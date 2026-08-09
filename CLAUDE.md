@@ -59,3 +59,9 @@ commands: `mvn clean verify`, `mvn test -pl <module>`, `mvn checkstyle:check`, `
 - `pi-java-ai`: `com.pijava.ai.cli.AiCli` — `pi-ai` 模型管理 CLI
 - `pi-java-agent-core`: `com.pijava.agent.AgentHarness` — Agent 运行时主类
 - `pi-java-tui`: `com.pijava.tui.PiTuiApp` — 交互模式入口
+
+## pi 项目代码路径
+D:\workplaceForai\pi
+## 运行环境
+jdk:D:\soft\jdk\jdk-26
+maven：D:\soft\apache-maven-3.9.9
