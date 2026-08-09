@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.pi-java</groupId>
+    <artifactId>pi-java-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>pi-java</name>
+    <description>Pure Java AI coding agent — a port of pi</description>
+
+    <modules>
+        <module>pi-java-bom</module>
+        <module>pi-java-telemetry</module>
+        <module>pi-java-ai</module>
+        <module>pi-java-agent-core</module>
+        <module>pi-java-session-backend-sqlite</module>
+        <module>pi-java-tui</module>
+        <module>pi-java-protocol</module>
+        <module>pi-java-client</module>
+        <module>pi-java-server</module>
+        <module>pi-java-coding-agent</module>
+        <module>pi-java-evals</module>
+    </modules>
+
+    <properties>
+        <java.release>26</java.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- Dependency versions (managed globally via BOM) -->
+        <version.jackson>2.19.2</version.jackson>
+        <version.tamboui>0.3.0</version.tamboui>
+        <version.sqlite>3.47.1.0</version.sqlite>
+        <version.picocli>4.7.7</version.picocli>
+        <version.json-schema-validator>1.5.6</version.json-schema-validator>
+        <version.jspecify>1.0.0</version.jspecify>
+        <version.snakeyaml>2.4</version.snakeyaml>
+        <version.junit>5.12.2</version.junit>
+        <version.assertj>3.27.4</version.assertj>
+        <version.mockito>5.17.1</version.mockito>
+
+        <!-- Plugin versions -->
+        <version.maven-compiler-plugin>3.14.0</version.maven-compiler-plugin>
+        <version.maven-surefire-plugin>3.5.3</version.maven-surefire-plugin>
+        <version.maven-enforcer-plugin>3.6.1</version.maven-enforcer-plugin>
+        <version.maven-checkstyle-plugin>3.6.0</version.maven-checkstyle-plugin>
+        <version.spotbugs-maven-plugin>4.8.6.3</version.spotbugs-maven-plugin>
+        <version.maven-javadoc-plugin>3.12.0</version.maven-javadoc-plugin>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.pi-java</groupId>
+                <artifactId>pi-java-bom</artifactId>
+                <version>${project.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!-- Compiler: JDK 26 -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>${version.maven-compiler-plugin}</version>
+                    <configuration>
+                        <release>${java.release}</release>
+                        <encoding>${project.build.sourceEncoding}</encoding>
+                    </configuration>
+                </plugin>
+
+                <!-- Surefire: unit tests -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>${version.maven-surefire-plugin}</version>
+                    <configuration>
+                        <includes>
+                            <include>**/*Test.java</include>
+                        </includes>
+                    </configuration>
+                </plugin>
+
+                <!-- Enforcer: dependency convergence + JDK version -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-enforcer-plugin</artifactId>
+                    <version>${version.maven-enforcer-plugin}</version>
+                    <executions>
+                        <execution>
+                            <id>enforce</id>
+                            <goals>
+                                <goal>enforce</goal>
+                            </goals>
+                            <configuration>
+                                <rules>
+                                    <requireJavaVersion>
+                                        <version>[26,27)</version>
+                                    </requireJavaVersion>
+                                    <dependencyConvergence/>
+                                    <banDuplicatePomDependencyVersions/>
+                                </rules>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <!-- Checkstyle: code style -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-checkstyle-plugin</artifactId>
+                    <version>${version.maven-checkstyle-plugin}</version>
+                    <configuration>
+                        <configLocation>checkstyle.xml</configLocation>
+                        <encoding>UTF-8</encoding>
+                        <consoleOutput>true</consoleOutput>
+                        <failsOnError>true</failsOnError>
+                        <linkXRef>false</linkXRef>
+                        <excludes>**/module-info.java</excludes>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>validate</id>
+                            <phase>validate</phase>
+                            <goals>
+                                <goal>check</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <!-- SpotBugs: static analysis -->
+                <plugin>
+                    <groupId>com.github.spotbugs</groupId>
+                    <artifactId>spotbugs-maven-plugin</artifactId>
+                    <version>${version.spotbugs-maven-plugin}</version>
+                    <configuration>
+                        <effort>Max</effort>
+                        <threshold>Low</threshold>
+                        <maxRank>15</maxRank>
+                        <excludeFilterFile>spotbugs-exclude.xml</excludeFilterFile>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>spotbugs</id>
+                            <phase>verify</phase>
+                            <goals>
+                                <goal>check</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <!-- Javadoc -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-javadoc-plugin</artifactId>
+                    <version>${version.maven-javadoc-plugin}</version>
+                    <configuration>
+                        <doclint>all</doclint>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
+        <!-- Apply plugins to all modules -->
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+            </plugin>
+            <!-- SpotBugs: run manually with mvn spotbugs:check (Phase 0, Maven 4 compat) -->
+        </plugins>
+    </build>
+</project>

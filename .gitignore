@@ -26,3 +26,11 @@ graalvm-reachability-metadata/
 
 # Logs
 *.log
+
+# Maven wrapper (keep the jar, ignore the properties for reproducibility)
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/wrapper/maven-wrapper.properties
+
+# Checkstyle / SpotBugs caches
+.checkstyle/
+.spotbugs/
