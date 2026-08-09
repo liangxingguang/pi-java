@@ -1,0 +1,54 @@
+package com.pijava.ai.message;
+
+import java.util.List;
+
+/**
+ * A message in a conversation with an LLM.
+ *
+ * <p>This sealed interface has three permitted subtypes matching the
+ * three standard roles in LLM chat APIs.</p>
+ */
+public sealed interface Message {
+
+    /** The role of the message author. */
+    String role();
+
+    /** The content blocks that make up this message. */
+    List<ContentBlock> content();
+
+    /** A system-level instruction message. */
+    record SystemMessage(List<ContentBlock> content) implements Message {
+        public SystemMessage {
+            content = List.copyOf(content);
+        }
+
+        @Override
+        public String role() {
+            return "system";
+        }
+    }
+
+    /** A message from the end user. */
+    record UserMessage(List<ContentBlock> content) implements Message {
+        public UserMessage {
+            content = List.copyOf(content);
+        }
+
+        @Override
+        public String role() {
+            return "user";
+        }
+    }
+
+    /** A message from the assistant (LLM). */
+    record AssistantMessage(List<ContentBlock> content) implements Message {
+        public AssistantMessage {
+            content = List.copyOf(content);
+        }
+
+        @Override
+        public String role() {
+            return "assistant";
+        }
+    }
+}
