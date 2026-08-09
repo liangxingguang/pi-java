@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.pi-java</groupId>
+    <artifactId>pi-java-bom</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>pi-java BOM</name>
+    <description>Bill of Materials — unified version management for all pi-java modules</description>
+
+    <properties>
+        <java.release>26</java.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <version.jackson>2.19.2</version.jackson>
+        <version.tamboui>0.3.0</version.tamboui>
+        <version.sqlite>3.47.1.0</version.sqlite>
+        <version.picocli>4.7.7</version.picocli>
+        <version.json-schema-validator>1.5.6</version.json-schema-validator>
+        <version.jspecify>1.0.0</version.jspecify>
+        <version.snakeyaml>2.4</version.snakeyaml>
+        <version.junit>5.12.2</version.junit>
+        <version.assertj>3.27.4</version.assertj>
+        <version.mockito>5.17.1</version.mockito>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Internal modules -->
+            <dependency>
+                <groupId>com.pi-java</groupId>
+                <artifactId>pi-java-telemetry</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.pi-java</groupId>
+                <artifactId>pi-java-ai</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.pi-java</groupId>
+                <artifactId>pi-java-agent-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.pi-java</groupId>
+                <artifactId>pi-java-session-backend-sqlite</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.pi-java</groupId>
+                <artifactId>pi-java-tui</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.pi-java</groupId>
+                <artifactId>pi-java-protocol</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.pi-java</groupId>
+                <artifactId>pi-java-client</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.pi-java</groupId>
+                <artifactId>pi-java-server</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.pi-java</groupId>
+                <artifactId>pi-java-coding-agent</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.pi-java</groupId>
+                <artifactId>pi-java-evals</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- Jackson -->
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-core</artifactId>
+                <version>${version.jackson}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>${version.jackson}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-annotations</artifactId>
+                <version>${version.jackson}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.dataformat</groupId>
+                <artifactId>jackson-dataformat-cbor</artifactId>
+                <version>${version.jackson}</version>
+            </dependency>
+
+            <!-- TamboUI -->
+            <dependency>
+                <groupId>dev.tamboui</groupId>
+                <artifactId>tamboui-toolkit</artifactId>
+                <version>${version.tamboui}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.tamboui</groupId>
+                <artifactId>tamboui-panama-backend</artifactId>
+                <version>${version.tamboui}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.tamboui</groupId>
+                <artifactId>tamboui-jline3-backend</artifactId>
+                <version>${version.tamboui}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.tamboui</groupId>
+                <artifactId>tamboui-css</artifactId>
+                <version>${version.tamboui}</version>
+            </dependency>
+
+            <!-- SQLite -->
+            <dependency>
+                <groupId>org.xerial</groupId>
+                <artifactId>sqlite-jdbc</artifactId>
+                <version>${version.sqlite}</version>
+            </dependency>
+
+            <!-- Picocli -->
+            <dependency>
+                <groupId>info.picocli</groupId>
+                <artifactId>picocli</artifactId>
+                <version>${version.picocli}</version>
+            </dependency>
+
+            <!-- JSON Schema Validator -->
+            <dependency>
+                <groupId>com.networknt</groupId>
+                <artifactId>json-schema-validator</artifactId>
+                <version>${version.json-schema-validator}</version>
+            </dependency>
+
+            <!-- Nullness annotations -->
+            <dependency>
+                <groupId>org.jspecify</groupId>
+                <artifactId>jspecify</artifactId>
+                <version>${version.jspecify}</version>
+            </dependency>
+
+            <!-- SnakeYAML -->
+            <dependency>
+                <groupId>org.yaml</groupId>
+                <artifactId>snakeyaml</artifactId>
+                <version>${version.snakeyaml}</version>
+            </dependency>
+
+            <!-- Testing -->
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter</artifactId>
+                <version>${version.junit}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.assertj</groupId>
+                <artifactId>assertj-core</artifactId>
+                <version>${version.assertj}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.mockito</groupId>
+                <artifactId>mockito-core</artifactId>
+                <version>${version.mockito}</version>
+                <scope>test</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>
