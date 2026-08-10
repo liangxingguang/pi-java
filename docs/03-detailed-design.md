@@ -14,11 +14,17 @@ com.pijava.ai/
 │   ├── StreamApi.java
 │   ├── SimpleApi.java
 │   ├── ChatApi.java
+│   ├── ProviderApi.java     ← 标记接口（sealed，permits ChatApi）
 │   └── ApiOptions.java
+├── protocol/               ← 协议适配器（一个协议一个适配器，所有供应商复用）
+│   ├── AnthropicMessagesApi.java
+│   ├── OpenAICompletionsApi.java
+│   ├── GoogleGenerativeAiApi.java
+│   └── MistralConversationsApi.java
 ├── model/                  ← 模型定义
 │   ├── ModelId.java
 │   ├── ModelInfo.java      ← 模型元数据
-│   ├── ModelCapability.java ← 能力枚举
+│   ├── ModelCapability.java ← 能力密封接口
 │   └── PricingInfo.java
 ├── message/                ← 消息类型
 │   ├── Message.java        ← 密封接口
@@ -34,27 +40,28 @@ com.pijava.ai/
 │   ├── ToolCallEnd.java
 │   ├── UsageInfo.java
 │   ├── StreamError.java
-│   └── StreamDone.java
-├── provider/               ← Provider 实现
+│   ├── StreamDone.java
+│   └── ToolCallBuilder.java ← 工具参数增量聚合（OpenAI/Mistral 共享）
+├── provider/               ← Provider 配置（不可变，绑定协议适配器）
 │   ├── Provider.java       ← SPI 接口
 │   ├── ProviderFactory.java
-│   ├── anthropic/
-│   │   ├── AnthropicProvider.java
-│   │   ├── AnthropicChatApi.java
-│   │   └── AnthropicModels.java
-│   ├── openai/
-│   ├── google/
-│   ├── deepseek/
-│   └── mistral/
+│   ├── ProviderRegistry.java
+│   ├── AnthropicProvider.java
+│   ├── OpenAIProvider.java
+│   ├── GoogleProvider.java
+│   ├── DeepSeekProvider.java
+│   ├── MistralProvider.java
+│   └── FauxProvider.java    ← 可编程假 Provider
 ├── catalog/                ← 模型目录
 │   ├── ModelCatalog.java
 │   ├── BuiltinCatalog.java
-│   └── RemoteCatalog.java
+│   └── RemoteCatalog.java   ← Phase 6
 ├── auth/                   ← 认证
 │   ├── CredentialStore.java
 │   ├── EnvApiKeyResolver.java
-│   ├── KeychainStore.java
-│   └── OAuthFlow.java
+│   ├── FileCredentialStore.java
+│   ├── KeychainStore.java   ← Phase 6
+│   └── OAuthFlow.java       ← Phase 6
 ├── http/                   ← HTTP 传输
 │   └── PiHttpClient.java   ← 对 HttpClient 的薄封装
 └── cli/                    ← pi-ai CLI
@@ -64,6 +71,12 @@ com.pijava.ai/
 ### 1.2 核心接口设计
 
 ```java
+// ProviderApi — 标记接口：Provider 对外暴露的一种 API 能力
+public sealed interface ProviderApi permits ChatApi {
+    // Phase 1 仅 ChatApi 一种能力；
+    // Phase 6 可能扩展 ImageApi、EmbeddingApi 等
+}
+
 // Provider SPI — 扩展点
 public interface Provider {
     /** 供应商名称，如 "anthropic"、"openai" */

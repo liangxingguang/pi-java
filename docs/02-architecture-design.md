@@ -151,20 +151,29 @@ public record ModelId<T extends Provider>(
     Class<T> provider
 ) {}
 
-// Provider 的可达模型集合
-public sealed interface ProviderApi permits
-    ChatApi, StreamApi, ResponsesApi, SimpleApi
-{
-    String name();
-    Set<Class<? extends ModelCapability>> capabilities();
-}
+// ProviderApi — 标记接口：Provider 对外暴露的一种 API 能力
+// Phase 1 仅 ChatApi 一种能力；Phase 6 可能扩展 ImageApi、EmbeddingApi 等
+public sealed interface ProviderApi permits ChatApi {}
+
+// ChatApi = StreamApi + SimpleApi，是 Phase 1 的唯一 ProviderApi 能力
+public interface ChatApi extends StreamApi, SimpleApi {}
 
 // 核心流式调用接口
-public interface StreamApi extends ProviderApi {
+public interface StreamApi {
     Flow.Publisher<StreamEvent> stream(
         StreamRequest request,
         ApiOptions options
     );
+
+    StreamIterator<StreamEvent> streamBlocking(
+        StreamRequest request,
+        ApiOptions options
+    );
+}
+
+// 非流式调用接口
+public interface SimpleApi {
+    Message send(StreamRequest request, ApiOptions options);
 }
 
 // 流事件的密封层次

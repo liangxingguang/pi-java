@@ -51,32 +51,37 @@
 ## 3. Phase 1 — LLM API 层（第 2–5 周）
 
 ### 目标
-提供统一的 LLM 调用接口，首批支持 5 个主流 Provider。
+提供统一的 LLM 调用接口，首批支持 5 个主流 Provider。Protocol-center（协议中心）架构，一个协议一个适配器，供应商差异用配置消除。
 
 ### 任务分解
 
 | 编号 | 任务 | 产出 | 工时 |
 |------|------|------|------|
 | P1-0 | **编写阶段设计文档** | `06-phase1-ai-design.md`（从 03 §1 提取 + 扩展） | 0.5d |
-| P1-1 | 定义核心接口 | `Provider`、`StreamApi`、`ChatApi`、`ModelId` | 1d |
-| P1-2 | 实现消息/流事件类型 | `Message`、`StreamEvent` 密封层次 | 1d |
-| P1-3 | 实现 HTTP 传输层 | `PiHttpClient`（HttpClient 封装） | 1d |
-| P1-4 | 实现 Anthropic Provider | `AnthropicProvider` + `AnthropicChatApi` | 2d |
-| P1-5 | 实现 OpenAI Provider | `OpenAIProvider` + `OpenAIChatApi` | 2d |
-| P1-6 | 实现 Google Gemini Provider | `GoogleProvider` + `GoogleChatApi` | 2d |
-| P1-7 | 实现 DeepSeek Provider | `DeepSeekProvider`（OpenAI 兼容） | 1d |
-| P1-8 | 实现 Mistral Provider | `MistralProvider` + `MistralChatApi` | 1.5d |
-| P1-9 | Provider 注册机制（SPI） | `ProviderFactory` + ServiceLoader | 1d |
-| P1-10 | 模型目录系统 | `BuiltinCatalog` + 内置模型数据 | 1d |
-| P1-11 | 认证系统 | `EnvApiKeyResolver` + `CredentialStore` 接口 | 1d |
-| P1-12 | Faux Provider（测试用） | 可编程的假 Provider | 1d |
-| P1-13 | `pi-ai` CLI 子命令 | `list-models`、`auth`、`ping` | 1d |
-| P1-14 | 单元测试 + 集成测试 | 覆盖率 > 80% | 3d |
+| P1-1 | 审查/补充 Phase 0 接口 | 补充 `PricingInfo`、定义 `ProviderApi` 标记接口 | 0.5d |
+| P1-2 | 审查/补充消息与流事件类型 | 完善 `Message` 密封层次、`StreamEvent` 密封层次（7 种子类型）、`ContentBlock` | 1d |
+| P1-3 | `PiHttpClient` + SSE 解析器 | HttpClient 封装：重试、`User-Agent`、SSE 迭代器 | 1d |
+| P1-4 | `AnthropicMessagesApi` | 消息转换 + 流事件映射 + thinking block 处理 | 1.5d |
+| P1-5 | `OpenAICompletionsApi` | 消息转换 + tool_calls delta 聚合（`ToolCallBuilder`） | 1.5d |
+| P1-6 | `GoogleGenerativeAiApi` | 消息转换 + promptFeedback 安全拦截 | 1.5d |
+| P1-7 | `MistralConversationsApi` | JSON 请求构建 + SSE 响应解析 + 复用 `ToolCallBuilder` | 1d |
+| P1-8 | 5 个 Provider 配置 | 配置类 + `ProviderRegistry` 手动注册 | 0.5d |
+| P1-9 | `ProviderRegistry` + `ProviderFactory` SPI | 手动注册 + ServiceLoader 发现通道 | 0.5d |
+| P1-10 | `FauxProvider` | 可编程假 Provider，支持三种回放模式 | 0.5d |
+| P1-11 | 模型目录 + `BuiltinCatalog` | 5 供应商模型数据 + 模糊搜索 + `ModelsStore` 接口 | 1d |
+| P1-12 | 认证系统 | `EnvApiKeyResolver` + `FileCredentialStore`（文件锁） | 1d |
+| P1-13 | `pi-ai` CLI | picocli：`list-models`、`auth`、`ping` | 0.5d |
+| P1-14 | 单元测试 | 覆盖率 > 80% | 2.5d |
+| P1-15 | 冒烟测试 | 每 Provider 1 个真实 API 请求（手动触发） | 0.5d |
+
+**总计**：约 3 周纯编码 + 1 周 review/集成 buffer = 3–4 周（P1-4 到 P1-7 四个适配器可并行开发）
 
 ### 里程碑
+- [ ] `mvn clean verify` 通过（零错误、零警告）
 - [ ] 5 个 Provider 流式调用均可工作
 - [ ] `pi-ai list-models` 输出正确
 - [ ] Faux Provider 可用于下游测试
+- [ ] `pi-ai auth <provider>` 交互式配置 API key
 
 ---
 
