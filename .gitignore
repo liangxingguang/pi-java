@@ -1,6 +1,5 @@
 # Maven
 target/
-!.mvn/wrapper/maven-wrapper.jar
 
 # IDE
 .idea/
@@ -27,9 +26,8 @@ graalvm-reachability-metadata/
 # Logs
 *.log
 
-# Maven wrapper (keep the jar, ignore the properties for reproducibility)
-!.mvn/wrapper/maven-wrapper.jar
-.mvn/wrapper/maven-wrapper.properties
+# Maven wrapper (modern only-script mode — no jar needed)
+.mvn/wrapper/maven-wrapper.jar
 
 # Checkstyle / SpotBugs caches
 .checkstyle/

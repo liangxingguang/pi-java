@@ -126,6 +126,7 @@
                         <failsOnError>true</failsOnError>
                         <linkXRef>false</linkXRef>
                         <excludes>**/module-info.java</excludes>
+                        <outputFile>${project.build.directory}/checkstyle-result.xml</outputFile>
                     </configuration>
                     <executions>
                         <execution>

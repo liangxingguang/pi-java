@@ -34,3 +34,9 @@ jobs:
         with:
           name: test-results-${{ matrix.os }}
           path: '**/target/surefire-reports/*.xml'
+
+      - name: Checkstyle report
+        if: always()
+        uses: jwgmeligmeyling/checkstyle-github-action@v1
+        with:
+          path: '**/target/checkstyle-result.xml'
