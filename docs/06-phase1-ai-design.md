@@ -444,15 +444,21 @@ openai      gpt-5                       128K       $2.50      $10.00
 
 ---
 
-## 12. 不做（Out of Scope）
+## 12. Phase 1 不做（延后到 Phase 6 实现）
 
-- OAuth 登录流程（Phase 6）
-- 远程模型目录更新（ETag / 动态刷新，Phase 6）
-- Bedrock / Vertex AI 适配器（Phase 6）
-- 图像生成模型（Phase 6）
-- `pi-ai login` OAuth（只做 api-key 环境变量 + 文件存储）
-- CBOR 协议（Phase 6）
-- 模型目录 CLI 发布工具（Phase 6）
+以下功能 pi 原版均已实现，pi-java 延后到 Phase 6（生态扩展）：
+
+| 功能 | pi 现状 | 延后原因 |
+|------|---------|---------|
+| OAuth 登录流程（`pi-ai login` Anthropic / GitHub Copilot / OpenRouter） | ✅ 已实现 | Phase 1 以 API key 优先，降低认证复杂度 |
+| 远程模型目录更新（ETag 条件请求 + `refreshModels()`） | ✅ 已实现 | Phase 1 内置静态目录足够 |
+| Bedrock 适配器（`bedrock-converse-stream.ts` ~1173行） | ✅ 已实现 | 非核心路径，AWS 依赖重 |
+| Vertex AI 适配器（`google-vertex.ts` ~592行） | ✅ 已实现 | 非核心路径 |
+| 图像生成模型（`image-models*.ts` + `images*.ts`） | ✅ 已实现 | Phase 1 聚焦文本生成 |
+| CBOR 协议（远程会话编解码） | ✅ 已实现 | 依赖 protocol 模块（Phase 6） |
+| 模型目录 CLI 发布工具 | ✅ 已实现 | 开发辅助工具，非运行时必需 |
+
+Phase 1 聚焦**可跑通端到端的最小 LLM 调用层**：5 个 Provider + API key 认证 + 静态模型目录。
 
 ---
 
