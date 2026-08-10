@@ -48,7 +48,7 @@
         <version.maven-surefire-plugin>3.5.3</version.maven-surefire-plugin>
         <version.maven-enforcer-plugin>3.6.1</version.maven-enforcer-plugin>
         <version.maven-checkstyle-plugin>3.6.0</version.maven-checkstyle-plugin>
-        <version.spotbugs-maven-plugin>4.8.6.3</version.spotbugs-maven-plugin>
+        <version.spotbugs-maven-plugin>4.9.8.3</version.spotbugs-maven-plugin>
         <version.maven-javadoc-plugin>3.12.0</version.maven-javadoc-plugin>
     </properties>
 
@@ -186,7 +186,10 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-checkstyle-plugin</artifactId>
             </plugin>
-            <!-- SpotBugs: run manually with mvn spotbugs:check (Phase 0, Maven 4 compat) -->
+            <plugin>
+                <groupId>com.github.spotbugs</groupId>
+                <artifactId>spotbugs-maven-plugin</artifactId>
+            </plugin>
         </plugins>
     </build>
 </project>
