@@ -18,4 +18,5 @@ module com.pijava.ai {
     exports com.pijava.ai.provider;
     exports com.pijava.ai.auth;
     exports com.pijava.ai.catalog;
+    exports com.pijava.ai.http;
 }
