@@ -10,6 +10,9 @@ package com.pijava.agent.harness;
  */
 public sealed interface DriveMode {
 
+    Automatic AUTOMATIC = new Automatic();
+    Manual MANUAL = new Manual();
+
     /** The harness runs autonomously to completion. */
     record Automatic() implements DriveMode {}
 

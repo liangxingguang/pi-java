@@ -5,11 +5,20 @@ import java.util.Set;
 /**
  * Capabilities that a model may support.
  *
- * <p>Each capability corresponds to a feature that callers can
- * query before sending a request. The sealed interface + record
- * pattern follows the Erasable Java convention.</p>
+ * <p>Each variant is a singleton record — use the static constants
+ * ({@link #TEXT}, {@link #IMAGE_INPUT}, …) for identity comparison
+ * and set membership. The sealed interface + record pattern follows
+ * the Erasable Java convention.</p>
  */
 public sealed interface ModelCapability {
+
+    Text TEXT = new Text();
+    ImageInput IMAGE_INPUT = new ImageInput();
+    ToolUse TOOL_USE = new ToolUse();
+    Thinking THINKING = new Thinking();
+    Streaming STREAMING = new Streaming();
+    PromptCaching PROMPT_CACHING = new PromptCaching();
+    ComputerUse COMPUTER_USE = new ComputerUse();
 
     /** Text generation (chat). */
     record Text() implements ModelCapability {}
@@ -37,9 +46,6 @@ public sealed interface ModelCapability {
      * frontier chat model.
      */
     static Set<ModelCapability> frontierDefaults() {
-        return Set.of(
-            new Text(), new ImageInput(), new ToolUse(),
-            new Thinking(), new Streaming(), new PromptCaching()
-        );
+        return Set.of(TEXT, IMAGE_INPUT, TOOL_USE, THINKING, STREAMING, PROMPT_CACHING);
     }
 }
