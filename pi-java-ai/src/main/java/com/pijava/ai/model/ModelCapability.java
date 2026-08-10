@@ -6,29 +6,40 @@ import java.util.Set;
  * Capabilities that a model may support.
  *
  * <p>Each capability corresponds to a feature that callers can
- * query before sending a request.</p>
+ * query before sending a request. The sealed interface + record
+ * pattern follows the Erasable Java convention.</p>
  */
-public enum ModelCapability {
+public sealed interface ModelCapability {
+
     /** Text generation (chat). */
-    TEXT,
+    record Text() implements ModelCapability {}
+
     /** Image input (vision). */
-    IMAGE_INPUT,
+    record ImageInput() implements ModelCapability {}
+
     /** Tool / function calling. */
-    TOOL_USE,
+    record ToolUse() implements ModelCapability {}
+
     /** Extended thinking / reasoning. */
-    THINKING,
+    record Thinking() implements ModelCapability {}
+
     /** Streaming responses. */
-    STREAMING,
+    record Streaming() implements ModelCapability {}
+
     /** Prompt caching (e.g. Anthropic prompt cache). */
-    PROMPT_CACHING,
+    record PromptCaching() implements ModelCapability {}
+
     /** Computer use (screenshot + mouse/keyboard). */
-    COMPUTER_USE;
+    record ComputerUse() implements ModelCapability {}
 
     /**
      * Returns the set of capabilities typically expected of a
      * frontier chat model.
      */
-    public static Set<ModelCapability> frontierDefaults() {
-        return Set.of(TEXT, IMAGE_INPUT, TOOL_USE, THINKING, STREAMING, PROMPT_CACHING);
+    static Set<ModelCapability> frontierDefaults() {
+        return Set.of(
+            new Text(), new ImageInput(), new ToolUse(),
+            new Thinking(), new Streaming(), new PromptCaching()
+        );
     }
 }

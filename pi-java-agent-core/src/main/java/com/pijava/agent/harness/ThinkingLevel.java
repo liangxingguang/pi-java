@@ -6,9 +6,9 @@ package com.pijava.agent.harness;
  * <p>Mirrors the thinking budget / effort levels supported by
  * Claude and other reasoning models.</p>
  */
-public enum ThinkingLevel {
-    OFF,
-    LOW,
-    MEDIUM,
-    HIGH
+public sealed interface ThinkingLevel {
+    record Off() implements ThinkingLevel {}
+    record Low() implements ThinkingLevel {}
+    record Medium() implements ThinkingLevel {}
+    record High() implements ThinkingLevel {}
 }

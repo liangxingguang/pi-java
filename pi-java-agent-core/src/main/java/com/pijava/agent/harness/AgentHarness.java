@@ -17,9 +17,6 @@ import com.pijava.ai.model.ModelId;
  */
 public class AgentHarness implements AutoCloseable {
 
-    /** Drive mode for the harness. */
-    public enum DriveMode { AUTOMATIC, MANUAL }
-
     // ── Lane management ──────────────────────────────────────
 
     /** Get the default lane handle. */
