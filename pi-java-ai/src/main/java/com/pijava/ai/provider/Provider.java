@@ -3,6 +3,7 @@ package com.pijava.ai.provider;
 import java.util.Set;
 
 import com.pijava.ai.api.ApiOptions;
+import com.pijava.ai.api.ProviderApi;
 import com.pijava.ai.catalog.ModelCatalog;
 
 /**
@@ -12,8 +13,9 @@ import com.pijava.ai.catalog.ModelCatalog;
  * interface. Providers are discovered via {@link java.util.ServiceLoader}
  * and registered in the global provider registry.</p>
  *
- * <p>Type parameter {@code A} is the set of API interfaces the provider
- * supports (e.g. {@code ChatApi.class}).</p>
+ * <p>The {@link ProviderApi} sealed hierarchy constrains which API types
+ * a provider can expose. Phase 1 only defines {@code ChatApi}; additional
+ * modalities arrive in Phase 6.</p>
  */
 public interface Provider {
 
@@ -24,10 +26,10 @@ public interface Provider {
     String displayName();
 
     /** The set of API types this provider can create. */
-    Set<Class<?>> supportedApis();
+    Set<Class<? extends ProviderApi>> supportedApis();
 
     /** Create an API instance of the given type. */
-    <T> T createApi(Class<T> apiType, ApiOptions options);
+    <T extends ProviderApi> T createApi(Class<T> apiType, ApiOptions options);
 
     /** The built-in model catalog for this provider. */
     ModelCatalog builtinModels();

@@ -12,7 +12,23 @@ import java.util.Map;
 public sealed interface StreamEvent {
 
     /** A chunk of text in the assistant's response. */
-    record TextDelta(String text) implements StreamEvent {}
+    record TextDelta(String text, String type) implements StreamEvent {
+        /** Plain conversational text. */
+        public static final String TEXT = "text";
+        /** Extended thinking / reasoning content. */
+        public static final String THINKING = "thinking";
+
+        public TextDelta {
+            if (type == null || type.isBlank()) {
+                type = TEXT;
+            }
+        }
+
+        /** Convenience constructor for plain text (backward-compatible). */
+        public static TextDelta of(String text) {
+            return new TextDelta(text, TEXT);
+        }
+    }
 
     /** The assistant is about to call a tool. */
     record ToolCallStart(String id, String name) implements StreamEvent {}
