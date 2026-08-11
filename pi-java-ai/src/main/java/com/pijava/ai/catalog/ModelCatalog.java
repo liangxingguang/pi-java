@@ -21,4 +21,13 @@ public interface ModelCatalog {
 
     /** Find models that match a search query (fuzzy). */
     List<ModelInfo> search(String query);
+
+    /** An empty catalog (used by FauxProvider). */
+    static ModelCatalog empty() {
+        return new ModelCatalog() {
+            @Override public List<ModelInfo> listModels() { return List.of(); }
+            @Override public Optional<ModelInfo> find(ModelId<?> id) { return Optional.empty(); }
+            @Override public List<ModelInfo> search(String query) { return List.of(); }
+        };
+    }
 }

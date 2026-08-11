@@ -1,6 +1,7 @@
 package com.pijava.ai.api;
 
 import java.util.Iterator;
+import java.util.List;
 
 import com.pijava.ai.stream.StreamEvent;
 
@@ -35,4 +36,14 @@ public interface StreamIterator extends Iterator<StreamEvent>, AutoCloseable {
      */
     @Override
     void close();
+
+    /** Create a StreamIterator from a pre-built list of events (for testing). */
+    static StreamIterator from(List<StreamEvent> events) {
+        return new StreamIterator() {
+            private final Iterator<StreamEvent> iter = events.iterator();
+            @Override public boolean hasNext() { return iter.hasNext(); }
+            @Override public StreamEvent next() { return iter.next(); }
+            @Override public void close() {}
+        };
+    }
 }
