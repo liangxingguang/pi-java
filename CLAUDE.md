@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **pi-java** — Pure Java (JDK 26) 复刻 [pi](https://github.com/earendil-works/pi) AI 编码代理。代码在 `D:\workplaceForai\pi-java`，参考原项目在 `D:\workplaceForai\pi`。
 
-11 个 Maven + JPMS 模块，依赖方向自下而上：
+11 个 Maven 模块，依赖方向自下而上：
 
 ```
 telemetry ← ai ← agent ← coding-agent
@@ -17,11 +17,11 @@ telemetry ← ai ← agent ← coding-agent
               protocol ← server
 ```
 
-命名空间：`com.pijava`（JPMS） / `com.pi-java`（Maven groupId）。
+命名空间：`com.pijava`（包名） / `com.pi-java`（Maven groupId）。
 
 ## 技术栈
 
-JDK 26 · Maven 4.x · JPMS · Jackson (JSON/CBOR) · [TamboUI](https://tamboui.dev/) (终端 UI，源自 Ratatui) · SQLite (`xerial/sqlite-jdbc`) · Picocli · JUnit 5 + AssertJ
+JDK 26 · Maven 4.x · Jackson (JSON/CBOR) · [TamboUI](https://tamboui.dev/) (终端 UI，源自 Ratatui) · SQLite (`xerial/sqlite-jdbc`) · Picocli · JUnit 5 + AssertJ
 
 ## 构建设计阶段
 
@@ -62,6 +62,10 @@ commands: `mvn clean verify`, `mvn test -pl <module>`, `mvn checkstyle:check`, `
 
 ## pi 项目代码路径
 D:\workplaceForai\pi
+
+## pi ↔ pi-java 对照表
+- [Phase 1 代码对照表](docs/phase1-pi-code-mapping.md) — 逐文件对齐度 + 差异说明
+
 ## 运行环境
 jdk:D:\soft\jdk\jdk-26
 maven：D:\soft\apache-maven-3.9.9
