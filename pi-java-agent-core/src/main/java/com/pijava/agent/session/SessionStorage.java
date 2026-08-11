@@ -2,8 +2,8 @@ package com.pijava.agent.session;
 
 import java.util.List;
 
-import com.pijava.agent.harness.Entry;
-import com.pijava.agent.harness.LaneRecord;
+import com.pijava.agent.entry.Entry;
+import com.pijava.agent.record.LaneRecord;
 
 /**
  * Per-session persistence interface.
