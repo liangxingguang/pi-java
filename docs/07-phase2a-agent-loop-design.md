@@ -22,10 +22,11 @@
 │         │ peekAction / executeAction                     │
 │  ┌──────▼───────────────────────────────────────────┐    │
 │  │  AgentHarness（状态机 + StreamFn 持有者）          │    │
-│  │  • LaneState { phase, messages, pendingWrites }   │    │
+│  │  • LaneState { phase, transcript, pendingWrites }  │    │
+│  │    └─ buildMessages() 从 entries 构建消息列表     │    │
 │  │  • StreamFn（通过 HarnessConfig 注入）            │    │
-│  │  • peekAction() → ActionInfo                     │    │
-│  │  • executeAction(ActionInfo) → ActionInfo | null  │    │
+│  │  • peekAction() → Action                         │    │
+│  │  • executeAction(Action) → Action | null          │    │
 │  │    └─ StreamAssistant → 内部调用 LLM + 消费事件流  │    │
 │  └──────────────────────────────────────────────────┘    │
 │         │ StreamFn                                       │
@@ -99,20 +100,35 @@ public sealed interface StreamEvent {
 
     // ── 工具调用 ─────────────────────────────────────────
 
-    /** 工具调用开始。contentIndex 定位消息中的内容块索引。 */
-    record ToolCallStart(int contentIndex, String id, String name) implements StreamEvent {}
+    /**
+     * 工具调用开始。contentIndex 定位消息中的内容块索引。
+     * 对齐 pi：toolcall_start 只含 contentIndex + partial，
+     * 工具名/ID 在 toolcall_end 中到达。
+     */
+    record ToolCallStart(int contentIndex) implements StreamEvent {}
 
     /** 工具调用参数增量。 */
     record ToolCallDelta(int contentIndex, String id, String jsonDelta) implements StreamEvent {}
 
-    /** 工具调用结束。 */
+    /** 工具调用结束。携带完整 ToolCall 信息。 */
     record ToolCallEnd(int contentIndex, String id, String name, Map<String, Object> arguments) implements StreamEvent {}
 
-    // ── 元事件（已有的，不变）───────────────────────────────
+    // ── 元事件 ───────────────────────────────────────────
 
     record UsageInfo(long inputTokens, long outputTokens) implements StreamEvent {}
-    record StreamDone(String stopReason, UsageInfo usage) implements StreamEvent {}
-    record StreamError(Throwable error) implements StreamEvent {}
+
+    /**
+     * 流正常结束。
+     * 对齐 pi 的 done 事件：携带最终 AssistantMessage 快照 + 停止原因。
+     */
+    record StreamDone(String reason, UsageInfo usage) implements StreamEvent {}
+
+    /**
+     * 流出错。
+     * 对齐 pi 的 error 事件：携带截至错误时的 AssistantMessage 快照 +
+     * reason 判别器（"aborted" | "error"）+ 原始异常。
+     */
+    record StreamError(String reason, Throwable error) implements StreamEvent {}
 }
 ```
 
@@ -124,17 +140,20 @@ public sealed interface StreamEvent {
 public sealed interface StreamEvent {
     /**
      * 当前 AssistantMessage 的完整快照。
+     * 对齐 pi：所有 12 种事件都携带 partial。
      * Agent Loop 用此做"原地替换"——收到事件就用 partial 覆盖
      * context 的最后一条消息，不用自己拼接增量。
-     * 对于 Start 事件返回 null。
      */
     AssistantMessage partial();
 }
 ```
 
-`AssistantMessage` 是 `pi-java-agent-core` 中定义的类型，区别于 Phase 1 的 `Message.AssistantMessage`：
+`AssistantMessage` 定义在 `pi-java-ai` 模块（`com.pijava.ai.message`）中，**不是** `pi-java-agent-core` 的类型。
+这避免了 `pi-java-ai` → `pi-java-agent-core` 的反向依赖（依赖方向是 `ai ← agent-core`）。
+`pi-java-agent-core` 可直接复用此类型：
 
 ```java
+// pi-java-ai 模块：com.pijava.ai.message.AssistantMessage
 public record AssistantMessage(
     String id,
     List<ContentBlock> content,
@@ -142,6 +161,10 @@ public record AssistantMessage(
     String stopReason
 ) {}
 ```
+
+**与 Phase 1 `Message.AssistantMessage` 的区别**：Phase 1 的 `Message.AssistantMessage` 是 LLM 的静态响应；
+`AssistantMessage` 是流式构建中的**可变快照**——每收到一个事件就更新一次。两者字段相似但用途不同，
+后续可考虑统一。
 
 ### 2.4 协议适配器变更
 
@@ -160,44 +183,61 @@ publisher.submit(new StreamEvent.TextEnd(contentIndex, text, partial));
 
 ## 3. ThinkingLevel 系统（P2a-2）
 
-### 3.1 枚举定义
+### 3.1 类型定义
+
+对齐 pi 的 `ThinkingLevel`（6 级刻度）和 `ModelThinkingLevel`（`"off" | ThinkingLevel`）两层设计。
+Java 用 `sealed interface` + `record` 实现，符合 Erasable Java 规范。
 
 ```java
 /**
  * 思考深度六级刻度。
- * 对齐 pi 的 ThinkingLevel 设计。
+ * 对齐 pi 的 ThinkingLevel："minimal"|"low"|"medium"|"high"|"xhigh"|"max"。
+ * OFF 不是 ThinkingLevel，是独立的 ModelThinkingLevel.Off。
  */
-public enum ThinkingLevel {
-    OFF,      // 不思考
-    MINIMAL,  // ~1024 tokens
-    LOW,      // ~2048 tokens
-    MEDIUM,   // ~8192 tokens
-    HIGH,     // ~16384 tokens
-    XHIGH;    // 模型最大值
+public sealed interface ThinkingLevel {
+    record Minimal() implements ThinkingLevel {}  // ~1024 tokens
+    record Low() implements ThinkingLevel {}      // ~2048 tokens
+    record Medium() implements ThinkingLevel {}   // ~8192 tokens
+    record High() implements ThinkingLevel {}     // ~16384 tokens
+    record XHigh() implements ThinkingLevel {}    // 模型最大值
+
+    /** 六级刻度的自然排序（用于 clamp 回退）。 */
+    static List<ThinkingLevel> ordered() {
+        return List.of(new Minimal(), new Low(), new Medium(),
+                       new High(), new XHigh());
+    }
 
     /**
      * 回退逻辑：先向上找（思考更多通常比更少安全），找不到再向下。
      * 对齐 pi clampThinkingLevel()。
      */
-    public static ThinkingLevel clamp(ThinkingLevel requested,
-                                       Set<ThinkingLevel> supported) {
+    static ThinkingLevel clamp(ThinkingLevel requested,
+                                Set<ThinkingLevel> supported) {
+        var ordered = ordered();
         if (supported.contains(requested)) return requested;
+        int idx = ordered.indexOf(requested);
         // 先向上找
-        for (var level : values()) {
-            if (level.ordinal() > requested.ordinal()
-                    && supported.contains(level)) {
-                return level;
-            }
+        for (int i = idx + 1; i < ordered.size(); i++) {
+            if (supported.contains(ordered.get(i))) return ordered.get(i);
         }
         // 再向下找
-        for (int i = values().length - 1; i >= 0; i--) {
-            if (values()[i].ordinal() < requested.ordinal()
-                    && supported.contains(values()[i])) {
-                return values()[i];
-            }
+        for (int i = idx - 1; i >= 0; i--) {
+            if (supported.contains(ordered.get(i))) return ordered.get(i);
         }
-        return OFF; // 兜底
+        return new Minimal(); // 兜底
     }
+}
+
+/**
+ * 模型思考级别：关闭 或 启用某级别。
+ * 对齐 pi 的 ModelThinkingLevel = "off" | ThinkingLevel。
+ */
+public sealed interface ModelThinkingLevel {
+    record Off() implements ModelThinkingLevel {}
+    record Enabled(ThinkingLevel level) implements ModelThinkingLevel {}
+
+    static ModelThinkingLevel off() { return new Off(); }
+    static ModelThinkingLevel of(ThinkingLevel level) { return new Enabled(level); }
 }
 ```
 
@@ -209,13 +249,18 @@ public enum ThinkingLevel {
 /**
  * 模型自带的思考级别翻译表。
  * 对齐 pi Model.thinkingLevelMap。
+ * 只包含模型支持的 ThinkingLevel（不含 Off——Off 直接对应 ThinkingConfig.OFF）。
  */
 public record ThinkingLevelMap(
     Map<ThinkingLevel, ThinkingConfig> levelMap
 ) {
-    public ThinkingConfig forLevel(ThinkingLevel level) {
-        return levelMap.getOrDefault(clamp(level, levelMap.keySet()),
-                                     ThinkingConfig.OFF);
+    public ThinkingConfig forLevel(ModelThinkingLevel level) {
+        return switch (level) {
+            case ModelThinkingLevel.Off o  -> ThinkingConfig.OFF;
+            case ModelThinkingLevel.Enabled e ->
+                levelMap.getOrDefault(ThinkingLevel.clamp(e.level(), levelMap.keySet()),
+                                      ThinkingConfig.OFF);
+        };
     }
 }
 
@@ -252,6 +297,16 @@ public record ModelInfo(
 
 ```java
 /**
+ * Entry 共享标识字段。Java sealed 子类型组合此 header，消除字段重复。
+ */
+public record EntryHeader(
+    String id,
+    long seq,
+    String parentId,
+    Instant timestamp
+) {}
+
+/**
  * 用户可见的持久化事件，出现在转录（transcript）中。
  * 对齐 pi 的 Entry sealed union。
  */
@@ -267,39 +322,39 @@ public record ModelInfo(
 })
 public sealed interface Entry {
 
-    String id();
-    long seq();
-    String parentId();
-    Instant timestamp();
+    EntryHeader header();
 
     /** 用户/助手/工具消息。Phase 2a 只用 user + assistant 角色。 */
     record Message(
-        String id, long seq, String parentId, Instant timestamp,
+        EntryHeader header,
         String role,           // "user" | "assistant" | "tool"
         List<ContentBlock> blocks
     ) implements Entry {}
 
     /** 模型变更（Phase 2c 使用）。 */
     record ModelChange(
-        String id, long seq, String parentId, Instant timestamp,
+        EntryHeader header,
         String provider, String modelId
     ) implements Entry {}
 
-    /** 思考级别变更（Phase 2a 使用——初始化时写入）。 */
+    /** 思考级别变更（Phase 2a 使用——初始化时写入）。
+     *  level 值为 ModelThinkingLevel 的字符串表示：
+     *  "off" | "minimal" | "low" | "medium" | "high" | "xhigh"
+     */
     record ThinkingLevelChange(
-        String id, long seq, String parentId, Instant timestamp,
-        String level       // "off" | "minimal" | "low" | "medium" | "high" | "xhigh"
+        EntryHeader header,
+        String level
     ) implements Entry {}
 
     /** 活跃工具集变更（Phase 2b 使用）。 */
     record ActiveToolsChange(
-        String id, long seq, String parentId, Instant timestamp,
+        EntryHeader header,
         List<String> toolNames
     ) implements Entry {}
 
     /** 上下文压缩记录（Phase 2c 使用）。 */
     record Compaction(
-        String id, long seq, String parentId, Instant timestamp,
+        EntryHeader header,
         String reason,        // "overflow" | "manual"
         int entriesBefore,
         int entriesAfter
@@ -307,13 +362,13 @@ public sealed interface Entry {
 
     /** 分支摘要（Phase 2c 使用）。 */
     record BranchSummary(
-        String id, long seq, String parentId, Instant timestamp,
+        EntryHeader header,
         String summary
     ) implements Entry {}
 
     /** 自定义事件（扩展用）。 */
     record Custom(
-        String id, long seq, String parentId, Instant timestamp,
+        EntryHeader header,
         String kind,
         Map<String, Object> data
     ) implements Entry {}
@@ -328,40 +383,44 @@ public sealed interface Entry {
 
 ```java
 /**
+ * LaneRecord 共享标识字段。
+ */
+public record RecordHeader(long seq, Instant timestamp) {}
+
+/**
  * 车道级别的内部操作记录，用于调试和审计。
  * 对齐 pi 的 LaneRecord sealed union。
  * Java sealed 类型要求一次性声明全部子类型（编译期检查），
  * 但各 Phase 按需构造实例。
  */
 public sealed interface LaneRecord {
-    long seq();
-    Instant timestamp();
+    RecordHeader header();
 
     // ═══ Phase 2a 构造 ═══════════════════════════════════
 
     /** 一次操作（run / resume）开始。 */
     record OperationStarted(
-        long seq, Instant timestamp,
+        RecordHeader header,
         String runId,
         String intent       // 用户意图摘要
     ) implements LaneRecord {}
 
     /** 中止请求。 */
     record AbortRequested(
-        long seq, Instant timestamp,
+        RecordHeader header,
         String reason
     ) implements LaneRecord {}
 
     /** 操作完成。 */
     record OperationFinished(
-        long seq, Instant timestamp,
+        RecordHeader header,
         String runId,
         String status       // "completed" | "aborted" | "error"
     ) implements LaneRecord {}
 
     /** 单次 LLM 调用尝试。 */
     record StepAttempt(
-        long seq, Instant timestamp,
+        RecordHeader header,
         int stepIndex,
         long inputTokens,
         long outputTokens
@@ -369,7 +428,7 @@ public sealed interface LaneRecord {
 
     /** Token 用量记录。 */
     record UsageRecord(
-        long seq, Instant timestamp,
+        RecordHeader header,
         long inputTokens,
         long outputTokens,
         String modelId
@@ -379,7 +438,7 @@ public sealed interface LaneRecord {
 
     /** 工具开始执行（Phase 2b）。 */
     record ToolStarted(
-        long seq, Instant timestamp,
+        RecordHeader header,
         String toolCallId,
         String toolName,
         Map<String, Object> arguments
@@ -389,20 +448,20 @@ public sealed interface LaneRecord {
 
     /** 队列入队（Phase 2c）。 */
     record QueueEnqueued(
-        long seq, Instant timestamp,
+        RecordHeader header,
         String queueType,    // "steer" | "followUp" | "nextRun"
         String content
     ) implements LaneRecord {}
 
     /** 队列取消（Phase 2c）。 */
     record QueueCancelled(
-        long seq, Instant timestamp,
+        RecordHeader header,
         String queueType
     ) implements LaneRecord {}
 
     /** 写操作延迟（Phase 2c）。 */
     record WriteDeferred(
-        long seq, Instant timestamp,
+        RecordHeader header,
         String entryId
     ) implements LaneRecord {}
 }
@@ -445,6 +504,8 @@ Phase 2a 只走到 `stopReason` 为止，没有工具调用回环。
  * 手动驱动的 Agent 运行时。
  * 对齐 pi 的 AgentHarness + AgentLane 接口。
  * StreamFn 通过 HarnessConfig 注入，executeAction(StreamAssistant) 内部调用 LLM。
+ *
+ * Phase 2a 只暴露手动驱动 API。多车道/lane/watch/hook 延后到 Phase 2c。
  */
 public class AgentHarness implements AutoCloseable {
 
@@ -462,43 +523,35 @@ public class AgentHarness implements AutoCloseable {
      * 查看下一个待执行的动作，不改变状态。
      * 返回 null 表示当前无可执行动作（run 结束）。
      */
-    public ActionInfo peekAction();
+    public Action peekAction();
 
     /**
      * 执行 peekAction 返回的动作，等待其完成。
      * 对于 StreamAssistant：内部调用 StreamFn 消费事件流，更新 LaneState。
-     * 返回下一个待执行的 ActionInfo，或 null 表示 run 结束。
+     * 返回下一个待执行的 Action，或 null 表示 run 结束。
+     * 对齐 pi：executeAction 也返回下一个 ActionInfo（pi 中返回 Promise<ActionInfo|undefined>）。
      */
-    public ActionInfo executeAction(ActionInfo action);
+    public Action executeAction(Action action);
 
     // ── 操作 ─────────────────────────────────────────────
 
     /** 发起一次新的 run。Phase 2a 只接受文本 prompt。 */
-    public ActionInfo run(String prompt);
+    public Action run(String prompt);
 
     /** 中止当前 run。 */
     public void abort();
 
-    // ── 车道（Phase 2c 完善）─────────────────────────────
+    // ── 结果 ─────────────────────────────────────────────
 
-    public LaneHandle lane();                          // 默认车道
-    public LaneHandle createLane(LaneConfig config);   // Phase 2c
-    public List<LaneHandle> lanes();
-
-    // ── 快照/订阅（Phase 2c 完善）───────────────────────
-
-    public WatchHandle<LaneSnapshot> watch();
+    /** 返回最近一次 run 的最终 assistant 消息。 */
+    public AssistantMessage lastAssistantMessage();
 
     // ── 模型/配置（Phase 2a 基础版）─────────────────────
 
     public ModelId<?> getModel();
     public void setModel(ModelId<?> model);
-    public ThinkingLevel getThinkingLevel();
-    public void setThinkingLevel(ThinkingLevel level);
-
-    // ── Hook 注册（Phase 2c 完善）───────────────────────
-
-    public <T> void on(String hookName, Consumer<T> handler);
+    public ModelThinkingLevel getThinkingLevel();
+    public void setThinkingLevel(ModelThinkingLevel level);
 
     @Override
     public void close();
@@ -519,8 +572,8 @@ public record HarnessConfig(
     /** 当前模型标识。 */
     ModelId<?> model,
 
-    /** 思考深度级别。 */
-    ThinkingLevel thinkingLevel,
+    /** 思考模式（Off 或启用某级别）。 */
+    ModelThinkingLevel thinkingLevel,
 
     /** 系统提示。Phase 2a 为固定字符串，Phase 2c 扩展为模板。 */
     String systemPrompt,
@@ -539,9 +592,11 @@ public record HarnessConfig(
 }
 ```
 
-### 6.3 ActionInfo 类型
+### 6.3 Action 类型
 
-对齐 pi 的 `ActionInfo` 联合类型。Phase 2a 只需要 3 种：
+对齐 pi 的 `ActionInfo` 联合类型。Phase 2a 子集；Phase 2b/2c 逐步扩充。
+
+**与已有骨架的关系**：已有 `AgentHarness` 骨架使用名称为 `Action` 的 sealed interface。Phase 2a 保留同名并扩充子类型。
 
 ```java
 /**
@@ -549,37 +604,46 @@ public record HarnessConfig(
  * Phase 2a 子集；Phase 2b/2c 逐步扩充。
  * 对齐 pi 的 ActionInfo 联合类型（agent-harness.ts:182）。
  */
-public sealed interface ActionInfo {
+public sealed interface Action {
 
-    /** 调用 LLM 获取下一个响应 chunk。 */
+    /**
+     * 调用 LLM 获取下一个响应 chunk。
+     * step 取值对齐 pi：
+     *   "assistant"      — Phase 2a
+     *   "compaction"     — Phase 2c
+     *   "branch_summary" — Phase 2c
+     */
     record StreamAssistant(
-        String step,     // "assistant"（Phase 2a）/ "compaction"（Phase 2c）
+        String step,     // "assistant" | "compaction" | "branch_summary"
         int attempt
-    ) implements ActionInfo {}
+    ) implements Action {}
 
     /**
      * 追加一条 Entry 到转录。
      * 对齐 pi 的引用模式：entry 已由 harness 内部创建在 pendingWrites 中，
      * 此 action 只传递标识（entryType + entryId），不传递完整对象。
+     * Phase 2a 单 lane 同步写入；pi 的 apply_pending_write 在 Phase 2c 多 lane 时加入。
      */
     record AppendEntry(
         String entryType,  // "message" | "thinking_level_change" | ...
         String entryId
-    ) implements ActionInfo {}
+    ) implements Action {}
 
     /**
      * 尝试结束当前 run。
      * 对齐 pi 的 try_finish_run：可能因 lane 状态不符而拒绝。
+     * pi 的 finish_operation 是独立的操作级 action；Phase 2a 单 lane 合并为一个 TryFinishRun。
+     * Phase 2c 多 lane 时拆分为 try_finish_run + finish_operation。
      */
     record TryFinishRun(
         String outcome    // "completed" | "failed"
-    ) implements ActionInfo {}
+    ) implements Action {}
 
     /** 执行工具（Phase 2b 使用）。 */
     record ExecuteTool(
         String toolCallId,
         String toolName
-    ) implements ActionInfo {}
+    ) implements Action {}
 }
 ```
 
@@ -589,11 +653,10 @@ public sealed interface ActionInfo {
 // AgentHarness 内部维护的 lane 状态
 class LaneState {
     RunPhase phase;              // idle | assistant | checkpoint
-    List<Entry> transcript;      // 当前 lane 的 Entry 链
+    List<Entry> transcript;      // 当前 lane 的 Entry 链（消息的唯一数据源）
     String runId;
     int stepIndex;
-    List<Message> messages;      // 当前轮次的 LLM 消息历史
-    AssistantMessage partial;    // 正在构建的 assistant 消息
+    AssistantMessage partial;    // 正在构建的 assistant 消息（来自最后一个 partial 快照）
 
     /**
      * 最新自有 entry 的快照信息。
@@ -607,6 +670,18 @@ class LaneState {
     // List<ToolCall> pendingToolCalls;
     // Phase 2c 扩展：
     // Queue<String> steerQueue, followUpQueue;
+
+    // ═══════════════════════════════════════════════════════
+    // 对齐 pi：消息列表不从 LaneState 存储，而是从 transcript
+    // entries 在每次 LLM 请求前动态构建。
+    // pi reducer.ts:79-109 中 LaneState 不持有裸消息列表。
+    // ═══════════════════════════════════════════════════════
+
+    /**
+     * 从 transcript entries 构建 LLM 消息列表。
+     * 每次 StreamAssistant 时调用，确保消息反映最新的 Entry 状态。
+     */
+    List<Message> buildMessages();
 }
 
 /**
@@ -640,6 +715,12 @@ checkpoint(空)         TryFinishRun（没有待写入的 Entry）
 `AgentLoop` 是薄驱动层，只负责 `peekAction()` → `executeAction()` 循环。
 **StreamFn 已通过 `HarnessConfig` 注入 `AgentHarness`**，`executeAction(StreamAssistant)` 内部完成 LLM 调用 + 事件消费。Loop 不需要知道 LLM 调用细节。
 
+**为什么需要 AgentLoop**（设计说明）：pi 的 `agentLoop()` 是 `agent-harness.ts` 内的一个函数。
+Java 化时提取为独立类，因为：
+1. 它是 Phase 3 CLI/TUI 的连接点——TUI 的事件循环调用 `AgentLoop`，非 TUI 模式（`-p`）也用它
+2. 独立类便于单元测试（不依赖 harness 的其他方法如 `runToCompletion()`）
+3. 同时 `AgentHarness.runToCompletion()`（02-design 已定义）在 Phase 2c 实现，内部复用 AgentLoop 逻辑
+
 ```java
 /**
  * Agent 循环——外层驱动逻辑。
@@ -662,7 +743,7 @@ public class AgentLoop {
         // 1. 发起 run——写入 user Message Entry + ThinkingLevelChange Entry
         var action = harness.run(userPrompt);
 
-        // 2. 驱动循环：peekAction → executeAction 直到 null
+        // 2. 驱动循环：executeAction 返回下一个 action，null 表示结束
         while (action != null) {
             action = harness.executeAction(action);
         }
@@ -724,40 +805,26 @@ public record StreamOptions(
 
 `executeAction(StreamAssistant)` 内部调用 `StreamFn`，逐事件消费。**核心策略：使用 `partial` 快照，不做手动拼接。**
 
-§2.3 的 `partial()` 方法已确保每个事件携带当前 AssistantMessage 的完整快照。AgentHarness 消费事件时只需：
+§2.3 的 `partial()` 方法已确保**所有 12 种事件（包括 Start）** 携带当前 AssistantMessage 的完整快照。AgentHarness 消费事件时只需：
 
-1. 收到 `Start` → 初始化消息槽位
-2. 收到任何携带 `partial` 的事件 → 用 `partial` 覆盖 LaneState 中的当前消息
-3. 收到 `StreamDone` → 取最后一个 `partial`，设置 `stopReason` + `usage`
-4. 收到 `StreamError` → 设置 `stopReason: "error"`
+1. 收到 `Start` → 用 `partial` 初始化消息槽位
+2. 收到其他事件 → 用 `partial` 覆盖 LaneState 中的当前消息
+3. 收到 `StreamDone` → 取 `partial`（最终完整消息）+ `reason`
+4. 收到 `StreamError` → 取 `partial`（截至错误的快照）+ `reason`（"aborted" | "error"）
 
 ```java
 // AgentHarness.executeAction(StreamAssistant) 内部逻辑（简化版）
-ActionInfo executeStreamAssistant(ActionInfo.StreamAssistant sa) {
-    var messages = buildMessages(laneState);  // 从 LaneState 构建消息列表
-    var options = buildStreamOptions();        // 从 ThinkingLevel 翻译
+Action executeStreamAssistant(Action.StreamAssistant sa) {
+    var messages = laneState.buildMessages();  // 从 transcript entries 动态构建
+    var options = buildStreamOptions();         // 从 ModelThinkingLevel 翻译
 
     var iter = streamFn.stream(messages, getModel(), options);
 
     while (iter.hasNext()) {
         var event = iter.next();
-        switch (event) {
-            case StreamEvent.Start s ->
-                laneState.partial = null;  // 重置
-
-            case StreamEvent.StreamDone sd ->
-                laneState.partial = sd.partial();  // 最终快照
-
-            case StreamEvent.StreamError se ->
-                laneState.partial = se.partial();  // 错误快照（含 stopReason="error"）
-
-            default -> {
-                // 所有增量事件（TextDelta、ThinkingDelta、ToolCallDelta 等）
-                // partial 已包含完整快照，直接覆盖即可
-                if (event.partial() != null) {
-                    laneState.partial = event.partial();
-                }
-            }
+        // 所有事件都携带 partial（包括 Start），直接覆盖
+        if (event.partial() != null) {
+            laneState.partial = event.partial();
         }
     }
 
@@ -767,7 +834,8 @@ ActionInfo executeStreamAssistant(ActionInfo.StreamAssistant sa) {
 }
 ```
 
-**设计对比**：pi 也使用 `partial` 做原地替换（`agent-harness.ts` 中 `stream_assistant` 处理逻辑）。手动拼接 `ContentBlock` 的方案（如 Phase 1 文档的 `foldEvents`）不再需要——`partial` 机制消除了增量拼接代码。
+**设计对比**：pi 也使用 `partial` 做原地替换（`agent-harness.ts` 中 `stream_assistant` 处理逻辑）。
+所有 12 种事件都携带 `partial: AssistantMessage`——包括 `start`。手动拼接 `ContentBlock` 的方案不再需要。
 
 ## 8. 上下文管理（P2a-7）
 
@@ -824,27 +892,33 @@ public class OverflowDetector {
 
 ```java
 /**
- * 便捷流式调用，自动处理 ThinkingLevel 翻译。
+ * 便捷流式调用，自动处理 ThinkingLevel 翻译 + 上下文溢出检测。
  * 对齐 pi 的 streamSimple() 包装。
  *
- * Phase 2a 职责：ThinkingLevel → Provider 参数翻译
- * Phase 2c 扩展：发请求前检测上下文是否溢出，溢出则触发 compaction
+ * Phase 2a 职责：
+ *   1. ThinkingLevel → Provider 参数翻译（通过 ThinkingLevelMap）
+ *   2. 发请求前调用 ContextEstimator + OverflowDetector 检测是否溢出
+ *   3. 溢出时返回 OverflowDetector 的诊断信息（stopReason="overflow"），
+ *      由 AgentLoop 的上层调用者决定如何处理
+ *
+ * Phase 2c 扩展：溢出时自动触发 compaction（而非仅报告）
  */
 public class StreamSimple {
 
     /**
      * 流式调用 LLM。
-     * 1. 根据 ThinkingLevel + ThinkingLevelMap 自动翻译成各 Provider 的具体参数
+     * 1. 根据 ModelThinkingLevel + ThinkingLevelMap 自动翻译成各 Provider 的具体参数
      *    （Anthropic: thinking.budget_tokens; OpenAI: reasoning_effort）
-     * 2. 发送请求并返回事件流
+     * 2. 调用 ContextEstimator.checkOverflow() 预检测；若溢出，注入溢出标记到请求
+     * 3. 发送请求并返回事件流
+     * 4. 请求结束后调用 OverflowDetector.isOverflow() 后检测
      *
-     * TODO Phase 2c：发请求前调用 ContextEstimator + OverflowDetector，
-     *      溢出时触发 compaction 而非直接发送请求
+     * TODO Phase 2c：溢出时自动触发 compaction 而非仅标记
      */
     public static StreamIterator<StreamEvent> stream(
             ModelInfo model,
             List<Message> messages,
-            ThinkingLevel reasoning,
+            ModelThinkingLevel reasoning,
             StreamFn streamFn);
 }
 ```
@@ -856,14 +930,15 @@ public class StreamSimple {
 | 层级 | 内容 | 依赖 |
 |------|------|------|
 | StreamEvent 序列化测试 | 12 种事件的 Jackson 序列化/反序列化（含 partial 字段） | 无 |
-| Entry/LaneRecord 测试 | 7 种 Entry + 9 种 LaneRecord 的构建和字段验证 | 无 |
-| ThinkingLevel 测试 | clamp 回退逻辑 | 无 |
+| Entry/EntryHeader 测试 | 7 种 Entry + EntryHeader 的构建和字段验证 | 无 |
+| LaneRecord/RecordHeader 测试 | 9 种 LaneRecord + RecordHeader 的构建和字段验证 | 无 |
+| ThinkingLevel 测试 | sealed interface + clamp 回退逻辑 + ModelThinkingLevel 开关 | 无 |
 | AgentHarness 状态机测试 | peekAction/executeAction 状态转换 + StreamAssistant 内部调用 | FauxProvider |
 | AgentLoop 集成测试 | 文本对话：user → assistant（FauxProvider.text("Hi!")） | FauxProvider |
 | AgentLoop 错误测试 | LLM 返回 error → partial 快照含 stopReason="error" | FauxProvider.error() |
-| partial 快照消费测试 | 流事件携带 partial → harness 直接覆盖，无需手动拼接 | FauxProvider |
+| partial 快照消费测试 | 所有 12 种事件携带 partial → harness 直接覆盖 | FauxProvider |
 | 上下文溢出检测测试 | 模拟溢出场景（三重检测逻辑） | 无 |
-| streamSimple 翻译测试 | ThinkingLevel → Provider 参数映射 | 无 |
+| streamSimple 翻译+溢出测试 | ModelThinkingLevel → Provider 参数映射 + 溢出预检测 | 无 |
 
 ### 10.2 覆盖率目标
 
@@ -875,34 +950,41 @@ public class StreamSimple {
 ## 11. 包结构
 
 ```
+# pi-java-agent-core 模块（com.pijava.agent）
 com.pijava.agent/
 ├── harness/
 │   ├── AgentHarness.java          ← 状态机主体
 │   ├── HarnessConfig.java         ← 创建配置（含 StreamFn + 模型 + 系统提示等）
 │   ├── LaneState.java             ← 内部 lane 状态（package-private，含 NewestOwn）
-│   ├── ActionInfo.java            ← peekAction 返回值 sealed 类型
+│   ├── Action.java                ← peekAction 返回值 sealed 类型
 │   ├── StreamFn.java              ← LLM 调用函数接口（通过 HarnessConfig 注入）
-│   ├── StreamOptions.java         ← 流式请求额外选项
-│   └── Hook.java                  ← Hook 注册（Phase 2c）
+│   └── StreamOptions.java         ← 流式请求额外选项
 ├── loop/
 │   └── AgentLoop.java             ← 外层驱动循环（不持有 StreamFn）
 ├── entry/
 │   ├── Entry.java                 ← 7 种 Entry 密封接口
+│   ├── EntryHeader.java           ← Entry 共享标识（id, seq, parentId, timestamp）
 │   └── ProvisionedEntry.java      ← 已预备待写入的 Entry（pendingWrites 元素）
 ├── record/
-│   └── LaneRecord.java            ← 9 种 LaneRecord 密封接口
+│   ├── LaneRecord.java            ← 9 种 LaneRecord 密封接口
+│   └── RecordHeader.java          ← LaneRecord 共享标识（seq, timestamp）
 ├── thinking/
-│   ├── ThinkingLevel.java         ← 六级枚举
+│   ├── ThinkingLevel.java         ← sealed interface + 5 个 record 子类型
+│   ├── ModelThinkingLevel.java    ← Off | Enabled(ThinkingLevel)
 │   ├── ThinkingLevelMap.java      ← 模型翻译表
 │   └── ThinkingConfig.java        ← Provider 特定参数
 ├── context/
 │   ├── ContextEstimator.java      ← token 估算
-│   └── OverflowDetector.java      ← 溢出检测（Phase 2a 定义 + 单测，2c 集成）
-├── stream/
-│   ├── StreamEvent.java           ← 在 pi-java-ai 模块中更新（12 种事件 + partial）
-│   └── StreamSimple.java          ← 便捷函数（Phase 2a：thinking 翻译；2c：溢出 + compaction）
-└── message/
-    └── AssistantMessage.java      ← Agent 层消息类型
+│   └── OverflowDetector.java      ← 溢出检测（Phase 2a 定义 + 单测 + streamSimple 集成）
+└── stream/
+    └── StreamSimple.java          ← 便捷函数（thinking 翻译 + 溢出检测）
+
+# ── 以下类型在 pi-java-ai 模块（com.pijava.ai）───────────
+# pi-java-ai/
+#   ├── stream/
+#   │   └── StreamEvent.java       ← 12 种事件 + partial: AssistantMessage
+#   └── message/
+#       └── AssistantMessage.java  ← 流式快照类型（pi-java-ai 模块，避免反向依赖）
 ```
 
 ## 12. 里程碑与验收
