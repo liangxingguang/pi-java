@@ -27,7 +27,7 @@ Mistral 证明了纯 `HttpClient` + 手动 JSON/SSE 解析完全可行（§2.4�
 1. **流式事件解析复杂度**：Anthropic 的 SSE 事件类型多达 8 种（`content_block_start/delta/stop`、`message_delta`、`message_stop`、`ping`、`error`），SDK 已处理事件分发、重连、错误分类，手写等价逻辑 ≈ 300+ 行且有边界 case 风险
 2. **认证与安全**：SDK 内置 API key 注入、请求签名（Google 使用 OAuth2/API key 双模式），避免手动管理敏感 header
 3. **社区维护**：API 变更时 SDK 先行适配；自建 HTTP 层需要持续追踪每个供应商的 changelog
-4. **JPMS 兼容**：三个 SDK 均已验证在 JDK 26 + JPMS 下可用（必要时通过 `--add-opens` 处理模块访问）
+4. **JDK 26 兼容**：三个 SDK 均已验证在 JDK 26 下可用
 
 Mistral 使用纯 `HttpClient` 的原因：其 API 是标准 OpenAI 兼容 SSE，无独立 SDK 维护成本低于引入非官方社区 SDK。
 
@@ -692,7 +692,7 @@ openai      gpt-5                       128K       $2.50      $10.00
 
 | 风险 | 影响 | 缓解 |
 |------|------|------|
-| anthropic-java SDK 不兼容 JDK 26 | 中 | SDK 声明 JDK 8+，基本兼容；JPMS 问题可通过 `--add-opens` 处理 |
+| anthropic-java SDK 不兼容 JDK 26 | 中 | SDK 声明 JDK 8+，基本兼容 |
 | google-genai 版本快速迭代 | 低 | 锁定精确版本，升版本单独 PR |
 | Mistral API 变更 | 低 | 协议简单（标准 SSE + JSON），影响可控 |
 | DeepSeek API 与 OpenAI 差异 | 中 | 已知差异用 compat 配置处理 |

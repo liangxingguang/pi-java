@@ -12,7 +12,9 @@
 |------|------|------|----------|------|
 | Phase 0 | 基础设施 | 项目骨架、构建系统、CI | 1 周 | 可构建的空项目 + `05-phase0-infrastructure-design.md` |
 | Phase 1 | LLM API | 统一 LLM 调用层 | 3–4 周 | `pi-java-ai` 可用 + `06-phase1-ai-design.md` |
-| Phase 2 | Agent 运行时 | Agent 循环 + 工具 | 4–5 周 | `pi-java-agent-core` 可用 + `07-phase2-agent-core-design.md` |
+| Phase 2a | Agent 循环最小版 | 12 事件 + ThinkingLevel + Entry + 基础循环 + 上下文管理 | 2 周 | 可跑 `pi-java -p "hello"` + `07-phase2a-agent-loop-design.md` |
+| Phase 2b | 工具系统 | Tool 接口 + 8 个内置工具 + 测试 | 2 周 | Agent 可调用 bash/read/write + `07b-phase2b-tools-design.md` |
+| Phase 2c | 高级编排 | 多车道、Hook、压缩、Skills、手动驱动 | 2 周 | 对齐 pi AgentHarness 全部能力 + `07c-phase2c-orchestration-design.md` |
 | Phase 3 | CLI + TUI | 交互式终端 | 2–3 周 | `pi-java` 命令行可用 + `08-phase3-cli-tui-design.md` |
 | Phase 4 | 持久化与恢复 | 会话存储、压缩 | 3–4 周 | 完整会话生命周期 + `09-phase4-persistence-design.md` |
 | Phase 5 | 原生分发 | GraalVM Native Image | 1–2 周 | 独立二进制文件 + `10-phase5-native-design.md` |
@@ -33,7 +35,7 @@
 |------|------|------|------|
 | P0-0 | **编写阶段设计文档** | `05-phase0-infrastructure-design.md`（从 03 提取 + 扩展） | 0.5d |
 | P0-1 | 创建 Maven 多模块项目（11 模块） | `pom.xml` × 12（根 + 11 模块，含 BOM） | 0.5d |
-| P0-2 | 配置 `module-info.java` | 每个模块的 JPMS 声明 | 0.5d |
+| P0-2 | 配置模块骨架 | 每个模块的包结构 + `package-info.java` 占位 | 0.5d |
 | P0-3 | 配置 Checkstyle / SpotBugs | 代码风格 + 静态分析 | 0.5d |
 | P0-4 | 配置 `maven-enforcer-plugin` | 依赖收敛 + JDK 26 版本约束 | 0.5d |
 | P0-5 | GitHub Actions CI | 构建 + 测试 + Checkstyle | 1d |
@@ -85,37 +87,93 @@
 
 ---
 
-## 4. Phase 2 — Agent 运行时（第 6–10 周）
+## 4. Phase 2a — Agent 循环最小版（第 6–7 周）
 
 ### 目标
-实现可用的 Agent 循环引擎，包含工具系统和会话管理。
+跑通 `pi-java -p "hello"` → LLM → 返回响应的完整链路。不需要工具调用。
+
+### 设计决策
+对齐 pi 的**手动驱动模式**：AgentHarness 是状态机，暴露 `peekAction()` / `executeAction()` 给外层（Phase 3 CLI/TUI）推着走。循环逻辑在外层，Harness 不自己跑。
 
 ### 任务分解
 
 | 编号 | 任务 | 产出 | 工时 |
 |------|------|------|------|
-| P2-0 | **编写阶段设计文档** | `07-phase2-agent-core-design.md`（从 03 §2 提取 + 扩展） | 0.5d |
-| P2-1 | Entry + LaneRecord 类型系统 | `Entry` + `LaneRecord` 密封接口（对齐 pi） | 1d |
-| P2-2 | AgentHarness 核心 | 多车道模型、手动驱动、快照订阅、11 个 Hook | 5d |
-| P2-3 | 工具注册与执行 | `Tool` 接口 + `ToolRegistry` | 1d |
-| P2-4 | Bash 工具 | 进程管理（ProcessBuilder + 虚拟线程） | 2d |
-| P2-5 | 文件读写工具 | Read / Write / Edit / EditDiff | 2d |
-| P2-6 | 搜索工具 | Find（glob 匹配）+ Grep（正则搜索） | 1d |
-| P2-7 | LS 工具 | 目录列表（NIO） | 0.5d |
-| P2-8 | 图片处理工具 | 图片读取/压缩（javax.imageio + FFM） | 1.5d |
-| P2-9 | 系统提示构建器 | 模板化 System Prompt | 1d |
-| P2-10 | Agent 循环基础版 | 用户消息 → LLM → 工具结果 → 循环 | 3d |
-| P2-11 | 模型路由 | 根据任务自动选模型 | 1d |
-| P2-12 | 遥测系统 | Telemetry 接口 + 事件计数 | 1d |
-| P2-13 | 压缩（Compaction）v1 | 简单截断策略 | 1d |
-| P2-14 | 单元测试 + 集成测试 | 使用 Faux Provider | 3d |
-| P2-15 | 事件系统（Hooks + Events） | 11 个 Hook + EventBus | 1d |
-| P2-16 | HTTP 代理检测 | 自动检测系统代理配置 | 0.5d |
+| P2a-0 | **编写阶段设计文档** | `07-phase2a-agent-loop-design.md`（从 03 §2 提取 + 扩展）| 0.5d |
+| P2a-1 | 补齐 12 事件协议 | `start`、`text_start/end`、`thinking_start/end` + `partial` 字段 | 0.5d |
+| P2a-2 | ThinkingLevel 系统 | 枚举 6 级 + `clampThinkingLevel()` | 0.5d |
+| P2a-3 | Entry 类型系统 | `Entry` 密封接口（7 种子类型，对齐 pi）| 1d |
+| P2a-4 | LaneRecord 类型系统 | `LaneRecord` 密封接口（9 种子类型）| 0.5d |
+| P2a-5 | AgentHarness 骨架 | 状态机 + 基础 lane 模型 + `peekAction()` | 3d |
+| P2a-6 | Agent Loop（无工具版） | user → LLM → assistant 响应 → 结束，含 stopReason 处理 | 1d |
+| P2a-7 | 上下文管理 | `estimateContextTokens()` + `isContextOverflow()` | 1d |
+| P2a-8 | streamSimple() 便捷函数 | 自动翻译 thinking 级别 + 溢出前 compaction 触发 | 0.5d |
+| P2a-9 | 单元测试 | FauxProvider 驱动的 Loop 测试 | 1d |
 
-### 里程碑
-- [ ] Agent 循环可完成多轮工具调用
-- [ ] 所有内置工具可独立测试
-- [ ] 遥测事件正确记录
+**里程碑**：`pi-java -p "hello"` 输出 LLM 响应文本。
+
+---
+
+## 5. Phase 2b — 工具系统（第 8–9 周）
+
+### 目标
+Agent 可以调用 bash/read/write 等工具完成编码任务。
+
+### 任务分解
+
+| 编号 | 任务 | 产出 | 工时 |
+|------|------|------|------|
+| P2b-0 | **编写阶段设计文档** | `07b-phase2b-tools-design.md` | 0.5d |
+| P2b-1 | Tool 接口 + ToolRegistry | `AgentTool` 接口 + 注册/查找 | 1d |
+| P2b-2 | Bash 工具 | ProcessBuilder + 虚拟线程 + 超时/截断 | 2d |
+| P2b-3 | Read 工具 | NIO 文件读取 + 行数限制 | 1d |
+| P2b-4 | Write 工具 | NIO 文件写入 + 原子替换 | 1d |
+| P2b-5 | Edit 工具 | 精确字符串替换 + 备份 | 1.5d |
+| P2b-6 | Grep 工具 | 正则搜索 + 行号 | 1d |
+| P2b-7 | LS 工具 | 目录列表 + 递归 | 0.5d |
+| P2b-8 | Glob 工具 | 通配符文件匹配 | 0.5d |
+| P2b-9 | 工具执行引擎 | 并行/串行调度 + 审批确认 | 1d |
+| P2b-10 | Agent Loop（带工具版） | LLM → toolcall → 执行 → 结果 → LLM 循环 | 1d |
+| P2b-11 | 集成测试 | FauxProvider + 真实工具 | 1.5d |
+
+**里程碑**：Agent 可完成"读文件→改代码→运行测试"的多轮工具调用。
+
+---
+
+## 6. Phase 2c — 高级编排（第 10–11 周）
+
+### 目标
+对齐 pi AgentHarness 全部能力：多车道、Hook、压缩、Skills、手动驱动。
+
+### 任务分解
+
+| 编号 | 任务 | 产出 | 工时 |
+|------|------|------|------|
+| P2c-0 | **编写阶段设计文档** | `07c-phase2c-orchestration-design.md` | 0.5d |
+| P2c-1 | 多车道模型 | `createLane()` + `moveLane()` + lane 隔离 | 1.5d |
+| P2c-2 | 手动驱动模式完善 | `executeAction()` + `runToCompletion()` + `close()` 拒绝待执行 | 1d |
+| P2c-3 | 快照/订阅系统 | `watch()` → `WatchHandle<LaneSnapshot>` + `HarnessEventBus` | 1d |
+| P2c-4 | 11 个生命周期 Hook | `before_run` / `before_tool` / `after_response` 等 | 2d |
+| P2c-5 | Skills 系统 | `loadSkills()` + `formatSkillInvocation()` | 1d |
+| P2c-6 | 压缩 Compaction v1 | 截断策略 + `before_compaction` hook | 1d |
+| P2c-7 | 系统提示构建器 | 模板化 System Prompt + 动态工具描述 | 1d |
+| P2c-8 | HTTP 代理检测 + AbortSignal | 系统代理自动检测 + 可取消 HTTP 请求 | 0.5d |
+| P2c-9 | Provider 重试策略完善 | 按供应商区分退避 | 0.5d |
+| P2c-10 | 模型路由 | `ModelResolver` 根据任务选模型 | 1d |
+| P2c-11 | 遥测系统集成 | Telemetry 接口 + Agent 事件计数 | 0.5d |
+| P2c-12 | 集成测试 | 多 lane + hook + compaction 端到端 | 1d |
+
+**里程碑**：对齐 pi AgentHarness 全部能力，为 Phase 3 CLI/TUI 提供完整的 Agent API。
+
+---
+
+## Phase 2 里程碑总览
+
+```
+Phase 2a 完成 → pi-java -p "hello" 返回 LLM 响应
+Phase 2b 完成 → Agent 可调用 bash/read/write 完成编码任务
+Phase 2c 完成 → 对齐 pi AgentHarness 全部能力，Phase 3 可接入
+```
 
 ---
 

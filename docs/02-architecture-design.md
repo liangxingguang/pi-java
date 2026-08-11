@@ -102,18 +102,18 @@ pi-java/  （共 11 个模块）
 └── docs/                            ← 项目文档
 ```
 
-| 模块 | groupId:artifactId | JPMS 模块名 | pi 对应 | 说明 |
+| 模块 | groupId:artifactId | pi 对应 | 说明 |
 |------|-------------------|-------------|---------|------|
-| telemetry | `com.pijava:pi-java-telemetry` | `com.pijava.telemetry` | `packages/telemetry` | 遥测合约 |
-| ai | `com.pijava:pi-java-ai` | `com.pijava.ai` | `packages/ai` | LLM API |
-| agent-core | `com.pijava:pi-java-agent-core` | `com.pijava.agent` | `packages/agent` | Agent 运行时 |
-| sqlite-backend | `com.pijava:pi-java-session-backend-sqlite` | `com.pijava.session.backend.sqlite` | `packages/session-backends/sqlite-node` | SQLite 会话存储 |
-| tui | `com.pijava:pi-java-tui` | `com.pijava.tui` | `packages/tui` | 终端 UI |
-| protocol | `com.pijava:pi-java-protocol` | `com.pijava.protocol` | `packages/protocol` | CBOR 协议 |
-| client | `com.pijava:pi-java-client` | `com.pijava.client` | `packages/client` | 远程会话客户端 |
-| server | `com.pijava:pi-java-server` | `com.pijava.server` | `packages/server` | 远程会话服务端 |
-| coding-agent | `com.pijava:pi-java-coding-agent` | `com.pijava.coding.agent` | `packages/coding-agent` | CLI 入口 |
-| evals | `com.pijava:pi-java-evals` | `com.pijava.evals` | `packages/evals` | 评估框架 |
+| telemetry | `com.pijava:pi-java-telemetry` | `packages/telemetry` | 遥测合约 |
+| ai | `com.pijava:pi-java-ai` | `packages/ai` | LLM API |
+| agent-core | `com.pijava:pi-java-agent-core` | `packages/agent` | Agent 运行时 |
+| sqlite-backend | `com.pijava:pi-java-session-backend-sqlite` | `packages/session-backends/sqlite-node` | SQLite 会话存储 |
+| tui | `com.pijava:pi-java-tui` | `packages/tui` | 终端 UI |
+| protocol | `com.pijava:pi-java-protocol` | `packages/protocol` | CBOR 协议 |
+| client | `com.pijava:pi-java-client` | `packages/client` | 远程会话客户端 |
+| server | `com.pijava:pi-java-server` | `packages/server` | 远程会话服务端 |
+| coding-agent | `com.pijava:pi-java-coding-agent` | `packages/coding-agent` | CLI 入口 |
+| evals | `com.pijava:pi-java-evals` | `packages/evals` | 评估框架 |
 
 ---
 
@@ -122,7 +122,7 @@ pi-java/  （共 11 个模块）
 | 关注点 | 选型 | 说明 |
 |--------|------|------|
 | 运行时 | JDK 26 | 虚拟线程、结构化并发、模式匹配 |
-| 构建系统 | Maven 4.x | JPMS 支持成熟，声明式配置 |
+| 构建系统 | Maven 4.x | 声明式配置，依赖管理成熟 |
 | HTTP 客户端 | `java.net.http.HttpClient` (JDK 内置) | 支持 HTTP/2、SSE、异步 |
 | 并发模型 | 虚拟线程（`--enable-preview` 在 22 之前无需） | 协程风格，百万级并发 |
 | JSON | Jackson (`jackson-core`, `jackson-databind`) | 流式解析 + CBOR 模块 |

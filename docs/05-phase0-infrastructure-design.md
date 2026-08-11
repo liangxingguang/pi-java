@@ -377,9 +377,11 @@ pi-java/
 
 ---
 
-## 4. JPMS module-info.java 设计
+## 4. 模块化策略
 
-### 4.1 核心模块（Phase 0 定义接口）
+> **Phase 1 决策：不使用 JPMS。** 外部 SDK（anthropic-java、openai-java）及传递依赖不支持模块路径，会产生分裂包冲突。模块隔离由 Maven 多模块 + maven-enforcer-plugin + 包结构约定保证。详见 Phase 1 实施记录。
+
+### 4.1 （已废弃）核心模块 JPMS 声明
 
 ```
 com.pijava.telemetry          exports com.pijava.telemetry
@@ -816,7 +818,7 @@ Phase 0 完成的标准（AI 在提交 PR 前必须全部通过）：
 ## 14. 里程碑
 
 - [ ] `./mvnw clean verify` 在 ubuntu-latest / windows-latest / macos-latest 均通过
-- [ ] 所有 11 个模块含正确的 `module-info.java`
+- [ ] 所有 11 个模块含正确的包结构和依赖配置
 - [ ] Checkstyle / SpotBugs / enforcer 均无错误
 - [ ] CI 绿灯
 - [ ] `CONTRIBUTING.md` + `AGENTS.md` 已写入

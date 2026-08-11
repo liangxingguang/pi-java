@@ -86,7 +86,7 @@ pi-java 的目标是使用 **JDK 26** 以 **Pure Java**（尽可能减少外部�
 | NF5 | 原生二进制分发 | P1 | 通过 GraalVM Native Image 编译为独立可执行文件 |
 | NF6 | 响应式 / 非阻塞 I/O | P1 | LLM 流式响应使用 Flow API 或虚拟线程模拟同步风格 |
 | NF7 | 可测试性 | P0 | 每个模块可独立测试；提供 faux/mock provider 用于离线测试 |
-| NF8 | 模块化 | P0 | 基于 JPMS（Java Platform Module System）的多模块 Maven/Gradle 项目 |
+| NF8 | 模块化 | P0 | 基于 Maven 多模块结构，包隔离 + maven-enforcer-plugin 保证依赖收敛 |
 | NF9 | 性能 | P2 | LLM 响应流处理延迟 < 10ms 额外开销；TUI 渲染 60fps 感知流畅 |
 | NF10 | 崩溃恢复 | P1 | JSONL 增量写入，崩溃后可从最后一个完整记录恢复 |
 
@@ -97,9 +97,9 @@ pi-java 的目标是使用 **JDK 26** 以 **Pure Java**（尽可能减少外部�
 | 约束 | 说明 |
 |------|------|
 | 语言版本 | Java 22+（语言特性），JDK 26 作为构建和运行基线 |
-| 构建系统 | Maven（推荐，JPMS 支持更成熟）或 Gradle |
+| 构建系统 | Maven 4.x（声明式配置，依赖管理成熟） |
 | 外部依赖上限 | 核心模块 ≤ 5 个外部依赖；CLI 模块可放宽至 ~15 个 |
-| 命名空间 | Maven groupId: `com.pi-java`；JPMS 模块名: `com.pijava`（JPMS 不允许连字符） |
+| 命名空间 | Maven groupId: `com.pi-java`；包名: `com.pijava` |
 | API 兼容性 | 不承诺与 pi（TypeScript）的 API 兼容；仅复刻架构理念和功能 |
 | 功能点 兼容性 | 1：1复刻pi功能点，不能简化或者遗漏，只能对齐或者超越 |
 | 许可证 | MIT（与原项目一致） |
@@ -120,7 +120,7 @@ pi-java 的目标是使用 **JDK 26** 以 **Pure Java**（尽可能减少外部�
 
 | 决策项 | 选项 | 推荐 |
 |--------|------|------|
-| 构建系统 | Maven / Gradle | **Maven** — JPMS 支持更成熟，声明式配置更清晰 |
+| 构建系统 | Maven / Gradle | **Maven** — 声明式配置，依赖管理更成熟 |
 | HTTP 客户端 | `java.net.http.HttpClient` / OkHttp | **HttpClient** — JDK 内置，虚拟线程友好 |
 | JSON 处理 | Jackson / Gson / javax.json | **Jackson** — CBOR 模块复用，流式解析成熟 |
 | TUI 库 | TamboUI | **TamboUI** — 源自 Ratatui（Claude CLI 同源），内置差量渲染、Widget 库、CSS 主题、GraalVM 支持 |
