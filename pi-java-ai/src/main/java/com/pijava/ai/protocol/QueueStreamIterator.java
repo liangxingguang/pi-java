@@ -3,6 +3,7 @@ package com.pijava.ai.protocol;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import com.pijava.ai.api.StreamIterator;
+import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamEvent.StreamDone;
 import com.pijava.ai.stream.StreamEvent.StreamError;
@@ -49,7 +50,7 @@ final class QueueStreamIterator implements StreamIterator {
             return event;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return new StreamError(e);
+            return new StreamError("error", e, AssistantMessage.empty());
         }
     }
 

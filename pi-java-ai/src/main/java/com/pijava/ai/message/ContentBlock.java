@@ -2,6 +2,9 @@ package com.pijava.ai.message;
 
 import java.util.Map;
 
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+
 /**
  * A block of content within a {@link Message}.
  *
@@ -9,6 +12,13 @@ import java.util.Map;
  * The design mirrors the content-block model used by Anthropic, OpenAI,
  * and Google Gemini.</p>
  */
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
+@JsonSubTypes({
+    @JsonSubTypes.Type(value = ContentBlock.TextContent.class, name = "text"),
+    @JsonSubTypes.Type(value = ContentBlock.ImageContent.class, name = "image"),
+    @JsonSubTypes.Type(value = ContentBlock.ToolUseContent.class, name = "tool_use"),
+    @JsonSubTypes.Type(value = ContentBlock.ToolResultContent.class, name = "tool_result")
+})
 public sealed interface ContentBlock {
 
     /** Plain text content. */

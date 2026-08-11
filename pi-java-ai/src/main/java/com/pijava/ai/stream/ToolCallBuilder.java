@@ -2,13 +2,19 @@ package com.pijava.ai.stream;
 
 import java.util.Map;
 
+import com.pijava.ai.message.AssistantMessage;
+
 /**
  * Accumulates streaming JSON deltas for a single tool call into a complete
  * set of arguments.
  *
- * <p>Protocol-agnostic: shared by OpenAI and Mistral adapters, neither of
- * which couples to any vendor SDK. Each adapter creates and manages builder
- * instances keyed by {@code tool_call_id}.</p>
+ * <p>Protocol-agnostic: shared by OpenAI and Mistral adapters. Each adapter
+ * creates and manages builder instances keyed by {@code tool_call_id}.</p>
+ *
+ * <p>Phase 2a: updated to work with the new 13-event protocol (contentIndex
+ * + partial snapshots). Use {@link StreamPartialBuilder} for full protocol
+ * compliance; this builder is a lower-level accumulator for adapters that
+ * need finer control over tool-call event emission.</p>
  */
 public final class ToolCallBuilder {
 
@@ -55,9 +61,12 @@ public final class ToolCallBuilder {
         return arguments.toString();
     }
 
-    /** Build the terminal {@link StreamEvent.ToolCallEnd} event. */
-    @SuppressWarnings("unchecked")
-    public StreamEvent.ToolCallEnd toEnd() {
+    /**
+     * Build the terminal {@link StreamEvent.ToolCallEnd} event.
+     * Phase 2a: requires contentIndex and partial snapshot.
+     */
+    @SuppressWarnings("unchecked") // Jackson ObjectMapper.readValue with generic Map type
+    public StreamEvent.ToolCallEnd toEnd(int contentIndex, AssistantMessage partial) {
         Map<String, Object> parsed;
         try {
             parsed = (Map<String, Object>) (Map<?, ?>)
@@ -66,6 +75,6 @@ public final class ToolCallBuilder {
         } catch (Exception e) {
             parsed = Map.of("_raw", arguments.toString());
         }
-        return new StreamEvent.ToolCallEnd(id, name, parsed);
+        return new StreamEvent.ToolCallEnd(contentIndex, id, name, parsed, partial);
     }
 }

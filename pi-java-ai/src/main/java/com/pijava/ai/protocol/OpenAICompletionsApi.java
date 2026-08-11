@@ -1,9 +1,6 @@
 package com.pijava.ai.protocol;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Flow;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.SubmissionPublisher;
 
 import com.openai.client.OpenAIClient;
@@ -11,26 +8,19 @@ import com.openai.client.okhttp.OpenAIOkHttpClient;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
 
 import com.pijava.ai.api.ApiOptions;
-import com.pijava.ai.api.ChatApi;
-import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
-import com.pijava.ai.stream.StreamEvent.StreamDone;
-import com.pijava.ai.stream.StreamEvent.StreamError;
-import com.pijava.ai.stream.StreamEvent.TextDelta;
-import com.pijava.ai.stream.StreamEvent.ToolCallDelta;
-import com.pijava.ai.stream.StreamEvent.ToolCallStart;
-import com.pijava.ai.stream.StreamEvent.UsageInfo;
+import com.pijava.ai.stream.StreamPartialBuilder;
 
 /**
  * OpenAI Chat Completions adapter using the official {@code openai-java} SDK.
  *
- * <p>Phase 1: text-only streaming using SDK convenience methods
- * ({@code addUserMessage(String)}, {@code addSystemMessage(String)}).</p>
+ * <p>Phase 2a: emits the full 13-event protocol with {@code partial} snapshots
+ * via {@link StreamPartialBuilder}.</p>
  */
-public class OpenAICompletionsApi implements ChatApi {
+public class OpenAICompletionsApi extends AbstractChatApi {
 
     protected final OpenAIClient client;
     protected final String apiKey;
@@ -48,84 +38,86 @@ public class OpenAICompletionsApi implements ChatApi {
     }
 
     @Override
-    public Flow.Publisher<StreamEvent> stream(StreamRequest request, ApiOptions options) {
-        var publisher = new SubmissionPublisher<StreamEvent>();
-        Thread.startVirtualThread(() -> {
-            try {
-                streamInternal(request, publisher);
-                publisher.close();
-            } catch (Exception e) {
-                publisher.closeExceptionally(e);
-            }
-        });
-        return publisher;
-    }
-
-    @Override
-    public StreamIterator streamBlocking(StreamRequest request, ApiOptions options) {
-        var queue = new LinkedBlockingQueue<StreamEvent>();
-        stream(request, options).subscribe(new Flow.Subscriber<>() {
-            private Flow.Subscription subscription;
-            @Override public void onSubscribe(Flow.Subscription s) {
-                this.subscription = s; s.request(Long.MAX_VALUE);
-            }
-            @Override public void onNext(StreamEvent e) { queue.offer(e); }
-            @Override public void onError(Throwable t) { queue.offer(new StreamError(t)); }
-            @Override public void onComplete() {}
-        });
-        return new AiQueueStreamIterator(queue);
-    }
-
-    @Override
-    public Message send(StreamRequest request, ApiOptions options) {
-        var blocks = new ArrayList<ContentBlock>();
-        try (var iter = streamBlocking(request, options)) {
-            while (iter.hasNext()) {
-                var event = iter.next();
-                if (event instanceof TextDelta td) {
-                    blocks.add(new ContentBlock.TextContent(td.text()));
-                }
-            }
-        } catch (Exception e) {
-            throw new com.pijava.ai.http.PiHttpException(0, "Streaming failed", e);
-        }
-        return new Message.AssistantMessage(blocks);
-    }
-
-    private void streamInternal(StreamRequest request,
-                                 SubmissionPublisher<StreamEvent> publisher) {
+    protected void streamInternal(StreamRequest request,
+                                   SubmissionPublisher<StreamEvent> publisher) {
+        var builder = new StreamPartialBuilder();
+        boolean textStarted = false;
+        boolean toolStarted = false;
+        var pendingToolId = new String[]{""};
+        var pendingToolName = new String[]{""};
         try {
             var params = buildParams(request);
+            publisher.submit(builder.emitStart());
+
             try (var streamResponse = client.chat().completions().createStreaming(params)) {
-                streamResponse.stream().forEach(chunk -> {
-                    if (chunk.choices().isEmpty()) return;
+
+                for (var chunk : streamResponse.stream().toList()) {
+                    if (chunk.choices().isEmpty()) {
+                        if (chunk.usage().isPresent()) {
+                            var u = chunk.usage().get();
+                            publisher.submit(builder.emitUsage(u.promptTokens(), u.completionTokens()));
+                        }
+                        continue;
+                    }
                     var choice = chunk.choices().get(0);
                     var delta = choice.delta();
 
-                    delta.content().ifPresent(text -> {
-                        if (!text.isEmpty()) publisher.submit(
-                                new TextDelta(text, TextDelta.TEXT));
-                    });
+                    // Text content
+                    if (delta.content().isPresent()) {
+                        var text = delta.content().get();
+                        if (!text.isEmpty()) {
+                            if (!textStarted) {
+                                publisher.submit(builder.emitTextStart());
+                                textStarted = true;
+                            }
+                            publisher.submit(builder.emitTextDelta(text));
+                        }
+                    }
 
-                    delta.toolCalls().ifPresent(toolCalls -> {
-                        for (var tc : toolCalls) {
+                    // Tool calls — accumulate deltas; emit ToolCallEnd at finish
+                    if (delta.toolCalls().isPresent()) {
+                        for (var tc : delta.toolCalls().get()) {
+                            // First appearance: has id + function name
                             if (tc.id().isPresent() && tc.function().isPresent()) {
                                 var func = tc.function().get();
-                                publisher.submit(new ToolCallStart(
-                                        tc.id().get(), func.name().orElse("")));
-                                func.arguments().ifPresent(args ->
-                                        publisher.submit(new ToolCallDelta(
-                                                tc.id().get(), args)));
+                                pendingToolId[0] = tc.id().get();
+                                pendingToolName[0] = func.name().orElse("");
+                                if (!toolStarted) {
+                                    publisher.submit(builder.emitToolCallStart());
+                                    toolStarted = true;
+                                }
+                                if (func.arguments().isPresent()) {
+                                    publisher.submit(builder.emitToolCallDelta(
+                                            pendingToolId[0], func.arguments().get()));
+                                }
+                            } else if (tc.function().isPresent()) {
+                                // Subsequent chunks: only function.arguments
+                                var func = tc.function().get();
+                                if (func.arguments().isPresent()) {
+                                    publisher.submit(builder.emitToolCallDelta(
+                                            pendingToolId[0], func.arguments().get()));
+                                }
                             }
                         }
-                    });
+                    }
 
-                    chunk.usage().ifPresent(u -> publisher.submit(
-                            new UsageInfo(u.promptTokens(), u.completionTokens())));
-                });
+                    // Usage
+                    if (chunk.usage().isPresent()) {
+                        var u = chunk.usage().get();
+                        publisher.submit(builder.emitUsage(u.promptTokens(), u.completionTokens()));
+                    }
+                }
             }
+            // Emit block-end events before StreamDone
+            if (textStarted) publisher.submit(builder.emitTextEnd());
+            if (toolStarted) {
+                publisher.submit(builder.emitToolCallEnd(
+                        pendingToolId[0], pendingToolName[0]));
+            }
+            String reason = toolStarted ? "tool_use" : "stop";
+            publisher.submit(builder.emitDone(reason));
         } catch (Exception e) {
-            publisher.submit(new StreamError(e));
+            publisher.submit(builder.emitError("error", e));
         }
     }
 

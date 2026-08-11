@@ -3,8 +3,6 @@ package com.pijava.ai.protocol;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Flow;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.SubmissionPublisher;
 
 import com.google.genai.Client;
@@ -19,28 +17,21 @@ import com.google.genai.types.Part;
 import com.google.genai.types.Tool;
 
 import com.pijava.ai.api.ApiOptions;
-import com.pijava.ai.api.ChatApi;
-import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
-import com.pijava.ai.stream.StreamEvent.StreamDone;
-import com.pijava.ai.stream.StreamEvent.StreamError;
-import com.pijava.ai.stream.StreamEvent.TextDelta;
-import com.pijava.ai.stream.StreamEvent.ToolCallEnd;
-import com.pijava.ai.stream.StreamEvent.ToolCallStart;
-import com.pijava.ai.stream.StreamEvent.UsageInfo;
+import com.pijava.ai.stream.StreamPartialBuilder;
 
 /**
  * Google Gemini API adapter using the official {@code google-genai} SDK.
  *
- * <p>Handles message conversion, promptFeedback safety interception,
- * and functionCall → tool-call event mapping. Google returns complete
- * function-call arguments in a single response (no delta aggregation needed).</p>
+ * <p>Phase 2a: emits the full 13-event protocol with {@code partial} snapshots.
+ * Google returns complete function-call arguments in a single response
+ * (no delta aggregation needed).</p>
  */
-public final class GoogleGenerativeAiApi implements ChatApi {
+public final class GoogleGenerativeAiApi extends AbstractChatApi {
 
     private static final String DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com";
 
@@ -56,59 +47,21 @@ public final class GoogleGenerativeAiApi implements ChatApi {
                 .build();
     }
 
-    @Override
-    public Flow.Publisher<StreamEvent> stream(StreamRequest request, ApiOptions options) {
-        var publisher = new SubmissionPublisher<StreamEvent>();
-        Thread.startVirtualThread(() -> {
-            try {
-                streamInternal(request, publisher);
-                publisher.close();
-            } catch (Exception e) {
-                publisher.closeExceptionally(e);
-            }
-        });
-        return publisher;
-    }
-
-    @Override
-    public StreamIterator streamBlocking(StreamRequest request, ApiOptions options) {
-        var queue = new LinkedBlockingQueue<StreamEvent>();
-        stream(request, options).subscribe(new Flow.Subscriber<>() {
-            private Flow.Subscription subscription;
-            @Override public void onSubscribe(Flow.Subscription s) {
-                this.subscription = s; s.request(Long.MAX_VALUE);
-            }
-            @Override public void onNext(StreamEvent e) { queue.offer(e); }
-            @Override public void onError(Throwable t) { queue.offer(new StreamError(t)); }
-            @Override public void onComplete() {}
-        });
-        return new com.pijava.ai.protocol.QueueStreamIterator(queue);
-    }
-
-    @Override
-    public Message send(StreamRequest request, ApiOptions options) {
-        var blocks = new ArrayList<ContentBlock>();
-        try (var iter = streamBlocking(request, options)) {
-            while (iter.hasNext()) {
-                var event = iter.next();
-                if (event instanceof TextDelta td) {
-                    blocks.add(new ContentBlock.TextContent(td.text()));
-                }
-            }
-        } catch (Exception e) {
-            throw new com.pijava.ai.http.PiHttpException(0, "Streaming failed", e);
-        }
-        return new Message.AssistantMessage(blocks);
-    }
-
     // ── Internals ─────────────────────────────────────────────────
 
-    private void streamInternal(StreamRequest request,
-                                SubmissionPublisher<StreamEvent> publisher) {
+    @Override
+    protected void streamInternal(StreamRequest request,
+                                   SubmissionPublisher<StreamEvent> publisher) {
+        var builder = new StreamPartialBuilder();
+        String finishReason = null;
         try {
             var contents = toGoogleContents(request.messages());
             var config = buildConfig(request);
 
+            publisher.submit(builder.emitStart());
+
+            boolean textStarted = false;
+            boolean thinkingStarted = false;
             try (ResponseStream<GenerateContentResponse> stream =
                          client.models.generateContentStream(
                                  request.model().modelName(), contents, config)) {
@@ -118,7 +71,7 @@ public final class GoogleGenerativeAiApi implements ChatApi {
                     if (response.promptFeedback().isPresent()) {
                         var fb = response.promptFeedback().get();
                         if (fb.blockReason().isPresent()) {
-                            publisher.submit(new StreamError(
+                            publisher.submit(builder.emitError("error",
                                     new IllegalStateException(
                                             "Content blocked by Google safety filter: "
                                                     + fb.blockReason().get())));
@@ -132,7 +85,7 @@ public final class GoogleGenerativeAiApi implements ChatApi {
                         long input = usage.promptTokenCount().orElse(0);
                         long output = usage.candidatesTokenCount().orElse(0)
                                 + usage.thoughtsTokenCount().orElse(0);
-                        publisher.submit(new UsageInfo(input, output));
+                        publisher.submit(builder.emitUsage(input, output));
                     }
 
                     // Process candidates
@@ -143,13 +96,27 @@ public final class GoogleGenerativeAiApi implements ChatApi {
                         if (parts.isEmpty()) continue;
 
                         for (var part : parts.get()) {
-                            // Text / thinking
+                            // Thinking block — Google's thought() is a boolean flag
+                            // indicating the text content represents model thinking
+                            if (part.thought().isPresent() && part.thought().get()
+                                    && part.text().isPresent()) {
+                                String thought = part.text().get();
+                                if (!thinkingStarted) {
+                                    publisher.submit(builder.emitThinkingStart());
+                                    thinkingStarted = true;
+                                }
+                                publisher.submit(builder.emitThinkingDelta(thought));
+                                continue;
+                            }
+
+                            // Text
                             if (part.text().isPresent()) {
                                 String text = part.text().get();
-                                boolean isThinking = part.thought().isPresent()
-                                        && part.thought().get();
-                                String type = isThinking ? TextDelta.THINKING : TextDelta.TEXT;
-                                publisher.submit(new TextDelta(text, type));
+                                if (!textStarted) {
+                                    publisher.submit(builder.emitTextStart());
+                                    textStarted = true;
+                                }
+                                publisher.submit(builder.emitTextDelta(text));
                             }
 
                             // Function call (Google returns complete args — no delta)
@@ -161,22 +128,24 @@ public final class GoogleGenerativeAiApi implements ChatApi {
                                 String name = fc.name().orElse("");
                                 Map<String, Object> args = fc.args().orElse(Map.of());
 
-                                publisher.submit(new ToolCallStart(id, name));
-                                publisher.submit(new ToolCallEnd(id, name, args));
+                                publisher.submit(builder.emitToolCallStart());
+                                publisher.submit(builder.emitToolCallDelta(id, ""));
+                                publisher.submit(builder.emitToolCallEnd(id, name));
                             }
                         }
                     }
 
                     // Finish reason
-                    var finishReason = response.finishReason();
-                    if (finishReason != null) {
-                        String reason = finishReason.toString().toLowerCase();
-                        publisher.submit(new StreamDone(reason, null));
+                    if (response.finishReason() != null) {
+                        finishReason = response.finishReason().toString().toLowerCase();
                     }
                 }
             }
+            if (thinkingStarted) publisher.submit(builder.emitThinkingEnd());
+            if (textStarted) publisher.submit(builder.emitTextEnd());
+            publisher.submit(builder.emitDone(finishReason != null ? finishReason : "stop"));
         } catch (Exception e) {
-            publisher.submit(new StreamError(e));
+            publisher.submit(builder.emitError("error", e));
         }
     }
 

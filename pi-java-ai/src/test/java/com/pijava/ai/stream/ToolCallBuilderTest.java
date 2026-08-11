@@ -1,5 +1,7 @@
 package com.pijava.ai.stream;
 
+import com.pijava.ai.message.AssistantMessage;
+
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -7,6 +9,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Tests for {@link ToolCallBuilder} — delta aggregation for OpenAI/Mistral tool calls.
  */
 class ToolCallBuilderTest {
+
+    private static final AssistantMessage PARTIAL = AssistantMessage.empty();
 
     @Test
     void shouldStartWithCorrectIdAndName() {
@@ -46,7 +50,7 @@ class ToolCallBuilderTest {
         builder.start("toolu_01", "read");
         builder.append("{\"path\":\"/src/main.java\",\"offset\":10}");
 
-        var end = builder.toEnd();
+        var end = builder.toEnd(0, PARTIAL);
         assertThat(end.id()).isEqualTo("toolu_01");
         assertThat(end.name()).isEqualTo("read");
         assertThat(end.arguments())
@@ -60,7 +64,7 @@ class ToolCallBuilderTest {
         builder.start("toolu_01", "read");
         builder.append("not valid json");
 
-        var end = builder.toEnd();
+        var end = builder.toEnd(0, PARTIAL);
         assertThat(end.arguments()).containsKey("_raw");
         assertThat(end.arguments().get("_raw")).isEqualTo("not valid json");
     }

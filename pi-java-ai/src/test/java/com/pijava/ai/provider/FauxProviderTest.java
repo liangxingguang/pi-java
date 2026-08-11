@@ -37,10 +37,16 @@ class FauxProviderTest {
             }
         }
 
-        assertThat(events).hasSize(2);
-        assertThat(events.get(0)).isInstanceOf(StreamEvent.TextDelta.class);
-        assertThat(((StreamEvent.TextDelta) events.get(0)).text()).isEqualTo("Hello, world!");
-        assertThat(events.get(1)).isInstanceOf(StreamEvent.StreamDone.class);
+        // Phase 2a: 5 events: Start → TextStart → TextDelta → TextEnd → StreamDone
+        assertThat(events).hasSize(5);
+        assertThat(events.get(0)).isInstanceOf(StreamEvent.Start.class);
+        assertThat(events.get(1)).isInstanceOf(StreamEvent.TextStart.class);
+        assertThat(events.get(2)).isInstanceOf(StreamEvent.TextDelta.class);
+        assertThat(events.get(3)).isInstanceOf(StreamEvent.TextEnd.class);
+        assertThat(events.get(4)).isInstanceOf(StreamEvent.StreamDone.class);
+
+        var delta = (StreamEvent.TextDelta) events.get(2);
+        assertThat(delta.delta()).isEqualTo("Hello, world!");
     }
 
     @Test
@@ -56,15 +62,14 @@ class FauxProviderTest {
             }
         }
 
+        // Phase 2a: 4 events: Start → ToolCallStart → ToolCallEnd → StreamDone
         assertThat(events).hasSize(4);
-        assertThat(events.get(0)).isInstanceOf(StreamEvent.ToolCallStart.class);
-        assertThat(events.get(1)).isInstanceOf(StreamEvent.ToolCallEnd.class);
-        assertThat(events.get(2)).isInstanceOf(StreamEvent.TextDelta.class);
+        assertThat(events.get(0)).isInstanceOf(StreamEvent.Start.class);
+        assertThat(events.get(1)).isInstanceOf(StreamEvent.ToolCallStart.class);
+        assertThat(events.get(2)).isInstanceOf(StreamEvent.ToolCallEnd.class);
         assertThat(events.get(3)).isInstanceOf(StreamEvent.StreamDone.class);
 
-        var start = (StreamEvent.ToolCallStart) events.get(0);
-        assertThat(start.name()).isEqualTo("read");
-        var end = (StreamEvent.ToolCallEnd) events.get(1);
+        var end = (StreamEvent.ToolCallEnd) events.get(2);
         assertThat(end.name()).isEqualTo("read");
         assertThat(end.arguments()).containsEntry("path", "/src/main.java");
     }
@@ -81,9 +86,11 @@ class FauxProviderTest {
             }
         }
 
-        assertThat(events).hasSize(1);
-        assertThat(events.get(0)).isInstanceOf(StreamEvent.StreamError.class);
-        var error = (StreamEvent.StreamError) events.get(0);
+        // Phase 2a: 2 events: Start → StreamError
+        assertThat(events).hasSize(2);
+        assertThat(events.get(0)).isInstanceOf(StreamEvent.Start.class);
+        assertThat(events.get(1)).isInstanceOf(StreamEvent.StreamError.class);
+        var error = (StreamEvent.StreamError) events.get(1);
         assertThat(error.error().getMessage()).isEqualTo("Connection refused");
     }
 

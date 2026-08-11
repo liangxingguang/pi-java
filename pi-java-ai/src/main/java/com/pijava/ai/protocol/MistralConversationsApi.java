@@ -1,44 +1,32 @@
 package com.pijava.ai.protocol;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Flow;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.SubmissionPublisher;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.pijava.ai.api.ApiOptions;
-import com.pijava.ai.api.ChatApi;
-import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.http.PiHttpClient;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
-import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
-import com.pijava.ai.stream.StreamEvent.StreamDone;
-import com.pijava.ai.stream.StreamEvent.StreamError;
-import com.pijava.ai.stream.StreamEvent.TextDelta;
-import com.pijava.ai.stream.StreamEvent.ToolCallDelta;
-import com.pijava.ai.stream.StreamEvent.ToolCallEnd;
-import com.pijava.ai.stream.StreamEvent.ToolCallStart;
-import com.pijava.ai.stream.StreamEvent.UsageInfo;
+import com.pijava.ai.stream.StreamPartialBuilder;
 import com.pijava.ai.stream.ToolCallBuilder;
 
 /**
  * Mistral Chat Completions API adapter using raw HTTP + SSE.
  *
- * <p>Mistral has no official Java SDK. This adapter uses {@link PiHttpClient}
- * for JSON request construction and SSE response parsing. The tool-call delta
- * aggregation reuses the shared {@link ToolCallBuilder}.</p>
+ * <p>Phase 2a: emits the full 13-event protocol with {@code partial} snapshots
+ * via {@link StreamPartialBuilder}. Mistral has no official Java SDK; uses
+ * {@link PiHttpClient} for JSON requests and SSE parsing.</p>
  */
-public final class MistralConversationsApi implements ChatApi {
+public final class MistralConversationsApi extends AbstractChatApi {
 
     private static final String DEFAULT_BASE_URL = "https://api.mistral.ai/v1";
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -56,102 +44,69 @@ public final class MistralConversationsApi implements ChatApi {
                 .build();
     }
 
-    @Override
-    public Flow.Publisher<StreamEvent> stream(StreamRequest request, ApiOptions options) {
-        var publisher = new SubmissionPublisher<StreamEvent>();
-        Thread.startVirtualThread(() -> {
-            try {
-                streamInternal(request, publisher);
-                publisher.close();
-            } catch (Exception e) {
-                publisher.closeExceptionally(e);
-            }
-        });
-        return publisher;
-    }
-
-    @Override
-    public StreamIterator streamBlocking(StreamRequest request, ApiOptions options) {
-        var queue = new LinkedBlockingQueue<StreamEvent>();
-        stream(request, options).subscribe(new Flow.Subscriber<>() {
-            private Flow.Subscription subscription;
-            @Override public void onSubscribe(Flow.Subscription s) {
-                this.subscription = s; s.request(Long.MAX_VALUE);
-            }
-            @Override public void onNext(StreamEvent e) { queue.offer(e); }
-            @Override public void onError(Throwable t) { queue.offer(new StreamError(t)); }
-            @Override public void onComplete() {}
-        });
-        return new com.pijava.ai.protocol.QueueStreamIterator(queue);
-    }
-
-    @Override
-    public com.pijava.ai.message.Message send(StreamRequest request, ApiOptions options) {
-        var blocks = new ArrayList<ContentBlock>();
-        try (var iter = streamBlocking(request, options)) {
-            while (iter.hasNext()) {
-                var event = iter.next();
-                if (event instanceof TextDelta td) {
-                    blocks.add(new ContentBlock.TextContent(td.text()));
-                }
-            }
-        } catch (Exception e) {
-            throw new com.pijava.ai.http.PiHttpException(0, "Request failed", e);
-        }
-        return new Message.AssistantMessage(blocks);
-    }
-
     // ── Internals ─────────────────────────────────────────────
 
-    @SuppressWarnings("unchecked")
-    private void streamInternal(StreamRequest request,
-                                 SubmissionPublisher<StreamEvent> publisher) {
+    @Override
+    @SuppressWarnings("unchecked") // SSE response JSON parsing with generic Map types
+    protected void streamInternal(StreamRequest request,
+                                   SubmissionPublisher<StreamEvent> publisher) {
+        var builder = new StreamPartialBuilder();
         try {
             String jsonBody = buildRequestBody(request);
             var headers = Map.of(
                     "Authorization", "Bearer " + apiKey,
                     "Accept", "text/event-stream");
 
+            publisher.submit(builder.emitStart());
+
             Iterator<PiHttpClient.ServerSentEvent> sseEvents =
                     http.postSse(baseUrl + "/chat/completions", jsonBody, headers);
 
             var toolCallBuilders = new HashMap<String, ToolCallBuilder>();
+            var textStarted = new boolean[]{false};
+            String finishReason = "stop";
 
             while (sseEvents.hasNext()) {
                 var sse = sseEvents.next();
                 if ("[DONE]".equals(sse.data())) {
-                    for (var builder : toolCallBuilders.values()) {
-                        if (builder.isComplete()) {
-                            publisher.submit(builder.toEnd());
-                        }
-                    }
-                    publisher.submit(new StreamDone("stop", null));
+                    if (textStarted[0]) publisher.submit(builder.emitTextEnd());
+                    publisher.submit(builder.emitDone(finishReason));
                     return;
                 }
-                processSseData(sse.data(), publisher, toolCallBuilders);
+                finishReason = processSseData(sse.data(), publisher, builder,
+                        toolCallBuilders, textStarted);
             }
+            if (textStarted[0]) publisher.submit(builder.emitTextEnd());
+            publisher.submit(builder.emitDone(finishReason));
         } catch (Exception e) {
-            publisher.submit(new StreamError(e));
+            publisher.submit(builder.emitError("error", e));
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private void processSseData(String data,
-                                 SubmissionPublisher<StreamEvent> publisher,
-                                 Map<String, ToolCallBuilder> builders) {
+    @SuppressWarnings("unchecked") // SSE response JSON parsing with generic Map types
+    private String processSseData(String data,
+                                  SubmissionPublisher<StreamEvent> publisher,
+                                  StreamPartialBuilder builder,
+                                  Map<String, ToolCallBuilder> toolBuilders,
+                                  boolean[] textStarted) {
+        String finishReason = "stop";
         try {
             var json = MAPPER.readValue(data, Map.class);
             var choices = (List<Map<String, Object>>) json.get("choices");
-            if (choices == null || choices.isEmpty()) return;
+            if (choices == null || choices.isEmpty()) return finishReason;
 
             var choice = choices.get(0);
             var delta = (Map<String, Object>) choice.get("delta");
-            if (delta == null) return;
+            if (delta == null) return finishReason;
 
             // Text delta
             var content = (String) delta.get("content");
             if (content != null && !content.isEmpty()) {
-                publisher.submit(new TextDelta(content, TextDelta.TEXT));
+                if (!textStarted[0]) {
+                    publisher.submit(builder.emitTextStart());
+                    textStarted[0] = true;
+                }
+                publisher.submit(builder.emitTextDelta(content));
             }
 
             // Tool call delta
@@ -166,28 +121,32 @@ public final class MistralConversationsApi implements ChatApi {
                     var name = (String) function.get("name");
                     var args = (String) function.get("arguments");
 
-                    var builder = builders.computeIfAbsent(index,
+                    var toolBuilder = toolBuilders.computeIfAbsent(index,
                             k -> new ToolCallBuilder());
 
-                    if (tcId != null && name != null && !builder.isStarted()) {
-                        builder.start(tcId, name);
-                        publisher.submit(new ToolCallStart(tcId, name));
+                    if (tcId != null && name != null && !toolBuilder.isStarted()) {
+                        toolBuilder.start(tcId, name);
+                        publisher.submit(builder.emitToolCallStart());
                     }
                     if (args != null) {
-                        builder.append(args);
-                        publisher.submit(new ToolCallDelta(builder.id(), args));
+                        toolBuilder.append(args);
+                        publisher.submit(builder.emitToolCallDelta(
+                                toolBuilder.id(), args));
                     }
                 }
             }
 
-            // Finish reason
-            var finishReason = (String) choice.get("finish_reason");
-            if ("stop".equals(finishReason)) {
-                publisher.submit(new StreamDone("stop", null));
-            } else if ("tool_calls".equals(finishReason)) {
-                for (var builder : builders.values()) {
-                    if (builder.isComplete()) {
-                        publisher.submit(builder.toEnd());
+            // Finish reason — emit ToolCallEnd when tool_use, before StreamDone
+            var reason = (String) choice.get("finish_reason");
+            if (reason != null && !reason.isEmpty()) {
+                var normalized = "tool_calls".equals(reason) ? "tool_use" : reason;
+                finishReason = normalized;
+                if ("tool_use".equals(normalized)) {
+                    for (var tb : toolBuilders.values()) {
+                        if (tb.isComplete()) {
+                            publisher.submit(builder.emitToolCallEnd(
+                                    tb.id(), tb.name()));
+                        }
                     }
                 }
             }
@@ -197,12 +156,13 @@ public final class MistralConversationsApi implements ChatApi {
             if (usage != null) {
                 long promptTokens = ((Number) usage.getOrDefault("prompt_tokens", 0)).longValue();
                 long completionTokens = ((Number) usage.getOrDefault("completion_tokens", 0)).longValue();
-                publisher.submit(new UsageInfo(promptTokens, completionTokens));
+                publisher.submit(builder.emitUsage(promptTokens, completionTokens));
             }
 
         } catch (JsonProcessingException e) {
             // Skip unparseable data lines
         }
+        return finishReason;
     }
 
     @SuppressWarnings("unchecked")

@@ -10,6 +10,7 @@ import com.pijava.ai.api.ProviderApi;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.ModelCatalog;
+import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
@@ -33,29 +34,54 @@ public final class FauxProvider implements Provider {
         this.delayMs = delayMs;
     }
 
-    /** Convenience: create a FauxProvider that returns the given text. */
+    /**
+     * Convenience: create a FauxProvider that returns the given text.
+     * Produces a full event sequence: Start → TextStart → TextDelta → TextEnd → StreamDone.
+     */
     public static FauxProvider text(String text) {
+        var msg = AssistantMessage.empty()
+                .withContent(List.of(new ContentBlock.TextContent(text)))
+                .withStopReason("stop");
+        var partial0 = AssistantMessage.empty();
+        var partial1 = AssistantMessage.empty()
+                .withContent(List.of(new ContentBlock.TextContent("")));
         return new FauxProvider("faux", List.of(
-                new StreamEvent.TextDelta(text, StreamEvent.TextDelta.TEXT),
-                new StreamEvent.StreamDone("stop", null)
+                new StreamEvent.Start(partial0),
+                new StreamEvent.TextStart(0, partial1),
+                new StreamEvent.TextDelta(0, text, msg.withStopReason(null)),
+                new StreamEvent.TextEnd(0, text, msg.withStopReason(null)),
+                new StreamEvent.StreamDone("stop", null, msg)
         ), 0);
     }
 
-    /** Convenience: create a FauxProvider that simulates a tool call. */
+    /**
+     * Convenience: create a FauxProvider that simulates a tool call.
+     * Produces: Start → ToolCallStart → ToolCallDelta → ToolCallEnd → StreamDone.
+     */
     public static FauxProvider toolCall(String toolName, java.util.Map<String, Object> args) {
         var callId = "faux_call_1";
+        var block = new ContentBlock.ToolUseContent(callId, toolName, args);
+        var finalMsg = AssistantMessage.empty()
+                .withContent(List.of(block))
+                .withStopReason("tool_use");
         return new FauxProvider("faux-tool", List.of(
-                new StreamEvent.ToolCallStart(callId, toolName),
-                new StreamEvent.ToolCallEnd(callId, toolName, args),
-                new StreamEvent.TextDelta("Tool called: " + toolName, StreamEvent.TextDelta.TEXT),
-                new StreamEvent.StreamDone("tool_calls", null)
+                new StreamEvent.Start(AssistantMessage.empty()),
+                new StreamEvent.ToolCallStart(0, AssistantMessage.empty()
+                        .withContent(List.of(new ContentBlock.ToolUseContent("", "", java.util.Map.of())))),
+                new StreamEvent.ToolCallEnd(0, callId, toolName, args, finalMsg.withStopReason(null)),
+                new StreamEvent.StreamDone("tool_use", null, finalMsg)
         ), 0);
     }
 
-    /** Convenience: create a FauxProvider that returns an error. */
+    /**
+     * Convenience: create a FauxProvider that returns an error.
+     * Produces: Start → StreamError.
+     */
     public static FauxProvider error(String message) {
         return new FauxProvider("faux-error", List.of(
-                new StreamEvent.StreamError(new RuntimeException(message))
+                new StreamEvent.Start(AssistantMessage.empty()),
+                new StreamEvent.StreamError("error",
+                        new RuntimeException(message), AssistantMessage.empty())
         ), 0);
     }
 
@@ -123,8 +149,8 @@ public final class FauxProvider implements Provider {
         public Message send(StreamRequest request, ApiOptions options) {
             var blocks = new ArrayList<ContentBlock>();
             for (var event : events) {
-                if (event instanceof StreamEvent.TextDelta(var text, var type)) {
-                    blocks.add(new ContentBlock.TextContent(text));
+                if (event instanceof StreamEvent.StreamDone done) {
+                    return new Message.AssistantMessage(done.partial().content());
                 }
             }
             return new Message.AssistantMessage(blocks);
