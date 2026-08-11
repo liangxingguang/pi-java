@@ -7,6 +7,7 @@ import java.util.UUID;
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.entry.ProvisionedEntry;
 import com.pijava.agent.record.LaneRecord;
+import com.pijava.agent.tool.AbortSignal;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -47,6 +48,12 @@ final class LaneState {
     /** Internal operation records for debugging and audit (Phase 2a). */
     final List<LaneRecord> records = new ArrayList<>();
 
+    /** Pending tool calls to execute (populated after tool_use stopReason). Phase 2b. */
+    final List<Action.ExecuteTool> pendingToolCalls = new ArrayList<>();
+
+    /** Abort signal for the current run. Phase 2b. */
+    AbortSignal abortSignal;
+
     // ── Helpers ──────────────────────────────────────────────
 
     /** Derive the next sequence number. */
@@ -81,7 +88,12 @@ final class LaneState {
         return switch (entry.role()) {
             case "user" -> new Message.UserMessage(entry.blocks());
             case "assistant" -> new Message.AssistantMessage(entry.blocks());
-            case "tool" -> new Message.UserMessage(entry.blocks()); // tool results as user content
+            case "tool" -> {
+                var block = (ContentBlock.ToolResultContent) entry.blocks().get(0);
+                yield new Message.ToolResultMessage(
+                    block.toolUseId(), block.toolName(),
+                    block.content(), block.isError());
+            }
             default -> new Message.UserMessage(entry.blocks());
         };
     }

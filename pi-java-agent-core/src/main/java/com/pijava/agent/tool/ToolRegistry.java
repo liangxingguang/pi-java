@@ -54,6 +54,11 @@ public class ToolRegistry {
         return List.copyOf(tools.values());
     }
 
+    /** Remove all registered tools. */
+    public void clear() {
+        tools.clear();
+    }
+
     /**
      * Execute a tool call by name.
      *

@@ -30,7 +30,10 @@ public class DefaultFileSystem implements FileSystem {
     @Override
     public void writeFile(String path, String content) throws IOException {
         var filePath = Path.of(path);
-        Files.createDirectories(filePath.getParent());
+        var parent = filePath.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
         Files.writeString(filePath, content);
     }
 

@@ -5,10 +5,10 @@ import java.util.Map;
 /**
  * A tool that the agent can invoke.
  *
- * <p>Tools are registered with the agent and become available to the
- * LLM via function-calling. Each tool has a name, description, JSON
- * Schema for its input, and an execution method.</p>
+ * @deprecated Replaced by {@link com.pijava.agent.tool.AgentTool} in Phase 2b.
+ *             This interface will be removed after Phase 2b migration is complete.
  */
+@Deprecated(forRemoval = true)
 public interface Tool {
 
     /** Unique tool name (e.g. "bash", "read", "write"). */

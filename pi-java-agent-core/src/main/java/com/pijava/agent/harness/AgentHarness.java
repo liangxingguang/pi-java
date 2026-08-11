@@ -14,6 +14,10 @@ import com.pijava.agent.entry.EntryHeader;
 import com.pijava.agent.entry.ProvisionedEntry;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.record.RecordHeader;
+import com.pijava.agent.tool.AgentTool;
+import com.pijava.agent.tool.ToolContext;
+import com.pijava.agent.tool.ToolRegistry;
+import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.model.ModelId;
@@ -36,7 +40,8 @@ import com.pijava.ai.thinking.ModelThinkingLevel;
  *   executeAction(StreamAssistant) → stream LLM → CHECKPOINT
  *   CHECKPOINT → peekAction() → AppendEntry (pending writes)
  *   CHECKPOINT → peekAction() → TryFinishRun (no pending writes)
- *   executeAction(TryFinishRun) → IDLE (or ASSISTANT for tool calls)
+ *   executeAction(TryFinishRun) → IDLE (or ASSISTANT via tool_use)
+ *   executeAction(ExecuteTool) → execute tool → ASSISTANT
  * </pre>
  */
 public class AgentHarness implements AutoCloseable {
@@ -45,8 +50,11 @@ public class AgentHarness implements AutoCloseable {
     private ModelId<?> model;
     private ModelThinkingLevel thinkingLevel;
     private final String systemPrompt;
-    private final Set<String> activeTools;
+    private Set<AgentTool<?, ?>> activeTools;
     private final int maxInputTokens;
+    private final ToolRegistry toolRegistry;
+    private final ToolContext toolContext;
+    private final String commandPrefix;
 
     // Single lane (Phase 2a)
     private final LaneState lane;
@@ -69,6 +77,9 @@ public class AgentHarness implements AutoCloseable {
         this.systemPrompt = config.systemPrompt();
         this.activeTools = config.activeTools();
         this.maxInputTokens = config.maxInputTokens();
+        this.toolRegistry = config.toolRegistry();
+        this.toolContext = config.toolContext();
+        this.commandPrefix = config.commandPrefix();
         this.lane = new LaneState();
     }
 
@@ -95,6 +106,8 @@ public class AgentHarness implements AutoCloseable {
         lane.transcript.clear();
         lane.pendingWrites.clear();
         lane.records.clear();
+        lane.pendingToolCalls.clear();
+        lane.abortSignal = com.pijava.agent.tool.AbortSignal.create();
 
         // Write user message entry
         var userEntry = new Entry.Message(
@@ -127,6 +140,9 @@ public class AgentHarness implements AutoCloseable {
     /** Abort the current run. */
     public void abort() {
         aborted = true;
+        if (lane.abortSignal != null) {
+            lane.abortSignal.abort();
+        }
         if (!(lane.phase instanceof RunPhase.Idle)) {
             lane.records.add(new LaneRecord.AbortRequested(
                     LaneRecord.newHeader(lane.records.size()), "user_requested"));
@@ -143,10 +159,6 @@ public class AgentHarness implements AutoCloseable {
     /**
      * Peek at the next pending action without changing state.
      * Returns null when there is nothing to do (IDLE phase, no run in progress).
-     *
-     * <p>In ASSISTANT phase, pending writes (initial entries) are returned
-     * before StreamAssistant, ensuring initialization entries are persisted
-     * before the LLM call.</p>
      */
     public Action peekAction() {
         return switch (lane.phase) {
@@ -154,6 +166,10 @@ public class AgentHarness implements AutoCloseable {
             case RunPhase.Assistant a -> {
                 var pw = drainNextPendingWrite();
                 if (pw != null) yield pw;
+                // Phase 2b: yield pending tool calls before starting new LLM call
+                if (!lane.pendingToolCalls.isEmpty()) {
+                    yield lane.pendingToolCalls.remove(0);
+                }
                 yield new Action.StreamAssistant("assistant", 0);
             }
             case RunPhase.Checkpoint c -> {
@@ -166,7 +182,6 @@ public class AgentHarness implements AutoCloseable {
 
     /**
      * Return the next pending write as an AppendEntry action, or null if none.
-     * Extracted to avoid duplicated logic across peekAction switch arms.
      */
     private Action drainNextPendingWrite() {
         if (!lane.pendingWrites.isEmpty()) {
@@ -187,7 +202,7 @@ public class AgentHarness implements AutoCloseable {
             case Action.StreamAssistant sa -> executeStreamAssistant(sa);
             case Action.AppendEntry ae -> executeAppendEntry(ae);
             case Action.TryFinishRun tfr -> executeTryFinishRun(tfr);
-            case Action.ExecuteTool et -> throw new UnsupportedOperationException("Phase 2b");
+            case Action.ExecuteTool et -> executeTool(et);
         };
     }
 
@@ -204,16 +219,22 @@ public class AgentHarness implements AutoCloseable {
         // Build messages from transcript
         var messages = lane.buildMessages(systemPrompt);
         var thinkingConfig = translateThinking(thinkingLevel);
+
+        // Phase 2b: pass tool definitions from registry
+        var toolDefs = toolRegistry != null
+            ? toolRegistry.toToolDefinitions()
+            : List.<ToolDefinition>of();
         var options = new StreamOptions(
                 java.util.OptionalInt.empty(),
                 java.util.OptionalDouble.empty(),
                 thinkingConfig,
-                List.of()
+                toolDefs
         );
 
         // Record step attempt
         int attemptIdx = lane.stepIndex++;
-        long[] usage = {0, 0}; // [inputTokens, outputTokens]
+        long inputTokens = 0;
+        long outputTokens = 0;
         try {
             var iter = streamFn.stream(messages, model, options);
             try {
@@ -227,8 +248,8 @@ public class AgentHarness implements AutoCloseable {
                     if (event instanceof StreamEvent.UsageInfo ui
                             && ui.partial() != null
                             && ui.partial().usage() != null) {
-                        usage[0] = ui.partial().usage().inputTokens();
-                        usage[1] = ui.partial().usage().outputTokens();
+                        inputTokens = ui.partial().usage().inputTokens();
+                        outputTokens = ui.partial().usage().outputTokens();
                     }
                     // All events carry partial — replace current snapshot
                     if (event.partial() != null) {
@@ -252,12 +273,12 @@ public class AgentHarness implements AutoCloseable {
         // Record step attempt
         lane.records.add(new LaneRecord.StepAttempt(
                 LaneRecord.newHeader(lane.records.size()),
-                attemptIdx, usage[0], usage[1]));
+                attemptIdx, inputTokens, outputTokens));
         // Record usage if we have token counts
-        if (usage[0] > 0 || usage[1] > 0) {
+        if (inputTokens > 0 || outputTokens > 0) {
             lane.records.add(new LaneRecord.UsageRecord(
                     LaneRecord.newHeader(lane.records.size()),
-                    usage[0], usage[1], model.modelName()));
+                    inputTokens, outputTokens, model.modelName()));
         }
 
         // Create assistant message entry from the final partial
@@ -281,30 +302,35 @@ public class AgentHarness implements AutoCloseable {
     // ── Internal: AppendEntry ────────────────────────────────
 
     private Action executeAppendEntry(Action.AppendEntry ae) {
-        // Find the matching pending write and mark it written
         for (var pw : lane.pendingWrites) {
             if (pw.entry().header().id().equals(ae.entryId())) {
                 pw.markWritten();
                 break;
             }
         }
-        // Remove all written entries from pendingWrites
         lane.pendingWrites.removeIf(ProvisionedEntry::isWritten);
-
-        // Return next action
         return peekAction();
     }
 
     // ── Internal: TryFinishRun ───────────────────────────────
 
     private Action executeTryFinishRun(Action.TryFinishRun tfr) {
-        String status = "failed";
-        if (lane.newestOwn != null) {
+        String status;
+        if (lane.newestOwn == null) {
+            status = "failed";
+        } else {
             String stopReason = lane.newestOwn.stopReason();
             if ("tool_use".equals(stopReason)) {
-                // Phase 2b: transition back to ASSISTANT for tool results
-                status = "completed";
-            } else if ("error".equals(stopReason) || "aborted".equals(stopReason)) {
+                // Phase 2b: extract tool calls from the assistant partial
+                List<Action.ExecuteTool> toolActions = extractToolCalls(lane.partial);
+                if (!toolActions.isEmpty()) {
+                    lane.pendingToolCalls.addAll(toolActions);
+                    // Stay in CHECKPOINT — tool execution will transition back to ASSISTANT
+                    status = "tool_use";
+                } else {
+                    status = "completed";
+                }
+            } else if (isErrorStopReason(stopReason)) {
                 status = "error";
             } else {
                 status = "completed";
@@ -313,16 +339,82 @@ public class AgentHarness implements AutoCloseable {
         // Record operation finish
         lane.records.add(new LaneRecord.OperationFinished(
                 LaneRecord.newHeader(lane.records.size()), lane.runId, status));
+        if ("tool_use".equals(status)) {
+            return peekAction();
+        }
         lane.phase = RunPhase.IDLE;
         return null;
+    }
+
+    // ── Internal: ExecuteTool ────────────────────────────────
+
+    /**
+     * Execute a single tool call. Follows the exception-driven error model:
+     * tool throws on failure, harness catches and wraps error content.
+     */
+    private Action executeTool(Action.ExecuteTool et) {
+        List<ContentBlock> resultBlocks;
+        boolean isError = false;
+
+        try {
+            var result = toolRegistry.execute(
+                et.toolName(), et.toolCallId(), et.arguments(),
+                lane.abortSignal, null, toolContext);
+            resultBlocks = result.content();
+        } catch (Exception e) {
+            resultBlocks = List.of(new ContentBlock.TextContent(
+                "Error: " + e.getMessage()));
+            isError = true;
+        }
+
+        // Write tool result as Entry.Message(role="tool")
+        var parentId = lane.lastEntry() != null
+            ? lane.lastEntry().header().id() : "";
+        var toolEntry = new Entry.Message(
+            Entry.newHeader(lane.nextSeq(), parentId),
+            "tool",
+            List.of(new ContentBlock.ToolResultContent(
+                et.toolCallId(), et.toolName(),
+                resultBlocks, isError))
+        );
+        lane.transcript.add(toolEntry);
+        lane.pendingWrites.add(new ProvisionedEntry(toolEntry));
+
+        // Record tool execution
+        lane.records.add(new LaneRecord.ToolStarted(
+            LaneRecord.newHeader(lane.records.size()),
+            et.toolCallId(), et.toolName(), et.arguments()));
+
+        // Transition back to ASSISTANT for follow-up LLM call
+        lane.phase = RunPhase.ASSISTANT;
+        return peekAction();
+    }
+
+    /**
+     * Extract tool call actions from an assistant message partial.
+     * Phase 2b: scans content blocks for {@link ContentBlock.ToolUseContent}.
+     */
+    private static List<Action.ExecuteTool> extractToolCalls(AssistantMessage partial) {
+        if (partial == null || partial.content() == null) {
+            return List.of();
+        }
+        return partial.content().stream()
+            .filter(ContentBlock.ToolUseContent.class::isInstance)
+            .map(b -> {
+                var tc = (ContentBlock.ToolUseContent) b;
+                return new Action.ExecuteTool(tc.id(), tc.name(), tc.arguments());
+            })
+            .toList();
+    }
+
+    private static boolean isErrorStopReason(String stopReason) {
+        return "error".equals(stopReason) || "aborted".equals(stopReason);
     }
 
     // ── Helpers ──────────────────────────────────────────────
 
     /**
      * Translate ModelThinkingLevel to provider ThinkingConfig.
-     * Phase 2a: uses a basic default mapping (budget_tokens per level).
-     * Phase 2c: delegates to StreamSimple + ModelInfo.thinkingLevelMap.
      */
     private static com.pijava.ai.thinking.ThinkingConfig translateThinking(
             ModelThinkingLevel level) {
@@ -360,7 +452,8 @@ public class AgentHarness implements AutoCloseable {
     private String determineOutcome() {
         if (lane.newestOwn == null) return "failed";
         String sr = lane.newestOwn.stopReason();
-        if ("error".equals(sr) || "aborted".equals(sr)) return "failed";
+        if (isErrorStopReason(sr)) return "failed";
+        if ("tool_use".equals(sr)) return "tool_use";
         return "completed";
     }
 
@@ -382,6 +475,22 @@ public class AgentHarness implements AutoCloseable {
     public void setModel(ModelId<?> model) { this.model = model; }
     public ModelThinkingLevel getThinkingLevel() { return thinkingLevel; }
     public void setThinkingLevel(ModelThinkingLevel level) { this.thinkingLevel = level; }
+
+    // ── Tools ────────────────────────────────────────────────
+
+    /** Return the active tool set. */
+    public Set<AgentTool<?, ?>> getActiveTools() {
+        return Set.copyOf(activeTools);
+    }
+
+    /** Update the active tool set. */
+    public void setActiveTools(Set<AgentTool<?, ?>> tools) {
+        this.activeTools = Set.copyOf(tools);
+        if (toolRegistry != null) {
+            toolRegistry.clear();
+            toolRegistry.registerAll(List.copyOf(tools));
+        }
+    }
 
     // ═══════════════════════════════════════════════════════════
     // Deferred (Phase 2b/2c)
@@ -413,14 +522,6 @@ public class AgentHarness implements AutoCloseable {
 
     public CompletionStage<Void> runToCompletion() {
         throw new UnsupportedOperationException("Phase 2c");
-    }
-
-    public Set<Tool> getActiveTools() {
-        throw new UnsupportedOperationException("Phase 2b");
-    }
-
-    public void setActiveTools(Set<Tool> tools) {
-        throw new UnsupportedOperationException("Phase 2b");
     }
 
     public void compact(CompactionSettings settings) {

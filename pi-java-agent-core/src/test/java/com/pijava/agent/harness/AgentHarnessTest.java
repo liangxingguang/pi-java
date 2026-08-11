@@ -47,7 +47,7 @@ class AgentHarnessTest {
     private AgentHarness createHarness(StreamFn sf) {
         return AgentHarness.create(new HarnessConfig(
                 sf, MODEL, ModelThinkingLevel.off(), "",
-                Set.of(), 200_000));
+                Set.of(), 200_000, null, null, null));
     }
 
     // ── State machine tests ─────────────────────────────────
@@ -151,10 +151,15 @@ class AgentHarnessTest {
                 .isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> harness.runToCompletion())
                 .isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> harness.getActiveTools())
-                .isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> harness.compact(null))
                 .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void getActiveToolsReturnsConfiguredTools() {
+        var harness = createHarness(textStreamFn("ok"));
+        var tools = harness.getActiveTools();
+        assertThat(tools).isEmpty();
     }
 
     // ── Partial consumption tests ─────────────────────────────

@@ -36,7 +36,7 @@ class AgentLoopTest {
                         new StreamEvent.StreamDone("stop", null, partial)
                 )),
                 MODEL, ModelThinkingLevel.off(), "",
-                Set.of(), 200_000));
+                Set.of(), 200_000, null, null, null));
 
         var loop = new AgentLoop(harness);
         var result = loop.run("How are you?");
@@ -58,7 +58,7 @@ class AgentLoopTest {
                                 new RuntimeException("boom"), partial)
                 )),
                 MODEL, ModelThinkingLevel.off(), "",
-                Set.of(), 200_000));
+                Set.of(), 200_000, null, null, null));
 
         var loop = new AgentLoop(harness);
         var result = loop.run("test");
