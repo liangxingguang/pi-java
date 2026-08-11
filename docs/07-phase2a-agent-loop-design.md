@@ -73,8 +73,14 @@ StreamEvent                             StreamEvent
 ```java
 public sealed interface StreamEvent {
 
+    /**
+     * 当前 AssistantMessage 的完整快照。
+     * 所有 12 种子类型都通过 record 构造器参数或方法体实现此方法。
+     */
+    AssistantMessage partial();
+
     /** 流开始。Agent Loop 用它初始化消息槽位。 */
-    record Start() implements StreamEvent {}
+    record Start(AssistantMessage partial) implements StreamEvent {}
 
     // ── 文本块（text_start → text_delta* → text_end）─────────
 
@@ -120,15 +126,17 @@ public sealed interface StreamEvent {
     /**
      * 流正常结束。
      * 对齐 pi 的 done 事件：携带最终 AssistantMessage 快照 + 停止原因。
+     * partial 由 sealed interface 的 partial() 方法提供——所有 12 种事件都携带。
      */
-    record StreamDone(String reason, UsageInfo usage) implements StreamEvent {}
+    record StreamDone(String reason, UsageInfo usage, AssistantMessage partial) implements StreamEvent {}
 
     /**
      * 流出错。
      * 对齐 pi 的 error 事件：携带截至错误时的 AssistantMessage 快照 +
      * reason 判别器（"aborted" | "error"）+ 原始异常。
+     * partial 由 sealed interface 的 partial() 方法提供——所有 12 种事件都携带。
      */
-    record StreamError(String reason, Throwable error) implements StreamEvent {}
+    record StreamError(String reason, Throwable error, AssistantMessage partial) implements StreamEvent {}
 }
 ```
 
