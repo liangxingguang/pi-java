@@ -1,4 +1,5 @@
 package com.pijava.agent.tool;
+import com.pijava.ai.AbortSignal;
 
 import java.util.Collection;
 import java.util.List;
@@ -79,12 +80,16 @@ public class ToolRegistry {
         if (approvalHandler != null && !approvalHandler.approve(toolName, arguments)) {
             throw new SecurityException("Tool call not approved: " + toolName);
         }
-        // Heterogeneous tool map requires unchecked cast; type-safety guaranteed
-        // by register-time coupling between name key and AgentTool's generic signature.
+        // Heterogeneous tool map requires unchecked cast back to raw AgentTool;
+        // type-safety is guaranteed by register-time coupling between name key
+        // and the tool's generic signature. prepareArguments must be called first
+        // to convert the raw Map into the tool's typed input record.
         @SuppressWarnings("unchecked")
-        var result = ((AgentTool<Map<String, Object>, Object>) tool)
-            .execute(toolCallId, arguments, signal,
-                     (ToolUpdateCallback<Object>) onUpdate, context);
+        var rawTool = (AgentTool<Object, Object>) tool;
+        var prepared = rawTool.prepareArguments(arguments);
+        @SuppressWarnings("unchecked")
+        var result = rawTool.execute(toolCallId, prepared, signal,
+                                     (ToolUpdateCallback<Object>) onUpdate, context);
         return result;
     }
 

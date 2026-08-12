@@ -1,29 +1,40 @@
 package com.pijava.agent.harness;
 
+import java.util.Map;
 import java.util.Set;
 
+import com.pijava.agent.compaction.CompactionSettings;
+import com.pijava.agent.skill.Skill;
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ToolContext;
 import com.pijava.agent.tool.ToolRegistry;
+import com.pijava.ai.http.RetryPolicy;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.thinking.ModelThinkingLevel;
+import com.pijava.ai.thinking.ThinkingLevelMap;
+import com.pijava.telemetry.NoopTelemetryContext;
+import com.pijava.telemetry.TelemetryContext;
 
 /**
  * Configuration for creating an {@link AgentHarness}.
  *
- * <p>Aligned with pi's {@code AgentHarnessOptions}. The {@code StreamFn}
- * is injected here so the harness (and its internal {@code AgentLoop})
- * never needs to know about HTTP or provider details.</p>
+ * <p>Phase 2c: added driveMode, compactionSettings fields.</p>
  *
- * @param streamFn       LLM streaming call function
- * @param model          current model identifier
- * @param thinkingLevel  thinking mode (off or enabled at a level)
- * @param systemPrompt   system prompt (Phase 2a: fixed string)
- * @param activeTools    active tool set (Phase 2b: AgentTool instances)
- * @param maxInputTokens maximum input tokens for overflow detection
- * @param toolRegistry   tool registry for the harness (Phase 2b)
- * @param toolContext    execution environment for tools (Phase 2b)
- * @param commandPrefix  optional prefix for bash commands (Phase 2b)
+ * @param streamFn           LLM streaming call function
+ * @param model              current model identifier
+ * @param thinkingLevel      thinking mode (off or enabled at a level)
+ * @param systemPrompt       system prompt (Phase 2a: fixed string)
+ * @param activeTools        active tool set (Phase 2b: AgentTool instances)
+ * @param maxInputTokens     maximum input tokens for overflow detection
+ * @param toolRegistry       tool registry for the harness
+ * @param toolContext        execution environment for tools
+ * @param commandPrefix      optional prefix for bash commands
+ * @param driveMode          drive mode (default: MANUAL)
+ * @param compactionSettings compaction settings (null = no auto-compaction)
+ * @param skills             named skills to register (default: empty)
+ * @param retryPolicy        retry policy for the LLM HTTP client (default: default policy)
+ * @param telemetry          telemetry context (default: no-op)
+ * @param thinkingLevelMap   per-model thinking translation (default: empty = no thinking)
  */
 public record HarnessConfig(
     StreamFn streamFn,
@@ -34,10 +45,20 @@ public record HarnessConfig(
     int maxInputTokens,
     ToolRegistry toolRegistry,
     ToolContext toolContext,
-    String commandPrefix
+    String commandPrefix,
+    DriveMode driveMode,
+    CompactionSettings compactionSettings,
+    Map<String, Skill> skills,
+    RetryPolicy retryPolicy,
+    TelemetryContext telemetry,
+    ThinkingLevelMap thinkingLevelMap
 ) {
     public HarnessConfig {
         activeTools = Set.copyOf(activeTools);
+        skills = Map.copyOf(skills);
+        if (retryPolicy == null) retryPolicy = RetryPolicy.defaultPolicy();
+        if (telemetry == null) telemetry = NoopTelemetryContext.INSTANCE;
+        if (thinkingLevelMap == null) thinkingLevelMap = ThinkingLevelMap.empty();
     }
 
     public static Builder builder() {
@@ -54,6 +75,12 @@ public record HarnessConfig(
         private ToolRegistry toolRegistry;
         private ToolContext toolContext;
         private String commandPrefix;
+        private DriveMode driveMode = DriveMode.MANUAL;
+        private CompactionSettings compactionSettings;
+        private Map<String, Skill> skills = Map.of();
+        private RetryPolicy retryPolicy = RetryPolicy.defaultPolicy();
+        private TelemetryContext telemetry = NoopTelemetryContext.INSTANCE;
+        private ThinkingLevelMap thinkingLevelMap = ThinkingLevelMap.empty();
 
         public Builder streamFn(StreamFn fn) { this.streamFn = fn; return this; }
         public Builder model(ModelId<?> m) { this.model = m; return this; }
@@ -66,13 +93,23 @@ public record HarnessConfig(
         public Builder toolRegistry(ToolRegistry tr) { this.toolRegistry = tr; return this; }
         public Builder toolContext(ToolContext tc) { this.toolContext = tc; return this; }
         public Builder commandPrefix(String cp) { this.commandPrefix = cp; return this; }
+        public Builder driveMode(DriveMode dm) { this.driveMode = dm; return this; }
+        public Builder compactionSettings(CompactionSettings cs) { this.compactionSettings = cs; return this; }
+        public Builder skills(Map<String, Skill> s) {
+            this.skills = Map.copyOf(s); return this;
+        }
+        public Builder retryPolicy(RetryPolicy rp) { this.retryPolicy = rp; return this; }
+        public Builder telemetry(TelemetryContext t) { this.telemetry = t; return this; }
+        public Builder thinkingLevelMap(ThinkingLevelMap tlm) { this.thinkingLevelMap = tlm; return this; }
 
         public HarnessConfig build() {
             if (streamFn == null) throw new IllegalStateException("streamFn is required");
             if (model == null) throw new IllegalStateException("model is required");
             return new HarnessConfig(streamFn, model, thinkingLevel,
                                      systemPrompt, activeTools, maxInputTokens,
-                                     toolRegistry, toolContext, commandPrefix);
+                                     toolRegistry, toolContext, commandPrefix,
+                                     driveMode, compactionSettings, skills,
+                                     retryPolicy, telemetry, thinkingLevelMap);
         }
     }
 }

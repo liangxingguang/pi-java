@@ -100,4 +100,11 @@ public sealed interface LaneRecord {
         RecordHeader header,
         String entryId
     ) implements LaneRecord {}
+
+    /** A lifecycle hook threw an exception (Phase 2c). Non-fatal. */
+    record HookError(
+        RecordHeader header,
+        String hookName,
+        String message
+    ) implements LaneRecord {}
 }

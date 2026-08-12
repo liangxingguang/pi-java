@@ -1,4 +1,5 @@
 package com.pijava.agent.tool.builtin;
+import com.pijava.ai.AbortSignal;
 
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
@@ -44,7 +45,6 @@ public final class GlobTool {
             @Override public ExecutionMode executionMode() { return new ExecutionMode.Parallel(); }
 
             @Override
-            @SuppressWarnings("unchecked")
             public GlobInput prepareArguments(Map<String, Object> raw) {
                 String pattern = (String) raw.get("pattern");
                 Optional<String> path = Optional.ofNullable((String) raw.get("path"));

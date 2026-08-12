@@ -2,7 +2,6 @@ package com.pijava.agent.tool.builtin;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Map;
 import java.util.Optional;
 
 import com.pijava.agent.tool.*;
@@ -13,11 +12,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ReadToolTest {
 
-    private static ToolContext contextFor(Path cwd) {
-        return new ToolContext(cwd.toString(), Map.of(),
-            new DefaultShellExecutor(), new DefaultFileSystem());
-    }
-
     @Test
     void readsTextFile(@TempDir Path tmp) throws Exception {
         var file = tmp.resolve("hello.txt");
@@ -25,7 +19,7 @@ class ReadToolTest {
         var tool = ReadTool.create();
         var result = tool.execute("id1", new ReadTool.ReadInput(
             file.toString(), Optional.empty(), Optional.empty()),
-            null, null, contextFor(tmp));
+            null, null, TestContexts.at(tmp));
         assertThat(result.content()).isNotEmpty();
         var text = ((ContentBlock.TextContent) result.content().get(0)).text();
         assertThat(text).contains("Hello, World!");
@@ -38,7 +32,7 @@ class ReadToolTest {
         var tool = ReadTool.create();
         var result = tool.execute("id1", new ReadTool.ReadInput(
             file.toString(), Optional.of(2), Optional.of(2)),
-            null, null, contextFor(tmp));
+            null, null, TestContexts.at(tmp));
         var text = ((ContentBlock.TextContent) result.content().get(0)).text();
         assertThat(text).contains("b", "c");
         assertThat(text).doesNotContain("a", "d");
@@ -54,7 +48,7 @@ class ReadToolTest {
         var tool = ReadTool.create();
         var result = tool.execute("id1", new ReadTool.ReadInput(
             file.toString(), Optional.empty(), Optional.empty()),
-            null, null, contextFor(tmp));
+            null, null, TestContexts.at(tmp));
         assertThat(result.content()).hasSize(2);
         assertThat(result.content().get(0)).isInstanceOf(ContentBlock.TextContent.class);
         assertThat(result.content().get(1)).isInstanceOf(ContentBlock.ImageContent.class);

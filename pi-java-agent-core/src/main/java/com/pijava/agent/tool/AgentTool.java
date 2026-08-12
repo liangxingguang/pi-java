@@ -1,4 +1,5 @@
 package com.pijava.agent.tool;
+import com.pijava.ai.AbortSignal;
 
 import java.util.Map;
 
@@ -41,7 +42,7 @@ public interface AgentTool<TParams, TDetails> {
      * Optional compatibility shim for raw tool-call arguments before
      * schema validation. Must return an object matching TParams.
      */
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings("unchecked")  // safe: callers supply TParams via type inference at the call site
     default TParams prepareArguments(Map<String, Object> raw) {
         return (TParams) raw;
     }

@@ -2,27 +2,29 @@ package com.pijava.agent.harness;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
+import java.util.Set;
 
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.entry.ProvisionedEntry;
 import com.pijava.agent.record.LaneRecord;
-import com.pijava.agent.tool.AbortSignal;
+import com.pijava.ai.AbortSignal;
+import com.pijava.agent.tool.AgentTool;
 import com.pijava.ai.message.AssistantMessage;
-import com.pijava.ai.message.ContentBlock;
-import com.pijava.ai.message.Message;
 
 /**
  * Internal per-lane state for {@link AgentHarness}.
  *
- * <p>Package-private — only AgentHarness creates and mutates this.
+ * <p>Only AgentHarness and its collaborators create and mutate this.
  * Phase 2a supports a single lane; multi-lane in Phase 2c.</p>
  *
  * <p>Aligned with pi's {@code LaneState}. Key design: messages are NOT stored
  * directly — they are built from {@link #transcript} entries on each LLM request
- * via {@link #buildMessages()}.</p>
+ * by {@code ActionExecutor}.</p>
  */
-final class LaneState {
+public final class LaneState {
+
+    /** Lane identifier. */
+    String laneName = "default";
 
     /** Current run phase. */
     RunPhase phase = RunPhase.IDLE;
@@ -46,13 +48,23 @@ final class LaneState {
     final List<ProvisionedEntry> pendingWrites = new ArrayList<>();
 
     /** Internal operation records for debugging and audit (Phase 2a). */
-    final List<LaneRecord> records = new ArrayList<>();
+    public final List<LaneRecord> records = new ArrayList<>();
 
     /** Pending tool calls to execute (populated after tool_use stopReason). Phase 2b. */
     final List<Action.ExecuteTool> pendingToolCalls = new ArrayList<>();
 
     /** Abort signal for the current run. Phase 2b. */
     AbortSignal abortSignal;
+
+    // Phase 2c: multi-lane fields
+    /** Parent leaf ID for branching; null for the default lane. */
+    String parentLeafId;
+
+    /** Lane-level tool override; null means inherit from harness. */
+    Set<AgentTool<?, ?>> activeTools;
+
+    /** Lane-level system prompt override; null means inherit from harness. */
+    String systemPrompt;
 
     // ── Helpers ──────────────────────────────────────────────
 
@@ -64,38 +76,6 @@ final class LaneState {
     /** The most recent entry, or null. */
     Entry lastEntry() {
         return transcript.isEmpty() ? null : transcript.get(transcript.size() - 1);
-    }
-
-    /**
-     * Build the LLM message list from transcript entries.
-     * Extracts user/assistant messages, prepends system prompt if present.
-     */
-    List<Message> buildMessages(String systemPrompt) {
-        var messages = new ArrayList<Message>();
-        if (systemPrompt != null && !systemPrompt.isEmpty()) {
-            messages.add(new Message.SystemMessage(
-                    List.of(new ContentBlock.TextContent(systemPrompt))));
-        }
-        for (var entry : transcript) {
-            if (entry instanceof Entry.Message msg) {
-                messages.add(toMessage(msg));
-            }
-        }
-        return messages;
-    }
-
-    private static Message toMessage(Entry.Message entry) {
-        return switch (entry.role()) {
-            case "user" -> new Message.UserMessage(entry.blocks());
-            case "assistant" -> new Message.AssistantMessage(entry.blocks());
-            case "tool" -> {
-                var block = (ContentBlock.ToolResultContent) entry.blocks().get(0);
-                yield new Message.ToolResultMessage(
-                    block.toolUseId(), block.toolName(),
-                    block.content(), block.isError());
-            }
-            default -> new Message.UserMessage(entry.blocks());
-        };
     }
 
     // ═══════════════════════════════════════════════════════════

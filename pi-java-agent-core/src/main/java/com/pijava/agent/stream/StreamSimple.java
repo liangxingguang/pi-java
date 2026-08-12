@@ -7,6 +7,7 @@ import com.pijava.agent.harness.StreamFn;
 import com.pijava.agent.harness.StreamOptions;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.catalog.ModelInfo;
+import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -53,7 +54,7 @@ public final class StreamSimple {
         if (overflow > 0) {
             // Phase 2a: just report. Phase 2c: trigger compaction.
             // Return error event signalling overflow
-            var partial = com.pijava.ai.message.AssistantMessage.empty()
+            var partial = AssistantMessage.empty()
                     .withStopReason("overflow");
             return StreamIterator.from(List.of(
                     new StreamEvent.Start(partial),

@@ -14,11 +14,9 @@ public final class ToolSetFactory {
     /**
      * Create the full coding tool set: bash, read, write, edit, grep, ls, glob.
      *
-     * @param cwd           working directory for tools (unused in factory;
-     *                      ToolContext is resolved per-execution)
      * @param commandPrefix optional prefix prepended to every bash command
      */
-    public static List<AgentTool<?, ?>> createCodingTools(String cwd, String commandPrefix) {
+    public static List<AgentTool<?, ?>> createCodingTools(String commandPrefix) {
         return List.of(
             BashTool.create(commandPrefix),
             ReadTool.create(),
@@ -32,9 +30,8 @@ public final class ToolSetFactory {
 
     /**
      * Create a read-only tool set: read, grep, ls, glob.
-     * No mutation-capable tools included.
      */
-    public static List<AgentTool<?, ?>> createReadOnlyTools(String cwd) {
+    public static List<AgentTool<?, ?>> createReadOnlyTools() {
         return List.of(
             ReadTool.create(),
             GrepTool.create(),

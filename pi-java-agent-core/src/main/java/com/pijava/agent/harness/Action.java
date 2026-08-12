@@ -41,7 +41,7 @@ public sealed interface Action {
      * Try to end the current run.
      * May be rejected if the lane state is not ready.
      *
-     * @param outcome "completed" | "failed"
+     * @param outcome "completed" | "tool_use" | "error"
      */
     record TryFinishRun(
         String outcome

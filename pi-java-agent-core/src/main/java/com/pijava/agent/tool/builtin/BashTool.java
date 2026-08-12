@@ -1,5 +1,9 @@
 package com.pijava.agent.tool.builtin;
+import com.pijava.ai.AbortSignal;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -21,7 +25,8 @@ import com.pijava.ai.message.ContentBlock;
  * The {@code ApprovalHandler} callback (§2.4) is the primary safeguard.
  */
 public final class BashTool {
-    private static final long MAX_TIMEOUT_SECONDS = 2_147_483_647L / 1000;
+    /** Max timeout in seconds: {@code Long.MAX_VALUE / 1000} ≈ 2^41 ms. */
+    private static final long MAX_TIMEOUT_SECONDS = Long.MAX_VALUE / 1000;
 
     private BashTool() {}
 
@@ -58,7 +63,6 @@ public final class BashTool {
             @Override public ExecutionMode executionMode() { return new ExecutionMode.Sequential(); }
 
             @Override
-            @SuppressWarnings("unchecked")
             public BashInput prepareArguments(Map<String, Object> raw) {
                 String command = (String) raw.get("command");
                 Optional<Long> timeout = Optional.empty();
@@ -104,20 +108,23 @@ public final class BashTool {
                 String outputText;
 
                 if (truncation.truncated()) {
-                    details = new BashDetails(truncation, null);
+                    // Save full output to temp file
+                    String tempPath = saveTempFile(output);
+                    details = new BashDetails(truncation, tempPath);
                     int startLine = truncation.totalLines() - truncation.outputLines() + 1;
                     int endLine = truncation.totalLines();
                     if (truncation.lastLinePartial()) {
                         outputText = truncation.content()
                             + "\n\n[Showing last " + TruncationUtils.formatSize(truncation.outputBytes())
                             + " of line " + endLine + " (line is "
-                            + TruncationUtils.formatSize(shellResult.outputBytes()) + ").]";
+                            + TruncationUtils.formatSize(shellResult.outputBytes()) + ")."
+                            + "\nFull output saved to: " + tempPath + "]";
                     } else {
                         outputText = truncation.content()
                             + "\n\n[Showing lines " + startLine + "-" + endLine
                             + " of " + truncation.totalLines()
                             + " (" + TruncationUtils.formatSize(TruncationUtils.DEFAULT_MAX_BYTES)
-                            + " limit).]";
+                            + " limit). Full output saved to: " + tempPath + "]";
                     }
                 } else {
                     outputText = truncation.content();
@@ -132,5 +139,17 @@ public final class BashTool {
                     details, null, false, List.of());
             }
         };
+    }
+
+    /**
+     * Save the full (untruncated) output to a temp file.
+     * @return the absolute path to the temp file
+     * @throws IOException if the temp file cannot be created or written
+     */
+    private static String saveTempFile(String output) throws IOException {
+        Path tempFile = Files.createTempFile("bash-output-", ".txt");
+        tempFile.toFile().deleteOnExit();
+        Files.writeString(tempFile, output);
+        return tempFile.toAbsolutePath().toString();
     }
 }

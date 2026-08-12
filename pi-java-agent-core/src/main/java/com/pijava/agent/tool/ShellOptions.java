@@ -1,4 +1,5 @@
 package com.pijava.agent.tool;
+import com.pijava.ai.AbortSignal;
 
 import java.util.Map;
 import java.util.OptionalLong;

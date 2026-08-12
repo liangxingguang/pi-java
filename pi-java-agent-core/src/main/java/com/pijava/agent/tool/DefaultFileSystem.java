@@ -34,7 +34,22 @@ public class DefaultFileSystem implements FileSystem {
         if (parent != null) {
             Files.createDirectories(parent);
         }
-        Files.writeString(filePath, content);
+        // Atomic write: write to temp file then rename
+        var tempPath = Path.of(path + ".tmp." + System.nanoTime());
+        try {
+            Files.writeString(tempPath, content);
+            Files.move(tempPath, filePath,
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException e) {
+            // Clean up temp file on failure
+            try {
+                Files.deleteIfExists(tempPath);
+            } catch (IOException ignored) {
+                // best-effort cleanup
+            }
+            throw e;
+        }
     }
 
     @Override

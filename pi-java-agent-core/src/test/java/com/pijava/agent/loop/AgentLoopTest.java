@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Set;
 
 import com.pijava.agent.harness.AgentHarness;
+import com.pijava.agent.harness.DriveMode;
 import com.pijava.agent.harness.HarnessConfig;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
@@ -36,7 +37,8 @@ class AgentLoopTest {
                         new StreamEvent.StreamDone("stop", null, partial)
                 )),
                 MODEL, ModelThinkingLevel.off(), "",
-                Set.of(), 200_000, null, null, null));
+                Set.of(), 200_000, null, null, null,
+                DriveMode.MANUAL, null, java.util.Map.of(), com.pijava.ai.http.RetryPolicy.defaultPolicy(), com.pijava.telemetry.NoopTelemetryContext.INSTANCE, com.pijava.ai.thinking.ThinkingLevelMap.empty()));
 
         var loop = new AgentLoop(harness);
         var result = loop.run("How are you?");
@@ -58,7 +60,8 @@ class AgentLoopTest {
                                 new RuntimeException("boom"), partial)
                 )),
                 MODEL, ModelThinkingLevel.off(), "",
-                Set.of(), 200_000, null, null, null));
+                Set.of(), 200_000, null, null, null,
+                DriveMode.MANUAL, null, java.util.Map.of(), com.pijava.ai.http.RetryPolicy.defaultPolicy(), com.pijava.telemetry.NoopTelemetryContext.INSTANCE, com.pijava.ai.thinking.ThinkingLevelMap.empty()));
 
         var loop = new AgentLoop(harness);
         var result = loop.run("test");

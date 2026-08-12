@@ -1,4 +1,5 @@
 package com.pijava.agent.tool.builtin;
+import com.pijava.ai.AbortSignal;
 
 import java.util.List;
 import java.util.Map;
@@ -41,7 +42,6 @@ public final class WriteTool {
             @Override public ExecutionMode executionMode() { return new ExecutionMode.Sequential(); }
 
             @Override
-            @SuppressWarnings("unchecked")
             public WriteInput prepareArguments(Map<String, Object> raw) {
                 return new WriteInput((String) raw.get("path"), (String) raw.get("content"));
             }

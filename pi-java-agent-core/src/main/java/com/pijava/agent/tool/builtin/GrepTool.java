@@ -1,4 +1,5 @@
 package com.pijava.agent.tool.builtin;
+import com.pijava.ai.AbortSignal;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -50,7 +51,6 @@ public final class GrepTool {
             @Override public ExecutionMode executionMode() { return new ExecutionMode.Parallel(); }
 
             @Override
-            @SuppressWarnings("unchecked")
             public GrepInput prepareArguments(Map<String, Object> raw) {
                 String pattern = (String) raw.get("pattern");
                 Optional<String> path = Optional.ofNullable((String) raw.get("path"));
@@ -99,16 +99,12 @@ public final class GrepTool {
             }
 
             private void grepDir(String dirPath, Pattern pattern, String glob,
-                    ToolContext context, List<String> matches) {
-                try {
-                    var files = context.fs().listDir(dirPath, true);
-                    for (var file : files) {
-                        if (!"file".equals(file.kind())) continue;
-                        if (glob != null && !matchesGlob(file.path(), glob)) continue;
-                        grepFile(file.path(), pattern, matches);
-                    }
-                } catch (Exception ignored) {
-                    // skip unreadable directories
+                    ToolContext context, List<String> matches) throws Exception {
+                var files = context.fs().listDir(dirPath, true);
+                for (var file : files) {
+                    if (!"file".equals(file.kind())) continue;
+                    if (glob != null && !matchesGlob(file.path(), glob)) continue;
+                    grepFile(file.path(), pattern, matches);
                 }
             }
 

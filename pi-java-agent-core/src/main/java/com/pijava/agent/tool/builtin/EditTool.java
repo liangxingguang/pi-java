@@ -1,4 +1,5 @@
 package com.pijava.agent.tool.builtin;
+import com.pijava.ai.AbortSignal;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -60,6 +61,8 @@ public final class EditTool {
             @Override public ExecutionMode executionMode() { return new ExecutionMode.Sequential(); }
 
             @Override
+            // unchecked cast unavoidable: Map<String,Object>::get returns Object,
+            // and generic array elements erase to raw Map at runtime
             @SuppressWarnings("unchecked")
             public EditInput prepareArguments(Map<String, Object> raw) {
                 String path = (String) raw.get("path");
@@ -115,11 +118,12 @@ public final class EditTool {
 
                 context.fs().writeFile(absolutePath, newContent);
                 String diffStr = generateSimpleDiff(originalContent, newContent);
+                String patchStr = generateUnifiedPatch(params.path(), originalContent, newContent);
                 return new ToolResult<>(
                     List.of(new ContentBlock.TextContent(
                         "Successfully replaced " + params.edits().size()
                         + " block(s) in " + params.path() + ".")),
-                    new EditDetails(diffStr, "", firstLine),
+                    new EditDetails(diffStr, patchStr, firstLine),
                     null, false, List.of());
             }
 
@@ -153,6 +157,49 @@ public final class EditTool {
                         if (!origLine.equals(newLine)) {
                             sb.append("+ ").append(newLine).append("\n");
                         }
+                    }
+                }
+                return sb.toString();
+            }
+
+            /** Generate a unified-diff patch that can be applied with {@code patch -p0}. */
+            private String generateUnifiedPatch(String filePath, String original, String newContent) {
+                var origLines = original.lines().toList();
+                var newLines = newContent.lines().toList();
+                int diffStart = -1, diffEnd = -1;
+                int maxLen = Math.max(origLines.size(), newLines.size());
+                for (int i = 0; i < maxLen; i++) {
+                    String ol = i < origLines.size() ? origLines.get(i) : "";
+                    String nl = i < newLines.size() ? newLines.get(i) : "";
+                    if (!ol.equals(nl)) {
+                        if (diffStart == -1) diffStart = i;
+                        diffEnd = i + 1;
+                    }
+                }
+                if (diffStart < 0) return "";
+                int contextLines = 2;
+                int hunkStart = Math.max(0, diffStart - contextLines);
+                int hunkEnd = Math.min(maxLen, diffEnd + contextLines);
+                int oldCount = hunkEnd - hunkStart;
+                int newCount = hunkEnd - hunkStart + (newLines.size() - origLines.size());
+                var sb = new StringBuilder();
+                sb.append("--- a/").append(filePath).append("\n");
+                sb.append("+++ b/").append(filePath).append("\n");
+                sb.append("@@ -").append(hunkStart + 1).append(",").append(oldCount)
+                  .append(" +").append(hunkStart + 1).append(",").append(newCount)
+                  .append(" @@\n");
+                for (int i = hunkStart; i < hunkEnd; i++) {
+                    String ol = i < origLines.size() ? origLines.get(i) : null;
+                    String nl = i < newLines.size() ? newLines.get(i) : null;
+                    if (ol == null) {
+                        sb.append("+").append(nl).append("\n");
+                    } else if (nl == null) {
+                        sb.append("-").append(ol).append("\n");
+                    } else if (ol.equals(nl)) {
+                        sb.append(" ").append(ol).append("\n");
+                    } else {
+                        sb.append("-").append(ol).append("\n");
+                        sb.append("+").append(nl).append("\n");
                     }
                 }
                 return sb.toString();

@@ -1,71 +1,101 @@
 package com.pijava.agent.harness;
 
-import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import com.pijava.agent.compaction.CompactionSettings;
-import com.pijava.agent.entry.Entry;
-import com.pijava.agent.entry.EntryHeader;
-import com.pijava.agent.entry.ProvisionedEntry;
+import com.pijava.agent.hook.AfterResponseHook;
+import com.pijava.agent.hook.AfterToolHook;
+import com.pijava.agent.hook.BeforeCompactionHook;
+import com.pijava.agent.hook.BeforeNavigationHook;
+import com.pijava.agent.hook.BeforePayloadHook;
+import com.pijava.agent.hook.BeforeRequestHook;
+import com.pijava.agent.hook.BeforeResumeHook;
+import com.pijava.agent.hook.BeforeRunEndHook;
+import com.pijava.agent.hook.BeforeRunHook;
+import com.pijava.agent.hook.BeforeToolHook;
+import com.pijava.agent.hook.HookSystem;
+import com.pijava.agent.hook.TransformContextHook;
 import com.pijava.agent.record.LaneRecord;
-import com.pijava.agent.record.RecordHeader;
+import com.pijava.agent.skill.Skill;
+import com.pijava.agent.skill.SkillManager;
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ToolContext;
+import com.pijava.agent.tool.ToolExecutor;
 import com.pijava.agent.tool.ToolRegistry;
-import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.message.AssistantMessage;
-import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.model.ModelId;
-import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
+import com.pijava.telemetry.TelemetryContext;
 
 /**
- * The central agent runtime — manages lanes, tools, hooks, and the
- * main prompt → LLM → tool → repeat loop.
+ * Central agent runtime — prompt → LLM → tool → repeat loop.
  *
- * <h3>Drive model (Phase 2a)</h3>
- * Manual-drive only: the outer loop (CLI, TUI, or {@code AgentLoop})
- * calls {@link #peekAction()} → {@link #executeAction(Action)} to push
- * the state machine forward. The harness never runs autonomously.
+ * <p>Phase 2c: multi-lane support, lifecycle hooks, compaction, skills,
+ * snapshot subscriptions, autonomous drive, and close().</p>
  *
- * <h3>State machine</h3>
- * <pre>
- *   IDLE → run(prompt) → ASSISTANT
- *   ASSISTANT → peekAction() → StreamAssistant
- *   executeAction(StreamAssistant) → stream LLM → CHECKPOINT
- *   CHECKPOINT → peekAction() → AppendEntry (pending writes)
- *   CHECKPOINT → peekAction() → TryFinishRun (no pending writes)
- *   executeAction(TryFinishRun) → IDLE (or ASSISTANT via tool_use)
- *   executeAction(ExecuteTool) → execute tool → ASSISTANT
- * </pre>
+ * <p>Manual-drive: the outer loop calls {@link #peekAction()} →
+ * {@link #executeAction(Action)} to advance the state machine.</p>
  */
 public class AgentHarness implements AutoCloseable {
+
+    // ═══════════════════════════════════════════════════════════
+    // Fields
+    // ═══════════════════════════════════════════════════════════
+
+    /** Default lane name. */
+    public static final String DEFAULT_LANE = "default";
 
     private final StreamFn streamFn;
     private ModelId<?> model;
     private ModelThinkingLevel thinkingLevel;
-    private final String systemPrompt;
+    private String systemPrompt;
     private Set<AgentTool<?, ?>> activeTools;
     private final int maxInputTokens;
     private final ToolRegistry toolRegistry;
     private final ToolContext toolContext;
-    private final String commandPrefix;
+    private boolean closed;
 
-    // Single lane (Phase 2a)
-    private final LaneState lane;
-    private boolean aborted;
+    // Phase 2c: multi-lane
+    private final ConcurrentMap<String, LaneState> lanes = new ConcurrentHashMap<>();
+    private final String defaultLaneName;
+
+    // Phase 2c: drive mode
+    private DriveMode driveMode = DriveMode.MANUAL;
+
+    // Phase 2c: hooks
+    private final HookSystem hookSystem;
+
+    // Phase 2c: skills
+    private final SkillManager skillManager = new SkillManager();
+
+    // Phase 2c: compaction
+    private CompactionSettings compactionSettings;
+
+    // Phase 2c: event bus
+    final HarnessEventBus eventBus = new HarnessEventBus();
+
+    // Phase 2c: token counter
+    private final ExecutionContext.TokenCounter tokenCounter = new ExecutionContext.TokenCounter();
+
+    // Phase 2c: action executor
+    private ActionExecutor actionExecutor;
+
+    // Phase 2c: snapshot service
+    private SnapshotService snapshotService;
+
+    // Phase 2c: queue manager + telemetry
+    private QueueManager queueManager;
+    private final TelemetryContext telemetry;
 
     // ── Factory ──────────────────────────────────────────────
 
-    /**
-     * Create a new AgentHarness from configuration.
-     * The {@link StreamFn} is stored internally; the loop never touches it.
-     */
+    /** Create a new AgentHarness from configuration. */
     public static AgentHarness create(HarnessConfig config) {
         return new AgentHarness(config);
     }
@@ -79,412 +109,333 @@ public class AgentHarness implements AutoCloseable {
         this.maxInputTokens = config.maxInputTokens();
         this.toolRegistry = config.toolRegistry();
         this.toolContext = config.toolContext();
-        this.commandPrefix = config.commandPrefix();
-        this.lane = new LaneState();
+        this.driveMode = config.driveMode() != null ? config.driveMode() : DriveMode.MANUAL;
+        this.compactionSettings = config.compactionSettings();
+        this.telemetry = config.telemetry();
+        this.hookSystem = new HookSystem(lanes);
+        this.defaultLaneName = DEFAULT_LANE;
+        config.skills().values().forEach(skillManager::register);
+
+        // Create the default lane
+        var defaultLane = new LaneState();
+        defaultLane.laneName = DEFAULT_LANE;
+        lanes.put(DEFAULT_LANE, defaultLane);
+
+        // Build snapshot service first (referenced by execution context)
+        this.snapshotService = new SnapshotService(
+            lanes, eventBus, tokenCounter,
+            () -> model != null ? model.modelName() : "unknown",
+            () -> activeTools.stream().map(AgentTool::name)
+                .collect(java.util.stream.Collectors.toSet()));
+
+        // Build execution context and action executor
+        var execCtx = new ExecutionContext(
+            streamFn, () -> model, () -> thinkingLevel, () -> systemPrompt, () -> activeTools,
+            maxInputTokens, toolRegistry, toolContext,
+            new ToolExecutor(toolRegistry, toolContext), skillManager,
+            hookSystem, lanes, () -> compactionSettings, config.thinkingLevelMap(),
+            tokenCounter, snapshotService);
+        this.actionExecutor = new ActionExecutor(execCtx);
+        this.queueManager = new QueueManager();
     }
 
-    // ── Operation ────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════
+    // Multi-lane
+    // ═══════════════════════════════════════════════════════════
 
-    /**
-     * Initiate a new run with the given user prompt.
-     * Writes user Message + ThinkingLevelChange entries (if non-default),
-     * transitions to ASSISTANT phase. Returns the first AppendEntry action
-     * so that initialization entries are flushed before StreamAssistant runs.
-     *
-     * @return the first action to execute (AppendEntry for initial entries,
-     *         or StreamAssistant if there are no pending writes)
-     */
+    /** Get the default lane handle. */
+    public LaneHandle lane() {
+        return new LaneHandle(defaultLaneName, this);
+    }
+
+    /** Create a new lane. */
+    public LaneHandle createLane(LaneConfig config) {
+        if (closed) throw new HarnessClosedException();
+        if (lanes.containsKey(config.name())) {
+            throw new LaneExistsException(config.name());
+        }
+        var state = new LaneState();
+        state.laneName = config.name();
+        state.parentLeafId = config.parentLeafId();
+        state.activeTools = config.activeTools() != null
+            ? Set.copyOf(config.activeTools()) : null;
+        state.systemPrompt = config.systemPrompt();
+        lanes.put(config.name(), state);
+        return new LaneHandle(config.name(), this);
+    }
+
+    /** List all lane handles. */
+    public List<LaneHandle> lanes() {
+        return lanes.keySet().stream()
+            .map(name -> new LaneHandle(name, this))
+            .toList();
+    }
+
+    /** Move entries from one lane to another. */
+    public void moveLane(String source, String target) {
+        if (closed) throw new HarnessClosedException();
+        var src = requireLane(source);
+        var tgt = requireLane(target);
+        tgt.transcript.addAll(src.transcript);
+        src.transcript.clear();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Queue scheduling (Phase 3 stubs) — delegated to QueueManager
+    // ═══════════════════════════════════════════════════════════
+
+    /** Enqueue a steer prompt. Queue consumption is Phase 3. */
+    public String steer(String laneName, String prompt) {
+        return queueManager.steer(laneName, prompt);
+    }
+
+    /** Enqueue a follow-up prompt. Queue consumption is Phase 3. */
+    public String followUp(String laneName, String prompt) {
+        return queueManager.followUp(laneName, prompt);
+    }
+
+    /** Enqueue a next-run prompt. Queue consumption is Phase 3. */
+    public String nextRun(String laneName, String prompt) {
+        return queueManager.nextRun(laneName, prompt);
+    }
+
+    /** Cancel all queued items of the given type ("steer", "followUp", "nextRun"). */
+    public void cancelQueued(String laneName, String queueType) {
+        queueManager.cancelQueued(laneName, queueType);
+    }
+
+    // ── Operation (single-lane convenience overloads) ─────────
+
+    /** Initiate a new run on the default lane. */
     public Action run(String prompt) {
-        if (!(lane.phase instanceof RunPhase.Idle)) {
-            throw new IllegalStateException("Cannot start run: lane is not idle");
-        }
-        aborted = false;
-        lane.runId = UUID.randomUUID().toString();
-        lane.stepIndex = 0;
-        lane.partial = null;
-        lane.newestOwn = null;
-        lane.transcript.clear();
-        lane.pendingWrites.clear();
-        lane.records.clear();
-        lane.pendingToolCalls.clear();
-        lane.abortSignal = com.pijava.agent.tool.AbortSignal.create();
-
-        // Write user message entry
-        var userEntry = new Entry.Message(
-                Entry.newHeader(lane.nextSeq(), ""),
-                "user",
-                List.of(new ContentBlock.TextContent(prompt))
-        );
-        lane.transcript.add(userEntry);
-        lane.pendingWrites.add(new ProvisionedEntry(userEntry));
-
-        // Write thinking level change if non-default
-        if (thinkingLevel instanceof ModelThinkingLevel.Enabled en) {
-            var levelName = en.level().label();
-            var tlEntry = new Entry.ThinkingLevelChange(
-                    Entry.newHeader(lane.nextSeq(), userEntry.header().id()),
-                    levelName
-            );
-            lane.transcript.add(tlEntry);
-            lane.pendingWrites.add(new ProvisionedEntry(tlEntry));
-        }
-
-        lane.phase = RunPhase.ASSISTANT;
-        // Record operation start
-        lane.records.add(new LaneRecord.OperationStarted(
-                LaneRecord.newHeader(lane.records.size()), lane.runId, prompt));
-        // Return first action — ensures entries are flushed before StreamAssistant
-        return peekAction();
+        return run(defaultLaneName, prompt);
     }
 
-    /** Abort the current run. */
+    /** Initiate a new run on the specified lane. */
+    public Action run(String laneName, String prompt) {
+        if (closed) throw new HarnessClosedException();
+        telemetry.incrementCounter("harness.turn", 1);
+        return actionExecutor.run(laneName, prompt);
+    }
+
+    /** Abort the current run on the default lane. */
     public void abort() {
-        aborted = true;
+        abort(defaultLaneName);
+    }
+
+    /** Abort the current run on the specified lane. */
+    public void abort(String laneName) {
+        var lane = requireLane(laneName);
         if (lane.abortSignal != null) {
             lane.abortSignal.abort();
         }
         if (!(lane.phase instanceof RunPhase.Idle)) {
             lane.records.add(new LaneRecord.AbortRequested(
-                    LaneRecord.newHeader(lane.records.size()), "user_requested"));
+                LaneRecord.newHeader(lane.records.size()), "user_requested"));
         }
+        publishState(laneName);
     }
 
-    /** Return the final assistant message from the most recent run. */
+    /** Return the final assistant message from the most recent run (default lane). */
     public AssistantMessage lastAssistantMessage() {
-        return lane.partial;
+        return lanes.get(defaultLaneName).partial;
     }
 
-    // ── Manual drive ─────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════
+    // Manual drive
+    // ═══════════════════════════════════════════════════════════
 
-    /**
-     * Peek at the next pending action without changing state.
-     * Returns null when there is nothing to do (IDLE phase, no run in progress).
-     */
+    /** Return the next pending action from the default lane. */
     public Action peekAction() {
-        return switch (lane.phase) {
-            case RunPhase.Idle i -> null;
-            case RunPhase.Assistant a -> {
-                var pw = drainNextPendingWrite();
-                if (pw != null) yield pw;
-                // Phase 2b: yield pending tool calls before starting new LLM call
-                if (!lane.pendingToolCalls.isEmpty()) {
-                    yield lane.pendingToolCalls.remove(0);
-                }
-                yield new Action.StreamAssistant("assistant", 0);
-            }
-            case RunPhase.Checkpoint c -> {
-                var pw = drainNextPendingWrite();
-                if (pw != null) yield pw;
-                yield new Action.TryFinishRun(determineOutcome());
-            }
-        };
+        return peekAction(defaultLaneName);
     }
 
-    /**
-     * Return the next pending write as an AppendEntry action, or null if none.
-     */
-    private Action drainNextPendingWrite() {
-        if (!lane.pendingWrites.isEmpty()) {
-            var pw = lane.pendingWrites.get(0);
-            return new Action.AppendEntry(
-                    entryTypeName(pw.entry()), pw.entry().header().id());
+    /** Return the next pending action from the specified lane. */
+    public Action peekAction(String laneName) {
+        if (driveMode instanceof DriveMode.Automatic) {
+            throw new IllegalStateException("peekAction is disabled in AUTOMATIC mode");
         }
-        return null;
+        return actionExecutor.peekAction(laneName);
     }
 
-    /**
-     * Execute a single action (manual drive mode).
-     * For {@code StreamAssistant}: calls LLM via {@code StreamFn}, consumes events.
-     * Returns the next action to execute, or null if the run has ended.
-     */
+    /** Execute a single action (default lane). */
     public Action executeAction(Action action) {
-        return switch (action) {
-            case Action.StreamAssistant sa -> executeStreamAssistant(sa);
-            case Action.AppendEntry ae -> executeAppendEntry(ae);
-            case Action.TryFinishRun tfr -> executeTryFinishRun(tfr);
-            case Action.ExecuteTool et -> executeTool(et);
-        };
+        return executeAction(defaultLaneName, action);
     }
 
-    // ── Internal: StreamAssistant ────────────────────────────
-
-    private Action executeStreamAssistant(Action.StreamAssistant sa) {
-        if (aborted) {
-            lane.phase = RunPhase.CHECKPOINT;
-            lane.partial = AssistantMessage.empty().withStopReason("aborted");
-            lane.newestOwn = deriveNewestOwn();
-            return peekAction();
+    /** Execute a single action on the specified lane. */
+    public Action executeAction(String laneName, Action action) {
+        if (closed) throw new HarnessClosedException();
+        if (driveMode instanceof DriveMode.Automatic) {
+            throw new IllegalStateException("executeAction is disabled in AUTOMATIC mode");
         }
+        var result = actionExecutor.executeAction(laneName, action);
+        publishState(laneName);
+        return result;
+    }
 
-        // Build messages from transcript
-        var messages = lane.buildMessages(systemPrompt);
-        var thinkingConfig = translateThinking(thinkingLevel);
+    // ═══════════════════════════════════════════════════════════
+    // Drive mode
+    // ═══════════════════════════════════════════════════════════
 
-        // Phase 2b: pass tool definitions from registry
-        var toolDefs = toolRegistry != null
-            ? toolRegistry.toToolDefinitions()
-            : List.<ToolDefinition>of();
-        var options = new StreamOptions(
-                java.util.OptionalInt.empty(),
-                java.util.OptionalDouble.empty(),
-                thinkingConfig,
-                toolDefs
-        );
+    public DriveMode drive() {
+        return driveMode;
+    }
 
-        // Record step attempt
-        int attemptIdx = lane.stepIndex++;
-        long inputTokens = 0;
-        long outputTokens = 0;
+    public void drive(DriveMode mode) {
+        if (closed) throw new HarnessClosedException();
+        this.driveMode = mode;
+    }
+
+    public CompletionStage<Void> runToCompletion() {
+        return runToCompletion(defaultLaneName);
+    }
+
+    public CompletionStage<Void> runToCompletion(String laneName) {
+        if (driveMode instanceof DriveMode.Manual) {
+            throw new IllegalStateException("Cannot runToCompletion in MANUAL mode");
+        }
+        return CompletableFuture.runAsync(() -> {
+            Action action;
+            while ((action = actionExecutor.peekAction(laneName)) != null) {
+                actionExecutor.executeAction(laneName, action);
+                publishState(laneName);
+            }
+        });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Compaction
+    // ═══════════════════════════════════════════════════════════
+
+    public void compact(CompactionSettings settings) {
+        compact(defaultLaneName, settings);
+    }
+
+    public void compact(String laneName, CompactionSettings settings) {
+        if (closed) throw new HarnessClosedException();
+        actionExecutor.compact(laneName, settings);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Skills
+    // ═══════════════════════════════════════════════════════════
+
+    public Skill skill(String name) {
+        if (closed) throw new HarnessClosedException();
+        return skillManager.get(name);
+    }
+
+    public void registerSkill(Skill skill) {
+        skillManager.register(skill);
+    }
+
+    public String promptFromTemplate(String template, Map<String, Object> vars) {
+        if (closed) throw new HarnessClosedException();
         try {
-            var iter = streamFn.stream(messages, model, options);
-            try {
-                while (iter.hasNext()) {
-                    if (aborted) {
-                        iter.close();
-                        break;
-                    }
-                    var event = iter.next();
-                    // Track usage if present
-                    if (event instanceof StreamEvent.UsageInfo ui
-                            && ui.partial() != null
-                            && ui.partial().usage() != null) {
-                        inputTokens = ui.partial().usage().inputTokens();
-                        outputTokens = ui.partial().usage().outputTokens();
-                    }
-                    // All events carry partial — replace current snapshot
-                    if (event.partial() != null) {
-                        lane.partial = event.partial();
-                    }
-                    if (event instanceof StreamEvent.StreamDone) {
-                        break;
-                    }
-                    if (event instanceof StreamEvent.StreamError) {
-                        break;
-                    }
-                }
-            } finally {
-                iter.close();
-            }
-        } catch (Exception e) {
-            lane.partial = AssistantMessage.empty()
-                    .withStopReason("error");
+            return skillManager.template(template).render(vars);
+        } catch (SkillManager.UnknownTemplateException e) {
+            // Fall back to literal template (Phase 2c minimal)
+            return template;
         }
-
-        // Record step attempt
-        lane.records.add(new LaneRecord.StepAttempt(
-                LaneRecord.newHeader(lane.records.size()),
-                attemptIdx, inputTokens, outputTokens));
-        // Record usage if we have token counts
-        if (inputTokens > 0 || outputTokens > 0) {
-            lane.records.add(new LaneRecord.UsageRecord(
-                    LaneRecord.newHeader(lane.records.size()),
-                    inputTokens, outputTokens, model.modelName()));
-        }
-
-        // Create assistant message entry from the final partial
-        if (lane.partial != null) {
-            var parentId = lane.lastEntry() != null
-                    ? lane.lastEntry().header().id() : "";
-            var asstEntry = new Entry.Message(
-                    Entry.newHeader(lane.nextSeq(), parentId),
-                    "assistant",
-                    lane.partial.content()
-            );
-            lane.transcript.add(asstEntry);
-            lane.pendingWrites.add(new ProvisionedEntry(asstEntry));
-        }
-
-        lane.newestOwn = deriveNewestOwn();
-        lane.phase = RunPhase.CHECKPOINT;
-        return peekAction();
     }
 
-    // ── Internal: AppendEntry ────────────────────────────────
-
-    private Action executeAppendEntry(Action.AppendEntry ae) {
-        for (var pw : lane.pendingWrites) {
-            if (pw.entry().header().id().equals(ae.entryId())) {
-                pw.markWritten();
-                break;
-            }
-        }
-        lane.pendingWrites.removeIf(ProvisionedEntry::isWritten);
-        return peekAction();
+    public SkillManager skillManager() {
+        return skillManager;
     }
 
-    // ── Internal: TryFinishRun ───────────────────────────────
+    // ═══════════════════════════════════════════════════════════
+    // Hooks — delegated to HookSystem
+    // ═══════════════════════════════════════════════════════════
 
-    private Action executeTryFinishRun(Action.TryFinishRun tfr) {
-        String status;
-        if (lane.newestOwn == null) {
-            status = "failed";
-        } else {
-            String stopReason = lane.newestOwn.stopReason();
-            if ("tool_use".equals(stopReason)) {
-                // Phase 2b: extract tool calls from the assistant partial
-                List<Action.ExecuteTool> toolActions = extractToolCalls(lane.partial);
-                if (!toolActions.isEmpty()) {
-                    lane.pendingToolCalls.addAll(toolActions);
-                    // Stay in CHECKPOINT — tool execution will transition back to ASSISTANT
-                    status = "tool_use";
-                } else {
-                    status = "completed";
-                }
-            } else if (isErrorStopReason(stopReason)) {
-                status = "error";
-            } else {
-                status = "completed";
-            }
-        }
-        // Record operation finish
-        lane.records.add(new LaneRecord.OperationFinished(
-                LaneRecord.newHeader(lane.records.size()), lane.runId, status));
-        if ("tool_use".equals(status)) {
-            return peekAction();
-        }
-        lane.phase = RunPhase.IDLE;
-        return null;
+    public AutoCloseable onBeforeRun(String laneName, BeforeRunHook hook) {
+        return hookSystem.onBeforeRun(laneName, hook);
     }
 
-    // ── Internal: ExecuteTool ────────────────────────────────
-
-    /**
-     * Execute a single tool call. Follows the exception-driven error model:
-     * tool throws on failure, harness catches and wraps error content.
-     */
-    private Action executeTool(Action.ExecuteTool et) {
-        List<ContentBlock> resultBlocks;
-        boolean isError = false;
-
-        try {
-            var result = toolRegistry.execute(
-                et.toolName(), et.toolCallId(), et.arguments(),
-                lane.abortSignal, null, toolContext);
-            resultBlocks = result.content();
-        } catch (Exception e) {
-            resultBlocks = List.of(new ContentBlock.TextContent(
-                "Error: " + e.getMessage()));
-            isError = true;
-        }
-
-        // Write tool result as Entry.Message(role="tool")
-        var parentId = lane.lastEntry() != null
-            ? lane.lastEntry().header().id() : "";
-        var toolEntry = new Entry.Message(
-            Entry.newHeader(lane.nextSeq(), parentId),
-            "tool",
-            List.of(new ContentBlock.ToolResultContent(
-                et.toolCallId(), et.toolName(),
-                resultBlocks, isError))
-        );
-        lane.transcript.add(toolEntry);
-        lane.pendingWrites.add(new ProvisionedEntry(toolEntry));
-
-        // Record tool execution
-        lane.records.add(new LaneRecord.ToolStarted(
-            LaneRecord.newHeader(lane.records.size()),
-            et.toolCallId(), et.toolName(), et.arguments()));
-
-        // Transition back to ASSISTANT for follow-up LLM call
-        lane.phase = RunPhase.ASSISTANT;
-        return peekAction();
+    public AutoCloseable onBeforeResume(String laneName, BeforeResumeHook hook) {
+        return hookSystem.onBeforeResume(laneName, hook);
     }
 
-    /**
-     * Extract tool call actions from an assistant message partial.
-     * Phase 2b: scans content blocks for {@link ContentBlock.ToolUseContent}.
-     */
-    private static List<Action.ExecuteTool> extractToolCalls(AssistantMessage partial) {
-        if (partial == null || partial.content() == null) {
-            return List.of();
-        }
-        return partial.content().stream()
-            .filter(ContentBlock.ToolUseContent.class::isInstance)
-            .map(b -> {
-                var tc = (ContentBlock.ToolUseContent) b;
-                return new Action.ExecuteTool(tc.id(), tc.name(), tc.arguments());
-            })
-            .toList();
+    public AutoCloseable onTransformContext(String laneName, TransformContextHook hook) {
+        return hookSystem.onTransformContext(laneName, hook);
     }
 
-    private static boolean isErrorStopReason(String stopReason) {
-        return "error".equals(stopReason) || "aborted".equals(stopReason);
+    public AutoCloseable onBeforeRequest(String laneName, BeforeRequestHook hook) {
+        return hookSystem.onBeforeRequest(laneName, hook);
     }
 
-    // ── Helpers ──────────────────────────────────────────────
-
-    /**
-     * Translate ModelThinkingLevel to provider ThinkingConfig.
-     */
-    private static com.pijava.ai.thinking.ThinkingConfig translateThinking(
-            ModelThinkingLevel level) {
-        return switch (level) {
-            case ModelThinkingLevel.Off o -> com.pijava.ai.thinking.ThinkingConfig.OFF;
-            case ModelThinkingLevel.Enabled en -> switch (en.level()) {
-                case com.pijava.ai.thinking.ThinkingLevel.Minimal m ->
-                    com.pijava.ai.thinking.ThinkingConfig.withBudget(1024);
-                case com.pijava.ai.thinking.ThinkingLevel.Low l ->
-                    com.pijava.ai.thinking.ThinkingConfig.withBudget(2048);
-                case com.pijava.ai.thinking.ThinkingLevel.Medium m ->
-                    com.pijava.ai.thinking.ThinkingConfig.withBudget(8192);
-                case com.pijava.ai.thinking.ThinkingLevel.High h ->
-                    com.pijava.ai.thinking.ThinkingConfig.withBudget(16384);
-                case com.pijava.ai.thinking.ThinkingLevel.XHigh x ->
-                    com.pijava.ai.thinking.ThinkingConfig.withBudget(32768);
-            };
-        };
+    public AutoCloseable onBeforePayload(String laneName, BeforePayloadHook hook) {
+        return hookSystem.onBeforePayload(laneName, hook);
     }
 
-    private LaneState.NewestOwn deriveNewestOwn() {
-        for (int i = lane.transcript.size() - 1; i >= 0; i--) {
-            var entry = lane.transcript.get(i);
-            if (entry instanceof Entry.Message msg
-                    && "assistant".equals(msg.role())) {
-                String stopReason = lane.partial != null
-                        ? lane.partial.stopReason() : null;
-                return new LaneState.NewestOwn(
-                        msg.header().id(), "message", "assistant", stopReason);
-            }
-        }
-        return null;
+    public AutoCloseable onAfterResponse(String laneName, AfterResponseHook hook) {
+        return hookSystem.onAfterResponse(laneName, hook);
     }
 
-    private String determineOutcome() {
-        if (lane.newestOwn == null) return "failed";
-        String sr = lane.newestOwn.stopReason();
-        if (isErrorStopReason(sr)) return "failed";
-        if ("tool_use".equals(sr)) return "tool_use";
-        return "completed";
+    public AutoCloseable onBeforeTool(String laneName, BeforeToolHook hook) {
+        return hookSystem.onBeforeTool(laneName, hook);
     }
 
-    private static String entryTypeName(Entry entry) {
-        return switch (entry) {
-            case Entry.Message m -> "message";
-            case Entry.ModelChange mc -> "model_change";
-            case Entry.ThinkingLevelChange tlc -> "thinking_level_change";
-            case Entry.ActiveToolsChange atc -> "active_tools_change";
-            case Entry.Compaction c -> "compaction";
-            case Entry.BranchSummary bs -> "branch_summary";
-            case Entry.Custom c -> "custom";
-        };
+    public AutoCloseable onAfterTool(String laneName, AfterToolHook hook) {
+        return hookSystem.onAfterTool(laneName, hook);
     }
 
-    // ── Model / thinking ─────────────────────────────────────
+    public AutoCloseable onBeforeCompaction(String laneName, BeforeCompactionHook hook) {
+        return hookSystem.onBeforeCompaction(laneName, hook);
+    }
+
+    public AutoCloseable onBeforeNavigation(String laneName, BeforeNavigationHook hook) {
+        return hookSystem.onBeforeNavigation(laneName, hook);
+    }
+
+    public AutoCloseable onBeforeRunEnd(String laneName, BeforeRunEndHook hook) {
+        return hookSystem.onBeforeRunEnd(laneName, hook);
+    }
+
+    // ── Hook firing — delegated to HookSystem ─────────────────
+
+    // ═══════════════════════════════════════════════════════════
+    // Snapshot / Watch — delegated to SnapshotService
+    // ═══════════════════════════════════════════════════════════
+
+    public LaneSnapshot snapshot(String laneName) {
+        return snapshotService.snapshot(laneName);
+    }
+
+    public WatchHandle<LaneSnapshot> watch(String laneName) {
+        return snapshotService.watch(laneName);
+    }
+
+    public WatchHandle<SessionSnapshot> watchSession() {
+        return snapshotService.watchSession();
+    }
+
+    /** Publish lane + session snapshots after a state change. */
+    private void publishState(String laneName) {
+        snapshotService.publishState(laneName);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Model / Thinking / Tools
+    // ═══════════════════════════════════════════════════════════
 
     public ModelId<?> getModel() { return model; }
-    public void setModel(ModelId<?> model) { this.model = model; }
+    public void setModel(ModelId<?> model) {
+        if (closed) throw new HarnessClosedException();
+        this.model = model;
+    }
     public ModelThinkingLevel getThinkingLevel() { return thinkingLevel; }
-    public void setThinkingLevel(ModelThinkingLevel level) { this.thinkingLevel = level; }
+    public void setThinkingLevel(ModelThinkingLevel level) {
+        if (closed) throw new HarnessClosedException();
+        this.thinkingLevel = level;
+    }
 
-    // ── Tools ────────────────────────────────────────────────
-
-    /** Return the active tool set. */
     public Set<AgentTool<?, ?>> getActiveTools() {
         return Set.copyOf(activeTools);
     }
 
-    /** Update the active tool set. */
     public void setActiveTools(Set<AgentTool<?, ?>> tools) {
+        if (closed) throw new HarnessClosedException();
         this.activeTools = Set.copyOf(tools);
         if (toolRegistry != null) {
             toolRegistry.clear();
@@ -492,46 +443,57 @@ public class AgentHarness implements AutoCloseable {
         }
     }
 
+    public CompactionSettings getCompactionSettings() { return compactionSettings; }
+    public void setCompactionSettings(CompactionSettings s) {
+        if (closed) throw new HarnessClosedException();
+        this.compactionSettings = s;
+    }
+
     // ═══════════════════════════════════════════════════════════
-    // Deferred (Phase 2b/2c)
+    // Close
     // ═══════════════════════════════════════════════════════════
-
-    public LaneHandle lane() {
-        throw new UnsupportedOperationException("Phase 2c");
-    }
-
-    public LaneHandle createLane(LaneConfig config) {
-        throw new UnsupportedOperationException("Phase 2c");
-    }
-
-    public List<LaneHandle> lanes() {
-        throw new UnsupportedOperationException("Phase 2c");
-    }
-
-    public void moveLane(String lane, String to) {
-        throw new UnsupportedOperationException("Phase 2c");
-    }
-
-    public DriveMode drive() {
-        throw new UnsupportedOperationException("Phase 2c");
-    }
-
-    public void drive(DriveMode mode) {
-        throw new UnsupportedOperationException("Phase 2c");
-    }
-
-    public CompletionStage<Void> runToCompletion() {
-        throw new UnsupportedOperationException("Phase 2c");
-    }
-
-    public void compact(CompactionSettings settings) {
-        throw new UnsupportedOperationException("Phase 2c");
-    }
-
-    // ── Lifecycle ────────────────────────────────────────────
 
     @Override
     public void close() {
-        // no-op in Phase 2a
+        closed = true;
+        for (var lane : lanes.values()) {
+            if (lane.abortSignal != null) {
+                lane.abortSignal.abort();
+            }
+            snapshotService.publishState(lane.laneName);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Internal helpers
+    // ═══════════════════════════════════════════════════════════
+
+    private LaneState requireLane(String laneName) {
+        return HarnessUtils.requireLane(lanes, laneName);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Exceptions
+    // ═══════════════════════════════════════════════════════════
+
+    /** Thrown when an operation is attempted on a closed harness. */
+    public static final class HarnessClosedException extends IllegalStateException {
+        public HarnessClosedException() {
+            super("AgentHarness is closed");
+        }
+    }
+
+    /** Thrown when attempting to create a lane with an existing name. */
+    public static final class LaneExistsException extends IllegalArgumentException {
+        public LaneExistsException(String name) {
+            super("Lane already exists: " + name);
+        }
+    }
+
+    /** Thrown when compaction is requested on a lane with nothing to compact. */
+    public static final class NothingToCompactException extends IllegalStateException {
+        public NothingToCompactException(String laneName) {
+            super("Nothing to compact in lane: " + laneName);
+        }
     }
 }

@@ -1,4 +1,5 @@
 package com.pijava.agent.tool.builtin;
+import com.pijava.ai.AbortSignal;
 
 import java.util.List;
 import java.util.Map;
@@ -42,7 +43,6 @@ public final class LsTool {
             @Override public ExecutionMode executionMode() { return new ExecutionMode.Parallel(); }
 
             @Override
-            @SuppressWarnings("unchecked")
             public LsInput prepareArguments(Map<String, Object> raw) {
                 Optional<String> path = Optional.ofNullable((String) raw.get("path"));
                 Optional<Boolean> recursive = Optional.empty();

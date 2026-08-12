@@ -1,4 +1,5 @@
 package com.pijava.agent.tool.builtin;
+import com.pijava.ai.AbortSignal;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -50,7 +51,6 @@ public final class ReadTool {
             @Override public ExecutionMode executionMode() { return new ExecutionMode.Parallel(); }
 
             @Override
-            @SuppressWarnings("unchecked")
             public ReadInput prepareArguments(Map<String, Object> raw) {
                 String path = (String) raw.get("path");
                 Optional<Integer> offset = Optional.empty();
@@ -109,10 +109,10 @@ public final class ReadTool {
                     details = new ReadDetails(truncation);
                 } else if (truncation.truncated()) {
                     int startDisplay = startLine + 1;
-                    int endDisplay = startLine + truncation.outputLines();
-                    int nextOffset = endDisplay;
+                    int endDisplay = startDisplay + truncation.outputLines() - 1;
+                    int nextOffset = endDisplay + 1;
                     outputText = truncation.content()
-                        + "\n\n[Showing lines " + startDisplay + "-" + (endDisplay - 1)
+                        + "\n\n[Showing lines " + startDisplay + "-" + endDisplay
                         + " of " + allLines.size()
                         + " (" + TruncationUtils.formatSize(TruncationUtils.DEFAULT_MAX_BYTES)
                         + " limit). Use offset=" + nextOffset + " to continue.]";

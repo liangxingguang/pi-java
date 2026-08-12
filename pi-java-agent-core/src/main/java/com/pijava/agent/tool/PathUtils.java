@@ -19,9 +19,24 @@ public final class PathUtils {
     private static final byte[] BMP_SIG = {0x42, 0x4D};
     private static final byte[] RIFF_SIG = {0x52, 0x49, 0x46, 0x46};
 
-    /** Resolve a tool path: relative → absolute, normalize. */
+    /**
+     * Resolve a tool path: relative → absolute, normalize, reject traversal.
+     *
+     * @throws SecurityException if the resolved path escapes the working directory
+     *         (e.g. {@code ../} attempts to access parent directories)
+     */
     public static String resolveToolPath(ToolContext ctx, String path) {
-        return ctx.fs().resolvePath(path);
+        String resolved = ctx.fs().resolvePath(path);
+        String cwd = ctx.fs().resolvePath(ctx.cwd());
+        // Normalize both paths to handle trailing separators and case differences
+        Path resolvedPath = Path.of(resolved).toAbsolutePath().normalize();
+        Path cwdPath = Path.of(cwd).toAbsolutePath().normalize();
+        if (!resolvedPath.startsWith(cwdPath)) {
+            throw new SecurityException(
+                "Path traversal detected: '" + path + "' resolves to '" + resolved
+                + "' which is outside the working directory '" + cwd + "'");
+        }
+        return resolved;
     }
 
     /** Detect image MIME type from file bytes. */
