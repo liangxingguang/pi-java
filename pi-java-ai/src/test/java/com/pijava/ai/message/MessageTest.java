@@ -48,14 +48,13 @@ class MessageTest {
 
     @Test
     void toolResultShouldPreserveErrorFlag() {
-        var msg = new Message.UserMessage(List.of(
-                new ContentBlock.ToolResultContent("toolu_01", "File not found", true)));
+        var msg = new Message.ToolResultMessage("toolu_01", "read",
+                List.of(new ContentBlock.TextContent("File not found")), true);
 
         assertThat(msg.content()).hasSize(1);
-        var block = (ContentBlock.ToolResultContent) msg.content().get(0);
-        assertThat(block.toolUseId()).isEqualTo("toolu_01");
-        assertThat(block.content()).isEqualTo("File not found");
-        assertThat(block.isError()).isTrue();
+        assertThat(msg.toolUseId()).isEqualTo("toolu_01");
+        assertThat(msg.toolName()).isEqualTo("read");
+        assertThat(msg.isError()).isTrue();
     }
 
     @Test

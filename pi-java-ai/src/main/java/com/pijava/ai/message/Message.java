@@ -51,4 +51,22 @@ public sealed interface Message {
             return "assistant";
         }
     }
+
+    /**
+     * A tool execution result message.
+     * Carries the tool call ID, tool name, result content, and error flag
+     * so that protocol adapters can format tool-result blocks correctly
+     * for each LLM provider.
+     */
+    record ToolResultMessage(String toolUseId, String toolName,
+                             List<ContentBlock> content, boolean isError) implements Message {
+        public ToolResultMessage {
+            content = List.copyOf(content);
+        }
+
+        @Override
+        public String role() {
+            return "tool";
+        }
+    }
 }

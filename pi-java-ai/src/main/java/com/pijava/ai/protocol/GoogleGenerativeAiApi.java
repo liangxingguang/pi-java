@@ -212,9 +212,15 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
                         .functionCall(fc.build())
                         .build());
             }
-            case ContentBlock.ToolResultContent tc ->
-                    List.of(Part.fromFunctionResponse(tc.toolUseId(),
-                            Map.of("content", tc.content())));
+            case ContentBlock.ToolResultContent tc -> {
+                    // Extract text from content blocks for the function response
+                    String text = tc.content().stream()
+                        .filter(ContentBlock.TextContent.class::isInstance)
+                        .map(b -> ((ContentBlock.TextContent) b).text())
+                        .collect(java.util.stream.Collectors.joining("\n"));
+                    yield List.of(Part.fromFunctionResponse(tc.toolUseId(),
+                            Map.of("content", text)));
+                }
             case ContentBlock.ImageContent ic ->
                     List.of(Part.fromBytes(
                             java.util.Base64.getDecoder().decode(ic.data()),

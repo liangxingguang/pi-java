@@ -1,5 +1,6 @@
 package com.pijava.ai.message;
 
+import java.util.List;
 import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
@@ -49,8 +50,14 @@ public sealed interface ContentBlock {
      * A tool result returned to the assistant.
      *
      * @param toolUseId the ID of the corresponding {@link ToolUseContent}
-     * @param content   the result payload (text or structured)
+     * @param toolName  the name of the tool that produced this result
+     * @param content   the result content blocks (text or image)
      * @param isError   {@code true} if the tool execution failed
      */
-    record ToolResultContent(String toolUseId, String content, boolean isError) implements ContentBlock {}
+    record ToolResultContent(String toolUseId, String toolName,
+                             List<ContentBlock> content, boolean isError) implements ContentBlock {
+        public ToolResultContent {
+            content = List.copyOf(content);
+        }
+    }
 }

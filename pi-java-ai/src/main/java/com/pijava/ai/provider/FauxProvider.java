@@ -97,7 +97,7 @@ public final class FauxProvider implements Provider {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings("unchecked")  // safe: apiType equality check guarantees T is the expected API type
     public <T extends ProviderApi> T createApi(Class<T> apiType, ApiOptions options) {
         if (apiType.equals(ChatApi.class)) {
             return (T) new FauxChatApi(events, delayMs);

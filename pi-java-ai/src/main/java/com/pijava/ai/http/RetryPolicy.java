@@ -37,6 +37,52 @@ public final class RetryPolicy {
         return new Builder().build();
     }
 
+    /** Anthropic preset: 3 retries, 1000ms×2^n, retry on 429/5xx. */
+    public static RetryPolicy anthropic() {
+        return new Builder()
+                .maxRetries(3)
+                .baseDelay(Duration.ofSeconds(1))
+                .retryableStatuses(Set.of(429, 500, 502, 503, 504))
+                .build();
+    }
+
+    /** OpenAI preset: 5 retries, 500ms×2^n, retry on 429/500/502/503. */
+    public static RetryPolicy openai() {
+        return new Builder()
+                .maxRetries(5)
+                .baseDelay(Duration.ofMillis(500))
+                .retryableStatuses(Set.of(429, 500, 502, 503))
+                .build();
+    }
+
+    /** Google preset: 3 retries, 2000ms×1.5^n, retry on 429/500/503. */
+    public static RetryPolicy google() {
+        return new Builder()
+                .maxRetries(3)
+                .baseDelay(Duration.ofSeconds(2))
+                .backoffMultiplier(1.5)
+                .retryableStatuses(Set.of(429, 500, 503))
+                .build();
+    }
+
+    /** Mistral preset: 3 retries, 1000ms×2^n, retry on 429/500/502/503. */
+    public static RetryPolicy mistral() {
+        return new Builder()
+                .maxRetries(3)
+                .baseDelay(Duration.ofSeconds(1))
+                .retryableStatuses(Set.of(429, 500, 502, 503))
+                .build();
+    }
+
+    /** DeepSeek preset: 3 retries, 1000ms×2^n, retry on 429/500/502/503. */
+    public static RetryPolicy deepseek() {
+        return new Builder()
+                .maxRetries(3)
+                .baseDelay(Duration.ofSeconds(1))
+                .retryableStatuses(Set.of(429, 500, 502, 503))
+                .build();
+    }
+
     /** Whether the given HTTP status code is retryable. */
     public boolean shouldRetry(int statusCode) {
         return retryableStatuses.contains(statusCode) || (statusCode >= 500 && statusCode < 600);

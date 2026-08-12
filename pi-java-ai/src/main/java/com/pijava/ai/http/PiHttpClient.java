@@ -10,6 +10,8 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.TimeoutException;
 
+import com.pijava.ai.AbortSignal;
+
 /**
  * Thin wrapper around JDK {@link java.net.http.HttpClient} with SSE parsing,
  * automatic retry, and abort-signal support.
@@ -61,6 +63,21 @@ public final class PiHttpClient implements AutoCloseable {
      */
     public Iterator<ServerSentEvent> postSse(String url, String jsonBody,
                                               Map<String, String> headers) {
+        return postSse(url, jsonBody, headers, null);
+    }
+
+    /**
+     * POST JSON to {@code url} and consume the response as SSE events,
+     * honouring an optional abort signal.
+     *
+     * @param url      the target endpoint
+     * @param jsonBody the JSON request body
+     * @param headers  additional HTTP headers
+     * @param signal   cancellation signal, or null to disable
+     * @return a lazy iterator of SSE events
+     */
+    public Iterator<ServerSentEvent> postSse(String url, String jsonBody,
+                                              Map<String, String> headers, AbortSignal signal) {
         var requestBuilder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("Content-Type", "application/json")
@@ -74,7 +91,7 @@ public final class PiHttpClient implements AutoCloseable {
         }
 
         var request = requestBuilder.build();
-        return executeWithRetrySse(request, 0);
+        return executeWithRetrySse(request, 0, signal);
     }
 
     /**
@@ -104,17 +121,24 @@ public final class PiHttpClient implements AutoCloseable {
 
     // ── Retry / SSE internals ──────────────────────────────────
 
-    private Iterator<ServerSentEvent> executeWithRetrySse(HttpRequest request, int attempt) {
+    private Iterator<ServerSentEvent> executeWithRetrySse(HttpRequest request, int attempt,
+                                                          AbortSignal signal) {
+        if (signal != null && signal.isAborted()) {
+            throw new PiHttpException(0, "Request aborted");
+        }
         try {
             var response = http.send(request, HttpResponse.BodyHandlers.ofLines());
             int status = response.statusCode();
 
             if (retryPolicy.shouldRetry(status) && attempt < retryPolicy.maxRetries()) {
+                if (signal != null && signal.isAborted()) {
+                    throw new PiHttpException(0, "Request aborted");
+                }
                 long delayMs = retryPolicy.delayMs(status, attempt, response);
                 if (delayMs > 0) {
                     Thread.sleep(delayMs);
                 }
-                return executeWithRetrySse(request, attempt + 1);
+                return executeWithRetrySse(request, attempt + 1, signal);
             }
 
             if (status < 200 || status >= 300) {
@@ -124,6 +148,9 @@ public final class PiHttpClient implements AutoCloseable {
             return new SseIterator(response.body().iterator());
         } catch (java.io.IOException e) {
             if (retryPolicy.shouldRetry(e) && attempt < retryPolicy.maxRetries()) {
+                if (signal != null && signal.isAborted()) {
+                    throw new PiHttpException(0, "Request aborted", e);
+                }
                 long delayMs = retryPolicy.delayMs(0, attempt, null);
                 if (delayMs > 0) {
                     try {
@@ -133,7 +160,7 @@ public final class PiHttpClient implements AutoCloseable {
                         throw new PiHttpException(0, "Retry interrupted", e);
                     }
                 }
-                return executeWithRetrySse(request, attempt + 1);
+                return executeWithRetrySse(request, attempt + 1, signal);
             }
             throw new PiHttpException(0, "Request failed after " + (attempt + 1) + " attempts", e);
         } catch (InterruptedException e) {

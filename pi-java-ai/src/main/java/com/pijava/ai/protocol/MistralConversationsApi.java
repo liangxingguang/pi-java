@@ -165,7 +165,6 @@ public final class MistralConversationsApi extends AbstractChatApi {
         return finishReason;
     }
 
-    @SuppressWarnings("unchecked")
     private String buildRequestBody(StreamRequest request) throws JsonProcessingException {
         var body = new HashMap<String, Object>();
         body.put("model", request.model().modelName());
@@ -199,6 +198,12 @@ public final class MistralConversationsApi extends AbstractChatApi {
                 }
                 case Message.AssistantMessage(var content) -> {
                     m.put("role", "assistant");
+                    m.put("content", extractText(content));
+                }
+                case Message.ToolResultMessage(var toolUseId, var toolName,
+                                               var content, var isError) -> {
+                    m.put("role", "tool");
+                    m.put("tool_call_id", toolUseId);
                     m.put("content", extractText(content));
                 }
             }
