@@ -543,7 +543,14 @@ public class AgentHarness implements AutoCloseable {
 
     // ── 操作 ─────────────────────────────────────────────
 
-    /** 发起一次新的 run。Phase 2a 只接受文本 prompt。 */
+    /**
+     * 发起一次新的 run。Phase 2a 只接受文本 prompt。
+     *
+     * <p><b>单轮语义</b>：每次 run() 都会重置 lane 状态（含 transcript.clear()），
+     * 表示一个全新的独立会话。多轮连续（历史累积）由 Phase 3 的
+     * steer/followUp 队列承载，而非重复调用 run()。这与 pi 的 run() 追加
+     * 行为对应到 Phase 3 的多轮机制，Phase 2 的 run() 保持单轮。</p>
+     */
     public Action run(String prompt);
 
     /** 中止当前 run。 */

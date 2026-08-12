@@ -9,45 +9,35 @@
 
 ## 1. 架构概览
 
-```
-┌─ pi-java-agent-core ─────────────────────────────────────────────┐
-│                                                                  │
-│  AgentLoop (扩展版)                                              │
-│  ┌──────────────────────────────────────────────────────────┐    │
-│  │  while (action = harness.peekAction()) {                 │    │
-│  │    action = harness.executeAction(action);               │    │
-│  │    // executeAction(StreamAssistant) → LLM 返回          │    │
-│  │    //   stopReason="tool_use" → ExecuteTool action       │    │
-│  │    // executeAction(ExecuteTool) → 查找工具 → 执行        │    │
-│  │    //   → tool_result Entry → 重新进入 ASSISTANT 阶段    │    │
-│  │  }                                                       │    │
-│  └──────────────────────────────────────────────────────────┘    │
-│         │ peekAction / executeAction                             │
-│  ┌──────▼──────────────────────────────────────────────────┐     │
-│  │  AgentHarness（状态机扩展：tool_call → tool_result 回环） │     │
-│  │  • executeTryFinishRun(): stopReason="tool_use"          │     │
-│  │    → 不结束 run，改为返回 ExecuteTool actions             │     │
-│  │  • executeAction(ExecuteTool): ToolRegistry 查找 → 执行   │     │
-│  │    → ToolResult → Entry → ASSISTANT 阶段                  │     │
-│  └──────────────────────────────────────────────────────────┘     │
-│         │                                                        │
-│  ┌──────▼──────────────────────────────────────────────────┐     │
-│  │  ToolRegistry + AgentTool                                 │     │
-│  │  • register/toolNames/execute                            │     │
-│  │  • 7 个内置工具：bash, read, write, edit, grep, ls, glob  │     │
-│  └──────────────────────────────────────────────────────────┘     │
-│         │                                                        │
-│  ┌──────▼──────────────────────────────────────────────────┐     │
-│  │  ExecutionToolContext（工具执行环境）                      │     │
-│  │  • cwd: String, env: Map<String,String>                  │     │
-│  │  • shellExec: ProcessBuilder 封装                        │     │
-│  │  • readFile/writeFile/info → NIO API                     │     │
-│  └──────────────────────────────────────────────────────────┘     │
-└──────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph agent["pi-java-agent-core"]
+        direction TB
+        loop["<b>AgentLoop</b>（扩展版）<br/>
+        while peekAction() → executeAction()<br/>
+        StreamAssistant → tool_use → ExecuteTool → ASSISTANT"]
+
+        harness["<b>AgentHarness</b>（状态机扩展）<br/>
+        • executeTryFinishRun(): tool_use → ExecuteTool 队列<br/>
+        • executeAction(ExecuteTool): ToolRegistry 查找 → 执行<br/>
+        • ToolResult / 异常 → Entry → ASSISTANT 阶段"]
+
+        registry["<b>ToolRegistry + AgentTool</b><br/>
+        • register / toolNames / execute<br/>
+        • 7 个内置工具：bash, read, write, edit, grep, ls, glob"]
+
+        context["<b>ToolContext</b>（工具执行环境）<br/>
+        • cwd + env + ShellExecutor + FileSystem<br/>
+        • ProcessBuilder 封装 / NIO API"]
+    end
+
+    loop -->|"peekAction / executeAction"| harness
+    harness -->|"查找 + 执行"| registry
+    registry -->|"依赖"| context
 ```
 
 **核心设计决策（对齐 pi）：**
-- **AgentTool 接口**：对齐 pi 的 `AgentHarnessTool<TContext, TParameters, TDetails>`，5 参数 execute 签名（含 toolCallId、signal、onUpdate、context）
+- **AgentTool 接口**：对齐 pi 的 `AgentTool<TParameters, TDetails>`，5 参数 execute 签名（含 toolCallId、signal、onUpdate、context）。Java 化差异：context 作为 execute() 参数而非泛型参数
 - **7 个内置工具**：bash（ProcessBuilder + 虚拟线程 + 超时/截断）、read（NIO 文件读取 + 行数限制 + 图片检测）、write（NIO 写入 + 原子替换）、edit（精确字符串替换 + diff 输出 + 备份）、grep（ripgrep 正则搜索 + 行号）、ls（目录列表 + 递归）、glob（通配符文件匹配）
 - **工具执行引擎**：支持 sequential/parallel 两种模式，Phase 2b 默认 sequential
 - **审批机制**：Phase 2b 在 ToolRegistry 层引入 `ApprovalHandler` 回调，Phase 3 CLI/TUI 对接
@@ -59,10 +49,10 @@
 
 ### 2.1 现有 Tool 接口的问题
 
-Phase 2a 的 `Tool` 接口（`com.pijava.agent.harness.Tool`）过于简化：
+Phase 2a 的 `Tool` 接口（`com.pijava.agent.harness.Tool`）是占位符设计，Phase 2b 不再扩展它：
 
 ```java
-// 现状（Phase 2a）
+// 现状（Phase 2a）— Phase 2b 将整体替换为 AgentTool
 public interface Tool {
     String name();
     String description();
@@ -72,15 +62,19 @@ public interface Tool {
 }
 ```
 
-问题：
+与 pi 的差异：
 1. `execute()` 只有 arguments 参数，缺少 `toolCallId`（标识工具调用）、`AbortSignal`（取消支持）、`onUpdate`（流式进度回调）
 2. `ToolResult` 只有 `content: String`，缺少 `details`（结构化详情，用于 UI 渲染）、`usage`（工具自身用量）
 3. 没有执行上下文（cwd、env、文件系统），工具无法操作真实文件
-4. 与 pi 的 `AgentHarnessTool` 不对齐
+4. Phase 2a `Tool` 使用 `isError` 标志位，pi 使用异常驱动模型（throw = error）
+
+**迁移策略**：Phase 2b 引入 `AgentTool`（新接口，对齐 pi），Phase 2a 的 `Tool` 接口标记 `@Deprecated` 并在 Phase 2b 完成后删除。`HarnessConfig.activeTools` 从 `Set<String>` 迁移到 `Set<AgentTool<?,?>>`。
 
 ### 2.2 新的 AgentTool 接口
 
-对齐 pi 的 `AgentHarnessTool<TContext, TParameters, TDetails>`，Java 化设计：
+对齐 pi 的 `AgentTool<TParameters, TDetails>`（pi 中 extends `Tool<TParameters>`，4 参数 execute）。
+Java 化差异：`execute()` 多一个 `ToolContext context` 参数 — Java 无 TypeScript 的闭包捕获机制，
+工具工厂无法隐式注入执行环境，因此显式传入。
 
 ```java
 package com.pijava.agent.tool;
@@ -91,9 +85,13 @@ package com.pijava.agent.tool;
  * @param <TParams>  validated arguments type (Jackson-deserialized from LLM JSON)
  * @param <TDetails> structured detail type for UI rendering
  *
- * <p>Aligned with pi's {@code AgentHarnessTool}. Differs from the Phase 2a
- * {@code Tool} interface by adding toolCallId, signal, onUpdate, and
- * context parameters to {@code execute()}.</p>
+ * <p>Aligned with pi's {@code AgentTool}. Key Java-izations:
+ * <ul>
+ *   <li>5-param {@code execute()} — adds explicit {@code ToolContext} (pi injects via closure)</li>
+ *   <li>Exception-driven errors — tools throw on failure, harness catches and
+ *       wraps in error content (pi identical approach)</li>
+ *   <li>{@code @FunctionalInterface} for callbacks instead of inline lambdas</li>
+ * </ul></p>
  */
 public interface AgentTool<TParams, TDetails> {
 
@@ -111,8 +109,8 @@ public interface AgentTool<TParams, TDetails> {
 
     /**
      * Execution mode hint.
-     * {@code SEQUENTIAL} — cannot run concurrently with other tools (e.g. bash).
-     * {@code PARALLEL} — can run concurrently with other PARALLEL tools (e.g. read, grep, ls, glob).
+     * {@link ExecutionMode.Sequential} — cannot run concurrently with other tools (e.g. bash).
+     * {@link ExecutionMode.Parallel} — can run concurrently with other parallel tools (e.g. read, grep, ls, glob).
      */
     ExecutionMode executionMode();
 
@@ -127,13 +125,16 @@ public interface AgentTool<TParams, TDetails> {
     }
 
     /**
-     * Execute the tool call.
+     * Execute the tool call. <b>Throw on failure</b> — the harness catches
+     * exceptions and wraps them in error results. This aligns with pi's
+     * exception-driven error model.
      *
      * @param toolCallId unique identifier from the LLM
      * @param params     validated arguments
      * @param signal     abort signal (may be null)
      * @param onUpdate   progress callback (may be null; scoped to this invocation)
-     * @param context    execution environment (cwd, shell, filesystem)
+     * @param context    execution environment (cwd, shell, filesystem) —
+     *                   explicit because Java lacks TypeScript's closure-based DI
      * @return the tool result
      * @throws Exception on failure (harness wraps in error result)
      */
@@ -145,48 +146,66 @@ public interface AgentTool<TParams, TDetails> {
         ToolContext context
     ) throws Exception;
 }
+```
 
+**ExecutionMode** — 工具执行模式（sealed interface，符合 Erasable Java 规范）：
+
+```java
 /** Tool execution mode. */
-public enum ExecutionMode { SEQUENTIAL, PARALLEL }
+public sealed interface ExecutionMode {
+    /** Must execute sequentially (e.g. bash). */
+    record Sequential() implements ExecutionMode {}
+    /** Can execute concurrently with other parallel tools (e.g. read, grep, ls, glob). */
+    record Parallel() implements ExecutionMode {}
+}
+```
 
+**ToolResult** — 工具执行结果（异常驱动：成功返回此类型，失败 throw）：
+
+```java
 /**
  * Tool execution result.
  *
- * @param content  text/image content returned to the LLM
- * @param details  structured details for logs or UI rendering (nullable)
- * @param isError  {@code true} if the execution failed
- * @param usage    usage from the tool execution itself (nullable)
- * @param terminate hint that the agent should stop after the current batch
+ * <p>Tools throw on failure; {@code execute()} never returns an error result.
+ * The harness catches exceptions and wraps them as error content for the LLM.</p>
+ *
+ * @param content      text/image content returned to the LLM
+ * @param details      structured details for logs or UI rendering (nullable)
+ * @param usage        usage from the tool execution itself (nullable)
+ * @param terminate    hint that the agent should stop after the current batch
+ * @param addedToolNames names of tools dynamically registered by this result
+ *                       (Phase 2c — MCP tools; reserved field, always empty in 2b)
  */
 public record ToolResult<TDetails>(
     List<ContentBlock> content,
     TDetails details,
-    boolean isError,
     UsageInfo usage,
-    boolean terminate
+    boolean terminate,
+    List<String> addedToolNames
 ) {
+    public ToolResult {
+        addedToolNames = List.copyOf(addedToolNames);
+    }
+
     /** Create a successful text-only result. */
     public static <T> ToolResult<T> success(String text) {
         return new ToolResult<>(
             List.of(new ContentBlock.TextContent(text)),
-            null, false, null, false);
+            null, null, false, List.of());
     }
 
     /** Create a successful result with details. */
     public static <T> ToolResult<T> success(String text, T details) {
         return new ToolResult<>(
             List.of(new ContentBlock.TextContent(text)),
-            details, false, null, false);
-    }
-
-    /** Create an error result. */
-    public static <T> ToolResult<T> error(String message) {
-        return new ToolResult<>(
-            List.of(new ContentBlock.TextContent(message)),
-            null, true, null, false);
+            details, null, false, List.of());
     }
 }
+```
 
+**ToolUpdateCallback** — 流式进度回调（`@FunctionalInterface`）：
+
+```java
 /**
  * Progress callback for streaming tool execution updates.
  * Scoped to the current {@code execute()} invocation; calls made after
@@ -196,7 +215,11 @@ public record ToolResult<TDetails>(
 public interface ToolUpdateCallback<TDetails> {
     void onUpdate(ToolResult<TDetails> partialResult);
 }
+```
 
+**AbortSignal** — 工具取消信号：
+
+```java
 /**
  * Abort signal for tool cancellation. Wraps a volatile boolean flag.
  * Aligned with pi's {@code AbortSignal}.
@@ -215,6 +238,24 @@ public class AbortSignal {
 }
 ```
 
+### 2.2b ToolDefinition（LLM 协议层工具描述）
+
+`ToolDefinition` 是 `AgentTool` 的轻量投影，仅包含 LLM 请求所需的元数据字段。
+与 `03-detailed-design.md` §2.5 中带渲染字段的 `ToolDefinition` 不同：渲染字段（`renderCall`、
+`renderResult`、`promptSnippet`、`promptGuidelines`）推迟到 Phase 3 TUI 阶段引入。
+
+```java
+/**
+ * Lightweight tool descriptor for LLM requests.
+ * Phase 2b: name + description + JSON Schema. Phase 3: adds renderCall/renderResult/promptSnippet.
+ */
+public record ToolDefinition(
+    String name,
+    String description,
+    Map<String, Object> inputSchema
+) {}
+```
+
 ### 2.3 ToolContext（执行环境）
 
 对齐 pi 的 `ExecutionToolContext` + `ExecutionEnv`：
@@ -225,6 +266,10 @@ package com.pijava.agent.tool;
 /**
  * Filesystem and shell context required by built-in tools.
  * Injected by AgentHarness, resolved per-turn from harness configuration.
+ *
+ * <p>Instances are <b>effectively immutable</b> (record-style fields + final
+ * executor/fs references). {@link ShellExecutor} and {@link FileSystem}
+ * implementations must document their own thread-safety guarantees.</p>
  *
  * <p>Aligned with pi's {@code ExecutionToolContext} and {@code ExecutionEnv}.
  */
@@ -286,6 +331,10 @@ public record ShellResult(
 /**
  * Filesystem abstraction for read/write tools.
  * Implementations: real filesystem (production) or in-memory (tests).
+ *
+ * <p>{@code glob()} and {@code grep()} are NOT on this interface —
+ * those are tool-level operations, not filesystem primitives.
+ * GrepTool and GlobTool use {@code listDir()} + own logic.</p>
  */
 public interface FileSystem {
     /** Read a text file. Returns lines as a list. */
@@ -305,12 +354,6 @@ public interface FileSystem {
 
     /** List directory contents. */
     List<FileInfo> listDir(String path, boolean recursive) throws IOException;
-
-    /** Glob matching. */
-    List<String> glob(String pattern) throws IOException;
-
-    /** Grep search in files. */
-    List<GrepMatch> grep(String pattern, String path, boolean regex) throws IOException;
 }
 
 public record FileInfo(
@@ -379,26 +422,31 @@ public class ToolRegistry {
 
     /**
      * Execute a tool call by name.
-     * @return the tool result, or an error result if the tool is not found
+     *
+     * @throws SecurityException        if the tool call is not approved
+     * @throws IllegalArgumentException if the tool is not found
+     * @throws Exception                on tool execution failure (harness catches and wraps)
      */
     public ToolResult<?> execute(
             String toolName, String toolCallId,
             Map<String, Object> arguments,
             AbortSignal signal, ToolUpdateCallback<?> onUpdate,
-            ToolContext context) {
+            ToolContext context) throws Exception {
         var tool = tools.get(toolName);
         if (tool == null) {
-            return ToolResult.error("Tool not found: " + toolName);
+            throw new IllegalArgumentException("Tool not found: " + toolName);
         }
-        try {
-            @SuppressWarnings("unchecked")
-            var result = ((AgentTool<Map<String, Object>, Object>) tool)
-                .execute(toolCallId, arguments, signal,
-                         (ToolUpdateCallback<Object>) onUpdate, context);
-            return result;
-        } catch (Exception e) {
-            return ToolResult.error(e.getMessage());
+        // Phase 2b: check approval before execution (Phase 3 CLI/TUI provides interactive handler)
+        if (approvalHandler != null && !approvalHandler.approve(toolName, arguments)) {
+            throw new SecurityException("Tool call not approved: " + toolName);
         }
+        // Heterogeneous tool map requires unchecked cast; type-safety guaranteed
+        // by register-time coupling between name key and AgentTool's generic signature.
+        @SuppressWarnings("unchecked")
+        var result = ((AgentTool<Map<String, Object>, Object>) tool)
+            .execute(toolCallId, arguments, signal,
+                     (ToolUpdateCallback<Object>) onUpdate, context);
+        return result;
     }
 
     /** Generate tool definitions suitable for the LLM request. */
@@ -449,6 +497,14 @@ public interface ApprovalHandler {
  * Execution: ProcessBuilder + Virtual Threads + output capture
  * Truncation: last 2000 lines or 100KB (whichever hit first),
  *   save full output to temp file if truncated
+ *
+ * <h4>Security model (Phase 2b)</h4>
+ * Phase 2b runs commands directly via {@code ProcessBuilder} with no sandbox.
+ * The {@code ApprovalHandler} callback (§2.4) is the primary safeguard —
+ * every command requires user approval before execution (Phase 3 CLI/TUI).
+ * Server/CI modes may auto-approve via a programmatic handler.
+ * Phase 3+ may add sandboxing ({@code --sandbox}) and command whitelists
+ * ({@code --allowed-commands}) aligned with pi's {@code BashToolOptions}.
  */
 public final class BashTool {
     private static final int DEFAULT_MAX_LINES = 2000;
@@ -597,7 +653,12 @@ public final class TruncationUtils {
     /** Truncate keeping the tail (for bash output). */
     public static TruncationResult truncateTail(String content, int maxLines, long maxBytes);
 
-    /** Truncate keeping the head (for read output). */
+    /**
+     * Truncate keeping the head (for read output).
+     * {@code lastLinePartial} is always {@code false} for head truncation —
+     * the last line is excluded entirely (not partially included) when the
+     * byte limit is exceeded mid-line. This avoids showing a broken partial line.
+     */
     public static TruncationResult truncateHead(String content, int maxLines, long maxBytes);
 
     record TruncationResult(
@@ -606,7 +667,7 @@ public final class TruncationUtils {
         String truncatedBy,    // "lines" | "bytes"
         int outputLines,
         long outputBytes,
-        boolean lastLinePartial
+        boolean lastLinePartial  // meaningful only for tail truncation (bash)
     ) {}
 
     /** Format a byte size for display. */
@@ -633,20 +694,21 @@ public final class PathUtils {
 }
 ```
 
-### 4.3 工具定义工厂（ToolDefinitions）
+### 4.3 工具集工厂（ToolSetFactory）
 
 ```java
 /**
  * Factory methods for creating tool sets.
  * Aligned with pi's tool creation patterns.
  */
-public final class ToolDefinitions {
+public final class ToolSetFactory {
 
     /**
      * Create the full coding tool set: bash, read, write, edit, grep, ls, glob.
-     * @param cwd working directory for tools
+     * @param cwd           working directory for tools
+     * @param commandPrefix optional prefix prepended to every bash command
      */
-    public static List<AgentTool<?, ?>> createCodingTools(String cwd);
+    public static List<AgentTool<?, ?>> createCodingTools(String cwd, String commandPrefix);
 
     /**
      * Create a read-only tool set: read, grep, ls, glob.
@@ -664,20 +726,33 @@ public final class ToolDefinitions {
 
 Phase 2a 状态机：
 
-```
-idle → run → ASSISTANT → peekAction → StreamAssistant → CHECKPOINT
-  → TryFinishRun → idle（结束）
+```mermaid
+stateDiagram-v2
+    [*] --> IDLE
+    IDLE --> ASSISTANT : run(prompt)
+    ASSISTANT --> CHECKPOINT : StreamAssistant
+    CHECKPOINT --> IDLE : TryFinishRun
 ```
 
 Phase 2b 扩展（工具回环）：
 
-```
-idle → run → ASSISTANT → StreamAssistant → CHECKPOINT
-  → stopReason?
-     ├─ "stop" / "error" / "length" → TryFinishRun → idle
-     └─ "tool_use" → peekAction → ExecuteTool*
-         → executeAction(ExecuteTool) → tool_result Entry
-         → ASSISTANT → StreamAssistant → CHECKPOINT → ...
+```mermaid
+stateDiagram-v2
+    [*] --> IDLE
+    IDLE --> ASSISTANT : run(prompt)
+    ASSISTANT --> CHECKPOINT : StreamAssistant
+
+    state CHECKPOINT {
+        direction LR
+        evaluate : evaluate stopReason
+        tool_loop : ExecuteTool*
+        tool_result : tool_result Entry
+
+        evaluate --> IDLE : stop/error/length → TryFinishRun
+        evaluate --> tool_loop : tool_use
+        tool_loop --> tool_result : executeAction
+        tool_result --> ASSISTANT : re-enter LLM loop
+    }
 ```
 
 ### 5.2 executeTryFinishRun 扩展
@@ -706,12 +781,28 @@ private Action executeTryFinishRun(Action.TryFinishRun tfr) {
 
 ### 5.3 executeAction(ExecuteTool) 新分支
 
+工具执行遵循异常驱动模型：工具成功返回 `ToolResult`，失败时抛出异常，
+harness 捕获后构造 error 内容块写入 transcript。
+
+Phase 2b 直接调用 {@code toolRegistry.execute()}（单工具逐个执行）；
+Phase 3 替换为 {@link ToolExecutor}（支持 batch 级并行 + 审批流水线）。
+
 ```java
 private Action executeTool(Action.ExecuteTool et) {
-    // Create tool result context (Entry for transcript)
-    var result = toolRegistry.execute(
-        et.toolName(), et.toolCallId(), et.arguments(),
-        lane.abortSignal(), null, toolContext);
+    List<ContentBlock> resultBlocks;
+    boolean isError = false;
+
+    try {
+        var result = toolRegistry.execute(
+            et.toolName(), et.toolCallId(), et.arguments(),
+            lane.abortSignal(), null, toolContext);
+        resultBlocks = result.content();
+    } catch (Exception e) {
+        // Exception-driven error model: wrap thrown error as text content
+        resultBlocks = List.of(new ContentBlock.TextContent(
+            "Error: " + e.getMessage()));
+        isError = true;
+    }
 
     // Write tool result as Entry.Message(role="tool")
     var parentId = lane.lastEntry().header().id();
@@ -720,7 +811,7 @@ private Action executeTool(Action.ExecuteTool et) {
         "tool",
         List.of(new ContentBlock.ToolResultContent(
             et.toolCallId(), et.toolName(),
-            result.content(), result.isError()))
+            resultBlocks, isError))
     );
     lane.transcript.add(toolEntry);
     lane.pendingWrites.add(new ProvisionedEntry(toolEntry));
@@ -731,6 +822,7 @@ private Action executeTool(Action.ExecuteTool et) {
         et.toolCallId(), et.toolName(), et.arguments()));
 
     // Transition back to ASSISTANT for follow-up LLM call
+    // (error or success — LLM decides next step)
     lane.phase = RunPhase.ASSISTANT;
     return peekAction();
 }
@@ -784,7 +876,7 @@ public record HarnessConfig(
     ModelId<?> model,
     ModelThinkingLevel thinkingLevel,
     String systemPrompt,
-    Set<String> activeTools,      // → Phase 2b: used to filter ToolRegistry
+    Set<AgentTool<?, ?>> activeTools,  // Phase 2b: ToolRegistry filters from this set
     int maxInputTokens,
     // Phase 2b additions:
     ToolRegistry toolRegistry,    // ← 新增
@@ -796,6 +888,65 @@ public record HarnessConfig(
     }
 }
 ```
+
+### 5.7 工具错误处理流程
+
+工具执行错误遵循 pi 的异常驱动模型，在 harness 层统一捕获和转换：
+
+```mermaid
+flowchart TD
+    exec["executeTool(ExecuteTool)"] --> call["toolRegistry.execute()"]
+    call -->|成功| success["ToolResult.content<br/>→ tool_result Entry<br/>isError = false"]
+    success --> assistant["→ ASSISTANT 阶段"]
+
+    call -->|异常| classify{异常类型}
+    classify -->|SecurityException| denied["审批拒绝<br/>→ tool_result Entry<br/>isError = true"]
+    classify -->|IllegalArgumentException| notfound["工具未找到<br/>→ tool_result Entry<br/>isError = true"]
+    classify -->|工具自身异常| toolerr["bash超时/read不存在/edit冲突<br/>→ tool_result Entry<br/>isError = true"]
+    classify -->|不可恢复| fatal["OOM / 文件系统错误<br/>→ lane.partial.stopReason = error<br/>→ TryFinishRun(error)"]
+
+    denied --> assistant
+    notfound --> assistant
+    toolerr --> assistant
+```
+
+关键设计决策：
+- **工具错误不结束 run**：即使 `isError=true`，tool_result 写入 transcript 后仍返回 ASSISTANT，
+  LLM 可基于错误信息自行修正（例如用正确路径重试 read）
+- **"Tool not found" 不结束 run**：与 pi 一致，LLM 可能打错工具名，返回错误让它重试
+- **工具结果的 `terminate` 标志**：当同一批次所有工具结果均设置 `terminate=true` 时，
+  harness 提前结束 run（可用于"任务已完成"信号）
+
+### 5.8 多工具批量处理（Multi-Tool Batch）
+
+一个 assistant turn 可能返回多个 `tool_use` 块。Phase 2b 逐个处理：
+
+```mermaid
+sequenceDiagram
+    participant AL as AgentLoop
+    participant AH as AgentHarness
+    participant LLM
+    participant TR as ToolRegistry
+
+    AL->>AH: peekAction() → StreamAssistant
+    AH->>LLM: stream(messages, tools)
+    LLM-->>AH: partial 含 3 个 ToolUseContent, stopReason="tool_use"
+    AH->>AH: executeTryFinishRun()<br/>extractToolCalls(partial)<br/>→ [ExecuteTool(bash), ExecuteTool(read), ExecuteTool(grep)]
+
+    loop 逐个执行 3 个工具
+        AL->>AH: peekAction() → ExecuteTool
+        AL->>AH: executeAction(ExecuteTool)
+        AH->>TR: execute(toolName, arguments)
+        TR-->>AH: ToolResult / Exception
+        AH->>AH: 写入 tool_result Entry → ASSISTANT
+    end
+
+    AL->>AH: peekAction() → StreamAssistant
+    AH->>LLM: stream(messages + 3 tool_results, tools)
+    LLM-->>AH: 看到 3 个 tool_result，决定下一步
+```
+
+Phase 3 将使用 `StructuredTaskScope` 并行化 `ExecutionMode.Parallel` 模式工具（read/grep/ls/glob）。
 
 ---
 
@@ -866,8 +1017,8 @@ public class ToolExecutor {
 
     /**
      * Execute a batch of tool calls in parallel.
-     * Only tools with ExecutionMode.PARALLEL can run concurrently;
-     * SEQUENTIAL tools force the whole batch to execute sequentially.
+     * Only tools with {@link ExecutionMode.Parallel} can run concurrently;
+     * {@link ExecutionMode.Sequential} tools force the whole batch to execute sequentially.
      */
     public List<Entry.Message> executeParallel(
             List<Action.ExecuteTool> toolActions,
@@ -884,15 +1035,16 @@ public class ToolExecutor {
 com.pijava.agent/
 ├── tool/
 │   ├── AgentTool.java              ← 工具接口（泛型 + 5 参数 execute）
+│   ├── ToolDefinition.java         ← LLM 协议层工具描述
 │   ├── ToolRegistry.java           ← 工具注册/查找/执行
 │   ├── ToolResult.java             ← 工具结果 record
 │   ├── ToolUpdateCallback.java     ← 流式进度回调（F.I.）
 │   ├── AbortSignal.java            ← 取消信号
-│   ├── ExecutionMode.java          ← SEQUENTIAL | PARALLEL
+│   ├── ExecutionMode.java          ← sealed: Sequential | Parallel
 │   ├── ApprovalHandler.java        ← 审批回调（F.I.）
 │   ├── ToolContext.java            ← 执行环境（cwd + shell + fs）
 │   ├── ToolExecutor.java           ← 工具执行引擎
-│   ├── ToolDefinitions.java        ← 工具集工厂方法
+│   ├── ToolSetFactory.java          ← 工具集工厂方法
 │   ├── ShellExecutor.java          ← Shell 执行器接口
 │   ├── DefaultShellExecutor.java   ← ProcessBuilder 实现
 │   ├── FileSystem.java             ← 文件系统抽象接口
@@ -901,13 +1053,14 @@ com.pijava.agent/
 │   ├── GrepMatch.java              ← grep 匹配结果 record
 │   ├── TruncationUtils.java        ← 输出截断工具
 │   ├── PathUtils.java              ← 路径解析工具
-│   ├── BashTool.java               ← bash 工具
-│   ├── ReadTool.java               ← read 工具
-│   ├── WriteTool.java              ← write 工具
-│   ├── EditTool.java               ← edit 工具
-│   ├── GrepTool.java               ← grep 工具
-│   ├── LsTool.java                 ← ls 工具
-│   └── GlobTool.java               ← glob 工具
+│   └── builtin/                    ← 内置工具实现
+│       ├── BashTool.java           ← bash 工具
+│       ├── ReadTool.java           ← read 工具
+│       ├── WriteTool.java          ← write 工具
+│       ├── EditTool.java           ← edit 工具
+│       ├── GrepTool.java           ← grep 工具
+│       ├── LsTool.java             ← ls 工具
+│       └── GlobTool.java           ← glob 工具
 ├── harness/
 │   ├── AgentHarness.java           ← 状态机扩展（工具回环）
 │   ├── LaneState.java              ← 新增 pendingToolCalls + abortSignal
@@ -939,7 +1092,7 @@ com.pijava.agent/
 | Edit 工具测试 | 精确替换 + diff 输出 + 冲突检测 | TempDir |
 | Grep 工具测试 | 正则匹配 + 文件过滤 | TempDir |
 | LS/Glob 工具测试 | 目录列表 + 递归 + 通配符 | TempDir |
-| ToolRegistry 测试 | 注册/查找/未找到 | 无 |
+| ToolRegistry 测试 | 注册/查找/未找到 + 审批拒绝 + 工具异常传播 | 无 |
 | ToolExecutor 测试 | 顺序/并行执行 | 无 |
 | AgentHarness 工具回环测试 | tool_use → ExecuteTool → ASSISTANT → stop | FauxProvider + ToolRegistry |
 | AgentLoop 工具集成测试 | 多轮工具调用往返 | FauxProvider + InMemoryFileSystem |
@@ -989,3 +1142,23 @@ pi-java -p "read src/main/java/com/pijava/agent/harness/AgentHarness.java and co
 - `addedToolNames` 动态工具注册（→ Phase 2c）
 - 工具执行的 `onUpdate` 流式进度（Phase 2b 定义接口，各工具按需实现；bash 工具实现，其余工具直接返回最终结果）
 - Skills 系统（→ Phase 2c）
+
+---
+
+## 12. 设计审查记录
+
+### v1.1（2026-08-11 review 修复）
+
+| 修复项 | 位置 | 变更 |
+|--------|------|------|
+| `ToolDefinition` 类型缺失 | 新增 §2.2b | 定义 `record ToolDefinition(name, description, inputSchema)`，与 03 §2.5 的差异加注释 |
+| `Tool` 基接口迁移路径 | §2.1 | 补充 Phase 2a `Tool` → Phase 2b `AgentTool` 迁移策略，`@Deprecated` + 删除计划 |
+| `isError` → 异常驱动 | §2.2, §2.4, §5.3, §5.7 | 移除 `ToolResult.isError`；工具 `execute()` 抛异常，harness 捕获后构造 error content；新增 §5.7 错误处理流程 |
+| `ToolResult.addedToolNames` 预留 | §2.2 | 新增字段（Phase 2c MCP 工具动态注册），Phase 2b 始终为空 |
+| 5-param `execute()` 说明 | §2.2 | 添加 Javadoc 说明：Java 无闭包 DI，`ToolContext` 需显式传入 |
+| `FileSystem` 接口职责过重 | §2.3 | 移除 `glob()` 和 `grep()` → 工具自行实现；添加 Thread-safety 说明 |
+| `ToolRegistry.execute()` 异常处理 | §2.4 | `Tool not found` 改为 `throw IllegalArgumentException`；异常向上传播 |
+| 多工具批量处理 | 新增 §5.8 | 描述逐个执行流程 + Phase 3 并行化计划 |
+| Bash 安全模型 | §3.1 | 添加 Phase 2b 安全策略：`ApprovalHandler` 审批 + 无沙箱（Phase 3+ 补充） |
+| `lastLinePartial` 语义 | §4.1 | 明确 head 截断下始终为 `false`，仅 tail 截断有意义 |
+| 包结构 `builtin/` 子包 | §8 | 7 个工具类从 `tool/` 扁平 → `tool/builtin/`
