@@ -79,7 +79,10 @@ public final class FileSettingsStorage implements SettingsStorage {
 
     private void write(Path path, Settings settings) {
         try {
-            Files.createDirectories(path.getParent());
+            var parent = path.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
             var temp = path.resolveSibling(path.getFileName() + ".tmp");
             Json.mapper().writerWithDefaultPrettyPrinter().writeValue(temp.toFile(), settings);
             Files.move(temp, path, StandardCopyOption.REPLACE_EXISTING,
