@@ -52,6 +52,8 @@ public final class SettingsManager {
     public void reload() {
         global = storage.readGlobal();
         project = storage.readProject();
+        migrate(global);
+        migrate(project);
         modifiedFields.clear();
     }
 
@@ -115,6 +117,28 @@ public final class SettingsManager {
             return override;
         }
         return !"never".equals(defaultTrust);
+    }
+
+    /**
+     * Migrate legacy settings fields (Phase 3 design §12.3): {@code queueMode}
+     * → {@code steeringMode}, {@code websockets} → {@code transport}. The old
+     * keys are consumed (removed from the unknown passthrough) once migrated.
+     */
+    private static void migrate(Settings settings) {
+        if (settings.steeringMode == null) {
+            var legacy = settings.unknown().get("queueMode");
+            if (legacy instanceof String value) {
+                settings.steeringMode = value;
+                settings.removeUnknown("queueMode");
+            }
+        }
+        if (settings.transport == null) {
+            var legacy = settings.unknown().get("websockets");
+            if (legacy instanceof String value) {
+                settings.transport = value;
+                settings.removeUnknown("websockets");
+            }
+        }
     }
 
     private Settings merge(Settings base, Settings override) {

@@ -77,4 +77,19 @@ class SettingsManagerTest {
 
         assertThat(manager.isProjectTrusted()).isTrue();
     }
+
+    @Test
+    void migratesLegacyQueueModeAndWebsockets() {
+        var storage = new InMemorySettingsStorage();
+        var global = new Settings();
+        global.setUnknown("queueMode", "all");
+        global.setUnknown("websockets", "sse");
+        storage.writeGlobal(global);
+
+        var manager = SettingsManager.withStorage(storage);
+
+        assertThat(manager.effective().steeringMode).isEqualTo("all");
+        assertThat(manager.effective().transport).isEqualTo("sse");
+        assertThat(manager.effective().unknown()).doesNotContainKey("queueMode");
+    }
 }

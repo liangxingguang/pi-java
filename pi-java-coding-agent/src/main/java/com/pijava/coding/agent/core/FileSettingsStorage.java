@@ -1,9 +1,14 @@
 package com.pijava.coding.agent.core;
 
 import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.StandardCopyOption;
+import java.util.function.Function;
 
 /**
  * File-based settings storage (Phase 3 design §12.3).
@@ -65,6 +70,25 @@ public final class FileSettingsStorage implements SettingsStorage {
         write(projectPath, settings);
     }
 
+    @Override
+    public void withLock(SettingsScope scope, Function<String, String> fn) {
+        var path = scope instanceof SettingsScope.Global
+            ? globalPath : projectPath;
+        withFileLock(path, () -> {
+            try {
+                String current = Files.exists(path) ? Files.readString(path) : "{}";
+                var updated = fn.apply(current);
+                if (updated != null) {
+                    Files.writeString(path, updated,
+                        StandardOpenOption.TRUNCATE_EXISTING);
+                }
+            } catch (IOException e) {
+                throw new SettingsStorageException(
+                    "Cannot read-modify-write settings: " + path, e);
+            }
+        });
+    }
+
     private Settings read(Path path) {
         if (!Files.exists(path)) {
             return new Settings();
@@ -78,6 +102,10 @@ public final class FileSettingsStorage implements SettingsStorage {
     }
 
     private void write(Path path, Settings settings) {
+        withFileLock(path, () -> writeUnlocked(path, settings));
+    }
+
+    private void writeUnlocked(Path path, Settings settings) {
         try {
             var parent = path.getParent();
             if (parent != null) {
@@ -90,6 +118,48 @@ public final class FileSettingsStorage implements SettingsStorage {
         } catch (IOException e) {
             throw new SettingsStorageException(
                 "Cannot write settings: " + path, e);
+        }
+    }
+
+    /**
+     * Run an action under an exclusive lock (retry 10×20ms). A sidecar
+     * {@code .lock} file is used so the settings file itself is never held
+     * open while an atomic rename happens (Windows-friendly).
+     */
+    private static void withFileLock(Path target, Runnable action) {
+        var lockPath = target.resolveSibling(target.getFileName() + ".lock");
+        try {
+            var parent = lockPath.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+        } catch (IOException e) {
+            throw new SettingsStorageException(
+                "Cannot create settings directory: " + target, e);
+        }
+        for (int attempt = 0; ; attempt++) {
+            try (var channel = FileChannel.open(
+                    lockPath, StandardOpenOption.CREATE,
+                    StandardOpenOption.WRITE);
+                 FileLock ignored = channel.lock()) {
+                action.run();
+                return;
+            } catch (OverlappingFileLockException e) {
+                if (attempt >= 9) {
+                    throw new SettingsStorageException(
+                        "Could not acquire settings lock: " + target, e);
+                }
+                try {
+                    Thread.sleep(20);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new SettingsStorageException(
+                        "Interrupted while waiting for settings lock: " + target, ie);
+                }
+            } catch (IOException e) {
+                throw new SettingsStorageException(
+                    "Could not lock settings: " + target, e);
+            }
         }
     }
 }
