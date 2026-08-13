@@ -890,13 +890,13 @@ public static AgentSession create(Args args) {
     var services = new SessionServices(
         settings,
         new TrustManager(settings.defaultProjectTrust()),
-        ProviderFactory.withDefaults(),                                  // ai：5 个内置 Provider
-        new DefaultModelResolver(BuiltinCatalog.INSTANCE),               // ai：模型目录
-        ToolSetFactory.createCodingTools(Path.of("")),                   // agent-core：内置工具集
+        defaultProviders(args),                                          // Phase 3 新增：ProviderRegistry 注册 5 个内置 Provider
+        new DefaultModelResolver(BuiltinCatalog.all()),                  // Phase 3 新增：all() 聚合 5 个 provider 目录
+        ToolSetFactory.createCodingTools(""),                            // agent-core：内置工具集（commandPrefix 默认空）
         CommandRegistry.withBuiltins());                                 // 22 个 slash 命令（§14）
     var harness = AgentHarness.builder()
-        .streamFn(services.providers().streamFn(args))
-        .model(ModelResolver.resolve(args.model(), settings))
+        .streamFn(streamFnFor(args, services.providers()))               // Phase 3 新增：按 provider/model 从 Provider 组装 StreamFn
+        .model(services.models().resolve(args.model(), settings))        // Phase 3 新增：resolve(String pattern, Settings) 重载
         .thinkingLevel(parseThinkingLevel(args.thinking()))             // §9.3
         .activeTools(activeTools(args, settings))
         .toolRegistry(services.tools())
@@ -1422,14 +1422,16 @@ com.pijava.agent/
 public record SessionServices(
     SettingsManager settings,
     TrustManager trust,
-    ProviderFactory providers,     // com.pijava.ai.provider
+    ProviderRegistry providers,    // com.pijava.ai.provider（ProviderFactory 为 SPI 接口，注册经 ProviderRegistry）
     ModelResolver models,          // com.pijava.ai.model
     ToolRegistry tools,            // com.pijava.agent.tool
     CommandRegistry slashCommands
 ) {}
 ```
 
-> **偏离说明（03 §4.1 `SessionServices`）**：03 的 `SessionServices` 列有 `harness`/`modelResolver`/`toolRegistry`/`skillManager`/`extensionManager`/`settings`/`trustManager`/`compaction`/`sessionStorage` 九字段。Phase 3 子集收敛为六字段：`harness` 不在容器内注入（由 `AgentSession.create()` 组装流程构造，§9.5 —— 容器与 harness 是构造关系而非注入关系）；`sessionStorage` → Phase 4（Phase 3 以 `InMemorySessionRepository` 替代，§11.5）；`skillManager`/`extensionManager` → Phase 6（skills/extensions 系统未落地）；`compaction` 已由 Phase 2c 在 `AgentHarness` 内部实现，不单列服务。`modelResolver`/`toolRegistry`/`trustManager` 更名 `models`/`tools`/`trust`，新增 `providers`/`slashCommands`。
+> **新增 API 清单（Phase 3 实现时在 ai/agent-core 补充，§9.5 组装层依赖）**：① `defaultProviders(Args)` —— 用 `ProviderRegistry.register` 注册 5 个内置 Provider（Phase 1 已提供 Provider 实现）；② `BuiltinCatalog.all()` —— 聚合 5 个 per-provider 静态目录（现无 INSTANCE 常量，构造器 private）；③ `DefaultModelResolver.resolve(String pattern, Settings)` 重载 —— 按 `provider/id` 与 `:thinking` pattern 解析（现有签名 `resolve(Set<ModelCapability>, Optional<String>)` 为能力匹配，不接 CLI 字符串）；④ `streamFnFor(Args, ProviderRegistry)` —— 从选定 Provider 构造 `agent-core.StreamFn`。其余引用（`ToolSetFactory.createCodingTools(String)`、`AgentHarness.builder()` 链、`DriveMode.MANUAL`）均为现有 API。
+
+> **偏离说明（03 §4.1 `SessionServices`）**：03 的 `SessionServices` 列有 `harness`/`modelResolver`/`toolRegistry`/`skillManager`/`extensionManager`/`settings`/`trustManager`/`compaction`/`sessionStorage` 九字段。Phase 3 子集收敛为六字段：`harness` 不在容器内注入（由 `AgentSession.create()` 组装流程构造，§9.5 —— 容器与 harness 是构造关系而非注入关系）；`sessionStorage` → Phase 4（Phase 3 以 `InMemorySessionRepository` 替代，§11.5）；`skillManager`/`extensionManager` → Phase 6（skills/extensions 系统未落地）；`compaction` 已由 Phase 2c 在 `AgentHarness` 内部实现，不单列服务。`modelResolver`/`toolRegistry`/`trustManager` 更名 `models`/`tools`/`trust`，新增 `providers`（`ProviderRegistry`，非 SPI 接口 `ProviderFactory`，见 §9.5 新增 API 清单）/`slashCommands`。
 
 > **pom 依赖变更（必做，防循环依赖）**：Phase 3 起模块方向为 `tui → coding-agent → agent-core → ai → telemetry`。
 > - `pi-java-coding-agent/pom.xml`：**移除** `pi-java-tui` 依赖（交互入口改经 ServiceLoader 发现，运行时 classpath 同时包含两个 jar）；
@@ -1523,6 +1525,11 @@ pi-java
 ---
 
 ## 19. 设计审查记录
+
+### v1.11（2026-08-14 组装层签名对齐：与 agent-core/ai 实际 API 一致）
+
+- **§9.5 `AgentSession.create` 4 处签名修正**：`ProviderFactory.withDefaults()` → `defaultProviders(args)`（`ProviderFactory` 为 SPI 接口，注册经 `ProviderRegistry`）；`BuiltinCatalog.INSTANCE` → `BuiltinCatalog.all()`（现无 `INSTANCE` 常量且构造器 private）；`ToolSetFactory.createCodingTools(Path.of(""))` → `createCodingTools("")`（实际签名 `String commandPrefix`）；`ModelResolver.resolve(String, Settings)` 标注为 Phase 3 新增重载（现有签名 `resolve(Set<ModelCapability>, Optional<String>)`）。
+- **§15 `SessionServices`**：`ProviderFactory providers` → `ProviderRegistry providers`；补「新增 API 清单」（`defaultProviders`/`BuiltinCatalog.all()`/`resolve(pattern)` 重载/`streamFnFor`），实施时在 ai/agent-core 补充签名。
 
 ### v1.10（2026-08-14 微瑕疵清理：残余过时引用 + 载体定义）
 
