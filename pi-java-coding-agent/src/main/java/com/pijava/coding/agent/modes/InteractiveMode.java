@@ -18,7 +18,7 @@ import com.pijava.coding.agent.core.slash.SlashContext;
  */
 public final class InteractiveMode {
 
-    private final AgentSession session;
+    private AgentSession session;
     private EntryObserver entryObserver = entry -> { };
     private StreamObserver streamObserver = event -> { };
 
@@ -73,5 +73,10 @@ public final class InteractiveMode {
     /** The wrapped session. */
     public AgentSession session() {
         return session;
+    }
+
+    /** Swap the active session ({@code /new /resume /fork /clone}). */
+    public void switchSession(AgentSession newSession) {
+        this.session = newSession;
     }
 }

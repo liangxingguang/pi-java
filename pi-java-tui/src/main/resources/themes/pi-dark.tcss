@@ -1,0 +1,31 @@
+Screen {
+    background: #1a1b26;
+}
+
+ChatPanel {
+    padding: 1 2;
+}
+
+MessageBubble.user {
+    border-color: #7aa2f7;
+    background: #24283b;
+}
+
+MessageBubble.assistant {
+    border-color: #9ece6a;
+    background: #1f2335;
+}
+
+ToolCallCard {
+    border-color: #e0af68;
+}
+
+StatusBar {
+    background: #16161e;
+    foreground: #565f89;
+}
+
+EditorComponent {
+    border-color: #7dcfff;
+    background: #1f2335;
+}

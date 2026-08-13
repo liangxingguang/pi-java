@@ -21,7 +21,24 @@
             <groupId>com.pi-java</groupId>
             <artifactId>pi-java-agent-core</artifactId>
         </dependency>
-        <!-- TamboUI dependencies added in Phase 3 -->
+        <!-- Phase 3: tui → coding-agent (observers, AgentSession, InteractiveMode) -->
+        <dependency>
+            <groupId>com.pi-java</groupId>
+            <artifactId>pi-java-coding-agent</artifactId>
+        </dependency>
+        <!-- TamboUI (versions managed by the BOM) -->
+        <dependency>
+            <groupId>dev.tamboui</groupId>
+            <artifactId>tamboui-toolkit</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.tamboui</groupId>
+            <artifactId>tamboui-panama-backend</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.tamboui</groupId>
+            <artifactId>tamboui-css</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
