@@ -261,6 +261,7 @@ final class ActionExecutor {
                         break;
                     }
                     var event = iter.next();
+                    ctx.streamListener().get().accept(event);
                     if (event instanceof StreamEvent.UsageInfo ui
                             && ui.partial() != null && ui.partial().usage() != null) {
                         inputTokens = ui.partial().usage().inputTokens();

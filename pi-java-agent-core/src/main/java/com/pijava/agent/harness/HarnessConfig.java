@@ -2,6 +2,7 @@ package com.pijava.agent.harness;
 
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 
 import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.skill.Skill;
@@ -10,6 +11,7 @@ import com.pijava.agent.tool.ToolContext;
 import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.ai.http.RetryPolicy;
 import com.pijava.ai.model.ModelId;
+import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.ai.thinking.ThinkingLevelMap;
 import com.pijava.telemetry.NoopTelemetryContext;
@@ -39,6 +41,8 @@ import com.pijava.telemetry.TelemetryContext;
  * @param steeringMode       how steer-queue messages are drained (default: one-at-a-time)
  * @param followUpMode       how follow-up-queue messages are drained (default: one-at-a-time)
  * @param toolExecution      tool execution mode for multi-tool turns (default: parallel)
+ * @param streamListener     receives every StreamEvent as the harness consumes
+ *                           it (default: no-op; Phase 3 TUI/print streaming)
  */
 public record HarnessConfig(
     StreamFn streamFn,
@@ -58,7 +62,8 @@ public record HarnessConfig(
     ThinkingLevelMap thinkingLevelMap,
     QueueMode steeringMode,
     QueueMode followUpMode,
-    ToolExecution toolExecution
+    ToolExecution toolExecution,
+    Consumer<StreamEvent> streamListener
 ) {
     public HarnessConfig {
         activeTools = Set.copyOf(activeTools);
@@ -69,6 +74,7 @@ public record HarnessConfig(
         if (steeringMode == null) steeringMode = QueueMode.defaultMode();
         if (followUpMode == null) followUpMode = QueueMode.defaultMode();
         if (toolExecution == null) toolExecution = ToolExecution.defaultMode();
+        if (streamListener == null) streamListener = event -> { };
     }
 
     public static Builder builder() {
@@ -94,6 +100,7 @@ public record HarnessConfig(
         private QueueMode steeringMode = QueueMode.defaultMode();
         private QueueMode followUpMode = QueueMode.defaultMode();
         private ToolExecution toolExecution = ToolExecution.defaultMode();
+        private Consumer<StreamEvent> streamListener = event -> { };
 
         public Builder streamFn(StreamFn fn) { this.streamFn = fn; return this; }
         public Builder model(ModelId<?> m) { this.model = m; return this; }
@@ -117,6 +124,9 @@ public record HarnessConfig(
         public Builder steeringMode(QueueMode mode) { this.steeringMode = mode; return this; }
         public Builder followUpMode(QueueMode mode) { this.followUpMode = mode; return this; }
         public Builder toolExecution(ToolExecution mode) { this.toolExecution = mode; return this; }
+        public Builder streamListener(Consumer<StreamEvent> listener) {
+            this.streamListener = listener; return this;
+        }
 
         public HarnessConfig build() {
             if (streamFn == null) throw new IllegalStateException("streamFn is required");
@@ -126,7 +136,8 @@ public record HarnessConfig(
                                      toolRegistry, toolContext, commandPrefix,
                                      driveMode, compactionSettings, skills,
                                      retryPolicy, telemetry, thinkingLevelMap,
-                                     steeringMode, followUpMode, toolExecution);
+                                     steeringMode, followUpMode, toolExecution,
+                                     streamListener);
         }
     }
 }

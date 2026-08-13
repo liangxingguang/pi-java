@@ -31,7 +31,8 @@ class HookTest {
                 DriveMode.MANUAL, null, java.util.Map.of(),
                 com.pijava.ai.http.RetryPolicy.defaultPolicy(),
                 com.pijava.telemetry.NoopTelemetryContext.INSTANCE, com.pijava.ai.thinking.ThinkingLevelMap.empty(),
-                QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode()));
+                QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),
+                event -> { }));
     }
 
     /** Run a single turn to completion (so all wired hooks fire). */

@@ -7,6 +7,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.Consumer;
 
 import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.hook.AfterResponseHook;
@@ -29,6 +30,7 @@ import com.pijava.agent.tool.ToolContext;
 import com.pijava.agent.tool.ToolExecutor;
 import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.ai.message.AssistantMessage;
+import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.telemetry.TelemetryContext;
@@ -95,6 +97,7 @@ public class AgentHarness implements AutoCloseable {
     private QueueMode steeringMode;
     private QueueMode followUpMode;
     private ToolExecution toolExecution;
+    private Consumer<StreamEvent> streamListener = event -> { };
 
     // ── Factory ──────────────────────────────────────────────
 
@@ -146,8 +149,25 @@ public class AgentHarness implements AutoCloseable {
             maxInputTokens, toolRegistry, toolContext,
             new ToolExecutor(toolRegistry, toolContext), skillManager,
             hookSystem, lanes, () -> compactionSettings, config.thinkingLevelMap(),
-            tokenCounter, snapshotService, queueManager, () -> toolExecution);
+            tokenCounter, snapshotService, queueManager, () -> toolExecution,
+            () -> streamListener);
         this.actionExecutor = new ActionExecutor(execCtx);
+    }
+
+    /**
+     * Register a listener for every {@link StreamEvent} the harness consumes.
+     * Phase 3: used by AgentSession to feed live streaming to Print/Interactive
+     * modes. Only one listener is active at a time.
+     *
+     * @return registration handle; closing it restores the no-op listener
+     */
+    public AutoCloseable onStreamEvent(Consumer<StreamEvent> listener) {
+        this.streamListener = listener;
+        return () -> {
+            if (this.streamListener == listener) {
+                this.streamListener = event -> { };
+            }
+        };
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -469,6 +489,12 @@ public class AgentHarness implements AutoCloseable {
     public void setThinkingLevel(ModelThinkingLevel level) {
         if (closed) throw new HarnessClosedException();
         this.thinkingLevel = level;
+    }
+
+    /** Change the system prompt for subsequent runs. */
+    public void setSystemPrompt(String prompt) {
+        if (closed) throw new HarnessClosedException();
+        this.systemPrompt = prompt;
     }
 
     public Set<AgentTool<?, ?>> getActiveTools() {

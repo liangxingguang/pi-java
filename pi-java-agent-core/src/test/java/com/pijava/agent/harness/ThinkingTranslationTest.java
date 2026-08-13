@@ -44,7 +44,8 @@ class ThinkingTranslationTest {
                 DriveMode.MANUAL, null, Map.of(),
                 com.pijava.ai.http.RetryPolicy.defaultPolicy(),
                 com.pijava.telemetry.NoopTelemetryContext.INSTANCE, map,
-                QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode()));
+                QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),
+                event -> { }));
 
         harness.run("hello");
         var action = harness.peekAction();
@@ -76,7 +77,8 @@ class ThinkingTranslationTest {
                 com.pijava.ai.http.RetryPolicy.defaultPolicy(),
                 com.pijava.telemetry.NoopTelemetryContext.INSTANCE,
                 ThinkingLevelMap.empty(),
-                QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode()));
+                QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),
+                event -> { }));
 
         harness.run("hello");
         var action = harness.peekAction();

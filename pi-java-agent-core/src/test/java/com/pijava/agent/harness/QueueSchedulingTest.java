@@ -37,7 +37,8 @@ class QueueSchedulingTest {
             com.pijava.ai.http.RetryPolicy.defaultPolicy(),
             com.pijava.telemetry.NoopTelemetryContext.INSTANCE,
             com.pijava.ai.thinking.ThinkingLevelMap.empty(),
-            QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode()));
+            QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),
+            event -> { }));
     }
 
     private static void drive(AgentHarness h, String lane) {
@@ -156,5 +157,18 @@ class QueueSchedulingTest {
         assertThat(userMessages(h, "default"))
             .containsExactly("first\n\nsecond");
         assertThat(h.snapshot("default").queues().followUp()).isEmpty();
+    }
+
+    @Test
+    void streamListenerReceivesEvents() throws Exception {
+        var h = harness();
+        var received = new java.util.ArrayList<StreamEvent>();
+        try (var registration = h.onStreamEvent(received::add)) {
+            h.run("default", "hello");
+            drive(h, "default");
+        }
+
+        assertThat(received).isNotEmpty();
+        assertThat(received).anyMatch(e -> e instanceof StreamEvent.TextEnd);
     }
 }

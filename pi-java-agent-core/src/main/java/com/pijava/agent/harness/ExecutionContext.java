@@ -1,6 +1,7 @@
 package com.pijava.agent.harness;
 
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Supplier;
 
@@ -12,6 +13,7 @@ import com.pijava.agent.tool.ToolContext;
 import com.pijava.agent.tool.ToolExecutor;
 import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.ai.model.ModelId;
+import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.ai.thinking.ThinkingLevelMap;
 
@@ -44,7 +46,8 @@ record ExecutionContext(
     TokenCounter tokenCounter,
     SnapshotService snapshotService,
     QueueManager queueManager,
-    Supplier<ToolExecution> toolExecution
+    Supplier<ToolExecution> toolExecution,
+    Supplier<Consumer<StreamEvent>> streamListener
 ) {
     LaneState requireLane(String laneName) {
         return HarnessUtils.requireLane(lanes, laneName);
