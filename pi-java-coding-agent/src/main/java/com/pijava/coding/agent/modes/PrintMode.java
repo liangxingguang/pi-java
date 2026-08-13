@@ -33,7 +33,7 @@ public final class PrintMode {
         var prompt = String.join(" ", messages);
         try (var session = AgentSession.create(args)) {
             var result = session.processPrompt(prompt, PromptConfig.defaults());
-            result.stream().forEach(PrintMode::renderEvent);
+            result.stream().forEach(event -> renderEvent(event, args.verbose()));
             return result.status().exitCode();
         } catch (Exception e) {
             System.err.println("error: " + e.getMessage());
@@ -41,8 +41,13 @@ public final class PrintMode {
         }
     }
 
-    /** Render a stream event to stdout/stderr (dedicated output path). */
-    static void renderEvent(StreamEvent event) {
+    /**
+     * Render a stream event to stdout/stderr (dedicated output path).
+     *
+     * @param verbose when true, thinking deltas and tool-call summaries are
+     *                printed (default hides tool details, per §10)
+     */
+    static void renderEvent(StreamEvent event, boolean verbose) {
         switch (event) {
             case StreamEvent.Start ignored -> { }
             case StreamEvent.TextStart ignored -> { }
@@ -50,11 +55,22 @@ public final class PrintMode {
                 System.out.print(delta);
             case StreamEvent.TextEnd ignored -> { }
             case StreamEvent.ThinkingStart ignored -> { }
-            case StreamEvent.ThinkingDelta ignored -> { /* hidden by default */ }
+            case StreamEvent.ThinkingDelta(var contentIndex, var delta, var partial) -> {
+                if (verbose) {
+                    System.out.print(delta);
+                }
+            }
             case StreamEvent.ThinkingEnd ignored -> { }
             case StreamEvent.ToolCallStart ignored -> { }
             case StreamEvent.ToolCallDelta ignored -> { }
-            case StreamEvent.ToolCallEnd ignored -> System.out.println();
+            case StreamEvent.ToolCallEnd(
+                    var contentIndex, var id, var name, var arguments, var partial) -> {
+                if (verbose) {
+                    System.out.println("🔧 " + name + " " + arguments);
+                } else {
+                    System.out.println();
+                }
+            }
             case StreamEvent.UsageInfo ignored -> { }
             case StreamEvent.StreamDone ignored -> { }
             case StreamEvent.StreamError(var reason, var error, var partial) ->

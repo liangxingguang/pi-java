@@ -22,9 +22,9 @@ class PrintModeTest {
         try {
             System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
             PrintMode.renderEvent(new StreamEvent.TextDelta(
-                0, "hello ", AssistantMessage.empty()));
+                0, "hello ", AssistantMessage.empty()), false);
             PrintMode.renderEvent(new StreamEvent.TextDelta(
-                0, "world", AssistantMessage.empty()));
+                0, "world", AssistantMessage.empty()), false);
         } finally {
             System.setOut(original);
         }
@@ -39,7 +39,7 @@ class PrintModeTest {
         try {
             System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
             PrintMode.renderEvent(new StreamEvent.ToolCallEnd(
-                0, "id", "read", java.util.Map.of(), AssistantMessage.empty()));
+                0, "id", "read", java.util.Map.of(), AssistantMessage.empty()), false);
         } finally {
             System.setOut(original);
         }
@@ -55,12 +55,31 @@ class PrintModeTest {
         try {
             System.setErr(new PrintStream(err, true, StandardCharsets.UTF_8));
             PrintMode.renderEvent(new StreamEvent.StreamError(
-                "error", new IllegalStateException("boom"), AssistantMessage.empty()));
+                "error", new IllegalStateException("boom"), AssistantMessage.empty()), false);
         } finally {
             System.setErr(original);
         }
 
         assertThat(err.toString(StandardCharsets.UTF_8))
             .contains("error", "boom");
+    }
+
+    @Test
+    void verbosePrintsThinkingAndToolDetails() {
+        var out = new ByteArrayOutputStream();
+        var original = System.out;
+        try {
+            System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+            PrintMode.renderEvent(new StreamEvent.ThinkingDelta(
+                0, "reasoning...", AssistantMessage.empty()), true);
+            PrintMode.renderEvent(new StreamEvent.ToolCallEnd(
+                0, "id", "read", java.util.Map.of("path", "a.txt"),
+                AssistantMessage.empty()), true);
+        } finally {
+            System.setOut(original);
+        }
+
+        assertThat(out.toString(StandardCharsets.UTF_8))
+            .contains("reasoning...", "read", "a.txt");
     }
 }
