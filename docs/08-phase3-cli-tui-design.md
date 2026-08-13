@@ -47,7 +47,7 @@ flowchart TB
 
         components["业务组件<br/>
         • ChatPanel / MessageBubble / ToolCallCard<br/>
-        • DiffView / StatusBar / SessionBrowser<br/>
+        • DiffView / StatusBar / SessionListScreen<br/>
         • MarkdownRenderer / EditorComponent"]
 
         theme["TCSS 主题<br/>
@@ -483,6 +483,8 @@ public final class EditorComponent {
 ```
 
 > **语法高亮 + 补全**：pi 自研 TUI 有独立的高亮/补全子系统；pi-java Phase 3 委托 TamboUI TextArea 的输入能力，**语法高亮/智能补全 → Phase 6**（依赖 TamboUI 0.4+ 的语法高亮 API）。
+>
+> **偏离说明（04 P3-5 范围）**：04 计划 P3-5 为「多行输入 + 语法高亮 + 补全」三项交付；Phase 3 仅落地**多行输入**（委托 TamboUI TextArea），语法高亮/智能补全整体后移 Phase 6。已同步 §18 与 §17 验收，避免验收含糊。
 
 ---
 
@@ -498,6 +500,7 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     private SessionSnapshot snapshot;   // 由 WatchHandle 快照驱动（见 §4.5）
     private final StringBuilder assistantDraft = new StringBuilder();  // in-flight 增量文本
     private final StringBuilder thinkingDraft = new StringBuilder();   // in-flight thinking 增量
+    private String lastError;           // 最近一次 StreamError（UI 态，不进 agent-core 快照；驱动状态栏红色提示）
 
     /** 接收 agent-core 的 Entry，投影为 ChatMessage 后追加（投影见 §4.1）。 */
     @Override public void onEntry(Entry entry) {
@@ -510,18 +513,29 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     /** 增量流事件 → 草稿气泡；TextEnd/ThinkingEnd 提交（流式打字机效果，见 §4.2）。 */
     @Override public void onStreamEvent(StreamEvent event) {
         switch (event) {
+            case StreamEvent.Start(var partial) -> { /* 流开始：草稿由 submit 初始化 */ }
             case StreamEvent.TextStart(var contentIndex, var partial) -> assistantDraft.setLength(0);
             case StreamEvent.TextDelta(var contentIndex, var delta, var partial) -> assistantDraft.append(delta);
             case StreamEvent.TextEnd(var contentIndex, var text, var partial) -> {
                 chatPanel.append(ChatMessage.Assistant(List.of(new ContentBlock.TextContent(text))));
                 assistantDraft.setLength(0);
             }
+            case StreamEvent.ThinkingStart(var contentIndex, var partial) -> thinkingDraft.setLength(0);
             case StreamEvent.ThinkingDelta(var contentIndex, var delta, var partial) -> thinkingDraft.append(delta);
             case StreamEvent.ThinkingEnd(var contentIndex, var thinking, var partial) -> {
                 chatPanel.append(ChatMessage.Assistant(List.of(new ContentBlock.TextContent("🧠 " + thinking))));
                 thinkingDraft.setLength(0);
             }
-            default -> {}
+            // 工具阶段不逐字渲染：ToolCallEnd / Entry 到达时才渲染 ToolCallCard（§4.2）
+            case StreamEvent.ToolCallStart(var contentIndex, var partial) -> { }
+            case StreamEvent.ToolCallDelta(var contentIndex, var id, var jsonDelta, var partial) -> { }
+            case StreamEvent.ToolCallEnd(var contentIndex, var id, var name, var arguments, var partial) -> { }
+            case StreamEvent.UsageInfo(var inputTokens, var outputTokens, var partial) -> { /* usage 由 StreamDone/快照驱动 */ }
+            case StreamEvent.StreamDone(var reason, var usage, var partial) -> { /* 状态收敛于 SessionResult.status()（§10） */ }
+            case StreamEvent.StreamError(var reason, var error, var partial) -> {
+                lastError = reason + (error != null ? ": " + error.getMessage() : "");
+                chatPanel.append(ChatMessage.Error(lastError));
+            }
         }
     }
 
@@ -536,13 +550,16 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     }
 
     public Widget render() { return column(chatPanel.render().fill(), draftBubble().fill(), editor.render()); }
-    public Widget statusBar() { return snapshot == null ? row().length(1) : new StatusBar().render(snapshot); }  // 首帧未就绪渲染空行
+    public Widget statusBar() {
+        if (lastError != null) return text("[red]" + lastError + "[/]").red();   // 错误优先；由本类持有，不进快照
+        return snapshot == null ? row().length(1) : new StatusBar().render(snapshot);  // 首帧未就绪渲染空行
+    }
     public void onKeyEvent(KeyEvent event) { editor.onKeyEvent(event); }
 
-    /** 快捷键动作支持（§7.2 动作分发）。 */
-    public void clearEditor() { editor.clear(); }
-    public boolean editorEmpty() { return editor.getText().isEmpty(); }
-    public String draftText() { return editor.getText(); }
+    /** 输入面 API（§7.2 动作分发）：ChatScreen 是编辑器输入的唯一门户，PiTuiApp 只与 ChatScreen 交互，不触碰 EditorComponent。 */
+    public void clearInput() { editor.clear(); }
+    public boolean isInputEmpty() { return editor.getText().isEmpty(); }
+    public String inputText() { return editor.getText(); }
     public void showModelSelector() { /* §8.3：弹出 ModelSelectorScreen（root overlay 层） */ }
 }
 ```
@@ -577,12 +594,15 @@ public final class PiTuiApp implements TuiApp {
     private void handleAction(String keyId) {
         switch (keyId) {
             case KeybindingsManager.INTERRUPT      -> mode.abort();
-            case KeybindingsManager.FOLLOW_UP      -> mode.followUp(chatScreen.draftText());
-            case KeybindingsManager.CLEAR          -> chatScreen.clearEditor();
-            case KeybindingsManager.EXIT           -> { if (chatScreen.editorEmpty()) exit(); }
+            case KeybindingsManager.FOLLOW_UP      -> mode.followUp(chatScreen.inputText());
+            case KeybindingsManager.CLEAR          -> chatScreen.clearInput();
+            case KeybindingsManager.EXIT           -> { if (chatScreen.isInputEmpty()) exit(); }
             case KeybindingsManager.MODEL_SELECT   -> chatScreen.showModelSelector();
-            // MODEL_CYCLE/THINKING_CYCLE/THINKING_TOGGLE/TOOLS_EXPAND/EXTERNAL_EDITOR/DEQUEUE → 动作或 Phase 6 占位
-            default -> {}
+            // 以下绑定 Phase 3 仅枚举，动作 → Phase 6 占位（§7.2/§18）
+            case KeybindingsManager.MODEL_CYCLE, KeybindingsManager.THINKING_CYCLE,
+                 KeybindingsManager.THINKING_TOGGLE, KeybindingsManager.TOOLS_EXPAND,
+                 KeybindingsManager.EXTERNAL_EDITOR, KeybindingsManager.DEQUEUE -> { /* Phase 6 */ }
+            default -> { /* 未知 keyId（用户自定义 keybindings.json）：显式忽略，不吞已知动作 */ }
         }
     }
 
@@ -659,9 +679,9 @@ public final class SettingsScreen {
 }
 ```
 
-### 8.2 会话浏览器
+### 8.2 会话浏览器（SessionListScreen）
 
-`SessionBrowser` 组件在 Ctrl+S（或 `/resume`）时弹出，列出 `AgentSession.listSessions()` 结果，支持模糊过滤（复用 pi `fuzzy.ts` 逻辑 → 独立 `FuzzyMatcher` 工具类）。
+`SessionListScreen` 在 `/resume`（或 `/session`）时弹出，列出 `AgentSession.listSessions()` 结果，支持模糊过滤（复用 pi `fuzzy.ts` 逻辑 → 独立 `FuzzyMatcher` 工具类）。
 
 ```java
 /** 模糊匹配工具，对齐 pi packages/tui/src/fuzzy.ts。 */
@@ -689,7 +709,7 @@ public final class ModelSelectorScreen {
     public void onKeyEvent(KeyEvent e) { /* 选择 → AgentSession.setModel(modelId) */ }
 }
 
-/** 会话树选择器：/tree、Ctrl+S 打开。按 SessionSnapshot.lanes 渲染分支树。 */
+/** 会话树选择器：`/tree` 打开。按 SessionSnapshot.lanes 渲染分支树。 */
 public final class TreeSelectorScreen {
     public Widget render(SessionSnapshot snapshot) { /* lanes 树渲染 */ }
     public void onKeyEvent(KeyEvent e) { /* 选择 → AgentSession.navigate(lane) */ }
@@ -742,7 +762,7 @@ public final class TreeSelectorScreen {
 | 主题 | `--theme` | | 加载主题文件（可多次；Phase 3 仅内置 dark/light，路径加载 → Phase 6） |
 | 主题 | `--no-themes` | | 禁用主题发现 |
 | 上下文 | `--no-context-files` | `-nc` | 禁用 AGENTS.md/CLAUDE.md 发现 |
-| 输出 | `--export` | | 导出会话到 HTML 并退出（HTML 渲染器依赖会话存储 → Phase 4；Phase 3 解析参数 + 占位提示） |
+| 输出 | `--export` | | 导出会话到 HTML 并退出（HTML 渲染器 → Phase 6，独立于会话存储；Phase 3 解析参数 + 占位提示，见 §9.5） |
 | 行为 | `--offline` | | 禁用启动网络操作 |
 | 行为 | `--verbose` | | 强制详细启动 |
 | 位置 | `@file` | | 将文件加入初始消息 |
@@ -782,7 +802,8 @@ public record Args(
 }
 
 public final class ArgsParser {
-    /** 解析 CLI 参数；@Unmatched 收集未知 flag 与位置参数，后处理按 pi args.ts 规则解析 extension flags（--xxx=value / --xxx value）。 */
+    /** 解析 CLI 参数；@Unmatched 收集未知 flag 与位置参数，后处理按 pi args.ts 规则解析 extension flags（--xxx=value / --xxx value）。
+     *  --mode 仅接受 text/json/rpc（对齐 pi args.ts 校验），非法值记 ArgDiagnostic("error")，由 Main 在分发前终止。 */
     public static Args parse(String[] args) { /* picocli 解析 + 后处理 */ }
 }
 ```
@@ -840,6 +861,17 @@ public final class Main {
         if (parsed.help())    { HelpText.print(); return; }
         if (parsed.version()) { System.out.println(Version.VERSION); return; }
         if (parsed.listModels() != null) { System.exit(ListModelsCommand.run(parsed.listModels())); return; }
+        // --mode json / rpc：Phase 6 未实现，明确报错退出，不静默落入交互模式（§9.1/§18）；
+        // 非法值（非 text/json/rpc）已在 ArgsParser diagnostics 报 invalid（§9.2），此处不再区分
+        if (parsed.mode() != null && !"text".equals(parsed.mode())) {
+            System.err.println("error: --mode " + parsed.mode() + " is not implemented yet (Phase 6)");
+            System.exit(2); return;
+        }
+        // --export：Phase 3 仅解析 + 占位提示（HTML 渲染器 → Phase 6），不静默落入交互模式（§9.1/§18）
+        if (parsed.export() != null) {
+            System.err.println("error: --export is not implemented yet (HTML renderer → Phase 6)");
+            System.exit(2); return;
+        }
         if (parsed.print())   { System.exit(PrintMode.run(parsed.messages(), parsed)); return; }
 
         // 交互模式（默认）：ServiceLoader 发现 tui 入口（§11.1）
@@ -919,20 +951,26 @@ public record RunStatus(int exitCode, String reason) {}
 /** 专用输出器（Print Mode 的 stdout 出口，满足 §17 无 System.out.println 残留约定——此处仅示意）。 */
 static void renderEvent(StreamEvent event) {
     switch (event) {
+        case StreamEvent.Start(var partial) -> { }
+        case StreamEvent.TextStart(var contentIndex, var partial) -> { }
         case StreamEvent.TextDelta(var contentIndex, var delta, var partial) -> System.out.print(delta);
+        case StreamEvent.TextEnd(var contentIndex, var text, var partial) -> { }
+        case StreamEvent.ThinkingStart(var contentIndex, var partial) -> { }
         case StreamEvent.ThinkingDelta(var contentIndex, var delta, var partial) -> { /* 默认隐藏；--verbose 打印 */ }
+        case StreamEvent.ThinkingEnd(var contentIndex, var thinking, var partial) -> { }
+        case StreamEvent.ToolCallStart(var contentIndex, var partial) -> { }
+        case StreamEvent.ToolCallDelta(var contentIndex, var id, var jsonDelta, var partial) -> { }
         case StreamEvent.ToolCallEnd(var contentIndex, var id, var name, var arguments, var partial) ->
             System.out.println();   // 工具阶段结束后换行分隔
-        case StreamEvent.StreamError(var reason, var error, var partial) -> {
-            System.err.println("error: " + reason);   // 错误 → stderr；退出码由 RunStatus 决定（非零）
-        }
+        case StreamEvent.UsageInfo(var inputTokens, var outputTokens, var partial) -> { /* usage 由 StreamDone 携带 */ }
         case StreamEvent.StreamDone(var reason, var usage, var partial) -> { /* usage → --verbose 摘要 */ }
-        default -> {}
+        case StreamEvent.StreamError(var reason, var error, var partial) ->
+            System.err.println("error: " + reason);   // 错误 → stderr；退出码由 RunStatus 决定（非零）
     }
 }
 ```
 
-> **StreamDone/StreamError 处理**：`StreamDone` 携带 `usage`（进状态栏/`--verbose` 摘要）与 `reason`（停止原因，映射 `RunStatus.reason`）；`StreamError` → 非零退出码（Print）或 `ChatMessage.Error` 气泡 + 状态栏红色提示（交互模式，§4.1）。两者都在 `SessionResult.status()` 收敛，模式代码不重复判错。
+> **StreamDone/StreamError 处理**：`StreamDone` 携带 `usage`（进状态栏/`--verbose` 摘要）与 `reason`（停止原因，映射 `RunStatus.reason`）；`StreamError` → 非零退出码（Print）或 `ChatMessage.Error` 气泡 + 状态栏红色提示（交互模式：由 `ChatScreen.lastError` 驱动，§7.1——UI 态，不进 agent-core 快照）。两者都在 `SessionResult.status()` 收敛，模式代码不重复判错。
 
 ---
 
@@ -1130,6 +1168,8 @@ public final class Settings {
 }
 ```
 
+> **String 枚举字段的边界**：`theme`/`transport`/`steeringMode`/`followUpMode`/`defaultProjectTrust`/`doubleEscapeAction`/`treeFilterMode`/`tuiMode` 等枚举值字段在 `Settings` 层以 String 存储（JSON 序列化边界，对齐 pi settings-manager 的字符串字面量），消费处映射为强类型：`steeringMode`/`followUpMode` → `QueueMode`（§11.2）、`theme` → `PiTheme`（§3.2）、`defaultProjectTrust` → `TrustManager`（§12.4）、`transport`/`tuiMode`/`treeFilterMode`/`doubleEscapeAction` → 消费点按需映射（§7.2/§8.3）。与 §11.2 同一原则：JSON 持久化 vs 强类型运行时并存，非重复逻辑。
+
 ### 12.2 SettingsManager
 
 ```java
@@ -1157,6 +1197,8 @@ public final class SettingsManager {
     public void flush();
 }
 ```
+
+> **拆分计划（防 500 行越限）**：`SettingsManager` 若单类容纳约 40 个 `getXxx/setXxx` 会突破 CLAUDE.md 的 500 行上限。实现阶段按职责拆为三类：① `SettingsManager` —— 生命周期（load/effective/flush/reload/迁移/setProjectTrusted，约 120 行）；② `SettingsAccessors` —— 约 40 个每字段 getter/setter（`setXxx → markModified + save`，约 250 行）；③ `SettingsStorage`/`FileSettingsStorage`/`InMemorySettingsStorage` —— 存储与锁（§12.3，独立文件）。`Settings`（§12.1）亦单列。各文件均 ≤500 行，见 §15 包结构。
 
 > **优先级与覆盖**：取值优先级 **CLI > project > global**。`effective()` 只做 global/project 的 deep merge（global 兜底、project 覆盖）；CLI 显式参数（`--model`/`--thinking`/`--tools` 等）在 §9.5 组装时覆盖 `effective()`，不写回 settings 文件（对齐 pi：CLI flag 不改持久化配置）。
 
@@ -1267,7 +1309,7 @@ public final class CommandRegistry {
 | 1 | `/settings` | 打开设置菜单 | 设置页 | 完整 |
 | 2 | `/model` | 选择模型（打开选择器） | 模型选择器（§8.3） | 完整 |
 | 3 | `/scoped-models` | 启用/禁用 Ctrl+P 轮换模型 | 选择器 | 部分（写 `enabledModels`；富 UI → Phase 6） |
-| 4 | `/export` | 导出会话（HTML/JSONL） | 直接 | 占位（HTML 渲染器依赖会话存储 → Phase 4） |
+| 4 | `/export` | 导出会话（HTML/JSONL） | 直接 | 占位（HTML 渲染器 → Phase 6） |
 | 5 | `/import` | 从 JSONL 导入并恢复会话 | 直接 | 占位（依赖 JSONL 解析/会话重建 → Phase 4） |
 | 6 | `/share` | 分享会话为 GitHub gist | 直接 | 占位（需远程 gist API → Phase 6） |
 | 7 | `/copy` | 复制最后一条 agent 消息 | 直接 | 部分（桌面剪贴板；headless 降级为打印） |
@@ -1289,7 +1331,7 @@ public final class CommandRegistry {
 
 > **实现度定义**：**完整** = Phase 3 核心路径可用；**部分** = 核心路径可用、富能力推迟（括号标注阶段）；**占位** = 仅注册 + 输出提示（§18 对应条目）。22 个命令全部注册且 `/hotkeys` 可列（§17 验收）。
 >
-> **偏离说明**：04 的 P3-13 写「23 built-in commands」基于 03 §4.3 过时清单；本设计跟随 pi 当前 **22 个** 命令。`/export` 在 pi 中支持 HTML（默认）与 JSONL（指定 `.jsonl` 后缀）双格式，但 HTML 渲染器与 JSONL 导入依赖 Phase 4 会话存储，Phase 3 仅注册命令 + 输出占位提示（见 §18）。`/share` → Phase 6（需远程 gist API）；Phase 3 输出占位提示。
+> **偏离说明**：04 的 P3-13 写「23 built-in commands」基于 03 §4.3 过时清单；本设计跟随 pi 当前 **22 个** 命令。`/export` 在 pi 中支持 HTML（默认）与 JSONL（指定 `.jsonl` 后缀）双格式，HTML 渲染器 → Phase 6（独立于会话存储）、JSONL 导入依赖 Phase 4 会话存储，Phase 3 仅注册命令 + 输出占位提示（见 §18）。`/share` → Phase 6（需远程 gist API）；Phase 3 输出占位提示。
 
 ---
 
@@ -1308,8 +1350,12 @@ com.pijava.coding.agent/
 │   ├── SessionResult.java             ← processPrompt 结果（stream + entries + status，§10）
 │   ├── RunStatus.java                 ← 运行结束状态（exitCode + reason，§10）
 │   ├── SessionServices.java           ← DI 容器 record
-│   ├── SettingsManager.java           ← 设置管理（§12）
+│   ├── SettingsManager.java           ← 设置生命周期（load/merge/flush/迁移，§12.2）
+│   ├── SettingsAccessors.java         ← 每字段 getter/setter（防 500 行，§12.2）
 │   ├── Settings.java                  ← settings schema（§12.1）
+│   ├── SettingsStorage.java           ← 存储接口（§12.3）
+│   ├── FileSettingsStorage.java       ← 文件存储 + 文件锁（§12.3）
+│   ├── InMemorySettingsStorage.java   ← 内存存储（§12.3）
 │   ├── TrustManager.java              ← 项目信任（§12.4）
 │   ├── KeybindingsManager.java        ← 键盘绑定（§7.2）
 │   ├── EntryObserver.java             ← Entry 观察者接口（coding-agent 定义，tui 实现，§11.1）
@@ -1329,8 +1375,8 @@ com.pijava.coding.agent/
 │   └── TuiEntryPoint.java             ← TUI 交互入口 SPI（§11.1，tui 提供实现）
 ├── modes/
 │   ├── InteractiveMode.java           ← 交互模式（§11）
-│   ├── PrintMode.java                 ← 打印模式（§10）
-│   └── JsonEventMode.java             ← --mode json 事件流（Phase 3 定义，实现 → Phase 6）
+│   └── PrintMode.java                 ← 打印模式（§10）
+│   （--mode json/rpc → Phase 6，不设空壳类；Main 显式报错退出，§9.5/§18）
 
 # pi-java-tui（com.pijava.tui）
 com.pijava.tui/
@@ -1345,7 +1391,6 @@ com.pijava.tui/
 │   ├── ToolCallCard.java              ← 工具卡片
 │   ├── DiffView.java                  ← Diff 渲染
 │   ├── StatusBar.java                 ← 底部状态栏
-│   ├── SessionBrowser.java            ← 会话选择器
 │   ├── SelectList.java                ← 通用可选项列表（§8.3）
 │   ├── MarkdownRenderer.java          ← Markdown → Widget（§5）
 │   ├── EditorComponent.java           ← 输入编辑器（§6）
@@ -1383,6 +1428,8 @@ public record SessionServices(
     CommandRegistry slashCommands
 ) {}
 ```
+
+> **偏离说明（03 §4.1 `SessionServices`）**：03 的 `SessionServices` 列有 `harness`/`modelResolver`/`toolRegistry`/`skillManager`/`extensionManager`/`settings`/`trustManager`/`compaction`/`sessionStorage` 九字段。Phase 3 子集收敛为六字段：`harness` 不在容器内注入（由 `AgentSession.create()` 组装流程构造，§9.5 —— 容器与 harness 是构造关系而非注入关系）；`sessionStorage` → Phase 4（Phase 3 以 `InMemorySessionRepository` 替代，§11.5）；`skillManager`/`extensionManager` → Phase 6（skills/extensions 系统未落地）；`compaction` 已由 Phase 2c 在 `AgentHarness` 内部实现，不单列服务。`modelResolver`/`toolRegistry`/`trustManager` 更名 `models`/`tools`/`trust`，新增 `providers`/`slashCommands`。
 
 > **pom 依赖变更（必做，防循环依赖）**：Phase 3 起模块方向为 `tui → coding-agent → agent-core → ai → telemetry`。
 > - `pi-java-coding-agent/pom.xml`：**移除** `pi-java-tui` 依赖（交互入口改经 ServiceLoader 发现，运行时 classpath 同时包含两个 jar）；
@@ -1450,23 +1497,25 @@ pi-java
 - [ ] 22 个 slash 命令注册且 `/hotkeys` 可列（帮助走 `--help`；pi 无 `/help` 命令）
 - [ ] `settings.json` 读写 + global/project 覆盖生效
 - [ ] Windows Terminal / macOS Terminal.app / iTerm2 / Alacritty 四终端冒烟通过
+- [ ] 编辑器多行输入可用（语法高亮/智能补全 → Phase 6，见 §6/§18）
 - [ ] 无 `System.out.println` 残留（Print Mode 的 stdout 输出走专用输出器）
 
 ---
 
 ## 18. Phase 3 不做
 
-- **RPC 模式**（`--mode rpc`、`Args.Rpc` → Phase 6，参数解析可保留但实现推迟）
+- **RPC 模式**（`--mode rpc` → Phase 6，参数解析可保留但实现推迟；`Args` 为扁平 record，无 sealed 变体，见 §9.2/§9.4）
 - **JSON 事件流 schema**（`--mode json` → Phase 6，与 RPC 共用）
 - **远程会话 / CBOR 协议**（→ Phase 6）
-- **完整 41 个 `app.*` keybinding**（`tree.filter.*`、`models.*` 等富过滤 → Phase 6；核心 `app.*` 子集见 §7.2，选择器随 §8.3 落地）
+- **完整 42 个 `app.*` keybinding**（`tree.filter.*`、`models.*` 等富过滤 → Phase 6；核心 `app.*` 子集见 §7.2，选择器随 §8.3 落地）
 - **Markdown GFM 全兼容**（表格/图片/LaTeX/mermaid → Phase 6）
 - **编辑器语法高亮/智能补全**（依赖 TamboUI 0.4+ API → Phase 6）
 - **自定义主题文件加载**（`--theme <path>` 仅内置 dark/light → Phase 6）
 - **`/share` gist 上传**（→ Phase 6，需远程 API）
 - **信任标记持久化**（`~/.pi-java/trust/` → Phase 4）
 - **会话持久化**（SessionStorage/SQLite → Phase 4；Phase 3 用 Phase 4 之前的 InMemory 或 stub）
-- **HTML 导出渲染器 / JSONL 会话导入**（CLI `--export` 与 `/export`、`/import` 完整实现依赖 Phase 4 会话存储；Phase 3 仅解析/注册 + 占位提示）
+- **HTML 导出渲染器**（CLI `--export` 与 `/export` 的 HTML 格式 → Phase 6，独立于会话存储；Phase 3 仅解析/注册 + 占位提示）
+- **JSONL 会话导入**（`/import` 与 `/export` 的 `.jsonl` 格式依赖 Phase 4 会话存储/重建；Phase 3 仅注册 + 占位提示）
 - **完整 settings schema**（branchSummary/retry/warnings/thinkingBudgets/npmCommand 等边缘字段 → 按需，Phase 3 实现核心子集 + 透传）
 - **扩展包管理子命令**（`install`/`remove`/`uninstall`/`update`/`list` → Phase 6，依赖扩展系统；Phase 3 仅枚举分发入口）
 - **`config` 子命令的 TUI 资源开关**（→ Phase 6）
@@ -1474,6 +1523,27 @@ pi-java
 ---
 
 ## 19. 设计审查记录
+
+### v1.10（2026-08-14 微瑕疵清理：残余过时引用 + 载体定义）
+
+- **§18 `Args.Rpc` 过时引用**：v1.2 已废弃 `Args` sealed 变体（扁平 record，§9.2/§9.4），删除该残留引用。
+- **§7.1/§10 状态栏错误载体**：定义 `ChatScreen.lastError`（UI 态，不进 agent-core 快照）——`StreamError` 写入并追加 `ChatMessage.Error` 气泡，`statusBar()` 优先渲染红色错误文本；§10 表述同步。
+- **§9.2/§9.5 非法 `--mode` 校验**：`ArgsParser` 仅接受 `text/json/rpc`（对齐 pi `args.ts`），非法值记 `ArgDiagnostic("error")`；`Main` 对合法但未实现的 `json/rpc` 报 Phase 6 退出，不再混淆非法值与未实现。
+
+### v1.9（2026-08-14 五轮复审修复：二轴审查 10 项修复，达成 95+ 实施门槛）
+
+针对二轴审查（Standards/Spec）10 项发现逐条修复：
+
+- **Spec#1 `--mode json/rpc` 静默落入交互模式**（§9.5）：`Main.main()` 新增 `mode`/`export` 分发——`--mode json/rpc` 显式 `System.err` 报错退出（退出码 2），`--export` 占位提示后退出，不再静默进入 TUI。§15 删除空壳 `JsonEventMode.java`。
+- **Spec#2 `--export` 推迟理由修正**（§9.1/§14.2/§18）：HTML 渲染器独立于会话存储 → Phase 6（原误为「依赖 Phase 4 会话存储」）；JSONL 导入仍依赖 Phase 4。§18 拆为两条。
+- **Spec#3 P3-5 范围显式化**（§6/§17）：补「偏离说明（04 P3-5 范围）」——语法高亮/补全后移 Phase 6；§17 验收新增「编辑器多行输入可用」复选框。
+- **Spec#4 `SessionServices` 字段静默丢弃**（§15）：补「偏离说明（03 §4.1）」——`harness`/`sessionStorage`/`skillManager`/`extensionManager`/`compaction` 的收敛理由与去向逐一说明。
+- **Spec#5 `app.*` 计数差一**（§18）：`41` → `42`（对齐 pi `keybindings.ts` L14–55 实为 42 个）。
+- **H1 `SettingsManager` 超 500 行**（§12.2/§15）：补拆分计划（`SettingsManager` 生命周期 / `SettingsAccessors` 约 40 getter/setter / `SettingsStorage` 系列独立文件），§15 同步拆出 `SettingsAccessors`/`SettingsStorage`/`FileSettingsStorage`/`InMemorySettingsStorage`。
+- **S1 会话选择器重名**（§1/§8.2/§8.3/§15）：统一为 `SessionListScreen`，删除 §15 `SessionBrowser.java`；消除 Ctrl+S 双映射歧义（会话/树选择器均改由 slash 命令触发，对齐 pi `app.session.*` `defaultKeys: []`）。
+- **S2 Settings 枚举字段 Primitive Obsession**（§12.1）：补「String 枚举字段的边界」——8 个枚举值字段统一在 Settings 层存 String、消费点映射强类型，与 §11.2 同一原则。
+- **S3 ChatScreen Middle Man**（§7.1）：`clearEditor/editorEmpty/draftText` → `clearInput/isInputEmpty/inputText`，标注 ChatScreen 为输入唯一门户。
+- **S4 `default -> {}` 吞异常**（§7.1/§10）：`onStreamEvent`/`renderEvent` 改为 StreamEvent 13 变体全覆盖 switch（无 default），补交互模式缺失的 `StreamError` 气泡处理；`handleAction` 显式枚举 6 个 Phase 6 占位绑定，default 仅用于未知自定义 keyId。
 
 ### v1.8（2026-08-14 四轮复审修复：消除残留矛盾 + 定稿关键决策）
 
