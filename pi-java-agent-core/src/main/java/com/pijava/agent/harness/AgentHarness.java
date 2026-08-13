@@ -92,6 +92,9 @@ public class AgentHarness implements AutoCloseable {
     // Phase 2c: queue manager + telemetry
     private QueueManager queueManager;
     private final TelemetryContext telemetry;
+    private QueueMode steeringMode;
+    private QueueMode followUpMode;
+    private ToolExecution toolExecution;
 
     // ── Factory ──────────────────────────────────────────────
 
@@ -110,6 +113,9 @@ public class AgentHarness implements AutoCloseable {
         this.toolRegistry = config.toolRegistry();
         this.toolContext = config.toolContext();
         this.driveMode = config.driveMode() != null ? config.driveMode() : DriveMode.MANUAL;
+        this.steeringMode = config.steeringMode();
+        this.followUpMode = config.followUpMode();
+        this.toolExecution = config.toolExecution();
         this.compactionSettings = config.compactionSettings();
         this.telemetry = config.telemetry();
         this.hookSystem = new HookSystem(lanes);
@@ -128,15 +134,20 @@ public class AgentHarness implements AutoCloseable {
             () -> activeTools.stream().map(AgentTool::name)
                 .collect(java.util.stream.Collectors.toSet()));
 
+        // Build queue manager first (referenced by the execution context)
+        this.queueManager = new QueueManager(
+            lanes,
+            () -> steeringMode,
+            () -> followUpMode);
+
         // Build execution context and action executor
         var execCtx = new ExecutionContext(
             streamFn, () -> model, () -> thinkingLevel, () -> systemPrompt, () -> activeTools,
             maxInputTokens, toolRegistry, toolContext,
             new ToolExecutor(toolRegistry, toolContext), skillManager,
             hookSystem, lanes, () -> compactionSettings, config.thinkingLevelMap(),
-            tokenCounter, snapshotService);
+            tokenCounter, snapshotService, queueManager, () -> toolExecution);
         this.actionExecutor = new ActionExecutor(execCtx);
-        this.queueManager = new QueueManager();
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -184,17 +195,17 @@ public class AgentHarness implements AutoCloseable {
     // Queue scheduling (Phase 3 stubs) — delegated to QueueManager
     // ═══════════════════════════════════════════════════════════
 
-    /** Enqueue a steer prompt. Queue consumption is Phase 3. */
+    /** Enqueue a steer prompt (injected into the current run's next round). */
     public String steer(String laneName, String prompt) {
         return queueManager.steer(laneName, prompt);
     }
 
-    /** Enqueue a follow-up prompt. Queue consumption is Phase 3. */
+    /** Enqueue a follow-up prompt (processed when the current run finishes). */
     public String followUp(String laneName, String prompt) {
         return queueManager.followUp(laneName, prompt);
     }
 
-    /** Enqueue a next-run prompt. Queue consumption is Phase 3. */
+    /** Enqueue a next-run prompt (starts a run when the lane is idle). */
     public String nextRun(String laneName, String prompt) {
         return queueManager.nextRun(laneName, prompt);
     }
@@ -202,6 +213,36 @@ public class AgentHarness implements AutoCloseable {
     /** Cancel all queued items of the given type ("steer", "followUp", "nextRun"). */
     public void cancelQueued(String laneName, String queueType) {
         queueManager.cancelQueued(laneName, queueType);
+    }
+
+    /** Current steer-queue drain mode. */
+    public QueueMode steeringMode() {
+        return steeringMode;
+    }
+
+    /** Change the steer-queue drain mode (Phase 3). */
+    public void steeringMode(QueueMode mode) {
+        this.steeringMode = mode;
+    }
+
+    /** Current follow-up-queue drain mode. */
+    public QueueMode followUpMode() {
+        return followUpMode;
+    }
+
+    /** Change the follow-up-queue drain mode (Phase 3). */
+    public void followUpMode(QueueMode mode) {
+        this.followUpMode = mode;
+    }
+
+    /** Current tool execution mode. */
+    public ToolExecution toolExecution() {
+        return toolExecution;
+    }
+
+    /** Change the tool execution mode (Phase 3). */
+    public void toolExecution(ToolExecution mode) {
+        this.toolExecution = mode;
     }
 
     // ── Operation (single-lane convenience overloads) ─────────

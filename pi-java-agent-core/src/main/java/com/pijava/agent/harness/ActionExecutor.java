@@ -1,8 +1,11 @@
 package com.pijava.agent.harness;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Future;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 import com.pijava.agent.compaction.CompactionService;
@@ -27,6 +30,7 @@ import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
+import com.pijava.agent.tool.ToolResult;
 
 /**
  * Executes individual {@link Action} subclasses for {@link AgentHarness}.
@@ -131,12 +135,41 @@ final class ActionExecutor {
     Action peekAction(String laneName) {
         var lane = ctx.requireLane(laneName);
         return switch (lane.phase) {
-            case RunPhase.Idle i -> null;
+            case RunPhase.Idle i -> {
+                // Start a new run when any queue has items (Phase 3). Steer is
+                // polled first, then nextRun, then followUp (aligned with pi's
+                // outer loop which polls steering before follow-up queues).
+                var steer = ctx.queueManager().drainSteer(laneName);
+                if (!steer.isEmpty()) {
+                    yield run(laneName, String.join("\n\n", steer));
+                }
+                var nextRun = ctx.queueManager().drainNextRun(laneName);
+                if (!nextRun.isEmpty()) {
+                    yield run(laneName, String.join("\n\n", nextRun));
+                }
+                var followUps = ctx.queueManager().drainFollowUp(laneName);
+                if (!followUps.isEmpty()) {
+                    yield run(laneName, String.join("\n\n", followUps));
+                }
+                yield null;
+            }
             case RunPhase.Assistant a -> {
                 var pw = drainNextPendingWrite(lane);
                 if (pw != null) yield pw;
                 if (!lane.pendingToolCalls.isEmpty()) {
+                    if (ctx.toolExecution().get() instanceof ToolExecution.Parallel
+                            && lane.pendingToolCalls.size() > 1) {
+                        var calls = List.copyOf(lane.pendingToolCalls);
+                        lane.pendingToolCalls.clear();
+                        yield new Action.ExecuteToolBatch(calls);
+                    }
                     yield lane.pendingToolCalls.remove(0);
+                }
+                // Inject queued steering messages before the next LLM round (Phase 3).
+                var steer = ctx.queueManager().drainSteer(laneName);
+                if (!steer.isEmpty()) {
+                    injectUserMessages(lane, steer);
+                    yield peekAction(laneName);
                 }
                 yield new Action.StreamAssistant("assistant", 0);
             }
@@ -156,7 +189,20 @@ final class ActionExecutor {
             case Action.AppendEntry ae -> executeAppendEntry(lane, ae);
             case Action.TryFinishRun tfr -> executeTryFinishRun(laneName, lane, tfr);
             case Action.ExecuteTool et -> executeTool(laneName, lane, et);
+            case Action.ExecuteToolBatch etb -> executeToolBatch(laneName, lane, etb);
         };
+    }
+
+    /** Append queued steering prompts as user entries (Phase 3). */
+    private void injectUserMessages(LaneState lane, List<String> prompts) {
+        for (var prompt : prompts) {
+            var userEntry = new Entry.Message(
+                Entry.newHeader(lane.nextSeq(), HarnessUtils.lastEntryId(lane)),
+                "user",
+                List.of(new ContentBlock.TextContent(prompt)));
+            lane.transcript.add(userEntry);
+            lane.pendingWrites.add(new ProvisionedEntry(userEntry));
+        }
     }
 
     private Action drainNextPendingWrite(LaneState lane) {
@@ -313,78 +359,26 @@ final class ActionExecutor {
             new RunEndContext(laneName, lane.runId, status));
 
         lane.phase = RunPhase.IDLE;
+        // Start the next run from queued follow-up messages (Phase 3).
+        // One-at-a-time leaves the rest queued; they are drained when each
+        // subsequent run finishes.
+        var followUps = ctx.queueManager().drainFollowUp(laneName);
+        if (!followUps.isEmpty()) {
+            return run(laneName, String.join("\n\n", followUps));
+        }
         return null;
     }
 
     // ── ExecuteTool ─────────────────────────────────────────
 
     private Action executeTool(String laneName, LaneState lane, Action.ExecuteTool et) {
-        // Fire before_tool
-        var beforeResult = ctx.hookSystem().fireBeforeTool(laneName,
-            new ToolCallContext(laneName, et.toolCallId(), et.toolName(), et.arguments()));
-        if (beforeResult != null && !beforeResult.allowed()) {
-            var deniedEntry = new Entry.Message(
-                Entry.newHeader(lane.nextSeq(),
-                    HarnessUtils.lastEntryId(lane)),
-                "tool",
-                List.of(new ContentBlock.ToolResultContent(
-                    et.toolCallId(), et.toolName(),
-                    List.of(new ContentBlock.TextContent("Tool call denied by hook")), true)));
-            lane.transcript.add(deniedEntry);
-            lane.pendingWrites.add(new ProvisionedEntry(deniedEntry));
-            lane.phase = RunPhase.ASSISTANT;
-            return peekAction(laneName);
-        }
-
-        Map<String, Object> args = (beforeResult != null && beforeResult.arguments() != null)
-            ? beforeResult.arguments() : et.arguments();
-
-        List<ContentBlock> resultBlocks;
-        boolean isError = false;
-        boolean shouldTerminate = false;
-
-        try {
-            var result = ctx.toolExecutor().executeRaw(
-                et.toolName(), et.toolCallId(), args, lane.abortSignal);
-
-            // Fire after_tool
-            var afterResult = ctx.hookSystem().fireAfterTool(laneName,
-                new ToolResultContext(laneName, et.toolCallId(), et.toolName(), result));
-            if (afterResult != null) {
-                result = afterResult;
-            }
-
-            resultBlocks = result.content();
-            shouldTerminate = result.terminate();
-        } catch (SecurityException e) {
-            resultBlocks = List.of(new ContentBlock.TextContent(
-                "Tool call not approved: " + e.getMessage()));
-            isError = true;
-        } catch (IllegalArgumentException e) {
-            resultBlocks = List.of(new ContentBlock.TextContent(
-                "Tool error: " + e.getMessage()));
-            isError = true;
-        } catch (Exception e) {
-            resultBlocks = List.of(new ContentBlock.TextContent(
-                "Error: " + e.getMessage()));
-            isError = true;
-        }
-
-        var parentId = lane.lastEntry() != null
-            ? lane.lastEntry().header().id() : "";
-        var toolEntry = new Entry.Message(
-            Entry.newHeader(lane.nextSeq(), parentId),
-            "tool",
-            List.of(new ContentBlock.ToolResultContent(
-                et.toolCallId(), et.toolName(), resultBlocks, isError)));
-        lane.transcript.add(toolEntry);
-        lane.pendingWrites.add(new ProvisionedEntry(toolEntry));
-
+        var outcome = executeToolStages(laneName, lane, List.of(et)).getFirst();
+        appendToolEntry(lane, et, outcome);
         lane.records.add(new LaneRecord.ToolStarted(
             LaneRecord.newHeader(lane.records.size()),
-            et.toolCallId(), et.toolName(), args));
+            et.toolCallId(), et.toolName(), et.arguments()));
 
-        if (shouldTerminate && lane.pendingToolCalls.isEmpty()) {
+        if (outcome.terminate() && lane.pendingToolCalls.isEmpty()) {
             lane.pendingWrites.clear();
             lane.records.add(new LaneRecord.OperationFinished(
                 LaneRecord.newHeader(lane.records.size()), lane.runId, "completed"));
@@ -393,6 +387,205 @@ final class ActionExecutor {
         }
         lane.phase = RunPhase.ASSISTANT;
         return peekAction(laneName);
+    }
+
+    /** Execute a batch of tool calls in parallel (Phase 3, ToolExecution.Parallel). */
+    private Action executeToolBatch(String laneName, LaneState lane,
+                                     Action.ExecuteToolBatch batch) {
+        var outcomes = executeToolStages(laneName, lane, batch.calls());
+        boolean anyTerminate = false;
+        for (int i = 0; i < batch.calls().size(); i++) {
+            var call = batch.calls().get(i);
+            var outcome = outcomes.get(i);
+            appendToolEntry(lane, call, outcome);
+            lane.records.add(new LaneRecord.ToolStarted(
+                LaneRecord.newHeader(lane.records.size()),
+                call.toolCallId(), call.toolName(), call.arguments()));
+            anyTerminate |= outcome.terminate();
+        }
+        if (anyTerminate) {
+            lane.pendingWrites.clear();
+            lane.records.add(new LaneRecord.OperationFinished(
+                LaneRecord.newHeader(lane.records.size()), lane.runId, "completed"));
+            lane.phase = RunPhase.IDLE;
+            return null;
+        }
+        lane.phase = RunPhase.ASSISTANT;
+        return peekAction(laneName);
+    }
+
+    /**
+     * Run the per-tool pipeline (before_tool → raw execution → after_tool)
+     * for a list of calls. Raw execution runs in parallel when there are
+     * multiple calls; hooks fire sequentially to keep ordering deterministic.
+     */
+    private List<ToolOutcome> executeToolStages(
+            String laneName, LaneState lane, List<Action.ExecuteTool> calls) {
+        var decisions = new ArrayList<BeforeToolDecision>();
+        for (var et : calls) {
+            decisions.add(beforeToolDecision(laneName, et));
+        }
+
+        List<RawToolResult> rawResults;
+        if (calls.size() > 1) {
+            rawResults = runRawBatch(lane, decisions);
+        } else {
+            rawResults = new ArrayList<>();
+            for (var d : decisions) {
+                rawResults.add(d.allowed()
+                    ? runRawSafely(lane, d) : RawToolResult.denied());
+            }
+        }
+
+        var outcomes = new ArrayList<ToolOutcome>();
+        for (int i = 0; i < calls.size(); i++) {
+            var et = calls.get(i);
+            var decision = decisions.get(i);
+            if (!decision.allowed()) {
+                outcomes.add(ToolOutcome.denied(et));
+                continue;
+            }
+            var raw = rawResults.get(i);
+            var result = raw.result();
+            var afterResult = ctx.hookSystem().fireAfterTool(laneName,
+                new ToolResultContext(laneName, et.toolCallId(), et.toolName(), result));
+            if (afterResult != null) {
+                result = afterResult;
+            }
+            outcomes.add(new ToolOutcome(
+                result.content(), raw.isError(), result.terminate()));
+        }
+        return outcomes;
+    }
+
+    /** Fire {@code before_tool} hooks and compute the effective arguments. */
+    private BeforeToolDecision beforeToolDecision(String laneName, Action.ExecuteTool et) {
+        var beforeResult = ctx.hookSystem().fireBeforeTool(laneName,
+            new ToolCallContext(laneName, et.toolCallId(), et.toolName(), et.arguments()));
+        if (beforeResult != null && !beforeResult.allowed()) {
+            return BeforeToolDecision.deny(et);
+        }
+        var args = (beforeResult != null && beforeResult.arguments() != null)
+            ? beforeResult.arguments() : et.arguments();
+        return BeforeToolDecision.allow(et, args);
+    }
+
+    /** Execute the raw tool calls of one turn in parallel (StructuredTaskScope). */
+    private List<RawToolResult> runRawBatch(LaneState lane, List<BeforeToolDecision> decisions) {
+        var results = new ArrayList<RawToolResult>(
+            Collections.nCopies(decisions.size(), null));
+        // Virtual-thread executor instead of StructuredTaskScope: the latter is
+        // a preview API in JDK 26 and the project does not enable previews.
+        // Ordered results are collected after all tasks complete.
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var futures = new ArrayList<Future<RawToolResult>>(decisions.size());
+            for (var d : decisions) {
+                if (!d.allowed()) {
+                    futures.add(null);
+                    continue;
+                }
+                var decision = d;
+                futures.add(executor.submit(() -> runRawSafely(lane, decision)));
+            }
+            for (int i = 0; i < decisions.size(); i++) {
+                var future = futures.get(i);
+                results.set(i, future != null
+                    ? future.get() : RawToolResult.denied());
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            for (int i = 0; i < decisions.size(); i++) {
+                if (results.get(i) == null) {
+                    results.set(i, new RawToolResult(new ToolResult<>(
+                        List.of(new ContentBlock.TextContent("Tool batch interrupted")),
+                        null, null, true, List.of()), true));
+                }
+            }
+        } catch (java.util.concurrent.ExecutionException e) {
+            for (int i = 0; i < decisions.size(); i++) {
+                if (results.get(i) == null) {
+                    results.set(i, new RawToolResult(new ToolResult<>(
+                        List.of(new ContentBlock.TextContent(
+                            "Tool batch failed: " + e.getCause().getMessage())),
+                        null, null, true, List.of()), true));
+                }
+            }
+        }
+        return results;
+    }
+
+    /** Execute a single raw tool call, encoding failures as error results. */
+    private RawToolResult runRawSafely(LaneState lane, BeforeToolDecision d) {
+        try {
+            var result = ctx.toolExecutor().executeRaw(
+                d.call().toolName(), d.call().toolCallId(), d.args(), lane.abortSignal);
+            return new RawToolResult(result, false);
+        } catch (SecurityException e) {
+            return new RawToolResult(new ToolResult<>(
+                List.of(new ContentBlock.TextContent(
+                    "Tool call not approved: " + e.getMessage())),
+                null, null, false, List.of()), true);
+        } catch (IllegalArgumentException e) {
+            return new RawToolResult(new ToolResult<>(
+                List.of(new ContentBlock.TextContent("Tool error: " + e.getMessage())),
+                null, null, false, List.of()), true);
+        } catch (Exception e) {
+            return new RawToolResult(new ToolResult<>(
+                List.of(new ContentBlock.TextContent("Error: " + e.getMessage())),
+                null, null, false, List.of()), true);
+        }
+    }
+
+    /** Append a tool result entry to the lane transcript (Phase 3). */
+    private void appendToolEntry(LaneState lane, Action.ExecuteTool et, ToolOutcome outcome) {
+        var parentId = lane.lastEntry() != null
+            ? lane.lastEntry().header().id() : "";
+        var toolEntry = new Entry.Message(
+            Entry.newHeader(lane.nextSeq(), parentId),
+            "tool",
+            List.of(new ContentBlock.ToolResultContent(
+                et.toolCallId(), et.toolName(), outcome.blocks(), outcome.isError())));
+        lane.transcript.add(toolEntry);
+        lane.pendingWrites.add(new ProvisionedEntry(toolEntry));
+    }
+
+    /** Result of the before_tool stage. */
+    private record BeforeToolDecision(
+        Action.ExecuteTool call,
+        boolean allowed,
+        Map<String, Object> args
+    ) {
+        static BeforeToolDecision allow(Action.ExecuteTool call, Map<String, Object> args) {
+            return new BeforeToolDecision(call, true, args);
+        }
+
+        static BeforeToolDecision deny(Action.ExecuteTool call) {
+            return new BeforeToolDecision(call, false, Map.of());
+        }
+    }
+
+    /** Raw tool execution result plus whether the execution failed. */
+    private record RawToolResult(ToolResult<?> result, boolean isError) {
+        static RawToolResult denied() {
+            return new RawToolResult(new ToolResult<>(
+                List.of(new ContentBlock.TextContent("Tool call denied by hook")),
+                null, null, false, List.of()), true);
+        }
+    }
+
+    /** Per-tool outcome used to build the transcript entry. */
+    private record ToolOutcome(
+        List<ContentBlock> blocks,
+        boolean isError,
+        boolean terminate
+    ) {
+        static ToolOutcome denied(Action.ExecuteTool et) {
+            return new ToolOutcome(
+                List.of(new ContentBlock.ToolResultContent(
+                    et.toolCallId(), et.toolName(),
+                    List.of(new ContentBlock.TextContent("Tool call denied by hook")), true)),
+                true, false);
+        }
     }
 
     // ═══════════════════════════════════════════════════════════

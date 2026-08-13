@@ -1,6 +1,7 @@
 package com.pijava.agent.harness;
 
 import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Set;
 
@@ -65,6 +66,27 @@ public final class LaneState {
 
     /** Lane-level system prompt override; null means inherit from harness. */
     String systemPrompt;
+
+    // Phase 3: scheduling queues (steer / followUp / nextRun)
+    /** Steering queue — injected into the current run's next assistant round. */
+    final ArrayDeque<LaneInfo.QueuedItem> steerQueue = new ArrayDeque<>();
+
+    /** Follow-up queue — processed when the current run finishes. */
+    final ArrayDeque<LaneInfo.QueuedItem> followUpQueue = new ArrayDeque<>();
+
+    /** Next-run queue — starts a new run when the lane is idle. */
+    final ArrayDeque<LaneInfo.QueuedItem> nextRunQueue = new ArrayDeque<>();
+
+    /** Monotonic sequence number shared by all three queues. */
+    long queueSeq;
+
+    /** Snapshot the three queues for {@link LaneInfo.Queues}. */
+    LaneInfo.Queues queueSnapshot() {
+        return new LaneInfo.Queues(
+            List.copyOf(steerQueue),
+            List.copyOf(followUpQueue),
+            List.copyOf(nextRunQueue));
+    }
 
     // ── Helpers ──────────────────────────────────────────────
 

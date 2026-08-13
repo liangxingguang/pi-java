@@ -84,7 +84,7 @@ final class SnapshotService {
             List.copyOf(lane.transcript),
             lane.lastEntry() != null ? lane.lastEntry().header().id() : null,
             op,
-            new LaneInfo.Queues(List.of(), List.of(), List.of()),
+            lane.queueSnapshot(),
             lane.pendingWrites.stream()
                 .filter(pw -> !pw.isWritten()).toList(),
             faulted

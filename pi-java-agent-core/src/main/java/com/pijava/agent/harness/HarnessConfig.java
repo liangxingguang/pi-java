@@ -18,7 +18,8 @@ import com.pijava.telemetry.TelemetryContext;
 /**
  * Configuration for creating an {@link AgentHarness}.
  *
- * <p>Phase 2c: added driveMode, compactionSettings fields.</p>
+ * <p>Phase 2c: added driveMode, compactionSettings fields.
+ * Phase 3: added steeringMode, followUpMode, toolExecution fields.</p>
  *
  * @param streamFn           LLM streaming call function
  * @param model              current model identifier
@@ -35,6 +36,9 @@ import com.pijava.telemetry.TelemetryContext;
  * @param retryPolicy        retry policy for the LLM HTTP client (default: default policy)
  * @param telemetry          telemetry context (default: no-op)
  * @param thinkingLevelMap   per-model thinking translation (default: empty = no thinking)
+ * @param steeringMode       how steer-queue messages are drained (default: one-at-a-time)
+ * @param followUpMode       how follow-up-queue messages are drained (default: one-at-a-time)
+ * @param toolExecution      tool execution mode for multi-tool turns (default: parallel)
  */
 public record HarnessConfig(
     StreamFn streamFn,
@@ -51,7 +55,10 @@ public record HarnessConfig(
     Map<String, Skill> skills,
     RetryPolicy retryPolicy,
     TelemetryContext telemetry,
-    ThinkingLevelMap thinkingLevelMap
+    ThinkingLevelMap thinkingLevelMap,
+    QueueMode steeringMode,
+    QueueMode followUpMode,
+    ToolExecution toolExecution
 ) {
     public HarnessConfig {
         activeTools = Set.copyOf(activeTools);
@@ -59,6 +66,9 @@ public record HarnessConfig(
         if (retryPolicy == null) retryPolicy = RetryPolicy.defaultPolicy();
         if (telemetry == null) telemetry = NoopTelemetryContext.INSTANCE;
         if (thinkingLevelMap == null) thinkingLevelMap = ThinkingLevelMap.empty();
+        if (steeringMode == null) steeringMode = QueueMode.defaultMode();
+        if (followUpMode == null) followUpMode = QueueMode.defaultMode();
+        if (toolExecution == null) toolExecution = ToolExecution.defaultMode();
     }
 
     public static Builder builder() {
@@ -81,6 +91,9 @@ public record HarnessConfig(
         private RetryPolicy retryPolicy = RetryPolicy.defaultPolicy();
         private TelemetryContext telemetry = NoopTelemetryContext.INSTANCE;
         private ThinkingLevelMap thinkingLevelMap = ThinkingLevelMap.empty();
+        private QueueMode steeringMode = QueueMode.defaultMode();
+        private QueueMode followUpMode = QueueMode.defaultMode();
+        private ToolExecution toolExecution = ToolExecution.defaultMode();
 
         public Builder streamFn(StreamFn fn) { this.streamFn = fn; return this; }
         public Builder model(ModelId<?> m) { this.model = m; return this; }
@@ -101,6 +114,9 @@ public record HarnessConfig(
         public Builder retryPolicy(RetryPolicy rp) { this.retryPolicy = rp; return this; }
         public Builder telemetry(TelemetryContext t) { this.telemetry = t; return this; }
         public Builder thinkingLevelMap(ThinkingLevelMap tlm) { this.thinkingLevelMap = tlm; return this; }
+        public Builder steeringMode(QueueMode mode) { this.steeringMode = mode; return this; }
+        public Builder followUpMode(QueueMode mode) { this.followUpMode = mode; return this; }
+        public Builder toolExecution(ToolExecution mode) { this.toolExecution = mode; return this; }
 
         public HarnessConfig build() {
             if (streamFn == null) throw new IllegalStateException("streamFn is required");
@@ -109,7 +125,8 @@ public record HarnessConfig(
                                      systemPrompt, activeTools, maxInputTokens,
                                      toolRegistry, toolContext, commandPrefix,
                                      driveMode, compactionSettings, skills,
-                                     retryPolicy, telemetry, thinkingLevelMap);
+                                     retryPolicy, telemetry, thinkingLevelMap,
+                                     steeringMode, followUpMode, toolExecution);
         }
     }
 }

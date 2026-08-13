@@ -42,7 +42,9 @@ record ExecutionContext(
     Supplier<CompactionSettings> compactionSettings,
     ThinkingLevelMap thinkingLevelMap,
     TokenCounter tokenCounter,
-    SnapshotService snapshotService
+    SnapshotService snapshotService,
+    QueueManager queueManager,
+    Supplier<ToolExecution> toolExecution
 ) {
     LaneState requireLane(String laneName) {
         return HarnessUtils.requireLane(lanes, laneName);

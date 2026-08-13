@@ -1,5 +1,6 @@
 package com.pijava.agent.harness;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -58,6 +59,22 @@ public sealed interface Action {
     ) implements Action {
         public ExecuteTool {
             arguments = Map.copyOf(arguments);
+        }
+    }
+
+    /**
+     * Execute a batch of tool calls from one assistant turn (Phase 3).
+     * Used by the harness when {@link ToolExecution.Parallel} is active and
+     * the turn produced more than one tool call; the calls run in parallel on
+     * a virtual-thread executor.
+     *
+     * @param calls tool calls in declaration order (defensive copy)
+     */
+    record ExecuteToolBatch(
+        List<ExecuteTool> calls
+    ) implements Action {
+        public ExecuteToolBatch {
+            calls = List.copyOf(calls);
         }
     }
 }

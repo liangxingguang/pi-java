@@ -1,8 +1,11 @@
 package com.pijava.agent.tool;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Future;
+import java.util.concurrent.Executors;
 
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.harness.Action;
@@ -44,11 +47,56 @@ public class ToolExecutor {
         return results;
     }
 
-    /** Execute a batch of tool calls in parallel (Phase 3). */
+    /**
+     * Execute a batch of tool calls in parallel (Phase 3).
+     *
+     * <p>Results are returned in declaration order. Failures are encoded as
+     * error content blocks (same contract as {@link #executeSequential}).
+     * The harness's per-tool hook flow does not use this method — it runs its
+     * own staged batch through {@code ActionExecutor} so hooks stay ordered.</p>
+     */
     public List<Entry.Message> executeParallel(
             List<Action.ExecuteTool> toolActions,
             AbortSignal signal) {
-        throw new UnsupportedOperationException("Parallel tool execution is Phase 3");
+        var results = new ArrayList<Entry.Message>(
+            Collections.nCopies(toolActions.size(), null));
+        // Virtual-thread executor (StructuredTaskScope is preview in JDK 26).
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var futures = new ArrayList<Future<Entry.Message>>(toolActions.size());
+            for (var action : toolActions) {
+                futures.add(executor.submit(() -> executeOne(action, signal)));
+            }
+            for (int i = 0; i < toolActions.size(); i++) {
+                results.set(i, futures.get(i).get());
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            for (int i = 0; i < toolActions.size(); i++) {
+                if (results.get(i) == null) {
+                    results.set(i, new Entry.Message(
+                        Entry.newHeader(-1, ""), "tool",
+                        List.of(new ContentBlock.ToolResultContent(
+                            toolActions.get(i).toolCallId(),
+                            toolActions.get(i).toolName(),
+                            List.of(new ContentBlock.TextContent("Tool batch interrupted")),
+                            true))));
+                }
+            }
+        } catch (java.util.concurrent.ExecutionException e) {
+            for (int i = 0; i < toolActions.size(); i++) {
+                if (results.get(i) == null) {
+                    results.set(i, new Entry.Message(
+                        Entry.newHeader(-1, ""), "tool",
+                        List.of(new ContentBlock.ToolResultContent(
+                            toolActions.get(i).toolCallId(),
+                            toolActions.get(i).toolName(),
+                            List.of(new ContentBlock.TextContent(
+                                "Tool batch failed: " + e.getCause().getMessage())),
+                            true))));
+                }
+            }
+        }
+        return results;
     }
 
     /**

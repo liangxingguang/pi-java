@@ -6,6 +6,8 @@ import java.util.Set;
 import com.pijava.agent.harness.AgentHarness;
 import com.pijava.agent.harness.DriveMode;
 import com.pijava.agent.harness.HarnessConfig;
+import com.pijava.agent.harness.QueueMode;
+import com.pijava.agent.harness.ToolExecution;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
@@ -38,7 +40,7 @@ class AgentLoopTest {
                 )),
                 MODEL, ModelThinkingLevel.off(), "",
                 Set.of(), 200_000, null, null, null,
-                DriveMode.MANUAL, null, java.util.Map.of(), com.pijava.ai.http.RetryPolicy.defaultPolicy(), com.pijava.telemetry.NoopTelemetryContext.INSTANCE, com.pijava.ai.thinking.ThinkingLevelMap.empty()));
+                DriveMode.MANUAL, null, java.util.Map.of(), com.pijava.ai.http.RetryPolicy.defaultPolicy(), com.pijava.telemetry.NoopTelemetryContext.INSTANCE, com.pijava.ai.thinking.ThinkingLevelMap.empty(), QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode()));
 
         var loop = new AgentLoop(harness);
         var result = loop.run("How are you?");
@@ -61,7 +63,7 @@ class AgentLoopTest {
                 )),
                 MODEL, ModelThinkingLevel.off(), "",
                 Set.of(), 200_000, null, null, null,
-                DriveMode.MANUAL, null, java.util.Map.of(), com.pijava.ai.http.RetryPolicy.defaultPolicy(), com.pijava.telemetry.NoopTelemetryContext.INSTANCE, com.pijava.ai.thinking.ThinkingLevelMap.empty()));
+                DriveMode.MANUAL, null, java.util.Map.of(), com.pijava.ai.http.RetryPolicy.defaultPolicy(), com.pijava.telemetry.NoopTelemetryContext.INSTANCE, com.pijava.ai.thinking.ThinkingLevelMap.empty(), QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode()));
 
         var loop = new AgentLoop(harness);
         var result = loop.run("test");
