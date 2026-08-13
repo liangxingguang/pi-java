@@ -3,7 +3,7 @@
 > **目标**：搭建可构建（`mvn clean verify`）、可测试、CI 就绪的 Maven 多模块项目骨架。  
 > **工时**：1 周（含本文档编写 0.5d）  
 > **输入文档**：`02-architecture-design.md` §1–3、`03-detailed-design.md` 全部接口  
-> **产出**：编译通过的空项目，所有模块含 `module-info.java`，CI 绿灯
+> **产出**：编译通过的空项目（Maven 多模块，不使用 JPMS），CI 绿灯
 
 ---
 
@@ -25,13 +25,11 @@ pi-java/
 ├── AGENTS.md
 │
 ├── pi-java-bom/
-│   ├── pom.xml                         ← BOM（dependencyManagement，无 parent 依赖）
-│   └── src/main/java/module-info.java  ← 空模块声明（仅用于 BOM 聚合）
+│   └── pom.xml                         ← BOM（dependencyManagement，无 parent 依赖）
 │
 ├── pi-java-telemetry/
 │   ├── pom.xml
 │   └── src/main/java/
-│       ├── module-info.java
 │       └── com/pijava/telemetry/
 │           ├── TelemetryContext.java    ← 接口定义（startSpan）
 │           ├── TelemetrySpan.java       ← extends TelemetryContext（span 可启动子 span）
@@ -41,7 +39,6 @@ pi-java/
 ├── pi-java-ai/
 │   ├── pom.xml
 │   └── src/main/java/
-│       ├── module-info.java
 │       └── com/pijava/ai/
 │           ├── api/
 │           │   ├── StreamApi.java
@@ -66,7 +63,6 @@ pi-java/
 ├── pi-java-agent-core/
 │   ├── pom.xml
 │   └── src/main/java/
-│       ├── module-info.java
 │       └── com/pijava/agent/
 │           ├── harness/
 │           │   ├── AgentHarness.java
@@ -83,49 +79,42 @@ pi-java/
 ├── pi-java-session-backend-sqlite/
 │   ├── pom.xml
 │   └── src/main/java/
-│       ├── module-info.java
 │       └── com/pijava/session/backend/sqlite/
 │           └── package-info.java        ← 占位（Phase 4 实现）
 │
 ├── pi-java-tui/
 │   ├── pom.xml
 │   └── src/main/java/
-│       ├── module-info.java
 │       └── com/pijava/tui/
 │           └── package-info.java        ← 占位（Phase 3 实现）
 │
 ├── pi-java-protocol/
 │   ├── pom.xml
 │   └── src/main/java/
-│       ├── module-info.java
 │       └── com/pijava/protocol/
 │           └── package-info.java        ← 占位（Phase 6 实现）
 │
 ├── pi-java-client/
 │   ├── pom.xml
 │   └── src/main/java/
-│       ├── module-info.java
 │       └── com/pijava/client/
 │           └── package-info.java        ← 占位（Phase 6 实现）
 │
 ├── pi-java-server/
 │   ├── pom.xml
 │   └── src/main/java/
-│       ├── module-info.java
 │       └── com/pijava/server/
 │           └── package-info.java        ← 占位（Phase 6 实现）
 │
 ├── pi-java-coding-agent/
 │   ├── pom.xml
 │   └── src/main/java/
-│       ├── module-info.java
 │       └── com/pijava/coding/agent/
 │           └── package-info.java        ← 占位（Phase 3 实现）
 │
 ├── pi-java-evals/
 │   ├── pom.xml
 │   └── src/main/java/
-│       ├── module-info.java
 │       └── com/pijava/evals/
 │           └── package-info.java        ← 占位（Phase 6 实现）
 │
@@ -140,10 +129,10 @@ pi-java/
 ```
 
 **说明**：
-- Phase 0 只定义 **所有模块的公用接口签名**（`telemetry` + `ai` + `agent-core` 三个核心模块），其余模块只建目录 + `module-info.java` + `package-info.java` 占位
+- Phase 0 只定义 **所有模块的公用接口签名**（`telemetry` + `ai` + `agent-core` 三个核心模块），其余模块只建目录 + `package-info.java` 占位
 - `pi-java-bom` 无父 POM，仅包含 `dependencyManagement`
 - 所有模块均创建 `src/test/java/` 测试目录（结构与 `src/main/java/` 镜像，见 §10.1）
-- 核心模块不创建 `package-info.java`（有实际 Java 文件，不会触发空包警告）；占位模块必须创建 `package-info.java`（包内无其他类时 JPMS 需要）
+- 核心模块不创建 `package-info.java`（有实际 Java 文件，不会触发空包警告）；占位模块必须创建 `package-info.java`（空包需要包文档声明）
 - Maven Wrapper 通过 `mvn wrapper:wrapper -Dmaven=4.0.0-beta-5` 生成（统一版本）
 
 ---
@@ -379,104 +368,22 @@ pi-java/
 
 ## 4. 模块化策略
 
-> **Phase 1 决策：不使用 JPMS。** 外部 SDK（anthropic-java、openai-java）及传递依赖不支持模块路径，会产生分裂包冲突。模块隔离由 Maven 多模块 + maven-enforcer-plugin + 包结构约定保证。详见 Phase 1 实施记录。
+> **最终决策：不使用 JPMS。** 早期曾计划为每个模块编写 `module-info.java`，但外部 SDK（anthropic-java、openai-java）及传递依赖不支持模块路径，会产生分裂包冲突，因此已放弃 JPMS。模块隔离由 Maven 多模块 + maven-enforcer-plugin + 包结构约定保证，所有模块以 classpath 方式运行，不生成任何 `module-info.java`。
 
-### 4.1 （已废弃）核心模块 JPMS 声明
-
-```
-com.pijava.telemetry          exports com.pijava.telemetry
-                              requires 无外部依赖
-                              【注】TelemetrySpan extends TelemetryContext，
-                              使 span 可启动子 span（span 嵌套）
-
-com.pijava.ai                 exports com.pijava.ai.api
-                              exports com.pijava.ai.model
-                              exports com.pijava.ai.message
-                              exports com.pijava.ai.stream
-                              exports com.pijava.ai.provider
-                              exports com.pijava.ai.auth
-                              exports com.pijava.ai.catalog
-                              requires transitive com.pijava.telemetry
-                              requires com.fasterxml.jackson.databind
-                              requires java.net.http
-
-com.pijava.agent              exports com.pijava.agent.harness
-                              exports com.pijava.agent.session
-                              exports com.pijava.agent.compaction
-                              requires transitive com.pijava.ai
-                              requires com.fasterxml.jackson.databind
-                              【注】com.pijava.agent 基础包暂不导出（Phase 0 无类），
-                              Phase 2 添加类后补充 exports
-```
-
-### 4.2 占位模块（Phase 0 仅声明模块名）
-
-```java
-// pi-java-session-backend-sqlite/src/main/java/module-info.java
-module com.pijava.session.backend.sqlite {
-    requires com.pijava.agent;
-    requires java.sql;
-    exports com.pijava.session.backend.sqlite;
-}
-
-// pi-java-tui/src/main/java/module-info.java
-module com.pijava.tui {
-    requires com.pijava.agent;
-    requires dev.tamboui.toolkit;
-    requires dev.tamboui.panama.backend;
-    exports com.pijava.tui;
-}
-
-// pi-java-protocol/src/main/java/module-info.java
-module com.pijava.protocol {
-    requires com.fasterxml.jackson.databind;
-    requires com.fasterxml.jackson.dataformat.cbor;
-    exports com.pijava.protocol;
-}
-
-// pi-java-client/src/main/java/module-info.java
-module com.pijava.client {
-    requires com.pijava.protocol;
-    exports com.pijava.client;
-}
-
-// pi-java-server/src/main/java/module-info.java
-module com.pijava.server {
-    requires com.pijava.protocol;
-    requires com.pijava.agent;
-    exports com.pijava.server;
-}
-
-// pi-java-coding-agent/src/main/java/module-info.java
-module com.pijava.coding.agent {
-    requires com.pijava.agent;
-    requires com.pijava.tui;
-    requires info.picocli;
-    exports com.pijava.coding.agent;
-}
-
-// pi-java-evals/src/main/java/module-info.java
-module com.pijava.evals {
-    requires com.pijava.agent;
-    requires com.pijava.coding.agent;
-    exports com.pijava.evals;
-}
-```
-
-### 4.3 模块依赖图（JPMS 视角）
+### 4.1 模块依赖图（Maven 模块视角）
 
 ```mermaid
 graph TD
-    telemetry["com.pijava.telemetry"]
-    ai["com.pijava.ai"]
-    agent["com.pijava.agent"]
-    sqlite["com.pijava.session.backend.sqlite"]
-    tui["com.pijava.tui"]
-    protocol["com.pijava.protocol"]
-    client["com.pijava.client"]
-    server["com.pijava.server"]
-    coding["com.pijava.coding.agent"]
-    evals["com.pijava.evals"]
+    telemetry["pi-java-telemetry"]
+    ai["pi-java-ai"]
+    agent["pi-java-agent-core"]
+    sqlite["pi-java-session-backend-sqlite"]
+    tui["pi-java-tui"]
+    protocol["pi-java-protocol"]
+    client["pi-java-client"]
+    server["pi-java-server"]
+    coding["pi-java-coding-agent"]
+    evals["pi-java-evals"]
 
     ai --> telemetry
     agent --> ai
@@ -810,7 +717,7 @@ Phase 0 完成的标准（AI 在提交 PR 前必须全部通过）：
 # → 至少 telemetry 模块的 NoopTelemetryContextTest 通过
 
 # 6. 循环依赖检查
-# 人工检查 mermaid 图与 module-info.java requires 声明一致
+# 人工检查 mermaid 图与各模块 pom.xml 依赖声明一致
 ```
 
 ---

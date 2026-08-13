@@ -11,7 +11,7 @@
     <!-- Line length 120 columns -->
     <module name="LineLength">
         <property name="max" value="120"/>
-        <property name="ignorePattern" value="^package.*|^import.*|^module.*"/>
+        <property name="ignorePattern" value="^package.*|^import.*"/>
     </module>
 
     <!-- File length 500 lines (matches CLAUDE.md convention) -->

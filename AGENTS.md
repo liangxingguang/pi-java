@@ -4,7 +4,7 @@ Guidance for AI coding agents working in this repository.
 
 ## Architecture Overview
 
-**pi-java** is a Pure Java (JDK 26) port of [pi](https://github.com/earendil-works/pi), an AI coding agent. The project has 11 Maven + JPMS modules with strict bottom-up dependencies:
+**pi-java** is a Pure Java (JDK 26) port of [pi](https://github.com/earendil-works/pi), an AI coding agent. The project has 11 Maven modules (no JPMS; modules run on the classpath) with strict bottom-up dependencies:
 
 ```
 telemetry ← ai ← agent ← coding-agent
