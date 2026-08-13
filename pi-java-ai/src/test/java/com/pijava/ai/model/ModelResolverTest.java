@@ -59,4 +59,58 @@ class ModelResolverTest {
         assertThatThrownBy(() -> resolver.resolve(Set.of(ModelCapability.IMAGE_INPUT), Optional.empty()))
                 .isInstanceOf(IllegalStateException.class);
     }
+
+    @Test
+    void resolvePatternWithProviderAndName() {
+        var catalog = catalog(List.of(
+                info("anthropic", "claude-sonnet", Set.of(ModelCapability.TEXT)),
+                info("openai", "gpt-5", Set.of(ModelCapability.TEXT))));
+        var resolver = new DefaultModelResolver(catalog);
+
+        var resolved = resolver.resolve("openai/gpt-5");
+        assertThat(resolved.provider()).isEqualTo("openai");
+        assertThat(resolved.modelName()).isEqualTo("gpt-5");
+    }
+
+    @Test
+    void resolvePatternIgnoresThinkingSuffix() {
+        var catalog = catalog(List.of(
+                info("anthropic", "claude-sonnet", Set.of(ModelCapability.TEXT))));
+        var resolver = new DefaultModelResolver(catalog);
+
+        var resolved = resolver.resolve("claude-sonnet:high");
+        assertThat(resolved.modelName()).isEqualTo("claude-sonnet");
+    }
+
+    @Test
+    void resolvePatternWithBareProvider() {
+        var catalog = catalog(List.of(
+                info("google", "gemini-2.5-flash", Set.of(ModelCapability.TEXT)),
+                info("google", "gemini-2.5-pro", Set.of(ModelCapability.TEXT))));
+        var resolver = new DefaultModelResolver(catalog);
+
+        var resolved = resolver.resolve("google");
+        assertThat(resolved.provider()).isEqualTo("google");
+    }
+
+    @Test
+    void resolvePatternThrowsOnUnknownModel() {
+        var catalog = catalog(List.of(
+                info("anthropic", "claude-sonnet", Set.of(ModelCapability.TEXT))));
+        var resolver = new DefaultModelResolver(catalog);
+
+        assertThatThrownBy(() -> resolver.resolve("anthropic/does-not-exist"))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void resolveNullPatternFallsBackToDefaultProvider() {
+        var catalog = catalog(List.of(
+                info("google", "gemini-2.5-flash", Set.of(ModelCapability.TEXT)),
+                info("openai", "gpt-5", Set.of(ModelCapability.TEXT))));
+        var resolver = new DefaultModelResolver(catalog);
+
+        var resolved = resolver.resolve((String) null);
+        assertThat(resolved.provider()).isEqualTo("google");
+    }
 }

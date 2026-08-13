@@ -121,4 +121,19 @@ class BuiltinCatalogTest {
         assertThat(catalog.search("anything")).isEmpty();
         assertThat(catalog.find(ModelId.of("x", "y"))).isEmpty();
     }
+
+    @Test
+    void allAggregatesEveryProvider() {
+        var models = BuiltinCatalog.all().listModels();
+
+        assertThat(models)
+            .extracting(m -> m.id().provider())
+            .contains("anthropic", "openai", "google", "deepseek", "mistral");
+        assertThat(models.size()).isEqualTo(
+            BuiltinCatalog.anthropicModels().listModels().size()
+                + BuiltinCatalog.openaiModels().listModels().size()
+                + BuiltinCatalog.googleModels().listModels().size()
+                + BuiltinCatalog.deepseekModels().listModels().size()
+                + BuiltinCatalog.mistralModels().listModels().size());
+    }
 }

@@ -78,6 +78,21 @@ public final class BuiltinCatalog implements ModelCatalog {
         ));
     }
 
+    /**
+     * Aggregate catalog of all 5 built-in provider model lists.
+     * Phase 3: used by the coding-agent assembly layer
+     * ({@code AgentSession.create}) for CLI model resolution.
+     */
+    public static ModelCatalog all() {
+        var models = new ArrayList<ModelInfo>();
+        for (var catalog : List.of(
+                anthropicModels(), openaiModels(), googleModels(),
+                deepseekModels(), mistralModels())) {
+            models.addAll(catalog.listModels());
+        }
+        return new BuiltinCatalog(models);
+    }
+
     // ── ModelCatalog impl ─────────────────────────────────────
 
     @Override
