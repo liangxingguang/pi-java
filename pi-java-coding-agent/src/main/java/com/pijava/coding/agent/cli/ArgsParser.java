@@ -3,8 +3,6 @@ package com.pijava.coding.agent.cli;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.Callable;
-
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -24,7 +22,7 @@ import picocli.CommandLine.Unmatched;
  * collide with the single-char {@code -n} ({@code --name}).</p>
  */
 @Command(name = "pi-java")
-public final class ArgsParser implements Callable<Args> {
+public final class ArgsParser {
 
     @Option(names = "--provider")
     String provider;
@@ -145,12 +143,6 @@ public final class ArgsParser implements Callable<Args> {
 
     @Unmatched
     List<String> unmatched = new ArrayList<>();
-
-    /** Not used — {@link #parse} drives picocli directly. */
-    @Override
-    public Args call() {
-        return null;
-    }
 
     /** Parse CLI arguments into an {@link Args} record. */
     public static Args parse(String[] args) {

@@ -1,6 +1,5 @@
 package com.pijava.coding.agent.core;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,41 +64,9 @@ public final class Settings {
         return Map.copyOf(unknown);
     }
 
-    /** Copy constructor used by the merge logic. */
-    public Settings copy() {
-        var copy = new Settings();
-        copy.defaultProvider = defaultProvider;
-        copy.defaultModel = defaultModel;
-        copy.defaultThinkingLevel = defaultThinkingLevel;
-        copy.transport = transport;
-        copy.steeringMode = steeringMode;
-        copy.followUpMode = followUpMode;
-        copy.theme = theme;
-        copy.compaction = compaction;
-        copy.hideThinkingBlock = hideThinkingBlock;
-        copy.externalEditor = externalEditor;
-        copy.shellPath = shellPath;
-        copy.quietStartup = quietStartup;
-        copy.defaultProjectTrust = defaultProjectTrust;
-        copy.extensions = extensions == null ? null : new ArrayList<>(extensions);
-        copy.skills = skills == null ? null : new ArrayList<>(skills);
-        copy.prompts = prompts == null ? null : new ArrayList<>(prompts);
-        copy.themes = themes == null ? null : new ArrayList<>(themes);
-        copy.enableSkillCommands = enableSkillCommands;
-        copy.terminal = terminal;
-        copy.images = images;
-        copy.enabledModels = enabledModels == null ? null : new ArrayList<>(enabledModels);
-        copy.doubleEscapeAction = doubleEscapeAction;
-        copy.treeFilterMode = treeFilterMode;
-        copy.editorPaddingX = editorPaddingX;
-        copy.outputPad = outputPad;
-        copy.autocompleteMaxVisible = autocompleteMaxVisible;
-        copy.markdown = markdown;
-        copy.sessionDir = sessionDir;
-        copy.httpProxy = httpProxy;
-        copy.tuiMode = tuiMode;
-        copy.unknown.putAll(unknown);
-        return copy;
+    /** Remove a legacy key from the unknown passthrough (migration). */
+    public void removeUnknown(String key) {
+        unknown.remove(key);
     }
 
     /** Compaction settings (JSON boundary representation). */

@@ -1,6 +1,5 @@
 package com.pijava.coding.agent.core.slash.builtin;
 
-import java.time.format.DateTimeFormatter;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
@@ -8,15 +7,13 @@ import com.pijava.coding.agent.core.AgentSession;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
 import com.pijava.coding.agent.core.slash.SlashCommand;
 import com.pijava.coding.agent.core.slash.SlashContext;
+import static com.pijava.coding.agent.core.slash.builtin.CommandUtil.simple;
 
 /**
  * Session lifecycle slash commands (Phase 3 design §14.2
  * #8/#9/#12/#13/#14/#18/#20).
  */
 public final class SessionCommands {
-
-    private static final DateTimeFormatter TIME =
-        DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     private SessionCommands() {}
 
@@ -91,31 +88,12 @@ public final class SessionCommands {
 
     private static String sessionInfo(SlashContext ctx) {
         var session = ctx.session();
-        var sessions = session.listSessions();
-        var info = session.listSessions().stream()
-            .filter(s -> session.latestSession().map(l -> l == session).orElse(false))
-            .findFirst();
         var builder = new StringBuilder();
         builder.append("Session: ").append(session.sessionName()).append('\n');
         builder.append("Lane: ").append(session.laneName()).append('\n');
         builder.append("Entries: ").append(session.entryCount()).append('\n');
-        builder.append("Sessions in process: ").append(sessions.size());
+        builder.append("Sessions in process: ")
+            .append(session.listSessions().size());
         return builder.toString();
-    }
-
-    private interface SimpleBody {
-        String run(String args, SlashContext ctx);
-    }
-
-    private static SlashCommand simple(String name, String description,
-                                       String hint, SimpleBody body) {
-        return new SlashCommand() {
-            @Override public String name() { return name; }
-            @Override public String description() { return description; }
-            @Override public String argumentHint() { return hint; }
-            @Override public CompletionStage<String> execute(String args, SlashContext ctx) {
-                return CompletableFuture.completedFuture(body.run(args, ctx));
-            }
-        };
     }
 }

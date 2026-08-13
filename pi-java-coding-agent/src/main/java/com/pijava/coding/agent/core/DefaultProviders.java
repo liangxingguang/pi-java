@@ -32,7 +32,7 @@ public final class DefaultProviders {
     private DefaultProviders() {}
 
     /** Register the 5 built-in providers into a fresh registry. */
-    public static ProviderRegistry defaultProviders(Args args) {
+    public static ProviderRegistry defaultProviders() {
         var registry = ProviderRegistry.create();
         for (var provider : builtins()) {
             registry.register(provider);

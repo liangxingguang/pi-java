@@ -4,12 +4,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 import com.pijava.agent.compaction.CompactionSettings;
-import com.pijava.agent.entry.Entry;
 import com.pijava.ai.auth.FileCredentialStore;
 import com.pijava.coding.agent.core.KeybindingsManager;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
 import com.pijava.coding.agent.core.slash.SlashCommand;
 import com.pijava.coding.agent.core.slash.SlashContext;
+import static com.pijava.coding.agent.core.slash.builtin.CommandUtil.simple;
 
 /**
  * Miscellaneous slash commands (Phase 3 design §14.2
@@ -45,7 +45,7 @@ public final class MiscCommands {
             }
             @Override public String argumentHint() { return ""; }
             @Override public CompletionStage<String> execute(String args, SlashContext ctx) {
-                var lastAssistant = lastAssistantText(ctx);
+                var lastAssistant = ctx.session().lastAssistantText();
                 if (lastAssistant == null) {
                     return CompletableFuture.completedFuture(
                         "No assistant message to copy yet.");
@@ -120,25 +120,6 @@ public final class MiscCommands {
         });
     }
 
-    private static String lastAssistantText(SlashContext ctx) {
-        var transcript = ctx.session().harness()
-            .snapshot(ctx.session().laneName()).transcript();
-        for (int i = transcript.size() - 1; i >= 0; i--) {
-            var entry = transcript.get(i);
-            if (entry instanceof Entry.Message m && "assistant".equals(m.role())
-                    && !m.blocks().isEmpty()) {
-                var builder = new StringBuilder();
-                for (var block : m.blocks()) {
-                    if (block instanceof com.pijava.ai.message.ContentBlock.TextContent text) {
-                        builder.append(text.text());
-                    }
-                }
-                return builder.toString();
-            }
-        }
-        return null;
-    }
-
     private static String hotkeys(SlashContext ctx) {
         var keys = ctx.keybindings();
         var builder = new StringBuilder("Keybindings:\n");
@@ -165,21 +146,5 @@ public final class MiscCommands {
     private static SlashCommand placeholder(String name, String description,
                                             String hint, String message) {
         return simple(name, description, hint, (args, ctx) -> message);
-    }
-
-    private interface SimpleBody {
-        String run(String args, SlashContext ctx);
-    }
-
-    private static SlashCommand simple(String name, String description,
-                                       String hint, SimpleBody body) {
-        return new SlashCommand() {
-            @Override public String name() { return name; }
-            @Override public String description() { return description; }
-            @Override public String argumentHint() { return hint; }
-            @Override public CompletionStage<String> execute(String args, SlashContext ctx) {
-                return CompletableFuture.completedFuture(body.run(args, ctx));
-            }
-        };
     }
 }
