@@ -22,8 +22,8 @@
             <artifactId>pi-java-agent-core</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.pi-java</groupId>
-            <artifactId>pi-java-tui</artifactId>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
         </dependency>
         <dependency>
             <groupId>info.picocli</groupId>
