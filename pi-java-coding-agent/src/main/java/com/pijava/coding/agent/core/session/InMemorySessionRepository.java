@@ -21,8 +21,27 @@ import com.pijava.coding.agent.core.AgentSession;
  */
 public final class InMemorySessionRepository {
 
+    private static final InMemorySessionRepository SHARED =
+        new InMemorySessionRepository();
+
     private final Map<String, SessionEntry> sessions = new ConcurrentHashMap<>();
     private String latestId;
+
+    private InMemorySessionRepository() {}
+
+    /** Create a fresh registry (tests and isolated scopes). */
+    public static InMemorySessionRepository create() {
+        return new InMemorySessionRepository();
+    }
+
+    /**
+     * The process-wide registry: every {@link AgentSession#create} registers
+     * here, so {@code -c/-r/--fork} and {@code /session} work within the
+     * process (Phase 4 replaces this with persistent storage).
+     */
+    public static InMemorySessionRepository shared() {
+        return SHARED;
+    }
 
     /** Create a new session entry (called by {@link AgentSession#create}). */
     public AgentSession create(AgentSession session) {

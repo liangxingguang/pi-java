@@ -35,13 +35,12 @@ public final class InteractiveMode {
     /**
      * Submit a prompt: drives the harness on a virtual thread and forwards
      * events to the observers (typewriter rendering in the TUI).
+     * Exactly one virtual thread is started per run (the drive thread inside
+     * {@code AgentSession.processPrompt}).
      */
     public void submit(String prompt) {
-        Thread.startVirtualThread(() -> {
-            var result = session.processPrompt(prompt, PromptConfig.defaults());
-            result.stream().forEach(streamObserver::onStreamEvent);
-            result.entries().forEach(entryObserver::onEntry);
-        });
+        session.processPrompt(
+            prompt, PromptConfig.defaults(), streamObserver, entryObserver);
     }
 
     /** Abort the current run (cross-thread safe). */

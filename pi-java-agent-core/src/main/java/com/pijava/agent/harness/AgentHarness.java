@@ -424,6 +424,11 @@ public class AgentHarness implements AutoCloseable {
         this.systemPrompt = prompt;
     }
 
+    /** The current system prompt. */
+    public String getSystemPrompt() {
+        return systemPrompt;
+    }
+
     public Set<AgentTool<?, ?>> getActiveTools() {
         return Set.copyOf(activeTools);
     }

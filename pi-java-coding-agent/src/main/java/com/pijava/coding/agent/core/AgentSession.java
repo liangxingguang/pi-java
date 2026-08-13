@@ -6,6 +6,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 import com.pijava.agent.entry.Entry;
@@ -22,7 +23,9 @@ import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.agent.tool.ToolSetFactory;
 import com.pijava.ai.catalog.BuiltinCatalog;
+import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.model.DefaultModelResolver;
+import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.coding.agent.cli.Args;
 import com.pijava.coding.agent.cli.ThinkingLevels;
@@ -48,7 +51,7 @@ public final class AgentSession implements AutoCloseable {
     private final Instant createdAt = Instant.now();
     private final Args args;
     private String laneName = AgentHarness.DEFAULT_LANE;
-    private InMemorySessionRepository repository = new InMemorySessionRepository();
+    private InMemorySessionRepository repository = InMemorySessionRepository.shared();
 
     private AgentSession(AgentHarness harness, SessionServices services,
                          Args args, String name) {
@@ -64,9 +67,17 @@ public final class AgentSession implements AutoCloseable {
      * repository so {@code -c/-r} and {@code /session} can find it.
      */
     public static AgentSession create(Args args) {
+        return create(args, InMemorySessionRepository.shared());
+    }
+
+    /**
+     * Assemble a session against a specific repository. Tests pass a fresh
+     * repository to isolate process-wide state; production uses the shared one.
+     */
+    static AgentSession create(Args args, InMemorySessionRepository repository) {
         var settings = SettingsManager.load(args.projectTrustOverride());
         var effective = settings.effective();
-        var providers = DefaultProviders.defaultProviders(args);
+        var providers = DefaultProviders.defaultProviders();
         var models = new DefaultModelResolver(BuiltinCatalog.all());
         var tools = new ToolRegistry(null);
         var toolList = ToolSetFactory.createCodingTools("");
@@ -85,9 +96,8 @@ public final class AgentSession implements AutoCloseable {
         var harness = AgentHarness.create(HarnessConfig.builder()
             .streamFn(DefaultProviders.streamFnFor(args, providers))
             .model(models.resolve(modelPattern))
-            .thinkingLevel(ThinkingLevels.parse(args.thinking()))
-            .systemPrompt(args.systemPrompt() != null
-                ? args.systemPrompt() : DEFAULT_SYSTEM_PROMPT)
+            .thinkingLevel(thinkingLevelFor(args))
+            .systemPrompt(systemPromptFor(args))
             .activeTools(activeTools(args, toolList))
             .toolRegistry(tools)
             .driveMode(new DriveMode.Manual())
@@ -99,8 +109,8 @@ public final class AgentSession implements AutoCloseable {
         var session = new AgentSession(
             harness, services, args,
             args.name() != null ? args.name() : "session");
-        session.repository.create(session);
-        return session;
+        session.repository = repository;
+        return resolveSession(session, args);
     }
 
     /** The underlying harness (used by the session repository and TUI). */
@@ -141,9 +151,24 @@ public final class AgentSession implements AutoCloseable {
     /**
      * Run a prompt and return a live result: incremental stream events feed
      * {@link SessionResult#stream()} as the harness drives on a virtual thread;
-     * entries and status complete when the run finishes.
+     * entries and status complete when the run finishes. One virtual thread is
+     * started per run (Phase 3 design §11.1).
      */
     public SessionResult processPrompt(String prompt, PromptConfig config) {
+        return processPrompt(prompt, config, null, null);
+    }
+
+    /**
+     * Run a prompt and forward events/entries to observers on the drive
+     * thread. Used by {@code InteractiveMode} so a run uses exactly one
+     * virtual thread; {@link SessionResult#stream()} is still available for
+     * consumers without observers (e.g. print mode).
+     */
+    public SessionResult processPrompt(
+            String prompt,
+            PromptConfig config,
+            StreamObserver streamObserver,
+            EntryObserver entryObserver) {
         if (config.systemPrompt() != null) {
             harness.setSystemPrompt(config.systemPrompt());
         }
@@ -155,7 +180,9 @@ public final class AgentSession implements AutoCloseable {
         var entriesFuture = new CompletableFuture<List<Entry>>();
         var statusFuture = new CompletableFuture<RunStatus>();
 
-        Thread.startVirtualThread(() -> driveRun(prompt, queue, entriesFuture, statusFuture));
+        Thread.startVirtualThread(() -> driveRun(
+            prompt, queue, entriesFuture, statusFuture,
+            streamObserver, entryObserver));
 
         Stream<StreamEvent> stream = Stream.generate(() -> {
             try {
@@ -191,6 +218,27 @@ public final class AgentSession implements AutoCloseable {
     /** Queue a steering message (injected into the current run's next round). */
     public String steer(String prompt) {
         return harness.steer(laneName, prompt);
+    }
+
+    /** The most recent assistant text (for {@code /copy}). */
+    public String lastAssistantText() {
+        var transcript = harness.snapshot(laneName).transcript();
+        for (int i = transcript.size() - 1; i >= 0; i--) {
+            var entry = transcript.get(i);
+            if (entry instanceof Entry.Message message
+                    && "assistant".equals(message.role())) {
+                var builder = new StringBuilder();
+                for (var block : message.blocks()) {
+                    if (block instanceof ContentBlock.TextContent text) {
+                        builder.append(text.text());
+                    }
+                }
+                if (!builder.isEmpty()) {
+                    return builder.toString();
+                }
+            }
+        }
+        return null;
     }
 
     /** Subscribe to live session snapshots (status bar, tree selector). */
@@ -236,29 +284,44 @@ public final class AgentSession implements AutoCloseable {
             String prompt,
             LinkedBlockingQueue<StreamEvent> queue,
             CompletableFuture<List<Entry>> entriesFuture,
-            CompletableFuture<RunStatus> statusFuture) {
-        var stopReason = new String[]{"completed"};
+            CompletableFuture<RunStatus> statusFuture,
+            StreamObserver streamObserver,
+            EntryObserver entryObserver) {
+        var stopReason = new AtomicReference<>("completed");
         try (var registration = harness.onStreamEvent(event -> {
             if (event instanceof StreamEvent.StreamDone done && done.reason() != null) {
-                stopReason[0] = done.reason();
+                stopReason.set(done.reason());
             }
             if (event instanceof StreamEvent.StreamError) {
-                stopReason[0] = "error";
+                stopReason.set("error");
             }
-            queue.add(event);
+            if (streamObserver == null) {
+                queue.add(event);
+            } else {
+                streamObserver.onStreamEvent(event);
+            }
         })) {
             Action action = harness.run(laneName, prompt);
             while (action != null) {
                 action = harness.executeAction(laneName, action);
             }
             var lane = harness.snapshot(laneName);
-            entriesFuture.complete(List.copyOf(lane.transcript()));
-            statusFuture.complete(new RunStatus(exitCode(stopReason[0]), stopReason[0]));
+            var transcript = List.copyOf(lane.transcript());
+            entriesFuture.complete(transcript);
+            if (entryObserver != null) {
+                for (var entry : transcript) {
+                    entryObserver.onEntry(entry);
+                }
+            }
+            statusFuture.complete(new RunStatus(
+                exitCode(stopReason.get()), stopReason.get()));
         } catch (Exception e) {
             statusFuture.complete(new RunStatus(1, "error"));
             entriesFuture.complete(List.of());
         } finally {
-            queue.add(null);
+            if (streamObserver == null) {
+                queue.add(null);
+            }
         }
     }
 
@@ -272,7 +335,7 @@ public final class AgentSession implements AutoCloseable {
 
     private static Set<AgentTool<?, ?>> activeTools(
             Args args, List<AgentTool<?, ?>> toolList) {
-        if (args.noTools()) {
+        if (args.noTools() || args.noBuiltinTools()) {
             return Set.of();
         }
         if (args.tools() != null && !args.tools().isEmpty()) {
@@ -288,6 +351,49 @@ public final class AgentSession implements AutoCloseable {
                 .collect(java.util.stream.Collectors.toSet());
         }
         return Set.copyOf(toolList);
+    }
+
+    private static ModelThinkingLevel thinkingLevelFor(Args args) {
+        if (args.thinking() != null) {
+            return ThinkingLevels.parse(args.thinking());
+        }
+        var fromModel = ThinkingLevels.parseFromModelPattern(args.model());
+        return fromModel != null ? fromModel : ModelThinkingLevel.off();
+    }
+
+    private static String systemPromptFor(Args args) {
+        var base = args.systemPrompt() != null
+            ? args.systemPrompt() : DEFAULT_SYSTEM_PROMPT;
+        if (args.appendSystemPrompt().isEmpty()) {
+            return base;
+        }
+        return base + "\n\n" + String.join("\n\n", args.appendSystemPrompt());
+    }
+
+    private static AgentSession resolveSession(AgentSession session, Args args) {
+        if (args.noSession()) {
+            return session; // ephemeral: not registered in the repository
+        }
+        var repository = session.repository;
+        if (args.continue_()) {
+            return repository.latest().orElseThrow(() -> new IllegalStateException(
+                "No previous session to continue in this process "
+                    + "(session persistence lands in Phase 4)"));
+        }
+        var sessionId = args.sessionId() != null ? args.sessionId() : args.session();
+        if (args.resume() || sessionId != null) {
+            return repository.find(sessionId).orElseThrow(() -> new IllegalStateException(
+                "Session not found: " + sessionId
+                    + " (in-process registry only; persistence in Phase 4)"));
+        }
+        if (args.fork() != null) {
+            return repository.find(args.fork())
+                .map(source -> repository.fork(source, session.name))
+                .orElseThrow(() -> new IllegalStateException(
+                    "Session not found: " + args.fork()));
+        }
+        repository.create(session);
+        return session;
     }
 
     private static QueueMode queueMode(String mode) {

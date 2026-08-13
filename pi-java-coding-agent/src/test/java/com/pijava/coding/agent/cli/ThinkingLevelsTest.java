@@ -41,4 +41,14 @@ class ThinkingLevelsTest {
         assertThat(ThinkingLevels.parse("HIGH"))
             .isEqualTo(ModelThinkingLevel.of(new ThinkingLevel.High()));
     }
+
+    @Test
+    void extractsSuffixFromModelPattern() {
+        assertThat(ThinkingLevels.parseFromModelPattern(
+            "anthropic/claude-sonnet:high"))
+            .isEqualTo(ModelThinkingLevel.of(new ThinkingLevel.High()));
+        assertThat(ThinkingLevels.parseFromModelPattern("gpt-5")).isNull();
+        assertThat(ThinkingLevels.parseFromModelPattern(
+            "anthropic/claude-sonnet:bogus")).isNull();
+    }
 }

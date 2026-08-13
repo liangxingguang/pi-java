@@ -43,4 +43,21 @@ public final class ThinkingLevels {
     public static boolean isValid(String raw) {
         return raw != null && validValues().contains(raw.toLowerCase());
     }
+
+    /**
+     * Extract a thinking level from a model pattern's {@code ":thinking"}
+     * suffix (e.g. {@code "claude-sonnet:high"}), or {@code null} when the
+     * pattern has no valid suffix.
+     */
+    public static ModelThinkingLevel parseFromModelPattern(String pattern) {
+        if (pattern == null) {
+            return null;
+        }
+        var colon = pattern.lastIndexOf(':');
+        if (colon <= 0) {
+            return null;
+        }
+        var suffix = pattern.substring(colon + 1);
+        return isValid(suffix) ? parse(suffix) : null;
+    }
 }
