@@ -48,9 +48,10 @@ public final class MessageBubble {
                     new ToolCallCard(name, String.valueOf(arguments), "running").render();
                 case ContentBlock.ToolResultContent(
                         var toolUseId, var toolName, var content, var isError) ->
-                    TamboUIAdapter.panel(TamboUIAdapter.markupText(
-                        truncate(joinText(content), 500)))
-                        .green().rounded();
+                    new ToolCallCard(
+                        toolName,
+                        truncate(joinText(content), 500),
+                        isError ? "error" : "done").render();
                 case ContentBlock.ImageContent(var mediaType, var data) ->
                     TamboUIAdapter.text("[image: " + mediaType + "]").dim();
             });

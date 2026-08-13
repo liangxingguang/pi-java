@@ -32,14 +32,22 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     private final StringBuilder assistantDraft = new StringBuilder();
     private final StringBuilder thinkingDraft = new StringBuilder();
     private String lastError;
+    private String lastStreamCommittedText;
 
     /** Receive a complete transcript entry (dedupes streamed assistant text). */
     @Override
     public void onEntry(Entry entry) {
-        if (!(entry instanceof Entry.Message message
-                && "assistant".equals(message.role()))) {
-            chatPanel.append(ChatMessage.from(entry));
+        if (entry instanceof Entry.Message message
+                && "assistant".equals(message.role())) {
+            // Skip an assistant entry already committed by the stream
+            // (TextEnd); otherwise append it (e.g. non-streaming paths).
+            if (joinText(message.blocks()).equals(lastStreamCommittedText)) {
+                lastStreamCommittedText = null;
+                return;
+            }
+            lastStreamCommittedText = null;
         }
+        chatPanel.append(ChatMessage.from(entry));
     }
 
     /** Incremental stream events → draft bubble (typewriter effect). */
@@ -53,6 +61,7 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
             case StreamEvent.TextEnd(var contentIndex, var text, var partial) -> {
                 chatPanel.append(new ChatMessage.Assistant(
                     List.of(new ContentBlock.TextContent(text))));
+                lastStreamCommittedText = text;
                 assistantDraft.setLength(0);
             }
             case StreamEvent.ThinkingStart ignored -> thinkingDraft.setLength(0);
@@ -155,5 +164,15 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     /** The committed message count (test hook). */
     int messageCount() {
         return chatPanel.size();
+    }
+
+    private static String joinText(List<ContentBlock> blocks) {
+        var builder = new StringBuilder();
+        for (var block : blocks) {
+            if (block instanceof ContentBlock.TextContent text) {
+                builder.append(text.text());
+            }
+        }
+        return builder.toString();
     }
 }

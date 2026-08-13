@@ -94,12 +94,10 @@ public final class PiTuiApp {
 
     private EventResult onKeyEvent(KeyEvent event) {
         if (overlay != null) {
-            if (overlay.onKeyEvent(event) || overlay.isDone()) {
-                if (overlay.isDone()) {
-                    overlay.apply(session, this::switchSession);
-                    overlay = null;
-                }
-                return EventResult.HANDLED;
+            overlay.onKeyEvent(event);
+            if (overlay.isDone()) {
+                overlay.apply(session, this::switchSession);
+                overlay = null;
             }
             return EventResult.HANDLED;
         }

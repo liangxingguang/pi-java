@@ -61,6 +61,21 @@ class ChatScreenTest {
     }
 
     @Test
+    void nonMatchingAssistantEntryIsAppendedAfterStreamCommit() {
+        var screen = new ChatScreen();
+        screen.onStreamEvent(new StreamEvent.TextEnd(
+            0, "streamed text", AssistantMessage.empty()));
+        var countAfterStream = screen.messageCount();
+
+        screen.onEntry(new Entry.Message(
+            Entry.newHeader(2, ""), "assistant",
+            List.of(new ContentBlock.TextContent("later text"))));
+
+        assertThat(screen.messageCount()).isEqualTo(countAfterStream + 1);
+        assertThat(screen.lastMessage()).isInstanceOf(ChatMessage.Assistant.class);
+    }
+
+    @Test
     void streamErrorBecomesErrorBubble() {
         var screen = new ChatScreen();
         screen.onStreamEvent(new StreamEvent.StreamError(
