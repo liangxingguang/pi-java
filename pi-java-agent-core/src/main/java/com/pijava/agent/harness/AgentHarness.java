@@ -1,7 +1,6 @@
 package com.pijava.agent.harness;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -10,20 +9,8 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
 
 import com.pijava.agent.compaction.CompactionSettings;
-import com.pijava.agent.hook.AfterResponseHook;
-import com.pijava.agent.hook.AfterToolHook;
-import com.pijava.agent.hook.BeforeCompactionHook;
-import com.pijava.agent.hook.BeforeNavigationHook;
-import com.pijava.agent.hook.BeforePayloadHook;
-import com.pijava.agent.hook.BeforeRequestHook;
-import com.pijava.agent.hook.BeforeResumeHook;
-import com.pijava.agent.hook.BeforeRunEndHook;
-import com.pijava.agent.hook.BeforeRunHook;
-import com.pijava.agent.hook.BeforeToolHook;
 import com.pijava.agent.hook.HookSystem;
-import com.pijava.agent.hook.TransformContextHook;
 import com.pijava.agent.record.LaneRecord;
-import com.pijava.agent.skill.Skill;
 import com.pijava.agent.skill.SkillManager;
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ToolContext;
@@ -382,78 +369,18 @@ public class AgentHarness implements AutoCloseable {
     // Skills
     // ═══════════════════════════════════════════════════════════
 
-    public Skill skill(String name) {
-        if (closed) throw new HarnessClosedException();
-        return skillManager.get(name);
-    }
-
-    public void registerSkill(Skill skill) {
-        skillManager.register(skill);
-    }
-
-    public String promptFromTemplate(String template, Map<String, Object> vars) {
-        if (closed) throw new HarnessClosedException();
-        try {
-            return skillManager.template(template).render(vars);
-        } catch (SkillManager.UnknownTemplateException e) {
-            // Fall back to literal template (Phase 2c minimal)
-            return template;
-        }
-    }
-
     public SkillManager skillManager() {
         return skillManager;
     }
 
     // ═══════════════════════════════════════════════════════════
-    // Hooks — delegated to HookSystem
+    // Hooks — delegated to HookSystem (registration via hookSystem())
     // ═══════════════════════════════════════════════════════════
 
-    public AutoCloseable onBeforeRun(String laneName, BeforeRunHook hook) {
-        return hookSystem.onBeforeRun(laneName, hook);
+    /** Access the hook system for registration (Phase 2c hooks). */
+    public HookSystem hookSystem() {
+        return hookSystem;
     }
-
-    public AutoCloseable onBeforeResume(String laneName, BeforeResumeHook hook) {
-        return hookSystem.onBeforeResume(laneName, hook);
-    }
-
-    public AutoCloseable onTransformContext(String laneName, TransformContextHook hook) {
-        return hookSystem.onTransformContext(laneName, hook);
-    }
-
-    public AutoCloseable onBeforeRequest(String laneName, BeforeRequestHook hook) {
-        return hookSystem.onBeforeRequest(laneName, hook);
-    }
-
-    public AutoCloseable onBeforePayload(String laneName, BeforePayloadHook hook) {
-        return hookSystem.onBeforePayload(laneName, hook);
-    }
-
-    public AutoCloseable onAfterResponse(String laneName, AfterResponseHook hook) {
-        return hookSystem.onAfterResponse(laneName, hook);
-    }
-
-    public AutoCloseable onBeforeTool(String laneName, BeforeToolHook hook) {
-        return hookSystem.onBeforeTool(laneName, hook);
-    }
-
-    public AutoCloseable onAfterTool(String laneName, AfterToolHook hook) {
-        return hookSystem.onAfterTool(laneName, hook);
-    }
-
-    public AutoCloseable onBeforeCompaction(String laneName, BeforeCompactionHook hook) {
-        return hookSystem.onBeforeCompaction(laneName, hook);
-    }
-
-    public AutoCloseable onBeforeNavigation(String laneName, BeforeNavigationHook hook) {
-        return hookSystem.onBeforeNavigation(laneName, hook);
-    }
-
-    public AutoCloseable onBeforeRunEnd(String laneName, BeforeRunEndHook hook) {
-        return hookSystem.onBeforeRunEnd(laneName, hook);
-    }
-
-    // ── Hook firing — delegated to HookSystem ─────────────────
 
     // ═══════════════════════════════════════════════════════════
     // Snapshot / Watch — delegated to SnapshotService

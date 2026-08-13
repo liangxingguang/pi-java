@@ -58,7 +58,7 @@ class AgentHarnessIntegrationTest {
 
         // Register a hook that fires on every run end
         var runEndCount = new int[1];
-        h.onBeforeRunEnd("review", ctx -> runEndCount[0]++);
+        h.hookSystem().onBeforeRunEnd("review", ctx -> runEndCount[0]++);
 
         // Run on two lanes
         drive(h, "review", "review this code");

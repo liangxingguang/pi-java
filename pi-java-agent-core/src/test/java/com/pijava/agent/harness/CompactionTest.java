@@ -105,7 +105,7 @@ class CompactionTest {
         }
 
         var keep = message("assistant", "kept by hook");
-        h.onBeforeCompaction("default",
+        h.hookSystem().onBeforeCompaction("default",
                 ctx -> new CompactionPlan(List.of(keep), 10));
         h.compact(CompactionSettings.defaults());
 

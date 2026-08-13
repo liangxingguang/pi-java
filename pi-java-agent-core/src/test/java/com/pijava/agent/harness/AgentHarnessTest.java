@@ -206,7 +206,7 @@ class AgentHarnessTest {
     void beforeRunHookIsFired() {
         var harness = createHarness(textStreamFn("ok"));
         var fired = new boolean[1];
-        harness.onBeforeRun("default", ctx -> fired[0] = true);
+        harness.hookSystem().onBeforeRun("default", ctx -> fired[0] = true);
         harness.run("test hook");
         assertThat(fired[0]).isTrue();
     }
@@ -214,7 +214,7 @@ class AgentHarnessTest {
     @Test
     void hookErrorIsRecorded() {
         var harness = createHarness(textStreamFn("ok"));
-        harness.onBeforeRun("default", ctx -> {
+        harness.hookSystem().onBeforeRun("default", ctx -> {
             throw new RuntimeException("hook exploded");
         });
         // Should not throw — hook errors are non-fatal
@@ -231,7 +231,7 @@ class AgentHarnessTest {
     void hookUnsubscriptionWorks() {
         var harness = createHarness(textStreamFn("ok"));
         var fired = new boolean[1];
-        var handle = harness.onBeforeRun("default", ctx -> fired[0] = true);
+        var handle = harness.hookSystem().onBeforeRun("default", ctx -> fired[0] = true);
         harness.run("test"); // this fires the hook → fired[0] = true
         assertThat(fired[0]).isTrue();
         try { handle.close(); } catch (Exception ignored) {}

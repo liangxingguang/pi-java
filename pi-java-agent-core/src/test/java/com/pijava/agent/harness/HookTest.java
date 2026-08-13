@@ -48,7 +48,7 @@ class HookTest {
     void beforeRunHookFires() {
         var h = harness();
         var fired = new boolean[1];
-        h.onBeforeRun("default", ctx -> fired[0] = true);
+        h.hookSystem().onBeforeRun("default", ctx -> fired[0] = true);
         h.run("hello");
         assertThat(fired[0]).isTrue();
     }
@@ -57,7 +57,7 @@ class HookTest {
     void beforeRequestHookFires() {
         var h = harness();
         var fired = new boolean[1];
-        h.onBeforeRequest("default", ctx -> fired[0] = true);
+        h.hookSystem().onBeforeRequest("default", ctx -> fired[0] = true);
         driveToCompletion(h, "hello");
         assertThat(fired[0]).isTrue();
     }
@@ -66,7 +66,7 @@ class HookTest {
     void afterResponseHookFires() {
         var h = harness();
         var fired = new boolean[1];
-        h.onAfterResponse("default", ctx -> fired[0] = true);
+        h.hookSystem().onAfterResponse("default", ctx -> fired[0] = true);
         driveToCompletion(h, "hello");
         assertThat(fired[0]).isTrue();
     }
@@ -75,7 +75,7 @@ class HookTest {
     void beforeRunEndHookFiresAtRunEnd() {
         var h = harness();
         var fired = new boolean[1];
-        h.onBeforeRunEnd("default", ctx -> fired[0] = true);
+        h.hookSystem().onBeforeRunEnd("default", ctx -> fired[0] = true);
         driveToCompletion(h, "hello");
         assertThat(fired[0]).isTrue();
     }
@@ -84,7 +84,7 @@ class HookTest {
     void transformContextHookFires() {
         var h = harness();
         var fired = new boolean[1];
-        h.onTransformContext("default", messages -> {
+        h.hookSystem().onTransformContext("default", messages -> {
             fired[0] = true;
             return messages;
         });
@@ -95,7 +95,7 @@ class HookTest {
     @Test
     void throwingHookIsNonFatal() {
         var h = harness();
-        h.onBeforeRun("default", ctx -> {
+        h.hookSystem().onBeforeRun("default", ctx -> {
             throw new RuntimeException("boom");
         });
         // Should not throw; hook errors are swallowed and recorded
