@@ -41,12 +41,27 @@ public final class DefaultProviders {
     }
 
     /**
-     * Build a {@link StreamFn} that routes through the provider selected by
-     * {@code args.provider()} (default "google"), using the CLI API key or the
-     * environment/file credential store.
+     * Resolve the effective provider name: CLI {@code --provider} &gt; settings
+     * {@code defaultProvider} &gt; the built-in default ("google").
      */
-    public static StreamFn streamFnFor(Args args, ProviderRegistry providers) {
-        var providerName = args.provider() != null ? args.provider() : DEFAULT_PROVIDER;
+    public static String resolveProviderName(Args args, String defaultProvider) {
+        if (args.provider() != null && !args.provider().isBlank()) {
+            return args.provider();
+        }
+        if (defaultProvider != null && !defaultProvider.isBlank()) {
+            return defaultProvider;
+        }
+        return DEFAULT_PROVIDER;
+    }
+
+    /**
+     * Build a {@link StreamFn} that routes through the provider selected by
+     * {@code args.provider()} or the settings default, using the CLI API key or
+     * the environment/file credential store.
+     */
+    public static StreamFn streamFnFor(Args args, String defaultProvider,
+                                       ProviderRegistry providers) {
+        var providerName = resolveProviderName(args, defaultProvider);
         return (messages, model, options) -> {
             var provider = providers.get(providerName)
                 .orElseThrow(() -> new IllegalStateException(
