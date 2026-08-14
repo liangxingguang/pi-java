@@ -1,7 +1,5 @@
 package com.pijava.tui.screen;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -38,23 +36,18 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     // Text of the user message optimistically shown on submit; matched against
     // the transcript entry when the run completes so it isn't duplicated.
     private String pendingUserText;
-    // Text streamed for the assistant message currently in flight; finalized
-    // (pushed onto committedTexts) when the message ends (Start/StreamDone).
-    private final StringBuilder currentMessageText = new StringBuilder();
-    // Fully streamed assistant-message texts, in transcript order, waiting to
-    // be matched (and consumed) by the batched onEntry calls.
-    private final Deque<String> committedTexts = new ArrayDeque<>();
+    // Whether the current run's assistant text was already rendered through
+    // the streaming path (TextEnd). Transcript entries must not render it a
+    // second time — the transcript snapshot may contain extra blocks (e.g.
+    // thinking) or reordered deltas that would otherwise duplicate the bubble.
+    private boolean assistantStreamed;
 
     /** Receive a complete transcript entry (dedupes streamed assistant text). */
     @Override
     public void onEntry(Entry entry) {
         if (entry instanceof Entry.Message message
                 && "assistant".equals(message.role())) {
-            // Skip an assistant entry whose text was already committed by the
-            // stream (TextEnd); otherwise append it (e.g. non-streaming paths).
-            if (!committedTexts.isEmpty()
-                    && committedTexts.peek().equals(joinText(message.blocks()))) {
-                committedTexts.poll();
+            if (assistantStreamed) {
                 return;
             }
         }
@@ -72,15 +65,15 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     @Override
     public void onStreamEvent(StreamEvent event) {
         switch (event) {
-            case StreamEvent.Start ignored -> finalizeMessage();
+            case StreamEvent.Start ignored -> assistantStreamed = false;
             case StreamEvent.TextStart ignored -> assistantDraft.setLength(0);
             case StreamEvent.TextDelta(var contentIndex, var delta, var partial) ->
                 assistantDraft.append(delta);
             case StreamEvent.TextEnd(var contentIndex, var text, var partial) -> {
                 chatPanel.append(new ChatMessage.Assistant(
                     List.of(new ContentBlock.TextContent(text))));
-                currentMessageText.append(text);
                 assistantDraft.setLength(0);
+                assistantStreamed = true;
             }
             case StreamEvent.ThinkingStart ignored -> thinkingDraft.setLength(0);
             case StreamEvent.ThinkingDelta(var contentIndex, var delta, var partial) ->
@@ -94,10 +87,9 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
             case StreamEvent.ToolCallDelta ignored -> { }
             case StreamEvent.ToolCallEnd ignored -> { }
             case StreamEvent.UsageInfo ignored -> { }
-            case StreamEvent.StreamDone ignored -> finalizeMessage();
+            case StreamEvent.StreamDone ignored -> { }
             case StreamEvent.StreamError(var reason, var error, var partial) -> {
                 lastError = reason + (error != null ? ": " + error.getMessage() : "");
-                currentMessageText.setLength(0);
                 chatPanel.append(new ChatMessage.Error(lastError));
             }
         }
@@ -220,10 +212,4 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     }
 
     /** Close the in-flight streamed message: record its text for onEntry dedup. */
-    private void finalizeMessage() {
-        if (!currentMessageText.isEmpty()) {
-            committedTexts.add(currentMessageText.toString());
-        }
-        currentMessageText.setLength(0);
-    }
 }

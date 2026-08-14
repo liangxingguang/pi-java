@@ -39,8 +39,6 @@ class ChatScreenTest {
         screen.onStreamEvent(new StreamEvent.Start(AssistantMessage.empty()));
         screen.onStreamEvent(new StreamEvent.TextEnd(
             0, "text", AssistantMessage.empty()));
-        screen.onStreamEvent(new StreamEvent.StreamDone(
-            "stop", null, AssistantMessage.empty()));
         var countBefore = screen.messageCount();
 
         var entry = new Entry.Message(
@@ -49,6 +47,27 @@ class ChatScreenTest {
         screen.onEntry(entry);
 
         assertThat(screen.messageCount()).isEqualTo(countBefore);
+    }
+
+    @Test
+    void transcriptWithExtraBlocksDoesNotDuplicateStream() {
+        var screen = new ChatScreen();
+        screen.onStreamEvent(new StreamEvent.Start(AssistantMessage.empty()));
+        screen.onStreamEvent(new StreamEvent.TextEnd(
+            0, "正常回答", AssistantMessage.empty()));
+        assertThat(screen.messageCount()).isEqualTo(1);
+
+        // The transcript snapshot may carry extra/reordered blocks; it must
+        // not render a second (duplicated) bubble.
+        var entry = new Entry.Message(
+            Entry.newHeader(1, ""), "assistant",
+            List.of(
+                new ContentBlock.TextContent("乱序片段"),
+                new ContentBlock.TextContent("正常回答")));
+        screen.onEntry(entry);
+
+        assertThat(screen.messageCount()).isEqualTo(1);
+        assertThat(screen.lastMessage()).isInstanceOf(ChatMessage.Assistant.class);
     }
 
     @Test
@@ -64,20 +83,21 @@ class ChatScreenTest {
     }
 
     @Test
-    void nonMatchingAssistantEntryIsAppendedAfterStreamCommit() {
+    void nonMatchingAssistantEntryIsSkippedAfterStreamCommit() {
         var screen = new ChatScreen();
         screen.onStreamEvent(new StreamEvent.Start(AssistantMessage.empty()));
         screen.onStreamEvent(new StreamEvent.TextEnd(
             0, "streamed text", AssistantMessage.empty()));
-        screen.onStreamEvent(new StreamEvent.StreamDone(
-            "stop", null, AssistantMessage.empty()));
         var countAfterStream = screen.messageCount();
 
+        // The transcript may contain a second/extra assistant snapshot with
+        // different (even reordered) text; it was already shown via the
+        // streaming path and must not be rendered again.
         screen.onEntry(new Entry.Message(
             Entry.newHeader(2, ""), "assistant",
-            List.of(new ContentBlock.TextContent("later text"))));
+            List.of(new ContentBlock.TextContent("reordered text"))));
 
-        assertThat(screen.messageCount()).isEqualTo(countAfterStream + 1);
+        assertThat(screen.messageCount()).isEqualTo(countAfterStream);
         assertThat(screen.lastMessage()).isInstanceOf(ChatMessage.Assistant.class);
     }
 
