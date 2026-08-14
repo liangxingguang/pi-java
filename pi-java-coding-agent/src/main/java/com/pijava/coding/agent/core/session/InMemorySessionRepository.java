@@ -51,6 +51,16 @@ public final class InMemorySessionRepository {
         return session;
     }
 
+    /**
+     * Register a session under an exact caller-supplied ID ({@code --session-id},
+     * "create if missing" per Phase 3 design §9.1).
+     */
+    public AgentSession createWithId(AgentSession session, String id) {
+        sessions.put(id, new SessionEntry(id, session, Instant.now()));
+        latestId = id;
+        return session;
+    }
+
     /** The most recent session, if any ({@code -c}). */
     public Optional<AgentSession> latest() {
         return latestId == null ? Optional.empty()

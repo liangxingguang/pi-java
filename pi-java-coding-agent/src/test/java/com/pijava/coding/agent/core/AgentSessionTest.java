@@ -34,6 +34,31 @@ class AgentSessionTest {
     }
 
     @Test
+    void sessionIdCreatesWhenMissing() {
+        var repo = InMemorySessionRepository.create();
+        try (var session = AgentSession.create(
+                ArgsParser.parse(new String[] {"--session-id", "proj-123"}),
+                repo)) {
+            assertThat(repo.find("proj-123")).contains(session);
+            assertThat(repo.list()).hasSize(1);
+        }
+    }
+
+    @Test
+    void sessionIdReusesExistingExactId() {
+        var repo = InMemorySessionRepository.create();
+        try (var first = AgentSession.create(
+                ArgsParser.parse(new String[] {"--session-id", "proj-123"}),
+                repo)) {
+            var second = AgentSession.create(
+                ArgsParser.parse(new String[] {"--session-id", "proj-123"}),
+                repo);
+            assertThat(repo.find("proj-123")).contains(first);
+            assertThat(repo.list()).hasSize(1);
+        }
+    }
+
+    @Test
     void modelPatternThinkingSuffixSetsThinkingLevel() {
         try (var session = AgentSession.create(
                 ArgsParser.parse(new String[] {

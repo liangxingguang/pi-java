@@ -380,10 +380,14 @@ public final class AgentSession implements AutoCloseable {
                 "No previous session to continue in this process "
                     + "(session persistence lands in Phase 4)"));
         }
-        var sessionId = args.sessionId() != null ? args.sessionId() : args.session();
-        if (args.resume() || sessionId != null) {
-            return repository.find(sessionId).orElseThrow(() -> new IllegalStateException(
-                "Session not found: " + sessionId
+        if (args.sessionId() != null) {
+            // --session-id: exact project session ID, create if missing (§9.1).
+            return repository.find(args.sessionId()).orElseGet(() ->
+                repository.createWithId(session, args.sessionId()));
+        }
+        if (args.resume() || args.session() != null) {
+            return repository.find(args.session()).orElseThrow(() -> new IllegalStateException(
+                "Session not found: " + args.session()
                     + " (in-process registry only; persistence in Phase 4)"));
         }
         if (args.fork() != null) {
