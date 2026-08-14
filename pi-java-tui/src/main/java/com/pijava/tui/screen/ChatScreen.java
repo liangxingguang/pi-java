@@ -106,8 +106,8 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
             : thinkingDraft.length() > 0 ? "\uD83E\uDDD0 " + thinkingDraft : null;
         return text == null
             ? TamboUIAdapter.spacer(0)
-            : TamboUIAdapter.panel(TamboUIAdapter.markupText(text))
-                .cyan().rounded();
+            // Plain streaming text, matching the Codex-CLI message style.
+            : TamboUIAdapter.markupText(text);
     }
 
     /** Render the main chat area. */
