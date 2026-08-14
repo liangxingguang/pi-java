@@ -12,6 +12,7 @@ import com.pijava.tui.component.EditorComponent;
 import com.pijava.tui.component.ChatMessage;
 import com.pijava.tui.screen.ChatScreen;
 import com.pijava.tui.screen.SettingsScreen;
+import com.pijava.tui.theme.PiTheme;
 import com.pijava.tui.util.TuiEventDispatcher;
 
 import dev.tamboui.toolkit.app.ToolkitRunner;
@@ -101,6 +102,7 @@ class PiTuiAppInputTest {
             var dispatcher = new TuiEventDispatcher();
             var app = new PiTuiApp(mode, chatScreen,
                 new KeybindingsManager(), dispatcher);
+            runner.styleEngine(PiTheme.engineFor("dark"));
             mode.setObservers(
                 entry -> dispatcher.dispatch(() -> chatScreen.onEntry(entry)),
                 event -> dispatcher.dispatch(() -> chatScreen.onStreamEvent(event)));
@@ -233,6 +235,55 @@ class PiTuiAppInputTest {
             // no cursor, editor not at the bottom").
             assertThat(backend.hasLineContaining("> ")).isTrue();
             assertThat(backend.hasCursorCell()).isTrue();
+
+            runner.quit();
+            thread.join(5000);
+            assertThat(thread.isAlive()).isFalse();
+        } finally {
+            runner.close();
+        }
+    }
+
+    @Test
+    void submittedUserMessageRendersAsBubble() throws Exception {
+        var backend = new FakeBackend();
+        var runner = ToolkitRunner.create(
+            TuiConfig.builder().backend(backend).build());
+        try (var session = AgentSession.create(
+                ArgsParser.parse(new String[] {}))) {
+            var chatScreen = new ChatScreen();
+            var mode = new InteractiveMode(session);
+            var dispatcher = new TuiEventDispatcher();
+            var app = new PiTuiApp(mode, chatScreen,
+                new KeybindingsManager(), dispatcher);
+            mode.setObservers(
+                entry -> dispatcher.dispatch(() -> chatScreen.onEntry(entry)),
+                event -> dispatcher.dispatch(() -> chatScreen.onStreamEvent(event)));
+            app.start(runner);
+
+            var thread = Thread.startVirtualThread(() -> {
+                try {
+                    runner.run(app::root);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            Thread.sleep(300);
+            backend.feed("你好\r");
+            Thread.sleep(400);
+
+            // The optimistic user bubble must appear in the rendered frame,
+            // even though the model run may still be in flight or fail.
+            assertThat(chatScreen.messageCount()).isGreaterThan(0);
+            assertThat(chatScreen.lastMessage())
+                .isInstanceOf(ChatMessage.User.class);
+            assertThat(backend.hasLineContaining("你")).isTrue();
+            // The theme must actually style the bubble (regression for the
+            // white-box look when TCSS selectors didn't match).
+            assertThat(backend.hasBackgroundCells()).isTrue();
+            // A panel border must separate the bubble from plain text.
+            assertThat(backend.hasLineContaining("╭")).isTrue();
 
             runner.quit();
             thread.join(5000);

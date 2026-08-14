@@ -77,11 +77,11 @@ public final class PiTuiApp {
             return TamboUIAdapter.column(
                 chatScreen.render().fill(),
                 overlay.render(),
-                chatScreen.statusBar());
+                chatScreen.statusBar()).addClass("Screen");
         }
         return TamboUIAdapter.column(
             chatScreen.render().fill(),
-            chatScreen.statusBar());
+            chatScreen.statusBar()).addClass("Screen");
     }
 
     public boolean isRunning() {

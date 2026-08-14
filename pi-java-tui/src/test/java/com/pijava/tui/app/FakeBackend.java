@@ -24,6 +24,7 @@ final class FakeBackend implements Backend {
     private int drawCount;
     private final char[][] grid = new char[60][160];
     private final Set<Long> cursorCells = new HashSet<>();
+    private final Set<Long> backgroundCells = new HashSet<>();
 
     /** Queue raw terminal bytes (UTF-8) as if typed by the user. */
     void feed(String text) {
@@ -53,6 +54,9 @@ final class FakeBackend implements Backend {
                 if (cell.style().bg().map(c -> c.equals(Color.CYAN)).orElse(false)) {
                     cursorCells.add(((long) y << 32) | (x & 0xFFFFFFFFL));
                 }
+                if (cell.style().bg().isPresent()) {
+                    backgroundCells.add(((long) y << 32) | (x & 0xFFFFFFFFL));
+                }
             }
         }
     }
@@ -70,6 +74,11 @@ final class FakeBackend implements Backend {
     /** Whether any rendered cell carries the cyan cursor block. */
     synchronized boolean hasCursorCell() {
         return !cursorCells.isEmpty();
+    }
+
+    /** Whether any rendered cell has an explicit background (theme active). */
+    synchronized boolean hasBackgroundCells() {
+        return !backgroundCells.isEmpty();
     }
 
     @Override
