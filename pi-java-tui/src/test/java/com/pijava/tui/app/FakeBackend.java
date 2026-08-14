@@ -51,7 +51,8 @@ final class FakeBackend implements Backend {
                 Cell cell = diffResult.getCell(i);
                 var symbol = cell.symbol();
                 grid[y][x] = symbol == null || symbol.isEmpty() ? ' ' : symbol.charAt(0);
-                if (cell.style().bg().map(c -> c.equals(Color.CYAN)).orElse(false)) {
+                if (cell.style().bg().isPresent()
+                        && isBreathShade(cell.style().bg().get())) {
                     cursorCells.add(((long) y << 32) | (x & 0xFFFFFFFFL));
                 }
                 if (cell.style().bg().isPresent()) {
@@ -79,6 +80,15 @@ final class FakeBackend implements Backend {
     /** Whether any rendered cell has an explicit background (theme active). */
     synchronized boolean hasBackgroundCells() {
         return !backgroundCells.isEmpty();
+    }
+
+    private static boolean isBreathShade(Color color) {
+        for (var shade : com.pijava.tui.util.EditorElement.BREATH) {
+            if (shade.equals(color)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override

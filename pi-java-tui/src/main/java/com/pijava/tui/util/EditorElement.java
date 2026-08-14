@@ -24,6 +24,22 @@ import dev.tamboui.widgets.input.TextAreaState;
  */
 public final class EditorElement extends StyledElement<EditorElement> {
 
+    /** Cursor shade cycle (bright → dim → bright), stepped every 100ms. */
+    public static final Color[] BREATH = {
+        Color.hex("#00FFD7"),
+        Color.hex("#00D9B8"),
+        Color.hex("#00B39A"),
+        Color.hex("#008D7C"),
+        Color.hex("#00665E"),
+        Color.hex("#00413C"),
+        Color.hex("#00665E"),
+        Color.hex("#008D7C"),
+        Color.hex("#00B39A"),
+        Color.hex("#00D9B8"),
+    };
+
+    private static final int BREATH_STEP_MS = 100;
+
     private final TextAreaState state;
     private String placeholder = "";
 
@@ -51,12 +67,19 @@ public final class EditorElement extends StyledElement<EditorElement> {
     protected void renderContent(Frame frame, Rect area, RenderContext context) {
         TextArea widget = TextArea.builder()
             .style(context.currentStyle())
-            // A solid block is visible on both themes (reverse video can be
-            // washed out by some terminal palettes).
-            .cursorStyle(Style.EMPTY.bg(Color.CYAN).fg(Color.BLACK))
+            // A solid breathing block: the 50ms tick redraws this element, so
+            // stepping the shade with wall-clock time gives a smooth
+            // brighten/dim pulse like Codex's terminal cursor.
+            .cursorStyle(Style.EMPTY.bg(breathShade()).fg(Color.BLACK))
             .placeholder(placeholder)
             .placeholderStyle(Style.EMPTY.dim())
             .build();
         widget.renderWithCursor(area, frame.buffer(), state, frame);
+    }
+
+    private static Color breathShade() {
+        long now = System.nanoTime() / 1_000_000L;
+        int index = (int) ((now / BREATH_STEP_MS) % BREATH.length);
+        return BREATH[index];
     }
 }
