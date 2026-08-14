@@ -20,19 +20,17 @@ public final class MessageBubble {
     public static Element of(ChatMessage msg) {
         return switch (msg) {
             case ChatMessage.User(var text) ->
-                TamboUIAdapter.panel(TamboUIAdapter.markupText(text))
-                    .cyan().rounded().addClass("MessageBubble", "user");
+                // Codex-CLI style: plain text, no bubble/background.
+                TamboUIAdapter.markupText(text);
             case ChatMessage.Assistant(var blocks) ->
                 TamboUIAdapter.column(renderBlocks(blocks))
                     .addClass("MessageBubble", "assistant");
             case ChatMessage.ToolCall(var name, var arguments) ->
                 new ToolCallCard(name, arguments, "running").render();
             case ChatMessage.ToolResult(var output) ->
-                TamboUIAdapter.panel(TamboUIAdapter.markupText(truncate(output, 500)))
-                    .green().rounded().addClass("MessageBubble", "tool");
+                TamboUIAdapter.markupText(truncate(output, 500));
             case ChatMessage.Error(var message) ->
-                TamboUIAdapter.panel(TamboUIAdapter.markupText(
-                    "[red]" + message + "[/]")).red().rounded();
+                TamboUIAdapter.markupText("[red]" + message + "[/]");
             case ChatMessage.System(var text) ->
                 // markupText keeps multi-line output (slash command help,
                 // changelogs, hotkeys) as separate lines; plain text() renders

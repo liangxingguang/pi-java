@@ -6,16 +6,6 @@
     padding: 1 2;
 }
 
-.MessageBubble.user {
-    border-color: #1e66f5;
-    background: #ccd0da;
-}
-
-.MessageBubble.assistant {
-    border-color: #40a02b;
-    background: #e6e9ef;
-}
-
 .ToolCallCard {
     border-color: #df8e1d;
 }
