@@ -34,7 +34,10 @@ public final class MessageBubble {
                 TamboUIAdapter.panel(TamboUIAdapter.markupText(
                     "[red]" + message + "[/]")).red().rounded();
             case ChatMessage.System(var text) ->
-                TamboUIAdapter.text(text).dim();
+                // markupText keeps multi-line output (slash command help,
+                // changelogs, hotkeys) as separate lines; plain text() renders
+                // a single line and flattens every newline.
+                TamboUIAdapter.markupText(text).dim();
         };
     }
 

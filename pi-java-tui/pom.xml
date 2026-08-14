@@ -37,6 +37,10 @@
         </dependency>
         <dependency>
             <groupId>dev.tamboui</groupId>
+            <artifactId>tamboui-jline3-backend</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.tamboui</groupId>
             <artifactId>tamboui-css</artifactId>
         </dependency>
         <dependency>

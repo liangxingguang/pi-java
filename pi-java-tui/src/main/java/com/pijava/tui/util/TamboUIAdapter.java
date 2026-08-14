@@ -1,9 +1,11 @@
 package com.pijava.tui.util;
 
 import java.util.Collection;
+import java.io.IOException;
 
 import com.pijava.coding.agent.core.KeybindingsManager;
 
+import dev.tamboui.terminal.Backend;
 import dev.tamboui.layout.Constraint;
 import dev.tamboui.style.Color;
 import dev.tamboui.toolkit.Toolkit;
@@ -37,12 +39,30 @@ public final class TamboUIAdapter {
     /** Create a full-screen TUI runner (Panama backend via ServiceLoader). */
     public static ToolkitRunner createRunner(PostRenderProcessor extraProcessor) throws Exception {
         return ToolkitRunner.create(TuiConfig.builder()
-            .backend(new NoMode2027Backend())
+            .backend(createBackend())
             .alternateScreen(true)
             .hideCursor(true)
             .bracketedPaste(true)
             .postRenderProcessor(extraProcessor)
             .build());
+    }
+
+    /**
+     * Windows console input records report arrow keys with {@code uChar == 0},
+     * which the Panama backend discards; JLine reads the console correctly, so
+     * Windows uses it. Other platforms keep the native Panama backend. Both
+     * variants skip the Mode 2027 handshake.
+     */
+    private static Backend createBackend() throws IOException {
+        if (isWindows()) {
+            return new NoMode2027JLineBackend();
+        }
+        return new NoMode2027Backend();
+    }
+
+    private static boolean isWindows() {
+        var os = System.getProperty("os.name", "");
+        return os.toLowerCase(java.util.Locale.ROOT).contains("win");
     }
 
     // ── Element factories ────────────────────────────────────
