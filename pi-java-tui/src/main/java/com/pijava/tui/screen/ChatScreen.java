@@ -176,12 +176,12 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     }
 
     /** The last committed message (test hook). */
-    ChatMessage lastMessage() {
+    public ChatMessage lastMessage() {
         return chatPanel.last();
     }
 
     /** The committed message count (test hook). */
-    int messageCount() {
+    public int messageCount() {
         return chatPanel.size();
     }
 

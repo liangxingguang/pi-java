@@ -206,6 +206,11 @@ public final class PiTuiApp {
         this.overlay = screenOverlay;
     }
 
+    /** The current modal overlay, or null (test hook). */
+    ScreenOverlay currentOverlay() {
+        return overlay;
+    }
+
     private void switchSession(AgentSession newSession) {
         this.session = newSession;
         mode.switchSession(newSession);
@@ -247,7 +252,13 @@ public final class PiTuiApp {
             event -> dispatcher.dispatch(() -> chatScreen.onStreamEvent(event)));
 
         try {
-            var runner = TamboUIAdapter.createRunner();
+            // TamboUI auto-generates ids and auto-focuses the TextArea at first
+            // render, which would swallow every key (Enter becomes a newline)
+            // before our global handler runs. FocusReset keeps the app as the
+            // sole owner of all keys.
+            var focusReset = new FocusReset();
+            var runner = TamboUIAdapter.createRunner(focusReset);
+            focusReset.bind(runner.focusManager());
             runner.styleEngine(PiTheme.engineFor(themeFrom(args, session)));
             app.start(runner);
             app.submitInitial(args);
@@ -276,4 +287,5 @@ public final class PiTuiApp {
         var theme = session.services().settings().effective().theme;
         return theme == null ? "dark" : theme;
     }
+
 }

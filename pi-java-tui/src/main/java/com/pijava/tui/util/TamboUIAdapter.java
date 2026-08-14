@@ -15,6 +15,7 @@ import dev.tamboui.toolkit.elements.Row;
 import dev.tamboui.toolkit.elements.Spacer;
 import dev.tamboui.toolkit.elements.TextElement;
 import dev.tamboui.toolkit.elements.TextAreaElement;
+import dev.tamboui.tui.PostRenderProcessor;
 import dev.tamboui.tui.TuiConfig;
 import dev.tamboui.tui.event.KeyCode;
 import dev.tamboui.tui.event.KeyEvent;
@@ -34,11 +35,12 @@ public final class TamboUIAdapter {
     // ── Runner / config ──────────────────────────────────────
 
     /** Create a full-screen TUI runner (Panama backend via ServiceLoader). */
-    public static ToolkitRunner createRunner() throws Exception {
+    public static ToolkitRunner createRunner(PostRenderProcessor extraProcessor) throws Exception {
         return ToolkitRunner.create(TuiConfig.builder()
             .alternateScreen(true)
             .hideCursor(true)
             .bracketedPaste(true)
+            .postRenderProcessor(extraProcessor)
             .build());
     }
 
