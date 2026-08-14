@@ -282,8 +282,8 @@ class PiTuiAppInputTest {
             // The theme must actually style the bubble (regression for the
             // white-box look when TCSS selectors didn't match).
             assertThat(backend.hasBackgroundCells()).isTrue();
-            // A panel border must separate the bubble from plain text.
-            assertThat(backend.hasLineContaining("╭")).isTrue();
+            // No white border around bubbles; the themed background is enough.
+            assertThat(backend.hasLineContaining("╭")).isFalse();
 
             runner.quit();
             thread.join(5000);
@@ -297,7 +297,8 @@ class PiTuiAppInputTest {
     void pageUpScrollsChatHistoryWithoutCrashing() throws Exception {
         var backend = new FakeBackend();
         var runner = ToolkitRunner.create(
-            TuiConfig.builder().backend(backend).build());
+            TuiConfig.builder().backend(backend)
+                .tickRate(Duration.ofMillis(50)).build());
         try (var session = AgentSession.create(
                 ArgsParser.parse(new String[] {}))) {
             var chatScreen = new ChatScreen();
@@ -318,18 +319,21 @@ class PiTuiAppInputTest {
                 }
             });
 
-            Thread.sleep(300);
+            Thread.sleep(200);
             // Seed enough history to make the list scrollable.
-            for (int i = 0; i < 20; i++) {
+            for (int i = 0; i < 40; i++) {
                 chatScreen.appendSystemText("message " + i);
             }
-            var drawsBefore = backend.drawCount();
+            Thread.sleep(300);
+            // Pinned at the bottom: the oldest message is clipped away.
+            assertThat(backend.hasLineContaining("message 0")).isFalse();
 
             // PageUp must reach the scrollable list, not the editor.
             backend.feed("\u001b[5~");
             Thread.sleep(300);
 
-            assertThat(backend.drawCount()).isGreaterThan(drawsBefore);
+            // Scrolling up reveals the clipped history.
+            assertThat(backend.hasLineContaining("message 0")).isTrue();
             runner.quit();
             thread.join(5000);
             assertThat(thread.isAlive()).isFalse();

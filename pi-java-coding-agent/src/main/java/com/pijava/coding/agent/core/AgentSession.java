@@ -2,6 +2,7 @@ package com.pijava.coding.agent.core;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -21,7 +22,10 @@ import com.pijava.agent.harness.ToolExecution;
 import com.pijava.agent.harness.WatchHandle;
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ToolRegistry;
+import com.pijava.agent.tool.ToolContext;
 import com.pijava.agent.tool.ToolSetFactory;
+import com.pijava.agent.tool.DefaultFileSystem;
+import com.pijava.agent.tool.DefaultShellExecutor;
 import com.pijava.ai.catalog.BuiltinCatalog;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
@@ -108,6 +112,11 @@ public final class AgentSession implements AutoCloseable {
             .systemPrompt(systemPromptFor(args))
             .activeTools(activeTools(args, toolList))
             .toolRegistry(tools)
+            .toolContext(new ToolContext(
+                System.getProperty("user.dir"),
+                Map.of(),
+                new DefaultShellExecutor(),
+                new DefaultFileSystem()))
             .driveMode(new DriveMode.Manual())
             .steeringMode(queueMode(effective.steeringMode))
             .followUpMode(queueMode(effective.followUpMode))

@@ -32,6 +32,12 @@ public final class StreamPartialBuilder {
     private String toolCallName = "";
 
     private int nextContentIndex;
+    // Each stream owns its block index so interleaved text/thinking/tool
+    // deltas never overwrite each other's block (they used to target
+    // blocks.size()-1, which corrupted the snapshot when streams alternated).
+    private int textBlockIndex = -1;
+    private int thinkingBlockIndex = -1;
+    private int toolBlockIndex = -1;
 
     public StreamPartialBuilder(String messageId) {
         this.messageId = messageId;
@@ -74,6 +80,7 @@ public final class StreamPartialBuilder {
     /** Emit text-block-start. Adds a placeholder {@link ContentBlock.TextContent}. */
     public StreamEvent.TextStart emitTextStart() {
         textBuf.setLength(0);
+        textBlockIndex = blocks.size();
         blocks.add(new ContentBlock.TextContent(""));
         int idx = nextContentIndex++;
         return new StreamEvent.TextStart(idx, snapshot());
@@ -82,15 +89,20 @@ public final class StreamPartialBuilder {
     /** Emit a text delta. Updates the current text block in-place. */
     public StreamEvent.TextDelta emitTextDelta(String delta) {
         textBuf.append(delta);
-        // Replace the last block with accumulated text
-        int idx = blocks.size() - 1;
+        if (textBlockIndex < 0) {
+            // A text delta without a preceding start: create the block lazily.
+            textBlockIndex = blocks.size();
+            blocks.add(new ContentBlock.TextContent(""));
+            nextContentIndex++;
+        }
+        int idx = textBlockIndex;
         blocks.set(idx, new ContentBlock.TextContent(textBuf.toString()));
         return new StreamEvent.TextDelta(idx, delta, snapshot());
     }
 
     /** Emit text-block-end. The text block is already finalized. */
     public StreamEvent.TextEnd emitTextEnd() {
-        int idx = blocks.size() - 1;
+        int idx = Math.max(0, textBlockIndex);
         return new StreamEvent.TextEnd(idx, textBuf.toString(), snapshot());
     }
 
@@ -101,6 +113,7 @@ public final class StreamPartialBuilder {
     /** Emit thinking-block-start. Adds a placeholder {@link ContentBlock.TextContent}. */
     public StreamEvent.ThinkingStart emitThinkingStart() {
         thinkingBuf.setLength(0);
+        thinkingBlockIndex = blocks.size();
         blocks.add(new ContentBlock.TextContent(""));
         int idx = nextContentIndex++;
         return new StreamEvent.ThinkingStart(idx, snapshot());
@@ -109,14 +122,19 @@ public final class StreamPartialBuilder {
     /** Emit a thinking delta. Updates the current thinking block in-place. */
     public StreamEvent.ThinkingDelta emitThinkingDelta(String delta) {
         thinkingBuf.append(delta);
-        int idx = blocks.size() - 1;
+        if (thinkingBlockIndex < 0) {
+            thinkingBlockIndex = blocks.size();
+            blocks.add(new ContentBlock.TextContent(""));
+            nextContentIndex++;
+        }
+        int idx = thinkingBlockIndex;
         blocks.set(idx, new ContentBlock.TextContent(thinkingBuf.toString()));
         return new StreamEvent.ThinkingDelta(idx, delta, snapshot());
     }
 
     /** Emit thinking-block-end. */
     public StreamEvent.ThinkingEnd emitThinkingEnd() {
-        int idx = blocks.size() - 1;
+        int idx = Math.max(0, thinkingBlockIndex);
         return new StreamEvent.ThinkingEnd(idx, thinkingBuf.toString(), snapshot());
     }
 
@@ -129,6 +147,7 @@ public final class StreamPartialBuilder {
         toolArgBuf.setLength(0);
         toolCallId = "";
         toolCallName = "";
+        toolBlockIndex = blocks.size();
         blocks.add(new ContentBlock.ToolUseContent("", "", Map.of()));
         int idx = nextContentIndex++;
         return new StreamEvent.ToolCallStart(idx, snapshot());
@@ -138,7 +157,12 @@ public final class StreamPartialBuilder {
     public StreamEvent.ToolCallDelta emitToolCallDelta(String id, String jsonDelta) {
         this.toolCallId = id;
         toolArgBuf.append(jsonDelta);
-        int idx = blocks.size() - 1;
+        if (toolBlockIndex < 0) {
+            toolBlockIndex = blocks.size();
+            blocks.add(new ContentBlock.ToolUseContent("", "", Map.of()));
+            nextContentIndex++;
+        }
+        int idx = toolBlockIndex;
         parseAndSetToolBlock(idx);
         return new StreamEvent.ToolCallDelta(idx, id, jsonDelta, snapshot());
     }
@@ -147,7 +171,7 @@ public final class StreamPartialBuilder {
     public StreamEvent.ToolCallEnd emitToolCallEnd(String id, String name) {
         this.toolCallId = id;
         this.toolCallName = name;
-        int idx = blocks.size() - 1;
+        int idx = Math.max(0, toolBlockIndex);
         Map<String, Object> args = parseArgs();
         blocks.set(idx, new ContentBlock.ToolUseContent(id, name, args));
         return new StreamEvent.ToolCallEnd(idx, id, name, args, snapshot());
