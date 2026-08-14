@@ -37,6 +37,7 @@ public final class TamboUIAdapter {
     /** Create a full-screen TUI runner (Panama backend via ServiceLoader). */
     public static ToolkitRunner createRunner(PostRenderProcessor extraProcessor) throws Exception {
         return ToolkitRunner.create(TuiConfig.builder()
+            .backend(new NoMode2027Backend())
             .alternateScreen(true)
             .hideCursor(true)
             .bracketedPaste(true)
