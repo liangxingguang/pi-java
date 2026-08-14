@@ -19,12 +19,21 @@ class SlashCommandTest {
         var registry = CommandRegistry.withBuiltins();
         var names = registry.names();
 
-        assertThat(names).hasSize(22);
+        assertThat(names).hasSize(23);
         assertThat(names).contains(
-            "settings", "model", "scoped-models", "export", "import", "share",
+            "help", "settings", "model", "scoped-models", "export", "import", "share",
             "copy", "name", "session", "changelog", "hotkeys", "fork", "clone",
             "tree", "trust", "login", "logout", "new", "compact", "resume",
             "reload", "quit");
+    }
+
+    @Test
+    void helpListsCommands() {
+        var registry = CommandRegistry.withBuiltins();
+        var result = registry.dispatch("/help", SlashContext.of(null))
+            .toCompletableFuture().join();
+
+        assertThat(result).contains("Slash commands:", "/model", "/settings");
     }
 
     @Test

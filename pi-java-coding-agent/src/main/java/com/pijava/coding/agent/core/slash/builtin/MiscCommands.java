@@ -29,6 +29,10 @@ public final class MiscCommands {
 
     /** Register the remaining 10 commands. */
     public static void registerAll(CommandRegistry registry) {
+        registry.register(simple("help", "Show slash commands and shortcuts", "",
+            (args, ctx) -> ctx.keybindings() == null
+                ? registry.helpText()
+                : registry.helpText() + "\n\n" + hotkeys(ctx)));
         registry.register(placeholder("export",
             "Export session (HTML/JSONL)", "[path]",
             "HTML export is not implemented yet (Phase 6)."));

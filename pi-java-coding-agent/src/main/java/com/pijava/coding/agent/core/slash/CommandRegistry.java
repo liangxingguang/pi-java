@@ -51,6 +51,25 @@ public final class CommandRegistry {
     }
 
     /**
+     * One-line help listing every registered command.
+     * Used by the {@code /help} command (pi has no {@code /help}; this is a
+     * pi-java usability addition — full CLI help stays on {@code --help}).
+     */
+    public String helpText() {
+        var builder = new StringBuilder("Slash commands:\n");
+        for (var name : names()) {
+            var command = commands.get(name);
+            builder.append("  /").append(name);
+            if (command.argumentHint() != null && !command.argumentHint().isEmpty()) {
+                builder.append(' ').append(command.argumentHint());
+            }
+            builder.append("  — ").append(command.description()).append('\n');
+        }
+        builder.append("\nFull CLI help: pi-java --help");
+        return builder.toString();
+    }
+
+    /**
      * Match and execute a slash command.
      *
      * @param input   full input line
