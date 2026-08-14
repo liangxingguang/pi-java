@@ -25,7 +25,6 @@ import com.pijava.agent.tool.ToolSetFactory;
 import com.pijava.ai.catalog.BuiltinCatalog;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.model.DefaultModelResolver;
-import com.pijava.ai.model.ModelId;
 import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.coding.agent.cli.Args;
@@ -103,8 +102,7 @@ public final class AgentSession implements AutoCloseable {
         var harness = AgentHarness.create(HarnessConfig.builder()
             .streamFn(DefaultProviders.streamFnFor(
                 args, effective.defaultProvider, providers))
-            .model(resolveModel(
-                models, modelPattern, providerName, args.model() != null))
+            .model(models.resolve(modelPattern, providerName))
             .thinkingLevel(thinkingLevelFor(args))
             .systemPrompt(systemPromptFor(args))
             .activeTools(activeTools(args, toolList))
@@ -414,26 +412,5 @@ public final class AgentSession implements AutoCloseable {
             return new QueueMode.All();
         }
         return new QueueMode.OneAtATime();
-    }
-
-    /**
-     * Resolve the model pattern. An explicit CLI {@code --model} must resolve
-     * (unknown models surface to the user); a settings-configured default that
-     * is not in the builtin catalog falls back to the configured provider's
-     * first model so the app still starts.
-     */
-    private static ModelId<?> resolveModel(
-            DefaultModelResolver models,
-            String pattern,
-            String providerName,
-            boolean explicit) {
-        try {
-            return models.resolve(pattern);
-        } catch (IllegalStateException e) {
-            if (explicit) {
-                throw e;
-            }
-            return models.resolve(providerName);
-        }
     }
 }

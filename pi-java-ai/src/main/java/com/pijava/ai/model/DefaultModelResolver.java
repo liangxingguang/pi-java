@@ -56,8 +56,15 @@ public final class DefaultModelResolver implements ModelResolver {
      * @throws IllegalStateException if the pattern cannot be resolved
      */
     public ModelId<?> resolve(String pattern) {
+        return resolve(pattern, null);
+    }
+
+    public ModelId<?> resolve(String pattern, String defaultProvider) {
         if (pattern == null || pattern.isBlank()) {
-            return resolve(Set.of(ModelCapability.TEXT), Optional.of("google"));
+            var preferred = Optional.ofNullable(defaultProvider)
+                .filter(p -> !p.isBlank())
+                .or(() -> Optional.of("google"));
+            return resolve(Set.of(ModelCapability.TEXT), preferred);
         }
         var trimmed = pattern.trim();
         var colon = trimmed.lastIndexOf(':');
@@ -98,7 +105,19 @@ public final class DefaultModelResolver implements ModelResolver {
             }
         }
         if (matches.isEmpty()) {
-            throw new IllegalStateException("Unknown model pattern: " + pattern);
+            // Not in the builtin catalog: accept an arbitrary model ID so users
+            // can use any model their provider's API supports. The catalog only
+            // provides listing/pricing/context metadata for known models.
+            var effectiveProvider = providerRef != null
+                ? providerRef
+                : (defaultProvider != null && !defaultProvider.isBlank()
+                    ? defaultProvider : "google");
+            // Aligned with pi's resolveCliModel: warn that we're using a
+            // custom (uncatalogued) model id rather than a known entry.
+            System.err.println("Model \"" + nameRef
+                + "\" not found for provider \"" + effectiveProvider
+                + "\". Using custom model id.");
+            return ModelId.of(effectiveProvider, nameRef);
         }
         return matches.getFirst().id();
     }

@@ -94,13 +94,25 @@ class ModelResolverTest {
     }
 
     @Test
-    void resolvePatternThrowsOnUnknownModel() {
+    void resolvePatternAcceptsUnknownModel() {
         var catalog = catalog(List.of(
                 info("anthropic", "claude-sonnet", Set.of(ModelCapability.TEXT))));
         var resolver = new DefaultModelResolver(catalog);
 
-        assertThatThrownBy(() -> resolver.resolve("anthropic/does-not-exist"))
-                .isInstanceOf(IllegalStateException.class);
+        var resolved = resolver.resolve("anthropic/does-not-exist", "anthropic");
+        assertThat(resolved.provider()).isEqualTo("anthropic");
+        assertThat(resolved.modelName()).isEqualTo("does-not-exist");
+    }
+
+    @Test
+    void resolveBareUnknownModelUsesDefaultProvider() {
+        var catalog = catalog(List.of(
+                info("deepseek", "deepseek-chat", Set.of(ModelCapability.TEXT))));
+        var resolver = new DefaultModelResolver(catalog);
+
+        var resolved = resolver.resolve("deepseek-v4-flash", "deepseek");
+        assertThat(resolved.provider()).isEqualTo("deepseek");
+        assertThat(resolved.modelName()).isEqualTo("deepseek-v4-flash");
     }
 
     @Test
