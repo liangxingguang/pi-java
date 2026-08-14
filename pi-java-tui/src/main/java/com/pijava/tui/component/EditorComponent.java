@@ -5,6 +5,7 @@ import java.util.function.Consumer;
 import com.pijava.tui.util.TamboUIAdapter;
 
 import dev.tamboui.toolkit.elements.TextAreaElement;
+import dev.tamboui.tui.event.KeyCode;
 import dev.tamboui.tui.event.KeyEvent;
 import dev.tamboui.widgets.input.TextAreaState;
 
@@ -30,9 +31,45 @@ public final class EditorComponent {
         return element;
     }
 
-    /** Forward a key event to the editor state. */
+    /**
+     * Handle a key event by driving the {@link TextAreaState} directly.
+     *
+     * <p>The app shell owns all keys (the editor element has no id, so the
+     * TamboUI focus system never routes keys to it); typing and navigation
+     * are applied here. Enter/Shift+Enter and app.* shortcuts are handled by
+     * the app shell before this method is reached, which also avoids the
+     * {@code TextAreaElement} swallowing Enter as a newline.</p>
+     */
     public void onKeyEvent(KeyEvent event) {
-        element.handleKeyEvent(event, false);
+        if (event.hasCtrl() || event.hasAlt()) {
+            return; // app shortcuts / paste handled elsewhere
+        }
+        switch (event.code()) {
+            case KeyCode.CHAR -> {
+                var text = event.string();
+                if (text != null && !text.isBlank()) {
+                    state.insert(text);
+                }
+            }
+            case KeyCode.BACKSPACE -> state.deleteBackward();
+            case KeyCode.DELETE -> state.deleteForward();
+            case KeyCode.LEFT -> state.moveCursorLeft();
+            case KeyCode.RIGHT -> state.moveCursorRight();
+            case KeyCode.UP -> state.moveCursorUp();
+            case KeyCode.DOWN -> state.moveCursorDown();
+            case KeyCode.HOME -> state.moveCursorToLineStart();
+            case KeyCode.END -> state.moveCursorToLineEnd();
+            case KeyCode.PAGE_UP -> state.scrollUp(1);
+            case KeyCode.PAGE_DOWN -> state.scrollDown(1, state.lineCount());
+            default -> { }
+        }
+    }
+
+    /** Insert pasted text at the cursor (bracketed paste support). */
+    public void insertText(String text) {
+        if (text != null && !text.isEmpty()) {
+            state.insert(text);
+        }
     }
 
     /** Register the submit callback (invoked by the app on plain Enter). */

@@ -28,12 +28,12 @@ public final class PiTheme {
     public static StyleEngine engineFor(String theme) {
         var engine = StyleEngine.create();
         try {
-            engine.loadStylesheet(DARK);
-            engine.loadStylesheet(LIGHT);
+            engine.loadStylesheet("dark", DARK);
+            engine.loadStylesheet("light", LIGHT);
         } catch (IOException e) {
             throw new IllegalStateException("Cannot load built-in themes", e);
         }
-        engine.setActiveStylesheet("light".equalsIgnoreCase(theme) ? LIGHT : DARK);
+        engine.setActiveStylesheet("light".equalsIgnoreCase(theme) ? "light" : "dark");
         return engine;
     }
 

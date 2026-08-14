@@ -38,6 +38,7 @@ public final class TamboUIAdapter {
         return ToolkitRunner.create(TuiConfig.builder()
             .alternateScreen(true)
             .hideCursor(true)
+            .bracketedPaste(true)
             .build());
     }
 
@@ -123,9 +124,17 @@ public final class TamboUIAdapter {
             case KeyCode.PAGE_DOWN -> "pagedown";
             case KeyCode.CHAR -> {
                 var text = event.string();
-                yield text == null || text.isBlank()
-                    ? "unknown"
-                    : String.valueOf(Character.toLowerCase(text.charAt(0)));
+                if (text == null || text.isBlank()) {
+                    yield "unknown";
+                }
+                // Terminals often send Ctrl+letter as a control code (Ctrl+C = 3,
+                // Ctrl+D = 4, …). Map 1–26 back to the letter so the app.*
+                // bindings resolve.
+                var codePoint = event.codePoint();
+                if (event.hasCtrl() && codePoint >= 1 && codePoint <= 26) {
+                    yield String.valueOf((char) ('a' + codePoint - 1));
+                }
+                yield String.valueOf(Character.toLowerCase(text.charAt(0)));
             }
             default -> "unknown";
         };
@@ -135,7 +144,16 @@ public final class TamboUIAdapter {
 
     /** Whether the event is a plain Enter (submit). */
     public static boolean isPlainEnter(KeyEvent event) {
-        return event.isKey(KeyCode.ENTER) && !event.hasAlt() && !event.hasShift();
+        if (event.hasAlt() || event.hasShift()) {
+            return false;
+        }
+        if (event.isKey(KeyCode.ENTER)) {
+            return true;
+        }
+        // Some terminals/backends report Enter as CHAR('\r') / CHAR('\n')
+        // instead of KeyCode.ENTER (e.g. via ConPTY). Treat those as Enter.
+        return event.code() == KeyCode.CHAR
+            && ("\r".equals(event.string()) || "\n".equals(event.string()));
     }
 
     /** Whether the event is Shift+Enter (newline in the editor). */

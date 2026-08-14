@@ -22,6 +22,7 @@ import dev.tamboui.toolkit.element.Element;
 import dev.tamboui.toolkit.event.EventResult;
 import dev.tamboui.tui.event.Event;
 import dev.tamboui.tui.event.KeyEvent;
+import dev.tamboui.tui.event.PasteEvent;
 
 /**
  * TUI application shell (Phase 3 design §7.1).
@@ -49,6 +50,7 @@ public final class PiTuiApp {
         this.keys = keys;
         this.dispatcher = dispatcher;
         this.session = mode.session();
+        chatScreen.onSubmit(mode::submit);
     }
 
     /** Attach to a runner: register the global key handler + snapshot feed. */
@@ -87,9 +89,27 @@ public final class PiTuiApp {
 
     private EventResult onEvent(Event event) {
         if (event instanceof KeyEvent keyEvent) {
+            debugLog("KEY code=" + keyEvent.code() + " str=" + keyEvent.string());
             return onKeyEvent(keyEvent);
         }
+        if (event instanceof PasteEvent pasteEvent) {
+            chatScreen.insertText(pasteEvent.text());
+            return EventResult.HANDLED;
+        }
         return EventResult.UNHANDLED;
+    }
+
+    private static void debugLog(String msg) {
+        try {
+            java.nio.file.Files.writeString(
+                java.nio.file.Path.of(
+                    System.getProperty("user.home"), "tui-debug.log"),
+                msg + System.lineSeparator(),
+                java.nio.file.StandardOpenOption.CREATE,
+                java.nio.file.StandardOpenOption.APPEND);
+        } catch (Exception ignored) {
+            // best-effort diagnostic logging
+        }
     }
 
     private EventResult onKeyEvent(KeyEvent event) {
@@ -126,8 +146,8 @@ public final class PiTuiApp {
         var slashContext = new SlashContext(
             session, keys, this::exit, this::switchSession);
         var command = mode.dispatch(text, slashContext);
-        chatScreen.clearInput();
         if (command != null) {
+            chatScreen.clearInput();
             command.thenAccept(result ->
                 dispatcher.dispatch(() -> handleCommandResult(result)));
         } else {
@@ -209,6 +229,11 @@ public final class PiTuiApp {
      * and run the TUI loop (Phase 3 design §11.1).
      */
     public static int runInteractive(Args args) {
+        if (System.console() == null) {
+            System.err.println("error: interactive mode requires a real terminal "
+                + "(run from Windows Terminal / cmd / PowerShell)");
+            return 1;
+        }
         var session = AgentSession.create(args);
         var chatScreen = new ChatScreen();
         var mode = new InteractiveMode(session);
@@ -229,7 +254,17 @@ public final class PiTuiApp {
             runner.run(app::root);
             return 0;
         } catch (Exception e) {
+            // The backend may have entered the alternate screen / hidden the
+            // cursor before failing; restore the main screen so this message
+            // is visible.
+            try {
+                System.out.print("\033[?1049l\033[?25h\033[0m");
+                System.out.flush();
+            } catch (Throwable ignored) {
+                // best-effort restore
+            }
             System.err.println("TUI error: " + e.getMessage());
+            e.printStackTrace(System.err);
             return 1;
         }
     }

@@ -3,6 +3,7 @@ package com.pijava.tui.screen;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
+import java.util.function.Consumer;
 
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.harness.SessionSnapshot;
@@ -149,9 +150,19 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
         editor.submit();
     }
 
+    /** Register the plain-Enter submit callback (agent prompt submission). */
+    public void onSubmit(Consumer<String> handler) {
+        editor.onSubmit(handler);
+    }
+
     /** Insert a newline (Shift+Enter). */
     public void insertNewline() {
         editor.insertNewline();
+    }
+
+    /** Insert pasted text into the editor. */
+    public void insertText(String text) {
+        editor.insertText(text);
     }
 
     /** Append a system/info bubble (slash command results). */
