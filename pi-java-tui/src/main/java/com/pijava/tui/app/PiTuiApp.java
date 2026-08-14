@@ -131,10 +131,12 @@ public final class PiTuiApp {
         }
         var keyId = keys.resolve(TamboUIAdapter.toStroke(event));
         if (keyId != null) {
+            debugLog("  -> action " + keyId);
             handleAction(keyId);
             return EventResult.HANDLED;
         }
         chatScreen.onKeyEvent(event);
+        debugLog("  editorText=" + chatScreen.inputText());
         return EventResult.HANDLED;
     }
 
