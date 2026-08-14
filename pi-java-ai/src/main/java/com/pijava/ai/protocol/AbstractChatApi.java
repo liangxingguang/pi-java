@@ -50,7 +50,15 @@ public abstract class AbstractChatApi implements ChatApi {
             @Override public void onError(Throwable t) {
                 queue.offer(new StreamEvent.StreamError("error", t, AssistantMessage.empty()));
             }
-            @Override public void onComplete() {}
+            @Override public void onComplete() {
+                // Safety net: the SubmissionPublisher can drop the adapter's
+                // final StreamDone (submit() immediately followed by close()),
+                // which would leave QueueStreamIterator.hasNext() blocking
+                // forever on an empty queue. Emit a synthetic done so the
+                // iterator always terminates.
+                queue.offer(new StreamEvent.StreamDone(
+                    "stop", null, AssistantMessage.empty()));
+            }
         });
         return new QueueStreamIterator(queue);
     }
