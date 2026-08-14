@@ -1,13 +1,17 @@
 package com.pijava.tui.app;
 
 import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
+import dev.tamboui.buffer.Cell;
 import dev.tamboui.buffer.DiffResult;
 import dev.tamboui.layout.Position;
 import dev.tamboui.layout.Size;
+import dev.tamboui.style.Color;
 import dev.tamboui.terminal.Backend;
 
 /**
@@ -18,6 +22,8 @@ final class FakeBackend implements Backend {
 
     private final BlockingQueue<Integer> input = new LinkedBlockingQueue<>();
     private int drawCount;
+    private final char[][] grid = new char[60][160];
+    private final Set<Long> cursorCells = new HashSet<>();
 
     /** Queue raw terminal bytes (UTF-8) as if typed by the user. */
     void feed(String text) {
@@ -35,7 +41,35 @@ final class FakeBackend implements Backend {
     public void draw(DiffResult diffResult) throws IOException {
         synchronized (this) {
             drawCount++;
+            for (int i = 0; i < diffResult.size(); i++) {
+                int x = diffResult.getX(i);
+                int y = diffResult.getY(i);
+                if (x < 0 || x >= 160 || y < 0 || y >= 60) {
+                    continue;
+                }
+                Cell cell = diffResult.getCell(i);
+                var symbol = cell.symbol();
+                grid[y][x] = symbol == null || symbol.isEmpty() ? ' ' : symbol.charAt(0);
+                if (cell.style().bg().map(c -> c.equals(Color.CYAN)).orElse(false)) {
+                    cursorCells.add(((long) y << 32) | (x & 0xFFFFFFFFL));
+                }
+            }
         }
+    }
+
+    /** Whether any rendered line contains the given text (accumulated). */
+    synchronized boolean hasLineContaining(String text) {
+        for (char[] row : grid) {
+            if (new String(row).contains(text)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Whether any rendered cell carries the cyan cursor block. */
+    synchronized boolean hasCursorCell() {
+        return !cursorCells.isEmpty();
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.pijava.tui.util;
 
 import dev.tamboui.layout.Rect;
+import dev.tamboui.style.Color;
 import dev.tamboui.style.Style;
 import dev.tamboui.terminal.Frame;
 import dev.tamboui.text.CharWidth;
@@ -50,7 +51,9 @@ public final class EditorElement extends StyledElement<EditorElement> {
     protected void renderContent(Frame frame, Rect area, RenderContext context) {
         TextArea widget = TextArea.builder()
             .style(context.currentStyle())
-            .cursorStyle(Style.EMPTY.reversed())
+            // A solid block is visible on both themes (reverse video can be
+            // washed out by some terminal palettes).
+            .cursorStyle(Style.EMPTY.bg(Color.CYAN).fg(Color.BLACK))
             .placeholder(placeholder)
             .placeholderStyle(Style.EMPTY.dim())
             .build();

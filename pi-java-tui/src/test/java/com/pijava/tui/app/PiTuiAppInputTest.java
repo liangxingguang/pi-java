@@ -199,6 +199,49 @@ class PiTuiAppInputTest {
         }
     }
 
+    @Test
+    void inputRowShowsPromptAndCursorInRealLayout() throws Exception {
+        var backend = new FakeBackend();
+        var runner = ToolkitRunner.create(
+            TuiConfig.builder().backend(backend).build());
+        try (var session = AgentSession.create(
+                ArgsParser.parse(new String[] {}))) {
+            var chatScreen = new ChatScreen();
+            var mode = new InteractiveMode(session);
+            var dispatcher = new TuiEventDispatcher();
+            var app = new PiTuiApp(mode, chatScreen,
+                new KeybindingsManager(), dispatcher);
+            mode.setObservers(
+                entry -> dispatcher.dispatch(() -> chatScreen.onEntry(entry)),
+                event -> dispatcher.dispatch(() -> chatScreen.onStreamEvent(event)));
+            app.start(runner);
+
+            var thread = Thread.startVirtualThread(() -> {
+                try {
+                    runner.run(app::root);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            Thread.sleep(300);
+            backend.feed("你好");
+            Thread.sleep(300);
+
+            // The input row must show a "> " prompt and a reversed cursor
+            // block in the real column layout (regression for "no prompt,
+            // no cursor, editor not at the bottom").
+            assertThat(backend.hasLineContaining("> ")).isTrue();
+            assertThat(backend.hasCursorCell()).isTrue();
+
+            runner.quit();
+            thread.join(5000);
+            assertThat(thread.isAlive()).isFalse();
+        } finally {
+            runner.close();
+        }
+    }
+
     private static int selectedField(Object overlay) throws Exception {
         var field = SettingsScreen.class.getDeclaredField("selected");
         field.setAccessible(true);

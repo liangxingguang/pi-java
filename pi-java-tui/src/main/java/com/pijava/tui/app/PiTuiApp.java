@@ -159,6 +159,7 @@ public final class PiTuiApp {
             command.thenAccept(result ->
                 dispatcher.dispatch(() -> handleCommandResult(result)));
         } else {
+            chatScreen.appendUserText(text);
             chatScreen.submitInput();
         }
     }

@@ -23,6 +23,7 @@ import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.agent.tool.ToolSetFactory;
 import com.pijava.ai.catalog.BuiltinCatalog;
+import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.model.DefaultModelResolver;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -323,6 +324,13 @@ public final class AgentSession implements AutoCloseable {
             statusFuture.complete(new RunStatus(
                 exitCode(stopReason.get()), stopReason.get()));
         } catch (Exception e) {
+            var error = new StreamEvent.StreamError(
+                "error", e, AssistantMessage.empty());
+            if (streamObserver != null) {
+                streamObserver.onStreamEvent(error);
+            } else {
+                queue.add(error);
+            }
             statusFuture.complete(new RunStatus(1, "error"));
             entriesFuture.complete(List.of());
         } finally {

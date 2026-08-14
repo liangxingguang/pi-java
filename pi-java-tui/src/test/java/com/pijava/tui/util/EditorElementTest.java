@@ -1,0 +1,48 @@
+package com.pijava.tui.util;
+
+import dev.tamboui.buffer.Buffer;
+import dev.tamboui.layout.Rect;
+import dev.tamboui.style.Style;
+import dev.tamboui.terminal.Frame;
+import dev.tamboui.toolkit.element.DefaultRenderContext;
+import dev.tamboui.toolkit.element.ElementRegistry;
+import dev.tamboui.toolkit.event.EventRouter;
+import dev.tamboui.toolkit.focus.FocusManager;
+import dev.tamboui.tui.RenderThread;
+import dev.tamboui.widgets.input.TextAreaState;
+
+import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
+
+class EditorElementTest {
+
+    @Test
+    void rendersTextAndAlwaysVisibleCursor() throws Exception {
+        var state = new TextAreaState();
+        state.setText("hello");
+        var element = new EditorElement(state);
+        var buffer = Buffer.empty(new Rect(0, 0, 30, 1));
+        var frame = Frame.forTesting(buffer);
+        var context = new DefaultRenderContext(
+            new FocusManager(),
+            new EventRouter(new FocusManager(), new ElementRegistry()));
+
+        var mark = RenderThread.class.getDeclaredMethod("markAsRenderThread");
+        mark.setAccessible(true);
+        mark.invoke(null);
+        try {
+            element.render(frame, new Rect(0, 0, 30, 1), context);
+        } finally {
+            var clear = RenderThread.class.getDeclaredMethod("clearRenderThread");
+            clear.setAccessible(true);
+            clear.invoke(null);
+        }
+
+        // Text renders at the start of the area.
+        assertThat(buffer.get(0, 0).symbol()).isEqualTo("h");
+        // The cursor block sits right after the text as a solid cyan block.
+        assertThat(buffer.get(5, 0).style())
+            .isEqualTo(Style.EMPTY.bg(dev.tamboui.style.Color.CYAN)
+                .fg(dev.tamboui.style.Color.BLACK));
+    }
+}

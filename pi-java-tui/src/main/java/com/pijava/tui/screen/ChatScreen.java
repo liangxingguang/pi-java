@@ -35,6 +35,9 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     private final StringBuilder assistantDraft = new StringBuilder();
     private final StringBuilder thinkingDraft = new StringBuilder();
     private String lastError;
+    // Text of the user message optimistically shown on submit; matched against
+    // the transcript entry when the run completes so it isn't duplicated.
+    private String pendingUserText;
     // Text streamed for the assistant message currently in flight; finalized
     // (pushed onto committedTexts) when the message ends (Start/StreamDone).
     private final StringBuilder currentMessageText = new StringBuilder();
@@ -55,6 +58,13 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
                 return;
             }
         }
+        if (entry instanceof Entry.Message message
+                && "user".equals(message.role())
+                && pendingUserText != null
+                && pendingUserText.equals(joinText(message.blocks()))) {
+            pendingUserText = null;
+            return;
+        }
         chatPanel.append(ChatMessage.from(entry));
     }
 
@@ -67,13 +77,16 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
                 finalizeMessage();
             }
             case StreamEvent.TextStart ignored -> assistantDraft.setLength(0);
-            case StreamEvent.TextDelta(var contentIndex, var delta, var partial) ->
+            case StreamEvent.TextDelta(var contentIndex, var delta, var partial) -> {
                 assistantDraft.append(delta);
+                streamDebug("DELTA len=" + delta.length());
+            }
             case StreamEvent.TextEnd(var contentIndex, var text, var partial) -> {
                 chatPanel.append(new ChatMessage.Assistant(
                     List.of(new ContentBlock.TextContent(text))));
                 currentMessageText.append(text);
                 assistantDraft.setLength(0);
+                streamDebug("TEXTEND text=" + text);
             }
             case StreamEvent.ThinkingStart ignored -> thinkingDraft.setLength(0);
             case StreamEvent.ThinkingDelta(var contentIndex, var delta, var partial) ->
@@ -184,6 +197,12 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     /** Append a system/info bubble (slash command results). */
     public void appendSystemText(String text) {
         chatPanel.append(new ChatMessage.System(text));
+    }
+
+    /** Show the user's message immediately on submit (optimistic bubble). */
+    public void appendUserText(String text) {
+        pendingUserText = text;
+        chatPanel.append(new ChatMessage.User(text));
     }
 
     /** The current snapshot (for tree selectors). */
