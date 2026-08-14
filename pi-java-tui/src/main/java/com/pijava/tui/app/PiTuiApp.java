@@ -113,15 +113,6 @@ public final class PiTuiApp {
             }
             return EventResult.HANDLED;
         }
-        if (event.isPageUp() || event.isPageDown()) {
-            // The scrollable ChatPanel (unfocused element) handles history
-            // scrolling; don't feed these to the editor.
-            return EventResult.UNHANDLED;
-        }
-        if ((event.isUp() || event.isDown()) && chatScreen.isInputEmpty()) {
-            // Empty editor: arrow keys scroll chat history.
-            return EventResult.UNHANDLED;
-        }
         if (TamboUIAdapter.isPlainEnter(event)) {
             submit();
             return EventResult.HANDLED;

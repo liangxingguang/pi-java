@@ -3,25 +3,20 @@ package com.pijava.tui.component;
 import java.util.ArrayList;
 import java.util.List;
 
-import dev.tamboui.toolkit.element.StyledElement;
-import dev.tamboui.toolkit.elements.ListElement;
+import com.pijava.tui.util.TamboUIAdapter;
+
+import dev.tamboui.toolkit.elements.Column;
 
 /**
- * Main chat panel: a scrollable message list (Phase 3 design §4.3).
+ * Main chat panel: message list (Phase 3 design §4.3).
  *
- * <p>Backed by {@link ListElement} with sticky auto-scroll: new messages keep
- * the viewport pinned to the bottom, and PageUp/PageDown or the scroll wheel
- * browse history without losing the latest content.</p>
+ * <p>Rendered as a full column. Scrolling is tracked as R7: the scrollable
+ * ListElement variant garbled multi-line/wide-character content, so it was
+ * reverted until a reliable viewport implementation exists.</p>
  */
 public final class ChatPanel {
 
     private final List<ChatMessage> messages = new ArrayList<>();
-    // Scrollable list with sticky auto-scroll: new messages stay visible,
-    // PageUp/PageDown (or scroll wheel) browse history.
-    private final ListElement<ChatMessage> element = new ListElement<ChatMessage>()
-        .stickyScroll()
-        .fill()
-        .addClass("ChatPanel");
 
     /** Append a message (thread-safe: called via the render-thread dispatcher). */
     public void append(ChatMessage message) {
@@ -43,13 +38,11 @@ public final class ChatPanel {
         return messages.isEmpty() ? null : messages.get(messages.size() - 1);
     }
 
-    /** Render the scrollable message list. */
-    public StyledElement<?> render() {
-        var items = messages.stream()
+    /** Render the message list. */
+    public Column render() {
+        var children = messages.stream()
             .map(MessageBubble::of)
-            .map(StyledElement.class::cast)
-            .toArray(StyledElement<?>[]::new);
-        element.elements(items);
-        return element;
+            .toList();
+        return TamboUIAdapter.column(children).fill().addClass("ChatPanel");
     }
 }

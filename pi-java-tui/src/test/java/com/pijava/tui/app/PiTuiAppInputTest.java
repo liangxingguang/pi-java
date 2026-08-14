@@ -125,12 +125,10 @@ class PiTuiAppInputTest {
 
             // Down arrow moves from field 0 to field 1, Up returns to 0.
             backend.feed("\u001b[B");
-            Thread.sleep(300);
-            assertThat(selectedField(overlay)).isEqualTo(1);
+            awaitSelectedField(overlay, 1);
 
             backend.feed("\u001b[A");
-            Thread.sleep(300);
-            assertThat(selectedField(overlay)).isZero();
+            awaitSelectedField(overlay, 0);
 
             runner.quit();
             thread.join(5000);
@@ -293,58 +291,21 @@ class PiTuiAppInputTest {
         }
     }
 
-    @Test
-    void pageUpScrollsChatHistoryWithoutCrashing() throws Exception {
-        var backend = new FakeBackend();
-        var runner = ToolkitRunner.create(
-            TuiConfig.builder().backend(backend)
-                .tickRate(Duration.ofMillis(50)).build());
-        try (var session = AgentSession.create(
-                ArgsParser.parse(new String[] {}))) {
-            var chatScreen = new ChatScreen();
-            var mode = new InteractiveMode(session);
-            var dispatcher = new TuiEventDispatcher();
-            var app = new PiTuiApp(mode, chatScreen,
-                new KeybindingsManager(), dispatcher);
-            mode.setObservers(
-                entry -> dispatcher.dispatch(() -> chatScreen.onEntry(entry)),
-                event -> dispatcher.dispatch(() -> chatScreen.onStreamEvent(event)));
-            app.start(runner);
-
-            var thread = Thread.startVirtualThread(() -> {
-                try {
-                    runner.run(app::root);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            });
-
-            Thread.sleep(200);
-            // Seed enough history to make the list scrollable.
-            for (int i = 0; i < 40; i++) {
-                chatScreen.appendSystemText("message " + i);
-            }
-            Thread.sleep(300);
-            // Pinned at the bottom: the oldest message is clipped away.
-            assertThat(backend.hasLineContaining("message 0")).isFalse();
-
-            // PageUp must reach the scrollable list, not the editor.
-            backend.feed("\u001b[5~");
-            Thread.sleep(300);
-
-            // Scrolling up reveals the clipped history.
-            assertThat(backend.hasLineContaining("message 0")).isTrue();
-            runner.quit();
-            thread.join(5000);
-            assertThat(thread.isAlive()).isFalse();
-        } finally {
-            runner.close();
-        }
-    }
-
     private static int selectedField(Object overlay) throws Exception {
         var field = SettingsScreen.class.getDeclaredField("selected");
         field.setAccessible(true);
         return field.getInt(overlay);
+    }
+
+    private static void awaitSelectedField(Object overlay, int expected)
+            throws Exception {
+        long deadline = System.currentTimeMillis() + 3000;
+        while (System.currentTimeMillis() < deadline) {
+            if (selectedField(overlay) == expected) {
+                return;
+            }
+            Thread.sleep(50);
+        }
+        assertThat(selectedField(overlay)).isEqualTo(expected);
     }
 }
