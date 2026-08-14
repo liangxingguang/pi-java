@@ -23,6 +23,7 @@ import dev.tamboui.toolkit.event.EventResult;
 import dev.tamboui.tui.event.Event;
 import dev.tamboui.tui.event.KeyEvent;
 import dev.tamboui.tui.event.PasteEvent;
+import dev.tamboui.tui.event.TickEvent;
 
 /**
  * TUI application shell (Phase 3 design §7.1).
@@ -88,6 +89,11 @@ public final class PiTuiApp {
     }
 
     private EventResult onEvent(Event event) {
+        if (event instanceof TickEvent) {
+            // Redraw on every tick so streamed text (dispatched from the
+            // virtual-thread observer) reaches the draft bubble.
+            return EventResult.HANDLED;
+        }
         if (event instanceof KeyEvent keyEvent) {
             debugLog("KEY code=" + keyEvent.code() + " str=" + keyEvent.string());
             return onKeyEvent(keyEvent);
@@ -254,13 +260,7 @@ public final class PiTuiApp {
             event -> dispatcher.dispatch(() -> chatScreen.onStreamEvent(event)));
 
         try {
-            // TamboUI auto-generates ids and auto-focuses the TextArea at first
-            // render, which would swallow every key (Enter becomes a newline)
-            // before our global handler runs. FocusReset keeps the app as the
-            // sole owner of all keys.
-            var focusReset = new FocusReset();
-            var runner = TamboUIAdapter.createRunner(focusReset);
-            focusReset.bind(runner.focusManager());
+            var runner = TamboUIAdapter.createRunner();
             runner.styleEngine(PiTheme.engineFor(themeFrom(args, session)));
             app.start(runner);
             app.submitInitial(args);

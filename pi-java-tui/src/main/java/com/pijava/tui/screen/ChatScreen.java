@@ -62,7 +62,10 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     @Override
     public void onStreamEvent(StreamEvent event) {
         switch (event) {
-            case StreamEvent.Start ignored -> finalizeMessage();
+            case StreamEvent.Start ignored -> {
+                streamDebug("START");
+                finalizeMessage();
+            }
             case StreamEvent.TextStart ignored -> assistantDraft.setLength(0);
             case StreamEvent.TextDelta(var contentIndex, var delta, var partial) ->
                 assistantDraft.append(delta);
@@ -84,11 +87,16 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
             case StreamEvent.ToolCallDelta ignored -> { }
             case StreamEvent.ToolCallEnd ignored -> { }
             case StreamEvent.UsageInfo ignored -> { }
-            case StreamEvent.StreamDone ignored -> finalizeMessage();
+            case StreamEvent.StreamDone ignored -> {
+                streamDebug("DONE");
+                finalizeMessage();
+            }
             case StreamEvent.StreamError(var reason, var error, var partial) -> {
                 lastError = reason + (error != null ? ": " + error.getMessage() : "");
                 currentMessageText.setLength(0);
                 chatPanel.append(new ChatMessage.Error(lastError));
+                streamDebug("ERROR reason=" + reason
+                    + " msg=" + (error != null ? error.getMessage() : null));
             }
         }
     }
@@ -103,7 +111,7 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
         var text = assistantDraft.length() > 0 ? assistantDraft.toString()
             : thinkingDraft.length() > 0 ? "\uD83E\uDDD0 " + thinkingDraft : null;
         return text == null
-            ? TamboUIAdapter.row().fill()
+            ? TamboUIAdapter.spacer(0)
             : TamboUIAdapter.panel(TamboUIAdapter.markupText(text))
                 .cyan().rounded();
     }
@@ -113,7 +121,15 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
         return TamboUIAdapter.column(
             chatPanel.render().fill(),
             draftBubble(),
+            separator(),
             editor.render());
+    }
+
+    /** One-cell divider between the transcript and the input row. */
+    private Element separator() {
+        return TamboUIAdapter.row(TamboUIAdapter.text(""))
+            .length(1)
+            .addClass("Separator");
     }
 
     /** Bottom status bar (error first, then snapshot or an empty row). */
@@ -201,5 +217,18 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
             committedTexts.add(currentMessageText.toString());
         }
         currentMessageText.setLength(0);
+    }
+
+    private static void streamDebug(String msg) {
+        try {
+            java.nio.file.Files.writeString(
+                java.nio.file.Path.of(
+                    System.getProperty("user.home"), "tui-debug.log"),
+                "STREAM " + msg + System.lineSeparator(),
+                java.nio.file.StandardOpenOption.CREATE,
+                java.nio.file.StandardOpenOption.APPEND);
+        } catch (Exception ignored) {
+            // best-effort diagnostic logging
+        }
     }
 }

@@ -3,8 +3,9 @@ package com.pijava.tui.component;
 import java.util.function.Consumer;
 
 import com.pijava.tui.util.TamboUIAdapter;
+import com.pijava.tui.util.EditorElement;
 
-import dev.tamboui.toolkit.elements.TextAreaElement;
+import dev.tamboui.toolkit.elements.Row;
 import dev.tamboui.tui.event.KeyCode;
 import dev.tamboui.tui.event.KeyEvent;
 import dev.tamboui.widgets.input.TextAreaState;
@@ -16,19 +17,21 @@ import dev.tamboui.widgets.input.TextAreaState;
 public final class EditorComponent {
 
     private final TextAreaState state = new TextAreaState();
-    private final TextAreaElement element;
+    private final EditorElement element;
     private Consumer<String> submitHandler = text -> { };
 
     public EditorComponent() {
-        this.element = TamboUIAdapter.textArea(state)
-            .placeholder("Type your message... (Enter submit, Alt+Enter queue, Esc interrupt)")
+        this.element = TamboUIAdapter.editorElement(state)
+            .placeholder("Type a message… (Enter send, Shift+Enter newline, Alt+Enter queue)")
             .fill()
             .addClass("EditorComponent");
     }
 
-    /** The editor widget for the render tree. */
-    public TextAreaElement render() {
-        return element;
+    /** The input row for the render tree: a {@code >} prompt plus the editor. */
+    public Row render() {
+        return TamboUIAdapter.row(
+            TamboUIAdapter.text("> ").cyan(),
+            element);
     }
 
     /**

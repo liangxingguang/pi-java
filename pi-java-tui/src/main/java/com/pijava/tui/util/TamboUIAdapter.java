@@ -2,6 +2,7 @@ package com.pijava.tui.util;
 
 import java.util.Collection;
 import java.io.IOException;
+import java.time.Duration;
 
 import com.pijava.coding.agent.core.KeybindingsManager;
 
@@ -17,7 +18,6 @@ import dev.tamboui.toolkit.elements.Row;
 import dev.tamboui.toolkit.elements.Spacer;
 import dev.tamboui.toolkit.elements.TextElement;
 import dev.tamboui.toolkit.elements.TextAreaElement;
-import dev.tamboui.tui.PostRenderProcessor;
 import dev.tamboui.tui.TuiConfig;
 import dev.tamboui.tui.event.KeyCode;
 import dev.tamboui.tui.event.KeyEvent;
@@ -36,14 +36,14 @@ public final class TamboUIAdapter {
 
     // ── Runner / config ──────────────────────────────────────
 
-    /** Create a full-screen TUI runner (Panama backend via ServiceLoader). */
-    public static ToolkitRunner createRunner(PostRenderProcessor extraProcessor) throws Exception {
+    /** Create a full-screen TUI runner with a 50ms tick (streaming animation). */
+    public static ToolkitRunner createRunner() throws Exception {
         return ToolkitRunner.create(TuiConfig.builder()
             .backend(createBackend())
+            .tickRate(Duration.ofMillis(50))
             .alternateScreen(true)
             .hideCursor(true)
             .bracketedPaste(true)
-            .postRenderProcessor(extraProcessor)
             .build());
     }
 
@@ -111,6 +111,16 @@ public final class TamboUIAdapter {
 
     public static TextAreaElement textArea(TextAreaState state) {
         return Toolkit.textArea(state);
+    }
+
+    /** An input row that renders text/cursor but never consumes keys. */
+    public static EditorElement editorElement(TextAreaState state) {
+        return new EditorElement(state);
+    }
+
+    /** A fixed-height empty row (used for a zero-height draft slot). */
+    public static Spacer spacer(int length) {
+        return Spacer.length(length);
     }
 
     // ── Layout constraints / colors ──────────────────────────

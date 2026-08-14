@@ -1,5 +1,9 @@
 package com.pijava.tui.app;
 
+import java.time.Duration;
+
+import com.pijava.ai.message.AssistantMessage;
+import com.pijava.ai.stream.StreamEvent;
 import com.pijava.coding.agent.cli.ArgsParser;
 import com.pijava.coding.agent.core.AgentSession;
 import com.pijava.coding.agent.core.KeybindingsManager;
@@ -30,11 +34,8 @@ class PiTuiAppInputTest {
     @Test
     void slashCommandsRespondToCarriageReturnEnter() throws Exception {
         var backend = new FakeBackend();
-        var focusReset = new FocusReset();
         var runner = ToolkitRunner.create(
-            TuiConfig.builder().backend(backend)
-                .postRenderProcessor(focusReset).build());
-        focusReset.bind(runner.focusManager());
+            TuiConfig.builder().backend(backend).build());
         try (var session = AgentSession.create(
                 ArgsParser.parse(new String[] {}))) {
             var chatScreen = new ChatScreen();
@@ -91,11 +92,8 @@ class PiTuiAppInputTest {
     @Test
     void settingsOverlayNavigatesWithArrowKeys() throws Exception {
         var backend = new FakeBackend();
-        var focusReset = new FocusReset();
         var runner = ToolkitRunner.create(
-            TuiConfig.builder().backend(backend)
-                .postRenderProcessor(focusReset).build());
-        focusReset.bind(runner.focusManager());
+            TuiConfig.builder().backend(backend).build());
         try (var session = AgentSession.create(
                 ArgsParser.parse(new String[] {}))) {
             var chatScreen = new ChatScreen();
@@ -131,6 +129,67 @@ class PiTuiAppInputTest {
             backend.feed("\u001b[A");
             Thread.sleep(300);
             assertThat(selectedField(overlay)).isZero();
+
+            runner.quit();
+            thread.join(5000);
+            assertThat(thread.isAlive()).isFalse();
+        } finally {
+            runner.close();
+        }
+    }
+
+    @Test
+    void streamedTextIsRenderedByTickAndCommitted() throws Exception {
+        var backend = new FakeBackend();
+        var runner = ToolkitRunner.create(TuiConfig.builder()
+            .backend(backend)
+            .tickRate(Duration.ofMillis(50))
+            .build());
+        try (var session = AgentSession.create(
+                ArgsParser.parse(new String[] {}))) {
+            var chatScreen = new ChatScreen();
+            var mode = new InteractiveMode(session);
+            var dispatcher = new TuiEventDispatcher();
+            var app = new PiTuiApp(mode, chatScreen,
+                new KeybindingsManager(), dispatcher);
+            mode.setObservers(
+                entry -> dispatcher.dispatch(() -> chatScreen.onEntry(entry)),
+                event -> dispatcher.dispatch(() -> chatScreen.onStreamEvent(event)));
+            app.start(runner);
+
+            var thread = Thread.startVirtualThread(() -> {
+                try {
+                    runner.run(app::root);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            Thread.sleep(200);
+            var drawsBefore = backend.drawCount();
+
+            // Simulate the model streaming from the virtual thread: the 50ms
+            // tick must wake the render loop so the draft bubble updates.
+            Thread.startVirtualThread(() -> {
+                for (int i = 0; i < 20; i++) {
+                    dispatcher.dispatch(() -> chatScreen.onStreamEvent(
+                        new StreamEvent.TextDelta(0, "x", AssistantMessage.empty())));
+                    try {
+                        Thread.sleep(15);
+                    } catch (InterruptedException ignored) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+                dispatcher.dispatch(() -> chatScreen.onStreamEvent(
+                    new StreamEvent.TextEnd(0, "xxxxxxxxxxxxxxxxxxxx",
+                        AssistantMessage.empty())));
+            });
+
+            Thread.sleep(700);
+
+            assertThat(backend.drawCount()).isGreaterThan(drawsBefore);
+            assertThat(chatScreen.lastMessage())
+                .isInstanceOf(ChatMessage.Assistant.class);
 
             runner.quit();
             thread.join(5000);

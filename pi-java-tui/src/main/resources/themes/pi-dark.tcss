@@ -29,3 +29,7 @@ EditorComponent {
     border-color: #7dcfff;
     background: #1f2335;
 }
+
+Separator {
+    background: #3b4261;
+}
