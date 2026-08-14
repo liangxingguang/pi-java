@@ -3,6 +3,7 @@ package com.pijava.ai.provider;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.ChatApi;
@@ -25,13 +26,34 @@ import com.pijava.ai.stream.StreamEvent;
 public final class FauxProvider implements Provider {
 
     private final String name;
-    private final List<StreamEvent> events;
+    private final List<List<StreamEvent>> responses;
     private final long delayMs;
+    private final AtomicInteger nextCall = new AtomicInteger();
 
     public FauxProvider(String name, List<StreamEvent> events, long delayMs) {
+        this(name, List.of(events), delayMs, false);
+    }
+
+    private FauxProvider(String name, List<List<StreamEvent>> responses,
+                         long delayMs, boolean multiResponse) {
         this.name = name;
-        this.events = List.copyOf(events);
+        this.responses = List.copyOf(responses);
         this.delayMs = delayMs;
+    }
+
+    /**
+     * Create a provider that returns a different event sequence per model
+     * call (e.g. tool call first, then a final text reply). This models the
+     * multi-turn tool loop without hanging on a repeated tool call.
+     */
+    public static FauxProvider sequence(
+            String name, List<List<StreamEvent>> responses) {
+        return new FauxProvider(name, responses, 0, true);
+    }
+
+    List<StreamEvent> nextResponse() {
+        int index = Math.min(nextCall.getAndIncrement(), responses.size() - 1);
+        return responses.get(index);
     }
 
     /**
@@ -100,7 +122,7 @@ public final class FauxProvider implements Provider {
     @SuppressWarnings("unchecked")  // safe: apiType equality check guarantees T is the expected API type
     public <T extends ProviderApi> T createApi(Class<T> apiType, ApiOptions options) {
         if (apiType.equals(ChatApi.class)) {
-            return (T) new FauxChatApi(events, delayMs);
+            return (T) new FauxChatApi(this, delayMs);
         }
         throw new IllegalArgumentException("Unsupported API type: " + apiType);
     }
@@ -114,11 +136,11 @@ public final class FauxProvider implements Provider {
 
     private static final class FauxChatApi implements ChatApi {
 
-        private final List<StreamEvent> events;
+        private final FauxProvider provider;
         private final long delayMs;
 
-        FauxChatApi(List<StreamEvent> events, long delayMs) {
-            this.events = events;
+        FauxChatApi(FauxProvider provider, long delayMs) {
+            this.provider = provider;
             this.delayMs = delayMs;
         }
 
@@ -128,7 +150,7 @@ public final class FauxProvider implements Provider {
             var publisher = new java.util.concurrent.SubmissionPublisher<StreamEvent>();
             Thread.startVirtualThread(() -> {
                 try {
-                    for (var event : events) {
+                    for (var event : provider.nextResponse()) {
                         if (delayMs > 0) Thread.sleep(delayMs);
                         publisher.submit(event);
                     }
@@ -142,13 +164,13 @@ public final class FauxProvider implements Provider {
 
         @Override
         public StreamIterator streamBlocking(StreamRequest request, ApiOptions options) {
-            return StreamIterator.from(events);
+            return StreamIterator.from(provider.nextResponse());
         }
 
         @Override
         public Message send(StreamRequest request, ApiOptions options) {
             var blocks = new ArrayList<ContentBlock>();
-            for (var event : events) {
+            for (var event : provider.nextResponse()) {
                 if (event instanceof StreamEvent.StreamDone done) {
                     return new Message.AssistantMessage(done.partial().content());
                 }

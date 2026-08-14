@@ -26,8 +26,13 @@ public final class PathUtils {
      *         (e.g. {@code ../} attempts to access parent directories)
      */
     public static String resolveToolPath(ToolContext ctx, String path) {
-        String resolved = ctx.fs().resolvePath(path);
-        String cwd = ctx.fs().resolvePath(ctx.cwd());
+        // Relative paths resolve against the ToolContext working directory,
+        // not the JVM process directory.
+        Path requested = Path.of(path);
+        String resolved = requested.isAbsolute()
+            ? requested.normalize().toString()
+            : Path.of(ctx.cwd()).resolve(requested).normalize().toString();
+        String cwd = Path.of(ctx.cwd()).toAbsolutePath().normalize().toString();
         // Normalize both paths to handle trailing separators and case differences
         Path resolvedPath = Path.of(resolved).toAbsolutePath().normalize();
         Path cwdPath = Path.of(cwd).toAbsolutePath().normalize();

@@ -30,6 +30,7 @@ import com.pijava.ai.catalog.BuiltinCatalog;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.model.DefaultModelResolver;
+import com.pijava.ai.provider.ProviderRegistry;
 import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.coding.agent.cli.Args;
@@ -80,9 +81,25 @@ public final class AgentSession implements AutoCloseable {
      * repository to isolate process-wide state; production uses the shared one.
      */
     static AgentSession create(Args args, InMemorySessionRepository repository) {
+        return create(args, repository, DefaultProviders.defaultProviders(),
+            new ToolContext(
+                System.getProperty("user.dir"),
+                Map.of(),
+                new DefaultShellExecutor(),
+                new DefaultFileSystem()));
+    }
+
+    /**
+     * Assemble a session against a specific repository, provider registry and
+     * tool context. Tests inject a {@link com.pijava.ai.provider.FauxProvider}
+     * and a temp-dir {@link ToolContext} to exercise the full
+     * submit → stream → tool-execution path without a real LLM.
+     */
+    static AgentSession create(Args args, InMemorySessionRepository repository,
+                               ProviderRegistry providers,
+                               ToolContext toolContext) {
         var settings = SettingsManager.load(args.projectTrustOverride());
         var effective = settings.effective();
-        var providers = DefaultProviders.defaultProviders();
         var models = new DefaultModelResolver(BuiltinCatalog.all());
         var tools = new ToolRegistry(null);
         var toolList = ToolSetFactory.createCodingTools("");
@@ -112,11 +129,7 @@ public final class AgentSession implements AutoCloseable {
             .systemPrompt(systemPromptFor(args))
             .activeTools(activeTools(args, toolList))
             .toolRegistry(tools)
-            .toolContext(new ToolContext(
-                System.getProperty("user.dir"),
-                Map.of(),
-                new DefaultShellExecutor(),
-                new DefaultFileSystem()))
+            .toolContext(toolContext)
             .driveMode(new DriveMode.Manual())
             .steeringMode(queueMode(effective.steeringMode))
             .followUpMode(queueMode(effective.followUpMode))
