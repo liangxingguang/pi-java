@@ -1,11 +1,19 @@
 package com.pijava.ai.protocol;
 
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.SubmissionPublisher;
 
+import com.openai.core.JsonValue;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
+import com.openai.models.FunctionDefinition;
+import com.openai.models.FunctionParameters;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
+import com.openai.models.chat.completions.ChatCompletionFunctionTool;
+import com.openai.models.chat.completions.ChatCompletionStreamOptions;
+import com.openai.models.chat.completions.ChatCompletionTool;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
@@ -137,11 +145,37 @@ public class OpenAICompletionsApi extends AbstractChatApi {
             }
         }
 
-        // TODO: add tool support (requires FunctionDefinition/parameters type mapping)
+        // Pass tools so the model emits structured tool_calls instead of
+        // writing fake XML tool invocations into the text stream (which also
+        // avoids garbled interleaving in the rendered bubble).
+        for (var td : request.tools()) {
+            builder.addTool(ChatCompletionTool.ofFunction(
+                ChatCompletionFunctionTool.builder()
+                    .type(JsonValue.from("function"))
+                    .function(FunctionDefinition.builder()
+                        .name(td.name())
+                        .description(td.description())
+                        .parameters(FunctionParameters.builder()
+                            .putAllAdditionalProperties(toJsonValues(td.inputSchema()))
+                            .build())
+                        .build())
+                    .build()));
+        }
+        // Ask for usage in the stream so the token counter/status bar updates.
+        builder.streamOptions(ChatCompletionStreamOptions.builder()
+            .includeUsage(true)
+            .build());
+
         if (request.maxTokens() > 0) builder.maxCompletionTokens(request.maxTokens());
         if (request.temperature() >= 0) builder.temperature(request.temperature());
 
         return builder.build();
+    }
+
+    private static Map<String, JsonValue> toJsonValues(Map<String, Object> schema) {
+        var out = new LinkedHashMap<String, JsonValue>();
+        schema.forEach((key, value) -> out.put(key, JsonValue.from(value)));
+        return out;
     }
 
     private String extractText(List<ContentBlock> blocks) {
