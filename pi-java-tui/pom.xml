@@ -48,4 +48,19 @@
             <artifactId>assertj-core</artifactId>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Run the CLI from a terminal (pass CLI flags via -Dexec.args):
+                 mvn -pl pi-java-tui -am exec:java -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>${version.exec-maven-plugin}</version>
+                <configuration>
+                    <mainClass>com.pijava.coding.agent.Main</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>
