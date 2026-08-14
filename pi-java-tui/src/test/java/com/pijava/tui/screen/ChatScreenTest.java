@@ -36,8 +36,11 @@ class ChatScreenTest {
     @Test
     void assistantEntryIsDeduplicatedAfterStreamCommit() {
         var screen = new ChatScreen();
+        screen.onStreamEvent(new StreamEvent.Start(AssistantMessage.empty()));
         screen.onStreamEvent(new StreamEvent.TextEnd(
             0, "text", AssistantMessage.empty()));
+        screen.onStreamEvent(new StreamEvent.StreamDone(
+            "stop", null, AssistantMessage.empty()));
         var countBefore = screen.messageCount();
 
         var entry = new Entry.Message(
@@ -63,8 +66,11 @@ class ChatScreenTest {
     @Test
     void nonMatchingAssistantEntryIsAppendedAfterStreamCommit() {
         var screen = new ChatScreen();
+        screen.onStreamEvent(new StreamEvent.Start(AssistantMessage.empty()));
         screen.onStreamEvent(new StreamEvent.TextEnd(
             0, "streamed text", AssistantMessage.empty()));
+        screen.onStreamEvent(new StreamEvent.StreamDone(
+            "stop", null, AssistantMessage.empty()));
         var countAfterStream = screen.messageCount();
 
         screen.onEntry(new Entry.Message(
@@ -73,6 +79,52 @@ class ChatScreenTest {
 
         assertThat(screen.messageCount()).isEqualTo(countAfterStream + 1);
         assertThat(screen.lastMessage()).isInstanceOf(ChatMessage.Assistant.class);
+    }
+
+    @Test
+    void multiBlockAssistantEntryIsDeduplicated() {
+        var screen = new ChatScreen();
+        screen.onStreamEvent(new StreamEvent.Start(AssistantMessage.empty()));
+        screen.onStreamEvent(new StreamEvent.TextEnd(
+            0, "first ", AssistantMessage.empty()));
+        screen.onStreamEvent(new StreamEvent.TextEnd(
+            1, "second", AssistantMessage.empty()));
+        screen.onStreamEvent(new StreamEvent.StreamDone(
+            "stop", null, AssistantMessage.empty()));
+        var countAfterStream = screen.messageCount();
+
+        screen.onEntry(new Entry.Message(
+            Entry.newHeader(1, ""), "assistant",
+            List.of(
+                new ContentBlock.TextContent("first "),
+                new ContentBlock.TextContent("second"))));
+
+        assertThat(screen.messageCount()).isEqualTo(countAfterStream);
+    }
+
+    @Test
+    void multiTurnAssistantEntriesAreDeduplicatedInOrder() {
+        var screen = new ChatScreen();
+        screen.onStreamEvent(new StreamEvent.Start(AssistantMessage.empty()));
+        screen.onStreamEvent(new StreamEvent.TextEnd(
+            0, "first", AssistantMessage.empty()));
+        screen.onStreamEvent(new StreamEvent.StreamDone(
+            "stop", null, AssistantMessage.empty()));
+        screen.onStreamEvent(new StreamEvent.Start(AssistantMessage.empty()));
+        screen.onStreamEvent(new StreamEvent.TextEnd(
+            0, "second", AssistantMessage.empty()));
+        screen.onStreamEvent(new StreamEvent.StreamDone(
+            "stop", null, AssistantMessage.empty()));
+        var countAfterStream = screen.messageCount();
+
+        screen.onEntry(new Entry.Message(
+            Entry.newHeader(1, ""), "assistant",
+            List.of(new ContentBlock.TextContent("first"))));
+        screen.onEntry(new Entry.Message(
+            Entry.newHeader(3, ""), "assistant",
+            List.of(new ContentBlock.TextContent("second"))));
+
+        assertThat(screen.messageCount()).isEqualTo(countAfterStream);
     }
 
     @Test

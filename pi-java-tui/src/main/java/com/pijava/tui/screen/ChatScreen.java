@@ -1,5 +1,7 @@
 package com.pijava.tui.screen;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
 
 import com.pijava.agent.entry.Entry;
@@ -32,20 +34,25 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     private final StringBuilder assistantDraft = new StringBuilder();
     private final StringBuilder thinkingDraft = new StringBuilder();
     private String lastError;
-    private String lastStreamCommittedText;
+    // Text streamed for the assistant message currently in flight; finalized
+    // (pushed onto committedTexts) when the message ends (Start/StreamDone).
+    private final StringBuilder currentMessageText = new StringBuilder();
+    // Fully streamed assistant-message texts, in transcript order, waiting to
+    // be matched (and consumed) by the batched onEntry calls.
+    private final Deque<String> committedTexts = new ArrayDeque<>();
 
     /** Receive a complete transcript entry (dedupes streamed assistant text). */
     @Override
     public void onEntry(Entry entry) {
         if (entry instanceof Entry.Message message
                 && "assistant".equals(message.role())) {
-            // Skip an assistant entry already committed by the stream
-            // (TextEnd); otherwise append it (e.g. non-streaming paths).
-            if (joinText(message.blocks()).equals(lastStreamCommittedText)) {
-                lastStreamCommittedText = null;
+            // Skip an assistant entry whose text was already committed by the
+            // stream (TextEnd); otherwise append it (e.g. non-streaming paths).
+            if (!committedTexts.isEmpty()
+                    && committedTexts.peek().equals(joinText(message.blocks()))) {
+                committedTexts.poll();
                 return;
             }
-            lastStreamCommittedText = null;
         }
         chatPanel.append(ChatMessage.from(entry));
     }
@@ -54,14 +61,14 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     @Override
     public void onStreamEvent(StreamEvent event) {
         switch (event) {
-            case StreamEvent.Start ignored -> { }
+            case StreamEvent.Start ignored -> finalizeMessage();
             case StreamEvent.TextStart ignored -> assistantDraft.setLength(0);
             case StreamEvent.TextDelta(var contentIndex, var delta, var partial) ->
                 assistantDraft.append(delta);
             case StreamEvent.TextEnd(var contentIndex, var text, var partial) -> {
                 chatPanel.append(new ChatMessage.Assistant(
                     List.of(new ContentBlock.TextContent(text))));
-                lastStreamCommittedText = text;
+                currentMessageText.append(text);
                 assistantDraft.setLength(0);
             }
             case StreamEvent.ThinkingStart ignored -> thinkingDraft.setLength(0);
@@ -76,9 +83,10 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
             case StreamEvent.ToolCallDelta ignored -> { }
             case StreamEvent.ToolCallEnd ignored -> { }
             case StreamEvent.UsageInfo ignored -> { }
-            case StreamEvent.StreamDone ignored -> { }
+            case StreamEvent.StreamDone ignored -> finalizeMessage();
             case StreamEvent.StreamError(var reason, var error, var partial) -> {
                 lastError = reason + (error != null ? ": " + error.getMessage() : "");
+                currentMessageText.setLength(0);
                 chatPanel.append(new ChatMessage.Error(lastError));
             }
         }
@@ -174,5 +182,13 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
             }
         }
         return builder.toString();
+    }
+
+    /** Close the in-flight streamed message: record its text for onEntry dedup. */
+    private void finalizeMessage() {
+        if (!currentMessageText.isEmpty()) {
+            committedTexts.add(currentMessageText.toString());
+        }
+        currentMessageText.setLength(0);
     }
 }
