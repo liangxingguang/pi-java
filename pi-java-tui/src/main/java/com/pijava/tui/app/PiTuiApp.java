@@ -95,7 +95,6 @@ public final class PiTuiApp {
             return EventResult.HANDLED;
         }
         if (event instanceof KeyEvent keyEvent) {
-            debugLog("KEY code=" + keyEvent.code() + " str=" + keyEvent.string());
             return onKeyEvent(keyEvent);
         }
         if (event instanceof PasteEvent pasteEvent) {
@@ -103,19 +102,6 @@ public final class PiTuiApp {
             return EventResult.HANDLED;
         }
         return EventResult.UNHANDLED;
-    }
-
-    private static void debugLog(String msg) {
-        try {
-            java.nio.file.Files.writeString(
-                java.nio.file.Path.of(
-                    System.getProperty("user.home"), "tui-debug.log"),
-                msg + System.lineSeparator(),
-                java.nio.file.StandardOpenOption.CREATE,
-                java.nio.file.StandardOpenOption.APPEND);
-        } catch (Exception ignored) {
-            // best-effort diagnostic logging
-        }
     }
 
     private EventResult onKeyEvent(KeyEvent event) {
@@ -137,12 +123,10 @@ public final class PiTuiApp {
         }
         var keyId = keys.resolve(TamboUIAdapter.toStroke(event));
         if (keyId != null) {
-            debugLog("  -> action " + keyId);
             handleAction(keyId);
             return EventResult.HANDLED;
         }
         chatScreen.onKeyEvent(event);
-        debugLog("  editorText=" + chatScreen.inputText());
         return EventResult.HANDLED;
     }
 
