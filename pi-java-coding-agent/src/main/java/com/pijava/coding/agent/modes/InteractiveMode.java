@@ -27,7 +27,7 @@ public final class InteractiveMode {
     }
 
     /** Register observers (non-blocking; no thread starts here). */
-    public void run(EntryObserver entries, StreamObserver stream) {
+    public void setObservers(EntryObserver entries, StreamObserver stream) {
         this.entryObserver = entries;
         this.streamObserver = stream;
     }

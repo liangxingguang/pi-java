@@ -217,7 +217,7 @@ public final class PiTuiApp {
             new KeybindingsManager(), dispatcher);
 
         // Virtual-thread events → render-thread queue (thread model §11.1).
-        mode.run(
+        mode.setObservers(
             entry -> dispatcher.dispatch(() -> chatScreen.onEntry(entry)),
             event -> dispatcher.dispatch(() -> chatScreen.onStreamEvent(event)));
 
