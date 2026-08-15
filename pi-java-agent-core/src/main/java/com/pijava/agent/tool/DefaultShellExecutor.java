@@ -16,12 +16,12 @@ import java.util.concurrent.TimeoutException;
  * Default shell executor using ProcessBuilder + Virtual Threads.
  *
  * <p>Aligned with pi's {@code getShellConfig} (utils/shell.ts): commands
- * always run in a real bash. On Windows the resolution order is the
- * configured {@code shellPath} setting, then Git Bash in its known install
- * locations (plus a location derived from {@code git.exe} on PATH, which
- * covers custom/portable installs), then {@code bash.exe} on PATH; if none
- * is found an actionable error pointing at Git for Windows is thrown (pi
- * behavior — no silent cmd fallback). The legacy WSL
+ * always run in a real bash. When bash is not on PATH the solution is the
+ * same as pi's — the user sets {@code shellPath} in settings.json. The
+ * resolution order is the configured {@code shellPath}, then Git Bash in its
+ * known install locations, then {@code bash.exe} on PATH; if none is found
+ * an actionable error pointing at Git for Windows is thrown (pi behavior —
+ * no silent cmd fallback, no magic auto-detection). The legacy WSL
  * {@code C:\Windows\System32\bash.exe} is special cased to receive the
  * command on stdin instead of {@code -c}.</p>
  *
@@ -173,21 +173,6 @@ public class DefaultShellExecutor implements ShellExecutor {
         var candidates = new ArrayList<String>();
         addCandidate(candidates, System.getenv("ProgramFiles"), "Git\\bin\\bash.exe");
         addCandidate(candidates, System.getenv("ProgramFiles(x86)"), "Git\\bin\\bash.exe");
-        addCandidate(candidates, System.getenv("LOCALAPPDATA"), "Programs\\Git\\bin\\bash.exe");
-        // Custom/portable installs: git.exe is on PATH (e.g. D:\soft\Git\cmd)
-        // but the install root isn't; derive the root from it.
-        var gitOnPath = firstOnPath("git.exe");
-        if (gitOnPath != null) {
-            var gitDir = Path.of(gitOnPath).getParent();
-            if (gitDir != null) {
-                var root = gitDir.getParent();
-                if (root != null) {
-                    addPath(candidates, root.resolve("bin").resolve("bash.exe"));
-                    addPath(candidates, root.resolve("usr").resolve("bin").resolve("bash.exe"));
-                }
-                addPath(candidates, gitDir.resolve("bash.exe"));
-            }
-        }
         return candidates;
     }
 
