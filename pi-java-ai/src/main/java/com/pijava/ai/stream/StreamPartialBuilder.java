@@ -183,8 +183,12 @@ public final class StreamPartialBuilder {
 
     /** Emit usage info. */
     public StreamEvent.UsageInfo emitUsage(long inputTokens, long outputTokens) {
-        this.usage = new StreamEvent.UsageInfo(inputTokens, outputTokens, snapshot());
-        return this.usage;
+        // Assign before snapshot() so the emitted event's partial carries the
+        // usage — consumers (ActionExecutor's token counter) only accept
+        // UsageInfo whose partial().usage() is non-null.
+        var usageInfo = new StreamEvent.UsageInfo(inputTokens, outputTokens, null);
+        this.usage = usageInfo;
+        return new StreamEvent.UsageInfo(inputTokens, outputTokens, snapshot());
     }
 
     /** Emit stream-done. */

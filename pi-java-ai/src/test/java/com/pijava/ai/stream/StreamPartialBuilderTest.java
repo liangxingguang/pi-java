@@ -35,4 +35,24 @@ class StreamPartialBuilderTest {
             .containsEntry("path", "hello.py")
             .containsEntry("content", "print(\"hello\")");
     }
+
+    @Test
+    void emitUsageCarriesUsageInThePartialSnapshot() {
+        var builder = new StreamPartialBuilder();
+        builder.emitStart();
+        builder.emitTextStart();
+        builder.emitTextDelta("hi");
+
+        var usage = builder.emitUsage(123, 45);
+
+        // ActionExecutor only counts tokens when the emitted UsageInfo's
+        // partial snapshot carries the usage; regression for the status-bar
+        // token counter staying at 0.
+        assertThat(usage.inputTokens()).isEqualTo(123);
+        assertThat(usage.outputTokens()).isEqualTo(45);
+        assertThat(usage.partial()).isNotNull();
+        assertThat(usage.partial().usage()).isNotNull();
+        assertThat(usage.partial().usage().inputTokens()).isEqualTo(123);
+        assertThat(usage.partial().usage().outputTokens()).isEqualTo(45);
+    }
 }
