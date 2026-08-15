@@ -117,6 +117,15 @@ public final class SettingsAccessors {
         manager.markModified("shellPath");
     }
 
+    public String getShellCommandPrefix() {
+        return manager.effective().shellCommandPrefix;
+    }
+
+    public void setShellCommandPrefix(String prefix) {
+        manager.global().shellCommandPrefix = prefix;
+        manager.markModified("shellCommandPrefix");
+    }
+
     public String getExternalEditor() {
         return manager.effective().externalEditor;
     }

@@ -81,12 +81,15 @@ public final class AgentSession implements AutoCloseable {
      * repository to isolate process-wide state; production uses the shared one.
      */
     static AgentSession create(Args args, InMemorySessionRepository repository) {
+        var settings = SettingsManager.load(args.projectTrustOverride());
+        var effective = settings.effective();
         return create(args, repository, DefaultProviders.defaultProviders(),
             new ToolContext(
                 System.getProperty("user.dir"),
                 Map.of(),
-                new DefaultShellExecutor(),
-                new DefaultFileSystem()));
+                new DefaultShellExecutor(effective.shellPath),
+                new DefaultFileSystem()),
+            settings);
     }
 
     /**
@@ -98,11 +101,22 @@ public final class AgentSession implements AutoCloseable {
     static AgentSession create(Args args, InMemorySessionRepository repository,
                                ProviderRegistry providers,
                                ToolContext toolContext) {
-        var settings = SettingsManager.load(args.projectTrustOverride());
+        // Test entry point: callers inject the tool context; settings load
+        // with the default rules so shellPath/shellCommandPrefix still apply.
+        return create(args, repository, providers, toolContext,
+            SettingsManager.load(args.projectTrustOverride()));
+    }
+
+    private static AgentSession create(Args args, InMemorySessionRepository repository,
+                                       ProviderRegistry providers,
+                                       ToolContext toolContext,
+                                       SettingsManager settings) {
         var effective = settings.effective();
         var models = new DefaultModelResolver(BuiltinCatalog.all());
         var tools = new ToolRegistry(null);
-        var toolList = ToolSetFactory.createCodingTools("");
+        var commandPrefix = effective.shellCommandPrefix == null
+            ? "" : effective.shellCommandPrefix;
+        var toolList = ToolSetFactory.createCodingTools(commandPrefix);
         tools.registerAll(toolList);
 
         var services = new SessionServices(

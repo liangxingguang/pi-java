@@ -31,6 +31,7 @@ public final class Settings {
     public Boolean hideThinkingBlock;
     public String externalEditor;
     public String shellPath;
+    public String shellCommandPrefix;
     public Boolean quietStartup;
     public String defaultProjectTrust;
     public List<String> extensions;

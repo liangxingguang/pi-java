@@ -144,17 +144,17 @@ public final class BashTool {
 
     /**
      * Tells the model which shell actually runs the command on this host so it
-     * stops sending bash-only syntax where it cannot work.
+     * knows bash semantics always apply (Git Bash on Windows, per pi).
      */
     private static String shellNote() {
         var os = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT);
         if (os.contains("win")) {
-            return "On this Windows host the command runs in cmd.exe, so use Windows "
-                + "syntax: `dir` instead of `ls`, `cd` (bare) instead of `pwd`, `type` "
-                + "instead of `cat`, `copy`/`move` instead of `cp`/`mv`. Unix-style "
-                + "commands such as `ls -la` or `pwd` will fail. ";
+            return "On this Windows host the command runs in Git Bash (real bash), so "
+                + "bash syntax such as `ls -la`, `pwd`, `cat`, and `&&` works. If bash "
+                + "commands fail with 'No bash shell found', install Git for Windows "
+                + "or set shellPath in settings.json. ";
         }
-        return "The command runs in sh (POSIX shell). ";
+        return "The command runs in bash. ";
     }
 
     /**
