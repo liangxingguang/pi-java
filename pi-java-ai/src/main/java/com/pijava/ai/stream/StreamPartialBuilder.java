@@ -110,11 +110,11 @@ public final class StreamPartialBuilder {
     // Thinking block
     // ═══════════════════════════════════════════════════════════
 
-    /** Emit thinking-block-start. Adds a placeholder {@link ContentBlock.TextContent}. */
+    /** Emit thinking-block-start. Adds a placeholder {@link ContentBlock.ThinkingContent}. */
     public StreamEvent.ThinkingStart emitThinkingStart() {
         thinkingBuf.setLength(0);
         thinkingBlockIndex = blocks.size();
-        blocks.add(new ContentBlock.TextContent(""));
+        blocks.add(new ContentBlock.ThinkingContent(""));
         int idx = nextContentIndex++;
         return new StreamEvent.ThinkingStart(idx, snapshot());
     }
@@ -124,11 +124,11 @@ public final class StreamPartialBuilder {
         thinkingBuf.append(delta);
         if (thinkingBlockIndex < 0) {
             thinkingBlockIndex = blocks.size();
-            blocks.add(new ContentBlock.TextContent(""));
+            blocks.add(new ContentBlock.ThinkingContent(""));
             nextContentIndex++;
         }
         int idx = thinkingBlockIndex;
-        blocks.set(idx, new ContentBlock.TextContent(thinkingBuf.toString()));
+        blocks.set(idx, new ContentBlock.ThinkingContent(thinkingBuf.toString()));
         return new StreamEvent.ThinkingDelta(idx, delta, snapshot());
     }
 
@@ -208,12 +208,20 @@ public final class StreamPartialBuilder {
     @SuppressWarnings("unchecked") // Jackson ObjectMapper.readValue with generic Map type
     private Map<String, Object> parseArgs() {
         try {
-            return (Map<String, Object>) (Map<?, ?>)
-                    new com.fasterxml.jackson.databind.ObjectMapper()
-                            .readValue(toolArgBuf.toString(), Map.class);
+            return (Map<String, Object>) (Map<?, ?>) lenientMapper()
+                    .readValue(toolArgBuf.toString(), Map.class);
         } catch (Exception e) {
             return Map.of("_raw", toolArgBuf.toString());
         }
+    }
+
+    /** ObjectMapper tolerant of common model-output JSON quirks. */
+    static com.fasterxml.jackson.databind.ObjectMapper lenientMapper() {
+        return new com.fasterxml.jackson.databind.ObjectMapper()
+            .enable(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_COMMENTS)
+            .enable(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_SINGLE_QUOTES)
+            .enable(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES)
+            .enable(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_TRAILING_COMMA);
     }
 
     private void parseAndSetToolBlock(int idx) {

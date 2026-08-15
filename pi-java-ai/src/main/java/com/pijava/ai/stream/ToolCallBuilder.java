@@ -70,7 +70,7 @@ public final class ToolCallBuilder {
         Map<String, Object> parsed;
         try {
             parsed = (Map<String, Object>) (Map<?, ?>)
-                    new com.fasterxml.jackson.databind.ObjectMapper()
+                    StreamPartialBuilder.lenientMapper()
                             .readValue(arguments.toString(), Map.class);
         } catch (Exception e) {
             parsed = Map.of("_raw", arguments.toString());

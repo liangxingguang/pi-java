@@ -1,9 +1,6 @@
 package com.pijava.coding.agent.core;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
+import com.pijava.agent.harness.StreamFn;
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.ChatApi;
 import com.pijava.ai.api.StreamIterator;
@@ -11,15 +8,11 @@ import com.pijava.ai.auth.EnvApiKeyResolver;
 import com.pijava.ai.auth.FileCredentialStore;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
-import com.pijava.ai.provider.AnthropicProvider;
-import com.pijava.ai.provider.DeepSeekProvider;
-import com.pijava.ai.provider.GoogleProvider;
-import com.pijava.ai.provider.MistralProvider;
-import com.pijava.ai.provider.OpenAIProvider;
-import com.pijava.ai.provider.Provider;
-import com.pijava.ai.provider.ProviderRegistry;
-import com.pijava.agent.harness.StreamFn;
+import com.pijava.ai.provider.*;
 import com.pijava.coding.agent.cli.Args;
+
+import java.util.List;
+import java.util.Map;
 
 /**
  * Assembly helpers for providers and the harness {@link StreamFn}
@@ -64,8 +57,7 @@ public final class DefaultProviders {
         var providerName = resolveProviderName(args, defaultProvider);
         return (messages, model, options) -> {
             var provider = providers.get(providerName)
-                .orElseThrow(() -> new IllegalStateException(
-                    "Unknown provider: " + providerName));
+                .orElseThrow(() -> new IllegalStateException("Unknown provider: " + providerName));
             return streamBlocking(provider, messages, model, options, apiOptions(args, providerName));
         };
     }
@@ -96,12 +88,9 @@ public final class DefaultProviders {
             return args.apiKey();
         }
         var env = new EnvApiKeyResolver().resolveApiKey(providerName);
-        if (env.isPresent()) {
-            return env.get();
-        }
-        return new FileCredentialStore().resolveApiKey(providerName)
-            .orElse("");
-    }
+		return env.orElseGet(() -> new FileCredentialStore().resolveApiKey(providerName)
+				.orElse(""));
+	}
 
     private static List<Provider> builtins() {
         return List.of(

@@ -155,4 +155,73 @@ class ChatScreenTest {
 
         assertThat(screen.lastMessage()).isInstanceOf(ChatMessage.Error.class);
     }
+
+    @Test
+    void toolCallRunAppendsTurnSeparatorOnFinish() {
+        var screen = new ChatScreen();
+        screen.onStreamEvent(new StreamEvent.ToolCallStart(0, AssistantMessage.empty()));
+        screen.onStreamEvent(new StreamEvent.ToolCallEnd(
+            0, "id", "read", java.util.Map.of(), AssistantMessage.empty()));
+        var count = screen.messageCount();
+
+        screen.finishRun(65_000_000_000L);
+
+        assertThat(screen.messageCount()).isEqualTo(count + 1);
+        assertThat(screen.lastMessage()).isInstanceOf(ChatMessage.TurnSeparator.class);
+    }
+
+    @Test
+    void conversationalRunWithoutToolsAddsNoSeparator() {
+        var screen = new ChatScreen();
+        screen.onStreamEvent(new StreamEvent.TextEnd(
+            0, "hello", AssistantMessage.empty()));
+        var count = screen.messageCount();
+
+        screen.finishRun(30_000_000_000L);
+
+        assertThat(screen.messageCount()).isEqualTo(count);
+    }
+
+    @Test
+    void showWelcomeAppendsSystemBanner() {
+        var screen = new ChatScreen();
+
+        screen.showWelcome("pi-java card");
+
+        assertThat(screen.messageCount()).isEqualTo(1);
+        assertThat(screen.lastMessage()).isInstanceOf(ChatMessage.System.class);
+    }
+    @Test
+    void slashInputActivatesCompleterAndCompletionReplacesText() {
+        var screen = new ChatScreen();
+        screen.setSlashCommands(List.of(
+            new com.pijava.tui.component.SlashCompleter.CommandItem(
+                "model", "", "Switch model")));
+
+        screen.onKeyEvent(dev.tamboui.tui.event.KeyEvent.ofChar('/'));
+        screen.onKeyEvent(dev.tamboui.tui.event.KeyEvent.ofChar('m'));
+
+        assertThat(screen.completerActive()).isTrue();
+        assertThat(screen.applyCompletion()).isTrue();
+        assertThat(screen.inputText()).isEqualTo("/model");
+        assertThat(screen.completerActive()).isFalse();
+    }
+    @Test
+    void tabKeyCompletesHighlightedCommand() {
+        var screen = new ChatScreen();
+        screen.setSlashCommands(List.of(
+            new com.pijava.tui.component.SlashCompleter.CommandItem(
+                "model", "", "Switch model")));
+
+        screen.onKeyEvent(dev.tamboui.tui.event.KeyEvent.ofChar('/'));
+        screen.onKeyEvent(dev.tamboui.tui.event.KeyEvent.ofChar('m'));
+        assertThat(screen.completerActive()).isTrue();
+
+        screen.onKeyEvent(dev.tamboui.tui.event.KeyEvent.ofKey(
+            dev.tamboui.tui.event.KeyCode.TAB,
+            dev.tamboui.tui.bindings.BindingSets.defaults()));
+
+        assertThat(screen.inputText()).isEqualTo("/model");
+        assertThat(screen.completerActive()).isFalse();
+    }
 }

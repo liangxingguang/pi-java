@@ -14,9 +14,11 @@ public sealed interface ChatMessage {
     record User(String text) implements ChatMessage {}
     record Assistant(List<ContentBlock> blocks) implements ChatMessage {}
     record ToolCall(String name, String arguments) implements ChatMessage {}
-    record ToolResult(String output) implements ChatMessage {}
+    record ToolResult(String output, boolean isError) implements ChatMessage {}
     record Error(String message) implements ChatMessage {}
     record System(String text) implements ChatMessage {}
+    /** Inter-turn divider with an optional runtime label (Codex CLI style). */
+    record TurnSeparator(String label) implements ChatMessage {}
 
     /** Project an agent-core {@link Entry} into a chat bubble. */
     static ChatMessage from(Entry entry) {
@@ -49,13 +51,13 @@ public sealed interface ChatMessage {
 
     private static ChatMessage fromToolBlocks(List<ContentBlock> blocks) {
         if (blocks.isEmpty()) {
-            return new ToolResult("");
+            return new ToolResult("", false);
         }
         var block = blocks.get(0);
         if (block instanceof ContentBlock.ToolResultContent result) {
-            return new ToolResult(joinText(result.content()));
+            return new ToolResult(joinText(result.content()), result.isError());
         }
-        return new ToolResult(joinText(blocks));
+        return new ToolResult(joinText(blocks), false);
     }
 
     private static String joinText(List<ContentBlock> blocks) {

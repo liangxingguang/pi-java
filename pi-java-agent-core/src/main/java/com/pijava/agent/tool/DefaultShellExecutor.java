@@ -12,6 +12,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Default shell executor using ProcessBuilder + Virtual Threads.
  *
@@ -32,6 +35,9 @@ import java.util.concurrent.TimeoutException;
  */
 public class DefaultShellExecutor implements ShellExecutor {
 
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultShellExecutor.class);
+    private static final int MAX_LOG_COMMAND_LENGTH = 500;
+
     private final String customShellPath;
 
     public DefaultShellExecutor() {
@@ -45,6 +51,8 @@ public class DefaultShellExecutor implements ShellExecutor {
 
     @Override
     public ShellResult execute(String command, ShellOptions options) throws Exception {
+        long startNanos = System.nanoTime();
+        LOG.debug("shell exec: cwd={} command={}", options.cwd(), truncate(command));
         ShellConfig config = resolveShell();
         var pb = new ProcessBuilder();
         if (config.transport() == ShellTransport.STDIN) {
@@ -102,6 +110,9 @@ public class DefaultShellExecutor implements ShellExecutor {
 
             String outputStr = output.toString(StandardCharsets.UTF_8);
             long outputLines = outputStr.isEmpty() ? 0 : outputStr.lines().count();
+            long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000L;
+            LOG.debug("shell exit: code={} timedOut={} lines={} elapsedMs={}",
+                exitCode, timedOut, outputLines, elapsedMs);
 
             return new ShellResult(
                 outputStr,
@@ -158,9 +169,14 @@ public class DefaultShellExecutor implements ShellExecutor {
         if (isLegacyWslBashPath(shell)) {
             return new ShellConfig(List.of(shell, "-s"), ShellTransport.STDIN);
         }
-        return isWindows()
-            ? new ShellConfig(List.of(shell, "--login", "-c"), ShellTransport.ARGV)
-            : new ShellConfig(List.of(shell, "-c"), ShellTransport.ARGV);
+        if (isWindows()) {
+            // Git Bash / MSYS: receive the command over stdin. Passing it as a
+            // `-c` argv goes through Windows command-line parsing and MSYS
+            // backslash conversion, which corrupts escapes like `\n` inside
+            // `echo -e "5\n3"` (observed as `5n3`).
+            return new ShellConfig(List.of(shell, "--login", "-s"), ShellTransport.STDIN);
+        }
+        return new ShellConfig(List.of(shell, "-c"), ShellTransport.ARGV);
     }
 
     /** Mirrors pi's isLegacyWslBashPath. */
@@ -226,6 +242,12 @@ public class DefaultShellExecutor implements ShellExecutor {
         var all = new ArrayList<String>(args);
         all.add(command);
         return all;
+    }
+
+    private static String truncate(String text) {
+        String singleLine = text.replace('\n', ' ').replace('\r', ' ');
+        return singleLine.length() <= MAX_LOG_COMMAND_LENGTH
+            ? singleLine : singleLine.substring(0, MAX_LOG_COMMAND_LENGTH) + "...";
     }
 
     private static boolean isWindows() {

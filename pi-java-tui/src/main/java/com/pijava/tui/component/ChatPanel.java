@@ -3,31 +3,23 @@ package com.pijava.tui.component;
 import java.util.ArrayList;
 import java.util.List;
 
-import dev.tamboui.toolkit.element.StyledElement;
-import dev.tamboui.toolkit.elements.ListElement;
-
 /**
- * Main chat panel: a scrollable message list (Phase 3 design §4.3).
+ * Main chat panel: a row-level scrollable transcript viewport (Phase 3
+ * alignment design §5.2), replacing the TamboUI {@code ListElement} chat
+ * container.
  *
- * <p>Backed by a persistent {@link ListElement} held as a field, following
- * TamboUI's official chat-pane pattern (sticky auto-scroll, no selection
- * highlight, visible scrollbar). Rebuilding the list inline every render
- * discards the scroll state, so the same element is reused and only its items
- * are refreshed each frame.</p>
+ * <p>Backed by a persistent {@link ChatViewportElement} held as a field:
+ * the element owns its scroll state, so rebuilding the item list every frame
+ * (messages/draft) never discards the scroll position. The streaming draft is
+ * rendered as the last message inside the viewport instead of a separate
+ * bubble below the list.</p>
  */
 public final class ChatPanel {
 
     private final List<ChatMessage> messages = new ArrayList<>();
-    // Official log/chat-style configuration: no row is selected, no highlight
-    // symbol or inverted row, sticky scroll (new content stays visible until
-    // the user scrolls away), a visible scrollbar, and a stable focus id.
-    private final ListElement<ChatMessage> element = new ListElement<ChatMessage>()
-        .selected(-1)
-        .highlightSymbol("")
-        .highlightStyle(dev.tamboui.style.Style.EMPTY)
-        .displayOnly()
-        .stickyScroll()
-        .scrollbar()
+    private ChatMessage draft;
+    private final ChatViewportElement element = new ChatViewportElement()
+        .scrollbar(true)
         .id("chat")
         .fill()
         .addClass("ChatPanel");
@@ -37,28 +29,67 @@ public final class ChatPanel {
         messages.add(message);
     }
 
-    /** Clear all messages ({@code /clear} etc.). */
-    public void clear() {
-        messages.clear();
+    /**
+     * Sets the in-flight streaming draft (null = none). The draft joins the
+     * viewport as the last message; committed messages follow on TextEnd.
+     */
+    public void setDraft(ChatMessage message) {
+        this.draft = message;
     }
 
-    /** The number of messages (for tests). */
+    /** Clear all messages and the draft ({@code /clear} etc.). */
+    public void clear() {
+        messages.clear();
+        draft = null;
+    }
+
+    /** The number of committed messages (for tests). */
     public int size() {
         return messages.size();
     }
 
-    /** The last message, if any. */
+    /** Snapshot of committed messages (scrollback printer). */
+    public List<ChatMessage> messages() {
+        return List.copyOf(messages);
+    }
+
+    /** The in-flight streaming draft, or null. */
+    public ChatMessage draft() {
+        return draft;
+    }
+
+    /** The last committed message, if any. */
     public ChatMessage last() {
         return messages.isEmpty() ? null : messages.get(messages.size() - 1);
     }
 
-    /** Render the scrollable message list. */
-    public StyledElement<?> render() {
-        var items = messages.stream()
-            .map(MessageBubble::of)
-            .map(StyledElement.class::cast)
-            .toArray(StyledElement<?>[]::new);
-        element.elements(items);
-        return element;
+    /** Scrolls the viewport by {@code delta} rows (negative = up). */
+    public void scrollByRows(int delta) {
+        element.scrollState().scrollByRows(delta, element.rowCount(), element.visibleRows());
+    }
+
+    /** Jumps to the top of the transcript. */
+    public void scrollToTop() {
+        element.scrollState().scrollToTop();
+    }
+
+    /** Jumps to the bottom of the transcript and resumes follow. */
+    public void scrollToBottom() {
+        element.scrollState().scrollToBottom();
+    }
+
+    /** The current first visible row (test hook). */
+    public int scrollOffset() {
+        return element.scrollState().offset();
+    }
+
+    /** The current viewport height in rows (test hook). */
+    public int visibleRows() {
+        return element.visibleRows();
+    }
+
+    /** Render the scrollable transcript viewport. */
+    public ChatViewportElement render() {
+        return element.messages(messages, draft);
     }
 }

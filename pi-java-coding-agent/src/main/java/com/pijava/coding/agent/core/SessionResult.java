@@ -44,4 +44,9 @@ public final class SessionResult {
     public RunStatus status() {
         return status.join();
     }
+
+    /** Completion signal for the run status (non-blocking). */
+    public CompletableFuture<RunStatus> statusFuture() {
+        return status;
+    }
 }

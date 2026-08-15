@@ -9,6 +9,7 @@ import com.pijava.coding.agent.core.KeybindingsManager;
 import dev.tamboui.terminal.Backend;
 import dev.tamboui.layout.Constraint;
 import dev.tamboui.style.Color;
+import dev.tamboui.style.Style;
 import dev.tamboui.toolkit.Toolkit;
 import dev.tamboui.toolkit.app.ToolkitRunner;
 import dev.tamboui.toolkit.elements.Column;
@@ -22,6 +23,9 @@ import dev.tamboui.tui.TuiConfig;
 import dev.tamboui.tui.event.KeyCode;
 import dev.tamboui.tui.event.KeyEvent;
 import dev.tamboui.widgets.input.TextAreaState;
+import dev.tamboui.widgets.scrollbar.Scrollbar;
+import dev.tamboui.widgets.scrollbar.ScrollbarOrientation;
+import dev.tamboui.widgets.scrollbar.ScrollbarState;
 
 /**
  * Isolation layer for direct TamboUI API usage (Phase 3 design §2.2, risk R1).
@@ -40,11 +44,16 @@ public final class TamboUIAdapter {
     public static ToolkitRunner createRunner() throws Exception {
         return ToolkitRunner.create(TuiConfig.builder()
             .backend(createBackend())
-            .tickRate(Duration.ofMillis(50))
+            // 33ms (~30Hz) keeps continuous motion — trackpad scroll and the
+            // streaming draft — visibly smooth; the diff renderer keeps the
+            // cost low. The normalizer flushes fractional rows every tick.
+            .tickRate(Duration.ofMillis(33))
             .alternateScreen(true)
             .hideCursor(true)
             .bracketedPaste(true)
-            // Let the chat ListElement receive wheel events for scrolling.
+            // Scroll input is normalized by the app shell before element
+            // routing; capture stays enabled (disable_mouse_capture defaults
+            // to false in the alignment design).
             .mouseCapture(true)
             .build());
     }
@@ -55,14 +64,15 @@ public final class TamboUIAdapter {
      * Windows uses it. Other platforms keep the native Panama backend. Both
      * variants skip the Mode 2027 handshake.
      */
-    private static Backend createBackend() throws IOException {
+    static Backend createBackend() throws IOException {
         if (isWindows()) {
             return new NoMode2027JLineBackend();
         }
         return new NoMode2027Backend();
     }
 
-    private static boolean isWindows() {
+    /** Whether the app runs on Windows (ConPTY/console mouse path). */
+    public static boolean isWindows() {
         var os = System.getProperty("os.name", "");
         return os.toLowerCase(java.util.Locale.ROOT).contains("win");
     }
@@ -125,6 +135,40 @@ public final class TamboUIAdapter {
         return Spacer.length(length);
     }
 
+    // ── Scrollbar (row-level viewport) ───────────────────────
+
+    /**
+     * Builds a right-aligned vertical scrollbar with the given thumb/track
+     * styles (already resolved from CSS by the caller).
+     *
+     * @param thumbStyle the thumb style (may be {@link Style#EMPTY})
+     * @param trackStyle the track style (may be {@link Style#EMPTY})
+     * @return a vertical scrollbar widget
+     */
+    public static Scrollbar verticalScrollbar(Style thumbStyle, Style trackStyle) {
+        return Scrollbar.builder()
+            .orientation(ScrollbarOrientation.VERTICAL_RIGHT)
+            .thumbStyle(thumbStyle)
+            .trackStyle(trackStyle)
+            .build();
+    }
+
+    /**
+     * Creates the state for a row-level scrollbar.
+     *
+     * @param contentLength          total row count
+     * @param viewportContentLength  visible row count
+     * @param position               first visible row index
+     * @return the scrollbar state
+     */
+    public static ScrollbarState scrollbarState(int contentLength,
+                                                int viewportContentLength,
+                                                int position) {
+        return new ScrollbarState(Math.max(1, contentLength))
+            .viewportContentLength(viewportContentLength)
+            .position(position);
+    }
+
     // ── Layout constraints / colors ──────────────────────────
 
     public static Constraint fill() {
@@ -177,22 +221,40 @@ public final class TamboUIAdapter {
             key, event.hasCtrl(), event.hasAlt(), event.hasShift());
     }
 
-    /** Whether the event is a plain Enter (submit). */
-    public static boolean isPlainEnter(KeyEvent event) {
-        if (event.hasAlt() || event.hasShift()) {
+    /**
+     * Whether the event submits the editor: a plain Enter (CR) with no
+     * modifiers, matching Codex CLI's composer default {@code submit=[Enter]}.
+     * Shift/Alt/Ctrl variants never submit (Shift/Alt+Enter insert a newline).
+     */
+    public static boolean isSendEnter(KeyEvent event) {
+        if (event.hasCtrl() || event.hasAlt() || event.hasShift()) {
             return false;
         }
         if (event.isKey(KeyCode.ENTER)) {
             return true;
         }
-        // Some terminals/backends report Enter as CHAR('\r') / CHAR('\n')
-        // instead of KeyCode.ENTER (e.g. via ConPTY). Treat those as Enter.
-        return event.code() == KeyCode.CHAR
-            && ("\r".equals(event.string()) || "\n".equals(event.string()));
+        // Windows consoles can deliver Enter as CHAR('\r') rather than ENTER.
+        return event.code() == KeyCode.CHAR && "\r".equals(event.string());
     }
 
-    /** Whether the event is Shift+Enter (newline in the editor). */
-    public static boolean isShiftEnter(KeyEvent event) {
-        return event.isKey(KeyCode.ENTER) && event.hasShift() && !event.hasAlt();
+    /**
+     * Whether the event inserts a newline in the editor:
+     * <ul>
+     *   <li>CHAR LF (U+000A) — Shift+Enter-as-LF / Ctrl+J fallback. Codex CLI
+     *       normalizes U+000A to logical Ctrl+J bound to {@code insert_newline}
+     *       (openai/codex #20555, PR #20798); {@code EventParser} surfaces LF
+     *       as a plain {@code '\n'} character.</li>
+     *   <li>Shift+Enter / Alt+Enter when a terminal reports the modifier —
+     *       Codex's editor default {@code insert_newline} includes both.</li>
+     * </ul>
+     */
+    public static boolean isNewlineEnter(KeyEvent event) {
+        if (event.code() == KeyCode.CHAR && "\n".equals(event.string())) {
+            return true;
+        }
+        if (!event.isKey(KeyCode.ENTER)) {
+            return false;
+        }
+        return event.hasShift() || event.hasAlt();
     }
 }

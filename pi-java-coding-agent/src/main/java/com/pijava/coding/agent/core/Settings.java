@@ -51,6 +51,7 @@ public final class Settings {
     public String sessionDir;
     public String httpProxy;
     public String tuiMode;
+    public Tui tui;
 
     /** Unknown fields passthrough (aligned with pi's extensible settings). */
     private final Map<String, Object> unknown = new HashMap<>();
@@ -93,5 +94,24 @@ public final class Settings {
     public record Markdown(
         int codeBlockIndent,
         boolean mermaid
+    ) {}
+
+    /**
+     * TUI settings (JSON boundary representation), aligned with Codex TUI2
+     * {@code tui.scroll_*} (PR #8357). Every component is optional at this
+     * boundary; {@code com.pijava.tui.util.ScrollConfig.from(Settings)} falls
+     * back to the documented defaults for null or invalid values.
+     */
+    public record Tui(
+        String scrollMode,
+        Integer scrollEventsPerTick,
+        Integer scrollWheelLines,
+        Integer scrollTrackpadLines,
+        Integer scrollTrackpadAccelEvents,
+        Integer scrollTrackpadAccelMax,
+        Boolean scrollInvert,
+        Integer scrollWheelTickDetectMaxMs,
+        Integer scrollWheelLikeMaxDurationMs,
+        Boolean disableMouseCapture
     ) {}
 }

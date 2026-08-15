@@ -32,3 +32,6 @@ graalvm-reachability-metadata/
 # Checkstyle / SpotBugs caches
 .checkstyle/
 .spotbugs/
+
+# Agent scratch/working data
+.agents/

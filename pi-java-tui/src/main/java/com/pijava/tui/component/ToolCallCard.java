@@ -1,29 +1,33 @@
 package com.pijava.tui.component;
 
-import com.pijava.tui.util.TamboUIAdapter;
+import java.util.List;
 
-import dev.tamboui.toolkit.element.Element;
+import dev.tamboui.style.Style;
 
 /**
- * Tool call line (Phase 3 design §4.3): rendered as plain text like the rest
- * of the conversation — no border, no background (Codex-CLI style). The
- * arguments are pre-wrapped to the chat content width so the row height
- * measured by the {@code ListElement} always matches the rendered height.
+ * Tool call lines (Phase 3 alignment design §5.3): plain text like the rest
+ * of the conversation — no border, no background (Codex-CLI style). The name
+ * and status share one logical row (markup carries the intra-row styles); the
+ * arguments are a single preformatted row hard-truncated at the content width.
  */
 public record ToolCallCard(
     String name,
     String arguments,
     String status
 ) {
-    /** Render as a plain two-line block: name/status, then arguments. */
-    public Element render(int contentWidth) {
-        return TamboUIAdapter.column(
-            TamboUIAdapter.row(
-                TamboUIAdapter.text(name).bold().cyan(),
-                TamboUIAdapter.spacerFill(),
-                TamboUIAdapter.text(status).dim()),
-            TamboUIAdapter.text(
-                MessageBubble.wrap(truncate(arguments, 200), contentWidth)).dim());
+    /**
+     * Builds the two logical rows: name/status, then the preformatted
+     * arguments (truncated to 200 chars, never wrapped).
+     *
+     * @return logical lines
+     */
+    public List<LogicalLine> lines() {
+        return List.of(
+            new LogicalLine(
+                "[cyan]" + name + "[/]  [dim]" + status + "[/]",
+                0, 0, false, Style.EMPTY),
+            new LogicalLine(
+                truncate(arguments, 200), 4, 4, true, Style.EMPTY.dim()));
     }
 
     private static String truncate(String value, int max) {

@@ -2,218 +2,135 @@ package com.pijava.tui.component;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Function;
+import java.util.Map;
 
 import com.pijava.ai.message.ContentBlock;
-import com.pijava.tui.util.TamboUIAdapter;
+import com.pijava.tui.util.TextLayout;
 
-import dev.tamboui.layout.Rect;
-import dev.tamboui.terminal.Frame;
-import dev.tamboui.toolkit.element.Element;
-import dev.tamboui.toolkit.element.RenderContext;
-import dev.tamboui.toolkit.element.Size;
-import dev.tamboui.toolkit.element.StyledElement;
+import dev.tamboui.style.Style;
 
 /**
- * Renders a {@link ChatMessage} into a TamboUI widget tree
- * (Phase 3 design §4.2).
- *
- * <p>{@link ChatPanel} is a {@code ListElement}, which sizes every item from
- * its preferred height. Long content is therefore pre-wrapped to the chat
- * content width here so the measured height always matches the rendered
- * height — otherwise auto-wrapped rows would be clipped inside a list cell
- * (TamboUI chat-pane rule: pre-wrap long lines at insert time).</p>
- *
- * <p>The actual content width is only known once the list lays out for a
- * frame, so {@link #of(ChatMessage)} returns a width-aware wrapper that
- * pre-wraps to the item's real width at render time (reserving the column
- * taken by the always-visible scrollbar).</p>
+ * Projects a {@link ChatMessage} into width-agnostic {@link LogicalLine}s
+ * (Phase 3 alignment design §5.3). Wrapping happens at render time inside the
+ * {@link ChatViewportElement}, so message content never caches a stale width.
  */
 public final class MessageBubble {
+
+    /** Continuation indent for user/assistant message bodies. */
+    private static final int MESSAGE_INDENT = 2;
+    /** Indent for tool arguments and tool results (Codex-CLI hierarchy). */
+    private static final int TOOL_INDENT = 4;
 
     private MessageBubble() {}
 
     /**
-     * Build the widget for a chat message. Long text is pre-wrapped to the
-     * actual content width of the list cell when the frame renders.
+     * Builds the logical lines for a chat message.
+     *
+     * @param msg the chat message
+     * @return logical lines (empty for an empty message)
      */
-    public static Element of(ChatMessage msg) {
-        return new WidthWrappedElement(width -> build(msg, width));
-    }
-
-    private static Element build(ChatMessage msg, int contentWidth) {
+    public static List<LogicalLine> lines(ChatMessage msg) {
         return switch (msg) {
-            case ChatMessage.User(var text) ->
-                // Codex-CLI style: plain text, no bubble/background.
-                TamboUIAdapter.markupText(wrap(text, contentWidth));
-            case ChatMessage.Assistant(var blocks) ->
-                TamboUIAdapter.column(renderBlocks(blocks, contentWidth))
-                    .addClass("MessageBubble", "assistant");
-            case ChatMessage.ToolCall(var name, var arguments) ->
-                new ToolCallCard(name, arguments, "running").render(contentWidth);
-            case ChatMessage.ToolResult(var output) ->
-                TamboUIAdapter.markupText(wrap(truncate(output, 500), contentWidth));
+            case ChatMessage.User(var text) -> prefix(
+                TextLayout.split(TextLayout.escapeMarkup(text), false),
+                "› ", MESSAGE_INDENT);
+            case ChatMessage.Assistant(var blocks) -> renderBlocks(blocks);
+            case ChatMessage.ToolCall(var name, var arguments) -> toolCallCard(name, arguments);
+            case ChatMessage.ToolResult(var output, var isError) ->
+                List.of(new LogicalLine(
+                    (isError ? "! " : "") + truncate(TextLayout.escapeMarkup(output), 500),
+                    TOOL_INDENT, TOOL_INDENT, true,
+                    isError ? Style.EMPTY.red() : Style.EMPTY.dim()));
             case ChatMessage.Error(var message) ->
-                TamboUIAdapter.markupText(wrap("[red]" + message + "[/]", contentWidth));
-            case ChatMessage.System(var text) ->
-                // markupText keeps multi-line output (slash command help,
-                // changelogs, hotkeys) as separate lines; plain text() renders
-                // a single line and flattens every newline.
-                TamboUIAdapter.markupText(wrap(text, contentWidth)).dim();
+                TextLayout.split("[red]" + TextLayout.escapeMarkup(message) + "[/]", false);
+            case ChatMessage.System(var text) -> dim(TextLayout.split(TextLayout.escapeMarkup(text), false));
+            case ChatMessage.TurnSeparator(var label) ->
+                List.of(new LogicalLine(separator(label), 0, 0, false, Style.EMPTY.dim()));
         };
     }
 
-    private static List<Element> renderBlocks(
-            List<ContentBlock> blocks, int contentWidth) {
-        var elements = new ArrayList<Element>();
+    /** Applies the first-line prefix and the continuation indent to a block. */
+    private static List<LogicalLine> prefix(
+            List<LogicalLine> lines, String prefix, int indent) {
+        var out = new ArrayList<LogicalLine>(lines.size());
+        for (int i = 0; i < lines.size(); i++) {
+            var line = lines.get(i);
+            out.add(i == 0
+                ? new LogicalLine(prefix + line.markup(), 0, indent,
+                    line.preformatted(), line.style())
+                : new LogicalLine(line.markup(), indent, indent,
+                    line.preformatted(), line.style()));
+        }
+        return out;
+    }
+
+    /** A dim rule spanning the separator label, or a plain rule without one. */
+    private static String separator(String label) {
+        String safe = label == null ? "" : TextLayout.escapeMarkup(label);
+        return safe.isBlank()
+            ? "─".repeat(40)
+            : "─".repeat(18) + " " + safe + " " + "─".repeat(18);
+    }
+
+    private static List<LogicalLine> renderBlocks(List<ContentBlock> blocks) {
+        var lines = new ArrayList<LogicalLine>();
+        boolean prefixed = false;
         for (var block : blocks) {
-            elements.add(switch (block) {
-                case ContentBlock.TextContent(var text) ->
-                    TamboUIAdapter.markupText(wrap(text, contentWidth));
+            var blockLines = switch (block) {
+                case ContentBlock.TextContent(var text) -> {
+                    var split = TextLayout.split(TextLayout.escapeMarkup(text), false);
+                    if (!prefixed) {
+                        // The bullet belongs to the assistant prose, not to a
+                        // leading tool card (which has its own status prefix).
+                        split = prefix(split, "• ", MESSAGE_INDENT);
+                        prefixed = true;
+                    }
+                    yield split;
+                }
+                case ContentBlock.ThinkingContent(var text) -> dim(
+                    TextLayout.split(TextLayout.escapeMarkup(text), false));
                 case ContentBlock.ToolUseContent(var id, var name, var arguments) ->
-                    new ToolCallCard(name, String.valueOf(arguments), "running")
-                        .render(contentWidth);
+                    new ToolCallCard(toolName(name), toolArgs(arguments), "running").lines();
                 case ContentBlock.ToolResultContent(
                         var toolUseId, var toolName, var content, var isError) ->
                     new ToolCallCard(
-                        toolName,
-                        truncate(joinText(content), 500),
-                        isError ? "error" : "done").render(contentWidth);
+                        toolName(toolName),
+                        truncate(TextLayout.escapeMarkup(joinText(content)), 500),
+                        isError ? "error" : "done").lines();
                 case ContentBlock.ImageContent(var mediaType, var data) ->
-                    TamboUIAdapter.text("[image: " + mediaType + "]").dim();
-            });
+                    List.of(new LogicalLine(
+                        "[image: " + mediaType + "]", 0, 0, false, Style.EMPTY.dim()));
+            };
+            lines.addAll(blockLines);
         }
-        return elements;
+        return lines;
     }
 
-    /**
-     * Pre-wraps text to the exact width of the list cell, so the measured
-     * height (explicit newline count) matches the rendered height.
-     */
-    private static final class WidthWrappedElement
-            extends StyledElement<WidthWrappedElement> {
-
-        private final Function<Integer, Element> factory;
-        private Element cached;
-        private int cachedWidth = -1;
-
-        WidthWrappedElement(Function<Integer, Element> factory) {
-            this.factory = factory;
-        }
-
-        private Element child(int width) {
-            if (cached == null || cachedWidth != width) {
-                cached = factory.apply(width);
-                cachedWidth = width;
-            }
-            return cached;
-        }
-
-        @Override
-        public Size preferredSize(int availableWidth, int availableHeight,
-                                  RenderContext context) {
-            // The always-visible scrollbar reserves the last column.
-            int contentWidth = Math.max(1, availableWidth - 1);
-            return child(contentWidth).preferredSize(contentWidth, availableHeight, context);
-        }
-
-        @Override
-        protected void renderContent(Frame frame, Rect area,
-                                     RenderContext context) {
-            child(Math.max(1, area.width())).render(frame, area, context);
-        }
+    private static List<LogicalLine> toolCallCard(String name, String arguments) {
+        return new ToolCallCard(toolName(name),
+            TextLayout.escapeMarkup(arguments), "running").lines();
+    }
+    /** Tool card label: fall back to "tool" when the stream omits the name. */
+    private static String toolName(String name) {
+        return name == null || name.isBlank() ? "tool" : name;
     }
 
-    /**
-     * Greedy word-wrap with a hard-break fallback, keeping multi-line input
-     * intact. Lines longer than {@code width} are broken at word boundaries
-     * when possible, otherwise split by display width (wide chars count 2).
-     */
-    static String wrap(String text, int width) {
-        if (text == null || text.isEmpty() || width <= 0) {
-            return text;
+    /** Tool arguments for display: unwrap {"_raw": "..."} back to the raw text. */
+    private static String toolArgs(Map<String, Object> arguments) {
+        if (arguments.size() == 1 && arguments.get("_raw") instanceof String raw) {
+            return raw;
         }
-        var out = new StringBuilder();
-        var lines = text.split("\r?\n", -1);
-        for (int i = 0; i < lines.length; i++) {
-            wrapLine(lines[i], width, out);
-            if (i < lines.length - 1) {
-                out.append('\n');
-            }
-        }
-        return out.toString();
+        return String.valueOf(arguments);
     }
 
-    private static void wrapLine(String line, int width, StringBuilder out) {
-        var words = line.split(" ");
-        var current = new StringBuilder();
-        int currentWidth = 0;
-        for (var word : words) {
-            int wordWidth = displayWidth(word);
-            if (currentWidth + wordWidth + (current.isEmpty() ? 0 : 1) > width) {
-                if (current.isEmpty()) {
-                    // Word alone is wider than the line: hard-break it.
-                    out.append(hardBreak(word, width));
-                    continue;
-                }
-                out.append(current).append('\n');
-                current.setLength(0);
-                currentWidth = 0;
-            }
-            if (!current.isEmpty()) {
-                current.append(' ');
-                currentWidth += 1;
-            }
-            current.append(word);
-            currentWidth += wordWidth;
+    private static List<LogicalLine> dim(List<LogicalLine> lines) {
+        var out = new ArrayList<LogicalLine>(lines.size());
+        for (var line : lines) {
+            out.add(new LogicalLine(line.markup(), line.initialIndent(),
+                line.subsequentIndent(), line.preformatted(),
+                Style.EMPTY.dim().patch(line.style())));
         }
-        out.append(current);
-    }
-
-    private static String hardBreak(String word, int width) {
-        var out = new StringBuilder();
-        var chunk = new StringBuilder();
-        int chunkWidth = 0;
-        for (int i = 0; i < word.length(); ) {
-            int cp = word.codePointAt(i);
-            int w = displayWidth(Character.toString(cp));
-            if (chunkWidth + w > width && chunkWidth > 0) {
-                out.append(chunk).append('\n');
-                chunk.setLength(0);
-                chunkWidth = 0;
-            }
-            chunk.appendCodePoint(cp);
-            chunkWidth += w;
-            i += Character.charCount(cp);
-        }
-        out.append(chunk);
-        return out.toString();
-    }
-
-    private static int displayWidth(String s) {
-        int width = 0;
-        for (int i = 0; i < s.length(); ) {
-            int cp = s.codePointAt(i);
-            width += isWide(cp) ? 2 : 1;
-            i += Character.charCount(cp);
-        }
-        return width;
-    }
-
-    private static boolean isWide(int cp) {
-        return cp >= 0x1100 && (cp <= 0x115F
-                || cp == 0x2329 || cp == 0x232A
-                || (cp >= 0x2E80 && cp <= 0xA4CF && cp != 0x303F)
-                || (cp >= 0xAC00 && cp <= 0xD7A3)
-                || (cp >= 0xF900 && cp <= 0xFAFF)
-                || (cp >= 0xFE10 && cp <= 0xFE19)
-                || (cp >= 0xFE30 && cp <= 0xFE6F)
-                || (cp >= 0xFF00 && cp <= 0xFF60)
-                || (cp >= 0xFFE0 && cp <= 0xFFE6)
-                || (cp >= 0x1F300 && cp <= 0x1F64F)
-                || (cp >= 0x1F900 && cp <= 0x1F9FF)
-                || (cp >= 0x20000 && cp <= 0x2FFFD)
-                || (cp >= 0x30000 && cp <= 0x3FFFD));
+        return out;
     }
 
     private static String joinText(List<ContentBlock> blocks) {

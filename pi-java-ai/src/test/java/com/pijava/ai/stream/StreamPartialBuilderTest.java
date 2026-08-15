@@ -55,4 +55,11 @@ class StreamPartialBuilderTest {
         assertThat(usage.partial().usage().inputTokens()).isEqualTo(123);
         assertThat(usage.partial().usage().outputTokens()).isEqualTo(45);
     }
+    @Test
+    void lenientMapperAcceptsModelJsonQuirks() throws Exception {
+        // Trailing comma + unquoted field name, common in model-generated args.
+        var parsed = StreamPartialBuilder.lenientMapper()
+            .readValue("{command: \"echo hi\",}", java.util.Map.class);
+        assertThat(parsed).isInstanceOf(java.util.Map.class);
+    }
 }

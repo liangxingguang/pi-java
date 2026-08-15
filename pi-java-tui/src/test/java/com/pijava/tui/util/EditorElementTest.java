@@ -40,12 +40,9 @@ class EditorElementTest {
 
         // Text renders at the start of the area.
         assertThat(buffer.get(0, 0).symbol()).isEqualTo("h");
-        // The cursor block sits right after the text as a solid breathing
-        // block whose shade is one of the cyan breath palette.
+        // The cursor block sits right after the text as a steady cyan block.
         var cursorStyle = buffer.get(5, 0).style();
-        assertThat(cursorStyle.bg()).isPresent();
-        assertThat(EditorElement.BREATH)
-            .contains(cursorStyle.bg().orElseThrow());
+        assertThat(cursorStyle.bg()).contains(EditorElement.CURSOR);
         assertThat(cursorStyle.fg()).contains(dev.tamboui.style.Color.BLACK);
     }
 }

@@ -65,18 +65,26 @@ public final class NoMode2027JLineBackend extends JLineBackend {
 
     @Override
     public void enableMouseCapture() throws IOException {
-        // Tell JLine the terminal is tracking mouse input: sets its internal
-        // tracking flag and ENABLE_MOUSE_INPUT so Windows console
-        // MOUSE_EVENT_RECORDs are forwarded to the reader instead of dropped.
-        jlineTerminal().trackMouse(Terminal.MouseTracking.Normal);
+        // Any-event tracking: the console must also forward motion WITHOUT a
+        // button held, so the chat viewport can thicken its scrollbar under
+        // the cursor (Codex-CLI style). Normal tracking drops those records.
+        jlineTerminal().trackMouse(Terminal.MouseTracking.Any);
         // Then write the raw CSI sequences with SGR (1006) last, so terminals
         // that honor escape requests keep sending SGR rather than urxvt/X10.
         super.enableMouseCapture();
+        // SGR any-event tracking (1003): hover moves for terminals that
+        // deliver SGR directly (Windows Terminal / ConPTY passthrough).
+        var writer = jlineTerminal().writer();
+        writer.print("\u001b[?1003h");
+        writer.flush();
     }
 
     @Override
     public void disableMouseCapture() throws IOException {
         super.disableMouseCapture();
+        var writer = jlineTerminal().writer();
+        writer.print("\u001b[?1003l");
+        writer.flush();
         jlineTerminal().trackMouse(Terminal.MouseTracking.Off);
     }
 
@@ -141,11 +149,16 @@ public final class NoMode2027JLineBackend extends JLineBackend {
             if (x >= 0) out.add(x);
             return raw;
         }
+        // Re-queue the CSI introducer consumed above: the caller returns ESC
+        // and the EventParser expects the full SGR shape ESC [ < b ; x ; y M;
+        // without the '[', the body would be parsed as standalone characters
+        // and typed into the editor instead of scrolling the viewport.
+        out.add((int) '[');
         enqueueSgr(out, b - 32, x - 32, y - 32);
         return raw;
     }
 
-    /** Queue {@code ESC [ < b ; x ; y M} for a converted X10 sequence. */
+    /** Queue the SGR body {@code < b ; x ; y M} (the caller re-adds {@code [}). */
     private static void enqueueSgr(Deque<Integer> out, int button, int x, int y) {
         out.add((int) '<');
         for (var ch : String.valueOf(button).toCharArray()) out.add((int) ch);

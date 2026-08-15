@@ -4,8 +4,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.pijava.agent.entry.Entry;
 import com.pijava.agent.harness.SessionSnapshot;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
@@ -118,5 +120,81 @@ class AgentSessionToolIntegrationTest {
             assertThat(lastSnapshot.get()).isNotNull();
             assertThat(lastSnapshot.get().totalTokens()).isEqualTo(168);
         }
+    }
+
+    @Test
+    void laterRunsDoNotReplayEarlierTranscriptEntries() throws Exception {
+        var tmp = Files.createTempDirectory("pi-java-replay-test");
+
+        var args = ArgsParser.parse(new String[] {
+            "--provider", "faux-replay", "--model", "hello", "--no-session"});
+        var providers = ProviderRegistry.create();
+        var helloMsg = AssistantMessage.empty().withContent(List.of(
+            new ContentBlock.TextContent("hello"))).withStopReason("stop");
+        var worldMsg = AssistantMessage.empty().withContent(List.of(
+            new ContentBlock.TextContent("world"))).withStopReason("stop");
+        providers.register(FauxProvider.sequence("faux-replay", List.of(
+            List.of(
+                new StreamEvent.Start(AssistantMessage.empty()),
+                new StreamEvent.TextStart(0, AssistantMessage.empty()),
+                new StreamEvent.TextDelta(0, "hello", helloMsg),
+                new StreamEvent.TextEnd(0, "hello", helloMsg),
+                new StreamEvent.StreamDone("stop", null, helloMsg)),
+            List.of(
+                new StreamEvent.Start(AssistantMessage.empty()),
+                new StreamEvent.TextStart(0, AssistantMessage.empty()),
+                new StreamEvent.TextDelta(0, "world", worldMsg),
+                new StreamEvent.TextEnd(0, "world", worldMsg),
+                new StreamEvent.StreamDone("stop", null, worldMsg)))));
+        var toolContext = new ToolContext(
+            tmp.toString(), Map.of(),
+            new DefaultShellExecutor(), new DefaultFileSystem());
+
+        var session = AgentSession.create(
+            args, InMemorySessionRepository.create(),
+            providers, toolContext);
+        try (session) {
+            var entries = new CopyOnWriteArrayList<Entry>();
+            session.processPrompt("first", PromptConfig.defaults(),
+                ignored -> { }, entries::add).status();
+            session.processPrompt("second", PromptConfig.defaults(),
+                ignored -> { }, entries::add).status();
+
+            // Invariant: each run's end-of-run entry delivery contains each
+            // transcript entry exactly once; a second run must not re-deliver
+            // the first run's entries (multi-turn TUI duplication guard).
+            assertThat(userTexts(entries, "first")).isEqualTo(1);
+            assertThat(userTexts(entries, "second")).isEqualTo(1);
+            assertThat(assistantTexts(entries, "hello")).isEqualTo(1);
+            assertThat(assistantTexts(entries, "world")).isEqualTo(1);
+        }
+    }
+
+    private static long userTexts(List<Entry> entries, String text) {
+        return entries.stream()
+            .filter(Entry.Message.class::isInstance)
+            .map(Entry.Message.class::cast)
+            .filter(m -> "user".equals(m.role()))
+            .filter(m -> text.equals(joinText(m.blocks())))
+            .count();
+    }
+
+    private static long assistantTexts(List<Entry> entries, String text) {
+        return entries.stream()
+            .filter(Entry.Message.class::isInstance)
+            .map(Entry.Message.class::cast)
+            .filter(m -> "assistant".equals(m.role()))
+            .filter(m -> text.equals(joinText(m.blocks())))
+            .count();
+    }
+
+    private static String joinText(List<ContentBlock> blocks) {
+        var builder = new StringBuilder();
+        for (var block : blocks) {
+            if (block instanceof ContentBlock.TextContent text) {
+                builder.append(text.text());
+            }
+        }
+        return builder.toString();
     }
 }

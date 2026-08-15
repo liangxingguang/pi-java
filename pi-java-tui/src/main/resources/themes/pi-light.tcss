@@ -6,6 +6,22 @@
     padding: 1 2;
 }
 
+ChatViewportElement-scrollbar-thumb {
+    foreground: #6c6f85;
+}
+
+ChatViewportElement-scrollbar-track {
+    foreground: #ccd0da;
+}
+
+ChatViewportElement-scrollbar-thumb-hover {
+    foreground: #1e66f5;
+}
+
+ChatViewportElement-scrollbar-track-hover {
+    foreground: #dce0e8;
+}
+
 .StatusBar {
     background: #dce0e8;
     foreground: #6c6f85;

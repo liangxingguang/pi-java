@@ -16,9 +16,18 @@ public final class StatusBar {
         return TamboUIAdapter.row(
             TamboUIAdapter.text(" " + snapshot.name()).dim(),
             TamboUIAdapter.spacerFill(),
+            running(snapshot),
             TamboUIAdapter.text("\u26A1 " + snapshot.totalTokens() + " tokens").dim(),
             TamboUIAdapter.text(" | ").dim(),
             TamboUIAdapter.text(snapshot.model()).dim())
             .length(1).addClass("StatusBar");
+    }
+
+    /** A live "running" indicator while the agent is working (empty when idle). */
+    private static dev.tamboui.toolkit.elements.TextElement running(SessionSnapshot snapshot) {
+        if ("running".equals(snapshot.phase())) {
+            return TamboUIAdapter.text("\u25CF running ").cyan();
+        }
+        return TamboUIAdapter.text("").dim();
     }
 }

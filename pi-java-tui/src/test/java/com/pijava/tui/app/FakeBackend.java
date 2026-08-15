@@ -26,12 +26,28 @@ final class FakeBackend implements Backend {
     private char[][] lastGrid = new char[60][160];
     private final Set<Long> cursorCells = new HashSet<>();
     private final Set<Long> backgroundCells = new HashSet<>();
+    private final java.util.List<String> rawWrites =
+        new java.util.concurrent.CopyOnWriteArrayList<>();
 
     /** Queue raw terminal bytes (UTF-8) as if typed by the user. */
     void feed(String text) {
         for (char c : text.toCharArray()) {
             input.add((int) c);
         }
+    }
+
+    /** Raw bytes written to the terminal (scrollback lines, escape sequences). */
+    java.util.List<String> rawWrites() {
+        return rawWrites;
+    }
+
+    /**
+     * Records raw output so inline-mode tests can assert what was appended to
+     * the terminal scrollback (InlineDisplay writes through this channel).
+     */
+    @Override
+    public void writeRaw(byte[] data) throws IOException {
+        rawWrites.add(new String(data, java.nio.charset.StandardCharsets.UTF_8));
     }
 
     /** Number of frames drawn so far. */
@@ -53,7 +69,7 @@ final class FakeBackend implements Backend {
                 var symbol = cell.symbol();
                 grid[y][x] = symbol == null || symbol.isEmpty() ? ' ' : symbol.charAt(0);
                 if (cell.style().bg().isPresent()
-                        && isBreathShade(cell.style().bg().get())) {
+                        && isCursorShade(cell.style().bg().get())) {
                     cursorCells.add(((long) y << 32) | (x & 0xFFFFFFFFL));
                 }
                 if (cell.style().bg().isPresent()) {
@@ -97,13 +113,8 @@ final class FakeBackend implements Backend {
         return !backgroundCells.isEmpty();
     }
 
-    private static boolean isBreathShade(Color color) {
-        for (var shade : com.pijava.tui.util.EditorElement.BREATH) {
-            if (shade.equals(color)) {
-                return true;
-            }
-        }
-        return false;
+    private static boolean isCursorShade(Color color) {
+        return com.pijava.tui.util.EditorElement.CURSOR.equals(color);
     }
 
     @Override
@@ -179,8 +190,26 @@ final class FakeBackend implements Backend {
 
     @Override
     public int peek(int timeoutMillis) throws IOException {
-        var value = input.peek();
-        return value == null ? -1 : value;
+        // A real terminal blocks until the next byte of an escape sequence
+        // arrives; the queue-backed fake must do the same, otherwise the
+        // first ESC of a burst is reported as a standalone key and the
+        // remaining bytes are misparsed as characters.
+        long deadline = System.currentTimeMillis() + Math.max(0, timeoutMillis);
+        while (true) {
+            var value = input.peek();
+            if (value != null) {
+                return value;
+            }
+            if (System.currentTimeMillis() >= deadline) {
+                return -1;
+            }
+            try {
+                Thread.sleep(1);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return -1;
+            }
+        }
     }
 
     @Override

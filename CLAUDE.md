@@ -44,7 +44,7 @@ commands: `mvn clean verify`, `mvn test -pl <module>`, `mvn checkstyle:check`, `
 
 ## 编码规范
 
-- **Erasable Java**：使用 `record`、`sealed interface`、`switch` 模式匹配，不使用 `enum`（如 pi 禁止 erasable TypeScript 之外语法）
+- **Erasable Java（代数数据类型）**：优先用 `record` + `sealed interface` + `switch` 模式匹配表达 ADT；`enum` 与 sealed 按数据形状取舍——**纯常量闭集用 `enum`**（判别字面量、错误码、状态、选项开关；需 snake_case/字符串序列化时用 `@JsonValue`，不手写 switch），**变体携带不同字段或行为时用 `sealed interface` + `record`**。不绝对禁用 `enum`（Java `enum` 是常态构造，无 pi TS `enum` 的运行时问题）；也不为凑「无 enum」而用 sealed 空 record 硬造纯常量枚举。
 - **无 `@SuppressWarnings`**（除非有注释说明）
 - **文件 ≤ 500 行**，超过则拆分
 - **Commit 粒度**：每个可独立编译的模块完成即 commit（200–500 行/次）

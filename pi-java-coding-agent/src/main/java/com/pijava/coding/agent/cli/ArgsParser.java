@@ -135,6 +135,9 @@ public final class ArgsParser {
     @Option(names = "--verbose")
     boolean verbose;
 
+    @Option(names = "--debug")
+    boolean debug;
+
     @Option(names = {"--approve", "-a"})
     boolean approve;
 
@@ -220,7 +223,7 @@ public final class ArgsParser {
             List.copyOf(skills), noSkills,
             List.copyOf(promptTemplates), noPromptTemplates,
             List.copyOf(themes), noThemes, noContextFiles,
-            print, export, listModels, offline, tuiMode, verbose, trustOverride,
+            print, export, listModels, offline, tuiMode, verbose, debug, trustOverride,
             parsedMessages, parsedFileArgs, parsedUnmatched, diagnostics);
     }
 

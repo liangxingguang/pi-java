@@ -41,8 +41,9 @@ import java.util.List;
  * @param export                export session file to HTML and exit (Phase 6)
  * @param listModels            null = not passed, "" = bare, non-empty = search term
  * @param offline               disable startup network operations
- * @param tuiMode               "regular" (default) | "fullscreen"
+ * @param tuiMode               "fullscreen" (default) | "regular"
  * @param verbose               force verbose startup
+ * @param debug                 enable debug logging (DEBUG level)
  * @param projectTrustOverride  --approve=true / --no-approve=false / null=unset
  * @param messages              positional prompt messages
  * @param fileArgs              @file arguments joined into the initial message
@@ -87,6 +88,7 @@ public record Args(
         boolean offline,
         String tuiMode,
         boolean verbose,
+        boolean debug,
         Boolean projectTrustOverride,
         List<String> messages,
         List<String> fileArgs,

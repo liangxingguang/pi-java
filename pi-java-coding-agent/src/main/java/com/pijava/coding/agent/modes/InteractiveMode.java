@@ -5,6 +5,7 @@ import java.util.concurrent.CompletionStage;
 import com.pijava.coding.agent.core.AgentSession;
 import com.pijava.coding.agent.core.EntryObserver;
 import com.pijava.coding.agent.core.PromptConfig;
+import com.pijava.coding.agent.core.SessionResult;
 import com.pijava.coding.agent.core.StreamObserver;
 import com.pijava.coding.agent.core.slash.SlashContext;
 
@@ -38,8 +39,8 @@ public final class InteractiveMode {
      * Exactly one virtual thread is started per run (the drive thread inside
      * {@code AgentSession.processPrompt}).
      */
-    public void submit(String prompt) {
-        session.processPrompt(
+    public SessionResult submit(String prompt) {
+        return session.processPrompt(
             prompt, PromptConfig.defaults(), streamObserver, entryObserver);
     }
 

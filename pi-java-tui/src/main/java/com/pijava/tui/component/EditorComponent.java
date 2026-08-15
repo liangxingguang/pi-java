@@ -22,7 +22,7 @@ public final class EditorComponent {
 
     public EditorComponent() {
         this.element = TamboUIAdapter.editorElement(state)
-            .placeholder("Type a message… (Enter send, Shift+Enter newline, Alt+Enter queue)")
+            .placeholder("Type a message… (Enter send, Shift+Enter newline)")
             .fill()
             .addClass("EditorComponent");
     }
@@ -50,9 +50,13 @@ public final class EditorComponent {
         switch (event.code()) {
             case KeyCode.CHAR -> {
                 var text = event.string();
-                if (text != null && !text.isBlank()) {
-                    state.insert(text);
+                if (text == null || text.isEmpty() || "\r".equals(text)) {
+                    // Empty input, or a stray carriage return: Enter is owned
+                    // by the app shell, so '\r' must never land in the text.
+                    // Everything else (spaces, tabs, '\n') is real input.
+                    return;
                 }
+                state.insert(text);
             }
             case KeyCode.BACKSPACE -> state.deleteBackward();
             case KeyCode.DELETE -> state.deleteForward();
@@ -75,9 +79,19 @@ public final class EditorComponent {
         }
     }
 
+    /** Replace the whole editor content (slash completion). */
+    public void replaceText(String text) {
+        state.setText(text == null ? "" : text);
+    }
+
     /** Register the submit callback (invoked by the app on plain Enter). */
     public void onSubmit(Consumer<String> handler) {
         this.submitHandler = handler;
+    }
+
+    /** Number of visible editor rows (1 for a single-line prompt). */
+    public int lineCount() {
+        return Math.max(1, state.lineCount());
     }
 
     /** Current editor text. */

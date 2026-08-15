@@ -7,14 +7,19 @@ import com.pijava.coding.agent.cli.ArgsParser;
 import com.pijava.coding.agent.cli.HelpText;
 import com.pijava.coding.agent.cli.ListModelsCommand;
 import com.pijava.coding.agent.cli.Version;
+import com.pijava.coding.agent.core.Logging;
 import com.pijava.coding.agent.modes.PrintMode;
 import com.pijava.coding.agent.spi.TuiEntryPoint;
 import com.pijava.coding.agent.subcommand.SubcommandHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * {@code pi-java} CLI entry point (Phase 3 design §9.5).
  */
 public final class Main {
+
+    private static final Logger LOG = LoggerFactory.getLogger(Main.class);
 
     private Main() {}
 
@@ -31,6 +36,9 @@ public final class Main {
         }
 
         var parsed = ArgsParser.parse(args);
+        Logging.configure(parsed.debug(), !parsed.print());
+        LOG.debug("CLI args parsed: mode={} print={} debug={}",
+            parsed.mode(), parsed.print(), parsed.debug());
         if (hasErrors(parsed)) {
             printDiagnostics(parsed);
             return 2;

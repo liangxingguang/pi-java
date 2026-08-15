@@ -25,8 +25,10 @@ import com.pijava.ai.message.ContentBlock;
  * The {@code ApprovalHandler} callback (§2.4) is the primary safeguard.
  */
 public final class BashTool {
-    /** Max timeout in seconds: {@code Long.MAX_VALUE / 1000} ≈ 2^41 ms. */
-    private static final long MAX_TIMEOUT_SECONDS = Long.MAX_VALUE / 1000;
+    /** Default timeout in seconds when the model omits {@code timeout} (aligned with Claude Code / Codex: 120s). */
+    private static final long DEFAULT_TIMEOUT_SECONDS = 120L;
+    /** Max timeout in seconds (aligned with Claude Code / pi-bash-timeout: 600s). */
+    private static final long MAX_TIMEOUT_SECONDS = 600L;
 
     private BashTool() {}
 
@@ -48,7 +50,7 @@ public final class BashTool {
                     + TruncationUtils.DEFAULT_MAX_LINES + " lines or "
                     + (TruncationUtils.DEFAULT_MAX_BYTES / 1024) + "KB (whichever is hit first). "
                     + "If truncated, full output is saved to a temp file. "
-                    + "Optionally provide a timeout in seconds.";
+                    + "Optionally provide a timeout in seconds (default 120, max 600; pass a larger value for long-running commands).";
             }
             @Override
             public Map<String, Object> inputSchema() {
@@ -56,7 +58,7 @@ public final class BashTool {
                     "type", "object",
                     "properties", Map.of(
                         "command", Map.of("type", "string", "description", "Bash command to execute"),
-                        "timeout", Map.of("type", "number", "description", "Timeout in seconds (optional)")
+                        "timeout", Map.of("type", "number", "description", "Timeout in seconds (optional; default 120, max 600)")
                     ),
                     "required", List.of("command")
                 );
@@ -66,6 +68,12 @@ public final class BashTool {
             @Override
             public BashInput prepareArguments(Map<String, Object> raw) {
                 String command = (String) raw.get("command");
+                if (command == null && raw.get("_raw") instanceof String rawJson) {
+                    // Stream adapters fall back to {"_raw": "<raw json>"} when the
+                    // model tool arguments are truncated or malformed; recover the
+                    // command so the call still runs instead of silently failing.
+                    command = extractCommand(rawJson);
+                }
                 Optional<Long> timeout = Optional.empty();
                 Object timeoutObj = raw.get("timeout");
                 if (timeoutObj instanceof Number n) {
@@ -82,21 +90,27 @@ public final class BashTool {
                 if (commandPrefix != null && !commandPrefix.isEmpty()) {
                     command = commandPrefix + "\n" + command;
                 }
-                long timeout = params.timeoutSeconds().orElse(0L);
-                if (timeout > 0 && timeout > MAX_TIMEOUT_SECONDS) {
+                long timeout = params.timeoutSeconds().filter(t -> t > 0)
+                    .orElse(DEFAULT_TIMEOUT_SECONDS);
+                if (timeout > MAX_TIMEOUT_SECONDS) {
                     throw new IllegalArgumentException(
                         "Timeout exceeds maximum of " + MAX_TIMEOUT_SECONDS + " seconds");
                 }
 
                 var options = new ShellOptions(
                     context.cwd(), context.env(), true,
-                    timeout > 0 ? java.util.OptionalLong.of(timeout) : java.util.OptionalLong.empty(),
+                    java.util.OptionalLong.of(timeout),
                     signal
                 );
                 var shellResult = context.shell().execute(command, options);
 
                 if (shellResult.timedOut()) {
-                    throw new RuntimeException("Command timed out after " + timeout + " seconds");
+                    String partial = shellResult.output();
+                    if (partial.length() > 2000) {
+                        partial = partial.substring(0, 2000) + "\n...(truncated)";
+                    }
+                    throw new RuntimeException("Command timed out after " + timeout + " seconds"
+                        + (partial.isBlank() ? "" : "\n\nPartial output before timeout:\n" + partial));
                 }
 
                 String output = shellResult.output();
@@ -146,6 +160,27 @@ public final class BashTool {
      * Tells the model which shell actually runs the command on this host so it
      * knows bash semantics always apply (Git Bash on Windows, per pi).
      */
+    /** Best-effort command extraction from a raw (possibly malformed) JSON argument. */
+    private static String extractCommand(String rawJson) {
+        try {
+            Object parsed = new com.fasterxml.jackson.databind.ObjectMapper()
+                .enable(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_COMMENTS)
+                .enable(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_SINGLE_QUOTES)
+                .enable(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES)
+                .enable(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_TRAILING_COMMA)
+                .readValue(rawJson, Object.class);
+            if (parsed instanceof Map<?, ?> map && map.get("command") instanceof String cmd) {
+                return cmd;
+            }
+        } catch (Exception ignored) {
+            // fall through to regex extraction
+        }
+        var matcher = java.util.regex.Pattern.compile(
+            "\"command\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").matcher(rawJson);
+        return matcher.find()
+            ? matcher.group(1).replace("\\\"", "\"").replace("\\\\", "\\")
+            : null;
+    }
     private static String shellNote() {
         var os = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT);
         if (os.contains("win")) {

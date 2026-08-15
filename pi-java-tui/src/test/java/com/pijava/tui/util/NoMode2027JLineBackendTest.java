@@ -46,7 +46,7 @@ class NoMode2027JLineBackendTest {
 
         assertThat(emitted).isEqualTo(27);
         assertThat(out).containsExactly(
-            (int) '<', (int) '6', (int) '4', (int) ';',
+            (int) '[', (int) '<', (int) '6', (int) '4', (int) ';',
             (int) '1', (int) '0', (int) ';', (int) '2', (int) '0', (int) 'M');
     }
 

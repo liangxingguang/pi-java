@@ -16,6 +16,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
 @JsonSubTypes({
     @JsonSubTypes.Type(value = ContentBlock.TextContent.class, name = "text"),
+    @JsonSubTypes.Type(value = ContentBlock.ThinkingContent.class, name = "thinking"),
     @JsonSubTypes.Type(value = ContentBlock.ImageContent.class, name = "image"),
     @JsonSubTypes.Type(value = ContentBlock.ToolUseContent.class, name = "tool_use"),
     @JsonSubTypes.Type(value = ContentBlock.ToolResultContent.class, name = "tool_result")
@@ -24,6 +25,14 @@ public sealed interface ContentBlock {
 
     /** Plain text content. */
     record TextContent(String text) implements ContentBlock {}
+
+    /**
+     * Model reasoning/thinking text (e.g. DeepSeek {@code reasoning_content}).
+     * Kept separate from {@link TextContent} so providers that require passing
+     * reasoning back on later turns (DeepSeek thinking mode) can serialize it
+     * into the provider-specific field instead of mixing it into content.
+     */
+    record ThinkingContent(String text) implements ContentBlock {}
 
     /**
      * An image provided as a base64-encoded data URL.

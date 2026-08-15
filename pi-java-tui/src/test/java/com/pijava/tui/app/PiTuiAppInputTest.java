@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PiTuiAppInputTest {
 
     @Test
-    void slashCommandsRespondToCarriageReturnEnter() throws Exception {
+    void slashCommandsRespondToSendKey() throws Exception {
         var backend = new FakeBackend();
         var runner = ToolkitRunner.create(
             TuiConfig.builder().backend(backend).build());
@@ -65,7 +65,7 @@ class PiTuiAppInputTest {
             Thread.sleep(300);
             int drawsBefore = backend.drawCount();
 
-            // Type "/help" and press Enter (sent as carriage return).
+            // Type "/help" and press Enter (CR — the send key).
             backend.feed("/help\r");
             Thread.sleep(400);
 
@@ -238,6 +238,56 @@ class PiTuiAppInputTest {
     }
 
     @Test
+    void enterSubmitsAndLfInsertsNewline() throws Exception {
+        var backend = new FakeBackend();
+        var runner = ToolkitRunner.create(
+            TuiConfig.builder().backend(backend).build());
+        try (var session = AgentSession.create(
+                ArgsParser.parse(new String[] {}))) {
+            var chatScreen = new ChatScreen();
+            var mode = new InteractiveMode(session);
+            var dispatcher = new TuiEventDispatcher();
+            var app = new PiTuiApp(mode, chatScreen,
+                new KeybindingsManager(), dispatcher);
+            mode.setObservers(
+                entry -> dispatcher.dispatch(() -> chatScreen.onEntry(entry)),
+                event -> dispatcher.dispatch(() -> chatScreen.onStreamEvent(event)));
+            app.start(runner);
+
+            var thread = Thread.startVirtualThread(() -> {
+                try {
+                    runner.run(app::root);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            Thread.sleep(300);
+            backend.feed("hello");
+            backend.feed("\r"); // plain Enter (CR): submit
+            awaitUserMessage(chatScreen, "hello");
+
+            assertThat(chatScreen.inputText()).isEmpty();
+
+            backend.feed("hi");
+            backend.feed("\n"); // LF: Shift+Enter/Ctrl+J fallback → newline
+            Thread.sleep(200);
+
+            assertThat(chatScreen.inputText()).isEqualTo("hi\n");
+
+            backend.feed("\r"); // Enter submits the multi-line draft
+            awaitUserMessage(chatScreen, "hi\n");
+            assertThat(chatScreen.inputText()).isEmpty();
+
+            runner.quit();
+            thread.join(5000);
+            assertThat(thread.isAlive()).isFalse();
+        } finally {
+            runner.close();
+        }
+    }
+
+    @Test
     void submittedUserMessageRendersAsBubble() throws Exception {
         var backend = new FakeBackend();
         var runner = ToolkitRunner.create(
@@ -276,7 +326,11 @@ class PiTuiAppInputTest {
             // white-box look when TCSS selectors didn't match).
             assertThat(backend.hasBackgroundCells()).isTrue();
             // No white border around bubbles; the themed background is enough.
-            assertThat(backend.hasLineContaining("╭")).isFalse();
+            // The startup card legitimately uses a rounded box, so scope the
+            // check to the user-message row.
+            assertThat(backend.lastDrawLines().stream()
+                .filter(line -> line.contains("你好"))
+                .noneMatch(line -> line.contains("╭"))).isTrue();
 
             runner.quit();
             thread.join(5000);
@@ -323,8 +377,10 @@ class PiTuiAppInputTest {
                 "newest message pinned to the bottom before scrolling");
 
             // PageUp scrolls history: the first message enters the viewport and
-            // the newest scrolls out.
-            backend.feed("\u001b[5~");
+            // the newest scrolls out (several pages; block separators add rows).
+            for (int i = 0; i < 6; i++) {
+                backend.feed("\u001b[5~");
+            }
             awaitLine(backend, "scroll-line-0",
                 "oldest message visible after PageUp");
             awaitNoLine(backend, "scroll-line-39",
@@ -381,9 +437,9 @@ class PiTuiAppInputTest {
             }
             Thread.sleep(300);
 
-            // SGR mouse wheel-up at the chat area (row 15, 1-based); each
-            // notch scrolls three rows, six notches reach the top.
-            for (int i = 0; i < 6; i++) {
+            // SGR mouse wheel-up at the chat area (row 15, 1-based). Send enough
+            // raw events to reach the top even with the block-separator rows.
+            for (int i = 0; i < 100; i++) {
                 backend.feed("\u001b[<64;50;15M");
             }
             var mouseEvents = awaitMouseScrolls(routed);
@@ -393,7 +449,7 @@ class PiTuiAppInputTest {
                 "newest message scrolled out of view after wheel-up");
 
             // SGR mouse wheel-down returns to the bottom.
-            for (int i = 0; i < 6; i++) {
+            for (int i = 0; i < 100; i++) {
                 backend.feed("\u001b[<65;50;15M");
             }
             awaitLine(backend, "wheel-line-39",
@@ -405,6 +461,25 @@ class PiTuiAppInputTest {
         } finally {
             runner.close();
         }
+    }
+
+    private static void awaitUserMessage(ChatScreen chatScreen, String text)
+            throws Exception {
+        long deadline = System.currentTimeMillis() + 3000;
+        while (System.currentTimeMillis() < deadline) {
+            var found = chatScreen.messages().stream()
+                .filter(ChatMessage.User.class::isInstance)
+                .map(ChatMessage.User.class::cast)
+                .anyMatch(user -> text.equals(user.text()));
+            if (found) {
+                return;
+            }
+            Thread.sleep(50);
+        }
+        assertThat(chatScreen.messages())
+            .as("user message submitted: " + text)
+            .anyMatch(m -> m instanceof ChatMessage.User user
+                && text.equals(user.text()));
     }
 
     private static int selectedField(Object overlay) throws Exception {
@@ -490,5 +565,108 @@ class PiTuiAppInputTest {
             .as("mouse wheel-up events reach the router")
             .contains("dev.tamboui.tui.event.MouseEvent");
         return List.of();
+    }
+
+    @Test
+    void csiUShiftEnterInsertsNewlineAndDoesNotSubmit() throws Exception {
+        var backend = new FakeBackend();
+        var runner = ToolkitRunner.create(
+            TuiConfig.builder().backend(backend).build());
+        try (var session = AgentSession.create(
+                ArgsParser.parse(new String[] {}))) {
+            var chatScreen = new ChatScreen();
+            var mode = new InteractiveMode(session);
+            var dispatcher = new TuiEventDispatcher();
+            var app = new PiTuiApp(mode, chatScreen,
+                new KeybindingsManager(), dispatcher);
+            mode.setObservers(
+                entry -> dispatcher.dispatch(() -> chatScreen.onEntry(entry)),
+                event -> dispatcher.dispatch(() -> chatScreen.onStreamEvent(event)));
+            app.start(runner);
+
+            var thread = Thread.startVirtualThread(() -> {
+                try {
+                    runner.run(app::root);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            Thread.sleep(300);
+            backend.feed("hi");
+            // CSI-u Shift+Enter (ESC[13;2u) carries the shift modifier and
+            // must insert a newline instead of submitting.
+            backend.feed("\u001b[13;2u");
+            Thread.sleep(200);
+
+            assertThat(chatScreen.inputText()).isEqualTo("hi\n");
+
+            backend.feed("\r"); // plain Enter still submits
+            awaitUserMessage(chatScreen, "hi\n");
+            assertThat(chatScreen.inputText()).isEmpty();
+
+            runner.quit();
+            thread.join(5000);
+            assertThat(thread.isAlive()).isFalse();
+        } finally {
+            runner.close();
+        }
+    }
+    @Test
+    void slashCompleterFiltersCompletesAndCloses() throws Exception {
+        var backend = new FakeBackend();
+        var runner = ToolkitRunner.create(
+            TuiConfig.builder().backend(backend).build());
+        try (var session = AgentSession.create(
+                ArgsParser.parse(new String[] {}))) {
+            var chatScreen = new ChatScreen();
+            var mode = new InteractiveMode(session);
+            var dispatcher = new TuiEventDispatcher();
+            var app = new PiTuiApp(mode, chatScreen,
+                new KeybindingsManager(), dispatcher);
+            var routed = new java.util.concurrent.CopyOnWriteArrayList<Event>();
+            runner.eventRouter().addGlobalHandler(event -> {
+                routed.add(event);
+                return EventResult.UNHANDLED;
+            });
+            mode.setObservers(
+                entry -> dispatcher.dispatch(() -> chatScreen.onEntry(entry)),
+                event -> dispatcher.dispatch(() -> chatScreen.onStreamEvent(event)));
+            app.start(runner);
+
+            var thread = Thread.startVirtualThread(() -> {
+                try {
+                    runner.run(app::root);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            Thread.sleep(300);
+            backend.feed("/mo");
+            Thread.sleep(200);
+            assertThat(chatScreen.completerActive()).isTrue();
+
+            backend.feed("\t"); // Tab completes the highlighted command
+            Thread.sleep(200);
+            assertThat(routed.stream()
+                .filter(dev.tamboui.tui.event.KeyEvent.class::isInstance)
+                .map(dev.tamboui.tui.event.KeyEvent.class::cast)
+                .anyMatch(ke -> ke.isChar('\t')))
+                .as("Tab event reaches the global handler")
+                .isTrue();
+            assertThat(chatScreen.completerActive()).isFalse();
+            assertThat(chatScreen.inputText()).startsWith("/model");
+
+            backend.feed("\u001b"); // Esc no longer opens a panel
+            Thread.sleep(200);
+            assertThat(chatScreen.completerActive()).isFalse();
+
+            runner.quit();
+            thread.join(5000);
+            assertThat(thread.isAlive()).isFalse();
+        } finally {
+            runner.close();
+        }
     }
 }

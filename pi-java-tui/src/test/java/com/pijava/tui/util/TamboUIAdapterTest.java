@@ -13,11 +13,27 @@ import static org.assertj.core.api.Assertions.assertThat;
 class TamboUIAdapterTest {
 
     @Test
-    void carriageReturnCountsAsPlainEnter() {
-        assertThat(TamboUIAdapter.isPlainEnter(KeyEvent.ofChar('\r'))).isTrue();
-        assertThat(TamboUIAdapter.isPlainEnter(KeyEvent.ofChar('\n'))).isTrue();
-        assertThat(TamboUIAdapter.isPlainEnter(KeyEvent.ofKey(KeyCode.ENTER))).isTrue();
-        assertThat(TamboUIAdapter.isPlainEnter(KeyEvent.ofChar('x'))).isFalse();
+    void enterSendsAndLfOrShiftEnterInsertsNewline() {
+        // Plain Enter / CR submits (Codex composer default submit=[Enter]).
+        assertThat(TamboUIAdapter.isSendEnter(KeyEvent.ofKey(KeyCode.ENTER))).isTrue();
+        assertThat(TamboUIAdapter.isSendEnter(KeyEvent.ofChar('\r'))).isTrue();
+        // Shift/Alt/Ctrl variants never submit.
+        assertThat(TamboUIAdapter.isSendEnter(
+            KeyEvent.ofKey(KeyCode.ENTER, KeyModifiers.SHIFT))).isFalse();
+        assertThat(TamboUIAdapter.isSendEnter(
+            KeyEvent.ofKey(KeyCode.ENTER, KeyModifiers.ALT))).isFalse();
+        assertThat(TamboUIAdapter.isSendEnter(
+            KeyEvent.ofKey(KeyCode.ENTER, KeyModifiers.CTRL))).isFalse();
+        assertThat(TamboUIAdapter.isSendEnter(KeyEvent.ofChar('\r', KeyModifiers.ALT))).isFalse();
+
+        // LF (Shift+Enter/Ctrl+J fallback) and Shift/Alt+Enter insert newlines.
+        assertThat(TamboUIAdapter.isNewlineEnter(KeyEvent.ofChar('\n'))).isTrue();
+        assertThat(TamboUIAdapter.isNewlineEnter(
+            KeyEvent.ofKey(KeyCode.ENTER, KeyModifiers.SHIFT))).isTrue();
+        assertThat(TamboUIAdapter.isNewlineEnter(
+            KeyEvent.ofKey(KeyCode.ENTER, KeyModifiers.ALT))).isTrue();
+        assertThat(TamboUIAdapter.isNewlineEnter(KeyEvent.ofKey(KeyCode.ENTER))).isFalse();
+        assertThat(TamboUIAdapter.isNewlineEnter(KeyEvent.ofChar('x'))).isFalse();
     }
 
     @Test

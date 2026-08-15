@@ -59,9 +59,10 @@ public final class HelpText {
               --print, -p                    Non-interactive print mode
               --export <path>                Export session to HTML and exit (Phase 6)
               --list-models [search]         List models (optional fuzzy search)
-              --tui-mode <mode>              regular (default) or fullscreen
+              --tui-mode <mode>              fullscreen (default) or regular
               --offline                      Disable startup network operations
               --verbose                      Force verbose startup
+              --debug                        Enable debug logging (DEBUG level)
               --help, -h                     Show help
               --version, -v                  Show version
 

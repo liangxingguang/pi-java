@@ -26,23 +26,25 @@ class DefaultShellExecutorTest {
     }
 
     @Test
-    void customShellPathRunsCommandViaDashC() throws Exception {
+    void customShellPathRunsCommandViaStdin() throws Exception {
         Path fakeBash = createFakeBash();
         var executor = new DefaultShellExecutor(fakeBash.toString());
 
         var result = executor.execute("echo hello-bash", options(tmp));
 
         assertThat(result.exitCode()).isZero();
-        // The fake bash echoes its arguments; the command must arrive as an
-        // argv argument after the shell flags (bash --login -c <command>).
+        // Windows shells receive the command over stdin (bash --login -s) so
+        // escapes like `\n` survive MSYS argument conversion untouched.
         assertThat(result.output()).contains("echo hello-bash");
     }
 
     private Path createFakeBash() throws Exception {
         if (isWindows()) {
-            // A .cmd is spawnable directly on Windows and echoes its arguments.
+            // A .cmd is spawnable directly on Windows; it reads the command
+            // from stdin (stdin transport) and echoes it back.
             Path script = tmp.resolve("bash.cmd");
-            Files.writeString(script, "@echo off\r\necho %*\r\n");
+            Files.writeString(script,
+                "@echo off\r\nfindstr /r \".*\"\r\n");
             return script;
         }
         Path script = tmp.resolve("bash");

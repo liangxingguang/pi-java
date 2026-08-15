@@ -1,19 +1,25 @@
 package com.pijava.ai.protocol;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.SubmissionPublisher;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openai.core.JsonValue;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
 import com.openai.models.FunctionDefinition;
 import com.openai.models.FunctionParameters;
+import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
 import com.openai.models.chat.completions.ChatCompletionFunctionTool;
+import com.openai.models.chat.completions.ChatCompletionMessageFunctionToolCall;
+import com.openai.models.chat.completions.ChatCompletionMessageToolCall;
 import com.openai.models.chat.completions.ChatCompletionStreamOptions;
 import com.openai.models.chat.completions.ChatCompletionTool;
+import com.openai.models.chat.completions.ChatCompletionToolMessageParam;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
@@ -33,6 +39,8 @@ public class OpenAICompletionsApi extends AbstractChatApi {
     protected final OpenAIClient client;
     protected final String apiKey;
 
+    private static final ObjectMapper JSON = new ObjectMapper();
+
     public OpenAICompletionsApi(ApiOptions options) {
         this(options, "OPENAI_API_KEY");
     }
@@ -50,9 +58,7 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                                    SubmissionPublisher<StreamEvent> publisher) {
         var builder = new StreamPartialBuilder();
         boolean textStarted = false;
-        boolean toolStarted = false;
-        var pendingToolId = new String[]{""};
-        var pendingToolName = new String[]{""};
+        var toolCall = new ToolCallAccumulator();
         try {
             var params = buildParams(request);
             publisher.submit(builder.emitStart());
@@ -82,30 +88,18 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                         }
                     }
 
-                    // Tool calls — accumulate deltas; emit ToolCallEnd at finish
+                    // Tool calls — accumulate deltas; emit ToolCallEnd at finish.
+                    // id / name / arguments may arrive in separate chunks
+                    // (DeepSeek etc.); start on the first chunk whatever it
+                    // contains so the call is never dropped.
                     if (delta.toolCalls().isPresent()) {
                         for (var tc : delta.toolCalls().get()) {
-                            // First appearance: has id + function name
-                            if (tc.id().isPresent() && tc.function().isPresent()) {
-                                var func = tc.function().get();
-                                pendingToolId[0] = tc.id().get();
-                                pendingToolName[0] = func.name().orElse("");
-                                if (!toolStarted) {
-                                    publisher.submit(builder.emitToolCallStart());
-                                    toolStarted = true;
-                                }
-                                if (func.arguments().isPresent()) {
-                                    publisher.submit(builder.emitToolCallDelta(
-                                            pendingToolId[0], func.arguments().get()));
-                                }
-                            } else if (tc.function().isPresent()) {
-                                // Subsequent chunks: only function.arguments
-                                var func = tc.function().get();
-                                if (func.arguments().isPresent()) {
-                                    publisher.submit(builder.emitToolCallDelta(
-                                            pendingToolId[0], func.arguments().get()));
-                                }
-                            }
+                            var fn = tc.function();
+                            toolCall.update(
+                                tc.id().orElse(null),
+                                fn.flatMap(f -> f.name()).orElse(null),
+                                fn.flatMap(f -> f.arguments()).orElse(null),
+                                publisher::submit, builder);
                         }
                     }
 
@@ -118,30 +112,35 @@ public class OpenAICompletionsApi extends AbstractChatApi {
             }
             // Emit block-end events before StreamDone
             if (textStarted) publisher.submit(builder.emitTextEnd());
-            if (toolStarted) {
-                publisher.submit(builder.emitToolCallEnd(
-                        pendingToolId[0], pendingToolName[0]));
-            }
-            String reason = toolStarted ? "tool_use" : "stop";
+            toolCall.finish(publisher::submit, builder);
+            String reason = toolCall.started() ? "tool_use" : "stop";
             publisher.submit(builder.emitDone(reason));
         } catch (Exception e) {
             publisher.submit(builder.emitError("error", e));
         }
     }
 
-    private ChatCompletionCreateParams buildParams(StreamRequest request) {
+    static ChatCompletionCreateParams buildParams(StreamRequest request) {
         var builder = ChatCompletionCreateParams.builder()
                 .model(request.model().modelName());
 
         for (var msg : request.messages()) {
-            var text = extractText(msg.content());
-            if (text.isEmpty()) continue;
             if (msg instanceof Message.SystemMessage) {
-                builder.addSystemMessage(text);
+                var text = extractText(msg.content());
+                if (!text.isEmpty()) builder.addSystemMessage(text);
             } else if (msg instanceof Message.UserMessage) {
-                builder.addUserMessage(text);
-            } else if (msg instanceof Message.AssistantMessage) {
-                builder.addAssistantMessage(text);
+                var text = extractText(msg.content());
+                if (!text.isEmpty()) builder.addUserMessage(text);
+            } else if (msg instanceof Message.AssistantMessage assistant) {
+                addAssistantMessage(builder, assistant, request.model().provider());
+            } else if (msg instanceof Message.ToolResultMessage tool) {
+                // Tool results must be sent back to the model, otherwise it
+                // cannot see the outcome and keeps repeating the same tool
+                // call (observed as duplicated write blocks in the TUI).
+                builder.addMessage(ChatCompletionToolMessageParam.builder()
+                    .toolCallId(tool.toolUseId())
+                    .content(extractText(tool.content()))
+                    .build());
             }
         }
 
@@ -178,7 +177,59 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         return out;
     }
 
-    private String extractText(List<ContentBlock> blocks) {
+    /** Serializes an assistant message including its tool calls. */
+    private static void addAssistantMessage(
+            ChatCompletionCreateParams.Builder builder,
+            Message.AssistantMessage assistant, String provider) {
+        var text = new StringBuilder();
+        var reasoning = new StringBuilder();
+        var toolCalls = new ArrayList<ChatCompletionMessageToolCall>();
+        for (var block : assistant.content()) {
+            if (block instanceof ContentBlock.TextContent tc) {
+                text.append(tc.text());
+            } else if (block instanceof ContentBlock.ThinkingContent thinking) {
+                reasoning.append(thinking.text());
+            } else if (block instanceof ContentBlock.ToolUseContent toolUse) {
+                toolCalls.add(ChatCompletionMessageToolCall.ofFunction(
+                    ChatCompletionMessageFunctionToolCall.builder()
+                        .id(toolUse.id())
+                        .function(ChatCompletionMessageFunctionToolCall.Function.builder()
+                            .name(toolUse.name())
+                            .arguments(toArgumentsJson(toolUse.arguments()))
+                            .build())
+                        .build()));
+            }
+        }
+        var ab = ChatCompletionAssistantMessageParam.builder();
+        if (!text.isEmpty()) {
+            ab.content(text.toString());
+        }
+        if (!toolCalls.isEmpty()) {
+            ab.toolCalls(toolCalls);
+        }
+        // DeepSeek thinking mode requires reasoning_content on assistant
+        // history messages; without it the API rejects the turn with 400.
+        // This field is DeepSeek-specific: only round-trip it for providers
+        // that demand it, so OpenAI/Mistral/vLLM never receive an unknown
+        // parameter on the same OpenAI-compatible path.
+        if (!reasoning.isEmpty() && "deepseek".equalsIgnoreCase(provider)) {
+            ab.putAdditionalProperty("reasoning_content",
+                com.openai.core.JsonValue.from(reasoning.toString()));
+        }
+        if (!text.isEmpty() || !toolCalls.isEmpty() || !reasoning.isEmpty()) {
+            builder.addMessage(ab.build());
+        }
+    }
+
+    private static String toArgumentsJson(Map<String, Object> arguments) {
+        try {
+            return JSON.writeValueAsString(arguments);
+        } catch (Exception e) {
+            return "{}";
+        }
+    }
+
+    private static String extractText(List<ContentBlock> blocks) {
         var sb = new StringBuilder();
         for (var block : blocks) {
             if (block instanceof ContentBlock.TextContent tc) sb.append(tc.text());

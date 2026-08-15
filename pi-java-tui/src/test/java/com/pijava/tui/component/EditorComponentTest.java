@@ -54,4 +54,15 @@ class EditorComponentTest {
 
         assertThat(editor.getText()).isEqualTo("pasted\ncontent");
     }
+
+    @Test
+    void spacesAndNewlinesAreInserted() {
+        var editor = new EditorComponent();
+        editor.onKeyEvent(KeyEvent.ofChar('h'));
+        editor.onKeyEvent(KeyEvent.ofChar(' '));
+        editor.onKeyEvent(KeyEvent.ofChar('w'));
+        editor.onKeyEvent(KeyEvent.ofChar('\n'));
+
+        assertThat(editor.getText()).isEqualTo("h w\n");
+    }
 }
