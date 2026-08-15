@@ -33,7 +33,7 @@
 
         <!-- Dependency versions (managed globally via BOM) -->
         <version.jackson>2.19.2</version.jackson>
-        <version.tamboui>0.3.0</version.tamboui>
+        <version.tamboui>0.4.0</version.tamboui>
         <version.sqlite>3.47.1.0</version.sqlite>
         <version.picocli>4.7.7</version.picocli>
         <version.json-schema-validator>1.5.6</version.json-schema-validator>

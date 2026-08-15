@@ -26,6 +26,34 @@ class MessageBubbleTest {
     }
 
     @Test
+    void wrapKeepsShortAndMultiLineTextIntact() {
+        assertThat(MessageBubble.wrap("short", 40)).isEqualTo("short");
+        assertThat(MessageBubble.wrap("one\ntwo\nthree", 40))
+            .isEqualTo("one\ntwo\nthree");
+        assertThat(MessageBubble.wrap(null, 40)).isNull();
+        assertThat(MessageBubble.wrap("", 40)).isEmpty();
+    }
+
+    @Test
+    void wrapBreaksLongLinesAtWordBoundaries() {
+        var text = "aaaa bbbb cccc dddd eeee";
+        assertThat(MessageBubble.wrap(text, 10))
+            .isEqualTo("aaaa bbbb\ncccc dddd\neeee");
+    }
+
+    @Test
+    void wrapHardBreaksWordsLongerThanTheWidth() {
+        assertThat(MessageBubble.wrap("abcdefghij", 4))
+            .isEqualTo("abcd\nefgh\nij");
+    }
+
+    @Test
+    void wrapCountsWideCharactersAsTwoColumns() {
+        // 4 CJK chars = 8 display columns, so a width of 6 must break after 3.
+        assertThat(MessageBubble.wrap("你好世界", 6)).isEqualTo("你好世\n界");
+    }
+
+    @Test
     void chatMessageProjectsToolEntry() {
         var entry = new com.pijava.agent.entry.Entry.Message(
             com.pijava.agent.entry.Entry.newHeader(0, ""), "tool",

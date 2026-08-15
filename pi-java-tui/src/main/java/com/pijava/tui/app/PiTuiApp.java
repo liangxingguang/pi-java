@@ -21,6 +21,7 @@ import dev.tamboui.toolkit.app.ToolkitRunner;
 import dev.tamboui.toolkit.element.Element;
 import dev.tamboui.toolkit.event.EventResult;
 import dev.tamboui.tui.event.Event;
+import dev.tamboui.tui.event.KeyCode;
 import dev.tamboui.tui.event.KeyEvent;
 import dev.tamboui.tui.event.PasteEvent;
 import dev.tamboui.tui.event.TickEvent;
@@ -41,7 +42,9 @@ public final class PiTuiApp {
     private AgentSession session;
     private ToolkitRunner runner;
     private WatchHandle<com.pijava.agent.harness.SessionSnapshot> snapshotHandle;
-    private ScreenOverlay overlay;
+    // Written on the render thread (dispatcher drain) and read by the global
+    // key handler plus test hooks on other threads — needs volatile visibility.
+    private volatile ScreenOverlay overlay;
     private boolean running = true;
 
     public PiTuiApp(InteractiveMode mode, ChatScreen chatScreen,
@@ -126,8 +129,25 @@ public final class PiTuiApp {
             handleAction(keyId);
             return EventResult.HANDLED;
         }
+        // Empty editor: hand navigation keys to the chat list so the user can
+        // scroll history (the ListElement handles them as an unfocused
+        // element after the global handler passes).
+        if (chatScreen.isInputEmpty() && isChatNavigation(event)) {
+            return EventResult.UNHANDLED;
+        }
         chatScreen.onKeyEvent(event);
         return EventResult.HANDLED;
+    }
+
+    private static boolean isChatNavigation(KeyEvent event) {
+        if (event.hasCtrl() || event.hasAlt() || event.hasShift()) {
+            return false;
+        }
+        return switch (event.code()) {
+            case KeyCode.UP, KeyCode.DOWN, KeyCode.PAGE_UP, KeyCode.PAGE_DOWN,
+                 KeyCode.HOME, KeyCode.END -> true;
+            default -> false;
+        };
     }
 
     private void submit() {

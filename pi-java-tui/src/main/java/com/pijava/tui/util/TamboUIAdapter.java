@@ -44,6 +44,8 @@ public final class TamboUIAdapter {
             .alternateScreen(true)
             .hideCursor(true)
             .bracketedPaste(true)
+            // Let the chat ListElement receive wheel events for scrolling.
+            .mouseCapture(true)
             .build());
     }
 

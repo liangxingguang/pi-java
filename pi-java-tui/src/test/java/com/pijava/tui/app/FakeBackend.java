@@ -23,6 +23,7 @@ final class FakeBackend implements Backend {
     private final BlockingQueue<Integer> input = new LinkedBlockingQueue<>();
     private int drawCount;
     private final char[][] grid = new char[60][160];
+    private char[][] lastGrid = new char[60][160];
     private final Set<Long> cursorCells = new HashSet<>();
     private final Set<Long> backgroundCells = new HashSet<>();
 
@@ -59,6 +60,11 @@ final class FakeBackend implements Backend {
                     backgroundCells.add(((long) y << 32) | (x & 0xFFFFFFFFL));
                 }
             }
+            // Snapshot the latest frame so tests can assert what is currently
+            // visible (the accumulated grid would hide scroll offsets).
+            for (int y = 0; y < lastGrid.length; y++) {
+                System.arraycopy(grid[y], 0, lastGrid[y], 0, lastGrid[y].length);
+            }
         }
     }
 
@@ -70,6 +76,15 @@ final class FakeBackend implements Backend {
             }
         }
         return false;
+    }
+
+    /** The last drawn frame, as trimmed strings per row. */
+    synchronized java.util.List<String> lastDrawLines() {
+        var lines = new java.util.ArrayList<String>();
+        for (char[] row : lastGrid) {
+            lines.add(new String(row).stripTrailing());
+        }
+        return lines;
     }
 
     /** Whether any rendered cell carries the cyan cursor block. */

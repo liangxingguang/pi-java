@@ -3,20 +3,34 @@ package com.pijava.tui.component;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.pijava.tui.util.TamboUIAdapter;
-
-import dev.tamboui.toolkit.elements.Column;
+import dev.tamboui.toolkit.element.StyledElement;
+import dev.tamboui.toolkit.elements.ListElement;
 
 /**
- * Main chat panel: message list (Phase 3 design §4.3).
+ * Main chat panel: a scrollable message list (Phase 3 design §4.3).
  *
- * <p>Rendered as a full column. Scrolling is tracked as R7: the scrollable
- * ListElement variant garbled multi-line/wide-character content, so it was
- * reverted until a reliable viewport implementation exists.</p>
+ * <p>Backed by a persistent {@link ListElement} held as a field, following
+ * TamboUI's official chat-pane pattern (sticky auto-scroll, no selection
+ * highlight, visible scrollbar). Rebuilding the list inline every render
+ * discards the scroll state, so the same element is reused and only its items
+ * are refreshed each frame.</p>
  */
 public final class ChatPanel {
 
     private final List<ChatMessage> messages = new ArrayList<>();
+    // Official log/chat-style configuration: no row is selected, no highlight
+    // symbol or inverted row, sticky scroll (new content stays visible until
+    // the user scrolls away), a visible scrollbar, and a stable focus id.
+    private final ListElement<ChatMessage> element = new ListElement<ChatMessage>()
+        .selected(-1)
+        .highlightSymbol("")
+        .highlightStyle(dev.tamboui.style.Style.EMPTY)
+        .displayOnly()
+        .stickyScroll()
+        .scrollbar()
+        .id("chat")
+        .fill()
+        .addClass("ChatPanel");
 
     /** Append a message (thread-safe: called via the render-thread dispatcher). */
     public void append(ChatMessage message) {
@@ -38,11 +52,13 @@ public final class ChatPanel {
         return messages.isEmpty() ? null : messages.get(messages.size() - 1);
     }
 
-    /** Render the message list. */
-    public Column render() {
-        var children = messages.stream()
+    /** Render the scrollable message list. */
+    public StyledElement<?> render() {
+        var items = messages.stream()
             .map(MessageBubble::of)
-            .toList();
-        return TamboUIAdapter.column(children).fill().addClass("ChatPanel");
+            .map(StyledElement.class::cast)
+            .toArray(StyledElement<?>[]::new);
+        element.elements(items);
+        return element;
     }
 }

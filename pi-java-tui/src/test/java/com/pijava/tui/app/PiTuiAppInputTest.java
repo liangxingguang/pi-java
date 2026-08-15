@@ -77,10 +77,7 @@ class PiTuiAppInputTest {
 
             // "/settings" opens the settings overlay.
             backend.feed("/settings\r");
-            Thread.sleep(400);
-            assertThat(app.currentOverlay()).isNotNull();
-            assertThat(app.currentOverlay()).isInstanceOf(
-                com.pijava.tui.screen.SettingsScreen.class);
+            awaitSettingsOverlay(app);
 
             runner.quit();
             thread.join(5000);
@@ -119,9 +116,7 @@ class PiTuiAppInputTest {
             Thread.sleep(300);
 
             backend.feed("/settings\r");
-            Thread.sleep(400);
-            var overlay = app.currentOverlay();
-            assertThat(overlay).isInstanceOf(SettingsScreen.class);
+            var overlay = awaitSettingsOverlay(app);
 
             // Down arrow moves from field 0 to field 1, Up returns to 0.
             backend.feed("\u001b[B");
@@ -291,6 +286,72 @@ class PiTuiAppInputTest {
         }
     }
 
+    @Test
+    void emptyInputLetsChatListScrollHistory() throws Exception {
+        var backend = new FakeBackend();
+        var runner = ToolkitRunner.create(
+            TuiConfig.builder().backend(backend).build());
+        try (var session = AgentSession.create(
+                ArgsParser.parse(new String[] {}))) {
+            var chatScreen = new ChatScreen();
+            var mode = new InteractiveMode(session);
+            var dispatcher = new TuiEventDispatcher();
+            var app = new PiTuiApp(mode, chatScreen,
+                new KeybindingsManager(), dispatcher);
+            mode.setObservers(
+                entry -> dispatcher.dispatch(() -> chatScreen.onEntry(entry)),
+                event -> dispatcher.dispatch(() -> chatScreen.onStreamEvent(event)));
+            app.start(runner);
+
+            var thread = Thread.startVirtualThread(() -> {
+                try {
+                    runner.run(app::root);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            Thread.sleep(300);
+            for (int i = 0; i < 40; i++) {
+                int line = i;
+                dispatcher.dispatch(
+                    () -> chatScreen.appendSystemText("scroll-line-" + line));
+            }
+            Thread.sleep(300);
+
+            var visible = backend.lastDrawLines();
+            assertThat(visible.stream().anyMatch(l -> l.contains("scroll-line-39")))
+                .as("newest message pinned to the bottom before scrolling")
+                .isTrue();
+
+            // PageUp scrolls history: the first message enters the viewport and
+            // the newest scrolls out.
+            backend.feed("\u001b[5~");
+            Thread.sleep(300);
+            visible = backend.lastDrawLines();
+            assertThat(visible.stream().anyMatch(l -> l.contains("scroll-line-0")))
+                .as("oldest message visible after PageUp")
+                .isTrue();
+            assertThat(visible.stream().anyMatch(l -> l.contains("scroll-line-39")))
+                .as("newest message scrolled out of view after PageUp")
+                .isFalse();
+
+            // End resumes sticky auto-scroll back to the bottom.
+            backend.feed("\u001b[4~");
+            Thread.sleep(300);
+            visible = backend.lastDrawLines();
+            assertThat(visible.stream().anyMatch(l -> l.contains("scroll-line-39")))
+                .as("End returns to the newest message")
+                .isTrue();
+
+            runner.quit();
+            thread.join(5000);
+            assertThat(thread.isAlive()).isFalse();
+        } finally {
+            runner.close();
+        }
+    }
+
     private static int selectedField(Object overlay) throws Exception {
         var field = SettingsScreen.class.getDeclaredField("selected");
         field.setAccessible(true);
@@ -307,5 +368,19 @@ class PiTuiAppInputTest {
             Thread.sleep(50);
         }
         assertThat(selectedField(overlay)).isEqualTo(expected);
+    }
+
+    private static SettingsScreen awaitSettingsOverlay(PiTuiApp app)
+            throws Exception {
+        long deadline = System.currentTimeMillis() + 3000;
+        while (System.currentTimeMillis() < deadline) {
+            var overlay = app.currentOverlay();
+            if (overlay instanceof SettingsScreen screen) {
+                return screen;
+            }
+            Thread.sleep(50);
+        }
+        assertThat(app.currentOverlay()).isInstanceOf(SettingsScreen.class);
+        return null;
     }
 }
