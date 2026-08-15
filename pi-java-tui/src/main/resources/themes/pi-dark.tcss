@@ -6,10 +6,6 @@
     padding: 1 2;
 }
 
-.ToolCallCard {
-    border-color: #e0af68;
-}
-
 .StatusBar {
     background: #16161e;
     foreground: #565f89;

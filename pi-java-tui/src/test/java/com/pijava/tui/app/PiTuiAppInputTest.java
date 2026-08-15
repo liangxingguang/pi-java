@@ -319,30 +319,85 @@ class PiTuiAppInputTest {
             }
             Thread.sleep(300);
 
-            var visible = backend.lastDrawLines();
-            assertThat(visible.stream().anyMatch(l -> l.contains("scroll-line-39")))
-                .as("newest message pinned to the bottom before scrolling")
-                .isTrue();
+            awaitLine(backend, "scroll-line-39",
+                "newest message pinned to the bottom before scrolling");
 
             // PageUp scrolls history: the first message enters the viewport and
             // the newest scrolls out.
             backend.feed("\u001b[5~");
-            Thread.sleep(300);
-            visible = backend.lastDrawLines();
-            assertThat(visible.stream().anyMatch(l -> l.contains("scroll-line-0")))
-                .as("oldest message visible after PageUp")
-                .isTrue();
-            assertThat(visible.stream().anyMatch(l -> l.contains("scroll-line-39")))
-                .as("newest message scrolled out of view after PageUp")
-                .isFalse();
+            awaitLine(backend, "scroll-line-0",
+                "oldest message visible after PageUp");
+            awaitNoLine(backend, "scroll-line-39",
+                "newest message scrolled out of view after PageUp");
 
             // End resumes sticky auto-scroll back to the bottom.
             backend.feed("\u001b[4~");
+            awaitLine(backend, "scroll-line-39",
+                "End returns to the newest message");
+
+            runner.quit();
+            thread.join(5000);
+            assertThat(thread.isAlive()).isFalse();
+        } finally {
+            runner.close();
+        }
+    }
+
+    @Test
+    void mouseWheelScrollsChatHistory() throws Exception {
+        var backend = new FakeBackend();
+        var runner = ToolkitRunner.create(
+            TuiConfig.builder().backend(backend).build());
+        try (var session = AgentSession.create(
+                ArgsParser.parse(new String[] {}))) {
+            var chatScreen = new ChatScreen();
+            var mode = new InteractiveMode(session);
+            var dispatcher = new TuiEventDispatcher();
+            var app = new PiTuiApp(mode, chatScreen,
+                new KeybindingsManager(), dispatcher);
+            var routed = new CopyOnWriteArrayList<Event>();
+            runner.eventRouter().addGlobalHandler(event -> {
+                routed.add(event);
+                return EventResult.UNHANDLED;
+            });
+            mode.setObservers(
+                entry -> dispatcher.dispatch(() -> chatScreen.onEntry(entry)),
+                event -> dispatcher.dispatch(() -> chatScreen.onStreamEvent(event)));
+            app.start(runner);
+
+            var thread = Thread.startVirtualThread(() -> {
+                try {
+                    runner.run(app::root);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
             Thread.sleep(300);
-            visible = backend.lastDrawLines();
-            assertThat(visible.stream().anyMatch(l -> l.contains("scroll-line-39")))
-                .as("End returns to the newest message")
-                .isTrue();
+            for (int i = 0; i < 40; i++) {
+                int line = i;
+                dispatcher.dispatch(
+                    () -> chatScreen.appendSystemText("wheel-line-" + line));
+            }
+            Thread.sleep(300);
+
+            // SGR mouse wheel-up at the chat area (row 15, 1-based); each
+            // notch scrolls three rows, six notches reach the top.
+            for (int i = 0; i < 6; i++) {
+                backend.feed("\u001b[<64;50;15M");
+            }
+            var mouseEvents = awaitMouseScrolls(routed);
+            awaitLine(backend, "wheel-line-0",
+                "oldest message visible after wheel-up");
+            awaitNoLine(backend, "wheel-line-39",
+                "newest message scrolled out of view after wheel-up");
+
+            // SGR mouse wheel-down returns to the bottom.
+            for (int i = 0; i < 6; i++) {
+                backend.feed("\u001b[<65;50;15M");
+            }
+            awaitLine(backend, "wheel-line-39",
+                "wheel-down returns to the newest message");
 
             runner.quit();
             thread.join(5000);
@@ -382,5 +437,58 @@ class PiTuiAppInputTest {
         }
         assertThat(app.currentOverlay()).isInstanceOf(SettingsScreen.class);
         return null;
+    }
+
+    private static void awaitLine(FakeBackend backend, String text,
+                                  String description) throws Exception {
+        long deadline = System.currentTimeMillis() + 3000;
+        while (System.currentTimeMillis() < deadline) {
+            if (backend.lastDrawLines().stream()
+                    .anyMatch(l -> l.contains(text))) {
+                return;
+            }
+            Thread.sleep(50);
+        }
+        assertThat(backend.lastDrawLines().stream()
+                .anyMatch(l -> l.contains(text)))
+            .as(description).isTrue();
+    }
+
+    private static void awaitNoLine(FakeBackend backend, String text,
+                                    String description) throws Exception {
+        long deadline = System.currentTimeMillis() + 3000;
+        while (System.currentTimeMillis() < deadline) {
+            if (backend.lastDrawLines().stream()
+                    .noneMatch(l -> l.contains(text))) {
+                return;
+            }
+            Thread.sleep(50);
+        }
+        assertThat(backend.lastDrawLines().stream()
+                .noneMatch(l -> l.contains(text)))
+            .as(description).isTrue();
+    }
+
+    private static List<dev.tamboui.tui.event.MouseEvent> awaitMouseScrolls(
+            List<Event> routed) throws Exception {
+        long deadline = System.currentTimeMillis() + 3000;
+        while (System.currentTimeMillis() < deadline) {
+            var found = routed.stream()
+                .filter(dev.tamboui.tui.event.MouseEvent.class::isInstance)
+                .map(dev.tamboui.tui.event.MouseEvent.class::cast)
+                .filter(me -> me.kind()
+                    == dev.tamboui.tui.event.MouseEventKind.SCROLL_UP)
+                .toList();
+            if (!found.isEmpty()) {
+                return found;
+            }
+            Thread.sleep(50);
+        }
+        var classes = routed.stream()
+            .map(e -> e.getClass().getName()).toList();
+        assertThat(classes)
+            .as("mouse wheel-up events reach the router")
+            .contains("dev.tamboui.tui.event.MouseEvent");
+        return List.of();
     }
 }

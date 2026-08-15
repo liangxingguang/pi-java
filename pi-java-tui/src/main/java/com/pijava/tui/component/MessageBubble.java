@@ -50,7 +50,7 @@ public final class MessageBubble {
                 TamboUIAdapter.column(renderBlocks(blocks, contentWidth))
                     .addClass("MessageBubble", "assistant");
             case ChatMessage.ToolCall(var name, var arguments) ->
-                new ToolCallCard(name, arguments, "running").render();
+                new ToolCallCard(name, arguments, "running").render(contentWidth);
             case ChatMessage.ToolResult(var output) ->
                 TamboUIAdapter.markupText(wrap(truncate(output, 500), contentWidth));
             case ChatMessage.Error(var message) ->
@@ -71,13 +71,14 @@ public final class MessageBubble {
                 case ContentBlock.TextContent(var text) ->
                     TamboUIAdapter.markupText(wrap(text, contentWidth));
                 case ContentBlock.ToolUseContent(var id, var name, var arguments) ->
-                    new ToolCallCard(name, String.valueOf(arguments), "running").render();
+                    new ToolCallCard(name, String.valueOf(arguments), "running")
+                        .render(contentWidth);
                 case ContentBlock.ToolResultContent(
                         var toolUseId, var toolName, var content, var isError) ->
                     new ToolCallCard(
                         toolName,
                         truncate(joinText(content), 500),
-                        isError ? "error" : "done").render();
+                        isError ? "error" : "done").render(contentWidth);
                 case ContentBlock.ImageContent(var mediaType, var data) ->
                     TamboUIAdapter.text("[image: " + mediaType + "]").dim();
             });

@@ -42,7 +42,8 @@ public final class BashTool {
             @Override public String name() { return "bash"; }
             @Override public String label() { return "bash"; }
             @Override public String description() {
-                return "Execute a bash command in the current working directory. "
+                return "Execute a shell command in the current working directory. "
+                    + shellNote()
                     + "Returns stdout and stderr. Output is truncated to last "
                     + TruncationUtils.DEFAULT_MAX_LINES + " lines or "
                     + (TruncationUtils.DEFAULT_MAX_BYTES / 1024) + "KB (whichever is hit first). "
@@ -139,6 +140,21 @@ public final class BashTool {
                     details, null, false, List.of());
             }
         };
+    }
+
+    /**
+     * Tells the model which shell actually runs the command on this host so it
+     * stops sending bash-only syntax where it cannot work.
+     */
+    private static String shellNote() {
+        var os = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT);
+        if (os.contains("win")) {
+            return "On this Windows host the command runs in cmd.exe, so use Windows "
+                + "syntax: `dir` instead of `ls`, `cd` (bare) instead of `pwd`, `type` "
+                + "instead of `cat`, `copy`/`move` instead of `cp`/`mv`. Unix-style "
+                + "commands such as `ls -la` or `pwd` will fail. ";
+        }
+        return "The command runs in sh (POSIX shell). ";
     }
 
     /**
