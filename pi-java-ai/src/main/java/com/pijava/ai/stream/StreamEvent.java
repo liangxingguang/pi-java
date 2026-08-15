@@ -4,6 +4,7 @@ import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.pijava.ai.Usage;
 import com.pijava.ai.message.AssistantMessage;
 
 /**
@@ -143,8 +144,24 @@ public sealed interface StreamEvent {
 
     /**
      * Token usage statistics for the current request.
+     *
+     * @param usage full usage breakdown (cache/cost), may be null when the
+     *              provider only reports input/output counts
      */
-    record UsageInfo(long inputTokens, long outputTokens, AssistantMessage partial) implements StreamEvent {}
+    record UsageInfo(long inputTokens, long outputTokens, AssistantMessage partial,
+                     Usage usage) implements StreamEvent {
+
+        /** Construct usage info without a full {@link Usage} breakdown. */
+        public UsageInfo(long inputTokens, long outputTokens, AssistantMessage partial) {
+            this(inputTokens, outputTokens, partial, null);
+        }
+
+        /** Build usage info from a full usage breakdown, if available. */
+        public static UsageInfo from(long inputTokens, long outputTokens,
+                                     AssistantMessage partial, Usage usage) {
+            return new UsageInfo(inputTokens, outputTokens, partial, usage);
+        }
+    }
 
     /**
      * The stream finished normally.

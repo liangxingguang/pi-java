@@ -8,6 +8,8 @@ import java.util.concurrent.ConcurrentMap;
 
 import com.pijava.agent.harness.LaneState;
 import com.pijava.agent.record.LaneRecord;
+import com.pijava.agent.record.UsageCause;
+import com.pijava.agent.record.UsageCause;
 import com.pijava.agent.tool.ToolResult;
 
 /**
@@ -220,10 +222,15 @@ public final class HookSystem {
     }
 
     private void recordHookError(String laneName, String hookName, Exception e) {
+        // Hook failures are non-fatal. pi records them via usage records with
+        // cause "hook"; the harness does not produce usage for hooks yet, so a
+        // zero-usage record marks the event (Phase 4 §3.2).
         var lane = lanes.get(laneName);
         if (lane != null) {
-            lane.records.add(new LaneRecord.HookError(
-                LaneRecord.newHeader(lane.records.size()), hookName, e.getMessage()));
+            lane.records.add(new LaneRecord.UsageRecord(
+                java.util.UUID.randomUUID().toString(), 0, laneName, null,
+                com.pijava.ai.Usage.of(0, 0), UsageCause.HOOK,
+                "", null, null, null, null));
         }
     }
 

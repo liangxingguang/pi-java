@@ -22,6 +22,6 @@ public record LaneSnapshot(
     String leafId,
     LaneInfo.OperationInfo operation,
     LaneInfo.Queues queues,
-    List<ProvisionedEntry> pendingWrites,
+    List<Entry> pendingWrites,
     boolean faulted
 ) {}

@@ -46,7 +46,7 @@ public final class LaneState {
     NewestOwn newestOwn;
 
     /** Entries provisioned but not yet persisted. */
-    final List<ProvisionedEntry> pendingWrites = new ArrayList<>();
+    final List<Entry> pendingWrites = new ArrayList<>();
 
     /** Internal operation records for debugging and audit (Phase 2a). */
     public final List<LaneRecord> records = new ArrayList<>();

@@ -2,13 +2,15 @@ package com.pijava.agent.harness;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
+import com.pijava.agent.compaction.CompactionResult;
 import com.pijava.agent.compaction.CompactionService;
 import com.pijava.agent.compaction.CompactionSettings;
+import com.pijava.agent.compaction.SummaryGenerator;
 import com.pijava.agent.context.OverflowDetector;
 import com.pijava.agent.entry.Entry;
-import com.pijava.agent.entry.ProvisionedEntry;
 import com.pijava.agent.hook.CompactionContext;
 import com.pijava.agent.hook.RequestContext;
 import com.pijava.agent.hook.ResponseContext;
@@ -16,8 +18,13 @@ import com.pijava.agent.hook.RunContext;
 import com.pijava.agent.hook.RunEndContext;
 import com.pijava.agent.prompt.SystemPromptBuilder;
 import com.pijava.agent.record.LaneRecord;
+import com.pijava.agent.record.OperationOutcome;
+import com.pijava.agent.record.ReplayKind;
+import com.pijava.agent.record.StepKind;
+import com.pijava.agent.record.UsageCause;
 import com.pijava.ai.AbortSignal;
 import com.pijava.agent.tool.AgentTool;
+import com.pijava.ai.Usage;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
@@ -52,7 +59,7 @@ final class ActionExecutor {
         if (!(lane.phase instanceof RunPhase.Idle)) {
             throw new IllegalStateException("Cannot start run: lane " + laneName + " is not idle");
         }
-        lane.runId = java.util.UUID.randomUUID().toString();
+        lane.runId = UUID.randomUUID().toString();
         lane.stepIndex = 0;
         lane.partial = null;
         lane.newestOwn = null;
@@ -70,26 +77,24 @@ final class ActionExecutor {
 
         // Write user message entry
         var userEntry = new Entry.Message(
-            Entry.newHeader(lane.nextSeq(), ""),
-            "user",
-            List.of(new ContentBlock.TextContent(prompt))
-        );
+            UUID.randomUUID().toString(), 0, null, null,
+            new Message.UserMessage(List.of(new ContentBlock.TextContent(prompt))), null);
         lane.transcript.add(userEntry);
-        lane.pendingWrites.add(new ProvisionedEntry(userEntry));
+        lane.pendingWrites.add(userEntry);
 
         // Write thinking level change if non-default
         if (ctx.thinkingLevel().get() instanceof ModelThinkingLevel.Enabled en) {
             var tlEntry = new Entry.ThinkingLevelChange(
-                Entry.newHeader(lane.nextSeq(), userEntry.header().id()),
-                en.level().label()
-            );
+                UUID.randomUUID().toString(), 0, null, null,
+                en.level().label());
             lane.transcript.add(tlEntry);
-            lane.pendingWrites.add(new ProvisionedEntry(tlEntry));
+            lane.pendingWrites.add(tlEntry);
         }
 
         lane.phase = RunPhase.ASSISTANT;
         lane.records.add(new LaneRecord.OperationStarted(
-            LaneRecord.newHeader(lane.records.size()), lane.runId, prompt));
+            UUID.randomUUID().toString(), 0, laneName, null, null,
+            new LaneRecord.OperationStarted.Run(promptList, List.of(), null, null)));
         ctx.incrementTurn();
         ctx.publishState(laneName);
         return peekAction(laneName);
@@ -115,11 +120,46 @@ final class ActionExecutor {
         if (plan != null && !plan.keepEntries().isEmpty()) {
             compacted = plan.keepEntries();
         } else {
-            compacted = CompactionService.compact(lane.transcript, settings,
-                lane.nextSeq(), HarnessUtils.lastEntryId(lane));
+            compacted = compactTranscript(lane, settings);
         }
         lane.transcript.clear();
         lane.transcript.addAll(compacted);
+    }
+
+    private List<Entry> compactTranscript(LaneState lane, CompactionSettings settings) {
+        var result = CompactionService.compact(lane.transcript, settings, SummaryGenerator.truncating());
+        var retainedTail = keptMessagesFrom(lane.transcript, result.firstKeptEntryId());
+        var compactionEntry = new Entry.Compaction(
+            UUID.randomUUID().toString(), lane.nextSeq(), HarnessUtils.lastEntryId(lane),
+            java.time.Instant.now(), result.summary(), retainedTail,
+            (int) result.tokensBefore(), result.details(), result.usage());
+        var kept = new ArrayList<Entry>();
+        String firstKept = result.firstKeptEntryId();
+        boolean seen = false;
+        for (var entry : lane.transcript) {
+            if (seen) {
+                kept.add(entry);
+            } else if (entry.id().equals(firstKept)) {
+                kept.add(entry);
+                seen = true;
+            }
+        }
+        kept.add(0, compactionEntry);
+        return kept;
+    }
+
+    private static List<Message> keptMessagesFrom(List<Entry> transcript, String firstKeptId) {
+        List<Message> kept = new ArrayList<>();
+        boolean seen = false;
+        for (var entry : transcript) {
+            if (entry.id().equals(firstKeptId)) {
+                seen = true;
+            }
+            if (seen && entry instanceof Entry.Message msg) {
+                kept.add(msg.message());
+            }
+        }
+        return kept;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -192,18 +232,17 @@ final class ActionExecutor {
     private void injectUserMessages(LaneState lane, List<String> prompts) {
         for (var prompt : prompts) {
             var userEntry = new Entry.Message(
-                Entry.newHeader(lane.nextSeq(), HarnessUtils.lastEntryId(lane)),
-                "user",
-                List.of(new ContentBlock.TextContent(prompt)));
+                UUID.randomUUID().toString(), 0, null, null,
+                new Message.UserMessage(List.of(new ContentBlock.TextContent(prompt))), null);
             lane.transcript.add(userEntry);
-            lane.pendingWrites.add(new ProvisionedEntry(userEntry));
+            lane.pendingWrites.add(userEntry);
         }
     }
 
     private Action drainNextPendingWrite(LaneState lane) {
         if (!lane.pendingWrites.isEmpty()) {
-            var pw = lane.pendingWrites.get(0);
-            return new Action.AppendEntry(HarnessUtils.entryTypeName(pw.entry()), pw.entry().header().id());
+            var entry = lane.pendingWrites.get(0);
+            return new Action.AppendEntry(entry.type(), entry.id());
         }
         return null;
     }
@@ -293,23 +332,26 @@ final class ActionExecutor {
             new ResponseContext(laneName, lane.runId, lane.partial,
                 new StreamEvent.UsageInfo(inputTokens, outputTokens, lane.partial)));
 
-        lane.records.add(new LaneRecord.StepAttempt(
-            LaneRecord.newHeader(lane.records.size()), attemptIdx, inputTokens, outputTokens));
-        if (inputTokens > 0 || outputTokens > 0) {
-            lane.records.add(new LaneRecord.UsageRecord(
-                LaneRecord.newHeader(lane.records.size()),
-                inputTokens, outputTokens, ctx.model().get().modelName()));
-            ctx.addTokens(inputTokens + outputTokens);
+        String asstEntryId = null;
+        if (lane.partial != null) {
+            asstEntryId = UUID.randomUUID().toString();
+            var parentId = lane.lastEntry() != null ? lane.lastEntry().id() : null;
+            var asstEntry = new Entry.Message(
+                asstEntryId, 0, null, null,
+                new Message.AssistantMessage(lane.partial.content()), null);
+            lane.transcript.add(asstEntry);
+            lane.pendingWrites.add(asstEntry);
         }
 
-        if (lane.partial != null) {
-            var parentId = lane.lastEntry() != null
-                ? lane.lastEntry().header().id() : "";
-            var asstEntry = new Entry.Message(
-                Entry.newHeader(lane.nextSeq(), parentId),
-                "assistant", lane.partial.content());
-            lane.transcript.add(asstEntry);
-            lane.pendingWrites.add(new ProvisionedEntry(asstEntry));
+        lane.records.add(new LaneRecord.StepAttempt(
+            UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
+            StepKind.ASSISTANT, attemptIdx, asstEntryId == null ? "" : asstEntryId, null));
+        if (inputTokens > 0 || outputTokens > 0) {
+            lane.records.add(new LaneRecord.UsageRecord(
+                UUID.randomUUID().toString(), 0, laneName, null,
+                Usage.of(inputTokens, outputTokens), UsageCause.ASSISTANT,
+                lane.runId, asstEntryId, null, attemptIdx, stopReason));
+            ctx.addTokens(inputTokens + outputTokens);
         }
 
         lane.newestOwn = HarnessUtils.deriveNewestOwn(lane);
@@ -320,13 +362,7 @@ final class ActionExecutor {
     // ── AppendEntry ─────────────────────────────────────────
 
     private Action executeAppendEntry(LaneState lane, Action.AppendEntry ae) {
-        for (var pw : lane.pendingWrites) {
-            if (pw.entry().header().id().equals(ae.entryId())) {
-                pw.markWritten();
-                break;
-            }
-        }
-        lane.pendingWrites.removeIf(ProvisionedEntry::isWritten);
+        lane.pendingWrites.removeIf(entry -> entry.id().equals(ae.entryId()));
         return peekAction(lane.laneName);
     }
 
@@ -341,7 +377,8 @@ final class ActionExecutor {
                 lane.pendingToolCalls.addAll(toolActions);
                 lane.phase = RunPhase.ASSISTANT;
                 lane.records.add(new LaneRecord.OperationFinished(
-                    LaneRecord.newHeader(lane.records.size()), lane.runId, "tool_use"));
+                    UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
+                    OperationOutcome.COMPLETED, null));
                 return peekAction(laneName);
             }
             // tool_use stop reason but no tool calls → complete the run instead
@@ -350,7 +387,8 @@ final class ActionExecutor {
 
         // Terminal outcome (completed / error): fire before_run_end and finish
         lane.records.add(new LaneRecord.OperationFinished(
-            LaneRecord.newHeader(lane.records.size()), lane.runId, status));
+            UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
+            "error".equals(status) ? OperationOutcome.FAILED : OperationOutcome.COMPLETED, null));
         ctx.hookSystem().fireBeforeRunEnd(laneName,
             new RunEndContext(laneName, lane.runId, status));
 
@@ -371,13 +409,14 @@ final class ActionExecutor {
         var outcome = toolPipeline.executeStages(laneName, lane, List.of(et)).getFirst();
         toolPipeline.appendEntry(lane, et, outcome);
         lane.records.add(new LaneRecord.ToolStarted(
-            LaneRecord.newHeader(lane.records.size()),
-            et.toolCallId(), et.toolName(), et.arguments()));
+            UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
+            "", 0, et.toolCallId(), et.toolName(), et.arguments(), "", ReplayKind.NEVER));
 
         if (outcome.terminate() && lane.pendingToolCalls.isEmpty()) {
             lane.pendingWrites.clear();
             lane.records.add(new LaneRecord.OperationFinished(
-                LaneRecord.newHeader(lane.records.size()), lane.runId, "completed"));
+                UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
+                OperationOutcome.COMPLETED, null));
             lane.phase = RunPhase.IDLE;
             return null;
         }
@@ -395,14 +434,15 @@ final class ActionExecutor {
             var outcome = outcomes.get(i);
             toolPipeline.appendEntry(lane, call, outcome);
             lane.records.add(new LaneRecord.ToolStarted(
-                LaneRecord.newHeader(lane.records.size()),
-                call.toolCallId(), call.toolName(), call.arguments()));
+                UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
+                "", 0, call.toolCallId(), call.toolName(), call.arguments(), "", ReplayKind.NEVER));
             anyTerminate |= outcome.terminate();
         }
         if (anyTerminate) {
             lane.pendingWrites.clear();
             lane.records.add(new LaneRecord.OperationFinished(
-                LaneRecord.newHeader(lane.records.size()), lane.runId, "completed"));
+                UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
+                OperationOutcome.COMPLETED, null));
             lane.phase = RunPhase.IDLE;
             return null;
         }
@@ -419,7 +459,7 @@ final class ActionExecutor {
         if (settings == null) return;
         if (lane.transcript.size() <= 1) return;
         int estimatedTokens = CompactionService.estimateTokens(lane.transcript);
-        if (estimatedTokens > settings.maxTokens()) {
+        if (settings.enabled() && estimatedTokens > ctx.maxInputTokens() - settings.reserveTokens()) {
             applyCompaction(laneName, lane, settings, estimatedTokens);
         }
     }
@@ -434,7 +474,7 @@ final class ActionExecutor {
         }
         for (var entry : lane.transcript) {
             if (entry instanceof Entry.Message msg) {
-                messages.add(HarnessUtils.toMessage(msg));
+                messages.add(msg.message());
             }
         }
         // Fire transform_context hook

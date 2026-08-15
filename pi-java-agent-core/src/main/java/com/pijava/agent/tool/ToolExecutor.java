@@ -11,6 +11,7 @@ import com.pijava.agent.entry.Entry;
 import com.pijava.agent.harness.Action;
 import com.pijava.ai.AbortSignal;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.Message;
 
 /**
  * Tool execution engine.
@@ -73,26 +74,22 @@ public class ToolExecutor {
             Thread.currentThread().interrupt();
             for (int i = 0; i < toolActions.size(); i++) {
                 if (results.get(i) == null) {
-                    results.set(i, new Entry.Message(
-                        Entry.newHeader(-1, ""), "tool",
-                        List.of(new ContentBlock.ToolResultContent(
-                            toolActions.get(i).toolCallId(),
-                            toolActions.get(i).toolName(),
-                            List.of(new ContentBlock.TextContent("Tool batch interrupted")),
-                            true))));
+                    results.set(i, toolResultEntry(
+                        toolActions.get(i).toolCallId(),
+                        toolActions.get(i).toolName(),
+                        List.of(new ContentBlock.TextContent("Tool batch interrupted")),
+                        true));
                 }
             }
         } catch (java.util.concurrent.ExecutionException e) {
             for (int i = 0; i < toolActions.size(); i++) {
                 if (results.get(i) == null) {
-                    results.set(i, new Entry.Message(
-                        Entry.newHeader(-1, ""), "tool",
-                        List.of(new ContentBlock.ToolResultContent(
-                            toolActions.get(i).toolCallId(),
-                            toolActions.get(i).toolName(),
-                            List.of(new ContentBlock.TextContent(
-                                "Tool batch failed: " + e.getCause().getMessage())),
-                            true))));
+                    results.set(i, toolResultEntry(
+                        toolActions.get(i).toolCallId(),
+                        toolActions.get(i).toolName(),
+                        List.of(new ContentBlock.TextContent(
+                            "Tool batch failed: " + e.getCause().getMessage())),
+                        true));
                 }
             }
         }
@@ -119,10 +116,13 @@ public class ToolExecutor {
             resultBlocks = List.of(new ContentBlock.TextContent("Error: " + e.getMessage()));
             isError = true;
         }
+        return toolResultEntry(action.toolCallId(), action.toolName(), resultBlocks, isError);
+    }
+
+    private static Entry.Message toolResultEntry(String toolCallId, String toolName,
+                                                 List<ContentBlock> blocks, boolean isError) {
         return new Entry.Message(
-            Entry.newHeader(-1, ""),  // seq + parentId set by the harness
-            "tool",
-            List.of(new ContentBlock.ToolResultContent(
-                action.toolCallId(), action.toolName(), resultBlocks, isError)));
+            java.util.UUID.randomUUID().toString(), 0, null, null,
+            new Message.ToolResultMessage(toolCallId, toolName, blocks, isError), null);
     }
 }

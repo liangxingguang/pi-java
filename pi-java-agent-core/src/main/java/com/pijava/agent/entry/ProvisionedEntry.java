@@ -1,28 +1,26 @@
 package com.pijava.agent.entry;
 
 /**
- * An entry that has been provisioned (created with header and ID) but not yet
- * written to persistent storage.
+ * An entry that has been provisioned (has an id) but whose
+ * {@code seq}/{@code parentId}/{@code timestamp} are assigned by the storage
+ * on commit (aligned with pi's {@code ProvisionedEntry} type alias).
  *
- * <p>Used in {@code LaneState.pendingWrites} to bridge the gap between
- * entry creation (inside the harness) and entry persistence (by the outer
- * driver via {@code AppendEntry} action).</p>
+ * <p>The {@code seq}/{@code parentId}/{@code timestamp} components of the
+ * wrapped entry are placeholders; callers must only read {@code id()} and the
+ * type-specific payload fields.</p>
+ *
+ * @param <T> the concrete entry type
  */
-public final class ProvisionedEntry {
+public final class ProvisionedEntry<T extends Entry> {
 
-    private final Entry entry;
-    private volatile boolean written;
+    private final T entry;
 
-    public ProvisionedEntry(Entry entry) {
+    public ProvisionedEntry(T entry) {
         this.entry = entry;
-        this.written = false;
     }
 
-    public Entry entry() { return entry; }
-    public boolean isWritten() { return written; }
-
-    /** Mark this entry as persisted. Idempotent. */
-    public void markWritten() {
-        this.written = true;
+    /** The provisioned entry. */
+    public T entry() {
+        return entry;
     }
 }

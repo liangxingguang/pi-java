@@ -27,32 +27,22 @@ final class HarnessUtils {
         return lane;
     }
 
-    /** The ID of the most recent entry, or empty string if the lane is empty. */
+    /** The ID of the most recent entry, or {@code null} if the lane is empty. */
     static String lastEntryId(LaneState lane) {
-        return lane.lastEntry() != null ? lane.lastEntry().header().id() : "";
+        return lane.lastEntry() != null ? lane.lastEntry().id() : null;
     }
 
     static Message toMessage(Entry.Message entry) {
-        return switch (entry.role()) {
-            case "user" -> new Message.UserMessage(entry.blocks());
-            case "assistant" -> new Message.AssistantMessage(entry.blocks());
-            case "tool" -> {
-                var block = (ContentBlock.ToolResultContent) entry.blocks().get(0);
-                yield new Message.ToolResultMessage(
-                    block.toolUseId(), block.toolName(),
-                    block.content(), block.isError());
-            }
-            default -> new Message.UserMessage(entry.blocks());
-        };
+        return entry.message();
     }
 
     static LaneState.NewestOwn deriveNewestOwn(LaneState lane) {
         for (int i = lane.transcript.size() - 1; i >= 0; i--) {
             var entry = lane.transcript.get(i);
-            if (entry instanceof Entry.Message msg && "assistant".equals(msg.role())) {
+            if (entry instanceof Entry.Message msg && "assistant".equals(msg.message().role())) {
                 String stopReason = lane.partial != null ? lane.partial.stopReason() : null;
                 return new LaneState.NewestOwn(
-                    msg.header().id(), "message", "assistant", stopReason);
+                    msg.id(), "message", "assistant", stopReason);
             }
         }
         return null;
@@ -72,15 +62,7 @@ final class HarnessUtils {
     }
 
     static String entryTypeName(Entry entry) {
-        return switch (entry) {
-            case Entry.Message m -> "message";
-            case Entry.ModelChange mc -> "model_change";
-            case Entry.ThinkingLevelChange tlc -> "thinking_level_change";
-            case Entry.ActiveToolsChange atc -> "active_tools_change";
-            case Entry.Compaction c -> "compaction";
-            case Entry.BranchSummary bs -> "branch_summary";
-            case Entry.Custom c -> "custom";
-        };
+        return entry.type();
     }
 
     static List<Action.ExecuteTool> extractToolCalls(AssistantMessage partial) {

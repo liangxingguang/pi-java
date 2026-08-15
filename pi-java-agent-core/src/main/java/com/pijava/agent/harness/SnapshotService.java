@@ -78,15 +78,14 @@ final class SnapshotService {
         }
         boolean faulted = lane.records.stream()
             .anyMatch(r -> r instanceof LaneRecord.OperationFinished f
-                && "error".equals(f.status()));
+                && f.outcome() == com.pijava.agent.record.OperationOutcome.FAILED);
         return new LaneSnapshot(
             lane.laneName,
             List.copyOf(lane.transcript),
-            lane.lastEntry() != null ? lane.lastEntry().header().id() : null,
+            lane.lastEntry() != null ? lane.lastEntry().id() : null,
             op,
             lane.queueSnapshot(),
-            lane.pendingWrites.stream()
-                .filter(pw -> !pw.isWritten()).toList(),
+            List.copyOf(lane.pendingWrites),
             faulted
         );
     }
@@ -94,7 +93,7 @@ final class SnapshotService {
     private SessionSnapshot buildSessionSnapshot() {
         var laneInfos = lanes.values().stream()
             .map(l -> new LaneInfo(l.laneName,
-                l.lastEntry() != null ? l.lastEntry().header().id() : null,
+                l.lastEntry() != null ? l.lastEntry().id() : null,
                 null))
             .toList();
         String phase = lanes.values().stream()

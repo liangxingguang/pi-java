@@ -8,7 +8,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 import com.pijava.agent.entry.Entry;
-import com.pijava.agent.entry.ProvisionedEntry;
+import com.pijava.ai.message.Message;
 import com.pijava.agent.hook.ToolCallContext;
 import com.pijava.agent.hook.ToolResultContext;
 import com.pijava.agent.tool.ToolResult;
@@ -76,15 +76,12 @@ final class ToolExecutionPipeline {
 
     /** Append a tool result entry to the lane transcript. */
     void appendEntry(LaneState lane, Action.ExecuteTool call, ToolOutcome outcome) {
-        var parentId = lane.lastEntry() != null
-            ? lane.lastEntry().header().id() : "";
         var toolEntry = new Entry.Message(
-            Entry.newHeader(lane.nextSeq(), parentId),
-            "tool",
-            List.of(new ContentBlock.ToolResultContent(
-                call.toolCallId(), call.toolName(), outcome.blocks(), outcome.isError())));
+            java.util.UUID.randomUUID().toString(), 0, null, null,
+            new Message.ToolResultMessage(
+                call.toolCallId(), call.toolName(), outcome.blocks(), outcome.isError()), null);
         lane.transcript.add(toolEntry);
-        lane.pendingWrites.add(new ProvisionedEntry(toolEntry));
+        lane.pendingWrites.add(toolEntry);
     }
 
     /** Fire {@code before_tool} hooks and compute the effective arguments. */

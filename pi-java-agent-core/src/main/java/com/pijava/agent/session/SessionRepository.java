@@ -1,28 +1,34 @@
 package com.pijava.agent.session;
 
 import java.util.List;
-import java.util.Optional;
 
 /**
- * Session lifecycle management.
+ * Session lifecycle management (aligned with pi {@code SessionRepo}).
  *
- * <p>Manages the collection of all sessions: create, list, open,
- * delete, and fork. Each session is backed by a {@link SessionStorage}.</p>
+ * @param <TMetadata>       metadata type
+ * @param <TCreateOptions>  create options type
+ * @param <TListOptions>    list options type
  */
-public interface SessionRepository {
+public interface SessionRepository<
+    TMetadata extends SessionMetadata,
+    TCreateOptions,
+    TListOptions> {
 
-    /** List all known sessions. */
-    List<Session> listSessions();
+    /** Create a session and return it with a backend writer claim. */
+    Session<TMetadata> create(TCreateOptions options);
 
-    /** Create a new session. */
-    Session createSession(String displayName);
+    /**
+     * Open a session for writing and acquire the backend writer claim
+     * (SQLite: writer lease; JSONL: lock-free).
+     */
+    Session<TMetadata> open(TMetadata metadata);
 
-    /** Open an existing session for reading and writing. */
-    Optional<SessionStorage<?>> openSession(String sessionId);
+    /** List metadata without opening sessions or acquiring writer claims. */
+    List<TMetadata> list(TListOptions options);
 
-    /** Delete a session and all its data. */
-    void deleteSession(String sessionId);
+    /** Delete a session (idempotent). */
+    void delete(TMetadata metadata);
 
-    /** Fork a session (create a copy with a new ID). */
-    Session forkSession(String sessionId, String newDisplayName);
+    /** Fork a source session with the given scope. */
+    Session<TMetadata> fork(TMetadata source, ForkOptions options, TCreateOptions createOptions);
 }

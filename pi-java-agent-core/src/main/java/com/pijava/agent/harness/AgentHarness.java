@@ -279,7 +279,8 @@ public class AgentHarness implements AutoCloseable {
         }
         if (!(lane.phase instanceof RunPhase.Idle)) {
             lane.records.add(new LaneRecord.AbortRequested(
-                LaneRecord.newHeader(lane.records.size()), "user_requested"));
+                java.util.UUID.randomUUID().toString(), 0, laneName, null,
+                lane.runId == null ? "" : lane.runId));
         }
         publishState(laneName);
     }

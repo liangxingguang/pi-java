@@ -1,24 +1,21 @@
 package com.pijava.agent.compaction;
 
 /**
- * Settings that control context compaction behaviour.
+ * Compaction configuration (aligned with pi {@code CompactionSettings}).
  *
- * <p>When the context approaches the model's window limit the
- * harness triggers compaction to keep the most relevant content.</p>
- *
- * @param maxTokens             token budget for the compacted context
- * @param retentionRatio        fraction of entries to retain (0.0–1.0)
- * @param preserveSystemMessages keep system messages regardless
- * @param preserveRecentTools   keep recent tool results regardless
+ * @param enabled         master switch; {@code false} disables compaction
+ * @param reserveTokens   context-window reserve: compaction triggers when
+ *                        {@code contextTokens > window - reserveTokens}
+ * @param keepRecentTokens recent-token budget that determines the cut point
  */
 public record CompactionSettings(
-    int maxTokens,
-    double retentionRatio,
-    boolean preserveSystemMessages,
-    boolean preserveRecentTools
+    boolean enabled,
+    int reserveTokens,
+    int keepRecentTokens
 ) {
-    /** Sensible defaults for interactive use. */
+
+    /** Defaults: enabled, 16384 reserved, 20000 recent tokens kept. */
     public static CompactionSettings defaults() {
-        return new CompactionSettings(100_000, 0.3, true, true);
+        return new CompactionSettings(true, 16384, 20000);
     }
 }
