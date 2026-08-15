@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.OptionalLong;
 
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,8 +35,25 @@ class DefaultShellExecutorTest {
 
         assertThat(result.exitCode()).isZero();
         // The fake bash echoes its arguments; the command must arrive as an
-        // argv argument after "-c" (pi spawns bash -c <command>).
+        // argv argument after the shell flags (bash --login -c <command>).
         assertThat(result.output()).contains("echo hello-bash");
+    }
+
+    @Test
+    void discoversGitBashFromGitOnPathWhenPresent() throws Exception {
+        Assumptions.assumeTrue(isWindows(), "Git-derived discovery is Windows-only");
+        Path git = firstOnPath("git.exe");
+        Assumptions.assumeTrue(git != null, "git.exe not on PATH");
+        var root = git.getParent().getParent();
+        Assumptions.assumeTrue(
+            Files.exists(root.resolve("bin").resolve("bash.exe")),
+            "no Git Bash installed next to git.exe");
+
+        var executor = new DefaultShellExecutor();
+        var result = executor.execute("echo discovered-bash", options(tmp));
+
+        assertThat(result.exitCode()).isZero();
+        assertThat(result.output()).contains("discovered-bash");
     }
 
     private Path createFakeBash() throws Exception {
@@ -54,6 +72,20 @@ class DefaultShellExecutorTest {
     private static ShellOptions options(Path cwd) {
         return new ShellOptions(
             cwd.toString(), Map.of(), true, OptionalLong.empty(), null);
+    }
+
+    private static Path firstOnPath(String executable) throws Exception {
+        var pb = new ProcessBuilder("where", executable);
+        pb.redirectErrorStream(true);
+        var process = pb.start();
+        if (!process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)) {
+            process.destroyForcibly();
+            return null;
+        }
+        var first = new String(process.getInputStream().readAllBytes())
+            .lines().findFirst().orElse("").trim();
+        return first.isEmpty() || !Files.exists(Path.of(first))
+            ? null : Path.of(first);
     }
 
     private static boolean isWindows() {

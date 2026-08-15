@@ -15,13 +15,20 @@ import java.util.concurrent.TimeoutException;
 /**
  * Default shell executor using ProcessBuilder + Virtual Threads.
  *
- * <p>Aligned with pi's {@code getShellConfig} (utils/shell.ts): commands always
- * run in a real bash. On Windows the resolution order is the configured
- * {@code shellPath} setting, then Git Bash in its known install locations,
- * then {@code bash.exe} on PATH; if none is found an actionable error
- * pointing at Git for Windows is thrown (pi behavior — no silent cmd
- * fallback). The legacy WSL {@code C:\Windows\System32\bash.exe} is special
- * cased to receive the command on stdin instead of {@code -c}.</p>
+ * <p>Aligned with pi's {@code getShellConfig} (utils/shell.ts): commands
+ * always run in a real bash. On Windows the resolution order is the
+ * configured {@code shellPath} setting, then Git Bash in its known install
+ * locations (plus a location derived from {@code git.exe} on PATH, which
+ * covers custom/portable installs), then {@code bash.exe} on PATH; if none
+ * is found an actionable error pointing at Git for Windows is thrown (pi
+ * behavior — no silent cmd fallback). The legacy WSL
+ * {@code C:\Windows\System32\bash.exe} is special cased to receive the
+ * command on stdin instead of {@code -c}.</p>
+ *
+ * <p>Git Bash on Windows is launched as a login shell ({@code --login -c})
+ * because its non-login shells inherit only the Windows PATH — without the
+ * login profile, coreutils like {@code ls} (in {@code /usr/bin}) are not on
+ * PATH and every command fails.</p>
  */
 public class DefaultShellExecutor implements ShellExecutor {
 
@@ -125,7 +132,7 @@ public class DefaultShellExecutor implements ShellExecutor {
                     return configFor(candidate);
                 }
             }
-            String onPath = findBashOnPath();
+            String onPath = firstOnPath("bash.exe");
             if (onPath != null) {
                 return configFor(onPath);
             }
@@ -140,7 +147,7 @@ public class DefaultShellExecutor implements ShellExecutor {
         if (Files.exists(Path.of("/bin/bash"))) {
             return configFor("/bin/bash");
         }
-        String onPath = findBashOnPath();
+        String onPath = firstOnPath("bash");
         if (onPath != null) {
             return configFor(onPath);
         }
@@ -148,8 +155,11 @@ public class DefaultShellExecutor implements ShellExecutor {
     }
 
     private static ShellConfig configFor(String shell) {
-        return isLegacyWslBashPath(shell)
-            ? new ShellConfig(List.of(shell, "-s"), ShellTransport.STDIN)
+        if (isLegacyWslBashPath(shell)) {
+            return new ShellConfig(List.of(shell, "-s"), ShellTransport.STDIN);
+        }
+        return isWindows()
+            ? new ShellConfig(List.of(shell, "--login", "-c"), ShellTransport.ARGV)
             : new ShellConfig(List.of(shell, "-c"), ShellTransport.ARGV);
     }
 
@@ -159,24 +169,46 @@ public class DefaultShellExecutor implements ShellExecutor {
         return normalized.matches("^[a-z]:\\\\windows\\\\(?:system32|sysnative)\\\\bash\\.exe$");
     }
 
-    private static List<String> gitBashCandidates() {
+    private static List<String> gitBashCandidates() throws IOException {
         var candidates = new ArrayList<String>();
-        var programFiles = System.getenv("ProgramFiles");
-        if (programFiles != null && !programFiles.isBlank()) {
-            candidates.add(programFiles + "\\Git\\bin\\bash.exe");
-        }
-        var programFilesX86 = System.getenv("ProgramFiles(x86)");
-        if (programFilesX86 != null && !programFilesX86.isBlank()) {
-            candidates.add(programFilesX86 + "\\Git\\bin\\bash.exe");
+        addCandidate(candidates, System.getenv("ProgramFiles"), "Git\\bin\\bash.exe");
+        addCandidate(candidates, System.getenv("ProgramFiles(x86)"), "Git\\bin\\bash.exe");
+        addCandidate(candidates, System.getenv("LOCALAPPDATA"), "Programs\\Git\\bin\\bash.exe");
+        // Custom/portable installs: git.exe is on PATH (e.g. D:\soft\Git\cmd)
+        // but the install root isn't; derive the root from it.
+        var gitOnPath = firstOnPath("git.exe");
+        if (gitOnPath != null) {
+            var gitDir = Path.of(gitOnPath).getParent();
+            if (gitDir != null) {
+                var root = gitDir.getParent();
+                if (root != null) {
+                    addPath(candidates, root.resolve("bin").resolve("bash.exe"));
+                    addPath(candidates, root.resolve("usr").resolve("bin").resolve("bash.exe"));
+                }
+                addPath(candidates, gitDir.resolve("bash.exe"));
+            }
         }
         return candidates;
     }
 
-    private static String findBashOnPath() throws IOException {
+    private static void addCandidate(List<String> candidates, String base, String relative) {
+        if (base != null && !base.isBlank()) {
+            addPath(candidates, Path.of(base, relative));
+        }
+    }
+
+    private static void addPath(List<String> candidates, Path path) {
+        var normalized = path.normalize().toString();
+        if (!candidates.contains(normalized)) {
+            candidates.add(normalized);
+        }
+    }
+
+    private static String firstOnPath(String executable) throws IOException {
         try {
             var pb = isWindows()
-                ? new ProcessBuilder("where", "bash.exe")
-                : new ProcessBuilder("which", "bash");
+                ? new ProcessBuilder("where", executable)
+                : new ProcessBuilder("which", executable);
             pb.redirectErrorStream(true);
             var process = pb.start();
             if (!process.waitFor(5, TimeUnit.SECONDS)) {
