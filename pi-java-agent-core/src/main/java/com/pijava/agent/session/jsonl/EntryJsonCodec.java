@@ -18,7 +18,13 @@ final class EntryJsonCodec {
     private EntryJsonCodec() {}
 
     static Entry decode(JsonNode node, String id, long seq, String parentId, Instant timestamp) {
-        String type = JsonlCodec.requireString(node, "type");
+        return decode(node, id, seq, parentId, timestamp, null);
+    }
+
+    /** Decode with the type taken from {@code typeOverride} when non-null (SQLite payloads strip it). */
+    static Entry decode(JsonNode node, String id, long seq, String parentId, Instant timestamp,
+                        String typeOverride) {
+        String type = typeOverride != null ? typeOverride : JsonlCodec.requireString(node, "type");
         return switch (type) {
             case "message" -> {
                 Message message = MessageJsonCodec.decode(node.get("message"));

@@ -297,6 +297,12 @@ public final class JsonlCodec {
         return EntryJsonCodec.decode(payload, id, seq, parentId, timestamp);
     }
 
+    /** Decode an entry whose payload excludes {@code type} (SQLite entry rows). */
+    public static Entry decodeEntryPayload(JsonNode payload, String id, long seq,
+                                           String parentId, Instant timestamp, String type) {
+        return EntryJsonCodec.decode(payload, id, seq, parentId, timestamp, type);
+    }
+
     /** Decode a record from a payload node with identity fields supplied separately. */
     public static LaneRecord decodeRecordPayload(JsonNode payload, String id, long seq,
                                                  String lane, Instant timestamp) {
