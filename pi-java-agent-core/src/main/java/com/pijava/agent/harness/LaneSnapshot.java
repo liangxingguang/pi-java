@@ -3,6 +3,7 @@ package com.pijava.agent.harness;
 import java.util.List;
 
 import com.pijava.agent.entry.Entry;
+import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.entry.ProvisionedEntry;
 
 /**
@@ -10,6 +11,7 @@ import com.pijava.agent.entry.ProvisionedEntry;
  *
  * @param lane          lane name
  * @param transcript    current transcript entries
+ * @param records       current lane records
  * @param leafId        current leaf entry id
  * @param operation     current operation info (null if idle)
  * @param queues        queue state
@@ -19,6 +21,7 @@ import com.pijava.agent.entry.ProvisionedEntry;
 public record LaneSnapshot(
     String lane,
     List<Entry> transcript,
+    List<LaneRecord> records,
     String leafId,
     LaneInfo.OperationInfo operation,
     LaneInfo.Queues queues,

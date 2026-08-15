@@ -1,16 +1,20 @@
 package com.pijava.coding.agent.core;
 
+import java.nio.file.Path;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 import com.pijava.agent.entry.Entry;
+import com.pijava.agent.entry.ProvisionedEntry;
 import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.harness.Action;
 import com.pijava.agent.harness.AgentHarness;
@@ -20,6 +24,15 @@ import com.pijava.agent.harness.LaneConfig;
 import com.pijava.agent.harness.QueueMode;
 import com.pijava.agent.harness.ToolExecution;
 import com.pijava.agent.harness.WatchHandle;
+import com.pijava.agent.session.ForkOptions;
+import com.pijava.agent.session.Session;
+
+import com.pijava.agent.session.SessionRepository;
+import com.pijava.agent.session.memory.MemorySessionRepository;
+
+
+
+
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.agent.tool.ToolContext;
@@ -42,7 +55,9 @@ import com.pijava.coding.agent.core.slash.CommandRegistry;
 /**
  * Session orchestration: wraps an {@link AgentHarness} with settings, trust,
  * providers and slash commands, and exposes prompt execution with live
- * streaming (Phase 3 design §9.5/§11.5).
+ * streaming (Phase 3 design §9.5/§11.5). Since Phase 4, sessions are backed
+ * by a persistent {@link SessionRepository} (JSONL default, SQLite opt-in)
+ * so {@code -c/-r} and {@code /resume} survive process restarts.
  */
 public final class AgentSession implements AutoCloseable {
 
@@ -70,6 +85,10 @@ public final class AgentSession implements AutoCloseable {
     private final Args args;
     private String laneName = AgentHarness.DEFAULT_LANE;
     private InMemorySessionRepository repository = InMemorySessionRepository.shared();
+    private PersistentSessionRepositories.RepositoryHandle persistentRepository;
+    private Session<?> session;
+    private final Set<String> persistedEntryIds = new HashSet<>();
+    private final Set<String> persistedRecordIds = new HashSet<>();
 
     private AgentSession(AgentHarness harness, SessionServices services,
                          Args args, String name) {
@@ -79,19 +98,27 @@ public final class AgentSession implements AutoCloseable {
         this.name = name;
     }
 
-    /**
-     * Assemble a session from CLI arguments: settings → services → harness
-     * (Phase 3 design §9.5). The new session is registered in the process-local
-     * repository so {@code -c/-r} and {@code /session} can find it.
-     */
+    /** Assemble from CLI args with the configured persistent backend. */
     public static AgentSession create(Args args) {
-        return create(args, InMemorySessionRepository.shared());
+        var settings = SettingsManager.load(args.projectTrustOverride());
+        var effective = settings.effective();
+        var backend = effective.sessionBackend == null ? "jsonl" : effective.sessionBackend;
+        var sessionsRoot = Path.of(args.sessionDir() != null ? args.sessionDir()
+            : (effective.sessionDir != null ? effective.sessionDir
+                : Path.of(System.getProperty("user.home"), ".pi-java", "agent", "sessions").toString()));
+        var handle = "sqlite".equals(backend)
+            ? PersistentSessionRepositories.sqlite(sessionsRoot)
+            : PersistentSessionRepositories.jsonl(sessionsRoot);
+        return create(args, handle, DefaultProviders.defaultProviders(),
+            new ToolContext(
+                System.getProperty("user.dir"),
+                Map.of(),
+                new DefaultShellExecutor(effective.shellPath),
+                new DefaultFileSystem()),
+            settings);
     }
 
-    /**
-     * Assemble a session against a specific repository. Tests pass a fresh
-     * repository to isolate process-wide state; production uses the shared one.
-     */
+    /** Assemble a session against a specific in-memory repository (tests). */
     static AgentSession create(Args args, InMemorySessionRepository repository) {
         var settings = SettingsManager.load(args.projectTrustOverride());
         var effective = settings.effective();
@@ -104,17 +131,10 @@ public final class AgentSession implements AutoCloseable {
             settings);
     }
 
-    /**
-     * Assemble a session against a specific repository, provider registry and
-     * tool context. Tests inject a {@link com.pijava.ai.provider.FauxProvider}
-     * and a temp-dir {@link ToolContext} to exercise the full
-     * submit → stream → tool-execution path without a real LLM.
-     */
+    /** Test entry point with injected providers and tool context. */
     static AgentSession create(Args args, InMemorySessionRepository repository,
                                ProviderRegistry providers,
                                ToolContext toolContext) {
-        // Test entry point: callers inject the tool context; settings load
-        // with the default rules so shellPath/shellCommandPrefix still apply.
         return create(args, repository, providers, toolContext,
             SettingsManager.load(args.projectTrustOverride()));
     }
@@ -123,6 +143,27 @@ public final class AgentSession implements AutoCloseable {
                                        ProviderRegistry providers,
                                        ToolContext toolContext,
                                        SettingsManager settings) {
+        var session = assemble(args, settings, providers, toolContext,
+            null, new MemorySessionRepository());
+        session.repository = repository;
+        return resolveSession(session, args);
+    }
+
+    private static AgentSession create(Args args, PersistentSessionRepositories.RepositoryHandle handle,
+                                       ProviderRegistry providers,
+                                       ToolContext toolContext,
+                                       SettingsManager settings) {
+        var session = assemble(args, settings, providers, toolContext,
+            handle, handle.repository());
+        session.persistentRepository = handle;
+        return resolveSession(session, args);
+    }
+
+    private static AgentSession assemble(Args args, SettingsManager settings,
+                                         ProviderRegistry providers,
+                                         ToolContext toolContext,
+                                         PersistentSessionRepositories.RepositoryHandle handle,
+                                         SessionRepository<?, ?, ?> repository) {
         var effective = settings.effective();
         var models = new DefaultModelResolver(BuiltinCatalog.all());
         var tools = new ToolRegistry(null);
@@ -137,14 +178,14 @@ public final class AgentSession implements AutoCloseable {
             providers,
             models,
             tools,
-            CommandRegistry.withBuiltins());
+            CommandRegistry.withBuiltins(),
+            repository);
 
         var providerName = DefaultProviders.resolveProviderName(
             args, effective.defaultProvider);
         var modelPattern = args.model() != null
             ? args.model() : effective.defaultModel;
         if (modelPattern == null || modelPattern.isBlank()) {
-            // No explicit model: fall back to the provider's first model.
             modelPattern = providerName;
         }
         var harness = AgentHarness.create(HarnessConfig.builder()
@@ -165,8 +206,8 @@ public final class AgentSession implements AutoCloseable {
         var session = new AgentSession(
             harness, services, args,
             args.name() != null ? args.name() : "session");
-        session.repository = repository;
-        return resolveSession(session, args);
+        session.persistentRepository = handle;
+        return session;
     }
 
     /** The underlying harness (used by the session repository and TUI). */
@@ -187,6 +228,9 @@ public final class AgentSession implements AutoCloseable {
     /** Rename the session ({@code /name}). */
     public void setSessionName(String newName) {
         this.name = newName;
+        if (session != null) {
+            session.setName(newName);
+        }
     }
 
     /** The CLI arguments this session was assembled from ({@code /new}). */
@@ -204,22 +248,12 @@ public final class AgentSession implements AutoCloseable {
         return harness.snapshot(laneName).transcript().size();
     }
 
-    /**
-     * Run a prompt and return a live result: incremental stream events feed
-     * {@link SessionResult#stream()} as the harness drives on a virtual thread;
-     * entries and status complete when the run finishes. One virtual thread is
-     * started per run (Phase 3 design §11.1).
-     */
+    /** Run a prompt, returning a live {@link SessionResult} (Phase 3 §11.1). */
     public SessionResult processPrompt(String prompt, PromptConfig config) {
         return processPrompt(prompt, config, null, null);
     }
 
-    /**
-     * Run a prompt and forward events/entries to observers on the drive
-     * thread. Used by {@code InteractiveMode} so a run uses exactly one
-     * virtual thread; {@link SessionResult#stream()} is still available for
-     * consumers without observers (e.g. print mode).
-     */
+    /** Run a prompt, forwarding events/entries to observers (one virtual thread). */
     public SessionResult processPrompt(
             String prompt,
             PromptConfig config,
@@ -282,9 +316,9 @@ public final class AgentSession implements AutoCloseable {
         for (int i = transcript.size() - 1; i >= 0; i--) {
             var entry = transcript.get(i);
             if (entry instanceof Entry.Message message
-                    && "assistant".equals(message.role())) {
+                    && "assistant".equals(message.message().role())) {
                 var builder = new StringBuilder();
-                for (var block : message.blocks()) {
+                for (var block : message.message().content()) {
                     if (block instanceof ContentBlock.TextContent text) {
                         builder.append(text.text());
                     }
@@ -302,23 +336,53 @@ public final class AgentSession implements AutoCloseable {
         return harness.watchSession();
     }
 
-    /** List process-local sessions for {@code /session} and the resume picker. */
+    /** List sessions for {@code /session} and the resume picker. */
     public List<SessionInfo> listSessions() {
+        if (persistentRepository != null) {
+            return persistentRepository.list(System.getProperty("user.dir")).stream()
+                .map(meta -> new SessionInfo(meta.id(), "session",
+                    meta.createdAt(), 0))
+                .toList();
+        }
         return repository.list();
     }
 
     /** The most recent session, or empty ({@code -c}). */
-    public java.util.Optional<AgentSession> latestSession() {
+    public Optional<AgentSession> latestSession() {
+        if (persistentRepository != null) {
+            return persistentRepository.latest().map(meta -> {
+            SessionPersistence.attach(this, persistentRepository, meta);
+            return this;
+        });
+        }
         return repository.latest();
     }
 
     /** Find a session by ID/prefix ({@code -r/--session}). */
-    public java.util.Optional<AgentSession> findSession(String idOrPrefix) {
+    public Optional<AgentSession> findSession(String idOrPrefix) {
+        if (persistentRepository != null) {
+            return persistentRepository.find(idOrPrefix).map(meta -> {
+            SessionPersistence.attach(this, persistentRepository, meta);
+            return this;
+        });
+        }
         return repository.find(idOrPrefix);
     }
 
     /** Create a forked copy on a new lane ({@code /fork /clone --fork}). */
     public AgentSession forkCopy(String branchName) {
+        if (persistentRepository != null && session != null) {
+            var metadata = session.getMetadata();
+            var forked = persistentRepository.fork(metadata, new ForkOptions.Tree(),
+                System.getProperty("user.dir"));
+            var copy = new AgentSession(harness, services, args, branchName);
+            copy.persistentRepository = persistentRepository;
+            copy.session = forked;
+            SessionPersistence.attach(copy, persistentRepository, forked.getMetadata());
+            copy.name = branchName;
+            copy.laneName = AgentHarness.DEFAULT_LANE;
+            return copy;
+        }
         harness.createLane(LaneConfig.of(branchName));
         var forked = new AgentSession(harness, services, args, branchName);
         forked.laneName = branchName;
@@ -327,9 +391,16 @@ public final class AgentSession implements AutoCloseable {
         return forked;
     }
 
-    /** Flush settings and close the harness. */
+    /** Flush settings, persist pending writes and close the harness. */
     @Override
     public void close() {
+        SessionPersistence.persistPending(this, session, laneName);
+        if (session != null) {
+            session.close();
+        }
+        if (persistentRepository != null) {
+            persistentRepository.close();
+        }
         services.settings().flush();
         harness.close();
     }
@@ -343,59 +414,9 @@ public final class AgentSession implements AutoCloseable {
             CompletableFuture<RunStatus> statusFuture,
             StreamObserver streamObserver,
             EntryObserver entryObserver) {
-        var stopReason = new AtomicReference<>("completed");
-        try (var registration = harness.onStreamEvent(event -> {
-            if (event instanceof StreamEvent.StreamDone done && done.reason() != null) {
-                stopReason.set(done.reason());
-            }
-            if (event instanceof StreamEvent.StreamError) {
-                stopReason.set("error");
-            }
-            if (streamObserver == null) {
-                queue.add(event);
-            } else {
-                streamObserver.onStreamEvent(event);
-            }
-        })) {
-            Action action = harness.run(laneName, prompt);
-            while (action != null) {
-                action = harness.executeAction(laneName, action);
-            }
-            var lane = harness.snapshot(laneName);
-            var transcript = List.copyOf(lane.transcript());
-            entriesFuture.complete(transcript);
-            if (entryObserver != null) {
-                for (var entry : transcript) {
-                    entryObserver.onEntry(entry);
-                }
-            }
-            statusFuture.complete(new RunStatus(
-                exitCode(stopReason.get()), stopReason.get()));
-        } catch (Exception e) {
-            var error = new StreamEvent.StreamError(
-                "error", e, AssistantMessage.empty());
-            if (streamObserver != null) {
-                streamObserver.onStreamEvent(error);
-            } else {
-                queue.add(error);
-            }
-            statusFuture.complete(new RunStatus(1, "error"));
-            entriesFuture.complete(List.of());
-        } finally {
-            if (streamObserver == null) {
-                queue.add(null);
-            }
-        }
+        SessionRunner.drive(this, prompt, queue, entriesFuture, statusFuture,
+            streamObserver, entryObserver);
     }
-
-    private static int exitCode(String stopReason) {
-        return switch (stopReason) {
-            case "error" -> 1;
-            case "aborted" -> 130;
-            default -> 0;
-        };
-    }
-
     private static Set<AgentTool<?, ?>> activeTools(
             Args args, List<AgentTool<?, ?>> toolList) {
         if (args.noTools() || args.noBuiltinTools()) {
@@ -435,38 +456,45 @@ public final class AgentSession implements AutoCloseable {
 
     private static AgentSession resolveSession(AgentSession session, Args args) {
         if (args.noSession()) {
-            return session; // ephemeral: not registered in the repository
+            return session;
         }
-        var repository = session.repository;
-        if (args.continue_()) {
-            return repository.latest().orElseThrow(() -> new IllegalStateException(
-                "No previous session to continue in this process "
-                    + "(session persistence lands in Phase 4)"));
+        if (session.persistentRepository != null) {
+            return SessionPersistence.resolvePersistent(session, args);
         }
-        if (args.sessionId() != null) {
-            // --session-id: exact project session ID, create if missing (§9.1).
-            return repository.find(args.sessionId()).orElseGet(() ->
-                repository.createWithId(session, args.sessionId()));
-        }
-        if (args.resume() || args.session() != null) {
-            return repository.find(args.session()).orElseThrow(() -> new IllegalStateException(
-                "Session not found: " + args.session()
-                    + " (in-process registry only; persistence in Phase 4)"));
-        }
-        if (args.fork() != null) {
-            return repository.find(args.fork())
-                .map(source -> repository.fork(source, session.name))
-                .orElseThrow(() -> new IllegalStateException(
-                    "Session not found: " + args.fork()));
-        }
-        repository.create(session);
-        return session;
+        return SessionPersistence.resolveInMemory(session, args);
     }
-
     private static QueueMode queueMode(String mode) {
         if ("all".equals(mode)) {
             return new QueueMode.All();
         }
         return new QueueMode.OneAtATime();
+    }
+    // ── Package-private accessors ───────────────────────────
+    Session<?> session() {
+        return session;
+    }
+
+    void session(Session<?> session) {
+        this.session = session;
+    }
+
+    PersistentSessionRepositories.RepositoryHandle persistentRepository() {
+        return persistentRepository;
+    }
+
+    InMemorySessionRepository inMemoryRepository() {
+        return repository;
+    }
+
+    java.util.Set<String> persistedEntryIds() {
+        return persistedEntryIds;
+    }
+
+    java.util.Set<String> persistedRecordIds() {
+        return persistedRecordIds;
+    }
+
+    void name(String name) {
+        this.name = name;
     }
 }

@@ -1,5 +1,6 @@
 package com.pijava.coding.agent.core;
 
+import com.pijava.agent.session.SessionRepository;
 import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.ai.model.ModelResolver;
 import com.pijava.ai.provider.ProviderRegistry;
@@ -18,8 +19,9 @@ import com.pijava.coding.agent.core.slash.CommandRegistry;
  * @param trust         project trust decisions
  * @param providers     registered LLM providers
  * @param models        model catalog resolver
- * @param tools         tool registry (active tools registered on the harness)
- * @param slashCommands 22 built-in slash commands
+ * @param tools             tool registry (active tools registered on the harness)
+ * @param slashCommands     22 built-in slash commands
+ * @param sessionRepository persistent session repository (Phase 4)
  */
 public record SessionServices(
     SettingsManager settings,
@@ -27,5 +29,6 @@ public record SessionServices(
     ProviderRegistry providers,
     ModelResolver models,
     ToolRegistry tools,
-    CommandRegistry slashCommands
+    CommandRegistry slashCommands,
+    SessionRepository<?, ?, ?> sessionRepository
 ) {}

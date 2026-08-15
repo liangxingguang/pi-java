@@ -82,6 +82,7 @@ final class SnapshotService {
         return new LaneSnapshot(
             lane.laneName,
             List.copyOf(lane.transcript),
+            List.copyOf(lane.records),
             lane.lastEntry() != null ? lane.lastEntry().id() : null,
             op,
             lane.queueSnapshot(),

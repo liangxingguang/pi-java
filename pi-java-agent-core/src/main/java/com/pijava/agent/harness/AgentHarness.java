@@ -266,6 +266,18 @@ public class AgentHarness implements AutoCloseable {
         return actionExecutor.run(laneName, prompt);
     }
 
+    /**
+     * Seed a lane transcript from a persisted session on resume. No-op when
+     * the lane already has entries (Phase 4 recovery).
+     */
+    public void seedTranscript(String laneName, List<com.pijava.agent.entry.Entry> entries) {
+        var lane = requireLane(laneName);
+        if (!lane.transcript.isEmpty()) {
+            return;
+        }
+        lane.transcript.addAll(entries);
+    }
+
     /** Abort the current run on the default lane. */
     public void abort() {
         abort(defaultLaneName);

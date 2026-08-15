@@ -49,6 +49,7 @@ public final class Settings {
     public Integer autocompleteMaxVisible;
     public Markdown markdown;
     public String sessionDir;
+    public String sessionBackend;
     public String httpProxy;
     public String tuiMode;
     public Tui tui;

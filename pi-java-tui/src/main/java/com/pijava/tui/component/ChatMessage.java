@@ -27,25 +27,26 @@ public sealed interface ChatMessage {
             case Entry.ModelChange change ->
                 new System("Model: " + change.provider() + "/" + change.modelId());
             case Entry.ThinkingLevelChange change ->
-                new System("Thinking: " + change.level());
+                new System("Thinking: " + change.thinkingLevel());
             case Entry.ActiveToolsChange change ->
-                new System("Tools: " + String.join(", ", change.toolNames()));
+                new System("Tools: " + String.join(", ", change.activeToolNames()));
             case Entry.Compaction compaction ->
-                new System("Compacted context (" + compaction.entriesBefore()
-                    + " → " + compaction.entriesAfter() + ")");
+                new System("Compacted context: " + compaction.summary());
+
             case Entry.BranchSummary summary ->
                 new System("Branch: " + summary.summary());
             case Entry.Custom custom ->
-                new System("Custom event: " + custom.kind());
+                new System("Custom event: " + custom.customType());
         };
     }
 
     private static ChatMessage fromMessage(Entry.Message message) {
-        return switch (message.role()) {
-            case "user" -> new User(joinText(message.blocks()));
-            case "assistant" -> new Assistant(message.blocks());
-            case "tool" -> fromToolBlocks(message.blocks());
-            default -> new System("Unknown message role: " + message.role());
+        var content = message.message().content();
+        return switch (message.message().role()) {
+            case "user" -> new User(joinText(content));
+            case "assistant" -> new Assistant(content);
+            case "tool" -> fromToolBlocks(content);
+            default -> new System("Unknown message role: " + message.message().role());
         };
     }
 

@@ -53,15 +53,15 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     @Override
     public void onEntry(Entry entry) {
         if (entry instanceof Entry.Message message
-                && "assistant".equals(message.role())) {
+                && "assistant".equals(message.message().role())) {
             if (assistantStreamed || thinkingRendered) {
                 return;
             }
         }
         if (entry instanceof Entry.Message message
-                && "user".equals(message.role())
+                && "user".equals(message.message().role())
                 && pendingUserText != null
-                && pendingUserText.equals(joinText(message.blocks()))) {
+                && pendingUserText.equals(joinText(message.message().content()))) {
             pendingUserText = null;
             return;
         }
