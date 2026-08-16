@@ -50,6 +50,7 @@ public sealed interface ContentBlock {
      * @param arguments tool arguments as a JSON-compatible map
      */
     record ToolUseContent(String id, String name, Map<String, Object> arguments) implements ContentBlock {
+        /** Compact constructor that defensively copies the arguments map. */
         public ToolUseContent {
             arguments = Map.copyOf(arguments);
         }
@@ -65,6 +66,7 @@ public sealed interface ContentBlock {
      */
     record ToolResultContent(String toolUseId, String toolName,
                              List<ContentBlock> content, boolean isError) implements ContentBlock {
+        /** Compact constructor that defensively copies the content blocks. */
         public ToolResultContent {
             content = List.copyOf(content);
         }

@@ -28,10 +28,16 @@ public final class FileCredentialStore implements CredentialStore {
 
     private final Path path;
 
+    /** Create a store backed by the default {@code ~/.pi-java/auth.json} file. */
     public FileCredentialStore() {
         this(STORE_PATH);
     }
 
+    /**
+     * Create a store backed by the given file.
+     *
+     * @param path the credential file to read from and write to
+     */
     public FileCredentialStore(Path path) {
         this.path = path;
     }

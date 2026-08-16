@@ -33,12 +33,32 @@ public final class MiscCommands {
             (args, ctx) -> ctx.keybindings() == null
                 ? registry.helpText()
                 : registry.helpText() + "\n\n" + hotkeys(ctx)));
-        registry.register(placeholder("export",
-            "Export session (HTML/JSONL)", "[path]",
-            "HTML export is not implemented yet (Phase 6)."));
-        registry.register(placeholder("import",
-            "Import session from JSONL", "<file>",
-            "JSONL import is not implemented yet (Phase 4)."));
+        registry.register(simple("export", "Export session as JSONL", "<path>",
+            (args, ctx) -> {
+                if (args.isBlank()) {
+                    return "Usage: /export <path>.jsonl";
+                }
+                try {
+                    ctx.session().exportJsonl(java.nio.file.Path.of(args.trim()));
+                    return "Exported session to " + args.trim();
+                } catch (Exception e) {
+                    return "Export failed: " + e.getMessage();
+                }
+            }));
+        registry.register(simple("import", "Import session from JSONL", "<file>",
+            (args, ctx) -> {
+                if (args.isBlank()) {
+                    return "Usage: /import <file>.jsonl";
+                }
+                try {
+                    var imported = ctx.session().importJsonl(
+                        java.nio.file.Path.of(args.trim()));
+                    ctx.onSwitchSession().accept(imported);
+                    return "Imported session from " + args.trim();
+                } catch (Exception e) {
+                    return "Import failed: " + e.getMessage();
+                }
+            }));
         registry.register(placeholder("share",
             "Share session as GitHub gist", "",
             "Session sharing is not implemented yet (Phase 6)."));

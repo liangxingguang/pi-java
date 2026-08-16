@@ -35,6 +35,11 @@ public final class MistralConversationsApi extends AbstractChatApi {
     private final String apiKey;
     private final String baseUrl;
 
+    /**
+     * Create an adapter for the given options.
+     *
+     * @param options API options (apiKey or {@code MISTRAL_API_KEY} required)
+     */
     public MistralConversationsApi(ApiOptions options) {
         this.apiKey = resolveApiKey(options);
         this.baseUrl = options.baseUrl() != null && !options.baseUrl().isBlank()

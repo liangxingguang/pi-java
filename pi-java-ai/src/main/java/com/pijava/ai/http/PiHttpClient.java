@@ -8,7 +8,6 @@ import java.time.Duration;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.concurrent.TimeoutException;
 
 import com.pijava.ai.AbortSignal;
 
@@ -177,26 +176,31 @@ public final class PiHttpClient implements AutoCloseable {
         private Duration connectTimeout = Duration.ofSeconds(30);
         private java.net.ProxySelector proxy;
 
+        /** Set the User-Agent header sent on each request. */
         public Builder userAgent(String ua) {
             this.userAgent = ua;
             return this;
         }
 
+        /** Set the retry policy used for transient failures. */
         public Builder retryPolicy(RetryPolicy policy) {
             this.retryPolicy = policy;
             return this;
         }
 
+        /** Set the proxy selector used for requests. */
         public Builder proxy(java.net.ProxySelector proxy) {
             this.proxy = proxy;
             return this;
         }
 
+        /** Set the connection timeout. */
         public Builder connectTimeout(Duration timeout) {
             this.connectTimeout = timeout;
             return this;
         }
 
+        /** Build the {@link PiHttpClient} instance. */
         public PiHttpClient build() {
             return new PiHttpClient(this);
         }

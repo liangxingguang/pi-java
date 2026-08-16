@@ -41,10 +41,21 @@ public class OpenAICompletionsApi extends AbstractChatApi {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
+    /**
+     * Create an adapter for the given options.
+     *
+     * @param options API options (apiKey or {@code OPENAI_API_KEY} required)
+     */
     public OpenAICompletionsApi(ApiOptions options) {
         this(options, "OPENAI_API_KEY");
     }
 
+    /**
+     * Create an adapter for the given options, resolving the API key from an env var.
+     *
+     * @param options     API options (apiKey or env var required)
+     * @param apiKeyEnvVar the environment variable holding the API key
+     */
     public OpenAICompletionsApi(ApiOptions options, String apiKeyEnvVar) {
         this.apiKey = resolveApiKey(options, apiKeyEnvVar);
         var baseUrl = options.baseUrl() != null && !options.baseUrl().isBlank()

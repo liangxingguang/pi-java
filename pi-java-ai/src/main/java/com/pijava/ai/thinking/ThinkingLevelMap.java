@@ -2,7 +2,6 @@ package com.pijava.ai.thinking;
 
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Per-model translation table: each supported {@link ThinkingLevel} maps to
@@ -15,6 +14,7 @@ import java.util.stream.Collectors;
 public record ThinkingLevelMap(
     Map<ThinkingLevel, ThinkingConfig> levelMap
 ) {
+    /** Compact constructor that defensively copies the level map. */
     public ThinkingLevelMap {
         levelMap = Map.copyOf(levelMap);
     }

@@ -23,10 +23,20 @@ public final class FileSettingsStorage implements SettingsStorage {
     private final Path globalPath;
     private final Path projectPath;
 
+    /**
+     * Create storage using the default agent directory and the current working
+     * directory as the project directory.
+     */
     public FileSettingsStorage() {
         this(defaultAgentDir(), Path.of(System.getProperty("user.dir")));
     }
 
+    /**
+     * Create storage rooted at the given agent and project directories.
+     *
+     * @param agentDir   directory holding the global {@code settings.json}
+     * @param projectDir project directory holding {@code .pi-java/settings.json}
+     */
     public FileSettingsStorage(Path agentDir, Path projectDir) {
         this.globalPath = agentDir.resolve("settings.json");
         this.projectPath = projectDir.resolve(".pi-java").resolve("settings.json");

@@ -15,6 +15,7 @@ public record SpanOptions(String name, Map<String, Object> attributes) {
         this(name, Map.of());
     }
 
+    /** Defensively copy attributes. */
     public SpanOptions {
         attributes = Map.copyOf(attributes);
     }

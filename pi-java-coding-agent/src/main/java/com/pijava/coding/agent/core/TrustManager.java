@@ -21,6 +21,12 @@ public final class TrustManager {
         this(defaultRoot(), defaultTrust);
     }
 
+    /**
+     * Create a trust manager storing markers under the given root.
+     *
+     * @param trustRoot    directory under which project marker files are stored
+     * @param defaultTrust default policy when no marker exists ("ask" | "always" | "never")
+     */
     public TrustManager(Path trustRoot, String defaultTrust) {
         this.trustRoot = trustRoot;
         if (defaultTrust != null) {

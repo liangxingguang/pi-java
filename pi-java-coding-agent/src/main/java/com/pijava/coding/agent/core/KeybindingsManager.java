@@ -37,6 +37,15 @@ public final class KeybindingsManager {
      * @param shift shift modifier
      */
     public record KeyStroke(String key, boolean ctrl, boolean alt, boolean shift) {
+        /**
+         * Convenience factory for a neutral key stroke.
+         *
+         * @param key   lowercase key name ("esc", "enter", "up", "c", …)
+         * @param ctrl  control modifier
+         * @param alt   alt modifier
+         * @param shift shift modifier
+         * @return the new {@link KeyStroke}
+         */
         public static KeyStroke of(String key, boolean ctrl, boolean alt, boolean shift) {
             return new KeyStroke(key, ctrl, alt, shift);
         }
@@ -44,6 +53,7 @@ public final class KeybindingsManager {
 
     private final Map<String, KeyStroke> bindings = new HashMap<>();
 
+    /** Create a manager pre-populated with the default keybindings. */
     public KeybindingsManager() {
         bindings.put(INTERRUPT, KeyStroke.of("esc", false, false, false));
         bindings.put(CLEAR, KeyStroke.of("c", true, false, false));

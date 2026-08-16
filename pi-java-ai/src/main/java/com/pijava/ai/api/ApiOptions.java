@@ -19,6 +19,7 @@ public record ApiOptions(
     int maxRetries,
     Map<String, Object> extra
 ) {
+    /** Compact constructor that defensively copies the {@code extra} options map. */
     public ApiOptions {
         extra = Map.copyOf(extra);
     }

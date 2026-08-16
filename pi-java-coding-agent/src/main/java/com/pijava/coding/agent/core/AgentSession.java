@@ -14,9 +14,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Stream;
 
 import com.pijava.agent.entry.Entry;
-import com.pijava.agent.entry.ProvisionedEntry;
 import com.pijava.agent.compaction.CompactionSettings;
-import com.pijava.agent.harness.Action;
 import com.pijava.agent.harness.AgentHarness;
 import com.pijava.agent.harness.DriveMode;
 import com.pijava.agent.harness.HarnessConfig;
@@ -40,7 +38,6 @@ import com.pijava.agent.tool.ToolSetFactory;
 import com.pijava.agent.tool.DefaultFileSystem;
 import com.pijava.agent.tool.DefaultShellExecutor;
 import com.pijava.ai.catalog.BuiltinCatalog;
-import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.model.DefaultModelResolver;
 import com.pijava.ai.provider.ProviderRegistry;

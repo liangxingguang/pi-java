@@ -24,6 +24,7 @@ public record StreamRequest(
     double temperature,
     Map<String, Object> extra
 ) {
+    /** Compact constructor that defensively copies the messages, tools, and extra maps. */
     public StreamRequest {
         messages = List.copyOf(messages);
         tools = List.copyOf(tools);

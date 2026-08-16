@@ -57,11 +57,18 @@ public final class Settings {
     /** Unknown fields passthrough (aligned with pi's extensible settings). */
     private final Map<String, Object> unknown = new HashMap<>();
 
+    /**
+     * Capture an unrecognized field so it round-trips through JSON.
+     *
+     * @param key   unknown field name
+     * @param value raw value
+     */
     @JsonAnySetter
     public void setUnknown(String key, Object value) {
         unknown.put(key, value);
     }
 
+    /** All unknown fields preserved from parsing, as an immutable copy. */
     @JsonAnyGetter
     public Map<String, Object> unknown() {
         return Map.copyOf(unknown);

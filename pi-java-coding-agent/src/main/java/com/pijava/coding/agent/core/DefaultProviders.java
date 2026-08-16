@@ -8,7 +8,13 @@ import com.pijava.ai.auth.EnvApiKeyResolver;
 import com.pijava.ai.auth.FileCredentialStore;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
-import com.pijava.ai.provider.*;
+import com.pijava.ai.provider.AnthropicProvider;
+import com.pijava.ai.provider.DeepSeekProvider;
+import com.pijava.ai.provider.GoogleProvider;
+import com.pijava.ai.provider.MistralProvider;
+import com.pijava.ai.provider.OpenAIProvider;
+import com.pijava.ai.provider.Provider;
+import com.pijava.ai.provider.ProviderRegistry;
 import com.pijava.coding.agent.cli.Args;
 
 import java.util.List;

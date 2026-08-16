@@ -29,6 +29,7 @@ public record ModelInfo(
     PricingInfo pricing,
     ThinkingLevelMap thinkingLevelMap
 ) {
+    /** Compact constructor that defensively copies capabilities and defaults a null thinking map. */
     public ModelInfo {
         capabilities = Set.copyOf(capabilities);
         if (thinkingLevelMap == null) {

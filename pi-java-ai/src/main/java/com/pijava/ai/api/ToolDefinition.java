@@ -14,6 +14,7 @@ public record ToolDefinition(
     String description,
     Map<String, Object> inputSchema
 ) {
+    /** Compact constructor that defensively copies the {@code inputSchema} map. */
     public ToolDefinition {
         inputSchema = Map.copyOf(inputSchema);
     }

@@ -123,7 +123,8 @@ public sealed interface StreamEvent {
      * @param id the tool call ID
      * @param jsonDelta incremental JSON fragment
      */
-    record ToolCallDelta(int contentIndex, String id, String jsonDelta, AssistantMessage partial) implements StreamEvent {}
+    record ToolCallDelta(int contentIndex, String id, String jsonDelta,
+                         AssistantMessage partial) implements StreamEvent {}
 
     /**
      * A tool call is complete.
@@ -132,7 +133,9 @@ public sealed interface StreamEvent {
      * @param name the tool name
      * @param arguments parsed JSON arguments (defensive copy)
      */
-    record ToolCallEnd(int contentIndex, String id, String name, Map<String, Object> arguments, AssistantMessage partial) implements StreamEvent {
+    record ToolCallEnd(int contentIndex, String id, String name,
+                       Map<String, Object> arguments, AssistantMessage partial) implements StreamEvent {
+        /** Compact constructor that defensively copies the arguments map. */
         public ToolCallEnd {
             arguments = Map.copyOf(arguments);
         }

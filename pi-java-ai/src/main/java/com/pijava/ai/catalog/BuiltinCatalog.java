@@ -30,6 +30,7 @@ public final class BuiltinCatalog implements ModelCatalog {
 
     // ── Per-provider factories ────────────────────────────────
 
+    /** Catalog of Anthropic Claude models. */
     public static ModelCatalog anthropicModels() {
         return new BuiltinCatalog(List.of(
                 model("claude-fable-5", "Claude Fable 5",
@@ -43,6 +44,7 @@ public final class BuiltinCatalog implements ModelCatalog {
         ));
     }
 
+    /** Catalog of OpenAI GPT models. */
     public static ModelCatalog openaiModels() {
         return new BuiltinCatalog(List.of(
                 model("gpt-5", "GPT-5", 128_000, 16_384, frontierChatCaps(), 2.50, 10.00),
@@ -51,6 +53,7 @@ public final class BuiltinCatalog implements ModelCatalog {
         ));
     }
 
+    /** Catalog of Google Gemini models. */
     public static ModelCatalog googleModels() {
         return new BuiltinCatalog(List.of(
                 model("gemini-2.5-pro", "Gemini 2.5 Pro",
@@ -60,6 +63,7 @@ public final class BuiltinCatalog implements ModelCatalog {
         ));
     }
 
+    /** Catalog of DeepSeek models. */
     public static ModelCatalog deepseekModels() {
         return new BuiltinCatalog(List.of(
                 model("deepseek-chat", "DeepSeek Chat",
@@ -69,6 +73,7 @@ public final class BuiltinCatalog implements ModelCatalog {
         ));
     }
 
+    /** Catalog of Mistral models. */
     public static ModelCatalog mistralModels() {
         return new BuiltinCatalog(List.of(
                 model("mistral-large", "Mistral Large",

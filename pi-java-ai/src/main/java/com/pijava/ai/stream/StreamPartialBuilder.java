@@ -39,10 +39,16 @@ public final class StreamPartialBuilder {
     private int thinkingBlockIndex = -1;
     private int toolBlockIndex = -1;
 
+    /**
+     * Create a builder for a message with the given ID.
+     *
+     * @param messageId the message identifier
+     */
     public StreamPartialBuilder(String messageId) {
         this.messageId = messageId;
     }
 
+    /** Create a builder for a message with a randomly generated ID. */
     public StreamPartialBuilder() {
         this(java.util.UUID.randomUUID().toString());
     }

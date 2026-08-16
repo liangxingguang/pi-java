@@ -8,7 +8,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.pijava.agent.harness.AgentHarness;
 import com.pijava.agent.harness.LaneConfig;
 import com.pijava.coding.agent.core.AgentSession;
 

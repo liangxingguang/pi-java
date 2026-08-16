@@ -2,7 +2,6 @@ package com.pijava.ai.http;
 
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -144,6 +143,7 @@ public final class RetryPolicy {
         public Builder maxDelay(Duration d) { this.maxDelay = d; return this; }
         public Builder retryableStatuses(Set<Integer> s) { this.retryableStatuses = s; return this; }
 
+        /** Build the {@link RetryPolicy} instance. */
         public RetryPolicy build() {
             return new RetryPolicy(this);
         }

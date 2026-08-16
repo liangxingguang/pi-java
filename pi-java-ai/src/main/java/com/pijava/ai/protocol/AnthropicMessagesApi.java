@@ -29,6 +29,11 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
 
     private final AnthropicClient client;
 
+    /**
+     * Create an adapter for the given options.
+     *
+     * @param options API options (apiKey or {@code ANTHROPIC_API_KEY} required)
+     */
     public AnthropicMessagesApi(ApiOptions options) {
         var apiKey = resolveApiKey(options);
         this.client = AnthropicOkHttpClient.builder().apiKey(apiKey).build();

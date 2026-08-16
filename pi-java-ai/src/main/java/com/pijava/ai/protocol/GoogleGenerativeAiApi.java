@@ -37,6 +37,11 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
 
     private final Client client;
 
+    /**
+     * Create an adapter for the given options.
+     *
+     * @param options API options (apiKey or {@code GEMINI_API_KEY} required)
+     */
     public GoogleGenerativeAiApi(ApiOptions options) {
         var apiKey = resolveApiKey(options);
         var baseUrl = options.baseUrl() != null && !options.baseUrl().isBlank()

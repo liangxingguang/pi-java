@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.ServiceLoader;
 
 import com.pijava.agent.session.ForkOptions;
+import com.pijava.agent.session.MutationReplayer;
 import com.pijava.agent.session.Session;
 import com.pijava.agent.session.SessionBackendFactory;
 import com.pijava.agent.session.SessionMetadata;
@@ -23,6 +24,7 @@ import com.pijava.agent.session.jsonl.JsonlSessionListOptions;
 import com.pijava.agent.session.jsonl.JsonlSessionMetadata;
 import com.pijava.agent.session.jsonl.JsonlSessionRepository;
 import com.pijava.agent.session.jsonl.JsonlSessionStorage;
+import com.pijava.agent.session.memory.MemorySessionMetadata;
 
 /**
  * Type-erased persistent-session facade used by {@link AgentSession}
@@ -187,6 +189,7 @@ final class PersistentSessionRepositories {
                     throw new SessionError(SessionErrorCode.INVALID_PAYLOAD,
                         "Import file has an invalid header");
                 }
+                // Raw call: the runtime repository is the sqlite repo.
                 @SuppressWarnings("rawtypes")
                 SessionRepository raw = repo;
                 Session<?> created = (Session<?>) raw.create(
@@ -260,11 +263,10 @@ final class PersistentSessionRepositories {
 
     /** Export via {@code getLog} re-encode (backend-independent). */
     static void exportViaLog(Session<?> session, Path target) {
-        var mapper = com.pijava.agent.session.SessionJson.mapper();
         var metadata = session.getMetadata();
         var header = new com.pijava.agent.session.jsonl.JsonlV4Header("header", 4,
             metadata.id(), metadata.createdAt().toEpochMilli(),
-            System.getProperty("user.dir"), metadata.parentSessionId(), null, null);
+            metadataCwd(metadata), metadata.parentSessionId(), null, null);
         var sb = new StringBuilder(JsonlCodec.encodeHeader(header));
         for (var item : session.getLog(com.pijava.agent.session.LogOptions.none())) {
             sb.append(JsonlCodec.encodeMutation(mutationFromLogItem(item)));
@@ -304,6 +306,10 @@ final class PersistentSessionRepositories {
     }
 
     private static void applyMutation(Session<?> session, SessionMutation mutation) {
+        if (session.storage() instanceof MutationReplayer replayer) {
+            replayer.replayMutation(mutation);
+            return;
+        }
         switch (mutation) {
             case SessionMutation.Entry entry -> {
                 String lane = entry.lane() == null ? "main" : entry.lane();
@@ -346,5 +352,20 @@ final class PersistentSessionRepositories {
             case com.pijava.agent.session.LogItem.LabelItem l ->
                 new SessionMutation.FactLabel(l.seq(), l.targetId(), l.label());
         };
+    }
+
+    /** Resolve the session cwd from metadata; the SQLite type is read reflectively. */
+    private static String metadataCwd(SessionMetadata metadata) {
+        if (metadata instanceof JsonlSessionMetadata j) {
+            return j.cwd();
+        }
+        if (metadata instanceof MemorySessionMetadata m) {
+            return m.cwd();
+        }
+        try {
+            return (String) metadata.getClass().getMethod("cwd").invoke(metadata);
+        } catch (ReflectiveOperationException | ClassCastException e) {
+            return System.getProperty("user.dir");
+        }
     }
 }

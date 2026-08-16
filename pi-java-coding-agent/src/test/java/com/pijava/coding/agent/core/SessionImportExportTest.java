@@ -93,4 +93,39 @@ class SessionImportExportTest {
             handle.close();
         }
     }
+
+    @Test
+    void sqliteImportPreservesSeqAndTimestamp() throws Exception {
+        Path db = Files.createTempDirectory("pi-io-sqlite-seq").resolve("s.db");
+        var handle = PersistentSessionRepositories.sqlite(db);
+        try {
+            var session = handle.create("cwd", null);
+            session.appendEntry(message("m1", "first"), "main");
+            session.appendEntry(message("m2", "second"), "main");
+
+            var m1Before = byId(session.findEntries(EntryQuery.all()), "m1");
+            var m2Before = byId(session.findEntries(EntryQuery.all()), "m2");
+
+            Path exported = Files.createTempFile("pi-io-seq", ".jsonl");
+            handle.exportJsonl(session, exported);
+
+            Path db2 = Files.createTempDirectory("pi-io-sqlite-seq2").resolve("s.db");
+            var handle2 = PersistentSessionRepositories.sqlite(db2);
+            var imported = handle2.importJsonl(exported, "cwd");
+
+            var m1After = byId(imported.findEntries(EntryQuery.all()), "m1");
+            var m2After = byId(imported.findEntries(EntryQuery.all()), "m2");
+            assertThat(m1After.seq()).isEqualTo(m1Before.seq());
+            assertThat(m2After.seq()).isEqualTo(m2Before.seq());
+            assertThat(m1After.timestamp()).isEqualTo(m1Before.timestamp());
+            assertThat(m2After.timestamp()).isEqualTo(m2Before.timestamp());
+            handle2.close();
+        } finally {
+            handle.close();
+        }
+    }
+
+    private static Entry byId(List<Entry> entries, String id) {
+        return entries.stream().filter(e -> e.id().equals(id)).findFirst().orElseThrow();
+    }
 }

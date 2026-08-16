@@ -30,6 +30,7 @@ public record AssistantMessage(
     StreamEvent.UsageInfo usage,
     String stopReason
 ) {
+    /** Compact constructor that defensively copies the content blocks. */
     public AssistantMessage {
         content = List.copyOf(content);
     }

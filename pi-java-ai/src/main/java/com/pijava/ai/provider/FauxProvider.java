@@ -30,6 +30,13 @@ public final class FauxProvider implements Provider {
     private final long delayMs;
     private final AtomicInteger nextCall = new AtomicInteger();
 
+    /**
+     * Create a provider that replays the given events on every call.
+     *
+     * @param name    provider name
+     * @param events  the event sequence to replay
+     * @param delayMs delay between events in milliseconds
+     */
     public FauxProvider(String name, List<StreamEvent> events, long delayMs) {
         this(name, List.of(events), delayMs, false);
     }

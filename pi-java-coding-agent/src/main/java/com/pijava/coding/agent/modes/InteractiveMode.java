@@ -23,6 +23,11 @@ public final class InteractiveMode {
     private EntryObserver entryObserver = entry -> { };
     private StreamObserver streamObserver = event -> { };
 
+    /**
+     * Create interactive mode driving the given session.
+     *
+     * @param session the underlying agent session
+     */
     public InteractiveMode(AgentSession session) {
         this.session = session;
     }

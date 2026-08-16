@@ -14,6 +14,11 @@ public final class DefaultModelResolver implements ModelResolver {
 
     private final ModelCatalog catalog;
 
+    /**
+     * Create a resolver backed by the given catalog.
+     *
+     * @param catalog the model catalog to resolve against
+     */
     public DefaultModelResolver(ModelCatalog catalog) {
         this.catalog = catalog;
     }
@@ -59,6 +64,14 @@ public final class DefaultModelResolver implements ModelResolver {
         return resolve(pattern, null);
     }
 
+    /**
+     * Resolve a CLI model pattern to a concrete model, with a fallback provider.
+     *
+     * @param pattern model pattern or ID (may be null → default provider)
+     * @param defaultProvider fallback provider when the pattern is absent or unqualified
+     * @return the resolved model ID
+     * @throws IllegalStateException if the pattern cannot be resolved
+     */
     public ModelId<?> resolve(String pattern, String defaultProvider) {
         if (pattern == null || pattern.isBlank()) {
             var preferred = Optional.ofNullable(defaultProvider)

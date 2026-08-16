@@ -83,6 +83,18 @@ class SlashCommandTest {
     }
 
     @Test
+    void exportAndImportAreWiredNotPlaceholders() {
+        var registry = CommandRegistry.withBuiltins();
+        var context = SlashContext.of(null);
+
+        // Phase 4 §4.7: /export and /import must be wired, not "not implemented".
+        assertThat(registry.dispatch("/export", context).toCompletableFuture().join())
+            .contains("Usage: /export");
+        assertThat(registry.dispatch("/import", context).toCompletableFuture().join())
+            .contains("Usage: /import");
+    }
+
+    @Test
     void nameChangesSessionDisplayName() {
         var registry = CommandRegistry.withBuiltins();
         // Use a session stub: AgentSession cannot be null here, so we build the

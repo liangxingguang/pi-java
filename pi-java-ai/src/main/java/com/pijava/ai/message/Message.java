@@ -18,6 +18,7 @@ public sealed interface Message {
 
     /** A system-level instruction message. */
     record SystemMessage(List<ContentBlock> content) implements Message {
+        /** Compact constructor that defensively copies the content blocks. */
         public SystemMessage {
             content = List.copyOf(content);
         }
@@ -30,6 +31,7 @@ public sealed interface Message {
 
     /** A message from the end user. */
     record UserMessage(List<ContentBlock> content) implements Message {
+        /** Compact constructor that defensively copies the content blocks. */
         public UserMessage {
             content = List.copyOf(content);
         }
@@ -42,6 +44,7 @@ public sealed interface Message {
 
     /** A message from the assistant (LLM). */
     record AssistantMessage(List<ContentBlock> content) implements Message {
+        /** Compact constructor that defensively copies the content blocks. */
         public AssistantMessage {
             content = List.copyOf(content);
         }
@@ -60,6 +63,7 @@ public sealed interface Message {
      */
     record ToolResultMessage(String toolUseId, String toolName,
                              List<ContentBlock> content, boolean isError) implements Message {
+        /** Compact constructor that defensively copies the content blocks. */
         public ToolResultMessage {
             content = List.copyOf(content);
         }

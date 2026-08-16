@@ -1,6 +1,5 @@
 package com.pijava.ai.cli;
 
-import java.util.Comparator;
 
 import com.pijava.ai.auth.EnvApiKeyResolver;
 import com.pijava.ai.auth.FileCredentialStore;
