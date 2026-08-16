@@ -222,7 +222,10 @@
         <profile>
             <id>native</id>
             <properties>
-                <maven.test.skip>true</maven.test.skip>
+                <!-- skipTests (not maven.test.skip): skip test *execution* only,
+                     keep test compilation so agent-core's test-jar is still
+                     produced for session-backend-sqlite's test dependency -->
+                <skipTests>true</skipTests>
             </properties>
             <dependencyManagement>
                 <dependencies>

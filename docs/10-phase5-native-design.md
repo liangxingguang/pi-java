@@ -166,7 +166,7 @@ Logback（`logback-classic`，runtime）依赖 Joran（SAX）+ 大量反射 + �
   <profile>
     <id>native</id>
     <properties>
-      <maven.test.skip>true</maven.test.skip>
+      <skipTests>true</skipTests>
     </properties>
     <dependencyManagement>
       <dependencies>
