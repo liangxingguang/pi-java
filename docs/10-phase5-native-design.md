@@ -12,11 +12,12 @@
 
 ```mermaid
 flowchart LR
-    subgraph src["11 个 Maven 模块"]
+    subgraph src["12 个 Maven 模块（含 dist）"]
         ca["pi-java-coding-agent<br/>Main (pi-java CLI)"]
         ai["pi-java-ai<br/>AiCli (pi-ai CLI)"]
         tui["pi-java-tui<br/>TamboUI/JLine/Panama"]
         sqlite["pi-java-session-backend-sqlite<br/>xerial sqlite-jdbc (JNI)"]
+        dist["pi-java-dist<br/>聚合（shade 宿主）"]
     end
 
     subgraph build["Maven 构建流水线"]
@@ -38,10 +39,11 @@ flowchart LR
         linux["linux-x64/pi-java + pi-ai"]
     end
 
-    ca --> shade --> native --> out
+    ca --> dist
+    tui --> dist
+    sqlite --> dist
+    dist --> shade --> native --> out
     ai --> shade
-    tui --> shade
-    sqlite --> shade
     native --> cfg
     agent --> cfg
 ```
@@ -60,12 +62,22 @@ flowchart LR
 
 | 组件 | 选型 | 说明 |
 |------|------|------|
-| JDK | GraalVM for JDK 26（`graalvm-community` 26） | 与项目 `java.release=26` 一致；Panama FFM 已是稳定 API |
-| Native 构建插件 | `org.graalvm.buildtools:native-maven-plugin`（0.10.x） | 官方插件，`mvn -Pnative package` 一键构建，支持 `buildArgs`/`metadataRepository` |
+| JDK | GraalVM Community Edition **26.0.x**（`graalvm-community`） | 与项目 `java.release=26` 一致；Panama FFM 已是稳定 API。**可用性需 P5-1 首日核实**：26.0.0 计划 2026-03-17 发布，但截至 2026-08 版本跟踪源最新社区版为 25.2.4，26.0 线尚未列入已发布（见 §9 N5 升级） |
+| Native 构建插件 | `org.graalvm.buildtools:native-maven-plugin`（**0.10.6**） | 官方插件，`mvn -Pnative package` 一键构建，支持 `buildArgs`/`metadataRepository`；0.11.0 已出，本阶段锁定 0.10.x 稳定线 |
 | Fat jar | `maven-shade-plugin` | 打包单一 jar + `Main-Class` 清单 + SPI 服务合并 |
 | 反射配置生成 | Tracing Agent（`-agentlib:native-image-agent=config-output-dir=...`） | 自动产出 config JSON |
 | 版本管理 | 版本集中在根 `pom.xml` `<properties>`（`version.graalvm`、`version.native-maven-plugin`、`version.shade-plugin`） | 与现有 `version.jackson` 等一致 |
 
+### 2.1 新增根 pom 版本属性（实施第一步）
+
+以下属性当前**均不存在**（已核实根 pom/BOM），实施第一步在根 `pom.xml` `<properties>` 统一新增，替换文档中出现的 `${...}` 引用：
+
+| 属性 | 默认值 | 说明 |
+|------|--------|------|
+| `version.graalvm` | `26.0.x` | GraalVM CE for JDK 26；可用性 Day-1 核实（§7 平台探针），不可用则按风险 N5 退回方案 |
+| `version.native-maven-plugin` | `0.10.6` | 锁定 0.10 稳定线（§2 选型） |
+| `version.shade-plugin` | `3.6.0` | maven-shade-plugin 稳定版 |
+| `version.slf4j` | `2.0.16` | 与 BOM 现有 `slf4j-api` 字面量版本对齐（实施时可顺手把 BOM 字面量统一为该属性） |
 > **依赖与风险（R2 展开）**：GraalVM for JDK 26 社区版需支持 Panama FFM + JNI 的 native-image 后端。sqlite-jdbc 的本地库（`sqlitejdbc.dll`/`libsqlitejdbc.dylib`/`.so`）按平台打包，native-image 需 `-H:+JNI` + 把本地库作为 resource 拷贝到构建产物旁。
 
 ---
@@ -80,7 +92,7 @@ Native Image 关闭了反射/JNI/资源/序列化的默认可达性，需显式�
 | **反射** | TamboUI/JLine 终端后端 | `reflect-config.json` | `org.jline.terminal.impl.*`（复用 demo 的 140 行清单） |
 | **反射** | Picocli 注解（`@Command`/`@Option`） | `reflect-config.json` 或 picocli-codegen | `ArgsParser` 命令类 |
 | **JNI** | xerial sqlite-jdbc | `jni-config.json` + resource | `org.sqlite.*` 本地方法 + `sqlitejdbc*` 本地库 |
-| **资源** | ServiceLoader + SQL 迁移 | `resource-config.json` | `META-INF/services/*`、`sql/001_initial.sql`、`logback.xml`（coding-agent；tui 走 logback 默认配置，需一并覆盖） |
+| **资源** | ServiceLoader + SQL 迁移 | `resource-config.json` | `META-INF/services/*`、`sql/001_initial.sql`；`logback.xml` 仅 JVM 构建需要（native 排除 logback 后无需打包，tui 无独立 logback.xml） |
 | **动态代理** | （Jackson 或日志） | `proxy-config.json` | 按 Tracing Agent 产出 |
 | **序列化** | （若启用 Java 序列化） | `serialization-config.json` | 按需 |
 
@@ -98,7 +110,8 @@ Native Image 关闭了反射/JNI/资源/序列化的默认可达性，需显式�
 
 pi-java 的持久化/协议大量依赖 Jackson 对 sealed record 的 `@JsonTypeInfo` 多态反序列化。Native 下：
 
-- **sealed 层次**：`Entry`（7 子类型）、`LaneRecord`（9 子类型）、`Message`（4 子类型）、`ContentBlock`、`SessionMutation`（5 变体）、`LogItem`、`ForkOptions`。每个子类型的**无参/全参构造器 + 字段**需可反射。
+- **Jackson 多态类型**（`@JsonTypeInfo` + `@JsonSubTypes`，须注册全部子类型 + 判别）：`Entry`（7）、`LaneRecord`（9）、`ContentBlock`（5）、`StreamEvent`（13）。每个子类型的**全参构造器 + 字段**需可反射。其中 `StreamEvent` 当前仅在测试（`StreamEventTest`）序列化、native 主路径不触发，列入清单以防未来 RPC/telemetry 使用。
+- **sealed 非多态类型**（无 `@JsonSubTypes`，走 manual codec 或显式 switch，如 JSONL `JsonlCodec`）：`Message`（4）、`SessionMutation`（5）、`LogItem`、`ForkOptions`。记录序列化仍需字段/构造器反射，但不需多态判别注册。
 - **判别 enum**：`OperationOutcome`/`StepKind`/`UsageCause`/`ReplayKind`/`QueueKind`/`SessionErrorCode` 的 `@JsonCreator fromValue` 静态工厂需注册。
 - **策略**：Tracing Agent 跑「JSONL v4 编解码 + SQLite payload 编解码 + settings 解析」冒烟即可覆盖绝大多数；再按 §4.5 的稳定清单兜底。`jackson-databind` 自带的 native feature 只能减少少量样板，**用户 sealed record/POJO 的反射注册仍以 Tracing Agent 产出为准**，不依赖自动注册。
 
@@ -111,7 +124,7 @@ pi-java 的持久化/协议大量依赖 Jackson 对 sealed record 的 `@JsonType
          -H:+ReportExceptionStackTraces
   ```
 - **`reflect-config.json`**：JLine 终端 provider 清单（`org.jline.terminal.impl.posix.*`/`jansi.*`/`jna.*`/`ffm.*`/`exec.*`/`win.*`），全部 `allDeclaredConstructors/Methods/Fields`。可直接从 `.agents/tamboui-demos/.../reflect-config.json` 拷贝并适配当前 JLine 版本。
-- **Panama 后端**（`tamboui-panama-backend`）：FFM 在 native-image 下需 `--enable-native-access=ALL-UNNAMED`（或 `--enable-native-access` + `-H:EnableUnsafe` 视后端而定）。Windows 上 Panama 后端可能仍需 fallback 到 jline3 后端（Phase 3 已有 `NoMode2027JLineBackend` 兜底，见下）。
+- **Panama 后端**（`tamboui-panama-backend`）：FFM 在 native-image 下需 `--enable-native-access=ALL-UNNAMED`（或 `--enable-native-access` + `-H:+EnableUnsafe` 视后端而定）。Windows 上 Panama 后端可能仍需 fallback 到 jline3 后端（Phase 3 已有 `NoMode2027JLineBackend` 兜底，见下）。
 
 ### 4.3 SQLite（xerial sqlite-jdbc 3.47.1.0，JNI）
 
@@ -131,6 +144,8 @@ Logback（`logback-classic`，runtime）依赖 Joran（SAX）+ 大量反射 + �
 > **前置重构（已随本设计落地）**：`Logging.java` 已改为**仅依赖 slf4j-api**——logback 存在时经反射配置（根级别、TUI 模式 detach CONSOLE appender），logback 缺席（native）时降级为 `org.slf4j.simpleLogger.defaultLogLevel` 系统属性。因此替换依赖不会破坏编译，`Logging.configure(debug, tui)` 签名不变。
 
 > **与 `10-logging-design.md` 的决策变更**：10-logging 原计划「保留 logback + 补 native 反射配置」，本设计改为「native 下切 slf4j-simple」。此为跨文档决策变更，落地时同步更新 10-logging 的 Phase 5 备注。
+
+> **级别时机**：native 下 Logging.configure 在 Main 启动早期设置 org.slf4j.simpleLogger.defaultLogLevel；slf4j-simple 在首次创建 logger 时读取该属性，须保证 configure 先于任何日志输出（当前成立）。
 
 ### 4.6 Settings（JSON + Jackson，非 SnakeYAML）
 
@@ -194,7 +209,7 @@ Logback（`logback-classic`，runtime）依赖 Joran（SAX）+ 大量反射 + �
               <arg>--enable-url-protocols=https</arg>
               <arg>--enable-native-access=ALL-UNNAMED</arg>
               <arg>-H:+JNI</arg>
-              <arg>-march=compatibility</arg>  <!-- 平台矩阵见 §7 -->
+              <!-- -march 仅 x86 传入（§7）：由 CI 平台 profile 注入，arm64 不含该 arg -->
             </buildArgs>
           </configuration>
         </plugin>
@@ -206,17 +221,105 @@ Logback（`logback-classic`，runtime）依赖 Joran（SAX）+ 大量反射 + �
 
 - `pi-ai` 用第二个 execution：`mainClass=com.pijava.ai.cli.AiCli`、`imageName=pi-ai`。
 - 构建命令对齐 `04-implementation-plan.md` §7：`mvn -Pnative package`。
-- 原生 config 放在 `pi-java-coding-agent/src/main/resources/META-INF/native-image/com.pi-java/coding-agent/{native-image.properties,reflect-config.json,resource-config.json,jni-config.json}`（同理 `pi-java-ai` 一份）。Tracing Agent 生成的 config 先落这里，再由人工裁剪。
+- 原生 config 放在 shade 源模块的 `src/main/resources/META-INF/native-image/`：`pi-java` 产物 → `pi-java-dist`（`com.pi-java/dist`），`pi-ai` 产物 → `pi-java-ai`（`com.pi-java/ai`）。Tracing Agent 生成的 config 先落这里，再由人工裁剪。
 - **按模块归属（推荐）**：sqlite-jdbc 的 `jni-config.json` 放 `pi-java-session-backend-sqlite`、JLine reflect-config 放 `pi-java-tui` 各自模块的 `META-INF/native-image/`；native-image 会合并 classpath 上所有模块的 config，分散放置便于按模块维护（与集中放置二选一保持一致）。
+- **-march 平台化**：`buildArgs` 不写死 `-march`；由 CI/平台 profile 按 `os.arch` 注入（x86-64 传 `-march=compatibility`，aarch64 不传），与 §7 平台矩阵一致。
 
 ### 5.1 运行时聚合（shade 源模块）
 
-`pi-java` 主产物的 fat jar 必须包含 coding-agent + tui + sqlite 三个模块，但当前依赖图不满足（sqlite 仅 `test` scope、tui 为反向依赖）。shade 的源模块需保证这条运行时链路可达，二选一：
+`pi-java` 主产物的 fat jar 必须包含 coding-agent + tui + sqlite 三个模块，但当前依赖图不满足（sqlite 仅 `test` scope、tui 为反向依赖）。**已定案：方案 A**——新增 `pi-java-dist` 聚合模块（不污染 tui 职责、天然承载 shade + native config + 平台产物目录），`runtime` 依赖 coding-agent + tui + session-backend-sqlite + 日志实现（JVM: logback-classic；native profile: slf4j-simple，见 §5），在此模块上执行 shade + native-image，`mainClass=com.pijava.coding.agent.Main`。
 
-- **方案 A（推荐）**：新增 `pi-java-dist`（或 `pi-java-cli`）聚合模块，`runtime` 依赖 coding-agent + tui + session-backend-sqlite + logback，在此模块上执行 shade + native-image，`mainClass=com.pijava.coding.agent.Main`。
-- **方案 B**：给 `pi-java-tui` 增加 `runtime` 依赖 session-backend-sqlite（tui 已 → coding-agent），在 tui 模块上 shade + native-image。
+`pi-ai` 产物在 `pi-java-ai` 上 shade（ai 自包含，`mainClass=com.pijava.ai.cli.AiCli`）。
 
-无论哪种，`pi-ai` 产物在 `pi-java-ai` 上 shade（ai 自包含，`mainClass=com.pijava.ai.cli.AiCli`）。
+### 5.2 `pi-java-dist` 聚合模块骨架（方案 A）
+
+§5 的 XML 是根 `native` profile（负责 `-Pnative` 激活 + dependencyManagement 里 logback→slf4j-simple 交换）；**shade + native-image 的 plugin execution 实际落在 dist 模块与 `pi-java-ai`**，而非根 pom：
+
+```xml
+<!-- pi-java-dist/pom.xml -->
+<project>
+  <parent>
+    <groupId>com.pi-java</groupId>
+    <artifactId>pi-java-parent</artifactId>
+    <version>${project.version}</version>
+  </parent>
+  <artifactId>pi-java-dist</artifactId>
+  <packaging>jar</packaging>
+
+  <dependencies>
+    <!-- 主类 Main 在 coding-agent（compile），其传递依赖拉入 agent-core -->
+    <dependency>
+      <groupId>com.pi-java</groupId>
+      <artifactId>pi-java-coding-agent</artifactId>
+    </dependency>
+    <!-- SPI 实现：只进 runtime classpath，dist 代码不直接引用 -->
+    <dependency>
+      <groupId>com.pi-java</groupId>
+      <artifactId>pi-java-tui</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.pi-java</groupId>
+      <artifactId>pi-java-session-backend-sqlite</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>pi-java</finalName>
+    <plugins>
+      <!-- shade：fat jar + 合并 META-INF/services（SPI 注册） -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>${version.shade-plugin}</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals><goal>shade</goal></goals>
+            <configuration>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+              </transformers>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <!-- native-image：fat jar → 二进制 -->
+      <plugin>
+        <groupId>org.graalvm.buildtools</groupId>
+        <artifactId>native-maven-plugin</artifactId>
+        <version>${version.native-maven-plugin}</version>
+        <executions>
+          <execution>
+            <id>build-native</id>
+            <phase>package</phase>
+            <goals><goal>compile-no-fork</goal></goals>
+          </execution>
+        </executions>
+        <configuration>
+          <mainClass>com.pijava.coding.agent.Main</mainClass>
+          <imageName>pi-java</imageName>
+          <buildArgs>
+            <arg>--enable-url-protocols=https</arg>
+            <arg>--enable-native-access=ALL-UNNAMED</arg>
+            <arg>-H:+JNI</arg>
+            <!-- -march 仅 x86 传入（§7）：由 CI 平台 profile 注入，arm64 不含该 arg -->
+          </buildArgs>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>
+```
+
+要点：
+
+- **SPI 可达性**：`pi-java-tui` 与 `pi-java-session-backend-sqlite` 以 `runtime` scope 引入，既不污染 dist 源码，又保证 shade 与 native-image 的 classpath 含 `PiTuiEntryPoint`/`SqliteSessionBackendFactory`，`ServiceLoader` 才能发现它们。
+- **config 归属**：native config 随 shade 源模块走，放 `pi-java-dist/src/main/resources/META-INF/native-image/com.pi-java/dist/`（§5 已改）。
+- **`pi-ai` 对称**：`pi-java-ai` 自身即入口模块，直接配 shade + native-image（`mainClass=com.pijava.ai.cli.AiCli`、`imageName=pi-ai`），无需 dist。
+- **根 pom <modules> 增项**：新增 pi-java-dist 后必须加入根 pom 模块列表，否则 mvn -Pnative package 不会构建 dist（实施第一步）。
 
 ---
 
@@ -275,7 +378,7 @@ java -agentlib:native-image-agent=config-merge-dir=... \
 
 | 策略 | 手段 | 预期收益 |
 |------|------|----------|
-| **charset 裁剪** | `-H:+AddAllCharsets=false`：只打包 UTF-8/US-ASCII，不打包全部 JDK charset | ~2MB |
+| **charset 裁剪** | `-H:-AddAllCharsets`：只打包 UTF-8/US-ASCII，不打包全部 JDK charset | ~2MB |
 | **日志降级** | native profile 用 `slf4j-simple` 替换 logback（§4.5）：去掉 Joran/反射/~1MB | ~1MB |
 | **依赖裁剪** | shade 只含运行时可达模块；`protocol`/`client`/`server`/`evals` 不在 `pi-java`/`pi-ai` 运行时路径，不进 fat jar | 视依赖 |
 | **GC** | `--gc=serial`（native-image 默认，最小） | 基线 |
@@ -296,7 +399,7 @@ java -agentlib:native-image-agent=config-merge-dir=... \
 | N2 | sqlite-jdbc JNI 本地库未正确打包 → 启动即失败 | 高 | 中 | 三平台分别验证本地库；`jni-config.json` + resource 打包 + 冒烟测试 |
 | N3 | TamboUI Panama 后端在 native 下不可用（FFM/信号） | 中 | 中 | 保留 jline3 后端兜底（Phase 3 已有）；`--initialize-at-build-time=org.jline` |
 | N4 | Logback 反射过重拖慢构建/失败 | 中 | 中 | native profile 切换 `slf4j-simple`（§4.5） |
-| N5 | GraalVM for JDK 26 尚缺某平台支持 | 中 | 低 | 锁定 GraalVM 版本；CI 矩阵尽早探针 |
+| N5 | GraalVM for JDK 26 尚未发布/稳定（26.0.0 计划 2026-03-17，截至 2026-08 版本跟踪源最新为 25.2.4） | 高 | 高 | Day-1 平台探针（§7）；若不可用则评估退回 GraalVM 25.x + 项目降到 JDK 25 LTS，或顺延 Phase 5 |
 | N6 | 反射清单随 Phase 迭代漂移 | 中 | 中 | `-Pnative package` 纳入每 PR 验证（R2），config 与业务同仓 |
 
 ---
@@ -306,6 +409,7 @@ java -agentlib:native-image-agent=config-merge-dir=... \
 - [ ] `mvn -Pnative package` 在 win-x64 产出 `pi-java.exe`/`pi-ai.exe`，可运行。
 - [ ] 三平台（win-x64 / mac-arm64 / linux-x64）native 构建成功（CI 矩阵）。
 - [ ] `pi-java -p "hello"` 冷启动 < 100ms，空闲内存 < 50MB。
+- [ ] 首次成功构建后回填 §8 实测的启动时间 / 空闲内存 / 二进制体积三项，并与目标对比（体积不达 ~20MB 时按 §8.1 逐项加码）。
 - [ ] 原生二进制能完成「建会话 → 写 entry/record → SQLite 恢复 → `/export` `/import`」全链路（Phase 4 能力面回归）。
 - [ ] CI 对三平台产物自动跑 native 冒烟（`-p "hello"` + SQLite create/recover），非仅构建成功。
 - [ ] 交互 TUI 在原生二进制下可启动并处理输入（jline3 或 Panama 后端）。
@@ -348,3 +452,26 @@ java -agentlib:native-image-agent=config-merge-dir=... \
 4. **新增「运行时聚合缺口」（§5.1）**：sqlite 仅 `test` scope、tui 为反向依赖，shade 源模块需先建立 runtime 聚合（方案 A：`pi-java-dist` 聚合模块；方案 B：tui 增加 sqlite runtime 依赖）。
 5. **§4.3：补 coding-agent 对 `com.pijava.session.sqlite.*` 的反射入口**（`Class.forName` + `getConstructor`），冒烟须覆盖 fork 路径。
 6. **P2 补充**：Jackson「自动注册」表述澄清（用户类型仍以 Tracing Agent 为准）；`-march` 仅 x86 语义；sqlite/tui 原生 config 按模块归属；平台探针任务（P5-1 前置）；CI 产物 native 冒烟（P5-4/验收）；启动 <100ms 列为 stretch 目标。
+
+### v1.3（2026-08-16 复审修订）
+
+按 95% 门禁复审，采纳「方案 A」并进一步修订：
+
+1. **§5.1 定案方案 A**：新增 `pi-java-dist` 聚合模块（原「二选一」收敛为单一方案，dist 承载 shade + native config + 平台产物目录）。
+2. **§4.1 反射清单分层**：区分 Jackson 多态类型（`Entry` 7 / `LaneRecord` 9 / `ContentBlock` 5 / **`StreamEvent` 13**）与 sealed 非多态类型（`Message` 4 / `SessionMutation` 5 / `LogItem` / `ForkOptions`）；补漏 `StreamEvent`（当前仅测试序列化，列入以防未来 RPC/telemetry 使用）。
+3. **§2 锁定版本**：GraalVM CE 26.0.x（可用性 Day-1 核实）+ native-maven-plugin 0.10.6（0.11.0 已出，本阶段锁 0.10 稳定线）。
+4. **§9 N5 升级**：GraalVM 26 可用性由「低概率」升为「高概率 Day-1 blocker」（26.0.0 计划 2026-03-17，截至 2026-08 版本跟踪源最新为 25.2.4）。
+### v1.4（2026-08-16 复审修订，实施前勘误）
+
+按实施前复审意见修订：
+
+1. **§8.1 charset 标志语法**：`-H:+AddAllCharsets=false` 改为合法布尔语法 `-H:-AddAllCharsets`。
+2. **`-march` 平台化**：§5/§5.2 的 `buildArgs` 不再写死 `-march=compatibility`，改由 CI/平台 profile 按 `os.arch` 注入（x86-64 传 `compatibility`、aarch64 不传），与 §7 一致。
+3. **§2.1 新增版本属性清单**：`version.graalvm`（26.0.x）、`version.native-maven-plugin`（0.10.6）、`version.shade-plugin`（3.6.0）、`version.slf4j`（2.0.16，对齐 BOM 现有 slf4j-api），替换文档中的 `${...}` 引用。
+4. **§3 resource 行**：`logback.xml` 标注「仅 JVM 构建需要，native 排除 logback 后无需打包；tui 无独立 logback.xml」。
+5. **§5.1 dist 依赖**：日志实现措辞明确（JVM: logback-classic；native profile: slf4j-simple）。
+6. **§5.2**：补「根 pom `<modules>` 增列 `pi-java-dist`」。
+7. **§4.2**：`-H:EnableUnsafe` 更正为 `-H:+EnableUnsafe`。
+8. **§4.5**：补 slf4j-simple 级别属性的设置时机说明（configure 先于任何日志输出）。
+5. **§10 验收新增**：首次成功构建后回填 §8 实测启动/内存/体积。
+6. **闭环 `10-logging-design.md`**：其 Phase 5 备注由「补 logback 反射配置」改为「native 下切 slf4j-simple」。
