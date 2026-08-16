@@ -293,6 +293,7 @@ public final class InlineTuiShell implements AutoCloseable {
         display.render((area, buf) -> copy(buffer, area, buf), contentHeight, cursorX, cursorY);
     }
 
+    /** Renders the overlay frame through the given renderer (no-op when inactive). */
     public void renderOverlay(Consumer<Frame> renderer) {
         var display = overlayDisplay;
         var frame = overlayFrame;

@@ -20,6 +20,7 @@ public final class EditorComponent {
     private final EditorElement element;
     private Consumer<String> submitHandler = text -> { };
 
+    /** Creates the editor component backed by a fresh {@link TextAreaState}. */
     public EditorComponent() {
         this.element = TamboUIAdapter.editorElement(state)
             .placeholder("Type a message… (Enter send, Shift+Enter newline)")

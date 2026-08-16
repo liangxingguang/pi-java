@@ -1,6 +1,5 @@
 package com.pijava.tui.screen;
 
-import java.util.List;
 
 import com.pijava.agent.harness.AgentHarness;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -25,6 +24,11 @@ public final class WelcomeOverlay {
         this(null);
     }
 
+    /**
+     * Builds the startup card from the given session (may be null).
+     *
+     * @param session the active session for model/thinking details, or null
+     */
     public WelcomeOverlay(AgentSession session) {
         this.text = buildCard(session);
     }

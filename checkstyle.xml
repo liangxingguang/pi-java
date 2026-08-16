@@ -34,12 +34,10 @@
             <property name="exceptionVariableName" value="expected|ignored"/>
         </module>
 
-        <!-- No System.out / System.err (use java.util.logging) -->
-        <module name="RegexpSinglelineJava">
-            <property name="format" value="System\.(out|err)\.print"/>
-            <property name="message"
-                      value="Use java.util.logging.Logger instead of System.out/err"/>
-        </module>
+        <!-- No System.out rule: pi-java is a CLI; stdout/stderr ARE the
+             correct output channels (print mode, list-models, auth prompts,
+             TUI escape sequences). A blanket "use a logger" rule would force
+             library-style logging onto user-facing command output. -->
 
         <!-- Javadoc required on public methods -->
         <module name="MissingJavadocMethod">

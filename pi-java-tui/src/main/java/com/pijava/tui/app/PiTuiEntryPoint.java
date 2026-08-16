@@ -12,6 +12,6 @@ public final class PiTuiEntryPoint implements TuiEntryPoint {
 
     @Override
     public int runInteractive(Args args) {
-        return PiTuiApp.runInteractive(args);
+        return PiTuiLauncher.runInteractive(args);
     }
 }

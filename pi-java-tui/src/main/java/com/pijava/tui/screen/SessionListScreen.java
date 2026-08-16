@@ -1,6 +1,5 @@
 package com.pijava.tui.screen;
 
-import java.util.Optional;
 import java.util.function.Consumer;
 
 import com.pijava.coding.agent.core.AgentSession;
@@ -18,11 +17,17 @@ public final class SessionListScreen implements ScreenOverlay {
 
     private final SelectList<SessionInfo> list;
 
+    /**
+     * Creates the session list over the given sessions.
+     *
+     * @param sessions the sessions to choose from
+     */
     public SessionListScreen(java.util.List<SessionInfo> sessions) {
         this.list = new SelectList<>(sessions,
             info -> info.id().substring(0, 8) + "  " + info.name());
     }
 
+    /** Handle selector keys; returns true when consumed. */
     public boolean onKeyEvent(KeyEvent event) {
         return list.onKeyEvent(event);
     }

@@ -21,6 +21,11 @@ public final class NoMode2027Backend extends PanamaBackend {
 
     private final PlatformTerminal platform;
 
+    /**
+     * Creates the backend, retaining the platform terminal for raw mode.
+     *
+     * @throws IOException if the platform terminal cannot be obtained
+     */
     public NoMode2027Backend() throws IOException {
         super();
         this.platform = platformTerminal();

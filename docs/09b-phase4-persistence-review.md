@@ -130,12 +130,26 @@ fb70206 feat(phase4): conformance suite across Memory/JSONL/SQLite + backend-spe
 |---|---|---|
 | P0 | 3 个 SpotBugs 使 `mvn clean verify` 失败 | 已修：`DefaultJsonlFileSystem.writeFile` 空安全父目录；`JsonlSessionStorage.drain`/`MemorySessionStorage.drain` 改为注释说明的 no-op；另修复 `SqliteDatabase.open` 空安全、`SqliteSessionStorage.drain` 空同步块，并给动态 SQL 方法加 `@SuppressFBWarnings`（注释说明仅内部语句）。`mvn clean verify -o` 全绿（checkstyle 0 违规、SpotBugs 0、全部测试通过）。 |
 | P0 | 根 entry 缺 `"parentId":null` | 已修：`JsonlCodec.encodeMutation` 对 entry 在 `parentId` 缺失时显式 `putNull("parentId")`，与 pi `requireNullableId` 兼容；同步修正 spec §3.2（`parentId` 移出可选省略清单并说明例外）。 |
-| P1 | `/import` `/export` 未实现 | 已落地：`JsonlSessionRepository.importJsonl`（复制 + v3 标记 + 同 id 冲突）；`RepositoryHandle.exportJsonl/importJsonl`（JSONL 快速复制、SQLite/Memory `getLog` 重编码 + 逐行重放）；`AgentSession`/`/export` `/import` slash 命令接线。新增双后端 `SessionImportExportTest` 与 v3 导入测试。 |
+| P1 | `/import` `/export` 未实现 | 已落地：`JsonlSessionRepository.importJsonl`（复制 + v3 标记 + 同 id 冲突）；`RepositoryHandle.exportJsonl/importJsonl`（JSONL 快速复制、SQLite/Memory `getLog` 重编码 + 逐行重放）；`AgentSession.exportJsonl/importJsonl` 后端方法。新增双后端 `SessionImportExportTest` 与 v3 导入测试。**注：`MiscCommands` 的 `/export` `/import` slash 命令当时未接线（仍为占位符），接线在后续 commit 完成，见 §6。** |
 | P1 | Compaction 丢弃 usage | 已修：`CompactionService.compact` 捕获 `SummaryResult` 并把 `usage()` 传入 `CompactionResult`。 |
-| P1 | 文件超 500 行 | `SqliteSessionStorage` 压缩至 500 行；`AgentHarness` 当前 484 行（基线复核）。 |
+| P1 | 文件超 500 行 | `SqliteSessionStorage` 压缩至 498 行；`AgentHarness` 当时仍 511 行（本表「484 行」记录有误，后续拆分见 §6）。 |
 | P1 | `ForkOptions.Position` 空 record 假枚举 | 已改为 `enum Position { AT, BEFORE }`，同步更新 `SessionState`/`SqliteSessionRepository`/conformance 用例。 |
 | P1 | ~28 文件缺末尾换行 | 全量扫尾：37 个 Java 文件补齐 `\n`。 |
 | P2 | `RecordJsonCodec.enumOf` 反射重复 | 已消：改用各 enum 自带的 `fromValue`（`@JsonCreator`），删除反射辅助。 |
 | P2 | `/new` 陈旧文案 | 已改为「Started new session」。 |
 | P2 | `appendEntry/appendRecord` 重复 | 保留（判断项）：JSONL/Memory 两处实现差异小且各自持有锁语义，抽取共享 helper 收益有限，留待后续。 |
 | 历史 | commit 粒度超限（8cb251a 等） | 已发生不可回溯；后续提交按 200–500 行/次拆分。 |
+
+---
+
+## 6. 后续修正（2026-08-16）
+
+对上表两处不实记录及审查发现的其他问题逐项修正：
+
+| 项 | 修正 |
+|---|---|
+| `/export` `/import` slash 接线 | `MiscCommands` 的 `placeholder("export"/"import")` 改为真实实现，调 `AgentSession.exportJsonl/importJsonl` + `onSwitchSession`；新增 `SlashCommandTest.exportAndImportAreWiredNotPlaceholders`。 |
+| `AgentHarness` 超 500 行 | 3 个嵌套异常类抽顶层（`HarnessClosedException`/`LaneExistsException`/`NothingToCompactException`）；再抽 `HarnessState`（9 个可变配置字段）。511 → **478 行**。 |
+| `@SuppressWarnings("rawtypes")` 缺注释 | `PersistentSessionRepositories` SQLite import 分支补注释。 |
+| `exportViaLog` header cwd 失真 | 新增 `metadataCwd()`：JSONL/Memory 直接取 `cwd()`、SQLite 反射取，回退 `user.dir`。 |
+| SQLite import 非字节级忠实 | 新增 `MutationReplayer` 能力接口；`SqliteSessionStorage.replayMutation` 以原始 seq/parentId/timestamp 落行，`PersistentSessionRepositories` 优先走它；新增 `sqliteImportPreservesSeqAndTimestamp` 断言。 |

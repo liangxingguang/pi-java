@@ -285,6 +285,7 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
 
     // ── Input portal API (PiTuiApp only touches ChatScreen) ──
 
+    /** Clears the editor and closes the slash completer. */
     public void clearInput() {
         editor.clear();
         completer.update("");
@@ -294,6 +295,7 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
         return editor.getText().isEmpty();
     }
 
+    /** The current editor text. */
     public String inputText() {
         return editor.getText();
     }

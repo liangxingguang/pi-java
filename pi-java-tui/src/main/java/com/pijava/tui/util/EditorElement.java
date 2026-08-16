@@ -33,10 +33,16 @@ public final class EditorElement extends StyledElement<EditorElement> {
     private final TextAreaState state;
     private String placeholder = "";
 
+    /**
+     * Creates the editor element rendering the given state.
+     *
+     * @param state the text area state to render
+     */
     public EditorElement(TextAreaState state) {
         this.state = state;
     }
 
+    /** Sets the placeholder text shown while the editor is empty. */
     public EditorElement placeholder(String placeholder) {
         this.placeholder = placeholder != null ? placeholder : "";
         return this;

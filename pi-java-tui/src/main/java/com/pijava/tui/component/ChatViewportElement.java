@@ -17,7 +17,6 @@ import dev.tamboui.toolkit.element.Size;
 import dev.tamboui.toolkit.element.StyledElement;
 import dev.tamboui.toolkit.event.DragHandler;
 import dev.tamboui.toolkit.event.EventResult;
-import dev.tamboui.tui.event.MouseButton;
 import dev.tamboui.tui.event.MouseEvent;
 import dev.tamboui.tui.event.MouseEventKind;
 
@@ -118,6 +117,7 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
     private boolean scrollbarHovered;
     private boolean scrollbarDragging;
 
+    /** Creates a chat viewport with scrollbar-drag (Codex-CLI style) handling. */
     public ChatViewportElement() {
         // Scrollbar drag (Codex-CLI style): pressing the thumb scrolls the
         // transcript proportionally to the pointer row; Windows X10 input

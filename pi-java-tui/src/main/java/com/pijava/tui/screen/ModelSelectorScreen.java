@@ -19,6 +19,11 @@ public final class ModelSelectorScreen implements ScreenOverlay {
     private final SelectList<String> list;
     private final AgentSession session;
 
+    /**
+     * Creates the model selector listing all built-in models.
+     *
+     * @param session the session whose model is switched on confirm
+     */
     public ModelSelectorScreen(AgentSession session) {
         this.session = session;
         List<String> models = BuiltinCatalog.all().listModels().stream()

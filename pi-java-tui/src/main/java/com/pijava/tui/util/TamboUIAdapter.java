@@ -79,35 +79,43 @@ public final class TamboUIAdapter {
 
     // ── Element factories ────────────────────────────────────
 
+    /** A plain (unstyled) text element. */
     public static TextElement text(String content) {
         return Toolkit.text(content);
     }
 
+    /** A text element rendering {@code [tag]...[/]} markup. */
     public static MarkupTextElement markupText(String markup) {
         return Toolkit.markupText(markup);
     }
 
+    /** An untitled panel wrapping the given children. */
     public static Panel panel(dev.tamboui.toolkit.element.Element... children) {
         return Toolkit.panel(children);
     }
 
+    /** A titled panel wrapping the given children. */
     public static Panel panel(String title,
                               dev.tamboui.toolkit.element.Element... children) {
         return Toolkit.panel(title, children);
     }
 
+    /** A horizontal row layout over the given children. */
     public static Row row(dev.tamboui.toolkit.element.Element... children) {
         return Toolkit.row(children);
     }
 
+    /** A vertical column layout over the given children. */
     public static Column column(dev.tamboui.toolkit.element.Element... children) {
         return Toolkit.column(children);
     }
 
+    /** A vertical column layout over the given children. */
     public static Column column(Collection<? extends dev.tamboui.toolkit.element.Element> children) {
         return Toolkit.column(children.toArray(dev.tamboui.toolkit.element.Element[]::new));
     }
 
+    /** A zero-length spacer. */
     public static Spacer spacer() {
         return Toolkit.spacer();
     }
@@ -117,10 +125,12 @@ public final class TamboUIAdapter {
         return Spacer.fill();
     }
 
+    /** A single-select list element over the given items. */
     public static dev.tamboui.toolkit.elements.ListElement<?> list(Collection<String> items) {
         return Toolkit.list(items.stream().toList());
     }
 
+    /** A plain TamboUI text-area element over the given state. */
     public static TextAreaElement textArea(TextAreaState state) {
         return Toolkit.textArea(state);
     }
@@ -171,14 +181,17 @@ public final class TamboUIAdapter {
 
     // ── Layout constraints / colors ──────────────────────────
 
+    /** A fill-weight layout constraint. */
     public static Constraint fill() {
         return Toolkit.fill();
     }
 
+    /** A fixed-length layout constraint. */
     public static Constraint length(int cells) {
         return Toolkit.length(cells);
     }
 
+    /** Parse a hex color ({@code #RRGGBB}). */
     public static Color hex(String hex) {
         return Color.hex(hex);
     }

@@ -42,6 +42,11 @@ public final class NoMode2027JLineBackend extends JLineBackend {
     private Attributes savedAttributes;
     private final Deque<Integer> pending = new ArrayDeque<>();
 
+    /**
+     * Creates the JLine backend (no Mode 2027 handshake).
+     *
+     * @throws IOException if the JLine terminal cannot be created
+     */
     public NoMode2027JLineBackend() throws IOException {
         super();
     }

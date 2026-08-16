@@ -135,6 +135,8 @@
                         <failsOnError>true</failsOnError>
                         <linkXRef>false</linkXRef>
                         <outputFile>${project.build.directory}/checkstyle-result.xml</outputFile>
+                        <!-- Vendored TamboUI source (dev.tamboui) is third-party. -->
+                        <excludes>dev/tamboui/**</excludes>
                     </configuration>
                     <executions>
                         <execution>

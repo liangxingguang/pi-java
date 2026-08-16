@@ -19,6 +19,7 @@ public final class SlashCompleter {
 
     /** One slash command with its argument hint and description. */
     public record CommandItem(String name, String hint, String description) {
+        /** The display line: {@code "/name hint — description"}, clipped to 64 columns. */
         public String display() {
             String line = "/" + name;
             if (hint != null && !hint.isEmpty()) {
@@ -41,6 +42,11 @@ public final class SlashCompleter {
     private int selected;
     private boolean active;
 
+    /**
+     * Creates the completer over the registry of slash commands.
+     *
+     * @param items all available commands in registry order
+     */
     public SlashCompleter(List<CommandItem> items) {
         this.allItems = List.copyOf(items);
     }

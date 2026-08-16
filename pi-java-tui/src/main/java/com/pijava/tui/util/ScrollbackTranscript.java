@@ -46,6 +46,11 @@ public final class ScrollbackTranscript {
     private int printedMessages;
     private boolean draftVisible = true;
 
+    /**
+     * Creates the scrollback printer writing through the given sink.
+     *
+     * @param sink the styled-line output target
+     */
     public ScrollbackTranscript(Sink sink) {
         this.sink = sink;
     }

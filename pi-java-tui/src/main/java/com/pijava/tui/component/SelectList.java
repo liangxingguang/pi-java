@@ -25,6 +25,12 @@ public final class SelectList<T> {
     private boolean confirmed;
     private String filter = "";
 
+    /**
+     * Creates a selectable list over the given items.
+     *
+     * @param items all items in their canonical order
+     * @param label maps an item to its display label
+     */
     public SelectList(List<T> items, Function<T, String> label) {
         this.allItems = List.copyOf(items);
         this.label = label;

@@ -2,7 +2,6 @@ package com.pijava.tui.theme;
 
 import java.io.IOException;
 
-import com.pijava.tui.util.TamboUIAdapter;
 
 import dev.tamboui.css.engine.StyleEngine;
 import dev.tamboui.toolkit.app.ToolkitRunner;

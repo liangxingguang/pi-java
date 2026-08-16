@@ -1,6 +1,5 @@
 package com.pijava.tui.screen;
 
-import java.util.Optional;
 import java.util.function.Consumer;
 
 import com.pijava.agent.harness.SessionSnapshot;
@@ -18,6 +17,11 @@ public final class TreeSelectorScreen implements ScreenOverlay {
 
     private final SelectList<String> list;
 
+    /**
+     * Creates the tree selector listing the session's lanes.
+     *
+     * @param snapshot the snapshot whose lanes are listed
+     */
     public TreeSelectorScreen(SessionSnapshot snapshot) {
         var lanes = snapshot.lanes().stream()
             .map(lane -> lane.name() + (lane.leafId() == null ? "" : " @" + lane.leafId()))
@@ -26,6 +30,7 @@ public final class TreeSelectorScreen implements ScreenOverlay {
         this.list = new SelectList<>(lanes, s -> s);
     }
 
+    /** Handle selector keys; returns true when consumed. */
     public boolean onKeyEvent(KeyEvent event) {
         return list.onKeyEvent(event);
     }

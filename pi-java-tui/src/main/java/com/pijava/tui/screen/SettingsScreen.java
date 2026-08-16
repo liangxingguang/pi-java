@@ -56,6 +56,11 @@ public final class SettingsScreen implements ScreenOverlay {
             a -> bool(a.getQuietStartup()),
             (a, v) -> a.setQuietStartup(Boolean.parseBoolean(v))));
 
+    /**
+     * Creates the settings page bound to the session's settings service.
+     *
+     * @param session the session whose settings are edited
+     */
     public SettingsScreen(AgentSession session) {
         this.session = session;
     }
