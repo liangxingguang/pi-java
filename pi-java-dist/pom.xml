@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.pi-java</groupId>
+        <artifactId>pi-java-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>pi-java-dist</artifactId>
+
+    <name>pi-java Dist</name>
+    <description>Native-image aggregation module (Phase 5) — shades coding-agent + tui + sqlite into the pi-java binary</description>
+
+    <dependencies>
+        <!-- 主类 Main 在 coding-agent；其传递依赖拉入 agent-core + ai -->
+        <dependency>
+            <groupId>com.pi-java</groupId>
+            <artifactId>pi-java-coding-agent</artifactId>
+        </dependency>
+        <!-- SPI 实现：runtime scope，dist 代码不直接引用 -->
+        <dependency>
+            <groupId>com.pi-java</groupId>
+            <artifactId>pi-java-tui</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.pi-java</groupId>
+            <artifactId>pi-java-session-backend-sqlite</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>pi-java</finalName>
+        <plugins>
+            <!-- shade：fat jar + 合并 META-INF/services（SPI 注册） -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>${version.shade-plugin}</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                            </transformers>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>native</id>
+            <build>
+                <plugins>
+                    <!-- native-image：fat jar → 二进制（仅 -Pnative 激活） -->
+                    <plugin>
+                        <groupId>org.graalvm.buildtools</groupId>
+                        <artifactId>native-maven-plugin</artifactId>
+                        <version>${version.native-maven-plugin}</version>
+                        <executions>
+                            <execution>
+                                <id>build-native</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>compile-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <mainClass>com.pijava.coding.agent.Main</mainClass>
+                            <imageName>pi-java</imageName>
+                            <buildArgs>
+                                <arg>--enable-url-protocols=https</arg>
+                                <arg>--enable-native-access=ALL-UNNAMED</arg>
+                                <arg>-H:+JNI</arg>
+                            </buildArgs>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>

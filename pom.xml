@@ -25,10 +25,11 @@
         <module>pi-java-server</module>
         <module>pi-java-coding-agent</module>
         <module>pi-java-evals</module>
+        <module>pi-java-dist</module>
     </modules>
 
     <properties>
-        <java.release>26</java.release>
+        <java.release>25</java.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <!-- Dependency versions (managed globally via BOM) -->
@@ -50,7 +51,15 @@
         <version.maven-checkstyle>10.21.4</version.maven-checkstyle>
         <version.spotbugs-maven-plugin>4.9.8.3</version.spotbugs-maven-plugin>
         <version.maven-javadoc-plugin>3.12.0</version.maven-javadoc-plugin>
+        <version.maven-jar-plugin>3.4.1</version.maven-jar-plugin>
         <version.exec-maven-plugin>3.5.0</version.exec-maven-plugin>
+
+        <!-- Native image (Phase 5) -->
+        <version.graalvm>25.0.4</version.graalvm>
+        <version.native-maven-plugin>0.10.6</version.native-maven-plugin>
+        <version.shade-plugin>3.6.0</version.shade-plugin>
+        <version.slf4j>2.0.16</version.slf4j>
+        <version.logback>1.5.16</version.logback>
     </properties>
 
     <dependencyManagement>
@@ -68,7 +77,7 @@
     <build>
         <pluginManagement>
             <plugins>
-                <!-- Compiler: JDK 26 -->
+                <!-- Compiler: JDK 25 -->
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
@@ -105,7 +114,7 @@
                             <configuration>
                                 <rules>
                                     <requireJavaVersion>
-                                        <version>[26,27)</version>
+                                        <version>[25,26)</version>
                                     </requireJavaVersion>
                                     <dependencyConvergence/>
                                     <banDuplicatePomDependencyVersions/>
@@ -129,7 +138,6 @@
                     </dependencies>
                     <configuration>
                         <configLocation>checkstyle.xml</configLocation>
-                        <encoding>UTF-8</encoding>
                         <consoleOutput>true</consoleOutput>
                         <failsOnError>true</failsOnError>
                         <linkXRef>false</linkXRef>
@@ -179,6 +187,13 @@
                         <doclint>all</doclint>
                     </configuration>
                 </plugin>
+
+                <!-- JAR (test-jar for agent-core; version centralized here) -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>${version.maven-jar-plugin}</version>
+                </plugin>
             </plugins>
         </pluginManagement>
 
@@ -202,4 +217,30 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>native</id>
+            <properties>
+                <maven.test.skip>true</maven.test.skip>
+            </properties>
+            <dependencyManagement>
+                <dependencies>
+                    <!-- native 下 logback-classic 降为 provided（不进 fat jar），
+                         引入 slf4j-simple 作为运行时实现（§4.5） -->
+                    <dependency>
+                        <groupId>ch.qos.logback</groupId>
+                        <artifactId>logback-classic</artifactId>
+                        <version>${version.logback}</version>
+                        <scope>provided</scope>
+                    </dependency>
+                    <dependency>
+                        <groupId>org.slf4j</groupId>
+                        <artifactId>slf4j-simple</artifactId>
+                        <version>${version.slf4j}</version>
+                    </dependency>
+                </dependencies>
+            </dependencyManagement>
+        </profile>
+    </profiles>
 </project>

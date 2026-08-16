@@ -1,0 +1,43 @@
+# Phase 5 (P5-4)：三平台 native 构建矩阵。
+# 前置：仓库需为公开（GitHub Actions 对 public repo 无限免费，含 macOS）。
+name: Native Image
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  native:
+    name: Native build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]  # macos-latest = Apple Silicon (arm64)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up GraalVM (JDK 25, native-image)
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '25'
+          distribution: 'graalvm-community'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: 'maven'
+
+      # windows-latest 预装 VS 2022（MSVC）→ native-image 可直接链接（设计文档 §2/风险 N7）
+      - name: Build native image (pi-java)
+        run: ./mvnw -Pnative package --batch-mode
+
+      - name: Upload native binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: pi-java-native-${{ matrix.os }}
+          path: |
+            pi-java-dist/target/pi-java
+            pi-java-dist/target/pi-java.exe
+
+      # TODO(P5-5): 对产物跑 native 冒烟（`pi-java -p "hello"` + SQLite 会话 create/recover）。
+      # TODO: `pi-ai` 原生产物（pi-java-ai 模块尚需补 shade + native-image）。

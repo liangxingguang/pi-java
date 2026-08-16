@@ -14,7 +14,7 @@
     <description>Bill of Materials — unified version management for all pi-java modules</description>
 
     <properties>
-        <java.release>26</java.release>
+        <java.release>25</java.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <version.jackson>2.19.2</version.jackson>
@@ -85,6 +85,11 @@
             <dependency>
                 <groupId>com.pi-java</groupId>
                 <artifactId>pi-java-evals</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.pi-java</groupId>
+                <artifactId>pi-java-dist</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
