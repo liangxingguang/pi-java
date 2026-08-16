@@ -62,11 +62,13 @@ flowchart LR
 
 | 组件 | 选型 | 说明 |
 |------|------|------|
-| JDK | GraalVM Community Edition **26.0.x**（`graalvm-community`） | 与项目 `java.release=26` 一致；Panama FFM 已是稳定 API。**可用性需 P5-1 首日核实**：26.0.0 计划 2026-03-17 发布，但截至 2026-08 版本跟踪源最新社区版为 25.2.4，26.0 线尚未列入已发布（见 §9 N5 升级） |
+| JDK | GraalVM Community Edition **25.2.x（JDK 25 LTS）** | 项目 `java.release` 由 26 降为 25（源码无 Java 26 独有特性，零代码改动）；Panama FFM 已是稳定 API |
 | Native 构建插件 | `org.graalvm.buildtools:native-maven-plugin`（**0.10.6**） | 官方插件，`mvn -Pnative package` 一键构建，支持 `buildArgs`/`metadataRepository`；0.11.0 已出，本阶段锁定 0.10.x 稳定线 |
 | Fat jar | `maven-shade-plugin` | 打包单一 jar + `Main-Class` 清单 + SPI 服务合并 |
 | 反射配置生成 | Tracing Agent（`-agentlib:native-image-agent=config-output-dir=...`） | 自动产出 config JSON |
 | 版本管理 | 版本集中在根 `pom.xml` `<properties>`（`version.graalvm`、`version.native-maven-plugin`、`version.shade-plugin`） | 与现有 `version.jackson` 等一致 |
+
+> **Windows C 工具链（win-x64 native 前提，探针已核实）**：GraalVM native-image 在 Windows 上需 MSVC（`cl.exe`/`link.exe`）链接机器码，要求 Visual Studio 2022 Build Tools ≥17.6（「使用 C++ 的桌面开发」工作负载）。**本机探针确认无 `vswhere.exe`/`cl.exe`/`gcc`**，故 win-x64 native 构建委托 CI（`windows-latest` 预装 VS 2022）；本机只做 JVM 开发 + JVM 冒烟（§7）。mac/linux 用系统自带 clang/gcc，无此依赖。
 
 ### 2.1 新增根 pom 版本属性（实施第一步）
 
@@ -74,17 +76,19 @@ flowchart LR
 
 | 属性 | 默认值 | 说明 |
 |------|--------|------|
-| `version.graalvm` | `26.0.x` | GraalVM CE for JDK 26；可用性 Day-1 核实（§7 平台探针），不可用则按风险 N5 退回方案 |
+| `version.graalvm` | `25.2.x` | GraalVM CE for JDK 25（LTS）；本机已装 `D:\soft\jdk\graalvm-jdk-25`，CI 用同版本 |
 | `version.native-maven-plugin` | `0.10.6` | 锁定 0.10 稳定线（§2 选型） |
 | `version.shade-plugin` | `3.6.0` | maven-shade-plugin 稳定版 |
 | `version.slf4j` | `2.0.16` | 与 BOM 现有 `slf4j-api` 字面量版本对齐（实施时可顺手把 BOM 字面量统一为该属性） |
-> **依赖与风险（R2 展开）**：GraalVM for JDK 26 社区版需支持 Panama FFM + JNI 的 native-image 后端。sqlite-jdbc 的本地库（`sqlitejdbc.dll`/`libsqlitejdbc.dylib`/`.so`）按平台打包，native-image 需 `-H:+JNI` + 把本地库作为 resource 拷贝到构建产物旁。
+> **依赖与风险（R2 展开）**：GraalVM for JDK 25 社区版需支持 Panama FFM + JNI 的 native-image 后端。sqlite-jdbc 的本地库（`sqlitejdbc.dll`/`libsqlitejdbc.dylib`/`.so`）按平台打包，native-image 需 `-H:+JNI` + 把本地库作为 resource 拷贝到构建产物旁。
 
 ---
 
 ## 3. 反射与 Native 配置总览
 
 Native Image 关闭了反射/JNI/资源/序列化的默认可达性，需显式声明。按「谁需要」分五类：
+
+> **格式说明（GraalVM 25，P5-2 已核）**：Tracing Agent 与 native-image 25 使用 consolidated **`reachability-metadata.json`**（单文件，内含 `reflection`/`resources`/`jni`/`bundles`/`serialization` section），**替代**旧版分文件的 `reflect-config.json`/`resource-config.json`/`jni-config.json`。下表「配置文件」列写的分文件名均指该 consolidated 文件内的对应 section。
 
 | 类别 | 触发方 | 配置文件 | 关键内容 |
 |------|--------|----------|----------|
@@ -162,7 +166,7 @@ Logback（`logback-classic`，runtime）依赖 Joran（SAX）+ 大量反射 + �
   <profile>
     <id>native</id>
     <properties>
-      <skip.native.tests>true</skip.native.tests>
+      <maven.test.skip>true</maven.test.skip>
     </properties>
     <dependencyManagement>
       <dependencies>
@@ -171,6 +175,7 @@ Logback（`logback-classic`，runtime）依赖 Joran（SAX）+ 大量反射 + �
         <dependency>
           <groupId>ch.qos.logback</groupId>
           <artifactId>logback-classic</artifactId>
+          <version>${version.logback}</version>
           <scope>provided</scope>
         </dependency>
         <dependency>
@@ -221,7 +226,7 @@ Logback（`logback-classic`，runtime）依赖 Joran（SAX）+ 大量反射 + �
 
 - `pi-ai` 用第二个 execution：`mainClass=com.pijava.ai.cli.AiCli`、`imageName=pi-ai`。
 - 构建命令对齐 `04-implementation-plan.md` §7：`mvn -Pnative package`。
-- 原生 config 放在 shade 源模块的 `src/main/resources/META-INF/native-image/`：`pi-java` 产物 → `pi-java-dist`（`com.pi-java/dist`），`pi-ai` 产物 → `pi-java-ai`（`com.pi-java/ai`）。Tracing Agent 生成的 config 先落这里，再由人工裁剪。
+- 原生 config 放在 shade 源模块的 `src/main/resources/META-INF/native-image/<groupId>/<artifactId>/`：`pi-java` 产物 → `pi-java-dist`（`com.pi-java/pi-java-dist`），`pi-ai` 产物 → `pi-java-ai`（`com.pi-java/pi-java-ai`）。文件为 consolidated `reachability-metadata.json`（GraalVM 25），Tracing Agent 生成后落这里，再由人工裁剪。
 - **按模块归属（推荐）**：sqlite-jdbc 的 `jni-config.json` 放 `pi-java-session-backend-sqlite`、JLine reflect-config 放 `pi-java-tui` 各自模块的 `META-INF/native-image/`；native-image 会合并 classpath 上所有模块的 config，分散放置便于按模块维护（与集中放置二选一保持一致）。
 - **-march 平台化**：`buildArgs` 不写死 `-march`；由 CI/平台 profile 按 `os.arch` 注入（x86-64 传 `-march=compatibility`，aarch64 不传），与 §7 平台矩阵一致。
 
@@ -347,18 +352,62 @@ java -agentlib:native-image-agent=config-merge-dir=... \
 
 > 生成后**人工复核**：删掉仅测试路径的条目、确认判别 enum 的 `fromValue` 已注册、确认 `META-INF/services` 已进 resource-config。手写部分只保留 §4 列的稳定项。
 
+> **GraalVM 25 实操要点（P5-2 本地已核）**：
+> - **产出格式**：agent 的 `config-output-dir` 生成 consolidated `reachability-metadata.json`（含 `reflection`/`resources`/`jni` section），非旧版分文件（见 §3 格式说明）。
+> - **Windows PATH 陷阱**：裸 `java` 可能解析到系统 jdk-26（agent 报「VM incompatible」），必须用全路径 `$JAVA_HOME/bin/java.exe`（GraalVM 25）。
+> - **离线冒烟覆盖有限**：`--list-models`/`--version` 只录到 picocli + logback（native 下被 slf4j-simple 换掉，属噪声）+ JDK 基础类型；**Jackson sealed record（`Entry`/`LaneRecord`/`Message`/`ContentBlock`）只在会话持久化时触发**，离线冒烟录不到。
+> - **会话冒烟移交 CI**：完整覆盖矩阵（`-p "hello"` 流式 + SQLite 会话 create/recover + FauxProvider 回放）在 CI native smoke job 里跑（本地无 LLM 会话 + 无 MSVC），生成的 `reachability-metadata.json` 回填 dist 模块再人工复核。
+
 ---
 
 ## 7. 平台矩阵（P5-5）
 
 | 平台 | 二进制 | SQLite 本地库 | 终端后端 | 备注 |
 |------|--------|---------------|----------|------|
-| **win-x64** | `pi-java.exe`/`pi-ai.exe` | `sqlitejdbc.dll` | jline3（WinSysTerminal）优先，Panama 后端验证后启用 | 当前开发环境；`-march=compatibility` 提高兼容 |
+| **win-x64** | `pi-java.exe`/`pi-ai.exe` | `sqlitejdbc.dll` | jline3（WinSysTerminal）优先，Panama 后端验证后启用 | 本机无 MSVC → native 走 CI `windows-latest`；本机仅 JVM 开发；`-march=compatibility` |
 | **mac-arm64** | `pi-java`/`pi-ai` | `libsqlitejdbc.dylib` | Panama 后端（Terminal.app/iTerm2/Alacritty） | Apple Silicon 主力测试 |
 | **linux-x64** | `pi-java`/`pi-ai` | `libsqlitejdbc.so` | Panama 后端 | CI 矩阵覆盖 |
 
-- **构建矩阵**：GitHub Actions 三平台各跑 `mvn -Pnative package`（P5-4），产物上传 artifact，并对产物跑「`pi-java -p "hello"` + SQLite 会话 create/recover」冒烟（复用 Phase 4 端到端用例的 native 形态），避免只验证「构建成功」。
-- **平台探针（P5-1 前置）**：首日先在三平台构建一个 hello-world 主类的空壳 native-image，第一时间暴露 GraalVM for JDK 26 工具链/平台支持问题（风险 N5）。
+- **构建矩阵**：GitHub Actions 三平台各跑 `mvn -Pnative package`（P5-4），产物上传 artifact，并对产物跑「`pi-java -p "hello"` + SQLite 会话 create/recover」冒烟（复用 Phase 4 端到端用例的 native 形态），避免只验证「构建成功」。公开仓库下 GitHub Actions 完全免费（无限分钟，含 macOS），是 win/mac/linux 三平台 native 的首选。
+
+  ```yaml
+  # .github/workflows/native.yml（P5-4：三平台 native 构建矩阵）
+  name: Native Image
+  on:
+    push: { branches: [main] }
+    pull_request:
+
+  jobs:
+    native:
+      strategy:
+        fail-fast: false
+        matrix:
+          os: [ubuntu-latest, windows-latest, macos-latest]   # macos-latest = Apple Silicon (arm64)
+      runs-on: ${{ matrix.os }}
+      steps:
+        - uses: actions/checkout@v4
+
+        - uses: graalvm/setup-graalvm@v1
+          with:
+            java-version: '25'
+            distribution: 'graalvm-community'   # 免费 CE；对齐本机 Oracle GraalVM 可换 'oracle-graalvm'
+            github-token: ${{ secrets.GITHUB_TOKEN }}
+            cache: 'maven'
+
+        # windows-latest 预装 VS 2022（MSVC）→ native-image 可直接链接（§2、风险 N7）
+        - name: Build native image
+          run: ./mvnw -Pnative package --batch-mode
+
+        - uses: actions/upload-artifact@v4
+          with:
+            name: pi-java-native-${{ matrix.os }}
+            path: |
+              pi-java-dist/target/pi-java*
+              pi-java-ai/target/pi-ai*
+  ```
+
+  > 说明：`graalvm/setup-graalvm@v1` 自带 native-image；`macos-latest` 即 Apple Silicon（匹配 mac-arm64）；win-x64 无需本机 MSVC（runner 预装 VS 2022）。CodeMagic 等移动端 CI 不适用于 JVM/native-image，不采用。
+- **平台探针（P5-1 前置，本机已执行）**：hello-world 空壳 native-image 已跑——GraalVM 25 native-image 本身正常，但**本机无 `vswhere.exe`/`cl.exe`（无 VS 2022 Build Tools），Windows 链接无法完成** → win-x64 native 委托 CI（§2、风险 N7）。mac/linux 无需额外工具链。
 - **`-march` 策略**：`-march=compatibility|native` 仅对 x86 目标有意义；arm64 的 `-march` 语义不同（默认即可），因此该参数应只在 x86 平台传入，arm64 构建不设置。跨平台发布用 `compatibility`。
 - **本地库分发**：SQLite 本地库随二进制一起打包（zip/tar 归档），二进制靠相对路径或 `-Djava.library.path` 定位。
 
@@ -399,14 +448,15 @@ java -agentlib:native-image-agent=config-merge-dir=... \
 | N2 | sqlite-jdbc JNI 本地库未正确打包 → 启动即失败 | 高 | 中 | 三平台分别验证本地库；`jni-config.json` + resource 打包 + 冒烟测试 |
 | N3 | TamboUI Panama 后端在 native 下不可用（FFM/信号） | 中 | 中 | 保留 jline3 后端兜底（Phase 3 已有）；`--initialize-at-build-time=org.jline` |
 | N4 | Logback 反射过重拖慢构建/失败 | 中 | 中 | native profile 切换 `slf4j-simple`（§4.5） |
-| N5 | GraalVM for JDK 26 尚未发布/稳定（26.0.0 计划 2026-03-17，截至 2026-08 版本跟踪源最新为 25.2.4） | 高 | 高 | Day-1 平台探针（§7）；若不可用则评估退回 GraalVM 25.x + 项目降到 JDK 25 LTS，或顺延 Phase 5 |
+| N5 | ~~GraalVM for JDK 26 尚未发布~~ **已解决**：改用 GraalVM 25.2.x（JDK 25 LTS）+ 项目降到 Java 25 | 已解决 | — | `java.release` 26→25 仅改根 pom 两行，源码零改动；GraalVM 25 已装稳定 |
 | N6 | 反射清单随 Phase 迭代漂移 | 中 | 中 | `-Pnative package` 纳入每 PR 验证（R2），config 与业务同仓 |
+| N7 | ~~Windows 本机无 MSVC → native 链接失败~~ **已解决（方案 B）**：win-x64 native 委托 CI `windows-latest`（预装 VS 2022）；本机仅 JVM 开发 | 已解决 | — | 探针已核实本机无 cl.exe/gcc；日后本机需 win-x64 native 时先装 VS 2022 Build Tools |
 
 ---
 
 ## 10. 验收标准
 
-- [ ] `mvn -Pnative package` 在 win-x64 产出 `pi-java.exe`/`pi-ai.exe`，可运行。
+- [ ] `mvn -Pnative package` 在 CI `windows-latest` 产出 win-x64 `pi-java.exe`/`pi-ai.exe`，可运行（本机无 MSVC，win-x64 native 委托 CI）。
 - [ ] 三平台（win-x64 / mac-arm64 / linux-x64）native 构建成功（CI 矩阵）。
 - [ ] `pi-java -p "hello"` 冷启动 < 100ms，空闲内存 < 50MB。
 - [ ] 首次成功构建后回填 §8 实测的启动时间 / 空闲内存 / 二进制体积三项，并与目标对比（体积不达 ~20MB 时按 §8.1 逐项加码）。
@@ -421,7 +471,7 @@ java -agentlib:native-image-agent=config-merge-dir=... \
 
 - **CBOR 协议 / 远程会话**（→ Phase 6，`pi-java-protocol`/`server`/`client` 模块不在本阶段 native 产物内）。
 - **交叉编译**：不在 win 上编译 mac/linux 产物（GraalVM 原生不支持交叉编译），三平台各自在目标平台构建。
-- **native-image 的 GraalVM 升级策略**：本阶段锁定一个 GraalVM 26 版本，后续升版本单独 PR（对齐风险 R6 思路）。
+- **native-image 的 GraalVM 升级策略**：本阶段锁定 GraalVM 25.2.x（JDK 25 LTS），后续升版本单独 PR（对齐风险 R6 思路）。
 - **安装器/签名**：win/mac 的安装包、代码签名、公证 → 后续发布阶段，本阶段只产出裸二进制归档。
 
 ---
@@ -461,6 +511,8 @@ java -agentlib:native-image-agent=config-merge-dir=... \
 2. **§4.1 反射清单分层**：区分 Jackson 多态类型（`Entry` 7 / `LaneRecord` 9 / `ContentBlock` 5 / **`StreamEvent` 13**）与 sealed 非多态类型（`Message` 4 / `SessionMutation` 5 / `LogItem` / `ForkOptions`）；补漏 `StreamEvent`（当前仅测试序列化，列入以防未来 RPC/telemetry 使用）。
 3. **§2 锁定版本**：GraalVM CE 26.0.x（可用性 Day-1 核实）+ native-maven-plugin 0.10.6（0.11.0 已出，本阶段锁 0.10 稳定线）。
 4. **§9 N5 升级**：GraalVM 26 可用性由「低概率」升为「高概率 Day-1 blocker」（26.0.0 计划 2026-03-17，截至 2026-08 版本跟踪源最新为 25.2.4）。
+5. **§10 验收新增**：首次成功构建后回填 §8 实测启动/内存/体积。
+6. **闭环 `10-logging-design.md`**：其 Phase 5 备注由「补 logback 反射配置」改为「native 下切 slf4j-simple」。
 ### v1.4（2026-08-16 复审修订，实施前勘误）
 
 按实施前复审意见修订：
@@ -473,5 +525,41 @@ java -agentlib:native-image-agent=config-merge-dir=... \
 6. **§5.2**：补「根 pom `<modules>` 增列 `pi-java-dist`」。
 7. **§4.2**：`-H:EnableUnsafe` 更正为 `-H:+EnableUnsafe`。
 8. **§4.5**：补 slf4j-simple 级别属性的设置时机说明（configure 先于任何日志输出）。
-5. **§10 验收新增**：首次成功构建后回填 §8 实测启动/内存/体积。
-6. **闭环 `10-logging-design.md`**：其 Phase 5 备注由「补 logback 反射配置」改为「native 下切 slf4j-simple」。
+
+### v1.5（2026-08-16 工具链定案）
+
+用户确认本机已装 `D:\soft\jdk\graalvm-jdk-25`，据此把工具链从「GraalVM 26（尚未发布）」改为「GraalVM 25 + Java 25 LTS」：
+
+1. **§2 / §2.1**：JDK 目标改为 GraalVM CE 25.2.x（`version.graalvm=25.2.x`），项目 `java.release` 26 → 25。
+2. **§9 N5**：从「高概率 Day-1 blocker」降为「已解决」（GraalVM 25 已装稳定 + Java 25 LTS）。
+3. **§11**：升级策略锁 GraalVM 25.2.x。
+4. **依据（已核实）**：pi-java 源码无 Java 26 独有特性（无 `--enable-preview`、无 FFM 直用，实际用 records/sealed/switch/虚拟线程，均 Java 16–21）；依赖侧 `tamboui-panama-backend` = class file 0x42（Java 22）、其余更低，无 >Java 25 字节码。
+5. **配套代码改动（已执行）**：根 `pom.xml` + BOM `java.release` 26→25、enforcer `[26,27)`→`[25,26)`；`run.cmd` JAVA_HOME → `graalvm-jdk-25`；`ci.yml` `java-version` 26→25；4 处 Java 注释同步为「JDK 25」。全仓库无残留 JDK 26 引用。
+
+### v1.6（2026-08-16 平台探针 + 方案 B）
+
+本机平台探针（hello-world 空壳 native-image）结果：GraalVM 25 native-image 正常，但**本机无 Visual Studio 2022 Build Tools（无 `vswhere.exe`/`cl.exe`）且无 gcc**，Windows 链接无法完成。
+
+1. **§2 / §7**：记录「Windows native 需 MSVC（VS 2022 Build Tools ≥17.6）」这一前提；win-x64 native 委托 CI `windows-latest`（预装 VS 2022），本机仅 JVM 开发。
+2. **§9 新增 N7**：本机无 MSVC → 已解决（方案 B，委托 CI）。
+3. **§10**：win-x64 验收改为「CI `windows-latest` 产出」。
+
+### v1.7（2026-08-17 CI 方案补全）
+
+确定 CI 用 GitHub Actions（公开仓库完全免费、三 OS 全覆盖），§7 构建矩阵补 `.github/workflows/native.yml` 片段：`graalvm/setup-graalvm@v1`（java-version 25）+ 三 OS 矩阵 + `./mvnw -Pnative package` + artifact 上传。mac-arm64 用 `macos-latest`（Apple Silicon）；win-x64 用 `windows-latest`（预装 VS 2022）。CodeMagic 等移动端 CI 不适配，不采用。
+
+### v1.8（2026-08-17 P5-2 实操勘误）
+
+P5-1 落地（`pi-java-dist` 模块 + native profile + shade fat jar，本地 `mvn clean verify` 通过、fat jar 冒烟 `--version` OK）后，P5-2 本地跑 Tracing Agent 发现：
+
+1. **§3/§5/§6 格式变更**：GraalVM 25 的 agent 产出 consolidated `reachability-metadata.json`（替代旧版 reflect-config/resource-config/jni-config 分文件）；native-image 25 读取 `META-INF/native-image/<groupId>/<artifactId>/reachability-metadata.json`。
+2. **§5 config 路径**：`com.pi-java/dist` 更正为 `com.pi-java/pi-java-dist`（groupId/artifactId 约定）。
+3. **§6 实操要点**：Windows 裸 `java` 解析到 jdk-26（用全路径 `java.exe`）；离线冒烟只录 picocli+logback+JDK，Jackson sealed record 需会话冒烟，**移交 CI**。
+
+### v1.9（2026-08-17 P5-4 落地）
+
+落地 `.github/workflows/native.yml`（三平台 native 矩阵）并修两个 `-Pnative` 实测 bug：
+
+1. **`skip.native.tests` → `maven.test.skip`**：前者非 Maven 识别属性（不会真跳过测试），改为 `maven.test.skip=true`。
+2. **logback dependencyManagement 条目补 version**：native profile 里 logback-classic 条目无 version 会顶掉 BOM 版本管理 → `-Pnative validate` 报「version is missing」；补 `${version.logback}=1.5.16`。
+3. **native.yml**：`graalvm/setup-graalvm@v1` + 三 OS + `./mvnw -Pnative package` + artifact 上传；`pi-ai` 原生产物与 native 冒烟留 TODO（P5-5）。

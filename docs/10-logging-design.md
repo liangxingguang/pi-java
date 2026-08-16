@@ -17,7 +17,7 @@
 
 - 理由：`logger.info("... {}", arg)` 占位符 API 是 Java 生态标准；logback 自带滚动文件、异步 appender、MDC。
 - **NF1「Pure Java 优先」在此显式放宽**（已获人确认）：日志框架属「无可替代」场景，不重复造轮子。
-- **GraalVM native（NF5，Phase 5）**：logback 需 native-image 反射配置（`reflect-config.json` + `--initialize-at-build-time`）。本设计记录该风险，Phase 5 落地时补，本阶段不阻塞。
+- **GraalVM native（NF5，Phase 5）**：logback 反射较重，native 产物改用 `slf4j-simple`（见 `10-phase5-native-design.md` §4.5）；`Logging.java` 保持 slf4j-api-only，logback 缺席时经系统属性降级。本阶段（JVM）仍用 logback，不阻塞。
 
 ## 2. 依赖落地（关键：库模块不绑定后端）
 
@@ -126,3 +126,8 @@ public final class Logging {
 - TUI 模式 console appender 关闭（避免 alternate screen 糊屏），日志仍落文件。
 - 开关用 `--debug`（`--verbose` 已被占用）。
 - GraalVM native 反射配置列为 Phase 5 风险，本阶段不阻塞。
+
+### v1.1（2026-08-16 与 Phase 5 对齐）
+
+- Phase 5 复审确定：native 产物用 `slf4j-simple` 替换 `logback-classic`（见 `10-phase5-native-design.md` §4.5），而非「保留 logback + 补反射配置」。
+- `Logging.java` 改为仅依赖 slf4j-api（logback 经反射配置，缺席时降级 slf4j-simple 属性），§6 类设计以该实现为准。
