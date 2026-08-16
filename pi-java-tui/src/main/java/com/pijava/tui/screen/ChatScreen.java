@@ -54,7 +54,12 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     public void onEntry(Entry entry) {
         if (entry instanceof Entry.Message message
                 && "assistant".equals(message.message().role())) {
-            if (assistantStreamed || thinkingRendered) {
+            // Skip entries already rendered via the streaming path, and empty
+            // assistant entries (a failed run commits one with no blocks, which
+            // would otherwise render as a blank bubble above the optimistic
+            // user message).
+            if (assistantStreamed || thinkingRendered
+                    || message.message().content().isEmpty()) {
                 return;
             }
         }
