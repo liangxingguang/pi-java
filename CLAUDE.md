@@ -64,7 +64,7 @@ commands: `mvn clean verify`, `mvn test -pl <module>`, `mvn checkstyle:check`, `
 D:\workplaceForai\pi
 
 ## pi ↔ pi-java 对照表
-- [Phase 1 代码对照表](docs/phase1-pi-code-mapping.md) — 逐文件对齐度 + 差异说明
+- [Phase 1-4 代码对照表](docs/phase1-pi-code-mapping.md) — 逐文件/包级对齐度 + 差异说明（Phase 1-4 全模块）
 
 ## 运行环境
 jdk:D:\soft\jdk\jdk-26
