@@ -65,6 +65,7 @@ public record HarnessConfig(
     ToolExecution toolExecution,
     Consumer<StreamEvent> streamListener
 ) {
+    /** Canonical constructor applying default values and defensive copies. */
     public HarnessConfig {
         activeTools = Set.copyOf(activeTools);
         skills = Map.copyOf(skills);
@@ -77,6 +78,7 @@ public record HarnessConfig(
         if (streamListener == null) streamListener = event -> { };
     }
 
+    /** Create a new configuration builder. */
     public static Builder builder() {
         return new Builder();
     }
@@ -106,6 +108,7 @@ public record HarnessConfig(
         public Builder model(ModelId<?> m) { this.model = m; return this; }
         public Builder thinkingLevel(ModelThinkingLevel tl) { this.thinkingLevel = tl; return this; }
         public Builder systemPrompt(String sp) { this.systemPrompt = sp; return this; }
+        /** Set the active tools; returns {@code this} for chaining. */
         public Builder activeTools(Set<AgentTool<?, ?>> at) {
             this.activeTools = Set.copyOf(at); return this;
         }
@@ -115,6 +118,7 @@ public record HarnessConfig(
         public Builder commandPrefix(String cp) { this.commandPrefix = cp; return this; }
         public Builder driveMode(DriveMode dm) { this.driveMode = dm; return this; }
         public Builder compactionSettings(CompactionSettings cs) { this.compactionSettings = cs; return this; }
+        /** Set the named skills to register; returns {@code this} for chaining. */
         public Builder skills(Map<String, Skill> s) {
             this.skills = Map.copyOf(s); return this;
         }
@@ -124,10 +128,12 @@ public record HarnessConfig(
         public Builder steeringMode(QueueMode mode) { this.steeringMode = mode; return this; }
         public Builder followUpMode(QueueMode mode) { this.followUpMode = mode; return this; }
         public Builder toolExecution(ToolExecution mode) { this.toolExecution = mode; return this; }
+        /** Set the stream listener; returns {@code this} for chaining. */
         public Builder streamListener(Consumer<StreamEvent> listener) {
             this.streamListener = listener; return this;
         }
 
+        /** Build the {@link HarnessConfig}, validating required fields. */
         public HarnessConfig build() {
             if (streamFn == null) throw new IllegalStateException("streamFn is required");
             if (model == null) throw new IllegalStateException("model is required");

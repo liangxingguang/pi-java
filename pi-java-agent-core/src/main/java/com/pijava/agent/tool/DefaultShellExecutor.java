@@ -40,6 +40,7 @@ public class DefaultShellExecutor implements ShellExecutor {
 
     private final String customShellPath;
 
+    /** Create a default shell executor with no custom shell path. */
     public DefaultShellExecutor() {
         this(null);
     }

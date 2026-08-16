@@ -2,14 +2,11 @@ package com.pijava.agent.session;
 
 import java.io.IOException;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializerProvider;
@@ -116,7 +113,8 @@ public final class SessionJson {
         // Wildcard generic cast: ProvisionedEntry.class is raw; the serializer accepts any subtype.
         @SuppressWarnings({ "rawtypes", "unchecked" })
         Class provisionedEntryType = ProvisionedEntry.class;
-        module.addSerializer(provisionedEntryType, (com.fasterxml.jackson.databind.JsonSerializer) new ProvisionedEntrySerializer());
+        module.addSerializer(provisionedEntryType,
+            (com.fasterxml.jackson.databind.JsonSerializer) new ProvisionedEntrySerializer());
         mapper.registerModule(module);
         return mapper;
     }

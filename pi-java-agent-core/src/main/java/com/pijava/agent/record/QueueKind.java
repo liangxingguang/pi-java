@@ -15,11 +15,13 @@ public enum QueueKind {
         this.value = value;
     }
 
+    /** The serialized queue kind value. */
     @JsonValue
     public String value() {
         return value;
     }
 
+    /** Parse a queue kind from its serialized value. */
     @JsonCreator
     public static QueueKind fromValue(String value) {
         for (var kind : values()) {

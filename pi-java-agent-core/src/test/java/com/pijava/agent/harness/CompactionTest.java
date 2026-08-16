@@ -84,7 +84,7 @@ class CompactionTest {
     void harnessCompactThrowsNothingToCompactOnEmptyLane() {
         var h = harness();
         assertThatThrownBy(() -> h.compact(CompactionSettings.defaults()))
-                .isInstanceOf(AgentHarness.NothingToCompactException.class);
+                .isInstanceOf(NothingToCompactException.class);
     }
 
     @Test

@@ -49,7 +49,7 @@ class MultiLaneTest {
         var h = harness();
         h.createLane(LaneConfig.of("dup"));
         assertThatThrownBy(() -> h.createLane(LaneConfig.of("dup")))
-                .isInstanceOf(AgentHarness.LaneExistsException.class);
+                .isInstanceOf(LaneExistsException.class);
     }
 
     @Test

@@ -5,8 +5,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import com.pijava.agent.tool.*;
-import com.pijava.ai.message.ContentBlock;
+import com.pijava.agent.tool.AgentTool;
+import com.pijava.agent.tool.ExecutionMode;
+import com.pijava.agent.tool.PathUtils;
+import com.pijava.agent.tool.ToolContext;
+import com.pijava.agent.tool.ToolResult;
+import com.pijava.agent.tool.ToolUpdateCallback;
+import com.pijava.agent.tool.TruncationUtils;
 
 /**
  * Directory listing tool. Aligned with pi's ls tool.
@@ -19,6 +24,7 @@ public final class LsTool {
 
     public record LsInput(Optional<String> path, Optional<Boolean> recursive) {}
 
+    /** Create the ls tool. */
     public static AgentTool<LsInput, Void> create() {
         return new AgentTool<>() {
             @Override public String name() { return "ls"; }

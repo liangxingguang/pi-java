@@ -10,6 +10,7 @@ public final class NewRecord<T extends LaneRecord> {
 
     private final T record;
 
+    /** Wrap a record pending storage-assigned identity fields. */
     public NewRecord(T record) {
         this.record = record;
     }

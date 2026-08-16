@@ -6,7 +6,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import com.pijava.agent.tool.*;
+import com.pijava.agent.tool.AgentTool;
+import com.pijava.agent.tool.ExecutionMode;
+import com.pijava.agent.tool.PathUtils;
+import com.pijava.agent.tool.ToolContext;
+import com.pijava.agent.tool.ToolResult;
+import com.pijava.agent.tool.ToolUpdateCallback;
+import com.pijava.agent.tool.TruncationUtils;
 import com.pijava.ai.message.ContentBlock;
 
 /**
@@ -23,6 +29,7 @@ public final class ReadTool {
     public record ReadInput(String path, Optional<Integer> offset, Optional<Integer> limit) {}
     public record ReadDetails(TruncationUtils.TruncationResult truncation) {}
 
+    /** Create the read tool. */
     public static AgentTool<ReadInput, ReadDetails> create() {
         return new AgentTool<>() {
             @Override public String name() { return "read"; }

@@ -23,6 +23,7 @@ public record StreamOptions(
     ThinkingConfig thinking,
     List<ToolDefinition> tools
 ) {
+    /** Defensively copies {@code tools}. */
     public StreamOptions {
         tools = List.copyOf(tools);
     }

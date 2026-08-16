@@ -2,7 +2,6 @@ package com.pijava.agent.session.jsonl;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.pijava.agent.entry.Entry;

@@ -7,7 +7,12 @@ import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Map;
 
-import com.pijava.agent.tool.*;
+import com.pijava.agent.tool.AgentTool;
+import com.pijava.agent.tool.ExecutionMode;
+import com.pijava.agent.tool.PathUtils;
+import com.pijava.agent.tool.ToolContext;
+import com.pijava.agent.tool.ToolResult;
+import com.pijava.agent.tool.ToolUpdateCallback;
 import com.pijava.ai.message.ContentBlock;
 
 /**
@@ -25,6 +30,7 @@ public final class EditTool {
     public record Edit(String oldText, String newText) {}
     public record EditDetails(String diff, String patch, int firstChangedLine) {}
 
+    /** Create the edit tool. */
     public static AgentTool<EditInput, EditDetails> create() {
         return new AgentTool<>() {
             @Override public String name() { return "edit"; }

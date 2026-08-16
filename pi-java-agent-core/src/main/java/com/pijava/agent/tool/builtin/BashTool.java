@@ -8,7 +8,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import com.pijava.agent.tool.*;
+import com.pijava.agent.tool.AgentTool;
+import com.pijava.agent.tool.ExecutionMode;
+import com.pijava.agent.tool.ShellOptions;
+import com.pijava.agent.tool.ToolContext;
+import com.pijava.agent.tool.ToolResult;
+import com.pijava.agent.tool.ToolUpdateCallback;
+import com.pijava.agent.tool.TruncationUtils;
 import com.pijava.ai.message.ContentBlock;
 
 /**
@@ -35,10 +41,12 @@ public final class BashTool {
     public record BashInput(String command, Optional<Long> timeoutSeconds) {}
     public record BashDetails(TruncationUtils.TruncationResult truncation, String fullOutputPath) {}
 
+    /** Create the bash tool with no command prefix. */
     public static AgentTool<BashInput, BashDetails> create() {
         return create(null);
     }
 
+    /** Create the bash tool with an optional command prefix. */
     public static AgentTool<BashInput, BashDetails> create(String commandPrefix) {
         return new AgentTool<>() {
             @Override public String name() { return "bash"; }
@@ -50,7 +58,8 @@ public final class BashTool {
                     + TruncationUtils.DEFAULT_MAX_LINES + " lines or "
                     + (TruncationUtils.DEFAULT_MAX_BYTES / 1024) + "KB (whichever is hit first). "
                     + "If truncated, full output is saved to a temp file. "
-                    + "Optionally provide a timeout in seconds (default 120, max 600; pass a larger value for long-running commands).";
+                    + "Optionally provide a timeout in seconds "
+                    + "(default 120, max 600; pass a larger value for long-running commands).";
             }
             @Override
             public Map<String, Object> inputSchema() {
@@ -58,7 +67,8 @@ public final class BashTool {
                     "type", "object",
                     "properties", Map.of(
                         "command", Map.of("type", "string", "description", "Bash command to execute"),
-                        "timeout", Map.of("type", "number", "description", "Timeout in seconds (optional; default 120, max 600)")
+                        "timeout", Map.of("type", "number", "description",
+                        "Timeout in seconds (optional; default 120, max 600)")
                     ),
                     "required", List.of("command")
                 );

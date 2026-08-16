@@ -9,8 +9,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
-import com.pijava.agent.tool.*;
-import com.pijava.ai.message.ContentBlock;
+import com.pijava.agent.tool.AgentTool;
+import com.pijava.agent.tool.ExecutionMode;
+import com.pijava.agent.tool.PathUtils;
+import com.pijava.agent.tool.ToolContext;
+import com.pijava.agent.tool.ToolResult;
+import com.pijava.agent.tool.ToolUpdateCallback;
 
 /**
  * Regular expression search in files. Aligned with pi's grep tool.
@@ -25,6 +29,7 @@ public final class GrepTool {
 
     public record GrepInput(String pattern, Optional<String> path, Optional<String> glob) {}
 
+    /** Create the grep tool. */
     public static AgentTool<GrepInput, Void> create() {
         return new AgentTool<>() {
             @Override public String name() { return "grep"; }

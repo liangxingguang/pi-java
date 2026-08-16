@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Set;
 
 import com.pijava.agent.entry.Entry;
-import com.pijava.agent.entry.ProvisionedEntry;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.ai.AbortSignal;
 import com.pijava.agent.tool.AgentTool;

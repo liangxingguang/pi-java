@@ -159,7 +159,7 @@ class AgentHarnessTest {
         var harness = createHarness(textStreamFn("ok"));
         harness.createLane(LaneConfig.of("review"));
         assertThatThrownBy(() -> harness.createLane(LaneConfig.of("review")))
-                .isInstanceOf(AgentHarness.LaneExistsException.class);
+                .isInstanceOf(LaneExistsException.class);
     }
 
     @Test
@@ -254,9 +254,9 @@ class AgentHarnessTest {
         var harness = createHarness(textStreamFn("ok"));
         harness.close();
         assertThatThrownBy(() -> harness.run("test"))
-                .isInstanceOf(AgentHarness.HarnessClosedException.class);
+                .isInstanceOf(HarnessClosedException.class);
         assertThatThrownBy(() -> harness.createLane(LaneConfig.of("x")))
-                .isInstanceOf(AgentHarness.HarnessClosedException.class);
+                .isInstanceOf(HarnessClosedException.class);
     }
 
     // ── Phase 2c: Skills tests ────────────────────────────────

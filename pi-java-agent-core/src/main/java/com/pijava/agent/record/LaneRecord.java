@@ -115,6 +115,7 @@ public sealed interface LaneRecord {
             String systemPromptOverride,
             Map<String, Object> resumeData
         ) implements Intent {
+            /** Defensively copies {@code originalPrompt} and {@code initialMessages}. */
             public Run {
                 originalPrompt = List.copyOf(originalPrompt);
                 initialMessages = List.copyOf(initialMessages);
@@ -189,6 +190,7 @@ public sealed interface LaneRecord {
         String resultEntryId,
         ReplayKind replay
     ) implements LaneRecord {
+        /** Defensively copies {@code effectiveArgs}. */
         public ToolStarted {
             effectiveArgs = Map.copyOf(effectiveArgs);
         }

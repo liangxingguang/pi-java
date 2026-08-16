@@ -57,6 +57,7 @@ public sealed interface Action {
         String toolName,
         Map<String, Object> arguments
     ) implements Action {
+        /** Defensively copies {@code arguments}. */
         public ExecuteTool {
             arguments = Map.copyOf(arguments);
         }
@@ -73,6 +74,7 @@ public sealed interface Action {
     record ExecuteToolBatch(
         List<ExecuteTool> calls
     ) implements Action {
+        /** Defensively copies {@code calls}. */
         public ExecuteToolBatch {
             calls = List.copyOf(calls);
         }

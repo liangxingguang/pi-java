@@ -18,6 +18,7 @@ public record LaneConfig(
     Set<AgentTool<?, ?>> activeTools,
     String systemPrompt
 ) {
+    /** Defensively copies {@code activeTools} when non-null. */
     public LaneConfig {
         if (activeTools != null) {
             activeTools = Set.copyOf(activeTools);

@@ -4,7 +4,6 @@ import java.util.List;
 
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.record.LaneRecord;
-import com.pijava.agent.entry.ProvisionedEntry;
 
 /**
  * Immutable point-in-time snapshot of a lane.

@@ -43,6 +43,7 @@ public class SkillManager {
 
     /** Exception thrown when a skill is not found. */
     public static final class UnknownSkillException extends RuntimeException {
+        /** Create an exception for an unknown skill name. */
         public UnknownSkillException(String name) {
             super("Unknown skill: " + name);
         }
@@ -50,6 +51,7 @@ public class SkillManager {
 
     /** Exception thrown when a prompt template is not found. */
     public static final class UnknownTemplateException extends RuntimeException {
+        /** Create an exception for an unknown template name. */
         public UnknownTemplateException(String name) {
             super("Unknown template: " + name);
         }

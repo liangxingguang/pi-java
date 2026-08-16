@@ -28,6 +28,7 @@ public class ToolExecutor {
     private final ToolRegistry registry;
     private final ToolContext context;
 
+    /** Create a tool executor bound to the given registry and context. */
     public ToolExecutor(ToolRegistry registry, ToolContext context) {
         this.registry = registry;
         this.context = context;

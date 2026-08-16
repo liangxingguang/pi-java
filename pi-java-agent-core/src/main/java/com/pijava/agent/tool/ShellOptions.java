@@ -11,6 +11,7 @@ public record ShellOptions(
     OptionalLong timeoutSeconds,
     AbortSignal signal
 ) {
+    /** Defensively copies {@code env}. */
     public ShellOptions {
         env = Map.copyOf(env);
     }

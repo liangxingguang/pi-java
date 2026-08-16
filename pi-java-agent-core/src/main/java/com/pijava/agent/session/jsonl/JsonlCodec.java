@@ -47,10 +47,12 @@ public final class JsonlCodec {
             return kind;
         }
 
+        /** Create a syntax-type decode error. */
         public static DecodeError syntax(String message, Throwable cause) {
             return new DecodeError("syntax", message, cause);
         }
 
+        /** Create a schema-type decode error. */
         public static DecodeError schema(String message) {
             return new DecodeError("schema", message, null);
         }
@@ -58,14 +60,17 @@ public final class JsonlCodec {
 
     /** A parse result: exactly one of {@code value} / {@code error} is non-null. */
     public record ParseResult<T>(T value, DecodeError error) {
+        /** Whether the parse succeeded ({@code value} is non-null). */
         public boolean ok() {
             return value != null;
         }
 
+        /** Create a successful parse result. */
         public static <T> ParseResult<T> ok(T value) {
             return new ParseResult<>(value, null);
         }
 
+        /** Create a failed parse result carrying the error. */
         public static <T> ParseResult<T> err(DecodeError error) {
             return new ParseResult<>(null, error);
         }
@@ -314,6 +319,7 @@ public final class JsonlCodec {
         return RecordJsonCodec.decode(payload, id, seq, lane, timestamp);
     }
 
+    /** Read a required textual field as a {@code String}. */
     public static String requireString(JsonNode node, String field) {
         JsonNode value = node.get(field);
         if (value == null || !value.isTextual()) {
@@ -322,6 +328,7 @@ public final class JsonlCodec {
         return value.textValue();
     }
 
+    /** Read a required integral field as a {@code long}. */
     public static long requireLong(JsonNode node, String field) {
         JsonNode value = node.get(field);
         if (value == null || !value.isIntegralNumber()) {
@@ -330,10 +337,12 @@ public final class JsonlCodec {
         return value.longValue();
     }
 
+    /** Read a required integral field as an {@code int}. */
     public static int requireInt(JsonNode node, String field) {
         return (int) requireLong(node, field);
     }
 
+    /** Read a nullable string field ({@code null} when absent or JSON null). */
     public static String nullableString(JsonNode node, String field) {
         JsonNode value = node.get(field);
         if (value == null || value.isNull()) {
@@ -345,6 +354,7 @@ public final class JsonlCodec {
         return value.textValue();
     }
 
+    /** Read an optional string field, or {@code null} when absent. */
     public static String optionalString(JsonNode node, String field) {
         JsonNode value = node.get(field);
         if (value == null || value.isNull()) {
@@ -356,6 +366,7 @@ public final class JsonlCodec {
         return value.textValue();
     }
 
+    /** Read an optional object field as a map, or {@code null} when absent. */
     public static Map<String, Object> optionalObject(JsonNode node, String field) {
         JsonNode value = node.get(field);
         if (value == null || value.isNull()) {
@@ -367,6 +378,7 @@ public final class JsonlCodec {
         return SessionJson.mapper().convertValue(value, new com.fasterxml.jackson.core.type.TypeReference<>() {});
     }
 
+    /** Read a non-negative epoch-millis field as an {@link Instant}. */
     public static Instant instant(JsonNode node, String field) {
         long ms = requireLong(node, field);
         if (ms < 0) {

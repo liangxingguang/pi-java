@@ -17,6 +17,7 @@ public class AgentLoop {
 
     private final AgentHarness harness;
 
+    /** Create an agent loop that drives the given harness. */
     public AgentLoop(AgentHarness harness) {
         this.harness = harness;
     }

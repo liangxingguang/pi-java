@@ -166,6 +166,7 @@ public final class DefaultJsonlFileSystem implements JsonlSessionRepoFileSystem 
 
     /** File-system failure wrapper for the JSONL backend. */
     public static final class JsonlFileException extends RuntimeException {
+        /** Create a file-system failure wrapper with a message and cause. */
         public JsonlFileException(String message, Throwable cause) {
             super(message, cause);
         }

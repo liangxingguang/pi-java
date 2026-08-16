@@ -21,10 +21,12 @@ public final class Session<TMetadata extends SessionMetadata> implements Session
     private final SessionStorage<TMetadata> storage;
     private final IdGenerator idGenerator;
 
+    /** Create a session over the given storage with the default id generator. */
     public Session(SessionStorage<TMetadata> storage) {
         this(storage, UuidV7.INSTANCE);
     }
 
+    /** Create a session over the given storage with a custom id generator. */
     public Session(SessionStorage<TMetadata> storage, IdGenerator idGenerator) {
         this.storage = storage;
         this.idGenerator = idGenerator;

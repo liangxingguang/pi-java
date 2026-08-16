@@ -4,8 +4,12 @@ import com.pijava.ai.AbortSignal;
 import java.util.List;
 import java.util.Map;
 
-import com.pijava.agent.tool.*;
-import com.pijava.ai.message.ContentBlock;
+import com.pijava.agent.tool.AgentTool;
+import com.pijava.agent.tool.ExecutionMode;
+import com.pijava.agent.tool.PathUtils;
+import com.pijava.agent.tool.ToolContext;
+import com.pijava.agent.tool.ToolResult;
+import com.pijava.agent.tool.ToolUpdateCallback;
 
 /**
  * File writing tool. Creates parent directories, overwrites existing files.
@@ -18,6 +22,7 @@ public final class WriteTool {
 
     public record WriteInput(String path, String content) {}
 
+    /** Create the write tool. */
     public static AgentTool<WriteInput, Void> create() {
         return new AgentTool<>() {
             @Override public String name() { return "write"; }

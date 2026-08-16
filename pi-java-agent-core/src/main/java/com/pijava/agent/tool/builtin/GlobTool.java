@@ -8,8 +8,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import com.pijava.agent.tool.*;
-import com.pijava.ai.message.ContentBlock;
+import com.pijava.agent.tool.AgentTool;
+import com.pijava.agent.tool.ExecutionMode;
+import com.pijava.agent.tool.PathUtils;
+import com.pijava.agent.tool.ToolContext;
+import com.pijava.agent.tool.ToolResult;
+import com.pijava.agent.tool.ToolUpdateCallback;
 
 /**
  * Glob-based file matching tool. Aligned with pi's glob tool.
@@ -22,6 +26,7 @@ public final class GlobTool {
 
     public record GlobInput(String pattern, Optional<String> path) {}
 
+    /** Create the glob tool. */
     public static AgentTool<GlobInput, Void> create() {
         return new AgentTool<>() {
             @Override public String name() { return "glob"; }

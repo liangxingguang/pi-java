@@ -16,11 +16,13 @@ public enum OperationOutcome {
         this.value = value;
     }
 
+    /** The serialized outcome value. */
     @JsonValue
     public String value() {
         return value;
     }
 
+    /** Parse an outcome from its serialized value. */
     @JsonCreator
     public static OperationOutcome fromValue(String value) {
         for (var outcome : values()) {

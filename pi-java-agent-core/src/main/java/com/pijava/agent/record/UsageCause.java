@@ -19,11 +19,13 @@ public enum UsageCause {
         this.value = value;
     }
 
+    /** The serialized usage cause value. */
     @JsonValue
     public String value() {
         return value;
     }
 
+    /** Parse a usage cause from its serialized value. */
     @JsonCreator
     public static UsageCause fromValue(String value) {
         for (var cause : values()) {

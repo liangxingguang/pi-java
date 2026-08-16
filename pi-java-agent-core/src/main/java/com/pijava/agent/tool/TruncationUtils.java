@@ -33,6 +33,7 @@ public final class TruncationUtils {
         return truncateHead(content, DEFAULT_MAX_LINES, DEFAULT_MAX_BYTES);
     }
 
+    /** Truncate keeping the head with explicit line and byte limits. */
     public static TruncationResult truncateHead(String content, int maxLines, long maxBytes) {
         int totalBytes = content.getBytes(StandardCharsets.UTF_8).length;
         String[] lines = splitLines(content);
@@ -85,6 +86,7 @@ public final class TruncationUtils {
         return truncateTail(content, DEFAULT_MAX_LINES, DEFAULT_MAX_BYTES);
     }
 
+    /** Truncate keeping the tail with explicit line and byte limits. */
     public static TruncationResult truncateTail(String content, int maxLines, long maxBytes) {
         int totalBytes = content.getBytes(StandardCharsets.UTF_8).length;
         String[] lines = splitLines(content);

@@ -119,6 +119,7 @@ public sealed interface Entry {
         Instant timestamp,
         List<String> activeToolNames
     ) implements Entry {
+        /** Defensively copies {@code activeToolNames}. */
         public ActiveToolsChange {
             activeToolNames = List.copyOf(activeToolNames);
         }
@@ -136,6 +137,7 @@ public sealed interface Entry {
         Map<String, Object> details,
         com.pijava.ai.Usage usage
     ) implements Entry {
+        /** Defensively copies {@code retainedTail}. */
         public Compaction {
             retainedTail = List.copyOf(retainedTail);
         }
@@ -162,6 +164,7 @@ public sealed interface Entry {
         String customType,
         Map<String, Object> data
     ) implements Entry {
+        /** Defensively copies {@code data} when non-null. */
         public Custom {
             data = data == null ? null : Map.copyOf(data);
         }

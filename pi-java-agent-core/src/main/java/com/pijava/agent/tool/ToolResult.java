@@ -24,6 +24,7 @@ public record ToolResult<TDetails>(
     boolean terminate,
     List<String> addedToolNames
 ) {
+    /** Defensively copies {@code addedToolNames}. */
     public ToolResult {
         addedToolNames = List.copyOf(addedToolNames);
     }

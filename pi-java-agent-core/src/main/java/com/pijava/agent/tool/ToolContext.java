@@ -19,6 +19,7 @@ public class ToolContext {
     private final ShellExecutor shell;
     private final FileSystem fs;
 
+    /** Create a tool execution context (env is defensively copied). */
     public ToolContext(String cwd, Map<String, String> env,
                        ShellExecutor shell, FileSystem fs) {
         this.cwd = cwd;

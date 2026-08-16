@@ -1,6 +1,5 @@
 package com.pijava.agent.session.memory;
 
-import java.time.Instant;
 import java.util.List;
 
 import com.pijava.agent.entry.Entry;
@@ -34,6 +33,7 @@ public final class MemorySessionStorage implements SessionStorage<MemorySessionM
     private final SessionState state = new SessionState();
     private final Object lock = new Object();
 
+    /** Create in-memory storage with the given metadata. */
     public MemorySessionStorage(MemorySessionMetadata metadata) {
         this.metadata = metadata;
     }
@@ -82,7 +82,8 @@ public final class MemorySessionStorage implements SessionStorage<MemorySessionM
             state.validateUnusedId(entry.entry().id());
             // The generic cast is safe: committed() preserves the runtime subtype.
             @SuppressWarnings("unchecked")
-            T committed = (T) entry.entry().committed(state.nextSequence(), parentId, java.time.Instant.ofEpochMilli(System.currentTimeMillis()));
+            T committed = (T) entry.entry().committed(state.nextSequence(), parentId,
+                java.time.Instant.ofEpochMilli(System.currentTimeMillis()));
             SessionJson.assertSerializable(committed);
             state.applyMutation(new SessionMutation.Entry(lane, committed));
             return committed;
@@ -102,7 +103,8 @@ public final class MemorySessionStorage implements SessionStorage<MemorySessionM
             }
             // The generic cast is safe: committed() preserves the runtime subtype.
             @SuppressWarnings("unchecked")
-            T committed = (T) record.record().committed(state.nextSequence(), java.time.Instant.ofEpochMilli(System.currentTimeMillis()));
+            T committed = (T) record.record().committed(state.nextSequence(),
+                java.time.Instant.ofEpochMilli(System.currentTimeMillis()));
             SessionJson.assertSerializable(committed);
             state.applyMutation(new SessionMutation.Record(committed));
             return committed;

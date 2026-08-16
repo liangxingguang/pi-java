@@ -7,5 +7,6 @@ package com.pijava.agent.tool;
  */
 @FunctionalInterface
 public interface ToolUpdateCallback<TDetails> {
+    /** Receive a partial tool result during streaming execution. */
     void onUpdate(ToolResult<TDetails> partialResult);
 }

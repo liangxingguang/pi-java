@@ -15,11 +15,13 @@ public enum StepKind {
         this.value = value;
     }
 
+    /** The serialized step kind value. */
     @JsonValue
     public String value() {
         return value;
     }
 
+    /** Parse a step kind from its serialized value. */
     @JsonCreator
     public static StepKind fromValue(String value) {
         for (var kind : values()) {

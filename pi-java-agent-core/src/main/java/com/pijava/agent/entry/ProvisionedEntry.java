@@ -17,6 +17,7 @@ public final class ProvisionedEntry<T extends Entry> {
 
     private final T entry;
 
+    /** Wrap an entry pending storage-assigned identity fields. */
     public ProvisionedEntry(T entry) {
         this.entry = entry;
     }

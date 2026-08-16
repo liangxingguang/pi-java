@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import com.pijava.agent.compaction.CompactionResult;
 import com.pijava.agent.compaction.CompactionService;
 import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.compaction.SummaryGenerator;
@@ -104,7 +103,7 @@ final class ActionExecutor {
     void compact(String laneName, CompactionSettings settings) {
         var lane = ctx.requireLane(laneName);
         if (lane.transcript.size() <= 1) {
-            throw new AgentHarness.NothingToCompactException(laneName);
+            throw new NothingToCompactException(laneName);
         }
         applyCompaction(laneName, lane, settings, CompactionService.estimateTokens(lane.transcript));
         ctx.publishState(laneName);

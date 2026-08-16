@@ -29,6 +29,7 @@ public final class JsonlSessionRepository implements
     private final Path sessionsRoot;
     private final Set<String> activeCreateDestinations = new HashSet<>();
 
+    /** Create a JSONL repository rooted at {@code sessionsRoot}. */
     public JsonlSessionRepository(Path sessionsRoot, JsonlSessionRepoFileSystem fs) {
         this.sessionsRoot = sessionsRoot;
         this.fs = fs;

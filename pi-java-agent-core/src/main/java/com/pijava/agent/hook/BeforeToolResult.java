@@ -10,6 +10,7 @@ import java.util.Map;
  * @param arguments modified arguments (null = use original)
  */
 public record BeforeToolResult(boolean allowed, Map<String, Object> arguments) {
+    /** Defensively copies {@code arguments} when non-null. */
     public BeforeToolResult {
         if (arguments != null) {
             arguments = Map.copyOf(arguments);

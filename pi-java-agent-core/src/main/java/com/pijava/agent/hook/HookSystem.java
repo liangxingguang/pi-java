@@ -24,6 +24,7 @@ public final class HookSystem {
     private final HookRegistry registry = new HookRegistry();
     private final ConcurrentMap<String, LaneState> lanes;
 
+    /** Create a hook system bound to the given lane map. */
     public HookSystem(ConcurrentMap<String, LaneState> lanes) {
         this.lanes = lanes;
     }
@@ -32,46 +33,57 @@ public final class HookSystem {
     // Registration (11 on* methods)
     // ═══════════════════════════════════════════════════════════
 
+    /** Register a {@code before_run} hook for the lane. */
     public AutoCloseable onBeforeRun(String laneName, BeforeRunHook hook) {
         return registry.register(laneName, "before_run", hook);
     }
 
+    /** Register a {@code before_resume} hook for the lane. */
     public AutoCloseable onBeforeResume(String laneName, BeforeResumeHook hook) {
         return registry.register(laneName, "before_resume", hook);
     }
 
+    /** Register a {@code transform_context} hook for the lane. */
     public AutoCloseable onTransformContext(String laneName, TransformContextHook hook) {
         return registry.register(laneName, "transform_context", hook);
     }
 
+    /** Register a {@code before_request} hook for the lane. */
     public AutoCloseable onBeforeRequest(String laneName, BeforeRequestHook hook) {
         return registry.register(laneName, "before_request", hook);
     }
 
+    /** Register a {@code before_payload} hook for the lane. */
     public AutoCloseable onBeforePayload(String laneName, BeforePayloadHook hook) {
         return registry.register(laneName, "before_payload", hook);
     }
 
+    /** Register an {@code after_response} hook for the lane. */
     public AutoCloseable onAfterResponse(String laneName, AfterResponseHook hook) {
         return registry.register(laneName, "after_response", hook);
     }
 
+    /** Register a {@code before_tool} hook for the lane. */
     public AutoCloseable onBeforeTool(String laneName, BeforeToolHook hook) {
         return registry.register(laneName, "before_tool", hook);
     }
 
+    /** Register an {@code after_tool} hook for the lane. */
     public AutoCloseable onAfterTool(String laneName, AfterToolHook hook) {
         return registry.register(laneName, "after_tool", hook);
     }
 
+    /** Register a {@code before_compaction} hook for the lane. */
     public AutoCloseable onBeforeCompaction(String laneName, BeforeCompactionHook hook) {
         return registry.register(laneName, "before_compaction", hook);
     }
 
+    /** Register a {@code before_navigation} hook for the lane. */
     public AutoCloseable onBeforeNavigation(String laneName, BeforeNavigationHook hook) {
         return registry.register(laneName, "before_navigation", hook);
     }
 
+    /** Register a {@code before_run_end} hook for the lane. */
     public AutoCloseable onBeforeRunEnd(String laneName, BeforeRunEndHook hook) {
         return registry.register(laneName, "before_run_end", hook);
     }
@@ -80,16 +92,19 @@ public final class HookSystem {
     // Firing (10 fire* methods)
     // ═══════════════════════════════════════════════════════════
 
+    /** Fire all {@code before_run} hooks for the lane. */
     public void fireBeforeRun(String laneName, RunContext ctx) {
         fireVoid(laneName, "before_run",
             hook -> ((BeforeRunHook) hook).beforeRun(ctx));
     }
 
+    /** Fire all {@code before_resume} hooks for the lane. */
     public void fireBeforeResume(String laneName, ResumeContext ctx) {
         fireVoid(laneName, "before_resume",
             hook -> ((BeforeResumeHook) hook).beforeResume(ctx));
     }
 
+    /** Fire all {@code before_request} hooks for the lane. */
     public void fireBeforeRequest(String laneName, RequestContext ctx) {
         fireVoid(laneName, "before_request",
             hook -> ((BeforeRequestHook) hook).beforeRequest(ctx));
@@ -113,6 +128,7 @@ public final class HookSystem {
         return result;
     }
 
+    /** Fire all {@code after_response} hooks for the lane. */
     public void fireAfterResponse(String laneName, ResponseContext ctx) {
         fireVoid(laneName, "after_response",
             hook -> ((AfterResponseHook) hook).afterResponse(ctx));
@@ -171,11 +187,13 @@ public final class HookSystem {
         return null;
     }
 
+    /** Fire all {@code before_navigation} hooks for the lane. */
     public void fireBeforeNavigation(String laneName, NavigationContext ctx) {
         fireVoid(laneName, "before_navigation",
             hook -> ((BeforeNavigationHook) hook).beforeNavigation(ctx));
     }
 
+    /** Fire all {@code before_run_end} hooks for the lane. */
     public void fireBeforeRunEnd(String laneName, RunEndContext ctx) {
         fireVoid(laneName, "before_run_end",
             hook -> ((BeforeRunEndHook) hook).beforeRunEnd(ctx));
