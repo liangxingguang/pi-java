@@ -24,11 +24,11 @@ final class LaneView implements SessionTree {
     }
 
     private String leaf() {
-        return storage.getLanes().stream()
+        var pointer = storage.getLanes().stream()
             .filter(p -> lane.equals(p.lane()))
-            .map(LanePointer::leafId)
             .findFirst()
             .orElseThrow(() -> new SessionError(SessionErrorCode.INVALID_LANE, "Lane not found: " + lane));
+        return pointer.leafId();
     }
 
     @Override

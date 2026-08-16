@@ -71,7 +71,7 @@ class AgentHarnessIntegrationTest {
         // Compaction on the review lane after more turns
         drive(h, "review", "one more turn");
         var before = h.snapshot("review").transcript().size();
-        h.compact("review", new CompactionSettings(100_000, 0.5, true, true));
+        h.compact("review", new CompactionSettings(true, 16384, 20000));
         var after = h.snapshot("review").transcript().size();
         assertThat(after).isLessThanOrEqualTo(before);
     }

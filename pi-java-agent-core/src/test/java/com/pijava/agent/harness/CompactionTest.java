@@ -3,12 +3,14 @@ package com.pijava.agent.harness;
 import java.util.List;
 import java.util.Set;
 
+import com.pijava.agent.compaction.CompactionResult;
 import com.pijava.agent.compaction.CompactionService;
 import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.hook.CompactionPlan;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
+import com.pijava.ai.message.Message;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
@@ -41,8 +43,11 @@ class CompactionTest {
     }
 
     private static Entry message(String role, String text) {
-        return new Entry.Message(Entry.newHeader(0, ""), role,
-                List.of(new ContentBlock.TextContent(text)));
+        Message message = "assistant".equals(role)
+            ? new Message.AssistantMessage(List.of(new ContentBlock.TextContent(text)))
+            : new Message.UserMessage(List.of(new ContentBlock.TextContent(text)));
+        return new Entry.Message(java.util.UUID.randomUUID().toString(), 0, null, null,
+            message, null);
     }
 
     // ── CompactionService unit tests ──────────────────────────
@@ -54,19 +59,22 @@ class CompactionTest {
                 message("assistant", "second"),
                 message("user", "third"),
                 message("assistant", "fourth"));
-        var settings = new CompactionSettings(100_000, 0.5, true, true);
-        var result = CompactionService.compact(transcript, settings, 4, "");
+        var settings = new CompactionSettings(true, 16384, 8);
+        var result = CompactionService.compact(transcript, settings,
+            com.pijava.agent.compaction.SummaryGenerator.truncating());
 
-        // 4 entries * 0.5 = keep last 2, plus a compaction entry prepended
-        assertThat(result).hasSize(3);
-        assertThat(result.get(0)).isInstanceOf(Entry.Compaction.class);
+        assertThat(result.summary()).isNotBlank();
+        // Small transcript: the fallback cut keeps only the last message.
+        assertThat(result.firstKeptEntryId()).isEqualTo(transcript.get(3).id());
+        assertThat(result.tokensBefore()).isGreaterThan(0);
     }
 
     @Test
     void compactThrowsWhenTranscriptTooSmall() {
         assertThatThrownBy(() -> CompactionService.compact(
                 List.of(message("user", "only")),
-                CompactionSettings.defaults(), 1, ""))
+                CompactionSettings.defaults(),
+                com.pijava.agent.compaction.SummaryGenerator.truncating()))
                 .isInstanceOf(IllegalStateException.class);
     }
 
@@ -90,7 +98,7 @@ class CompactionTest {
         int before = h.snapshot("default").transcript().size();
         assertThat(before).isGreaterThan(1);
 
-        h.compact(new CompactionSettings(100_000, 0.5, true, true));
+        h.compact(new CompactionSettings(true, 16384, 20000));
         int after = h.snapshot("default").transcript().size();
         assertThat(after).isLessThanOrEqualTo(before);
     }

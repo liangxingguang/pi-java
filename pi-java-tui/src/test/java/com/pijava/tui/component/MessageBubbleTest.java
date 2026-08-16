@@ -3,6 +3,7 @@ package com.pijava.tui.component;
 import java.util.List;
 
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.Message;
 
 import dev.tamboui.style.Style;
 
@@ -108,9 +109,9 @@ class MessageBubbleTest {
     @Test
     void chatMessageProjectsToolEntry() {
         var entry = new com.pijava.agent.entry.Entry.Message(
-            com.pijava.agent.entry.Entry.newHeader(0, ""), "tool",
-            List.of(new ContentBlock.ToolResultContent(
-                "id", "read", List.of(new ContentBlock.TextContent("file")), false)));
+            "t-1", 0, null, null,
+            new Message.ToolResultMessage("id", "read",
+                List.of(new ContentBlock.TextContent("file")), false), null);
 
         var message = ChatMessage.from(entry);
         assertThat(message).isInstanceOf(ChatMessage.ToolResult.class);

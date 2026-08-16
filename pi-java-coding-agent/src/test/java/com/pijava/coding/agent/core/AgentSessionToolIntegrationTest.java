@@ -174,8 +174,8 @@ class AgentSessionToolIntegrationTest {
         return entries.stream()
             .filter(Entry.Message.class::isInstance)
             .map(Entry.Message.class::cast)
-            .filter(m -> "user".equals(m.role()))
-            .filter(m -> text.equals(joinText(m.blocks())))
+            .filter(m -> "user".equals(m.message().role()))
+            .filter(m -> text.equals(joinText(m.message().content())))
             .count();
     }
 
@@ -183,8 +183,8 @@ class AgentSessionToolIntegrationTest {
         return entries.stream()
             .filter(Entry.Message.class::isInstance)
             .map(Entry.Message.class::cast)
-            .filter(m -> "assistant".equals(m.role()))
-            .filter(m -> text.equals(joinText(m.blocks())))
+            .filter(m -> "assistant".equals(m.message().role()))
+            .filter(m -> text.equals(joinText(m.message().content())))
             .count();
     }
 

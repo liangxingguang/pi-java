@@ -1,5 +1,7 @@
 package com.pijava.agent.entry;
 
+import com.fasterxml.jackson.annotation.JsonValue;
+
 /**
  * An entry that has been provisioned (has an id) but whose
  * {@code seq}/{@code parentId}/{@code timestamp} are assigned by the storage
@@ -19,7 +21,11 @@ public final class ProvisionedEntry<T extends Entry> {
         this.entry = entry;
     }
 
-    /** The provisioned entry. */
+    /**
+     * The provisioned entry. {@code @JsonValue} makes the wrapper serialize
+     * as the entry itself, matching pi's type-alias semantics.
+     */
+    @JsonValue
     public T entry() {
         return entry;
     }

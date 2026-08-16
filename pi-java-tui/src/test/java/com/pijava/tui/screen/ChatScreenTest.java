@@ -5,6 +5,7 @@ import java.util.List;
 import com.pijava.agent.entry.Entry;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.tui.component.ChatMessage;
 
@@ -42,8 +43,8 @@ class ChatScreenTest {
         var countBefore = screen.messageCount();
 
         var entry = new Entry.Message(
-            Entry.newHeader(1, ""), "assistant",
-            List.of(new ContentBlock.TextContent("text")));
+            "e-0", 0, null, null,
+            new Message.AssistantMessage(List.of(new ContentBlock.TextContent("text"))), null);
         screen.onEntry(entry);
 
         assertThat(screen.messageCount()).isEqualTo(countBefore);
@@ -60,10 +61,10 @@ class ChatScreenTest {
         // The transcript snapshot may carry extra/reordered blocks; it must
         // not render a second (duplicated) bubble.
         var entry = new Entry.Message(
-            Entry.newHeader(1, ""), "assistant",
-            List.of(
+            "e-1", 0, null, null,
+            new Message.AssistantMessage(List.of(
                 new ContentBlock.TextContent("乱序片段"),
-                new ContentBlock.TextContent("正常回答")));
+                new ContentBlock.TextContent("正常回答"))), null);
         screen.onEntry(entry);
 
         assertThat(screen.messageCount()).isEqualTo(1);
@@ -74,8 +75,8 @@ class ChatScreenTest {
     void userEntryIsAppended() {
         var screen = new ChatScreen();
         var entry = new Entry.Message(
-            Entry.newHeader(0, ""), "user",
-            List.of(new ContentBlock.TextContent("hi")));
+            "e-2", 0, null, null,
+            new Message.UserMessage(List.of(new ContentBlock.TextContent("hi"))), null);
 
         screen.onEntry(entry);
 
@@ -94,8 +95,8 @@ class ChatScreenTest {
         // different (even reordered) text; it was already shown via the
         // streaming path and must not be rendered again.
         screen.onEntry(new Entry.Message(
-            Entry.newHeader(2, ""), "assistant",
-            List.of(new ContentBlock.TextContent("reordered text"))));
+            "e-3", 0, null, null,
+            new Message.AssistantMessage(List.of(new ContentBlock.TextContent("reordered text"))), null));
 
         assertThat(screen.messageCount()).isEqualTo(countAfterStream);
         assertThat(screen.lastMessage()).isInstanceOf(ChatMessage.Assistant.class);
@@ -114,10 +115,10 @@ class ChatScreenTest {
         var countAfterStream = screen.messageCount();
 
         screen.onEntry(new Entry.Message(
-            Entry.newHeader(1, ""), "assistant",
-            List.of(
+            "e-4", 0, null, null,
+            new Message.AssistantMessage(List.of(
                 new ContentBlock.TextContent("first "),
-                new ContentBlock.TextContent("second"))));
+                new ContentBlock.TextContent("second"))), null));
 
         assertThat(screen.messageCount()).isEqualTo(countAfterStream);
     }
@@ -138,11 +139,11 @@ class ChatScreenTest {
         var countAfterStream = screen.messageCount();
 
         screen.onEntry(new Entry.Message(
-            Entry.newHeader(1, ""), "assistant",
-            List.of(new ContentBlock.TextContent("first"))));
+            "e-5", 0, null, null,
+            new Message.AssistantMessage(List.of(new ContentBlock.TextContent("first"))), null));
         screen.onEntry(new Entry.Message(
-            Entry.newHeader(3, ""), "assistant",
-            List.of(new ContentBlock.TextContent("second"))));
+            "e-6", 0, null, null,
+            new Message.AssistantMessage(List.of(new ContentBlock.TextContent("second"))), null));
 
         assertThat(screen.messageCount()).isEqualTo(countAfterStream);
     }

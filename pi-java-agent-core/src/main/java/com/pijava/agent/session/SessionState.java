@@ -29,7 +29,11 @@ public final class SessionState {
     private final List<LaneRecord> records = new ArrayList<>();
     private final Map<String, Map<String, LaneRecord.OperationStarted>> openOperationsByLane =
         new LinkedHashMap<>();
-    private final Map<String, String> lanes = new LinkedHashMap<>(Map.of("main", (String) null));
+    private final Map<String, String> lanes = new LinkedHashMap<>();
+
+    {
+        lanes.put("main", null);
+    }
     private final List<LogItem> log = new ArrayList<>();
     private final Map<String, String> labels = new LinkedHashMap<>();
     private String name;

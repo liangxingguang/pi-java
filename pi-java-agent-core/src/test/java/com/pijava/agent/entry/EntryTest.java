@@ -4,7 +4,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+import com.pijava.ai.message.Message;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.agent.session.SessionJson;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -12,116 +14,109 @@ import static org.assertj.core.api.Assertions.assertThat;
 class EntryTest {
 
     @Test
-    void entryHeaderFields() {
+    void messageEntryFlatFields() {
         var now = Instant.now();
-        var header = new EntryHeader("id-1", 0L, "", now);
-
-        assertThat(header.id()).isEqualTo("id-1");
-        assertThat(header.seq()).isEqualTo(0L);
-        assertThat(header.parentId()).isEmpty();
-        assertThat(header.timestamp()).isEqualTo(now);
-    }
-
-    @Test
-    void newHeaderGeneratesUuid() {
-        var header = Entry.newHeader(5L, "parent-1");
-
-        assertThat(header.id()).isNotEmpty();
-        assertThat(header.seq()).isEqualTo(5L);
-        assertThat(header.parentId()).isEqualTo("parent-1");
-        assertThat(header.timestamp()).isNotNull();
-    }
-
-    @Test
-    void messageEntry() {
-        var header = Entry.newHeader(0L, "");
         var blocks = List.<ContentBlock>of(new ContentBlock.TextContent("Hello"));
-        var msg = new Entry.Message(header, "user", blocks);
+        var msg = new Entry.Message("id-1", 1L, "parent", now,
+            new Message.UserMessage(blocks), null);
 
-        assertThat(msg.header()).isSameAs(header);
-        assertThat(msg.role()).isEqualTo("user");
-        assertThat(msg.blocks()).hasSize(1);
+        assertThat(msg.id()).isEqualTo("id-1");
+        assertThat(msg.seq()).isEqualTo(1L);
+        assertThat(msg.parentId()).isEqualTo("parent");
+        assertThat(msg.timestamp()).isEqualTo(now);
+        assertThat(msg.message().role()).isEqualTo("user");
+        assertThat(msg.message().content()).hasSize(1);
+        assertThat(msg.terminate()).isNull();
     }
 
     @Test
-    void messageEntryDefensiveCopy() {
-        var header = Entry.newHeader(0L, "");
-        var blocks = new java.util.ArrayList<>(List.<ContentBlock>of(
-                new ContentBlock.TextContent("test")));
-        var msg = new Entry.Message(header, "assistant", blocks);
+    void messageEntryPreservesPayloadOnCommit() {
+        var now = Instant.now();
+        var msg = new Entry.Message("id-1", 0, null, null,
+            new Message.UserMessage(List.of(new ContentBlock.TextContent("hi"))), null);
+        Entry committed = msg.committed(5L, "leaf", now);
 
-        blocks.clear();
-        assertThat(msg.blocks()).hasSize(1);
+        assertThat(committed.id()).isEqualTo("id-1");
+        assertThat(committed.seq()).isEqualTo(5L);
+        assertThat(committed.parentId()).isEqualTo("leaf");
+        assertThat(committed.timestamp()).isEqualTo(now);
+        assertThat(((Entry.Message) committed).message().content()).hasSize(1);
     }
 
     @Test
     void thinkingLevelChangeEntry() {
-        var header = Entry.newHeader(1L, "parent");
-        var entry = new Entry.ThinkingLevelChange(header, "medium");
-
-        assertThat(entry.header()).isSameAs(header);
-        assertThat(entry.level()).isEqualTo("medium");
+        var entry = new Entry.ThinkingLevelChange("id-1", 1L, "parent",
+            Instant.now(), "medium");
+        assertThat(entry.thinkingLevel()).isEqualTo("medium");
+        assertThat(entry.type()).isEqualTo("thinking_level_change");
     }
 
     @Test
     void modelChangeEntry() {
-        var header = Entry.newHeader(2L, "parent");
-        var entry = new Entry.ModelChange(header, "anthropic", "claude-sonnet-4-6");
-
+        var entry = new Entry.ModelChange("id-1", 2L, "parent",
+            Instant.now(), "anthropic", "claude-sonnet-4-6");
         assertThat(entry.provider()).isEqualTo("anthropic");
         assertThat(entry.modelId()).isEqualTo("claude-sonnet-4-6");
     }
 
     @Test
-    void activeToolsChangeEntry() {
-        var header = Entry.newHeader(3L, "parent");
+    void activeToolsChangeEntryDefensiveCopy() {
         var tools = new java.util.ArrayList<>(List.of("bash", "read"));
-        var entry = new Entry.ActiveToolsChange(header, tools);
-
+        var entry = new Entry.ActiveToolsChange("id-1", 3L, "parent",
+            Instant.now(), tools);
         tools.clear();
-        assertThat(entry.toolNames()).containsExactly("bash", "read");
+        assertThat(entry.activeToolNames()).containsExactly("bash", "read");
     }
 
     @Test
     void compactionEntry() {
-        var header = Entry.newHeader(4L, "parent");
-        var entry = new Entry.Compaction(header, "overflow", 100, 50);
-
-        assertThat(entry.reason()).isEqualTo("overflow");
-        assertThat(entry.entriesBefore()).isEqualTo(100);
-        assertThat(entry.entriesAfter()).isEqualTo(50);
+        var entry = new Entry.Compaction("id-1", 4L, "parent", Instant.now(),
+            "summary", List.of(), 100,
+            Map.of("readFiles", List.of("a.txt")), null);
+        assertThat(entry.summary()).isEqualTo("summary");
+        assertThat(entry.tokensBefore()).isEqualTo(100);
+        assertThat(entry.retainedTail()).isEmpty();
     }
 
     @Test
     void branchSummaryEntry() {
-        var header = Entry.newHeader(5L, "parent");
-        var entry = new Entry.BranchSummary(header, "Summary text");
-
+        var entry = new Entry.BranchSummary("id-1", 5L, "parent", Instant.now(),
+            "from-1", "Summary text", null, null);
         assertThat(entry.summary()).isEqualTo("Summary text");
+        assertThat(entry.fromId()).isEqualTo("from-1");
     }
 
     @Test
-    void customEntry() {
-        var header = Entry.newHeader(6L, "parent");
+    void customEntryDefensiveCopy() {
         var data = new java.util.HashMap<String, Object>(Map.of("key", "value"));
-        var entry = new Entry.Custom(header, "my-event", data);
-
+        var entry = new Entry.Custom("id-1", 6L, "parent", Instant.now(), "my-event", data);
         data.put("key", "modified");
         assertThat(entry.data()).containsEntry("key", "value");
-        assertThat(entry.kind()).isEqualTo("my-event");
+        assertThat(entry.customType()).isEqualTo("my-event");
     }
 
     @Test
-    void provisionedEntry() {
-        var header = Entry.newHeader(0L, "");
-        var entry = new Entry.Message(header, "user",
-                List.of(new ContentBlock.TextContent("hi")));
-        var pw = new ProvisionedEntry(entry);
+    void provisionedEntryWrapsWithoutWrittenFlag() {
+        var entry = new Entry.Message("id-1", 0, null, null,
+            new Message.UserMessage(List.of(new ContentBlock.TextContent("hi"))), null);
+        var pw = new ProvisionedEntry<Entry.Message>(entry);
 
         assertThat(pw.entry()).isSameAs(entry);
-        assertThat(pw.isWritten()).isFalse();
+    }
 
-        pw.markWritten();
-        assertThat(pw.isWritten()).isTrue();
+    @Test
+    void jsonSerializationUsesPiKeyNames() throws Exception {
+        var msg = new Entry.Message("id-1", 1L, "parent", Instant.ofEpochMilli(1720000001000L),
+            new Message.UserMessage(List.of(new ContentBlock.TextContent("fix"))), null);
+        var node = SessionJson.mapper().valueToTree(msg);
+
+        assertThat(node.get("type").asText()).isEqualTo("message");
+        assertThat(node.get("id").asText()).isEqualTo("id-1");
+        assertThat(node.get("seq").asLong()).isEqualTo(1L);
+        assertThat(node.get("parentId").asText()).isEqualTo("parent");
+        assertThat(node.get("timestamp").asLong()).isEqualTo(1720000001000L);
+        assertThat(node.get("message").get("role").asText()).isEqualTo("user");
+        assertThat(node.get("message").get("content").get(0).get("type").asText()).isEqualTo("text");
+        assertThat(node.has("terminate")).isFalse();
     }
 }

@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Map;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.pijava.agent.entry.Entry;
 import com.pijava.agent.entry.ProvisionedEntry;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.record.OperationOutcome;
@@ -109,7 +110,11 @@ final class RecordJsonCodec {
         if (node == null || !node.isObject()) {
             throw JsonlCodec.DecodeError.schema("has invalid target");
         }
-        return new ProvisionedEntry<>(JsonlCodec.decodeEntry(node));
+        // Targets are provisioned entries: no seq/parentId/timestamp yet.
+        String id = JsonlCodec.requireString(node, "id");
+        String type = JsonlCodec.requireString(node, "type");
+        Entry entry = EntryJsonCodec.decode(node, id, 0, null, Instant.EPOCH, type);
+        return new ProvisionedEntry<>(entry);
     }
 
     private static java.util.List<ProvisionedEntry<?>> decodeTargetList(JsonNode node) {

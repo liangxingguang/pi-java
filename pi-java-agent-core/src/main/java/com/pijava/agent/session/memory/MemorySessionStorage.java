@@ -16,6 +16,7 @@ import com.pijava.agent.session.LogOptions;
 import com.pijava.agent.session.RecordQuery;
 import com.pijava.agent.session.SessionError;
 import com.pijava.agent.session.SessionErrorCode;
+import com.pijava.agent.session.SessionJson;
 import com.pijava.agent.session.SessionMutation;
 import com.pijava.agent.session.SessionState;
 import com.pijava.agent.session.SessionStats;
@@ -23,12 +24,15 @@ import com.pijava.agent.session.SessionStorage;
 
 /**
  * In-memory session storage built on {@link SessionState}. Serves as the
- * conformance oracle and a test double for the JSONL/SQLite backends.
+ * conformance oracle and a test double for the JSONL/SQLite backends. Mutating
+ * methods are serialized on a lock so concurrent lane writes keep commit
+ * order (Phase 4 conformance case 1.8).
  */
 public final class MemorySessionStorage implements SessionStorage<MemorySessionMetadata> {
 
     private final MemorySessionMetadata metadata;
     private final SessionState state = new SessionState();
+    private final Object lock = new Object();
 
     public MemorySessionStorage(MemorySessionMetadata metadata) {
         this.metadata = metadata;
@@ -55,44 +59,54 @@ public final class MemorySessionStorage implements SessionStorage<MemorySessionM
 
     @Override
     public void createLane(String lane, String at) {
-        state.validateNewLane(lane);
-        state.validateTarget(at);
-        state.applyMutation(new SessionMutation.Lane(state.nextSequence(), lane, at));
+        synchronized (lock) {
+            state.validateNewLane(lane);
+            state.validateTarget(at);
+            state.applyMutation(new SessionMutation.Lane(state.nextSequence(), lane, at));
+        }
     }
 
     @Override
     public void moveLane(String lane, String to) {
-        state.requireLane(lane);
-        state.validateTarget(to);
-        state.applyMutation(new SessionMutation.Lane(state.nextSequence(), lane, to));
+        synchronized (lock) {
+            state.requireLane(lane);
+            state.validateTarget(to);
+            state.applyMutation(new SessionMutation.Lane(state.nextSequence(), lane, to));
+        }
     }
 
     @Override
     public <T extends Entry> T appendEntry(ProvisionedEntry<T> entry, String lane) {
-        String parentId = state.requireLane(lane);
-        state.validateUnusedId(entry.entry().id());
-        // The generic cast is safe: committed() preserves the runtime subtype.
-        @SuppressWarnings("unchecked")
-        T committed = (T) entry.entry().committed(state.nextSequence(), parentId, Instant.now());
-        state.applyMutation(new SessionMutation.Entry(lane, committed));
-        return committed;
+        synchronized (lock) {
+            String parentId = state.requireLane(lane);
+            state.validateUnusedId(entry.entry().id());
+            // The generic cast is safe: committed() preserves the runtime subtype.
+            @SuppressWarnings("unchecked")
+            T committed = (T) entry.entry().committed(state.nextSequence(), parentId, java.time.Instant.ofEpochMilli(System.currentTimeMillis()));
+            SessionJson.assertSerializable(committed);
+            state.applyMutation(new SessionMutation.Entry(lane, committed));
+            return committed;
+        }
     }
 
     @Override
     public <T extends LaneRecord> T appendRecord(NewRecord<T> record) {
-        state.requireLane(record.record().lane());
-        state.validateUnusedId(record.record().id());
-        var currentOpen = state.findOpenOperations(record.record().lane(), 1);
-        if (record.record() instanceof LaneRecord.OperationStarted && !currentOpen.isEmpty()) {
-            throw new SessionError(SessionErrorCode.STORAGE,
-                "Lane " + record.record().lane()
-                    + " already has an open operation " + currentOpen.getFirst().id());
+        synchronized (lock) {
+            state.requireLane(record.record().lane());
+            state.validateUnusedId(record.record().id());
+            var currentOpen = state.findOpenOperations(record.record().lane(), 1);
+            if (record.record() instanceof LaneRecord.OperationStarted && !currentOpen.isEmpty()) {
+                throw new SessionError(SessionErrorCode.STORAGE,
+                    "Lane " + record.record().lane()
+                        + " already has an open operation " + currentOpen.getFirst().id());
+            }
+            // The generic cast is safe: committed() preserves the runtime subtype.
+            @SuppressWarnings("unchecked")
+            T committed = (T) record.record().committed(state.nextSequence(), java.time.Instant.ofEpochMilli(System.currentTimeMillis()));
+            SessionJson.assertSerializable(committed);
+            state.applyMutation(new SessionMutation.Record(committed));
+            return committed;
         }
-        // The generic cast is safe: committed() preserves the runtime subtype.
-        @SuppressWarnings("unchecked")
-        T committed = (T) record.record().committed(state.nextSequence(), Instant.now());
-        state.applyMutation(new SessionMutation.Record(committed));
-        return committed;
     }
 
     @Override
@@ -132,7 +146,9 @@ public final class MemorySessionStorage implements SessionStorage<MemorySessionM
 
     @Override
     public void setName(String name) {
-        state.applyMutation(new SessionMutation.FactName(state.nextSequence(), name));
+        synchronized (lock) {
+            state.applyMutation(new SessionMutation.FactName(state.nextSequence(), name));
+        }
     }
 
     @Override
@@ -142,8 +158,10 @@ public final class MemorySessionStorage implements SessionStorage<MemorySessionM
 
     @Override
     public void setLabel(String id, String label) {
-        state.validateTarget(id);
-        state.applyMutation(new SessionMutation.FactLabel(state.nextSequence(), id, label));
+        synchronized (lock) {
+            state.validateTarget(id);
+            state.applyMutation(new SessionMutation.FactLabel(state.nextSequence(), id, label));
+        }
     }
 
     @Override
@@ -153,7 +171,9 @@ public final class MemorySessionStorage implements SessionStorage<MemorySessionM
 
     @Override
     public void drain() {
-        // Nothing queued in memory.
+        synchronized (lock) {
+            // Serialized chain is drained on return.
+        }
     }
 
     @Override

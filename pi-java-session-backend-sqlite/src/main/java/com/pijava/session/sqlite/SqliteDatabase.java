@@ -50,13 +50,70 @@ public final class SqliteDatabase implements AutoCloseable {
         }
     }
 
-    /** Execute a statement without parameters. */
+    /**
+     * Execute statements without parameters. The input may contain multiple
+     * statements separated by {@code ';'} — JDBC {@code Statement.execute}
+     * only runs the first, so each is executed individually. The splitter
+     * ignores semicolons inside single-quoted strings and inside
+     * {@code BEGIN...END} trigger bodies.
+     */
     public void exec(String sql) {
         try (Statement statement = connection.createStatement()) {
-            statement.execute(sql);
+            for (var part : splitStatements(sql)) {
+                statement.execute(part);
+            }
         } catch (SQLException e) {
             throw new SqliteException("Failed to execute SQL: " + sql, e);
         }
+    }
+
+    private static List<String> splitStatements(String sql) {
+        List<String> statements = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean inString = false;
+        int beginDepth = 0;
+        for (int i = 0; i < sql.length(); i++) {
+            char c = sql.charAt(i);
+            if (inString) {
+                current.append(c);
+                if (c == '\'' && i > 0 && sql.charAt(i - 1) != '\\') {
+                    inString = false;
+                }
+                continue;
+            }
+            if (c == '\'') {
+                inString = true;
+                current.append(c);
+                continue;
+            }
+            if (c == ';' && beginDepth == 0) {
+                if (!current.toString().isBlank()) {
+                    statements.add(current.toString());
+                }
+                current.setLength(0);
+                continue;
+            }
+            if (Character.isLetter(c)) {
+                int end = i;
+                while (end < sql.length() && (Character.isLetterOrDigit(sql.charAt(end)) || sql.charAt(end) == '_')) {
+                    end++;
+                }
+                String word = sql.substring(i, end).toLowerCase();
+                if ("begin".equals(word)) {
+                    beginDepth++;
+                } else if ("end".equals(word) && beginDepth > 0) {
+                    beginDepth--;
+                }
+                current.append(sql, i, end);
+                i = end - 1;
+                continue;
+            }
+            current.append(c);
+        }
+        if (!current.toString().isBlank()) {
+            statements.add(current.toString());
+        }
+        return statements;
     }
 
     /** Execute an update with parameters; returns the change count. */
@@ -90,45 +147,71 @@ public final class SqliteDatabase implements AutoCloseable {
         try (var statement = connection.prepareStatement(sql)) {
             bind(statement, params);
             try (ResultSet rs = statement.executeQuery()) {
-                return rs.next() ? Optional.of(mapper.map(rs)) : Optional.empty();
+                return rs.next() ? Optional.ofNullable(mapper.map(rs)) : Optional.empty();
             }
         } catch (SQLException e) {
             throw new SqliteException("Failed to query SQL: " + sql, e);
         }
     }
 
-    /** Run {@code operation} inside a transaction; commit on success, rollback on failure. */
+    /** Current transaction nesting depth (single-threaded connection). */
+    private int txDepth;
+
+    /**
+     * Run {@code operation} inside a transaction; commit on success, rollback
+     * on failure. Nested calls use SAVEPOINTs so inner work can roll back
+     * without aborting the outer transaction.
+     */
     public <T> T transaction(Supplier<T> operation) {
-        boolean previousAutoCommit;
+        boolean top = txDepth == 0;
         try {
-            previousAutoCommit = connection.getAutoCommit();
-            connection.setAutoCommit(false);
+            if (top) {
+                connection.setAutoCommit(false);
+            } else {
+                connection.createStatement().execute("SAVEPOINT pi_tx_" + txDepth);
+            }
+            txDepth++;
         } catch (SQLException e) {
             throw new SqliteException("Failed to start transaction", e);
         }
         try {
             T result = operation.get();
-            connection.commit();
+            if (top) {
+                connection.commit();
+            } else {
+                connection.createStatement().execute("RELEASE SAVEPOINT pi_tx_" + (txDepth - 1));
+            }
             return result;
         } catch (SQLException e) {
             try {
-                connection.rollback();
+                if (top) {
+                    connection.rollback();
+                } else {
+                    connection.createStatement().execute("ROLLBACK TO SAVEPOINT pi_tx_" + (txDepth - 1));
+                }
             } catch (SQLException rollback) {
                 e.addSuppressed(rollback);
             }
             throw new SqliteException("Failed to commit transaction", e);
         } catch (RuntimeException | Error e) {
             try {
-                connection.rollback();
+                if (top) {
+                    connection.rollback();
+                } else {
+                    connection.createStatement().execute("ROLLBACK TO SAVEPOINT pi_tx_" + (txDepth - 1));
+                }
             } catch (SQLException rollback) {
                 e.addSuppressed(rollback);
             }
             throw e;
         } finally {
-            try {
-                connection.setAutoCommit(previousAutoCommit);
-            } catch (SQLException e) {
-                throw new SqliteException("Failed to restore auto-commit", e);
+            txDepth--;
+            if (top) {
+                try {
+                    connection.setAutoCommit(true);
+                } catch (SQLException e) {
+                    throw new SqliteException("Failed to restore auto-commit", e);
+                }
             }
         }
     }

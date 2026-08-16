@@ -58,23 +58,29 @@ public final class CompactionService {
         for (int i = transcript.size() - 1; i >= 0; i--) {
             accumulated += estimateTokens(transcript.get(i));
             if (accumulated >= keepRecentTokens) {
-                for (int j = i; j >= 0; j--) {
-                    if (transcript.get(j) instanceof Entry.Message m) {
-                        String role = m.message().role();
-                        if ("user".equals(role)) {
-                            return j;
-                        }
-                        if ("assistant".equals(role)) {
-                            boolean followedByTool = j + 1 < transcript.size()
-                                && transcript.get(j + 1) instanceof Entry.Message next
-                                && "tool".equals(next.message().role());
-                            if (!followedByTool) {
-                                return j;
-                            }
-                        }
+                return safeCut(transcript, i);
+            }
+        }
+        // Threshold not reached: keep only the last user/assistant message so
+        // compaction always makes progress on small transcripts.
+        return safeCut(transcript, transcript.size() - 1);
+    }
+
+    private static int safeCut(List<Entry> transcript, int from) {
+        for (int j = from; j >= 0; j--) {
+            if (transcript.get(j) instanceof Entry.Message m) {
+                String role = m.message().role();
+                if ("user".equals(role)) {
+                    return j;
+                }
+                if ("assistant".equals(role)) {
+                    boolean followedByTool = j + 1 < transcript.size()
+                        && transcript.get(j + 1) instanceof Entry.Message next
+                        && "tool".equals(next.message().role());
+                    if (!followedByTool) {
+                        return j;
                     }
                 }
-                return 0;
             }
         }
         return 0;

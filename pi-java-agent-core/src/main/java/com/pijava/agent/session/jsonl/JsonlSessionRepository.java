@@ -120,6 +120,14 @@ public final class JsonlSessionRepository implements
         }
     }
 
+    /** Delete all sessions under the root (test cleanup). */
+    public void deleteAllQuietly() {
+        if (!fs.exists(sessionsRoot)) {
+            return;
+        }
+        fs.remove(sessionsRoot, true);
+    }
+
     /** Check whether a session file exists and its id matches. */
     private JsonlSessionStorage loadStorage(JsonlSessionMetadata metadata) {
         if (!fs.exists(metadata.path())) {

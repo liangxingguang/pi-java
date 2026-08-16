@@ -394,8 +394,8 @@ public final class AgentSession implements AutoCloseable {
     /** Flush settings, persist pending writes and close the harness. */
     @Override
     public void close() {
-        SessionPersistence.persistPending(this, session, laneName);
         if (session != null) {
+            SessionPersistence.persistPending(this, session, laneName);
             session.close();
         }
         if (persistentRepository != null) {

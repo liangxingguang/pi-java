@@ -25,6 +25,9 @@ final class SessionPersistence {
     /** Persist new transcript entries and lane records into the session. */
     static void persistPending(AgentSession owner, Session<?> persistent, String laneName) {
         var snapshot = owner.harness().snapshot(laneName);
+        if (persistent.getLanes().stream().noneMatch(p -> laneName.equals(p.lane()))) {
+            persistent.createLane(laneName, null);
+        }
         for (var entry : snapshot.transcript()) {
             if (owner.persistedEntryIds().add(entry.id())) {
                 persistent.appendEntry(new ProvisionedEntry<>(entry), laneName);
@@ -34,9 +37,6 @@ final class SessionPersistence {
             if (owner.persistedRecordIds().add(record.id())) {
                 persistent.appendRecord(new NewRecord<>(record));
             }
-        }
-        if (persistent.getLanes().stream().noneMatch(p -> laneName.equals(p.lane()))) {
-            persistent.createLane(laneName, null);
         }
     }
 

@@ -206,7 +206,7 @@ public final class JsonlCodec {
     private static SessionMutation parseEntryMutation(JsonNode node, long seq) {
         String lane = node.has("lane") ? requireString(node, "lane") : null;
         String id = requireString(node, "id");
-        String type = requireString(node, "entry type");
+        String type = requireString(node, "type");
         if (!ENTRY_TYPES.contains(type)) {
             throw DecodeError.schema("has unknown entry type " + type);
         }
@@ -224,7 +224,7 @@ public final class JsonlCodec {
     private static SessionMutation parseRecordMutation(JsonNode node, long seq) {
         String id = requireString(node, "id");
         String lane = requireString(node, "lane");
-        String type = requireString(node, "record type");
+        String type = requireString(node, "type");
         if (!RECORD_TYPES.contains(type)) {
             throw DecodeError.schema("has unknown record type " + type);
         }
@@ -233,7 +233,7 @@ public final class JsonlCodec {
             if (intent == null || !intent.isObject()) {
                 throw DecodeError.schema("has invalid intent");
             }
-            String operationKind = requireString(intent, "operation kind");
+            String operationKind = requireString(intent, "kind");
             if (!OPERATION_KINDS.contains(operationKind)) {
                 throw DecodeError.schema("has unknown operation kind " + operationKind);
             }

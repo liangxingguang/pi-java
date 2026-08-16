@@ -1,7 +1,12 @@
 package com.pijava.agent.record;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
+
+import com.pijava.ai.Usage;
+import com.pijava.ai.message.Message;
+import com.pijava.ai.message.ContentBlock;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -9,97 +14,72 @@ import static org.assertj.core.api.Assertions.assertThat;
 class LaneRecordTest {
 
     @Test
-    void recordHeaderFields() {
+    void operationStartedWithRunIntent() {
         var now = Instant.now();
-        var header = new RecordHeader(1L, now);
+        var intent = new LaneRecord.OperationStarted.Run(
+            List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")))),
+            List.of(), null, null);
+        var rec = new LaneRecord.OperationStarted("rec-1", 1L, "main", now, null, intent);
 
-        assertThat(header.seq()).isEqualTo(1L);
-        assertThat(header.timestamp()).isEqualTo(now);
-    }
-
-    @Test
-    void newHeaderCreatesTimestamp() {
-        var header = LaneRecord.newHeader(5L);
-        assertThat(header.seq()).isEqualTo(5L);
-        assertThat(header.timestamp()).isNotNull();
-    }
-
-    @Test
-    void operationStarted() {
-        var header = LaneRecord.newHeader(0L);
-        var rec = new LaneRecord.OperationStarted(header, "run-1", "test intent");
-
-        assertThat(rec.header()).isSameAs(header);
-        assertThat(rec.runId()).isEqualTo("run-1");
-        assertThat(rec.intent()).isEqualTo("test intent");
+        assertThat(rec.id()).isEqualTo("rec-1");
+        assertThat(rec.seq()).isEqualTo(1L);
+        assertThat(rec.lane()).isEqualTo("main");
+        assertThat(rec.timestamp()).isEqualTo(now);
+        assertThat(rec.intent()).isSameAs(intent);
     }
 
     @Test
     void abortRequested() {
-        var header = LaneRecord.newHeader(1L);
-        var rec = new LaneRecord.AbortRequested(header, "user cancelled");
-
-        assertThat(rec.reason()).isEqualTo("user cancelled");
+        var rec = new LaneRecord.AbortRequested("rec-1", 1L, "main", Instant.now(), "run-1");
+        assertThat(rec.runId()).isEqualTo("run-1");
+        assertThat(rec.type()).isEqualTo("abort_requested");
     }
 
     @Test
     void operationFinished() {
-        var header = LaneRecord.newHeader(2L);
-        var rec = new LaneRecord.OperationFinished(header, "run-1", "completed");
-
-        assertThat(rec.status()).isEqualTo("completed");
+        var rec = new LaneRecord.OperationFinished("rec-1", 1L, "main", Instant.now(),
+            "run-1", OperationOutcome.COMPLETED, null);
+        assertThat(rec.outcome()).isEqualTo(OperationOutcome.COMPLETED);
+        assertThat(rec.error()).isNull();
     }
 
     @Test
     void stepAttempt() {
-        var header = LaneRecord.newHeader(3L);
-        var rec = new LaneRecord.StepAttempt(header, 0, 100, 50);
-
-        assertThat(rec.stepIndex()).isEqualTo(0);
-        assertThat(rec.inputTokens()).isEqualTo(100);
-        assertThat(rec.outputTokens()).isEqualTo(50);
+        var rec = new LaneRecord.StepAttempt("rec-1", 1L, "main", Instant.now(),
+            "run-1", StepKind.ASSISTANT, 0, "entry-9", null);
+        assertThat(rec.step()).isEqualTo(StepKind.ASSISTANT);
+        assertThat(rec.attempt()).isEqualTo(0);
+        assertThat(rec.resultEntryId()).isEqualTo("entry-9");
     }
 
     @Test
-    void usageRecord() {
-        var header = LaneRecord.newHeader(4L);
-        var rec = new LaneRecord.UsageRecord(header, 200, 100, "claude-sonnet");
-
-        assertThat(rec.modelId()).isEqualTo("claude-sonnet");
-    }
-
-    @Test
-    void toolStartedDefensiveCopy() {
-        var header = LaneRecord.newHeader(5L);
-        var args = new java.util.HashMap<String, Object>(Map.of("path", "/test"));
-        var rec = new LaneRecord.ToolStarted(header, "toolu_1", "read", args);
-
-        args.put("path", "/modified");
-        assertThat(rec.arguments()).containsEntry("path", "/test");
+    void toolStarted() {
+        var rec = new LaneRecord.ToolStarted("rec-1", 1L, "main", Instant.now(),
+            "run-1", "asst-1", 0, "call-1", "bash",
+            Map.of("cmd", "ls"), "entry-9", ReplayKind.NEVER);
+        assertThat(rec.toolName()).isEqualTo("bash");
+        assertThat(rec.replay()).isEqualTo(ReplayKind.NEVER);
+        assertThat(rec.effectiveArgs()).containsEntry("cmd", "ls");
     }
 
     @Test
     void queueEnqueued() {
-        var header = LaneRecord.newHeader(6L);
-        var rec = new LaneRecord.QueueEnqueued(header, "steer", "content");
-
-        assertThat(rec.queueType()).isEqualTo("steer");
-        assertThat(rec.content()).isEqualTo("content");
+        var target = new com.pijava.agent.entry.ProvisionedEntry<>(
+            new com.pijava.agent.entry.Entry.Message("e-1", 0, null, null,
+                new Message.UserMessage(List.of()), null));
+        var rec = new LaneRecord.QueueEnqueued("rec-1", 1L, "main", Instant.now(),
+            QueueKind.STEER, "run-1", target);
+        assertThat(rec.queue()).isEqualTo(QueueKind.STEER);
+        assertThat(rec.target()).isSameAs(target);
     }
 
     @Test
-    void queueCancelled() {
-        var header = LaneRecord.newHeader(7L);
-        var rec = new LaneRecord.QueueCancelled(header, "followUp");
-
-        assertThat(rec.queueType()).isEqualTo("followUp");
-    }
-
-    @Test
-    void writeDeferred() {
-        var header = LaneRecord.newHeader(8L);
-        var rec = new LaneRecord.WriteDeferred(header, "entry-1");
-
-        assertThat(rec.entryId()).isEqualTo("entry-1");
+    void usageRecordAccumulatesUsage() {
+        var usage = new Usage(100, 50, 10, 5, null, null, 165,
+            new Usage.Cost(0.1, 0.2, 0.01, 0.02, 0.33));
+        var rec = new LaneRecord.UsageRecord("rec-1", 1L, "main", Instant.now(),
+            usage, UsageCause.ASSISTANT, "run-1", "entry-9", null, 0, "stop");
+        assertThat(rec.usage()).isEqualTo(usage);
+        assertThat(rec.cause()).isEqualTo(UsageCause.ASSISTANT);
     }
 }

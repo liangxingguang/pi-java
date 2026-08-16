@@ -168,7 +168,8 @@ public final class JsonlSessionStorage implements SessionStorage<JsonlSessionMet
             state.validateUnusedId(entry.entry().id());
             // The generic cast is safe: committed() preserves the runtime subtype of the provisioned entry.
             @SuppressWarnings("unchecked")
-            T committed = (T) entry.entry().committed(state.nextSequence(), parentId, Instant.now());
+            T committed = (T) entry.entry().committed(state.nextSequence(), parentId, java.time.Instant.ofEpochMilli(System.currentTimeMillis()));
+            com.pijava.agent.session.SessionJson.assertSerializable(committed);
             var mutation = new SessionMutation.Entry(lane, committed);
             appendMutation(mutation);
             applyMutation(mutation);
@@ -190,7 +191,8 @@ public final class JsonlSessionStorage implements SessionStorage<JsonlSessionMet
             }
             // The generic cast is safe: committed() preserves the runtime subtype of the provisioned record.
             @SuppressWarnings("unchecked")
-            T committed = (T) record.record().committed(state.nextSequence(), Instant.now());
+            T committed = (T) record.record().committed(state.nextSequence(), java.time.Instant.ofEpochMilli(System.currentTimeMillis()));
+            com.pijava.agent.session.SessionJson.assertSerializable(committed);
             var mutation = new SessionMutation.Record(committed);
             appendMutation(mutation);
             applyMutation(mutation);

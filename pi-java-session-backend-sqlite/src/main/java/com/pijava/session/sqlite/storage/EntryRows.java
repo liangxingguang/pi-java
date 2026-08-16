@@ -40,7 +40,9 @@ public final class EntryRows {
             object.remove("type");
             return SessionJson.mapper().writeValueAsString(object);
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to encode entry payload", e);
+            throw new com.pijava.agent.session.SessionError(
+                com.pijava.agent.session.SessionErrorCode.INVALID_PAYLOAD,
+                "Durable payload " + e.getMessage(), e);
         }
     }
 

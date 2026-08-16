@@ -80,6 +80,11 @@ public final class Session<TMetadata extends SessionMetadata> implements Session
 
     /** Query records. */
     public List<LaneRecord> findRecords(RecordQuery query) {
+        if (query != null && query.operationKind() != null
+                && !"operation_started".equals(query.type())) {
+            throw new SessionError(SessionErrorCode.INVALID_QUERY,
+                "operationKind requires type \"operation_started\"");
+        }
         return storage.findRecords(query);
     }
 
@@ -90,18 +95,26 @@ public final class Session<TMetadata extends SessionMetadata> implements Session
 
     /** The session log. */
     public List<LogItem> getLog(LogOptions options) {
-        return storage.getLog(options);
+        var o = options == null ? LogOptions.none() : options;
+        if (o.limit() != null && o.limit() <= 0) {
+            throw new SessionError(SessionErrorCode.INVALID_QUERY, "limit must be a positive integer");
+        }
+        if (o.afterSeq() != null && o.afterSeq() < 0) {
+            throw new SessionError(SessionErrorCode.INVALID_QUERY,
+                "cursor sequence must be a non-negative integer");
+        }
+        return storage.getLog(o);
     }
 
     // ── SessionTree ─────────────────────────────────────────
 
     @Override
     public String getLeafId() {
-        return storage.getLanes().stream()
+        var pointer = storage.getLanes().stream()
             .filter(p -> "main".equals(p.lane()))
-            .map(LanePointer::leafId)
             .findFirst()
             .orElseThrow(() -> new SessionError(SessionErrorCode.INVALID_LANE, "Lane not found: main"));
+        return pointer.leafId();
     }
 
     @Override
@@ -136,11 +149,13 @@ public final class Session<TMetadata extends SessionMetadata> implements Session
 
     @Override
     public List<Entry> findEntries(EntryQuery query) {
+        validateQuery(query);
         return storage.findEntries(query);
     }
 
     @Override
     public Entry findEntry(EntryQuery query) {
+        validateQuery(query);
         var entries = storage.findEntries(withLimit(query, 1));
         return entries.isEmpty() ? null : entries.get(0);
     }
@@ -169,6 +184,17 @@ public final class Session<TMetadata extends SessionMetadata> implements Session
     /** Release resources: JSONL no-op; SQLite releases lease + stops heartbeat. */
     public void close() {
         storage.close();
+    }
+
+    private static void validateQuery(EntryQuery query) {
+        var q = query == null ? EntryQuery.all() : query;
+        if (q.limit() != null && q.limit() <= 0) {
+            throw new SessionError(SessionErrorCode.INVALID_QUERY, "limit must be a positive integer");
+        }
+        if (q.cursor() != null && q.cursor().afterSeq() < 0) {
+            throw new SessionError(SessionErrorCode.INVALID_QUERY,
+                "cursor sequence must be a non-negative integer");
+        }
     }
 
     private List<Entry> queryBranch(String lane, EntryQuery query, BranchBounds bounds, int resultLimit) {

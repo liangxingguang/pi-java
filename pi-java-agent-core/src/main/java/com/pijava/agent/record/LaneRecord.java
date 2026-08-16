@@ -99,6 +99,13 @@ public sealed interface LaneRecord {
     ) implements LaneRecord {
 
         /** Operation intent payload (aligned with pi's nested {@code intent} object). */
+        @com.fasterxml.jackson.annotation.JsonTypeInfo(
+            use = com.fasterxml.jackson.annotation.JsonTypeInfo.Id.NAME, property = "kind")
+        @com.fasterxml.jackson.annotation.JsonSubTypes({
+            @com.fasterxml.jackson.annotation.JsonSubTypes.Type(value = Run.class, name = "run"),
+            @com.fasterxml.jackson.annotation.JsonSubTypes.Type(value = Compaction.class, name = "compaction"),
+            @com.fasterxml.jackson.annotation.JsonSubTypes.Type(value = Navigation.class, name = "navigation")
+        })
         public sealed interface Intent permits Run, Compaction, Navigation {}
 
         /** A run: normalized caller input before {@code before_run}. */

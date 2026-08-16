@@ -11,6 +11,7 @@ import com.pijava.agent.entry.Entry;
 import com.pijava.agent.harness.Action;
 import com.pijava.ai.AbortSignal;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.Message;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -47,9 +48,9 @@ class ToolExecutorTest {
 
         assertThat(results).hasSize(1);
         var entry = results.get(0);
-        assertThat(entry.role()).isEqualTo("tool");
-        var block = (ContentBlock.ToolResultContent) entry.blocks().get(0);
-        assertThat(block.toolName()).isEqualTo("echo");
+        assertThat(entry.message().role()).isEqualTo("tool");
+        var toolMessage = (Message.ToolResultMessage) entry.message();
+        assertThat(toolMessage.toolName()).isEqualTo("echo");
     }
 
     @Test
@@ -73,8 +74,8 @@ class ToolExecutorTest {
                 List.of(new Action.ExecuteTool("c1", "boom", Map.of())), null);
 
         assertThat(results).hasSize(1);
-        var block = (ContentBlock.ToolResultContent) results.get(0).blocks().get(0);
-        assertThat(block.isError()).isTrue();
+        var toolMessage = (Message.ToolResultMessage) results.get(0).message();
+        assertThat(toolMessage.isError()).isTrue();
     }
 
     @Test
@@ -146,7 +147,7 @@ class ToolExecutorTest {
     }
 
     private static String toolText(Entry.Message entry) {
-        var block = (ContentBlock.ToolResultContent) entry.blocks().get(0);
-        return ((ContentBlock.TextContent) block.content().get(0)).text();
+        var toolMessage = (Message.ToolResultMessage) entry.message();
+        return ((ContentBlock.TextContent) toolMessage.content().get(0)).text();
     }
 }

@@ -50,8 +50,8 @@ class QueueSchedulingTest {
 
     private static List<String> userMessages(AgentHarness h, String lane) {
         return h.snapshot(lane).transcript().stream()
-            .filter(e -> e instanceof Entry.Message m && "user".equals(m.role()))
-            .map(e -> ((Entry.Message) e).blocks())
+            .filter(e -> e instanceof Entry.Message m && "user".equals(m.message().role()))
+            .map(e -> ((Entry.Message) e).message().content())
             .map(blocks -> blocks.isEmpty() ? "" : ((ContentBlock.TextContent) blocks.get(0)).text())
             .toList();
     }

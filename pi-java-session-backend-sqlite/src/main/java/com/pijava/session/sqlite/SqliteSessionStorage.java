@@ -269,7 +269,7 @@ public final class SqliteSessionStorage implements SessionStorage<SqliteSessionM
             long seq = SequenceRows.getNextSequence(db, metadata.id());
             // committed() preserves the runtime subtype of the provisioned entry.
             @SuppressWarnings("unchecked")
-            T committed = (T) entry.entry().committed(seq, parentId, Instant.now());
+            T committed = (T) entry.entry().committed(seq, parentId, java.time.Instant.ofEpochMilli(System.currentTimeMillis()));
             EntryRows.insertEntryRow(db, metadata.id(), new EntryRows.NewEntryRow(
                 seq, committed.id(), committed.parentId(), committed.type(),
                 timestampToText(committed.timestamp()), EntryRows.entryPayload(committed)));
@@ -298,10 +298,12 @@ public final class SqliteSessionStorage implements SessionStorage<SqliteSessionM
             if (provisioned instanceof LaneRecord.OperationStarted) {
                 LaneRows.startLaneOperation(db, metadata.id(), provisioned.lane(), provisioned.id());
             }
+            // One timestamp source so the returned record equals the decoded row.
+            Instant now = Instant.ofEpochMilli(System.currentTimeMillis());
             RecordRows.appendRecordRow(db, metadata.id(), new RecordRows.NewRecordRow(
                 seq, provisioned.id(), provisioned.lane(), recordRunId(provisioned),
                 provisioned.type(), recordOpKind(provisioned),
-                timestampToText(Instant.now()), recordPayload(provisioned)));
+                timestampToText(now), recordPayload(provisioned)));
             if (provisioned instanceof LaneRecord.OperationFinished finished) {
                 LaneRows.finishLaneOperation(db, metadata.id(), provisioned.lane(), finished.runId());
             }
@@ -311,7 +313,7 @@ public final class SqliteSessionStorage implements SessionStorage<SqliteSessionM
             SequenceRows.advanceSequence(db, metadata.id(), seq);
             // committed() preserves the runtime subtype of the provisioned record.
             @SuppressWarnings("unchecked")
-            T committed = (T) provisioned.committed(seq, Instant.now());
+            T committed = (T) provisioned.committed(seq, now);
             return committed;
         });
     }
@@ -431,7 +433,8 @@ public final class SqliteSessionStorage implements SessionStorage<SqliteSessionM
         try {
             return SessionJson.mapper().writeValueAsString(record);
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to encode record payload", e);
+            throw new SessionError(SessionErrorCode.INVALID_PAYLOAD,
+                "Durable payload " + e.getMessage(), e);
         }
     }
 
