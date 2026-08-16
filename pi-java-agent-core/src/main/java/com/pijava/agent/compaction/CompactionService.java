@@ -39,13 +39,13 @@ public final class CompactionService {
             .filter(Entry.Message.class::isInstance)
             .map(e -> ((Entry.Message) e).message())
             .toList();
-        String summary = summaryGenerator
-            .summarize(discardedMessages, null, null, settings.reserveTokens())
-            .text();
+        SummaryGenerator.SummaryResult summaryResult = summaryGenerator
+            .summarize(discardedMessages, null, null, settings.reserveTokens());
         String firstKept = transcript.get(cut).id();
         long tokensBefore = estimateTokens(transcript);
         return new CompactionResult(
-            summary, firstKept, tokensBefore, null, null, null);
+            summaryResult.text(), firstKept, tokensBefore, null,
+            summaryResult.usage(), null);
     }
 
     /**

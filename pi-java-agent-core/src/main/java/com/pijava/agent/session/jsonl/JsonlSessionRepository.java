@@ -128,6 +128,43 @@ public final class JsonlSessionRepository implements
         fs.remove(sessionsRoot, true);
     }
 
+    /**
+     * Import a JSONL session file (Phase 4 §4.7). Validates the header,
+     * keeps the header's session id, copies the file into the sessions
+     * directory for {@code cwd}, and opens it. A same-id session throws
+     * {@code already_exists}.
+     */
+    public Session<JsonlSessionMetadata> importJsonl(Path source, String cwd) {
+        List<String> firstLine = fs.readTextLines(source, 1);
+        if (firstLine.isEmpty()) {
+            throw new SessionError(SessionErrorCode.INVALID_PAYLOAD,
+                "Import file is empty: " + source);
+        }
+        var headerResult = JsonlCodec.parseHeader(firstLine.getFirst());
+        if (!headerResult.ok()) {
+            throw new SessionError(SessionErrorCode.INVALID_PAYLOAD,
+                "Import file has an invalid header: " + headerResult.error().getMessage());
+        }
+        var header = headerResult.value();
+        String id = header.id();
+        if (!SESSION_ID_PATTERN.matcher(id).matches()) {
+            throw new SessionError(SessionErrorCode.INVALID_PAYLOAD,
+                "Session id must contain only alphanumeric characters, '-', '_', and '.'");
+        }
+        String resolvedCwd = fs.absolutePath(cwd);
+        if (sessionIdExists(id, resolvedCwd)) {
+            throw new SessionError(SessionErrorCode.ALREADY_EXISTS,
+                "Session already exists: " + id);
+        }
+        String sessionDirectory = sessionDirectory(resolvedCwd);
+        fs.createDir(Path.of(sessionDirectory), true);
+        Path destination = Path.of(fs.joinPath(List.of(
+            sessionDirectory, sessionFileName(header.createdAtMs(), id))));
+        String content = fs.readTextFile(source);
+        fs.writeFile(destination, content);
+        return new Session<>(JsonlSessionStorage.load(fs, destination));
+    }
+
     /** Check whether a session file exists and its id matches. */
     private JsonlSessionStorage loadStorage(JsonlSessionMetadata metadata) {
         if (!fs.exists(metadata.path())) {

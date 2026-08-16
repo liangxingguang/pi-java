@@ -64,7 +64,7 @@ public final class SessionCommands {
             (args, ctx) -> {
                 var fresh = AgentSession.create(ctx.session().sessionArgs());
                 ctx.onSwitchSession().accept(fresh);
-                return "Started new session (in-memory; persistence in Phase 4)";
+                return "Started new session";
             }));
         registry.register(new SlashCommand() {
             @Override public String name() { return "resume"; }

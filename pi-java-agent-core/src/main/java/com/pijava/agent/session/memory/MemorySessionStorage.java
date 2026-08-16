@@ -169,11 +169,10 @@ public final class MemorySessionStorage implements SessionStorage<MemorySessionM
         return state.getStats();
     }
 
+    /** Nothing is queued in memory; writes complete synchronously. */
     @Override
     public void drain() {
-        synchronized (lock) {
-            // Serialized chain is drained on return.
-        }
+        // No-op.
     }
 
     @Override

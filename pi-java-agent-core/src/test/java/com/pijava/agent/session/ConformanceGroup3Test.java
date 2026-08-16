@@ -102,12 +102,12 @@ public abstract class ConformanceGroup3Test {
             session.appendEntry(userMessage("m3", "three"), "main");
 
             var atFork = b.fork(session.getMetadata().id(),
-                new ForkOptions.Branch("m2", new ForkOptions.Branch.At()));
+                new ForkOptions.Branch("m2", ForkOptions.Branch.Position.AT));
             assertThat(atFork.findEntries(EntryQuery.all()))
                 .extracting(Entry::id).containsExactlyInAnyOrder("m1", "m2");
 
             var beforeFork = b.fork(session.getMetadata().id(),
-                new ForkOptions.Branch("m3", new ForkOptions.Branch.Before()));
+                new ForkOptions.Branch("m3", ForkOptions.Branch.Position.BEFORE));
             assertThat(beforeFork.findEntries(EntryQuery.all()))
                 .extracting(Entry::id).containsExactlyInAnyOrder("m1", "m2");
 

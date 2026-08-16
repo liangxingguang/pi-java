@@ -29,8 +29,9 @@ public final class SqliteDatabase implements AutoCloseable {
     /** Open (creating if needed) the database at {@code path}. */
     public static SqliteDatabase open(Path path) {
         try {
-            if (path.getParent() != null) {
-                Files.createDirectories(path.getParent());
+            Path parent = path.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
             }
             Class.forName("org.sqlite.JDBC");
             var connection = DriverManager.getConnection("jdbc:sqlite:" + path);
@@ -56,7 +57,13 @@ public final class SqliteDatabase implements AutoCloseable {
      * only runs the first, so each is executed individually. The splitter
      * ignores semicolons inside single-quoted strings and inside
      * {@code BEGIN...END} trigger bodies.
+     *
+     * <p>The SQL is always internal (PRAGMAs, resources, SAVEPOINTs), never
+     * user input; SpotBugs cannot see that through the String parameter.</p>
      */
+    @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
+        value = "SQL_NONCONSTANT_STRING_PASSED_TO_EXECUTE",
+        justification = "exec receives only internal DDL/PRAGMA/SAVEPOINT statements")
     public void exec(String sql) {
         try (Statement statement = connection.createStatement()) {
             for (var part : splitStatements(sql)) {

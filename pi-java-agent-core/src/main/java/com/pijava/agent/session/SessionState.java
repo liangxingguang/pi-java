@@ -242,7 +242,7 @@ public final class SessionState {
                     throw new SessionError(SessionErrorCode.INVALID_FORK_TARGET,
                         "Fork target is not a message entry: " + selectedEntryId);
                 }
-                boolean at = branch.position() instanceof ForkOptions.Branch.At
+                boolean at = branch.position() == ForkOptions.Branch.Position.AT
                     || (branch.position() == null && branch.entryId() == null);
                 targetId = at ? entry.id() : entry.parentId();
             }

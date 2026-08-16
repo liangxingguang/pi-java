@@ -40,7 +40,14 @@ public final class BranchEntryRows {
             sessionId, leafId);
     }
 
-    /** Query cached branch rows with stop/cursor/type/limit filters. */
+    /**
+     * Query cached branch rows with stop/cursor/type/limit filters. The SQL is
+     * assembled from fixed fragments plus bound parameters only; the
+     * nonconstant string is the internal query builder, never user input.
+     */
+    @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
+        value = "SQL_PREPARED_STATEMENT_GENERATED_FROM_NONCONSTANT_STRING",
+        justification = "queryCachedBranchRows builds fixed SQL fragments with bound parameters only")
     public static List<CachedBranchEntryRow> queryCachedBranchRows(
             SqliteDatabase db, String sessionId, CachedBranch branch, Query query) {
         boolean oldestFirst = query.order() == com.pijava.agent.session.EntryOrder.OLDEST_FIRST;

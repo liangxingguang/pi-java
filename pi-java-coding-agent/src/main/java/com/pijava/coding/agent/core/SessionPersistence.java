@@ -118,6 +118,25 @@ final class SessionPersistence {
         return session;
     }
 
+    /** Export the current session to a JSONL file ({@code /export}). */
+    static void exportJsonl(AgentSession owner, java.nio.file.Path target) {
+        if (owner.persistentRepository() == null || owner.session() == null) {
+            throw new IllegalStateException("No persistent session to export");
+        }
+        owner.persistentRepository().exportJsonl(owner.session(), target);
+    }
+
+    /** Import a JSONL file into a new persistent session ({@code /import}). */
+    static AgentSession importJsonl(AgentSession owner, java.nio.file.Path source) {
+        if (owner.persistentRepository() == null) {
+            throw new IllegalStateException("No persistent repository to import into");
+        }
+        var imported = owner.persistentRepository().importJsonl(
+            source, System.getProperty("user.dir"));
+        attach(owner, owner.persistentRepository(), imported.getMetadata());
+        return owner;
+    }
+
     static String sessionNameOf(Session<?> opened, SessionMetadata metadata) {
         String stored = opened.getName();
         if (stored != null && !stored.isBlank()) {

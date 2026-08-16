@@ -121,12 +121,18 @@ public final class JsonlSessionStorage implements SessionStorage<JsonlSessionMet
         return load(fs, path);
     }
 
-    /** Wait for all queued writes (serialized chain is drained on return). */
+    /**
+     * Wait for all queued writes. Java's serialized tail chain means every
+     * write has completed when this method is called; nothing is queued.
+     */
     @Override
     public void drain() {
-        synchronized (writeLock) {
-            // The synchronized block is the serial tail chain; nothing queued remains.
-        }
+        // No-op: the synchronized write path is the serial chain.
+    }
+
+    /** The backing JSONL file path (used by the export fast path). */
+    public Path path() {
+        return metadata.path();
     }
 
     @Override

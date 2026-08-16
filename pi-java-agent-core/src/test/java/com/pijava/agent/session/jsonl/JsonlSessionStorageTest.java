@@ -95,6 +95,33 @@ class JsonlSessionStorageTest {
     }
 
     @Test
+    void importJsonlCopiesFileAndMarksV3() throws Exception {
+        Path dir = Files.createTempDirectory("pi-jsonl-import");
+        var repo = JsonlSessionRepository.over(dir);
+        // Build a v3 file with a legacy parent path.
+        Path source = Files.createTempFile("pi-import", ".jsonl");
+        String v3Header = "{\"kind\":\"header\",\"version\":3,\"id\":\"imp-1\","
+            + "\"createdAt\":1720000000000,\"cwd\":\"cwd\",\"legacyParentSessionPath\":\"/old/s.jsonl\"}";
+        String entry = "{\"kind\":\"entry\",\"lane\":\"main\",\"type\":\"message\",\"id\":\"m1\","
+            + "\"seq\":1,\"parentId\":null,\"timestamp\":1720000001000,"
+            + "\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}}";
+        Files.writeString(source, v3Header + "\n" + entry + "\n");
+
+        Session<?> imported = repo.importJsonl(source, "cwd");
+        var metadata = (JsonlSessionMetadata) imported.getMetadata();
+        assertThat(metadata.id()).isEqualTo("imp-1");
+        assertThat(metadata.sourceFormat()).isEqualTo(3);
+        assertThat(metadata.legacyParentSessionPath()).isEqualTo("/old/s.jsonl");
+        assertThat(imported.findEntries(com.pijava.agent.session.EntryQuery.all()))
+            .extracting(Entry::id).containsExactly("m1");
+
+        // Same id import into the same root conflicts.
+        assertThatThrownBy(() -> repo.importJsonl(source, "cwd"))
+            .extracting(e -> ((SessionError) e).code())
+            .isEqualTo(SessionErrorCode.ALREADY_EXISTS);
+    }
+
+    @Test
     void invalidSessionIdIsRejected() throws Exception {
         Path dir = Files.createTempDirectory("pi-jsonl-id");
         var repo = JsonlSessionRepository.over(dir);

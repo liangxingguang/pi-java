@@ -13,13 +13,12 @@ public sealed interface ForkOptions {
     record Branch(String entryId, Position position) implements ForkOptions {
 
         /** Position relative to the selected entry. */
-        public sealed interface Position permits At, Before {}
-
-        /** Fork at (including) the entry. */
-        public record At() implements Position {}
-
-        /** Fork before the entry. */
-        public record Before() implements Position {}
+        public enum Position {
+            /** Fork at (including) the entry. */
+            AT,
+            /** Fork before the entry. */
+            BEFORE
+        }
     }
 
     /** Tree scope: copy all entries, lanes and branch tips. */

@@ -138,7 +138,6 @@ public final class AgentSession implements AutoCloseable {
         return create(args, repository, providers, toolContext,
             SettingsManager.load(args.projectTrustOverride()));
     }
-
     private static AgentSession create(Args args, InMemorySessionRepository repository,
                                        ProviderRegistry providers,
                                        ToolContext toolContext,
@@ -148,7 +147,6 @@ public final class AgentSession implements AutoCloseable {
         session.repository = repository;
         return resolveSession(session, args);
     }
-
     private static AgentSession create(Args args, PersistentSessionRepositories.RepositoryHandle handle,
                                        ProviderRegistry providers,
                                        ToolContext toolContext,
@@ -158,7 +156,6 @@ public final class AgentSession implements AutoCloseable {
         session.persistentRepository = handle;
         return resolveSession(session, args);
     }
-
     private static AgentSession assemble(Args args, SettingsManager settings,
                                          ProviderRegistry providers,
                                          ToolContext toolContext,
@@ -369,6 +366,16 @@ public final class AgentSession implements AutoCloseable {
         return repository.find(idOrPrefix);
     }
 
+    /** Export the current session to a JSONL file ({@code /export}). */
+    public void exportJsonl(java.nio.file.Path target) {
+        SessionPersistence.exportJsonl(this, target);
+    }
+
+    /** Import a JSONL file into a new persistent session ({@code /import}). */
+    public AgentSession importJsonl(java.nio.file.Path source) {
+        return SessionPersistence.importJsonl(this, source);
+    }
+
     /** Create a forked copy on a new lane ({@code /fork /clone --fork}). */
     public AgentSession forkCopy(String branchName) {
         if (persistentRepository != null && session != null) {
@@ -436,7 +443,6 @@ public final class AgentSession implements AutoCloseable {
         }
         return Set.copyOf(toolList);
     }
-
     private static ModelThinkingLevel thinkingLevelFor(Args args) {
         if (args.thinking() != null) {
             return ThinkingLevels.parse(args.thinking());
@@ -444,7 +450,6 @@ public final class AgentSession implements AutoCloseable {
         var fromModel = ThinkingLevels.parseFromModelPattern(args.model());
         return fromModel != null ? fromModel : ModelThinkingLevel.off();
     }
-
     private static String systemPromptFor(Args args) {
         var base = args.systemPrompt() != null
             ? args.systemPrompt() : DEFAULT_SYSTEM_PROMPT;
@@ -453,7 +458,6 @@ public final class AgentSession implements AutoCloseable {
         }
         return base + "\n\n" + String.join("\n\n", args.appendSystemPrompt());
     }
-
     private static AgentSession resolveSession(AgentSession session, Args args) {
         if (args.noSession()) {
             return session;
@@ -473,7 +477,6 @@ public final class AgentSession implements AutoCloseable {
     Session<?> session() {
         return session;
     }
-
     void session(Session<?> session) {
         this.session = session;
     }
@@ -481,15 +484,12 @@ public final class AgentSession implements AutoCloseable {
     PersistentSessionRepositories.RepositoryHandle persistentRepository() {
         return persistentRepository;
     }
-
     InMemorySessionRepository inMemoryRepository() {
         return repository;
     }
-
     java.util.Set<String> persistedEntryIds() {
         return persistedEntryIds;
     }
-
     java.util.Set<String> persistedRecordIds() {
         return persistedRecordIds;
     }

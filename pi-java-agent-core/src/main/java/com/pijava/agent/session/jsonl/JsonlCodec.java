@@ -140,6 +140,11 @@ public final class JsonlCodec {
                     node.put("lane", m.lane());
                 }
                 node.setAll((ObjectNode) mapper.valueToTree(m.entry()));
+                // pi's codec requires the parentId key (null for root entries);
+                // NON_NULL would otherwise omit it, breaking byte-level compat.
+                if (!node.has("parentId")) {
+                    node.putNull("parentId");
+                }
             }
             case SessionMutation.Record m -> {
                 node.put("kind", "record");

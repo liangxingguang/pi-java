@@ -56,8 +56,9 @@ public final class DefaultJsonlFileSystem implements JsonlSessionRepoFileSystem 
     @Override
     public void writeFile(Path path, String content) {
         try {
-            if (path.getParent() != null) {
-                Files.createDirectories(path.getParent());
+            Path parent = path.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
             }
             Files.writeString(path, content, StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);

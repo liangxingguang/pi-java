@@ -93,20 +93,17 @@ public final class SqliteSessionStorage implements SessionStorage<SqliteSessionM
                 "Session not found: " + metadata.id()));
         return SessionRows.decodeSessionMetadata(row, metadata.path());
     }
-
     @Override
     public List<LanePointer> getLanes() {
         return LaneRows.readLanes(db, metadata.id()).stream()
             .map(row -> new LanePointer(row.lane(), row.leafId()))
             .toList();
     }
-
     @Override
     public Entry getEntry(String id) {
         var row = EntryRows.readEntryRow(db, metadata.id(), id);
         return row.map(EntryRows::decodeEntry).orElse(null);
     }
-
     @Override
     public List<Entry> findEntries(EntryQuery query) {
         var q = query == null ? EntryQuery.all() : query;
@@ -341,12 +338,10 @@ public final class SqliteSessionStorage implements SessionStorage<SqliteSessionM
         });
     }
 
-    /** Wait for all queued writes (serialized lock means none pending on return). */
+    /** Wait for all queued writes (serialized lock drained on return). */
     @Override
     public void drain() {
-        synchronized (lock) {
-            // The lock is the serial write queue.
-        }
+        // No-op: the synchronized write path is the serial queue.
     }
 
     @Override

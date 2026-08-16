@@ -29,11 +29,11 @@ final class RecordJsonCodec {
                 JsonlCodec.requireString(node, "runId"));
             case "operation_finished" -> new LaneRecord.OperationFinished(id, seq, lane, timestamp,
                 JsonlCodec.requireString(node, "runId"),
-                enumOf(OperationOutcome.class, node, "outcome"),
+                OperationOutcome.fromValue(JsonlCodec.requireString(node, "outcome")),
                 decodeError(node.get("error")));
             case "step_attempt" -> new LaneRecord.StepAttempt(id, seq, lane, timestamp,
                 JsonlCodec.requireString(node, "runId"),
-                enumOf(StepKind.class, node, "step"),
+                StepKind.fromValue(JsonlCodec.requireString(node, "step")),
                 JsonlCodec.requireInt(node, "attempt"),
                 JsonlCodec.requireString(node, "resultEntryId"),
                 JsonlCodec.optionalString(node, "compactionReason"));
@@ -45,9 +45,9 @@ final class RecordJsonCodec {
                 JsonlCodec.requireString(node, "toolName"),
                 objectMap(node, "effectiveArgs"),
                 JsonlCodec.requireString(node, "resultEntryId"),
-                enumOf(ReplayKind.class, node, "replay"));
+                ReplayKind.fromValue(JsonlCodec.requireString(node, "replay")));
             case "queue_enqueued" -> new LaneRecord.QueueEnqueued(id, seq, lane, timestamp,
-                enumOf(QueueKind.class, node, "queue"),
+                QueueKind.fromValue(JsonlCodec.requireString(node, "queue")),
                 JsonlCodec.optionalString(node, "runId"),
                 decodeTarget(node.get("target")));
             case "queue_cancelled" -> new LaneRecord.QueueCancelled(id, seq, lane, timestamp,
@@ -58,7 +58,7 @@ final class RecordJsonCodec {
                 decodeTarget(node.get("target")));
             case "usage" -> new LaneRecord.UsageRecord(id, seq, lane, timestamp,
                 EntryJsonCodec.decodeUsage(node.get("usage")),
-                enumOf(UsageCause.class, node, "cause"),
+                UsageCause.fromValue(JsonlCodec.requireString(node, "cause")),
                 JsonlCodec.optionalString(node, "runId"),
                 JsonlCodec.optionalString(node, "entryId"),
                 JsonlCodec.optionalString(node, "toolCallId"),
@@ -133,18 +133,5 @@ final class RecordJsonCodec {
         return map == null ? Map.of() : map;
     }
 
-    private static <E extends Enum<E>> E enumOf(Class<E> type, JsonNode node, String field) {
-        String value = JsonlCodec.requireString(node, field);
-        for (var constant : type.getEnumConstants()) {
-            try {
-                var valueMethod = type.getMethod("value");
-                if (value.equals(valueMethod.invoke(constant))) {
-                    return constant;
-                }
-            } catch (ReflectiveOperationException e) {
-                throw new IllegalStateException("Enum " + type.getSimpleName() + " lacks value()", e);
-            }
-        }
-        throw JsonlCodec.DecodeError.schema("has unknown " + field + " " + value);
-    }
+
 }
