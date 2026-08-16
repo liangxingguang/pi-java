@@ -26,11 +26,13 @@ public final class SessionRows {
         String sessionName
     ) {}
 
+    /** Whether a session with the given ID exists. */
     public static boolean sessionExists(SqliteDatabase db, String sessionId) {
         return db.get("SELECT 1 AS found FROM sessions WHERE id = ?", rs -> rs.getInt("found"),
             sessionId).isPresent();
     }
 
+    /** Insert a new session row. */
     public static void insertSessionRow(SqliteDatabase db, NewSessionRow session) {
         db.run("""
             INSERT INTO sessions (id, created_at, metadata, cwd, parent_session_id)
@@ -39,10 +41,12 @@ public final class SessionRows {
             session.cwd(), session.parentSessionId());
     }
 
+    /** Read a single session row by ID, if present. */
     public static Optional<SessionRow> readSessionRow(SqliteDatabase db, String sessionId) {
         return db.get(SESSION_SELECT + " WHERE s.id = ?", SessionRows::mapSessionRow, sessionId);
     }
 
+    /** Read all session rows, optionally filtered by cwd. */
     public static List<SessionRow> readSessionRows(SqliteDatabase db, String cwd) {
         if (cwd == null) {
             return db.all(SESSION_SELECT + " ORDER BY s.created_at DESC", SessionRows::mapSessionRow);
@@ -51,10 +55,12 @@ public final class SessionRows {
             SessionRows::mapSessionRow, cwd);
     }
 
+    /** Delete the session row for the given ID. */
     public static void deleteSessionRow(SqliteDatabase db, String sessionId) {
         db.run("DELETE FROM sessions WHERE id = ?", sessionId);
     }
 
+    /** Decode a session row into session metadata. */
     public static SqliteSessionMetadata decodeSessionMetadata(SessionRow row, Path path) {
         return new SqliteSessionMetadata(
             row.id(),

@@ -11,6 +11,7 @@ public final class StatsRows {
 
     private StatsRows() {}
 
+    /** Create the stats row for a new session. */
     public static void createStats(SqliteDatabase db, String sessionId, long messageCount) {
         db.run("""
             INSERT INTO session_stats
@@ -19,6 +20,7 @@ public final class StatsRows {
             """, sessionId, messageCount);
     }
 
+    /** Read the session's usage stats. */
     public static SessionStats readStats(SqliteDatabase db, String sessionId) {
         var row = db.get("""
             SELECT session_id, message_count, cached_tokens, uncached_tokens, total_tokens, cost_total
@@ -36,6 +38,7 @@ public final class StatsRows {
         return new SessionStats((long) values[0], values[1], values[2], values[3], values[4]);
     }
 
+    /** Increment the session's message count. */
     public static void incrementMessageCount(SqliteDatabase db, String sessionId) {
         int changes = db.run(
             "UPDATE session_stats SET message_count = message_count + 1 WHERE session_id = ?",
@@ -46,6 +49,7 @@ public final class StatsRows {
         }
     }
 
+    /** Accumulate a usage record into the session's stats. */
     public static void addUsageToStats(SqliteDatabase db, String sessionId, Usage usage) {
         int changes = db.run("""
             UPDATE session_stats
@@ -62,6 +66,7 @@ public final class StatsRows {
         }
     }
 
+    /** Delete the stats row for the session. */
     public static void deleteStats(SqliteDatabase db, String sessionId) {
         db.run("DELETE FROM session_stats WHERE session_id = ?", sessionId);
     }

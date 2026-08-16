@@ -2,7 +2,6 @@ package com.pijava.session.sqlite;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -20,7 +19,9 @@ import com.pijava.agent.session.LogOptions;
 import com.pijava.agent.session.RecordQuery;
 import com.pijava.agent.session.SessionError;
 import com.pijava.agent.session.SessionErrorCode;
+import com.pijava.agent.session.MutationReplayer;
 import com.pijava.agent.session.SessionJson;
+import com.pijava.agent.session.SessionMutation;
 import com.pijava.agent.session.SessionStats;
 import com.pijava.agent.session.SessionStorage;
 import com.pijava.session.sqlite.storage.BranchEntryRows;
@@ -38,7 +39,7 @@ import com.pijava.session.sqlite.storage.StatsRows;
  * (owner+fence+unexpired), then performs the mutation and advances the shared
  * sequence. A background heartbeat keeps the lease alive.
  */
-public final class SqliteSessionStorage implements SessionStorage<SqliteSessionMetadata> {
+public final class SqliteSessionStorage implements SessionStorage<SqliteSessionMetadata>, MutationReplayer {
 
     private final SqliteDatabase db;
     private final SqliteSessionMetadata metadata;
@@ -266,10 +267,11 @@ public final class SqliteSessionStorage implements SessionStorage<SqliteSessionM
             long seq = SequenceRows.getNextSequence(db, metadata.id());
             // committed() preserves the runtime subtype of the provisioned entry.
             @SuppressWarnings("unchecked")
-            T committed = (T) entry.entry().committed(seq, parentId, java.time.Instant.ofEpochMilli(System.currentTimeMillis()));
+            T committed = (T) entry.entry().committed(seq, parentId,
+                java.time.Instant.ofEpochMilli(System.currentTimeMillis()));
             EntryRows.insertEntryRow(db, metadata.id(), new EntryRows.NewEntryRow(
                 seq, committed.id(), committed.parentId(), committed.type(),
-                timestampToText(committed.timestamp()), EntryRows.entryPayload(committed)));
+                SqliteCodecs.timestampToText(committed.timestamp()), EntryRows.entryPayload(committed)));
             LaneRows.setLaneLeaf(db, metadata.id(), lane, committed.id());
             BranchCache.appendEntryToBranchCache(db, metadata.id(), committed.id(), seq,
                 committed.type(), committed instanceof Entry.Custom c ? c.customType() : null,
@@ -298,9 +300,9 @@ public final class SqliteSessionStorage implements SessionStorage<SqliteSessionM
             // One timestamp source so the returned record equals the decoded row.
             Instant now = Instant.ofEpochMilli(System.currentTimeMillis());
             RecordRows.appendRecordRow(db, metadata.id(), new RecordRows.NewRecordRow(
-                seq, provisioned.id(), provisioned.lane(), recordRunId(provisioned),
-                provisioned.type(), recordOpKind(provisioned),
-                timestampToText(now), recordPayload(provisioned)));
+                seq, provisioned.id(), provisioned.lane(), SqliteCodecs.recordRunId(provisioned),
+                provisioned.type(), SqliteCodecs.recordOpKind(provisioned),
+                SqliteCodecs.timestampToText(now), SqliteCodecs.recordPayload(provisioned)));
             if (provisioned instanceof LaneRecord.OperationFinished finished) {
                 LaneRows.finishLaneOperation(db, metadata.id(), provisioned.lane(), finished.runId());
             }
@@ -315,12 +317,24 @@ public final class SqliteSessionStorage implements SessionStorage<SqliteSessionM
         });
     }
 
+    // ── Import replay ──────────────────────────────────────
+
+    /**
+     * Apply a raw {@link SessionMutation} preserving its original seq/parentId/
+     * timestamp (Phase 4 §4.7 import replay). Unlike {@link #appendEntry}, nothing
+     * is re-derived from the current lane head or clock.
+     */
+    @Override
+    public void replayMutation(SessionMutation mutation) {
+        enqueueWriteAction(() -> SqliteMutationReplay.replay(db, metadata, mutation));
+    }
+
     @Override
     public void setName(String name) {
         enqueueWriteAction(() -> {
             long seq = SequenceRows.getNextSequence(db, metadata.id());
             FactRows.appendFact(db, metadata.id(), seq, "name", null,
-                name == null ? null : jsonString(name));
+                name == null ? null : SqliteCodecs.jsonString(name));
             SequenceRows.advanceSequence(db, metadata.id(), seq);
         });
     }
@@ -333,7 +347,7 @@ public final class SqliteSessionStorage implements SessionStorage<SqliteSessionM
             }
             long seq = SequenceRows.getNextSequence(db, metadata.id());
             FactRows.appendFact(db, metadata.id(), seq, "label", id,
-                label == null ? null : jsonString(label));
+                label == null ? null : SqliteCodecs.jsonString(label));
             SequenceRows.advanceSequence(db, metadata.id(), seq);
         });
     }
@@ -410,55 +424,6 @@ public final class SqliteSessionStorage implements SessionStorage<SqliteSessionM
     private static SessionError lostWriterError() {
         return new SessionError(SessionErrorCode.STORAGE,
             "SQLite session writer lease was lost");
-    }
-
-    private static String timestampToText(Instant timestamp) {
-        return timestamp.toString();
-    }
-
-    private static String jsonString(String value) {
-        try {
-            return SessionJson.mapper().writeValueAsString(value);
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to encode fact value", e);
-        }
-    }
-
-    private static String recordPayload(LaneRecord record) {
-        try {
-            return SessionJson.mapper().writeValueAsString(record);
-        } catch (Exception e) {
-            throw new SessionError(SessionErrorCode.INVALID_PAYLOAD,
-                "Durable payload " + e.getMessage(), e);
-        }
-    }
-
-    private static String recordRunId(LaneRecord record) {
-        if (record instanceof LaneRecord.OperationStarted started) {
-            return started.id();
-        }
-        return switch (record) {
-            case LaneRecord.OperationFinished r -> r.runId();
-            case LaneRecord.StepAttempt r -> r.runId();
-            case LaneRecord.ToolStarted r -> r.runId();
-            case LaneRecord.QueueEnqueued r -> r.runId();
-            case LaneRecord.QueueCancelled r -> r.runId();
-            case LaneRecord.WriteDeferred r -> r.runId();
-            case LaneRecord.UsageRecord r -> r.runId();
-            default -> null;
-        };
-    }
-
-    private static String recordOpKind(LaneRecord record) {
-        if (record instanceof LaneRecord.OperationStarted started
-                && started.intent() != null) {
-            return switch (started.intent()) {
-                case LaneRecord.OperationStarted.Run r -> "run";
-                case LaneRecord.OperationStarted.Compaction c -> "compaction";
-                case LaneRecord.OperationStarted.Navigation n -> "navigation";
-            };
-        }
-        return null;
     }
 
     private static boolean matchesEntryQuery(Entry entry, EntryQuery query) {

@@ -55,6 +55,7 @@ public final class EntryRows {
             entry.timestamp(), entry.payload());
     }
 
+    /** Read a single entry row by ID, if present. */
     public static Optional<EntryRow> readEntryRow(SqliteDatabase db, String sessionId, String entryId) {
         return db.get(ENTRY_SELECT + " WHERE session_id = ? AND id = ?",
             EntryRows::map, sessionId, entryId);
@@ -87,11 +88,13 @@ public final class EntryRows {
         return db.all(sql.toString(), EntryRows::map, params.toArray());
     }
 
+    /** Whether an entry with the given ID exists in the session. */
     public static boolean idExistsInEntries(SqliteDatabase db, String sessionId, String id) {
         return db.get("SELECT 1 AS found FROM entries WHERE session_id = ? AND id = ? LIMIT 1",
             rs -> rs.getInt("found"), sessionId, id).isPresent();
     }
 
+    /** Delete all entry rows for the session. */
     public static void deleteEntryRows(SqliteDatabase db, String sessionId) {
         db.run("DELETE FROM entries WHERE session_id = ?", sessionId);
     }
@@ -128,6 +131,7 @@ public final class EntryRows {
         Integer limit
     ) {
 
+        /** Create query options from optional filters. */
         public static QueryOptions of(Long afterSeq, EntryCursor cursor, String type,
                                       EntryOrder order, Integer limit) {
             return new QueryOptions(afterSeq, cursor, type, order, limit);

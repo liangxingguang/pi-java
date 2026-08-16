@@ -19,6 +19,7 @@ public final class SqliteSessionSearch implements SessionSearch<SqliteSessionMet
     private final Path databasePath;
     private SqliteDatabase database;
 
+    /** Create a search instance over the session database at {@code databasePath}. */
     public SqliteSessionSearch(Path databasePath) {
         this.databasePath = databasePath;
     }
@@ -120,10 +121,12 @@ public final class SqliteSessionSearch implements SessionSearch<SqliteSessionMet
               INSERT INTO session_search_fts(rowid, payload) VALUES (new.rowid, new.payload);
             END;
             CREATE TRIGGER IF NOT EXISTS session_search_fts_ad AFTER DELETE ON entries BEGIN
-              INSERT INTO session_search_fts(session_search_fts, rowid, payload) VALUES('delete', old.rowid, old.payload);
+              INSERT INTO session_search_fts(session_search_fts, rowid, payload)
+                VALUES('delete', old.rowid, old.payload);
             END;
             CREATE TRIGGER IF NOT EXISTS session_search_fts_au AFTER UPDATE OF payload ON entries BEGIN
-              INSERT INTO session_search_fts(session_search_fts, rowid, payload) VALUES('delete', old.rowid, old.payload);
+              INSERT INTO session_search_fts(session_search_fts, rowid, payload)
+                VALUES('delete', old.rowid, old.payload);
               INSERT INTO session_search_fts(rowid, payload) VALUES (new.rowid, new.payload);
             END;
             """);

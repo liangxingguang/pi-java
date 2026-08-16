@@ -28,6 +28,7 @@ public final class LaneRows {
         String leafId
     ) {}
 
+    /** Create the initial lane row for a session. */
     public static void createInitialLane(SqliteDatabase db, String sessionId,
                                          String lane, String leafId) {
         db.run("INSERT INTO lanes (session_id, lane, leaf_id, open_operation_id) VALUES (?, ?, ?, NULL)",
@@ -64,8 +65,10 @@ public final class LaneRows {
         return rows;
     }
 
+    /** Read a single lane by name, if present. */
     public static Optional<LaneRow> readLane(SqliteDatabase db, String sessionId, String lane) {
-        return db.get("SELECT session_id, lane, leaf_id, open_operation_id FROM lanes WHERE session_id = ? AND lane = ?",
+        return db.get(
+            "SELECT session_id, lane, leaf_id, open_operation_id FROM lanes WHERE session_id = ? AND lane = ?",
             rs -> new LaneRow(rs.getString("session_id"), rs.getString("lane"),
                 rs.getString("leaf_id"), rs.getString("open_operation_id")),
             sessionId, lane);
@@ -92,6 +95,7 @@ public final class LaneRows {
         return row.get()[0];
     }
 
+    /** Create a lane and log its initial move. */
     public static void createLane(SqliteDatabase db, String sessionId, long seq,
                                   String lane, String leafId) {
         db.run("INSERT INTO lanes (session_id, lane, leaf_id, open_operation_id) VALUES (?, ?, ?, NULL)",
@@ -99,6 +103,7 @@ public final class LaneRows {
         appendLaneMove(db, sessionId, seq, lane, leafId);
     }
 
+    /** Move the lane to a new leaf and log the lane move. */
     public static void moveLane(SqliteDatabase db, String sessionId, long seq,
                                 String lane, String leafId) {
         int changes = db.run("UPDATE lanes SET leaf_id = ? WHERE session_id = ? AND lane = ?",
@@ -109,6 +114,7 @@ public final class LaneRows {
         appendLaneMove(db, sessionId, seq, lane, leafId);
     }
 
+    /** Point the lane at a new leaf without logging a lane move. */
     public static void setLaneLeaf(SqliteDatabase db, String sessionId, String lane, String leafId) {
         int changes = db.run("UPDATE lanes SET leaf_id = ? WHERE session_id = ? AND lane = ?",
             leafId, sessionId, lane);
@@ -134,11 +140,13 @@ public final class LaneRows {
             "Lane " + lane + " already has an open operation " + current.get().openOperationId());
     }
 
+    /** Clear the open operation on the lane if it matches {@code runId}. */
     public static void finishLaneOperation(SqliteDatabase db, String sessionId, String lane, String runId) {
         db.run("UPDATE lanes SET open_operation_id = NULL WHERE session_id = ? AND lane = ? AND open_operation_id = ?",
             sessionId, lane, runId);
     }
 
+    /** Read lane-move rows, optionally after a sequence and limited in count. */
     public static List<LaneMoveRow> readLaneMoveRows(SqliteDatabase db, String sessionId,
                                                      Long afterSeq, Integer limit) {
         var sql = new StringBuilder(
@@ -159,6 +167,7 @@ public final class LaneRows {
             rs.getString("lane"), rs.getString("leaf_id")), params.toArray());
     }
 
+    /** Delete all lanes and lane moves for the session. */
     public static void deleteLaneRows(SqliteDatabase db, String sessionId) {
         db.run("DELETE FROM lane_moves WHERE session_id = ?", sessionId);
         db.run("DELETE FROM lanes WHERE session_id = ?", sessionId);

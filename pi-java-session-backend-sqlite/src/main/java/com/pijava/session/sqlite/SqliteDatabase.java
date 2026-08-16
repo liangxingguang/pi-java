@@ -1,7 +1,5 @@
 package com.pijava.session.sqlite;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -249,11 +247,13 @@ public final class SqliteDatabase implements AutoCloseable {
     /** Maps a result-set row to a value. */
     @FunctionalInterface
     public interface RowMapper<T> {
+        /** Map the current result-set row to a value. */
         T map(ResultSet rs) throws SQLException;
     }
 
     /** SQLite access failure. */
     public static final class SqliteException extends RuntimeException {
+        /** Create an exception with a message and cause. */
         public SqliteException(String message, Throwable cause) {
             super(message, cause);
         }

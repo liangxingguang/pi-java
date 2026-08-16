@@ -2,7 +2,6 @@ package com.pijava.session.sqlite.storage;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.pijava.agent.record.LaneRecord;
@@ -42,11 +41,13 @@ public final class RecordRows {
             record.type(), record.opKind(), record.timestamp(), record.payload());
     }
 
+    /** Whether a record with the given ID exists in the session. */
     public static boolean idExistsInRecords(SqliteDatabase db, String sessionId, String id) {
         return db.get("SELECT 1 AS found FROM records WHERE session_id = ? AND id = ? LIMIT 1",
             rs -> rs.getInt("found"), sessionId, id).isPresent();
     }
 
+    /** Delete all record rows for the session. */
     public static void deleteRecordRows(SqliteDatabase db, String sessionId) {
         db.run("DELETE FROM records WHERE session_id = ?", sessionId);
     }

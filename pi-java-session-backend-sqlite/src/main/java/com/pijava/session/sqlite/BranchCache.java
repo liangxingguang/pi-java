@@ -17,6 +17,7 @@ public final class BranchCache {
 
     private BranchCache() {}
 
+    /** Delete all cached branch tips and entries for the session. */
     public static void deleteBranchCache(SqliteDatabase db, String sessionId) {
         BranchTipRows.deleteBranchTips(db, sessionId);
         BranchEntryRows.deleteBranchEntries(db, sessionId);
@@ -40,6 +41,7 @@ public final class BranchCache {
         }
     }
 
+    /** Build a new cached branch for the path from {@code leafId} to root, SAVEPOINT-protected. */
     public static void buildCachedBranch(SqliteDatabase db, String sessionId, String leafId) {
         db.exec("SAVEPOINT build_branch_cache");
         try {

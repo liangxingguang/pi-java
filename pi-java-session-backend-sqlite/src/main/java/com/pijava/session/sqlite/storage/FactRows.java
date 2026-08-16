@@ -19,12 +19,14 @@ public final class FactRows {
         String value
     ) {}
 
+    /** Append a new fact row. */
     public static void appendFact(SqliteDatabase db, String sessionId, long seq,
                                   String kind, String key, String value) {
         db.run("INSERT INTO facts (session_id, seq, kind, key, value) VALUES (?, ?, ?, ?, ?)",
             sessionId, seq, kind, key, value);
     }
 
+    /** Read the most recent fact for the given kind/key, if any. */
     public static Optional<FactRow> readLatestFact(SqliteDatabase db, String sessionId,
                                                    String kind, String key) {
         return db.get("""
@@ -55,6 +57,7 @@ public final class FactRows {
             """, rs -> new String[] { rs.getString("key"), rs.getString("value") }, sessionId);
     }
 
+    /** Read fact rows, optionally after a sequence and limited in count. */
     public static List<FactRow> readFactRows(SqliteDatabase db, String sessionId,
                                              Long afterSeq, Integer limit) {
         var sql = new StringBuilder("SELECT session_id, seq, kind, key, value FROM facts WHERE session_id = ?");
@@ -72,6 +75,7 @@ public final class FactRows {
         return db.all(sql.toString(), FactRows::map, params.toArray());
     }
 
+    /** Delete all fact rows for the session. */
     public static void deleteFactRows(SqliteDatabase db, String sessionId) {
         db.run("DELETE FROM facts WHERE session_id = ?", sessionId);
     }

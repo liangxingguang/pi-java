@@ -28,6 +28,7 @@ public final class BranchEntryRows {
         String payload
     ) {}
 
+    /** Read the cached branch containing {@code leafId}, if any. */
     public static Optional<CachedBranch> readCachedBranch(SqliteDatabase db, String sessionId,
                                                           String leafId) {
         return db.get("""
@@ -120,10 +121,12 @@ public final class BranchEntryRows {
         Integer limit
     ) {}
 
+    /** Delete all cached branch entries for the session. */
     public static void deleteBranchEntries(SqliteDatabase db, String sessionId) {
         db.run("DELETE FROM branch_entries WHERE session_id = ?", sessionId);
     }
 
+    /** Insert a single membership row into the branch cache. */
     public static void insertBranchEntry(SqliteDatabase db, String sessionId, String branchId,
                                          String entryId, long entrySeq, String entryType,
                                          String customType) {
@@ -163,6 +166,7 @@ public final class BranchEntryRows {
         }
     }
 
+    /** Read the cached branch containing the entry, if any. */
     public static Optional<CachedBranch> readBranchContainingEntry(SqliteDatabase db,
                                                                    String sessionId, String entryId) {
         return db.get("""
@@ -175,6 +179,7 @@ public final class BranchEntryRows {
             sessionId, entryId);
     }
 
+    /** Copy entries up to {@code throughSeq} from one cached branch into another. */
     public static void copyBranchEntriesThroughSeq(SqliteDatabase db, String sessionId,
                                                    String targetBranchId, String sourceBranchId,
                                                    long throughSeq) {

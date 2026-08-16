@@ -46,10 +46,18 @@ public final class SqliteSessionRepository implements
     private final Set<SqliteSessionStorage> activeStorages = new HashSet<>();
     private SqliteDatabase database;
 
+    /** Create a repository with the default lease TTL and heartbeat intervals. */
     public SqliteSessionRepository(Path databasePath) {
         this(databasePath, DEFAULT_TTL_MS, DEFAULT_HEARTBEAT_MS);
     }
 
+    /**
+     * Create a repository for the given database path.
+     *
+     * @param databasePath        path to the SQLite database file
+     * @param ttlMs               writer-lease TTL in milliseconds
+     * @param heartbeatIntervalMs writer-lease heartbeat cadence in milliseconds
+     */
     public SqliteSessionRepository(Path databasePath, long ttlMs, long heartbeatIntervalMs) {
         if (ttlMs <= 0 || heartbeatIntervalMs <= 0 || heartbeatIntervalMs >= ttlMs) {
             throw new IllegalArgumentException(
