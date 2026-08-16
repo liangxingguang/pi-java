@@ -692,7 +692,7 @@ public interface FileMutationQueue {
 |------|------|
 | **源自 Ratatui** | TamboUI 的设计直接继承自 Rust 的 Ratatui——Claude CLI 使用的 TUI 库，在 AI 编码代理场景已得到验证 |
 | **三层 API** | Immediate Mode → TuiRunner → Toolkit DSL，按需选择抽象层级 |
-| **Panama/FFM 后端** | 与 JDK 26 Foreign Function API 目标一致，零 JNI 开销 |
+| **Panama/FFM 后端** | 与 JDK 25 Foreign Function API 目标一致，零 JNI 开销 |
 | **GraalVM 原生支持** | 官方支持编译到 ~10MB 原生二进制，与我们的分发方案一致 |
 | **MIT 许可证** | 与 pi-java 一致 |
 

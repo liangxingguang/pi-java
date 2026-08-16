@@ -21,7 +21,7 @@ import com.pijava.ai.message.ContentBlock;
  * <p>Extracted from {@link ActionExecutor} so both files stay under the
  * 500-line limit. Hooks fire sequentially to keep ordering deterministic;
  * raw execution uses a virtual-thread executor (StructuredTaskScope is a
- * preview API in JDK 26).</p>
+ * preview API in JDK 25).</p>
  */
 final class ToolExecutionPipeline {
 

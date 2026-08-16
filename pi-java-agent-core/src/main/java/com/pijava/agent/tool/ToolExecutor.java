@@ -62,7 +62,7 @@ public class ToolExecutor {
             AbortSignal signal) {
         var results = new ArrayList<Entry.Message>(
             Collections.nCopies(toolActions.size(), null));
-        // Virtual-thread executor (StructuredTaskScope is preview in JDK 26).
+        // Virtual-thread executor (StructuredTaskScope is preview in JDK 25).
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             var futures = new ArrayList<Future<Entry.Message>>(toolActions.size());
             for (var action : toolActions) {

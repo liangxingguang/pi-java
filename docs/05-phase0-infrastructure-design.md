@@ -152,7 +152,7 @@ pi-java/
 
 ```xml
 <properties>
-    <java.release>26</java.release>
+    <java.release>25</java.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
     <!-- 依赖版本（全局统一通过 BOM 管理） -->
@@ -217,7 +217,7 @@ pi-java/
 
 | 插件 | 用途 | 关键配置 |
 |------|------|---------|
-| `maven-compiler-plugin` | JDK 26 编译 | `release=26`、`encoding=UTF-8` |
+| `maven-compiler-plugin` | JDK 25 编译 | `release=25`、`encoding=UTF-8` |
 | `maven-surefire-plugin` | 单元测试 | 自动发现 `*Test.java`、argLine 预留 JaCoCo / native-image agent |
 | `maven-enforcer-plugin` | 依赖收敛 + JDK 版本 | `requireJavaVersion=26`、`dependencyConvergence`、禁止 `dev.pijava.*` 循环依赖 |
 | `maven-checkstyle-plugin` | 代码风格 | Google Java Style + 自定义抑制 |
@@ -528,7 +528,7 @@ graph TD
             <configuration>
                 <rules>
                     <requireJavaVersion>
-                        <version>[26,27)</version>
+                        <version>[25,26)</version>
                     </requireJavaVersion>
                     <dependencyConvergence/>
                     <banDuplicatePomDependencyVersions/>
@@ -566,10 +566,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 26
+      - name: Set up JDK 25
         uses: actions/setup-java@v4
         with:
-          java-version: '26'
+          java-version: '25'
           distribution: 'temurin'
           cache: 'maven'
 
@@ -702,7 +702,7 @@ Phase 0 完成的标准（AI 在提交 PR 前必须全部通过）：
 
 # 2. JDK 版本检查
 ./mvnw enforcer:enforce
-# → JDK 26 满足
+# → JDK 25 满足
 
 # 3. Checkstyle
 ./mvnw checkstyle:check

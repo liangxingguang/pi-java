@@ -37,7 +37,7 @@
 | P0-1 | 创建 Maven 多模块项目（11 模块） | `pom.xml` × 12（根 + 11 模块，含 BOM） | 0.5d |
 | P0-2 | 配置模块骨架 | 每个模块的包结构 + `package-info.java` 占位 | 0.5d |
 | P0-3 | 配置 Checkstyle / SpotBugs | 代码风格 + 静态分析 | 0.5d |
-| P0-4 | 配置 `maven-enforcer-plugin` | 依赖收敛 + JDK 26 版本约束 | 0.5d |
+| P0-4 | 配置 `maven-enforcer-plugin` | 依赖收敛 + JDK 25 版本约束 | 0.5d |
 | P0-5 | GitHub Actions CI | 构建 + 测试 + Checkstyle | 1d |
 | P0-6 | 写入 `CONTRIBUTING.md` + `AGENTS.md` | 贡献指南 | 0.5d |
 | P0-7 | 配置 `.gitignore` + `.editorconfig` | 项目约定 | 0.5d |

@@ -121,7 +121,7 @@ pi-java/  （共 11 个模块）
 
 | 关注点 | 选型 | 说明 |
 |--------|------|------|
-| 运行时 | JDK 26 | 虚拟线程、结构化并发、模式匹配 |
+| 运行时 | JDK 25 | 虚拟线程、结构化并发、模式匹配 |
 | 构建系统 | Maven 4.x | 声明式配置，依赖管理成熟 |
 | HTTP 客户端 | `java.net.http.HttpClient` (JDK 内置) | 支持 HTTP/2、SSE、异步 |
 | 并发模型 | 虚拟线程（`--enable-preview` 在 22 之前无需） | 协程风格，百万级并发 |
@@ -130,10 +130,10 @@ pi-java/  （共 11 个模块）
 | JSON Schema | `com.networknt:json-schema-validator` | 工具参数校验 |
 | 会话存储 | SQLite + JSONL v4 双轨 | 1:1 对齐 pi：SQLite 主存储（12 表 + FTS5 搜索 + 写租约 + 分支缓存），JSONL v4 兼容导入/导出 |
 | 终端 UI | [TamboUI](https://tamboui.dev/) 0.3.x | 源自 Ratatui（Claude CLI 同源），内置差量渲染、Widget 库、CSS 主题、GraalVM 支持 |
-| 终端后端 | TamboUI Panama Backend | 基于 JDK FFM，与 JDK 26 Foreign Function API 目标一致 |
+| 终端后端 | TamboUI Panama Backend | 基于 JDK FFM，与 JDK 25 Foreign Function API 目标一致 |
 | 键盘/输入 | TamboUI JLine3 Backend | 复用 JLine3 的终端输入处理 |
 | 日志 | `java.lang.System.Logger` + `java.util.logging` | 零外部依赖，桥接到 SLF4J 可选 |
-| 原生编译 | GraalVM for JDK 26 | 独立二进制分发 |
+| 原生编译 | GraalVM for JDK 25 | 独立二进制分发 |
 | SQLite | xerial/sqlite-jdbc | 会话元数据索引、全文搜索、事务安全 |
 | CLI 参数 | picocli | 类型安全、自动补全、多级子命令 |
 | 测试 | JUnit 5 + AssertJ | 主流组合 |
@@ -303,7 +303,7 @@ public class EditorComponent {
 |--------------|-------------|
 | `tamboui-toolkit` | 构建所有业务组件（ChatPanel, ToolCallCard, SessionBrowser 等） |
 | `tamboui-jline3-backend` | 键盘输入处理（替代直接使用 JLine3） |
-| `tamboui-panama-backend` | JDK 26 FFM 终端后端（零 JNI 开销） |
+| `tamboui-panama-backend` | JDK 25 FFM 终端后端（零 JNI 开销） |
 | `tamboui-css` | 运行时主题切换（亮色/暗色） |
 | `tamboui-image` | 多模态图片渲染（LLM 返回的图片） |
 | `tamboui-picocli` | 可选：CLI 参数与 TUI 的路由集成 |

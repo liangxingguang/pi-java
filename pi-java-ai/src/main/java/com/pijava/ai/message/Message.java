@@ -5,8 +5,9 @@ import java.util.List;
 /**
  * A message in a conversation with an LLM.
  *
- * <p>This sealed interface has three permitted subtypes matching the
- * three standard roles in LLM chat APIs.</p>
+ * <p>This sealed interface has four permitted subtypes: the three standard
+ * roles ({@link SystemMessage}, {@link UserMessage}, {@link AssistantMessage})
+ * plus a {@link ToolResultMessage}.</p>
  */
 public sealed interface Message {
 

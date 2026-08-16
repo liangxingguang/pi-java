@@ -1,6 +1,6 @@
 # pi-java 需求分析
 
-> **项目定位**：使用 JDK 26 + Pure Java 复刻 [pi](https://github.com/earendil-works/pi) 项目——一个自扩展的 AI 编码代理（coding agent）、通用代理运行时（agent runtime）以及统一多供应商 LLM API 网关。
+> **项目定位**：使用 JDK 25 + Pure Java 复刻 [pi](https://github.com/earendil-works/pi) 项目——一个自扩展的 AI 编码代理（coding agent）、通用代理运行时（agent runtime）以及统一多供应商 LLM API 网关。
 
 ---
 
@@ -12,7 +12,7 @@ pi（原名 pi-mono）是由 earendil-works 开发的开源 AI 编码代理，�
 - **代理运行时层**（`packages/agent`）：Agent 循环、工具调用、会话管理、持久化存储
 - **编码代理层**（`packages/coding-agent`）：交互式 CLI、终端 TUI、slash 命令、技能系统
 
-pi-java 的目标是使用 **JDK 26** 以 **Pure Java**（尽可能减少外部依赖）方式重新实现以上三层，保留 pi 的架构理念同时充分利用 Java 平台的特性优势。
+pi-java 的目标是使用 **JDK 25** 以 **Pure Java**（尽可能减少外部依赖）方式重新实现以上三层，保留 pi 的架构理念同时充分利用 Java 平台的特性优势。
 
 ---
 
@@ -80,7 +80,7 @@ pi-java 的目标是使用 **JDK 26** 以 **Pure Java**（尽可能减少外部�
 | 编号 | 需求 | 优先级 | 说明 |
 |------|------|--------|------|
 | NF1 | Pure Java 优先 | P0 | 核心功能仅使用 JDK 标准库；外部依赖仅限 JSON/CBOR/YAML 解析、TamboUI（TUI 库）、SQLite JDBC 驱动（存储层）等无可替代的场景 |
-| NF2 | JDK 26 基线 | P0 | 利用虚拟线程、结构化并发、模式匹配、Foreign Function API、sealed classes 等新特性 |
+| NF2 | JDK 25 基线 | P0 | 利用虚拟线程、结构化并发、模式匹配、Foreign Function API、sealed classes 等新特性 |
 | NF3 | 编译期类型安全 | P0 | 利用 Java 泛型、密封类、记录类实现比 TypeScript 更强的类型约束 |
 | NF4 | 跨平台 | P0 | Windows / macOS / Linux 三个主要平台 |
 | NF5 | 原生二进制分发 | P1 | 通过 GraalVM Native Image 编译为独立可执行文件 |
@@ -96,7 +96,7 @@ pi-java 的目标是使用 **JDK 26** 以 **Pure Java**（尽可能减少外部�
 
 | 约束 | 说明 |
 |------|------|
-| 语言版本 | Java 22+（语言特性），JDK 26 作为构建和运行基线 |
+| 语言版本 | Java 22+（语言特性），JDK 25 作为构建和运行基线 |
 | 构建系统 | Maven 4.x（声明式配置，依赖管理成熟） |
 | 外部依赖上限 | 核心模块 ≤ 5 个外部依赖；CLI 模块可放宽至 ~15 个 |
 | 命名空间 | Maven groupId: `com.pi-java`；包名: `com.pijava` |

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**pi-java** — Pure Java (JDK 26) 复刻 [pi](https://github.com/earendil-works/pi) AI 编码代理。代码在 `D:\workplaceForai\pi-java`，参考原项目在 `D:\workplaceForai\pi`。
+**pi-java** — Pure Java (JDK 25) 复刻 [pi](https://github.com/earendil-works/pi) AI 编码代理。代码在 `D:\workplaceForai\pi-java`，参考原项目在 `D:\workplaceForai\pi`。
 
 11 个 Maven 模块，依赖方向自下而上：
 
@@ -21,7 +21,7 @@ telemetry ← ai ← agent ← coding-agent
 
 ## 技术栈
 
-JDK 26 · Maven 4.x · Jackson (JSON/CBOR) · [TamboUI](https://tamboui.dev/) (终端 UI，源自 Ratatui) · SQLite (`xerial/sqlite-jdbc`) · Picocli · JUnit 5 + AssertJ
+JDK 25 · Maven 4.x · Jackson (JSON/CBOR) · [TamboUI](https://tamboui.dev/) (终端 UI，源自 Ratatui) · SQLite (`xerial/sqlite-jdbc`) · Picocli · JUnit 5 + AssertJ
 
 ## 构建设计阶段
 
@@ -67,5 +67,5 @@ D:\workplaceForai\pi
 - [Phase 1-4 代码对照表](docs/phase1-pi-code-mapping.md) — 逐文件/包级对齐度 + 差异说明（Phase 1-4 全模块）
 
 ## 运行环境
-jdk:D:\soft\jdk\jdk-26
+jdk:D:\soft\jdk\graalvm-jdk-25
 maven：D:\soft\apache-maven-3.9.9

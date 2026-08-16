@@ -6,7 +6,7 @@ import java.util.UUID;
 /**
  * RFC 9562 UUID version 7 (time-ordered) generator.
  *
- * <p>pi uses {@code uuidv7} for session/entry/record ids; JDK 26 does not yet
+ * <p>pi uses {@code uuidv7} for session/entry/record ids; JDK 25 does not yet
  * expose a type-7 factory, so this implements the standard layout: 48-bit Unix
  * timestamp with millisecond precision, version/variant bits, then 74 bits of
  * randomness.</p>

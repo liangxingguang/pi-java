@@ -199,7 +199,7 @@ classDiagram
 
 ### 2.2 Panama 后端配置
 
-TamboUI 的 Panama 后端通过 JDK 26 Foreign Function & Memory API 直连终端，零 JNI。`TamboUIAdapter` 是唯一直接 import TamboUI API 的类：
+TamboUI 的 Panama 后端通过 JDK 25 Foreign Function & Memory API 直连终端，零 JNI。`TamboUIAdapter` 是唯一直接 import TamboUI API 的类：
 
 ```java
 package com.pijava.tui.util;
@@ -1258,7 +1258,7 @@ public final class TrustManager {
 |---|------|----------|------|
 | R1 | TamboUI 0.3.0 实际 API 与本文假定形状（`TuiRunner`/`TuiApp`/`loadCss`/`TextArea`/`ScrollView`）不符 | 高/高 | `TamboUIAdapter` 全量隔离直接依赖；P3-1 首日先跑 API 探针 smoke（§2.3）；必要时升级 0.4 或切换后端 |
 | R2 | Panama 后端在 CI/部分终端不兼容（无真终端/权限受限） | 中/高 | `tamboui-jline3-backend` 无缝回退（§2.3 冒烟）；CI 用 headless 渲染断言 |
-| R3 | 虚拟线程/`StructuredTaskScope` 在 JDK 26 的兼容或 bug | 低/中 | `-Dpi.virtual-threads=false` 降级顺序执行（§11.4）；并行工具测试覆盖 Sequential/Parallel 结果一致 |
+| R3 | 虚拟线程/`StructuredTaskScope` 在 JDK 25 的兼容或 bug | 低/中 | `-Dpi.virtual-threads=false` 降级顺序执行（§11.4）；并行工具测试覆盖 Sequential/Parallel 结果一致 |
 | R4 | Windows ConPTY/IME/Shift+Tab 修饰键差异 | 中/中 | §13.1 Windows Terminal 真机验证 + ConPTY 冒烟；Shift+Tab 依赖后端 VT 模式（同 pi `terminal.ts` 处理） |
 | R5 | API key 泄露（`--api-key` 参数、settings、日志） | 低/高 | 认证走 ai 模块 `FileCredentialStore`/`EnvApiKeyResolver`；`--api-key` 不进日志；`auth print-api-key` 输出前确认 |
 | R6 | ServiceLoader 发现失败或重复实现 | 低/中 | 单实现注册（§11.1）；未发现 → 明确错误而非静默降级；重复实现 → 首个 + 警告 |
