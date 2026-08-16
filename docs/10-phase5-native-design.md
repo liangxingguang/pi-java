@@ -124,9 +124,10 @@ pi-java 的持久化/协议大量依赖 Jackson 对 sealed record 的 `@JsonType
 - **`native-image.properties`**（复用 demo，对齐 `tamboui-jline3-backend`）：
   ```
   Args = --initialize-at-build-time=org.jline \
-         --enable-url-protocols=https \
-         -H:+ReportExceptionStackTraces
+         --initialize-at-run-time=org.jline.nativ \
+         --enable-url-protocols=https
   ```
+  > **注意（CI 实测）**：`--initialize-at-build-time=org.jline` 太宽，会把 `org.jline.nativ`（本地库绑定层）也构建时初始化，其 `<clinit>` 调用 native 方法（`CLibrary$WinSize.init()`）→ `UnsatisfiedLinkError`。必须补 `--initialize-at-run-time=org.jline.nativ` 覆盖。
 - **`reflect-config.json`**：JLine 终端 provider 清单（`org.jline.terminal.impl.posix.*`/`jansi.*`/`jna.*`/`ffm.*`/`exec.*`/`win.*`），全部 `allDeclaredConstructors/Methods/Fields`。可直接从 `.agents/tamboui-demos/.../reflect-config.json` 拷贝并适配当前 JLine 版本。
 - **Panama 后端**（`tamboui-panama-backend`）：FFM 在 native-image 下需 `--enable-native-access=ALL-UNNAMED`（或 `--enable-native-access` + `-H:+EnableUnsafe` 视后端而定）。Windows 上 Panama 后端可能仍需 fallback 到 jline3 后端（Phase 3 已有 `NoMode2027JLineBackend` 兜底，见下）。
 
