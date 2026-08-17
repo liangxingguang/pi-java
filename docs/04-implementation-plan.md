@@ -17,7 +17,7 @@
 | Phase 2c | 高级编排 | 多车道、Hook、压缩、Skills、手动驱动 | 2 周 | 对齐 pi AgentHarness 全部能力 + `07c-phase2c-orchestration-design.md` |
 | Phase 3 | CLI + TUI | 交互式终端 | 2–3 周 | `pi-java` 命令行可用 + `08-phase3-cli-tui-design.md` |
 | Phase 4 | 持久化与恢复 | 会话存储、压缩 | 3–4 周 | 完整会话生命周期 + `09-phase4-persistence-design.md` |
-| Phase 5 | 原生分发 | GraalVM Native Image | 1–2 周 | 独立二进制文件 + `10-phase5-native-design.md` |
+| Phase 5 | 原生分发（**已放弃**） | ~~GraalVM Native Image~~ | — | JVM fat jar 分发 + `10-phase5-native-design.md`（记录放弃结论） |
 | Phase 6 | 生态扩展 | 更多 Provider、远程会话 | 按需持续 | 持续迭代 + `11-phase6-ecosystem-design.md` |
 
 **总估算 MVP（Phase 0–4）**：13–17 周（约 3–4.5 个月，单人全职）
@@ -240,7 +240,10 @@ SQLite + JSONL v4 双轨会话存储（1:1 对齐 pi），含 FTS5 全文搜索�
 ## 7. Phase 5 — 原生分发（第 18–19 周）
 
 ### 目标
-通过 GraalVM Native Image 生成独立可执行文件。
+
+> **已放弃（2026-08-18）**：实测原生产物 149MB（目标 ≤30MB），根因是 OpenAI/Anthropic SDK 占 fat jar ~98% 且 SDK 不可替换。结论退回 **JVM fat jar** 分发，详见 `10-phase5-native-design.md` v1.10。以下任务分解与里程碑仅作历史参考，不再执行。
+
+~~通过 GraalVM Native Image 生成独立可执行文件。~~
 
 ### 任务分解
 
@@ -253,10 +256,11 @@ SQLite + JSONL v4 双轨会话存储（1:1 对齐 pi），含 FTS5 全文搜索�
 | P5-4 | CI 自动化 | GitHub Actions 的 Native Image 构建矩阵 | 1d |
 | P5-5 | 平台测试 | win-x64, mac-arm64, linux-x64 | 2d |
 
-### 里程碑
-- [ ] 三个平台的 Native Image 构建成功
-- [ ] 启动时间 < 100ms
-- [ ] 内存占用 < 50MB 空闲
+### 里程碑（已放弃，不再追踪）
+
+- [ ] ~~三个平台的 Native Image 构建成功~~
+- [ ] ~~启动时间 < 100ms~~
+- [ ] ~~内存占用 < 50MB 空闲~~
 
 ---
 

@@ -22,7 +22,7 @@ telemetry ← ai ← agent ← coding-agent
 - **docs/02-architecture-design.md** — module structure, layer dependencies, core interfaces
 - **docs/03-detailed-design.md** — class-level design: Entry/LaneRecord, AgentHarness, SessionStorage/Repository, SQLite schema, JSONL v4 format, TamboUI components, slash commands, CLI parameters
 - **docs/04-implementation-plan.md** — Phase 0–6, 13–17 week MVP, risk matrix
-- **docs/05-phase0-infrastructure-design.md** — Phase 0 detailed blueprint (this phase)
+- **docs/11-phase6-ecosystem-design.md** — Phase 6 detailed blueprint (current phase)
 
 ## Development Workflow
 
@@ -30,4 +30,4 @@ All code is written by AI, reviewed by humans. Each phase follows the 8-step pro
 
 ## Current Phase
 
-Phase 0 — Infrastructure: project skeleton, build system, CI.
+Phase 6 — Ecosystem: provider expansion, evals, RPC, remote sessions, extensions, publishing.

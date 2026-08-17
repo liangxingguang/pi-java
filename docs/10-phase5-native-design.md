@@ -1,5 +1,7 @@
 # Phase 5: 原生分发 — 阶段设计文档
 
+> **⚠️ 已放弃（2026-08-18）**：本阶段的 GraalVM Native Image 分发目标已放弃。实测产物 `pi-java.exe` 为 **149MB**，远超 §8 的 ≤30MB 目标。根因：fat jar（104MB）中 OpenAI Java SDK（`com.openai` 132MB）+ Anthropic SDK（`com.anthropic` 52MB）+ Kotlin/okhttp/google 等传递依赖共占 ~98%，应用代码 `com.pijava` 仅 1.8MB；OpenAI SDK 自带的 4.1MB `reflect-config.json`（注册 11,721 类）使 native-image 无法裁剪。**约束：SDK 不可替换**，故 ≤30MB 目标不可达。结论：退回 **JVM fat jar**（`pi-java-dist/target/pi-java.jar`）分发。本文档保留作历史/架构参考，§8–§10 的体积/平台目标不再执行。
+
 > **目标**：通过 GraalVM Native Image 把 `pi-java` 与 `pi-ai` 两个 CLI 编译为独立原生二进制，实现秒级启动与低内存占用。
 > **工时**：1–2 周（5 项任务）
 > **输入文档**：`04-implementation-plan.md` §7（Phase 5 任务分解 + 风险 R2）
@@ -564,3 +566,11 @@ P5-1 落地（`pi-java-dist` 模块 + native profile + shade fat jar，本地 `m
 1. **`skip.native.tests` → `maven.test.skip`**：前者非 Maven 识别属性（不会真跳过测试），改为 `maven.test.skip=true`。
 2. **logback dependencyManagement 条目补 version**：native profile 里 logback-classic 条目无 version 会顶掉 BOM 版本管理 → `-Pnative validate` 报「version is missing」；补 `${version.logback}=1.5.16`。
 3. **native.yml**：`graalvm/setup-graalvm@v1` + 三 OS + `./mvnw -Pnative package` + artifact 上传；`pi-ai` 原生产物与 native 冒烟留 TODO（P5-5）。
+
+### v1.10（2026-08-18 放弃原生分发）
+
+实测 `pi-java.exe` 149MB（§8 目标 ≤30MB，超 5×）。根因：LLM SDK 占 fat jar ~98%（OpenAI 132MB + Anthropic 52MB + Kotlin/okhttp/google 传递依赖），且 OpenAI SDK 自带 4.1MB `reflect-config.json`（注册 11,721 类）使 native-image 无法裁剪；**约束 SDK 不可替换**。结论：
+
+1. **放弃 GraalVM Native Image 分发**，退回 JVM fat jar（`pi-java-dist/target/pi-java.jar`，104MB）。分发形态：`java -cp`（fat jar 缺 Main-Class manifest，需 `java -jar` 则补 shade mainClass 一行）。
+2. §8 体积目标（≤30MB）、§10 原生验收项、`.github/workflows/native.yml` 三平台矩阵随之作废（保留文件为参考，不删除以免破坏 CI 引用）。
+3. 已生成的 `reachability-metadata.json` 反射配置与 Tracing Agent 冒烟产物一并丢弃（未提交）。
