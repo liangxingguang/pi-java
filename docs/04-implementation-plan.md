@@ -266,21 +266,45 @@ SQLite + JSONL v4 双轨会话存储（1:1 对齐 pi），含 FTS5 全文搜索�
 
 ## 8. Phase 6 — 生态扩展（持续）
 
-### 可选任务
+> **详细规划见 `11-phase6-ecosystem-design.md`**（2026-08-19 审核修订）。本节保留概览；任务编号、范围与验收标准以阶段设计文档 §8 为准。
 
-| 优先级 | 任务 | 工时 |
-|--------|------|------|
-| P6-0 | **编写阶段设计文档** | `11-phase6-ecosystem-design.md`（Provider 扩展 + RPC + evals） | 0.5d || 高 | 新增 Provider（35 个）：Amazon Bedrock, Azure OpenAI, Cloudflare Workers AI, Cohere, DeepInfra, Fireworks AI, GitHub Models, Google Vertex AI, Groq, HuggingFace, Hyperbolic, Lambda, Minimax, Nebius, Nvidia NIM, OctoAI, Ollama, OpenRouter, Perplexity, Replicate, Sambanova, Scale, Snowflake Cortex, Sourcegraph, Together AI, WatsonX, xAI, Zhipu AI, Moonshot, Baidu Qianfan, Alibaba Bailian, Tencent Hunyuan, ByteDance Doubao, StepFun, 01.AI | 每个 0.5–2d |
-| 高 | 评估框架（evals）— conformance tests | Provider/API 合规性测试套件 | 3d |
-| 高 | 评估框架（evals）— smoke tests | 快速冒烟测试（每个 Provider 1 个请求） | 2d |
-| 高 | 评估框架（evals）— extension tests | 扩展/插件集成测试 | 2d |
-| 中 | RPC 模式（JSONL） | 3d |
-| 中 | 技能系统（Skills） | 3d |
-| 中 | 扩展系统（Extensions / Plugin） | 5d |
-| 中 | 远程模型目录更新（ETag） | 2d |
-| 低 | CBOR 协议 + 远程会话 | 10d |
-| 低 | 模型目录 CLI 发布工具 | 3d |
-| 低 | Maven Central 发布流水线 | 2d |
+### 8.1 主线任务
+
+| 编号 | 优先级 | 任务 | 工时 |
+|------|--------|------|------|
+| P6-0 | 高 | **编写阶段设计文档** `11-phase6-ecosystem-design.md` | 0.5d |
+| P6-1a | 高 | `AnthropicMessagesApi` 支持 `apiKeyEnvVar` + `baseUrl` 覆盖（阻塞项） | 0.5d |
+| P6-1b | 高 | `ProviderConfig` / `ConfigurableProvider` / 两个协议基类 | 1.5d |
+| P6-1c | 高 | 新增 11 个中国大陆常用 Provider（合计 16 个） | 3–5d |
+| P6-1d | 高 | `DefaultProviders` 调用 ServiceLoader 发现 | 0.5d |
+| P6-1e | 高 | `OpenAIResponsesApi` + Responses 共享转换层 | 3d |
+| P6-1f | 中 | `AzureOpenAIResponsesApi` | 1.5d |
+| P6-1g | 中 | `PiMessagesApi` | 1.5d |
+| P6-2 | 高 | evals — conformance tests（C1–C10 × 7 适配器） | 3d |
+| P6-3 | 高 | evals — smoke tests | 2d |
+| P6-4 | 高 | evals — extension tests | 2d |
+| P6-5a | 中 | `onStreamEvent` 改多监听器 + `AgentSessionEvent` 订阅层（RPC 前置） | 2d |
+| P6-5b | 中 | RPC 首批命令 + LF-only JSONL 分帧 | 3d |
+| P6-5c | 中 | RPC 次批命令（模型/思考/压缩） | 2d |
+| P6-5d | 低 | RPC 末批命令 | 3d |
+| P6-5e | 低 | `--mode json`（PrintMode 改造，独立于 RPC） | 1d |
+| P6-6 | 中 | 技能系统（Skills，含 `SKILL.md` 规则、校验、JGit ignore 过滤） | 3d |
+| P6-7 | 中 | 扩展系统（Extensions / Plugin） | 5d |
+| P6-7b | 中 | RPC 扩展 UI 双向通道 | 2d |
+| P6-8 | 中 | `ModelsStore`（补 Phase 1 缺口）+ 远程目录 ETag | 2d |
+| P6-9a | 低 | CBOR 编解码 + 增量分帧 | 3d |
+| P6-9b | 低 | `PiServer` + Unix socket 监听 | 4d |
+| P6-9c | 低 | `PiClient` + `SessionHandle` | 3d |
+| P6-10 | 低 | 模型目录 CLI 发布工具 | 3d |
+| P6-11 | 低 | Maven Central 发布流水线 | 2d |
+
+**Provider 范围变更（2026-08-19）**：原计划的 35 个 provider 名单来自早期调研，含 14 个 pi 并不存在的供应商。现改为聚焦中国大陆常用共 11 个（Kimi ×2、智谱 ×2、通义千问、小米 MiMo ×2、MiniMax ×2、蚂蚁百灵、Ollama），baseUrl 与环境变量取自 pi 源码实测，无待确认端点。**不接入**：百度千帆 / 腾讯混元 / 字节豆包（pi 无对应实现可参照，用户可经 `models.json` 自行接入）；Bedrock / Azure OpenAI / Vertex AI（需特殊认证与未实现的适配器）。详见设计文档 §2.4。
+
+### 8.2 从 Phase 3/4/5 推移来的遗留任务
+
+Phase 3/4/5 有 17 项功能被显式标注「→ Phase 6」，包括 HTML 导出渲染器、`/share`、`pi-java config`/`package` 子命令、`auth print-bearer-token`、OAuth 认证流程、OpenTelemetry 实现、多 profile 认证、URL 图片输入、自定义主题、Markdown 表格/图片/mermaid、语法高亮与补全、富过滤键绑定等。完整清单与出处见设计文档 §8.2 —— **不补全这些，Phase 6 无法判定完成**。
+
+**Phase 5 已放弃**：GraalVM 原生分发目标于 2026-08-18 放弃（实测 149MB，超 ≤30MB 目标 5 倍），退回 JVM fat jar 分发。Phase 6 所有 Native Image 相关约束随之作废。
 
 ---
 
