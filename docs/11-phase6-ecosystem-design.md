@@ -1897,25 +1897,25 @@ pi-ai catalog publish --file models.json --endpoint https://models.example.com/u
 
 以下任务在早期阶段文档或代码中被显式标注「→ Phase 6」，属本阶段范围。**不补全这些，Phase 6 无法判定完成。**
 
-| 编号 | 任务 | 优先级 | 出处 |
-|------|------|--------|------|
-| P6-12 | HTML 导出渲染器 | 中 | `09-phase4:1628`、`Main.java:64`（`--export`）、`MiscCommands`（`/export`） |
-| P6-13 | `/share` 会话分享 | 低 | `MiscCommands.java:64` |
-| P6-14 | `pi-java config` 子命令（TUI 资源开关） | 低 | `ConfigCommand.java:16` |
-| P6-15 | `auth print-bearer-token` | 低 | `AuthCommand.java:34` |
-| P6-16 | `pi-java package` 子命令（扩展包管理） | 中 | `PackageCommand.java:22`，随 P6-7 落地 |
-| P6-17 | OAuth 认证流程（`OAuthFlow`） | 中 | `03-detailed-design.md:64`；pi 有 9 个 OAuth provider |
-| P6-18 | 多 profile 认证（同 provider 多组凭证） | 低 | `06-phase1:711` |
-| P6-19 | URL 引用图片输入（非 base64） | 低 | `06-phase1:712` |
-| P6-20 | OpenTelemetry Telemetry 实现 | 低 | `07c-phase2c:997,1011,1144` |
-| P6-21 | 自定义主题文件加载 | 低 | `08-phase3:261` |
-| P6-22 | Markdown 表格 / 图片 / mermaid 渲染 | 低 | `08-phase3:431,456` |
-| P6-23 | 编辑器语法高亮 + 智能补全 | 低 | `08-phase3:485,487`（依赖 TamboUI 0.4+） |
-| P6-24 | `tree.filter.*` / `models.*` 富过滤键绑定 | 低 | `08-phase3:601,635,647` |
-| P6-25 | Entry 元数据事件富样式渲染 | 低 | `08-phase3:306` |
-| P6-26 | 会话 diff 渲染 | 低 | `08b-phase3:447` |
-| P6-27 | AI 生成 Skills | 低 | `07c-phase2c:1130` |
-| P6-28 | `ImageApi` / `EmbeddingApi`（需改 `ProviderApi` permits） | 低 | `02-architecture:155`、`06-phase1:226` |
+| 编号 | 任务 | 优先级 | 出处 | 状态 |
+|------|------|--------|------|------|
+| P6-12 | HTML 导出渲染器 | 中 | `09-phase4:1628`、`Main.java:64`（`--export`）、`MiscCommands`（`/export`） | ⏳ 进行中 |
+| P6-13 | `/share` 会话分享 | 低 | `MiscCommands.java:64` | ⏳ 进行中 |
+| P6-14 | `pi-java config` 子命令（TUI 资源开关） | 低 | `ConfigCommand.java:16` | ⏳ 进行中 |
+| P6-15 | `auth print-bearer-token` | 低 | `AuthCommand.java:34` | ⏳ 进行中 |
+| P6-16 | `pi-java package` 子命令（扩展包管理） | 中 | `PackageCommand.java:22`，随 P6-7 落地 | ✅ 已完成 |
+| P6-17 | OAuth 认证流程（`OAuthFlow`） | 中 | `03-detailed-design.md:64`；pi 有 9 个 OAuth provider | ⏳ 进行中 |
+| P6-18 | 多 profile 认证（同 provider 多组凭证） | 低 | `06-phase1:711` | ⏳ 进行中 |
+| P6-19 | URL 引用图片输入（非 base64） | 低 | `06-phase1:712` | ⏳ 进行中 |
+| P6-20 | OpenTelemetry Telemetry 实现 | 低 | `07c-phase2c:997,1011,1144` | ⏳ 进行中 |
+| P6-21 | 自定义主题文件加载 | 低 | `08-phase3:261` | ⏳ 进行中 |
+| P6-22 | Markdown 表格 / 图片 / mermaid 渲染 | 低 | `08-phase3:431,456` | ⏳ 进行中 |
+| P6-23 | 编辑器语法高亮 + 智能补全 | 低 | `08-phase3:485,487`（依赖 TamboUI 0.4+） | ⏳ 进行中 |
+| P6-24 | `tree.filter.*` / `models.*` 富过滤键绑定 | 低 | `08-phase3:601,635,647` | ⏳ 进行中 |
+| P6-25 | Entry 元数据事件富样式渲染 | 低 | `08-phase3:306` | ⏳ 进行中 |
+| P6-26 | 会话 diff 渲染 | 低 | `08b-phase3:447` | ⏳ 进行中 |
+| P6-27 | AI 生成 Skills | 低 | `07c-phase2c:1130` | ⏳ 进行中 |
+| P6-28 | `ImageApi` / `EmbeddingApi`（需改 `ProviderApi` permits） | 低 | `02-architecture:155`、`06-phase1:226` | ⏳ 进行中 |
 
 > **建议实施顺序**：P6-1a→1b→1c→1d（Provider 基础）→ P6-2/3/4（evals，可与 1e/1f/1g 并行）→ P6-5a→5b（RPC 核心）→ P6-6/P6-7/P6-16（Skills/Extensions）→ P6-8 → P6-12（HTML 导出）→ P6-17（OAuth）→ P6-9a/9b/9c（远程会话）→ P6-10/11 → 其余低优先级遗留项按需。
 >
