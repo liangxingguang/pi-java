@@ -1885,7 +1885,7 @@ pi-ai catalog publish --file models.json --endpoint https://models.example.com/u
 | P6-5e | `--mode json`（PrintMode 改造，独立于 RPC） | 低 | §4.1 对照表 | ✅ 已完成 |
 | P6-6 | 技能系统（Skills，含 JGit ignore + `PI_JAVA_CODING_AGENT_DIR`） | 中 | Markdown Skill 加载 + 目录发现 | ✅ 已完成 |
 | P6-7 | 扩展系统（Extensions / Plugin） | 中 | `ExtensionManager` + `PiExtension` SPI | ✅ 已完成 |
-| P6-7b | RPC 扩展 UI 双向通道 | 中 | §4.3 `extension_ui_request/response` | 未开始 |
+| P6-7b | RPC 扩展 UI 双向通道 | 中 | §4.3 `extension_ui_request/response` | ✅ 已完成 |
 | P6-8 | `ModelsStore` + 远程模型目录（ETag） | 中 | 补 Phase 1 缺口 + `RemoteCatalog` | ✅ 已完成 |
 | P6-9a | CBOR 编解码 + 增量分帧 | 低 | `pi-java-protocol` | ✅ 已完成 |
 | P6-9b | `PiServer` + Unix socket 监听 | 低 | `pi-java-server` | ✅ 已完成 |
