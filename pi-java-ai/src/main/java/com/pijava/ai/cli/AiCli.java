@@ -20,7 +20,8 @@ import picocli.CommandLine.Parameters;
  * {@code pi-ai ping <provider> [model]}.</p>
  */
 @Command(name = "pi-ai", description = "pi-java AI model management CLI",
-         subcommands = {AiCli.ListModels.class, AiCli.AuthCmd.class, AiCli.PingCmd.class})
+         subcommands = {AiCli.ListModels.class, AiCli.AuthCmd.class, AiCli.PingCmd.class,
+                        CatalogCommand.class})
 public final class AiCli implements Runnable {
 
     @Override
