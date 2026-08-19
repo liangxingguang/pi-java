@@ -43,6 +43,8 @@ import com.pijava.ai.stream.StreamEvent;
 import com.pijava.coding.agent.cli.Args;
 import com.pijava.coding.agent.core.session.InMemorySessionRepository;
 import com.pijava.coding.agent.core.session.SessionInfo;
+import com.pijava.coding.agent.extension.DefaultExtensionContext;
+import com.pijava.coding.agent.extension.ExtensionManager;
 import com.pijava.coding.agent.skill.SkillDiscovery;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
 
@@ -202,6 +204,7 @@ public final class AgentSession implements AutoCloseable {
             .toolExecution(ToolExecution.defaultMode())
             .skills(discoverSkills(args))
             .build());
+        loadExtensions(args, services, harness);
 
         var session = new AgentSession(
             harness, services, args,
@@ -435,6 +438,16 @@ public final class AgentSession implements AutoCloseable {
     }
 
     // ── Internals ────────────────────────────────────────────
+
+    /** 加载扩展（ServiceLoader），--no-extensions 时跳过。 */
+    private static void loadExtensions(Args args, SessionServices services,
+                                       AgentHarness harness) {
+        if (args.noExtensions()) {
+            return;
+        }
+        var context = new DefaultExtensionContext(services, harness.skillManager());
+        new ExtensionManager(context).loadAll();
+    }
 
     /** 发现技能（USER + PROJECT + 显式路径），--no-skills 时为空。 */
     private static Map<String, Skill> discoverSkills(Args args) {
