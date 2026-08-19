@@ -3,6 +3,7 @@ package com.pijava.coding.agent.core;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -22,6 +23,7 @@ import com.pijava.agent.harness.HarnessConfig;
 import com.pijava.agent.harness.LaneConfig;
 import com.pijava.agent.harness.ToolExecution;
 import com.pijava.agent.harness.WatchHandle;
+import com.pijava.agent.skill.Skill;
 import com.pijava.agent.session.ForkOptions;
 import com.pijava.agent.session.Session;
 
@@ -41,6 +43,7 @@ import com.pijava.ai.stream.StreamEvent;
 import com.pijava.coding.agent.cli.Args;
 import com.pijava.coding.agent.core.session.InMemorySessionRepository;
 import com.pijava.coding.agent.core.session.SessionInfo;
+import com.pijava.coding.agent.skill.SkillDiscovery;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
 
 /**
@@ -197,6 +200,7 @@ public final class AgentSession implements AutoCloseable {
             .steeringMode(SessionSetup.queueMode(effective.steeringMode))
             .followUpMode(SessionSetup.queueMode(effective.followUpMode))
             .toolExecution(ToolExecution.defaultMode())
+            .skills(discoverSkills(args))
             .build());
 
         var session = new AgentSession(
@@ -431,6 +435,23 @@ public final class AgentSession implements AutoCloseable {
     }
 
     // ── Internals ────────────────────────────────────────────
+
+    /** 发现技能（USER + PROJECT + 显式路径），--no-skills 时为空。 */
+    private static Map<String, Skill> discoverSkills(Args args) {
+        if (args.noSkills()) {
+            return Map.of();
+        }
+        var cwd = Path.of(System.getProperty("user.dir"));
+        var discovery = new SkillDiscovery(cwd, FileSettingsStorage.defaultAgentDir());
+        var explicit = args.skills() == null ? List.<Path>of()
+            : args.skills().stream().map(Path::of).toList();
+        var result = discovery.discoverAll(true, explicit);
+        var map = new LinkedHashMap<String, Skill>();
+        for (var skill : result.skills()) {
+            map.put(skill.name(), skill);
+        }
+        return map;
+    }
 
     // ── Package-private accessors ───────────────────────────
     Session<?> session() {

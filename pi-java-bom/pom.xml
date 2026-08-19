@@ -24,6 +24,7 @@
         <version.json-schema-validator>1.5.6</version.json-schema-validator>
         <version.jspecify>1.0.0</version.jspecify>
         <version.snakeyaml>2.4</version.snakeyaml>
+        <version.jgit>7.6.0.202603022253-r</version.jgit>
 
         <version.anthropic-java>2.52.0</version.anthropic-java>
         <version.openai-java>4.42.0</version.openai-java>
@@ -170,6 +171,23 @@
                 <groupId>org.yaml</groupId>
                 <artifactId>snakeyaml</artifactId>
                 <version>${version.snakeyaml}</version>
+            </dependency>
+
+            <!-- JGit（P6-6 技能目录 .gitignore 语义；排除对象库/传输层依赖） -->
+            <dependency>
+                <groupId>org.eclipse.jgit</groupId>
+                <artifactId>org.eclipse.jgit</artifactId>
+                <version>${version.jgit}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>com.googlecode.javaewah</groupId>
+                        <artifactId>JavaEWAH</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>commons-codec</groupId>
+                        <artifactId>commons-codec</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
 
             <!-- LLM Provider SDKs -->

@@ -31,11 +31,14 @@ public final class SystemPromptBuilder {
         return this;
     }
 
-    /** Append skill system prompts. */
+    /** Append skill system prompts (excludes {@code disableModelInvocation} skills). */
     public SystemPromptBuilder skills(Collection<Skill> skills) {
-        if (skills.isEmpty()) return this;
+        var active = skills.stream()
+            .filter(s -> !s.disableModelInvocation())
+            .toList();
+        if (active.isEmpty()) return this;
         sb.append("## Active Skills\n\n");
-        for (var s : skills) {
+        for (var s : active) {
             sb.append(s.systemPrompt()).append("\n");
         }
         sb.append("\n");

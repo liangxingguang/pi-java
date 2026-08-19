@@ -43,7 +43,8 @@ public final class FileSettingsStorage implements SettingsStorage {
     }
 
     static Path defaultAgentDir() {
-        var envDir = System.getenv("PI_AGENT_DIR");
+        // 对齐 pi 的构造规则 ${APP_NAME.toUpperCase()}_CODING_AGENT_DIR（config.ts:495）。
+        var envDir = System.getenv("PI_JAVA_CODING_AGENT_DIR");
         if (envDir != null && !envDir.isBlank()) {
             return Path.of(envDir);
         }
