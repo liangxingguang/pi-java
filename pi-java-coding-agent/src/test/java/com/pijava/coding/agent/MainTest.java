@@ -25,9 +25,10 @@ class MainTest {
     }
 
     @Test
-    void futureModeIsRejected() {
+    void jsonModeWithoutPromptIsError() {
+        // --mode json 已实现（P6-5e）：无 prompt 消息时报错。
         int code = Main.run(new String[] {"--mode", "json"});
-        assertThat(code).isEqualTo(2);
+        assertThat(code).isEqualTo(1);
     }
 
     @Test
