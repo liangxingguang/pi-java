@@ -52,4 +52,13 @@ public final class JsonEventMapper {
         }
         return node;
     }
+
+    /** 把单个 {@link StreamEvent} 序列化为线格式 JSON（剥除 partial）。 */
+    public static String toStreamEventWire(StreamEvent event) {
+        try {
+            return MAPPER.writeValueAsString(event);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            return "{}";
+        }
+    }
 }

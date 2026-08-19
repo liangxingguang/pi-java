@@ -48,4 +48,15 @@ class JsonEventMapperTest {
         assertThat(node.get("type").asText()).isEqualTo("agent_settled");
         assertThat(node.size()).isEqualTo(1);
     }
+
+    @Test
+    void toStreamEventWireStripsPartial() {
+        var partial = AssistantMessage.empty().withContent(List.of(
+            new ContentBlock.TextContent("Hello world")));
+        var json = JsonEventMapper.toStreamEventWire(
+            new StreamEvent.TextDelta(0, "world", partial));
+        assertThat(json).doesNotContain("partial");
+        assertThat(json).contains("\"type\":\"text_delta\"")
+            .contains("\"delta\":\"world\"");
+    }
 }

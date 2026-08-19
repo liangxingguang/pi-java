@@ -58,9 +58,12 @@ public final class Main {
         if (parsed.mode() != null && "rpc".equals(parsed.mode())) {
             return RpcMode.run(System.in, System.out, parsed);
         }
+        if (parsed.mode() != null && "json".equals(parsed.mode())) {
+            return PrintMode.runJson(parsed.messages(), parsed);
+        }
         if (parsed.mode() != null && !"text".equals(parsed.mode())) {
             System.err.println("error: --mode " + parsed.mode()
-                + " is not implemented yet (json lands in Phase 6)");
+                + " is not a supported mode");
             return 2;
         }
         if (parsed.export() != null) {

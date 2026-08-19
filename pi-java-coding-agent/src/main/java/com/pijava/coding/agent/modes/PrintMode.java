@@ -5,6 +5,7 @@ import java.util.List;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.coding.agent.core.AgentSession;
 import com.pijava.coding.agent.core.PromptConfig;
+import com.pijava.coding.agent.mode.JsonEventMapper;
 import com.pijava.coding.agent.cli.Args;
 
 /**
@@ -34,6 +35,29 @@ public final class PrintMode {
         try (var session = AgentSession.create(args)) {
             var result = session.processPrompt(prompt, PromptConfig.defaults());
             result.stream().forEach(event -> renderEvent(event, args.verbose()));
+            return result.status().exitCode();
+        } catch (Exception e) {
+            System.err.println("error: " + e.getMessage());
+            return 1;
+        }
+    }
+
+    /**
+     * JSON 变体（P6-5e，--mode json）：print 模式只输出事件行（剥除 partial），
+     * 不读 stdin、单次 prompt 后退出（对齐 pi {@code print-mode.ts}）。
+     *
+     * @return process exit code
+     */
+    public static int runJson(List<String> messages, Args args) {
+        if (messages.isEmpty()) {
+            System.err.println("error: -p requires a prompt message");
+            return 1;
+        }
+        var prompt = String.join(" ", messages);
+        try (var session = AgentSession.create(args)) {
+            var result = session.processPrompt(prompt, PromptConfig.defaults());
+            result.stream().forEach(event ->
+                System.out.println(JsonEventMapper.toStreamEventWire(event)));
             return result.status().exitCode();
         } catch (Exception e) {
             System.err.println("error: " + e.getMessage());
