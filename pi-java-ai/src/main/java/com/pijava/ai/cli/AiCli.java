@@ -3,14 +3,10 @@ package com.pijava.ai.cli;
 
 import com.pijava.ai.auth.EnvApiKeyResolver;
 import com.pijava.ai.auth.FileCredentialStore;
-import com.pijava.ai.catalog.BuiltinCatalog;
 import com.pijava.ai.catalog.ModelInfo;
-import com.pijava.ai.provider.AnthropicProvider;
-import com.pijava.ai.provider.DeepSeekProvider;
-import com.pijava.ai.provider.GoogleProvider;
-import com.pijava.ai.provider.MistralProvider;
-import com.pijava.ai.provider.OpenAIProvider;
+import com.pijava.ai.provider.Provider;
 import com.pijava.ai.provider.ProviderRegistry;
+import com.pijava.ai.provider.builtin.ProviderCatalog;
 
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -44,45 +40,40 @@ public final class AiCli implements Runnable {
     static final class ListModels implements Runnable {
 
         @Parameters(index = "0", arity = "0..1",
-                    description = "Provider filter (anthropic|openai|google|deepseek|mistral)")
+                    description = "Provider filter (anthropic, openai, moonshotai-cn, ...)")
         String provider;
 
         @Override
         public void run() {
-            var catalogs = new java.util.LinkedHashMap<String, java.util.List<ModelInfo>>();
-
-            if (provider == null || provider.equals("anthropic")) {
-                catalogs.put("anthropic", BuiltinCatalog.anthropicModels().listModels());
-            }
-            if (provider == null || provider.equals("openai")) {
-                catalogs.put("openai", BuiltinCatalog.openaiModels().listModels());
-            }
-            if (provider == null || provider.equals("google")) {
-                catalogs.put("google", BuiltinCatalog.googleModels().listModels());
-            }
-            if (provider == null || provider.equals("deepseek")) {
-                catalogs.put("deepseek", BuiltinCatalog.deepseekModels().listModels());
-            }
-            if (provider == null || provider.equals("mistral")) {
-                catalogs.put("mistral", BuiltinCatalog.mistralModels().listModels());
-            }
+            var providers = ProviderCatalog.all().stream()
+                .filter(p -> provider == null || provider.equals(p.name()))
+                .toList();
 
             // Header
-            System.out.printf("%-12s %-30s %-10s %-10s %-10s%n",
+            System.out.printf("%-22s %-30s %-10s %-10s %-10s%n",
                     "Provider", "Model ID", "Context", "Input/$", "Output/$");
-            System.out.println("──────────  ─────────────────────────────  ──────────  ──────────  ──────────");
+            System.out.println(separator());
 
-            for (var entry : catalogs.entrySet()) {
-                for (var model : entry.getValue()) {
-                    var p = model.pricing();
-                    System.out.printf("%-12s %-30s %-10s %-10s %-10s%n",
-                            entry.getKey(),
-                            model.id().modelName(),
-                            formatTokens(model.maxInputTokens()),
-                            p.isKnown() ? String.format("$%.2f", p.inputPrice()) : "N/A",
-                            p.isKnown() ? String.format("$%.2f", p.outputPrice()) : "N/A");
+            for (var p : providers) {
+                for (var model : p.builtinModels().listModels()) {
+                    printModel(p, model);
                 }
             }
+        }
+
+        private static String separator() {
+            return "─".repeat(22) + " " + "─".repeat(30) + " " + "─".repeat(10)
+                + " " + "─".repeat(10) + " " + "─".repeat(10);
+        }
+
+        private void printModel(Provider provider, ModelInfo model) {
+            var pricing = model.pricing();
+            System.out.printf("%-22s %-30s %-10s %-10s %-10s%n",
+                    provider.name(),
+                    model.id().modelName(),
+                    formatTokens(model.maxInputTokens()),
+                    pricing.isKnown() ? String.format("$%.2f", pricing.inputPrice()) : "N/A",
+                    pricing.isKnown() ? String.format("$%.2f", pricing.outputPrice()) : "N/A");
         }
 
         private String formatTokens(int tokens) {
@@ -97,7 +88,7 @@ public final class AiCli implements Runnable {
     @Command(name = "auth", description = "Configure API key for a provider")
     static final class AuthCmd implements Runnable {
 
-        @Parameters(index = "0", description = "Provider name (anthropic|openai|google|deepseek|mistral)")
+        @Parameters(index = "0", description = "Provider name (anthropic, openai, moonshotai-cn, ...)")
         String provider;
 
         @Override
@@ -140,25 +131,21 @@ public final class AiCli implements Runnable {
                     var store = new FileCredentialStore();
                     key = store.resolveApiKey(provider);
                 }
-                if (key.isEmpty()) {
+                if (key.isEmpty() && !"ollama".equals(provider)) {
                     System.out.println("No API key found. Run 'pi-ai auth " + provider + "' first.");
                     return;
                 }
-
                 var options = com.pijava.ai.api.ApiOptions.defaults();
-                // Use resolved key
                 options = new com.pijava.ai.api.ApiOptions(
-                        options.baseUrl(), key.get(), options.timeout(),
+                        options.baseUrl(), key.orElse(""), options.timeout(),
                         options.maxRetries(), options.extra());
 
-                var registry = ProviderRegistry.global();
-                registry.register(new AnthropicProvider());
-                registry.register(new OpenAIProvider());
-                registry.register(new GoogleProvider());
-                registry.register(new DeepSeekProvider());
-                registry.register(new MistralProvider());
+                var registry = ProviderRegistry.create();
+                registry.loadBuiltinProviders();
+                registry.discoverFromServiceLoader();
 
-                var prov = registry.get(provider).orElseThrow();
+                var prov = registry.get(provider).orElseThrow(
+                    () -> new IllegalArgumentException("Unknown provider: " + provider));
                 var api = prov.createApi(
                         com.pijava.ai.api.ChatApi.class, options);
                 var models = prov.builtinModels().listModels();
@@ -171,7 +158,7 @@ public final class AiCli implements Runnable {
                         java.util.List.of(new com.pijava.ai.message.Message.UserMessage(
                                 java.util.List.of(new com.pijava.ai.message.ContentBlock.TextContent("ping")))));
 
-                var response = api.send(request, options);
+                api.send(request, options);
                 System.out.println("OK — connected to " + provider + " using " + testModel);
             } catch (Exception e) {
                 System.out.println("FAILED: " + e.getMessage());

@@ -2,16 +2,19 @@ package com.pijava.ai.provider;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.ServiceLoader;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.pijava.ai.provider.builtin.ProviderCatalog;
+
 /**
  * Central registry for LLM {@link Provider} instances.
  *
- * <p>Providers can be registered manually (Phase 1 primary path) or discovered
- * through {@link ServiceLoader} (Phase 6 extension). The registry is
- * thread-safe.</p>
+ * <p>Providers can be registered manually, loaded from
+ * {@link ProviderCatalog}, or discovered through {@link ServiceLoader}.
+ * The registry is thread-safe.</p>
  */
 public final class ProviderRegistry {
 
@@ -47,7 +50,34 @@ public final class ProviderRegistry {
         return List.copyOf(providers.values());
     }
 
-    /** Discover and register providers via ServiceLoader (Phase 6 extension). */
+    /**
+     * List registered providers that support {@code protocol}.
+     *
+     * @param protocol protocol family to filter by
+     * @return matching providers in unspecified order
+     */
+    public List<Provider> listByProtocol(Protocol protocol) {
+        Objects.requireNonNull(protocol, "protocol");
+        return providers.values().stream()
+            .filter(p -> p.supportedProtocols().contains(protocol))
+            .toList();
+    }
+
+    /**
+     * Register every built-in provider from {@link ProviderCatalog}.
+     *
+     * @return number of providers registered
+     */
+    public int loadBuiltinProviders() {
+        int count = 0;
+        for (var provider : ProviderCatalog.all()) {
+            register(provider);
+            count++;
+        }
+        return count;
+    }
+
+    /** Discover and register providers via ServiceLoader. */
     public void discoverFromServiceLoader() {
         var loader = ServiceLoader.load(ProviderFactory.class);
         for (var factory : loader) {

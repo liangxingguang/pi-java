@@ -1,40 +1,29 @@
 package com.pijava.ai.provider;
 
-import java.util.Set;
-
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.ChatApi;
-import com.pijava.ai.api.ProviderApi;
-import com.pijava.ai.catalog.ModelCatalog;
+import com.pijava.ai.catalog.BuiltinCatalog;
 import com.pijava.ai.protocol.MistralConversationsApi;
 
 /**
  * Mistral provider — Mistral models via the Chat Completions API.
  */
-public final class MistralProvider implements Provider {
+public final class MistralProvider extends ConfigurableProvider {
 
     @Override
-    public String name() { return "mistral"; }
-
-    @Override
-    public String displayName() { return "Mistral"; }
-
-    @Override
-    public Set<Class<? extends ProviderApi>> supportedApis() {
-        return Set.of(ChatApi.class);
+    protected ProviderConfig config() {
+        return ProviderConfig.single(
+            "mistral", "Mistral", "https://api.mistral.ai/v1",
+            "MISTRAL_API_KEY", Protocol.MISTRAL_CONVERSATIONS,
+            BuiltinCatalog.mistralModels());
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public <T extends ProviderApi> T createApi(Class<T> apiType, ApiOptions options) {
-        if (apiType.equals(ChatApi.class)) {
-            return (T) new MistralConversationsApi(options);
-        }
-        throw new IllegalArgumentException("Unsupported API type: " + apiType);
-    }
-
-    @Override
-    public ModelCatalog builtinModels() {
-        return com.pijava.ai.catalog.BuiltinCatalog.mistralModels();
+    protected ChatApi createChatApi(Protocol protocol, ApiOptions options) {
+        return switch (protocol) {
+            case MISTRAL_CONVERSATIONS -> new MistralConversationsApi(options);
+            default -> throw new IllegalArgumentException(
+                "MistralProvider cannot serve protocol " + protocol);
+        };
     }
 }

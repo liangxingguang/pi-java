@@ -24,6 +24,9 @@ import com.pijava.ai.stream.StreamPartialBuilder;
  *
  * <p>Phase 2a: emits the full 13-event protocol with {@code partial} snapshots
  * via {@link StreamPartialBuilder}. Handles text, thinking, and tool-call blocks.</p>
+ *
+ * <p>Phase 6: added {@code (ApiOptions, String apiKeyEnvVar)} constructor and
+ * {@code baseUrl} override support for Anthropic-compatible providers (MiniMax etc.).</p>
  */
 public final class AnthropicMessagesApi extends AbstractChatApi {
 
@@ -35,8 +38,22 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
      * @param options API options (apiKey or {@code ANTHROPIC_API_KEY} required)
      */
     public AnthropicMessagesApi(ApiOptions options) {
-        var apiKey = resolveApiKey(options);
-        this.client = AnthropicOkHttpClient.builder().apiKey(apiKey).build();
+        this(options, "ANTHROPIC_API_KEY");
+    }
+
+    /**
+     * Create an adapter for the given options, resolving the API key from an env var.
+     *
+     * @param options     API options (apiKey or env var required)
+     * @param apiKeyEnvVar the environment variable holding the API key
+     */
+    public AnthropicMessagesApi(ApiOptions options, String apiKeyEnvVar) {
+        var apiKey = resolveApiKey(options, apiKeyEnvVar);
+        var builder = AnthropicOkHttpClient.builder().apiKey(apiKey);
+        if (options.baseUrl() != null && !options.baseUrl().isBlank()) {
+            builder.baseUrl(options.baseUrl());
+        }
+        this.client = builder.build();
     }
 
     @Override
@@ -186,11 +203,11 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         return sb.toString();
     }
 
-    private static String resolveApiKey(ApiOptions options) {
+    private static String resolveApiKey(ApiOptions options, String envVar) {
         if (options.apiKey() != null && !options.apiKey().isBlank()) return options.apiKey();
-        var env = System.getenv("ANTHROPIC_API_KEY");
+        var env = System.getenv(envVar);
         if (env != null && !env.isBlank()) return env;
         throw new IllegalStateException(
-                "No Anthropic API key. Set ANTHROPIC_API_KEY or pass apiKey.");
+                "No API key. Set " + envVar + " or pass apiKey.");
     }
 }

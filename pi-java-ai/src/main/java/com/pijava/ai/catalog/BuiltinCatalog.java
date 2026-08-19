@@ -98,6 +98,10 @@ public final class BuiltinCatalog implements ModelCatalog {
         return new BuiltinCatalog(models);
     }
 
+    /** Build a catalog from an explicit model list. */
+    public static ModelCatalog of(List<ModelInfo> models) {
+        return new BuiltinCatalog(List.copyOf(models));
+    }
     // ── ModelCatalog impl ─────────────────────────────────────
 
     @Override

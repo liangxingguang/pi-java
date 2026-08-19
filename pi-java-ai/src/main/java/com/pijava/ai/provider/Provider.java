@@ -33,4 +33,14 @@ public interface Provider {
 
     /** The built-in model catalog for this provider. */
     ModelCatalog builtinModels();
+
+    /**
+     * Protocols this provider can serve.
+     *
+     * <p>{@link ConfigurableProvider} overrides this from
+     * {@link ProviderConfig#supportedProtocols()}.</p>
+     */
+    default Set<Protocol> supportedProtocols() {
+        return Set.of();
+    }
 }
