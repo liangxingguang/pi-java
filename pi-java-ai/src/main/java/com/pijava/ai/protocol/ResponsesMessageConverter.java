@@ -42,10 +42,20 @@ final class ResponsesMessageConverter {
 
     private ResponsesMessageConverter() {}
 
-    /** 构建 Responses 流式请求参数。 */
+    /** 构建 Responses 流式请求参数（model 用 request 的 modelName）。 */
     static ResponseCreateParams buildParams(StreamRequest request, ResponsesOptions ropts) {
+        return buildParams(request, ropts, request.model().modelName());
+    }
+
+    /**
+     * 构建 Responses 流式请求参数。
+     *
+     * @param modelName 覆盖 model 字段（Azure 传部署名）
+     */
+    static ResponseCreateParams buildParams(StreamRequest request, ResponsesOptions ropts,
+                                            String modelName) {
         var builder = ResponseCreateParams.builder()
-            .model(request.model().modelName())
+            .model(modelName)
             .store(false)
             .input(ResponseCreateParams.Input.ofResponse(convertMessages(request.messages())));
 
