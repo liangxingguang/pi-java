@@ -6,6 +6,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 import com.pijava.agent.compaction.CompactionSettings;
@@ -71,7 +72,8 @@ public class AgentHarness implements AutoCloseable {
     // Phase 2c: queue manager + telemetry
     private QueueManager queueManager;
     private final TelemetryContext telemetry;
-    private Consumer<StreamEvent> streamListener = event -> { };
+    // Phase 6: multi-listener event broadcast (was a single Consumer).
+    private final List<Consumer<StreamEvent>> streamListeners = new CopyOnWriteArrayList<>();
 
     // Phase 2c: mutable run configuration (model/thinking/tools/drive/queues)
     private final HarnessState state = new HarnessState();
@@ -128,24 +130,30 @@ public class AgentHarness implements AutoCloseable {
             new ToolExecutor(toolRegistry, toolContext), skillManager,
             hookSystem, lanes, () -> state.compactionSettings, config.thinkingLevelMap(),
             tokenCounter, snapshotService, queueManager, () -> state.toolExecution,
-            () -> streamListener);
+            () -> this::broadcastStreamEvent);
         this.actionExecutor = new ActionExecutor(execCtx);
     }
 
     /**
      * Register a listener for every {@link StreamEvent} the harness consumes.
-     * Phase 3: used by AgentSession to feed live streaming to Print/Interactive
-     * modes. Only one listener is active at a time.
-     *
-     * @return registration handle; closing it restores the no-op listener
+     * Phase 6: multiple concurrent listeners supported (RPC + TUI sharing a
+     * harness); closing the handle removes only this listener.
      */
     public AutoCloseable onStreamEvent(Consumer<StreamEvent> listener) {
-        this.streamListener = listener;
-        return () -> {
-            if (this.streamListener == listener) {
-                this.streamListener = event -> { };
+        streamListeners.add(listener);
+        return () -> streamListeners.remove(listener);
+    }
+
+    /** Broadcast to all listeners; a throwing listener is isolated. */
+    private void broadcastStreamEvent(StreamEvent event) {
+        for (var listener : streamListeners) {
+            try {
+                listener.accept(event);
+            } catch (RuntimeException e) {
+                org.slf4j.LoggerFactory.getLogger(AgentHarness.class)
+                    .warn("StreamEvent listener threw: {}", e.toString());
             }
-        };
+        }
     }
 
     // ═══════════════════════════════════════════════════════════

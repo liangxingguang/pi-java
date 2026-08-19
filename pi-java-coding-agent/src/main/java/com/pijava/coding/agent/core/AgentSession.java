@@ -11,6 +11,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 import com.pijava.agent.entry.Entry;
@@ -19,7 +20,6 @@ import com.pijava.agent.harness.AgentHarness;
 import com.pijava.agent.harness.DriveMode;
 import com.pijava.agent.harness.HarnessConfig;
 import com.pijava.agent.harness.LaneConfig;
-import com.pijava.agent.harness.QueueMode;
 import com.pijava.agent.harness.ToolExecution;
 import com.pijava.agent.harness.WatchHandle;
 import com.pijava.agent.session.ForkOptions;
@@ -28,10 +28,6 @@ import com.pijava.agent.session.Session;
 import com.pijava.agent.session.SessionRepository;
 import com.pijava.agent.session.memory.MemorySessionRepository;
 
-
-
-
-import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.agent.tool.ToolContext;
 import com.pijava.agent.tool.ToolSetFactory;
@@ -41,10 +37,8 @@ import com.pijava.ai.provider.builtin.ProviderCatalog;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.model.DefaultModelResolver;
 import com.pijava.ai.provider.ProviderRegistry;
-import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.coding.agent.cli.Args;
-import com.pijava.coding.agent.cli.ThinkingLevels;
 import com.pijava.coding.agent.core.session.InMemorySessionRepository;
 import com.pijava.coding.agent.core.session.SessionInfo;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
@@ -86,6 +80,8 @@ public final class AgentSession implements AutoCloseable {
     private Session<?> session;
     private final Set<String> persistedEntryIds = new HashSet<>();
     private final Set<String> persistedRecordIds = new HashSet<>();
+    // Phase 6: 会话级事件广播（多监听器）。
+    private final SessionEventHub eventHub = new SessionEventHub();
 
     private AgentSession(AgentHarness harness, SessionServices services,
                          Args args, String name) {
@@ -142,7 +138,7 @@ public final class AgentSession implements AutoCloseable {
         var session = assemble(args, settings, providers, toolContext,
             null, new MemorySessionRepository());
         session.repository = repository;
-        return resolveSession(session, args);
+        return SessionSetup.resolveSession(session, args);
     }
     private static AgentSession create(Args args, PersistentSessionRepositories.RepositoryHandle handle,
                                        ProviderRegistry providers,
@@ -151,7 +147,7 @@ public final class AgentSession implements AutoCloseable {
         var session = assemble(args, settings, providers, toolContext,
             handle, handle.repository());
         session.persistentRepository = handle;
-        return resolveSession(session, args);
+        return SessionSetup.resolveSession(session, args);
     }
     private static AgentSession assemble(Args args, SettingsManager settings,
                                          ProviderRegistry providers,
@@ -186,14 +182,14 @@ public final class AgentSession implements AutoCloseable {
             .streamFn(DefaultProviders.streamFnFor(
                 args, effective.defaultProvider, providers))
             .model(models.resolve(modelPattern, providerName))
-            .thinkingLevel(thinkingLevelFor(args))
-            .systemPrompt(systemPromptFor(args))
-            .activeTools(activeTools(args, toolList))
+            .thinkingLevel(SessionSetup.thinkingLevelFor(args))
+            .systemPrompt(SessionSetup.systemPromptFor(args))
+            .activeTools(SessionSetup.activeTools(args, toolList))
             .toolRegistry(tools)
             .toolContext(toolContext)
             .driveMode(new DriveMode.Manual())
-            .steeringMode(queueMode(effective.steeringMode))
-            .followUpMode(queueMode(effective.followUpMode))
+            .steeringMode(SessionSetup.queueMode(effective.steeringMode))
+            .followUpMode(SessionSetup.queueMode(effective.followUpMode))
             .toolExecution(ToolExecution.defaultMode())
             .build());
 
@@ -264,8 +260,8 @@ public final class AgentSession implements AutoCloseable {
         var entriesFuture = new CompletableFuture<List<Entry>>();
         var statusFuture = new CompletableFuture<RunStatus>();
 
-        Thread.startVirtualThread(() -> driveRun(
-            prompt, queue, entriesFuture, statusFuture,
+        Thread.startVirtualThread(() -> SessionRunner.drive(
+            this, prompt, queue, entriesFuture, statusFuture,
             streamObserver, entryObserver));
 
         Stream<StreamEvent> stream = Stream.generate(() -> {
@@ -328,6 +324,25 @@ public final class AgentSession implements AutoCloseable {
     /** Subscribe to live session snapshots (status bar, tree selector). */
     public WatchHandle<com.pijava.agent.harness.SessionSnapshot> watchSession() {
         return harness.watchSession();
+    }
+
+    /**
+     * 订阅会话级事件（对齐 pi {@code AgentSession.subscribe}）。
+     *
+     * <p>支持多监听器；返回的句柄关闭时只摘除本监听器。P6-5a 首批发射
+     * {@code MessageUpdate} / {@code AgentEnd} / {@code AgentSettled} /
+     * {@code EntryAppended} 四种事件。</p>
+     *
+     * @param listener 事件监听器
+     * @return 注册句柄；关闭它只摘除本监听器
+     */
+    public AutoCloseable subscribe(Consumer<AgentSessionEvent> listener) {
+        return eventHub.subscribe(listener);
+    }
+
+    /** 广播会话事件给所有监听器；单个监听器异常被隔离。 */
+    void emitSessionEvent(AgentSessionEvent event) {
+        eventHub.emit(event);
     }
 
     /** List sessions for {@code /session} and the resume picker. */
@@ -411,65 +426,6 @@ public final class AgentSession implements AutoCloseable {
 
     // ── Internals ────────────────────────────────────────────
 
-    private void driveRun(
-            String prompt,
-            LinkedBlockingQueue<StreamEvent> queue,
-            CompletableFuture<List<Entry>> entriesFuture,
-            CompletableFuture<RunStatus> statusFuture,
-            StreamObserver streamObserver,
-            EntryObserver entryObserver) {
-        SessionRunner.drive(this, prompt, queue, entriesFuture, statusFuture,
-            streamObserver, entryObserver);
-    }
-    private static Set<AgentTool<?, ?>> activeTools(
-            Args args, List<AgentTool<?, ?>> toolList) {
-        if (args.noTools() || args.noBuiltinTools()) {
-            return Set.of();
-        }
-        if (args.tools() != null && !args.tools().isEmpty()) {
-            var allow = Set.copyOf(args.tools());
-            return toolList.stream()
-                .filter(t -> allow.contains(t.name()))
-                .collect(java.util.stream.Collectors.toSet());
-        }
-        if (args.excludeTools() != null && !args.excludeTools().isEmpty()) {
-            var deny = Set.copyOf(args.excludeTools());
-            return toolList.stream()
-                .filter(t -> !deny.contains(t.name()))
-                .collect(java.util.stream.Collectors.toSet());
-        }
-        return Set.copyOf(toolList);
-    }
-    private static ModelThinkingLevel thinkingLevelFor(Args args) {
-        if (args.thinking() != null) {
-            return ThinkingLevels.parse(args.thinking());
-        }
-        var fromModel = ThinkingLevels.parseFromModelPattern(args.model());
-        return fromModel != null ? fromModel : ModelThinkingLevel.off();
-    }
-    private static String systemPromptFor(Args args) {
-        var base = args.systemPrompt() != null
-            ? args.systemPrompt() : DEFAULT_SYSTEM_PROMPT;
-        if (args.appendSystemPrompt().isEmpty()) {
-            return base;
-        }
-        return base + "\n\n" + String.join("\n\n", args.appendSystemPrompt());
-    }
-    private static AgentSession resolveSession(AgentSession session, Args args) {
-        if (args.noSession()) {
-            return session;
-        }
-        if (session.persistentRepository != null) {
-            return SessionPersistence.resolvePersistent(session, args);
-        }
-        return SessionPersistence.resolveInMemory(session, args);
-    }
-    private static QueueMode queueMode(String mode) {
-        if ("all".equals(mode)) {
-            return new QueueMode.All();
-        }
-        return new QueueMode.OneAtATime();
-    }
     // ── Package-private accessors ───────────────────────────
     Session<?> session() {
         return session;

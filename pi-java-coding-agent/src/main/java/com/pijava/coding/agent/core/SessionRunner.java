@@ -35,6 +35,7 @@ final class SessionRunner {
             if (event instanceof StreamEvent.StreamError) {
                 stopReason.set("error");
             }
+            owner.emitSessionEvent(new AgentSessionEvent.MessageUpdate(event));
             if (streamObserver == null) {
                 queue.add(event);
             } else {
@@ -53,9 +54,18 @@ final class SessionRunner {
                     entryObserver.onEntry(entry);
                 }
             }
+            for (var entry : transcript) {
+                owner.emitSessionEvent(new AgentSessionEvent.EntryAppended(entry));
+            }
             if (owner.session() != null) {
                 SessionPersistence.persistPending(owner, owner.session(), laneName);
             }
+            owner.emitSessionEvent(new AgentSessionEvent.AgentEnd(
+                transcript.stream()
+                    .filter(Entry.Message.class::isInstance)
+                    .map(e -> ((Entry.Message) e).message())
+                    .toList(), false));
+            owner.emitSessionEvent(new AgentSessionEvent.AgentSettled());
             statusFuture.complete(new RunStatus(
                 exitCode(stopReason.get()), stopReason.get()));
         } catch (Exception e) {
@@ -66,6 +76,8 @@ final class SessionRunner {
             } else {
                 queue.add(error);
             }
+            owner.emitSessionEvent(new AgentSessionEvent.AgentEnd(List.of(), false));
+            owner.emitSessionEvent(new AgentSessionEvent.AgentSettled());
             statusFuture.complete(new RunStatus(1, "error"));
             entriesFuture.complete(List.of());
         } finally {
