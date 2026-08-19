@@ -73,8 +73,47 @@ class RpcDispatcherTest {
             .contains("\"command\":\"bad_command\"")
             .contains("\"success\":false")
             .contains("Unknown command: bad_command");
+        // set_model 解析成功但模型不存在 → 处理器异常报实际消息
         assertThat(output).contains("\"id\":\"5\"")
-            .contains("Unknown command: set_model");
+            .contains("\"command\":\"set_model\"")
+            .contains("\"success\":false")
+            .contains("Unknown model: x");
+    }
+
+    @Test
+    void secondBatchControlCommands() throws Exception {
+        var ctx = context("faux-batch", textStream("Hi"));
+        var out = new ByteArrayOutputStream();
+        var dispatcher = new RpcDispatcher(ctx.session(), new JsonlWriter(out), ctx.args());
+
+        dispatcher.handleLine("{\"id\":\"1\",\"type\":\"set_model\",\"model\":\"openai/gpt-5\"}");
+        dispatcher.handleLine("{\"id\":\"2\",\"type\":\"get_available_models\"}");
+        dispatcher.handleLine("{\"id\":\"3\",\"type\":\"set_thinking_level\",\"level\":\"medium\"}");
+        dispatcher.handleLine("{\"id\":\"4\",\"type\":\"get_available_thinking_levels\"}");
+        dispatcher.handleLine("{\"id\":\"5\",\"type\":\"set_session_name\",\"name\":\"my-session\"}");
+        dispatcher.handleLine("{\"id\":\"6\",\"type\":\"compact\"}");
+        dispatcher.handleLine("{\"id\":\"7\",\"type\":\"set_auto_compaction\",\"enabled\":true}");
+        dispatcher.handleLine("{\"id\":\"8\",\"type\":\"get_commands\"}");
+        dispatcher.handleLine("{\"id\":\"9\",\"type\":\"get_session_stats\"}");
+
+        String output = out.toString(StandardCharsets.UTF_8);
+        assertThat(output).contains("\"command\":\"set_model\",\"success\":true");
+        assertThat(output).contains("\"command\":\"get_available_models\",\"success\":true")
+            .contains("openai/gpt-5");
+        assertThat(output).contains("\"command\":\"set_thinking_level\",\"success\":true");
+        assertThat(output).contains("\"command\":\"get_available_thinking_levels\",\"success\":true");
+        assertThat(output).contains("\"command\":\"set_session_name\",\"success\":true");
+        // compact 空会话可能无内容可压缩 → 只要返回 compact 响应即可
+        assertThat(output).contains("\"command\":\"compact\"");
+        // 未实现命令回 Not implemented
+        assertThat(output).contains("\"command\":\"set_auto_compaction\",\"success\":false")
+            .contains("Not implemented");
+        assertThat(output).contains("\"command\":\"get_commands\",\"success\":true")
+            .contains("\"name\":\"help\"");
+        assertThat(output).contains("\"command\":\"get_session_stats\",\"success\":true");
+
+        // set_model 实际改动了 harness 模型
+        assertThat(ctx.session().harness().getModel().modelName()).isEqualTo("gpt-5");
     }
 
     @Test

@@ -29,7 +29,18 @@ class RpcCommandTest {
             new RpcCommand.GetState("5"),
             new RpcCommand.NewSession("6"),
             new RpcCommand.GetMessages("7"),
-            new RpcCommand.GetLastAssistantText("8"));
+            new RpcCommand.GetLastAssistantText("8"),
+            new RpcCommand.SetModel("1", "openai/gpt-4o"),
+            new RpcCommand.CycleModel("2"),
+            new RpcCommand.GetAvailableModels("3"),
+            new RpcCommand.SetThinkingLevel("4", "medium"),
+            new RpcCommand.CycleThinkingLevel("5"),
+            new RpcCommand.GetAvailableThinkingLevels("6"),
+            new RpcCommand.Compact("7"),
+            new RpcCommand.SetAutoCompaction("8", true),
+            new RpcCommand.GetSessionStats("9"),
+            new RpcCommand.SetSessionName("10", "name"),
+            new RpcCommand.GetCommands("11"));
 
         for (var command : commands) {
             var json = JSON.writeValueAsString(command);
@@ -48,7 +59,7 @@ class RpcCommandTest {
     @Test
     void unknownTypeThrows() {
         assertThatThrownBy(() -> JSON.readValue(
-            "{\"id\":\"1\",\"type\":\"set_model\",\"model\":\"x\"}",
+            "{\"id\":\"1\",\"type\":\"nonexistent_cmd\"}",
             RpcCommand.class))
             .isInstanceOf(Exception.class);
     }

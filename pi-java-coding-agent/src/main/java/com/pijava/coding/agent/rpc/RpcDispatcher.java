@@ -2,15 +2,19 @@ package com.pijava.coding.agent.rpc;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.ArrayList;
 import java.util.List;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.harness.QueueMode;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.model.ModelId;
 import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.ai.thinking.ThinkingLevel;
+import com.pijava.coding.agent.cli.ThinkingLevels;
 import com.pijava.coding.agent.core.AgentSession;
 import com.pijava.coding.agent.core.AgentSessionEvent;
 import com.pijava.coding.agent.core.PromptConfig;
@@ -46,24 +50,33 @@ public final class RpcDispatcher {
         this.eventSubscription = session.subscribe(this::emitEvent);
     }
 
-    /** 解析并分发一行；解析失败也要回 success:false 响应而非抛出。 */
+    /** 解析并分发一行；解析失败或处理器异常都回 success:false 响应而非抛出。 */
     public void handleLine(String line) {
         if (line == null || line.isBlank()) {
             return;
         }
+        String type = extractField(line, "type");
+        String id = extractField(line, "id");
         try {
             handle(JSON.readValue(line, RpcCommand.class));
         } catch (Exception e) {
-            String type = extractField(line, "type");
-            String id = extractField(line, "id");
+            String message = e.getMessage();
+            if (type == null) {
+                message = "Unknown command: <unparseable>";
+            } else if (message == null || isTypeIdError(message)) {
+                message = "Unknown command: " + type;
+            }
             try {
-                out.write(RpcResponse.fail(id,
-                    type == null ? "unknown" : type,
-                    "Unknown command: " + (type == null ? "<unparseable>" : type)));
+                out.write(RpcResponse.fail(id, type == null ? "unknown" : type, message));
             } catch (IOException io) {
                 throw new UncheckedIOException(io);
             }
         }
+    }
+
+    /** 类型解析失败（未知 type）与处理器异常区分开。 */
+    private static boolean isTypeIdError(String message) {
+        return message.contains("type id") || message.contains("known type ids");
     }
 
     /** 分发一条已解析命令。 */
@@ -96,6 +109,46 @@ public final class RpcDispatcher {
                 case RpcCommand.GetLastAssistantText t ->
                     out.write(RpcResponse.ok(t.id(), "get_last_assistant_text",
                         session.lastAssistantText()));
+                // ── 次批：模型/思考等级/压缩控制面 ──
+                case RpcCommand.SetModel m -> {
+                    session.harness().setModel(resolveModel(m.model()));
+                    out.write(RpcResponse.ok(m.id(), "set_model"));
+                }
+                case RpcCommand.CycleModel c -> {
+                    session.harness().setModel(cycleModel(session));
+                    out.write(RpcResponse.ok(c.id(), "cycle_model"));
+                }
+                case RpcCommand.GetAvailableModels g ->
+                    out.write(RpcResponse.ok(g.id(), "get_available_models",
+                        availableModels()));
+                case RpcCommand.SetThinkingLevel s -> {
+                    session.harness().setThinkingLevel(ThinkingLevels.parse(s.level()));
+                    out.write(RpcResponse.ok(s.id(), "set_thinking_level"));
+                }
+                case RpcCommand.CycleThinkingLevel c -> {
+                    session.harness().setThinkingLevel(cycleThinking(session));
+                    out.write(RpcResponse.ok(c.id(), "cycle_thinking_level"));
+                }
+                case RpcCommand.GetAvailableThinkingLevels g ->
+                    out.write(RpcResponse.ok(g.id(), "get_available_thinking_levels",
+                        availableThinkingLevels()));
+                case RpcCommand.Compact c -> {
+                    session.compact(CompactionSettings.defaults());
+                    out.write(RpcResponse.ok(c.id(), "compact"));
+                }
+                case RpcCommand.SetAutoCompaction a ->
+                    out.write(RpcResponse.fail(a.id(), "set_auto_compaction",
+                        "Not implemented"));
+                case RpcCommand.GetSessionStats g ->
+                    out.write(RpcResponse.ok(g.id(), "get_session_stats",
+                        buildStats()));
+                case RpcCommand.SetSessionName s -> {
+                    session.setSessionName(s.name());
+                    out.write(RpcResponse.ok(s.id(), "set_session_name"));
+                }
+                case RpcCommand.GetCommands g ->
+                    out.write(RpcResponse.ok(g.id(), "get_commands",
+                        buildCommands()));
             }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -172,6 +225,89 @@ public final class RpcDispatcher {
 
     private List<com.pijava.agent.entry.Entry> harnessTranscript() {
         return session.harness().snapshot(session.laneName()).transcript();
+    }
+
+    // ── 次批辅助 ─────────────────────────────────────────────────────────
+
+    /** 解析模型模式（"provider/model" 或纯 modelName）→ ModelId。 */
+    private ModelId<?> resolveModel(String pattern) {
+        var models = com.pijava.ai.provider.builtin.ProviderCatalog.allModels().listModels();
+        String p = pattern == null ? "" : pattern.trim();
+        if (p.isEmpty()) {
+            throw new IllegalArgumentException("model pattern required");
+        }
+        if (p.contains("/")) {
+            var parts = p.split("/", 2);
+            return models.stream().map(com.pijava.ai.catalog.ModelInfo::id)
+                .filter(id -> id.provider().equals(parts[0])
+                    && id.modelName().equals(parts[1]))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Unknown model: " + pattern));
+        }
+        return models.stream().map(com.pijava.ai.catalog.ModelInfo::id)
+            .filter(id -> id.modelName().equals(p))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("Unknown model: " + pattern));
+    }
+
+    private ModelId<?> cycleModel(AgentSession s) {
+        var models = com.pijava.ai.provider.builtin.ProviderCatalog.allModels().listModels();
+        if (models.isEmpty()) {
+            return s.harness().getModel();
+        }
+        ModelId<?> current = s.harness().getModel();
+        int idx = -1;
+        for (int i = 0; i < models.size(); i++) {
+            if (models.get(i).id().equals(current)) {
+                idx = i;
+                break;
+            }
+        }
+        return models.get((idx + 1) % models.size()).id();
+    }
+
+    private ModelThinkingLevel cycleThinking(AgentSession s) {
+        var levels = ThinkingLevel.ordered();
+        ModelThinkingLevel current = s.harness().getThinkingLevel();
+        int idx = current instanceof ModelThinkingLevel.Enabled e
+            ? levels.indexOf(e.level()) : -1;
+        return ModelThinkingLevel.of(levels.get((idx + 1) % levels.size()));
+    }
+
+    private List<String> availableModels() {
+        return com.pijava.ai.provider.builtin.ProviderCatalog.allModels()
+            .listModels().stream()
+            .map(m -> m.id().provider() + "/" + m.id().modelName())
+            .sorted().toList();
+    }
+
+    private List<String> availableThinkingLevels() {
+        return ThinkingLevel.ordered().stream()
+            .map(ThinkingLevel::label).toList();
+    }
+
+    private RpcSessionStats buildStats() {
+        var snapshot = session.watchSession().current();
+        ModelId<?> model = session.harness().getModel();
+        return new RpcSessionStats(
+            model == null ? "" : model.provider() + "/" + model.modelName(),
+            snapshot == null ? 0 : snapshot.totalTokens(),
+            snapshot == null ? 0 : snapshot.turnCount(),
+            (int) session.entryCount(),
+            snapshot == null ? "idle" : snapshot.phase());
+    }
+
+    private List<RpcSlashCommand> buildCommands() {
+        var registry = session.services().slashCommands();
+        var commands = new ArrayList<RpcSlashCommand>();
+        for (var name : registry.names()) {
+            var cmd = registry.get(name);
+            if (cmd != null) {
+                commands.add(new RpcSlashCommand(
+                    name, cmd.description(), cmd.argumentHint()));
+            }
+        }
+        return commands;
     }
 
     private static String thinkingWire(ModelThinkingLevel level) {

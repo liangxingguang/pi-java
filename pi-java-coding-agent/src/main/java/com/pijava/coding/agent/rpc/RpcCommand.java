@@ -27,7 +27,18 @@ import com.pijava.ai.message.ContentBlock;
     @JsonSubTypes.Type(value = RpcCommand.GetState.class),
     @JsonSubTypes.Type(value = RpcCommand.NewSession.class),
     @JsonSubTypes.Type(value = RpcCommand.GetMessages.class),
-    @JsonSubTypes.Type(value = RpcCommand.GetLastAssistantText.class)
+    @JsonSubTypes.Type(value = RpcCommand.GetLastAssistantText.class),
+    @JsonSubTypes.Type(value = RpcCommand.SetModel.class),
+    @JsonSubTypes.Type(value = RpcCommand.CycleModel.class),
+    @JsonSubTypes.Type(value = RpcCommand.GetAvailableModels.class),
+    @JsonSubTypes.Type(value = RpcCommand.SetThinkingLevel.class),
+    @JsonSubTypes.Type(value = RpcCommand.CycleThinkingLevel.class),
+    @JsonSubTypes.Type(value = RpcCommand.GetAvailableThinkingLevels.class),
+    @JsonSubTypes.Type(value = RpcCommand.Compact.class),
+    @JsonSubTypes.Type(value = RpcCommand.SetAutoCompaction.class),
+    @JsonSubTypes.Type(value = RpcCommand.GetSessionStats.class),
+    @JsonSubTypes.Type(value = RpcCommand.SetSessionName.class),
+    @JsonSubTypes.Type(value = RpcCommand.GetCommands.class)
 })
 public sealed interface RpcCommand {
 
@@ -78,6 +89,63 @@ public sealed interface RpcCommand {
     @JsonTypeName("get_last_assistant_text")
     record GetLastAssistantText(String id) implements RpcCommand {
         @Override public String type() { return "get_last_assistant_text"; }
+    }
+
+    // ── 次批（P6-5c）：模型/思考等级/压缩控制面 ──────────────────────────
+
+    @JsonTypeName("set_model")
+    record SetModel(String id, String model) implements RpcCommand {
+        @Override public String type() { return "set_model"; }
+    }
+
+    @JsonTypeName("cycle_model")
+    record CycleModel(String id) implements RpcCommand {
+        @Override public String type() { return "cycle_model"; }
+    }
+
+    @JsonTypeName("get_available_models")
+    record GetAvailableModels(String id) implements RpcCommand {
+        @Override public String type() { return "get_available_models"; }
+    }
+
+    @JsonTypeName("set_thinking_level")
+    record SetThinkingLevel(String id, String level) implements RpcCommand {
+        @Override public String type() { return "set_thinking_level"; }
+    }
+
+    @JsonTypeName("cycle_thinking_level")
+    record CycleThinkingLevel(String id) implements RpcCommand {
+        @Override public String type() { return "cycle_thinking_level"; }
+    }
+
+    @JsonTypeName("get_available_thinking_levels")
+    record GetAvailableThinkingLevels(String id) implements RpcCommand {
+        @Override public String type() { return "get_available_thinking_levels"; }
+    }
+
+    @JsonTypeName("compact")
+    record Compact(String id) implements RpcCommand {
+        @Override public String type() { return "compact"; }
+    }
+
+    @JsonTypeName("set_auto_compaction")
+    record SetAutoCompaction(String id, boolean enabled) implements RpcCommand {
+        @Override public String type() { return "set_auto_compaction"; }
+    }
+
+    @JsonTypeName("get_session_stats")
+    record GetSessionStats(String id) implements RpcCommand {
+        @Override public String type() { return "get_session_stats"; }
+    }
+
+    @JsonTypeName("set_session_name")
+    record SetSessionName(String id, String name) implements RpcCommand {
+        @Override public String type() { return "set_session_name"; }
+    }
+
+    @JsonTypeName("get_commands")
+    record GetCommands(String id) implements RpcCommand {
+        @Override public String type() { return "get_commands"; }
     }
 
     /** pi: streamingBehavior?: "steer" | "followUp" —— 纯常量闭集 → enum。 */
