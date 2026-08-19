@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -37,6 +39,8 @@ public final class RpcDispatcher {
     private AgentSession session;
     private AutoCloseable eventSubscription;
     private volatile boolean streaming;
+    private final LinkedBlockingQueue<RpcExtensionUIResponse> uiQueue =
+        new LinkedBlockingQueue<>();
 
     /**
      * @param session 目标会话（new_session 会重建）
@@ -48,6 +52,7 @@ public final class RpcDispatcher {
         this.out = out;
         this.args = args;
         this.eventSubscription = session.subscribe(this::emitEvent);
+        session.extensionUI(this::extensionUiRequest);
     }
 
     /** 解析并分发一行；解析失败或处理器异常都回 success:false 响应而非抛出。 */
@@ -57,6 +62,15 @@ public final class RpcDispatcher {
         }
         String type = extractField(line, "type");
         String id = extractField(line, "id");
+        if ("extension_ui_response".equals(type)) {
+            // UI 响应 → 路由到阻塞队列，非命令
+            try {
+                uiQueue.offer(JSON.readValue(line, RpcExtensionUIResponse.class));
+            } catch (Exception ignored) {
+                // 畸形响应忽略
+            }
+            return;
+        }
         try {
             handle(JSON.readValue(line, RpcCommand.class));
         } catch (Exception e) {
@@ -168,6 +182,29 @@ public final class RpcDispatcher {
         // 异步命令：不阻塞等待结果，事件经订阅推送。
         streaming = true;
         session.processPrompt(text, PromptConfig.defaults());
+    }
+
+    /** 扩展 UI 请求：写 extension_ui_request 到 stdout，阻塞等 extension_ui_response。 */
+    private RpcExtensionUIResponse extensionUiRequest(RpcExtensionUIRequest request) {
+        try {
+            out.write(request);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        long deadline = System.nanoTime() + java.time.Duration.ofMinutes(5).toNanos();
+        while (System.nanoTime() < deadline) {
+            RpcExtensionUIResponse response;
+            try {
+                response = uiQueue.poll(10, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Extension UI interrupted", e);
+            }
+            if (response != null && request.id().equals(response.id())) {
+                return response;
+            }
+        }
+        throw new RuntimeException("Extension UI request timed out: " + request.method());
     }
 
     /** 事件 → 线格式写 stdout。 */

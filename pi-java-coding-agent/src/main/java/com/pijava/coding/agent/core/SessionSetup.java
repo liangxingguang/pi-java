@@ -1,14 +1,19 @@
 package com.pijava.coding.agent.core;
 
+import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.pijava.agent.harness.QueueMode;
+import com.pijava.agent.skill.Skill;
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.coding.agent.cli.Args;
 import com.pijava.coding.agent.cli.ThinkingLevels;
+import com.pijava.coding.agent.skill.SkillDiscovery;
 
 /**
  * AgentSession 的静态装配助手。
@@ -76,5 +81,22 @@ final class SessionSetup {
             return new QueueMode.All();
         }
         return new QueueMode.OneAtATime();
+    }
+
+    /** 发现技能（USER + PROJECT + 显式路径），--no-skills 时为空。 */
+    static Map<String, Skill> discoverSkills(Args args) {
+        if (args.noSkills()) {
+            return Map.of();
+        }
+        var cwd = Path.of(System.getProperty("user.dir"));
+        var discovery = new SkillDiscovery(cwd, FileSettingsStorage.defaultAgentDir());
+        var explicit = args.skills() == null ? List.<Path>of()
+            : args.skills().stream().map(Path::of).toList();
+        var result = discovery.discoverAll(true, explicit);
+        var map = new LinkedHashMap<String, Skill>();
+        for (var skill : result.skills()) {
+            map.put(skill.name(), skill);
+        }
+        return map;
     }
 }

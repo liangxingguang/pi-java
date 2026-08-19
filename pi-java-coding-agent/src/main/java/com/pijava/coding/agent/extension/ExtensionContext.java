@@ -28,6 +28,11 @@ public interface ExtensionContext {
     /** 设置管理器。 */
     SettingsManager settings();
 
+    /** 扩展 UI 服务（RPC 模式可交互；无通道回落 noop）。 */
+    default ExtensionUI ui() {
+        return ExtensionUI.noop();
+    }
+
     /** 便捷访问底层服务集合。 */
     SessionServices services();
 }

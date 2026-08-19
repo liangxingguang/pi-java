@@ -19,6 +19,10 @@ import com.pijava.ai.stream.StreamEvent;
 import com.pijava.coding.agent.cli.ArgsParser;
 import com.pijava.coding.agent.core.AgentSession;
 
+import java.util.concurrent.atomic.AtomicReference;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -117,6 +121,45 @@ class RpcDispatcherTest {
     }
 
     @Test
+    void extensionUiRequestGetsResponseFromStdin() throws Exception {
+        var ctx = context("faux-ui", textStream("Hi"));
+        var out = new ByteArrayOutputStream();
+        var dispatcher = new RpcDispatcher(ctx.session(), new JsonlWriter(out), ctx.args());
+
+        var result = new AtomicReference<RpcExtensionUIResponse>();
+        Thread thread = Thread.startVirtualThread(() ->
+            result.set(ctx.session().extensionUI().request(
+                new RpcExtensionUIRequest("ui-1", "input", Map.of("prompt", "Name?")))));
+        awaitOutput(out, "extension_ui_request");
+
+        // 客户端从 stdin 回响应
+        dispatcher.handleLine(
+            "{\"type\":\"extension_ui_response\",\"id\":\"ui-1\",\"value\":\"hello\"}");
+
+        awaitResult(result);
+        assertThat(result.get()).isNotNull();
+        assertThat(result.get().value()).isEqualTo("hello");
+        assertThat(out.toString()).contains("\"type\":\"extension_ui_request\"")
+            .contains("\"method\":\"input\"");
+    }
+
+    @Test
+    void extensionUiWireRoundTrip() throws Exception {
+        var mapper = new ObjectMapper();
+        var request = new RpcExtensionUIRequest("r1", "confirm", Map.of("message", "OK?"));
+        var requestJson = mapper.writeValueAsString(request);
+        assertThat(requestJson).contains("\"type\":\"extension_ui_request\"");
+        var back = mapper.readValue(requestJson, RpcExtensionUIRequest.class);
+        assertThat(back).isEqualTo(request);
+
+        var response = RpcExtensionUIResponse.confirm("r1", true);
+        var responseJson = mapper.writeValueAsString(response);
+        assertThat(responseJson).contains("\"type\":\"extension_ui_response\"");
+        assertThat(mapper.readValue(responseJson, RpcExtensionUIResponse.class))
+            .isEqualTo(response);
+    }
+
+    @Test
     void getStateReturnsPayload() throws Exception {
         var ctx = context("faux-state", textStream("Hi"));
         var out = new ByteArrayOutputStream();
@@ -156,6 +199,36 @@ class RpcDispatcherTest {
             new StreamEvent.TextDelta(0, text, done),
             new StreamEvent.TextEnd(0, text, done),
             new StreamEvent.StreamDone("stop", null, done)));
+    }
+
+    private static void awaitOutput(ByteArrayOutputStream out, String fragment) {
+        var deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+        while (System.nanoTime() < deadline) {
+            if (out.toString(StandardCharsets.UTF_8).contains(fragment)) {
+                return;
+            }
+            sleepQuietly(20);
+        }
+        throw new AssertionError("timed out waiting for: " + fragment);
+    }
+
+    private static void awaitResult(AtomicReference<RpcExtensionUIResponse> ref) {
+        var deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+        while (System.nanoTime() < deadline) {
+            if (ref.get() != null) {
+                return;
+            }
+            sleepQuietly(20);
+        }
+        throw new AssertionError("extension UI request did not complete");
+    }
+
+    private static void sleepQuietly(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     /** 轮询输出直到出现 agent_settled（异步事件），带超时。 */

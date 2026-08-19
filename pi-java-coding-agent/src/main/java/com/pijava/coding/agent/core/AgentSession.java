@@ -3,7 +3,6 @@ package com.pijava.coding.agent.core;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -23,7 +22,6 @@ import com.pijava.agent.harness.HarnessConfig;
 import com.pijava.agent.harness.LaneConfig;
 import com.pijava.agent.harness.ToolExecution;
 import com.pijava.agent.harness.WatchHandle;
-import com.pijava.agent.skill.Skill;
 import com.pijava.agent.session.ForkOptions;
 import com.pijava.agent.session.Session;
 
@@ -45,7 +43,7 @@ import com.pijava.coding.agent.core.session.InMemorySessionRepository;
 import com.pijava.coding.agent.core.session.SessionInfo;
 import com.pijava.coding.agent.extension.DefaultExtensionContext;
 import com.pijava.coding.agent.extension.ExtensionManager;
-import com.pijava.coding.agent.skill.SkillDiscovery;
+import com.pijava.coding.agent.extension.ExtensionUI;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
 
 /**
@@ -87,6 +85,8 @@ public final class AgentSession implements AutoCloseable {
     private final Set<String> persistedRecordIds = new HashSet<>();
     // Phase 6: 会话级事件广播（多监听器）。
     private final SessionEventHub eventHub = new SessionEventHub();
+    // Phase 6 (P6-7b): 扩展 UI 服务（RPC 模式注入，缺省 noop）。
+    private ExtensionUI extensionUI = ExtensionUI.noop();
 
     private AgentSession(AgentHarness harness, SessionServices services,
                          Args args, String name) {
@@ -202,9 +202,9 @@ public final class AgentSession implements AutoCloseable {
             .steeringMode(SessionSetup.queueMode(effective.steeringMode))
             .followUpMode(SessionSetup.queueMode(effective.followUpMode))
             .toolExecution(ToolExecution.defaultMode())
-            .skills(discoverSkills(args))
+            .skills(SessionSetup.discoverSkills(args))
             .build());
-        loadExtensions(args, services, harness);
+        loadExtensions(args, services, harness, ExtensionUI.noop());
 
         var session = new AgentSession(
             harness, services, args,
@@ -358,6 +358,18 @@ public final class AgentSession implements AutoCloseable {
         eventHub.emit(event);
     }
 
+    /** 注入扩展 UI 服务（RPC 模式用；覆盖 loadExtensions 时的 noop）。 */
+    public void extensionUI(ExtensionUI ui) {
+        if (ui != null) {
+            this.extensionUI = ui;
+        }
+    }
+
+    /** 当前扩展 UI 服务。 */
+    public ExtensionUI extensionUI() {
+        return extensionUI;
+    }
+
     /** List sessions for {@code /session} and the resume picker. */
     public List<SessionInfo> listSessions() {
         if (persistentRepository != null) {
@@ -441,29 +453,12 @@ public final class AgentSession implements AutoCloseable {
 
     /** 加载扩展（ServiceLoader），--no-extensions 时跳过。 */
     private static void loadExtensions(Args args, SessionServices services,
-                                       AgentHarness harness) {
+                                       AgentHarness harness, ExtensionUI ui) {
         if (args.noExtensions()) {
             return;
         }
-        var context = new DefaultExtensionContext(services, harness.skillManager());
+        var context = new DefaultExtensionContext(services, harness.skillManager(), ui);
         new ExtensionManager(context).loadAll();
-    }
-
-    /** 发现技能（USER + PROJECT + 显式路径），--no-skills 时为空。 */
-    private static Map<String, Skill> discoverSkills(Args args) {
-        if (args.noSkills()) {
-            return Map.of();
-        }
-        var cwd = Path.of(System.getProperty("user.dir"));
-        var discovery = new SkillDiscovery(cwd, FileSettingsStorage.defaultAgentDir());
-        var explicit = args.skills() == null ? List.<Path>of()
-            : args.skills().stream().map(Path::of).toList();
-        var result = discovery.discoverAll(true, explicit);
-        var map = new LinkedHashMap<String, Skill>();
-        for (var skill : result.skills()) {
-            map.put(skill.name(), skill);
-        }
-        return map;
     }
 
     // ── Package-private accessors ───────────────────────────
