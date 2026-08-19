@@ -19,6 +19,8 @@ final class QueueStreamIterator implements StreamIterator {
 
     private final LinkedBlockingQueue<StreamEvent> queue;
     private boolean closed;
+    /** Element peeked by {@link #hasNext()} and handed to {@link #next()}. */
+    private StreamEvent pending;
 
     QueueStreamIterator(LinkedBlockingQueue<StreamEvent> queue) {
         this.queue = queue;
@@ -28,11 +30,12 @@ final class QueueStreamIterator implements StreamIterator {
     public boolean hasNext() {
         if (closed) return false;
         try {
-            var event = queue.take();
-            if (event instanceof StreamDone || event instanceof StreamError) {
+            if (pending == null) {
+                pending = queue.take();
+            }
+            if (pending instanceof StreamDone || pending instanceof StreamError) {
                 closed = true;
             }
-            queue.put(event);
             return true;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -43,7 +46,8 @@ final class QueueStreamIterator implements StreamIterator {
     @Override
     public StreamEvent next() {
         try {
-            var event = queue.take();
+            var event = pending != null ? pending : queue.take();
+            pending = null;
             if (event instanceof StreamDone || event instanceof StreamError) {
                 closed = true;
             }

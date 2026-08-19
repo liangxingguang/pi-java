@@ -7,6 +7,7 @@ import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.ChatApi;
 import com.pijava.ai.protocol.AnthropicMessagesApi;
 import com.pijava.ai.protocol.OpenAICompletionsApi;
+import com.pijava.ai.protocol.OpenAIResponsesApi;
 import com.pijava.ai.provider.builtin.OllamaProvider;
 import com.pijava.ai.provider.builtin.ProviderCatalog;
 
@@ -91,13 +92,24 @@ class ProviderCatalogConformanceTest {
         for (var name : new String[] {
             "moonshotai-cn", "moonshotai", "zai-coding-cn", "zai",
             "qwen-token-plan-cn", "xiaomi", "xiaomi-token-plan-cn",
-            "ant-ling", "ollama", "openai", "deepseek"
+            "ant-ling", "ollama", "deepseek"
         }) {
             var provider = provider(name);
             assertThat(provider).isInstanceOf(OpenAiCompatibleProvider.class);
             assertThat(provider.createApi(ChatApi.class, keyedOptions()))
                 .isInstanceOf(OpenAICompletionsApi.class);
         }
+    }
+
+    @Test
+    void openaiProviderRoutesResponsesViaExtraProtocol() {
+        var provider = provider("openai");
+        assertThat(provider.createApi(ChatApi.class, keyedOptions()))
+            .isInstanceOf(OpenAICompletionsApi.class);
+        var responsesOptions = new ApiOptions("", "sk-test",
+            Duration.ofSeconds(1), 0, Map.of("protocol", "openai-responses"));
+        assertThat(provider.createApi(ChatApi.class, responsesOptions))
+            .isInstanceOf(OpenAIResponsesApi.class);
     }
 
     private static Provider provider(String name) {

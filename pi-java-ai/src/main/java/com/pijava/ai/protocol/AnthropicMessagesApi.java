@@ -202,12 +202,4 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         }
         return sb.toString();
     }
-
-    private static String resolveApiKey(ApiOptions options, String envVar) {
-        if (options.apiKey() != null && !options.apiKey().isBlank()) return options.apiKey();
-        var env = System.getenv(envVar);
-        if (env != null && !env.isBlank()) return env;
-        throw new IllegalStateException(
-                "No API key. Set " + envVar + " or pass apiKey.");
-    }
 }

@@ -90,4 +90,16 @@ public abstract class AbstractChatApi implements ChatApi {
      */
     protected abstract void streamInternal(StreamRequest request,
                                            SubmissionPublisher<StreamEvent> publisher);
+
+    /** 解析 API key：优先 options.apiKey，否则回落环境变量。 */
+    protected static String resolveApiKey(ApiOptions options, String envVar) {
+        if (options.apiKey() != null && !options.apiKey().isBlank()) {
+            return options.apiKey();
+        }
+        var env = System.getenv(envVar);
+        if (env != null && !env.isBlank()) {
+            return env;
+        }
+        throw new IllegalStateException("No API key. Set " + envVar + " or pass apiKey.");
+    }
 }
