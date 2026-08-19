@@ -102,6 +102,14 @@ class ProviderCatalogConformanceTest {
     }
 
     @Test
+    void ollamaWorksWithoutApiKey() {
+        var provider = provider("ollama");
+        // apiKeyEnvVar 为空 → 占位 key 路径生效（P6-1 显式子任务）。
+        assertThat(provider.createApi(ChatApi.class, keyedOptions()))
+            .isInstanceOf(OpenAICompletionsApi.class);
+    }
+
+    @Test
     void openaiProviderRoutesResponsesViaExtraProtocol() {
         var provider = provider("openai");
         assertThat(provider.createApi(ChatApi.class, keyedOptions()))
