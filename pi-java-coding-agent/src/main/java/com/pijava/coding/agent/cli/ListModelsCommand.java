@@ -2,8 +2,8 @@ package com.pijava.coding.agent.cli;
 
 import java.util.Comparator;
 
-import com.pijava.ai.catalog.BuiltinCatalog;
 import com.pijava.ai.catalog.ModelInfo;
+import com.pijava.ai.provider.builtin.ProviderCatalog;
 
 /**
  * {@code --list-models} command: prints the built-in model catalog, optionally
@@ -19,7 +19,7 @@ public final class ListModelsCommand {
      * @param search null/"" = all models, non-empty = fuzzy search term
      */
     public static int run(String search) {
-        var catalog = BuiltinCatalog.all();
+        var catalog = ProviderCatalog.allModels();
         var models = search == null || search.isBlank()
             ? catalog.listModels() : catalog.search(search);
         var sorted = models.stream()
@@ -33,11 +33,11 @@ public final class ListModelsCommand {
                 + (search == null || search.isBlank() ? "." : " for: " + search));
             return 0;
         }
-        System.out.printf("%-12s %-30s %-10s %-10s %-10s%n",
+        System.out.printf("%-22s %-30s %-10s %-10s %-10s%n",
             "Provider", "Model ID", "Context", "Input/$", "Output/$");
         for (var model : sorted) {
             var pricing = model.pricing();
-            System.out.printf("%-12s %-30s %-10s %-10s %-10s%n",
+            System.out.printf("%-22s %-30s %-10s %-10s %-10s%n",
                 model.id().provider(),
                 model.id().modelName(),
                 formatTokens(model.maxInputTokens()),

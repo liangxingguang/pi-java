@@ -3,7 +3,7 @@ package com.pijava.tui.screen;
 import java.util.List;
 import java.util.function.Consumer;
 
-import com.pijava.ai.catalog.BuiltinCatalog;
+import com.pijava.ai.provider.builtin.ProviderCatalog;
 import com.pijava.ai.model.ModelId;
 import com.pijava.coding.agent.core.AgentSession;
 import com.pijava.tui.component.SelectList;
@@ -26,7 +26,7 @@ public final class ModelSelectorScreen implements ScreenOverlay {
      */
     public ModelSelectorScreen(AgentSession session) {
         this.session = session;
-        List<String> models = BuiltinCatalog.all().listModels().stream()
+        List<String> models = ProviderCatalog.allModels().listModels().stream()
             .map(m -> m.id().provider() + "/" + m.id().modelName())
             .sorted()
             .toList();

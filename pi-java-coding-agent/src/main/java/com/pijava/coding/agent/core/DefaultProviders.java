@@ -8,11 +8,6 @@ import com.pijava.ai.auth.EnvApiKeyResolver;
 import com.pijava.ai.auth.FileCredentialStore;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
-import com.pijava.ai.provider.AnthropicProvider;
-import com.pijava.ai.provider.DeepSeekProvider;
-import com.pijava.ai.provider.GoogleProvider;
-import com.pijava.ai.provider.MistralProvider;
-import com.pijava.ai.provider.OpenAIProvider;
 import com.pijava.ai.provider.Provider;
 import com.pijava.ai.provider.ProviderRegistry;
 import com.pijava.coding.agent.cli.Args;
@@ -30,12 +25,14 @@ public final class DefaultProviders {
 
     private DefaultProviders() {}
 
-    /** Register the 5 built-in providers into a fresh registry. */
+    /**
+     * Register the 16 built-in providers and any ServiceLoader-discovered
+     * third-party {@code ProviderFactory} implementations.
+     */
     public static ProviderRegistry defaultProviders() {
         var registry = ProviderRegistry.create();
-        for (var provider : builtins()) {
-            registry.register(provider);
-        }
+        registry.loadBuiltinProviders();
+        registry.discoverFromServiceLoader();
         return registry;
     }
 
@@ -94,16 +91,7 @@ public final class DefaultProviders {
             return args.apiKey();
         }
         var env = new EnvApiKeyResolver().resolveApiKey(providerName);
-		return env.orElseGet(() -> new FileCredentialStore().resolveApiKey(providerName)
-				.orElse(""));
-	}
-
-    private static List<Provider> builtins() {
-        return List.of(
-            new AnthropicProvider(),
-            new OpenAIProvider(),
-            new GoogleProvider(),
-            new DeepSeekProvider(),
-            new MistralProvider());
+        return env.orElseGet(() -> new FileCredentialStore().resolveApiKey(providerName)
+                .orElse(""));
     }
 }
