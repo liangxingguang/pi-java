@@ -9,6 +9,7 @@ import com.pijava.coding.agent.cli.ListModelsCommand;
 import com.pijava.coding.agent.cli.Version;
 import com.pijava.coding.agent.core.Logging;
 import com.pijava.coding.agent.modes.PrintMode;
+import com.pijava.coding.agent.rpc.RpcMode;
 import com.pijava.coding.agent.spi.TuiEntryPoint;
 import com.pijava.coding.agent.subcommand.SubcommandHandler;
 import org.slf4j.Logger;
@@ -54,9 +55,12 @@ public final class Main {
         if (parsed.listModels() != null) {
             return ListModelsCommand.run(parsed.listModels());
         }
+        if (parsed.mode() != null && "rpc".equals(parsed.mode())) {
+            return RpcMode.run(System.in, System.out, parsed);
+        }
         if (parsed.mode() != null && !"text".equals(parsed.mode())) {
             System.err.println("error: --mode " + parsed.mode()
-                + " is not implemented yet (json/rpc land in Phase 6)");
+                + " is not implemented yet (json lands in Phase 6)");
             return 2;
         }
         if (parsed.export() != null) {

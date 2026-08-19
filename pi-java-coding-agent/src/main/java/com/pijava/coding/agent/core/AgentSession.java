@@ -124,6 +124,12 @@ public final class AgentSession implements AutoCloseable {
             settings);
     }
 
+    /** Create with injected providers and tool context (RPC/testing). */
+    public static AgentSession create(Args args, ProviderRegistry providers,
+                                      ToolContext toolContext) {
+        return create(args, InMemorySessionRepository.create(), providers, toolContext);
+    }
+
     /** Test entry point with injected providers and tool context. */
     static AgentSession create(Args args, InMemorySessionRepository repository,
                                ProviderRegistry providers,
