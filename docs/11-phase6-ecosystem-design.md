@@ -1888,8 +1888,8 @@ pi-ai catalog publish --file models.json --endpoint https://models.example.com/u
 | P6-7b | RPC 扩展 UI 双向通道 | 中 | §4.3 `extension_ui_request/response` | 未开始 |
 | P6-8 | `ModelsStore` + 远程模型目录（ETag） | 中 | 补 Phase 1 缺口 + `RemoteCatalog` | ✅ 已完成 |
 | P6-9a | CBOR 编解码 + 增量分帧 | 低 | `pi-java-protocol` | ✅ 已完成 |
-| P6-9b | `PiServer` + Unix socket 监听 | 低 | `pi-java-server` | 🔄 进行中 |
-| P6-9c | `PiClient` + `SessionHandle` | 低 | `pi-java-client` | 🔄 进行中 |
+| P6-9b | `PiServer` + Unix socket 监听 | 低 | `pi-java-server` | ✅ 已完成 |
+| P6-9c | `PiClient` + `SessionHandle` | 低 | `pi-java-client` | ✅ 已完成 |
 | P6-10 | 模型目录 CLI 发布工具 | 低 | `pi-ai catalog` 子命令 | 未开始 |
 | P6-11 | Maven Central 发布流水线 | 低 | `release` profile | 未开始 |
 
