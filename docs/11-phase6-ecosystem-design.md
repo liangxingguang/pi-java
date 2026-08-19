@@ -1867,29 +1867,29 @@ pi-ai catalog publish --file models.json --endpoint https://models.example.com/u
 
 | 编号 | 任务 | 优先级 | 产出 | 状态 |
 |------|------|--------|------|------|
-| P6-0 | 编写阶段设计文档 | 高 | `11-phase6-ecosystem-design.md` | 本文档 |
-| P6-1a | `AnthropicMessagesApi` 支持 `apiKeyEnvVar` + `baseUrl` 覆盖 | 高 | §2.3 阻塞项修复 | 未开始 |
-| P6-1b | `ProviderConfig` / `ConfigurableProvider` / 两个协议基类 | 高 | 配置驱动 Provider 体系 | 未开始 |
-| P6-1c | 新增 11 个中国大陆常用 Provider | 高 | §2.4 清单（合计 16 个） | 未开始 |
-| P6-1d | `DefaultProviders` 调用 ServiceLoader 发现 | 高 | 第三方 JAR 可注册 Provider | 未开始 |
-| P6-1e | `OpenAIResponsesApi` + Responses 共享转换层 | 高 | §2.5.1 | 未开始 |
-| P6-1f | `AzureOpenAIResponsesApi` | 中 | §2.5.2 | 未开始 |
-| P6-1g | `PiMessagesApi` | 中 | §2.5.3 | 未开始 |
-| P6-2 | evals — conformance tests | 高 | `pi-java-evals` Conformance 套件 | 未开始 |
-| P6-3 | evals — smoke tests | 高 | `pi-java-evals` Smoke 套件 | 未开始 |
-| P6-4 | evals — extension tests | 高 | `pi-java-evals` Extension 套件 | 未开始 |
-| P6-5a | `onStreamEvent` 改多监听器 + `AgentSessionEvent` 订阅层 | 中 | RPC 的前置依赖（§4.7） | 未开始 |
-| P6-5b | RPC 模式首批命令 + JSONL 分帧 | 中 | `pi-java --mode rpc` | 未开始 |
-| P6-5c | RPC 次批命令（模型/思考/压缩） | 中 | §4.3 次批 | 未开始 |
-| P6-5d | RPC 末批命令 | 低 | §4.3 末批 | 未开始 |
-| P6-5e | `--mode json`（PrintMode 改造，独立于 RPC） | 低 | §4.1 对照表 | 未开始 |
-| P6-6 | 技能系统（Skills，含 JGit ignore + `PI_JAVA_CODING_AGENT_DIR`） | 中 | Markdown Skill 加载 + 目录发现 | 未开始 |
-| P6-7 | 扩展系统（Extensions / Plugin） | 中 | `ExtensionManager` + `PiExtension` SPI | 未开始 |
+| P6-0 | 编写阶段设计文档 | 高 | `11-phase6-ecosystem-design.md` | ✅ 本文档 |
+| P6-1a | `AnthropicMessagesApi` 支持 `apiKeyEnvVar` + `baseUrl` 覆盖 | 高 | §2.3 阻塞项修复 | ✅ 已完成 |
+| P6-1b | `ProviderConfig` / `ConfigurableProvider` / 两个协议基类 | 高 | 配置驱动 Provider 体系 | ✅ 已完成 |
+| P6-1c | 新增 11 个中国大陆常用 Provider | 高 | §2.4 清单（合计 16 个） | ✅ 已完成 |
+| P6-1d | `DefaultProviders` 调用 ServiceLoader 发现 | 高 | 第三方 JAR 可注册 Provider | ✅ 已完成 |
+| P6-1e | `OpenAIResponsesApi` + Responses 共享转换层 | 高 | §2.5.1 | ✅ 已完成 |
+| P6-1f | `AzureOpenAIResponsesApi` | 中 | §2.5.2 | ✅ 已完成 |
+| P6-1g | `PiMessagesApi` | 中 | §2.5.3 | ✅ 已完成 |
+| P6-2 | evals — conformance tests | 高 | `pi-java-evals` Conformance 套件 | ✅ 已完成 |
+| P6-3 | evals — smoke tests | 高 | `pi-java-evals` Smoke 套件 | ✅ 已完成 |
+| P6-4 | evals — extension tests | 高 | `pi-java-evals` Extension 套件 | ✅ 已完成 |
+| P6-5a | `onStreamEvent` 改多监听器 + `AgentSessionEvent` 订阅层 | 中 | RPC 的前置依赖（§4.7） | ✅ 已完成 |
+| P6-5b | RPC 模式首批命令 + JSONL 分帧 | 中 | `pi-java --mode rpc` | ✅ 已完成 |
+| P6-5c | RPC 次批命令（模型/思考/压缩） | 中 | §4.3 次批 | ✅ 已完成 |
+| P6-5d | RPC 末批命令 | 低 | §4.3 末批 | 未开始（依赖 BashExecutor/HTML/会话树，建议延后） |
+| P6-5e | `--mode json`（PrintMode 改造，独立于 RPC） | 低 | §4.1 对照表 | ✅ 已完成 |
+| P6-6 | 技能系统（Skills，含 JGit ignore + `PI_JAVA_CODING_AGENT_DIR`） | 中 | Markdown Skill 加载 + 目录发现 | ✅ 已完成 |
+| P6-7 | 扩展系统（Extensions / Plugin） | 中 | `ExtensionManager` + `PiExtension` SPI | ✅ 已完成 |
 | P6-7b | RPC 扩展 UI 双向通道 | 中 | §4.3 `extension_ui_request/response` | 未开始 |
-| P6-8 | `ModelsStore` + 远程模型目录（ETag） | 中 | 补 Phase 1 缺口 + `RemoteCatalog` | 未开始 |
-| P6-9a | CBOR 编解码 + 增量分帧 | 低 | `pi-java-protocol` | 未开始 |
-| P6-9b | `PiServer` + Unix socket 监听 | 低 | `pi-java-server` | 未开始 |
-| P6-9c | `PiClient` + `SessionHandle` | 低 | `pi-java-client` | 未开始 |
+| P6-8 | `ModelsStore` + 远程模型目录（ETag） | 中 | 补 Phase 1 缺口 + `RemoteCatalog` | ✅ 已完成 |
+| P6-9a | CBOR 编解码 + 增量分帧 | 低 | `pi-java-protocol` | ✅ 已完成 |
+| P6-9b | `PiServer` + Unix socket 监听 | 低 | `pi-java-server` | 🔄 进行中 |
+| P6-9c | `PiClient` + `SessionHandle` | 低 | `pi-java-client` | 🔄 进行中 |
 | P6-10 | 模型目录 CLI 发布工具 | 低 | `pi-ai catalog` 子命令 | 未开始 |
 | P6-11 | Maven Central 发布流水线 | 低 | `release` profile | 未开始 |
 

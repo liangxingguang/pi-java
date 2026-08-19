@@ -26,6 +26,11 @@
             <artifactId>pi-java-agent-core</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.pi-java</groupId>
+            <artifactId>pi-java-client</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
         </dependency>
