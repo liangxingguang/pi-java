@@ -67,6 +67,8 @@ final class MessageJsonCodec {
             case "image" -> new ContentBlock.ImageContent(
                 JsonlCodec.requireString(node, "mediaType"),
                 JsonlCodec.requireString(node, "data"));
+            case "image_url" -> new ContentBlock.UrlImageContent(
+                JsonlCodec.requireString(node, "url"));
             case "tool_use" -> new ContentBlock.ToolUseContent(
                 JsonlCodec.requireString(node, "id"),
                 JsonlCodec.requireString(node, "name"),

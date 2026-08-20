@@ -81,6 +81,10 @@ public final class SessionJson {
                 node.put("mediaType", i.mediaType());
                 node.put("data", i.data());
             }
+            case ContentBlock.UrlImageContent u -> {
+                node.put("type", "image_url");
+                node.put("url", u.url());
+            }
             case ContentBlock.ToolUseContent t -> {
                 node.put("type", "tool_use");
                 node.put("id", t.id());

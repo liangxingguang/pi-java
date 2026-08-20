@@ -122,6 +122,24 @@ class JsonlSessionStorageTest {
     }
 
     @Test
+    void urlImageMessageRoundTripsThroughStorage() throws Exception {
+        Path dir = Files.createTempDirectory("pi-jsonl-url-img");
+        var repo = JsonlSessionRepository.over(dir);
+        var session = repo.create(new JsonlSessionCreateOptions("s1", "cwd", null, null));
+        session.appendEntry(new ProvisionedEntry<>(new Entry.Message("e1", 0, null, null,
+            new Message.UserMessage(List.<ContentBlock>of(
+                new ContentBlock.UrlImageContent("https://ex.com/a.png"))), null)), "main");
+        session.storage().drain();
+        Path file = repo.list(JsonlSessionListOptions.all()).getFirst().path();
+
+        var storage = JsonlSessionStorage.load(FS, file);
+        var block = ((Entry.Message) storage.findEntries(
+            com.pijava.agent.session.EntryQuery.all()).get(0))
+            .message().content().get(0);
+        assertThat(block).isEqualTo(new ContentBlock.UrlImageContent("https://ex.com/a.png"));
+    }
+
+    @Test
     void invalidSessionIdIsRejected() throws Exception {
         Path dir = Files.createTempDirectory("pi-jsonl-id");
         var repo = JsonlSessionRepository.over(dir);

@@ -133,7 +133,8 @@ final class ResponsesMessageConverter {
     }
 
     private static ResponseInputItem toUserItem(List<ContentBlock> content) {
-        var hasImage = content.stream().anyMatch(b -> b instanceof ContentBlock.ImageContent);
+        var hasImage = content.stream().anyMatch(b -> b instanceof ContentBlock.ImageContent
+            || b instanceof ContentBlock.UrlImageContent);
         if (!hasImage) {
             return inputMessage(EasyInputMessage.Role.USER, extractText(content));
         }
@@ -146,6 +147,11 @@ final class ResponsesMessageConverter {
                 parts.add(ResponseInputContent.ofInputImage(ResponseInputImage.builder()
                     .detail(ResponseInputImage.Detail.AUTO)
                     .imageUrl("data:" + img.mediaType() + ";base64," + img.data())
+                    .build()));
+            } else if (block instanceof ContentBlock.UrlImageContent url) {
+                parts.add(ResponseInputContent.ofInputImage(ResponseInputImage.builder()
+                    .detail(ResponseInputImage.Detail.AUTO)
+                    .imageUrl(url.url())
                     .build()));
             }
         }

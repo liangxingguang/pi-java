@@ -115,6 +115,7 @@ public final class CompactionService {
             case ContentBlock.TextContent t -> t.text();
             case ContentBlock.ThinkingContent t -> t.text();
             case ContentBlock.ImageContent i -> "";
+            case ContentBlock.UrlImageContent u -> u.url();
             case ContentBlock.ToolUseContent t -> t.name() + " " + t.arguments();
             case ContentBlock.ToolResultContent t -> {
                 StringBuilder sb = new StringBuilder();

@@ -18,6 +18,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
     @JsonSubTypes.Type(value = ContentBlock.TextContent.class, name = "text"),
     @JsonSubTypes.Type(value = ContentBlock.ThinkingContent.class, name = "thinking"),
     @JsonSubTypes.Type(value = ContentBlock.ImageContent.class, name = "image"),
+    @JsonSubTypes.Type(value = ContentBlock.UrlImageContent.class, name = "image_url"),
     @JsonSubTypes.Type(value = ContentBlock.ToolUseContent.class, name = "tool_use"),
     @JsonSubTypes.Type(value = ContentBlock.ToolResultContent.class, name = "tool_result")
 })
@@ -41,6 +42,17 @@ public sealed interface ContentBlock {
      * @param data      base64-encoded bytes (without the data: URL prefix)
      */
     record ImageContent(String mediaType, String data) implements ContentBlock {}
+
+    /**
+     * An image referenced by a remote URL（P6-19，非 base64 内联）。
+     *
+     * <p>由协议适配器按各自能力下发：OpenAI Responses/兼容 API 走
+     * {@code image_url}，Gemini 走 {@code fileData}。Anthropic 不支持 URL 图片，
+     * 需先下载转 base64（不在本任务范围）。</p>
+     *
+     * @param url 图片 http(s) 地址
+     */
+    record UrlImageContent(String url) implements ContentBlock {}
 
     /**
      * A tool-use request emitted by the assistant.

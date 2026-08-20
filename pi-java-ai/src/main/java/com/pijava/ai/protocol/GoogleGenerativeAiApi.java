@@ -232,6 +232,13 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
                     List.of(Part.fromBytes(
                             java.util.Base64.getDecoder().decode(ic.data()),
                             ic.mediaType()));
+            case ContentBlock.UrlImageContent url ->
+                    // Gemini 走 fileData（URL 图片，P6-19）。
+                    List.of(Part.builder()
+                            .fileData(com.google.genai.types.FileData.builder()
+                                    .fileUri(url.url())
+                                    .build())
+                            .build());
         };
     }
 

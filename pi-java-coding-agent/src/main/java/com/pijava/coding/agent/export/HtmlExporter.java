@@ -200,6 +200,13 @@ public final class HtmlExporter {
                     .append(MarkdownToHtml.render(text(block, "text")))
                     .append("</div>\n");
                 case "image" -> renderImage(out, block);
+                case "image_url" -> {
+                    var url = text(block, "url");
+                    if (url != null) {
+                        out.append("      <img src=\"").append(escape(url))
+                            .append("\" alt=\"image\">\n");
+                    }
+                }
                 case "tool_use" -> renderToolUse(out, block);
                 case "tool_result" -> renderToolResult(out, block);
                 default -> { /* 未知块类型不渲染 */ }

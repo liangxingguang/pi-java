@@ -56,6 +56,20 @@ class HtmlExporterTest {
     }
 
     @Test
+    void exportsUrlImageBlock() throws Exception {
+        var jsonl = tmp.resolve("session.jsonl");
+        Files.write(jsonl, List.of(
+            "{\"kind\":\"header\",\"version\":4,\"id\":\"s1\"}",
+            "{\"type\":\"message\",\"id\":\"e1\",\"seq\":1,\"parentId\":null,"
+                + "\"timestamp\":\"2026-08-20T10:00:00Z\",\"message\":{\"role\":\"user\","
+                + "\"content\":[{\"type\":\"image_url\",\"url\":\"https://ex.com/a.png\"}]}}"));
+
+        var html = Files.readString(new HtmlExporter().export(jsonl, tmp.resolve("out.html")));
+
+        assertThat(html).contains("<img src=\"https://ex.com/a.png\" alt=\"image\">");
+    }
+
+    @Test
     void exportDerivesDefaultOutputName() throws Exception {
         var jsonl = tmp.resolve("my-session.jsonl");
         Files.writeString(jsonl, "{\"kind\":\"header\",\"version\":4,\"id\":\"s1\"}\n");

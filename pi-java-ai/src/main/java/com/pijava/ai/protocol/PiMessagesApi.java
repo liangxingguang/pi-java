@@ -217,6 +217,8 @@ public final class PiMessagesApi extends AbstractChatApi {
                 arr.addObject().put("type", "image")
                     .put("mediaType", img.mediaType())
                     .put("data", img.data());
+            } else if (block instanceof ContentBlock.UrlImageContent url) {
+                arr.addObject().put("type", "image_url").put("url", url.url());
             }
         }
         return arr;
