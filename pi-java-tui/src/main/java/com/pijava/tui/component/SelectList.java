@@ -8,6 +8,7 @@ import java.util.function.Function;
 import com.pijava.tui.util.TamboUIAdapter;
 
 import dev.tamboui.toolkit.element.Element;
+import dev.tamboui.tui.event.KeyCode;
 import dev.tamboui.tui.event.KeyEvent;
 
 /**
@@ -51,8 +52,27 @@ public final class SelectList<T> {
             confirmed = true;
             return true; // caller reads selected()
         }
+        if (event.isKey(KeyCode.BACKSPACE)) {
+            if (filter.isEmpty()) {
+                return false;
+            }
+            filter = filter.substring(0, filter.length() - 1);
+            refresh();
+            return true;
+        }
         if (event.isCancel()) {
+            // First Esc clears an active filter; a second Esc cancels.
+            if (!filter.isEmpty()) {
+                filter = "";
+                refresh();
+                return true;
+            }
             cancelled = true;
+            return true;
+        }
+        if (isFilterInput(event)) {
+            filter += event.character();
+            refresh();
             return true;
         }
         return false;
@@ -62,6 +82,20 @@ public final class SelectList<T> {
     public void filter(String query) {
         this.filter = query == null ? "" : query;
         refresh();
+    }
+
+    /** The current filter query (P6-24 type-to-filter; empty when inactive). */
+    public String filter() {
+        return filter;
+    }
+
+    /** Printable character without Ctrl/Alt — accumulates into the filter. */
+    private static boolean isFilterInput(KeyEvent event) {
+        if (event.hasCtrl() || event.hasAlt()) {
+            return false;
+        }
+        return event.code() == KeyCode.CHAR
+            && !Character.isISOControl(event.character());
     }
 
     /** The currently selected item, if any. */
@@ -91,12 +125,15 @@ public final class SelectList<T> {
 
     /** Render the list with the current selection highlighted. */
     public Element render() {
+        String title = filter.isEmpty()
+            ? "Select (type to filter, ↑/↓ enter, Esc cancel)"
+            : "Filter: \"" + filter + "\" (Esc clear, enter confirm)";
         return TamboUIAdapter.list(
             visible.stream().map(label).toList())
             .selected(Math.min(selected, Math.max(0, visible.size() - 1)))
             .highlightColor(dev.tamboui.style.Color.CYAN)
             .rounded()
-            .title("Select (↑/↓ enter, Esc cancel)")
+            .title(title)
             .fill();
     }
 

@@ -27,7 +27,7 @@ public final class FuzzyMatcher {
         return candidates.stream()
             .map(candidate -> new Scored(candidate, score(lower, candidate.toLowerCase())))
             .filter(s -> s.score >= 0)
-            .sorted(Comparator.comparingInt((Scored s) -> s.score).reversed())
+            .sorted(Comparator.comparingInt((Scored s) -> s.score))
             .map(s -> s.candidate)
             .toList();
     }
@@ -41,7 +41,7 @@ public final class FuzzyMatcher {
         return items.stream()
             .map(item -> new ScoredItem<>(item, score(lower, label.apply(item).toLowerCase())))
             .filter(s -> s.score >= 0)
-            .sorted(Comparator.comparingInt((ScoredItem<T> s) -> s.score).reversed())
+            .sorted(Comparator.comparingInt((ScoredItem<T> s) -> s.score))
             .map(s -> s.item)
             .toList();
     }
