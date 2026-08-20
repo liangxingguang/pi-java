@@ -8,6 +8,7 @@ import com.pijava.coding.agent.cli.HelpText;
 import com.pijava.coding.agent.cli.ListModelsCommand;
 import com.pijava.coding.agent.cli.Version;
 import com.pijava.coding.agent.core.Logging;
+import com.pijava.coding.agent.export.HtmlExporter;
 import com.pijava.coding.agent.modes.PrintMode;
 import com.pijava.coding.agent.rpc.RpcMode;
 import com.pijava.coding.agent.spi.TuiEntryPoint;
@@ -67,9 +68,15 @@ public final class Main {
             return 2;
         }
         if (parsed.export() != null) {
-            System.err.println(
-                "error: --export is not implemented yet (HTML renderer lands in Phase 6)");
-            return 2;
+            try {
+                var input = java.nio.file.Path.of(parsed.export());
+                var out = new HtmlExporter().export(input);
+                System.out.println("Exported session to " + out);
+                return 0;
+            } catch (Exception e) {
+                System.err.println("error: " + e.getMessage());
+                return 1;
+            }
         }
         if (parsed.print()) {
             return PrintMode.run(parsed.messages(), parsed);

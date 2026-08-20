@@ -32,9 +32,10 @@ class MainTest {
     }
 
     @Test
-    void exportIsRejected() {
-        int code = Main.run(new String[] {"--export", "out.html"});
-        assertThat(code).isEqualTo(2);
+    void exportOfMissingFileIsError() {
+        // P6-12：--export 已实现；输入文件不存在 → 退出码 1。
+        int code = Main.run(new String[] {"--export", "missing-session.jsonl"});
+        assertThat(code).isEqualTo(1);
     }
 
     @Test

@@ -7,6 +7,7 @@ import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.ai.auth.FileCredentialStore;
 import com.pijava.coding.agent.core.KeybindingsManager;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
+import com.pijava.coding.agent.export.HtmlExporter;
 import com.pijava.coding.agent.core.slash.SlashCommand;
 import com.pijava.coding.agent.core.slash.SlashContext;
 import static com.pijava.coding.agent.core.slash.builtin.CommandUtil.simple;
@@ -33,14 +34,25 @@ public final class MiscCommands {
             (args, ctx) -> ctx.keybindings() == null
                 ? registry.helpText()
                 : registry.helpText() + "\n\n" + hotkeys(ctx)));
-        registry.register(simple("export", "Export session as JSONL", "<path>",
+        registry.register(simple("export", "Export session as HTML or JSONL", "<path>",
             (args, ctx) -> {
                 if (args.isBlank()) {
-                    return "Usage: /export <path>.jsonl";
+                    return "Usage: /export <path>.html|.jsonl";
                 }
                 try {
-                    ctx.session().exportJsonl(java.nio.file.Path.of(args.trim()));
-                    return "Exported session to " + args.trim();
+                    var target = java.nio.file.Path.of(args.trim());
+                    if (target.getFileName().toString().endsWith(".html")) {
+                        var tmp = java.nio.file.Files.createTempFile("pi-java-export", ".jsonl");
+                        try {
+                            ctx.session().exportJsonl(tmp);
+                            var out = new HtmlExporter().export(tmp, target);
+                            return "Exported session to " + out;
+                        } finally {
+                            java.nio.file.Files.deleteIfExists(tmp);
+                        }
+                    }
+                    ctx.session().exportJsonl(target);
+                    return "Exported session to " + target;
                 } catch (Exception e) {
                     return "Export failed: " + e.getMessage();
                 }
