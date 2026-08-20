@@ -1901,8 +1901,8 @@ pi-ai catalog publish --file models.json --endpoint https://models.example.com/u
 |------|------|--------|------|------|
 | P6-12 | HTML 导出渲染器 | 中 | `09-phase4:1628`、`Main.java:64`（`--export`）、`MiscCommands`（`/export`） | ✅ 已完成 |
 | P6-13 | `/share` 会话分享 | 低 | `MiscCommands.java:64` | ⏳ 进行中 |
-| P6-14 | `pi-java config` 子命令（TUI 资源开关） | 低 | `ConfigCommand.java:16` | ⏳ 进行中 |
-| P6-15 | `auth print-bearer-token` | 低 | `AuthCommand.java:34` | ⏳ 进行中 |
+| P6-14 | `pi-java config` 子命令（TUI 资源开关） | 低 | `ConfigCommand.java:16` | ✅ 已完成 |
+| P6-15 | `auth print-bearer-token` | 低 | `AuthCommand.java:34` | ✅ 已完成 |
 | P6-16 | `pi-java package` 子命令（扩展包管理） | 中 | `PackageCommand.java:22`，随 P6-7 落地 | ✅ 已完成 |
 | P6-17 | OAuth 认证流程（`OAuthFlow`） | 中 | `03-detailed-design.md:64`；pi 有 9 个 OAuth provider | ✅ 已完成 |
 | P6-18 | 多 profile 认证（同 provider 多组凭证） | 低 | `06-phase1:711` | ⏳ 进行中 |
