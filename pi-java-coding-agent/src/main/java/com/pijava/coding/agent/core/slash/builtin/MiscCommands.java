@@ -6,6 +6,7 @@ import java.util.concurrent.CompletionStage;
 import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.ai.auth.FileCredentialStore;
 import com.pijava.coding.agent.core.KeybindingsManager;
+import com.pijava.coding.agent.core.SessionShare;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
 import com.pijava.coding.agent.export.HtmlExporter;
 import com.pijava.coding.agent.core.slash.SlashCommand;
@@ -71,9 +72,26 @@ public final class MiscCommands {
                     return "Import failed: " + e.getMessage();
                 }
             }));
-        registry.register(placeholder("share",
-            "Share session as GitHub gist", "",
-            "Session sharing is not implemented yet (Phase 6)."));
+        registry.register(new SlashCommand() {
+            @Override public String name() { return "share"; }
+            @Override public String description() { return "Share session as GitHub gist"; }
+            @Override public String argumentHint() { return ""; }
+            @Override public CompletionStage<String> execute(String args, SlashContext ctx) {
+                try {
+                    var tmp = java.nio.file.Files.createTempFile("pi-java-share", ".jsonl");
+                    try {
+                        ctx.session().exportJsonl(tmp);
+                        var jsonl = java.nio.file.Files.readString(tmp);
+                        var url = new SessionShare().share(jsonl);
+                        return CompletableFuture.completedFuture("Shared session: " + url);
+                    } finally {
+                        java.nio.file.Files.deleteIfExists(tmp);
+                    }
+                } catch (Exception e) {
+                    return CompletableFuture.completedFuture("Share failed: " + e.getMessage());
+                }
+            }
+        });
         registry.register(new SlashCommand() {
             @Override public String name() { return "copy"; }
             @Override public String description() {
@@ -179,8 +197,4 @@ public final class MiscCommands {
         return builder.toString();
     }
 
-    private static SlashCommand placeholder(String name, String description,
-                                            String hint, String message) {
-        return simple(name, description, hint, (args, ctx) -> message);
-    }
 }
