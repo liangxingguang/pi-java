@@ -42,4 +42,40 @@ class MarkdownRendererTest {
         var renderer = new MarkdownRenderer();
         assertThat(renderer.render("# Hi\n\n```\ncode\n```\n- a\n> q")).isNotNull();
     }
+
+    @Test
+    void parsesPipeTables() {
+        var markdown = """
+            | a | b |
+            |---|---|
+            | 1 | 2 |
+            """;
+
+        var blocks = MarkdownRenderer.parseBlocks(markdown);
+
+        assertThat(blocks).hasSize(1);
+        assertThat(blocks.get(0)).isInstanceOf(MarkdownRenderer.Block.Table.class);
+        assertThat(((MarkdownRenderer.Block.Table) blocks.get(0)).rows())
+            .containsExactly(List.of("a", "b"), List.of("1", "2"));
+    }
+
+    @Test
+    void parsesImageBlocks() {
+        var blocks = MarkdownRenderer.parseBlocks("![diagram](https://ex.com/d.png)");
+
+        assertThat(blocks.get(0)).isInstanceOf(MarkdownRenderer.Block.Image.class);
+        assertThat(((MarkdownRenderer.Block.Image) blocks.get(0)).alt())
+            .isEqualTo("diagram");
+        assertThat(((MarkdownRenderer.Block.Image) blocks.get(0)).url())
+            .isEqualTo("https://ex.com/d.png");
+    }
+
+    @Test
+    void mermaidFenceIsCodeBlockWithLanguage() {
+        var blocks = MarkdownRenderer.parseBlocks("```mermaid\ngraph TD\nA-->B\n```");
+
+        assertThat(blocks.get(0)).isInstanceOf(MarkdownRenderer.Block.Code.class);
+        assertThat(((MarkdownRenderer.Block.Code) blocks.get(0)).language())
+            .isEqualTo("mermaid");
+    }
 }

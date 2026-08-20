@@ -100,6 +100,9 @@ public final class MessageBubble {
                 case ContentBlock.ImageContent(var mediaType, var data) ->
                     List.of(new LogicalLine(
                         "[image: " + mediaType + "]", 0, 0, false, Style.EMPTY.dim()));
+                case ContentBlock.UrlImageContent(var url) ->
+                    List.of(new LogicalLine(
+                        "[image: " + url + "]", 0, 0, false, Style.EMPTY.dim()));
             };
             lines.addAll(blockLines);
         }
