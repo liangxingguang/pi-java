@@ -4,8 +4,7 @@ import com.pijava.agent.harness.StreamFn;
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.ChatApi;
 import com.pijava.ai.api.StreamIterator;
-import com.pijava.ai.auth.EnvApiKeyResolver;
-import com.pijava.ai.auth.FileCredentialStore;
+import com.pijava.ai.auth.Credentials;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.provider.Provider;
@@ -90,8 +89,7 @@ public final class DefaultProviders {
         if (args.apiKey() != null && !args.apiKey().isBlank()) {
             return args.apiKey();
         }
-        var env = new EnvApiKeyResolver().resolveApiKey(providerName);
-        return env.orElseGet(() -> new FileCredentialStore().resolveApiKey(providerName)
-                .orElse(""));
+        // P6-18：profile 感知解析（激活 profile → 默认）。
+        return Credentials.resolveApiKey(providerName).orElse("");
     }
 }

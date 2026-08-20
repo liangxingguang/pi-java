@@ -2,9 +2,9 @@ package com.pijava.coding.agent.subcommand;
 
 import java.util.Optional;
 
-import com.pijava.ai.auth.EnvApiKeyResolver;
+import com.pijava.ai.auth.AuthProfileManager;
+import com.pijava.ai.auth.Credentials;
 import com.pijava.ai.auth.FileCredentialStore;
-import com.pijava.ai.auth.OAuthConfig;
 import com.pijava.ai.auth.OAuthCredential;
 import com.pijava.ai.auth.OAuthCredentialStore;
 import com.pijava.ai.auth.OAuthFlow;
@@ -39,6 +39,7 @@ public final class AuthCommand {
             case "check" -> check(provider(subArgs));
             case "oauth-login" -> oauthLogin(provider(subArgs));
             case "print-bearer-token" -> printBearerToken(provider(subArgs));
+            case "profile" -> profileCommand(subArgs);
             default -> {
                 System.out.println("Unknown auth command: " + subArgs[0]);
                 usage();
@@ -118,26 +119,23 @@ public final class AuthCommand {
     }
 
     private static Optional<String> resolve(String provider) {
-        var env = new EnvApiKeyResolver().resolveApiKey(provider);
-        if (env.isPresent()) {
-            return env;
-        }
-        var file = new FileCredentialStore().resolveApiKey(provider);
-        if (file.isPresent()) {
-            return file;
+        var credential = Credentials.resolveApiKey(provider);
+        if (credential.isPresent()) {
+            return credential;
         }
         var oauth = new OAuthCredentialStore().resolve(provider);
         if (oauth.isEmpty()) {
             return Optional.empty();
         }
-        var credential = oauth.get();
-        if (credential.isExpired()) {
-            credential = refresh(provider, credential);
-            if (credential != null) {
-                new OAuthCredentialStore().store(provider, credential);
+        var oauthCredential = oauth.get();
+        if (oauthCredential.isExpired()) {
+            oauthCredential = refresh(provider, oauthCredential);
+            if (oauthCredential != null) {
+                new OAuthCredentialStore().store(provider, oauthCredential);
             }
         }
-        return Optional.ofNullable(credential == null ? null : credential.accessToken());
+        return Optional.ofNullable(
+            oauthCredential == null ? null : oauthCredential.accessToken());
     }
 
     /** 过期凭证尝试刷新；无 refresh token 或未注册 OAuth 配置时返回原值。 */
@@ -158,6 +156,71 @@ public final class AuthCommand {
         }
     }
 
+    /** 多 profile 认证（P6-18）：{@code auth profile set|unset|list|set-key ...}。 */
+    private static int profileCommand(String[] subArgs) {
+        if (subArgs.length < 2) {
+            usage();
+            return 1;
+        }
+        return switch (subArgs[1]) {
+            case "set" -> setProfile(subArgs);
+            case "unset" -> unsetProfile(subArgs);
+            case "list" -> listProfiles(subArgs);
+            case "set-key" -> setProfileKey(subArgs);
+            default -> {
+                System.out.println("Unknown profile command: " + subArgs[1]);
+                usage();
+                yield 1;
+            }
+        };
+    }
+
+    private static int setProfile(String[] subArgs) {
+        if (subArgs.length < 4) {
+            usage();
+            return 1;
+        }
+        var provider = subArgs[2];
+        new AuthProfileManager().setActiveProfile(provider, subArgs[3]);
+        System.out.println("Active profile for " + provider + " set to " + subArgs[3]);
+        return 0;
+    }
+
+    private static int unsetProfile(String[] subArgs) {
+        if (subArgs.length < 3) {
+            usage();
+            return 1;
+        }
+        var provider = subArgs[2];
+        new AuthProfileManager().clearActiveProfile(provider);
+        System.out.println("Active profile for " + provider + " cleared (default credential)");
+        return 0;
+    }
+
+    private static int listProfiles(String[] subArgs) {
+        if (subArgs.length < 3) {
+            usage();
+            return 1;
+        }
+        var provider = subArgs[2];
+        var manager = new AuthProfileManager();
+        System.out.println("Active profile for " + provider + ": "
+            + manager.activeProfile(provider).orElse("(default)"));
+        return 0;
+    }
+
+    private static int setProfileKey(String[] subArgs) {
+        if (subArgs.length < 5) {
+            usage();
+            return 1;
+        }
+        var provider = subArgs[2];
+        var profile = subArgs[3];
+        new FileCredentialStore().storeApiKey(provider, profile, subArgs[4]);
+        System.out.println("Stored API key for " + provider + " profile " + profile);
+        return 0;
+    }
+
     private static String provider(String[] subArgs) {
         return subArgs.length > 1 ? subArgs[1] : null;
     }
@@ -169,6 +232,10 @@ public final class AuthCommand {
               pi-java auth check <provider>
               pi-java auth oauth-login <provider>   (OAuth PKCE flow; e.g. openrouter)
               pi-java auth print-bearer-token <provider>   (print "Bearer <key>" header value)
+              pi-java auth profile set <provider> <name>   (activate a credential profile)
+              pi-java auth profile unset <provider>
+              pi-java auth profile list <provider>
+              pi-java auth profile set-key <provider> <name> <key>   (store a profile key)
             Providers: anthropic | openai | google | deepseek | mistral
             OAuth: """ + OAuthProviders.names());
     }

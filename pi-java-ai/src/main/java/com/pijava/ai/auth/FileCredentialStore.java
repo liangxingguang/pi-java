@@ -49,6 +49,31 @@ public final class FileCredentialStore implements CredentialStore {
                 .filter(v -> !v.isBlank());
     }
 
+    /** 按 profile 解析（key 形如 {@code provider::profile}，P6-18）。 */
+    public Optional<String> resolveApiKey(String provider, String profile) {
+        var all = readAll();
+        return Optional.ofNullable(all.get(profileKey(provider, profile)))
+                .filter(v -> !v.isBlank());
+    }
+
+    /** 存储指定 profile 的 API key。 */
+    public void storeApiKey(String provider, String profile, String apiKey) {
+        var all = readAll();
+        all.put(profileKey(provider, profile), apiKey);
+        writeAll(all);
+    }
+
+    /** 删除指定 profile 的 API key。 */
+    public void deleteApiKey(String provider, String profile) {
+        var all = readAll();
+        all.remove(profileKey(provider, profile));
+        writeAll(all);
+    }
+
+    private static String profileKey(String provider, String profile) {
+        return provider + "::" + profile;
+    }
+
     @Override
     public void storeApiKey(String provider, String apiKey) {
         var all = readAll();

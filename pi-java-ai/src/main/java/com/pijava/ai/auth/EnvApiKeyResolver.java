@@ -27,6 +27,19 @@ public final class EnvApiKeyResolver implements CredentialStore {
         return Optional.ofNullable(value).filter(v -> !v.isBlank());
     }
 
+    /**
+     * 按 profile 解析：环境变量 {@code <PROVIDER>_API_KEY_<PROFILE>}（P6-18）。
+     * 如 {@code ANTHROPIC_API_KEY_WORK}。
+     */
+    public Optional<String> resolveApiKey(String provider, String profile) {
+        var envVar = ENV_VAR_MAP.get(provider);
+        if (envVar == null || envVar.isBlank()) {
+            return Optional.empty();
+        }
+        var value = System.getenv(envVar + "_" + profile.toUpperCase());
+        return Optional.ofNullable(value).filter(v -> !v.isBlank());
+    }
+
     @Override
     public void storeApiKey(String provider, String apiKey) {
         throw new UnsupportedOperationException(
