@@ -1909,7 +1909,7 @@ pi-ai catalog publish --file models.json --endpoint https://models.example.com/u
 | P6-19 | URL 引用图片输入（非 base64） | 低 | `06-phase1:712` | ✅ 已完成 |
 | P6-20 | OpenTelemetry Telemetry 实现 | 低 | `07c-phase2c:997,1011,1144` | ⏳ 进行中 |
 | P6-21 | 自定义主题文件加载 | 低 | `08-phase3:261` | ⏳ 进行中 |
-| P6-22 | Markdown 表格 / 图片 / mermaid 渲染 | 低 | `08-phase3:431,456` | ⏳ 进行中 |
+| P6-22 | Markdown 表格 / 图片 / mermaid 渲染 | 低 | `08-phase3:431,456` | ✅ 已完成 |
 | P6-23 | 编辑器语法高亮 + 智能补全 | 低 | `08-phase3:485,487`（依赖 TamboUI 0.4+） | ⏳ 进行中 |
 | P6-24 | `tree.filter.*` / `models.*` 富过滤键绑定 | 低 | `08-phase3:601,635,647` | ⏳ 进行中 |
 | P6-25 | Entry 元数据事件富样式渲染 | 低 | `08-phase3:306` | ⏳ 进行中 |
