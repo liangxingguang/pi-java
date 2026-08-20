@@ -40,7 +40,7 @@ public final class SubcommandHandler {
             case "auth" -> AuthCommand.run(subArgs);
             case "install", "remove", "uninstall", "update", "list" ->
                 PackageCommand.run(subCommand, subArgs);
-            case "config" -> ConfigCommand.run();
+            case "config" -> ConfigCommand.run(subArgs);
             default -> 2;
         };
     }
