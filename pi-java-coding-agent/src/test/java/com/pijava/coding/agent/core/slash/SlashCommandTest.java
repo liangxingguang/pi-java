@@ -15,16 +15,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SlashCommandTest {
 
     @Test
-    void registersAll22BuiltinCommands() {
+    void registersAllBuiltinCommands() {
         var registry = CommandRegistry.withBuiltins();
         var names = registry.names();
 
-        assertThat(names).hasSize(23);
+        // P6-27 新增 /create-skill。
+        assertThat(names).hasSize(24);
         assertThat(names).contains(
             "help", "settings", "model", "scoped-models", "export", "import", "share",
             "copy", "name", "session", "changelog", "hotkeys", "fork", "clone",
             "tree", "trust", "login", "logout", "new", "compact", "resume",
-            "reload", "quit");
+            "reload", "quit", "create-skill");
     }
 
     @Test

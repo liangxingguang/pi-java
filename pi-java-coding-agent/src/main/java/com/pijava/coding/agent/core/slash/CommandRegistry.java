@@ -10,6 +10,7 @@ import com.pijava.coding.agent.core.slash.builtin.MiscCommands;
 import com.pijava.coding.agent.core.slash.builtin.ModelCommands;
 import com.pijava.coding.agent.core.slash.builtin.SessionCommands;
 import com.pijava.coding.agent.core.slash.builtin.SettingsCommands;
+import com.pijava.coding.agent.core.slash.builtin.SkillsCommands;
 
 /**
  * Slash command registry (Phase 3 design §14.1).
@@ -97,6 +98,7 @@ public final class CommandRegistry {
         SessionCommands.registerAll(registry);
         SettingsCommands.registerAll(registry);
         MiscCommands.registerAll(registry);
+        SkillsCommands.registerAll(registry);
         return registry;
     }
 }
