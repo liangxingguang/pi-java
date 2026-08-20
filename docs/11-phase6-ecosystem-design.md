@@ -1899,7 +1899,7 @@ pi-ai catalog publish --file models.json --endpoint https://models.example.com/u
 
 | 编号 | 任务 | 优先级 | 出处 | 状态 |
 |------|------|--------|------|------|
-| P6-12 | HTML 导出渲染器 | 中 | `09-phase4:1628`、`Main.java:64`（`--export`）、`MiscCommands`（`/export`） | ⏳ 进行中 |
+| P6-12 | HTML 导出渲染器 | 中 | `09-phase4:1628`、`Main.java:64`（`--export`）、`MiscCommands`（`/export`） | ✅ 已完成 |
 | P6-13 | `/share` 会话分享 | 低 | `MiscCommands.java:64` | ⏳ 进行中 |
 | P6-14 | `pi-java config` 子命令（TUI 资源开关） | 低 | `ConfigCommand.java:16` | ⏳ 进行中 |
 | P6-15 | `auth print-bearer-token` | 低 | `AuthCommand.java:34` | ⏳ 进行中 |
