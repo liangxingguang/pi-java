@@ -38,11 +38,7 @@ public final class AuthCommand {
             case "print-api-key" -> printApiKey(provider(subArgs));
             case "check" -> check(provider(subArgs));
             case "oauth-login" -> oauthLogin(provider(subArgs));
-            case "print-bearer-token" -> {
-                System.out.println(
-                    "error: print-bearer-token is not implemented yet (P6-15)");
-                yield 2;
-            }
+            case "print-bearer-token" -> printBearerToken(provider(subArgs));
             default -> {
                 System.out.println("Unknown auth command: " + subArgs[0]);
                 usage();
@@ -101,6 +97,26 @@ public final class AuthCommand {
         return key.isPresent() ? 0 : 1;
     }
 
+    /** 输出 HTTP {@code Authorization} 请求头值（P6-15）。 */
+    private static int printBearerToken(String provider) {
+        if (provider == null) {
+            usage();
+            return 1;
+        }
+        var key = resolve(provider);
+        if (key.isEmpty()) {
+            System.out.println("No API key found for " + provider);
+            return 1;
+        }
+        System.out.println(bearer(key.get()));
+        return 0;
+    }
+
+    /** 将 API key 格式化为 {@code Authorization} 头值。 */
+    static String bearer(String apiKey) {
+        return "Bearer " + apiKey;
+    }
+
     private static Optional<String> resolve(String provider) {
         var env = new EnvApiKeyResolver().resolveApiKey(provider);
         if (env.isPresent()) {
@@ -152,7 +168,7 @@ public final class AuthCommand {
               pi-java auth print-api-key <provider>
               pi-java auth check <provider>
               pi-java auth oauth-login <provider>   (OAuth PKCE flow; e.g. openrouter)
-              pi-java auth print-bearer-token <provider>   (P6-15)
+              pi-java auth print-bearer-token <provider>   (print "Bearer <key>" header value)
             Providers: anthropic | openai | google | deepseek | mistral
             OAuth: """ + OAuthProviders.names());
     }
