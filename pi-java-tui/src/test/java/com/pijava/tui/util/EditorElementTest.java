@@ -45,4 +45,33 @@ class EditorElementTest {
         assertThat(cursorStyle.bg()).contains(EditorElement.CURSOR);
         assertThat(cursorStyle.fg()).contains(dev.tamboui.style.Color.BLACK);
     }
+
+    @Test
+    void highlightsKeywordTokensInCurrentLine() throws Exception {
+        var state = new TextAreaState();
+        state.setText("return");
+        var element = new EditorElement(state);
+        var buffer = Buffer.empty(new Rect(0, 0, 30, 1));
+        var frame = Frame.forTesting(buffer);
+        var context = new DefaultRenderContext(
+            new FocusManager(),
+            new EventRouter(new FocusManager(), new ElementRegistry()));
+
+        var mark = RenderThread.class.getDeclaredMethod("markAsRenderThread");
+        mark.setAccessible(true);
+        mark.invoke(null);
+        try {
+            element.render(frame, new Rect(0, 0, 30, 1), context);
+        } finally {
+            var clear = RenderThread.class.getDeclaredMethod("clearRenderThread");
+            clear.setAccessible(true);
+            clear.invoke(null);
+        }
+
+        // "return" is a highlighted keyword: the cell carries a foreground color.
+        assertThat(buffer.get(0, 0).symbol()).isEqualTo("r");
+        assertThat(buffer.get(0, 0).style().fg()).isPresent();
+        // The cursor still sits after the text.
+        assertThat(buffer.get(6, 0).style().bg()).contains(EditorElement.CURSOR);
+    }
 }
