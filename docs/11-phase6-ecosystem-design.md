@@ -1914,7 +1914,7 @@ pi-ai catalog publish --file models.json --endpoint https://models.example.com/u
 | P6-24 | `tree.filter.*` / `models.*` 富过滤键绑定 | 低 | `08-phase3:601,635,647` | ⏳ 进行中 |
 | P6-25 | Entry 元数据事件富样式渲染 | 低 | `08-phase3:306` | ⏳ 进行中 |
 | P6-26 | 会话 diff 渲染 | 低 | `08b-phase3:447` | ⏳ 进行中 |
-| P6-27 | AI 生成 Skills | 低 | `07c-phase2c:1130` | ⏳ 进行中 |
+| P6-27 | AI 生成 Skills | 低 | `07c-phase2c:1130` | ✅ 已完成 |
 | P6-28 | `ImageApi` / `EmbeddingApi`（需改 `ProviderApi` permits） | 低 | `02-architecture:155`、`06-phase1:226` | ⏳ 进行中 |
 
 > **建议实施顺序**：P6-1a→1b→1c→1d（Provider 基础）→ P6-2/3/4（evals，可与 1e/1f/1g 并行）→ P6-5a→5b（RPC 核心）→ P6-6/P6-7/P6-16（Skills/Extensions）→ P6-8 → P6-12（HTML 导出）→ P6-17（OAuth）→ P6-9a/9b/9c（远程会话）→ P6-10/11 → 其余低优先级遗留项按需。
