@@ -5,6 +5,7 @@ import java.util.List;
 
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.tui.component.ChatMessage;
+import com.pijava.tui.component.MetaKind;
 
 import dev.tamboui.text.Line;
 
@@ -49,7 +50,7 @@ class ScrollbackTranscriptTest {
         var transcript = new ScrollbackTranscript(sink);
         var messages = new ArrayList<ChatMessage>();
         messages.add(new ChatMessage.User("hello"));
-        messages.add(new ChatMessage.System("done"));
+        messages.add(new ChatMessage.System("done", MetaKind.GENERIC));
 
         transcript.sync(messages, null, WIDTH);
 

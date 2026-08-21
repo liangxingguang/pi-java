@@ -9,6 +9,7 @@ import com.pijava.coding.agent.core.StreamObserver;
 import com.pijava.tui.component.ChatMessage;
 import com.pijava.tui.component.ChatPanel;
 import com.pijava.tui.component.EditorComponent;
+import com.pijava.tui.component.MetaKind;
 import com.pijava.tui.component.SlashCompleter;
 import com.pijava.tui.component.StatusBar;
 import com.pijava.tui.util.TamboUIAdapter;
@@ -129,7 +130,7 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
      * tips) as the first message of the transcript.
      */
     public void showWelcome(String cardText) {
-        chatPanel.append(new ChatMessage.System(cardText));
+        chatPanel.append(new ChatMessage.System(cardText, MetaKind.GENERIC));
     }
 
     /** Reset per-run tool accounting (called before each prompt submission). */
@@ -328,7 +329,7 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
 
     /** Append a system/info bubble (slash command results). */
     public void appendSystemText(String text) {
-        chatPanel.append(new ChatMessage.System(text));
+        chatPanel.append(new ChatMessage.System(text, MetaKind.GENERIC));
     }
 
     /** Show the user's message immediately on submit (optimistic bubble). */

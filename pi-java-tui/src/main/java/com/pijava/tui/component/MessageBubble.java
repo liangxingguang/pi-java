@@ -7,6 +7,7 @@ import java.util.Map;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.tui.util.TextLayout;
 
+import dev.tamboui.style.Color;
 import dev.tamboui.style.Style;
 
 /**
@@ -43,7 +44,7 @@ public final class MessageBubble {
                     isError ? Style.EMPTY.red() : Style.EMPTY.dim()));
             case ChatMessage.Error(var message) ->
                 TextLayout.split("[red]" + TextLayout.escapeMarkup(message) + "[/]", false);
-            case ChatMessage.System(var text) -> dim(TextLayout.split(TextLayout.escapeMarkup(text), false));
+            case ChatMessage.System(var text, var kind) -> system(text, kind);
             case ChatMessage.TurnSeparator(var label) ->
                 List.of(new LogicalLine(separator(label), 0, 0, false, Style.EMPTY.dim()));
         };
@@ -132,6 +133,29 @@ public final class MessageBubble {
             out.add(new LogicalLine(line.markup(), line.initialIndent(),
                 line.subsequentIndent(), line.preformatted(),
                 Style.EMPTY.dim().patch(line.style())));
+        }
+        return out;
+    }
+
+    /**
+     * Renders a metadata/system bubble (P6-25): the kind's icon prefixes the
+     * first line, and the whole block takes the kind's color — except GENERIC,
+     * which stays the legacy dim line with no icon.
+     */
+    private static List<LogicalLine> system(String text, MetaKind kind) {
+        String escaped = TextLayout.escapeMarkup(text);
+        String label = kind.icon() == null ? escaped : kind.icon() + " " + escaped;
+        var lines = TextLayout.split(label, false);
+        return kind == MetaKind.GENERIC ? dim(lines) : colorize(lines, kind.color());
+    }
+
+    /** Tints every line with a foreground color, preserving line styles. */
+    private static List<LogicalLine> colorize(List<LogicalLine> lines, Color color) {
+        var out = new ArrayList<LogicalLine>(lines.size());
+        for (var line : lines) {
+            out.add(new LogicalLine(line.markup(), line.initialIndent(),
+                line.subsequentIndent(), line.preformatted(),
+                Style.EMPTY.fg(color).patch(line.style())));
         }
         return out;
     }

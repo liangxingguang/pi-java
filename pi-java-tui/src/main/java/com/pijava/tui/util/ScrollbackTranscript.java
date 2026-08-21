@@ -6,6 +6,7 @@ import java.util.List;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.tui.component.ChatMessage;
 import com.pijava.tui.component.LogicalLine;
+import com.pijava.tui.component.MetaKind;
 import com.pijava.tui.component.MessageBubble;
 import com.pijava.tui.component.RenderRow;
 import com.pijava.tui.util.TextLayout;
@@ -116,7 +117,7 @@ public final class ScrollbackTranscript {
             case ChatMessage.ToolCall(String name, String arguments) -> name + " " + arguments;
             case ChatMessage.ToolResult(String output, boolean isError) -> output;
             case ChatMessage.Error(String text) -> text;
-            case ChatMessage.System(String text) -> text;
+            case ChatMessage.System(String text, MetaKind kind) -> text;
             case ChatMessage.TurnSeparator(String label) -> label;
         };
     }

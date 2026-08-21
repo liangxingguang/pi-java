@@ -16,7 +16,13 @@ public sealed interface ChatMessage {
     record ToolCall(String name, String arguments) implements ChatMessage {}
     record ToolResult(String output, boolean isError) implements ChatMessage {}
     record Error(String message) implements ChatMessage {}
-    record System(String text) implements ChatMessage {}
+    /** Metadata/system bubble; {@link MetaKind} drives icon + color (P6-25). */
+    record System(String text, MetaKind kind) implements ChatMessage {
+        /** Defaults a null kind to {@link MetaKind#GENERIC}. */
+        public System {
+            kind = kind == null ? MetaKind.GENERIC : kind;
+        }
+    }
     /** Inter-turn divider with an optional runtime label (Codex CLI style). */
     record TurnSeparator(String label) implements ChatMessage {}
 
@@ -25,18 +31,22 @@ public sealed interface ChatMessage {
         return switch (entry) {
             case Entry.Message message -> fromMessage(message);
             case Entry.ModelChange change ->
-                new System("Model: " + change.provider() + "/" + change.modelId());
+                new System("Model: " + change.provider() + "/" + change.modelId(),
+                    MetaKind.MODEL_CHANGE);
             case Entry.ThinkingLevelChange change ->
-                new System("Thinking: " + change.thinkingLevel());
+                new System("Thinking: " + change.thinkingLevel(),
+                    MetaKind.THINKING_LEVEL);
             case Entry.ActiveToolsChange change ->
-                new System("Tools: " + String.join(", ", change.activeToolNames()));
+                new System("Tools: " + String.join(", ", change.activeToolNames()),
+                    MetaKind.ACTIVE_TOOLS);
             case Entry.Compaction compaction ->
-                new System("Compacted context: " + compaction.summary());
+                new System("Compacted context: " + compaction.summary(),
+                    MetaKind.COMPACTION);
 
             case Entry.BranchSummary summary ->
-                new System("Branch: " + summary.summary());
+                new System("Branch: " + summary.summary(), MetaKind.BRANCH);
             case Entry.Custom custom ->
-                new System("Custom event: " + custom.customType());
+                new System("Custom event: " + custom.customType(), MetaKind.CUSTOM);
         };
     }
 
@@ -46,7 +56,8 @@ public sealed interface ChatMessage {
             case "user" -> new User(joinText(content));
             case "assistant" -> new Assistant(content);
             case "tool" -> fromToolBlocks(content);
-            default -> new System("Unknown message role: " + message.message().role());
+            default -> new System("Unknown message role: " + message.message().role(),
+                MetaKind.GENERIC);
         };
     }
 

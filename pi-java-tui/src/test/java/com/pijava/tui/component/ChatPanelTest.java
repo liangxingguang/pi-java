@@ -15,7 +15,7 @@ class ChatPanelTest {
         panel.append(new ChatMessage.User("hi"));
         panel.append(new ChatMessage.Assistant(List.of(
             new ContentBlock.TextContent("hello"))));
-        panel.append(new ChatMessage.System("info"));
+        panel.append(new ChatMessage.System("info", MetaKind.GENERIC));
 
         assertThat(panel.render()).isInstanceOf(ChatViewportElement.class);
     }

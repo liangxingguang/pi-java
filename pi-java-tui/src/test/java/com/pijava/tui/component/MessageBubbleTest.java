@@ -2,6 +2,7 @@ package com.pijava.tui.component;
 
 import java.util.List;
 
+import com.pijava.agent.entry.Entry;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 
@@ -26,7 +27,7 @@ class MessageBubbleTest {
         assertThat(MessageBubble.lines(new ChatMessage.ToolResult("output", false)))
             .isNotEmpty();
         assertThat(MessageBubble.lines(new ChatMessage.Error("boom"))).isNotEmpty();
-        assertThat(MessageBubble.lines(new ChatMessage.System("info"))).isNotEmpty();
+        assertThat(MessageBubble.lines(new ChatMessage.System("info", MetaKind.GENERIC))).isNotEmpty();
         assertThat(MessageBubble.lines(new ChatMessage.TurnSeparator("done"))).isNotEmpty();
     }
 
@@ -101,9 +102,44 @@ class MessageBubbleTest {
 
     @Test
     void systemLinesAreDim() {
-        var lines = MessageBubble.lines(new ChatMessage.System("info"));
+        var lines = MessageBubble.lines(new ChatMessage.System("info", MetaKind.GENERIC));
         assertThat(lines).isNotEmpty();
+        assertThat(lines.get(0).markup()).isEqualTo("info");
         assertThat(lines.get(0).style()).isEqualTo(Style.EMPTY.dim());
+    }
+
+    @Test
+    void metadataKindsRenderIconAndColor() {
+        for (var kind : new MetaKind[] {MetaKind.MODEL_CHANGE, MetaKind.THINKING_LEVEL,
+                MetaKind.ACTIVE_TOOLS, MetaKind.COMPACTION, MetaKind.BRANCH, MetaKind.CUSTOM}) {
+            var lines = MessageBubble.lines(new ChatMessage.System("hello", kind));
+            assertThat(lines).hasSize(1);
+            assertThat(lines.get(0).markup()).isEqualTo(kind.icon() + " hello");
+            assertThat(lines.get(0).style()).isEqualTo(Style.EMPTY.fg(kind.color()));
+        }
+    }
+
+    @Test
+    void metadataEntriesMapToDistinctKinds() {
+        assertThat(ChatMessage.from(new Entry.ModelChange(
+                "m", 0, null, null, "deepseek", "v4")))
+            .isEqualTo(new ChatMessage.System("Model: deepseek/v4", MetaKind.MODEL_CHANGE));
+        assertThat(ChatMessage.from(new Entry.ThinkingLevelChange(
+                "t", 0, null, null, "high")))
+            .isEqualTo(new ChatMessage.System("Thinking: high", MetaKind.THINKING_LEVEL));
+        assertThat(ChatMessage.from(new Entry.ActiveToolsChange(
+                "a", 0, null, null, List.of("bash", "write"))))
+            .isEqualTo(new ChatMessage.System("Tools: bash, write", MetaKind.ACTIVE_TOOLS));
+        assertThat(ChatMessage.from(new Entry.Compaction(
+                "c", 0, null, null, "kept 3 msgs", List.of(), 100, null, null)))
+            .isEqualTo(new ChatMessage.System(
+                "Compacted context: kept 3 msgs", MetaKind.COMPACTION));
+        assertThat(ChatMessage.from(new Entry.BranchSummary(
+                "b", 0, null, null, "from-1", "summ", null, null)))
+            .isEqualTo(new ChatMessage.System("Branch: summ", MetaKind.BRANCH));
+        assertThat(ChatMessage.from(new Entry.Custom(
+                "x", 0, null, null, "progress", null)))
+            .isEqualTo(new ChatMessage.System("Custom event: progress", MetaKind.CUSTOM));
     }
 
     @Test
