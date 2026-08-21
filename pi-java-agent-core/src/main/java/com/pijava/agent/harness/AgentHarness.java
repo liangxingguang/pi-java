@@ -241,6 +241,11 @@ public class AgentHarness implements AutoCloseable {
         state.followUpMode = mode;
     }
 
+    /** The shared tool context (shell executor, cwd, env) for this harness. */
+    public ToolContext toolContext() {
+        return toolContext;
+    }
+
     /** Current tool execution mode. */
     public ToolExecution toolExecution() {
         return state.toolExecution;

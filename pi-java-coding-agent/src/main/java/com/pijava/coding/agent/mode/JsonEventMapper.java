@@ -48,6 +48,49 @@ public final class JsonEventMapper {
                 node.put("type", "entry_appended");
                 node.set("entry", MAPPER.valueToTree(a.entry()));
             }
+            case AgentSessionEvent.QueueUpdate q -> {
+                node.put("type", "queue_update");
+                node.set("steering", MAPPER.valueToTree(q.steering()));
+                node.set("followUp", MAPPER.valueToTree(q.followUp()));
+            }
+            case AgentSessionEvent.SessionInfoChanged s -> {
+                node.put("type", "session_info_changed");
+                node.put("name", s.name());
+            }
+            case AgentSessionEvent.ThinkingLevelChanged t -> {
+                node.put("type", "thinking_level_changed");
+                node.set("level", MAPPER.valueToTree(t.level()));
+            }
+            case AgentSessionEvent.CompactionStart c -> {
+                node.put("type", "compaction_start");
+                node.put("reason", c.reason().name());
+            }
+            case AgentSessionEvent.CompactionEnd c -> {
+                node.put("type", "compaction_end");
+                node.put("reason", c.reason().name());
+                node.set("result", MAPPER.valueToTree(c.result()));
+                node.put("aborted", c.aborted());
+                node.put("willRetry", c.willRetry());
+                node.put("errorMessage", c.errorMessage());
+            }
+            case AgentSessionEvent.AutoRetryStart r -> {
+                node.put("type", "auto_retry_start");
+                node.put("attempt", r.attempt());
+                node.put("maxAttempts", r.maxAttempts());
+                node.put("delayMs", r.delayMs());
+                node.put("errorMessage", r.errorMessage());
+            }
+            case AgentSessionEvent.AutoRetryEnd r -> {
+                node.put("type", "auto_retry_end");
+                node.put("success", r.success());
+                node.put("attempt", r.attempt());
+                node.put("finalError", r.finalError());
+            }
+            case AgentSessionEvent.BashExecutionUpdate b -> {
+                node.put("type", "bash_execution_update");
+                node.put("id", b.id());
+                node.put("delta", b.delta());
+            }
             default -> node.put("type", "unsupported_event");
         }
         return node;

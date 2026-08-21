@@ -33,6 +33,9 @@ import com.pijava.agent.tool.ToolContext;
 import com.pijava.agent.tool.ToolSetFactory;
 import com.pijava.agent.tool.DefaultFileSystem;
 import com.pijava.agent.tool.DefaultShellExecutor;
+import com.pijava.agent.tool.ShellOptions;
+import com.pijava.agent.tool.ShellResult;
+import com.pijava.ai.AbortSignal;
 import com.pijava.ai.provider.builtin.ProviderCatalog;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.model.DefaultModelResolver;
@@ -88,6 +91,10 @@ public final class AgentSession implements AutoCloseable {
     private final SessionEventHub eventHub = new SessionEventHub();
     // Phase 6 (P6-7b): 扩展 UI 服务（RPC 模式注入，缺省 noop）。
     private ExtensionUI extensionUI = ExtensionUI.noop();
+    // P6-5d: auto-retry / 会话级 bash 状态（RPC 末批命令）。
+    private volatile boolean autoRetryEnabled;
+    private volatile boolean retryAborted;
+    private volatile AbortSignal bashAbortSignal;
 
     private AgentSession(AgentHarness harness, SessionServices services,
                          Args args, String name) {
@@ -434,6 +441,98 @@ public final class AgentSession implements AutoCloseable {
         forked.repository = repository;
         repository.create(forked);
         return forked;
+    }
+
+    /** Fork a new session branching from a specific entry (RPC {@code fork}/{@code clone}).
+     *  持久化路径按 pi {@code ForkOptions.Branch} 在 entry 前分支；内存路径经
+     *  {@link LaneConfig#parentLeafId()} 在指定 entry 处建新 lane。 */
+    public AgentSession forkFromEntry(String entryId) {
+        String branchName = name + "-fork";
+        if (persistentRepository != null && session != null) {
+            var metadata = session.getMetadata();
+            var forked = persistentRepository.fork(metadata,
+                new ForkOptions.Branch(entryId, ForkOptions.Branch.Position.BEFORE),
+                System.getProperty("user.dir"));
+            var copy = new AgentSession(harness, services, args, branchName);
+            copy.persistentRepository = persistentRepository;
+            copy.session = forked;
+            SessionPersistence.attach(copy, persistentRepository, forked.getMetadata());
+            copy.name = branchName;
+            copy.laneName = AgentHarness.DEFAULT_LANE;
+            return copy;
+        }
+        harness.createLane(new LaneConfig(branchName, entryId, null, null));
+        var forked = new AgentSession(harness, services, args, branchName);
+        forked.laneName = branchName;
+        forked.repository = repository;
+        repository.create(forked);
+        return forked;
+    }
+
+    /** 会话级 bash 执行（RPC {@code bash}）：经 harness shell 运行并发射一条
+     *  {@link AgentSessionEvent.BashExecutionUpdate}。v1 阻塞执行，不增量流式。 */
+    public ShellResult executeBash(String id, String command, boolean excludeFromContext) {
+        var toolContext = harness.toolContext();
+        var signal = AbortSignal.create();
+        bashAbortSignal = signal;
+        try {
+            var result = toolContext.shell().execute(command, new ShellOptions(
+                toolContext.cwd(), toolContext.env(), true,
+                java.util.OptionalLong.empty(), signal));
+            eventHub.emit(new AgentSessionEvent.BashExecutionUpdate(id, result.output()));
+            return result;
+        } catch (Exception e) {
+            throw new RuntimeException("Bash command failed: " + command, e);
+        }
+    }
+
+    /** 中止正在执行的会话级 bash（RPC {@code abort_bash}）。 */
+    public void abortBash() {
+        var signal = bashAbortSignal;
+        if (signal != null) {
+            signal.abort();
+        }
+    }
+
+    /** 最近一次会话级 bash 是否被中止（RPC {@code bash} 响应 {@code cancelled}）。 */
+    public boolean bashAborted() {
+        var signal = bashAbortSignal;
+        return signal != null && signal.isAborted();
+    }
+
+    /** 启用/停用自动重试（RPC {@code set_auto_retry}）。 */
+    public void setAutoRetryEnabled(boolean enabled) {
+        autoRetryEnabled = enabled;
+    }
+
+    /** 自动重试是否启用。 */
+    public boolean autoRetryEnabled() {
+        return autoRetryEnabled;
+    }
+
+    /** 中止当前 run 的待处理重试（RPC {@code abort_retry}）。 */
+    public void abortRetry() {
+        retryAborted = true;
+    }
+
+    /** 是否已请求中止重试（SessionRunner 轮询）；每次 drive 启动前重置。 */
+    boolean retryAborted() {
+        return retryAborted;
+    }
+
+    /** 重置重试中止标志（SessionRunner 每次 run 前调用）。 */
+    void resetRetryAbort() {
+        retryAborted = false;
+    }
+
+    /** 可供 fork 的用户消息（RPC {@code get_fork_messages}，对齐 pi
+     *  {@code getUserMessagesForForking}）。 */
+    public List<Entry.Message> getUserMessagesForForking() {
+        return harness().snapshot(laneName).transcript().stream()
+            .filter(Entry.Message.class::isInstance)
+            .map(Entry.Message.class::cast)
+            .filter(e -> "user".equals(e.message().role()))
+            .toList();
     }
 
     /** Flush settings, persist pending writes and close the harness. */

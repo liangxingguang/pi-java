@@ -40,7 +40,23 @@ class RpcCommandTest {
             new RpcCommand.SetAutoCompaction("8", true),
             new RpcCommand.GetSessionStats("9"),
             new RpcCommand.SetSessionName("10", "name"),
-            new RpcCommand.GetCommands("11"));
+            new RpcCommand.GetCommands("11"),
+            new RpcCommand.SetSteeringMode("12", "all"),
+            new RpcCommand.SetFollowUpMode("13", "one-at-a-time"),
+            new RpcCommand.SetAutoRetry("14", true),
+            new RpcCommand.AbortRetry("15"),
+            new RpcCommand.Bash("16", "ls", true),
+            new RpcCommand.Bash("17", "pwd", null),
+            new RpcCommand.AbortBash("18"),
+            new RpcCommand.ExportHtml("19", "/tmp/out.html"),
+            new RpcCommand.ExportHtml("20", null),
+            new RpcCommand.SwitchSession("21", "session-path"),
+            new RpcCommand.Fork("22", "entry-1"),
+            new RpcCommand.Clone("23"),
+            new RpcCommand.GetForkMessages("24"),
+            new RpcCommand.GetEntries("25", "entry-2"),
+            new RpcCommand.GetEntries("26", null),
+            new RpcCommand.GetTree("27"));
 
         for (var command : commands) {
             var json = JSON.writeValueAsString(command);

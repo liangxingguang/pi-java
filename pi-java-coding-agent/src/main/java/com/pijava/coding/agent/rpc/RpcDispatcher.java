@@ -2,16 +2,23 @@ package com.pijava.coding.agent.rpc;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import com.pijava.agent.compaction.CompactionSettings;
+import com.pijava.agent.entry.Entry;
 import com.pijava.agent.harness.QueueMode;
+import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -20,6 +27,7 @@ import com.pijava.coding.agent.cli.ThinkingLevels;
 import com.pijava.coding.agent.core.AgentSession;
 import com.pijava.coding.agent.core.AgentSessionEvent;
 import com.pijava.coding.agent.core.PromptConfig;
+import com.pijava.coding.agent.export.HtmlExporter;
 import com.pijava.coding.agent.mode.JsonEventMapper;
 import com.pijava.coding.agent.cli.Args;
 
@@ -150,9 +158,10 @@ public final class RpcDispatcher {
                     session.compact(CompactionSettings.defaults());
                     out.write(RpcResponse.ok(c.id(), "compact"));
                 }
-                case RpcCommand.SetAutoCompaction a ->
-                    out.write(RpcResponse.fail(a.id(), "set_auto_compaction",
-                        "Not implemented"));
+                case RpcCommand.SetAutoCompaction a -> {
+                    setAutoCompaction(a.enabled());
+                    out.write(RpcResponse.ok(a.id(), "set_auto_compaction"));
+                }
                 case RpcCommand.GetSessionStats g ->
                     out.write(RpcResponse.ok(g.id(), "get_session_stats",
                         buildStats()));
@@ -163,6 +172,97 @@ public final class RpcDispatcher {
                 case RpcCommand.GetCommands g ->
                     out.write(RpcResponse.ok(g.id(), "get_commands",
                         buildCommands()));
+                // ── 末批（P6-5d）：队列模式 / 重试 / bash / 会话 / 导出 ──
+                case RpcCommand.SetSteeringMode s -> {
+                    session.harness().steeringMode(fromWire(s.mode()));
+                    out.write(RpcResponse.ok(s.id(), "set_steering_mode"));
+                }
+                case RpcCommand.SetFollowUpMode f -> {
+                    session.harness().followUpMode(fromWire(f.mode()));
+                    out.write(RpcResponse.ok(f.id(), "set_follow_up_mode"));
+                }
+                case RpcCommand.SetAutoRetry r -> {
+                    session.setAutoRetryEnabled(r.enabled());
+                    out.write(RpcResponse.ok(r.id(), "set_auto_retry"));
+                }
+                case RpcCommand.AbortRetry r -> {
+                    session.abortRetry();
+                    out.write(RpcResponse.ok(r.id(), "abort_retry"));
+                }
+                case RpcCommand.AbortBash b -> {
+                    session.abortBash();
+                    out.write(RpcResponse.ok(b.id(), "abort_bash"));
+                }
+                case RpcCommand.Bash b -> {
+                    var result = session.executeBash(b.id(), b.command(),
+                        b.excludeFromContext() != null && b.excludeFromContext());
+                    out.write(RpcResponse.ok(b.id(), "bash",
+                        new RpcPayloads.RpcBashResult(
+                            result.output(), result.exitCode(),
+                            session.bashAborted(), result.truncated(), null)));
+                }
+                case RpcCommand.ExportHtml e -> {
+                    var path = exportHtml(e.outputPath());
+                    out.write(RpcResponse.ok(e.id(), "export_html",
+                        Map.of("path", path)));
+                }
+                case RpcCommand.SwitchSession s -> {
+                    if (session.findSession(s.sessionPath()).isEmpty()) {
+                        out.write(RpcResponse.fail(s.id(), "switch_session",
+                            "Session not found: " + s.sessionPath()));
+                    } else {
+                        out.write(RpcResponse.ok(s.id(), "switch_session",
+                            Map.of("cancelled", false)));
+                    }
+                }
+                case RpcCommand.Fork fk -> {
+                    var forked = session.forkFromEntry(fk.entryId());
+                    closeSession();
+                    session = forked;
+                    eventSubscription = session.subscribe(this::emitEvent);
+                    out.write(RpcResponse.ok(fk.id(), "fork",
+                        Map.of("text", "", "cancelled", false)));
+                }
+                case RpcCommand.Clone c -> {
+                    var leaf = leafId();
+                    var forked = leaf == null
+                        ? session.forkCopy(session.sessionName() + "-clone")
+                        : session.forkFromEntry(leaf);
+                    closeSession();
+                    session = forked;
+                    eventSubscription = session.subscribe(this::emitEvent);
+                    out.write(RpcResponse.ok(c.id(), "clone",
+                        Map.of("cancelled", false)));
+                }
+                case RpcCommand.GetForkMessages g -> {
+                    var messages = session.getUserMessagesForForking().stream()
+                        .map(e -> new RpcPayloads.RpcForkMessage(
+                            e.id(), forkMessageText(e)))
+                        .toList();
+                    out.write(RpcResponse.ok(g.id(), "get_fork_messages",
+                        new RpcPayloads.RpcForkMessagesData(messages)));
+                }
+                case RpcCommand.GetEntries g -> {
+                    var entries = harnessTranscript();
+                    if (g.since() == null || g.since().isBlank()) {
+                        out.write(RpcResponse.ok(g.id(), "get_entries",
+                            new RpcPayloads.RpcEntriesData(entries, leafId())));
+                    } else {
+                        int idx = indexOfEntry(entries, g.since());
+                        if (idx < 0) {
+                            out.write(RpcResponse.fail(g.id(), "get_entries",
+                                "Entry not found: " + g.since()));
+                        } else {
+                            out.write(RpcResponse.ok(g.id(), "get_entries",
+                                new RpcPayloads.RpcEntriesData(
+                                    List.copyOf(entries.subList(idx + 1, entries.size())),
+                                    leafId())));
+                        }
+                    }
+                }
+                case RpcCommand.GetTree t ->
+                    out.write(RpcResponse.ok(t.id(), "get_tree",
+                        new RpcPayloads.RpcTreeData(buildTree(), leafId())));
             }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -236,6 +336,7 @@ public final class RpcDispatcher {
     private RpcSessionState buildState() {
         var harness = session.harness();
         var model = harness.getModel();
+        var compaction = harness.getCompactionSettings();
         String modelId = model == null ? "" : model.provider() + "/" + model.modelName();
         return new RpcSessionState(
             modelId,
@@ -247,7 +348,7 @@ public final class RpcDispatcher {
             null,
             null,
             session.sessionName(),
-            false,
+            compaction != null && compaction.enabled(),
             (int) session.entryCount(),
             0);
     }
@@ -265,6 +366,16 @@ public final class RpcDispatcher {
     }
 
     // ── 次批辅助 ─────────────────────────────────────────────────────────
+
+    /** 切换自动压缩主开关，保留当前 reserve/keepRecent 预算。 */
+    private void setAutoCompaction(boolean enabled) {
+        var current = session.harness().getCompactionSettings();
+        var defaults = CompactionSettings.defaults();
+        session.harness().setCompactionSettings(new CompactionSettings(
+            enabled,
+            current == null ? defaults.reserveTokens() : current.reserveTokens(),
+            current == null ? defaults.keepRecentTokens() : current.keepRecentTokens()));
+    }
 
     /** 解析模型模式（"provider/model" 或纯 modelName）→ ModelId。 */
     private ModelId<?> resolveModel(String pattern) {
@@ -369,6 +480,113 @@ public final class RpcDispatcher {
 
     private static String queueWire(QueueMode mode) {
         return mode instanceof QueueMode.All ? "all" : "one-at-a-time";
+    }
+
+    // ── 末批（P6-5d）辅助 ──────────────────────────────────────────────
+
+    /** 线格式 "all" | "one-at-a-time" → QueueMode（对齐 pi QueueMode 判别）。 */
+    private static QueueMode fromWire(String mode) {
+        return "all".equals(mode) ? new QueueMode.All() : new QueueMode.OneAtATime();
+    }
+
+    /** 当前主 lane 的 leaf entry id（末条 transcript entry），空会话为 null。 */
+    private String leafId() {
+        var entries = harnessTranscript();
+        return entries.isEmpty() ? null : entries.get(entries.size() - 1).id();
+    }
+
+    /** 导出当前会话为 HTML（P6-12），返回生成的文件路径。 */
+    private String exportHtml(String outputPath) {
+        try {
+            var tmp = Files.createTempFile("pi-java-export", ".jsonl");
+            writeSessionJsonl(tmp);
+            var html = outputPath == null || outputPath.isBlank()
+                ? new HtmlExporter().export(tmp)
+                : new HtmlExporter().export(tmp, java.nio.file.Path.of(outputPath));
+            return html.toString();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /** 写会话 JSONL：持久化会话走 {@code exportJsonl}；in-memory 会话内联写
+     *  header + transcript（HtmlExporter 兼容格式）。 */
+    private void writeSessionJsonl(java.nio.file.Path target) throws IOException {
+        try {
+            session.exportJsonl(target);
+            return;
+        } catch (IllegalStateException e) {
+            // in-memory 会话（--no-session）：无持久化会话，内联序列化
+        }
+        var header = JSON.createObjectNode();
+        header.put("id", session.sessionName());
+        header.put("name", session.sessionName());
+        var lines = new ArrayList<String>();
+        lines.add(JSON.writeValueAsString(header));
+        for (var entry : harnessTranscript()) {
+            lines.add(JSON.writeValueAsString(entryWithRole(entry)));
+        }
+        Files.write(target, lines);
+    }
+
+    /** Entry JSON 补 message.role（HtmlExporter 按 role 渲染；Message.role() 派生不序列化）。 */
+    private com.fasterxml.jackson.databind.node.ObjectNode entryWithRole(Entry entry) {
+        var node = (com.fasterxml.jackson.databind.node.ObjectNode) JSON.valueToTree(entry);
+        if (entry instanceof Entry.Message m && node.get("message") instanceof ObjectNode msg) {
+            msg.put("role", m.message().role());
+        }
+        return node;
+    }
+
+    /** 按 entry id 找索引（get_entries since 过滤）；找不到回 -1。 */
+    private static int indexOfEntry(List<Entry> entries, String id) {
+        for (int i = 0; i < entries.size(); i++) {
+            if (entries.get(i).id().equals(id)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** 从 transcript 按 parentId 建会话树（对齐 pi {@code getTree}）。 */
+    private List<RpcPayloads.RpcSessionTreeNode> buildTree() {
+        var entries = harnessTranscript();
+        if (entries.isEmpty()) {
+            return List.of();
+        }
+        var byParent = new LinkedHashMap<String, List<Entry>>();
+        for (var e : entries) {
+            byParent.computeIfAbsent(e.parentId(), k -> new ArrayList<>()).add(e);
+        }
+        List<Entry> roots = entries.stream()
+            .filter(e -> e.parentId() == null)
+            .toList();
+        if (roots.isEmpty()) {
+            // 线性 lane 首条作根（parentId 由存储补全前）
+            roots = List.of(entries.get(0));
+        }
+        return roots.stream().map(r -> treeNode(r, byParent)).toList();
+    }
+
+    private static RpcPayloads.RpcSessionTreeNode treeNode(
+            Entry entry, Map<String, List<Entry>> byParent) {
+        var children = byParent.getOrDefault(entry.id(), List.of()).stream()
+            .map(c -> treeNode(c, byParent))
+            .toList();
+        return new RpcPayloads.RpcSessionTreeNode(entry, children, null);
+    }
+
+    /** 取消息 entry 的纯文本（get_fork_messages / fork 的 text 载荷）。 */
+    private static String forkMessageText(Entry e) {
+        if (e instanceof Entry.Message m
+                && m.message() instanceof Message.UserMessage user) {
+            return user.content().stream()
+                .filter(ContentBlock.TextContent.class::isInstance)
+                .map(ContentBlock.TextContent.class::cast)
+                .map(ContentBlock.TextContent::text)
+                .collect(Collectors.joining("\n"));
+        }
+        return "";
     }
 
     private static String extractField(String line, String field) {

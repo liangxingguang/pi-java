@@ -38,7 +38,20 @@ import com.pijava.ai.message.ContentBlock;
     @JsonSubTypes.Type(value = RpcCommand.SetAutoCompaction.class),
     @JsonSubTypes.Type(value = RpcCommand.GetSessionStats.class),
     @JsonSubTypes.Type(value = RpcCommand.SetSessionName.class),
-    @JsonSubTypes.Type(value = RpcCommand.GetCommands.class)
+    @JsonSubTypes.Type(value = RpcCommand.GetCommands.class),
+    @JsonSubTypes.Type(value = RpcCommand.SetSteeringMode.class),
+    @JsonSubTypes.Type(value = RpcCommand.SetFollowUpMode.class),
+    @JsonSubTypes.Type(value = RpcCommand.SetAutoRetry.class),
+    @JsonSubTypes.Type(value = RpcCommand.AbortRetry.class),
+    @JsonSubTypes.Type(value = RpcCommand.Bash.class),
+    @JsonSubTypes.Type(value = RpcCommand.AbortBash.class),
+    @JsonSubTypes.Type(value = RpcCommand.ExportHtml.class),
+    @JsonSubTypes.Type(value = RpcCommand.SwitchSession.class),
+    @JsonSubTypes.Type(value = RpcCommand.Fork.class),
+    @JsonSubTypes.Type(value = RpcCommand.Clone.class),
+    @JsonSubTypes.Type(value = RpcCommand.GetForkMessages.class),
+    @JsonSubTypes.Type(value = RpcCommand.GetEntries.class),
+    @JsonSubTypes.Type(value = RpcCommand.GetTree.class)
 })
 public sealed interface RpcCommand {
 
@@ -146,6 +159,74 @@ public sealed interface RpcCommand {
     @JsonTypeName("get_commands")
     record GetCommands(String id) implements RpcCommand {
         @Override public String type() { return "get_commands"; }
+    }
+
+    // ── 末批（P6-5d）：队列模式 / 重试 / bash / 会话 / 导出 ─────────────────
+
+    @JsonTypeName("set_steering_mode")
+    record SetSteeringMode(String id, String mode) implements RpcCommand {
+        @Override public String type() { return "set_steering_mode"; }
+    }
+
+    @JsonTypeName("set_follow_up_mode")
+    record SetFollowUpMode(String id, String mode) implements RpcCommand {
+        @Override public String type() { return "set_follow_up_mode"; }
+    }
+
+    @JsonTypeName("set_auto_retry")
+    record SetAutoRetry(String id, boolean enabled) implements RpcCommand {
+        @Override public String type() { return "set_auto_retry"; }
+    }
+
+    @JsonTypeName("abort_retry")
+    record AbortRetry(String id) implements RpcCommand {
+        @Override public String type() { return "abort_retry"; }
+    }
+
+    @JsonTypeName("bash")
+    record Bash(String id, String command, Boolean excludeFromContext)
+        implements RpcCommand {
+        @Override public String type() { return "bash"; }
+    }
+
+    @JsonTypeName("abort_bash")
+    record AbortBash(String id) implements RpcCommand {
+        @Override public String type() { return "abort_bash"; }
+    }
+
+    @JsonTypeName("export_html")
+    record ExportHtml(String id, String outputPath) implements RpcCommand {
+        @Override public String type() { return "export_html"; }
+    }
+
+    @JsonTypeName("switch_session")
+    record SwitchSession(String id, String sessionPath) implements RpcCommand {
+        @Override public String type() { return "switch_session"; }
+    }
+
+    @JsonTypeName("fork")
+    record Fork(String id, String entryId) implements RpcCommand {
+        @Override public String type() { return "fork"; }
+    }
+
+    @JsonTypeName("clone")
+    record Clone(String id) implements RpcCommand {
+        @Override public String type() { return "clone"; }
+    }
+
+    @JsonTypeName("get_fork_messages")
+    record GetForkMessages(String id) implements RpcCommand {
+        @Override public String type() { return "get_fork_messages"; }
+    }
+
+    @JsonTypeName("get_entries")
+    record GetEntries(String id, String since) implements RpcCommand {
+        @Override public String type() { return "get_entries"; }
+    }
+
+    @JsonTypeName("get_tree")
+    record GetTree(String id) implements RpcCommand {
+        @Override public String type() { return "get_tree"; }
     }
 
     /** pi: streamingBehavior?: "steer" | "followUp" —— 纯常量闭集 → enum。 */
