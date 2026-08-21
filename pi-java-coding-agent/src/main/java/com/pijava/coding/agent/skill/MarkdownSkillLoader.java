@@ -110,7 +110,8 @@ public final class MarkdownSkillLoader {
         if (parent == null) {
             return null;
         }
-        String dirName = parent.getFileName() == null ? null : parent.getFileName().toString();
+        Path fileName = parent.getFileName();
+        String dirName = fileName == null ? null : fileName.toString();
         return dirName == null ? null : dirName.toLowerCase(Locale.ROOT);
     }
 

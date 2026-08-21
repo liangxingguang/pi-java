@@ -25,13 +25,15 @@ public record InstalledExtension(
 
     /** 从扩展目录中的 JAR 构建展示记录。 */
     public static InstalledExtension of(Path jar) {
+        Path fileNamePath = jar.getFileName();
+        String fileName = fileNamePath == null ? jar.toString() : fileNamePath.toString();
         var manifest = ExtensionManifest.from(jar);
         var name = manifest.map(ExtensionManifest::name)
             .filter(v -> v != null && !v.isBlank())
-            .orElseGet(() -> stripJarSuffix(jar.getFileName().toString()));
+            .orElseGet(() -> stripJarSuffix(fileName));
         return new InstalledExtension(
             jar,
-            jar.getFileName().toString(),
+            fileName,
             name,
             manifest.map(ExtensionManifest::version).orElse(""),
             manifest.map(ExtensionManifest::description).orElse(""),

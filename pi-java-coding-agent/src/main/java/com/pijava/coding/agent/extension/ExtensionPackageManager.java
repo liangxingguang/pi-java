@@ -77,12 +77,16 @@ public final class ExtensionPackageManager {
         if (!Files.isRegularFile(jar)) {
             throw new IllegalArgumentException("No such file: " + jar);
         }
+        Path fileName = jar.getFileName();
+        if (fileName == null) {
+            throw new IllegalArgumentException("Not a file: " + jar);
+        }
         if (!InstalledExtension.isExtensionJar(jar)) {
             throw new IllegalArgumentException(
-                jar.getFileName() + " is not an extension JAR (missing "
+                fileName + " is not an extension JAR (missing "
                     + "META-INF/pi-extension.json or META-INF/services/...PiExtension)");
         }
-        return copy(jar, jar.getFileName().toString());
+        return copy(jar, fileName.toString());
     }
 
     /** 安装远程扩展：下载到扩展目录并返回展示记录。 */
@@ -93,7 +97,12 @@ public final class ExtensionPackageManager {
         if (!"http".equals(source.getScheme()) && !"https".equals(source.getScheme())) {
             throw new IllegalArgumentException("Unsupported source scheme: " + source.getScheme());
         }
-        var fileName = Path.of(source.getPath()).getFileName().toString();
+        Path fileNamePath = Path.of(source.getPath()).getFileName();
+        if (fileNamePath == null) {
+            throw new IllegalArgumentException(
+                "Extension URL must point to a .jar file: " + source);
+        }
+        var fileName = fileNamePath.toString();
         if (fileName.isBlank() || !fileName.endsWith(".jar")) {
             throw new IllegalArgumentException(
                 "Extension URL must point to a .jar file: " + source);

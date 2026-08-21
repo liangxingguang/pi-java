@@ -70,9 +70,13 @@ public final class HtmlExporter {
 
     /** 导出到当前目录的 {@code pi-java-session-<basename>.html}。 */
     public Path export(Path sessionJsonl) {
-        var fileName = sessionJsonl.getFileName().toString();
-        var base = fileName.endsWith(".jsonl")
-            ? fileName.substring(0, fileName.length() - 6) : fileName;
+        var fileName = sessionJsonl.getFileName();
+        if (fileName == null) {
+            throw new IllegalArgumentException("Not a file path: " + sessionJsonl);
+        }
+        var name = fileName.toString();
+        var base = name.endsWith(".jsonl")
+            ? name.substring(0, name.length() - 6) : name;
         return export(sessionJsonl, Path.of("pi-java-session-" + base + ".html"));
     }
 
