@@ -79,7 +79,7 @@ flowchart TB
 | 4 个协议适配器：`OpenAICompletionsApi` / `AnthropicMessagesApi` / `GoogleGenerativeAiApi` / `MistralConversationsApi` | 复用现有 4 个适配器覆盖全部新增 Provider，本阶段不新增适配器 |
 | `BuiltinCatalog` 硬编码 5 家模型数据（`anthropicModels()` 等 5 个静态方法 + `all()`） | 新增 `RemoteCatalog`，ETag 条件刷新，保留内置数据兜底 |
 | `ProviderRegistry.discoverFromServiceLoader()` 已有，但**启动装配未调用**（`DefaultProviders.defaultProviders()` 为手动 `register`） | 在 `DefaultProviders` 中调用 ServiceLoader 发现，第三方 JAR 可自动注册（P6-1 显式子任务） |
-| `ProviderApi` 是 `sealed interface ... permits ChatApi` | 若引入 `ImageApi`/`EmbeddingApi` 需修改 `permits` 子句 —— `pi-java-ai` 破坏性变更，本阶段**不做**（见 §2.7） |
+| `ProviderApi` 是 `sealed interface ... permits ChatApi` | P6-28 已引入 `ImageApi`/`EmbeddingApi`，permits 改为 `ChatApi, ImageApi, EmbeddingApi`（详见 `12-phase6-image-embedding-design.md`） |
 
 > **与 pi 的既有偏差（不在本阶段修正，仅记录）**：pi 的 `openai` provider 使用 `openai-responses` 协议（Responses API），pi-java 的 `OpenAIProvider` 使用 `OpenAICompletionsApi`（Chat Completions API）。pi 另有 `openai-responses` / `azure-openai-responses` / `openai-codex-responses` / `bedrock-converse-stream` / `google-vertex` / `pi-messages` 六个适配器 pi-java 未实现。本阶段的新增 Provider 全部落在已有 4 个适配器上，不触碰该偏差。
 
@@ -634,7 +634,7 @@ sequenceDiagram
 
 > **本阶段唯一的新增依赖**：`org.eclipse.jgit:org.eclipse.jgit:7.6.0`（3.22MB，排除 `JavaEWAH` / `commons-codec` 后仅传递 `slf4j-api`），仅供工作流 E 的技能目录扫描做 `.gitignore` 语义匹配（§6.4.1）。工作流 A 的 Provider 与三个新协议**零新增依赖**。
 
-> **`ProviderApi` sealed 约束**：新增三个协议都产出 `ChatApi`，不需要新的 `ProviderApi` 子类型，故 `permits ChatApi` 保持不变。`ImageApi` / `EmbeddingApi`（pi 有 `openrouter-images`）仍不在本阶段。
+> **`ProviderApi` sealed 约束**：新增三个协议都产出 `ChatApi`，不需要新的 `ProviderApi` 子类型。`ImageApi` / `EmbeddingApi` 由 **P6-28** 落地（新增 `openrouter-images` provider 对齐 pi 的 `openrouter-images`，EmbeddingApi 走 OpenAI `/v1/embeddings`）—— 见 `12-phase6-image-embedding-design.md`。
 
 ---
 
@@ -1915,7 +1915,7 @@ pi-ai catalog publish --file models.json --endpoint https://models.example.com/u
 | P6-25 | Entry 元数据事件富样式渲染 | 低 | `08-phase3:306` | ✅ 已完成 |
 | P6-26 | 会话 diff 渲染 | 低 | `08b-phase3:447` | ✅ 已完成 |
 | P6-27 | AI 生成 Skills | 低 | `07c-phase2c:1130` | ✅ 已完成 |
-| P6-28 | `ImageApi` / `EmbeddingApi`（需改 `ProviderApi` permits） | 低 | `02-architecture:155`、`06-phase1:226` | ⏸ 延后（§2.7：pi 仅 `openrouter-images`，需破坏 `ProviderApi` permits，非本阶段范围） |
+| P6-28 | `ImageApi` / `EmbeddingApi`（需改 `ProviderApi` permits） | 低 | `02-architecture:155`、`06-phase1:226`、`12-phase6-image-embedding-design.md` | ✅ 已完成（见 §13 v1.5） |
 
 > **建议实施顺序**：P6-1a→1b→1c→1d（Provider 基础）→ P6-2/3/4（evals，可与 1e/1f/1g 并行）→ P6-5a→5b（RPC 核心）→ P6-6/P6-7/P6-16（Skills/Extensions）→ P6-8 → P6-12（HTML 导出）→ P6-17（OAuth）→ P6-9a/9b/9c（远程会话）→ P6-10/11 → 其余低优先级遗留项按需。
 >
@@ -2127,3 +2127,18 @@ Phase 5 已于 2026-08-18 放弃原生分发（实测 149MB vs ≤30MB 目标）
 **既有偏差记录**：`fork` 响应 `text` 回空串（pi-java 无 pi 的 entry 文本选择流程）；`bash` 不增量流式（`ShellExecutor.execute` 阻塞 API，留待后续）；文件 ≤500 行约束三处超限——`RpcDispatcher.java`(601) 与 `AgentSession.java`(595，改动前已 545 超标) 为本阶段推高，`AgentHarness.java`(505) 仅超 5 行，拆分列为后续重构（与 §13 v1.3 记录的 TUI 既有例外一致）。
 
 **额外修复（验收冒烟时发现）——`JsonlWriter` 关闭 System.out**：`ObjectMapper.writeValue(OutputStream, value)` 的 `AUTO_CLOSE_TARGET` 默认 true，第一次写就把 `System.out` close 掉，`PrintStream` 后续写被静默吞掉 —— `--mode rpc`/`--mode json` 多行输出只剩第一行（`RpcModeEndToEndTest` 用 `ByteArrayOutputStream` 未暴露）。改为 `writeValueAsBytes` 后 `out.write(bytes)` 不再触碰目标流。回归：`JsonlWriterTest.writesMultipleLines` / `doesNotCloseTheUnderlyingStream`。fat jar 冒烟验证 5 行命令全响应（含 `BashExecutionUpdate` 事件 + 未知命令 `success:false`）。
+
+### v1.5（2026-08-22 P6-28 ImageApi/EmbeddingApi 落地）
+
+原延后项 P6-28（`ImageApi`/`EmbeddingApi`，需破坏 `ProviderApi permits ChatApi`）按用户指示实现，设计文档 `docs/12-phase6-image-embedding-design.md`。用户两次决策：**ImageApi 直接复刻 pi 的 `openrouter-images.ts` 模式**（独立 provider，不挂靠 OpenAI）；**EmbeddingApi 一起做**（pi 无 embedding provider，pi-java 独有，OpenAI `/v1/embeddings`）。
+
+- `ProviderApi permits ChatApi, ImageApi, EmbeddingApi`（一次破坏性变更到三能力）。
+- 新增 `ImageApi`/`ImageRequest`/`ImageResult`/`ImageStopReason`（对齐 pi `ImagesFunction`/`ImagesContext`/`AssistantImages`/`ImagesStopReason`）与 `EmbeddingApi`/`EmbeddingRequest`/`EmbeddingResult`。
+- `ConfigurableProvider.createApi` 三路分派 + `createImageApi`/`createEmbeddingApi` 钩子（默认抛 UnsupportedOperationException）；`createChatApi` 从 abstract 改为默认抛（图片专用 provider 无需实现）。
+- 新增 `OpenRouterImagesProvider`（镜像 pi `openrouter-images.ts`：name/baseUrl `https://openrouter.ai/api/v1`/`OPENROUTER_API_KEY`，8 个 FLUX/seedream/gemini-image 模型）+ `OpenRouterImagesApi`（chat completions + `modalities:["image","text"]`，解析 `message.images` data URI；`Modality.Companion.of("image")` 绕开 SDK 枚举缺 IMAGE）。
+- `OpenAIProvider` 加 `EmbeddingApi` → `OpenAIEmbeddingApi`（`client.embeddings()`）；`openaiModels()` 加 `text-embedding-3-small/large`。
+- `ModelCapability` 加 `IMAGE_OUTPUT`；`CatalogModel` switch 补全。
+- `AiCli` 加 `image`/`embed` 子命令；provider 计数 16 → 17（conformance/registry 测试同步更新）。
+- 测试：round-trip（6）+ `OpenRouterImagesApiTest`（3：modalities 请求 + data URI 解析）+ `OpenAIEmbeddingApiTest`（3）。evals conformance 的协议一致性检查放宽为仅 chat provider（图片 provider 的 supportedProtocols 为空合法）。
+
+**偏差记录**：ImageApi 接口形状/provider 模式/chat-with-modalities 调用对齐 pi；pi-java 用 openai-java SDK 实现 OpenRouter 调用（pi 用 openai npm SDK）。EmbeddingApi 无 pi 参照。`ProviderApi permits` 的破坏性变更是 P6-28 既定成本。
