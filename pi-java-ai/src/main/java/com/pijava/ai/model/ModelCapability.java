@@ -14,6 +14,7 @@ public sealed interface ModelCapability {
 
     Text TEXT = new Text();
     ImageInput IMAGE_INPUT = new ImageInput();
+    ImageOutput IMAGE_OUTPUT = new ImageOutput();
     ToolUse TOOL_USE = new ToolUse();
     Thinking THINKING = new Thinking();
     Streaming STREAMING = new Streaming();
@@ -25,6 +26,9 @@ public sealed interface ModelCapability {
 
     /** Image input (vision). */
     record ImageInput() implements ModelCapability {}
+
+    /** Image output (generation) — e.g. FLUX, seedream, gemini-image. */
+    record ImageOutput() implements ModelCapability {}
 
     /** Tool / function calling. */
     record ToolUse() implements ModelCapability {}

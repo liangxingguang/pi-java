@@ -49,7 +49,24 @@ public final class BuiltinCatalog implements ModelCatalog {
         return new BuiltinCatalog(List.of(
                 model("gpt-5", "GPT-5", 128_000, 16_384, frontierChatCaps(), 2.50, 10.00),
                 model("gpt-5-mini", "GPT-5 Mini", 128_000, 8_192, frontierChatCaps(), 0.50, 2.00),
-                model("gpt-5-nano", "GPT-5 Nano", 128_000, 4_096, chatCaps(), 0.15, 0.60)
+                model("gpt-5-nano", "GPT-5 Nano", 128_000, 4_096, chatCaps(), 0.15, 0.60),
+                embeddingModel("text-embedding-3-small", "Text Embedding 3 Small"),
+                embeddingModel("text-embedding-3-large", "Text Embedding 3 Large")
+        ));
+    }
+
+    /** Catalog of OpenRouter image generation models (P6-28，对齐 pi
+     *  {@code image-models.generated.ts} 的 openrouter 条目). */
+    public static ModelCatalog openRouterImageModels() {
+        return new BuiltinCatalog(List.of(
+                imageModel("black-forest-labs/flux.2-flex", "Black Forest Labs: FLUX.2 Flex"),
+                imageModel("black-forest-labs/flux.2-klein-4b", "Black Forest Labs: FLUX.2 Klein 4B"),
+                imageModel("black-forest-labs/flux.2-max", "Black Forest Labs: FLUX.2 Max"),
+                imageModel("black-forest-labs/flux.2-pro", "Black Forest Labs: FLUX.2 Pro"),
+                imageModel("bytedance-seed/seedream-4.5", "Bytedance Seed: Seedream 4.5"),
+                imageModel("google/gemini-2.5-flash-image", "Google: Gemini 2.5 Flash Image"),
+                imageModel("google/gemini-3-pro-image", "Google: Gemini 3 Pro Image"),
+                imageModel("google/gemini-3-pro-image-preview", "Google: Gemini 3 Pro Image Preview")
         ));
     }
 
@@ -138,6 +155,21 @@ public final class BuiltinCatalog implements ModelCatalog {
                         name),
                 display, caps, maxInput, maxOutput, false,
                 new PricingInfo(inPrice, outPrice));
+    }
+
+    /** OpenRouter image-generation model（provider 固定 openrouter-images）。 */
+    private static ModelInfo imageModel(String id, String display) {
+        return new ModelInfo(
+                ModelId.of("openrouter-images", id), display,
+                Set.of(ModelCapability.IMAGE_INPUT, ModelCapability.IMAGE_OUTPUT),
+                0, 0, false, PricingInfo.UNKNOWN);
+    }
+
+    /** OpenAI embedding model. */
+    private static ModelInfo embeddingModel(String id, String display) {
+        return new ModelInfo(
+                ModelId.of("openai", id), display,
+                Set.of(ModelCapability.TEXT), 0, 0, false, PricingInfo.UNKNOWN);
     }
 
     private static Set<ModelCapability> frontierChatCaps() {

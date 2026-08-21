@@ -41,6 +41,7 @@ public final class ProviderCatalog {
         providers.add(new MiniMaxProvider());
         providers.add(new AntLingProvider());
         providers.add(new OllamaProvider());
+        providers.add(new OpenRouterImagesProvider());
         return List.copyOf(providers);
     }
 

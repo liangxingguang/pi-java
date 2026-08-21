@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.function.Consumer;
 
+import com.pijava.ai.api.ChatApi;
 import com.pijava.ai.provider.ConfigurableProvider;
 import com.pijava.ai.provider.Provider;
 import com.pijava.ai.provider.builtin.ProviderCatalog;
@@ -14,7 +15,7 @@ import com.pijava.evals.api.EvalResult;
 import com.pijava.evals.api.EvalSuite;
 
 /**
- * Catalog-level checks for the 16 built-in providers.
+ * Catalog-level checks for the 17 built-in providers.
  */
 public final class ProviderCatalogConformance implements EvalSuite {
 
@@ -26,9 +27,9 @@ public final class ProviderCatalogConformance implements EvalSuite {
     @Override
     public List<EvalCase> cases() {
         return List.of(
-            evalCase("sixteen-providers", ctx -> {
-                if (ProviderCatalog.all().size() != 16) {
-                    throw new AssertionError("expected 16 providers, got "
+            evalCase("seventeen-providers", ctx -> {
+                if (ProviderCatalog.all().size() != 17) {
+                    throw new AssertionError("expected 17 providers, got "
                         + ProviderCatalog.all().size());
                 }
             }),
@@ -49,7 +50,10 @@ public final class ProviderCatalogConformance implements EvalSuite {
                     if (config.name().isBlank() || config.defaultBaseUrl().isBlank()) {
                         throw new AssertionError(provider.name() + " missing name/baseUrl");
                     }
-                    if (!config.supportedProtocols().contains(config.defaultProtocol())) {
+                    // 协议一致性仅对 chat provider 生效；图片专用 provider（如
+                    // openrouter-images）的 supportedProtocols 为空是合法的。
+                    if (provider.supportedApis().contains(ChatApi.class)
+                            && !config.supportedProtocols().contains(config.defaultProtocol())) {
                         throw new AssertionError(provider.name() + " defaultProtocol not supported");
                     }
                     if (!"ollama".equals(provider.name())

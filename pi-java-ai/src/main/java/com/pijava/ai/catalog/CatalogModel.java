@@ -59,6 +59,7 @@ public record CatalogModel(
         return switch (c) {
             case ModelCapability.Text() -> "text";
             case ModelCapability.ImageInput() -> "imageInput";
+            case ModelCapability.ImageOutput() -> "imageOutput";
             case ModelCapability.ToolUse() -> "toolUse";
             case ModelCapability.Thinking() -> "thinking";
             case ModelCapability.Streaming() -> "streaming";
@@ -70,6 +71,7 @@ public record CatalogModel(
     private static ModelCapability capability(String name) {
         return switch (name) {
             case "imageInput" -> ModelCapability.IMAGE_INPUT;
+            case "imageOutput" -> ModelCapability.IMAGE_OUTPUT;
             case "toolUse" -> ModelCapability.TOOL_USE;
             case "thinking" -> ModelCapability.THINKING;
             case "streaming" -> ModelCapability.STREAMING;

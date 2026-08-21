@@ -5,6 +5,8 @@ import java.util.Set;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.ChatApi;
+import com.pijava.ai.api.EmbeddingApi;
+import com.pijava.ai.api.ImageApi;
 import com.pijava.ai.api.ProviderApi;
 import com.pijava.ai.catalog.ModelCatalog;
 
@@ -40,7 +42,7 @@ public abstract class ConfigurableProvider implements Provider {
     }
 
     @Override
-    public final Set<Class<? extends ProviderApi>> supportedApis() {
+    public Set<Class<? extends ProviderApi>> supportedApis() {
         return Set.of(ChatApi.class);
     }
 
@@ -62,11 +64,18 @@ public abstract class ConfigurableProvider implements Provider {
      */
     @Override
     public <T extends ProviderApi> T createApi(Class<T> apiType, ApiOptions options) {
-        if (!apiType.equals(ChatApi.class)) {
-            throw new IllegalArgumentException("Unsupported API type: " + apiType);
-        }
         var protocol = resolveProtocol(options);
-        return apiType.cast(createChatApi(protocol, effectiveOptions(options)));
+        var opts = effectiveOptions(options);
+        if (apiType.equals(ChatApi.class)) {
+            return apiType.cast(createChatApi(protocol, opts));
+        }
+        if (apiType.equals(ImageApi.class)) {
+            return apiType.cast(createImageApi(protocol, opts));
+        }
+        if (apiType.equals(EmbeddingApi.class)) {
+            return apiType.cast(createEmbeddingApi(protocol, opts));
+        }
+        throw new IllegalArgumentException("Unsupported API type: " + apiType);
     }
 
     /** Read protocol from ApiOptions.extra "protocol" key, fall back to default. */
@@ -94,6 +103,22 @@ public abstract class ConfigurableProvider implements Provider {
             options.timeout(), options.maxRetries(), options.extra());
     }
 
-    /** Subclasses construct the protocol adapter here. */
-    protected abstract ChatApi createChatApi(Protocol protocol, ApiOptions options);
+    /** Subclasses construct the protocol adapter here; image-only providers leave it
+     *  unimplemented (default throws). */
+    protected ChatApi createChatApi(Protocol protocol, ApiOptions options) {
+        throw new UnsupportedOperationException(
+            "Provider " + name() + " does not support ChatApi");
+    }
+
+    /** Subclasses override to support image generation; base providers do not. */
+    protected ImageApi createImageApi(Protocol protocol, ApiOptions options) {
+        throw new UnsupportedOperationException(
+            "Provider " + name() + " does not support ImageApi");
+    }
+
+    /** Subclasses override to support embeddings; base providers do not. */
+    protected EmbeddingApi createEmbeddingApi(Protocol protocol, ApiOptions options) {
+        throw new UnsupportedOperationException(
+            "Provider " + name() + " does not support EmbeddingApi");
+    }
 }

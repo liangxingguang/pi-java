@@ -4,8 +4,8 @@ package com.pijava.ai.api;
  * Marker interface for an API capability exposed by a {@link com.pijava.ai.provider.Provider}.
  *
  * <p>Each concrete subtype represents a distinct API modality (chat, image generation,
- * embeddings, etc.). Phase 1 only defines {@link ChatApi}; additional modalities such
- * as {@code ImageApi} or {@code EmbeddingApi} will be added in Phase 6.</p>
+ * embeddings). Phase 1 only defined {@link ChatApi}; P6-28 adds {@link ImageApi}
+ * (aligned with pi's {@code ImagesFunction}) and {@link EmbeddingApi}.</p>
  *
  * <p>This is a sealed interface following the Erasable Java convention — the set of
  * allowed API types is fixed at compile time and exhaustive {@code switch} coverage
@@ -15,5 +15,5 @@ package com.pijava.ai.api;
  * @see com.pijava.ai.provider.Provider#createApi(Class, ApiOptions)
  */
 public sealed interface ProviderApi
-        permits ChatApi {
+        permits ChatApi, ImageApi, EmbeddingApi {
 }

@@ -24,11 +24,11 @@ class ProviderCatalogConformanceTest {
         "anthropic", "openai", "google", "deepseek", "mistral",
         "moonshotai-cn", "moonshotai", "zai-coding-cn", "zai",
         "qwen-token-plan-cn", "xiaomi", "xiaomi-token-plan-cn",
-        "minimax-cn", "minimax", "ant-ling", "ollama"
+        "minimax-cn", "minimax", "ant-ling", "ollama", "openrouter-images"
     };
 
     @Test
-    void catalogContainsSixteenProviders() {
+    void catalogContainsSeventeenProviders() {
         var names = ProviderCatalog.all().stream().map(Provider::name).toList();
         assertThat(names).containsExactly(EXPECTED_NAMES);
     }
@@ -38,13 +38,17 @@ class ProviderCatalogConformanceTest {
         for (var provider : ProviderCatalog.all()) {
             assertThat(provider.name()).isNotBlank();
             assertThat(provider.displayName()).isNotBlank();
-            assertThat(provider.supportedProtocols()).isNotEmpty();
             assertThat(provider.builtinModels().listModels()).isNotEmpty();
             assertThat(provider).isInstanceOf(ConfigurableProvider.class);
 
             var config = ((ConfigurableProvider) provider).providerConfig();
             assertThat(config.defaultBaseUrl()).isNotBlank();
-            assertThat(config.supportedProtocols()).contains(config.defaultProtocol());
+            // 协议一致性仅对 chat provider 生效；图片专用 provider（openrouter-images）
+            // 的 supportedProtocols 为空是合法的。
+            if (provider.supportedApis().contains(ChatApi.class)) {
+                assertThat(provider.supportedProtocols()).isNotEmpty();
+                assertThat(config.supportedProtocols()).contains(config.defaultProtocol());
+            }
             if (!"ollama".equals(provider.name())) {
                 assertThat(config.apiKeyEnvVar())
                     .as(provider.name() + " apiKeyEnvVar")

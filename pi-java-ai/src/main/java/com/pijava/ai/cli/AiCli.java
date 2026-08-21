@@ -1,9 +1,19 @@
 package com.pijava.ai.cli;
 
 
+import java.util.List;
+
 import com.pijava.ai.auth.EnvApiKeyResolver;
 import com.pijava.ai.auth.FileCredentialStore;
+import com.pijava.ai.api.ApiOptions;
+import com.pijava.ai.api.EmbeddingApi;
+import com.pijava.ai.api.EmbeddingRequest;
+import com.pijava.ai.api.ImageApi;
+import com.pijava.ai.api.ImageRequest;
+import com.pijava.ai.api.ImageStopReason;
 import com.pijava.ai.catalog.ModelInfo;
+import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.model.ModelId;
 import com.pijava.ai.provider.Provider;
 import com.pijava.ai.provider.ProviderRegistry;
 import com.pijava.ai.provider.builtin.ProviderCatalog;
@@ -21,6 +31,7 @@ import picocli.CommandLine.Parameters;
  */
 @Command(name = "pi-ai", description = "pi-java AI model management CLI",
          subcommands = {AiCli.ListModels.class, AiCli.AuthCmd.class, AiCli.PingCmd.class,
+                        AiCli.ImageCmd.class, AiCli.EmbedCmd.class,
                         CatalogCommand.class})
 public final class AiCli implements Runnable {
 
@@ -161,6 +172,94 @@ public final class AiCli implements Runnable {
 
                 api.send(request, options);
                 System.out.println("OK — connected to " + provider + " using " + testModel);
+            } catch (Exception e) {
+                System.out.println("FAILED: " + e.getMessage());
+            }
+        }
+    }
+
+    // ── image（P6-28）─────────────────────────────────────────
+
+    @Command(name = "image", description = "Generate an image via a provider")
+    static final class ImageCmd implements Runnable {
+
+        @Option(names = {"-p", "--provider"}, defaultValue = "openrouter-images",
+                description = "Provider name")
+        String provider;
+
+        @Option(names = {"-m", "--model"}, defaultValue = "black-forest-labs/flux.2-flex",
+                description = "Image model")
+        String model;
+
+        @Parameters(index = "0", description = "Image prompt")
+        String prompt;
+
+        @Override
+        public void run() {
+            try {
+                var registry = ProviderRegistry.create();
+                registry.loadBuiltinProviders();
+                registry.discoverFromServiceLoader();
+                var prov = registry.get(provider).orElseThrow(
+                    () -> new IllegalArgumentException("Unknown provider: " + provider));
+                var options = ApiOptions.defaults();
+                var api = prov.createApi(ImageApi.class, options);
+                var result = api.generate(new ImageRequest(
+                        ModelId.of(provider, model),
+                        List.of(new ContentBlock.TextContent(prompt))), options);
+                if (result.stopReason() == ImageStopReason.ERROR) {
+                    System.out.println("FAILED: " + result.errorMessage());
+                    return;
+                }
+                for (var block : result.output()) {
+                    if (block instanceof ContentBlock.ImageContent img) {
+                        System.out.println("image: " + img.mediaType()
+                            + " (base64 " + img.data().length() + " chars)");
+                    } else if (block instanceof ContentBlock.TextContent t && !t.text().isBlank()) {
+                        System.out.println("text: " + t.text());
+                    }
+                }
+                if (result.output().stream().noneMatch(ContentBlock.ImageContent.class::isInstance)) {
+                    System.out.println("No image returned.");
+                }
+            } catch (Exception e) {
+                System.out.println("FAILED: " + e.getMessage());
+            }
+        }
+    }
+
+    // ── embed（P6-28）─────────────────────────────────────────
+
+    @Command(name = "embed", description = "Embed text via a provider")
+    static final class EmbedCmd implements Runnable {
+
+        @Option(names = {"-p", "--provider"}, defaultValue = "openai",
+                description = "Provider name")
+        String provider;
+
+        @Option(names = {"-m", "--model"}, defaultValue = "text-embedding-3-small",
+                description = "Embedding model")
+        String model;
+
+        @Parameters(index = "0", description = "Text to embed")
+        String text;
+
+        @Override
+        public void run() {
+            try {
+                var registry = ProviderRegistry.create();
+                registry.loadBuiltinProviders();
+                registry.discoverFromServiceLoader();
+                var prov = registry.get(provider).orElseThrow(
+                    () -> new IllegalArgumentException("Unknown provider: " + provider));
+                var options = ApiOptions.defaults();
+                var api = prov.createApi(EmbeddingApi.class, options);
+                var result = api.embed(new EmbeddingRequest(
+                        ModelId.of(provider, model), List.of(text)), options);
+                int dim = result.embeddings().isEmpty()
+                    ? 0 : result.embeddings().get(0).length;
+                System.out.println("Embeddings: " + result.embeddings().size()
+                    + " x dim " + dim + " (inputTokens=" + result.inputTokens() + ")");
             } catch (Exception e) {
                 System.out.println("FAILED: " + e.getMessage());
             }

@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Runs catalog conformance against the 16 built-in providers.
+ * Runs catalog conformance against the 17 built-in providers.
  */
 class ProviderCatalogTest {
 
