@@ -1881,7 +1881,7 @@ pi-ai catalog publish --file models.json --endpoint https://models.example.com/u
 | P6-5a | `onStreamEvent` 改多监听器 + `AgentSessionEvent` 订阅层 | 中 | RPC 的前置依赖（§4.7） | ✅ 已完成 |
 | P6-5b | RPC 模式首批命令 + JSONL 分帧 | 中 | `pi-java --mode rpc` | ✅ 已完成 |
 | P6-5c | RPC 次批命令（模型/思考/压缩） | 中 | §4.3 次批 | ✅ 已完成 |
-| P6-5d | RPC 末批命令 | 低 | §4.3 末批 | 未开始（依赖 BashExecutor/HTML/会话树，建议延后） |
+| P6-5d | RPC 末批命令 | 低 | §4.3 末批 | ⏸ 延后（依赖 BashExecutor/HTML/会话树） |
 | P6-5e | `--mode json`（PrintMode 改造，独立于 RPC） | 低 | §4.1 对照表 | ✅ 已完成 |
 | P6-6 | 技能系统（Skills，含 JGit ignore + `PI_JAVA_CODING_AGENT_DIR`） | 中 | Markdown Skill 加载 + 目录发现 | ✅ 已完成 |
 | P6-7 | 扩展系统（Extensions / Plugin） | 中 | `ExtensionManager` + `PiExtension` SPI | ✅ 已完成 |
@@ -1915,7 +1915,7 @@ pi-ai catalog publish --file models.json --endpoint https://models.example.com/u
 | P6-25 | Entry 元数据事件富样式渲染 | 低 | `08-phase3:306` | ✅ 已完成 |
 | P6-26 | 会话 diff 渲染 | 低 | `08b-phase3:447` | ✅ 已完成 |
 | P6-27 | AI 生成 Skills | 低 | `07c-phase2c:1130` | ✅ 已完成 |
-| P6-28 | `ImageApi` / `EmbeddingApi`（需改 `ProviderApi` permits） | 低 | `02-architecture:155`、`06-phase1:226` | ⏳ 进行中 |
+| P6-28 | `ImageApi` / `EmbeddingApi`（需改 `ProviderApi` permits） | 低 | `02-architecture:155`、`06-phase1:226` | ⏸ 延后（§2.7：pi 仅 `openrouter-images`，需破坏 `ProviderApi` permits，非本阶段范围） |
 
 > **建议实施顺序**：P6-1a→1b→1c→1d（Provider 基础）→ P6-2/3/4（evals，可与 1e/1f/1g 并行）→ P6-5a→5b（RPC 核心）→ P6-6/P6-7/P6-16（Skills/Extensions）→ P6-8 → P6-12（HTML 导出）→ P6-17（OAuth）→ P6-9a/9b/9c（远程会话）→ P6-10/11 → 其余低优先级遗留项按需。
 >
