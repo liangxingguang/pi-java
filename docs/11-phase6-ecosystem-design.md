@@ -2125,3 +2125,5 @@ Phase 5 已于 2026-08-18 放弃原生分发（实测 149MB vs ≤30MB 目标）
 **测试**：`RpcDispatcherTest` 增 `lastBatchModeAndRetryCommands` / `bashCommandRunsAndReturnsResult` / `sessionQueryAndExportCommands` / `autoRetryRerunsAfterError`；`RpcCommandTest` 末批 13 个 record round-trip。全部通过（10 + 3 + 4 mapper 测试）。
 
 **既有偏差记录**：`fork` 响应 `text` 回空串（pi-java 无 pi 的 entry 文本选择流程）；`bash` 不增量流式（`ShellExecutor.execute` 阻塞 API，留待后续）；文件 ≤500 行约束三处超限——`RpcDispatcher.java`(601) 与 `AgentSession.java`(595，改动前已 545 超标) 为本阶段推高，`AgentHarness.java`(505) 仅超 5 行，拆分列为后续重构（与 §13 v1.3 记录的 TUI 既有例外一致）。
+
+**额外修复（验收冒烟时发现）——`JsonlWriter` 关闭 System.out**：`ObjectMapper.writeValue(OutputStream, value)` 的 `AUTO_CLOSE_TARGET` 默认 true，第一次写就把 `System.out` close 掉，`PrintStream` 后续写被静默吞掉 —— `--mode rpc`/`--mode json` 多行输出只剩第一行（`RpcModeEndToEndTest` 用 `ByteArrayOutputStream` 未暴露）。改为 `writeValueAsBytes` 后 `out.write(bytes)` 不再触碰目标流。回归：`JsonlWriterTest.writesMultipleLines` / `doesNotCloseTheUnderlyingStream`。fat jar 冒烟验证 5 行命令全响应（含 `BashExecutionUpdate` 事件 + 未知命令 `success:false`）。

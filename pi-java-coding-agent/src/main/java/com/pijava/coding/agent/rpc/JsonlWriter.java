@@ -25,7 +25,11 @@ public final class JsonlWriter {
 
     /** 把对象序列化为单行 JSON 写出。 */
     public synchronized void write(Object value) throws IOException {
-        JSON.writeValue(out, value);
+        // 用 writeValueAsBytes 而非 writeValue(out, ...)：后者 AUTO_CLOSE_TARGET
+        // 默认 true，第一次写会 close() 掉目标流（System.out），后续写被 PrintStream
+        // 静默吞掉 —— RPC 模式多行输出只剩第一行。
+        byte[] bytes = JSON.writeValueAsBytes(value);
+        out.write(bytes);
         out.write('\n');
         out.flush();
     }
