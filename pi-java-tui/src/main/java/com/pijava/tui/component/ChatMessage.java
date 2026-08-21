@@ -14,7 +14,13 @@ public sealed interface ChatMessage {
     record User(String text) implements ChatMessage {}
     record Assistant(List<ContentBlock> blocks) implements ChatMessage {}
     record ToolCall(String name, String arguments) implements ChatMessage {}
-    record ToolResult(String output, boolean isError) implements ChatMessage {}
+    /** Tool result content blocks (text and/or diff), for rich rendering (P6-26). */
+    record ToolResult(List<ContentBlock> content, boolean isError) implements ChatMessage {
+        /** Defensively copies the content blocks. */
+        public ToolResult {
+            content = List.copyOf(content);
+        }
+    }
     record Error(String message) implements ChatMessage {}
     /** Metadata/system bubble; {@link MetaKind} drives icon + color (P6-25). */
     record System(String text, MetaKind kind) implements ChatMessage {
@@ -63,13 +69,13 @@ public sealed interface ChatMessage {
 
     private static ChatMessage fromToolBlocks(List<ContentBlock> blocks) {
         if (blocks.isEmpty()) {
-            return new ToolResult("", false);
+            return new ToolResult(List.of(), false);
         }
         var block = blocks.get(0);
         if (block instanceof ContentBlock.ToolResultContent result) {
-            return new ToolResult(joinText(result.content()), result.isError());
+            return new ToolResult(result.content(), result.isError());
         }
-        return new ToolResult(joinText(blocks), false);
+        return new ToolResult(blocks, false);
     }
 
     private static String joinText(List<ContentBlock> blocks) {

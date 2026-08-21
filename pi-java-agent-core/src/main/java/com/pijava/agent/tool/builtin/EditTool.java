@@ -4,6 +4,7 @@ import com.pijava.ai.AbortSignal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -125,10 +126,15 @@ public final class EditTool {
                 context.fs().writeFile(absolutePath, newContent);
                 String diffStr = generateSimpleDiff(originalContent, newContent);
                 String patchStr = generateUnifiedPatch(params.path(), originalContent, newContent);
+                var blocks = new ArrayList<ContentBlock>();
+                blocks.add(new ContentBlock.TextContent(
+                    "Successfully replaced " + params.edits().size()
+                    + " block(s) in " + params.path() + "."));
+                if (diffStr != null && !diffStr.isEmpty()) {
+                    blocks.add(new ContentBlock.DiffContent(diffStr));
+                }
                 return new ToolResult<>(
-                    List.of(new ContentBlock.TextContent(
-                        "Successfully replaced " + params.edits().size()
-                        + " block(s) in " + params.path() + ".")),
+                    blocks,
                     new EditDetails(diffStr, patchStr, firstLine),
                     null, false, List.of());
             }

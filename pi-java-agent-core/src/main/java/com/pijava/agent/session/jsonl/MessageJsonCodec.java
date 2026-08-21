@@ -78,6 +78,8 @@ final class MessageJsonCodec {
                 JsonlCodec.requireString(node, "toolName"),
                 decodeBlocks(node.get("content")),
                 node.has("isError") && node.get("isError").asBoolean(false));
+            case "diff" -> new ContentBlock.DiffContent(
+                JsonlCodec.requireString(node, "diffText"));
             default -> throw JsonlCodec.DecodeError.schema("has unknown content block type");
         };
     }

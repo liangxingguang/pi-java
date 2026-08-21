@@ -37,11 +37,7 @@ public final class MessageBubble {
                 "› ", MESSAGE_INDENT);
             case ChatMessage.Assistant(var blocks) -> renderBlocks(blocks);
             case ChatMessage.ToolCall(var name, var arguments) -> toolCallCard(name, arguments);
-            case ChatMessage.ToolResult(var output, var isError) ->
-                List.of(new LogicalLine(
-                    (isError ? "! " : "") + truncate(TextLayout.escapeMarkup(output), 500),
-                    TOOL_INDENT, TOOL_INDENT, true,
-                    isError ? Style.EMPTY.red() : Style.EMPTY.dim()));
+            case ChatMessage.ToolResult(var content, var isError) -> toolResult(content, isError);
             case ChatMessage.Error(var message) ->
                 TextLayout.split("[red]" + TextLayout.escapeMarkup(message) + "[/]", false);
             case ChatMessage.System(var text, var kind) -> system(text, kind);
@@ -104,6 +100,8 @@ public final class MessageBubble {
                 case ContentBlock.UrlImageContent(var url) ->
                     List.of(new LogicalLine(
                         "[image: " + url + "]", 0, 0, false, Style.EMPTY.dim()));
+                case ContentBlock.DiffContent(var diffText) ->
+                    DiffView.lines(diffText);
             };
             lines.addAll(blockLines);
         }
@@ -125,6 +123,42 @@ public final class MessageBubble {
             return raw;
         }
         return String.valueOf(arguments);
+    }
+
+    /**
+     * Renders a tool result: text blocks as indented dim/red lines, diff blocks
+     * via {@link DiffView} (P6-26). Other block kinds produce no flat line.
+     */
+    private static List<LogicalLine> toolResult(List<ContentBlock> content, boolean isError) {
+        var out = new ArrayList<LogicalLine>();
+        for (var block : content) {
+            switch (block) {
+                case ContentBlock.TextContent(var text) -> out.add(new LogicalLine(
+                    (isError ? "! " : "") + truncate(TextLayout.escapeMarkup(text), 500),
+                    TOOL_INDENT, TOOL_INDENT, true,
+                    isError ? Style.EMPTY.red() : Style.EMPTY.dim()));
+                case ContentBlock.DiffContent(var diff) ->
+                    out.addAll(indent(DiffView.lines(diff), TOOL_INDENT));
+                case ContentBlock.ImageContent(var mediaType, var data) -> out.add(new LogicalLine(
+                    "[image: " + mediaType + "]", TOOL_INDENT, TOOL_INDENT, false, Style.EMPTY.dim()));
+                case ContentBlock.UrlImageContent(var url) -> out.add(new LogicalLine(
+                    "[image: " + url + "]", TOOL_INDENT, TOOL_INDENT, false, Style.EMPTY.dim()));
+                case ContentBlock.ThinkingContent ignored -> { }
+                case ContentBlock.ToolUseContent ignored -> { }
+                case ContentBlock.ToolResultContent ignored -> { }
+            }
+        }
+        return out;
+    }
+
+    /** Shifts every line's indents by {@code indent} cells (preserves style). */
+    private static List<LogicalLine> indent(List<LogicalLine> lines, int indent) {
+        var out = new ArrayList<LogicalLine>(lines.size());
+        for (var line : lines) {
+            out.add(new LogicalLine(line.markup(), line.initialIndent() + indent,
+                line.subsequentIndent() + indent, line.preformatted(), line.style()));
+        }
+        return out;
     }
 
     private static List<LogicalLine> dim(List<LogicalLine> lines) {

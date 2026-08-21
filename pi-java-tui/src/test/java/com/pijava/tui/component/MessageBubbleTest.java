@@ -24,7 +24,8 @@ class MessageBubbleTest {
             new ContentBlock.TextContent("reply"))))).isNotEmpty();
         assertThat(MessageBubble.lines(new ChatMessage.ToolCall("read", "{}")))
             .hasSize(2);
-        assertThat(MessageBubble.lines(new ChatMessage.ToolResult("output", false)))
+        assertThat(MessageBubble.lines(new ChatMessage.ToolResult(
+                List.of(new ContentBlock.TextContent("output")), false)))
             .isNotEmpty();
         assertThat(MessageBubble.lines(new ChatMessage.Error("boom"))).isNotEmpty();
         assertThat(MessageBubble.lines(new ChatMessage.System("info", MetaKind.GENERIC))).isNotEmpty();
@@ -57,7 +58,7 @@ class MessageBubbleTest {
     @Test
     void toolResultIsPreformattedTruncatedIndentedAndDim() {
         var lines = MessageBubble.lines(new ChatMessage.ToolResult(
-            "x".repeat(600), false));
+            List.of(new ContentBlock.TextContent("x".repeat(600))), false));
         assertThat(lines).hasSize(1);
         assertThat(lines.get(0).preformatted()).isTrue();
         assertThat(lines.get(0).initialIndent()).isEqualTo(4);
@@ -95,9 +96,28 @@ class MessageBubbleTest {
 
     @Test
     void toolResultErrorIsMarkedAndRed() {
-        var err = MessageBubble.lines(new ChatMessage.ToolResult("bad", true));
+        var err = MessageBubble.lines(new ChatMessage.ToolResult(
+            List.of(new ContentBlock.TextContent("bad")), true));
         assertThat(err.get(0).markup()).isEqualTo("! bad");
         assertThat(err.get(0).style()).isEqualTo(Style.EMPTY.red());
+    }
+
+    @Test
+    void toolResultRendersDiffBlocksViaDiffView() {
+        var lines = MessageBubble.lines(new ChatMessage.ToolResult(
+            List.of(
+                new ContentBlock.TextContent("done"),
+                new ContentBlock.DiffContent("+new\n-old")),
+            false));
+        assertThat(lines).hasSize(3);
+        assertThat(lines.get(0).markup()).isEqualTo("done");
+        assertThat(lines.get(0).initialIndent()).isEqualTo(4);
+        assertThat(lines.get(0).style()).isEqualTo(Style.EMPTY.dim());
+        assertThat(lines.get(1).markup()).isEqualTo("+new");
+        assertThat(lines.get(1).initialIndent()).isEqualTo(4);
+        assertThat(lines.get(1).style()).isEqualTo(Style.EMPTY.fg(DiffView.ADDED));
+        assertThat(lines.get(2).markup()).isEqualTo("-old");
+        assertThat(lines.get(2).style()).isEqualTo(Style.EMPTY.fg(DiffView.REMOVED));
     }
 
     @Test

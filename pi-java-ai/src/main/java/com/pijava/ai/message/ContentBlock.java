@@ -20,7 +20,8 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
     @JsonSubTypes.Type(value = ContentBlock.ImageContent.class, name = "image"),
     @JsonSubTypes.Type(value = ContentBlock.UrlImageContent.class, name = "image_url"),
     @JsonSubTypes.Type(value = ContentBlock.ToolUseContent.class, name = "tool_use"),
-    @JsonSubTypes.Type(value = ContentBlock.ToolResultContent.class, name = "tool_result")
+    @JsonSubTypes.Type(value = ContentBlock.ToolResultContent.class, name = "tool_result"),
+    @JsonSubTypes.Type(value = ContentBlock.DiffContent.class, name = "diff")
 })
 public sealed interface ContentBlock {
 
@@ -83,4 +84,15 @@ public sealed interface ContentBlock {
             content = List.copyOf(content);
         }
     }
+
+    /**
+     * A unified diff fragment for UI rendering (P6-26). Providers drop this
+     * block when building LLM requests — the tool's summary text already
+     * informs the model, and the diff is a display-only artifact.
+     *
+     * @param diffText unified-diff text (lines prefixed with {@code -}/{@code +}/
+     *        {@code ' '}, optionally with {@code @@} hunk / {@code ---}/{@code +++}
+     *        headers)
+     */
+    record DiffContent(String diffText) implements ContentBlock {}
 }

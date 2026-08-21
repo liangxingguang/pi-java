@@ -124,6 +124,7 @@ public final class CompactionService {
                 }
                 yield sb.toString();
             }
+            case ContentBlock.DiffContent d -> ""; // display-only; never enters model context
         };
     }
 }

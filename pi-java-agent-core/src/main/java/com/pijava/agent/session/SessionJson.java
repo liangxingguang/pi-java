@@ -101,6 +101,10 @@ public final class SessionJson {
                 }
                 node.put("isError", t.isError());
             }
+            case ContentBlock.DiffContent d -> {
+                node.put("type", "diff");
+                node.put("diffText", d.diffText());
+            }
         }
         return node;
     }

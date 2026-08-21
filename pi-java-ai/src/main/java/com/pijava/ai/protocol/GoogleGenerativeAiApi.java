@@ -208,6 +208,8 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
                     List.of(Part.fromText(tc.text()));
             case ContentBlock.ThinkingContent tc ->
                     List.of(); // Gemini has its own thinking protocol; do not echo it as text
+            case ContentBlock.DiffContent diff ->
+                    List.of(); // display-only artifact; not part of the LLM request
             case ContentBlock.ToolUseContent tc -> {
                 var fc = FunctionCall.builder()
                         .name(tc.name())
