@@ -1,12 +1,12 @@
-# Phase 1-4 代码对照表（pi-java ↔ pi TypeScript）
+# Phase 1-6 代码对照表（pi-java ↔ pi TypeScript）
 
 > pi 源码位置：`D:\workplaceForai\pi\packages\`
 > pi-java 源码位置：各模块 `src/main/java/` 下 `com.pijava.*`
-> 更新日期：2026-08-16（由原 Phase 1 对照表扩展至 Phase 0-4 全模块）
+> 更新日期：2026-08-22（由原 Phase 1 对照表扩展至 Phase 0-6 全模块）
 
 ## 0. 范围与方法
 
-- **覆盖范围**：pi 10 个包中已实现的 6 个（`telemetry`、`ai`、`agent`、`session-backends/sqlite-node`、`tui`、`coding-agent`）逐项对照；未实现的 4 个（`protocol`、`client`、`server`、`evals`）以「Phase 6 存根」形式列入。
+- **覆盖范围**：pi 10 个包全部逐项对照（`telemetry`、`ai`、`agent`、`session-backends/sqlite-node`、`tui`、`coding-agent`、`protocol`、`client`、`server`、`evals`）；Phase 6 于 2026-08-22 完成，§8 由存根改为真实映射。
 - **粒度约定（混合）**：小模块（telemetry、sqlite-node、存储契约）逐文件；`agent-core` 按 harness/tool/session/hook/compaction 分组逐文件；大模块（tui、coding-agent）包级汇总 + 关键文件单列。
 - **对齐度判据**：≥95% 完全对齐（接口/行为逐项一致）；80–94% 主要对齐（结构一致，存在已记录的差异）；<80% 部分对齐（核心流程对齐但能力面缺失）。
 - **旧表修正标注**：原 Phase 1 表中结论若已被后续阶段更新，保留原表并以「⚠️ 已于 Phase N 更新」标注修正。
@@ -344,14 +344,77 @@
 
 ---
 
-## 8. Phase 6 存根 — protocol / client / server / evals
+## 8. Phase 6 — 生态扩展（已完成 2026-08-22）
 
-| pi-java 模块 | pi 包 | pi 规模 | 状态 |
-|-------------|-------|---------|------|
-| `pi-java-protocol`（package-info） | `packages/protocol`（8 文件 / 1138 行） | schemas.ts + framing.ts + codec.ts + cbor/（encoder/decoder/options） | Phase 6：消息词汇（ClientHello/Request/Response/EventEnvelope）、命令集、快照/转录模型、CBOR 帧编解码 |
-| `pi-java-client`（package-info） | `packages/client`（10 文件 / 1094 行） | 远程客户端 | Phase 6：F22 RPC / F32 Unix Socket |
-| `pi-java-server`（package-info） | `packages/server`（17 文件 / 2110 行） | 远程服务端 | Phase 6：RPC 服务端 + 远程会话 |
-| `pi-java-evals`（package-info） | `packages/evals`（8 文件 / 1179 行） | 评估框架 | Phase 6：F35 评估/conformance 框架（当前 conformance 套件内嵌于各模块测试） |
+> 按 `11-phase6-ecosystem-design.md` 六条工作流 + P6-28 落地。对齐度判据同 §0。
+
+### 8.1 Provider 生态（P6-1）— `provider/` + `protocol/` ↔ `providers/` + `api/`
+
+| pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
+|--------|-----------------|--------|----------|
+| `provider/ConfigurableProvider.java` | `providers/` 配置驱动模式 | ✅ ~90% | 三能力分派（Chat/Image/Embedding）+ 协议路由 |
+| `provider/builtin/*.java`（17 个） | `providers/all.ts` builtinProviders()（39 chat + 1 image） | ⚠️ 部分 | pi-java 聚焦中国大陆 16 chat + `openrouter-images` 1 image，非全量 39 |
+| `provider/ProviderRegistry.discoverFromServiceLoader()` | —（Node 无等价） | ✅ 100% | 第三方 JAR 经 ServiceLoader 注册 |
+| `protocol/OpenAIResponsesApi.java` | `api/openai-responses.ts` | ✅ ~90% | Responses 事件映射逐行对齐 |
+| `protocol/AzureOpenAIResponsesApi.java` | `api/azure-openai-responses.ts` | ✅ ~85% | SDK 原生 Azure 支持（无需 com.azure） |
+| `protocol/PiMessagesApi.java` | `api/pi-messages.ts` | ✅ ~90% | 事件与 `StreamEvent` 近乎 1:1 |
+| `api/AnthropicMessagesApi.java`（P6-1a 增强） | `api/anthropic-messages.ts` | ✅ ~90% | 补 `apiKeyEnvVar` + `baseUrl` 覆盖 |
+
+### 8.2 evals（P6-2/3/4）— `pi-java-evals` ↔ `evals/`
+
+| pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
+|--------|-----------------|--------|----------|
+| `evals/conformance/*` | `evals/*.ts` | ✅ ~80% | Provider/Catalog/API conformance 套件 |
+| `evals/smoke/*` | — | pi-java 独有 | 每 provider 1 真实请求，需凭据默认跳过 |
+| `evals/extension/*` | `evals/*` | ✅ ~80% | extension 生命周期测试 |
+
+### 8.3 RPC 模式（P6-5）— `coding-agent/rpc/` + `mode/` ↔ `modes/rpc/` + `modes/json-event.ts`
+
+| pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
+|--------|-----------------|--------|----------|
+| `rpc/RpcCommand.java`（32 命令） | `modes/rpc/rpc-types.ts`（30 命令） | ✅ ~95% | 三批全实现（含 `set_auto_compaction`/bash/retry） |
+| `rpc/RpcDispatcher.java` | `modes/rpc/rpc-mode.ts` | ✅ ~90% | 事件订阅驱动响应 |
+| `rpc/JsonlReader.java` + `JsonlWriter.java` | `modes/jsonl.ts` | ✅ 100% | LF-only 分帧（U+2028/29 不误切） |
+| `rpc/RpcMode.java` | `modes/rpc/rpc-mode.ts` | ✅ ~90% | stdin 常驻循环 |
+| `mode/JsonEventMapper.java` | `modes/json-event.ts` | ✅ ~95% | 剥 `partial` + 全事件线格式 |
+
+### 8.4 Skills / Extensions（P6-6/7）— `coding-agent/skill/` + `extension/` ↔ `harness/skills.ts` + `extensions/`
+
+| pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
+|--------|-----------------|--------|----------|
+| `skill/MarkdownSkillLoader.java` + `SkillDiscovery.java` | `harness/skills.ts` | ✅ ~85% | SKILL.md 目录规则、前言校验、baseDir |
+| `skill/IgnoreFilter.java` | `ignore` npm 包语义 | ✅ ~90% | JGit IgnoreNode 三态上溯 |
+| `extension/ExtensionManager.java` + `PiExtension` SPI | `extensions/*` | ✅ ~80% | ServiceLoader + loadJar |
+| `skill/SkillGenerator.java`（P6-27） | AI 生成 skills | ✅ ~80% | `/create-skill` |
+
+### 8.5 模型目录（P6-8/10）— `catalog/` ↔ `models-store.ts` + `model-catalog.ts`
+
+| pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
+|--------|-----------------|--------|----------|
+| `catalog/ModelsStore.java` + `FileModelsStore.java` | `models-store.ts` | ✅ ~85% | 读写删，补 Phase 1 缺口 |
+| `catalog/RemoteCatalog.java` | 远程目录（ETag 条件刷新） | ✅ ~90% | ETag 含引号原样透传 |
+| `catalog/CatalogPublisher.java`（P6-10） | `pi-ai catalog` | ✅ ~80% | 发布工具 |
+
+### 8.6 CBOR 远程会话（P6-9）— protocol / client / server 模块 ↔ `protocol/` + `client/` + `server/`
+
+| pi-java 模块 | pi 包 | 对齐度 | 差异说明 |
+|-------------|-------|--------|----------|
+| `pi-java-protocol`（CborCodec/FrameCodec，26 文件） | `packages/protocol`（8 文件 / 1138 行） | ✅ ~85% | 4 字节大端长度前缀 + CBOR 信封；增量分帧 |
+| `pi-java-client`（PiClient/SessionHandle，7 文件） | `packages/client`（10 文件 / 1094 行） | ✅ ~80% | 远程会话客户端 |
+| `pi-java-server`（PiServer/PiSessionRuntime，14 文件） | `packages/server`（17 文件 / 2110 行） | ✅ ~85% | 会话控制面 + 独占租约 + 快照订阅（`SESSION_LOCKED`） |
+
+### 8.7 图片与嵌入（P6-28）— `provider/builtin/OpenRouterImagesProvider` + `protocol/OpenRouterImagesApi` ↔ `providers/openrouter-images.ts` + `api/openrouter-images.ts` + `images-models.ts`
+
+| pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
+|--------|-----------------|--------|----------|
+| `OpenRouterImagesProvider.java` | `providers/openrouter-images.ts` | ✅ ~90% | 独立 images provider，8 个模型 |
+| `OpenRouterImagesApi.java` | `api/openrouter-images.ts` | ✅ ~85% | chat-with-modalities；pi-java 用 openai-java SDK（pi 用 openai npm SDK） |
+| `api/ImageApi`/`ImageResult` 等 | `images-models.ts`（ImagesFunction/AssistantImages） | ✅ ~95% | 接口/字段逐一对应 |
+| `api/EmbeddingApi` + `protocol/OpenAIEmbeddingApi.java` | —（pi 无 embedding） | pi-java 独有 | OpenAI `/v1/embeddings` |
+
+### 8.8 杂项（P6-12..27）
+
+HTML 导出（`export/HtmlExporter`）、`/share`、`config`/`package`/`auth` 子命令、OAuth（`auth/OAuthFlow`）、OpenTelemetry（`pi-java-telemetry`）、TUI 富功能（主题/表格/语法高亮/会话 diff）等 —— 多为 pi-java 独有能力或 TamboUI 封装，无逐文件对照，此处不展开。
 
 ---
 
@@ -359,22 +422,27 @@
 
 | 模块 | pi 文件 | pi 行数 | pi-java 文件 | pi-java 行数 | 对齐度 |
 |------|--------|---------|-------------|-------------|--------|
-| telemetry | 6 | 826 | 4 | 91 | ~85% |
-| ai | 174 | 20,595 | 52 | 3,696 | ~90% |
-| agent | 49 | 11,332 | 146 | 8,640 | ~85% |
-| session-backends/sqlite-node | 18 | 2,112 | 22 | 2,422 | ~90% |
-| tui | 38 | 14,317 | 38 | 4,429 | ~75% |
-| coding-agent | 199 | 52,418 | 50 | 3,585 | ~65% |
-| protocol / client / server / evals | 43 | 5,521 | 4（package-info） | ~30 | Phase 6 存根 |
-| **总计（已实现）** | **484** | **~101,600** | **312** | **~22,900** | — |
+| telemetry | 6 | 826 | 7 | 444 | ~85% |
+| ai | 174 | 20,595 | 136 | 11,350 | ~90% |
+| agent | 49 | 11,332 | 195 | 13,979 | ~85% |
+| session-backends/sqlite-node | 18 | 2,112 | 28 | 3,074 | ~90% |
+| tui | 38 | 14,317 | 68 | 9,029 | ~75% |
+| coding-agent | 199 | 52,418 | 123 | 11,399 | ~65% |
+| protocol | 8 | 1,138 | 26 | 962 | ~85% |
+| client | 10 | 1,094 | 7 | 374 | ~80% |
+| server | 17 | 2,110 | 14 | 775 | ~85% |
+| evals | 8 | 1,179 | 19 | 1,183 | ~80% |
+| **总计（已实现）** | **527** | **~107,100** | **623** | **52,569** | — |
 
 ## 10. 已知差异清单（按模块）
 
+> 2026-08-22 更新：Phase 6 已完成，原「Phase 6」计划项已闭环，下表仅列**仍存的差异**。
+
 | 模块 | 未对齐项 | 计划 |
 |------|---------|------|
-| ai | 35+ 供应商适配器、OAuth 7 流程、OpenAI Responses、constrained sampling、images | Phase 6 |
-| agent-core | harness 富记录字段逐步填充（resultEntryId/effectiveArgs/usage.cause）、branch-summarization、file-mutation-queue/edit-diff 完整语义、skills/prompt 模板、image 工具 | Phase 6 / 渐进 |
-| tui | 渲染层为 TamboUI 封装（非逐文件）、编辑器/undo/kill-ring、Markdown 增强（latex/高亮） | Phase 6 / 渐进 |
-| coding-agent | HTML 导出渲染器、RPC/client/server、extensions、Bun 环境、图片处理、自动更新 | Phase 6 |
+| ai | 剩余 pi 供应商适配器（Bedrock/Vertex/OpenRouter chat 等，pi-java 聚焦中国大陆 16 个）、OAuth 9 流程（pi-java 有通用 PKCE，未逐 provider 接入）、constrained sampling | 按需 / 渐进 |
+| agent-core | harness 富记录字段逐步填充（resultEntryId/effectiveArgs/usage.cause）、branch-summarization、file-mutation-queue/edit-diff 完整语义、image 工具 | 渐进 |
+| tui | 渲染层为 TamboUI 封装（非逐文件）、编辑器/undo/kill-ring、Markdown latex | 渐进 |
+| coding-agent | Bun 运行时（pi-java 为 JVM）、自动更新、TUI 图片预览 | 按需 / 不适用 |
 | session-backend-sqlite | 多进程读并发压测、JSONL 扫描式搜索（按需） | 后续 |
-| protocol / client / server / evals | 全部 | Phase 6 |
+| protocol / client / server | `session`/`process` 细粒度控制（pi 有更多命令），已实现核心控制面 | 渐进 |
