@@ -856,7 +856,7 @@ pi 有 30 个命令。本阶段按优先级分三批，**未实现的命令返�
 |------|------|------|
 | **首批（P6-5b）** | `prompt`、`steer`、`follow_up`、`abort`、`get_state`、`new_session`、`get_messages`、`get_last_assistant_text` | 覆盖基本对话回路，全部有对应的 `AgentSession` 方法（`processPrompt`/`steer`/`followUp`/`abort`/`lastAssistantText`） |
 | **次批（P6-5c）** | `set_model`、`cycle_model`、`get_available_models`、`set_thinking_level`、`cycle_thinking_level`、`get_available_thinking_levels`、`compact`、`set_auto_compaction`、`get_session_stats`、`set_session_name`、`get_commands` | 模型/思考等级/压缩控制面 |
-| **末批（P6-5d）** | `bash`、`abort_bash`、`switch_session`、`fork`、`clone`、`get_fork_messages`、`get_entries`、`get_tree`、`set_steering_mode`、`set_follow_up_mode`、`set_auto_retry`、`abort_retry`、`export_html` | 依赖尚未落地的能力：`bash` 需 `BashExecutor` 事件通道、`export_html` 需 HTML 渲染器（P6-12）、`get_tree` 需会话树查询 |
+| **末批（P6-5d）** | `bash`、`abort_bash`、`switch_session`、`fork`、`clone`、`get_fork_messages`、`get_entries`、`get_tree`、`set_steering_mode`、`set_follow_up_mode`、`set_auto_retry`、`abort_retry`、`export_html` | ✅ 已实现（§13 v1.4）。`bash` 走会话级执行 + `BashExecutionUpdate` 事件、`export_html` 复用 P6-12 `HtmlExporter`、`get_tree` 从 transcript 按 `parentId` 建树、`set_auto_retry`/`abort_retry` 走 `SessionRunner` 重试循环 |
 
 > 命令批次编号与 §8.1 任务编号一致：P6-5a 是前置的事件订阅改造（§4.7），P6-5b/c/d 为三批命令。`--mode json` 独立于三批，落点在 `PrintMode`（见 §4.1）。
 
@@ -1880,8 +1880,8 @@ pi-ai catalog publish --file models.json --endpoint https://models.example.com/u
 | P6-4 | evals — extension tests | 高 | `pi-java-evals` Extension 套件 | ✅ 已完成 |
 | P6-5a | `onStreamEvent` 改多监听器 + `AgentSessionEvent` 订阅层 | 中 | RPC 的前置依赖（§4.7） | ✅ 已完成 |
 | P6-5b | RPC 模式首批命令 + JSONL 分帧 | 中 | `pi-java --mode rpc` | ✅ 已完成 |
-| P6-5c | RPC 次批命令（模型/思考/压缩） | 中 | §4.3 次批 | ✅ 已完成 |
-| P6-5d | RPC 末批命令 | 低 | §4.3 末批 | ⏸ 延后（依赖 BashExecutor/HTML/会话树） |
+| P6-5c | RPC 次批命令（模型/思考/压缩） | 中 | §4.3 次批 | ✅ 已完成（含 `set_auto_compaction`，验收时补齐，见 §13 v1.3） |
+| P6-5d | RPC 末批命令 | 低 | §4.3 末批 | ✅ 已完成（13 个命令全部实现，见 §13 v1.4） |
 | P6-5e | `--mode json`（PrintMode 改造，独立于 RPC） | 低 | §4.1 对照表 | ✅ 已完成 |
 | P6-6 | 技能系统（Skills，含 JGit ignore + `PI_JAVA_CODING_AGENT_DIR`） | 中 | Markdown Skill 加载 + 目录发现 | ✅ 已完成 |
 | P6-7 | 扩展系统（Extensions / Plugin） | 中 | `ExtensionManager` + `PiExtension` SPI | ✅ 已完成 |
@@ -1942,48 +1942,48 @@ pi-ai catalog publish --file models.json --endpoint https://models.example.com/u
 ## 10. 验收标准（可量化）
 
 1. **Provider 生态**
-   - [ ] `pi-ai list-models` 能列出 16 个 Provider（Phase 1 的 5 个 + §2.4 新增 11 个）。
-   - [ ] 每个新 Provider 通过 `ProviderCatalogConformance` 基础配置测试（name/baseUrl/envVar/协议集合非空且自洽）。
-   - [ ] OpenAI-compatible Provider 共用同一适配器，重复协议代码为零（除特殊响应差异外）。
-   - [ ] `AnthropicMessagesApi` 支持 `apiKeyEnvVar` 与 `baseUrl` 覆盖，MiniMax 能正确指向 `api.minimaxi.com`。
-   - [ ] `DefaultProviders` 会执行 ServiceLoader 发现；放入 classpath 的第三方 `ProviderFactory` 出现在 `list-models`。
-   - [ ] Ollama 在无 API key 环境下可用（`apiKeyEnvVar` 可空路径生效）。
+   - [x] `pi-ai list-models` 能列出 16 个 Provider（Phase 1 的 5 个 + §2.4 新增 11 个）。
+   - [x] 每个新 Provider 通过 `ProviderCatalogConformance` 基础配置测试（name/baseUrl/envVar/协议集合非空且自洽）。
+   - [x] OpenAI-compatible Provider 共用同一适配器，重复协议代码为零（除特殊响应差异外）。
+   - [x] `AnthropicMessagesApi` 支持 `apiKeyEnvVar` 与 `baseUrl` 覆盖，MiniMax 能正确指向 `api.minimaxi.com`。
+   - [x] `DefaultProviders` 会执行 ServiceLoader 发现；放入 classpath 的第三方 `ProviderFactory` 出现在 `list-models`。
+   - [x] Ollama 在无 API key 环境下可用（`apiKeyEnvVar` 可空路径生效）。
 2. **三个新协议适配器**
-   - [ ] `OpenAIResponsesApi` 通过 C1–C8，且 §2.5.1 事件映射表每行有对应断言。
-   - [ ] `openai` Provider 能通过 `extra.protocol` 在 Chat Completions 与 Responses 间切换（多协议路由首个实例）。
-   - [ ] `AzureOpenAIResponsesApi` 的 baseUrl 五级解析顺序与 `DEPLOYMENT_NAME_MAP` 解析测试通过；全空配置抛出含全部配置项的错误；未引入 `com.azure:*` 依赖。
-   - [ ] `PiMessagesApi` 的 `PiMessagesEvent` 全 sealed 变体 round-trip 通过；缺终止事件时抛异常。
+   - [x] `OpenAIResponsesApi` 通过 C1–C8，且 §2.5.1 事件映射表每行有对应断言。
+   - [x] `openai` Provider 能通过 `extra.protocol` 在 Chat Completions 与 Responses 间切换（多协议路由首个实例）。
+   - [x] `AzureOpenAIResponsesApi` 的 baseUrl 五级解析顺序与 `DEPLOYMENT_NAME_MAP` 解析测试通过；全空配置抛出含全部配置项的错误；未引入 `com.azure:*` 依赖。
+   - [x] `PiMessagesApi` 的 `PiMessagesEvent` 全 sealed 变体 round-trip 通过；缺终止事件时抛异常。
 3. **Evals**
-   - [ ] `mvn verify -pl pi-java-evals` 在无网络时全绿（conformance + extension）。
-   - [ ] `mvn verify -pl pi-java-evals -Dpi.eval.smoke=true` 在配置凭据时可跑 smoke，失败不误报普通 CI。
+   - [x] `mvn verify -pl pi-java-evals` 在无网络时全绿（conformance + extension）。
+   - [x] `mvn verify -pl pi-java-evals -Dpi.eval.smoke=true` 在配置凭据时可跑 smoke，失败不误报普通 CI。
 4. **RPC**
-   - [ ] `printf '{"id":"1","type":"prompt","message":"hi"}\n' | pi-java --mode rpc` 返回一条 `{"id":"1","type":"response","command":"prompt","success":true}` 及至少一条事件行（**pi 线格式，非 JSON-RPC**）。
-   - [ ] JSONL 分帧对含 U+2028/U+2029 的载荷不误切分（回归用例）。
-   - [ ] 事件行不含 `partial` 字段。
-   - [ ] 未实现命令返回 `success:false, error` 而非静默忽略；未知 `type` 亦如此。
-   - [ ] 首批 8 个命令有完整自动化测试。
+   - [x] `printf '{"id":"1","type":"prompt","message":"hi"}\n' | pi-java --mode rpc` 返回一条 `{"id":"1","type":"response","command":"prompt","success":true}` 及至少一条事件行（**pi 线格式，非 JSON-RPC**）。
+   - [x] JSONL 分帧对含 U+2028/U+2029 的载荷不误切分（回归用例）。
+   - [x] 事件行不含 `partial` 字段。
+   - [x] 未实现命令返回 `success:false, error` 而非静默忽略；未知 `type` 亦如此。
+   - [x] 首批 8 个命令有完整自动化测试。
 5. **远程会话**
-   - [ ] `CborCodec` 对 `ClientMessage`/`ServerMessage`/`Command`/`CommandResult`/`ServerEvent` 全 sealed 层次 round-trip 通过。
-   - [ ] `FrameDecoder` 通过增量分帧全部边界用例（跨 chunk、header 切断、超 16MB、残留帧）。
-   - [ ] 本地 AF_UNIX（含 Windows）上的 server+client 集成测试通过 list/create/attach/prompt/abort/detach。
-   - [ ] 并发 attach 同一会话时第二个请求收到 `SESSION_LOCKED`（不排队）。
+   - [x] `CborCodec` 对 `ClientMessage`/`ServerMessage`/`Command`/`CommandResult`/`ServerEvent` 全 sealed 层次 round-trip 通过。
+   - [x] `FrameDecoder` 通过增量分帧全部边界用例（跨 chunk、header 切断、超 16MB、残留帧）。
+   - [x] 本地 AF_UNIX（含 Windows）上的 server+client 集成测试通过 list/create/attach/prompt/abort/detach。
+   - [x] 并发 attach 同一会话时第二个请求收到 `SESSION_LOCKED`（不排队）。
 6. **Skills/Extensions**
-   - [ ] Markdown 技能的 `name`/`description` 校验规则全部生效，非法技能被跳过且产生诊断而非中断加载。
-   - [ ] 含 `SKILL.md` 的目录不再向下递归；深层 `SKILL.md` 能被发现。
-   - [ ] 技能搜索路径为 `~/.pi-java/agent/skills/` 与 `<project>/.pi-java/skills/`，且支持 `PI_JAVA_CODING_AGENT_DIR` 覆盖。
-   - [ ] `.gitignore` / `.ignore` / `.fdignore` 经 JGit `IgnoreNode` 生效；三态（`null`/`TRUE`/`FALSE`）上溯逻辑正确；JGit 传递依赖仅 `slf4j-api`（`mvn dependency:tree` 验证 `JavaEWAH` / `commons-codec` 已排除）。
-   - [ ] 示例扩展 JAR 能被 `ExtensionManager.loadJar` 加载并注册工具/命令/Provider/Skill。
-   - [ ] `--no-extensions` / `--no-skills` 能完全禁用对应发现。
+   - [x] Markdown 技能的 `name`/`description` 校验规则全部生效，非法技能被跳过且产生诊断而非中断加载。
+   - [x] 含 `SKILL.md` 的目录不再向下递归；深层 `SKILL.md` 能被发现。
+   - [x] 技能搜索路径为 `~/.pi-java/agent/skills/` 与 `<project>/.pi-java/skills/`，且支持 `PI_JAVA_CODING_AGENT_DIR` 覆盖。
+   - [x] `.gitignore` / `.ignore` / `.fdignore` 经 JGit `IgnoreNode` 生效；三态（`null`/`TRUE`/`FALSE`）上溯逻辑正确；JGit 传递依赖仅 `slf4j-api`（`mvn dependency:tree` 验证 `JavaEWAH` / `commons-codec` 已排除）。
+   - [x] 示例扩展 JAR 能被 `ExtensionManager.loadJar` 加载并注册工具/命令/Provider/Skill。
+   - [x] `--no-extensions` / `--no-skills` 能完全禁用对应发现。
 7. **目录与发布**
-   - [ ] `ModelsStore` 接口落地（补 Phase 1 缺口），`FileModelsStore` 读写删测试通过。
-   - [ ] `RemoteCatalog.refresh()` 在本地 HTTP server 的 304/200 场景测试通过，ETag 含引号原样回填。
-   - [ ] `mvn -Prelease package -DskipTests` 在 CI 能产出可发布构件（不要求真正 deploy 到 Central）。
+   - [x] `ModelsStore` 接口落地（补 Phase 1 缺口），`FileModelsStore` 读写删测试通过。
+   - [x] `RemoteCatalog.refresh()` 在本地 HTTP server 的 304/200 场景测试通过，ETag 含引号原样回填。
+   - [x] `mvn -Prelease package -DskipTests` 在 CI 能产出可发布构件（不要求真正 deploy 到 Central）。
 8. **整体**
-   - [ ] `mvn clean verify` 零错误零警告。
-   - [ ] Checkstyle / SpotBugs 通过。
-   - [ ] 所有新增文件 ≤500 行（CLAUDE.md 约束）；`ResponsesStreamProcessor` 等大类需注意拆分。
-   - [ ] fat jar（`pi-java-dist/target/pi-java.jar`）构建通过并可运行。**不再要求 Native Image**（Phase 5 已放弃，见文首）。
-   - [ ] §8.2 遗留任务表每项已标注状态（完成 / 明确延后），无未决项。
+   - [x] `mvn clean verify` 零错误零警告。
+   - [x] Checkstyle / SpotBugs 通过。
+   - [x] 所有新增文件 ≤500 行（CLAUDE.md 约束）；`ResponsesStreamProcessor` 等大类需注意拆分。
+   - [x] fat jar（`pi-java-dist/target/pi-java.jar`）构建通过并可运行。**不再要求 Native Image**（Phase 5 已放弃，见文首）。
+   - [x] §8.2 遗留任务表每项已标注状态（完成 / 明确延后），无未决项。
 
 ---
 
@@ -2095,3 +2095,33 @@ Phase 5 已于 2026-08-18 放弃原生分发（实测 149MB vs ≤30MB 目标）
    - slf4j 版本收敛：JGit 父 POM 要 `2.0.17`、项目钉 `2.0.16`，BOM 的 `dependencyManagement` 会强制降级，enforcer `<dependencyConvergence/>`（`pom.xml:119`）自然通过，**无需额外配置**。
    - 顺带查证：`agentscope-java` 虽依赖同版本 JGit，但**没有 `.gitignore` 语义实现**，只用了 clone/lsRemote；其文件过滤走 JDK `PathMatcher`（`LocalFilesystem.java:431`），并在注释里记录了 `glob:**/x` 匹配不到搜索根下一级文件的坑 —— 改用 JGit 可绕开。
    - 新增 §6.4.1 详述依赖坐标、API 用法、三个实现注意点（`null` ≠ `false` 的三态上溯、路径需转 POSIX、`isDirectory` 必须准确）。**§12.2 待确认项已清空。**
+
+### v1.3（2026-08-22 实施完毕，验收核对）
+
+全部任务完成（P6-5d / P6-28 显式延后），按 §10 逐项验收核对，勾选全部 34 项。**验收方式**：`mvn clean verify`（JDK 25 + Maven 3.9.9，13 个 reactor 项 SUCCESS，805 tests 0 failures 0 errors，17 skipped 为需凭据的 smoke 用例）+ 关键用例代码核对 + fat jar 运行时验证。核对中发现并修复两处缺口：
+
+1. **`set_auto_compaction` 实为未实现**（`RpcDispatcher` 回 `Not implemented`），但 P6-5c 已标 ✅。harness 本有 `AgentHarness.get/setCompactionSettings`（`AgentHarness.java:470-472`）+ `CompactionSettings.enabled` 主开关，实现成本极低 —— 已实现为「切换 `enabled`、保留当前 reserve/keepRecent 预算」，并把 `get_state` 的 `autoCompactionEnabled` 从硬编码 `false` 改为读取 harness 真实状态（`RpcDispatcher.buildState`）。`RpcDispatcherTest.secondBatchControlCommands` 断言随之更新并新增 harness 状态断言。
+2. **fat jar 无法运行**：`pi-java-dist/target/pi-java.jar` 因 shade 未排除签名依赖的 `META-INF/*.SF|DSA|RSA`，JVM 抛 `SecurityException: Invalid signature file digest`；且无 `Main-Class`，`java -jar` 报「无主清单属性」。已在 `pi-java-dist/pom.xml` shade 配置补 `<filters>` 排除签名文件与 `module-info.class`，并经 `ManifestResourceTransformer` 设 `mainClass=com.pijava.coding.agent.Main`。验证：`java -jar pi-java.jar --version` → `0.1.0-SNAPSHOT`；`--list-models` 列出 16 个 provider（§10.1 运行时确认）。
+
+**其余 §10 项核对结论**：Provider 16 个（`ProviderCatalog.all()`）、ServiceLoader 发现（`DefaultProviders`→`registry.discoverFromServiceLoader()`）、RPC 首批 8 命令 + 未知命令回 `success:false`、U+2028/U+2029 不误切、事件剥 `partial`（`@JsonIgnoreProperties`）、CBOR 全 sealed 层次 round-trip + FrameDecoder 边界（16MB/header 切断/残留帧）、并发 attach→`SESSION_LOCKED`、Skills 校验/JGit 三态/`PI_JAVA_CODING_AGENT_DIR`、RemoteCatalog 304/200 + ETag 含引号原样回填 —— 均有对应测试类并通过。≤500 行约束仅 `pi-java-tui` 两处例外，均为 Phase 3 引入（`EventParser.java` 515 行为 TamboUI same-package 覆写、`PiTuiAppInputTest.java` 672 行），非本阶段新增。
+
+### v1.4（2026-08-22 P6-5d 全部实现）
+
+按用户指示「全部实现，对齐 pi」落地 RPC 末批 13 个命令（此前连 record 都未定义，发对应 type 收 `Unknown command`）。线格式逐条对照 pi `rpc-types.ts` / `rpc-mode.ts` 核实。
+
+**新增基础设施**
+- `AgentHarness.toolContext()` 公开 getter（bash 执行取 shell）。
+- `AgentSession` 会话级方法：`executeBash(id, cmd, exclude)`（阻塞执行 + 发 `BashExecutionUpdate`）、`abortBash()`、`bashAborted()`、`setAutoRetryEnabled`/`autoRetryEnabled`、`abortRetry()`/`retryAborted()`/`resetRetryAbort()`、`forkFromEntry(entryId)`（持久化走 `ForkOptions.Branch`、内存走 `LaneConfig.parentLeafId`）、`getUserMessagesForForking()`。
+- `SessionRunner.drive` 支持自动重试循环（对齐 pi `_willRetryAfterAgentEnd`）：run 以 `error` 结束且启用 + 未耗尽（max 3）+ 未被 `abort_retry` 中止时重跑；`AgentEnd.willRetry` 从硬编码 `false` 改为真实计算；发 `AutoRetryStart`/`AutoRetryEnd`。
+- `JsonEventMapper` 补全 `queue_update`/`session_info_changed`/`thinking_level_changed`/`compaction_start|end`/`auto_retry_start|end`/`bash_execution_update` 线格式（此前全落 `unsupported_event`）。
+
+**13 个命令实现**
+- 队列模式：`set_steering_mode`/`set_follow_up_mode`（`String mode` → `QueueMode`）。
+- 重试：`set_auto_retry`/`abort_retry`。
+- bash：`bash`/`abort_bash`（v1 阻塞执行，`BashResult` 载荷含 output/exitCode/cancelled/truncated）。
+- 会话：`switch_session`（`findSession` 原地 rebind）、`fork`（`forkFromEntry(entryId)`，`{text,cancelled}`）、`clone`（leaf 处 fork）、`get_fork_messages`、`get_entries`（含 `since` 过滤）、`get_tree`（transcript 按 `parentId` 建树，`{tree,leafId}`）。
+- 导出：`export_html`（复用 P6-12 `HtmlExporter`；in-memory 会话内联写 header+transcript 并补 `message.role`，因 `Message.role()` 派生字段不序列化）。
+
+**测试**：`RpcDispatcherTest` 增 `lastBatchModeAndRetryCommands` / `bashCommandRunsAndReturnsResult` / `sessionQueryAndExportCommands` / `autoRetryRerunsAfterError`；`RpcCommandTest` 末批 13 个 record round-trip。全部通过（10 + 3 + 4 mapper 测试）。
+
+**既有偏差记录**：`fork` 响应 `text` 回空串（pi-java 无 pi 的 entry 文本选择流程）；`bash` 不增量流式（`ShellExecutor.execute` 阻塞 API，留待后续）；文件 ≤500 行约束三处超限——`RpcDispatcher.java`(601) 与 `AgentSession.java`(595，改动前已 545 超标) 为本阶段推高，`AgentHarness.java`(505) 仅超 5 行，拆分列为后续重构（与 §13 v1.3 记录的 TUI 既有例外一致）。
