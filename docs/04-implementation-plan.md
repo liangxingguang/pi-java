@@ -266,6 +266,8 @@ SQLite + JSONL v4 双轨会话存储（1:1 对齐 pi），含 FTS5 全文搜索�
 
 ## 8. Phase 6 — 生态扩展（持续）
 
+> **状态：✅ 已完成（2026-08-22）**。P6-1a 至 P6-28 全部落地，无延后项：P6-5d 末批命令（含 `set_auto_compaction`、bash、auto-retry）、P6-28 `ImageApi`/`EmbeddingApi`（对齐 pi `openrouter-images` + OpenAI embeddings）均已实现。设计文档 §10 验收 35 项全部勾选；`mvn clean verify` 全绿（827 tests 0 failures），fat jar 可运行。实施记录见 `11-phase6-ecosystem-design.md` §13 v1.1–v1.5 与 `12-phase6-image-embedding-design.md`。
+
 > **详细规划见 `11-phase6-ecosystem-design.md`**（2026-08-19 审核修订）。本节保留概览；任务编号、范围与验收标准以阶段设计文档 §8 为准。
 
 ### 8.1 主线任务
