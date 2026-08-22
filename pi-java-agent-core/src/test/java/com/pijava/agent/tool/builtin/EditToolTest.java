@@ -8,6 +8,7 @@ import com.pijava.agent.tool.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class EditToolTest {
 
@@ -49,6 +50,62 @@ class EditToolTest {
         assertThat(result.content().get(1))
             .isInstanceOf(com.pijava.ai.message.ContentBlock.DiffContent.class);
         var diff = (com.pijava.ai.message.ContentBlock.DiffContent) result.content().get(1);
-        assertThat(diff.diffText()).contains("- Hello World").contains("+ Hello Java");
+        assertThat(diff.diffText()).contains("-1 Hello World").contains("+1 Hello Java");
+    }
+
+    @Test
+    void fuzzyMatchAppliesWhenExactMissing(@TempDir Path tmp) throws Exception {
+        var file = tmp.resolve("f.txt");
+        Files.writeString(file, "alpha\nbeta"); // clean line, oldText has trailing space
+        var tool = EditTool.create();
+        tool.execute("id", new EditTool.EditInput(file.toString(),
+            List.of(new EditTool.Edit("alpha ", "ALPHA"))),
+            null, null, TestContexts.at(tmp));
+        assertThat(Files.readString(file)).isEqualTo("ALPHA\nbeta");
+    }
+
+    @Test
+    void preservesCrlfLineEndings(@TempDir Path tmp) throws Exception {
+        var file = tmp.resolve("f.txt");
+        Files.writeString(file, "hello\r\nworld\r\n");
+        var tool = EditTool.create();
+        tool.execute("id", new EditTool.EditInput(file.toString(),
+            List.of(new EditTool.Edit("world", "W"))),
+            null, null, TestContexts.at(tmp));
+        assertThat(Files.readString(file)).isEqualTo("hello\r\nW\r\n");
+    }
+
+    @Test
+    void preservesBom(@TempDir Path tmp) throws Exception {
+        var file = tmp.resolve("f.txt");
+        Files.writeString(file, "﻿abc");
+        var tool = EditTool.create();
+        tool.execute("id", new EditTool.EditInput(file.toString(),
+            List.of(new EditTool.Edit("abc", "ABC"))),
+            null, null, TestContexts.at(tmp));
+        assertThat(Files.readString(file)).isEqualTo("﻿ABC");
+    }
+
+    @Test
+    void overlappingEditsFailEndToEnd(@TempDir Path tmp) {
+        var file = tmp.resolve("f.txt");
+        assertThatThrownBy(() -> {
+            Files.writeString(file, "abcd");
+            var tool = EditTool.create();
+            tool.execute("id", new EditTool.EditInput(file.toString(),
+                List.of(new EditTool.Edit("ab", "AB"), new EditTool.Edit("bc", "BC"))),
+                null, null, TestContexts.at(tmp));
+        }).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void multipleEditsAreApplied(@TempDir Path tmp) throws Exception {
+        var file = tmp.resolve("f.txt");
+        Files.writeString(file, "one\ntwo\nthree");
+        var tool = EditTool.create();
+        tool.execute("id", new EditTool.EditInput(file.toString(),
+            List.of(new EditTool.Edit("one", "1"), new EditTool.Edit("three", "3"))),
+            null, null, TestContexts.at(tmp));
+        assertThat(Files.readString(file)).isEqualTo("1\ntwo\n3");
     }
 }

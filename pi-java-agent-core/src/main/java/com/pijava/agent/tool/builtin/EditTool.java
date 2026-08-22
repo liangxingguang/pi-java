@@ -1,4 +1,5 @@
 package com.pijava.agent.tool.builtin;
+
 import com.pijava.ai.AbortSignal;
 
 import java.nio.file.Files;
@@ -18,14 +19,20 @@ import com.pijava.ai.message.ContentBlock;
 
 /**
  * File editing tool using exact string replacement.
- * Aligned with pi's {@code createEditTool}.
+ * Aligned with pi's {@code createEditTool} + {@code edit-diff.ts}.
  *
  * <p>Schema: { path: String, edits: Array<{ oldText: String, newText: String }> }
- * Each edit's oldText must be unique and non-overlapping.
- * Creates .bak file before modification.</p>
+ * Each edit's oldText must be unique and non-overlapping. All edits are matched
+ * against the original (LF-normalized) content — exact match first, then a
+ * fuzzy NFKC-normalized fallback — and applied in reverse order. Line endings
+ * and a leading BOM are preserved. Mutations to the same file are serialized
+ * through {@link FileMutationQueue}. Creates a .bak before modification.</p>
  */
 public final class EditTool {
     private EditTool() {}
+
+    /** Serializes edits to the same canonical path across concurrent tool calls. */
+    private static final FileMutationQueue QUEUE = new FileMutationQueue();
 
     public record EditInput(String path, List<Edit> edits) {}
     public record Edit(String oldText, String newText) {}
@@ -39,7 +46,8 @@ public final class EditTool {
             @Override public String description() {
                 return "Edit a single file using exact text replacement. "
                     + "Every edits[].oldText must match a unique, non-overlapping region "
-                    + "of the original file.";
+                    + "of the original file. If two changes affect the same block or nearby "
+                    + "lines, merge them into one edit instead of emitting overlapping edits.";
             }
             @Override
             public Map<String, Object> inputSchema() {
@@ -92,129 +100,52 @@ public final class EditTool {
                 String absolutePath = PathUtils.resolveToolPath(context, params.path());
                 var info = context.fs().fileInfo(absolutePath);
                 if (!"file".equals(info.kind()) && !"symlink".equals(info.kind())) {
-                    throw new IllegalArgumentException("Path is not a file: " + params.path());
+                    throw new IllegalArgumentException(
+                        "Could not edit file: " + params.path() + ". Path is not a file.");
                 }
 
-                String originalContent = Files.readString(Path.of(absolutePath));
-                // Create .bak
-                Files.copy(Path.of(absolutePath), Path.of(absolutePath + ".bak"),
-                    StandardCopyOption.REPLACE_EXISTING);
+                final Path target = Path.of(absolutePath);
+                // The read→apply→write is atomic under the queue so two concurrent
+                // edits to the same file never read stale content and overwrite each other.
+                return QUEUE.withQueue(absolutePath, () -> {
+                    String read = Files.readString(target);
+                    var bom = EditDiff.stripBom(read);
+                    String originalEnding = EditDiff.detectLineEnding(bom.text());
+                    String normalizedContent = EditDiff.normalizeToLF(bom.text());
 
-                String newContent = originalContent;
-                int firstLine = -1;
-                for (var edit : params.edits()) {
-                    String oldText = edit.oldText();
-                    String newText = edit.newText();
-                    int idx = newContent.indexOf(oldText);
-                    if (idx == -1) {
-                        throw new IllegalArgumentException(
-                            "Could not find oldText in file: " + params.path()
-                            + "\noldText: " + truncateForError(oldText));
-                    }
-                    if (newContent.indexOf(oldText, idx + 1) != -1) {
-                        throw new IllegalArgumentException(
-                            "oldText is not unique in file: " + params.path()
-                            + "\noldText: " + truncateForError(oldText));
-                    }
-                    if (firstLine == -1) {
-                        firstLine = (int) newContent.substring(0, idx).lines().count() + 1;
-                    }
-                    newContent = newContent.substring(0, idx) + newText
-                        + newContent.substring(idx + oldText.length());
-                }
+                    var normalizedEdits = params.edits().stream()
+                        .map(e -> new EditDiff.Edit(e.oldText(), e.newText()))
+                        .toList();
+                    var applied = EditDiff.applyEditsToNormalizedContent(
+                        normalizedContent, normalizedEdits, params.path());
 
-                context.fs().writeFile(absolutePath, newContent);
-                String diffStr = generateSimpleDiff(originalContent, newContent);
-                String patchStr = generateUnifiedPatch(params.path(), originalContent, newContent);
-                var blocks = new ArrayList<ContentBlock>();
-                blocks.add(new ContentBlock.TextContent(
-                    "Successfully replaced " + params.edits().size()
-                    + " block(s) in " + params.path() + "."));
-                if (diffStr != null && !diffStr.isEmpty()) {
-                    blocks.add(new ContentBlock.DiffContent(diffStr));
-                }
-                return new ToolResult<>(
-                    blocks,
-                    new EditDetails(diffStr, patchStr, firstLine),
-                    null, false, List.of());
-            }
+                    String newContent = bom.bom()
+                        + EditDiff.restoreLineEndings(applied.newContent(), originalEnding);
 
-            private String truncateForError(String text) {
-                if (text.length() <= 100) return text;
-                return text.substring(0, 100) + "...";
-            }
+                    Files.copy(target, Path.of(absolutePath + ".bak"),
+                        StandardCopyOption.REPLACE_EXISTING);
+                    context.fs().writeFile(absolutePath, newContent);
 
-            private String generateSimpleDiff(String original, String newContent) {
-                var sb = new StringBuilder();
-                var origLines = original.lines().toList();
-                var newLines = newContent.lines().toList();
-                int maxLen = Math.max(origLines.size(), newLines.size());
-                int diffStart = -1;
-                int diffEnd = -1;
-                for (int i = 0; i < maxLen; i++) {
-                    String origLine = i < origLines.size() ? origLines.get(i) : "";
-                    String newLine = i < newLines.size() ? newLines.get(i) : "";
-                    if (!origLine.equals(newLine)) {
-                        if (diffStart == -1) diffStart = i;
-                        diffEnd = i + 1;
-                    }
-                }
-                if (diffStart >= 0) {
-                    for (int i = Math.max(0, diffStart - 2);
-                         i < Math.min(maxLen, diffEnd + 2); i++) {
-                        String origLine = i < origLines.size() ? origLines.get(i) : "";
-                        String newLine = i < newLines.size() ? newLines.get(i) : "";
-                        char marker = origLine.equals(newLine) ? ' ' : '-';
-                        sb.append(marker).append(" ").append(origLine).append("\n");
-                        if (!origLine.equals(newLine)) {
-                            sb.append("+ ").append(newLine).append("\n");
-                        }
-                    }
-                }
-                return sb.toString();
-            }
+                    var diffResult = LineDiff.generateDiffString(
+                        applied.baseContent(), applied.newContent(), 4);
+                    String patchStr = LineDiff.generateUnifiedPatch(
+                        params.path(), params.path(),
+                        applied.baseContent(), applied.newContent(), 4);
 
-            /** Generate a unified-diff patch that can be applied with {@code patch -p0}. */
-            private String generateUnifiedPatch(String filePath, String original, String newContent) {
-                var origLines = original.lines().toList();
-                var newLines = newContent.lines().toList();
-                int diffStart = -1, diffEnd = -1;
-                int maxLen = Math.max(origLines.size(), newLines.size());
-                for (int i = 0; i < maxLen; i++) {
-                    String ol = i < origLines.size() ? origLines.get(i) : "";
-                    String nl = i < newLines.size() ? newLines.get(i) : "";
-                    if (!ol.equals(nl)) {
-                        if (diffStart == -1) diffStart = i;
-                        diffEnd = i + 1;
+                    var blocks = new ArrayList<ContentBlock>();
+                    blocks.add(new ContentBlock.TextContent(
+                        "Successfully replaced " + params.edits().size()
+                        + " block(s) in " + params.path() + "."));
+                    if (diffResult.diff() != null && !diffResult.diff().isEmpty()) {
+                        blocks.add(new ContentBlock.DiffContent(diffResult.diff()));
                     }
-                }
-                if (diffStart < 0) return "";
-                int contextLines = 2;
-                int hunkStart = Math.max(0, diffStart - contextLines);
-                int hunkEnd = Math.min(maxLen, diffEnd + contextLines);
-                int oldCount = hunkEnd - hunkStart;
-                int newCount = hunkEnd - hunkStart + (newLines.size() - origLines.size());
-                var sb = new StringBuilder();
-                sb.append("--- a/").append(filePath).append("\n");
-                sb.append("+++ b/").append(filePath).append("\n");
-                sb.append("@@ -").append(hunkStart + 1).append(",").append(oldCount)
-                  .append(" +").append(hunkStart + 1).append(",").append(newCount)
-                  .append(" @@\n");
-                for (int i = hunkStart; i < hunkEnd; i++) {
-                    String ol = i < origLines.size() ? origLines.get(i) : null;
-                    String nl = i < newLines.size() ? newLines.get(i) : null;
-                    if (ol == null) {
-                        sb.append("+").append(nl).append("\n");
-                    } else if (nl == null) {
-                        sb.append("-").append(ol).append("\n");
-                    } else if (ol.equals(nl)) {
-                        sb.append(" ").append(ol).append("\n");
-                    } else {
-                        sb.append("-").append(ol).append("\n");
-                        sb.append("+").append(nl).append("\n");
-                    }
-                }
-                return sb.toString();
+                    int firstLine = diffResult.firstChangedLine() == null
+                        ? -1 : diffResult.firstChangedLine();
+                    return new ToolResult<>(
+                        blocks,
+                        new EditDetails(diffResult.diff(), patchStr, firstLine),
+                        null, false, List.of());
+                });
             }
         };
     }

@@ -15,10 +15,15 @@ import com.pijava.agent.tool.ToolUpdateCallback;
  * File writing tool. Creates parent directories, overwrites existing files.
  * Aligned with pi's {@code createWriteTool}.
  *
- * <p>Schema: { path: String, content: String }</p>
+ * <p>Schema: { path: String, content: String }. Writes to the same canonical
+ * path are serialized through {@link FileMutationQueue} so concurrent tool
+ * calls never interleave.</p>
  */
 public final class WriteTool {
     private WriteTool() {}
+
+    /** Serializes writes to the same canonical path across concurrent tool calls. */
+    private static final FileMutationQueue QUEUE = new FileMutationQueue();
 
     public record WriteInput(String path, String content) {}
 
@@ -56,7 +61,10 @@ public final class WriteTool {
                     AbortSignal signal, ToolUpdateCallback<Void> onUpdate,
                     ToolContext context) throws Exception {
                 String absolutePath = PathUtils.resolveToolPath(context, params.path());
-                context.fs().writeFile(absolutePath, params.content());
+                QUEUE.withQueue(absolutePath, () -> {
+                    context.fs().writeFile(absolutePath, params.content());
+                    return null;
+                });
                 return ToolResult.success("Successfully wrote "
                     + params.content().length() + " bytes to " + params.path());
             }
