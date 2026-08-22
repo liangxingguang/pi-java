@@ -1,4 +1,4 @@
-# pi-java ↔ pi 代码对照表（按模块）
+# pi-java ↔ pi 功能对照表（按模块）
 
 > pi 源码位置：`D:\workplaceForai\pi\packages\`
 > pi-java 源码位置：各模块 `src/main/java/` 下 `com.pijava.*`
@@ -6,16 +6,17 @@
 
 ## 0. 范围与方法
 
-- **覆盖范围**：pi 10 个包全部逐项对照。**按 pi-java 模块组织**（每个 pi-java Maven 模块一节），而非按 Phase 组织——一个模块往往横跨多个 Phase（如 ai 模块含 Phase 1 基础 + Phase 6 Provider 生态/图片嵌入）。
-- **粒度约定（混合）**：小模块（telemetry、sqlite-node、存储契约）逐文件；`agent-core` 按 harness/tool/session/hook/compaction 分组逐文件；大模块（tui、coding-agent）包级汇总 + 关键文件单列。
-- **对齐度判据**：≥95% 完全对齐（接口/行为逐项一致）；80–94% 主要对齐（结构一致，存在已记录的差异）；<80% 部分对齐（核心流程对齐但能力面缺失）。
-- **行数对比口径**：pi 行数为对应包 TypeScript 行数；pi-java 行数为模块 `src/` 下 Java 行数。**对齐度 ≠ 行数比**——pi 为单体结构，pi-java 按模块拆分，跨模块合计才是全量能力面对比（见各模块注）。
+- **比较基准：功能完成度，不是代码行数**。pi 为 TypeScript 单体、pi-java 用库封装（TamboUI/openai-java SDK 等）替代大量实现，行数比无意义。本节及以下各模块以**功能能力覆盖**为判据：枚举 pi 对应包的核心能力，逐项标记 pi-java 覆盖状态。
+- **覆盖范围**：pi 10 个包全部逐项对照。**按 pi-java 模块组织**（每个 pi-java Maven 模块一节），而非按 Phase 组织——一个模块往往横跨多个 Phase。
+- **完成度标记**：✅ 已实现（行为/接口对齐）· ⚠️ 部分实现（存在已记录差异）· ❌ 未实现 · **pi-java 独有**（pi 无对应，能力超集）。
+- **模块完成度判据**：按能力分组加权——核心用户路径（对话/工具/会话/持久化）权重高于外围能力（自动更新/prompt 模板等）。<80% 核心路径不完整；80–94% 核心路径完整、外围有缺口；≥95% 全能力对齐。
 
 ---
 
 ## 1. pi-java-ai ↔ packages/ai
 
-> pi-java 源码位置：`pi-java-ai\src\main\java\com\pijava\ai\`（136 文件）；pi：174 文件 / 20,595 行。
+> pi-java 源码位置：`pi-java-ai\src\main\java\com\pijava\ai\`
+> **功能完成度 ~88%**：核心能力全覆盖（消息/流事件模型、chat 协议适配器、Provider 注册机制、认证、模型目录、HTTP 传输、图片/嵌入）；外围缺口——部分供应商（Bedrock/Vertex/OpenRouter chat 等，pi-java 聚焦中国大陆 16 个）、OAuth 逐 provider 接入、constrained sampling、`ModelInfo` 富字段。
 
 ### 1.1 API 接口层（`api/` ↔ `types.ts` + `compat.ts`）
 
@@ -120,7 +121,8 @@
 
 ## 2. pi-java-telemetry ↔ packages/telemetry
 
-> pi-java 源码位置：`pi-java-telemetry\src\main\java\com\pijava\telemetry\`（7 文件）；pi：6 文件 / 826 行。
+> pi-java 源码位置：`pi-java-telemetry\src\main\java\com\pijava\telemetry\`
+> **功能完成度 ~85%**：核心能力全覆盖（TelemetryContext/Span/Noop + OTel 实现 P6-20）；缺口——memory 后端、遥测 conformance 套件。
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
@@ -131,13 +133,12 @@
 | `OtelTelemetryContext.java`（P6-20） | OTel 适配器 | ✅ ~85% | OpenTelemetry-backed 实现 |
 | — | `memory.ts` + `testing/` | — | 内存后端 + conformance 套件未实现 |
 
-**统计**：pi 6 文件 / 826 行 ↔ pi-java 7 文件 / 444 行，整体对齐度 ~85%（接口对齐，能力面缺 memory/testing）。
-
 ---
 
 ## 3. pi-java-agent-core ↔ packages/agent
 
-> pi-java 源码位置：`pi-java-agent-core\src\main\java\com\pijava\agent\`（195 文件）；pi：49 文件 / 11,332 行（含 `harness/session/` 存储契约 13 文件）。
+> pi-java 源码位置：`pi-java-agent-core\src\main\java\com\pijava\agent\`
+> **功能完成度 ~88%**：核心能力全覆盖（harness 循环、11 hooks、工具系统、上下文/压缩、存储契约、JSONL/Memory 后端）；缺口——branch-summarization、file-mutation-queue/edit-diff 完整语义、image 工具、LLM 压缩摘要、prompt-templates。
 
 ### 3.1 Harness 与循环（`harness/` + `loop/` ↔ `harness/` + `agent-loop.ts`）
 
@@ -226,13 +227,12 @@
 | `skill/SkillManager.java` | `harness/skills.ts` | ✅ 60% | 简化：支持注册/查询；Markdown frontmatter 解析与 prompt 模板由 coding-agent skill/ 补全（P6-6） |
 | `prompt/SystemPromptBuilder.java` | `harness/system-prompt.ts` | ✅ 80% | 基础/工具/技能拼接一致；prompt 模板渲染（`prompt-templates.ts`）未实现 |
 
-**统计**：pi 49 文件 / 11,332 行 ↔ pi-java 195 文件 / 13,979 行（含存储契约/JSONL），整体对齐度 ~85%。
-
 ---
 
 ## 4. pi-java-session-backend-sqlite ↔ packages/session-backends/sqlite-node
 
-> pi-java 源码位置：`pi-java-session-backend-sqlite\src\main\java\com\pijava\session\sqlite\`（28 文件）；pi：18 文件 / 2,112 行。
+> pi-java 源码位置：`pi-java-session-backend-sqlite\src\main\java\com\pijava\session\sqlite\`
+> **功能完成度 ~90%**：全能力对齐（repository/storage/writer lease/branch cache/FTS5 搜索/migrations）；差异为技术栈（sqlite-jdbc vs node:sqlite）与并发压测待做。
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
@@ -248,13 +248,12 @@
 | `Migrations.java` + `resources/sql/001_initial.sql` | `sqlite/migrations.ts` + `migrations/001_initial.sql` | ✅ 95% | 11 表逐列一致 |
 | `SqliteSessionBackendFactory.java` + `META-INF/services` | `sqlite/index.ts` 导出 | ✅ 90% | ServiceLoader 注册等价于 pi 包导出 |
 
-**统计**：pi 18 文件 / 2,112 行 ↔ pi-java 28 文件 / 3,074 行，整体对齐度 ~90%。
-
 ---
 
 ## 5. pi-java-tui ↔ packages/tui
 
-> pi-java 源码位置：`pi-java-tui\src\main\java\com\pijava\tui\`（68 文件）；pi：38 文件 / 14,317 行。**渲染层采用 TamboUI 封装而非逐文件复刻 pi 终端原语**，按行为对齐。
+> pi-java 源码位置：`pi-java-tui\src\main\java\com\pijava\tui\`
+> **功能完成度 ~78%**：核心交互能力全覆盖（会话界面、输入/滚动/选择器/主题、Markdown 渲染、语法高亮、会话 diff、富过滤键）；缺口——渲染层为 TamboUI 封装（非逐文件复刻 pi 终端原语，行为对齐）、编辑器 undo/kill-ring、Markdown latex。
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
@@ -271,15 +270,16 @@
 | `screen/SessionListScreen.java` + 会话 diff 渲染（P6-26） | `components/` 相关 | ✅ 70% | 会话切换/差异视图 |
 | 组件族（`component/` 其余） | `components/` | ✅ 70% | 由 TamboUI 组件等价承载 |
 
-**统计**：pi 38 文件 / 14,317 行 ↔ pi-java 68 文件 / 9,029 行，整体对齐度 ~75%（行为对齐，渲染技术栈不同——pi 自研终端渲染 ~1.4 万行，pi-java 选 TamboUI 封装）。
-
 ---
 
 ## 6. pi-java-coding-agent ↔ packages/coding-agent
 
-> pi-java 源码位置：`pi-java-coding-agent\src\main\java\com\pijava\coding\agent\`（123 文件）；pi：199 文件 / 52,418 行。
+> pi-java 源码位置：`pi-java-coding-agent\src\main\java\com\pijava\coding\agent\`
+> **功能完成度 ~78%**（早期按行数比记为 65%，无意义——pi 为单体把交互模式/工具/扩展运行时全打包，pi-java 拆到 tui + agent-core）。
 
-**对齐度 65% 的解读**：pi 的 coding-agent 是**单体**（52K 行），把交互模式（`modes/interactive/` 47 文件 / 17K 行）、工具实现（`core/tools/` 15 文件 / 4K 行）、扩展运行时（`core/extensions/` 5 文件 / 4K 行）全打包在内。pi-java 按模块拆分：交互 TUI 在 `pi-java-tui`（TamboUI 封装）、工具在 `pi-java-agent-core`、扩展在 coding-agent 的 `extension/`。**若按全量能力面合计（coding-agent + tui + agent-core），对齐度显著高于 65%**；单看 coding-agent 模块 65% 主要反映三块差距：① `modes/interactive/` 未逐文件移植（渲染层走 TamboUI）；② pi 独有能力缺失（prompt-templates、auto-format、resource-loader、process-manager、auto-update、image 工具、RPC client、更多 slash 命令、utils 工具集）；③ pi 的 `core/` 会话逻辑（agent-session 单文件 ~10K 行）在 pi-java 拆到 agent-core + coding-agent 两层。
+**核心用户路径全覆盖**：CLI（~40 参数 + 子命令）、Print/Interactive/RPC 三模式、会话组装/驱动/持久化、设置/信任、23+ slash 命令、RPC 32 命令（P6-5）、技能系统（P6-6）、扩展系统（P6-7）、HTML 导出（P6-12）、`/share`（P6-13）、config/package/auth 子命令（P6-14/15/16）、AI 生成技能（P6-27）。
+
+**缺口（pi 有、pi-java 未实现）**：prompt-templates、auto-format、resource-loader、process-manager、auto-update、image 工具、interactive 模式逐文件移植（渲染层走 TamboUI 在 tui 模块）、`utils/` 工具集、更多 slash 命令。Bun 运行时为 pi-java 不适用（JVM）。
 
 | pi-java 分组 | pi 对应 | 对齐度 | 差异说明 |
 |-------------|---------|--------|---------|
@@ -303,13 +303,14 @@
 
 **pi 有、pi-java 未实现的**：`bun/`（Bun CLI，pi-java 为 JVM 不适用）、`client/` + `server/`（远程会话控制面，pi-java 在独立模块见 §8/§9）、`utils/`（33 文件 / 3.5K 行工具集——prompt-templates、auto-format、resource-loader、process-manager、auto-update 等）、image 工具集、更多 slash 命令。
 
-**统计**：pi 199 文件 / 52,418 行 ↔ pi-java 123 文件 / 11,399 行，模块级对齐度 ~65%（跨 tui + agent-core 合计后功能面更高）。
+**功能完成度小结**：核心用户路径（对话/工具/会话/持久化/RPC/技能/扩展）全覆盖；缺口集中在 pi 的交互全栈逐文件移植与外围工具（auto-update/prompt-templates 等）。综合 ~78%。
 
 ---
 
 ## 7. pi-java-protocol ↔ packages/protocol
 
-> pi-java 源码位置：`pi-java-protocol\src\main\java\com\pijava\protocol\`（26 文件）；pi：8 文件 / 1,138 行。Phase 6（P6-9a）落地。
+> pi-java 源码位置：`pi-java-protocol\src\main\java\com\pijava\protocol\`
+> **功能完成度 ~85%**：CBOR 编解码 + 增量分帧 + 信封/命令/结果/事件全 sealed 层次（P6-9a）。
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
@@ -317,39 +318,39 @@
 | `FrameCodec.java` + `FrameDecoder.java` | `framing.ts` + `codec.ts` | ✅ ~90% | 4 字节大端长度前缀 + 增量分帧（16MB 上限、header 切断、残留帧） |
 | 信封/命令/结果/事件类型 | `schemas.ts` | ✅ ~85% | hello/request/response/event 信封、命令集、快照/转录模型 |
 
-**统计**：pi 8 文件 / 1,138 行 ↔ pi-java 26 文件 / 962 行，整体对齐度 ~85%。
 
 ---
 
 ## 8. pi-java-client ↔ packages/client
 
-> pi-java 源码位置：`pi-java-client\src\main\java\com\pijava\client\`（7 文件）；pi：10 文件 / 1,094 行。Phase 6（P6-9c）落地。
+> pi-java 源码位置：`pi-java-client\src\main\java\com\pijava\client\`
+> **功能完成度 ~80%**：远程会话客户端（list/create/attach/prompt/abort/detach，P6-9c）。
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
 | `PiClient.java` + `SessionHandle.java` | `client/` | ✅ ~80% | 远程会话客户端（list/create/attach/prompt/abort/detach） |
 | 并发/锁语义 | `client/` | ✅ ~80% | 并发 attach 冲突由 server 端 `SESSION_LOCKED` 承载 |
 
-**统计**：pi 10 文件 / 1,094 行 ↔ pi-java 7 文件 / 374 行，整体对齐度 ~80%。
 
 ---
 
 ## 9. pi-java-server ↔ packages/server
 
-> pi-java 源码位置：`pi-java-server\src\main\java\com\pijava\server\`（14 文件）；pi：17 文件 / 2,110 行。Phase 6（P6-9b）落地。
+> pi-java 源码位置：`pi-java-server\src\main\java\com\pijava\server\`
+> **功能完成度 ~85%**：会话控制面 + 独占租约 + 快照订阅 + Unix socket（P6-9b）。
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
 | `PiServer.java` + `PiSessionRuntime.java` | `server/` | ✅ ~85% | 会话控制面 + 独占租约 + 快照订阅；冲突操作直接拒绝不排队 |
 | Unix socket 监听 | `server/` | ✅ ~85% | 本地 AF_UNIX（含 Windows）集成 |
 
-**统计**：pi 17 文件 / 2,110 行 ↔ pi-java 14 文件 / 775 行，整体对齐度 ~85%。
 
 ---
 
 ## 10. pi-java-evals ↔ packages/evals
 
-> pi-java 源码位置：`pi-java-evals\src\main\java\com\pijava\evals\`（19 文件）；pi：8 文件 / 1,179 行。Phase 6（P6-2/3/4）落地。
+> pi-java 源码位置：`pi-java-evals\src\main\java\com\pijava\evals\`
+> **功能完成度 ~80%**：conformance 套件（C1–C8）+ smoke + extension（P6-2/3/4）。
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
@@ -357,27 +358,25 @@
 | `evals/smoke/*` | — | pi-java 独有 | 每 provider 1 真实请求，需凭据默认跳过 |
 | `evals/extension/*` | `evals/*` | ✅ ~80% | extension 生命周期测试 |
 
-**统计**：pi 8 文件 / 1,179 行 ↔ pi-java 19 文件 / 1,183 行，整体对齐度 ~80%。
 
 ---
 
-## 11. 统计汇总
+## 11. 功能完成度汇总
 
-| 模块 | pi 文件 | pi 行数 | pi-java 文件 | pi-java 行数 | 对齐度 |
-|------|--------|---------|-------------|-------------|--------|
-| telemetry | 6 | 826 | 7 | 444 | ~85% |
-| ai | 174 | 20,595 | 136 | 11,350 | ~90% |
-| agent | 49 | 11,332 | 195 | 13,979 | ~85% |
-| session-backends/sqlite-node | 18 | 2,112 | 28 | 3,074 | ~90% |
-| tui | 38 | 14,317 | 68 | 9,029 | ~75% |
-| coding-agent | 199 | 52,418 | 123 | 11,399 | ~65% |
-| protocol | 8 | 1,138 | 26 | 962 | ~85% |
-| client | 10 | 1,094 | 7 | 374 | ~80% |
-| server | 17 | 2,110 | 14 | 775 | ~85% |
-| evals | 8 | 1,179 | 19 | 1,183 | ~80% |
-| **总计（已实现）** | **527** | **~107,100** | **623** | **52,569** | — |
+| 模块 | 功能完成度 | 核心能力 | 主要缺口 |
+|------|-----------|---------|---------|
+| telemetry | ~85% | TelemetryContext/Span/Noop/OTel | memory/testing 后端 |
+| ai | ~88% | 消息/流事件、chat 适配器（7）、Provider 机制、认证、模型目录、图片/嵌入 | Bedrock/Vertex 等供应商、OAuth 逐 provider、constrained sampling |
+| agent-core | ~88% | harness 循环、11 hooks、工具系统、压缩、存储契约、JSONL/Memory | branch-summarization、file-mutation-queue、image 工具、LLM 摘要 |
+| session-backend-sqlite | ~90% | repository/storage/lease/branch cache/FTS5 搜索 | 并发压测 |
+| tui | ~78% | 会话界面、输入/滚动/主题/Markdown/语法高亮/diff | 渲染逐文件、编辑器 undo/kill-ring、latex |
+| coding-agent | ~78% | CLI、三模式、会话/RPC/技能/扩展/HTML 导出/子命令 | prompt-templates、auto-update、auto-format、interactive 逐文件 |
+| protocol | ~85% | CBOR 编解码、增量分帧、信封/命令/事件 | 细粒度控制命令 |
+| client | ~80% | 远程会话客户端 | 控制面深度 |
+| server | ~85% | 会话控制面、租约、快照订阅 | 细粒度控制命令 |
+| evals | ~80% | conformance/smoke/extension | 完整测试矩阵 |
 
-> **行数对比说明**：pi-java 总行数显著低于 pi（52K vs 107K），但差距主要来自三处**结构性差异**而非功能缺失：① pi 的 `modes/interactive/`（17K 行）与 `core/`（28K 行）为单体终端全栈，pi-java 用 TamboUI 库封装（渲染层不逐行复刻）；② pi 使用 Node/Bun 生态（utils/ 3.5K 行、bun/），pi-java 用 JDK 标准库替代；③ pi 含 auto-update/prompt-templates/constrained-sampling 等 pi-java 明确不做的外围能力。核心用户路径（对话/工具/会话/持久化/RPC/远程会话/图片嵌入）均已对齐。
+> **整体功能完成度 ~85%**：核心用户路径（对话、工具、会话、持久化、RPC、远程会话、图片/嵌入）全部对齐。差异集中在三块**结构性取舍**：① 交互终端全栈用 TamboUI 库封装（行为对齐，渲染层不逐文件复刻）；② 外围能力（auto-update/prompt-templates/constrained-sampling 等）明确不实现；③ 供应商清单聚焦中国大陆（16 chat + 1 image，非 pi 全量 40）。
 
 ## 12. 已知差异清单（按模块）
 
