@@ -6,6 +6,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.function.Supplier;
 
 import com.pijava.agent.compaction.CompactionSettings;
+import com.pijava.agent.compaction.SummaryGenerator;
 import com.pijava.agent.hook.HookSystem;
 import com.pijava.agent.skill.SkillManager;
 import com.pijava.agent.tool.AgentTool;
@@ -47,7 +48,8 @@ record ExecutionContext(
     SnapshotService snapshotService,
     QueueManager queueManager,
     Supplier<ToolExecution> toolExecution,
-    Supplier<Consumer<StreamEvent>> streamListener
+    Supplier<Consumer<StreamEvent>> streamListener,
+    SummaryGenerator summaryGenerator
 ) {
     LaneState requireLane(String laneName) {
         return HarnessUtils.requireLane(lanes, laneName);

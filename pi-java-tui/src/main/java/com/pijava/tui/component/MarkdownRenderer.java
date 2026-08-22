@@ -7,6 +7,8 @@ import java.util.regex.Pattern;
 
 import com.pijava.tui.util.TamboUIAdapter;
 
+import dev.tamboui.style.Color;
+import dev.tamboui.style.Style;
 import dev.tamboui.toolkit.element.Element;
 
 /**
@@ -38,7 +40,7 @@ public final class MarkdownRenderer {
                 "mermaid".equals(lang)
                     ? TamboUIAdapter.panel(TamboUIAdapter.text("[mermaid diagram]\n" + code))
                         .gray().rounded()
-                    : TamboUIAdapter.panel(TamboUIAdapter.text(code)).gray().rounded();
+                    : renderHighlightedCode(code);
             case Block.ListBlock(List<String> items) ->
                 TamboUIAdapter.column(items.stream()
                     .map(item -> TamboUIAdapter.text("" + (char) 0x2022 + " " + item))
@@ -80,6 +82,42 @@ public final class MarkdownRenderer {
             }
         }
         return TamboUIAdapter.column(elements);
+    }
+
+    /** 代码块语法高亮（P6-23 对齐）：逐行 SyntaxHighlighter 分段 → markup
+     *  {@code [#hex]...[/]}；转义 {@code [}/\text{\}} 避免被 markup 误解析。 */
+    private Element renderHighlightedCode(String code) {
+        var lines = Arrays.stream(code.split("\n", -1))
+            .map(MarkdownRenderer::highlightLine)
+            .map(TamboUIAdapter::markupText)
+            .toList();
+        return TamboUIAdapter.panel(TamboUIAdapter.column(lines)).gray().rounded();
+    }
+
+    /** 把 SyntaxHighlighter 行内分段转成 markup 字符串（包私有供测试）。 */
+    static String highlightLine(String line) {
+        var sb = new StringBuilder();
+        for (var segment : SyntaxHighlighter.highlight(line, Style.EMPTY)) {
+            var hex = segment.style().fg().map(c -> toHex(c.toRgb())).orElse(null);
+            var text = escape(segment.text());
+            if (hex == null) {
+                sb.append(text);
+            } else {
+                sb.append('[').append(hex).append(']').append(text).append("[/]");
+            }
+        }
+        return sb.toString();
+    }
+
+    /** markup 转义：{@code [[} → {@code [}，{@code ]]} → {@code ]}。 */
+    private static String escape(String text) {
+        return text.replace("[", "[[").replace("]", "]]");
+    }
+
+    /** RGB → {@code #RRGGBB}（markup 真彩 token）。 */
+    private static String toHex(Color color) {
+        var rgb = color.toRgb();
+        return String.format("#%02X%02X%02X", rgb.r(), rgb.g(), rgb.b());
     }
 
     /** Parse markdown into a block list (line-based). */

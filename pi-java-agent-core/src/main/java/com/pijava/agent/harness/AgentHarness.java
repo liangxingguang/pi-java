@@ -130,7 +130,7 @@ public class AgentHarness implements AutoCloseable {
             new ToolExecutor(toolRegistry, toolContext), skillManager,
             hookSystem, lanes, () -> state.compactionSettings, config.thinkingLevelMap(),
             tokenCounter, snapshotService, queueManager, () -> state.toolExecution,
-            () -> this::broadcastStreamEvent);
+            () -> this::broadcastStreamEvent, config.summaryGenerator());
         this.actionExecutor = new ActionExecutor(execCtx);
     }
 

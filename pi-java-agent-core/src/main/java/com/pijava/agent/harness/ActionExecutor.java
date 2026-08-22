@@ -7,7 +7,6 @@ import java.util.stream.Collectors;
 
 import com.pijava.agent.compaction.CompactionService;
 import com.pijava.agent.compaction.CompactionSettings;
-import com.pijava.agent.compaction.SummaryGenerator;
 import com.pijava.agent.context.OverflowDetector;
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.hook.CompactionContext;
@@ -126,7 +125,7 @@ final class ActionExecutor {
     }
 
     private List<Entry> compactTranscript(LaneState lane, CompactionSettings settings) {
-        var result = CompactionService.compact(lane.transcript, settings, SummaryGenerator.truncating());
+        var result = CompactionService.compact(lane.transcript, settings, ctx.summaryGenerator());
         var retainedTail = keptMessagesFrom(lane.transcript, result.firstKeptEntryId());
         var compactionEntry = new Entry.Compaction(
             UUID.randomUUID().toString(), lane.nextSeq(), HarnessUtils.lastEntryId(lane),

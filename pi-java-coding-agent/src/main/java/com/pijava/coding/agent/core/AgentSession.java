@@ -16,6 +16,7 @@ import java.util.stream.Stream;
 
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.compaction.CompactionSettings;
+import com.pijava.agent.compaction.LlmSummaryGenerator;
 import com.pijava.agent.harness.AgentHarness;
 import com.pijava.agent.harness.DriveMode;
 import com.pijava.agent.harness.HarnessConfig;
@@ -197,10 +198,13 @@ public final class AgentSession implements AutoCloseable {
         if (modelPattern == null || modelPattern.isBlank()) {
             modelPattern = providerName;
         }
+        var streamFn = DefaultProviders.streamFnFor(
+            args, effective.defaultProvider, providers);
+        var model = models.resolve(modelPattern, providerName);
         var harness = AgentHarness.create(HarnessConfig.builder()
-            .streamFn(DefaultProviders.streamFnFor(
-                args, effective.defaultProvider, providers))
-            .model(models.resolve(modelPattern, providerName))
+            .streamFn(streamFn)
+            .model(model)
+            .summaryGenerator(new LlmSummaryGenerator(streamFn, () -> model))
             .thinkingLevel(SessionSetup.thinkingLevelFor(args))
             .systemPrompt(SessionSetup.systemPromptFor(args))
             .activeTools(SessionSetup.activeTools(args, toolList))

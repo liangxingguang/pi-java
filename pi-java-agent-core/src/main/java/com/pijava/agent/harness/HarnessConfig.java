@@ -5,6 +5,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 import com.pijava.agent.compaction.CompactionSettings;
+import com.pijava.agent.compaction.SummaryGenerator;
 import com.pijava.agent.skill.Skill;
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ToolContext;
@@ -63,7 +64,8 @@ public record HarnessConfig(
     QueueMode steeringMode,
     QueueMode followUpMode,
     ToolExecution toolExecution,
-    Consumer<StreamEvent> streamListener
+    Consumer<StreamEvent> streamListener,
+    SummaryGenerator summaryGenerator
 ) {
     /** Canonical constructor applying default values and defensive copies. */
     public HarnessConfig {
@@ -76,11 +78,28 @@ public record HarnessConfig(
         if (followUpMode == null) followUpMode = QueueMode.defaultMode();
         if (toolExecution == null) toolExecution = ToolExecution.defaultMode();
         if (streamListener == null) streamListener = event -> { };
+        if (summaryGenerator == null) summaryGenerator = SummaryGenerator.truncating();
     }
 
     /** Create a new configuration builder. */
     public static Builder builder() {
         return new Builder();
+    }
+
+    /** 19-参便利构造（测试/旧路径）；summary 默认 {@code truncating()}。 */
+    public HarnessConfig(
+            StreamFn streamFn, ModelId<?> model, ModelThinkingLevel thinkingLevel,
+            String systemPrompt, Set<AgentTool<?, ?>> activeTools, int maxInputTokens,
+            ToolRegistry toolRegistry, ToolContext toolContext, String commandPrefix,
+            DriveMode driveMode, CompactionSettings compactionSettings,
+            Map<String, Skill> skills, RetryPolicy retryPolicy, TelemetryContext telemetry,
+            ThinkingLevelMap thinkingLevelMap, QueueMode steeringMode,
+            QueueMode followUpMode, ToolExecution toolExecution,
+            Consumer<StreamEvent> streamListener) {
+        this(streamFn, model, thinkingLevel, systemPrompt, activeTools, maxInputTokens,
+             toolRegistry, toolContext, commandPrefix, driveMode, compactionSettings,
+             skills, retryPolicy, telemetry, thinkingLevelMap, steeringMode,
+             followUpMode, toolExecution, streamListener, SummaryGenerator.truncating());
     }
 
     public static final class Builder {
@@ -103,6 +122,7 @@ public record HarnessConfig(
         private QueueMode followUpMode = QueueMode.defaultMode();
         private ToolExecution toolExecution = ToolExecution.defaultMode();
         private Consumer<StreamEvent> streamListener = event -> { };
+        private SummaryGenerator summaryGenerator = SummaryGenerator.truncating();
 
         public Builder streamFn(StreamFn fn) { this.streamFn = fn; return this; }
         public Builder model(ModelId<?> m) { this.model = m; return this; }
@@ -133,6 +153,11 @@ public record HarnessConfig(
             this.streamListener = listener; return this;
         }
 
+        /** Set the compaction summary generator (default: truncating placeholder). */
+        public Builder summaryGenerator(SummaryGenerator generator) {
+            this.summaryGenerator = generator; return this;
+        }
+
         /** Build the {@link HarnessConfig}, validating required fields. */
         public HarnessConfig build() {
             if (streamFn == null) throw new IllegalStateException("streamFn is required");
@@ -143,7 +168,7 @@ public record HarnessConfig(
                                      driveMode, compactionSettings, skills,
                                      retryPolicy, telemetry, thinkingLevelMap,
                                      steeringMode, followUpMode, toolExecution,
-                                     streamListener);
+                                     streamListener, summaryGenerator);
         }
     }
 }

@@ -78,4 +78,22 @@ class MarkdownRendererTest {
         assertThat(((MarkdownRenderer.Block.Code) blocks.get(0)).language())
             .isEqualTo("mermaid");
     }
+
+    @Test
+    void highlightLineEmitsColorMarkupForKeywordsAndNumbers() {
+        var markup = MarkdownRenderer.highlightLine("public int x = 42;");
+        // 关键字 public/int → #569CD6，数字 42 → #B5CEA8
+        assertThat(markup).contains("[#569CD6]public[/]")
+            .contains("[#569CD6]int[/]")
+            .contains("[#B5CEA8]42[/]");
+    }
+
+    @Test
+    void highlightLineEscapesBracketsInCode() {
+        var markup = MarkdownRenderer.highlightLine("var a = b[0];");
+        // [ → [[，] → ]]（markup 转义），避免 a[0] 被误解析为标签
+        assertThat(markup).doesNotContain("b[0]");
+        assertThat(markup).contains("b[[");
+        assertThat(markup).contains("]]");
+    }
 }
