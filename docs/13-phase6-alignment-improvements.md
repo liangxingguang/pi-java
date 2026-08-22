@@ -13,7 +13,7 @@
 | 类别 | 条目 | 处理 |
 |------|------|------|
 | **A. 真实缺口（代码可补）** | `ModelInfo` 70%、`MarkdownRenderer` 70%、`CompactionService` 75% | 低成本项本次实施 |
-| | `EditTool` 70%、`OAuthFlow` 70%、`EditorComponent` 70% | 大项给方案 + 工作量，分期 |
+| | `EditTool` 70%、`OAuthFlow` 70%、`EditorComponent` 70% | 大项**本次实施** |
 | **B. 文档口径过时（非代码缺口）** | `SkillManager` 60%、`SessionListScreen` 70% | 修正对齐度 + 补注 |
 | **C. 结构性取舍（设计决策，非缺口）** | provider 17/40、`InteractiveMode` 75%、TamboUI 组件族 70% | 重新定性为「设计决策」 |
 
@@ -45,29 +45,34 @@
 - **目标对齐度**：90%（结构化摘要流程对齐 pi；`serializeConversation` 完整细节渐进）。
 - **工作量**：1d。
 
-### 1.4 `EditTool` file-mutation-queue（70% → 90%）— ⏸ 分期
+### 1.4 `EditTool` file-mutation-queue（70% → 90%）— ✅ 本次实施
 
-- **现状**：`pi-java-agent-core/.../tool/builtin/EditTool.java` 单文件精确替换 + 简单 diff。
-- **差距**：pi `harness/tools/edit-diff.ts`（500 行）+ `file-mutation-queue.ts`（56 行）——批量变更队列（原子 apply + 冲突检测），EditTool 走队列而非直接写。
-- **方案**：移植 `file-mutation-queue`（变更条目入队 → 原子 apply → 冲突时拒绝）；`edit-diff.ts` 的完整 diff 语义（行号/上下文/多编辑）。
+- **实施**（`feat(agent-core)`）：移植 pi `harness/tools/edit-diff.ts` + `file-mutation-queue.ts`。
+  - `EditDiff.java`：exact → fuzzy（NFKC 规范化）匹配、全部编辑**对原始内容**匹配 + 反序 apply、唯一性/重叠校验、行尾（CRLF/LF）与 BOM 保留、pi 错误文案。
+  - `LineDiff.java`：Hirschberg LCS 行 diff；行号 + 上下文的显示 diff（pi `generateDiffString`）与 `patch -p0` 统一补丁。
+  - `FileMutationQueue.java`：同 canonical 路径 FIFO 串行化（工具调用在虚拟线程并行，避免同文件丢失更新），接入 EditTool + WriteTool；注册步 synchronized 修复并发竞争。
 - **目标对齐度**：90%。
-- **工作量**：~2d。**分期原因**：涉及 agent-core 工具执行管道的队列化改造，风险高。
+- **验证**：33 个新测试（fuzzy/重叠/BOM/CRLF/队列并发），agent-core verify 绿。
 
-### 1.5 `OAuthFlow` 逐 provider 接入（70% → 90%）— ⏸ 分期
+### 1.5 `OAuthFlow` 逐 provider 接入（70% → 90%）— ✅ 本次实施
 
-- **现状**：`pi-java-ai/.../auth/OAuthFlow.java` 通用 PKCE authorization-code 流程。
-- **差距**：pi `auth/oauth/` 11 个文件（anthropic/github-copilot/kimi-coding/openai-codex/openrouter/radius/xai + device-code/pkce 通用），逐 provider 授权端点/token 交换/scope 不同。
-- **方案**：抽取 provider 配置表（授权端点/令牌端点/client-id 来源/scope），逐 provider 接入；device-code 流程为独立变体。
-- **目标对齐度**：90%（9 个 provider flow + device-code）。
-- **工作量**：~3d。**分期原因**：每个 provider 需实测端点与凭证格式。
+- **实施**（`feat(ai,coding-agent)`）：注册 pi `auth/oauth/` 全量 provider 集 + 新增 RFC 8628 device-code 流程。
+  - `OAuthProvider` sealed Pkce|Device 判别；`OAuthProviders` 注册 openrouter/anthropic（PKCE）+ xai/kimi/github-copilot/openai-codex（device）+ `radius(gateway)` 工厂。
+  - `DeviceCodeFlow.java`：设备授权 → verification URI + user code → token 轮询（pending/slow_down/denied/expired）+ OpenAI Codex 两段式（device 轮询拿 `authorization_code` 再 PKCE 交换）+ refresh。
+  - `OAuthInteraction` 顶层接口两流程共用；`AuthCommand` 按 provider 判别分发。
+- **目标对齐度**：90%（7 provider + device-code + pkce 通用）。
+- **验证**：17 个 auth 测试（pending/slow_down/两段式/provider 配置），ai + coding-agent verify 绿。
 
-### 1.6 `EditorComponent` undo/kill-ring（70% → 90%）— ⏸ 分期
+### 1.6 `EditorComponent` undo/kill-ring（70% → 90%）— ✅ 本次实施
 
-- **现状**：`pi-java-tui/.../component/EditorComponent.java`（126 行）基础 insert/replace，无撤销栈。
-- **差距**：pi `components/editor-component.ts` 含 undo/redo、kill-ring（多行 kill/yank）、游标历史。
-- **方案**：编辑器状态加 undo/redo 栈（每个 edit 入栈）+ kill-ring（循环缓冲区）。
+- **实施**（`feat(tui)`）：移植 pi `tui/components/editor.ts` 编辑语义到 TamboUI 编辑器。
+  - fish 风格 undo（Ctrl+-，连续词字符合并为一个 undo 单元，快照 = 文本 + 游标，经 TextAreaState 移动原语恢复）。
+  - Emacs kill-ring（Ctrl+K/U 删至行尾/行首、Ctrl+W/Alt+D 删词、连续 kill 累积、Ctrl+Y yank、Alt+Y yank-pop）。
+  - 词导航（Ctrl+Left/Right、Alt+B/F，移植 `findWordBackward/Forward` 的 Intl.Segmenter 语义）+ Ctrl+A/E/B/F / Ctrl+Home/End。
+  - `KillRing`（环形缓冲）+ `EditorWordNav`（词边界 + 字素↔char 换算）支撑类。
 - **目标对齐度**：90%。
-- **工作量**：~2d。**分期原因**：TamboUI `TextAreaState` 变更语义需细测。
+- **验证**：25 个新测试，pi-java-tui 全量 verify 绿。
+- **注**：pi `editor-component.ts` 实为接口契约；真实 undo/kill-ring 在 pi `tui/components/editor.ts`。
 
 ---
 
@@ -116,13 +121,13 @@
 | ModelInfo | 70% | 85% | ✅ 本次实施 |
 | MarkdownRenderer | 70% | 90% | ✅ 本次实施 |
 | CompactionService | 75% | 90% | ✅ 本次实施 |
-| EditTool | 70% | 90% | ⏸ 分期（~2d） |
-| OAuthFlow | 70% | 90% | ⏸ 分期（~3d） |
-| EditorComponent | 70% | 90% | ⏸ 分期（~2d） |
+| EditTool | 70% | 90% | ✅ 本次实施 |
+| OAuthFlow | 70% | 90% | ✅ 本次实施 |
+| EditorComponent | 70% | 90% | ✅ 本次实施 |
 | SkillManager | 60% | 90% | ✅ 口径修正 |
 | SessionListScreen | 70% | 90% | ✅ 口径修正 |
 | provider 17/40 | ⚠️ | — | ✅ 设计决策 |
 | InteractiveMode | 75% | — | ✅ 设计决策 |
 | TamboUI 组件族 | 70% | — | ✅ 设计决策 |
 
-**结论**：低成本缺口（1.1–1.3）本次实施后，文档中 <80% 条目仅剩三个**已给方案+工作量的分期大项**（1.4–1.6）与三个**设计决策**（C 类），无未决缺口。
+**结论**：原 11 个 <80% 条目全部闭环——6 个缺口（1.1–1.6）已实施、2 个口径修正（B 类）、3 个设计决策（C 类）。文档中已无 <80% 条目。
