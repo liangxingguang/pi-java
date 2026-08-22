@@ -17,22 +17,11 @@ import java.util.concurrent.ConcurrentHashMap;
 final class FileMutationQueue {
 
     private final ConcurrentHashMap<String, CompletableFuture<Void>> queues = new ConcurrentHashMap<>();
-    private volatile CompletableFuture<Void> registration = CompletableFuture.completedFuture(null);
 
     /** Serialize {@code fn} against prior mutations to the same file. */
     <T> T withQueue(String filePath, ThrowingSupplier<T> fn) throws Exception {
-        CompletableFuture<KeyedQueue> reg = registration.thenApply(ignored -> {
-            String key = canonicalKey(filePath);
-            CompletableFuture<Void> currentQueue = queues.getOrDefault(key,
-                CompletableFuture.completedFuture(null));
-            CompletableFuture<Void> release = new CompletableFuture<>();
-            CompletableFuture<Void> chained = currentQueue.thenCompose(v -> release);
-            queues.put(key, chained);
-            return new KeyedQueue(key, currentQueue, chained, release);
-        });
-        registration = reg.thenApply(v -> (Void) null).exceptionally(e -> null);
-
-        KeyedQueue keyed = reg.join();
+        String key = canonicalKey(filePath);
+        KeyedQueue keyed = register(key);
         keyed.currentQueue().join();
         try {
             return fn.get();
@@ -40,6 +29,21 @@ final class FileMutationQueue {
             keyed.release().complete(null);
             queues.remove(keyed.key(), keyed.chained());
         }
+    }
+
+    /**
+     * Chain this mutation onto the tail of the same-key queue. Synchronized so
+     * two threads registering for the same key cannot both capture the same
+     * head and run concurrently (pi's JS version is single-threaded and does
+     * not need the guard).
+     */
+    private synchronized KeyedQueue register(String key) {
+        CompletableFuture<Void> currentQueue = queues.getOrDefault(key,
+            CompletableFuture.completedFuture(null));
+        CompletableFuture<Void> release = new CompletableFuture<>();
+        CompletableFuture<Void> chained = currentQueue.thenCompose(v -> release);
+        queues.put(key, chained);
+        return new KeyedQueue(key, currentQueue, chained, release);
     }
 
     /** Canonical mutation key: realpath when resolvable, else the normalized path. */
