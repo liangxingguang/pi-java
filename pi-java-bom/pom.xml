@@ -25,6 +25,7 @@
         <version.jspecify>1.0.0</version.jspecify>
         <version.snakeyaml>2.4</version.snakeyaml>
         <version.jgit>7.6.0.202603022253-r</version.jgit>
+        <version.java-websocket>1.5.7</version.java-websocket>
 
         <version.anthropic-java>2.52.0</version.anthropic-java>
         <version.openai-java>4.42.0</version.openai-java>
@@ -83,6 +84,11 @@
             <dependency>
                 <groupId>com.pi-java</groupId>
                 <artifactId>pi-java-coding-agent</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.pi-java</groupId>
+                <artifactId>pi-java-web</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -173,6 +179,13 @@
                 <groupId>org.yaml</groupId>
                 <artifactId>snakeyaml</artifactId>
                 <version>${version.snakeyaml}</version>
+            </dependency>
+
+            <!-- Java-WebSocket（P7 Web UI WS 传输） -->
+            <dependency>
+                <groupId>org.java-websocket</groupId>
+                <artifactId>Java-WebSocket</artifactId>
+                <version>${version.java-websocket}</version>
             </dependency>
 
             <!-- JGit（P6-6 技能目录 .gitignore 语义；排除对象库/传输层依赖） -->

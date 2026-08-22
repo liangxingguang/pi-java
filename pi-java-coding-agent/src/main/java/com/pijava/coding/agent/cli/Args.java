@@ -16,7 +16,8 @@ import java.util.List;
  * @param resume                pick a session to resume (-r)
  * @param help                  print help (-h/--help)
  * @param version               print version (-v/--version)
- * @param mode                  output mode: "text" (default) | "json" | "rpc"
+ * @param mode                  output mode: "text" (default) | "json" | "rpc" | "web"
+ * @param port                  web UI listen port (Phase 7, --mode web only)
  * @param name                  session display name
  * @param noSession             ephemeral session (do not save)
  * @param session               session file or partial UUID
@@ -62,6 +63,7 @@ public record Args(
         boolean help,
         boolean version,
         String mode,
+        Integer port,
         String name,
         boolean noSession,
         String session,

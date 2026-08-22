@@ -12,6 +12,7 @@ import com.pijava.coding.agent.export.HtmlExporter;
 import com.pijava.coding.agent.modes.PrintMode;
 import com.pijava.coding.agent.rpc.RpcMode;
 import com.pijava.coding.agent.spi.TuiEntryPoint;
+import com.pijava.coding.agent.spi.WebEntryPoint;
 import com.pijava.coding.agent.subcommand.SubcommandHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,6 +59,15 @@ public final class Main {
         }
         if (parsed.mode() != null && "rpc".equals(parsed.mode())) {
             return RpcMode.run(System.in, System.out, parsed);
+        }
+        if (parsed.mode() != null && "web".equals(parsed.mode())) {
+            var web = ServiceLoader.load(WebEntryPoint.class).findFirst();
+            if (web.isEmpty()) {
+                System.err.println(
+                    "error: web mode requires pi-java-web on the classpath");
+                return 1;
+            }
+            return web.get().runWeb(parsed);
         }
         if (parsed.mode() != null && "json".equals(parsed.mode())) {
             return PrintMode.runJson(parsed.messages(), parsed);

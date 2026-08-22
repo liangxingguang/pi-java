@@ -57,6 +57,9 @@ public final class ArgsParser {
     @Option(names = "--mode")
     String mode;
 
+    @Option(names = "--port")
+    Integer port;
+
     @Option(names = {"--name", "-n"})
     String name;
 
@@ -167,9 +170,13 @@ public final class ArgsParser {
     }
 
     private Args toArgs(List<Args.ArgDiagnostic> diagnostics) {
-        if (mode != null && !Set.of("text", "json", "rpc").contains(mode)) {
+        if (mode != null && !Set.of("text", "json", "rpc", "web").contains(mode)) {
             diagnostics.add(new Args.ArgDiagnostic("error",
-                "Invalid --mode \"" + mode + "\". Valid values: text, json, rpc"));
+                "Invalid --mode \"" + mode + "\". Valid values: text, json, rpc, web"));
+        }
+        if (port != null && (port < 1 || port > 65535)) {
+            diagnostics.add(new Args.ArgDiagnostic("error",
+                "Invalid --port \"" + port + "\". Valid range: 1-65535"));
         }
         if (tuiMode != null
                 && !Set.of("regular", "fullscreen").contains(tuiMode)) {
@@ -216,7 +223,7 @@ public final class ArgsParser {
 
         return new Args(
             provider, model, apiKey, systemPrompt, List.copyOf(appendSystemPrompt),
-            thinking, continue_, resume, help, version, mode, name, noSession,
+            thinking, continue_, resume, help, version, mode, port, name, noSession,
             session, sessionId, fork, sessionDir,
             split(models), split(tools), split(excludeTools),
             noTools, noBuiltinTools, List.copyOf(extensions), noExtensions,

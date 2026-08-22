@@ -25,6 +25,10 @@ import com.pijava.agent.harness.ToolExecution;
 import com.pijava.agent.harness.WatchHandle;
 import com.pijava.agent.session.ForkOptions;
 import com.pijava.agent.session.Session;
+import com.pijava.agent.session.SessionMetadata;
+import com.pijava.agent.session.EntryQuery;
+import com.pijava.agent.session.EntryOrder;
+import com.pijava.agent.session.jsonl.JsonlSessionMetadata;
 
 import com.pijava.agent.session.SessionRepository;
 import com.pijava.agent.session.memory.MemorySessionRepository;
@@ -248,6 +252,11 @@ public final class AgentSession implements AutoCloseable {
         }
     }
 
+    /** 会话持久化 id（pi {@code AgentSession.sessionId}）；in-memory 会话回退显示名。 */
+    public String sessionId() {
+        return session == null ? name : session.getMetadata().id();
+    }
+
     /** The CLI arguments this session was assembled from ({@code /new}). */
     public Args sessionArgs() {
         return args;
@@ -391,6 +400,77 @@ public final class AgentSession implements AutoCloseable {
                 .toList();
         }
         return repository.list();
+    }
+
+    /** 会话列表摘要（web UI 用；对齐 pi {@code SessionManager.list}）。 */
+    public record SessionSummary(
+            String id, String path, String name, String cwd, Instant created,
+            long modifiedMs, int messageCount, String firstMessage) {
+    }
+
+    /**
+     * 列出 {@code cwd} 下的持久化会话摘要。name/messageCount/firstMessage 需
+     * 打开会话读取（逐会话 writer lease），本地工具场景可接受；打开失败降级为
+     * 元数据摘要。
+     */
+    public List<SessionSummary> listSessionsSummary(String cwd) {
+        if (persistentRepository == null) {
+            return List.of();
+        }
+        String dir = cwd == null || cwd.isBlank() ? System.getProperty("user.dir") : cwd;
+        var result = new java.util.ArrayList<SessionSummary>();
+        for (var meta : persistentRepository.list(dir)) {
+            result.add(summaryFor(meta));
+        }
+        return result;
+    }
+
+    private SessionSummary summaryFor(SessionMetadata meta) {
+        String path = meta.id();
+        String cwd = "";
+        long modifiedMs = meta.createdAt().toEpochMilli();
+        if (meta instanceof JsonlSessionMetadata j) {
+            path = j.path().toString();
+            cwd = j.cwd();
+            modifiedMs = j.modifiedAtMs();
+        }
+        String name = "";
+        int messageCount = 0;
+        String firstMessage = "";
+        Session<?> opened = null;
+        try {
+            opened = persistentRepository.open(meta);
+            name = opened.getName();
+            messageCount = (int) opened.getStats().messageCount();
+            var first = opened.findEntries(
+                new EntryQuery("message", null, EntryOrder.OLDEST_FIRST, 1, null));
+            if (!first.isEmpty() && first.get(0) instanceof Entry.Message m
+                    && m.message() != null) {
+                firstMessage = firstMessageText(m.message());
+            }
+        } catch (Exception ignored) {
+            // 打开失败（并发写锁等）降级为元数据摘要
+        } finally {
+            if (opened != null) {
+                try {
+                    opened.close();
+                } catch (Exception ignored) {
+                    // 忽略关闭失败
+                }
+            }
+        }
+        return new SessionSummary(meta.id(), path, name, cwd,
+            meta.createdAt(), modifiedMs, messageCount, firstMessage);
+    }
+
+    /** 取消息纯文本（首个 text 内容块；无则空串）。 */
+    private static String firstMessageText(com.pijava.ai.message.Message message) {
+        return message.content().stream()
+            .filter(com.pijava.ai.message.ContentBlock.TextContent.class::isInstance)
+            .map(com.pijava.ai.message.ContentBlock.TextContent.class::cast)
+            .map(com.pijava.ai.message.ContentBlock.TextContent::text)
+            .findFirst()
+            .orElse("");
     }
 
     /** The most recent session, or empty ({@code -c}). */

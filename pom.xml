@@ -24,6 +24,7 @@
         <module>pi-java-client</module>
         <module>pi-java-server</module>
         <module>pi-java-coding-agent</module>
+        <module>pi-java-web</module>
         <module>pi-java-evals</module>
         <module>pi-java-dist</module>
     </modules>
