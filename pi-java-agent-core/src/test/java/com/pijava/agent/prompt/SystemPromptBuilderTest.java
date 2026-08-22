@@ -54,6 +54,40 @@ class SystemPromptBuilderTest {
     }
 
     @Test
+    void toolsSectionUsesPromptSnippetWhenPresent() {
+        var prompt = new SystemPromptBuilder()
+                .tools(List.of(renderTool("snippet", "Short snippet", List.of())))
+                .build();
+        assertThat(prompt).contains("- **snippet**: Short snippet");
+        assertThat(prompt).doesNotContain("full description");
+    }
+
+    @Test
+    void toolsSectionAppendsPromptGuidelines() {
+        var prompt = new SystemPromptBuilder()
+                .tools(List.of(renderTool("guide", "", List.of("Always return JSON"))))
+                .build();
+        assertThat(prompt).contains("- Always return JSON");
+    }
+
+    /** AgentTool carrying pi {@code promptSnippet}/{@code promptGuidelines} render metadata. */
+    private static AgentTool<String, Void> renderTool(String name, String snippet, List<String> guidelines) {
+        return new AgentTool<>() {
+            @Override public String name() { return name; }
+            @Override public String label() { return name; }
+            @Override public String description() { return name + " full description"; }
+            @Override public Map<String, Object> inputSchema() { return Map.of(); }
+            @Override public ExecutionMode executionMode() { return new ExecutionMode.Sequential(); }
+            @Override public String promptSnippet() { return snippet; }
+            @Override public List<String> promptGuidelines() { return guidelines; }
+            @Override public ToolResult<Void> execute(String id, String params, AbortSignal signal,
+                    ToolUpdateCallback<Void> onUpdate, com.pijava.agent.tool.ToolContext ctx) {
+                return ToolResult.success("ok");
+            }
+        };
+    }
+
+    @Test
     void skillsSectionListsSkillPrompts() {
         var prompt = new SystemPromptBuilder()
                 .skills(List.of(skill("tdd", "Write tests first.")))

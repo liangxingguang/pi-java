@@ -1,6 +1,7 @@
 package com.pijava.agent.tool;
 import com.pijava.ai.AbortSignal;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -24,6 +25,20 @@ public interface AgentTool<TParams, TDetails> {
 
     /** Human-readable label for UI display. */
     String label();
+
+    /**
+     * One-line snippet for the system prompt's Available-tools section
+     * (pi {@code ToolDefinition.promptSnippet}). Empty means fall back to
+     * {@link #description()}.
+     */
+    default String promptSnippet() {
+        return "";
+    }
+
+    /** Guideline bullets appended to the system prompt when this tool is active. */
+    default List<String> promptGuidelines() {
+        return List.of();
+    }
 
     /** Description shown to the LLM in the system prompt / tool definition. */
     String description();

@@ -19,13 +19,20 @@ public final class SystemPromptBuilder {
         return this;
     }
 
-    /** Append tool descriptions for the given tools. */
+    /** Append tool descriptions for the given tools (uses {@code promptSnippet} when present). */
     public SystemPromptBuilder tools(Collection<AgentTool<?, ?>> tools) {
         if (tools.isEmpty()) return this;
         sb.append("## Available Tools\n\n");
         for (var t : tools) {
-            sb.append("- **").append(t.name()).append("**: ")
-              .append(t.description()).append("\n");
+            sb.append("- **").append(t.name()).append("**: ");
+            var snippet = t.promptSnippet();
+            sb.append(snippet == null || snippet.isBlank() ? t.description() : snippet).append("\n");
+        }
+        for (var t : tools) {
+            var guidelines = t.promptGuidelines();
+            for (var guideline : guidelines) {
+                sb.append("- ").append(guideline).append("\n");
+            }
         }
         sb.append("\n");
         return this;

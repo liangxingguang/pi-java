@@ -61,5 +61,28 @@ final class QueueStreamIterator implements StreamIterator {
     @Override
     public void close() {
         closed = true;
+        // Unblock a consumer parked in hasNext()/next() take(): a closed stream
+        // that never received a terminal event would otherwise hang forever.
+        queue.offer(new StreamDone("aborted", null, AssistantMessage.empty()));
+    }
+
+    /**
+     * Abort the stream early: drop any buffered events and unblock a waiting
+     * consumer with an error (pi {@code EventStream.abort}).
+     *
+     * <p>Backpressure needs no explicit support — the pull-based {@code take()}
+     * already throttles the producer. Abort is the one true gap: without it, a
+     * producer that stops without a terminal event leaves the consumer blocked.
+     * {@code closed} is deliberately <em>not</em> set here so the injected
+     * {@link StreamError} is delivered to the consumer (which sets {@code closed}
+     * when it reads it); the FIFO queue guarantees the error precedes any event
+     * a racing producer appends.</p>
+     */
+    public void abort(Throwable cause) {
+        if (closed) {
+            return;
+        }
+        queue.clear();
+        queue.offer(new StreamError("aborted", cause, AssistantMessage.empty()));
     }
 }

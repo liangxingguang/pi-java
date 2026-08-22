@@ -96,7 +96,9 @@ public class ToolRegistry {
     /** Generate tool definitions suitable for the LLM request. */
     public List<ToolDefinition> toToolDefinitions() {
         return tools.values().stream()
-            .map(t -> new ToolDefinition(t.name(), t.description(), t.inputSchema()))
+            .map(t -> new ToolDefinition(t.name(), t.description(), t.inputSchema(),
+                t.label(), t.promptSnippet().isEmpty() ? null : t.promptSnippet(),
+                t.promptGuidelines(), null))
             .toList();
     }
 
