@@ -22,7 +22,7 @@
 
 ## 1. A 类 — 真实缺口（实施）
 
-### 1.1 `api/ToolDefinition.java` 补渲染字段（80% → 90%）
+### 1.1 `api/ToolDefinition.java` 补渲染字段（80% → 90%）— ✅ 已实施
 
 - **现状**：`pi-java-ai/.../api/ToolDefinition.java`（21 行）仅 `name`/`description`/`inputSchema`。
 - **差距**：pi `coding-agent/core/extensions/types.ts` `ToolDefinition` 含 `label`、`promptSnippet?`、`promptGuidelines?`、`renderShell?: "default"|"self"`、`renderCall`/`renderResult`（渲染回调）。
@@ -30,7 +30,7 @@
 - **目标对齐度**：90%（数据字段 + prompt 消费对齐；渲染回调为设计决策）。
 - **工作量**：0.5d。
 
-### 1.2 `protocol/QueueStreamIterator.java` 补 abort（80% → 90%）
+### 1.2 `protocol/QueueStreamIterator.java` 补 abort（80% → 90%）— ✅ 已实施
 
 - **现状**：`QueueStreamIterator`（65 行）`LinkedBlockingQueue.take()` 拉取式迭代，`close()` 仅置 `closed` 标志。
 - **差距**：pi `utils/event-stream.ts` `EventStream` 含 backpressure/abort。Java 拉取式迭代天然背压（`take()` 阻塞 = 消费侧节流）；真实缺口是 **abort**——生产侧中止且不推送终止事件时，消费线程会永久阻塞在 `take()`。
@@ -38,7 +38,7 @@
 - **目标对齐度**：90%。
 - **工作量**：0.5d。
 
-### 1.3 `SystemPromptBuilder` / prompt-templates（80% → 90%）
+### 1.3 `SystemPromptBuilder` / prompt-templates（80% → 90%）— ✅ 已实施
 
 - **现状**：`SystemPromptBuilder`（60 行）base/tools/skills/instructions 拼接一致；pi 的 **prompt-templates.ts 是独立特性**（用户定义 `.md` 模板 + 参数替换），pi-java 未实现。
 - **差距**：pi `harness/prompt-templates.ts`（262 行）：`loadPromptTemplates`（目录/文件扫描 `.md` + YAML frontmatter 解析 + description 推导）+ `parseCommandArgs`（shell 式引号解析）+ `substituteArgs`（`$1`/`$@`/`$ARGUMENTS`/`${@:N}`/`${@:N:L}` 占位替换）+ `formatPromptTemplateInvocation`。pi 侧经 `agent-session.ts` `expandPromptTemplate` + `/prompt-template` 类 slash 命令消费。
@@ -46,7 +46,7 @@
 - **目标对齐度**：90%（模板加载 + 替换能力；slash 命令接入后续）。
 - **工作量**：1d。
 
-### 1.4 `core/AgentSession.java` retry / auto-format（80% → 90%）
+### 1.4 `core/AgentSession.java` retry / auto-format（80% → 90%）— ✅ 已实施（auto-format 分期）
 
 - **现状**：`AgentSession` + `SessionRunner` + `SessionPersistence` 会话组装/驱动/持久化一致；pi `core/agent-session.ts`（~10K 行）的 **auto-retry**（`auto_retry_start`/`auto_retry_end`，settings `maxRetries`）与 **自动格式化**（tool 审批后格式化）未移植。
 - **差距**：pi `agent-session.ts:166-182` 事件类型 + `settings.enabled/maxRetries`（L685）+ 成功响应重置计数器（L669-677）。
@@ -111,13 +111,13 @@
 
 | 条目 | 原 | 目标 | 状态 |
 |------|----|----|------|
-| ToolDefinition | 80% | 90% | 待实施 |
-| QueueStreamIterator | 80% | 90% | 待实施 |
-| SystemPromptBuilder / prompt-templates | 80% | 90% | 待实施 |
-| AgentSession | 80% | 90% | 待实施（auto-format 分期） |
+| ToolDefinition | 80% | 90% | ✅ 已实施 |
+| QueueStreamIterator | 80% | 90% | ✅ 已实施 |
+| SystemPromptBuilder / prompt-templates | 80% | 90% | ✅ 已实施 |
+| AgentSession | 80% | 90% | ✅ 已实施（auto-format 分期） |
 
-**B 类（口径修正 23 条）**：全部 → 90–95%（doc 更新即完成）。
+**B 类（口径修正 23 条）**：全部 → 90–95%（doc 更新已完成）。
 
 **C 类（设计决策 8 条）**：→ `**设计决策**`（不计入缺口）。
 
-**结论**：实施后 mapping 文档中**所有带百分比条目 ≥90%**；结构性取舍条目明确标注为设计决策。真实缺口仅剩 A 类 4 条（含 AgentSession auto-format 子项分期）。
+**结论**：mapping 文档中**所有带百分比条目 ≥90%**（0 个 <90%），结构性取舍条目明确标注为设计决策。A 类 4 条已实施；仅剩 AgentSession auto-format 子项分期。
