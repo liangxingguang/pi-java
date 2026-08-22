@@ -1,58 +1,51 @@
-# Phase 1-6 代码对照表（pi-java ↔ pi TypeScript）
+# pi-java ↔ pi 代码对照表（按模块）
 
 > pi 源码位置：`D:\workplaceForai\pi\packages\`
 > pi-java 源码位置：各模块 `src/main/java/` 下 `com.pijava.*`
-> 更新日期：2026-08-22（由原 Phase 1 对照表扩展至 Phase 0-6 全模块）
+> 更新日期：2026-08-22（按模块重排；Phase 6 于 2026-08-22 完成）
 
 ## 0. 范围与方法
 
-- **覆盖范围**：pi 10 个包全部逐项对照（`telemetry`、`ai`、`agent`、`session-backends/sqlite-node`、`tui`、`coding-agent`、`protocol`、`client`、`server`、`evals`）；Phase 6 于 2026-08-22 完成，§8 由存根改为真实映射。
+- **覆盖范围**：pi 10 个包全部逐项对照。**按 pi-java 模块组织**（每个 pi-java Maven 模块一节），而非按 Phase 组织——一个模块往往横跨多个 Phase（如 ai 模块含 Phase 1 基础 + Phase 6 Provider 生态/图片嵌入）。
 - **粒度约定（混合）**：小模块（telemetry、sqlite-node、存储契约）逐文件；`agent-core` 按 harness/tool/session/hook/compaction 分组逐文件；大模块（tui、coding-agent）包级汇总 + 关键文件单列。
 - **对齐度判据**：≥95% 完全对齐（接口/行为逐项一致）；80–94% 主要对齐（结构一致，存在已记录的差异）；<80% 部分对齐（核心流程对齐但能力面缺失）。
-- **旧表修正标注**：原 Phase 1 表中结论若已被后续阶段更新，保留原表并以「⚠️ 已于 Phase N 更新」标注修正。
+- **行数对比口径**：pi 行数为对应包 TypeScript 行数；pi-java 行数为模块 `src/` 下 Java 行数。**对齐度 ≠ 行数比**——pi 为单体结构，pi-java 按模块拆分，跨模块合计才是全量能力面对比（见各模块注）。
 
 ---
 
-## 1. Phase 1 — pi-java-ai ↔ packages/ai
+## 1. pi-java-ai ↔ packages/ai
 
-> pi-java 源码位置：`pi-java-ai\src\main\java\com\pijava\ai\`
+> pi-java 源码位置：`pi-java-ai\src\main\java\com\pijava\ai\`（136 文件）；pi：174 文件 / 20,595 行。
 
 ### 1.1 API 接口层（`api/` ↔ `types.ts` + `compat.ts`）
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
 | `api/StreamApi.java` | `types.ts` `StreamFunction` 类型（L320） | ✅ 100% | Java 用 interface + `Flow.Publisher`；pi 用函数签名 `(model,context,options) => EventStream` |
-| `api/SimpleApi.java` | `compat.ts` `streamSimple()` 包装 | ✅ 95% | ⚠️ 已于 Phase 2a 更新：ThinkingLevel 自动翻译已由 agent-core harness 承担 |
+| `api/SimpleApi.java` | `compat.ts` `streamSimple()` 包装 | ✅ 95% | ThinkingLevel 自动翻译已由 agent-core harness 承担 |
 | `api/ChatApi.java` | 无直接对应 | ✅ 100% | Java 特有：`StreamApi + SimpleApi` 组合接口，实现 `ProviderApi` 标记 |
-| `api/StreamRequest.java` | `types.ts` `Context` + `Model` 参数组合 | ✅ 100% | pi 不打包成单个 request 对象，直接传三个参数 |
+| `api/StreamRequest.java` | `types.ts` `Context` + `Model` 参数组合 | ✅ 100% | pi 不打包成单个 request 对象 |
 | `api/StreamIterator.java` | `utils/event-stream.ts` `EventStream<T,R>` | ✅ 90% | pi 用 async iterator + backpressure queue；Java 用 `Iterator` + 虚拟线程阻塞 |
-| `api/ApiOptions.java` | `types.ts` options 泛型参数 `TOptions` | ✅ 80% | pi 的 options 是 per-API 的泛型（如 `AnthropicOptions`）；Java 用统一 record |
-| `api/ToolDefinition.java` | `types.ts` `ToolDefinition`（函数声明 + JSON Schema） | ✅ 80% | pi 含 `renderCall`/`renderResult`/`promptSnippet` 渲染字段；Java 仅 name/description/inputSchema（渲染字段待补） |
-| `api/ProviderApi.java` | `types.ts` `Api` 字符串字面量类型 | ✅ 100% | pi 用 tagged string；Java 用 `sealed interface` |
+| `api/ApiOptions.java` | `types.ts` options 泛型参数 `TOptions` | ✅ 80% | pi 的 options 是 per-API 泛型；Java 用统一 record |
+| `api/ToolDefinition.java` | `types.ts` `ToolDefinition` | ✅ 80% | pi 含 `renderCall`/`renderResult`/`promptSnippet` 渲染字段；Java 仅 name/description/inputSchema |
+| `api/ProviderApi.java` | `types.ts` `Api` 字符串字面量类型 | ✅ 100% | pi 用 tagged string；Java 用 `sealed interface`（`permits ChatApi, ImageApi, EmbeddingApi`，P6-28） |
 
 ### 1.2 协议适配器（`protocol/` ↔ `api/`）
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
-| `protocol/AnthropicMessagesApi.java` | `api/anthropic-messages.ts`（~1200 行） | ✅ 90% | **核心差异**：pi 用原始 SSE 解析，Java 用官方 SDK `anthropic-java`；消息转换逻辑一致 |
-| `protocol/OpenAICompletionsApi.java` | `api/openai-completions.ts`（~600 行） | ✅ 90% | 都用 SDK。pi 的工具调用聚合在适配器内联；Java 有独立的 `ToolCallBuilder` |
-| `protocol/GoogleGenerativeAiApi.java` | `api/google-generative-ai.ts`（~500 行） | ✅ 95% | 共用 `google-shared.ts` 的工具转换；Java 独自分装了 `toGoogleContents()`/`toGoogleParts()` |
-| `protocol/MistralConversationsApi.java` | `api/mistral-conversations.ts`（~200 行） | ✅ 95% | 都用原始 HTTP + SSE。JSON 构建和解析逻辑一一对应 |
-| `protocol/QueueStreamIterator.java` | `utils/event-stream.ts` `EventStream` | ✅ 80% | pi 的 `EventStream` 更完善：backpressure、abort signal、`EventStreamSignal` |
-| `protocol/ToolCallAccumulator.java` | 无独立文件 | ✅ 100% | pi 的 OpenAI/Mistral 适配器内联了同样的聚合逻辑，Java 提取为共享类 |
+| `protocol/AnthropicMessagesApi.java` | `api/anthropic-messages.ts`（~1200 行） | ✅ 90% | **核心差异**：pi 用原始 SSE 解析，Java 用官方 SDK `anthropic-java`；消息转换逻辑一致。P6-1a 补 `apiKeyEnvVar` + `baseUrl` 覆盖 |
+| `protocol/OpenAICompletionsApi.java` | `api/openai-completions.ts`（~600 行） | ✅ 90% | 都用 SDK。pi 的工具调用聚合内联；Java 有独立 `ToolCallBuilder` |
+| `protocol/GoogleGenerativeAiApi.java` | `api/google-generative-ai.ts`（~500 行） | ✅ 95% | 共用 `google-shared.ts` 工具转换；Java 独自分装 |
+| `protocol/MistralConversationsApi.java` | `api/mistral-conversations.ts`（~200 行） | ✅ 95% | 都用原始 HTTP + SSE，逻辑一一对应 |
+| `protocol/QueueStreamIterator.java` | `utils/event-stream.ts` `EventStream` | ✅ 80% | pi 的 `EventStream` 更完善（backpressure/abort） |
+| `protocol/ToolCallAccumulator.java` | 无独立文件 | ✅ 100% | pi 内联，Java 提取为共享类 |
+| `protocol/OpenAIResponsesApi.java`（P6-1e） | `api/openai-responses.ts`（~800 行） | ✅ ~90% | Responses 事件映射逐行对齐 |
+| `protocol/AzureOpenAIResponsesApi.java`（P6-1f） | `api/azure-openai-responses.ts` | ✅ ~85% | SDK 原生 Azure 支持（无需 `com.azure`） |
+| `protocol/PiMessagesApi.java`（P6-1g） | `api/pi-messages.ts` | ✅ ~90% | 事件与 `StreamEvent` 近乎 1:1 |
+| `protocol/OpenRouterImagesApi.java`（P6-28） | `api/openrouter-images.ts` | ✅ ~85% | chat-with-modalities；pi-java 用 openai-java SDK（pi 用 openai npm SDK） |
 
-**pi 有、Phase 1-4 没有的适配器：**
-
-| pi 适配器 | pi 文件名 | 状态 |
-|-----------|----------|------|
-| Bedrock Converse | `api/bedrock-converse-stream.ts`（~1173 行） | Phase 6 |
-| Google Vertex AI | `api/google-vertex.ts`（~592 行） | Phase 6 |
-| OpenAI Responses | `api/openai-responses.ts`（~800 行） | Phase 6（/v1/responses 新 API） |
-| OpenAI Codex Responses | `api/openai-codex-responses.ts` | Phase 6 |
-| Azure OpenAI Responses | `api/azure-openai-responses.ts` | Phase 6 |
-| Pi Messages (Radius) | `api/pi-messages.ts` | Phase 6（wire protocol） |
-| Cloudflare Workers AI | `api/cloudflare.ts` | Phase 6 |
-| OpenRouter Images | `api/openrouter-images.ts` | Phase 6 |
+**pi 有、pi-java 未实现的适配器**：Bedrock Converse（`api/bedrock-converse-stream.ts`）、Google Vertex（`api/google-vertex.ts`）、OpenAI Codex Responses（`api/openai-codex-responses.ts`）、Cloudflare Workers AI（`api/cloudflare.ts`）——按需 / 渐进。
 
 ### 1.3 消息与流事件（`message/` + `stream/` ↔ `types.ts`）
 
@@ -60,365 +53,315 @@
 |---------|-----------------|--------|---------|
 | `message/Message.java` | `types.ts` `Message` 联合（L455） | ✅ 100% | sealed hierarchy：System/User/Assistant/ToolResult |
 | `message/ContentBlock.java` | `types.ts` content block 类型 | ✅ 100% | Text/Thinking/Image/ToolUse/ToolResult 五类一致 |
-| `stream/StreamEvent.java` | `types.ts` `AssistantMessageEvent`（13 种子类型，L523） | ✅ 95% | ⚠️ 已于 Phase 2a 更新：原表「缺 start/text_start/thinking_start/partial」已补齐为 13 种事件（Start/Text*/Thinking*/ToolCall*/UsageInfo/StreamDone/StreamError），每种携带 `partial` 快照 |
+| `stream/StreamEvent.java` | `types.ts` `AssistantMessageEvent`（13 种子类型，L523） | ✅ 95% | 13 种事件（Start/Text*/Thinking*/ToolCall*/UsageInfo/StreamDone/StreamError），每种携带 `partial` 快照 |
 | `stream/StreamPartialBuilder.java` | `utils/event-stream.ts` 内聚 | ✅ 90% | 事件增量 → `AssistantMessage` 快照构建 |
 
-### 1.4 Provider 配置（`provider/` ↔ `providers/`）
+### 1.4 Provider 配置与注册（`provider/` ↔ `providers/` + `models.ts`）
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
-| `provider/Provider.java` | `models.ts` `Provider` interface（~15 字段） | ✅ 80% | pi 更复杂：含 `api`、`models`、`thinkingLevelMap`、`auth`、`baseUrl` 等 |
+| `provider/Provider.java` | `models.ts` `Provider` interface（~15 字段） | ✅ 80% | pi 更复杂：含 `api`/`models`/`thinkingLevelMap`/`auth`/`baseUrl` 等 |
 | `provider/ProviderFactory.java` | `models.ts` `createProvider()` 工厂函数 | ✅ 100% | pi 用函数，Java 用 SPI 接口 |
-| `provider/ProviderRegistry.java` | `compat.ts` api-registry + `providers/all.ts` `builtinProviders()` | ✅ 90% | 都支持手动注册 + 全局查询 |
-| `provider/AnthropicProvider.java` | `providers/anthropic.ts` | ✅ 100% | 名字、baseUrl、绑定适配器逻辑一致 |
-| `provider/OpenAIProvider.java` | `providers/openai.ts` | ✅ 100% | |
-| `provider/GoogleProvider.java` | `providers/google.ts` | ✅ 100% | |
-| `provider/DeepSeekProvider.java` | `providers/deepseek.ts` | ✅ 100% | 都复用 OpenAI 适配器 |
-| `provider/MistralProvider.java` | `providers/mistral.ts` | ✅ 100% | |
+| `provider/ProviderRegistry.java` | `compat.ts` api-registry + `providers/all.ts` `builtinProviders()` | ✅ 90% | 手动注册 + 全局查询；P6-1d 补 ServiceLoader 发现 |
+| `provider/ConfigurableProvider.java`（P6-1b） | `providers/` 配置驱动模式 | ✅ ~90% | 三能力分派（Chat/Image/Embedding）+ 协议路由 |
+| `provider/builtin/*.java`（17 个，P6-1c） | `providers/all.ts` builtinProviders()（39 chat + 1 image） | ⚠️ 部分 | pi-java 聚焦中国大陆 16 chat + `openrouter-images` 1 image，非全量 39 |
+| `provider/AnthropicProvider.java` 等 5 家 | `providers/anthropic.ts` 等 | ✅ 100% | 名字/baseUrl/绑定适配器逻辑一致 |
 | `provider/FauxProvider.java` | `providers/faux.ts` | ✅ 100% | 三种回放模式完全对齐 |
 
-### 1.5 模型目录（`catalog/` + `model/` ↔ `model-catalog.ts` + `providers/*.models.ts`）
+### 1.5 模型目录（`catalog/` + `model/` ↔ `model-catalog.ts` + `models-store.ts`）
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
 | `model/ModelId.java` | `model-catalog.ts` `ModelId` 类型 | ✅ 100% | pi 用 `{provider, modelId}` 对象；Java 用 record |
-| `model/ModelInfo.java` | `types.ts` `Model<TApi>` interface（L794） | ✅ 70% | pi 含 `thinkingLevelMap`、`compat`、`headers`、`samplingParams` 等，Java 只实现核心字段 |
-| `model/ModelCapability.java` | `types.ts` capability tags | ✅ 100% | |
-| `model/PricingInfo.java` | `types.ts` `ModelCost` + `ModelCostRates` | ✅ 90% | pi 分 input/output/cacheRead/cacheWrite 四种单价；Java 只分 input/output |
+| `model/ModelInfo.java` | `types.ts` `Model<TApi>` interface（L794） | ✅ 70% | pi 含 `thinkingLevelMap`/`compat`/`headers`/`samplingParams` 等，Java 只实现核心字段 |
+| `model/ModelCapability.java` | `types.ts` capability tags | ✅ 100% | P6-28 加 `IMAGE_OUTPUT` |
+| `model/PricingInfo.java` | `types.ts` `ModelCost` + `ModelCostRates` | ✅ 90% | pi 分 input/output/cacheRead/cacheWrite 四种；Java 只分 input/output |
 | `catalog/ModelCatalog.java` | `model-catalog.ts` `ModelCatalog` type | ✅ 90% | |
-| `catalog/BuiltinCatalog.java` | `providers/*.models.ts`（自动生成） | ✅ 80% | pi 模型数据自动生成（`npm run generate-models`）；Java 手写 5 个供应商数据 |
-| ~~`catalog/ModelsStore.java`~~ | `models-store.ts` `ModelsStoreEntry` | — | ⚠️ 已于 Phase 4 更新：该行已移除——远程目录持久化未采用，会话存储改由 JSONL/SQLite 双轨承担 |
+| `catalog/BuiltinCatalog.java` | `providers/*.models.ts`（自动生成） | ✅ 80% | pi 自动生成；Java 手写（P6-28 加 embedding 模型） |
+| `catalog/ModelsStore.java` + `FileModelsStore.java`（P6-8） | `models-store.ts` `ModelsStoreEntry` | ✅ ~85% | 补 Phase 1 缺口；读写删 |
+| `catalog/RemoteCatalog.java`（P6-8） | 远程目录（ETag 条件刷新） | ✅ ~90% | ETag 含引号原样透传 |
+| `catalog/CatalogPublisher.java`（P6-10） | `pi-ai catalog` 发布工具 | ✅ ~80% | 模型目录发布 |
 
 ### 1.6 认证（`auth/` ↔ `auth/` + `env-api-keys.ts`）
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
-| `auth/CredentialStore.java` | `auth/credential-store.ts` `CredentialStore` interface | ✅ 100% | resolveApiKey / storeApiKey / deleteApiKey 三方法一致 |
+| `auth/CredentialStore.java` | `auth/credential-store.ts` `CredentialStore` | ✅ 100% | resolveApiKey/storeApiKey/deleteApiKey 三方法一致 |
 | `auth/EnvApiKeyResolver.java` | `env-api-keys.ts` | ✅ 100% | 环境变量映射表一致 |
-| `auth/FileCredentialStore.java` | `auth/credential-store.ts` `InMemoryCredentialStore` + `cli.ts`（auth.json 读写） | ✅ 90% | pi 用内存 store + Node fs；Java 用 `FileChannel.lock()` 支持跨进程并发 |
-| — | `auth/resolve.ts` `resolveProviderAuth()` | ✅ 90% | ⚠️ 已于 Phase 3 更新：完整认证解析管线由 coding-agent `DefaultProviders.resolveProviderName` + `AuthCommand` 承担 |
-| — | `auth/context.ts` `AuthContext` | ✅ 90% | ⚠️ 已于 Phase 3 更新：`ToolContext` + `ProviderRegistry` 承载注入式配置 |
-| — | `auth/oauth/`（7 个 OAuth flow） | Phase 6 | 设计文档明确延后 |
+| `auth/FileCredentialStore.java` | `auth/credential-store.ts` `InMemoryCredentialStore` + `cli.ts` | ✅ 90% | pi 用内存 store + Node fs；Java 用 `FileChannel.lock()` 跨进程并发 |
+| `auth/OAuthFlow.java` + `AuthProfileManager.java`（P6-17/18） | `auth/oauth/`（9 个 OAuth flow） | ✅ 70% | 通用 PKCE authorization-code 流程；未逐 provider 接入 pi 的 9 个流程 |
+| — | `auth/resolve.ts` / `context.ts` | ✅ 90% | 认证解析管线由 coding-agent `DefaultProviders.resolveProviderName` + `AuthCommand` 承担 |
 
 ### 1.7 HTTP 传输（`http/` ↔ `utils/` + `api/`）
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
-| `http/PiHttpClient.java` | `utils/event-stream.ts` SSE 解析 + 各适配器原始 SSE 处理 | ✅ 90% | pi 的 SSE 解析分散在适配器内部；Java 集中封装 |
+| `http/PiHttpClient.java` | `utils/event-stream.ts` SSE 解析 + 各适配器原始 SSE | ✅ 90% | pi 的 SSE 解析分散在适配器内部；Java 集中封装 |
 | `http/RetryPolicy.java` | `utils/retry.ts` + `utils/provider-retry.ts` | ✅ 90% | 指数退避、Retry-After 解析一致 |
 | `http/PiHttpException.java` | `utils/error-body.ts` `formatProviderError()` | ✅ 100% | HTTP 错误码 → 异常 |
-| `http/ProxyDetector.java` | `utils/node-http-proxy.ts` | ✅ 90% | ⚠️ 已于 Phase 2 更新：系统代理检测（HTTP_PROXY/HTTPS_PROXY）已落地 |
+| `http/ProxyDetector.java` | `utils/node-http-proxy.ts` | ✅ 90% | 系统代理检测一致 |
 
 ### 1.8 CLI（`cli/` ↔ `cli.ts`）
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
-| `cli/AiCli.java` | `cli.ts`（~150 行） | ✅ 90% | 独立命令行入口；命令集相同：list-models、auth、ping；pi 还支持 OAuth login |
+| `cli/AiCli.java` | `cli.ts`（~150 行） | ✅ 90% | list-models/auth/ping；P6-28 加 `image`/`embed`；pi 还支持 OAuth login |
 
-### 1.9 Phase 1 未落地项的状态更新
-
-| pi 文件 | 功能 | 状态（更新后） |
-|---------|------|---------|
-| `compat.ts`（api-registry 部分） | 全局 API 注册表 | ✅ Phase 1（ProviderRegistry） |
-| `compat.ts`（stream/complete） | 统一调用入口 | ✅ Phase 1（ChatApi） |
-| `models.ts` `createModels()` | 模型发布管线 | ✅ 已由 coding-agent `DefaultModelResolver` + `BuiltinCatalog` 承担（Phase 3） |
-| `models.ts` `calculateCost()` | Token 成本计算 | ✅ 已由 `PricingInfo` + usage 统计承担（Phase 4 累计 costTotal） |
-| `models.ts` `clampThinkingLevel()` | 思考级别回退 | ✅ 已由 `ThinkingLevels.parse` + `ModelThinkingLevel` 承担（Phase 3） |
-| `models.generated.ts` | 自动生成的模型数据 | ⚠️ 手写代替（Phase 1 结论保留） |
-| `models-store.ts` | 远程目录持久化 | ⚠️ 已于 Phase 4 更新：未采用（见 1.5 ModelsStore 行） |
-| `api/lazy.ts` `lazyStream` | 懒加载翻译器 | Phase 6 |
-| `api/constrained-sampling.ts` | 语法约束采样 | Phase 6 |
-| `api/simple-options.ts` | 估计上下文 token 数 | ✅ 已由 agent-core `ContextEstimator` 承担（Phase 2c） |
-| `utils/overflow.ts` `isContextOverflow()` | 上下文溢出检测 | ✅ 已由 agent-core `OverflowDetector` 承担（Phase 2c） |
-| `utils/abort.ts` `operationSignal` | 可取消操作 | ✅ 已由 ai `AbortSignal` 承担（Phase 2a） |
-| `session-resources.ts` | 会话级资源清理 | ✅ 已由 coding-agent `AgentSession.close`/`SessionPersistence` 承担（Phase 4） |
-| `images*.ts`（4 文件） | 图片生成 | Phase 6 |
-| `bun-oauth.ts` | Bun OAuth 注册 | Phase 6 |
-| `bedrock-provider.ts` | Bedrock 入口 | Phase 6 |
-| `legacy-api-aliases.ts` | 旧 API 别名（兼容） | 不做 |
-
-## 2. Phase 0 — pi-java-telemetry ↔ packages/telemetry
-
-> pi-java 源码位置：`pi-java-telemetry\src\main\java\com\pijava\telemetry\`（4 文件）；pi：6 文件 / 826 行。
+### 1.9 图片与嵌入（P6-28）— `provider/builtin/OpenRouterImagesProvider` + `protocol/OpenRouterImagesApi` ↔ `providers/openrouter-images.ts` + `images-models.ts`
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
-|---------|-----------------|--------|---------|
-| `TelemetryContext.java` | `index.ts`（TelemetryContext 类型） | ✅ 90% | 采样/父上下文语义一致；pi 还有 in-memory 与 testing 实现，Java 只有 Noop |
-| `TelemetrySpan.java` | `index.ts` `TelemetrySpan` | ✅ 90% | `addAttribute`/`end` 一致；pi 支持 `addLink`/`event`，Java 未实现 |
-| `SpanOptions.java` | `index.ts` `SpanOptions` | ✅ 95% | 字段对应（name/type/attributes/severity）；Java 用 record |
-| `NoopTelemetryContext.java` | `noop.ts` | ✅ 100% | 空实现逐方法一致 |
-| — | `memory.ts` | Phase 6 | 内存遥测后端（测试用） |
-| — | `testing/`（types/index/conformance） | Phase 6 | 遥测 conformance 套件 |
-| — | OTel 适配器 | Phase 6 | F18（`01-requirements-analysis.md`），当前由 Noop 占位 |
-
-**统计**：pi 6 文件 / 826 行 ↔ pi-java 4 文件 / 91 行，整体对齐度 ~85%（接口对齐，能力面缺 memory/testing/OTel）。
+|--------|-----------------|--------|----------|
+| `OpenRouterImagesProvider.java` | `providers/openrouter-images.ts` | ✅ ~90% | 独立 images provider，8 个模型（FLUX.2/seedream/gemini-image） |
+| `OpenRouterImagesApi.java` | `api/openrouter-images.ts` | ✅ ~85% | chat-with-modalities；`Modality.Companion.of("image")` 绕开 SDK 枚举缺 IMAGE |
+| `api/ImageApi`/`ImageRequest`/`ImageResult`/`ImageStopReason` | `images-models.ts`（ImagesFunction/ImagesContext/AssistantImages/ImagesStopReason） | ✅ ~95% | 接口/字段逐一对应 |
+| `api/EmbeddingApi` + `protocol/OpenAIEmbeddingApi.java` | —（pi 无 embedding） | pi-java 独有 | OpenAI `/v1/embeddings` |
 
 ---
 
-## 3. Phase 2a/2b/2c — pi-java-agent-core ↔ packages/agent
+## 2. pi-java-telemetry ↔ packages/telemetry
 
-> pi-java 源码位置：`pi-java-agent-core\src\main\java\com\pijava\agent\`；pi：49 文件 / 11332 行。
+> pi-java 源码位置：`pi-java-telemetry\src\main\java\com\pijava\telemetry\`（7 文件）；pi：6 文件 / 826 行。
+
+| pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
+|---------|-----------------|--------|---------|
+| `TelemetryContext.java` | `index.ts`（TelemetryContext 类型） | ✅ 90% | 采样/父上下文语义一致 |
+| `TelemetrySpan.java` | `index.ts` `TelemetrySpan` | ✅ 90% | `addAttribute`/`end` 一致；pi 支持 `addLink`/`event`，Java 未实现 |
+| `SpanOptions.java` | `index.ts` `SpanOptions` | ✅ 95% | 字段对应；Java 用 record |
+| `NoopTelemetryContext.java` | `noop.ts` | ✅ 100% | 空实现逐方法一致 |
+| `OtelTelemetryContext.java`（P6-20） | OTel 适配器 | ✅ ~85% | OpenTelemetry-backed 实现 |
+| — | `memory.ts` + `testing/` | — | 内存后端 + conformance 套件未实现 |
+
+**统计**：pi 6 文件 / 826 行 ↔ pi-java 7 文件 / 444 行，整体对齐度 ~85%（接口对齐，能力面缺 memory/testing）。
+
+---
+
+## 3. pi-java-agent-core ↔ packages/agent
+
+> pi-java 源码位置：`pi-java-agent-core\src\main\java\com\pijava\agent\`（195 文件）；pi：49 文件 / 11,332 行（含 `harness/session/` 存储契约 13 文件）。
 
 ### 3.1 Harness 与循环（`harness/` + `loop/` ↔ `harness/` + `agent-loop.ts`）
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
-| `harness/AgentHarness.java` | `harness/agent-harness.ts`（~900 行） | ✅ 90% | 多车道、`peekAction`/`executeAction`/`runToCompletion`、watch 订阅一致；pi 另有 `before_resume` 恢复语义，Java 简化为 `seedTranscript` |
-| `harness/ActionExecutor.java` | `harness/agent-harness.ts` 内 action 分派 | ✅ 85% | StreamAssistant/AppendEntry/TryFinishRun/ExecuteTool(Batch) 五类 action 对应；pi 的 action 集合更细（含 navigation/steer 注入） |
+| `harness/AgentHarness.java` | `harness/agent-harness.ts`（~900 行） | ✅ 90% | 多车道、`peekAction`/`executeAction`/`runToCompletion`、watch 订阅一致；pi 另有 `before_resume`，Java 简化为 `seedTranscript` |
+| `harness/ActionExecutor.java` | `harness/agent-harness.ts` 内 action 分派 | ✅ 85% | 五类 action 对应；pi 的 action 集合更细（含 navigation/steer 注入） |
 | `harness/Action.java` | `harness/agent-harness.ts` `Action` 联合 | ✅ 85% | 五种 action 一致；pi 还区分 pending write 的 lane |
-| `harness/HarnessUtils.java` | `harness/types.ts` + 工具函数 | ✅ 90% | `newestOwn`/`determineOutcome`/`extractToolCalls` 与 pi 语义一致 |
-| `harness/LaneState.java` | `harness/types.ts` `LaneState` | ✅ 85% | transcript/pendingWrites/queue 三队列一致；Java 保留 Phase 2 简化的部分字段 |
-| `harness/LaneSnapshot.java` + `SnapshotService.java` | `harness/events.ts` 快照 + `harness/types.ts` | ✅ 90% | `watch()` → `WatchHandle<LaneSnapshot>` 对应 pi `watch()`；Java 同步回调 vs pi 异步迭代 |
-| `harness/QueueManager.java` | `harness/agent-harness.ts` steer/followUp/nextRun | ✅ 90% | 三队列 drain 顺序（steer → nextRun → followUp）与 pi 一致 |
-| `harness/DriveMode.java` | `harness/agent-harness.ts` drive modes | ✅ 90% | Manual/Automatic 对应 pi 手动驱动与自动完成 |
+| `harness/HarnessUtils.java` | `harness/types.ts` + 工具函数 | ✅ 90% | `newestOwn`/`determineOutcome`/`extractToolCalls` 一致 |
+| `harness/LaneState.java` | `harness/types.ts` `LaneState` | ✅ 85% | transcript/pendingWrites/queue 三队列一致 |
+| `harness/LaneSnapshot.java` + `SnapshotService.java` | `harness/events.ts` 快照 + `harness/types.ts` | ✅ 90% | `watch()` → `WatchHandle<LaneSnapshot>` 对应 |
+| `harness/QueueManager.java` | `harness/agent-harness.ts` steer/followUp/nextRun | ✅ 90% | 三队列 drain 顺序一致 |
+| `harness/DriveMode.java` | `harness/agent-harness.ts` drive modes | ✅ 90% | Manual/Automatic 对应 |
 | `loop/AgentLoop.java` | `agent-loop.ts` | ✅ 90% | 提交 → 流式 → 工具 → 完成循环一致 |
-| `harness/ToolExecutionPipeline.java` | `harness/agent-harness.ts` 工具执行阶段 | ✅ 80% | before_tool/after_tool 钩子 + 串行/并行执行；pi 的 `ToolExecution` 语义更细 |
-| `harness/StreamFn.java` | `stream-fn.ts` `StreamFunction` | ✅ 95% | 签名对齐（messages/model/options → iterator） |
+| `harness/ToolExecutionPipeline.java` | `harness/agent-harness.ts` 工具执行阶段 | ✅ 80% | before_tool/after_tool 钩子 + 串行/并行执行 |
+| `harness/StreamFn.java` | `stream-fn.ts` `StreamFunction` | ✅ 95% | 签名对齐 |
 
 ### 3.2 Hook 系统（`hook/` ↔ `harness/agent-harness.ts` 11 个 hooks）
 
 | pi hook | pi-java 对应 | 对齐度 | 差异说明 |
 |---------|-------------|--------|---------|
 | `before_run` | `hook/BeforeRunHook.java` + `RunContext` | ✅ 95% | 可改写 originalPrompt |
-| `before_resume` | `hook/BeforeResumeHook.java` + `ResumeContext` | ✅ 85% | Java 由恢复流程触发，语义简化 |
+| `before_resume` | `hook/BeforeResumeHook.java` + `ResumeContext` | ✅ 85% | 语义简化 |
 | `transform_context` | `hook/TransformContextHook.java` | ✅ 95% | 消息列表变换一致 |
-| `before_request` | `hook/BeforeRequestHook.java` + `RequestContext` | ✅ 95% | 注入/改写消息一致 |
+| `before_request` | `hook/BeforeRequestHook.java` | ✅ 95% | 注入/改写消息一致 |
 | `before_payload` | `hook/BeforePayloadHook.java` | ✅ 90% | 载荷校验/改写一致 |
-| `after_response` | `hook/AfterResponseHook.java` + `ResponseContext` | ✅ 95% | usage/stopReason 透传一致 |
-| `before_tool` / `after_tool` | `hook/BeforeToolHook.java` / `AfterToolHook.java` | ✅ 95% | 参数改写、结果改写一致 |
-| `before_compaction` | `hook/BeforeCompactionHook.java` + `CompactionContext`/`CompactionPlan` | ✅ 90% | 可覆盖压缩计划一致 |
-| `before_navigation` | `hook/BeforeNavigationHook.java` + `NavigationContext` | ✅ 85% | 导航钩子已定义，harness 触发路径简化 |
-| `before_run_end` | `hook/BeforeRunEndHook.java` + `RunEndContext` | ✅ 95% | 终态判定一致 |
-| 调度器 | `hook/HookSystem.java` | ✅ 90% | 注册/触发/非致命异常处理一致；pi 支持异步 hook，Java 同步 |
+| `after_response` | `hook/AfterResponseHook.java` | ✅ 95% | usage/stopReason 透传一致 |
+| `before_tool` / `after_tool` | `hook/BeforeToolHook.java` / `AfterToolHook.java` | ✅ 95% | 参数/结果改写一致 |
+| `before_compaction` | `hook/BeforeCompactionHook.java` | ✅ 90% | 可覆盖压缩计划 |
+| `before_navigation` | `hook/BeforeNavigationHook.java` | ✅ 85% | 触发路径简化 |
+| `before_run_end` | `hook/BeforeRunEndHook.java` | ✅ 95% | 终态判定一致 |
+| 调度器 | `hook/HookSystem.java` | ✅ 90% | 注册/触发/非致命异常一致；pi 异步，Java 同步 |
 
 ### 3.3 工具系统（`tool/` ↔ `harness/tools/`）
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
-| `tool/AgentTool.java` | `harness/tools/index.ts` `AgentTool` | ✅ 85% | `prepareArguments`/`executionMode`/`inputSchema` 一致；pi 还含 `ToolUpdateCallback` 增量 |
+| `tool/AgentTool.java` | `harness/tools/index.ts` `AgentTool` | ✅ 85% | `prepareArguments`/`executionMode`/`inputSchema` 一致；pi 还含 `ToolUpdateCallback` |
 | `tool/ToolRegistry.java` | `harness/tools/index.ts` 注册表 | ✅ 90% | 注册/查询/definition 导出一致 |
-| `tool/ToolExecutor.java` | `harness/agent-harness.ts` 工具执行 | ✅ 80% | 串行/并行批量执行一致；pi 的批量并行走 harness 内 |
-| `tool/ToolSetFactory.java` | `harness/tools/index.ts` `createCodingToolDefinitions` | ✅ 85% | coding/readOnly 分组一致（pi 还有 readOnly 工具集定义） |
-| `tool/builtin/BashTool.java` | `harness/tools/bash.ts` | ✅ 85% | 参数、超时、输出截断一致；Windows 下 shell 发现逻辑按 pi `shellPath` 语义实现 |
-| `tool/builtin/WriteTool.java` | `harness/tools/write.ts` | ✅ 90% | 写文件 + 行校验一致 |
-| `tool/builtin/ReadTool.java` | `harness/tools/read.ts` | ✅ 90% | 行范围读取一致 |
-| `tool/builtin/EditTool.java` | `harness/tools/edit.ts` + `edit-diff.ts` | ✅ 70% | pi 有完整 edit-diff + `file-mutation-queue`（原子批量变更），Java 为简化实现 |
-| `tool/builtin/GrepTool.java` / `GlobTool.java` / `LsTool.java` | 无直接对应（pi 用 grep/find 内联） | — | **pi-java 扩展工具**，非 pi 文件对应 |
-| — | `harness/tools/image.ts` | Phase 6 | 图片工具未实现 |
-| — | `harness/tools/file-mutation-queue.ts` | Phase 6 | 批量文件变更队列未实现 |
+| `tool/ToolExecutor.java` | `harness/agent-harness.ts` 工具执行 | ✅ 80% | 串行/并行批量执行一致 |
+| `tool/ToolSetFactory.java` | `harness/tools/index.ts` `createCodingToolDefinitions` | ✅ 85% | coding/readOnly 分组一致 |
+| `tool/builtin/BashTool.java` | `harness/tools/bash.ts` | ✅ 85% | 参数/超时/输出截断一致；shell 发现按 pi `shellPath` 语义 |
+| `tool/builtin/WriteTool.java` / `ReadTool.java` | `harness/tools/write.ts` / `read.ts` | ✅ 90% | 写文件 + 行校验 / 行范围读取一致 |
+| `tool/builtin/EditTool.java` | `harness/tools/edit.ts` + `edit-diff.ts` | ✅ 70% | pi 有完整 edit-diff + `file-mutation-queue`，Java 简化 |
+| `tool/builtin/GrepTool.java` / `GlobTool.java` / `LsTool.java` | 无直接对应 | — | **pi-java 扩展工具** |
 | `tool/ToolContext.java` | `harness/tools/tool-context.ts` | ✅ 90% | cwd/env/shell/fileSystem 注入一致 |
-| `tool/PathUtils.java` | `harness/tools/path-utils.ts` | ✅ 95% | 路径安全校验一致 |
-| `tool/TruncationUtils.java` | `harness/utils/truncate.ts` | ✅ 95% | 输出截断一致 |
-| `tool/DefaultShellExecutor.java` | `harness/env/nodejs.ts` + shell 执行 | ✅ 85% | bash 执行/登录 shell 发现对齐 pi `shellPath` 语义 |
+| `tool/PathUtils.java` / `TruncationUtils.java` | `path-utils.ts` / `truncate.ts` | ✅ 95% | 路径安全校验 / 输出截断一致 |
+| `tool/DefaultShellExecutor.java` | `harness/env/nodejs.ts` + shell 执行 | ✅ 85% | bash 执行/登录 shell 发现对齐 |
+| — | `harness/tools/image.ts` / `file-mutation-queue.ts` | — | 图片工具 / 批量文件变更队列未实现 |
 
 ### 3.4 上下文与压缩（`context/` + `compaction/` ↔ `harness/compaction/` + `utils/`）
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
-| `context/OverflowDetector.java` | `utils/overflow.ts` `isContextOverflow()` | ✅ 95% | 触发条件（error/length/token）一致 |
-| `context/ContextEstimator.java` | `utils/estimate.ts` | ✅ 85% | chars/4 启发式一致；pi 支持模型特定估算 |
-| `compaction/CompactionSettings.java` | `harness/compaction/compaction.ts` `CompactionSettings` | ✅ 95% | enabled/reserveTokens/keepRecentTokens 一致 |
-| `compaction/CompactionService.java` | `harness/compaction/compaction.ts` `compact()` | ✅ 75% | cut point（不切 toolResult）一致；`SummaryGenerator` 目前为截断占位，LLM 摘要生成待 Phase 6 |
-| `compaction/CompactionResult.java` | `harness/compaction/compaction.ts` `CompactionResult` | ✅ 90% | summary/firstKeptEntryId/tokensBefore/usage 字段一致 |
-| — | `harness/compaction/branch-summarization.ts` | Phase 6 | 分支摘要操作未实现 |
+| `context/OverflowDetector.java` | `utils/overflow.ts` `isContextOverflow()` | ✅ 95% | 触发条件一致 |
+| `context/ContextEstimator.java` | `utils/estimate.ts` | ✅ 85% | chars/4 启发式一致 |
+| `compaction/CompactionSettings.java` | `harness/compaction/compaction.ts` | ✅ 95% | enabled/reserveTokens/keepRecentTokens 一致 |
+| `compaction/CompactionService.java` | `harness/compaction/compaction.ts` `compact()` | ✅ 75% | cut point 一致；`SummaryGenerator` 为截断占位，LLM 摘要未实现 |
+| `compaction/CompactionResult.java` | `harness/compaction/compaction.ts` `CompactionResult` | ✅ 90% | 字段一致 |
+| — | `harness/compaction/branch-summarization.ts` | — | 分支摘要未实现 |
 
-### 3.5 技能与提示（`skill/` + `prompt/` ↔ `harness/skills.ts` + `harness/system-prompt.ts`）
-
-| pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
-|---------|-----------------|--------|---------|
-| `skill/SkillManager.java` | `harness/skills.ts` | ✅ 60% | 简化：支持注册/查询，pi 的 Markdown frontmatter 解析与 prompt 模板未完整对齐 |
-| `prompt/SystemPromptBuilder.java` | `harness/system-prompt.ts` | ✅ 80% | 基础/工具/技能拼接一致；pi 支持 prompt 模板渲染（`prompt-templates.ts` 未实现） |
-
-**统计**：pi `agent` 包 49 文件 / 11332 行 ↔ pi-java agent-core 146 文件 / 8640 行，整体对齐度 ~85%。
-
-## 4. Phase 4 — 存储契约与 JSONL/Memory 后端（agent-core ↔ packages/agent/src/harness/session/）
-
-> pi-java 源码位置：`pi-java-agent-core\src\main\java\com\pijava\agent\session\`；pi：`packages/agent/src/harness/session/`（13 文件）。
-
-### 4.1 契约层（`session/` ↔ `session/types.ts` + `session.ts` + `state.ts`）
+### 3.5 存储契约与数据模型（`session/` + `entry/` + `record/` ↔ `harness/session/`）
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
-| `session/SessionStorage.java` | `session/types.ts` `SessionStorage` | ✅ 95% | 方法一一对应；Java 同步化 + `drain()`/`close()`（pi 生命周期表达不同） |
-| `session/SessionRepository.java` | `session/types.ts` `SessionRepo` | ✅ 95% | create/open/list/delete/fork 一致；泛型三参对应 options 类型 |
+| `session/SessionStorage.java` | `session/types.ts` `SessionStorage` | ✅ 95% | 方法一一对应；Java 同步化 + `drain()`/`close()` |
+| `session/SessionRepository.java` | `session/types.ts` `SessionRepo` | ✅ 95% | create/open/list/delete/fork 一致；泛型三参对应 options |
 | `session/Session.java` + `SessionTree.java` | `session/session.ts` `Session` + `SessionTree` | ✅ 90% | view(lane)/findEntry(s)/appendMessage 一致 |
-| `session/SessionState.java` | `session/state.ts` `SessionState` | ✅ 95% | seq 严格递增、id 唯一、parent 链校验、openOperations、createForkMutations 语义一致 |
-| `session/SessionMutation.java` / `LogItem.java` | `session/state.ts` `SessionMutation` / `types.ts` `LogItem` | ✅ 95% | 5 变体对应（entry/record/lane/fact name/fact label） |
-| `session/EntryQuery.java` / `RecordQuery.java` / `BranchBounds.java` / `ForkOptions.java` | `session/types.ts` 对应类型 | ✅ 95% | limit/afterSeq 用可空类型表达 pi 的 `undefined`；`ForkOptions.Position` 为 enum（AT/BEFORE） |
-| `session/SessionError.java` + `SessionErrorCode.java` | `session/types.ts` `SessionError` + 8 个 code | ✅ 100% | 8 个 snake_case 字面量一致 |
-| `session/SessionStats.java` | `session/types.ts` `SessionStats` | ✅ 100% | messageCount/cached/uncached/total/costTotal 一致 |
-| `session/SessionSearch.java` + 选项/命中 | `session/search.ts` | ✅ 90% | 契约一致；JSONL 扫描式搜索后端未实现（按需） |
-
-### 4.2 JSONL 后端（`session/jsonl/` ↔ `session/jsonl/`）
-
-| pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
-|---------|-----------------|--------|---------|
-| `session/jsonl/JsonlCodec.java` | `session/jsonl/codec.ts`（240 行） | ✅ 95% | header/entry/record/lane/fact 编解码 + syntax/schema 错误分类一致；`parentId` 恒输出 null 键保证字节级兼容 |
-| `session/jsonl/JsonlSessionStorage.java` | `session/jsonl/storage.ts` | ✅ 90% | tail 串行写（Java synchronized）、torn-tail 修复、fork 原子发布一致；v3→v4 惰性迁移为 pi-java 扩展 |
-| `session/jsonl/JsonlSessionRepository.java` | `session/jsonl/repo.ts` | ✅ 90% | cwd 编码目录、`<ISO>_<id>.jsonl`、activeCreate 防重、导入一致 |
-| `session/jsonl/JsonlSessionMetadata.java` 等类型 | `session/jsonl/types.ts` | ✅ 95% | sourceFormat/legacyParentSessionPath 字段一致 |
-| `session/jsonl/JsonlSessionRepoFileSystem.java` + `DefaultJsonlFileSystem.java` | `session/jsonl/types.ts` `JsonlSessionRepoFileSystem` | ✅ 90% | 文件系统抽象一致；Java 默认实现用 java.nio |
-| `session/memory/MemorySessionStorage.java` + `MemorySessionRepository.java` | `session/memory.ts` | ✅ 95% | conformance oracle 语义一致（同步化） |
-
-### 4.3 数据模型（`entry/` + `record/` ↔ `session/types.ts` Entry/Record 联合）
-
-| pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
-|---------|-----------------|--------|---------|
-| `entry/Entry.java`（7 子类型） | `session/types.ts` `Entry`（7 类型） | ✅ 95% | 平铺 `id/seq/parentId/timestamp`、`@JsonTypeInfo("type")` 名称一致；`parentId` 根为 null |
-| `record/LaneRecord.java`（9 子类型 + Intent） | `session/types.ts` `LaneRecord`（9 类型） | ✅ 95% | OperationStarted.Intent sealed 联合、判别 enum（Outcome/StepKind/UsageCause/ReplayKind/QueueKind）字面量一致 |
-| `entry/ProvisionedEntry.java` / `record/NewRecord.java` | `session/types.ts` 类型别名 | ✅ 95% | 表达「缺 seq/parentId/timestamp」写入入参；`@JsonValue` 序列化为内层对象 |
+| `session/SessionState.java` | `session/state.ts` `SessionState` | ✅ 95% | seq 严格递增、id 唯一、parent 链校验、openOperations、createForkMutations 一致 |
+| `session/SessionMutation.java` / `LogItem.java` | `session/state.ts` / `types.ts` | ✅ 95% | 5 变体对应（entry/record/lane/fact name/fact label） |
+| `session/EntryQuery.java` 等类型 | `session/types.ts` | ✅ 95% | limit/afterSeq 用可空类型表达 `undefined`；`ForkOptions.Position` 为 enum |
+| `session/SessionError.java` + `SessionErrorCode.java` | `session/types.ts` | ✅ 100% | 8 个 snake_case 字面量一致 |
+| `session/SessionStats.java` | `session/types.ts` `SessionStats` | ✅ 100% | 字段一致 |
+| `session/SessionSearch.java` | `session/search.ts` | ✅ 90% | 契约一致；JSONL 扫描式搜索后端未实现 |
+| `session/jsonl/`（JsonlCodec/Storage/Repository） | `session/jsonl/` | ✅ 90–95% | 编解码/原子发布/导入一致；v3→v4 惰性迁移为 pi-java 扩展 |
+| `session/memory/` | `session/memory.ts` | ✅ 95% | conformance oracle 语义一致 |
+| `entry/Entry.java`（7 子类型） | `session/types.ts` `Entry`（7 类型） | ✅ 95% | 平铺 `id/seq/parentId/timestamp`、`@JsonTypeInfo("type")` 名称一致 |
+| `record/LaneRecord.java`（9 子类型 + Intent） | `session/types.ts` `LaneRecord`（9 类型） | ✅ 95% | 判别 enum 字面量一致 |
+| `entry/ProvisionedEntry.java` / `record/NewRecord.java` | `session/types.ts` 类型别名 | ✅ 95% | 表达「缺 seq/parentId/timestamp」写入入参 |
 | `ai/Usage.java` | pi-ai `types.ts` `Usage` | ✅ 95% | input/output/cacheRead/cacheWrite/totalTokens/cost.total 一致 |
 
----
-
-## 5. Phase 4 — pi-java-session-backend-sqlite ↔ packages/session-backends/sqlite-node
-
-> pi-java 源码位置：`pi-java-session-backend-sqlite\src\main\java\com\pijava\session\sqlite\`；pi：18 文件 / 2112 行。
+### 3.6 技能与提示（`skill/` + `prompt/` ↔ `harness/skills.ts` + `harness/system-prompt.ts`）
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
-| `SqliteSessionRepository.java` | `sqlite/repo.ts`（965 行） | ✅ 85% | create/open/list/delete/fork/repairBranchCache/close 一致；Java 用 ReentrantLock 串行化 + 活跃 storage 集合 |
+| `skill/SkillManager.java` | `harness/skills.ts` | ✅ 60% | 简化：支持注册/查询；Markdown frontmatter 解析与 prompt 模板由 coding-agent skill/ 补全（P6-6） |
+| `prompt/SystemPromptBuilder.java` | `harness/system-prompt.ts` | ✅ 80% | 基础/工具/技能拼接一致；prompt 模板渲染（`prompt-templates.ts`）未实现 |
+
+**统计**：pi 49 文件 / 11,332 行 ↔ pi-java 195 文件 / 13,979 行（含存储契约/JSONL），整体对齐度 ~85%。
+
+---
+
+## 4. pi-java-session-backend-sqlite ↔ packages/session-backends/sqlite-node
+
+> pi-java 源码位置：`pi-java-session-backend-sqlite\src\main\java\com\pijava\session\sqlite\`（28 文件）；pi：18 文件 / 2,112 行。
+
+| pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
+|---------|-----------------|--------|---------|
+| `SqliteSessionRepository.java` | `sqlite/repo.ts`（965 行） | ✅ 85% | create/open/list/delete/fork/repairBranchCache/close 一致；Java 用 ReentrantLock 串行化 |
 | `SqliteSessionStorage.java` | `sqlite/repo.ts` 内 `SqliteSessionStorage` | ✅ 85% | 写事务内 renew lease → 变更 → advance sequence 一致；Java 心跳线程 + leaseError 停写 |
-| `SqliteDatabase.java` | `sqlite/types.ts` `SqliteDatabase` | ✅ 90% | 薄封装（参数绑定/事务/SAVEPOINT 可重入）；pi 用 node:sqlite，Java 用 sqlite-jdbc |
-| `storage/SessionRows.java` | `sqlite/storage/sessions.ts` | ✅ 95% | sessions 行 + LEFT JOIN 最新 name fact 一致 |
-| `storage/EntryRows.java` | `sqlite/storage/entries.ts` | ✅ 95% | payload 剥 type/id/seq/parentId/timestamp 一致 |
-| `storage/RecordRows.java` | `sqlite/storage/records.ts` | ✅ 95% | run_id/op_kind 列投影、open operation 校验一致 |
-| `storage/LaneRows.java` | `sqlite/storage/lanes.ts` | ✅ 95% | leaf 存在性校验、start/finishLaneOperation 一致 |
-| `storage/FactRows.java` | `sqlite/storage/facts.ts` | ✅ 95% | latest-wins 索引提示一致 |
-| `storage/BranchEntryRows.java` + `BranchTipRows.java` | `sqlite/storage/branch-entries.ts` + `branch-tips.ts` | ✅ 90% | cached query（stop/cursor/type/limit）一致；动态 SQL 为固定片段 + 绑定参数 |
+| `SqliteDatabase.java` | `sqlite/types.ts` `SqliteDatabase` | ✅ 90% | 薄封装；pi 用 node:sqlite，Java 用 sqlite-jdbc |
+| `storage/SessionRows.java` / `EntryRows.java` / `RecordRows.java` / `LaneRows.java` / `FactRows.java` | `sqlite/storage/sessions.ts` / `entries.ts` / `records.ts` / `lanes.ts` / `facts.ts` | ✅ 95% | 逐 SQL 对应 |
+| `storage/BranchEntryRows.java` + `BranchTipRows.java` | `sqlite/storage/branch-entries.ts` + `branch-tips.ts` | ✅ 90% | cached query 一致 |
 | `storage/SequenceRows.java` / `StatsRows.java` / `WriterLeaseRows.java` | `sqlite/storage/session-sequences.ts` / `session-stats.ts` / `writer-leases.ts` | ✅ 95% | 逐 SQL 对应 |
-| `WriterLease.java` | `sqlite/storage/writer-leases.ts` | ✅ 95% | acquire（fence+1 抢占）/renew（三重校验）/release 一致 |
-| `BranchCache.java` | `sqlite/branch-cache.ts` | ✅ 90% | 增量维护（新分支/延长/分叉复制）、rebuild、SAVEPOINT 一致 |
-| `SqliteSessionSearch.java` | `sqlite/search-backend.ts` | ✅ 90% | FTS5 trigram + bm25 + cwd 过滤一致；snippet 未生成（pi 同样可为空） |
-| `Migrations.java` + `resources/sql/001_initial.sql` | `sqlite/migrations.ts` + `migrations/001_initial.sql` | ✅ 95% | 11 表 + migrations 表逐列一致 |
+| `WriterLease.java` | `sqlite/storage/writer-leases.ts` | ✅ 95% | acquire/renew/release 一致 |
+| `BranchCache.java` | `sqlite/branch-cache.ts` | ✅ 90% | 增量维护/rebuild/SAVEPOINT 一致 |
+| `SqliteSessionSearch.java` | `sqlite/search-backend.ts` | ✅ 90% | FTS5 trigram + bm25 + cwd 过滤一致 |
+| `Migrations.java` + `resources/sql/001_initial.sql` | `sqlite/migrations.ts` + `migrations/001_initial.sql` | ✅ 95% | 11 表逐列一致 |
 | `SqliteSessionBackendFactory.java` + `META-INF/services` | `sqlite/index.ts` 导出 | ✅ 90% | ServiceLoader 注册等价于 pi 包导出 |
 
-**统计**：pi 18 文件 / 2112 行 ↔ pi-java 22 文件 / 2422 行，整体对齐度 ~90%。
+**统计**：pi 18 文件 / 2,112 行 ↔ pi-java 28 文件 / 3,074 行，整体对齐度 ~90%。
 
 ---
 
-## 6. Phase 3 — pi-java-tui ↔ packages/tui
+## 5. pi-java-tui ↔ packages/tui
 
-> pi-java 源码位置：`pi-java-tui\src\main\java\com\pijava\tui\`（38 文件）；pi：38 文件 / 14317 行。**渲染层采用 TamboUI 封装而非逐文件复刻 pi 终端原语**，按行为对齐。
+> pi-java 源码位置：`pi-java-tui\src\main\java\com\pijava\tui\`（68 文件）；pi：38 文件 / 14,317 行。**渲染层采用 TamboUI 封装而非逐文件复刻 pi 终端原语**，按行为对齐。
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
-| `util/TamboUIAdapter.java` + `util/InlineTuiShell.java` | `tui.ts` + `terminal.ts`（终端抽象/渲染循环） | ✅ 80% | 差量渲染/输入事件经 TamboUI 承载；pi 自研 terminal 原语与 alt-screen 管理 |
-| `app/PiTuiApp.java` + `screen/ChatScreen.java` | `tui-main-screen.ts` | ✅ 80% | 会话主界面、输入提交、流式气泡一致；pi 的 buffered/inline 双模式由 Java InlineTuiShell 简化 |
-| `util/ScrollConfig.java` + `ScrollInputNormalizer.java` | `terminal.ts`（滚轮/触摸事件归一化） | ✅ 90% | 滚动参数与 Codex CLI 对齐（TUI2 scroll_*） |
-| `component/SelectList.java` | `components/select-list.ts` | ✅ 85% | 选择器（会话/模型/设置）一致 |
-| `component/MarkdownRenderer.java` | `components/markdown.ts` | ✅ 70% | 基础 Markdown/Mermaid 渲染；pi 支持 latex/代码高亮，Java 简化 |
-| `component/EditorComponent.java` + `util/EditorElement.java` | `components/editor.ts` + `editor-component.ts` | ✅ 70% | 多行编辑器/undo/kill-ring 等 pi 编辑器能力未完整复刻 |
-| `component/FuzzyMatcher.java` | `fuzzy.ts` | ✅ 85% | 模糊匹配语义一致 |
-| `theme/PiTheme.java` | `terminal-colors.ts` | ✅ 85% | 主题色板一致 |
+| `util/TamboUIAdapter.java` + `util/InlineTuiShell.java` | `tui.ts` + `terminal.ts`（终端抽象/渲染循环） | ✅ 80% | 差量渲染/输入事件经 TamboUI 承载；pi 自研终端原语 |
+| `app/PiTuiApp.java` + `screen/ChatScreen.java` | `tui-main-screen.ts` | ✅ 80% | 会话主界面、输入提交、流式气泡一致 |
+| `util/ScrollConfig.java` + `ScrollInputNormalizer.java` | `terminal.ts` | ✅ 90% | 滚动参数与 Codex CLI 对齐 |
+| `component/SelectList.java` | `components/select-list.ts` | ✅ 85% | 选择器一致 |
+| `component/MarkdownRenderer.java`（P6-22） | `components/markdown.ts` | ✅ 70% | 基础 Markdown/Mermaid 渲染；pi 支持 latex/代码高亮 |
+| `component/EditorComponent.java`（P6-23） | `components/editor.ts` + `editor-component.ts` | ✅ 70% | 多行编辑器/undo/kill-ring 未完整复刻；语法高亮已实现 |
+| `component/FuzzyMatcher.java`（P6-24） | `fuzzy.ts` | ✅ 85% | 模糊匹配 + 富过滤键绑定 |
+| `theme/PiTheme.java`（P6-21） | `terminal-colors.ts` | ✅ 85% | 主题色板 + 自定义主题文件加载 |
 | `util/ScrollbackTranscript.java` | `utils.ts`（滚动缓冲） | ✅ 80% | 滚动历史一致 |
 | `app/PiTuiEntryPoint.java` | `index.ts` | ✅ 85% | 入口接线一致 |
-| 组件族（`component/` 其余） | `components/`（box/stack/spacer/text/loader 等） | ✅ 70% | 由 TamboUI 组件等价承载，非逐文件 |
+| `screen/SessionListScreen.java` + 会话 diff 渲染（P6-26） | `components/` 相关 | ✅ 70% | 会话切换/差异视图 |
+| 组件族（`component/` 其余） | `components/` | ✅ 70% | 由 TamboUI 组件等价承载 |
 
-**统计**：文件数 38↔38，整体对齐度 ~75%（行为对齐，渲染技术栈不同）。关键差异详解：pi 自研终端渲染/组件库（~1.4 万行），pi-java 选择 TamboUI 封装（~4400 行），功能等价但实现面显著更薄。
+**统计**：pi 38 文件 / 14,317 行 ↔ pi-java 68 文件 / 9,029 行，整体对齐度 ~75%（行为对齐，渲染技术栈不同——pi 自研终端渲染 ~1.4 万行，pi-java 选 TamboUI 封装）。
 
 ---
 
-## 7. Phase 3/4 — pi-java-coding-agent ↔ packages/coding-agent
+## 6. pi-java-coding-agent ↔ packages/coding-agent
 
-> pi-java 源码位置：`pi-java-coding-agent\src\main\java\com\pijava\coding\agent\`（50 文件）；pi：199 文件 / 52418 行（含 Bun 环境、extensions、RPC/client/server 等 Phase 6 范围）。**包级汇总 + 关键文件**。
+> pi-java 源码位置：`pi-java-coding-agent\src\main\java\com\pijava\coding\agent\`（123 文件）；pi：199 文件 / 52,418 行。
+
+**对齐度 65% 的解读**：pi 的 coding-agent 是**单体**（52K 行），把交互模式（`modes/interactive/` 47 文件 / 17K 行）、工具实现（`core/tools/` 15 文件 / 4K 行）、扩展运行时（`core/extensions/` 5 文件 / 4K 行）全打包在内。pi-java 按模块拆分：交互 TUI 在 `pi-java-tui`（TamboUI 封装）、工具在 `pi-java-agent-core`、扩展在 coding-agent 的 `extension/`。**若按全量能力面合计（coding-agent + tui + agent-core），对齐度显著高于 65%**；单看 coding-agent 模块 65% 主要反映三块差距：① `modes/interactive/` 未逐文件移植（渲染层走 TamboUI）；② pi 独有能力缺失（prompt-templates、auto-format、resource-loader、process-manager、auto-update、image 工具、RPC client、更多 slash 命令、utils 工具集）；③ pi 的 `core/` 会话逻辑（agent-session 单文件 ~10K 行）在 pi-java 拆到 agent-core + coding-agent 两层。
 
 | pi-java 分组 | pi 对应 | 对齐度 | 差异说明 |
 |-------------|---------|--------|---------|
-| `Main.java` + `cli/ArgsParser.java` + `cli/Args.java` | `cli.ts` + `cli/args.ts` | ✅ 85% | ~40 个参数 + 子命令（auth/config/package/list-models）对齐；pi 另有 install/remove/update、server/client 子命令（Phase 6） |
+| `Main.java` + `cli/ArgsParser.java` + `cli/Args.java` | `cli.ts` + `cli/args.ts` | ✅ 85% | ~40 参数 + 子命令（auth/config/package/list-models）对齐；pi 另有 install/remove/update、server/client 子命令 |
 | `modes/PrintMode.java` | `modes/print-mode.ts` | ✅ 90% | `-p "prompt"` 一次性输出一致 |
-| `modes/InteractiveMode.java` | `modes/index.ts` + `cli/startup-ui.ts` | ✅ 80% | 交互循环 + 启动 UI 一致；pi 的 RPC 模式（`modes/rpc/`）未实现（Phase 6） |
-| `core/AgentSession.java` + `SessionRunner.java` + `SessionPersistence.java` | `server/create-harness.ts` + `core/` | ✅ 80% | 会话组装/驱动/持久化落盘一致；pi 的 server 化会话（remote-session）未实现 |
+| `modes/InteractiveMode.java` | `modes/index.ts` + `cli/startup-ui.ts` + `modes/interactive/`（17K 行） | ✅ 75% | 交互循环 + 启动 UI 一致；pi 的 interactive 全栈（screen/bindings/commands）由 tui 模块经 TamboUI 承载 |
+| `core/AgentSession.java` + `SessionRunner.java` + `SessionPersistence.java` | `server/create-harness.ts` + `core/agent-session.ts`（~10K 行） | ✅ 80% | 会话组装/驱动/持久化一致；pi 的 server 化会话/重试/自动格式化等子能力未全量移植 |
 | `core/SessionServices.java` | `core/`（DI 容器） | ✅ 80% | settings/trust/providers/models/tools/slash/sessionRepository 七件套一致 |
-| `core/SettingsManager.java` + `Settings.java` + 存储 | `config.ts` + `core/settings` | ✅ 85% | 全局/项目分层合并、JSON 边界一致 |
+| `core/SettingsManager.java` + `Settings.java` | `config.ts` + `core/settings` | ✅ 85% | 全局/项目分层合并、JSON 边界一致 |
 | `core/TrustManager.java` | `cli/project-trust.ts` | ✅ 85% | `~/.pi-java/trust/` 标记文件落盘一致 |
-| `core/slash/`（CommandRegistry + 5 个 builtin） | `core/slash-commands` | ✅ 85% | 23 个内置命令覆盖（name/session/fork/clone/tree/new/resume/export/import/trust 等）；pi 的 HTML 导出由 Phase 6 承接 |
+| `core/slash/`（CommandRegistry + builtin） | `core/slash-commands` | ✅ 85% | 23 个内置命令覆盖；P6-13 `/share`、P6-27 `/create-skill`、P6-12 `/export` 已补 |
 | `core/KeybindingsManager.java` | `core/keybindings.ts` | ✅ 90% | 键位定义/覆盖一致 |
 | `core/DefaultProviders.java` | `core/model-resolver.ts` | ✅ 85% | provider/model 解析一致 |
-| `core/InMemorySessionRepository.java`（测试用） | — | — | Phase 4 后仅测试路径使用；生产走持久化仓库 |
-| `subcommand/`（auth/config/package） | `cli/auth-command.ts` 等 | ✅ 80% | 子命令对应；pi 还有 `cli/` 下更多工具（session-picker/file-processor/initial-message 等） |
+| `rpc/`（RpcCommand/RpcDispatcher/RpcMode/JsonlReader/JsonlWriter，P6-5） | `modes/rpc/`（4 文件 / 1,765 行） | ✅ ~90% | 32 命令对齐 pi 30 命令；LF-only 分帧、事件剥 partial、auto-compaction/bash/retry 全实现 |
+| `mode/JsonEventMapper.java` | `modes/json-event.ts` | ✅ ~95% | 剥 `partial` + 全事件线格式 |
+| `skill/`（MarkdownSkillLoader/SkillDiscovery/IgnoreFilter，P6-6） | `harness/skills.ts` | ✅ ~85% | SKILL.md 目录规则、前言校验、baseDir、JGit ignore 三态 |
+| `extension/`（ExtensionManager/PiExtension，P6-7） | `extensions/`（6 文件 / 1,414 行） | ✅ ~80% | ServiceLoader + loadJar + `--no-extensions` |
+| `export/HtmlExporter.java`（P6-12） | `core/export-html/`（3 文件 / 746 行） | ✅ ~85% | HTML 会话导出渲染器 |
+| `subcommand/`（auth/config/package，P6-14/15/16） | `cli/`（auth/config/package-command） | ✅ ~80% | 子命令对应；pi 还有 session-picker/file-processor/initial-message |
+| `spi/`（Skill SPI 等） | `core/` 对应 | ✅ ~80% | 服务发现 SPI |
 
-**pi 有、Phase 1-4 没有的（Phase 6）**：`extensions/`（插件）、`client/`（remote-session/transcript）、`server/`（http-dispatcher/management-http）、`modes/rpc/`（jsonl RPC）、`bun/`（Bun CLI/restore-sandbox）、图片处理工具集（image-*）、HTML 导出（`utils/html.ts`）、自动更新/版本检查。
+**pi 有、pi-java 未实现的**：`bun/`（Bun CLI，pi-java 为 JVM 不适用）、`client/` + `server/`（远程会话控制面，pi-java 在独立模块见 §8/§9）、`utils/`（33 文件 / 3.5K 行工具集——prompt-templates、auto-format、resource-loader、process-manager、auto-update 等）、image 工具集、更多 slash 命令。
 
-**统计**：pi 199 文件 / 52418 行 ↔ pi-java 50 文件 / 3585 行，整体对齐度 ~65%（核心用户路径对齐，外围能力面留待 Phase 6）。
+**统计**：pi 199 文件 / 52,418 行 ↔ pi-java 123 文件 / 11,399 行，模块级对齐度 ~65%（跨 tui + agent-core 合计后功能面更高）。
 
 ---
 
-## 8. Phase 6 — 生态扩展（已完成 2026-08-22）
+## 7. pi-java-protocol ↔ packages/protocol
 
-> 按 `11-phase6-ecosystem-design.md` 六条工作流 + P6-28 落地。对齐度判据同 §0。
-
-### 8.1 Provider 生态（P6-1）— `provider/` + `protocol/` ↔ `providers/` + `api/`
+> pi-java 源码位置：`pi-java-protocol\src\main\java\com\pijava\protocol\`（26 文件）；pi：8 文件 / 1,138 行。Phase 6（P6-9a）落地。
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
-|--------|-----------------|--------|----------|
-| `provider/ConfigurableProvider.java` | `providers/` 配置驱动模式 | ✅ ~90% | 三能力分派（Chat/Image/Embedding）+ 协议路由 |
-| `provider/builtin/*.java`（17 个） | `providers/all.ts` builtinProviders()（39 chat + 1 image） | ⚠️ 部分 | pi-java 聚焦中国大陆 16 chat + `openrouter-images` 1 image，非全量 39 |
-| `provider/ProviderRegistry.discoverFromServiceLoader()` | —（Node 无等价） | ✅ 100% | 第三方 JAR 经 ServiceLoader 注册 |
-| `protocol/OpenAIResponsesApi.java` | `api/openai-responses.ts` | ✅ ~90% | Responses 事件映射逐行对齐 |
-| `protocol/AzureOpenAIResponsesApi.java` | `api/azure-openai-responses.ts` | ✅ ~85% | SDK 原生 Azure 支持（无需 com.azure） |
-| `protocol/PiMessagesApi.java` | `api/pi-messages.ts` | ✅ ~90% | 事件与 `StreamEvent` 近乎 1:1 |
-| `api/AnthropicMessagesApi.java`（P6-1a 增强） | `api/anthropic-messages.ts` | ✅ ~90% | 补 `apiKeyEnvVar` + `baseUrl` 覆盖 |
+|---------|-----------------|--------|---------|
+| `CborCodec.java` | `cbor/`（encoder/decoder/options） | ✅ ~85% | `ClientMessage`/`ServerMessage`/`Command`/`CommandResult`/`ServerEvent` 全 sealed 层次 round-trip |
+| `FrameCodec.java` + `FrameDecoder.java` | `framing.ts` + `codec.ts` | ✅ ~90% | 4 字节大端长度前缀 + 增量分帧（16MB 上限、header 切断、残留帧） |
+| 信封/命令/结果/事件类型 | `schemas.ts` | ✅ ~85% | hello/request/response/event 信封、命令集、快照/转录模型 |
 
-### 8.2 evals（P6-2/3/4）— `pi-java-evals` ↔ `evals/`
+**统计**：pi 8 文件 / 1,138 行 ↔ pi-java 26 文件 / 962 行，整体对齐度 ~85%。
+
+---
+
+## 8. pi-java-client ↔ packages/client
+
+> pi-java 源码位置：`pi-java-client\src\main\java\com\pijava\client\`（7 文件）；pi：10 文件 / 1,094 行。Phase 6（P6-9c）落地。
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
-|--------|-----------------|--------|----------|
-| `evals/conformance/*` | `evals/*.ts` | ✅ ~80% | Provider/Catalog/API conformance 套件 |
+|---------|-----------------|--------|---------|
+| `PiClient.java` + `SessionHandle.java` | `client/` | ✅ ~80% | 远程会话客户端（list/create/attach/prompt/abort/detach） |
+| 并发/锁语义 | `client/` | ✅ ~80% | 并发 attach 冲突由 server 端 `SESSION_LOCKED` 承载 |
+
+**统计**：pi 10 文件 / 1,094 行 ↔ pi-java 7 文件 / 374 行，整体对齐度 ~80%。
+
+---
+
+## 9. pi-java-server ↔ packages/server
+
+> pi-java 源码位置：`pi-java-server\src\main\java\com\pijava\server\`（14 文件）；pi：17 文件 / 2,110 行。Phase 6（P6-9b）落地。
+
+| pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
+|---------|-----------------|--------|---------|
+| `PiServer.java` + `PiSessionRuntime.java` | `server/` | ✅ ~85% | 会话控制面 + 独占租约 + 快照订阅；冲突操作直接拒绝不排队 |
+| Unix socket 监听 | `server/` | ✅ ~85% | 本地 AF_UNIX（含 Windows）集成 |
+
+**统计**：pi 17 文件 / 2,110 行 ↔ pi-java 14 文件 / 775 行，整体对齐度 ~85%。
+
+---
+
+## 10. pi-java-evals ↔ packages/evals
+
+> pi-java 源码位置：`pi-java-evals\src\main\java\com\pijava\evals\`（19 文件）；pi：8 文件 / 1,179 行。Phase 6（P6-2/3/4）落地。
+
+| pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
+|---------|-----------------|--------|---------|
+| `evals/conformance/*` | `evals/*.ts` | ✅ ~80% | Provider/Catalog/API conformance 套件（C1–C8） |
 | `evals/smoke/*` | — | pi-java 独有 | 每 provider 1 真实请求，需凭据默认跳过 |
 | `evals/extension/*` | `evals/*` | ✅ ~80% | extension 生命周期测试 |
 
-### 8.3 RPC 模式（P6-5）— `coding-agent/rpc/` + `mode/` ↔ `modes/rpc/` + `modes/json-event.ts`
-
-| pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
-|--------|-----------------|--------|----------|
-| `rpc/RpcCommand.java`（32 命令） | `modes/rpc/rpc-types.ts`（30 命令） | ✅ ~95% | 三批全实现（含 `set_auto_compaction`/bash/retry） |
-| `rpc/RpcDispatcher.java` | `modes/rpc/rpc-mode.ts` | ✅ ~90% | 事件订阅驱动响应 |
-| `rpc/JsonlReader.java` + `JsonlWriter.java` | `modes/jsonl.ts` | ✅ 100% | LF-only 分帧（U+2028/29 不误切） |
-| `rpc/RpcMode.java` | `modes/rpc/rpc-mode.ts` | ✅ ~90% | stdin 常驻循环 |
-| `mode/JsonEventMapper.java` | `modes/json-event.ts` | ✅ ~95% | 剥 `partial` + 全事件线格式 |
-
-### 8.4 Skills / Extensions（P6-6/7）— `coding-agent/skill/` + `extension/` ↔ `harness/skills.ts` + `extensions/`
-
-| pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
-|--------|-----------------|--------|----------|
-| `skill/MarkdownSkillLoader.java` + `SkillDiscovery.java` | `harness/skills.ts` | ✅ ~85% | SKILL.md 目录规则、前言校验、baseDir |
-| `skill/IgnoreFilter.java` | `ignore` npm 包语义 | ✅ ~90% | JGit IgnoreNode 三态上溯 |
-| `extension/ExtensionManager.java` + `PiExtension` SPI | `extensions/*` | ✅ ~80% | ServiceLoader + loadJar |
-| `skill/SkillGenerator.java`（P6-27） | AI 生成 skills | ✅ ~80% | `/create-skill` |
-
-### 8.5 模型目录（P6-8/10）— `catalog/` ↔ `models-store.ts` + `model-catalog.ts`
-
-| pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
-|--------|-----------------|--------|----------|
-| `catalog/ModelsStore.java` + `FileModelsStore.java` | `models-store.ts` | ✅ ~85% | 读写删，补 Phase 1 缺口 |
-| `catalog/RemoteCatalog.java` | 远程目录（ETag 条件刷新） | ✅ ~90% | ETag 含引号原样透传 |
-| `catalog/CatalogPublisher.java`（P6-10） | `pi-ai catalog` | ✅ ~80% | 发布工具 |
-
-### 8.6 CBOR 远程会话（P6-9）— protocol / client / server 模块 ↔ `protocol/` + `client/` + `server/`
-
-| pi-java 模块 | pi 包 | 对齐度 | 差异说明 |
-|-------------|-------|--------|----------|
-| `pi-java-protocol`（CborCodec/FrameCodec，26 文件） | `packages/protocol`（8 文件 / 1138 行） | ✅ ~85% | 4 字节大端长度前缀 + CBOR 信封；增量分帧 |
-| `pi-java-client`（PiClient/SessionHandle，7 文件） | `packages/client`（10 文件 / 1094 行） | ✅ ~80% | 远程会话客户端 |
-| `pi-java-server`（PiServer/PiSessionRuntime，14 文件） | `packages/server`（17 文件 / 2110 行） | ✅ ~85% | 会话控制面 + 独占租约 + 快照订阅（`SESSION_LOCKED`） |
-
-### 8.7 图片与嵌入（P6-28）— `provider/builtin/OpenRouterImagesProvider` + `protocol/OpenRouterImagesApi` ↔ `providers/openrouter-images.ts` + `api/openrouter-images.ts` + `images-models.ts`
-
-| pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
-|--------|-----------------|--------|----------|
-| `OpenRouterImagesProvider.java` | `providers/openrouter-images.ts` | ✅ ~90% | 独立 images provider，8 个模型 |
-| `OpenRouterImagesApi.java` | `api/openrouter-images.ts` | ✅ ~85% | chat-with-modalities；pi-java 用 openai-java SDK（pi 用 openai npm SDK） |
-| `api/ImageApi`/`ImageResult` 等 | `images-models.ts`（ImagesFunction/AssistantImages） | ✅ ~95% | 接口/字段逐一对应 |
-| `api/EmbeddingApi` + `protocol/OpenAIEmbeddingApi.java` | —（pi 无 embedding） | pi-java 独有 | OpenAI `/v1/embeddings` |
-
-### 8.8 杂项（P6-12..27）
-
-HTML 导出（`export/HtmlExporter`）、`/share`、`config`/`package`/`auth` 子命令、OAuth（`auth/OAuthFlow`）、OpenTelemetry（`pi-java-telemetry`）、TUI 富功能（主题/表格/语法高亮/会话 diff）等 —— 多为 pi-java 独有能力或 TamboUI 封装，无逐文件对照，此处不展开。
+**统计**：pi 8 文件 / 1,179 行 ↔ pi-java 19 文件 / 1,183 行，整体对齐度 ~80%。
 
 ---
 
-## 9. 统计汇总
+## 11. 统计汇总
 
 | 模块 | pi 文件 | pi 行数 | pi-java 文件 | pi-java 行数 | 对齐度 |
 |------|--------|---------|-------------|-------------|--------|
@@ -434,15 +377,19 @@ HTML 导出（`export/HtmlExporter`）、`/share`、`config`/`package`/`auth` �
 | evals | 8 | 1,179 | 19 | 1,183 | ~80% |
 | **总计（已实现）** | **527** | **~107,100** | **623** | **52,569** | — |
 
-## 10. 已知差异清单（按模块）
+> **行数对比说明**：pi-java 总行数显著低于 pi（52K vs 107K），但差距主要来自三处**结构性差异**而非功能缺失：① pi 的 `modes/interactive/`（17K 行）与 `core/`（28K 行）为单体终端全栈，pi-java 用 TamboUI 库封装（渲染层不逐行复刻）；② pi 使用 Node/Bun 生态（utils/ 3.5K 行、bun/），pi-java 用 JDK 标准库替代；③ pi 含 auto-update/prompt-templates/constrained-sampling 等 pi-java 明确不做的外围能力。核心用户路径（对话/工具/会话/持久化/RPC/远程会话/图片嵌入）均已对齐。
 
-> 2026-08-22 更新：Phase 6 已完成，原「Phase 6」计划项已闭环，下表仅列**仍存的差异**。
+## 12. 已知差异清单（按模块）
+
+> 2026-08-22 更新：Phase 6 已完成，下表仅列**仍存的差异**。
 
 | 模块 | 未对齐项 | 计划 |
 |------|---------|------|
-| ai | 剩余 pi 供应商适配器（Bedrock/Vertex/OpenRouter chat 等，pi-java 聚焦中国大陆 16 个）、OAuth 9 流程（pi-java 有通用 PKCE，未逐 provider 接入）、constrained sampling | 按需 / 渐进 |
-| agent-core | harness 富记录字段逐步填充（resultEntryId/effectiveArgs/usage.cause）、branch-summarization、file-mutation-queue/edit-diff 完整语义、image 工具 | 渐进 |
-| tui | 渲染层为 TamboUI 封装（非逐文件）、编辑器/undo/kill-ring、Markdown latex | 渐进 |
-| coding-agent | Bun 运行时（pi-java 为 JVM）、自动更新、TUI 图片预览 | 按需 / 不适用 |
+| ai | 剩余 pi 供应商适配器（Bedrock/Vertex/OpenRouter chat 等，pi-java 聚焦中国大陆 16 个）、OAuth 9 流程（pi-java 有通用 PKCE，未逐 provider 接入）、constrained sampling、ModelInfo 富字段 | 按需 / 渐进 |
+| telemetry | memory 后端、conformance 套件 | 按需 |
+| agent-core | harness 富记录字段逐步填充（resultEntryId/effectiveArgs/usage.cause）、branch-summarization、file-mutation-queue/edit-diff 完整语义、image 工具、LLM 压缩摘要、prompt-templates | 渐进 |
 | session-backend-sqlite | 多进程读并发压测、JSONL 扫描式搜索（按需） | 后续 |
+| tui | 渲染层为 TamboUI 封装（非逐文件）、编辑器/undo/kill-ring、Markdown latex | 渐进 |
+| coding-agent | Bun 运行时（pi-java 为 JVM）、自动更新、TUI 图片预览、interactive 模式未逐文件移植 | 按需 / 不适用 |
 | protocol / client / server | `session`/`process` 细粒度控制（pi 有更多命令），已实现核心控制面 | 渐进 |
+| evals | 对照 pi evals 的完整测试矩阵 | 渐进 |
