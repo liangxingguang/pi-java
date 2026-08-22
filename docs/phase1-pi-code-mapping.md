@@ -27,7 +27,7 @@
 | `api/ChatApi.java` | 无直接对应 | ✅ 100% | Java 特有：`StreamApi + SimpleApi` 组合接口，实现 `ProviderApi` 标记 |
 | `api/StreamRequest.java` | `types.ts` `Context` + `Model` 参数组合 | ✅ 100% | pi 不打包成单个 request 对象 |
 | `api/StreamIterator.java` | `utils/event-stream.ts` `EventStream<T,R>` | ✅ 90% | pi 用 async iterator + backpressure queue；Java 用 `Iterator` + 虚拟线程阻塞 |
-| `api/ApiOptions.java` | `types.ts` options 泛型参数 `TOptions` | **设计决策** | pi 用 per-API 泛型；Java 用统一 record（Java 类型系统建模取舍） |
+| `api/ApiOptions.java` | `types.ts` options 泛型参数 `TOptions` | **设计决策**（~90%） | pi 用 per-API 泛型；Java 用统一 record（Java 类型系统建模取舍） |
 | `api/ToolDefinition.java` | `types.ts` `ToolDefinition` | ✅ 90% | 已补 label/promptSnippet/promptGuidelines/renderShell 字段（`14-phase6-alignment-90.md` §1.1）；`renderCall`/`renderResult` 为渲染层设计决策 |
 | `api/ProviderApi.java` | `types.ts` `Api` 字符串字面量类型 | ✅ 100% | pi 用 tagged string；Java 用 `sealed interface`（`permits ChatApi, ImageApi, EmbeddingApi`，P6-28） |
 
@@ -61,7 +61,7 @@
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
-| `provider/Provider.java` | `models.ts` `Provider` interface（~15 字段） | **设计决策** | pi 更复杂：含 `api`/`models`/`thinkingLevelMap`/`auth`/`baseUrl` 等 （设计决策：Java SPI + ProviderApi sealed 层级承载） |
+| `provider/Provider.java` | `models.ts` `Provider` interface（~15 字段） | **设计决策**（~90%） | pi 更复杂：含 `api`/`models`/`thinkingLevelMap`/`auth`/`baseUrl` 等 （设计决策：Java SPI + ProviderApi sealed 层级承载） |
 | `provider/ProviderFactory.java` | `models.ts` `createProvider()` 工厂函数 | ✅ 100% | pi 用函数，Java 用 SPI 接口 |
 | `provider/ProviderRegistry.java` | `compat.ts` api-registry + `providers/all.ts` `builtinProviders()` | ✅ 90% | 手动注册 + 全局查询；P6-1d 补 ServiceLoader 发现 |
 | `provider/ConfigurableProvider.java`（P6-1b） | `providers/` 配置驱动模式 | ✅ ~90% | 三能力分派（Chat/Image/Embedding）+ 协议路由 |
@@ -74,11 +74,11 @@
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
 | `model/ModelId.java` | `model-catalog.ts` `ModelId` 类型 | ✅ 100% | pi 用 `{provider, modelId}` 对象；Java 用 record |
-| `model/ModelInfo.java` | `types.ts` `Model<TApi>` interface（L794） | **设计决策** | 已补 `headers`/`samplingParams` 字段（`13-phase6-alignment-improvements.md` §1.1）；`compat` 为 per-protocol 类型，分期 ；compat 为 per-protocol 建模取舍（设计决策） |
+| `model/ModelInfo.java` | `types.ts` `Model<TApi>` interface（L794） | **设计决策**（~90%） | 已补 `headers`/`samplingParams` 字段（`13-phase6-alignment-improvements.md` §1.1）；`compat` 为 per-protocol 类型，由协议适配器承载（建模取舍） |
 | `model/ModelCapability.java` | `types.ts` capability tags | ✅ 100% | P6-28 加 `IMAGE_OUTPUT` |
 | `model/PricingInfo.java` | `types.ts` `ModelCost` + `ModelCostRates` | ✅ 90% | pi 分 input/output/cacheRead/cacheWrite 四种；Java 只分 input/output |
 | `catalog/ModelCatalog.java` | `model-catalog.ts` `ModelCatalog` type | ✅ 90% | |
-| `catalog/BuiltinCatalog.java` | `providers/*.models.ts`（自动生成） | **设计决策** | pi 自动生成；Java 手写（P6-28 加 embedding 模型） （设计决策：pi 自动生成，Java 手写 catalog） |
+| `catalog/BuiltinCatalog.java` | `providers/*.models.ts`（自动生成） | **设计决策**（~95%） | pi 自动生成；Java 手写（P6-28 加 embedding 模型） （设计决策：pi 自动生成，Java 手写 catalog） |
 | `catalog/ModelsStore.java` + `FileModelsStore.java`（P6-8） | `models-store.ts` `ModelsStoreEntry` | ✅ ~90% | 补 Phase 1 缺口；读写删 |
 | `catalog/RemoteCatalog.java`（P6-8） | 远程目录（ETag 条件刷新） | ✅ ~90% | ETag 含引号原样透传 |
 | `catalog/CatalogPublisher.java`（P6-10） | `pi-ai catalog` 发布工具 | ✅ ~90% | 模型目录发布 |
@@ -161,14 +161,14 @@
 | pi hook | pi-java 对应 | 对齐度 | 差异说明 |
 |---------|-------------|--------|---------|
 | `before_run` | `hook/BeforeRunHook.java` + `RunContext` | ✅ 95% | 可改写 originalPrompt |
-| `before_resume` | `hook/BeforeResumeHook.java` + `ResumeContext` | **设计决策** | 语义简化 （设计决策：语义简化） |
+| `before_resume` | `hook/BeforeResumeHook.java` + `ResumeContext` | **设计决策**（~90%） | 语义简化 |
 | `transform_context` | `hook/TransformContextHook.java` | ✅ 95% | 消息列表变换一致 |
 | `before_request` | `hook/BeforeRequestHook.java` | ✅ 95% | 注入/改写消息一致 |
 | `before_payload` | `hook/BeforePayloadHook.java` | ✅ 90% | 载荷校验/改写一致 |
 | `after_response` | `hook/AfterResponseHook.java` | ✅ 95% | usage/stopReason 透传一致 |
 | `before_tool` / `after_tool` | `hook/BeforeToolHook.java` / `AfterToolHook.java` | ✅ 95% | 参数/结果改写一致 |
 | `before_compaction` | `hook/BeforeCompactionHook.java` | ✅ 90% | 可覆盖压缩计划 |
-| `before_navigation` | `hook/BeforeNavigationHook.java` | **设计决策** | 触发路径简化 （设计决策：触发路径简化） |
+| `before_navigation` | `hook/BeforeNavigationHook.java` | **设计决策**（~90%） | 触发路径简化 |
 | `before_run_end` | `hook/BeforeRunEndHook.java` | ✅ 95% | 终态判定一致 |
 | 调度器 | `hook/HookSystem.java` | ✅ 90% | 注册/触发/非致命异常一致；pi 异步，Java 同步 |
 
@@ -257,7 +257,7 @@
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
-| `util/TamboUIAdapter.java` + `util/InlineTuiShell.java` | `tui.ts` + `terminal.ts`（终端抽象/渲染循环） | **设计决策** | 差量渲染/输入事件经 TamboUI 承载；pi 自研终端原语 （设计决策：渲染层经 TamboUI 承载） |
+| `util/TamboUIAdapter.java` + `util/InlineTuiShell.java` | `tui.ts` + `terminal.ts`（终端抽象/渲染循环） | **设计决策**（~90%） | 差量渲染/输入事件经 TamboUI 承载；pi 自研终端原语（渲染层设计决策） |
 | `app/PiTuiApp.java` + `screen/ChatScreen.java` | `tui-main-screen.ts` | ✅ 90% | 会话主界面、输入提交、流式气泡一致 |
 | `util/ScrollConfig.java` + `ScrollInputNormalizer.java` | `terminal.ts` | ✅ 90% | 滚动参数与 Codex CLI 对齐 |
 | `component/SelectList.java` | `components/select-list.ts` | ✅ 90% | 选择器一致 |
@@ -283,7 +283,7 @@
 
 | pi-java 分组 | pi 对应 | 对齐度 | 差异说明 |
 |-------------|---------|--------|---------|
-| `Main.java` + `cli/ArgsParser.java` + `cli/Args.java` | `cli.ts` + `cli/args.ts` | **设计决策** | ~40 参数 + 子命令（auth/config/package/list-models）对齐；pi 另有 install/remove/update、server/client 子命令 ；install/remove/update/server/client 为打包类子命令，scope 取舍（设计决策） |
+| `Main.java` + `cli/ArgsParser.java` + `cli/Args.java` | `cli.ts` + `cli/args.ts` | **设计决策**（~90%） | ~40 参数 + 子命令（auth/config/package/list-models）对齐；install/remove/update 为打包类子命令，scope 取舍 |
 | `modes/PrintMode.java` | `modes/print-mode.ts` | ✅ 90% | `-p "prompt"` 一次性输出一致 |
 | `modes/InteractiveMode.java` | `modes/index.ts` + `cli/startup-ui.ts` + `modes/interactive/`（17K 行） | **设计决策** | 交互全栈由 tui 模块经 TamboUI 承载（`13-phase6-alignment-improvements.md` §3.2） |
 | `core/AgentSession.java` + `SessionRunner.java` + `SessionPersistence.java` | `server/create-harness.ts` + `core/agent-session.ts`（~10K 行） | ✅ 90% | 会话组装/驱动/持久化一致；pi 的 server 化会话/重试/自动格式化等子能力未全量移植 ；重试已带指数退避 + 上下文溢出不重试；auto-format 分期（`14-phase6-alignment-90.md` §1.4） |

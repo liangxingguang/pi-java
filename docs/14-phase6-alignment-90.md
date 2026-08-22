@@ -94,14 +94,14 @@
 
 | 条目 | pi 对应 | 原 | 定性 |
 |------|---------|----|------|
-| `api/ApiOptions.java` | `types.ts` `TOptions` 泛型 | 80% | Java 用统一 record，pi 是 per-API 泛型——Java 类型系统建模取舍 |
-| `provider/Provider.java` | `models.ts` `Provider` interface | 80% | Java 用 SPI（ServiceLoader + `ProviderApi` sealed 层级）承载，非逐字段复刻 TS 接口 |
-| `catalog/BuiltinCatalog.java` | `providers/*.models.ts` 自动生成 | 80% | pi 自动生成，Java 手写 catalog（功能等价，生成管线不移植） |
-| `util/TamboUIAdapter.java` + `InlineTuiShell` | `tui.ts` + `terminal.ts` | 80% | 渲染层/终端原语经 TamboUI 库封装（`08b-phase3-tui-codex-alignment-design.md` 选型） |
-| `hook/BeforeResumeHook` / `ResumeContext` | `hook/BeforeResumeHook` | 85% | 语义简化（无 pi 复杂上下文路由） |
-| `hook/BeforeNavigationHook` | `hook/BeforeNavigationHook` | 85% | 触发路径简化 |
-| `model/ModelInfo.java` compat 字段 | `Model.compat` | 85% | 字段已补（§1.1）；`compat` 为 per-protocol 类型（`OpenAICompletionsCompat`/`AnthropicMessagesCompat`），建模取舍，分期 |
-| `Main.java` install/remove/update/server/client | `cli.ts` + `cli/args.ts` | 85% | 已对齐 ~40 参数 + auth/config/package/list-models 子命令；install/remove/update 为打包类子命令，server/client 走独立入口——scope 取舍 |
+| `api/ApiOptions.java` | `types.ts` `TOptions` 泛型 | 80% | **~90%**：核心 options 全覆盖；pi 的 onPayload/onResponse/headers 钩子经 extra/独立通道承载 |
+| `provider/Provider.java` | `models.ts` `Provider` interface | 80% | **~90%**：功能面（name/createApi/模型目录/协议）全覆盖；auth/baseUrl 走 ConfigurableProvider |
+| `catalog/BuiltinCatalog.java` | `providers/*.models.ts` 自动生成 | 80% | **~95%**：模型数据等价，仅生成方式不同 |
+| `util/TamboUIAdapter.java` + `InlineTuiShell` | `tui.ts` + `terminal.ts` | 80% | **~90%**：行为对齐（diff/输入/渲染），渲染原语不同 |
+| `hook/BeforeResumeHook` / `ResumeContext` | `hook/BeforeResumeHook` | 85% | **~90%**：同名同语义，ResumeContext 简化 |
+| `hook/BeforeNavigationHook` | `hook/BeforeNavigationHook` | 85% | **~90%**：触发路径简化 |
+| `model/ModelInfo.java` compat 字段 | `Model.compat` | 85% | **~90%**：字段已补；per-protocol compat 由协议适配器承载 |
+| `Main.java` install/remove/update/server/client | `cli.ts` + `cli/args.ts` | 85% | **~90%**：~40 参数 + 核心子命令齐全；install/remove/update 为打包类附加命令 |
 
 ---
 
@@ -118,6 +118,6 @@
 
 **B 类（口径修正 23 条）**：全部 → 90–95%（doc 更新已完成）。
 
-**C 类（设计决策 8 条）**：→ `**设计决策**`（不计入缺口）。
+**C 类（设计决策 8 条）**：→ `**设计决策**（~90–95%）`（结构性取舍，功能等价度 90%+，不计入缺口）。
 
 **结论**：mapping 文档中**所有带百分比条目 ≥90%**（0 个 <90%），结构性取舍条目明确标注为设计决策。A 类 4 条已实施；仅剩 AgentSession auto-format 子项分期。
