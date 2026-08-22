@@ -1,5 +1,6 @@
 package com.pijava.web;
 
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.function.Consumer;
 
@@ -28,6 +29,8 @@ final class WebDispatcher {
     private final Args args;
     private final Consumer<WebServerMessage> send;
     private final AgentEventTranslator translator = new AgentEventTranslator();
+    private final FileBrowserService files;
+    private final GitService git = new GitService();
     private AgentSession session;
     private AutoCloseable eventSubscription;
 
@@ -35,6 +38,7 @@ final class WebDispatcher {
         this.session = session;
         this.args = args;
         this.send = send;
+        this.files = new FileBrowserService(Path.of(System.getProperty("user.dir")));
     }
 
     /** 建立事件订阅并推送初始 {@code ready}。 */
@@ -69,6 +73,11 @@ final class WebDispatcher {
                 case WebClientMessage.NewSession ignored -> newSession();
                 case WebClientMessage.GetSessions ignored -> send.accept(sessions());
                 case WebClientMessage.LoadSession l -> loadSession(l.sessionPath());
+                case WebClientMessage.ListDir l -> send.accept(dirListing(l.path()));
+                case WebClientMessage.ReadFile f -> send.accept(fileContent(f.path()));
+                case WebClientMessage.GitStatus ignored -> send.accept(gitStatus());
+                case WebClientMessage.GitDiff d -> send.accept(gitDiff(d.file(), d.staged()));
+                case WebClientMessage.GitHistory h -> send.accept(gitHistory(h.file(), h.limit()));
             }
         } catch (Exception e) {
             send.accept(new WebServerMessage.Error(
@@ -185,6 +194,37 @@ final class WebDispatcher {
                 s.messageCount(), s.firstMessage()))
             .toList();
         return new WebServerMessage.Sessions(items, session.sessionId());
+    }
+
+    // ── Stage B：文件 / git（代码调试）────────────────────────────────────
+
+    private WebServerMessage dirListing(String path) {
+        var l = files.listDir(path);
+        return new WebServerMessage.DirListing(l.path(), l.entries());
+    }
+
+    private WebServerMessage fileContent(String path) {
+        var c = files.readFile(path);
+        return new WebServerMessage.FileContent(c.path(), c.content(), c.truncated());
+    }
+
+    private WebServerMessage gitStatus() {
+        var s = git.status(workspace());
+        return new WebServerMessage.GitStatusResult(s.cwd(), s.entries());
+    }
+
+    private WebServerMessage gitDiff(String file, Boolean staged) {
+        var d = git.diff(workspace(), file, Boolean.TRUE.equals(staged));
+        return new WebServerMessage.GitDiffResult(d.file(), d.staged(), d.text());
+    }
+
+    private WebServerMessage gitHistory(String file, Integer limit) {
+        var h = git.history(workspace(), file, limit);
+        return new WebServerMessage.GitHistoryResult(h.file(), h.commits());
+    }
+
+    private static Path workspace() {
+        return Path.of(System.getProperty("user.dir"));
     }
 
     // ── 模型辅助 ─────────────────────────────────────────────────────────

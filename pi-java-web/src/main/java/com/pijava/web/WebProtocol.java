@@ -50,6 +50,20 @@ public final class WebProtocol {
             String sessionName) {
     }
 
+    // ── Stage B DTO：文件 / git ─────────────────────────────────────────
+
+    /** 目录项（文件浏览器）。 */
+    public record DirEntry(String name, String kind, long size, long modifiedMs) {
+    }
+
+    /** git status 项（{@code indexStatus}/{@code workTreeStatus}：A/M/D/R/C/U，空 = 无）。 */
+    public record StatusEntry(String path, String indexStatus, String workTreeStatus) {
+    }
+
+    /** git 提交项。 */
+    public record CommitInfo(String id, String message, String author, String date) {
+    }
+
     // ── 客户端 → 服务端 ─────────────────────────────────────────────────
 
     @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type",
@@ -65,7 +79,12 @@ public final class WebProtocol {
         @JsonSubTypes.Type(value = WebClientMessage.GetState.class),
         @JsonSubTypes.Type(value = WebClientMessage.NewSession.class),
         @JsonSubTypes.Type(value = WebClientMessage.GetSessions.class),
-        @JsonSubTypes.Type(value = WebClientMessage.LoadSession.class)
+        @JsonSubTypes.Type(value = WebClientMessage.LoadSession.class),
+        @JsonSubTypes.Type(value = WebClientMessage.ListDir.class),
+        @JsonSubTypes.Type(value = WebClientMessage.ReadFile.class),
+        @JsonSubTypes.Type(value = WebClientMessage.GitStatus.class),
+        @JsonSubTypes.Type(value = WebClientMessage.GitDiff.class),
+        @JsonSubTypes.Type(value = WebClientMessage.GitHistory.class)
     })
     public sealed interface WebClientMessage {
 
@@ -127,6 +146,33 @@ public final class WebProtocol {
         record LoadSession(String sessionPath) implements WebClientMessage {
             @Override public String type() { return "loadSession"; }
         }
+
+        // ── Stage B 扩展：文件浏览器 / git（代码调试）──────────────────────
+
+        @JsonTypeName("listDir")
+        record ListDir(String path) implements WebClientMessage {
+            @Override public String type() { return "listDir"; }
+        }
+
+        @JsonTypeName("readFile")
+        record ReadFile(String path) implements WebClientMessage {
+            @Override public String type() { return "readFile"; }
+        }
+
+        @JsonTypeName("gitStatus")
+        record GitStatus() implements WebClientMessage {
+            @Override public String type() { return "gitStatus"; }
+        }
+
+        @JsonTypeName("gitDiff")
+        record GitDiff(String file, Boolean staged) implements WebClientMessage {
+            @Override public String type() { return "gitDiff"; }
+        }
+
+        @JsonTypeName("gitHistory")
+        record GitHistory(String file, Integer limit) implements WebClientMessage {
+            @Override public String type() { return "gitHistory"; }
+        }
     }
 
     // ── 服务端 → 客户端 ─────────────────────────────────────────────────
@@ -141,7 +187,12 @@ public final class WebProtocol {
         @JsonSubTypes.Type(value = WebServerMessage.ModelChanged.class),
         @JsonSubTypes.Type(value = WebServerMessage.Error.class),
         @JsonSubTypes.Type(value = WebServerMessage.Sessions.class),
-        @JsonSubTypes.Type(value = WebServerMessage.SessionChanged.class)
+        @JsonSubTypes.Type(value = WebServerMessage.SessionChanged.class),
+        @JsonSubTypes.Type(value = WebServerMessage.DirListing.class),
+        @JsonSubTypes.Type(value = WebServerMessage.FileContent.class),
+        @JsonSubTypes.Type(value = WebServerMessage.GitStatusResult.class),
+        @JsonSubTypes.Type(value = WebServerMessage.GitDiffResult.class),
+        @JsonSubTypes.Type(value = WebServerMessage.GitHistoryResult.class)
     })
     public sealed interface WebServerMessage {
 
@@ -199,6 +250,42 @@ public final class WebProtocol {
         @JsonTypeName("sessionChanged")
         record SessionChanged(String sessionId) implements WebServerMessage {
             @Override public String type() { return "sessionChanged"; }
+        }
+
+        // ── Stage B 扩展：文件浏览器 / git ────────────────────────────────
+
+        /** 目录列表响应（{@code dirListing}）。 */
+        @JsonTypeName("dirListing")
+        record DirListing(String path, List<DirEntry> entries) implements WebServerMessage {
+            @Override public String type() { return "dirListing"; }
+        }
+
+        /** 文件内容响应（{@code fileContent}）。 */
+        @JsonTypeName("fileContent")
+        record FileContent(String path, String content, boolean truncated)
+                implements WebServerMessage {
+            @Override public String type() { return "fileContent"; }
+        }
+
+        /** git status 响应（{@code gitStatusResult}）。 */
+        @JsonTypeName("gitStatusResult")
+        record GitStatusResult(String cwd, List<StatusEntry> status)
+                implements WebServerMessage {
+            @Override public String type() { return "gitStatusResult"; }
+        }
+
+        /** git diff 响应（{@code gitDiffResult}，unified diff 文本）。 */
+        @JsonTypeName("gitDiffResult")
+        record GitDiffResult(String file, boolean staged, String diff)
+                implements WebServerMessage {
+            @Override public String type() { return "gitDiffResult"; }
+        }
+
+        /** git 历史响应（{@code gitHistoryResult}）。 */
+        @JsonTypeName("gitHistoryResult")
+        record GitHistoryResult(String file, List<CommitInfo> commits)
+                implements WebServerMessage {
+            @Override public String type() { return "gitHistoryResult"; }
         }
     }
 }
