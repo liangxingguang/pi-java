@@ -246,7 +246,7 @@ public final class AuthCommand {
             Usage:
               pi-java auth print-api-key <provider>
               pi-java auth check <provider>
-              pi-java auth oauth-login <provider>   (OAuth PKCE flow; e.g. openrouter)
+              pi-java auth oauth-login <provider>   (OAuth PKCE/device-code flow)
               pi-java auth print-bearer-token <provider>   (print "Bearer <key>" header value)
               pi-java auth profile set <provider> <name>   (activate a credential profile)
               pi-java auth profile unset <provider>
