@@ -1,8 +1,18 @@
 package com.pijava.web;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import com.pijava.coding.agent.export.HtmlExporter;
 
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.session.SessionJson;
@@ -29,10 +39,13 @@ final class WebDispatcher {
     private final Args args;
     private final Consumer<WebServerMessage> send;
     private final AgentEventTranslator translator = new AgentEventTranslator();
+    private static final ObjectMapper JSON = new ObjectMapper();
+
     private final FileBrowserService files;
     private final GitService git = new GitService();
     private AgentSession session;
     private AutoCloseable eventSubscription;
+    private long bashSeq;
 
     WebDispatcher(AgentSession session, Args args, Consumer<WebServerMessage> send) {
         this.session = session;
@@ -78,6 +91,13 @@ final class WebDispatcher {
                 case WebClientMessage.GitStatus ignored -> send.accept(gitStatus());
                 case WebClientMessage.GitDiff d -> send.accept(gitDiff(d.file(), d.staged()));
                 case WebClientMessage.GitHistory h -> send.accept(gitHistory(h.file(), h.limit()));
+                case WebClientMessage.Bash b -> bash(b.command());
+                case WebClientMessage.AbortBash ignored -> session.abortBash();
+                case WebClientMessage.GetTree ignored -> send.accept(buildTree());
+                case WebClientMessage.Fork f -> forkFrom(f.entryId());
+                case WebClientMessage.Clone ignored -> cloneSession();
+                case WebClientMessage.ExportHtml ignored -> exportHtml();
+                case WebClientMessage.ListSkills ignored -> send.accept(listSkills());
             }
         } catch (Exception e) {
             send.accept(new WebServerMessage.Error(
@@ -225,6 +245,101 @@ final class WebDispatcher {
 
     private static Path workspace() {
         return Path.of(System.getProperty("user.dir"));
+    }
+
+    // ── Stage C：终端 / fork / 导出 / skills ─────────────────────────────
+
+    private void bash(String command) {
+        if (command == null || command.isBlank()) {
+            send.accept(new WebServerMessage.Error("Command required"));
+            return;
+        }
+        String id = "web-bash-" + (bashSeq++);
+        Thread.startVirtualThread(() -> {
+            try {
+                var result = session.executeBash(id, command, false);
+                send.accept(new WebServerMessage.BashResult(
+                    command, result.exitCode(), result.output(),
+                    result.truncated(), session.bashAborted()));
+            } catch (Exception e) {
+                send.accept(new WebServerMessage.BashResult(
+                    command, -1,
+                    e.getMessage() == null ? String.valueOf(e) : e.getMessage(),
+                    false, false));
+            }
+        });
+    }
+
+    /** fork：{@code entryId} 之后的会话拷贝为新会话（共享 harness，不关旧会话）。 */
+    private void forkFrom(String entryId) {
+        if (entryId == null || entryId.isBlank()) {
+            send.accept(new WebServerMessage.Error("Entry id required"));
+            return;
+        }
+        closeSubscription();
+        session = session.forkFromEntry(entryId);
+        resubscribe();
+        send.accept(new WebServerMessage.SessionChanged(session.sessionId()));
+        send.accept(stateSync());
+    }
+
+    /** clone：整会话拷贝（无 leaf 时用当前会话名 clone）。 */
+    private void cloneSession() {
+        var entries = session.harness().snapshot(session.laneName()).transcript();
+        String leaf = entries.isEmpty() ? null : entries.get(entries.size() - 1).id();
+        closeSubscription();
+        session = leaf == null
+            ? session.forkCopy(session.sessionName() + "-clone")
+            : session.forkFromEntry(leaf);
+        resubscribe();
+        send.accept(new WebServerMessage.SessionChanged(session.sessionId()));
+        send.accept(stateSync());
+    }
+
+    private void exportHtml() {
+        try {
+            var tmp = Files.createTempFile("pi-java-web-export", ".jsonl");
+            session.exportJsonl(tmp);
+            var html = new HtmlExporter().export(tmp);
+            send.accept(new WebServerMessage.ExportPath(html.toString()));
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Export failed: " + e.getMessage());
+        }
+    }
+
+    private WebServerMessage.Skills listSkills() {
+        var skills = session.harness().skillManager().all().stream()
+            .map(s -> new WebProtocol.SkillInfo(s.name(), s.description()))
+            .toList();
+        return new WebServerMessage.Skills(skills);
+    }
+
+    /** 会话树（节点 {@code {entry, children}}），对齐 pi {@code getTree}。 */
+    private WebServerMessage.Tree buildTree() {
+        var entries = session.harness().snapshot(session.laneName()).transcript();
+        var byParent = new LinkedHashMap<String, List<Entry>>();
+        for (var e : entries) {
+            byParent.computeIfAbsent(e.parentId(), k -> new ArrayList<>()).add(e);
+        }
+        List<Entry> roots = entries.stream()
+            .filter(e -> e.parentId() == null)
+            .toList();
+        if (roots.isEmpty() && !entries.isEmpty()) {
+            roots = List.of(entries.get(0));
+        }
+        var tree = roots.stream().map(r -> treeNode(r, byParent)).toList();
+        String leafId = entries.isEmpty() ? null : entries.get(entries.size() - 1).id();
+        return new WebServerMessage.Tree(tree, leafId);
+    }
+
+    private ObjectNode treeNode(Entry entry, Map<String, List<Entry>> byParent) {
+        var node = JSON.createObjectNode();
+        node.set("entry", SessionJson.mapper().valueToTree(entry));
+        var children = node.putArray("children");
+        for (var child : byParent.getOrDefault(entry.id(), List.of())) {
+            children.add(treeNode(child, byParent));
+        }
+        return node;
     }
 
     // ── 模型辅助 ─────────────────────────────────────────────────────────

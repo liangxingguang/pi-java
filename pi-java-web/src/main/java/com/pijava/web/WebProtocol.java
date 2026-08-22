@@ -64,6 +64,10 @@ public final class WebProtocol {
     public record CommitInfo(String id, String message, String author, String date) {
     }
 
+    /** skill 项（Stage C）。 */
+    public record SkillInfo(String name, String description) {
+    }
+
     // ── 客户端 → 服务端 ─────────────────────────────────────────────────
 
     @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type",
@@ -84,7 +88,14 @@ public final class WebProtocol {
         @JsonSubTypes.Type(value = WebClientMessage.ReadFile.class),
         @JsonSubTypes.Type(value = WebClientMessage.GitStatus.class),
         @JsonSubTypes.Type(value = WebClientMessage.GitDiff.class),
-        @JsonSubTypes.Type(value = WebClientMessage.GitHistory.class)
+        @JsonSubTypes.Type(value = WebClientMessage.GitHistory.class),
+        @JsonSubTypes.Type(value = WebClientMessage.Bash.class),
+        @JsonSubTypes.Type(value = WebClientMessage.AbortBash.class),
+        @JsonSubTypes.Type(value = WebClientMessage.GetTree.class),
+        @JsonSubTypes.Type(value = WebClientMessage.Fork.class),
+        @JsonSubTypes.Type(value = WebClientMessage.Clone.class),
+        @JsonSubTypes.Type(value = WebClientMessage.ExportHtml.class),
+        @JsonSubTypes.Type(value = WebClientMessage.ListSkills.class)
     })
     public sealed interface WebClientMessage {
 
@@ -173,6 +184,43 @@ public final class WebProtocol {
         record GitHistory(String file, Integer limit) implements WebClientMessage {
             @Override public String type() { return "gitHistory"; }
         }
+
+        // ── Stage C 扩展：终端 / fork / 导出 / skills ──────────────────────
+
+        @JsonTypeName("bash")
+        record Bash(String command) implements WebClientMessage {
+            @Override public String type() { return "bash"; }
+        }
+
+        @JsonTypeName("abortBash")
+        record AbortBash() implements WebClientMessage {
+            @Override public String type() { return "abortBash"; }
+        }
+
+        @JsonTypeName("getTree")
+        record GetTree() implements WebClientMessage {
+            @Override public String type() { return "getTree"; }
+        }
+
+        @JsonTypeName("fork")
+        record Fork(String entryId) implements WebClientMessage {
+            @Override public String type() { return "fork"; }
+        }
+
+        @JsonTypeName("clone")
+        record Clone() implements WebClientMessage {
+            @Override public String type() { return "clone"; }
+        }
+
+        @JsonTypeName("exportHtml")
+        record ExportHtml() implements WebClientMessage {
+            @Override public String type() { return "exportHtml"; }
+        }
+
+        @JsonTypeName("listSkills")
+        record ListSkills() implements WebClientMessage {
+            @Override public String type() { return "listSkills"; }
+        }
     }
 
     // ── 服务端 → 客户端 ─────────────────────────────────────────────────
@@ -192,7 +240,11 @@ public final class WebProtocol {
         @JsonSubTypes.Type(value = WebServerMessage.FileContent.class),
         @JsonSubTypes.Type(value = WebServerMessage.GitStatusResult.class),
         @JsonSubTypes.Type(value = WebServerMessage.GitDiffResult.class),
-        @JsonSubTypes.Type(value = WebServerMessage.GitHistoryResult.class)
+        @JsonSubTypes.Type(value = WebServerMessage.GitHistoryResult.class),
+        @JsonSubTypes.Type(value = WebServerMessage.BashResult.class),
+        @JsonSubTypes.Type(value = WebServerMessage.Tree.class),
+        @JsonSubTypes.Type(value = WebServerMessage.ExportPath.class),
+        @JsonSubTypes.Type(value = WebServerMessage.Skills.class)
     })
     public sealed interface WebServerMessage {
 
@@ -286,6 +338,34 @@ public final class WebProtocol {
         record GitHistoryResult(String file, List<CommitInfo> commits)
                 implements WebServerMessage {
             @Override public String type() { return "gitHistoryResult"; }
+        }
+
+        // ── Stage C 扩展：终端 / fork / 导出 / skills ─────────────────────
+
+        /** bash 执行完成（{@code bashResult}）。 */
+        @JsonTypeName("bashResult")
+        record BashResult(String command, int exitCode, String output,
+                          boolean truncated, boolean aborted)
+                implements WebServerMessage {
+            @Override public String type() { return "bashResult"; }
+        }
+
+        /** 会话树（{@code tree}，节点 {@code {entry, children}}）。 */
+        @JsonTypeName("tree")
+        record Tree(List<ObjectNode> tree, String leafId) implements WebServerMessage {
+            @Override public String type() { return "tree"; }
+        }
+
+        /** 导出 HTML 路径（{@code exportPath}）。 */
+        @JsonTypeName("exportPath")
+        record ExportPath(String path) implements WebServerMessage {
+            @Override public String type() { return "exportPath"; }
+        }
+
+        /** skill 列表（{@code skills}）。 */
+        @JsonTypeName("skills")
+        record Skills(List<SkillInfo> skills) implements WebServerMessage {
+            @Override public String type() { return "skills"; }
         }
     }
 }
