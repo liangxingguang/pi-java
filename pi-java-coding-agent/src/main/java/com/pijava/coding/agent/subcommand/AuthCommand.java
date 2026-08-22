@@ -4,10 +4,15 @@ import java.util.Optional;
 
 import com.pijava.ai.auth.AuthProfileManager;
 import com.pijava.ai.auth.Credentials;
+import com.pijava.ai.auth.DeviceCodeConfig;
+import com.pijava.ai.auth.DeviceCodeFlow;
 import com.pijava.ai.auth.FileCredentialStore;
+import com.pijava.ai.auth.OAuthConfig;
 import com.pijava.ai.auth.OAuthCredential;
 import com.pijava.ai.auth.OAuthCredentialStore;
 import com.pijava.ai.auth.OAuthFlow;
+import com.pijava.ai.auth.OAuthInteraction;
+import com.pijava.ai.auth.OAuthProvider;
 import com.pijava.ai.auth.OAuthProviders;
 
 /**
@@ -53,14 +58,14 @@ public final class AuthCommand {
             usage();
             return 1;
         }
-        var config = OAuthProviders.get(provider);
-        if (config.isEmpty()) {
+        var providerSpec = OAuthProviders.get(provider);
+        if (providerSpec.isEmpty()) {
             System.out.println("No OAuth flow registered for provider '" + provider
                 + "'. Available: " + OAuthProviders.names());
             return 1;
         }
         try {
-            var credential = new OAuthFlow(config.get()).login(CONSOLE);
+            var credential = login(providerSpec.get());
             new OAuthCredentialStore().store(provider, credential);
             System.out.println("Signed in to " + provider
                 + " (OAuth credential saved to ~/.pi-java/auth-oauth.json).");
@@ -143,17 +148,28 @@ public final class AuthCommand {
         if (credential.refreshToken().isBlank()) {
             return credential;
         }
-        var config = OAuthProviders.get(provider);
-        if (config.isEmpty()) {
+        var providerSpec = OAuthProviders.get(provider);
+        if (providerSpec.isEmpty()) {
             return credential;
         }
         try {
-            return new OAuthFlow(config.get()).refresh(credential);
+            return switch (providerSpec.get()) {
+                case OAuthProvider.Pkce(OAuthConfig c) -> new OAuthFlow(c).refresh(credential);
+                case OAuthProvider.Device(DeviceCodeConfig d) -> new DeviceCodeFlow(d).refresh(credential);
+            };
         } catch (Exception e) {
             System.out.println("OAuth token refresh failed for " + provider
                 + ": " + e.getMessage());
             return credential;
         }
+    }
+
+    /** 按 provider 流程判别执行 PKCE 或 device-code 登录。 */
+    private static OAuthCredential login(OAuthProvider provider) throws Exception {
+        return switch (provider) {
+            case OAuthProvider.Pkce(OAuthConfig c) -> new OAuthFlow(c).login(CONSOLE);
+            case OAuthProvider.Device(DeviceCodeConfig d) -> new DeviceCodeFlow(d).login(CONSOLE);
+        };
     }
 
     /** 多 profile 认证（P6-18）：{@code auth profile set|unset|list|set-key ...}。 */
@@ -241,7 +257,7 @@ public final class AuthCommand {
     }
 
     /** 基于控制台的 OAuth 交互实现（无控制台时 prompt 返回空串）。 */
-    private static final class ConsoleInteraction implements OAuthFlow.Interaction {
+    private static final class ConsoleInteraction implements OAuthInteraction {
         @Override
         public void notify(String message) {
             System.out.println(message);

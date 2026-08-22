@@ -50,7 +50,7 @@ class OAuthFlowTest {
             "http://127.0.0.1:" + port(tokenServer) + "/token",
             "", "");
         var flow = new OAuthFlow(config, false);
-        var interaction = new OAuthFlow.Interaction() {
+        var interaction = new OAuthInteraction() {
             @Override public void notify(String message) { }
             @Override public String prompt(String message) { return "some-code"; }
         };
@@ -104,8 +104,8 @@ class OAuthFlowTest {
 
     // ── Helpers ──────────────────────────────────────────────
 
-    private static OAuthFlow.Interaction interaction(AtomicReference<String> callbackUrl) {
-        return new OAuthFlow.Interaction() {
+    private static OAuthInteraction interaction(AtomicReference<String> callbackUrl) {
+        return new OAuthInteraction() {
             @Override public void notify(String message) {
                 if (message.startsWith("Listening for OAuth callback on ")) {
                     callbackUrl.set(message.substring("Listening for OAuth callback on ".length()));

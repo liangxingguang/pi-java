@@ -55,19 +55,12 @@ public final class OAuthFlow {
         this.autoOpenBrowser = autoOpenBrowser;
     }
 
-    /** 登录交互回调：notify 提示进度，prompt 请求手动输入（无控制台返回 null）。 */
-    public interface Interaction {
-        void notify(String message);
-
-        String prompt(String message);
-    }
-
     /**
      * 执行完整登录流程，返回凭证。
      *
      * @throws IOException 用户取消、超时、授权被拒或 token 换取失败
      */
-    public OAuthCredential login(Interaction interaction) throws IOException {
+    public OAuthCredential login(OAuthInteraction interaction) throws IOException {
         var verifier = generateVerifier();
         var challenge = generateChallenge(verifier);
         var callbackPath = "/oauth/callback/" + Long.toHexString(RANDOM.nextLong());
