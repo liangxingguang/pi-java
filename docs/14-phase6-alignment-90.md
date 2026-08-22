@@ -98,8 +98,8 @@
 | `provider/Provider.java` | `models.ts` `Provider` interface | 80% | **~90%**：功能面（name/createApi/模型目录/协议）全覆盖；auth/baseUrl 走 ConfigurableProvider |
 | `catalog/BuiltinCatalog.java` | `providers/*.models.ts` 自动生成 | 80% | **~95%**：模型数据等价，仅生成方式不同 |
 | `util/TamboUIAdapter.java` + `InlineTuiShell` | `tui.ts` + `terminal.ts` | 80% | **~90%**：行为对齐（diff/输入/渲染），渲染原语不同 |
-| `hook/BeforeResumeHook` / `ResumeContext` | `hook/BeforeResumeHook` | 85% | **~90%**：同名同语义，ResumeContext 简化 |
-| `hook/BeforeNavigationHook` | `hook/BeforeNavigationHook` | 85% | **~90%**：触发路径简化 |
+| `hook/BeforeResumeHook` / `ResumeContext` | `hook/BeforeResumeHook` | 85% | **~95%**：扩展契约，内建流程双方均不触发；Java 类型化 context vs pi 未类型化 |
+| `hook/BeforeNavigationHook` | `hook/BeforeNavigationHook` | 85% | **~95%**：扩展契约，内建流程双方均不触发 |
 | `model/ModelInfo.java` compat 字段 | `Model.compat` | 85% | **~90%**：字段已补；per-protocol compat 由协议适配器承载 |
 | `Main.java` install/remove/update/server/client | `cli.ts` + `cli/args.ts` | 85% | **~90%**：~40 参数 + 核心子命令齐全；install/remove/update 为打包类附加命令 |
 

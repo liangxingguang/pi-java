@@ -161,14 +161,14 @@
 | pi hook | pi-java 对应 | 对齐度 | 差异说明 |
 |---------|-------------|--------|---------|
 | `before_run` | `hook/BeforeRunHook.java` + `RunContext` | ✅ 95% | 可改写 originalPrompt |
-| `before_resume` | `hook/BeforeResumeHook.java` + `ResumeContext` | **设计决策**（~90%） | 语义简化 |
+| `before_resume` | `hook/BeforeResumeHook.java` + `ResumeContext` | **设计决策**（~95%） | 扩展契约（内建流程双方均不触发）；Java 类型化 `ResumeContext` vs pi 未类型化 `event: unknown` |
 | `transform_context` | `hook/TransformContextHook.java` | ✅ 95% | 消息列表变换一致 |
 | `before_request` | `hook/BeforeRequestHook.java` | ✅ 95% | 注入/改写消息一致 |
 | `before_payload` | `hook/BeforePayloadHook.java` | ✅ 90% | 载荷校验/改写一致 |
 | `after_response` | `hook/AfterResponseHook.java` | ✅ 95% | usage/stopReason 透传一致 |
 | `before_tool` / `after_tool` | `hook/BeforeToolHook.java` / `AfterToolHook.java` | ✅ 95% | 参数/结果改写一致 |
 | `before_compaction` | `hook/BeforeCompactionHook.java` | ✅ 90% | 可覆盖压缩计划 |
-| `before_navigation` | `hook/BeforeNavigationHook.java` | **设计决策**（~90%） | 触发路径简化 |
+| `before_navigation` | `hook/BeforeNavigationHook.java` | **设计决策**（~95%） | 扩展契约（内建流程双方均不触发）；Java 类型化 `NavigationContext` |
 | `before_run_end` | `hook/BeforeRunEndHook.java` | ✅ 95% | 终态判定一致 |
 | 调度器 | `hook/HookSystem.java` | ✅ 90% | 注册/触发/非致命异常一致；pi 异步，Java 同步 |
 
