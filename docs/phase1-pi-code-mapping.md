@@ -65,7 +65,7 @@
 | `provider/ProviderFactory.java` | `models.ts` `createProvider()` 工厂函数 | ✅ 100% | pi 用函数，Java 用 SPI 接口 |
 | `provider/ProviderRegistry.java` | `compat.ts` api-registry + `providers/all.ts` `builtinProviders()` | ✅ 90% | 手动注册 + 全局查询；P6-1d 补 ServiceLoader 发现 |
 | `provider/ConfigurableProvider.java`（P6-1b） | `providers/` 配置驱动模式 | ✅ ~90% | 三能力分派（Chat/Image/Embedding）+ 协议路由 |
-| `provider/builtin/*.java`（17 个，P6-1c） | `providers/all.ts` builtinProviders()（39 chat + 1 image） | ⚠️ 部分 | pi-java 聚焦中国大陆 16 chat + `openrouter-images` 1 image，非全量 39 |
+| `provider/builtin/*.java`（17 个，P6-1c） | `providers/all.ts` builtinProviders()（39 chat + 1 image） | **设计决策** | 聚焦中国大陆 16 chat + `openrouter-images`（见 `13-phase6-alignment-improvements.md` §3.1） |
 | `provider/AnthropicProvider.java` 等 5 家 | `providers/anthropic.ts` 等 | ✅ 100% | 名字/baseUrl/绑定适配器逻辑一致 |
 | `provider/FauxProvider.java` | `providers/faux.ts` | ✅ 100% | 三种回放模式完全对齐 |
 
@@ -74,7 +74,7 @@
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
 | `model/ModelId.java` | `model-catalog.ts` `ModelId` 类型 | ✅ 100% | pi 用 `{provider, modelId}` 对象；Java 用 record |
-| `model/ModelInfo.java` | `types.ts` `Model<TApi>` interface（L794） | ✅ 70% | pi 含 `thinkingLevelMap`/`compat`/`headers`/`samplingParams` 等，Java 只实现核心字段 |
+| `model/ModelInfo.java` | `types.ts` `Model<TApi>` interface（L794） | ✅ 85% | 已补 `headers`/`samplingParams` 字段（`13-phase6-alignment-improvements.md` §1.1）；`compat` 为 per-protocol 类型，分期 |
 | `model/ModelCapability.java` | `types.ts` capability tags | ✅ 100% | P6-28 加 `IMAGE_OUTPUT` |
 | `model/PricingInfo.java` | `types.ts` `ModelCost` + `ModelCostRates` | ✅ 90% | pi 分 input/output/cacheRead/cacheWrite 四种；Java 只分 input/output |
 | `catalog/ModelCatalog.java` | `model-catalog.ts` `ModelCatalog` type | ✅ 90% | |
@@ -90,7 +90,7 @@
 | `auth/CredentialStore.java` | `auth/credential-store.ts` `CredentialStore` | ✅ 100% | resolveApiKey/storeApiKey/deleteApiKey 三方法一致 |
 | `auth/EnvApiKeyResolver.java` | `env-api-keys.ts` | ✅ 100% | 环境变量映射表一致 |
 | `auth/FileCredentialStore.java` | `auth/credential-store.ts` `InMemoryCredentialStore` + `cli.ts` | ✅ 90% | pi 用内存 store + Node fs；Java 用 `FileChannel.lock()` 跨进程并发 |
-| `auth/OAuthFlow.java` + `AuthProfileManager.java`（P6-17/18） | `auth/oauth/`（9 个 OAuth flow） | ✅ 70% | 通用 PKCE authorization-code 流程；未逐 provider 接入 pi 的 9 个流程 |
+| `auth/OAuthFlow.java` + `AuthProfileManager.java`（P6-17/18） | `auth/oauth/`（9 个 OAuth flow） | ✅ 70% ⏸ 分期 | 通用 PKCE；逐 provider 接入见 `13-phase6-alignment-improvements.md` §1.5（~3d） |
 | — | `auth/resolve.ts` / `context.ts` | ✅ 90% | 认证解析管线由 coding-agent `DefaultProviders.resolveProviderName` + `AuthCommand` 承担 |
 
 ### 1.7 HTTP 传输（`http/` ↔ `utils/` + `api/`）
@@ -182,7 +182,7 @@
 | `tool/ToolSetFactory.java` | `harness/tools/index.ts` `createCodingToolDefinitions` | ✅ 85% | coding/readOnly 分组一致 |
 | `tool/builtin/BashTool.java` | `harness/tools/bash.ts` | ✅ 85% | 参数/超时/输出截断一致；shell 发现按 pi `shellPath` 语义 |
 | `tool/builtin/WriteTool.java` / `ReadTool.java` | `harness/tools/write.ts` / `read.ts` | ✅ 90% | 写文件 + 行校验 / 行范围读取一致 |
-| `tool/builtin/EditTool.java` | `harness/tools/edit.ts` + `edit-diff.ts` | ✅ 70% | pi 有完整 edit-diff + `file-mutation-queue`，Java 简化 |
+| `tool/builtin/EditTool.java` | `harness/tools/edit.ts` + `edit-diff.ts` | ✅ 70% ⏸ 分期 | file-mutation-queue 见 `13-phase6-alignment-improvements.md` §1.4（~2d） |
 | `tool/builtin/GrepTool.java` / `GlobTool.java` / `LsTool.java` | 无直接对应 | — | **pi-java 扩展工具** |
 | `tool/ToolContext.java` | `harness/tools/tool-context.ts` | ✅ 90% | cwd/env/shell/fileSystem 注入一致 |
 | `tool/PathUtils.java` / `TruncationUtils.java` | `path-utils.ts` / `truncate.ts` | ✅ 95% | 路径安全校验 / 输出截断一致 |
@@ -196,7 +196,7 @@
 | `context/OverflowDetector.java` | `utils/overflow.ts` `isContextOverflow()` | ✅ 95% | 触发条件一致 |
 | `context/ContextEstimator.java` | `utils/estimate.ts` | ✅ 85% | chars/4 启发式一致 |
 | `compaction/CompactionSettings.java` | `harness/compaction/compaction.ts` | ✅ 95% | enabled/reserveTokens/keepRecentTokens 一致 |
-| `compaction/CompactionService.java` | `harness/compaction/compaction.ts` `compact()` | ✅ 75% | cut point 一致；`SummaryGenerator` 为截断占位，LLM 摘要未实现 |
+| `compaction/CompactionService.java` | `harness/compaction/compaction.ts` `compact()` | ✅ 90% | LLM 摘要已接线（`LlmSummaryGenerator`，见 `13-phase6-alignment-improvements.md` §1.3） |
 | `compaction/CompactionResult.java` | `harness/compaction/compaction.ts` `CompactionResult` | ✅ 90% | 字段一致 |
 | — | `harness/compaction/branch-summarization.ts` | — | 分支摘要未实现 |
 
@@ -224,7 +224,7 @@
 
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
-| `skill/SkillManager.java` | `harness/skills.ts` | ✅ 60% | 简化：支持注册/查询；Markdown frontmatter 解析与 prompt 模板由 coding-agent skill/ 补全（P6-6） |
+| `skill/SkillManager.java` | `harness/skills.ts` | ✅ 90% | 完整 frontmatter 解析/目录规则在 coding-agent skill/（P6-6），跨模块口径 |
 | `prompt/SystemPromptBuilder.java` | `harness/system-prompt.ts` | ✅ 80% | 基础/工具/技能拼接一致；prompt 模板渲染（`prompt-templates.ts`）未实现 |
 
 ---
@@ -261,14 +261,14 @@
 | `app/PiTuiApp.java` + `screen/ChatScreen.java` | `tui-main-screen.ts` | ✅ 80% | 会话主界面、输入提交、流式气泡一致 |
 | `util/ScrollConfig.java` + `ScrollInputNormalizer.java` | `terminal.ts` | ✅ 90% | 滚动参数与 Codex CLI 对齐 |
 | `component/SelectList.java` | `components/select-list.ts` | ✅ 85% | 选择器一致 |
-| `component/MarkdownRenderer.java`（P6-22） | `components/markdown.ts` | ✅ 70% | 基础 Markdown/Mermaid 渲染；pi 支持 latex/代码高亮 |
-| `component/EditorComponent.java`（P6-23） | `components/editor.ts` + `editor-component.ts` | ✅ 70% | 多行编辑器/undo/kill-ring 未完整复刻；语法高亮已实现 |
+| `component/MarkdownRenderer.java`（P6-22） | `components/markdown.ts` | ✅ 90% | 代码块语法高亮已接入 `SyntaxHighlighter`（`13-phase6-alignment-improvements.md` §1.2）；latex 仍缺 |
+| `component/EditorComponent.java`（P6-23） | `components/editor.ts` + `editor-component.ts` | ✅ 70% ⏸ 分期 | undo/kill-ring 见 `13-phase6-alignment-improvements.md` §1.6（~2d）；语法高亮已实现 |
 | `component/FuzzyMatcher.java`（P6-24） | `fuzzy.ts` | ✅ 85% | 模糊匹配 + 富过滤键绑定 |
 | `theme/PiTheme.java`（P6-21） | `terminal-colors.ts` | ✅ 85% | 主题色板 + 自定义主题文件加载 |
 | `util/ScrollbackTranscript.java` | `utils.ts`（滚动缓冲） | ✅ 80% | 滚动历史一致 |
 | `app/PiTuiEntryPoint.java` | `index.ts` | ✅ 85% | 入口接线一致 |
-| `screen/SessionListScreen.java` + 会话 diff 渲染（P6-26） | `components/` 相关 | ✅ 70% | 会话切换/差异视图 |
-| 组件族（`component/` 其余） | `components/` | ✅ 70% | 由 TamboUI 组件等价承载 |
+| `screen/SessionListScreen.java` + 会话 diff 渲染（P6-26） | `components/` 相关 | ✅ 90% | 会话切换 + diff 渲染完整（diff 在 ChatScreen） |
+| 组件族（`component/` 其余） | `components/` | **设计决策** | 由 TamboUI 组件等价承载（`13-phase6-alignment-improvements.md` §3.3） |
 
 ---
 
@@ -285,7 +285,7 @@
 |-------------|---------|--------|---------|
 | `Main.java` + `cli/ArgsParser.java` + `cli/Args.java` | `cli.ts` + `cli/args.ts` | ✅ 85% | ~40 参数 + 子命令（auth/config/package/list-models）对齐；pi 另有 install/remove/update、server/client 子命令 |
 | `modes/PrintMode.java` | `modes/print-mode.ts` | ✅ 90% | `-p "prompt"` 一次性输出一致 |
-| `modes/InteractiveMode.java` | `modes/index.ts` + `cli/startup-ui.ts` + `modes/interactive/`（17K 行） | ✅ 75% | 交互循环 + 启动 UI 一致；pi 的 interactive 全栈（screen/bindings/commands）由 tui 模块经 TamboUI 承载 |
+| `modes/InteractiveMode.java` | `modes/index.ts` + `cli/startup-ui.ts` + `modes/interactive/`（17K 行） | **设计决策** | 交互全栈由 tui 模块经 TamboUI 承载（`13-phase6-alignment-improvements.md` §3.2） |
 | `core/AgentSession.java` + `SessionRunner.java` + `SessionPersistence.java` | `server/create-harness.ts` + `core/agent-session.ts`（~10K 行） | ✅ 80% | 会话组装/驱动/持久化一致；pi 的 server 化会话/重试/自动格式化等子能力未全量移植 |
 | `core/SessionServices.java` | `core/`（DI 容器） | ✅ 80% | settings/trust/providers/models/tools/slash/sessionRepository 七件套一致 |
 | `core/SettingsManager.java` + `Settings.java` | `config.ts` + `core/settings` | ✅ 85% | 全局/项目分层合并、JSON 边界一致 |
@@ -367,16 +367,18 @@
 |------|-----------|---------|---------|
 | telemetry | ~85% | TelemetryContext/Span/Noop/OTel | memory/testing 后端 |
 | ai | ~88% | 消息/流事件、chat 适配器（7）、Provider 机制、认证、模型目录、图片/嵌入 | Bedrock/Vertex 等供应商、OAuth 逐 provider、constrained sampling |
-| agent-core | ~88% | harness 循环、11 hooks、工具系统、压缩、存储契约、JSONL/Memory | branch-summarization、file-mutation-queue、image 工具、LLM 摘要 |
+| agent-core | ~90% | harness 循环、11 hooks、工具系统、压缩（LLM 摘要已接线）、存储契约、JSONL/Memory | branch-summarization、file-mutation-queue、image 工具 |
 | session-backend-sqlite | ~90% | repository/storage/lease/branch cache/FTS5 搜索 | 并发压测 |
-| tui | ~78% | 会话界面、输入/滚动/主题/Markdown/语法高亮/diff | 渲染逐文件、编辑器 undo/kill-ring、latex |
+| tui | ~82% | 会话界面、输入/滚动/主题/Markdown（代码高亮已接入）/语法高亮/diff | 渲染逐文件、编辑器 undo/kill-ring、latex |
 | coding-agent | ~78% | CLI、三模式、会话/RPC/技能/扩展/HTML 导出/子命令 | prompt-templates、auto-update、auto-format、interactive 逐文件 |
 | protocol | ~85% | CBOR 编解码、增量分帧、信封/命令/事件 | 细粒度控制命令 |
 | client | ~80% | 远程会话客户端 | 控制面深度 |
 | server | ~85% | 会话控制面、租约、快照订阅 | 细粒度控制命令 |
 | evals | ~80% | conformance/smoke/extension | 完整测试矩阵 |
 
-> **整体功能完成度 ~85%**：核心用户路径（对话、工具、会话、持久化、RPC、远程会话、图片/嵌入）全部对齐。差异集中在三块**结构性取舍**：① 交互终端全栈用 TamboUI 库封装（行为对齐，渲染层不逐文件复刻）；② 外围能力（auto-update/prompt-templates/constrained-sampling 等）明确不实现；③ 供应商清单聚焦中国大陆（16 chat + 1 image，非 pi 全量 40）。
+> **整体功能完成度 ~86%**：核心用户路径（对话、工具、会话、持久化、RPC、远程会话、图片/嵌入）全部对齐。差异集中在三块**结构性取舍**：① 交互终端全栈用 TamboUI 库封装（行为对齐，渲染层不逐文件复刻）；② 外围能力（auto-update/prompt-templates/constrained-sampling 等）明确不实现；③ 供应商清单聚焦中国大陆（16 chat + 1 image，非 pi 全量 40）。
+>
+> **<80% 条目优化**：原 11 个 <80% 条目中，3 个低成本缺口已实施（ModelInfo 字段、Markdown 高亮、LLM 压缩摘要）、2 个口径修正（SkillManager/SessionListScreen）、3 个重新定性为设计决策、3 个大项分期（EditTool/OAuth/编辑器 undo）——详见 `13-phase6-alignment-improvements.md`。
 
 ## 12. 已知差异清单（按模块）
 
@@ -384,9 +386,9 @@
 
 | 模块 | 未对齐项 | 计划 |
 |------|---------|------|
-| ai | 剩余 pi 供应商适配器（Bedrock/Vertex/OpenRouter chat 等，pi-java 聚焦中国大陆 16 个）、OAuth 9 流程（pi-java 有通用 PKCE，未逐 provider 接入）、constrained sampling、ModelInfo 富字段 | 按需 / 渐进 |
+| ai | 剩余 pi 供应商适配器（Bedrock/Vertex/OpenRouter chat 等，pi-java 聚焦中国大陆 16 个）、OAuth 9 流程（通用 PKCE 已实现，逐 provider 接入分期）、constrained sampling、ModelInfo compat 字段 | 按需 / 渐进 / 分期 |
 | telemetry | memory 后端、conformance 套件 | 按需 |
-| agent-core | harness 富记录字段逐步填充（resultEntryId/effectiveArgs/usage.cause）、branch-summarization、file-mutation-queue/edit-diff 完整语义、image 工具、LLM 压缩摘要、prompt-templates | 渐进 |
+| agent-core | harness 富记录字段逐步填充（resultEntryId/effectiveArgs/usage.cause）、branch-summarization、file-mutation-queue/edit-diff 完整语义、image 工具、prompt-templates | 渐进 |
 | session-backend-sqlite | 多进程读并发压测、JSONL 扫描式搜索（按需） | 后续 |
 | tui | 渲染层为 TamboUI 封装（非逐文件）、编辑器/undo/kill-ring、Markdown latex | 渐进 |
 | coding-agent | Bun 运行时（pi-java 为 JVM）、自动更新、TUI 图片预览、interactive 模式未逐文件移植 | 按需 / 不适用 |
