@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -290,7 +289,7 @@ public final class AgentSession implements AutoCloseable {
             harness.setThinkingLevel(config.thinkingLevel());
         }
 
-        var queue = new LinkedBlockingQueue<StreamEvent>();
+        var queue = new LinkedBlockingQueue<Optional<StreamEvent>>();
         var entriesFuture = new CompletableFuture<List<Entry>>();
         var statusFuture = new CompletableFuture<RunStatus>();
 
@@ -303,9 +302,9 @@ public final class AgentSession implements AutoCloseable {
                 return queue.take();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                return null;
+                return Optional.<StreamEvent>empty();
             }
-        }).takeWhile(Objects::nonNull);
+        }).takeWhile(Optional::isPresent).map(Optional::get);
         return new SessionResult(stream, entriesFuture, statusFuture);
     }
 

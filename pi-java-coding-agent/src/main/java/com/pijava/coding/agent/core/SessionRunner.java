@@ -1,6 +1,7 @@
 package com.pijava.coding.agent.core;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicReference;
@@ -44,7 +45,7 @@ final class SessionRunner {
     static void drive(
             AgentSession owner,
             String prompt,
-            LinkedBlockingQueue<StreamEvent> queue,
+            LinkedBlockingQueue<Optional<StreamEvent>> queue,
             CompletableFuture<List<Entry>> entriesFuture,
             CompletableFuture<RunStatus> statusFuture,
             StreamObserver streamObserver,
@@ -64,7 +65,7 @@ final class SessionRunner {
             }
             owner.emitSessionEvent(new AgentSessionEvent.MessageUpdate(event));
             if (streamObserver == null) {
-                queue.add(event);
+                queue.add(Optional.of(event));
             } else {
                 streamObserver.onStreamEvent(event);
             }
@@ -92,7 +93,7 @@ final class SessionRunner {
                     if (streamObserver != null) {
                         streamObserver.onStreamEvent(error);
                     } else {
-                        queue.add(error);
+                        queue.add(Optional.of(error));
                     }
                 }
                 shouldRetry = "error".equals(stopReason.get())
@@ -137,7 +138,7 @@ final class SessionRunner {
             if (streamObserver != null) {
                 streamObserver.onStreamEvent(error);
             } else {
-                queue.add(error);
+                queue.add(Optional.of(error));
             }
             owner.emitSessionEvent(new AgentSessionEvent.AgentEnd(List.of(), false));
             owner.emitSessionEvent(new AgentSessionEvent.AgentSettled());
@@ -145,7 +146,7 @@ final class SessionRunner {
             entriesFuture.complete(List.of());
         } finally {
             if (streamObserver == null) {
-                queue.add(null);
+                queue.add(Optional.empty());
             }
         }
     }

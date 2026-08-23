@@ -2,6 +2,7 @@ package com.pijava.coding.agent.core;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -22,6 +23,7 @@ import com.pijava.agent.tool.ToolContext;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 /**
  * End-to-end regression for the full submit → stream → tool-execution path:
@@ -167,6 +169,42 @@ class AgentSessionToolIntegrationTest {
             assertThat(userTexts(entries, "second")).isEqualTo(1);
             assertThat(assistantTexts(entries, "hello")).isEqualTo(1);
             assertThat(assistantTexts(entries, "world")).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void streamDrainsToCompletionWithoutObserver() throws Exception {
+        // Regression: the queue path (streamObserver == null) used null as the
+        // end-of-stream sentinel, but LinkedBlockingQueue rejects null, so the
+        // drive virtual thread died in its finally block and every consumer of
+        // the returned stream (PrintMode -p, web chat, RPC) blocked on
+        // queue.take() forever. The sentinel is now Optional.empty().
+        var tmp = Files.createTempDirectory("pi-java-stream-test");
+        var args = ArgsParser.parse(new String[] {
+            "--provider", "faux-stream", "--model", "hello", "--no-session"});
+        var providers = ProviderRegistry.create();
+        var done = AssistantMessage.empty().withContent(List.of(
+            new ContentBlock.TextContent("hi"))).withStopReason("stop");
+        providers.register(FauxProvider.sequence("faux-stream", List.of(List.of(
+            new StreamEvent.Start(AssistantMessage.empty()),
+            new StreamEvent.TextStart(0, AssistantMessage.empty()),
+            new StreamEvent.TextDelta(0, "hi", done),
+            new StreamEvent.TextEnd(0, "hi", done),
+            new StreamEvent.StreamDone("stop", null, done)))));
+        var session = AgentSession.create(
+            args, InMemorySessionRepository.create(), providers,
+            new ToolContext(tmp.toString(), Map.of(),
+                new DefaultShellExecutor(), new DefaultFileSystem()));
+        try (session) {
+            var result = session.processPrompt("hi", PromptConfig.defaults());
+            // Must terminate and carry the reply; a regression would hang here,
+            // which assertTimeoutPreemptively turns into a clean failure.
+            assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
+                var events = result.stream().toList();
+                assertThat(events).extracting(e -> e.getClass().getSimpleName())
+                    .contains("TextDelta", "StreamDone");
+            });
+            assertThat(result.status().exitCode()).isZero();
         }
     }
 
