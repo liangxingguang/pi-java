@@ -24,7 +24,7 @@ public final class OpenAIProvider extends ConfigurableProvider {
             "openai", "OpenAI", "https://api.openai.com/v1",
             "OPENAI_API_KEY", Protocol.OPENAI_COMPLETIONS,
             Set.of(Protocol.OPENAI_COMPLETIONS, Protocol.OPENAI_RESPONSES),
-            BuiltinCatalog.openaiModels());
+            BuiltinCatalog.openaiModels(), null);
     }
 
     @Override

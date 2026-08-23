@@ -26,7 +26,7 @@ public final class OpenRouterImagesProvider extends ConfigurableProvider {
             "openrouter-images", "OpenRouter Images",
             "https://openrouter.ai/api/v1", "OPENROUTER_API_KEY",
             Protocol.OPENAI_COMPLETIONS, Set.of(),
-            BuiltinCatalog.openRouterImageModels());
+            BuiltinCatalog.openRouterImageModels(), null);
     }
 
     @Override
