@@ -80,13 +80,16 @@ public final class BuiltinCatalog implements ModelCatalog {
         ));
     }
 
-    /** Catalog of DeepSeek models. */
+    /**
+     * Catalog of DeepSeek models (V4 series). 旧别名 {@code deepseek-chat}/
+     * {@code deepseek-reasoner} 于 2026-07-24 弃用，故仅列 V4；Flash 支持工具调用。
+     */
     public static ModelCatalog deepseekModels() {
         return new BuiltinCatalog(List.of(
-                model("deepseek-chat", "DeepSeek Chat",
-                        128_000, 8_192, chatCaps(), 0.27, 1.10),
-                model("deepseek-reasoner", "DeepSeek Reasoner",
-                        128_000, 32_768, reasoningCaps(), 0.55, 2.19)
+                model("deepseek-v4-flash", "DeepSeek V4 Flash",
+                        1_048_576, 393_216, chatCaps(), 0.14, 0.28),
+                model("deepseek-v4-pro", "DeepSeek V4 Pro",
+                        1_048_576, 393_216, reasoningCaps(), 1.74, 3.48)
         ));
     }
 
