@@ -33,6 +33,12 @@
             <artifactId>pi-java-session-backend-sqlite</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!-- WebEntryPoint SPI（web 模式，Phase 7） -->
+        <dependency>
+            <groupId>com.pi-java</groupId>
+            <artifactId>pi-java-web</artifactId>
+            <scope>runtime</scope>
+        </dependency>
     </dependencies>
 
     <build>

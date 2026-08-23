@@ -196,33 +196,31 @@ pi-java 已有一个 **headless RPC 层**，本质是「stdio 上的 JSON 协议
 
 ## 7. Stage 拆分（每阶段独立编译 + commit）
 
-### Stage A — 骨架 + 最小对话闭环
+### Stage A — 骨架 + 最小对话闭环 ✅（`16a5c46`）
 - `pi-java-web` 模块（pom + 根 pom/BOM 注册）；`WebEntryPoint` SPI + `Main --mode web` + `--port`。
 - `PiWebServer`（Java-WebSocket `/api/ws` + 静态托管 `resources/web/`）。
 - `WebProtocol`（基线 21 消息 Jackson 多态）、`WebDispatcher`（§3.1 消息 → `AgentSession`）、`AgentEventTranslator`（§4）。
-- `SessionFacade`（状态组装 + 真实会话列表）。
+- `SessionFacade`（状态组装 + 真实会话列表）。实际并入 `WebDispatcher`（`stateSync`/`sessions`），无独立类。
 - 前端：pi-webui `client/` Vite build → `resources/web/`，**零改动**跑通对话闭环。
 - **验证**：浏览器 `localhost:8787` 完成 新建/列表/切换会话 + 流式对话 + 切换模型/思考等级。
-- **Commit**：`feat(web): pi-java-web skeleton with WS chat roundtrip`。
 
-### Stage B — 代码调试（文件浏览器 + git diff）
+### Stage B — 代码调试（文件浏览器 + git diff） ✅（`10954c0`）
 - 协议扩展（§3.3 B 行）；`FileBrowserService`（`FileSystem` + 信任边界）；`GitService`（JGit status/diff/history）。
 - 前端：文件树面板 + 代码查看器 + git diff 视图（自绘，或复用 `pi-web-ui` 若含 diff 组件）。
 - **验证**：受信目录列/读；含未提交改动仓库返回正确 diff。
-- **Commit**：`feat(web): file browser + git diff`。
 
-### Stage C — 完整功能（终端 + skills/MCP + fork 树 + 导出）
-- 终端：WS 全双工 `bash`/`abortBash` + `bashOutput`（`BashExecutionUpdate`）。
-- skills/plugins/MCP：`harness().skillManager()`/`services().slashCommands()` + MCP 面。
-- fork 树：`get_tree`/`fork`/`clone`/`getForkMessages` → 前端分支树。
-- 导出：`export_html`。
-- **Commit**：`feat(web): terminal + skills/mcp + fork tree + export`。
+### Stage C — 完整功能（终端 + skills + fork 树 + 导出） ✅（`deef37c`）
+- 终端：`bash`/`abortBash` + `bashResult`（一次性结果消息，非流式 `bashOutput`——实现取舍）。
+- skills：`harness().skillManager()` + `listSkills`/`skills`（MCP 面未纳入）。
+- fork 树：`forkFromEntry`/`forkCopy` + `getTree`/`fork`/`clone` → 前端分支树。
+- 导出：`exportHtml`（`HtmlExporter`）。
 
-### Stage D — 打磨 + 鉴权 + 文档
-- 网关 token 鉴权（`~/.pi-java/web/gateway-token` + `PI_JAVA_WEB_TOKEN`，对齐 pivot-ui 思路）。
-- 会话重命名/错误提示/多 tab 细节。
-- `phase1-pi-code-mapping.md` 增补 web 条目。
-- **验证**：`mvn clean verify` 零错误零警告、checkstyle/spotbugs、无 `System.out.println`。
+### Stage D — 打磨 + 鉴权 + 文档 ✅（2026-08-23 完成）
+- 网关 token 鉴权（`~/.pi-java/web/gateway-token` + `PI_JAVA_WEB_TOKEN`，对齐 pivot-ui 思路）。`GatewayToken` 首启自动生成落盘；`PiWebServer.onOpen` 校验 `?token=`（常数时间比较），失败 `close 4401`；`/api/config` 返回 `requiresAuth`。
+- 会话重命名（`setSessionName` → `sessionNameChanged`）/ 会话统计（`getSessionStats` → `sessionStats`）；错误提示走既有 `error` 消息 + 前端横幅；多 tab 每连接独立会话（既有设计）。
+- 前端：`getWsUrl()` 读 localStorage token 并追加 `?token=`，`requiresAuth` 且无 token 时 prompt；sidebar 增加重命名按钮。
+- `phase1-pi-code-mapping.md` 增补 web 条目（§13）。
+- **验证**：`mvn clean verify` 零错误零警告、checkstyle/spotbugs 通过、无 `System.out.println`。
 - **Commit**：`feat(web): gateway token auth + polish`。
 
 ---

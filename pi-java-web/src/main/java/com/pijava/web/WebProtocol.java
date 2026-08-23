@@ -95,7 +95,9 @@ public final class WebProtocol {
         @JsonSubTypes.Type(value = WebClientMessage.Fork.class),
         @JsonSubTypes.Type(value = WebClientMessage.Clone.class),
         @JsonSubTypes.Type(value = WebClientMessage.ExportHtml.class),
-        @JsonSubTypes.Type(value = WebClientMessage.ListSkills.class)
+        @JsonSubTypes.Type(value = WebClientMessage.ListSkills.class),
+        @JsonSubTypes.Type(value = WebClientMessage.SetSessionName.class),
+        @JsonSubTypes.Type(value = WebClientMessage.GetSessionStats.class)
     })
     public sealed interface WebClientMessage {
 
@@ -221,6 +223,16 @@ public final class WebProtocol {
         record ListSkills() implements WebClientMessage {
             @Override public String type() { return "listSkills"; }
         }
+
+        @JsonTypeName("setSessionName")
+        record SetSessionName(String name) implements WebClientMessage {
+            @Override public String type() { return "setSessionName"; }
+        }
+
+        @JsonTypeName("getSessionStats")
+        record GetSessionStats() implements WebClientMessage {
+            @Override public String type() { return "getSessionStats"; }
+        }
     }
 
     // ── 服务端 → 客户端 ─────────────────────────────────────────────────
@@ -244,7 +256,9 @@ public final class WebProtocol {
         @JsonSubTypes.Type(value = WebServerMessage.BashResult.class),
         @JsonSubTypes.Type(value = WebServerMessage.Tree.class),
         @JsonSubTypes.Type(value = WebServerMessage.ExportPath.class),
-        @JsonSubTypes.Type(value = WebServerMessage.Skills.class)
+        @JsonSubTypes.Type(value = WebServerMessage.Skills.class),
+        @JsonSubTypes.Type(value = WebServerMessage.SessionNameChanged.class),
+        @JsonSubTypes.Type(value = WebServerMessage.SessionStats.class)
     })
     public sealed interface WebServerMessage {
 
@@ -366,6 +380,19 @@ public final class WebProtocol {
         @JsonTypeName("skills")
         record Skills(List<SkillInfo> skills) implements WebServerMessage {
             @Override public String type() { return "skills"; }
+        }
+
+        /** 会话重命名广播（{@code sessionNameChanged}）。 */
+        @JsonTypeName("sessionNameChanged")
+        record SessionNameChanged(String sessionId, String name) implements WebServerMessage {
+            @Override public String type() { return "sessionNameChanged"; }
+        }
+
+        /** 会话统计快照（{@code sessionStats}）。 */
+        @JsonTypeName("sessionStats")
+        record SessionStats(String sessionId, String name, int messageCount, int entryCount,
+                            ModelInfo model, String thinkingLevel) implements WebServerMessage {
+            @Override public String type() { return "sessionStats"; }
         }
     }
 }

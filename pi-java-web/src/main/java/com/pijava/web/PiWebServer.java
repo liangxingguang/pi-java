@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CountDownLatch;
 
@@ -52,8 +53,15 @@ public final class PiWebServer {
     public static int run(Args args) {
         int port = args.port() == null ? DEFAULT_PORT : args.port();
         int wsPort = port == DEFAULT_PORT ? DEFAULT_PORT + 1 : port + 1;
+        // 首启自动生成 token 并落盘（默认受保护）；生成时打印一次供浏览器登录
+        String token = GatewayToken.configured().orElseGet(() -> {
+            String generated = GatewayToken.resolve();
+            LOG.info("pi-java web UI gateway token generated: {} (saved to {})",
+                generated, GatewayToken.DEFAULT_FILE);
+            return generated;
+        });
         try {
-            return start(args, port, wsPort).await();
+            return start(args, port, wsPort, token).await();
         } catch (Exception e) {
             LOG.error("Failed to start web UI", e);
             System.err.println("error: " + e.getMessage());
@@ -85,17 +93,34 @@ public final class PiWebServer {
         }
     }
 
-    /** 启动双服务器（静态 + WS）。 */
+    /** 启动双服务器（静态 + WS），token 取 {@link GatewayToken#resolve()}。 */
     static ServerHandle start(Args args, int port, int wsPort) throws IOException {
+        return start(args, port, wsPort, GatewayToken.resolve());
+    }
+
+    /** 启动双服务器（静态 + WS）；{@code gatewayToken} 为空 = 不鉴权（测试用）。 */
+    static ServerHandle start(Args args, int port, int wsPort, String gatewayToken)
+            throws IOException {
         var http = HttpServer.create(new InetSocketAddress(port), 0);
-        http.createContext("/", exchange -> handleHttp(exchange, wsPort));
+        boolean requiresAuth = gatewayToken != null && !gatewayToken.isEmpty();
+        http.createContext("/", exchange -> handleHttp(exchange, wsPort, requiresAuth));
         http.setExecutor(java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor());
         http.start();
         LOG.info("pi-java web UI serving static at http://localhost:{}/", port);
+        if (requiresAuth) {
+            LOG.info("pi-java web UI gateway auth enabled (token: {})", GatewayToken.DEFAULT_FILE);
+        }
 
         var ws = new WebSocketServer(new InetSocketAddress(wsPort)) {
             @Override
             public void onOpen(WebSocket conn, ClientHandshake handshake) {
+                if (requiresAuth && !authenticated(conn, gatewayToken)) {
+                    LOG.warn("web auth rejected: {}", conn.getRemoteSocketAddress());
+                    sendJson(conn, new WebServerMessage.Error(
+                        "authentication required: connect /api/ws with ?token=..."));
+                    conn.close(4401, "unauthorized");
+                    return;
+                }
                 LOG.info("web client connected: {}", conn.getRemoteSocketAddress());
                 AgentSession session;
                 try {
@@ -151,11 +176,13 @@ public final class PiWebServer {
 
     // ── HTTP 静态托管 ────────────────────────────────────────────────────
 
-    private static void handleHttp(HttpExchange exchange, int wsPort) throws IOException {
+    private static void handleHttp(HttpExchange exchange, int wsPort, boolean requiresAuth)
+            throws IOException {
         try {
             String path = exchange.getRequestURI().getPath();
             if ("/api/config".equals(path)) {
-                byte[] body = ("{\"wsPort\":" + wsPort + "}").getBytes(StandardCharsets.UTF_8);
+                byte[] body = ("{\"wsPort\":" + wsPort + ",\"requiresAuth\":" + requiresAuth + "}")
+                    .getBytes(StandardCharsets.UTF_8);
                 respond(exchange, 200, "application/json", body);
                 return;
             }
@@ -197,6 +224,33 @@ public final class PiWebServer {
         if (path.endsWith(".woff2")) return "font/woff2";
         if (path.endsWith(".json")) return "application/json";
         return "application/octet-stream";
+    }
+
+    // ── WS 网关鉴权 ─────────────────────────────────────────────────────
+
+    /** 校验 WS 连接是否携带正确 token（URL 查询参数 {@code ?token=...}）。 */
+    private static boolean authenticated(WebSocket conn, String expected) {
+        return GatewayToken.matches(expected, queryParam(conn.getResourceDescriptor(), "token"));
+    }
+
+    /** 从 resource descriptor（如 {@code /api/ws?token=abc}）取查询参数。 */
+    private static String queryParam(String descriptor, String name) {
+        if (descriptor == null) {
+            return null;
+        }
+        int q = descriptor.indexOf('?');
+        if (q < 0) {
+            return null;
+        }
+        for (String pair : descriptor.substring(q + 1).split("&")) {
+            int eq = pair.indexOf('=');
+            String key = eq < 0 ? pair : pair.substring(0, eq);
+            if (key.equals(name)) {
+                String val = eq < 0 ? "" : pair.substring(eq + 1);
+                return URLDecoder.decode(val, StandardCharsets.UTF_8);
+            }
+        }
+        return null;
     }
 
     private static void sendJson(WebSocket conn, WebServerMessage msg) {

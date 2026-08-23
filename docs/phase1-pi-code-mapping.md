@@ -2,7 +2,7 @@
 
 > pi 源码位置：`D:\workplaceForai\pi\packages\`
 > pi-java 源码位置：各模块 `src/main/java/` 下 `com.pijava.*`
-> 更新日期：2026-08-22（按模块重排；Phase 6 于 2026-08-22 完成）
+> 更新日期：2026-08-23（按模块重排；Phase 6 于 2026-08-22 完成，Phase 7 web UI 于 2026-08-23 完成）
 
 ## 0. 范围与方法
 
@@ -394,3 +394,39 @@
 | coding-agent | Bun 运行时（pi-java 为 JVM）、自动更新、TUI 图片预览、interactive 模式未逐文件移植 | 按需 / 不适用 |
 | protocol / client / server | `session`/`process` 细粒度控制（pi 有更多命令），已实现核心控制面 | 渐进 |
 | evals | 对照 pi evals 的完整测试矩阵 | 渐进 |
+
+## 13. pi-java-web ↔ pi-webui（Phase 7）
+
+> 比较基准：pi-webui（`D:\workplaceForai\pi-webui`）是 pi 官方 Web UI，协议 `shared/protocol.ts`（21 条 WS JSON 消息）。
+> pi-java 复刻其前端 + 协议作基线，服务端 `server/index.ts`（内嵌 pi SDK）整段替换为 pi-java WS 网关。
+> **功能完成度 ~95%**（对 pi-webui 基线）：基线 21 条消息全齐，扩展为协议超集（文件/git/终端/skills/fork/导出/会话控制）；Stage D 补网关 token 鉴权与会话重命名。
+> pi-java 独有：pi-webui 服务端无对应物，故以「前端对齐度 + 协议覆盖」为判据，不比代码行数。
+
+### 13.1 协议覆盖（`shared/protocol.ts` 21 条基线）
+
+| pi-java-web | pi-webui `protocol.ts` | 对齐度 | 差异说明 |
+|-------------|------------------------|--------|---------|
+| `WebProtocol.WebClientMessage` | `ClientMessage` 联合（11 条） | ✅ 100% | prompt/steer/followUp/abort/getModels/setModel/setThinkingLevel/getState/newSession/getSessions/loadSession 全对应 |
+| `WebProtocol.WebServerMessage` | `ServerMessage` 联合（8 条） | ✅ 100% | ready/stateSync/agentEvent/models/modelChanged/error/sessions/sessionChanged 全对应 |
+| `AgentEventTranslator` | 前端 `handleAgentEvent` | ✅ ~90% | StreamEvent/AgentSessionEvent → pi-webui 事件词汇（agent_start/message_update/message_end/agent_end/turn_end）；`timestamp` 去重字段由翻译层补齐 |
+| `SerializedAgentState` | `SerializedAgentState` | ✅ ~90% | 会话名/消息数经 `listSessionsSummary` 修正（`SessionInfo` stub 已补真实值） |
+
+### 13.2 pi-java-web 扩展（pi-webui 无，协议超集）
+
+| 能力 | pi-java-web 类 | 阶段 |
+|------|---------------|------|
+| 文件浏览器 | `FileBrowserService` + `listDir`/`readFile` | B |
+| git 调试 | `GitService` + `gitStatus`/`gitDiff`/`gitHistory` | B |
+| 终端 | `session.executeBash` + `bash`/`abortBash`/`bashResult` | C |
+| skills | `harness().skillManager()` + `listSkills`/`skills` | C |
+| fork/clone 树 | `forkFromEntry`/`forkCopy` + `getTree`/`fork`/`clone` | C |
+| HTML 导出 | `HtmlExporter` + `exportHtml`/`exportPath` | C |
+| 会话重命名/统计 | `setSessionName`/`getSessionStats` + `sessionNameChanged`/`sessionStats` | D |
+| 网关 token 鉴权 | `GatewayToken` + `PiWebServer.onOpen` 校验 `?token=`，`/api/config` 返回 `requiresAuth` | D |
+
+### 13.3 差异与已知取舍
+
+- **服务端**：pi-webui `server/index.ts` 内嵌 pi SDK；pi-java 复用 `AgentSession` + `RpcDispatcher` 逻辑（`RpcHelpers` 语义内聚于 `WebDispatcher`），前端与协议字面复用。
+- **鉴权**：pi-webui 默认无鉴权；pi-java 首启自动生成 `~/.pi-java/web/gateway-token`（或 `PI_JAVA_WEB_TOKEN`），WS 需 `?token=`，静态托管保持公开（安全数据走 WS）。
+- **事件翻译**：`timestamp` 去重字段、`messages` 实机渲染以真实前端验证为准（`15-phase7-webui-design.md` §4.3）。
+- **前端构建**：`npm run build:client`（Vite）产物提交进 `pi-java-web/src/main/resources/web/`，Maven 不依赖 Node。

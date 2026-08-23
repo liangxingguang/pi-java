@@ -98,6 +98,12 @@ final class WebDispatcher {
                 case WebClientMessage.Clone ignored -> cloneSession();
                 case WebClientMessage.ExportHtml ignored -> exportHtml();
                 case WebClientMessage.ListSkills ignored -> send.accept(listSkills());
+                case WebClientMessage.SetSessionName n -> {
+                    session.setSessionName(n.name());
+                    send.accept(new WebServerMessage.SessionNameChanged(
+                        session.sessionId(), session.sessionName()));
+                }
+                case WebClientMessage.GetSessionStats ignored -> send.accept(sessionStats());
             }
         } catch (Exception e) {
             send.accept(new WebServerMessage.Error(
@@ -214,6 +220,16 @@ final class WebDispatcher {
                 s.messageCount(), s.firstMessage()))
             .toList();
         return new WebServerMessage.Sessions(items, session.sessionId());
+    }
+
+    /** 当前会话统计快照（{@code getSessionStats} 响应）。 */
+    private WebServerMessage.SessionStats sessionStats() {
+        var harness = session.harness();
+        var transcript = harness.snapshot(session.laneName()).transcript();
+        int messageCount = (int) transcript.stream().filter(Entry.Message.class::isInstance).count();
+        return new WebServerMessage.SessionStats(
+            session.sessionId(), session.sessionName(), messageCount, transcript.size(),
+            currentModelInfo(), thinkingWire(harness.getThinkingLevel()));
     }
 
     // ── Stage B：文件 / git（代码调试）────────────────────────────────────

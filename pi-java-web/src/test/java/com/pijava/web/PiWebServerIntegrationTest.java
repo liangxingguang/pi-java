@@ -23,9 +23,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * 端到端冒烟测试（Phase 7 设计 §8）：启动静态 + WS 双服务器，
  * 验证 {@code /api/config}、WS {@code ready}、{@code getState} /
- * {@code getModels} / {@code getSessions} 控制面往返。
+ * {@code getModels} / {@code getSessions} 控制面往返，以及 Stage D
+ * 会话重命名往返。
  */
 class PiWebServerIntegrationTest {
+
+    private static final String TOKEN = "test-token";
 
     private static int freePort() throws Exception {
         try (var socket = new ServerSocket(0)) {
@@ -38,10 +41,54 @@ class PiWebServerIntegrationTest {
         var args = ArgsParser.parse(new String[]{"--mode", "web", "--offline", "--no-session"});
         int port = freePort();
         int wsPort = freePort();
-        var handle = PiWebServer.start(args, port, wsPort);
+        var handle = PiWebServer.start(args, port, wsPort, TOKEN);
         try {
             assertConfigEndpoint(port, wsPort);
             assertWsRoundtrip(wsPort);
+        } finally {
+            handle.close();
+        }
+    }
+
+    @Test
+    void sessionRenameRoundtrip() throws Exception {
+        var args = ArgsParser.parse(new String[]{"--mode", "web", "--offline", "--no-session"});
+        int port = freePort();
+        int wsPort = freePort();
+        var handle = PiWebServer.start(args, port, wsPort, TOKEN);
+        try {
+            var received = new LinkedBlockingQueue<String>();
+            var client = new WebSocketClient(
+                    new URI("ws://localhost:" + wsPort + "/api/ws?token=" + TOKEN)) {
+                @Override
+                public void onOpen(ServerHandshake handshake) {
+                }
+
+                @Override
+                public void onMessage(String message) {
+                    received.offer(message);
+                }
+
+                @Override
+                public void onClose(int code, String reason, boolean remote) {
+                }
+
+                @Override
+                public void onError(Exception ex) {
+                }
+            };
+            client.connectBlocking(10, TimeUnit.SECONDS);
+            assertThat(client.isOpen()).isTrue();
+            assertThat(awaitType(received, "ready")).isEqualTo("ready");
+
+            client.send("{\"type\":\"setSessionName\",\"name\":\"my-renamed\"}");
+            assertThat(awaitContaining(received, "\"type\":\"sessionNameChanged\"")).isTrue();
+
+            // 重命名生效：后续 getState 的 stateSync 反映新名字
+            client.send("{\"type\":\"getState\"}");
+            assertThat(awaitContaining(received, "\"sessionName\":\"my-renamed\"")).isTrue();
+
+            client.close();
         } finally {
             handle.close();
         }
@@ -56,6 +103,7 @@ class PiWebServerIntegrationTest {
             HttpResponse.BodyHandlers.ofString());
         assertThat(config.statusCode()).isEqualTo(200);
         assertThat(config.body()).contains("\"wsPort\":" + wsPort);
+        assertThat(config.body()).contains("\"requiresAuth\":true");
 
         // 静态前端：根路径返回 SPA index.html
         var page = client.send(HttpRequest.newBuilder(
@@ -68,7 +116,8 @@ class PiWebServerIntegrationTest {
 
     private static void assertWsRoundtrip(int wsPort) throws Exception {
         var received = new LinkedBlockingQueue<String>();
-        var client = new WebSocketClient(new URI("ws://localhost:" + wsPort + "/api/ws")) {
+        var client = new WebSocketClient(
+                new URI("ws://localhost:" + wsPort + "/api/ws?token=" + TOKEN)) {
             @Override
             public void onOpen(ServerHandshake handshake) {
             }
@@ -135,6 +184,23 @@ class PiWebServerIntegrationTest {
             // 忽略不相关消息（如 agentEvent），继续等目标类型
         }
         throw new AssertionError("Timed out waiting for " + String.join("|", types)
+            + "; received so far: " + received);
+    }
+
+    /** 等待任意包含 {@code substring} 的消息，消费掉其他消息。 */
+    private static boolean awaitContaining(BlockingQueue<String> received, String substring)
+            throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+        while (System.nanoTime() < deadline) {
+            String line = received.poll(2, TimeUnit.SECONDS);
+            if (line == null) {
+                continue;
+            }
+            if (line.contains(substring)) {
+                return true;
+            }
+        }
+        throw new AssertionError("Timed out waiting for " + substring
             + "; received so far: " + received);
     }
 }
