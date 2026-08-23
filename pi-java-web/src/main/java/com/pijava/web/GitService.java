@@ -1,5 +1,6 @@
 package com.pijava.web;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -8,6 +9,7 @@ import com.pijava.web.WebProtocol.CommitInfo;
 import com.pijava.web.WebProtocol.StatusEntry;
 
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.diff.DiffFormatter;
 import org.eclipse.jgit.lib.Constants;
 
@@ -61,7 +63,7 @@ final class GitService {
                 entries.add(new StatusEntry(path, "U", "U"));
             }
             return new Status(cwd.toString(), entries);
-        } catch (Exception e) {
+        } catch (IOException | GitAPIException e) {
             throw new IllegalArgumentException("Not a git repository: " + cwd);
         }
     }
@@ -103,7 +105,7 @@ final class GitService {
             }
             formatter.flush();
             return new Diff(file, staged, output.toString());
-        } catch (Exception e) {
+        } catch (IOException | GitAPIException e) {
             throw new IllegalArgumentException("git diff failed: " + e.getMessage());
         }
     }
@@ -145,7 +147,7 @@ final class GitService {
                     rev.getAuthorIdent().getWhen().toInstant().toString()));
             }
             return new History(file, commits);
-        } catch (Exception e) {
+        } catch (IOException | GitAPIException e) {
             throw new IllegalArgumentException("git history failed: " + e.getMessage());
         }
     }
