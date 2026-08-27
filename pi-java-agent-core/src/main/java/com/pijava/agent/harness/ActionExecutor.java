@@ -14,6 +14,7 @@ import com.pijava.agent.hook.RequestContext;
 import com.pijava.agent.hook.ResponseContext;
 import com.pijava.agent.hook.RunContext;
 import com.pijava.agent.hook.RunEndContext;
+import com.pijava.agent.hook.ShouldStopAfterTurnContext;
 import com.pijava.agent.prompt.SystemPromptBuilder;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.record.OperationOutcome;
@@ -381,6 +382,22 @@ final class ActionExecutor {
             }
             // tool_use stop reason but no tool calls → complete the run instead
             status = "completed";
+        }
+
+        // pi alignment: shouldStopAfterTurn — after a completed turn, hooks
+        // may end the run before queued follow-ups would start the next one.
+        if ("completed".equals(status)) {
+            var stop = ctx.hookSystem().fireShouldStopAfterTurn(laneName,
+                new ShouldStopAfterTurnContext(laneName, lane.runId, lane.partial, List.of()));
+            if (stop) {
+                lane.records.add(new LaneRecord.OperationFinished(
+                    UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
+                    OperationOutcome.COMPLETED, null));
+                ctx.hookSystem().fireBeforeRunEnd(laneName,
+                    new RunEndContext(laneName, lane.runId, status));
+                lane.phase = RunPhase.IDLE;
+                return null;
+            }
         }
 
         // Terminal outcome (completed / error): fire before_run_end and finish

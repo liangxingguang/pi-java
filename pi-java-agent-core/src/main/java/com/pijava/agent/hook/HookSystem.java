@@ -88,6 +88,11 @@ public final class HookSystem {
         return registry.register(laneName, "before_run_end", hook);
     }
 
+    /** Register a {@code should_stop_after_turn} hook for the lane. */
+    public AutoCloseable onShouldStopAfterTurn(String laneName, ShouldStopAfterTurnHook hook) {
+        return registry.register(laneName, "should_stop_after_turn", hook);
+    }
+
     // ═══════════════════════════════════════════════════════════
     // Firing (10 fire* methods)
     // ═══════════════════════════════════════════════════════════
@@ -216,6 +221,24 @@ public final class HookSystem {
             }
         }
         return result;
+    }
+
+    /**
+     * Fire {@code should_stop_after_turn} hooks.
+     * First non-null return wins; a throwing hook is recorded and abstains.
+     *
+     * @return true when a hook decided the run should stop
+     */
+    public boolean fireShouldStopAfterTurn(String laneName, ShouldStopAfterTurnContext ctx) {
+        for (var hook : registry.get(laneName, "should_stop_after_turn")) {
+            try {
+                var r = ((ShouldStopAfterTurnHook) hook).shouldStopAfterTurn(ctx);
+                if (r != null) return r;
+            } catch (Exception e) {
+                recordHookError(laneName, "should_stop_after_turn", e);
+            }
+        }
+        return false;
     }
 
     // ═══════════════════════════════════════════════════════════
