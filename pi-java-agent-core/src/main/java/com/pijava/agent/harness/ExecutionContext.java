@@ -49,7 +49,8 @@ record ExecutionContext(
     QueueManager queueManager,
     Supplier<ToolExecution> toolExecution,
     Supplier<Consumer<StreamEvent>> streamListener,
-    SummaryGenerator summaryGenerator
+    SummaryGenerator summaryGenerator,
+    java.util.function.BiConsumer<ModelId<?>, String> turnConfigApplier
 ) {
     LaneState requireLane(String laneName) {
         return HarnessUtils.requireLane(lanes, laneName);

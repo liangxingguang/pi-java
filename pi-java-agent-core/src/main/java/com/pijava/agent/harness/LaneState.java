@@ -56,6 +56,9 @@ public final class LaneState {
     /** Abort signal for the current run. Phase 2b. */
     AbortSignal abortSignal;
 
+    /** Pending update from prepare_next_turn hooks; consumed by the next StreamAssistant, cleared at run end. */
+    com.pijava.agent.hook.TurnUpdate pendingTurnUpdate;
+
     // Phase 2c: multi-lane fields
     /** Parent leaf ID for branching; null for the default lane. */
     String parentLeafId;

@@ -151,4 +151,78 @@ class HookTest {
         h.followUp("default", "second");
         assertThat(h.peekAction("default")).isNotNull();
     }
+
+    // ── prepare_next_turn ─────────────────────────────────
+
+    /** Multi-turn StreamFn: transcripts without a toolResult get tool_use; with one, stop. */
+    private static StreamFn toolUseThenStopStreamFn(java.util.List<String> seenModels) {
+        var toolUse = AssistantMessage.empty()
+                .withContent(List.of(new ContentBlock.ToolUseContent(
+                    "call-1", "echo", java.util.Map.of())))
+                .withStopReason("tool_use");
+        var stop = AssistantMessage.empty()
+                .withContent(List.of(new ContentBlock.TextContent("done")))
+                .withStopReason("stop");
+        return (messages, model, options) -> {
+            boolean firstTurn = messages.stream()
+                .noneMatch(m -> m instanceof com.pijava.ai.message.Message.ToolResultMessage);
+            seenModels.add(model.provider() + "/" + model.modelName());
+            var partial = firstTurn ? toolUse : stop;
+            return StreamIterator.from(List.of(
+                new StreamEvent.Start(AssistantMessage.empty()),
+                new StreamEvent.TextEnd(0, "x", partial),
+                new StreamEvent.StreamDone(partial.stopReason(), null, partial)));
+        };
+    }
+
+    private static void drive(AgentHarness h) {
+        var action = h.peekAction();
+        while (action != null) { action = h.executeAction(action); }
+    }
+
+    @Test
+    void prepareNextTurnSwitchesModelForNextTurnWithinRun() {
+        var seenModels = new java.util.ArrayList<String>();
+        var h = AgentHarness.create(configWith(toolUseThenStopStreamFn(seenModels)));
+        h.hookSystem().onPrepareNextTurn("default", ctx ->
+            new com.pijava.agent.hook.TurnUpdate(ModelId.of("faux", "next-model"), null));
+        h.run("go");
+        drive(h);
+        // turn 1 used test-model; turn 2 (same run) used next-model
+        assertThat(seenModels).containsExactly("faux/test-model", "faux/next-model");
+        // transcript records the switch (pi-java auditability)
+        assertThat(h.snapshot("default").transcript().stream()
+            .anyMatch(e -> e instanceof com.pijava.agent.entry.Entry.ModelChange mc
+                && "next-model".equals(mc.modelId()))).isTrue();
+    }
+
+    @Test
+    void prepareNextTurnDoesNotLeakAcrossRuns() {
+        var seenModels = new java.util.ArrayList<String>();
+        var h = AgentHarness.create(configWith(toolUseThenStopStreamFn(seenModels)));
+        h.hookSystem().onPrepareNextTurn("default", ctx ->
+            new com.pijava.agent.hook.TurnUpdate(ModelId.of("faux", "next-model"), null));
+        // run 1: turn1 test-model → hook fires → turn2 next-model → run ends
+        h.run("run1");
+        drive(h);
+        // reset model for run 2 (hook fired in run1 must NOT carry over)
+        h.setModel(ModelId.of("faux", "test-model"));
+        h.run("run2");
+        drive(h);
+        assertThat(seenModels).containsExactly(
+            "faux/test-model", "faux/next-model",
+            "faux/test-model", "faux/next-model");
+    }
+
+    @Test
+    void prepareNextTurnNullChangesNothing() {
+        var seenModels = new java.util.ArrayList<String>();
+        var h = AgentHarness.create(configWith(toolUseThenStopStreamFn(seenModels)));
+        h.hookSystem().onPrepareNextTurn("default", ctx -> null);
+        h.run("go");
+        drive(h);
+        assertThat(seenModels).containsExactly("faux/test-model", "faux/test-model");
+        assertThat(h.snapshot("default").transcript().stream()
+            .noneMatch(e -> e instanceof com.pijava.agent.entry.Entry.ModelChange)).isTrue();
+    }
 }

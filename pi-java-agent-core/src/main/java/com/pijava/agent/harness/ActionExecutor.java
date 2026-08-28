@@ -10,6 +10,7 @@ import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.context.OverflowDetector;
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.hook.CompactionContext;
+import com.pijava.agent.hook.PrepareNextTurnContext;
 import com.pijava.agent.hook.RequestContext;
 import com.pijava.agent.hook.ResponseContext;
 import com.pijava.agent.hook.RunContext;
@@ -66,6 +67,7 @@ final class ActionExecutor {
         lane.pendingWrites.clear();
         lane.records.clear();
         lane.pendingToolCalls.clear();
+        lane.pendingTurnUpdate = null;
         lane.abortSignal = AbortSignal.create();
 
         // Fire before_run hook
@@ -260,6 +262,7 @@ final class ActionExecutor {
         }
 
         // Auto-compaction: check token budget before building messages
+        applyPendingTurnUpdate(laneName, lane);
         checkAutoCompact(laneName, lane);
 
         var messages = buildMessagesForLane(laneName, lane);
@@ -370,6 +373,14 @@ final class ActionExecutor {
     private Action executeTryFinishRun(String laneName, LaneState lane,
                                         Action.TryFinishRun tfr) {
         String status = tfr.outcome();
+        // pi alignment: prepareNextTurn fires after turn_end, before the
+        // shouldStop check (agent-loop.ts:232→248). Scoped to THIS run: the
+        // update is applied by the next StreamAssistant and cleared at run end.
+        if ("completed".equals(status) || "tool_use".equals(status)) {
+            var upd = ctx.hookSystem().firePrepareNextTurn(laneName,
+                new PrepareNextTurnContext(laneName, lane.runId, lane.partial, List.of()));
+            if (upd != null) lane.pendingTurnUpdate = upd;
+        }
         if ("tool_use".equals(status)) {
             List<Action.ExecuteTool> toolActions = HarnessUtils.extractToolCalls(lane.partial);
             if (!toolActions.isEmpty()) {
@@ -396,6 +407,7 @@ final class ActionExecutor {
                 ctx.hookSystem().fireBeforeRunEnd(laneName,
                     new RunEndContext(laneName, lane.runId, status));
                 lane.phase = RunPhase.IDLE;
+                lane.pendingTurnUpdate = null;
                 return null;
             }
         }
@@ -408,6 +420,7 @@ final class ActionExecutor {
             new RunEndContext(laneName, lane.runId, status));
 
         lane.phase = RunPhase.IDLE;
+        lane.pendingTurnUpdate = null;
         // Start the next run from queued follow-up messages (Phase 3).
         // One-at-a-time leaves the rest queued; they are drained when each
         // subsequent run finishes.
@@ -468,6 +481,43 @@ final class ActionExecutor {
     // ═══════════════════════════════════════════════════════════
     // Internal helpers
     // ═══════════════════════════════════════════════════════════
+
+    /** Apply a pending prepare_next_turn update; write a change entry only when the value truly changed. */
+    private void applyPendingTurnUpdate(String laneName, LaneState lane) {
+        if (lane.pendingTurnUpdate == null) return;
+        var upd = lane.pendingTurnUpdate;
+        lane.pendingTurnUpdate = null;
+        if (upd.model() != null) {
+            var current = ctx.model().get();
+            boolean changed = !current.modelName().equals(upd.model().modelName())
+                || !current.provider().equals(upd.model().provider());
+            ctx.turnConfigApplier().accept(upd.model(), null);
+            if (changed) {
+                var e = new Entry.ModelChange(UUID.randomUUID().toString(), lane.nextSeq(),
+                    HarnessUtils.lastEntryId(lane), java.time.Instant.now(),
+                    upd.model().provider(), upd.model().modelName());
+                lane.transcript.add(e);
+                lane.pendingWrites.add(e);
+            }
+        }
+        if (upd.thinkingLevel() != null) {
+            var cur = ctx.thinkingLevel().get();
+            boolean changed;
+            if ("off".equals(upd.thinkingLevel())) {
+                changed = !(cur instanceof ModelThinkingLevel.Off);
+            } else {
+                changed = !(cur instanceof ModelThinkingLevel.Enabled en
+                    && en.level().label().equals(upd.thinkingLevel()));
+            }
+            ctx.turnConfigApplier().accept(null, upd.thinkingLevel());
+            if (changed) {
+                var e = new Entry.ThinkingLevelChange(UUID.randomUUID().toString(), lane.nextSeq(),
+                    HarnessUtils.lastEntryId(lane), java.time.Instant.now(), upd.thinkingLevel());
+                lane.transcript.add(e);
+                lane.pendingWrites.add(e);
+            }
+        }
+    }
 
     void checkAutoCompact(String laneName, LaneState lane) {
         var settings = ctx.compactionSettings().get();

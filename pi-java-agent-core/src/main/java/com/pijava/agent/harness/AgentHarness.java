@@ -130,8 +130,32 @@ public class AgentHarness implements AutoCloseable {
             new ToolExecutor(toolRegistry, toolContext), skillManager,
             hookSystem, lanes, () -> state.compactionSettings, config.thinkingLevelMap(),
             tokenCounter, snapshotService, queueManager, () -> state.toolExecution,
-            () -> this::broadcastStreamEvent, config.summaryGenerator());
+            () -> this::broadcastStreamEvent, config.summaryGenerator(),
+            this::applyTurnConfig);
         this.actionExecutor = new ActionExecutor(execCtx);
+    }
+
+    /** Apply a prepare_next_turn update to harness state (label → level). */
+    private void applyTurnConfig(ModelId<?> model, String thinkingLevelLabel) {
+        if (model != null) {
+            state.model = model;
+        }
+        if (thinkingLevelLabel != null) {
+            state.thinkingLevel = "off".equals(thinkingLevelLabel)
+                ? ModelThinkingLevel.off()
+                : ModelThinkingLevel.of(parseThinkingLabel(thinkingLevelLabel));
+        }
+    }
+
+    private static com.pijava.ai.thinking.ThinkingLevel parseThinkingLabel(String label) {
+        return switch (label) {
+            case "minimal" -> new com.pijava.ai.thinking.ThinkingLevel.Minimal();
+            case "low" -> new com.pijava.ai.thinking.ThinkingLevel.Low();
+            case "medium" -> new com.pijava.ai.thinking.ThinkingLevel.Medium();
+            case "high" -> new com.pijava.ai.thinking.ThinkingLevel.High();
+            case "xhigh" -> new com.pijava.ai.thinking.ThinkingLevel.XHigh();
+            default -> throw new IllegalArgumentException("Unknown thinking level: " + label);
+        };
     }
 
     /**

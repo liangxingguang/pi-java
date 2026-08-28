@@ -93,6 +93,11 @@ public final class HookSystem {
         return registry.register(laneName, "should_stop_after_turn", hook);
     }
 
+    /** Register a {@code prepare_next_turn} hook for the lane. */
+    public AutoCloseable onPrepareNextTurn(String laneName, PrepareNextTurnHook hook) {
+        return registry.register(laneName, "prepare_next_turn", hook);
+    }
+
     // ═══════════════════════════════════════════════════════════
     // Firing (10 fire* methods)
     // ═══════════════════════════════════════════════════════════
@@ -239,6 +244,32 @@ public final class HookSystem {
             }
         }
         return false;
+    }
+
+    /**
+     * Fire {@code prepare_next_turn} hooks, chaining updates. Each non-null
+     * return merges over the accumulated result; a throwing hook is recorded
+     * and abstains.
+     *
+     * @return the merged update, or null when no hook produced one
+     */
+    public TurnUpdate firePrepareNextTurn(String laneName, PrepareNextTurnContext ctx) {
+        TurnUpdate result = null;
+        for (var hook : registry.get(laneName, "prepare_next_turn")) {
+            try {
+                var u = ((PrepareNextTurnHook) hook).prepareNextTurn(ctx);
+                if (u != null) {
+                    result = new TurnUpdate(
+                        u.model() != null ? u.model()
+                            : result != null ? result.model() : null,
+                        u.thinkingLevel() != null ? u.thinkingLevel()
+                            : result != null ? result.thinkingLevel() : null);
+                }
+            } catch (Exception e) {
+                recordHookError(laneName, "prepare_next_turn", e);
+            }
+        }
+        return result;
     }
 
     // ═══════════════════════════════════════════════════════════
