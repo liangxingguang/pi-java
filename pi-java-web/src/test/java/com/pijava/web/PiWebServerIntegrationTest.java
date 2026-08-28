@@ -51,6 +51,56 @@ class PiWebServerIntegrationTest {
     }
 
     @Test
+    void settingsRoundtrip() throws Exception {
+        var args = ArgsParser.parse(new String[]{"--mode", "web", "--offline", "--no-session"});
+        int port = freePort();
+        int wsPort = freePort();
+        var handle = PiWebServer.start(args, port, wsPort, TOKEN);
+        try {
+            var received = new LinkedBlockingQueue<String>();
+            var client = new WebSocketClient(
+                    new URI("ws://localhost:" + wsPort + "/api/ws?token=" + TOKEN)) {
+                @Override
+                public void onOpen(ServerHandshake handshake) {
+                }
+
+                @Override
+                public void onMessage(String message) {
+                    received.offer(message);
+                }
+
+                @Override
+                public void onClose(int code, String reason, boolean remote) {
+                }
+
+                @Override
+                public void onError(Exception ex) {
+                }
+            };
+            client.connectBlocking(10, TimeUnit.SECONDS);
+            assertThat(client.isOpen()).isTrue();
+            assertThat(awaitType(received, "ready")).isEqualTo("ready");
+
+            // getSettings → settingsState（含 theme key）
+            client.send("{\"type\":\"getSettings\"}");
+            String state = awaitMessage(received, "settingsState");
+            assertThat(state).contains("\"theme\":");
+
+            // setSetting 往返：改为 light，随后恢复原值避免副作用
+            String original = extractSetting(state, "theme");
+            String testValue = "dark".equals(original) ? "light" : "dark";
+            client.send("{\"type\":\"setSetting\",\"key\":\"theme\",\"value\":\"" + testValue + "\"}");
+            assertThat(awaitContaining(received, "\"theme\":\"" + testValue + "\"")).isTrue();
+            client.send("{\"type\":\"setSetting\",\"key\":\"theme\",\"value\":\"" + original + "\"}");
+            assertThat(awaitContaining(received, "\"theme\":\"" + original + "\"")).isTrue();
+
+            client.close();
+        } finally {
+            handle.close();
+        }
+    }
+
+    @Test
     void sessionRenameRoundtrip() throws Exception {
         var args = ArgsParser.parse(new String[]{"--mode", "web", "--offline", "--no-session"});
         int port = freePort();
@@ -166,6 +216,33 @@ class PiWebServerIntegrationTest {
     private static String awaitType(BlockingQueue<String> received, String type)
             throws Exception {
         return awaitAny(received, type);
+    }
+
+    /** 等待指定 type 的消息并返回完整消息体（消费掉其他消息）。 */
+    private static String awaitMessage(BlockingQueue<String> received, String type)
+            throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+        while (System.nanoTime() < deadline) {
+            String line = received.poll(2, TimeUnit.SECONDS);
+            if (line == null) {
+                continue;
+            }
+            if (line.contains("\"type\":\"" + type + "\"")) {
+                return line;
+            }
+        }
+        throw new AssertionError("Timed out waiting for " + type);
+    }
+
+    /** 从 settingsState 消息提取 {@code "key":"value"} 的值。 */
+    private static String extractSetting(String message, String key) {
+        var needle = "\"" + key + "\":\"";
+        int start = message.indexOf(needle);
+        assertThat(start).as("key %s present in %s", key, message).isGreaterThanOrEqualTo(0);
+        int valueStart = start + needle.length();
+        int end = message.indexOf('"', valueStart);
+        assertThat(end).as("value terminator for %s", key).isGreaterThanOrEqualTo(0);
+        return message.substring(valueStart, end);
     }
 
     private static String awaitAny(BlockingQueue<String> received, String... types)

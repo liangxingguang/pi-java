@@ -124,7 +124,7 @@ public final class PiWebServer {
                 LOG.info("web client connected: {}", conn.getRemoteSocketAddress());
                 AgentSession session;
                 try {
-                    session = AgentSession.create(args);
+                    session = AgentSession.createWeb(args);
                 } catch (Exception e) {
                     LOG.error("Failed to create agent session for web client", e);
                     sendJson(conn, new WebServerMessage.Error(

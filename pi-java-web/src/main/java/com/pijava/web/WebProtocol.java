@@ -1,6 +1,7 @@
 package com.pijava.web;
 
 import java.util.List;
+import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -97,7 +98,9 @@ public final class WebProtocol {
         @JsonSubTypes.Type(value = WebClientMessage.ExportHtml.class),
         @JsonSubTypes.Type(value = WebClientMessage.ListSkills.class),
         @JsonSubTypes.Type(value = WebClientMessage.SetSessionName.class),
-        @JsonSubTypes.Type(value = WebClientMessage.GetSessionStats.class)
+        @JsonSubTypes.Type(value = WebClientMessage.GetSessionStats.class),
+        @JsonSubTypes.Type(value = WebClientMessage.GetSettings.class),
+        @JsonSubTypes.Type(value = WebClientMessage.SetSetting.class)
     })
     public sealed interface WebClientMessage {
 
@@ -233,6 +236,16 @@ public final class WebProtocol {
         record GetSessionStats() implements WebClientMessage {
             @Override public String type() { return "getSessionStats"; }
         }
+
+        @JsonTypeName("getSettings")
+        record GetSettings() implements WebClientMessage {
+            @Override public String type() { return "getSettings"; }
+        }
+
+        @JsonTypeName("setSetting")
+        record SetSetting(String key, String value) implements WebClientMessage {
+            @Override public String type() { return "setSetting"; }
+        }
     }
 
     // ── 服务端 → 客户端 ─────────────────────────────────────────────────
@@ -258,7 +271,8 @@ public final class WebProtocol {
         @JsonSubTypes.Type(value = WebServerMessage.ExportPath.class),
         @JsonSubTypes.Type(value = WebServerMessage.Skills.class),
         @JsonSubTypes.Type(value = WebServerMessage.SessionNameChanged.class),
-        @JsonSubTypes.Type(value = WebServerMessage.SessionStats.class)
+        @JsonSubTypes.Type(value = WebServerMessage.SessionStats.class),
+        @JsonSubTypes.Type(value = WebServerMessage.SettingsState.class)
     })
     public sealed interface WebServerMessage {
 
@@ -393,6 +407,12 @@ public final class WebProtocol {
         record SessionStats(String sessionId, String name, int messageCount, int entryCount,
                             ModelInfo model, String thinkingLevel) implements WebServerMessage {
             @Override public String type() { return "sessionStats"; }
+        }
+
+        /** 设置快照（{@code settingsState}，web 相关的平面 key→value）。 */
+        @JsonTypeName("settingsState")
+        record SettingsState(Map<String, String> settings) implements WebServerMessage {
+            @Override public String type() { return "settingsState"; }
         }
     }
 }

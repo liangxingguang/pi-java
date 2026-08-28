@@ -15,7 +15,7 @@ PORT="${1:-8787}"
 JAR="pi-java-dist/target/pi-java.jar"
 
 echo "[pi-java web] building (incremental)..."
-"$MVN" -q -pl pi-java-dist -am package -DskipTests || {
+"$MVN" -q -pl pi-java-dist -am install -DskipTests || {
     echo "[pi-java web] build failed"
     exit 1
 }

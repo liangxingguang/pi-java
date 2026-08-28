@@ -24,6 +24,7 @@ import com.pijava.coding.agent.cli.Args;
 import com.pijava.coding.agent.cli.ThinkingLevels;
 import com.pijava.coding.agent.core.AgentSession;
 import com.pijava.coding.agent.core.PromptConfig;
+import com.pijava.coding.agent.core.SettingsAccessors;
 import com.pijava.web.WebProtocol.ModelInfo;
 import com.pijava.web.WebProtocol.SerializedAgentState;
 import com.pijava.web.WebProtocol.SessionListItem;
@@ -104,6 +105,11 @@ final class WebDispatcher {
                         session.sessionId(), session.sessionName()));
                 }
                 case WebClientMessage.GetSessionStats ignored -> send.accept(sessionStats());
+                case WebClientMessage.GetSettings ignored -> send.accept(settingsState());
+                case WebClientMessage.SetSetting s -> {
+                    setSetting(s.key(), s.value());
+                    send.accept(settingsState());
+                }
             }
         } catch (Exception e) {
             send.accept(new WebServerMessage.Error(
@@ -184,7 +190,7 @@ final class WebDispatcher {
     private WebServerMessage.StateSync stateSync() {
         var harness = session.harness();
         var model = harness.getModel();
-        var messages = harness.snapshot(session.laneName()).transcript().stream()
+        var messages = session.accumulatedEntries().stream()
             .filter(Entry.Message.class::isInstance)
             .map(e -> SessionJson.messageNode(((Entry.Message) e).message()))
             .toList();
@@ -230,6 +236,44 @@ final class WebDispatcher {
         return new WebServerMessage.SessionStats(
             session.sessionId(), session.sessionName(), messageCount, transcript.size(),
             currentModelInfo(), thinkingWire(harness.getThinkingLevel()));
+    }
+
+    // ── Phase 3：设置（web 相关子集，对齐 TUI /settings）────────────────
+
+    private SettingsAccessors settings() {
+        return session.services().settings().accessors();
+    }
+
+    /** 当前有效设置快照（web 相关 key，null 归默认）。 */
+    private WebServerMessage.SettingsState settingsState() {
+        var a = settings();
+        var m = new LinkedHashMap<String, String>();
+        m.put("theme", firstNonNull(a.getTheme(), "dark"));
+        m.put("defaultThinkingLevel", firstNonNull(a.getDefaultThinkingLevel(), "off"));
+        m.put("steeringMode", firstNonNull(a.getSteeringMode(), "one-at-a-time"));
+        m.put("followUpMode", firstNonNull(a.getFollowUpMode(), "one-at-a-time"));
+        m.put("defaultProjectTrust", firstNonNull(a.getDefaultProjectTrust(), "prompt"));
+        m.put("hideThinkingBlock", String.valueOf(Boolean.TRUE.equals(a.getHideThinkingBlock())));
+        return new WebServerMessage.SettingsState(m);
+    }
+
+    /** 写单个设置（写入全局 scope 并持久化）。 */
+    private void setSetting(String key, String value) {
+        var a = settings();
+        switch (key == null ? "" : key) {
+            case "theme" -> a.setTheme(value);
+            case "defaultThinkingLevel" -> a.setDefaultThinkingLevel(value);
+            case "steeringMode" -> a.setSteeringMode(value);
+            case "followUpMode" -> a.setFollowUpMode(value);
+            case "defaultProjectTrust" -> a.setDefaultProjectTrust(value);
+            case "hideThinkingBlock" -> a.setHideThinkingBlock(Boolean.parseBoolean(value));
+            default -> throw new IllegalArgumentException("Unknown setting: " + key);
+        }
+        session.services().settings().flush();
+    }
+
+    private static String firstNonNull(String v, String dflt) {
+        return v == null ? dflt : v;
     }
 
     // ── Stage B：文件 / git（代码调试）────────────────────────────────────

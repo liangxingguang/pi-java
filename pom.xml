@@ -59,6 +59,7 @@
         <version.graalvm>25.0.4</version.graalvm>
         <version.native-maven-plugin>0.10.6</version.native-maven-plugin>
         <version.shade-plugin>3.6.0</version.shade-plugin>
+        <version.frontend-maven-plugin>1.15.1</version.frontend-maven-plugin>
         <version.slf4j>2.0.16</version.slf4j>
         <version.logback>1.5.16</version.logback>
     </properties>
