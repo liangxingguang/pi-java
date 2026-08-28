@@ -56,7 +56,8 @@ final class PersistentSessionRepositories {
 
             @Override
             public Optional<? extends SessionMetadata> latest() {
-                return repo.list(JsonlSessionListOptions.all()).stream().findFirst();
+                var all = repo.list(JsonlSessionListOptions.all());
+                return all.stream().findFirst();
             }
 
             @Override

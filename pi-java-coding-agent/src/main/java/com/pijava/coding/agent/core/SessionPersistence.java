@@ -54,6 +54,22 @@ final class SessionPersistence {
     }
 
     /** Resolve {@code -c/-r/--fork/--session-id} against the persistent repo. */
+    /** Web 默认：恢复最近一个持久会话（刷新/重连保留历史），仅当无会话时新建。 */
+    static AgentSession resolvePersistentWeb(AgentSession session, Args args) {
+        var handle = session.persistentRepository();
+        var cwd = System.getProperty("user.dir");
+        var latest = handle.latest();
+        return latest.map(meta -> {
+            attach(session, handle, meta);
+            return session;
+        }).orElseGet(() -> {
+            var created = handle.create(cwd, null);
+            session.session(created);
+            attach(session, handle, created.getMetadata());
+            return session;
+        });
+    }
+
     static AgentSession resolvePersistent(AgentSession session, Args args) {
         var handle = session.persistentRepository();
         var cwd = System.getProperty("user.dir");

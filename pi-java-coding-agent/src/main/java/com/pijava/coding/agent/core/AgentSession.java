@@ -109,6 +109,28 @@ public final class AgentSession implements AutoCloseable {
     }
 
     /** Assemble from CLI args with the configured persistent backend. */
+    /** Web 默认入口：恢复最近一个持久会话，仅当无会话时新建（刷新/重连不丢历史）。 */
+    public static AgentSession createWeb(Args args) {
+        var settings = SettingsManager.load(args.projectTrustOverride());
+        var effective = settings.effective();
+        var backend = effective.sessionBackend == null ? "jsonl" : effective.sessionBackend;
+        var sessionsRoot = Path.of(args.sessionDir() != null ? args.sessionDir()
+            : (effective.sessionDir != null ? effective.sessionDir
+                : Path.of(System.getProperty("user.home"), ".pi-java", "agent", "sessions").toString()));
+        var handle = "sqlite".equals(backend)
+            ? PersistentSessionRepositories.sqlite(sessionsRoot)
+            : PersistentSessionRepositories.jsonl(sessionsRoot);
+        var session = assemble(args, settings, DefaultProviders.defaultProviders(),
+            new ToolContext(
+                System.getProperty("user.dir"),
+                Map.of(),
+                new DefaultShellExecutor(effective.shellPath),
+                new DefaultFileSystem()),
+            handle, handle.repository());
+        session.persistentRepository = handle;
+        return SessionPersistence.resolvePersistentWeb(session, args);
+    }
+
     public static AgentSession create(Args args) {
         var settings = SettingsManager.load(args.projectTrustOverride());
         var effective = settings.effective();
@@ -269,6 +291,18 @@ public final class AgentSession implements AutoCloseable {
     /** Approximate transcript size for session listings. */
     public long entryCount() {
         return harness.snapshot(laneName).transcript().size();
+    }
+
+    /** 全文对话条目（持久会话提交序），供跨回合/重连展示完整历史。 */
+    public List<Entry> accumulatedEntries() {
+        if (session != null) {
+            var entries = session.findEntries(
+                new EntryQuery(null, null, EntryOrder.OLDEST_FIRST, null, null));
+            if (!entries.isEmpty()) {
+                return entries;
+            }
+        }
+        return harness.snapshot(laneName).transcript();
     }
 
     /** Run a prompt, returning a live {@link SessionResult} (Phase 3 §11.1). */
