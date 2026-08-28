@@ -112,9 +112,67 @@ final class ActionExecutor {
         return peekAction(laneName);
     }
 
-    /** Compact the specified lane's transcript. */
-    void compact(String laneName, CompactionSettings settings) {
+    /** Clear lane transcript, queues, and run state (pi Agent.reset alignment). */
+    void reset(String laneName) {
         var lane = ctx.requireLane(laneName);
+        if (!(lane.phase instanceof RunPhase.Idle)) {
+            throw new IllegalStateException(
+                "Cannot reset: lane " + laneName + " is running");
+        }
+        synchronized (lane) {
+            lane.transcript.clear();
+            lane.pendingWrites.clear();
+            lane.records.clear();
+            lane.pendingToolCalls.clear();
+            lane.partial = null;
+            lane.newestOwn = null;
+            lane.runId = null;
+            lane.stepIndex = 0;
+            lane.pendingTurnUpdate = null;
+            lane.steerQueue.clear();
+            lane.followUpQueue.clear();
+            lane.nextRunQueue.clear();
+        }
+    }
+
+    /**
+     * Continue a run from the current transcript tail (pi agentLoopContinue
+     * alignment): no new user entry, straight into the assistant stream.
+     */
+    Action runContinue(String laneName) {
+        var lane = ctx.requireLane(laneName);
+        if (!(lane.phase instanceof RunPhase.Idle)) {
+            throw new IllegalStateException(
+                "Cannot continue: lane " + laneName + " is not idle");
+        }
+        if (lane.transcript.isEmpty()) {
+            throw new IllegalStateException("Cannot continue: no messages in context");
+        }
+        var last = lane.lastEntry();
+        if (last instanceof Entry.Message m
+                && m.message() instanceof Message.AssistantMessage) {
+            throw new IllegalStateException("Cannot continue from message role: assistant");
+        }
+        lane.runId = UUID.randomUUID().toString();
+        lane.stepIndex = 0;
+        lane.partial = null;
+        lane.newestOwn = null;
+        lane.records.clear();
+        lane.pendingToolCalls.clear();
+        lane.abortSignal = AbortSignal.create();
+
+        ctx.hookSystem().fireBeforeRun(laneName,
+            new RunContext(laneName, lane.runId, List.of()));
+        lane.records.add(new LaneRecord.OperationStarted(
+            UUID.randomUUID().toString(), 0, laneName, null, null,
+            new LaneRecord.OperationStarted.Run(List.of(), List.of(), null, null)));
+        ctx.incrementTurn();
+        lane.phase = RunPhase.ASSISTANT;
+        return peekAction(laneName);
+    }
+
+    /** Compact the specified lane's transcript. */
+    void compact(String laneName, CompactionSettings settings) {        var lane = ctx.requireLane(laneName);
         if (lane.transcript.size() <= 1) {
             throw new NothingToCompactException(laneName);
         }

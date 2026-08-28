@@ -350,6 +350,37 @@ public class AgentHarness implements AutoCloseable {
         publishState(laneName);
     }
 
+    /**
+     * Clear lane transcript, all queues, and run state (pi Agent.reset
+     * alignment). Rejected while the lane is running.
+     */
+    public void reset(String laneName) {
+        if (closed) throw new HarnessClosedException();
+        actionExecutor.reset(laneName);
+        publishState(laneName);
+    }
+
+    /** Clear the default lane (pi Agent.reset alignment). */
+    public void reset() {
+        reset(defaultLaneName);
+    }
+
+    /**
+     * Continue a run from the current transcript tail (pi Agent.continue
+     * alignment): no new user entry, straight into the assistant stream.
+     */
+    public Action continueRun(String laneName) {
+        if (closed) throw new HarnessClosedException();
+        var action = actionExecutor.runContinue(laneName);
+        publishState(laneName);
+        return action;
+    }
+
+    /** Continue a run on the default lane. */
+    public Action continueRun() {
+        return continueRun(defaultLaneName);
+    }
+
     /** Return the final assistant message from the most recent run (default lane). */
     public AssistantMessage lastAssistantMessage() {
         return lanes.get(defaultLaneName).partial;
