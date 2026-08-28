@@ -202,7 +202,7 @@ public final class AgentSession implements AutoCloseable {
             modelPattern = providerName;
         }
         var streamFn = DefaultProviders.streamFnFor(
-            args, effective.defaultProvider, providers);
+            args, effective.defaultProvider, providers, effective);
         var model = models.resolve(modelPattern, providerName);
         var harness = AgentHarness.create(HarnessConfig.builder()
             .streamFn(streamFn)

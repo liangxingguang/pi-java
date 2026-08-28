@@ -13,6 +13,8 @@ import com.pijava.coding.agent.cli.Args;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.function.Function;
 
 /**
  * Assembly helpers for providers and the harness {@link StreamFn}
@@ -51,16 +53,17 @@ public final class DefaultProviders {
 
     /**
      * Build a {@link StreamFn} that routes through the provider selected by
-     * {@code args.provider()} or the settings default, using the CLI API key or
-     * the environment/file credential store.
+     * {@code args.provider()} or the settings default, using the CLI API key,
+     * the settings key, or the environment/file credential store.
      */
     public static StreamFn streamFnFor(Args args, String defaultProvider,
-                                       ProviderRegistry providers) {
+                                       ProviderRegistry providers, Settings settings) {
         var providerName = resolveProviderName(args, defaultProvider);
         return (messages, model, options) -> {
             var provider = providers.get(providerName)
                 .orElseThrow(() -> new IllegalStateException("Unknown provider: " + providerName));
-            return streamBlocking(provider, messages, model, options, apiOptions(args, providerName));
+            return streamBlocking(provider, messages, model, options,
+                apiOptions(args, providerName, settings, Credentials::resolveApiKey));
         };
     }
 
@@ -79,17 +82,26 @@ public final class DefaultProviders {
         return api.streamBlocking(request, apiOptions);
     }
 
-    private static ApiOptions apiOptions(Args args, String providerName) {
-        var apiKey = resolveApiKey(args, providerName);
-        return new ApiOptions("", apiKey,
+    /**
+     * Resolve {@link ApiOptions} for a provider: baseUrl/apiKey priority is
+     * CLI flag &gt; settings default &gt; credential resolver (null = none).
+     */
+    static ApiOptions apiOptions(Args args, String providerName, Settings settings,
+                                 Function<String, Optional<String>> credentialResolver) {
+        var baseUrl = firstNonBlank(args.baseUrl(), settings == null ? null : settings.defaultBaseUrl);
+        var apiKey = firstNonBlank(args.apiKey(), settings == null ? null : settings.defaultApiKey);
+        if (apiKey == null && credentialResolver != null) {
+            apiKey = credentialResolver.apply(providerName).orElse(null);
+        }
+        return new ApiOptions(baseUrl == null ? "" : baseUrl,
+            apiKey == null ? "" : apiKey,
             java.time.Duration.ofSeconds(120), 2, Map.of());
     }
 
-    private static String resolveApiKey(Args args, String providerName) {
-        if (args.apiKey() != null && !args.apiKey().isBlank()) {
-            return args.apiKey();
+    private static String firstNonBlank(String first, String second) {
+        if (first != null && !first.isBlank()) {
+            return first;
         }
-        // P6-18：profile 感知解析（激活 profile → 默认）。
-        return Credentials.resolveApiKey(providerName).orElse("");
+        return second;
     }
 }

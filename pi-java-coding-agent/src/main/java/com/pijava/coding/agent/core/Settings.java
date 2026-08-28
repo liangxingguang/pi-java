@@ -23,6 +23,10 @@ public final class Settings {
     public String defaultProvider;
     public String defaultModel;
     public String defaultThinkingLevel;
+    /** API endpoint override (OpenAI/Anthropic-compatible relay); blank = provider default. */
+    public String defaultBaseUrl;
+    /** API key override; blank = environment variable / auth.json resolution. */
+    public String defaultApiKey;
     public String transport;
     public String steeringMode;
     public String followUpMode;

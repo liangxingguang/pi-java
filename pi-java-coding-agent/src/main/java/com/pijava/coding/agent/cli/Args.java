@@ -9,6 +9,7 @@ import java.util.List;
  * @param provider              provider name (default: google)
  * @param model                 model pattern/ID (supports "provider/id" and ":thinking")
  * @param apiKey                API key (default: environment variable)
+ * @param baseUrl               API endpoint override for relay/compatible endpoints
  * @param systemPrompt          system prompt (default: coding assistant)
  * @param appendSystemPrompt    extra system prompt fragments (repeatable)
  * @param thinking              raw thinking level string ("off".."max"), see §9.3
@@ -55,6 +56,7 @@ public record Args(
         String provider,
         String model,
         String apiKey,
+        String baseUrl,
         String systemPrompt,
         List<String> appendSystemPrompt,
         String thinking,

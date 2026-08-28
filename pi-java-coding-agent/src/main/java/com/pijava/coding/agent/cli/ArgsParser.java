@@ -33,6 +33,9 @@ public final class ArgsParser {
     @Option(names = "--api-key")
     String apiKey;
 
+    @Option(names = "--base-url")
+    String baseUrl;
+
     @Option(names = "--system-prompt")
     String systemPrompt;
 
@@ -222,7 +225,7 @@ public final class ArgsParser {
         }
 
         return new Args(
-            provider, model, apiKey, systemPrompt, List.copyOf(appendSystemPrompt),
+            provider, model, apiKey, baseUrl, systemPrompt, List.copyOf(appendSystemPrompt),
             thinking, continue_, resume, help, version, mode, port, name, noSession,
             session, sessionId, fork, sessionDir,
             split(models), split(tools), split(excludeTools),

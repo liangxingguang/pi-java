@@ -41,4 +41,48 @@ class DefaultProvidersTest {
             "minimax-cn", "minimax", "ant-ling", "ollama");
         assertThat(names).hasSizeGreaterThanOrEqualTo(16);
     }
+
+    @Test
+    void apiOptionsCarriesBaseUrlFromSettings() {
+        var settings = new Settings();
+        settings.defaultBaseUrl = "https://relay.example.com/v1";
+        var args = ArgsParser.parse(new String[] {});
+        var opts = DefaultProviders.apiOptions(args, "openai", settings, null);
+        assertThat(opts.baseUrl()).isEqualTo("https://relay.example.com/v1");
+    }
+
+    @Test
+    void cliBaseUrlOverridesSettings() {
+        var settings = new Settings();
+        settings.defaultBaseUrl = "https://relay.example.com/v1";
+        var args = ArgsParser.parse(new String[] {"--base-url", "https://cli.example.com/v1"});
+        var opts = DefaultProviders.apiOptions(args, "openai", settings, null);
+        assertThat(opts.baseUrl()).isEqualTo("https://cli.example.com/v1");
+    }
+
+    @Test
+    void apiOptionsDefaultsToBlankBaseUrl() {
+        var settings = new Settings();
+        var args = ArgsParser.parse(new String[] {});
+        var opts = DefaultProviders.apiOptions(args, "openai", settings, null);
+        assertThat(opts.baseUrl()).isEqualTo("");
+    }
+
+    @Test
+    void settingsApiKeyUsedWhenNoCliKey() {
+        var settings = new Settings();
+        settings.defaultApiKey = "sk-settings";
+        var args = ArgsParser.parse(new String[] {});
+        var opts = DefaultProviders.apiOptions(args, "openai", settings, null);
+        assertThat(opts.apiKey()).isEqualTo("sk-settings");
+    }
+
+    @Test
+    void cliApiKeyOverridesSettingsKey() {
+        var settings = new Settings();
+        settings.defaultApiKey = "sk-settings";
+        var args = ArgsParser.parse(new String[] {"--api-key", "sk-cli"});
+        var opts = DefaultProviders.apiOptions(args, "openai", settings, null);
+        assertThat(opts.apiKey()).isEqualTo("sk-cli");
+    }
 }

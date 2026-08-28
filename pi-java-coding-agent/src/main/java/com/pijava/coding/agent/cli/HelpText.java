@@ -28,6 +28,7 @@ public final class HelpText {
               --provider <name>              Provider name (default: google)
               --model <pattern>              Model pattern or ID (supports "provider/id" and ":<thinking>")
               --api-key <key>                API key (defaults to env vars)
+              --base-url <url>              API endpoint override (OpenAI/Anthropic-compatible relay)
               --system-prompt <text>         System prompt (default: coding assistant prompt)
               --append-system-prompt <text>  Append text or file contents to the system prompt
               --mode <mode>                  Output mode: text (default), json, rpc (json/rpc in Phase 6)
