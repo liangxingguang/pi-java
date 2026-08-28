@@ -26,5 +26,14 @@ public record LaneInfo(
     ) {}
 
     /** A queued steer/followUp/nextRun item. */
-    public record QueuedItem(String prompt, long seq) {}
+    public record QueuedItem(String prompt, List<PromptImage> images, long seq) {
+        /** Defensively copies {@code images}. */
+        public QueuedItem {
+            images = List.copyOf(images);
+        }
+        /** Plain-text convenience constructor (no images). */
+        public QueuedItem(String prompt, long seq) {
+            this(prompt, List.of(), seq);
+        }
+    }
 }

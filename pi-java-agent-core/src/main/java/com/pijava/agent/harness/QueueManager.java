@@ -30,9 +30,14 @@ final class QueueManager {
 
     /** Enqueue a steer prompt. Phase 3. */
     String steer(String laneName, String prompt) {
+        return steer(laneName, prompt, List.of());
+    }
+
+    /** Enqueue a steer prompt with images. */
+    String steer(String laneName, String prompt, List<PromptImage> images) {
         var lane = requireLane(laneName);
         synchronized (lane) {
-            var item = new LaneInfo.QueuedItem(prompt, lane.queueSeq++);
+            var item = new LaneInfo.QueuedItem(prompt, images, lane.queueSeq++);
             lane.steerQueue.addLast(item);
             return Long.toString(item.seq());
         }
@@ -40,9 +45,14 @@ final class QueueManager {
 
     /** Enqueue a follow-up prompt. Phase 3. */
     String followUp(String laneName, String prompt) {
+        return followUp(laneName, prompt, List.of());
+    }
+
+    /** Enqueue a follow-up prompt with images. */
+    String followUp(String laneName, String prompt, List<PromptImage> images) {
         var lane = requireLane(laneName);
         synchronized (lane) {
-            var item = new LaneInfo.QueuedItem(prompt, lane.queueSeq++);
+            var item = new LaneInfo.QueuedItem(prompt, images, lane.queueSeq++);
             lane.followUpQueue.addLast(item);
             return Long.toString(item.seq());
         }
@@ -50,9 +60,14 @@ final class QueueManager {
 
     /** Enqueue a next-run prompt. Phase 3. */
     String nextRun(String laneName, String prompt) {
+        return nextRun(laneName, prompt, List.of());
+    }
+
+    /** Enqueue a next-run prompt with images. */
+    String nextRun(String laneName, String prompt, List<PromptImage> images) {
         var lane = requireLane(laneName);
         synchronized (lane) {
-            var item = new LaneInfo.QueuedItem(prompt, lane.queueSeq++);
+            var item = new LaneInfo.QueuedItem(prompt, images, lane.queueSeq++);
             lane.nextRunQueue.addLast(item);
             return Long.toString(item.seq());
         }
@@ -75,17 +90,17 @@ final class QueueManager {
 
     /**
      * Drain the steer queue according to the steering mode.
-     * Returns the prompts to inject as user messages.
+     * Returns the items to inject as user messages.
      */
-    List<String> drainSteer(String laneName) {
+    List<LaneInfo.QueuedItem> drainSteer(String laneName) {
         return drain(laneName, lane -> lane.steerQueue, steeringMode.get());
     }
 
     /**
      * Drain the follow-up queue according to the follow-up mode.
-     * Returns the prompts that start the next run.
+     * Returns the items that start the next run.
      */
-    List<String> drainFollowUp(String laneName) {
+    List<LaneInfo.QueuedItem> drainFollowUp(String laneName) {
         return drain(laneName, lane -> lane.followUpQueue, followUpMode.get());
     }
 
@@ -93,7 +108,7 @@ final class QueueManager {
      * Drain the next-run queue according to the follow-up mode
      * (nextRun has no dedicated setting; it reuses the follow-up mode).
      */
-    List<String> drainNextRun(String laneName) {
+    List<LaneInfo.QueuedItem> drainNextRun(String laneName) {
         return drain(laneName, lane -> lane.nextRunQueue, followUpMode.get());
     }
 
@@ -101,18 +116,18 @@ final class QueueManager {
         java.util.ArrayDeque<LaneInfo.QueuedItem> queueOf(LaneState lane);
     }
 
-    private List<String> drain(String laneName, QueueAccessor accessor, QueueMode mode) {
+    private List<LaneInfo.QueuedItem> drain(String laneName, QueueAccessor accessor, QueueMode mode) {
         var lane = requireLane(laneName);
-        var drained = new ArrayList<String>();
+        var drained = new ArrayList<LaneInfo.QueuedItem>();
         synchronized (lane) {
             var queue = accessor.queueOf(lane);
             if (mode instanceof QueueMode.All) {
                 while (!queue.isEmpty()) {
-                    drained.add(queue.removeFirst().prompt());
+                    drained.add(queue.removeFirst());
                 }
             } else {
                 if (!queue.isEmpty()) {
-                    drained.add(queue.removeFirst().prompt());
+                    drained.add(queue.removeFirst());
                 }
             }
         }

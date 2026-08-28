@@ -230,14 +230,29 @@ public class AgentHarness implements AutoCloseable {
         return queueManager.steer(laneName, prompt);
     }
 
+    /** Enqueue a steer prompt with images. */
+    public String steer(String laneName, String prompt, List<PromptImage> images) {
+        return queueManager.steer(laneName, prompt, images == null ? List.of() : images);
+    }
+
     /** Enqueue a follow-up prompt (processed when the current run finishes). */
     public String followUp(String laneName, String prompt) {
         return queueManager.followUp(laneName, prompt);
     }
 
+    /** Enqueue a follow-up prompt with images. */
+    public String followUp(String laneName, String prompt, List<PromptImage> images) {
+        return queueManager.followUp(laneName, prompt, images == null ? List.of() : images);
+    }
+
     /** Enqueue a next-run prompt (starts a run when the lane is idle). */
     public String nextRun(String laneName, String prompt) {
         return queueManager.nextRun(laneName, prompt);
+    }
+
+    /** Enqueue a next-run prompt with images. */
+    public String nextRun(String laneName, String prompt, List<PromptImage> images) {
+        return queueManager.nextRun(laneName, prompt, images == null ? List.of() : images);
     }
 
     /** Cancel all queued items of the given type ("steer", "followUp", "nextRun"). */
@@ -289,9 +304,19 @@ public class AgentHarness implements AutoCloseable {
 
     /** Initiate a new run on the specified lane. */
     public Action run(String laneName, String prompt) {
+        return run(laneName, prompt, List.of());
+    }
+
+    /** Initiate a new run on the default lane with attached images. */
+    public Action run(String prompt, List<PromptImage> images) {
+        return run(defaultLaneName, prompt, images);
+    }
+
+    /** Initiate a new run on the specified lane with attached images. */
+    public Action run(String laneName, String prompt, List<PromptImage> images) {
         if (closed) throw new HarnessClosedException();
         telemetry.incrementCounter("harness.turn", 1);
-        return actionExecutor.run(laneName, prompt);
+        return actionExecutor.run(laneName, prompt, images == null ? List.of() : images);
     }
 
     /**

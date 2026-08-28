@@ -53,8 +53,21 @@ final class ActionExecutor {
     // Run initiation
     // ═══════════════════════════════════════════════════════════
 
+    /** Start a run from drained queue items (merged into one user message). */
+    private Action runQueued(String laneName, List<LaneInfo.QueuedItem> items) {
+        var prompt = items.stream().map(LaneInfo.QueuedItem::prompt)
+            .collect(java.util.stream.Collectors.joining("\n\n"));
+        var images = items.stream().flatMap(i -> i.images().stream()).toList();
+        return run(laneName, prompt, images);
+    }
+
     /** Initiate a new run on the specified lane. */
     Action run(String laneName, String prompt) {
+        return run(laneName, prompt, List.of());
+    }
+
+    /** Initiate a new run on the specified lane with attached images. */
+    Action run(String laneName, String prompt, List<PromptImage> images) {
         var lane = ctx.requireLane(laneName);
         if (!(lane.phase instanceof RunPhase.Idle)) {
             throw new IllegalStateException("Cannot start run: lane " + laneName + " is not idle");
@@ -70,16 +83,14 @@ final class ActionExecutor {
         lane.pendingTurnUpdate = null;
         lane.abortSignal = AbortSignal.create();
 
-        // Fire before_run hook
-        var promptList = List.<Message>of(
-            new Message.UserMessage(List.of(new ContentBlock.TextContent(prompt))));
+        var userMessage = buildUserMessage(prompt, images);
+        var promptList = List.<Message>of(userMessage);
         ctx.hookSystem().fireBeforeRun(laneName,
             new RunContext(laneName, lane.runId, promptList));
 
         // Write user message entry
         var userEntry = new Entry.Message(
-            UUID.randomUUID().toString(), 0, null, null,
-            new Message.UserMessage(List.of(new ContentBlock.TextContent(prompt))), null);
+            UUID.randomUUID().toString(), 0, null, null, userMessage, null);
         lane.transcript.add(userEntry);
         lane.pendingWrites.add(userEntry);
 
@@ -177,15 +188,15 @@ final class ActionExecutor {
                 // outer loop which polls steering before follow-up queues).
                 var steer = ctx.queueManager().drainSteer(laneName);
                 if (!steer.isEmpty()) {
-                    yield run(laneName, String.join("\n\n", steer));
+                    yield runQueued(laneName, steer);
                 }
                 var nextRun = ctx.queueManager().drainNextRun(laneName);
                 if (!nextRun.isEmpty()) {
-                    yield run(laneName, String.join("\n\n", nextRun));
+                    yield runQueued(laneName, nextRun);
                 }
                 var followUps = ctx.queueManager().drainFollowUp(laneName);
                 if (!followUps.isEmpty()) {
-                    yield run(laneName, String.join("\n\n", followUps));
+                    yield runQueued(laneName, followUps);
                 }
                 yield null;
             }
@@ -206,8 +217,7 @@ final class ActionExecutor {
                 if (!steer.isEmpty()) {
                     injectUserMessages(lane, steer);
                     yield peekAction(laneName);
-                }
-                yield new Action.StreamAssistant("assistant", 0);
+                }                yield new Action.StreamAssistant("assistant", 0);
             }
             case RunPhase.Checkpoint c -> {
                 var pw = drainNextPendingWrite(lane);
@@ -230,14 +240,25 @@ final class ActionExecutor {
     }
 
     /** Append queued steering prompts as user entries (Phase 3). */
-    private void injectUserMessages(LaneState lane, List<String> prompts) {
-        for (var prompt : prompts) {
-            var userEntry = new Entry.Message(
-                UUID.randomUUID().toString(), 0, null, null,
-                new Message.UserMessage(List.of(new ContentBlock.TextContent(prompt))), null);
-            lane.transcript.add(userEntry);
-            lane.pendingWrites.add(userEntry);
+    private void injectUserMessages(LaneState lane, List<LaneInfo.QueuedItem> items) {
+        var prompt = items.stream().map(LaneInfo.QueuedItem::prompt)
+            .collect(java.util.stream.Collectors.joining("\n\n"));
+        var images = items.stream().flatMap(i -> i.images().stream()).toList();
+        var userEntry = new Entry.Message(
+            UUID.randomUUID().toString(), 0, null, null,
+            buildUserMessage(prompt, images), null);
+        lane.transcript.add(userEntry);
+        lane.pendingWrites.add(userEntry);
+    }
+
+    /** Build a user message: text first, then images (pi agent.ts:402-406 order). */
+    private static Message buildUserMessage(String prompt, List<PromptImage> images) {
+        var content = new ArrayList<ContentBlock>();
+        content.add(new ContentBlock.TextContent(prompt));
+        if (images != null) {
+            images.forEach(img -> content.add(img.toContentBlock()));
         }
+        return new Message.UserMessage(content);
     }
 
     private Action drainNextPendingWrite(LaneState lane) {
@@ -426,7 +447,7 @@ final class ActionExecutor {
         // subsequent run finishes.
         var followUps = ctx.queueManager().drainFollowUp(laneName);
         if (!followUps.isEmpty()) {
-            return run(laneName, String.join("\n\n", followUps));
+            return runQueued(laneName, followUps);
         }
         return null;
     }
