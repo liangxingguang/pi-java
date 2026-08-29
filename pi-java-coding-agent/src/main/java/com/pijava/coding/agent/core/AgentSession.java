@@ -241,13 +241,12 @@ public final class AgentSession implements AutoCloseable {
             .toolExecution(ToolExecution.defaultMode())
             .skills(SessionSetup.discoverSkills(args))
             .build());
-        loadExtensions(args, services, harness, ExtensionUI.noop());
-
-        var session = new AgentSession(
+        var agentSession = new AgentSession(
             harness, services, args,
             args.name() != null ? args.name() : "session");
-        session.persistentRepository = handle;
-        return session;
+        agentSession.persistentRepository = handle;
+        loadExtensions(args, services, harness, ExtensionUI.noop(), agentSession);
+        return agentSession;
     }
 
     /** The underlying harness (used by the session repository and TUI). */
@@ -678,11 +677,14 @@ public final class AgentSession implements AutoCloseable {
 
     /** 加载扩展（ServiceLoader + 扩展目录 JAR），--no-extensions 时跳过。 */
     private static void loadExtensions(Args args, SessionServices services,
-                                       AgentHarness harness, ExtensionUI ui) {
+                                       AgentHarness harness, ExtensionUI ui,
+                                       AgentSession owner) {
         if (args.noExtensions()) {
             return;
         }
         var context = new DefaultExtensionContext(services, harness.skillManager(), ui);
+        // session 由 SessionPersistence 稍后赋值，惰性求值绑定供 sendMessage 落盘用。
+        context.bindSession(() -> owner.session());
         var manager = new ExtensionManager(context);
         manager.loadAll();
         for (var jar : ExtensionPackageManager.global().installedJars()) {
