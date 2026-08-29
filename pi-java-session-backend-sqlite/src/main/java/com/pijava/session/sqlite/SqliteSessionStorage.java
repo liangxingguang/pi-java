@@ -108,8 +108,9 @@ public final class SqliteSessionStorage implements SessionStorage<SqliteSessionM
     @Override
     public List<Entry> findEntries(EntryQuery query) {
         var q = query == null ? EntryQuery.all() : query;
-        String sqlType = q.type() != null ? q.type()
-            : (q.customType() != null ? "custom" : null);
+        // customType filtering spans both custom and custom_message entries, so
+        // no SQL type narrowing here; matchesEntryQuery filters in memory.
+        String sqlType = q.type();
         Integer sqlLimit = q.customType() == null ? q.limit() : null;
         var rows = EntryRows.readEntryRows(db, metadata.id(),
             EntryRows.QueryOptions.of(null, q.cursor(), sqlType, q.order(), sqlLimit));
@@ -274,7 +275,7 @@ public final class SqliteSessionStorage implements SessionStorage<SqliteSessionM
                 SqliteCodecs.timestampToText(committed.timestamp()), EntryRows.entryPayload(committed)));
             LaneRows.setLaneLeaf(db, metadata.id(), lane, committed.id());
             BranchCache.appendEntryToBranchCache(db, metadata.id(), committed.id(), seq,
-                committed.type(), committed instanceof Entry.Custom c ? c.customType() : null,
+                committed.type(), SqliteCodecs.customTypeOf(committed),
                 committed.parentId());
             if (committed.type().equals("message")) {
                 StatsRows.incrementMessageCount(db, metadata.id());
@@ -429,8 +430,7 @@ public final class SqliteSessionStorage implements SessionStorage<SqliteSessionM
     private static boolean matchesEntryQuery(Entry entry, EntryQuery query) {
         return (query.type() == null || query.type().equals(entry.type()))
             && (query.customType() == null
-                || (entry.type().equals("custom")
-                    && query.customType().equals(((Entry.Custom) entry).customType())))
+                || query.customType().equals(SqliteCodecs.customTypeOf(entry)))
             && (query.cursor() == null
                 || (query.order() == EntryOrder.OLDEST_FIRST
                     ? entry.seq() > query.cursor().afterSeq()

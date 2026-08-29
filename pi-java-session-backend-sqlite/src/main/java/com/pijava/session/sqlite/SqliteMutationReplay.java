@@ -58,7 +58,7 @@ final class SqliteMutationReplay {
             SqliteCodecs.timestampToText(entry.timestamp()), EntryRows.entryPayload(entry)));
         LaneRows.setLaneLeaf(db, metadata.id(), lane, entry.id());
         BranchCache.appendEntryToBranchCache(db, metadata.id(), entry.id(), entry.seq(),
-            entry.type(), entry instanceof Entry.Custom c ? c.customType() : null,
+            entry.type(), SqliteCodecs.customTypeOf(entry),
             entry.parentId());
         if (entry.type().equals("message")) {
             StatsRows.incrementMessageCount(db, metadata.id());

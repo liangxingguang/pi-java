@@ -2,6 +2,7 @@ package com.pijava.session.sqlite;
 
 import java.time.Instant;
 
+import com.pijava.agent.entry.Entry;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.session.SessionError;
 import com.pijava.agent.session.SessionErrorCode;
@@ -11,6 +12,15 @@ import com.pijava.agent.session.SessionJson;
 final class SqliteCodecs {
 
     private SqliteCodecs() {}
+
+    /** The {@code customType} of a custom entry subtype, or {@code null}. */
+    static String customTypeOf(Entry entry) {
+        return switch (entry) {
+            case Entry.Custom c -> c.customType();
+            case Entry.CustomMessage cm -> cm.customType();
+            default -> null;
+        };
+    }
 
     static String timestampToText(Instant timestamp) {
         return timestamp.toString();
