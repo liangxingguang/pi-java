@@ -12,8 +12,9 @@ import com.pijava.ai.stream.StreamEvent;
  *
  * <p>Contract: never throw exceptions — errors are encoded as
  * {@link StreamEvent.StreamError} in the event stream. Injected into
- * {@link AgentHarness} via {@link HarnessConfig}; the {@code AgentLoop}
- * never touches this directly.</p>
+ * {@link AgentHarness} via {@link HarnessConfig}; callers drive the harness
+ * through {@code peekAction()}/{@code executeAction()} and never touch this
+ * directly.</p>
  *
  * <p>Aligned with pi's {@code StreamFn} type.</p>
  */

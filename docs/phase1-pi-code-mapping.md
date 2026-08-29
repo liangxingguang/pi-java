@@ -152,7 +152,7 @@
 | `harness/LaneSnapshot.java` + `SnapshotService.java` | `harness/events.ts` 快照 + `harness/types.ts` | ✅ 90% | `watch()` → `WatchHandle<LaneSnapshot>` 对应 |
 | `harness/QueueManager.java` | `harness/agent-harness.ts` steer/followUp/nextRun | ✅ 90% | 三队列 drain 顺序一致 |
 | `harness/DriveMode.java` | `harness/agent-harness.ts` drive modes | ✅ 90% | Manual/Automatic 对应 |
-| `loop/AgentLoop.java` | `agent-loop.ts` | ✅ 90% | 提交 → 流式 → 工具 → 完成循环一致 |
+| `loop/AgentLoop.java` | `agent-loop.ts` | ⛔ 已删除 | 公开门面 `agentLoop()` 双方生产链路均不使用；循环实现对齐于 `runAgentLoop()`，由 `AgentHarness` 手动驱动 API（`peekAction`/`executeAction`）+ `SessionRunner.drive` 承担；`agentLoopContinue` 由 `AgentHarness.continueRun` 承担 |
 | `harness/ToolExecutionPipeline.java` | `harness/agent-harness.ts` 工具执行阶段 | ✅ 90% | before_tool/after_tool 钩子 + 串行/并行执行 |
 | `harness/StreamFn.java` | `stream-fn.ts` `StreamFunction` | ✅ 95% | 签名对齐 |
 
