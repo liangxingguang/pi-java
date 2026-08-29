@@ -17,7 +17,7 @@ import com.pijava.coding.agent.export.HtmlExporter;
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.session.SessionJson;
 import com.pijava.ai.model.ModelId;
-import com.pijava.ai.provider.builtin.ProviderCatalog;
+import com.pijava.ai.provider.ModelsJsonConfig;
 import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.ai.thinking.ThinkingLevel;
 import com.pijava.coding.agent.cli.Args;
@@ -36,6 +36,8 @@ import com.pijava.web.WebProtocol.WebServerMessage;
  * {@code newSession} / {@code loadSession} 切换当前会话并重建事件订阅。
  */
 final class WebDispatcher {
+
+
 
     private final Args args;
     private final Consumer<WebServerMessage> send;
@@ -209,7 +211,7 @@ final class WebDispatcher {
     }
 
     private WebServerMessage.Models models() {
-        var all = ProviderCatalog.allModels().listModels().stream()
+        var all = ModelsJsonConfig.allModels().listModels().stream()
             .map(m -> new ModelInfo(m.id().provider(), m.id().modelName(),
                 m.displayName() == null ? m.id().modelName() : m.displayName()))
             .toList();
@@ -405,7 +407,7 @@ final class WebDispatcher {
     // ── 模型辅助 ─────────────────────────────────────────────────────────
 
     private ModelId<?> resolveModelId(String provider, String modelId) {
-        return ProviderCatalog.allModels().listModels().stream()
+        return ModelsJsonConfig.allModels().listModels().stream()
             .map(com.pijava.ai.catalog.ModelInfo::id)
             .filter(id -> id.provider().equals(provider) && id.modelName().equals(modelId))
             .findFirst()
@@ -419,7 +421,7 @@ final class WebDispatcher {
     }
 
     private ModelInfo toModelInfo(ModelId<?> model) {
-        var name = ProviderCatalog.allModels().listModels().stream()
+        var name = ModelsJsonConfig.allModels().listModels().stream()
             .filter(m -> m.id().equals(model))
             .findFirst()
             .map(m -> m.displayName() == null ? m.id().modelName() : m.displayName())
