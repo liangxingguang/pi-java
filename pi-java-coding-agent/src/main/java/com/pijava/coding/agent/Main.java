@@ -39,7 +39,11 @@ public final class Main {
         }
 
         var parsed = ArgsParser.parse(args);
-        Logging.configure(parsed.debug(), !parsed.print());
+        // tui=true detaches the CONSOLE appender (alternate-screen safety);
+        // only the interactive TUI actually needs that — web/json/rpc keep it.
+        boolean tuiMode = !parsed.print()
+            && (parsed.mode() == null || "text".equals(parsed.mode()));
+        Logging.configure(parsed.debug(), tuiMode);
         LOG.debug("CLI args parsed: mode={} print={} debug={}",
             parsed.mode(), parsed.print(), parsed.debug());
         if (hasErrors(parsed)) {
