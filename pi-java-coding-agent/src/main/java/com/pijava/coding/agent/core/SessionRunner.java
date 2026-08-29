@@ -101,8 +101,14 @@ final class SessionRunner {
                     && owner.autoRetryEnabled()
                     && attempt < MAX_RETRIES
                     && !owner.retryAborted();
+                // Flush this run's entries before AgentEnd so the full-history
+                // payload matches stateSync's accumulatedEntries() source
+                // (id-deduped, safe to call again below).
+                if (owner.session() != null) {
+                    SessionPersistence.persistPending(owner, owner.session(), laneName);
+                }
                 owner.emitSessionEvent(new AgentSessionEvent.AgentEnd(
-                    messages(transcript), shouldRetry));
+                    owner.accumulatedMessages(), shouldRetry));
                 if (shouldRetry) {
                     attempt++;
                     long delayMs = retryDelayMs(attempt);

@@ -305,6 +305,14 @@ public final class AgentSession implements AutoCloseable {
         return harness.snapshot(laneName).transcript();
     }
 
+    /** Full-history messages (accumulatedEntries projected to their payloads). */
+    public List<com.pijava.ai.message.Message> accumulatedMessages() {
+        return accumulatedEntries().stream()
+            .filter(Entry.Message.class::isInstance)
+            .map(e -> ((Entry.Message) e).message())
+            .toList();
+    }
+
     /** Run a prompt, returning a live {@link SessionResult} (Phase 3 §11.1). */
     public SessionResult processPrompt(String prompt, PromptConfig config) {
         return processPrompt(prompt, config, null, null);
