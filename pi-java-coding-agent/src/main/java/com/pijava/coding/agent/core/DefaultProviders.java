@@ -27,14 +27,29 @@ public final class DefaultProviders {
     private DefaultProviders() {}
 
     /**
-     * Register the 16 built-in providers and any ServiceLoader-discovered
-     * third-party {@code ProviderFactory} implementations.
+     * Register the 16 built-in providers, any ServiceLoader-discovered
+     * third-party {@code ProviderFactory} implementations, and the user's
+     * {@code models.json} custom providers (which override builtins on
+     * name collision). A malformed models.json warns and continues —
+     * aligned with pi's diagnostics behavior.
      */
     public static ProviderRegistry defaultProviders() {
         var registry = ProviderRegistry.create();
         registry.loadBuiltinProviders();
         registry.discoverFromServiceLoader();
+        registerModelsJsonProviders(registry);
         return registry;
+    }
+
+    private static void registerModelsJsonProviders(ProviderRegistry registry) {
+        try {
+            for (var provider : com.pijava.ai.provider.ModelsJsonConfig.loadDefault().buildProviders()) {
+                registry.register(provider);
+            }
+        } catch (RuntimeException e) {
+            System.err.println("Warning: failed to load models.json providers: "
+                + e.getMessage());
+        }
     }
 
     /**

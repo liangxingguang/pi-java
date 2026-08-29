@@ -40,7 +40,6 @@ import com.pijava.agent.tool.DefaultShellExecutor;
 import com.pijava.agent.tool.ShellOptions;
 import com.pijava.agent.tool.ShellResult;
 import com.pijava.ai.AbortSignal;
-import com.pijava.ai.provider.builtin.ProviderCatalog;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.model.DefaultModelResolver;
 import com.pijava.ai.provider.ProviderRegistry;
@@ -200,7 +199,8 @@ public final class AgentSession implements AutoCloseable {
                                          PersistentSessionRepositories.RepositoryHandle handle,
                                          SessionRepository<?, ?, ?> repository) {
         var effective = settings.effective();
-        var models = new DefaultModelResolver(ProviderCatalog.allModels());
+        var models = new DefaultModelResolver(
+            com.pijava.ai.provider.ModelsJsonConfig.allModels());
         var tools = new ToolRegistry(null);
         var commandPrefix = effective.shellCommandPrefix == null
             ? "" : effective.shellCommandPrefix;

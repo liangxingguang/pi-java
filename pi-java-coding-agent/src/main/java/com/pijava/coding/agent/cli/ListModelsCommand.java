@@ -3,11 +3,11 @@ package com.pijava.coding.agent.cli;
 import java.util.Comparator;
 
 import com.pijava.ai.catalog.ModelInfo;
-import com.pijava.ai.provider.builtin.ProviderCatalog;
+import com.pijava.ai.provider.ModelsJsonConfig;
 
 /**
- * {@code --list-models} command: prints the built-in model catalog, optionally
- * filtered by a search term (Phase 3 design §9.4).
+ * {@code --list-models} command: prints the model catalog (built-in +
+ * models.json), optionally filtered by a search term (Phase 3 design §9.4).
  */
 public final class ListModelsCommand {
 
@@ -19,7 +19,7 @@ public final class ListModelsCommand {
      * @param search null/"" = all models, non-empty = fuzzy search term
      */
     public static int run(String search) {
-        var catalog = ProviderCatalog.allModels();
+        var catalog = ModelsJsonConfig.allModels();
         var models = search == null || search.isBlank()
             ? catalog.listModels() : catalog.search(search);
         var sorted = models.stream()

@@ -379,7 +379,7 @@ public final class RpcDispatcher {
 
     /** 解析模型模式（"provider/model" 或纯 modelName）→ ModelId。 */
     private ModelId<?> resolveModel(String pattern) {
-        var models = com.pijava.ai.provider.builtin.ProviderCatalog.allModels().listModels();
+        var models = com.pijava.ai.provider.ModelsJsonConfig.allModels().listModels();
         String p = pattern == null ? "" : pattern.trim();
         if (p.isEmpty()) {
             throw new IllegalArgumentException("model pattern required");
@@ -399,7 +399,7 @@ public final class RpcDispatcher {
     }
 
     private ModelId<?> cycleModel(AgentSession s) {
-        var models = com.pijava.ai.provider.builtin.ProviderCatalog.allModels().listModels();
+        var models = com.pijava.ai.provider.ModelsJsonConfig.allModels().listModels();
         if (models.isEmpty()) {
             return s.harness().getModel();
         }
@@ -423,7 +423,7 @@ public final class RpcDispatcher {
     }
 
     private List<String> availableModels() {
-        return com.pijava.ai.provider.builtin.ProviderCatalog.allModels()
+        return com.pijava.ai.provider.ModelsJsonConfig.allModels()
             .listModels().stream()
             .map(m -> m.id().provider() + "/" + m.id().modelName())
             .sorted().toList();
