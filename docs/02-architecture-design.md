@@ -380,7 +380,7 @@ flowchart LR
 | **观察者模式** | HarnessEvent 订阅、Telemetry 收集 |
 | **装饰器** | 遥测包裹的 StreamApi、带缓存的 ModelCatalog |
 | **工厂方法** | ProviderFactory → ChatApi/SimpleApi 实例 |
-| **模板方法** | AgentLoop 骨架，子类定制 prompt/tools |
+| **手动驱动状态机** | AgentHarness `peekAction()`/`executeAction()`，外层（SessionRunner/TUI/RPC）推着走 |
 
 ---
 

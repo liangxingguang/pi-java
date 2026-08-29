@@ -725,6 +725,12 @@ checkpoint(空)         TryFinishRun（没有待写入的 Entry）
 
 ## 7. Agent Loop（P2a-6）
 
+> **现状注记（2026-08-29）**：`AgentLoop` 类已删除。pi 的生产链路同样绕过公开导出的
+> `agentLoop()`（`Agent.prompt()` 内部调用未导出的 `runAgentLoop()`）。pi-java 的循环
+> 驱动由 `AgentHarness` 的 `peekAction()`/`executeAction()` 手动驱动 API 承担，生产调用方
+> 是 `SessionRunner.drive`；`agentLoopContinue` 语义由 `AgentHarness.continueRun` 承担。
+> 以下为 Phase 2a 当时的设计记录，保留供追溯。
+
 ### 7.1 核心循环
 
 `AgentLoop` 是薄驱动层，只负责 `peekAction()` → `executeAction()` 循环。

@@ -9,6 +9,10 @@
 
 ## 1. 架构概览
 
+> **现状注记（2026-08-29）**：图中与后文的 `AgentLoop` 驱动角色已由 `AgentHarness` 的
+> `peekAction()`/`executeAction()` 手动驱动 API 承担（调用方：`SessionRunner.drive`），
+> `AgentLoop` 类已删除；以下保留 Phase 2b 当时的设计记录供追溯。
+
 ```mermaid
 flowchart TB
     subgraph agent["pi-java-agent-core"]
