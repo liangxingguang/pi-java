@@ -32,7 +32,11 @@ public sealed interface ChatMessage {
     /** Inter-turn divider with an optional runtime label (Codex CLI style). */
     record TurnSeparator(String label) implements ChatMessage {}
 
-    /** Project an agent-core {@link Entry} into a chat bubble. */
+    /**
+     * Project an agent-core {@link Entry} into a chat bubble. Returns
+     * {@code null} for entries that must not be rendered (a custom message
+     * with {@code display=false}, aligned with pi's interactive-mode gate).
+     */
     static ChatMessage from(Entry entry) {
         return switch (entry) {
             case Entry.Message message -> fromMessage(message);
@@ -53,6 +57,10 @@ public sealed interface ChatMessage {
                 new System("Branch: " + summary.summary(), MetaKind.BRANCH);
             case Entry.Custom custom ->
                 new System("Custom event: " + custom.customType(), MetaKind.CUSTOM);
+            case Entry.CustomMessage customMessage -> customMessage.display()
+                ? new System("[" + customMessage.customType() + "] "
+                    + customMessage.content().plainText(), MetaKind.CUSTOM)
+                : null;
         };
     }
 

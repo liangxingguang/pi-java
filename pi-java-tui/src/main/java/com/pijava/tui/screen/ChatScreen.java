@@ -71,7 +71,10 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
             pendingUserText = null;
             return;
         }
-        chatPanel.append(ChatMessage.from(entry));
+        var bubble = ChatMessage.from(entry);
+        if (bubble != null) {
+            chatPanel.append(bubble);
+        }
     }
 
     /** Incremental stream events → draft inside the viewport (typewriter). */

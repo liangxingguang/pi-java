@@ -151,7 +151,7 @@ class MessageBubbleTest {
                 "a", 0, null, null, List.of("bash", "write"))))
             .isEqualTo(new ChatMessage.System("Tools: bash, write", MetaKind.ACTIVE_TOOLS));
         assertThat(ChatMessage.from(new Entry.Compaction(
-                "c", 0, null, null, "kept 3 msgs", List.of(), 100, null, null)))
+                "c", 0, null, null, "kept 3 msgs", null, List.of(), 100, null, null)))
             .isEqualTo(new ChatMessage.System(
                 "Compacted context: kept 3 msgs", MetaKind.COMPACTION));
         assertThat(ChatMessage.from(new Entry.BranchSummary(
@@ -160,6 +160,25 @@ class MessageBubbleTest {
         assertThat(ChatMessage.from(new Entry.Custom(
                 "x", 0, null, null, "progress", null)))
             .isEqualTo(new ChatMessage.System("Custom event: progress", MetaKind.CUSTOM));
+    }
+
+    @Test
+    void customMessageDisplayGateAndLabel() {
+        assertThat(ChatMessage.from(new Entry.CustomMessage(
+                "cm", 0, null, null, "my-ext",
+                com.pijava.agent.entry.CustomMessageContent.of("injected"), true, null)))
+            .isEqualTo(new ChatMessage.System("[my-ext] injected", MetaKind.CUSTOM));
+        assertThat(ChatMessage.from(new Entry.CustomMessage(
+                "cm", 0, null, null, "my-ext",
+                com.pijava.agent.entry.CustomMessageContent.of(List.<ContentBlock>of(
+                    new ContentBlock.TextContent("a"),
+                    new ContentBlock.ImageContent("image/png", "eA=="))),
+                true, null)))
+            .isEqualTo(new ChatMessage.System("[my-ext] a", MetaKind.CUSTOM));
+        assertThat(ChatMessage.from(new Entry.CustomMessage(
+                "cm", 0, null, null, "my-ext",
+                com.pijava.agent.entry.CustomMessageContent.of("hidden"), false, null)))
+            .isNull();
     }
 
     @Test
