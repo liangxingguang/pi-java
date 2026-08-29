@@ -3,6 +3,7 @@ package com.pijava.agent.session;
 import java.util.List;
 import java.util.Map;
 
+import com.pijava.agent.entry.CustomMessageContent;
 import com.pijava.agent.entry.Entry;
 import com.pijava.ai.message.Message;
 
@@ -52,4 +53,12 @@ public interface SessionTree {
 
     /** Append a custom entry and return the persisted entry id. */
     String appendCustomEntry(String customType, Map<String, Object> data);
+
+    /**
+     * Append a custom message entry (pi {@code appendCustomMessageEntry}) and
+     * return the persisted entry id. Its content participates in the LLM
+     * context; {@code display} only gates TUI rendering.
+     */
+    String appendCustomMessageEntry(String customType, CustomMessageContent content,
+                                    boolean display, Map<String, Object> details);
 }

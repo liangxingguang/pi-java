@@ -46,6 +46,12 @@ public final class ConformanceSupport {
         return new ProvisionedEntry<>(new Entry.Custom(id, 0, null, null, customType, data));
     }
 
+    public static ProvisionedEntry<Entry.CustomMessage> customMessage(String id, String customType,
+                                                                      String content, boolean display) {
+        return new ProvisionedEntry<>(new Entry.CustomMessage(id, 0, null, null, customType,
+            com.pijava.agent.entry.CustomMessageContent.of(content), display, null));
+    }
+
     public static NewRecord<LaneRecord.OperationStarted> operationStarted(String id, String lane) {
         return new NewRecord<>(new LaneRecord.OperationStarted(id, 0, lane, null, null,
             new LaneRecord.OperationStarted.Run(List.of(), List.of(), null, null)));

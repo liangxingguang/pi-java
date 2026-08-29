@@ -2,6 +2,7 @@ package com.pijava.agent.session;
 
 import static com.pijava.agent.session.ConformanceSupport.assistantMessage;
 import static com.pijava.agent.session.ConformanceSupport.custom;
+import static com.pijava.agent.session.ConformanceSupport.customMessage;
 import static com.pijava.agent.session.ConformanceSupport.operationFinished;
 import static com.pijava.agent.session.ConformanceSupport.operationStarted;
 import static com.pijava.agent.session.ConformanceSupport.usage;
@@ -54,10 +55,11 @@ public abstract class ConformanceGroup2Test {
             session.appendEntry(userMessage("m1", "first"), "main");
             session.appendEntry(assistantMessage("m2", "second"), "main");
             session.appendEntry(custom("c1", "my-event", Map.of("k", "v")), "main");
+            session.appendEntry(customMessage("cm1", "my-event", "injected", true), "main");
             session.appendEntry(userMessage("m3", "third"), "main");
 
             var lastTwo = session.findEntries(new EntryQuery(null, null, null, 2, null));
-            assertThat(lastTwo).extracting(Entry::id).containsExactly("m3", "c1");
+            assertThat(lastTwo).extracting(Entry::id).containsExactly("m3", "cm1");
 
             // Newest-first cursor: seq < afterSeq.
             var afterCursor = session.findEntries(new EntryQuery(null, null, null, null,
@@ -65,10 +67,17 @@ public abstract class ConformanceGroup2Test {
             assertThat(afterCursor).extracting(Entry::id).containsExactly("m1");
             var oldestCursor = session.findEntries(new EntryQuery(null, null,
                 EntryOrder.OLDEST_FIRST, null, new EntryCursor(2)));
-            assertThat(oldestCursor).extracting(Entry::id).containsExactly("c1", "m3");
+            assertThat(oldestCursor).extracting(Entry::id).containsExactly("c1", "cm1", "m3");
 
             var customs = session.findEntries(new EntryQuery("custom", "my-event", null, null, null));
             assertThat(customs).extracting(Entry::id).containsExactly("c1");
+
+            var customMessages = session.findEntries(
+                new EntryQuery("custom_message", "my-event", null, null, null));
+            assertThat(customMessages).extracting(Entry::id).containsExactly("cm1");
+
+            var byCustomType = session.findEntries(new EntryQuery(null, "my-event", null, null, null));
+            assertThat(byCustomType).extracting(Entry::id).containsExactly("cm1", "c1");
 
             var oldest = session.findEntries(new EntryQuery(null, null,
                 EntryOrder.OLDEST_FIRST, 2, null));

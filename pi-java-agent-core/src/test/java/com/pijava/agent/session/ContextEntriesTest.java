@@ -143,6 +143,45 @@ class ContextEntriesTest {
     }
 
     @Test
+    void customMessageTextBecomesUserMessageIgnoringDisplayAndDetails() {
+        var cm = new Entry.CustomMessage("cm", 0, "a", Instant.EPOCH, "ext",
+            com.pijava.agent.entry.CustomMessageContent.of("injected"), false,
+            java.util.Map.of("secret", "not-for-llm"));
+        var path = List.<Entry>of(
+            message("a", null, "user", "q"),
+            cm);
+        var msgs = ContextEntries.toMessages(path);
+        assertThat(msgs).hasSize(2);
+        assertThat(msgs.get(1)).isInstanceOf(Message.UserMessage.class);
+        assertThat(((Message.UserMessage) msgs.get(1)).content())
+            .containsExactly(new ContentBlock.TextContent("injected"));
+    }
+
+    @Test
+    void customMessageBlocksPassThroughToUserMessage() {
+        var blocks = List.<ContentBlock>of(
+            new ContentBlock.TextContent("look"),
+            new ContentBlock.ImageContent("image/png", "aGVsbG8="));
+        var cm = new Entry.CustomMessage("cm", 0, "a", Instant.EPOCH, "ext",
+            com.pijava.agent.entry.CustomMessageContent.of(blocks), true, null);
+        var msgs = ContextEntries.toMessages(List.<Entry>of(
+            message("a", null, "user", "q"), cm));
+        assertThat(msgs).hasSize(2);
+        assertThat(((Message.UserMessage) msgs.get(1)).content()).isEqualTo(blocks);
+    }
+
+    @Test
+    void customEntryRemainsSkippedButCustomMessageProjects() {
+        var path = List.<Entry>of(
+            new Entry.Custom("c", 0, null, Instant.EPOCH, "type", java.util.Map.of()),
+            new Entry.CustomMessage("cm", 1, "c", Instant.EPOCH, "type",
+                com.pijava.agent.entry.CustomMessageContent.of("visible to llm"), true, null));
+        var msgs = ContextEntries.toMessages(path);
+        assertThat(msgs).hasSize(1);
+        assertThat(textOf(msgs.get(0))).isEqualTo("visible to llm");
+    }
+
+    @Test
     void missingParentStopsWalk() {
         // compaction subset: "a" absent, "b".parentId dangles — walk must not throw
         var entries = List.<Entry>of(

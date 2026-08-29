@@ -19,6 +19,7 @@ import com.pijava.ai.message.Message;
  * compaction 后全部]}。当截断后的 transcript（live 压缩把被摘要条目移出 lane）
  * 使父链断开时，回退为按列表顺序构建路径（存储条目即提交序，等价 pi 的
  * leaf-path 语义）。压缩/分支摘要条目转为带 pi 确切前缀/后缀的 user 消息，
+ * custom_message 条目按 pi 语义转为 user 消息（display/details 不进上下文），
  * 其余非消息条目不产消息。</p>
  *
  * <p>live 构建（{@code buildMessagesForLane}）与 resume seed
@@ -130,7 +131,8 @@ public final class ContextEntries {
     /**
      * Convert a leaf path to LLM messages: message entries pass through,
      * compaction/branch summaries become user messages with pi's exact
-     * prefix/suffix, other entry types produce nothing.
+     * prefix/suffix, custom_message entries become user messages carrying
+     * their content, other entry types produce nothing.
      */
     public static List<Message> toMessages(List<Entry> leafPath) {
         List<Message> messages = new ArrayList<>();
@@ -153,6 +155,11 @@ public final class ContextEntries {
         }
         if (e instanceof Entry.BranchSummary bs && bs.summary() != null) {
             return userMessage(branchSummaryText(bs.summary()));
+        }
+        if (e instanceof Entry.CustomMessage cm) {
+            // pi messages.ts convertToLlm "custom" case: string -> single text
+            // block, block list passes through; display/details never reach the LLM.
+            return new Message.UserMessage(cm.content().toBlocks());
         }
         return null;
     }

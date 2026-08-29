@@ -13,6 +13,9 @@ import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.pijava.agent.entry.CustomMessageContent;
 import com.pijava.agent.entry.ProvisionedEntry;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -118,6 +121,7 @@ public final class SessionJson {
         module.addDeserializer(Instant.class, new InstantEpochMsDeserializer());
         module.addSerializer(Message.class, new MessageSerializer());
         module.addSerializer(ContentBlock.class, new ContentBlockSerializer());
+        module.addSerializer(CustomMessageContent.class, new CustomMessageContentSerializer());
         // Wildcard generic cast: ProvisionedEntry.class is raw; the serializer accepts any subtype.
         @SuppressWarnings({ "rawtypes", "unchecked" })
         Class provisionedEntryType = ProvisionedEntry.class;
@@ -159,6 +163,29 @@ public final class SessionJson {
         public void serialize(ContentBlock value, JsonGenerator gen, SerializerProvider serializers)
                 throws IOException {
             gen.writeTree(blockNode(value));
+        }
+    }
+
+    /** Build the pi-shaped JSON node for custom-message content (bare string or block array). */
+    public static JsonNode contentNode(CustomMessageContent content) {
+        return switch (content) {
+            case CustomMessageContent.Text t -> TextNode.valueOf(t.text());
+            case CustomMessageContent.Blocks b -> {
+                ArrayNode array = MAPPER.createArrayNode();
+                for (var block : b.blocks()) {
+                    array.add(blockNode(block));
+                }
+                yield array;
+            }
+        };
+    }
+
+    /** Serialize {@link CustomMessageContent} as a bare string or block array (pi shape). */
+    static final class CustomMessageContentSerializer extends JsonSerializer<CustomMessageContent> {
+        @Override
+        public void serialize(CustomMessageContent value, JsonGenerator gen, SerializerProvider serializers)
+                throws IOException {
+            gen.writeTree(contentNode(value));
         }
     }
 

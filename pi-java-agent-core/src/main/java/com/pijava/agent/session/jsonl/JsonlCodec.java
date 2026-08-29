@@ -20,7 +20,7 @@ public final class JsonlCodec {
 
     private static final List<String> ENTRY_TYPES = List.of(
         "message", "model_change", "thinking_level_change", "active_tools_change",
-        "compaction", "branch_summary", "custom");
+        "compaction", "branch_summary", "custom", "custom_message");
 
     private static final List<String> RECORD_TYPES = List.of(
         "operation_started", "abort_requested", "operation_finished", "step_attempt",
@@ -220,7 +220,7 @@ public final class JsonlCodec {
         if (!ENTRY_TYPES.contains(type)) {
             throw DecodeError.schema("has unknown entry type " + type);
         }
-        if ("custom".equals(type)) {
+        if ("custom".equals(type) || "custom_message".equals(type)) {
             requireString(node, "customType");
         }
         String parentId = nullableString(node, "parentId");

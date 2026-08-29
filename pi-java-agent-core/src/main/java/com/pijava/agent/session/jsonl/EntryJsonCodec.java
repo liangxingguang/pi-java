@@ -1,10 +1,13 @@
 package com.pijava.agent.session.jsonl;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.pijava.agent.entry.CustomMessageContent;
 import com.pijava.agent.entry.Entry;
+import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 
 /**
@@ -53,8 +56,31 @@ final class EntryJsonCodec {
             case "custom" -> new Entry.Custom(id, seq, parentId, timestamp,
                 JsonlCodec.requireString(node, "customType"),
                 JsonlCodec.optionalObject(node, "data"));
+            case "custom_message" -> new Entry.CustomMessage(id, seq, parentId, timestamp,
+                JsonlCodec.requireString(node, "customType"),
+                decodeContent(node.get("content")),
+                node.has("display") && node.get("display").asBoolean(false),
+                JsonlCodec.optionalObject(node, "details"));
             default -> throw JsonlCodec.DecodeError.schema("has unknown entry type " + type);
         };
+    }
+
+    /** pi {@code CustomMessageEntry.content}: bare string or content-block array. */
+    private static CustomMessageContent decodeContent(JsonNode node) {
+        if (node == null || node.isNull()) {
+            throw JsonlCodec.DecodeError.schema("has missing content");
+        }
+        if (node.isTextual()) {
+            return new CustomMessageContent.Text(node.textValue());
+        }
+        if (node.isArray()) {
+            List<ContentBlock> blocks = new ArrayList<>(node.size());
+            for (JsonNode item : node) {
+                blocks.add(MessageJsonCodec.decodeBlock(item));
+            }
+            return new CustomMessageContent.Blocks(blocks);
+        }
+        throw JsonlCodec.DecodeError.schema("has invalid content");
     }
 
     static List<String> stringList(JsonNode node, String field) {

@@ -29,7 +29,8 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
     @JsonSubTypes.Type(value = Entry.ActiveToolsChange.class, name = "active_tools_change"),
     @JsonSubTypes.Type(value = Entry.Compaction.class, name = "compaction"),
     @JsonSubTypes.Type(value = Entry.BranchSummary.class, name = "branch_summary"),
-    @JsonSubTypes.Type(value = Entry.Custom.class, name = "custom")
+    @JsonSubTypes.Type(value = Entry.Custom.class, name = "custom"),
+    @JsonSubTypes.Type(value = Entry.CustomMessage.class, name = "custom_message")
 })
 public sealed interface Entry {
 
@@ -55,6 +56,7 @@ public sealed interface Entry {
             case Compaction c -> "compaction";
             case BranchSummary bs -> "branch_summary";
             case Custom c -> "custom";
+            case CustomMessage cm -> "custom_message";
         };
     }
 
@@ -72,6 +74,8 @@ public sealed interface Entry {
             case BranchSummary e -> new BranchSummary(e.id(), seq, parentId, timestamp, e.fromId(),
                 e.summary(), e.details(), e.usage());
             case Custom e -> new Custom(e.id(), seq, parentId, timestamp, e.customType(), e.data());
+            case CustomMessage e -> new CustomMessage(e.id(), seq, parentId, timestamp,
+                e.customType(), e.content(), e.display(), e.details());
         };
     }
 
@@ -168,6 +172,28 @@ public sealed interface Entry {
         /** Defensively copies {@code data} when non-null. */
         public Custom {
             data = data == null ? null : Map.copyOf(data);
+        }
+    }
+
+    /**
+     * A custom message injected by an extension (pi
+     * {@code CustomMessageEntry}): {@code content} participates in the LLM
+     * context as a user message, {@code display} only gates TUI rendering,
+     * {@code details} is extension-private metadata never sent to the LLM.
+     */
+    record CustomMessage(
+        String id,
+        long seq,
+        String parentId,
+        Instant timestamp,
+        String customType,
+        CustomMessageContent content,
+        boolean display,
+        Map<String, Object> details
+    ) implements Entry {
+        /** Defensively copies {@code details} when non-null. */
+        public CustomMessage {
+            details = details == null ? null : Map.copyOf(details);
         }
     }
 }

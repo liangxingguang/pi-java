@@ -3,6 +3,7 @@ package com.pijava.agent.session;
 import java.util.List;
 import java.util.Map;
 
+import com.pijava.agent.entry.CustomMessageContent;
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.entry.ProvisionedEntry;
 import com.pijava.ai.message.Message;
@@ -99,6 +100,15 @@ final class LaneView implements SessionTree {
     public String appendCustomEntry(String customType, Map<String, Object> data) {
         var provisioned = new ProvisionedEntry<Entry.Custom>(
             new Entry.Custom(session.idGenerator().next(), 0, null, null, customType, data));
+        return storage.appendEntry(provisioned, lane).id();
+    }
+
+    @Override
+    public String appendCustomMessageEntry(String customType, CustomMessageContent content,
+                                           boolean display, Map<String, Object> details) {
+        var provisioned = new ProvisionedEntry<Entry.CustomMessage>(
+            new Entry.CustomMessage(session.idGenerator().next(), 0, null, null,
+                customType, content, display, details));
         return storage.appendEntry(provisioned, lane).id();
     }
 

@@ -3,6 +3,7 @@ package com.pijava.agent.session;
 import java.util.List;
 import java.util.Map;
 
+import com.pijava.agent.entry.CustomMessageContent;
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.entry.ProvisionedEntry;
 import com.pijava.agent.record.LaneRecord;
@@ -183,6 +184,12 @@ public final class Session<TMetadata extends SessionMetadata> implements Session
         return appendCustomEntryToLane("main", customType, data);
     }
 
+    @Override
+    public String appendCustomMessageEntry(String customType, CustomMessageContent content,
+                                           boolean display, Map<String, Object> details) {
+        return appendCustomMessageToLane("main", customType, content, display, details);
+    }
+
     /** Release resources: JSONL no-op; SQLite releases lease + stops heartbeat. */
     public void close() {
         storage.close();
@@ -233,6 +240,14 @@ public final class Session<TMetadata extends SessionMetadata> implements Session
     private String appendCustomEntryToLane(String lane, String customType, Map<String, Object> data) {
         var provisioned = new ProvisionedEntry<Entry.Custom>(
             new Entry.Custom(idGenerator.next(), 0, null, null, customType, data));
+        return appendEntry(provisioned, lane).id();
+    }
+
+    private String appendCustomMessageToLane(String lane, String customType,
+                                             CustomMessageContent content, boolean display,
+                                             Map<String, Object> details) {
+        var provisioned = new ProvisionedEntry<Entry.CustomMessage>(
+            new Entry.CustomMessage(idGenerator.next(), 0, null, null, customType, content, display, details));
         return appendEntry(provisioned, lane).id();
     }
 

@@ -97,6 +97,80 @@ class EntryTest {
     }
 
     @Test
+    void customMessageEntryTextFormSerializesAsBareString() {
+        var entry = new Entry.CustomMessage("id-1", 7L, "parent", Instant.ofEpochMilli(1720000002000L),
+            "my-extension", CustomMessageContent.of("Injected context..."), true, null);
+        var node = SessionJson.mapper().valueToTree(entry);
+
+        assertThat(entry.type()).isEqualTo("custom_message");
+        assertThat(node.get("type").asText()).isEqualTo("custom_message");
+        assertThat(node.get("customType").asText()).isEqualTo("my-extension");
+        assertThat(node.get("content").isTextual()).isTrue();
+        assertThat(node.get("content").asText()).isEqualTo("Injected context...");
+        assertThat(node.get("display").asBoolean()).isTrue();
+        assertThat(node.has("details")).isFalse();
+    }
+
+    @Test
+    void customMessageEntryBlocksFormSerializesAsBareArray() {
+        var blocks = List.<ContentBlock>of(
+            new ContentBlock.TextContent("see "),
+            new ContentBlock.ImageContent("image/png", "aGVsbG8="));
+        var entry = new Entry.CustomMessage("id-2", 8L, "parent", Instant.now(),
+            "ext", CustomMessageContent.of(blocks), false, Map.of("internal", 42));
+        var node = SessionJson.mapper().valueToTree(entry);
+
+        assertThat(node.get("content").isArray()).isTrue();
+        assertThat(node.get("content").get(0).get("type").asText()).isEqualTo("text");
+        assertThat(node.get("content").get(1).get("type").asText()).isEqualTo("image");
+        assertThat(node.get("display").asBoolean()).isFalse();
+        assertThat(node.get("details").get("internal").asInt()).isEqualTo(42);
+    }
+
+    @Test
+    void customMessageEntryRoundTripsThroughCodec() {
+        var blocks = List.<ContentBlock>of(new ContentBlock.TextContent("hello"),
+            new ContentBlock.ImageContent("image/jpeg", "eA=="));
+        var original = new Entry.CustomMessage("id-3", 9L, "parent", Instant.now(),
+            "ext", CustomMessageContent.of(blocks), true, Map.of("k", "v"));
+        var decoded = com.pijava.agent.session.jsonl.JsonlCodec.decodeEntry(
+            SessionJson.mapper().valueToTree(original));
+
+        assertThat(decoded).isInstanceOf(Entry.CustomMessage.class);
+        var cm = (Entry.CustomMessage) decoded;
+        assertThat(cm.id()).isEqualTo("id-3");
+        assertThat(cm.customType()).isEqualTo("ext");
+        assertThat(cm.display()).isTrue();
+        assertThat(cm.details()).containsEntry("k", "v");
+        assertThat(cm.content()).isInstanceOf(CustomMessageContent.Blocks.class);
+        assertThat(((CustomMessageContent.Blocks) cm.content()).blocks()).isEqualTo(blocks);
+    }
+
+    @Test
+    void customMessageTextRoundTripAndConversions() {
+        var original = new Entry.CustomMessage("id-4", 10L, "parent", Instant.now(),
+            "ext", CustomMessageContent.of("plain text"), false, null);
+        var decoded = com.pijava.agent.session.jsonl.JsonlCodec.decodeEntry(
+            SessionJson.mapper().valueToTree(original));
+
+        var cm = (Entry.CustomMessage) decoded;
+        assertThat(cm.content()).isEqualTo(new CustomMessageContent.Text("plain text"));
+        assertThat(cm.content().toBlocks()).containsExactly(new ContentBlock.TextContent("plain text"));
+        assertThat(cm.content().plainText()).isEqualTo("plain text");
+        assertThat(cm.committed(11L, "p2", Instant.EPOCH).type()).isEqualTo("custom_message");
+    }
+
+    @Test
+    void customMessageBlocksPlainTextJoinsTextIgnoresImages() {
+        var content = CustomMessageContent.of(List.<ContentBlock>of(
+            new ContentBlock.TextContent("a"),
+            new ContentBlock.ImageContent("image/png", "x"),
+            new ContentBlock.TextContent("b")));
+        assertThat(content.plainText()).isEqualTo("ab");
+        assertThat(content.toBlocks()).hasSize(3);
+    }
+
+    @Test
     void provisionedEntryWrapsWithoutWrittenFlag() {
         var entry = new Entry.Message("id-1", 0, null, null,
             new Message.UserMessage(List.of(new ContentBlock.TextContent("hi"))), null);

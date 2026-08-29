@@ -396,12 +396,19 @@ public final class SessionState {
     private boolean matchesEntryQuery(Entry entry, EntryQuery query) {
         return (query.type() == null || query.type().equals(entry.type()))
             && (query.customType() == null
-                || (entry.type().equals("custom")
-                    && query.customType().equals(((Entry.Custom) entry).customType())))
+                || query.customType().equals(customTypeOf(entry)))
             && (query.cursor() == null
                 || (query.order() == EntryOrder.OLDEST_FIRST
                     ? entry.seq() > query.cursor().afterSeq()
                     : entry.seq() < query.cursor().afterSeq()));
+    }
+
+    private static String customTypeOf(Entry entry) {
+        return switch (entry) {
+            case Entry.Custom c -> c.customType();
+            case Entry.CustomMessage cm -> cm.customType();
+            default -> null;
+        };
     }
 
     private boolean matchesRecordQuery(LaneRecord record, RecordQuery query) {
