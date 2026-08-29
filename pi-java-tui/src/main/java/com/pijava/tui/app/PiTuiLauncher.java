@@ -25,7 +25,10 @@ public final class PiTuiLauncher {
      * and run the TUI loop (Phase 3 design §11.1).
      */
     public static int runInteractive(Args args) {
-        if (System.console() == null) {
+        // IDE consoles have no PTY (System.console() == null); the
+        // pi-java.dev.forceTui property lets IDEA "Emulate terminal" setups
+        // that still lack a console object run the TUI anyway.
+        if (System.console() == null && !Boolean.getBoolean("pi-java.dev.forceTui")) {
             System.err.println("error: interactive mode requires a real terminal "
                 + "(run from Windows Terminal / cmd / PowerShell)");
             return 1;
