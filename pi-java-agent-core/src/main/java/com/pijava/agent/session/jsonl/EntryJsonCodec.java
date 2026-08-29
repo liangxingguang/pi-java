@@ -40,6 +40,7 @@ final class EntryJsonCodec {
                 stringList(node, "activeToolNames"));
             case "compaction" -> new Entry.Compaction(id, seq, parentId, timestamp,
                 JsonlCodec.requireString(node, "summary"),
+                JsonlCodec.optionalString(node, "firstKeptEntryId"),
                 MessageJsonCodec.decodeList(node.get("retainedTail")),
                 JsonlCodec.requireInt(node, "tokensBefore"),
                 JsonlCodec.optionalObject(node, "details"),

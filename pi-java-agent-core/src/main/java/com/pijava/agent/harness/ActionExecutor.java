@@ -20,6 +20,7 @@ import com.pijava.agent.prompt.SystemPromptBuilder;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.record.OperationOutcome;
 import com.pijava.agent.record.ReplayKind;
+import com.pijava.agent.session.ContextEntries;
 import com.pijava.agent.record.StepKind;
 import com.pijava.agent.record.UsageCause;
 import com.pijava.ai.AbortSignal;
@@ -201,8 +202,8 @@ final class ActionExecutor {
         var retainedTail = keptMessagesFrom(lane.transcript, result.firstKeptEntryId());
         var compactionEntry = new Entry.Compaction(
             UUID.randomUUID().toString(), lane.nextSeq(), HarnessUtils.lastEntryId(lane),
-            java.time.Instant.now(), result.summary(), retainedTail,
-            (int) result.tokensBefore(), result.details(), result.usage());
+            java.time.Instant.now(), result.summary(), result.firstKeptEntryId(),
+            retainedTail, (int) result.tokensBefore(), result.details(), result.usage());
         var kept = new ArrayList<Entry>();
         String firstKept = result.firstKeptEntryId();
         boolean seen = false;
@@ -616,11 +617,10 @@ final class ActionExecutor {
             messages.add(new Message.SystemMessage(
                 List.of(new ContentBlock.TextContent(prompt))));
         }
-        for (var entry : lane.transcript) {
-            if (entry instanceof Entry.Message msg) {
-                messages.add(msg.message());
-            }
-        }
+        // Compaction-aware context (pi buildContextEntries): compaction/branch
+        // summaries become user messages instead of being dropped
+        messages.addAll(ContextEntries.toMessages(
+            ContextEntries.pathToLeaf(lane.transcript, HarnessUtils.lastEntryId(lane))));
         // Fire transform_context hook
         var transformed = ctx.hookSystem().fireTransformContext(laneName, messages);
         return new ArrayList<>(transformed);

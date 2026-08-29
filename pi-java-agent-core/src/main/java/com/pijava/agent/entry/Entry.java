@@ -68,7 +68,7 @@ public sealed interface Entry {
             case ActiveToolsChange e ->
                 new ActiveToolsChange(e.id(), seq, parentId, timestamp, e.activeToolNames());
             case Compaction e -> new Compaction(e.id(), seq, parentId, timestamp, e.summary(),
-                e.retainedTail(), e.tokensBefore(), e.details(), e.usage());
+                e.firstKeptEntryId(), e.retainedTail(), e.tokensBefore(), e.details(), e.usage());
             case BranchSummary e -> new BranchSummary(e.id(), seq, parentId, timestamp, e.fromId(),
                 e.summary(), e.details(), e.usage());
             case Custom e -> new Custom(e.id(), seq, parentId, timestamp, e.customType(), e.data());
@@ -132,6 +132,7 @@ public sealed interface Entry {
         String parentId,
         Instant timestamp,
         String summary,
+        String firstKeptEntryId,
         List<com.pijava.ai.message.Message> retainedTail,
         int tokensBefore,
         Map<String, Object> details,

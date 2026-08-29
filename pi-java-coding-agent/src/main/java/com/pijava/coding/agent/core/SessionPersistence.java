@@ -6,6 +6,7 @@ import java.util.List;
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.entry.ProvisionedEntry;
 import com.pijava.agent.record.NewRecord;
+import com.pijava.agent.session.ContextEntries;
 import com.pijava.agent.session.EntryOrder;
 import com.pijava.agent.session.EntryQuery;
 import com.pijava.agent.session.ForkOptions;
@@ -40,7 +41,7 @@ final class SessionPersistence {
         }
     }
 
-    /** Attach a persisted session: open, seed the harness transcript, set the name. */
+    /** Attach a persisted session: open, seed the compaction-aware harness transcript, set the name. */
     static void attach(AgentSession owner, PersistentSessionRepositories.RepositoryHandle handle,
                        SessionMetadata metadata) {
         Session<?> opened = handle.open(metadata);
@@ -50,7 +51,12 @@ final class SessionPersistence {
             new EntryQuery(null, null, EntryOrder.OLDEST_FIRST, null, null));
         owner.persistedEntryIds().clear();
         entries.forEach(e -> owner.persistedEntryIds().add(e.id()));
-        owner.harness().seedTranscript(owner.laneName(), entries);
+        // Seed the lane with the compaction-aware context (pi buildSessionContext),
+        // not all entries — otherwise resume would re-inflate the compacted prefix.
+        // Display paths (accumulatedEntries) still read full history from storage.
+        String leafId = entries.isEmpty() ? null : entries.get(entries.size() - 1).id();
+        owner.harness().seedTranscript(owner.laneName(),
+            ContextEntries.contextEntries(ContextEntries.pathToLeaf(entries, leafId)));
     }
 
     /** Resolve {@code -c/-r/--fork/--session-id} against the persistent repo. */

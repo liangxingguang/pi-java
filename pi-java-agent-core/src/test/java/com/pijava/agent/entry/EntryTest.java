@@ -71,9 +71,10 @@ class EntryTest {
     @Test
     void compactionEntry() {
         var entry = new Entry.Compaction("id-1", 4L, "parent", Instant.now(),
-            "summary", List.of(), 100,
+            "summary", "kept-1", List.of(), 100,
             Map.of("readFiles", List.of("a.txt")), null);
         assertThat(entry.summary()).isEqualTo("summary");
+        assertThat(entry.firstKeptEntryId()).isEqualTo("kept-1");
         assertThat(entry.tokensBefore()).isEqualTo(100);
         assertThat(entry.retainedTail()).isEmpty();
     }
