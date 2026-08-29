@@ -6,7 +6,6 @@ import java.util.List;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-import com.pijava.agent.session.SessionJson;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.coding.agent.core.AgentSessionEvent;
 import com.pijava.web.WebProtocol.WebServerMessage;
@@ -81,20 +80,8 @@ final class AgentEventTranslator {
 
     private WebServerMessage messageUpdate(com.pijava.ai.message.AssistantMessage partial) {
         var node = typeNode("message_update");
-        node.set("message", assistantNode(partial));
+        node.set("message", WebWireJson.assistantNode(partial));
         return new WebServerMessage.AgentEvent(node);
-    }
-
-    /** 流式快照 {@code AssistantMessage} → pi 形状 {@code {role:"assistant", content:[...]}}。 */
-    private static com.fasterxml.jackson.databind.node.ObjectNode assistantNode(
-            com.pijava.ai.message.AssistantMessage partial) {
-        var node = JSON.createObjectNode();
-        node.put("role", "assistant");
-        var content = node.putArray("content");
-        for (var block : partial.content()) {
-            content.add(SessionJson.blockNode(block));
-        }
-        return node;
     }
 
     private WebServerMessage agentEnd(AgentSessionEvent.AgentEnd e) {
@@ -104,7 +91,7 @@ final class AgentEventTranslator {
         if (!e.messages().isEmpty()) {
             var arr = node.putArray("messages");
             for (var m : e.messages()) {
-                arr.add(SessionJson.messageNode(m));
+                arr.add(WebWireJson.messageNode(m));
             }
         }
         return new WebServerMessage.AgentEvent(node);

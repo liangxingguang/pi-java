@@ -192,7 +192,7 @@ final class WebDispatcher {
         var model = harness.getModel();
         var messages = session.accumulatedEntries().stream()
             .filter(Entry.Message.class::isInstance)
-            .map(e -> SessionJson.messageNode(((Entry.Message) e).message()))
+            .map(e -> WebWireJson.messageNode(((Entry.Message) e).message()))
             .toList();
         var state = new SerializedAgentState(
             messages,

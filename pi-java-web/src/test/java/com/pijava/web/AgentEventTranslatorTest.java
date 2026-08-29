@@ -96,6 +96,29 @@ class AgentEventTranslatorTest {
     }
 
     @Test
+    void agentEndConvertsMessagesToPiShape() {
+        var msgs = translator.translate(new AgentSessionEvent.AgentEnd(
+            List.of(new Message.ToolResultMessage("call-1", "bash",
+                List.of(new ContentBlock.TextContent("out")), false)),
+            false));
+        var ev = ((WebServerMessage.AgentEvent) msgs.get(0)).event();
+        var first = ev.get("messages").get(0);
+        assertThat(first.get("role").asText()).isEqualTo("toolResult");
+        assertThat(first.get("toolCallId").asText()).isEqualTo("call-1");
+    }
+
+    @Test
+    void messageUpdateThinkingUsesThinkingField() {
+        var partial = new AssistantMessage("id-1",
+            List.of(new ContentBlock.ThinkingContent("thought")), null, null);
+        var msgs = translator.translate(new AgentSessionEvent.MessageUpdate(
+            new StreamEvent.ThinkingDelta(0, "thought", partial)));
+        var ev = ((WebServerMessage.AgentEvent) msgs.get(0)).event();
+        assertThat(ev.get("message").get("content").get(0).get("thinking").asText())
+            .isEqualTo("thought");
+    }
+
+    @Test
     void bashOutputEmitsBashOutputEvent() {
         var msgs = translator.translate(new AgentSessionEvent.BashExecutionUpdate("bash-1", "out"));
         var ev = ((WebServerMessage.AgentEvent) msgs.get(0)).event();
