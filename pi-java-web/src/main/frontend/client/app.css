@@ -1,5 +1,14 @@
 @import "@mariozechner/pi-web-ui/app.css";
 
+/* 用户消息右对齐（pi-web-ui user-message 硬编码 justify-start） */
+#messages-scroll user-message > div:first-child {
+  justify-content: flex-end;
+}
+
+user-message .user-message-container {
+  max-width: 85%;
+}
+
 :root {
   --accent-foreground: oklch(45% 0.18 155);
   --sidebar-width: 300px;
