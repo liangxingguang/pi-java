@@ -45,7 +45,34 @@ public final class OtelTelemetryContext implements TelemetryContext {
     @Override
     public <T> T startSpan(SpanOptions options,
                            Function<? super TelemetrySpan, ? extends T> body) {
-        return runSpan(null, options, body);
+        try (var span = openSpan(options)) {
+            try {
+                return body.apply(span);
+            } catch (RuntimeException | Error e) {
+                if (span instanceof OtelSpan os) {
+                    os.span.recordException(e);
+                    os.span.setStatus(StatusCode.ERROR);
+                }
+                throw e;
+            }
+        }
+    }
+
+    @Override
+    public TelemetrySpan openSpan(SpanOptions options) {
+        var builder = openTelemetry.getTracer(INSTRUMENTATION).spanBuilder(options.name());
+        Attributes attrs = toAttributes(options.attributes()).toBuilder()
+            .putAll(dimensionAttributes())
+            .build();
+        Span span = builder.setAllAttributes(attrs).startSpan();
+        return new OtelSpan(span);
+    }
+
+    @Override
+    public TelemetryContext with(String key, String value) {
+        var merged = new HashMap<>(dimensions);
+        merged.put(key, value);
+        return new OtelTelemetryContext(openTelemetry, merged);
     }
 
     @Override
@@ -60,33 +87,13 @@ public final class OtelTelemetryContext implements TelemetryContext {
             .record(durationMs, dimensionAttributes());
     }
 
-    @Override
-    public TelemetryContext with(String key, String value) {
-        var merged = new HashMap<>(dimensions);
-        merged.put(key, value);
-        return new OtelTelemetryContext(openTelemetry, merged);
-    }
-
-    private <T> T runSpan(Span parent, SpanOptions options,
-                          Function<? super TelemetrySpan, ? extends T> body) {
+    private TelemetrySpan openSpanUnder(Span parent, SpanOptions options) {
         var builder = openTelemetry.getTracer(INSTRUMENTATION).spanBuilder(options.name());
-        if (parent != null) {
-            builder.setParent(Context.root().with(parent));
-        }
+        builder.setParent(Context.root().with(parent));
         Attributes attrs = toAttributes(options.attributes()).toBuilder()
             .putAll(dimensionAttributes())
             .build();
-        Span span = builder.setAllAttributes(attrs).startSpan();
-        var telemetrySpan = new OtelSpan(span);
-        try {
-            return body.apply(telemetrySpan);
-        } catch (RuntimeException | Error e) {
-            span.recordException(e);
-            span.setStatus(StatusCode.ERROR);
-            throw e;
-        } finally {
-            telemetrySpan.close();
-        }
+        return new OtelSpan(builder.setAllAttributes(attrs).startSpan());
     }
 
     private Attributes dimensionAttributes() {
@@ -134,9 +141,37 @@ public final class OtelTelemetryContext implements TelemetryContext {
         }
 
         @Override
+        public void addAttribute(String key, Object value) {
+            if (ended) {
+                return;
+            }
+            if (value instanceof String s) {
+                span.setAttribute(key, s);
+            } else if (value instanceof Boolean b) {
+                span.setAttribute(key, b);
+            } else if (value instanceof Long l) {
+                span.setAttribute(key, l);
+            } else if (value instanceof Integer i) {
+                span.setAttribute(key, (long) i);
+            } else if (value instanceof Double d) {
+                span.setAttribute(key, d);
+            }
+        }
+
+        @Override
         public <T> T startSpan(SpanOptions options,
                                Function<? super TelemetrySpan, ? extends T> body) {
-            return runSpan(span, options, body);
+            try (var child = openSpanUnder(this.span, options)) {
+                try {
+                    return body.apply(child);
+                } catch (RuntimeException | Error e) {
+                    if (child instanceof OtelSpan os) {
+                        os.span.recordException(e);
+                        os.span.setStatus(StatusCode.ERROR);
+                    }
+                    throw e;
+                }
+            }
         }
 
         @Override

@@ -23,6 +23,20 @@ public interface TelemetryContext {
      */
     <T> T startSpan(SpanOptions options, Function<? super TelemetrySpan, ? extends T> body);
 
+    /**
+     * Open a span without a callback; the caller is responsible for closing
+     * it (which ends the span).  Use for spans that must cross action or
+     * thread boundaries.
+     */
+    default TelemetrySpan openSpan(SpanOptions options) {
+        var holder = new Object() { TelemetrySpan span; };
+        startSpan(options, span -> {
+            holder.span = span;
+            return null;
+        });
+        return holder.span;
+    }
+
     /** Increment a counter metric. Default no-op. */
     default void incrementCounter(String name, long delta) { }
 

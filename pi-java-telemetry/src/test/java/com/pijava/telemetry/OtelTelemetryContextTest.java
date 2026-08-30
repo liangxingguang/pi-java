@@ -129,4 +129,63 @@ class OtelTelemetryContextTest {
             assertThat(data.getAttributes().get(AttributeKey.stringKey("session.id"))).isEqualTo("abc");
         }
     }
+
+    @Test
+    void openSpanEndsOnCloseAndAcceptsLateAttributes() {
+        var spans = InMemorySpanExporter.create();
+        var metrics = InMemoryMetricReader.create();
+        try (var sdk = sdk(spans, metrics)) {
+            var telemetry = OtelTelemetryContext.create(sdk);
+
+            var span = telemetry.openSpan(new SpanOptions("harness.run", Map.of("lane", "default")));
+            span.addAttribute("stopReason", "completed");
+            span.close();
+            span.close(); // idempotent
+
+            var data = spans.getFinishedSpanItems().get(0);
+            assertThat(data.getName()).isEqualTo("harness.run");
+            assertThat(data.getAttributes().get(AttributeKey.stringKey("lane"))).isEqualTo("default");
+            assertThat(data.getAttributes().get(AttributeKey.stringKey("stopReason"))).isEqualTo("completed");
+            assertThat(data.getEndEpochNanos()).isGreaterThan(0);
+        }
+    }
+
+    @Test
+    void openSpanUnderParentLinksParentSpanId() {
+        var spans = InMemorySpanExporter.create();
+        var metrics = InMemoryMetricReader.create();
+        try (var sdk = sdk(spans, metrics)) {
+            var telemetry = OtelTelemetryContext.create(sdk);
+
+            telemetry.startSpan(new SpanOptions("outer"), outer -> {
+                var inner = outer.openSpan(new SpanOptions("inner"));
+                inner.close();
+                return null;
+            });
+
+            var finished = spans.getFinishedSpanItems();
+            assertThat(finished).hasSize(2);
+            var outer = finished.stream().filter(s -> s.getName().equals("outer")).findFirst().orElseThrow();
+            var inner = finished.stream().filter(s -> s.getName().equals("inner")).findFirst().orElseThrow();
+            assertThat(inner.getParentSpanId()).isEqualTo(outer.getSpanContext().getSpanId());
+        }
+    }
+
+    @Test
+    void startSpanDelegatesToOpenSpan() {
+        var spans = InMemorySpanExporter.create();
+        var metrics = InMemoryMetricReader.create();
+        try (var sdk = sdk(spans, metrics)) {
+            var telemetry = OtelTelemetryContext.create(sdk);
+
+            String result = telemetry.startSpan(new SpanOptions("ai.call"), span -> {
+                span.addAttribute("late", "attr");
+                return "value";
+            });
+
+            assertThat(result).isEqualTo("value");
+            var data = spans.getFinishedSpanItems().get(0);
+            assertThat(data.getAttributes().get(AttributeKey.stringKey("late"))).isEqualTo("attr");
+        }
+    }
 }

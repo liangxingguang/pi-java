@@ -22,6 +22,11 @@ public final class NoopTelemetryContext implements TelemetryContext {
         return body.apply(NOOP_SPAN);
     }
 
+    @Override
+    public TelemetrySpan openSpan(SpanOptions options) {
+        return NOOP_SPAN;
+    }
+
     private static final class NoopSpan implements TelemetrySpan {
         @Override
         public void close() {

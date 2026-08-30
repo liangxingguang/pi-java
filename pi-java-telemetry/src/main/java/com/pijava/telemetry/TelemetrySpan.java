@@ -15,4 +15,10 @@ public interface TelemetrySpan extends TelemetryContext, AutoCloseable {
      */
     @Override
     void close();
+
+    /**
+     * Attach an attribute discovered after the span started (e.g. token
+     * counts known only at the end).  Null values are ignored.  Default no-op.
+     */
+    default void addAttribute(String key, Object value) { }
 }
