@@ -163,11 +163,12 @@ class HookTest {
         var stop = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent("done")))
                 .withStopReason("stop");
+        // Alternate per call: runs now append to the transcript across turns,
+        // so "no ToolResult in context" can no longer identify a run's first turn.
+        var calls = new java.util.concurrent.atomic.AtomicInteger();
         return (messages, model, options) -> {
-            boolean firstTurn = messages.stream()
-                .noneMatch(m -> m instanceof com.pijava.ai.message.Message.ToolResultMessage);
+            var partial = calls.incrementAndGet() % 2 == 1 ? toolUse : stop;
             seenModels.add(model.provider() + "/" + model.modelName());
-            var partial = firstTurn ? toolUse : stop;
             return StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.TextEnd(0, "x", partial),

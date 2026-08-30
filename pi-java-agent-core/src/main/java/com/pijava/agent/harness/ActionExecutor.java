@@ -77,7 +77,8 @@ final class ActionExecutor {
         lane.stepIndex = 0;
         lane.partial = null;
         lane.newestOwn = null;
-        lane.transcript.clear();
+        // pi alignment (agent-loop.ts): consecutive prompts append to the
+        // existing transcript — only reset() clears context.
         lane.pendingWrites.clear();
         lane.records.clear();
         lane.pendingToolCalls.clear();
@@ -91,14 +92,16 @@ final class ActionExecutor {
 
         // Write user message entry
         var userEntry = new Entry.Message(
-            UUID.randomUUID().toString(), 0, null, null, userMessage, null);
+            UUID.randomUUID().toString(), 0, lane.lastEntry() != null ? lane.lastEntry().id() : null,
+            null, userMessage, null);
         lane.transcript.add(userEntry);
         lane.pendingWrites.add(userEntry);
 
         // Write thinking level change if non-default
         if (ctx.thinkingLevel().get() instanceof ModelThinkingLevel.Enabled en) {
             var tlEntry = new Entry.ThinkingLevelChange(
-                UUID.randomUUID().toString(), 0, null, null,
+                UUID.randomUUID().toString(), 0,
+                lane.lastEntry() != null ? lane.lastEntry().id() : null, null,
                 en.level().label());
             lane.transcript.add(tlEntry);
             lane.pendingWrites.add(tlEntry);
@@ -308,7 +311,8 @@ final class ActionExecutor {
             .collect(java.util.stream.Collectors.joining("\n\n"));
         var images = items.stream().flatMap(i -> i.images().stream()).toList();
         var userEntry = new Entry.Message(
-            UUID.randomUUID().toString(), 0, null, null,
+            UUID.randomUUID().toString(), 0,
+            lane.lastEntry() != null ? lane.lastEntry().id() : null, null,
             buildUserMessage(prompt, images), null);
         lane.transcript.add(userEntry);
         lane.pendingWrites.add(userEntry);
@@ -421,9 +425,8 @@ final class ActionExecutor {
         String asstEntryId = null;
         if (lane.partial != null) {
             asstEntryId = UUID.randomUUID().toString();
-            var parentId = lane.lastEntry() != null ? lane.lastEntry().id() : null;
             var asstEntry = new Entry.Message(
-                asstEntryId, 0, null, null,
+                asstEntryId, 0, lane.lastEntry() != null ? lane.lastEntry().id() : null, null,
                 new Message.AssistantMessage(lane.partial.content()), null);
             lane.transcript.add(asstEntry);
             lane.pendingWrites.add(asstEntry);

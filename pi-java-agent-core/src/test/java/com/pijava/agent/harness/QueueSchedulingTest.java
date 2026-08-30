@@ -112,8 +112,9 @@ class QueueSchedulingTest {
         h.followUp("default", "follow-up prompt");
         drive(h, "default");
 
+        // Runs append to the transcript, so the follow-up run sees both prompts.
         assertThat(userMessages(h, "default"))
-            .containsExactly("follow-up prompt");
+            .containsExactly("first prompt", "follow-up prompt");
         assertThat(h.lastAssistantMessage()).isNotNull();
     }
 
@@ -127,9 +128,9 @@ class QueueSchedulingTest {
         drive(h, "default");
 
         // One-at-a-time: each run drains exactly one message; the runs chain
-        // until the queue is empty. run() clears the transcript per run, so the
-        // final transcript holds only the last processed prompt.
-        assertThat(userMessages(h, "default")).containsExactly("third");
+        // until the queue is empty. Consecutive runs append, so the final
+        // transcript holds every processed prompt in order.
+        assertThat(userMessages(h, "default")).containsExactly("first", "second", "third");
         assertThat(h.snapshot("default").queues().followUp()).isEmpty();
     }
 

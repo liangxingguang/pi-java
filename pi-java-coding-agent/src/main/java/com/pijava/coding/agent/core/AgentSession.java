@@ -95,6 +95,10 @@ public final class AgentSession implements AutoCloseable {
     private Session<?> session;
     private final Set<String> persistedEntryIds = new HashSet<>();
     private final Set<String> persistedRecordIds = new HashSet<>();
+    // Entry ids already delivered via end-of-run EntryAppended/entryObserver.
+    // Session-scoped because consecutive runs append to one lane transcript
+    // (pi alignment) and each run's delivery replays the full transcript.
+    private final Set<String> deliveredEntryIds = new HashSet<>();
     // Phase 6: 会话级事件广播（多监听器）。
     private final SessionEventHub eventHub = new SessionEventHub();
     // Phase 6 (P6-7b): 扩展 UI 服务（RPC 模式注入，缺省 noop）。
@@ -723,6 +727,9 @@ public final class AgentSession implements AutoCloseable {
     }
     java.util.Set<String> persistedRecordIds() {
         return persistedRecordIds;
+    }
+    java.util.Set<String> deliveredEntryIds() {
+        return deliveredEntryIds;
     }
 
     void name(String name) {

@@ -82,13 +82,23 @@ final class SessionRunner {
             do {
                 shouldRetry = false;
                 try {
-                    Action action = owner.harness().run(laneName, prompt);
+                    // pi alignment (_prepareRetry + agent.continue): a retry
+                    // keeps the prior context and continues from the transcript
+                    // tail instead of re-prompting (which would duplicate the
+                    // user message under append semantics).
+                    Action action;
+                    if (attempt == 0) {
+                        action = owner.harness().run(laneName, prompt);
+                    } else {
+                        owner.harness().dropTrailingErrorAssistant(laneName);
+                        action = owner.harness().continueRun(laneName);
+                    }
                     // Immediate user echo (pi alignment: agent-loop emits
                     // message_start/message_end(user) before streaming; the
                     // frontend relies on this to render the prompt instantly
                     // instead of only at agent_end's whole-table replacement).
-                    // Only the first attempt — retries re-run() the lane and
-                    // would re-echo the same prompt.
+                    // Only the first attempt — retries continue the same lane
+                    // and would re-echo the same prompt.
                     if (attempt == 0) {
                         owner.harness().snapshot(laneName).transcript().stream()
                             .filter(Entry.Message.class::isInstance)
@@ -149,13 +159,22 @@ final class SessionRunner {
                     success, attempt, success ? null : errorMessage.get()));
             }
             entriesFuture.complete(transcript);
+            // Consecutive runs now append to the lane transcript (pi alignment),
+            // so the end-of-run delivery must dedupe by entry id — replays of
+            // earlier turns' entries would duplicate bubbles in the TUI/web.
+            // The dedupe set is session-scoped (owner.deliveredEntryIds) because
+            // each processPrompt call drives its own SessionRunner instance.
             if (entryObserver != null) {
                 for (var entry : transcript) {
-                    entryObserver.onEntry(entry);
+                    if (owner.deliveredEntryIds().add(entry.id())) {
+                        entryObserver.onEntry(entry);
+                    }
                 }
             }
             for (var entry : transcript) {
-                owner.emitSessionEvent(new AgentSessionEvent.EntryAppended(entry));
+                if (owner.deliveredEntryIds().add(entry.id())) {
+                    owner.emitSessionEvent(new AgentSessionEvent.EntryAppended(entry));
+                }
             }
             if (owner.session() != null) {
                 SessionPersistence.persistPending(owner, owner.session(), laneName);

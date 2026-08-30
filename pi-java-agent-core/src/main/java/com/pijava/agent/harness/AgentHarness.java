@@ -10,6 +10,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 import com.pijava.agent.compaction.CompactionSettings;
+import com.pijava.agent.entry.Entry;
 import com.pijava.agent.hook.HookSystem;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.skill.SkillManager;
@@ -379,6 +380,29 @@ public class AgentHarness implements AutoCloseable {
     /** Continue a run on the default lane. */
     public Action continueRun() {
         return continueRun(defaultLaneName);
+    }
+
+    /**
+     * Remove the trailing error assistant entry from the lane transcript
+     * (pi {@code _prepareRetry} keeps the errored message only in session
+     * history, not in agent state), so a retry continues from the prior
+     * context without re-prompting.
+     */
+    public void dropTrailingErrorAssistant(String laneName) {
+        var lane = lanes.get(laneName);
+        if (lane == null) {
+            return;
+        }
+        var entries = lane.transcript;
+        if (entries.isEmpty()
+                || !(entries.get(entries.size() - 1) instanceof Entry.Message m)
+                || !"assistant".equals(m.message().role())) {
+            return;
+        }
+        String stopReason = lane.newestOwn != null ? lane.newestOwn.stopReason() : null;
+        if (HarnessUtils.isErrorStopReason(stopReason)) {
+            entries.remove(entries.size() - 1);
+        }
     }
 
     /** Return the final assistant message from the most recent run (default lane). */
