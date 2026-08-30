@@ -62,4 +62,20 @@ class StreamPartialBuilderTest {
             .readValue("{command: \"echo hi\",}", java.util.Map.class);
         assertThat(parsed).isInstanceOf(java.util.Map.class);
     }
+
+    @Test
+    void signatureDeltaAccumulatesIntoThinkingBlock() {
+        var builder = new StreamPartialBuilder();
+        builder.emitStart();
+        builder.emitThinkingStart();
+        builder.emitThinkingDelta("reasoning...");
+        builder.emitThinkingSignature("sig_");
+        builder.emitThinkingSignature("abc");
+
+        var blocks = builder.snapshot().content();
+        assertThat(blocks.get(0)).isInstanceOf(ContentBlock.ThinkingContent.class);
+        var thinking = (ContentBlock.ThinkingContent) blocks.get(0);
+        assertThat(thinking.text()).isEqualTo("reasoning...");
+        assertThat(thinking.signature()).isEqualTo("sig_abc");
+    }
 }

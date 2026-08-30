@@ -27,6 +27,7 @@ public final class StreamPartialBuilder {
     // Per-block accumulators
     private final StringBuilder textBuf = new StringBuilder();
     private final StringBuilder thinkingBuf = new StringBuilder();
+    private final StringBuilder thinkingSigBuf = new StringBuilder();
     private final StringBuilder toolArgBuf = new StringBuilder();
     private String toolCallId = "";
     private String toolCallName = "";
@@ -119,6 +120,7 @@ public final class StreamPartialBuilder {
     /** Emit thinking-block-start. Adds a placeholder {@link ContentBlock.ThinkingContent}. */
     public StreamEvent.ThinkingStart emitThinkingStart() {
         thinkingBuf.setLength(0);
+        thinkingSigBuf.setLength(0);
         thinkingBlockIndex = blocks.size();
         blocks.add(new ContentBlock.ThinkingContent(""));
         int idx = nextContentIndex++;
@@ -134,8 +136,18 @@ public final class StreamPartialBuilder {
             nextContentIndex++;
         }
         int idx = thinkingBlockIndex;
-        blocks.set(idx, new ContentBlock.ThinkingContent(thinkingBuf.toString()));
+        blocks.set(idx, new ContentBlock.ThinkingContent(
+            thinkingBuf.toString(), thinkingSigBuf.toString()));
         return new StreamEvent.ThinkingDelta(idx, delta, snapshot());
+    }
+
+    /** Emit a signature delta for the current thinking block (Anthropic). */
+    public StreamEvent.ThinkingDelta emitThinkingSignature(String signature) {
+        thinkingSigBuf.append(signature);
+        int idx = Math.max(0, thinkingBlockIndex);
+        blocks.set(idx, new ContentBlock.ThinkingContent(
+            thinkingBuf.toString(), thinkingSigBuf.toString()));
+        return new StreamEvent.ThinkingDelta(idx, "", snapshot());
     }
 
     /** Emit thinking-block-end. */

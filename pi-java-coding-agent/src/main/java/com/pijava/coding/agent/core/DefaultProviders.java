@@ -89,11 +89,17 @@ public final class DefaultProviders {
             com.pijava.agent.harness.StreamOptions options,
             ApiOptions apiOptions) {
         var api = provider.createApi(ChatApi.class, apiOptions);
+        var extra = new java.util.LinkedHashMap<String, Object>();
+        var thinking = options.thinking();
+        if (thinking != null && thinking.enabled()
+                && thinking.budgetTokens().isPresent()) {
+            extra.put("thinking.budgetTokens", thinking.budgetTokens().getAsInt());
+        }
         var request = new com.pijava.ai.api.StreamRequest(
             model, messages, options.tools(),
             options.maxTokens().orElse(-1),
             options.temperature().orElse(-1),
-            Map.of());
+            extra);
         return api.streamBlocking(request, apiOptions);
     }
 

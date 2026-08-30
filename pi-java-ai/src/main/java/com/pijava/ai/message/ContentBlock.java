@@ -33,8 +33,22 @@ public sealed interface ContentBlock {
      * Kept separate from {@link TextContent} so providers that require passing
      * reasoning back on later turns (DeepSeek thinking mode) can serialize it
      * into the provider-specific field instead of mixing it into content.
+     *
+     * <p>{@code signature} carries the provider's tamper-evidence token for the
+     * thinking text (Anthropic extended thinking). Replay requires it; without
+     * a signature adapters downgrade the block to plain text.</p>
      */
-    record ThinkingContent(String text) implements ContentBlock {}
+    record ThinkingContent(String text, String signature) implements ContentBlock {
+        /** Compact constructor normalizing a null signature to empty. */
+        public ThinkingContent {
+            signature = signature == null ? "" : signature;
+        }
+
+        /** Backwards-compatible constructor for pre-signature call sites. */
+        public ThinkingContent(String text) {
+            this(text, "");
+        }
+    }
 
     /**
      * An image provided as a base64-encoded data URL.
