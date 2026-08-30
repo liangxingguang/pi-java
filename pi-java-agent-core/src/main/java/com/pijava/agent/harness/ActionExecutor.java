@@ -105,8 +105,11 @@ final class ActionExecutor {
         }
 
         lane.phase = RunPhase.ASSISTANT;
+        // pi alignment: the operation id IS the runId (state.openOperationsByLane
+        // pairs operation_finished.runId with operation_started.id) — a separate
+        // UUID would never match and would leak an open operation on the lane.
         lane.records.add(new LaneRecord.OperationStarted(
-            UUID.randomUUID().toString(), 0, laneName, null, null,
+            lane.runId, 0, laneName, null, null,
             new LaneRecord.OperationStarted.Run(promptList, List.of(), null, null)));
         ctx.incrementTurn();
         ctx.publishState(laneName);
@@ -164,8 +167,9 @@ final class ActionExecutor {
 
         ctx.hookSystem().fireBeforeRun(laneName,
             new RunContext(laneName, lane.runId, List.of()));
+        // pi alignment: operation id == runId (see run()).
         lane.records.add(new LaneRecord.OperationStarted(
-            UUID.randomUUID().toString(), 0, laneName, null, null,
+            lane.runId, 0, laneName, null, null,
             new LaneRecord.OperationStarted.Run(List.of(), List.of(), null, null)));
         ctx.incrementTurn();
         lane.phase = RunPhase.ASSISTANT;

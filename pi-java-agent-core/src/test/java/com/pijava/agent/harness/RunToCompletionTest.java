@@ -9,6 +9,7 @@ import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
+import com.pijava.agent.record.LaneRecord;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -67,5 +68,39 @@ class RunToCompletionTest {
         h.runToCompletion().toCompletableFuture().join();
         assertThat(h.lastAssistantMessage()).isNotNull();
         assertThat(h.lastAssistantMessage().stopReason()).isEqualTo("stop");
+    }
+
+    /**
+     * Regression: each run's OperationStarted must reuse the lane runId so the
+     * session layer can pair it with OperationFinished. A separate UUID
+     * (pre-alignment) made operation_finished.runId never match the started id,
+     * leaking an open operation that crashed the SECOND run of the same session
+     * with "Lane already has an open operation" — the web UI's lost last turn.
+     */
+    @Test
+    void consecutiveRunsNeverLeaveStaleOpenOperation() {
+        var h = harness();
+        h.drive(new DriveMode.Automatic());
+
+        h.run("first");
+        h.runToCompletion().toCompletableFuture().join();
+        var first = h.snapshot(AgentHarness.DEFAULT_LANE).records().stream()
+            .filter(r -> r instanceof LaneRecord.OperationFinished).toList();
+        assertThat(first).hasSize(1);
+
+        h.run("second");
+        h.runToCompletion().toCompletableFuture().join();
+        var all = h.snapshot(AgentHarness.DEFAULT_LANE).records();
+
+        // Second run opened a fresh operation that is closed by its own finish.
+        var finishedIds = all.stream()
+            .filter(r -> r instanceof LaneRecord.OperationFinished)
+            .map(r -> ((LaneRecord.OperationFinished) r).runId())
+            .toList();
+        var startedIds = all.stream()
+            .filter(r -> r instanceof LaneRecord.OperationStarted)
+            .map(r -> r.id())
+            .toList();
+        assertThat(finishedIds).containsExactlyElementsOf(startedIds);
     }
 }
