@@ -126,4 +126,16 @@ class AgentEventTranslatorTest {
         assertThat(ev.get("id").asText()).isEqualTo("bash-1");
         assertThat(ev.get("delta").asText()).isEqualTo("out");
     }
+
+    @Test
+    void userMessageReceivedEmitsMessageEnd() {
+        var msgs = translator.translate(new AgentSessionEvent.UserMessageReceived(
+            new Message.UserMessage(List.of(new ContentBlock.TextContent("what is the weather?")))));
+        assertThat(msgs).hasSize(1);
+        var ev = ((WebServerMessage.AgentEvent) msgs.get(0)).event();
+        assertThat(ev.get("type").asText()).isEqualTo("message_end");
+        assertThat(ev.get("message").get("role").asText()).isEqualTo("user");
+        assertThat(ev.get("message").get("content").get(0).get("text").asText())
+            .isEqualTo("what is the weather?");
+    }
 }

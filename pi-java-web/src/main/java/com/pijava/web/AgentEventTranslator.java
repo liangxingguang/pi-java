@@ -40,6 +40,10 @@ final class AgentEventTranslator {
         var out = new ArrayList<WebServerMessage>();
         switch (event) {
             case AgentSessionEvent.MessageUpdate u -> translateStream(u.streamEvent(), out);
+            // 即时回显：run 启动即推 message_end(user)，前端收到即上列表，
+            // 不等 agent_end 整表替换（对齐 pi agent-loop 的 message_end）。
+            case AgentSessionEvent.UserMessageReceived u ->
+                out.add(userMessageEnd(u.message()));
             case AgentSessionEvent.AgentEnd e -> {
                 streaming = false;
                 out.add(agentEnd(e));
@@ -86,6 +90,13 @@ final class AgentEventTranslator {
     private WebServerMessage messageUpdate(com.pijava.ai.message.AssistantMessage partial) {
         var node = typeNode("message_update");
         node.set("message", WebWireJson.assistantNode(partial));
+        return new WebServerMessage.AgentEvent(node);
+    }
+
+    /** user 消息 wire 帧：{type:"message_end", message:{role:"user",content:[...]}}。 */
+    private WebServerMessage userMessageEnd(com.pijava.ai.message.Message userMsg) {
+        var node = typeNode("message_end");
+        node.set("message", WebWireJson.messageNode(userMsg));
         return new WebServerMessage.AgentEvent(node);
     }
 

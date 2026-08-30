@@ -83,6 +83,21 @@ final class SessionRunner {
                 shouldRetry = false;
                 try {
                     Action action = owner.harness().run(laneName, prompt);
+                    // Immediate user echo (pi alignment: agent-loop emits
+                    // message_start/message_end(user) before streaming; the
+                    // frontend relies on this to render the prompt instantly
+                    // instead of only at agent_end's whole-table replacement).
+                    // Only the first attempt — retries re-run() the lane and
+                    // would re-echo the same prompt.
+                    if (attempt == 0) {
+                        owner.harness().snapshot(laneName).transcript().stream()
+                            .filter(Entry.Message.class::isInstance)
+                            .map(e -> ((Entry.Message) e).message())
+                            .filter(m -> m instanceof Message.UserMessage)
+                            .findFirst()
+                            .ifPresent(m -> owner.emitSessionEvent(
+                                new AgentSessionEvent.UserMessageReceived(m)));
+                    }
                     while (action != null) {
                         action = owner.harness().executeAction(laneName, action);
                     }

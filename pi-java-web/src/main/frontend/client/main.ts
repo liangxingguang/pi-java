@@ -282,13 +282,13 @@ function handleAgentEvent(event: any) {
       break;
 
     case "message_end":
-      if (event.message) {
-        const existing = messages.findIndex(
-          (m: any) => m.timestamp === (event.message as any).timestamp && m.role === event.message.role
-        );
-        if (existing === -1) {
-          messages = [...messages, event.message];
-        }
+      // 即时回显 user 消息（后端 run 启动即发 message_end，对齐 pi）。
+      // 直接追加而非按 timestamp 去重：wire 序列化不含 timestamp（都为
+      // undefined），去重会把后续轮次的新 user 消息误判为已存在而丢弃；
+      // 且 message_end 必先于 agent_end（整表赋值）到达，不会重复。
+      if (event.message && event.message.role === "user") {
+        console.log("[message_end] user echo ->", event.message.content);
+        messages = [...messages, event.message];
       }
       streamingMessage = null;
       updateStreamingContainer(null, true);

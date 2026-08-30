@@ -20,6 +20,9 @@ public sealed interface AgentSessionEvent {
     /** 包装底层 StreamEvent；序列化时剥除 partial（RPC §4.2）。 */
     record MessageUpdate(StreamEvent streamEvent) implements AgentSessionEvent {}
 
+    /** 用户消息即时回显（run 启动即发，不等 agent_end；对齐 pi message_end(user)）。 */
+    record UserMessageReceived(Message message) implements AgentSessionEvent {}
+
     /** Agent 一次 run 结束（转录完成）。 */
     record AgentEnd(List<Message> messages, boolean willRetry) implements AgentSessionEvent {}
 
