@@ -1,6 +1,8 @@
 package com.pijava.ai.protocol;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.SubmissionPublisher;
 
 import com.anthropic.client.AnthropicClient;
@@ -11,9 +13,14 @@ import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.MessageParam;
 import com.anthropic.models.messages.RawMessageStreamEvent;
 import com.anthropic.models.messages.TextBlockParam;
+import com.anthropic.models.messages.Tool;
+import com.anthropic.models.messages.ToolResultBlockParam;
+import com.anthropic.models.messages.ToolUnion;
+import com.anthropic.models.messages.ToolUseBlockParam;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
@@ -62,6 +69,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         var builder = new StreamPartialBuilder();
         var isToolBlock = new boolean[]{false};
         var isThinkingBlock = new boolean[]{false};
+        var toolCallSeen = new boolean[]{false};
         var pendingToolName = new String[]{""};
         var pendingToolId = new String[]{""};
         try {
@@ -72,11 +80,11 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                          client.messages().createStreaming(params)) {
                 sr.stream().forEach(raw -> {
                     StreamEvent se = mapEvent(raw, builder, isToolBlock,
-                            isThinkingBlock, pendingToolName, pendingToolId);
+                            isThinkingBlock, toolCallSeen, pendingToolName, pendingToolId);
                     if (se != null) publisher.submit(se);
                 });
             }
-            publisher.submit(builder.emitDone("end_turn"));
+            publisher.submit(builder.emitDone(toolCallSeen[0] ? "tool_use" : "end_turn"));
         } catch (Exception e) {
             publisher.submit(builder.emitError("error", e));
         }
@@ -86,6 +94,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                                   StreamPartialBuilder builder,
                                   boolean[] isToolBlock,
                                   boolean[] isThinkingBlock,
+                                  boolean[] toolCallSeen,
                                   String[] pendingToolName,
                                   String[] pendingToolId) {
         try {
@@ -95,6 +104,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                     var tu = block.toolUse().orElseThrow();
                     isToolBlock[0] = true;
                     isThinkingBlock[0] = false;
+                    toolCallSeen[0] = true;
                     pendingToolName[0] = tu.name();
                     pendingToolId[0] = tu.id();
                     return builder.emitToolCallStart();
@@ -102,7 +112,13 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                 if (block.isThinking()) {
                     isToolBlock[0] = false;
                     isThinkingBlock[0] = true;
-                    return builder.emitThinkingStart();
+                    var start = builder.emitThinkingStart();
+                    var initial = block.thinking()
+                            .map(t -> t.signature()).orElse("");
+                    if (initial != null && !initial.isEmpty()) {
+                        builder.emitThinkingSignature(initial);
+                    }
+                    return start;
                 }
                 isToolBlock[0] = false;
                 isThinkingBlock[0] = false;
@@ -121,7 +137,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                     return builder.emitThinkingDelta(delta.asThinking().thinking());
                 }
                 if (delta.isSignature()) {
-                    return null;
+                    return builder.emitThinkingSignature(delta.asSignature().signature());
                 }
                 return null;
             }
@@ -162,25 +178,126 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
 
         for (var msg : request.messages()) {
             if (msg instanceof Message.SystemMessage) continue;
-            var text = extractText(msg.content());
-            if (text.isEmpty()) continue;
+            var blockParams = toBlockParams(msg);
+            if (blockParams.isEmpty()) continue;
 
             var role = msg instanceof Message.UserMessage
                     ? MessageParam.Role.USER : MessageParam.Role.ASSISTANT;
-
             builder.addMessage(MessageParam.builder()
                     .role(role)
-                    .content(MessageParam.Content.ofBlockParams(
-                            List.of(ContentBlockParam.ofText(
-                                    TextBlockParam.builder().text(text).build()))))
+                    .content(MessageParam.Content.ofBlockParams(blockParams))
                     .build());
+        }
+
+        for (var td : request.tools()) {
+            var inputSchema = Tool.InputSchema.builder()
+                    .putAllAdditionalProperties(toJsonValues(td.inputSchema()))
+                    .build();
+            var toolBuilder = Tool.builder()
+                    .name(td.name())
+                    .inputSchema(inputSchema);
+            if (td.description() != null && !td.description().isBlank()) {
+                toolBuilder.description(td.description());
+            }
+            builder.addTool(ToolUnion.ofTool(toolBuilder.build()));
         }
 
         if (request.temperature() >= 0) {
             builder.temperature(request.temperature());
         }
 
+        // pi alignment (anthropic-messages.ts:1047-1051): budget-based
+        // extended thinking, threaded through StreamRequest.extra by the
+        // harness StreamFn. The SDK builder leaves `type` as JsonMissing,
+        // so it must be set explicitly or the API ignores the config.
+        var budget = request.extra().get("thinking.budgetTokens");
+        if (budget instanceof Number n && n.longValue() > 0) {
+            builder.thinking(com.anthropic.models.messages.ThinkingConfigParam.ofEnabled(
+                    com.anthropic.models.messages.ThinkingConfigEnabled.builder()
+                            .budgetTokens(n.longValue())
+                            .type(com.anthropic.core.JsonValue.from("enabled"))
+                            .build()));
+        }
+
         return builder.build();
+    }
+
+    private List<ContentBlockParam> toBlockParams(Message msg) {
+        var result = new ArrayList<ContentBlockParam>();
+        if (msg instanceof Message.ToolResultMessage tool) {
+            var resultContent = ToolResultBlockParam.Content.ofBlocks(
+                    toTextBlocks(tool.content()));
+            var toolResult = ToolResultBlockParam.builder()
+                    .toolUseId(tool.toolUseId())
+                    .content(resultContent)
+                    .isError(tool.isError())
+                    .build();
+            result.add(ContentBlockParam.ofToolResult(toolResult));
+            return result;
+        }
+        for (var block : msg.content()) {
+            if (block instanceof ContentBlock.TextContent tc) {
+                result.add(ContentBlockParam.ofText(
+                        TextBlockParam.builder().text(tc.text()).build()));
+            } else if (block instanceof ContentBlock.ThinkingContent th) {
+                appendThinkingBlock(result, th);
+            } else if (block instanceof ContentBlock.ToolUseContent tu) {
+                var input = ToolUseBlockParam.Input.builder()
+                        .putAllAdditionalProperties(toJsonValues(tu.arguments()))
+                        .build();
+                result.add(ContentBlockParam.ofToolUse(ToolUseBlockParam.builder()
+                        .id(tu.id())
+                        .name(tu.name())
+                        .input(input)
+                        .build()));
+            }
+            // ThinkingContent is dropped: replaying thinking blocks requires
+            // the original signature, and assistant history only needs the
+            // tool_use/text content for the model to continue correctly.
+        }
+        return result;
+    }
+
+    /**
+     * Replay a thinking block per pi's rule (anthropic-messages.ts:1188-1211):
+     * with a signature → thinking block carrying it; without → downgrade to
+     * plain text; empty thinking and no signature → skip entirely.
+     */
+    private void appendThinkingBlock(List<ContentBlockParam> result,
+                                     ContentBlock.ThinkingContent th) {
+        var signature = th.signature() == null ? "" : th.signature().trim();
+        var text = th.text() == null ? "" : th.text();
+        if (text.isBlank() && signature.isEmpty()) {
+            return;
+        }
+        if (signature.isEmpty()) {
+            result.add(ContentBlockParam.ofText(
+                    TextBlockParam.builder().text(text).build()));
+            return;
+        }
+        result.add(ContentBlockParam.ofThinking(
+                com.anthropic.models.messages.ThinkingBlockParam.builder()
+                        .thinking(text)
+                        .signature(signature)
+                        .build()));
+    }
+
+    private static List<ToolResultBlockParam.Content.Block> toTextBlocks(List<ContentBlock> blocks) {
+        var result = new ArrayList<ToolResultBlockParam.Content.Block>();
+        for (var block : blocks) {
+            if (block instanceof ContentBlock.TextContent tc) {
+                result.add(ToolResultBlockParam.Content.Block.ofText(
+                        TextBlockParam.builder().text(tc.text()).build()));
+            }
+        }
+        return result;
+    }
+
+    private static Map<String, com.anthropic.core.JsonValue> toJsonValues(
+            Map<String, Object> schema) {
+        var out = new java.util.LinkedHashMap<String, com.anthropic.core.JsonValue>();
+        schema.forEach((key, value) -> out.put(key, com.anthropic.core.JsonValue.from(value)));
+        return out;
     }
 
     private String extractSystemText(List<Message> messages) {
