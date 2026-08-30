@@ -1,0 +1,284 @@
+# 18 - 可观察性层设计（trace / 审计 / 指标 / 日志）
+
+## 1. 背景与问题
+
+pi-java 此前的运行时是一个黑盒子：关键链路没有日志输出，一次 run 内发生了什么
+（几轮 LLM 调用、每个工具耗时多少、token 花在哪里、为何重试）无从回溯。
+
+现状是「三轨并行、互不打通」：
+
+| 轨道 | 现状 | 缺口 |
+|------|------|------|
+| 日志 | slf4j+logback 已落地（`10-logging-design.md`），文件落 `~/.pi-java/logs/` | 全项目仅 8 个类有 logger，§7 分层埋点清单未落实；无 trace 上下文关联 |
+| 遥测 | telemetry 模块有 `TelemetryContext/Span` 接口 + Noop + OTel 适配器（P6-20） | 仅 `AgentHarness` 一处 counter 调用；无 exporter 装配；`ExecutionContext` 无 telemetry 字段，埋点链路不通 |
+| 审计 | `LaneRecord`（"for debugging, audit and recovery"）已随 session JSONL/SQLite 持久化 | 缺 `ToolFinished`（`ToolStarted.resultEntryId` 恒传空串）；所有环节无耗时字段；无 LLM 请求摘要 |
+
+目标：
+
+1. **监控**：全链路 trace、每轮 LLM 调用与工具调用埋点；指标（循环次数、token、失败率、耗时）
+2. **审计**：每步动作完整日志、可回溯复现（payload 可选落盘、逐调用离线重放）
+3. **调试**：主链路 SLF4J 日志输出
+
+已确认的方案决策：trace 数据落**本地 JSONL 文件**（零新依赖；`OtelTelemetryContext`
+保留，需要外接 Jaeger 时自行挂 OTel SDK exporter）；审计轨补全 + `--trace-payloads`
+可选 payload 开关（默认关闭）；每次 run 结束打印 summary + 落盘；不动 TUI。
+
+## 2. 三轨分工
+
+| 轨道 | 载体 | 生命周期 | 消费者 |
+|------|------|----------|--------|
+| SLF4J 日志 | 人读文本行 | 运行时调试，滚转即弃 | 开发者 tail 文件 |
+| Trace JSONL | 结构化 span/event 行 | 每进程一个文件，事后分析 | 离线分析脚本、外接 OTel |
+| LaneRecord | session 审计轨 | 随 session 永久持久化 | session 回放、统计 |
+
+同一事件（如一次 LLM 调用的耗时/tokens）三处记录是**刻意冗余**：日志给人看、
+trace 供机器聚合、LaneRecord 是持久审计契约（随 session 可移植）。实现上埋点
+代码物理相邻（同方法内相邻语句），改一处必见另两处。
+
+## 3. 模块归属与接线
+
+### 3.1 telemetry 模块
+
+新增 `com.pijava.telemetry.JsonlFileTelemetry`（实现 `TelemetryContext`）：
+
+- pom 加 `jackson-databind`（BOM 管 2.19.2）+ `slf4j-api`（写失败告警用）
+- 纯 JDK NIO + jackson，native 兼容（jackson 已在 session 持久化 native 链路验证）
+- 文件 IO 全部 best-effort：写失败 `LOG.warn` 一次后静默降级，**永不向上抛**
+  （telemetry 不能杀死主链路）
+
+### 3.2 埋点分工
+
+| 层 | 职责 |
+|----|------|
+| agent-core（ActionExecutor / ToolExecutionPipeline / AgentHarness） | 打 span、写 LaneRecord、发 SLF4J 日志 |
+| telemetry | 定义接口 + exporter 实现，不知道 agent 存在 |
+| coding-agent（AgentSession.assemble / SessionRunner） | 装配：构造 exporter、注入 sessionId 维度、payload 捕获 StreamFn 包装、`--trace-payloads` 开关、run summary |
+
+**关键接线**：`ExecutionContext` 加 `TelemetryContext telemetry` 字段，
+`AgentHarness` 构造时传入——当前 ActionExecutor/ToolExecutionPipeline 完全摸不到
+telemetry，这是埋点的先决条件。
+
+## 4. TelemetryContext 接口扩展（最小增量）
+
+回调式 `startSpan` 无法表达跨 action 边界的 `harness.run` span（run 从
+`ActionExecutor.run()` 开始、在 `executeTryFinishRun()` 结束，中间穿过
+SessionRunner 的 while 循环）。新增两个默认方法：
+
+```java
+// TelemetryContext:
+/** 打开一个不由回调关闭的 span；调用方负责 close()（end）。 */
+default TelemetrySpan openSpan(SpanOptions options) { ... }
+
+// TelemetrySpan:
+/** span 结束前补属性（token 数、stopReason 只有结束时才知道）。 */
+default void addAttribute(String key, Object value) { }
+```
+
+三个实现同步改：
+
+- `NoopTelemetryContext`：openSpan 返回单例 NoopSpan
+- `OtelTelemetryContext`：openSpan 创建 OTel span 不立即 end，close() 时
+  `span.end()`；addAttribute → `span.setAttribute`（P6-20 资产天然契合）
+- `JsonlFileTelemetry`：见 §5
+
+不变式：`startSpan(options, body)` = openSpan + try/finally close（默认方法），
+两套 API 共存不冗余。
+
+## 5. Trace 数据模型（JSONL 行格式）
+
+### 5.1 文件与行类型
+
+`~/.pi-java/logs/traces/trace-<sessionId>-<yyyyMMdd-HHmmss>.jsonl`
+（每进程一个文件，追加；runId 在每行，跨 run 不碎文件）：
+
+```jsonl
+{"kind":"span_start","ts":"...","traceId":"<runId>","spanId":"a1b2c3d4","parentSpanId":"e5f6a7b8","name":"llm.request","sessionId":"...","lane":"default","attrs":{...}}
+{"kind":"span_end","ts":"...","spanId":"a1b2c3d4","durationMs":2314,"status":"ok","attrs":{"inputTokens":12340,"outputTokens":1021,"stopReason":"tool_use"}}
+{"kind":"event","ts":"...","traceId":"<runId>","spanId":"a1b2c3d4","name":"llm.payload.request","payload":{...}}
+{"kind":"counter","ts":"...","sessionId":"...","name":"harness.turn","delta":1}
+```
+
+- `traceId` = runId（pi 对齐：operation id IS runId）；`sessionId` 经
+  `telemetry.with("sessionId", id)` 注入，exporter 把维度并进每行
+- spanId：8 字节 hex
+- status：`ok` / `error` / `aborted`
+- span_end 缺失（进程崩溃）：离线分析按文件尾悬挂判定，可接受
+
+### 5.2 parent-child 表达
+
+**不依赖 ThreadLocal**：span 对象自带 traceId/spanId/parentSpanId，子 span 以
+parent 对象打开——天然解决 `runRawBatch` 虚拟线程并行（worker 线程直接引用
+parent span 对象开子 span）。exporter 另提供 `pushCurrent/popCurrent` 包内 API，
+供 event 行（payload 记录点）在批量 worker 线程绑定当前栈顶 span。
+
+### 5.3 Span 清单
+
+| span name | 打开点 / 关闭点 | 关键 attributes |
+|-----------|----------------|-----------------|
+| `harness.run` | `ActionExecutor.run()` open（存 LaneState 新字段 `runSpan`）；`executeTryFinishRun()` 终态 + terminate 路径关闭 | lane、promptChars、outcome、stopReason、attemptCount、inputTokens/outputTokens（累计）、durationMs |
+| `llm.request` | `executeStreamAssistant` 包裹 streamFn 调用段（回调式） | attempt、model、messageCount、toolCount、thinking、inputTokens、outputTokens、stopReason、errorClass、durationMs |
+| `tool.execute` | `ToolExecutionPipeline.executeStages` 每 call 一个，包 before_hook 判定 + raw 执行 + after_hook | toolCallId、toolName、toolIndex、batchSize、allowed、isError、terminate、argsChars、durationMs |
+| `compaction.apply` | `applyCompaction` 回调式 | reason(auto/manual/overflow)、estimatedTokens、tokensBefore、entriesBefore/After、durationMs |
+
+计数器：`harness.turn`（已有）、`harness.run`、`llm.requests`、
+`llm.tokens.input`、`llm.tokens.output`、`tool.executions`、`tool.errors`、
+`compactions`。计时：`llm.request.duration`、`tool.execute.duration`——与 span
+的 durationMs 刻意冗余：span 行服务单次 trace 回放，metric 行服务跨 run 聚合。
+
+## 6. 审计轨补全（LaneRecord）
+
+### 6.1 新变体 `tool_finished`
+
+```java
+record ToolFinished(String id, long seq, String lane, Instant timestamp,
+    String runId, String toolCallId, String toolName,
+    boolean isError, boolean terminate, String resultEntryId,
+    long durationMs) implements LaneRecord {}
+```
+
+写入点：ActionExecutor.executeTool/executeToolBatch，紧跟 ToolStarted。
+顺手修正 `appendEntry` 返回 entry id（现 void），让 ToolStarted 的
+resultEntryId 不再传空串。
+
+### 6.2 durationMs 加点（全 optional，NON_NULL 序列化）
+
+| 变体 | 加什么 |
+|------|--------|
+| `OperationFinished` | `Long durationMs`（run 起点→终态） |
+| `StepAttempt` | `Long durationMs`（LLM 步耗时） |
+| `ToolFinished`（新） | 内含 |
+| `ToolStarted` | 不加（耗时归 finished） |
+
+### 6.3 LLM 请求摘要 → 扩展 StepAttempt（不新开变体）
+
+StepAttempt 语义即 "A single LLM call attempt"，新字段全 optional：
+
+```
+model(String, "provider/name"), messageCount(Integer), toolCount(Integer),
+thinking(String, "off"|"budget=8000"|"effort=high"), durationMs(Long)
+```
+
+token 已有 `UsageRecord`（每步已写），不重复。
+
+### 6.4 兼容性
+
+- **旧文件可读**：新字段全 optional → 旧文件零影响
+- **新文件被旧 reader 读**：`tool_finished` 命中 `JsonlCodec.RECORD_TYPES`
+  白名单 + RecordJsonCodec 的 strict decode 会抛 `DecodeError.schema`。
+  **决策：接受**（同仓发布，交叉读仅发生在手动拷贝 session 场景），不做宽容
+  解码（保持 pi codec 严格性对齐），docs 记录
+- **SQLite**：`records.payload` 整体 JSON，零 DDL。`SqliteCodecs.recordRunId`
+  加 ToolFinished case（否则 run_id 列为 null，破坏 run 索引查询）
+- **穷举 switch 清单**（编译器强制找齐）：`LaneRecord.type()`、
+  `LaneRecord.committed()`、`RecordJsonCodec.decode()`、`SqliteCodecs.recordRunId`
+
+## 7. `--trace-payloads` 开关
+
+### 7.1 传递路径
+
+```
+Args(@Option "--trace-payloads") → AgentSession.assemble() 直接读
+  → new JsonlFileTelemetry(dir, payloads=...)   // 开关落 exporter 构造参数
+  → streamFn = new PayloadRecordingStreamFn(inner, exporter, payloads)
+```
+
+不加 HarnessConfig 字段：唯一消费者（StreamFn 包装）在 coding-agent、args 就在
+手边，往 agent-core 的 record 加没人读的字段是死配置。
+
+### 7.2 记录点（PayloadRecordingStreamFn，coding-agent 内 ~60 行）
+
+- **请求**：`stream()` 内序列化 {model, messages, tools(名+schema), maxTokens,
+  temperature, extra} 发 `llm.payload.request` event 行。
+  **wire 原文拿不到**（`AbstractChatApi.streamInternal` 内部组装不外露），
+  StreamRequest 级别已足够离线重放（把 payload 里的 messages 喂回 streamFn）
+- **响应**：包装 StreamIterator 透传，终结时（StreamDone/StreamError）用最后
+  事件的 `partial()` 序列化为 `llm.payload.response`
+- **脱敏**：`StreamRequest` 不含 ApiOptions，API key 天然不落；约定 extra 禁放
+  凭证。payload 文件含用户代码/对话原文，属预期行为，文档提示敏感
+
+### 7.3 关联机制
+
+wrapper 与 executeStreamAssistant 同线程：exporter 的当前栈顶即 `llm.request`
+span，event 行自动带正确 traceId/spanId。批量 worker 线程在 lambda 首尾
+push/pop parent span。
+
+## 8. Run Summary
+
+### 8.1 数据源
+
+| 指标 | 来源 |
+|------|------|
+| attempts / willRetry 次数 | SessionRunner.drive 局部变量 |
+| input/output tokens / cost | drive 循环内 stream 监听器累计 `UsageInfo`（**TokenCounter 是 session 累计值不能直接用**）；cost 取 `usage.cost().total()`（null→0） |
+| 工具成功/失败数 | `snapshot(lane).records()` 过滤 runId 匹配的 `ToolFinished.isError` |
+| durationMs | drive 循环墙钟 |
+| stopReason / exitCode | `RunStatus`（已有） |
+| 循环次数 | 本次 run 的 StepAttempt 计数 |
+
+`RunSummaryAggregator`（coding-agent/core，~80 行纯聚合）。
+
+### 8.2 打印点
+
+`SessionRunner.drive()` 的 `statusFuture.complete(...)` 之前（覆盖 -p/TUI/RPC
+全模式）。输出通道：`LOG.info`（恒写文件）+ 仅非 TUI 模式 `System.err.println`
+（stdout 被 assistant 正文占用，绝不能混）。TUI 不动。
+
+格式：
+
+```
+[pi-java] run summary: attempts=1 durationMs=5234ms stopReason=completed
+  tokens: in=12,340 out=1,021 cost=$0.0432
+  tools: 6 ok, 1 failed | retries: 0
+```
+
+## 9. 主链路 SLF4J 日志
+
+### 9.1 埋点清单（对齐 `10-logging-design.md` §7，控制在关键节点）
+
+**agent-core**（新增 logger：`ActionExecutor`、`ToolExecutionPipeline`）：
+
+| 位置 | 级别 | 内容 |
+|------|------|------|
+| run 开始/结束 | INFO | runId、lane、promptChars / outcome、durationMs、tokens |
+| LLM 调用结束 | DEBUG | model、messageCount、toolCount、耗时、in/out tokens、stopReason |
+| LLM 流错误 catch | WARN | 异常对象入参 `LOG.warn("...", e)` |
+| 工具开始/结束 | DEBUG | toolName、durationMs、isError |
+| compaction | INFO | reason、tokensBefore→After、耗时 |
+| abort | INFO | lane、runId |
+
+**coding-agent**：SessionRunner 重试 WARN（attempt、delayMs、错误摘要）。
+**ai 模块**（新增 logger：`PiHttpClient`）：HTTP 重试 WARN（status、attempt、
+Retry-After）；流式错误 WARN。ai pom 已有 slf4j-api，零依赖变更。
+
+### 9.2 规范
+
+- 库模块只用 slf4j-api（现状如此）；`{}` 占位符不拼接
+- **敏感信息不落日志**：API key、prompt/messages 全文永不进日志——payload
+  落盘走 `--trace-payloads` 的 trace 文件；工具参数只落 toolName+argsChars
+- 级别约定：INFO=run 生命周期、DEBUG=每步细节、WARN=重试与降级、ERROR=失败终点
+
+## 10. 实施顺序
+
+| # | Commit | 模块 | 内容 |
+|---|--------|------|------|
+| 1 | `docs: 18-observability-design.md` | docs | 本文档 |
+| 2 | `feat(telemetry): openSpan/addAttribute + JSONL file exporter` | telemetry | 接口扩展、Noop/Otel 同步、JsonlFileTelemetry、pom |
+| 3 | `feat(agent-core): LaneRecord ToolFinished + duration + LLM summary` | agent-core, session-backend-sqlite | §6 全部 |
+| 4 | `feat(agent-core): harness.run + llm.request + compaction spans` | agent-core | ExecutionContext 注入、run span 存 LaneState、埋点 + 计数器 + 日志 |
+| 5 | `feat(agent-core): tool.execute span + tool lifecycle logging` | agent-core | 每-call span（批量 worker push/pop）、工具日志 |
+| 6 | `feat(coding-agent): trace exporter assembly + --trace-payloads` | coding-agent | Args 开关、assemble 装配、PayloadRecordingStreamFn |
+| 7 | `feat(coding-agent): run summary` | coding-agent | RunSummaryAggregator + drive 打印 |
+| 8 | `feat(ai): HTTP retry + stream error logging` | ai | PiHttpClient WARN、流错误日志 |
+
+每步 `mvn clean verify` 零错误（JAVA_HOME 指向 GraalVM 25；底层模块改动带 `-am`）。
+
+## 11. 风险
+
+| 风险 | 评估 | 缓解 |
+|------|------|------|
+| native image | 低：仅 JDK NIO + jackson（已在 native 链路） | 无需新增 reflect-config。native+TUI 下 slf4j-simple 无法 detach console，新 WARN 会写 stderr——既有约束的放大，记录不改 |
+| TUI 与 trace 冲突 | 无 | trace 文件独立于 logback appender |
+| JSONL v4 前向兼容 | 旧二进制读新 session 抛 schema 错 | 接受并文档化（§6.4） |
+| 高并发 span 写 | exporter 单文件多线程追加 | 单锁 + 每次 span_end/event flush（崩溃丢尾可接受） |
+| SpanOptions Map.copyOf 拒 null | 埋点传 null 会 NPE | 埋点统一 null→省略，exporter 兜底过滤 |
+| payload 体积 | --trace-payloads 长会话可达百 MB | 默认关闭；单文件按进程切分；文档提示 |
