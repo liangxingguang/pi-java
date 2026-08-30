@@ -30,13 +30,19 @@ final class RecordJsonCodec {
             case "operation_finished" -> new LaneRecord.OperationFinished(id, seq, lane, timestamp,
                 JsonlCodec.requireString(node, "runId"),
                 OperationOutcome.fromValue(JsonlCodec.requireString(node, "outcome")),
-                decodeError(node.get("error")));
+                decodeError(node.get("error")),
+                JsonlCodec.optionalLong(node, "durationMs"));
             case "step_attempt" -> new LaneRecord.StepAttempt(id, seq, lane, timestamp,
                 JsonlCodec.requireString(node, "runId"),
                 StepKind.fromValue(JsonlCodec.requireString(node, "step")),
                 JsonlCodec.requireInt(node, "attempt"),
                 JsonlCodec.requireString(node, "resultEntryId"),
-                JsonlCodec.optionalString(node, "compactionReason"));
+                JsonlCodec.optionalString(node, "compactionReason"),
+                JsonlCodec.optionalString(node, "model"),
+                JsonlCodec.optionalInteger(node, "messageCount"),
+                JsonlCodec.optionalInteger(node, "toolCount"),
+                JsonlCodec.optionalString(node, "thinking"),
+                JsonlCodec.optionalLong(node, "durationMs"));
             case "tool_started" -> new LaneRecord.ToolStarted(id, seq, lane, timestamp,
                 JsonlCodec.requireString(node, "runId"),
                 JsonlCodec.requireString(node, "assistantEntryId"),
@@ -46,6 +52,14 @@ final class RecordJsonCodec {
                 objectMap(node, "effectiveArgs"),
                 JsonlCodec.requireString(node, "resultEntryId"),
                 ReplayKind.fromValue(JsonlCodec.requireString(node, "replay")));
+            case "tool_finished" -> new LaneRecord.ToolFinished(id, seq, lane, timestamp,
+                JsonlCodec.requireString(node, "runId"),
+                JsonlCodec.requireString(node, "toolCallId"),
+                JsonlCodec.requireString(node, "toolName"),
+                node.has("isError") && node.get("isError").asBoolean(false),
+                node.has("terminate") && node.get("terminate").asBoolean(false),
+                JsonlCodec.optionalString(node, "resultEntryId"),
+                JsonlCodec.optionalLong(node, "durationMs"));
             case "queue_enqueued" -> new LaneRecord.QueueEnqueued(id, seq, lane, timestamp,
                 QueueKind.fromValue(JsonlCodec.requireString(node, "queue")),
                 JsonlCodec.optionalString(node, "runId"),

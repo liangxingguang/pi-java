@@ -51,6 +51,7 @@ final class SqliteCodecs {
             case LaneRecord.OperationFinished r -> r.runId();
             case LaneRecord.StepAttempt r -> r.runId();
             case LaneRecord.ToolStarted r -> r.runId();
+            case LaneRecord.ToolFinished r -> r.runId();
             case LaneRecord.QueueEnqueued r -> r.runId();
             case LaneRecord.QueueCancelled r -> r.runId();
             case LaneRecord.WriteDeferred r -> r.runId();

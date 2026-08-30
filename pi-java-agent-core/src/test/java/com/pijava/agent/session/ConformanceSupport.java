@@ -65,7 +65,7 @@ public final class ConformanceSupport {
     public static NewRecord<LaneRecord.OperationFinished> operationFinished(String id, String lane,
                                                                             String runId) {
         return new NewRecord<>(new LaneRecord.OperationFinished(id, 0, lane, null,
-            runId, OperationOutcome.COMPLETED, null));
+            runId, OperationOutcome.COMPLETED, null, null));
     }
 
     public static NewRecord<LaneRecord.QueueEnqueued> queueEnqueued(String id, String lane,
@@ -88,7 +88,7 @@ public final class ConformanceSupport {
     public static NewRecord<LaneRecord.StepAttempt> stepAttempt(String id, String lane,
                                                                 String runId) {
         return new NewRecord<>(new LaneRecord.StepAttempt(id, 0, lane, null,
-            runId, StepKind.ASSISTANT, 0, "entry-1", null));
+            runId, StepKind.ASSISTANT, 0, "entry-1", null, null, null, null, null, null));
     }
 
     public static NewRecord<LaneRecord.ToolStarted> toolStarted(String id, String lane,

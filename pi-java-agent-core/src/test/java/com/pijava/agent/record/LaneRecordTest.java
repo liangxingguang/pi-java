@@ -38,7 +38,7 @@ class LaneRecordTest {
     @Test
     void operationFinished() {
         var rec = new LaneRecord.OperationFinished("rec-1", 1L, "main", Instant.now(),
-            "run-1", OperationOutcome.COMPLETED, null);
+            "run-1", OperationOutcome.COMPLETED, null, null);
         assertThat(rec.outcome()).isEqualTo(OperationOutcome.COMPLETED);
         assertThat(rec.error()).isNull();
     }
@@ -46,7 +46,7 @@ class LaneRecordTest {
     @Test
     void stepAttempt() {
         var rec = new LaneRecord.StepAttempt("rec-1", 1L, "main", Instant.now(),
-            "run-1", StepKind.ASSISTANT, 0, "entry-9", null);
+            "run-1", StepKind.ASSISTANT, 0, "entry-9", null, null, null, null, null, null);
         assertThat(rec.step()).isEqualTo(StepKind.ASSISTANT);
         assertThat(rec.attempt()).isEqualTo(0);
         assertThat(rec.resultEntryId()).isEqualTo("entry-9");
@@ -81,5 +81,37 @@ class LaneRecordTest {
             usage, UsageCause.ASSISTANT, "run-1", "entry-9", null, 0, "stop");
         assertThat(rec.usage()).isEqualTo(usage);
         assertThat(rec.cause()).isEqualTo(UsageCause.ASSISTANT);
+    }
+
+    @Test
+    void toolFinishedCarriesOutcomeAndDuration() {
+        var rec = new LaneRecord.ToolFinished("rec-1", 1L, "main", Instant.now(),
+            "run-1", "call-1", "bash", false, false, "entry-9", 123L);
+        assertThat(rec.type()).isEqualTo("tool_finished");
+        assertThat(rec.toolCallId()).isEqualTo("call-1");
+        assertThat(rec.toolName()).isEqualTo("bash");
+        assertThat(rec.isError()).isFalse();
+        assertThat(rec.terminate()).isFalse();
+        assertThat(rec.resultEntryId()).isEqualTo("entry-9");
+        assertThat(rec.durationMs()).isEqualTo(123L);
+    }
+
+    @Test
+    void stepAttemptCarriesLlmRequestSummary() {
+        var rec = new LaneRecord.StepAttempt("rec-1", 1L, "main", Instant.now(),
+            "run-1", StepKind.ASSISTANT, 0, "entry-9", null,
+            "anthropic/claude-sonnet-4-6", 14, 7, "budget=8000", 2314L);
+        assertThat(rec.model()).isEqualTo("anthropic/claude-sonnet-4-6");
+        assertThat(rec.messageCount()).isEqualTo(14);
+        assertThat(rec.toolCount()).isEqualTo(7);
+        assertThat(rec.thinking()).isEqualTo("budget=8000");
+        assertThat(rec.durationMs()).isEqualTo(2314L);
+    }
+
+    @Test
+    void operationFinishedCarriesDuration() {
+        var rec = new LaneRecord.OperationFinished("rec-1", 1L, "main", Instant.now(),
+            "run-1", OperationOutcome.COMPLETED, null, 5234L);
+        assertThat(rec.durationMs()).isEqualTo(5234L);
     }
 }

@@ -434,7 +434,8 @@ final class ActionExecutor {
 
         lane.records.add(new LaneRecord.StepAttempt(
             UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
-            StepKind.ASSISTANT, attemptIdx, asstEntryId == null ? "" : asstEntryId, null));
+            StepKind.ASSISTANT, attemptIdx, asstEntryId == null ? "" : asstEntryId, null,
+            null, null, null, null, null));
         if (inputTokens > 0 || outputTokens > 0) {
             lane.records.add(new LaneRecord.UsageRecord(
                 UUID.randomUUID().toString(), 0, laneName, null,
@@ -475,7 +476,7 @@ final class ActionExecutor {
                 lane.phase = RunPhase.ASSISTANT;
                 lane.records.add(new LaneRecord.OperationFinished(
                     UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
-                    OperationOutcome.COMPLETED, null));
+                    OperationOutcome.COMPLETED, null, null));
                 return peekAction(laneName);
             }
             // tool_use stop reason but no tool calls → complete the run instead
@@ -490,7 +491,7 @@ final class ActionExecutor {
             if (stop) {
                 lane.records.add(new LaneRecord.OperationFinished(
                     UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
-                    OperationOutcome.COMPLETED, null));
+                    OperationOutcome.COMPLETED, null, null));
                 ctx.hookSystem().fireBeforeRunEnd(laneName,
                     new RunEndContext(laneName, lane.runId, status));
                 lane.phase = RunPhase.IDLE;
@@ -502,7 +503,7 @@ final class ActionExecutor {
         // Terminal outcome (completed / error): fire before_run_end and finish
         lane.records.add(new LaneRecord.OperationFinished(
             UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
-            "error".equals(status) ? OperationOutcome.FAILED : OperationOutcome.COMPLETED, null));
+            "error".equals(status) ? OperationOutcome.FAILED : OperationOutcome.COMPLETED, null, null));
         ctx.hookSystem().fireBeforeRunEnd(laneName,
             new RunEndContext(laneName, lane.runId, status));
 
@@ -531,7 +532,7 @@ final class ActionExecutor {
             lane.pendingWrites.clear();
             lane.records.add(new LaneRecord.OperationFinished(
                 UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
-                OperationOutcome.COMPLETED, null));
+                OperationOutcome.COMPLETED, null, null));
             lane.phase = RunPhase.IDLE;
             return null;
         }
@@ -557,7 +558,7 @@ final class ActionExecutor {
             lane.pendingWrites.clear();
             lane.records.add(new LaneRecord.OperationFinished(
                 UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
-                OperationOutcome.COMPLETED, null));
+                OperationOutcome.COMPLETED, null, null));
             lane.phase = RunPhase.IDLE;
             return null;
         }

@@ -26,6 +26,7 @@ import com.pijava.ai.Usage;
     @JsonSubTypes.Type(value = LaneRecord.OperationFinished.class, name = "operation_finished"),
     @JsonSubTypes.Type(value = LaneRecord.StepAttempt.class, name = "step_attempt"),
     @JsonSubTypes.Type(value = LaneRecord.ToolStarted.class, name = "tool_started"),
+    @JsonSubTypes.Type(value = LaneRecord.ToolFinished.class, name = "tool_finished"),
     @JsonSubTypes.Type(value = LaneRecord.QueueEnqueued.class, name = "queue_enqueued"),
     @JsonSubTypes.Type(value = LaneRecord.QueueCancelled.class, name = "queue_cancelled"),
     @JsonSubTypes.Type(value = LaneRecord.WriteDeferred.class, name = "write_deferred"),
@@ -53,6 +54,7 @@ public sealed interface LaneRecord {
             case OperationFinished r -> "operation_finished";
             case StepAttempt r -> "step_attempt";
             case ToolStarted r -> "tool_started";
+            case ToolFinished r -> "tool_finished";
             case QueueEnqueued r -> "queue_enqueued";
             case QueueCancelled r -> "queue_cancelled";
             case WriteDeferred r -> "write_deferred";
@@ -67,12 +69,16 @@ public sealed interface LaneRecord {
                 e.sourceLeafId(), e.intent());
             case AbortRequested e -> new AbortRequested(e.id(), seq, e.lane(), timestamp, e.runId());
             case OperationFinished e -> new OperationFinished(e.id(), seq, e.lane(), timestamp,
-                e.runId(), e.outcome(), e.error());
+                e.runId(), e.outcome(), e.error(), e.durationMs());
             case StepAttempt e -> new StepAttempt(e.id(), seq, e.lane(), timestamp, e.runId(),
-                e.step(), e.attempt(), e.resultEntryId(), e.compactionReason());
+                e.step(), e.attempt(), e.resultEntryId(), e.compactionReason(),
+                e.model(), e.messageCount(), e.toolCount(), e.thinking(), e.durationMs());
             case ToolStarted e -> new ToolStarted(e.id(), seq, e.lane(), timestamp, e.runId(),
                 e.assistantEntryId(), e.toolIndex(), e.toolCallId(), e.toolName(),
                 e.effectiveArgs(), e.resultEntryId(), e.replay());
+            case ToolFinished e -> new ToolFinished(e.id(), seq, e.lane(), timestamp, e.runId(),
+                e.toolCallId(), e.toolName(), e.isError(), e.terminate(), e.resultEntryId(),
+                e.durationMs());
             case QueueEnqueued e -> new QueueEnqueued(e.id(), seq, e.lane(), timestamp,
                 e.queue(), e.runId(), e.target());
             case QueueCancelled e -> new QueueCancelled(e.id(), seq, e.lane(), timestamp,
@@ -155,7 +161,8 @@ public sealed interface LaneRecord {
         Instant timestamp,
         String runId,
         OperationOutcome outcome,
-        OperationError error
+        OperationError error,
+        Long durationMs
     ) implements LaneRecord {
 
         /** Structured error detail (aligned with pi's nested {@code error} object). */
@@ -172,7 +179,27 @@ public sealed interface LaneRecord {
         StepKind step,
         int attempt,
         String resultEntryId,
-        String compactionReason
+        String compactionReason,
+        String model,
+        Integer messageCount,
+        Integer toolCount,
+        String thinking,
+        Long durationMs
+    ) implements LaneRecord {}
+
+    /** A tool call finished executing (observability: outcome + latency). */
+    record ToolFinished(
+        String id,
+        long seq,
+        String lane,
+        Instant timestamp,
+        String runId,
+        String toolCallId,
+        String toolName,
+        boolean isError,
+        boolean terminate,
+        String resultEntryId,
+        Long durationMs
     ) implements LaneRecord {}
 
     /** A tool started executing. */

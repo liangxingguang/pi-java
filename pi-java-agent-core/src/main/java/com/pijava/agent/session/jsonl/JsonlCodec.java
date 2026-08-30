@@ -24,7 +24,8 @@ public final class JsonlCodec {
 
     private static final List<String> RECORD_TYPES = List.of(
         "operation_started", "abort_requested", "operation_finished", "step_attempt",
-        "tool_started", "queue_enqueued", "queue_cancelled", "write_deferred", "usage");
+        "tool_started", "tool_finished", "queue_enqueued", "queue_cancelled",
+        "write_deferred", "usage");
 
     private static final List<String> OPERATION_KINDS = List.of("run", "compaction", "navigation");
 
@@ -376,6 +377,24 @@ public final class JsonlCodec {
             throw DecodeError.schema("has invalid " + field);
         }
         return SessionJson.mapper().convertValue(value, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+    }
+
+    /** Read an optional integral field as a {@code Long}, or {@code null} when absent. */
+    public static Long optionalLong(JsonNode node, String field) {
+        JsonNode value = node.get(field);
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        if (!value.isIntegralNumber()) {
+            throw DecodeError.schema("has invalid " + field);
+        }
+        return value.longValue();
+    }
+
+    /** Read an optional integral field as an {@code Integer}, or {@code null} when absent. */
+    public static Integer optionalInteger(JsonNode node, String field) {
+        Long value = optionalLong(node, field);
+        return value == null ? null : value.intValue();
     }
 
     /** Read a non-negative epoch-millis field as an {@link Instant}. */
