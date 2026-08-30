@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.anthropic.models.messages.MessageCreateParams;
+import com.anthropic.models.messages.MessageParam;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
@@ -100,6 +101,60 @@ class AnthropicMessagesApiBuildParamsTest {
         var result = messages.get(2).content();
         var blocks = result.asBlockParams();
         assertThat(blocks).anyMatch(b -> b.isToolResult());
+    }
+
+    @Test
+    void sendsToolResultAsUserRole() throws Exception {
+        // Anthropic requires tool_result blocks inside a user message
+        // (pi anthropic-messages.ts maps toolResult -> role "user").
+        var request = new StreamRequest(
+            ModelId.of("anthropic", "claude-sonnet-5"),
+            List.of(
+                new Message.UserMessage(
+                    List.of(new ContentBlock.TextContent("list files"))),
+                new Message.AssistantMessage(List.of(
+                    new ContentBlock.ToolUseContent(
+                        "toolu_01", "ls", Map.of("path", ".")))),
+                new Message.ToolResultMessage(
+                    "toolu_01", "ls",
+                    List.of(new ContentBlock.TextContent("a.txt")), false)),
+            List.of(), 100, 0.5, Map.of());
+
+        var params = buildParams(request);
+
+        var messages = params.messages();
+        assertThat(messages.get(2).role())
+            .isEqualTo(MessageParam.Role.USER);
+    }
+
+    @Test
+    void mergesConsecutiveToolResultsIntoOneUserMessage() throws Exception {
+        var request = new StreamRequest(
+            ModelId.of("anthropic", "claude-sonnet-5"),
+            List.of(
+                new Message.UserMessage(
+                    List.of(new ContentBlock.TextContent("list files"))),
+                new Message.AssistantMessage(List.of(
+                    new ContentBlock.ToolUseContent(
+                        "toolu_01", "ls", Map.of("path", ".")),
+                    new ContentBlock.ToolUseContent(
+                        "toolu_02", "ls", Map.of("path", "..")))),
+                new Message.ToolResultMessage(
+                    "toolu_01", "ls",
+                    List.of(new ContentBlock.TextContent("a.txt")), false),
+                new Message.ToolResultMessage(
+                    "toolu_02", "ls",
+                    List.of(new ContentBlock.TextContent("b.txt")), false)),
+            List.of(), 100, 0.5, Map.of());
+
+        var params = buildParams(request);
+
+        var messages = params.messages();
+        // user, assistant, one merged user message carrying both tool_results
+        assertThat(messages).hasSize(3);
+        assertThat(messages.get(2).role()).isEqualTo(MessageParam.Role.USER);
+        var blocks = messages.get(2).content().asBlockParams();
+        assertThat(blocks).filteredOn(b -> b.isToolResult()).hasSize(2);
     }
 
     @Test

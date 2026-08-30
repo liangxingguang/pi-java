@@ -176,8 +176,29 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
             builder.system(systemText);
         }
 
-        for (var msg : request.messages()) {
+        for (int i = 0; i < request.messages().size(); i++) {
+            var msg = request.messages().get(i);
             if (msg instanceof Message.SystemMessage) continue;
+
+            // Anthropic requires tool_result blocks inside a user message
+            // (pi anthropic-messages.ts maps toolResult -> role "user" and
+            // merges consecutive tool results into one user message).
+            if (msg instanceof Message.ToolResultMessage) {
+                var resultBlocks = new ArrayList<ContentBlockParam>();
+                int j = i;
+                while (j < request.messages().size()
+                        && request.messages().get(j) instanceof Message.ToolResultMessage tool) {
+                    resultBlocks.add(toToolResultBlock(tool));
+                    j++;
+                }
+                i = j - 1;
+                builder.addMessage(MessageParam.builder()
+                    .role(MessageParam.Role.USER)
+                    .content(MessageParam.Content.ofBlockParams(resultBlocks))
+                    .build());
+                continue;
+            }
+
             var blockParams = toBlockParams(msg);
             if (blockParams.isEmpty()) continue;
 
@@ -224,17 +245,6 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
 
     private List<ContentBlockParam> toBlockParams(Message msg) {
         var result = new ArrayList<ContentBlockParam>();
-        if (msg instanceof Message.ToolResultMessage tool) {
-            var resultContent = ToolResultBlockParam.Content.ofBlocks(
-                    toTextBlocks(tool.content()));
-            var toolResult = ToolResultBlockParam.builder()
-                    .toolUseId(tool.toolUseId())
-                    .content(resultContent)
-                    .isError(tool.isError())
-                    .build();
-            result.add(ContentBlockParam.ofToolResult(toolResult));
-            return result;
-        }
         for (var block : msg.content()) {
             if (block instanceof ContentBlock.TextContent tc) {
                 result.add(ContentBlockParam.ofText(
@@ -280,6 +290,17 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                         .thinking(text)
                         .signature(signature)
                         .build()));
+    }
+
+    private static ContentBlockParam toToolResultBlock(Message.ToolResultMessage tool) {
+        var resultContent = ToolResultBlockParam.Content.ofBlocks(
+                toTextBlocks(tool.content()));
+        var toolResult = ToolResultBlockParam.builder()
+                .toolUseId(tool.toolUseId())
+                .content(resultContent)
+                .isError(tool.isError())
+                .build();
+        return ContentBlockParam.ofToolResult(toolResult);
     }
 
     private static List<ToolResultBlockParam.Content.Block> toTextBlocks(List<ContentBlock> blocks) {

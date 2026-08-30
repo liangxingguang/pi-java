@@ -84,7 +84,7 @@ public final class MessageBubble {
                     }
                     yield split;
                 }
-                case ContentBlock.ThinkingContent(var text) -> dim(
+                case ContentBlock.ThinkingContent(var text, _) -> dim(
                     TextLayout.split(TextLayout.escapeMarkup(text), false));
                 case ContentBlock.ToolUseContent(var id, var name, var arguments) ->
                     new ToolCallCard(toolName(name), toolArgs(arguments), "running").lines();
