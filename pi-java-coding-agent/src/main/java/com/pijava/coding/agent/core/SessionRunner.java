@@ -98,13 +98,16 @@ final class SessionRunner {
                     // frontend relies on this to render the prompt instantly
                     // instead of only at agent_end's whole-table replacement).
                     // Only the first attempt — retries continue the same lane
-                    // and would re-echo the same prompt.
+                    // and would re-echo the same prompt. Takes the LAST user
+                    // message: runs append to the transcript, so the newest
+                    // user entry is this run's prompt (findFirst would echo a
+                    // stale earlier turn).
                     if (attempt == 0) {
                         owner.harness().snapshot(laneName).transcript().stream()
                             .filter(Entry.Message.class::isInstance)
                             .map(e -> ((Entry.Message) e).message())
                             .filter(m -> m instanceof Message.UserMessage)
-                            .findFirst()
+                            .reduce((first, second) -> second)
                             .ifPresent(m -> owner.emitSessionEvent(
                                 new AgentSessionEvent.UserMessageReceived(m)));
                     }
