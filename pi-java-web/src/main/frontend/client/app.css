@@ -7,6 +7,9 @@
 
 user-message .user-message-container {
   max-width: 85%;
+  /* 覆盖 pi-web-ui 的橙色渐变底色 */
+  background: #f5f5f5;
+  border-color: #f4f4f4;
 }
 
 :root {
