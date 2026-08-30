@@ -108,6 +108,11 @@ function connectWs() {
 
     ws.onmessage = (ev) => {
       const msg = JSON.parse(ev.data) as ServerMessage;
+      if (msg.type === "agentEvent") {
+        console.log("[ws<-server]", msg.event?.type, JSON.stringify(msg.event || {}).slice(0, 160));
+      } else {
+        console.log("[ws<-server]", msg.type);
+      }
       handleServerMessage(msg);
     };
   });
@@ -228,6 +233,7 @@ function handleServerMessage(msg: ServerMessage) {
 }
 
 function applyStateSync(state: SerializedAgentState) {
+  console.log("[stateSync] messages=", state.messages.length, "| sessionId=", state.sessionId);
   messages = state.messages;
   isStreaming = state.isStreaming;
   streamingMessage = state.streamingMessage || null;
@@ -254,7 +260,13 @@ function handleAgentEvent(event: any) {
         // agent_end 携带完整累计 transcript（后端 AgentEnd 权威收口）——整表替换，
         // 而非按 (role,timestamp) 去重追加：序列化消息不含 timestamp，去重会把
         // 新回合的 user/assistant 误判为重复而丢弃（最后一组不回显，需刷新才显示）。
+        console.log("[agent_end] REPLACING messages: incoming=",
+          event.messages.length, "| prev=", messages.length, "| willRetry=", event.willRetry);
         messages = event.messages;
+      } else {
+        // 关键诊断：agent_end 没有 messages 字段 → 前端保留旧列表，
+        // streaming 容器被清空 → 本回合输出消失（症状 2）。
+        console.warn("[agent_end] NO messages field in payload! prev=", messages.length);
       }
       updateStreamingContainer(null, false);
       renderApp();
@@ -325,6 +337,9 @@ function updateStreamingContainer(message: AgentMessage | null, streaming: boole
 
 function handleSend(input: string) {
   if (!input.trim() || isStreaming) return;
+  // DEBUG: 前端本地不追加 user 消息；可见性完全依赖 agent_end 携带全量 messages。
+  // 若 agent_end 无 messages 字段，本回合 user+assistant 两帧都会从列表消失。
+  console.log("[send] prompt=", input, "| messages.len=", messages.length, "| isStreaming=", isStreaming);
   send({ type: "prompt", text: input });
 
   const editor = document.querySelector("message-editor") as MessageEditor | null;

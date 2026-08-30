@@ -12,6 +12,9 @@ import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Drives one harness run on a virtual thread and persists the produced
  * transcript/records into the session (Phase 4 §13.1).
@@ -24,6 +27,8 @@ import com.pijava.ai.stream.StreamEvent;
  * 上下文溢出错误不重试（交由压缩处理，对齐 pi {@code isContextOverflow}）。</p>
  */
 final class SessionRunner {
+
+    private static final Logger LOG = LoggerFactory.getLogger(SessionRunner.class);
 
     private SessionRunner() {}
 
@@ -84,6 +89,7 @@ final class SessionRunner {
                     var lane = owner.harness().snapshot(laneName);
                     transcript = List.copyOf(lane.transcript());
                 } catch (Exception e) {
+                    LOG.warn("[session] harness run error, stopReason=error", e);
                     stopReason.set("error");
                     if (e.getMessage() != null) {
                         errorMessage.set(e.getMessage());
@@ -107,8 +113,12 @@ final class SessionRunner {
                 if (owner.session() != null) {
                     SessionPersistence.persistPending(owner, owner.session(), laneName);
                 }
-                owner.emitSessionEvent(new AgentSessionEvent.AgentEnd(
-                    owner.accumulatedMessages(), shouldRetry));
+                var endMessages = owner.accumulatedMessages();
+                LOG.info("[session] AgentEnd emit: messages={} persistedIds={} shouldRetry={}",
+                    endMessages.size(),
+                    owner.session() == null ? -1 : owner.persistedEntryIds().size(),
+                    shouldRetry);
+                owner.emitSessionEvent(new AgentSessionEvent.AgentEnd(endMessages, shouldRetry));
                 if (shouldRetry) {
                     attempt++;
                     long delayMs = retryDelayMs(attempt);
@@ -139,6 +149,7 @@ final class SessionRunner {
             statusFuture.complete(new RunStatus(
                 exitCode(stopReason.get()), stopReason.get()));
         } catch (Exception e) {
+            LOG.error("[session] drive failed; emitting empty AgentEnd (run=" + laneName + ")", e);
             var error = new StreamEvent.StreamError(
                 "error", e, AssistantMessage.empty());
             if (streamObserver != null) {

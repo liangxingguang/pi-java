@@ -10,6 +10,9 @@ import com.pijava.ai.stream.StreamEvent;
 import com.pijava.coding.agent.core.AgentSessionEvent;
 import com.pijava.web.WebProtocol.WebServerMessage;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * pi-java {@link AgentSessionEvent} → pi-webui 前端 {@code agentEvent} 词汇翻译层
  * （Phase 7 设计 §4）。前端不改：{@code agent_start} / {@code message_update} /
@@ -20,6 +23,8 @@ import com.pijava.web.WebProtocol.WebServerMessage;
  * 避免逐条 {@code message_end} 的去重竞态。</p>
  */
 final class AgentEventTranslator {
+
+    private static final Logger LOG = LoggerFactory.getLogger(AgentEventTranslator.class);
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
@@ -93,6 +98,10 @@ final class AgentEventTranslator {
             for (var m : e.messages()) {
                 arr.add(WebWireJson.messageNode(m));
             }
+            LOG.debug("[web] agent_end translated with {} messages", e.messages().size());
+        } else {
+            LOG.warn("[web] agent_end has EMPTY messages — payload omits messages; "
+                + "frontend will keep stale list. willRetry={}", e.willRetry());
         }
         return new WebServerMessage.AgentEvent(node);
     }

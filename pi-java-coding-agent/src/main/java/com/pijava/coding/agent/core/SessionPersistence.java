@@ -14,6 +14,9 @@ import com.pijava.agent.session.Session;
 import com.pijava.agent.session.SessionMetadata;
 import com.pijava.coding.agent.cli.Args;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Persistent-session lifecycle helpers for {@link AgentSession} (Phase 4
  * §13): write-through persistence of harness entries/records, resume seeding,
@@ -21,24 +24,32 @@ import com.pijava.coding.agent.cli.Args;
  */
 final class SessionPersistence {
 
+    private static final Logger LOG = LoggerFactory.getLogger(SessionPersistence.class);
+
     private SessionPersistence() {}
 
     /** Persist new transcript entries and lane records into the session. */
     static void persistPending(AgentSession owner, Session<?> persistent, String laneName) {
         var snapshot = owner.harness().snapshot(laneName);
+        int appended = 0;
+        int records = 0;
         if (persistent.getLanes().stream().noneMatch(p -> laneName.equals(p.lane()))) {
             persistent.createLane(laneName, null);
         }
         for (var entry : snapshot.transcript()) {
             if (owner.persistedEntryIds().add(entry.id())) {
                 persistent.appendEntry(new ProvisionedEntry<>(entry), laneName);
+                appended++;
             }
         }
         for (var record : snapshot.records()) {
             if (owner.persistedRecordIds().add(record.id())) {
                 persistent.appendRecord(new NewRecord<>(record));
+                records++;
             }
         }
+        LOG.info("[session] persistPending: transcript={} appended={} records={} persistedIds={}",
+            snapshot.transcript().size(), appended, records, owner.persistedEntryIds().size());
     }
 
     /** Attach a persisted session: open, seed the compaction-aware harness transcript, set the name. */

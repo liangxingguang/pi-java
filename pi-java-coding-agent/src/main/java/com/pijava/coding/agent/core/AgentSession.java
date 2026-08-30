@@ -38,6 +38,9 @@ import com.pijava.agent.tool.ToolSetFactory;
 import com.pijava.agent.tool.DefaultFileSystem;
 import com.pijava.agent.tool.DefaultShellExecutor;
 import com.pijava.agent.tool.ShellOptions;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.pijava.agent.tool.ShellResult;
 import com.pijava.ai.AbortSignal;
 import com.pijava.ai.message.ContentBlock;
@@ -78,6 +81,8 @@ public final class AgentSession implements AutoCloseable {
             + "- End each turn with a one- or two-sentence summary: what changed "
             + "and what is next.\n"
             + "- Show file paths clearly when working with files.";
+
+    private static final Logger LOG = LoggerFactory.getLogger(AgentSession.class);
 
     private final AgentHarness harness;
     private final SessionServices services;
@@ -300,6 +305,10 @@ public final class AgentSession implements AutoCloseable {
             if (!entries.isEmpty()) {
                 return entries;
             }
+            LOG.debug("[session] accumulatedEntries: storage empty ({} entries), falling back to harness recent",
+                entries.size());
+        } else {
+            LOG.warn("[session] accumulatedEntries: persistent session is null, using harness recent");
         }
         return harness.snapshot(laneName).transcript();
     }

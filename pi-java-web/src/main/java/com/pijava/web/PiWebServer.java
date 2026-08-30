@@ -256,10 +256,20 @@ public final class PiWebServer {
     private static void sendJson(WebSocket conn, WebServerMessage msg) {
         if (conn.isOpen()) {
             try {
-                conn.send(JSON.writeValueAsString(msg));
+                var json = JSON.writeValueAsString(msg);
+                LOG.info("[ws->client] {}", truncate(json, 400));
+                conn.send(json);
             } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
                 LOG.warn("Failed to serialize web message", e);
             }
         }
+    }
+
+    /** 截断超长帧，避免日志刷屏（message_update 全文通常很长）。 */
+    private static String truncate(String s, int max) {
+        if (s == null || s.length() <= max) {
+            return s;
+        }
+        return s.substring(0, max) + "…(" + s.length() + " chars)";
     }
 }
