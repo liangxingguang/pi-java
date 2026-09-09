@@ -17,6 +17,7 @@ import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.ai.thinking.ThinkingLevelMap;
+import com.pijava.telemetry.TelemetryContext;
 
 /**
  * Bundles harness-level dependencies for {@link ActionExecutor}.
@@ -50,7 +51,8 @@ record ExecutionContext(
     Supplier<ToolExecution> toolExecution,
     Supplier<Consumer<StreamEvent>> streamListener,
     SummaryGenerator summaryGenerator,
-    java.util.function.BiConsumer<ModelId<?>, String> turnConfigApplier
+    java.util.function.BiConsumer<ModelId<?>, String> turnConfigApplier,
+    TelemetryContext telemetry
 ) {
     LaneState requireLane(String laneName) {
         return HarnessUtils.requireLane(lanes, laneName);

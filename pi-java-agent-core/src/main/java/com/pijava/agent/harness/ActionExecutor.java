@@ -30,8 +30,14 @@ import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
+import com.pijava.telemetry.SpanOptions;
+import com.pijava.telemetry.TelemetrySpan;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Executes individual {@link Action} subclasses for {@link AgentHarness}.
@@ -41,6 +47,8 @@ import com.pijava.ai.thinking.ModelThinkingLevel;
  * under the 500-line limit.</p>
  */
 final class ActionExecutor {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ActionExecutor.class);
 
     private final ExecutionContext ctx;
     private final ToolExecutionPipeline toolPipeline;
@@ -84,6 +92,8 @@ final class ActionExecutor {
         lane.pendingToolCalls.clear();
         lane.pendingTurnUpdate = null;
         lane.abortSignal = AbortSignal.create();
+        lane.runStartNanos = System.nanoTime();
+        lane.runSpan = openRunSpan(laneName, lane, prompt.length());
 
         var userMessage = buildUserMessage(prompt, images);
         var promptList = List.<Message>of(userMessage);
@@ -136,6 +146,8 @@ final class ActionExecutor {
             lane.runId = null;
             lane.stepIndex = 0;
             lane.pendingTurnUpdate = null;
+            lane.runSpan = null;
+            lane.runStartNanos = 0;
             lane.steerQueue.clear();
             lane.followUpQueue.clear();
             lane.nextRunQueue.clear();
@@ -167,6 +179,8 @@ final class ActionExecutor {
         lane.records.clear();
         lane.pendingToolCalls.clear();
         lane.abortSignal = AbortSignal.create();
+        lane.runStartNanos = System.nanoTime();
+        lane.runSpan = openRunSpan(laneName, lane, 0);
 
         ctx.hookSystem().fireBeforeRun(laneName,
             new RunContext(laneName, lane.runId, List.of()));
@@ -191,17 +205,30 @@ final class ActionExecutor {
     /** Fire before_compaction, compute the compacted transcript, and replace it. */
     private void applyCompaction(String laneName, LaneState lane,
                                  CompactionSettings settings, int estimatedTokens) {
-        var compactCtx = new CompactionContext(laneName,
-            List.copyOf(lane.transcript), estimatedTokens);
-        var plan = ctx.hookSystem().fireBeforeCompaction(laneName, compactCtx);
-        List<Entry> compacted;
-        if (plan != null && !plan.keepEntries().isEmpty()) {
-            compacted = plan.keepEntries();
-        } else {
-            compacted = compactTranscript(lane, settings);
+        ctx.telemetry().incrementCounter("compactions", 1);
+        int entriesBefore = lane.transcript.size();
+        var span = (lane.runSpan != null ? lane.runSpan : ctx.telemetry())
+            .openSpan(new SpanOptions("compaction.apply",
+                java.util.Map.of("reason", "auto", "estimatedTokens", estimatedTokens,
+                    "entriesBefore", entriesBefore)));
+        try {
+            var compactCtx = new CompactionContext(laneName,
+                List.copyOf(lane.transcript), estimatedTokens);
+            var plan = ctx.hookSystem().fireBeforeCompaction(laneName, compactCtx);
+            List<Entry> compacted;
+            if (plan != null && !plan.keepEntries().isEmpty()) {
+                compacted = plan.keepEntries();
+            } else {
+                compacted = compactTranscript(lane, settings);
+            }
+            lane.transcript.clear();
+            lane.transcript.addAll(compacted);
+            span.addAttribute("entriesAfter", lane.transcript.size());
+            LOG.info("[agent] compaction lane={} tokensBefore={} entries {}->{}",
+                laneName, estimatedTokens, entriesBefore, lane.transcript.size());
+        } finally {
+            span.close();
         }
-        lane.transcript.clear();
-        lane.transcript.addAll(compacted);
     }
 
     private List<Entry> compactTranscript(LaneState lane, CompactionSettings settings) {
@@ -376,6 +403,15 @@ final class ActionExecutor {
         long inputTokens = 0;
         long outputTokens = 0;
         Throwable streamError = null;
+        long llmStart = System.nanoTime();
+        var llmSpan = (lane.runSpan != null ? lane.runSpan : ctx.telemetry())
+            .openSpan(new SpanOptions("llm.request",
+                java.util.Map.of(
+                    "attempt", attemptIdx,
+                    "model", modelLabel(ctx.model().get()),
+                    "messageCount", messages.size(),
+                    "toolCount", toolDefs.size(),
+                    "thinking", thinkingLabel(ctx.thinkingLevel().get()))));
         try {
             var iter = ctx.streamFn().stream(messages, ctx.model().get(), options);
             try {
@@ -403,6 +439,34 @@ final class ActionExecutor {
         } catch (Exception e) {
             streamError = e;
             lane.partial = AssistantMessage.empty().withStopReason("error");
+        } finally {
+            long durationMs = (System.nanoTime() - llmStart) / 1_000_000;
+            String stop = lane.partial != null ? lane.partial.stopReason() : null;
+            llmSpan.addAttribute("inputTokens", inputTokens);
+            llmSpan.addAttribute("outputTokens", outputTokens);
+            if (stop != null) {
+                llmSpan.addAttribute("stopReason", stop);
+            }
+            if (streamError != null) {
+                llmSpan.addAttribute("errorClass", streamError.getClass().getSimpleName());
+            }
+            llmSpan.close();
+            ctx.telemetry().incrementCounter("llm.requests", 1);
+            ctx.telemetry().recordTiming("llm.request.duration", durationMs);
+            if (inputTokens > 0) {
+                ctx.telemetry().incrementCounter("llm.tokens.input", inputTokens);
+            }
+            if (outputTokens > 0) {
+                ctx.telemetry().incrementCounter("llm.tokens.output", outputTokens);
+            }
+            LOG.debug("[agent] llm done lane={} model={} msgCount={} toolCount={} "
+                    + "in={} out={} durationMs={} stop={}",
+                laneName, modelLabel(ctx.model().get()), messages.size(),
+                toolDefs.size(), inputTokens, outputTokens, durationMs, stop);
+            if (streamError != null) {
+                LOG.warn("[agent] llm stream error lane={} runId={}",
+                    laneName, lane.runId, streamError);
+            }
         }
 
         // Context overflow detection: trigger compaction when the response
@@ -435,7 +499,9 @@ final class ActionExecutor {
         lane.records.add(new LaneRecord.StepAttempt(
             UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
             StepKind.ASSISTANT, attemptIdx, asstEntryId == null ? "" : asstEntryId, null,
-            null, null, null, null, null));
+            modelLabel(ctx.model().get()), messages.size(), toolDefs.size(),
+            thinkingLabel(ctx.thinkingLevel().get()),
+            (System.nanoTime() - llmStart) / 1_000_000));
         if (inputTokens > 0 || outputTokens > 0) {
             lane.records.add(new LaneRecord.UsageRecord(
                 UUID.randomUUID().toString(), 0, laneName, null,
@@ -476,7 +542,7 @@ final class ActionExecutor {
                 lane.phase = RunPhase.ASSISTANT;
                 lane.records.add(new LaneRecord.OperationFinished(
                     UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
-                    OperationOutcome.COMPLETED, null, null));
+                    OperationOutcome.COMPLETED, null, runDurationMs(lane)));
                 return peekAction(laneName);
             }
             // tool_use stop reason but no tool calls → complete the run instead
@@ -491,9 +557,10 @@ final class ActionExecutor {
             if (stop) {
                 lane.records.add(new LaneRecord.OperationFinished(
                     UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
-                    OperationOutcome.COMPLETED, null, null));
+                    OperationOutcome.COMPLETED, null, runDurationMs(lane)));
                 ctx.hookSystem().fireBeforeRunEnd(laneName,
                     new RunEndContext(laneName, lane.runId, status));
+                closeRunSpan(lane, status);
                 lane.phase = RunPhase.IDLE;
                 lane.pendingTurnUpdate = null;
                 return null;
@@ -503,9 +570,11 @@ final class ActionExecutor {
         // Terminal outcome (completed / error): fire before_run_end and finish
         lane.records.add(new LaneRecord.OperationFinished(
             UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
-            "error".equals(status) ? OperationOutcome.FAILED : OperationOutcome.COMPLETED, null, null));
+            "error".equals(status) ? OperationOutcome.FAILED : OperationOutcome.COMPLETED,
+            null, runDurationMs(lane)));
         ctx.hookSystem().fireBeforeRunEnd(laneName,
             new RunEndContext(laneName, lane.runId, status));
+        closeRunSpan(lane, status);
 
         lane.phase = RunPhase.IDLE;
         lane.pendingTurnUpdate = null;
@@ -532,7 +601,8 @@ final class ActionExecutor {
             lane.pendingWrites.clear();
             lane.records.add(new LaneRecord.OperationFinished(
                 UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
-                OperationOutcome.COMPLETED, null, null));
+                OperationOutcome.COMPLETED, null, runDurationMs(lane)));
+            closeRunSpan(lane, "completed");
             lane.phase = RunPhase.IDLE;
             return null;
         }
@@ -558,7 +628,8 @@ final class ActionExecutor {
             lane.pendingWrites.clear();
             lane.records.add(new LaneRecord.OperationFinished(
                 UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
-                OperationOutcome.COMPLETED, null, null));
+                OperationOutcome.COMPLETED, null, runDurationMs(lane)));
+            closeRunSpan(lane, "completed");
             lane.phase = RunPhase.IDLE;
             return null;
         }
@@ -644,6 +715,55 @@ final class ActionExecutor {
             .tools(effectiveTools)
             .skills(ctx.skillManager().all())
             .build();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Telemetry spans
+    // ═══════════════════════════════════════════════════════════
+
+    /** Open the {@code harness.run} span and record the run-start counter. */
+    private TelemetrySpan openRunSpan(String laneName, LaneState lane, int promptChars) {
+        ctx.telemetry().incrementCounter("harness.run", 1);
+        var span = ctx.telemetry().openSpan(new SpanOptions("harness.run",
+            java.util.Map.of("lane", laneName, "promptChars", promptChars)));
+        LOG.info("[agent] run start lane={} runId={} promptChars={}",
+            laneName, lane.runId, promptChars);
+        return span;
+    }
+
+    /** Close the {@code harness.run} span with terminal attributes. */
+    private void closeRunSpan(LaneState lane, String outcome) {
+        var span = lane.runSpan;
+        if (span == null) {
+            return;
+        }
+        lane.runSpan = null;
+        String stopReason = lane.partial != null ? lane.partial.stopReason() : null;
+        if (stopReason != null) {
+            span.addAttribute("stopReason", stopReason);
+        }
+        span.addAttribute("outcome", outcome);
+        span.addAttribute("attemptCount", lane.stepIndex);
+        LOG.info("[agent] run end lane={} runId={} outcome={} durationMs={}",
+            lane.laneName, lane.runId, outcome,
+            (System.nanoTime() - lane.runStartNanos) / 1_000_000);
+        span.close();
+    }
+
+    /** Format the thinking mode as a label for attrs/records. */
+    private static String thinkingLabel(ModelThinkingLevel level) {
+        return level instanceof ModelThinkingLevel.Enabled en
+            ? en.level().label() : "off";
+    }
+
+    /** Format the model as {@code provider/name}. */
+    private static String modelLabel(ModelId<?> model) {
+        return model.provider() + "/" + model.modelName();
+    }
+
+    /** Wall-clock milliseconds since the run started (for OperationFinished.durationMs). */
+    private Long runDurationMs(LaneState lane) {
+        return lane.runStartNanos == 0 ? null : (System.nanoTime() - lane.runStartNanos) / 1_000_000;
     }
 
 }

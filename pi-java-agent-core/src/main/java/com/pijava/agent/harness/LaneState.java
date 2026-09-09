@@ -10,6 +10,7 @@ import com.pijava.agent.record.LaneRecord;
 import com.pijava.ai.AbortSignal;
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.ai.message.AssistantMessage;
+import com.pijava.telemetry.TelemetrySpan;
 
 /**
  * Internal per-lane state for {@link AgentHarness}.
@@ -55,6 +56,12 @@ public final class LaneState {
 
     /** Abort signal for the current run. Phase 2b. */
     AbortSignal abortSignal;
+
+    /** Open {@code harness.run} telemetry span for the current run (observability). */
+    TelemetrySpan runSpan;
+
+    /** Run start wall-clock for OperationFinished.durationMs / harness.run duration. */
+    long runStartNanos;
 
     /** Pending update from prepare_next_turn hooks; consumed by the next StreamAssistant, cleared at run end. */
     com.pijava.agent.hook.TurnUpdate pendingTurnUpdate;
