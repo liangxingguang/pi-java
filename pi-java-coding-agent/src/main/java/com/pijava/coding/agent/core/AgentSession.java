@@ -54,6 +54,10 @@ import com.pijava.coding.agent.extension.DefaultExtensionContext;
 import com.pijava.coding.agent.extension.ExtensionManager;
 import com.pijava.coding.agent.extension.ExtensionPackageManager;
 import com.pijava.coding.agent.extension.ExtensionUI;
+import com.pijava.coding.agent.extension.ResourcePaths;
+import com.pijava.coding.agent.prompt.PromptTemplateRegistry;
+import com.pijava.coding.agent.prompt.PromptTemplates;
+import com.pijava.coding.agent.skill.SkillDiscovery;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
 
 /**
@@ -103,6 +107,8 @@ public final class AgentSession implements AutoCloseable {
     private final SessionEventHub eventHub = new SessionEventHub();
     // Phase 6 (P6-7b): 扩展 UI 服务（RPC 模式注入，缺省 noop）。
     private ExtensionUI extensionUI = ExtensionUI.noop();
+    // resources_discover：扩展贡献的主题候选（启动时选第一个可用）。
+    private List<Path> themePaths = List.of();
     // P6-5d: auto-retry / 会话级 bash 状态（RPC 末批命令）。
     private volatile boolean autoRetryEnabled;
     private volatile boolean retryAborted;
@@ -216,6 +222,14 @@ public final class AgentSession implements AutoCloseable {
         var toolList = ToolSetFactory.createCodingTools(commandPrefix);
         tools.registerAll(toolList);
 
+        var promptTemplates = new PromptTemplateRegistry();
+        // CLI --prompt-template 路径先载入注册表（--no-prompt-templates 时为空）。
+        if (!args.noPromptTemplates() && args.promptTemplates() != null
+                && !args.promptTemplates().isEmpty()) {
+            var load = PromptTemplates.load(
+                new DefaultFileSystem(), args.promptTemplates());
+            promptTemplates.registerAll(load.templates());
+        }
         var services = new SessionServices(
             settings,
             new TrustManager(effective.defaultProjectTrust),
@@ -223,7 +237,8 @@ public final class AgentSession implements AutoCloseable {
             models,
             tools,
             CommandRegistry.withBuiltins(),
-            repository);
+            repository,
+            promptTemplates);
 
         var providerName = DefaultProviders.resolveProviderName(
             args, effective.defaultProvider);
@@ -258,6 +273,43 @@ public final class AgentSession implements AutoCloseable {
         return agentSession;
     }
 
+    /**
+     * 收集扩展贡献的会话开始资源（resources_discover）并接入会话。
+     *
+     * <p>加载顺序使扩展在 harness 构造之后运行，故钩子贡献的技能经共享
+     * {@code SkillManager} 在首轮 LLM 请求前注册即生效（技能在请求期惰性读取）。
+     * promptPaths 经 {@code PromptTemplates} 载入 {@code SessionServices} 的
+     * 注册表；themePaths 作为候选列表存于会话，供 TUI 启动时选第一个。</p>
+     */
+    private static void applySessionStartResources(AgentHarness harness,
+            SessionServices services, ResourcePaths paths, Args args,
+            AgentSession owner) {
+        if (paths == null || paths.isEmpty()) {
+            return;
+        }
+        // skills: 加载钩子贡献的路径并入 harness 的 SkillManager（与 --skills 同容器）。
+        if (!paths.skillPaths().isEmpty() && !args.noSkills()) {
+            var cwd = Path.of(System.getProperty("user.dir"));
+            var discovery = new SkillDiscovery(
+                cwd, FileSettingsStorage.defaultAgentDir());
+            var result = discovery.discoverAll(false, paths.skillPaths());
+            for (var skill : result.skills()) {
+                harness.skillManager().register(skill);
+            }
+        }
+        // prompts: 加载钩子贡献的路径并入 SessionServices 的注册表。
+        if (!paths.promptPaths().isEmpty() && !args.noPromptTemplates()) {
+            var load = PromptTemplates.load(
+                new DefaultFileSystem(),
+                paths.promptPaths().stream().map(Path::toString).toList());
+            services.promptTemplates().registerAll(load.templates());
+        }
+        // themes: 扩展贡献的候选列表（TUI 启动时选第一个可用）。
+        if (!paths.themePaths().isEmpty() && !args.noThemes()) {
+            owner.themePaths = List.copyOf(paths.themePaths());
+        }
+    }
+
     /** The underlying harness (used by the session repository and TUI). */
     public AgentHarness harness() {
         return harness;
@@ -289,6 +341,11 @@ public final class AgentSession implements AutoCloseable {
     /** The CLI arguments this session was assembled from ({@code /new}). */
     public Args sessionArgs() {
         return args;
+    }
+
+    /** 扩展贡献的主题候选（resources_discover themePaths）；无则空列表。 */
+    public List<Path> themePaths() {
+        return themePaths;
     }
 
     /** The active lane name. */
@@ -706,6 +763,8 @@ public final class AgentSession implements AutoCloseable {
         for (var jar : ExtensionPackageManager.project().installedJars()) {
             manager.loadJar(jar);
         }
+        applySessionStartResources(harness, services,
+            manager.sessionStartResources(), args, owner);
     }
 
     // ── Package-private accessors ───────────────────────────

@@ -76,6 +76,29 @@ public final class ExtensionManager {
         return Set.copyOf(loaded.keySet());
     }
 
+    /**
+     * 收集所有已加载扩展的会话开始资源贡献（合并保序）。
+     *
+     * <p>单个扩展的 {@code sessionStartResources()} 抛异常被隔离（记录告警），
+     * 该扩展贡献视为空——扩展错误永不阻断会话装配。</p>
+     */
+    public ResourcePaths sessionStartResources() {
+        var merged = ResourcePaths.none();
+        for (var ext : loaded.values()) {
+            try {
+                var paths = ext.sessionStartResources();
+                if (paths != null) {
+                    merged = merged.plus(paths);
+                }
+            } catch (RuntimeException e) {
+                java.util.logging.Logger.getLogger(ExtensionManager.class.getName())
+                    .warning("Extension '" + ext.name()
+                        + "' sessionStartResources() threw: " + e);
+            }
+        }
+        return merged;
+    }
+
     private void load(PiExtension ext) {
         loaded.put(ext.name(), ext);
         ext.register(context);

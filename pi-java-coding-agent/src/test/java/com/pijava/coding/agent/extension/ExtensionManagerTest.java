@@ -18,6 +18,7 @@ import com.pijava.coding.agent.core.SessionServices;
 import com.pijava.coding.agent.core.SettingsManager;
 import com.pijava.coding.agent.core.TrustManager;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
+import com.pijava.coding.agent.prompt.PromptTemplateRegistry;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -89,7 +90,8 @@ class ExtensionManagerTest {
             new TrustManager("none"),
             providers,
             new DefaultModelResolver(BuiltinCatalog.all()),
-            tools, commands, new MemorySessionRepository());
+            tools, commands, new MemorySessionRepository(),
+            new PromptTemplateRegistry());
         return new DefaultExtensionContext(services, new SkillManager());
     }
 

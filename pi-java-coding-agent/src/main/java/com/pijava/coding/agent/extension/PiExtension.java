@@ -18,4 +18,15 @@ public interface PiExtension {
 
     /** 注册工具/命令/Provider/Skill。 */
     void register(ExtensionContext ctx);
+
+    /**
+     * 会话开始时被调用，可贡献额外资源路径（对齐 pi {@code resources_discover}）。
+     *
+     * <p>返回的资源路径在会话装配时并入 CLI 参数：skillPaths 追加到技能发现，
+     * promptPaths 追加到提示模板注册，themePaths 作为主题候选（启动时选第一个
+     * 可用）。抛异常被隔离（记为告警），贡献视为空。</p>
+     */
+    default ResourcePaths sessionStartResources() {
+        return ResourcePaths.none();
+    }
 }
