@@ -1,7 +1,9 @@
 package com.pijava.coding.agent.core;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicReference;
@@ -58,6 +60,15 @@ final class SessionRunner {
         var laneName = owner.laneName();
         var stopReason = new AtomicReference<>("completed");
         var errorMessage = new AtomicReference<String>(null);
+        // Run summary (§8): wall-clock of the whole drive (incl. retry backoff)
+        // and stream usage accumulated here; tool/step counters come from the
+        // lane records filtered by the runIds collected below.
+        final long driveStartNanos = System.nanoTime();
+        // Mutable boxes (lambda capture requires effectively-final references).
+        long[] inputTokens = {0};
+        long[] outputTokens = {0};
+        double[] costUsd = {0};
+        var runIds = new HashSet<String>();
         try (var registration = owner.harness().onStreamEvent(event -> {
             if (event instanceof StreamEvent.StreamDone done && done.reason() != null) {
                 stopReason.set(done.reason());
@@ -66,6 +77,15 @@ final class SessionRunner {
                 stopReason.set("error");
                 if (err.error() != null && err.error().getMessage() != null) {
                     errorMessage.set(err.error().getMessage());
+                }
+            }
+            if (event instanceof StreamEvent.UsageInfo usage) {
+                // TokenCounter is the session-wide accumulator and cannot be
+                // reused here — this drive's usage is local to the stream.
+                inputTokens[0] += usage.inputTokens();
+                outputTokens[0] += usage.outputTokens();
+                if (usage.usage() != null && usage.usage().cost() != null) {
+                    costUsd[0] += usage.usage().cost().total();
                 }
             }
             owner.emitSessionEvent(new AgentSessionEvent.MessageUpdate(event));
@@ -110,6 +130,13 @@ final class SessionRunner {
                             .reduce((first, second) -> second)
                             .ifPresent(m -> owner.emitSessionEvent(
                                 new AgentSessionEvent.UserMessageReceived(m)));
+                    }
+                    // Collect this attempt's runId (operation id == runId,
+                    // ActionExecutor) so the run summary can filter lane
+                    // records to only this drive — a retry re-rolls the id.
+                    var op = owner.harness().snapshot(laneName).operation();
+                    if (op != null && op.id() != null) {
+                        runIds.add(op.id());
                     }
                     while (action != null) {
                         action = owner.harness().executeAction(laneName, action);
@@ -183,6 +210,14 @@ final class SessionRunner {
                 SessionPersistence.persistPending(owner, owner.session(), laneName);
             }
             owner.emitSessionEvent(new AgentSessionEvent.AgentSettled());
+            var summary = RunSummaryAggregator.aggregate(
+                owner.harness().snapshot(laneName).records(), runIds)
+                .withTotals(new RunSummaryAggregator.Totals(
+                    inputTokens[0], outputTokens[0], costUsd[0]));
+            printRunSummary(owner, summary.withMeta(
+                attempt + 1,
+                (System.nanoTime() - driveStartNanos) / 1_000_000,
+                stopReason.get()));
             statusFuture.complete(new RunStatus(
                 exitCode(stopReason.get()), stopReason.get()));
         } catch (Exception e) {
@@ -203,6 +238,31 @@ final class SessionRunner {
                 queue.add(Optional.empty());
             }
         }
+    }
+
+    /**
+     * Emit the run summary (design §8.2): {@code LOG.info} always (lands in
+     * the log file), plus {@code System.err} in non-TUI modes — stdout is
+     * occupied by the assistant body and must never be mixed. The interactive
+     * TUI renders its own panels, so it only gets the log line.
+     */
+    private static void printRunSummary(AgentSession owner, RunSummaryAggregator.Summary summary) {
+        LOG.info("[pi-java] run summary: attempts={} durationMs={}ms stopReason={}",
+            summary.attempts(), summary.durationMs(), summary.stopReason());
+        LOG.info("  tokens: in={} out={} cost=${}",
+            summary.totals().inputTokens(), summary.totals().outputTokens(),
+            summary.totals().costUsd());
+        LOG.info("  tools: {} ok, {} failed | steps: {}",
+            summary.toolOk(), summary.toolFailed(), summary.steps());
+        if (!isTui(owner)) {
+            summary.printTo(System.err);
+        }
+    }
+
+    /** Non-TUI when print mode is on, or an explicit non-text mode (web/json/rpc). */
+    private static boolean isTui(AgentSession owner) {
+        var args = owner.sessionArgs();
+        return !args.print() && (args.mode() == null || "text".equals(args.mode()));
     }
 
     private static List<Message> messages(List<Entry> transcript) {
