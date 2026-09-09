@@ -46,6 +46,7 @@ import java.util.List;
  * @param tuiMode               "fullscreen" (default) | "regular"
  * @param verbose               force verbose startup
  * @param debug                 enable debug logging (DEBUG level)
+ * @param tracePayloads         record LLM request/response payloads to the trace file
  * @param projectTrustOverride  --approve=true / --no-approve=false / null=unset
  * @param messages              positional prompt messages
  * @param fileArgs              @file arguments joined into the initial message
@@ -93,6 +94,7 @@ public record Args(
         String tuiMode,
         boolean verbose,
         boolean debug,
+        boolean tracePayloads,
         Boolean projectTrustOverride,
         List<String> messages,
         List<String> fileArgs,

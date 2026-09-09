@@ -414,28 +414,33 @@ final class ActionExecutor {
                     "toolCount", toolDefs.size(),
                     "thinking", thinkingLabel(ctx.thinkingLevel().get()))));
         try {
-            var iter = ctx.streamFn().stream(messages, ctx.model().get(), options);
+            ctx.telemetry().pushCurrent(llmSpan);
             try {
-                while (iter.hasNext()) {
-                    if (lane.abortSignal != null && lane.abortSignal.isAborted()) {
-                        iter.close();
-                        break;
+                var iter = ctx.streamFn().stream(messages, ctx.model().get(), options);
+                try {
+                    while (iter.hasNext()) {
+                        if (lane.abortSignal != null && lane.abortSignal.isAborted()) {
+                            iter.close();
+                            break;
+                        }
+                        var event = iter.next();
+                        ctx.streamListener().get().accept(event);
+                        if (event instanceof StreamEvent.UsageInfo ui
+                                && ui.partial() != null && ui.partial().usage() != null) {
+                            inputTokens = ui.partial().usage().inputTokens();
+                            outputTokens = ui.partial().usage().outputTokens();
+                        }
+                        if (event.partial() != null) {
+                            lane.partial = event.partial();
+                        }
+                        if (event instanceof StreamEvent.StreamDone) break;
+                        if (event instanceof StreamEvent.StreamError) break;
                     }
-                    var event = iter.next();
-                    ctx.streamListener().get().accept(event);
-                    if (event instanceof StreamEvent.UsageInfo ui
-                            && ui.partial() != null && ui.partial().usage() != null) {
-                        inputTokens = ui.partial().usage().inputTokens();
-                        outputTokens = ui.partial().usage().outputTokens();
-                    }
-                    if (event.partial() != null) {
-                        lane.partial = event.partial();
-                    }
-                    if (event instanceof StreamEvent.StreamDone) break;
-                    if (event instanceof StreamEvent.StreamError) break;
+                } finally {
+                    iter.close();
                 }
             } finally {
-                iter.close();
+                ctx.telemetry().popCurrent(llmSpan);
             }
         } catch (Exception e) {
             streamError = e;

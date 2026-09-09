@@ -64,6 +64,7 @@ public final class HelpText {
               --offline                      Disable startup network operations
               --verbose                      Force verbose startup
               --debug                        Enable debug logging (DEBUG level)
+              --trace-payloads               Record LLM request/response payloads to the trace file
               --help, -h                     Show help
               --version, -v                  Show version
 

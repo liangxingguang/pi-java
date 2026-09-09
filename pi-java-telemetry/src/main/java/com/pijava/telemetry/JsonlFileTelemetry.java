@@ -87,6 +87,7 @@ public final class JsonlFileTelemetry implements TelemetryContext {
     }
 
     /** Whether event lines are recorded. */
+    @Override
     public boolean recordsPayloads() {
         return recordPayloads;
     }
@@ -137,6 +138,7 @@ public final class JsonlFileTelemetry implements TelemetryContext {
      * @param name event name (e.g. "llm.payload.request")
      * @param payload payload map (may contain nested structures)
      */
+    @Override
     public void recordEvent(String name, Map<String, Object> payload) {
         if (!recordPayloads) {
             return;
@@ -160,6 +162,7 @@ public final class JsonlFileTelemetry implements TelemetryContext {
      *
      * @param span the span to bind
      */
+    @Override
     public void pushCurrent(TelemetrySpan span) {
         if (span instanceof JsonlSpan js) {
             currentStack.push(js);
@@ -172,6 +175,7 @@ public final class JsonlFileTelemetry implements TelemetryContext {
      *
      * @param span the span to unbind
      */
+    @Override
     public void popCurrent(TelemetrySpan span) {
         if (span instanceof JsonlSpan js && currentStack.peek() == js) {
             currentStack.pop();

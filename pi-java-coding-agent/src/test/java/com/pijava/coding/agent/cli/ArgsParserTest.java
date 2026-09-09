@@ -151,6 +151,16 @@ class ArgsParserTest {
     }
 
     @Test
+    void tracePayloadsFlagParses() {
+        assertThat(ArgsParser.parse(new String[] {"--trace-payloads"}).tracePayloads())
+            .isTrue();
+        assertThat(ArgsParser.parse(new String[] {}).tracePayloads())
+            .isFalse();
+        assertThat(ArgsParser.parse(new String[] {"--debug", "--trace-payloads"})
+            .tracePayloads()).isTrue();
+    }
+
+    @Test
     void helpAndVersionShortFlags() {
         assertThat(ArgsParser.parse(new String[] {"-h"}).help()).isTrue();
         assertThat(ArgsParser.parse(new String[] {"-v"}).version()).isTrue();

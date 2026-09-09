@@ -1,5 +1,6 @@
 package com.pijava.telemetry;
 
+import java.util.Map;
 import java.util.function.Function;
 
 /**
@@ -47,4 +48,41 @@ public interface TelemetryContext {
     default TelemetryContext with(String key, String value) {
         return this;
     }
+
+    /**
+     * Record a structured event line bound to the current span (see {@link
+     * #pushCurrent}).  Payload capture (e.g. {@code --trace-payloads}) is an
+     * opt-in: exporters that do not record payloads ignore this. Default no-op.
+     *
+     * @param name    event name (e.g. "llm.payload.request")
+     * @param payload structured payload (may contain nested maps/lists)
+     */
+    default void recordEvent(String name, Map<String, Object> payload) { }
+
+    /**
+     * Whether this context actually records event lines.  Callers use it to
+     * skip building an expensive payload when recording is disabled (the
+     * default). Default {@code false}.
+     */
+    default boolean recordsPayloads() {
+        return false;
+    }
+
+    /**
+     * Bind a span (opened on this or another thread) as the current span for
+     * {@link #recordEvent} on this thread.  Must be paired with {@link
+     * #popCurrent} in a finally block. Default no-op.
+     *
+     * @param span the span to bind
+     */
+    default void pushCurrent(TelemetrySpan span) { }
+
+    /**
+     * Remove a span previously bound with {@link #pushCurrent}.  Only pops
+     * if it is the current top (guards against unbalanced pairs). Default
+     * no-op.
+     *
+     * @param span the span to unbind
+     */
+    default void popCurrent(TelemetrySpan span) { }
 }

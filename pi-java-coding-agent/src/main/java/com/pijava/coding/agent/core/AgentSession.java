@@ -249,11 +249,15 @@ public final class AgentSession implements AutoCloseable {
         }
         var streamFn = DefaultProviders.streamFnFor(
             args, effective.defaultProvider, providers, effective);
+        // Trace exporter: same instance powers harness telemetry (spans/counters)
+        // and payload recording (wrapper), so events bind to the llm.request span.
+        var telemetry = PayloadRecordingStreamFn.exporter(args.sessionId(), args.tracePayloads());
+        var recordingStreamFn = new PayloadRecordingStreamFn(streamFn, telemetry);
         var model = models.resolve(modelPattern, providerName);
         var harness = AgentHarness.create(HarnessConfig.builder()
-            .streamFn(streamFn)
+            .streamFn(recordingStreamFn)
             .model(model)
-            .summaryGenerator(new LlmSummaryGenerator(streamFn, () -> model))
+            .summaryGenerator(new LlmSummaryGenerator(recordingStreamFn, () -> model))
             .thinkingLevel(SessionSetup.thinkingLevelFor(args))
             .systemPrompt(SessionSetup.systemPromptFor(args))
             .activeTools(SessionSetup.activeTools(args, toolList))
@@ -264,6 +268,7 @@ public final class AgentSession implements AutoCloseable {
             .followUpMode(SessionSetup.queueMode(effective.followUpMode))
             .toolExecution(ToolExecution.defaultMode())
             .skills(SessionSetup.discoverSkills(args))
+            .telemetry(telemetry)
             .build());
         var agentSession = new AgentSession(
             harness, services, args,
