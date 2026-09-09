@@ -4,15 +4,24 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pijava.agent.entry.Entry;
-import com.pijava.ai.message.Message;
 import com.pijava.agent.hook.ToolCallContext;
 import com.pijava.agent.hook.ToolResultContext;
+import com.pijava.agent.record.LaneRecord;
+import com.pijava.agent.record.ReplayKind;
 import com.pijava.agent.tool.ToolResult;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.Message;
+import com.pijava.telemetry.SpanOptions;
+import com.pijava.telemetry.TelemetrySpan;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Per-tool execution pipeline: before_tool hooks → raw execution (parallel for
@@ -22,8 +31,17 @@ import com.pijava.ai.message.ContentBlock;
  * 500-line limit. Hooks fire sequentially to keep ordering deterministic;
  * raw execution uses a virtual-thread executor (StructuredTaskScope is a
  * preview API in JDK 25).</p>
+ *
+ * <p>Each call is wrapped in a {@code tool.execute} telemetry span spanning
+ * before_tool → raw → after_tool (observability design §5.3), and every call
+ * writes {@link LaneRecord.ToolStarted}/{@link LaneRecord.ToolFinished} audit
+ * records so the transcript entry's id lands in
+ * {@code ToolStarted.resultEntryId} (design §6.1).</p>
  */
 final class ToolExecutionPipeline {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ToolExecutionPipeline.class);
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final ExecutionContext ctx;
 
@@ -37,13 +55,22 @@ final class ToolExecutionPipeline {
      */
     List<ToolOutcome> executeStages(
             String laneName, LaneState lane, List<Action.ExecuteTool> calls) {
-        var decisions = new ArrayList<BeforeToolDecision>();
-        for (var et : calls) {
+        int batchSize = calls.size();
+
+        // Stage 1: open a per-call span + fire before_tool hooks (in order).
+        var decisions = new ArrayList<BeforeToolDecision>(batchSize);
+        var spans = new ArrayList<TelemetrySpan>(batchSize);
+        var starts = new ArrayList<Long>(batchSize);
+        for (int i = 0; i < batchSize; i++) {
+            var et = calls.get(i);
+            starts.add(System.nanoTime());
+            spans.add(openToolSpan(lane, et, i, batchSize));
             decisions.add(beforeToolDecision(laneName, et));
         }
 
+        // Stage 2: raw execution — parallel for batches, sequential otherwise.
         List<RawToolResult> rawResults;
-        if (calls.size() > 1) {
+        if (batchSize > 1) {
             rawResults = runRawBatch(lane, decisions);
         } else {
             rawResults = new ArrayList<>();
@@ -53,12 +80,17 @@ final class ToolExecutionPipeline {
             }
         }
 
-        var outcomes = new ArrayList<ToolOutcome>();
-        for (int i = 0; i < calls.size(); i++) {
+        // Stage 3: after_tool hooks + close spans + audit records (in order).
+        var outcomes = new ArrayList<ToolOutcome>(batchSize);
+        for (int i = 0; i < batchSize; i++) {
             var et = calls.get(i);
             var decision = decisions.get(i);
+            var span = spans.get(i);
+            long startNanos = starts.get(i);
             if (!decision.allowed()) {
-                outcomes.add(ToolOutcome.denied(et));
+                var outcome = ToolOutcome.denied(et);
+                closeToolSpan(lane, span, et, decision, i, batchSize, outcome, startNanos);
+                outcomes.add(outcome);
                 continue;
             }
             var raw = rawResults.get(i);
@@ -68,20 +100,27 @@ final class ToolExecutionPipeline {
             if (afterResult != null) {
                 result = afterResult;
             }
-            outcomes.add(new ToolOutcome(
-                result.content(), raw.isError(), result.terminate()));
+            var outcome = new ToolOutcome(
+                result.content(), raw.isError(), result.terminate());
+            closeToolSpan(lane, span, et, decision, i, batchSize, outcome, startNanos);
+            outcomes.add(outcome);
         }
         return outcomes;
     }
 
-    /** Append a tool result entry to the lane transcript. */
-    void appendEntry(LaneState lane, Action.ExecuteTool call, ToolOutcome outcome) {
+    /**
+     * Append a tool result entry to the lane transcript and return its id so
+     * the {@link LaneRecord.ToolStarted}/{@link LaneRecord.ToolFinished} audit
+     * records can link it as {@code resultEntryId} (design §6.1).
+     */
+    private String appendEntry(LaneState lane, Action.ExecuteTool call, ToolOutcome outcome) {
         var toolEntry = new Entry.Message(
-            java.util.UUID.randomUUID().toString(), 0, null, null,
+            UUID.randomUUID().toString(), 0, null, null,
             new Message.ToolResultMessage(
                 call.toolCallId(), call.toolName(), outcome.blocks(), outcome.isError()), null);
         lane.transcript.add(toolEntry);
         lane.pendingWrites.add(toolEntry);
+        return toolEntry.id();
     }
 
     /** Fire {@code before_tool} hooks and compute the effective arguments. */
@@ -158,6 +197,70 @@ final class ToolExecutionPipeline {
             return new RawToolResult(new ToolResult<>(
                 List.of(new ContentBlock.TextContent("Error: " + e.getMessage())),
                 null, null, false, List.of()), true);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // tool.execute telemetry span + audit records
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * Open a per-call {@code tool.execute} span nested under the open
+     * {@code harness.run} span (falling back to the root context).
+     */
+    private TelemetrySpan openToolSpan(
+            LaneState lane, Action.ExecuteTool et, int index, int batchSize) {
+        var parent = lane.runSpan != null ? lane.runSpan : ctx.telemetry();
+        return parent.openSpan(new SpanOptions("tool.execute", Map.of(
+            "toolCallId", et.toolCallId(),
+            "toolName", et.toolName(),
+            "toolIndex", index,
+            "batchSize", batchSize)));
+    }
+
+    /** Close the span, write audit records, metrics and the debug log line. */
+    private void closeToolSpan(
+            LaneState lane, TelemetrySpan span, Action.ExecuteTool et,
+            BeforeToolDecision decision, int index, int batchSize,
+            ToolOutcome outcome, long startNanos) {
+        boolean allowed = decision.allowed();
+        boolean isError = outcome.isError();
+        boolean terminate = outcome.terminate();
+        long durationMs = (System.nanoTime() - startNanos) / 1_000_000;
+
+        span.addAttribute("allowed", allowed);
+        span.addAttribute("isError", isError);
+        span.addAttribute("terminate", terminate);
+        span.addAttribute("argsChars", safeArgsChars(decision.args()));
+
+        String resultEntryId = appendEntry(lane, et, outcome);
+        lane.records.add(new LaneRecord.ToolStarted(
+            UUID.randomUUID().toString(), 0, lane.laneName, null, lane.runId,
+            "", index, et.toolCallId(), et.toolName(),
+            decision.args(), resultEntryId, ReplayKind.NEVER));
+        lane.records.add(new LaneRecord.ToolFinished(
+            UUID.randomUUID().toString(), 0, lane.laneName, null, lane.runId,
+            et.toolCallId(), et.toolName(), isError, terminate,
+            resultEntryId, durationMs));
+
+        ctx.telemetry().incrementCounter("tool.executions", 1);
+        if (isError) {
+            ctx.telemetry().incrementCounter("tool.errors", 1);
+        }
+        ctx.telemetry().recordTiming("tool.execute.duration", durationMs);
+
+        LOG.debug("[agent] tool {} lane={} name={} durationMs={} isError={}",
+            allowed ? "done" : "denied", lane.laneName, et.toolName(), durationMs, isError);
+
+        span.close();
+    }
+
+    /** Character count of the effective args for observability (never the args themselves). */
+    private static int safeArgsChars(Map<String, Object> args) {
+        try {
+            return MAPPER.writeValueAsBytes(args).length;
+        } catch (Exception e) {
+            return args.toString().length();
         }
     }
 

@@ -19,12 +19,12 @@ import com.pijava.agent.hook.ShouldStopAfterTurnContext;
 import com.pijava.agent.prompt.SystemPromptBuilder;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.record.OperationOutcome;
-import com.pijava.agent.record.ReplayKind;
 import com.pijava.agent.session.ContextEntries;
 import com.pijava.agent.record.StepKind;
 import com.pijava.agent.record.UsageCause;
 import com.pijava.ai.AbortSignal;
 import com.pijava.agent.tool.AgentTool;
+import com.pijava.agent.tool.ExecutionMode;
 import com.pijava.ai.Usage;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.message.AssistantMessage;
@@ -298,7 +298,8 @@ final class ActionExecutor {
                 if (pw != null) yield pw;
                 if (!lane.pendingToolCalls.isEmpty()) {
                     if (ctx.toolExecution().get() instanceof ToolExecution.Parallel
-                            && lane.pendingToolCalls.size() > 1) {
+                            && lane.pendingToolCalls.size() > 1
+                            && !hasSequentialTool(lane.pendingToolCalls)) {
                         var calls = List.copyOf(lane.pendingToolCalls);
                         lane.pendingToolCalls.clear();
                         yield new Action.ExecuteToolBatch(calls);
@@ -591,11 +592,9 @@ final class ActionExecutor {
     // ── ExecuteTool ─────────────────────────────────────────
 
     private Action executeTool(String laneName, LaneState lane, Action.ExecuteTool et) {
+        // ToolExecutionPipeline appends the transcript entry and writes the
+        // ToolStarted/ToolFinished audit records + tool.execute span.
         var outcome = toolPipeline.executeStages(laneName, lane, List.of(et)).getFirst();
-        toolPipeline.appendEntry(lane, et, outcome);
-        lane.records.add(new LaneRecord.ToolStarted(
-            UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
-            "", 0, et.toolCallId(), et.toolName(), et.arguments(), "", ReplayKind.NEVER));
 
         if (outcome.terminate() && lane.pendingToolCalls.isEmpty()) {
             lane.pendingWrites.clear();
@@ -613,18 +612,17 @@ final class ActionExecutor {
     /** Execute a batch of tool calls in parallel (Phase 3, ToolExecution.Parallel). */
     private Action executeToolBatch(String laneName, LaneState lane,
                                      Action.ExecuteToolBatch batch) {
+        // ToolExecutionPipeline appends transcript entries + writes the
+        // ToolStarted/ToolFinished audit records + per-call tool.execute spans.
         var outcomes = toolPipeline.executeStages(laneName, lane, batch.calls());
-        boolean anyTerminate = false;
-        for (int i = 0; i < batch.calls().size(); i++) {
-            var call = batch.calls().get(i);
-            var outcome = outcomes.get(i);
-            toolPipeline.appendEntry(lane, call, outcome);
-            lane.records.add(new LaneRecord.ToolStarted(
-                UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
-                "", 0, call.toolCallId(), call.toolName(), call.arguments(), "", ReplayKind.NEVER));
-            anyTerminate |= outcome.terminate();
+        // pi alignment (agent-loop.ts shouldTerminateToolBatch): end the run only
+        // when EVERY call in the batch asks for it. A single terminating call must
+        // not silently drop the remaining calls' results.
+        boolean allTerminate = !outcomes.isEmpty();
+        for (var outcome : outcomes) {
+            allTerminate &= outcome.terminate();
         }
-        if (anyTerminate) {
+        if (allTerminate) {
             lane.pendingWrites.clear();
             lane.records.add(new LaneRecord.OperationFinished(
                 UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
@@ -640,6 +638,24 @@ final class ActionExecutor {
     // ═══════════════════════════════════════════════════════════
     // Internal helpers
     // ═══════════════════════════════════════════════════════════
+
+    /**
+     * Whether any pending call belongs to a tool that declared
+     * {@link ExecutionMode#Sequential}.
+     *
+     * <p>pi alignment ({@code agent-loop.ts:419-424}, {@code hasSequentialToolCall}):
+     * one sequential tool demotes the whole batch to sequential execution —
+     * the batch is never split into a parallel part and a serial part.
+     */
+    private boolean hasSequentialTool(List<Action.ExecuteTool> calls) {
+        if (ctx.toolRegistry() == null) {
+            return false;
+        }
+        return calls.stream()
+            .map(call -> ctx.toolRegistry().get(call.toolName()))
+            .anyMatch(tool -> tool != null
+                && tool.executionMode() instanceof ExecutionMode.Sequential);
+    }
 
     /** Apply a pending prepare_next_turn update; write a change entry only when the value truly changed. */
     private void applyPendingTurnUpdate(String laneName, LaneState lane) {
