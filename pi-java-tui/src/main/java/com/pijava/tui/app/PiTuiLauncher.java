@@ -112,10 +112,9 @@ public final class PiTuiLauncher {
     }
 
     private static String themeFrom(Args args, AgentSession session) {
-        if (args.themes() != null && !args.themes().isEmpty()) {
-            return args.themes().get(0);
-        }
-        var theme = session.services().settings().effective().theme;
-        return theme == null ? "dark" : theme;
+        var cli = args.themes() != null && !args.themes().isEmpty()
+            ? args.themes().get(0) : null;
+        var settingsTheme = session.services().settings().effective().theme;
+        return PiTheme.resolveTheme(cli, settingsTheme, session.themePaths());
     }
 }

@@ -2,6 +2,7 @@ package com.pijava.tui.theme;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
 
 
 import dev.tamboui.css.engine.StyleEngine;
@@ -54,6 +55,35 @@ public final class PiTheme {
     /** Apply the theme to an existing runner (used when toggling themes). */
     public static void apply(ToolkitRunner runner, String theme) {
         runner.styleEngine(engineFor(theme));
+    }
+
+    /**
+     * 解析生效主题：显式 {@code cliTheme} → settings 值 → 扩展候选第一个 → dark。
+     *
+     * <p>前两者为启动期优先级（CLI 覆盖 settings），候选为 resources_discover
+     * 的 themePaths（首个非空）。候选项交给 {@link #engineFor} 解析（.tcss 文件
+     * 或内置名；无效则回落 dark）。</p>
+     *
+     * @param cliTheme     {@code --theme} 值，可能为 null
+     * @param settingsTheme settings.theme，可能为 null
+     * @param candidates   扩展贡献的主题候选（有序），可能为空
+     */
+    public static String resolveTheme(String cliTheme, String settingsTheme,
+                                      List<Path> candidates) {
+        if (cliTheme != null && !cliTheme.isBlank()) {
+            return cliTheme;
+        }
+        if (settingsTheme != null && !settingsTheme.isBlank()) {
+            return settingsTheme;
+        }
+        if (candidates != null) {
+            for (var candidate : candidates) {
+                if (candidate != null) {
+                    return candidate.toString();
+                }
+            }
+        }
+        return "dark";
     }
 
     private static String resolveThemeName(StyleEngine engine, String theme) {
