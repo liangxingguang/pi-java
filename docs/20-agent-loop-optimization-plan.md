@@ -220,11 +220,11 @@ void toolThenFollowUpDrivesTwoRunsViaExplicitActions() {
 
 | 条款 | pi 位置 | pi-java 落点 | 状态 |
 |---|---|---|---|
-| 批次终止需全部 terminate | `:582` | `ActionExecutor:625` | ⬜ |
-| 有 sequential 工具则整批串行 | `:419` | `ActionExecutor:299` | ⬜ |
-| length 停止则工具调用判失败 | `:211` | 无 | ⬜ |
-| 工具参数 schema 校验 | `:618` | `ToolRegistry:87` | ⬜ |
-| before_tool block 可 terminate | `:636` | `ToolExecutionPipeline:195` | ⬜ |
+| 批次终止需全部 terminate | `:582` | `ActionExecutor:625` | ✅ L0-② |
+| 有 sequential 工具则整批串行 | `:419` | `ActionExecutor:299` | ✅ L0-① |
+| length 停止则工具调用判失败 | `:211` | `HarnessUtils:56` + `ActionExecutor:527`（`failTruncatedToolCalls`） | ✅ L1-③ |
+| 工具参数 schema 校验 | `:618` | `ToolArgumentsValidator` + `ToolRegistry:87` | ✅ L1-④ |
+| before_tool block 可 terminate | `:636` | `BeforeToolResult.terminate` + `ToolExecutionPipeline:195` | ✅ L1-⑤ |
 
 每轮对齐拿这张表过一遍，不靠记忆。
 
@@ -277,9 +277,13 @@ L0（0.5d） → L1（2-3d） → L2（2d） → [观察] → L3（可选）
 
 1. **文件行数已超限**：`ActionExecutor.java` 现 769 行、`AgentHarness.java` 现 609 行，
    均超 CLAUDE.md 的「文件 ≤ 500 行」规范。本次新增方法会加剧。
-   建议 L1 阶段顺带拆分，例如：
-   - compaction 相关（`compact` / `applyCompaction` / `compactTranscript` / `keptMessagesFrom`）→ `CompactionExecutor`
-   - telemetry span 辅助（`openRunSpan` / `closeRunSpan` / `modelLabel` / `thinkingLabel`）→ `RunSpanFactory`
+   L1 已完成三处拆分（`ActionExecutor` 850 → 635 行）：
+   - compaction 相关（`compact` / `applyCompaction` / `compactTranscript` / `keptMessagesFrom` / `checkAutoCompact`）→ `CompactionExecutor`（121 行）
+   - telemetry span 辅助（`openRunSpan` / `closeRunSpan` / `modelLabel` / `thinkingLabel` / `runDurationMs`）→ `RunSpanFactory`（73 行）
+   - 上下文组装（`buildMessagesForLane` / `buildSystemPrompt` / `applyPendingTurnUpdate`）→ `ContextAssembler`（102 行）
+   **剩余偏离**：`ActionExecutor` 仍 635 行 > 500。剩余为紧密耦合的 action 分派/流式核心
+   （`executeStreamAssistant`/`executeTryFinishRun`/`executeTool(Batch)`），机械拆分弊大于利，
+   留待后续；`AgentHarness`（609 行）同属已知技术债。
 2. **不要为 ④ 引入 JSON Schema 依赖**：native image 反射配置成本高，自研子集校验器足够覆盖内置工具。
 3. **⑤ 是公开 API 破损变更**：`BeforeToolResult` 属 `com.pijava.agent.hook` 公开包，扩展实现者需同步；
    当前 `0.1.0-SNAPSHOT` 可接受，若已对外发布则改为新增 `BeforeToolResultV2` 或提供默认方法。

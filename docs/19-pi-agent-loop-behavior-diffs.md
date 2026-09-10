@@ -12,9 +12,9 @@
 |---|---|---|---|---|
 | 1 | 批量工具 `terminate` 判定：`every` → `any` | **高**（run 提前结束） | `agent-loop.ts:582` | `ActionExecutor.java:625` |
 | 2 | 工具级 `executionMode` 未参与并行判定 | **高**（bash/edit/write 被并发执行） | `agent-loop.ts:419-424` | `ActionExecutor.java:299-307` |
-| 3 | 缺 `stopReason == "length"` 的截断保护 | 中（执行参数被截断的调用） | `agent-loop.ts:211-214, 381` | 无对应实现 |
-| 4 | 缺 `validateToolArguments` 运行时 schema 校验 | 中（非法参数静默降级） | `agent-loop.ts:618` | 无对应实现 |
-| 5 | `beforeToolCall` block 不支持 `terminate` | 低 | `agent-loop.ts:636-646` | `ToolExecutionPipeline.java:195` |
+| 3 | 缺 `stopReason == "length"` 的截断保护 | 中（执行参数被截断的调用） | `agent-loop.ts:211-214, 381` | `HarnessUtils.java:56` + `ActionExecutor.java:527`（L1 已修） |
+| 4 | 缺 `validateToolArguments` 运行时 schema 校验 | 中（非法参数静默降级） | `agent-loop.ts:618` | `ToolRegistry.java:87`（L1 已修） |
+| 5 | `beforeToolCall` block 不支持 `terminate` | 低 | `agent-loop.ts:636-646` | `ToolExecutionPipeline.java:195`（L1 已修） |
 | 6 | 重试循环位置上移（多一层） | 低（行为略强） | Agent 层 `_willRetryAfterAgentEnd` | `SessionRunner.java:82-157` |
 
 ---
@@ -166,15 +166,23 @@ if (!hasSequential && parallel && calls.size() > 1) { yield new Action.ExecuteTo
 输出触达 token 上限时，工具参数 JSON 可能不完整。`ToolCallAccumulator` 一类实现通常做 best-effort
 JSON salvage，因此**截断的参数可能仍解析成功并执行**——例如 `write` 写入内容残缺的文件、`edit` 应用不完整的替换。pi 明确规避了这一风险。
 
-### 建议
+### 已修复（L1，2026-09-10）
 
-在 `executeTryFinishRun` 的 `tool_use` 分支前增加：
+`HarnessUtils.determineOutcome` 增加 `"length"` 分支（`isLengthStop`），`ActionExecutor.executeTryFinishRun`
+在 `tool_use` 分支前先判 `"length"`：
 
 ```java
-if ("length".equals(stopReason)) {
-    // 与 pi failToolCallsFromTruncatedMessage 对齐：全部判失败并回灌错误结果
+if ("length".equals(status)) {
+    failTruncatedToolCalls(lane);   // 与 pi failToolCallsFromTruncatedMessage 对齐
+    lane.phase = RunPhase.ASSISTANT;
+    return peekAction(laneName);
 }
 ```
+
+`failTruncatedToolCalls` 把 partial 里每个工具调用写成一个 `isError=true` 的 `ToolResultMessage`
+（文案含 "hit the output token limit … Re-issue the tool call with complete arguments."），
+模型拿回错误后自行重试；run 不因此提前结束。回归测试见
+`AgentLoopL1Test.lengthStopFailsToolCallsBackWithoutExecutingThem`。
 
 ---
 
@@ -211,11 +219,16 @@ if ("length".equals(stopReason)) {
 模型给出缺字段/类型错误的参数时，pi 会返回结构化校验错误供模型自我纠正；pi-java 则把 null/默认值传给工具，
 可能产生 NPE 或静默的错误行为，且模型拿不到 schema 级反馈。
 
-### 建议
+### 已修复（L1，2026-09-10）
 
-新增 `ToolArgumentsValidator`（基于 `inputSchema()` 的 JSON Schema 子集校验：type / required / enum），
-在 `ToolRegistry.execute` 的 `prepareArguments` 之后、`AgentTool.execute` 之前调用，失败抛
-`IllegalArgumentException`（现有 `ToolExecutionPipeline.runRawSafely:153` 已会把它包装成错误结果）。
+新增 `ToolArgumentsValidator`（`pi-java-agent-core/.../tool/`）：基于 `inputSchema()` 的 JSON Schema
+子集校验（type / required / properties 递归 / items 元素类型），在 `ToolRegistry.execute` 的
+`prepareArguments` 之后、`AgentTool.execute` 之前调用，失败抛 `IllegalArgumentException`
+（`ToolExecutionPipeline.runRawSafely` 已把它包装成 `"Tool error: …"` 错误结果回灌模型）。
+
+关键边界：参数含 `_raw`（流适配器对截断/畸形 JSON 的回收路径，如 BashTool）时**跳过 required 检查**，
+避免破坏该恢复机制。回归测试见 `AgentLoopL1Test.invalidArgumentsAreFedBackAsErrorsInsteadOfExecuted`、
+`validArgumentsStillExecute`。
 
 ---
 
@@ -260,9 +273,15 @@ if ("length".equals(stopReason)) {
 `before_tool` 钩子无法表达「拒绝并终止」——例如权限系统判定"用户已选择一律拒绝"时，
 pi 能立刻结束 run，pi-java 会继续请求模型、可能反复触发同一被拒调用。
 
-### 建议
+### 已修复（L1，2026-09-10）
 
-给 `before_tool` 的返回结构增加 `terminate` 字段并透传到 `ToolOutcome`。
+`BeforeToolResult` 增加第三分量 `terminate`（保留 2 参兼容构造器与 `proceed()` 别名），
+新增 `denyAndTerminate(reason)` 工厂。`ToolExecutionPipeline.beforeToolDecision` 拒绝时把
+`beforeResult.terminate()` 透传到 `BeforeToolDecision.deny(call, terminate)`，
+`ToolOutcome.denied(et, terminate)` 最终落到 `ToolFinished.terminate` 与 OperationFinished 判定。
+
+注意：拒绝结果的容器是 `ContentBlock.ToolResultContent`（携带 call id/name），外层内层都是内容块。
+回归测试见 `AgentLoopL1Test.denyAndTerminateEndsTheRun`、`plainDenyDoesNotTerminate`。
 
 ---
 

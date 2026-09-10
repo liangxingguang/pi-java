@@ -147,13 +147,17 @@
 | `harness/AgentHarness.java` | `harness/agent-harness.ts`（~900 行） | ✅ 90% | 多车道、`peekAction`/`executeAction`/`runToCompletion`、watch 订阅一致；pi 另有 `before_resume`，Java 简化为 `seedTranscript` |
 | `harness/ActionExecutor.java` | `harness/agent-harness.ts` 内 action 分派 | ✅ 95% | 五类 action 对应；pi 的 action 集合更细（含 navigation/steer 注入） （口径修正：五类 action 一致） |
 | `harness/Action.java` | `harness/agent-harness.ts` `Action` 联合 | ✅ 95% | 五种 action 一致；pi 还区分 pending write 的 lane （口径修正：五种 action 一致） |
-| `harness/HarnessUtils.java` | `harness/types.ts` + 工具函数 | ✅ 90% | `newestOwn`/`determineOutcome`/`extractToolCalls` 一致 |
+| `harness/HarnessUtils.java` | `harness/types.ts` + 工具函数 | ✅ 90% | `newestOwn`/`determineOutcome`/`extractToolCalls` 一致；`determineOutcome` 含 `length` 分支（L1-③，对齐 `agent-loop.ts:211`） |
 | `harness/LaneState.java` | `harness/types.ts` `LaneState` | ✅ 95% | transcript/pendingWrites/queue 三队列一致 （口径修正：三队列一致） |
 | `harness/LaneSnapshot.java` + `SnapshotService.java` | `harness/events.ts` 快照 + `harness/types.ts` | ✅ 90% | `watch()` → `WatchHandle<LaneSnapshot>` 对应 |
 | `harness/QueueManager.java` | `harness/agent-harness.ts` steer/followUp/nextRun | ✅ 90% | 三队列 drain 顺序一致 |
 | `harness/DriveMode.java` | `harness/agent-harness.ts` drive modes | ✅ 90% | Manual/Automatic 对应 |
 | `loop/AgentLoop.java` | `agent-loop.ts` | ⛔ 已删除 | 公开门面 `agentLoop()` 双方生产链路均不使用；循环实现对齐于 `runAgentLoop()`，由 `AgentHarness` 手动驱动 API（`peekAction`/`executeAction`）+ `SessionRunner.drive` 承担；`agentLoopContinue` 由 `AgentHarness.continueRun` 承担 |
-| `harness/ToolExecutionPipeline.java` | `harness/agent-harness.ts` 工具执行阶段 | ✅ 90% | before_tool/after_tool 钩子 + 串行/并行执行 |
+| `harness/ToolExecutionPipeline.java` | `harness/agent-harness.ts` 工具执行阶段 | ✅ 90% | before_tool/after_tool 钩子 + 串行/并行执行 + before_tool 拒绝可 `terminate`（L1-⑤，对齐 `agent-loop.ts:636-646`） |
+| `harness/CompactionExecutor.java` | `agent-harness.ts` compact 路径 | ✅ 90% | L1 拆分自 `ActionExecutor`（docs/20 §8）：`compact`/`applyCompaction`/`compactTranscript`/`keptMessagesFrom`/`checkAutoCompact` + `before_compaction` 钩子 + compaction.apply span |
+| `harness/ContextAssembler.java` | `agent-loop.ts` buildContextEntries | ✅ 90% | L1 拆分自 `ActionExecutor`：`buildMessagesForLane`/`buildSystemPrompt`/`applyPendingTurnUpdate` + transform_context 钩子 |
+| `harness/RunSpanFactory.java` | （无 pi 对应） | ✅ 100% | **pi-java 独有**：`harness.run` span + run start/end 日志 + model/thinking 标签（observability §5.1） |
+| `tool/ToolArgumentsValidator.java` | `agent-loop.ts` `validateToolArguments` | ✅ 95% | L1-④ 运行时 schema 校验（type/required/properties/items 子集）；`_raw` 回收路径跳过 required（对齐 BashTool 截断恢复） |
 | `harness/StreamFn.java` | `stream-fn.ts` `StreamFunction` | ✅ 95% | 签名对齐 |
 
 ### 3.2 Hook 系统（`hook/` ↔ `harness/agent-harness.ts` 11 个 hooks）
@@ -177,7 +181,7 @@
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
 | `tool/AgentTool.java` | `harness/tools/index.ts` `AgentTool` | ✅ 95% | `prepareArguments`/`executionMode`/`inputSchema` 一致；pi 还含 `ToolUpdateCallback` （口径修正：execute 签名已含 ToolUpdateCallback） |
-| `tool/ToolRegistry.java` | `harness/tools/index.ts` 注册表 | ✅ 90% | 注册/查询/definition 导出一致 |
+| `tool/ToolRegistry.java` | `harness/tools/index.ts` 注册表 | ✅ 90% | 注册/查询/definition 导出一致；`execute` 内置 `ToolArgumentsValidator.validate`（L1-④，对齐 `validateToolArguments`） |
 | `tool/ToolExecutor.java` | `harness/agent-harness.ts` 工具执行 | ✅ 90% | 串行/并行批量执行一致 |
 | `tool/ToolSetFactory.java` | `harness/tools/index.ts` `createCodingToolDefinitions` | ✅ 90% | coding/readOnly 分组一致 |
 | `tool/builtin/BashTool.java` | `harness/tools/bash.ts` | ✅ 90% | 参数/超时/输出截断一致；shell 发现按 pi `shellPath` 语义 |
