@@ -170,6 +170,10 @@ public record BeforeToolResult(boolean allowed, Map<String, Object> arguments, b
 
 前五项是「把已知的坑填上」。但根因未除——骨架不提供行为细节，下次改状态机还会漂。建三道闸：
 
+> ✅ **L2 已实现（2026-09-11）**：闸 1 `LoopInvariants`（65 行）+ `peekAction` 断言包装 +
+> ASSISTANT 分支 abort 护栏（不变量 5 行为化）；闸 2 `AgentLoopL2Test`（9 用例：golden-trace ×3 +
+> 不变量单元测试 ×5 + abort 行为 ×1）；闸 3 回填 `docs/19` §10。
+
 ### 4.1 闸 1：`peekAction` 出口的不变量断言
 
 把循环不变量从隐含约定变成运行时可查（`-ea` 生效，生产零开销）。`peekAction` 现有 switch 提取为
@@ -226,7 +230,7 @@ void toolThenFollowUpDrivesTwoRunsViaExplicitActions() {
 | 工具参数 schema 校验 | `:618` | `ToolArgumentsValidator` + `ToolRegistry:87` | ✅ L1-④ |
 | before_tool block 可 terminate | `:636` | `BeforeToolResult.terminate` + `ToolExecutionPipeline:195` | ✅ L1-⑤ |
 
-每轮对齐拿这张表过一遍，不靠记忆。
+每轮对齐拿这张表过一遍，不靠记忆。此表已回填到 `docs/19` §10（L2 闸 3）。
 
 ---
 
@@ -284,6 +288,9 @@ L0（0.5d） → L1（2-3d） → L2（2d） → [观察] → L3（可选）
    **剩余偏离**：`ActionExecutor` 仍 635 行 > 500。剩余为紧密耦合的 action 分派/流式核心
    （`executeStreamAssistant`/`executeTryFinishRun`/`executeTool(Batch)`），机械拆分弊大于利，
    留待后续；`AgentHarness`（609 行）同属已知技术债。
+   **L2 增补（2026-09-11）**：新增 `LoopInvariants`（65 行，不变量谓词 + diagnostics）与
+   `AgentLoopL2Test`（279 行，golden-trace + 不变量单元测试）。`ActionExecutor` 635 → 660 行
+   （`computeNextAction` 提取 + `peekAction` 断言包装 + ASSISTANT 分支 abort 护栏），仍超 500。
 2. **不要为 ④ 引入 JSON Schema 依赖**：native image 反射配置成本高，自研子集校验器足够覆盖内置工具。
 3. **⑤ 是公开 API 破损变更**：`BeforeToolResult` 属 `com.pijava.agent.hook` 公开包，扩展实现者需同步；
    当前 `0.1.0-SNAPSHOT` 可接受，若已对外发布则改为新增 `BeforeToolResultV2` 或提供默认方法。

@@ -343,3 +343,26 @@ pi-java 因 `driveMode = Manual`（默认，`AgentSession.java:262`）不在 har
 
 每项的验收：在 `pi-java-agent-core` 补对应单元测试（可参照 `HarnessToolExecutionSpansTest` 的批量路径构造方式），
 并在 `docs/phase1-pi-code-mapping.md` 中回填对齐度。
+
+---
+
+## 10. L2 防漂移（2026-09-11）：行为条款映射表
+
+闸 3 落地（`docs/20` §4.3）：把 pi `agent-loop.ts` 的行为条款固化为
+「条款 → pi-java 落点」checklist，每轮对齐拿这张表过一遍，不靠记忆。
+前五项在 L0/L1 已闭环，后两项是 L2 的防漂移机制。
+
+| 条款 | pi 位置 | pi-java 落点 | 状态 |
+|---|---|---|---|
+| 批次终止需全部 terminate | `agent-loop.ts:582` | `ActionExecutor.executeToolBatch`（`allTerminate`） | ✅ L0-② |
+| 有 sequential 工具则整批串行 | `agent-loop.ts:419-424` | `ActionExecutor` ASSISTANT 分支（`hasSequentialTool`） | ✅ L0-① |
+| length 停止则工具调用判失败 | `agent-loop.ts:211-214, 381` | `HarnessUtils.determineOutcome`/`isLengthStop` + `ActionExecutor.failTruncatedToolCalls` | ✅ L1-③ |
+| 工具参数 schema 校验 | `agent-loop.ts:618` | `ToolArgumentsValidator` + `ToolRegistry.execute` | ✅ L1-④ |
+| before_tool block 可 terminate | `agent-loop.ts:636-646` | `BeforeToolResult.terminate` + `ToolExecutionPipeline` | ✅ L1-⑤ |
+| 中断后不再发 LLM 请求 | abort 语义 | `ActionExecutor` ASSISTANT 分支 abort 护栏 + `LoopInvariants` 不变量 5 | ✅ L2-⑥ |
+| 每个 action 出口满足循环不变量 | —（pi-java 独有机制） | `LoopInvariants.hold`（`peekAction` 断言包装，`-ea` 生效） | ✅ L2-⑥ |
+| 状态机路径可断言 | —（pi-java 独有机制） | `AgentLoopL2Test` golden-trace（断言 Action 序列本身） | ✅ L2-⑦ |
+
+闸 1（`LoopInvariants` + `peekAction` 断言包装 + abort 护栏）与闸 2（`AgentLoopL2Test`
+golden-trace / 不变量单元测试）见 `docs/20` §4.1/§4.2；`AgentLoopL2Test` 9 用例全绿。
+

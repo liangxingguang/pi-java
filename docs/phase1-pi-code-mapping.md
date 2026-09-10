@@ -145,7 +145,7 @@
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
 | `harness/AgentHarness.java` | `harness/agent-harness.ts`（~900 行） | ✅ 90% | 多车道、`peekAction`/`executeAction`/`runToCompletion`、watch 订阅一致；pi 另有 `before_resume`，Java 简化为 `seedTranscript` |
-| `harness/ActionExecutor.java` | `harness/agent-harness.ts` 内 action 分派 | ✅ 95% | 五类 action 对应；pi 的 action 集合更细（含 navigation/steer 注入） （口径修正：五类 action 一致） |
+| `harness/ActionExecutor.java` | `harness/agent-harness.ts` 内 action 分派 | ✅ 95% | 五类 action 对应；pi 的 action 集合更细（含 navigation/steer 注入） （口径修正：五类 action 一致）；`peekAction` 拆 `computeNextAction` + `LoopInvariants` 断言包装 + ASSISTANT 分支 abort 护栏（L2-⑥，docs/20 §4.1） |
 | `harness/Action.java` | `harness/agent-harness.ts` `Action` 联合 | ✅ 95% | 五种 action 一致；pi 还区分 pending write 的 lane （口径修正：五种 action 一致） |
 | `harness/HarnessUtils.java` | `harness/types.ts` + 工具函数 | ✅ 90% | `newestOwn`/`determineOutcome`/`extractToolCalls` 一致；`determineOutcome` 含 `length` 分支（L1-③，对齐 `agent-loop.ts:211`） |
 | `harness/LaneState.java` | `harness/types.ts` `LaneState` | ✅ 95% | transcript/pendingWrites/queue 三队列一致 （口径修正：三队列一致） |
@@ -157,6 +157,7 @@
 | `harness/CompactionExecutor.java` | `agent-harness.ts` compact 路径 | ✅ 90% | L1 拆分自 `ActionExecutor`（docs/20 §8）：`compact`/`applyCompaction`/`compactTranscript`/`keptMessagesFrom`/`checkAutoCompact` + `before_compaction` 钩子 + compaction.apply span |
 | `harness/ContextAssembler.java` | `agent-loop.ts` buildContextEntries | ✅ 90% | L1 拆分自 `ActionExecutor`：`buildMessagesForLane`/`buildSystemPrompt`/`applyPendingTurnUpdate` + transform_context 钩子 |
 | `harness/RunSpanFactory.java` | （无 pi 对应） | ✅ 100% | **pi-java 独有**：`harness.run` span + run start/end 日志 + model/thinking 标签（observability §5.1） |
+| `harness/LoopInvariants.java` | （无 pi 对应） | ✅ 100% | **pi-java 独有**：5 条循环不变量谓词 + diagnostics（L2-⑥，docs/20 §4.1）；`peekAction` 断言包装 + abort 护栏，`-ea` 生效；回归测试 `AgentLoopL2Test`（golden-trace，docs/20 §4.2） |
 | `tool/ToolArgumentsValidator.java` | `agent-loop.ts` `validateToolArguments` | ✅ 95% | L1-④ 运行时 schema 校验（type/required/properties/items 子集）；`_raw` 回收路径跳过 required（对齐 BashTool 截断恢复） |
 | `harness/StreamFn.java` | `stream-fn.ts` `StreamFunction` | ✅ 95% | 签名对齐 |
 
