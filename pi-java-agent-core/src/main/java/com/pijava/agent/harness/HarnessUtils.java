@@ -58,7 +58,19 @@ final class HarnessUtils {
         String sr = lane.newestOwn.stopReason();
         if (isErrorStopReason(sr)) return "error";
         if ("tool_use".equals(sr)) return "tool_use";
+        if ("length".equals(sr)) return "length";
         return "completed";
+    }
+
+    /**
+     * Whether the assistant's stop reason signals an output-token-limit
+     * truncation (pi {@code agent-loop.ts:211-214, 381}). When true, any tool
+     * calls in the response must NOT be executed — their arguments may be
+     * truncated mid-JSON.
+     */
+    static boolean isLengthStop(LaneState lane) {
+        String sr = lane.partial != null ? lane.partial.stopReason() : null;
+        return "length".equals(sr);
     }
 
     static String entryTypeName(Entry entry) {

@@ -86,6 +86,11 @@ public class ToolRegistry {
         // to convert the raw Map into the tool's typed input record.
         @SuppressWarnings("unchecked")
         var rawTool = (AgentTool<Object, Object>) tool;
+        // Runtime schema validation (agent-loop plan §3.2): reject truncated or
+        // malformed arguments before they reach prepareArguments/execute. A
+        // violation throws IllegalArgumentException, which the tool pipeline
+        // encodes as an error result fed back to the model.
+        ToolArgumentsValidator.validate(rawTool.inputSchema(), arguments);
         var prepared = rawTool.prepareArguments(arguments);
         @SuppressWarnings("unchecked")
         var result = rawTool.execute(toolCallId, prepared, signal,

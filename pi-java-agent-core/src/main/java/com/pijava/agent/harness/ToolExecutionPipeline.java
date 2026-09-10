@@ -88,7 +88,7 @@ final class ToolExecutionPipeline {
             var span = spans.get(i);
             long startNanos = starts.get(i);
             if (!decision.allowed()) {
-                var outcome = ToolOutcome.denied(et);
+                var outcome = ToolOutcome.denied(et, decision.terminate());
                 closeToolSpan(lane, span, et, decision, i, batchSize, outcome, startNanos);
                 outcomes.add(outcome);
                 continue;
@@ -128,7 +128,9 @@ final class ToolExecutionPipeline {
         var beforeResult = ctx.hookSystem().fireBeforeTool(laneName,
             new ToolCallContext(laneName, et.toolCallId(), et.toolName(), et.arguments()));
         if (beforeResult != null && !beforeResult.allowed()) {
-            return BeforeToolDecision.deny(et);
+            // Deny-and-terminate channel (agent-loop plan §3.3): a denying hook
+            // may ask the run to end instead of feeding the model another chance.
+            return BeforeToolDecision.deny(et, beforeResult.terminate());
         }
         var args = (beforeResult != null && beforeResult.arguments() != null)
             ? beforeResult.arguments() : et.arguments();
@@ -268,15 +270,16 @@ final class ToolExecutionPipeline {
     record BeforeToolDecision(
         Action.ExecuteTool call,
         boolean allowed,
-        Map<String, Object> args
+        Map<String, Object> args,
+        boolean terminate
     ) {
         static BeforeToolDecision allow(
                 Action.ExecuteTool call, Map<String, Object> args) {
-            return new BeforeToolDecision(call, true, args);
+            return new BeforeToolDecision(call, true, args, false);
         }
 
-        static BeforeToolDecision deny(Action.ExecuteTool call) {
-            return new BeforeToolDecision(call, false, Map.of());
+        static BeforeToolDecision deny(Action.ExecuteTool call, boolean terminate) {
+            return new BeforeToolDecision(call, false, Map.of(), terminate);
         }
     }
 
@@ -295,12 +298,12 @@ final class ToolExecutionPipeline {
         boolean isError,
         boolean terminate
     ) {
-        static ToolOutcome denied(Action.ExecuteTool et) {
+        static ToolOutcome denied(Action.ExecuteTool et, boolean terminate) {
             return new ToolOutcome(
                 List.of(new ContentBlock.ToolResultContent(
                     et.toolCallId(), et.toolName(),
                     List.of(new ContentBlock.TextContent("Tool call denied by hook")), true)),
-                true, false);
+                true, terminate);
         }
     }
 }
