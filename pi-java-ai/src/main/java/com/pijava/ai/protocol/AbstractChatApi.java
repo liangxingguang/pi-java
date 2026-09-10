@@ -14,6 +14,9 @@ import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Shared base for protocol adapters.
  *
@@ -24,6 +27,8 @@ import com.pijava.ai.stream.StreamEvent;
  */
 public abstract class AbstractChatApi implements ChatApi {
 
+    private static final Logger LOG = LoggerFactory.getLogger(AbstractChatApi.class);
+
     @Override
     public Flow.Publisher<StreamEvent> stream(StreamRequest request, ApiOptions options) {
         var publisher = new SubmissionPublisher<StreamEvent>();
@@ -32,6 +37,10 @@ public abstract class AbstractChatApi implements ChatApi {
                 streamInternal(request, publisher);
                 publisher.close();
             } catch (Exception e) {
+                // Best-effort logging must never break error delivery.
+                var model = request.model() == null ? "unknown"
+                    : request.model().provider() + "/" + request.model().modelName();
+                LOG.warn("[ai] LLM stream failed for model {}", model, e);
                 publisher.closeExceptionally(e);
             }
         });

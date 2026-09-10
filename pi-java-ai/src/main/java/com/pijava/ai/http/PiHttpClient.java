@@ -11,6 +11,9 @@ import java.util.NoSuchElementException;
 
 import com.pijava.ai.AbortSignal;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Thin wrapper around JDK {@link java.net.http.HttpClient} with SSE parsing,
  * automatic retry, and abort-signal support.
@@ -22,6 +25,8 @@ import com.pijava.ai.AbortSignal;
  * thread-safe after construction.</p>
  */
 public final class PiHttpClient implements AutoCloseable {
+
+    private static final Logger LOG = LoggerFactory.getLogger(PiHttpClient.class);
 
     /** A single Server-Sent Events data line. */
     public record ServerSentEvent(String id, String event, String data) {
@@ -134,6 +139,9 @@ public final class PiHttpClient implements AutoCloseable {
                     throw new PiHttpException(0, "Request aborted");
                 }
                 long delayMs = retryPolicy.delayMs(status, attempt, response);
+                LOG.warn("[ai] HTTP {} for {}, retry {}/{} in {}ms (Retry-After: {})",
+                    status, request.uri(), attempt + 1, retryPolicy.maxRetries(), delayMs,
+                    response.headers().firstValue("Retry-After").orElse("n/a"));
                 if (delayMs > 0) {
                     Thread.sleep(delayMs);
                 }
@@ -151,6 +159,8 @@ public final class PiHttpClient implements AutoCloseable {
                     throw new PiHttpException(0, "Request aborted", e);
                 }
                 long delayMs = retryPolicy.delayMs(0, attempt, null);
+                LOG.warn("[ai] request to {} failed, retry {}/{} in {}ms",
+                    request.uri(), attempt + 1, retryPolicy.maxRetries(), delayMs, e);
                 if (delayMs > 0) {
                     try {
                         Thread.sleep(delayMs);
