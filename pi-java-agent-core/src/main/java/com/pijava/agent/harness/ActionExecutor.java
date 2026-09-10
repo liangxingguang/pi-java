@@ -206,6 +206,20 @@ final class ActionExecutor {
     /** Return the next pending action from the specified lane. */
     Action peekAction(String laneName) {
         var lane = ctx.requireLane(laneName);
+        var action = computeNextAction(laneName);
+        assert LoopInvariants.hold(lane, action)
+            : "invariant violated: " + LoopInvariants.diagnostics(lane, action);
+        return action;
+    }
+
+    /**
+     * Pure computation of the next action for a lane, driven by the run phase.
+     * Kept separate from {@link #peekAction} so the loop invariants (docs/20
+     * §4.1, L2-⑥) are asserted on every action the harness produces. Internal
+     * recursion calls {@link #peekAction} so every level is checked.
+     */
+    private Action computeNextAction(String laneName) {
+        var lane = ctx.requireLane(laneName);
         return switch (lane.phase) {
             case RunPhase.Idle i -> {
                 // Start a new run when any queue has items (Phase 3). Steer is
@@ -243,7 +257,18 @@ final class ActionExecutor {
                 if (!steer.isEmpty()) {
                     injectUserMessages(lane, steer);
                     yield peekAction(laneName);
-                }                yield new Action.StreamAssistant("assistant", 0);
+                }
+                // Abort guard (docs/20 §4.1 invariant 5): never issue another
+                // LLM request once the lane is aborted. Transition to the
+                // checkpoint so the run finalizes as "error" instead of
+                // producing a StreamAssistant.
+                if (lane.abortSignal != null && lane.abortSignal.isAborted()) {
+                    lane.phase = RunPhase.CHECKPOINT;
+                    lane.partial = AssistantMessage.empty().withStopReason("aborted");
+                    lane.newestOwn = HarnessUtils.deriveNewestOwn(lane);
+                    yield peekAction(laneName);
+                }
+                yield new Action.StreamAssistant("assistant", 0);
             }
             case RunPhase.Checkpoint c -> {
                 var pw = drainNextPendingWrite(lane);
