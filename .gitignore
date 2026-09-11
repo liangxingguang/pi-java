@@ -35,6 +35,7 @@ graalvm-reachability-metadata/
 
 # Agent scratch/working data
 .agents/
+.codebuddy/
 
 # Session export artifacts (/export)
 pi-java-session-*.html
