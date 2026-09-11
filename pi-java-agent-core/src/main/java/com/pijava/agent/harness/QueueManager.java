@@ -2,8 +2,12 @@ package com.pijava.agent.harness;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Supplier;
+
+import com.pijava.agent.record.LaneRecord;
+import com.pijava.agent.record.QueueKind;
 
 /**
  * Declares the steer/followUp/nextRun queue scheduling API.
@@ -35,12 +39,7 @@ final class QueueManager {
 
     /** Enqueue a steer prompt with images. */
     String steer(String laneName, String prompt, List<PromptImage> images) {
-        var lane = requireLane(laneName);
-        synchronized (lane) {
-            var item = new LaneInfo.QueuedItem(prompt, images, lane.queueSeq++);
-            lane.steerQueue.addLast(item);
-            return Long.toString(item.seq());
-        }
+        return enqueue(laneName, prompt, images, target -> target.steerQueue, QueueKind.STEER);
     }
 
     /** Enqueue a follow-up prompt. Phase 3. */
@@ -50,12 +49,8 @@ final class QueueManager {
 
     /** Enqueue a follow-up prompt with images. */
     String followUp(String laneName, String prompt, List<PromptImage> images) {
-        var lane = requireLane(laneName);
-        synchronized (lane) {
-            var item = new LaneInfo.QueuedItem(prompt, images, lane.queueSeq++);
-            lane.followUpQueue.addLast(item);
-            return Long.toString(item.seq());
-        }
+        return enqueue(laneName, prompt, images, target -> target.followUpQueue,
+            QueueKind.FOLLOW_UP);
     }
 
     /** Enqueue a next-run prompt. Phase 3. */
@@ -65,10 +60,24 @@ final class QueueManager {
 
     /** Enqueue a next-run prompt with images. */
     String nextRun(String laneName, String prompt, List<PromptImage> images) {
+        return enqueue(laneName, prompt, images, target -> target.nextRunQueue,
+            QueueKind.NEXT_RUN);
+    }
+
+    /**
+     * Append an item to the selected queue and emit its {@code QueueEnqueued}
+     * record (docs/21 D2 — the record log is the audit source, so every
+     * enqueue must be recorded).
+     */
+    private String enqueue(String laneName, String prompt, List<PromptImage> images,
+                           QueueAccessor accessor, QueueKind kind) {
         var lane = requireLane(laneName);
         synchronized (lane) {
             var item = new LaneInfo.QueuedItem(prompt, images, lane.queueSeq++);
-            lane.nextRunQueue.addLast(item);
+            accessor.queueOf(lane).addLast(item);
+            lane.records.add(new LaneRecord.QueueEnqueued(
+                UUID.randomUUID().toString(), 0, laneName, null, kind,
+                lane.runId, HarnessUtils.provisionedQueueTarget(item)));
             return Long.toString(item.seq());
         }
     }
@@ -77,13 +86,18 @@ final class QueueManager {
     void cancelQueued(String laneName, String queueType) {
         var lane = requireLane(laneName);
         synchronized (lane) {
-            switch (queueType) {
-                case "steer" -> lane.steerQueue.clear();
-                case "followUp" -> lane.followUpQueue.clear();
-                case "nextRun" -> lane.nextRunQueue.clear();
+            var queue = switch (queueType) {
+                case "steer" -> lane.steerQueue;
+                case "followUp" -> lane.followUpQueue;
+                case "nextRun" -> lane.nextRunQueue;
                 default -> throw new IllegalArgumentException(
                     "Unknown queue type: " + queueType
                         + " (expected steer, followUp, or nextRun)");
+            };
+            while (!queue.isEmpty()) {
+                lane.records.add(new LaneRecord.QueueCancelled(
+                    UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
+                    Long.toString(queue.removeFirst().seq())));
             }
         }
     }

@@ -29,6 +29,7 @@ import com.pijava.ai.Usage;
     @JsonSubTypes.Type(value = LaneRecord.ToolFinished.class, name = "tool_finished"),
     @JsonSubTypes.Type(value = LaneRecord.QueueEnqueued.class, name = "queue_enqueued"),
     @JsonSubTypes.Type(value = LaneRecord.QueueCancelled.class, name = "queue_cancelled"),
+    @JsonSubTypes.Type(value = LaneRecord.QueueConsumed.class, name = "queue_consumed"),
     @JsonSubTypes.Type(value = LaneRecord.WriteDeferred.class, name = "write_deferred"),
     @JsonSubTypes.Type(value = LaneRecord.UsageRecord.class, name = "usage")
 })
@@ -57,6 +58,7 @@ public sealed interface LaneRecord {
             case ToolFinished r -> "tool_finished";
             case QueueEnqueued r -> "queue_enqueued";
             case QueueCancelled r -> "queue_cancelled";
+            case QueueConsumed r -> "queue_consumed";
             case WriteDeferred r -> "write_deferred";
             case UsageRecord r -> "usage";
         };
@@ -84,6 +86,8 @@ public sealed interface LaneRecord {
                 e.queue(), e.runId(), e.target());
             case QueueCancelled e -> new QueueCancelled(e.id(), seq, e.lane(), timestamp,
                 e.runId(), e.entryId());
+            case QueueConsumed e -> new QueueConsumed(e.id(), seq, e.lane(), timestamp,
+                e.runId(), e.queue(), e.targets());
             case WriteDeferred e -> new WriteDeferred(e.id(), seq, e.lane(), timestamp,
                 e.runId(), e.target());
             case UsageRecord e -> new UsageRecord(e.id(), seq, e.lane(), timestamp, e.usage(),
@@ -242,6 +246,30 @@ public sealed interface LaneRecord {
         String runId,
         com.pijava.agent.entry.ProvisionedEntry<?> target
     ) implements LaneRecord {}
+
+    /**
+     * A drained batch of queue items was consumed — merged into the transcript
+     * (steer/followUp) or folded into the next run's prompt (nextRun).
+     *
+     * <p>pi-java specific: pi infers consumption from entry presence, but
+     * pi-java merges a whole drain into a single user entry, so the record log
+     * needs this explicit marker. {@code targets} holds every item consumed by
+     * that drain ({@code QueueMode} merges them into one prompt).</p>
+     */
+    record QueueConsumed(
+        String id,
+        long seq,
+        String lane,
+        Instant timestamp,
+        String runId,
+        QueueKind queue,
+        List<com.pijava.agent.entry.ProvisionedEntry<?>> targets
+    ) implements LaneRecord {
+        /** Defensively copies {@code targets}. */
+        public QueueConsumed {
+            targets = List.copyOf(targets);
+        }
+    }
 
     /** A queue item was cancelled. */
     record QueueCancelled(

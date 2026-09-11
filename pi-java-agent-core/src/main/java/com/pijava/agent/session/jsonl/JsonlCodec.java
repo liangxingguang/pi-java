@@ -25,7 +25,7 @@ public final class JsonlCodec {
     private static final List<String> RECORD_TYPES = List.of(
         "operation_started", "abort_requested", "operation_finished", "step_attempt",
         "tool_started", "tool_finished", "queue_enqueued", "queue_cancelled",
-        "write_deferred", "usage");
+        "queue_consumed", "write_deferred", "usage");
 
     private static final List<String> OPERATION_KINDS = List.of("run", "compaction", "navigation");
 

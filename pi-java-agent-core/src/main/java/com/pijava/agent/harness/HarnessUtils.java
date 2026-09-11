@@ -1,9 +1,11 @@
 package com.pijava.agent.harness;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentMap;
 
 import com.pijava.agent.entry.Entry;
+import com.pijava.agent.entry.ProvisionedEntry;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -34,6 +36,31 @@ final class HarnessUtils {
 
     static Message toMessage(Entry.Message entry) {
         return entry.message();
+    }
+
+    /** Build a user message: text first, then images (pi agent.ts:402-406 order). */
+    static Message buildUserMessage(String prompt, List<PromptImage> images) {
+        var content = new ArrayList<ContentBlock>();
+        content.add(new ContentBlock.TextContent(prompt));
+        if (images != null) {
+            images.forEach(img -> content.add(img.toContentBlock()));
+        }
+        return new Message.UserMessage(content);
+    }
+
+    /**
+     * Provision a queued item as a placeholder entry for queue records
+     * ({@code QueueEnqueued} target / {@code QueueConsumed} targets).
+     *
+     * <p>The id is the item's queue sequence number, not a real transcript
+     * entry id: a drain merges every item into one entry, so an item never
+     * maps 1:1 onto a transcript entry (docs/21 R6). It only needs to be
+     * stable so a cancel/consume record can reference the same item.</p>
+     */
+    static ProvisionedEntry<?> provisionedQueueTarget(LaneInfo.QueuedItem item) {
+        return new ProvisionedEntry<>(new Entry.Message(
+            Long.toString(item.seq()), 0, null, null,
+            buildUserMessage(item.prompt(), item.images()), null));
     }
 
     static LaneState.NewestOwn deriveNewestOwn(LaneState lane) {

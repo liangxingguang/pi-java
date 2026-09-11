@@ -230,8 +230,10 @@ class AgentLoopL2Test {
             action = h.executeAction("default", action);
         }
 
-        // The idle lane consumes the nextRun queue as the first action.
-        assertThat(labels(actions)).startsWith("ConsumeQueueItem(followUp)");
+        // The idle lane consumes the nextRun queue as the first action, tagged
+        // with the queue it actually came from (docs/21 D10 — the nextRun drain
+        // used to be labelled "followUp", which mis-tagged its consume record).
+        assertThat(labels(actions)).startsWith("ConsumeQueueItem(nextRun)");
         // The queued prompt becomes a user message in the run.
         var messages = h.snapshot("default").transcript().stream()
             .filter(e -> e instanceof Entry.Message m && "user".equals(m.message().role()))

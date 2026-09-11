@@ -423,6 +423,10 @@ public final class SessionState {
             runIdMatches = query.runId().equals(step.runId());
         } else if (record instanceof LaneRecord.ToolStarted tool) {
             runIdMatches = query.runId().equals(tool.runId());
+        } else if (record instanceof LaneRecord.ToolFinished tool) {
+            runIdMatches = query.runId().equals(tool.runId());
+        } else if (record instanceof LaneRecord.QueueConsumed consumed) {
+            runIdMatches = consumed.runId() != null && query.runId().equals(consumed.runId());
         } else if (record instanceof LaneRecord.QueueEnqueued enqueued) {
             runIdMatches = enqueued.runId() != null && query.runId().equals(enqueued.runId());
         } else if (record instanceof LaneRecord.QueueCancelled cancelled) {

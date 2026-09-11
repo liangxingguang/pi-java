@@ -1,6 +1,5 @@
 package com.pijava.agent.harness;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -17,6 +16,7 @@ import com.pijava.agent.hook.RunEndContext;
 import com.pijava.agent.hook.ShouldStopAfterTurnContext;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.record.OperationOutcome;
+import com.pijava.agent.record.QueueKind;
 import com.pijava.agent.record.StepKind;
 import com.pijava.agent.record.UsageCause;
 import com.pijava.ai.AbortSignal;
@@ -87,16 +87,17 @@ final class ActionExecutor {
         lane.partial = null;
         lane.newestOwn = null;
         // pi alignment (agent-loop.ts): consecutive prompts append to the
-        // existing transcript — only reset() clears context.
+        // existing transcript — only reset() clears context. The record log is
+        // append-only (docs/21 D6): a run N enqueue is consumed by run N+1, so
+        // the log must span runs for the fold to see the queue lifecycle.
         lane.pendingWrites.clear();
-        lane.records.clear();
         lane.pendingToolCalls.clear();
         lane.pendingTurnUpdate = null;
         lane.abortSignal = AbortSignal.create();
         lane.runStartNanos = System.nanoTime();
         lane.runSpan = runSpans.openRunSpan(laneName, lane, prompt.length());
 
-        var userMessage = buildUserMessage(prompt, images);
+        var userMessage = HarnessUtils.buildUserMessage(prompt, images);
         var promptList = List.<Message>of(userMessage);
         ctx.hookSystem().fireBeforeRun(laneName,
             new RunContext(laneName, lane.runId, promptList));
@@ -177,7 +178,6 @@ final class ActionExecutor {
         lane.stepIndex = 0;
         lane.partial = null;
         lane.newestOwn = null;
-        lane.records.clear();
         lane.pendingToolCalls.clear();
         lane.abortSignal = AbortSignal.create();
         lane.runStartNanos = System.nanoTime();
@@ -234,7 +234,7 @@ final class ActionExecutor {
                 }
                 var nextRun = ctx.queueManager().drainNextRun(laneName);
                 if (!nextRun.isEmpty()) {
-                    yield new Action.ConsumeQueueItem("followUp", nextRun);
+                    yield new Action.ConsumeQueueItem("nextRun", nextRun);
                 }
                 var followUps = ctx.queueManager().drainFollowUp(laneName);
                 if (!followUps.isEmpty()) {
@@ -303,19 +303,21 @@ final class ActionExecutor {
         var userEntry = new Entry.Message(
             UUID.randomUUID().toString(), 0,
             lane.lastEntry() != null ? lane.lastEntry().id() : null, null,
-            buildUserMessage(prompt, images), null);
+            HarnessUtils.buildUserMessage(prompt, images), null);
         lane.transcript.add(userEntry);
         lane.pendingWrites.add(userEntry);
+        // Mid-run steer injection bypasses ConsumeQueueItem, so it must emit
+        // the same record here — otherwise the fold would still see these
+        // items as pending and a resume would inject them twice (docs/21 D10).
+        emitQueueConsumed(lane, QueueKind.STEER, items);
     }
 
-    /** Build a user message: text first, then images (pi agent.ts:402-406 order). */
-    private static Message buildUserMessage(String prompt, List<PromptImage> images) {
-        var content = new ArrayList<ContentBlock>();
-        content.add(new ContentBlock.TextContent(prompt));
-        if (images != null) {
-            images.forEach(img -> content.add(img.toContentBlock()));
-        }
-        return new Message.UserMessage(content);
+    /** Emit the record marking a drained batch as consumed (docs/21 D4). */
+    private static void emitQueueConsumed(LaneState lane, QueueKind kind,
+                                          List<LaneInfo.QueuedItem> items) {
+        lane.records.add(new LaneRecord.QueueConsumed(
+            UUID.randomUUID().toString(), 0, lane.laneName, null, lane.runId, kind,
+            items.stream().map(HarnessUtils::provisionedQueueTarget).toList()));
     }
 
     private Action drainNextPendingWrite(LaneState lane) {
@@ -495,7 +497,11 @@ final class ActionExecutor {
 
     private Action executeConsumeQueueItem(String laneName, LaneState lane,
                                             Action.ConsumeQueueItem cqi) {
-        return runQueued(laneName, cqi.items());
+        // Start the run first: it assigns lane.runId, which the consume record
+        // carries as the run that consumed the items.
+        var action = runQueued(laneName, cqi.items());
+        emitQueueConsumed(lane, QueueKind.fromValue(cqi.queue()), cqi.items());
+        return action;
     }
 
     // ── FinishOperation ─────────────────────────────────────

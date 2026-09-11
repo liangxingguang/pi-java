@@ -68,6 +68,10 @@ final class RecordJsonCodec {
             case "queue_cancelled" -> new LaneRecord.QueueCancelled(id, seq, lane, timestamp,
                 JsonlCodec.optionalString(node, "runId"),
                 JsonlCodec.requireString(node, "entryId"));
+            case "queue_consumed" -> new LaneRecord.QueueConsumed(id, seq, lane, timestamp,
+                JsonlCodec.optionalString(node, "runId"),
+                QueueKind.fromValue(JsonlCodec.requireString(node, "queue")),
+                decodeTargetList(node.get("targets")));
             case "write_deferred" -> new LaneRecord.WriteDeferred(id, seq, lane, timestamp,
                 JsonlCodec.requireString(node, "runId"),
                 decodeTarget(node.get("target")));
