@@ -74,8 +74,7 @@ public sealed interface LaneRecord {
                 e.runId(), e.outcome(), e.error(), e.durationMs());
             case StepAttempt e -> new StepAttempt(e.id(), seq, e.lane(), timestamp, e.runId(),
                 e.step(), e.attempt(), e.resultEntryId(), e.compactionReason(),
-                e.model(), e.messageCount(), e.toolCount(), e.thinking(), e.durationMs(),
-                e.stopReason());
+                e.model(), e.messageCount(), e.toolCount(), e.thinking(), e.durationMs());
             case ToolStarted e -> new ToolStarted(e.id(), seq, e.lane(), timestamp, e.runId(),
                 e.assistantEntryId(), e.toolIndex(), e.toolCallId(), e.toolName(),
                 e.effectiveArgs(), e.resultEntryId(), e.replay());
@@ -177,10 +176,11 @@ public sealed interface LaneRecord {
     /**
      * A single LLM call attempt.
      *
-     * <p>{@code stopReason} is the assistant stop reason observed for this
-     * attempt ({@code completed} / {@code tool_use} / {@code length} /
-     * {@code error} / {@code aborted}); {@code null} for non-assistant steps
-     * and for records decoded from pre-Phase-21 JSONL files.</p>
+     * <p>The assistant stop reason ({@code completed} / {@code tool_use} /
+     * {@code length} / {@code error} / {@code aborted}) lives on the
+     * {@code resultEntryId} message entry, not here (docs/23 D1): the entry is
+     * the single source of truth, so a resumed fold and the live lane cannot
+     * disagree.</p>
      */
     record StepAttempt(
         String id,
@@ -196,8 +196,7 @@ public sealed interface LaneRecord {
         Integer messageCount,
         Integer toolCount,
         String thinking,
-        Long durationMs,
-        String stopReason
+        Long durationMs
     ) implements LaneRecord {}
 
     /** A tool call finished executing (observability: outcome + latency). */

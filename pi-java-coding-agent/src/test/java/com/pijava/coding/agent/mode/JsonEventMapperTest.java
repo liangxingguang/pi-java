@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.coding.agent.core.AgentSessionEvent;
 
@@ -47,6 +48,19 @@ class JsonEventMapperTest {
         var node = JsonEventMapper.toWire(new AgentSessionEvent.AgentSettled());
         assertThat(node.get("type").asText()).isEqualTo("agent_settled");
         assertThat(node.size()).isEqualTo(1);
+    }
+
+    @Test
+    void agentEndWireCarriesAssistantStopReasonAndOmitsNullDeferred() {
+        var end = new AgentSessionEvent.AgentEnd(List.of(
+            new Message.AssistantMessage(List.of(new ContentBlock.TextContent("done")), "stop", null)),
+            false);
+
+        var node = JsonEventMapper.toWire(end);
+
+        var msg = node.get("messages").get(0);
+        assertThat(msg.get("stopReason").asText()).isEqualTo("stop");
+        assertThat(msg.has("deferred")).isFalse();   // NON_NULL mixin
     }
 
     @Test

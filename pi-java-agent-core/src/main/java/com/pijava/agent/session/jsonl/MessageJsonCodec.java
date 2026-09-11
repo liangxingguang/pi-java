@@ -5,6 +5,7 @@ import java.util.List;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.DeferredHandle;
 import com.pijava.ai.message.Message;
 
 /**
@@ -35,7 +36,10 @@ final class MessageJsonCodec {
         return switch (role) {
             case "system" -> new Message.SystemMessage(content);
             case "user" -> new Message.UserMessage(content);
-            case "assistant" -> new Message.AssistantMessage(content);
+            case "assistant" -> new Message.AssistantMessage(
+                content,
+                JsonlCodec.optionalString(node, "stopReason"),
+                decodeDeferred(node.get("deferred")));
             case "tool" -> new Message.ToolResultMessage(
                 JsonlCodec.requireString(node, "toolUseId"),
                 JsonlCodec.requireString(node, "toolName"),
@@ -43,6 +47,23 @@ final class MessageJsonCodec {
                 node.has("isError") && node.get("isError").asBoolean(false));
             default -> throw JsonlCodec.DecodeError.schema("has unknown message role");
         };
+    }
+
+    private static DeferredHandle decodeDeferred(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (!node.isObject()) {
+            throw JsonlCodec.DecodeError.schema("has invalid deferred handle");
+        }
+        return new DeferredHandle(
+            JsonlCodec.requireString(node, "provider"),
+            JsonlCodec.requireString(node, "modelId"),
+            JsonlCodec.requireString(node, "api"),
+            JsonlCodec.requireString(node, "id"),
+            JsonlCodec.optionalLong(node, "expiresAt"),
+            JsonlCodec.optionalLong(node, "pollAfterMs"),
+            JsonlCodec.optionalObject(node, "data"));
     }
 
     static List<ContentBlock> decodeBlocks(JsonNode node) {

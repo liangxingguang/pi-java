@@ -1,9 +1,11 @@
 package com.pijava.coding.agent.mode;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.coding.agent.core.AgentSessionEvent;
 
@@ -17,11 +19,17 @@ import com.pijava.coding.agent.core.AgentSessionEvent;
 public final class JsonEventMapper {
 
     private static final ObjectMapper MAPPER = new ObjectMapper()
-        .addMixIn(StreamEvent.class, StreamEventMixin.class);
+        .addMixIn(StreamEvent.class, StreamEventMixin.class)
+        .addMixIn(Message.class, MessageMixin.class);
 
     /** 对 StreamEvent 全变体忽略 {@code partial} 字段。 */
     @JsonIgnoreProperties("partial")
     abstract static class StreamEventMixin {
+    }
+
+    /** Omits null components so the wire shape only grows when a field is set. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    abstract static class MessageMixin {
     }
 
     private JsonEventMapper() {}

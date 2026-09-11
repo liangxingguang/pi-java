@@ -461,7 +461,11 @@ final class ActionExecutor {
             asstEntryId = UUID.randomUUID().toString();
             var asstEntry = new Entry.Message(
                 asstEntryId, 0, lane.lastEntry() != null ? lane.lastEntry().id() : null, null,
-                new Message.AssistantMessage(lane.partial.content()), null);
+                new Message.AssistantMessage(lane.partial.content(),
+                    // stopReason 随 entry 落库，成为唯一真相（docs/23 D1）。
+                    lane.partial.stopReason(),
+                    // 无 provider 支持 deferral，此处恒为 null（docs/23 D2/P1）。
+                    null), null);
             lane.transcript.add(asstEntry);
             lane.pendingWrites.add(asstEntry);
         }
@@ -471,8 +475,7 @@ final class ActionExecutor {
             StepKind.ASSISTANT, attemptIdx, asstEntryId == null ? "" : asstEntryId, null,
             RunSpanFactory.modelLabel(ctx.model().get()), messages.size(), toolDefs.size(),
             RunSpanFactory.thinkingLabel(ctx.thinkingLevel().get()),
-            (System.nanoTime() - llmStart) / 1_000_000,
-            stopReason));
+            (System.nanoTime() - llmStart) / 1_000_000));
         // Recorded unconditionally (docs/21): a zero-token turn (error /
         // abort before any usage was reported) is exactly the case whose
         // stopReason the fold needs, so gating on tokens>0 lost it.

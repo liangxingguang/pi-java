@@ -88,7 +88,7 @@ public final class ConformanceSupport {
     public static NewRecord<LaneRecord.StepAttempt> stepAttempt(String id, String lane,
                                                                 String runId) {
         return new NewRecord<>(new LaneRecord.StepAttempt(id, 0, lane, null,
-            runId, StepKind.ASSISTANT, 0, "entry-1", null, null, null, null, null, null, null));
+            runId, StepKind.ASSISTANT, 0, "entry-1", null, null, null, null, null, null));
     }
 
     public static NewRecord<LaneRecord.ToolStarted> toolStarted(String id, String lane,

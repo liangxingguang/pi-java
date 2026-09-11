@@ -36,7 +36,7 @@ class RunSummaryAggregatorTest {
         return new LaneRecord.StepAttempt(
             UUID.randomUUID().toString(), 0, "lane", NOW, runId,
             StepKind.ASSISTANT, 0, UUID.randomUUID().toString(), null,
-            "model", 1, 0, null, 100L, "completed");
+            "model", 1, 0, null, 100L);
     }
 
     @Test

@@ -16,6 +16,7 @@ import com.pijava.agent.record.OperationOutcome;
 import com.pijava.agent.record.QueueKind;
 import com.pijava.agent.record.StepKind;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
 
 /**
@@ -123,7 +124,7 @@ final class LaneStateFolder {
             openOp == null ? RunPhase.IDLE : RunPhase.CHECKPOINT,
             openOp == null ? null : openOp.id(),
             openOp == null ? 0 : stepIndex(ordered, openOp.id()),
-            newestOwn(ownEntries, ordered),
+            newestOwn(ownEntries),
             finished != null && finished.outcome() == OperationOutcome.FAILED,
             finished != null && finished.outcome() == OperationOutcome.ABORTED,
             effectiveConfiguration(configurationEntries),
@@ -175,34 +176,22 @@ final class LaneStateFolder {
 
     /**
      * The newest assistant message among the operation's own entries, with the
-     * stop reason its step attempt recorded.
+     * stop reason persisted on that entry (docs/23 D1).
      *
-     * <p>The live driver reads the stop reason from the in-memory partial;
-     * {@code StepAttempt.stopReason} is the persisted equivalent, so a record
-     * written before Phase 21 (or a non-assistant step) yields {@code null}.</p>
+     * <p>Type matching rather than a {@code role()} string compare: an
+     * assistant transcript entry is always a {@link Message.AssistantMessage},
+     * matching the live driver's {@code deriveNewestOwn}. Entries written
+     * before the stop reason was persisted decode it as {@code null}.</p>
      */
-    private static LaneState.NewestOwn newestOwn(List<Entry> ownEntries,
-                                                 List<LaneRecord> ordered) {
+    private static LaneState.NewestOwn newestOwn(List<Entry> ownEntries) {
         for (int i = ownEntries.size() - 1; i >= 0; i--) {
             if (ownEntries.get(i) instanceof Entry.Message msg
-                    && "assistant".equals(msg.message().role())) {
+                    && msg.message() instanceof Message.AssistantMessage assistant) {
                 return new LaneState.NewestOwn(
-                    msg.id(), "message", "assistant", stopReasonFor(ordered, msg.id()));
+                    msg.id(), "message", "assistant", assistant.stopReason());
             }
         }
         return null;
-    }
-
-    private static String stopReasonFor(List<LaneRecord> ordered, String entryId) {
-        String stopReason = null;
-        for (var record : ordered) {
-            if (record instanceof LaneRecord.StepAttempt step
-                    && step.step() == StepKind.ASSISTANT
-                    && entryId.equals(step.resultEntryId())) {
-                stopReason = step.stopReason();
-            }
-        }
-        return stopReason;
     }
 
     /** Overlay the configuration entries in sequence order. */

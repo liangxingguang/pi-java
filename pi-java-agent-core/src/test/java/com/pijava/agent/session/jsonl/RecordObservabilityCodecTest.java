@@ -1,12 +1,17 @@
 package com.pijava.agent.session.jsonl;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pijava.agent.entry.Entry;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.record.OperationOutcome;
 import com.pijava.agent.record.StepKind;
 import com.pijava.agent.session.SessionMutation;
+import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.Message;
 
 import org.junit.jupiter.api.Test;
 
@@ -24,6 +29,39 @@ class RecordObservabilityCodecTest {
         var result = JsonlCodec.parseMutation(line);
         assertThat(result.ok()).as("parse should succeed: %s", result.error()).isTrue();
         return (SessionMutation.Record) result.value();
+    }
+
+    private Entry encodeThenParseEntry(Entry entry) {
+        String line = JsonlCodec.encodeMutation(new SessionMutation.Entry(null, entry));
+        var result = JsonlCodec.parseMutation(line);
+        assertThat(result.ok()).as("parse should succeed: %s", result.error()).isTrue();
+        return ((SessionMutation.Entry) result.value()).entry();
+    }
+
+    @Test
+    void assistantEntryRoundTripsItsStopReason() {
+        var entry = new Entry.Message("e-1", 11L, null, Instant.now(),
+            new Message.AssistantMessage(
+                List.of(new ContentBlock.TextContent("done")), "tool_use", null), null);
+
+        var parsed = (Entry.Message) encodeThenParseEntry(entry);
+
+        assertThat(parsed.message()).isInstanceOf(Message.AssistantMessage.class);
+        assertThat(((Message.AssistantMessage) parsed.message()).stopReason())
+            .isEqualTo("tool_use");
+    }
+
+    @Test
+    void assistantEntryWithoutStopReasonDecodesAsNull() {
+        // 旧文件只有 {role, content}（Task 2 之前的格式）。
+        var node = new ObjectMapper().createObjectNode();
+        node.put("role", "assistant");
+        node.putArray("content").addObject().put("type", "text").put("text", "old");
+
+        var decoded = MessageJsonCodec.decode(node);
+
+        assertThat(((Message.AssistantMessage) decoded).stopReason()).isNull();
+        assertThat(((Message.AssistantMessage) decoded).deferred()).isNull();
     }
 
     @Test
@@ -50,7 +88,7 @@ class RecordObservabilityCodecTest {
     void stepAttemptWithSummaryFieldsRoundtrips() {
         var rec = new LaneRecord.StepAttempt("rec-8", 13L, "main", Instant.now(),
             "run-1", StepKind.ASSISTANT, 1, "entry-10", null,
-            "anthropic/claude-sonnet-4-6", 14, 7, "budget=8000", 2314L, "tool_use");
+            "anthropic/claude-sonnet-4-6", 14, 7, "budget=8000", 2314L);
         var parsed = encodeThenParse(new SessionMutation.Record(rec)).record();
 
         var attempt = (LaneRecord.StepAttempt) parsed;
@@ -58,7 +96,6 @@ class RecordObservabilityCodecTest {
         assertThat(attempt.messageCount()).isEqualTo(14);
         assertThat(attempt.toolCount()).isEqualTo(7);
         assertThat(attempt.thinking()).isEqualTo("budget=8000");
-        assertThat(attempt.stopReason()).isEqualTo("tool_use");
         assertThat(attempt.durationMs()).isEqualTo(2314L);
     }
 
@@ -109,10 +146,9 @@ class RecordObservabilityCodecTest {
     void stepAttemptSummaryOmittedFieldsAreNotSerialized() {
         var rec = new LaneRecord.StepAttempt("rec-12", 17L, "main", Instant.now(),
             "run-1", StepKind.ASSISTANT, 0, "entry-9", null,
-            null, null, null, null, null, null);
+            null, null, null, null, null);
         String line = JsonlCodec.encodeMutation(new SessionMutation.Record(rec));
 
-        assertThat(line).doesNotContain("\"stopReason\"");
         assertThat(line).doesNotContain("\"model\"");
         assertThat(line).doesNotContain("\"messageCount\"");
         assertThat(line).doesNotContain("\"toolCount\"");

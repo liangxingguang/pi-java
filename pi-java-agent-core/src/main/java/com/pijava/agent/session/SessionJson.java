@@ -64,6 +64,14 @@ public final class SessionJson {
             node.put("toolName", tool.toolName());
             node.put("isError", tool.isError());
         }
+        if (message instanceof Message.AssistantMessage assistant) {
+            if (assistant.stopReason() != null) {
+                node.put("stopReason", assistant.stopReason());
+            }
+            if (assistant.deferred() != null) {
+                node.set("deferred", MAPPER.valueToTree(assistant.deferred()));
+            }
+        }
         return node;
     }
 

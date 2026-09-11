@@ -300,7 +300,7 @@ class LaneStateFoldTest {
     private static LaneRecord.StepAttempt step(String runId, StepKind kind, int attempt,
                                                 String reason) {
         return new LaneRecord.StepAttempt("s-" + runId + attempt, 0, "default", null, runId,
-            kind, attempt, "e1", reason, null, null, null, null, null, "stop");
+            kind, attempt, "e1", reason, null, null, null, null, null);
     }
 
     private static void assertCorrupt(List<LaneRecord> records, String code) {

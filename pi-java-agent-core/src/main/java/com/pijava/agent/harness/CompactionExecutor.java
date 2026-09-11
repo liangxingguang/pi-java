@@ -142,7 +142,7 @@ final class CompactionExecutor {
         return new LaneRecord.StepAttempt(
             UUID.randomUUID().toString(), 0, laneName, null, runId,
             StepKind.COMPACTION, attempt, resultEntryId, reason,
-            null, null, null, null, durationMs, null);
+            null, null, null, null, durationMs);
     }
 
     private List<Entry> compactTranscript(LaneState lane, CompactionSettings settings) {

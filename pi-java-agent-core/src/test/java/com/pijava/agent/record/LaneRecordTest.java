@@ -46,11 +46,10 @@ class LaneRecordTest {
     @Test
     void stepAttempt() {
         var rec = new LaneRecord.StepAttempt("rec-1", 1L, "main", Instant.now(),
-            "run-1", StepKind.ASSISTANT, 0, "entry-9", null, null, null, null, null, null, null);
+            "run-1", StepKind.ASSISTANT, 0, "entry-9", null, null, null, null, null, null);
         assertThat(rec.step()).isEqualTo(StepKind.ASSISTANT);
         assertThat(rec.attempt()).isEqualTo(0);
         assertThat(rec.resultEntryId()).isEqualTo("entry-9");
-        assertThat(rec.stopReason()).isNull();
     }
 
     @Test
@@ -101,13 +100,12 @@ class LaneRecordTest {
     void stepAttemptCarriesLlmRequestSummary() {
         var rec = new LaneRecord.StepAttempt("rec-1", 1L, "main", Instant.now(),
             "run-1", StepKind.ASSISTANT, 0, "entry-9", null,
-            "anthropic/claude-sonnet-4-6", 14, 7, "budget=8000", 2314L, "tool_use");
+            "anthropic/claude-sonnet-4-6", 14, 7, "budget=8000", 2314L);
         assertThat(rec.model()).isEqualTo("anthropic/claude-sonnet-4-6");
         assertThat(rec.messageCount()).isEqualTo(14);
         assertThat(rec.toolCount()).isEqualTo(7);
         assertThat(rec.thinking()).isEqualTo("budget=8000");
         assertThat(rec.durationMs()).isEqualTo(2314L);
-        assertThat(rec.stopReason()).isEqualTo("tool_use");
     }
 
     @Test
