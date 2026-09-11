@@ -225,17 +225,20 @@ final class ActionExecutor {
                 // Start a new run when any queue has items (Phase 3). Steer is
                 // polled first, then nextRun, then followUp (aligned with pi's
                 // outer loop which polls steering before follow-up queues).
+                // Each drain yields an explicit ConsumeQueueItem action (L3):
+                // the queue is consumed whole per the QueueMode (one-at-a-time
+                // or all), then the next run starts from the merged prompt.
                 var steer = ctx.queueManager().drainSteer(laneName);
                 if (!steer.isEmpty()) {
-                    yield runQueued(laneName, steer);
+                    yield new Action.ConsumeQueueItem("steer", steer);
                 }
                 var nextRun = ctx.queueManager().drainNextRun(laneName);
                 if (!nextRun.isEmpty()) {
-                    yield runQueued(laneName, nextRun);
+                    yield new Action.ConsumeQueueItem("followUp", nextRun);
                 }
                 var followUps = ctx.queueManager().drainFollowUp(laneName);
                 if (!followUps.isEmpty()) {
-                    yield runQueued(laneName, followUps);
+                    yield new Action.ConsumeQueueItem("followUp", followUps);
                 }
                 yield null;
             }
@@ -283,10 +286,12 @@ final class ActionExecutor {
         var lane = ctx.requireLane(laneName);
         return switch (action) {
             case Action.StreamAssistant sa -> executeStreamAssistant(laneName, lane, sa);
-            case Action.AppendEntry ae -> executeAppendEntry(lane, ae);
+            case Action.ApplyPendingWrite apw -> executeApplyPendingWrite(lane, apw);
             case Action.TryFinishRun tfr -> executeTryFinishRun(laneName, lane, tfr);
             case Action.ExecuteTool et -> executeTool(laneName, lane, et);
             case Action.ExecuteToolBatch etb -> executeToolBatch(laneName, lane, etb);
+            case Action.ConsumeQueueItem cqi -> executeConsumeQueueItem(laneName, lane, cqi);
+            case Action.FinishOperation fo -> executeFinishOperation(laneName, lane, fo);
         };
     }
 
@@ -316,7 +321,7 @@ final class ActionExecutor {
     private Action drainNextPendingWrite(LaneState lane) {
         if (!lane.pendingWrites.isEmpty()) {
             var entry = lane.pendingWrites.get(0);
-            return new Action.AppendEntry(entry.type(), entry.id());
+            return new Action.ApplyPendingWrite(entry.type(), entry.id());
         }
         return null;
     }
@@ -478,11 +483,58 @@ final class ActionExecutor {
         return peekAction(laneName);
     }
 
-    // ── AppendEntry ─────────────────────────────────────────
+    // ── ApplyPendingWrite ───────────────────────────────────
 
-    private Action executeAppendEntry(LaneState lane, Action.AppendEntry ae) {
-        lane.pendingWrites.removeIf(entry -> entry.id().equals(ae.entryId()));
+    private Action executeApplyPendingWrite(LaneState lane, Action.ApplyPendingWrite apw) {
+        lane.pendingWrites.removeIf(entry -> entry.id().equals(apw.entryId()));
         return peekAction(lane.laneName);
+    }
+
+    // ── ConsumeQueueItem ────────────────────────────────────
+
+    private Action executeConsumeQueueItem(String laneName, LaneState lane,
+                                            Action.ConsumeQueueItem cqi) {
+        return runQueued(laneName, cqi.items());
+    }
+
+    // ── FinishOperation ─────────────────────────────────────
+
+    private Action executeFinishOperation(String laneName, LaneState lane,
+                                           Action.FinishOperation fo) {
+        lane.records.add(new LaneRecord.OperationFinished(
+            UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
+            outcome(fo.outcome()), null, RunSpanFactory.runDurationMs(lane)));
+        ctx.hookSystem().fireBeforeRunEnd(laneName,
+            new RunEndContext(laneName, lane.runId, fo.outcome()));
+        runSpans.closeRunSpan(lane, fo.outcome());
+
+        // Terminated runs (denyAndTerminate / allTerminate) drop pending writes —
+        // the tool result is not persisted when the operation ends early.
+        lane.pendingWrites.clear();
+        lane.phase = RunPhase.IDLE;
+        lane.pendingTurnUpdate = null;
+        if (fo.stop()) {
+            // shouldStopAfterTurn hit / tool-terminated run: end the drive loop
+            // here. Queued follow-ups stay in the queue for a future drive — a
+            // stopping hook means "stop after this turn", not "start the next
+            // queued run" (L3, preserves the pre-L3 return-null terminal paths).
+            return null;
+        }
+        // Normal terminal: return to IDLE so the next peekAction produces a
+        // ConsumeQueueItem action, chaining the follow-up within the same drive
+        // loop (L3). No explicit drain here: follow-ups are enqueued externally
+        // (AgentSession.followUp → QueueManager.followUp).
+        return peekAction(laneName);
+    }
+
+    /** Map a finish_operation outcome string to its {@link OperationOutcome}. */
+    private static OperationOutcome outcome(String value) {
+        return switch (value) {
+            case "aborted" -> OperationOutcome.ABORTED;
+            case "failed" -> OperationOutcome.FAILED;
+            case "declined" -> OperationOutcome.DECLINED;
+            default -> OperationOutcome.COMPLETED;
+        };
     }
 
     // ── TryFinishRun ────────────────────────────────────────
@@ -512,9 +564,6 @@ final class ActionExecutor {
             if (!toolActions.isEmpty()) {
                 lane.pendingToolCalls.addAll(toolActions);
                 lane.phase = RunPhase.ASSISTANT;
-                lane.records.add(new LaneRecord.OperationFinished(
-                    UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
-                    OperationOutcome.COMPLETED, null, RunSpanFactory.runDurationMs(lane)));
                 return peekAction(laneName);
             }
             // tool_use stop reason but no tool calls → complete the run instead
@@ -523,41 +572,23 @@ final class ActionExecutor {
 
         // pi alignment: shouldStopAfterTurn — after a completed turn, hooks
         // may end the run before queued follow-ups would start the next one.
+        // A stopping hook is a terminal condition: finish the operation now
+        // (the operation_finished record / before_run_end / idle transition
+        // are handled by FinishOperation, L3).
         if ("completed".equals(status)) {
             var stop = ctx.hookSystem().fireShouldStopAfterTurn(laneName,
                 new ShouldStopAfterTurnContext(laneName, lane.runId, lane.partial, List.of()));
             if (stop) {
-                lane.records.add(new LaneRecord.OperationFinished(
-                    UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
-                    OperationOutcome.COMPLETED, null, RunSpanFactory.runDurationMs(lane)));
-                ctx.hookSystem().fireBeforeRunEnd(laneName,
-                    new RunEndContext(laneName, lane.runId, status));
-                runSpans.closeRunSpan(lane, status);
-                lane.phase = RunPhase.IDLE;
-                lane.pendingTurnUpdate = null;
-                return null;
+                return new Action.FinishOperation(status, true);
             }
         }
 
-        // Terminal outcome (completed / error): fire before_run_end and finish
-        lane.records.add(new LaneRecord.OperationFinished(
-            UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
-            "error".equals(status) ? OperationOutcome.FAILED : OperationOutcome.COMPLETED,
-            null, RunSpanFactory.runDurationMs(lane)));
-        ctx.hookSystem().fireBeforeRunEnd(laneName,
-            new RunEndContext(laneName, lane.runId, status));
-        runSpans.closeRunSpan(lane, status);
-
-        lane.phase = RunPhase.IDLE;
-        lane.pendingTurnUpdate = null;
-        // Start the next run from queued follow-up messages (Phase 3).
-        // One-at-a-time leaves the rest queued; they are drained when each
-        // subsequent run finishes.
-        var followUps = ctx.queueManager().drainFollowUp(laneName);
-        if (!followUps.isEmpty()) {
-            return runQueued(laneName, followUps);
-        }
-        return null;
+        // Terminal outcome (completed / error): the operation ends. The
+        // operation_finished record, before_run_end hook, run-span close and
+        // idle transition are all handled by the FinishOperation action — this
+        // method only selects the outcome and returns the action (L3).
+        String outcome = "error".equals(status) ? "failed" : status;
+        return new Action.FinishOperation(outcome);
     }
 
     // ── ExecuteTool ─────────────────────────────────────────
@@ -568,13 +599,9 @@ final class ActionExecutor {
         var outcome = toolPipeline.executeStages(laneName, lane, List.of(et)).getFirst();
 
         if (outcome.terminate() && lane.pendingToolCalls.isEmpty()) {
-            lane.pendingWrites.clear();
-            lane.records.add(new LaneRecord.OperationFinished(
-                UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
-                OperationOutcome.COMPLETED, null, RunSpanFactory.runDurationMs(lane)));
-            runSpans.closeRunSpan(lane, "completed");
-            lane.phase = RunPhase.IDLE;
-            return null;
+            // A terminating tool outcome ends the drive here (pre-L3 return-null
+            // path): no follow-up chain — the run was stopped mid-operation.
+            return new Action.FinishOperation("completed", true);
         }
         lane.phase = RunPhase.ASSISTANT;
         return peekAction(laneName);
@@ -594,13 +621,9 @@ final class ActionExecutor {
             allTerminate &= outcome.terminate();
         }
         if (allTerminate) {
-            lane.pendingWrites.clear();
-            lane.records.add(new LaneRecord.OperationFinished(
-                UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
-                OperationOutcome.COMPLETED, null, RunSpanFactory.runDurationMs(lane)));
-            runSpans.closeRunSpan(lane, "completed");
-            lane.phase = RunPhase.IDLE;
-            return null;
+            // Same as the single-call terminate path: end the drive without a
+            // follow-up chain (pre-L3 return-null behavior).
+            return new Action.FinishOperation("completed", true);
         }
         lane.phase = RunPhase.ASSISTANT;
         return peekAction(laneName);

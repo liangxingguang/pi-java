@@ -15,17 +15,23 @@ final class LoopInvariants {
 
     /**
      * Whether {@code action} is a legal next action given the (already
-     * mutated) {@code lane} state. The five invariants:
+     * mutated) {@code lane} state. The seven invariants:
      *
      * <ol>
      *   <li>IDLE returning {@code null} implies no pending tool calls — a call
      *       must never be silently dropped when the run ends.</li>
-     *   <li>ASSISTANT actions are only AppendEntry / ExecuteTool(Batch) /
+     *   <li>ASSISTANT actions are only ApplyPendingWrite / ExecuteTool(Batch) /
      *       StreamAssistant.</li>
-     *   <li>CHECKPOINT actions are only AppendEntry / TryFinishRun.</li>
+     *   <li>CHECKPOINT actions are only ApplyPendingWrite / TryFinishRun /
+     *       FinishOperation.</li>
      *   <li>A {@code null} action implies no pending writes — no provisioned
      *       entry may be left unpersisted when the run ends.</li>
      *   <li>Never produce a StreamAssistant once the lane is aborted.</li>
+     *   <li>ConsumeQueueItem only in IDLE — queue items are consumed only when
+     *       the lane is idle (pi consume happens at checkpoint/finish
+     *       boundaries; pi-java's steer injection mid-run stays inline).</li>
+     *   <li>FinishOperation only in CHECKPOINT — the terminal action is
+     *       produced only from the checkpoint phase.</li>
      * </ol>
      */
     static boolean hold(LaneState lane, Action action) {
@@ -43,13 +49,14 @@ final class LoopInvariants {
             return lane.pendingWrites.isEmpty();
         }
         return switch (lane.phase) {
-            case RunPhase.Assistant a -> action instanceof Action.AppendEntry
+            case RunPhase.Assistant a -> action instanceof Action.ApplyPendingWrite
                 || action instanceof Action.ExecuteTool
                 || action instanceof Action.ExecuteToolBatch
                 || action instanceof Action.StreamAssistant;
-            case RunPhase.Checkpoint c -> action instanceof Action.AppendEntry
-                || action instanceof Action.TryFinishRun;
-            case RunPhase.Idle i -> false;
+            case RunPhase.Checkpoint c -> action instanceof Action.ApplyPendingWrite
+                || action instanceof Action.TryFinishRun
+                || action instanceof Action.FinishOperation;
+            case RunPhase.Idle i -> action instanceof Action.ConsumeQueueItem;
         };
     }
 

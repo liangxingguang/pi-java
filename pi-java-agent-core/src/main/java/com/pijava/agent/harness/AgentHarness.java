@@ -468,10 +468,16 @@ public class AgentHarness implements AutoCloseable {
         if (state.driveMode instanceof DriveMode.Manual) {
             throw new IllegalStateException("Cannot runToCompletion in MANUAL mode");
         }
+        // Chain each action's successor (same driver shape as SessionRunner.drive):
+        // the harness produces decision actions (e.g. TryFinishRun -> FinishOperation)
+        // whose successor MUST be executed. Re-peeking after executeAction would
+        // re-derive the same decision action from the unchanged phase and never run
+        // the terminal FinishOperation (L3: executeTryFinishRun no longer mutates the
+        // phase to IDLE — that moved into executeFinishOperation).
         return CompletableFuture.runAsync(() -> {
-            Action action;
-            while ((action = actionExecutor.peekAction(laneName)) != null) {
-                actionExecutor.executeAction(laneName, action);
+            Action action = actionExecutor.peekAction(laneName);
+            while (action != null) {
+                action = actionExecutor.executeAction(laneName, action);
                 publishState(laneName);
             }
         });
