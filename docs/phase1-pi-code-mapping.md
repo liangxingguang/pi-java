@@ -145,7 +145,7 @@
 | pi-java | pi (TypeScript) | 对齐度 | 差异说明 |
 |---------|-----------------|--------|---------|
 | `harness/AgentHarness.java` | `harness/agent-harness.ts`（~900 行） | ✅ 90% | 多车道、`peekAction`/`executeAction`/`runToCompletion`、watch 订阅一致；pi 另有 `before_resume`，Java 简化为 `seedTranscript` |
-| `harness/ActionExecutor.java` | `harness/agent-harness.ts` 内 action 分派 | ✅ 95% | 五类 action 对应；pi 的 action 集合更细（含 navigation/steer 注入） （口径修正：五类 action 一致）；`peekAction` 拆 `computeNextAction` + `LoopInvariants` 断言包装 + ASSISTANT 分支 abort 护栏（L2-⑥，docs/20 §4.1） |
+| `harness/ActionExecutor.java` | `harness/agent-harness.ts` 内 action 分派 | ✅ 95% | 五类 action 对应；pi 的 action 集合更细（含 navigation/steer 注入） （口径修正：五类 action 一致）；`peekAction` 拆 `computeNextAction` + `LoopInvariants` 断言包装 + ASSISTANT 分支 abort 护栏（L2-⑥，docs/20 §4.1）；**L3（docs/20 §5）**：`Action` 5 态 → 7 态（+`ConsumeQueueItem`/`FinishOperation`，`AppendEntry`→`ApplyPendingWrite`），`OperationFinished` 写点 5 → 1（仅 `executeFinishOperation`），tool_use 不再提前写 |
 | `harness/Action.java` | `harness/agent-harness.ts` `Action` 联合 | ✅ 95% | 五种 action 一致；pi 还区分 pending write 的 lane （口径修正：五种 action 一致） |
 | `harness/HarnessUtils.java` | `harness/types.ts` + 工具函数 | ✅ 90% | `newestOwn`/`determineOutcome`/`extractToolCalls` 一致；`determineOutcome` 含 `length` 分支（L1-③，对齐 `agent-loop.ts:211`） |
 | `harness/LaneState.java` | `harness/types.ts` `LaneState` | ✅ 95% | transcript/pendingWrites/queue 三队列一致 （口径修正：三队列一致） |

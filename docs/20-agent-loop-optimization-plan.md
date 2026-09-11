@@ -236,14 +236,49 @@ void toolThenFollowUpDrivesTwoRunsViaExplicitActions() {
 
 ## 5. L3 可选：转移显式化（观望）
 
-pi 的 `ActionInfo`（`agent-harness.ts:182-196`）比 pi-java 的 `Action` 多 6 个动作：
-`commit_follow_up`、`consume_queue_item`、`finish_operation`、`apply_pending_write`、`hook`、`sleep`。
-pi-java 把它们压进了 `peekAction`/`executeTryFinishRun` 的分支（所以 follow-up 续跑是「状态机自转移」）。
+> ✅ **L3 核心 3 项已实现（2026-09-11）**：`ApplyPendingWrite`（AppendEntry 重命名）+
+> `ConsumeQueueItem` + `FinishOperation`。`commit_follow_up` 在 pi-java 无对应物
+> （`RunEndContext` 无 followUp，followUp 由外部 `followUp()` 入队）；`hook`/`sleep` 记录为
+> L3-B 推迟（request 钩子因流式阻塞无法拆、sleep 在 SessionRunner 跨模块耦合）。详见 §5.1。
 
-- **好处**：每个转移都是可断言的一等公民，与 pi 骨架逐条对应，闸 2 的序列断言能直接对照 pi
-- **代价**：`Action` 变 11 态，`peekAction` 的 switch 翻倍需拆文件；`SessionRunner` 循环不变
+pi 的 `ActionInfo`（`agent-harness.ts:182-196`，**14 变体/15 字面量**，对齐基准是 `harness-v2.md`
+§15 manual-drive + 状态机 §5，非 `agent-loop.ts`——后者是 v3 兼容旧路径）比 pi-java 的 `Action`
+多 6 个动作。pi-java 把其中 3 项压进了 `peekAction`/`executeTryFinishRun` 的隐式分支
+（follow-up 续跑 = 状态机自转移），导致转移不可断言、语义藏在 switch 分支里。
 
-**建议：先做 L2，观察一个迭代；若仍持续漂移再启动 L3。**
+### 5.1 L3 已做（3 项核心）
+
+| 动作 | pi 语义 | pi-java 落点 |
+|---|---|---|
+| `apply_pending_write` | deferred write 落盘，abort 期间也允许 | `Action.ApplyPendingWrite`（原 `AppendEntry` 重命名） |
+| `consume_queue_item` | 消费 steer/followUp 队列项 | `Action.ConsumeQueueItem`（IDLE 三处 drain → 显式 action，按 QueueMode 整体合并） |
+| `finish_operation` | 写 operation_finished + 清 lane 当前 operation | `Action.FinishOperation`（正常终局 + shouldStop + tool terminate 统一出口） |
+
+**顺带修 bug**：原 `executeTryFinishRun` 的 tool_use 分支在工具执行**前**写 `OperationFinished`，
+现移除——`OperationFinished` 现只由 `executeFinishOperation` 一处写。
+
+**`stop` 语义**：`Action.FinishOperation(outcome, stop)`。shouldStopAfterTurn 命中 / tool terminate →
+`stop=true`（结束驱动，queued follow-up 不自动续跑，保留 pre-L3 的 return-null 路径）；普通终局 →
+`stop=false`（经 IDLE 的 `ConsumeQueueItem` 在同一驱动内链入 follow-up）。
+
+**驱动契约（实施中发现的硬约束）**：`executeAction` 的返回值即"下一个要执行的动作"，驱动器必须
+**链式**使用（pi `runLoop` / `SessionRunner.drive` 均如此）。`AgentHarness.runToCompletion` 原为
+**re-peek** 风格（执行后丢弃返回值、重新 `peekAction`）——对 `TryFinishRun → FinishOperation` 这类
+**纯决策动作**（只返回后继、不改 phase）会死循环：re-peek 从不变的 CHECKPOINT 再产 `TryFinishRun`，
+`FinishOperation` 永不执行。已改为链式对齐 `SessionRunner.drive`。
+
+### 5.2 L3-B 推迟（本次不做）
+
+| 动作 | 为什么推迟 |
+|---|---|
+| `hook` | 顶层化需拆分 `ToolExecutionPipeline`（钩子与工具执行混在一起）；request/compaction 钩子因流式阻塞无法拆出 |
+| `sleep` | 全部产生于重试路径，重试在 `SessionRunner`（coding-agent 模块）；迁入状态机会把重试策略跨模块耦合 |
+| `commit_follow_up` | pi-java `RunEndContext` 无 followUp，followUp 由外部 `followUp()` 入队——无对应物 |
+
+### 5.3 收益
+
+每个转移都是可断言的一等公民，闸 2 golden-trace 序列可直接对照 pi 骨架；
+`FinishOperation` 成为 operation 终局唯一写点（5 处 OperationFinished 收敛为 1）。
 
 ---
 
@@ -291,6 +326,14 @@ L0（0.5d） → L1（2-3d） → L2（2d） → [观察] → L3（可选）
    **L2 增补（2026-09-11）**：新增 `LoopInvariants`（65 行，不变量谓词 + diagnostics）与
    `AgentLoopL2Test`（279 行，golden-trace + 不变量单元测试）。`ActionExecutor` 635 → 660 行
    （`computeNextAction` 提取 + `peekAction` 断言包装 + ASSISTANT 分支 abort 护栏），仍超 500。
+   **L3 增补（2026-09-11）**：`Action` 变 7 态（+`ConsumeQueueItem`/`FinishOperation`，
+   `AppendEntry`→`ApplyPendingWrite`）；`ActionExecutor` 660 → 683 行（3 个新 case +
+   `executeConsumeQueueItem`/`executeFinishOperation`/`outcome()` helper + `FinishOperation` 的
+   `stop` flag + tool_use 分支移除过早 OperationFinished），仍超 500 已知债。`LoopInvariants`
+   不变量 5 → 7（+6 consume 仅 IDLE、+7 finish 仅 CHECKPOINT），65 → 72 行。
+   `OperationFinished` 写点 5 处 → 1 处（仅 `executeFinishOperation`）。
+   `AgentHarness` 609 → 615 行（`runToCompletion` 由 re-peek 改为链式，见 §5.1 驱动契约）。
+   `AgentLoopL2Test` 279 → 361 行（describe + 3 条 golden 更新 + 2 条新 golden + 不变量 6/7 用例）。
 2. **不要为 ④ 引入 JSON Schema 依赖**：native image 反射配置成本高，自研子集校验器足够覆盖内置工具。
 3. **⑤ 是公开 API 破损变更**：`BeforeToolResult` 属 `com.pijava.agent.hook` 公开包，扩展实现者需同步；
    当前 `0.1.0-SNAPSHOT` 可接受，若已对外发布则改为新增 `BeforeToolResultV2` 或提供默认方法。

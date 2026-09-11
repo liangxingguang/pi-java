@@ -366,3 +366,19 @@ pi-java 因 `driveMode = Manual`（默认，`AgentSession.java:262`）不在 har
 闸 1（`LoopInvariants` + `peekAction` 断言包装 + abort 护栏）与闸 2（`AgentLoopL2Test`
 golden-trace / 不变量单元测试）见 `docs/20` §4.1/§4.2；`AgentLoopL2Test` 9 用例全绿。
 
+### 10.1 L3 转移显式化（2026-09-11）
+
+把 3 个隐式转移变成一等公民 `Action`，与 pi 骨架逐条对应。`Action` 5 态 → 7 态。
+
+| 条款 | pi 位置 | pi-java 落点 | 状态 |
+|---|---|---|---|
+| `apply_pending_write` — deferred write 落盘 | `harness-v2.md` §15 `fx.applyPendingWrite` | `Action.ApplyPendingWrite`（原 `AppendEntry` 重命名） | ✅ L3 |
+| `consume_queue_item` — 消费 steer/followUp 队列 | `harness-v2.md` §15 `fx.consumeQueueItem` | `Action.ConsumeQueueItem`（IDLE 三处 drain → 显式 action，按 QueueMode 整体合并） | ✅ L3 |
+| `finish_operation` — 写 operation_finished + 清 operation | `harness-v2.md` §15 `fx.finishOperation` | `Action.FinishOperation`（正常终局 + shouldStop + tool terminate 统一出口） | ✅ L3 |
+| tool_use 不再提前写 OperationFinished | —（pi-java 原缺陷） | `executeTryFinishRun` tool_use 分支移除过早写；`OperationFinished` 仅 `executeFinishOperation` 一处 | ✅ L3 |
+| finish 后是否续跑 queued run（`stop` 语义） | `harness-v2.md` §15（shouldStop 后不自动开下一 run） | `Action.FinishOperation(outcome, stop)`：`stop=true`（shouldStop 命中 / tool terminate）→ 结束驱动、queued follow-up 留给未来驱动；`stop=false`（普通终局）→ 经 IDLE 的 `ConsumeQueueItem` 在同一驱动内链入 follow-up | ✅ L3 |
+| 驱动循环契约（链式执行返回值） | pi `runLoop`：`action = executeAction(action)` | 所有驱动器必须链式使用 `executeAction` 返回值；`runToCompletion` 原为 re-peek（丢弃返回值重 peek），对纯决策动作 `TryFinishRun→FinishOperation` 死循环，已改为链式对齐 `SessionRunner.drive` | ✅ L3 |
+| `commit_follow_up` — before_run_end 钩子返回 follow-up | `harness-v2.md` §15 `fx.commitRunEndFollowUp` | pi-java `RunEndContext` 无 followUp，followUp 由外部 `followUp()` 入队 | 无对应物（L3-B） |
+| `hook` — 每个 fx.runHook 停泊 | `harness-v2.md` §15 GatedEffects | 顶层化需拆分 `ToolExecutionPipeline`；request 钩子因流式阻塞无法拆 | 推迟（L3-B） |
+| `sleep` — 重试退避 | `harness-v2.md` §15 `fx.sleep` | 重试在 `SessionRunner`（coding-agent 模块），迁入状态机跨模块耦合 | 推迟（L3-B） |
+
