@@ -479,10 +479,13 @@ Expected: FAIL — `deferredErrorAndAbortedAssistantMessagesProjectToNothing` �
 ```java
     /**
      * Assistant stop reasons whose message carries no content worth sending
-     * back to the provider (pi {@code session/context.ts:71-73}): a deferred
-     * message holds a handle rather than content, and error/aborted turns
-     * contributed nothing. Projecting them to zero messages keeps them out of
-     * the request while leaving the entry in the transcript for display.
+     * back to the provider. Authority is pi's **spec**
+     * ({@code docs/harness-v2.md:164}: "Assistant responses with stop reason
+     * error, aborted, or deferred project to no provider message. A genuine
+     * output-limit length response remains in context"), not pi's current
+     * code — pi's {@code session/context.ts:72} filters {@code deferred} only,
+     * so this rule is a superset of pi's code and an exact match of its spec.
+     * Cite the spec when claiming alignment.
      */
     private static final Set<String> NON_PROJECTED_STOP_REASONS =
         Set.of("deferred", "error", "aborted");

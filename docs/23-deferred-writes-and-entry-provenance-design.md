@@ -79,7 +79,7 @@
 | **D1** | **entry 为 stopReason 唯一真相**；**删除 `StepAttempt.stopReason`**（`f4e5fdc` 加的字段回退） | pi 把 stopReason 存在 assistant message 上；两条真相源会长期漂移。快照 `FAIL_ON_UNKNOWN_PROPERTIES=false`，旧 JSONL 里残留的该字段解码时被忽略，无需迁移 |
 | **D2** | 引入 `DeferredHandle` 类型 + `Message.AssistantMessage.deferred`，但**不引入任何生产者**；`deferred` 派生与 `invalid_deferred_handle` 校验**仅由测试覆盖** | 用户确认（B）。与 pi 现状一致（pi 的类型同样无生产者）。**如实记录，不假装有生产者** |
 | **D3** | **`WriteDeferred` 生产者 = lane 非 idle 时新增到 `lane.pendingWrites` 的 entry** | 用户确认。对齐 pi「running 期间即 deferred」规则（`harness-v2.md:1894`）：run 自己产出的（assistant 回复 / 工具结果 / 中途 steer / 截断回灌）算 deferred；run 起始的用户 prompt 在 phase 仍为 IDLE 时入列，算直接 append |
-| **D4** | **完整采纳 pi 的上下文投影规则**：`stopReason ∈ {deferred, error, aborted}` 的 assistant entry **投影为零条 provider 消息** | 用户确认（A，完整采纳）。对齐 pi `session/context.ts:71-73`。⚠️ 行为变更，见 R1 |
+| **D4** | **完整采纳 pi 的上下文投影规则**：`stopReason ∈ {deferred, error, aborted}` 的 assistant entry **投影为零条 provider 消息**（`length` 保留） | 用户确认（A，完整采纳）。⚠️ 行为变更，见 R1。<br/>**对齐基准的精确表述（Task 3 核实）**：本规则**等于 pi 的 spec**（`harness-v2.md:164`：「Assistant responses with stop reason `error`, `aborted`, or `deferred` project to no provider message. A genuine output-limit `length` response remains in context」），但是 **pi 已实现代码的超集**——pi 的 `session/context.ts:72` 目前**只过滤 `deferred`**。引用时须区分「spec 对齐」与「代码对齐」，不得声称三者都来自 `context.ts` |
 | **D5** | `toolBatch` 按 **`toolCallId`** 匹配，并用 `deferredWriteIds` 排除延迟写入 | pi `reducer.ts:479-486`。pi-java 另有 `ToolStarted/ToolFinished` 的 `assistantEntryId`/`toolCallId`/`toolIndex` 可交叉校验 |
 | **D6** | `terminalFailure` 双 provenance：`step`（`StepAttempt.resultEntryId` == 该 entry）或 `deferred_fetch`（`usage.cause==DEFERRED_FETCH` 绑该 entry，或前一条 own entry 是 deferred）。且该 entry **不得**是 deferred write（`deferredWriteIds` 抑制） | pi `reducer.ts:614-640` |
 | **D7** | 同期拆分：`LaneStateFolder` → 3 类；`ActionExecutor` 抽出 assistant 流执行 | 用户确认（C）。不拆必破 500 行规范 |
@@ -162,6 +162,10 @@ record TerminalFailure(String entryId, String source, /* "step" | "deferred_fetc
 
 ```java
 // session/ContextEntries.toMessages(...) — 加一条早退
+//
+// 依据 pi 的 spec（harness-v2.md:164），而非 pi 的当前代码：pi 的
+// session/context.ts:72 只过滤 "deferred"。本规则按 spec 取三者，故是
+// pi 代码的超集、pi spec 的等集 —— 引用时勿声称三者都出自 context.ts。
 if (entry instanceof Entry.Message m
         && m.message() instanceof Message.AssistantMessage a
         && PROJECT_OUT.contains(a.stopReason())) {   // {deferred, error, aborted}
