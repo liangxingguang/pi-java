@@ -302,6 +302,16 @@ flowchart LR
 
 ## 6. Out（明确推迟）项：为什么不做
 
+> **⚠️ 勘误（2026-09-12，见 `docs/23-deferred-writes-and-entry-provenance-design.md` §1.3）**：
+> 下表 **#2 与 #3 的「为什么不做」理由经代码核对后不成立或仅部分成立**，已在 docs/23 中实施：
+> - **#2 toolBatch**：原文称「drain 合并成单条 user entry，结构上无法按条对齐」——**错**。pi 的
+>   `deriveToolBatch` 按 **`toolCallId`** 匹配 assistant 的 toolCall ↔ 之后的 toolResult entry，
+>   与 queue drain 合并无关；toolResult 从来一条一个 entry，pi-java 结构完全具备。
+> - **#3 terminalFailure**：原文称「依赖 deferred 无运行时」——**仅部分成立**。`producedByStep` 分支
+>   现成可做（`StepAttempt.resultEntryId` 已存在），只有 `producedByDeferredFetch` 分支依赖 deferred。
+> - **#5** 维持原判：已被 D4（`QueueConsumed`）取代并落地。
+> - **#1 / #4** 已在 docs/23 实施（#1 限定 harness/记录层，#4 删 `StepAttempt.stopReason` 改 entry 唯一真相）。
+
 | Out 项 | 为什么不做 | 何时做 |
 |---|---|---|
 | **1. deferred 执行机制** | pi-java 只有 schema 碎片，**无运行时**：`DeferredHandle` 全仓库 0 命中，`fetch_deferred`/`cancel_deferred` 无对应 Action，`WriteDeferred` record 无发射点。fold 派生的 deferred 字段无消费者 | P0 之后专门立项（需先做 write-deferred 运行时 + prompt-template 消费者） |
