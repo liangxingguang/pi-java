@@ -359,7 +359,7 @@ public class AgentHarness implements AutoCloseable {
             lane.records.addAll(records);
             // Accepted-but-unapplied writes: a crash between the write_deferred
             // record and its entry leaves the write pending after recovery
-            // (docs/23 D3). Unlike the queues, this set survives abort.
+            // (docs/22 D3). Unlike the queues, this set survives abort.
             lane.pendingWrites.clear();
             for (var pending : folded.pendingWrites()) {
                 lane.pendingWrites.add(pending.entry());

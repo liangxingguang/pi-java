@@ -10,7 +10,7 @@ import java.util.Map;
  * message when the request continues in the background. Carrying it lets the
  * final message be reconstructed later from {@code data}.</p>
  *
- * <p><b>No producer in pi-java</b> (docs/23 D2): no provider implements
+ * <p><b>No producer in pi-java</b> (docs/22 D2): no provider implements
  * deferral, so nothing constructs one outside tests. pi is in the same state —
  * its type exists but only the faux test provider returns one.</p>
  *

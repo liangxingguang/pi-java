@@ -50,7 +50,7 @@ public sealed interface Message {
      * {@code tool_use} / {@code length} / {@code error} / {@code aborted} /
      * {@code deferred}), or {@code null} for messages that never came from a
      * completed stream. It is the single source of truth for the reason
-     * (docs/23 D1) — readers must not keep a parallel copy.
+     * (docs/22 D1) — readers must not keep a parallel copy.
      * {@code deferred} is the provider handle carried only when
      * {@code stopReason} is {@code "deferred"}.</p>
      */

@@ -54,6 +54,17 @@ class LaneStateFoldTest {
             new StreamEvent.StreamDone("stop", null, DONE)));
     }
 
+    /** Every call fails: the run terminates with a trailing errored entry. */
+    private static StreamFn errorStreamFn() {
+        var error = AssistantMessage.empty()
+            .withContent(List.of(new ContentBlock.TextContent("boom")))
+            .withStopReason("error");
+        return (messages, model, options) -> StreamIterator.from(List.of(
+            new StreamEvent.Start(AssistantMessage.empty()),
+            new StreamEvent.TextEnd(0, "boom", error),
+            new StreamEvent.StreamDone("error", null, error)));
+    }
+
     private static StreamFn toolUseThenStopStreamFn(String toolName) {
         var toolUse = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.ToolUseContent(
@@ -287,7 +298,7 @@ class LaneStateFoldTest {
         assertThat(folded.idle()).isTrue();
     }
 
-    // ── Deferred writes (docs/23 D3) ────────────────────────
+    // ── Deferred writes (docs/22 D3) ────────────────────────
 
     private static Entry userMessage(String id, String text) {
         return new Entry.Message(id, 0, null, null,
@@ -300,11 +311,62 @@ class LaneStateFoldTest {
         h.run("default", "hello");
         drive(h, "default");
 
-        // 有意的退化解：每个写入点都是 `lane.transcript.add(e)` 紧跟 `lane.pendingWrites.add(e)`，
-        // 所以 WriteDeferred 的 target 必然已在 ownEntries 里 ⇒ fold 视为「已应用」。
+        // 在**未发生 compaction、未发生 retry 丢弃**的 lane 上，每个写入点都是
+        // `lane.transcript.add(e)` 紧跟 `lane.pendingWrites.add(e)`，所以
+        // WriteDeferred 的 target 都还在 transcript 里 ⇒ fold 视为「已应用」。
+        // （该全称断言在 compaction/retry 之后不成立，见下面两个用例。）
         // live 的 pendingWrites 是「尚未持久化」的流动标记，与 fold 的「已接受未应用」
         // 不是同一个集合，因此不可拿两者比大小。
         assertThat(foldOf(h, "default").pendingWrites()).isEmpty();
+    }
+
+    @Test
+    void foldPendingWritesIsEmptyAfterAnIdleCompaction() {
+        var registry = new ToolRegistry(null);
+        registry.register(echoTool());
+        var h = harness(toolUseThenStopStreamFn("echo"), registry);
+        h.run("default", "go");
+        drive(h, "default");
+        h.compact("default", com.pijava.agent.compaction.CompactionSettings.defaults());
+
+        // compaction 确实替换了 transcript（CompactionExecutor:86-87），被丢弃条目的
+        // write_deferred 记录仍在日志里 —— 前置条件用断言钉住，避免本用例变成空绿。
+        var transcriptIds = h.snapshot("default").transcript().stream()
+            .map(Entry::id).toList();
+        var writtenIds = h.snapshot("default").records().stream()
+            .filter(LaneRecord.WriteDeferred.class::isInstance)
+            .map(record -> ((LaneRecord.WriteDeferred) record).target().entry().id())
+            .toList();
+        assertThat(writtenIds).isNotEmpty();
+        assertThat(writtenIds).anyMatch(id -> !transcriptIds.contains(id));
+
+        // 但空闲 compaction 会**新开一个 operation**（started/step/finished 三连），
+        // 它成为最后锚点，于是那些陈旧写入落在 operation-scoped 切片之外 ⇒ fold
+        // 不再报待应用。作用域收窄顺带掩盖了这个泄漏；真正暴露它的是不新开
+        // operation 的丢弃路径（下一个用例）。
+        var folded = foldOf(h, "default");
+
+        assertThat(folded.idle()).isTrue();
+        assertThat(folded.pendingWrites()).isEmpty();
+    }
+
+    @Test
+    void foldPendingWritesLeaksWritesDroppedByRetry() {
+        var h = harness(errorStreamFn(), null);
+        h.run("default", "hello");
+        drive(h, "default");
+
+        var droppedId = h.snapshot("default").transcript().get(1).id();
+        h.dropTrailingErrorAssistant("default");
+
+        // 已知泄漏（本用例将其钉住，而非修复）：dropTrailingErrorAssistant
+        // （AgentHarness:460）移除尾部 assistant 条目，却不发任何抵消记录，
+        // 也不新开 operation —— 于是该条目的 write_deferred 仍落在 operation
+        // 作用域内、target 却已不在 entries 里 ⇒ fold 报「已接受未应用」。
+        var pending = foldOf(h, "default").pendingWrites();
+
+        assertThat(pending).isNotEmpty();
+        assertThat(pending).extracting(entry -> entry.entry().id()).containsExactly(droppedId);
     }
 
     @Test

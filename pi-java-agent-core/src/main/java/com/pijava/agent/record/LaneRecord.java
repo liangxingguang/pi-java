@@ -178,7 +178,7 @@ public sealed interface LaneRecord {
      *
      * <p>The assistant stop reason ({@code completed} / {@code tool_use} /
      * {@code length} / {@code error} / {@code aborted}) lives on the
-     * {@code resultEntryId} message entry, not here (docs/23 D1): the entry is
+     * {@code resultEntryId} message entry, not here (docs/22 D1): the entry is
      * the single source of truth, so a resumed fold and the live lane cannot
      * disagree.</p>
      */

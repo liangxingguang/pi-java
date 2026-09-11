@@ -78,7 +78,7 @@ final class HarnessUtils {
     }
 
     /**
-     * Record an in-flight write as deferred (docs/23 D3).
+     * Record an in-flight write as deferred (docs/22 D3).
      *
      * <p>pi's rule is "a lane-view entry write during a run becomes a durable
      * deferred write; while idle it appends" (docs/harness-v2.md:1894). The

@@ -179,13 +179,13 @@ final class AssistantStreamExecutor {
             var asstEntry = new Entry.Message(
                 asstEntryId, 0, lane.lastEntry() != null ? lane.lastEntry().id() : null, null,
                 new Message.AssistantMessage(lane.partial.content(),
-                    // stopReason 随 entry 落库，成为唯一真相（docs/23 D1）。
+                    // stopReason 随 entry 落库，成为唯一真相（docs/22 D1）。
                     lane.partial.stopReason(),
-                    // 无 provider 支持 deferral，此处恒为 null（docs/23 D2/P1）。
+                    // 无 provider 支持 deferral，此处恒为 null（docs/22 D2/P1）。
                     null), null);
             lane.transcript.add(asstEntry);
             lane.pendingWrites.add(asstEntry);
-            // Written while the run is in flight ⇒ deferred (docs/23 D3).
+            // Written while the run is in flight ⇒ deferred (docs/22 D3).
             HarnessUtils.recordDeferredWrite(lane, asstEntry);
         }
 
@@ -235,7 +235,7 @@ final class AssistantStreamExecutor {
                 null);
             lane.transcript.add(toolEntry);
             lane.pendingWrites.add(toolEntry);
-            // Truncation feedback is the run's own output ⇒ deferred (docs/23 D3).
+            // Truncation feedback is the run's own output ⇒ deferred (docs/22 D3).
             HarnessUtils.recordDeferredWrite(lane, toolEntry);
         }
     }

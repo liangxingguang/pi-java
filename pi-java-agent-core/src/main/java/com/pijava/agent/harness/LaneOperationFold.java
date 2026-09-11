@@ -77,17 +77,40 @@ final class LaneOperationFold {
             pendingQueue(ordered, QueueKind.STEER),
             pendingQueue(ordered, QueueKind.FOLLOW_UP),
             pendingQueue(ordered, QueueKind.NEXT_RUN),
-            pendingWrites(ordered, appliedEntryIds),
+            pendingWrites(operationScoped(ordered), appliedEntryIds),
             deferred(ownEntries));
     }
 
     /**
+     * The operation-scoped slice: records at or after the last
+     * {@code OperationStarted}, or the whole slice when no operation was ever
+     * started.
+     *
+     * <p>pi computes the pending sets from the open operation's own records
+     * (pi {@code reducer.ts:539-541}), which keeps a stale write from an
+     * earlier, already-finished run from resurfacing as pending. The fallback
+     * covers a log that never opened an operation: the fold is then a
+     * whole-slice projection, as for the queue sets.</p>
+     */
+    private static List<LaneRecord> operationScoped(List<LaneRecord> ordered) {
+        int anchor = -1;
+        for (int i = 0; i < ordered.size(); i++) {
+            if (ordered.get(i) instanceof LaneRecord.OperationStarted) {
+                anchor = i;
+            }
+        }
+        return anchor < 0 ? ordered : ordered.subList(anchor, ordered.size());
+    }
+
+    /**
      * Accepted-but-not-yet-applied writes: a {@code write_deferred} whose
-     * target id is absent from the operation's own entries.
+     * target id is absent from the recovery slice's entries.
      *
      * <p>Unlike the queue pending sets, this is NOT zeroed on abort — a
      * deferred write survives cancellation and is still applied
-     * (pi reducer.ts:543-558).</p>
+     * (pi reducer.ts:543-558). Retention is asserted even after the operation
+     * has finished as aborted, which is stronger than pi's own case (pi keeps
+     * the operation open, {@code reducer.test.ts:808-830}).</p>
      */
     private static List<ProvisionedEntry<?>> pendingWrites(
             List<LaneRecord> operationRecords, Set<String> ownEntryIds) {
@@ -181,7 +204,7 @@ final class LaneOperationFold {
 
     /**
      * The newest assistant message among the operation's own entries, with the
-     * stop reason persisted on that entry (docs/23 D1).
+     * stop reason persisted on that entry (docs/22 D1).
      *
      * <p>Type matching rather than a {@code role()} string compare: an
      * assistant transcript entry is always a {@link Message.AssistantMessage},

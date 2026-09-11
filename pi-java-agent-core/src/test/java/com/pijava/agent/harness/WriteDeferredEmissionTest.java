@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Phase 23 step 5: every in-flight entry write emits its {@code write_deferred}
- * record (docs/23 D3). A lane-view entry write while a run is in flight is
+ * record (docs/22 D3). A lane-view entry write while a run is in flight is
  * deferred; while the lane is idle it is a direct append, so the prompt that
  * starts a run is not recorded as deferred.
  */
@@ -103,18 +103,15 @@ class WriteDeferredEmissionTest {
     @Test
     void runStartUserPromptIsNotRecordedAsDeferred() {
         var h = harness(simpleStreamFn(), null);
+        // 不 drive：只走到 run 起始的两个写入点（user prompt + thinking level），
+        // 此刻 lane 仍是 IDLE，两者都是直接 append，一个 write_deferred 都不该有。
         h.run("default", "hello");
+
+        assertThat(ofType(h, "default", LaneRecord.WriteDeferred.class)).isEmpty();
+
+        // 再 drive 出 run 自身的产出后，才出现延迟写入（见下一个用例）。
         drive(h, "default");
-
-        // run 起始时 lane 仍为 IDLE，属直接 append（docs/23 D3）：启动 run 的
-        // user prompt 条目绝不落 write_deferred。断言的是「不指向该条目」而非
-        // 「零条记录」——同一次 drive 期间 run 自身产出的 assistant 回复必须是
-        // 延迟写入（见下一个用例 hasSize(1)），两者不可兼得。
-        String promptId = h.snapshot("default").transcript().get(0).id();
-
-        assertThat(ofType(h, "default", LaneRecord.WriteDeferred.class))
-            .extracting(record -> ((LaneRecord.WriteDeferred) record).target().entry().id())
-            .doesNotContain(promptId);
+        assertThat(ofType(h, "default", LaneRecord.WriteDeferred.class)).hasSize(1);
     }
 
     @Test

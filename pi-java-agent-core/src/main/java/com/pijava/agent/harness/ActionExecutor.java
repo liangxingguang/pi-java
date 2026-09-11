@@ -96,7 +96,7 @@ final class ActionExecutor {
         lane.transcript.add(userEntry);
         lane.pendingWrites.add(userEntry);
         // No-op here — the lane is still IDLE, so the prompt is a direct
-        // append, not a deferred write (docs/23 D3).
+        // append, not a deferred write (docs/22 D3).
         HarnessUtils.recordDeferredWrite(lane, userEntry);
 
         // Write thinking level change if non-default
@@ -298,7 +298,7 @@ final class ActionExecutor {
         lane.transcript.add(userEntry);
         lane.pendingWrites.add(userEntry);
         // Injected mid-run: the lane is in the assistant phase, so this is a
-        // deferred write (docs/23 D3).
+        // deferred write (docs/22 D3).
         HarnessUtils.recordDeferredWrite(lane, userEntry);
         // Mid-run steer injection bypasses ConsumeQueueItem, so it must emit
         // the same record here — otherwise the fold would still see these

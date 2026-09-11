@@ -43,7 +43,7 @@ final class RecordLogValidator {
      * Validate a lane's record log against pi's rules, including the two that
      * need entry lookups: a deferred assistant entry must carry its provider
      * handle, and a {@code write_deferred} target that already exists must
-     * match it (docs/23 D3).
+     * match it (docs/22 D3).
      *
      * <p>Positions, not {@code seq}, order the comparisons: records attached
      * to a live lane all carry {@code seq == 0} until storage commits them, so
