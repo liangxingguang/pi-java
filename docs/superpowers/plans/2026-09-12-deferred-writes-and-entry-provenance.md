@@ -2,17 +2,17 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 落地 `docs/23` 的四个工作流——#4 assistant `stopReason` 落到 entry（唯一真相，删 `StepAttempt.stopReason`）、#1 `WriteDeferred` 记录层（真实发射点 + fold 派生 + 校验）、#2 `toolBatch` 派生、#3 `terminalFailure` 溯源。
+**Goal:** 落地 `docs/22` 的四个工作流——#4 assistant `stopReason` 落到 entry（唯一真相，删 `StepAttempt.stopReason`）、#1 `WriteDeferred` 记录层（真实发射点 + fold 派生 + 校验）、#2 `toolBatch` 派生、#3 `terminalFailure` 溯源。
 
 **Architecture:** 先打溯源地基（entry 携带 stopReason），再建 deferred 记录层（生产者接到既有 `lane.pendingWrites` 入列点），最后在其 `deferredWriteIds` 之上派生 `toolBatch`/`terminalFailure`。期间把 `LaneStateFolder` 拆为 3 类、从 `ActionExecutor` 抽出 `AssistantStreamExecutor`，保证每个文件 ≤ 500 行。
 
 **Tech Stack:** JDK 25 · JUnit 5 + AssertJ · Jackson · Maven（模块 `pi-java-ai` / `pi-java-agent-core`）
 
-**Spec:** `docs/23-deferred-writes-and-entry-provenance-design.md`
+**Spec:** `docs/22-deferred-writes-and-entry-provenance-design.md`
 
 ## Global Constraints
 
-- **不碰 provider 层**：不加 `SimpleStreamOptions.deferred`，不加 `fetchDeferred`/`cancelDeferred`（docs/23 §6-1）
+- **不碰 provider 层**：不加 `SimpleStreamOptions.deferred`，不加 `fetchDeferred`/`cancelDeferred`（docs/22 §6-1）
 - **`DeferredHandle` 无生产者**：`deferred` 派生与 `invalid_deferred_handle` 校验**仅由测试覆盖**；不得为了让它们"有生产者"而偷偷加 provider 代码
 - **D4 是行为变更**：`stopReason ∈ {deferred, error, aborted}` 的 assistant entry 投影为零条 provider 消息。**不允许为了让测试变绿而回退该规则**；若既有用例依赖旧行为，逐个审查并在 commit message 中说明
 - 文件 ≤ 500 行；无 `@SuppressWarnings`；不加 `System.out.println`
@@ -107,7 +107,7 @@ import java.util.Map;
  * message when the request continues in the background. Carrying it lets the
  * final message be reconstructed later from {@code data}.</p>
  *
- * <p><b>No producer in pi-java</b> (docs/23 D2): no provider implements
+ * <p><b>No producer in pi-java</b> (docs/22 D2): no provider implements
  * deferral, so nothing constructs one outside tests. pi is in the same state —
  * its type exists but only the faux test provider returns one.</p>
  *
@@ -147,7 +147,7 @@ public record DeferredHandle(
      * {@code tool_use} / {@code length} / {@code error} / {@code aborted} /
      * {@code deferred}), or {@code null} for messages that never came from a
      * completed stream. It is the single source of truth for the reason
-     * (docs/23 D1) — readers must not keep a parallel copy.
+     * (docs/22 D1) — readers must not keep a parallel copy.
      * {@code deferred} is the provider handle carried only when
      * {@code stopReason} is {@code "deferred"}.</p>
      */
@@ -338,9 +338,9 @@ Expected: FAIL — assistant 分支只读 `content`，`stopReason` 解码为 nul
 
 ```java
                 new Message.AssistantMessage(lane.partial.content(),
-                    // stopReason 随 entry 落库，成为唯一真相（docs/23 D1）。
+                    // stopReason 随 entry 落库，成为唯一真相（docs/22 D1）。
                     lane.partial.stopReason(),
-                    // 无 provider 支持 deferral，此处恒为 null（docs/23 D2/P1）。
+                    // 无 provider 支持 deferral，此处恒为 null（docs/22 D2/P1）。
                     null), null);
 ```
 
@@ -634,7 +634,7 @@ git commit -m "refactor(agent-core): split LaneStateFolder; extract AssistantStr
         h.run("default", "hello");
         drive(h, "default");
 
-        // run 起始时 lane 仍为 IDLE，属直接 append（docs/23 D3）。
+        // run 起始时 lane 仍为 IDLE，属直接 append（docs/22 D3）。
         assertThat(ofType(h, "default", LaneRecord.WriteDeferred.class)).isEmpty();
     }
 
@@ -681,7 +681,7 @@ Expected: FAIL — `WriteDeferred` 零发射，全部 `isEmpty()`
 
 ```java
     /**
-     * Record an in-flight write as deferred (docs/23 D3).
+     * Record an in-flight write as deferred (docs/22 D3).
      *
      * <p>pi's rule is "a lane-view entry write during a run becomes a durable
      * deferred write; while idle it appends" (docs/harness-v2.md:1894). The
@@ -1147,7 +1147,7 @@ git commit -m "feat(agent-core): derive toolBatch + terminalFailure
 
 ---
 
-## 验收对照（docs/23 §9）
+## 验收对照（docs/22 §9）
 
 | 验收项 | 由哪个任务保证 |
 |---|---|
@@ -1163,6 +1163,6 @@ git commit -m "feat(agent-core): derive toolBatch + terminalFailure
 
 ## Self-Review 记录
 
-- **spec 覆盖**：docs/23 §3.1→Task 1；§3.2→Task 2；§3.3(D4)→Task 3；§3.5(拆分)→Task 4；§3.4 的 `pendingWrites`/`deferred`（#1）→Task 5；`toolBatch`/`terminalFailure`（#2/#3）+ 两条校验→Task 5/6。§5 测试清单逐条落到任务。**无遗漏**。
+- **spec 覆盖**：docs/22 §3.1→Task 1；§3.2→Task 2；§3.3(D4)→Task 3；§3.5(拆分)→Task 4；§3.4 的 `pendingWrites`/`deferred`（#1）→Task 5；`toolBatch`/`terminalFailure`（#2/#3）+ 两条校验→Task 5/6。§5 测试清单逐条落到任务。**无遗漏**。
 - **类型一致性**：`DeferredHandle`（7 组件，Task 1 定义）在 Task 2/5 一致使用；`ToolBatch`/`ToolBatchCall`/`TerminalFailure` 在 Task 6 定义并自洽；`FoldedState` 分两批加字段（Task 5 加 2、Task 6 加 2），Task 5 的测试不引用 Task 6 的字段。
 - **占位符**：无 TBD/TODO；每个代码步骤都给了可编译的实体代码。
