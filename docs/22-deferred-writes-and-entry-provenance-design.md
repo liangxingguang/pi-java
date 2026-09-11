@@ -185,7 +185,7 @@ if (entry instanceof Entry.Message m
   > - **空闲** compaction 会发 `OperationStarted(Compaction)`，**它成为新锚点**，把被丢弃 entry 的写入挤出范围 ⇒ **仍为空**（泄漏被掩盖）。
   > - `AgentHarness.dropTrailingErrorAssistant` 移除尾部 entry 且**不发任何记录** ⇒ 锚点不变 ⇒ **非空（泄漏）**。
   > - `AgentHarness.moveLane` 把源 lane 的整条 transcript 搬到目标 lane 并 `clear()` 源，**不发任何记录、也不开 operation**
-  >   ⇒ 源 lane 锚点不变 ⇒ 其未完成 operation 的写入**非空（泄漏）**。（`moveLane` 当前无仓内调用方，仅作公开 API 为 subagent/pi 对齐保留。）
+  >   ⇒ 源 lane 锚点不变 ⇒ 其未完成 operation 的写入**非空（泄漏）**。（`moveLane` 当前无**生产代码**调用方——`MultiLaneTest` 有测试调用；仅作公开 API 为 subagent/pi 对齐保留。）
   > 故泄漏在**重试、run 中 compaction 与 `moveLane`** 上成立，在**空闲 compaction** 上被掩盖——本派生对「entry 被移除」这类事实并不可靠。
   > 另：`SessionPersistence.restoreFromRecordLog` 从**存储**（而非 transcript）算 ownEntries，被 compaction 丢掉的 entry 仍在存储里，
   > 故**恢复路径基本不受影响**；受影响的是「拿 compacted 后的 live transcript 当 ownEntries」的调用方（如哨兵测试的 `foldOf`）。
