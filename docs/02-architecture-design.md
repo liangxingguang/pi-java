@@ -251,8 +251,22 @@ public sealed interface Entry permits
 public sealed interface LaneRecord permits
     OperationStarted, AbortRequested, OperationFinished,
     StepAttempt, ToolStarted, QueueEnqueued, QueueCancelled,
-    WriteDeferred, UsageRecord
+    QueueConsumed, WriteDeferred, UsageRecord
 { long seq(); Instant timestamp(); }
+
+// LaneState 可派生：fold(records, transcript) → FoldedState（Phase 21，对齐 pi harness/reducer.ts）
+public record FoldedState(
+    String lane,
+    RunPhase phase,                 // IDLE | RUNNING | CHECKPOINT（fold 归一化）
+    String runId,                   // 当前 open operation 的 id；空闲为 null
+    int stepIndex,
+    LaneState.NewestOwn newestOwn,  // 最近 own entry 摘要（含 stopReason）
+    boolean faulted,                // 最近一次 operation 以 error 结束
+    boolean aborted,                // 最近一次 operation 被 abort
+    List<LaneInfo.QueuedItem> pendingSteer,
+    List<LaneInfo.QueuedItem> pendingFollowUp,
+    List<LaneInfo.QueuedItem> pendingNextRun
+) {}
 ```
 
 ### 4.3 TUI 层（`pi-java-tui`）
