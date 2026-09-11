@@ -184,10 +184,15 @@ if (entry instanceof Entry.Message m
   >   ⇒ 锚点不变 ⇒ 被丢弃 entry 的 `write_deferred` 落回范围 ⇒ **非空（泄漏）**。
   > - **空闲** compaction 会发 `OperationStarted(Compaction)`，**它成为新锚点**，把被丢弃 entry 的写入挤出范围 ⇒ **仍为空**（泄漏被掩盖）。
   > - `AgentHarness.dropTrailingErrorAssistant` 移除尾部 entry 且**不发任何记录** ⇒ 锚点不变 ⇒ **非空（泄漏）**。
-  > 故泄漏在**重试与 run 中 compaction** 上成立，在**空闲 compaction** 上被掩盖——本派生对「entry 被移除」这类事实并不可靠。
+  > - `AgentHarness.moveLane` 把源 lane 的整条 transcript 搬到目标 lane 并 `clear()` 源，**不发任何记录、也不开 operation**
+  >   ⇒ 源 lane 锚点不变 ⇒ 其未完成 operation 的写入**非空（泄漏）**。（`moveLane` 当前无仓内调用方，仅作公开 API 为 subagent/pi 对齐保留。）
+  > 故泄漏在**重试、run 中 compaction 与 `moveLane`** 上成立，在**空闲 compaction** 上被掩盖——本派生对「entry 被移除」这类事实并不可靠。
   > 另：`SessionPersistence.restoreFromRecordLog` 从**存储**（而非 transcript）算 ownEntries，被 compaction 丢掉的 entry 仍在存储里，
   > 故**恢复路径基本不受影响**；受影响的是「拿 compacted 后的 live transcript 当 ownEntries」的调用方（如哨兵测试的 `foldOf`）。
-  > 该派生**唯一的真实消费者是崩溃恢复**：`write_deferred` 记录已落库而 target entry 未落库时，恢复必须把它视为待应用。
+  > 该派生**唯一的真实消费者是崩溃恢复**：`write_deferred` 记录已落库而 target entry 未落库时，恢复会把它**当作待应用呈现（surfaces as pending）**；
+  > 但**重新落库并未实现**——持久化是 transcript 驱动的（`SessionPersistence.persistPending` 遍历 `snapshot.transcript()`），
+  > 只存在于 `lane.pendingWrites` 的 entry 永远不会被写进存储；恢复后循环发 `ApplyPendingWrite`、entry 出列、无人重写 ⇒ **该写入静默丢失**。
+  > 把这类 entry 补回 transcript 会复活重试/compaction 丢弃的 entry（即上文的泄漏），故本阶段不做，此处只把声明改准确。
   > 故**不得**用「fold 的 pendingWrites == live 的 pendingWrites」做哨兵——两者是不同集合（live 的是「尚未持久化」的流动标记）。
   > 测试须断言：无 compaction 无重试为空 + **空闲 compaction 之后也为空** + **重试之后非空**（钉住泄漏）+ 「target 未落库」切片非空 + abort 后仍保留。
 - **`deferred`（#1）**：**仅看 newest own entry**——是 assistant 且 `stopReason=="deferred"` 且带 handle → 克隆 handle，否则 null。

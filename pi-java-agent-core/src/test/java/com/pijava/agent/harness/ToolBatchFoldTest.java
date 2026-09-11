@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Phase 23 step 6: the folded tool batch pairs the newest assistant entry's
+ * docs/22 step 6: the folded tool batch pairs the newest assistant entry's
  * tool calls with their results by {@code toolCallId}, and reports each call
  * whose result never landed (pi {@code deriveToolBatch},
  * {@code reducer.ts:479-486}).

@@ -358,8 +358,13 @@ public class AgentHarness implements AutoCloseable {
             lane.records.clear();
             lane.records.addAll(records);
             // Accepted-but-unapplied writes: a crash between the write_deferred
-            // record and its entry leaves the write pending after recovery
-            // (docs/22 D3). Unlike the queues, this set survives abort.
+            // record and its entry makes the fold report that write as pending
+            // after recovery (docs/22 D3). Re-persisting it is NOT implemented:
+            // persistence is transcript-driven (SessionPersistence.persistPending
+            // iterates snapshot.transcript()), so an entry held only in this set
+            // is never written back — on resume the loop emits ApplyPendingWrite,
+            // the entry leaves the list, and the write is lost. Unlike the
+            // queues, this set survives abort.
             lane.pendingWrites.clear();
             for (var pending : folded.pendingWrites()) {
                 lane.pendingWrites.add(pending.entry());

@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Phase 23 step 6: an error entry counts as the operation's terminal failure
+ * docs/22 step 6: an error entry counts as the operation's terminal failure
  * only when a step attempt or a deferred fetch produced it, and never when it
  * is the target of an applied deferred write (pi {@code reducer.ts:614-640}).
  *
