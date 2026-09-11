@@ -237,17 +237,17 @@ owner.harness().restoreFromFold(folded);   // 重建 phase/runId/queues/records/
 
 ```mermaid
 flowchart LR
-    subgraph Live["live driver（原地改 LaneState）"]
-        A["run()/runContinue()"] -->|OperationStarted| R
-        B["executeStreamAssistant"] -->|StepAttempt(stopReason)| R
-        C["executeConsumeQueueItem"] -->|QueueConsumed| R
-        D["QueueManager.steer/followUp/nextRun"] -->|QueueEnqueued| R
-        E["QueueManager.cancelQueued"] -->|QueueCancelled| R
-        F["CompactionExecutor"] -->|StepAttempt(COMPACTION)| R
-        G["executeFinishOperation"] -->|OperationFinished| R
-        H["ToolExecutionPipeline"] -->|ToolStarted/ToolFinished| R
-        I["close()/abort()"] -->|AbortRequested| R
-        J["run 结束"] -->|UsageRecord(stopReason)| R
+    subgraph Live["live driver 原地改 LaneState"]
+        A["run / runContinue"] -->|operation_started| R
+        B["executeStreamAssistant"] -->|step_attempt 带 stopReason| R
+        C["executeConsumeQueueItem"] -->|queue_consumed| R
+        D["QueueManager 三个入队方法"] -->|queue_enqueued| R
+        E["QueueManager.cancelQueued"] -->|queue_cancelled| R
+        F["CompactionExecutor"] -->|step_attempt COMPACTION| R
+        G["executeFinishOperation"] -->|operation_finished| R
+        H["ToolExecutionPipeline"] -->|tool_started / tool_finished| R
+        I["close 与 abort"] -->|abort_requested| R
+        J["run 结束"] -->|usage 带 stopReason| R
         R[(LaneRecord 日志)]
     end
 ```
@@ -257,12 +257,12 @@ flowchart LR
 ```mermaid
 flowchart LR
     R[(LaneRecord 日志)] --> V["validateRecordLog 子集"]
-    E[(entry 存储)] -->|ownEntries 有界切片| K["LaneStateFolder.fold(records, ownEntries, configurationEntries)"]
+    E[(entry 存储)] -->|ownEntries 有界切片| K["LaneStateFolder.fold 三个输入"]
     E -->|configurationEntries 有界切片| K
     V -->|RecordLogCorruption| X["拒绝恢复"]
-    V -->|通过| K
-    K -->|FoldedState| S["哨兵测试 LaneStateFoldTest（== live snapshot）"]
-    K -->|FoldedState| X2["resume 恢复（restoreFromFold，替代全量 seedTranscript）"]
+    V -->|校验通过| K
+    K -->|FoldedState| S["哨兵测试 LaneStateFoldTest 等于 live snapshot"]
+    K -->|FoldedState| X2["resume 恢复 restoreFromFold"]
 ```
 
 ---
