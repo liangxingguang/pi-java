@@ -600,6 +600,13 @@ public class AgentHarness implements AutoCloseable {
             if (lane.abortSignal != null) {
                 lane.abortSignal.abort();
             }
+            // Closing a running lane is an abort request: record it so the
+            // fold sees why the operation stopped, matching abort() (docs/21).
+            if (!(lane.phase instanceof RunPhase.Idle)) {
+                lane.records.add(new LaneRecord.AbortRequested(
+                    java.util.UUID.randomUUID().toString(), 0, lane.laneName, null,
+                    lane.runId == null ? "" : lane.runId));
+            }
             snapshotService.publishState(lane.laneName);
         }
     }

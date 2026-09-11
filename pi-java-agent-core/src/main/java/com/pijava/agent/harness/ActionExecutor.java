@@ -447,7 +447,7 @@ final class ActionExecutor {
             var settings = ctx.compactionSettings().get();
             if (settings != null && lane.transcript.size() > 1) {
                 compactions.applyCompaction(laneName, lane, settings,
-                    CompactionService.estimateTokens(lane.transcript));
+                    CompactionService.estimateTokens(lane.transcript), "overflow");
             }
         }
 
@@ -473,13 +473,14 @@ final class ActionExecutor {
             RunSpanFactory.thinkingLabel(ctx.thinkingLevel().get()),
             (System.nanoTime() - llmStart) / 1_000_000,
             stopReason));
-        if (inputTokens > 0 || outputTokens > 0) {
-            lane.records.add(new LaneRecord.UsageRecord(
-                UUID.randomUUID().toString(), 0, laneName, null,
-                Usage.of(inputTokens, outputTokens), UsageCause.ASSISTANT,
-                lane.runId, asstEntryId, null, attemptIdx, stopReason));
-            ctx.addTokens(inputTokens + outputTokens);
-        }
+        // Recorded unconditionally (docs/21): a zero-token turn (error /
+        // abort before any usage was reported) is exactly the case whose
+        // stopReason the fold needs, so gating on tokens>0 lost it.
+        lane.records.add(new LaneRecord.UsageRecord(
+            UUID.randomUUID().toString(), 0, laneName, null,
+            Usage.of(inputTokens, outputTokens), UsageCause.ASSISTANT,
+            lane.runId, asstEntryId, null, attemptIdx, stopReason));
+        ctx.addTokens(inputTokens + outputTokens);
 
         lane.newestOwn = HarnessUtils.deriveNewestOwn(lane);
         lane.phase = RunPhase.CHECKPOINT;
