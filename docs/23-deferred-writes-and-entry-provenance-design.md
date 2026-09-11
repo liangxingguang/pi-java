@@ -288,7 +288,7 @@ flowchart TD
 | # | 风险 | 缓解 |
 |---|---|---|
 | **R1** | **D4 完整采纳是行为变更**：`error`/`aborted` 的 assistant entry 不再进 provider 上下文 | 先全量跑既有测试定位受影响用例；`dropTrailingErrorAssistant` 已覆盖尾部落库场景，语义不冲突。若确有依赖，用例需逐个审——**不允许为了让测试变绿而回退规则** |
-| **R2** | 删 `StepAttempt.stopReason` 使 `f4e5fdc` 的产物作废；已落库记录含该字段 | `FAIL_ON_UNKNOWN_PROPERTIES=false`（已核实 `SessionJson:118`）+ `RecordJsonCodec` 是手写字段读取 → 旧文件安全；SQLite payload 是 JSON blob，无表迁移 |
+| **R2** | 删 `StepAttempt.stopReason` 使 `f4e5fdc` 的产物作废；已落库记录含该字段 | `FAIL_ON_UNKNOWN_PROPERTIES=false`（已核实 `SessionJson:118`）+ `RecordJsonCodec` 是手写字段读取 → 旧文件安全；SQLite payload 是 JSON blob，无表迁移。<br/>**已核实的具体后果（Task 2 review）**：旧日志 fold 出的 `newestOwn.stopReason` 为 null，因此**恢复**一条「日志尾部操作未收尾」的旧会话时，`determineOutcome` 回退到 `"completed"`（原先可能派生 `"error"`/`"tool_use"`），影响该 lane 的 `faulted` 标志——一次性、仅针对旧二进制写下的日志，粗略但不错误。<br/>**不受影响**：`dropTrailingErrorAssistant` 走的 `lane.newestOwn` 由 live 的 `HarnessUtils.deriveNewestOwn`（读 `lane.partial.stopReason()`）设置，**不读 fold**，故重试路径无回归。 |
 | **R3** | `WriteDeferred` 发射使 record 量翻倍（run 中每条 entry 一条记录） | `LaneSnapshot.records()` 增长 → 既有 R3（docs/21）延续；若膨胀显著，另立项限流 |
 | **R4** | fold 的 `deferred`/`toolBatch`/`terminalFailure` 当前**无 live 消费者**（只有哨兵测试） | 如实记录（同 D2/B 的处置）；它们是 resume 恢复正确性的组成部分，不是死代码 |
 | **R5** | 拆分类改变包内可见性，可能碰 `LoopInvariants` / `ActionExecutor` 耦合 | 全部为 package-private 同类包内搬迁，不改公开 API；靠既有测试兜底 |

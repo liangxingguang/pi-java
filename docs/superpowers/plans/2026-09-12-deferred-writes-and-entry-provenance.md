@@ -348,12 +348,14 @@ Expected: FAIL — assistant 分支只读 `content`，`stopReason` 解码为 nul
 
 1. `LaneRecord.java`：`StepAttempt` record 去掉最后一个 `String stopReason` 组件（185-201）；`committed()` 的 `case StepAttempt`（75-78）去掉 `e.stopReason()` 实参。
 2. `RecordJsonCodec.java:35-46`：`step_attempt` 分支去掉 `JsonlCodec.optionalString(node, "stopReason")` 实参。
-3. 更新 5 处测试 fixture（位置参数少一个）：
-   - `LaneStateFoldTest.java:300-304`（helper `step`，去掉末位 `"stop"`）
-   - `LaneRecordTest.java:48-49`（去掉末位 null，并删 :53 的 `rec.stopReason()` 断言）、`:102-104`（去掉末位 `"tool_use"`，并删 :110 的断言）
-   - `RecordObservabilityCodecTest.java:51-53`（去掉末位 `"tool_use"`，删 :61 断言）、`:110-112`（去掉末位 null，删 :113 的 `"stopReason"` 省略断言）
-   - `ConformanceSupport.java:90-91`（去掉末位 null）
-   - `RunSummaryAggregatorTest.java:36-39`（去掉末位 `"completed"`，删 :96 断言）
+3. 更新 **6 处**构造点（位置参数少一个）：
+   - `LaneStateFoldTest.java`（helper `step`，去掉末位 `"stop"`）
+   - `LaneRecordTest.java` 两处（去掉末位值，并删对应的 `rec.stopReason()` 断言）
+   - `RecordObservabilityCodecTest.java` 两处（去掉末位值，并删对应的 `"stopReason"` 断言）
+   - `ConformanceSupport.java`（去掉末位 null）
+   - `RunSummaryAggregatorTest.java` fixture（去掉末位 `"completed"` 实参）
+   - **`CompactionExecutor.java`**（第 6 处，plan 初版遗漏；该处末位传 `null`，不改则不编译）
+   - ⚠️ **`RunSummaryAggregatorTest` 的 `assertThat(full.stopReason())` 断言必须保留**：它断言的是 `RunSummaryAggregator.Summary.stopReason`（由 `withMeta(int, long, String)` 设置），与被删的 `LaneRecord.StepAttempt.stopReason` 是**无关组件**，且是该参数唯一的覆盖。plan 初版误判为应删（Task 2 review 已裁决）。
 
 > `StepAttempt` 的 `compactionReason` 组件**保留**（`invalid_compaction_reason` 校验依赖它）。
 
