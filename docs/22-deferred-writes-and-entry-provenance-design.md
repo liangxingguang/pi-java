@@ -1,4 +1,4 @@
-# 23 — Deferred 写入运行时 + entry 溯源（stopReason / toolBatch / terminalFailure）
+# 22 — Deferred 写入运行时 + entry 溯源（stopReason / toolBatch / terminalFailure）
 
 > 上一篇：`docs/21-record-log-fold-design.md`（record 日志补全 + LaneStateFold）。
 > 本篇实施 docs/21 §6 的推迟项中**确实可做**的部分：**#1 deferred 记录层**、**#2 toolBatch**、
