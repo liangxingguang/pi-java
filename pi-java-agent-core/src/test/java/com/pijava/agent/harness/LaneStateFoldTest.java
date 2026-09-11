@@ -8,6 +8,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.pijava.agent.entry.Entry;
+import com.pijava.agent.entry.ProvisionedEntry;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.record.OperationOutcome;
 import com.pijava.agent.record.QueueKind;
@@ -22,6 +23,7 @@ import com.pijava.ai.AbortSignal;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -283,6 +285,80 @@ class LaneStateFoldTest {
         // folds back to idle rather than picking up a stray open operation.
         var folded = foldOf(h, "default");
         assertThat(folded.idle()).isTrue();
+    }
+
+    // ── Deferred writes (docs/23 D3) ────────────────────────
+
+    private static Entry userMessage(String id, String text) {
+        return new Entry.Message(id, 0, null, null,
+            new Message.UserMessage(List.of(new ContentBlock.TextContent(text))), null);
+    }
+
+    @Test
+    void foldPendingWritesIsEmptyOnALiveLane() {
+        var h = harness(simpleStreamFn(), null);
+        h.run("default", "hello");
+        drive(h, "default");
+
+        // 有意的退化解：每个写入点都是 `lane.transcript.add(e)` 紧跟 `lane.pendingWrites.add(e)`，
+        // 所以 WriteDeferred 的 target 必然已在 ownEntries 里 ⇒ fold 视为「已应用」。
+        // live 的 pendingWrites 是「尚未持久化」的流动标记，与 fold 的「已接受未应用」
+        // 不是同一个集合，因此不可拿两者比大小。
+        assertThat(foldOf(h, "default").pendingWrites()).isEmpty();
+    }
+
+    @Test
+    void foldPendingWritesSurfacesWritesWhoseTargetNeverLanded() {
+        // 崩溃场景：write_deferred 记录已落库，target entry 没落库 —— 恢复时必须视为待应用。
+        // 这才是本派生的唯一真实消费者。
+        var write = new LaneRecord.WriteDeferred("w-1", 0, "default", null, "",
+            new ProvisionedEntry<>(userMessage("never-persisted", "lost")));
+
+        var folded = LaneStateFolder.fold("default", List.of(write), List.of(), List.of());
+
+        assertThat(folded.pendingWrites()).hasSize(1);
+        assertThat(folded.pendingWrites().get(0).entry().id()).isEqualTo("never-persisted");
+    }
+
+    @Test
+    void foldKeepsPendingWritesWhenTheOperationAborted() {
+        // 与 steer/followUp 不同：延迟写入在 abort 后仍保留（pi reducer.ts:543-558）。
+        var write = new LaneRecord.WriteDeferred("w-1", 0, "default", null, "",
+            new ProvisionedEntry<>(userMessage("never-persisted", "lost")));
+        var records = List.<LaneRecord>of(
+            new LaneRecord.OperationStarted("run-1", 0, "default", null, null,
+                new LaneRecord.OperationStarted.Run(List.of(), List.of(), null, null)),
+            new LaneRecord.AbortRequested("a-1", 0, "default", null, "run-1"),
+            write,
+            new LaneRecord.OperationFinished("f-1", 0, "default", null, "run-1",
+                OperationOutcome.ABORTED, null, null));
+
+        assertThat(LaneStateFolder.fold("default", records, List.of(), List.of()).pendingWrites())
+            .hasSize(1);
+    }
+
+    @Test
+    void foldRejectsDeferredAssistantEntryWithoutHandle() {
+        var entry = new Entry.Message("a-1", 0, null, null,
+            new Message.AssistantMessage(
+                List.of(new ContentBlock.TextContent("")), "deferred", null), null);
+        assertThatThrownBy(() -> LaneStateFolder.fold("default", List.of(), List.of(entry), List.of()))
+            .isInstanceOf(RecordLogCorruption.class)
+            .hasMessageContaining("invalid_deferred_handle");
+    }
+
+    @Test
+    void foldRejectsWriteDeferredTargetThatContradictsAnExistingEntry() {
+        var existing = new Entry.Message("t-1", 1, null, null,
+            new Message.UserMessage(List.of(new ContentBlock.TextContent("real"))), null);
+        var contradicting = new ProvisionedEntry<>(new Entry.Message("t-1", 0, null, null,
+            new Message.UserMessage(List.of(new ContentBlock.TextContent("other"))), null));
+        var record = new LaneRecord.WriteDeferred("w-1", 0, "default", null, "", contradicting);
+
+        assertThatThrownBy(() -> LaneStateFolder.fold("default", List.of(record),
+            List.of(existing), List.of()))
+            .isInstanceOf(RecordLogCorruption.class)
+            .hasMessageContaining("provisioned_entry_mismatch");
     }
 
     // ── validateRecordLog ───────────────────────────────────

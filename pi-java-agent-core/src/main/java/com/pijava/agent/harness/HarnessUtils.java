@@ -2,10 +2,12 @@ package com.pijava.agent.harness;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentMap;
 
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.entry.ProvisionedEntry;
+import com.pijava.agent.record.LaneRecord;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -73,6 +75,34 @@ final class HarnessUtils {
             }
         }
         return null;
+    }
+
+    /**
+     * Record an in-flight write as deferred (docs/23 D3).
+     *
+     * <p>pi's rule is "a lane-view entry write during a run becomes a durable
+     * deferred write; while idle it appends" (docs/harness-v2.md:1894). The
+     * lane's own equivalent of "writing while a run is in flight" is adding to
+     * {@code pendingWrites} while the lane is not idle — a run's own output
+     * (assistant reply, tool results, mid-run steer, truncation feedback) is
+     * deferred, while the prompt that starts the run is a direct append.</p>
+     *
+     * <p>Lives here rather than in {@link ActionExecutor} because the write
+     * sites are spread over four classes (ActionExecutor, AssistantStream-
+     * Executor, ToolExecutionPipeline, ContextAssembler).</p>
+     *
+     * <p>The run id falls back to the empty string: {@code RecordJsonCodec}
+     * requires the field, and {@link LaneOperationFold#runIdOf} reads an empty
+     * run id as "no run id", skipping the unknown-operation check.</p>
+     */
+    static void recordDeferredWrite(LaneState lane, Entry entry) {
+        if (lane.phase instanceof RunPhase.Idle) {
+            return;
+        }
+        lane.records.add(new LaneRecord.WriteDeferred(
+            UUID.randomUUID().toString(), 0, lane.laneName, null,
+            lane.runId == null ? "" : lane.runId,
+            new ProvisionedEntry<>(entry)));
     }
 
     static boolean isErrorStopReason(String sr) {

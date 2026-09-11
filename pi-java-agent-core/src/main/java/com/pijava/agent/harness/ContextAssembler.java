@@ -44,6 +44,8 @@ final class ContextAssembler {
                     upd.model().provider(), upd.model().modelName());
                 lane.transcript.add(e);
                 lane.pendingWrites.add(e);
+                // Applied mid-run by a prepare_next_turn hook ⇒ deferred.
+                HarnessUtils.recordDeferredWrite(lane, e);
             }
         }
         if (upd.thinkingLevel() != null) {
@@ -61,6 +63,8 @@ final class ContextAssembler {
                     HarnessUtils.lastEntryId(lane), Instant.now(), upd.thinkingLevel());
                 lane.transcript.add(e);
                 lane.pendingWrites.add(e);
+                // Applied mid-run by a prepare_next_turn hook ⇒ deferred.
+                HarnessUtils.recordDeferredWrite(lane, e);
             }
         }
     }

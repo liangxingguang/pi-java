@@ -7,9 +7,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.pijava.agent.entry.Entry;
+import com.pijava.agent.entry.ProvisionedEntry;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.record.QueueKind;
 import com.pijava.agent.record.StepKind;
+import com.pijava.ai.message.Message;
 
 /**
  * The corruption rules of a lane's record log, restricted to the subset of
@@ -30,14 +33,33 @@ final class RecordLogValidator {
      * Validate a lane's record log against the subset of pi's rules that need
      * no entry lookups (docs/21 §3.4, R8).
      *
+     * @throws RecordLogCorruption on the first violated rule
+     */
+    static void validate(String lane, List<LaneRecord> records) {
+        validate(lane, records, List.of());
+    }
+
+    /**
+     * Validate a lane's record log against pi's rules, including the two that
+     * need entry lookups: a deferred assistant entry must carry its provider
+     * handle, and a {@code write_deferred} target that already exists must
+     * match it (docs/23 D3).
+     *
      * <p>Positions, not {@code seq}, order the comparisons: records attached
      * to a live lane all carry {@code seq == 0} until storage commits them, so
      * sequence numbers cannot order in-memory records.</p>
      *
+     * <p>{@code entries} is the whole recovery slice — the operation's own
+     * entries plus the configuration entries — mirroring pi's single
+     * {@code entriesById} map.</p>
+     *
      * @throws RecordLogCorruption on the first violated rule
      */
-    static void validate(String lane, List<LaneRecord> records) {
+    static void validate(String lane, List<LaneRecord> records, List<Entry> entries) {
         var ordered = LaneOperationFold.orderBySeq(records);
+        Map<String, Entry> entriesById = new LinkedHashMap<>();
+        entries.forEach(entry -> entriesById.put(entry.id(), entry));
+        validateDeferredHandles(entries);
         var starts = new LinkedHashSet<String>();
         var open = new LinkedHashSet<String>();
         Map<String, Integer> finishedAt = new HashMap<>();
@@ -81,6 +103,8 @@ final class RecordLogValidator {
                 enqueuedAt.put(enqueued.target().entry().id(), i);
             } else if (record instanceof LaneRecord.QueueCancelled cancelled) {
                 validateQueueCancellation(cancelled, enqueuedAt, i);
+            } else if (record instanceof LaneRecord.WriteDeferred deferred) {
+                validateProvisionedTarget(entriesById, deferred.target());
             }
         }
 
@@ -144,6 +168,49 @@ final class RecordLogValidator {
             corrupt("invalid_queue_cancellation", "Queue cancellation " + cancelled.id()
                 + " has no pending matching enqueue");
         }
+    }
+
+    /**
+     * A deferred assistant entry must carry the provider handle that the
+     * deferral is reconstructed from (pi {@code reducer.ts:272-283}).
+     */
+    private static void validateDeferredHandles(List<Entry> entries) {
+        for (var entry : entries) {
+            if (entry instanceof Entry.Message msg
+                    && msg.message() instanceof Message.AssistantMessage assistant
+                    && "deferred".equals(assistant.stopReason())
+                    && assistant.deferred() == null) {
+                corrupt("invalid_deferred_handle", "Deferred assistant entry " + entry.id()
+                    + " does not carry a handle");
+            }
+        }
+    }
+
+    /**
+     * A {@code write_deferred} whose target already exists must match it
+     * (pi {@code reducer.ts:383-385}): the record claims the entry was
+     * provisioned with this content, so a differing entry means two writers
+     * disagreed about the same id.
+     */
+    private static void validateProvisionedTarget(Map<String, Entry> entriesById,
+                                                  ProvisionedEntry<?> target) {
+        var existing = entriesById.get(target.entry().id());
+        if (existing != null && !matchesProvisionedEntry(existing, target.entry())) {
+            corrupt("provisioned_entry_mismatch", "Provisioned entry "
+                + target.entry().id() + " exists with content different from its intent");
+        }
+    }
+
+    /**
+     * Payload equality between a committed entry and its provisioned target.
+     *
+     * <p>{@code seq}/{@code parentId}/{@code timestamp} are assigned by
+     * storage on commit, so they are normalized away first — pi strips exactly
+     * these three fields before its deep comparison
+     * (pi {@code reducer.ts:139-142}).</p>
+     */
+    private static boolean matchesProvisionedEntry(Entry existing, Entry target) {
+        return existing.committed(0, null, null).equals(target.committed(0, null, null));
     }
 
     private static void corrupt(String code, String message) {

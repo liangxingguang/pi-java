@@ -3,7 +3,9 @@ package com.pijava.agent.harness;
 import java.util.List;
 
 import com.pijava.agent.entry.Entry;
+import com.pijava.agent.entry.ProvisionedEntry;
 import com.pijava.agent.record.LaneRecord;
+import com.pijava.ai.message.DeferredHandle;
 import com.pijava.ai.model.ModelId;
 
 /**
@@ -12,8 +14,9 @@ import com.pijava.ai.model.ModelId;
  *
  * <p>Aligned with pi's {@code harness/reducer.ts} ({@code reduceLaneState}),
  * restricted to the subset pi-java can derive: operation state, queue pending
- * sets and the effective configuration. Deferred writes, tool batches and
- * terminal-failure provenance are out of scope (docs/21 §6).</p>
+ * sets, the effective configuration, the pending deferred writes and the
+ * unredeemed deferred handle. Tool batches and terminal-failure provenance
+ * are out of scope (docs/21 §6).</p>
  *
  * <p>The fold algorithm lives in {@link LaneOperationFold} and the corruption
  * rules in {@link RecordLogValidator}; this class only owns the record
@@ -46,12 +49,15 @@ final class LaneStateFolder {
         EffectiveConfiguration effectiveConfiguration,
         List<LaneInfo.QueuedItem> pendingSteer,
         List<LaneInfo.QueuedItem> pendingFollowUp,
-        List<LaneInfo.QueuedItem> pendingNextRun
+        List<LaneInfo.QueuedItem> pendingNextRun,
+        List<ProvisionedEntry<?>> pendingWrites,
+        DeferredHandle deferred
     ) {
         FoldedState {
             pendingSteer = List.copyOf(pendingSteer);
             pendingFollowUp = List.copyOf(pendingFollowUp);
             pendingNextRun = List.copyOf(pendingNextRun);
+            pendingWrites = List.copyOf(pendingWrites);
         }
 
         /** True when the lane has no open operation. */

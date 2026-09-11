@@ -95,6 +95,9 @@ final class ActionExecutor {
             null, userMessage, null);
         lane.transcript.add(userEntry);
         lane.pendingWrites.add(userEntry);
+        // No-op here — the lane is still IDLE, so the prompt is a direct
+        // append, not a deferred write (docs/23 D3).
+        HarnessUtils.recordDeferredWrite(lane, userEntry);
 
         // Write thinking level change if non-default
         if (ctx.thinkingLevel().get() instanceof ModelThinkingLevel.Enabled en) {
@@ -104,6 +107,7 @@ final class ActionExecutor {
                 en.level().label());
             lane.transcript.add(tlEntry);
             lane.pendingWrites.add(tlEntry);
+            HarnessUtils.recordDeferredWrite(lane, tlEntry);
         }
 
         lane.phase = RunPhase.ASSISTANT;
@@ -293,6 +297,9 @@ final class ActionExecutor {
             HarnessUtils.buildUserMessage(prompt, images), null);
         lane.transcript.add(userEntry);
         lane.pendingWrites.add(userEntry);
+        // Injected mid-run: the lane is in the assistant phase, so this is a
+        // deferred write (docs/23 D3).
+        HarnessUtils.recordDeferredWrite(lane, userEntry);
         // Mid-run steer injection bypasses ConsumeQueueItem, so it must emit
         // the same record here — otherwise the fold would still see these
         // items as pending and a resume would inject them twice (docs/21 D10).

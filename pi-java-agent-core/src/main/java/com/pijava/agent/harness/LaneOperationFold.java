@@ -3,8 +3,10 @@ package com.pijava.agent.harness;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.entry.ProvisionedEntry;
@@ -13,6 +15,7 @@ import com.pijava.agent.record.OperationOutcome;
 import com.pijava.agent.record.QueueKind;
 import com.pijava.agent.record.StepKind;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.DeferredHandle;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
 
@@ -48,7 +51,17 @@ final class LaneOperationFold {
                                             List<Entry> ownEntries,
                                             List<Entry> configurationEntries) {
         var ordered = orderBySeq(records);
-        RecordLogValidator.validate(lane, ordered);
+        // One entriesById map, as in pi: a write is "applied" as soon as its
+        // entry exists anywhere in the recovery slice. Configuration entries
+        // are a subset of the own entries on a live lane, but not on resume —
+        // a configuration entry written before the operation anchor is not an
+        // own entry.
+        var slicedEntries = new ArrayList<Entry>(ownEntries.size() + configurationEntries.size());
+        slicedEntries.addAll(ownEntries);
+        slicedEntries.addAll(configurationEntries);
+        var appliedEntryIds = new LinkedHashSet<String>();
+        slicedEntries.forEach(entry -> appliedEntryIds.add(entry.id()));
+        RecordLogValidator.validate(lane, ordered, slicedEntries);
 
         var openOp = openOperation(ordered);
         var finished = lastFinish(ordered);
@@ -63,7 +76,66 @@ final class LaneOperationFold {
             effectiveConfiguration(configurationEntries),
             pendingQueue(ordered, QueueKind.STEER),
             pendingQueue(ordered, QueueKind.FOLLOW_UP),
-            pendingQueue(ordered, QueueKind.NEXT_RUN));
+            pendingQueue(ordered, QueueKind.NEXT_RUN),
+            pendingWrites(ordered, appliedEntryIds),
+            deferred(ownEntries));
+    }
+
+    /**
+     * Accepted-but-not-yet-applied writes: a {@code write_deferred} whose
+     * target id is absent from the operation's own entries.
+     *
+     * <p>Unlike the queue pending sets, this is NOT zeroed on abort — a
+     * deferred write survives cancellation and is still applied
+     * (pi reducer.ts:543-558).</p>
+     */
+    private static List<ProvisionedEntry<?>> pendingWrites(
+            List<LaneRecord> operationRecords, Set<String> ownEntryIds) {
+        List<ProvisionedEntry<?>> pending = new ArrayList<>();
+        for (var record : operationRecords) {
+            if (record instanceof LaneRecord.WriteDeferred write
+                    && !ownEntryIds.contains(write.target().entry().id())) {
+                pending.add(write.target());
+            }
+        }
+        return pending;
+    }
+
+    /**
+     * The ids of every deferred write this operation requested — deferred, not
+     * pending: the set includes writes that already landed.
+     *
+     * <p>Not part of {@link LaneStateFolder.FoldedState}: its consumer is the
+     * terminal-failure derivation (pi {@code reducer.ts:611-613}, pi-java
+     * step 6), which needs it to tell a deferred error entry apart from a
+     * fatal one.</p>
+     */
+    static Set<String> deferredWriteIds(List<LaneRecord> operationRecords) {
+        Set<String> ids = new LinkedHashSet<>();
+        for (var record : operationRecords) {
+            if (record instanceof LaneRecord.WriteDeferred write) {
+                ids.add(write.target().entry().id());
+            }
+        }
+        return ids;
+    }
+
+    /**
+     * The provider handle of an unredeemed deferred response: only the
+     * newest own entry counts, so a follow-on entry redeems it
+     * (pi reducer.ts:595-603).
+     */
+    private static DeferredHandle deferred(List<Entry> ownEntries) {
+        if (ownEntries.isEmpty()) {
+            return null;
+        }
+        var newest = ownEntries.get(ownEntries.size() - 1);
+        if (newest instanceof Entry.Message msg
+                && msg.message() instanceof Message.AssistantMessage assistant
+                && "deferred".equals(assistant.stopReason())) {
+            return assistant.deferred();
+        }
+        return null;
     }
 
     /** The operation started without a matching finish, if any. */

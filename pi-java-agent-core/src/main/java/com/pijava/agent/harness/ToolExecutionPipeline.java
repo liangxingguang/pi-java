@@ -120,6 +120,8 @@ final class ToolExecutionPipeline {
                 call.toolCallId(), call.toolName(), outcome.blocks(), outcome.isError()), null);
         lane.transcript.add(toolEntry);
         lane.pendingWrites.add(toolEntry);
+        // Tool results are produced mid-run ⇒ deferred writes (docs/23 D3).
+        HarnessUtils.recordDeferredWrite(lane, toolEntry);
         return toolEntry.id();
     }
 

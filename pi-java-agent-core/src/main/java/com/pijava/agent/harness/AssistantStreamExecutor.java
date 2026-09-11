@@ -185,6 +185,8 @@ final class AssistantStreamExecutor {
                     null), null);
             lane.transcript.add(asstEntry);
             lane.pendingWrites.add(asstEntry);
+            // Written while the run is in flight ⇒ deferred (docs/23 D3).
+            HarnessUtils.recordDeferredWrite(lane, asstEntry);
         }
 
         lane.records.add(new LaneRecord.StepAttempt(
@@ -233,6 +235,8 @@ final class AssistantStreamExecutor {
                 null);
             lane.transcript.add(toolEntry);
             lane.pendingWrites.add(toolEntry);
+            // Truncation feedback is the run's own output ⇒ deferred (docs/23 D3).
+            HarnessUtils.recordDeferredWrite(lane, toolEntry);
         }
     }
 }
