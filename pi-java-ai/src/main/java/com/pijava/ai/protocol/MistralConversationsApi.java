@@ -201,9 +201,9 @@ public final class MistralConversationsApi extends AbstractChatApi {
                     m.put("role", "user");
                     m.put("content", extractText(content));
                 }
-                case Message.AssistantMessage(var content) -> {
+                case Message.AssistantMessage a -> {
                     m.put("role", "assistant");
-                    m.put("content", extractText(content));
+                    m.put("content", extractText(a.content()));
                 }
                 case Message.ToolResultMessage(var toolUseId, var toolName,
                                                var content, var isError) -> {

@@ -47,6 +47,27 @@ class MessageTest {
     }
 
     @Test
+    void assistantMessageCarriesStopReasonAndDeferredHandle() {
+        var handle = new DeferredHandle("faux", "test-model", "faux-api", "batch-1",
+            1_700_000_000_000L, 500L, Map.of("row", 2));
+        var msg = new Message.AssistantMessage(
+            List.of(new ContentBlock.TextContent("hi")), "deferred", handle);
+
+        assertThat(msg.content()).hasSize(1);
+        assertThat(msg.stopReason()).isEqualTo("deferred");
+        assertThat(msg.deferred()).isEqualTo(handle);
+        assertThat(msg.role()).isEqualTo("assistant");
+    }
+
+    @Test
+    void singleArgConstructorLeavesStopReasonAndDeferredNull() {
+        var msg = new Message.AssistantMessage(List.of(new ContentBlock.TextContent("hi")));
+
+        assertThat(msg.stopReason()).isNull();
+        assertThat(msg.deferred()).isNull();
+    }
+
+    @Test
     void toolResultShouldPreserveErrorFlag() {
         var msg = new Message.ToolResultMessage("toolu_01", "read",
                 List.of(new ContentBlock.TextContent("File not found")), true);

@@ -43,11 +43,33 @@ public sealed interface Message {
         }
     }
 
-    /** A message from the assistant (LLM). */
-    record AssistantMessage(List<ContentBlock> content) implements Message {
+    /**
+     * A message from the assistant (LLM).
+     *
+     * <p>{@code stopReason} is the reason the turn ended ({@code stop} /
+     * {@code tool_use} / {@code length} / {@code error} / {@code aborted} /
+     * {@code deferred}), or {@code null} for messages that never came from a
+     * completed stream. It is the single source of truth for the reason
+     * (docs/23 D1) — readers must not keep a parallel copy.
+     * {@code deferred} is the provider handle carried only when
+     * {@code stopReason} is {@code "deferred"}.</p>
+     */
+    record AssistantMessage(
+        List<ContentBlock> content,
+        String stopReason,
+        DeferredHandle deferred
+    ) implements Message {
         /** Compact constructor that defensively copies the content blocks. */
         public AssistantMessage {
             content = List.copyOf(content);
+        }
+
+        /**
+         * Compatibility constructor: every pre-existing call site, and data
+         * written before stop reasons were recorded, carries neither field.
+         */
+        public AssistantMessage(List<ContentBlock> content) {
+            this(content, null, null);
         }
 
         @Override
