@@ -481,9 +481,9 @@ public sealed interface LaneRecord {
 
     /** 队列项被消费（drain 并合并进 transcript）。pi-java 独有（Phase 21，对齐 pi reducer.ts 的消费推断缺口） */
     record QueueConsumed(
-        long seq, Instant timestamp,
+        String id, long seq, String lane, Instant timestamp,
         String runId,                 // 消费它的 run；空闲消费为 ""
-        String queueType,             // "steer" | "followUp" | "nextRun"
+        QueueKind queue,              // steer | followUp | nextRun（取 QueuedItem 真实来源队列，D10）
         List<ProvisionedEntry<?>> targets   // 该次 drain 消费的全部项（QueueMode 整体合并）
     ) implements LaneRecord {}
 }
@@ -492,11 +492,11 @@ public sealed interface LaneRecord {
 > **Phase 21 附注（record-log fold，对齐 pi `harness/reducer.ts`）**：
 > LaneState 从「可变的独立对象 + 并行审计日志」改为「**record 日志的纯函数折叠**」。
 > - 补 P0 记录发射缺口：`QueueEnqueued`/`QueueCancelled`/`QueueConsumed`（新增）发射；`close()` 补 `AbortRequested`；
-> - `StepAttempt` 增 `stopReason` 字段；`UsageRecord` 无条件发射 stopReason；
+> - `StepAttempt` 增 `stopReason` 字段；`UsageRecord` 在 tokens==0 时也发射（D2，stopReason 字段已存在）；
 > - compaction 是 **step 而非嵌套 operation**（run 中 `StepAttempt(COMPACTION)`，空闲三连 `OperationStarted(Compaction)`+`StepAttempt`+`OperationFinished`）；
 > - `lane.records` 改 append-only（移除 run/runContinue 的 clear，保留 reset）；
 > - 新类 `LaneStateFolder.fold(records, ownEntries, configurationEntries) → FoldedState`（纯函数，**pi 式有界切片**
->   + `validateRecordLog` 子集校验，供哨兵测试 + resume 有界恢复）；
+>   + `validateRecordLog` 子集校验，供哨兵测试 + resume 有界恢复）；配置类过滤用新增默认方法 `Entry::isConfiguration`；
 > - **Out（推迟）**：deferred 执行、toolBatch、terminalFailure 溯源、entry-内嵌 stopReason、queue 消费按 entry-presence 推断。
 >
 > 完整设计见 `docs/21-record-log-fold-design.md`。

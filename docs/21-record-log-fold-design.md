@@ -23,6 +23,13 @@
 > **方案升级（用户确认 2026-09-11）**：fold 输入从 `transcript` 全量 → **pi 式有界切片**
 > `(records, ownEntries, configurationEntries)`。期望「和 pi 一样」的 resume 扩展性/健壮性：
 > 存储层已具备查询能力（`RecordQuery` 按 runId 过滤 + `EntryQuery` 按 seq cursor 切片），无需改 schema。
+>
+> **2026-09-11 设计审核修订**（代码对拍，F1–F8 已并入下文）：① `ActiveToolsChange` **无发射点**
+> （`setActiveTools` 不写 entry；HookTest:196/227 实为 ModelChange 断言）→ D11/R10 修正；② 新增
+> `Entry::isConfiguration` 默认方法（§3.3/§3.6/Step 1）；③ `QueueConsumed` 覆盖 `injectUserMessages` +
+> 修 `ActionExecutor:237` nextRun 误标（D10/R11）；④ `matchesRecordQuery` 顺带补 ToolFinished（F5/Step 2）；
+> ⑤ open-op 续跑路径（F6/§3.6/§5）；⑥ ownEntries 单 lane 限定（F7）；⑦ abort 测试需驱动至终局、
+> phase 术语统一为 ASSISTANT（F8）。
 
 ---
 
@@ -61,6 +68,8 @@
 | **D7** | fold 是**纯函数** `LaneStateFolder.fold(records, ownEntries, configurationEntries)`，前置 **`validateRecordLog` 子集**校验（损坏→`RecordLogCorruption`）；live driver 继续原地改 LaneState。不做增量 apply | pi reducer 即纯函数 + 校验先行；两个消费方都不需要增量 |
 | **D8** | **abort outcome 修正**：`HarnessUtils.determineOutcome` 把 `"aborted"` → `"aborted"`（现映射到 error→FAILED，污染 `faulted`） | pi 对齐；⚠️ 行为变更，需查现有断言 |
 | **D9** | **resume 恢复改为有界切片**：`SessionPersistence.attach` 用 `findRecords(RecordQuery(lane, null, null,...))` + `findEntries(cursor afterSeq)` 有界取数据 → `LaneStateFolder.fold` → 重建 LaneState，替代全量 `seedTranscript` | 恢复不随会话增长；compaction 也能正确重建（record 日志是源，不依赖 transcript 完整性） |
+| **D10** | **QueueConsumed 覆盖全部 drain 出口**（审核修订）：run 中 steer 注入走 `ActionExecutor.injectUserMessages`（**不经** `ConsumeQueueItem`），须与 `executeConsumeQueueItem` **同点发射**；QueueKind 取 QueuedItem 真实来源队列（顺带修 `ActionExecutor:237` 把 nextRun drain 误标为 `"followUp"` 的疏漏） | 否则 run 中消费的 steer 项在 fold 里仍算 pending → 崩溃后 resume 重复注入（F4/F4b） |
+| **D11** | **activeToolNames 仅在存在 `ActiveToolsChange` entry 时派生**（审核修订）：`setActiveTools` **不写 entry**（R10 原文有误），fold 无 entry 时 `activeToolNames=null`（=继承 harness 默认）；resume 不重建 per-lane activeTools 覆盖，后续立项补发射 | 如实反映当前可派生集；哨兵测试不覆盖 activeTools 变更 |
 
 > **为什么 fold 是双投影**：pi 的 reducer 输入含 `ownEntries` + `configurationEntries`（entry 查询），
 > 而 entry 与 record 在存储层分开持久化（`SessionStorage.appendEntry`/`appendRecord` 两个 API）。
@@ -99,7 +108,7 @@ record QueueConsumed(
 
 - `QueueEnqueued`（现有）在 `QueueManager.steer/followUp/nextRun` 发射（Step 2）。
 - `QueueCancelled`（现有）在 `QueueManager.cancelQueued` 发射（Step 2）。
-- `QueueConsumed`（新增）在 `ActionExecutor.executeConsumeQueueItem` 发射（Step 2）。
+- `QueueConsumed`（新增）在 `ActionExecutor.executeConsumeQueueItem` **及 `injectUserMessages`** 发射（Step 2，D10）——后者覆盖 run 中 steer 注入，避免 fold 把已消费项当 pending。
 
 ### 3.3 `LaneStateFolder`（核心，新文件 ~350 行）
 
@@ -116,7 +125,7 @@ final class LaneStateFolder {
     /** 折叠结果：与 LaneState 对应字段对齐的不可变快照。 */
     record FoldedState(
         String lane,
-        RunPhase phase,                 // IDLE | RUNNING | CHECKPOINT（fold 归一化，见 R5）
+        RunPhase phase,                 // IDLE | ASSISTANT | CHECKPOINT（fold 归一化，见 R5）
         String runId,                   // 当前 open operation 的 id；空闲为 null
         int stepIndex,                  // 当前 run 已完成的 step 数
         NewestOwn newestOwn,            // 最近一条 own entry 的摘要（含 stopReason）
@@ -139,6 +148,7 @@ final class LaneStateFolder {
      * fold(records, ownEntries, configurationEntries) 的入口。
      * records 按 seq 升序 fold；ownEntries = open operation 追加的条目（旧在前）；
      * configurationEntries = 配置类 entry（ModelChange/ThinkingLevelChange/ActiveToolsChange，旧在前）。
+     * 配置类过滤用新增默认方法 Entry::isConfiguration（三个配置类型覆写 true；当前无方法，审核修订 F3）。
      */
     static FoldedState fold(
         String lane,
@@ -225,6 +235,12 @@ var folded = LaneStateFolder.fold(lane, records, ownEntries, configurationEntrie
 owner.harness().restoreFromFold(folded);   // 重建 phase/runId/queues/records/newestOwn
 ```
 
+> **有界切片注意（审核修订）**：`Entry::isConfiguration` 为新增默认方法（见 §3.3）；`findEntries` 无 lane 字段，
+> 多 lane 会话下 ownEntries 会跨 lane，本阶段以**单 lane** 会话为限（F7）。
+> **open-op 续跑**：会话在 run 中途持久化时（`OperationStarted` 已落库、无 `OperationFinished`），resume 恢复
+> phase=CHECKPOINT，驱动循环会先 `TryFinishRun` 收尾；MANUAL 模式若未收尾就 `continueRun()`，第二个
+> `OperationStarted` 会撞 `appendRecord` 的 open-op 校验——恢复路径须先终结合理（F6）。
+
 > **现有 `seedTranscript` 路径保留**：`restoreFromFold` 重建编排状态（phase/queues/records），
 > transcript 仍由 `ContextEntries.contextEntries(pathToLeaf(...))` 提供（compaction-aware）。
 > 两条路径并行：fold 管「编排状态」，seedTranscript 管「显示上下文」。
@@ -274,11 +290,12 @@ flowchart LR
 | 哨兵：user→tool→follow-up→compaction 全驱动 | `LaneStateFoldTest` | 每个边界 `fold(records, ownEntries, configurationEntries)` 派生的 phase/runId/stepIndex/newestOwn/effectiveConfiguration 与 live `LaneState` 相等（phase 在 tool_use-stream 后单一瞬态点跳过，R5） |
 | 队列消费折叠 | 同 | enqueue→consume 后 fold 的 pendingFollowUp == live 队列剩余 |
 | compaction step | 同 | run 中 compaction → fold 产出 `StepAttempt(COMPACTION)`，pendingWrites 正确 |
-| abort 路径 | 同 | `abort()` 后 fold 的 `aborted=true`，phase 不为 RUNNING |
+| abort 路径 | 同 | `abort()` 后**驱动至终局**（FinishOperation 落 `OperationFinished(ABORTED)`）→ fold 的 `aborted=true`，phase 归 IDLE；仅 `abort()` 不落 finished，`aborted` 仍 false（审核修订） |
 | 空闲三连 | 同 | 空闲 compaction → `OperationStarted(Compaction)`+`StepAttempt`+`OperationFinished` |
 | validateRecordLog | 同 | 构造损坏日志（第二个 open op / record-after-finish / 非连续 attempt / abort 后入队）→ 断言 `RecordLogCorruption` |
-| queue 记录发射 | `QueueRecordEmissionTest` | steer/followUp/nextRun/cancelQueued/consume 各发射对应记录 |
+| queue 记录发射 | `QueueRecordEmissionTest` | steer/followUp/nextRun/cancelQueued/consume 各发射对应记录；**run 中 steer 注入（injectUserMessages）也发射 QueueConsumed，且 QueueKind 取真实队列**（D10） |
 | resume 有界恢复 | `coding-agent` 恢复测试 + 新增 | 持久化后重建 harness，fold 重建的 LaneState 与持久化前一致（compaction 场景也验证） |
+| resume open-op 续跑 | 同 | 持久化含 open `OperationStarted` 无 `OperationFinished` → resume 后驱动自动收尾，再续跑不撞 `appendRecord` open-op 校验（F6） |
 | 现有回归 | 复用 `AgentLoopL2Test` / `RunToCompletionTest` / `HookTest` | append-only + D8 行为变更不破坏现有语义 |
 
 ---
@@ -293,9 +310,9 @@ flowchart LR
 | **4. entry-内嵌 stopReason（pi 做法）** | pi 把 stopReason 存在 assistant entry 的 message 上；pi-java 的 `StepAttempt` 无 stopReason 字段、`determineOutcome` 从内存 `lane.newestOwn` 读。若走 pi 路线 = 改 Entry 持久化 schema（JSONL/SQLite 双写）+ 全仓 message 消费方，blast radius 过大 | 本阶段用 D3 折中（StepAttempt 加 stopReason 字段） |
 | **5. queue 消费按 entry-presence 推断** | pi 每条 queue item 对应一条 entry，消费 = entry 出现；pi-java 把 drain 合并成单条 user entry（QueueMode 整体合并），无逐条对应 | 本阶段用 D4 折中（新增 QueueConsumed record） |
 
-> **effectiveConfiguration 已移入 In**（从 Out 移除）：配置 Entry（ModelChange/ThinkingLevelChange/ActiveToolsChange）
-> 本就进 transcript（`ContextAssembler:42/60`、`ActionExecutor:113` 确认），fold 的 `configurationEntries` 直接读它们
-> 即可派生，无需新发射点。
+> **effectiveConfiguration 已移入 In**（从 Out 移除）：`ModelChange`/`ThinkingLevelChange` 本就进 transcript
+> （`ContextAssembler:42/60`、`ActionExecutor:112-119` 确认），fold 的 `configurationEntries` 直接读它们即可派生；
+> **`ActiveToolsChange` 无发射点**（`setActiveTools` 不写 entry），`activeToolNames` 仅在 entry 存在时派生（D11）。
 
 ---
 
@@ -309,8 +326,8 @@ flowchart LR
 
 | Step | 提交 | 主要文件 |
 |---|---|---|
-| 1 | `feat(agent-core): persist step stopReason on StepAttempt + abort outcome` | `record/LaneRecord.java`、`session/jsonl/RecordJsonCodec.java`、`harness/ActionExecutor.java`、`harness/HarnessUtils.java` + 4 处测试 fixture |
-| 2 | `feat(agent-core): emit queue_enqueued/queue_cancelled/queue_consumed records` | `record/LaneRecord.java`（+QueueConsumed）、`harness/QueueManager.java`、`JsonlCodec`/`RecordJsonCodec`/`SessionState`/`SqliteCodecs` + 测试 |
+| 1 | `feat(agent-core): persist step stopReason on StepAttempt + abort outcome` | `record/LaneRecord.java`、`session/jsonl/RecordJsonCodec.java`、`harness/ActionExecutor.java`、`harness/HarnessUtils.java`、`entry/Entry.java`（+`isConfiguration` 默认方法，F3）+ 4 处测试 fixture |
+| 2 | `feat(agent-core): emit queue_enqueued/queue_cancelled/queue_consumed records` | `record/LaneRecord.java`（+QueueConsumed）、`harness/QueueManager.java`、`harness/ActionExecutor.java`（injectUserMessages 同点发射 + 修 nextRun 标签，D10）、`JsonlCodec`/`RecordJsonCodec`/`SessionState`（+QueueConsumed **及 ToolFinished** case，F5）/`SqliteCodecs` + 测试 |
 | 3 | `feat(agent-core): compaction records, close abort, append-only records` | `harness/CompactionExecutor.java`、`harness/AgentHarness.java`（close + seedRecords）、`harness/ActionExecutor.java`（去 clear） |
 | 4 | `feat(agent-core): LaneStateFolder — record-log fold + validateRecordLog` | `harness/LaneStateFolder.java`（新，~350 行，含 fold + validateRecordLog 子集 + FoldedState + EffectiveConfiguration + RecordLogCorruption） |
 | 5 | `feat(agent-core): LaneStateFoldTest sentinel + resume bounded restore` | `harness/LaneStateFoldTest.java`（新）、`coding-agent/SessionPersistence.java`（attach 改有界切片→fold→restoreFromFold） |
@@ -333,7 +350,8 @@ flowchart LR
 | **R7** | append-only 后 `reset()` 仍 clear → fold 历史截断 | reset 语义明确是「清空 lane」，保留；fold 只对 reset 之后的记录负责 |
 | **R8** | `validateRecordLog` 子集裁剪范围 | 裁剪 deferred 依赖 + entry 深度校验（tool_call_mismatch/duplicate/provisioned_entry_mismatch/inconsistent_step）；保留的 7 类都是 records 内部一致性，不依赖 entry lookup |
 | **R9** | resume 有界恢复改动 `SessionPersistence.attach` 的 seedTranscript 路径 | 现有 coding-agent 恢复测试 + 新增有界恢复测试覆盖；fold 重建编排状态与 seedTranscript 管显示上下文并行不冲突 |
-| **R10** | 配置派生依赖 Entry 已进 transcript | `ContextAssembler:42/60`、`ActionExecutor:113` 确认 `ModelChange`/`ThinkingLevelChange` 已发射；`ActiveToolsChange` 由 harness `setActiveTools` 写入（HookTest:196/227 佐证） |
+| **R10** | 配置派生依赖 Entry 已进 transcript | `ContextAssembler:42/60`、`ActionExecutor:112-119` 确认 `ModelChange`/`ThinkingLevelChange` 已发射；**`ActiveToolsChange` 无发射点**（`setActiveTools` 不写 entry；HookTest:196/227 是 ModelChange 断言，非 ActiveToolsChange）——fold 的 `activeToolNames` 仅在存在 ActiveToolsChange entry 时派生，否则 null（继承 harness 默认）；resume 不重建 per-lane activeTools（D11） |
+| **R11** | QueueConsumed 覆盖不全：run 中 steer 走 `injectUserMessages` 不经 `ConsumeQueueItem`；nextRun drain 在 `ActionExecutor:237` 被误标 `"followUp"` | D10：两处同点发射 QueueConsumed，QueueKind 取 QueuedItem 真实来源队列（顺带修标签） |
 
 ---
 
