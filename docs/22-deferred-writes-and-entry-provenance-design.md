@@ -177,11 +177,19 @@ if (entry instanceof Entry.Message m
 
 - **`pendingWrites`（#1）**：本次 run 的 `WriteDeferred` 记录中，`target.id` **不在** ownEntries 里的 → 克隆 target。
   与 `pendingSteer/FollowUp` 不同，**abort 时不清零**（pi `reducer.ts:543-558`；延迟写入在取消时仍会被应用）。
-  > **语义边界（写计划时核实）**：pi-java 的每个写入点都是 `lane.transcript.add(e)` **紧跟** `lane.pendingWrites.add(e)`，
-  > 因此 **live lane 上该派生恒为空**——target 总是已在 ownEntries 中。该派生**唯一的真实消费者是崩溃恢复**：
-  > `write_deferred` 记录已落库而 target entry 未落库时，恢复必须把它视为待应用。
-  > 故**不得**用「fold 的 pendingWrites == live 的 pendingWrites」做哨兵——两者是不同集合
-  > （live 的是「尚未持久化」的流动标记）。测试须断言：live 为空 + 构造「target 未落库」的切片为非空 + abort 后仍保留。
+  > **语义边界（Task 5 review + fix round 修正，两次都写错过，以本节为准）**：每个写入点都是
+  > `lane.transcript.add(e)` **紧跟** `lane.pendingWrites.add(e)`，因此在**无 compaction、无重试**的 live lane 上该派生为空。
+  > **入口移除会让它非空，但只在「移除之后没有再开 operation」时成立**：
+  > - `CompactionExecutor.applyCompaction` 清空并替换 `lane.transcript`。**run 中** compaction 只发 `StepAttempt`（**不开** operation）
+  >   ⇒ 锚点不变 ⇒ 被丢弃 entry 的 `write_deferred` 落回范围 ⇒ **非空（泄漏）**。
+  > - **空闲** compaction 会发 `OperationStarted(Compaction)`，**它成为新锚点**，把被丢弃 entry 的写入挤出范围 ⇒ **仍为空**（泄漏被掩盖）。
+  > - `AgentHarness.dropTrailingErrorAssistant` 移除尾部 entry 且**不发任何记录** ⇒ 锚点不变 ⇒ **非空（泄漏）**。
+  > 故泄漏在**重试与 run 中 compaction** 上成立，在**空闲 compaction** 上被掩盖——本派生对「entry 被移除」这类事实并不可靠。
+  > 另：`SessionPersistence.restoreFromRecordLog` 从**存储**（而非 transcript）算 ownEntries，被 compaction 丢掉的 entry 仍在存储里，
+  > 故**恢复路径基本不受影响**；受影响的是「拿 compacted 后的 live transcript 当 ownEntries」的调用方（如哨兵测试的 `foldOf`）。
+  > 该派生**唯一的真实消费者是崩溃恢复**：`write_deferred` 记录已落库而 target entry 未落库时，恢复必须把它视为待应用。
+  > 故**不得**用「fold 的 pendingWrites == live 的 pendingWrites」做哨兵——两者是不同集合（live 的是「尚未持久化」的流动标记）。
+  > 测试须断言：无 compaction 无重试为空 + **空闲 compaction 之后也为空** + **重试之后非空**（钉住泄漏）+ 「target 未落库」切片非空 + abort 后仍保留。
 - **`deferred`（#1）**：**仅看 newest own entry**——是 assistant 且 `stopReason=="deferred"` 且带 handle → 克隆 handle，否则 null。
   即「只有挂在算子尾部时才算未兑换」（pi 测试 `reducer.test.ts:982-1002`）。
 - **`deferredWriteIds`（#1，供 #2/#3）**：本次 run 所有 `WriteDeferred.target.id` 的集合。
@@ -250,7 +258,7 @@ flowchart TD
 | **折叠读 entry 的 stopReason** | `LaneStateFoldTest` 扩容 | fold 的 `newestOwn.stopReason` == live `lastAssistantMessage().stopReason()`（既有哨兵断言保持） |
 | **投影规则（D4）** | 新 `ContextProjectionTest` | `deferred`/`error`/`aborted` 的 assistant entry **零条** provider 消息；`stop`/`tool_use`/`length` 正常投影；非 assistant entry 不受影响 |
 | **WriteDeferred 发射（D3）** | 新 `WriteDeferredEmissionTest` | run 中产生的 entry（assistant/工具结果/中途 steer）各发一条 `WriteDeferred`；run 起始的用户 prompt **不**发 |
-| **pendingWrites 派生** | 同 / `LaneStateFoldTest` | fold 的 `pendingWrites` **由 record 派生**（= `target.id ∉ ownEntries` 的 `WriteDeferred`）。**live lane 上恒为空**（写入点 `transcript.add` 紧跟 `pendingWrites.add`，见 §3.4 语义边界），故**不得**与 live `snapshot.pendingWrites()` 比大小。三个断言：① live lane 上为空；② 构造「record 已落库、target 未落库」的切片 → 非空（崩溃恢复，唯一真实消费者）；③ abort 后仍保留（≠ steer/followUp 清零） |
+| **pendingWrites 派生** | 同 / `LaneStateFoldTest` | fold 的 `pendingWrites` **由 record 派生**（= `target.id ∉ ownEntries` 的 `WriteDeferred`），范围**最后一条 `OperationStarted` 起**（无则整片），见 §3.4。**无 compaction 无重试的 live lane 上为空**；**空闲 compaction 之后仍为空**（其 `OperationStarted` 成为新锚点）；**重试之后非空**（孤儿泄漏）。故**不得**与 live `snapshot.pendingWrites()` 比大小。五个断言：① 无 compaction 的 live lane 为空（`run()` 不 `drive()`，直接钉 IDLE 门）；② 空闲 compaction 之后为空（须先断言「确有被丢弃的 entry」，否则是空跑）；③ 重试之后非空且 `containsExactly(被丢弃的 id)`（钉住泄漏）；④ 构造「record 已落库、target 未落库」的切片 → 非空（崩溃恢复，唯一真实消费者）；⑤ abort 后仍保留（≠ steer/followUp 清零） |
 | `invalid_deferred_handle` | `LaneStateFoldTest` | 构造 `stopReason=="deferred"` 但无 handle 的 assistant entry → `RecordLogCorruption` |
 | `provisioned_entry_mismatch`（write_deferred） | 同 | target id 已存在于 entries 且内容不同 → `RecordLogCorruption` |
 | **toolBatch 派生（#2）** | 新 `ToolBatchFoldTest` | 一轮 tool_use：每 call 关联到 `toolUseId` 相同的 toolResult entry；未执行的 call 标 `missing`；延迟写入**不**被当作结果 |
