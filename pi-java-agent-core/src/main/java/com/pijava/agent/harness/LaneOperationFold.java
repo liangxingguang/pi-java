@@ -14,6 +14,7 @@ import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.record.OperationOutcome;
 import com.pijava.agent.record.QueueKind;
 import com.pijava.agent.record.StepKind;
+import com.pijava.agent.record.UsageCause;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.DeferredHandle;
 import com.pijava.ai.message.Message;
@@ -65,6 +66,10 @@ final class LaneOperationFold {
 
         var openOp = openOperation(ordered);
         var finished = lastFinish(ordered);
+        // One operation-scoped slice, one deferred-write id set: both the
+        // pending set and the two derived projections read the same records.
+        var scopedRecords = operationScoped(ordered);
+        var deferredIds = deferredWriteIds(scopedRecords);
         return new LaneStateFolder.FoldedState(
             lane,
             openOp == null ? RunPhase.IDLE : RunPhase.CHECKPOINT,
@@ -77,8 +82,10 @@ final class LaneOperationFold {
             pendingQueue(ordered, QueueKind.STEER),
             pendingQueue(ordered, QueueKind.FOLLOW_UP),
             pendingQueue(ordered, QueueKind.NEXT_RUN),
-            pendingWrites(operationScoped(ordered), appliedEntryIds),
-            deferred(ownEntries));
+            pendingWrites(scopedRecords, appliedEntryIds),
+            deferred(ownEntries),
+            toolBatch(ownEntries, deferredIds),
+            terminalFailure(ownEntries, scopedRecords, deferredIds));
     }
 
     /**
@@ -128,10 +135,10 @@ final class LaneOperationFold {
      * The ids of every deferred write this operation requested — deferred, not
      * pending: the set includes writes that already landed.
      *
-     * <p>Not part of {@link LaneStateFolder.FoldedState}: its consumer is the
-     * terminal-failure derivation (pi {@code reducer.ts:611-613}, pi-java
-     * step 6), which needs it to tell a deferred error entry apart from a
-     * fatal one.</p>
+     * <p>Not part of {@link LaneStateFolder.FoldedState}: its consumers are the
+     * tool-batch and terminal-failure derivations (pi {@code reducer.ts:479-486},
+     * {@code reducer.ts:611-613}), which need it so a deferred write is never
+     * mistaken for a tool result or for a fatal error.</p>
      */
     static Set<String> deferredWriteIds(List<LaneRecord> operationRecords) {
         Set<String> ids = new LinkedHashSet<>();
@@ -157,6 +164,119 @@ final class LaneOperationFold {
                 && msg.message() instanceof Message.AssistantMessage assistant
                 && "deferred".equals(assistant.stopReason())) {
             return assistant.deferred();
+        }
+        return null;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Derived projections
+    // ═══════════════════════════════════════════════════════════
+
+    /** A tool batch: the assistant entry that requested calls, and each call's outcome. */
+    record ToolBatch(String assistantEntryId, List<ToolBatchCall> calls) {
+        ToolBatch {
+            calls = List.copyOf(calls);
+        }
+    }
+
+    /** One call of a batch; {@code missing} when no result entry was found. */
+    record ToolBatchCall(String toolCallId, String toolName, String resultEntryId,
+                         boolean missing) {}
+
+    /**
+     * Pair the newest assistant entry's tool calls with their results
+     * (pi {@code deriveToolBatch}, reducer.ts:479-486).
+     *
+     * <p>Results are matched by {@code toolCallId}, not by queue-drain
+     * correspondence — a tool result is always one entry per call, so the
+     * merged-drain shape that blocks queue inference elsewhere does not apply
+     * here. Entries are compared by position, not {@code seq}: an uncommitted
+     * entry's seq is 0.</p>
+     */
+    private static ToolBatch toolBatch(List<Entry> ownEntries, Set<String> deferredWriteIds) {
+        int assistantIndex = -1;
+        List<ContentBlock.ToolUseContent> calls = List.of();
+        for (int i = ownEntries.size() - 1; i >= 0; i--) {
+            if (ownEntries.get(i) instanceof Entry.Message msg
+                    && msg.message() instanceof Message.AssistantMessage assistant) {
+                var toolCalls = assistant.content().stream()
+                    .filter(ContentBlock.ToolUseContent.class::isInstance)
+                    .map(ContentBlock.ToolUseContent.class::cast)
+                    .toList();
+                if (!toolCalls.isEmpty()) {
+                    assistantIndex = i;
+                    calls = toolCalls;
+                    break;
+                }
+            }
+        }
+        if (assistantIndex < 0) {
+            return null;
+        }
+        List<ToolBatchCall> matched = new ArrayList<>();
+        for (var call : calls) {
+            String resultEntryId = null;
+            for (int i = assistantIndex + 1; i < ownEntries.size(); i++) {
+                if (ownEntries.get(i) instanceof Entry.Message msg
+                        && msg.message() instanceof Message.ToolResultMessage result
+                        && call.id().equals(result.toolUseId())
+                        && !deferredWriteIds.contains(msg.id())) {
+                    resultEntryId = msg.id();
+                    break;
+                }
+            }
+            matched.add(new ToolBatchCall(call.id(), call.name(), resultEntryId,
+                resultEntryId == null));
+        }
+        return new ToolBatch(((Entry.Message) ownEntries.get(assistantIndex)).id(), matched);
+    }
+
+    /** The newest error entry, with the provenance that explains how it arose. */
+    record TerminalFailure(String entryId, String source, Message message) {}
+
+    /**
+     * Attribute an error entry to what produced it (pi reducer.ts:614-640).
+     *
+     * <p>An error entry counts only if a step attempt or a deferred fetch
+     * produced it — otherwise the error is not the operation's terminal
+     * failure. An applied deferred write is excluded outright, so a write that
+     * happens to be an error message is never mistaken for a failure.</p>
+     */
+    private static TerminalFailure terminalFailure(List<Entry> ownEntries,
+                                                   List<LaneRecord> operationRecords,
+                                                   Set<String> deferredWriteIds) {
+        if (ownEntries.isEmpty()) {
+            return null;
+        }
+        var newest = ownEntries.get(ownEntries.size() - 1);
+        if (!(newest instanceof Entry.Message msg)
+                || !(msg.message() instanceof Message.AssistantMessage assistant)
+                || !"error".equals(assistant.stopReason())
+                || deferredWriteIds.contains(msg.id())) {
+            return null;
+        }
+        boolean producedByStep = false;
+        boolean producedByDeferredFetch = false;
+        for (var record : operationRecords) {
+            if (record instanceof LaneRecord.StepAttempt step
+                    && msg.id().equals(step.resultEntryId())) {
+                producedByStep = true;
+            }
+            if (record instanceof LaneRecord.UsageRecord usage
+                    && usage.cause() == UsageCause.DEFERRED_FETCH
+                    && msg.id().equals(usage.entryId())) {
+                producedByDeferredFetch = true;
+            }
+        }
+        if (ownEntries.size() >= 2
+                && ownEntries.get(ownEntries.size() - 2) instanceof Entry.Message previous
+                && previous.message() instanceof Message.AssistantMessage prevAssistant
+                && "deferred".equals(prevAssistant.stopReason())) {
+            producedByDeferredFetch = true;
+        }
+        if (producedByStep || producedByDeferredFetch) {
+            return new TerminalFailure(msg.id(),
+                producedByStep ? "step" : "deferred_fetch", msg.message());
         }
         return null;
     }

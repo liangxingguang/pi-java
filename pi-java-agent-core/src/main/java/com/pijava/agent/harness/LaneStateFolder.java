@@ -12,11 +12,10 @@ import com.pijava.ai.model.ModelId;
  * The fold result shapes for a lane's record log, plus the entry points that
  * produce them.
  *
- * <p>Aligned with pi's {@code harness/reducer.ts} ({@code reduceLaneState}),
- * restricted to the subset pi-java can derive: operation state, queue pending
- * sets, the effective configuration, the pending deferred writes and the
- * unredeemed deferred handle. Tool batches and terminal-failure provenance
- * are out of scope (docs/21 §6).</p>
+ * <p>Aligned with pi's {@code harness/reducer.ts} ({@code reduceLaneState}):
+ * operation state, queue pending sets, the effective configuration, the
+ * pending deferred writes, the unredeemed deferred handle, the newest tool
+ * batch and the terminal-failure provenance (docs/21 §6, docs/22 §3.4).</p>
  *
  * <p>The fold algorithm lives in {@link LaneOperationFold} and the corruption
  * rules in {@link RecordLogValidator}; this class only owns the record
@@ -51,7 +50,9 @@ final class LaneStateFolder {
         List<LaneInfo.QueuedItem> pendingFollowUp,
         List<LaneInfo.QueuedItem> pendingNextRun,
         List<ProvisionedEntry<?>> pendingWrites,
-        DeferredHandle deferred
+        DeferredHandle deferred,
+        LaneOperationFold.ToolBatch toolBatch,
+        LaneOperationFold.TerminalFailure terminalFailure
     ) {
         FoldedState {
             pendingSteer = List.copyOf(pendingSteer);
