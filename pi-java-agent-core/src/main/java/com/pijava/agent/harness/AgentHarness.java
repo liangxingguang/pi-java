@@ -18,6 +18,7 @@ import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ToolContext;
 import com.pijava.agent.tool.ToolExecutor;
 import com.pijava.agent.tool.ToolRegistry;
+import com.pijava.ai.AbortSignal;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.model.ModelId;
@@ -46,7 +47,7 @@ public class AgentHarness implements AutoCloseable {
     private final int maxInputTokens;
     private final ToolRegistry toolRegistry;
     private final ToolContext toolContext;
-    private boolean closed;
+    private volatile boolean closed;
 
     // Phase 2c: multi-lane
     private final ConcurrentMap<String, LaneState> lanes = new ConcurrentHashMap<>();
@@ -330,6 +331,54 @@ public class AgentHarness implements AutoCloseable {
             return;
         }
         lane.transcript.addAll(entries);
+    }
+
+    /**
+     * Rebuild a lane's orchestration state from its record log (docs/21 D9).
+     *
+     * <p>The caller supplies the lane's records plus the bounded entry slices
+     * the fold needs: the entries appended since the lane's last
+     * {@code OperationStarted}, and the configuration entries. State is
+     * restored, never merged — this is a resume, so the lane is empty.</p>
+     *
+     * <p>A lane whose log ends with an unfinished operation restores to the
+     * checkpoint phase: the drive loop finalizes it (a {@code TryFinishRun})
+     * before any new run opens, because storage rejects a second open
+     * operation on the same lane. An abort signal is installed so the
+     * restored lane stays abortable.</p>
+     *
+     * @throws RecordLogCorruption when the log is internally inconsistent
+     */
+    public void restoreFromRecords(String laneName, List<LaneRecord> records,
+                                   List<Entry> ownEntries, List<Entry> configurationEntries) {
+        if (closed) throw new HarnessClosedException();
+        var lane = requireLane(laneName);
+        var folded = LaneStateFolder.fold(laneName, records, ownEntries, configurationEntries);
+        synchronized (lane) {
+            lane.records.clear();
+            lane.records.addAll(records);
+            lane.runId = folded.runId();
+            lane.stepIndex = folded.stepIndex();
+            lane.newestOwn = folded.newestOwn();
+            lane.phase = folded.idle() ? RunPhase.IDLE : RunPhase.CHECKPOINT;
+            lane.partial = null;
+            lane.abortSignal = AbortSignal.create();
+            lane.steerQueue.clear();
+            lane.steerQueue.addAll(folded.pendingSteer());
+            lane.followUpQueue.clear();
+            lane.followUpQueue.addAll(folded.pendingFollowUp());
+            lane.nextRunQueue.clear();
+            lane.nextRunQueue.addAll(folded.pendingNextRun());
+            // Keep new queue items from reusing a restored item's sequence.
+            long maxQueueSeq = -1;
+            for (var queue : List.of(lane.steerQueue, lane.followUpQueue, lane.nextRunQueue)) {
+                for (var item : queue) {
+                    maxQueueSeq = Math.max(maxQueueSeq, item.seq());
+                }
+            }
+            lane.queueSeq = maxQueueSeq + 1;
+        }
+        publishState(laneName);
     }
 
     /** Abort the current run on the default lane. */

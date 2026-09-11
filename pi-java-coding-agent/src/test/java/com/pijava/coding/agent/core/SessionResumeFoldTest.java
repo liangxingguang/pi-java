@@ -1,0 +1,196 @@
+package com.pijava.coding.agent.core;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+
+import com.pijava.agent.entry.Entry;
+import com.pijava.agent.entry.ProvisionedEntry;
+import com.pijava.agent.harness.AgentHarness;
+import com.pijava.agent.record.LaneRecord;
+import com.pijava.agent.record.NewRecord;
+import com.pijava.agent.record.OperationOutcome;
+import com.pijava.agent.record.QueueKind;
+import com.pijava.agent.session.EntryOrder;
+import com.pijava.agent.session.EntryQuery;
+import com.pijava.agent.session.RecordQuery;
+import com.pijava.coding.agent.cli.ArgsParser;
+import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.Message;
+
+import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * Resume rebuilds orchestration state by folding the record log (docs/21 D9),
+ * while the transcript seed stays responsible for display context.
+ *
+ * <p>Records are lane-scoped, so these seed under the harness's lane name.</p>
+ */
+class SessionResumeFoldTest {
+
+    private static final String LANE = AgentHarness.DEFAULT_LANE;
+
+    private static ProvisionedEntry<Entry.Message> userMessage(String id, String text) {
+        return new ProvisionedEntry<>(new Entry.Message(id, 0, null, null,
+            new Message.UserMessage(List.of(new ContentBlock.TextContent(text))), null));
+    }
+
+    private static LaneRecord.OperationStarted openRun(String id) {
+        return new LaneRecord.OperationStarted(id, 0, LANE, null, null,
+            new LaneRecord.OperationStarted.Run(List.of(), List.of(), null, null));
+    }
+
+    private static LaneRecord.OperationFinished finish(String id, OperationOutcome outcome) {
+        return new LaneRecord.OperationFinished("fin-" + id, 0, LANE, null, id,
+            outcome, null, 10L);
+    }
+
+    private static ProvisionedEntry<Entry.Message> queuedTarget(String queueSeq, String text) {
+        return new ProvisionedEntry<>(new Entry.Message(queueSeq, 0, null, null,
+            new Message.UserMessage(List.of(new ContentBlock.TextContent(text))), null));
+    }
+
+    /** Persist a session whose lane carries the given records. */
+    private static Path seed(RecordSeed seed) throws Exception {
+        Path root = Files.createTempDirectory("pi-resume-fold");
+        var handle = PersistentSessionRepositories.jsonl(root);
+        try {
+            var session = handle.create("cwd", null);
+            session.createLane(LANE, null);
+            seed.run(session);
+        } finally {
+            handle.close();
+        }
+        return root;
+    }
+
+    private interface RecordSeed {
+        void run(com.pijava.agent.session.Session<?> session);
+    }
+
+    private static AgentSession resume(Path root) {
+        return AgentSession.createWeb(ArgsParser.parse(new String[] {
+            "--session-dir", root.toString()}));
+    }
+
+    @Test
+    void attachRestoresPendingQueuesFromRecordLog() throws Exception {
+        Path root = seed(session -> {
+            session.appendEntry(userMessage("m1", "hello"), LANE);
+            session.appendRecord(new NewRecord<>(openRun("run-1")));
+            session.appendRecord(new NewRecord<>(finish("run-1", OperationOutcome.COMPLETED)));
+            session.appendRecord(new NewRecord<>(new LaneRecord.QueueEnqueued(
+                "q1", 0, LANE, null, QueueKind.FOLLOW_UP, null,
+                queuedTarget("0", "queued follow-up"))));
+        });
+
+        var resumed = resume(root);
+        try {
+            var snapshot = resumed.harness().snapshot(LANE);
+            // The finished operation folds back to idle, and the enqueue that was
+            // never consumed or cancelled is still pending after the resume.
+            assertThat(snapshot.operation()).isNull();
+            assertThat(snapshot.queues().followUp()).hasSize(1);
+            assertThat(snapshot.queues().followUp().get(0).prompt()).isEqualTo("queued follow-up");
+            // Restored records are marked persisted so write-through is a no-op.
+            assertThat(resumed.persistedRecordIds()).contains("run-1", "fin-run-1", "q1");
+        } finally {
+            resumed.close();
+        }
+    }
+
+    @Test
+    void attachIgnoresCompletedQueueLifecycles() throws Exception {
+        Path root = seed(session -> {
+            session.appendEntry(userMessage("m1", "hello"), LANE);
+            session.appendRecord(new NewRecord<>(openRun("run-1")));
+            session.appendRecord(new NewRecord<>(new LaneRecord.QueueEnqueued(
+                "q1", 0, LANE, null, QueueKind.FOLLOW_UP, "run-1",
+                queuedTarget("0", "done already"))));
+            session.appendRecord(new NewRecord<>(new LaneRecord.QueueConsumed(
+                "q2", 0, LANE, null, "run-1", QueueKind.FOLLOW_UP,
+                List.of(queuedTarget("0", "done already")))));
+            session.appendRecord(new NewRecord<>(finish("run-1", OperationOutcome.COMPLETED)));
+        });
+
+        var resumed = resume(root);
+        try {
+            assertThat(resumed.harness().snapshot(LANE).queues().followUp()).isEmpty();
+        } finally {
+            resumed.close();
+        }
+    }
+
+    /**
+     * A session persisted mid-run keeps an open operation. Restoring it must
+     * put the lane in the checkpoint phase so the drive loop finalizes the
+     * operation before any new run opens one — storage rejects a second open
+     * operation on the same lane (docs/21 F6).
+     */
+    @Test
+    void resumeFinalizesOpenOperationBeforeStartingAnother() throws Exception {
+        Path root = seed(session -> {
+            session.appendEntry(userMessage("m1", "mid-run prompt"), LANE);
+            session.appendRecord(new NewRecord<>(openRun("run-open")));
+        });
+
+        var resumed = resume(root);
+        try {
+            var harness = resumed.harness();
+            assertThat(harness.snapshot(LANE).operation()).isNotNull();
+
+            // Drive the restored lane: the checkpoint phase finalizes the
+            // operation instead of streaming a new assistant turn.
+            var action = harness.peekAction(LANE);
+            while (action != null) {
+                action = harness.executeAction(LANE, action);
+            }
+
+            assertThat(harness.snapshot(LANE).operation()).isNull();
+
+            // A fresh run may now open its own operation; the flush on close
+            // writes both the finalization and the new operation.
+            harness.run(LANE, "next prompt");
+        } finally {
+            resumed.close();
+        }
+
+        var open = openOperations(root);
+        assertThat(open).hasSize(1);
+        assertThat(open.get(0).id()).isNotEqualTo("run-open");
+    }
+
+    /** Re-open the persisted session to inspect what was actually written. */
+    private static List<LaneRecord.OperationStarted> openOperations(Path root) {
+        var handle = PersistentSessionRepositories.jsonl(root);
+        try {
+            var meta = handle.latest().orElseThrow();
+            return handle.open(meta).findOpenOperations(LANE, 10);
+        } finally {
+            handle.close();
+        }
+    }
+
+    /** Guards the test's own assumption that records survive a round trip. */
+    @Test
+    void seededRecordsAreReadable() throws Exception {
+        Path root = seed(session -> {
+            session.appendRecord(new NewRecord<>(openRun("run-1")));
+            session.appendRecord(new NewRecord<>(finish("run-1", OperationOutcome.COMPLETED)));
+        });
+
+        var handle = PersistentSessionRepositories.jsonl(root);
+        try {
+            var meta = handle.latest().orElseThrow();
+            var records = handle.open(meta).findRecords(new RecordQuery(
+                LANE, null, null, null, null, EntryOrder.OLDEST_FIRST, null));
+            assertThat(records).hasSize(2);
+            assertThat(records.get(1)).isInstanceOf(LaneRecord.OperationFinished.class);
+            assertThat(handle.open(meta).findEntries(new EntryQuery(
+                null, null, EntryOrder.OLDEST_FIRST, null, null))).isEmpty();
+        } finally {
+            handle.close();
+        }
+    }
+}
