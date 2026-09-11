@@ -241,7 +241,7 @@ flowchart TD
 | **折叠读 entry 的 stopReason** | `LaneStateFoldTest` 扩容 | fold 的 `newestOwn.stopReason` == live `lastAssistantMessage().stopReason()`（既有哨兵断言保持） |
 | **投影规则（D4）** | 新 `ContextProjectionTest` | `deferred`/`error`/`aborted` 的 assistant entry **零条** provider 消息；`stop`/`tool_use`/`length` 正常投影；非 assistant entry 不受影响 |
 | **WriteDeferred 发射（D3）** | 新 `WriteDeferredEmissionTest` | run 中产生的 entry（assistant/工具结果/中途 steer）各发一条 `WriteDeferred`；run 起始的用户 prompt **不**发 |
-| **pendingWrites 派生** | 同 / `LaneStateFoldTest` | fold 的 `pendingWrites` == live `snapshot.pendingWrites()`；abort 后仍保留（≠ steer/followUp 清零） |
+| **pendingWrites 派生** | 同 / `LaneStateFoldTest` | fold 的 `pendingWrites` **由 record 派生**（= `target.id ∉ ownEntries` 的 `WriteDeferred`），**不等价于** live `snapshot.pendingWrites()`——后者还含 run 起始的直接 append 条目（D3 不为它发记录）。断言改为：裸 `run()` 后 fold 为空、run 进行中非空；abort 后仍保留（≠ steer/followUp 清零） |
 | `invalid_deferred_handle` | `LaneStateFoldTest` | 构造 `stopReason=="deferred"` 但无 handle 的 assistant entry → `RecordLogCorruption` |
 | `provisioned_entry_mismatch`（write_deferred） | 同 | target id 已存在于 entries 且内容不同 → `RecordLogCorruption` |
 | **toolBatch 派生（#2）** | 新 `ToolBatchFoldTest` | 一轮 tool_use：每 call 关联到 `toolUseId` 相同的 toolResult entry；未执行的 call 标 `missing`；延迟写入**不**被当作结果 |
