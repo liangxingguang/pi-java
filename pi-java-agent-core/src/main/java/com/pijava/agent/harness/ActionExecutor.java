@@ -469,7 +469,8 @@ final class ActionExecutor {
             StepKind.ASSISTANT, attemptIdx, asstEntryId == null ? "" : asstEntryId, null,
             RunSpanFactory.modelLabel(ctx.model().get()), messages.size(), toolDefs.size(),
             RunSpanFactory.thinkingLabel(ctx.thinkingLevel().get()),
-            (System.nanoTime() - llmStart) / 1_000_000));
+            (System.nanoTime() - llmStart) / 1_000_000,
+            stopReason));
         if (inputTokens > 0 || outputTokens > 0) {
             lane.records.add(new LaneRecord.UsageRecord(
                 UUID.randomUUID().toString(), 0, laneName, null,

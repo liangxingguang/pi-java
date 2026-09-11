@@ -42,7 +42,8 @@ final class RecordJsonCodec {
                 JsonlCodec.optionalInteger(node, "messageCount"),
                 JsonlCodec.optionalInteger(node, "toolCount"),
                 JsonlCodec.optionalString(node, "thinking"),
-                JsonlCodec.optionalLong(node, "durationMs"));
+                JsonlCodec.optionalLong(node, "durationMs"),
+                JsonlCodec.optionalString(node, "stopReason"));
             case "tool_started" -> new LaneRecord.ToolStarted(id, seq, lane, timestamp,
                 JsonlCodec.requireString(node, "runId"),
                 JsonlCodec.requireString(node, "assistantEntryId"),

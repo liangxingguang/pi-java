@@ -52,10 +52,17 @@ final class HarnessUtils {
         return "error".equals(sr) || "aborted".equals(sr);
     }
 
-    /** Derive the run outcome from the newest own entry's stop reason. */
+    /**
+     * Derive the run outcome from the newest own entry's stop reason.
+     *
+     * <p>An aborted turn keeps its own outcome (pi alignment): folding it into
+     * {@code "error"} would mark the operation FAILED and pollute the lane's
+     * {@code faulted} flag with a user-initiated stop.</p>
+     */
     static String determineOutcome(LaneState lane) {
         if (lane.newestOwn == null) return "error";
         String sr = lane.newestOwn.stopReason();
+        if ("aborted".equals(sr)) return "aborted";
         if (isErrorStopReason(sr)) return "error";
         if ("tool_use".equals(sr)) return "tool_use";
         if ("length".equals(sr)) return "length";

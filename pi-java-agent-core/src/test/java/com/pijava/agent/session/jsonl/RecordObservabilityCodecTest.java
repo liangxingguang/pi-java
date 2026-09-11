@@ -50,7 +50,7 @@ class RecordObservabilityCodecTest {
     void stepAttemptWithSummaryFieldsRoundtrips() {
         var rec = new LaneRecord.StepAttempt("rec-8", 13L, "main", Instant.now(),
             "run-1", StepKind.ASSISTANT, 1, "entry-10", null,
-            "anthropic/claude-sonnet-4-6", 14, 7, "budget=8000", 2314L);
+            "anthropic/claude-sonnet-4-6", 14, 7, "budget=8000", 2314L, "tool_use");
         var parsed = encodeThenParse(new SessionMutation.Record(rec)).record();
 
         var attempt = (LaneRecord.StepAttempt) parsed;
@@ -58,6 +58,7 @@ class RecordObservabilityCodecTest {
         assertThat(attempt.messageCount()).isEqualTo(14);
         assertThat(attempt.toolCount()).isEqualTo(7);
         assertThat(attempt.thinking()).isEqualTo("budget=8000");
+        assertThat(attempt.stopReason()).isEqualTo("tool_use");
         assertThat(attempt.durationMs()).isEqualTo(2314L);
     }
 
@@ -108,9 +109,10 @@ class RecordObservabilityCodecTest {
     void stepAttemptSummaryOmittedFieldsAreNotSerialized() {
         var rec = new LaneRecord.StepAttempt("rec-12", 17L, "main", Instant.now(),
             "run-1", StepKind.ASSISTANT, 0, "entry-9", null,
-            null, null, null, null, null);
+            null, null, null, null, null, null);
         String line = JsonlCodec.encodeMutation(new SessionMutation.Record(rec));
 
+        assertThat(line).doesNotContain("\"stopReason\"");
         assertThat(line).doesNotContain("\"model\"");
         assertThat(line).doesNotContain("\"messageCount\"");
         assertThat(line).doesNotContain("\"toolCount\"");
