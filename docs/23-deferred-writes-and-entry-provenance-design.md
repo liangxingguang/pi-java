@@ -128,7 +128,13 @@ record AssistantMessage(
 // ActionExecutor — 保留 stopReason，不再丢弃（原 :462）
 var asstEntry = new Entry.Message(asstEntryId, 0, parentId, null,
     new Message.AssistantMessage(lane.partial.content(),
-        lane.partial.stopReason(), lane.partial.deferred()), null);
+        lane.partial.stopReason(),
+        // ⚠️ 勘误（2026-09-12）：此处原写 lane.partial.deferred()，但流式快照类型
+        // com.pijava.ai.message.AssistantMessage 只有 (id, content, usage, stopReason)，
+        // 并无 deferred 组件。因 D2 已定「DeferredHandle 无生产者」，给流式类型加该字段
+        // 只会得到一个恒为 null 的死字段，故刻意不加，此处恒传 null。
+        // Message.AssistantMessage.deferred 仅由测试直接构造（D2/B）。
+        null), null);
 
 // LaneRecord.StepAttempt — 删除 stopReason 组件（D1）
 record StepAttempt(..., Long durationMs) implements LaneRecord {}
