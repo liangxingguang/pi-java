@@ -94,13 +94,22 @@ class TerminalFailureFoldTest {
         assertThat(folded.terminalFailure()).isNull();
     }
 
+    /**
+     * The deferral exclusion must be the <em>only</em> reason this yields null.
+     * The fixture carries full step provenance naming the error entry — the
+     * same records as {@link #errorEntryProducedByAStepIsAttributedToStep},
+     * which is this test's control and does yield a failure. So the step arm
+     * would fire here but for the exclusion; dropping the
+     * {@code deferredWriteIds} guard from the derivation turns this red.
+     */
     @Test
     void deferredWriteErrorEntryIsNotATerminalFailure() {
         var error = errorAssistant("a-1");
         var write = new LaneRecord.WriteDeferred("w-1", 0, "default", null, "",
             new ProvisionedEntry<>(error));
 
-        var folded = fold(List.of(write), List.of(error));
+        var folded = fold(List.of(started("run-1"), stepAttempt("run-1", "a-1"), write),
+            List.of(error));
 
         assertThat(folded.terminalFailure()).isNull();
     }

@@ -192,6 +192,20 @@ final class LaneOperationFold {
      * merged-drain shape that blocks queue inference elsewhere does not apply
      * here. Entries are compared by position, not {@code seq}: an uncommitted
      * entry's seq is 0.</p>
+     *
+     * <p>This scan is pi's {@code blockedResult} arm, and pi's other arm
+     * ({@code startedResult}, {@code reducer.ts:473-481}) is deliberately not
+     * ported. That arm looks up a {@code tool_started} record's
+     * {@code resultEntryId} via a map keyed on
+     * {@code record.assistantEntryId == assistantEntry.id}; pi-java emits
+     * {@code ToolStarted} with an empty {@code assistantEntryId}
+     * ({@code ToolExecutionPipeline.closeToolSpan}), so the key never matches
+     * an entry id and {@code startedResult} would always be undefined — the
+     * lookup is dead code here. Dropping it also drops a real behavior
+     * difference: pi reads that map from the wider
+     * {@code input.entries ∪ ownEntries} set ({@code reducer.ts:511-512}) and
+     * does not filter it by {@code deferredWriteIds}, unlike
+     * {@code blockedResult}.</p>
      */
     private static ToolBatch toolBatch(List<Entry> ownEntries, Set<String> deferredWriteIds) {
         int assistantIndex = -1;
