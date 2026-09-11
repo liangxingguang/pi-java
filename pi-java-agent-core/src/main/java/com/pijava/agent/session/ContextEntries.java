@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.pijava.agent.entry.Entry;
 import com.pijava.ai.message.ContentBlock;
@@ -34,6 +35,19 @@ public final class ContextEntries {
     private static final String BRANCH_SUMMARY_PREFIX =
         "The following is a summary of a branch that this conversation came back from:\n\n<summary>\n";
     private static final String BRANCH_SUMMARY_SUFFIX = "</summary>";
+
+    /**
+     * Assistant stop reasons whose message carries no content worth sending
+     * back to the provider. Authority is pi's spec
+     * ({@code docs/harness-v2.md:164}): "Assistant responses with stop reason
+     * error, aborted, or deferred project to no provider message. A genuine
+     * output-limit length response remains in context." pi's current code
+     * ({@code session/context.ts:72}) filters {@code deferred} only, so this
+     * rule is a superset of pi's code and an exact match of its spec — cite
+     * the spec when claiming alignment.
+     */
+    private static final Set<String> NON_PROJECTED_STOP_REASONS =
+        Set.of("deferred", "error", "aborted");
 
     private ContextEntries() {}
 
@@ -148,6 +162,11 @@ public final class ContextEntries {
     /** Per-entry projection (pi {@code sessionEntryToContextMessages}); {@code null} = no message. */
     private static Message project(Entry e) {
         if (e instanceof Entry.Message m) {
+            if (m.message() instanceof Message.AssistantMessage assistant
+                    && assistant.stopReason() != null
+                    && NON_PROJECTED_STOP_REASONS.contains(assistant.stopReason())) {
+                return null;
+            }
             return m.message();
         }
         if (e instanceof Entry.Compaction c) {

@@ -30,6 +30,13 @@ class ContextEntriesTest {
         return new Entry.Message(id, 0, parentId, Instant.EPOCH, msg, null);
     }
 
+    /** Assistant message entry carrying an explicit stop reason (D4 provenance). */
+    private static Entry.Message assistantEntry(String id, String text, String stopReason) {
+        var msg = new Message.AssistantMessage(List.of(new ContentBlock.TextContent(text)),
+            stopReason, null);
+        return new Entry.Message(id, 0, null, Instant.EPOCH, msg, null);
+    }
+
     private static Entry.Compaction compaction(String id, String parentId, String summary, String firstKeptId) {
         return new Entry.Compaction(id, 0, parentId, Instant.EPOCH, summary,
             firstKeptId, List.of(), 1000, null, null);
@@ -208,5 +215,41 @@ class ContextEntriesTest {
         var b = message("b", "a", "assistant", "r");
         var entries = List.<Entry>of(a, b);
         assertThat(ContextEntries.pathToLeaf(entries, null)).containsExactly(a, b);
+    }
+
+    // ── D4: 投影规则（stopReason 决定 assistant entry 是否进 provider 上下文）────────
+
+    @Test
+    void deferredErrorAndAbortedAssistantMessagesProjectToNothing() {
+        for (String stopReason : List.of("deferred", "error", "aborted")) {
+            var assistant = assistantEntry("a-" + stopReason, "partial text", stopReason);
+            var messages = ContextEntries.toMessages(List.<Entry>of(
+                message("u-1", null, "user", "hello"), assistant));
+
+            assertThat(messages)
+                .as("stopReason=%s 的 assistant 消息必须投影为零条（pi spec docs/harness-v2.md:164）", stopReason)
+                .extracting(Message::role)
+                .containsExactly("user");
+        }
+    }
+
+    @Test
+    void completedToolUseAndLengthMessagesStillProject() {
+        for (String stopReason : List.of("stop", "tool_use", "length")) {
+            var assistant = assistantEntry("a-" + stopReason, "answer", stopReason);
+
+            assertThat(ContextEntries.toMessages(List.<Entry>of(assistant)))
+                .as("stopReason=%s 不属于被投影掉的集合", stopReason)
+                .hasSize(1);
+        }
+    }
+
+    @Test
+    void assistantWithoutStopReasonStillProjects() {
+        // 旧数据 / 非流式构造的消息 stopReason 为 null，必须保留。
+        var assistant = (Entry.Message) new Entry.Message("a-null", 0, null, null,
+            new Message.AssistantMessage(List.of(new ContentBlock.TextContent("answer"))), null);
+
+        assertThat(ContextEntries.toMessages(List.<Entry>of(assistant))).hasSize(1);
     }
 }
