@@ -65,7 +65,7 @@ class AgentHarnessTest {
         var firstAction = harness.run("hello");
         assertThat(firstAction).isNotNull();
         var action = harness.peekAction();
-        while (action instanceof Action.AppendEntry) {
+        while (action instanceof Action.ApplyPendingWrite) {
             action = harness.executeAction(action);
         }
         assertThat(action).isInstanceOf(Action.StreamAssistant.class);

@@ -113,11 +113,13 @@ class AgentLoopL2Test {
     /** Compact descriptor for an action, stable against entry-id UUIDs. */
     private static String describe(Action a) {
         return switch (a) {
-            case Action.AppendEntry ae -> "AppendEntry(" + ae.entryType() + ")";
+            case Action.ApplyPendingWrite apw -> "ApplyPendingWrite(" + apw.entryType() + ")";
             case Action.StreamAssistant sa -> "StreamAssistant(" + sa.step() + "," + sa.attempt() + ")";
             case Action.TryFinishRun tfr -> "TryFinishRun(" + tfr.outcome() + ")";
             case Action.ExecuteTool et -> "ExecuteTool(" + et.toolName() + ")";
             case Action.ExecuteToolBatch etb -> "ExecuteToolBatch(" + etb.calls().size() + ")";
+            case Action.ConsumeQueueItem cqi -> "ConsumeQueueItem(" + cqi.queue() + ")";
+            case Action.FinishOperation fo -> "FinishOperation(" + fo.outcome() + ")";
         };
     }
 
@@ -138,9 +140,10 @@ class AgentLoopL2Test {
 
         // Any reordering of peekAction branches changes this sequence.
         assertThat(labels(actions)).containsExactly(
-            "AppendEntry(message)", "StreamAssistant(assistant,0)", "AppendEntry(message)",
-            "TryFinishRun(tool_use)", "ExecuteTool(read)", "AppendEntry(message)",
-            "StreamAssistant(assistant,0)", "AppendEntry(message)", "TryFinishRun(completed)");
+            "ApplyPendingWrite(message)", "StreamAssistant(assistant,0)", "ApplyPendingWrite(message)",
+            "TryFinishRun(tool_use)", "ExecuteTool(read)", "ApplyPendingWrite(message)",
+            "StreamAssistant(assistant,0)", "ApplyPendingWrite(message)", "TryFinishRun(completed)",
+            "FinishOperation(completed)");
         // The tool payload survives the state machine unchanged.
         assertThat(actions.get(4))
             .isEqualTo(new Action.ExecuteTool("call-1", "read", Map.of("path", "a.txt")));
@@ -159,9 +162,9 @@ class AgentLoopL2Test {
         // L1-③ as a sequence: the truncated call is failed back (TryFinishRun
         // with "length" → one failed tool entry) before the model retries.
         assertThat(labels(actions)).containsExactly(
-            "AppendEntry(message)", "StreamAssistant(assistant,0)", "AppendEntry(message)",
-            "TryFinishRun(length)", "AppendEntry(message)", "StreamAssistant(assistant,0)",
-            "AppendEntry(message)", "TryFinishRun(completed)");
+            "ApplyPendingWrite(message)", "StreamAssistant(assistant,0)", "ApplyPendingWrite(message)",
+            "TryFinishRun(length)", "ApplyPendingWrite(message)", "StreamAssistant(assistant,0)",
+            "ApplyPendingWrite(message)", "TryFinishRun(completed)", "FinishOperation(completed)");
         assertThat(executed.get()).isZero();
     }
 
@@ -175,11 +178,67 @@ class AgentLoopL2Test {
 
         var actions = driveCollectingActions(h, "denied call");
 
-        // L1-⑤ as a sequence: the run ends right at the denied tool — no
-        // follow-up StreamAssistant, no re-loop on the same call.
+        // L1-⑤ as a sequence: the run ends right at the denied tool — the
+        // terminating outcome surfaces as a FinishOperation, no follow-up
+        // StreamAssistant, no re-loop on the same call.
         assertThat(labels(actions)).containsExactly(
-            "AppendEntry(message)", "StreamAssistant(assistant,0)", "AppendEntry(message)",
-            "TryFinishRun(tool_use)", "ExecuteTool(echo)");
+            "ApplyPendingWrite(message)", "StreamAssistant(assistant,0)", "ApplyPendingWrite(message)",
+            "TryFinishRun(tool_use)", "ExecuteTool(echo)", "FinishOperation(completed)");
+    }
+
+    @Test
+    void finishOperationMarksEachRunEnd() {
+        var registry = new ToolRegistry(null);
+        registry.register(recordingTool("read", Map.of(), new AtomicInteger()));
+        var h = harness(registry, scriptedStreamFn(List.of(
+            toolUsePartial("tool_use", "read", Map.of("path", "a.txt")), stopPartial())));
+
+        // Queue a follow-up before driving so the second run (tool → stop) is
+        // chained within the same drive loop.
+        var actions = new ArrayList<Action>();
+        var action = h.run("default", "read a.txt");
+        action = h.peekAction("default");
+        while (action != null && !(action instanceof Action.TryFinishRun)) {
+            actions.add(action);
+            action = h.executeAction("default", action);
+        }
+        h.followUp("default", "then stop");
+        while (action != null) {
+            actions.add(action);
+            action = h.executeAction("default", action);
+        }
+
+        // Each run's terminal outcome is an explicit FinishOperation; the
+        // follow-up is consumed as a ConsumeQueueItem between runs.
+        assertThat(labels(actions)).containsSubsequence(
+            "ApplyPendingWrite(message)", "TryFinishRun(tool_use)", "ExecuteTool(read)",
+            "ApplyPendingWrite(message)", "TryFinishRun(completed)", "FinishOperation(completed)",
+            "ConsumeQueueItem(followUp)");
+        assertThat(h.lastAssistantMessage()).isNotNull();
+    }
+
+    @Test
+    void consumeQueueItemStartsWithNextRun() {
+        var registry = new ToolRegistry(null);
+        var h = harness(registry, scriptedStreamFn(List.of(stopPartial())));
+        h.nextRun("default", "queued message");
+
+        var actions = new ArrayList<Action>();
+        var action = h.peekAction("default");
+        while (action != null) {
+            actions.add(action);
+            action = h.executeAction("default", action);
+        }
+
+        // The idle lane consumes the nextRun queue as the first action.
+        assertThat(labels(actions)).startsWith("ConsumeQueueItem(followUp)");
+        // The queued prompt becomes a user message in the run.
+        var messages = h.snapshot("default").transcript().stream()
+            .filter(e -> e instanceof Entry.Message m && "user".equals(m.message().role()))
+            .map(e -> ((Entry.Message) e).message().content())
+            .map(blocks -> blocks.isEmpty() ? "" : ((ContentBlock.TextContent) blocks.get(0)).text())
+            .toList();
+        assertThat(messages).contains("queued message");
     }
 
     // ── ⑥ abort 护栏（不变量 5 行为化）─────────────────────
@@ -201,7 +260,7 @@ class AgentLoopL2Test {
             action = h.executeAction("default", action);
         }
         actions.add(action);                             // ExecuteTool
-        action = h.executeAction("default", action);     // AppendEntry(tool)
+        action = h.executeAction("default", action);     // ApplyPendingWrite(tool)
         h.abort("default");
         while (action != null) {
             actions.add(action);
@@ -247,6 +306,29 @@ class AgentLoopL2Test {
         var asst = new LaneState();
         asst.phase = RunPhase.ASSISTANT;
         assertThat(LoopInvariants.hold(asst, new Action.TryFinishRun("completed"))).isFalse();
+        // IDLE can only yield a ConsumeQueueItem.
+        var idle = new LaneState();
+        idle.phase = RunPhase.IDLE;
+        assertThat(LoopInvariants.hold(idle, new Action.StreamAssistant("assistant", 0))).isFalse();
+        assertThat(LoopInvariants.hold(idle, new Action.FinishOperation("completed"))).isFalse();
+    }
+
+    @Test
+    void invariantsHoldGateNewActionsToTheirPhases() {
+        // ConsumeQueueItem is legal only while idle.
+        var idle = new LaneState();
+        idle.phase = RunPhase.IDLE;
+        assertThat(LoopInvariants.hold(idle, new Action.ConsumeQueueItem("followUp", List.of()))).isTrue();
+        var asst = new LaneState();
+        asst.phase = RunPhase.ASSISTANT;
+        asst.abortSignal = AbortSignal.create();
+        assertThat(LoopInvariants.hold(asst, new Action.ConsumeQueueItem("steer", List.of()))).isFalse();
+        var ckpt = new LaneState();
+        ckpt.phase = RunPhase.CHECKPOINT;
+        assertThat(LoopInvariants.hold(ckpt, new Action.ConsumeQueueItem("followUp", List.of()))).isFalse();
+        // FinishOperation is legal only from CHECKPOINT.
+        assertThat(LoopInvariants.hold(ckpt, new Action.FinishOperation("completed"))).isTrue();
+        assertThat(LoopInvariants.hold(asst, new Action.FinishOperation("failed"))).isFalse();
     }
 
     @Test
@@ -269,11 +351,11 @@ class AgentLoopL2Test {
         asst.abortSignal = AbortSignal.create();
         assertThat(LoopInvariants.hold(asst, new Action.StreamAssistant("assistant", 0))).isTrue();
         assertThat(LoopInvariants.hold(asst, new Action.ExecuteTool("c", "x", Map.of()))).isTrue();
-        assertThat(LoopInvariants.hold(asst, new Action.AppendEntry("message", "e"))).isTrue();
+        assertThat(LoopInvariants.hold(asst, new Action.ApplyPendingWrite("message", "e"))).isTrue();
 
         var ckpt = new LaneState();
         ckpt.phase = RunPhase.CHECKPOINT;
         assertThat(LoopInvariants.hold(ckpt, new Action.TryFinishRun("completed"))).isTrue();
-        assertThat(LoopInvariants.hold(ckpt, new Action.AppendEntry("message", "e"))).isTrue();
+        assertThat(LoopInvariants.hold(ckpt, new Action.ApplyPendingWrite("message", "e"))).isTrue();
     }
 }

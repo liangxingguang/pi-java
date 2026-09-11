@@ -153,6 +153,11 @@ class ToolBatchParityTest {
 
         var action = firstToolAction(h);
         assertThat(action).isInstanceOf(Action.ExecuteToolBatch.class);
-        assertThat(h.executeAction("default", action)).isNull();
+        // L3: the operation terminal is single-sourced in FinishOperation. A
+        // fully-terminating batch yields a stop-finish action whose execution
+        // ends the drive (returns null) after writing operation_finished.
+        var finish = h.executeAction("default", action);
+        assertThat(finish).isEqualTo(new Action.FinishOperation("completed", true));
+        assertThat(h.executeAction("default", finish)).isNull();
     }
 }
