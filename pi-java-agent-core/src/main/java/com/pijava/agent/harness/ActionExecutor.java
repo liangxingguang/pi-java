@@ -2,34 +2,21 @@ package com.pijava.agent.harness;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
-import com.pijava.agent.compaction.CompactionService;
 import com.pijava.agent.compaction.CompactionSettings;
-import com.pijava.agent.context.OverflowDetector;
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.hook.PrepareNextTurnContext;
-import com.pijava.agent.hook.RequestContext;
-import com.pijava.agent.hook.ResponseContext;
 import com.pijava.agent.hook.RunContext;
 import com.pijava.agent.hook.RunEndContext;
 import com.pijava.agent.hook.ShouldStopAfterTurnContext;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.record.OperationOutcome;
 import com.pijava.agent.record.QueueKind;
-import com.pijava.agent.record.StepKind;
-import com.pijava.agent.record.UsageCause;
 import com.pijava.ai.AbortSignal;
-import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ExecutionMode;
-import com.pijava.ai.Usage;
-import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.message.AssistantMessage;
-import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
-import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
-import com.pijava.telemetry.SpanOptions;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,14 +35,14 @@ final class ActionExecutor {
     private final ExecutionContext ctx;
     private final ToolExecutionPipeline toolPipeline;
     private final CompactionExecutor compactions;
-    private final ContextAssembler contextAssembler;
+    private final AssistantStreamExecutor assistantStream;
     private final RunSpanFactory runSpans;
 
     ActionExecutor(ExecutionContext ctx) {
         this.ctx = ctx;
         this.toolPipeline = new ToolExecutionPipeline(ctx);
         this.compactions = new CompactionExecutor(ctx);
-        this.contextAssembler = new ContextAssembler(ctx);
+        this.assistantStream = new AssistantStreamExecutor(ctx, this::peekAction);
         this.runSpans = new RunSpanFactory(ctx);
     }
 
@@ -285,7 +272,7 @@ final class ActionExecutor {
     Action executeAction(String laneName, Action action) {
         var lane = ctx.requireLane(laneName);
         return switch (action) {
-            case Action.StreamAssistant sa -> executeStreamAssistant(laneName, lane, sa);
+            case Action.StreamAssistant sa -> assistantStream.execute(laneName, lane, sa);
             case Action.ApplyPendingWrite apw -> executeApplyPendingWrite(lane, apw);
             case Action.TryFinishRun tfr -> executeTryFinishRun(laneName, lane, tfr);
             case Action.ExecuteTool et -> executeTool(laneName, lane, et);
@@ -326,168 +313,6 @@ final class ActionExecutor {
             return new Action.ApplyPendingWrite(entry.type(), entry.id());
         }
         return null;
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    // StreamAssistant
-    // ═══════════════════════════════════════════════════════════
-
-    private Action executeStreamAssistant(String laneName, LaneState lane,
-                                           Action.StreamAssistant sa) {
-        if (lane.abortSignal != null && lane.abortSignal.isAborted()) {
-            lane.phase = RunPhase.CHECKPOINT;
-            lane.partial = AssistantMessage.empty().withStopReason("aborted");
-            lane.newestOwn = HarnessUtils.deriveNewestOwn(lane);
-            return peekAction(laneName);
-        }
-
-        // Auto-compaction: check token budget before building messages
-        contextAssembler.applyPendingTurnUpdate(laneName, lane);
-        compactions.checkAutoCompact(laneName, lane);
-
-        var messages = contextAssembler.buildMessagesForLane(laneName, lane);
-        var thinkingConfig = ctx.thinkingLevelMap().forLevel(ctx.thinkingLevel().get());
-
-        // Fire before_request
-        ctx.hookSystem().fireBeforeRequest(laneName,
-            new RequestContext(laneName, lane.runId, messages));
-
-        // Build tool definitions, respecting lane-level tool overrides
-        var effectiveTools = lane.activeTools != null ? lane.activeTools : ctx.activeTools().get();
-        var allToolDefs = ctx.toolRegistry() != null
-            ? ctx.toolRegistry().toToolDefinitions() : List.<ToolDefinition>of();
-        var activeNames = effectiveTools.stream().map(AgentTool::name)
-            .collect(Collectors.toSet());
-        var toolDefs = allToolDefs.stream()
-            .filter(td -> activeNames.contains(td.name())).toList();
-        var options = new StreamOptions(
-            java.util.OptionalInt.empty(), java.util.OptionalDouble.empty(),
-            thinkingConfig, toolDefs);
-
-        int attemptIdx = lane.stepIndex++;
-        long inputTokens = 0;
-        long outputTokens = 0;
-        Throwable streamError = null;
-        long llmStart = System.nanoTime();
-        var llmSpan = (lane.runSpan != null ? lane.runSpan : ctx.telemetry())
-            .openSpan(new SpanOptions("llm.request",
-                java.util.Map.of(
-                    "attempt", attemptIdx,
-                    "model", RunSpanFactory.modelLabel(ctx.model().get()),
-                    "messageCount", messages.size(),
-                    "toolCount", toolDefs.size(),
-                    "thinking", RunSpanFactory.thinkingLabel(ctx.thinkingLevel().get()))));
-        try {
-            ctx.telemetry().pushCurrent(llmSpan);
-            try {
-                var iter = ctx.streamFn().stream(messages, ctx.model().get(), options);
-                try {
-                    while (iter.hasNext()) {
-                        if (lane.abortSignal != null && lane.abortSignal.isAborted()) {
-                            iter.close();
-                            break;
-                        }
-                        var event = iter.next();
-                        ctx.streamListener().get().accept(event);
-                        if (event instanceof StreamEvent.UsageInfo ui
-                                && ui.partial() != null && ui.partial().usage() != null) {
-                            inputTokens = ui.partial().usage().inputTokens();
-                            outputTokens = ui.partial().usage().outputTokens();
-                        }
-                        if (event.partial() != null) {
-                            lane.partial = event.partial();
-                        }
-                        if (event instanceof StreamEvent.StreamDone) break;
-                        if (event instanceof StreamEvent.StreamError) break;
-                    }
-                } finally {
-                    iter.close();
-                }
-            } finally {
-                ctx.telemetry().popCurrent(llmSpan);
-            }
-        } catch (Exception e) {
-            streamError = e;
-            lane.partial = AssistantMessage.empty().withStopReason("error");
-        } finally {
-            long durationMs = (System.nanoTime() - llmStart) / 1_000_000;
-            String stop = lane.partial != null ? lane.partial.stopReason() : null;
-            llmSpan.addAttribute("inputTokens", inputTokens);
-            llmSpan.addAttribute("outputTokens", outputTokens);
-            if (stop != null) {
-                llmSpan.addAttribute("stopReason", stop);
-            }
-            if (streamError != null) {
-                llmSpan.addAttribute("errorClass", streamError.getClass().getSimpleName());
-            }
-            llmSpan.close();
-            ctx.telemetry().incrementCounter("llm.requests", 1);
-            ctx.telemetry().recordTiming("llm.request.duration", durationMs);
-            if (inputTokens > 0) {
-                ctx.telemetry().incrementCounter("llm.tokens.input", inputTokens);
-            }
-            if (outputTokens > 0) {
-                ctx.telemetry().incrementCounter("llm.tokens.output", outputTokens);
-            }
-            LOG.debug("[agent] llm done lane={} model={} msgCount={} toolCount={} "
-                    + "in={} out={} durationMs={} stop={}",
-                laneName, RunSpanFactory.modelLabel(ctx.model().get()), messages.size(),
-                toolDefs.size(), inputTokens, outputTokens, durationMs, stop);
-            if (streamError != null) {
-                LOG.warn("[agent] llm stream error lane={} runId={}",
-                    laneName, lane.runId, streamError);
-            }
-        }
-
-        // Context overflow detection: trigger compaction when the response
-        // signals an overflow (error message, token count, or zero-output+length).
-        String stopReason = lane.partial != null ? lane.partial.stopReason() : null;
-        var usageInfo = new StreamEvent.UsageInfo(inputTokens, outputTokens, lane.partial);
-        if (OverflowDetector.isOverflow(streamError, stopReason, usageInfo, ctx.maxInputTokens())) {
-            var settings = ctx.compactionSettings().get();
-            if (settings != null && lane.transcript.size() > 1) {
-                compactions.applyCompaction(laneName, lane, settings,
-                    CompactionService.estimateTokens(lane.transcript), "overflow");
-            }
-        }
-
-        // Fire after_response
-        ctx.hookSystem().fireAfterResponse(laneName,
-            new ResponseContext(laneName, lane.runId, lane.partial,
-                new StreamEvent.UsageInfo(inputTokens, outputTokens, lane.partial)));
-
-        String asstEntryId = null;
-        if (lane.partial != null) {
-            asstEntryId = UUID.randomUUID().toString();
-            var asstEntry = new Entry.Message(
-                asstEntryId, 0, lane.lastEntry() != null ? lane.lastEntry().id() : null, null,
-                new Message.AssistantMessage(lane.partial.content(),
-                    // stopReason 随 entry 落库，成为唯一真相（docs/23 D1）。
-                    lane.partial.stopReason(),
-                    // 无 provider 支持 deferral，此处恒为 null（docs/23 D2/P1）。
-                    null), null);
-            lane.transcript.add(asstEntry);
-            lane.pendingWrites.add(asstEntry);
-        }
-
-        lane.records.add(new LaneRecord.StepAttempt(
-            UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
-            StepKind.ASSISTANT, attemptIdx, asstEntryId == null ? "" : asstEntryId, null,
-            RunSpanFactory.modelLabel(ctx.model().get()), messages.size(), toolDefs.size(),
-            RunSpanFactory.thinkingLabel(ctx.thinkingLevel().get()),
-            (System.nanoTime() - llmStart) / 1_000_000));
-        // Recorded unconditionally (docs/21): a zero-token turn (error /
-        // abort before any usage was reported) is exactly the case whose
-        // stopReason the fold needs, so gating on tokens>0 lost it.
-        lane.records.add(new LaneRecord.UsageRecord(
-            UUID.randomUUID().toString(), 0, laneName, null,
-            Usage.of(inputTokens, outputTokens), UsageCause.ASSISTANT,
-            lane.runId, asstEntryId, null, attemptIdx, stopReason));
-        ctx.addTokens(inputTokens + outputTokens);
-
-        lane.newestOwn = HarnessUtils.deriveNewestOwn(lane);
-        lane.phase = RunPhase.CHECKPOINT;
-        return peekAction(laneName);
     }
 
     // ── ApplyPendingWrite ───────────────────────────────────
@@ -566,7 +391,7 @@ final class ActionExecutor {
         // them back into the transcript and let the model retry (inner loop
         // continues), rather than treating it as a terminal outcome.
         if ("length".equals(status)) {
-            failTruncatedToolCalls(lane);
+            assistantStream.failTruncatedToolCalls(lane);
             lane.phase = RunPhase.ASSISTANT;
             return peekAction(laneName);
         }
@@ -643,35 +468,6 @@ final class ActionExecutor {
     // ═══════════════════════════════════════════════════════════
     // Internal helpers
     // ═══════════════════════════════════════════════════════════
-
-    /**
-     * Fail every tool call in the latest assistant message back into the
-     * transcript (pi {@code agent-loop.ts:211-214, 381}): the response hit the
-     * output token limit, so the calls' arguments may be truncated mid-JSON
-     * and must not be executed. The error result is appended as a tool message
-     * so the model can re-issue the calls with complete arguments.
-     *
-     * <p>Called before the run transitions back to {@code ASSISTANT} — the
-     * inner loop continues with the model seeing the failure.</p>
-     */
-    private void failTruncatedToolCalls(LaneState lane) {
-        var toolCalls = HarnessUtils.extractToolCalls(lane.partial);
-        for (var call : toolCalls) {
-            var toolEntry = new Entry.Message(
-                UUID.randomUUID().toString(), 0, null, null,
-                new Message.ToolResultMessage(
-                    call.toolCallId(), call.toolName(),
-                    List.of(new ContentBlock.TextContent(
-                        "Tool call \"" + call.toolName()
-                            + "\" was not executed: the response hit the output token limit, "
-                            + "so its arguments may be truncated. Re-issue the tool call with "
-                            + "complete arguments.")),
-                    true),
-                null);
-            lane.transcript.add(toolEntry);
-            lane.pendingWrites.add(toolEntry);
-        }
-    }
 
     /**
      * Whether any pending call belongs to a tool that declared
