@@ -495,8 +495,9 @@ public sealed interface LaneRecord {
 > - `StepAttempt` 增 `stopReason` 字段；`UsageRecord` 无条件发射 stopReason；
 > - compaction 是 **step 而非嵌套 operation**（run 中 `StepAttempt(COMPACTION)`，空闲三连 `OperationStarted(Compaction)`+`StepAttempt`+`OperationFinished`）；
 > - `lane.records` 改 append-only（移除 run/runContinue 的 clear，保留 reset）；
-> - 新类 `LaneStateFolder.fold(records, transcript) → FoldedState`（纯函数，供哨兵测试 + resume 恢复）；
-> - **Out（推迟）**：deferred 执行、effectiveConfiguration、toolBatch、terminalFailure 溯源、entry-内嵌 stopReason、queue 消费按 entry-presence 推断。
+> - 新类 `LaneStateFolder.fold(records, ownEntries, configurationEntries) → FoldedState`（纯函数，**pi 式有界切片**
+>   + `validateRecordLog` 子集校验，供哨兵测试 + resume 有界恢复）；
+> - **Out（推迟）**：deferred 执行、toolBatch、terminalFailure 溯源、entry-内嵌 stopReason、queue 消费按 entry-presence 推断。
 >
 > 完整设计见 `docs/21-record-log-fold-design.md`。
 

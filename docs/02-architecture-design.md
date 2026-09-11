@@ -254,7 +254,7 @@ public sealed interface LaneRecord permits
     QueueConsumed, WriteDeferred, UsageRecord
 { long seq(); Instant timestamp(); }
 
-// LaneState 可派生：fold(records, transcript) → FoldedState（Phase 21，对齐 pi harness/reducer.ts）
+// LaneState 可派生：fold(records, ownEntries, configurationEntries) → FoldedState（Phase 21，对齐 pi harness/reducer.ts）
 public record FoldedState(
     String lane,
     RunPhase phase,                 // IDLE | RUNNING | CHECKPOINT（fold 归一化）
@@ -263,6 +263,7 @@ public record FoldedState(
     LaneState.NewestOwn newestOwn,  // 最近 own entry 摘要（含 stopReason）
     boolean faulted,                // 最近一次 operation 以 error 结束
     boolean aborted,                // 最近一次 operation 被 abort
+    EffectiveConfiguration effectiveConfiguration,  // 从配置 Entry 派生
     List<LaneInfo.QueuedItem> pendingSteer,
     List<LaneInfo.QueuedItem> pendingFollowUp,
     List<LaneInfo.QueuedItem> pendingNextRun
