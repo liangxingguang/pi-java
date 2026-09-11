@@ -113,25 +113,35 @@ final class CompactionExecutor {
                                        String resultEntryId, long durationMs) {
         String entryId = resultEntryId == null ? "" : resultEntryId;
         if (!(lane.phase instanceof RunPhase.Idle)) {
-            lane.records.add(compactionAttempt(laneName, lane.runId, reason, entryId, durationMs));
+            lane.records.add(compactionAttempt(laneName, lane, lane.runId, reason, entryId, durationMs));
             return;
         }
         String opId = UUID.randomUUID().toString();
         lane.records.add(new LaneRecord.OperationStarted(opId, 0, laneName, null,
             HarnessUtils.lastEntryId(lane),
             new LaneRecord.OperationStarted.Compaction(null, entryId)));
-        lane.records.add(compactionAttempt(laneName, opId, reason, entryId, durationMs));
+        lane.records.add(compactionAttempt(laneName, lane, opId, reason, entryId, durationMs));
         lane.records.add(new LaneRecord.OperationFinished(
             UUID.randomUUID().toString(), 0, laneName, null, opId,
             OperationOutcome.COMPLETED, null, durationMs));
     }
 
-    private static LaneRecord.StepAttempt compactionAttempt(String laneName, String runId,
-                                                           String reason, String resultEntryId,
-                                                           long durationMs) {
+    private static LaneRecord.StepAttempt compactionAttempt(String laneName, LaneState lane,
+                                                           String runId, String reason,
+                                                           String resultEntryId, long durationMs) {
+        // Attempts are numbered per (run, step) series and must be consecutive
+        // — validateRecordLog rejects a gap (docs/21 §3.4).
+        int attempt = 0;
+        for (var record : lane.records) {
+            if (record instanceof LaneRecord.StepAttempt step
+                    && step.step() == StepKind.COMPACTION
+                    && java.util.Objects.equals(step.runId(), runId)) {
+                attempt++;
+            }
+        }
         return new LaneRecord.StepAttempt(
             UUID.randomUUID().toString(), 0, laneName, null, runId,
-            StepKind.COMPACTION, 0, resultEntryId, reason,
+            StepKind.COMPACTION, attempt, resultEntryId, reason,
             null, null, null, null, durationMs, null);
     }
 

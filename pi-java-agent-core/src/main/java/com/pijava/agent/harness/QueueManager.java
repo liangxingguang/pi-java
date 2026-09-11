@@ -77,9 +77,20 @@ final class QueueManager {
             accessor.queueOf(lane).addLast(item);
             lane.records.add(new LaneRecord.QueueEnqueued(
                 UUID.randomUUID().toString(), 0, laneName, null, kind,
-                lane.runId, HarnessUtils.provisionedQueueTarget(item)));
+                currentRunId(lane), HarnessUtils.provisionedQueueTarget(item)));
             return Long.toString(item.seq());
         }
+    }
+
+    /**
+     * The run an enqueue belongs to, or {@code null} while the lane is idle.
+     *
+     * <p>{@code lane.runId} survives a finished run, so tagging an idle
+     * enqueue with it would place the record after that operation's finish
+     * and make {@code validateRecordLog} read the log as corrupt.</p>
+     */
+    private static String currentRunId(LaneState lane) {
+        return lane.phase instanceof RunPhase.Idle ? null : lane.runId;
     }
 
     /** Cancel queued items of the given type. Phase 3. */
@@ -96,7 +107,7 @@ final class QueueManager {
             };
             while (!queue.isEmpty()) {
                 lane.records.add(new LaneRecord.QueueCancelled(
-                    UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
+                    UUID.randomUUID().toString(), 0, laneName, null, currentRunId(lane),
                     Long.toString(queue.removeFirst().seq())));
             }
         }
