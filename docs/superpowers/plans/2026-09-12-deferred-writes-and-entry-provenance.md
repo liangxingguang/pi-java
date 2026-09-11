@@ -438,7 +438,7 @@ git commit -m "feat(agent-core): persist assistant stopReason on the entry, drop
                 userEntry("u-1", "hello"), assistant));
 
             assertThat(messages)
-                .as("stopReason=%s 的 assistant 消息必须投影为零条（pi context.ts:71-73）", stopReason)
+                .as("stopReason=%s 的 assistant 消息必须投影为零条（pi spec docs/harness-v2.md:164）", stopReason)
                 .extracting(Message::role)
                 .containsExactly("user");
         }
