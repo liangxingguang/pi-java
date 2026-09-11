@@ -714,14 +714,46 @@ Expected: PASS
 
 ```java
     @Test
-    void foldPendingWritesMatchesLiveLane() {
+    void foldPendingWritesIsEmptyOnALiveLane() {
         var h = harness(simpleStreamFn(), null);
-        var action = h.run("default", "hello");
-        // 停在第一条 ApplyPendingWrite 之前：此刻 pendingWrites 非空。
-        var folded = foldOf(h, "default");
+        h.run("default", "hello");
+        drive(h, "default");
 
-        assertThat(folded.pendingWrites())
-            .hasSameSizeAs(h.snapshot("default").pendingWrites());
+        // 有意的退化解：每个写入点都是 `lane.transcript.add(e)` 紧跟 `lane.pendingWrites.add(e)`，
+        // 所以 WriteDeferred 的 target 必然已在 ownEntries 里 ⇒ fold 视为「已应用」。
+        // live 的 pendingWrites 是「尚未持久化」的流动标记，与 fold 的「已接受未应用」
+        // 不是同一个集合，因此不可拿两者比大小。
+        assertThat(foldOf(h, "default").pendingWrites()).isEmpty();
+    }
+
+    @Test
+    void foldPendingWritesSurfacesWritesWhoseTargetNeverLanded() {
+        // 崩溃场景：write_deferred 记录已落库，target entry 没落库 —— 恢复时必须视为待应用。
+        // 这才是本派生的唯一真实消费者。
+        var write = new LaneRecord.WriteDeferred("w-1", 0, "default", null, "",
+            new ProvisionedEntry<>(userMessage("never-persisted", "lost")));
+
+        var folded = LaneStateFolder.fold("default", List.of(write), List.of(), List.of());
+
+        assertThat(folded.pendingWrites()).hasSize(1);
+        assertThat(folded.pendingWrites().get(0).entry().id()).isEqualTo("never-persisted");
+    }
+
+    @Test
+    void foldKeepsPendingWritesWhenTheOperationAborted() {
+        // 与 steer/followUp 不同：延迟写入在 abort 后仍保留（pi reducer.ts:543-558）。
+        var write = new LaneRecord.WriteDeferred("w-1", 0, "default", null, "",
+            new ProvisionedEntry<>(userMessage("never-persisted", "lost")));
+        var records = List.<LaneRecord>of(
+            new LaneRecord.OperationStarted("run-1", 0, "default", null, null,
+                new LaneRecord.OperationStarted.Run(List.of(), List.of(), null, null)),
+            new LaneRecord.AbortRequested("a-1", 0, "default", null, "run-1"),
+            write,
+            new LaneRecord.OperationFinished("f-1", 0, "default", null, "run-1",
+                OperationOutcome.ABORTED, null, null));
+
+        assertThat(LaneStateFolder.fold("default", records, List.of(), List.of()).pendingWrites())
+            .hasSize(1);
     }
 
     @Test

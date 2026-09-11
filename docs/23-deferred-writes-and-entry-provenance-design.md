@@ -177,6 +177,11 @@ if (entry instanceof Entry.Message m
 
 - **`pendingWrites`（#1）**：本次 run 的 `WriteDeferred` 记录中，`target.id` **不在** ownEntries 里的 → 克隆 target。
   与 `pendingSteer/FollowUp` 不同，**abort 时不清零**（pi `reducer.ts:543-558`；延迟写入在取消时仍会被应用）。
+  > **语义边界（写计划时核实）**：pi-java 的每个写入点都是 `lane.transcript.add(e)` **紧跟** `lane.pendingWrites.add(e)`，
+  > 因此 **live lane 上该派生恒为空**——target 总是已在 ownEntries 中。该派生**唯一的真实消费者是崩溃恢复**：
+  > `write_deferred` 记录已落库而 target entry 未落库时，恢复必须把它视为待应用。
+  > 故**不得**用「fold 的 pendingWrites == live 的 pendingWrites」做哨兵——两者是不同集合
+  > （live 的是「尚未持久化」的流动标记）。测试须断言：live 为空 + 构造「target 未落库」的切片为非空 + abort 后仍保留。
 - **`deferred`（#1）**：**仅看 newest own entry**——是 assistant 且 `stopReason=="deferred"` 且带 handle → 克隆 handle，否则 null。
   即「只有挂在算子尾部时才算未兑换」（pi 测试 `reducer.test.ts:982-1002`）。
 - **`deferredWriteIds`（#1，供 #2/#3）**：本次 run 所有 `WriteDeferred.target.id` 的集合。
@@ -245,7 +250,7 @@ flowchart TD
 | **折叠读 entry 的 stopReason** | `LaneStateFoldTest` 扩容 | fold 的 `newestOwn.stopReason` == live `lastAssistantMessage().stopReason()`（既有哨兵断言保持） |
 | **投影规则（D4）** | 新 `ContextProjectionTest` | `deferred`/`error`/`aborted` 的 assistant entry **零条** provider 消息；`stop`/`tool_use`/`length` 正常投影；非 assistant entry 不受影响 |
 | **WriteDeferred 发射（D3）** | 新 `WriteDeferredEmissionTest` | run 中产生的 entry（assistant/工具结果/中途 steer）各发一条 `WriteDeferred`；run 起始的用户 prompt **不**发 |
-| **pendingWrites 派生** | 同 / `LaneStateFoldTest` | fold 的 `pendingWrites` **由 record 派生**（= `target.id ∉ ownEntries` 的 `WriteDeferred`），**不等价于** live `snapshot.pendingWrites()`——后者还含 run 起始的直接 append 条目（D3 不为它发记录）。断言改为：裸 `run()` 后 fold 为空、run 进行中非空；abort 后仍保留（≠ steer/followUp 清零） |
+| **pendingWrites 派生** | 同 / `LaneStateFoldTest` | fold 的 `pendingWrites` **由 record 派生**（= `target.id ∉ ownEntries` 的 `WriteDeferred`）。**live lane 上恒为空**（写入点 `transcript.add` 紧跟 `pendingWrites.add`，见 §3.4 语义边界），故**不得**与 live `snapshot.pendingWrites()` 比大小。三个断言：① live lane 上为空；② 构造「record 已落库、target 未落库」的切片 → 非空（崩溃恢复，唯一真实消费者）；③ abort 后仍保留（≠ steer/followUp 清零） |
 | `invalid_deferred_handle` | `LaneStateFoldTest` | 构造 `stopReason=="deferred"` 但无 handle 的 assistant entry → `RecordLogCorruption` |
 | `provisioned_entry_mismatch`（write_deferred） | 同 | target id 已存在于 entries 且内容不同 → `RecordLogCorruption` |
 | **toolBatch 派生（#2）** | 新 `ToolBatchFoldTest` | 一轮 tool_use：每 call 关联到 `toolUseId` 相同的 toolResult entry；未执行的 call 标 `missing`；延迟写入**不**被当作结果 |
