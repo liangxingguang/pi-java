@@ -164,8 +164,12 @@ runLoop(:~165)
 | 2 | 让 `SessionRunner` 切到 `PiLoop`，**保留** `AgentHarness` 旧 API 不动 | `pi-java-coding-agent` 全模块测试通过（当前 213 个） |
 | — | ✅ **已完成**。`PiLoop`（`e9a1031`）+ `PiToolRunner`（`56bfec6`）+ `PiLaneEngine`/`PiLaneSink`（`9deee23`）+ `SessionRunner` 切换（`65d1285`）。**coding-agent 213/213，全 reactor `mvn -o clean verify` 绿**。切换暴露的四处「开销长在执行步里」的丢失见 §5.1 末 | |
 | 3 | 用 `docs/23c` §2 的 L5 差分跑 **S1–S8** 剧本 | 零 P0；差异按 P1/P2 归档 |
+| — | ✅ **已完成**（报告见 `docs/29`）。差分机器本身此前**不存在**，按 `docs/23c §7` 先补齐五个部件：共用剧本、pi 侧 runner、pi 侧真相、Java 侧 runner + 归一化器、差分器。**8/8 通过，7 个剧本逐字节相同**；零 P0、1 条 P1（并行批次内 `tool_execution_end` 的相对次序，见 `docs/29 §5`）、0 条 P2。差分**发现并修复了一个真实 P0**：`PiLoopTools.executeParallel` 把 start/end 交错发出，而 pi 的并行分支保证「所有 start 早于任何 end」——该类的 javadoc 本来就写着正确行为，是**代码与自己的文档相反**（`docs/29 §4.1`） | |
 | 4 | 若 1–3 通过 ⇒ 旧的状态机成为**死代码**，此时删除**无风险**，规模就是 §2.2 那 2,362 行 | 全 reactor `mvn -o clean verify` 绿 |
 | 5 | 把 `records` 发射点接到新循环上，`LaneOperationFold` / `LaneStateFolder` 退休 | run summary 相关测试保持通过 |
+
+**第 4 步的推进条件已满足**（第 1–3 步全部通过）。但按用户裁决（2026-09-13）：旧状态机与新循环
+**并存，删除最后做** —— 因此第 4 步**暂不执行**，此处不做删除。
 
 **若第 2 或第 3 步不通过** ⇒ **不进行第 4 步**，退回选项 A，并把"pi-java 的哪一条需求 pi 的循环满足不了"
 写成具体结论 —— 那才是真正的架构依据，而不是现在的推测。
