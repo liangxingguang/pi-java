@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.concurrent.Flow;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.SubmissionPublisher;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.ChatApi;
@@ -29,22 +30,41 @@ public abstract class AbstractChatApi implements ChatApi {
 
     private static final Logger LOG = LoggerFactory.getLogger(AbstractChatApi.class);
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>The returned publisher attaches each subscriber <em>before</em> the
+     * producer can publish anything, and starts the producer virtual thread
+     * lazily on the first {@code subscribe} — at most once, however many
+     * subscribers arrive.</p>
+     *
+     * <p>Ordering matters: {@link SubmissionPublisher#submit} silently discards
+     * an item when no subscriber is attached yet. A producer that wins the race
+     * to its first {@code submit} (which every adapter does, emitting
+     * {@code Start} before any network I/O) would therefore lose that event
+     * permanently. Attaching first closes the window instead of narrowing it.</p>
+     */
     @Override
     public Flow.Publisher<StreamEvent> stream(StreamRequest request, ApiOptions options) {
         var publisher = new SubmissionPublisher<StreamEvent>();
-        Thread.startVirtualThread(() -> {
-            try {
-                streamInternal(request, publisher);
-                publisher.close();
-            } catch (Exception e) {
-                // Best-effort logging must never break error delivery.
-                var model = request.model() == null ? "unknown"
-                    : request.model().provider() + "/" + request.model().modelName();
-                LOG.warn("[ai] LLM stream failed for model {}", model, e);
-                publisher.closeExceptionally(e);
+        var started = new AtomicBoolean();
+        return subscriber -> {
+            publisher.subscribe(subscriber);
+            if (started.compareAndSet(false, true)) {
+                Thread.startVirtualThread(() -> {
+                    try {
+                        streamInternal(request, publisher);
+                        publisher.close();
+                    } catch (Exception e) {
+                        // Best-effort logging must never break error delivery.
+                        var model = request.model() == null ? "unknown"
+                            : request.model().provider() + "/" + request.model().modelName();
+                        LOG.warn("[ai] LLM stream failed for model {}", model, e);
+                        publisher.closeExceptionally(e);
+                    }
+                });
             }
-        });
-        return publisher;
+        };
     }
 
     @Override
