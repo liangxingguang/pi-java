@@ -22,6 +22,13 @@ public interface StreamApi {
     /**
      * Stream a chat request as a reactive publisher.
      *
+     * <p>Subscribing is what starts the request. The returned publisher
+     * performs no work until it is subscribed to, so a publisher that is
+     * obtained and never subscribed to issues no provider request at all.
+     * The producer starts once, on the first {@code subscribe}, however many
+     * subscribers arrive; subscribers that attach later do not replay the
+     * events they missed.</p>
+     *
      * @param request the chat request
      * @param options API call options
      * @return a publisher of stream events
