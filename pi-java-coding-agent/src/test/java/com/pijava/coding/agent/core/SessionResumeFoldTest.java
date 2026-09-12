@@ -123,42 +123,53 @@ class SessionResumeFoldTest {
     }
 
     /**
-     * A session persisted mid-run keeps an open operation. Restoring it must
-     * put the lane in the checkpoint phase so the drive loop finalizes the
-     * operation before any new run opens one — storage rejects a second open
+     * A session persisted mid-run keeps an open operation. Resuming must settle
+     * it at the resume boundary (docs/30 §4.2) so the lane comes back idle and a
+     * new run may open its own operation — storage rejects a second open
      * operation on the same lane (docs/21 F6).
+     *
+     * <p>Until this settlement existed, a crashed session resumed to the
+     * checkpoint phase and relied on the drive loop's {@code TryFinishRun} to
+     * close the operation. That action lives only in the retired step chain,
+     * and {@code PiLaneEngine.run} refuses a non-idle lane — so a resumed
+     * session threw {@code IllegalStateException: Cannot start run} on its
+     * first prompt.</p>
+     *
+     * <p>The idle check below is the very predicate that guard rejects, and
+     * "no open operation in storage" is the one storage rejects, so
+     * drivability is pinned without needing a provider to stream from.</p>
      */
     @Test
-    void resumeFinalizesOpenOperationBeforeStartingAnother() throws Exception {
+    void resumeSettlesACrashOpenedOperationSoANewRunCanOpen() throws Exception {
         Path root = seed(session -> {
             session.appendEntry(userMessage("m1", "mid-run prompt"), LANE);
-            session.appendRecord(new NewRecord<>(openRun("run-open")));
+            session.appendRecord(new NewRecord<>(openRun("run-crashed")));
         });
 
         var resumed = resume(root);
         try {
-            var harness = resumed.harness();
-            assertThat(harness.snapshot(LANE).operation()).isNotNull();
-
-            // Drive the restored lane: the checkpoint phase finalizes the
-            // operation instead of streaming a new assistant turn.
-            var action = harness.peekAction(LANE);
-            while (action != null) {
-                action = harness.executeAction(LANE, action);
-            }
-
-            assertThat(harness.snapshot(LANE).operation()).isNull();
+            // Idle, not checkpoint: the crash-opened operation was closed.
+            assertThat(resumed.harness().snapshot(LANE).operation()).isNull();
 
             // A fresh run may now open its own operation; the flush on close
-            // writes both the finalization and the new operation.
-            harness.run(LANE, "next prompt");
+            // writes both the settlement and the new operation.
+            resumed.harness().run(LANE, "next prompt");
         } finally {
             resumed.close();
         }
 
         var open = openOperations(root);
         assertThat(open).hasSize(1);
-        assertThat(open.get(0).id()).isNotEqualTo("run-open");
+        assertThat(open.get(0).id()).isNotEqualTo("run-crashed");
+
+        var settlement = recordsFrom(root).stream()
+            .filter(LaneRecord.OperationFinished.class::isInstance)
+            .map(LaneRecord.OperationFinished.class::cast)
+            .toList();
+        assertThat(settlement).hasSize(1);
+        assertThat(settlement.get(0).runId()).isEqualTo("run-crashed");
+        // A process dying is a stop, not a failure: FAILED would fault the lane.
+        assertThat(settlement.get(0).outcome()).isEqualTo(OperationOutcome.ABORTED);
     }
 
     /** Re-open the persisted session to inspect what was actually written. */
@@ -171,6 +182,20 @@ class SessionResumeFoldTest {
             handle.close();
         }
     }
+
+    /** Every record on the lane, read back from disk. */
+    private static List<LaneRecord> recordsFrom(Path root) {
+        var handle = PersistentSessionRepositories.jsonl(root);
+        try {
+            var meta = handle.latest().orElseThrow();
+            return handle.open(meta).findRecords(new RecordQuery(
+                LANE, null, null, null, null, EntryOrder.OLDEST_FIRST, null));
+        } finally {
+            handle.close();
+        }
+    }
+
+    /** Guards the test's own assumption that records survive a round trip. */
 
     /** Guards the test's own assumption that records survive a round trip. */
     @Test

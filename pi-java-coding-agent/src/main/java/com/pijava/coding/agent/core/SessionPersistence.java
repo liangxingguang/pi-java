@@ -1,12 +1,14 @@
 package com.pijava.coding.agent.core;
 
 import java.util.List;
+import java.util.UUID;
 
 
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.entry.ProvisionedEntry;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.record.NewRecord;
+import com.pijava.agent.record.OperationOutcome;
 import com.pijava.agent.session.ContextEntries;
 import com.pijava.agent.session.EntryOrder;
 import com.pijava.agent.session.EntryQuery;
@@ -59,12 +61,13 @@ final class SessionPersistence {
     }
 
     /**
-     * Attach a persisted session: open, rebuild the lane's orchestration state
-     * from its record log, then seed the compaction-aware harness transcript.
+     * Attach a persisted session: open, settle any operation a crash left open,
+     * rebuild the lane's orchestration state from its record log, then seed the
+     * compaction-aware harness transcript.
      *
-     * <p>The two are deliberately separate (docs/21 D9): the record fold owns
-     * orchestration state (phase / run id / queues / newest own entry), while
-     * the transcript seed owns the display context.</p>
+     * <p>The last two are deliberately separate (docs/21 D9): the record fold
+     * owns orchestration state (phase / run id / queues / newest own entry),
+     * while the transcript seed owns the display context.</p>
      */
     static void attach(AgentSession owner, PersistentSessionRepositories.RepositoryHandle handle,
                        SessionMetadata metadata) {
@@ -72,6 +75,7 @@ final class SessionPersistence {
         owner.session(opened);
         owner.name(sessionNameOf(opened, metadata));
         String lane = owner.laneName();
+        settleOpenOperation(opened, lane);
         List<Entry> entries = opened.findEntries(
             new EntryQuery(null, null, EntryOrder.OLDEST_FIRST, null, null));
         owner.persistedEntryIds().clear();
@@ -83,6 +87,41 @@ final class SessionPersistence {
         String leafId = entries.isEmpty() ? null : entries.get(entries.size() - 1).id();
         owner.harness().seedTranscript(owner.laneName(),
             ContextEntries.contextEntries(ContextEntries.pathToLeaf(entries, leafId)));
+    }
+
+    /**
+     * Close an operation a crash left open on the lane (docs/30 §4.2).
+     *
+     * <p>A process killed mid-run leaves an {@code OperationStarted} with no
+     * matching {@code OperationFinished}. The record fold restores such a lane
+     * to the checkpoint phase and relies on the drive loop's
+     * {@code TryFinishRun} to close it — but <b>that action lives only in the
+     * retired step chain</b>, while {@code PiLaneEngine.run} refuses any lane
+     * that is not idle. A resumed session therefore threw
+     * {@code IllegalStateException: Cannot start run} on its first prompt.</p>
+     *
+     * <p>Settling here, at the resume boundary, fixes that for both drivers:
+     * the appended {@code OperationFinished} is read back by the fold, so the
+     * lane restores to idle. Storage only rejects a <em>second</em>
+     * {@code OperationStarted} on a lane, so closing is always permitted.</p>
+     *
+     * <p>{@code ABORTED}, not {@code FAILED}: the process dying is a stop, not
+     * a failure. {@code HarnessUtils.determineOutcome} keeps {@code "aborted"}
+     * distinct for exactly this reason, so a crashed run does not mark the lane
+     * faulted. The operation is never resumed mid-flight — pi's durable restart
+     * point is replaced wholesale, not folded back (docs/30 §1).</p>
+     */
+    private static void settleOpenOperation(Session<?> opened, String lane) {
+        var open = opened.findOpenOperations(lane, 1);
+        if (open.isEmpty()) {
+            return;
+        }
+        var crashed = open.getFirst();
+        opened.appendRecord(new NewRecord<>(new LaneRecord.OperationFinished(
+            UUID.randomUUID().toString(), 0, lane, null,
+            crashed.id(), OperationOutcome.ABORTED, null, null)));
+        LOG.info("[session] settled the operation a crash left open: lane={} runId={}",
+            lane, crashed.id());
     }
 
     /**
