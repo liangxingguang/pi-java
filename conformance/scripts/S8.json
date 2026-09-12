@@ -1,0 +1,13 @@
+{
+  "id": "S8",
+  "name": "follow-up 队列",
+  "systemPrompt": "You are helpful.",
+  "prompt": "Start",
+  "toolExecution": "parallel",
+  "tools": [],
+  "responses": [
+    { "content": [{ "type": "text", "text": "First" }], "stopReason": "stop" },
+    { "content": [{ "type": "text", "text": "Followed up" }], "stopReason": "stop" }
+  ],
+  "followUp": [{ "afterTurn": 0, "text": "and another thing" }]
+}

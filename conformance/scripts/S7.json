@@ -1,0 +1,11 @@
+{
+  "id": "S7",
+  "name": "流中途 abort",
+  "systemPrompt": "You are helpful.",
+  "prompt": "Start something",
+  "toolExecution": "parallel",
+  "tools": [],
+  "responses": [
+    { "content": [{ "type": "text", "text": "Partial answer" }], "stopReason": "aborted" }
+  ]
+}

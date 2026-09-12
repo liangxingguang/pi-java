@@ -1,0 +1,14 @@
+{
+  "id": "S1",
+  "name": "单轮纯文本",
+  "systemPrompt": "You are helpful.",
+  "prompt": "Hello",
+  "toolExecution": "parallel",
+  "tools": [],
+  "responses": [
+    {
+      "content": [{ "type": "text", "text": "Hi there!", "chunks": ["Hi th", "ere!"] }],
+      "stopReason": "stop"
+    }
+  ]
+}

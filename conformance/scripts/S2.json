@@ -1,0 +1,15 @@
+{
+  "id": "S2",
+  "name": "单轮单工具",
+  "systemPrompt": "You are helpful.",
+  "prompt": "Echo something",
+  "toolExecution": "parallel",
+  "tools": [{ "name": "echo" }],
+  "responses": [
+    {
+      "content": [{ "type": "toolCall", "name": "echo", "arguments": { "text": "hi" } }],
+      "stopReason": "toolUse"
+    },
+    { "content": [{ "type": "text", "text": "Done" }], "stopReason": "stop" }
+  ]
+}

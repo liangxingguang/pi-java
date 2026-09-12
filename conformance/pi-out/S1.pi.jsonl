@@ -1,0 +1,11 @@
+{"type":"agent_start"}
+{"type":"turn_start"}
+{"message":{"content":"Hello","role":"user"},"type":"message_start"}
+{"message":{"content":"Hello","role":"user"},"type":"message_end"}
+{"message":{"content":[],"role":"assistant","stopReason":"stop"},"type":"message_start"}
+{"detail":null,"evt":"text_start","type":"message_update"}
+{"detail":"ere!","evt":"text_delta","type":"message_update"}
+{"detail":"Hi there!","evt":"text_end","type":"message_update"}
+{"message":{"content":[{"text":"Hi there!","type":"text"}],"role":"assistant","stopReason":"stop"},"type":"message_end"}
+{"stopReason":"stop","toolResults":[],"type":"turn_end"}
+{"messages":[{"content":"Hello","role":"user"},{"content":[{"text":"Hi there!","type":"text"}],"role":"assistant","stopReason":"stop"}],"type":"agent_end"}

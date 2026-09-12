@@ -1,0 +1,18 @@
+{
+  "id": "S5",
+  "name": "length 截断",
+  "systemPrompt": "You are helpful.",
+  "prompt": "Do something long",
+  "toolExecution": "parallel",
+  "tools": [{ "name": "never" }],
+  "responses": [
+    {
+      "content": [
+        { "type": "text", "text": "Starting…" },
+        { "type": "toolCall", "name": "never", "arguments": { "n": 1 } }
+      ],
+      "stopReason": "length"
+    },
+    { "content": [{ "type": "text", "text": "Recovered" }], "stopReason": "stop" }
+  ]
+}

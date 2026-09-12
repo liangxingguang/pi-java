@@ -1,0 +1,10 @@
+{"type":"agent_start"}
+{"type":"turn_start"}
+{"message":{"content":"Start something","role":"user"},"type":"message_start"}
+{"message":{"content":"Start something","role":"user"},"type":"message_end"}
+{"message":{"content":[],"role":"assistant","stopReason":"stop"},"type":"message_start"}
+{"detail":null,"evt":"text_start","type":"message_update"}
+{"detail":"Partial answer","evt":"text_end","type":"message_update"}
+{"message":{"content":[{"text":"Partial answer","type":"text"}],"role":"assistant","stopReason":"aborted"},"type":"message_end"}
+{"stopReason":"aborted","toolResults":[],"type":"turn_end"}
+{"messages":[{"content":"Start something","role":"user"},{"content":[{"text":"Partial answer","type":"text"}],"role":"assistant","stopReason":"aborted"}],"type":"agent_end"}
