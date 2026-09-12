@@ -97,6 +97,10 @@ class ToolBatchFoldTest {
         // both truth values rather than on a single-case fixture.
         assertThat(calls).anySatisfy(call -> assertThat(call.missing()).isFalse());
         assertThat(calls).anySatisfy(call -> assertThat(call.missing()).isTrue());
+        // NOT behavioural coverage: missing() is defined as resultEntryId() == null,
+        // so this can never fail — it pins the derived accessor's shape (a revert
+        // to a stored component breaks compilation), not its behaviour. The two
+        // anySatisfy assertions above are what actually discriminate.
         assertThat(calls).allSatisfy(call ->
             assertThat(call.missing()).isEqualTo(call.resultEntryId() == null));
     }

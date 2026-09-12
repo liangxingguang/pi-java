@@ -52,20 +52,21 @@ final class LaneOperationFold {
                                             List<Entry> ownEntries,
                                             List<Entry> configurationEntries) {
         var ordered = orderBySeq(records);
-        // One applied-entry set, as in pi: a write is "applied" as soon as its
-        // entry exists anywhere in the recovery slice. Configuration entries
-        // are a subset of the own entries on a live lane, but not on resume —
-        // a configuration entry written before the operation anchor is not an
-        // own entry.
-        var slicedEntries = new ArrayList<Entry>(ownEntries.size() + configurationEntries.size());
-        slicedEntries.addAll(ownEntries);
-        slicedEntries.addAll(configurationEntries);
-        var appliedEntryIds = new LinkedHashSet<String>();
-        slicedEntries.forEach(entry -> appliedEntryIds.add(entry.id()));
-        // The validator sees the operation's own entries only: pi's map comes
-        // from input.entries (reducer.ts:317), which never includes the
-        // configuration entries (docs/22). Widening it would reject logs pi
-        // accepts, so the two maps are deliberately not the same set.
+        // The ids of the operation's own entries — the same slice the validator
+        // checks below. Exactly one lookup reads it: is the target of a
+        // deferred write already applied? Configuration entries are not added:
+        // every WriteDeferred target is an Entry.Message, and isConfiguration()
+        // is overridden only by ModelChange/ThinkingLevelChange/ActiveToolsChange,
+        // so a configuration id could never match. On the resume path (where a
+        // configuration entry may predate the operation anchor) the set stays
+        // correct for the same reason.
+        var appliedEntryIds = new LinkedHashSet<String>(ownEntries.size());
+        ownEntries.forEach(entry -> appliedEntryIds.add(entry.id()));
+        // The validator's map is narrower than pi's: pi builds it from
+        // input.entries (reducer.ts:317), the operation's entries plus those
+        // fetched by provisioned or referenced id, while this fold has no such
+        // extra input and validates the own entries only. Widening it here
+        // would reject logs pi accepts (docs/22).
         RecordLogValidator.validate(lane, ordered, ownEntries);
 
         var openOp = openOperation(ordered);
