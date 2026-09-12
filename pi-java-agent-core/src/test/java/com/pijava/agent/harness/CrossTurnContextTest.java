@@ -96,6 +96,41 @@ class CrossTurnContextTest {
         assertThat(texts).containsExactly("after reset");
     }
 
+    /**
+     * The ContextEntries projection rule reaches the provider context through
+     * the <em>resume seed</em> path too, not just through the live transcript:
+     * a seeded assistant entry whose stop reason is deferred/error/aborted must
+     * never be sent to the provider (pi spec {@code docs/harness-v2.md:164}).
+     */
+    @Test
+    void seededNonProjectedAssistantEntryStaysOutOfTheProviderContext() {
+        for (String stopReason : List.of("deferred", "error", "aborted")) {
+            var captured = new AtomicReference<List<Message>>();
+            var h = harness(captured);
+
+            h.seedTranscript("default", List.of(
+                new Entry.Message("u-1", 0, null, null,
+                    new Message.UserMessage(List.of(new ContentBlock.TextContent("hello"))), null),
+                new Entry.Message("a-1", 0, "u-1", null,
+                    new Message.AssistantMessage(
+                        List.of(new ContentBlock.TextContent("partial text")), stopReason, null),
+                    null)));
+
+            h.run("next");
+            drive(h);
+
+            var texts = captured.get().stream()
+                .flatMap(m -> m.content().stream())
+                .filter(ContentBlock.TextContent.class::isInstance)
+                .map(b -> ((ContentBlock.TextContent) b).text())
+                .toList();
+            assertThat(texts)
+                .as("stopReason=%s 的 seeded assistant 条目不得进 provider 上下文", stopReason)
+                .doesNotContain("partial text")
+                .contains("hello", "next");
+        }
+    }
+
     @Test
     void transcriptGrowsAcrossRuns() {
         var captured = new AtomicReference<List<Message>>();

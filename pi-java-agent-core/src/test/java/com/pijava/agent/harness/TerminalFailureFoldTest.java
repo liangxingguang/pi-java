@@ -95,6 +95,24 @@ class TerminalFailureFoldTest {
     }
 
     /**
+     * Both provenance arms hold at once — a step attempt names the error entry
+     * <em>and</em> the entry is preceded by a deferred one — and the step wins
+     * (pi {@code reducer.ts:614-640} tests {@code producedByStep} first).
+     */
+    @Test
+    void stepProvenanceWinsOverADeferredPredecessor() {
+        var deferred = deferredAssistant("a-0", "handle-1");
+        var error = errorAssistant("a-1");
+
+        var folded = fold(List.of(started("run-1"), stepAttempt("run-1", "a-1")),
+            List.of(deferred, error));
+
+        assertThat(folded.terminalFailure()).isNotNull();
+        assertThat(folded.terminalFailure().entryId()).isEqualTo("a-1");
+        assertThat(folded.terminalFailure().source()).isEqualTo("step");
+    }
+
+    /**
      * The deferral exclusion must be the <em>only</em> reason this yields null.
      * The fixture carries full step provenance naming the error entry — the
      * same records as {@link #errorEntryProducedByAStepIsAttributedToStep},

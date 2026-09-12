@@ -82,6 +82,25 @@ class ToolBatchFoldTest {
             .containsExactly("call-2");
     }
 
+    /**
+     * {@code missing} is derived from {@code resultEntryId}, not stored
+     * alongside it: the two can never disagree, in either direction.
+     */
+    @Test
+    void missingIsExactlyTheAbsentResultEntryId() {
+        var assistant = assistantWithToolCalls("a-1", List.of("call-1", "call-2"));
+        var own = List.<Entry>of(assistant, toolResult("r-1", "call-1", "ok"));
+
+        var calls = fold(List.of(), own).toolBatch().calls();
+
+        // One matched and one unmatched call, so the invariant is pinned on
+        // both truth values rather than on a single-case fixture.
+        assertThat(calls).anySatisfy(call -> assertThat(call.missing()).isFalse());
+        assertThat(calls).anySatisfy(call -> assertThat(call.missing()).isTrue());
+        assertThat(calls).allSatisfy(call ->
+            assertThat(call.missing()).isEqualTo(call.resultEntryId() == null));
+    }
+
     @Test
     void deferredWriteIsNotMistakenForAToolResult() {
         // 延迟写入的 target id 与被排除的 toolResult 同 id：必须不被当成结果。

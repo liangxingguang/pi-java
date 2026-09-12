@@ -11,6 +11,7 @@ import com.pijava.agent.record.OperationOutcome;
 import com.pijava.agent.record.StepKind;
 import com.pijava.agent.session.SessionMutation;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.DeferredHandle;
 import com.pijava.ai.message.Message;
 
 import org.junit.jupiter.api.Test;
@@ -62,6 +63,41 @@ class RecordObservabilityCodecTest {
 
         assertThat(((Message.AssistantMessage) decoded).stopReason()).isNull();
         assertThat(((Message.AssistantMessage) decoded).deferred()).isNull();
+    }
+
+    @Test
+    void assistantEntryWithoutStopReasonOmitsTheKey() {
+        // 编码侧的反向保证：null stop reason 不得写出 "stopReason" 键，
+        // 否则旧 reader 会读到一个 null 值而非缺省（与上个用例互为镜像）。
+        var entry = new Entry.Message("e-4", 19L, null, Instant.now(),
+            new Message.AssistantMessage(
+                List.of(new ContentBlock.TextContent("x")), null, null), null);
+
+        String line = JsonlCodec.encodeMutation(new SessionMutation.Entry(null, entry));
+
+        assertThat(line).doesNotContain("\"stopReason\"");
+        assertThat(line).doesNotContain("\"deferred\"");
+    }
+
+    /**
+     * The deferred-handle persistence chain (docs/22 D2): no producer exists in
+     * production, so the encode and non-null decode branches would otherwise
+     * never run. Constructing a handle directly and round-tripping it pins both.
+     */
+    @Test
+    void assistantEntryRoundTripsItsDeferredHandle() {
+        var handle = new DeferredHandle("anthropic", "claude-sonnet-4", "anthropic-messages",
+            "batch-1/row-2", 1_700_000_000_000L, 500L, Map.of("row", 2, "done", false));
+        var entry = new Entry.Message("e-5", 20L, null, Instant.now(),
+            new Message.AssistantMessage(
+                List.of(new ContentBlock.TextContent("pending")), "deferred", handle), null);
+
+        var parsed = (Entry.Message) encodeThenParseEntry(entry);
+        var assistant = (Message.AssistantMessage) parsed.message();
+
+        assertThat(assistant.stopReason()).isEqualTo("deferred");
+        assertThat(assistant.deferred()).isEqualTo(handle);
+        assertThat(assistant.deferred().data()).containsEntry("row", 2);
     }
 
     @Test
