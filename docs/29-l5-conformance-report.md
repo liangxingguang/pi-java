@@ -139,3 +139,69 @@ pi 自身的一处配置坏死在此记录：`packages/agent/vitest.config.ts` �
 `@earendil-works/pi-ai/utils/*` 子路径导入，**在 `v0.85.1` 和 `my-pi` HEAD 上都跑不了它自己的
 `agent-loop.test.ts`**。本次用独立配置文件绕过（补上 `/utils/(.+)$` 别名后其自测 23/23 绿），
 **没有**改动 pi 的配置文件。
+
+## 9. 差分之外发现的缺陷（记录，未修）
+
+`docs/28 §5` 第 5 步要求「`records` 发射点接到新循环上」。核对时发现该子句**已由第 2 步的接线
+满足**（见 §9.1），而补上「新循环日志是否仍可折叠」这一空白覆盖后，**找到一个两条路径共有的
+既有缺陷**（§9.2）。它**不属于 L5 差分发现**，在此显式声明，以免与 §4.1 混为一谈。
+
+### 9.1 第 5 步第一子句的核对（已满足）
+
+`LaneRecord` 全部 11 个变体在新驱动路径上都有发射点：
+
+| 变体 | 发射点（新路径） |
+|---|---|
+| `OperationStarted` / `OperationFinished` | `ActionExecutor.run` / `finishRun`（`PiLaneEngine` 起手收口复用） |
+| `StepAttempt` / `UsageRecord` | `PiLaneSink.emitAssistantRecords` |
+| `ToolStarted` / `ToolFinished` | `PiLaneSink.emitToolRecords` |
+| `QueueConsumed` | `PiLaneEngine.emitQueueConsumed` |
+| `QueueEnqueued` / `QueueCancelled` | `QueueManager`（会话层队列 API） |
+| `WriteDeferred` | `HarnessUtils.recordDeferredWrite`（`PiLaneSink.append` 调用） |
+| `AbortRequested` | `AgentHarness` 的 abort 路径 |
+
+### 9.2 缺陷：`deferredWriteIds` 使两条折叠派生在真实日志上恒为空
+
+**症状**：对**真实**日志调用 `LaneStateFolder.fold`，`toolBatch()` 把**每条**工具调用都标成
+`missing`（`resultEntryId == null`）；同理，任何由 step 产生的 `error` 条目都不会被判为
+`terminalFailure()`。
+
+**根因**：`HarnessUtils.recordDeferredWrite` 对**运行期追加的每一条 entry** 都发一条
+`WriteDeferred`（`LaneOperationFold.deferredWriteIds` 因此收下全部运行期 entry id，含每个工具
+结果），而两条派生都用 `!deferredWriteIds.contains(entryId)` 作排除条件 —— 排除条件把每个候选
+都滤掉，派生恒为空。
+
+**两条路径都有**：把同一折叠施加在旧步进链（`peekAction`/`executeAction`）产生的日志上，同样
+复现 `resultEntryId=null`。缺陷自 Phase 21 起就存在。
+
+**为何一直没有暴露**：`ToolBatchFoldTest` / `TerminalFailureFoldTest` 的记录集是**手搓的最小集**
+（只给目标条目配一条 `WriteDeferred`），而 `LaneStateFoldTest` / `DeferredWriteFoldTest` 虽然折叠
+真实日志，却**从不断言 `toolBatch()` / `terminalFailure()`**。本次新增
+`PiLaneEngineTest.recordLogOfANewLoopToolRunFoldsBackToTheLiveLane` 是第一个折叠真实工具轮日志的
+用例，它把这个缺陷照了出来（该用例因此**刻意不破口**这两个派生，只在注释里指向本节）。
+
+**当前无生产影响**：`AgentHarness.restoreFromRecords` 消费的字段是
+`idle / runId / stepIndex / newestOwn / 三个队列 / pendingWrites`，**不含** `toolBatch()` 与
+`terminalFailure()` —— 两者在 `src/main` 里零消费者。
+
+**不修的理由（裁决 2026-09-13：退休）**：修它需要先判定「是排除条件过宽，还是
+`recordDeferredWrite` 过宽」，而 `LaneOperationFold` javadoc 引用的判据
+（`pi reducer.ts:479-486` / `:614-640` 等）**指向一份 pi 已删除的文件**（详见 §9.3）。两个方向都能
+让现有测试变绿，靠读代码无法裁决。
+
+裁决为**退休整条折叠链**，因此本缺陷**不修** —— 修它等于加固一段要删的代码。实施蓝图见
+**`docs/30`**。新增的那个折叠用例随之改为断言恢复后的可驱动性（`docs/30 §5` Step 2）。
+
+### 9.3 相关背景：折叠模型的 pi 参照已不存在
+
+`docs/28 §5` 第 5 步要求让 `LaneOperationFold` / `LaneStateFolder` 退休。核对参照实现时确认：
+
+- `v0.85.1` 的 `packages/agent/src/harness/runtime/reducer.ts` 只有 **232 行**，是**实时事件
+  归约器**（`reduceLaneSnapshot`，把 `HarnessEvent` 归约进 lane 快照），**不是**日志折叠器。
+- `deferredWrite` / `WriteDeferred` / `deriveToolBatch` / `reduceLaneState` 在 `v0.85.1` **与**
+  用户 `my-pi` 检出上**全仓零命中**。
+- π 侧 `harness.md:1317` invariant 5 明文禁止该模型：
+  *"No read on a hot path may fold history or infer state from an absent value — no value history exists to fold."*
+
+即：`LaneOperationFold` 是一套**仅存在于 pi-java** 的构造，其 javadoc 的行号引用指向 pi 已删除的
+667 行旧 `reducer.ts`。退休与「跟 legacy 还是跟 harness」的裁决耦合，见 `docs/28` 的后续步骤。
