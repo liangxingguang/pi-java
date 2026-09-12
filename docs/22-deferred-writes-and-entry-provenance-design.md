@@ -193,6 +193,11 @@ if (entry instanceof Entry.Message m
   > 但**重新落库并未实现**——持久化是 transcript 驱动的（`SessionPersistence.persistPending` 遍历 `snapshot.transcript()`），
   > 只存在于 `lane.pendingWrites` 的 entry 永远不会被写进存储；恢复后循环发 `ApplyPendingWrite`、entry 出列、无人重写 ⇒ **该写入静默丢失**。
   > 把这类 entry 补回 transcript 会复活重试/compaction 丢弃的 entry（即上文的泄漏），故本阶段不做，此处只把声明改准确。
+  >
+  > **⚠️ 勘误（2026-09-12）**：上述两点已在 `docs/26-write-durability-and-deferred-runtime-design.md`
+  > Part A 立项修复 —— 清偿走 `EntryPersister` 端口（不再靠「补回 transcript」），泄漏走新增的
+  > `LaneRecord.EntryDropped` 记录（让「entry 被删除」在日志里可见并排除 owed 判定）。本段保留为
+  > 问题记录，不再是最终结论。
   > 故**不得**用「fold 的 pendingWrites == live 的 pendingWrites」做哨兵——两者是不同集合（live 的是「尚未持久化」的流动标记）。
   > 测试须断言：无 compaction 无重试为空 + **空闲 compaction 之后也为空** + **重试之后非空**（钉住泄漏）+ 「target 未落库」切片非空 + abort 后仍保留。
 - **`deferred`（#1）**：**仅看 newest own entry**——是 assistant 且 `stopReason=="deferred"` 且带 handle → 克隆 handle，否则 null。
@@ -292,13 +297,19 @@ flowchart TD
 
 ## 6. Out（明确不做）
 
+> **⚠️ 勘误（2026-09-12）**：本表 Out-1 / 2 / 3 / 5 已**改判为要做**，设计与落点见
+> `docs/26-write-durability-and-deferred-runtime-design.md`（Part B）。改判理由：当时的「pi 自己都没实现 ⇒
+> 做了是死代码」把**对齐对象搞错了** —— 这两项在 pi 侧的基准是 **spec**（`harness-v2.md:934-977` 等），
+> 不是 pi 的运行时；pi 的 harness 是 `HarnessNotImplemented` 脚手架，本来就无可比代码。
+> 另外本表第 1 条「写入清偿」相关的缺口（`pendingWrites` 不落库）也在 `docs/26` Part A 修复。
+
 | Out 项 | 为什么不做 | 何时做 |
 |---|---|---|
-| **1. provider 层 deferred**（`SimpleStreamOptions.deferred`、`fetchDeferred`/`cancelDeferred`、长轮询/挂起恢复） | pi 自己都没实现（§0）；无真实 provider 支持，做了是死代码 | 出现支持 deferral 的真实 provider 时 |
-| **2. `UsageCause.DEFERRED_FETCH` 的发射点** | 只有 provider 层会产出它，随 Out-1 | 同 Out-1 |
-| **3. `RunOutcome.suspended` / `SuspendedOperation.reason`** | pi 的挂起语义依赖 provider 层 | 同 Out-1 |
+| **1. provider 层 deferred**（`SimpleStreamOptions.deferred`、`fetchDeferred`/`cancelDeferred`、长轮询/挂起恢复） | ~~pi 自己都没实现（§0）；无真实 provider 支持，做了是死代码~~ **→ 改判：做（`docs/26` Part B），对齐 pi spec** | 已立项 |
+| **2. `UsageCause.DEFERRED_FETCH` 的发射点** | ~~只有 provider 层会产出它，随 Out-1~~ **→ 改判：做（赎回路径发射）** | 已立项 |
+| **3. `RunOutcome.suspended` / `SuspendedOperation.reason`** | ~~pi 的挂起语义依赖 provider 层~~ **→ 改判：做（挂起态按 spec 由「open operation + 未赎回的 deferred entry」表示）** | 已立项 |
 | **4. `queue 消费按 entry-presence 推断`（docs/21 §6-5）** | 已被 D4（`QueueConsumed`）取代并落地 | 不适用 |
-| **5. `deferred` 派生的真实消费者** | 无 provider → handle 永不产生；本阶段仅为 fold 完整性与校验而存在 | 同 Out-1 |
+| **5. `deferred` 派生的真实消费者** | ~~无 provider → handle 永不产生；本阶段仅为 fold 完整性与校验而存在~~ **→ 改判：做（赎回链路成为其消费者）** | 已立项 |
 
 ---
 
