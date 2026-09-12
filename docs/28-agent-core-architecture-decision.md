@@ -159,14 +159,48 @@ runLoop(:~165)
 | 步 | 做什么 | 通过判据 |
 |---|---|---|
 | 0 | 本文评审通过 | 你点头 |
-| 1 | **新写独立的 `PiLoop`**（新类，**不删旧的**），一对一译出 `runLoop` / `streamAssistantResponse` / `executeToolCalls`。估计 150–200 行 | 编译通过；与 `agent-loop.ts` 逐段对照审查 |
+| 1 | **新写独立的 `PiLoop`**（新类，**不删旧的**），一对一译出 `runLoop` / `streamAssistantResponse` / `executeToolCalls` | 编译通过；与 `agent-loop.ts` 逐段对照审查 |
+| — | ✅ **已完成（`e9a1031`）**。实测 `PiLoop` 421 行 + `PiLoopTools` 149 行 = **570 行**，对 pi 的 **803 行**是 **0.71 倍** ⇒ §7 第 1 条通过。5 个金标用例（单轮文本 / 工具轮 / aborted / length 截断 / follow-up）断的是**帧序**，期望值取自 `agent-loop.ts` 实读 | |
 | 2 | 让 `SessionRunner` 切到 `PiLoop`，**保留** `AgentHarness` 旧 API 不动 | `pi-java-coding-agent` 全模块测试通过（当前 213 个） |
+| — | ⬜ **进行中**。前置件 `PiLoop`（`e9a1031`）与 `PiToolRunner`（`56bfec6`）已完成。**接线设计见 §5.1** | |
 | 3 | 用 `docs/23c` §2 的 L5 差分跑 **S1–S8** 剧本 | 零 P0；差异按 P1/P2 归档 |
 | 4 | 若 1–3 通过 ⇒ 旧的状态机成为**死代码**，此时删除**无风险**，规模就是 §2.2 那 2,362 行 | 全 reactor `mvn -o clean verify` 绿 |
 | 5 | 把 `records` 发射点接到新循环上，`LaneOperationFold` / `LaneStateFolder` 退休 | run summary 相关测试保持通过 |
 
 **若第 2 或第 3 步不通过** ⇒ **不进行第 4 步**，退回选项 A，并把"pi-java 的哪一条需求 pi 的循环满足不了"
 写成具体结论 —— 那才是真正的架构依据，而不是现在的推测。
+
+### 5.1 第 2 步的接线设计（2026-09-13 实测确定，**实施前必读**）
+
+**关键约束**：`SessionPersistence.persistPending`、`AgentSession.accumulatedMessages()`、
+`RunSummaryAggregator` **都读 harness 的车道状态**（`snapshot(laneName).transcript()/records()`）。
+所以新驱动必须同时喂住它，否则持久化与消息累积会断。这决定了接线取「桥接」而非「搬迁」。
+
+**采用并存方案**（用户裁决 2026-09-13）：`agent-core` 里 6 处 `transcript.add` **不删**，
+旧 `AgentHarness` API 全部保留；第 4 步才删。
+
+| # | 改动 | 位置 | 说明 |
+|---|---|---|---|
+| 1 | 新增 `AgentHarness.appendEntry(String laneName, Entry entry)` | `agent-core` | 桥接器用它把新 entry 喂进车道 transcript。与既有 `seedTranscript(:328)` 同风格，`lanes` 是 `ConcurrentMap<String, LaneState>`（`:53`） |
+| 2 | 新增 `PiSessionBridge implements PiLoop.Sink` | `coding-agent/core` | 见下 |
+| 3 | `SessionRunner` 把 `run()`/`continueRun()` + `executeAction` 循环换成 `PiLoop.run`/`continueRun` | `coding-agent/core` | 其余（重试、`AgentEnd`、`AgentSettled`、run summary、终局 entry 投递）**全部保留** |
+
+**`PiSessionBridge` 的三项职责**（对应 pi 的 `agent-session.ts`）：
+
+1. **创建 entry**：`MessageEnd` 时把消息包成 `Entry.Message` 并调 `harness.appendEntry`。
+   → **终局投递无需改动**：`SessionRunner:204-215` 已按 `deliveredEntryIds` 去重后遍历
+   `transcript` 投递 `entryObserver` 与 `EntryAppended`，桥接器写进去的会自动被捞到。
+2. **转发流事件**：`MessageUpdate` → `owner.emitSessionEvent(new MessageUpdate(streamEvent))`
+   + `streamObserver.onStreamEvent(...)`。
+   ⚠️ **注意**：当前这条链路由 `SessionRunner:72` 的 `owner.harness().onStreamEvent(...)` 提供，
+   而 PiLoop 驱动时不经过旧 harness ⇒ 该注册**收不到事件**。桥接器必须接管
+   `StreamDone`/`StreamError`/`UsageInfo` 的**停因、错误信息与 token 记账**（`stopReason` /
+   `errorMessage` / `inputTokens` 等可变盒子）。
+3. **turn / agent 生命周期**：`AgentStart`/`TurnStart`/`TurnEnd`/`AgentEnd` → 对应的
+   `AgentSessionEvent`（A1–A4 亦在此落地）。
+
+**已知缺口（不阻塞第 2 步）**：`Message.ToolResultMessage` 无 `details` 字段（A7），
+故 `details` 只能上事件、无法随 entry 落库 —— 见 `PiToolRunner` 的 javadoc。
 
 ---
 
@@ -187,7 +221,10 @@ runLoop(:~165)
 
 **回退到选项 A**（并接受长期人工对齐成本）的条件，任一成立即回退：
 
-1. `PiLoop` 无法用 ≤ 300 行 Java 表达 pi 的循环语义；
+1. **移植比原版更臃肿** —— 判据是**比值**，不是绝对行数：`PiLoop` + `PiLoopTools` 的总行数
+   必须**不超过** pi 的 `agent-loop.ts`（`v0.85.1`：**803 行**）。
+   *（2026-09-13 修订：原文写的是"≤ 300 行 Java"，那是拍脑袋估的绝对值，不可比 ——
+   pi 把类型声明放在独立的 `types.ts`，Java 侧必须一并计入。实测见 §5 第 1 步结果。）*
 2. 有 pi-java 消费者的需求**确证**依赖显式步进（例如某个 UI 需要"执行一步再看"）——
    注意 `DriveMode.MANUAL` 目前**无生产消费者**，此条需要新证据；
 3. L5 差分出现**无法归档**的 P0，且根因在 pi 的循环本身（即 pi 的行为不能满足 pi-java 的需求）。
