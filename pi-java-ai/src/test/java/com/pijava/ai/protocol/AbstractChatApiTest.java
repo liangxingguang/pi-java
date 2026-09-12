@@ -7,6 +7,7 @@ import java.util.concurrent.Flow;
 import java.util.concurrent.SubmissionPublisher;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
@@ -115,10 +116,25 @@ class AbstractChatApiTest {
         publisher.subscribe(collector(first, firstDone));
         assertThat(firstDone.await(5, TimeUnit.SECONDS)).isTrue();
 
+        // The shared collector counts its latch down in onError too, so it can
+        // only prove the late subscriber *terminated*. This subscriber keeps a
+        // latch that is released by onComplete alone, plus the error it saw, so
+        // the assertion below pins *normal* completion, not mere termination.
         var second = new CopyOnWriteArrayList<StreamEvent>();
-        var secondDone = new CountDownLatch(1);
-        publisher.subscribe(collector(second, secondDone));
-        assertThat(secondDone.await(5, TimeUnit.SECONDS)).isTrue();
+        var secondCompleted = new CountDownLatch(1);
+        var secondError = new AtomicReference<Throwable>();
+        publisher.subscribe(new Flow.Subscriber<>() {
+            @Override public void onSubscribe(Flow.Subscription s) {
+                s.request(Long.MAX_VALUE);
+            }
+            @Override public void onNext(StreamEvent e) { second.add(e); }
+            @Override public void onError(Throwable t) { secondError.set(t); }
+            @Override public void onComplete() { secondCompleted.countDown(); }
+        });
+
+        assertThat(secondCompleted.await(5, TimeUnit.SECONDS))
+            .as("late subscriber must complete normally; error was: %s", secondError)
+            .isTrue();
 
         assertThat(api.invocations).hasValue(1);
         assertThat(first).containsExactly(EVENT);
