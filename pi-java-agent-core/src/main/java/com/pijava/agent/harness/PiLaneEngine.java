@@ -58,17 +58,29 @@ public final class PiLaneEngine {
     // ═══════════════════════════════════════════════════════════
 
     /**
+     * 一次运行的结果。
+     *
+     * @param runId      本次运行的 id（= {@code OperationStarted} 的 id）。**必须在收口前取回**：
+     *                   收口会关掉操作，之后 {@code snapshot().operation()} 为 null，
+     *                   而 run summary 要靠它把记录过滤到本次驱动。
+     * @param transcript 运行结束时的车道 transcript 快照
+     */
+    public record RunOutcome(String runId, List<Entry> transcript) {}
+
+    /**
      * 用一个新 prompt 驱动一次运行（pi {@code runAgentLoop}）。
      *
      * @param downstream 会话层接收器，可为 {@code null}
-     * @return 运行结束时的车道 transcript 快照
      */
-    public List<Entry> run(String laneName, String prompt,
-                           List<PromptImage> images, PiLoop.Sink downstream) {
+    public RunOutcome run(String laneName, String prompt,
+                          List<PromptImage> images, PiLoop.Sink downstream) {
         var lane = ctx.requireLane(laneName);
         if (!(lane.phase instanceof RunPhase.Idle)) {
             throw new IllegalStateException("Cannot start run: lane " + laneName + " is not idle");
         }
+        // 旧路径由 AgentHarness.run 记这个计数；引擎直接调 actionExecutor，会绕过那层。
+        // 只在**新起**运行时记，与 AgentHarness.run / continueRun 的分工一致。
+        ctx.telemetry().incrementCounter("harness.turn", 1);
         actionExecutor.run(laneName, prompt, images == null ? List.of() : images);
         // 起手已把用户 entry 写进 transcript；取回**同一个对象**作为 PiLoop 的 prompt，
         // 这样 PiLaneSink 才能按引用抑制重复写入（PiLoop 会为 prompt 发 message_start/end）。
@@ -83,9 +95,8 @@ public final class PiLaneEngine {
      * 从 transcript 尾部续跑（pi {@code runAgentLoopContinue}，自动重试用）。
      *
      * @param downstream 会话层接收器，可为 {@code null}
-     * @return 运行结束时的车道 transcript 快照
      */
-    public List<Entry> continueRun(String laneName, PiLoop.Sink downstream) {
+    public RunOutcome continueRun(String laneName, PiLoop.Sink downstream) {
         actionExecutor.runContinue(laneName);
         var lane = ctx.requireLane(laneName);
         return drive(laneName, List.of(), transcriptMessages(lane), downstream);
@@ -95,9 +106,10 @@ public final class PiLaneEngine {
     // 驱动
     // ═══════════════════════════════════════════════════════════
 
-    private List<Entry> drive(String laneName, List<Message> prompts, List<Message> context,
-                              PiLoop.Sink downstream) {
+    private RunOutcome drive(String laneName, List<Message> prompts, List<Message> context,
+                             PiLoop.Sink downstream) {
         var lane = ctx.requireLane(laneName);
+        var runId = lane.runId;
         // 起手时已在转录里的消息：PiLoop 会为它们重发 message_start/end 的，一律不再落盘。
         Set<Message> present = Collections.newSetFromMap(new IdentityHashMap<>());
         present.addAll(transcriptMessages(lane));
@@ -113,7 +125,10 @@ public final class PiLaneEngine {
 
         var outcome = HarnessUtils.determineOutcome(lane);
         actionExecutor.finishRun(laneName, outcome, stop[0]);
-        return List.copyOf(lane.transcript);
+        // 收口后发布一次：旧路径由 AgentHarness.executeAction 在末尾的 action 后发布，
+        // 新驱动只调 actionExecutor，不会经过 AgentHarness 的那层包装。
+        ctx.publishState(laneName);
+        return new RunOutcome(runId, List.copyOf(lane.transcript));
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -166,6 +181,9 @@ public final class PiLaneEngine {
         compactions.checkAutoCompact(laneName, lane);
         var messages = assembler.buildMessagesForLane(laneName, lane);
         sink.assembledMessageCount(messages.size());
+        // before_request 钩子 + llm.request 跨度：原本长在 AssistantStreamExecutor 里，
+        // 属「执行步」开销，PiLoop 不带，必须在这里补上。
+        sink.beginRequest(lane, messages);
         return messages;
     }
 

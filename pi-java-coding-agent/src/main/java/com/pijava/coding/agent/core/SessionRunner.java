@@ -9,7 +9,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.pijava.agent.entry.Entry;
-import com.pijava.agent.harness.Action;
+import com.pijava.agent.harness.PiLaneEngine;
+import com.pijava.agent.harness.PiLoop;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
@@ -106,14 +107,20 @@ final class SessionRunner {
                     // keeps the prior context and continues from the transcript
                     // tail instead of re-prompting (which would duplicate the
                     // user message under append semantics).
-                    Action action;
+                    //
+                    // docs/28 §5 第 2 步：驱动换成 PiLoop 的双循环。起手/收口仍由
+                    // harness 的 ActionExecutor 负责，被替换的只是中间的
+                    // peekAction → executeAction 步进链。
+                    PiLaneEngine.RunOutcome outcome;
                     if (attempt == 0) {
-                        action = owner.harness().run(laneName, prompt);
+                        outcome = owner.harness().piEngine()
+                            .run(laneName, prompt, List.of(), persistPerEntry(owner, laneName));
                     } else {
                         owner.harness().dropTrailingErrorAssistant(laneName);
-                        action = owner.harness().continueRun(laneName);
+                        outcome = owner.harness().piEngine()
+                            .continueRun(laneName, persistPerEntry(owner, laneName));
                     }
-                    // 用户 prompt 的 entry 由 run() 产生，先落盘再开始流式
+                    // 用户 prompt 的 entry 由引擎起手写入，此处补一次落盘
                     // （docs/27 §2.1：pi 的 `_appendEntry` → `_persist` 逐条写）。
                     flush(owner, laneName);
                     // Immediate user echo (pi alignment: agent-loop emits
@@ -137,21 +144,12 @@ final class SessionRunner {
                     // Collect this attempt's runId (operation id == runId,
                     // ActionExecutor) so the run summary can filter lane
                     // records to only this drive — a retry re-rolls the id.
-                    var op = owner.harness().snapshot(laneName).operation();
-                    if (op != null && op.id() != null) {
-                        runIds.add(op.id());
+                    // 引擎在收口时关掉操作，所以必须用返回值里带出的 id，
+                    // 不能事后再查 snapshot().operation()（那时已为 null）。
+                    if (outcome.runId() != null) {
+                        runIds.add(outcome.runId());
                     }
-                    while (action != null) {
-                        action = owner.harness().executeAction(laneName, action);
-                        // 每步 action 后落盘（docs/27 §2.1）。pi 的
-                        // `session-manager._persist` 在条目产生后立即 appendFileSync，
-                        // 崩溃窗口因此是"一条 entry"；此前 pi-java 只在 run 边界
-                        // 批量 flush，窗口是"一整个 run"（多轮 + 工具调用）。
-                        // 幂等：persistPending 按 id 去重，重复调用不会重写。
-                        flush(owner, laneName);
-                    }
-                    var lane = owner.harness().snapshot(laneName);
-                    transcript = List.copyOf(lane.transcript());
+                    transcript = outcome.transcript();
                 } catch (Exception e) {
                     LOG.warn("[session] harness run error, stopReason=error", e);
                     stopReason.set("error");
@@ -264,6 +262,24 @@ final class SessionRunner {
         if (owner.session() != null) {
             SessionPersistence.persistPending(owner, owner.session(), laneName);
         }
+    }
+
+    /**
+     * 逐条落盘的接收器（docs/27 §2.1）。
+     *
+     * <p>{@code PiLaneSink} 先把 entry 挂进车道 transcript，**再**把事件转给下游，所以在
+     * {@code MessageEnd} 上 flush 恰好是「每条 entry 产生后立即写」。pi 的
+     * {@code session-manager._persist} 就是这个时机，崩溃窗口因此是"一条 entry"；
+     * 此前 pi-java 只在 run 边界批量 flush，窗口是"一整个 run"（多轮 + 工具调用）。</p>
+     *
+     * <p>幂等：{@code persistPending} 按 id 去重，重复调用只做集合查表。</p>
+     */
+    private static PiLoop.Sink persistPerEntry(AgentSession owner, String laneName) {
+        return event -> {
+            if (event instanceof PiLoop.Event.MessageEnd) {
+                flush(owner, laneName);
+            }
+        };
     }
 
     private static void printRunSummary(AgentSession owner, RunSummaryAggregator.Summary summary) {
