@@ -156,6 +156,14 @@ class PiLaneEngineTest {
         return h.snapshot(AgentHarness.DEFAULT_LANE).records();
     }
 
+    /** Fold the live lane's log exactly as resume recovery would (SessionPersistence.attach). */
+    private static LaneStateFolder.FoldedState foldOf(AgentHarness h) {
+        var snapshot = h.snapshot(AgentHarness.DEFAULT_LANE);
+        return LaneStateFolder.fold(AgentHarness.DEFAULT_LANE, snapshot.records(),
+            snapshot.transcript(), snapshot.transcript().stream()
+                .filter(Entry::isConfiguration).toList());
+    }
+
     // ── 用例 ───────────────────────────────────────────────────────
 
     /**
@@ -276,5 +284,71 @@ class PiLaneEngineTest {
         assertThat(((Message.ToolResultMessage) transcript.get(2)).isError()).isTrue();
         assertThat(transcript.get(2).content().toString()).contains("nope");
         assertThat(h.snapshot(AgentHarness.DEFAULT_LANE).operation()).isNull();
+    }
+
+    // ── 记录日志可折叠性：恢复路径读的就是它 ─────────────────────────
+
+    /**
+     * 新驱动产出的记录日志必须仍能被 {@link LaneStateFolder} 折叠。
+     *
+     * <p>{@code LaneStateFoldTest} 的同类哨兵**全部经旧步进链**（{@code peekAction} /
+     * {@code executeAction}）产生日志，新循环发出的日志此前没有任何测试覆盖。两条路径的
+     * 记录形态一旦分叉 —— 动作序号不连续、记录落在 {@code OperationFinished} 之后、
+     * 未知操作号 —— 恢复就会以 {@code RecordLogCorruption} 拒启。<b>这是切换驱动后才会
+     * 暴露、且只在恢复时暴露的一类缺陷</b>，所以在这里显式钉住。</p>
+     *
+     * <p>折叠结果还要与 live 车道一致：这正是 {@code SessionPersistence.attach} 恢复时
+     * 依赖的等式（docs/21 §5）。</p>
+     */
+    @Test
+    void recordLogOfANewLoopTextRunFoldsBackToTheLiveLane() {
+        var h = harness(scripted(List.of(textTurn("hello"))), null);
+
+        h.piEngine().run(AgentHarness.DEFAULT_LANE, "hi", List.of(), new Recorder());
+
+        var folded = foldOf(h);
+        assertThat(folded.idle()).isTrue();
+        assertThat(h.snapshot(AgentHarness.DEFAULT_LANE).operation()).isNull();
+        assertThat(folded.runId()).isNull();
+        assertThat(folded.faulted()).isFalse();
+        assertThat(folded.aborted()).isFalse();
+        assertThat(folded.pendingSteer()).isEmpty();
+        assertThat(folded.pendingFollowUp()).isEmpty();
+        assertThat(folded.pendingNextRun()).isEmpty();
+        assertThat(folded.pendingWrites()).isEmpty();
+    }
+
+    /**
+     * 工具轮同样要折叠得回来（含工具记录的那一段日志）。
+     *
+     * <p><b>这里刻意不破口 {@code toolBatch()}</b>：它当前对任何真实日志都返回
+     * 「每条调用都 {@code missing}」——{@link HarnessUtils#recordDeferredWrite} 把运行期
+     * 追加的**每一条** entry 都记成 {@code WriteDeferred}，于是
+     * {@code LaneOperationFold.deferredWriteIds} 收下了全部工具结果 entry，而
+     * {@code toolBatch} 的 {@code !deferredWriteIds.contains(...)} 排除条件随即把每个
+     * 候选都滤掉。该缺陷**两条路径都有**（旧步进链同样复现），只是此前没有任何测试
+     * 折叠过真实工具轮日志；且 {@code toolBatch()} / {@code terminalFailure()} 目前
+     * **没有生产消费者**（{@code AgentHarness.restoreFromRecords} 只取
+     * idle / runId / stepIndex / newestOwn / 三个队列 / pendingWrites）。
+     * 详见 {@code docs/29 §9}。</p>
+     */
+    @Test
+    void recordLogOfANewLoopToolRunFoldsBackToTheLiveLane() {
+        var h = harness(scripted(List.of(
+            toolTurn("tc1", "echo", Map.of("x", "1")),
+            textTurn("done"))), okTool("echo", "echoed"));
+
+        h.piEngine().run(AgentHarness.DEFAULT_LANE, "run echo", List.of(), new Recorder());
+
+        var folded = foldOf(h);
+        assertThat(folded.idle()).isTrue();
+        assertThat(h.snapshot(AgentHarness.DEFAULT_LANE).operation()).isNull();
+        assertThat(folded.pendingWrites()).isEmpty();
+        assertThat(folded.pendingSteer()).isEmpty();
+        assertThat(folded.pendingFollowUp()).isEmpty();
+        // 工具轮里折叠仍要认得出「批次属于哪条助手消息」——id 指向真实 entry。
+        assertThat(folded.toolBatch()).isNotNull();
+        assertThat(h.snapshot(AgentHarness.DEFAULT_LANE).transcript())
+            .anyMatch(e -> e.id().equals(folded.toolBatch().assistantEntryId()));
     }
 }
