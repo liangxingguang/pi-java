@@ -92,8 +92,8 @@ final class HarnessUtils {
      * Executor, ToolExecutionPipeline, ContextAssembler).</p>
      *
      * <p>The run id falls back to the empty string: {@code RecordJsonCodec}
-     * requires the field, and {@link RecordLogValidator} reads an empty run id
-     * as "no run id", skipping the unknown-operation check.</p>
+     * requires the field, and an empty run id reads as "no run id" — a record
+     * emitted while idle belongs to no operation.</p>
      */
     static void recordDeferredWrite(LaneState lane, Entry entry) {
         if (lane.phase instanceof RunPhase.Idle) {

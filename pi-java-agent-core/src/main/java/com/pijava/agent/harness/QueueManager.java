@@ -86,8 +86,9 @@ final class QueueManager {
      * The run an enqueue belongs to, or {@code null} while the lane is idle.
      *
      * <p>{@code lane.runId} survives a finished run, so tagging an idle
-     * enqueue with it would place the record after that operation's finish
-     * and make {@code validateRecordLog} read the log as corrupt.</p>
+     * enqueue with it would place the record after that operation's finish.
+     * Nothing validates that any more (the record-log fold was retired,
+     * docs/30), but the log is still an audit trail worth keeping honest.</p>
      */
     private static String currentRunId(LaneState lane) {
         return lane.phase instanceof RunPhase.Idle ? null : lane.runId;

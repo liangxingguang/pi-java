@@ -129,8 +129,10 @@ final class CompactionExecutor {
     private static LaneRecord.StepAttempt compactionAttempt(String laneName, LaneState lane,
                                                            String runId, String reason,
                                                            String resultEntryId, long durationMs) {
-        // Attempts are numbered per (run, step) series and must be consecutive
-        // — validateRecordLog rejects a gap (docs/21 §3.4).
+        // Attempts are numbered per (run, step) series and must be consecutive.
+        // Nothing enforces that any more (the record-log fold was retired,
+        // docs/30); the run summary reads these numbers, so a gap would still
+        // misreport the step count.
         int attempt = 0;
         for (var record : lane.records) {
             if (record instanceof LaneRecord.StepAttempt step

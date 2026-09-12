@@ -1,6 +1,7 @@
 package com.pijava.agent.harness;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -152,16 +153,50 @@ class PiLaneEngineTest {
             .toList();
     }
 
+    /** The lane's records, in emission order. */
     private static List<LaneRecord> recordsOf(AgentHarness h) {
         return h.snapshot(AgentHarness.DEFAULT_LANE).records();
     }
 
-    /** Fold the live lane's log exactly as resume recovery would (SessionPersistence.attach). */
-    private static LaneStateFolder.FoldedState foldOf(AgentHarness h) {
-        var snapshot = h.snapshot(AgentHarness.DEFAULT_LANE);
-        return LaneStateFolder.fold(AgentHarness.DEFAULT_LANE, snapshot.records(),
-            snapshot.transcript(), snapshot.transcript().stream()
-                .filter(Entry::isConfiguration).toList());
+    /** Ids of every {@code OperationStarted}, in emission order. */
+    private static List<String> startedIds(List<LaneRecord> records) {
+        return records.stream().filter(LaneRecord.OperationStarted.class::isInstance)
+            .map(r -> ((LaneRecord.OperationStarted) r).id()).toList();
+    }
+
+    /**
+     * Every end-to-end run must leave a record log that is self-consistent:
+     * starts pair up with finishes in order, each step attempt hangs off a
+     * started operation, and each (run, step) attempt series runs 0,1,2,…
+     * without gaps.
+     *
+     * <p>These are the invariants {@code RecordLogValidator} used to check when
+     * it folded the log on resume. The fold is retired ({@code docs/30}), so
+     * nothing enforces them any more — but the log is still what run summary
+     * and the audit trail read, and <b>the new loop had no coverage for any of
+     * them</b>: the old {@code LaneStateFoldTest} sentinels all produced their
+     * logs through the step chain ({@code peekAction} / {@code executeAction}).</p>
+     */
+    private static void assertLogIsWellFormed(AgentHarness h) {
+        var records = recordsOf(h);
+        assertThat(records.stream().filter(LaneRecord.OperationFinished.class::isInstance)
+            .map(r -> ((LaneRecord.OperationFinished) r).runId()).toList())
+            .as("every started operation is finished, in order")
+            .isEqualTo(startedIds(records));
+
+        var started = startedIds(records);
+        var seen = new HashMap<String, Integer>();
+        for (var record : records) {
+            if (record instanceof LaneRecord.StepAttempt step) {
+                assertThat(started).as("step attempt %s hangs off a known run", step.id())
+                    .contains(step.runId());
+                String key = step.runId() + "|" + step.step().value();
+                int expected = seen.getOrDefault(key, 0);
+                assertThat(step.attempt()).as("%s attempts are consecutive from 0",
+                    step.step().value()).isEqualTo(expected);
+                seen.put(key, expected + 1);
+            }
+        }
     }
 
     // ── 用例 ───────────────────────────────────────────────────────
@@ -286,69 +321,44 @@ class PiLaneEngineTest {
         assertThat(h.snapshot(AgentHarness.DEFAULT_LANE).operation()).isNull();
     }
 
-    // ── 记录日志可折叠性：恢复路径读的就是它 ─────────────────────────
+    // ── 记录日志的结构不变量 ───────────────────────────────────────
 
-    /**
-     * 新驱动产出的记录日志必须仍能被 {@link LaneStateFolder} 折叠。
-     *
-     * <p>{@code LaneStateFoldTest} 的同类哨兵**全部经旧步进链**（{@code peekAction} /
-     * {@code executeAction}）产生日志，新循环发出的日志此前没有任何测试覆盖。两条路径的
-     * 记录形态一旦分叉 —— 动作序号不连续、记录落在 {@code OperationFinished} 之后、
-     * 未知操作号 —— 恢复就会以 {@code RecordLogCorruption} 拒启。<b>这是切换驱动后才会
-     * 暴露、且只在恢复时暴露的一类缺陷</b>，所以在这里显式钉住。</p>
-     *
-     * <p>折叠结果还要与 live 车道一致：这正是 {@code SessionPersistence.attach} 恢复时
-     * 依赖的等式（docs/21 §5）。</p>
-     */
+    /** 一轮文本：日志自洽，且车道停稳。 */
     @Test
-    void recordLogOfANewLoopTextRunFoldsBackToTheLiveLane() {
+    void recordLogOfANewLoopTextRunIsWellFormed() {
         var h = harness(scripted(List.of(textTurn("hello"))), null);
 
         h.piEngine().run(AgentHarness.DEFAULT_LANE, "hi", List.of(), new Recorder());
 
-        var folded = foldOf(h);
-        assertThat(folded.idle()).isTrue();
         assertThat(h.snapshot(AgentHarness.DEFAULT_LANE).operation()).isNull();
-        assertThat(folded.runId()).isNull();
-        assertThat(folded.faulted()).isFalse();
-        assertThat(folded.aborted()).isFalse();
-        assertThat(folded.pendingSteer()).isEmpty();
-        assertThat(folded.pendingFollowUp()).isEmpty();
-        assertThat(folded.pendingNextRun()).isEmpty();
-        assertThat(folded.pendingWrites()).isEmpty();
+        assertLogIsWellFormed(h);
+        assertThat(recordsOf(h).stream().filter(LaneRecord.StepAttempt.class::isInstance))
+            .singleElement()
+            .satisfies(r -> assertThat(((LaneRecord.StepAttempt) r).attempt()).isZero());
     }
 
-    /**
-     * 工具轮同样要折叠得回来（含工具记录的那一段日志）。
-     *
-     * <p><b>这里刻意不破口 {@code toolBatch()}</b>：它当前对任何真实日志都返回
-     * 「每条调用都 {@code missing}」——{@link HarnessUtils#recordDeferredWrite} 把运行期
-     * 追加的**每一条** entry 都记成 {@code WriteDeferred}，于是
-     * {@code LaneOperationFold.deferredWriteIds} 收下了全部工具结果 entry，而
-     * {@code toolBatch} 的 {@code !deferredWriteIds.contains(...)} 排除条件随即把每个
-     * 候选都滤掉。该缺陷**两条路径都有**（旧步进链同样复现），只是此前没有任何测试
-     * 折叠过真实工具轮日志；且 {@code toolBatch()} / {@code terminalFailure()} 目前
-     * **没有生产消费者**（{@code AgentHarness.restoreFromRecords} 只取
-     * idle / runId / stepIndex / newestOwn / 三个队列 / pendingWrites）。
-     * 详见 {@code docs/29 §9}。</p>
-     */
+    /** 工具轮：日志同样自洽，且工具结果记录指向真实 entry。 */
     @Test
-    void recordLogOfANewLoopToolRunFoldsBackToTheLiveLane() {
+    void recordLogOfANewLoopToolRunIsWellFormed() {
         var h = harness(scripted(List.of(
             toolTurn("tc1", "echo", Map.of("x", "1")),
             textTurn("done"))), okTool("echo", "echoed"));
 
         h.piEngine().run(AgentHarness.DEFAULT_LANE, "run echo", List.of(), new Recorder());
 
-        var folded = foldOf(h);
-        assertThat(folded.idle()).isTrue();
         assertThat(h.snapshot(AgentHarness.DEFAULT_LANE).operation()).isNull();
-        assertThat(folded.pendingWrites()).isEmpty();
-        assertThat(folded.pendingSteer()).isEmpty();
-        assertThat(folded.pendingFollowUp()).isEmpty();
-        // 工具轮里折叠仍要认得出「批次属于哪条助手消息」——id 指向真实 entry。
-        assertThat(folded.toolBatch()).isNotNull();
-        assertThat(h.snapshot(AgentHarness.DEFAULT_LANE).transcript())
-            .anyMatch(e -> e.id().equals(folded.toolBatch().assistantEntryId()));
+        assertLogIsWellFormed(h);
+        // 工具轮有两个助手步（tool_use + stop），序号必须 0、1 连续。
+        assertThat(recordsOf(h).stream()
+            .filter(LaneRecord.StepAttempt.class::isInstance)
+            .map(r -> ((LaneRecord.StepAttempt) r).attempt()).toList())
+            .containsExactly(0, 1);
+        // ToolFinished 的结果 entry 必须真的在车道上；指向不存在的 entry 会让
+        // run summary 的失败归因落空。它由 PiLaneSink 在结果消息的 message_end 上回填。
+        var transcript = h.snapshot(AgentHarness.DEFAULT_LANE).transcript();
+        assertThat(recordsOf(h).stream().filter(LaneRecord.ToolFinished.class::isInstance)
+            .map(r -> ((LaneRecord.ToolFinished) r).resultEntryId()).toList())
+            .singleElement()
+            .satisfies(id -> assertThat(transcript).anyMatch(e -> e.id().equals(id)));
     }
 }
