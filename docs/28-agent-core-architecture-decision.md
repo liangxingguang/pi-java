@@ -162,7 +162,7 @@ runLoop(:~165)
 | 1 | **新写独立的 `PiLoop`**（新类，**不删旧的**），一对一译出 `runLoop` / `streamAssistantResponse` / `executeToolCalls` | 编译通过；与 `agent-loop.ts` 逐段对照审查 |
 | — | ✅ **已完成（`e9a1031`）**。实测 `PiLoop` 421 行 + `PiLoopTools` 149 行 = **570 行**，对 pi 的 **803 行**是 **0.71 倍** ⇒ §7 第 1 条通过。5 个金标用例（单轮文本 / 工具轮 / aborted / length 截断 / follow-up）断的是**帧序**，期望值取自 `agent-loop.ts` 实读 | |
 | 2 | 让 `SessionRunner` 切到 `PiLoop`，**保留** `AgentHarness` 旧 API 不动 | `pi-java-coding-agent` 全模块测试通过（当前 213 个） |
-| — | 🔶 **车道侧已就位**：`PiLoop`（`e9a1031`）+ `PiToolRunner`（`56bfec6`）+ `PiLaneEngine`/`PiLaneSink`（本轮，6 个用例、agent-core 416 全绿）。剩余：`PiSessionBridge` 与 `SessionRunner` 切换。**接线设计见 §5.1（已按实测更正）** | |
+| — | ✅ **已完成**。`PiLoop`（`e9a1031`）+ `PiToolRunner`（`56bfec6`）+ `PiLaneEngine`/`PiLaneSink`（`9deee23`）+ `SessionRunner` 切换（`65d1285`）。**coding-agent 213/213，全 reactor `mvn -o clean verify` 绿**。切换暴露的四处「开销长在执行步里」的丢失见 §5.1 末 | |
 | 3 | 用 `docs/23c` §2 的 L5 差分跑 **S1–S8** 剧本 | 零 P0；差异按 P1/P2 归档 |
 | 4 | 若 1–3 通过 ⇒ 旧的状态机成为**死代码**，此时删除**无风险**，规模就是 §2.2 那 2,362 行 | 全 reactor `mvn -o clean verify` 绿 |
 | 5 | 把 `records` 发射点接到新循环上，`LaneOperationFold` / `LaneStateFolder` 退休 | run summary 相关测试保持通过 |
@@ -207,8 +207,29 @@ text/thinking/toolcall 九种帧，`StreamEvent.UsageInfo` 不在其中 ⇒ **to
 | 2 | 新增 `PiLaneSink implements PiLoop.Sink`（事件 → entry / 记录 / `lane.partial`） | `agent-core` | ✅ |
 | 3 | 新增 `PiLaneEngine`（起手 + `PiLoop` + 收口 + 配置装配） | `agent-core` | ✅ |
 | 4 | `AgentHarness.piEngine()`；`ActionExecutor.finishRun(...)` | `agent-core` | ✅ |
-| 5 | 新增 `PiSessionBridge implements PiLoop.Sink`（会话事件 / 流观察者） | `coding-agent/core` | ⬜ |
-| 6 | `SessionRunner` 换成 `piEngine().run/continueRun` | `coding-agent/core` | ⬜ |
+| 5 | ~~新增 `PiSessionBridge implements PiLoop.Sink`~~ **不需要**（见下） | `coding-agent/core` | ✅ 免做 |
+| 6 | `SessionRunner` 换成 `piEngine().run/continueRun` | `coding-agent/core` | ✅ |
+
+**更正三：`PiSessionBridge` 不需要。** §5.1 初稿要求它接管流事件转发与停因/token 记账。
+实测：原始帧旁路接到 `ctx.streamListener()`（即 harness 既有的广播链）之后，
+`SessionRunner:73` 的 `onStreamEvent` 注册**照常收到每一帧**，那些可变盒子无需改造；
+entry 经由车道 transcript 流动，终局投递按 `deliveredEntryIds` 去重后自动捞到。
+会话侧因此**一行都不用加**。`PiSessionBridge` 要到 A1–A4（turn 级会话事件）才需要。
+
+**切换暴露的四处丢失（「开销长在执行步里，不在驱动循环里」）**：
+`AssistantStreamExecutor` 除了跑流，还承担了钩子与遥测。它们是**执行步**的开销，
+`PiLoop` 结构上不带，必须显式搬到引擎侧。四条都是靠既有测试抓出来的，已全部补齐：
+
+| # | 丢失 | 抓它的测试 |
+|---|---|---|
+| 1 | `before_request` 钩子从不触发（**真实功能缺陷**，不只是遥测） | `ModelSwitchRealReproTest`（捕获 0 条消息） |
+| 2 | `llm.request` 跨度消失 ⇒ 请求/响应负载事件无处绑定 | `PayloadRecordingStreamFnTest` ×2 |
+| 3 | 状态发布时机：旧路径在每个 action 后发布，新驱动的等价点是每条 entry 产生后 + 收口后 | `AgentSessionToolIntegrationTest`（期望 168 token，实得 0） |
+| 4 | `harness.turn` 计数器（`AgentHarness.run` 记的，引擎直连 `actionExecutor` 绕过） | `PayloadRecordingStreamFnTest` |
+| 5 | 溢出检测 → 自动压缩（`OverflowDetector` + `CompactionExecutor`） | 无（预防性补齐） |
+
+**教训**：移植驱动循环时，「循环」部分好对，「循环周围的执行步开销」才是漏点。
+判据不是读代码，是让既有测试说话 —— 这四条全是被红掉的测试指出来的，没有一条是我读出来的。
 
 **`PiLaneEngine` 的复用处**（起手与收口不重写，避免漂移）：
 起手直接调 `ActionExecutor.run(laneName, prompt, images)`（`runId` / `abortSignal` /
