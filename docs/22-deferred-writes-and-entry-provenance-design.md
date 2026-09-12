@@ -197,7 +197,13 @@ if (entry instanceof Entry.Message m
   > 测试须断言：无 compaction 无重试为空 + **空闲 compaction 之后也为空** + **重试之后非空**（钉住泄漏）+ 「target 未落库」切片非空 + abort 后仍保留。
 - **`deferred`（#1）**：**仅看 newest own entry**——是 assistant 且 `stopReason=="deferred"` 且带 handle → 克隆 handle，否则 null。
   即「只有挂在算子尾部时才算未兑换」（pi 测试 `reducer.test.ts:982-1002`）。
-- **`deferredWriteIds`（#1，供 #2/#3）**：本次 run 所有 `WriteDeferred.target.id` 的集合。
+- **`deferredWriteIds`（#1，供 #2/#3，Task 5 review 修正）**：**最后一条 `OperationStarted` 起**的记录里所有
+  `WriteDeferred.target.id` 的集合（无则整片）——范围与 `pendingWrites` 一致，对齐 pi 的 `operationRecords`
+  （`reducer.ts:539-541,611-613`）。**不是**「本次 run 全部」。
+  > **范围不对称，勿按直觉统一**：`pendingWrites` 与 `deferredWriteIds` 都按 operation 收窄，
+  > 而三个 **queue** pending 集（`pendingSteer`/`pendingFollowUp`/`pendingNextRun`）仍是**整片扫描**。
+  > 这是有意的：queue 项的生命周期天然跨 run（run N 入队的 followUp 由 run N+1 消费），
+  > 按单次 operation 收窄会漏掉跨 run 的待消费项。（Task 5 review 曾把这个不对称列为「值得在 Task 6 设计里写一行」。）
 - **`toolBatch`（#2）**：取 ownEntries 中**最后一条内容含 toolCall 的 assistant entry**；对其每个 toolCall，
   在**该 entry 之后**的 ownEntries 里找 `role=="toolResult"` 且 `toolUseId` 相同、且 **id 不在 `deferredWriteIds`** 的 entry。
   找不到 → 该 call 标 `missing`（pi 用 `deferredWriteIds` 排除正是为了不让延迟写入冒充工具结果）。
@@ -223,6 +229,13 @@ if (entry instanceof Entry.Message m
 
 `Action.ApplyPendingWrite` 语义**不变**（仍是「从 `lane.pendingWrites` 出列」；真正的持久化仍在
 coding-agent 的 `persistPending`），本期只**额外**在入列时发 `WriteDeferred` 记录。
+
+> **依赖方向是有意为之，勿「解开」**（Task 6 review 提出）：三者并非单向层次，而是**同一 package 内的协作环**——
+> `LaneStateFolder.FoldedState` 引用 `LaneOperationFold.ToolBatch`/`TerminalFailure`（结果类型），
+> `LaneOperationFold` 反过来构造 `LaneStateFolder.FoldedState`（唯一构造点），
+> `RecordLogValidator` 又调用 `LaneOperationFold.orderBySeq`/`runIdOf`。
+> 这个环是**按职责切分**的结果（入口/DTO、op 派生、校验），不是按依赖方向切的；
+> 全部为 package-private，公共 API 只有 `LaneStateFolder.fold`。行数指标只是**触发**拆分的信号，不是切分依据。
 
 ---
 
