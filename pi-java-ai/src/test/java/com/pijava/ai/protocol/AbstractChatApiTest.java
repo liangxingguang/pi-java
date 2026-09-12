@@ -118,9 +118,12 @@ class AbstractChatApiTest {
         var second = new CopyOnWriteArrayList<StreamEvent>();
         var secondDone = new CountDownLatch(1);
         publisher.subscribe(collector(second, secondDone));
-        secondDone.await(5, TimeUnit.SECONDS);
+        assertThat(secondDone.await(5, TimeUnit.SECONDS)).isTrue();
 
         assertThat(api.invocations).hasValue(1);
         assertThat(first).containsExactly(EVENT);
+        // The publisher is already closed, so the late subscriber is completed
+        // but receives nothing: events are never replayed to late subscribers.
+        assertThat(second).isEmpty();
     }
 }
