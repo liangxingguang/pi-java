@@ -2,7 +2,6 @@ package com.pijava.agent.harness;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import com.pijava.agent.compaction.CompactionService;
@@ -40,9 +39,9 @@ final class AssistantStreamExecutor {
     private final ExecutionContext ctx;
     private final ContextAssembler contextAssembler;
     private final CompactionExecutor compactions;
-    private final Function<String, Action> peekAction;
+    private final PeekAction peekAction;
 
-    AssistantStreamExecutor(ExecutionContext ctx, Function<String, Action> peekAction) {
+    AssistantStreamExecutor(ExecutionContext ctx, PeekAction peekAction) {
         this.ctx = ctx;
         this.contextAssembler = new ContextAssembler(ctx);
         this.compactions = new CompactionExecutor(ctx);
@@ -207,36 +206,5 @@ final class AssistantStreamExecutor {
         lane.newestOwn = HarnessUtils.deriveNewestOwn(lane);
         lane.phase = RunPhase.CHECKPOINT;
         return peekAction.apply(laneName);
-    }
-
-    /**
-     * Fail every tool call in the latest assistant message back into the
-     * transcript (pi {@code agent-loop.ts:211-214, 381}): the response hit the
-     * output token limit, so the calls' arguments may be truncated mid-JSON
-     * and must not be executed. The error result is appended as a tool message
-     * so the model can re-issue the calls with complete arguments.
-     *
-     * <p>Called before the run transitions back to {@code ASSISTANT} — the
-     * inner loop continues with the model seeing the failure.</p>
-     */
-    void failTruncatedToolCalls(LaneState lane) {
-        var toolCalls = HarnessUtils.extractToolCalls(lane.partial);
-        for (var call : toolCalls) {
-            var toolEntry = new Entry.Message(
-                UUID.randomUUID().toString(), 0, null, null,
-                new Message.ToolResultMessage(
-                    call.toolCallId(), call.toolName(),
-                    List.of(new ContentBlock.TextContent(
-                        "Tool call \"" + call.toolName()
-                            + "\" was not executed: the response hit the output token limit, "
-                            + "so its arguments may be truncated. Re-issue the tool call with "
-                            + "complete arguments.")),
-                    true),
-                null);
-            lane.transcript.add(toolEntry);
-            lane.pendingWrites.add(toolEntry);
-            // Truncation feedback is the run's own output ⇒ deferred (docs/22 D3).
-            HarnessUtils.recordDeferredWrite(lane, toolEntry);
-        }
     }
 }

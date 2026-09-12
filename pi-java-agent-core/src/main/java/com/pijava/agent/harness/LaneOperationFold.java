@@ -52,7 +52,7 @@ final class LaneOperationFold {
                                             List<Entry> ownEntries,
                                             List<Entry> configurationEntries) {
         var ordered = orderBySeq(records);
-        // One entriesById map, as in pi: a write is "applied" as soon as its
+        // One applied-entry set, as in pi: a write is "applied" as soon as its
         // entry exists anywhere in the recovery slice. Configuration entries
         // are a subset of the own entries on a live lane, but not on resume —
         // a configuration entry written before the operation anchor is not an
@@ -62,7 +62,11 @@ final class LaneOperationFold {
         slicedEntries.addAll(configurationEntries);
         var appliedEntryIds = new LinkedHashSet<String>();
         slicedEntries.forEach(entry -> appliedEntryIds.add(entry.id()));
-        RecordLogValidator.validate(lane, ordered, slicedEntries);
+        // The validator sees the operation's own entries only: pi's map comes
+        // from input.entries (reducer.ts:317), which never includes the
+        // configuration entries (docs/22). Widening it would reject logs pi
+        // accepts, so the two maps are deliberately not the same set.
+        RecordLogValidator.validate(lane, ordered, ownEntries);
 
         var openOp = openOperation(ordered);
         var finished = lastFinish(ordered);
@@ -179,9 +183,19 @@ final class LaneOperationFold {
         }
     }
 
-    /** One call of a batch; {@code missing} when no result entry was found. */
-    record ToolBatchCall(String toolCallId, String toolName, String resultEntryId,
-                         boolean missing) {}
+    /** One call of a batch, answered or not. */
+    record ToolBatchCall(String toolCallId, String toolName, String resultEntryId) {
+
+        /**
+         * True when no result entry was found for this call.
+         *
+         * <p>Derived rather than stored: {@code resultEntryId} is the single
+         * source of truth, so the two cannot disagree.</p>
+         */
+        boolean missing() {
+            return resultEntryId == null;
+        }
+    }
 
     /**
      * Pair the newest assistant entry's tool calls with their results
@@ -239,11 +253,22 @@ final class LaneOperationFold {
                     break;
                 }
             }
-            matched.add(new ToolBatchCall(call.id(), call.name(), resultEntryId,
-                resultEntryId == null));
+            matched.add(new ToolBatchCall(call.id(), call.name(), resultEntryId));
         }
         return new ToolBatch(((Entry.Message) ownEntries.get(assistantIndex)).id(), matched);
     }
+
+    /**
+     * The {@code source} of a failure produced by an assistant step
+     * (pi {@code TerminalFailureState.source}, {@code reducer.ts:62-66}).
+     */
+    static final String SOURCE_STEP = "step";
+
+    /**
+     * The {@code source} of a failure produced by a deferred fetch; the value
+     * is shared with the usage record that evidences the fetch.
+     */
+    static final String SOURCE_DEFERRED_FETCH = UsageCause.DEFERRED_FETCH.value();
 
     /** The newest error entry, with the provenance that explains how it arose. */
     record TerminalFailure(String entryId, String source, Message message) {}
@@ -290,7 +315,7 @@ final class LaneOperationFold {
         }
         if (producedByStep || producedByDeferredFetch) {
             return new TerminalFailure(msg.id(),
-                producedByStep ? "step" : "deferred_fetch", msg.message());
+                producedByStep ? SOURCE_STEP : SOURCE_DEFERRED_FETCH, msg.message());
         }
         return null;
     }
@@ -436,27 +461,6 @@ final class LaneOperationFold {
             seq = 0;
         }
         return new LaneInfo.QueuedItem(prompt, images, seq);
-    }
-
-    /**
-     * The run an operation-scoped record belongs to, or {@code null} when it
-     * carries none (an idle enqueue, or an abort on a lane with no run).
-     */
-    static String runIdOf(LaneRecord record) {
-        String runId = switch (record) {
-            case LaneRecord.OperationFinished r -> r.runId();
-            case LaneRecord.AbortRequested r -> r.runId();
-            case LaneRecord.StepAttempt r -> r.runId();
-            case LaneRecord.ToolStarted r -> r.runId();
-            case LaneRecord.ToolFinished r -> r.runId();
-            case LaneRecord.QueueEnqueued r -> r.runId();
-            case LaneRecord.QueueCancelled r -> r.runId();
-            case LaneRecord.QueueConsumed r -> r.runId();
-            case LaneRecord.WriteDeferred r -> r.runId();
-            case LaneRecord.UsageRecord r -> r.runId();
-            case LaneRecord.OperationStarted r -> null;
-        };
-        return runId == null || runId.isEmpty() ? null : runId;
     }
 
     /** Stable ordering: persisted records sort by seq, in-memory ones keep order. */

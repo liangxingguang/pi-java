@@ -398,7 +398,7 @@ final class ActionExecutor {
         // them back into the transcript and let the model retry (inner loop
         // continues), rather than treating it as a terminal outcome.
         if ("length".equals(status)) {
-            assistantStream.failTruncatedToolCalls(lane);
+            HarnessUtils.failTruncatedToolCalls(lane);
             lane.phase = RunPhase.ASSISTANT;
             return peekAction(laneName);
         }

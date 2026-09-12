@@ -33,10 +33,12 @@ final class RecordLogValidator {
      * Validate a lane's record log against the subset of pi's rules that need
      * no entry lookups (docs/21 §3.4, R8).
      *
+     * @param orderedRecords the lane's records, already ordered by {@code seq}
+     *                       (see {@link LaneOperationFold#orderBySeq})
      * @throws RecordLogCorruption on the first violated rule
      */
-    static void validate(String lane, List<LaneRecord> records) {
-        validate(lane, records, List.of());
+    static void validate(String lane, List<LaneRecord> orderedRecords) {
+        validate(lane, orderedRecords, List.of());
     }
 
     /**
@@ -49,14 +51,22 @@ final class RecordLogValidator {
      * to a live lane all carry {@code seq == 0} until storage commits them, so
      * sequence numbers cannot order in-memory records.</p>
      *
-     * <p>{@code entries} is the whole recovery slice — the operation's own
-     * entries plus the configuration entries — mirroring pi's single
-     * {@code entriesById} map.</p>
+     * <p>The caller owns the ordering — this method does not re-sort.
+     * {@link LaneOperationFold#orderBySeq} is the one ordering used by every
+     * caller, so the log is sorted once per fold rather than once per
+     * validation.</p>
      *
+     * <p>{@code entries} is the operation's own entries, matching pi's map
+     * source exactly ({@code reducer.ts:317} builds it from
+     * {@code input.entries} and never folds the configuration entries in).
+     * Widening the map here would reject a log pi accepts, since every lookup
+     * is an existence or equality check.</p>
+     *
+     * @param orderedRecords the lane's records, already ordered by {@code seq}
+     * @param entries        the operation's own entries
      * @throws RecordLogCorruption on the first violated rule
      */
-    static void validate(String lane, List<LaneRecord> records, List<Entry> entries) {
-        var ordered = LaneOperationFold.orderBySeq(records);
+    static void validate(String lane, List<LaneRecord> orderedRecords, List<Entry> entries) {
         Map<String, Entry> entriesById = new LinkedHashMap<>();
         entries.forEach(entry -> entriesById.put(entry.id(), entry));
         validateDeferredHandles(entries);
@@ -67,15 +77,15 @@ final class RecordLogValidator {
         Map<String, Integer> enqueuedAt = new LinkedHashMap<>();
         Map<String, LaneRecord.StepAttempt> attempts = new LinkedHashMap<>();
 
-        for (int i = 0; i < ordered.size(); i++) {
-            var record = ordered.get(i);
+        for (int i = 0; i < orderedRecords.size(); i++) {
+            var record = orderedRecords.get(i);
             if (record instanceof LaneRecord.OperationStarted started) {
                 starts.add(started.id());
                 open.add(started.id());
                 continue;
             }
 
-            String runId = LaneOperationFold.runIdOf(record);
+            String runId = runIdOf(record);
             if (runId != null) {
                 if (!starts.contains(runId)) {
                     corrupt("unknown_operation", "Record " + record.id()
@@ -112,6 +122,31 @@ final class RecordLogValidator {
             corrupt("multiple_open_operations",
                 "Lane " + lane + " has at least two open operations");
         }
+    }
+
+    /**
+     * The run an operation-scoped record belongs to, or {@code null} when it
+     * carries none (an idle enqueue, or an abort on a lane with no run).
+     *
+     * <p>Lives here rather than in {@link LaneOperationFold}: the validator is
+     * its only caller, and the empty-string normalization is a rule of the
+     * validation, not of the fold.</p>
+     */
+    private static String runIdOf(LaneRecord record) {
+        String runId = switch (record) {
+            case LaneRecord.OperationFinished r -> r.runId();
+            case LaneRecord.AbortRequested r -> r.runId();
+            case LaneRecord.StepAttempt r -> r.runId();
+            case LaneRecord.ToolStarted r -> r.runId();
+            case LaneRecord.ToolFinished r -> r.runId();
+            case LaneRecord.QueueEnqueued r -> r.runId();
+            case LaneRecord.QueueCancelled r -> r.runId();
+            case LaneRecord.QueueConsumed r -> r.runId();
+            case LaneRecord.WriteDeferred r -> r.runId();
+            case LaneRecord.UsageRecord r -> r.runId();
+            case LaneRecord.OperationStarted r -> null;
+        };
+        return runId == null || runId.isEmpty() ? null : runId;
     }
 
     private static void validateCompactionReason(LaneRecord.StepAttempt step) {

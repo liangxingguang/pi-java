@@ -109,9 +109,12 @@ final class LaneStateFolder {
      * Validate a lane's record log against the subset of pi's rules that need
      * no entry lookups (docs/21 §3.4, R8).
      *
+     * <p>Orders the records itself: {@link RecordLogValidator} trusts the
+     * order it is handed, so an unordered caller must sort first.</p>
+     *
      * @throws RecordLogCorruption on the first violated rule
      */
     static void validateRecordLog(String lane, List<LaneRecord> records) {
-        RecordLogValidator.validate(lane, records);
+        RecordLogValidator.validate(lane, LaneOperationFold.orderBySeq(records));
     }
 }

@@ -92,8 +92,8 @@ final class HarnessUtils {
      * Executor, ToolExecutionPipeline, ContextAssembler).</p>
      *
      * <p>The run id falls back to the empty string: {@code RecordJsonCodec}
-     * requires the field, and {@link LaneOperationFold#runIdOf} reads an empty
-     * run id as "no run id", skipping the unknown-operation check.</p>
+     * requires the field, and {@link RecordLogValidator} reads an empty run id
+     * as "no run id", skipping the unknown-operation check.</p>
      */
     static void recordDeferredWrite(LaneState lane, Entry entry) {
         if (lane.phase instanceof RunPhase.Idle) {
@@ -149,5 +149,40 @@ final class HarnessUtils {
                 var tc = (ContentBlock.ToolUseContent) b;
                 return new Action.ExecuteTool(tc.id(), tc.name(), tc.arguments());
             }).toList();
+    }
+
+    /**
+     * Fail every tool call in the latest assistant message back into the
+     * transcript (pi {@code agent-loop.ts:211-214, 381}): the response hit the
+     * output token limit, so the calls' arguments may be truncated mid-JSON
+     * and must not be executed. The error result is appended as a tool message
+     * so the model can re-issue the calls with complete arguments.
+     *
+     * <p>Called before the run transitions back to {@code ASSISTANT} — the
+     * inner loop continues with the model seeing the failure.</p>
+     *
+     * <p>Lives here rather than in a step executor: its caller is the
+     * non-streaming truncation arm of the run loop, and it is the sibling of
+     * {@link #extractToolCalls}, which it reads the calls through.</p>
+     */
+    static void failTruncatedToolCalls(LaneState lane) {
+        var toolCalls = extractToolCalls(lane.partial);
+        for (var call : toolCalls) {
+            var toolEntry = new Entry.Message(
+                UUID.randomUUID().toString(), 0, null, null,
+                new Message.ToolResultMessage(
+                    call.toolCallId(), call.toolName(),
+                    List.of(new ContentBlock.TextContent(
+                        "Tool call \"" + call.toolName()
+                            + "\" was not executed: the response hit the output token limit, "
+                            + "so its arguments may be truncated. Re-issue the tool call with "
+                            + "complete arguments.")),
+                    true),
+                null);
+            lane.transcript.add(toolEntry);
+            lane.pendingWrites.add(toolEntry);
+            // Truncation feedback is the run's own output ⇒ deferred (docs/22 D3).
+            recordDeferredWrite(lane, toolEntry);
+        }
     }
 }
