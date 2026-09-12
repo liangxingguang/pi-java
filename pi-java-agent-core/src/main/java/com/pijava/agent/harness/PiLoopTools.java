@@ -80,21 +80,31 @@ final class PiLoopTools {
         return new Batch(List.copyOf(messages), allTerminate(outcomes));
     }
 
-    /** pi {@code executeToolCallsParallel}：start 全部源序 → end 随完成 → 结果消息源序补发。 */
+    /**
+     * pi {@code executeToolCallsParallel}：start 全部源序 → end 随完成 → 结果消息源序补发。
+     *
+     * <p><b>两相结构是语义的一部分</b>：pi 先在准备循环里把**全部**调用以源序发出
+     * {@code tool_execution_start}，随后才在 {@code Promise.all} 里按各自完成序发
+     * {@code tool_execution_end}（{@code :547} 与 {@code :550-553}）。因此「所有 start 都
+     * 早于任何 end」是该模式的保证，消费者可据此判断批次何时真正开始收尾。</p>
+     */
     private static Batch executeParallel(List<ContentBlock.ToolUseContent> calls,
                                          PiLoop.Config config, PiLoop.Sink emit) {
-        var outcomes = new ArrayList<PiLoop.ToolOutcome>();
         for (var call : calls) {
             emit.emit(new PiLoop.Event.ToolExecutionStart(
                 call.id(), call.name(), call.arguments()));
-            var outcome = config.toolRunner().run(
-                new PiLoop.ToolCall(call.id(), call.name(), call.arguments(), false));
+        }
+
+        var outcomes = new ArrayList<PiLoop.ToolOutcome>();
+        for (var call : calls) {
+            // pi: 已中止时 prepareToolCall 直接返回 immediate 错误结果，**不执行**（:655-661）
+            var outcome = aborted(config)
+                ? abortedOutcome(call)
+                : config.toolRunner().run(
+                    new PiLoop.ToolCall(call.id(), call.name(), call.arguments(), false));
             outcomes.add(outcome);
             emit.emit(new PiLoop.Event.ToolExecutionEnd(
                 call.id(), call.name(), outcome.result(), outcome.isError()));
-            if (aborted(config)) {
-                break;
-            }
         }
         var messages = new ArrayList<Message.ToolResultMessage>();
         for (var outcome : outcomes) {
@@ -128,6 +138,18 @@ final class PiLoopTools {
             messages.add(message);
         }
         return new Batch(List.copyOf(messages), false);
+    }
+
+    /**
+     * pi {@code createErrorToolResult("Operation aborted")}（{@code :637-641} / {@code :656-660}）：
+     * 信号已中止时该调用**不执行**，但照样收到一个错误结果。
+     */
+    private static PiLoop.ToolOutcome abortedOutcome(ContentBlock.ToolUseContent call) {
+        var text = "Operation aborted";
+        return new PiLoop.ToolOutcome(
+            new Message.ToolResultMessage(call.id(), call.name(),
+                List.of(new ContentBlock.TextContent(text)), true),
+            text, true, false);
     }
 
     /** pi {@code shouldTerminateToolBatch}：非空且**每一项**都 terminate。 */

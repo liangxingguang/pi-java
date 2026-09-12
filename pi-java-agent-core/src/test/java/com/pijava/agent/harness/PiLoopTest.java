@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.pijava.ai.AbortSignal;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.message.AssistantMessage;
@@ -288,6 +289,80 @@ class PiLoopTest {
             "message_end:assistant",
             "turn_end(0)",
             "agent_end");
+        assertThat(tools.invoked).isEmpty();
+    }
+
+    @Test
+    void parallelBatchEmitsEveryStartBeforeAnyEnd() {
+        // pi 的并行分支：准备循环里把**全部** start 按源序发出（agent-loop.ts:547），
+        // end 随后由 Promise.all 按完成序发出（:550-553）。「所有 start 都早于任何 end」
+        // 因此是该模式的结构保证，不是时序巧合 —— 由 docs/23c 的 S4 剧本差分发现。
+        var rec = new Recorder();
+        var context = new ArrayList<Message>();
+        var partial = AssistantMessage.empty();
+        var done = AssistantMessage.empty()
+            .withContent(List.of(
+                new ContentBlock.ToolUseContent("c1", "bash", Map.of()),
+                new ContentBlock.ToolUseContent("c2", "read", Map.of()),
+                new ContentBlock.ToolUseContent("c3", "grep", Map.of())))
+            .withStopReason("tool_use");
+
+        PiLoop.run(List.of(user("go")), context,
+            config(scripted(List.of(
+                List.of(new StreamEvent.Start(partial),
+                    new StreamEvent.StreamDone("tool_use", null, done)),
+                textTurn("done"))),
+                new StubTools()),
+            rec);
+
+        assertThat(rec.frames.stream().filter(f -> f.startsWith("tool_execution_")).toList())
+            .containsExactly(
+                "tool_execution_start:bash",
+                "tool_execution_start:read",
+                "tool_execution_start:grep",
+                "tool_execution_end:bash",
+                "tool_execution_end:read",
+                "tool_execution_end:grep");
+    }
+
+    @Test
+    void abortedSignalFailsEveryToolCallWithoutExecutingIt() {
+        // pi: 信号已中止时 prepareToolCall 直接返回 immediate 错误（:655-661），
+        // 已 start 的调用照样收到 end，但**一个都不执行**。
+        var signal = AbortSignal.create();
+        signal.abort();
+        var rec = new Recorder();
+        var tools = new StubTools();
+        var context = new ArrayList<Message>();
+        var partial = AssistantMessage.empty();
+        var done = AssistantMessage.empty()
+            .withContent(List.of(
+                new ContentBlock.ToolUseContent("c1", "bash", Map.of()),
+                new ContentBlock.ToolUseContent("c2", "read", Map.of())))
+            .withStopReason("tool_use");
+
+        PiLoop.run(List.of(user("go")), context,
+            new PiLoop.Config(
+                ModelId.of("faux", "test-model"),
+                ModelThinkingLevel.off(),
+                ThinkingLevelMap.empty(),
+                List.<ToolDefinition>of(),
+                ToolExecution.defaultMode(),
+                tools,
+                scripted(List.of(
+                    List.of(new StreamEvent.Start(partial),
+                        new StreamEvent.StreamDone("tool_use", null, done)),
+                    textTurn("stopped"))),
+                signal,
+                null, null, null, null, null, null),
+            rec);
+
+        assertThat(rec.frames.stream().filter(f -> f.startsWith("tool_execution_")).toList())
+            .containsExactly(
+                "tool_execution_start:bash",
+                "tool_execution_start:read",
+                "tool_execution_end:bash",
+                "tool_execution_end:read");
         assertThat(tools.invoked).isEmpty();
     }
 
