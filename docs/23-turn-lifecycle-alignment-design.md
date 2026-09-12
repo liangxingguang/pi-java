@@ -609,7 +609,7 @@ case StreamEvent.ToolCallDelta d -> out.add(messageUpdate(d.partial()));
 
 ---
 
-## 13. 明确不等价（8 条，各有理由）
+## 13. 明确不等价（9 条，各有理由）
 
 | # | 项 | pi | pi-java | 理由 |
 |---|---|---|---|---|
