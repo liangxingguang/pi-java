@@ -50,8 +50,12 @@ final class SessionPersistence {
                 records++;
             }
         }
-        LOG.info("[session] persistPending: transcript={} appended={} records={} persistedIds={}",
-            snapshot.transcript().size(), appended, records, owner.persistedEntryIds().size());
+        // 每步 action 后都会被调用（docs/27 §2.1 的逐条落盘），只在确有写入时记
+        // INFO —— 否则一个长 run 会为每次空 flush 刷一行日志。
+        if (appended > 0 || records > 0) {
+            LOG.info("[session] persistPending: transcript={} appended={} records={} persistedIds={}",
+                snapshot.transcript().size(), appended, records, owner.persistedEntryIds().size());
+        }
     }
 
     /**

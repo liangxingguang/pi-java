@@ -113,6 +113,9 @@ final class SessionRunner {
                         owner.harness().dropTrailingErrorAssistant(laneName);
                         action = owner.harness().continueRun(laneName);
                     }
+                    // 用户 prompt 的 entry 由 run() 产生，先落盘再开始流式
+                    // （docs/27 §2.1：pi 的 `_appendEntry` → `_persist` 逐条写）。
+                    flush(owner, laneName);
                     // Immediate user echo (pi alignment: agent-loop emits
                     // message_start/message_end(user) before streaming; the
                     // frontend relies on this to render the prompt instantly
@@ -140,6 +143,12 @@ final class SessionRunner {
                     }
                     while (action != null) {
                         action = owner.harness().executeAction(laneName, action);
+                        // 每步 action 后落盘（docs/27 §2.1）。pi 的
+                        // `session-manager._persist` 在条目产生后立即 appendFileSync，
+                        // 崩溃窗口因此是"一条 entry"；此前 pi-java 只在 run 边界
+                        // 批量 flush，窗口是"一整个 run"（多轮 + 工具调用）。
+                        // 幂等：persistPending 按 id 去重，重复调用不会重写。
+                        flush(owner, laneName);
                     }
                     var lane = owner.harness().snapshot(laneName);
                     transcript = List.copyOf(lane.transcript());
@@ -165,9 +174,7 @@ final class SessionRunner {
                 // Flush this run's entries before AgentEnd so the full-history
                 // payload matches stateSync's accumulatedEntries() source
                 // (id-deduped, safe to call again below).
-                if (owner.session() != null) {
-                    SessionPersistence.persistPending(owner, owner.session(), laneName);
-                }
+                flush(owner, laneName);
                 var endMessages = owner.accumulatedMessages();
                 LOG.info("[session] AgentEnd emit: messages={} persistedIds={} shouldRetry={}",
                     endMessages.size(),
@@ -206,9 +213,7 @@ final class SessionRunner {
                     owner.emitSessionEvent(new AgentSessionEvent.EntryAppended(entry));
                 }
             }
-            if (owner.session() != null) {
-                SessionPersistence.persistPending(owner, owner.session(), laneName);
-            }
+            flush(owner, laneName);
             owner.emitSessionEvent(new AgentSessionEvent.AgentSettled());
             var summary = RunSummaryAggregator.aggregate(
                 owner.harness().snapshot(laneName).records(), runIds)
@@ -246,6 +251,21 @@ final class SessionRunner {
      * occupied by the assistant body and must never be mixed. The interactive
      * TUI renders its own panels, so it only gets the log line.
      */
+    /**
+     * 把尚未落盘的 entry / record 写入持久会话（docs/27 §2.1）。
+     *
+     * <p>落盘时机与 pi 产品的 {@code session-manager._persist} 对齐：**每条 entry
+     * 产生后即写**，而不是攒到 run 结束。pi 的崩溃窗口因此是"一条 entry"，而此前
+     * pi-java 的窗口是"一整个 run"（多轮助手响应 + 工具调用，可能数分钟）。</p>
+     *
+     * <p>幂等：{@code persistPending} 用 id 去重，重复调用只做集合查表。</p>
+     */
+    private static void flush(AgentSession owner, String laneName) {
+        if (owner.session() != null) {
+            SessionPersistence.persistPending(owner, owner.session(), laneName);
+        }
+    }
+
     private static void printRunSummary(AgentSession owner, RunSummaryAggregator.Summary summary) {
         LOG.info("[pi-java] run summary: attempts={} durationMs={}ms stopReason={}",
             summary.attempts(), summary.durationMs(), summary.stopReason());
