@@ -101,6 +101,12 @@ final class AssistantStreamExecutor {
                     while (iter.hasNext()) {
                         if (lane.abortSignal != null && lane.abortSignal.isAborted()) {
                             iter.close();
+                            // 中断的轮次必须定格为 aborted（docs/23 §4.4）：provider 不会为
+                            // 未完成的流写 stopReason，留 null 会让 determineOutcome 记成
+                            // completed，且这段半成品会被投影进后续请求的上下文。
+                            lane.partial = lane.partial == null
+                                ? AssistantMessage.empty().withStopReason("aborted")
+                                : lane.partial.withStopReason("aborted");
                             break;
                         }
                         var event = iter.next();
@@ -124,7 +130,10 @@ final class AssistantStreamExecutor {
             }
         } catch (Exception e) {
             streamError = e;
-            lane.partial = AssistantMessage.empty().withStopReason("error");
+            // 用户中止导致的流异常同样归一到 aborted，否则会记成 error ⇒ FAILED
+            // （docs/23 §4.4；与上面的 break 分支同族）。
+            boolean aborted = lane.abortSignal != null && lane.abortSignal.isAborted();
+            lane.partial = AssistantMessage.empty().withStopReason(aborted ? "aborted" : "error");
         } finally {
             long durationMs = (System.nanoTime() - llmStart) / 1_000_000;
             String stop = lane.partial != null ? lane.partial.stopReason() : null;
