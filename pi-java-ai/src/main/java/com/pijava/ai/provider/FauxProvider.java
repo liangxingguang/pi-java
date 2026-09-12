@@ -3,6 +3,7 @@ package com.pijava.ai.provider;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.pijava.ai.api.ApiOptions;
@@ -151,22 +152,35 @@ public final class FauxProvider implements Provider {
             this.delayMs = delayMs;
         }
 
+        /**
+         * Attaches the subscriber <em>before</em> the producer can publish,
+         * mirroring {@link com.pijava.ai.protocol.AbstractChatApi#stream}: the
+         * producer virtual thread starts lazily on the first {@code subscribe},
+         * at most once. {@code SubmissionPublisher.submit} silently discards an
+         * item when no subscriber is attached yet, so a producer started eagerly
+         * would lose the first event.
+         */
         @Override
         public java.util.concurrent.Flow.Publisher<StreamEvent> stream(
                 StreamRequest request, ApiOptions options) {
             var publisher = new java.util.concurrent.SubmissionPublisher<StreamEvent>();
-            Thread.startVirtualThread(() -> {
-                try {
-                    for (var event : provider.nextResponse()) {
-                        if (delayMs > 0) Thread.sleep(delayMs);
-                        publisher.submit(event);
-                    }
-                    publisher.close();
-                } catch (Exception e) {
-                    publisher.closeExceptionally(e);
+            var started = new AtomicBoolean();
+            return subscriber -> {
+                publisher.subscribe(subscriber);
+                if (started.compareAndSet(false, true)) {
+                    Thread.startVirtualThread(() -> {
+                        try {
+                            for (var event : provider.nextResponse()) {
+                                if (delayMs > 0) Thread.sleep(delayMs);
+                                publisher.submit(event);
+                            }
+                            publisher.close();
+                        } catch (Exception e) {
+                            publisher.closeExceptionally(e);
+                        }
+                    });
                 }
-            });
-            return publisher;
+            };
         }
 
         @Override
