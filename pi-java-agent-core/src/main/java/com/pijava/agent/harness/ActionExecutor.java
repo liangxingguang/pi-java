@@ -190,6 +190,19 @@ final class ActionExecutor {
         compactions.compact(laneName, settings);
     }
 
+    /**
+     * 终局收口：写 {@code OperationFinished}、跑 {@code before_run_end}、关 run span、
+     * 清 {@code pendingWrites} 并把车道收回 IDLE（{@link PiLaneEngine} 的出口）。
+     *
+     * <p>直接落到 {@link #executeFinishOperation} —— 中间的 {@code TryFinishRun} 分支
+     * （length 截断补发、tool_use 续跑、prepare_next_turn）在 PiLoop 侧已由循环本身承担，
+     * 再走一遍会重复消费。</p>
+     */
+    void finishRun(String laneName, String outcome, boolean stop) {
+        var lane = ctx.requireLane(laneName);
+        executeFinishOperation(laneName, lane, new Action.FinishOperation(outcome, stop));
+    }
+
     // ═══════════════════════════════════════════════════════════
     // Manual drive
     // ═══════════════════════════════════════════════════════════

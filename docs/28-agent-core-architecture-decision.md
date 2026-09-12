@@ -162,7 +162,7 @@ runLoop(:~165)
 | 1 | **新写独立的 `PiLoop`**（新类，**不删旧的**），一对一译出 `runLoop` / `streamAssistantResponse` / `executeToolCalls` | 编译通过；与 `agent-loop.ts` 逐段对照审查 |
 | — | ✅ **已完成（`e9a1031`）**。实测 `PiLoop` 421 行 + `PiLoopTools` 149 行 = **570 行**，对 pi 的 **803 行**是 **0.71 倍** ⇒ §7 第 1 条通过。5 个金标用例（单轮文本 / 工具轮 / aborted / length 截断 / follow-up）断的是**帧序**，期望值取自 `agent-loop.ts` 实读 | |
 | 2 | 让 `SessionRunner` 切到 `PiLoop`，**保留** `AgentHarness` 旧 API 不动 | `pi-java-coding-agent` 全模块测试通过（当前 213 个） |
-| — | ⬜ **进行中**。前置件 `PiLoop`（`e9a1031`）与 `PiToolRunner`（`56bfec6`）已完成。**接线设计见 §5.1** | |
+| — | 🔶 **车道侧已就位**：`PiLoop`（`e9a1031`）+ `PiToolRunner`（`56bfec6`）+ `PiLaneEngine`/`PiLaneSink`（本轮，6 个用例、agent-core 416 全绿）。剩余：`PiSessionBridge` 与 `SessionRunner` 切换。**接线设计见 §5.1（已按实测更正）** | |
 | 3 | 用 `docs/23c` §2 的 L5 差分跑 **S1–S8** 剧本 | 零 P0；差异按 P1/P2 归档 |
 | 4 | 若 1–3 通过 ⇒ 旧的状态机成为**死代码**，此时删除**无风险**，规模就是 §2.2 那 2,362 行 | 全 reactor `mvn -o clean verify` 绿 |
 | 5 | 把 `records` 发射点接到新循环上，`LaneOperationFold` / `LaneStateFolder` 退休 | run summary 相关测试保持通过 |
@@ -170,37 +170,71 @@ runLoop(:~165)
 **若第 2 或第 3 步不通过** ⇒ **不进行第 4 步**，退回选项 A，并把"pi-java 的哪一条需求 pi 的循环满足不了"
 写成具体结论 —— 那才是真正的架构依据，而不是现在的推测。
 
-### 5.1 第 2 步的接线设计（2026-09-13 实测确定，**实施前必读**）
+### 5.1 第 2 步的接线设计（2026-09-13 实测确定，**已按实测更正**）
+
+> ⚠️ **2026-09-13 更正**：本节初稿假定「桥接器只做事件转发 + `appendEntry`，可以整个放在
+> `coding-agent`」。**实测不成立**（见下），实施时按更正后的切分。—— 初稿的两条错误已由
+> `PiLaneEngine` 的落地证伪并修正，此处保留记录以免重犯。
 
 **关键约束**：`SessionPersistence.persistPending`、`AgentSession.accumulatedMessages()`、
 `RunSummaryAggregator` **都读 harness 的车道状态**（`snapshot(laneName).transcript()/records()`）。
-所以新驱动必须同时喂住它，否则持久化与消息累积会断。这决定了接线取「桥接」而非「搬迁」。
+所以新驱动必须同时喂住它，否则持久化与消息累积会断。
+
+**更正一：车道侧必须在 `agent-core`。** 旧路径把「创建 entry」分散在
+`AssistantStreamExecutor:184-198`（助手）、`ToolExecutionPipeline`（工具结果）、
+`ActionExecutor.injectUserMessages`（steer）三处，而它们全部落在
+**包内可见的 `LaneState`** 上；`ContextAssembler` / `CompactionExecutor` / 记录日志的
+九处发射点同理。`coding-agent` 拿不到 `LaneState`，**桥接器无法在那里完成车道写入**。
+⇒ 拆成两侧：车道侧留 `agent-core`（`PiLaneEngine` + `PiLaneSink`），会话侧才放
+`coding-agent`（`PiSessionBridge`）。
+
+**更正二：`UsageInfo` 是独立帧，不属于生命周期事件。** `PiLoop.isUpdateEvent` 只认
+text/thinking/toolcall 九种帧，`StreamEvent.UsageInfo` 不在其中 ⇒ **token 数与用量记录会
+静默丢失**。更麻烦的是 `lane.partial` 需要的是**流式 partial**
+（`com.pijava.ai.message.AssistantMessage`），与消息记录
+（`Message.AssistantMessage`）是**两个不同类型**，只有原始帧携带前者。
+⇒ `PiLoop.Config` 增加 `streamListener` **原始帧旁路**，并接到 harness 既有的广播链
+`ctx.streamListener()` 上。**附带收益**：`SessionRunner:72` 的
+`owner.harness().onStreamEvent(...)` 注册**无需改造**，停因 / 错误信息 / token 记账的
+可变盒子继续工作。
 
 **采用并存方案**（用户裁决 2026-09-13）：`agent-core` 里 6 处 `transcript.add` **不删**，
 旧 `AgentHarness` API 全部保留；第 4 步才删。
 
-| # | 改动 | 位置 | 说明 |
+| # | 改动 | 位置 | 状态 |
 |---|---|---|---|
-| 1 | 新增 `AgentHarness.appendEntry(String laneName, Entry entry)` | `agent-core` | 桥接器用它把新 entry 喂进车道 transcript。与既有 `seedTranscript(:328)` 同风格，`lanes` 是 `ConcurrentMap<String, LaneState>`（`:53`） |
-| 2 | 新增 `PiSessionBridge implements PiLoop.Sink` | `coding-agent/core` | 见下 |
-| 3 | `SessionRunner` 把 `run()`/`continueRun()` + `executeAction` 循环换成 `PiLoop.run`/`continueRun` | `coding-agent/core` | 其余（重试、`AgentEnd`、`AgentSettled`、run summary、终局 entry 投递）**全部保留** |
+| 1 | `PiLoop.Config` 增 `streamListener` 原始帧旁路 | `agent-core` | ✅ |
+| 2 | 新增 `PiLaneSink implements PiLoop.Sink`（事件 → entry / 记录 / `lane.partial`） | `agent-core` | ✅ |
+| 3 | 新增 `PiLaneEngine`（起手 + `PiLoop` + 收口 + 配置装配） | `agent-core` | ✅ |
+| 4 | `AgentHarness.piEngine()`；`ActionExecutor.finishRun(...)` | `agent-core` | ✅ |
+| 5 | 新增 `PiSessionBridge implements PiLoop.Sink`（会话事件 / 流观察者） | `coding-agent/core` | ⬜ |
+| 6 | `SessionRunner` 换成 `piEngine().run/continueRun` | `coding-agent/core` | ⬜ |
 
-**`PiSessionBridge` 的三项职责**（对应 pi 的 `agent-session.ts`）：
+**`PiLaneEngine` 的复用处**（起手与收口不重写，避免漂移）：
+起手直接调 `ActionExecutor.run(laneName, prompt, images)`（`runId` / `abortSignal` /
+`before_run` 钩子 / 用户 entry / `OperationStarted` 记录 / 思考等级 entry），
+收口调 `ActionExecutor.finishRun(...)`（`OperationFinished` / `before_run_end` / run span /
+清 `pendingWrites` / 回 IDLE）。中间的 `peekAction → executeAction` 步进链才是被替换的部分。
 
-1. **创建 entry**：`MessageEnd` 时把消息包成 `Entry.Message` 并调 `harness.appendEntry`。
-   → **终局投递无需改动**：`SessionRunner:204-215` 已按 `deliveredEntryIds` 去重后遍历
-   `transcript` 投递 `entryObserver` 与 `EntryAppended`，桥接器写进去的会自动被捞到。
-2. **转发流事件**：`MessageUpdate` → `owner.emitSessionEvent(new MessageUpdate(streamEvent))`
-   + `streamObserver.onStreamEvent(...)`。
-   ⚠️ **注意**：当前这条链路由 `SessionRunner:72` 的 `owner.harness().onStreamEvent(...)` 提供，
-   而 PiLoop 驱动时不经过旧 harness ⇒ 该注册**收不到事件**。桥接器必须接管
-   `StreamDone`/`StreamError`/`UsageInfo` 的**停因、错误信息与 token 记账**（`stopReason` /
-   `errorMessage` / `inputTokens` 等可变盒子）。
-3. **turn / agent 生命周期**：`AgentStart`/`TurnStart`/`TurnEnd`/`AgentEnd` → 对应的
-   `AgentSessionEvent`（A1–A4 亦在此落地）。
+**三个实现要点（都是踩过的坑）**：
 
-**已知缺口（不阻塞第 2 步）**：`Message.ToolResultMessage` 无 `details` 字段（A7），
-故 `details` 只能上事件、无法随 entry 落库 —— 见 `PiToolRunner` 的 javadoc。
+1. **用户消息不能写两遍**。起手已写用户 entry，而 `PiLoop.run` 还会为同一 prompt 发
+   `message_start`/`message_end`（pi `agent-loop.ts:109-114`）。⇒ 引擎把**起手时 transcript 里
+   已有的消息对象**按**引用**交给 `PiLaneSink` 抑制；按值判等不可靠。
+   `PiLaneEngineTest.promptIsNotDuplicated` 是这条的哨兵 —— 实测去掉抑制后 4 个用例失败。
+2. **工具记录必须在结果消息的 `message_end` 上发射**，不能在 `tool_execution_end` ——
+   pi 的顺序是 start → end → 结果消息（`agent-loop.ts:442-479`），到 end 时结果 entry 还不存在，
+   `ToolFinished.resultEntryId` 会是空。
+3. **`transformContext` 忽略传入的消息列表**，从 `lane.transcript` 重建：车道才是真源，
+   且自动压缩（`checkAutoCompact`）会在装配前改写转录。
+
+**已知降级（记录在案，非隐藏）**：
+
+- `LaneRecord.ToolStarted.effectiveArgs` 记为空表（参数已交给注册表，此处不持副本）。
+  `RunSummaryAggregator` 只读 `isError`/`runId`，不受影响。
+- `nextRun` 队列**不由引擎消费** —— 它语义是「再起一次运行」，归会话层驱动循环决定。
+- `Message.ToolResultMessage` 无 `details` 字段（A7），故 `details` 只能上事件、
+  无法随 entry 落库 —— 见 `PiToolRunner` 的 javadoc。
 
 ---
 

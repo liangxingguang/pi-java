@@ -68,6 +68,9 @@ public class AgentHarness implements AutoCloseable {
     // Phase 2c: action executor
     private ActionExecutor actionExecutor;
 
+    // docs/28 §5 第 2 步：pi 双循环引擎，与显式步进链并存
+    private final PiLaneEngine piEngine;
+
     // Phase 2c: snapshot service
     private SnapshotService snapshotService;
 
@@ -135,6 +138,17 @@ public class AgentHarness implements AutoCloseable {
             () -> this::broadcastStreamEvent, config.summaryGenerator(),
             this::applyTurnConfig, telemetry);
         this.actionExecutor = new ActionExecutor(execCtx);
+        this.piEngine = new PiLaneEngine(execCtx, actionExecutor);
+    }
+
+    /**
+     * pi 双循环引擎（{@code docs/28 §5} 第 2 步）。
+     *
+     * <p>与 {@link #run}/{@link #peekAction}/{@link #executeAction} 的显式步进链**并存**：
+     * 两者共用同一份车道状态与起手/收口代码，删除旧链在第 4 步（用户裁决 2026-09-13）。</p>
+     */
+    public PiLaneEngine piEngine() {
+        return piEngine;
     }
 
     /** Apply a prepare_next_turn update to harness state (label → level). */
@@ -149,7 +163,8 @@ public class AgentHarness implements AutoCloseable {
         }
     }
 
-    private static com.pijava.ai.thinking.ThinkingLevel parseThinkingLabel(String label) {
+    /** 标签 → 思考等级。包内可见：{@link PiLaneEngine} 把它用于 {@code prepareNextTurn}。 */
+    static com.pijava.ai.thinking.ThinkingLevel parseThinkingLabel(String label) {
         return switch (label) {
             case "minimal" -> new com.pijava.ai.thinking.ThinkingLevel.Minimal();
             case "low" -> new com.pijava.ai.thinking.ThinkingLevel.Low();

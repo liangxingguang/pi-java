@@ -157,7 +157,8 @@ class PiLoopTest {
             followUp,
             null,
             null,
-            stopHook);
+            stopHook,
+            null);
     }
 
     private static Message user(String text) {

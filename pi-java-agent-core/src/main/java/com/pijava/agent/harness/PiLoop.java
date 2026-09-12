@@ -3,6 +3,7 @@ package com.pijava.agent.harness;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import com.pijava.ai.AbortSignal;
@@ -153,6 +154,12 @@ public final class PiLoop {
     /**
      * pi 的 {@code AgentLoopConfig} 在 pi-java 侧的对应物。所有可选字段用
      * {@code null} 表示「未配置」，与 pi 的 {@code ?.} 可选调用一致。
+     *
+     * <p>{@code streamListener} 是 pi-java 特有的**原始帧旁路**：pi 把用量等信息放在消息
+     * 本身的 partial 里，pi-java 的 {@link StreamEvent.UsageInfo} 却是一个独立帧，且不属于
+     * 生命周期事件（{@link PiLoop#isUpdateEvent} 不含它）。若不旁路，token 记账与停因推导会
+     * 静默丢失 —— 该帧同时喂给 harness 的既有广播链（{@code AgentHarness.onStreamEvent}），
+     * 使会话层无需为切换驱动改造记账代码。</p>
      */
     public record Config(
             ModelId<?> model,
@@ -167,7 +174,8 @@ public final class PiLoop {
             Supplier<List<Message>> followUpMessages,
             ContextTransform transformContext,
             NextTurnHook prepareNextTurn,
-            StopHook shouldStopAfterTurn) {}
+            StopHook shouldStopAfterTurn,
+            Consumer<StreamEvent> streamListener) {}
 
     private PiLoop() {}
 
@@ -307,7 +315,8 @@ public final class PiLoop {
                             config.toolDefs(), config.toolExecution(), config.toolRunner(),
                             config.streamFn(), config.signal(), config.steeringMessages(),
                             config.followUpMessages(), config.transformContext(),
-                            config.prepareNextTurn(), config.shouldStopAfterTurn());
+                            config.prepareNextTurn(), config.shouldStopAfterTurn(),
+                            config.streamListener());
                     }
                 }
 
@@ -361,6 +370,9 @@ public final class PiLoop {
         try {
             while (iter.hasNext()) {
                 var event = iter.next();
+                if (config.streamListener() != null) {
+                    config.streamListener().accept(event);
+                }
                 if (event instanceof StreamEvent.Start start) {
                     addedPartial = true;
                     finalMessage = fromPartial(start.partial());
