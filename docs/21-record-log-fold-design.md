@@ -1,5 +1,22 @@
 # 21 — Record 日志补全 + LaneState 可派生（对齐 pi harness/reducer.ts）
 
+> ## ⛔ 本文的折叠模型已退休（2026-09-13）
+>
+> **本文的参照物在 pi 侧已不存在，且 pi 明文禁止该模型。** 退休裁决、证据与实施蓝图见
+> **`docs/30-retire-record-log-fold-design.md`**。
+>
+> - `LaneStateFolder` / `LaneOperationFold` / `RecordLogValidator` / `RecordLogCorruption`
+>   **已删除**（876 行源码 + 984 行测试）。恢复不再折叠日志：日志降级为**纯旁路审计**。
+> - 第 ④ 项的哨兵 `LaneStateFoldTest` 随之删除；`PiLaneEngineTest` 改为直接断言日志的
+>   结构不变量。
+> - `v0.85.1` 的 `harness/runtime/reducer.ts` 只有 **232 行**，是实时事件归约器
+>   （`reduceLaneSnapshot`），不是 667 行的日志折叠器；`deferredWrite` / `WriteDeferred` /
+>   `deriveToolBatch` / `reduceLaneState` 在 pi 全仓零命中。
+> - pi `harness.md:1317` invariant 5：*"No read on a hot path may fold history or infer
+>   state from an absent value — no value history exists to fold."*
+>
+> **本文的 ① 记录发射补全仍然有效**（那些记录仍在发射，仍是审计来源）；**②③④ 已作废**。
+
 > 上一篇：`docs/20-agent-loop-optimization-plan.md`（agent-loop 状态机对齐）。
 > 本篇是**记录日志（LaneRecord）完整性** + **记录派生（fold）** 阶段设计。
 > 编制日期：2026-09-11。基准：pi `packages/agent/src/harness/reducer.ts`（667 行纯函数 `reduceLaneState`）。

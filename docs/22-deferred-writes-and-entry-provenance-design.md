@@ -1,5 +1,19 @@
 # 22 — Deferred 写入运行时 + entry 溯源（stopReason / toolBatch / terminalFailure）
 
+> ## ⛔ 本文的 #2 / #3 随折叠链一并退休（2026-09-13）
+>
+> `toolBatch` 与 `terminalFailure` 是**折叠派生**，只在 `LaneOperationFold` 里存在。折叠链已按
+> **`docs/30-retire-record-log-fold-design.md`** 退休，两个派生随之删除 —— 它们**在 `src/main`
+> 里本来就没有消费者**，且在真实日志上恒为空（`docs/29 §9.2`）。
+>
+> - **#1 deferred 记录层**：记录仍在发射，但恢复不再从日志重建 `pendingWrites`
+>   （pi 没有该机制；`docs/22 D3` 自己就实证了派生不可靠）。机制本体留待 `docs/27 §5.2`。
+> - **#2 toolBatch / #3 terminalFailure**：**已作废**，随折叠链删除。
+> - **#4 stopReason 入 entry**：**仍然有效** —— stopReason 留在 entry 上正是为了不依赖折叠，
+>   与退休方向一致。
+> - 本文记录的 `docs/21 §6` 推迟项里，**queue entry-presence 推断**一项同理作废：折叠没了，
+>   「推断」也就没有了。
+
 > 上一篇：`docs/21-record-log-fold-design.md`（record 日志补全 + LaneStateFold）。
 > 本篇实施 docs/21 §6 的推迟项中**确实可做**的部分：**#1 deferred 记录层**、**#2 toolBatch**、
 > **#3 terminalFailure**、**#4 stopReason 入 entry**。

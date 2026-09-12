@@ -171,3 +171,6 @@ if (!open.isEmpty()) {
 | `pendingWrites` 机制本体 | 仍在（`docs/27 §5.2`），本文只停掉「从日志重建」 |
 | `WriteDeferred` 记录 | 保留发射（纯旁路审计），但退休后**无任何折叠消费者** |
 | 中断时刻的部分工具输出 | 与 pi 一致：不从半途续跑，下次运行从已落盘的 entry 重建上下文 |
+| **日志不变量不再有生产端守卫** | `RecordLogValidator` 的规则（未知操作号、finish 之后的记录、非连续 attempt、队列取消无对应入队…）此前只在**恢复时**执行 —— **不是写入门禁**。退休后它们**只在测试里**被钉住（`PiLaneEngineTest.assertLogIsWellFormed` 覆盖前两条 + attempt 连续性）。`QueueManager` / `CompactionExecutor` 的相关注释已改为「无人校验，但日志仍应保持诚实」 |
+| 消费端 `RunSummaryAggregator` 未受影响 | 它读的是 `StepAttempt` / `ToolFinished` / `UsageRecord` 的**发射**，与折叠无关；两个折叠用例改写为直接断言日志后仍覆盖它 |
+| `docs/22` 的 #2/#3 | `toolBatch` / `terminalFailure` 随折叠链删除，`docs/22` 已加横幅说明作废 |
