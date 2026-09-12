@@ -68,6 +68,28 @@ class MessageTest {
     }
 
     @Test
+    void deferredHandleDefensiveCopy() {
+        var data = new java.util.HashMap<String, Object>();
+        data.put("row", 2);
+        var handle = new DeferredHandle("faux", "test-model", "faux-api", "batch-1",
+            null, null, data);
+
+        data.put("row", "modified");
+
+        assertThat(handle.data()).containsEntry("row", 2);
+    }
+
+    @Test
+    void deferredHandleAcceptsANullDataMap() {
+        var handle = new DeferredHandle("faux", "test-model", "faux-api", "batch-1",
+            null, null, null);
+
+        assertThat(handle.data()).isNull();
+        assertThat(handle.expiresAt()).isNull();
+        assertThat(handle.pollAfterMs()).isNull();
+    }
+
+    @Test
     void toolResultShouldPreserveErrorFlag() {
         var msg = new Message.ToolResultMessage("toolu_01", "read",
                 List.of(new ContentBlock.TextContent("File not found")), true);
