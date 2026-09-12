@@ -80,7 +80,7 @@ final class SessionPersistence {
             new EntryQuery(null, null, EntryOrder.OLDEST_FIRST, null, null));
         owner.persistedEntryIds().clear();
         entries.forEach(e -> owner.persistedEntryIds().add(e.id()));
-        restoreFromRecordLog(owner, opened, lane, entries);
+        restoreFromRecordLog(owner, opened, lane);
         // Seed the lane with the compaction-aware context (pi buildSessionContext),
         // not all entries — otherwise resume would re-inflate the compacted prefix.
         // Display paths (accumulatedEntries) still read full history from storage.
@@ -125,36 +125,19 @@ final class SessionPersistence {
     }
 
     /**
-     * Rebuild the lane's orchestration state from its record log (docs/21 D9).
+     * Load the lane's persisted record log on resume (docs/30 §4.1).
      *
-     * <p>The record slice is lane-scoped, and the entry slices are anchored to
-     * the lane's last {@code OperationStarted}: a resumed lane only needs the
-     * entries that operation appended, not the whole session. Configuration
-     * entries are cumulative, so they are selected by type across all entries.
-     * </p>
-     *
-     * <p>Recovery is refused, not guessed, when the log is inconsistent — the
-     * fold throws {@code RecordLogCorruption}.</p>
+     * <p>The slice is lane-scoped and taken whole: the log is a pure audit side
+     * channel, so no entry slicing is needed to reconstruct state from it
+     * (docs/30 §4.2 removed the fold that needed the slices).</p>
      */
-    private static void restoreFromRecordLog(AgentSession owner, Session<?> opened, String lane,
-                                             List<Entry> entries) {
+    private static void restoreFromRecordLog(AgentSession owner, Session<?> opened, String lane) {
         List<LaneRecord> records = opened.findRecords(new RecordQuery(
             lane, null, null, null, null, EntryOrder.OLDEST_FIRST, null));
         if (records.isEmpty()) {
             return;
         }
-        long anchor = Long.MIN_VALUE;
-        for (var record : records) {
-            if (record instanceof LaneRecord.OperationStarted started) {
-                anchor = Math.max(anchor, started.seq());
-            }
-        }
-        final long anchorSeq = anchor;
-        List<Entry> ownEntries = anchorSeq == Long.MIN_VALUE ? entries
-            : entries.stream().filter(e -> e.seq() > anchorSeq).toList();
-        List<Entry> configurationEntries = entries.stream()
-            .filter(Entry::isConfiguration).toList();
-        owner.harness().restoreFromRecords(lane, records, ownEntries, configurationEntries);
+        owner.harness().restoreRecords(lane, records);
         // The lane now carries its persisted records; mark them as written so
         // write-through does not append them a second time.
         owner.persistedRecordIds().clear();

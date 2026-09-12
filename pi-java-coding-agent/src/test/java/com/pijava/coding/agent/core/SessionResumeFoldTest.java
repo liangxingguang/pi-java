@@ -22,10 +22,12 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Resume rebuilds orchestration state by folding the record log (docs/21 D9),
- * while the transcript seed stays responsible for display context.
+ * Resume behavior after the record-log fold was retired (docs/30).
  *
- * <p>Records are lane-scoped, so these seed under the harness's lane name.</p>
+ * <p>The log is loaded but no longer folded into orchestration state, so the
+ * lane comes back idle with empty queues; the transcript seed stays responsible
+ * for display context. Records are lane-scoped, so these seed under the
+ * harness's lane name.</p>
  */
 class SessionResumeFoldTest {
 
@@ -74,8 +76,19 @@ class SessionResumeFoldTest {
             "--session-dir", root.toString()}));
     }
 
+    /**
+     * Queues are <b>not</b> rebuilt from the record log (docs/30 §4.3).
+     *
+     * <p>This test used to assert the opposite — that an enqueue which was never
+     * consumed or cancelled came back as pending. That behavior is now
+     * deliberately dropped: pi keeps queues in-process, so a crash loses them,
+     * and replaying an old enqueue would re-inject a half-finished prompt into
+     * an unrelated later run. The records themselves are still loaded (and
+     * marked persisted, so write-through stays a no-op) — they are simply no
+     * longer a source of orchestration state.</p>
+     */
     @Test
-    void attachRestoresPendingQueuesFromRecordLog() throws Exception {
+    void attachLoadsRecordsWithoutRebuildingQueuesFromThem() throws Exception {
         Path root = seed(session -> {
             session.appendEntry(userMessage("m1", "hello"), LANE);
             session.appendRecord(new NewRecord<>(openRun("run-1")));
@@ -88,35 +101,13 @@ class SessionResumeFoldTest {
         var resumed = resume(root);
         try {
             var snapshot = resumed.harness().snapshot(LANE);
-            // The finished operation folds back to idle, and the enqueue that was
-            // never consumed or cancelled is still pending after the resume.
+            // The finished operation leaves the lane idle …
             assertThat(snapshot.operation()).isNull();
-            assertThat(snapshot.queues().followUp()).hasSize(1);
-            assertThat(snapshot.queues().followUp().get(0).prompt()).isEqualTo("queued follow-up");
-            // Restored records are marked persisted so write-through is a no-op.
+            // … but the unconsumed enqueue does not come back.
+            assertThat(snapshot.queues().followUp()).isEmpty();
+            // The log itself is loaded, and marked persisted so write-through
+            // does not append it a second time.
             assertThat(resumed.persistedRecordIds()).contains("run-1", "fin-run-1", "q1");
-        } finally {
-            resumed.close();
-        }
-    }
-
-    @Test
-    void attachIgnoresCompletedQueueLifecycles() throws Exception {
-        Path root = seed(session -> {
-            session.appendEntry(userMessage("m1", "hello"), LANE);
-            session.appendRecord(new NewRecord<>(openRun("run-1")));
-            session.appendRecord(new NewRecord<>(new LaneRecord.QueueEnqueued(
-                "q1", 0, LANE, null, QueueKind.FOLLOW_UP, "run-1",
-                queuedTarget("0", "done already"))));
-            session.appendRecord(new NewRecord<>(new LaneRecord.QueueConsumed(
-                "q2", 0, LANE, null, "run-1", QueueKind.FOLLOW_UP,
-                List.of(queuedTarget("0", "done already")))));
-            session.appendRecord(new NewRecord<>(finish("run-1", OperationOutcome.COMPLETED)));
-        });
-
-        var resumed = resume(root);
-        try {
-            assertThat(resumed.harness().snapshot(LANE).queues().followUp()).isEmpty();
         } finally {
             resumed.close();
         }

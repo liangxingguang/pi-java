@@ -349,61 +349,47 @@ public class AgentHarness implements AutoCloseable {
     }
 
     /**
-     * Rebuild a lane's orchestration state from its record log (docs/21 D9).
+     * Load a lane's persisted record log on resume (docs/30 §4.1).
      *
-     * <p>The caller supplies the lane's records plus the bounded entry slices
-     * the fold needs: the entries appended since the lane's last
-     * {@code OperationStarted}, and the configuration entries. State is
-     * restored, never merged — this is a resume, so the lane is empty.</p>
+     * <p>State is <b>replaced, never merged</b> — this is a resume, so the lane
+     * is empty. Only the log itself is loaded: orchestration state is no longer
+     * reconstructed from it. The record log is a pure audit side channel
+     * (docs/28 option C), and pi forbids inferring state from it
+     * ({@code harness.md:1317} invariant 5: <i>"no value history exists to
+     * fold"</i>), so nothing here derives phase, run id or queues out of
+     * records.</p>
      *
-     * <p>A lane whose log ends with an unfinished operation restores to the
-     * checkpoint phase: the drive loop finalizes it (a {@code TryFinishRun})
-     * before any new run opens, because storage rejects a second open
-     * operation on the same lane. An abort signal is installed so the
-     * restored lane stays abortable.</p>
+     * <p>The lane comes back <b>idle</b>. Any operation a crash left open was
+     * settled at the resume boundary before this call
+     * ({@code SessionPersistence.settleOpenOperation}), so storage holds no open
+     * operation and the next run may open its own.</p>
      *
-     * @throws RecordLogCorruption when the log is internally inconsistent
+     * <p>Queues and pending writes start <b>empty</b>: pi keeps them in-process,
+     * so a crash loses them. Rebuilding them from the log would re-inject a
+     * half-finished prompt into an unrelated later run (docs/30 §4.3).
+     * {@code newestOwn} likewise starts {@code null} — it is derived from the
+     * run's own output ({@code PiLaneSink.onMessageEnd}) long before any outcome
+     * is determined, and {@link HarnessUtils#determineOutcome} is only ever
+     * called after that. An abort signal is installed so the restored lane stays
+     * abortable.</p>
      */
-    public void restoreFromRecords(String laneName, List<LaneRecord> records,
-                                   List<Entry> ownEntries, List<Entry> configurationEntries) {
+    public void restoreRecords(String laneName, List<LaneRecord> records) {
         if (closed) throw new HarnessClosedException();
         var lane = requireLane(laneName);
-        var folded = LaneStateFolder.fold(laneName, records, ownEntries, configurationEntries);
         synchronized (lane) {
             lane.records.clear();
             lane.records.addAll(records);
-            // Accepted-but-unapplied writes: a crash between the write_deferred
-            // record and its entry makes the fold report that write as pending
-            // after recovery (docs/22 D3). Re-persisting it is NOT implemented:
-            // persistence is transcript-driven (SessionPersistence.persistPending
-            // iterates snapshot.transcript()), so an entry held only in this set
-            // is never written back — on resume the loop emits ApplyPendingWrite,
-            // the entry leaves the list, and the write is lost. Unlike the
-            // queues, this set survives abort.
             lane.pendingWrites.clear();
-            for (var pending : folded.pendingWrites()) {
-                lane.pendingWrites.add(pending.entry());
-            }
-            lane.runId = folded.runId();
-            lane.stepIndex = folded.stepIndex();
-            lane.newestOwn = folded.newestOwn();
-            lane.phase = folded.idle() ? RunPhase.IDLE : RunPhase.CHECKPOINT;
+            lane.steerQueue.clear();
+            lane.followUpQueue.clear();
+            lane.nextRunQueue.clear();
+            lane.queueSeq = 0;
+            lane.runId = null;
+            lane.stepIndex = 0;
+            lane.newestOwn = null;
+            lane.phase = RunPhase.IDLE;
             lane.partial = null;
             lane.abortSignal = AbortSignal.create();
-            lane.steerQueue.clear();
-            lane.steerQueue.addAll(folded.pendingSteer());
-            lane.followUpQueue.clear();
-            lane.followUpQueue.addAll(folded.pendingFollowUp());
-            lane.nextRunQueue.clear();
-            lane.nextRunQueue.addAll(folded.pendingNextRun());
-            // Keep new queue items from reusing a restored item's sequence.
-            long maxQueueSeq = -1;
-            for (var queue : List.of(lane.steerQueue, lane.followUpQueue, lane.nextRunQueue)) {
-                for (var item : queue) {
-                    maxQueueSeq = Math.max(maxQueueSeq, item.seq());
-                }
-            }
-            lane.queueSeq = maxQueueSeq + 1;
         }
         publishState(laneName);
     }
