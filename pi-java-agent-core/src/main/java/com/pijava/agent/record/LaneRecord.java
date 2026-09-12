@@ -290,7 +290,18 @@ public sealed interface LaneRecord {
         com.pijava.agent.entry.ProvisionedEntry<?> target
     ) implements LaneRecord {}
 
-    /** Token usage was recorded. */
+    /**
+     * Token usage was recorded.
+     *
+     * <p>{@code stopReason} is <b>audit data for this usage event, not a
+     * derivation input</b> — deliberately kept even though no code reads it.
+     * It is not the parallel-copy that docs/22 D1 removed from
+     * {@code StepAttempt}: that one duplicated a value the fold derives from
+     * (so the two could drift), whereas nothing derives from this. The
+     * assistant entry is the single source of truth for a turn's reason;
+     * this field only records what the reason was at the moment usage was
+     * accounted, for anyone reading the log.</p>
+     */
     record UsageRecord(
         String id,
         long seq,

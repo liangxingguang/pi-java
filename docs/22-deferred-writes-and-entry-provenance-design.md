@@ -230,12 +230,17 @@ if (entry instanceof Entry.Message m
 `Action.ApplyPendingWrite` 语义**不变**（仍是「从 `lane.pendingWrites` 出列」；真正的持久化仍在
 coding-agent 的 `persistPending`），本期只**额外**在入列时发 `WriteDeferred` 记录。
 
-> **依赖方向是有意为之，勿「解开」**（Task 6 review 提出）：三者并非单向层次，而是**同一 package 内的协作环**——
-> `LaneStateFolder.FoldedState` 引用 `LaneOperationFold.ToolBatch`/`TerminalFailure`（结果类型），
-> `LaneOperationFold` 反过来构造 `LaneStateFolder.FoldedState`（唯一构造点），
-> `RecordLogValidator` 又调用 `LaneOperationFold.orderBySeq`/`runIdOf`。
-> 这个环是**按职责切分**的结果（入口/DTO、op 派生、校验），不是按依赖方向切的；
-> 全部为 package-private，公共 API 只有 `LaneStateFolder.fold`。行数指标只是**触发**拆分的信号，不是切分依据。
+> **依赖方向是有意为之，勿「解开」**（Task 6 review 提出，清理分支 `fix/phase22-leftovers` 后修正）：
+> 三者**不是单向层次**，而是同一 package 内的协作关系，其中 A↔B 是双向的——
+> - `LaneStateFolder`（A，入口 + 结果 DTO）的 `FoldedState` 字段类型取自 B：
+>   `LaneOperationFold.ToolBatch` / `.TerminalFailure`；
+> - `LaneOperationFold`（B，op 派生）反过来返回并构造 A 的 `FoldedState`（唯一构造点），并引用 A 的 `EffectiveConfiguration`；
+> - `RecordLogValidator`（C，校验）由 B 调用（`LaneOperationFold.fold` 先校验后派生）；**C 不再反向引用 B**
+>   （`runIdOf` 已按 C2 迁入 C，排序职责也已移回 `LaneStateFolder.validateRecordLog`）。
+>
+> A↔B 本质是「结果类型 ↔ 它唯一的生产者」，属正常 DTO/生产者耦合，不是职责纠缠；
+> 全部 package-private，公共 API 只有 `LaneStateFolder.fold`。拆分依据是**职责**（入口/DTO、op 派生、校验），
+> 行数只是**触发**拆分的信号，不是切分依据。后人看到 A 引用 B、B 又引用 A 时不要试图「理顺」——那是纯 churn。
 
 ---
 
