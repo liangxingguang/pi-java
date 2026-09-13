@@ -126,7 +126,9 @@ JAVA_HOME="D:/soft/jdk/graalvm-jdk-25" \
 - **通用判据**：`mvn -o -am -pl pi-java-agent-core test` **427/427 绿**；checkstyle 零违规
   （既有 7 条 warning 均为改动前就存在的文件）；新增文件全部 ≤ 500 行；无 `System.out.println`。
 
-⇒ `docs/28 §5` 第 4 步（删除旧状态机）的**推进条件已满足**。按用户裁决，删除仍然**最后**做。
+⇒ `docs/28 §5` 第 3 步判据达成。（第 4 步「删除旧状态机」此后已**撤销** —— 复核发现旧状态机
+不是死代码，`PiLaneEngine` 复用了 `ActionExecutor` 的 `run`/`runContinue`/`finishRun`，
+`peekAction` 也仍在 live 路径上被调用；见 `docs/28 §2.4` 与 §5。）
 
 ## 8. 对用户 pi 检出的副作用（可回退）
 

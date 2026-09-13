@@ -1,6 +1,7 @@
 # 28 — agent-core 架构决策：自建显式状态机 vs 1:1 复刻 pi 双循环
 
-> **状态：待裁决。** 编制日期 2026-09-13。基线 pi `v0.85.1`（见 `docs/27`）。
+> **状态：已裁决并落地（2026-09-13）。** 编制日期 2026-09-13。基线 pi `v0.85.1`（见 `docs/27`）。
+> 选项 C 已采纳；§5 第 1/2/3/5 步完成，**第 4 步撤销**（§2.4 证伪了它的前提）。
 > **前置**：`docs/27-pi-alignment-baseline.md`（对齐规则 = pi 最新 release tag = pi 产品层）。
 >
 > **本文只做决定，不动代码。** 决定前不实施 `docs/27 §5.2` 的欠写修复 —— 见 §6。
@@ -15,6 +16,16 @@
 
 **本文的建议**：**选项 C —— 1:1 复刻驱动循环，把记录日志降级为纯旁路审计**（不再是恢复的真源）。
 理由见 §4。**但先做最小验证性手术（§5），不要直接重写。**
+
+**执行结果（2026-09-13 收盘）**：
+
+| §5 步骤 | 结果 |
+|---|---|
+| 1 `PiLoop` / `PiLoopTools` | ✅ `e9a1031`（570 行 vs pi 803 行） |
+| 2 `SessionRunner` 切到 `PiLoop` | ✅ `9deee23` / `65d1285`（coding-agent 213/213） |
+| 3 L5 差分 S1–S8 | ✅ `docs/29`（8/8，零 P0） |
+| 4 删除旧状态机 | ⛔ **撤销** —— 前提「旧状态机成为死代码」被 §2.4 证伪 |
+| 5 `records` 接到新循环 + 折叠退休 | ✅ `docs/30`（删 876 行 main + 984 行测试） |
 
 ---
 
@@ -69,7 +80,11 @@ runLoop(:~165)
 |---|---|
 | `agent-core` 全模块 | 171 文件 / **14,022 行** |
 | `harness/` 包 | 39 文件 / **4,631 行** |
-| 其中「状态机 + 记录日志」子集 | **2,362 行**（`ActionExecutor` 497、`LaneOperationFold` 471、`RecordLogValidator` 254、`AssistantStreamExecutor` 219、`LaneState` 130、`Action` 129、`LaneStateFolder` 120、`LoopInvariants` 72、`SnapshotService` 116、`RunPhase`/`PeekAction` + `record/LaneRecord` 318） |
+| 其中「状态机 + 记录日志」子集（**决策时基线**） | **2,362 行**（`ActionExecutor` 497、`LaneOperationFold` 471、`RecordLogValidator` 254、`AssistantStreamExecutor` 219、`LaneState` 130、`Action` 129、`LaneStateFolder` 120、`LoopInvariants` 72、`SnapshotService` 116、`RunPhase`/`PeekAction` + `record/LaneRecord` 318） |
+
+> ⚠️ **上表是决策时的基线，2026-09-13 已复核更正 —— 见 §2.4。** 折叠三件套
+> （`LaneOperationFold` + `RecordLogValidator` + `LaneStateFolder` = **845 行**）已随第 5 步删除；
+> 余下 8 个类合计 1,212 行，但**其中大部分不是死代码**。**这个数字支撑不了第 4 步。**
 
 **两个刺眼的消费数据（实测）**：
 
@@ -96,7 +111,39 @@ runLoop(:~165)
 | fold 派生不可靠（entry 被删则谓词失效） | 第三个真源 `records` 被当作恢复依据 |
 
 **已修一条**：崩溃窗口已按 pi 的时机改为逐 action 落盘（`docs/27 §5.2`，含回归测试）。
-另两条随本决策处理。
+
+**另两条的结局**：fold 已随第 5 步**退休**（折叠链删除、恢复改为读 entry，见 `docs/30`）——
+第三个真源 `records` 降级为纯旁路审计；`pendingWrites` **仍在**（`docs/27 §5.2`，本决策只停掉了
+「从日志重建它」）。⇒ 三个真源收成两个：`lane.transcript` + `pendingWrites`。
+
+### 2.4 复核（2026-09-13）：旧状态机**不是**死代码
+
+第 5 步落地后回查调用图，**§5 第 4 步的前提被证伪**。三条实测：
+
+**(a) 新驱动建在旧状态机上 —— 不是「顺手复用」，是接缝本身。**
+
+| 位置 | 调用 | 作用 |
+|---|---|---|
+| `PiLaneEngine:84` | `actionExecutor.run(laneName, prompt, images)` | 起手：runId / abortSignal / 用户 entry / `OperationStarted` |
+| `PiLaneEngine:100` | `actionExecutor.runContinue(laneName)` | 续跑起手 |
+| `PiLaneEngine:127` | `actionExecutor.finishRun(laneName, outcome, stop)` | 收口：`OperationFinished` / run span / 收回 IDLE |
+
+**(b) 接缝不干净：`peekAction` 仍在 live 路径上被调用。** `ActionExecutor:122` 与 `:185`
+都以 `return peekAction(laneName)` 结尾（引擎丢弃该返回值），而 `computeNextAction` 在
+`RunPhase.Assistant` 分支里**有副作用**（`:263-266`）：`drainSteer` 消费队列 → `injectUserMessages`
+→ 递归 peek。⇒ `peekAction` / `computeNextAction` / `LoopInvariants` 三者都还在跑，只是判决结果没人看。
+
+**(c) 真正够不着的只有「中段」**：`executeAction` 七路分派里**除 `executeFinishOperation` 之外的六路**、
+`computeNextAction` 的相位选路、`DriveMode.MANUAL` 的步进语义、`Action.StreamAssistant` +
+`AssistantStreamExecutor`（219 行）。它们**与接缝同处一个类、一个 sealed 接口、一个 switch** ——
+拆掉它们就是拆 `ActionExecutor` 本身。
+
+**SDK 面的实情**：`peekAction` / `executeAction` / `runToCompletion` 在 `src/main` 里**零消费者**
+（`SessionRunner` 已走 `piEngine()`；`PiTuiApp:405` 的 `handleAction` 是 UI 自己的按键处理，无关；
+`LaneHandle` 更彻底 —— 连测试都没有）。但 **agent-core 74 个测试文件里有 22 个**在用 MANUAL 步进。
+
+⇒ **「删除旧状态机」= 拆掉新驱动的接缝，代价是改写 22 个测试文件并破 `AgentHarness` 的公开面，
+不是清理死代码。** 裁决（2026-09-13）：**第 4 步撤销**，见 §5。
 
 ---
 
@@ -137,7 +184,10 @@ runLoop(:~165)
 - ✅ 拿到 B 的全部等价性收益
 - ✅ **保住可观测性投资**（记忆里那条"可观察性层 9/9 闭环"不被推翻），run summary 继续工作
 - ✅ 恢复机制从"折叠派生"变成 pi 的"读 entry"，欠写问题**失去存在土壤**
-- ⚠️ 仍需破 `peekAction`/`executeAction` 的 SDK 面（与 B 相同）
+- ~~⚠️ 仍需破 `peekAction`/`executeAction` 的 SDK 面（与 B 相同）~~
+  → **实测更正（§2.4）**：**不需要破**。`piEngine()` 是通过复用 `ActionExecutor` 的
+  `run`/`runContinue`/`finishRun` 接上去的，`peekAction`/`executeAction` 不必删。选项 C 的
+  这一条成本**没有兑现**，也正因如此第 4 步被撤销。
 
 ---
 
@@ -147,6 +197,8 @@ runLoop(:~165)
    行为差异只可能来自移植错误，而不是设计分歧 —— 而且立刻可以用 `docs/23c` 的 L5 差分框架钉住。
 2. **它消灭三个真源。** 欠写、崩溃窗口、fold 不可靠三条缺陷同根；换驱动即可一并消除，
    不需要单独设计"清偿方案"。
+   *（**2026-09-13 更正**：这条**没有完全兑现**。崩溃窗口与 fold 两条已消除（逐 action 落盘、
+   折叠链退休），但 `pendingWrites` 仍在，欠写不收敛**未修**。真源从三个收到两个，不是零。）*
 3. **它保住已经付过钱的东西。** 记录日志与 run summary 是真实资产（可观测性 9 个提交已闭环），
    降级为旁路审计即可继续用，不必删。
 4. **它不需要"重写整个 agent-core"。** `QueueManager` / `CompactionExecutor` / `ContextAssembler` /
@@ -165,15 +217,28 @@ runLoop(:~165)
 | — | ✅ **已完成**。`PiLoop`（`e9a1031`）+ `PiToolRunner`（`56bfec6`）+ `PiLaneEngine`/`PiLaneSink`（`9deee23`）+ `SessionRunner` 切换（`65d1285`）。**coding-agent 213/213，全 reactor `mvn -o clean verify` 绿**。切换暴露的四处「开销长在执行步里」的丢失见 §5.1 末 | |
 | 3 | 用 `docs/23c` §2 的 L5 差分跑 **S1–S8** 剧本 | 零 P0；差异按 P1/P2 归档 |
 | — | ✅ **已完成**（报告见 `docs/29`）。差分机器本身此前**不存在**，按 `docs/23c §7` 先补齐五个部件：共用剧本、pi 侧 runner、pi 侧真相、Java 侧 runner + 归一化器、差分器。**8/8 通过，7 个剧本逐字节相同**；零 P0、1 条 P1（并行批次内 `tool_execution_end` 的相对次序，见 `docs/29 §5`）、0 条 P2。差分**发现并修复了一个真实 P0**：`PiLoopTools.executeParallel` 把 start/end 交错发出，而 pi 的并行分支保证「所有 start 早于任何 end」——该类的 javadoc 本来就写着正确行为，是**代码与自己的文档相反**（`docs/29 §4.1`） | |
-| 4 | 若 1–3 通过 ⇒ 旧的状态机成为**死代码**，此时删除**无风险**，规模就是 §2.2 那 2,362 行 | 全 reactor `mvn -o clean verify` 绿 |
+| 4 | ~~若 1–3 通过 ⇒ 旧的状态机成为**死代码**，此时删除**无风险**，规模就是 §2.2 那 2,362 行~~ | ~~全 reactor `mvn -o clean verify` 绿~~ |
+| — | ⛔ **已撤销（2026-09-13）**。前提被证伪：旧状态机**不是**死代码 —— 新驱动 `PiLaneEngine` 复用了它的 `run`/`runContinue`/`finishRun`，`peekAction` 也仍在 live 路径上被调用（§2.4）。裁决依据：**「之前说最后删除是基于这部分代码没有用了；如果有用，就不删除了。」** ⇒ `AgentHarness` 的旧 API 与 `ActionExecutor` 的接缝**长期保留** | — |
 | 5 | 把 `records` 发射点接到新循环上，`LaneOperationFold` / `LaneStateFolder` 退休 | run summary 相关测试保持通过 |
 | — | ✅ **已完成**。第一子句经核对**已由第 2 步的接线满足**（`LaneRecord` 11 个变体在新路径上都有发射点，对照表见 `docs/29 §9.1`）。补空白覆盖时发现 `docs/29 §9.2` 的既有缺陷，并确认**折叠模型的 pi 参照已不存在**（`docs/29 §9.3`）⇒ 裁决**退休**，实施蓝图与理由见 **`docs/30`**。核对过程中另证实一个**独立 P0**并已单独修复：崩溃恢复的车道在新驱动下**不可驱动**（`PiLaneEngine.run` 拒绝非 IDLE 车道，而收尾的 `TryFinishRun` 只存在于旧步进链）—— 现在在恢复边界收尾（`docs/30 §4.2`）。<br>**落地**：删 4 个类（876 行）+ 4 个测试类（984 行）；`restoreFromRecords` 收窄为 `restoreRecords`；恢复不再重建队列 / `pendingWrites`（`docs/30 §4.3`）；`docs/21`、`docs/22` 加停止横幅。全 reactor 绿 | |
 
-**第 4 步的推进条件已满足**（第 1–3 步全部通过）。但按用户裁决（2026-09-13）：旧状态机与新循环
-**并存，删除最后做** —— 因此第 4 步**暂不执行**，此处不做删除。
+**第 4 步已撤销**（2026-09-13）。早先的裁决是「并存，删除最后做」，其判据是「旧状态机成为死代码」；
+复核后该判据**不成立**（§2.4）—— 新驱动的接缝就是旧状态机的一部分。按用户裁决：
+**「如果有用，就不删除了。」** ⇒ 第 4 步**不再执行**，`AgentHarness` 的 `peekAction`/`executeAction`/
+`runToCompletion`、`ActionExecutor` 的 `run`/`runContinue`/`finishRun` 及其支撑的 `Action` /
+`RunPhase` / `LaneState` / `LoopInvariants` / `DriveMode.MANUAL` **长期保留**，是维护面的一部分，
+不再记为「待清理的债务」。
 
-**若第 2 或第 3 步不通过** ⇒ **不进行第 4 步**，退回选项 A，并把"pi-java 的哪一条需求 pi 的循环满足不了"
-写成具体结论 —— 那才是真正的架构依据，而不是现在的推测。
+**并存的实际后果**：树的里有两套驱动语义 —— 新的 `PiLoop`（`SessionRunner → piEngine()`，**唯一
+生产路径**）与旧的 `Action`/`RunPhase` 步进链（**只剩测试在用**，外加被新驱动复用的起手/收口接缝）。
+风险因此是**维护面**而非正确性：改 `ActionExecutor` 的起手或收口要同时想到两条路径。
+
+真源方面，§2.3 的三条收成两条：第三个真源 `records` 随第 5 步降级为纯旁路审计，
+`pendingWrites` 仍在（`docs/27 §5.2`）。**欠写不收敛那条缺陷没有被本决策消除**，只是不再是
+恢复路径的一部分。
+
+**若第 2 或第 3 步不通过** ⇒ 退回选项 A，并把"pi-java 的哪一条需求 pi 的循环满足不了"
+写成具体结论 —— 那才是真正的架构依据，而不是现在的推测。（第 2、3 步均已通过，此路径未触发。）
 
 ### 5.1 第 2 步的接线设计（2026-09-13 实测确定，**已按实测更正**）
 
@@ -204,7 +269,7 @@ text/thinking/toolcall 九种帧，`StreamEvent.UsageInfo` 不在其中 ⇒ **to
 可变盒子继续工作。
 
 **采用并存方案**（用户裁决 2026-09-13）：`agent-core` 里 6 处 `transcript.add` **不删**，
-旧 `AgentHarness` API 全部保留；第 4 步才删。
+旧 `AgentHarness` API 全部保留；第 4 步已撤销（§5），**长期保留**。
 
 | # | 改动 | 位置 | 状态 |
 |---|---|---|---|
@@ -268,7 +333,7 @@ entry 经由车道 transcript 流动，终局投递按 `deliveredEntryIds` 去�
 
 | 工作 | 状态 |
 |---|---|
-| `docs/27 §5.2` 的**欠写不收敛**修复 | ⛔ **暂停**。选项 C 下 `pendingWrites` 整体消失，现在修等于白做 |
+| `docs/27 §5.2` 的**欠写不收敛**修复 | ✅ **解除阻塞（2026-09-13）**。原判据「选项 C 下 `pendingWrites` 整体消失，现在修等于白做」**不成立** —— 第 5 步只停掉了「从日志重建 `pendingWrites`」，机制本体仍在（`docs/30 §4.3`）。⇒ 该修复**重新进入待办**，不再被本决策阻塞 |
 | **A1–A4**（legacy 事件层：turn 事件、工具三帧缺失） | ✅ **不阻塞**，两种架构都需要。可先做 |
 | **A8**（流中途 abort 终态） | ✅ 已完成（`175e9fa`） |
 | 落盘时机（`docs/27 §5.2` 第 1 条） | ✅ 已完成（逐 action 落盘 + `SessionFlushTimingTest`） |
@@ -277,7 +342,12 @@ entry 经由车道 transcript 流动，终局投递按 `deliveredEntryIds` 去�
 
 ## 7. 退出判据 / 回退条件
 
-**推进条件**：§5 第 1–3 步全部通过。
+**推进条件**：§5 第 1–3 步全部通过。（**已满足**，2026-09-13 —— 见 §0 执行结果表。）
+
+> **下方第 2 条回退条件已部分成立**：`peekAction` / `executeAction` 之所以必须留下，不是因为
+> 「某个 UI 需要一步一停」被确证，而是因为**新驱动复用了它们**（§2.4）。这与本条的原文不同 ——
+> 本条设想的是「消费者依赖步进语义」，实际发生的是「端口依赖接缝实现」。若将来要把接缝做干净，
+> 需要的是**重写 `ActionExecutor` 的收口/起手为独立 API**，而不是恢复步进驱动。
 
 **回退到选项 A**（并接受长期人工对齐成本）的条件，任一成立即回退：
 
@@ -310,7 +380,13 @@ wc -l pi-java-agent-core/src/main/java/com/pijava/agent/harness/*.java    # 期�
 
 ## 9. 未验证的假设（**必须显式列出**）
 
-本文的推荐建立在以下**尚未验证**的前提上。第 5 步的验证性手术正是为了证伪它们：
+本文的推荐建立在以下**尚未验证**的前提上。§5 的验证性手术正是为了证伪它们。
+
+> **核对结果（2026-09-13）**：①② 已由 §2.4 的调用图回查**部分消解**（①对选项 C 不再构成风险 ——
+> C 不必破 `peekAction`/`executeAction`；②的答案仍是「没有产品需求」，但 22 个测试文件在用）；
+> ③ 已由 `PiLaneEngineTest` 的 run summary 断言**验证**；④ 已由第 5 步的恢复改造**验证**
+> （落地形态是 `SessionPersistence.attach` → `restoreRecords` + `seedTranscript` 两步，
+> 见 `docs/30 §4.1`）。
 
 1. **`peekAction` / `executeAction` 没有仓库外的 SDK 消费者。** 本文只检查了本仓库；
    它们是否被外部集成方使用**未知**。若被使用，选项 B/C 都破兼容（需要保留薄适配层）。
