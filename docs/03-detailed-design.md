@@ -479,7 +479,7 @@ public sealed interface LaneRecord {
         String modelId
     ) implements LaneRecord {}
 
-    /** 队列项被消费（drain 并合并进 transcript）。pi-java 独有（Phase 21，对齐 pi reducer.ts 的消费推断缺口） */
+    /** 队列项被消费（drain 并合并进 transcript）。pi-java 独有（Phase 21 新增，补发射缺口） */
     record QueueConsumed(
         String id, long seq, String lane, Instant timestamp,
         String runId,                 // 消费它的 run；空闲消费为 ""
@@ -489,17 +489,21 @@ public sealed interface LaneRecord {
 }
 ```
 
-> **Phase 21 附注（record-log fold，对齐 pi `harness/reducer.ts`）**：
-> LaneState 从「可变的独立对象 + 并行审计日志」改为「**record 日志的纯函数折叠**」。
-> - 补 P0 记录发射缺口：`QueueEnqueued`/`QueueCancelled`/`QueueConsumed`（新增）发射；`close()` 补 `AbortRequested`；
-> - `StepAttempt` 增 `stopReason` 字段；`UsageRecord` 在 tokens==0 时也发射（D2，stopReason 字段已存在）；
-> - compaction 是 **step 而非嵌套 operation**（run 中 `StepAttempt(COMPACTION)`，空闲三连 `OperationStarted(Compaction)`+`StepAttempt`+`OperationFinished`）；
-> - `lane.records` 改 append-only（移除 run/runContinue 的 clear，保留 reset）；
-> - 新类 `LaneStateFolder.fold(records, ownEntries, configurationEntries) → FoldedState`（纯函数，**pi 式有界切片**
->   + `validateRecordLog` 子集校验，供哨兵测试 + resume 有界恢复）；配置类过滤用新增默认方法 `Entry::isConfiguration`；
-> - **Out（推迟）**：deferred 执行、toolBatch、terminalFailure 溯源、entry-内嵌 stopReason、queue 消费按 entry-presence 推断。
+> **Phase 21/22 附注 —— 已退休（2026-09-13）**：
+> `LaneState` **不是** record 日志的折叠结果。折叠链（`LaneStateFolder` / `LaneOperationFold` /
+> `RecordLogValidator` / `RecordLogCorruption`）**已删除** —— 它的 pi 参照早已不存在，且 pi
+> `harness.md:1317` 明文禁止「在热路径上折叠历史」。
 >
-> 完整设计见 `docs/21-record-log-fold-design.md`。
+> 仍然有效的部分：`LaneRecord` 的**发射**（11 个变体全都有发射点）、`lane.records` 改 append-only、
+> compaction 记为 step、`StepAttempt.stopReason`。**记录日志的定位是纯旁路审计**，供
+> `RunSummaryAggregator` 与回溯，**不参与状态恢复**。
+>
+> 参考：`docs/30-retire-record-log-fold-design.md`（退休蓝图与证据）。
+>
+> 已随之作废的项：`LaneStateFolder` / `RecordLogValidator` / `Entry::isConfiguration` /
+> `toolBatch` / `terminalFailure` / queue 消费的 entry-presence 推断。
+> 记录**发射**侧的补全仍然成立（`QueueEnqueued`/`QueueCancelled`/`QueueConsumed`、
+> `close()` 补 `AbortRequested`、`UsageRecord` 去掉 tokens>0 门槛、compaction 记为 step）。
 
 ### 2.4 存储接口：SessionStorage + SessionRepository
 

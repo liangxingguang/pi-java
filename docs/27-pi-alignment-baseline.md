@@ -3,7 +3,7 @@
 > **编制日期**：2026-09-13。**基线**：pi 最新 release tag **`v0.85.1`**（2026-09-05，`d981de122`）。
 >
 > **本文取代 `docs/23`、`docs/26`**（两份已随本文提交删除），并修正 `docs/23c` 的参照物假设。
-> 历史评审记录保留在 `docs/23b-turn-lifecycle-design-review.md`（已声明"不复改"）。
+> `docs/23` 的历史评审记录（`docs/23b`）亦已删除 —— 其审查对象不存在了，留着只会误导。
 
 ---
 
@@ -163,7 +163,23 @@ pi 的 legacy 层**确实**发全 turn 事件与工具三帧，pi-java **确实*
 | `docs/23-turn-lifecycle-alignment-design.md` | 628 行里 A6（给钩子传 `toolResults`）**方向错** —— pi 任何钩子都没有该字段；§4.3 ③' 与 pi **相反**（挂起时 pi 发 `turn_end` 再发 `run_suspend`）；A8 的 outcome 半边相反。碎片多，重写比挑拣便宜。A1–A4 已由 §5.1 承接 |
 | `docs/26-write-durability-and-deferred-runtime-design.md` | **立论整段失效**：引用的 `harness-v2*.md` 已删除；两个核心机制（`EntryDropped`、`pendingWrites` 清偿）在 pi 里**都不存在**（pi 产品无欠账概念，harness 是永不删 entry + 投影期过滤） |
 
-`docs/23c` **保留**（方法论是资产）。`docs/23b` **保留**（历史记录）。
+`docs/23c` **保留**（方法论是资产，L5 差分框架仍在使用）。
+
+**2026-09-13 追加删除**（起因：agent loop 宿主层对齐 pi `agent.ts`，见 `docs/31`）：
+
+| 文档 | 删除理由 |
+|---|---|
+| `docs/23b-turn-lifecycle-design-review.md` | 审查对象 `docs/23` 已删除，成为孤儿 |
+| `docs/16-agent-loop-alignment-design.md` | 立的框架是「补齐 `AgentHarness`」，而该框架正是本次要拆的；4 个缺口均已实现 |
+| `docs/19-pi-agent-loop-behavior-diffs.md` | 基准指向即将删除的 `ActionExecutor`（含行号引用）；差分记录已由 `docs/29` 的**机器差分**取代 |
+| `docs/20-agent-loop-optimization-plan.md` | `docs/19` 的落地方案，同上 |
+| `docs/21-record-log-fold-design.md` | 折叠模型已退休（`docs/30`），自带停止横幅 |
+| `docs/22-deferred-writes-and-entry-provenance-design.md` | #1/#2/#3 全废（`pendingWrites` 已定删，`toolBatch`/`terminalFailure` 随折叠链删），仅 #4 仍有效 |
+| `docs/25-subagent-support-design.md` | pi-java 无 subagent（`src/main` 零命中）；pi 侧是**扩展示例**而非内核能力 |
+
+> #4「stopReason 入 entry」仍然有效，已由 `docs/03` 的附注与 `docs/29 §9.1` 承接。
+> `docs/07c-phase2c-orchestration-design.md`（Phase 2c）**保留为阶段历史** —— 其中的多车道与
+> 手动驱动部分已随本次对齐作废，但它记录的是该阶段**当时**如何建成，不再作为当前设计依据。
 
 **删除不是不可逆**：
 
