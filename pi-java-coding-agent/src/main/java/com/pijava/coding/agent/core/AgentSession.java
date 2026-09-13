@@ -255,6 +255,10 @@ public final class AgentSession implements AutoCloseable {
         var harness = AgentHarness.create(HarnessConfig.builder()
             .streamFn(recordingStreamFn)
             .model(model)
+            // 3b（docs/31 §8.20）：阈值压缩的门读**当前模型**的上下文窗口
+            // （pi model.contextWindow，agent-session.ts:548）；目录字段
+            // maxInputTokens 的释义即窗口大小。setModel 后随之动态变。
+            .contextWindow(models::contextWindow)
             .summaryGenerator(new LlmSummaryGenerator(recordingStreamFn, () -> model))
             .thinkingLevel(SessionSetup.thinkingLevelFor(args))
             .systemPrompt(SessionSetup.systemPromptFor(args))
