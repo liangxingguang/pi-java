@@ -276,6 +276,8 @@ this.agent.state.tools = tools;
 
 ### 4.2 装配与压缩搬到哪
 
+> **✅ 已实施（2026-09-13，commit `c82c9b2`）** —— 见 §8.11。
+
 **问题**：`ContextAssembler.buildMessagesForLane` 每次请求做三件事 ——
 建系统提示、`ContextEntries.pathToLeaf(transcript)` 重建消息、fire `transform_context` 钩子。
 
@@ -639,8 +641,8 @@ pi 用 `async/await`，Java 没有。**这不是障碍**：pi 的 `runLoop` 里�
 
 #### 仍未做的
 
-- **§3.1 的 `messages` 工作副本**（见上）
-- **§4.2** 装配与压缩移出请求路径
+- ~~**§3.1 的 `messages` 工作副本**~~ —— 已随 §4.2 落地（§8.11）
+- ~~**§4.2** 装配与压缩移出请求路径~~ —— 见 §8.11
 - **§4.3 + 多车道运行时容器**：见 §8.10（`createLane` **有**生产调用者，且 pi **本身就有 lane**）
 
 ---
@@ -705,6 +707,52 @@ harness，靠新建 lane 假装隔离。持久化分支**早就对齐了**：`Ag
 状态**（`agent-session.ts:3286`，5 个同步点之一），而 §4.2 的 `messages` 工作副本正是
 做这件事的机制；先删容器，分支切换就没有落脚点。落法：让每个 `AgentSession` 持有**自己
 的** harness（fork 也不例外），`laneName` 恒为 `DEFAULT_LANE`。
+
+---
+
+### 8.11 §4.2 + §3.1 —— 已实施（2026-09-13，commit `c82c9b2`）
+
+**读 pi 得到的准确形状**（`agent.ts` / `agent-session.ts`）：
+
+| 项 | pi 的做法 |
+|---|---|
+| 工作副本 | `state.messages` 由 `processEvents` 在 `message_end` 上 `push`（`agent.ts:554-557`） |
+| 交给循环的 | `createContextSnapshot()` = `{...state, messages: state.messages.slice()}`（`:437-443`）—— **一份拷贝** |
+| 重建点 | 只在日志整体替换/首次填充时 `state.messages = buildSessionContext().messages`（`:2357-2359` 等 5 处） |
+| 阈值压缩 | `_compactBeforeNextAssistantResponse` 包在 `prepareNextTurnWithContext` 里（`:542` / `:557-577`），压缩后**经 `NextTurnUpdate.context` 整体交回循环** |
+| 溢出压缩 | `_handlePostAgentRun:1142` → `_checkCompaction:2132`，在 `agent_end` **之后** |
+
+**落法**（`docs/31 §4.2` + §3.1 的 `messages` 工作副本一并落地）：
+
+- `LaneState.messages` 就是工作副本。`PiLaneSink.onMessageEnd` 往里追加，**先于**
+  `alreadyPresent` 的抑制 —— 起手的用户 prompt 因「日志里已有」不重复落盘，但照样进副本，
+  pi 的用户消息也是经 `message_end` 进 `state.messages` 的。
+- 重建只在四处：`seedTranscript`（resume）· `applyCompaction` · `LaneRegistry.move` · `reset`。
+  统一走 `HarnessUtils.rebuildLaneMessages`。**压缩从不原地改写消息，它换的是日志。**
+- 循环拿到的是**拷贝**，与 `createContextSnapshot()` 的 `.slice()` 同形。
+- 请求路径上只剩 `transform_context` 钩子，外加钩子看不到的两项**执行步开销**
+  （`before_request` 钩子 + `llm.request` 跨度）—— 它们原本长在 `AssistantStreamExecutor`
+  里，属执行步，`PiLoop` 不带，必须显式搬到一个点上（`PiLaneEngine.beforeRequest`）。
+- `prepare_next_turn` 的结果**在钩子返回点就地应用**（`ContextAssembler.applyTurnUpdate`），
+  `LaneState.pendingTurnUpdate` 这个「暂存到下次请求」的字段删掉了 —— pi 的
+  `prepareNextTurnWithContext` 自己 `appendModelChange`，返回给循环的只是 `{model, reasoning}`。
+- 两处压缩触发点就位：阈值在 `prepareNextTurn`（`CompactionExecutor.checkThreshold`，
+  压缩后经 `NextTurnUpdate.context` 把重建的消息交回循环）；溢出在 `drive` 里
+  `PiLoop` 返回之后（`PiLaneSink.checkOverflowAfterRun`），从轮内的 `endRequest` 搬出来。
+
+**一处顺带的行为修正**：此前阈值压缩发生在 `transformContext` 里 —— 它换掉了
+`lane.transcript`，但循环持有的 `context.messages()` **没有跟着换**（钩子返回值只喂 provider）。
+于是循环内部状态与 provider 看到的上下文分叉。现在经 `NextTurnUpdate.context` 换了整个
+context，与 pi 一致。
+
+**验证**：全反应堆 14 模块绿（agent-core 374 = 371 + 3）；L5 `ConformanceTest` 10/10 不变；
+checkstyle 0 违规；8 个改动文件全部 ≤ 500 行。新增 `LaneMessagesTest`（3 例），
+**三次反向实验**逐一确认会咬住：撤掉 `checkThreshold`、撤掉 `checkOverflowAfterRun`、
+撤掉 `seedTranscript` 里的重建 —— 各自只红对应那一条。
+
+**仍未做的**：`docs/03 §2.3` 的 `LaneState`/`LaneRecord` 两节待同步（CLAUDE.md 要求）；
+多车道运行时容器删除（§4.3 / §8.10）—— 现在它有了落脚点，因为分支切换正是
+「用该 lane 的日志重建 `state.messages`」。
 
 ---
 
