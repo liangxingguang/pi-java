@@ -14,6 +14,8 @@ import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 import com.pijava.agent.entry.Entry;
+import com.pijava.agent.compaction.CompactionObserver;
+import com.pijava.agent.compaction.CompactionResult;
 import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.compaction.LlmSummaryGenerator;
 import com.pijava.agent.harness.AgentHarness;
@@ -252,6 +254,31 @@ public final class AgentSession implements AutoCloseable {
         var telemetry = PayloadRecordingStreamFn.exporter(args.sessionId(), args.tracePayloads());
         var recordingStreamFn = new PayloadRecordingStreamFn(streamFn, telemetry);
         var model = models.resolve(modelPattern, providerName);
+        // 3c（docs/31 §8.21，裁决③）：宿主层的自动压缩事件走轻量 observer，不占
+        // HookSystem。harness 先于会话构造 ⇒ 用引用晚绑定：observer 在压缩真正
+        // 发生时（必晚于 create() 返回）才读得到会话。pi 的 compaction_start/end
+        // 就发在会话层，这里经 emitSessionEvent 进同一条会话事件流。
+        var sessionRef = new java.util.concurrent.atomic.AtomicReference<AgentSession>();
+        var compactionObserver = new CompactionObserver() {
+            @Override
+            public void onStart(String reason) {
+                var session = sessionRef.get();
+                if (session != null) {
+                    session.emitSessionEvent(
+                        new AgentSessionEvent.CompactionStart(compactionReasonOf(reason)));
+                }
+            }
+
+            @Override
+            public void onEnd(String reason, CompactionResult result, boolean aborted,
+                              boolean willRetry, String errorMessage) {
+                var session = sessionRef.get();
+                if (session != null) {
+                    session.emitSessionEvent(new AgentSessionEvent.CompactionEnd(
+                        compactionReasonOf(reason), result, aborted, willRetry, errorMessage));
+                }
+            }
+        };
         var harness = AgentHarness.create(HarnessConfig.builder()
             .streamFn(recordingStreamFn)
             .model(model)
@@ -259,6 +286,9 @@ public final class AgentSession implements AutoCloseable {
             // （pi model.contextWindow，agent-session.ts:548）；目录字段
             // maxInputTokens 的释义即窗口大小。setModel 后随之动态变。
             .contextWindow(models::contextWindow)
+            // 3c（docs/31 §8.21，裁决④）：isRecoverableLength 的操作数 =
+            // pi model.maxTokens = 目录 maxOutputTokens；未编目 ⇒ 0 ⇒ 判据恒 false。
+            .maxOutputTokens(models::maxOutputTokens)
             .summaryGenerator(new LlmSummaryGenerator(recordingStreamFn, () -> model))
             .thinkingLevel(SessionSetup.thinkingLevelFor(args))
             .systemPrompt(SessionSetup.systemPromptFor(args))
@@ -270,13 +300,28 @@ public final class AgentSession implements AutoCloseable {
             .toolExecution(ToolExecution.defaultMode())
             .skills(SessionSetup.discoverSkills(args))
             .telemetry(telemetry)
+            .compactionObserver(compactionObserver)
             .build());
         var agentSession = new AgentSession(
             harness, services, args,
             args.name() != null ? args.name() : "session");
+        sessionRef.set(agentSession);
         agentSession.persistentRepository = handle;
         loadExtensions(args, services, harness, ExtensionUI.noop(), agentSession);
         return agentSession;
+    }
+
+    /**
+     * observer 的 reason 字符串（pi 的字面量 {@code "manual"}/{@code "threshold"}/
+     * {@code "overflow"}）→ 会话事件的枚举。未知值归 OVERFLOW 是防御：observer 的
+     * 生产点只有这三个字面量（agent-core 的压缩三路）。
+     */
+    private static AgentSessionEvent.CompactionReason compactionReasonOf(String reason) {
+        return switch (reason) {
+            case "manual" -> AgentSessionEvent.CompactionReason.MANUAL;
+            case "threshold" -> AgentSessionEvent.CompactionReason.THRESHOLD;
+            default -> AgentSessionEvent.CompactionReason.OVERFLOW;
+        };
     }
 
     /**

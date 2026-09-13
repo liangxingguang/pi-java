@@ -14,6 +14,7 @@ import com.pijava.agent.harness.PiLoop;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
+import com.pijava.ai.utils.ContextOverflow;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,15 +41,6 @@ final class SessionRunner {
 
     /** 重试指数退避的基准延迟（对齐 pi 默认 {@code baseDelayMs}）。 */
     private static final long BASE_DELAY_MS = 2_000;
-
-    /** 上下文溢出错误特征串（对齐 pi {@code isContextOverflow} 的 OVERFLOW_PATTERNS）。 */
-    private static final List<String> CONTEXT_OVERFLOW_MARKERS = List.of(
-        "prompt is too long", "request_too_large", "input is too long for requested model",
-        "exceeds the context window", "maximum context length", "context length exceeded",
-        "context_length_exceeded", "input token count exceeds the maximum", "maximum prompt length",
-        "reduce the length of the messages", "too many tokens", "maximum context size",
-        "context window exceeds limit", "exceeded model token limit", "too long for model",
-        "model_context_window_exceeded", "range of input length should be", "input is too long");
 
     static void drive(
             AgentSession owner,
@@ -311,18 +303,24 @@ final class SessionRunner {
     /**
      * 错误是否可自动重试（pi {@code isRetryableAssistantError}）：上下文溢出不重试，
      * 交由压缩处理，避免空耗重试预算。
+     *
+     * <p><b>3c 起的单一真源</b>（{@code docs/31 §8.21}）：溢出判定交 ai 层的
+     * {@link ContextOverflow}（pi {@code overflow.ts} 的逐字正则移植）。此前这里的
+     * 18 条小写 contains 特征串是 pi 模式的**近似副本**，与 pi 的 25 条
+     * case-insensitive 正则存在出入 —— 现在两路读同一份判据。窗口操作数传
+     * {@code null}：本判据只在 error 收尾上触发（case 2 要 stop、case 3 要 length，
+     * 均不可达），且错误消息不带 usage。</p>
+     *
+     * <p>「null ⇒ true」的保守形状与黑名单语义保留；换成 pi 的白名单判据
+     * （{@code retry.ts:235-240}）是 3d 的事。</p>
      */
     static boolean isRetryableError(String errorMessage) {
         if (errorMessage == null) {
             return true;
         }
-        String lower = errorMessage.toLowerCase();
-        for (var marker : CONTEXT_OVERFLOW_MARKERS) {
-            if (lower.contains(marker)) {
-                return false;
-            }
-        }
-        return true;
+        var synthetic = new Message.AssistantMessage(
+            List.of(), "error", null, null, null, null, null, null, errorMessage);
+        return !ContextOverflow.isContextOverflow(synthetic, null);
     }
 
     /** 指数退避延迟：{@code baseDelayMs * 2^(attempt-1)}（pi {@code _prepareRetry}）。 */
