@@ -2,14 +2,14 @@
 {"type":"turn_start"}
 {"message":{"content":"Run a batch","role":"user"},"type":"message_start"}
 {"message":{"content":"Run a batch","role":"user"},"type":"message_end"}
-{"message":{"content":[],"role":"assistant","stopReason":"stop"},"type":"message_start"}
+{"message":{"api":"openai-responses","content":[],"model":"mock","provider":"openai","role":"assistant","stopReason":"stop","usage":{"cacheRead":0,"cacheWrite":0,"cost":{"cacheRead":0,"cacheWrite":0,"input":0,"output":0,"total":0},"input":0,"output":0,"totalTokens":0}},"type":"message_start"}
 {"detail":null,"evt":"toolcall_start","type":"message_update"}
 {"detail":"ok1","evt":"toolcall_end","type":"message_update"}
 {"detail":null,"evt":"toolcall_start","type":"message_update"}
 {"detail":"ok2","evt":"toolcall_end","type":"message_update"}
 {"detail":null,"evt":"toolcall_start","type":"message_update"}
 {"detail":"denied","evt":"toolcall_end","type":"message_update"}
-{"message":{"content":[{"arguments":{"n":1},"name":"ok1","type":"toolCall"},{"arguments":{"n":2},"name":"ok2","type":"toolCall"},{"arguments":{"n":3},"name":"denied","type":"toolCall"}],"role":"assistant","stopReason":"toolUse"},"type":"message_end"}
+{"message":{"api":"openai-responses","content":[{"arguments":{"n":1},"name":"ok1","type":"toolCall"},{"arguments":{"n":2},"name":"ok2","type":"toolCall"},{"arguments":{"n":3},"name":"denied","type":"toolCall"}],"model":"mock","provider":"openai","role":"assistant","stopReason":"toolUse","usage":{"cacheRead":0,"cacheWrite":0,"cost":{"cacheRead":0,"cacheWrite":0,"input":0,"output":0,"total":0},"input":0,"output":0,"totalTokens":0}},"type":"message_end"}
 {"id":"tc1","name":"ok1","type":"tool_execution_start"}
 {"id":"tc2","name":"ok2","type":"tool_execution_start"}
 {"id":"tc3","name":"denied","type":"tool_execution_start"}
@@ -24,10 +24,10 @@
 {"message":{"content":[{"text":"denied by policy","type":"text"}],"details":{},"isError":true,"role":"toolResult","toolName":"denied"},"type":"message_end"}
 {"stopReason":"toolUse","toolResults":["ok1","ok2","denied"],"type":"turn_end"}
 {"type":"turn_start"}
-{"message":{"content":[],"role":"assistant","stopReason":"stop"},"type":"message_start"}
+{"message":{"api":"openai-responses","content":[],"model":"mock","provider":"openai","role":"assistant","stopReason":"stop","usage":{"cacheRead":0,"cacheWrite":0,"cost":{"cacheRead":0,"cacheWrite":0,"input":0,"output":0,"total":0},"input":0,"output":0,"totalTokens":0}},"type":"message_start"}
 {"detail":null,"evt":"text_start","type":"message_update"}
 {"detail":"done","evt":"text_delta","type":"message_update"}
 {"detail":"Batch done","evt":"text_end","type":"message_update"}
-{"message":{"content":[{"text":"Batch done","type":"text"}],"role":"assistant","stopReason":"stop"},"type":"message_end"}
+{"message":{"api":"openai-responses","content":[{"text":"Batch done","type":"text"}],"model":"mock","provider":"openai","role":"assistant","stopReason":"stop","usage":{"cacheRead":0,"cacheWrite":0,"cost":{"cacheRead":0,"cacheWrite":0,"input":0,"output":0,"total":0},"input":0,"output":0,"totalTokens":0}},"type":"message_end"}
 {"stopReason":"stop","toolResults":[],"type":"turn_end"}
-{"messages":[{"content":"Run a batch","role":"user"},{"content":[{"arguments":{"n":1},"name":"ok1","type":"toolCall"},{"arguments":{"n":2},"name":"ok2","type":"toolCall"},{"arguments":{"n":3},"name":"denied","type":"toolCall"}],"role":"assistant","stopReason":"toolUse"},{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"ok1"},{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"ok2"},{"content":[{"text":"denied by policy","type":"text"}],"details":{},"isError":true,"role":"toolResult","toolName":"denied"},{"content":[{"text":"Batch done","type":"text"}],"role":"assistant","stopReason":"stop"}],"type":"agent_end"}
+{"messages":[{"content":"Run a batch","role":"user"},{"api":"openai-responses","content":[{"arguments":{"n":1},"name":"ok1","type":"toolCall"},{"arguments":{"n":2},"name":"ok2","type":"toolCall"},{"arguments":{"n":3},"name":"denied","type":"toolCall"}],"model":"mock","provider":"openai","role":"assistant","stopReason":"toolUse","usage":{"cacheRead":0,"cacheWrite":0,"cost":{"cacheRead":0,"cacheWrite":0,"input":0,"output":0,"total":0},"input":0,"output":0,"totalTokens":0}},{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"ok1"},{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"ok2"},{"content":[{"text":"denied by policy","type":"text"}],"details":{},"isError":true,"role":"toolResult","toolName":"denied"},{"api":"openai-responses","content":[{"text":"Batch done","type":"text"}],"model":"mock","provider":"openai","role":"assistant","stopReason":"stop","usage":{"cacheRead":0,"cacheWrite":0,"cost":{"cacheRead":0,"cacheWrite":0,"input":0,"output":0,"total":0},"input":0,"output":0,"totalTokens":0}}],"type":"agent_end"}

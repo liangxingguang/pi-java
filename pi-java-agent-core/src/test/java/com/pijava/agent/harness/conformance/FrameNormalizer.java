@@ -153,9 +153,33 @@ final class FrameNormalizer {
         return switch (message) {
             case Message.UserMessage user ->
                 CanonicalJson.obj("role", "user", "content", textOf(user.content()));
-            case Message.AssistantMessage assistant -> CanonicalJson.obj(
-                "role", "assistant", "content", blocksOf(assistant.content()),
-                "stopReason", stopReasonOf(assistant.stopReason()));
+            // 3a（docs/31 §8.19）：assistant 一支补齐 provider 身份 + 计量 ——
+            // pi 的 estimateContextTokens/_checkCompaction 从这些字段读起，帧里
+            // 隐身等于行为失明。timestamp **不进帧**：pi 侧是 Date.now()，两侧都
+            // 不可复现（同 toolCallId 的豁免逻辑）。deferred 不进帧：handle id
+            // 随机，且 conformance 桩从不设置它。键省略规则与 resultOf 一致。
+            case Message.AssistantMessage assistant -> {
+                var out = new LinkedHashMap<String, Object>();
+                out.put("role", "assistant");
+                out.put("content", blocksOf(assistant.content()));
+                out.put("stopReason", stopReasonOf(assistant.stopReason()));
+                if (assistant.api() != null) {
+                    out.put("api", assistant.api());
+                }
+                if (assistant.provider() != null) {
+                    out.put("provider", assistant.provider());
+                }
+                if (assistant.model() != null) {
+                    out.put("model", assistant.model());
+                }
+                if (assistant.usage() != null) {
+                    out.put("usage", usageOf(assistant.usage()));
+                }
+                if (assistant.errorMessage() != null) {
+                    out.put("errorMessage", assistant.errorMessage());
+                }
+                yield out;
+            }
             case Message.ToolResultMessage result -> {
                 var out = new LinkedHashMap<String, Object>();
                 out.put("role", "toolResult");
@@ -227,6 +251,48 @@ final class FrameNormalizer {
     /** pi-java 的 {@code tool_use} 归一化回 pi 的 {@code toolUse}；其余逐字相同。 */
     private static String stopReasonOf(String stopReason) {
         return "tool_use".equals(stopReason) ? "toolUse" : stopReason;
+    }
+
+    /**
+     * 渲染 pi 的 {@code Usage} 形状（键序与 run.test.ts {@code createUsage()} 对应：
+     * input/output/cacheRead/cacheWrite/totalTokens/cost，可选的 cacheWrite1h/
+     * reasoning 非空才带）。Java 侧计数是 double，pi 侧 stringify 写整数 ——
+     * 整数值归一为 long，否则 "0.0" ≠ "0" 会假红。
+     */
+    private static Object usageOf(com.pijava.ai.Usage usage) {
+        var out = new LinkedHashMap<String, Object>();
+        out.put("input", num(usage.input()));
+        out.put("output", num(usage.output()));
+        out.put("cacheRead", num(usage.cacheRead()));
+        out.put("cacheWrite", num(usage.cacheWrite()));
+        if (usage.cacheWrite1h() != null) {
+            out.put("cacheWrite1h", num(usage.cacheWrite1h()));
+        }
+        if (usage.reasoning() != null) {
+            out.put("reasoning", num(usage.reasoning()));
+        }
+        out.put("totalTokens", num(usage.totalTokens()));
+        if (usage.cost() != null) {
+            var cost = new LinkedHashMap<String, Object>();
+            cost.put("input", num(usage.cost().input()));
+            cost.put("output", num(usage.cost().output()));
+            cost.put("cacheRead", num(usage.cost().cacheRead()));
+            cost.put("cacheWrite", num(usage.cost().cacheWrite()));
+            cost.put("total", num(usage.cost().total()));
+            out.put("cost", cost);
+        }
+        return out;
+    }
+
+    /** 整数值 ⇒ long（pi 的 stringify 写 0 而不是 0.0）。必须用两条独立
+     *  return：{@code cond ? Long.valueOf(..) : Double.valueOf(..)} 是**数值**
+     *  条件表达式（JLS 15.25），两分支皆可转数值 ⇒ 整体提升为 double，
+     *  装箱被编译器当场拆掉再 l2d —— 字节码实测坐实，别改回三元。 */
+    private static Object num(double value) {
+        if (value == Math.rint(value) && !Double.isInfinite(value)) {
+            return Long.valueOf((long) value);
+        }
+        return Double.valueOf(value);
     }
 
     private String toolCallId(String id) {

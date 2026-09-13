@@ -252,11 +252,24 @@ class Normalizer {
 	message(m: AgentMessage): unknown {
 		if (m.role === "user") return { role: "user", content: m.content };
 		if (m.role === "assistant") {
-			return {
+			// 3a parity (docs/31 §8.19): provider identity + usage now render —
+			// twin of the Java FrameNormalizer assistant branch. The mock sets all
+			// of them via createAssistantMessage (never faux's withUsageEstimate),
+			// so they are deterministic. `timestamp` does NOT ride (Date.now() on
+			// both sides — same exclusion logic as toolCallId); `deferred` neither
+			// (random handle id, no script sets it). Optional keys drop when
+			// undefined — identical omission rules as the toolResult branch.
+			const out: Record<string, unknown> = {
 				role: "assistant",
 				content: m.content.map((c) => this.block(c)),
 				stopReason: m.stopReason,
 			};
+			if (m.api !== undefined) out.api = m.api;
+			if (m.provider !== undefined) out.provider = m.provider;
+			if (m.model !== undefined) out.model = m.model;
+			if (m.usage !== undefined) out.usage = m.usage;
+			if (m.errorMessage !== undefined) out.errorMessage = m.errorMessage;
+			return out;
 		}
 		// toolResult carries the whole message payload now — twin of the Java
 		// FrameNormalizer.messageOf (createToolResultMessage puts details/usage/

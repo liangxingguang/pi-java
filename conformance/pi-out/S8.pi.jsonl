@@ -2,17 +2,17 @@
 {"type":"turn_start"}
 {"message":{"content":"Start","role":"user"},"type":"message_start"}
 {"message":{"content":"Start","role":"user"},"type":"message_end"}
-{"message":{"content":[],"role":"assistant","stopReason":"stop"},"type":"message_start"}
+{"message":{"api":"openai-responses","content":[],"model":"mock","provider":"openai","role":"assistant","stopReason":"stop","usage":{"cacheRead":0,"cacheWrite":0,"cost":{"cacheRead":0,"cacheWrite":0,"input":0,"output":0,"total":0},"input":0,"output":0,"totalTokens":0}},"type":"message_start"}
 {"detail":null,"evt":"text_start","type":"message_update"}
 {"detail":"First","evt":"text_end","type":"message_update"}
-{"message":{"content":[{"text":"First","type":"text"}],"role":"assistant","stopReason":"stop"},"type":"message_end"}
+{"message":{"api":"openai-responses","content":[{"text":"First","type":"text"}],"model":"mock","provider":"openai","role":"assistant","stopReason":"stop","usage":{"cacheRead":0,"cacheWrite":0,"cost":{"cacheRead":0,"cacheWrite":0,"input":0,"output":0,"total":0},"input":0,"output":0,"totalTokens":0}},"type":"message_end"}
 {"stopReason":"stop","toolResults":[],"type":"turn_end"}
 {"type":"turn_start"}
 {"message":{"content":"and another thing","role":"user"},"type":"message_start"}
 {"message":{"content":"and another thing","role":"user"},"type":"message_end"}
-{"message":{"content":[],"role":"assistant","stopReason":"stop"},"type":"message_start"}
+{"message":{"api":"openai-responses","content":[],"model":"mock","provider":"openai","role":"assistant","stopReason":"stop","usage":{"cacheRead":0,"cacheWrite":0,"cost":{"cacheRead":0,"cacheWrite":0,"input":0,"output":0,"total":0},"input":0,"output":0,"totalTokens":0}},"type":"message_start"}
 {"detail":null,"evt":"text_start","type":"message_update"}
 {"detail":"Followed up","evt":"text_end","type":"message_update"}
-{"message":{"content":[{"text":"Followed up","type":"text"}],"role":"assistant","stopReason":"stop"},"type":"message_end"}
+{"message":{"api":"openai-responses","content":[{"text":"Followed up","type":"text"}],"model":"mock","provider":"openai","role":"assistant","stopReason":"stop","usage":{"cacheRead":0,"cacheWrite":0,"cost":{"cacheRead":0,"cacheWrite":0,"input":0,"output":0,"total":0},"input":0,"output":0,"totalTokens":0}},"type":"message_end"}
 {"stopReason":"stop","toolResults":[],"type":"turn_end"}
-{"messages":[{"content":"Start","role":"user"},{"content":[{"text":"First","type":"text"}],"role":"assistant","stopReason":"stop"},{"content":"and another thing","role":"user"},{"content":[{"text":"Followed up","type":"text"}],"role":"assistant","stopReason":"stop"}],"type":"agent_end"}
+{"messages":[{"content":"Start","role":"user"},{"api":"openai-responses","content":[{"text":"First","type":"text"}],"model":"mock","provider":"openai","role":"assistant","stopReason":"stop","usage":{"cacheRead":0,"cacheWrite":0,"cost":{"cacheRead":0,"cacheWrite":0,"input":0,"output":0,"total":0},"input":0,"output":0,"totalTokens":0}},{"content":"and another thing","role":"user"},{"api":"openai-responses","content":[{"text":"Followed up","type":"text"}],"model":"mock","provider":"openai","role":"assistant","stopReason":"stop","usage":{"cacheRead":0,"cacheWrite":0,"cost":{"cacheRead":0,"cacheWrite":0,"input":0,"output":0,"total":0},"input":0,"output":0,"totalTokens":0}}],"type":"agent_end"}

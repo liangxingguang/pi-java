@@ -1,9 +1,12 @@
 package com.pijava.agent.session.jsonl;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.pijava.agent.session.SessionJson;
+import com.pijava.ai.Usage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.DeferredHandle;
 import com.pijava.ai.message.Message;
@@ -38,7 +41,13 @@ final class MessageJsonCodec {
             case "assistant" -> new Message.AssistantMessage(
                 content,
                 JsonlCodec.optionalString(node, "stopReason"),
-                decodeDeferred(node.get("deferred")));
+                decodeDeferred(node.get("deferred")),
+                JsonlCodec.optionalString(node, "api"),
+                JsonlCodec.optionalString(node, "provider"),
+                JsonlCodec.optionalString(node, "model"),
+                decodeUsage(node.get("usage")),
+                decodeTimestamp(node.get("timestamp")),
+                JsonlCodec.optionalString(node, "errorMessage"));
             case "tool" -> new Message.ToolResultMessage(
                 JsonlCodec.requireString(node, "toolUseId"),
                 JsonlCodec.requireString(node, "toolName"),
@@ -84,6 +93,32 @@ final class MessageJsonCodec {
             JsonlCodec.optionalLong(node, "expiresAt"),
             JsonlCodec.optionalLong(node, "pollAfterMs"),
             JsonlCodec.optionalObject(node, "data"));
+    }
+
+    /** 3a：assistant 消息的 token 计量（pi 必有字段；旧文件缺席 ⇒ null，键省略）。 */
+    private static Usage decodeUsage(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (!node.isObject()) {
+            throw JsonlCodec.DecodeError.schema("has invalid usage");
+        }
+        try {
+            return SessionJson.mapper().treeToValue(node, Usage.class);
+        } catch (Exception e) {
+            throw JsonlCodec.DecodeError.schema("has invalid usage");
+        }
+    }
+
+    /** pi {@code timestamp: number}（epoch ms）→ Instant；缺席 ⇒ null。 */
+    private static Instant decodeTimestamp(JsonNode timestampNode) {
+        if (timestampNode == null || timestampNode.isNull()) {
+            return null;
+        }
+        if (!timestampNode.isNumber()) {
+            throw JsonlCodec.DecodeError.schema("has invalid timestamp");
+        }
+        return Instant.ofEpochMilli(timestampNode.asLong());
     }
 
     static List<ContentBlock> decodeBlocks(JsonNode node) {

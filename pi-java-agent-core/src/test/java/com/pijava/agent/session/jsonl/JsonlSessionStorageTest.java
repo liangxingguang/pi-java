@@ -182,6 +182,65 @@ class JsonlSessionStorageTest {
             .doesNotContain("\"usage\"").doesNotContain("\"addedToolNames\"");
     }
 
+    @Test
+    void assistantPayloadRoundTripsThroughJsonl() throws Exception {
+        // 3a 的 L3 判据（docs/31 §8.19）：身份三元组 + usage + timestamp + errorMessage
+        // 落库再读回逐字段相等；旧形状消息（兼容构造器）保持「键缺席」，不生出 null 噪声。
+        Path dir = Files.createTempDirectory("pi-jsonl-3a");
+        var repo = JsonlSessionRepository.over(dir);
+        var session = repo.create(new JsonlSessionCreateOptions("s1", "cwd", null, null));
+        var at = java.time.Instant.ofEpochMilli(1_700_000_000_123L);
+        var usage = new com.pijava.ai.Usage(10, 5, 1, 2, null, null, 18,
+            com.pijava.ai.Usage.Cost.zero());
+        session.appendEntry(new ProvisionedEntry<>(new Entry.Message("e1", 0, null, null,
+            new Message.AssistantMessage(List.of(new ContentBlock.TextContent("hi")),
+                "error", null, "anthropic-messages", "anthropic", "claude-sonnet-5",
+                usage, at, "boom"), null)), "main");
+        session.appendEntry(new ProvisionedEntry<>(new Entry.Message("e2", 0, null, null,
+            new Message.AssistantMessage(List.of(new ContentBlock.TextContent("old"))),
+            null)), "main");
+        session.storage().drain();
+        Path file = repo.list(JsonlSessionListOptions.all()).getFirst().path();
+
+        var storage = JsonlSessionStorage.load(FS, file);
+        var rich = assistantAt(storage.findEntries(
+            com.pijava.agent.session.EntryQuery.all()), "e1");
+        assertThat(rich.api()).isEqualTo("anthropic-messages");
+        assertThat(rich.provider()).isEqualTo("anthropic");
+        assertThat(rich.model()).isEqualTo("claude-sonnet-5");
+        assertThat(rich.usage()).isEqualTo(usage);
+        assertThat(rich.timestamp()).isEqualTo(at);
+        assertThat(rich.errorMessage()).isEqualTo("boom");
+        assertThat(rich.stopReason()).isEqualTo("error");
+        var plain = assistantAt(storage.findEntries(
+            com.pijava.agent.session.EntryQuery.all()), "e2");
+        assertThat(plain.usage()).isNull();
+        assertThat(plain.timestamp()).isNull();
+        // 原始行级判据（null ≙ undefined ⇒ 键不出现）：旧形状行不许写出身份/计量空壳键。
+        // 判到 **message 子对象**这一层 —— entry 自己就带 timestamp/parentId 等字段，
+        // 整行 substring 会把 entry 层的合法键误当载荷噪声。
+        String raw = Files.readString(file);
+        String plainLine = raw.lines()
+            .filter(l -> l.contains("\"e2\"")).findFirst().orElseThrow();
+        var plainMessage = com.pijava.agent.session.SessionJson.mapper()
+            .readTree(plainLine).get("message");
+        assertThat(plainMessage.has("api")).isFalse();
+        assertThat(plainMessage.has("provider")).isFalse();
+        assertThat(plainMessage.has("model")).isFalse();
+        assertThat(plainMessage.has("usage")).isFalse();
+        assertThat(plainMessage.has("timestamp")).isFalse();
+        assertThat(plainMessage.has("errorMessage")).isFalse();
+    }
+
+    private static Message.AssistantMessage assistantAt(List<Entry> entries, String entryId) {
+        return entries.stream()
+            .filter(e -> e instanceof Entry.Message m && m.id().equals(entryId)
+                && m.message() instanceof Message.AssistantMessage)
+            .map(e -> (Message.AssistantMessage) ((Entry.Message) e).message())
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("no assistant entry " + entryId));
+    }
+
     private static Message.ToolResultMessage toolResultNamed(
             List<Entry> entries, String toolName) {
         return entries.stream()

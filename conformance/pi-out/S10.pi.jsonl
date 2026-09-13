@@ -2,12 +2,12 @@
 {"type":"turn_start"}
 {"message":{"content":"Run a mixed batch","role":"user"},"type":"message_start"}
 {"message":{"content":"Run a mixed batch","role":"user"},"type":"message_end"}
-{"message":{"content":[],"role":"assistant","stopReason":"stop"},"type":"message_start"}
+{"message":{"api":"openai-responses","content":[],"model":"mock","provider":"openai","role":"assistant","stopReason":"stop","usage":{"cacheRead":0,"cacheWrite":0,"cost":{"cacheRead":0,"cacheWrite":0,"input":0,"output":0,"total":0},"input":0,"output":0,"totalTokens":0}},"type":"message_start"}
 {"detail":null,"evt":"toolcall_start","type":"message_update"}
 {"detail":"shellish","evt":"toolcall_end","type":"message_update"}
 {"detail":null,"evt":"toolcall_start","type":"message_update"}
 {"detail":"readish","evt":"toolcall_end","type":"message_update"}
-{"message":{"content":[{"arguments":{"n":1},"name":"shellish","type":"toolCall"},{"arguments":{"n":2},"name":"readish","type":"toolCall"}],"role":"assistant","stopReason":"toolUse"},"type":"message_end"}
+{"message":{"api":"openai-responses","content":[{"arguments":{"n":1},"name":"shellish","type":"toolCall"},{"arguments":{"n":2},"name":"readish","type":"toolCall"}],"model":"mock","provider":"openai","role":"assistant","stopReason":"toolUse","usage":{"cacheRead":0,"cacheWrite":0,"cost":{"cacheRead":0,"cacheWrite":0,"input":0,"output":0,"total":0},"input":0,"output":0,"totalTokens":0}},"type":"message_end"}
 {"id":"tc1","name":"shellish","type":"tool_execution_start"}
 {"id":"tc1","isError":false,"name":"shellish","result":{"content":[{"text":"ok","type":"text"}],"details":{}},"type":"tool_execution_end"}
 {"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"shellish"},"type":"message_start"}
@@ -18,10 +18,10 @@
 {"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"readish"},"type":"message_end"}
 {"stopReason":"toolUse","toolResults":["shellish","readish"],"type":"turn_end"}
 {"type":"turn_start"}
-{"message":{"content":[],"role":"assistant","stopReason":"stop"},"type":"message_start"}
+{"message":{"api":"openai-responses","content":[],"model":"mock","provider":"openai","role":"assistant","stopReason":"stop","usage":{"cacheRead":0,"cacheWrite":0,"cost":{"cacheRead":0,"cacheWrite":0,"input":0,"output":0,"total":0},"input":0,"output":0,"totalTokens":0}},"type":"message_start"}
 {"detail":null,"evt":"text_start","type":"message_update"}
 {"detail":"done","evt":"text_delta","type":"message_update"}
 {"detail":"Mixed done","evt":"text_end","type":"message_update"}
-{"message":{"content":[{"text":"Mixed done","type":"text"}],"role":"assistant","stopReason":"stop"},"type":"message_end"}
+{"message":{"api":"openai-responses","content":[{"text":"Mixed done","type":"text"}],"model":"mock","provider":"openai","role":"assistant","stopReason":"stop","usage":{"cacheRead":0,"cacheWrite":0,"cost":{"cacheRead":0,"cacheWrite":0,"input":0,"output":0,"total":0},"input":0,"output":0,"totalTokens":0}},"type":"message_end"}
 {"stopReason":"stop","toolResults":[],"type":"turn_end"}
-{"messages":[{"content":"Run a mixed batch","role":"user"},{"content":[{"arguments":{"n":1},"name":"shellish","type":"toolCall"},{"arguments":{"n":2},"name":"readish","type":"toolCall"}],"role":"assistant","stopReason":"toolUse"},{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"shellish"},{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"readish"},{"content":[{"text":"Mixed done","type":"text"}],"role":"assistant","stopReason":"stop"}],"type":"agent_end"}
+{"messages":[{"content":"Run a mixed batch","role":"user"},{"api":"openai-responses","content":[{"arguments":{"n":1},"name":"shellish","type":"toolCall"},{"arguments":{"n":2},"name":"readish","type":"toolCall"}],"model":"mock","provider":"openai","role":"assistant","stopReason":"toolUse","usage":{"cacheRead":0,"cacheWrite":0,"cost":{"cacheRead":0,"cacheWrite":0,"input":0,"output":0,"total":0},"input":0,"output":0,"totalTokens":0}},{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"shellish"},{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"readish"},{"api":"openai-responses","content":[{"text":"Mixed done","type":"text"}],"model":"mock","provider":"openai","role":"assistant","stopReason":"stop","usage":{"cacheRead":0,"cacheWrite":0,"cost":{"cacheRead":0,"cacheWrite":0,"input":0,"output":0,"total":0},"input":0,"output":0,"totalTokens":0}}],"type":"agent_end"}

@@ -90,6 +90,30 @@ public final class SessionJson {
             if (assistant.deferred() != null) {
                 node.set("deferred", MAPPER.valueToTree(assistant.deferred()));
             }
+            // 3a（docs/31 §8.19）：provider 身份 + 计量随消息落库。pi 的
+            // AssistantMessage 上这些是必有字段（types.ts:427-449），pi-java 生产
+            // 路径全部填充；解码旧文件或合成消息时可能缺 ⇒ null ⇒ 键省略
+            // （同 §8.18 的 A7 规则：Jackson 会写 null，必须主动省略）。
+            if (assistant.api() != null) {
+                node.put("api", assistant.api());
+            }
+            if (assistant.provider() != null) {
+                node.put("provider", assistant.provider());
+            }
+            if (assistant.model() != null) {
+                node.put("model", assistant.model());
+            }
+            if (assistant.usage() != null) {
+                node.set("usage", MAPPER.valueToTree(assistant.usage()));
+            }
+            if (assistant.timestamp() != null) {
+                // pi timestamp: number（epoch ms）；Instant 走同一方言（mapper 的
+                // InstantEpochMsSerializer 对嵌套 valueToTree 不生效，故显式转）。
+                node.put("timestamp", assistant.timestamp().toEpochMilli());
+            }
+            if (assistant.errorMessage() != null) {
+                node.put("errorMessage", assistant.errorMessage());
+            }
         }
         return node;
     }

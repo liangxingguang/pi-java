@@ -257,8 +257,12 @@ final class PiLoopRunner {
             }
             // 信号在**第一帧之前**就响了（调用方 abort 后才进这一轮）：没有事件可消费，
             // 这一轮仍必须有终局消息，否则调用方拿到 null。补一个空的 aborted 助手消息
-            // —— pi 侧等价物是 provider 自己以 aborted 收尾的那条消息。
-            finalMessage = new Message.AssistantMessage(List.of(), "aborted", null);
+            // —— pi 侧等价物是 provider 自己以 aborted 收尾的那条消息（faux.ts:321-328：
+            // provider/model 来自请求、errorMessage="Request was aborted"、timestamp=now；
+            // api 在循环层不可见 —— pi-java 的 ModelId 没有协议维度，故留 null，键省略）。
+            finalMessage = new Message.AssistantMessage(List.of(), "aborted", null,
+                null, config.model().provider(), config.model().modelName(),
+                null, java.time.Instant.now(), "Request was aborted");
         }
         finalMessage = markAborted(finalMessage, signal, cutShort);
         if (addedPartial) {
@@ -311,9 +315,17 @@ final class PiLoopRunner {
             || event instanceof StreamEvent.ToolCallEnd;
     }
 
-    /** 流式 partial 类型 → 消息类型（pi-java 把两者拆成了两个类）。 */
+    /**
+     * 流式 partial 类型 → 消息类型（pi-java 把两者拆成了两个类）。
+     *
+     * <p>3a：投影必须全字段 —— pi 的 partial 与终局是同一形状（
+     * {@code assistant-message-frame.ts:77-92}），api/provider/model/usage/
+     * timestamp/errorMessage 都在 provider 构造点写死、由这里带进终局消息，
+     * compaction 估算与溢出守卫（3b/3c）才读得到。此前只搬 content/stopReason，
+     * 是一个静默丢点。</p>
+     */
     private static Message.AssistantMessage fromPartial(AssistantMessage partial) {
-        return new Message.AssistantMessage(partial.content(), partial.stopReason(), null);
+        return Message.AssistantMessage.fromPartial(partial);
     }
 
     private static ThinkingConfig thinkingConfig(Config config) {
