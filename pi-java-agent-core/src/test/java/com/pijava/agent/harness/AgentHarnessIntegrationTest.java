@@ -35,19 +35,11 @@ class AgentHarnessIntegrationTest {
         return AgentHarness.create(new HarnessConfig(
                 streamFn("assistant reply"), MODEL, ModelThinkingLevel.off(), "",
                 Set.of(), 200_000, null, null, null,
-                DriveMode.MANUAL, null, java.util.Map.of(),
+            null, java.util.Map.of(),
                 com.pijava.ai.http.RetryPolicy.defaultPolicy(),
                 com.pijava.telemetry.NoopTelemetryContext.INSTANCE, com.pijava.ai.thinking.ThinkingLevelMap.empty(),
                 QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),
                 event -> { }));
-    }
-
-    private static void drive(AgentHarness h, String lane, String prompt) {
-        h.run(lane, prompt);
-        var action = h.peekAction(lane);
-        while (action != null) {
-            action = h.executeAction(lane, action);
-        }
     }
 
     @Test
@@ -61,15 +53,15 @@ class AgentHarnessIntegrationTest {
         h.hookSystem().onBeforeRunEnd("review", ctx -> runEndCount[0]++);
 
         // Run on two lanes
-        drive(h, "review", "review this code");
-        drive(h, "edit", "edit this file");
+        h.prompt("review", "review this code", List.of());
+        h.prompt("edit", "edit this file", List.of());
 
         assertThat(runEndCount[0]).isEqualTo(1);
         assertThat(h.snapshot("review").transcript()).isNotEmpty();
         assertThat(h.snapshot("edit").transcript()).isNotEmpty();
 
         // Compaction on the review lane after more turns
-        drive(h, "review", "one more turn");
+        h.prompt("review", "one more turn", List.of());
         var before = h.snapshot("review").transcript().size();
         h.compact("review", new CompactionSettings(true, 16384, 20000));
         var after = h.snapshot("review").transcript().size();
@@ -83,7 +75,7 @@ class AgentHarnessIntegrationTest {
         var handle = h.watch("default");
         handle.subscribe(snapshot -> updates[0]++);
 
-        drive(h, "default", "hello");
+        h.prompt("default", "hello", List.of());
         assertThat(updates[0]).isGreaterThan(0);
     }
 }

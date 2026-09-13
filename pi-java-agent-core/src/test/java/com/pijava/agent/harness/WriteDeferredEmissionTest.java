@@ -81,7 +81,7 @@ class WriteDeferredEmissionTest {
         return AgentHarness.create(new HarnessConfig(
             sf, MODEL, ModelThinkingLevel.off(), "",
             Set.of(), 200_000, registry, null, null,
-            DriveMode.MANUAL, null, Map.of(),
+            null, Map.of(),
             com.pijava.ai.http.RetryPolicy.defaultPolicy(),
             com.pijava.telemetry.NoopTelemetryContext.INSTANCE,
             com.pijava.ai.thinking.ThinkingLevelMap.empty(),
@@ -93,32 +93,26 @@ class WriteDeferredEmissionTest {
         return h.snapshot(lane).records().stream().filter(type::isInstance).toList();
     }
 
-    private static void drive(AgentHarness h, String lane) {
-        var action = h.peekAction(lane);
-        while (action != null) {
-            action = h.executeAction(lane, action);
-        }
-    }
-
     @Test
     void runStartUserPromptIsNotRecordedAsDeferred() {
         var h = harness(simpleStreamFn(), null);
-        // 不 drive：只走到 run 起始的两个写入点（user prompt + thinking level），
-        // 此刻 lane 仍是 IDLE，两者都是直接 append，一个 write_deferred 都不该有。
-        h.run("default", "hello");
+        // run 起手写下的两个 entry（user prompt + thinking level）此时 lane 仍是 IDLE，
+        // 都是直接 append ⇒ 一个 write_deferred 都不该有。运行途中写下的助手回复才是
+        // 延迟写入（见下一个用例）。
+        h.prompt("hello");
 
-        assertThat(ofType(h, "default", LaneRecord.WriteDeferred.class)).isEmpty();
-
-        // 再 drive 出 run 自身的产出后，才出现延迟写入（见下一个用例）。
-        drive(h, "default");
-        assertThat(ofType(h, "default", LaneRecord.WriteDeferred.class)).hasSize(1);
+        var deferred = ofType(h, "default", LaneRecord.WriteDeferred.class);
+        assertThat(deferred).hasSize(1);
+        var userId = h.snapshot("default").transcript().get(0).id();
+        assertThat(deferred.stream()
+            .map(r -> ((LaneRecord.WriteDeferred) r).target().entry().id()))
+            .doesNotContain(userId);
     }
 
     @Test
     void assistantReplyProducedMidRunIsRecordedAsDeferred() {
         var h = harness(simpleStreamFn(), null);
-        h.run("default", "hello");
-        drive(h, "default");
+        h.prompt("hello");
 
         var deferred = ofType(h, "default", LaneRecord.WriteDeferred.class);
         assertThat(deferred).hasSize(1);
@@ -126,18 +120,22 @@ class WriteDeferredEmissionTest {
     }
 
     @Test
-    void toolResultsAndMidRunSteerAreRecordedAsDeferred() {
+    void toolResultsAndMidRunSteerAreRecordedAsDeferred() throws Exception {
         var registry = new ToolRegistry(null);
         registry.register(echoTool());
         var h = harness(toolUseThenStopStreamFn("echo"), registry);
-        var action = h.run("default", "go");
-        while (action != null && !(action instanceof Action.ExecuteTool)) {
-            action = h.executeAction("default", action);
-        }
-        h.steer("default", "steer mid-run");
-        var next = action;
-        while (next != null) {
-            next = h.executeAction("default", next);
+        // 运行中途注入 steer：流事件监听器在运行线程上被调用，此时工具调用尚未收尾，
+        // 注入因而落在同一轮运行内（首个 TextEnd 上只注入一次）。
+        var steered = new java.util.concurrent.atomic.AtomicBoolean();
+        var registration = h.onStreamEvent(e -> {
+            if (e instanceof StreamEvent.TextEnd && steered.compareAndSet(false, true)) {
+                h.steer("default", "steer mid-run");
+            }
+        });
+        try {
+            h.prompt("go");
+        } finally {
+            registration.close();
         }
 
         // 工具结果条目 + 中途 steer 注入条目 + 第二轮 assistant 回复

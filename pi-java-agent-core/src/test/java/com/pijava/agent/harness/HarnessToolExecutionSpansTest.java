@@ -89,19 +89,11 @@ class HarnessToolExecutionSpansTest {
         return AgentHarness.create(new HarnessConfig(
                 streamFn, MODEL, ModelThinkingLevel.off(), "",
                 Set.of(), 200_000, registry, null, null,
-                DriveMode.MANUAL, null, Map.of(),
+            null, Map.of(),
                 com.pijava.ai.http.RetryPolicy.defaultPolicy(),
                 telemetry, com.pijava.ai.thinking.ThinkingLevelMap.empty(),
                 QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),
                 event -> { }));
-    }
-
-    private static void drive(AgentHarness h, String prompt) {
-        h.run("default", prompt);
-        var action = h.peekAction("default");
-        while (action != null) {
-            action = h.executeAction("default", action);
-        }
     }
 
     private List<JsonNode> readLines(Path tracesDir) throws IOException {
@@ -125,7 +117,7 @@ class HarnessToolExecutionSpansTest {
         var telemetry = JsonlFileTelemetry.create(tracesDir);
         var h = harness(telemetry, registry, toolUseThenStopStreamFn("call-1", "echo"));
 
-        drive(h, "run a tool");
+        h.prompt("run a tool");
 
         var lines = readLines(tracesDir);
 
@@ -204,7 +196,7 @@ class HarnessToolExecutionSpansTest {
         var telemetry = JsonlFileTelemetry.create(tracesDir);
         var h = harness(telemetry, registry, toolUseThenStopStreamFn("call-1", "boom"));
 
-        drive(h, "run a failing tool");
+        h.prompt("run a failing tool");
 
         var lines = readLines(tracesDir);
         assertThat(lines.stream().anyMatch(n -> "counter".equals(n.get("kind").asText())

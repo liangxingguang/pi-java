@@ -83,7 +83,7 @@ class QueueRecordEmissionTest {
         return AgentHarness.create(new HarnessConfig(
             sf, MODEL, ModelThinkingLevel.off(), "",
             Set.of(), 200_000, registry, null, null,
-            DriveMode.MANUAL, null, Map.of(),
+            null, Map.of(),
             com.pijava.ai.http.RetryPolicy.defaultPolicy(),
             com.pijava.telemetry.NoopTelemetryContext.INSTANCE,
             com.pijava.ai.thinking.ThinkingLevelMap.empty(),
@@ -97,13 +97,6 @@ class QueueRecordEmissionTest {
 
     private static List<LaneRecord> ofType(AgentHarness h, String lane, Class<?> type) {
         return h.snapshot(lane).records().stream().filter(type::isInstance).toList();
-    }
-
-    private static void drive(AgentHarness h, String lane) {
-        var action = h.peekAction(lane);
-        while (action != null) {
-            action = h.executeAction(lane, action);
-        }
     }
 
     private static List<String> userText(AgentHarness h, String lane) {
@@ -161,7 +154,8 @@ class QueueRecordEmissionTest {
         var h = harness();
         h.followUp("default", "queued");
 
-        drive(h, "default");
+        // 队列只在运行内被 drain：先起一轮运行（turn 1 用完之后才轮到 follow-up）。
+        h.prompt("go");
 
         assertThat(userText(h, "default")).contains("queued");
         var consumed = ofType(h, "default", LaneRecord.QueueConsumed.class);
@@ -173,38 +167,24 @@ class QueueRecordEmissionTest {
     }
 
     @Test
-    void drainingNextRunEmitsQueueConsumedWithNextRunKind() {
-        var h = harness();
-        h.nextRun("default", "queued");
-
-        drive(h, "default");
-
-        // Regression: the nextRun drain used to be labelled "followUp".
-        var consumed = ofType(h, "default", LaneRecord.QueueConsumed.class);
-        assertThat(consumed).hasSize(1);
-        assertThat(((LaneRecord.QueueConsumed) consumed.get(0)).queue())
-            .isEqualTo(QueueKind.NEXT_RUN);
-    }
-
-    @Test
-    void midRunSteerInjectionEmitsQueueConsumed() {
+    void midRunSteerInjectionEmitsQueueConsumed() throws Exception {
         var registry = new ToolRegistry(null);
         registry.register(echoTool());
         var h = harness(toolUseThenStopStreamFn("echo"), registry);
 
-        // Drive until the tool call is the pending action: the next peek runs
-        // in the assistant phase with no pending tool calls, which is where
-        // queued steering is injected (bypassing ConsumeQueueItem).
-        var action = h.run("default", "first prompt");
-        while (action != null && !(action instanceof Action.ExecuteTool)) {
-            action = h.executeAction("default", action);
-        }
-        assertThat(action).isInstanceOf(Action.ExecuteTool.class);
-
-        h.steer("default", "steer mid-run");
-        var next = action;
-        while (next != null) {
-            next = h.executeAction("default", next);
+        // 运行中途注入 steer：流事件监听器在运行线程上被调用，此时工具调用尚未收尾，
+        // 于是它走的是「轮内注入」那条路径（旧的 ConsumeQueueItem 旁路），
+        // 而不是运行起手时的那次 steering 轮询。
+        var steered = new java.util.concurrent.atomic.AtomicBoolean();
+        var registration = h.onStreamEvent(e -> {
+            if (e instanceof StreamEvent.TextEnd && steered.compareAndSet(false, true)) {
+                h.steer("default", "steer mid-run");
+            }
+        });
+        try {
+            h.prompt("first prompt");
+        } finally {
+            registration.close();
         }
 
         assertThat(userText(h, "default")).contains("steer mid-run");
@@ -218,9 +198,9 @@ class QueueRecordEmissionTest {
     void consumedRecordsSurviveAcrossRuns() {
         var h = harness();
         h.followUp("default", "one");
-        drive(h, "default");
+        h.prompt("run one");
         h.followUp("default", "two");
-        drive(h, "default");
+        h.prompt("run two");
 
         // Append-only log (docs/21 D6): both runs' queue lifecycle stays visible.
         assertThat(ofType(h, "default", LaneRecord.QueueEnqueued.class)).hasSize(2);

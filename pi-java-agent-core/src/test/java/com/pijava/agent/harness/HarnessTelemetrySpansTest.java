@@ -63,17 +63,13 @@ class HarnessTelemetrySpansTest {
         var h = AgentHarness.create(new HarnessConfig(
                 streamFn("assistant reply"), MODEL, ModelThinkingLevel.off(), "",
                 Set.of(), 200_000, null, null, null,
-                DriveMode.MANUAL, null, java.util.Map.of(),
+            null, java.util.Map.of(),
                 com.pijava.ai.http.RetryPolicy.defaultPolicy(),
                 telemetry, com.pijava.ai.thinking.ThinkingLevelMap.empty(),
                 QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),
                 event -> { }));
 
-        h.run("default", "hello");
-        var action = h.peekAction("default");
-        while (action != null) {
-            action = h.executeAction("default", action);
-        }
+        h.prompt("hello");
 
         var lines = readLines(tracesDir);
         var runStarts = lines.stream()
@@ -125,17 +121,13 @@ class HarnessTelemetrySpansTest {
         var h = AgentHarness.create(new HarnessConfig(
                 streamFn("assistant reply"), MODEL, ModelThinkingLevel.off(), "",
                 Set.of(), 200_000, null, null, null,
-                DriveMode.MANUAL, null, java.util.Map.of(),
+            null, java.util.Map.of(),
                 com.pijava.ai.http.RetryPolicy.defaultPolicy(),
                 telemetry, com.pijava.ai.thinking.ThinkingLevelMap.empty(),
                 QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),
                 event -> { }));
 
-        h.run("default", "hello");
-        var action = h.peekAction("default");
-        while (action != null) {
-            action = h.executeAction("default", action);
-        }
+        h.prompt("hello");
 
         var lane = h.snapshot("default");
         var attempts = lane.records().stream()

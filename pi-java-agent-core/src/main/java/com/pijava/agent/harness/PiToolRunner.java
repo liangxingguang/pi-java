@@ -38,11 +38,26 @@ import com.pijava.ai.message.Message;
  */
 public final class PiToolRunner implements PiLoop.ToolRunner {
 
+    /**
+     * 工具执行期间的观测点（**pi-java 可观测性层，pi 无对应物**）。
+     *
+     * <p>它存在是因为「被 {@code before_tool} 拒绝」与「工具自己抛错」在 pi 的
+     * {@code ToolResultMessage} 上都只是 {@code isError = true}，
+     * {@code tool.execute} 跨度却要区分二者。放在这里而不是
+     * {@link PiLoop.ToolOutcome} 上，是为了让 pi 的端口类型保持 1:1。</p>
+     */
+    @FunctionalInterface
+    public interface ToolObserver {
+        /** {@code allowed=false} 表示该校验/拒绝分支没有执行工具。 */
+        void decided(String toolCallId, boolean allowed);
+    }
+
     private final String laneName;
     private final ToolRegistry registry;
     private final HookSystem hooks;
     private final ToolContext toolContext;
     private final AbortSignal signal;
+    private final ToolObserver observer;
 
     /**
      * @param laneName    车道名（传给钩子；pi 的钩子事件带 {@code lane}）
@@ -50,14 +65,16 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
      * @param hooks       钩子系统，可为 {@code null}（无钩子时跳过 before/after_tool）
      * @param toolContext 工具上下文（工作目录、shell、文件系统）
      * @param signal      中止信号，可为 {@code null}
+     * @param observer    观测点，可为 {@code null}
      */
     public PiToolRunner(String laneName, ToolRegistry registry, HookSystem hooks,
-                        ToolContext toolContext, AbortSignal signal) {
+                        ToolContext toolContext, AbortSignal signal, ToolObserver observer) {
         this.laneName = laneName;
         this.registry = registry;
         this.hooks = hooks;
         this.toolContext = toolContext;
         this.signal = signal;
+        this.observer = observer;
     }
 
     @Override
@@ -65,8 +82,10 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
         var decision = hooks == null ? null : hooks.fireBeforeTool(laneName,
             new ToolCallContext(laneName, call.toolCallId(), call.toolName(), call.args()));
         if (decision != null && !decision.allowed()) {
+            notify(call.toolCallId(), false);
             return errorOutcome(call, denyReason(decision), decision.terminate());
         }
+        notify(call.toolCallId(), true);
         var args = decision != null && decision.arguments() != null
             ? decision.arguments() : call.args();
         try {
@@ -77,6 +96,12 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
             return toOutcome(call, finalized != null ? finalized : result, false);
         } catch (Exception e) {
             return errorOutcome(call, messageOf(e), false);
+        }
+    }
+
+    private void notify(String toolCallId, boolean allowed) {
+        if (observer != null) {
+            observer.decided(toolCallId, allowed);
         }
     }
 

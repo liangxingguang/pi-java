@@ -39,7 +39,7 @@ class CrossTurnContextTest {
         return AgentHarness.create(new HarnessConfig(
             sf, MODEL, ModelThinkingLevel.off(), "",
             Set.of(), 200_000, null, null, null,
-            DriveMode.MANUAL, null, java.util.Map.of(),
+            null, java.util.Map.of(),
             com.pijava.ai.http.RetryPolicy.defaultPolicy(),
             com.pijava.telemetry.NoopTelemetryContext.INSTANCE,
             com.pijava.ai.thinking.ThinkingLevelMap.empty(),
@@ -47,22 +47,15 @@ class CrossTurnContextTest {
             event -> { }));
     }
 
-    private static void drive(AgentHarness h) {
-        var action = h.peekAction();
-        while (action != null) { action = h.executeAction(action); }
-    }
-
     @Test
     void secondRunSeesFirstTurnMessages() {
         var captured = new AtomicReference<List<Message>>();
         var h = harness(captured);
 
-        h.run("turn one");
-        drive(h);
+        h.prompt("turn one");
         List<Message> firstCall = captured.get();
 
-        h.run("turn two");
-        drive(h);
+        h.prompt("turn two");
         List<Message> secondCall = captured.get();
 
         assertThat(firstCall).hasSize(1);
@@ -80,12 +73,10 @@ class CrossTurnContextTest {
     void resetStillClearsContext() {
         var captured = new AtomicReference<List<Message>>();
         var h = harness(captured);
-        h.run("before reset");
-        drive(h);
+        h.prompt("before reset");
 
         h.reset("default");
-        h.run("after reset");
-        drive(h);
+        h.prompt("after reset");
 
         assertThat(captured.get()).hasSize(1);
         List<String> texts = captured.get().stream()
@@ -116,8 +107,7 @@ class CrossTurnContextTest {
                         List.of(new ContentBlock.TextContent("partial text")), stopReason, null),
                     null)));
 
-            h.run("next");
-            drive(h);
+            h.prompt("next");
 
             var texts = captured.get().stream()
                 .flatMap(m -> m.content().stream())
@@ -135,12 +125,10 @@ class CrossTurnContextTest {
     void transcriptGrowsAcrossRuns() {
         var captured = new AtomicReference<List<Message>>();
         var h = harness(captured);
-        h.run("a");
-        drive(h);
+        h.prompt("a");
         int afterFirst = h.snapshot("default").transcript().size();
 
-        h.run("b");
-        drive(h);
+        h.prompt("b");
 
         var entries = h.snapshot("default").transcript();
         assertThat(entries.size()).isGreaterThan(afterFirst);

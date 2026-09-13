@@ -142,25 +142,36 @@ class SessionResumeFoldTest {
             // Idle, not checkpoint: the crash-opened operation was closed.
             assertThat(resumed.harness().snapshot(LANE).operation()).isNull();
 
-            // A fresh run may now open its own operation; the flush on close
-            // writes both the settlement and the new operation.
-            resumed.harness().run(LANE, "next prompt");
+            // A fresh run may now open its own operation. `prompt` is blocking,
+            // so it runs the whole turn: the new operation is opened and closed
+            // by its own finish, and the flush on close writes both records.
+            resumed.harness().prompt(LANE, "next prompt", List.of());
         } finally {
             resumed.close();
         }
 
-        var open = openOperations(root);
-        assertThat(open).hasSize(1);
-        assertThat(open.get(0).id()).isNotEqualTo("run-crashed");
+        // Nothing left open — that is exactly the predicate storage rejects.
+        assertThat(openOperations(root)).isEmpty();
+
+        var started = recordsFrom(root).stream()
+            .filter(LaneRecord.OperationStarted.class::isInstance)
+            .map(LaneRecord.OperationStarted.class::cast)
+            .toList();
+        assertThat(started).hasSize(2);            // the crashed one + this run
+        assertThat(started.get(1).id()).isNotEqualTo("run-crashed");
 
         var settlement = recordsFrom(root).stream()
             .filter(LaneRecord.OperationFinished.class::isInstance)
             .map(LaneRecord.OperationFinished.class::cast)
             .toList();
-        assertThat(settlement).hasSize(1);
-        assertThat(settlement.get(0).runId()).isEqualTo("run-crashed");
+        var crash = settlement.stream()
+            .filter(r -> "run-crashed".equals(r.runId())).findFirst().orElseThrow();
         // A process dying is a stop, not a failure: FAILED would fault the lane.
-        assertThat(settlement.get(0).outcome()).isEqualTo(OperationOutcome.ABORTED);
+        assertThat(crash.outcome()).isEqualTo(OperationOutcome.ABORTED);
+        // Every opened operation is closed by the run that opened it.
+        assertThat(settlement.stream().map(LaneRecord.OperationFinished::runId).toList())
+            .containsExactlyInAnyOrderElementsOf(
+                started.stream().map(LaneRecord.OperationStarted::id).toList());
     }
 
     /** Re-open the persisted session to inspect what was actually written. */

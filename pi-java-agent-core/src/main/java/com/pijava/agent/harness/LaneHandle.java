@@ -1,5 +1,7 @@
 package com.pijava.agent.harness;
 
+import java.util.List;
+
 /**
  * Handle to a specific lane. Delegates to {@link AgentHarness} with lane name context.
  * All operations are scoped to this lane.
@@ -18,9 +20,9 @@ public class LaneHandle {
         return laneName;
     }
 
-    /** Start a new run on this lane. */
-    public Action run(String prompt) {
-        return harness.run(laneName, prompt);
+    /** Run a prompt to completion on this lane (blocking). */
+    public PiLaneEngine.RunOutcome run(String prompt) {
+        return harness.prompt(laneName, prompt, List.of(), null);
     }
 
     /** Abort the current run on this lane. */

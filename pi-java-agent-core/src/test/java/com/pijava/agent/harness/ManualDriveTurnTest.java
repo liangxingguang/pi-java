@@ -14,9 +14,9 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Manual-drive single-turn semantics (previously covered by the removed
- * AgentLoop facade): drive peekAction/executeAction to completion, then read
- * the final assistant message.
+ * Single-turn semantics through the host's blocking {@link AgentHarness#prompt}:
+ * one prompt runs the loop to completion, then the final assistant message is read
+ * back.
  */
 class ManualDriveTurnTest {
 
@@ -26,19 +26,12 @@ class ManualDriveTurnTest {
         return AgentHarness.create(new HarnessConfig(
             sf, MODEL, ModelThinkingLevel.off(), "",
             Set.of(), 200_000, null, null, null,
-            DriveMode.MANUAL, null, java.util.Map.of(),
+            null, java.util.Map.of(),
             com.pijava.ai.http.RetryPolicy.defaultPolicy(),
             com.pijava.telemetry.NoopTelemetryContext.INSTANCE,
             com.pijava.ai.thinking.ThinkingLevelMap.empty(),
             QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),
             event -> { }));
-    }
-
-    private static void drive(AgentHarness h) {
-        var action = h.peekAction();
-        while (action != null) {
-            action = h.executeAction(action);
-        }
     }
 
     @Test
@@ -56,8 +49,7 @@ class ManualDriveTurnTest {
                 partial.withStopReason(null)),
             new StreamEvent.StreamDone("stop", null, partial))));
 
-        h.run("How are you?");
-        drive(h);
+        h.prompt("How are you?");
 
         var result = h.lastAssistantMessage();
         assertThat(result).isNotNull();
@@ -75,8 +67,7 @@ class ManualDriveTurnTest {
             new StreamEvent.StreamError("error",
                 new RuntimeException("boom"), partial))));
 
-        h.run("test");
-        drive(h);
+        h.prompt("test");
 
         var result = h.lastAssistantMessage();
         assertThat(result).isNotNull();

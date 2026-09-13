@@ -13,7 +13,7 @@ import com.pijava.agent.record.QueueKind;
  * Declares the steer/followUp/nextRun queue scheduling API.
  *
  * <p>Phase 3: implements enqueueing, cancellation, and mode-aware draining.
- * Queue consumption happens in {@link ActionExecutor} (steer at the next
+ * Queue consumption happens in {@link PiLaneEngine} (steer at the next
  * assistant round, followUp when a run finishes, nextRun when the lane is
  * idle). Package-private — only {@code AgentHarness} delegates to it.</p>
  */
@@ -91,7 +91,7 @@ final class QueueManager {
      * docs/30), but the log is still an audit trail worth keeping honest.</p>
      */
     private static String currentRunId(LaneState lane) {
-        return lane.phase instanceof RunPhase.Idle ? null : lane.runId;
+        return lane.isRunning() ? lane.runId : null;
     }
 
     /** Cancel queued items of the given type. Phase 3. */

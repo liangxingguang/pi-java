@@ -35,7 +35,7 @@ class CompactionTest {
         return AgentHarness.create(new HarnessConfig(
                 sf, MODEL, ModelThinkingLevel.off(), "",
                 Set.of(), 200_000, null, null, null,
-                DriveMode.MANUAL, null, java.util.Map.of(),
+            null, java.util.Map.of(),
                 com.pijava.ai.http.RetryPolicy.defaultPolicy(),
                 com.pijava.telemetry.NoopTelemetryContext.INSTANCE, com.pijava.ai.thinking.ThinkingLevelMap.empty(),
                 QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),
@@ -90,11 +90,7 @@ class CompactionTest {
     @Test
     void harnessCompactReducesPopulatedLane() {
         var h = harness();
-        h.run("hello");
-        var action = h.peekAction();
-        while (action != null) {
-            action = h.executeAction(action);
-        }
+        h.prompt("hello");
         int before = h.snapshot("default").transcript().size();
         assertThat(before).isGreaterThan(1);
 
@@ -106,11 +102,7 @@ class CompactionTest {
     @Test
     void beforeCompactionHookCanOverridePlan() {
         var h = harness();
-        h.run("hello");
-        var action = h.peekAction();
-        while (action != null) {
-            action = h.executeAction(action);
-        }
+        h.prompt("hello");
 
         var keep = message("assistant", "kept by hook");
         h.hookSystem().onBeforeCompaction("default",

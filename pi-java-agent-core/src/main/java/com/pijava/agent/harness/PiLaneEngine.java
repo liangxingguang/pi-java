@@ -26,8 +26,8 @@ import com.pijava.ai.thinking.ModelThinkingLevel;
  * 自动压缩、记录日志都绑定 {@link LaneState}（包内可见），会话层拿不到。因此引擎留在这里，
  * 会话层只经由 {@link PiLoop.Sink} 收事件。</p>
  *
- * <p><b>复用什么</b>：车道起手直接调 {@link ActionExecutor#run}，终局收口调
- * {@link ActionExecutor#finishRun} —— 起手的 {@code runId}／{@code abortSignal}／
+ * <p><b>复用什么</b>：车道起手直接调 {@link RunLifecycle#startRun}，终局收口调
+ * {@link RunLifecycle#finishRun} —— 起手的 {@code runId}／{@code ActiveRun}／
  * {@code before_run} 钩子／用户 entry／{@code OperationStarted} 记录，以及收口的
  * {@code OperationFinished}／{@code before_run_end}／run span，都与驱动循环无关，
  * 重写只会引入漂移。</p>
@@ -42,13 +42,13 @@ import com.pijava.ai.thinking.ModelThinkingLevel;
 public final class PiLaneEngine {
 
     private final ExecutionContext ctx;
-    private final ActionExecutor actionExecutor;
+    private final RunLifecycle lifecycle;
     private final ContextAssembler assembler;
     private final CompactionExecutor compactions;
 
-    PiLaneEngine(ExecutionContext ctx, ActionExecutor actionExecutor) {
+    PiLaneEngine(ExecutionContext ctx, RunLifecycle lifecycle) {
         this.ctx = ctx;
-        this.actionExecutor = actionExecutor;
+        this.lifecycle = lifecycle;
         this.assembler = new ContextAssembler(ctx);
         this.compactions = new CompactionExecutor(ctx);
     }
@@ -75,20 +75,21 @@ public final class PiLaneEngine {
     public RunOutcome run(String laneName, String prompt,
                           List<PromptImage> images, PiLoop.Sink downstream) {
         var lane = ctx.requireLane(laneName);
-        if (!(lane.phase instanceof RunPhase.Idle)) {
+        // 起手前先判空闲，避免起手失败时留下一次多记的 turn 计数。
+        if (lane.isRunning()) {
             throw new IllegalStateException("Cannot start run: lane " + laneName + " is not idle");
         }
-        // 旧路径由 AgentHarness.run 记这个计数；引擎直接调 actionExecutor，会绕过那层。
-        // 只在**新起**运行时记，与 AgentHarness.run / continueRun 的分工一致。
+        // 「新起一次运行」的计数点 —— 全仓唯一，两个入口（prompt / continueRun）里只有
+        // 前者计数。旧路径由 AgentHarness.run 记，与新驱动分工一致。
         ctx.telemetry().incrementCounter("harness.turn", 1);
-        actionExecutor.run(laneName, prompt, images == null ? List.of() : images);
+        var run = lifecycle.startRun(laneName, prompt, images == null ? List.of() : images);
         // 起手已把用户 entry 写进 transcript；取回**同一个对象**作为 PiLoop 的 prompt，
         // 这样 PiLaneSink 才能按引用抑制重复写入（PiLoop 会为 prompt 发 message_start/end）。
         var promptMessage = lastUserMessage(lane);
         if (promptMessage == null) {
             throw new IllegalStateException("run() did not append a user entry to lane " + laneName);
         }
-        return drive(laneName, List.of(promptMessage), new ArrayList<>(), downstream);
+        return drive(laneName, run, List.of(promptMessage), new ArrayList<>(), downstream);
     }
 
     /**
@@ -97,75 +98,77 @@ public final class PiLaneEngine {
      * @param downstream 会话层接收器，可为 {@code null}
      */
     public RunOutcome continueRun(String laneName, PiLoop.Sink downstream) {
-        actionExecutor.runContinue(laneName);
         var lane = ctx.requireLane(laneName);
-        return drive(laneName, List.of(), transcriptMessages(lane), downstream);
+        var run = lifecycle.startContinue(laneName);
+        return drive(laneName, run, List.of(), transcriptMessages(lane), downstream);
     }
 
     // ═══════════════════════════════════════════════════════════
     // 驱动
     // ═══════════════════════════════════════════════════════════
 
-    private RunOutcome drive(String laneName, List<Message> prompts, List<Message> context,
-                             PiLoop.Sink downstream) {
+    private RunOutcome drive(String laneName, ActiveRun run, List<Message> prompts,
+                             List<Message> context, PiLoop.Sink downstream) {
         var lane = ctx.requireLane(laneName);
         var runId = lane.runId;
-        // 起手时已在转录里的消息：PiLoop 会为它们重发 message_start/end 的，一律不再落盘。
-        Set<Message> present = Collections.newSetFromMap(new IdentityHashMap<>());
-        present.addAll(transcriptMessages(lane));
-        var sink = new PiLaneSink(ctx, laneName, present, downstream);
+        boolean settled = false;
+        try {
+            // 起手时已在转录里的消息：PiLoop 会为它们重发 message_start/end 的，一律不再落盘。
+            Set<Message> present = Collections.newSetFromMap(new IdentityHashMap<>());
+            present.addAll(transcriptMessages(lane));
+            var sink = new PiLaneSink(ctx, laneName, present, downstream);
 
-        var stop = new boolean[1];
-        var config = configFor(laneName, lane, sink, stop);
-        // 系统提示与工具在 run 起点装进 Context（pi 的 AgentContext）：
-        // transformContext 只改消息，够不着这两样（pi 的钩子签名是 (messages) => messages）。
-        var systemPrompt = assembler.buildSystemPrompt(lane);
-        sink.systemPrompt(systemPrompt);
-        var runContext = new Context(systemPrompt, context, toolDefs(lane));
-        if (prompts.isEmpty()) {
-            PiLoop.continueRun(runContext, config, sink);
-        } else {
-            PiLoop.run(prompts, runContext, config, sink);
+            var config = configFor(laneName, lane, sink);
+            // 系统提示与工具在 run 起点装进 Context（pi 的 AgentContext）：
+            // transformContext 只改消息，够不着这两样（pi 的钩子签名是 (messages) => messages）。
+            var systemPrompt = assembler.buildSystemPrompt(lane);
+            sink.systemPrompt(systemPrompt);
+            var runContext = new Context(systemPrompt, context, toolDefs(lane));
+            if (prompts.isEmpty()) {
+                PiLoop.continueRun(runContext, config, sink);
+            } else {
+                PiLoop.run(prompts, runContext, config, sink);
+            }
+
+            lifecycle.finishRun(laneName, HarnessUtils.determineOutcome(lane));
+            settled = true;
+            return new RunOutcome(runId, List.copyOf(lane.transcript));
+        } finally {
+            // 驱动**抛出**时同样要收口：否则 activeRun 永远挂着，车道再也起不了新运行，
+            // waitForIdle 也会永远等下去。异常路径按 error 结算，原异常照常向上抛。
+            if (!settled) {
+                lifecycle.finishRun(laneName, "error");
+            }
+            run.done().complete(null);
         }
-
-        var outcome = HarnessUtils.determineOutcome(lane);
-        actionExecutor.finishRun(laneName, outcome, stop[0]);
-        // 收口后发布一次：旧路径由 AgentHarness.executeAction 在末尾的 action 后发布，
-        // 新驱动只调 actionExecutor，不会经过 AgentHarness 的那层包装。
-        ctx.publishState(laneName);
-        return new RunOutcome(runId, List.copyOf(lane.transcript));
     }
 
     // ═══════════════════════════════════════════════════════════
     // 配置
     // ═══════════════════════════════════════════════════════════
 
-    private PiLoop.Config configFor(String laneName, LaneState lane, PiLaneSink sink,
-                                    boolean[] stop) {
+    private PiLoop.Config configFor(String laneName, LaneState lane, PiLaneSink sink) {
+        var signal = lane.abortSignal();
         var toolRunner = new PiToolRunner(laneName, ctx.toolRegistry(), ctx.hookSystem(),
-            ctx.toolContext(), lane.abortSignal);
+            ctx.toolContext(), signal, sink::noteToolAllowed);
         return new PiLoop.Config(
             ctx.model().get(),
             ctx.thinkingLevel().get(),
             ctx.thinkingLevelMap(),
             ctx.toolExecution().get(),
             call -> {
-                sink.noteToolStart(call.toolCallId());
+                sink.noteToolStart(call);
                 var outcome = toolRunner.run(call);
                 sink.noteToolTerminate(call.toolCallId(), outcome.terminate());
                 return outcome;
             },
             ctx.streamFn(),
-            lane.abortSignal,
+            signal,
             () -> drainSteer(laneName),
             () -> drainFollowUp(laneName),
             ignored -> assemble(laneName, lane, sink),
             next -> prepareNextTurn(laneName, lane),
-            next -> {
-                boolean stopping = fireShouldStopAfterTurn(laneName, lane);
-                stop[0] |= stopping;
-                return stopping;
-            },
+            next -> fireShouldStopAfterTurn(laneName, lane),
             // 原始帧旁路：喂既有的 harness 广播链，会话层的记账代码因此无需改造。
             event -> {
                 sink.noteStreamEvent(event);
@@ -210,7 +213,7 @@ public final class PiLaneEngine {
         return new PiLoop.NextTurnUpdate(
             update.model(),
             update.thinkingLevel() == null ? null
-                : ModelThinkingLevel.of(AgentHarness.parseThinkingLabel(update.thinkingLevel())));
+                : ModelThinkingLevel.of(HarnessState.parseThinkingLabel(update.thinkingLevel())));
     }
 
     private boolean fireShouldStopAfterTurn(String laneName, LaneState lane) {
@@ -257,6 +260,15 @@ public final class PiLaneEngine {
             items.stream().map(HarnessUtils::provisionedQueueTarget).toList()));
     }
 
+    /**
+     * 取走的队列项 → 注入的用户消息，**一项一条**。
+     *
+     * <p>pi 的 {@code PendingMessageQueue.drain()} 在 {@code "all"} 模式下原样返回全部
+     * 消息（{@code agent.ts:143-148}），循环再逐条 {@code push} 并各自发
+     * {@code message_start}/{@code message_end}（{@code agent-loop.ts:200-208}）
+     * —— **没有合并**。旧的 {@code ActionExecutor} 把整批拼成一条带空行分隔的用户消息，
+     * 那是 pi-java 自己的构造，本次对齐予以纠正。</p>
+     */
     private static List<Message> toMessages(List<LaneInfo.QueuedItem> items) {
         return items.stream()
             .map(i -> HarnessUtils.buildUserMessage(i.prompt(), i.images()))

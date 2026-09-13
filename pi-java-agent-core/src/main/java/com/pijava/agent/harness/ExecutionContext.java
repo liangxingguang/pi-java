@@ -11,7 +11,6 @@ import com.pijava.agent.hook.HookSystem;
 import com.pijava.agent.skill.SkillManager;
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ToolContext;
-import com.pijava.agent.tool.ToolExecutor;
 import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
@@ -20,7 +19,9 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
 import com.pijava.telemetry.TelemetryContext;
 
 /**
- * Bundles harness-level dependencies for {@link ActionExecutor}.
+ * Bundles harness-level dependencies for the run machinery
+ * ({@link RunLifecycle} / {@link PiLaneEngine} / {@link PiLaneSink} /
+ * {@link ContextAssembler} / {@link CompactionExecutor}).
  *
  * <p>Package-private — only {@code AgentHarness} creates this.
  * Introduced in Phase 2c to reduce constructor parameter count.</p>
@@ -39,7 +40,6 @@ record ExecutionContext(
     int maxInputTokens,
     ToolRegistry toolRegistry,
     ToolContext toolContext,
-    ToolExecutor toolExecutor,
     SkillManager skillManager,
     HookSystem hookSystem,
     ConcurrentMap<String, LaneState> lanes,

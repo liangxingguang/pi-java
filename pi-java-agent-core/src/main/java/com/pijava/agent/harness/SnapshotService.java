@@ -70,12 +70,10 @@ final class SnapshotService {
     }
 
     private LaneSnapshot buildLaneSnapshot(LaneState lane) {
-        LaneInfo.OperationInfo op = null;
-        if (!(lane.phase instanceof RunPhase.Idle)) {
-            op = new LaneInfo.OperationInfo(
-                lane.runId, "run",
-                lane.phase instanceof RunPhase.Checkpoint ? "suspended" : "running");
-        }
+        // 「是否在跑」由 activeRun 的有无表达（pi this.activeRun !== undefined）。
+        LaneInfo.OperationInfo op = lane.isRunning()
+            ? new LaneInfo.OperationInfo(lane.runId, "run", "running")
+            : null;
         boolean faulted = lane.records.stream()
             .anyMatch(r -> r instanceof LaneRecord.OperationFinished f
                 && f.outcome() == com.pijava.agent.record.OperationOutcome.FAILED);
@@ -86,7 +84,6 @@ final class SnapshotService {
             lane.lastEntry() != null ? lane.lastEntry().id() : null,
             op,
             lane.queueSnapshot(),
-            List.copyOf(lane.pendingWrites),
             faulted
         );
     }
@@ -98,7 +95,7 @@ final class SnapshotService {
                 null))
             .toList();
         String phase = lanes.values().stream()
-            .anyMatch(l -> !(l.phase instanceof RunPhase.Idle)) ? "running" : "idle";
+            .anyMatch(LaneState::isRunning) ? "running" : "idle";
         return new SessionSnapshot(
             "session",
             modelName.get(),

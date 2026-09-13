@@ -22,7 +22,7 @@ import org.slf4j.LoggerFactory;
  * Compact a lane transcript: {@code before_compaction} hook, compaction span,
  * and the {@link Entry.Compaction} marker entry with the retained tail.
  *
- * <p>Extracted from {@link ActionExecutor} in the agent-loop L1 cleanup
+ * <p>Extracted from the former step-chain executor in the agent-loop L1 cleanup
  * (docs/20 §8) to keep files under the 500-line limit.</p>
  */
 final class CompactionExecutor {
@@ -112,7 +112,7 @@ final class CompactionExecutor {
     private void emitCompactionRecords(String laneName, LaneState lane, String reason,
                                        String resultEntryId, long durationMs) {
         String entryId = resultEntryId == null ? "" : resultEntryId;
-        if (!(lane.phase instanceof RunPhase.Idle)) {
+        if (lane.isRunning()) {
             lane.records.add(compactionAttempt(laneName, lane, lane.runId, reason, entryId, durationMs));
             return;
         }

@@ -16,8 +16,8 @@ import com.pijava.ai.thinking.ModelThinkingLevel;
  * (model / thinking-level switch entries), then build the message list —
  * system prompt (skills + tools) plus compaction-aware context entries.
  *
- * <p>Extracted from {@link ActionExecutor} in the agent-loop L1 cleanup to
- * keep files under the 500-line limit.</p>
+ * <p>Extracted from the former step-chain executor in the agent-loop L1 cleanup
+ * to keep files under the 500-line limit.</p>
  */
 final class ContextAssembler {
 
@@ -42,7 +42,6 @@ final class ContextAssembler {
                     HarnessUtils.lastEntryId(lane), Instant.now(),
                     upd.model().provider(), upd.model().modelName());
                 lane.transcript.add(e);
-                lane.pendingWrites.add(e);
                 // Applied mid-run by a prepare_next_turn hook ⇒ deferred.
                 HarnessUtils.recordDeferredWrite(lane, e);
             }
@@ -61,7 +60,6 @@ final class ContextAssembler {
                 var e = new Entry.ThinkingLevelChange(UUID.randomUUID().toString(), lane.nextSeq(),
                     HarnessUtils.lastEntryId(lane), Instant.now(), upd.thinkingLevel());
                 lane.transcript.add(e);
-                lane.pendingWrites.add(e);
                 // Applied mid-run by a prepare_next_turn hook ⇒ deferred.
                 HarnessUtils.recordDeferredWrite(lane, e);
             }

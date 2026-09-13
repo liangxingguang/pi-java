@@ -2,6 +2,9 @@ package com.pijava.agent.harness;
 
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.ai.api.StreamIterator;
@@ -48,67 +51,106 @@ class AgentHarnessTest {
         return AgentHarness.create(new HarnessConfig(
                 sf, MODEL, ModelThinkingLevel.off(), "",
                 Set.of(), 200_000, null, null, null,
-                DriveMode.MANUAL, null, java.util.Map.of(), com.pijava.ai.http.RetryPolicy.defaultPolicy(), com.pijava.telemetry.NoopTelemetryContext.INSTANCE, com.pijava.ai.thinking.ThinkingLevelMap.empty(), QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(), event -> { }));
+                null, java.util.Map.of(), com.pijava.ai.http.RetryPolicy.defaultPolicy(), com.pijava.telemetry.NoopTelemetryContext.INSTANCE, com.pijava.ai.thinking.ThinkingLevelMap.empty(), QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(), event -> { }));
     }
 
-    // ── State machine tests ─────────────────────────────────
-
-    @Test
-    void peekActionWhenIdleReturnsNull() {
-        var harness = createHarness(textStreamFn("hello"));
-        assertThat(harness.peekAction()).isNull();
-    }
-
-    @Test
-    void runTransitionsToAssistant() {
-        var harness = createHarness(textStreamFn("hello"));
-        var firstAction = harness.run("hello");
-        assertThat(firstAction).isNotNull();
-        var action = harness.peekAction();
-        while (action instanceof Action.ApplyPendingWrite) {
-            action = harness.executeAction(action);
-        }
-        assertThat(action).isInstanceOf(Action.StreamAssistant.class);
-    }
-
-    @Test
-    void runWhenNotIdleThrows() {
-        var harness = createHarness(textStreamFn("hello"));
-        harness.run("first");
-        assertThatThrownBy(() -> harness.run("second"))
-                .isInstanceOf(IllegalStateException.class);
-    }
+    // ── Turn semantics ───────────────────────────────────────
 
     @Test
     void fullRunCycleReturnsResponse() {
         var harness = createHarness(textStreamFn("Hi there!"));
-        harness.run("Hello");
-        assertThat(harness.peekAction()).isNotNull();
-
-        var action = harness.peekAction();
-        while (action != null) {
-            action = harness.executeAction(action);
-        }
+        harness.prompt("Hello");
 
         var result = harness.lastAssistantMessage();
         assertThat(result).isNotNull();
         assertThat(result.content()).hasSize(1);
         assertThat(((ContentBlock.TextContent) result.content().get(0)).text())
                 .isEqualTo("Hi there!");
+        // A finished run leaves the lane idle (pi: activeRun cleared on finish).
+        assertThat(harness.snapshot("default").operation()).isNull();
     }
 
     @Test
     void errorStreamReturnsErrorPartial() {
         var harness = createHarness(errorStreamFn("connection refused"));
-        harness.run("test");
-        var action = harness.peekAction();
-        while (action != null) {
-            action = harness.executeAction(action);
-        }
+        harness.prompt("test");
 
         var result = harness.lastAssistantMessage();
         assertThat(result).isNotNull();
         assertThat(result.stopReason()).isEqualTo("error");
+    }
+
+    /**
+     * pi's {@code Agent.prompt} refuses a lane that is already processing
+     * ("Agent is already processing."). The run has to be in flight on another
+     * thread for that to be observable now — {@code prompt} is blocking, so a
+     * single-threaded caller can never race itself.
+     */
+    @Test
+    void promptWhenNotIdleThrows() throws Exception {
+        var inStream = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var inner = textStreamFn("ok");
+        var harness = createHarness((model, context, options) -> {
+            inStream.countDown();
+            try {
+                release.await(10, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return inner.stream(model, context, options);
+        });
+
+        var failure = new AtomicReference<Throwable>();
+        var driver = new Thread(() -> {
+            try {
+                harness.prompt("first");
+            } catch (Throwable t) {
+                failure.set(t);
+            }
+        });
+        driver.start();
+        assertThat(inStream.await(10, TimeUnit.SECONDS)).isTrue();
+
+        assertThatThrownBy(() -> harness.prompt("second"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("not idle");
+
+        release.countDown();
+        driver.join(10_000);
+        assertThat(failure.get()).isNull();
+    }
+
+    /** {@code waitForIdle} blocks until the in-flight run settles, then returns. */
+    @Test
+    void waitForIdleReturnsAfterTheRunSettles() throws Exception {
+        var inStream = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var inner = textStreamFn("ok");
+        var harness = createHarness((model, context, options) -> {
+            inStream.countDown();
+            try {
+                release.await(10, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return inner.stream(model, context, options);
+        });
+
+        var driver = new Thread(() -> harness.prompt("go"));
+        driver.start();
+        assertThat(inStream.await(10, TimeUnit.SECONDS)).isTrue();
+
+        var waiter = new Thread(() -> harness.waitForIdle("default"));
+        waiter.start();
+        // Still running ⇒ the waiter must still be parked.
+        waiter.join(200);
+        assertThat(waiter.isAlive()).isTrue();
+
+        release.countDown();
+        waiter.join(10_000);
+        driver.join(10_000);
+        assertThat(waiter.isAlive()).isFalse();
     }
 
     @Test
@@ -174,30 +216,9 @@ class AgentHarnessTest {
     void laneHandleRunDelegates() {
         var harness = createHarness(textStreamFn("Hi!"));
         var handle = harness.createLane(LaneConfig.of("lane1"));
-        var action = handle.run("hello from lane1");
-        assertThat(action).isNotNull();
-    }
-
-    // ── Phase 2c: Drive mode tests ────────────────────────────
-
-    @Test
-    void driveModeDefaultsToManual() {
-        var harness = createHarness(textStreamFn("ok"));
-        assertThat(harness.drive()).isInstanceOf(DriveMode.Manual.class);
-    }
-
-    @Test
-    void setDriveModeToAutomatic() {
-        var harness = createHarness(textStreamFn("ok"));
-        harness.drive(new DriveMode.Automatic());
-        assertThat(harness.drive()).isInstanceOf(DriveMode.Automatic.class);
-    }
-
-    @Test
-    void runToCompletionThrowsInManualMode() {
-        var harness = createHarness(textStreamFn("ok"));
-        assertThatThrownBy(() -> harness.runToCompletion())
-                .isInstanceOf(IllegalStateException.class);
+        var outcome = handle.run("hello from lane1");
+        assertThat(outcome).isNotNull();
+        assertThat(outcome.transcript()).isNotEmpty();
     }
 
     // ── Phase 2c: Hooks tests ─────────────────────────────────
@@ -207,7 +228,7 @@ class AgentHarnessTest {
         var harness = createHarness(textStreamFn("ok"));
         var fired = new boolean[1];
         harness.hookSystem().onBeforeRun("default", ctx -> fired[0] = true);
-        harness.run("test hook");
+        harness.prompt("test hook");
         assertThat(fired[0]).isTrue();
     }
 
@@ -218,12 +239,7 @@ class AgentHarnessTest {
             throw new RuntimeException("hook exploded");
         });
         // Should not throw — hook errors are non-fatal
-        harness.run("test");
-        // Drive to completion
-        var action = harness.peekAction();
-        while (action != null) {
-            action = harness.executeAction(action);
-        }
+        harness.prompt("test");
         assertThat(harness.lastAssistantMessage()).isNotNull();
     }
 
@@ -232,18 +248,12 @@ class AgentHarnessTest {
         var harness = createHarness(textStreamFn("ok"));
         var fired = new boolean[1];
         var handle = harness.hookSystem().onBeforeRun("default", ctx -> fired[0] = true);
-        harness.run("test"); // this fires the hook → fired[0] = true
+        harness.prompt("test"); // this fires the hook → fired[0] = true
         assertThat(fired[0]).isTrue();
-        try { handle.close(); } catch (Exception ignored) {}
-
-        // Drive first run to completion
-        var action = harness.peekAction();
-        while (action != null) {
-            action = harness.executeAction(action);
-        }
+        try { handle.close(); } catch (Exception ignored) { }
 
         fired[0] = false;
-        harness.run("test2"); // hook is unsubscribed, should not fire
+        harness.prompt("test2"); // hook is unsubscribed, should not fire
         assertThat(fired[0]).isFalse();
     }
 
@@ -253,7 +263,7 @@ class AgentHarnessTest {
     void closePreventsFurtherOperations() {
         var harness = createHarness(textStreamFn("ok"));
         harness.close();
-        assertThatThrownBy(() -> harness.run("test"))
+        assertThatThrownBy(() -> harness.prompt("test"))
                 .isInstanceOf(HarnessClosedException.class);
         assertThatThrownBy(() -> harness.createLane(LaneConfig.of("x")))
                 .isInstanceOf(HarnessClosedException.class);
@@ -306,12 +316,7 @@ class AgentHarnessTest {
         ));
 
         var harness = createHarness(allEventsFn);
-        harness.run("test with all events");
-
-        var action = harness.peekAction();
-        while (action != null) {
-            action = harness.executeAction(action);
-        }
+        harness.prompt("test with all events");
 
         var result = harness.lastAssistantMessage();
         assertThat(result).isNotNull();
@@ -335,12 +340,7 @@ class AgentHarnessTest {
         ));
 
         var harness = createHarness(errorFn);
-        harness.run("trigger error");
-
-        var action = harness.peekAction();
-        while (action != null) {
-            action = harness.executeAction(action);
-        }
+        harness.prompt("trigger error");
 
         var result = harness.lastAssistantMessage();
         assertThat(result).isNotNull();

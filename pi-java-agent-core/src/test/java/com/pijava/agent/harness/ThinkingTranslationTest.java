@@ -41,17 +41,13 @@ class ThinkingTranslationTest {
         var harness = AgentHarness.create(new HarnessConfig(
                 sf, MODEL, new ModelThinkingLevel.Enabled(new ThinkingLevel.High()), "",
                 Set.of(), 200_000, null, null, null,
-                DriveMode.MANUAL, null, Map.of(),
+            null, Map.of(),
                 com.pijava.ai.http.RetryPolicy.defaultPolicy(),
                 com.pijava.telemetry.NoopTelemetryContext.INSTANCE, map,
                 QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),
                 event -> { }));
 
-        harness.run("hello");
-        var action = harness.peekAction();
-        while (action != null) {
-            action = harness.executeAction(action);
-        }
+        harness.prompt("hello");
 
         assertThat(captured.get().thinking().budgetTokens()).hasValue(9999);
     }
@@ -73,18 +69,14 @@ class ThinkingTranslationTest {
         var harness = AgentHarness.create(new HarnessConfig(
                 sf, MODEL, new ModelThinkingLevel.Enabled(new ThinkingLevel.High()), "",
                 Set.of(), 200_000, null, null, null,
-                DriveMode.MANUAL, null, Map.of(),
+            null, Map.of(),
                 com.pijava.ai.http.RetryPolicy.defaultPolicy(),
                 com.pijava.telemetry.NoopTelemetryContext.INSTANCE,
                 ThinkingLevelMap.empty(),
                 QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),
                 event -> { }));
 
-        harness.run("hello");
-        var action = harness.peekAction();
-        while (action != null) {
-            action = harness.executeAction(action);
-        }
+        harness.prompt("hello");
 
         assertThat(captured.get().thinking().enabled()).isFalse();
     }

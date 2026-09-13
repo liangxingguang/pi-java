@@ -1,10 +1,13 @@
 package com.pijava.agent.harness;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.pijava.agent.compaction.CompactionService;
 import com.pijava.agent.context.OverflowDetector;
@@ -42,6 +45,9 @@ import com.pijava.telemetry.TelemetrySpan;
  */
 final class PiLaneSink implements PiLoop.Sink {
 
+    /** 只用来量参数规模的 JSON 序列化器。 */
+    private static final ObjectMapper ARGS_MAPPER = new ObjectMapper();
+
     private final ExecutionContext ctx;
     private final String laneName;
     private final PiLoop.Sink downstream;
@@ -56,9 +62,29 @@ final class PiLaneSink implements PiLoop.Sink {
      */
     private final Set<Message> alreadyPresent;
 
-    /** 本次工具调用的终止标记与起算时刻，由 {@link PiLaneToolRunner} 与事件回填。 */
+    /** 本次工具调用的终止标记与起算时刻，由 {@link PiToolRunner} 回填。 */
     private final Map<String, Boolean> toolTerminate = new HashMap<>();
     private final Map<String, Long> toolStartNanos = new HashMap<>();
+
+    /**
+     * 本次工具调用的 {@code before_tool} 判定（pi-java 可观测性层：被钩子拒绝与
+     * 「工具自己失败」在结果消息上都只是 {@code isError=true}，跨度需要分开）。
+     */
+    private final Map<String, Boolean> toolAllowed = new HashMap<>();
+
+    /** 本次工具调用的 {@code tool.execute} 跨度，在 {@link #noteToolStart} 开、结果消息处关。 */
+    private final Map<String, TelemetrySpan> toolSpans = new HashMap<>();
+
+    /**
+     * 本轮的**工具批次**成员（按 start 顺序）。
+     *
+     * <p>{@code ToolExecutionPipeline} 曾按批次整体处理，所以跨度带 {@code toolIndex} /
+     * {@code batchSize}；pi 的驱动是逐调用经过端口，批次形状只在
+     * {@code PiLoopTools} 里。这里用「助手消息落定后清空」重建同一个批次 ——
+     * pi 的顺序是 message_end → 全部 start → 各自 end，所以一个助手消息之后的全部 start
+     * 恰是同一批。</p>
+     */
+    private final List<String> batchCallIds = new ArrayList<>();
 
     /** 本次请求实际发给 provider 的消息数，由引擎的 {@code transformContext} 回填。 */
     private int assembledMessageCount;
@@ -137,8 +163,7 @@ final class PiLaneSink implements PiLoop.Sink {
      * {@code stopReason}（{@code "error"}），不再单独持有异常对象 —— 溢出检测仍会读
      * stopReason 与 token 数，判据不依赖异常。</p>
      */
-    private void endRequest(LaneState lane, Message.AssistantMessage assistant) {
-        long durationMs = (System.nanoTime() - llmStartNanos) / 1_000_000;
+    private void endRequest(LaneState lane, Message.AssistantMessage assistant, long durationMs) {
         String stop = assistant.stopReason();
         if (llmSpan != null) {
             llmSpan.addAttribute("inputTokens", inputTokens);
@@ -172,14 +197,45 @@ final class PiLaneSink implements PiLoop.Sink {
         }
     }
 
-    /** 由 {@link PiLaneToolRunner} 回填工具调用的起算时刻。 */
-    void noteToolStart(String toolCallId) {
-        toolStartNanos.put(toolCallId, System.nanoTime());
+    /**
+     * 工具调用开始：记起算时刻与批次位置，并打开 {@code tool.execute} 跨度
+     * （嵌套在 {@code harness.run} 之下，与旧路径的跨度形状一致）。
+     */
+    void noteToolStart(PiLoop.ToolCall call) {
+        var callId = call.toolCallId();
+        toolStartNanos.put(callId, System.nanoTime());
+        batchCallIds.add(callId);
+        var parent = laneRunSpanOrRoot();
+        toolSpans.put(callId, parent.openSpan(new SpanOptions("tool.execute", Map.of(
+            "toolCallId", callId,
+            "toolName", call.toolName(),
+            "toolIndex", batchCallIds.size() - 1,
+            "argsChars", safeArgsChars(call.args())))));
     }
 
-    /** 由 {@link PiLaneToolRunner} 回填 {@code terminate}（事件载荷里没有这个字段）。 */
+    /** 跨度的父级：本次运行的 {@code harness.run} 跨度，缺席时退回遥测根。 */
+    private com.pijava.telemetry.TelemetryContext laneRunSpanOrRoot() {
+        var lane = ctx.requireLane(laneName);
+        return lane.runSpan != null ? lane.runSpan : ctx.telemetry();
+    }
+
+    /** 由 {@link PiToolRunner} 回填 {@code terminate}（事件载荷里没有这个字段）。 */
     void noteToolTerminate(String toolCallId, boolean terminate) {
         toolTerminate.put(toolCallId, terminate);
+    }
+
+    /** 由 {@link PiToolRunner} 回填 {@code before_tool} 是否放行。 */
+    void noteToolAllowed(String toolCallId, boolean allowed) {
+        toolAllowed.put(toolCallId, allowed);
+    }
+
+    /** 工具参数的字节数（可观测性只记规模，不记参数本身）。 */
+    private static int safeArgsChars(Map<String, Object> args) {
+        try {
+            return ARGS_MAPPER.writeValueAsBytes(args).length;
+        } catch (Exception e) {
+            return args.toString().length();
+        }
     }
 
     /**
@@ -207,10 +263,8 @@ final class PiLaneSink implements PiLoop.Sink {
 
     @Override
     public void emit(PiLoop.Event event) {
-        switch (event) {
-            case PiLoop.Event.MessageEnd end -> onMessageEnd(end.message());
-            case PiLoop.Event.ToolExecutionStart start -> noteToolStart(start.toolCallId());
-            default -> { }
+        if (event instanceof PiLoop.Event.MessageEnd end) {
+            onMessageEnd(end.message());
         }
         if (downstream != null) {
             downstream.emit(event);
@@ -228,29 +282,42 @@ final class PiLaneSink implements PiLoop.Sink {
         var lane = ctx.requireLane(laneName);
         switch (message) {
             case Message.AssistantMessage assistant -> {
+                // 助手消息落定 ⇒ 本轮的批次结束（pi 的顺序是 message_end → 全部 start → 各自 end）。
+                batchCallIds.clear();
+                // 循环可能把被中断的一轮改写成 aborted（PiLoopRunner.markAborted）。
+                // lane.partial 必须跟着走：determineOutcome 与 lastAssistantMessage 都读它，
+                // 不同步的话 abort 会被记成 completed。
+                if (lane.partial != null) {
+                    lane.partial = lane.partial.withStopReason(assistant.stopReason());
+                }
+                var durationMs = llmDurationMs();
                 var entry = append(lane, message);
-                emitAssistantRecords(lane, entry, assistant);
-                endRequest(lane, assistant);
+                emitAssistantRecords(lane, entry, assistant, durationMs);
+                endRequest(lane, assistant, durationMs);
                 lane.newestOwn = HarnessUtils.deriveNewestOwn(lane);
             }
             case Message.ToolResultMessage result -> emitToolRecords(lane, append(lane, message), result);
             default -> append(lane, message);
         }
-        // 状态发布：旧路径在 AgentHarness.executeAction 的每个 action 后发布，
+        // 状态发布：旧路径在 AgentHarness 的每个 action 后发布，
         // 新驱动的等价点是「每条 entry 产生后」。少了这一步，会话快照会停在
         // 起手时的 token 数（AgentSessionToolIntegrationTest 抓的就是这个）。
         ctx.publishState(laneName);
     }
 
-    /** 建 entry 并挂上车道（{@code pendingWrites} 供既有持久化路径读取）。 */
+    /** 本次 {@code llm.request} 已经过的毫秒数。 */
+    private long llmDurationMs() {
+        return (System.nanoTime() - llmStartNanos) / 1_000_000;
+    }
+
+    /** 建 entry 并挂上车道。entry 一旦产生就直接进 transcript，没有中间态。 */
     private Entry.Message append(LaneState lane, Message message) {
         var entry = new Entry.Message(
             UUID.randomUUID().toString(), 0,
             lane.lastEntry() != null ? lane.lastEntry().id() : null, null, message, null);
         lane.transcript.add(entry);
-        lane.pendingWrites.add(entry);
         // 运行中写入 ⇒ 记为 deferred（docs/22 D3）。用户 prompt 由
-        // ActionExecutor.run() 在 IDLE 期写入，不走这里，语义不受影响。
+        // RunLifecycle.startRun() 在起手时写入，不走这里，语义不受影响。
         HarnessUtils.recordDeferredWrite(lane, entry);
         return entry;
     }
@@ -259,15 +326,15 @@ final class PiLaneSink implements PiLoop.Sink {
     // 记录日志（旁路审计，docs/28 选项 C）
     // ═══════════════════════════════════════════════════════════
 
-    /** 助手步的 {@code StepAttempt} + {@code UsageRecord}（对齐 AssistantStreamExecutor:200-212）。 */
+    /** 助手步的 {@code StepAttempt} + {@code UsageRecord}。 */
     private void emitAssistantRecords(LaneState lane, Entry.Message entry,
-                                      Message.AssistantMessage assistant) {
+                                      Message.AssistantMessage assistant, long durationMs) {
         int attempt = stepIndex++;
         lane.records.add(new LaneRecord.StepAttempt(
             UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
             StepKind.ASSISTANT, attempt, entry.id(), null,
             RunSpanFactory.modelLabel(ctx.model().get()), assembledMessageCount,
-            toolCount(), RunSpanFactory.thinkingLabel(ctx.thinkingLevel().get()), null));
+            toolCount(), RunSpanFactory.thinkingLabel(ctx.thinkingLevel().get()), durationMs));
         // 无条件发射（docs/21）：零 token 的一轮（error / abort）恰恰是折叠需要 stopReason
         // 的那种情形，按 tokens>0 设门槛会把它丢掉。
         lane.records.add(new LaneRecord.UsageRecord(
@@ -301,8 +368,40 @@ final class PiLaneSink implements PiLoop.Sink {
         lane.records.add(new LaneRecord.ToolFinished(
             UUID.randomUUID().toString(), 0, laneName, null, lane.runId,
             callId, result.toolName(), result.isError(), terminate, entry.id(), durationMs));
+        closeToolSpan(callId, result, terminate, durationMs);
+        ctx.telemetry().incrementCounter("tool.executions", 1);
+        if (result.isError()) {
+            ctx.telemetry().incrementCounter("tool.errors", 1);
+        }
+        ctx.telemetry().recordTiming("tool.execute.duration", durationMs);
         toolStartNanos.remove(callId);
         toolTerminate.remove(callId);
+    }
+
+    /**
+     * 关闭该调用的 {@code tool.execute} 跨度并补齐属性。
+     *
+     * <p>{@code batchSize} 只能在**收尾时**写：pi 保证一批的全部 start 早于任何 end
+     * （{@code docs/29 §4.1}），所以到收尾时同一批的成员已经全部登记。</p>
+     *
+     * <p>没有跨度的调用（被 {@code PiLoopTools.failTruncated} 直接失败掉的截断调用
+     * ——它**没有经过**工具端口）只是没有可观测性记录，不补一个假的。</p>
+     */
+    private void closeToolSpan(String callId, Message.ToolResultMessage result,
+                               boolean terminate, long durationMs) {
+        var span = toolSpans.remove(callId);
+        var allowed = toolAllowed.remove(callId);
+        if (span == null) {
+            return;
+        }
+        span.addAttribute("batchSize", batchCallIds.size());
+        // 缺席即放行：只有 PiToolRunner 的拒绝分支才回填 false。截断失败掉的调用没有跨度，
+        // 走不到这里。
+        span.addAttribute("allowed", allowed == null || allowed);
+        span.addAttribute("isError", result.isError());
+        span.addAttribute("terminate", terminate);
+        span.addAttribute("durationMs", durationMs);
+        span.close();
     }
 
     private int toolCount() {

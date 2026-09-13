@@ -29,7 +29,7 @@ class MultiLaneTest {
         return AgentHarness.create(new HarnessConfig(
                 sf, MODEL, ModelThinkingLevel.off(), "",
                 Set.of(), 200_000, null, null, null,
-                DriveMode.MANUAL, null, java.util.Map.of(),
+            null, java.util.Map.of(),
                 com.pijava.ai.http.RetryPolicy.defaultPolicy(),
                 com.pijava.telemetry.NoopTelemetryContext.INSTANCE, com.pijava.ai.thinking.ThinkingLevelMap.empty(),
                 QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),
@@ -57,12 +57,8 @@ class MultiLaneTest {
         var h = harness();
         h.createLane(LaneConfig.of("target"));
         // Populate the default lane transcript
-        h.run("hello");
-        // Flush the run so the assistant entry is written
-        var action = h.peekAction();
-        while (action != null) {
-            action = h.executeAction(action);
-        }
+        h.prompt("hello");
+        // prompt 阻塞到运行收口，助手 entry 已落盘
         int entriesBefore = h.snapshot("default").transcript().size();
         assertThat(entriesBefore).isGreaterThan(0);
 
@@ -75,8 +71,8 @@ class MultiLaneTest {
     void lanesAreIsolated() {
         var h = harness();
         h.createLane(LaneConfig.of("a"));
-        h.run("default", "default prompt");
-        h.run("a", "lane-a prompt");
+        h.prompt("default", "default prompt", List.of());
+        h.prompt("a", "lane-a prompt", List.of());
         assertThat(h.snapshot("default").transcript()).isNotEmpty();
         assertThat(h.snapshot("a").transcript()).isNotEmpty();
         // The two lanes hold different user entries
@@ -90,7 +86,7 @@ class MultiLaneTest {
         var lane = h.createLane(new LaneConfig("sp", null, null, "custom prompt"));
         assertThat(lane.name()).isEqualTo("sp");
         // systemPrompt is stored on LaneState (verified indirectly via run)
-        h.run("sp", "hello");
+        h.prompt("sp", "hello", List.of());
         assertThat(h.snapshot("sp").transcript()).isNotEmpty();
     }
 }

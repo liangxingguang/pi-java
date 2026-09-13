@@ -11,8 +11,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Telemetry-span helpers for the run lifecycle ({@code harness.run} span).
  *
- * <p>Extracted from {@link ActionExecutor} in the agent-loop L1 cleanup to keep
- * files under the 500-line limit (docs/20 §8). Opens/closes the per-run span,
+ * <p>Extracted from the former step-chain executor in the agent-loop L1 cleanup
+ * to keep files under the 500-line limit (docs/20 §8). Opens/closes the per-run span,
  * logs the run start/end lines, and formats model/thinking labels shared by
  * records and attributes.</p>
  */
@@ -48,7 +48,6 @@ final class RunSpanFactory {
             span.addAttribute("stopReason", stopReason);
         }
         span.addAttribute("outcome", outcome);
-        span.addAttribute("attemptCount", lane.stepIndex);
         LOG.info("[agent] run end lane={} runId={} outcome={} durationMs={}",
             lane.laneName, lane.runId, outcome,
             (System.nanoTime() - lane.runStartNanos) / 1_000_000);

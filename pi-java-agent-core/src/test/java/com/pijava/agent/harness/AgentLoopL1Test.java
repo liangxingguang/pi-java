@@ -78,20 +78,12 @@ class AgentLoopL1Test {
         return AgentHarness.create(new HarnessConfig(
                 streamFn, MODEL, ModelThinkingLevel.off(), "",
                 Set.of(), 200_000, registry, null, null,
-                DriveMode.MANUAL, null, Map.of(),
+            null, Map.of(),
                 com.pijava.ai.http.RetryPolicy.defaultPolicy(),
                 com.pijava.telemetry.NoopTelemetryContext.INSTANCE,
                 com.pijava.ai.thinking.ThinkingLevelMap.empty(),
                 QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),
                 event -> { }));
-    }
-
-    private static void drive(AgentHarness h, String prompt) {
-        h.run("default", prompt);
-        var action = h.peekAction("default");
-        while (action != null) {
-            action = h.executeAction("default", action);
-        }
     }
 
     private static AssistantMessage toolUsePartial(String stopReason, String toolName,
@@ -116,7 +108,7 @@ class AgentLoopL1Test {
             .withStopReason("stop");
         var h = harness(registry, scriptedStreamFn(List.of(lengthStop, finalStop)));
 
-        drive(h, "truncated call");
+        h.prompt("truncated call");
 
         // The truncated tool call must never reach the tool.
         assertThat(executed.get()).isZero();
@@ -135,9 +127,16 @@ class AgentLoopL1Test {
         assertThat(((ContentBlock.TextContent) msg.content().get(0)).text())
             .contains("hit the output token limit");
 
-        // No ToolFinished record was written (nothing executed).
-        assertThat(lane.records().stream()
-            .noneMatch(r -> r instanceof LaneRecord.ToolFinished)).isTrue();
+        // pi 对截断消息里的每个调用**同样**发 start/end
+        // （`failToolCallsFromTruncatedMessage`，agent-loop.ts:379-405），
+        // 所以审计记录里有一条 ToolFinished —— 但它没被执行（上面的 executed == 0），
+        // 且记为错误。旧路径不写这条记录，那是 ToolExecutionPipeline 的偏差。
+        var finished = lane.records().stream()
+            .filter(r -> r instanceof LaneRecord.ToolFinished)
+            .map(r -> (LaneRecord.ToolFinished) r)
+            .toList();
+        assertThat(finished).hasSize(1);
+        assertThat(finished.get(0).isError()).isTrue();
 
         // Run ended normally on the retry.
         assertThat(h.lastAssistantMessage().stopReason()).isEqualTo("stop");
@@ -161,7 +160,7 @@ class AgentLoopL1Test {
             .withStopReason("stop");
         var h = harness(registry, scriptedStreamFn(List.of(badCall, finalStop)));
 
-        drive(h, "bad args");
+        h.prompt("bad args");
 
         // The invalid call must never reach the tool.
         assertThat(executed.get()).isZero();
@@ -175,8 +174,11 @@ class AgentLoopL1Test {
         assertThat(toolEntries).hasSize(1);
         var msg = (com.pijava.ai.message.Message.ToolResultMessage) toolEntries.get(0).message();
         assertThat(msg.isError()).isTrue();
-        assertThat(((ContentBlock.TextContent) msg.content().get(0)).text())
-            .contains("Tool error");
+        // 校验器（ToolArgumentsValidator）自己的措辞原样回灌。旧路径的 "Tool error: "
+        // 前缀随 ToolExecutionPipeline 一起删除 —— pi 的 createErrorToolResult 也只带
+        // 文本本身，不套前缀。
+        var text = ((ContentBlock.TextContent) msg.content().get(0)).text();
+        assertThat(text).contains("text").contains("expected string");
 
         // Run continued and ended normally.
         assertThat(h.lastAssistantMessage().stopReason()).isEqualTo("stop");
@@ -197,7 +199,7 @@ class AgentLoopL1Test {
             .withStopReason("stop");
         var h = harness(registry, scriptedStreamFn(List.of(goodCall, finalStop)));
 
-        drive(h, "good args");
+        h.prompt("good args");
 
         assertThat(executed.get()).isEqualTo(1);
         assertThat(h.lastAssistantMessage().stopReason()).isEqualTo("stop");
@@ -217,7 +219,7 @@ class AgentLoopL1Test {
             toolUsePartial("tool_use", "echo", Map.of("text", "hello")), stop)));
         h.hookSystem().onBeforeTool("default", ctx -> BeforeToolResult.denyAndTerminate("not allowed"));
 
-        drive(h, "denied call");
+        h.prompt("denied call");
 
         // The run must terminate without looping on the same tool call.
         var lane = h.snapshot("default");
@@ -226,16 +228,19 @@ class AgentLoopL1Test {
                 && "tool".equals(m.message().role()))
             .map(e -> (com.pijava.agent.entry.Entry.Message) e)
             .toList();
-        // The denied result is wrapped in a ToolResultContent carrying the
-        // call id/name; its inner block is the text reason.
+        // 拒绝的理由是结果消息的**直接**文本内容。pi 的 createToolResultMessage 就是这么
+        // 建的（不套 ToolResultContent 外壳），PiToolRunner 与 L5 剧本的 denied 分支同形状，
+        // 调用 id/name 在 ToolResultMessage 自己的字段上。
         assertThat(toolEntries).hasSize(1);
         var msg = (com.pijava.ai.message.Message.ToolResultMessage) toolEntries.get(0).message();
+        assertThat(msg.toolUseId()).isEqualTo("call-1");
+        assertThat(msg.toolName()).isEqualTo("echo");
         assertThat(msg.content()).hasSize(1);
-        var block = (ContentBlock.ToolResultContent) msg.content().get(0);
-        assertThat(block.toolUseId()).isEqualTo("call-1");
-        assertThat(block.toolName()).isEqualTo("echo");
-        assertThat(((ContentBlock.TextContent) block.content().get(0)).text())
-            .contains("denied");
+        // 钩子给的**理由**原样回灌（PiToolRunner.denyReason 取 BeforeToolResult 的 reason），
+        // 而不是旧路径那句通用的 "Tool call denied by hook" —— pi 的
+        // createErrorToolResult 也是把理由带给模型的。
+        assertThat(((ContentBlock.TextContent) msg.content().get(0)).text())
+            .contains("not allowed");
 
         // ToolFinished records the terminate flag so the run ended.
         var finished = lane.records().stream()
@@ -268,7 +273,7 @@ class AgentLoopL1Test {
             return BeforeToolResult.allow();
         });
 
-        drive(h, "deny then allow");
+        h.prompt("deny then allow");
 
         // Second attempt executed.
         assertThat(executed.get()).isEqualTo(1);

@@ -33,19 +33,12 @@ class QueueSchedulingTest {
         return AgentHarness.create(new HarnessConfig(
             sf, MODEL, ModelThinkingLevel.off(), "",
             Set.of(), 200_000, null, null, null,
-            DriveMode.MANUAL, null, java.util.Map.of(),
+            null, java.util.Map.of(),
             com.pijava.ai.http.RetryPolicy.defaultPolicy(),
             com.pijava.telemetry.NoopTelemetryContext.INSTANCE,
             com.pijava.ai.thinking.ThinkingLevelMap.empty(),
             QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),
             event -> { }));
-    }
-
-    private static void drive(AgentHarness h, String lane) {
-        var action = h.peekAction(lane);
-        while (action != null) {
-            action = h.executeAction(lane, action);
-        }
     }
 
     private static List<String> userMessages(AgentHarness h, String lane) {
@@ -54,28 +47,6 @@ class QueueSchedulingTest {
             .map(e -> ((Entry.Message) e).message().content())
             .map(blocks -> blocks.isEmpty() ? "" : ((ContentBlock.TextContent) blocks.get(0)).text())
             .toList();
-    }
-
-    @Test
-    void nextRunStartsRunWhenIdle() {
-        var h = harness();
-        h.nextRun("default", "queued message");
-
-        drive(h, "default");
-
-        assertThat(userMessages(h, "default")).contains("queued message");
-        assertThat(h.lastAssistantMessage()).isNotNull();
-    }
-
-    @Test
-    void cancelQueuedClearsNextRun() {
-        var h = harness();
-        h.nextRun("default", "will be cancelled");
-        h.cancelQueued("default", "nextRun");
-
-        drive(h, "default");
-
-        assertThat(userMessages(h, "default")).isEmpty();
     }
 
     @Test
@@ -95,24 +66,30 @@ class QueueSchedulingTest {
         var h = harness();
         h.steer("default", "steering message");
 
-        drive(h, "default");
+        // 队列只在运行内被 drain：起手的 prompt 先落盘，随后轮询到的 steer 被注入。
+        h.prompt("go");
 
         assertThat(userMessages(h, "default"))
-            .containsExactly("steering message");
+            .containsExactly("go", "steering message");
     }
 
     @Test
-    void followUpQueuedDuringRunStartsNextRun() {
+    void followUpQueuedDuringRunStartsNextRun() throws Exception {
         var h = harness();
-        var action = h.run("default", "first prompt");
-        // Drive far enough that the first assistant reply is in flight, then queue.
-        while (action != null && !(action instanceof Action.TryFinishRun)) {
-            action = h.executeAction("default", action);
+        // 在第一次助手回复仍在途时入队（流事件监听器跑在运行线程上）。
+        var queued = new java.util.concurrent.atomic.AtomicBoolean();
+        var registration = h.onStreamEvent(e -> {
+            if (e instanceof StreamEvent.TextEnd && queued.compareAndSet(false, true)) {
+                h.followUp("default", "follow-up prompt");
+            }
+        });
+        try {
+            h.prompt("first prompt");
+        } finally {
+            registration.close();
         }
-        h.followUp("default", "follow-up prompt");
-        drive(h, "default");
 
-        // Runs append to the transcript, so the follow-up run sees both prompts.
+        // 运行内追加：内层循环耗尽后 drain follow-up，同一轮运行续上第二轮。
         assertThat(userMessages(h, "default"))
             .containsExactly("first prompt", "follow-up prompt");
         assertThat(h.lastAssistantMessage()).isNotNull();
@@ -125,12 +102,13 @@ class QueueSchedulingTest {
         h.followUp("default", "second");
         h.followUp("default", "third");
 
-        drive(h, "default");
+        h.prompt("go");
 
-        // One-at-a-time: each run drains exactly one message; the runs chain
-        // until the queue is empty. Consecutive runs append, so the final
-        // transcript holds every processed prompt in order.
-        assertThat(userMessages(h, "default")).containsExactly("first", "second", "third");
+        // One-at-a-time: each inner-loop exhaustion drains exactly one message;
+        // the turns chain inside the run until the queue is empty. Runs append,
+        // so the final transcript holds every processed prompt in order.
+        assertThat(userMessages(h, "default"))
+            .containsExactly("go", "first", "second", "third");
         assertThat(h.snapshot("default").queues().followUp()).isEmpty();
     }
 
@@ -139,9 +117,9 @@ class QueueSchedulingTest {
         var h = harness();
         h.followUp("default", "only");
 
-        drive(h, "default");
+        h.prompt("go");
 
-        assertThat(userMessages(h, "default")).containsExactly("only");
+        assertThat(userMessages(h, "default")).containsExactly("go", "only");
         assertThat(h.snapshot("default").operation()).isNull();
         assertThat(h.snapshot("default").queues().followUp()).isEmpty();
     }
@@ -153,10 +131,14 @@ class QueueSchedulingTest {
         h.followUp("default", "first");
         h.followUp("default", "second");
 
-        drive(h, "default");
+        h.prompt("go");
 
+        // All 模式一次取走整条队列，但**一项一条**：pi 的 PendingMessageQueue.drain()
+        // 在 "all" 下原样返回全部消息（agent.ts:143-148），循环再逐条 push 并各自发
+        // message_start/message_end（agent-loop.ts:200-208）—— 不合并。旧的
+        // ActionExecutor 把整批拼成一条 "first\n\nsecond"，是 pi-java 自己的构造。
         assertThat(userMessages(h, "default"))
-            .containsExactly("first\n\nsecond");
+            .containsExactly("go", "first", "second");
         assertThat(h.snapshot("default").queues().followUp()).isEmpty();
     }
 
@@ -165,8 +147,7 @@ class QueueSchedulingTest {
         var h = harness();
         var received = new java.util.ArrayList<StreamEvent>();
         try (var registration = h.onStreamEvent(received::add)) {
-            h.run("default", "hello");
-            drive(h, "default");
+            h.prompt("default", "hello", List.of());
         }
 
         assertThat(received).isNotEmpty();

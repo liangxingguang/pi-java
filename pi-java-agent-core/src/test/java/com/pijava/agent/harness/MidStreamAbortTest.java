@@ -81,10 +81,8 @@ class MidStreamAbortTest {
         var h = harness(midStreamAbortFn(holder));
         holder.set(h);
 
-        var action = h.run("default", "go");
-        while (action != null) {
-            action = h.executeAction("default", action);
-        }
+        // abort 由流自身在拉取途中设置（见 midStreamAbortFn），驱动是阻塞的整轮运行。
+        h.prompt("default", "go", List.of());
 
         // 终态必须是 aborted（pi：中断的轮次不是 completed）。
         assertThat(operationOutcome(h)).isEqualTo(OperationOutcome.ABORTED);
@@ -116,7 +114,7 @@ class MidStreamAbortTest {
         return AgentHarness.create(new HarnessConfig(
             streamFn, MODEL, ModelThinkingLevel.off(), "",
             Set.of(), 200_000, new ToolRegistry(null), null, null,
-            DriveMode.MANUAL, null, Map.of(),
+            null, Map.of(),
             com.pijava.ai.http.RetryPolicy.defaultPolicy(),
             com.pijava.telemetry.NoopTelemetryContext.INSTANCE,
             com.pijava.ai.thinking.ThinkingLevelMap.empty(),

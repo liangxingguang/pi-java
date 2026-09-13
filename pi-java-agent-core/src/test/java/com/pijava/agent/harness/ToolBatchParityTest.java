@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.pijava.agent.entry.Entry;
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ExecutionMode;
 import com.pijava.agent.tool.ToolContext;
@@ -15,6 +16,7 @@ import com.pijava.ai.AbortSignal;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -26,12 +28,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * pi alignment for multi-tool turns (pi {@code agent-loop.ts}):
  * <ul>
- *   <li>{@code hasSequentialToolCall} (:419-424) — one tool declaring
- *       {@link ExecutionMode#Sequential} demotes the whole batch to sequential
- *       execution; the batch is never split.</li>
  *   <li>{@code shouldTerminateToolBatch} (:582) — a batch ends the run only when
  *       <em>every</em> call asks to terminate, not when any one does.</li>
  * </ul>
+ *
+ * <p>批次的形态（并行一批 vs. 一个 Sequential 调用把整批降级）由 {@code PiToolRunner}
+ * 决定，不再经由 {@code Action} 暴露给调用方，因此这里只断言可观察到的运行终局。</p>
  */
 class ToolBatchParityTest {
 
@@ -100,38 +102,22 @@ class ToolBatchParityTest {
             .build());
     }
 
-    /** Drive until the first tool action surfaces (or give up after 10 steps). */
-    private static Action firstToolAction(AgentHarness h) {
-        Action action = h.run("default", "hi");
-        for (int i = 0; i < 10 && action != null; i++) {
-            if (action instanceof Action.ExecuteTool
-                    || action instanceof Action.ExecuteToolBatch) {
-                return action;
-            }
-            action = h.executeAction("default", action);
-        }
-        return action;
+    /** 助手文本块，按转录顺序（工具轮的助手消息只有 tool_use，不带文本）。 */
+    private static List<String> assistantTexts(AgentHarness h) {
+        return h.snapshot("default").transcript().stream()
+            .filter(Entry.Message.class::isInstance)
+            .map(e -> (Entry.Message) e)
+            .filter(e -> "assistant".equals(e.message().role()))
+            .flatMap(e -> e.message().content().stream())
+            .filter(ContentBlock.TextContent.class::isInstance)
+            .map(b -> ((ContentBlock.TextContent) b).text())
+            .toList();
     }
 
-    @Test
-    void parallelToolsFormOneBatch() {
-        var h = harness(twoToolCallsThenText("read", "glob"), List.<AgentTool<?, ?>>of(
-            tool("read", new ExecutionMode.Parallel(), false),
-            tool("glob", new ExecutionMode.Parallel(), false)));
-
-        var action = firstToolAction(h);
-        assertThat(action).isInstanceOf(Action.ExecuteToolBatch.class);
-        assertThat(((Action.ExecuteToolBatch) action).calls()).hasSize(2);
-    }
-
-    @Test
-    void oneSequentialToolDemotesTheWholeBatch() {
-        var h = harness(twoToolCallsThenText("bash", "read"), List.<AgentTool<?, ?>>of(
-            tool("bash", new ExecutionMode.Sequential(), false),
-            tool("read", new ExecutionMode.Parallel(), false)));
-
-        // pi: hasSequentialToolCall → executeToolCallsSequential, never a split batch
-        assertThat(firstToolAction(h)).isInstanceOf(Action.ExecuteTool.class);
+    /** 转录末条 Entry。 */
+    private static Entry lastEntry(AgentHarness h) {
+        var transcript = h.snapshot("default").transcript();
+        return transcript.get(transcript.size() - 1);
     }
 
     @Test
@@ -140,9 +126,10 @@ class ToolBatchParityTest {
             tool("read", new ExecutionMode.Parallel(), true),
             tool("glob", new ExecutionMode.Parallel(), false)));
 
-        var action = firstToolAction(h);
-        assertThat(action).isInstanceOf(Action.ExecuteToolBatch.class);
-        assertThat(h.executeAction("default", action)).isNotNull();
+        h.prompt("hi");
+
+        // 只有部分调用要求终止 ⇒ 运行继续，模型还有第二轮文本回复。
+        assertThat(assistantTexts(h)).contains("done");
     }
 
     @Test
@@ -151,13 +138,12 @@ class ToolBatchParityTest {
             tool("read", new ExecutionMode.Parallel(), true),
             tool("glob", new ExecutionMode.Parallel(), true)));
 
-        var action = firstToolAction(h);
-        assertThat(action).isInstanceOf(Action.ExecuteToolBatch.class);
-        // L3: the operation terminal is single-sourced in FinishOperation. A
-        // fully-terminating batch yields a stop-finish action whose execution
-        // ends the drive (returns null) after writing operation_finished.
-        var finish = h.executeAction("default", action);
-        assertThat(finish).isEqualTo(new Action.FinishOperation("completed", true));
-        assertThat(h.executeAction("default", finish)).isNull();
+        h.prompt("hi");
+
+        // pi: 全部要求终止 ⇒ 批次结束即收口，第二轮文本回复不再发生。
+        assertThat(assistantTexts(h)).isEmpty();
+        assertThat(lastEntry(h)).isInstanceOf(Entry.Message.class);
+        assertThat(((Entry.Message) lastEntry(h)).message())
+            .isInstanceOf(Message.ToolResultMessage.class);
     }
 }

@@ -202,12 +202,28 @@ final class PiLoopRunner {
             java.util.OptionalInt.empty(), java.util.OptionalDouble.empty(),
             thinkingConfig(config));
 
+        var signal = config.signal();
+        // 进入本次拉取时信号是否**已经**中止。它区分两件事：
+        //   · 已中止时进场 ⇒ 归工具阶段管（pi 的 prepareToolCall 逐调用回 immediate 错误，
+        //     agent-loop.ts:655-661）；provider 若照样吐帧，那些帧就该被消费，
+        //     否则工具阶段的「每个调用都补一个 end」根本没有调用可补。
+        //   · 拉取**途中**才中止 ⇒ 循环层自己兜底，不再消费后续事件（docs/23 §4.4 的 A8）。
+        // pi 把 signal 交给 streamFunction、由 provider 自己收尾（:307-311）；pi-java 的
+        // StreamIterator 是同步拉取，不能假定 provider 照做，所以补上第二条。
+        boolean abortedAtEntry = signal != null && signal.isAborted();
         var iter = config.streamFn().stream(config.model(), llmContext, options);
         Message.AssistantMessage finalMessage = null;
         boolean addedPartial = false;
+        boolean consumed = false;
+        boolean cutShort = false;
         try {
             while (iter.hasNext()) {
+                if (signal != null && !abortedAtEntry && consumed && signal.isAborted()) {
+                    cutShort = true;
+                    break;
+                }
                 var event = iter.next();
+                consumed = true;
                 if (config.streamListener() != null) {
                     config.streamListener().accept(event);
                 }
@@ -235,8 +251,16 @@ final class PiLoopRunner {
         }
 
         if (finalMessage == null) {
-            throw new IllegalStateException("stream produced no terminal message");
+            if (signal == null || !signal.isAborted()) {
+                // provider 什么都没发 ⇒ 真错误。
+                throw new IllegalStateException("stream produced no terminal message");
+            }
+            // 信号在**第一帧之前**就响了（调用方 abort 后才进这一轮）：没有事件可消费，
+            // 这一轮仍必须有终局消息，否则调用方拿到 null。补一个空的 aborted 助手消息
+            // —— pi 侧等价物是 provider 自己以 aborted 收尾的那条消息。
+            finalMessage = new Message.AssistantMessage(List.of(), "aborted", null);
         }
+        finalMessage = markAborted(finalMessage, signal, cutShort);
         if (addedPartial) {
             messages.set(messages.size() - 1, finalMessage);
         } else {
@@ -245,6 +269,33 @@ final class PiLoopRunner {
         }
         emit.emit(new Event.MessageEnd(finalMessage));
         return finalMessage;
+    }
+
+    /**
+     * 被中断的一轮必须以 {@code aborted} 收尾，而不是徒留一个 {@code null}
+     * {@code stopReason}（那样 {@code determineOutcome} 会落到 {@code completed}，
+     * 而 {@code ContextEntries.NON_PROJECTED_STOP_REASONS} 又不含 {@code null}，
+     * 于是这段残缺的响应会被当成正常回答投影进后续请求）。
+     *
+     * <p><b>只在流真的被切断时改写</b>（{@code cutShort}，或 provider 连终局事件都没发、
+     * {@code stopReason} 为 {@code null}）。provider 报出了终局判定就必须采信它 ——
+     * 否则一个「进场前就已中止、但 provider 照样吐完 tool_use」的轮次会被改写成
+     * {@code aborted}，循环随即返回，pi 的 {@code prepareToolCall} 那条
+     * 「每个调用补一个 immediate 错误 end」的路径就永远走不到了
+     * （{@code agent-loop.ts:655-661}）。</p>
+     */
+    private static Message.AssistantMessage markAborted(
+            Message.AssistantMessage message, com.pijava.ai.AbortSignal signal, boolean cutShort) {
+        if (signal == null || !signal.isAborted()) {
+            return message;
+        }
+        if ("error".equals(message.stopReason()) || "aborted".equals(message.stopReason())) {
+            return message;
+        }
+        if (!cutShort && message.stopReason() != null) {
+            return message;
+        }
+        return message.withStopReason("aborted");
     }
 
     /** pi: 除 start/done/error 之外的流事件都是 update。 */

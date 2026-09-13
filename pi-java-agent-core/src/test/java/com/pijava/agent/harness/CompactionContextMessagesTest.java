@@ -34,7 +34,7 @@ class CompactionContextMessagesTest {
         return AgentHarness.create(new HarnessConfig(
                 sf, MODEL, ModelThinkingLevel.off(), "",
                 Set.of(), 200_000, null, null, null,
-                DriveMode.MANUAL, null, java.util.Map.of(),
+            null, java.util.Map.of(),
                 com.pijava.ai.http.RetryPolicy.defaultPolicy(),
                 com.pijava.telemetry.NoopTelemetryContext.INSTANCE,
                 com.pijava.ai.thinking.ThinkingLevelMap.empty(),

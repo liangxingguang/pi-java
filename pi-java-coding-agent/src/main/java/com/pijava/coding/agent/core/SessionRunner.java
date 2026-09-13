@@ -108,16 +108,16 @@ final class SessionRunner {
                     // tail instead of re-prompting (which would duplicate the
                     // user message under append semantics).
                     //
-                    // docs/28 §5 第 2 步：驱动换成 PiLoop 的双循环。起手/收口仍由
-                    // harness 的 ActionExecutor 负责，被替换的只是中间的
-                    // peekAction → executeAction 步进链。
+                    // 驱动只有 PiLoop 一条（docs/31 §6）：harness.prompt /
+                    // continueRun 就是 pi 的 Agent.prompt / Agent.continue，
+                    // 起手与收口都在其中，调用方只提供会话层的事件接收器。
                     PiLaneEngine.RunOutcome outcome;
                     if (attempt == 0) {
-                        outcome = owner.harness().piEngine()
-                            .run(laneName, prompt, List.of(), persistPerEntry(owner, laneName));
+                        outcome = owner.harness()
+                            .prompt(laneName, prompt, List.of(), persistPerEntry(owner, laneName));
                     } else {
                         owner.harness().dropTrailingErrorAssistant(laneName);
-                        outcome = owner.harness().piEngine()
+                        outcome = owner.harness()
                             .continueRun(laneName, persistPerEntry(owner, laneName));
                     }
                     // 用户 prompt 的 entry 由引擎起手写入，此处补一次落盘

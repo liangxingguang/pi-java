@@ -35,7 +35,7 @@ class HookTest {
         return new HarnessConfig(
                 sf, MODEL, ModelThinkingLevel.off(), "",
                 Set.of(), 200_000, null, null, null,
-                DriveMode.MANUAL, null, java.util.Map.of(),
+            null, java.util.Map.of(),
                 com.pijava.ai.http.RetryPolicy.defaultPolicy(),
                 com.pijava.telemetry.NoopTelemetryContext.INSTANCE, com.pijava.ai.thinking.ThinkingLevelMap.empty(),
                 QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),
@@ -43,20 +43,13 @@ class HookTest {
     }
 
     /** Run a single turn to completion (so all wired hooks fire). */
-    private static void driveToCompletion(AgentHarness h, String prompt) {
-        h.run(prompt);
-        var action = h.peekAction();
-        while (action != null) {
-            action = h.executeAction(action);
-        }
-    }
 
     @Test
     void beforeRunHookFires() {
         var h = harness();
         var fired = new boolean[1];
         h.hookSystem().onBeforeRun("default", ctx -> fired[0] = true);
-        h.run("hello");
+        h.prompt("hello");
         assertThat(fired[0]).isTrue();
     }
 
@@ -65,7 +58,7 @@ class HookTest {
         var h = harness();
         var fired = new boolean[1];
         h.hookSystem().onBeforeRequest("default", ctx -> fired[0] = true);
-        driveToCompletion(h, "hello");
+        h.prompt("hello");
         assertThat(fired[0]).isTrue();
     }
 
@@ -74,7 +67,7 @@ class HookTest {
         var h = harness();
         var fired = new boolean[1];
         h.hookSystem().onAfterResponse("default", ctx -> fired[0] = true);
-        driveToCompletion(h, "hello");
+        h.prompt("hello");
         assertThat(fired[0]).isTrue();
     }
 
@@ -83,7 +76,7 @@ class HookTest {
         var h = harness();
         var fired = new boolean[1];
         h.hookSystem().onBeforeRunEnd("default", ctx -> fired[0] = true);
-        driveToCompletion(h, "hello");
+        h.prompt("hello");
         assertThat(fired[0]).isTrue();
     }
 
@@ -95,7 +88,7 @@ class HookTest {
             fired[0] = true;
             return messages;
         });
-        driveToCompletion(h, "hello");
+        h.prompt("hello");
         assertThat(fired[0]).isTrue();
     }
 
@@ -106,7 +99,7 @@ class HookTest {
             throw new RuntimeException("boom");
         });
         // Should not throw; hook errors are swallowed and recorded
-        driveToCompletion(h, "hello");
+        h.prompt("hello");
         assertThat(h.lastAssistantMessage()).isNotNull();
     }
 
@@ -121,35 +114,35 @@ class HookTest {
         var cfg = configWith(counting);
         var hookHarness = com.pijava.agent.harness.AgentHarness.create(cfg);
         hookHarness.hookSystem().onShouldStopAfterTurn("default", ctx -> Boolean.TRUE);
-        hookHarness.run("go");
         hookHarness.followUp("default", "second");
-        var action = hookHarness.peekAction();
-        while (action != null) { action = hookHarness.executeAction(action); }
+        hookHarness.prompt("go");
         // hook returned TRUE → run finished in ONE stream call
         assertThat(calls[0]).isEqualTo(1);
-        // and the follow-up queued before TryFinishRun was NOT drained by it
+        // and the follow-up queued before the run was NOT drained by it
         assertThat(hookHarness.snapshot("default")
             .queues().followUp()).hasSize(1);
     }
 
     @Test
     void shouldStopAfterTurnNullAbstains() {
-        var h = harness();
+        var seenModels = new java.util.ArrayList<String>();
+        var h = com.pijava.agent.harness.AgentHarness.create(configWith(toolUseThenStopStreamFn(seenModels)));
         h.hookSystem().onShouldStopAfterTurn("default", ctx -> null);
-        driveToCompletion(h, "go");
-        h.followUp("default", "second");
-        assertThat(h.peekAction("default")).isNotNull();
+        h.prompt("go");
+        // 弃权 ⇒ 循环继跑：tool_use 那一轮之后还有第二次请求。
+        assertThat(seenModels).hasSize(2);
     }
 
     @Test
     void throwingShouldStopHookAbstains() {
-        var h = harness();
+        var seenModels = new java.util.ArrayList<String>();
+        var h = com.pijava.agent.harness.AgentHarness.create(configWith(toolUseThenStopStreamFn(seenModels)));
         h.hookSystem().onShouldStopAfterTurn("default", ctx -> {
             throw new RuntimeException("boom");
         });
-        driveToCompletion(h, "go");
-        h.followUp("default", "second");
-        assertThat(h.peekAction("default")).isNotNull();
+        h.prompt("go");
+        // 抛异常等同于弃权 ⇒ 循环继跑。
+        assertThat(seenModels).hasSize(2);
     }
 
     // ── prepare_next_turn ─────────────────────────────────
@@ -176,10 +169,6 @@ class HookTest {
         };
     }
 
-    private static void drive(AgentHarness h) {
-        var action = h.peekAction();
-        while (action != null) { action = h.executeAction(action); }
-    }
 
     @Test
     void prepareNextTurnSwitchesModelForNextTurnWithinRun() {
@@ -187,8 +176,7 @@ class HookTest {
         var h = AgentHarness.create(configWith(toolUseThenStopStreamFn(seenModels)));
         h.hookSystem().onPrepareNextTurn("default", ctx ->
             new com.pijava.agent.hook.TurnUpdate(ModelId.of("faux", "next-model"), null));
-        h.run("go");
-        drive(h);
+        h.prompt("go");
         // turn 1 used test-model; turn 2 (same run) used next-model
         assertThat(seenModels).containsExactly("faux/test-model", "faux/next-model");
         // transcript records the switch (pi-java auditability)
@@ -204,12 +192,10 @@ class HookTest {
         h.hookSystem().onPrepareNextTurn("default", ctx ->
             new com.pijava.agent.hook.TurnUpdate(ModelId.of("faux", "next-model"), null));
         // run 1: turn1 test-model → hook fires → turn2 next-model → run ends
-        h.run("run1");
-        drive(h);
+        h.prompt("run1");
         // reset model for run 2 (hook fired in run1 must NOT carry over)
         h.setModel(ModelId.of("faux", "test-model"));
-        h.run("run2");
-        drive(h);
+        h.prompt("run2");
         assertThat(seenModels).containsExactly(
             "faux/test-model", "faux/next-model",
             "faux/test-model", "faux/next-model");
@@ -220,8 +206,7 @@ class HookTest {
         var seenModels = new java.util.ArrayList<String>();
         var h = AgentHarness.create(configWith(toolUseThenStopStreamFn(seenModels)));
         h.hookSystem().onPrepareNextTurn("default", ctx -> null);
-        h.run("go");
-        drive(h);
+        h.prompt("go");
         assertThat(seenModels).containsExactly("faux/test-model", "faux/test-model");
         assertThat(h.snapshot("default").transcript().stream()
             .noneMatch(e -> e instanceof com.pijava.agent.entry.Entry.ModelChange)).isTrue();

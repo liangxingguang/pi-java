@@ -2,11 +2,6 @@ package com.pijava.agent.harness;
 
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 import com.pijava.agent.compaction.CompactionSettings;
@@ -16,9 +11,7 @@ import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.skill.SkillManager;
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ToolContext;
-import com.pijava.agent.tool.ToolExecutor;
 import com.pijava.agent.tool.ToolRegistry;
-import com.pijava.ai.AbortSignal;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.model.ModelId;
@@ -28,11 +21,15 @@ import com.pijava.telemetry.TelemetryContext;
 /**
  * Central agent runtime — prompt → LLM → tool → repeat loop.
  *
- * <p>Phase 2c: multi-lane support, lifecycle hooks, compaction, skills,
- * snapshot subscriptions, autonomous drive, and close().</p>
+ * <p><b>驱动只有一个</b>：{@link PiLoop}（{@code docs/31 §6}）。原先并存的
+ * {@code peekAction} / {@code executeAction} 步进链连同 {@code Action}、{@code RunPhase}、
+ * {@code DriveMode} 已删除 —— 它们在生产路径上零调用者，只被测试使用，而推进职责本就归
+ * 驱动循环。宿主剩下的职责是 pi {@code agent.ts} 的那几件：起手、收口、abort、reset、
+ * 快照与订阅。</p>
  *
- * <p>Manual-drive: the outer loop calls {@link #peekAction()} →
- * {@link #executeAction(Action)} to advance the state machine.</p>
+ * <p>{@link #prompt} / {@link #continueRun} 是**阻塞**的：pi 的 {@code prompt()} 返回
+ * Promise，Java 侧由调用线程直接跑到收口（{@code docs/31 §8.5} 的口径 —— 对齐的是
+ * 「可观察效果的顺序」，不是 async 机器）。</p>
  */
 public class AgentHarness implements AutoCloseable {
 
@@ -49,9 +46,8 @@ public class AgentHarness implements AutoCloseable {
     private final ToolContext toolContext;
     private volatile boolean closed;
 
-    // Phase 2c: multi-lane
-    private final ConcurrentMap<String, LaneState> lanes = new ConcurrentHashMap<>();
-    private final String defaultLaneName;
+    // Phase 2c: multi-lane（容器与生命周期在 LaneRegistry）
+    private final LaneRegistry registry;
 
     // Phase 2c: hooks
     private final HookSystem hookSystem;
@@ -65,10 +61,10 @@ public class AgentHarness implements AutoCloseable {
     // Phase 2c: token counter
     private final ExecutionContext.TokenCounter tokenCounter = new ExecutionContext.TokenCounter();
 
-    // Phase 2c: action executor
-    private ActionExecutor actionExecutor;
+    // run 的起手/收口（pi runWithLifecycle / finishRun）
+    private RunLifecycle runLifecycle;
 
-    // docs/28 §5 第 2 步：pi 双循环引擎，与显式步进链并存
+    // 唯一的驱动：pi 双循环引擎
     private final PiLaneEngine piEngine;
 
     // Phase 2c: snapshot service
@@ -77,10 +73,8 @@ public class AgentHarness implements AutoCloseable {
     // Phase 2c: queue manager + telemetry
     private QueueManager queueManager;
     private final TelemetryContext telemetry;
-    // Phase 6: multi-listener event broadcast (was a single Consumer).
-    private final List<Consumer<StreamEvent>> streamListeners = new CopyOnWriteArrayList<>();
 
-    // Phase 2c: mutable run configuration (model/thinking/tools/drive/queues)
+    // Phase 2c: mutable run configuration (model/thinking/tools/queues)
     private final HarnessState state = new HarnessState();
 
     // ── Factory ──────────────────────────────────────────────
@@ -99,20 +93,15 @@ public class AgentHarness implements AutoCloseable {
         this.maxInputTokens = config.maxInputTokens();
         this.toolRegistry = config.toolRegistry();
         this.toolContext = config.toolContext();
-        state.driveMode = config.driveMode() != null ? config.driveMode() : DriveMode.MANUAL;
         state.steeringMode = config.steeringMode();
         state.followUpMode = config.followUpMode();
         state.toolExecution = config.toolExecution();
         state.compactionSettings = config.compactionSettings();
         this.telemetry = config.telemetry();
+        this.registry = new LaneRegistry(DEFAULT_LANE);
+        var lanes = registry.lanes();
         this.hookSystem = new HookSystem(lanes);
-        this.defaultLaneName = DEFAULT_LANE;
         config.skills().values().forEach(skillManager::register);
-
-        // Create the default lane
-        var defaultLane = new LaneState();
-        defaultLane.laneName = DEFAULT_LANE;
-        lanes.put(DEFAULT_LANE, defaultLane);
 
         // Build snapshot service first (referenced by execution context)
         this.snapshotService = new SnapshotService(
@@ -127,52 +116,18 @@ public class AgentHarness implements AutoCloseable {
             () -> state.steeringMode,
             () -> state.followUpMode);
 
-        // Build execution context and action executor
+        // Build execution context and the run lifecycle
         var execCtx = new ExecutionContext(
             streamFn, () -> state.model, () -> state.thinkingLevel,
             () -> state.systemPrompt, () -> state.activeTools,
             maxInputTokens, toolRegistry, toolContext,
-            new ToolExecutor(toolRegistry, toolContext), skillManager,
+            skillManager,
             hookSystem, lanes, () -> state.compactionSettings, config.thinkingLevelMap(),
             tokenCounter, snapshotService, queueManager, () -> state.toolExecution,
-            () -> this::broadcastStreamEvent, config.summaryGenerator(),
-            this::applyTurnConfig, telemetry);
-        this.actionExecutor = new ActionExecutor(execCtx);
-        this.piEngine = new PiLaneEngine(execCtx, actionExecutor);
-    }
-
-    /**
-     * pi 双循环引擎（{@code docs/28 §5} 第 2 步）。
-     *
-     * <p>与 {@link #run}/{@link #peekAction}/{@link #executeAction} 的显式步进链**并存**：
-     * 两者共用同一份车道状态与起手/收口代码，删除旧链在第 4 步（用户裁决 2026-09-13）。</p>
-     */
-    public PiLaneEngine piEngine() {
-        return piEngine;
-    }
-
-    /** Apply a prepare_next_turn update to harness state (label → level). */
-    private void applyTurnConfig(ModelId<?> model, String thinkingLevelLabel) {
-        if (model != null) {
-            state.model = model;
-        }
-        if (thinkingLevelLabel != null) {
-            state.thinkingLevel = "off".equals(thinkingLevelLabel)
-                ? ModelThinkingLevel.off()
-                : ModelThinkingLevel.of(parseThinkingLabel(thinkingLevelLabel));
-        }
-    }
-
-    /** 标签 → 思考等级。包内可见：{@link PiLaneEngine} 把它用于 {@code prepareNextTurn}。 */
-    static com.pijava.ai.thinking.ThinkingLevel parseThinkingLabel(String label) {
-        return switch (label) {
-            case "minimal" -> new com.pijava.ai.thinking.ThinkingLevel.Minimal();
-            case "low" -> new com.pijava.ai.thinking.ThinkingLevel.Low();
-            case "medium" -> new com.pijava.ai.thinking.ThinkingLevel.Medium();
-            case "high" -> new com.pijava.ai.thinking.ThinkingLevel.High();
-            case "xhigh" -> new com.pijava.ai.thinking.ThinkingLevel.XHigh();
-            default -> throw new IllegalArgumentException("Unknown thinking level: " + label);
-        };
+            () -> eventBus::broadcastStream, config.summaryGenerator(),
+            state::applyTurn, telemetry);
+        this.runLifecycle = new RunLifecycle(execCtx);
+        this.piEngine = new PiLaneEngine(execCtx, runLifecycle);
     }
 
     /**
@@ -181,20 +136,7 @@ public class AgentHarness implements AutoCloseable {
      * harness); closing the handle removes only this listener.
      */
     public AutoCloseable onStreamEvent(Consumer<StreamEvent> listener) {
-        streamListeners.add(listener);
-        return () -> streamListeners.remove(listener);
-    }
-
-    /** Broadcast to all listeners; a throwing listener is isolated. */
-    private void broadcastStreamEvent(StreamEvent event) {
-        for (var listener : streamListeners) {
-            try {
-                listener.accept(event);
-            } catch (RuntimeException e) {
-                org.slf4j.LoggerFactory.getLogger(AgentHarness.class)
-                    .warn("StreamEvent listener threw: {}", e.toString());
-            }
-        }
+        return eventBus.subscribeStream(listener);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -203,43 +145,28 @@ public class AgentHarness implements AutoCloseable {
 
     /** Get the default lane handle. */
     public LaneHandle lane() {
-        return new LaneHandle(defaultLaneName, this);
+        return registry.handle(this);
     }
 
     /** Create a new lane. */
     public LaneHandle createLane(LaneConfig config) {
         if (closed) throw new HarnessClosedException();
-        if (lanes.containsKey(config.name())) {
-            throw new LaneExistsException(config.name());
-        }
-        var lane = new LaneState();
-        lane.laneName = config.name();
-        lane.parentLeafId = config.parentLeafId();
-        lane.activeTools = config.activeTools() != null
-            ? Set.copyOf(config.activeTools()) : null;
-        lane.systemPrompt = config.systemPrompt();
-        lanes.put(config.name(), lane);
-        return new LaneHandle(config.name(), this);
+        return registry.create(this, config);
     }
 
     /** List all lane handles. */
     public List<LaneHandle> lanes() {
-        return lanes.keySet().stream()
-            .map(name -> new LaneHandle(name, this))
-            .toList();
+        return registry.handles(this);
     }
 
     /** Move entries from one lane to another. */
     public void moveLane(String source, String target) {
         if (closed) throw new HarnessClosedException();
-        var src = requireLane(source);
-        var tgt = requireLane(target);
-        tgt.transcript.addAll(src.transcript);
-        src.transcript.clear();
+        registry.move(source, target);
     }
 
     // ═══════════════════════════════════════════════════════════
-    // Queue scheduling (Phase 3 stubs) — delegated to QueueManager
+    // Queue scheduling — delegated to QueueManager
     // ═══════════════════════════════════════════════════════════
 
     /** Enqueue a steer prompt (injected into the current run's next round). */
@@ -312,100 +239,67 @@ public class AgentHarness implements AutoCloseable {
         state.toolExecution = mode;
     }
 
-    // ── Operation (single-lane convenience overloads) ─────────
+    // ═══════════════════════════════════════════════════════════
+    // Run lifecycle — pi Agent.prompt / continue / abort / reset
+    // ═══════════════════════════════════════════════════════════
 
-    /** Initiate a new run on the default lane. */
-    public Action run(String prompt) {
-        return run(defaultLaneName, prompt);
+    /** Run a prompt to completion on the default lane. */
+    public PiLaneEngine.RunOutcome prompt(String text) {
+        return prompt(registry.defaultLaneName(), text, List.of(), null);
     }
 
-    /** Initiate a new run on the specified lane. */
-    public Action run(String laneName, String prompt) {
-        return run(laneName, prompt, List.of());
+    /** Run a prompt to completion on the default lane, with attached images. */
+    public PiLaneEngine.RunOutcome prompt(String text, List<PromptImage> images) {
+        return prompt(registry.defaultLaneName(), text, images, null);
     }
 
-    /** Initiate a new run on the default lane with attached images. */
-    public Action run(String prompt, List<PromptImage> images) {
-        return run(defaultLaneName, prompt, images);
-    }
-
-    /** Initiate a new run on the specified lane with attached images. */
-    public Action run(String laneName, String prompt, List<PromptImage> images) {
-        if (closed) throw new HarnessClosedException();
-        telemetry.incrementCounter("harness.turn", 1);
-        return actionExecutor.run(laneName, prompt, images == null ? List.of() : images);
+    /** Run a prompt to completion on the specified lane. */
+    public PiLaneEngine.RunOutcome prompt(String laneName, String text, List<PromptImage> images) {
+        return prompt(laneName, text, images, null);
     }
 
     /**
-     * Seed a lane transcript from a persisted session on resume. No-op when
-     * the lane already has entries (Phase 4 recovery).
+     * Run a prompt to completion on the specified lane（pi {@code Agent.prompt}）。
+     *
+     * <p><b>阻塞</b>：返回时运行已收口，车道回到空闲。{@code downstream} 是会话层的事件
+     * 接收器，可为 {@code null}。</p>
      */
-    public void seedTranscript(String laneName, List<com.pijava.agent.entry.Entry> entries) {
-        var lane = requireLane(laneName);
-        if (!lane.transcript.isEmpty()) {
-            return;
-        }
-        lane.transcript.addAll(entries);
+    public PiLaneEngine.RunOutcome prompt(String laneName, String text, List<PromptImage> images,
+                                          PiLoop.Sink downstream) {
+        if (closed) throw new HarnessClosedException();
+        // 计数点在 PiLaneEngine.run —— 全仓唯一的新起运行入口，这里不再重复记。
+        return piEngine.run(laneName, text, images == null ? List.of() : images, downstream);
     }
 
     /**
-     * Load a lane's persisted record log on resume (docs/30 §4.1).
+     * Continue a run from the current transcript tail（pi {@code Agent.continue}）：
+     * 不写新的用户 entry，直接进助手流。
      *
-     * <p>State is <b>replaced, never merged</b> — this is a resume, so the lane
-     * is empty. Only the log itself is loaded: orchestration state is no longer
-     * reconstructed from it. The record log is a pure audit side channel
-     * (docs/28 option C), and pi forbids inferring state from it
-     * ({@code harness.md:1317} invariant 5: <i>"no value history exists to
-     * fold"</i>), so nothing here derives phase, run id or queues out of
-     * records.</p>
-     *
-     * <p>The lane comes back <b>idle</b>. Any operation a crash left open was
-     * settled at the resume boundary before this call
-     * ({@code SessionPersistence.settleOpenOperation}), so storage holds no open
-     * operation and the next run may open its own.</p>
-     *
-     * <p>Queues and pending writes start <b>empty</b>: pi keeps them in-process,
-     * so a crash loses them. Rebuilding them from the log would re-inject a
-     * half-finished prompt into an unrelated later run (docs/30 §4.3).
-     * {@code newestOwn} likewise starts {@code null} — it is derived from the
-     * run's own output ({@code PiLaneSink.onMessageEnd}) long before any outcome
-     * is determined, and {@link HarnessUtils#determineOutcome} is only ever
-     * called after that. An abort signal is installed so the restored lane stays
-     * abortable.</p>
+     * <p><b>阻塞</b>，语义同 {@link #prompt}。</p>
      */
-    public void restoreRecords(String laneName, List<LaneRecord> records) {
+    public PiLaneEngine.RunOutcome continueRun(String laneName, PiLoop.Sink downstream) {
         if (closed) throw new HarnessClosedException();
-        var lane = requireLane(laneName);
-        synchronized (lane) {
-            lane.records.clear();
-            lane.records.addAll(records);
-            lane.pendingWrites.clear();
-            lane.steerQueue.clear();
-            lane.followUpQueue.clear();
-            lane.nextRunQueue.clear();
-            lane.queueSeq = 0;
-            lane.runId = null;
-            lane.stepIndex = 0;
-            lane.newestOwn = null;
-            lane.phase = RunPhase.IDLE;
-            lane.partial = null;
-            lane.abortSignal = AbortSignal.create();
-        }
-        publishState(laneName);
+        return piEngine.continueRun(laneName, downstream);
+    }
+
+    /** Continue a run on the default lane. */
+    public PiLaneEngine.RunOutcome continueRun() {
+        return continueRun(registry.defaultLaneName(), null);
     }
 
     /** Abort the current run on the default lane. */
     public void abort() {
-        abort(defaultLaneName);
+        abort(registry.defaultLaneName());
     }
 
     /** Abort the current run on the specified lane. */
     public void abort(String laneName) {
         var lane = requireLane(laneName);
-        if (lane.abortSignal != null) {
-            lane.abortSignal.abort();
+        var signal = lane.abortSignal();
+        if (signal != null) {
+            signal.abort();
         }
-        if (!(lane.phase instanceof RunPhase.Idle)) {
+        if (lane.isRunning()) {
             lane.records.add(new LaneRecord.AbortRequested(
                 java.util.UUID.randomUUID().toString(), 0, laneName, null,
                 lane.runId == null ? "" : lane.runId));
@@ -414,135 +308,53 @@ public class AgentHarness implements AutoCloseable {
     }
 
     /**
+     * Wait for the lane's current run to finish（pi {@code Agent.waitForIdle}）。
+     *
+     * <p>车道空闲时立即返回。它在「另一条线程 abort 之后等它真的停下来」这个场景里有用
+     * —— 调用 {@link #prompt} 的那条线程本来就是阻塞的，不需要它。</p>
+     */
+    public void waitForIdle(String laneName) {
+        var lane = requireLane(laneName);
+        var run = lane.activeRun;
+        if (run != null) {
+            run.done().join();
+        }
+    }
+
+    /**
      * Clear lane transcript, all queues, and run state (pi Agent.reset
      * alignment). Rejected while the lane is running.
      */
     public void reset(String laneName) {
         if (closed) throw new HarnessClosedException();
-        actionExecutor.reset(laneName);
+        runLifecycle.reset(laneName);
         publishState(laneName);
     }
 
     /** Clear the default lane (pi Agent.reset alignment). */
     public void reset() {
-        reset(defaultLaneName);
+        reset(registry.defaultLaneName());
     }
 
-    /**
-     * Continue a run from the current transcript tail (pi Agent.continue
-     * alignment): no new user entry, straight into the assistant stream.
-     */
-    public Action continueRun(String laneName) {
+    /** Seed a lane transcript from a persisted session on resume (no-op when non-empty). */
+    public void seedTranscript(String laneName, List<Entry> entries) {
+        runLifecycle.seedTranscript(laneName, entries);
+    }
+
+    /** Load a lane's persisted record log on resume; the lane comes back idle (docs/30 §4.1). */
+    public void restoreRecords(String laneName, List<LaneRecord> records) {
         if (closed) throw new HarnessClosedException();
-        var action = actionExecutor.runContinue(laneName);
-        publishState(laneName);
-        return action;
+        runLifecycle.restoreRecords(laneName, records);
     }
 
-    /** Continue a run on the default lane. */
-    public Action continueRun() {
-        return continueRun(defaultLaneName);
-    }
-
-    /**
-     * Remove the trailing error assistant entry from the lane transcript
-     * (pi {@code _prepareRetry} keeps the errored message only in session
-     * history, not in agent state), so a retry continues from the prior
-     * context without re-prompting.
-     */
+    /** Drop the trailing error assistant entry so a retry continues from the prior context. */
     public void dropTrailingErrorAssistant(String laneName) {
-        var lane = lanes.get(laneName);
-        if (lane == null) {
-            return;
-        }
-        var entries = lane.transcript;
-        if (entries.isEmpty()
-                || !(entries.get(entries.size() - 1) instanceof Entry.Message m)
-                || !"assistant".equals(m.message().role())) {
-            return;
-        }
-        String stopReason = lane.newestOwn != null ? lane.newestOwn.stopReason() : null;
-        if (HarnessUtils.isErrorStopReason(stopReason)) {
-            entries.remove(entries.size() - 1);
-        }
+        runLifecycle.dropTrailingErrorAssistant(laneName);
     }
 
     /** Return the final assistant message from the most recent run (default lane). */
     public AssistantMessage lastAssistantMessage() {
-        return lanes.get(defaultLaneName).partial;
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    // Manual drive
-    // ═══════════════════════════════════════════════════════════
-
-    /** Return the next pending action from the default lane. */
-    public Action peekAction() {
-        return peekAction(defaultLaneName);
-    }
-
-    /** Return the next pending action from the specified lane. */
-    public Action peekAction(String laneName) {
-        if (state.driveMode instanceof DriveMode.Automatic) {
-            throw new IllegalStateException("peekAction is disabled in AUTOMATIC mode");
-        }
-        return actionExecutor.peekAction(laneName);
-    }
-
-    /** Execute a single action (default lane). */
-    public Action executeAction(Action action) {
-        return executeAction(defaultLaneName, action);
-    }
-
-    /** Execute a single action on the specified lane. */
-    public Action executeAction(String laneName, Action action) {
-        if (closed) throw new HarnessClosedException();
-        if (state.driveMode instanceof DriveMode.Automatic) {
-            throw new IllegalStateException("executeAction is disabled in AUTOMATIC mode");
-        }
-        var result = actionExecutor.executeAction(laneName, action);
-        publishState(laneName);
-        return result;
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    // Drive mode
-    // ═══════════════════════════════════════════════════════════
-
-    /** The current harness drive mode. */
-    public DriveMode drive() {
-        return state.driveMode;
-    }
-
-    /** Change the harness drive mode. */
-    public void drive(DriveMode mode) {
-        if (closed) throw new HarnessClosedException();
-        state.driveMode = mode;
-    }
-
-    /** Drive the default lane to completion in AUTOMATIC mode. */
-    public CompletionStage<Void> runToCompletion() {
-        return runToCompletion(defaultLaneName);
-    }
-
-    /** Drive the specified lane to completion in AUTOMATIC mode. */
-    public CompletionStage<Void> runToCompletion(String laneName) {
-        if (state.driveMode instanceof DriveMode.Manual) {
-            throw new IllegalStateException("Cannot runToCompletion in MANUAL mode");
-        }
-        // Chain each action's successor (same driver shape as SessionRunner.drive):
-        // the harness produces decision actions (e.g. TryFinishRun -> FinishOperation)
-        // whose successor MUST be executed. Re-peeking after executeAction would
-        // re-derive the same decision action from the unchanged phase and never run
-        // the terminal FinishOperation (L3: executeTryFinishRun no longer mutates the
-        // phase to IDLE — that moved into executeFinishOperation).
-        return CompletableFuture.runAsync(() -> {
-            Action action = actionExecutor.peekAction(laneName);
-            while (action != null) {
-                action = actionExecutor.executeAction(laneName, action);
-                publishState(laneName);
-            }
-        });
+        return registry.get(registry.defaultLaneName()).partial;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -551,13 +363,13 @@ public class AgentHarness implements AutoCloseable {
 
     /** Run a compaction on the default lane. */
     public void compact(CompactionSettings settings) {
-        compact(defaultLaneName, settings);
+        compact(registry.defaultLaneName(), settings);
     }
 
     /** Run a compaction on the specified lane. */
     public void compact(String laneName, CompactionSettings settings) {
         if (closed) throw new HarnessClosedException();
-        actionExecutor.compact(laneName, settings);
+        runLifecycle.compact(laneName, settings);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -658,13 +470,14 @@ public class AgentHarness implements AutoCloseable {
     @Override
     public void close() {
         closed = true;
-        for (var lane : lanes.values()) {
-            if (lane.abortSignal != null) {
-                lane.abortSignal.abort();
+        for (var lane : registry.lanes().values()) {
+            var signal = lane.abortSignal();
+            if (signal != null) {
+                signal.abort();
             }
-            // Closing a running lane is an abort request: record it so the
-            // fold sees why the operation stopped, matching abort() (docs/21).
-            if (!(lane.phase instanceof RunPhase.Idle)) {
+            // Closing a running lane is an abort request: record it so the log
+            // says why the operation stopped, matching abort().
+            if (lane.isRunning()) {
                 lane.records.add(new LaneRecord.AbortRequested(
                     java.util.UUID.randomUUID().toString(), 0, lane.laneName, null,
                     lane.runId == null ? "" : lane.runId));
@@ -678,7 +491,6 @@ public class AgentHarness implements AutoCloseable {
     // ═══════════════════════════════════════════════════════════
 
     private LaneState requireLane(String laneName) {
-        return HarnessUtils.requireLane(lanes, laneName);
+        return registry.require(laneName);
     }
-
 }

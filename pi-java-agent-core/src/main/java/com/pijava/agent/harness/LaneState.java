@@ -1,43 +1,37 @@
 package com.pijava.agent.harness;
 
-import java.util.ArrayList;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.record.LaneRecord;
-import com.pijava.ai.AbortSignal;
 import com.pijava.agent.tool.AgentTool;
+import com.pijava.ai.AbortSignal;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.telemetry.TelemetrySpan;
 
 /**
- * Internal per-lane state for {@link AgentHarness}.
+ * Internal per-lane state for {@link AgentHarness} — pi {@code AgentState} 的 Java 版
+ * （{@code docs/31 §3.1}）。
  *
- * <p>Only AgentHarness and its collaborators create and mutate this.
- * Phase 2a supports a single lane; multi-lane in Phase 2c.</p>
+ * <p>Only AgentHarness and its collaborators create and mutate this.</p>
  *
- * <p>Aligned with pi's {@code LaneState}. Key design: messages are NOT stored
- * directly — they are built from {@link #transcript} entries on each LLM request
- * by {@code ActionExecutor}.</p>
+ * <p><b>运行态由 {@link #activeRun} 表达</b>（{@code docs/31 §3.2}）：非空即为正在运行。
+ * 原先的 {@code RunPhase} 枚举与「先记账后落盘」的 {@code pendingWrites} 队列都已删除
+ * —— entry 一旦产生就直接进 {@link #transcript}，没有中间态。</p>
  */
 public final class LaneState {
 
     /** Lane identifier. */
     String laneName = "default";
 
-    /** Current run phase. */
-    RunPhase phase = RunPhase.IDLE;
-
-    /** The full transcript of entries (messages are built from these). */
+    /** The lane's entry log — 持久真源，{@link PiLaneSink} 与 run 起手直接追加。 */
     final List<Entry> transcript = new ArrayList<>();
 
     /** Current run identifier. */
     String runId;
-
-    /** Monotonic step counter within the current run. */
-    int stepIndex;
 
     /** Current assistant message partial snapshot (from last event). */
     AssistantMessage partial;
@@ -45,17 +39,15 @@ public final class LaneState {
     /** Summary of the newest own entry (for stopReason checks). */
     NewestOwn newestOwn;
 
-    /** Entries provisioned but not yet persisted. */
-    final List<Entry> pendingWrites = new ArrayList<>();
-
-    /** Internal operation records for debugging and audit (Phase 2a). */
+    /** Internal operation records for debugging and audit. */
     public final List<LaneRecord> records = new ArrayList<>();
 
-    /** Pending tool calls to execute (populated after tool_use stopReason). Phase 2b. */
-    final List<Action.ExecuteTool> pendingToolCalls = new ArrayList<>();
-
-    /** Abort signal for the current run. Phase 2b. */
-    AbortSignal abortSignal;
+    /**
+     * 当前运行；{@code null} 表示车道空闲（{@code docs/31 §3.2}）。
+     *
+     * <p>它是唯一的「是否在跑」判据 —— 取代了 {@code RunPhase} 三态枚举。</p>
+     */
+    ActiveRun activeRun;
 
     /** Open {@code harness.run} telemetry span for the current run (observability). */
     TelemetrySpan runSpan;
@@ -63,7 +55,7 @@ public final class LaneState {
     /** Run start wall-clock for OperationFinished.durationMs / harness.run duration. */
     long runStartNanos;
 
-    /** Pending update from prepare_next_turn hooks; consumed by the next StreamAssistant, cleared at run end. */
+    /** Pending update from prepare_next_turn hooks; consumed by the next turn, cleared at run end. */
     com.pijava.agent.hook.TurnUpdate pendingTurnUpdate;
 
     // Phase 2c: multi-lane fields
@@ -89,6 +81,24 @@ public final class LaneState {
     /** Monotonic sequence number shared by all three queues. */
     long queueSeq;
 
+    // ── Helpers ──────────────────────────────────────────────
+
+    /** Whether a run is in flight on this lane (pi {@code this.activeRun !== undefined}). */
+    boolean isRunning() {
+        return activeRun != null;
+    }
+
+    /**
+     * 当前运行的取消信号，空闲时为 {@code null}（pi {@code this.activeRun?.abortController.signal}）。
+     *
+     * <p>空闲时返回 {@code null} 是**有意的**：pi 的 {@code abort()} 在空闲时也无事可做。
+     * 原先在恢复时会预先装一个信号「让恢复后的车道可中止」，那是三态枚举时代的产物
+     * —— 空闲车道本就没有可中止的东西。</p>
+     */
+    AbortSignal abortSignal() {
+        return activeRun == null ? null : activeRun.signal();
+    }
+
     /** Snapshot the three queues for {@link LaneInfo.Queues}. */
     LaneInfo.Queues queueSnapshot() {
         return new LaneInfo.Queues(
@@ -96,8 +106,6 @@ public final class LaneState {
             List.copyOf(followUpQueue),
             List.copyOf(nextRunQueue));
     }
-
-    // ── Helpers ──────────────────────────────────────────────
 
     /** Derive the next sequence number. */
     long nextSeq() {
@@ -117,9 +125,7 @@ public final class LaneState {
      * Summary of the newest entry produced by the agent itself
      * (not by the user or external systems).
      *
-     * <p>Aligned with pi {@code LaneState.newestOwn}.
-     * Used in checkpoint phase to determine the outcome of
-     * {@code TryFinishRun}.</p>
+     * <p>Used to derive the run outcome ({@link HarnessUtils#determineOutcome}).</p>
      */
     record NewestOwn(
         String entryId,

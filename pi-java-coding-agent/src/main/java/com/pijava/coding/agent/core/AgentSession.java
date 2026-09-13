@@ -17,7 +17,6 @@ import com.pijava.agent.entry.Entry;
 import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.compaction.LlmSummaryGenerator;
 import com.pijava.agent.harness.AgentHarness;
-import com.pijava.agent.harness.DriveMode;
 import com.pijava.agent.harness.HarnessConfig;
 import com.pijava.agent.harness.LaneConfig;
 import com.pijava.agent.harness.ToolExecution;
@@ -263,7 +262,6 @@ public final class AgentSession implements AutoCloseable {
             .activeTools(SessionSetup.activeTools(args, toolList))
             .toolRegistry(tools)
             .toolContext(toolContext)
-            .driveMode(new DriveMode.Manual())
             .steeringMode(SessionSetup.queueMode(effective.steeringMode))
             .followUpMode(SessionSetup.queueMode(effective.followUpMode))
             .toolExecution(ToolExecution.defaultMode())

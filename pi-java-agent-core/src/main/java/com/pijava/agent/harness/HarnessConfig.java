@@ -21,8 +21,9 @@ import com.pijava.telemetry.TelemetryContext;
 /**
  * Configuration for creating an {@link AgentHarness}.
  *
- * <p>Phase 2c: added driveMode, compactionSettings fields.
- * Phase 3: added steeringMode, followUpMode, toolExecution fields.</p>
+ * <p>Phase 2c: added compactionSettings. Phase 3: added steeringMode, followUpMode,
+ * toolExecution. {@code driveMode} was removed with the step chain — the harness
+ * has exactly one driver now ({@code docs/31 §6}).</p>
  *
  * @param streamFn           LLM streaming call function
  * @param model              current model identifier
@@ -33,7 +34,6 @@ import com.pijava.telemetry.TelemetryContext;
  * @param toolRegistry       tool registry for the harness
  * @param toolContext        execution environment for tools
  * @param commandPrefix      optional prefix for bash commands
- * @param driveMode          drive mode (default: MANUAL)
  * @param compactionSettings compaction settings (null = no auto-compaction)
  * @param skills             named skills to register (default: empty)
  * @param retryPolicy        retry policy for the LLM HTTP client (default: default policy)
@@ -44,6 +44,7 @@ import com.pijava.telemetry.TelemetryContext;
  * @param toolExecution      tool execution mode for multi-tool turns (default: parallel)
  * @param streamListener     receives every StreamEvent as the harness consumes
  *                           it (default: no-op; Phase 3 TUI/print streaming)
+ * @param summaryGenerator   generates the compaction summary (default: truncating)
  */
 public record HarnessConfig(
     StreamFn streamFn,
@@ -55,7 +56,6 @@ public record HarnessConfig(
     ToolRegistry toolRegistry,
     ToolContext toolContext,
     String commandPrefix,
-    DriveMode driveMode,
     CompactionSettings compactionSettings,
     Map<String, Skill> skills,
     RetryPolicy retryPolicy,
@@ -86,18 +86,18 @@ public record HarnessConfig(
         return new Builder();
     }
 
-    /** 19-参便利构造（测试/旧路径）；summary 默认 {@code truncating()}。 */
+    /** 18-参便利构造（测试/旧路径）；summary 默认 {@code truncating()}。 */
     public HarnessConfig(
             StreamFn streamFn, ModelId<?> model, ModelThinkingLevel thinkingLevel,
             String systemPrompt, Set<AgentTool<?, ?>> activeTools, int maxInputTokens,
             ToolRegistry toolRegistry, ToolContext toolContext, String commandPrefix,
-            DriveMode driveMode, CompactionSettings compactionSettings,
+            CompactionSettings compactionSettings,
             Map<String, Skill> skills, RetryPolicy retryPolicy, TelemetryContext telemetry,
             ThinkingLevelMap thinkingLevelMap, QueueMode steeringMode,
             QueueMode followUpMode, ToolExecution toolExecution,
             Consumer<StreamEvent> streamListener) {
         this(streamFn, model, thinkingLevel, systemPrompt, activeTools, maxInputTokens,
-             toolRegistry, toolContext, commandPrefix, driveMode, compactionSettings,
+             toolRegistry, toolContext, commandPrefix, compactionSettings,
              skills, retryPolicy, telemetry, thinkingLevelMap, steeringMode,
              followUpMode, toolExecution, streamListener, SummaryGenerator.truncating());
     }
@@ -112,7 +112,6 @@ public record HarnessConfig(
         private ToolRegistry toolRegistry;
         private ToolContext toolContext;
         private String commandPrefix;
-        private DriveMode driveMode = DriveMode.MANUAL;
         private CompactionSettings compactionSettings;
         private Map<String, Skill> skills = Map.of();
         private RetryPolicy retryPolicy = RetryPolicy.defaultPolicy();
@@ -136,7 +135,6 @@ public record HarnessConfig(
         public Builder toolRegistry(ToolRegistry tr) { this.toolRegistry = tr; return this; }
         public Builder toolContext(ToolContext tc) { this.toolContext = tc; return this; }
         public Builder commandPrefix(String cp) { this.commandPrefix = cp; return this; }
-        public Builder driveMode(DriveMode dm) { this.driveMode = dm; return this; }
         public Builder compactionSettings(CompactionSettings cs) { this.compactionSettings = cs; return this; }
         /** Set the named skills to register; returns {@code this} for chaining. */
         public Builder skills(Map<String, Skill> s) {
@@ -165,7 +163,7 @@ public record HarnessConfig(
             return new HarnessConfig(streamFn, model, thinkingLevel,
                                      systemPrompt, activeTools, maxInputTokens,
                                      toolRegistry, toolContext, commandPrefix,
-                                     driveMode, compactionSettings, skills,
+                                     compactionSettings, skills,
                                      retryPolicy, telemetry, thinkingLevelMap,
                                      steeringMode, followUpMode, toolExecution,
                                      streamListener, summaryGenerator);

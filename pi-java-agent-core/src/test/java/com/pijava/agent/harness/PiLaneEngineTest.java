@@ -119,7 +119,7 @@ class PiLaneEngineTest {
         return AgentHarness.create(new HarnessConfig(
             sf, MODEL, ModelThinkingLevel.off(), "system", active, 200_000,
             tool == null ? null : registry, tool == null ? null : context, null,
-            DriveMode.MANUAL, null, Map.of(),
+            null, Map.of(),
             com.pijava.ai.http.RetryPolicy.defaultPolicy(),
             com.pijava.telemetry.NoopTelemetryContext.INSTANCE, ThinkingLevelMap.empty(),
             QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),
@@ -213,7 +213,7 @@ class PiLaneEngineTest {
         var h = harness(scripted(List.of(textTurn("hello"))), null);
         var rec = new Recorder();
 
-        h.piEngine().run(AgentHarness.DEFAULT_LANE, "hi", List.of(), rec);
+        h.prompt(AgentHarness.DEFAULT_LANE, "hi", List.of(), rec);
 
         var transcript = transcriptOf(h);
         assertThat(transcript).hasSize(2);
@@ -229,7 +229,7 @@ class PiLaneEngineTest {
     void textRunClosesTheOperationAndReturnsToIdle() {
         var h = harness(scripted(List.of(textTurn("hello"))), null);
 
-        h.piEngine().run(AgentHarness.DEFAULT_LANE, "hi", List.of(), new Recorder());
+        h.prompt(AgentHarness.DEFAULT_LANE, "hi", List.of(), new Recorder());
 
         assertThat(h.snapshot(AgentHarness.DEFAULT_LANE).operation()).isNull();
         var records = recordsOf(h);
@@ -245,7 +245,7 @@ class PiLaneEngineTest {
     void assistantStepAndUsageAreRecorded() {
         var h = harness(scripted(List.of(textTurn("hello"))), null);
 
-        h.piEngine().run(AgentHarness.DEFAULT_LANE, "hi", List.of(), new Recorder());
+        h.prompt(AgentHarness.DEFAULT_LANE, "hi", List.of(), new Recorder());
 
         var records = recordsOf(h);
         assertThat(records.stream().filter(LaneRecord.StepAttempt.class::isInstance)).hasSize(1);
@@ -265,7 +265,7 @@ class PiLaneEngineTest {
             toolTurn("tc1", "echo", Map.of("x", "1")),
             textTurn("done"))), okTool("echo", "echoed"));
 
-        h.piEngine().run(AgentHarness.DEFAULT_LANE, "run echo", List.of(), new Recorder());
+        h.prompt(AgentHarness.DEFAULT_LANE, "run echo", List.of(), new Recorder());
 
         var transcript = transcriptOf(h);
         assertThat(transcript).hasSize(4);
@@ -294,10 +294,9 @@ class PiLaneEngineTest {
     @Test
     void consecutiveRunsAppendAndNeverLeaveAnOpenOperation() {
         var h = harness(scripted(List.of(textTurn("one"), textTurn("two"))), null);
-        var engine = h.piEngine();
 
-        engine.run(AgentHarness.DEFAULT_LANE, "first", List.of(), new Recorder());
-        engine.run(AgentHarness.DEFAULT_LANE, "second", List.of(), new Recorder());
+        h.prompt(AgentHarness.DEFAULT_LANE, "first", List.of(), new Recorder());
+        h.prompt(AgentHarness.DEFAULT_LANE, "second", List.of(), new Recorder());
 
         assertThat(transcriptOf(h)).hasSize(4);
         var records = recordsOf(h);
@@ -312,7 +311,7 @@ class PiLaneEngineTest {
             toolTurn("tc9", "nope", Map.of()),
             textTurn("recovered"))), okTool("echo", "echoed"));
 
-        h.piEngine().run(AgentHarness.DEFAULT_LANE, "go", List.of(), new Recorder());
+        h.prompt(AgentHarness.DEFAULT_LANE, "go", List.of(), new Recorder());
 
         var transcript = transcriptOf(h);
         assertThat(transcript).hasSize(4);
@@ -328,7 +327,7 @@ class PiLaneEngineTest {
     void recordLogOfANewLoopTextRunIsWellFormed() {
         var h = harness(scripted(List.of(textTurn("hello"))), null);
 
-        h.piEngine().run(AgentHarness.DEFAULT_LANE, "hi", List.of(), new Recorder());
+        h.prompt(AgentHarness.DEFAULT_LANE, "hi", List.of(), new Recorder());
 
         assertThat(h.snapshot(AgentHarness.DEFAULT_LANE).operation()).isNull();
         assertLogIsWellFormed(h);
@@ -344,7 +343,7 @@ class PiLaneEngineTest {
             toolTurn("tc1", "echo", Map.of("x", "1")),
             textTurn("done"))), okTool("echo", "echoed"));
 
-        h.piEngine().run(AgentHarness.DEFAULT_LANE, "run echo", List.of(), new Recorder());
+        h.prompt(AgentHarness.DEFAULT_LANE, "run echo", List.of(), new Recorder());
 
         assertThat(h.snapshot(AgentHarness.DEFAULT_LANE).operation()).isNull();
         assertLogIsWellFormed(h);

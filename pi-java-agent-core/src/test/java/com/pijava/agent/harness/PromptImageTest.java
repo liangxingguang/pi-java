@@ -30,17 +30,12 @@ class PromptImageTest {
         return AgentHarness.create(new HarnessConfig(
             sf, MODEL, ModelThinkingLevel.off(), "",
             Set.of(), 200_000, null, null, null,
-            DriveMode.MANUAL, null, java.util.Map.of(),
+            null, java.util.Map.of(),
             com.pijava.ai.http.RetryPolicy.defaultPolicy(),
             com.pijava.telemetry.NoopTelemetryContext.INSTANCE,
             com.pijava.ai.thinking.ThinkingLevelMap.empty(),
             QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),
             event -> { }));
-    }
-
-    private static void drive(AgentHarness h) {
-        var action = h.peekAction();
-        while (action != null) { action = h.executeAction(action); }
     }
 
     private static List<ContentBlock> lastUserContent(AgentHarness h) {
@@ -53,7 +48,7 @@ class PromptImageTest {
     @Test
     void runWithImagesBuildsTextThenImageContent() {
         var h = harness();
-        h.run("look", List.of(new PromptImage("image/png", "aGk=")));
+        h.prompt("look", List.of(new PromptImage("image/png", "aGk=")));
         var content = lastUserContent(h);
         assertThat(content).hasSize(2);
         assertThat(content.get(0)).isInstanceOf(ContentBlock.TextContent.class);
@@ -65,13 +60,10 @@ class PromptImageTest {
     @Test
     void steerWithImagesCarriesImagesIntoInjectedEntry() {
         var h = harness();
-        h.run("first");
-        drive(h);
+        // 空闲时入队的 steer 由下一次运行在起手后立即注入（PiLoop 起始即轮询 steer 队列）。
         h.steer("default", "with pic", List.of(new PromptImage("image/jpeg", "eg==")));
-        var action = h.peekAction("default"); // idle + steer queued → new run
-        assertThat(action).isNotNull();
-        var a = action;
-        while (a != null) { a = h.executeAction("default", a); }
+        h.prompt("first");
+
         var content = lastUserContent(h);
         assertThat(content.get(0)).isInstanceOf(ContentBlock.TextContent.class);
         assertThat(content).anyMatch(b -> b instanceof ContentBlock.ImageContent
@@ -89,14 +81,14 @@ class PromptImageTest {
     @Test
     void nullImagesListTreatedAsEmpty() {
         var h = harness();
-        h.run("plain", (List<PromptImage>) null);
+        h.prompt("plain", (List<PromptImage>) null);
         assertThat(lastUserContent(h)).hasSize(1);
     }
 
     @Test
     void plainTextOverloadUnchanged() {
         var h = harness();
-        h.run("plain");
+        h.prompt("plain");
         assertThat(lastUserContent(h)).hasSize(1);
     }
 }

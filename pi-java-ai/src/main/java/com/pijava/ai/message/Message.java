@@ -60,6 +60,18 @@ public sealed interface Message {
             this(content, null, null);
         }
 
+        /**
+         * The same message with a different {@code stopReason}.
+         *
+         * <p>Used by the loop to record a turn that was cut short: an abort the
+         * provider did not report itself still has to land as {@code aborted},
+         * or the interrupted response would be projected into later requests as
+         * an ordinary answer.</p>
+         */
+        public AssistantMessage withStopReason(String newStopReason) {
+            return new AssistantMessage(content, newStopReason, deferred);
+        }
+
         @Override
         public String role() {
             return "assistant";

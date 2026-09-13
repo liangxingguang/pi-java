@@ -77,8 +77,10 @@ class PiToolRunnerTest {
 
     @Test
     void successfulCallProducesNonErrorResult() {
+        var decisions = new java.util.ArrayList<String>();
         var runner = new PiToolRunner("default", registryWith(okTool("echo", "hello")),
-            null, CTX, null);
+            null, CTX, null,
+            (callId, allowed) -> decisions.add(callId + "=" + allowed));
 
         var outcome = runner.run(call("echo"));
 
@@ -87,12 +89,13 @@ class PiToolRunnerTest {
         assertThat(outcome.message().toolUseId()).isEqualTo("tc1");
         assertThat(outcome.message().toolName()).isEqualTo("echo");
         assertThat(outcome.message().content().toString()).contains("hello");
+        assertThat(decisions).containsExactly("tc1=true");
     }
 
     @Test
     void unknownToolBecomesErrorResultNotAnException() {
         var runner = new PiToolRunner("default", registryWith(okTool("echo", "hi")),
-            null, CTX, null);
+            null, CTX, null, null);
 
         var outcome = runner.run(call("nope"));
 
@@ -104,7 +107,7 @@ class PiToolRunnerTest {
     @Test
     void throwingToolBecomesErrorResultNotAnException() {
         var runner = new PiToolRunner("default", registryWith(throwingTool("boom")),
-            null, CTX, null);
+            null, CTX, null, null);
 
         var outcome = runner.run(call("boom"));
 
@@ -117,13 +120,18 @@ class PiToolRunnerTest {
         var hooks = new HookSystem(new ConcurrentHashMap<>());
         hooks.onBeforeTool("default", ctx ->
             new BeforeToolResult(false, Map.of("reason", "not allowed here"), true));
+        var decisions = new java.util.ArrayList<String>();
         var runner = new PiToolRunner("default", registryWith(okTool("echo", "hi")),
-            hooks, CTX, null);
+            hooks, CTX, null,
+            (callId, allowed) -> decisions.add(callId + "=" + allowed));
 
         var outcome = runner.run(call("echo"));
 
         assertThat(outcome.isError()).isTrue();
         assertThat(outcome.terminate()).isTrue();
         assertThat(outcome.message().content().toString()).contains("not allowed here");
+        // 拒绝也要上报判定：tool.execute 跨度靠它区分「钩子拦下」与「工具自己失败」，
+        // 两者在结果消息上都只是 isError=true。
+        assertThat(decisions).containsExactly("tc1=false");
     }
 }
