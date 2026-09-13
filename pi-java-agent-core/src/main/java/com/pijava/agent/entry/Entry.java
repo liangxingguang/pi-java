@@ -60,16 +60,6 @@ public sealed interface Entry {
         };
     }
 
-    /**
-     * Whether this entry carries lane configuration rather than conversation
-     * content. Configuration entries feed the record-log fold's
-     * {@code effectiveConfiguration} derivation; they are never part of the
-     * LLM-visible transcript slice.
-     */
-    default boolean isConfiguration() {
-        return false;
-    }
-
     /** Rebuild this entry with storage-assigned identity fields. */
     default Entry committed(long seq, String parentId, Instant timestamp) {
         return switch (this) {
@@ -112,10 +102,6 @@ public sealed interface Entry {
         String provider,
         String modelId
     ) implements Entry {
-        @Override
-        public boolean isConfiguration() {
-            return true;
-        }
     }
 
     /**
@@ -129,10 +115,6 @@ public sealed interface Entry {
         Instant timestamp,
         String thinkingLevel
     ) implements Entry {
-        @Override
-        public boolean isConfiguration() {
-            return true;
-        }
     }
 
     /** The set of active tools was changed. */
@@ -146,11 +128,6 @@ public sealed interface Entry {
         /** Defensively copies {@code activeToolNames}. */
         public ActiveToolsChange {
             activeToolNames = List.copyOf(activeToolNames);
-        }
-
-        @Override
-        public boolean isConfiguration() {
-            return true;
         }
     }
 
