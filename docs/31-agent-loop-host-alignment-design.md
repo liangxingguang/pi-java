@@ -172,6 +172,8 @@ final class LaneState {
 
 ### 3.2 `activeRun` 取代 `RunPhase`
 
+> **✅ 已实施（2026-09-13，commit `03d8669`）** —— 见 §8.8。
+
 ```java
 record ActiveRun(AbortSignal signal, CompletableFuture<Void> promise) {}
 ```
@@ -356,6 +358,11 @@ entry 由会话层在 `message_end` 上直接写入，没有「先记账后落�
 
 ## 6. 删除清单与测试迁移
 
+> **✅ 已实施（2026-09-13，commit `03d8669`）** —— 见 §8.8。
+> 两处与本文不同：`pendingWrites` 是**先独立删掉**的（§5 的「随 sink 退化而消失」
+> 不是唯一路径）；**多车道容器没删** —— `createLane` 有生产调用者（会话层的 fork /
+> 分支、TUI 的车道选择），须先按 §4.3 把分支入口搬走。
+
 ### 6.1 删除
 
 | 目标 | 行数 | 依据 |
@@ -390,12 +397,14 @@ entry 由会话层在 `message_end` 上直接写入，没有「先记账后落�
 
 ## 7. 验收
 
-1. **L5 差分保持 8/8**（`docs/29`）：`PiLoop` 未动，但宿主层改动可能影响装配 ⇒ 必须重跑。
-2. **全 reactor `mvn -o -am clean verify` 绿**（14 模块），checkstyle 零违规。
+1. ~~**L5 差分保持 8/8**~~ **✅ 9/9**（§8.7 的 S9 之后），`03d8669` 后不变。
+2. **全 reactor `mvn -o -am clean verify` 绿**（14 模块），checkstyle 零违规 —— **✅ `03d8669` 达成**。
 3. **双驱动不再并存**：`src/main` 里不再有 `peekAction` / `executeAction` / `RunPhase` /
-   `Action` 的引用。
-4. **`pendingWrites` 零命中**。
-5. **行为等价抽查**：崩溃恢复、abort、steer 注入时机、自动压缩四条路径各有用例。
+   `Action` 的引用 —— **✅ 达成**（仅剩解释历史的注释）。
+4. **`pendingWrites` 零命中** —— **✅ 达成**。
+5. **行为等价抽查**：崩溃恢复、abort、steer 注入时机、自动压缩四条路径各有用例 ——
+   **✅ 达成**（`SessionResumeFoldTest` / `MidStreamAbortTest` / `QueueSchedulingTest` /
+   `CompactionTest`）。本轮另有 9 条**真实差异**由删除暴露并逐条对 pi 判定，见 §8.8。
 6. ~~**`PiLoop` 补上 `context` 通道**（§8.3-6），且新增一个 `prepareNextTurn` **非 null** 的
    L5 剧本 —— 现有 8 个剧本里它恒为 `null`，覆盖不到这条通道。~~
    **✅ 已完成（2026-09-13）**：通道见 §8.3-6；剧本为 **S9**，L5 现为 **9/9**。
@@ -547,6 +556,82 @@ pi 用 `async/await`，Java 没有。**这不是障碍**：pi 的 `runLoop` 里�
 
 **S9 仍不覆盖**：`AgentLoopTurnUpdate.thinkingLevel` —— 不出现在任何帧上，差分**结构上**
 验证不了，故未写进剧本。
+
+---
+
+### 8.8 §6 删除清单与 §3.2 —— 已实施（2026-09-13，commit `03d8669`）
+
+**实施依据是「生产路径上零调用者」**：`SessionRunner` 早已只走
+`piEngine().run()` / `.continueRun()`，而 `peekAction` / `executeAction` /
+`runToCompletion` / `DriveMode` 只被测试使用。于是同一套 `LaneState` 被两条驱动路径
+各自解读，**两者行为不一致长期无人发现** —— 因为测试走的是旧路径。
+
+#### 删掉的（约 1100 行）
+
+| 目标 | 依据 |
+|---|---|
+| `Action` / `PeekAction` / `LoopInvariants` / `RunPhase` / `DriveMode` | §6.1 |
+| `ActionExecutor` 的步进链 | §3.3 |
+| `AssistantStreamExecutor` | 流式执行已由 `PiLoop` 承担 |
+| `ToolExecutionPipeline` | `PiToolRunner` 取代；随之 `ToolExecutor` 也失活（零调用者） |
+
+#### 新增的
+
+| 类型 | 职责 |
+|---|---|
+| `ActiveRun` | **存在即为正在运行**，取代三态 `RunPhase`（§3.2）。`waitForIdle` 等它的完成信号 |
+| `RunLifecycle` | 只留起手/收口/空闲操作（`runId`、`before_run`、`OperationStarted`、`OperationFinished`、`before_run_end`、run span）+ 恢复三件套 |
+| `LaneRegistry` | 车道容器与生命周期 —— 拆出来是为了让 `AgentHarness` 回到 500 行以内 |
+
+宿主 API 对齐 pi：`prompt(...)` / `continueRun(...)` 是**阻塞**的整轮运行
+（§8.5 的口径），`piEngine()` 不再外露。
+
+> ⚠️ **§5 的删除方式与实施不同。** 设计写的是「随 `PiLaneSink` 退化为纯事件转发而整片
+> 消失」，实际是**先独立删掉**：`pendingWrites` 全仓零读取点（§8.3-5 清点确认），
+> 与 sink 的改造没有依赖关系，先删能缩小后续改动面。
+>
+> ⚠️ **§3.1 的字段清单只落地了一半。** `activeRun` 已取代 `RunPhase`，但
+> `transcript` **没有**被 `messages` 取代 —— §8.3-5 的清点表明下游（`SessionPersistence`
+> 的落盘、RPC/web 的 entry JSON、fork 取 `entry.id()`）**需要 `Entry` 对象**，
+> 而 harness 的 transcript 是**新 entry 的唯一生产者**。故 `messages` 工作副本应
+> **增量添加**而非替换，留待 §4.2。
+
+#### 删除后才暴露的既有缺陷（生产早已如此，不是本次引入）
+
+删掉旧路径后 9 个测试立刻转红。**它们在本 commit 之前是通过的** —— 因为它们走的是
+旧路径。逐条对 pi 源码判定后：
+
+| # | 症状 | 判定 | 处置 |
+|---|---|---|---|
+| 1 | 流中途 abort 被记成 COMPLETED | pi 把 signal 交给 streamFunction 由 provider 收尾（`agent-loop.ts:307-311`）；pi-java 的同步 `StreamIterator` 不能假定 provider 照做 | **补循环侧保证**：拉取途中信号一响就停止消费，被切断的一轮标 `aborted`（A8）。provider 给出终局判定时**不覆盖** |
+| 2 | 出错的运行被记成 COMPLETED | `determineOutcome` 返回 `"error"`，而 `RunLifecycle.outcome()` 只认 `OperationOutcome` 取值 ⇒ 落默认分支。span 属性写着 error，记录写着 COMPLETED | **修**：`"error"` → FAILED |
+| 3 | 无 `tool.execute` 跨度、无 tool.executions/tool.errors | `ToolExecutionPipeline` 独占这些，`PiToolRunner` 没有 | **修**：跨度在 `PiLaneSink.noteToolStart` 开、结果消息处关；`batchSize` 在收尾时补（pi 保证全部 start 早于任何 end） |
+| 4 | `StepAttempt.durationMs` 恒为 null | `PiLaneSink` 传硬 `null` | **修**：传实测毫秒 |
+| 5 | run span 的 `outcome` 是 `tool_use` | 消息级的 `tool_use`/`length` 被当成了**运行**结局；到达终局的运行必然已消费完全部工具调用 | **修**：`determineOutcome` 归一为 `completed` |
+| 6 | 截断的调用**有** `ToolFinished` 记录（旧路径没有） | pi 的 `failToolCallsFromTruncatedMessage` **同样**发 start/end（`agent-loop.ts:379-405`） | **改测试**：记录在，但 `executed == 0` |
+| 7 | 拒绝理由文本 | 旧路径是通用句 "Tool call denied by hook"；pi 的 `createErrorToolResult` 把理由带给模型 | **改测试**：断言钩子给的理由 |
+| 8 | 校验错误无 "Tool error: " 前缀 | 前缀是 `ToolExecutionPipeline` 的构造，pi 侧无对应物 | **改测试**：断言校验器措辞 |
+| 9 | 拒绝结果的块类型是 `TextContent` 不是 `ToolResultContent` | pi 的 `createToolResultMessage` 把文本直接放进结果消息 | **改测试**；`QueueMode.All` **不合并**（`PendingMessageQueue.drain` 原样返回，`agent-loop.ts:200-208`）—— 旧的 `"first\n\nsecond"` 合并是 pi-java 自己的构造 |
+
+> **这条是本次最有价值的产出**：删除不是「删掉没用的东西」，而是**让生产路径的缺陷
+> 不再有替身**。任何一次「新旧并存」的重构都应该预期这一幕，并把红掉的测试当作
+> 待判定的清单，而不是待修平的噪音。
+
+#### 测试迁移
+
+21 个文件改由 `prompt(...)` 驱动；2 个纯 `Action` 序列用例（`AgentLoopL2Test`、
+`RunToCompletionTest`）随结构删除 —— 它们钉的正是被拆掉的东西，其行为覆盖已在
+`PiLoopTest` 层（截断/abort/follow-up）与 `ConsecutiveRunsTest` 重复。
+`RunToCompletionTest` 里唯一的行为回归（连续运行的 operation 配对）已迁入后者。
+
+#### 仍未做的
+
+- **§3.1 的 `messages` 工作副本**（见上）
+- **§4.1** 配置 entry 由会话层写、`LaneState` 持字段
+- **§4.2** 装配与压缩移出请求路径
+- **§4.3 + §1.2 的多车道删除**：`createLane` 有**生产调用者**（`AgentSession` 的
+  fork/分支、TUI 的 `TreeSelectorScreen`），不是零调用者 —— 需先按 §4.3 把分支入口
+  搬到会话层，**不能直接删**
 
 ---
 
