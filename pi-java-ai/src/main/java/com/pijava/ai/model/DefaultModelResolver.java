@@ -67,6 +67,25 @@ public final class DefaultModelResolver implements ModelResolver {
     }
 
     /**
+     * 某模型的<b>输出上限</b>（pi {@code Model.maxTokens}，overflow-recovery 的
+     * {@code isRecoverableLength} 操作数 —— 「钳制前的原始意图上限」，
+     * {@code overflow.ts:171}；package 3c，docs/31 §8.21）。目录侧字段是
+     * {@code ModelInfo.maxOutputTokens}；目录里没有这个模型 ⇒ 返回 0，
+     * {@code desiredMaxOutput > 0} 判据随之恒 false ⇒ length 收尾不做
+     * compact-and-retry，与裁决④一致。
+     */
+    public int maxOutputTokens(ModelId<?> id) {
+        if (id == null) {
+            return 0;
+        }
+        return catalog.listModels().stream()
+            .filter(info -> id.equals(info.id()))
+            .map(com.pijava.ai.catalog.ModelInfo::maxOutputTokens)
+            .findFirst()
+            .orElse(0);
+    }
+
+    /**
      * Resolve a CLI model pattern to a concrete model.
      *
      * <p>Phase 3: supports {@code "provider/model"}, bare {@code "model"}, and
