@@ -16,6 +16,7 @@ import { join } from "node:path";
 import {
 	type AssistantMessage,
 	type AssistantMessageEvent,
+	type Context,
 	EventStream,
 	type Message,
 	type Model,
@@ -62,6 +63,28 @@ interface ScriptContent {
 interface ScriptResponse {
 	content: ScriptContent[];
 	stopReason: "stop" | "length" | "toolUse" | "aborted" | "error";
+	/**
+	 * Prepend an echo of what this request actually carried (message count /
+	 * model / systemPrompt) to the first text block.
+	 *
+	 * Why: normalized frames are agent events only — the request itself never
+	 * reaches a frame (the scripted stream ignores its arguments). A
+	 * `nextTurn` context replacement is therefore invisible to the diff, and
+	 * the scenario would pass even with the hook never wired up. The echo
+	 * folds the request's shape into the assistant message, which *is* framed.
+	 */
+	echoRequest?: boolean;
+}
+
+/** What `prepareNextTurn` returns after a given turn (pi's `AgentLoopTurnUpdate`). */
+interface ScriptNextTurn {
+	/** Fires once, after the turn at this index (0-based). */
+	afterTurn: number;
+	/** Replaces the whole context: these become the user messages. */
+	messages?: string[];
+	systemPrompt?: string;
+	/** Model id to switch to (provider stays "openai"). */
+	model?: string;
 }
 
 interface Script {
@@ -76,6 +99,8 @@ interface Script {
 	steer?: { afterTurn: number; text: string }[];
 	/** Follow-up messages injected once the inner loop drains after `afterTurn`. */
 	followUp?: { afterTurn: number; text: string }[];
+	/** `prepareNextTurn`'s return value; absent = no hook configured. */
+	nextTurn?: ScriptNextTurn;
 	/** Abort the run once this many tool calls have completed. */
 	abortAfterToolCalls?: number;
 }
@@ -307,8 +332,42 @@ async function runScript(script: Script): Promise<string[]> {
 	// count from the stream call counter keeps this independent of how quickly
 	// the event consumer drains the stream.
 	let streamCalls = 0;
-	const streamFn = () => new ScriptedStream(script.responses[streamCalls++]);
 	const completedTurns = () => streamCalls - 1;
+	// Byte-for-byte the same echo as the Java runner's `Driver.withEcho` —
+	// changing one without the other turns a wording difference into a
+	// reported behavior difference.
+	const withEcho = (response: ScriptResponse, context: Context, model: Model<any>): ScriptResponse => {
+		const echo = `[n=${context.messages.length} model=${model.provider}/${model.id} sys=${context.systemPrompt ?? "-"}]`;
+		const content = response.content.map((block, index) =>
+			index === 0 && block.type === "text"
+				? { ...block, text: `${echo} ${block.text ?? ""}` }
+				: block,
+		);
+		return { ...response, content };
+	};
+	const streamFn = (model: Model<any>, context: Context) => {
+		const response = script.responses[streamCalls++];
+		return new ScriptedStream(response.echoRequest ? withEcho(response, context, model) : response);
+	};
+	const modelFor = (id: string): Model<any> => ({ ...createModel(), id });
+
+	let nextTurnFired = false;
+	const prepareNextTurn = async () => {
+		const spec = script.nextTurn;
+		if (!spec || nextTurnFired || spec.afterTurn !== completedTurns()) return undefined;
+		nextTurnFired = true;
+		return {
+			model: spec.model ? modelFor(spec.model) : undefined,
+			// pi: `currentContext = nextTurnSnapshot.context ?? currentContext` — whole replacement.
+			context: spec.messages
+				? {
+						systemPrompt: spec.systemPrompt,
+						messages: spec.messages.map(userMessage),
+						tools,
+					}
+				: undefined,
+		};
+	};
 
 	const rejected = new Set((script.tools ?? []).filter((t) => t.reject).map((t) => t.name));
 	const steering = [...(script.steer ?? [])];
@@ -332,6 +391,7 @@ async function runScript(script: Script): Promise<string[]> {
 			followUp.splice(0, followUp.length, ...followUp.filter((f) => f.afterTurn !== turn));
 			return now.map((f) => userMessage(f.text));
 		},
+		prepareNextTurn,
 	};
 
 	const norm = new Normalizer();
@@ -358,7 +418,7 @@ function canonical(value: unknown): unknown {
 }
 
 describe("L5 conformance (pi side)", () => {
-	const ids = ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8"];
+	const ids = ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9"];
 	for (const id of ids) {
 		const scriptPath = join(SCRIPTS_DIR, `${id}.json`);
 		it(`runs ${id}`, async (ctx) => {

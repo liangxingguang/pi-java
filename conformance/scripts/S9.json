@@ -1,0 +1,25 @@
+{
+  "id": "S9",
+  "name": "prepareNextTurn 整体替换上下文与模型",
+  "systemPrompt": "SYS",
+  "prompt": "go",
+  "toolExecution": "parallel",
+  "tools": [{ "name": "echo" }],
+  "nextTurn": {
+    "afterTurn": 0,
+    "messages": ["COMPACTED"],
+    "systemPrompt": "SYS2",
+    "model": "switched"
+  },
+  "responses": [
+    {
+      "content": [{ "type": "toolCall", "name": "echo", "arguments": {} }],
+      "stopReason": "toolUse"
+    },
+    {
+      "content": [{ "type": "text", "text": "done" }],
+      "stopReason": "stop",
+      "echoRequest": true
+    }
+  ]
+}

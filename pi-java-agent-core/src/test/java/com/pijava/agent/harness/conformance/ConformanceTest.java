@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ConformanceTest {
 
     private static final List<String> SCENARIOS = List.of(
-        "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8");
+        "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9");
 
     /** 按剧本声明的放宽规则；未列出的剧本走**严格**逐帧比较。 */
     private static final Map<String, List<ConformanceDiff.Relaxation>> RELAXATIONS = Map.of(

@@ -27,6 +27,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * @param responses    按请求次序排列的助手响应
  * @param steer        在指定轮之后注入的 steer 消息
  * @param followUp     在本轮循环耗尽后注入的 follow-up 消息
+ * @param nextTurn     {@code prepareNextTurn} 的返回值；{@code null} 表示该剧本不配钩子
  */
 record ConformanceScript(
         String id,
@@ -37,7 +38,24 @@ record ConformanceScript(
         List<Tool> tools,
         List<Response> responses,
         List<Injection> steer,
-        List<Injection> followUp) {
+        List<Injection> followUp,
+        NextTurn nextTurn) {
+
+    /**
+     * {@code prepareNextTurn} 在指定轮之后返回的东西（pi 的 {@code AgentLoopTurnUpdate}）。
+     *
+     * <p>三个字段都映射到 pi 的对应字段：{@code messages} + {@code systemPrompt} 合成
+     * 一个**整体替换**的 {@code AgentContext}，{@code model} 换模型。</p>
+     *
+     * <p>pi 的第三个字段 {@code thinkingLevel} **不在剧本里**：它不出现在任何帧上，
+     * 差分验证不了 —— 写进来只会给人一种「已覆盖」的错觉。</p>
+     *
+     * @param afterTurn    在第 {@code afterTurn} 轮（0 基）完成之后生效，只触发一次
+     * @param messages     替换后上下文里的用户消息文本（整体替换，不是追加）
+     * @param systemPrompt 替换后的系统提示
+     * @param model        要切换到的模型 id（provider 固定 {@code openai}，两侧的基线模型同此）
+     */
+    record NextTurn(int afterTurn, List<String> messages, String systemPrompt, String model) {}
 
     /**
      * 剧本声明的工具。
@@ -62,8 +80,17 @@ record ConformanceScript(
     record Content(String type, String text, String thinking, String name,
                    Map<String, Object> arguments, List<String> chunks) {}
 
-    /** 一次助手响应：内容块 + 停因。 */
-    record Response(List<Content> content, String stopReason) {}
+    /**
+     * 一次助手响应：内容块 + 停因。
+     *
+     * @param echoRequest 把「这次请求实际带了什么」（消息数 / 模型 / 系统提示）编进首个文本块的开头。
+     *                    <p><b>为什么需要它</b>：归一化后的帧**只有 agent 事件** —— 请求消息本身
+     *                    从不进帧（剧本的流是假的，不看参数）。于是 {@code prepareNextTurn}
+     *                    整体替换上下文的后果在帧里完全不可观察，剧本会在钩子根本没被调用时
+     *                    照样通过 —— 一条不可能为它存在的理由而失败的用例。回显把这次请求的
+     *                    形状折进助手消息的文本，差分才真正覆盖到那条通道。</p>
+     */
+    record Response(List<Content> content, String stopReason, boolean echoRequest) {}
 
     /** 在完成第 {@code afterTurn} 轮（0 基）之后注入的一条消息。 */
     record Injection(int afterTurn, String text) {}
@@ -88,7 +115,8 @@ record ConformanceScript(
         var responses = new ArrayList<Response>();
         for (var node : root.path("responses")) {
             responses.add(new Response(contentOf(node.path("content")),
-                node.path("stopReason").asText("stop")));
+                node.path("stopReason").asText("stop"),
+                node.path("echoRequest").asBoolean(false)));
         }
         return new ConformanceScript(
             root.path("id").asText(),
@@ -99,7 +127,24 @@ record ConformanceScript(
             List.copyOf(tools),
             List.copyOf(responses),
             injections(root.path("steer")),
-            injections(root.path("followUp")));
+            injections(root.path("followUp")),
+            nextTurnOf(root.path("nextTurn")));
+    }
+
+    /** {@code nextTurn} 缺省为 {@code null}（S1–S8 都不配钩子）。 */
+    private static NextTurn nextTurnOf(JsonNode node) {
+        if (node == null || !node.isObject()) {
+            return null;
+        }
+        var messages = new ArrayList<String>();
+        for (var message : node.path("messages")) {
+            messages.add(message.asText(""));
+        }
+        return new NextTurn(
+            node.path("afterTurn").asInt(0),
+            List.copyOf(messages),
+            textOrNull(node, "systemPrompt"),
+            textOrNull(node, "model"));
     }
 
     private static List<Content> contentOf(JsonNode blocks) {

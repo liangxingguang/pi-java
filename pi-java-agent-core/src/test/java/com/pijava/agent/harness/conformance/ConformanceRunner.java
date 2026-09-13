@@ -31,6 +31,9 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
  */
 final class ConformanceRunner {
 
+    /** 两侧共用的基线模型 —— pi 侧 {@code createModel()} 就是 {@code openai/mock}。 */
+    private static final ModelId<?> BASE_MODEL = ModelId.of("openai", "mock");
+
     private ConformanceRunner() {}
 
     /** 跑完一个剧本，返回逐帧归一化后的 JSON 行。 */
@@ -39,7 +42,7 @@ final class ConformanceRunner {
         var frames = new ArrayList<String>();
         var driver = new Driver(script);
         var config = new PiLoop.Config(
-            ModelId.of("faux", "conformance"),
+            BASE_MODEL,
             ModelThinkingLevel.off(),
             ThinkingLevelMap.empty(),
             "sequential".equals(script.toolExecution())
@@ -50,7 +53,7 @@ final class ConformanceRunner {
             driver::steering,
             driver::followUp,
             null,
-            null,
+            driver::prepareNextTurn,
             null,
             null);
 
@@ -79,8 +82,10 @@ final class ConformanceRunner {
         private final Map<String, ConformanceScript.Tool> toolsByName = new HashMap<>();
         private final List<ConformanceScript.Injection> steering;
         private final List<ConformanceScript.Injection> followUp;
+        private final List<ToolDefinition> toolDefs;
         private final AtomicInteger callIds = new AtomicInteger();
         private int streamCalls;
+        private boolean nextTurnFired;
 
         Driver(ConformanceScript script) {
             this.script = script;
@@ -92,11 +97,61 @@ final class ConformanceRunner {
             }
             this.steering = new ArrayList<>(script.steer());
             this.followUp = new ArrayList<>(script.followUp());
+            this.toolDefs = ConformanceRunner.toolDefs(script);
         }
 
         StreamIterator stream(ModelId<?> model, Context context, StreamOptions options) {
+            var response = script.responses().get(streamCalls++);
             return new ListStream(ScriptedStreams.eventsFor(
-                script.responses().get(streamCalls++), callIds));
+                response.echoRequest() ? withEcho(response, context, model) : response, callIds));
+        }
+
+        /**
+         * 把这次请求的形状编进首个文本块 —— 帧里只有 agent 事件，请求本身不可见（见
+         * {@link ConformanceScript.Response#echoRequest}）。pi 侧 {@code runScript} 里
+         * 有一份逐字相同的实现，**改动必须同步**，否则差分会把两侧的措辞差异当成行为差异。
+         */
+        private static ConformanceScript.Response withEcho(
+                ConformanceScript.Response response, Context context, ModelId<?> model) {
+            var echo = "[n=" + context.messages().size()
+                + " model=" + model.provider() + "/" + model.modelName()
+                + " sys=" + (context.systemPrompt() == null ? "-" : context.systemPrompt()) + "]";
+            var content = new ArrayList<ConformanceScript.Content>();
+            for (int i = 0; i < response.content().size(); i++) {
+                var block = response.content().get(i);
+                if (i == 0 && "text".equals(block.type())) {
+                    var text = block.text() == null ? "" : block.text();
+                    content.add(new ConformanceScript.Content(block.type(),
+                        echo + " " + text, block.thinking(), block.name(),
+                        block.arguments(), block.chunks()));
+                } else {
+                    content.add(block);
+                }
+            }
+            return new ConformanceScript.Response(
+                List.copyOf(content), response.stopReason(), true);
+        }
+
+        /**
+         * pi 的 {@code prepareNextTurn}，在 {@code afterTurn} 指定的那一轮之后返回一次更新。
+         *
+         * <p>轮次从流请求计数派生（与 {@link #drain} 同源）：钩子在下一轮的开头被调用，
+         * 此时已发出的流请求数正好是「刚完成的轮次 + 1」。</p>
+         */
+        PiLoop.NextTurnUpdate prepareNextTurn(PiLoop.NextTurnContext turn) {
+            var spec = script.nextTurn();
+            if (spec == null || nextTurnFired || spec.afterTurn() != streamCalls - 1) {
+                return null;
+            }
+            nextTurnFired = true;
+            var messages = new ArrayList<Message>();
+            for (var text : spec.messages()) {
+                messages.add(new Message.UserMessage(
+                    List.of(new ContentBlock.TextContent(text))));
+            }
+            var model = spec.model() == null ? null : ModelId.of("openai", spec.model());
+            return new PiLoop.NextTurnUpdate(model, null,
+                new Context(spec.systemPrompt(), messages, toolDefs));
         }
 
         PiLoop.ToolOutcome executeTool(PiLoop.ToolCall call) {

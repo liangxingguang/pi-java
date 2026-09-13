@@ -396,8 +396,10 @@ entry 由会话层在 `message_end` 上直接写入，没有「先记账后落�
    `Action` 的引用。
 4. **`pendingWrites` 零命中**。
 5. **行为等价抽查**：崩溃恢复、abort、steer 注入时机、自动压缩四条路径各有用例。
-6. **`PiLoop` 补上 `context` 通道**（§8.3-6），且新增一个 `prepareNextTurn` **非 null** 的
-   L5 剧本 —— 现有 8 个剧本里它恒为 `null`，覆盖不到这条通道。
+6. ~~**`PiLoop` 补上 `context` 通道**（§8.3-6），且新增一个 `prepareNextTurn` **非 null** 的
+   L5 剧本 —— 现有 8 个剧本里它恒为 `null`，覆盖不到这条通道。~~
+   **✅ 已完成（2026-09-13）**：通道见 §8.3-6；剧本为 **S9**，L5 现为 **9/9**。
+   实施时发现「只加剧本」不够 —— 帧里没有请求，得先让请求可观察，见 §8.6。
 
 > ⚠️ 第 6 条是**实施的第 1 步**：`PiLoop` 现在的 1:1 是「在 L5 剧本覆盖到的范围内」，
 > 不是全量的。压缩的落地通道就在这条缺口上。
@@ -497,6 +499,54 @@ pi 用 `async/await`，Java 没有。**这不是障碍**：pi 的 `runLoop` 里�
 **裁决（2026-09-13）**：**明确记为有意偏离**，不引入 `CompletionStage` 重载 ——
 把 sink 链传染成异步的代价远大于收益。**pi-java 的扩展不许在 sink 里阻塞**；
 真出现需要 await 的扩展场景时再单独设计。
+
+### 8.6 系统提示搬出消息列表（2026-09-13，**已实施**，commit `6320d5a`）
+
+`docs/31` 初稿把这条记为「`Context.systemPrompt` 未单独携带」。读 pi 后，实际**比初稿说的更深**：
+
+| 事实 | 证据 |
+|---|---|
+| pi 的 `Message` **只有三个角色**，没有 system | `packages/ai/src/types.ts:470`：`UserMessage \| AssistantMessage \| ToolResultMessage` |
+| 系统提示是 `Context` 上的独立字段 | `types.ts:524-528` |
+| provider 适配层读的是 `context.systemPrompt`，**从不扫描消息列表** | `api/anthropic-messages.ts:1074`、`api/openai-completions.ts:1214`、`api/google-generative-ai.ts:380`、`api/mistral-conversations.ts:523`、`api/openai-responses-shared.ts:175`、`api/bedrock-converse-stream.ts:254` |
+| pi 的 `AgentLoopConfig` **没有 tools 字段** | `types.ts:145-213` 实测；工具只属于 `Context` |
+
+⇒ 处置：
+
+- 新增顶层 `harness/Context`（三字段对齐 pi），取代 `PiLoop` 的内嵌 Context；
+  `PiLoop.Config` 去掉 `toolDefs`、`StreamOptions` 去掉 `tools` —— 工具此前有**两个**真源。
+- **`Message.SystemMessage` 删除**：拆出系统提示后它没有任何生产者，留着等于让 6 个 provider
+  各守一个不可能发生的分支。删掉后 sealed 联合恰好三个变体，编译器证明了没有漏网点。
+- `StreamFn` 改为 pi 的形参与顺序 `(model, context, options)`；`StreamRequest` 增
+  `systemPrompt`，6 个 provider 改读它。
+- `ContextAssembler` 不再把系统提示折成 `messages[0]`，系统提示在 run 起点装进 Context
+  —— 顺带落地了 §4.2 的「移到 run 起点」。`transformContext` 因此像 pi 一样只看得见消息。
+- `RequestContext`（`before_request` 钩子）增 `systemPrompt`：钩子原先从 `messages[0]`
+  看到它，拆分后必须单独给，否则钩子看不到完整请求。
+
+验证：全 reactor `mvn -o clean verify` 绿（14 模块）；L5 8/8 不变（帧里不含系统提示，预期无变化）。
+
+### 8.7 S9 与 `echoRequest`：帧看不见的东西验证不了（2026-09-13，**已实施**）
+
+§8.3-6 补上 `context` 通道后需要一条差分剧本守住它，于是加了 **S9**。实施时发现一个陷阱：
+
+**归一化后的帧只有 agent 事件**（`agent_start` / `turn_*` / `message_*` / `tool_execution_*` /
+`agent_end`），**请求消息本身从不进帧** —— 剧本的流函数是假的，根本不看自己的参数。
+所以「上下文被整体替换」这个后果在帧里完全不可观察：只加一条 `prepareNextTurn` 非 `null`
+的剧本，它会在钩子**根本没接上**时照样通过 —— 一条不可能为它存在的理由而失败的用例。
+
+**处置**：给共享剧本格式加一个字段 `echoRequest`（两侧 runner 各约 6 行、逐字相同），
+把本次请求的形状（消息数 / 模型 / 系统提示）编进首个文本块。S9 第二轮回显
+`[n=1 model=openai/switched sys=SYS2]`；替换未生效时是 `n=3`。
+
+**反向实验**：Java 侧 `driver::prepareNextTurn` 换成 `null` ⇒ S9 失败，其余剧本不受影响。
+
+**这条有一个通用结论**：L5 差分只能验证**进得了帧**的东西。碰到只改变请求形状的通道
+（压缩、`transformContext`、工具过滤……），必须先把该形状折进帧，否则「加了剧本」只是
+给人一种已覆盖的错觉。
+
+**S9 仍不覆盖**：`AgentLoopTurnUpdate.thinkingLevel` —— 不出现在任何帧上，差分**结构上**
+验证不了，故未写进剧本。
 
 ---
 

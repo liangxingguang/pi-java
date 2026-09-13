@@ -110,7 +110,7 @@ JAVA_HOME="D:/soft/jdk/graalvm-jdk-25" \
 |---|---|
 | `tool_execution_update` | 剧本不产生流式工具中间结果，无帧可比 |
 | thinking 内容块 | 剧本未含 thinking 块 |
-| `prepareNextTurn` / `shouldStopAfterTurn` | 八个剧本里两者恒为 `null` |
+| ~~`prepareNextTurn` / `shouldStopAfterTurn`~~ | ~~八个剧本里两者恒为 `null`~~ —— **`prepareNextTurn` 已由 S9 覆盖**，见 §8；`shouldStopAfterTurn` 仍是盲区 |
 | `terminate` 语义（**every** 而非 any，`:589-591`） | 无剧本置 `terminate: true` |
 | `usage` / token 记账 | 按 `docs/23c §2.3` 归一化时**有意丢弃**，L5 结构上不覆盖 |
 | 车道 / 记录日志 / 持久化 | 有意排除：本次直连 `PiLoop`，对标 `agentLoop`，非 pi 的 harness 层 |
@@ -123,6 +123,25 @@ JAVA_HOME="D:/soft/jdk/graalvm-jdk-25" \
 
 - **零 P0**：达成。唯一的 P0（§4.1）已修并重跑验证。
 - **差异归档**：1 条 P1（§5），0 条 P2。
+
+## 8. 追加：S9（2026-09-13，`docs/31 §7` 第 6 条）
+
+`docs/31` 实施时发现 `PiLoop` 的 `NextTurnUpdate` 少一个 `context` 字段 —— 压缩的落地通道。
+补上之后需要一条差分剧本守住它，于是新增 **S9**：`prepareNextTurn` 非 `null`，整体替换
+上下文（消息 + 系统提示）并切模型。**9 / 9 通过，S9 与 pi 逐字节相同。**
+
+**一个必须记下来的坑**：归一化后的帧**只有 agent 事件**，请求消息本身从不进帧（剧本的流是
+假的，不看参数）。所以「上下文被整体替换」这个后果在帧里**完全不可观察** —— 只加一条
+`prepareNextTurn` 非 `null` 的剧本，它会在钩子根本没接上时照样通过。
+
+因此给共享剧本格式加了一个字段 `echoRequest`（两侧 runner 各约 6 行，逐字相同）：它把本次
+请求的形状（消息数 / 模型 / 系统提示）编进首个文本块。S9 第二轮回显
+`[n=1 model=openai/switched sys=SYS2]` —— 替换生效时为 `n=1`，未生效时为 `n=3`。
+
+**反向实验**：把 Java 侧 `driver::prepareNextTurn` 换成 `null`，S9 立刻失败；其余剧本不受影响。
+
+**S9 仍不覆盖**：`AgentLoopTurnUpdate.thinkingLevel` —— 它不出现在任何帧上，差分**结构上**
+验证不了，所以没有写进剧本（写进去只会让人以为已覆盖）。
 - **通用判据**：`mvn -o -am -pl pi-java-agent-core test` **427/427 绿**；checkstyle 零违规
   （既有 7 条 warning 均为改动前就存在的文件）；新增文件全部 ≤ 500 行；无 `System.out.println`。
 
