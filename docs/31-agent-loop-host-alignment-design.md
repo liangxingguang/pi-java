@@ -1,6 +1,8 @@
 # 31 — agent loop 宿主层对齐 pi `agent.ts`
 
 > **状态：待评审。** 编制日期 2026-09-13。**基线 pi `v0.85.1`**（见 `docs/27`）。
+> **2026-09-13 修订**：§2.2、§3.1、§4.1、§4.2、§8 按**读 pi 实测**更正 ——
+> 初稿的「真源翻转」与「压缩原地改写」两条**被证伪**，见 §8。
 >
 > **前置**：`docs/27`（对齐规则 = pi 稳定版）· `docs/28`（驱动已换成 `PiLoop`）·
 > `docs/30`（record-log 折叠链已退休）。
@@ -20,11 +22,14 @@ pi 的「agent loop 部分」是两个文件：
 | `packages/agent/src/agent-loop.ts` | 803 | 双循环：`runAgentLoop` / `runLoop` / `streamAssistantResponse` / `executeToolCalls` |
 | `packages/agent/src/agent.ts` | 592 | 循环的**宿主** `Agent`：状态、事件归约、run 生命周期 |
 
-**`agent-loop.ts` 已经搬完**（`PiLoop` 433 + `PiLoopTools` 171 = 604 行，对 803 是 0.75 倍），
-且经 L5 差分验证（`docs/29`：8/8 剧本通过，7 个逐字节相同）。
+**`agent-loop.ts` 基本搬完**（`PiLoop` 433 + `PiLoopTools` 171 = 604 行，对 803 是 0.75 倍），
+经 L5 差分验证（`docs/29`：8/8 剧本通过，7 个逐字节相同）。
 
-**本文只处理 `agent.ts` 这一层。** pi-java 把已对齐的循环插进了一套 pi 没有的状态机里 ——
-那是本文要拆的东西。
+> ⚠️ **但不是完全 1:1**：`AgentLoopTurnUpdate` 少一个 `context` 字段（`docs/31 §8.3-6`），
+> 而这正是压缩的落地通道。**实施的第 1 步就是补它** —— 见 §8.3-6。
+
+**除那一处外，本文只处理 `agent.ts` 这一层。** pi-java 把已对齐的循环插进了一套 pi 没有的
+状态机里 —— 那是本文要拆的东西。
 
 ### 1.2 明确排除
 
@@ -79,20 +84,32 @@ TUI / RPC / web 各自开一个 session，每个 session 一条车道。
 
 ### 2.2 三处结构性偏离
 
-**(1) 真源。** pi 的 agent 层持有 `messages`（`AgentState.messages`），会话层**订阅事件**把
-`message_end` 落成 entry：
+**(1) 消息的真源模型。** pi 是**两层**，实测（`docs/31 §4.2` 有完整证据）：
 
-```ts
-// pi v0.85.1  packages/coding-agent/src/core/agent-session.ts:402
-// "Always subscribe to agent events for internal handling
-//  (session persistence, extensions, auto-compaction, retry logic)"
-this._unsubscribeAgent = this.agent.subscribe(this._handleAgentEvent);
-```
+| 层 | 角色 |
+|---|---|
+| `sessionManager`（entry 日志） | **持久真源**。`buildSessionContext()` 把 entry 转成 messages |
+| `agent.state.messages` | **工作副本**。循环直接 `push`（`agent-loop.ts:319,350,365,401…`），会话层订阅事件落 entry |
 
-pi-java 方向相反：`LaneState.transcript`（entries）是真源，`ContextAssembler.buildMessagesForLane`
-每次请求从 entries 走一遍 `ContextEntries.pathToLeaf` 重建 messages。
+**两者之间只在「日志变了」的时候同步** —— 实测 pi 全部 5 处赋值点：
 
-**箭头反了，这是 ② 的全部内容。**
+| 位置 | 时机 |
+|---|---|
+| `sdk.ts:376` | 启动时恢复既有会话 |
+| `agent-session-runtime.ts:256` | resume / load |
+| `agent-session.ts:2034` | **手动**压缩后 |
+| `agent-session.ts:2359` | **自动**压缩后 |
+| `agent-session.ts:3286` | 分支导航（`sessionManager.branch`）后 |
+
+pi-java 的结构其实**同型**，差在重建时机：它把「entry → messages」放在
+`ContextAssembler.buildMessagesForLane`，**每次请求都走一遍**
+（`ContextEntries.pathToLeaf(transcript, leafId)`）；pi 只在上面 5 个点重建。
+
+⇒ **② 的对齐内容不是「翻转真源」，而是「把重建点从『每请求』收敛到『日志变更时』」。**
+循环改为直接改写 `messages`；entry 日志仍是持久真源，压缩/分支/加载三处重建。
+
+> ⚠️ **本条推翻了本文初稿的写法。** 初稿写的是「pi 的 `messages` 是真源、entries 降级」，
+> 读 pi 后被证伪 —— 见 §8「验证结果」。
 
 **(2) 运行态。** pi 用**对象存在与否**表示「正在跑」（`activeRun?`），pi-java 用三态枚举
 `RunPhase.Idle/Assistant/Checkpoint` 加一个 `lane.runId`。
@@ -121,7 +138,7 @@ pi-java 方向相反：`LaneState.transcript`（entries）是真源，`ContextAs
 // 目标：pi types.ts:334-358 的 Java 版
 final class LaneState {
     // ── pi AgentState 的九个字段 ──
-    List<Message> messages;                  // 真源（原 transcript 里的消息部分）
+    List<Message> messages;                  // 工作副本：循环直接改写；日志变更时从 entry 重建
     boolean isStreaming;
     Message streamingMessage;                // 原 lane.partial
     Set<String> pendingToolCalls;            // 原 List<Action.ExecuteTool>
@@ -216,12 +233,35 @@ void handleAgentEvent(PiLoop.Event event) {
 **问题**：pi 把 `model` / `thinkingLevel` / `tools` 存在 Agent 的**字段**上，entry 由会话层写；
 pi-java 把它们当 transcript 里的 entry，靠折叠读出来。
 
-**方案**：配置变成 `LaneState` 的字段（§3.1），会话层在**状态变更时**写 entry。
+**✅ 已实测**（`v0.85.1`）：pi 的做法是**字段赋值与 entry 追加在同一处**，**不走事件** ——
+`AgentEvent` 里根本没有 model/thinking 变更事件：
 
-- 变更来源有三个：`run()` 的初始配置、`prepareNextTurn` 钩子（run 中）、扩展的显式 setter。
-- 会话层从**事件**里看不到配置变更（pi 的 `AgentEvent` 里没有 model_change 事件）——
-  pi 的做法是这些变更**由发起方直接调 `sessionManager`**，不走事件。
-  ⚠️ **这一条必须实测确认**（见 §8 未验证假设 1）。
+```ts
+// agent-session.ts:1665-1666
+this.agent.state.model = model;
+this.sessionManager.appendModelChange(model.provider, model.id);
+
+// agent-session.ts:1801-1809
+this.agent.state.thinkingLevel = effectiveLevel;
+if (/* 非默认 */) {
+    this.sessionManager.appendThinkingLevelChange(effectiveLevel);
+    this._emit({ type: "thinking_level_changed", level: effectiveLevel });
+}
+
+// agent-session.ts:980   —— tools 只有字段，无对应 entry
+this.agent.state.tools = tools;
+```
+
+**方案**（照抄这个形状）：
+
+| 项 | 目标 |
+|---|---|
+| `model` / `thinkingLevel` / `tools` | 成为 `LaneState` 的**字段** |
+| `ModelChange` / `ThinkingLevelChange` entry | 由**会话层在设置时**写；与字段赋值同处 |
+| `ActiveToolsChange` entry | pi 在 **product 层无对应 entry**（`agent.state.tools` 只有字段）。pi-java 已有该 entry 且下游在消费 ⇒ **保留发射**，但不再由它派生状态 |
+| 变更来源 | `run()` 的初始配置 · `prepareNextTurn` 钩子 · 扩展的显式 setter ——三者都改成「设字段 + 写 entry」 |
+
+> `thinking_level_changed` 这个**会话事件**在 pi 里另发（`:160`），pi-java 的 A1–A4 事件层要一并承接。
 
 ### 4.2 装配与压缩搬到哪
 
@@ -235,11 +275,35 @@ pi-java 把它们当 transcript 里的 entry，靠折叠读出来。
 | 每次请求从 entries 重建 messages | **删除** —— 循环的 context 就是 `state.messages`（pi `createContextSnapshot()`） |
 | 系统提示每次请求重建 | 移到 **run 起点**（pi 的 `AgentState.systemPrompt` 是字段；skills 由会话层在启动时注入） |
 | `transform_context` 钩子 | **保留在循环里** —— pi 的 `AgentLoopConfig.transformContext`，`PiLoop` 已有 |
-| `CompactionExecutor.checkAutoCompact`（`PiLaneEngine.assemble` 里，请求路径上） | 移到**会话层的 `agent_end` 处理**（pi `_handleAgentEvent` 的 auto-compaction 分支） |
+| `CompactionExecutor.checkAutoCompact`（`PiLaneEngine.assemble` 里，请求路径上） | 改为 pi 的两段式触发，见下 |
 
-⚠️ **对齐后的一个硬约束**：`messages` 成为真源之后，压缩**必须真的改写 `state.messages`**，
-不再是「写一条 summary entry，下次重建时用它替换」。这是 pi 的做法，也是本方案里
-**风险最高的一处改动**（§8 未验证假设 2）。
+#### 压缩：pi 的实测机制
+
+**✅ 已实测。** 压缩**不是**原地改写 messages，而是**「写 entry → 从日志整体重建」**：
+
+```ts
+// agent-session.ts:2357-2359（自动压缩）
+this.sessionManager.appendCompaction(summary, firstKeptEntryId, tokensBefore, details, fromExtension, usage);
+const sessionContext = this.sessionManager.buildSessionContext();
+this.agent.state.messages = sessionContext.messages;      // 整体替换
+```
+
+压缩的**输入**也是日志，不是当前 messages：
+`sessionManager.getBranch()` → `prepareCompaction(pathEntries, settings)`（`_runAutoCompaction:2259-2262`）。
+
+触发点两处，都在会话层：
+
+| 触发 | 位置 | 时机 |
+|---|---|---|
+| 阈值 | `agent-session.ts:542 _compactBeforeNextAssistantResponse` | 包在 `prepareNextTurnWithContext` 里（`:557-577`），**下一轮助手响应之前** |
+| 溢出 | `agent-session.ts:2132 _checkCompaction` | `agent_end` 之后（由 `_handlePostAgentRun:1142` 调） |
+
+⇒ **pi-java 的落法**：`CompactionExecutor` 从 `PiLaneEngine.assemble` 摘掉，改成上述两个会话层触发点；
+压缩后**从 entry 日志重建 messages 并整体替换** —— **不需要原地改写**。
+
+> ⚠️ **本节的初稿被实测推翻了。** 初稿写的是「压缩必须原地改写真源」，并把它列为
+> 全方案风险最高项。实测正好相反：pi **从日志重建**，`messages` 是可丢弃的工作副本。
+> 见 §8「验证结果」。
 
 ### 4.3 分支 / fork 归谁
 
@@ -332,26 +396,58 @@ entry 由会话层在 `message_end` 上直接写入，没有「先记账后落�
    `Action` 的引用。
 4. **`pendingWrites` 零命中**。
 5. **行为等价抽查**：崩溃恢复、abort、steer 注入时机、自动压缩四条路径各有用例。
+6. **`PiLoop` 补上 `context` 通道**（§8.3-6），且新增一个 `prepareNextTurn` **非 null** 的
+   L5 剧本 —— 现有 8 个剧本里它恒为 `null`，覆盖不到这条通道。
+
+> ⚠️ 第 6 条是**实施的第 1 步**：`PiLoop` 现在的 1:1 是「在 L5 剧本覆盖到的范围内」，
+> 不是全量的。压缩的落地通道就在这条缺口上。
 
 ---
 
-## 8. 未验证的假设（**必须显式列出**）
+## 8. 验证结果（读 pi `v0.85.1` 实测，2026-09-13）
 
-本文的 §4 有三处建立在未实测的前提上，实施前必须逐条证实或证伪：
+### 8.1 已证实
 
-1. **配置变更如何流到会话层。** pi 的 `AgentEvent` 里**没有** model/thinking/tools 变更事件；
-   本文推断这些变更由发起方直接调 `sessionManager`，不走事件。**未读 pi 的
-   `setModel` / `setThinkingLevel` / `setTools` 实现验证。**
-2. **压缩必须原地改写 `state.messages`。** 本文推断这是 pi 的做法（`_replaceMessageInPlace`
-   的存在支持这一点，但那是消息替换不是压缩）。**未读 pi 的 auto-compaction 实现验证。**
-   ⚠️ 这是全方案**风险最高**的一处：压缩从「重建时替换」改成「原地改写真源」，
-   错法会导致上下文静默丢失或重复。
-3. **`Message` 的等价性。** pi 的 `AgentMessage = Message | CustomAgentMessages[...]`
-   （`types.ts:326`）是可扩展联合，含 `custom` / `bashExecution` / `compactionSummary` /
-   `branchSummary` 等角色；pi-java 的 `Message`（`Message.java:12`）只有
-   System/User/Assistant/ToolResult 四个。**未逐项核对哪些角色在 pi-java 有对应物。**
-4. **下游消费者不依赖 `transcript()`。** TUI / web / RPC / SQLite 四个消费者读
-   `snapshot().transcript()` 的地方**未清点**；`messages` 取代它之后是否等价未验证。
+| # | 假设 | 结论 | 证据 |
+|---|---|---|---|
+| 1 | 配置变更**不走事件**，由会话层直接写字段 + 追加 entry | ✅ **证实** | `agent-session.ts:1665-1666`（model）、`:1801-1809`（thinkingLevel）、`:980`（tools 只有字段）。`AgentEvent` 里确实没有配置变更事件 |
+| 2 | 压缩后 messages 被整体替换 | ✅ **证实**，但机制与初稿**相反** | `:2357-2359`：`appendCompaction(...)` → `buildSessionContext()` → `agent.state.messages = sessionContext.messages`。**从日志重建**，非原地改写 |
+| 3 | 消息是**工作副本**，entry 日志是持久真源 | ✅ **证实** | 循环直接 `push`（`agent-loop.ts:319,350,365,401,474,554`）；日志变更时整体重建，全部 5 处见 §2.2(1) |
+
+### 8.2 部分证实
+
+**4. `Message` 角色的等价性 —— 部分。**
+
+`CustomAgentMessages` **默认为空**（`agent/types.ts:317-319`，靠 declaration merging 扩展）。
+多出来的三个角色（`bashExecution` / `branchSummary` / `compactionSummary`）来自
+**pi 的 harness 层**（`harness/messages.ts:20,41,48` 的 `role: "..."` 与 `:56-58` 的合并声明）
+—— **属被排除范围**。
+
+`session-manager.ts:101/128` 记明：这些 entry **不参与 LLM 上下文**，或**在 `buildSessionContext()`
+里被转成 user 消息** —— 与 pi-java 的 `ContextEntries.toMessages` 同型。
+
+⇒ **仍待做**：逐项核对 pi-java 的 `Entry` 八种类型在 `ContextEntries` 里是否都有对应转换。
+
+### 8.3 未验证（实施前必须清点）
+
+**5. 下游消费者不依赖 `transcript()`。** TUI / web / RPC / SQLite 四个消费者读
+`snapshot().transcript()` 的地方**未清点**；`messages` 取代它之后是否等价未验证。
+
+**6. `prepareNextTurn` 的 context 通道 —— ✅ 证实缺失，`PiLoop` 少一个字段。**
+
+| | 字段 |
+|---|---|
+| pi `AgentLoopTurnUpdate`（`types.ts:138-145`） | `context?` · `model?` · `thinkingLevel?` —— **三个** |
+| pi-java `PiLoop.NextTurnUpdate`（`PiLoop.java:127`） | `model` · `thinking` —— **两个** |
+
+压缩正是靠 `context` 这条通道生效的（`agent-session.ts:557-577` 返回
+`{context: {...nextContext, systemPrompt, tools}}`）。
+
+⇒ **`PiLoop` 并非完全 1:1，这是一个真实缺口。** 且 **L5 差分覆盖不到它** ——
+`docs/29 §6` 自己记着「八个剧本里 `prepareNextTurn` / `shouldStopAfterTurn` 恒为 `null`」。
+
+**这是实施的第 1 步**：补 `AgentLoopTurnUpdate.context` 通道 + 补一个 L5 剧本让它非 null，
+否则 §4.2 的阈值压缩无处落地。
 
 ---
 
