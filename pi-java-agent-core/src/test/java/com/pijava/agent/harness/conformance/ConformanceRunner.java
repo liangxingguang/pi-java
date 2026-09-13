@@ -49,7 +49,14 @@ final class ConformanceRunner {
             ThinkingLevelMap.empty(),
             "sequential".equals(script.toolExecution())
                 ? new ToolExecution.Sequential() : new ToolExecution.Parallel(),
-            driver::executeTool,
+            new PiLoop.ToolRunner() {
+                @Override public PiLoop.Preparation prepare(PiLoop.ToolCall call) {
+                    return driver.prepareTool(call);
+                }
+                @Override public PiLoop.ToolOutcome execute(PiLoop.Prepared prepared) {
+                    return driver.executeTool(prepared);
+                }
+            },
             driver::stream,
             null,
             driver::steering,
@@ -179,10 +186,20 @@ final class ConformanceRunner {
                 new Context(spec.systemPrompt(), messages, tools));
         }
 
-        PiLoop.ToolOutcome executeTool(PiLoop.ToolCall call) {
+        /**
+         * 准备相：{@code reject} 工具在这里被拦下、产出 **immediate** 结局（pi 的
+         * {@code beforeToolCall}）。两相的区分正是 L5 要验证的形状 —— pi 并行分支的
+         * end 在准备循环内就地发出（{@code agent-loop.ts:506-517}）。
+         */
+        PiLoop.Preparation prepareTool(PiLoop.ToolCall call) {
             if (rejected.contains(call.toolName())) {
-                return denied(call);
+                return new PiLoop.ImmediateOutcome(denied(call));
             }
+            return new PiLoop.ToolRunner.CallPrepared(call);
+        }
+
+        PiLoop.ToolOutcome executeTool(PiLoop.Prepared prepared) {
+            var call = prepared.call();
             var tool = toolsByName.get(call.toolName());
             var terminate = tool != null && tool.terminate();
             return executed(call, tool != null && tool.isError(), terminate);

@@ -91,11 +91,12 @@ class PiLoopTurnHooksTest {
         return new Message.UserMessage(List.of(new ContentBlock.TextContent(text)));
     }
 
-    private static final PiLoop.ToolRunner OK_TOOLS = call ->
+    /** 无 immediate 分支的端口：所有调用直接进执行相（{@link PiLoop.ToolRunner#always}）。 */
+    private static final PiLoop.ToolRunner OK_TOOLS = PiLoop.ToolRunner.always(call ->
         new PiLoop.ToolOutcome(
             new Message.ToolResultMessage(call.toolCallId(), call.toolName(),
                 List.of(new ContentBlock.TextContent("ok")), false),
-            "ok", false, false);
+            "ok", false, false));
 
     /** 工具本体：只有 name / executionMode 有语义，其余给最小合法值。 */
     private static AgentTool<?, ?> toolDef(String name) {

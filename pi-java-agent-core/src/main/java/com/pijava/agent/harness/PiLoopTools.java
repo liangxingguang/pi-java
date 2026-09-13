@@ -1,11 +1,12 @@
 package com.pijava.agent.harness;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import com.pijava.agent.tool.ExecutionMode;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * 工具调用的**发射时序**（pi {@code agent-loop.ts:379-591}）。
@@ -39,8 +40,9 @@ final class PiLoopTools {
      *   <li>{@code tool_execution_start} 在**校验之前**发出 —— 被拒绝（denied）与未找到
      *       （unavailable）的调用**同样**收到 start 与 end（{@code :443-448} / {@code :498-503}）</li>
      *   <li>顺序模式：每个调用的 start / end / 结果消息**成组**发出（{@code :442-479}）</li>
-     *   <li>并行模式：所有 start 先按**源序**发出，end 随各自完成；结果消息在所有调用
-     *       结束后**严格按源序**补发（{@code :547-555}）</li>
+     *   <li>并行模式：start 与准备按**源序**交替推进，准备相即失败的调用当场收尾，
+     *       其余 end 随各自完成；结果消息在批次收束后**严格按源序**补发
+     *       （{@code :497-554}）</li>
      *   <li>{@code terminate} 取**全部** —— {@code shouldTerminateToolBatch} 是
      *       {@code every(terminate === true)}，非 any（{@code :589-591}）</li>
      * </ul>
@@ -80,7 +82,7 @@ final class PiLoopTools {
         return false;
     }
 
-    /** pi {@code executeToolCallsSequential}：start → run → end → 结果消息，逐个成组。 */
+    /** pi {@code executeToolCallsSequential}（{@code :431-485}）：start → 准备 → 执行 → end → 结果消息，逐个成组。 */
     private static Batch executeSequential(List<ContentBlock.ToolUseContent> calls,
                                            Context context, PiLoop.Config config,
                                            PiLoop.Sink emit) {
@@ -89,8 +91,11 @@ final class PiLoopTools {
         for (var call : calls) {
             emit.emit(new PiLoop.Event.ToolExecutionStart(
                 call.id(), call.name(), call.arguments()));
-            var outcome = config.toolRunner().run(
-                new PiLoop.ToolCall(call.id(), call.name(), call.arguments(), false));
+            // pi :451-468：immediate 与已执行的分岔只影响结果从哪来，收尾时序相同
+            var outcome = switch (config.toolRunner().prepare(toolCall(call))) {
+                case PiLoop.ImmediateOutcome immediate -> immediate.outcome();
+                case PiLoop.Prepared prepared -> config.toolRunner().execute(prepared);
+            };
             outcomes.add(outcome);
             emit.emit(new PiLoop.Event.ToolExecutionEnd(
                 call.id(), call.name(), outcome.result(), outcome.isError()));
@@ -104,32 +109,70 @@ final class PiLoopTools {
         return new Batch(List.copyOf(messages), allTerminate(outcomes));
     }
 
+    /** 内容块 → 端口请求。截断分支在 {@link #run} 顶部整体拦下，这里恒为 {@code false}。 */
+    private static PiLoop.ToolCall toolCall(ContentBlock.ToolUseContent call) {
+        return new PiLoop.ToolCall(call.id(), call.name(), call.arguments(), false);
+    }
+
     /**
-     * pi {@code executeToolCallsParallel}：start 全部源序 → end 随完成 → 结果消息源序补发。
+     * pi {@code executeToolCallsParallel}（{@code :487-560}）：**两相结构**。
      *
-     * <p><b>两相结构是语义的一部分</b>：pi 先在准备循环里把**全部**调用以源序发出
-     * {@code tool_execution_start}，随后才在 {@code Promise.all} 里按各自完成序发
-     * {@code tool_execution_end}（{@code :547} 与 {@code :550-553}）。因此「所有 start 都
-     * 早于任何 end」是该模式的保证，消费者可据此判断批次何时真正开始收尾。</p>
+     * <p>发射顺序分三段，都是语义的一部分：</p>
+     * <ol>
+     *   <li>准备循环按**源序**交替发 start 与准备；准备相就失败的调用
+     *       （拒绝 / 未找到 / 参数非法 / 已中止）**当场在准备循环内**收尾 end
+     *       （{@code :506-517}）—— 它的 end 因此排在所有真正执行过的调用**之前**；</li>
+     *   <li>拿到执行票的调用打包成延迟任务，end 由任务自己在完成时发
+     *       （{@code :520-541}）；中止检查也发生在任务执行时，不是入队时
+     *       （{@code :521-524}）；入队后同样查中止并 break（{@code :542-544}）；</li>
+     *   <li>批次收束（pi 的 {@code Promise.all}，{@code :547}）之后，结果消息按**源序**
+     *       补发（{@code :549-554}）。</li>
+     * </ol>
+     *
+     * <p>注意该模式**不**保证「所有 start 早于任何 end」：一个准备相即失败的调用，
+     * 其 end 会插在批次后续的 start 之前。此前 Java 侧所有 start 先批量发出、
+     * 再逐个执行收尾，被拒绝调用的 end 排错了位置 —— L5 的 S4 只能靠
+     * {@code PARALLEL_TOOL_END_ORDER} 放宽规则勉强对上，本方法按 pi 重排后该规则已删。</p>
+     *
+     * <p>延迟任务当前在 Java 里**串行**执行（确定性工具下与 pi 的完成序一致）；
+     * 真正的并行执行是另一条独立缺口（B），与本方法的发射顺序无关。</p>
      */
     private static Batch executeParallel(List<ContentBlock.ToolUseContent> calls,
                                          Context context, PiLoop.Config config,
                                          PiLoop.Sink emit) {
+        // pi 的 FinalizedToolCallEntry[]：immediate 已定局（end 已在准备循环里发过），
+        // prepared 是待跑任务（自己在完成时发 end）。List 位置 = 源序。
+        var entries = new ArrayList<Supplier<PiLoop.ToolOutcome>>();
         for (var call : calls) {
             emit.emit(new PiLoop.Event.ToolExecutionStart(
                 call.id(), call.name(), call.arguments()));
+            var preparation = config.toolRunner().prepare(toolCall(call));
+            if (preparation instanceof PiLoop.ImmediateOutcome immediate) {
+                emit.emit(new PiLoop.Event.ToolExecutionEnd(
+                    call.id(), call.name(),
+                    immediate.outcome().result(), immediate.outcome().isError()));
+                entries.add(immediate::outcome);
+                if (aborted(config)) {
+                    break;
+                }
+                continue;
+            }
+            var prepared = (PiLoop.Prepared) preparation;
+            entries.add(() -> {
+                var outcome = aborted(config)
+                    ? abortedOutcome(call)
+                    : config.toolRunner().execute(prepared);
+                emit.emit(new PiLoop.Event.ToolExecutionEnd(
+                    call.id(), call.name(), outcome.result(), outcome.isError()));
+                return outcome;
+            });
+            if (aborted(config)) {
+                break;
+            }
         }
-
         var outcomes = new ArrayList<PiLoop.ToolOutcome>();
-        for (var call : calls) {
-            // pi: 已中止时 prepareToolCall 直接返回 immediate 错误结果，**不执行**（:655-661）
-            var outcome = aborted(config)
-                ? abortedOutcome(call)
-                : config.toolRunner().run(
-                    new PiLoop.ToolCall(call.id(), call.name(), call.arguments(), false));
-            outcomes.add(outcome);
-            emit.emit(new PiLoop.Event.ToolExecutionEnd(
-                call.id(), call.name(), outcome.result(), outcome.isError()));
+        for (var entry : entries) {
+            outcomes.add(entry.get());
         }
         var messages = new ArrayList<Message.ToolResultMessage>();
         for (var outcome : outcomes) {

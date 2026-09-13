@@ -3,9 +3,11 @@ package com.pijava.agent.harness;
 import java.util.List;
 import java.util.Map;
 
+import com.pijava.agent.hook.BeforeToolResult;
 import com.pijava.agent.hook.HookSystem;
 import com.pijava.agent.hook.ToolCallContext;
 import com.pijava.agent.hook.ToolResultContext;
+import com.pijava.agent.tool.ToolArgumentsValidator;
 import com.pijava.agent.tool.ToolContext;
 import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.agent.tool.ToolResult;
@@ -21,14 +23,22 @@ import com.pijava.ai.message.Message;
  * 9 处耦合（{@code LaneState} × 7、{@code Action.ExecuteTool} × 9），无法供
  * {@link PiLoop} 的端口使用。</p>
  *
- * <p><b>错误映射</b>（对应 pi 的 {@code prepareToolCall} 三条路）：</p>
+ * <p><b>两相拆分</b>（对应 pi {@code agent-loop.ts} 的三个函数：{@code prepareToolCall}
+ * {@code :607-675}、{@code executePreparedToolCall} {@code :677-718}、
+ * {@code finalizeExecutedToolCall} {@code :720-764}）：{@link #prepare} 查找工具、校验参数、
+ * 跑 {@code before_tool} 钩子 —— 未找到 / 参数非法 / 钩子拒绝 / 已中止都返回
+ * {@link PiLoop.ImmediateOutcome}（pi 的 {@code kind:"immediate"}）；{@link #execute} 才真正
+ * 运行工具并跑 {@code after_tool} 钩子。这个区分是发射时序的前提：pi 在准备循环内就给
+ * immediate 调用收尾。</p>
+ *
+ * <p><b>错误映射</b>：</p>
  * <ul>
- *   <li>钩子拒绝 ⇒ {@code allowed=false}，返回立即错误结果（pi 的 denied）</li>
- *   <li>{@code IllegalArgumentException} ⇒ 工具未找到或参数非法（pi 的 unavailable）</li>
- *   <li>{@code SecurityException} ⇒ 未获批准（{@code ToolRegistry} 的 approvalHandler）</li>
- *   <li>其余异常 ⇒ 工具自身失败</li>
+ *   <li>钩子拒绝 ⇒ {@code allowed=false}，立即错误结果（pi 的 denied）</li>
+ *   <li>工具未找到 / {@code ToolArgumentsValidator} 不过 ⇒ immediate（pi 的 unavailable / 校验）</li>
+ *   <li>{@code SecurityException}（未获批准）与其余异常 ⇒ 已执行但失败（pi 在
+ *       {@code executePreparedToolCall} 的 catch 里）</li>
  * </ul>
- * <p>四条路都返回**错误结果消息**而非抛出 —— pi 对它们同样发 {@code tool_execution_start}
+ * <p>各路都返回**错误结果消息**而非抛出 —— pi 对它们同样发 {@code tool_execution_start}
  * 与 {@code tool_execution_end}，由 {@link PiLoopTools} 负责发射。</p>
  *
  * <p><b>已知缺口（A7，未在本步修）</b>：pi 的 {@code ToolResultMessage} 带 {@code details}，
@@ -61,7 +71,8 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
 
     /**
      * @param laneName    车道名（传给钩子；pi 的钩子事件带 {@code lane}）
-     * @param registry    工具注册表，负责查找、参数校验与执行
+     * @param registry    工具注册表，负责查找、参数校验与执行；可为 {@code null}
+     *                    （pi 的 {@code currentContext.tools?.find}：按「未找到」处理）
      * @param hooks       钩子系统，可为 {@code null}（无钩子时跳过 before/after_tool）
      * @param toolContext 工具上下文（工作目录、shell、文件系统）
      * @param signal      中止信号，可为 {@code null}
@@ -77,19 +88,50 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
         this.observer = observer;
     }
 
+    /**
+     * pi 的 {@code prepareToolCall}（{@code agent-loop.ts:607-675}），顺序与 pi 一致：
+     * 查找 → 校验 → {@code before_tool} → 中止检查 → 拒绝检查。pi 校验的是 {@code prepareArguments}
+     * 之后的参数；Java 侧 {@code prepareArguments} 长在 {@code ToolRegistry.execute} 里，
+     * 这里校验原始参数 —— 两道校验都不过才拿不到执行票，语义相同。
+     */
     @Override
-    public PiLoop.ToolOutcome run(PiLoop.ToolCall call) {
-        var decision = hooks == null ? null : hooks.fireBeforeTool(laneName,
-            new ToolCallContext(laneName, call.toolCallId(), call.toolName(), call.args()));
+    public PiLoop.Preparation prepare(PiLoop.ToolCall call) {
+        // pi {@code :613}：{@code tools?.find} —— 无注册表与查不到同一张面孔。
+        var tool = registry == null ? null : registry.get(call.toolName());
+        if (tool == null) {
+            return immediate(call, true, "Tool " + call.toolName() + " not found", false);
+        }
+        BeforeToolResult decision;
+        try {
+            ToolArgumentsValidator.validate(tool.inputSchema(), call.args());
+            decision = hooks == null ? null : hooks.fireBeforeTool(laneName,
+                new ToolCallContext(laneName, call.toolCallId(), call.toolName(), call.args()));
+        } catch (Exception e) {
+            return immediate(call, true, messageOf(e), false);
+        }
+        // pi 查两次中止（钩子返回后 :636-641、交付 prepared 前 :655-661），且都排在
+        // block 检查之前；中止是粘滞的、两次检查间无 await，一次即可 —— 中止压过拒绝。
+        if (signal != null && signal.isAborted()) {
+            return immediate(call, true, "Operation aborted", false);
+        }
         if (decision != null && !decision.allowed()) {
-            notify(call.toolCallId(), false);
-            return errorOutcome(call, denyReason(decision), decision.terminate());
+            return immediate(call, false, denyReason(decision), decision.terminate());
         }
         notify(call.toolCallId(), true);
         var args = decision != null && decision.arguments() != null
             ? decision.arguments() : call.args();
+        return new PreparedCall(call, args);
+    }
+
+    /** pi 的 {@code executePreparedToolCall} + {@code finalizeExecutedToolCall}。 */
+    @Override
+    public PiLoop.ToolOutcome execute(PiLoop.Prepared prepared) {
+        if (!(prepared instanceof PreparedCall state)) {
+            throw new IllegalArgumentException("执行票不是本 runner 签发的：" + prepared);
+        }
+        var call = state.call();
         try {
-            var result = registry.execute(call.toolName(), call.toolCallId(), args,
+            var result = registry.execute(call.toolName(), call.toolCallId(), state.args(),
                 signal, null, toolContext);
             var finalized = hooks == null ? result : hooks.fireAfterTool(laneName,
                 new ToolResultContext(laneName, call.toolCallId(), call.toolName(), result));
@@ -97,6 +139,17 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
         } catch (Exception e) {
             return errorOutcome(call, messageOf(e), false);
         }
+    }
+
+    /** 执行票：调用本身 + 钩子改写后的最终参数（pi 的 {@code PreparedToolCall.args}）。 */
+    private record PreparedCall(PiLoop.ToolCall call, Map<String, Object> args)
+            implements PiLoop.Prepared {}
+
+    /** 准备相当场失败：通知观测点后打包成 immediate 结果。 */
+    private PiLoop.Preparation immediate(PiLoop.ToolCall call, boolean allowed,
+                                         String text, boolean terminate) {
+        notify(call.toolCallId(), allowed);
+        return new PiLoop.ImmediateOutcome(errorOutcome(call, text, terminate));
     }
 
     private void notify(String toolCallId, boolean allowed) {
@@ -124,14 +177,12 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
         return new PiLoop.ToolOutcome(message, text, true, terminate);
     }
 
-    /** 钩子拒绝时的理由：{@code BeforeToolResult} 把 reason 放在 arguments 里。 */
-    private static String denyReason(com.pijava.agent.hook.BeforeToolResult decision) {
+    /** 钩子拒绝时的理由：{@code BeforeToolResult} 把 reason 放在 arguments 里；兜底文案对齐 pi 的 {@code reason || "Tool execution was blocked"}（{@code :643}）。 */
+    private static String denyReason(BeforeToolResult decision) {
         Map<String, Object> arguments = decision.arguments();
-        if (arguments == null) {
-            return "Tool call denied";
-        }
-        var reason = arguments.get("reason");
-        return reason == null ? "Tool call denied" : String.valueOf(reason);
+        var reason = arguments == null ? null : arguments.get("reason");
+        var text = reason == null ? null : String.valueOf(reason);
+        return text == null || text.isEmpty() ? "Tool execution was blocked" : text;
     }
 
     private static String messageOf(Exception e) {

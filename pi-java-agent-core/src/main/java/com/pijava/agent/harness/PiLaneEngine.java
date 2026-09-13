@@ -161,12 +161,7 @@ public final class PiLaneEngine {
             ctx.thinkingLevel().get(),
             ctx.thinkingLevelMap(),
             ctx.toolExecution().get(),
-            call -> {
-                sink.noteToolStart(call);
-                var outcome = toolRunner.run(call);
-                sink.noteToolTerminate(call.toolCallId(), outcome.terminate());
-                return outcome;
-            },
+            observing(toolRunner, sink),
             ctx.streamFn(),
             signal,
             () -> drainSteer(laneName),
@@ -179,6 +174,33 @@ public final class PiLaneEngine {
                 sink.noteStreamEvent(event);
                 ctx.streamListener().get().accept(event);
             });
+    }
+
+    /**
+     * 把两相端口包上 harness 侧的观测：{@code tool.execute} 跨度与批次位置在
+     * {@code prepare} 打开（此时循环刚发完 {@code tool_execution_start}），
+     * {@code terminate} 回填在结果定局时 —— immediate 分支（拒绝 / 未找到 / 参数非法 /
+     * 中止）在准备时定局，其余在执行完成时。两条分支都回填，跨度才不会漏账。
+     */
+    private static PiLoop.ToolRunner observing(PiToolRunner runner, PiLaneSink sink) {
+        return new PiLoop.ToolRunner() {
+            @Override
+            public PiLoop.Preparation prepare(PiLoop.ToolCall call) {
+                sink.noteToolStart(call);
+                var preparation = runner.prepare(call);
+                if (preparation instanceof PiLoop.ImmediateOutcome immediate) {
+                    sink.noteToolTerminate(call.toolCallId(), immediate.outcome().terminate());
+                }
+                return preparation;
+            }
+
+            @Override
+            public PiLoop.ToolOutcome execute(PiLoop.Prepared prepared) {
+                var outcome = runner.execute(prepared);
+                sink.noteToolTerminate(prepared.call().toolCallId(), outcome.terminate());
+                return outcome;
+            }
+        };
     }
 
     /**

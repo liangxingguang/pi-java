@@ -375,7 +375,7 @@ final class PiLaneSink implements PiLoop.Sink {
      * 到 end 时结果 entry 还不存在。</p>
      *
      * <p><b>已知缺口</b>：{@code effectiveArgs} 记空表 —— 参数已由
-     * {@link PiLaneToolRunner} 交给注册表，此处不再持有副本。
+     * {@link PiToolRunner} 交给注册表，此处不再持有副本。
      * {@code RunSummaryAggregator} 只读 {@code isError}/{@code runId}，不受影响
      * （docs/28 §5.1 已记录该降级）。</p>
      */

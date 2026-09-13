@@ -5,11 +5,9 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.DynamicTest;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,33 +28,18 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   npx vitest --run --config vitest.conformance.config.ts test/conformance/run.test.ts
  * </pre>
  *
- * <p>比对口径见 {@code docs/23c §2.3}（归一化）与 {@code §2.4}（P0/P1/P2 归档）。</p>
+ * <p>比对口径见 {@code docs/23c §2.3}（归一化）与 {@code §2.4}（P0/P1/P2 归档）：
+ * 十个剧本全部**严格**逐帧比较 —— 曾有的唯一放宽规则（S4 的
+ * {@code PARALLEL_TOOL_END_ORDER}）已随 {@code ToolRunner} 的两相拆分删除。</p>
  */
 class ConformanceTest {
 
     private static final List<String> SCENARIOS = List.of(
         "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10");
 
-    /** 按剧本声明的放宽规则；未列出的剧本走**严格**逐帧比较。 */
-    private static final Map<String, List<ConformanceDiff.Relaxation>> RELAXATIONS = Map.of(
-        "S4", List.of(ConformanceDiff.Relaxation.PARALLEL_TOOL_END_ORDER));
-
     @TestFactory
     Stream<DynamicTest> runsEveryScenarioAgainstPi() {
         return SCENARIOS.stream().map(id -> DynamicTest.dynamicTest(id, () -> verify(id)));
-    }
-
-    /** 放宽条款必须仍然生效，否则它就是一条被遗忘的豁免。 */
-    @Test
-    void declaredRelaxationsAreStillEffective() throws IOException {
-        for (var entry : RELAXATIONS.entrySet()) {
-            var expected = readFrames(piOutFile(entry.getKey()));
-            for (var relaxation : entry.getValue()) {
-                assertThat(ConformanceDiff.changes(expected, relaxation))
-                    .as("%s 的放宽规则 %s 已不再改变帧序，应当删除", entry.getKey(), relaxation)
-                    .isTrue();
-            }
-        }
     }
 
     private void verify(String id) throws IOException {
@@ -64,14 +47,10 @@ class ConformanceTest {
         var actual = ConformanceRunner.run(script);
         writeJavaOut(id, actual);
 
-        var expected = readFrames(piOutFile(id));
-        var relaxations = RELAXATIONS.getOrDefault(id, List.of());
-        var differences = ConformanceDiff.compare(
-            ConformanceDiff.relax(expected, relaxations),
-            ConformanceDiff.relax(actual, relaxations));
+        var differences = ConformanceDiff.compare(readFrames(piOutFile(id)), actual);
 
         assertThat(differences)
-            .as("%s（%s）与 pi 的帧序不一致；放宽规则：%s", id, script.name(), relaxations)
+            .as("%s（%s）与 pi 的帧序不一致", id, script.name())
             .isEmpty();
     }
 

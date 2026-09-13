@@ -38,7 +38,7 @@ final class PiLoopRunner {
      * <p>外层 `while (true)`：follow-up 队列决定是否再来一轮。
      * 内层 `while (hasMoreToolCalls || pendingMessages.length > 0)`：处理 steer 与工具调用。</p>
      *
-     * @param firstTurn 外层首轮不重复发 {@code turn_start}（调用方已发过一次）
+     * @param newMessages 外层首轮不重复发 {@code turn_start}（调用方已发过一次）
      */
     static void runLoop(Context initialContext, List<Message> newMessages,
                         Config initialConfig, Sink emit) {
@@ -227,9 +227,9 @@ final class PiLoopRunner {
                 if (config.streamListener() != null) {
                     config.streamListener().accept(event);
                 }
-                if (event instanceof StreamEvent.Start start) {
+                if (event instanceof StreamEvent.Start(AssistantMessage partial)) {
                     addedPartial = true;
-                    finalMessage = fromPartial(start.partial());
+                    finalMessage = fromPartial(partial);
                     messages.add(finalMessage);
                     emit.emit(new Event.MessageStart(finalMessage));
                 } else if (isUpdateEvent(event)) {

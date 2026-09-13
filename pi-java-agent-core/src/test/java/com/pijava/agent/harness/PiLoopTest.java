@@ -129,7 +129,14 @@ class PiLoopTest {
         private final List<String> invoked = new ArrayList<>();
 
         @Override
-        public PiLoop.ToolOutcome run(PiLoop.ToolCall call) {
+        public PiLoop.Preparation prepare(PiLoop.ToolCall call) {
+            return new PiLoop.ToolRunner.CallPrepared(call);
+        }
+
+        @Override
+        public PiLoop.ToolOutcome execute(PiLoop.Prepared prepared) {
+            var call = prepared.call();
+            // invoked 记录在执行相：拿到执行票≠执行过（中止的闭包不会走到这里）。
             invoked.add(call.toolName());
             var message = new Message.ToolResultMessage(call.toolCallId(), call.toolName(),
                 List.of(new ContentBlock.TextContent("ok")), false);
@@ -292,9 +299,11 @@ class PiLoopTest {
 
     @Test
     void parallelBatchEmitsEveryStartBeforeAnyEnd() {
-        // pi 的并行分支：准备循环里把**全部** start 按源序发出（agent-loop.ts:547），
-        // end 随后由 Promise.all 按完成序发出（:550-553）。「所有 start 都早于任何 end」
-        // 因此是该模式的结构保证，不是时序巧合 —— 由 docs/23c 的 S4 剧本差分发现。
+        // 准备循环按源序交替发 start 与准备（agent-loop.ts:498-545），延迟任务在完成时才发
+        // end（:519-541）。当且仅当**没有调用在准备相当场失败、也没有中止**时，start 循环
+        // 先于任何 closure 跑完，「所有 start 早于任何 end」成立 —— 这是本桩（StubTools 恒
+        // 给执行票）的形状，不是 pi 的结构保证：一个 immediate 调用的 end 会插进批次
+        // 后续的 start 之前（S4 剧本正是如此，见 docs/29 §4）。
         var rec = new Recorder();
         var context = Context.of(new ArrayList<>());
         var partial = AssistantMessage.empty();
@@ -324,9 +333,12 @@ class PiLoopTest {
     }
 
     @Test
-    void abortedSignalFailsEveryToolCallWithoutExecutingIt() {
-        // pi: 信号已中止时 prepareToolCall 直接返回 immediate 错误（:655-661），
-        // 已 start 的调用照样收到 end，但**一个都不执行**。
+    void abortedParallelBatchFramesOnlyTheFirstCallLikePi() {
+        // pi executeToolCallsParallel：批次开始前信号已中止时，准备循环给**第一个**调用
+        // 发 start、在其执行票闭包里收尾 end（"Operation aborted"，:521-524 的中止检查），
+        // 随后 break（:542-544）—— 后续调用**一帧都没有**，结果消息也只补发一条。
+        // 本测试旧断言（「每个已 start 的调用都收到 end」）钉住的是 pi-java 自创形状，
+        // 随端口两相拆分一并改为 pi 的真实形状；docs/29 §4 同步修正。
         var signal = AbortSignal.create();
         signal.abort();
         var rec = new Recorder();
@@ -357,9 +369,10 @@ class PiLoopTest {
         assertThat(rec.frames.stream().filter(f -> f.startsWith("tool_execution_")).toList())
             .containsExactly(
                 "tool_execution_start:bash",
-                "tool_execution_start:read",
-                "tool_execution_end:bash",
-                "tool_execution_end:read");
+                "tool_execution_end:bash");
+        assertThat(rec.frames.stream().filter(f -> f.equals("message_end:tool")).count())
+            .as("break 之后 c2 没有任何结果消息（pi 的 finalizedCalls 里只有 c1）")
+            .isEqualTo(1);
         assertThat(tools.invoked).isEmpty();
     }
 

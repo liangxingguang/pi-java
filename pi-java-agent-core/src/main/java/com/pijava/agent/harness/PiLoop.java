@@ -26,10 +26,10 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
  * <p><b>刻意不做的事</b>：不引入 {@code Action}、不引入 {@code RunPhase}、不写任何记录日志、
  * 不持有持久化状态。状态只有三样，与 pi 一致：消息列表、配置、{@code pendingMessages}。</p>
  *
- * <p><b>工具执行是端口</b>：pi 的 {@code executeToolCalls} 在 pi-java 里已有等价实现
- * （{@code ToolExecutionPipeline}），因此这里只定义 {@link ToolRunner} 端口，由调用方注入；
- * 发射时序（start 先于校验、结果消息源序补发、{@code terminate} 取全部）在
- * {@link PiLoopTools}。</p>
+ * <p><b>工具执行是端口</b>：这里只定义两相 {@link ToolRunner} 端口
+ * （{@code prepare} / {@code execute}，实现为 {@link PiToolRunner}），由调用方注入；
+ * 发射时序（start 先于校验、immediate 调用在准备循环内收尾、结果消息源序补发、
+ * {@code terminate} 取全部）在 {@link PiLoopTools}。</p>
  */
 public final class PiLoop {
 
@@ -101,15 +101,56 @@ public final class PiLoop {
     public record ToolOutcome(Message.ToolResultMessage message, Object result,
                               boolean isError, boolean terminate) {}
 
-    /** 工具执行端口。pi-java 侧由 {@code ToolExecutionPipeline} 提供实现。 */
-    @FunctionalInterface
+    /**
+     * 准备相的产物（pi 的 {@code prepareToolCall} 返回类型）：要么当场失败
+     * （{@link ImmediateOutcome}），要么拿到执行票（{@link Prepared}）。
+     *
+     * <p><b>为什么端口必须暴露这个区分</b>：pi 的并行分支在准备循环内就给 immediate
+     * 调用发 {@code tool_execution_end}（{@code agent-loop.ts:506-517}），已准备好的
+     * 调用则要到 {@code Promise.all} 里各自完成时才收尾（{@code :520-545}），
+     * 收尾顺序在 {@code :547} 之后才统一。单相端口复现不了这个 end 次序 ——
+     * 此前它被 L5 的放宽规则豁免掉了。</p>
+     */
+    public sealed interface Preparation permits ImmediateOutcome, Prepared {}
+
+    /** 准备相就失败（pi {@code kind:"immediate"}）：未找到 / 参数非法 / 钩子拒绝 / 已中止。 */
+    public record ImmediateOutcome(ToolOutcome outcome) implements Preparation {}
+
+    /**
+     * 通过了准备相（pi {@code kind:"prepared"}）。对循环**半透明**：循环只取回调用本身，
+     * 工具句柄与改写后的参数由签发它的 {@link ToolRunner} 实现自己持有。
+     */
+    public non-sealed interface Prepared extends Preparation {
+        /** 这张票对应的那次调用（pi 的 {@code PreparedToolCall.toolCall}）。 */
+        ToolCall call();
+    }
+
+    /** 工具执行端口。pi-java 侧由 {@link PiToolRunner} 提供实现。 */
     public interface ToolRunner {
         /**
-         * 执行一次工具调用（pi 的 {@code prepareToolCall} + {@code executePreparedToolCall}
-         * + {@code finalizeExecutedToolCall}）。被拒绝与未找到的调用**也要**返回结果而非抛异常
-         * —— pi 对它们同样发出 start 与 end。
+         * 准备相（pi 的 {@code prepareToolCall}，{@code agent-loop.ts:607-675}）：查找工具、
+         * 校验参数、跑 {@code before_tool} 钩子。失败的调用**也要**返回
+         * {@link ImmediateOutcome} 而非抛异常 —— pi 对它们同样发出 start 与 end。
          */
-        ToolOutcome run(ToolCall call);
+        Preparation prepare(ToolCall call);
+
+        /**
+         * 执行 + 收尾相（pi 的 {@code executePreparedToolCall} +
+         * {@code finalizeExecutedToolCall}，{@code agent-loop.ts:677-764}）：真正跑工具，
+         * 随后跑 {@code after_tool} 钩子。工具自身抛出的异常同样转成错误结果。
+         */
+        ToolOutcome execute(Prepared prepared);
+
+        /** 便捷适配：所有调用都直接进执行相、不存在 immediate 失败 —— 给测试与简单端口用。 */
+        static ToolRunner always(java.util.function.Function<ToolCall, ToolOutcome> execute) {
+            return new ToolRunner() {
+                @Override public Preparation prepare(ToolCall call) { return new CallPrepared(call); }
+                @Override public ToolOutcome execute(Prepared prepared) { return execute.apply(prepared.call()); }
+            };
+        }
+
+        /** {@link #always} 的执行票：只携带调用本身。 */
+        record CallPrepared(ToolCall call) implements Prepared {}
     }
 
     // ═══════════════════════════════════════════════════════════════
