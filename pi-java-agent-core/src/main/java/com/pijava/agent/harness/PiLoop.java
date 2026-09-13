@@ -118,13 +118,62 @@ public final class PiLoop {
     // 钩子（pi 的 AgentLoopConfig 可选回调）
     // ═══════════════════════════════════════════════════════════════
 
-    /** pi {@code prepareNextTurn} 的入参。 */
+    /**
+     * pi {@code AgentContext}（{@code types.ts:415-422}）：一次 run 的上下文。
+     *
+     * <p>三个字段逐字对齐 pi：{@code systemPrompt} / {@code messages} / {@code tools}。</p>
+     *
+     * <p><b>pi-java 的一处有意偏离</b>：pi 的 {@code StreamFn} 把 {@code systemPrompt} 作为
+     * 独立形参传给 provider（{@code agent-loop.ts:290-301} 的 {@code llmContext}），
+     * 而 pi-java 的 {@link StreamFn} 只有 {@code (messages, model, options)}，系统提示由宿主
+     * 折成 {@code messages[0]}（{@code ContextAssembler:95}）。把 {@code systemPrompt} 拆出来
+     * 需要同时改 {@link StreamFn} 的签名与宿主装配 —— 属 {@code docs/31 §4.2} 的宿主层工作，
+     * 不在本次。因此本记录**只携带 pi 三字段中的两个**，{@code systemPrompt} 仍走在
+     * {@code messages} 里。</p>
+     *
+     * @param messages 本轮的上下文消息（**可变**：循环会就地追加，与 pi 的
+     *                 {@code context.messages.push} 一致）
+     * @param tools    本次请求可用的工具（pi {@code AgentContext.tools}），
+     *                 作为 {@link StreamOptions#tools()} 的来源
+     */
+    public record Context(List<Message> messages, List<ToolDefinition> tools) {
+
+        public Context {
+            tools = tools == null ? List.of() : List.copyOf(tools);
+        }
+
+        /** 从消息列表建上下文，工具取默认空表。 */
+        public static Context of(List<Message> messages) {
+            return new Context(messages, List.of());
+        }
+    }
+
+    /**
+     * pi {@code prepareNextTurn} 的入参。
+     *
+     * <p>pi 传的是 {@code lastCompletedTurn}，其 {@code context} 字段就是**当时**的
+     * {@link Context}（{@code agent-loop.ts:165, 246}）—— 钩子因此能看到 systemPrompt 与 tools，
+     * 而不只是消息列表。</p>
+     */
     public record NextTurnContext(Message.AssistantMessage message,
                                   List<Message.ToolResultMessage> toolResults,
-                                  List<Message> messages) {}
+                                  Context context) {}
 
-    /** pi {@code prepareNextTurn} 的返回值：只允许改 model 与 thinking。 */
-    public record NextTurnUpdate(ModelId<?> model, ModelThinkingLevel thinking) {}
+    /**
+     * pi {@code AgentLoopTurnUpdate}（{@code types.ts:138-145}）：{@code prepareNextTurn}
+     * 的返回值。三个字段与 pi 一一对应，全部可选，{@code null} 表示「不改」。
+     *
+     * <p>{@code context} 是**整体替换**，不是合并 —— pi 的
+     * {@code currentContext = nextTurnSnapshot.context ?? currentContext}。
+     * 压缩正是靠这条通道把重建后的消息列表交回循环（{@code agent-session.ts:557-577}）。</p>
+     */
+    public record NextTurnUpdate(ModelId<?> model, ModelThinkingLevel thinking, Context context) {
+
+        /** 只改 model / thinking。 */
+        public NextTurnUpdate(ModelId<?> model, ModelThinkingLevel thinking) {
+            this(model, thinking, null);
+        }
+    }
 
     /** pi {@code prepareNextTurn}。返回 {@code null} 表示不改。 */
     @FunctionalInterface
@@ -194,9 +243,26 @@ public final class PiLoop {
      */
     public static List<Message> run(List<Message> prompts, List<Message> context,
                                     Config config, Sink emit) {
+        var current = new ArrayList<>(context);
+        var messages = run(prompts, new Context(current, config.toolDefs()), config, emit);
+        // 就地扩展调用方的列表（与 pi 的 context.messages 是同一数组一致）。
+        // ⚠️ 若 prepareNextTurn **整体替换**了 context，这里反映不出来 —— 用 Context 版入口。
+        context.clear();
+        context.addAll(current);
+        return messages;
+    }
+
+    /**
+     * pi {@code runAgentLoop} 的上下文版入口：调用方自带 {@link Context}（可含 tools）。
+     *
+     * <p>与 {@link #run(List, List, Config, Sink)} 的区别只在上下文载体 ——
+     * 目标形态是循环持有一个可被 {@code prepareNextTurn} **整体替换**的 context。</p>
+     */
+    public static List<Message> run(List<Message> prompts, Context context,
+                                    Config config, Sink emit) {
         var newMessages = new ArrayList<>(prompts);
-        var currentMessages = new ArrayList<>(context);
-        currentMessages.addAll(prompts);
+        // pi: {...context, messages: [...context.messages, ...prompts]} —— 扩展**同一**列表
+        context.messages().addAll(prompts);
 
         emit.emit(new Event.AgentStart());
         emit.emit(new Event.TurnStart());
@@ -205,9 +271,7 @@ public final class PiLoop {
             emit.emit(new Event.MessageEnd(prompt));
         }
 
-        runLoop(currentMessages, newMessages, config, emit, true);
-        context.clear();
-        context.addAll(currentMessages);
+        PiLoopRunner.runLoop(context, newMessages, config, emit);
         return newMessages;
     }
 
@@ -229,205 +293,25 @@ public final class PiLoop {
         emit.emit(new Event.AgentStart());
         emit.emit(new Event.TurnStart());
 
-        runLoop(context, newMessages, config, emit, true);
+        PiLoopRunner.runLoop(new Context(context, config.toolDefs()), newMessages, config, emit);
         return newMessages;
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // 主循环：pi runLoop（agent-loop.ts:165-279）
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * pi 的双循环。
-     *
-     * <p>外层 `while (true)`：follow-up 队列决定是否再来一轮。
-     * 内层 `while (hasMoreToolCalls || pendingMessages.length > 0)`：处理 steer 与工具调用。</p>
-     *
-     * @param firstTurn 外层首轮不重复发 {@code turn_start}（调用方已发过一次）
-     */
-    private static void runLoop(List<Message> messages, List<Message> newMessages,
-                                Config initialConfig, Sink emit, boolean firstTurn) {
-        var config = initialConfig;
-        var first = firstTurn;
-        // pi: 起始即检查 steer（用户可能在等待期间已经输入）
-        var pending = config.steeringMessages() == null
-            ? new ArrayList<Message>() : new ArrayList<>(config.steeringMessages().get());
-
-        while (true) {
-            boolean hasMoreToolCalls = true;
-
-            while (hasMoreToolCalls || !pending.isEmpty()) {
-                if (!first) {
-                    emit.emit(new Event.TurnStart());
-                } else {
-                    first = false;
-                }
-
-                // pi: 下一轮助手响应之前先注入 pending 消息
-                if (!pending.isEmpty()) {
-                    for (var message : pending) {
-                        emit.emit(new Event.MessageStart(message));
-                        emit.emit(new Event.MessageEnd(message));
-                        messages.add(message);
-                        newMessages.add(message);
-                    }
-                    pending.clear();
-                }
-
-                var message = streamAssistantResponse(messages, config, emit);
-                newMessages.add(message);
-
-                // pi: error / aborted 直接收口（agent-loop.ts:189-193）
-                if ("error".equals(message.stopReason()) || "aborted".equals(message.stopReason())) {
-                    emit.emit(new Event.TurnEnd(message, List.of()));
-                    emit.emit(new Event.AgentEnd(List.copyOf(newMessages)));
-                    return;
-                }
-
-                var toolCalls = PiLoopTools.callsOf(message);
-                var toolResults = new ArrayList<Message.ToolResultMessage>();
-                hasMoreToolCalls = false;
-                if (!toolCalls.isEmpty()) {
-                    // pi: length 截断 ⇒ 全部失败，不执行（:206-208 分派，:379-404 实现）
-                    var batch = PiLoopTools.run(toolCalls, config, emit,
-                        "length".equals(message.stopReason()));
-                    toolResults.addAll(batch.messages());
-                    hasMoreToolCalls = !batch.terminate();
-                    for (var result : toolResults) {
-                        messages.add(result);
-                        newMessages.add(result);
-                    }
-                }
-
-                emit.emit(new Event.TurnEnd(message, List.copyOf(toolResults)));
-
-                var nextTurn = new NextTurnContext(message, List.copyOf(toolResults),
-                    List.copyOf(messages));
-
-                // pi: prepareNextTurn 在 turn_end 之后、shouldStopAfterTurn 之前
-                if (config.prepareNextTurn() != null) {
-                    var update = config.prepareNextTurn().apply(nextTurn);
-                    if (update != null) {
-                        config = new Config(
-                            update.model() != null ? update.model() : config.model(),
-                            update.thinking() != null ? update.thinking() : config.thinking(),
-                            config.thinkingLevelMap(),
-                            config.toolDefs(), config.toolExecution(), config.toolRunner(),
-                            config.streamFn(), config.signal(), config.steeringMessages(),
-                            config.followUpMessages(), config.transformContext(),
-                            config.prepareNextTurn(), config.shouldStopAfterTurn(),
-                            config.streamListener());
-                    }
-                }
-
-                if (config.shouldStopAfterTurn() != null
-                        && config.shouldStopAfterTurn().apply(nextTurn)) {
-                    emit.emit(new Event.AgentEnd(List.copyOf(newMessages)));
-                    return;
-                }
-
-                pending = config.steeringMessages() == null
-                    ? new ArrayList<>() : new ArrayList<>(config.steeringMessages().get());
-            }
-
-            // pi: 内层结束 ⇒ 检查 follow-up，有则并入 pending 继续外层
-            var followUp = config.followUpMessages() == null
-                ? List.<Message>of() : config.followUpMessages().get();
-            if (!followUp.isEmpty()) {
-                pending = new ArrayList<>(followUp);
-                continue;
-            }
-            break;
+    /** pi {@code runAgentLoopContinue} 的上下文版入口。 */
+    public static List<Message> continueRun(Context context, Config config, Sink emit) {
+        var messages = context.messages();
+        if (messages.isEmpty()) {
+            throw new IllegalStateException("Cannot continue: no messages in context");
+        }
+        if (messages.get(messages.size() - 1).role().equals("assistant")) {
+            throw new IllegalStateException("Cannot continue from message role: assistant");
         }
 
-        emit.emit(new Event.AgentEnd(List.copyOf(newMessages)));
-    }
+        var newMessages = new ArrayList<Message>();
+        emit.emit(new Event.AgentStart());
+        emit.emit(new Event.TurnStart());
 
-    // ═══════════════════════════════════════════════════════════════
-    // 助手流：pi streamAssistantResponse（agent-loop.ts:283-375）
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * 发一次 provider 请求并把流式事件翻译成消息生命周期事件。
-     *
-     * <p>与 pi 的三条关键规则一致：① {@code message_start} 由流的 {@code start} 事件触发；
-     * ② 流中每帧用 partial 覆盖上下文的最后一条；③ 若 provider 从未发 {@code start}，
-     * 则在 {@code message_end} 之前补发一次 {@code message_start}。</p>
-     */
-    private static Message.AssistantMessage streamAssistantResponse(
-            List<Message> messages, Config config, Sink emit) {
-
-        var llmMessages = config.transformContext() != null
-            ? config.transformContext().apply(List.copyOf(messages)) : List.copyOf(messages);
-
-        var options = new StreamOptions(
-            java.util.OptionalInt.empty(), java.util.OptionalDouble.empty(),
-            thinkingConfig(config), config.toolDefs());
-
-        var iter = config.streamFn().stream(llmMessages, config.model(), options);
-        Message.AssistantMessage finalMessage = null;
-        boolean addedPartial = false;
-        try {
-            while (iter.hasNext()) {
-                var event = iter.next();
-                if (config.streamListener() != null) {
-                    config.streamListener().accept(event);
-                }
-                if (event instanceof StreamEvent.Start start) {
-                    addedPartial = true;
-                    finalMessage = fromPartial(start.partial());
-                    messages.add(finalMessage);
-                    emit.emit(new Event.MessageStart(finalMessage));
-                } else if (isUpdateEvent(event)) {
-                    if (finalMessage != null) {
-                        finalMessage = fromPartial(event.partial());
-                        messages.set(messages.size() - 1, finalMessage);
-                        emit.emit(new Event.MessageUpdate(finalMessage, event));
-                    }
-                } else if (event instanceof StreamEvent.StreamDone done) {
-                    finalMessage = fromPartial(done.partial());
-                    break;
-                } else if (event instanceof StreamEvent.StreamError err) {
-                    finalMessage = fromPartial(err.partial());
-                    break;
-                }
-            }
-        } finally {
-            iter.close();
-        }
-
-        if (finalMessage == null) {
-            throw new IllegalStateException("stream produced no terminal message");
-        }
-        if (addedPartial) {
-            messages.set(messages.size() - 1, finalMessage);
-        } else {
-            messages.add(finalMessage);
-            emit.emit(new Event.MessageStart(finalMessage));
-        }
-        emit.emit(new Event.MessageEnd(finalMessage));
-        return finalMessage;
-    }
-
-    /** pi: 除 start/done/error 之外的流事件都是 update。 */
-    private static boolean isUpdateEvent(StreamEvent event) {
-        return event instanceof StreamEvent.TextStart
-            || event instanceof StreamEvent.TextDelta
-            || event instanceof StreamEvent.TextEnd
-            || event instanceof StreamEvent.ThinkingStart
-            || event instanceof StreamEvent.ThinkingDelta
-            || event instanceof StreamEvent.ThinkingEnd
-            || event instanceof StreamEvent.ToolCallStart
-            || event instanceof StreamEvent.ToolCallDelta
-            || event instanceof StreamEvent.ToolCallEnd;
-    }
-
-    /** 流式 partial 类型 → 消息类型（pi-java 把两者拆成了两个类）。 */
-    private static Message.AssistantMessage fromPartial(AssistantMessage partial) {
-        return new Message.AssistantMessage(partial.content(), partial.stopReason(), null);
-    }
-
-    private static ThinkingConfig thinkingConfig(Config config) {
-        return config.thinkingLevelMap().forLevel(config.thinking());
+        PiLoopRunner.runLoop(context, newMessages, config, emit);
+        return newMessages;
     }
 }

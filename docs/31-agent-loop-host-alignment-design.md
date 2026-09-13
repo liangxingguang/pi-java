@@ -449,6 +449,55 @@ entry 由会话层在 `message_end` 上直接写入，没有「先记账后落�
 **这是实施的第 1 步**：补 `AgentLoopTurnUpdate.context` 通道 + 补一个 L5 剧本让它非 null，
 否则 §4.2 的阈值压缩无处落地。
 
+**✅ 已完成（2026-09-13）**，且实施时又读出一处**此前未发现的差异**（见 §8.4）。
+
+### 8.4 实施时新发现：`prepareNextTurn` 的调用时机与重拉
+
+`docs/31` 初稿只知道 `context` 字段缺失。实施时逐行对照 `agent-loop.ts:165-279`，
+又读出**两处**控制流差异：
+
+| # | pi | pi-java（改前） |
+|---|---|---|
+| 5 | `shouldStopAfterTurn` 先（`:249-252`，在 `turn_end` 之后），`prepareNextTurn` 后（`:176-183`，在**下一轮的开头**） | **顺序相反**：`prepareNextTurn` 先，`shouldStopAfterTurn` 后 |
+| 6 | `prepareNextTurn` 返回后，若此前没有待注入的 steer，则**再轮询一次**（`:184-189`） | 不重拉 |
+
+**第 5 条的后果是实的**：`shouldStopAfterTurn` 为真时 pi 直接返回，**根本不会调用**
+`prepareNextTurn`；改前会多跑一次有副作用的钩子。
+
+**第 6 条在 Java 侧更重**：pi 的注释写明理由是「准备可能很慢（例如压缩）」——
+压缩要跑一次 LLM 调用（数秒）。改前，用户在这段时间敲的 steer 会被推迟整整一轮。
+
+> **两处都由新增的 `PiLoopTurnHooksTest` 钉住**（5 个用例）。做了反向实验：把旧的
+> 「先 prepareNextTurn 后 shouldStop」插回去，5 个用例里 3 个失败 + 1 个报错。
+
+### 8.5 异步 ↔ 同步的对齐口径（**通用原则，适用于后续所有移植**）
+
+pi 用 `async/await`，Java 没有。**这不是障碍**：pi 的 `runLoop` 里没有任何 `Promise.all`，
+每个 `await` 都是「等它做完再往下」——这个循环**从来不会让两个循环步骤并发**，
+它是一个顺序状态机，`await` 只是它的挂起语法。
+
+⇒ **对齐的是「可观察效果的顺序」，不是 async 机器。**
+
+| pi | pi-java | 等价性 |
+|---|---|---|
+| `await emit(e)` | `sink.emit(e)`（同步） | ✅ 顺序等价 |
+| `await streamFn(...)` | 阻塞式 `StreamIterator`（虚拟线程） | ✅ |
+| `await config.getSteeringMessages()` | `Supplier.get()` | ✅ 前提：队列线程安全 |
+| `await config.prepareNextTurn(...)` | 同一线程阻塞 | ⚠️ **必须显式处理「阻塞期间世界在变」** —— 即第 6 条重拉 |
+
+**唯一一处机制上真不等价、且已裁决为有意偏离**：pi 的 `subscribe` 接受
+`(event, signal) => Promise<void> | void` 并**逐个 await**，`agent_end` 之后才算 idle：
+
+> `agent_end` is the final emitted event for a run, but the agent does not become idle
+> until all awaited listeners for that event have settled.
+
+`PiLoop.Sink` 是**同步**的。同步 sink 天然给了「emit 返回即 listener 完成」——
+顺序与结算语义都对；但**不能 await 一个异步 listener**。
+
+**裁决（2026-09-13）**：**明确记为有意偏离**，不引入 `CompletionStage` 重载 ——
+把 sink 链传染成异步的代价远大于收益。**pi-java 的扩展不许在 sink 里阻塞**；
+真出现需要 await 的扩展场景时再单独设计。
+
 ---
 
 ## 9. 与既有文档的关系
