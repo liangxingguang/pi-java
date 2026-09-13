@@ -61,11 +61,7 @@ final class RunLifecycle {
             new RunContext(laneName, lane.runId, promptList));
 
         lane.transcript.add(messageEntry(lane, userMessage));
-        if (ctx.thinkingLevel().get() instanceof ModelThinkingLevel.Enabled en) {
-            lane.transcript.add(new Entry.ThinkingLevelChange(
-                UUID.randomUUID().toString(), lane.nextSeq(), HarnessUtils.lastEntryId(lane),
-                null, en.level().label()));
-        }
+        recordConfigChanged(laneName);
 
         // pi alignment: the operation id IS the runId (state.openOperationsByLane pairs
         // operation_finished.runId with operation_started.id) — a separate UUID would
@@ -76,6 +72,48 @@ final class RunLifecycle {
         ctx.incrementTurn();
         ctx.publishState(laneName);
         return run;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // 配置 entry —— 与字段赋值同处写（pi sessionManager.append*）
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * 等级变更时补写 {@link Entry.ThinkingLevelChange}（pi {@code agent-session.ts:1813-1829}）。
+     *
+     * <p>pi 的守卫是 {@code isChanging = effectiveLevel !== previousLevel}，且**只在非默认等级时**
+     * 才写（{@code Off} 不入日志）—— 这里用 {@link LaneState#recordedThinking} 承担
+     * 「上一次记的值」，于是首次运行补记、之后无变更不重复、setter 改过之后下一次运行也不再重复。
+     * 这是 §4.1「配置 entry 与字段赋值同处」在 Java 侧的落法：字段仍是唯一真源，entry 只是它的
+     * 审计副本。</p>
+     */
+    void recordConfigChanged(String laneName) {
+        var lane = ctx.requireLane(laneName);
+        String label = ctx.thinkingLevel().get() instanceof ModelThinkingLevel.Enabled en
+            ? en.level().label() : null;
+        if (java.util.Objects.equals(label, lane.recordedThinking)) {
+            return;
+        }
+        lane.recordedThinking = label;
+        if (label == null) {
+            return;                       // 默认（off）不写 entry，与 pi 一致
+        }
+        lane.transcript.add(new Entry.ThinkingLevelChange(
+            UUID.randomUUID().toString(), lane.nextSeq(), HarnessUtils.lastEntryId(lane),
+            null, label));
+    }
+
+    /**
+     * 模型切换的 entry（pi {@code agent-session.ts:1687}）。
+     *
+     * <p>pi 在 {@code setModel} 里**无条件**追加 —— 变更判定只作用于 {@code model_select}
+     * 会话事件（{@code _emitModelSelect} 在相等时提前返回），entry 照写。这里照抄该形状。</p>
+     */
+    void recordModelChange(String laneName, com.pijava.ai.model.ModelId<?> model) {
+        var lane = ctx.requireLane(laneName);
+        lane.transcript.add(new Entry.ModelChange(
+            UUID.randomUUID().toString(), lane.nextSeq(), HarnessUtils.lastEntryId(lane),
+            java.time.Instant.now(), model.provider(), model.modelName()));
     }
 
     /**
@@ -187,6 +225,7 @@ final class RunLifecycle {
             lane.newestOwn = null;
             lane.runId = null;
             lane.pendingTurnUpdate = null;
+            lane.recordedThinking = null;
             lane.runSpan = null;
             lane.runStartNanos = 0;
             lane.steerQueue.clear();
@@ -214,6 +253,19 @@ final class RunLifecycle {
             return;
         }
         lane.transcript.addAll(entries);
+        // 恢复出让「上次记过什么」与既有日志一致，否则恢复后的首次运行会把一条已经在
+        // 日志里的 ThinkingLevelChange 再写一遍（docs/31 §4.1）。
+        lane.recordedThinking = lastRecordedThinking(lane);
+    }
+
+    /** 日志里最后一条 {@code ThinkingLevelChange} 的标签；没有则为 {@code null}。 */
+    private static String lastRecordedThinking(LaneState lane) {
+        for (int i = lane.transcript.size() - 1; i >= 0; i--) {
+            if (lane.transcript.get(i) instanceof Entry.ThinkingLevelChange change) {
+                return change.thinkingLevel();
+            }
+        }
+        return null;
     }
 
     /**

@@ -58,6 +58,15 @@ public final class LaneState {
     /** Pending update from prepare_next_turn hooks; consumed by the next turn, cleared at run end. */
     com.pijava.agent.hook.TurnUpdate pendingTurnUpdate;
 
+    /**
+     * 已写进 {@link #transcript} 的思考等级标签；{@code null} 表示尚未记录。
+     *
+     * <p>pi 只在等级**真的变了**时才追加 entry（{@code agent-session.ts:1813-1829} 的
+     * {@code isChanging} 守卫），所以需要一个「上次记的是什么」的判据，否则每次运行都会
+     * 重复追加一条（{@code docs/31 §4.1}）。</p>
+     */
+    String recordedThinking;
+
     // Phase 2c: multi-lane fields
     /** Parent leaf ID for branching; null for the default lane. */
     String parentLeafId;

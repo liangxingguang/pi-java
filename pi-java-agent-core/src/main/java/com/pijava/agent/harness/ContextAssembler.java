@@ -60,6 +60,7 @@ final class ContextAssembler {
                 var e = new Entry.ThinkingLevelChange(UUID.randomUUID().toString(), lane.nextSeq(),
                     HarnessUtils.lastEntryId(lane), Instant.now(), upd.thinkingLevel());
                 lane.transcript.add(e);
+                lane.recordedThinking = upd.thinkingLevel();
                 // Applied mid-run by a prepare_next_turn hook ⇒ deferred.
                 HarnessUtils.recordDeferredWrite(lane, e);
             }

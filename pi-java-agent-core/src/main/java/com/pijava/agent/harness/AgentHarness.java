@@ -419,16 +419,18 @@ public class AgentHarness implements AutoCloseable {
     // ═══════════════════════════════════════════════════════════
 
     public ModelId<?> getModel() { return state.model; }
-    /** Set the model used for subsequent LLM calls. */
+    /** Set the model used for subsequent LLM calls（同时把变更写进 transcript，见 §4.1）. */
     public void setModel(ModelId<?> model) {
         if (closed) throw new HarnessClosedException();
         state.model = model;
+        runLifecycle.recordModelChange(registry.defaultLaneName(), model);
     }
     public ModelThinkingLevel getThinkingLevel() { return state.thinkingLevel; }
-    /** Set the thinking level used for subsequent LLM calls. */
+    /** Set the thinking level used for subsequent LLM calls（变更时才写 entry，见 §4.1）. */
     public void setThinkingLevel(ModelThinkingLevel level) {
         if (closed) throw new HarnessClosedException();
         state.thinkingLevel = level;
+        runLifecycle.recordConfigChanged(registry.defaultLaneName());
     }
 
     /** Change the system prompt for subsequent runs. */
