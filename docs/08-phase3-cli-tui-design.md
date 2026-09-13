@@ -2,7 +2,8 @@
 
 > **目标**：提供完整的交互式终端体验 —— `pi-java` 命令行可用（交互模式 + Print 模式），内置 22 个 slash 命令、~40 个 CLI 参数、settings.json 设置管理、TCSS 双主题。
 > **工时**：2–3 周（14 项任务）
-> **输入文档**：`03-detailed-design.md` §3（TUI 模块）、§4（coding-agent 模块）、`04-implementation-plan.md` §5、`07c-phase2c-orchestration-design.md` §3.2 / §17（队列调度前向引用）
+> **输入文档**：`03-detailed-design.md` §3（TUI 模块）、§4（coding-agent 模块）、`04-implementation-plan.md` §5
+> （原引用的 `07c-phase2c-orchestration-design.md` §3.2 / §17 已随该文档删除）
 > **前置阶段**：Phase 2c（AgentHarness 完整能力 + `SessionSnapshot`/`WatchHandle` 已就绪）
 
 ---

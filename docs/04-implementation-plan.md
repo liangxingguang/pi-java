@@ -14,7 +14,7 @@
 | Phase 1 | LLM API | 统一 LLM 调用层 | 3–4 周 | `pi-java-ai` 可用 + `06-phase1-ai-design.md` |
 | Phase 2a | Agent 循环最小版 | 12 事件 + ThinkingLevel + Entry + 基础循环 + 上下文管理 | 2 周 | 可跑 `pi-java -p "hello"` + `07-phase2a-agent-loop-design.md` |
 | Phase 2b | 工具系统 | Tool 接口 + 8 个内置工具 + 测试 | 2 周 | Agent 可调用 bash/read/write + `07b-phase2b-tools-design.md` |
-| Phase 2c | 高级编排 | 多车道、Hook、压缩、Skills、手动驱动 | 2 周 | 对齐 pi AgentHarness 全部能力 + `07c-phase2c-orchestration-design.md` |
+| Phase 2c | 高级编排 | ~~多车道、手动驱动~~、Hook、压缩、Skills | 2 周 | Hook/压缩/Skills 已交付；**多车道与手动驱动已作废**（`docs/31 §1.2`）。设计文档 `07c` 已删除 |
 | Phase 3 | CLI + TUI | 交互式终端 | 2–3 周 | `pi-java` 命令行可用 + `08-phase3-cli-tui-design.md` |
 | Phase 4 | 持久化与恢复 | 会话存储、压缩 | 3–4 周 | 完整会话生命周期 + `09-phase4-persistence-design.md` |
 | Phase 5 | 原生分发（**已放弃**） | ~~GraalVM Native Image~~ | — | JVM fat jar 分发 + `10-phase5-native-design.md`（记录放弃结论） |
@@ -143,15 +143,19 @@ Agent 可以调用 bash/read/write 等工具完成编码任务。
 ## 6. Phase 2c — 高级编排（第 10–11 周）
 
 ### 目标
-对齐 pi AgentHarness 全部能力：多车道、Hook、压缩、Skills、手动驱动。
+~~对齐 pi AgentHarness 全部能力~~：Hook、压缩、Skills。**多车道与手动驱动已于 2026-09-13 作废**
+（`docs/31 §1.2`：车道出自 pi 被排除的 `harness/` 层，实测生产调用 0 个；手动驱动无生产消费者）。
+
+> ⚠️ **本节记录的是该阶段当时的计划**，其中多车道与手动驱动两项**已作废**，其余仍有效。
+> 阶段设计文档 `07c-phase2c-orchestration-design.md` **已删除**（`docs/27 §6`）。
 
 ### 任务分解
 
 | 编号 | 任务 | 产出 | 工时 |
 |------|------|------|------|
-| P2c-0 | **编写阶段设计文档** | `07c-phase2c-orchestration-design.md` | 0.5d |
-| P2c-1 | 多车道模型 | `createLane()` + `moveLane()` + lane 隔离 | 1.5d |
-| P2c-2 | 手动驱动模式完善 | `executeAction()` + `runToCompletion()` + `close()` 拒绝待执行 | 1d |
+| ~~P2c-0~~ | ~~编写阶段设计文档~~ | ~~`07c-…`~~ **已删除** | — |
+| ~~P2c-1~~ | ~~多车道模型~~ **已作废** | ~~`createLane()` + `moveLane()` + lane 隔离~~ | — |
+| ~~P2c-2~~ | ~~手动驱动模式完善~~ **已作废** | ~~`executeAction()` + `runToCompletion()`~~ | — |
 | P2c-3 | 快照/订阅系统 | `watch()` → `WatchHandle<LaneSnapshot>` + `HarnessEventBus` | 1d |
 | P2c-4 | 11 个生命周期 Hook | `before_run` / `before_tool` / `after_response` 等 | 2d |
 | P2c-5 | Skills 系统 | `loadSkills()` + `formatSkillInvocation()` | 1d |

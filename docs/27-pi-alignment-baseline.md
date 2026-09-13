@@ -176,10 +176,9 @@ pi 的 legacy 层**确实**发全 turn 事件与工具三帧，pi-java **确实*
 | `docs/21-record-log-fold-design.md` | 折叠模型已退休（`docs/30`），自带停止横幅 |
 | `docs/22-deferred-writes-and-entry-provenance-design.md` | #1/#2/#3 全废（`pendingWrites` 已定删，`toolBatch`/`terminalFailure` 随折叠链删），仅 #4 仍有效 |
 | `docs/25-subagent-support-design.md` | pi-java 无 subagent（`src/main` 零命中）；pi 侧是**扩展示例**而非内核能力 |
+| `docs/07c-phase2c-orchestration-design.md` | Phase 2c 阶段设计；其目标（多车道、手动驱动）与本次对齐**直接冲突** —— 留着会被读成当前设计依据 |
 
 > #4「stopReason 入 entry」仍然有效，已由 `docs/03` 的附注与 `docs/29 §9.1` 承接。
-> `docs/07c-phase2c-orchestration-design.md`（Phase 2c）**保留为阶段历史** —— 其中的多车道与
-> 手动驱动部分已随本次对齐作废，但它记录的是该阶段**当时**如何建成，不再作为当前设计依据。
 
 **删除不是不可逆**：
 
