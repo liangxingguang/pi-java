@@ -8,64 +8,66 @@
 
 ### 1.1 包结构
 
+> **本节 2026-09-13 按代码重写。** 原稿是一份**规划**的包结构，与实际不符：
+> 流事件是**一个** `StreamEvent.java` 里的 sealed 变体（原稿列了 8 个独立文件）；
+> `ModelInfo` 在 `catalog/` 不在 `model/`；`SystemMessage.java` 已随
+> `docs/31 §8.6` 删除（系统提示改由 harness 的 `Context` 承载）；`KeychainStore`
+> 从未实现；`ImageApi` / `EmbeddingApi` / OpenAI Responses / Pi Messages 等
+> 后来落地的适配器原稿里没有。
+
 ```
 com.pijava.ai/
-├── api/                    ← 公开 API 接口
-│   ├── StreamApi.java
-│   ├── SimpleApi.java
-│   ├── ChatApi.java
-│   ├── ProviderApi.java     ← 标记接口（sealed，permits ChatApi）
-│   └── ApiOptions.java
-├── protocol/               ← 协议适配器（一个协议一个适配器，所有供应商复用）
-│   ├── AnthropicMessagesApi.java
-│   ├── OpenAICompletionsApi.java
-│   ├── GoogleGenerativeAiApi.java
-│   └── MistralConversationsApi.java
-├── model/                  ← 模型定义
-│   ├── ModelId.java
-│   ├── ModelInfo.java      ← 模型元数据
-│   ├── ModelCapability.java ← 能力密封接口
-│   └── PricingInfo.java
+├── api/                    ← 公开 API（能力接口 + 请求/响应记录）
+│   ├── ProviderApi.java      ← 标记接口（sealed）
+│   ├── ChatApi.java  StreamApi.java  SimpleApi.java
+│   ├── ImageApi.java  EmbeddingApi.java            ← Phase 6 落地
+│   ├── StreamIterator.java                         ← 虚拟线程友好的同步迭代器
+│   └── StreamRequest.java  ApiOptions.java  ToolDefinition.java
+├── protocol/               ← 协议适配器（一个协议一个适配器，供应商复用）
+│   ├── AnthropicMessagesApi.java  OpenAICompletionsApi.java
+│   ├── OpenAIResponsesApi.java  AzureOpenAIResponsesApi.java
+│   ├── GoogleGenerativeAiApi.java  MistralConversationsApi.java
+│   ├── PiMessagesApi.java                          ← pi 自有协议
+│   ├── OpenAIEmbeddingApi.java  OpenRouterImagesApi.java
+│   └── AbstractChatApi.java  ToolCallAccumulator.java  …
+├── model/                  ← 模型标识与解析
+│   ├── ModelId.java  ModelCapability.java  PricingInfo.java
+│   └── ModelResolver.java  DefaultModelResolver.java
 ├── message/                ← 消息类型
-│   ├── Message.java        ← 密封接口
-│   ├── SystemMessage.java
-│   ├── UserMessage.java
+│   ├── Message.java         ← 密封接口（user / assistant / toolResult 三角色）
 │   ├── AssistantMessage.java
-│   └── ContentBlock.java   ← 文本 / 图片 / 工具调用
+│   ├── ContentBlock.java    ← 文本 / 图片 / 工具调用
+│   └── DeferredHandle.java
 ├── stream/                 ← 流事件
-│   ├── StreamEvent.java    ← 密封接口
-│   ├── TextDelta.java
-│   ├── ToolCallStart.java
-│   ├── ToolCallDelta.java
-│   ├── ToolCallEnd.java
-│   ├── UsageInfo.java
-│   ├── StreamError.java
-│   ├── StreamDone.java
-│   └── ToolCallBuilder.java ← 工具参数增量聚合（OpenAI/Mistral 共享）
-├── provider/               ← Provider 配置（不可变，绑定协议适配器）
-│   ├── Provider.java       ← SPI 接口
-│   ├── ProviderFactory.java
-│   ├── ProviderRegistry.java
-│   ├── AnthropicProvider.java
-│   ├── OpenAIProvider.java
-│   ├── GoogleProvider.java
-│   ├── DeepSeekProvider.java
-│   ├── MistralProvider.java
-│   └── FauxProvider.java    ← 可编程假 Provider
+│   ├── StreamEvent.java     ← 密封接口，变体都是它的嵌套 record
+│   ├── StreamPartialBuilder.java
+│   └── ToolCallBuilder.java ← 工具参数增量聚合（多协议共享）
+├── provider/               ← Provider 配置（绑定协议适配器）
+│   ├── Provider.java        ← SPI 接口
+│   ├── ProviderFactory.java  ProviderRegistry.java  ProviderConfig.java
+│   ├── Protocol.java        ← 协议标识
+│   ├── AnthropicProvider.java  OpenAIProvider.java  GoogleProvider.java
+│   ├── DeepSeekProvider.java  MistralProvider.java
+│   ├── AnthropicCompatibleProvider.java  OpenAiCompatibleProvider.java
+│   ├── ConfigurableProvider.java          ← models.json 驱动的自定义供应商
+│   ├── ModelsJsonConfig.java  ModelsJsonProvider.java  ModelsJsonSchema.java
+│   ├── FauxProvider.java    ← 可编程假 Provider（测试与 L5 用）
+│   └── builtin/
 ├── catalog/                ← 模型目录
-│   ├── ModelCatalog.java
-│   ├── BuiltinCatalog.java
-│   └── RemoteCatalog.java   ← Phase 6
+│   ├── ModelCatalog.java  BuiltinCatalog.java  RemoteCatalog.java
+│   ├── ModelInfo.java  CatalogModel.java  ModelsStore.java
+│   └── FileModelsStore.java  CatalogPublisher.java  …
 ├── auth/                   ← 认证
-│   ├── CredentialStore.java
-│   ├── EnvApiKeyResolver.java
-│   ├── FileCredentialStore.java
-│   ├── KeychainStore.java   ← Phase 6
-│   └── OAuthFlow.java       ← Phase 6
+│   ├── CredentialStore.java  EnvApiKeyResolver.java  FileCredentialStore.java
+│   ├── Credentials.java  AuthProfileManager.java
+│   └── OAuthFlow.java  OAuthProvider.java  OAuthProviders.java
+│       DeviceCodeFlow.java  OAuthCredentialStore.java  …
 ├── http/                   ← HTTP 传输
-│   └── PiHttpClient.java   ← 对 HttpClient 的薄封装
+│   ├── PiHttpClient.java     ← 对 HttpClient 的薄封装
+│   ├── PiHttpException.java  RetryPolicy.java  ProxyDetector.java
 └── cli/                    ← pi-ai CLI
-    └── AiCli.java
+    ├── AiCli.java
+    └── CatalogCommand.java
 ```
 
 ### 1.2 核心接口设计
@@ -134,15 +136,22 @@ try (var stream = api.streamBlocking(request, options)) {
 以 Anthropic 为例，消息和工具定义转换：
 
 ```
-Java 内部表示                    Anthropic Messages API 格式
-────────────────────────────────────────────────────────
-Message.SystemMessage(text)  →  {"role":"system","content":text}
+Java 内部表示                     Anthropic Messages API 格式
+─────────────────────────────────────────────────────────
+Context.systemPrompt         →  {"system": "..."}（顶层字段，不是一条消息）
 Message.UserMessage(blocks)  →  {"role":"user","content":[...]}
+Message.AssistantMessage     →  {"role":"assistant","content":[...]}
+Message.ToolResultMessage    →  {"role":"user","content":[{"type":"tool_result",...}]}
 ToolDefinition               →  {"name":"..","description":"..","input_schema":{...}}
 ToolCallStart(id,name)       ←  {"type":"content_block_start","content_block":{"type":"tool_use",...}}
-TextDelta(text)              ←  {"type":"content_block_delta","delta":{"type":"text_delta","text":"..."}}
+TextDelta(text)              ←  {"type":"content_block_delta","delta":{"text_delta","text":"..."}}
 StreamDone(usage)            ←  {"type":"message_delta","delta":{"stop_reason":"end_turn"},...}
 ```
+
+> **`Message.SystemMessage` 已删除（`docs/31 §8.6`）**：pi 的 `Message` 只有
+> user / assistant / toolResult 三个角色，系统提示是 `Context.systemPrompt`，
+> **六个 provider 适配层读的都是它、从不扫描消息列表**。原稿把系统提示画成一条
+> `{"role":"system"}` 消息，那是删除之前的形态。
 
 ---
 
@@ -386,9 +395,10 @@ public sealed interface Entry {
 | `Custom` | `customType`、`data` | 扩展事件（不进 LLM 上下文） |
 | `CustomMessage` | `customType`、`content`、`display`、`details` | 扩展注入的消息：`content` 进 LLM 上下文，`display` 只管 TUI 渲染 |
 
-> **`isConfiguration()` 的读者**：`ModelChange` / `ThinkingLevelChange` / `ActiveToolsChange`
-> 覆写为 `true`。它随 record-log 折叠链一起引入（`docs/21` F3），而折叠链已退休
-> （`docs/30`）——**当前无生产读者**。
+> **曾经有过 `isConfiguration()`**：`ModelChange` / `ThinkingLevelChange` /
+> `ActiveToolsChange` 覆写为 `true`，随 record-log 折叠链一起引入（`docs/21` F3）。
+> 折叠链退休后（`docs/30`）它零读者，**已于 2026-09-13 删除** —— 留着一个只为已删除机制
+> 存在的判据，只会让下一个读者以为它还有语义。
 
 #### LaneRecord 的 11 个变体
 
@@ -423,24 +433,30 @@ public sealed interface LaneRecord {
 
 ### 2.4 存储接口：SessionStorage + SessionRepository
 
+> **本节 2026-09-13 按代码重写。** 原稿的 `Session` 被写成「只剩 `metadata()` / `storage()`
+> 的接口」，实际它是**委派整个存储面的类**；`LaneInfo` / `ForkOptions` / `SessionStats`
+> 三个辅助类型也与代码不符。
+
 pi 有两层存储抽象：**SessionStorage**（单会话读写）和 **SessionRepository**（会话生命周期管理）。
+另有一个**会话树视图** `SessionTree` —— `Session` 与 `LaneView` 都实现它，因此「读一条车道」
+与「读整个会话」共用同一套查询面。
 
 ```java
 // ═══════════════════════════════════════════════════════════
-// SessionStorage<TMetadata> — 单会话持久化接口
+// SessionStorage<TMetadata> — 单会话持久化接口（后端实现它）
 // ═══════════════════════════════════════════════════════════
 
-public interface SessionStorage<TMetadata> {
+public interface SessionStorage<TMetadata extends SessionMetadata> {
 
     // ── 元数据 ──────────────────────────────────────────
     TMetadata getMetadata();
 
-    // ── 车道管理 ────────────────────────────────────────
-    List<LaneInfo> getLanes();
+    // ── 车道管理（存储层的分支模型，docs/31 §8.10）────────
+    List<LanePointer> getLanes();                      // record LanePointer(lane, leafId)
     void createLane(String lane, String at);
     void moveLane(String lane, String to);
 
-    // ── 写入 ────────────────────────────────────────────
+    // ── 写入（**身份由这里赋**：committed(seq, parentId, timestamp)）
     <T extends Entry> T appendEntry(ProvisionedEntry<T> entry, String lane);
     <T extends LaneRecord> T appendRecord(NewRecord<T> record);
 
@@ -449,7 +465,7 @@ public interface SessionStorage<TMetadata> {
     List<Entry> findEntries(EntryQuery query);
     List<Entry> findEntriesOnBranch(EntryQuery query, BranchBounds bounds, String start);
     List<LaneRecord> findRecords(RecordQuery query);
-    List<OperationStarted> findOpenOperations(String lane, int limit);
+    List<LaneRecord.OperationStarted> findOpenOperations(String lane, int limit);
     List<LogItem> getLog(LogOptions options);
 
     // ── 命名与标签 ──────────────────────────────────────
@@ -458,8 +474,10 @@ public interface SessionStorage<TMetadata> {
     String getLabel(String id);
     void setLabel(String id, String label);
 
-    // ── 统计 ────────────────────────────────────────────
+    // ── 统计 / 生命周期 ─────────────────────────────────
     SessionStats getStats();
+    void drain();                                      // 把待写缓冲刷到底层
+    void close();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -467,161 +485,238 @@ public interface SessionStorage<TMetadata> {
 //   — 会话生命周期管理
 // ═══════════════════════════════════════════════════════════
 
-public interface SessionRepository<TMetadata, TCreateOptions, TListOptions> {
+public interface SessionRepository<
+        TMetadata extends SessionMetadata, TCreateOptions, TListOptions> {
 
-    /** 创建新会话，返回包含 SessionStorage 的 Session 句柄 */
+    /** 创建会话，并取得后端的写者声明（SQLite：writer lease；JSONL：无锁）。 */
     Session<TMetadata> create(TCreateOptions options);
 
-    /** 打开已有会话 */
+    /** 打开已有会话，同样要取得写者声明。 */
     Session<TMetadata> open(TMetadata metadata);
 
-    /** 列出所有会话元数据 */
+    /** 只列元数据，不开会话、不取声明。 */
     List<TMetadata> list(TListOptions options);
 
-    /** 删除会话 */
+    /** 删除会话（幂等）。 */
     void delete(TMetadata metadata);
 
-    /** 从源会话分叉 */
+    /** 按给定范围分叉。 */
     Session<TMetadata> fork(TMetadata source, ForkOptions options, TCreateOptions createOptions);
 }
 
-// ── 辅助类型 ──────────────────────────────────────────────
+// ── 会话句柄：一个类，委派整个存储面 ──────────────────────
+//
+// Session 不是「只剩两个方法」的接口 —— 它把 SessionStorage 的读写面全套转发出来，
+// 并额外提供 view(lane) 取单条车道视图、getLeafId()、idGenerator()。
+// 它和 LaneView 一样实现 SessionTree。
 
-/** Session 句柄：绑定元数据与存储接口 */
-public interface Session<TMetadata> {
-    TMetadata metadata();
-    SessionStorage<TMetadata> storage();
-    void close();
+public final class Session<TMetadata extends SessionMetadata> implements SessionTree {
+    public Session(SessionStorage<TMetadata> storage);            // 默认 UuidV7 id 生成器
+    public Session(SessionStorage<TMetadata> storage, IdGenerator idGenerator);
+
+    public TMetadata getMetadata();
+    public SessionStorage<TMetadata> storage();
+    public IdGenerator idGenerator();
+    public SessionTree view(String lane);      // 非 "main" 时返回 LaneView
+    public List<LanePointer> getLanes();
+    public void createLane(String lane, String at);
+    public void moveLane(String lane, String to);
+    public <T extends Entry> T appendEntry(ProvisionedEntry<T> entry, String lane);
+    public <T extends LaneRecord> T appendRecord(NewRecord<T> record);
+    public List<LaneRecord> findRecords(RecordQuery query);
+    public List<LaneRecord.OperationStarted> findOpenOperations(String lane, int limit);
+    public List<LogItem> getLog(LogOptions options);
+    // … SessionTree 的读面：getLeafId / getEntry / findEntries /
+    //    findEntriesOnBranch / getStats / getName / setName / getLabel / setLabel
+    public void close();
 }
 
-public record LaneInfo(String name, String leafId, long entryCount) {}
+// ── 辅助类型（按代码）─────────────────────────────────────
 
-public record ForkOptions(String at, String branchName) {}
+public record LanePointer(String lane, String leafId) {}
+
+/** 分叉范围：整棵树，或在某个 entry **之前/之后**的分支。 */
+public sealed interface ForkOptions {
+    record Branch(String entryId, Position position) implements ForkOptions {
+        public enum Position { BEFORE, AFTER }
+    }
+    record Tree() implements ForkOptions {}
+}
 
 public record SessionStats(
-    long entryCount,
-    long tokenCount,
-    long toolCallCount,
-    Instant firstTimestamp,
-    Instant lastTimestamp
-) {}
+    long messageCount,
+    double cachedTokens,
+    double uncachedTokens,
+    double totalTokens,
+    double costTotal
+) { public static SessionStats zero() { … } }
+
+/** 合并读流：entry / record / lane 指针 / 会话名 / 标签，按 seq 归并。 */
+public sealed interface LogItem {
+    long seq();
+    record EntryItem(long seq, Entry entry) implements LogItem {}
+    record RecordItem(long seq, LaneRecord record) implements LogItem {}
+    record LaneItem(long seq, String lane, String leafId) implements LogItem {}
+    record NameItem(long seq, String name) implements LogItem {}
+    record LabelItem(long seq, String targetId, String label) implements LogItem {}
+}
+
+public record LogOptions(Long afterSeq, Integer limit) { … }
+public record BranchBounds(String start, String stopAtType, String stopAtId) { … }
+```
+
+`EntryQuery` / `RecordQuery` 是查询条件记录（各带 `all()` / `last(n)` 等便捷构造），
+字段较细，以源码为准。
+
+**身份归属**（`docs/31 §8.14`）：`appendEntry` 是**身份的唯一权威** —— 它调
+`entry.committed(state.nextSequence(), 车道的 tip, now)` 重赋 `seq` / `parentId` / `timestamp`
+（id 保留并校验未占用）。调用方传进去的 `ProvisionedEntry` 里的这些值是**占位**。
 ```
 
 ### 2.5 工具系统
 
-对齐 pi 的 `ToolDefinition` + `AgentTool` + 工厂模式。
+> **本节 2026-09-13 按代码重写。** 原稿描述的 `ToolDefinitions` 工厂、`AgentTool extends Tool`
+> 带嵌套 `ExecutionMode` 枚举、以及 `BashToolOptions` / `ReadToolOptions` / `EditToolOptions`
+> 三个选项 record —— **全都不存在**。它们从未被实现过，也没留下痕迹。
+
+工具系统分三层：**工具本体**（`AgentTool`）、**给 LLM 的定义**（`ToolDefinition`）、
+**执行与注册**（`ToolRegistry` + `ToolContext` + `ToolResult`）。
 
 ```java
 // ═══════════════════════════════════════════════════════════
-// ToolDefinition — 工具元数据 + 渲染定义
+// AgentTool<TParams, TDetails> — 可被 Agent 执行的工具
+// ═══════════════════════════════════════════════════════════
+
+public interface AgentTool<TParams, TDetails> {
+
+    String name();                                  // 唯一名（"bash" / "read" / …）
+    String label();                                 // UI 显示名
+    String description();                           // 给 LLM 的说明
+    Map<String, Object> inputSchema();              // 参数的 JSON Schema
+    ExecutionMode executionMode();                  // 能否与其他工具并发
+
+    /** system prompt 的 Available-tools 一段里的一行；空串则退回 description()。 */
+    default String promptSnippet() { return ""; }
+
+    /** 本工具激活时追加到 system prompt 的指南条目。 */
+    default List<String> promptGuidelines() { return List.of(); }
+
+    /** 原始参数 → TParams 的兼容性垫片（schema 校验之前）。 */
+    @SuppressWarnings("unchecked")
+    default TParams prepareArguments(Map<String, Object> raw) { return (TParams) raw; }
+
+    /**
+     * 执行。**失败要抛异常** —— harness 捕获后包成错误结果
+     * （对齐 pi 的异常驱动错误模型）。
+     */
+    ToolResult<TDetails> execute(String toolCallId, TParams params, AbortSignal signal,
+                                 ToolUpdateCallback<TDetails> onUpdate, ToolContext context)
+        throws Exception;
+}
+
+/**
+ * 执行模式。**是 sealed interface 不是 enum** —— pi 用对象表达两态，
+ * 而 ADT 的形状在这里与常量枚举同价，按 `CLAUDE.md` 的取舍规则取 sealed。
+ */
+public sealed interface ExecutionMode {
+    /** 不能与其他工具并发（bash）。 */
+    record Sequential() implements ExecutionMode {}
+    /** 可与其他 parallel 工具并发（read / grep / ls / glob）。 */
+    record Parallel() implements ExecutionMode {}
+}
+
+// ═══════════════════════════════════════════════════════════
+// ToolDefinition — 交给 provider 的定义（com.pijava.ai.api）
 // ═══════════════════════════════════════════════════════════
 
 public record ToolDefinition(
     String name,
     String description,
-    JsonSchema parameters,
-
-    /** 工具调用渲染器（在聊天中显示工具调用） */
-    Renderer renderCall,
-
-    /** 工具结果渲染器（在聊天中显示工具结果） */
-    Renderer renderResult,
-
-    /** 在 system prompt 中的工具描述片段 */
+    Map<String, Object> inputSchema,
+    String label,
     String promptSnippet,
-
-    /** 工具使用指南（注入到 system prompt） */
-    String promptGuidelines
+    List<String> promptGuidelines,
+    String renderShell            // 供 TUI 渲染工具卡片的 shell 片段
 ) {}
 
 // ═══════════════════════════════════════════════════════════
-// AgentTool — 可被 Agent 执行的工具
+// 注册表 —— 注册、按名取、执行、导出定义
 // ═══════════════════════════════════════════════════════════
 
-public interface AgentTool extends Tool {
+public class ToolRegistry {
+    public ToolRegistry(ApprovalHandler approvalHandler);   // null = 不审批
 
-    /** 准备/转换参数（例如展开通配符、验证路径） */
-    Map<String, JsonNode> prepareArguments(Map<String, JsonNode> rawArgs);
+    public void register(AgentTool<?, ?> tool);
+    public void registerAll(List<AgentTool<?, ?>> toolList);
+    public AgentTool<?, ?> get(String name);
+    public Set<String> toolNames();
+    public Collection<AgentTool<?, ?>> all();
+    public void clear();
 
-    /** 执行模式 */
-    ExecutionMode executionMode();
-
-    enum ExecutionMode {
-        SEQUENTIAL,   // 必须顺序执行
-        PARALLEL      // 可与其他工具并行执行
-    }
+    public ToolResult<?> execute(…);
+    public List<ToolDefinition> toToolDefinitions();
+    public String toSystemPromptFragment();
 }
 
 // ═══════════════════════════════════════════════════════════
-// 工具分组工厂
+// 执行环境与结果
 // ═══════════════════════════════════════════════════════════
 
-public final class ToolDefinitions {
-
-    /** 创建编程（写操作）工具集：bash, read, write, edit, find, grep, ls, glob */
-    public static List<ToolDefinition> createCodingToolDefinitions(String cwd);
-
-    /** 创建只读工具集：read, find, grep, ls, glob（不含写操作） */
-    public static List<ToolDefinition> createReadOnlyToolDefinitions(String cwd);
+/** 显式注入的执行环境 —— Java 没有 TS 的闭包式 DI，所以由参数传。 */
+public class ToolContext {
+    public ToolContext(String cwd, Map<String, String> env,
+                       ShellExecutor shell, FileSystem fs);
+    public String cwd();
+    public Map<String, String> env();
+    public ShellExecutor shell();
+    public FileSystem fs();
 }
 
-// ═══════════════════════════════════════════════════════════
-// 单工具选项
-// ═══════════════════════════════════════════════════════════
-
-public record BashToolOptions(
-    int timeoutMs,                     // 默认 120_000
-    boolean sandbox,                   // 是否启用沙箱
-    List<String> allowedCommands,      // 白名单（null = 全部允许）
-    boolean streamOutput               // 是否流式回传输出
+public record ToolResult<TDetails>(
+    List<ContentBlock> content,
+    TDetails details,
+    UsageInfo usage,                   // 工具自身的用量（可空），不计入主 LLM 计数
+    boolean terminate,                 // 提示 Agent 在本批工具后停下
+    List<String> addedToolNames        // 本结果动态注册的工具（MCP 预留，当前恒空）
 ) {
-    public static BashToolOptions defaults() {
-        return new BashToolOptions(120_000, true, null, true);
-    }
+    public static <T> ToolResult<T> success(String text);
+    public static <T> ToolResult<T> success(String text, T details);
+    public record UsageInfo(long inputTokens, long outputTokens) {}
 }
 
-public record ReadToolOptions(
-    int maxLines,                      // 单次最大行数，默认 2000
-    boolean includeLineNumbers,        // 是否包含行号
-    long maxFileSize                   // 最大文件大小（字节），默认 1MB
-) {
-    public static ReadToolOptions defaults() {
-        return new ReadToolOptions(2000, true, 1_048_576L);
-    }
-}
+// ═══════════════════════════════════════════════════════════
+// 工具集工厂（真名是 ToolSetFactory，不是 ToolDefinitions）
+// ═══════════════════════════════════════════════════════════
 
-public record EditToolOptions(
-    boolean dryRun,                    // 试运行（不实际修改文件）
-    boolean createBackup               // 是否创建备份文件
-) {
-    public static EditToolOptions defaults() {
-        return new EditToolOptions(false, true);
-    }
+public final class ToolSetFactory {
+    /** 编程工具集：bash / read / write / edit / find / grep / ls / glob … */
+    public static List<AgentTool<?, ?>> createCodingTools(String commandPrefix);
+    /** 只读工具集：无写操作。 */
+    public static List<AgentTool<?, ?>> createReadOnlyTools();
 }
 
 // ═══════════════════════════════════════════════════════════
 // file-mutation-queue（文件变更队列）
 // ═══════════════════════════════════════════════════════════
 
-/** 对同一文件的写/编辑操作通过队列串行化，避免竞态条件 */
-public interface FileMutationQueue {
-
-    /** 入队一个文件变更操作，返回 CompletableFuture */
-    CompletableFuture<Void> enqueue(String filePath, Supplier<CompletableFuture<Void>> mutation);
-
-    /** 等待文件的所有待处理变更完成 */
-    CompletableFuture<Void> drain(String filePath);
-
-    /** 等待所有文件的所有待处理变更完成 */
-    CompletableFuture<Void> drainAll();
-
-    /** 当前队列深度 */
-    int pendingCount(String filePath);
+/**
+ * 同一文件的写/编辑串行化，避免并发工具的竞态。
+ *
+ * <p><b>是包内可见的实现，不是公开接口</b>：入口只有
+ * {@code <T> T withQueue(String filePath, ThrowingSupplier<T> fn)} ——
+ * 按文件路径算出的 canonical key 排队，前一个完成才轮到下一个，
+ * 退出时释放并清掉空队列。原稿写的 {@code enqueue} / {@code drain} /
+ * {@code drainAll} / {@code pendingCount} 四个方法都不存在。</p>
+ */
+final class FileMutationQueue {
+    <T> T withQueue(String filePath, ThrowingSupplier<T> fn) throws Exception;
 }
 ```
 
----
-
+内置工具在 `com.pijava.agent.tool.builtin`：`BashTool` / `ReadTool` / `WriteTool` /
+`EditTool` / `GlobTool` / `GrepTool` / `LsTool`（另有 `EditDiff` / `LineDiff` 供 diff 渲染，
+`FileMutationQueue` 供串行化）。每个工具**自带参数校验**，没有集中的 options record
+—— 需要开关时由 `ToolSetFactory` 的构造参数与 `HarnessConfig.activeTools` 决定。
 ## 3. `pi-java-tui` 模块详细设计
 
 > **核心决策**：`pi-java-tui` 不重新发明终端渲染引擎。它直接构建在 [TamboUI](https://tamboui.dev/) 之上——TamboUI 提供差量渲染、Widget 树、CSS 样式、焦点管理和键盘处理，`pi-java-tui` 负责 AI 编码代理场景的业务组件和主题定制。
@@ -922,41 +1017,96 @@ public interface SessionSnapshot {
 
 ### 4.1 AgentSession
 
+> **本节 2026-09-13 按代码重写。** 原稿把 `AgentHarness` 放进了 `SessionServices`，
+> 还写了 `resume(String, SessionServices)` 与 `branch(String)` —— 都不存在。
+> `SessionServices` 是**共享的依赖容器**（多个会话可以共用一个），harness 是**每个会话
+> 自己的**（`docs/31 §4.3`），两者刻意分开。
+
 ```java
-public class AgentSession implements AutoCloseable {
-    private final AgentHarness harness;
-    private final ModelResolver modelResolver;
-    private final ToolRegistry toolRegistry;
-    private final SkillManager skillManager;
-    private final ExtensionManager extensionManager;
-    private final Settings settings;
-    private final TrustManager trustManager;
-    private final CompactionService compaction;
+public final class AgentSession implements AutoCloseable {
 
-    // 主要入口：处理一个用户提示
+    public static final String DEFAULT_SYSTEM_PROMPT = …;
+
+    // ── 构造：五个入口，差别只在「后端 + 依赖怎么来」────────
+    public static AgentSession create(Args args);                    // 持久化后端（jsonl/sqlite）
+    public static AgentSession createWeb(Args args);                 // web：恢复最近会话，无则新建
+    public static AgentSession create(Args args, ProviderRegistry providers,
+                                      ToolContext toolContext);      // 注入依赖（RPC / 测试）
+    static AgentSession create(Args args, InMemorySessionRepository repository);  // 内存仓库（测试）
+
+    // ── 一个会话 = 一个 harness（分支就是新会话）────────────
+    public AgentHarness harness();
+    public SessionServices services();
+    public String laneName();                  // 恒为 AgentHarness.DEFAULT_LANE
+
+    // ── 运行 ────────────────────────────────────────────────
+    public SessionResult processPrompt(String prompt);                       // 阻塞
     public SessionResult processPrompt(String prompt, PromptConfig config);
+    public SessionResult processPrompt(String prompt, PromptConfig config,
+                                       StreamObserver observer, …);          // 带流式观察者
+    public void abort();
+    public String steer(String prompt);        // 注入当前运行的下一轮
+    public String followUp(String prompt);     // 当前运行结束后处理
+    public void compact(CompactionSettings settings);
+    public String lastAssistantText();         // /copy
 
-    // 恢复会话
-    public static AgentSession resume(String sessionId, SessionServices services);
+    // ── 自动重试（RPC 末批命令）──────────────────────────────
+    public void setAutoRetryEnabled(boolean enabled);
+    public boolean autoRetryEnabled();
+    public void abortRetry();
 
-    // 会话管理
-    public String currentSessionId();
-    public Stream<SessionInfo> listSessions();
-    public String branch(String branchName);
+    // ── 分支：**新会话**，各自一个 harness ───────────────────
+    /** 整棵树都复制（pi {@code ForkOptions.Tree}）。 */
+    public AgentSession forkCopy(String branchName);
+    /** 在 entry **之前**分支（pi {@code position:"before"}）。 */
+    public AgentSession forkFromEntry(String entryId);
+    public List<Entry.Message> getUserMessagesForForking();
+
+    // ── 历史视图 / 会话管理 ─────────────────────────────────
+    public long entryCount();
+    public List<Entry> accumulatedEntries();   // 持久会话的提交序；无持久会话时退回 harness
+    public List<com.pijava.ai.message.Message> accumulatedMessages();
+    public String sessionId();  public String sessionName();  public void setSessionName(String);
+    public Args sessionArgs();
+    public List<SessionInfo> listSessions();
+    public List<SessionSummary> listSessionsSummary(String cwd);
+    public Optional<AgentSession> latestSession();
+    public Optional<AgentSession> findSession(String idOrPrefix);
+
+    // ── 订阅 / 事件 / 扩展 ──────────────────────────────────
+    public AutoCloseable subscribe(Consumer<AgentSessionEvent> listener);
+    public WatchHandle<SessionSnapshot> watchSession();
+    public void extensionUI(ExtensionUI ui);   public ExtensionUI extensionUI();
+
+    // ── 导入导出 / 会话级 bash ──────────────────────────────
+    public void exportJsonl(java.nio.file.Path target);
+    public AgentSession importJsonl(java.nio.file.Path source);
+    public ShellResult executeBash(String id, String command, boolean excludeFromContext);
+    public void abortBash();
+
+    public void close();                       // flush 设置、落盘、关 harness
 }
 
-// DI 容器 — 简化版
+/**
+ * 会话共享的依赖容器 —— **不含 harness**。
+ *
+ * <p>harness 是每会话一个（分支 = 新会话），而 settings / providers / tools /
+ * slash commands / 仓库句柄这些是进程级的，多个会话共用同一份。</p>
+ */
 public record SessionServices(
-    AgentHarness harness,
-    ModelResolver modelResolver,
-    ToolRegistry toolRegistry,
-    SkillManager skillManager,
-    ExtensionManager extensionManager,
-    Settings settings,
-    TrustManager trustManager,
-    CompactionService compaction,
-    SessionStorage<?> sessionStorage
+    SettingsManager settings,
+    TrustManager trust,
+    ProviderRegistry providers,
+    ModelResolver models,
+    ToolRegistry tools,
+    CommandRegistry slashCommands,
+    SessionRepository<?, ?, ?> sessionRepository,
+    PromptTemplateRegistry promptTemplates
 ) {}
+```
+
+**驱动在哪**：`processPrompt` 不自己跑循环，它交给 `SessionRunner` —— 那里才是
+「`harness.prompt(...)` / `continueRun(...)` + 逐条落盘 + 自动重试 + run summary」的地方。
 ```
 
 ### 4.2 CLI 入口

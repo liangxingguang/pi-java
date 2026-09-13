@@ -76,14 +76,14 @@ TUI / RPC / web 各自开一个 session，每个 session 一条车道。
 |---|---|---|
 | `AgentState.messages`（**真源**） | `LaneState.transcript`（entries 是真源，每轮重建 messages） | **翻转**（§3.1、§4.2） |
 | `activeRun?: {promise, resolve, abortController}`（存在即运行） | `RunPhase.Idle/Assistant/Checkpoint` + `lane.runId` | 换成 `activeRun`（§3.2） |
-| `processEvents(event)` 归约器（~40 行） | `ActionExecutor.executeAction` 七路 switch + `PiLaneSink` | 换成 `processEvents`（§3.3）—— **效果已落地，形状未照搬**，见 §8.14 |
+| `processEvents(event)` 归约器（~40 行） | `ActionExecutor.executeAction` 七路 switch + `PiLaneSink` | 效果已落地；**残差三项在 pi 里是死字段，不补**（§3.3、§8.14） |
 | `prompt()` / `continue()` / `abort()` / `reset()` | `ActionExecutor.run`/`runContinue` + `AgentHarness.abort/reset` | 1:1 重写 |
 | `handleRunFailure()`：合成错误助手消息，走**同一条** `processEvents` | `HarnessUtils.determineOutcome` + `TryFinishRun` 分支 | 1:1 |
 | `isStreaming` / `streamingMessage` | `RunPhase` / `lane.partial` | 1:1 |
 | `pendingToolCalls: Set<string>` | `List<Action.ExecuteTool>` | 改 `Set<String>` |
 | `systemPrompt` / `model` / `thinkingLevel` / `tools`（**字段**） | `Entry.ModelChange` / `ThinkingLevelChange` / `ActiveToolsChange`（**transcript 里的 entry**） | 翻成字段 + 会话层写 entry（§4.1） |
 | `PendingMessageQueue` ×2（steering / followUp） | `QueueManager` ×3（多 `nextRun`） | 保留（§4.4） |
-| `subscribe(listener)` → 事件 | `PiLaneSink` 直接写 entry | 会话层改为订阅者（§3.4）—— **未实施**，见 §8.14 |
+| `subscribe(listener)` → 事件 | `PiLaneSink` 直接写 entry | 落盘时机已对齐（`message_end`）；**entry 的作者不搬**，§3.4、§8.14 |
 | — | `Action` / `peekAction` / `executeAction` / `LoopInvariants` / `DriveMode` / `RunPhase` | **删**（§6） |
 | — | `pendingWrites` | **删**（裁决 ③，§5） |
 | — | `LaneRecord` 记录日志 | **保留**为旁路审计（pi 无，但有真实消费者） |
@@ -198,6 +198,10 @@ record ActiveRun(AbortSignal signal, CompletableFuture<Void> promise) {}
 已有）；`TryFinishRun` 的续跑分支 → 循环本身（`PiLoop` 已承担）；收口 → `finishRun()`。
 
 ### 3.3 `processEvents` 归约器
+
+> **⚠️ 本节只落地了一部分，且残差不补。** `messages` 与 `streamingMessage` 已同形；
+> `isStreaming` / `pendingToolCalls` / `errorMessage` **不补** —— 读数证明它们在 pi 里也
+> 没有任何读者（`isStreaming` 连 pi 的产品层都改用自己的私有字段）。见 §8.14。
 
 逐条对齐 pi `agent.ts:553-590`：
 
@@ -848,47 +852,64 @@ checkstyle 0 违规。删除 `MultiLaneTest`（5 例）与 `AgentHarnessTest` �
 
 ---
 
-### 8.14 §3.3 / §3.4 的真实状态（2026-09-13 清点）
+### 8.14 §3.3 / §3.4 的真实状态（2026-09-13 清点，同日按 pi 源码定案）
 
 §8.8 记录了 §5 与 §3.1 的实施偏差，但**漏了 §3.3 与 §3.4** —— 而 §2.1 的映射表把它们
-写成「处置」栏里的目标，读起来像已完成。清点结果如下，两处都**不是完成态**。
+写成「处置」栏里的目标，读起来像已完成。清点后又逐条回 pi 源码核对，结论如下。
 
-#### §3.3 `processEvents` 归约器 —— 效果已落地，形状未照搬
+#### §3.3 `processEvents` 归约器 —— **结案：残差三项在 pi 里都是死字段，不补**
 
 pi 的归约器写四个字段，Java 侧对照：
 
-| pi `AgentState` 字段 | pi-java | 差异 |
+| pi `AgentState` 字段 | pi-java | 在 pi 里被读吗 |
 |---|---|---|
-| `messages` | `LaneState.messages` | ✅ 同形（`PiLaneSink.onMessageEnd` 追加，`docs/31 §4.2`） |
+| `messages` | `LaneState.messages` | ✅ 同形（`PiLaneSink.onMessageEnd`，§4.2） |
 | `streamingMessage` | `LaneState.partial` | ✅ 同义，名字不同 |
-| `isStreaming` | 无此字段 | ⚠️ 由 `activeRun != null` 近似承担；pi 的 `true` 窗口是整次 run，Java 的 `isRunning()` 也是 |
-| `errorMessage` | 无此字段（`newestOwn` + `determineOutcome` 代替） | ⚠️ 结局判定等价，**但不上快照** —— pi 的 `AgentState` 是 `readonly` 暴露的，订阅者看得见 |
-| `pendingToolCalls` | 无此字段（`PiLaneSink` 内 `toolSpans` / `toolStartNanos` 按 callId 索引） | ⚠️ 同角色，未上快照 |
+| `isStreaming` | 由 `activeRun != null` 承担 | ❌ **pi 自己也不读** —— `AgentSession.isStreaming` 取的是它自己的私有字段 `_isAgentRunActive`（`agent-session.ts:916`），不是 `agent.state.isStreaming` |
+| `pendingToolCalls` | 无（`PiLaneSink` 内按 callId 索引的 `toolSpans`/`toolStartNanos`） | ❌ `agent.ts:560-569` 只加只删；全仓唯一同名串在 `ai/transform-messages.ts`，是**另一个局部变量** |
+| `errorMessage` | 无（`newestOwn` + `determineOutcome`） | ❌ 只在 `agent.ts:574` 写；读它的都是**消息对象**上的同名字段（`response.errorMessage`），不是 `state.errorMessage` |
 
-**`pendingToolCalls` 在 pi 里是只写的**（`agent.ts:560-569` 只加只删；全仓唯一的同名字符串
-在 `ai/transform-messages.ts`，是**另一个局部变量**）。所以这条差异是**可观察状态**的缺口，
-不是行为缺口：订阅者看不到「有哪些工具调用在飞」。
+⇒ **三项都是「写上去了但没人读」的可观察状态**，`isStreaming` 更是连 pi 的产品层都不用它。
+按本项目既有的口径（`§4.1` 拒绝为 `ActiveToolsChange` 加发射：「生产零调用者，加发射是
+投机代码」），**不补**。若将来有读者（例如 TUI 想显示「N 个工具在跑」），再加不迟 —— 那时
+它是为读者而加，不是为形状而加。
 
-⇒ 要补齐的话是**加字段**（`LaneState.pendingToolCalls: Set<String>` + 两个事件点上增删 +
-`LaneSnapshot` 暴露），不是重构。**未做。**
+`errorMessage` 另有一层：pi 的 **`AssistantMessage.errorMessage`**（`ai/types.ts:442`）是
+真的有人在读的（provider 适配层与压缩报告），而 pi-java 的 `AssistantMessage` 没有这个字段。
+那属于 `pi-java-ai` 的消息模型，不在本文范围。
 
-#### §3.4 会话层改为订阅者 —— 未实施，切分方向相反
+#### §3.4 会话层改为订阅者 —— **结案：不实施**，且理由不是成本
 
-设计想要的是 pi `agent-session.ts:643` 的分工：**Agent 发事件 → 会话层 append entry**，
-`PiLaneSink` 退化为纯转发。
+设计想要 pi `agent-session.ts:643` 的分工：Agent 发事件 → **会话层 append entry**，
+`PiLaneSink` 退化为纯转发。实际是**反向**：harness 造 entry（`PiLaneSink.append`），
+会话层订阅并落盘（`SessionRunner.persistPerEntry`）。
 
-实际落地的是**反向**：**harness 的作者**（`PiLaneSink.append` 造 `Entry` 并写进
-`transcript`），**会话层是订阅者**（`SessionRunner.persistPerEntry` 只把 harness 已经产出的
-entry 落盘）。§8.3-5 的清点正是这条反向切分的依据：`SessionPersistence` 的落盘走
-`snapshot().transcript()`，而 harness 的 transcript 是**新 entry 的唯一生产者**。
+**注意：落盘时机已经对齐了。** `persistPerEntry` 就在 `message_end` 上 flush
+（`SessionRunner:270-285`），与 pi 的 `session-manager._persist` 同点 —— 崩溃窗口都是
+「一条 entry」。剩下的差别只是**谁构造 `Entry` 对象**。
 
-**这是本次对齐里最大的一处结构性偏离**，且它是**为什么 §3.4 与 §4.2 能并存**的原因：
-`messages` 工作副本由 sink 维护（§4.2），entry 也由 sink 造 —— 两者在同一个事件点上，
-不必跨层同步。
+**为什么不该改**：entry 身份在 pi 里是**只有一个权威**（`sessionManager`），而 pi-java 有
+两个 —— harness 造 provisional（`seq = transcript.size()`、`timestamp = null`），存储用
+`Entry.committed(...)` 重赋（`MemorySessionStorage:85`、`Session:236`）。
 
-要照 §3.4 改，得把 entry 的构造整体搬到会话层，harness 只留 `messages` + 事件发射。
-**收益是形状与 pi 一致；成本是把 append 的落盘点、排序、deferred 标记一并搬走，而 L5
-差分验证不到这条通道**（帧里只有 agent 事件，`docs/31 §8.7`）。**未做，且未获裁决。**
+一度打算「把提交后的身份写回车道」来统一它们。**读了重试路径后放弃**：
+
+1. pi 的 `_prepareRetry` 把出错的助手消息**只留在会话历史、不留 agent 状态**
+   （`dropTrailingErrorAssistant` 就是它）；所以失败回合之后，**两个视图本来就该不同**。
+2. 写回会让车道的 `parentId` 跟随存储的链，而存储的链**包含那条被丢掉的 entry** ——
+   车道里却没有它。此后任何 `rebuildLaneMessages`（压缩触发）走
+   `ContextEntries.pathToLeaf`，会在缺失的父节点处 `break`，把上下文截断成**最后一条消息**。
+   ⇒ 写回会把一个「视图不同」变成一次真实的上下文坍塌。
+
+`timestamp = null` 也不是疏漏：那是全仓 `ProvisionedEntry` 的约定（`LaneView:95/102/110`、
+`Session:236` 同样传 `null`），语义是「身份由存储赋，尚未提交」。
+
+⇒ **两份视图各自自洽，且按设计必须不同**。要真正统一，得先把「会话历史 ⊃ agent 状态」
+这条 pi 的不变量建出来（entry 上区分「只进历史」与「进历史且进上下文」），那是另一个课题，
+不是把 append 搬个家。**不实施，理由记录在此。**
+
+> `PiLaneSink` 因此仍是**新 entry 的唯一生产者** —— 这条同时是 §4.2 能成立的前提：
+> `messages` 工作副本与 entry 由同一个类在同一个事件点上维护，不必跨层同步。
 
 ---
 
