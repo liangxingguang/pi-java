@@ -1118,6 +1118,57 @@ L5 全绿 —— 证明消息帧与持久化两条链各自独立被钉住。
 （真并发）与 `QueueMode.All` 待用户。agent-core **384/384**、ai **237/237**、
 全 reactor `clean verify` 绿。
 
+### 8.20 压缩计量 3b —— 已实施（2026-09-14，commit `8159d38`/`d5923ff`/`5aa88d6`）
+
+3a 把每条 assistant 消息的身份与用量带进了消息体，3b 消费它：阈值门与
+tokensBefore 改读 **pi 那份估算函数**，操作数换成**当前模型**的 contextWindow。
+逐行读 pi 两处（注意路径：**compaction.ts 在 `packages/agent/src/harness/compaction/`，
+而阈值门在 `packages/coding-agent/src/core/agent-session.ts`** —— 早前笔记把
+agent-session.ts 记成 packages/agent 下，是错的，在此更正）：
+
+| 事实 | pi 出处 | Java 落法 |
+|---|---|---|
+| `calculateContextTokens(usage) = usage.totalTokens \|\| input+output+cacheRead+cacheWrite` | compaction.ts:164-166 | 显式 0 判等（JS falsy ≙ Java `!= 0`），`ContextUsageEstimator.calculateContextTokens` |
+| 有效用量 = role assistant ∧ usage 在 ∧ stopReason∉{aborted,error} ∧ 折算 >0；**从尾部回溯**找最后一条 | :167-180, :215-243 | `assistantUsageOf` + 倒扫；命中 ⇒ `tokens = usage + Σ estimateTokens(其后消息)`，未命中 ⇒ 全列表字符估算 |
+| `estimateTokens`：每消息 `ceil(chars/4)`；user/toolResult/custom = text + image(4800)；assistant = text + thinking + toolCall(`name.length + JSON.stringify(arguments).length`)；`safeJsonStringify` 失败 ⇒ `"[unserializable]"` | :251-310, :38-43 | `ContextUsageEstimator.estimateTokens`（sealed 三角色 switch）+ `SessionJson.mapper()` 序列化 |
+| 阈值门 `!model \|\| model.contextWindow <= 0 \|\| !shouldCompact(estimateContextTokens(context.messages).tokens, window, settings)` ⇒ 跳过 | agent-session.ts:542-559；shouldCompact compaction.ts:246-249 | `CompactionExecutor.checkThreshold` 逐条同形；窗口经 `HarnessConfig.contextWindow:ToIntFunction<ModelId<?>>` 由宿主解析（resolver 目录值 `ModelInfo.maxInputTokens` ≙ pi contextWindow；未编目 ⇒ 0 ⇒ 跳过），fallback 静态 maxInputTokens 保留旧装配形状 |
+| prepareCompaction **:638** 只有「空路径 ∨ 末条是 compaction ⇒ 不可压」；**单条可压**（切点落自己身上） | compaction.ts:638, :370-398 | 旧实现两处 `size<=1` 守卫是**发明**，撤下；阈值侧静默跳过、手动侧抛（文案属宿主表面） |
+| `tokensBefore = estimateContextTokens(...).tokens` 单一来源，阈值/手动/溢出一条路 | :667 | `CompactionExecutor.contextTokens(lane)`；`CompactionService.compact` 增 4 参 `tokensBefore` 纯透传 |
+| findCutPoint 累加复用**同一个** estimateTokens | :387 | `CompactionService.findCutPoint` 改读 `ContextUsageEstimator.estimateTokens` |
+
+**Java 方言裁决**（钉在类 javadoc）：UserMessage 恒为块列表（pi 的裸字符串分支不存在）；
+`UrlImageContent` 按图像常数 4800；`ToolUseContent.arguments` 经 `Map.copyOf` **不可能
+为 null** ⇒ pi 的 `?? "undefined"` 分支在本构造面不可达，仅作形状保留；压缩摘要经
+ContextEntries 投影成 user 消息读全文，前缀字符计入是**有界启发式差异**（pi 自己也是
+启发式）。
+
+**L5 口径**：conformance 剧本不设 compactionSettings ⇒ 门短路，估算器不触帧；
+ScriptedStreams 恒 ZERO_USAGE ⇒ 用量锚点恒无效、走字符路径 —— 全 reactor 绿内
+**严格 12/12 复证**（`ConformanceTest tests="12" failures="0"`）。
+
+**新哨兵**：`ContextUsageEstimatorTest` 14 例（total 优先/分项回退、锚点+trailing、
+aborted/error/zero 永不锚定且扫描继续、ceil 边界、双图像方言、toolCall 长度、
+`{}`、嵌套 null、循环引用哨兵、shouldCompact 边界）；`CompactionThresholdGateTest`
+9 例（守卫逐条 + :638 静默 + 用量/字符双路起爆 + 窗口随当前模型）；
+`LaneMessagesTest` 3b 段 3 例（500 用量起爆而字符永不可、零窗口不压、百万窗口不压）。
+夹具修正两处：`compactReducesTranscriptToRetentionRatio` keep 8→20（ceil 累加改变
+兜底路可达性，注释记录意图）；`compactThrowsWhenTranscriptTooSmall` 重写为
+`compactThrowsOnlyOnEmptyTranscript_pi638`。
+
+**反证实验**（每组红集与预测核对手法同 3a）：RE-1 操作数改回
+`ctx.maxInputTokens()` ⇒ **恰 5 红**（GateTest 用量/字符/窗随模型 3 例 +
+LaneMessages 2 例，守卫类测试无感 —— 它们不依赖操作数来源）；RE-2 摘用量锚点 ⇒
+**恰 7 红**（估算器锚点 3 例 + 依赖用量起爆的 4 例，字符路哨兵无感）；RE-3 摘 :638
+守卫 ⇒ **恰 1 红**（lastEntryIsCompactionSkipsSilently）；RE-4 塞回 `size<=1` 发明 ⇒
+4 红（预期 1，偏差原因：GateTest 夹具转录本就只有 1 条 —— 单条可压正是 pi 行为，
+红在守卫该在的地方，全部 4 个仍由该编辑单独引起）。全部还原后残留扫描零命中，
+定向 6 类复验绿。
+
+**遗留**：3c 在队（`_checkCompaction` 四守卫 + `packages/ai/src/utils/overflow.ts:134
+isContextOverflow` / `:171 isRecoverableLength` 移植，替换 PiLaneSink:208 自造的
+OverflowDetector 路）；ContextEstimator（chars/3.5 死链）javadoc 虚假声明已改为
+指向本估算器。
+
 ---
 
 ## 9. 与既有文档的关系
