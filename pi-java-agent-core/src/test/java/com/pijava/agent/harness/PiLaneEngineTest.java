@@ -50,7 +50,7 @@ class PiLaneEngineTest {
     /** 流式脚本：第 N 次请求使用第 N 个脚本。 */
     private static StreamFn scripted(List<List<StreamEvent>> scripts) {
         var index = new AtomicInteger();
-        return (messages, model, options) -> {
+        return (model, context, options) -> {
             var script = scripts.get(index.getAndIncrement());
             return new StreamIterator() {
                 private int i;

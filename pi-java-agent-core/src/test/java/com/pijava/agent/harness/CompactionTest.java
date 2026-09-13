@@ -28,7 +28,7 @@ class CompactionTest {
         var partial = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent("ok")))
                 .withStopReason("stop");
-        StreamFn sf = (messages, model, options) -> StreamIterator.from(List.of(
+        StreamFn sf = (model, context, options) -> StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.TextEnd(0, "ok", partial),
                 new StreamEvent.StreamDone("stop", null, partial)));

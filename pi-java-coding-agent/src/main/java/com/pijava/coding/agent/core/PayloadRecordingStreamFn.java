@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.pijava.agent.harness.Context;
 import com.pijava.agent.harness.StreamFn;
 import com.pijava.agent.harness.StreamOptions;
 import com.pijava.ai.api.StreamIterator;
@@ -84,24 +85,26 @@ final class PayloadRecordingStreamFn implements StreamFn {
 
     @Override
     public StreamIterator stream(
-            List<Message> messages, ModelId<?> model, StreamOptions options) {
+            ModelId<?> model, Context context, StreamOptions options) {
         // Skip building the request payload entirely when recording is off
         // (the default): serializing the full message list on every LLM call
         // is the hot path and would be pure waste.
         if (telemetry.recordsPayloads()) {
-            telemetry.recordEvent(REQUEST, requestPayload(model, messages, options));
+            telemetry.recordEvent(REQUEST, requestPayload(model, context, options));
         }
         return new ResponseRecordingIterator(
-            inner.stream(messages, model, options), telemetry);
+            inner.stream(model, context, options), telemetry);
     }
 
     /** Serialize the request-level payload: model, messages, tools, limits, thinking. */
     private static Map<String, Object> requestPayload(
-            ModelId<?> model, List<Message> messages, StreamOptions options) {
+            ModelId<?> model, Context context, StreamOptions options) {
         var payload = new LinkedHashMap<String, Object>();
         payload.put("model", model.provider() + "/" + model.modelName());
-        payload.put("messages", messages.stream().map(PayloadRecordingStreamFn::message).toList());
-        payload.put("tools", options.tools().stream().map(PayloadRecordingStreamFn::tool).toList());
+        payload.put("systemPrompt", context.systemPrompt());
+        payload.put("messages", context.messages().stream()
+            .map(PayloadRecordingStreamFn::message).toList());
+        payload.put("tools", context.tools().stream().map(PayloadRecordingStreamFn::tool).toList());
         payload.put("maxTokens", options.maxTokens().isPresent() ? options.maxTokens().getAsInt() : -1);
         payload.put("temperature", options.temperature().isPresent() ? options.temperature().getAsDouble() : -1);
         var thinking = options.thinking();

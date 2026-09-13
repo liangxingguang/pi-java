@@ -38,7 +38,7 @@ class WriteDeferredEmissionTest {
         .withStopReason("stop");
 
     private static StreamFn simpleStreamFn() {
-        return (messages, model, options) -> StreamIterator.from(List.of(
+        return (model, context, options) -> StreamIterator.from(List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.TextEnd(0, "done", DONE),
             new StreamEvent.StreamDone("stop", null, DONE)));
@@ -51,7 +51,7 @@ class WriteDeferredEmissionTest {
                 "call-1", toolName, Map.of("text", "hello"))))
             .withStopReason("tool_use");
         var calls = new AtomicInteger();
-        return (messages, model, options) -> {
+        return (model, context, options) -> {
             var partial = calls.incrementAndGet() == 1 ? toolUse : DONE;
             return StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),

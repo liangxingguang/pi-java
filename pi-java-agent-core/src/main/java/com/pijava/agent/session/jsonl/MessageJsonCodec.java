@@ -34,7 +34,6 @@ final class MessageJsonCodec {
         String role = JsonlCodec.requireString(node, "role");
         List<ContentBlock> content = decodeBlocks(node.get("content"));
         return switch (role) {
-            case "system" -> new Message.SystemMessage(content);
             case "user" -> new Message.UserMessage(content);
             case "assistant" -> new Message.AssistantMessage(
                 content,

@@ -28,7 +28,7 @@ class ThinkingTranslationTest {
         var partial = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent("ok")))
                 .withStopReason("stop");
-        StreamFn sf = (messages, model, options) -> {
+        StreamFn sf = (model, context, options) -> {
             captured.set(options);
             return StreamIterator.from(List.of(
                     new StreamEvent.Start(AssistantMessage.empty()),
@@ -62,7 +62,7 @@ class ThinkingTranslationTest {
         var partial = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent("ok")))
                 .withStopReason("stop");
-        StreamFn sf = (messages, model, options) -> {
+        StreamFn sf = (model, context, options) -> {
             captured.set(options);
             return StreamIterator.from(List.of(
                     new StreamEvent.Start(AssistantMessage.empty()),

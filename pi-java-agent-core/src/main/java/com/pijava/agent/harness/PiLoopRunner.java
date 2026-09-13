@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.function.Supplier;
 
 import com.pijava.agent.harness.PiLoop.Config;
-import com.pijava.agent.harness.PiLoop.Context;
 import com.pijava.agent.harness.PiLoop.Event;
 import com.pijava.agent.harness.PiLoop.NextTurnContext;
 import com.pijava.agent.harness.PiLoop.NextTurnUpdate;
@@ -155,7 +154,8 @@ final class PiLoopRunner {
      * 一致（替换后循环写的是自己那份，不回头改调用方的列表，也与 {@code .slice()} 相同）。</p>
      */
     private static Context copyOf(Context context) {
-        return new Context(new ArrayList<>(context.messages()), context.tools());
+        return new Context(context.systemPrompt(), new ArrayList<>(context.messages()),
+            context.tools());
     }
 
     /** pi: {@code config = {...config, model, reasoning}} —— 只有这两个字段可被改写。 */
@@ -164,7 +164,7 @@ final class PiLoopRunner {
             update.model() != null ? update.model() : config.model(),
             update.thinking() != null ? update.thinking() : config.thinking(),
             config.thinkingLevelMap(),
-            config.toolDefs(), config.toolExecution(), config.toolRunner(),
+            config.toolExecution(), config.toolRunner(),
             config.streamFn(), config.signal(), config.steeringMessages(),
             config.followUpMessages(), config.transformContext(),
             config.prepareNextTurn(), config.shouldStopAfterTurn(),
@@ -195,12 +195,14 @@ final class PiLoopRunner {
 
         // pi: llmContext = {systemPrompt: context.systemPrompt, messages: llmMessages,
         //                   tools: context.tools}（agent-loop.ts:290-301）。
-        // pi-java 的 StreamFn 无 systemPrompt 形参，故只透传 tools —— 见 Context 的 javadoc。
+        // transformContext 只改消息（pi 的 transformContext 签名也不含 systemPrompt），
+        // 系统提示与工具原样透传。
+        var llmContext = new Context(context.systemPrompt(), llmMessages, context.tools());
         var options = new StreamOptions(
             java.util.OptionalInt.empty(), java.util.OptionalDouble.empty(),
-            thinkingConfig(config), context.tools());
+            thinkingConfig(config));
 
-        var iter = config.streamFn().stream(llmMessages, config.model(), options);
+        var iter = config.streamFn().stream(config.model(), llmContext, options);
         Message.AssistantMessage finalMessage = null;
         boolean addedPartial = false;
         try {

@@ -5,9 +5,10 @@ import java.util.List;
 /**
  * A message in a conversation with an LLM.
  *
- * <p>This sealed interface has four permitted subtypes: the three standard
- * roles ({@link SystemMessage}, {@link UserMessage}, {@link AssistantMessage})
- * plus a {@link ToolResultMessage}.</p>
+ * <p><b>恰好三个变体</b>，与 pi 的 {@code Message} 联合类型一致
+ * （{@code packages/ai/src/types.ts:470}：{@code UserMessage | AssistantMessage |
+ * ToolResultMessage}）。<b>没有 system 角色</b> —— 系统提示不属于消息列表，
+ * 它是 {@code Context.systemPrompt}，由各 provider 适配层映射到自己的 system 字段。</p>
  */
 public sealed interface Message {
 
@@ -16,19 +17,6 @@ public sealed interface Message {
 
     /** The content blocks that make up this message. */
     List<ContentBlock> content();
-
-    /** A system-level instruction message. */
-    record SystemMessage(List<ContentBlock> content) implements Message {
-        /** Compact constructor that defensively copies the content blocks. */
-        public SystemMessage {
-            content = List.copyOf(content);
-        }
-
-        @Override
-        public String role() {
-            return "system";
-        }
-    }
 
     /** A message from the end user. */
     record UserMessage(List<ContentBlock> content) implements Message {

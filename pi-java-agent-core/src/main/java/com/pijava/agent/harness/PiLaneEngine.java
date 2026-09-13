@@ -117,10 +117,15 @@ public final class PiLaneEngine {
 
         var stop = new boolean[1];
         var config = configFor(laneName, lane, sink, stop);
+        // 系统提示与工具在 run 起点装进 Context（pi 的 AgentContext）：
+        // transformContext 只改消息，够不着这两样（pi 的钩子签名是 (messages) => messages）。
+        var systemPrompt = assembler.buildSystemPrompt(lane);
+        sink.systemPrompt(systemPrompt);
+        var runContext = new Context(systemPrompt, context, toolDefs(lane));
         if (prompts.isEmpty()) {
-            PiLoop.continueRun(context, config, sink);
+            PiLoop.continueRun(runContext, config, sink);
         } else {
-            PiLoop.run(prompts, context, config, sink);
+            PiLoop.run(prompts, runContext, config, sink);
         }
 
         var outcome = HarnessUtils.determineOutcome(lane);
@@ -143,7 +148,6 @@ public final class PiLaneEngine {
             ctx.model().get(),
             ctx.thinkingLevel().get(),
             ctx.thinkingLevelMap(),
-            toolDefs(lane),
             ctx.toolExecution().get(),
             call -> {
                 sink.noteToolStart(call.toolCallId());
@@ -173,8 +177,12 @@ public final class PiLaneEngine {
      * 每轮请求前的上下文装配 —— 对应旧路径 {@code AssistantStreamExecutor:60-64} 的三步。
      *
      * <p>{@code PiLoop} 每次调用都会把它的内部消息列表传进来，但**本引擎不使用它**：
-     * pi-java 的真源是车道 transcript，装配必须从那里重建（含压缩摘要、系统提示、
-     * 车道级覆盖）。这也是 {@code docs/28} 所说的「车道是唯一真源」的落地方式。</p>
+     * pi-java 的真源是车道 transcript，装配必须从那里重建（含压缩摘要与车道级覆盖）。
+     * 这也是 {@code docs/28} 所说的「车道是唯一真源」的落地方式。</p>
+     *
+     * <p><b>这里只产消息。</b> 系统提示与工具定义不在其中 —— 它们由
+     * {@link #drive} 在 run 起点装进 {@link Context}，与 pi 的
+     * {@code AgentContext} 一致（pi 的 {@code transformContext} 同样看不到它们）。</p>
      */
     private List<Message> assemble(String laneName, LaneState lane, PiLaneSink sink) {
         assembler.applyPendingTurnUpdate(laneName, lane);

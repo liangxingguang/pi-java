@@ -46,8 +46,8 @@ class PiLoopTurnHooksTest {
     /** 流式脚本：第 N 次请求使用第 N 个脚本；同时记录每次请求的入参。 */
     private StreamFn scripted(List<List<StreamEvent>> scripts) {
         var index = new AtomicInteger();
-        return (messages, model, options) -> {
-            requests.add(List.copyOf(messages));
+        return (model, context, options) -> {
+            requests.add(List.copyOf(context.messages()));
             var script = scripts.get(index.getAndIncrement());
             return new StreamIterator() {
                 private int i;
@@ -98,14 +98,18 @@ class PiLoopTurnHooksTest {
         return new ToolDefinition(name, "test tool", Map.of(), name, null, List.of(), null);
     }
 
-    private static PiLoop.Config config(StreamFn streamFn, List<ToolDefinition> tools,
+    /** 运行上下文：工具走 {@link Context}（pi 的 {@code AgentContext}），不挂在配置上。 */
+    private static Context context(List<ToolDefinition> tools) {
+        return new Context(null, new ArrayList<>(), tools);
+    }
+
+    private static PiLoop.Config config(StreamFn streamFn,
                                         PiLoop.NextTurnHook nextTurn, PiLoop.StopHook stop,
                                         java.util.function.Supplier<List<Message>> steering) {
         return new PiLoop.Config(
             ModelId.of("faux", "test-model"),
             ModelThinkingLevel.off(),
             ThinkingLevelMap.empty(),
-            tools,
             ToolExecution.defaultMode(),
             OK_TOOLS,
             streamFn,
@@ -159,14 +163,14 @@ class PiLoopTurnHooksTest {
         var replacement = List.of(user("COMPACTED"));
         var calls = new AtomicInteger();
 
-        var config = config(scripted(toolThenText()), List.of(toolDef("echo")),
+        var config = config(scripted(toolThenText()),
             ctx -> {
                 calls.incrementAndGet();
-                return new PiLoop.NextTurnUpdate(null, null, PiLoop.Context.of(replacement));
+                return new PiLoop.NextTurnUpdate(null, null, Context.of(replacement));
             },
             null, null);
 
-        PiLoop.run(List.of(user("go")), new ArrayList<>(), config, new Recorder());
+        PiLoop.run(List.of(user("go")), context(List.of(toolDef("echo"))), config, new Recorder());
 
         assertThat(calls.get()).as("两轮 ⇒ prepareNextTurn 在第一轮结束后调用一次").isEqualTo(1);
         assertThat(requests).as("两次请求：第一轮原始上下文，第二轮用替换后的").hasSize(2);
@@ -178,11 +182,11 @@ class PiLoopTurnHooksTest {
     /** 钩子返回 {@code null} 或 {@code context} 为 null ⇒ 上下文不变。 */
     @Test
     void prepareNextTurnWithoutContextKeepsTheMessages() {
-        var config = config(scripted(toolThenText()), List.of(toolDef("echo")),
+        var config = config(scripted(toolThenText()),
             ctx -> new PiLoop.NextTurnUpdate(null, null, null),
             null, null);
 
-        PiLoop.run(List.of(user("go")), new ArrayList<>(), config, new Recorder());
+        PiLoop.run(List.of(user("go")), context(List.of(toolDef("echo"))), config, new Recorder());
 
         assertThat(requests.get(1))
             .as("不改 context ⇒ 沿用累计的消息（用户 + 助手 + 工具结果）")
@@ -199,14 +203,14 @@ class PiLoopTurnHooksTest {
         var tools = List.of(toolDef("echo"), toolDef("read"));
         var seen = new ArrayList<List<ToolDefinition>>();
 
-        var config = config(scripted(toolThenText()), tools,
+        var config = config(scripted(toolThenText()),
             ctx -> {
                 seen.add(ctx.context().tools());
                 return null;
             },
             null, null);
 
-        PiLoop.run(List.of(user("go")), new ArrayList<>(), config, new Recorder());
+        PiLoop.run(List.of(user("go")), context(tools), config, new Recorder());
 
         assertThat(seen).singleElement().isEqualTo(tools);
     }
@@ -221,7 +225,7 @@ class PiLoopTurnHooksTest {
     void shouldStopAfterTurnRunsBeforePrepareNextTurn() {
         var prepared = new AtomicInteger();
 
-        var config = config(scripted(List.of(textTurn("bye"))), List.of(),
+        var config = config(scripted(List.of(textTurn("bye"))),
             ctx -> {
                 prepared.incrementAndGet();
                 return null;
@@ -229,7 +233,7 @@ class PiLoopTurnHooksTest {
             ctx -> true,   // 立刻停
             null);
 
-        PiLoop.run(List.of(user("hi")), new ArrayList<>(), config, new Recorder());
+        PiLoop.run(List.of(user("hi")), context(List.of()), config, new Recorder());
 
         assertThat(prepared.get())
             .as("停之后没有下一轮 ⇒ prepareNextTurn 一次都不该被调用")
@@ -249,7 +253,6 @@ class PiLoopTurnHooksTest {
         var config = config(scripted(List.of(
                 toolTurn("tc1", "echo"),
                 textTurn("done"))),
-            List.of(toolDef("echo")),
             ctx -> {
                 // 模拟「压缩期间用户敲进来的 steer」
                 queued.add(user("STEER"));
@@ -263,7 +266,7 @@ class PiLoopTurnHooksTest {
                 return drained;
             });
 
-        PiLoop.run(List.of(user("go")), new ArrayList<>(), config, recorder);
+        PiLoop.run(List.of(user("go")), context(List.of(toolDef("echo"))), config, recorder);
 
         // 第二轮：turn_start 之后立刻是这条 steer 的 message_start，而不是被推迟到再下一轮。
         // 没有重拉时，steer 要等到第二轮结束后才被轮询到，于是会多跑一轮 ⇒ 3 个 turn_start。

@@ -66,14 +66,16 @@ class OpenAICompletionsApiRequestTest {
 
     @Test
     void plainTextMessagesKeepRoundTripping() {
-        var request = StreamRequest.of(ModelId.of("openai", "gpt-4o-mini"),
+        // 系统提示走请求上的独立字段，不在消息列表里 —— pi 的 Message 没有 system 角色。
+        var request = new StreamRequest(
+            ModelId.of("openai", "gpt-4o-mini"),
+            "be concise",
             List.of(
-                new Message.SystemMessage(List.of(
-                    new ContentBlock.TextContent("be concise"))),
                 new Message.UserMessage(List.of(
                     new ContentBlock.TextContent("hi"))),
                 new Message.AssistantMessage(List.of(
-                    new ContentBlock.TextContent("hello!")))));
+                    new ContentBlock.TextContent("hello!")))),
+            List.of(), -1, -1, java.util.Map.of());
 
         var params = OpenAICompletionsApi.buildParams(request);
 

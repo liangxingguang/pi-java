@@ -146,6 +146,11 @@ public final class PiMessagesApi extends AbstractChatApi {
     private static String buildBody(StreamRequest request) {
         try {
             var context = JSON.createObjectNode();
+            // wire 上的 context 就是 pi 的 Context 类型：{systemPrompt?, messages, tools?}
+            // （pi api/pi-messages.ts 的 `{ model, context, options }` POST body）。
+            if (request.systemPrompt() != null && !request.systemPrompt().isEmpty()) {
+                context.put("systemPrompt", request.systemPrompt());
+            }
             var messages = context.putArray("messages");
             for (var msg : request.messages()) {
                 messages.add(toWireMessage(msg));
@@ -177,9 +182,6 @@ public final class PiMessagesApi extends AbstractChatApi {
     }
 
     private static ObjectNode toWireMessage(Message msg) {
-        if (msg instanceof Message.SystemMessage s) {
-            return wireMessage("system", s.content());
-        }
         if (msg instanceof Message.UserMessage u) {
             return wireMessage("user", u.content());
         }

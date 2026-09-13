@@ -7,7 +7,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import com.pijava.ai.AbortSignal;
 import com.pijava.ai.api.StreamIterator;
-import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -45,7 +44,7 @@ class PiLoopTest {
     /** 流式脚本：第 N 次请求使用第 N 个脚本。 */
     private static StreamFn scripted(List<List<StreamEvent>> scripts) {
         var index = new AtomicInteger();
-        return (messages, model, options) -> {
+        return (model, context, options) -> {
             var script = scripts.get(index.getAndIncrement());
             return new StreamIterator() {
                 private int i;
@@ -149,7 +148,6 @@ class PiLoopTest {
             ModelId.of("faux", "test-model"),
             ModelThinkingLevel.off(),
             ThinkingLevelMap.empty(),
-            List.<ToolDefinition>of(),
             ToolExecution.defaultMode(),
             tools,
             streamFn,
@@ -171,7 +169,7 @@ class PiLoopTest {
     @Test
     void singleTextTurnMatchesPiSequence() {
         var rec = new Recorder();
-        var context = new ArrayList<Message>();
+        var context = Context.of(new ArrayList<>());
 
         PiLoop.run(List.of(user("hi")), context,
             config(scripted(List.of(textTurn("hello"))), null), rec);
@@ -194,7 +192,7 @@ class PiLoopTest {
     void toolTurnEmitsToolFramesThenStartsSecondTurn() {
         var rec = new Recorder();
         var tools = new StubTools();
-        var context = new ArrayList<Message>();
+        var context = Context.of(new ArrayList<>());
         var streamFn = scripted(List.of(
             toolTurn("tc1", "bash", Map.of("cmd", "ls")),
             textTurn("done")));
@@ -230,7 +228,7 @@ class PiLoopTest {
     @Test
     void abortedStopReasonEndsRunWithoutFurtherTurns() {
         var rec = new Recorder();
-        var context = new ArrayList<Message>();
+        var context = Context.of(new ArrayList<>());
 
         PiLoop.run(List.of(user("hi")), context,
             config(scripted(List.of(bareTurn("aborted"))), null), rec);
@@ -250,7 +248,7 @@ class PiLoopTest {
     void truncatedLengthFailsToolCallsWithoutExecutingThem() {
         var rec = new Recorder();
         var tools = new StubTools();
-        var context = new ArrayList<Message>();
+        var context = Context.of(new ArrayList<>());
         var partial = AssistantMessage.empty();
         var truncated = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.ToolUseContent("tc2", "bash", Map.of())))
@@ -298,7 +296,7 @@ class PiLoopTest {
         // end 随后由 Promise.all 按完成序发出（:550-553）。「所有 start 都早于任何 end」
         // 因此是该模式的结构保证，不是时序巧合 —— 由 docs/23c 的 S4 剧本差分发现。
         var rec = new Recorder();
-        var context = new ArrayList<Message>();
+        var context = Context.of(new ArrayList<>());
         var partial = AssistantMessage.empty();
         var done = AssistantMessage.empty()
             .withContent(List.of(
@@ -333,7 +331,7 @@ class PiLoopTest {
         signal.abort();
         var rec = new Recorder();
         var tools = new StubTools();
-        var context = new ArrayList<Message>();
+        var context = Context.of(new ArrayList<>());
         var partial = AssistantMessage.empty();
         var done = AssistantMessage.empty()
             .withContent(List.of(
@@ -346,7 +344,6 @@ class PiLoopTest {
                 ModelId.of("faux", "test-model"),
                 ModelThinkingLevel.off(),
                 ThinkingLevelMap.empty(),
-                List.<ToolDefinition>of(),
                 ToolExecution.defaultMode(),
                 tools,
                 scripted(List.of(
@@ -369,7 +366,7 @@ class PiLoopTest {
     @Test
     void followUpStartsANewTurnAfterTheInnerLoopDrains() {
         var rec = new Recorder();
-        var context = new ArrayList<Message>();
+        var context = Context.of(new ArrayList<>());
         var followUps = new ArrayList<List<Message>>(List.of(List.of(user("and again"))));
 
         PiLoop.run(List.of(user("hi")), context,

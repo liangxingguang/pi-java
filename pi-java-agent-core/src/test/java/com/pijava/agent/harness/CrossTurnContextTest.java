@@ -29,8 +29,8 @@ class CrossTurnContextTest {
         var partial = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent("done")))
             .withStopReason("stop");
-        StreamFn sf = (messages, model, options) -> {
-            captured.set(List.copyOf(messages));
+        StreamFn sf = (model, context, options) -> {
+            captured.set(List.copyOf(context.messages()));
             return StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.TextEnd(0, "done", partial),

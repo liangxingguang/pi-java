@@ -8,7 +8,6 @@ import java.util.UUID;
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.prompt.SystemPromptBuilder;
 import com.pijava.agent.session.ContextEntries;
-import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.thinking.ModelThinkingLevel;
 
@@ -83,18 +82,18 @@ final class ContextAssembler {
     }
 
     /**
-     * Build the message list for the next LLM request: system prompt first,
-     * then compaction-aware context entries (compaction/branch summaries become
-     * user messages instead of being dropped), then transform_context hook.
+     * Build the message list for the next LLM request: compaction-aware context
+     * entries (compaction/branch summaries become user messages instead of being
+     * dropped), then the transform_context hook.
+     *
+     * <p><b>系统提示不在这里。</b> pi 的 {@code Message} 没有 system 角色
+     * （{@code packages/ai/src/types.ts:470}），系统提示走
+     * {@link Context#systemPrompt()}；{@code transformContext} 也只看得到消息
+     * （pi 的钩子签名是 {@code (messages) => messages}）。系统提示由
+     * {@link #buildSystemPrompt} 单独产出，宿主在 run 起点装进 {@link Context}。</p>
      */
     List<Message> buildMessagesForLane(String laneName, LaneState lane) {
         var messages = new ArrayList<Message>();
-        // Build system prompt with skills + tools
-        var prompt = buildSystemPrompt(lane);
-        if (prompt != null && !prompt.isEmpty()) {
-            messages.add(new Message.SystemMessage(
-                List.of(new ContentBlock.TextContent(prompt))));
-        }
         // Compaction-aware context (pi buildContextEntries): compaction/branch
         // summaries become user messages instead of being dropped
         messages.addAll(ContextEntries.toMessages(

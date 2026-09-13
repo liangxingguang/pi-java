@@ -64,7 +64,7 @@ class AgentLoopL1Test {
      */
     private static StreamFn scriptedStreamFn(List<AssistantMessage> partials) {
         var index = new AtomicInteger();
-        return (messages, model, options) -> {
+        return (model, context, options) -> {
             var partial = partials.get(Math.min(index.incrementAndGet() - 1,
                 partials.size() - 1));
             return StreamIterator.from(List.of(

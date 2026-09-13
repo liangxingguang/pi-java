@@ -46,7 +46,7 @@ class ManualDriveTurnTest {
         var partial = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent("Hello, World!")))
             .withStopReason("stop");
-        var h = harnessWith((messages, model, options) -> StreamIterator.from(List.of(
+        var h = harnessWith((model, context, options) -> StreamIterator.from(List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.TextStart(0, partial.withContent(
                 List.of(new ContentBlock.TextContent("")))),
@@ -70,7 +70,7 @@ class ManualDriveTurnTest {
     @Test
     void errorTurnReturnsErrorPartial() {
         var partial = AssistantMessage.empty().withStopReason("error");
-        var h = harnessWith((messages, model, options) -> StreamIterator.from(List.of(
+        var h = harnessWith((model, context, options) -> StreamIterator.from(List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.StreamError("error",
                 new RuntimeException("boom"), partial))));

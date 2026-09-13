@@ -25,6 +25,7 @@ class OpenAICompletionsApiTest {
             "OPENAI_API_KEY");
         var request = new StreamRequest(
             ModelId.of("deepseek", "deepseek-v4-flash"),
+            null,
             List.of(new Message.UserMessage(
                 List.of(new ContentBlock.TextContent("hi")))),
             List.of(new ToolDefinition(

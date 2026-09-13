@@ -99,12 +99,15 @@ class PayloadRecordingStreamFnTest {
             assertThat(request.get("traceId").asText())
                 .isEqualTo(llmStart.get("traceId").asText());
 
-            // Request payload: model, messages with role/content, tools, limits.
+            // Request payload: model, systemPrompt, messages with role/content, tools, limits.
             var payload = request.get("payload");
             assertThat(payload.get("model").asText()).isEqualTo("faux-payload/hello");
+            // 系统提示是请求上的独立字段（pi 的 Context.systemPrompt），不进消息列表 ——
+            // 所以 messages[0] 是用户消息，而不是合成出来的 system 消息。
+            assertThat(payload.hasNonNull("systemPrompt")).isTrue();
             assertThat(payload.get("messages").isArray()).isTrue();
             assertThat(payload.get("messages").get(0).get("role").asText())
-                .isEqualTo("system");
+                .isEqualTo("user");
             assertThat(payload.get("tools").isArray()).isTrue();
             assertThat(payload.get("maxTokens").asInt()).isEqualTo(-1);
 

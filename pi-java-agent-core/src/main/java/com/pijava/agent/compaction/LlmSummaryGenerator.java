@@ -5,6 +5,7 @@ import java.util.OptionalDouble;
 import java.util.OptionalInt;
 import java.util.function.Supplier;
 
+import com.pijava.agent.harness.Context;
 import com.pijava.agent.harness.StreamFn;
 import com.pijava.agent.harness.StreamOptions;
 import com.pijava.ai.Usage;
@@ -44,15 +45,16 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
     public SummaryResult summarize(List<Message> compressed, String previousSummary,
                                    String customInstructions, int reserveTokens) {
         try {
-            var system = new Message.SystemMessage(
-                List.of(new ContentBlock.TextContent(SYSTEM_PROMPT)));
             var user = new Message.UserMessage(
                 List.of(new ContentBlock.TextContent(buildPrompt(compressed, previousSummary))));
             var options = new StreamOptions(
-                OptionalInt.empty(), OptionalDouble.empty(), ThinkingConfig.OFF, List.of());
+                OptionalInt.empty(), OptionalDouble.empty(), ThinkingConfig.OFF);
             var text = new StringBuilder();
             var usage = new Usage[] {null};
-            var iter = streamFn.stream(List.of(system, user), model.get(), options);
+            // 摘要系统提示走 Context.systemPrompt（pi 的 SUMMARIZATION_SYSTEM_PROMPT 同理），
+            // 不进消息列表 —— pi 的 Message 没有 system 角色。
+            var iter = streamFn.stream(model.get(),
+                new Context(SYSTEM_PROMPT, List.of(user), List.of()), options);
             try {
                 while (iter.hasNext()) {
                     var event = iter.next();

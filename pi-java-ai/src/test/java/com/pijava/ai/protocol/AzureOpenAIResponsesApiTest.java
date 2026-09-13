@@ -68,6 +68,7 @@ class AzureOpenAIResponsesApiTest {
     void buildParamsUsesDeploymentNameAsModel() throws Exception {
         var request = new StreamRequest(
             ModelId.of("azure-openai-responses", "gpt-4o"),
+            null,
             List.of(new Message.UserMessage(
                 List.of(new ContentBlock.TextContent("hi")))),
             List.of(), 100, -1, Map.of());

@@ -25,7 +25,7 @@ class HookTest {
         var partial = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent(text)))
                 .withStopReason("stop");
-        return (messages, model, options) -> StreamIterator.from(List.of(
+        return (model, context, options) -> StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.TextEnd(0, text, partial),
                 new StreamEvent.StreamDone("stop", null, partial)));
@@ -114,9 +114,9 @@ class HookTest {
     void shouldStopAfterTurnTruePreventsNextTurn() {
         var h = harness();
         var calls = new int[] {0};
-        StreamFn counting = (messages, model, options) -> {
+        StreamFn counting = (model, context, options) -> {
             calls[0]++;
-            return stream("stop-me").stream(messages, model, options);
+            return stream("stop-me").stream(model, context, options);
         };
         var cfg = configWith(counting);
         var hookHarness = com.pijava.agent.harness.AgentHarness.create(cfg);
@@ -166,7 +166,7 @@ class HookTest {
         // Alternate per call: runs now append to the transcript across turns,
         // so "no ToolResult in context" can no longer identify a run's first turn.
         var calls = new java.util.concurrent.atomic.AtomicInteger();
-        return (messages, model, options) -> {
+        return (model, context, options) -> {
             var partial = calls.incrementAndGet() % 2 == 1 ? toolUse : stop;
             seenModels.add(model.provider() + "/" + model.modelName());
             return StreamIterator.from(List.of(

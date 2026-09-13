@@ -7,13 +7,11 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import com.pijava.ai.AbortSignal;
-import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
-import com.pijava.ai.thinking.ThinkingConfig;
 import com.pijava.ai.thinking.ThinkingLevelMap;
 
 /**
@@ -119,41 +117,11 @@ public final class PiLoop {
     // ═══════════════════════════════════════════════════════════════
 
     /**
-     * pi {@code AgentContext}（{@code types.ts:415-422}）：一次 run 的上下文。
-     *
-     * <p>三个字段逐字对齐 pi：{@code systemPrompt} / {@code messages} / {@code tools}。</p>
-     *
-     * <p><b>pi-java 的一处有意偏离</b>：pi 的 {@code StreamFn} 把 {@code systemPrompt} 作为
-     * 独立形参传给 provider（{@code agent-loop.ts:290-301} 的 {@code llmContext}），
-     * 而 pi-java 的 {@link StreamFn} 只有 {@code (messages, model, options)}，系统提示由宿主
-     * 折成 {@code messages[0]}（{@code ContextAssembler:95}）。把 {@code systemPrompt} 拆出来
-     * 需要同时改 {@link StreamFn} 的签名与宿主装配 —— 属 {@code docs/31 §4.2} 的宿主层工作，
-     * 不在本次。因此本记录**只携带 pi 三字段中的两个**，{@code systemPrompt} 仍走在
-     * {@code messages} 里。</p>
-     *
-     * @param messages 本轮的上下文消息（**可变**：循环会就地追加，与 pi 的
-     *                 {@code context.messages.push} 一致）
-     * @param tools    本次请求可用的工具（pi {@code AgentContext.tools}），
-     *                 作为 {@link StreamOptions#tools()} 的来源
-     */
-    public record Context(List<Message> messages, List<ToolDefinition> tools) {
-
-        public Context {
-            tools = tools == null ? List.of() : List.copyOf(tools);
-        }
-
-        /** 从消息列表建上下文，工具取默认空表。 */
-        public static Context of(List<Message> messages) {
-            return new Context(messages, List.of());
-        }
-    }
-
-    /**
      * pi {@code prepareNextTurn} 的入参。
      *
      * <p>pi 传的是 {@code lastCompletedTurn}，其 {@code context} 字段就是**当时**的
-     * {@link Context}（{@code agent-loop.ts:165, 246}）—— 钩子因此能看到 systemPrompt 与 tools，
-     * 而不只是消息列表。</p>
+     * {@code AgentContext}（{@code agent-loop.ts:165, 246}）—— 钩子因此能看到 systemPrompt 与
+     * tools，而不只是消息列表。Java 侧由 {@link Context} 承载。</p>
      */
     public record NextTurnContext(Message.AssistantMessage message,
                                   List<Message.ToolResultMessage> toolResults,
@@ -206,15 +174,17 @@ public final class PiLoop {
      *
      * <p>{@code streamListener} 是 pi-java 特有的**原始帧旁路**：pi 把用量等信息放在消息
      * 本身的 partial 里，pi-java 的 {@link StreamEvent.UsageInfo} 却是一个独立帧，且不属于
-     * 生命周期事件（{@link PiLoop#isUpdateEvent} 不含它）。若不旁路，token 记账与停因推导会
+     * 生命周期事件（{@link PiLoopRunner#isUpdateEvent} 不含它）。若不旁路，token 记账与停因推导会
      * 静默丢失 —— 该帧同时喂给 harness 的既有广播链（{@code AgentHarness.onStreamEvent}），
      * 使会话层无需为切换驱动改造记账代码。</p>
+     *
+     * <p><b>没有 tools 字段</b>，与 pi 的 {@code AgentLoopConfig} 一致（{@code types.ts:145-213}
+     * 实测无此字段）：工具定义属于 {@link Context}，只此一处。</p>
      */
     public record Config(
             ModelId<?> model,
             ModelThinkingLevel thinking,
             ThinkingLevelMap thinkingLevelMap,
-            List<ToolDefinition> toolDefs,
             ToolExecution toolExecution,
             ToolRunner toolRunner,
             StreamFn streamFn,
@@ -238,25 +208,9 @@ public final class PiLoop {
      * <p>prompt 会先进入上下文并逐条发 {@code message_start}/{@code message_end}。</p>
      *
      * @param prompts 新增的 prompt 消息
-     * @param context 起始上下文（**会被就地扩展**，与 pi 一致）
+     * @param context 起始上下文（**会被就地扩展**，与 pi 一致）。
+     *                循环持有一个**可被 {@code prepareNextTurn} 整体替换**的 context
      * @return 本次循环新增的消息（pi 的 {@code newMessages}）
-     */
-    public static List<Message> run(List<Message> prompts, List<Message> context,
-                                    Config config, Sink emit) {
-        var current = new ArrayList<>(context);
-        var messages = run(prompts, new Context(current, config.toolDefs()), config, emit);
-        // 就地扩展调用方的列表（与 pi 的 context.messages 是同一数组一致）。
-        // ⚠️ 若 prepareNextTurn **整体替换**了 context，这里反映不出来 —— 用 Context 版入口。
-        context.clear();
-        context.addAll(current);
-        return messages;
-    }
-
-    /**
-     * pi {@code runAgentLoop} 的上下文版入口：调用方自带 {@link Context}（可含 tools）。
-     *
-     * <p>与 {@link #run(List, List, Config, Sink)} 的区别只在上下文载体 ——
-     * 目标形态是循环持有一个可被 {@code prepareNextTurn} **整体替换**的 context。</p>
      */
     public static List<Message> run(List<Message> prompts, Context context,
                                     Config config, Sink emit) {
@@ -281,23 +235,6 @@ public final class PiLoop {
      * <p>前置条件与 pi 相同：上下文非空，且末条不是 assistant
      * —— 否则 provider 会拒绝请求（{@code agent-loop.ts:71-77}）。</p>
      */
-    public static List<Message> continueRun(List<Message> context, Config config, Sink emit) {
-        if (context.isEmpty()) {
-            throw new IllegalStateException("Cannot continue: no messages in context");
-        }
-        if (context.get(context.size() - 1).role().equals("assistant")) {
-            throw new IllegalStateException("Cannot continue from message role: assistant");
-        }
-
-        var newMessages = new ArrayList<Message>();
-        emit.emit(new Event.AgentStart());
-        emit.emit(new Event.TurnStart());
-
-        PiLoopRunner.runLoop(new Context(context, config.toolDefs()), newMessages, config, emit);
-        return newMessages;
-    }
-
-    /** pi {@code runAgentLoopContinue} 的上下文版入口。 */
     public static List<Message> continueRun(Context context, Config config, Sink emit) {
         var messages = context.messages();
         if (messages.isEmpty()) {

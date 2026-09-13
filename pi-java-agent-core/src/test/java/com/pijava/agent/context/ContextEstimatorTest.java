@@ -28,10 +28,10 @@ class ContextEstimatorTest {
     @Test
     void estimateTokensMultipleMessages() {
         var messages = List.<Message>of(
-                new Message.SystemMessage(List.of(
-                        new ContentBlock.TextContent("You are helpful."))),
                 new Message.UserMessage(List.of(
-                        new ContentBlock.TextContent("Hello"))));
+                        new ContentBlock.TextContent("Hello"))),
+                new Message.AssistantMessage(List.of(
+                        new ContentBlock.TextContent("Hi!"))));
         long tokens = ContextEstimator.estimateTokens(messages);
         assertThat(tokens).isGreaterThan(0);
     }
@@ -54,15 +54,20 @@ class ContextEstimatorTest {
         assertThat(result).isGreaterThan(0);
     }
 
+    /**
+     * {@code checkOverflow} 不再有「跳过 system 消息」这条豁免：消息列表里**没有**
+     * system 角色（pi 的 {@code Message} 只有 user/assistant/toolResult）——
+     * 系统提示是 {@code Context.systemPrompt}，根本不进列表，因此所有消息都是压缩候选。
+     */
     @Test
-    void checkOverflowSkipsSystemMessagesWhenRemoving() {
-        // Small messages within a large window — no overflow
-        var systemMsg = new Message.SystemMessage(List.of(
-                new ContentBlock.TextContent("You are a helpful assistant.")));
-        var userMsg = new Message.UserMessage(List.of(
-                new ContentBlock.TextContent("hi")));
-        int result = ContextEstimator.checkOverflow(
-                List.of(systemMsg, userMsg), 100_000);
-        assertThat(result).isEqualTo(0);
+    void checkOverflowTreatsEveryMessageAsRemovable() {
+        var longText = "y".repeat(500_000); // ~142K tokens
+        var messages = List.<Message>of(
+                new Message.UserMessage(List.of(
+                        new ContentBlock.TextContent("hi"))),
+                new Message.AssistantMessage(List.of(
+                        new ContentBlock.TextContent(longText))));
+        int result = ContextEstimator.checkOverflow(messages, 100_000);
+        assertThat(result).as("含超长消息 ⇒ 溢出，且最早的那条也算候选").isGreaterThan(0);
     }
 }

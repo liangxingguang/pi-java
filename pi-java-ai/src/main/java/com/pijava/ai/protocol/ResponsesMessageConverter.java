@@ -57,7 +57,7 @@ final class ResponsesMessageConverter {
         var builder = ResponseCreateParams.builder()
             .model(modelName)
             .store(false)
-            .input(ResponseCreateParams.Input.ofResponse(convertMessages(request.messages())));
+            .input(ResponseCreateParams.Input.ofResponse(convertMessages(request)));
 
         var tools = new ArrayList<Tool>();
         for (var td : request.tools()) {
@@ -100,15 +100,16 @@ final class ResponsesMessageConverter {
 
     // ── Message conversion ─────────────────────────────────────────────
 
-    private static List<ResponseInputItem> convertMessages(List<Message> messages) {
+    private static List<ResponseInputItem> convertMessages(StreamRequest request) {
         var items = new ArrayList<ResponseInputItem>();
-        for (var msg : messages) {
-            if (msg instanceof Message.SystemMessage system) {
-                var text = extractText(system.content());
-                if (!text.isEmpty()) {
-                    items.add(inputMessage(EasyInputMessage.Role.SYSTEM, text));
-                }
-            } else if (msg instanceof Message.UserMessage user) {
+        // 系统提示是请求上的独立字段（pi openai-responses-shared.ts:175 读
+        // context.systemPrompt），不在消息列表里。
+        var systemPrompt = request.systemPrompt();
+        if (systemPrompt != null && !systemPrompt.isEmpty()) {
+            items.add(inputMessage(EasyInputMessage.Role.SYSTEM, systemPrompt));
+        }
+        for (var msg : request.messages()) {
+            if (msg instanceof Message.UserMessage user) {
                 items.add(toUserItem(user.content()));
             } else if (msg instanceof Message.AssistantMessage assistant) {
                 addAssistantItems(items, assistant);

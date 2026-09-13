@@ -85,8 +85,7 @@ class ModelSwitchRealReproTest {
     private static String describe(List<Message> messages) {
         var sb = new StringBuilder("[");
         for (var m : messages) {
-            if (m instanceof Message.SystemMessage) sb.append("system,");
-            else if (m instanceof Message.UserMessage) sb.append("user,");
+            if (m instanceof Message.UserMessage) sb.append("user,");
             else if (m instanceof Message.AssistantMessage) sb.append("assistant,");
             else if (m instanceof Message.ToolResultMessage) sb.append("tool,");
         }

@@ -1,5 +1,6 @@
 package com.pijava.ai.protocol;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -174,7 +175,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
         var body = new HashMap<String, Object>();
         body.put("model", request.model().modelName());
         body.put("stream", true);
-        body.put("messages", toMistralMessages(request.messages()));
+        body.put("messages", toMistralMessages(request));
 
         if (!request.tools().isEmpty()) {
             body.put("tools", toMistralTools(request.tools()));
@@ -189,14 +190,20 @@ public final class MistralConversationsApi extends AbstractChatApi {
         return MAPPER.writeValueAsString(body);
     }
 
-    private List<Map<String, Object>> toMistralMessages(List<Message> messages) {
-        return messages.stream().<Map<String, Object>>map(msg -> {
+    private List<Map<String, Object>> toMistralMessages(StreamRequest request) {
+        var messages = new ArrayList<Map<String, Object>>();
+        // 系统提示是请求上的独立字段（pi mistral-conversations.ts:523 读 context.systemPrompt），
+        // 不在消息列表里；Mistral 用一条 role=system 的消息承载它。
+        var systemPrompt = request.systemPrompt();
+        if (systemPrompt != null && !systemPrompt.isEmpty()) {
+            var system = new HashMap<String, Object>();
+            system.put("role", "system");
+            system.put("content", systemPrompt);
+            messages.add(system);
+        }
+        request.messages().stream().<Map<String, Object>>map(msg -> {
             var m = new HashMap<String, Object>();
             switch (msg) {
-                case Message.SystemMessage(var content) -> {
-                    m.put("role", "system");
-                    m.put("content", extractText(content));
-                }
                 case Message.UserMessage(var content) -> {
                     m.put("role", "user");
                     m.put("content", extractText(content));
@@ -213,7 +220,8 @@ public final class MistralConversationsApi extends AbstractChatApi {
                 }
             }
             return m;
-        }).toList();
+        }).forEach(messages::add);
+        return messages;
     }
 
     private List<Map<String, Object>> toMistralTools(List<ToolDefinition> definitions) {

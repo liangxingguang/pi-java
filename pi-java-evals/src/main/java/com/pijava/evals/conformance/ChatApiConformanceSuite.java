@@ -3,6 +3,7 @@ package com.pijava.evals.conformance;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 import com.pijava.ai.api.ApiOptions;
@@ -135,13 +136,14 @@ public final class ChatApiConformanceSuite implements EvalSuite {
 
     private static void c8(EvalContext ctx) {
         List<Message> messages = List.of(
-            new Message.SystemMessage(List.of(new ContentBlock.TextContent("sys"))),
             new Message.UserMessage(List.of(new ContentBlock.TextContent("hi"))),
             new Message.AssistantMessage(List.of(new ContentBlock.TextContent("yo"))),
             new Message.ToolResultMessage(
                 "call_1", "echo", List.of(new ContentBlock.TextContent("ok")), false)
         );
-        var events = collect(ctx.chatApi(), StreamRequest.of(MODEL, messages));
+        // 系统提示是请求上的独立字段，不在消息列表里（pi 的 Message 没有 system 角色）。
+        var request = new StreamRequest(MODEL, "sys", messages, List.of(), -1, -1, Map.of());
+        var events = collect(ctx.chatApi(), request);
         if (events.isEmpty()) {
             throw new AssertionError("multi-turn request produced no events");
         }

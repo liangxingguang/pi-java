@@ -102,8 +102,6 @@ final class FrameNormalizer {
                 "stopReason", stopReasonOf(assistant.stopReason()));
             case Message.ToolResultMessage result -> CanonicalJson.obj(
                 "role", "toolResult", "toolName", result.toolName(), "isError", result.isError());
-            case Message.SystemMessage system ->
-                CanonicalJson.obj("role", "system", "content", textOf(system.content()));
         };
     }
 

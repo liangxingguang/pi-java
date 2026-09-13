@@ -25,7 +25,7 @@ class AgentHarnessIntegrationTest {
         var partial = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent(reply)))
                 .withStopReason("stop");
-        return (messages, model, options) -> StreamIterator.from(List.of(
+        return (model, context, options) -> StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.TextEnd(0, reply, partial),
                 new StreamEvent.StreamDone("stop", null, partial)));

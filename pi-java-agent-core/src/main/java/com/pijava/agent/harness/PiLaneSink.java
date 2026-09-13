@@ -63,6 +63,14 @@ final class PiLaneSink implements PiLoop.Sink {
     /** 本次请求实际发给 provider 的消息数，由引擎的 {@code transformContext} 回填。 */
     private int assembledMessageCount;
 
+    /**
+     * 本次 run 的系统提示，由引擎在 run 起点装进 {@code Context} 时同步回填。
+     *
+     * <p>它不在消息列表里（pi 的 {@code Message} 没有 system 角色），但
+     * {@code before_request} 钩子要看完整的请求，所以单独带一份。</p>
+     */
+    private String systemPrompt;
+
     /** 本次助手流的用量：pi-java 的 {@link StreamEvent.UsageInfo} 是独立帧，只能旁路累计。 */
     private long inputTokens;
     private long outputTokens;
@@ -91,6 +99,11 @@ final class PiLaneSink implements PiLoop.Sink {
         this.assembledMessageCount = count;
     }
 
+    /** 由引擎在 run 起点回填：系统提示不进消息列表，但 {@code before_request} 要看到它。 */
+    void systemPrompt(String prompt) {
+        this.systemPrompt = prompt;
+    }
+
     // ═══════════════════════════════════════════════════════════
     // 一轮请求的开销侧：钩子 + 遥测（对齐 AssistantStreamExecutor:67-95）
     // ═══════════════════════════════════════════════════════════
@@ -105,7 +118,7 @@ final class PiLaneSink implements PiLoop.Sink {
      */
     void beginRequest(LaneState lane, List<Message> messages) {
         ctx.hookSystem().fireBeforeRequest(laneName,
-            new RequestContext(laneName, lane.runId, messages));
+            new RequestContext(laneName, lane.runId, systemPrompt, messages));
         llmStartNanos = System.nanoTime();
         var parent = lane.runSpan != null ? lane.runSpan : ctx.telemetry();
         llmSpan = parent.openSpan(new SpanOptions("llm.request", Map.of(

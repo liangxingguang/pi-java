@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.pijava.agent.harness.Context;
 import com.pijava.agent.harness.PiLoop;
 import com.pijava.agent.harness.StreamFn;
 import com.pijava.agent.harness.StreamOptions;
@@ -41,7 +42,6 @@ final class ConformanceRunner {
             ModelId.of("faux", "conformance"),
             ModelThinkingLevel.off(),
             ThinkingLevelMap.empty(),
-            toolDefs(script),
             "sequential".equals(script.toolExecution())
                 ? new ToolExecution.Sequential() : new ToolExecution.Parallel(),
             driver::executeTool,
@@ -56,7 +56,9 @@ final class ConformanceRunner {
 
         var prompt = new Message.UserMessage(
             List.of(new ContentBlock.TextContent(script.prompt())));
-        PiLoop.run(List.of(prompt), new ArrayList<>(), config,
+        // 系统提示与工具走 Context（pi 的 AgentContext），不在消息列表里。
+        var context = new Context(script.systemPrompt(), new ArrayList<>(), toolDefs(script));
+        PiLoop.run(List.of(prompt), context, config,
             event -> frames.add(normalizer.frame(event)));
         return List.copyOf(frames);
     }
@@ -92,7 +94,7 @@ final class ConformanceRunner {
             this.followUp = new ArrayList<>(script.followUp());
         }
 
-        StreamIterator stream(List<Message> messages, ModelId<?> model, StreamOptions options) {
+        StreamIterator stream(ModelId<?> model, Context context, StreamOptions options) {
             return new ListStream(ScriptedStreams.eventsFor(
                 script.responses().get(streamCalls++), callIds));
         }

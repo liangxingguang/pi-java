@@ -154,6 +154,7 @@ class OpenAIResponsesApiTest {
         var api = api("http://localhost:1/v1");
         var request = new StreamRequest(
             ModelId.of("openai", "gpt-4o"),
+            null,
             List.of(new Message.UserMessage(
                 List.of(new ContentBlock.TextContent("hi")))),
             List.of(), 4, -1, Map.of());
@@ -170,6 +171,7 @@ class OpenAIResponsesApiTest {
     void buildParamsSetsReasoningEffortFromExtra() throws Exception {
         var request = new StreamRequest(
             ModelId.of("openai", "gpt-4o"),
+            null,
             List.of(new Message.UserMessage(
                 List.of(new ContentBlock.TextContent("hi")))),
             List.of(), 100, -1, Map.of());

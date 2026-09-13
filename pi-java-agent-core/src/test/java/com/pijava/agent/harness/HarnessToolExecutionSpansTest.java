@@ -75,7 +75,7 @@ class HarnessToolExecutionSpansTest {
                 .withContent(List.of(new ContentBlock.TextContent("done")))
                 .withStopReason("stop");
         var calls = new java.util.concurrent.atomic.AtomicInteger();
-        return (messages, model, options) -> {
+        return (model, context, options) -> {
             var partial = calls.incrementAndGet() == 1 ? toolUse : stop;
             return StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),

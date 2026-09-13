@@ -3,6 +3,7 @@ package com.pijava.agent.stream;
 import java.util.List;
 
 import com.pijava.agent.context.ContextEstimator;
+import com.pijava.agent.harness.Context;
 import com.pijava.agent.harness.StreamFn;
 import com.pijava.agent.harness.StreamOptions;
 import com.pijava.ai.api.StreamIterator;
@@ -34,16 +35,18 @@ public final class StreamSimple {
      * Stream an LLM call with automatic thinking translation and overflow check.
      *
      * @param model     model metadata (includes thinking level map)
-     * @param messages  context messages
+     * @param context   request context (systemPrompt / messages / tools)
      * @param reasoning the requested thinking level
      * @param streamFn  the raw stream function
      * @return an iterator over stream events
      */
     public static StreamIterator stream(
             ModelInfo model,
-            List<Message> messages,
+            Context context,
             ModelThinkingLevel reasoning,
             StreamFn streamFn) {
+
+        var messages = context.messages();
 
         // 1. Translate thinking level → provider config
         var thinkingConfig = model.thinkingLevelMap().forLevel(reasoning);
@@ -70,10 +73,9 @@ public final class StreamSimple {
         var options = new StreamOptions(
                 java.util.OptionalInt.empty(),
                 java.util.OptionalDouble.empty(),
-                thinkingConfig,
-                List.of()
+                thinkingConfig
         );
 
-        return streamFn.stream(messages, model.id(), options);
+        return streamFn.stream(model.id(), context, options);
     }
 }

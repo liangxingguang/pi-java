@@ -171,14 +171,15 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                 .model(request.model().modelName())
                 .maxTokens(request.maxTokens() > 0 ? request.maxTokens() : 4096L);
 
-        var systemText = extractSystemText(request.messages());
-        if (!systemText.isEmpty()) {
+        // 系统提示是请求上的独立字段（pi anthropic-messages.ts:1074 读 context.systemPrompt），
+        // 不在消息列表里 —— pi 的 Message 没有 system 角色。
+        var systemText = request.systemPrompt();
+        if (systemText != null && !systemText.isEmpty()) {
             builder.system(systemText);
         }
 
         for (int i = 0; i < request.messages().size(); i++) {
             var msg = request.messages().get(i);
-            if (msg instanceof Message.SystemMessage) continue;
 
             // Anthropic requires tool_result blocks inside a user message
             // (pi anthropic-messages.ts maps toolResult -> role "user" and
@@ -319,18 +320,6 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         var out = new java.util.LinkedHashMap<String, com.anthropic.core.JsonValue>();
         schema.forEach((key, value) -> out.put(key, com.anthropic.core.JsonValue.from(value)));
         return out;
-    }
-
-    private String extractSystemText(List<Message> messages) {
-        var sb = new StringBuilder();
-        for (var msg : messages) {
-            if (msg instanceof Message.SystemMessage) {
-                for (var block : msg.content()) {
-                    if (block instanceof ContentBlock.TextContent tc) sb.append(tc.text());
-                }
-            }
-        }
-        return sb.toString();
     }
 
     private String extractText(List<ContentBlock> blocks) {

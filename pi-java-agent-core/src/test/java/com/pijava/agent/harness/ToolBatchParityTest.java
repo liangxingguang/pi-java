@@ -64,7 +64,7 @@ class ToolBatchParityTest {
      */
     private static StreamFn twoToolCallsThenText(String first, String second) {
         var round = new AtomicInteger();
-        return (messages, model, options) -> {
+        return (model, context, options) -> {
             if (round.getAndIncrement() == 0) {
                 var partial = AssistantMessage.empty()
                     .withContent(List.of(

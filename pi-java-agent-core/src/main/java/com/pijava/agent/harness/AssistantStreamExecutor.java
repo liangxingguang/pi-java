@@ -62,11 +62,14 @@ final class AssistantStreamExecutor {
         compactions.checkAutoCompact(laneName, lane);
 
         var messages = contextAssembler.buildMessagesForLane(laneName, lane);
+        // 系统提示不在消息列表里（pi 的 Message 没有 system 角色）——
+        // 它走 Context.systemPrompt，这里算一次供钩子与请求共用。
+        var systemPrompt = contextAssembler.buildSystemPrompt(lane);
         var thinkingConfig = ctx.thinkingLevelMap().forLevel(ctx.thinkingLevel().get());
 
         // Fire before_request
         ctx.hookSystem().fireBeforeRequest(laneName,
-            new RequestContext(laneName, lane.runId, messages));
+            new RequestContext(laneName, lane.runId, systemPrompt, messages));
 
         // Build tool definitions, respecting lane-level tool overrides
         var effectiveTools = lane.activeTools != null ? lane.activeTools : ctx.activeTools().get();
@@ -78,7 +81,9 @@ final class AssistantStreamExecutor {
             .filter(td -> activeNames.contains(td.name())).toList();
         var options = new StreamOptions(
             java.util.OptionalInt.empty(), java.util.OptionalDouble.empty(),
-            thinkingConfig, toolDefs);
+            thinkingConfig);
+        // 系统提示与工具只在 Context 上（pi 的 AgentContext）；消息列表里没有 system 角色。
+        var llmContext = new Context(systemPrompt, messages, toolDefs);
 
         int attemptIdx = lane.stepIndex++;
         long inputTokens = 0;
@@ -96,7 +101,7 @@ final class AssistantStreamExecutor {
         try {
             ctx.telemetry().pushCurrent(llmSpan);
             try {
-                var iter = ctx.streamFn().stream(messages, ctx.model().get(), options);
+                var iter = ctx.streamFn().stream(ctx.model().get(), llmContext, options);
                 try {
                     while (iter.hasNext()) {
                         if (lane.abortSignal != null && lane.abortSignal.isAborted()) {

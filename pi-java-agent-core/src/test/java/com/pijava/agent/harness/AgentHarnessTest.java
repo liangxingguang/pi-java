@@ -25,7 +25,7 @@ class AgentHarnessTest {
         var partial = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent(text)))
                 .withStopReason("stop");
-        return (messages, model, options) -> StreamIterator.from(List.of(
+        return (model, context, options) -> StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.TextStart(0, partial.withContent(
                         List.of(new ContentBlock.TextContent("")))),
@@ -37,7 +37,7 @@ class AgentHarnessTest {
 
     private static StreamFn errorStreamFn(String errorMsg) {
         var partial = AssistantMessage.empty().withStopReason("error");
-        return (messages, model, options) -> StreamIterator.from(List.of(
+        return (model, context, options) -> StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.StreamError("error",
                         new RuntimeException(errorMsg), partial)
@@ -287,7 +287,7 @@ class AgentHarnessTest {
                 .withStopReason("stop");
         var emptyPartial = AssistantMessage.empty();
 
-        StreamFn allEventsFn = (messages, model, options) -> StreamIterator.from(List.of(
+        StreamFn allEventsFn = (model, context, options) -> StreamIterator.from(List.of(
                 new StreamEvent.Start(emptyPartial),
                 new StreamEvent.TextStart(0, emptyPartial),
                 new StreamEvent.TextDelta(0, "hello", emptyPartial
@@ -325,7 +325,7 @@ class AgentHarnessTest {
     void errorEventPartialPreserved() {
         var errorPartial = AssistantMessage.empty()
                 .withStopReason("error");
-        StreamFn errorFn = (messages, model, options) -> StreamIterator.from(List.of(
+        StreamFn errorFn = (model, context, options) -> StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.TextStart(0, AssistantMessage.empty()),
                 new StreamEvent.TextDelta(0, "partial text", errorPartial

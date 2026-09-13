@@ -23,7 +23,7 @@ class RunToCompletionTest {
         var partial = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent("done")))
                 .withStopReason("stop");
-        StreamFn sf = (messages, model, options) -> StreamIterator.from(List.of(
+        StreamFn sf = (model, context, options) -> StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.TextEnd(0, "done", partial),
                 new StreamEvent.StreamDone("stop", null, partial)));

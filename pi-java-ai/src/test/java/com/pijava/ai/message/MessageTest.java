@@ -11,15 +11,20 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class MessageTest {
 
+    /**
+     * 变体集合与 pi 的 {@code Message} 联合类型一致：恰好三个角色，**没有 system**
+     * （{@code packages/ai/src/types.ts:470}）。系统提示是 {@code Context.systemPrompt}
+     * 上的独立字段，不是消息。多出第四个变体意味着某处又把系统提示塞回了消息列表。
+     */
     @Test
-    void systemMessageShouldHoldText() {
-        var msg = new Message.SystemMessage(
-                List.of(new ContentBlock.TextContent("You are a helpful assistant.")));
+    void messageUnionHasExactlyPiThreeRoles() {
+        var variants = java.util.Arrays.stream(Message.class.getPermittedSubclasses())
+                .map(Class::getSimpleName)
+                .sorted()
+                .toList();
 
-        assertThat(msg.content()).hasSize(1);
-        assertThat(msg.content().get(0)).isInstanceOf(ContentBlock.TextContent.class);
-        assertThat(((ContentBlock.TextContent) msg.content().get(0)).text())
-                .isEqualTo("You are a helpful assistant.");
+        assertThat(variants)
+                .containsExactly("AssistantMessage", "ToolResultMessage", "UserMessage");
     }
 
     @Test

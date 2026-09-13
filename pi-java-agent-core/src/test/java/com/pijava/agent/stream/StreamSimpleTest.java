@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.pijava.agent.harness.Context;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.AssistantMessage;
@@ -46,7 +47,7 @@ class StreamSimpleTest {
                 .withContent(List.of(new ContentBlock.TextContent("hi")))
                 .withStopReason("stop");
 
-        StreamIterator iter = StreamSimple.stream(model, messages,
+        StreamIterator iter = StreamSimple.stream(model, Context.of(messages),
                 ModelThinkingLevel.off(),
                 (msgs, mdl, opts) -> StreamIterator.from(List.of(
                         new StreamEvent.Start(AssistantMessage.empty()),
@@ -77,7 +78,7 @@ class StreamSimpleTest {
         var messages = List.<Message>of(new Message.UserMessage(
                 List.of(new ContentBlock.TextContent(longText))));
 
-        StreamIterator iter = StreamSimple.stream(model, messages,
+        StreamIterator iter = StreamSimple.stream(model, Context.of(messages),
                 ModelThinkingLevel.off(),
                 (msgs, mdl, opts) -> StreamIterator.from(List.of()));
 
@@ -103,7 +104,7 @@ class StreamSimpleTest {
                 List.of(new ContentBlock.TextContent("think deep"))));
 
         var thinkingUsed = new ThinkingConfig[1];
-        StreamIterator iter = StreamSimple.stream(model, messages,
+        StreamIterator iter = StreamSimple.stream(model, Context.of(messages),
                 ModelThinkingLevel.of(new ThinkingLevel.Low()),
                 (msgs, mdl, opts) -> {
                     thinkingUsed[0] = opts.thinking();

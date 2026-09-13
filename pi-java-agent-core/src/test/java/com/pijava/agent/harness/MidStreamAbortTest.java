@@ -48,7 +48,7 @@ class MidStreamAbortTest {
     private static StreamFn midStreamAbortFn(AtomicReference<AgentHarness> holder) {
         var partial = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent("partial answer")));
-        return (messages, model, options) -> new StreamIterator() {
+        return (model, context, options) -> new StreamIterator() {
             private int i;
 
             @Override

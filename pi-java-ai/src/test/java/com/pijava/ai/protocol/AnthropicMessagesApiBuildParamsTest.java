@@ -41,6 +41,7 @@ class AnthropicMessagesApiBuildParamsTest {
     void passesToolsToTheRequest() throws Exception {
         var request = new StreamRequest(
             ModelId.of("anthropic", "claude-sonnet-5"),
+            null,
             List.of(new Message.UserMessage(
                 List.of(new ContentBlock.TextContent("hi")))),
             List.of(new ToolDefinition(
@@ -61,6 +62,7 @@ class AnthropicMessagesApiBuildParamsTest {
     void roundTripsAssistantToolUseBlock() throws Exception {
         var request = new StreamRequest(
             ModelId.of("anthropic", "claude-sonnet-5"),
+            null,
             List.of(
                 new Message.UserMessage(
                     List.of(new ContentBlock.TextContent("list files"))),
@@ -83,6 +85,7 @@ class AnthropicMessagesApiBuildParamsTest {
     void roundTripsToolResultMessage() throws Exception {
         var request = new StreamRequest(
             ModelId.of("anthropic", "claude-sonnet-5"),
+            null,
             List.of(
                 new Message.UserMessage(
                     List.of(new ContentBlock.TextContent("list files"))),
@@ -109,6 +112,7 @@ class AnthropicMessagesApiBuildParamsTest {
         // (pi anthropic-messages.ts maps toolResult -> role "user").
         var request = new StreamRequest(
             ModelId.of("anthropic", "claude-sonnet-5"),
+            null,
             List.of(
                 new Message.UserMessage(
                     List.of(new ContentBlock.TextContent("list files"))),
@@ -131,6 +135,7 @@ class AnthropicMessagesApiBuildParamsTest {
     void mergesConsecutiveToolResultsIntoOneUserMessage() throws Exception {
         var request = new StreamRequest(
             ModelId.of("anthropic", "claude-sonnet-5"),
+            null,
             List.of(
                 new Message.UserMessage(
                     List.of(new ContentBlock.TextContent("list files"))),
@@ -161,6 +166,7 @@ class AnthropicMessagesApiBuildParamsTest {
     void replaysThinkingBlockWithSignature() throws Exception {
         var request = new StreamRequest(
             ModelId.of("anthropic", "claude-sonnet-5"),
+            null,
             List.of(
                 new Message.UserMessage(
                     List.of(new ContentBlock.TextContent("list files"))),
@@ -184,6 +190,7 @@ class AnthropicMessagesApiBuildParamsTest {
     void downgradesThinkingWithoutSignatureToText() throws Exception {
         var request = new StreamRequest(
             ModelId.of("anthropic", "claude-sonnet-5"),
+            null,
             List.of(
                 new Message.UserMessage(
                     List.of(new ContentBlock.TextContent("hi"))),
@@ -205,6 +212,7 @@ class AnthropicMessagesApiBuildParamsTest {
     void skipsEmptyThinkingWithoutSignature() throws Exception {
         var request = new StreamRequest(
             ModelId.of("anthropic", "claude-sonnet-5"),
+            null,
             List.of(
                 new Message.UserMessage(
                     List.of(new ContentBlock.TextContent("hi"))),
@@ -222,6 +230,7 @@ class AnthropicMessagesApiBuildParamsTest {
     void extraBudgetTokensEnableThinking() throws Exception {
         var request = new StreamRequest(
             ModelId.of("anthropic", "claude-sonnet-5"),
+            null,
             List.of(new Message.UserMessage(
                 List.of(new ContentBlock.TextContent("hi")))),
             List.of(), 2048, -1,
@@ -238,6 +247,7 @@ class AnthropicMessagesApiBuildParamsTest {
     void noBudgetTokensLeaveThinkingUnset() throws Exception {
         var request = new StreamRequest(
             ModelId.of("anthropic", "claude-sonnet-5"),
+            null,
             List.of(new Message.UserMessage(
                 List.of(new ContentBlock.TextContent("hi")))),
             List.of(), 2048, -1, Map.of());

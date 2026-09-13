@@ -49,12 +49,11 @@ public final class ContextEstimator {
         long limit = (long) (maxInputTokens * safetyMargin);
         if (estimated <= limit) return 0;
 
-        // Rough: remove oldest non-system messages until we're under
+        // Rough: remove oldest messages until we're under
         long current = estimated;
         int toRemove = 0;
         for (int i = 0; i < messages.size(); i++) {
             var msg = messages.get(i);
-            if (msg instanceof Message.SystemMessage) continue;
             long msgTokens = estimateTokens(List.of(msg));
             current -= msgTokens;
             toRemove++;

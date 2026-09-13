@@ -25,7 +25,7 @@ class CompactionServiceTest {
     private static StreamFn llm(String text) {
         var done = AssistantMessage.empty().withContent(List.of(
             new ContentBlock.TextContent(text))).withStopReason("stop");
-        return (messages, model, options) -> StreamIterator.from(List.of(
+        return (model, context, options) -> StreamIterator.from(List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.TextStart(0, AssistantMessage.empty()),
             new StreamEvent.TextDelta(0, text, done),
@@ -57,7 +57,7 @@ class CompactionServiceTest {
     @Test
     void llmSummaryFallsBackOnError() {
         var generator = new LlmSummaryGenerator(
-            (messages, model, options) -> StreamIterator.from(List.of(
+            (model, context, options) -> StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.StreamError("error",
                     new RuntimeException("boom"), AssistantMessage.empty()))),

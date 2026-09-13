@@ -74,18 +74,18 @@ public final class DefaultProviders {
     public static StreamFn streamFnFor(Args args, String defaultProvider,
                                        ProviderRegistry providers, Settings settings) {
         var providerName = resolveProviderName(args, defaultProvider);
-        return (messages, model, options) -> {
+        return (model, context, options) -> {
             var provider = providers.get(providerName)
                 .orElseThrow(() -> new IllegalStateException("Unknown provider: " + providerName));
-            return streamBlocking(provider, messages, model, options,
+            return streamBlocking(provider, model, context, options,
                 apiOptions(args, providerName, settings, Credentials::resolveApiKey));
         };
     }
 
     private static StreamIterator streamBlocking(
             Provider provider,
-            List<Message> messages,
             ModelId<?> model,
+            com.pijava.agent.harness.Context context,
             com.pijava.agent.harness.StreamOptions options,
             ApiOptions apiOptions) {
         var api = provider.createApi(ChatApi.class, apiOptions);
@@ -95,8 +95,9 @@ public final class DefaultProviders {
                 && thinking.budgetTokens().isPresent()) {
             extra.put("thinking.budgetTokens", thinking.budgetTokens().getAsInt());
         }
+        // 系统提示与工具定义都来自 Context（pi 的 Context）；它们不再走消息列表或 options。
         var request = new com.pijava.ai.api.StreamRequest(
-            model, messages, options.tools(),
+            model, context.systemPrompt(), context.messages(), context.tools(),
             options.maxTokens().orElse(-1),
             options.temperature().orElse(-1),
             extra);

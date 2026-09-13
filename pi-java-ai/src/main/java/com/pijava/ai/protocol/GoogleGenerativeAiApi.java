@@ -157,9 +157,10 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
     private GenerateContentConfig buildConfig(StreamRequest request) {
         var builder = GenerateContentConfig.builder();
 
-        // System instruction
-        var systemText = extractSystemText(request.messages());
-        if (!systemText.isEmpty()) {
+        // System instruction —— 请求上的独立字段（pi google-generative-ai.ts:380 读
+        // context.systemPrompt），不在消息列表里。
+        var systemText = request.systemPrompt();
+        if (systemText != null && !systemText.isEmpty()) {
             builder.systemInstruction(
                     Content.fromParts(Part.fromText(systemText)));
         }
@@ -184,9 +185,6 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
     private List<Content> toGoogleContents(List<Message> messages) {
         var contents = new ArrayList<Content>();
         for (var msg : messages) {
-            if (msg instanceof Message.SystemMessage) {
-                continue; // handled separately as systemInstruction
-            }
             var role = msg instanceof Message.UserMessage ? "user" : "model";
             var parts = new ArrayList<Part>();
             for (var block : msg.content()) {
@@ -257,20 +255,6 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
             }
             return builder.build();
         }).toList();
-    }
-
-    private String extractSystemText(List<Message> messages) {
-        var sb = new StringBuilder();
-        for (var msg : messages) {
-            if (msg instanceof Message.SystemMessage) {
-                for (var block : msg.content()) {
-                    if (block instanceof ContentBlock.TextContent tc) {
-                        sb.append(tc.text());
-                    }
-                }
-            }
-        }
-        return sb.toString();
     }
 
     private static String resolveApiKey(ApiOptions options) {

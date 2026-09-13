@@ -135,11 +135,15 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         var builder = ChatCompletionCreateParams.builder()
                 .model(request.model().modelName());
 
+        // 系统提示是请求上的独立字段（pi openai-completions.ts:1214 读 context.systemPrompt），
+        // 不在消息列表里。
+        var systemText = request.systemPrompt();
+        if (systemText != null && !systemText.isEmpty()) {
+            builder.addSystemMessage(systemText);
+        }
+
         for (var msg : request.messages()) {
-            if (msg instanceof Message.SystemMessage) {
-                var text = extractText(msg.content());
-                if (!text.isEmpty()) builder.addSystemMessage(text);
-            } else if (msg instanceof Message.UserMessage) {
+            if (msg instanceof Message.UserMessage) {
                 var text = extractText(msg.content());
                 if (!text.isEmpty()) builder.addUserMessage(text);
             } else if (msg instanceof Message.AssistantMessage assistant) {

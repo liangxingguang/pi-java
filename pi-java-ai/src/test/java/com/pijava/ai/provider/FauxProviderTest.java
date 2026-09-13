@@ -21,6 +21,7 @@ class FauxProviderTest {
     private static final ApiOptions OPTIONS = ApiOptions.defaults();
     private static final StreamRequest REQUEST = new StreamRequest(
             ModelId.of("faux", "test-model"),
+            null,
             java.util.List.of(new Message.UserMessage(
                     java.util.List.of(new ContentBlock.TextContent("hello")))),
             java.util.List.of(), -1, -1, java.util.Map.of());
