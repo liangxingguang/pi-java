@@ -904,6 +904,13 @@ pi 的归约器写四个字段，Java 侧对照：
 `timestamp = null` 也不是疏漏：那是全仓 `ProvisionedEntry` 的约定（`LaneView:95/102/110`、
 `Session:236` 同样传 `null`），语义是「身份由存储赋，尚未提交」。
 
+⇒ **两份视图各自自洽，且按设计必须不同**。要真正统一，得先把「会话历史 ⊃ agent 状态」
+这条 pi 的不变量建出来（entry 上区分「只进历史」与「进历史且进上下文」），那是另一个课题，
+不是把 append 搬个家。**不实施，理由记录在此。**
+
+> `PiLaneSink` 因此仍是**新 entry 的唯一生产者** —— 这条同时是 §4.2 能成立的前提：
+> `messages` 工作副本与 entry 由同一个类在同一个事件点上维护，不必跨层同步。
+
 ---
 
 ### 8.15 第 9 步遗留 A 项：端口两相拆分 —— 已实施（2026-09-13，commit `aaba914`）
@@ -939,12 +946,35 @@ pi 形状（`abortedParallelBatchFramesOnlyTheFirstCallLikePi`），docs/29 §4/
 确定性工具下帧序与 pi 一致，真并发需要先想清楚差分侧怎么验证非确定完成序。
 `QueueMode.All` 的宿主层行为变更仍待用户确认。
 
-⇒ **两份视图各自自洽，且按设计必须不同**。要真正统一，得先把「会话历史 ⊃ agent 状态」
-这条 pi 的不变量建出来（entry 上区分「只进历史」与「进历史且进上下文」），那是另一个课题，
-不是把 append 搬个家。**不实施，理由记录在此。**
+### 8.16 before/after_tool 钩子形状对齐 —— 已实施（2026-09-13，commit `e252aaa`）
 
-> `PiLaneSink` 因此仍是**新 entry 的唯一生产者** —— 这条同时是 §4.2 能成立的前提：
-> `messages` 工作副本与 entry 由同一个类在同一个事件点上维护，不必跨层同步。
+两相拆分（§8.15）落地后再逐行读 pi 的钩子链 —— `prepareToolCall` 的 catch
+（`agent-loop.ts:668-673`）、`executePreparedToolCall`（`:677-718`）、
+`finalizeExecutedToolCall`（`:720-764`）—— 查出三处分歧，全部对齐：
+
+| 分歧 | pi 事实 | 旧 Java 行为 |
+|---|---|---|
+| `after_tool` 返回值 | 逐字段 `??` 合并（`:745-751`），`isError = patch.isError ?? executed.isError`（`:752`） | 整体替换 `ToolResult` —— 改 `content` 会**静默吞掉** `terminate` |
+| 钩子抛异常 | `before`→immediate 错误结果（`:668-673`）；`after`→错误结果（`:754-757`）；异常不出端口 | 记账后吞掉，等于「放行 / 无操作」 |
+| 失败的执行 | 执行相 catch 先把异常转成错误结果（`:708-714`），**收尾钩子照样跑**在它上面 | catch 短路，`after_tool` 被跳过 |
+
+新增 `AfterToolPatch`（五字段补丁，`null`=保留 —— JS 里 `null` 与 `undefined` 同落
+`??` 右操作数，pi 也清不掉字段，故 Java 的 null=保留与之一一对应）与
+`AfterToolOutcome`（`result` + `isError`；pi 把 `isError` 放在结果**外面**，`:728-729`）；
+`ToolResultContext` 补 `isError` 字段（pi 把 `result` 与 `isError` 并列传给钩子，`:736-741`）。
+`HookSystem` 的「钩子非致命」契约第一次有了例外：两个工具钩子记账后**向上重抛**，
+转换点留在端口 —— 与 pi 的 catch 位置同构（收尾函数的 catch，不是事件总线的 catch）。
+
+**反证实验**（每组恰好红一个哨兵，还原后全绿）：整体替换 →
+`afterToolPatchMergesFieldByFieldAndKeepsTerminate`；吞 after 异常 →
+`throwingAfterToolBecomesErrorResult`；失败跳过钩子 →
+`afterToolHookRunsOnFailedExecutionAndSeesIsError`；吞 before 异常 →
+`throwingBeforeToolBecomesImmediateErrorResult`。
+
+**差分覆盖说明**：L5 的 conformance 端口不经 `HookSystem`（剧本无钩子项），这些形状
+只有单元级哨兵钉住 —— `PiToolRunnerTest` 5 新例（类内 10/10）、agent-core 375/375、
+全 reactor `clean verify` 绿。**结构修正**：§8.15 插错了位置，把 §8.14 与其结语（「两份
+视图」段）切开了 —— 已挪回 §8.14 末尾。
 
 ---
 
