@@ -1169,6 +1169,163 @@ isContextOverflow` / `:171 isRecoverableLength` 移植，替换 PiLaneSink:208 �
 OverflowDetector 路）；ContextEstimator（chars/3.5 死链）javadoc 虚假声明已改为
 指向本估算器。
 
+### 8.21 溢出恢复与收尾检查 3c —— **设计稿（2026-09-14，待审核，未实施）**
+
+> 本节是 3c 的准入设计文档。**未经审核认可前不写任何实施代码。**
+> pi 事实全部逐行读自 `packages/coding-agent/src/core/agent-session.ts`、
+> `packages/ai/src/utils/overflow.ts`、`packages/ai/src/utils/retry.ts`、
+> `packages/agent/src/harness/compaction/compaction.ts`（3b 已读的函数不复述）。
+
+#### 8.21.1 pi 事实（运行后检查全景）
+
+pi 的收尾循环住在宿主 `_runAgentPrompt`（agent-session.ts:1101-1114）：
+`agent.prompt()` 完成后 `while (await _handlePostAgentRun()) await agent.continue()`。
+`_handlePostAgentRun`（:1116-1144）按序三查，**重试在前、压缩在后**：
+①`_isRetryableError(msg) && _prepareRetry(msg)` ⇒ true 即续跑（:1123）；
+②`_checkCompaction(msg)` ⇒ true 即续跑（:1137）；③`agent.hasQueuedMessages()`（:1143）。
+两机制的交接由判据本身完成：**`_isRetryableError` 第一行就是
+`if (isContextOverflow(message, window)) return false`（:2876-2880，注释明文
+"Context overflow errors are NOT retryable (handled by compaction instead)"）**
+⇒ 溢出错误永远不耗重试预算、必然落到压缩路。
+
+`_checkCompaction(assistantMessage, skipAbortedCheck=true)`（:2154-2258）逐守卫：
+
+| # | 守卫/分支 | pi 行为 | 出处 |
+|---|---|---|---|
+| G0 | `!settings.enabled` ⇒ false | 全局开关最先 | :2156 |
+| G1 | `skipAbortedCheck && stopReason==="aborted"` ⇒ false | **prompt 预检传 false**（ catches aborted responses，:1258-1263），运行后检查传默认 true | :2159 |
+| G2 | `contextWindow = this.model?.contextWindow ?? 0` | 操作数=当前模型窗口（3b 已接 resolver） | :2161 |
+| G3 | `sameModel = model && msg.provider===model.provider && msg.model===model.id` | **只闸溢出两判据**（:2183-2184）；阈值 case 3 **不闸** | :2167-2168 |
+| G4 | `compactionEntry=getLatestCompactionEntry(getBranch())`；`assistantMessage.timestamp <= compactionEntry.timestamp` ⇒ false | **全局闸**（含阈值路），防陈旧消息重触发 | :2173-2178 |
+| C1 | `contextOverflow = sameModel && isContextOverflow(msg, window)` | 判据①（下详） | :2183 |
+| C2 | `recoverableLength = sameModel && isRecoverableLength(msg, model?.maxTokens ?? 0)` | 判据②；操作数是**输出上限原值**（目录 maxOutputTokens） | :2184 |
+| R0 | 溢出命中后 `willRetry = stopReason !== "stop"` | 成功完成的 length-stop 只压不续 | :2186-2192 |
+| R1 | `willRetry && _overflowRecoveryAttempted` ⇒ 发 `compaction_end{result:undefined, aborted:false, willRetry:false, errorMessage:固定文案}` + `_emitSessionCompactFailed`，return false | 一次性 compact-retry 闩；**两文案**：overflow⇒`"Context overflow recovery failed after one compact-and-retry attempt. Try reducing context or switching to a larger-context model."`；recoverableLength⇒`"Truncated response recovery failed after one compact-and-retry attempt."` | :2194-2214 |
+| R2 | 置闩 ⇒ `agent.state.messages` 尾若为 assistant 则**摘除**（日志不动）⇒ `_runAutoCompaction("overflow", true)` | 摘除在 prepare 前；**重建后还会再摘一次**（:2410-2419，注释 :2413 解释：日志重建会把 kept 的失败 assistant 复活） | :2216-2223 |
+| T1 | 阈值复查：`direct = msg.usage ? calculateContextTokens : 0`；`stopReason==="error" \|\| direct===0` ⇒ `estimate=estimateContextTokens(state.messages)`；**若锚点消息在 compaction 界前 ⇒ false**（:2237-2249，防刚压完被压缩前的旧用量再推过线）；`contextTokens=estimate.tokens`；否则 `contextTokens=direct` | 与 prepareNextTurn 门（:542）互补：一个轮间、一个**运行收尾** | :2226-2256 |
+| T2 | `shouldCompact(contextTokens, contextWindow, settings)` ⇒ `_runAutoCompaction("threshold", false)` | | :2254 |
+
+`_runAutoCompaction(reason, willRetry)`（:2270-2445）形状：`!model⇒false`；
+`prepareCompaction⇒undefined⇒false`（3b 已对齐）；发 `compaction_start{reason}`；
+`session_before_compact` 扩展钩子（cancel⇒`compaction_end{aborted:true}`+failed⇒false；
+自定义结果⇒直采）；摘要期间可中止（aborted⇒end+failed⇒false）；
+`appendCompaction` ⇒ **`getEntries()/buildSessionContext()/state.messages=` 整体重建**（:2380-2382）；
+`estimatedTokensAfter = estimateMessagesTokens(newContext.messages)`（:2383，
+**纯字符 ΣestimateTokens**，:294-300 —— 不用用量锚点）；发 `session_compact` 扩展事件；
+发 `compaction_end{result, willRetry}`；willRetry ⇒ 重建后再摘尾 error/length（R2 注）⇒
+return true（续跑）；否则 return `hasQueuedMessages()`；
+catch ⇒ `compaction_end{errorMessage: reason==="overflow" ?
+"Context overflow recovery failed: "+msg : "Auto-compaction failed: "+msg}`+failed+false。
+
+闩的复位点（都在 message 事件上，非运行边界）：① **user message_start** ⇒ false（:643）；
+② **assistant message_end 且 stopReason∉{error,length}** ⇒ false（:694-696）。
+
+`isContextOverflow(message, contextWindow?)`（overflow.ts:134-163）三路：
+case1 `stopReason==="error" && errorMessage` 存在 ⇒ 先过 **NON_OVERFLOW 3 条排除**
+（`Throttling error|Service unavailable:` / `rate limit` / `too many requests`）
+再过 **OVERFLOW_PATTERNS 25 条**（Anthropic/OpenAI/Google/xAI/Groq/OpenRouter/
+Together/llama.cpp/LM Studio/Copilot/MiniMax/Kimi/DS4/Cerebras/Mistral/z.ai/Ollama/
+DashScope…逐字在 :37-63，含 `model'?s` 的 U+2019 撇号与 `[\d,]+` 数字逗号类）；
+case2 **静默溢出**（z.ai 形）：`contextWindow && stopReason==="stop" &&
+usage.input+usage.cacheRead > contextWindow`；
+case3 **length 零输出**（MiMo 形）：`contextWindow && stopReason==="length" &&
+usage.output===0 && input+cacheRead >= contextWindow*0.99`。
+`isRecoverableLength(message, desiredMaxOutput)`（:171-173）：
+`stopReason==="length" && desiredMaxOutput>0 && usage.output < desiredMaxOutput`。
+
+#### 8.21.2 pi-java 现状差距
+
+| 面 | 现状 | 差距 |
+|---|---|---|
+| 溢出判据 | `OverflowDetector.isOverflow(null, lastStopReason, UsageInfo旁路累计, ctx.maxInputTokens())` | **javadoc 声称 aligned 实为自造**（§8.19 ContextEstimator 同族问题）：子串 5 个 vs 25 正则、无排除表；case2 无 `stopReason==="stop"` 闸、算 `input+output` 而非 `input+cacheRead`、操作数静态 maxInputTokens；case3 无 `>=0.99*window` 满窗条件；不读 errorMessage（3a 字段没消费） |
+| 收尾守卫 | `checkOverflowAfterRun` 只有 `settings!=null && transcript.size()>1` | **G1/G3/G4/R1 全无**；`size>1` 又是发明（3b 同款，撤）；**T1/T2 阈值复查完全没有**（轮间门只覆盖 prepareNextTurn） |
+| 溢出恢复 | 压完就完 | **R0/R2 没有**：error/length 尾不摘、不续跑 ⇒ pi 会自动重试一次的行为在 pi-java 是哑的 |
+| 事件面 | `AgentSessionEvent.CompactionStart/CompactionEnd`（含 reason/aborted/willRetry/errorMessage 全形状）**生产代码零发射者** | 又一处「无生产者」（与 RPC 转录同族）；两条固定失败文案无落点 |
+| 结果载荷 | `CompactionResult.estimatedTokensAfter` 恒 null（CompactionService:54） | pi 在两条自动路都填 ΣestimateTokens(新上下文) |
+| prompt 预检 | 无 | pi :1258-1263（aborted 响应在**下一次用户输入前**补查阈值） |
+
+#### 8.21.3 改动方案
+
+**pi-java-ai**（判据同层归位，pi 在 packages/ai）：
+- 新建 `com.pijava.ai.utils.ContextOverflow`：`isContextOverflow(AssistantMessage, Integer window)`
+  + `isRecoverableLength(AssistantMessage, long desiredMaxOutput)`。25+3 条正则**逐字移植**
+  （`Pattern.CASE_INSENSITIVE`；JS `?` 半角撇号与 U+2019 原样保留；`x?'` 型字符类不动）。
+  读消息对象 = 3a 字段的第一个消费者（errorMessage/usage 分解/stopReason）。
+  window 参数 `Integer`：null ≙ pi undefined ⇒ case2/3 短路（pi `if (contextWindow &&` 的
+  falsy 闸含 0 ⇒ **0 也短路**，判等用 `!= null && > 0`）。
+- **删除** `agent-core/context/OverflowDetector`（`OverflowDetectorTest` 改写为对 ContextOverflow 的判据测试）。
+
+**agent-core**（机制层，§4.2 同族裁决）：
+- `ContextUsageEstimator` 补 `estimateMessagesTokens(List<Message>)`（纯字符 Σ，供 estimatedTokensAfter）。
+- `HarnessConfig`/`ExecutionContext` 新增两槽：
+  ① `ToIntFunction<ModelId<?>> maxOutputTokens`（fallback `ignored -> 0`；pi `model?.maxTokens ?? 0`
+  同缺 ⇒ isRecoverableLength 恒 false，保守形状）；
+  ② `CompactionObserver observer`（onStart(reason, willRetry) / onEnd(reason, result|null,
+  aborted, willRetry, errorMessage)，agent-core 内建 record `CompactionEvents`；默认无操作。
+  **裁决取新槽不取 HookSystem**：钩子是用户可Cancel/替换的扩展面，事件发射是内部接线，
+  且 HookSystem 按车道注册、这里要的是无条件旁路。）
+- `LaneState` 加 `boolean overflowRecoveryAttempted`（pi 会话级字段，非运行级）；
+  复位两点对齐 pi 事件位：`PiLaneSink` 的 user message_start、assistant message_end（stop∉{error,length}）。
+- 新类 `harness/PostRunCompactionCheck`（package 私有）= `_checkCompaction` 逐条移植：
+  G0→G1(skipAborted 参数)→G2/G3(经 3b resolver)→G4(分支尾扫 compaction entry，
+  `Instant` 比较，消息 timestamp null ⇒ **不跳** ≙ JS `undefined <= n` 为 false)→
+  C1/C2→R0/R1/R2→T1/T2。**阈值路复用 3b 的 contextTokens/checkThreshold 已确立形状，
+  不另造第二份估算。**R1 固定文案两串入常量。R2 摘尾 = `lane.messages.removeLast()`
+  （日志不动，对齐 :2219-2221）。
+- `CompactionExecutor.applyCompaction` 接 observer 两发射点 + 重建后**再摘尾**
+  （willRetry 且新上下文尾 assistant stop∈{error,length}，:2410-2419）+
+  填 `estimatedTokensAfter`；reason 枚举化 manual/threshold/overflow。
+- `PiLaneEngine.drive`：`checkOverflowAfterRun` 换成 `do { run } while (postRun.check(msg, true))`
+  —— 续跑走与 continueRun 相同的 `PiLoop.continueRun` 通道（每次重挂 runId、重开 sink 形状）。
+- `prompt` 起点（仅带 prompt 的驱动，continueRun 不做）：先 `_findLastAssistantMessage` 同形扫描，
+  跑 `check(lastAssistant, /*skipAborted=*/false)`，**忽略返回值**（pi 注释 :1259：
+  用户消息紧接着自己会发，不在这里 continue）。
+
+**coding-agent**（宿主接线）：
+- `AgentSession.assemble`：`.maxOutputTokens(models::maxOutputTokens)`（DefaultModelResolver 补一个
+  目录读法，3b 同法）；`.observer(e -> owner::emitSessionEvent 映射)` 把 CompactionStart/End
+  接进既有事件面（**JsonEventMapper 已会映射，零生产变有生产**）。
+- `SessionRunner.isRetryableError`：溢出排除改走共享判据（对最后一条 assistant 消息调
+  ContextOverflow.isContextOverflow），撤 `CONTEXT_OVERFLOW_MARKERS` 子串表。
+  ⚠️ **只对齐「溢出⇒不重试」的交接，白名单问题不在本包**（见 8.21.5-3d）。
+
+**L5 预期**：conformance 无 compactionSettings ⇒ G0 最先短路；ScriptedStreams 无
+overflow 停因 ⇒ 预期 **12/12 不动**（跑 strict 复证）。
+
+**测试计划**：① ai 判据表驱动（25 条 OVERFLOW 各 1 命中样本、3 条 NON_OVERFLOW 压制、
+case2 stop 闸+input+cacheRead 口径、case3 0.99 边界、window null/0 短路、
+isRecoverableLength 三条件）；② PostRunCompactionCheck 逐守卫哨兵（G1 双向、G3 只闸溢出、
+G4 全局 + null-timestamp、R0 成功 length 只压不续、R1 双固定文案、R2 双摘尾、
+T1 锚点过期分支）；③ drive 续跑端到端（脚本：overflow 错误 turn ⇒ 压 ⇒ 第二请求 ⇒ 成功，
+断言请求数=2、日志含 compaction、observer 收到 start/end 各 2、闩不复位则二次红）；
+④ prompt 预检（aborted 尾 + 下一次 prompt 前压）；⑤ estimatedTokensAfter 填值；
+⑥ 反向实验 5 组（摘 G4/摘 R1 文案路/摘续跑/摘预检/判据退回旧 Detector ⇒ 各自恰红）。
+
+#### 8.21.4 需要审核的裁决点
+
+1. **续跑回路住在 agent-core `drive()` 内环**（pi 在宿主外环）——沿用 §4.2「机制进核、
+   数据经 resolver 注入」的既有裁决；交错顺序已被 `_isRetryableError` 的溢出排除守住，
+   两条路对同一消息互斥。
+2. **判据归位 pi-java-ai**，删 agent-core 的 OverflowDetector（含其 javadoc 不实声明一并消灭）。
+3. **事件走新 `CompactionObserver` 槽**，不走 HookSystem（理由如上）。
+4. **maxOutputTokens 缺席 ⇒ 0 ⇒ recoverableLength 恒 false**：宁可不恢复，不误恢复。
+5. **消息 timestamp 为 null 时 G4/锚点过期检查不跳**（JS `undefined <= n === false` 的忠实形状）。
+
+#### 8.21.5 取证新发现（登记，不入 3c）
+
+- **3d 自动重试判据白/黑名单反转**：pi `isRetryableAssistantError`（retry.ts:235-240）
+  = `stopReason==="error"` ∧ errorMessage 命中 **RETRYABLE_PROVIDER_ERROR_PATTERN 白名单**
+  （overloaded/rate limit/429/5xx/…retry.ts:26-45）**且**不命中
+  NON_RETRYABLE_PROVIDER_LIMIT 配额类（:7-24）才可重试；pi-java
+  `SessionRunner.isRetryableError(String)`（:315-326）是**默认全可重试**的黑名单
+  （null⇒true！），且无 stopReason 判。差异会在「401/参数错等确定性错误」上烧重试预算。
+- **settings 按模型覆盖**：pi `getCompactionSettings(model)`（settings-manager.ts:891-901）
+  reserve/keepRecent 支持 per-model override；pi-java 的 settings supplier 无模型参数。
+- **compaction `details` 生产者**：pi-java `CompactionResult.details` 恒 null；pi 填
+  readFiles/modifiedFiles（摘要生成路产出）——并入既有的「/compact 命令面复查」清单项。
+- `_emitSessionCompactFailed`（扩展层事件）：扩展层在 docs/27 §4 排除面 ⇒ observer 只保证
+  会话事件 `compaction_end.errorMessage`，扩展事件不发 —— 列**待用户**。
+
 ---
 
 ## 9. 与既有文档的关系
