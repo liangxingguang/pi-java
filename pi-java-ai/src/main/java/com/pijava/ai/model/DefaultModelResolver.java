@@ -48,6 +48,25 @@ public final class DefaultModelResolver implements ModelResolver {
     }
 
     /**
+     * 某模型的<b>上下文窗口</b>（pi {@code Model.contextWindow}；目录侧字段是
+     * {@code ModelInfo.maxInputTokens}，其 javadoc 释义即 "maximum context
+     * window size in tokens"）。自动压缩的阈值门按<b>当前</b>模型查询此值
+     * （package 3b，docs/31 §8.20）—— 目录里没有这个模型（自定义 id）⇒ 返回
+     * 0，触发侧的 {@code contextWindow <= 0} 守卫会跳过自动压缩，与 pi 的
+     * 守卫语义一致。
+     */
+    public int contextWindow(ModelId<?> id) {
+        if (id == null) {
+            return 0;
+        }
+        return catalog.listModels().stream()
+            .filter(info -> id.equals(info.id()))
+            .map(com.pijava.ai.catalog.ModelInfo::maxInputTokens)
+            .findFirst()
+            .orElse(0);
+    }
+
+    /**
      * Resolve a CLI model pattern to a concrete model.
      *
      * <p>Phase 3: supports {@code "provider/model"}, bare {@code "model"}, and
