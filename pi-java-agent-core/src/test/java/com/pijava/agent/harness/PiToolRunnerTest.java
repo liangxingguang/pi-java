@@ -1,7 +1,9 @@
 package com.pijava.agent.harness;
 
+import java.util.List;
 import java.util.Map;
 
+import com.pijava.agent.hook.AfterToolPatch;
 import com.pijava.agent.hook.BeforeToolResult;
 import com.pijava.agent.hook.HookSystem;
 import com.pijava.agent.tool.AgentTool;
@@ -13,6 +15,7 @@ import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.agent.tool.ToolResult;
 import com.pijava.agent.tool.ToolUpdateCallback;
 import com.pijava.ai.AbortSignal;
+import com.pijava.ai.message.ContentBlock;
 
 import org.junit.jupiter.api.Test;
 
@@ -61,6 +64,23 @@ class PiToolRunnerTest {
             @Override public ToolResult<Void> execute(String id, String params, AbortSignal signal,
                     ToolUpdateCallback<Void> onUpdate, ToolContext ctx) {
                 throw new IllegalStateException("tool exploded");
+            }
+        };
+    }
+
+    /** 一个总是成功、且带 terminate 提示的工具（pi 的批次停止通道）。 */
+    private static AgentTool<String, Void> terminateTool(String name) {
+        return new AgentTool<>() {
+            @Override public String name() { return name; }
+            @Override public String label() { return name; }
+            @Override public String description() { return "terminating tool"; }
+            @Override public Map<String, Object> inputSchema() { return Map.of(); }
+            @Override public ExecutionMode executionMode() { return new ExecutionMode.Sequential(); }
+            @Override public String prepareArguments(Map<String, Object> raw) { return "prepared"; }
+            @Override public ToolResult<Void> execute(String id, String params, AbortSignal signal,
+                    ToolUpdateCallback<Void> onUpdate, ToolContext ctx) {
+                return new ToolResult<>(
+                    List.of(new ContentBlock.TextContent("done")), null, null, true, List.of());
             }
         };
     }
@@ -169,5 +189,87 @@ class PiToolRunnerTest {
         assertThat(ticket).isInstanceOf(PiLoop.Prepared.class);
         assertThat(((PiLoop.Prepared) ticket).call().toolName()).isEqualTo("echo");
         assertThat(noHooks.execute((PiLoop.Prepared) ticket).isError()).isFalse();
+    }
+
+    // ═══ after_tool：pi 的 finalizeExecutedToolCall（agent-loop.ts:720-764）形状 ═══
+
+    @Test
+    void afterToolPatchMergesFieldByFieldAndKeepsTerminate() {
+        // pi 的合并是**逐字段 ??**（:745-751）：钩子只改 content，terminate=true 必须活着。
+        // 旧的 Java 形状是整体替换 ToolResult —— 改内容会静默吞掉 terminate。
+        var hooks = new HookSystem(new LaneState());
+        hooks.onAfterTool("default", ctx -> new AfterToolPatch(
+            List.of(new ContentBlock.TextContent("redacted")), null, null, null, null));
+        var runner = new PiToolRunner("default", registryWith(terminateTool("echo")),
+            hooks, CTX, null, null);
+
+        var outcome = runBoth(runner, call("echo"));
+
+        assertThat(outcome.message().content().toString()).contains("redacted");
+        assertThat(outcome.terminate()).as("补丁没碰 terminate ⇒ 保留").isTrue();
+        assertThat(outcome.isError()).isFalse();
+    }
+
+    @Test
+    void afterToolPatchCanFlipIsError() {
+        // pi :752：isError = afterResult.isError ?? isError —— 钩子可把成功结果标成错误。
+        var hooks = new HookSystem(new LaneState());
+        hooks.onAfterTool("default", ctx -> new AfterToolPatch(null, null, null, null, true));
+        var runner = new PiToolRunner("default", registryWith(okTool("echo", "hi")),
+            hooks, CTX, null, null);
+
+        assertThat(runBoth(runner, call("echo")).isError()).isTrue();
+    }
+
+    @Test
+    void afterToolHookRunsOnFailedExecutionAndSeesIsError() {
+        // pi：工具异常在执行段就转成了错误结果（:708-714），收尾段的钩子**照样跑**在它上面
+        // —— 钩子能看到 isError=true，还能改写错误文本。旧 Java 实现的 catch 把钩子整个跳过。
+        var seen = new java.util.concurrent.atomic.AtomicBoolean();
+        var hooks = new HookSystem(new LaneState());
+        hooks.onAfterTool("default", ctx -> {
+            seen.set(ctx.isError());
+            return new AfterToolPatch(
+                List.of(new ContentBlock.TextContent("masked")), null, null, null, null);
+        });
+        var runner = new PiToolRunner("default", registryWith(throwingTool("boom")),
+            hooks, CTX, null, null);
+
+        var outcome = runBoth(runner, call("boom"));
+
+        assertThat(seen.get()).as("钩子看到的是执行相的错误结果").isTrue();
+        assertThat(outcome.message().content().toString()).contains("masked");
+        assertThat(outcome.isError()).as("补丁没翻 isError ⇒ 维持错误").isTrue();
+    }
+
+    @Test
+    void throwingAfterToolBecomesErrorResult() {
+        // pi :754-757：钩子自己抛 ⇒ 收尾段转错误结果（内容换异常文本），异常不出端口。
+        var hooks = new HookSystem(new LaneState());
+        hooks.onAfterTool("default", ctx -> { throw new RuntimeException("after boom"); });
+        var runner = new PiToolRunner("default", registryWith(okTool("echo", "hi")),
+            hooks, CTX, null, null);
+
+        var outcome = runBoth(runner, call("echo"));
+
+        assertThat(outcome.isError()).isTrue();
+        assertThat(outcome.message().content().toString()).contains("after boom");
+    }
+
+    @Test
+    void throwingBeforeToolBecomesImmediateErrorResult() {
+        // pi prepareToolCall 的 catch（:668-673）：before_tool 抛异常 ⇒ immediate 错误结果，
+        // **不是**「吞掉当放行」。异常由 HookSystem 记账后重抛，转换点在 prepare 的 catch。
+        var hooks = new HookSystem(new LaneState());
+        hooks.onBeforeTool("default", ctx -> { throw new RuntimeException("before boom"); });
+        var runner = new PiToolRunner("default", registryWith(okTool("echo", "hi")),
+            hooks, CTX, null, null);
+
+        var preparation = runner.prepare(call("echo"));
+
+        assertThat(preparation).isInstanceOf(PiLoop.ImmediateOutcome.class);
+        var outcome = ((PiLoop.ImmediateOutcome) preparation).outcome();
+        assertThat(outcome.isError()).isTrue();
+        assertThat(outcome.message().content().toString()).contains("before boom");
     }
 }

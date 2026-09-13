@@ -16,7 +16,11 @@ import com.pijava.agent.tool.ToolResult;
  *
  * <p>Hooks are stored per-lane and per-hook-name, allowing independent
  * hook chains for each lane. Hook execution errors are recorded as
- * {@link LaneRecord.HookError} and never propagate — hooks are non-fatal.</p>
+ * {@link LaneRecord.HookError} and never propagate — hooks are non-fatal.
+ * <b>两个工具钩子除外</b>：pi 把 {@code beforeToolCall} 的异常转成 immediate 错误结果
+ * （{@code agent-loop.ts:668-673}）、{@code afterToolCall} 的异常转成错误结果
+ * （{@code :754-757}）——所以这两个先记录、再**向上重抛**，由 {@code PiToolRunner}
+ * 的 catch 完成转换；其余钩子族维持「非致命」。</p>
  *
  * <p>车道名仍是登记键（一个 harness 只有一条车道，{@code docs/31 §4.3}）——
  * 扩展注册时给出会话的车道名，触发时按同一名字取回。</p>
@@ -159,28 +163,55 @@ public final class HookSystem {
                 if (r != null && !r.allowed()) return r;
                 if (r != null && r.arguments() != null) result = r;
             } catch (Exception e) {
+                // pi 的 prepareToolCall 把钩子异常 catch 成 immediate 错误结果
+                // （agent-loop.ts:668-673）—— 这里记账后向上重抛，转换点在 PiToolRunner.prepare。
                 recordHookError(laneName, "before_tool", e);
+                throw e;
             }
         }
         return result;
     }
 
     /**
-     * Fire {@code after_tool} hooks, chaining result modifications.
-     * @return the final (possibly modified) tool result
+     * Fire {@code after_tool} hooks, merging each patch **field-by-field** into the
+     * result — pi's {@code finalizeExecutedToolCall}（{@code agent-loop.ts:744-752}）:
+     * 未设的字段保留原值，{@code isError} 由补丁翻转（初值取执行相的判定 —— pi 的
+     * {@code finalizeExecutedToolCall} 直接继承 {@code executed.isError}，{@code :729}）。
+     * 钩子异常先记账再**向上重抛**（pi 的转换点 {@code :754-757}，在 Java 侧对应
+     * {@code PiToolRunner.execute} 的 catch → 错误结果）。
+     *
+     * @return the merged result plus the error flag, as pi's finalized outcome
      */
-    public ToolResult<?> fireAfterTool(String laneName, ToolResultContext ctx) {
-        ToolResult<?> result = ctx.result();
+    public AfterToolOutcome fireAfterTool(String laneName, ToolResultContext ctx) {
+        var result = ctx.result();
+        var isError = ctx.isError();
         for (var hook : registry.get(laneName, "after_tool")) {
             try {
-                var r = ((AfterToolHook) hook).afterTool(
-                    new ToolResultContext(ctx.lane(), ctx.toolCallId(), ctx.toolName(), result));
-                if (r != null) result = r;
+                var patch = ((AfterToolHook) hook).afterTool(
+                    new ToolResultContext(ctx.lane(), ctx.toolCallId(), ctx.toolName(),
+                        result, isError));
+                if (patch != null) {
+                    result = applyAfterToolPatch(result, patch);
+                    if (patch.isError() != null) {
+                        isError = patch.isError();
+                    }
+                }
             } catch (Exception e) {
                 recordHookError(laneName, "after_tool", e);
+                throw e;
             }
         }
-        return result;
+        return new AfterToolOutcome(result, isError);
+    }
+
+    /** pi 的 {@code ??} 合并：补丁字段为 null = 保留原值（pi 的 null/undefined 同样落右操作数，清不成 null）。 */
+    private static ToolResult<Object> applyAfterToolPatch(ToolResult<?> cur, AfterToolPatch p) {
+        return new ToolResult<>(
+            p.content() != null ? p.content() : cur.content(),
+            p.details() != null ? p.details() : cur.details(),
+            p.usage() != null ? p.usage() : cur.usage(),
+            p.terminate() != null ? p.terminate() : cur.terminate(),
+            cur.addedToolNames());
     }
 
     /**

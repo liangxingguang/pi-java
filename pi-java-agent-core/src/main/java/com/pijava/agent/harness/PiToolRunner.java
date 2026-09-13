@@ -3,6 +3,7 @@ package com.pijava.agent.harness;
 import java.util.List;
 import java.util.Map;
 
+import com.pijava.agent.hook.AfterToolOutcome;
 import com.pijava.agent.hook.BeforeToolResult;
 import com.pijava.agent.hook.HookSystem;
 import com.pijava.agent.hook.ToolCallContext;
@@ -123,19 +124,37 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
         return new PreparedCall(call, args);
     }
 
-    /** pi 的 {@code executePreparedToolCall} + {@code finalizeExecutedToolCall}。 */
+    /**
+     * pi 的 {@code executePreparedToolCall} + {@code finalizeExecutedToolCall}。
+     *
+     * <p><b>两段各有自己的 catch</b>（与 pi 一致，{@code :685-714} / {@code :731-757}）：
+     * 工具抛的异常先在执行段转成错误结果并带着 {@code isError=true} 进入收尾段 ——
+     * <b>{@code after_tool} 钩子对失败的执行同样会跑</b>（钩子能改写错误文本、也能把
+     * {@code isError} 翻回去）；只有收尾段自己抛的异常才在这里转错误结果。</p>
+     */
     @Override
     public PiLoop.ToolOutcome execute(PiLoop.Prepared prepared) {
         if (!(prepared instanceof PreparedCall state)) {
             throw new IllegalArgumentException("执行票不是本 runner 签发的：" + prepared);
         }
         var call = state.call();
+        ToolResult<?> executed;
+        boolean isError;
         try {
-            var result = registry.execute(call.toolName(), call.toolCallId(), state.args(),
+            executed = registry.execute(call.toolName(), call.toolCallId(), state.args(),
                 signal, null, toolContext);
-            var finalized = hooks == null ? result : hooks.fireAfterTool(laneName,
-                new ToolResultContext(laneName, call.toolCallId(), call.toolName(), result));
-            return toOutcome(call, finalized != null ? finalized : result, false);
+            isError = false;
+        } catch (Exception e) {
+            // pi :711-714：createErrorToolResult(error.message) —— 内容换掉、标记为错，继续收尾
+            executed = new ToolResult<>(
+                List.of(new ContentBlock.TextContent(messageOf(e))), null, null, false, List.of());
+            isError = true;
+        }
+        try {
+            var finalized = hooks == null ? new AfterToolOutcome(executed, isError)
+                : hooks.fireAfterTool(laneName, new ToolResultContext(
+                    laneName, call.toolCallId(), call.toolName(), executed, isError));
+            return toOutcome(call, finalized.result(), finalized.isError());
         } catch (Exception e) {
             return errorOutcome(call, messageOf(e), false);
         }
