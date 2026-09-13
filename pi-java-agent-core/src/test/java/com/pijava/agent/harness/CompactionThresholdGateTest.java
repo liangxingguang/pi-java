@@ -38,11 +38,11 @@ class CompactionThresholdGateTest {
                                         ModelId<?> model, ToIntFunction<ModelId<?>> window) {
         return new ExecutionContext(
             null, () -> model, null, null, null,
-            200_000, window,
+            200_000, window, null,
             null, null, null,
             new HookSystem(lane), lane, () -> settings, null,
             new ExecutionContext.TokenCounter(), null, null, null, null,
-            SummaryGenerator.truncating(), null, NoopTelemetryContext.INSTANCE);
+            SummaryGenerator.truncating(), null, NoopTelemetryContext.INSTANCE, null);
     }
 
     private static Entry messageEntry(String id, Message message) {

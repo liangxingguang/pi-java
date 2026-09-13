@@ -117,26 +117,26 @@ final class RunLifecycle {
     }
 
     /**
-     * 从 transcript 尾部续跑（pi {@code runAgentLoopContinue}）：不写新的用户 entry，
-     * 直接进助手流。自动重试与「上一轮以错误收尾」的续跑都走这里。
+     * 续跑 pass 的起手（pi {@code Agent.continue} 的后半 + {@code runAgentLoopContinue}
+     * 的对应物）。3c 起守卫不在这里：pi 的判据（副本尾部的角色、steering/followUp
+     * 排空）住在 {@code agent.ts:362-388} 的前奏里，已随 package 3c 移交给
+     * {@link PiLaneEngine#continuePrompts}（{@code docs/31 §8.21}）—— 本方法只管装配。
+     *
+     * <p>prompt 模式（排空了队列的 continue ≙ pi 的
+     * {@code runPromptMessages(queued)}）与非 prompt 模式（pi 的
+     * {@code runContinuation()}）都从这里过：{@code prompts} 交给 {@code before_run}
+     * 与 {@code OperationStarted}，条目本身由 PiLoop 的 message 事件经 sink 落盘
+     * （{@code runPromptMessages} 在 pi 也是走事件把消息写进日志的）。</p>
      */
-    ActiveRun startContinue(String laneName) {
+    ActiveRun startContinue(String laneName, List<Message> prompts) {
         var lane = requireIdleLane(laneName);
-        if (lane.transcript.isEmpty()) {
-            throw new IllegalStateException("Cannot continue: no messages in context");
-        }
-        var last = lane.lastEntry();
-        if (last instanceof Entry.Message m
-                && m.message() instanceof Message.AssistantMessage) {
-            throw new IllegalStateException("Cannot continue from message role: assistant");
-        }
         var run = begin(lane);
         lane.runSpan = runSpans.openRunSpan(laneName, lane, 0);
         ctx.hookSystem().fireBeforeRun(laneName,
-            new RunContext(laneName, lane.runId, List.of()));
+            new RunContext(laneName, lane.runId, prompts));
         lane.records.add(new LaneRecord.OperationStarted(
             lane.runId, 0, laneName, null, null,
-            new LaneRecord.OperationStarted.Run(List.of(), List.of(), null, null)));
+            new LaneRecord.OperationStarted.Run(prompts, List.of(), null, null)));
         ctx.incrementTurn();
         ctx.publishState(laneName);
         return run;

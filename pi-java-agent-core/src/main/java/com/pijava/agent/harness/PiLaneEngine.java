@@ -44,12 +44,14 @@ public final class PiLaneEngine {
     private final RunLifecycle lifecycle;
     private final ContextAssembler assembler;
     private final CompactionExecutor compactions;
+    private final PostRunCompactionCheck postRun;
 
     PiLaneEngine(ExecutionContext ctx, RunLifecycle lifecycle) {
         this.ctx = ctx;
         this.lifecycle = lifecycle;
         this.assembler = new ContextAssembler(ctx);
         this.compactions = new CompactionExecutor(ctx);
+        this.postRun = new PostRunCompactionCheck(ctx, compactions);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -59,12 +61,22 @@ public final class PiLaneEngine {
     /**
      * 一次运行的结果。
      *
-     * @param runId      本次运行的 id（= {@code OperationStarted} 的 id）。**必须在收口前取回**：
+     * @param runId      首个 pass 的 run id（= {@code OperationStarted} 的 id）。**必须在收口前取回**：
      *                   收口会关掉操作，之后 {@code snapshot().operation()} 为 null，
      *                   而 run summary 要靠它把记录过滤到本次驱动。
+     * @param passRunIds 本次驱动实际跑过的全部 pass 的 run id（首元素 = {@code runId}）。
+     *                   3c 起 post-run 压缩可以续跑（pi {@code _runAgentPrompt} 的
+     *                   {@code while(await _handlePostAgentRun()) await agent.continue()}），
+     *                   一次驱动不再恰好等于一次运行；记录按 id 集合过滤即覆盖全部 pass。
      * @param transcript 运行结束时的车道 transcript 快照
      */
-    public record RunOutcome(String runId, List<Entry> transcript) {}
+    public record RunOutcome(String runId, List<String> passRunIds, List<Entry> transcript) {
+
+        /** 单 pass 的旧形状（3c 之前的全部调用点）。 */
+        public RunOutcome(String runId, List<Entry> transcript) {
+            this(runId, List.of(runId), transcript);
+        }
+    }
 
     /**
      * 用一个新 prompt 驱动一次运行（pi {@code runAgentLoop}）。
@@ -81,6 +93,12 @@ public final class PiLaneEngine {
         // 「新起一次运行」的计数点 —— 全仓唯一，两个入口（prompt / continueRun）里只有
         // 前者计数。旧路径由 AgentHarness.run 记，与新驱动分工一致。
         ctx.telemetry().incrementCounter("harness.turn", 1);
+        // pi prompt() 起手前的同一压缩判定（agent-session.ts:1258-1263，3c）：扫副本找
+        // 最后的助手消息（**含 aborted** ⇒ skipAbortedCheck=false，注释原文「catches
+        // aborted responses」）。返回值忽略 —— 用户的新 prompt 马上就要发，不在这里
+        // continue；压缩本身照跑。位置在 startRun 之前：pi 判定时用户 entry 尚未进
+        // state.messages。
+        postRun.checkBeforePrompt(laneName, lane);
         var run = lifecycle.startRun(laneName, prompt, images == null ? List.of() : images);
         // 起手已把用户 entry 写进 transcript；取回**同一个对象**作为 PiLoop 的 prompt，
         // 这样 PiLaneSink 才能按引用抑制重复写入（PiLoop 会为 prompt 发 message_start/end）。
@@ -98,8 +116,38 @@ public final class PiLaneEngine {
      */
     public RunOutcome continueRun(String laneName, PiLoop.Sink downstream) {
         var lane = ctx.requireLane(laneName);
-        var run = lifecycle.startContinue(laneName);
-        return drive(laneName, run, List.of(), downstream);
+        var prompts = continuePrompts(laneName, lane);
+        var run = lifecycle.startContinue(laneName, prompts);
+        return drive(laneName, run, prompts, downstream);
+    }
+
+    /**
+     * pi {@code Agent.continue} 的前奏（{@code agent.ts:362-388}）：判据看的是
+     * **工作副本尾部**（≙ {@code _state.messages}，不是日志 —— 日志可以停在一条
+     * 已被副本摘掉的助手消息上，R2 删尾正是这种形状）。尾部是助手消息时：
+     * 排空 steering ⇒ 以其消息起 prompt 模式的 pass（pi 的
+     * {@code runPromptMessages(queued, {skipInitialSteeringPoll: true})} ——
+     * 「drain 即摘除」让 skip 在 pi-java 天然成立）；steering 空 ⇒ 排空
+     * followUp（pi 无 skip）；都空 ⇒ 抛。尾部非助手 ⇒ 空 prompt，
+     * pi 的 {@code runContinuation()}。
+     */
+    List<Message> continuePrompts(String laneName, LaneState lane) {
+        var messages = lane.messages;
+        if (messages.isEmpty()) {
+            throw new IllegalStateException("Cannot continue: no messages in context");
+        }
+        if (!(messages.get(messages.size() - 1) instanceof Message.AssistantMessage)) {
+            return List.of();
+        }
+        var steer = drainSteer(laneName);
+        if (!steer.isEmpty()) {
+            return steer;
+        }
+        var followUps = drainFollowUp(laneName);
+        if (!followUps.isEmpty()) {
+            return followUps;
+        }
+        throw new IllegalStateException("Cannot continue from message role: assistant");
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -110,34 +158,33 @@ public final class PiLaneEngine {
                              PiLoop.Sink downstream) {
         var lane = ctx.requireLane(laneName);
         var runId = lane.runId;
+        var passRunIds = new ArrayList<String>();
+        passRunIds.add(runId);
         boolean settled = false;
         try {
-            // 起手时已在转录里的消息：PiLoop 会为它们重发 message_start/end 的，一律不再落盘。
-            Set<Message> present = Collections.newSetFromMap(new IdentityHashMap<>());
-            present.addAll(transcriptMessages(lane));
-            var sink = new PiLaneSink(ctx, laneName, present, downstream);
-
-            var config = configFor(laneName, lane, sink);
-            // 系统提示与工具在 run 起点装进 Context（pi 的 AgentContext）：
-            // transformContext 只改消息，够不着这两样（pi 的钩子签名是 (messages) => messages）。
-            var systemPrompt = assembler.buildSystemPrompt(lane);
-            sink.systemPrompt(systemPrompt);
-            // 工作副本的一份**拷贝**：pi 的 createContextSnapshot() 交的就是
-            // this._state.messages.slice()（agent.ts:437-443），循环往这份拷贝里推消息，
-            // 车道的副本由 PiLaneSink 在 message_end 上跟进 —— 与 pi 的 processEvents 同形。
-            var runContext = new Context(systemPrompt, new ArrayList<>(lane.messages), activeTools(lane));
-            if (prompts.isEmpty()) {
-                PiLoop.continueRun(runContext, config, sink);
-            } else {
-                PiLoop.run(prompts, runContext, config, sink);
+            var passPrompts = prompts;
+            // pi _runAgentPrompt:1109-1113 —— `while (await _handlePostAgentRun())
+            // await agent.continue()`。post-run 检查（重试①在 3d、压缩②、队列③）说
+            // 「还要跑」⇒ 收掉本 pass 的操作、再起一个 continue pass。Java 方言里每次
+            // continue 是完整的一起一收（finishRun + startContinue，各带 runId），
+            // pi 的 agent.continue() 不换 session 运行身份 —— 差异由 passRunIds 记账。
+            while (true) {
+                var sink = runPass(laneName, lane, passPrompts, downstream);
+                if (!postRun.checkAfterRun(laneName, lane, sink.lastAssistant())) {
+                    break;
+                }
+                // pi 的 agent.continue() 在续跑前判「副本尾部 + 队列」（agent.ts:362-388），
+                // 判崩了（助手尾且队列双空）异常要落在**上一个 pass 的开口之内** ——
+                // finally 收一次即可；先 finishRun 再判会双收口（旧代码的隐患）。
+                var nextPrompts = continuePrompts(laneName, lane);
+                lifecycle.finishRun(laneName, HarnessUtils.determineOutcome(lane));
+                lifecycle.startContinue(laneName, nextPrompts);
+                passRunIds.add(lane.runId);
+                passPrompts = nextPrompts;
             }
-
-            // pi: 溢出检查在 agent_end **之后**（_handlePostAgentRun:1142 → _checkCompaction:2132），
-            // 不在轮内。压缩改的是日志，工作副本随之重建，供下一次运行使用。
-            sink.checkOverflowAfterRun(lane);
             lifecycle.finishRun(laneName, HarnessUtils.determineOutcome(lane));
             settled = true;
-            return new RunOutcome(runId, List.copyOf(lane.transcript));
+            return new RunOutcome(runId, List.copyOf(passRunIds), List.copyOf(lane.transcript));
         } finally {
             // 驱动**抛出**时同样要收口：否则 activeRun 永远挂着，车道再也起不了新运行，
             // waitForIdle 也会永远等下去。异常路径按 error 结算，原异常照常向上抛。
@@ -146,6 +193,35 @@ public final class PiLaneEngine {
             }
             run.done().complete(null);
         }
+    }
+
+    /**
+     * 一个 pass = 一次 PiLoop 驱动（pi 的 {@code agent.prompt()} 或
+     * {@code agent.continue()} 的一跑）。sink 每 pass 新建 ⇒ pi 的
+     * {@code _lastAssistantMessage}「读后即清」在这里由 sink 的生命周期天然承担。
+     */
+    private PiLaneSink runPass(String laneName, LaneState lane, List<Message> prompts,
+                               PiLoop.Sink downstream) {
+        // 起手时已在转录里的消息：PiLoop 会为它们重发 message_start/end 的，一律不再落盘。
+        Set<Message> present = Collections.newSetFromMap(new IdentityHashMap<>());
+        present.addAll(transcriptMessages(lane));
+        var sink = new PiLaneSink(ctx, laneName, present, downstream);
+
+        var config = configFor(laneName, lane, sink);
+        // 系统提示与工具在 run 起点装进 Context（pi 的 AgentContext）：
+        // transformContext 只改消息，够不着这两样（pi 的钩子签名是 (messages) => messages）。
+        var systemPrompt = assembler.buildSystemPrompt(lane);
+        sink.systemPrompt(systemPrompt);
+        // 工作副本的一份**拷贝**：pi 的 createContextSnapshot() 交的就是
+        // this._state.messages.slice()（agent.ts:437-443），循环往这份拷贝里推消息，
+        // 车道的副本由 PiLaneSink 在 message_end 上跟进 —— 与 pi 的 processEvents 同形。
+        var runContext = new Context(systemPrompt, new ArrayList<>(lane.messages), activeTools(lane));
+        if (prompts.isEmpty()) {
+            PiLoop.continueRun(runContext, config, sink);
+        } else {
+            PiLoop.run(prompts, runContext, config, sink);
+        }
+        return sink;
     }
 
     // ═══════════════════════════════════════════════════════════

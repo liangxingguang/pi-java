@@ -104,7 +104,13 @@ class HookTest {
     }
 
     @Test
-    void shouldStopAfterTurnTruePreventsNextTurn() {
+    void shouldStopAfterTurnEndsRunButPostRunContinueDrainsFollowUp() {
+        // pi 真值（3c，docs/31 §8.21）：shouldStopAfterTurn 让内层循环在 followUp
+        // 排空**之前**就 agent_end 返回（agent-loop.ts:252-255，:261 的排空被跳过）⇒
+        // 运行内确实只烧了一次请求、队列确实没被运行内排空。但 _handlePostAgentRun
+        // ③ 看到队列有货（agent-session.ts:1143）⇒ agent.continue()：副本以助手消息
+        // 收尾 + followUp 有货 ⇒ 排空并按 runPromptMessages 再跑一个 pass
+        // （agent.ts:372-381）。于是整场 prompt() 共 2 次请求，队列被排空。
         var h = harness();
         var calls = new int[] {0};
         StreamFn counting = (model, context, options) -> {
@@ -115,12 +121,12 @@ class HookTest {
         var hookHarness = com.pijava.agent.harness.AgentHarness.create(cfg);
         hookHarness.hookSystem().onShouldStopAfterTurn("default", ctx -> Boolean.TRUE);
         hookHarness.followUp("default", "second");
-        hookHarness.prompt("go");
-        // hook returned TRUE → run finished in ONE stream call
-        assertThat(calls[0]).isEqualTo(1);
-        // and the follow-up queued before the run was NOT drained by it
+        var outcome = hookHarness.prompt("go");
+        // 运行内不排空（第一次请求不带 "second"），post-run continue 排空（第二次带）。
+        assertThat(calls[0]).isEqualTo(2);
         assertThat(hookHarness.snapshot("default")
-            .queues().followUp()).hasSize(1);
+            .queues().followUp()).isEmpty();
+        assertThat(outcome.passRunIds()).hasSize(2);
     }
 
     @Test

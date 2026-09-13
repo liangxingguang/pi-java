@@ -1,5 +1,6 @@
 package com.pijava.agent.harness;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -97,9 +98,14 @@ class LaneMessagesTest {
 
     /** 一段「报了巨量用量」的响应：溢出检测读的就是这个帧。 */
     private static List<StreamEvent> overflowingTurn(String text) {
+        // 3c 的判据读的是**终局助手消息**（pi 的 assistantMessage.usage/.provider/.model）
+        // —— 剧本世界没有 AbstractChatApi 的出口盖章，夹具必须自己把 usage 挂上
+        // done、并盖当前模型的身份戳，否则 sameModel/C1 与用量直读都看不见这条溢出。
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent(text)))
-            .withStopReason("stop");
+            .withStopReason("stop")
+            .withUsage(new StreamEvent.UsageInfo(500_000, 10, null))
+            .withIdentity("faux-api", "faux", "test-model", Instant.now());
         return List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.TextEnd(0, text, done),
@@ -283,9 +289,16 @@ class LaneMessagesTest {
         assertThat(marker.tokensBefore()).isBetween(500, 520);
     }
 
-    /** pi 守卫 {@code model.contextWindow <= 0}：窗口缺席（自定义模型）⇒ 完全不压。 */
+    /**
+     * 窗口 ≤ 0（自定义模型不在目录）时 pi 的两道门**不对称**（3c，docs/31 §8.21）：
+     * 轮内门 {@code _compactBeforeNextAssistantResponse}（agent-session.ts:543）有
+     * {@code contextWindow <= 0} 守卫 ⇒ 静默；{@code _checkCompaction} 的 T 路
+     * （:2230-2256）没有这道守卫，且 {@code shouldCompact = tokens > window - reserve}
+     * ⇒ 0 窗口下阈值线是 -10，任何正读数都过线。于是运行收口照样压一条 ——
+     * 旧钉「完全不压」是拿轮内门的守卫脑补了 T 路，撤下。
+     */
     @Test
-    void nonPositiveWindowFromResolverSkipsAutoCompaction() {
+    void nonPositiveWindowSkipsInTurnGateButPostRunThresholdFires() {
         var registry = new ToolRegistry(null);
         registry.register(echoTool());
         var h = harnessWithWindow(
@@ -294,8 +307,12 @@ class LaneMessagesTest {
 
         h.prompt("go");
 
+        // 轮内门静默 ⇒ 第二次请求不带摘要。
         assertThat(requests).hasSize(2);
-        assertThat(hasCompactionEntry(h)).isFalse();
+        assertThat(textsOf(requests.get(1)))
+            .noneMatch(t -> t.contains("compacted into the following summary"));
+        // T 路无窗守卫 ⇒ 收口阈值压缩照发（估算锚点 500 > -10）。
+        assertThat(hasCompactionEntry(h)).isTrue();
     }
 
     /**

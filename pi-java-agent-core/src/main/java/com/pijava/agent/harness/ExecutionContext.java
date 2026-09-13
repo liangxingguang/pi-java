@@ -38,6 +38,7 @@ record ExecutionContext(
     Supplier<Set<AgentTool<?, ?>>> activeTools,
     int maxInputTokens,
     java.util.function.ToIntFunction<ModelId<?>> contextWindow,
+    java.util.function.ToIntFunction<ModelId<?>> maxOutputTokens,
     ToolRegistry toolRegistry,
     ToolContext toolContext,
     SkillManager skillManager,
@@ -52,8 +53,20 @@ record ExecutionContext(
     Supplier<Consumer<StreamEvent>> streamListener,
     SummaryGenerator summaryGenerator,
     java.util.function.BiConsumer<ModelId<?>, String> turnConfigApplier,
-    TelemetryContext telemetry
+    TelemetryContext telemetry,
+    com.pijava.agent.compaction.CompactionObserver compactionObserver
 ) {
+    ExecutionContext {
+        // 与 HarnessConfig 的规范默认同置：直接构造 ExecutionContext 的装配（测试、
+        // 未来的第二宿主）不许从这两个槽读到 null。
+        if (maxOutputTokens == null) {
+            maxOutputTokens = ignored -> 0;
+        }
+        if (compactionObserver == null) {
+            compactionObserver = com.pijava.agent.compaction.CompactionObserver.NOOP;
+        }
+    }
+
     LaneState requireLane(String laneName) {
         return HarnessUtils.requireLane(lane, laneName);
     }
@@ -65,6 +78,15 @@ record ExecutionContext(
      */
     int contextWindow(ModelId<?> model) {
         return contextWindow.applyAsInt(model);
+    }
+
+    /**
+     * pi {@code model.maxTokens} —— 溢出恢复的 {@code isRecoverableLength} 操作数
+     * （3c，{@code docs/31 §8.21}；{@code agent-session.ts:2184}）。按当前模型解析；
+     * 解析不到 ⇒ 0 ⇒ 判据恒 false（裁决④）。
+     */
+    int maxOutputTokens(ModelId<?> model) {
+        return maxOutputTokens.applyAsInt(model);
     }
 
     void addTokens(long tokens) {

@@ -100,6 +100,18 @@ public final class LaneState {
      */
     String recordedThinking;
 
+    /**
+     * 溢出恢复一次性闩锁（pi {@code _overflowRecoveryAttempted}，
+     * {@code agent-session.ts:2194-2218}；package 3c，{@code docs/31 §8.21}）。
+     *
+     * <p>溢出/截断的恢复预算是<b>一次</b>：第一次命中设闩并 compact-and-retry，
+     * 闩已立 ⇒ 宣告失败（固定文案的 compaction_end）不再压。重置点与 pi 一致、
+     * 都在**会话层事件**上：新用户消息的 {@code message_start}（pi :643）、
+     * 助手 {@code message_end} 且 stopReason ∉ {error, length}（pi :694-696）。
+     * 它是 pi 的 session 级字段（跨 run 存活），故住车道而非 ActiveRun。</p>
+     */
+    boolean overflowRecoveryAttempted;
+
     // ═══════════════════════════════════════════════════════════
     // 配置（pi AgentState 的字段：model / thinkingLevel / systemPrompt / tools）
     // ═══════════════════════════════════════════════════════════

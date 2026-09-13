@@ -69,7 +69,8 @@ public final class StreamSimple {
         }
 
         // 3. Build options and call
-        // Phase 2c: wrap iterator to run OverflowDetector.isOverflow() post-request
+        // 溢出判定不在请求路径上（pi 亦如此，3c/docs/31 §8.21）：它在运行收口后的
+        // PostRunCompactionCheck 里，读终局助手消息经 ai 层的 ContextOverflow 判定。
         var options = new StreamOptions(
                 java.util.OptionalInt.empty(),
                 java.util.OptionalDouble.empty(),

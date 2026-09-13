@@ -39,6 +39,11 @@ import com.pijava.telemetry.TelemetryContext;
  *                           （coding-agent：catalog 的 {@code maxInputTokens}
  *                           即上下文窗口）。返回 0/负值 ⇒ pi 的
  *                           {@code contextWindow <= 0} 守卫跳过自动压缩。
+ * @param maxOutputTokens    pi {@code Model.maxTokens} 的操作数来源（3c，
+ *                           {@code docs/31 §8.21}）：按<b>当前</b>模型查其输出上限，
+ *                           {@code isRecoverableLength} 的「钳制前意图上限」判据读它。
+ *                           默认 {@code ignored -> 0} —— 解析不到 ⇒ 0 ⇒ 判据恒
+ *                           false（裁决④：length 收尾不做 compact-and-retry）。
  * @param toolRegistry       tool registry for the harness
  * @param toolContext        execution environment for tools
  * @param commandPrefix      optional prefix for bash commands
@@ -53,6 +58,8 @@ import com.pijava.telemetry.TelemetryContext;
  * @param streamListener     receives every StreamEvent as the harness consumes
  *                           it (default: no-op; Phase 3 TUI/print streaming)
  * @param summaryGenerator   generates the compaction summary (default: truncating)
+ * @param compactionObserver pi {@code compaction_start}/{@code compaction_end} 会话
+ *                           事件的宿主观察口（3c）；默认 {@code NOOP}
  */
 public record HarnessConfig(
     StreamFn streamFn,
@@ -62,6 +69,7 @@ public record HarnessConfig(
     Set<AgentTool<?, ?>> activeTools,
     int maxInputTokens,
     java.util.function.ToIntFunction<ModelId<?>> contextWindow,
+    java.util.function.ToIntFunction<ModelId<?>> maxOutputTokens,
     ToolRegistry toolRegistry,
     ToolContext toolContext,
     String commandPrefix,
@@ -74,7 +82,8 @@ public record HarnessConfig(
     QueueMode followUpMode,
     ToolExecution toolExecution,
     Consumer<StreamEvent> streamListener,
-    SummaryGenerator summaryGenerator
+    SummaryGenerator summaryGenerator,
+    com.pijava.agent.compaction.CompactionObserver compactionObserver
 ) {
     /** Canonical constructor applying default values and defensive copies. */
     public HarnessConfig {
@@ -88,7 +97,9 @@ public record HarnessConfig(
         if (toolExecution == null) toolExecution = ToolExecution.defaultMode();
         if (streamListener == null) streamListener = event -> { };
         if (summaryGenerator == null) summaryGenerator = SummaryGenerator.truncating();
+        if (compactionObserver == null) compactionObserver = com.pijava.agent.compaction.CompactionObserver.NOOP;
         if (contextWindow == null) contextWindow = ignored -> maxInputTokens;
+        if (maxOutputTokens == null) maxOutputTokens = ignored -> 0;
     }
 
     /** Create a new configuration builder. */
@@ -107,9 +118,10 @@ public record HarnessConfig(
             QueueMode followUpMode, ToolExecution toolExecution,
             Consumer<StreamEvent> streamListener) {
         this(streamFn, model, thinkingLevel, systemPrompt, activeTools, maxInputTokens,
-             null, toolRegistry, toolContext, commandPrefix, compactionSettings,
+             null, null, toolRegistry, toolContext, commandPrefix, compactionSettings,
              skills, retryPolicy, telemetry, thinkingLevelMap, steeringMode,
-             followUpMode, toolExecution, streamListener, SummaryGenerator.truncating());
+             followUpMode, toolExecution, streamListener, SummaryGenerator.truncating(),
+             null);
     }
 
     public static final class Builder {
@@ -120,6 +132,7 @@ public record HarnessConfig(
         private Set<AgentTool<?, ?>> activeTools = Set.of();
         private int maxInputTokens = 200_000;
         private java.util.function.ToIntFunction<ModelId<?>> contextWindow;
+        private java.util.function.ToIntFunction<ModelId<?>> maxOutputTokens;
         private ToolRegistry toolRegistry;
         private ToolContext toolContext;
         private String commandPrefix;
@@ -133,6 +146,7 @@ public record HarnessConfig(
         private ToolExecution toolExecution = ToolExecution.defaultMode();
         private Consumer<StreamEvent> streamListener = event -> { };
         private SummaryGenerator summaryGenerator = SummaryGenerator.truncating();
+        private com.pijava.agent.compaction.CompactionObserver compactionObserver;
 
         public Builder streamFn(StreamFn fn) { this.streamFn = fn; return this; }
         public Builder model(ModelId<?> m) { this.model = m; return this; }
@@ -146,6 +160,10 @@ public record HarnessConfig(
         /** Set the per-model context-window resolver (3b; default: {@code id -> maxInputTokens}). */
         public Builder contextWindow(java.util.function.ToIntFunction<ModelId<?>> cw) {
             this.contextWindow = cw; return this;
+        }
+        /** Set the per-model max-output resolver (3c; default: {@code id -> 0}). */
+        public Builder maxOutputTokens(java.util.function.ToIntFunction<ModelId<?>> mo) {
+            this.maxOutputTokens = mo; return this;
         }
         public Builder toolRegistry(ToolRegistry tr) { this.toolRegistry = tr; return this; }
         public Builder toolContext(ToolContext tc) { this.toolContext = tc; return this; }
@@ -171,18 +189,23 @@ public record HarnessConfig(
             this.summaryGenerator = generator; return this;
         }
 
+        /** Set the compaction observer (3c; default: {@code NOOP}). */
+        public Builder compactionObserver(com.pijava.agent.compaction.CompactionObserver observer) {
+            this.compactionObserver = observer; return this;
+        }
+
         /** Build the {@link HarnessConfig}, validating required fields. */
         public HarnessConfig build() {
             if (streamFn == null) throw new IllegalStateException("streamFn is required");
             if (model == null) throw new IllegalStateException("model is required");
             return new HarnessConfig(streamFn, model, thinkingLevel,
                                      systemPrompt, activeTools, maxInputTokens,
-                                     contextWindow,
+                                     contextWindow, maxOutputTokens,
                                      toolRegistry, toolContext, commandPrefix,
                                      compactionSettings, skills,
                                      retryPolicy, telemetry, thinkingLevelMap,
                                      steeringMode, followUpMode, toolExecution,
-                                     streamListener, summaryGenerator);
+                                     streamListener, summaryGenerator, compactionObserver);
         }
     }
 }

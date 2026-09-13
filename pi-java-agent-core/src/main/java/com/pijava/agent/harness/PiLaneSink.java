@@ -9,7 +9,6 @@ import java.util.UUID;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import com.pijava.agent.context.OverflowDetector;
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.hook.RequestContext;
 import com.pijava.agent.hook.ResponseContext;
@@ -100,9 +99,6 @@ final class PiLaneSink implements PiLoop.Sink {
     private long inputTokens;
     private long outputTokens;
 
-    /** 最后一次请求的停因，供 {@link #checkOverflowAfterRun} 在运行收尾时判定溢出。 */
-    private String lastStopReason;
-
     /** 本次请求的 step 序号（每次助手流 +1）。 */
     private int stepIndex;
 
@@ -110,8 +106,18 @@ final class PiLaneSink implements PiLoop.Sink {
     private TelemetrySpan llmSpan;
     private long llmStartNanos;
 
-    /** 溢出后的自动压缩（对齐 AssistantStreamExecutor:171-177）。 */
-    private final CompactionExecutor compactions;
+    /**
+     * 本次运行最后一个落定的助手消息（pi {@code _lastAssistantMessage}，
+     * {@code agent-session.ts:636,691}；package 3c）。post-run 的压缩检查读它 ——
+     * 事件侧跟踪，**不是**对工作副本的扫描；一轮没有助手消息则为 {@code null}。
+     * 每个 PiLaneSink 只活一条 pass（pi 读后即清 ≙ 我们换 sink），故无需显式清空。
+     */
+    private Message.AssistantMessage lastAssistant;
+
+    /** pi {@code const msg = this._lastAssistantMessage}（{@code :1117}）的读取端。 */
+    Message.AssistantMessage lastAssistant() {
+        return lastAssistant;
+    }
 
     PiLaneSink(ExecutionContext ctx, String laneName, Set<Message> alreadyPresent,
                PiLoop.Sink downstream) {
@@ -119,7 +125,6 @@ final class PiLaneSink implements PiLoop.Sink {
         this.laneName = laneName;
         this.alreadyPresent = alreadyPresent;
         this.downstream = downstream;
-        this.compactions = new CompactionExecutor(ctx);
     }
 
     /** 由引擎的 {@code transformContext} 回填，供 {@code StepAttempt.messageCount} 使用。 */
@@ -159,11 +164,12 @@ final class PiLaneSink implements PiLoop.Sink {
     }
 
     /**
-     * 一轮请求结束：发 {@code after_response}、关跨度、记指标、做溢出检测。
+     * 一轮请求结束：发 {@code after_response}、关跨度、记指标。
      *
-     * <p>{@code streamError} 传 {@code null}：{@link PiLoop} 把流异常折进了消息的
-     * {@code stopReason}（{@code "error"}），不再单独持有异常对象 —— 溢出检测仍会读
-     * stopReason 与 token 数，判据不依赖异常。</p>
+     * <p>3c 之前这里还挂着「最后一请求停因」的旁路字段供运行后的溢出判定；
+     * 现在溢出判定读的是<b>终局助手消息本身</b>（pi {@code _checkCompaction} 读
+     * {@code assistantMessage} 的 stopReason/errorMessage/usage/timestamp，
+     * {@code agent-session.ts:2154}），旁路字段删除。</p>
      */
     private void endRequest(LaneState lane, Message.AssistantMessage assistant, long durationMs) {
         String stop = assistant.stopReason();
@@ -189,32 +195,6 @@ final class PiLaneSink implements PiLoop.Sink {
         var usage = new StreamEvent.UsageInfo(inputTokens, outputTokens, lane.partial);
         ctx.hookSystem().fireAfterResponse(laneName,
             new ResponseContext(laneName, lane.runId, lane.partial, usage));
-        lastStopReason = stop;
-    }
-
-    /**
-     * 溢出检测 → 自动压缩，在 {@code agent_end} **之后**跑一次
-     * （pi {@code _handlePostAgentRun:1142} → {@code _checkCompaction:2132}）。
-     *
-     * <p>此前它在 {@link #endRequest} 里 —— 也就是**每一轮助手响应之后**。
-     * pi 的溢出检查是「一次运行跑完之后」的收尾动作，不是轮内动作
-     * （{@code docs/31 §4.2} 的两段式触发：阈值在 {@code prepareNextTurn}，
-     * 溢出在 {@code agent_end} 之后）。判据本身没变，仍是
-     * {@link OverflowDetector#isOverflow} 读最后一次请求的停因与用量。</p>
-     */
-    void checkOverflowAfterRun(LaneState lane) {
-        var usage = new StreamEvent.UsageInfo(inputTokens, outputTokens, lane.partial);
-        if (!OverflowDetector.isOverflow(null, lastStopReason, usage, ctx.maxInputTokens())) {
-            return;
-        }
-        var settings = ctx.compactionSettings().get();
-        if (settings != null && lane.transcript.size() > 1) {
-            // 估算与 threshold/manual 同源（3b：pi 三条路都经 prepareCompaction
-            // :667 的 estimateContextTokens）。溢出路径**自己的**四道守卫
-            // （aborted/sameModel/stale/one-shot）是 3c 的活，这里不动。
-            compactions.applyCompaction(laneName, lane, settings,
-                (int) compactions.contextTokens(lane), "overflow");
-        }
     }
 
     /**
@@ -283,11 +263,24 @@ final class PiLaneSink implements PiLoop.Sink {
 
     @Override
     public void emit(PiLoop.Event event) {
+        if (event instanceof PiLoop.Event.MessageStart start) {
+            onMessageStart(start.message());
+        }
         if (event instanceof PiLoop.Event.MessageEnd end) {
             onMessageEnd(end.message());
         }
         if (downstream != null) {
             downstream.emit(event);
+        }
+    }
+
+    /**
+     * 新用户消息进上下文 ⇒ 溢出恢复闩锁复位（pi {@code message_start} 的 user 分支，
+     * {@code agent-session.ts:643}；package 3c）。一次「用户回合」给一次新的恢复预算。
+     */
+    private void onMessageStart(Message message) {
+        if (message instanceof Message.UserMessage) {
+            ctx.requireLane(laneName).overflowRecoveryAttempted = false;
         }
     }
 
@@ -307,8 +300,19 @@ final class PiLaneSink implements PiLoop.Sink {
         }
         switch (message) {
             case Message.AssistantMessage assistant -> {
+                // 事件跟踪的「本次运行最后见到的助手消息」（pi
+                // {@code _lastAssistantMessage}，{@code agent-session.ts:636,691}）——
+                // post-run 压缩检查看的是它，**不是**对工作副本的扫描：一轮没发过
+                // 助手消息的运行收口时为 null（副本里可能躺着上一轮的）。
+                this.lastAssistant = assistant;
                 // 助手消息落定 ⇒ 本轮的批次结束（pi 的顺序是 message_end → 全部 start → 各自 end）。
                 batchCallIds.clear();
+                // 成功收尾（非 error/非 length）⇒ 溢出恢复闩锁复位
+                // （pi {@code agent-session.ts:694-696}；package 3c）。
+                String stopReason = assistant.stopReason();
+                if (!"error".equals(stopReason) && !"length".equals(stopReason)) {
+                    lane.overflowRecoveryAttempted = false;
+                }
                 // 循环可能把被中断的一轮改写成 aborted（PiLoopRunner.markAborted）。
                 // lane.partial 必须跟着走：determineOutcome 与 lastAssistantMessage 都读它，
                 // 不同步的话 abort 会被记成 completed。

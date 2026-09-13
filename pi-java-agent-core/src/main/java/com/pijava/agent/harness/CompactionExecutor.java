@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import com.pijava.agent.compaction.CompactionResult;
 import com.pijava.agent.compaction.CompactionService;
 import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.entry.Entry;
@@ -24,6 +25,15 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Extracted from the former step-chain executor in the agent-loop L1 cleanup
  * (docs/20 §8) to keep files under the 500-line limit.</p>
+ *
+ * <p><b>3c 的分层</b>（{@code docs/31 §8.21}）：pi 的自动压缩只有一个函数
+ * {@code _runAutoCompaction}（{@code agent-session.ts:2270-2445}），守卫、事件、
+ * 落库、重建、二次删尾、异常兜底全在其中；轮内阈值门（{@code :550}）与运行后的
+ * {@code _checkCompaction}（{@code :2255}）都汇入它。这里同形：
+ * {@link #runAutoCompaction} 是那条唯一的路，{@link #applyCompaction} 只是它的
+ * 共享执行体（{@code _runDefaultCompaction} 的对应物），手动 {@code /compact}
+ * 走 pi 的 {@code compact()} 形状 —— 各发各的事件，文案前缀也不同
+ * （{@code "Compaction failed: "} vs {@code "Auto-compaction failed: "}）。</p>
  */
 final class CompactionExecutor {
 
@@ -36,7 +46,22 @@ final class CompactionExecutor {
     }
 
     /**
-     * Compact the specified lane's transcript.
+     * 一次自动压缩的双结果 —— pi 的 {@code _runAutoCompaction} 返回值只被用作
+     * 「要不要 continue」（{@code :2420/:2425}），但 pi-java 的轮内门还要知道
+     * 「有没有真的压」（决定 {@code NextTurnUpdate.context} 的换与不换）。两个
+     * 问句分开答，pi 的两个消费点各自读自己那半。
+     *
+     * @param compacted      转录是否被替换（落库+重建发生）
+     * @param shouldContinue 驱动侧是否要再 continue 一轮（pi 返回值语义）
+     */
+    record AutoCompactionOutcome(boolean compacted, boolean shouldContinue) {
+
+        static final AutoCompactionOutcome SKIPPED = new AutoCompactionOutcome(false, false);
+    }
+
+    /**
+     * Compact the specified lane's transcript (pi {@code AgentSession.compact()},
+     * the manual entry point, {@code agent-session.ts:1967-2105}).
      *
      * <p>守卫是 pi {@code compact()} 的形状（{@code agent-session.ts:1963-1969}
      * 对 {@code prepareCompaction} 空返回的解释，判据在 {@code compaction.ts:638}）：
@@ -45,16 +70,40 @@ final class CompactionExecutor {
      * {@link NothingToCompactException} 承载两种原因（异常类型是方言，错误文案
      * 归宿主命令面清点）。此前这里的 {@code size <= 1} 门槛在 pi 不存在 ——
      * 单条消息的转录在 pi 是可压缩的（切点扫到它自己）。</p>
+     *
+     * <p><b>事件时序照 pi</b>：{@code compaction_start{manual}} 在守卫<b>之前</b>
+     * （{@code :1970}），守卫或压缩体抛错 ⇒ {@code compaction_end{manual,
+     * result:undefined, aborted:false, errorMessage:"Compaction failed: …"}}
+     * 后原样再抛（{@code :2092-2104}）。</p>
      */
     void compact(String laneName, CompactionSettings settings) {
         var lane = ctx.requireLane(laneName);
-        if (lane.transcript.isEmpty()) {
-            throw new NothingToCompactException(laneName);
+        ctx.compactionObserver().onStart("manual");
+        CompactionRun run;
+        try {
+            if (lane.transcript.isEmpty()) {
+                throw new NothingToCompactException(laneName);
+            }
+            if (lane.transcript.getLast() instanceof Entry.Compaction) {
+                throw new NothingToCompactException(laneName);
+            }
+            run = applyCompaction(laneName, lane, settings,
+                (int) contextTokens(lane), "manual", false);
+        } catch (RuntimeException e) {
+            // pi 的 catch（:2092-2104）：end{manual, aborted: 取消类, errorMessage:
+            // 非取消类才有 "Compaction failed: " 前缀} 后再抛。取消分支的 end 已由
+            // applyCompaction 的发中止检查承担（aborted:true），这里不重复发。
+            if (!"Compaction cancelled".equals(e.getMessage())) {
+                ctx.compactionObserver().onEnd("manual", null, false, false,
+                    "Compaction failed: " + (e.getMessage() == null ? "compaction failed" : e.getMessage()));
+            }
+            throw e;
         }
-        if (lane.transcript.getLast() instanceof Entry.Compaction) {
-            throw new NothingToCompactException(laneName);
+        if (run.aborted()) {
+            // pi :2049-2051 在 try 内抛 "Compaction cancelled"（end{aborted:true}
+            // 走它的 catch）；这里等价：end 已在体内发过，只差抛出。
+            throw new IllegalStateException("Compaction cancelled");
         }
-        applyCompaction(laneName, lane, settings, (int) contextTokens(lane), "manual");
         ctx.publishState(laneName);
     }
 
@@ -71,26 +120,16 @@ final class CompactionExecutor {
     }
 
     /**
-     * Compact when the token budget is exceeded (pi
-     * {@code _compactBeforeNextAssistantResponse}, {@code agent-session.ts:542}).
+     * 轮内阈值门（pi {@code _compactBeforeNextAssistantResponse}，
+     * {@code agent-session.ts:538-555}）。
      *
-     * <p>Called from {@code prepareNextTurn} — the trigger point pi wraps inside
-     * {@code prepareNextTurnWithContext} ({@code :557-577}) — <b>not</b> from the
-     * request path ({@code docs/31 §4.2}).</p>
-     *
-     * <p><b>门形状（3b，docs/31 §8.20）</b>逐条对齐 pi
-     * {@code _compactBeforeNextAssistantResponse}（{@code agent-session.ts:542-557}）：
-     * 无模型 ⇒ 跳过；当前模型的 {@code contextWindow <= 0} ⇒ 跳过；
-     * {@code !shouldCompact(estimateContextTokens(context.messages).tokens,
-     * model.contextWindow, settings)} ⇒ 跳过。操作数是**当前模型**的窗口
-     * （随 setModel 动态变），不是宿主静态配置 —— 旧的
-     * {@code estimatedTokens <= ctx.maxInputTokens() - reserve} 把动态模型
-     * 维度整个丢了，且估算读的是 transcript 字符（无用量项）。pi 的
-     * {@code transcript.size() <= 1} 门槛同样是**发明**：pi 在这道门里没有
-     * 长度判据，取而代之的是 {@code _runAutoCompaction} 内
-     * {@code prepareCompaction} 的守卫（{@code compaction.ts:638}：空路径或
-     * 末条已是 compaction ⇒ 不压），这里照搬。{@code settings == null} 是
-     * pi-java 方言（pi 恒有设置），仍在最前。</p>
+     * <p><b>门形状（3b，docs/31 §8.20）</b>逐条对齐：无模型 ⇒ 跳过；当前模型的
+     * {@code contextWindow <= 0} ⇒ 跳过；{@code !shouldCompact(
+     * estimateContextTokens(context.messages).tokens, model.contextWindow,
+     * settings)} ⇒ 跳过。通过后 pi 交 {@code _runAutoCompaction("threshold",
+     * false)}（{@code :550}）—— 这里同形交 {@link #runAutoCompaction}，
+     * 事件与守卫都在其内。门自己的 {@code transcript.size() <= 1} 发明早在 3b
+     * 删除；{@code prepareCompaction} 守卫由 runAutoCompaction 承担。</p>
      *
      * @return whether a compaction ran (the caller must then hand the rebuilt
      *         messages back to the loop through {@code NextTurnUpdate.context})
@@ -107,24 +146,91 @@ final class CompactionExecutor {
                 .shouldCompact(estimatedTokens, window, settings)) {
             return false;
         }
-        // pi prepareCompaction 的守卫住在 _runAutoCompaction 里（:2262-2265）：
-        // 空路径或末条已是 compaction ⇒ 静默不压（返回 false，不抛）。
-        if (lane.transcript.isEmpty()
-                || lane.transcript.getLast() instanceof Entry.Compaction) {
-            return false;
-        }
-        applyCompaction(laneName, lane, settings, (int) estimatedTokens, "threshold");
-        return true;
+        return runAutoCompaction(laneName, lane, "threshold", false).compacted();
     }
 
     /**
-     * Fire before_compaction, compute the compacted transcript, and replace it.
+     * pi {@code _runAutoCompaction(reason, willRetry)}（{@code agent-session.ts:2270-2445}）
+     * 的逐条移植 —— 3c 起它是一切<b>自动</b>压缩的唯一入口（轮内阈值、运行后阈值、
+     * 溢出共用，与 pi 同形）。
      *
-     * @param reason one of {@code "manual"} / {@code "threshold"} /
-     *               {@code "overflow"} (pi {@code compactionReason})
+     * <p>守卫顺序照 pi：无模型 ⇒ false（{@code :2277}）；{@code prepareCompaction}
+     * 空返回（空路径 / 末条已是 compaction，{@code compaction.ts:638}）⇒ false
+     * （{@code :2286}，<b>不发</b> start）。此后 {@code compaction_start}（{@code :2290}）、
+     * 压缩体、中止判定（{@code :2362} ⇒ {@code end{aborted:true}}）、
+     * {@code end{result, willRetry}}（{@code :2408}）。</p>
+     *
+     * <p><b>willRetry 的二次删尾</b>（{@code :2410-2419}）：压缩后的状态重建可能把
+     * 那条溢出/截断助手消息从日志里带回来（R2 删的只是副本，日志未动），
+     * {@code agent.continue()} 拒绝以助手消息收尾的状态，故再删一次 —— 判据是
+     * 尾部消息 stopReason ∈ {error, length}。非重试路径返回
+     * {@code hasQueuedMessages()}（{@code :2425}）。</p>
+     *
+     * <p>异常兜底照 {@code :2426-2448}：start 已发 ⇒ 发 {@code end{result:undefined,
+     * aborted:false, willRetry:false, errorMessage}}，文案前缀按 reason 分流
+     * （overflow ⇒ "Context overflow recovery failed: "，否则 "Auto-compaction
+     * failed: "），返回 false。{@code _emitSessionCompactFailed}（扩展层伴生事件）
+     * 不在 3c 面（docs/31 §8.21.5 登记）。</p>
      */
-    void applyCompaction(String laneName, LaneState lane,
-                         CompactionSettings settings, int estimatedTokens, String reason) {
+    AutoCompactionOutcome runAutoCompaction(String laneName, LaneState lane,
+                                            String reason, boolean willRetry) {
+        if (ctx.model().get() == null) {
+            return AutoCompactionOutcome.SKIPPED;
+        }
+        var settings = ctx.compactionSettings().get();
+        if (settings == null) {
+            return AutoCompactionOutcome.SKIPPED;
+        }
+        // pi prepareCompaction 的守卫（compaction.ts:638）：空路径或末条已是
+        // compaction ⇒ 静默不压、不发事件。
+        if (lane.transcript.isEmpty()
+                || lane.transcript.getLast() instanceof Entry.Compaction) {
+            return AutoCompactionOutcome.SKIPPED;
+        }
+        ctx.compactionObserver().onStart(reason);
+        try {
+            var run = applyCompaction(laneName, lane, settings,
+                (int) contextTokens(lane), reason, willRetry);
+            if (run.aborted()) {
+                // pi :2362-2377：end{aborted:true, willRetry:false} 已在体内发，
+                // 转录未替换。
+                return AutoCompactionOutcome.SKIPPED;
+            }
+            if (willRetry) {
+                dropTrailingRetryableAssistant(lane);
+                return new AutoCompactionOutcome(true, true);
+            }
+            return new AutoCompactionOutcome(true, hasQueuedMessages(lane));
+        } catch (RuntimeException e) {
+            var message = e.getMessage() != null ? e.getMessage() : "compaction failed";
+            var formatted = "overflow".equals(reason)
+                ? "Context overflow recovery failed: " + message
+                : "Auto-compaction failed: " + message;
+            ctx.compactionObserver().onEnd(reason, null, false, false, formatted);
+            return AutoCompactionOutcome.SKIPPED;
+        }
+    }
+
+    /** pi {@code agent.hasQueuedMessages()}（{@code agent.ts:309-311}）：steer/followUp 任一有货。 */
+    static boolean hasQueuedMessages(LaneState lane) {
+        return !lane.steerQueue.isEmpty() || !lane.followUpQueue.isEmpty();
+    }
+
+    /**
+     * pi {@code _runAutoCompaction}/{@code compact()} 的共享执行体（{@code :2296-2408}
+     * 去掉事件的部分；{@code _runDefaultCompaction} 的对应物）：钩子 → 压缩产物 →
+     * 整体替换 → 工作副本重建 → 记录与跨度。事件（start/end）由调用方按各自时序发。
+     *
+     * <p><b>中止判定</b>（pi {@code :2362}）在生成之后、落库之前：pi-java 的
+     * {@code SummaryGenerator} 不接信号（方言），只能在生成返回后观察
+     * {@code lane.abortSignal()}；命中则转录未动，返回 {@code aborted:true}。</p>
+     *
+     * @param reason {@code "manual"} / {@code "threshold"} / {@code "overflow"}
+     * @param willRetry pi 的 {@code compaction_end.willRetry}，随 end 事件透传
+     */
+    CompactionRun applyCompaction(String laneName, LaneState lane,
+                                  CompactionSettings settings, int estimatedTokens,
+                                  String reason, boolean willRetry) {
         ctx.telemetry().incrementCounter("compactions", 1);
         int entriesBefore = lane.transcript.size();
         long start = System.nanoTime();
@@ -138,14 +244,22 @@ final class CompactionExecutor {
                 List.copyOf(lane.transcript), estimatedTokens);
             var plan = ctx.hookSystem().fireBeforeCompaction(laneName, compactCtx);
             List<Entry> compacted;
+            CompactionResult result = null;
             if (plan != null && !plan.keepEntries().isEmpty()) {
                 compacted = plan.keepEntries();
             } else {
-                compacted = compactTranscript(lane, settings);
+                var built = compactTranscript(lane, settings);
+                compacted = built.kept();
+                result = built.result();
+            }
+            var signal = lane.abortSignal();
+            if (signal != null && signal.isAborted()) {
+                ctx.compactionObserver().onEnd(reason, null, true, false, null);
+                return new CompactionRun(null, true);
             }
             lane.transcript.clear();
             lane.transcript.addAll(compacted);
-            // 日志被整体替换 ⇒ 工作副本跟着重建（pi agent-session.ts:2357-2359 的
+            // 日志被整体替换 ⇒ 工作副本跟着重建（pi agent-session.ts:2380-2382 的
             // 「写 entry → buildSessionContext → state.messages = ...」）。只有重建这一条路：
             // 压缩从不原地改写消息，它换的是日志。
             HarnessUtils.rebuildLaneMessages(lane);
@@ -154,14 +268,47 @@ final class CompactionExecutor {
             if (!compacted.isEmpty() && compacted.get(0) instanceof Entry.Compaction marker) {
                 compactionEntryId = marker.id();
             }
+            if (result != null) {
+                // pi :2383：estimatedTokensAfter 从**重建后**的消息读，纯字符和
+                // （estimateMessagesTokens，无用量锚点）—— 与触发判据的
+                // estimateContextTokens 是两回事。
+                result = new CompactionResult(result.summary(), result.firstKeptEntryId(),
+                    result.tokensBefore(),
+                    (long) com.pijava.agent.context.ContextUsageEstimator
+                        .estimateMessagesTokens(List.copyOf(lane.messages)),
+                    result.usage(), result.details());
+            }
             span.addAttribute("entriesAfter", lane.transcript.size());
             LOG.info("[agent] compaction lane={} reason={} tokensBefore={} entries {}->{}",
                 laneName, reason, estimatedTokens, entriesBefore, lane.transcript.size());
+            emitCompactionRecords(laneName, lane, reason, compactionEntryId,
+                (System.nanoTime() - start) / 1_000_000);
+            // pi :2408 的 end 在重建与记录之后；plan 路径没有产物对象，result 发
+            // null ≙ pi 的 undefined（自定义压缩内容本就没有 CompactionResult 的方言）。
+            ctx.compactionObserver().onEnd(reason, result, false, willRetry, null);
+            return new CompactionRun(result, false);
         } finally {
             span.close();
         }
-        emitCompactionRecords(laneName, lane, reason, compactionEntryId,
-            (System.nanoTime() - start) / 1_000_000);
+    }
+
+    /** {@link #applyCompaction} 的结果：产物（可无）+ 是否被中止。 */
+    record CompactionRun(CompactionResult result, boolean aborted) {}
+
+    /**
+     * pi {@code :2410-2419} —— 状态重建可能把尾部助手消息带回副本；以
+     * error/length 收尾的那条会被 {@code agent.continue()} 拒绝，故再删一次。
+     * 日志不动（pi 同源：日志留着，副本删掉）。
+     */
+    private void dropTrailingRetryableAssistant(LaneState lane) {
+        var messages = lane.messages;
+        if (messages.isEmpty()) {
+            return;
+        }
+        if (messages.get(messages.size() - 1) instanceof Message.AssistantMessage last
+                && ("error".equals(last.stopReason()) || "length".equals(last.stopReason()))) {
+            messages.remove(messages.size() - 1);
+        }
     }
 
     /**
@@ -211,7 +358,10 @@ final class CompactionExecutor {
             null, null, null, null, durationMs);
     }
 
-    private List<Entry> compactTranscript(LaneState lane, CompactionSettings settings) {
+    /** 压缩体产物：新转录列表 + 结果对象（{@code estimatedTokensAfter} 由调用方在重建后补）。 */
+    private record Built(List<Entry> kept, CompactionResult result) {}
+
+    private Built compactTranscript(LaneState lane, CompactionSettings settings) {
         // tokensBefore 单一来源：pi 的三条路（threshold/manual/overflow）都从
         // prepareCompaction :667 的 estimateContextTokens 读，这里同形 —— 落库的
         // Entry.Compaction.tokensBefore 因此是「用量优先」值，与触发判据同源。
@@ -234,7 +384,7 @@ final class CompactionExecutor {
             }
         }
         kept.add(0, compactionEntry);
-        return kept;
+        return new Built(kept, result);
     }
 
     private static List<Message> keptMessagesFrom(List<Entry> transcript, String firstKeptId) {

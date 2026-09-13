@@ -123,6 +123,20 @@ public final class ContextUsageEstimator {
             trailingTokens, usageIndex);
     }
 
+    /**
+     * pi {@code estimateMessagesTokens}（agent-session.ts:294-300）：纯消息规模估算的
+     * 总和，<b>不看用量</b> —— 与 {@link #estimateContextTokens} 的分工正对应 pi 的
+     * 两个调用点：前者算「压缩后还剩多少」（{@code estimatedTokensAfter}，3c），
+     * 后者做「是否该压」的触发判据。
+     */
+    public static int estimateMessagesTokens(List<Message> messages) {
+        long tokens = 0;
+        for (var message : messages) {
+            tokens += estimateTokens(message);
+        }
+        return (int) tokens;
+    }
+
     /** pi {@code shouldCompact}（compaction.ts:246-249）：{@code enabled} 且超出 {@code window - reserve}。 */
     public static boolean shouldCompact(double contextTokens, int contextWindow,
                                         CompactionSettings settings) {
