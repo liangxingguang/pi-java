@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.pijava.agent.entry.Entry;
-import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 
 /**
@@ -23,14 +22,23 @@ public final class CompactionService {
     /**
      * Compact a transcript.
      *
+     * <p>pi 的 {@code prepareCompaction} 只在**空路径**时不可压缩
+     * （{@code compaction.ts:638}；单条消息同样可压 —— 切点就落在它上面），
+     * 且 {@code tokensBefore} 由调用方从上下文消息（用量优先的
+     * {@code estimateContextTokens}，{@code :667}）算好传入 —— Java 侧同一
+     * 形状：判据/落库值都由 {@code CompactionExecutor.contextTokens} 提供，
+     * 本函数不再自己发明字符估算。</p>
+     *
      * @param transcript      the full transcript (oldest first)
      * @param settings        compaction settings
      * @param summaryGenerator generates the summary of the discarded prefix
+     * @param tokensBefore    压缩前的上下文估算（pi {@code preparation.tokensBefore}）
      */
     public static CompactionResult compact(List<Entry> transcript,
                                            CompactionSettings settings,
-                                           SummaryGenerator summaryGenerator) {
-        if (transcript.size() <= 1) {
+                                           SummaryGenerator summaryGenerator,
+                                           long tokensBefore) {
+        if (transcript.isEmpty()) {
             throw new IllegalStateException("Nothing to compact: transcript too small");
         }
         int cut = findCutPoint(transcript, settings.keepRecentTokens());
@@ -42,7 +50,6 @@ public final class CompactionService {
         SummaryGenerator.SummaryResult summaryResult = summaryGenerator
             .summarize(discardedMessages, null, null, settings.reserveTokens());
         String firstKept = transcript.get(cut).id();
-        long tokensBefore = estimateTokens(transcript);
         return new CompactionResult(
             summaryResult.text(), firstKept, tokensBefore, null,
             summaryResult.usage(), null);
@@ -56,7 +63,13 @@ public final class CompactionService {
     static int findCutPoint(List<Entry> transcript, int keepRecentTokens) {
         long accumulated = 0;
         for (int i = transcript.size() - 1; i >= 0; i--) {
-            accumulated += estimateTokens(transcript.get(i));
+            // pi findCutPoint :387 读的就是**同一个** estimateTokens(message)
+            // （ceil(chars/4)，含 toolCall 的 JSON 长度与图像常数）；非消息 entry
+            // 在 pi 的累加里贡献 0（:386 `entry.type !== "message"` 直接 continue）。
+            if (transcript.get(i) instanceof Entry.Message msg) {
+                accumulated += com.pijava.agent.context.ContextUsageEstimator
+                    .estimateTokens(msg.message());
+            }
             if (accumulated >= keepRecentTokens) {
                 return safeCut(transcript, i);
             }
@@ -86,45 +99,4 @@ public final class CompactionService {
         return 0;
     }
 
-    /** Rough token estimate: ~4 chars per token over message text content. */
-    public static int estimateTokens(List<Entry> entries) {
-        long chars = 0;
-        for (var entry : entries) {
-            if (entry instanceof Entry.Message msg) {
-                for (var block : msg.message().content()) {
-                    chars += textOf(block).length();
-                }
-            }
-        }
-        return (int) (chars / 4);
-    }
-
-    private static long estimateTokens(Entry entry) {
-        if (entry instanceof Entry.Message msg) {
-            long chars = 0;
-            for (var block : msg.message().content()) {
-                chars += textOf(block).length();
-            }
-            return chars / 4;
-        }
-        return 0;
-    }
-
-    private static String textOf(ContentBlock block) {
-        return switch (block) {
-            case ContentBlock.TextContent t -> t.text();
-            case ContentBlock.ThinkingContent t -> t.text();
-            case ContentBlock.ImageContent i -> "";
-            case ContentBlock.UrlImageContent u -> u.url();
-            case ContentBlock.ToolUseContent t -> t.name() + " " + t.arguments();
-            case ContentBlock.ToolResultContent t -> {
-                StringBuilder sb = new StringBuilder();
-                for (var inner : t.content()) {
-                    sb.append(textOf(inner));
-                }
-                yield sb.toString();
-            }
-            case ContentBlock.DiffContent d -> ""; // display-only; never enters model context
-        };
-    }
 }

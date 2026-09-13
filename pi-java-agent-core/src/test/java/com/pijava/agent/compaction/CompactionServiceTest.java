@@ -74,10 +74,13 @@ class CompactionServiceTest {
         var entries = List.of(
             entry(new Message.UserMessage(List.of(new ContentBlock.TextContent("first")))),
             entry(new Message.AssistantMessage(List.of(new ContentBlock.TextContent("ok")))));
+        // tokensBefore 由调用方传入（pi preparation 形状，3b）：本函数不再
+        // 自己估 —— 单测直接钉「原样携带」。
         var result = CompactionService.compact(entries,
-            new CompactionSettings(true, 16_384, 200), generator);
+            new CompactionSettings(true, 16_384, 200), generator, 42L);
         assertThat(result.summary()).isEqualTo("## Goal\nx");
         assertThat(result.firstKeptEntryId()).isNotNull();
+        assertThat(result.tokensBefore()).isEqualTo(42);
     }
 
     private static com.pijava.agent.entry.Entry entry(Message message) {

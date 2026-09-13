@@ -127,7 +127,7 @@ public class AgentHarness implements AutoCloseable {
         var execCtx = new ExecutionContext(
             streamFn, () -> lane.model, () -> lane.thinkingLevel,
             () -> lane.systemPrompt, () -> lane.activeTools,
-            maxInputTokens, toolRegistry, toolContext,
+            maxInputTokens, config.contextWindow(), toolRegistry, toolContext,
             skillManager,
             hookSystem, lane, () -> lane.compactionSettings, config.thinkingLevelMap(),
             tokenCounter, snapshotService, queueManager, () -> lane.toolExecution,

@@ -217,4 +217,113 @@ class LaneMessagesTest {
                 && t.contains("a summary"));
         assertThat(first).contains("kept tail", "next");
     }
+
+    // ── 3b：用量优先的估算 + 动态 contextWindow 操作数（docs/31 §8.20） ──
+
+    /** builder 装配的车道：窗口经 resolver 按**当前模型**解析。 */
+    private AgentHarness harnessWithWindow(StreamFn streamFn, ModelId<?> model,
+                                           CompactionSettings settings,
+                                           ToolRegistry registry,
+                                           java.util.function.ToIntFunction<ModelId<?>> window) {
+        return AgentHarness.create(HarnessConfig.builder()
+            .streamFn(streamFn)
+            .model(model)
+            .compactionSettings(settings)
+            .toolRegistry(registry)
+            .contextWindow(window)
+            .build());
+    }
+
+    /**
+     * 带 500 用量的工具轮 —— 文本/参数都极短（字符估算约 0），但 provider 报了
+     * 巨量用量（3a：partial 的 UsageInfo 直落终局消息）。必须走 tool_use 停因，
+     * 运行才会进入第二轮，{@code prepareNextTurn} 的阈值门才有机会开火。
+     */
+    private static List<StreamEvent> usageToolTurn(long reportedInput) {
+        var done = AssistantMessage.empty()
+            .withContent(List.of(new ContentBlock.ToolUseContent("c1", "echo", Map.of())))
+            .withStopReason("tool_use")
+            .withUsage(new StreamEvent.UsageInfo(reportedInput, 0, null));
+        return List.of(
+            new StreamEvent.Start(AssistantMessage.empty()),
+            new StreamEvent.ToolCallEnd(0, "c1", "echo", Map.of(), done),
+            new StreamEvent.StreamDone("tool_use", null, done));
+    }
+
+    private Entry.Compaction firstCompaction(AgentHarness h) {
+        return h.snapshot(AgentHarness.DEFAULT_LANE).transcript().stream()
+            .filter(Entry.Compaction.class::isInstance)
+            .map(Entry.Compaction.class::cast)
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("expected a compaction entry"));
+    }
+
+    /**
+     * 用量优先（pi compaction.ts:215-243）：字符总量远不过线（几个字符 ⇒
+     * 个位数 tokens，阈值 190），但最后一条 assistant 报了 500 ⇒ 照压。
+     * 3b 之前读 transcript 字符的估算器**永远不会**压这条车道。
+     */
+    @Test
+    void usageBackedEstimateFiresCompactionThatCharsNeverWould() {
+        var registry = new ToolRegistry(null);
+        registry.register(echoTool());
+        var h = harnessWithWindow(
+            scripted(List.of(usageToolTurn(500), textTurn("b"))),
+            MODEL, new CompactionSettings(true, 10, 10), registry, id -> 200);
+
+        h.prompt("go");
+
+        assertThat(requests).hasSize(2);
+        assertThat(textsOf(requests.get(1)))
+            .as("500 用量必须把阈值门推过，哪怕字符才几个")
+            .anyMatch(t -> t.contains("compacted into the following summary"));
+        var marker = firstCompaction(h);
+        // tokensBefore 与判据同源（pi prepareCompaction :667）：锚点 usage=500
+        // + 锚点**之后**的消息字符（toolResult 几个字符）；锚点之前的 user 不计。
+        assertThat(marker.tokensBefore()).isBetween(500, 520);
+    }
+
+    /** pi 守卫 {@code model.contextWindow <= 0}：窗口缺席（自定义模型）⇒ 完全不压。 */
+    @Test
+    void nonPositiveWindowFromResolverSkipsAutoCompaction() {
+        var registry = new ToolRegistry(null);
+        registry.register(echoTool());
+        var h = harnessWithWindow(
+            scripted(List.of(usageToolTurn(500), textTurn("b"))),
+            MODEL, new CompactionSettings(true, 10, 10), registry, id -> 0);
+
+        h.prompt("go");
+
+        assertThat(requests).hasSize(2);
+        assertThat(hasCompactionEntry(h)).isFalse();
+    }
+
+    /**
+     * 操作数是**当前模型**的窗口（pi {@code this.model}），不是宿主静态值：
+     * 同一脚本，小窗模型压、大窗模型不压。
+     */
+    @Test
+    void thresholdOperandIsTheCurrentModelWindowNotAStatic() {
+        java.util.function.ToIntFunction<ModelId<?>> perModel =
+            id -> "small".equals(id.modelName()) ? 200 : 1_000_000;
+        var smallRegistry = new ToolRegistry(null);
+        smallRegistry.register(echoTool());
+        var small = harnessWithWindow(
+            scripted(List.of(usageToolTurn(500), textTurn("b"))),
+            ModelId.of("faux", "small"), new CompactionSettings(true, 10, 10),
+            smallRegistry, perModel);
+        small.prompt("go");
+        assertThat(hasCompactionEntry(small)).isTrue();
+
+        var bigRegistry = new ToolRegistry(null);
+        bigRegistry.register(echoTool());
+        var big = harnessWithWindow(
+            scripted(List.of(usageToolTurn(500), textTurn("b"))),
+            ModelId.of("faux", "big"), new CompactionSettings(true, 10, 10),
+            bigRegistry, perModel);
+        big.prompt("go");
+        assertThat(hasCompactionEntry(big))
+            .as("百万窗口下 500 用量不过线 —— 窗口必须跟着当前模型走")
+            .isFalse();
+    }
 }

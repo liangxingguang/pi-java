@@ -37,6 +37,7 @@ record ExecutionContext(
     Supplier<String> systemPrompt,
     Supplier<Set<AgentTool<?, ?>>> activeTools,
     int maxInputTokens,
+    java.util.function.ToIntFunction<ModelId<?>> contextWindow,
     ToolRegistry toolRegistry,
     ToolContext toolContext,
     SkillManager skillManager,
@@ -55,6 +56,15 @@ record ExecutionContext(
 ) {
     LaneState requireLane(String laneName) {
         return HarnessUtils.requireLane(lane, laneName);
+    }
+
+    /**
+     * pi {@code model.contextWindow} —— 阈值压缩门的操作数（3b，
+     * {@code agent-session.ts:547-549}）。按**当前**模型解析，切换模型后
+     * 随之变化；解析不到元数据 ⇒ 0 ⇒ 门的 {@code <= 0} 守卫跳过自动压缩。
+     */
+    int contextWindow(ModelId<?> model) {
+        return contextWindow.applyAsInt(model);
     }
 
     void addTokens(long tokens) {

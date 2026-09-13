@@ -31,6 +31,14 @@ import com.pijava.telemetry.TelemetryContext;
  * @param systemPrompt       system prompt (Phase 2a: fixed string)
  * @param activeTools        active tool set (Phase 2b: AgentTool instances)
  * @param maxInputTokens     maximum input tokens for overflow detection
+ * @param contextWindow      pi {@code model.contextWindow} 的操作数来源（3b，
+ *                           {@code docs/31 §8.20}）：按<b>当前</b>模型查其上下文
+ *                           窗口大小（阈值压缩读的正是这个值，模型切换后随之变）。
+ *                           默认 {@code ignored -> maxInputTokens}（静态回退，
+ *                           与 3b 之前的行为一致）；宿主装配时传目录查询
+ *                           （coding-agent：catalog 的 {@code maxInputTokens}
+ *                           即上下文窗口）。返回 0/负值 ⇒ pi 的
+ *                           {@code contextWindow <= 0} 守卫跳过自动压缩。
  * @param toolRegistry       tool registry for the harness
  * @param toolContext        execution environment for tools
  * @param commandPrefix      optional prefix for bash commands
@@ -53,6 +61,7 @@ public record HarnessConfig(
     String systemPrompt,
     Set<AgentTool<?, ?>> activeTools,
     int maxInputTokens,
+    java.util.function.ToIntFunction<ModelId<?>> contextWindow,
     ToolRegistry toolRegistry,
     ToolContext toolContext,
     String commandPrefix,
@@ -79,6 +88,7 @@ public record HarnessConfig(
         if (toolExecution == null) toolExecution = ToolExecution.defaultMode();
         if (streamListener == null) streamListener = event -> { };
         if (summaryGenerator == null) summaryGenerator = SummaryGenerator.truncating();
+        if (contextWindow == null) contextWindow = ignored -> maxInputTokens;
     }
 
     /** Create a new configuration builder. */
@@ -97,7 +107,7 @@ public record HarnessConfig(
             QueueMode followUpMode, ToolExecution toolExecution,
             Consumer<StreamEvent> streamListener) {
         this(streamFn, model, thinkingLevel, systemPrompt, activeTools, maxInputTokens,
-             toolRegistry, toolContext, commandPrefix, compactionSettings,
+             null, toolRegistry, toolContext, commandPrefix, compactionSettings,
              skills, retryPolicy, telemetry, thinkingLevelMap, steeringMode,
              followUpMode, toolExecution, streamListener, SummaryGenerator.truncating());
     }
@@ -109,6 +119,7 @@ public record HarnessConfig(
         private String systemPrompt = "";
         private Set<AgentTool<?, ?>> activeTools = Set.of();
         private int maxInputTokens = 200_000;
+        private java.util.function.ToIntFunction<ModelId<?>> contextWindow;
         private ToolRegistry toolRegistry;
         private ToolContext toolContext;
         private String commandPrefix;
@@ -132,6 +143,10 @@ public record HarnessConfig(
             this.activeTools = Set.copyOf(at); return this;
         }
         public Builder maxInputTokens(int mit) { this.maxInputTokens = mit; return this; }
+        /** Set the per-model context-window resolver (3b; default: {@code id -> maxInputTokens}). */
+        public Builder contextWindow(java.util.function.ToIntFunction<ModelId<?>> cw) {
+            this.contextWindow = cw; return this;
+        }
         public Builder toolRegistry(ToolRegistry tr) { this.toolRegistry = tr; return this; }
         public Builder toolContext(ToolContext tc) { this.toolContext = tc; return this; }
         public Builder commandPrefix(String cp) { this.commandPrefix = cp; return this; }
@@ -162,6 +177,7 @@ public record HarnessConfig(
             if (model == null) throw new IllegalStateException("model is required");
             return new HarnessConfig(streamFn, model, thinkingLevel,
                                      systemPrompt, activeTools, maxInputTokens,
+                                     contextWindow,
                                      toolRegistry, toolContext, commandPrefix,
                                      compactionSettings, skills,
                                      retryPolicy, telemetry, thinkingLevelMap,

@@ -9,7 +9,6 @@ import java.util.UUID;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import com.pijava.agent.compaction.CompactionService;
 import com.pijava.agent.context.OverflowDetector;
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.hook.RequestContext;
@@ -210,8 +209,11 @@ final class PiLaneSink implements PiLoop.Sink {
         }
         var settings = ctx.compactionSettings().get();
         if (settings != null && lane.transcript.size() > 1) {
+            // 估算与 threshold/manual 同源（3b：pi 三条路都经 prepareCompaction
+            // :667 的 estimateContextTokens）。溢出路径**自己的**四道守卫
+            // （aborted/sameModel/stale/one-shot）是 3c 的活，这里不动。
             compactions.applyCompaction(laneName, lane, settings,
-                CompactionService.estimateTokens(lane.transcript), "overflow");
+                (int) compactions.contextTokens(lane), "overflow");
         }
     }
 

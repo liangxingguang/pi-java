@@ -59,22 +59,32 @@ class CompactionTest {
                 message("assistant", "second"),
                 message("user", "third"),
                 message("assistant", "fourth"));
-        var settings = new CompactionSettings(true, 16384, 8);
+        var settings = new CompactionSettings(true, 16384, 20);
         var result = CompactionService.compact(transcript, settings,
-            com.pijava.agent.compaction.SummaryGenerator.truncating());
+            com.pijava.agent.compaction.SummaryGenerator.truncating(), 42L);
 
         assertThat(result.summary()).isNotBlank();
         // Small transcript: the fallback cut keeps only the last message.
+        // 新估算（pi 的 ceil(chars/4)，:278）四条累加 2+2+2+2=8 < 20 ⇒
+        // 仍走兜底切点；keep=8 在 3b 后会在第 0 条就达阈（ceil 更大），
+        // 那是 findCutPoint 的正常路，不是兜底路。
         assertThat(result.firstKeptEntryId()).isEqualTo(transcript.get(3).id());
-        assertThat(result.tokensBefore()).isGreaterThan(0);
+        assertThat(result.tokensBefore()).isEqualTo(42);
     }
 
     @Test
-    void compactThrowsWhenTranscriptTooSmall() {
+    void compactThrowsOnlyOnEmptyTranscript_pi638() {
+        // pi 的 prepareCompaction 只在**空路径**时不可压缩（compaction.ts:638）；
+        // 单条消息**可压** —— 切点落在它自己身上（findCutPoint :389 的
+        // cutPoints[0]）。旧实现把 size<=1 全判为不可压，是发明，3b 撤下。
+        var single = List.of(message("user", "only"));
+        var result = CompactionService.compact(single, CompactionSettings.defaults(),
+            com.pijava.agent.compaction.SummaryGenerator.truncating(), 7L);
+        assertThat(result.firstKeptEntryId()).isEqualTo(single.get(0).id());
+        assertThat(result.tokensBefore()).isEqualTo(7);
         assertThatThrownBy(() -> CompactionService.compact(
-                List.of(message("user", "only")),
-                CompactionSettings.defaults(),
-                com.pijava.agent.compaction.SummaryGenerator.truncating()))
+                List.of(), CompactionSettings.defaults(),
+                com.pijava.agent.compaction.SummaryGenerator.truncating(), 7L))
                 .isInstanceOf(IllegalStateException.class);
     }
 

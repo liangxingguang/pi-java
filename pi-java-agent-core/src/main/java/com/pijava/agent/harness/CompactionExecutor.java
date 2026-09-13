@@ -35,15 +35,39 @@ final class CompactionExecutor {
         this.ctx = ctx;
     }
 
-    /** Compact the specified lane's transcript. */
+    /**
+     * Compact the specified lane's transcript.
+     *
+     * <p>守卫是 pi {@code compact()} 的形状（{@code agent-session.ts:1963-1969}
+     * 对 {@code prepareCompaction} 空返回的解释，判据在 {@code compaction.ts:638}）：
+     * <b>空路径</b> ⇒ "Nothing to compact (session too small)"；<b>最后一条已是
+     * compaction 标记</b> ⇒ "Already compacted"。pi-java 用同一个
+     * {@link NothingToCompactException} 承载两种原因（异常类型是方言，错误文案
+     * 归宿主命令面清点）。此前这里的 {@code size <= 1} 门槛在 pi 不存在 ——
+     * 单条消息的转录在 pi 是可压缩的（切点扫到它自己）。</p>
+     */
     void compact(String laneName, CompactionSettings settings) {
         var lane = ctx.requireLane(laneName);
-        if (lane.transcript.size() <= 1) {
+        if (lane.transcript.isEmpty()) {
             throw new NothingToCompactException(laneName);
         }
-        applyCompaction(laneName, lane, settings,
-            CompactionService.estimateTokens(lane.transcript), "manual");
+        if (lane.transcript.getLast() instanceof Entry.Compaction) {
+            throw new NothingToCompactException(laneName);
+        }
+        applyCompaction(laneName, lane, settings, (int) contextTokens(lane), "manual");
         ctx.publishState(laneName);
+    }
+
+    /**
+     * pi {@code estimateContextTokens(context.messages).tokens} —— 用量优先的
+     * 上下文估算（compaction.ts:215-243；操作数是车道工作副本 ≙ pi 的
+     * {@code context.messages}）。压缩的三条路径（threshold / manual / overflow）
+     * 共用这一个来源做 tokensBefore，正如 pi 三条路都经
+     * {@code prepareCompaction}（{@code :667}）。
+     */
+    long contextTokens(LaneState lane) {
+        return (long) com.pijava.agent.context.ContextUsageEstimator
+            .estimateContextTokens(List.copyOf(lane.messages)).tokens();
     }
 
     /**
@@ -54,18 +78,42 @@ final class CompactionExecutor {
      * {@code prepareNextTurnWithContext} ({@code :557-577}) — <b>not</b> from the
      * request path ({@code docs/31 §4.2}).</p>
      *
+     * <p><b>门形状（3b，docs/31 §8.20）</b>逐条对齐 pi
+     * {@code _compactBeforeNextAssistantResponse}（{@code agent-session.ts:542-557}）：
+     * 无模型 ⇒ 跳过；当前模型的 {@code contextWindow <= 0} ⇒ 跳过；
+     * {@code !shouldCompact(estimateContextTokens(context.messages).tokens,
+     * model.contextWindow, settings)} ⇒ 跳过。操作数是**当前模型**的窗口
+     * （随 setModel 动态变），不是宿主静态配置 —— 旧的
+     * {@code estimatedTokens <= ctx.maxInputTokens() - reserve} 把动态模型
+     * 维度整个丢了，且估算读的是 transcript 字符（无用量项）。pi 的
+     * {@code transcript.size() <= 1} 门槛同样是**发明**：pi 在这道门里没有
+     * 长度判据，取而代之的是 {@code _runAutoCompaction} 内
+     * {@code prepareCompaction} 的守卫（{@code compaction.ts:638}：空路径或
+     * 末条已是 compaction ⇒ 不压），这里照搬。{@code settings == null} 是
+     * pi-java 方言（pi 恒有设置），仍在最前。</p>
+     *
      * @return whether a compaction ran (the caller must then hand the rebuilt
      *         messages back to the loop through {@code NextTurnUpdate.context})
      */
     boolean checkThreshold(String laneName, LaneState lane) {
         var settings = ctx.compactionSettings().get();
         if (settings == null) return false;
-        if (lane.transcript.size() <= 1) return false;
-        int estimatedTokens = CompactionService.estimateTokens(lane.transcript);
-        if (!settings.enabled() || estimatedTokens <= ctx.maxInputTokens() - settings.reserveTokens()) {
+        var model = ctx.model().get();
+        if (model == null) return false;
+        int window = ctx.contextWindow(model);
+        if (window <= 0) return false;
+        long estimatedTokens = contextTokens(lane);
+        if (!com.pijava.agent.context.ContextUsageEstimator
+                .shouldCompact(estimatedTokens, window, settings)) {
             return false;
         }
-        applyCompaction(laneName, lane, settings, estimatedTokens, "threshold");
+        // pi prepareCompaction 的守卫住在 _runAutoCompaction 里（:2262-2265）：
+        // 空路径或末条已是 compaction ⇒ 静默不压（返回 false，不抛）。
+        if (lane.transcript.isEmpty()
+                || lane.transcript.getLast() instanceof Entry.Compaction) {
+            return false;
+        }
+        applyCompaction(laneName, lane, settings, (int) estimatedTokens, "threshold");
         return true;
     }
 
@@ -164,7 +212,11 @@ final class CompactionExecutor {
     }
 
     private List<Entry> compactTranscript(LaneState lane, CompactionSettings settings) {
-        var result = CompactionService.compact(lane.transcript, settings, ctx.summaryGenerator());
+        // tokensBefore 单一来源：pi 的三条路（threshold/manual/overflow）都从
+        // prepareCompaction :667 的 estimateContextTokens 读，这里同形 —— 落库的
+        // Entry.Compaction.tokensBefore 因此是「用量优先」值，与触发判据同源。
+        var result = CompactionService.compact(lane.transcript, settings,
+            ctx.summaryGenerator(), contextTokens(lane));
         var retainedTail = keptMessagesFrom(lane.transcript, result.firstKeptEntryId());
         var compactionEntry = new Entry.Compaction(
             UUID.randomUUID().toString(), lane.nextSeq(), HarnessUtils.lastEntryId(lane),

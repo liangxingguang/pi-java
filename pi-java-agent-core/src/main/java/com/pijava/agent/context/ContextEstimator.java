@@ -8,9 +8,12 @@ import com.pijava.ai.message.Message;
 /**
  * Token-count estimation for conversation context.
  *
- * <p>Aligned with pi {@code estimateContextTokens()}. Uses a character-based
- * heuristic: total characters ÷ 3.5 (mixed Chinese/English average).
- * Not exact — for overflow detection and compaction triggering only.</p>
+ * <p><b>注意</b>：本类不是 pi {@code estimateContextTokens()} 的移植 —— 那是
+ * 字符数 ÷ 3.5 的自造启发式，pi 用的是「最后一条有效 assistant 用量 +
+ * 其后消息 ceil(chars/4)」（{@code compaction.ts:215-243}）。pi 形状的实现是
+ * {@link ContextUsageEstimator}（3b，docs/31 §8.20），压缩/溢出触发的对齐
+ * 都走那边。本类只服务 {@code StreamSimple} 的粗粒度溢出提示，与 pi 无对应物；
+ * 旧 javadoc 的「Aligned with pi」是不实声明，3b 更正。</p>
  */
 public final class ContextEstimator {
 
