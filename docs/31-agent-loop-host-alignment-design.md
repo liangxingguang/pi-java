@@ -1008,10 +1008,57 @@ S2/S3/S4/S9/S10/S11/S12 七红（S1/S5/S6/S7/S8 无执行过的 end，绿得其�
 （混合批次提前停）；去闩 + args 换成改写后参数 ⇒ `PiToolRunnerTest` 对应两例分红。
 还原后 agent-core **381/381**、全 reactor `clean verify` 绿。
 
-**仍未闭环（package 2，A7）**：pi 的 `createToolResultMessage`（`:784-797`）把
-`details`/`usage`/`addedToolNames` 也放在结果**消息**上，随 entry 落库；
-pi-java 的 `Message.ToolResultMessage` 仍只有 `(toolUseId, toolName, content, isError)`。
-事件的 `result` 现在已完整，消息层的缺席记录在 `PiToolRunner` 类 javadoc。
+**当时的遗留（package 2，A7，已由 §8.18 闭环）**：pi 的 `createToolResultMessage`
+（`:784-797`）把 `details`/`usage`/`addedToolNames` 也放在结果**消息**上，随 entry 落库；
+当时 pi-java 的 `Message.ToolResultMessage` 只有 `(toolUseId, toolName, content, isError)`。
+
+### 8.18 结果消息载荷 A7 —— 已实施（2026-09-14，commit `0141250`）
+
+package 1（§8.17）把 end 帧的 `result` 树补齐后，剩下的唯一缺席者是结果**消息**。
+逐行读 `createToolResultMessage`（`agent-loop.ts:784-797`）与 pi TS 类型
+（`packages/ai/src/types.ts:452-468`）钉死三条事实，全部照搬：
+
+| 事实 | pi 出处 | Java 落法 |
+|---|---|---|
+| 消息带 `details`/`usage`/`addedToolNames`，从结果对象**转发**（非重算） | `:792-794` | `ToolResultMessage` 增三字段；`PiToolRunner.toOutcome` 单点转发（错误路径 `errorOutcome` 也走它 —— pi 的 denied 结果同样只在 `:784-797` 合成一次，两处 details 恒相等） |
+| `addedToolNames` 有 length 门（空 ⇒ 键缺席）；`details`/`usage` undefined ⇒ 键缺席 | `:791` `...(length ? {...} : {})` | 编码器主动省略（Jackson 会写 null，JS stringify 丢 undefined —— 豁免方向相反，必须显式不写） |
+| 消息**无** `terminate`（只活在结果树里） | 类型 :452-468 无此字段 | 消息不增 terminate；L5 消息帧也不比较它 |
+
+**类型取舍**：`usage` 在消息上声明为 `Object` —— pi 侧是共享 `Usage`，pi-java 的工具
+usage（`ToolResult.UsageInfo`）在 agent 模块，ai 不能反向依赖；原样透传（null ≙
+undefined）与 pi 的 JS 对象语义同构，且避免字段名翻译（`inputTokens` vs `input`）在
+任何脚本里被设值时炸出假差异。`role()` 保持 `"tool"`（持久化方言，改 `"toolResult"`
+会连带改破既有会话文件）；WS 线格式由 `WebWireJson` 翻译成 pi 形状。既有的截断/中止
+合成点（`PiLoopTools.failTruncated`/`abortedOutcome`）也改为携带结果载荷 —— pi 的
+`failToolCallsFromTruncatedMessage`（`:379-404`）同样经 `createToolResultMessage`，
+故其消息 `details={}` 而非 null。provider 投影不读这三字段（Mistral 分支改为命名
+模式以吸收 arity 变化）。
+
+**四路往返（docs/23c §5）实测结论**：JSONL 写 = `SessionJson.messageNode`（唯一载荷
+构建器，`JsonlCodec` 经 `valueToTree` 走它）；JSONL 读 + SQLite 读 = `MessageJsonCodec.decode`
+（SQLite 的 `EntryRows` 与 JSONL 共用同一 mapper，编解码同源）；Web WS = `WebWireJson.messageNode`
+（独立构建器，需同步改）；**RPC 转录 = 无生产者** —— `TranscriptItem` 类型已定义但没有任何
+代码构建它，server 只转发 snapshot/progress 事件。故第四路记为「未接线」，无载荷可测。
+新增哨兵：`JsonlSessionStorageTest.toolResultPayloadRoundTripsThroughJsonl`（含行级
+判据：无载荷消息不许写出空壳键）、`SqliteToolResultPayloadTest`（open→append→drain→
+关→重开全链路）、`WebWireJsonTest.toolResultCarriesStructuredPayloadOnTheWire`、
+`MessageTest.toolResultCarriesStructuredPayloadLikePi`、`PiToolRunnerTest.messageForwardsResultPayloadFields`。
+**L5 消息帧盲区补齐**：两侧归一化器的 toolResult 消息渲染纳入
+`details`/`usage`/`addedToolNames?`（省略规则逐字镜像），12 份基准重算 —— 其中
+S1/S6/S7/S8 无 toolResult 消息帧、字节不变，其余 8 份随消息形状更新，**严格 12/12**。
+
+**反证实验**（每组恰好红预测集合，还原后全绿）：RE-A 驱动桩不转发 details ⇒
+L5 {S2,S3,S4,S9,S10,S11,S12} 七红、S5 绿得其所（其消息来自宿主 `failTruncated`，
+不经驱动注入点）；RE-B 持久化编码器丢 details ⇒ JSONL+SQLite 两 L3 哨兵红、L5 无感
+（消息帧取自活事件而非存储，证明了两条链各自独立被钉住）；RE-C 去掉 web 的 length 门 ⇒
+`WebWireJsonTest` 恰好 1 红。**实现期踩坑两件**：`ObjectNode.putPOJO` 存的 `POJONode`
+在序列化前对树内查询不可见（`get(0)` 得 null）⇒ 改显式 `putArray`+逐元素 `add`；
+`findEntries(EntryQuery.all())` 在本测试形状下不保证旧序 ⇒ 按 toolName 定位而非下标。
+agent-core **383/383**、ai/web/sqlite 模块绿、全 reactor `clean verify` 绿。
+
+**遗留不变**：B 项（真并发 = pi 的 `Promise.all`）与 `QueueMode.All` 宿主层仍待用户；
+`addedToolNames` 的 provider 层消费者（pi 的 native deferred tools）在 pi-java 今日
+无对应物，字段按 pi 形状预留（Phase 2c MCP）。
 
 ---
 
