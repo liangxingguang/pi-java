@@ -2,7 +2,6 @@ package com.pijava.agent.harness;
 
 import java.util.Set;
 import java.util.function.Consumer;
-import java.util.concurrent.ConcurrentMap;
 import java.util.function.Supplier;
 
 import com.pijava.agent.compaction.CompactionSettings;
@@ -42,7 +41,7 @@ record ExecutionContext(
     ToolContext toolContext,
     SkillManager skillManager,
     HookSystem hookSystem,
-    ConcurrentMap<String, LaneState> lanes,
+    LaneState lane,
     Supplier<CompactionSettings> compactionSettings,
     ThinkingLevelMap thinkingLevelMap,
     TokenCounter tokenCounter,
@@ -55,7 +54,7 @@ record ExecutionContext(
     TelemetryContext telemetry
 ) {
     LaneState requireLane(String laneName) {
-        return HarnessUtils.requireLane(lanes, laneName);
+        return HarnessUtils.requireLane(lane, laneName);
     }
 
     void addTokens(long tokens) {

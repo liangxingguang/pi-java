@@ -15,7 +15,11 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * End-to-end integration: multi-lane + hook + compaction in one flow.
+ * End-to-end integration: two harnesses（会话分支的两个宿主）+ hook + compaction.
+ *
+ * <p>此前这里跑的是「一个 harness 两条车道」；多车道运行时容器删除后
+ * （{@code docs/31 §4.3}），两条并行上下文就是**两个 harness**——父会话一个、
+ * 分支会话一个（{@link AgentHarness#fork()}）。</p>
  */
 class AgentHarnessIntegrationTest {
 
@@ -43,28 +47,29 @@ class AgentHarnessIntegrationTest {
     }
 
     @Test
-    void multiLaneRunWithHookAndCompaction() {
+    void forkedHarnessRunsIndependentlyWithHookAndCompaction() {
         var h = harness();
-        h.createLane(LaneConfig.of("review"));
-        h.createLane(LaneConfig.of("edit"));
+        var forked = h.fork();
 
-        // Register a hook that fires on every run end
+        // Register a hook that fires on every run end — only on the parent.
         var runEndCount = new int[1];
-        h.hookSystem().onBeforeRunEnd("review", ctx -> runEndCount[0]++);
+        h.hookSystem().onBeforeRunEnd("default", ctx -> runEndCount[0]++);
 
-        // Run on two lanes
-        h.prompt("review", "review this code", List.of());
-        h.prompt("edit", "edit this file", List.of());
+        // Two parallel contexts: one per harness.
+        h.prompt("review this code", List.of());
+        forked.prompt("edit this file", List.of());
 
-        assertThat(runEndCount[0]).isEqualTo(1);
-        assertThat(h.snapshot("review").transcript()).isNotEmpty();
-        assertThat(h.snapshot("edit").transcript()).isNotEmpty();
+        assertThat(runEndCount[0]).as("hook 只注册在父 harness 上").isEqualTo(1);
+        assertThat(h.snapshot("default").transcript()).isNotEmpty();
+        assertThat(forked.snapshot("default").transcript()).isNotEmpty();
+        assertThat(forked.snapshot("default").transcript())
+            .as("分支 harness 有自己的日志").isNotEqualTo(h.snapshot("default").transcript());
 
-        // Compaction on the review lane after more turns
-        h.prompt("review", "one more turn", List.of());
-        var before = h.snapshot("review").transcript().size();
-        h.compact("review", new CompactionSettings(true, 16384, 20000));
-        var after = h.snapshot("review").transcript().size();
+        // Compaction on the parent after more turns
+        h.prompt("one more turn", List.of());
+        var before = h.snapshot("default").transcript().size();
+        h.compact(new CompactionSettings(true, 16384, 20000));
+        var after = h.snapshot("default").transcript().size();
         assertThat(after).isLessThanOrEqualTo(before);
     }
 

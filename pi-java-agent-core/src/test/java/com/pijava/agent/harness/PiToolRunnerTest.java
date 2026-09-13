@@ -1,7 +1,6 @@
 package com.pijava.agent.harness;
 
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import com.pijava.agent.hook.BeforeToolResult;
 import com.pijava.agent.hook.HookSystem;
@@ -117,7 +116,7 @@ class PiToolRunnerTest {
 
     @Test
     void deniedByBeforeToolHookCarriesReasonAndTerminate() {
-        var hooks = new HookSystem(new ConcurrentHashMap<>());
+        var hooks = new HookSystem(new LaneState());
         hooks.onBeforeTool("default", ctx ->
             new BeforeToolResult(false, Map.of("reason", "not allowed here"), true));
         var decisions = new java.util.ArrayList<String>();

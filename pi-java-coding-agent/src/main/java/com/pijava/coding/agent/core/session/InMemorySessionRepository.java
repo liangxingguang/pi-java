@@ -8,7 +8,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.pijava.agent.harness.LaneConfig;
 import com.pijava.coding.agent.core.AgentSession;
 
 /**
@@ -95,11 +94,6 @@ public final class InMemorySessionRepository {
                 entry.getValue().session.entryCount()));
         }
         return List.copyOf(result);
-    }
-
-    /** Register a lane on an existing session (fork target support). */
-    public void ensureLane(AgentSession session, String laneName) {
-        session.harness().createLane(LaneConfig.of(laneName));
     }
 
     private record SessionEntry(

@@ -9,7 +9,6 @@ import java.util.concurrent.ConcurrentMap;
 import com.pijava.agent.harness.LaneState;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.record.UsageCause;
-import com.pijava.agent.record.UsageCause;
 import com.pijava.agent.tool.ToolResult;
 
 /**
@@ -18,15 +17,18 @@ import com.pijava.agent.tool.ToolResult;
  * <p>Hooks are stored per-lane and per-hook-name, allowing independent
  * hook chains for each lane. Hook execution errors are recorded as
  * {@link LaneRecord.HookError} and never propagate — hooks are non-fatal.</p>
+ *
+ * <p>车道名仍是登记键（一个 harness 只有一条车道，{@code docs/31 §4.3}）——
+ * 扩展注册时给出会话的车道名，触发时按同一名字取回。</p>
  */
 public final class HookSystem {
 
     private final HookRegistry registry = new HookRegistry();
-    private final ConcurrentMap<String, LaneState> lanes;
+    private final LaneState lane;
 
-    /** Create a hook system bound to the given lane map. */
-    public HookSystem(ConcurrentMap<String, LaneState> lanes) {
-        this.lanes = lanes;
+    /** Create a hook system bound to the harness's lane. */
+    public HookSystem(LaneState lane) {
+        this.lane = lane;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -297,8 +299,7 @@ public final class HookSystem {
         // Hook failures are non-fatal. pi records them via usage records with
         // cause "hook"; the harness does not produce usage for hooks yet, so a
         // zero-usage record marks the event (Phase 4 §3.2).
-        var lane = lanes.get(laneName);
-        if (lane != null) {
+        if (lane.laneName().equals(laneName)) {
             lane.records.add(new LaneRecord.UsageRecord(
                 java.util.UUID.randomUUID().toString(), 0, laneName, null,
                 com.pijava.ai.Usage.of(0, 0), UsageCause.HOOK,

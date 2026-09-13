@@ -185,40 +185,7 @@ class AgentHarnessTest {
     @Test
     void defaultLaneIsCreatedOnConstruction() {
         var harness = createHarness(textStreamFn("ok"));
-        var lane = harness.lane();
-        assertThat(lane.name()).isEqualTo("default");
-    }
-
-    @Test
-    void createLaneReturnsHandle() {
-        var harness = createHarness(textStreamFn("ok"));
-        var handle = harness.createLane(LaneConfig.of("review"));
-        assertThat(handle.name()).isEqualTo("review");
-    }
-
-    @Test
-    void createLaneWithExistingNameThrows() {
-        var harness = createHarness(textStreamFn("ok"));
-        harness.createLane(LaneConfig.of("review"));
-        assertThatThrownBy(() -> harness.createLane(LaneConfig.of("review")))
-                .isInstanceOf(LaneExistsException.class);
-    }
-
-    @Test
-    void lanesReturnsAllLanes() {
-        var harness = createHarness(textStreamFn("ok"));
-        harness.createLane(LaneConfig.of("a"));
-        harness.createLane(LaneConfig.of("b"));
-        assertThat(harness.lanes()).hasSize(3); // default + a + b
-    }
-
-    @Test
-    void laneHandleRunDelegates() {
-        var harness = createHarness(textStreamFn("Hi!"));
-        var handle = harness.createLane(LaneConfig.of("lane1"));
-        var outcome = handle.run("hello from lane1");
-        assertThat(outcome).isNotNull();
-        assertThat(outcome.transcript()).isNotEmpty();
+        assertThat(harness.laneName()).isEqualTo("default");
     }
 
     // ── Phase 2c: Hooks tests ─────────────────────────────────
@@ -265,7 +232,7 @@ class AgentHarnessTest {
         harness.close();
         assertThatThrownBy(() -> harness.prompt("test"))
                 .isInstanceOf(HarnessClosedException.class);
-        assertThatThrownBy(() -> harness.createLane(LaneConfig.of("x")))
+        assertThatThrownBy(() -> harness.compact(new CompactionSettings(true, 10, 10)))
                 .isInstanceOf(HarnessClosedException.class);
     }
 

@@ -46,8 +46,18 @@ public class AgentHarness implements AutoCloseable {
     private final ToolContext toolContext;
     private volatile boolean closed;
 
-    // Phase 2c: multi-lane（容器与生命周期在 LaneRegistry）
-    private final LaneRegistry registry;
+    /** 构造配置的留存副本 —— 只为 {@link #fork()} 用（新会话要一个**同配置**的独立 harness）。 */
+    private final HarnessConfig config;
+
+    /**
+     * 本 harness **唯一**的车道（pi {@code AgentState}，{@code docs/31 §4.3}）。
+     *
+     * <p>运行时多车道容器（{@code LaneRegistry} / {@code LaneHandle} / {@code LaneConfig}）
+     * 已删除：pi 的对齐目标 {@code agent.ts} 是单状态的，而「多分支」归会话层 —— 每个
+     * {@code AgentSession} 持有自己的 harness，分支就是新会话（存储层 lane 保留，那正是
+     * pi 的分支模型）。</p>
+     */
+    private final LaneState lane = new LaneState();
 
     // Phase 2c: hooks
     private final HookSystem hookSystem;
@@ -74,9 +84,6 @@ public class AgentHarness implements AutoCloseable {
     private QueueManager queueManager;
     private final TelemetryContext telemetry;
 
-    // Phase 2c: mutable run configuration (model/thinking/tools/queues)
-    private final HarnessState state = new HarnessState();
-
     // ── Factory ──────────────────────────────────────────────
 
     /** Create a new AgentHarness from configuration. */
@@ -85,49 +92,61 @@ public class AgentHarness implements AutoCloseable {
     }
 
     private AgentHarness(HarnessConfig config) {
+        this.config = config;
         this.streamFn = config.streamFn();
-        state.model = config.model();
-        state.thinkingLevel = config.thinkingLevel();
-        state.systemPrompt = config.systemPrompt();
-        state.activeTools = config.activeTools();
+        lane.laneName = DEFAULT_LANE;
+        lane.model = config.model();
+        lane.thinkingLevel = config.thinkingLevel();
+        lane.systemPrompt = config.systemPrompt();
+        lane.activeTools = config.activeTools();
         this.maxInputTokens = config.maxInputTokens();
         this.toolRegistry = config.toolRegistry();
         this.toolContext = config.toolContext();
-        state.steeringMode = config.steeringMode();
-        state.followUpMode = config.followUpMode();
-        state.toolExecution = config.toolExecution();
-        state.compactionSettings = config.compactionSettings();
+        lane.steeringMode = config.steeringMode();
+        lane.followUpMode = config.followUpMode();
+        lane.toolExecution = config.toolExecution();
+        lane.compactionSettings = config.compactionSettings();
         this.telemetry = config.telemetry();
-        this.registry = new LaneRegistry(DEFAULT_LANE);
-        var lanes = registry.lanes();
-        this.hookSystem = new HookSystem(lanes);
+        this.hookSystem = new HookSystem(lane);
         config.skills().values().forEach(skillManager::register);
 
         // Build snapshot service first (referenced by execution context)
         this.snapshotService = new SnapshotService(
-            lanes, eventBus, tokenCounter,
-            () -> state.model != null ? state.model.modelName() : "unknown",
-            () -> state.activeTools.stream().map(AgentTool::name)
+            lane, eventBus, tokenCounter,
+            () -> lane.model != null ? lane.model.modelName() : "unknown",
+            () -> lane.activeTools.stream().map(AgentTool::name)
                 .collect(java.util.stream.Collectors.toSet()));
 
         // Build queue manager first (referenced by the execution context)
         this.queueManager = new QueueManager(
-            lanes,
-            () -> state.steeringMode,
-            () -> state.followUpMode);
+            lane,
+            () -> lane.steeringMode,
+            () -> lane.followUpMode);
 
         // Build execution context and the run lifecycle
         var execCtx = new ExecutionContext(
-            streamFn, () -> state.model, () -> state.thinkingLevel,
-            () -> state.systemPrompt, () -> state.activeTools,
+            streamFn, () -> lane.model, () -> lane.thinkingLevel,
+            () -> lane.systemPrompt, () -> lane.activeTools,
             maxInputTokens, toolRegistry, toolContext,
             skillManager,
-            hookSystem, lanes, () -> state.compactionSettings, config.thinkingLevelMap(),
-            tokenCounter, snapshotService, queueManager, () -> state.toolExecution,
+            hookSystem, lane, () -> lane.compactionSettings, config.thinkingLevelMap(),
+            tokenCounter, snapshotService, queueManager, () -> lane.toolExecution,
             () -> eventBus::broadcastStream, config.summaryGenerator(),
-            state::applyTurn, telemetry);
+            lane::applyTurn, telemetry);
         this.runLifecycle = new RunLifecycle(execCtx);
         this.piEngine = new PiLaneEngine(execCtx, runLifecycle);
+    }
+
+    /**
+     * 同配置的**全新** harness —— 会话层建分支时给新会话一个独立宿主（{@code docs/31 §4.3}）。
+     *
+     * <p>车道是**空的**：pi 的 fork 复制 entry 是会话层的事（{@code harness/session/fork.ts}），
+     * 这里只负责「一个新的、同配置的 Agent 状态」，内容由调用方 {@link #seedTranscript} 播种。
+     * 与父 harness 共享的是 {@link HarnessConfig} 里那几个不可变依赖（streamFn、toolRegistry、
+     * toolContext）—— 比删除容器之前「子会话直接用父 harness」的隔离度只增不减。</p>
+     */
+    public AgentHarness fork() {
+        return new AgentHarness(config);
     }
 
     /**
@@ -139,30 +158,9 @@ public class AgentHarness implements AutoCloseable {
         return eventBus.subscribeStream(listener);
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // Multi-lane
-    // ═══════════════════════════════════════════════════════════
-
-    /** Get the default lane handle. */
-    public LaneHandle lane() {
-        return registry.handle(this);
-    }
-
-    /** Create a new lane. */
-    public LaneHandle createLane(LaneConfig config) {
-        if (closed) throw new HarnessClosedException();
-        return registry.create(this, config);
-    }
-
-    /** List all lane handles. */
-    public List<LaneHandle> lanes() {
-        return registry.handles(this);
-    }
-
-    /** Move entries from one lane to another. */
-    public void moveLane(String source, String target) {
-        if (closed) throw new HarnessClosedException();
-        registry.move(source, target);
+    /** The lane's name — 一个 harness 只有一条，恒为 {@link #DEFAULT_LANE}（{@code docs/31 §4.3}）。 */
+    public String laneName() {
+        return lane.laneName;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -206,22 +204,22 @@ public class AgentHarness implements AutoCloseable {
 
     /** Current steer-queue drain mode. */
     public QueueMode steeringMode() {
-        return state.steeringMode;
+        return lane.steeringMode;
     }
 
     /** Change the steer-queue drain mode (Phase 3). */
     public void steeringMode(QueueMode mode) {
-        state.steeringMode = mode;
+        lane.steeringMode = mode;
     }
 
     /** Current follow-up-queue drain mode. */
     public QueueMode followUpMode() {
-        return state.followUpMode;
+        return lane.followUpMode;
     }
 
     /** Change the follow-up-queue drain mode (Phase 3). */
     public void followUpMode(QueueMode mode) {
-        state.followUpMode = mode;
+        lane.followUpMode = mode;
     }
 
     /** The shared tool context (shell executor, cwd, env) for this harness. */
@@ -231,12 +229,12 @@ public class AgentHarness implements AutoCloseable {
 
     /** Current tool execution mode. */
     public ToolExecution toolExecution() {
-        return state.toolExecution;
+        return lane.toolExecution;
     }
 
     /** Change the tool execution mode (Phase 3). */
     public void toolExecution(ToolExecution mode) {
-        state.toolExecution = mode;
+        lane.toolExecution = mode;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -245,12 +243,12 @@ public class AgentHarness implements AutoCloseable {
 
     /** Run a prompt to completion on the default lane. */
     public PiLaneEngine.RunOutcome prompt(String text) {
-        return prompt(registry.defaultLaneName(), text, List.of(), null);
+        return prompt(DEFAULT_LANE, text, List.of(), null);
     }
 
     /** Run a prompt to completion on the default lane, with attached images. */
     public PiLaneEngine.RunOutcome prompt(String text, List<PromptImage> images) {
-        return prompt(registry.defaultLaneName(), text, images, null);
+        return prompt(DEFAULT_LANE, text, images, null);
     }
 
     /** Run a prompt to completion on the specified lane. */
@@ -284,12 +282,12 @@ public class AgentHarness implements AutoCloseable {
 
     /** Continue a run on the default lane. */
     public PiLaneEngine.RunOutcome continueRun() {
-        return continueRun(registry.defaultLaneName(), null);
+        return continueRun(DEFAULT_LANE, null);
     }
 
     /** Abort the current run on the default lane. */
     public void abort() {
-        abort(registry.defaultLaneName());
+        abort(DEFAULT_LANE);
     }
 
     /** Abort the current run on the specified lane. */
@@ -333,7 +331,7 @@ public class AgentHarness implements AutoCloseable {
 
     /** Clear the default lane (pi Agent.reset alignment). */
     public void reset() {
-        reset(registry.defaultLaneName());
+        reset(DEFAULT_LANE);
     }
 
     /** Seed a lane transcript from a persisted session on resume (no-op when non-empty). */
@@ -354,7 +352,7 @@ public class AgentHarness implements AutoCloseable {
 
     /** Return the final assistant message from the most recent run (default lane). */
     public AssistantMessage lastAssistantMessage() {
-        return registry.get(registry.defaultLaneName()).partial;
+        return lane.partial;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -363,7 +361,7 @@ public class AgentHarness implements AutoCloseable {
 
     /** Run a compaction on the default lane. */
     public void compact(CompactionSettings settings) {
-        compact(registry.defaultLaneName(), settings);
+        compact(DEFAULT_LANE, settings);
     }
 
     /** Run a compaction on the specified lane. */
@@ -418,51 +416,51 @@ public class AgentHarness implements AutoCloseable {
     // Model / Thinking / Tools
     // ═══════════════════════════════════════════════════════════
 
-    public ModelId<?> getModel() { return state.model; }
+    public ModelId<?> getModel() { return lane.model; }
     /** Set the model used for subsequent LLM calls（同时把变更写进 transcript，见 §4.1）. */
     public void setModel(ModelId<?> model) {
         if (closed) throw new HarnessClosedException();
-        state.model = model;
-        runLifecycle.recordModelChange(registry.defaultLaneName(), model);
+        lane.model = model;
+        runLifecycle.recordModelChange(DEFAULT_LANE, model);
     }
-    public ModelThinkingLevel getThinkingLevel() { return state.thinkingLevel; }
+    public ModelThinkingLevel getThinkingLevel() { return lane.thinkingLevel; }
     /** Set the thinking level used for subsequent LLM calls（变更时才写 entry，见 §4.1）. */
     public void setThinkingLevel(ModelThinkingLevel level) {
         if (closed) throw new HarnessClosedException();
-        state.thinkingLevel = level;
-        runLifecycle.recordConfigChanged(registry.defaultLaneName());
+        lane.thinkingLevel = level;
+        runLifecycle.recordConfigChanged(DEFAULT_LANE);
     }
 
     /** Change the system prompt for subsequent runs. */
     public void setSystemPrompt(String prompt) {
         if (closed) throw new HarnessClosedException();
-        state.systemPrompt = prompt;
+        lane.systemPrompt = prompt;
     }
 
     /** The current system prompt. */
     public String getSystemPrompt() {
-        return state.systemPrompt;
+        return lane.systemPrompt;
     }
 
     public Set<AgentTool<?, ?>> getActiveTools() {
-        return Set.copyOf(state.activeTools);
+        return Set.copyOf(lane.activeTools);
     }
 
     /** Replace the set of active tools, re-registering them in the tool registry. */
     public void setActiveTools(Set<AgentTool<?, ?>> tools) {
         if (closed) throw new HarnessClosedException();
-        state.activeTools = Set.copyOf(tools);
+        lane.activeTools = Set.copyOf(tools);
         if (toolRegistry != null) {
             toolRegistry.clear();
             toolRegistry.registerAll(List.copyOf(tools));
         }
     }
 
-    public CompactionSettings getCompactionSettings() { return state.compactionSettings; }
+    public CompactionSettings getCompactionSettings() { return lane.compactionSettings; }
     /** Set the compaction settings used for subsequent runs. */
     public void setCompactionSettings(CompactionSettings s) {
         if (closed) throw new HarnessClosedException();
-        state.compactionSettings = s;
+        lane.compactionSettings = s;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -472,20 +470,18 @@ public class AgentHarness implements AutoCloseable {
     @Override
     public void close() {
         closed = true;
-        for (var lane : registry.lanes().values()) {
-            var signal = lane.abortSignal();
-            if (signal != null) {
-                signal.abort();
-            }
-            // Closing a running lane is an abort request: record it so the log
-            // says why the operation stopped, matching abort().
-            if (lane.isRunning()) {
-                lane.records.add(new LaneRecord.AbortRequested(
-                    java.util.UUID.randomUUID().toString(), 0, lane.laneName, null,
-                    lane.runId == null ? "" : lane.runId));
-            }
-            snapshotService.publishState(lane.laneName);
+        var signal = lane.abortSignal();
+        if (signal != null) {
+            signal.abort();
         }
+        // Closing a running lane is an abort request: record it so the log
+        // says why the operation stopped, matching abort().
+        if (lane.isRunning()) {
+            lane.records.add(new LaneRecord.AbortRequested(
+                java.util.UUID.randomUUID().toString(), 0, lane.laneName, null,
+                lane.runId == null ? "" : lane.runId));
+        }
+        snapshotService.publishState(lane.laneName);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -493,6 +489,6 @@ public class AgentHarness implements AutoCloseable {
     // ═══════════════════════════════════════════════════════════
 
     private LaneState requireLane(String laneName) {
-        return registry.require(laneName);
+        return HarnessUtils.requireLane(lane, laneName);
     }
 }

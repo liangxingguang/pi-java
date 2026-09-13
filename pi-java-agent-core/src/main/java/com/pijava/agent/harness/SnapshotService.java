@@ -2,7 +2,6 @@ package com.pijava.agent.harness;
 
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -16,19 +15,19 @@ import com.pijava.agent.record.LaneRecord;
  */
 final class SnapshotService {
 
-    private final ConcurrentMap<String, LaneState> lanes;
+    private final LaneState lane;
     private final HarnessEventBus eventBus;
     private final ExecutionContext.TokenCounter tokenCounter;
     private final Supplier<String> modelName;
     private final Supplier<Set<String>> activeToolNames;
 
     SnapshotService(
-            ConcurrentMap<String, LaneState> lanes,
+            LaneState lane,
             HarnessEventBus eventBus,
             ExecutionContext.TokenCounter tokenCounter,
             Supplier<String> modelName,
             Supplier<Set<String>> activeToolNames) {
-        this.lanes = lanes;
+        this.lane = lane;
         this.eventBus = eventBus;
         this.tokenCounter = tokenCounter;
         this.modelName = modelName;
@@ -62,8 +61,7 @@ final class SnapshotService {
 
     /** Publish lane + session snapshots after a state change. */
     void publishState(String laneName) {
-        var lane = lanes.get(laneName);
-        if (lane != null) {
+        if (lane.laneName.equals(laneName)) {
             eventBus.publishLane(buildLaneSnapshot(lane));
         }
         eventBus.publishSession(buildSessionSnapshot());
@@ -89,13 +87,12 @@ final class SnapshotService {
     }
 
     private SessionSnapshot buildSessionSnapshot() {
-        var laneInfos = lanes.values().stream()
-            .map(l -> new LaneInfo(l.laneName,
-                l.lastEntry() != null ? l.lastEntry().id() : null,
-                null))
-            .toList();
-        String phase = lanes.values().stream()
-            .anyMatch(LaneState::isRunning) ? "running" : "idle";
+        // 一个 harness 恰好一条车道（docs/31 §4.3），会话快照的车道列表因此恒为单元素 ——
+        // 形状保留，因为会话层的分支是**会话**而不是车道（存储层 lane 才是分支模型）。
+        var laneInfos = List.of(new LaneInfo(lane.laneName,
+            lane.lastEntry() != null ? lane.lastEntry().id() : null,
+            null));
+        String phase = lane.isRunning() ? "running" : "idle";
         return new SessionSnapshot(
             "session",
             modelName.get(),
@@ -108,6 +105,6 @@ final class SnapshotService {
     }
 
     private LaneState requireLane(String laneName) {
-        return HarnessUtils.requireLane(lanes, laneName);
+        return HarnessUtils.requireLane(lane, laneName);
     }
 }

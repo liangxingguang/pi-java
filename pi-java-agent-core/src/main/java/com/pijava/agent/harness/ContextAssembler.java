@@ -41,13 +41,11 @@ final class ContextAssembler {
 
     /** Build the system prompt (base + tools + skills) for the run. */
     String buildSystemPrompt(LaneState lane) {
-        var effectivePrompt = lane.systemPrompt != null
-            ? lane.systemPrompt : ctx.systemPrompt().get();
-        var effectiveTools = lane.activeTools != null
-            ? lane.activeTools : ctx.activeTools().get();
+        // 车道级覆盖（LaneConfig.systemPrompt / activeTools）已随多车道容器删除
+        // （docs/31 §4.3）：配置只有 harness 一处，而 harness 只有一条车道。
         return new SystemPromptBuilder()
-            .base(effectivePrompt)
-            .tools(effectiveTools)
+            .base(ctx.systemPrompt().get())
+            .tools(ctx.activeTools().get())
             .skills(ctx.skillManager().all())
             .build();
     }

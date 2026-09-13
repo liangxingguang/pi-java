@@ -3,7 +3,6 @@ package com.pijava.agent.harness;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentMap;
 import java.util.function.Supplier;
 
 import com.pijava.agent.record.LaneRecord;
@@ -19,15 +18,15 @@ import com.pijava.agent.record.QueueKind;
  */
 final class QueueManager {
 
-    private final ConcurrentMap<String, LaneState> lanes;
+    private final LaneState lane;
     private final Supplier<QueueMode> steeringMode;
     private final Supplier<QueueMode> followUpMode;
 
     QueueManager(
-            ConcurrentMap<String, LaneState> lanes,
+            LaneState lane,
             Supplier<QueueMode> steeringMode,
             Supplier<QueueMode> followUpMode) {
-        this.lanes = lanes;
+        this.lane = lane;
         this.steeringMode = steeringMode;
         this.followUpMode = followUpMode;
     }
@@ -171,6 +170,6 @@ final class QueueManager {
     }
 
     private LaneState requireLane(String laneName) {
-        return HarnessUtils.requireLane(lanes, laneName);
+        return HarnessUtils.requireLane(lane, laneName);
     }
 }

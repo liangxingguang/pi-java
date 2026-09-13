@@ -5,12 +5,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
+import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.ai.AbortSignal;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.model.ModelId;
+import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.telemetry.TelemetrySpan;
 
 /**
@@ -22,11 +25,27 @@ import com.pijava.telemetry.TelemetrySpan;
  * <p><b>运行态由 {@link #activeRun} 表达</b>（{@code docs/31 §3.2}）：非空即为正在运行。
  * 原先的 {@code RunPhase} 枚举与「先记账后落盘」的 {@code pendingWrites} 队列都已删除
  * —— entry 一旦产生就直接进 {@link #transcript}，没有中间态。</p>
+ *
+ * <p><b>一个 harness 恰好一条车道</b>（{@code docs/31 §4.3}）。运行时多车道容器
+ * （{@code LaneRegistry} / {@code LaneHandle} / {@code LaneConfig}）已删除，每个
+ * {@code AgentSession} 持有自己的 harness —— pi 的 {@code AgentState} 也是单状态的，
+ * 「多分支」归会话层（存储层 lane 保留，那正是 pi 的分支模型）。于是
+ * 原先挂在 {@code HarnessState} 上的可变配置并回了这里，与 pi 的字段布局一致。</p>
  */
 public final class LaneState {
 
     /** Lane identifier. */
     String laneName = "default";
+
+    /**
+     * 车道名 —— 恒为 {@link AgentHarness#DEFAULT_LANE}（{@code docs/31 §4.3}）。
+     *
+     * <p>公开访问器：{@code HookSystem} 在 {@code com.pijava.agent.hook} 包，
+     * 需要它来辨认「这条 hook 错误属于本车道吗」。</p>
+     */
+    public String laneName() {
+        return laneName;
+    }
 
     /** The lane's entry log — 持久真源，{@link PiLaneSink} 与 run 起手直接追加。 */
     final List<Entry> transcript = new ArrayList<>();
@@ -81,15 +100,27 @@ public final class LaneState {
      */
     String recordedThinking;
 
-    // Phase 2c: multi-lane fields
-    /** Parent leaf ID for branching; null for the default lane. */
-    String parentLeafId;
+    // ═══════════════════════════════════════════════════════════
+    // 配置（pi AgentState 的字段：model / thinkingLevel / systemPrompt / tools）
+    // ═══════════════════════════════════════════════════════════
 
-    /** Lane-level tool override; null means inherit from harness. */
-    Set<AgentTool<?, ?>> activeTools;
-
-    /** Lane-level system prompt override; null means inherit from harness. */
+    /**
+     * 下一次运行使用的配置（{@code docs/31 §4.1} 表格里仍挂在「harness」那一行）。
+     *
+     * <p>它们此前住在 {@code HarnessState} —— 一个「一个 harness 有多条车道」时代的
+     * 独立可变配置对象。容器删除后每个 harness 只有一条车道，而 pi 的
+     * {@code AgentState} 本来就把这些字段和消息放在一起，于是并回这里：字段仍是唯一真源，
+     * {@link AgentHarness} 的 setter 直接改它，entry 只是它的审计副本。</p>
+     */
+    ModelId<?> model;
+    ModelThinkingLevel thinkingLevel;
     String systemPrompt;
+    Set<AgentTool<?, ?>> activeTools;
+    CompactionSettings compactionSettings;
+    /** steer / followUp 队列的排空模式（pi 在 Agent 上是纯内存的，不入日志）。 */
+    QueueMode steeringMode;
+    QueueMode followUpMode;
+    ToolExecution toolExecution;
 
     // Phase 3: scheduling queues (steer / followUp / nextRun)
     /** Steering queue — injected into the current run's next assistant round. */
@@ -133,6 +164,30 @@ public final class LaneState {
     /** Derive the next sequence number. */
     long nextSeq() {
         return transcript.size();
+    }
+
+    /** 应用一次 {@code prepare_next_turn} 的配置更新（{@code null} 表示不改该项）。 */
+    void applyTurn(ModelId<?> newModel, String thinkingLevelLabel) {
+        if (newModel != null) {
+            model = newModel;
+        }
+        if (thinkingLevelLabel != null) {
+            thinkingLevel = "off".equals(thinkingLevelLabel)
+                ? ModelThinkingLevel.off()
+                : ModelThinkingLevel.of(parseThinkingLabel(thinkingLevelLabel));
+        }
+    }
+
+    /** 标签 → 思考等级。包内可见：{@link PiLaneEngine} 把它用于 {@code prepareNextTurn}。 */
+    static com.pijava.ai.thinking.ThinkingLevel parseThinkingLabel(String label) {
+        return switch (label) {
+            case "minimal" -> new com.pijava.ai.thinking.ThinkingLevel.Minimal();
+            case "low" -> new com.pijava.ai.thinking.ThinkingLevel.Low();
+            case "medium" -> new com.pijava.ai.thinking.ThinkingLevel.Medium();
+            case "high" -> new com.pijava.ai.thinking.ThinkingLevel.High();
+            case "xhigh" -> new com.pijava.ai.thinking.ThinkingLevel.XHigh();
+            default -> throw new IllegalArgumentException("Unknown thinking level: " + label);
+        };
     }
 
     /** The most recent entry, or null. */

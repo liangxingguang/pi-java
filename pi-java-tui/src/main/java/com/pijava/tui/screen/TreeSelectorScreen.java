@@ -42,11 +42,18 @@ public final class TreeSelectorScreen implements ScreenOverlay {
 
     @Override
     public void apply(AgentSession session, Consumer<AgentSession> switcher) {
-        // Phase 3: lane navigation is minimal — the selection is reported as a
-        // system bubble; rich tree navigation arrives Phase 6.
-        list.selected().ifPresent(selection ->
-            session.harness().createLane(com.pijava.agent.harness.LaneConfig.of(
-                selection.split(" @", 2)[0])));
+        // 选中一行 = 从该分支点**分支**出去 —— 分支是会话层的事（docs/31 §4.3）：
+        // 新会话持自己的 harness，日志在 entry 前截断后播种。
+        //
+        // 此前这里是 createLane(选中的名字)，而列表本来就来自现存分支的名字 ——
+        // 那条路对任何真实分支都直接抛 LaneExistsException，实际从未生效过。
+        list.selected().ifPresent(selection -> {
+            var parts = selection.split(" @", 2);
+            if (parts.length < 2) {
+                return;                       // 空分支：无 entry 可分支
+            }
+            switcher.accept(session.forkFromEntry(parts[1]));
+        });
     }
 
     @Override

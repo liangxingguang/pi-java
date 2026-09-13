@@ -221,7 +221,7 @@ public final class PiLaneEngine {
         return new PiLoop.NextTurnUpdate(
             update == null ? null : update.model(),
             update == null || update.thinkingLevel() == null ? null
-                : ModelThinkingLevel.of(HarnessState.parseThinkingLabel(update.thinkingLevel())),
+                : ModelThinkingLevel.of(LaneState.parseThinkingLabel(update.thinkingLevel())),
             compacted ? rebuiltContext(lane) : null);
     }
 
@@ -294,13 +294,13 @@ public final class PiLaneEngine {
     // 工具与消息视图
     // ═══════════════════════════════════════════════════════════
 
-    /** 生效的工具定义：注册表按车道级 {@code activeTools} 过滤（对齐 AssistantStreamExecutor:72-78）。 */
+    /** 生效的工具定义：注册表按生效的 {@code activeTools} 过滤（对齐 AssistantStreamExecutor:72-78）。 */
     private List<ToolDefinition> toolDefs(LaneState lane) {
         if (ctx.toolRegistry() == null) {
             return List.of();
         }
-        var effective = lane.activeTools != null ? lane.activeTools : ctx.activeTools().get();
-        Set<String> names = effective.stream().map(AgentTool::name).collect(Collectors.toSet());
+        Set<String> names = ctx.activeTools().get().stream()
+            .map(AgentTool::name).collect(Collectors.toSet());
         return ctx.toolRegistry().toToolDefinitions().stream()
             .filter(td -> names.contains(td.name()))
             .collect(Collectors.toList());

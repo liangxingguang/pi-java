@@ -3,7 +3,6 @@ package com.pijava.agent.harness;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentMap;
 
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.entry.ProvisionedEntry;
@@ -22,10 +21,15 @@ final class HarnessUtils {
 
     private HarnessUtils() {}
 
-    /** Look up a lane by name, throwing if absent. */
-    static LaneState requireLane(ConcurrentMap<String, LaneState> lanes, String laneName) {
-        var lane = lanes.get(laneName);
-        if (lane == null) {
+    /**
+     * The harness's lane, provided the caller named it correctly.
+     *
+     * <p>一个 harness 只有一条车道（{@code docs/31 §4.3}），所以这里退化成一次名字核对
+     * —— 保留它是因为「该调用属于哪条车道」仍是各处 API 的形状，而名字对不上意味着调用方
+     * 拿着别的会话的车道名（或早已删除的旧分支名），那必须炸而不是静默返回本车道。</p>
+     */
+    static LaneState requireLane(LaneState lane, String laneName) {
+        if (!lane.laneName.equals(laneName)) {
             throw new IllegalArgumentException("Lane not found: " + laneName);
         }
         return lane;

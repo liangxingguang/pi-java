@@ -18,9 +18,9 @@ import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.compaction.LlmSummaryGenerator;
 import com.pijava.agent.harness.AgentHarness;
 import com.pijava.agent.harness.HarnessConfig;
-import com.pijava.agent.harness.LaneConfig;
 import com.pijava.agent.harness.ToolExecution;
 import com.pijava.agent.harness.WatchHandle;
+import com.pijava.agent.session.ContextEntries;
 import com.pijava.agent.session.ForkOptions;
 import com.pijava.agent.session.Session;
 import com.pijava.agent.session.SessionMetadata;
@@ -92,7 +92,6 @@ public final class AgentSession implements AutoCloseable {
     private String name;
     private final Instant createdAt = Instant.now();
     private final Args args;
-    private String laneName = AgentHarness.DEFAULT_LANE;
     private InMemorySessionRepository repository = InMemorySessionRepository.shared();
     private PersistentSessionRepositories.RepositoryHandle persistentRepository;
     private Session<?> session;
@@ -351,14 +350,19 @@ public final class AgentSession implements AutoCloseable {
         return themePaths;
     }
 
-    /** The active lane name. */
+    /**
+     * 会话车道的名字 —— 恒为 {@link AgentHarness#DEFAULT_LANE}（{@code docs/31 §4.3}）。
+     *
+     * <p>会话不再有「当前车道」这个可变字段：运行时多车道容器已删除，分支是**新会话**
+     * （每个会话持有自己的 harness）。名字由 harness 给出。</p>
+     */
     public String laneName() {
-        return laneName;
+        return harness.laneName();
     }
 
     /** Approximate transcript size for session listings. */
     public long entryCount() {
-        return harness.snapshot(laneName).transcript().size();
+        return harness.snapshot(laneName()).transcript().size();
     }
 
     /** 全文对话条目（持久会话提交序），供跨回合/重连展示完整历史。 */
@@ -374,7 +378,7 @@ public final class AgentSession implements AutoCloseable {
         } else {
             LOG.warn("[session] accumulatedEntries: persistent session is null, using harness recent");
         }
-        return harness.snapshot(laneName).transcript();
+        return harness.snapshot(laneName()).transcript();
     }
 
     /** Full-history messages (accumulatedEntries projected to their payloads). */
@@ -429,27 +433,27 @@ public final class AgentSession implements AutoCloseable {
 
     /** Abort the current run (cross-thread safe via the harness AbortSignal). */
     public void abort() {
-        harness.abort(laneName);
+        harness.abort(laneName());
     }
 
     /** Queue a follow-up message (processed when the current run finishes). */
     public String followUp(String prompt) {
-        return harness.followUp(laneName, prompt);
+        return harness.followUp(laneName(), prompt);
     }
 
     /** Trigger a manual context compaction ({@code /compact}). */
     public void compact(CompactionSettings settings) {
-        harness.compact(laneName, settings);
+        harness.compact(laneName(), settings);
     }
 
     /** Queue a steering message (injected into the current run's next round). */
     public String steer(String prompt) {
-        return harness.steer(laneName, prompt);
+        return harness.steer(laneName(), prompt);
     }
 
     /** The most recent assistant text (for {@code /copy}). */
     public String lastAssistantText() {
-        var transcript = harness.snapshot(laneName).transcript();
+        var transcript = harness.snapshot(laneName()).transcript();
         for (int i = transcript.size() - 1; i >= 0; i--) {
             var entry = transcript.get(i);
             if (entry instanceof Entry.Message message
@@ -618,31 +622,32 @@ public final class AgentSession implements AutoCloseable {
         return SessionPersistence.importJsonl(this, source);
     }
 
-    /** Create a forked copy on a new lane ({@code /fork /clone --fork}). */
+    /** Create a forked copy ({@code /fork /clone --fork}）：整棵树都复制（pi {@code ForkOptions.Tree}）。 */
     public AgentSession forkCopy(String branchName) {
         if (persistentRepository != null && session != null) {
             var metadata = session.getMetadata();
             var forked = persistentRepository.fork(metadata, new ForkOptions.Tree(),
                 System.getProperty("user.dir"));
-            var copy = new AgentSession(harness, services, args, branchName);
+            var copy = new AgentSession(harness.fork(), services, args, branchName);
             copy.persistentRepository = persistentRepository;
             copy.session = forked;
             SessionPersistence.attach(copy, persistentRepository, forked.getMetadata());
             copy.name = branchName;
-            copy.laneName = AgentHarness.DEFAULT_LANE;
             return copy;
         }
-        harness.createLane(LaneConfig.of(branchName));
-        var forked = new AgentSession(harness, services, args, branchName);
-        forked.laneName = branchName;
-        forked.repository = repository;
-        repository.create(forked);
-        return forked;
+        // 内存态：没有独立会话文件可 fork，于是**给它一个自己的 harness**再从本会话日志播种
+        // —— 这正是「分支归会话层」的落点（docs/31 §4.3）。此前这里靠共享父 harness + 新建
+        // lane 假装隔离，而那条新 lane 是**空的**：分支会话拿不到任何历史。
+        return forkInMemory(branchName, entries());
     }
 
-    /** Fork a new session branching from a specific entry (RPC {@code fork}/{@code clone}).
-     *  持久化路径按 pi {@code ForkOptions.Branch} 在 entry 前分支；内存路径经
-     *  {@link LaneConfig#parentLeafId()} 在指定 entry 处建新 lane。 */
+    /**
+     * Fork a new session branching from a specific entry（RPC {@code fork}/{@code clone}）。
+     *
+     * <p>持久化路径按 pi {@code ForkOptions.Branch} 在 entry **前**分支；内存路径同样在
+     * entry 前截断，再播种给新 harness —— 与 {@code selectBranchFork} 的
+     * {@code position: "before"} 一致（{@code harness/session/fork-policy.ts:25-27}）。</p>
+     */
     public AgentSession forkFromEntry(String entryId) {
         String branchName = name + "-fork";
         if (persistentRepository != null && session != null) {
@@ -650,17 +655,45 @@ public final class AgentSession implements AutoCloseable {
             var forked = persistentRepository.fork(metadata,
                 new ForkOptions.Branch(entryId, ForkOptions.Branch.Position.BEFORE),
                 System.getProperty("user.dir"));
-            var copy = new AgentSession(harness, services, args, branchName);
+            var copy = new AgentSession(harness.fork(), services, args, branchName);
             copy.persistentRepository = persistentRepository;
             copy.session = forked;
             SessionPersistence.attach(copy, persistentRepository, forked.getMetadata());
             copy.name = branchName;
-            copy.laneName = AgentHarness.DEFAULT_LANE;
             return copy;
         }
-        harness.createLane(new LaneConfig(branchName, entryId, null, null));
-        var forked = new AgentSession(harness, services, args, branchName);
-        forked.laneName = branchName;
+        return forkInMemory(branchName, entriesBefore(entryId));
+    }
+
+    /** 本会话车道上的 entry 日志（副本）。 */
+    private List<Entry> entries() {
+        return harness.snapshot(laneName()).transcript();
+    }
+
+    /**
+     * 分支点**之前**的那条路径（pi {@code position: "before"}：请求的 entry 本身不入选）。
+     *
+     * <p>找不到该 entry 即抛 —— pi 的 {@code selectBranchFork} 同样拒绝不在分支上的 entry
+     * （{@code "Fork entry … is not on source branch"}），静默给一个空会话更糟。</p>
+     */
+    private List<Entry> entriesBefore(String entryId) {
+        var all = entries();
+        var target = all.stream().filter(e -> e.id().equals(entryId)).findFirst()
+            .orElseThrow(() -> new IllegalArgumentException(
+                "Fork entry " + entryId + " is not on this session's branch"));
+        return ContextEntries.pathToLeaf(all, target.parentId());
+    }
+
+    /**
+     * 内存态分支：新会话持**自己的** harness，日志从父会话播种。
+     *
+     * <p>播种走 {@code seedTranscript}，它同时把 entry 日志与消息工作副本一起立起来
+     * （{@code docs/31 §4.2} 的重建点）。</p>
+     */
+    private AgentSession forkInMemory(String branchName, List<Entry> seedEntries) {
+        var forkedHarness = harness.fork();
+        forkedHarness.seedTranscript(AgentHarness.DEFAULT_LANE, seedEntries);
+        var forked = new AgentSession(forkedHarness, services, args, branchName);
         forked.repository = repository;
         repository.create(forked);
         return forked;
@@ -725,7 +758,7 @@ public final class AgentSession implements AutoCloseable {
     /** 可供 fork 的用户消息（RPC {@code get_fork_messages}，对齐 pi
      *  {@code getUserMessagesForForking}）。 */
     public List<Entry.Message> getUserMessagesForForking() {
-        return harness().snapshot(laneName).transcript().stream()
+        return harness().snapshot(laneName()).transcript().stream()
             .filter(Entry.Message.class::isInstance)
             .map(Entry.Message.class::cast)
             .filter(e -> "user".equals(e.message().role()))
@@ -736,7 +769,7 @@ public final class AgentSession implements AutoCloseable {
     @Override
     public void close() {
         if (session != null) {
-            SessionPersistence.persistPending(this, session, laneName);
+            SessionPersistence.persistPending(this, session, laneName());
             session.close();
         }
         if (persistentRepository != null) {
