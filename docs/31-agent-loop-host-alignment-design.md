@@ -76,14 +76,14 @@ TUI / RPC / web 各自开一个 session，每个 session 一条车道。
 |---|---|---|
 | `AgentState.messages`（**真源**） | `LaneState.transcript`（entries 是真源，每轮重建 messages） | **翻转**（§3.1、§4.2） |
 | `activeRun?: {promise, resolve, abortController}`（存在即运行） | `RunPhase.Idle/Assistant/Checkpoint` + `lane.runId` | 换成 `activeRun`（§3.2） |
-| `processEvents(event)` 归约器（~40 行） | `ActionExecutor.executeAction` 七路 switch + `PiLaneSink` | 换成 `processEvents`（§3.3） |
+| `processEvents(event)` 归约器（~40 行） | `ActionExecutor.executeAction` 七路 switch + `PiLaneSink` | 换成 `processEvents`（§3.3）—— **效果已落地，形状未照搬**，见 §8.14 |
 | `prompt()` / `continue()` / `abort()` / `reset()` | `ActionExecutor.run`/`runContinue` + `AgentHarness.abort/reset` | 1:1 重写 |
 | `handleRunFailure()`：合成错误助手消息，走**同一条** `processEvents` | `HarnessUtils.determineOutcome` + `TryFinishRun` 分支 | 1:1 |
 | `isStreaming` / `streamingMessage` | `RunPhase` / `lane.partial` | 1:1 |
 | `pendingToolCalls: Set<string>` | `List<Action.ExecuteTool>` | 改 `Set<String>` |
 | `systemPrompt` / `model` / `thinkingLevel` / `tools`（**字段**） | `Entry.ModelChange` / `ThinkingLevelChange` / `ActiveToolsChange`（**transcript 里的 entry**） | 翻成字段 + 会话层写 entry（§4.1） |
 | `PendingMessageQueue` ×2（steering / followUp） | `QueueManager` ×3（多 `nextRun`） | 保留（§4.4） |
-| `subscribe(listener)` → 事件 | `PiLaneSink` 直接写 entry | 会话层改为订阅者（§3.4） |
+| `subscribe(listener)` → 事件 | `PiLaneSink` 直接写 entry | 会话层改为订阅者（§3.4）—— **未实施**，见 §8.14 |
 | — | `Action` / `peekAction` / `executeAction` / `LoopInvariants` / `DriveMode` / `RunPhase` | **删**（§6） |
 | — | `pendingWrites` | **删**（裁决 ③，§5） |
 | — | `LaneRecord` 记录日志 | **保留**为旁路审计（pi 无，但有真实消费者） |
@@ -232,6 +232,10 @@ void handleAgentEvent(PiLoop.Event event) {
 ```
 
 **`PiLaneSink` 因此退化为纯事件转发**：不再造 entry、不再碰 `pendingWrites`。
+
+> **⚠️ 本节未实施，且是有意留下的** —— 见 §8.14。entry 的**作者**仍是 harness
+> （`PiLaneSink`），会话层是**订阅者**（`SessionRunner` 的 `persistPerEntry` 只负责落盘）。
+> 与本节设想的「会话层订阅并 append、sink 退化为纯转发」是**相反的切分**。
 
 ---
 
@@ -841,6 +845,50 @@ checkstyle 0 违规。删除 `MultiLaneTest`（5 例）与 `AgentHarnessTest` �
 **`docs/03` 的过期不是「没写」，而是「写了另一个东西」。** 这一章是 Phase 1-2 的
 详细设计，此后 pi 对齐（`docs/27` 起）把宿主层整体换掉了，而 §2 描述的是换掉之前的那套。
 现在 §2 以 `docs/31` 的结论为准，`docs/31` 以 pi 源码为准。
+
+---
+
+### 8.14 §3.3 / §3.4 的真实状态（2026-09-13 清点）
+
+§8.8 记录了 §5 与 §3.1 的实施偏差，但**漏了 §3.3 与 §3.4** —— 而 §2.1 的映射表把它们
+写成「处置」栏里的目标，读起来像已完成。清点结果如下，两处都**不是完成态**。
+
+#### §3.3 `processEvents` 归约器 —— 效果已落地，形状未照搬
+
+pi 的归约器写四个字段，Java 侧对照：
+
+| pi `AgentState` 字段 | pi-java | 差异 |
+|---|---|---|
+| `messages` | `LaneState.messages` | ✅ 同形（`PiLaneSink.onMessageEnd` 追加，`docs/31 §4.2`） |
+| `streamingMessage` | `LaneState.partial` | ✅ 同义，名字不同 |
+| `isStreaming` | 无此字段 | ⚠️ 由 `activeRun != null` 近似承担；pi 的 `true` 窗口是整次 run，Java 的 `isRunning()` 也是 |
+| `errorMessage` | 无此字段（`newestOwn` + `determineOutcome` 代替） | ⚠️ 结局判定等价，**但不上快照** —— pi 的 `AgentState` 是 `readonly` 暴露的，订阅者看得见 |
+| `pendingToolCalls` | 无此字段（`PiLaneSink` 内 `toolSpans` / `toolStartNanos` 按 callId 索引） | ⚠️ 同角色，未上快照 |
+
+**`pendingToolCalls` 在 pi 里是只写的**（`agent.ts:560-569` 只加只删；全仓唯一的同名字符串
+在 `ai/transform-messages.ts`，是**另一个局部变量**）。所以这条差异是**可观察状态**的缺口，
+不是行为缺口：订阅者看不到「有哪些工具调用在飞」。
+
+⇒ 要补齐的话是**加字段**（`LaneState.pendingToolCalls: Set<String>` + 两个事件点上增删 +
+`LaneSnapshot` 暴露），不是重构。**未做。**
+
+#### §3.4 会话层改为订阅者 —— 未实施，切分方向相反
+
+设计想要的是 pi `agent-session.ts:643` 的分工：**Agent 发事件 → 会话层 append entry**，
+`PiLaneSink` 退化为纯转发。
+
+实际落地的是**反向**：**harness 的作者**（`PiLaneSink.append` 造 `Entry` 并写进
+`transcript`），**会话层是订阅者**（`SessionRunner.persistPerEntry` 只把 harness 已经产出的
+entry 落盘）。§8.3-5 的清点正是这条反向切分的依据：`SessionPersistence` 的落盘走
+`snapshot().transcript()`，而 harness 的 transcript 是**新 entry 的唯一生产者**。
+
+**这是本次对齐里最大的一处结构性偏离**，且它是**为什么 §3.4 与 §4.2 能并存**的原因：
+`messages` 工作副本由 sink 维护（§4.2），entry 也由 sink 造 —— 两者在同一个事件点上，
+不必跨层同步。
+
+要照 §3.4 改，得把 entry 的构造整体搬到会话层，harness 只留 `messages` + 事件发射。
+**收益是形状与 pi 一致；成本是把 append 的落盘点、排序、deferred 标记一并搬走，而 L5
+差分验证不到这条通道**（帧里只有 agent 事件，`docs/31 §8.7`）。**未做，且未获裁决。**
 
 ---
 
