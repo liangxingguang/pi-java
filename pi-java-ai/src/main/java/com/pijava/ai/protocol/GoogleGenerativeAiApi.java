@@ -33,6 +33,11 @@ import com.pijava.ai.stream.StreamPartialBuilder;
  */
 public final class GoogleGenerativeAiApi extends AbstractChatApi {
 
+    @Override
+    public String apiName() {
+        return "google-generative-ai";
+    }
+
     private static final String DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com";
 
     private final Client client;

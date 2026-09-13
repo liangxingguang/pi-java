@@ -36,6 +36,11 @@ import com.pijava.ai.stream.StreamPartialBuilder;
  */
 public class OpenAICompletionsApi extends AbstractChatApi {
 
+    @Override
+    public String apiName() {
+        return "openai-completions";
+    }
+
     protected final OpenAIClient client;
     protected final String apiKey;
 

@@ -37,6 +37,11 @@ import com.pijava.ai.stream.StreamPartialBuilder;
  */
 public final class AnthropicMessagesApi extends AbstractChatApi {
 
+    @Override
+    public String apiName() {
+        return "anthropic-messages";
+    }
+
     private final AnthropicClient client;
 
     /**

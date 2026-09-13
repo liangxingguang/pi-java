@@ -26,6 +26,11 @@ import com.pijava.ai.stream.StreamEvent;
  */
 public final class AzureOpenAIResponsesApi extends AbstractChatApi {
 
+    @Override
+    public String apiName() {
+        return "azure-openai-responses";
+    }
+
     private final OpenAIClient client;
     private final ResponsesOptions responsesOptions;
     private final AzureOptions azureOptions;

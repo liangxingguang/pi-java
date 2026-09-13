@@ -29,6 +29,11 @@ import com.pijava.ai.stream.StreamPartialBuilder;
  */
 public final class PiMessagesApi extends AbstractChatApi {
 
+    @Override
+    public String apiName() {
+        return "pi-messages";
+    }
+
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private final PiHttpClient client;

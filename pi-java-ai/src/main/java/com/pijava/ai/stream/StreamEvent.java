@@ -49,6 +49,34 @@ public sealed interface StreamEvent {
      */
     AssistantMessage partial();
 
+    /**
+     * 用新的 partial 快照替换事件的 {@code partial}（其余字段原样保留）。
+     * 3a 的身份挂载点在 {@code AbstractChatApi} 出口统一调它，把
+     * api/provider/model/timestamp 写进每个事件携带的快照（pi 的 partial
+     * 本就与终局同形状携带这些字段）。{@link UsageInfo} 允许不带快照
+     * （{@code partial() == null}），这种情况原样返回。
+     */
+    static StreamEvent withPartial(StreamEvent event, AssistantMessage newPartial) {
+        return switch (event) {
+            case Start s -> new Start(newPartial);
+            case TextStart s -> new TextStart(s.contentIndex(), newPartial);
+            case TextDelta s -> new TextDelta(s.contentIndex(), s.delta(), newPartial);
+            case TextEnd s -> new TextEnd(s.contentIndex(), s.text(), newPartial);
+            case ThinkingStart s -> new ThinkingStart(s.contentIndex(), newPartial);
+            case ThinkingDelta s -> new ThinkingDelta(s.contentIndex(), s.delta(), newPartial);
+            case ThinkingEnd s -> new ThinkingEnd(s.contentIndex(), s.thinking(), newPartial);
+            case ToolCallStart s -> new ToolCallStart(s.contentIndex(), newPartial);
+            case ToolCallDelta s -> new ToolCallDelta(
+                s.contentIndex(), s.id(), s.jsonDelta(), newPartial);
+            case ToolCallEnd s -> new ToolCallEnd(
+                s.contentIndex(), s.id(), s.name(), s.arguments(), newPartial);
+            case UsageInfo s -> s.partial() == null ? s
+                : new UsageInfo(s.inputTokens(), s.outputTokens(), newPartial, s.usage());
+            case StreamDone s -> new StreamDone(s.reason(), s.usage(), newPartial);
+            case StreamError s -> new StreamError(s.reason(), s.error(), newPartial);
+        };
+    }
+
     // ═══════════════════════════════════════════════════════════
     // Lifecycle events
     // ═══════════════════════════════════════════════════════════

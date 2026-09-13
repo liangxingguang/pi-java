@@ -32,7 +32,8 @@ public sealed interface Message {
     }
 
     /**
-     * A message from the assistant (LLM).
+     * A message from the assistant (LLM) —— pi {@code AssistantMessage} 的镜像
+     * （{@code packages/ai/src/types.ts:427-449}）。
      *
      * <p>{@code stopReason} is the reason the turn ended ({@code stop} /
      * {@code tool_use} / {@code length} / {@code error} / {@code aborted} /
@@ -41,11 +42,36 @@ public sealed interface Message {
      * (docs/22 D1) — readers must not keep a parallel copy.
      * {@code deferred} is the provider handle carried only when
      * {@code stopReason} is {@code "deferred"}.</p>
+     *
+     * <p><b>provider 身份三元组 + 计量</b>（对齐 package 3a，docs/31 §8.19）：pi 的
+     * 每个 provider 在构造消息时就写死 {@code api}/{@code provider}/{@code model}
+     * （协议判别字面量 + {@code ModelId}），并把响应的 {@code usage} 和
+     * {@code timestamp} 一起落在消息上；harness 的自动压缩估算
+     * （{@code estimateContextTokens}）与溢出守卫（{@code _checkCompaction} 的
+     * sameModel/stale 判断）全部从这条消息读起 —— 缺了这些字段，压缩触发时机和
+     * 溢出恢复行为就和 pi 不一样。生产路径由 {@code AbstractChatApi} 在事件出口挂载、
+     * 经 {@link #fromPartial} 转入终局消息。</p>
+     *
+     * <p>pi 类型上的 {@code responseModel}/{@code responseId}/
+     * {@code providerThinkingLevel}/{@code diagnostics}/{@code rawStopReason}/
+     * {@code endTurn} 在对齐面（packages/agent/src）没有任何消费者（grep 全数命中的
+     * 只有 prompt-templates/skills 的同名局部量），故不移植；哪天 pi 的消费进
+     * 对齐面，清点时重开。</p>
+     *
+     * <p>可选字段全部「null ≙ pi 的 undefined」：序列化时键主动省略（Jackson 会把
+     * null 写出来，JS 的 stringify 会丢 undefined —— 规则同 §8.18 的 A7）。
+     * 兼容构造器服务于流式未成的消息和旧数据解码。</p>
      */
     record AssistantMessage(
         List<ContentBlock> content,
         String stopReason,
-        DeferredHandle deferred
+        DeferredHandle deferred,
+        String api,
+        String provider,
+        String model,
+        com.pijava.ai.Usage usage,
+        java.time.Instant timestamp,
+        String errorMessage
     ) implements Message {
         /** Compact constructor that defensively copies the content blocks. */
         public AssistantMessage {
@@ -57,11 +83,55 @@ public sealed interface Message {
          * written before stop reasons were recorded, carries neither field.
          */
         public AssistantMessage(List<ContentBlock> content) {
-            this(content, null, null);
+            this(content, null, null, null, null, null, null, null, null);
+        }
+
+        /** Compatibility constructor for the pre-3a (content, stopReason, deferred) shape. */
+        public AssistantMessage(List<ContentBlock> content, String stopReason, DeferredHandle deferred) {
+            this(content, stopReason, deferred, null, null, null, null, null, null);
         }
 
         /**
-         * The same message with a different {@code stopReason}.
+         * 从流式 partial 快照投影出终局消息 —— pi 的 partial 与终局<b>同一个
+         * 对象形状</b>（{@code assistant-message-frame.ts:77-92} 的
+         * {@code cloneStartMessage} 逐字段携带），所以投影必须全字段，
+         * 不能只搬 content/stopReason（那是 3a 之前的丢点）。
+         */
+        public static AssistantMessage fromPartial(
+                com.pijava.ai.message.AssistantMessage partial) {
+            return new AssistantMessage(
+                partial.content(),
+                partial.stopReason(),
+                null,
+                partial.api(),
+                partial.provider(),
+                partial.model(),
+                usageOf(partial.usage()),
+                partial.timestamp(),
+                partial.errorMessage());
+        }
+
+        /**
+         * 把 partial 上的 {@link com.pijava.ai.stream.StreamEvent.UsageInfo} 归一为
+         * 完整 {@link com.pijava.ai.Usage}：有全量分解用全量（含 cache/cost），只有
+         * input/output 计数的合成（cache 0、cost 零）；无 UsageInfo ⇒ null（键省略）。
+         */
+        private static com.pijava.ai.Usage usageOf(
+                com.pijava.ai.stream.StreamEvent.UsageInfo info) {
+            if (info == null) {
+                return null;
+            }
+            if (info.usage() != null) {
+                return info.usage();
+            }
+            return new com.pijava.ai.Usage(info.inputTokens(), info.outputTokens(), 0, 0,
+                null, null, info.inputTokens() + info.outputTokens(),
+                com.pijava.ai.Usage.Cost.zero());
+        }
+
+        /**
+         * The same message with a different {@code stopReason} (all other
+         * fields preserved — this is a rewrite, not a reconstruction).
          *
          * <p>Used by the loop to record a turn that was cut short: an abort the
          * provider did not report itself still has to land as {@code aborted},
@@ -69,7 +139,8 @@ public sealed interface Message {
          * an ordinary answer.</p>
          */
         public AssistantMessage withStopReason(String newStopReason) {
-            return new AssistantMessage(content, newStopReason, deferred);
+            return new AssistantMessage(content, newStopReason, deferred,
+                api, provider, model, usage, timestamp, errorMessage);
         }
 
         @Override

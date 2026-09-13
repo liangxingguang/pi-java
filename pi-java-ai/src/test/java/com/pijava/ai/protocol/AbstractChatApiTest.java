@@ -32,8 +32,16 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class AbstractChatApiTest {
 
+    /**
+     * 3a：事件出口现在给「裸」partial（api 为 null）挂载 provider 身份。这两个
+     * 订阅时序回归测的是**转发**，不是挂载 —— 所以 EVENT 自带身份，走出口的同一条
+     * 「已挂身份 ⇒ 原样透传」规则（{@code IdentitySubscriber.onNext}），下面
+     * {@code containsExactly(EVENT)} 因此仍然逐字成立，顺带钉住了不覆盖规则。
+     */
     private static final StreamEvent EVENT =
-        new StreamEvent.TextStart(0, AssistantMessage.empty());
+        new StreamEvent.TextStart(0, AssistantMessage.empty().withIdentity(
+            "openai-responses", "test", "zero-io",
+            java.time.Instant.ofEpochMilli(1_700_000_000_000L)));
 
     private static StreamRequest request() {
         return StreamRequest.of(ModelId.of("test", "zero-io"), List.of());
@@ -53,11 +61,41 @@ class AbstractChatApiTest {
         }
 
         @Override
+        public String apiName() {
+            return "openai-responses";
+        }
+
+        @Override
         protected void streamInternal(StreamRequest request,
                                       SubmissionPublisher<StreamEvent> publisher) {
             invocations.incrementAndGet();
             publisher.submit(event);
         }
+    }
+
+    /**
+     * 3a（docs/31 §8.19）：裸 partial 在事件出口挂上 provider 身份三元组 + 时间戳，
+     * 内容索引不动 —— pi 的 provider 在构造消息时就写死这些字段，harness 的
+     * 压缩估算与溢出守卫全从它们读起。
+     */
+    @Test
+    void barePartialExitsWithProviderIdentityAttached() throws Exception {
+        var api = new ZeroIoApi(new StreamEvent.TextStart(
+            2, AssistantMessage.empty()));
+        var publisher = api.stream(request(), ApiOptions.defaults());
+        Thread.sleep(200);
+
+        var received = new CopyOnWriteArrayList<StreamEvent>();
+        var done = new CountDownLatch(1);
+        publisher.subscribe(collector(received, done));
+
+        assertThat(done.await(5, TimeUnit.SECONDS)).isTrue();
+        var started = (StreamEvent.TextStart) received.getFirst();
+        assertThat(started.contentIndex()).isEqualTo(2);
+        assertThat(started.partial().api()).isEqualTo("openai-responses");
+        assertThat(started.partial().provider()).isEqualTo("test");
+        assertThat(started.partial().model()).isEqualTo("zero-io");
+        assertThat(started.partial().timestamp()).isNotNull();
     }
 
     /** Collects received events and releases the latch once the stream completes. */

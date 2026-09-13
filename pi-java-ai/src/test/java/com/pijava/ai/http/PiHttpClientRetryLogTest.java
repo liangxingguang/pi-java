@@ -79,6 +79,11 @@ class PiHttpClientRetryLogTest {
 
         var api = new AbstractChatApi() {
             @Override
+            public String apiName() {
+                return "openai-responses";
+            }
+
+            @Override
             protected void streamInternal(StreamRequest request,
                                           SubmissionPublisher<StreamEvent> publisher) {
                 throw new IllegalStateException("boom");

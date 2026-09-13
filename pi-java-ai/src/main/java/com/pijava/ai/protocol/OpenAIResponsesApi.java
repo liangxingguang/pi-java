@@ -20,6 +20,11 @@ import com.pijava.ai.stream.StreamEvent;
  */
 public final class OpenAIResponsesApi extends AbstractChatApi {
 
+    @Override
+    public String apiName() {
+        return "openai-responses";
+    }
+
     private final OpenAIClient client;
     private final ResponsesOptions responsesOptions;
 

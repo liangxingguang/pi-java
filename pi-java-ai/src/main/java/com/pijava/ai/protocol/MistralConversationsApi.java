@@ -29,6 +29,11 @@ import com.pijava.ai.stream.ToolCallBuilder;
  */
 public final class MistralConversationsApi extends AbstractChatApi {
 
+    @Override
+    public String apiName() {
+        return "mistral-conversations";
+    }
+
     private static final String DEFAULT_BASE_URL = "https://api.mistral.ai/v1";
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
