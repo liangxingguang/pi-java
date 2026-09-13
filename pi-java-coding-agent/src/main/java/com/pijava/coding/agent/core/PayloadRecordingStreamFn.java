@@ -8,6 +8,7 @@ import java.util.Map;
 import com.pijava.agent.harness.Context;
 import com.pijava.agent.harness.StreamFn;
 import com.pijava.agent.harness.StreamOptions;
+import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.message.AssistantMessage;
@@ -104,7 +105,8 @@ final class PayloadRecordingStreamFn implements StreamFn {
         payload.put("systemPrompt", context.systemPrompt());
         payload.put("messages", context.messages().stream()
             .map(PayloadRecordingStreamFn::message).toList());
-        payload.put("tools", context.tools().stream().map(PayloadRecordingStreamFn::tool).toList());
+        payload.put("tools", ToolRegistry.definitionsOf(context.tools()).stream()
+            .map(PayloadRecordingStreamFn::tool).toList());
         payload.put("maxTokens", options.maxTokens().isPresent() ? options.maxTokens().getAsInt() : -1);
         payload.put("temperature", options.temperature().isPresent() ? options.temperature().getAsDouble() : -1);
         var thinking = options.thinking();

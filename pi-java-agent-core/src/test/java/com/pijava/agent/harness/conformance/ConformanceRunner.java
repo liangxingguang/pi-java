@@ -14,7 +14,9 @@ import com.pijava.agent.harness.StreamFn;
 import com.pijava.agent.harness.StreamOptions;
 import com.pijava.agent.harness.ToolExecution;
 import com.pijava.ai.api.StreamIterator;
-import com.pijava.ai.api.ToolDefinition;
+import com.pijava.agent.tool.AgentTool;
+import com.pijava.agent.tool.ExecutionMode;
+import com.pijava.agent.tool.ToolResult;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
@@ -60,18 +62,41 @@ final class ConformanceRunner {
         var prompt = new Message.UserMessage(
             List.of(new ContentBlock.TextContent(script.prompt())));
         // 系统提示与工具走 Context（pi 的 AgentContext），不在消息列表里。
-        var context = new Context(script.systemPrompt(), new ArrayList<>(), toolDefs(script));
+        var context = new Context(script.systemPrompt(), new ArrayList<>(), tools(script));
         PiLoop.run(List.of(prompt), context, config,
             event -> frames.add(normalizer.frame(event)));
         return List.copyOf(frames);
     }
 
-    private static List<ToolDefinition> toolDefs(ConformanceScript script) {
-        var defs = new ArrayList<ToolDefinition>();
+    /**
+     * 剧本 → 工具**本体**（pi 侧 {@code runScript} 的 {@code AgentTool[]} 对偶）。
+     *
+     * <p>执行不走这里的 {@code execute} —— 循环的工具端口是 {@code driver::executeTool}。
+     * 本体只有两个用处：给 provider 投影出定义，以及让循环读到 {@code executionMode}
+     * （决定整批走顺序还是并行，{@code agent-loop.ts:417-421}）。</p>
+     */
+    private static List<AgentTool<?, ?>> tools(ConformanceScript script) {
+        var out = new ArrayList<AgentTool<?, ?>>();
         for (var tool : script.tools()) {
-            defs.add(new ToolDefinition(tool.name(), "scripted tool " + tool.name(), Map.of()));
+            out.add(new ScriptTool(tool.name(),
+                "sequential".equals(tool.executionMode())
+                    ? new ExecutionMode.Sequential() : new ExecutionMode.Parallel()));
         }
-        return List.copyOf(defs);
+        return List.copyOf(out);
+    }
+
+    /** 剧本工具的骨架：名字 + 执行模式，参数与行为都不参与（执行由 driver 提供）。 */
+    private record ScriptTool(String name, ExecutionMode mode) implements AgentTool<Void, Void> {
+        @Override public String label() { return name; }
+        @Override public String description() { return "scripted tool " + name; }
+        @Override public Map<String, Object> inputSchema() { return Map.of(); }
+        @Override public ExecutionMode executionMode() { return mode; }
+        @Override public ToolResult<Void> execute(String toolCallId, Void params,
+                com.pijava.ai.AbortSignal signal,
+                com.pijava.agent.tool.ToolUpdateCallback<Void> onUpdate,
+                com.pijava.agent.tool.ToolContext context) {
+            return ToolResult.success("ok");
+        }
     }
 
     /** 一次剧本运行的驱动状态：流脚本游标、工具语义、队列注入。 */
@@ -82,7 +107,7 @@ final class ConformanceRunner {
         private final Map<String, ConformanceScript.Tool> toolsByName = new HashMap<>();
         private final List<ConformanceScript.Injection> steering;
         private final List<ConformanceScript.Injection> followUp;
-        private final List<ToolDefinition> toolDefs;
+        private final List<AgentTool<?, ?>> tools;
         private final AtomicInteger callIds = new AtomicInteger();
         private int streamCalls;
         private boolean nextTurnFired;
@@ -97,7 +122,7 @@ final class ConformanceRunner {
             }
             this.steering = new ArrayList<>(script.steer());
             this.followUp = new ArrayList<>(script.followUp());
-            this.toolDefs = ConformanceRunner.toolDefs(script);
+            this.tools = ConformanceRunner.tools(script);
         }
 
         StreamIterator stream(ModelId<?> model, Context context, StreamOptions options) {
@@ -151,7 +176,7 @@ final class ConformanceRunner {
             }
             var model = spec.model() == null ? null : ModelId.of("openai", spec.model());
             return new PiLoop.NextTurnUpdate(model, null,
-                new Context(spec.systemPrompt(), messages, toolDefs));
+                new Context(spec.systemPrompt(), messages, tools));
         }
 
         PiLoop.ToolOutcome executeTool(PiLoop.ToolCall call) {

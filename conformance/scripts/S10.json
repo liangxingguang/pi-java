@@ -1,0 +1,21 @@
+{
+  "id": "S10",
+  "name": "批次含 sequential 工具 ⇒ 整批走顺序路径",
+  "systemPrompt": "You are helpful.",
+  "prompt": "Run a mixed batch",
+  "toolExecution": "parallel",
+  "tools": [
+    { "name": "shellish", "executionMode": "sequential" },
+    { "name": "readish", "executionMode": "parallel" }
+  ],
+  "responses": [
+    {
+      "content": [
+        { "type": "toolCall", "name": "shellish", "arguments": { "n": 1 } },
+        { "type": "toolCall", "name": "readish", "arguments": { "n": 2 } }
+      ],
+      "stopReason": "toolUse"
+    },
+    { "content": [{ "type": "text", "text": "Mixed done", "chunks": ["Mixed ", "done"] }], "stopReason": "stop" }
+  ]
+}

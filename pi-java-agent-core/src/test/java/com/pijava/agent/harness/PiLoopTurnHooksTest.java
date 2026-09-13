@@ -6,7 +6,11 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.pijava.ai.api.StreamIterator;
-import com.pijava.ai.api.ToolDefinition;
+import com.pijava.agent.tool.AgentTool;
+import com.pijava.agent.tool.ExecutionMode;
+import com.pijava.agent.tool.ToolContext;
+import com.pijava.agent.tool.ToolResult;
+import com.pijava.agent.tool.ToolUpdateCallback;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -93,13 +97,25 @@ class PiLoopTurnHooksTest {
                 List.of(new ContentBlock.TextContent("ok")), false),
             "ok", false, false);
 
-    /** 工具定义：只有 name 是必填语义，其余给最小合法值。 */
-    private static ToolDefinition toolDef(String name) {
-        return new ToolDefinition(name, "test tool", Map.of(), name, null, List.of(), null);
+    /** 工具本体：只有 name / executionMode 有语义，其余给最小合法值。 */
+    private static AgentTool<?, ?> toolDef(String name) {
+        return new ScriptTool(name);
+    }
+
+    /** 剧本式工具骨架：不执行（本测试只关心上下文里带了什么）。 */
+    private record ScriptTool(String name) implements AgentTool<Void, Void> {
+         public String label() { return name; }
+         public String description() { return "test tool"; }
+         public Map<String, Object> inputSchema() { return Map.of(); }
+         public ExecutionMode executionMode() { return new ExecutionMode.Parallel(); }
+         public ToolResult<Void> execute(String id, Void params, com.pijava.ai.AbortSignal s,
+                ToolUpdateCallback<Void> onUpdate, ToolContext c) {
+            return ToolResult.success("ok");
+        }
     }
 
     /** 运行上下文：工具走 {@link Context}（pi 的 {@code AgentContext}），不挂在配置上。 */
-    private static Context context(List<ToolDefinition> tools) {
+    private static Context context(List<AgentTool<?, ?>> tools) {
         return new Context(null, new ArrayList<>(), tools);
     }
 
@@ -201,7 +217,7 @@ class PiLoopTurnHooksTest {
     @Test
     void nextTurnContextExposesTheToolsOfTheRun() {
         var tools = List.of(toolDef("echo"), toolDef("read"));
-        var seen = new ArrayList<List<ToolDefinition>>();
+        var seen = new ArrayList<List<AgentTool<?, ?>>>();
 
         var config = config(scripted(toolThenText()),
             ctx -> {

@@ -104,7 +104,7 @@ final class PiLoopRunner {
                 hasMoreToolCalls = false;
                 if (!toolCalls.isEmpty()) {
                     // pi: length 截断 ⇒ 全部失败，不执行（:206-208 分派，:379-404 实现）
-                    var batch = PiLoopTools.run(toolCalls, config, emit,
+                    var batch = PiLoopTools.run(toolCalls, context, config, emit,
                         "length".equals(message.stopReason()));
                     toolResults.addAll(batch.messages());
                     hasMoreToolCalls = !batch.terminate();

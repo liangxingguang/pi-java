@@ -2,7 +2,7 @@ package com.pijava.agent.harness;
 
 import java.util.List;
 
-import com.pijava.ai.api.ToolDefinition;
+import com.pijava.agent.tool.AgentTool;
 import com.pijava.ai.message.Message;
 
 /**
@@ -27,13 +27,21 @@ import com.pijava.ai.message.Message;
  *
  * <p>工具同理：pi 的 {@code AgentLoopConfig} **没有** tools 字段，工具只在本记录上。</p>
  *
+ * <p><b>工具装的是 {@code AgentTool} 不是 {@code ToolDefinition}</b>（2026-09-13 更正）。
+ * pi 的两个 Context 对 tools 的类型不同：ai 层的 {@code Context.tools?: Tool[]} 是
+ * 「名字 + 描述 + 参数」的**窄定义**，agent 层的 {@code AgentContext.tools?: AgentTool[]}
+ * 是**带行为的本体**；pi 把后者原样塞进前者（结构类型兼容）。本记录合并了两个 Context，
+ * 一度取了窄的那份 —— 于是 {@code AgentTool.executionMode()}（决定整批走顺序还是并行，
+ * {@code agent-loop.ts:417-421}）在循环里**根本够不着**：生产代码零读者。
+ * 现在取宽的那份，provider 边界用 {@code ToolRegistry.definitionsOf} 投影成定义。</p>
+ *
  * @param systemPrompt 系统提示（{@code null} 表示不发送）。pi 的 {@code AgentState.systemPrompt}
  *                     是字段，由会话层在启动时注入
  * @param messages     本轮的消息列表。**可变** —— 循环会就地追加助手消息与工具结果，
  *                     与 pi 的 {@code context.messages.push} 一致
- * @param tools        本次请求可用的工具定义（{@code null} 视同空表）
+ * @param tools        本次请求可用的工具本体（{@code null} 视同空表）
  */
-public record Context(String systemPrompt, List<Message> messages, List<ToolDefinition> tools) {
+public record Context(String systemPrompt, List<Message> messages, List<AgentTool<?, ?>> tools) {
 
     /** 只对 {@code tools} 做防御性拷贝；{@code messages} 必须保持可变（见类注释）。 */
     public Context {
@@ -46,7 +54,7 @@ public record Context(String systemPrompt, List<Message> messages, List<ToolDefi
     }
 
     /** 消息 + 工具的上下文（无系统提示）。 */
-    public static Context of(List<Message> messages, List<ToolDefinition> tools) {
+    public static Context of(List<Message> messages, List<AgentTool<?, ?>> tools) {
         return new Context(null, messages, tools);
     }
 
@@ -60,8 +68,22 @@ public record Context(String systemPrompt, List<Message> messages, List<ToolDefi
         return new Context(systemPrompt, messages, tools);
     }
 
-    /** 换工具定义。 */
-    public Context withTools(List<ToolDefinition> tools) {
+    /** 换工具。 */
+    public Context withTools(List<AgentTool<?, ?>> tools) {
         return new Context(systemPrompt, messages, tools);
+    }
+
+    /**
+     * 按名查工具（pi {@code currentContext.tools?.find(t => t.name === tc.name)}）。
+     *
+     * <p>找不到返回 {@code null} —— pi 用 {@code ?.} 链，未注册的调用同样走到不了执行。</p>
+     */
+    public AgentTool<?, ?> toolNamed(String name) {
+        for (var tool : tools) {
+            if (tool.name().equals(name)) {
+                return tool;
+            }
+        }
+        return null;
     }
 }

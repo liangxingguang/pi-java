@@ -1,6 +1,7 @@
 package com.pijava.coding.agent.core;
 
 import com.pijava.agent.harness.StreamFn;
+import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.ChatApi;
 import com.pijava.ai.api.StreamIterator;
@@ -97,7 +98,8 @@ public final class DefaultProviders {
         }
         // 系统提示与工具定义都来自 Context（pi 的 Context）；它们不再走消息列表或 options。
         var request = new com.pijava.ai.api.StreamRequest(
-            model, context.systemPrompt(), context.messages(), context.tools(),
+            model, context.systemPrompt(), context.messages(),
+            ToolRegistry.definitionsOf(context.tools()),
             options.maxTokens().orElse(-1),
             options.temperature().orElse(-1),
             extra);

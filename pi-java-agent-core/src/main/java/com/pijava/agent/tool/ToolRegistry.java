@@ -100,7 +100,19 @@ public class ToolRegistry {
 
     /** Generate tool definitions suitable for the LLM request. */
     public List<ToolDefinition> toToolDefinitions() {
-        return tools.values().stream()
+        return definitionsOf(tools.values());
+    }
+
+    /**
+     * 工具本体 → LLM 定义（pi 的 {@code AgentTool} → ai 层 {@code Tool} 投影）。
+     *
+     * <p>agent 层的 {@code Context} 装的是**本体**（要读 {@code executionMode}，
+     * {@code agent-loop.ts:417-421}），provider 只认窄定义 —— 投影发生在请求边界，
+     * 与 pi 把 {@code AgentTool[]} 直接当 {@code Tool[]} 用是同一件事（它靠结构类型，
+     * Java 侧靠这次显式转换）。</p>
+     */
+    public static List<ToolDefinition> definitionsOf(Collection<AgentTool<?, ?>> tools) {
+        return tools.stream()
             .map(t -> new ToolDefinition(t.name(), t.description(), t.inputSchema(),
                 t.label(), t.promptSnippet().isEmpty() ? null : t.promptSnippet(),
                 t.promptGuidelines(), null))

@@ -3,6 +3,7 @@ package com.pijava.agent.harness;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.pijava.agent.tool.ExecutionMode;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 
@@ -47,19 +48,42 @@ final class PiLoopTools {
      * @param truncated {@code true} 表示助手消息以 {@code length} 收尾：参数可能被截断，
      *                  全部调用直接失败且**不执行**（{@code :379-404}）
      */
-    static Batch run(List<ContentBlock.ToolUseContent> calls, PiLoop.Config config,
-                     PiLoop.Sink emit, boolean truncated) {
+    static Batch run(List<ContentBlock.ToolUseContent> calls, Context context,
+                     PiLoop.Config config, PiLoop.Sink emit, boolean truncated) {
         if (truncated) {
             return failTruncated(calls, emit);
         }
-        return config.toolExecution() instanceof ToolExecution.Sequential
-            ? executeSequential(calls, config, emit)
-            : executeParallel(calls, config, emit);
+        return useSequentialPath(calls, context, config)
+            ? executeSequential(calls, context, config, emit)
+            : executeParallel(calls, context, config, emit);
+    }
+
+    /**
+     * pi {@code agent-loop.ts:417-421}：**批次里只要有一个 {@code sequential} 工具，
+     * 整批就走顺序路径** —— 哪怕配置说的是 parallel。
+     *
+     * <p>此前这个判据在 pi-java 里**没有对应物**：{@code AgentTool.executionMode()} 生产零读者，
+     * 于是一个含 bash 的批次被当成并行批次处理。pi 的规则是「一个慢/独占的工具会拖住整批」
+     * —— 顺序路径会把 start/end/结果消息逐个成组发出，事件形状与并行路径**不同**。</p>
+     */
+    private static boolean useSequentialPath(List<ContentBlock.ToolUseContent> calls,
+                                             Context context, PiLoop.Config config) {
+        if (config.toolExecution() instanceof ToolExecution.Sequential) {
+            return true;
+        }
+        for (var call : calls) {
+            var tool = context.toolNamed(call.name());
+            if (tool != null && tool.executionMode() instanceof ExecutionMode.Sequential) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** pi {@code executeToolCallsSequential}：start → run → end → 结果消息，逐个成组。 */
     private static Batch executeSequential(List<ContentBlock.ToolUseContent> calls,
-                                           PiLoop.Config config, PiLoop.Sink emit) {
+                                           Context context, PiLoop.Config config,
+                                           PiLoop.Sink emit) {
         var messages = new ArrayList<Message.ToolResultMessage>();
         var outcomes = new ArrayList<PiLoop.ToolOutcome>();
         for (var call : calls) {
@@ -89,7 +113,8 @@ final class PiLoopTools {
      * 早于任何 end」是该模式的保证，消费者可据此判断批次何时真正开始收尾。</p>
      */
     private static Batch executeParallel(List<ContentBlock.ToolUseContent> calls,
-                                         PiLoop.Config config, PiLoop.Sink emit) {
+                                         Context context, PiLoop.Config config,
+                                         PiLoop.Sink emit) {
         for (var call : calls) {
             emit.emit(new PiLoop.Event.ToolExecutionStart(
                 call.id(), call.name(), call.arguments()));

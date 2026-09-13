@@ -14,7 +14,6 @@ import com.pijava.agent.hook.ShouldStopAfterTurnContext;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.record.QueueKind;
 import com.pijava.agent.tool.AgentTool;
-import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.thinking.ModelThinkingLevel;
 
@@ -126,7 +125,7 @@ public final class PiLaneEngine {
             // 工作副本的一份**拷贝**：pi 的 createContextSnapshot() 交的就是
             // this._state.messages.slice()（agent.ts:437-443），循环往这份拷贝里推消息，
             // 车道的副本由 PiLaneSink 在 message_end 上跟进 —— 与 pi 的 processEvents 同形。
-            var runContext = new Context(systemPrompt, new ArrayList<>(lane.messages), toolDefs(lane));
+            var runContext = new Context(systemPrompt, new ArrayList<>(lane.messages), activeTools(lane));
             if (prompts.isEmpty()) {
                 PiLoop.continueRun(runContext, config, sink);
             } else {
@@ -228,7 +227,7 @@ public final class PiLaneEngine {
     /** 压缩后的上下文整体替换（pi {@code {...snapshot.context, messages: state.messages.slice()}}）。 */
     private Context rebuiltContext(LaneState lane) {
         return new Context(assembler.buildSystemPrompt(lane),
-            new ArrayList<>(lane.messages), toolDefs(lane));
+            new ArrayList<>(lane.messages), activeTools(lane));
     }
 
     private boolean fireShouldStopAfterTurn(String laneName, LaneState lane) {
@@ -294,16 +293,22 @@ public final class PiLaneEngine {
     // 工具与消息视图
     // ═══════════════════════════════════════════════════════════
 
-    /** 生效的工具定义：注册表按生效的 {@code activeTools} 过滤（对齐 AssistantStreamExecutor:72-78）。 */
-    private List<ToolDefinition> toolDefs(LaneState lane) {
+    /**
+     * 生效的工具**本体**：注册表按生效的 {@code activeTools} 过滤。
+     *
+     * <p>交给 {@link Context} 的是 {@code AgentTool} 而非定义 —— 循环要读
+     * {@code executionMode} 决定整批走顺序还是并行（pi {@code agent-loop.ts:417-421}）。
+     * provider 只在请求边界拿到投影（{@code ToolRegistry.definitionsOf}）。</p>
+     */
+    private List<AgentTool<?, ?>> activeTools(LaneState lane) {
         if (ctx.toolRegistry() == null) {
             return List.of();
         }
         Set<String> names = ctx.activeTools().get().stream()
             .map(AgentTool::name).collect(Collectors.toSet());
-        return ctx.toolRegistry().toToolDefinitions().stream()
-            .filter(td -> names.contains(td.name()))
-            .collect(Collectors.toList());
+        return ctx.toolRegistry().all().stream()
+            .filter(t -> names.contains(t.name()))
+            .toList();
     }
 
     private static List<Message> transcriptMessages(LaneState lane) {

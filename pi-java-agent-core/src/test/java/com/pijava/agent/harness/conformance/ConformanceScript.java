@@ -66,7 +66,14 @@ record ConformanceScript(
      *                  这里照搬以免两侧对同一份剧本给出不同解释
      * @param terminate 该调用是否终止本轮批次
      */
-    record Tool(String name, boolean reject, boolean isError, boolean terminate) {}
+    /**
+     * 剧本里的一个工具。
+     *
+     * @param executionMode {@code "sequential"} / {@code "parallel"}；缺省 = 未声明
+     *                      （pi 侧同为 {@code undefined}，两者都不触发顺序路径）
+     */
+    record Tool(String name, boolean reject, boolean isError, boolean terminate,
+                String executionMode) {}
 
     /**
      * 一段助手响应里的内容块。
@@ -110,7 +117,9 @@ record ConformanceScript(
             tools.add(new Tool(node.path("name").asText(),
                 node.path("reject").asBoolean(false),
                 node.path("isError").asBoolean(false),
-                node.path("terminate").asBoolean(false)));
+                node.path("terminate").asBoolean(false),
+                node.path("executionMode").isMissingNode()
+                    ? null : node.path("executionMode").asText()));
         }
         var responses = new ArrayList<Response>();
         for (var node : root.path("responses")) {
