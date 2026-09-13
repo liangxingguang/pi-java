@@ -757,9 +757,9 @@ checkstyle 0 违规；8 个改动文件全部 ≤ 500 行。新增 `LaneMessages
 **三次反向实验**逐一确认会咬住：撤掉 `checkThreshold`、撤掉 `checkOverflowAfterRun`、
 撤掉 `seedTranscript` 里的重建 —— 各自只红对应那一条。
 
-**仍未做的**：`docs/03 §2.3` 的 `LaneState`/`LaneRecord` 两节待同步（CLAUDE.md 要求）；
-多车道运行时容器删除（§4.3 / §8.10）—— 现在它有了落脚点，因为分支切换正是
-「用该 lane 的日志重建 `state.messages`」。**后者随后已实施，见 §8.12。**
+**仍未做的**：~~`docs/03 §2.3` 的 `LaneState`/`LaneRecord` 两节待同步（CLAUDE.md 要求）；
+多车道运行时容器删除（§4.3 / §8.10）~~ —— 两项随后均已落地：后者见 §8.12，
+前者见 §8.13。
 
 ---
 
@@ -820,7 +820,27 @@ checkstyle 0 违规。删除 `MultiLaneTest`（5 例）与 `AgentHarnessTest` �
 **反向实验**：把 `fork()` 改回返回 `this`，`forkReturnsAnIndependentEmptyHarness` 立刻红。
 
 **仍未做的**：`docs/03 §2.2`（`AgentHarness` 核心类）与 §2.3 的类级描述仍停在旧 API 上
-—— 已在 §2.2 加停止横幅指向本文，全量重写另立任务。
+—— 已加停止横幅指向本文。**随后已全量重写，见 §8.13。**
+
+---
+
+### 8.13 `docs/03 §2.1-§2.3` 类级重写 —— 已完成（2026-09-13，commit `e6b0ce6`）
+
+`docs/31` 的实施项全部落地后，`docs/03` 第 2 章的三节成了唯一还在说旧 API 的地方
+—— 而且**过期早于本轮**：`DriveMode` / `peekAction` / `executeAction` / `runToCompletion`
+在 `03d8669` 就删了，那时没同步。
+
+**重写的三节**：
+
+| 节 | 原稿 | 现在 |
+|---|---|---|
+| §2.1 | pi **harness 层**的 phase 枚举（`idle`/`turn`/`compaction`/`branch_summary`/`retry`）+ mermaid 状态图 | 「运行态：`activeRun`」—— pi `agent.ts` 的对象存在与否；三个「阶段」各自的真实归属；一次运行的生命周期时序图（含 `shouldStopAfterTurn` 先于 `prepareNextTurn` 的顺序修正） |
+| §2.2 | Phase 2c 的**推测 API**（`TreeNavigator` / `promptFromTemplate` / 手动驱动 / 多车道容器） | 按 `ab7d309` 的实际形状：`HarnessConfig` 字段表、完整的公开 API、`LaneState` 字段、快照类型、`setModel`/`setThinkingLevel` 的 entry 写入规则 |
+| §2.3 | Entry 8 变体 + LaneRecord 的旧形状（`Entry.Message` 还是 `role` + `blocks`） | 真实形状：两个 sealed interface 的公共访问器、Entry 8 变体的字段表、LaneRecord 11 变体的字段表、两层真源的分工、「记录是旁路审计」的边界 |
+
+**`docs/03` 的过期不是「没写」，而是「写了另一个东西」。** 这一章是 Phase 1-2 的
+详细设计，此后 pi 对齐（`docs/27` 起）把宿主层整体换掉了，而 §2 描述的是换掉之前的那套。
+现在 §2 以 `docs/31` 的结论为准，`docs/31` 以 pi 源码为准。
 
 ---
 
@@ -832,4 +852,4 @@ checkstyle 0 违规。删除 `MultiLaneTest`（5 例）与 `AgentHarnessTest` �
 | `docs/28` | 驱动层换成 `PiLoop` 的决策；本文是它的续篇（宿主层） |
 | `docs/29` | L5 差分报告，本文 §7 验收第 1 条的依据 |
 | `docs/30` | 折叠链退休；`records` 降级为旁路审计由它确立 |
-| `docs/03` | 类级设计；实施后 §2.3 的 `LaneState`/`LaneRecord` 两节需同步 |
+| `docs/03` | 类级设计；§2.1-§2.3 已按本文的结论重写（§8.13），§2 以本文为准、本文以 pi 源码为准 |

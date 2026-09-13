@@ -148,373 +148,278 @@ StreamDone(usage)            ←  {"type":"message_delta","delta":{"stop_reason"
 
 ## 2. `pi-java-agent-core` 模块详细设计
 
-### 2.1 AgentHarness 状态机
+### 2.1 运行态：`activeRun`
 
-pi 的 AgentHarness 使用以下阶段（phase）模型——这是协议层的标准阶段枚举。不存在 "PAUSED" 状态；暂停通过 `SuspendedOperation`（crash 或 deferred 原因）实现。
+> **本节 2026-09-13 重写。** 原稿描述的是 pi **harness 层**的 phase 枚举
+> （`idle` / `turn` / `compaction` / `branch_summary` / `retry`），那不是对齐目标
+> `agent.ts` 的形状，对应的 `RunPhase` 枚举也已在 `03d8669` 删除。
+> 完整决策见 `docs/31 §3.2` / `§8.8`。
 
-```mermaid
-stateDiagram-v2
-    [*] --> idle
-    idle --> turn : run(prompt)
-    turn --> turn : tool_result / continue
-    turn --> compaction : context overflow
-    compaction --> turn : compaction done
-    turn --> branch_summary : branch complete
-    branch_summary --> idle : summary stored
-    turn --> retry : retry policy trigger
-    retry --> turn : retry start
-    turn --> idle : done / stop
-    idle --> [*]
+pi 的 `Agent`（`agent.ts`）用**对象存在与否**表示「正在跑」：
+
+```ts
+activeRun?: { promise: Promise<void>; resolve: () => void; abortController: AbortController }
 ```
 
-阶段说明：
+Java 侧同形 —— `LaneState.activeRun`，`null` 即空闲：
 
-| 阶段 | 含义 |
-|------|------|
-| `idle` | 空闲，等待用户输入 |
-| `turn` | 正在处理一个转弯（调用 LLM + 执行工具） |
-| `compaction` | 上下文超出窗口，正在压缩历史 |
-| `branch_summary` | 分支完成，正在生成摘要 |
-| `retry` | 遇到可重试错误，正在重试 |
+| pi | pi-java |
+|---|---|
+| `if (this.activeRun) throw "Agent is already processing."` | `RunLifecycle.begin` 的 `lane.isRunning()` 守卫 |
+| `this.activeRun?.abortController.signal` | `LaneState.abortSignal()`：空闲返回 `null` |
+| `abort() { this.activeRun?.abortController.abort() }` | `AgentHarness.abort(laneName)` |
+| `waitForIdle() { return this.activeRun?.promise ?? Promise.resolve() }` | `AgentHarness.waitForIdle(laneName)`（`run.done().join()`） |
+| `finishRun()` 里清空 | `RunLifecycle.finishRun` 末尾 `lane.activeRun = null` |
+
+**`compaction` / `retry` / `branch_summary` 不是状态。** 它们各有归属：
+
+| 原「阶段」 | 实际归属 |
+|---|---|
+| `compaction` | 运行内部的两个触发点 —— 阈值在 `prepareNextTurn`（pi `_compactBeforeNextAssistantResponse`），溢出在 `agent_end` 之后（pi `_handlePostAgentRun`）。**运行态不因此改变**（`docs/31 §4.2`） |
+| `retry` | 会话层（`SessionRunner` 的自动重试走 `continueRun` + `dropTrailingErrorAssistant`） |
+| `branch_summary` | 会话层 —— 分支是**新会话**（`AgentSession.forkFromEntry`），不是车道 |
+
+#### 一次运行的生命周期
+
+```mermaid
+sequenceDiagram
+    participant H as AgentHarness
+    participant L as RunLifecycle
+    participant E as PiLaneEngine
+    participant P as PiLoop
+
+    H->>E: prompt(laneName, text, images, downstream)
+    E->>E: lane.isRunning() 守卫（在跑即抛）
+    E->>L: startRun —— runId / ActiveRun / before_run 钩子 /<br/>用户 entry / OperationStarted 记录 / turn 计数
+    E->>P: run(prompts, context, config, sink)
+    loop 每一轮
+        P->>P: transform_context 钩子 → 请求
+        P->>P: 流式响应 → message_start / message_end
+        P->>P: 工具调用（PiToolRunner）
+        P->>P: should_stop_after_turn —— 为真则循环在此收住
+        P->>P: prepare_next_turn —— <b>下一轮开头</b>：配置变更就地落盘 + 阈值压缩；<br/>压缩后经 NextTurnUpdate.context 整体换掉循环的上下文
+        P->>P: 再轮询一次 steer（准备可能很慢，例如压缩）
+    end
+    P-->>E: 循环结束
+    E->>E: sink.checkOverflowAfterRun(lane) —— 溢出压缩
+    E->>L: finishRun —— OperationFinished / before_run_end /<br/>关 run span / activeRun = null
+```
+
+`should_stop_after_turn` 在 `prepare_next_turn` **之前**：pi 的 `shouldStopAfterTurn` 一真，
+`prepareNextTurn` 就不再被调用（`docs/31 §8.4`，实施时读源码发现的两处顺序修正之一）。
+
+`drive` 用 `try/finally` 保证**驱动抛异常时同样收口**（按 `"error"` 结算），否则
+`activeRun` 会永远挂着，车道再也起不了新运行、`waitForIdle` 永远等下去。
+
+`prompt` / `continueRun` 是**阻塞**的：pi 的 `prompt()` 返回 Promise，Java 侧由调用线程
+直接跑到收口 —— 对齐的是「可观察效果的顺序」，不是 async 机器（`docs/31 §8.5`）。
 
 ### 2.2 AgentHarness 核心类
 
-> **⚠️ 本节已停用（2026-09-13）。** 下面的 API 是 Phase 2c 的形态，其中的**手动驱动**
-> （`DriveMode` / `peekAction` / `executeAction` / `runToCompletion`）与**运行时多车道容器**
-> （`LaneHandle` / `LaneConfig` / `createLane` / `lanes()` / `moveLane`）**均已删除**。
-> 宿主层现在的形态以 `docs/31-agent-loop-host-alignment-design.md` 为准
-> （§6 拆步进链、§8.8；§4.1 配置 entry、§8.9；§4.2 工作副本、§8.11；§4.3 单车道 +
-> 分支归会话层、§8.12）。本节待全量重写。
->
-> 对齐 pi 的 `agent.ts`（**单状态**）：一个 `AgentHarness` 恰好一条车道
-> （`laneName()` 恒为 `DEFAULT_LANE`），分支是**新会话**（`AgentHarness.fork()` +
-> `AgentSession.forkCopy` / `forkFromEntry`）；pi 的 `harness/` 层与 pico 不在对齐范围内。
+> **本节 2026-09-13 重写。** 原稿是 Phase 2c 的推测 API（`TreeNavigator` /
+> `promptFromTemplate` / 手动驱动 / 多车道容器），与代码早已不符。下文按 `ab7d309`
+> 的实际形状。
 
-对齐 pi 的 `agent-harness.ts`：多车道、快照订阅、11 个 Hook、队列调度、手动驱动。
+`AgentHarness` 是 pi `Agent` 的 Java 版宿主：**一个 harness 恰好一条车道**
+（`LaneState`，即 pi 的 `AgentState`），分支是**新会话**而不是新车道
+（`docs/31 §4.3` / `§8.12`）。
+
+#### 构造配置 —— `HarnessConfig`（record，19 个字段）
+
+| 字段 | 用途 |
+|---|---|
+| `streamFn` / `model` / `thinkingLevel` / `systemPrompt` | LLM 调用与提示 |
+| `activeTools` / `toolRegistry` / `toolContext` / `commandPrefix` | 工具 |
+| `maxInputTokens` | 溢出检测的窗口 |
+| `compactionSettings` | `null` = 不自动压缩 |
+| `skills` / `summaryGenerator` | 技能与压缩摘要生成 |
+| `retryPolicy` / `telemetry` / `thinkingLevelMap` | HTTP 重试、遥测、思考等级翻译 |
+| `steeringMode` / `followUpMode` / `toolExecution` | 队列排空模式与工具执行模式 |
+| `streamListener` | 每一条 `StreamEvent` 的旁路接收器（TUI / print 流式） |
+
+`HarnessConfig` 被 harness 留存一份副本，**只为 `fork()`**。
+
+#### 公开 API
 
 ```java
 public class AgentHarness implements AutoCloseable {
 
-    // ═══════════════════════════════════════════════════════
-    // 多车道（Lane）模型
-    // ═══════════════════════════════════════════════════════
+    public static final String DEFAULT_LANE = "default";
 
-    /** 获取默认车道 */
-    public LaneHandle lane();
+    /** 同配置的全新 harness（车道为空，内容由调用方播种）。会话层建分支用。 */
+    public AgentHarness fork();
 
-    /** 创建新车道 */
-    public LaneHandle createLane(LaneConfig config);
+    // ── 运行（阻塞；pi Agent.prompt / continue）──────────────
+    public PiLaneEngine.RunOutcome prompt(String text);
+    public PiLaneEngine.RunOutcome prompt(String text, List<PromptImage> images);
+    public PiLaneEngine.RunOutcome prompt(String laneName, String text,
+                                          List<PromptImage> images);
+    public PiLaneEngine.RunOutcome prompt(String laneName, String text,
+                                          List<PromptImage> images, PiLoop.Sink downstream);
+    public PiLaneEngine.RunOutcome continueRun();
+    public PiLaneEngine.RunOutcome continueRun(String laneName, PiLoop.Sink downstream);
+    public void abort();                       // 另有 abort(String laneName)
+    public void waitForIdle(String laneName);
 
-    /** 列出所有车道 */
-    public List<LaneHandle> lanes();
-
-    /** 将条目标移动到目标车道 */
-    public void moveLane(String lane, String to);
-
-    // ═══════════════════════════════════════════════════════
-    // 手动驱动模式
-    // ═══════════════════════════════════════════════════════
-
-    public enum DriveMode { AUTOMATIC, MANUAL }
-
-    /** 当前驱动模式 */
-    public DriveMode drive();
-
-    /** 设置驱动模式 */
-    public void drive(DriveMode mode);
-
-    /** 查看下一个待执行的动作（仅手动模式有效） */
-    public Optional<Action> peekAction();
-
-    /** 执行单个动作（仅手动模式有效） */
-    public void executeAction(Action action);
-
-    /** 从当前点运行到完成 */
-    public CompletionStage<Void> runToCompletion();
-
-    // ═══════════════════════════════════════════════════════
-    // 快照 / 订阅
-    // ═══════════════════════════════════════════════════════
-
-    /** 订阅车道级别快照，返回 WatchHandle 用于取消订阅 */
-    public WatchHandle<LaneSnapshot> watch();
-
-    /** 订阅会话级别快照 */
-    public WatchHandle<SessionSnapshot> watchSession();
-
-    // ═══════════════════════════════════════════════════════
-    // 11 个生命周期 Hook
-    // ═══════════════════════════════════════════════════════
-
-    @FunctionalInterface public interface BeforeRunHook {
-        void beforeRun(RunContext ctx);
-    }
-    @FunctionalInterface public interface BeforeResumeHook {
-        void beforeResume(ResumeContext ctx);
-    }
-    @FunctionalInterface public interface TransformContextHook {
-        ContextDelta transformContext(ContextDelta delta);
-    }
-    @FunctionalInterface public interface BeforeRequestHook {
-        void beforeRequest(RequestContext ctx);
-    }
-    @FunctionalInterface public interface BeforePayloadHook {
-        Map<String, Object> beforePayload(Map<String, Object> payload);
-    }
-    @FunctionalInterface public interface AfterResponseHook {
-        void afterResponse(ResponseContext ctx);
-    }
-    @FunctionalInterface public interface BeforeToolHook {
-        void beforeTool(ToolContext ctx);
-    }
-    @FunctionalInterface public interface AfterToolHook {
-        void afterTool(ToolResultContext ctx);
-    }
-    @FunctionalInterface public interface BeforeCompactionHook {
-        CompactionPlan beforeCompaction(CompactionContext ctx);
-    }
-    @FunctionalInterface public interface BeforeNavigationHook {
-        void beforeNavigation(NavigationContext ctx);
-    }
-    @FunctionalInterface public interface BeforeRunEndHook {
-        void beforeRunEnd(RunEndContext ctx);
-    }
-
-    public void onBeforeRun(BeforeRunHook hook);
-    public void onBeforeResume(BeforeResumeHook hook);
-    public void onTransformContext(TransformContextHook hook);
-    public void onBeforeRequest(BeforeRequestHook hook);
-    public void onBeforePayload(BeforePayloadHook hook);
-    public void onAfterResponse(AfterResponseHook hook);
-    public void onBeforeTool(BeforeToolHook hook);
-    public void onAfterTool(AfterToolHook hook);
-    public void onBeforeCompaction(BeforeCompactionHook hook);
-    public void onBeforeNavigation(BeforeNavigationHook hook);
-    public void onBeforeRunEnd(BeforeRunEndHook hook);
-
-    // ═══════════════════════════════════════════════════════
-    // 队列调度
-    // ═══════════════════════════════════════════════════════
-
-    /** 引导（steer）当前运行方向 */
-    public void steer(String prompt);
-
-    /** 排入跟进消息（当前 run 结束后发送） */
-    public void followUp(String prompt);
-
-    /** 排入下一次运行 */
-    public void nextRun(String prompt);
-
-    /** 取消所有排队的操作 */
-    public void cancelQueued();
-
-    // ═══════════════════════════════════════════════════════
-    // Skills / Templates
-    // ═══════════════════════════════════════════════════════
-
-    /** 获取已注册的 skill */
-    public Skill skill(String name);
-
-    /** 从模板生成 prompt */
-    public String promptFromTemplate(String template, Map<String, Object> vars);
-
-    // ═══════════════════════════════════════════════════════
-    // Compaction（压缩）
-    // ═══════════════════════════════════════════════════════
-
-    /** 手动触发压缩 */
+    // ── 空闲操作 ────────────────────────────────────────────
+    public void reset();                       // 另有 reset(String laneName)
     public void compact(CompactionSettings settings);
+    public void seedTranscript(String laneName, List<Entry> entries);   // resume 播种
+    public void restoreRecords(String laneName, List<LaneRecord> records);
+    public void dropTrailingErrorAssistant(String laneName);            // 重试前清残缺助手消息
 
-    public record CompactionSettings(
-        int maxTokens,
-        double retentionRatio,
-        boolean preserveSystemMessages,
-        boolean preserveRecentTools
-    ) {
-        public static CompactionSettings defaults() {
-            return new CompactionSettings(100_000, 0.3, true, true);
-        }
-    }
+    // ── 队列调度（三条：steer / followUp / nextRun）──────────
+    public String steer(String laneName, String prompt);
+    public String followUp(String laneName, String prompt);
+    public String nextRun(String laneName, String prompt);
+    public void cancelQueued(String laneName, String queueType);
+    public QueueMode steeringMode();  public void steeringMode(QueueMode mode);
+    public QueueMode followUpMode();  public void followUpMode(QueueMode mode);
 
-    // ═══════════════════════════════════════════════════════
-    // 树状导航
-    // ═══════════════════════════════════════════════════════
+    // ── 模型 / 思考级别 / 提示 / 工具 / 压缩 ─────────────────
+    public ModelId<?> getModel();                 public void setModel(ModelId<?> model);
+    public ModelThinkingLevel getThinkingLevel(); public void setThinkingLevel(ModelThinkingLevel level);
+    public String getSystemPrompt();              public void setSystemPrompt(String prompt);
+    public Set<AgentTool<?, ?>> getActiveTools(); public void setActiveTools(Set<AgentTool<?, ?>> tools);
+    public CompactionSettings getCompactionSettings();
+    public void setCompactionSettings(CompactionSettings s);
+    public ToolContext toolContext();
+    public ToolExecution toolExecution();         public void toolExecution(ToolExecution mode);
 
-    /** 获取树状导航器（用于在多分支间跳转） */
-    public TreeNavigator navigateTree();
+    // ── 快照 / 订阅 ─────────────────────────────────────────
+    public LaneSnapshot snapshot(String laneName);
+    public WatchHandle<LaneSnapshot> watch(String laneName);
+    public WatchHandle<SessionSnapshot> watchSession();
+    public AutoCloseable onStreamEvent(Consumer<StreamEvent> listener);
 
-    // ═══════════════════════════════════════════════════════
-    // 模型 / 思考级别 / 活跃工具
-    // ═══════════════════════════════════════════════════════
-
-    public ModelId getModel();
-    public void setModel(ModelId model);
-    public ThinkingLevel getThinkingLevel();
-    public void setThinkingLevel(ThinkingLevel level);
-    public Set<Tool> getActiveTools();
-    public void setActiveTools(Set<Tool> tools);
+    // ── 其它 ────────────────────────────────────────────────
+    public String laneName();                     // 恒为 DEFAULT_LANE
+    public AssistantMessage lastAssistantMessage();
+    public SkillManager skillManager();
+    public HookSystem hookSystem();
+    public void close();
 }
 ```
+
+**`setModel` / `setThinkingLevel` 会顺带写 entry**（`docs/31 §4.1`）：字段赋值是唯一真源，
+entry 是它的审计副本 —— 模型**无条件**写（pi `agent-session.ts:1687`），思考等级**变了才**写
+（`:1813-1829` 的 `isChanging` 守卫，且默认等级 `off` 不入日志）。
+
+#### `LaneState` —— pi `AgentState` 的 Java 版
+
+```java
+public final class LaneState {
+    String laneName;                       // 恒为 "default"
+    final List<Entry> transcript;          // **持久真源**：entry 日志
+    final List<Message> messages;          // **工作副本**：送给 provider 的那份
+    String runId;
+    AssistantMessage partial;              // pi streamingMessage
+    NewestOwn newestOwn;                   // 结局判定用（determineOutcome）
+    ActiveRun activeRun;                   // null = 空闲
+    TelemetrySpan runSpan;
+    long runStartNanos;
+    String recordedThinking;               // 「上次记过什么」——§4.1 的守卫
+
+    // 配置（pi AgentState 的字段；此前住在 HarnessState）
+    ModelId<?> model;
+    ModelThinkingLevel thinkingLevel;
+    String systemPrompt;
+    Set<AgentTool<?, ?>> activeTools;
+    CompactionSettings compactionSettings;
+    QueueMode steeringMode, followUpMode;
+    ToolExecution toolExecution;
+
+    // 调度队列（steer / followUp / nextRun）
+    final ArrayDeque<LaneInfo.QueuedItem> steerQueue, followUpQueue, nextRunQueue;
+    long queueSeq;
+
+    public final List<LaneRecord> records;  // 旁路审计，不参与状态
+}
+```
+
+**两层真源的分工**（`docs/31 §4.2`）：`transcript` 是持久真源，`messages` 是它的投影。
+工作副本由**事件**维护（`PiLaneSink` 在 `message_end` 上追加，对齐 pi `agent.ts:554-557`），
+只在日志被**整体替换**时重建 —— resume 播种、压缩、reset。此前每次请求都从 entry 日志
+重走一遍 `pathToLeaf`，那是本字段存在的理由。
+
+#### 快照
+
+| 类型 | 内容 |
+|---|---|
+| `LaneSnapshot` | `lane` / `transcript` / `records` / `leafId` / `operation`（空闲为 `null`）/ `queues` / `faulted` |
+| `SessionSnapshot` | `name` / `model` / `phase`（`"running"`\|`"idle"`）/ `totalTokens` / `turnCount` / `activeTools` / `lanes`（**单元素**：一个 harness 一条车道） |
+| `WatchHandle<T>` | `current()` / `subscribe(Consumer<T>)` / `close()` |
+
+`faulted` 的判据是「记录里存在 `OperationFinished` 且结局为 `FAILED`」—— 所以 abort 必须
+记成 `ABORTED` 而不是 `FAILED`，否则用户主动中止会污染故障标记。
 
 ### 2.3 操作记录体系：Entry + LaneRecord
 
-pi 将操作记录分为两层：**Entry**（用户可见的持久化事件，出现在转录中）和 **LaneRecord**（车道级别内部操作记录，用于调试和审计）。以下定义在整个文档中仅出现一次。
+两层记录：**Entry**（用户可见的持久化事件，构成对话转录）与 **LaneRecord**（车道级内部
+审计记录）。两者都是 `sealed interface` + `record` 的代数数据类型，判别字面量由
+`type()` 给出并与 JSON 的 `type` 属性一致。
 
 ```java
-// ═══════════════════════════════════════════════════════════
-// Entry — 用户可见的持久化事件
-// ═══════════════════════════════════════════════════════════
-
 public sealed interface Entry {
     String id();
     long seq();
-    String parentId();
+    String parentId();          // 根为 null
     Instant timestamp();
-
-    /** 消息（user / assistant / tool 消息） */
-    record Message(
-        String id, long seq, String parentId, Instant timestamp,
-        String role,                      // "user" | "assistant" | "tool"
-        List<ContentBlock> blocks
-    ) implements Entry {}
-
-    /** 模型变更 */
-    record ModelChange(
-        String id, long seq, String parentId, Instant timestamp,
-        String provider,
-        String modelId
-    ) implements Entry {}
-
-    /** 思考级别变更 */
-    record ThinkingLevelChange(
-        String id, long seq, String parentId, Instant timestamp,
-        String level                     // "off" | "low" | "medium" | "high"
-    ) implements Entry {}
-
-    /** 活跃工具集变更 */
-    record ActiveToolsChange(
-        String id, long seq, String parentId, Instant timestamp,
-        List<String> toolNames
-    ) implements Entry {}
-
-    /** 上下文压缩记录 */
-    record Compaction(
-        String id, long seq, String parentId, Instant timestamp,
-        String reason,                   // "overflow" | "manual"
-        int entriesBefore,
-        int entriesAfter
-    ) implements Entry {}
-
-    /** 分支摘要 */
-    record BranchSummary(
-        String id, long seq, String parentId, Instant timestamp,
-        String summary
-    ) implements Entry {}
-
-    /** 自定义事件（扩展用） */
-    record Custom(
-        String id, long seq, String parentId, Instant timestamp,
-        String kind,
-        Map<String, Object> data
-    ) implements Entry {}
-}
-
-// ═══════════════════════════════════════════════════════════
-// LaneRecord — 车道级别的内部操作记录
-// ═══════════════════════════════════════════════════════════
-
-public sealed interface LaneRecord {
-    long seq();
-    Instant timestamp();
-
-    /** 一次操作（run / resume）开始 */
-    record OperationStarted(
-        long seq, Instant timestamp,
-        String runId,
-        String intent                      // 用户意图摘要
-    ) implements LaneRecord {}
-
-    /** 中止请求 */
-    record AbortRequested(
-        long seq, Instant timestamp,
-        String reason
-    ) implements LaneRecord {}
-
-    /** 操作完成 */
-    record OperationFinished(
-        long seq, Instant timestamp,
-        String runId,
-        String status                      // "completed" | "aborted" | "error"
-    ) implements LaneRecord {}
-
-    /** 单次 LLM 调用尝试 */
-    record StepAttempt(
-        long seq, Instant timestamp,
-        int stepIndex,
-        long inputTokens,
-        long outputTokens
-    ) implements LaneRecord {}
-
-    /** 工具开始执行 */
-    record ToolStarted(
-        long seq, Instant timestamp,
-        String toolCallId,
-        String toolName,
-        Map<String, Object> arguments
-    ) implements LaneRecord {}
-
-    /** 队列入队 */
-    record QueueEnqueued(
-        long seq, Instant timestamp,
-        String queueType,                  // "steer" | "followUp" | "nextRun"
-        String content
-    ) implements LaneRecord {}
-
-    /** 队列取消 */
-    record QueueCancelled(
-        long seq, Instant timestamp,
-        String queueType
-    ) implements LaneRecord {}
-
-    /** 写操作延迟 */
-    record WriteDeferred(
-        long seq, Instant timestamp,
-        String entryId
-    ) implements LaneRecord {}
-
-    /** Token 用量记录 */
-    record UsageRecord(
-        long seq, Instant timestamp,
-        long inputTokens,
-        long outputTokens,
-        String modelId
-    ) implements LaneRecord {}
-
-    /** 队列项被消费（drain 并合并进 transcript）。pi-java 独有（Phase 21 新增，补发射缺口） */
-    record QueueConsumed(
-        String id, long seq, String lane, Instant timestamp,
-        String runId,                 // 消费它的 run；空闲消费为 ""
-        QueueKind queue,              // steer | followUp | nextRun（取 QueuedItem 真实来源队列，D10）
-        List<ProvisionedEntry<?>> targets   // 该次 drain 消费的全部项（QueueMode 整体合并）
-    ) implements LaneRecord {}
+    String type();              // 判别字面量（@JsonTypeInfo 用）
+    boolean isConfiguration();  // 默认 false
+    Entry committed(long seq, String parentId, Instant timestamp);  // 存储分配身份后重建
 }
 ```
 
-> **Phase 21/22 附注 —— 已退休（2026-09-13）**：
-> `LaneState` **不是** record 日志的折叠结果。折叠链（`LaneStateFolder` / `LaneOperationFold` /
-> `RecordLogValidator` / `RecordLogCorruption`）**已删除** —— 它的 pi 参照早已不存在，且 pi
-> `harness.md:1317` 明文禁止「在热路径上折叠历史」。
->
-> 仍然有效的部分：`LaneRecord` 的**发射**（11 个变体全都有发射点）、`lane.records` 改 append-only、
-> compaction 记为 step、`StepAttempt.stopReason`。**记录日志的定位是纯旁路审计**，供
-> `RunSummaryAggregator` 与回溯，**不参与状态恢复**。
->
-> 参考：`docs/30-retire-record-log-fold-design.md`（退休蓝图与证据）。
->
-> 已随之作废的项：`LaneStateFolder` / `RecordLogValidator` / `Entry::isConfiguration` /
-> `toolBatch` / `terminalFailure` / queue 消费的 entry-presence 推断。
-> 记录**发射**侧的补全仍然成立（`QueueEnqueued`/`QueueCancelled`/`QueueConsumed`、
-> `close()` 补 `AbortRequested`、`UsageRecord` 去掉 tokens>0 门槛、compaction 记为 step）。
+`seq` 是全仓**共享**的单调序号（entry / record / lane / fact 同一个空间）。
+
+#### Entry 的 8 个变体
+
+| 变体 | 关键字段 | 语义 |
+|---|---|---|
+| `Message` | `message`（`UserMessage`/`AssistantMessage`/`ToolResultMessage`）、`terminate` | 对话消息。**角色只在消息对象里** —— 系统提示不是 entry，它挂在 `Context.systemPrompt` 上（`docs/31 §8.6`） |
+| `ModelChange` | `provider`、`modelId` | 模型切换（配置） |
+| `ThinkingLevelChange` | `thinkingLevel`（`"off"`…`"xhigh"`） | 思考等级切换（配置） |
+| `ActiveToolsChange` | `activeToolNames` | 活跃工具集切换（配置） |
+| `Compaction` | `summary`、`firstKeptEntryId`、`retainedTail`、`tokensBefore`、`details`、`usage` | 压缩标记。**摘要前缀是逐字节固定的文本**，`firstKeptEntryId` 是平铺字段 |
+| `BranchSummary` | `fromId`、`summary`、`details`、`usage` | 分支摘要 |
+| `Custom` | `customType`、`data` | 扩展事件（不进 LLM 上下文） |
+| `CustomMessage` | `customType`、`content`、`display`、`details` | 扩展注入的消息：`content` 进 LLM 上下文，`display` 只管 TUI 渲染 |
+
+> **`isConfiguration()` 的读者**：`ModelChange` / `ThinkingLevelChange` / `ActiveToolsChange`
+> 覆写为 `true`。它随 record-log 折叠链一起引入（`docs/21` F3），而折叠链已退休
+> （`docs/30`）——**当前无生产读者**。
+
+#### LaneRecord 的 11 个变体
+
+```java
+public sealed interface LaneRecord {
+    String id(); long seq(); String lane(); Instant timestamp();
+    String type();                                              // 判别字面量
+    LaneRecord committed(long seq, Instant timestamp);          // 存储分配身份后重建
+}
+```
+
+| 变体 | 关键字段 | 语义 |
+|---|---|---|
+| `OperationStarted` | `sourceLeafId`、`intent` | 操作开始。`intent` 是 sealed：`Run`（`originalPrompt` / `initialMessages` / `systemPromptOverride` / `resumeData`）、`Compaction`（`customInstructions` / `resultEntryId`）、`Navigation`（`targetId` / `summarize` / `label` / `summaryEntryId`） |
+| `AbortRequested` | `runId` | 中止请求 |
+| `OperationFinished` | `runId`、`outcome`、`error`、`durationMs` | 操作结束。`outcome` ∈ `COMPLETED`/`ABORTED`/`FAILED`/`DECLINED` |
+| `StepAttempt` | `step`（`StepKind`）、`attempt`、`resultEntryId`、`compactionReason`、`model`、`messageCount`、`toolCount`、`thinking`、`durationMs` | 一次 LLM 调用尝试。**stopReason 不在这里** —— 它在 `resultEntryId` 指向的消息 entry 上，entry 是唯一真源（`docs/22` D1） |
+| `ToolStarted` | `assistantEntryId`、`toolIndex`、`toolCallId`、`toolName`、`effectiveArgs`、`resultEntryId`、`replay` | 工具开始执行 |
+| `ToolFinished` | `toolCallId`、`toolName`、`isError`、`terminate`、`resultEntryId`、`durationMs` | 工具执行结束（可观测性：结局 + 延迟） |
+| `QueueEnqueued` | `queue`（`QueueKind`）、`runId`、`target` | 入队 |
+| `QueueConsumed` | `queue`、`runId`、`targets` | 一批排空被消费。pi-java 特有：pi 从 entry 是否出现推断消费，而 pi-java 把整次排空合成一条用户消息，故需要显式标记 |
+| `QueueCancelled` | `runId`、`entryId` | 队列项被取消 |
+| `WriteDeferred` | `runId`、`target` | 运行中写入被标记为 deferred（`docs/22` D3） |
+| `UsageRecord` | `usage`、`cause`（`UsageCause`）、`runId`、`entryId`、`toolCallId`、`attempt`、`stopReason` | token 用量。`stopReason` 是**审计数据不是推导输入**：没有任何代码从它派生（与 `StepAttempt` 上被移除的那份平行副本不同） |
+
+> **记录日志是旁路审计，不参与状态推导。** 折叠链（`LaneStateFolder` /
+> `RecordLogValidator`）已退休，`docs/30` 明文禁止从记录反推状态；恢复时记录被原样载入，
+> 车道回到**空闲**，队列**为空**（队列是进程内的，崩溃即丢）。
+> 恢复的上下文由 `seedTranscript` 负责 —— 它是「用日志重建工作副本」的那条路径。
+
+---
 
 ### 2.4 存储接口：SessionStorage + SessionRepository
 
