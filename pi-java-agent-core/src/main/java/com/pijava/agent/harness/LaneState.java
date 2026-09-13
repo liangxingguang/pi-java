@@ -10,6 +10,7 @@ import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.ai.AbortSignal;
 import com.pijava.ai.message.AssistantMessage;
+import com.pijava.ai.message.Message;
 import com.pijava.telemetry.TelemetrySpan;
 
 /**
@@ -29,6 +30,22 @@ public final class LaneState {
 
     /** The lane's entry log — 持久真源，{@link PiLaneSink} 与 run 起手直接追加。 */
     final List<Entry> transcript = new ArrayList<>();
+
+    /**
+     * 工作副本 —— 送给 provider 的那份消息列表（pi {@code AgentState.messages}，
+     * {@code docs/31 §4.2}）。
+     *
+     * <p><b>两者分工</b>：{@link #transcript} 是持久真源，工作副本是它的投影。副本由
+     * **事件**维护（{@link PiLaneSink} 在 {@code message_end} 上追加，对齐 pi
+     * {@code agent.ts:556} 的 {@code processEvents}），只在日志被**整体替换**时重建
+     * （resume 播种、压缩、搬迁）。此前每次请求都从 entry 日志重走一遍
+     * {@code pathToLeaf} —— 那是本字段存在的理由。</p>
+     *
+     * <p>与 {@link #transcript} 的一处有意差异：起手的用户 prompt 因「日志里已有」被
+     * {@link PiLaneSink} 抑制落盘，但**照样进副本** —— pi 的用户消息也是经
+     * {@code message_end} 进 {@code state.messages} 的。</p>
+     */
+    final List<Message> messages = new ArrayList<>();
 
     /** Current run identifier. */
     String runId;
@@ -54,9 +71,6 @@ public final class LaneState {
 
     /** Run start wall-clock for OperationFinished.durationMs / harness.run duration. */
     long runStartNanos;
-
-    /** Pending update from prepare_next_turn hooks; consumed by the next turn, cleared at run end. */
-    com.pijava.agent.hook.TurnUpdate pendingTurnUpdate;
 
     /**
      * 已写进 {@link #transcript} 的思考等级标签；{@code null} 表示尚未记录。

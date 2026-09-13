@@ -84,5 +84,8 @@ final class LaneRegistry {
         var tgt = require(target);
         tgt.transcript.addAll(src.transcript);
         src.transcript.clear();
+        // 两侧日志都变 ⇒ 工作副本各自重建（docs/31 §4.2 的「日志整体替换」点）。
+        HarnessUtils.rebuildLaneMessages(tgt);
+        HarnessUtils.rebuildLaneMessages(src);
     }
 }

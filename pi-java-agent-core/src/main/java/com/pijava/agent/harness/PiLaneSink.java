@@ -101,6 +101,9 @@ final class PiLaneSink implements PiLoop.Sink {
     private long inputTokens;
     private long outputTokens;
 
+    /** 最后一次请求的停因，供 {@link #checkOverflowAfterRun} 在运行收尾时判定溢出。 */
+    private String lastStopReason;
+
     /** 本次请求的 step 序号（每次助手流 +1）。 */
     private int stepIndex;
 
@@ -187,13 +190,28 @@ final class PiLaneSink implements PiLoop.Sink {
         var usage = new StreamEvent.UsageInfo(inputTokens, outputTokens, lane.partial);
         ctx.hookSystem().fireAfterResponse(laneName,
             new ResponseContext(laneName, lane.runId, lane.partial, usage));
+        lastStopReason = stop;
+    }
 
-        if (OverflowDetector.isOverflow(null, stop, usage, ctx.maxInputTokens())) {
-            var settings = ctx.compactionSettings().get();
-            if (settings != null && lane.transcript.size() > 1) {
-                compactions.applyCompaction(laneName, lane, settings,
-                    CompactionService.estimateTokens(lane.transcript), "overflow");
-            }
+    /**
+     * 溢出检测 → 自动压缩，在 {@code agent_end} **之后**跑一次
+     * （pi {@code _handlePostAgentRun:1142} → {@code _checkCompaction:2132}）。
+     *
+     * <p>此前它在 {@link #endRequest} 里 —— 也就是**每一轮助手响应之后**。
+     * pi 的溢出检查是「一次运行跑完之后」的收尾动作，不是轮内动作
+     * （{@code docs/31 §4.2} 的两段式触发：阈值在 {@code prepareNextTurn}，
+     * 溢出在 {@code agent_end} 之后）。判据本身没变，仍是
+     * {@link OverflowDetector#isOverflow} 读最后一次请求的停因与用量。</p>
+     */
+    void checkOverflowAfterRun(LaneState lane) {
+        var usage = new StreamEvent.UsageInfo(inputTokens, outputTokens, lane.partial);
+        if (!OverflowDetector.isOverflow(null, lastStopReason, usage, ctx.maxInputTokens())) {
+            return;
+        }
+        var settings = ctx.compactionSettings().get();
+        if (settings != null && lane.transcript.size() > 1) {
+            compactions.applyCompaction(laneName, lane, settings,
+                CompactionService.estimateTokens(lane.transcript), "overflow");
         }
     }
 
@@ -276,10 +294,15 @@ final class PiLaneSink implements PiLoop.Sink {
     // ═══════════════════════════════════════════════════════════
 
     private void onMessageEnd(Message message) {
+        var lane = ctx.requireLane(laneName);
+        // 工作副本按 pi 的 processEvents 追加（agent.ts:554-557：message_end ⇒
+        // state.messages.push）。**先于** alreadyPresent 的抑制 —— 起手的用户 prompt 因
+        // 「日志里已有」不重复落盘，但照样要进副本，pi 的用户消息也是经 message_end 进
+        // state.messages 的（docs/31 §4.2）。
+        lane.messages.add(message);
         if (alreadyPresent.contains(message)) {
             return;
         }
-        var lane = ctx.requireLane(laneName);
         switch (message) {
             case Message.AssistantMessage assistant -> {
                 // 助手消息落定 ⇒ 本轮的批次结束（pi 的顺序是 message_end → 全部 start → 各自 end）。

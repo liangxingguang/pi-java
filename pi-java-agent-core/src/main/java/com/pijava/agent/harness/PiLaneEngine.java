@@ -89,7 +89,7 @@ public final class PiLaneEngine {
         if (promptMessage == null) {
             throw new IllegalStateException("run() did not append a user entry to lane " + laneName);
         }
-        return drive(laneName, run, List.of(promptMessage), new ArrayList<>(), downstream);
+        return drive(laneName, run, List.of(promptMessage), downstream);
     }
 
     /**
@@ -100,7 +100,7 @@ public final class PiLaneEngine {
     public RunOutcome continueRun(String laneName, PiLoop.Sink downstream) {
         var lane = ctx.requireLane(laneName);
         var run = lifecycle.startContinue(laneName);
-        return drive(laneName, run, List.of(), transcriptMessages(lane), downstream);
+        return drive(laneName, run, List.of(), downstream);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -108,7 +108,7 @@ public final class PiLaneEngine {
     // ═══════════════════════════════════════════════════════════
 
     private RunOutcome drive(String laneName, ActiveRun run, List<Message> prompts,
-                             List<Message> context, PiLoop.Sink downstream) {
+                             PiLoop.Sink downstream) {
         var lane = ctx.requireLane(laneName);
         var runId = lane.runId;
         boolean settled = false;
@@ -123,13 +123,19 @@ public final class PiLaneEngine {
             // transformContext 只改消息，够不着这两样（pi 的钩子签名是 (messages) => messages）。
             var systemPrompt = assembler.buildSystemPrompt(lane);
             sink.systemPrompt(systemPrompt);
-            var runContext = new Context(systemPrompt, context, toolDefs(lane));
+            // 工作副本的一份**拷贝**：pi 的 createContextSnapshot() 交的就是
+            // this._state.messages.slice()（agent.ts:437-443），循环往这份拷贝里推消息，
+            // 车道的副本由 PiLaneSink 在 message_end 上跟进 —— 与 pi 的 processEvents 同形。
+            var runContext = new Context(systemPrompt, new ArrayList<>(lane.messages), toolDefs(lane));
             if (prompts.isEmpty()) {
                 PiLoop.continueRun(runContext, config, sink);
             } else {
                 PiLoop.run(prompts, runContext, config, sink);
             }
 
+            // pi: 溢出检查在 agent_end **之后**（_handlePostAgentRun:1142 → _checkCompaction:2132），
+            // 不在轮内。压缩改的是日志，工作副本随之重建，供下一次运行使用。
+            sink.checkOverflowAfterRun(lane);
             lifecycle.finishRun(laneName, HarnessUtils.determineOutcome(lane));
             settled = true;
             return new RunOutcome(runId, List.copyOf(lane.transcript));
@@ -166,7 +172,7 @@ public final class PiLaneEngine {
             signal,
             () -> drainSteer(laneName),
             () -> drainFollowUp(laneName),
-            ignored -> assemble(laneName, lane, sink),
+            ignored -> beforeRequest(laneName, lane, sink),
             next -> prepareNextTurn(laneName, lane),
             next -> fireShouldStopAfterTurn(laneName, lane),
             // 原始帧旁路：喂既有的 harness 广播链，会话层的记账代码因此无需改造。
@@ -177,43 +183,52 @@ public final class PiLaneEngine {
     }
 
     /**
-     * 每轮请求前的上下文装配 —— 对应旧路径 {@code AssistantStreamExecutor:60-64} 的三步。
+     * pi {@code AgentLoopConfig.transformContext}：转成 provider 消息之前的最后一处改写。
      *
-     * <p>{@code PiLoop} 每次调用都会把它的内部消息列表传进来，但**本引擎不使用它**：
-     * pi-java 的真源是车道 transcript，装配必须从那里重建（含压缩摘要与车道级覆盖）。
-     * 这也是 {@code docs/28} 所说的「车道是唯一真源」的落地方式。</p>
-     *
-     * <p><b>这里只产消息。</b> 系统提示与工具定义不在其中 —— 它们由
-     * {@link #drive} 在 run 起点装进 {@link Context}，与 pi 的
-     * {@code AgentContext} 一致（pi 的 {@code transformContext} 同样看不到它们）。</p>
+     * <p>此前这里 {@code assemble} 做三件事 ——应用暂存的配置变更、阈值自动压缩、从 entry
+     * 日志重走 {@code pathToLeaf} 重建整份消息列表（{@code docs/31 §4.2}）。三件都已搬走：
+     * 配置变更归 {@link #prepareNextTurn}（钩子返回点），压缩归 pi 的两处触发点，消息改由
+     * 车道的工作副本承载。留在请求路径上的只有 {@code transform_context} 钩子，以及
+     * 钩子看不到的两项**执行步开销**（{@code before_request} 与 {@code llm.request} 跨度）
+     * —— 它们原本长在 {@code AssistantStreamExecutor} 里，属「执行步」，{@link PiLoop} 不带。</p>
      */
-    private List<Message> assemble(String laneName, LaneState lane, PiLaneSink sink) {
-        assembler.applyPendingTurnUpdate(laneName, lane);
-        compactions.checkAutoCompact(laneName, lane);
-        var messages = assembler.buildMessagesForLane(laneName, lane);
+    private List<Message> beforeRequest(String laneName, LaneState lane, PiLaneSink sink) {
+        var messages = assembler.transformContext(laneName, List.copyOf(lane.messages));
         sink.assembledMessageCount(messages.size());
-        // before_request 钩子 + llm.request 跨度：原本长在 AssistantStreamExecutor 里，
-        // 属「执行步」开销，PiLoop 不带，必须在这里补上。
         sink.beginRequest(lane, messages);
         return messages;
     }
 
     /**
-     * pi 的 {@code prepareNextTurn}：钩子结果同时**回填车道**（由下一轮
-     * {@link ContextAssembler#applyPendingTurnUpdate} 落成配置 entry 并更新 harness 状态）
-     * 与**回给循环**（下一轮直接使用新的 model / thinking）。两侧在同一次请求前生效，不会打架。
+     * pi {@code prepareNextTurn}（{@code agent-loop.ts:176-183}）。
+     *
+     * <p>钩子返回的配置变更**就地**落盘（{@code docs/31 §4.1}：字段赋值 + entry 同处），
+     * 与 pi 的 {@code prepareNextTurnWithContext} 自己 {@code appendModelChange} 同形；
+     * 交给循环的只是 {@code {model, reasoning}}。</p>
+     *
+     * <p>阈值压缩也在这里 —— pi 的 {@code _compactBeforeNextAssistantResponse} 就包在
+     * {@code prepareNextTurnWithContext} 里（{@code agent-session.ts:542/557-577}）。压缩后
+     * 从日志重建消息并**整体交回循环**（{@code NextTurnUpdate.context}），这正是 pi 那条
+     * 「压缩靠 context 通道生效」的路径。</p>
      */
     private PiLoop.NextTurnUpdate prepareNextTurn(String laneName, LaneState lane) {
         var update = ctx.hookSystem().firePrepareNextTurn(laneName,
             new PrepareNextTurnContext(laneName, lane.runId, lane.partial, List.of()));
-        if (update == null) {
-            return null;
+        if (update != null) {
+            assembler.applyTurnUpdate(laneName, lane, update);
         }
-        lane.pendingTurnUpdate = update;
+        boolean compacted = compactions.checkThreshold(laneName, lane);
         return new PiLoop.NextTurnUpdate(
-            update.model(),
-            update.thinkingLevel() == null ? null
-                : ModelThinkingLevel.of(HarnessState.parseThinkingLabel(update.thinkingLevel())));
+            update == null ? null : update.model(),
+            update == null || update.thinkingLevel() == null ? null
+                : ModelThinkingLevel.of(HarnessState.parseThinkingLabel(update.thinkingLevel())),
+            compacted ? rebuiltContext(lane) : null);
+    }
+
+    /** 压缩后的上下文整体替换（pi {@code {...snapshot.context, messages: state.messages.slice()}}）。 */
+    private Context rebuiltContext(LaneState lane) {
+        return new Context(assembler.buildSystemPrompt(lane),
+            new ArrayList<>(lane.messages), toolDefs(lane));
     }
 
     private boolean fireShouldStopAfterTurn(String laneName, LaneState lane) {

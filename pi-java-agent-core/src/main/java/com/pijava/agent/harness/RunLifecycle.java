@@ -151,7 +151,6 @@ final class RunLifecycle {
         lane.runId = UUID.randomUUID().toString();
         lane.partial = null;
         lane.newestOwn = null;
-        lane.pendingTurnUpdate = null;
         lane.runStartNanos = System.nanoTime();
         var run = ActiveRun.start();
         lane.activeRun = run;
@@ -186,7 +185,6 @@ final class RunLifecycle {
         ctx.hookSystem().fireBeforeRunEnd(laneName,
             new RunEndContext(laneName, lane.runId, outcome));
         runSpans.closeRunSpan(lane, outcome);
-        lane.pendingTurnUpdate = null;
         lane.activeRun = null;
         ctx.publishState(laneName);
     }
@@ -220,11 +218,12 @@ final class RunLifecycle {
         }
         synchronized (lane) {
             lane.transcript.clear();
+            // 工作副本跟着清（pi Agent.reset：this._state.messages = []，agent.ts:338）。
+            lane.messages.clear();
             lane.records.clear();
             lane.partial = null;
             lane.newestOwn = null;
             lane.runId = null;
-            lane.pendingTurnUpdate = null;
             lane.recordedThinking = null;
             lane.runSpan = null;
             lane.runStartNanos = 0;
@@ -256,6 +255,9 @@ final class RunLifecycle {
         // 恢复出让「上次记过什么」与既有日志一致，否则恢复后的首次运行会把一条已经在
         // 日志里的 ThinkingLevelChange 再写一遍（docs/31 §4.1）。
         lane.recordedThinking = lastRecordedThinking(lane);
+        // 工作副本从播种的日志重建 —— resume 是「首次填充」那一类重建点
+        // （pi sdk.ts:376 的启动恢复正是 5 个 sync 点之一，docs/31 §4.2）。
+        HarnessUtils.rebuildLaneMessages(lane);
     }
 
     /** 日志里最后一条 {@code ThinkingLevelChange} 的标签；没有则为 {@code null}。 */
@@ -324,6 +326,8 @@ final class RunLifecycle {
         String stopReason = lane.newestOwn != null ? lane.newestOwn.stopReason() : null;
         if (HarnessUtils.isErrorStopReason(stopReason)) {
             entries.remove(entries.size() - 1);
+            // 日志被改 ⇒ 工作副本跟着重建，否则重试会带着那条残缺的助手消息发出去。
+            HarnessUtils.rebuildLaneMessages(lane);
         }
     }
 }

@@ -8,6 +8,7 @@ import java.util.concurrent.ConcurrentMap;
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.entry.ProvisionedEntry;
 import com.pijava.agent.record.LaneRecord;
+import com.pijava.agent.session.ContextEntries;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 
@@ -33,6 +34,27 @@ final class HarnessUtils {
     /** The ID of the most recent entry, or {@code null} if the lane is empty. */
     static String lastEntryId(LaneState lane) {
         return lane.lastEntry() != null ? lane.lastEntry().id() : null;
+    }
+
+    /**
+     * Rebuild a lane's message working copy from its entry log (pi
+     * {@code this.agent.state.messages = sessionContext.messages},
+     * {@code agent-session.ts:2357-2359}).
+     *
+     * <p>Called only where the log is <b>wholly replaced or first filled</b> —
+     * resume seeding, compaction, lane move, reset. Day-to-day appends go
+     * through {@link PiLaneSink}'s event path and never come here
+     * ({@code docs/31 §4.2}).</p>
+     *
+     * <p>Compute-then-clear: {@code pathToLeaf} reads the log and cannot see
+     * the working copy, but "swap the whole thing or leave it untouched" beats
+     * "clear first, then maybe throw".</p>
+     */
+    static void rebuildLaneMessages(LaneState lane) {
+        var rebuilt = new ArrayList<>(ContextEntries.toMessages(
+            ContextEntries.pathToLeaf(lane.transcript, lastEntryId(lane))));
+        lane.messages.clear();
+        lane.messages.addAll(rebuilt);
     }
 
     /** Build a user message: text first, then images (pi agent.ts:402-406 order). */

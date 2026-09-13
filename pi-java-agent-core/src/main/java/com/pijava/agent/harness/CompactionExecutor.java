@@ -46,15 +46,27 @@ final class CompactionExecutor {
         ctx.publishState(laneName);
     }
 
-    /** Compact when the token budget is exceeded (auto-compaction). */
-    void checkAutoCompact(String laneName, LaneState lane) {
+    /**
+     * Compact when the token budget is exceeded (pi
+     * {@code _compactBeforeNextAssistantResponse}, {@code agent-session.ts:542}).
+     *
+     * <p>Called from {@code prepareNextTurn} — the trigger point pi wraps inside
+     * {@code prepareNextTurnWithContext} ({@code :557-577}) — <b>not</b> from the
+     * request path ({@code docs/31 §4.2}).</p>
+     *
+     * @return whether a compaction ran (the caller must then hand the rebuilt
+     *         messages back to the loop through {@code NextTurnUpdate.context})
+     */
+    boolean checkThreshold(String laneName, LaneState lane) {
         var settings = ctx.compactionSettings().get();
-        if (settings == null) return;
-        if (lane.transcript.size() <= 1) return;
+        if (settings == null) return false;
+        if (lane.transcript.size() <= 1) return false;
         int estimatedTokens = CompactionService.estimateTokens(lane.transcript);
-        if (settings.enabled() && estimatedTokens > ctx.maxInputTokens() - settings.reserveTokens()) {
-            applyCompaction(laneName, lane, settings, estimatedTokens, "threshold");
+        if (!settings.enabled() || estimatedTokens <= ctx.maxInputTokens() - settings.reserveTokens()) {
+            return false;
         }
+        applyCompaction(laneName, lane, settings, estimatedTokens, "threshold");
+        return true;
     }
 
     /**
@@ -85,6 +97,10 @@ final class CompactionExecutor {
             }
             lane.transcript.clear();
             lane.transcript.addAll(compacted);
+            // 日志被整体替换 ⇒ 工作副本跟着重建（pi agent-session.ts:2357-2359 的
+            // 「写 entry → buildSessionContext → state.messages = ...」）。只有重建这一条路：
+            // 压缩从不原地改写消息，它换的是日志。
+            HarnessUtils.rebuildLaneMessages(lane);
             // The builder path puts the fresh marker at the head; the hook-plan
             // path keeps caller-supplied entries and creates no marker.
             if (!compacted.isEmpty() && compacted.get(0) instanceof Entry.Compaction marker) {
