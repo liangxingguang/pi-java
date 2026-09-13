@@ -75,6 +75,34 @@ class WebWireJsonTest {
     }
 
     @Test
+    void assistantCarriesIdentityAndMetricsButNoTimestamp() {
+        // 3a（docs/31 §8.19）：身份三元组 + usage + stopReason/errorMessage 上 wire；
+        // timestamp 缺席是**维持既有有意偏离**（wire 无消息 timestamp，
+        // client/main.ts:261/286 直贴不判重），不是遗漏 —— 这条断言就是那条偏离的哨兵。
+        var usage = new com.pijava.ai.Usage(10, 5, 1, 2, null, null, 18,
+            com.pijava.ai.Usage.Cost.zero());
+        var m = new Message.AssistantMessage(List.of(new ContentBlock.TextContent("hi")),
+            "stop", null, "openai-responses", "openai", "mock", usage,
+            java.time.Instant.ofEpochMilli(1_700_000_000_000L), null);
+        var node = WebWireJson.messageNode(m);
+        assertThat(node.get("stopReason").asText()).isEqualTo("stop");
+        assertThat(node.get("api").asText()).isEqualTo("openai-responses");
+        assertThat(node.get("provider").asText()).isEqualTo("openai");
+        assertThat(node.get("model").asText()).isEqualTo("mock");
+        assertThat(node.get("usage").get("input").asInt()).isEqualTo(10);
+        assertThat(node.get("usage").get("cost").get("total").asInt()).isZero();
+        assertThat(node.has("timestamp")).isFalse();
+        assertThat(node.get("errorMessage")).isNull();
+        assertThat(node.get("deferred")).isNull();
+
+        var bare = WebWireJson.messageNode(new Message.AssistantMessage(
+            List.of(new ContentBlock.TextContent("old"))));
+        assertThat(bare.get("api")).isNull();
+        assertThat(bare.get("usage")).isNull();
+        assertThat(bare.get("stopReason")).isNull();
+    }
+
+    @Test
     void userTextMessagePassesThrough() {
         var m = new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")));
         var node = WebWireJson.messageNode(m);

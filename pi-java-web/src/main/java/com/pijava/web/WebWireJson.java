@@ -52,6 +52,33 @@ final class WebWireJson {
             }
             node.put("isError", tool.isError());
         }
+        if (m instanceof Message.AssistantMessage assistant) {
+            // 3a（docs/31 §8.19）：assistant 的身份 + 计量随消息上 wire（pi 的消息本就
+            // 全形状；前端不认识这些键，零行为影响 —— 同步纯为形状对齐）。
+            // timestamp 不带上：维持既有「wire 无消息 timestamp」的有意偏离
+            // （client/main.ts:261/286 直贴不判重）。省略规则同 toolResult 支。
+            if (assistant.stopReason() != null) {
+                node.put("stopReason", assistant.stopReason());
+            }
+            if (assistant.deferred() != null) {
+                node.set("deferred", MAPPER.valueToTree(assistant.deferred()));
+            }
+            if (assistant.api() != null) {
+                node.put("api", assistant.api());
+            }
+            if (assistant.provider() != null) {
+                node.put("provider", assistant.provider());
+            }
+            if (assistant.model() != null) {
+                node.put("model", assistant.model());
+            }
+            if (assistant.usage() != null) {
+                node.set("usage", MAPPER.valueToTree(assistant.usage()));
+            }
+            if (assistant.errorMessage() != null) {
+                node.put("errorMessage", assistant.errorMessage());
+            }
+        }
         return node;
     }
 
