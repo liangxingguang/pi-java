@@ -1114,7 +1114,7 @@ L5 全绿 —— 证明消息帧与持久化两条链各自独立被钉住。
 **遗留**：3b（`estimateContextTokens` 移植 + `checkThreshold` 操作数改
 `model.contextWindow` + `contextWindow>0` 护栏；现 `ContextEstimator` javadoc
 声称对齐实为 chars/3.5，属**虚假声明**，随 3b 修正）、3c（`_checkCompaction`
-四守卫；`isContextOverflow`/`isRecoverableLength` 定义尚未定位）在队；B 项
+四守卫；`isContextOverflow`/`isRecoverableLength` 定义尚未定位）—— 后已落地（§8.21，判据定位于 `packages/ai/src/utils/overflow.ts`）；B 项
 （真并发）与 `QueueMode.All` 待用户。agent-core **384/384**、ai **237/237**、
 全 reactor `clean verify` 绿。
 
@@ -1164,12 +1164,11 @@ LaneMessages 2 例，守卫类测试无感 —— 它们不依赖操作数来源
 红在守卫该在的地方，全部 4 个仍由该编辑单独引起）。全部还原后残留扫描零命中，
 定向 6 类复验绿。
 
-**遗留**：3c 在队（`_checkCompaction` 四守卫 + `packages/ai/src/utils/overflow.ts:134
-isContextOverflow` / `:171 isRecoverableLength` 移植，替换 PiLaneSink:208 自造的
-OverflowDetector 路）；ContextEstimator（chars/3.5 死链）javadoc 虚假声明已改为
-指向本估算器。
+**遗留**：3c 已落地（§8.21：`_checkCompaction` 全守卫 + `packages/ai/src/utils/overflow.ts:134
+isContextOverflow` / `:171 isRecoverableLength` 移植，自造的 OverflowDetector 已删除）；
+ContextEstimator（chars/3.5 死链）javadoc 虚假声明已改为指向本估算器。
 
-### 8.21 溢出恢复与收尾检查 3c —— **设计稿（2026-09-14，待审核，未实施）**
+### 8.21 溢出恢复与收尾检查 3c —— **已实施（2026-09-14，设计经用户审核通过；实施记录见 8.21.6）**
 
 > 本节是 3c 的准入设计文档。**未经审核认可前不写任何实施代码。**
 > pi 事实全部逐行读自 `packages/coding-agent/src/core/agent-session.ts`、
@@ -1225,7 +1224,8 @@ case1 `stopReason==="error" && errorMessage` 存在 ⇒ 先过 **NON_OVERFLOW 3 
 （`Throttling error|Service unavailable:` / `rate limit` / `too many requests`）
 再过 **OVERFLOW_PATTERNS 25 条**（Anthropic/OpenAI/Google/xAI/Groq/OpenRouter/
 Together/llama.cpp/LM Studio/Copilot/MiniMax/Kimi/DS4/Cerebras/Mistral/z.ai/Ollama/
-DashScope…逐字在 :37-63，含 `model'?s` 的 U+2019 撇号与 `[\d,]+` 数字逗号类）；
+DashScope…逐字在 :37-63，含 `model'?s` 的 ASCII（0x27）撇号可选类与 `[\d,]+` 数字逗号类；
+全文 U+2019 字节级复核零命中，旧稿「U+2019 撇号」系误记，见 8.21.6 更正）；
 case2 **静默溢出**（z.ai 形）：`contextWindow && stopReason==="stop" &&
 usage.input+usage.cacheRead > contextWindow`；
 case3 **length 零输出**（MiMo 形）：`contextWindow && stopReason==="length" &&
@@ -1249,7 +1249,7 @@ usage.output===0 && input+cacheRead >= contextWindow*0.99`。
 **pi-java-ai**（判据同层归位，pi 在 packages/ai）：
 - 新建 `com.pijava.ai.utils.ContextOverflow`：`isContextOverflow(AssistantMessage, Integer window)`
   + `isRecoverableLength(AssistantMessage, long desiredMaxOutput)`。25+3 条正则**逐字移植**
-  （`Pattern.CASE_INSENSITIVE`；JS `?` 半角撇号与 U+2019 原样保留；`x?'` 型字符类不动）。
+  （`Pattern.CASE_INSENSITIVE`；撇号是半角 ASCII 0x27 原样保留，全文无 U+2019（8.21.6 更正）；`x?'` 型字符类不动）。
   读消息对象 = 3a 字段的第一个消费者（errorMessage/usage 分解/stopReason）。
   window 参数 `Integer`：null ≙ pi undefined ⇒ case2/3 短路（pi `if (contextWindow &&` 的
   falsy 闸含 0 ⇒ **0 也短路**，判等用 `!= null && > 0`）。
@@ -1325,6 +1325,71 @@ T1 锚点过期分支）；③ drive 续跑端到端（脚本：overflow 错误 
   readFiles/modifiedFiles（摘要生成路产出）——并入既有的「/compact 命令面复查」清单项。
 - `_emitSessionCompactFailed`（扩展层事件）：扩展层在 docs/27 §4 排除面 ⇒ observer 只保证
   会话事件 `compaction_end.errorMessage`，扩展事件不发 —— 列**待用户**。
+
+#### 8.21.6 实施记录（2026-09-14）
+
+**提交**：`af213a8` feat(ai)（ContextOverflow 逐字移植 + 目录 maxOutputTokens，判据测试 8 例）
+→ `8c4a0dc` feat(agent-core)（G0→T2 全守卫、闩、observer、continue 边界、驱动续跑；13 守卫哨兵 + E2E）
+→ `60804f7` feat(coding-agent)（observer 接会话事件面；isRetryableError 撤
+CONTEXT_OVERFLOW_MARKERS 改走共享判据）。全 reactor `mvn -o -am clean verify` 绿、
+L5 strict **12/12** 不动（命中 8.21.3 预期：conformance 无 compaction 设置 ⇒ G0 最先短路）。
+设计测试计划 ①–⑤ 全落（判据表驱动 / PostRunCompactionCheckTest 13 例 / PostRunOverflowDriveTest
+端到端续跑与单趟 / abortedSkippedAfterRunButPrePromptCatchesIt 预检 /
+freshUsageAnchorFiresThresholdWithPureTokensAfter 钉 estimatedTokensAfter）。
+
+**形状按设计，实施期修正三处：**
+
+1. **continue 边界补齐成 pi `Agent.continue()`（agent.ts:362-388）的原文**——设计稿只写了
+   「续跑走 continueRun 通道」。实施时把 pi 的前导判定原样搬进 `PiLaneEngine.continuePrompts`：
+   **守卫读工作副本尾（不是日志尾）**；尾是 assistant ⇒ 先 `drainSteer`、空则 `drainFollowUp`、
+   都空抛 `"Cannot continue from message role: assistant"`；尾非 assistant ⇒ 空 prompts
+   （纯续跑，pi runContinuation 形）。排空出的消息**不预写日志**，由该 pass 的
+   message_start/message_end 事件路径落日志（pi `runPromptMessages` 同形，与 startRun 的
+   预写路径相对）。`RunLifecycle.startContinue` 改签收 prompts，原「日志尾空 / assistant 尾」
+   两道守卫删除（它们站错了源，是 HookTest/E2E 首跑两红的根因）。
+   **驱动环里续跑判定先于 `finishRun`**——抛错落在上一 pass 未关的 op 内、由 finally 收口，
+   旧顺序（先 finish 再判）有 double-finishRun 风险。QueueConsumed 仍记旧 runId
+   （排空先于收尾），按 D10「谁排空谁发射」接受。
+2. **`checkThreshold`（轮内门）改道 `runAutoCompaction`**——pi 轮内路（:550）同样发
+   compaction_start/end；旧实现自造一条不发事件的静默压缩路。改道后 `runAutoCompaction` 是
+   唯一自动入口，`AutoCompactionOutcome(compacted, shouldContinue)` 用两个问题答复 pi 一个
+   boolean 的两类调用方（R0/R2 问 shouldContinue，T2 同理，轮内门问 compacted）。
+3. **post-run 输入 = `PiLaneSink.lastAssistant`** ≙ pi `_lastAssistantMessage`（读后即清，
+   每 pass 一个新 sink；suppressed 消息不计）；prompt 预检扫工作副本（`findLastAssistant`，
+   含 aborted），返回值照 pi 忽略。
+
+**测试侧修正（钉 pi 真值，非回归）：**
+- `LaneMessagesTest.overflowingTurn` 夹具补 `withUsage`+`withIdentity`：剧本世界没有
+  AbstractChatApi 出口盖章，判据读的是**终局消息对象**（C1/sameModel/T1 直读全靠它）——
+  旧夹具 usage 只活在事件流里、无身份戳，3c 判据「看不见」这条静默溢出。
+  **剧本夹具规范**：要被判据看见的 assistant 必须自带身份与终局 usage。
+- `nonPositiveWindow…` 旧钉「窗口≤0 完全不压」重写为「轮内门静默、post-run T 路照压」：
+  `shouldCompact`（compaction.ts:235-238）**没有** window>0 守卫，那道守卫只住在轮内门
+  （agent-session.ts:543）⇒ 窗口 0 下阈值线 = `-reserve`，任何正读数过线。旧钉是拿轮内门
+  守卫脑补 T 路的发明。
+- `HookTest` 的 shouldStopAfterTurn 钉改判：运行内不排 followUp（agent-loop.ts:252-255 在
+  :261 排空**之前** agent_end+return），但 ③ 看到队列有货 ⇒ continue 排空再跑一个 pass
+  ⇒ 总请求 2、followUp 空、`passRunIds` 2。
+
+**反向实验（先预测红名单再动刀，五红一发现）：**
+- E1 摘 G3（`sameModel ⇒ true`）⇒ 恰 1 红 `differentModelOverflowTextIgnored` ✓
+- E2 给 `check()` 塞回发明的 `window<=0 ⇒ false` ⇒ 红 `nonPositiveWindow…` ✓
+  （同预测里的 aborted 例未红——其夹具窗口非零；预测过含，无害）
+- E4 摘 ③（`checkAfterRun` 只回 `check`）⇒ 恰 2 红 `queuedMessagesAloneDriveAContinuation`
+  + `HookTest.shouldStopAfterTurnEndsRunButPostRunContinueDrainsFollowUp` ✓
+- E5 摘 `continuePrompts` 的队列排空 ⇒ 红 HookTest（落进 throw 路）✓
+- E6 给 R1 分支加发 onStart ⇒ 恰 1 红 `latchedOverflowAnnouncesFailureWithEndOnly`
+  （钉死 pi :2194-2211 的「只 end 无 start」形状）✓
+- **E3/E3b/E3c 全绿 —— 登记为发现，不是漏洞**：R2 副本摘尾（pi :2214-2218）与重建后
+  `dropTrailingRetryableAssistant`（pi :2410-2419）在 pi-java 当前可达形状上**互为冗余**
+  ——rebuild 的切断点永不把 assistant 送回副本尾，单独或双双 no-op 都无可观测差异。
+  pi 两道都在，门判是「和 pi 表现一样」，**两道都保留**；可观测兜底是 continuePrompts 的
+  throw（E2E 下验过其红）。
+
+**更正**：8.21.1/8.21.3 两处「U+2019 撇号」为误记——pi `overflow.ts` 全文 `e2 80 99`
+字节级**零命中**，`model'?s` 型字符类是纯 ASCII 0x27；移植逐字照此（af213a8 提交信息同步记录）。
+**存量登记**：`coding-agent/AgentSession.java` 在 HEAD 已 837 行（超 500 限），3c 仅 +45 行、
+未夹带结构拆分——拆分并入例行清点项，不进本包。
 
 ---
 
