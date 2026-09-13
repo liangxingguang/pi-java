@@ -1,0 +1,28 @@
+{
+  "id": "S12",
+  "name": "批次 terminate 门：every 才停，混合批次继续",
+  "systemPrompt": "You are helpful.",
+  "prompt": "Terminate gate",
+  "toolExecution": "parallel",
+  "tools": [
+    { "name": "plainish" },
+    { "name": "term1", "terminate": true }
+  ],
+  "responses": [
+    {
+      "content": [
+        { "type": "toolCall", "name": "plainish", "arguments": {} },
+        { "type": "toolCall", "name": "term1", "arguments": {} }
+      ],
+      "stopReason": "toolUse"
+    },
+    {
+      "content": [
+        { "type": "toolCall", "name": "term1", "arguments": {} },
+        { "type": "toolCall", "name": "term1", "arguments": {} }
+      ],
+      "stopReason": "toolUse"
+    },
+    { "content": [{ "type": "text", "text": "Ghost turn that must never stream" }], "stopReason": "stop" }
+  ]
+}

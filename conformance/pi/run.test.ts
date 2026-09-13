@@ -43,6 +43,8 @@ interface ScriptTool {
 	/** Blocked by `beforeToolCall` before it ever executes. */
 	reject?: boolean;
 	details?: unknown;
+	/** Partial results streamed through `onUpdate` before the call resolves. */
+	updates?: number;
 }
 
 interface ScriptContent {
@@ -266,6 +268,34 @@ class Normalizer {
 		return { type: "toolCall", name: c.name, arguments: c.arguments };
 	}
 
+	/**
+	 * `tool_execution_end.result` is the *whole* finalized result object
+	 * (agent-loop.ts:774-782). Twin of the Java `FrameNormalizer.resultOf`:
+	 * `terminate` keeps `true` only (pi's undefined/absent and an explicit false both
+	 * mean "no termination" at the batch gate, `:590`); `addedToolNames` keeps
+	 * non-empty only; null/undefined fields drop from the wire. `usage` passes through
+	 * raw — no script sets it today; if one ever does, the field-name difference
+	 * between pi's `Usage` and the Java record turns the diff red *on purpose*:
+	 * negotiating a shared shape is then required, not silently skipping the field.
+	 */
+	result(r: unknown): unknown {
+		const res = (r ?? {}) as {
+			content?: AssistantMessage["content"];
+			details?: unknown;
+			usage?: unknown;
+			addedToolNames?: string[];
+			terminate?: boolean;
+		};
+		const out: Record<string, unknown> = {
+			content: (res.content ?? []).map((c) => this.block(c)),
+			terminate: res.terminate === true ? true : undefined,
+			addedToolNames: res.addedToolNames?.length ? res.addedToolNames : undefined,
+		};
+		if (res.details !== undefined && res.details !== null) out["details"] = res.details;
+		if (res.usage !== undefined && res.usage !== null) out["usage"] = res.usage;
+		return out;
+	}
+
 	frame(event: AgentEvent): unknown {
 		switch (event.type) {
 			case "agent_start":
@@ -283,12 +313,18 @@ class Normalizer {
 			case "tool_execution_start":
 				return { type: event.type, id: this.toolCallId(event.toolCallId), name: event.toolName };
 			case "tool_execution_update":
-				return { type: event.type, id: this.toolCallId(event.toolCallId), name: event.toolName };
+				return {
+					type: event.type,
+					id: this.toolCallId(event.toolCallId),
+					name: event.toolName,
+					partialResult: event.partialResult,
+				};
 			case "tool_execution_end":
 				return {
 					type: event.type,
 					id: this.toolCallId(event.toolCallId),
 					name: event.toolName,
+					result: this.result(event.result),
 					isError: event.isError,
 				};
 			case "turn_end":
@@ -314,11 +350,22 @@ async function runScript(script: Script): Promise<string[]> {
 		description: `scripted tool ${t.name}`,
 		parameters: Type.Object({}, { additionalProperties: true }),
 		executionMode: t.executionMode,
-		execute: async () => ({
-			content: [{ type: "text" as const, text: t.isError ? "failed" : "ok" }],
-			details: t.details ?? {},
-			terminate: t.terminate ?? false,
-		}),
+		execute: async (_toolCallId, _params, _signal, onUpdate) => {
+			// Streamed updates mirror the Java conformance driver: each partial is a
+			// whole AgentToolResult (types.ts:361-377 — `details` is a required field),
+			// pushed before the call resolves → `tool_execution_update` frames (agent-loop.ts:690-704).
+			for (let i = 1; i <= (t.updates ?? 0); i++) {
+				onUpdate?.({
+					content: [{ type: "text" as const, text: `partial ${i}` }],
+					details: {},
+				});
+			}
+			return {
+				content: [{ type: "text" as const, text: t.isError ? "failed" : "ok" }],
+				details: t.details ?? {},
+				terminate: t.terminate ?? false,
+			};
+		},
 	}));
 
 	const context: AgentContext = {
@@ -418,7 +465,7 @@ function canonical(value: unknown): unknown {
 }
 
 describe("L5 conformance (pi side)", () => {
-	const ids = ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9"];
+	const ids = ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12"];
 	for (const id of ids) {
 		const scriptPath = join(SCRIPTS_DIR, `${id}.json`);
 		it(`runs ${id}`, async (ctx) => {

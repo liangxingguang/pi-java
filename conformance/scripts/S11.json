@@ -1,0 +1,22 @@
+{
+  "id": "S11",
+  "name": "工具流式更新 + end 帧携带完整结果对象",
+  "systemPrompt": "You are helpful.",
+  "prompt": "Stream and show details",
+  "toolExecution": "parallel",
+  "tools": [
+    { "name": "stream", "updates": 3 },
+    { "name": "rich", "details": { "kind": "card", "note": "whole result on the wire" } }
+  ],
+  "responses": [
+    {
+      "content": [{ "type": "toolCall", "name": "stream", "arguments": { "q": "s" } }],
+      "stopReason": "toolUse"
+    },
+    {
+      "content": [{ "type": "toolCall", "name": "rich", "arguments": { "q": "r" } }],
+      "stopReason": "toolUse"
+    },
+    { "content": [{ "type": "text", "text": "Seen" }], "stopReason": "stop" }
+  ]
+}

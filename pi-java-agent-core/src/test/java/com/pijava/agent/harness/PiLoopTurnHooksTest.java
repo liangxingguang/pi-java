@@ -96,7 +96,7 @@ class PiLoopTurnHooksTest {
         new PiLoop.ToolOutcome(
             new Message.ToolResultMessage(call.toolCallId(), call.toolName(),
                 List.of(new ContentBlock.TextContent("ok")), false),
-            "ok", false, false));
+            ToolResult.success("ok"), false));
 
     /** 工具本体：只有 name / executionMode 有语义，其余给最小合法值。 */
     private static AgentTool<?, ?> toolDef(String name) {

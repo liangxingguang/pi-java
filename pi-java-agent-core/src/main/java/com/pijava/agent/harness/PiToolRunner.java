@@ -42,10 +42,13 @@ import com.pijava.ai.message.Message;
  * <p>各路都返回**错误结果消息**而非抛出 —— pi 对它们同样发 {@code tool_execution_start}
  * 与 {@code tool_execution_end}，由 {@link PiLoopTools} 负责发射。</p>
  *
- * <p><b>已知缺口（A7，未在本步修）</b>：pi 的 {@code ToolResultMessage} 带 {@code details}，
+ * <p><b>已知缺口（A7，未在本步修）</b>：pi 的 {@code ToolResultMessage} 带
+ * {@code details}/{@code usage}/{@code addedToolNames}（{@code agent-loop.ts:784-797}），
  * 而 pi-java 的 {@link Message.ToolResultMessage} 只有
- * {@code (toolUseId, toolName, content, isError)} —— 因此 {@code details} 只能经事件的
- * {@code result} 传到 wire，**无法随 entry 落库**。这是 `docs/23` 的 A7 项。</p>
+ * {@code (toolUseId, toolName, content, isError)} —— 事件的 {@code result} 现在带的是
+ * **完整结果对象**（与 pi 的 {@code finalized.result} 同形），但结果**消息**里的
+ * {@code details}/{@code usage} 仍缺席，随 entry 落库的也就没有它们。这是 {@code docs/23}
+ * 的 A7 项，属消息模型的改动，单独一步做。</p>
  */
 public final class PiToolRunner implements PiLoop.ToolRunner {
 
@@ -131,24 +134,38 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
      * 工具抛的异常先在执行段转成错误结果并带着 {@code isError=true} 进入收尾段 ——
      * <b>{@code after_tool} 钩子对失败的执行同样会跑</b>（钩子能改写错误文本、也能把
      * {@code isError} 翻回去）；只有收尾段自己抛的异常才在这里转错误结果。</p>
+     *
+     * <p><b>流式更新</b>（pi {@code :680-704}）：工具经 update 回调流出的每个部分结果都
+     * 直接发成 {@code tool_execution_update}，载荷 {@code args} 用<b>原始</b>调用的参数
+     * （pi 的 {@code prepared.toolCall.arguments} —— 改写后的参数在 {@code prepared.args}
+     * 字段里，不进事件）。执行返回后闩落下 {@code acceptingUpdates} —— 泄漏线程之后的
+     * 更新被丢弃，与 pi 同。</p>
      */
     @Override
-    public PiLoop.ToolOutcome execute(PiLoop.Prepared prepared) {
+    public PiLoop.ToolOutcome execute(PiLoop.Prepared prepared, PiLoop.Sink emit) {
         if (!(prepared instanceof PreparedCall state)) {
             throw new IllegalArgumentException("执行票不是本 runner 签发的：" + prepared);
         }
         var call = state.call();
+        var acceptingUpdates = new java.util.concurrent.atomic.AtomicBoolean(true);
         ToolResult<?> executed;
         boolean isError;
         try {
             executed = registry.execute(call.toolName(), call.toolCallId(), state.args(),
-                signal, null, toolContext);
+                signal, partial -> {
+                    // pi :688：!acceptingUpdates 时静默丢弃
+                    if (acceptingUpdates.get()) {
+                        emit.emit(new PiLoop.Event.ToolExecutionUpdate(call.toolCallId(),
+                            call.toolName(), call.args(), partial));
+                    }
+                }, toolContext);
             isError = false;
         } catch (Exception e) {
             // pi :711-714：createErrorToolResult(error.message) —— 内容换掉、标记为错，继续收尾
-            executed = new ToolResult<>(
-                List.of(new ContentBlock.TextContent(messageOf(e))), null, null, false, List.of());
+            executed = PiLoopTools.createErrorToolResult(messageOf(e));
             isError = true;
+        } finally {
+            acceptingUpdates.set(false);
         }
         try {
             var finalized = hooks == null ? new AfterToolOutcome(executed, isError)
@@ -177,23 +194,30 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
         }
     }
 
-    /** pi 的 {@code createToolResultMessage}：内容块 + 错误标记进消息，details 只上事件。 */
+    /** pi 的 {@code createToolResultMessage}（{@code :784-797}）：消息由结果对象派生。 */
     private static PiLoop.ToolOutcome toOutcome(PiLoop.ToolCall call,
                                                 ToolResult<?> result, boolean isError) {
+        // pi :791：content ?? [] —— 无类型工具可能返回无内容的结果，null 不进历史
+        var content = result.content() != null ? result.content() : List.<ContentBlock>of();
         return new PiLoop.ToolOutcome(
-            new Message.ToolResultMessage(call.toolCallId(), call.toolName(),
-                result.content(), isError),
-            result.details(),
-            isError,
-            result.terminate());
+            new Message.ToolResultMessage(call.toolCallId(), call.toolName(), content, isError),
+            result, isError);
     }
 
-    /** 立即失败（denied / unavailable / 执行异常）：内容为单块文本，terminate 由调用方给。 */
+    /**
+     * 立即失败（denied / unavailable / 执行异常 / 收尾异常）：pi 的
+     * {@code createErrorToolResult} 形状（{@code content=[text]}、{@code details={}}），
+     * 拒绝带 terminate 时补在结果对象上（pi {@code :645-647}）。
+     */
     private static PiLoop.ToolOutcome errorOutcome(PiLoop.ToolCall call, String text,
                                                    boolean terminate) {
-        var message = new Message.ToolResultMessage(call.toolCallId(), call.toolName(),
-            List.of(new ContentBlock.TextContent(text == null ? "" : text)), true);
-        return new PiLoop.ToolOutcome(message, text, true, terminate);
+        var base = PiLoopTools.createErrorToolResult(text);
+        var result = terminate
+            ? new ToolResult<>(base.content(), base.details(), null, true, List.of())
+            : base;
+        var message = new Message.ToolResultMessage(
+            call.toolCallId(), call.toolName(), result.content(), true);
+        return new PiLoop.ToolOutcome(message, result, true);
     }
 
     /** 钩子拒绝时的理由：{@code BeforeToolResult} 把 reason 放在 arguments 里；兜底文案对齐 pi 的 {@code reason || "Tool execution was blocked"}（{@code :643}）。 */

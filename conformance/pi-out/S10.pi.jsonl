@@ -9,11 +9,11 @@
 {"detail":"readish","evt":"toolcall_end","type":"message_update"}
 {"message":{"content":[{"arguments":{"n":1},"name":"shellish","type":"toolCall"},{"arguments":{"n":2},"name":"readish","type":"toolCall"}],"role":"assistant","stopReason":"toolUse"},"type":"message_end"}
 {"id":"tc1","name":"shellish","type":"tool_execution_start"}
-{"id":"tc1","isError":false,"name":"shellish","type":"tool_execution_end"}
+{"id":"tc1","isError":false,"name":"shellish","result":{"content":[{"text":"ok","type":"text"}],"details":{}},"type":"tool_execution_end"}
 {"message":{"isError":false,"role":"toolResult","toolName":"shellish"},"type":"message_start"}
 {"message":{"isError":false,"role":"toolResult","toolName":"shellish"},"type":"message_end"}
 {"id":"tc2","name":"readish","type":"tool_execution_start"}
-{"id":"tc2","isError":false,"name":"readish","type":"tool_execution_end"}
+{"id":"tc2","isError":false,"name":"readish","result":{"content":[{"text":"ok","type":"text"}],"details":{}},"type":"tool_execution_end"}
 {"message":{"isError":false,"role":"toolResult","toolName":"readish"},"type":"message_start"}
 {"message":{"isError":false,"role":"toolResult","toolName":"readish"},"type":"message_end"}
 {"stopReason":"toolUse","toolResults":["shellish","readish"],"type":"turn_end"}

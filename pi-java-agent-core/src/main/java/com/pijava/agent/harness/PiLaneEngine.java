@@ -195,8 +195,8 @@ public final class PiLaneEngine {
             }
 
             @Override
-            public PiLoop.ToolOutcome execute(PiLoop.Prepared prepared) {
-                var outcome = runner.execute(prepared);
+            public PiLoop.ToolOutcome execute(PiLoop.Prepared prepared, PiLoop.Sink emit) {
+                var outcome = runner.execute(prepared, emit);
                 sink.noteToolTerminate(prepared.call().toolCallId(), outcome.terminate());
                 return outcome;
             }

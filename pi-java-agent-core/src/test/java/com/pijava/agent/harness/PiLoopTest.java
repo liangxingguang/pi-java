@@ -14,6 +14,7 @@ import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.ai.thinking.ThinkingLevelMap;
+import com.pijava.agent.tool.ToolResult;
 
 import org.junit.jupiter.api.Test;
 
@@ -134,13 +135,13 @@ class PiLoopTest {
         }
 
         @Override
-        public PiLoop.ToolOutcome execute(PiLoop.Prepared prepared) {
+        public PiLoop.ToolOutcome execute(PiLoop.Prepared prepared, PiLoop.Sink emit) {
             var call = prepared.call();
             // invoked 记录在执行相：拿到执行票≠执行过（中止的闭包不会走到这里）。
             invoked.add(call.toolName());
             var message = new Message.ToolResultMessage(call.toolCallId(), call.toolName(),
                 List.of(new ContentBlock.TextContent("ok")), false);
-            return new PiLoop.ToolOutcome(message, "ok", false, false);
+            return new PiLoop.ToolOutcome(message, ToolResult.success("ok"), false);
         }
     }
 

@@ -1,11 +1,13 @@
 package com.pijava.agent.harness;
 
 import com.pijava.agent.tool.ExecutionMode;
+import com.pijava.agent.tool.ToolResult;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Supplier;
 
 /**
@@ -94,7 +96,7 @@ final class PiLoopTools {
             // pi :451-468：immediate 与已执行的分岔只影响结果从哪来，收尾时序相同
             var outcome = switch (config.toolRunner().prepare(toolCall(call))) {
                 case PiLoop.ImmediateOutcome immediate -> immediate.outcome();
-                case PiLoop.Prepared prepared -> config.toolRunner().execute(prepared);
+                case PiLoop.Prepared prepared -> config.toolRunner().execute(prepared, emit);
             };
             outcomes.add(outcome);
             emit.emit(new PiLoop.Event.ToolExecutionEnd(
@@ -161,7 +163,7 @@ final class PiLoopTools {
             entries.add(() -> {
                 var outcome = aborted(config)
                     ? abortedOutcome(call)
-                    : config.toolRunner().execute(prepared);
+                    : config.toolRunner().execute(prepared, emit);
                 emit.emit(new PiLoop.Event.ToolExecutionEnd(
                     call.id(), call.name(), outcome.result(), outcome.isError()));
                 return outcome;
@@ -198,9 +200,10 @@ final class PiLoopTools {
             var text = "Tool call \"" + call.name() + "\" was not executed: the response hit the "
                 + "output token limit, so its arguments may be truncated. "
                 + "Re-issue the tool call with complete arguments.";
-            var message = new Message.ToolResultMessage(call.id(), call.name(),
-                List.of(new ContentBlock.TextContent(text)), true);
-            emit.emit(new PiLoop.Event.ToolExecutionEnd(call.id(), call.name(), text, true));
+            var result = createErrorToolResult(text);
+            var message = new Message.ToolResultMessage(
+                call.id(), call.name(), result.content(), true);
+            emit.emit(new PiLoop.Event.ToolExecutionEnd(call.id(), call.name(), result, true));
             emit.emit(new PiLoop.Event.MessageStart(message));
             emit.emit(new PiLoop.Event.MessageEnd(message));
             messages.add(message);
@@ -213,11 +216,21 @@ final class PiLoopTools {
      * 信号已中止时该调用**不执行**，但照样收到一个错误结果。
      */
     private static PiLoop.ToolOutcome abortedOutcome(ContentBlock.ToolUseContent call) {
-        var text = "Operation aborted";
+        var result = createErrorToolResult("Operation aborted");
         return new PiLoop.ToolOutcome(
-            new Message.ToolResultMessage(call.id(), call.name(),
-                List.of(new ContentBlock.TextContent(text)), true),
-            text, true, false);
+            new Message.ToolResultMessage(call.id(), call.name(), result.content(), true),
+            result, true);
+    }
+
+    /**
+     * pi 的 {@code createErrorToolResult}（{@code agent-loop.ts:767-772}）：单文本块
+     * 内容 + **空对象** {@code details}（不是 undefined）+ 无 usage / terminate。
+     * 失败路径的 end 载荷就是它 —— 别用 {@code null} details 凑合。
+     */
+    static ToolResult<Object> createErrorToolResult(String text) {
+        return new ToolResult<>(
+            List.of(new ContentBlock.TextContent(text == null ? "" : text)),
+            Map.of(), null, false, List.of());
     }
 
     /** pi {@code shouldTerminateToolBatch}：非空且**每一项**都 terminate。 */

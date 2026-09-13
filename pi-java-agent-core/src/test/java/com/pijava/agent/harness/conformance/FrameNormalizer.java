@@ -2,10 +2,12 @@ package com.pijava.agent.harness.conformance;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import com.pijava.agent.harness.PiLoop;
+import com.pijava.agent.tool.ToolResult;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
@@ -15,10 +17,13 @@ import com.pijava.ai.stream.StreamEvent;
  * {@code conformance/pi/run.test.ts} 的 {@code Normalizer} 逐条对应。
  *
  * <p><b>抹平的事</b>：{@code toolCallId} 按首次出现次序改名 {@code tc1,tc2,…}；
- * 丢弃 id / runId / timestamp / usage 等不稳定字段；工具结果与 {@code tool_execution_end}
- * 只保留 {@code toolName} 与 {@code isError}（{@code details} 形状两侧不同源，不参与比较）。
+ * 丢弃 id / runId / timestamp 等不稳定字段。
  * <b>不抹平的事</b>：文本逐字比较，{@code arguments} 按整棵结构比较（键序已由
- * {@link CanonicalJson} 抹平）。</p>
+ * {@link CanonicalJson} 抹平）；{@code tool_execution_end} 携带**完整结果对象**、
+ * {@code tool_execution_update} 携带**完整部分结果** —— 曾几何时这两处载荷被归一化
+ * 直接丢掉，pi 与 pi-java 的 wire 形状差异（{@code result} 是整棵树而非 {@code details}、
+ * 流式更新干脆缺席）因此在差分里完全隐身。丢字段的豁免必须**两侧同时**做，否则
+ * 「比对通过」只是「没在看」。</p>
  *
  * <p>停因是唯一的**枚举名**差异：pi 用 {@code toolUse}，pi-java 用 {@code tool_use}。
  * 这是命名约定而非行为差异，归一化时映射回 pi 的写法。</p>
@@ -49,16 +54,58 @@ final class FrameNormalizer {
                 "id", toolCallId(e.toolCallId()), "name", e.toolName());
             case PiLoop.Event.ToolExecutionUpdate e -> CanonicalJson.obj(
                 "type", "tool_execution_update",
-                "id", toolCallId(e.toolCallId()), "name", e.toolName());
+                "id", toolCallId(e.toolCallId()), "name", e.toolName(),
+                "partialResult", e.partialResult());
             case PiLoop.Event.ToolExecutionEnd e -> CanonicalJson.obj(
                 "type", "tool_execution_end",
-                "id", toolCallId(e.toolCallId()), "name", e.toolName(), "isError", e.isError());
+                "id", toolCallId(e.toolCallId()), "name", e.toolName(),
+                "result", resultOf(e.result()), "isError", e.isError());
             case PiLoop.Event.TurnEnd e -> CanonicalJson.obj(
                 "type", "turn_end", "stopReason", stopReasonOf(e.message().stopReason()),
                 "toolResults", toolNames(e.toolResults()));
             case PiLoop.Event.AgentEnd e -> CanonicalJson.obj(
                 "type", "agent_end", "messages", messagesOf(e.messages()));
         };
+    }
+
+    /**
+     * pi 的 {@code tool_execution_end.result} = {@code finalized.result} **整棵树**
+     * （{@code agent-loop.ts:774-782}），逐字段规范化：
+     * <ul>
+     *   <li>{@code content} 走与消息内容块同一渲染器（pi 的 {@code ?? []} 规则同此）；</li>
+     *   <li>{@code details} 原样进树 —— 两侧都是剧本 JSON 的解析产物，键序由
+     *       {@link CanonicalJson#canonical} 抹平；null 对应 pi 的 undefined（线上缺席）；</li>
+     *   <li>{@code terminate} 只在**为真**时保留 —— pi 未设置（undefined）与显式 false
+     *       在批次门上同义（{@code result.terminate === true} 才终止），Java 的原始
+     *       boolean false 对应两者；true/缺席的差异仍是可比的，一侧多真一侧没真立即变红；</li>
+     *   <li>{@code addedToolNames} 只保留非空（pi 空数组/undefined 同样丢）；</li>
+     *   <li>{@code usage} 原样透传：剧本从不设置它，一旦有剧本设置，两侧字段名不同
+     *       （Java 的 {@code inputTokens}/{@code outputTokens}）会让差分立刻变红 ——
+     *       这是**故意留响**，不是豁免。</li>
+     * </ul>
+     */
+    private Object resultOf(Object raw) {
+        var out = new LinkedHashMap<String, Object>();
+        if (raw instanceof ToolResult<?> result) {
+            out.put("content", blocksOf(result.content() == null
+                ? List.of() : result.content()));
+            if (result.details() != null) {
+                out.put("details", result.details());
+            }
+            if (result.usage() != null) {
+                out.put("usage", result.usage());
+            }
+            if (result.terminate()) {
+                out.put("terminate", true);
+            }
+            if (!result.addedToolNames().isEmpty()) {
+                out.put("addedToolNames", result.addedToolNames());
+            }
+        } else {
+            // 载荷不是结果对象（不该发生）：原样进树，让差分红给开发者看
+            out.put("raw", raw);
+        }
+        return out;
     }
 
     /** pi 的 {@code AgentEventSink} 事件名 ⇒ 归一化后的 {@code evt} 字段。 */

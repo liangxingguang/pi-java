@@ -71,9 +71,15 @@ record ConformanceScript(
      *
      * @param executionMode {@code "sequential"} / {@code "parallel"}；缺省 = 未声明
      *                      （pi 侧同为 {@code undefined}，两者都不触发顺序路径）
+     * @param details       结果对象的 {@code details} 载荷（原样进
+     *                      {@code tool_execution_end.result.details}）；缺省 = {@code {}}
+     *                      （pi 侧 {@code t.details ?? {}}，{@code run.test.ts:319}）
+     * @param updates       执行期间经 update 回调流出的部分结果条数；缺省 0。
+     *                      两侧都把它翻成 {@code tool_execution_update} 帧 ——
+     *                      这是 L5 观察「工具流式更新是否发射」的唯一通道
      */
     record Tool(String name, boolean reject, boolean isError, boolean terminate,
-                String executionMode) {}
+                String executionMode, Object details, int updates) {}
 
     /**
      * 一段助手响应里的内容块。
@@ -119,7 +125,9 @@ record ConformanceScript(
                 node.path("isError").asBoolean(false),
                 node.path("terminate").asBoolean(false),
                 node.path("executionMode").isMissingNode()
-                    ? null : node.path("executionMode").asText()));
+                    ? null : node.path("executionMode").asText(),
+                detailsOf(node.path("details")),
+                node.path("updates").asInt(0)));
         }
         var responses = new ArrayList<Response>();
         for (var node : root.path("responses")) {
@@ -173,6 +181,14 @@ record ConformanceScript(
     private static String textOrNull(JsonNode node, String field) {
         var value = node.get(field);
         return value == null || value.isNull() ? null : value.asText();
+    }
+
+    /** 工具的 {@code details}：任意 JSON 原样转 Java 结构；缺席/显式 null → null（两侧都按 {@code {}} 处理）。 */
+    private static Object detailsOf(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+        return MAPPER.convertValue(node, Object.class);
     }
 
     private static Map<String, Object> argumentsOf(JsonNode node) {

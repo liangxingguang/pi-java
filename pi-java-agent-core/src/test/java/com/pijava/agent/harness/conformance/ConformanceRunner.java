@@ -53,8 +53,9 @@ final class ConformanceRunner {
                 @Override public PiLoop.Preparation prepare(PiLoop.ToolCall call) {
                     return driver.prepareTool(call);
                 }
-                @Override public PiLoop.ToolOutcome execute(PiLoop.Prepared prepared) {
-                    return driver.executeTool(prepared);
+                @Override public PiLoop.ToolOutcome execute(PiLoop.Prepared prepared,
+                                                            PiLoop.Sink emit) {
+                    return driver.executeTool(prepared, emit);
                 }
             },
             driver::stream,
@@ -198,35 +199,57 @@ final class ConformanceRunner {
             return new PiLoop.ToolRunner.CallPrepared(call);
         }
 
-        PiLoop.ToolOutcome executeTool(PiLoop.Prepared prepared) {
+        PiLoop.ToolOutcome executeTool(PiLoop.Prepared prepared, PiLoop.Sink emit) {
             var call = prepared.call();
             var tool = toolsByName.get(call.toolName());
-            var terminate = tool != null && tool.terminate();
-            return executed(call, tool != null && tool.isError(), terminate);
-        }
-
-        /** pi 的 {@code beforeToolCall} 拦截分支：结果文本是 reason，结果消息标记为错误。 */
-        private static PiLoop.ToolOutcome denied(PiLoop.ToolCall call) {
-            var text = "denied by policy";
-            return new PiLoop.ToolOutcome(
-                new Message.ToolResultMessage(call.toolCallId(), call.toolName(),
-                    List.of(new ContentBlock.TextContent(text)), true),
-                CanonicalJson.obj("terminate", false), true, false);
+            return executed(call, tool != null && tool.isError(),
+                tool != null && tool.terminate(),
+                tool == null ? null : tool.details(),
+                tool == null ? 0 : tool.updates(), emit);
         }
 
         /**
-         * 正常执行的分支。注意 {@code script.tool().isError()} 只选结果文本 ——
-         * pi 侧脚本的同名字段就是这个语义，执行成功的调用结果消息标记恒为 {@code false}。
+         * pi 的 {@code beforeToolCall} 拦截分支：结果文本是 reason，结果消息标记为错误。
+         * 结果对象是 pi 的 {@code createErrorToolResult} 形状（{@code agent-loop.ts:767-772}：
+         * 单文本块 + **空对象** details），end 帧的 {@code result} 要与 pi 逐字段对得上。
+         */
+        private static PiLoop.ToolOutcome denied(PiLoop.ToolCall call) {
+            var text = "denied by policy";
+            var content = List.<ContentBlock>of(new ContentBlock.TextContent(text));
+            return new PiLoop.ToolOutcome(
+                new Message.ToolResultMessage(call.toolCallId(), call.toolName(), content, true),
+                new ToolResult<>(content, Map.of(), null, false, List.of()), true);
+        }
+
+        /**
+         * 正常执行的分支。{@code isError} 只选结果文本 —— pi 侧脚本的同名字段就是这个语义，
+         * 执行成功的调用结果消息标记恒为 {@code false}。结果的 {@code details} 与 pi 侧
+         * 桩同形：{@code script.details ?? {}}（{@code run.test.ts:319}）。
+         *
+         * <p>{@code updates > 0} 时在返回结果**之前**经 {@code emit} 流出 N 条
+         * {@code tool_execution_update}，载荷用原始调用参数 —— 这正是 pi
+         * {@code executePreparedToolCall} 里工具回调的效果（{@code :690-704}）。</p>
          */
         private static PiLoop.ToolOutcome executed(PiLoop.ToolCall call, boolean failedText,
-                                                   boolean terminate) {
+                                                   boolean terminate, Object details,
+                                                   int updates, PiLoop.Sink emit) {
+            for (int i = 1; i <= updates; i++) {
+                // partial 是**整个** AgentToolResult（types.ts:361-377：details 必填），
+                // 与 pi 侧桩 push 的形状逐字段相同，帧才可比
+                emit.emit(new PiLoop.Event.ToolExecutionUpdate(call.toolCallId(),
+                    call.toolName(), call.args(),
+                    CanonicalJson.obj("content",
+                        List.of(CanonicalJson.obj("type", "text", "text", "partial " + i)),
+                        "details", Map.of())));
+            }
             var text = failedText ? "failed" : "ok";
+            var content = List.<ContentBlock>of(new ContentBlock.TextContent(text));
             return new PiLoop.ToolOutcome(
-                new Message.ToolResultMessage(call.toolCallId(), call.toolName(),
-                    List.of(new ContentBlock.TextContent(text)), false),
-                CanonicalJson.obj("content", text, "details", Map.of(),
-                    "terminate", terminate),
-                false, terminate);
+                new Message.ToolResultMessage(call.toolCallId(), call.toolName(), content, false),
+                new ToolResult<>(content,
+                    details == null ? Map.of() : details,
+                    null, terminate, List.of()),
+                false);
         }
 
         List<Message> steering() {

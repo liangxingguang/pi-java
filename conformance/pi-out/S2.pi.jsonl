@@ -7,7 +7,7 @@
 {"detail":"echo","evt":"toolcall_end","type":"message_update"}
 {"message":{"content":[{"arguments":{"text":"hi"},"name":"echo","type":"toolCall"}],"role":"assistant","stopReason":"toolUse"},"type":"message_end"}
 {"id":"tc1","name":"echo","type":"tool_execution_start"}
-{"id":"tc1","isError":false,"name":"echo","type":"tool_execution_end"}
+{"id":"tc1","isError":false,"name":"echo","result":{"content":[{"text":"ok","type":"text"}],"details":{}},"type":"tool_execution_end"}
 {"message":{"isError":false,"role":"toolResult","toolName":"echo"},"type":"message_start"}
 {"message":{"isError":false,"role":"toolResult","toolName":"echo"},"type":"message_end"}
 {"stopReason":"toolUse","toolResults":["echo"],"type":"turn_end"}

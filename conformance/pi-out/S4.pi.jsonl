@@ -13,9 +13,9 @@
 {"id":"tc1","name":"ok1","type":"tool_execution_start"}
 {"id":"tc2","name":"ok2","type":"tool_execution_start"}
 {"id":"tc3","name":"denied","type":"tool_execution_start"}
-{"id":"tc3","isError":true,"name":"denied","type":"tool_execution_end"}
-{"id":"tc1","isError":false,"name":"ok1","type":"tool_execution_end"}
-{"id":"tc2","isError":false,"name":"ok2","type":"tool_execution_end"}
+{"id":"tc3","isError":true,"name":"denied","result":{"content":[{"text":"denied by policy","type":"text"}],"details":{}},"type":"tool_execution_end"}
+{"id":"tc1","isError":false,"name":"ok1","result":{"content":[{"text":"ok","type":"text"}],"details":{}},"type":"tool_execution_end"}
+{"id":"tc2","isError":false,"name":"ok2","result":{"content":[{"text":"ok","type":"text"}],"details":{}},"type":"tool_execution_end"}
 {"message":{"isError":false,"role":"toolResult","toolName":"ok1"},"type":"message_start"}
 {"message":{"isError":false,"role":"toolResult","toolName":"ok1"},"type":"message_end"}
 {"message":{"isError":false,"role":"toolResult","toolName":"ok2"},"type":"message_start"}

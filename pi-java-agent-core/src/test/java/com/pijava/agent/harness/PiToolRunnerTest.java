@@ -95,12 +95,15 @@ class PiToolRunnerTest {
         return registry;
     }
 
+    /** 不收事件的汇：多数测试只关心结局，不关心流式更新。 */
+    private static final PiLoop.Sink NO_EMIT = event -> {};
+
     /** 走完两相：拿到执行票就执行，immediate 就地收尾 —— pi 循环就是这么调度端口的。 */
     private static PiLoop.ToolOutcome runBoth(PiToolRunner runner, PiLoop.ToolCall call) {
         var preparation = runner.prepare(call);
         return preparation instanceof PiLoop.ImmediateOutcome immediate
             ? immediate.outcome()
-            : runner.execute((PiLoop.Prepared) preparation);
+            : runner.execute((PiLoop.Prepared) preparation, NO_EMIT);
     }
 
     @Test
@@ -188,7 +191,128 @@ class PiToolRunnerTest {
         var ticket = noHooks.prepare(call("echo"));
         assertThat(ticket).isInstanceOf(PiLoop.Prepared.class);
         assertThat(((PiLoop.Prepared) ticket).call().toolName()).isEqualTo("echo");
-        assertThat(noHooks.execute((PiLoop.Prepared) ticket).isError()).isFalse();
+        assertThat(noHooks.execute((PiLoop.Prepared) ticket, NO_EMIT).isError()).isFalse();
+    }
+
+    // ═══ tool_execution_update：pi executePreparedToolCall 的回调转接（agent-loop.ts:690-704）═══
+
+    /** 执行中流出 N 条更新，并把 update 回调**漏**到外面（模拟执行返回后的泄漏线程）。 */
+    private static final class StreamingTool implements AgentTool<String, Void> {
+        private final String name;
+        private final int updates;
+        private final java.util.concurrent.atomic.AtomicReference<ToolUpdateCallback<Void>> leaked =
+            new java.util.concurrent.atomic.AtomicReference<>();
+
+        StreamingTool(String name, int updates) {
+            this.name = name;
+            this.updates = updates;
+        }
+
+        java.util.concurrent.atomic.AtomicReference<ToolUpdateCallback<Void>> leaked() {
+            return leaked;
+        }
+
+        @Override public String name() { return name; }
+        @Override public String label() { return name; }
+        @Override public String description() { return "streaming test tool"; }
+        @Override public Map<String, Object> inputSchema() { return Map.of(); }
+        @Override public ExecutionMode executionMode() { return new ExecutionMode.Sequential(); }
+        @Override public String prepareArguments(Map<String, Object> raw) { return "prepared"; }
+        @Override public ToolResult<Void> execute(String id, String params, AbortSignal signal,
+                ToolUpdateCallback<Void> onUpdate, ToolContext ctx) {
+            leaked.set(onUpdate);
+            if (onUpdate != null) {
+                for (int i = 1; i <= updates; i++) {
+                    onUpdate.onUpdate(ToolResult.success("partial " + i));
+                }
+            }
+            return ToolResult.success("final");
+        }
+    }
+
+    @Test
+    void toolUpdatesStreamAsEventsCarryingOriginalArgsBeforeTheResult() {
+        // pi 的事件 args = prepared.toolCall.arguments（**原始**调用参数，:696）——
+        // 钩子改写后的参数进执行，但不进事件。
+        var events = new java.util.ArrayList<PiLoop.Event>();
+        var hooks = new HookSystem(new LaneState());
+        hooks.onBeforeTool("default", ctx ->
+            new BeforeToolResult(true, Map.of("q", "rewritten"), false));
+        var runner = new PiToolRunner("default",
+            registryWith(new StreamingTool("echo", 2)), hooks, CTX, null, null);
+        var prepared = runner.prepare(
+            new PiLoop.ToolCall("tc1", "echo", Map.of("q", "orig"), false));
+
+        var outcome = runner.execute((PiLoop.Prepared) prepared, events::add);
+
+        var updates = events.stream()
+            .filter(PiLoop.Event.ToolExecutionUpdate.class::isInstance)
+            .map(PiLoop.Event.ToolExecutionUpdate.class::cast)
+            .toList();
+        assertThat(updates).as("N 条部分结果 ⇒ N 条 tool_execution_update").hasSize(2);
+        assertThat(updates.get(0).toolCallId()).isEqualTo("tc1");
+        assertThat(updates.get(0).toolName()).isEqualTo("echo");
+        assertThat(updates.get(0).args())
+            .as("事件带原始调用参数，不是钩子改写后的").isEqualTo(Map.of("q", "orig"));
+        assertThat(partialText(updates.get(0))).isEqualTo("partial 1");
+        assertThat(partialText(updates.get(1))).isEqualTo("partial 2");
+        assertThat(events).as("更新之外没有别的事件").hasSize(2);
+        assertThat(outcome.isError()).isFalse();
+    }
+
+    private static String partialText(PiLoop.Event.ToolExecutionUpdate update) {
+        var partial = (ToolResult<?>) update.partialResult();
+        return ((ContentBlock.TextContent) partial.content().get(0)).text();
+    }
+
+    @Test
+    void updatesAfterExecuteReturnsAreDiscarded() {
+        // pi 的 acceptingUpdates 闩（:688 + finally :716）：执行落定后的回调调用**静默丢弃**。
+        // 没有闩，泄漏线程能把已收尾的 toolCallId 再轰出一条事件。
+        var events = new java.util.ArrayList<PiLoop.Event>();
+        var tool = new StreamingTool("echo", 0);
+        var runner = new PiToolRunner("default", registryWith(tool), null, CTX, null, null);
+        var prepared = runner.prepare(call("echo"));
+
+        runner.execute((PiLoop.Prepared) prepared, events::add);
+        assertThat(events).isEmpty();
+
+        tool.leaked().get().onUpdate(ToolResult.success("late"));
+        assertThat(events).as("执行返回后的更新被闩丢弃").isEmpty();
+    }
+
+    // ═══ end 载荷 = 完整结果对象（pi :774-782，此前事件只带 details/text）═══
+
+    @Test
+    void outcomeResultIsTheWholeToolResult() {
+        var runner = new PiToolRunner("default", registryWith(terminateTool("echo")),
+            null, CTX, null, null);
+
+        var outcome = runBoth(runner, call("echo"));
+
+        assertThat(outcome.result().content()).hasSize(1);
+        assertThat(((ContentBlock.TextContent) outcome.result().content().get(0)).text())
+            .isEqualTo("done");
+        assertThat(outcome.result().terminate()).isTrue();
+        assertThat(outcome.result().details()).isNull();
+        assertThat(outcome.result().addedToolNames()).isEmpty();
+        assertThat(outcome.terminate()).as("批次门从结果对象派生").isTrue();
+    }
+
+    @Test
+    void failedExecutionResultMatchesPiCreateErrorToolResultShape() {
+        var runner = new PiToolRunner("default", registryWith(throwingTool("boom")),
+            null, CTX, null, null);
+
+        var outcome = runBoth(runner, call("boom"));
+
+        // pi 的 createErrorToolResult（:767-772）：单文本块 + **details 是空对象而非 null**。
+        // 旧 Java 实现把这棵树丢了（事件只带 details），这个断言把形状钉死。
+        assertThat(((ContentBlock.TextContent) outcome.result().content().get(0)).text())
+            .isEqualTo("tool exploded");
+        assertThat(outcome.result().details()).isEqualTo(Map.of());
+        assertThat(outcome.result().usage()).isNull();
+        assertThat(outcome.result().terminate()).isFalse();
     }
 
     // ═══ after_tool：pi 的 finalizeExecutedToolCall（agent-loop.ts:720-764）形状 ═══

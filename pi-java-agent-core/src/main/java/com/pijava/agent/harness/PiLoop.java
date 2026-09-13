@@ -13,6 +13,7 @@ import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.ai.thinking.ThinkingLevelMap;
+import com.pijava.agent.tool.ToolResult;
 
 /**
  * pi 双循环的 1:1 移植（{@code packages/agent/src/agent-loop.ts} @ pi {@code v0.85.1}，803 行）。
@@ -66,11 +67,11 @@ public final class PiLoop {
         record ToolExecutionStart(String toolCallId, String toolName,
                                   Map<String, Object> args) implements Event {}
 
-        /** pi {@code { type: "tool_execution_update"; ...; partialResult }} */
+        /** pi {@code { type: "tool_execution_update"; ...; args; partialResult }}（{@code :690-704}） */
         record ToolExecutionUpdate(String toolCallId, String toolName,
                                    Map<String, Object> args, Object partialResult) implements Event {}
 
-        /** pi {@code { type: "tool_execution_end"; ...; result; isError }} */
+        /** pi {@code { type: "tool_execution_end"; ...; result; isError }}，result=完整结果对象（{@code :774-782}） */
         record ToolExecutionEnd(String toolCallId, String toolName,
                                 Object result, boolean isError) implements Event {}
     }
@@ -91,15 +92,26 @@ public final class PiLoop {
                            Map<String, Object> args, boolean truncatedByLength) {}
 
     /**
-     * 一次工具调用的最终结果。
+     * 一次工具调用的最终结果 —— pi 的 {@code FinalizedToolCallOutcome}：
+     * 消息由 {@code createToolResultMessage(finalized)} 派生（{@code agent-loop.ts:784-797}），
+     * 而 {@code result} 就是 pi 的 {@code finalized.result} —— 它原样进
+     * {@code tool_execution_end.result}（{@code :779}），**不是** {@code details}。
+     * 失败路径的 result 是 {@code createErrorToolResult}：{@code content=[text]} 且
+     * {@code details={}}（{@code :767-772}）—— 空对象而非 null 是 pi 的形状。
      *
-     * @param message   pi 的 {@code ToolResultMessage}（会进上下文与 {@code newMessages}）
-     * @param result    pi 的 {@code tool_execution_end.result}（wire 载荷，可为任意形状）
-     * @param isError   是否错误结果
-     * @param terminate pi 的 {@code terminate}：为真时本批次结束驱动
+     * @param message pi 的 {@code ToolResultMessage}（会进上下文与 {@code newMessages}）
+     * @param result  pi 的 {@code finalized.result}（完整结果对象；wire 上即
+     *                {@code tool_execution_end.result} 与 {@code tool_execution_update.partialResult}）
+     * @param isError 是否错误结果（pi 把它放在 result **外面**，{@code :728-729}）
      */
-    public record ToolOutcome(Message.ToolResultMessage message, Object result,
-                              boolean isError, boolean terminate) {}
+    public record ToolOutcome(Message.ToolResultMessage message, ToolResult<?> result,
+                              boolean isError) {
+
+        /** pi 的 {@code result.terminate === true} 判据（批次门，{@code :590}）。 */
+        public boolean terminate() {
+            return result.terminate();
+        }
+    }
 
     /**
      * 准备相的产物（pi 的 {@code prepareToolCall} 返回类型）：要么当场失败
@@ -138,14 +150,21 @@ public final class PiLoop {
          * 执行 + 收尾相（pi 的 {@code executePreparedToolCall} +
          * {@code finalizeExecutedToolCall}，{@code agent-loop.ts:677-764}）：真正跑工具，
          * 随后跑 {@code after_tool} 钩子。工具自身抛出的异常同样转成错误结果。
+         *
+         * <p>{@code emit} 对应 pi 递给 {@code executePreparedToolCall} 的事件汇
+         * （{@code :679}）—— 工具经 update 回调流出的 {@code tool_execution_update}
+         * 由实现在这里直接发射（{@code :690-704}），执行结束后不再有更新
+         * （pi 的 {@code acceptingUpdates} 闩）。</p>
          */
-        ToolOutcome execute(Prepared prepared);
+        ToolOutcome execute(Prepared prepared, Sink emit);
 
-        /** 便捷适配：所有调用都直接进执行相、不存在 immediate 失败 —— 给测试与简单端口用。 */
+        /** 便捷适配：所有调用都直接进执行相、不存在 immediate 失败，也不流出更新 —— 给测试与简单端口用。 */
         static ToolRunner always(java.util.function.Function<ToolCall, ToolOutcome> execute) {
             return new ToolRunner() {
                 @Override public Preparation prepare(ToolCall call) { return new CallPrepared(call); }
-                @Override public ToolOutcome execute(Prepared prepared) { return execute.apply(prepared.call()); }
+                @Override public ToolOutcome execute(Prepared prepared, Sink emit) {
+                    return execute.apply(prepared.call());
+                }
             };
         }
 
