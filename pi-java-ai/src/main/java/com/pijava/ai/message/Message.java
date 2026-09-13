@@ -79,16 +79,44 @@ public sealed interface Message {
     }
 
     /**
-     * A tool execution result message.
-     * Carries the tool call ID, tool name, result content, and error flag
-     * so that protocol adapters can format tool-result blocks correctly
-     * for each LLM provider.
+     * A tool execution result message (pi {@code ToolResultMessage}，
+     * {@code packages/ai/src/types.ts:452-468}；由 {@code createToolResultMessage}
+     * 从结果对象派生，{@code agent-loop.ts:784-797})。
+     *
+     * <p>{@code details} / {@code usage} 是结果树上同名对象的<b>原样转发</b>
+     * （pi 的 {@code finalized.result.details}/{@code .usage}）—— pi 的
+     * {@code usage} 是 ai 共享的 {@code Usage} 类型，而 pi-java 的工具 usage 长在
+     * {@code ToolResult.UsageInfo}（agent 模块），ai 不能反向依赖 agent，故两者
+     * 都取 {@code Object}（{@code null} ≙ pi 的 undefined，线上/库里键缺席）。
+     * {@code addedToolNames} 对齐 pi 的「仅有内容才带上」：这里统一存非 null 列表，
+     * 空表在序列化时省略。</p>
+     *
+     * <p><b>provider 投影不读这三项</b> —— pi 的各协议适配器只从 {@code content}
+     * 构造工具结果块（{@code details} 是给 UI/日志的结构化载荷，不进模型上下文）。</p>
+     *
+     * <p>{@code role()} 的 {@code "tool"} 是 pi-java 持久化方言（JSONL/SQLite 里
+     * 写作 {@code "tool"}/{@code toolUseId}）；对外的 WS wire 由
+     * {@code WebWireJson} 转回 pi 的 {@code "toolResult"}/{@code toolCallId} 拼写。
+     * 别把 {@code role()} 改成 {@code "toolResult"} —— 那会连带改破既有会话文件。</p>
      */
     record ToolResultMessage(String toolUseId, String toolName,
-                             List<ContentBlock> content, boolean isError) implements Message {
-        /** Compact constructor that defensively copies the content blocks. */
+                             List<ContentBlock> content,
+                             Object details, Object usage, List<String> addedToolNames,
+                             boolean isError) implements Message {
+        /** Compact constructor: defensive copies; empty {@code addedToolNames} ≙ pi 的省略。 */
         public ToolResultMessage {
             content = List.copyOf(content);
+            addedToolNames = addedToolNames == null ? List.of() : List.copyOf(addedToolNames);
+        }
+
+        /**
+         * Compatibility constructor for messages without a structured payload
+         * (pi 的对象字面量里这些字段本就可选)。生产路径一律走全参构造，从结果对象
+         * 转发 —— 见 {@code PiToolRunner.toOutcome}。
+         */
+        public ToolResultMessage(String toolUseId, String toolName,
+                                 List<ContentBlock> content, boolean isError) {
+            this(toolUseId, toolName, content, null, null, List.of(), isError);
         }
 
         @Override

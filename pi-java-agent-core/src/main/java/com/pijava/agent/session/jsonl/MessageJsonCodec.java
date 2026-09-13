@@ -43,9 +43,30 @@ final class MessageJsonCodec {
                 JsonlCodec.requireString(node, "toolUseId"),
                 JsonlCodec.requireString(node, "toolName"),
                 content,
+                JsonlCodec.optionalAny(node, "details"),
+                JsonlCodec.optionalAny(node, "usage"),
+                decodeStringList(node.get("addedToolNames")),
                 node.has("isError") && node.get("isError").asBoolean(false));
             default -> throw JsonlCodec.DecodeError.schema("has unknown message role");
         };
+    }
+
+    /** {@code addedToolNames}：pi 只在非空时写出；缺席/非数组空表 ⇒ 空列表（缺省）。 */
+    private static List<String> decodeStringList(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return List.of();
+        }
+        if (!node.isArray()) {
+            throw JsonlCodec.DecodeError.schema("has invalid addedToolNames");
+        }
+        var names = new ArrayList<String>(node.size());
+        for (var item : node) {
+            if (!item.isTextual()) {
+                throw JsonlCodec.DecodeError.schema("has invalid addedToolNames entry");
+            }
+            names.add(item.textValue());
+        }
+        return List.copyOf(names);
     }
 
     private static DeferredHandle decodeDeferred(JsonNode node) {

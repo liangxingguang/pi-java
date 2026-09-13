@@ -85,6 +85,25 @@ class PiToolRunnerTest {
         };
     }
 
+    /** 一个结果树三载荷齐全的工具（details/usage/addedToolNames 都非空）。 */
+    private static AgentTool<String, Map<String, Object>> richTool(String name) {
+        return new AgentTool<>() {
+            @Override public String name() { return name; }
+            @Override public String label() { return name; }
+            @Override public String description() { return "rich tool"; }
+            @Override public Map<String, Object> inputSchema() { return Map.of(); }
+            @Override public ExecutionMode executionMode() { return new ExecutionMode.Sequential(); }
+            @Override public String prepareArguments(Map<String, Object> raw) { return "prepared"; }
+            @Override public ToolResult<Map<String, Object>> execute(String id, String params,
+                    AbortSignal signal, ToolUpdateCallback<Map<String, Object>> onUpdate,
+                    ToolContext ctx) {
+                return new ToolResult<>(List.of(new ContentBlock.TextContent("rich")),
+                    Map.of("kind", "card"), new ToolResult.UsageInfo(3, 5), false,
+                    List.of("mcp:late"));
+            }
+        };
+    }
+
     private static PiLoop.ToolCall call(String name) {
         return new PiLoop.ToolCall("tc1", name, Map.of(), false);
     }
@@ -313,6 +332,28 @@ class PiToolRunnerTest {
         assertThat(outcome.result().details()).isEqualTo(Map.of());
         assertThat(outcome.result().usage()).isNull();
         assertThat(outcome.result().terminate()).isFalse();
+        // 消息同样带 pi 的形状（createToolResultMessage 一条路，:784-797）：
+        // denied/异常/截断都不许把 details 丢在消息层
+        assertThat(outcome.message().details()).isEqualTo(Map.of());
+        assertThat(outcome.message().usage()).isNull();
+        assertThat(outcome.message().addedToolNames()).isEmpty();
+    }
+
+    @Test
+    void messageForwardsResultPayloadFields() {
+        var runner = new PiToolRunner("default", registryWith(richTool("rich")),
+            null, CTX, null, null);
+
+        var outcome = runBoth(runner, call("rich"));
+
+        // A7 的闭环点：pi 的 ToolResultMessage 带 details/usage/addedToolNames
+        // （packages/ai/src/types.ts:452-468），值**等于**结果树上的对应字段。
+        assertThat(outcome.message().details()).isEqualTo(outcome.result().details());
+        assertThat(outcome.message().usage()).isEqualTo(outcome.result().usage());
+        assertThat(outcome.message().addedToolNames())
+            .isEqualTo(List.of("mcp:late")).isEqualTo(outcome.result().addedToolNames());
+        assertThat(outcome.message().content()).isEqualTo(outcome.result().content());
+        assertThat(outcome.message().isError()).isFalse();
     }
 
     // ═══ after_tool：pi 的 finalizeExecutedToolCall（agent-loop.ts:720-764）形状 ═══

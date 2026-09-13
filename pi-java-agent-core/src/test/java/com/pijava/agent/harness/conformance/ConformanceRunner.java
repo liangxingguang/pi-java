@@ -216,9 +216,19 @@ final class ConformanceRunner {
         private static PiLoop.ToolOutcome denied(PiLoop.ToolCall call) {
             var text = "denied by policy";
             var content = List.<ContentBlock>of(new ContentBlock.TextContent(text));
-            return new PiLoop.ToolOutcome(
-                new Message.ToolResultMessage(call.toolCallId(), call.toolName(), content, true),
-                new ToolResult<>(content, Map.of(), null, false, List.of()), true);
+            // 消息从结果对象转发 —— pi 侧 denied 也只在 createToolResultMessage
+            // 一处合成（agent-loop.ts:784-797），两处的 details 因此恒相等
+            var result = new ToolResult<Object>(content, Map.of(), null, false, List.of());
+            return new PiLoop.ToolOutcome(messageOf(call, result, true), result, true);
+        }
+
+        /** pi 的 {@code createToolResultMessage}（{@code :784-797}）的测试桩等价物。 */
+        private static Message.ToolResultMessage messageOf(PiLoop.ToolCall call,
+                                                           ToolResult<?> result,
+                                                           boolean isError) {
+            return new Message.ToolResultMessage(call.toolCallId(), call.toolName(),
+                result.content(), result.details(), result.usage(),
+                result.addedToolNames(), isError);
         }
 
         /**
@@ -244,12 +254,10 @@ final class ConformanceRunner {
             }
             var text = failedText ? "failed" : "ok";
             var content = List.<ContentBlock>of(new ContentBlock.TextContent(text));
-            return new PiLoop.ToolOutcome(
-                new Message.ToolResultMessage(call.toolCallId(), call.toolName(), content, false),
-                new ToolResult<>(content,
-                    details == null ? Map.of() : details,
-                    null, terminate, List.of()),
-                false);
+            var result = new ToolResult<Object>(content,
+                details == null ? Map.of() : details,
+                null, terminate, List.of());
+            return new PiLoop.ToolOutcome(messageOf(call, result, false), result, false);
         }
 
         List<Message> steering() {

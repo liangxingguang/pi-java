@@ -379,6 +379,20 @@ public final class JsonlCodec {
         return SessionJson.mapper().convertValue(value, new com.fasterxml.jackson.core.type.TypeReference<>() {});
     }
 
+    /**
+     * Read an optional field of arbitrary JSON shape (object, array, or scalar)
+     * as plain Java values, or {@code null} when absent. Used for pi-shaped
+     * pass-through payloads such as a tool result's {@code details}/{@code usage},
+     * which are re-encoded verbatim by {@code SessionJson.messageNode}.
+     */
+    public static Object optionalAny(JsonNode node, String field) {
+        JsonNode value = node.get(field);
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        return SessionJson.mapper().convertValue(value, Object.class);
+    }
+
     /** Read an optional integral field as a {@code Long}, or {@code null} when absent. */
     public static Long optionalLong(JsonNode node, String field) {
         JsonNode value = node.get(field);

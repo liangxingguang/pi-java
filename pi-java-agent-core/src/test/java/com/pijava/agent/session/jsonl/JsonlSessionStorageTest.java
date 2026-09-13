@@ -140,6 +140,60 @@ class JsonlSessionStorageTest {
     }
 
     @Test
+    void toolResultPayloadRoundTripsThroughJsonl() throws Exception {
+        // A7 的 L3 判据（docs/23c §5）：details/usage/addedToolNames 落库再读回，
+        // 键集合与值原样保留；无载荷消息则保持「键缺席」，不生出 null 噪声。
+        Path dir = Files.createTempDirectory("pi-jsonl-a7");
+        var repo = JsonlSessionRepository.over(dir);
+        var session = repo.create(new JsonlSessionCreateOptions("s1", "cwd", null, null));
+        var details = java.util.Map.of("kind", "card",
+            "nested", java.util.Map.of("n", List.of(1, 2)));
+        var usage = java.util.Map.of("input", 3, "output", 5);
+        session.appendEntry(new ProvisionedEntry<>(new Entry.Message("e1", 0, null, null,
+            new Message.ToolResultMessage("call-1", "rich",
+                List.of(new ContentBlock.TextContent("ok")), details, usage,
+                List.of("mcp:late"), false), null)), "main");
+        session.appendEntry(new ProvisionedEntry<>(new Entry.Message("e2", 0, null, null,
+            new Message.ToolResultMessage("call-2", "plain",
+                List.of(new ContentBlock.TextContent("ok")), null, null, List.of(), true),
+            null)), "main");
+        session.storage().drain();
+        Path file = repo.list(JsonlSessionListOptions.all()).getFirst().path();
+
+        var storage = JsonlSessionStorage.load(FS, file);
+        var entries = storage.findEntries(com.pijava.agent.session.EntryQuery.all());
+        var rich = toolResultNamed(entries, "rich");
+        var plain = toolResultNamed(entries, "plain");
+
+        assertThat(rich.details()).isEqualTo(details);
+        assertThat(rich.usage()).isEqualTo(usage);
+        assertThat(rich.addedToolNames()).containsExactly("mcp:late");
+        assertThat(rich.isError()).isFalse();
+        assertThat(plain.details()).isNull();
+        assertThat(plain.usage()).isNull();
+        assertThat(plain.addedToolNames()).isEmpty();
+        assertThat(plain.isError()).isTrue();
+        // 原始行级判据（pi 的 stringify 丢 undefined ⇒ 键根本不出现）：
+        // 无载荷消息不许写出 "details"/"usage"/"addedToolNames" 空壳键
+        String raw = Files.readString(file);
+        String plainLine = raw.lines()
+            .filter(l -> l.contains("\"e2\"")).findFirst().orElseThrow();
+        assertThat(plainLine).doesNotContain("\"details\"")
+            .doesNotContain("\"usage\"").doesNotContain("\"addedToolNames\"");
+    }
+
+    private static Message.ToolResultMessage toolResultNamed(
+            List<Entry> entries, String toolName) {
+        return entries.stream()
+            .filter(e -> e instanceof Entry.Message m
+                && m.message() instanceof Message.ToolResultMessage t
+                && t.toolName().equals(toolName))
+            .map(e -> (Message.ToolResultMessage) ((Entry.Message) e).message())
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("no toolResult entry named " + toolName));
+    }
+
+    @Test
     void invalidSessionIdIsRejected() throws Exception {
         Path dir = Files.createTempDirectory("pi-jsonl-id");
         var repo = JsonlSessionRepository.over(dir);

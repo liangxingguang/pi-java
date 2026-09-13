@@ -42,13 +42,13 @@ import com.pijava.ai.message.Message;
  * <p>各路都返回**错误结果消息**而非抛出 —— pi 对它们同样发 {@code tool_execution_start}
  * 与 {@code tool_execution_end}，由 {@link PiLoopTools} 负责发射。</p>
  *
- * <p><b>已知缺口（A7，未在本步修）</b>：pi 的 {@code ToolResultMessage} 带
- * {@code details}/{@code usage}/{@code addedToolNames}（{@code agent-loop.ts:784-797}），
- * 而 pi-java 的 {@link Message.ToolResultMessage} 只有
- * {@code (toolUseId, toolName, content, isError)} —— 事件的 {@code result} 现在带的是
- * **完整结果对象**（与 pi 的 {@code finalized.result} 同形），但结果**消息**里的
- * {@code details}/{@code usage} 仍缺席，随 entry 落库的也就没有它们。这是 {@code docs/23}
- * 的 A7 项，属消息模型的改动，单独一步做。</p>
+ * <p><b>消息载荷（A7 已闭环）</b>：pi 的 {@code createToolResultMessage}
+ * （{@code agent-loop.ts:784-797}）把结果树的 {@code details}/{@code usage}/
+ * {@code addedToolNames} 原样转发到 {@link Message.ToolResultMessage} 上，随 entry
+ * 落库；{@link #toOutcome} 是本 runner 内该转发的唯一合成点（错误路径经
+ * {@link #errorOutcome} 汇到同一处）。序列化侧的省略规则（null/空 ⇒ 键缺席）在
+ * {@code SessionJson.messageNode} 与 {@code WebWireJson}，L5 消息帧与 L3 四路
+ * 往返各自钉住。</p>
  */
 public final class PiToolRunner implements PiLoop.ToolRunner {
 
@@ -199,8 +199,10 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
                                                 ToolResult<?> result, boolean isError) {
         // pi :791：content ?? [] —— 无类型工具可能返回无内容的结果，null 不进历史
         var content = result.content() != null ? result.content() : List.<ContentBlock>of();
+        // pi :792-794：details/usage/addedToolNames 原样转发到消息上（A7 的闭环点）
         return new PiLoop.ToolOutcome(
-            new Message.ToolResultMessage(call.toolCallId(), call.toolName(), content, isError),
+            new Message.ToolResultMessage(call.toolCallId(), call.toolName(), content,
+                result.details(), result.usage(), result.addedToolNames(), isError),
             result, isError);
     }
 
@@ -208,6 +210,8 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
      * 立即失败（denied / unavailable / 执行异常 / 收尾异常）：pi 的
      * {@code createErrorToolResult} 形状（{@code content=[text]}、{@code details={}}），
      * 拒绝带 terminate 时补在结果对象上（pi {@code :645-647}）。
+     * 消息与结果同源构造 —— pi 的 immediate 分支同样只经
+     * {@code createToolResultMessage} 一条路（{@code :784-797}）。
      */
     private static PiLoop.ToolOutcome errorOutcome(PiLoop.ToolCall call, String text,
                                                    boolean terminate) {
@@ -215,9 +219,7 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
         var result = terminate
             ? new ToolResult<>(base.content(), base.details(), null, true, List.of())
             : base;
-        var message = new Message.ToolResultMessage(
-            call.toolCallId(), call.toolName(), result.content(), true);
-        return new PiLoop.ToolOutcome(message, result, true);
+        return toOutcome(call, result, true);
     }
 
     /** 钩子拒绝时的理由：{@code BeforeToolResult} 把 reason 放在 arguments 里；兜底文案对齐 pi 的 {@code reason || "Tool execution was blocked"}（{@code :643}）。 */

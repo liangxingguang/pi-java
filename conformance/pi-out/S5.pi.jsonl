@@ -10,8 +10,8 @@
 {"message":{"content":[{"text":"Starting…","type":"text"},{"arguments":{"n":1},"name":"never","type":"toolCall"}],"role":"assistant","stopReason":"length"},"type":"message_end"}
 {"id":"tc1","name":"never","type":"tool_execution_start"}
 {"id":"tc1","isError":true,"name":"never","result":{"content":[{"text":"Tool call \"never\" was not executed: the response hit the output token limit, so its arguments may be truncated. Re-issue the tool call with complete arguments.","type":"text"}],"details":{}},"type":"tool_execution_end"}
-{"message":{"isError":true,"role":"toolResult","toolName":"never"},"type":"message_start"}
-{"message":{"isError":true,"role":"toolResult","toolName":"never"},"type":"message_end"}
+{"message":{"content":[{"text":"Tool call \"never\" was not executed: the response hit the output token limit, so its arguments may be truncated. Re-issue the tool call with complete arguments.","type":"text"}],"details":{},"isError":true,"role":"toolResult","toolName":"never"},"type":"message_start"}
+{"message":{"content":[{"text":"Tool call \"never\" was not executed: the response hit the output token limit, so its arguments may be truncated. Re-issue the tool call with complete arguments.","type":"text"}],"details":{},"isError":true,"role":"toolResult","toolName":"never"},"type":"message_end"}
 {"stopReason":"length","toolResults":["never"],"type":"turn_end"}
 {"type":"turn_start"}
 {"message":{"content":[],"role":"assistant","stopReason":"stop"},"type":"message_start"}
@@ -19,4 +19,4 @@
 {"detail":"Recovered","evt":"text_end","type":"message_update"}
 {"message":{"content":[{"text":"Recovered","type":"text"}],"role":"assistant","stopReason":"stop"},"type":"message_end"}
 {"stopReason":"stop","toolResults":[],"type":"turn_end"}
-{"messages":[{"content":"Do something long","role":"user"},{"content":[{"text":"Starting…","type":"text"},{"arguments":{"n":1},"name":"never","type":"toolCall"}],"role":"assistant","stopReason":"length"},{"isError":true,"role":"toolResult","toolName":"never"},{"content":[{"text":"Recovered","type":"text"}],"role":"assistant","stopReason":"stop"}],"type":"agent_end"}
+{"messages":[{"content":"Do something long","role":"user"},{"content":[{"text":"Starting…","type":"text"},{"arguments":{"n":1},"name":"never","type":"toolCall"}],"role":"assistant","stopReason":"length"},{"content":[{"text":"Tool call \"never\" was not executed: the response hit the output token limit, so its arguments may be truncated. Re-issue the tool call with complete arguments.","type":"text"}],"details":{},"isError":true,"role":"toolResult","toolName":"never"},{"content":[{"text":"Recovered","type":"text"}],"role":"assistant","stopReason":"stop"}],"type":"agent_end"}

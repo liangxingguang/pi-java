@@ -10,12 +10,12 @@
 {"message":{"content":[{"arguments":{"n":1},"name":"shellish","type":"toolCall"},{"arguments":{"n":2},"name":"readish","type":"toolCall"}],"role":"assistant","stopReason":"toolUse"},"type":"message_end"}
 {"id":"tc1","name":"shellish","type":"tool_execution_start"}
 {"id":"tc1","isError":false,"name":"shellish","result":{"content":[{"text":"ok","type":"text"}],"details":{}},"type":"tool_execution_end"}
-{"message":{"isError":false,"role":"toolResult","toolName":"shellish"},"type":"message_start"}
-{"message":{"isError":false,"role":"toolResult","toolName":"shellish"},"type":"message_end"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"shellish"},"type":"message_start"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"shellish"},"type":"message_end"}
 {"id":"tc2","name":"readish","type":"tool_execution_start"}
 {"id":"tc2","isError":false,"name":"readish","result":{"content":[{"text":"ok","type":"text"}],"details":{}},"type":"tool_execution_end"}
-{"message":{"isError":false,"role":"toolResult","toolName":"readish"},"type":"message_start"}
-{"message":{"isError":false,"role":"toolResult","toolName":"readish"},"type":"message_end"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"readish"},"type":"message_start"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"readish"},"type":"message_end"}
 {"stopReason":"toolUse","toolResults":["shellish","readish"],"type":"turn_end"}
 {"type":"turn_start"}
 {"message":{"content":[],"role":"assistant","stopReason":"stop"},"type":"message_start"}
@@ -24,4 +24,4 @@
 {"detail":"Mixed done","evt":"text_end","type":"message_update"}
 {"message":{"content":[{"text":"Mixed done","type":"text"}],"role":"assistant","stopReason":"stop"},"type":"message_end"}
 {"stopReason":"stop","toolResults":[],"type":"turn_end"}
-{"messages":[{"content":"Run a mixed batch","role":"user"},{"content":[{"arguments":{"n":1},"name":"shellish","type":"toolCall"},{"arguments":{"n":2},"name":"readish","type":"toolCall"}],"role":"assistant","stopReason":"toolUse"},{"isError":false,"role":"toolResult","toolName":"shellish"},{"isError":false,"role":"toolResult","toolName":"readish"},{"content":[{"text":"Mixed done","type":"text"}],"role":"assistant","stopReason":"stop"}],"type":"agent_end"}
+{"messages":[{"content":"Run a mixed batch","role":"user"},{"content":[{"arguments":{"n":1},"name":"shellish","type":"toolCall"},{"arguments":{"n":2},"name":"readish","type":"toolCall"}],"role":"assistant","stopReason":"toolUse"},{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"shellish"},{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"readish"},{"content":[{"text":"Mixed done","type":"text"}],"role":"assistant","stopReason":"stop"}],"type":"agent_end"}

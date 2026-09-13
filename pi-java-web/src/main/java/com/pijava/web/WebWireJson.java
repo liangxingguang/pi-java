@@ -33,6 +33,23 @@ final class WebWireJson {
         if (m instanceof Message.ToolResultMessage tool) {
             node.put("toolCallId", tool.toolUseId());
             node.put("toolName", tool.toolName());
+            // A7：结果消息的结构化载荷照 pi-ai 形状转发（pi ToolResultMessage 的
+            // details/usage/addedToolNames，packages/ai/src/types.ts:452-468）。
+            // undefined/null ⇒ 键缺席；空 addedToolNames ⇒ 键缺席（pi 的 length 门）。
+            if (tool.details() != null) {
+                node.set("details", MAPPER.valueToTree(tool.details()));
+            }
+            if (tool.usage() != null) {
+                node.set("usage", MAPPER.valueToTree(tool.usage()));
+            }
+            if (!tool.addedToolNames().isEmpty()) {
+                // 显式 ArrayNode：putPOJO 会留 POJONode，树内查询（测试、前端组装）
+                // 在序列化前看不见元素
+                var names = node.putArray("addedToolNames");
+                for (var name : tool.addedToolNames()) {
+                    names.add(name);
+                }
+            }
             node.put("isError", tool.isError());
         }
         return node;

@@ -212,11 +212,12 @@ public final class MistralConversationsApi extends AbstractChatApi {
                     m.put("role", "assistant");
                     m.put("content", extractText(a.content()));
                 }
-                case Message.ToolResultMessage(var toolUseId, var toolName,
-                                               var content, var isError) -> {
+                case Message.ToolResultMessage t -> {
+                    // 具名模式而非组件解构：details/usage/addedToolNames 是结构化载荷，
+                    // provider 投影只读 toolUseId + content（pi 的适配器同样不读它们）
                     m.put("role", "tool");
-                    m.put("tool_call_id", toolUseId);
-                    m.put("content", extractText(content));
+                    m.put("tool_call_id", t.toolUseId());
+                    m.put("content", extractText(t.content()));
                 }
             }
             return m;

@@ -103,6 +103,27 @@ class MessageTest {
         assertThat(msg.toolUseId()).isEqualTo("toolu_01");
         assertThat(msg.toolName()).isEqualTo("read");
         assertThat(msg.isError()).isTrue();
+        // 兼容构造器 = pi 对象字面量省略可选字段（details/usage undefined、addedToolNames 缺省）
+        assertThat(msg.details()).isNull();
+        assertThat(msg.usage()).isNull();
+        assertThat(msg.addedToolNames()).isEmpty();
+    }
+
+    @Test
+    void toolResultCarriesTheStructuredPayloadLikePi() {
+        // pi ToolResultMessage（ai/types.ts:452-468）的三载荷 + 空 addedToolNames 归一
+        var details = java.util.Map.of("kind", "card");
+        var full = new Message.ToolResultMessage("toolu_02", "mcp",
+                List.of(new ContentBlock.TextContent("ok")), details, "usage-token",
+                new java.util.ArrayList<>(List.of("mcp:a")), false);
+
+        assertThat(full.details()).isEqualTo(details);
+        assertThat(full.usage()).isEqualTo("usage-token");
+        assertThat(full.addedToolNames()).containsExactly("mcp:a");
+
+        var nullNames = new Message.ToolResultMessage("toolu_03", "mcp",
+                List.of(new ContentBlock.TextContent("ok")), null, null, null, true);
+        assertThat(nullNames.addedToolNames()).isEmpty();
     }
 
     @Test

@@ -140,6 +140,15 @@ final class FrameNormalizer {
         };
     }
 
+    /**
+     * 消息帧。toolResult 一支过去只留 {@code (role, toolName, isError)} —— 与
+     * {@code resultOf} 曾经的盲点同型：**消息**载荷上的 {@code content}/
+     * {@code details}/{@code usage}/{@code addedToolNames} 差异在差分里隐身
+     * （pi 的 {@code createToolResultMessage} 是带它们的，{@code agent-loop.ts:784-797}）。
+     * 省略规则与 {@link #resultOf} 一致（null/空 ⇒ 键缺席；usage 原样透传留响），
+     * 差别只有：消息**没有** {@code terminate} 字段（pi 的结果树才有），
+     * {@code toolCallId} 不上帧（id 不稳定，且顺序已足以定位）。
+     */
     private Object messageOf(Message message) {
         return switch (message) {
             case Message.UserMessage user ->
@@ -147,8 +156,23 @@ final class FrameNormalizer {
             case Message.AssistantMessage assistant -> CanonicalJson.obj(
                 "role", "assistant", "content", blocksOf(assistant.content()),
                 "stopReason", stopReasonOf(assistant.stopReason()));
-            case Message.ToolResultMessage result -> CanonicalJson.obj(
-                "role", "toolResult", "toolName", result.toolName(), "isError", result.isError());
+            case Message.ToolResultMessage result -> {
+                var out = new LinkedHashMap<String, Object>();
+                out.put("role", "toolResult");
+                out.put("toolName", result.toolName());
+                out.put("content", blocksOf(result.content()));
+                if (result.details() != null) {
+                    out.put("details", result.details());
+                }
+                if (result.usage() != null) {
+                    out.put("usage", result.usage());
+                }
+                if (!result.addedToolNames().isEmpty()) {
+                    out.put("addedToolNames", result.addedToolNames());
+                }
+                out.put("isError", result.isError());
+                yield out;
+            }
         };
     }
 

@@ -200,9 +200,12 @@ final class PiLoopTools {
             var text = "Tool call \"" + call.name() + "\" was not executed: the response hit the "
                 + "output token limit, so its arguments may be truncated. "
                 + "Re-issue the tool call with complete arguments.";
+            // pi 的截断路径同样经 createToolResultMessage（:784-797）—— details={} 等
+            // 字段随结果对象转发到消息上，与执行成功路径同一条构造路
             var result = createErrorToolResult(text);
-            var message = new Message.ToolResultMessage(
-                call.id(), call.name(), result.content(), true);
+            var message = new Message.ToolResultMessage(call.id(), call.name(),
+                result.content(), result.details(), result.usage(),
+                result.addedToolNames(), true);
             emit.emit(new PiLoop.Event.ToolExecutionEnd(call.id(), call.name(), result, true));
             emit.emit(new PiLoop.Event.MessageStart(message));
             emit.emit(new PiLoop.Event.MessageEnd(message));
@@ -217,9 +220,11 @@ final class PiLoopTools {
      */
     private static PiLoop.ToolOutcome abortedOutcome(ContentBlock.ToolUseContent call) {
         var result = createErrorToolResult("Operation aborted");
-        return new PiLoop.ToolOutcome(
-            new Message.ToolResultMessage(call.id(), call.name(), result.content(), true),
-            result, true);
+        // 与截断路径同理：消息从结果对象转发（pi :784-797 一条构造路）
+        var message = new Message.ToolResultMessage(call.id(), call.name(),
+            result.content(), result.details(), result.usage(),
+            result.addedToolNames(), true);
+        return new PiLoop.ToolOutcome(message, result, true);
     }
 
     /**

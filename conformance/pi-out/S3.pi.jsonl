@@ -12,16 +12,16 @@
 {"message":{"content":[{"arguments":{"n":1},"name":"t1","type":"toolCall"},{"arguments":{"n":2},"name":"t2","type":"toolCall"},{"arguments":{"n":3},"name":"t3","type":"toolCall"}],"role":"assistant","stopReason":"toolUse"},"type":"message_end"}
 {"id":"tc1","name":"t1","type":"tool_execution_start"}
 {"id":"tc1","isError":false,"name":"t1","result":{"content":[{"text":"ok","type":"text"}],"details":{}},"type":"tool_execution_end"}
-{"message":{"isError":false,"role":"toolResult","toolName":"t1"},"type":"message_start"}
-{"message":{"isError":false,"role":"toolResult","toolName":"t1"},"type":"message_end"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"t1"},"type":"message_start"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"t1"},"type":"message_end"}
 {"id":"tc2","name":"t2","type":"tool_execution_start"}
 {"id":"tc2","isError":false,"name":"t2","result":{"content":[{"text":"ok","type":"text"}],"details":{}},"type":"tool_execution_end"}
-{"message":{"isError":false,"role":"toolResult","toolName":"t2"},"type":"message_start"}
-{"message":{"isError":false,"role":"toolResult","toolName":"t2"},"type":"message_end"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"t2"},"type":"message_start"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"t2"},"type":"message_end"}
 {"id":"tc3","name":"t3","type":"tool_execution_start"}
 {"id":"tc3","isError":false,"name":"t3","result":{"content":[{"text":"ok","type":"text"}],"details":{}},"type":"tool_execution_end"}
-{"message":{"isError":false,"role":"toolResult","toolName":"t3"},"type":"message_start"}
-{"message":{"isError":false,"role":"toolResult","toolName":"t3"},"type":"message_end"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"t3"},"type":"message_start"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"t3"},"type":"message_end"}
 {"stopReason":"toolUse","toolResults":["t1","t2","t3"],"type":"turn_end"}
 {"type":"turn_start"}
 {"message":{"content":[],"role":"assistant","stopReason":"stop"},"type":"message_start"}
@@ -29,4 +29,4 @@
 {"detail":"All done","evt":"text_end","type":"message_update"}
 {"message":{"content":[{"text":"All done","type":"text"}],"role":"assistant","stopReason":"stop"},"type":"message_end"}
 {"stopReason":"stop","toolResults":[],"type":"turn_end"}
-{"messages":[{"content":"Run three tools","role":"user"},{"content":[{"arguments":{"n":1},"name":"t1","type":"toolCall"},{"arguments":{"n":2},"name":"t2","type":"toolCall"},{"arguments":{"n":3},"name":"t3","type":"toolCall"}],"role":"assistant","stopReason":"toolUse"},{"isError":false,"role":"toolResult","toolName":"t1"},{"isError":false,"role":"toolResult","toolName":"t2"},{"isError":false,"role":"toolResult","toolName":"t3"},{"content":[{"text":"All done","type":"text"}],"role":"assistant","stopReason":"stop"}],"type":"agent_end"}
+{"messages":[{"content":"Run three tools","role":"user"},{"content":[{"arguments":{"n":1},"name":"t1","type":"toolCall"},{"arguments":{"n":2},"name":"t2","type":"toolCall"},{"arguments":{"n":3},"name":"t3","type":"toolCall"}],"role":"assistant","stopReason":"toolUse"},{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"t1"},{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"t2"},{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"t3"},{"content":[{"text":"All done","type":"text"}],"role":"assistant","stopReason":"stop"}],"type":"agent_end"}

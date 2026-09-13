@@ -16,12 +16,12 @@
 {"id":"tc3","isError":true,"name":"denied","result":{"content":[{"text":"denied by policy","type":"text"}],"details":{}},"type":"tool_execution_end"}
 {"id":"tc1","isError":false,"name":"ok1","result":{"content":[{"text":"ok","type":"text"}],"details":{}},"type":"tool_execution_end"}
 {"id":"tc2","isError":false,"name":"ok2","result":{"content":[{"text":"ok","type":"text"}],"details":{}},"type":"tool_execution_end"}
-{"message":{"isError":false,"role":"toolResult","toolName":"ok1"},"type":"message_start"}
-{"message":{"isError":false,"role":"toolResult","toolName":"ok1"},"type":"message_end"}
-{"message":{"isError":false,"role":"toolResult","toolName":"ok2"},"type":"message_start"}
-{"message":{"isError":false,"role":"toolResult","toolName":"ok2"},"type":"message_end"}
-{"message":{"isError":true,"role":"toolResult","toolName":"denied"},"type":"message_start"}
-{"message":{"isError":true,"role":"toolResult","toolName":"denied"},"type":"message_end"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"ok1"},"type":"message_start"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"ok1"},"type":"message_end"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"ok2"},"type":"message_start"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"ok2"},"type":"message_end"}
+{"message":{"content":[{"text":"denied by policy","type":"text"}],"details":{},"isError":true,"role":"toolResult","toolName":"denied"},"type":"message_start"}
+{"message":{"content":[{"text":"denied by policy","type":"text"}],"details":{},"isError":true,"role":"toolResult","toolName":"denied"},"type":"message_end"}
 {"stopReason":"toolUse","toolResults":["ok1","ok2","denied"],"type":"turn_end"}
 {"type":"turn_start"}
 {"message":{"content":[],"role":"assistant","stopReason":"stop"},"type":"message_start"}
@@ -30,4 +30,4 @@
 {"detail":"Batch done","evt":"text_end","type":"message_update"}
 {"message":{"content":[{"text":"Batch done","type":"text"}],"role":"assistant","stopReason":"stop"},"type":"message_end"}
 {"stopReason":"stop","toolResults":[],"type":"turn_end"}
-{"messages":[{"content":"Run a batch","role":"user"},{"content":[{"arguments":{"n":1},"name":"ok1","type":"toolCall"},{"arguments":{"n":2},"name":"ok2","type":"toolCall"},{"arguments":{"n":3},"name":"denied","type":"toolCall"}],"role":"assistant","stopReason":"toolUse"},{"isError":false,"role":"toolResult","toolName":"ok1"},{"isError":false,"role":"toolResult","toolName":"ok2"},{"isError":true,"role":"toolResult","toolName":"denied"},{"content":[{"text":"Batch done","type":"text"}],"role":"assistant","stopReason":"stop"}],"type":"agent_end"}
+{"messages":[{"content":"Run a batch","role":"user"},{"content":[{"arguments":{"n":1},"name":"ok1","type":"toolCall"},{"arguments":{"n":2},"name":"ok2","type":"toolCall"},{"arguments":{"n":3},"name":"denied","type":"toolCall"}],"role":"assistant","stopReason":"toolUse"},{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"ok1"},{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"ok2"},{"content":[{"text":"denied by policy","type":"text"}],"details":{},"isError":true,"role":"toolResult","toolName":"denied"},{"content":[{"text":"Batch done","type":"text"}],"role":"assistant","stopReason":"stop"}],"type":"agent_end"}

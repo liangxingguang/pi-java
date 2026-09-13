@@ -62,6 +62,25 @@ public final class SessionJson {
         if (message instanceof Message.ToolResultMessage tool) {
             node.put("toolUseId", tool.toolUseId());
             node.put("toolName", tool.toolName());
+            // pi 的 createToolResultMessage（agent-loop.ts:784-797）：details/usage
+            // 为 undefined 时键在线上缺席（JS 的 stringify 丢 undefined），Java 的 null
+            // 同理必须**主动省略**（Jackson 会把 null 写出来）；addedToolNames 只在
+            // 非空时带上（pi 的 `...(length ? {...} : {})`）。键序两侧无关（对象字面量
+            // 顺序 vs 本方法写入顺序都不参与比较，L3 断言的是键集合与值）。
+            if (tool.details() != null) {
+                node.set("details", MAPPER.valueToTree(tool.details()));
+            }
+            if (tool.usage() != null) {
+                node.set("usage", MAPPER.valueToTree(tool.usage()));
+            }
+            if (!tool.addedToolNames().isEmpty()) {
+                // 显式 ArrayNode（同 WebWireJson）：putPOJO 的 POJONode 在序列化前
+                // 对树内查询不可见
+                var names = node.putArray("addedToolNames");
+                for (var name : tool.addedToolNames()) {
+                    names.add(name);
+                }
+            }
             node.put("isError", tool.isError());
         }
         if (message instanceof Message.AssistantMessage assistant) {

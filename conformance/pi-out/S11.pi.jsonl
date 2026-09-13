@@ -11,8 +11,8 @@
 {"id":"tc1","name":"stream","partialResult":{"content":[{"text":"partial 2","type":"text"}],"details":{}},"type":"tool_execution_update"}
 {"id":"tc1","name":"stream","partialResult":{"content":[{"text":"partial 3","type":"text"}],"details":{}},"type":"tool_execution_update"}
 {"id":"tc1","isError":false,"name":"stream","result":{"content":[{"text":"ok","type":"text"}],"details":{}},"type":"tool_execution_end"}
-{"message":{"isError":false,"role":"toolResult","toolName":"stream"},"type":"message_start"}
-{"message":{"isError":false,"role":"toolResult","toolName":"stream"},"type":"message_end"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"stream"},"type":"message_start"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"stream"},"type":"message_end"}
 {"stopReason":"toolUse","toolResults":["stream"],"type":"turn_end"}
 {"type":"turn_start"}
 {"message":{"content":[],"role":"assistant","stopReason":"stop"},"type":"message_start"}
@@ -21,8 +21,8 @@
 {"message":{"content":[{"arguments":{"q":"r"},"name":"rich","type":"toolCall"}],"role":"assistant","stopReason":"toolUse"},"type":"message_end"}
 {"id":"tc2","name":"rich","type":"tool_execution_start"}
 {"id":"tc2","isError":false,"name":"rich","result":{"content":[{"text":"ok","type":"text"}],"details":{"kind":"card","note":"whole result on the wire"}},"type":"tool_execution_end"}
-{"message":{"isError":false,"role":"toolResult","toolName":"rich"},"type":"message_start"}
-{"message":{"isError":false,"role":"toolResult","toolName":"rich"},"type":"message_end"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{"kind":"card","note":"whole result on the wire"},"isError":false,"role":"toolResult","toolName":"rich"},"type":"message_start"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{"kind":"card","note":"whole result on the wire"},"isError":false,"role":"toolResult","toolName":"rich"},"type":"message_end"}
 {"stopReason":"toolUse","toolResults":["rich"],"type":"turn_end"}
 {"type":"turn_start"}
 {"message":{"content":[],"role":"assistant","stopReason":"stop"},"type":"message_start"}
@@ -30,4 +30,4 @@
 {"detail":"Seen","evt":"text_end","type":"message_update"}
 {"message":{"content":[{"text":"Seen","type":"text"}],"role":"assistant","stopReason":"stop"},"type":"message_end"}
 {"stopReason":"stop","toolResults":[],"type":"turn_end"}
-{"messages":[{"content":"Stream and show details","role":"user"},{"content":[{"arguments":{"q":"s"},"name":"stream","type":"toolCall"}],"role":"assistant","stopReason":"toolUse"},{"isError":false,"role":"toolResult","toolName":"stream"},{"content":[{"arguments":{"q":"r"},"name":"rich","type":"toolCall"}],"role":"assistant","stopReason":"toolUse"},{"isError":false,"role":"toolResult","toolName":"rich"},{"content":[{"text":"Seen","type":"text"}],"role":"assistant","stopReason":"stop"}],"type":"agent_end"}
+{"messages":[{"content":"Stream and show details","role":"user"},{"content":[{"arguments":{"q":"s"},"name":"stream","type":"toolCall"}],"role":"assistant","stopReason":"toolUse"},{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"stream"},{"content":[{"arguments":{"q":"r"},"name":"rich","type":"toolCall"}],"role":"assistant","stopReason":"toolUse"},{"content":[{"text":"ok","type":"text"}],"details":{"kind":"card","note":"whole result on the wire"},"isError":false,"role":"toolResult","toolName":"rich"},{"content":[{"text":"Seen","type":"text"}],"role":"assistant","stopReason":"stop"}],"type":"agent_end"}

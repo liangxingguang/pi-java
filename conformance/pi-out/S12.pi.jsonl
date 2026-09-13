@@ -12,10 +12,10 @@
 {"id":"tc2","name":"term1","type":"tool_execution_start"}
 {"id":"tc1","isError":false,"name":"plainish","result":{"content":[{"text":"ok","type":"text"}],"details":{}},"type":"tool_execution_end"}
 {"id":"tc2","isError":false,"name":"term1","result":{"content":[{"text":"ok","type":"text"}],"details":{},"terminate":true},"type":"tool_execution_end"}
-{"message":{"isError":false,"role":"toolResult","toolName":"plainish"},"type":"message_start"}
-{"message":{"isError":false,"role":"toolResult","toolName":"plainish"},"type":"message_end"}
-{"message":{"isError":false,"role":"toolResult","toolName":"term1"},"type":"message_start"}
-{"message":{"isError":false,"role":"toolResult","toolName":"term1"},"type":"message_end"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"plainish"},"type":"message_start"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"plainish"},"type":"message_end"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"term1"},"type":"message_start"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"term1"},"type":"message_end"}
 {"stopReason":"toolUse","toolResults":["plainish","term1"],"type":"turn_end"}
 {"type":"turn_start"}
 {"message":{"content":[],"role":"assistant","stopReason":"stop"},"type":"message_start"}
@@ -28,9 +28,9 @@
 {"id":"tc4","name":"term1","type":"tool_execution_start"}
 {"id":"tc3","isError":false,"name":"term1","result":{"content":[{"text":"ok","type":"text"}],"details":{},"terminate":true},"type":"tool_execution_end"}
 {"id":"tc4","isError":false,"name":"term1","result":{"content":[{"text":"ok","type":"text"}],"details":{},"terminate":true},"type":"tool_execution_end"}
-{"message":{"isError":false,"role":"toolResult","toolName":"term1"},"type":"message_start"}
-{"message":{"isError":false,"role":"toolResult","toolName":"term1"},"type":"message_end"}
-{"message":{"isError":false,"role":"toolResult","toolName":"term1"},"type":"message_start"}
-{"message":{"isError":false,"role":"toolResult","toolName":"term1"},"type":"message_end"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"term1"},"type":"message_start"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"term1"},"type":"message_end"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"term1"},"type":"message_start"}
+{"message":{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"term1"},"type":"message_end"}
 {"stopReason":"toolUse","toolResults":["term1","term1"],"type":"turn_end"}
-{"messages":[{"content":"Terminate gate","role":"user"},{"content":[{"arguments":{},"name":"plainish","type":"toolCall"},{"arguments":{},"name":"term1","type":"toolCall"}],"role":"assistant","stopReason":"toolUse"},{"isError":false,"role":"toolResult","toolName":"plainish"},{"isError":false,"role":"toolResult","toolName":"term1"},{"content":[{"arguments":{},"name":"term1","type":"toolCall"},{"arguments":{},"name":"term1","type":"toolCall"}],"role":"assistant","stopReason":"toolUse"},{"isError":false,"role":"toolResult","toolName":"term1"},{"isError":false,"role":"toolResult","toolName":"term1"}],"type":"agent_end"}
+{"messages":[{"content":"Terminate gate","role":"user"},{"content":[{"arguments":{},"name":"plainish","type":"toolCall"},{"arguments":{},"name":"term1","type":"toolCall"}],"role":"assistant","stopReason":"toolUse"},{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"plainish"},{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"term1"},{"content":[{"arguments":{},"name":"term1","type":"toolCall"},{"arguments":{},"name":"term1","type":"toolCall"}],"role":"assistant","stopReason":"toolUse"},{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"term1"},{"content":[{"text":"ok","type":"text"}],"details":{},"isError":false,"role":"toolResult","toolName":"term1"}],"type":"agent_end"}

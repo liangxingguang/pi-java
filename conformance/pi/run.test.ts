@@ -258,8 +258,24 @@ class Normalizer {
 				stopReason: m.stopReason,
 			};
 		}
+		// toolResult carries the whole message payload now — twin of the Java
+		// FrameNormalizer.messageOf (createToolResultMessage puts details/usage/
+		// addedToolNames on the message, agent-loop.ts:784-797). Omission rules
+		// match `result()`: undefined/empty keys are dropped (JS stringify already
+		// drops undefined; addedToolNames only rides when non-empty). No
+		// `terminate` on a message (result-tree-only), and toolCallId stays off
+		// the frame (unstable id; order locates the call).
 		const tr = m as ToolResultMessage;
-		return { role: "toolResult", toolName: tr.toolName, isError: tr.isError };
+		const out: Record<string, unknown> = {
+			role: "toolResult",
+			toolName: tr.toolName,
+			content: tr.content.map((c) => this.block(c as AssistantMessage["content"][number])),
+		};
+		if (tr.details !== undefined) out.details = tr.details;
+		if (tr.usage !== undefined) out.usage = tr.usage;
+		if (tr.addedToolNames?.length) out.addedToolNames = tr.addedToolNames;
+		out.isError = tr.isError;
+		return out;
 	}
 
 	block(c: AssistantMessage["content"][number]): unknown {
