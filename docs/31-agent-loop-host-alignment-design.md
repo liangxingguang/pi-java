@@ -824,7 +824,7 @@ checkstyle 0 违规。删除 `MultiLaneTest`（5 例）与 `AgentHarnessTest` �
 
 ---
 
-### 8.13 `docs/03 §2.1-§2.3` 类级重写 —— 已完成（2026-09-13，commit `e6b0ce6`）
+### 8.13 `docs/03 §2.1-§2.3` 类级重写 —— 已完成（2026-09-13，commit `7b96114`）
 
 `docs/31` 的实施项全部落地后，`docs/03` 第 2 章的三节成了唯一还在说旧 API 的地方
 —— 而且**过期早于本轮**：`DriveMode` / `peekAction` / `executeAction` / `runToCompletion`
