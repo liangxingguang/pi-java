@@ -59,6 +59,13 @@ TUI / RPC / web 各自开一个 session，每个 session 一条车道。
 ⇒ **一个 session = 一个 pi 形状的 agent 状态。** 不需要「多车道怎么映射到 pi 的单 `Agent`」——
 本来就是一比一。
 
+> ⚠️ **上表第二行（2026-09-13 实测推翻）。** `createLane` 有生产调用者：
+> `AgentSession:635,661`（仅内存态 fork）、`InMemorySessionRepository:102`、
+> TUI `TreeSelectorScreen:48`。结论方向不变（要删运行时多车道容器），但**删除路径不是
+> 零调用者删除**。另外 **pi 本身就有 lane**（`pi.lane.config`/`pi.lane.state`，
+> 逐分支投影）—— 「lane 概念不在对齐目标内」只对 `agent.ts` 成立，对 pi 的**会话层**不成立。
+> 详见 §8.10。
+
 ---
 
 ## 2. 现状差异
@@ -232,6 +239,8 @@ void handleAgentEvent(PiLoop.Event event) {
 
 ### 4.1 配置 entry 谁写、何时写
 
+> **✅ 已实施（2026-09-13，commit `153380f`）** —— 见 §8.9。
+
 **问题**：pi 把 `model` / `thinkingLevel` / `tools` 存在 Agent 的**字段**上，entry 由会话层写；
 pi-java 把它们当 transcript 里的 entry，靠折叠读出来。
 
@@ -314,6 +323,10 @@ this.agent.state.messages = sessionContext.messages;      // 整体替换
 **方案**：搬到会话层。pi 里它是 `harness/session/fork.ts` + `fork-policy.ts` ——
 是 **fork**，不是 lane。pi-java 的 `AgentSession` 已有分支入口（`AgentSession:647`），
 把 `parentLeafId` 从 `LaneConfig` 移到那里即可。
+
+> ⚠️ **本节的初稿把 pi 看轻了。** 「是 fork，不是 lane」不成立 —— pi 的 fork **就是**
+> 建一个新 lane（`pi.lane.config` / `pi.lane.state` 逐分支投影）。要删的是
+> **运行时多车道容器**，不是 lane 概念本身。详见 §8.10；顺序上排在 §4.2 之后。
 
 ### 4.4 `nextRun` 队列的去向
 
@@ -627,11 +640,71 @@ pi 用 `async/await`，Java 没有。**这不是障碍**：pi 的 `runLoop` 里�
 #### 仍未做的
 
 - **§3.1 的 `messages` 工作副本**（见上）
-- **§4.1** 配置 entry 由会话层写、`LaneState` 持字段
 - **§4.2** 装配与压缩移出请求路径
-- **§4.3 + §1.2 的多车道删除**：`createLane` 有**生产调用者**（`AgentSession` 的
-  fork/分支、TUI 的 `TreeSelectorScreen`），不是零调用者 —— 需先按 §4.3 把分支入口
-  搬到会话层，**不能直接删**
+- **§4.3 + 多车道运行时容器**：见 §8.10（`createLane` **有**生产调用者，且 pi **本身就有 lane**）
+
+---
+
+### 8.9 §4.1 —— 已实施（2026-09-13，commit `153380f`）
+
+**读 pi 得到的准确形状**（`agent-session.ts`）：
+
+| 项 | pi 的做法 | 守卫 |
+|---|---|---|
+| `setModel` | 字段赋值 + `appendModelChange`（`:1687`） | **无条件**写 entry；变更判定只作用于 `model_select` **事件**（`_emitModelSelect` 相等时提前返回） |
+| `setThinkingLevel` | 字段赋值 + `appendThinkingLevelChange`（`:1813-1829`） | `isChanging = effectiveLevel !== previousLevel`，且**只在非默认等级时**写 |
+
+**pi-java 的缺口**：初始配置会写 entry，但**显式 setter 只改字段**。`/model`、
+`/thinking`、TUI 模型选择器、RPC `cycleModel` 都走 setter ⇒ 切换后持久化日志里
+没有这条变更，恢复时丢失。
+
+**落法**：新增 `RunLifecycle.recordModelChange` / `recordConfigChanged`，由 setter 在
+字段赋值同点调用；`LaneState.recordedThinking` 承担「上次记过什么」，于是
+
+- 首次运行补记一次（与改动前的行为一致，日志形状不变）；
+- 后续同等级运行**不再重复**（改动前每次运行都无条件追加一条，会堆出一串）；
+- `seedTranscript` 从既有日志初始化它 —— 否则恢复后首次运行会把日志里已有的那条再写一遍；
+- `reset` 清空日志时一并清空。
+
+**未纳入**：`ActiveToolsChange`。`setActiveTools` 在生产路径上**零调用者**，
+加发射是投机代码；§4.1 表里「保留发射」指的是留住该 entry 类型与其下游消费（已满足）。
+
+**验证**：全反应堆 14 模块绿（agent-core 371）；L5 10/10 不变；checkstyle 0 违规。
+新增 `ConfigEntryEmissionTest`（5 例），两次反向实验确认会咬住（撤掉 model 写入、
+撤掉 seed 初始化 → 分别红对应那一条）。
+
+---
+
+### 8.10 多车道：pi **有** lane，要删的不是这个概念（2026-09-13）
+
+**§1.2 的前提需要修正。** 它写「pi-java 里 `createLane` 的生产调用：0 个」，
+实测**不成立**（`AgentSession:635,661`、`InMemorySessionRepository:102`、
+TUI `TreeSelectorScreen:48`）。但更要紧的是下一条。
+
+**pi 自己就有 lane，lane 就是分支。** 实测 `harness/session/values.ts:158-161`：
+
+```ts
+branchTip  = value("pi.branch.tip",   branch)
+laneConfig = value("pi.lane.config",  lane)
+laneState  = value("pi.lane.state",   lane)   // { currentOperationId, lastOperationId, inbox }
+```
+
+`fork-policy.ts:53-58` 在 fork 时**逐分支**投影它们。所以：
+
+- **存储层的 lane（`Session.createLane` / `moveLane` + 各存储实现）是对齐的，要留住** ——
+  它正是 pi 的分支模型；
+- **要删的是 `AgentHarness` 的「运行时多车道容器」**（`LaneRegistry` / `LaneHandle` /
+  `LaneConfig` / `createLane` / `lanes()` / `moveLane`）—— 一个 harness 同时装多条车道。
+  pi 的对齐目标 `agent.ts` 是**单状态**的（`AgentState`），lane 归**被排除的** harness 层。
+
+**它为什么还在**：只有**内存态 fork** 需要它 —— 那条路径没有独立会话，只能共享父会话的
+harness，靠新建 lane 假装隔离。持久化分支**早就对齐了**：`AgentSession:648-659` 走
+`persistentRepository.fork(...)` 建**独立会话**，并显式把 `laneName` 设回 `DEFAULT_LANE`。
+
+**顺序**：删容器要**排在 §4.2 之后**。pi 里「切换到分支」是**用该 lane 的日志重建 agent
+状态**（`agent-session.ts:3286`，5 个同步点之一），而 §4.2 的 `messages` 工作副本正是
+做这件事的机制；先删容器，分支切换就没有落脚点。落法：让每个 `AgentSession` 持有**自己
+的** harness（fork 也不例外），`laneName` 恒为 `DEFAULT_LANE`。
 
 ---
 
