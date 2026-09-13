@@ -179,6 +179,17 @@ stateDiagram-v2
 
 ### 2.2 AgentHarness 核心类
 
+> **⚠️ 本节已停用（2026-09-13）。** 下面的 API 是 Phase 2c 的形态，其中的**手动驱动**
+> （`DriveMode` / `peekAction` / `executeAction` / `runToCompletion`）与**运行时多车道容器**
+> （`LaneHandle` / `LaneConfig` / `createLane` / `lanes()` / `moveLane`）**均已删除**。
+> 宿主层现在的形态以 `docs/31-agent-loop-host-alignment-design.md` 为准
+> （§6 拆步进链、§8.8；§4.1 配置 entry、§8.9；§4.2 工作副本、§8.11；§4.3 单车道 +
+> 分支归会话层、§8.12）。本节待全量重写。
+>
+> 对齐 pi 的 `agent.ts`（**单状态**）：一个 `AgentHarness` 恰好一条车道
+> （`laneName()` 恒为 `DEFAULT_LANE`），分支是**新会话**（`AgentHarness.fork()` +
+> `AgentSession.forkCopy` / `forkFromEntry`）；pi 的 `harness/` 层与 pico 不在对齐范围内。
+
 对齐 pi 的 `agent-harness.ts`：多车道、快照订阅、11 个 Hook、队列调度、手动驱动。
 
 ```java

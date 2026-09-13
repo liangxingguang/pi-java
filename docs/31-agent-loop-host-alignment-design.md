@@ -330,6 +330,10 @@ this.agent.state.messages = sessionContext.messages;      // 整体替换
 > 建一个新 lane（`pi.lane.config` / `pi.lane.state` 逐分支投影）。要删的是
 > **运行时多车道容器**，不是 lane 概念本身。详见 §8.10；顺序上排在 §4.2 之后。
 
+> **✅ 已实施（2026-09-13，commit `ab7d309`）** —— 见 §8.12。落法：每个
+> `AgentSession` 持自己的 harness（`AgentHarness.fork()`），`laneName` 恒为
+> `DEFAULT_LANE`，运行时多车道容器整体删除；**存储层的 lane 一字未动**。
+
 ### 4.4 `nextRun` 队列的去向
 
 **裁定：保留。**
@@ -752,7 +756,68 @@ checkstyle 0 违规；8 个改动文件全部 ≤ 500 行。新增 `LaneMessages
 
 **仍未做的**：`docs/03 §2.3` 的 `LaneState`/`LaneRecord` 两节待同步（CLAUDE.md 要求）；
 多车道运行时容器删除（§4.3 / §8.10）—— 现在它有了落脚点，因为分支切换正是
-「用该 lane 的日志重建 `state.messages`」。
+「用该 lane 的日志重建 `state.messages`」。**后者随后已实施，见 §8.12。**
+
+---
+
+### 8.12 §4.3 + 多车道运行时容器删除 —— 已实施（2026-09-13，commit `ab7d309`）
+
+**删掉的是「一个 harness 装多条车道」，不是 lane 概念**（§8.10 的裁决）。存储层的
+`Session.createLane` / `moveLane` + 各存储实现**一字未动** —— 那正是 pi
+`pi.branch.tip` / `pi.lane.config` / `pi.lane.state` 的分支模型。
+
+**读 pi 得到的准确形状**（`harness/session/fork.ts` + `fork-policy.ts`）：
+
+| 项 | pi 的做法 |
+|---|---|
+| fork 的内容 | `createForkSnapshot` **复制 entry**：`scope:"tree"` 复制全部；`scope:"branch"` 从分支尖端回溯到请求点 |
+| 分支点 | `selectBranchFork`：`position:"before"` 时 `destinationTip = parentId`，**请求的 entry 本身不入选** |
+| 找不到 entry | 抛 `Fork entry … is not on source branch`（静默给空会话是错的） |
+| lane 归谁 | `pi.lane.*` 是**存储值**，逐分支投影；`agent.ts` 的 `AgentState` 是单状态的 |
+
+**落法**：
+
+- **`AgentHarness` 只持一条车道**（`private final LaneState lane`）。删除
+  `LaneRegistry` / `LaneHandle` / `LaneConfig` / `LaneExistsException`，以及
+  `createLane` / `lanes()` / `moveLane` / `lane()`；新增 `laneName()` 与
+  **`fork()`**（同配置的全新 harness，车道为空，内容由调用方播种）。
+- **`LaneState` 吸收 `HarnessState`**：`model` / `thinkingLevel` / `systemPrompt` /
+  `activeTools` / `compactionSettings` / 队列模式 / `toolExecution` 并回车道的字段。
+  一个 harness 一条车道之后，「harness 的可变配置」与「车道的可变配置」是同一个东西，
+  而 pi 的 `AgentState` 本就把它们和消息放在一起（§4.1 表格里仍挂在 harness 那一行的项，
+  至此归位）。
+- **`HarnessUtils.requireLane(lane, laneName)`** 退化成一次名字核对：名字对不上就抛
+  `Lane not found`。保留名字是因为「该调用属于哪条车道」仍是各处 API 的形状，名字对不上
+  意味着调用方还拿着旧的分支名。
+- 五个协作者（`HookSystem` / `SnapshotService` / `QueueManager` / `ExecutionContext` /
+  `HarnessUtils`）的 `ConcurrentMap<String, LaneState>` 参数换成单个 `LaneState`。
+  `HookSystem` 其实只用那张表记 hook 错误；`SnapshotService` 的会话快照车道列表恒为单元素。
+- **会话层**：`AgentSession.laneName` 字段删除，访问器改为 `harness.laneName()`（恒为
+  `DEFAULT_LANE`），调用点因此无需改动。`InMemorySessionRepository.ensureLane` 删除。
+
+**顺带修正的两处既有缺陷**（删除才让它们现形，与 §6 那次同一模式）：
+
+1. **内存态 fork 无历史**。此前 `harness.createLane(branchName)` 建的新 lane 是**空的**，
+   `LaneConfig.parentLeafId` 只写不读（全仓唯一读者就是 `LaneRegistry` 自己）—— 分支会话
+   拿不到父会话的任何 entry。现在走 `harness.fork()` + `seedTranscript` 播种：
+   `forkCopy` 播全量（pi `scope:"tree"`），`forkFromEntry` 播到 entry **之前**
+   （pi `position:"before"`），找不到即抛。
+2. **持久化 fork 与父会话共用车道**。此前持久化分支复用父 harness 并把 `laneName` 设回
+   `DEFAULT_LANE` ⇒ 子会话的 `attach` 播种写进了**父会话的车道**，而那条车道非空，
+   `seedTranscript` 的「非空即 no-op」守卫直接跳过 —— 于是分支会话显示的是**父会话的
+   transcript**，此后两者的运行还往同一条日志里追加。现在子会话拿 `harness.fork()`，
+   各自一条空车道，`attach` 的播种真正生效。
+3. TUI `TreeSelectorScreen.apply` 此前是 `createLane(选中的名字)`，而列表本来就来自现存
+   分支的名字 —— 对任何真实分支都直接抛 `LaneExistsException`，从未生效过。现在接上
+   `session.forkFromEntry(leafId)` + `switcher`，即「选中分支点 = 从它分支」。
+
+**验证**：全反应堆 14 模块绿（agent-core 369）；L5 `ConformanceTest` 10/10 不变；
+checkstyle 0 违规。删除 `MultiLaneTest`（5 例）与 `AgentHarnessTest` 的 4 例容器 API 测试，
+新增 `SingleLaneTest`（4 例：一条车道 / 名字不符即抛 / 连续运行累加 / `fork()` 互不相干）——
+**反向实验**：把 `fork()` 改回返回 `this`，`forkReturnsAnIndependentEmptyHarness` 立刻红。
+
+**仍未做的**：`docs/03 §2.2`（`AgentHarness` 核心类）与 §2.3 的类级描述仍停在旧 API 上
+—— 已在 §2.2 加停止横幅指向本文，全量重写另立任务。
 
 ---
 
