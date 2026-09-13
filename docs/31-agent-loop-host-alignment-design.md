@@ -1062,6 +1062,64 @@ agent-core **383/383**、ai/web/sqlite 模块绿、全 reactor `clean verify` �
 
 ---
 
+### 8.19 assistant 身份与计量 3a —— 已实施（2026-09-14，commit `04deb48`/`e002048`/`a597768`）
+
+package 3（压缩触发时机）拆成 3a/3b/3c，3a 是地基：pi 的每条 assistant 消息在
+provider 层构造时就写死 `api`/`provider`/`model` 并带上 `usage`/`timestamp`
+（(+`errorMessage` 出错时)），3b 的 `estimateContextTokens` 与 3c 的
+`_checkCompaction`（sameModel/stale 判断）全部从这条消息读起 —— 字段缺失时
+触发时机与溢出恢复必然偏离。逐行读三处出处钉死形状：
+
+| 事实 | pi 出处 | Java 落法 |
+|---|---|---|
+| partial 与终局**同一对象形状**，逐字段携带 | `assistant-message-frame.ts:77-92`（`cloneStartMessage`） | `Message.AssistantMessage.fromPartial` 全 9 字段投影（3a 前只搬 content/stopReason，即本次修的丢点） |
+| 身份在 provider 流出口挂载 | `providers/faux.ts:281-291`（`cloneMessage`）等 | `AbstractChatApi` 事件出口单点装饰（`IdentitySubscriber`），7 个 adapter 各自声明 `apiName()` KnownApi 字面量 —— `ModelId` 只有 (provider, modelName)，协议是 adapter 的身份 |
+| conformance 恒挂 `openai-responses/openai/mock` + 全零 usage（**不经 faux**） | `run.test.ts` `createAssistantMessage` | `ScriptedStreams` 逐字镜像常量；model 恒为 `"mock"`，脚本换模型只影响请求文本不影响消息字段 |
+
+**排除裁决**：pi 类型上的 `responseModel`/`responseId`/`providerThinkingLevel`/
+`diagnostics`/`rawStopReason`/`endTurn` 在对齐面（`packages/agent/src`）零消费者
+（grep 命中的只有 prompt-templates/skills 同名局部量）⇒ 不移植，pi 改判时清点重开；
+`UserMessage.timestamp` 同理不移植。usage 只在有全量分解时用分解，否则由
+input/output 计数合成（cache 0、cost 零），无 UsageInfo ⇒ null ⇒ 键省略
+（null ≙ undefined，A7 规则）。
+
+**L5 帧豁免（两侧同步）**：timestamp 不进帧（pi 侧 `Date.now()`，两侧都不可复现，
+同 toolCallId 的豁免逻辑）；deferred 不进帧（handle id 随机且脚本从不设置）。
+12 份基准全部重算（58 行变更），**严格 12/12**。四路往返：JSONL 写 =
+`SessionJson.messageNode` 增六条件键；JSONL/SQLite 读 = `MessageJsonCodec`
+（共用编解码，SQLite 零改动）；WS = `WebWireJson` 镜像 pi 形状但**维持
+「wire 无消息 timestamp」的既有有意偏离**，由
+`assistantCarriesIdentityAndMetricsButNoTimestamp` 的 `has("timestamp")==false`
+钉住；RPC 转录仍无生产者（现状不变）。
+
+**新哨兵**：`MessageTest` 五例（9 组件构造、fromPartial 全字段、计数合成、
+无 UsageInfo⇒null、withStopReason 保身份）、`AbstractChatApiTest.barePartialExitsWithProviderIdentityAttached`
+（裸 partial 出口挂身份）+ 回归 EVENT 自带身份钉住「已挂 ⇒ 透传不覆盖」，
+`JsonlSessionStorageTest.assistantPayloadRoundTripsThroughJsonl`（含 message
+子对象级原始行判据）、`WebWireJsonTest` 上述哨兵。
+
+**反证实验**（每组恰好红预测集合，还原后 384/384+237/237 全绿、残留扫描零命中）：
+RE-A `fromPartial` 摘掉 usage+身份 ⇒ L5 **12/12 红** + `MessageTest` 两例红、
+其余 382 例无感；RE-B `SessionJson` 跳过 3a 六键 ⇒ 384 里**恰 1 红**（L3 哨兵），
+L5 全绿 —— 证明消息帧与持久化两条链各自独立被钉住。
+
+**实现期踩坑三件**：① Java **数值条件表达式**（JLS 15.25）：
+`cond ? Long.valueOf((long) v) : Double.valueOf(v)` 两分支皆可转数值 ⇒ 整体提升
+为 double，装箱被编译器当场拆掉再 `l2d`（字节码实测坐实）—— 帧渲染的 `0.0` vs `0`
+假红根因，修成两条独立 return，注释已钉「别改回三元」；② 单独 `surefire:test`
+不带 `-am` 会链到 ~/.m2 旧 pi-ai jar ⇒ `NoSuchMethodError: withIdentity`
+（[[jdk25-mvn-am]] 的又一次显形）；③ entry 层自带 `timestamp` 字段，旧形状行的
+整行 substring 判据会误报 —— 行级判据改判到 message 子对象。
+
+**遗留**：3b（`estimateContextTokens` 移植 + `checkThreshold` 操作数改
+`model.contextWindow` + `contextWindow>0` 护栏；现 `ContextEstimator` javadoc
+声称对齐实为 chars/3.5，属**虚假声明**，随 3b 修正）、3c（`_checkCompaction`
+四守卫；`isContextOverflow`/`isRecoverableLength` 定义尚未定位）在队；B 项
+（真并发）与 `QueueMode.All` 待用户。agent-core **384/384**、ai **237/237**、
+全 reactor `clean verify` 绿。
+
+---
+
 ## 9. 与既有文档的关系
 
 | 文档 | 关系 |
