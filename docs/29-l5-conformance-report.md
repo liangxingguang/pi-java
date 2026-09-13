@@ -3,6 +3,10 @@
 > **状态**：第 3 步**通过**（零 P0）。本文是 `docs/23c §6` ① 档要求的验收报告。
 > **注意**：`docs/23c §6` ① 把 P1 归档指向 `docs/23 §13`，而 `docs/23` 已于 `85d0f10` 删除。
 > 该归档目标由本文 §5 取代 —— 后续 P1 一律追加到本文 §5 的表里。
+> **更新（`docs/31 §8` 第 10 步）**：剧本已增至 10 个且**全部严格**逐帧通过 —— 唯一的
+> P1-1 随 `ToolRunner` 拆成 `prepare`/`execute` 两相而结案，放宽规则与守卫已删除。
+> §1–§3 保留验收当时的原貌；§4/§5 中两处对 pi 的错误描述（「所有 start 早于任何 end」
+> 的结构保证、中止批次「每个已 start 都补 end」）已按 `agent-loop.ts:487-560` 重读修正。
 
 ## 1. 结论
 
@@ -74,33 +78,42 @@ JAVA_HOME="D:/soft/jdk/graalvm-jdk-25" \
 ### 4.1 并行批次：start 与 end 交错
 
 `PiLoopTools.executeParallel` 原先在同一个循环里发出
-`start₁ → end₁ → start₂ → end₂ → …`，而 pi 的并行分支是**两相**的：
+`start₁ → end₁ → start₂ → end₂ → …`，而 pi 的并行分支是**三段**时序
+（本节初版对 pi 的描述有误，已按 `agent-loop.ts:487-560` 重读修正）：
 
-- 准备循环里把**全部** `tool_execution_start` 按源序发出（`agent-loop.ts:547`）；
-- 随后 `Promise.all` 按各自**完成序**发 `tool_execution_end`（`:550-553`）。
+- 准备循环按**源序**交替发 start 与准备（`:497-545`）；准备相当场失败的调用
+  （拒绝 / 未找到 / 参数非法 / 已中止）**在准备循环内**就收尾 end（`:505-517`）——
+  它的 end 因此排在批次后续的 start **之前**；
+- 拿到执行票的调用打包成延迟任务，end 由任务自己在完成时发（`:520-541`），
+  中止检查也发生在任务执行时（`:521-524`）；
+- 批次收束（`Promise.all`，`:547`）后，结果消息按**源序**补发（`:549-554`）。
 
-「所有 start 都早于任何 end」因此是该模式的**结构保证**，不是时序巧合。更值得注意的是：
-`PiLoopTools` 的类 javadoc 本来就写着「所有 start 先按**源序**发出，end 随各自完成」——
-**代码与自己的文档相反**，这条从第 2 步起就潜伏着。
+「所有 start 都早于任何 end」**不是**该模式的保证 —— 它只在批次里没有 immediate
+调用、也没中止时成立（S4 的录制里被拒调用恰是源序最后一个，才有初版误判的余地）。
+更值得注意的是：`PiLoopTools` 的类 javadoc 本来就写着「所有 start 先按**源序**发出，
+end 随各自完成」——**代码与自己的文档相反**，这条从第 2 步起就潜伏着。
 
 **验证过它确实会被抓到**：把该文件回退到修复前版本重跑，S4 以 5 帧错位失败
 （`start₁,end₁,start₂,end₂,…` vs `start₁,start₂,start₃,end₃,end₁,end₂`）；恢复修复后 9/9 绿。
 回归哨兵：`PiLoopTest.parallelBatchEmitsEveryStartBeforeAnyEnd`。
 
-**顺带对齐的中止路径**（差分未覆盖，声明在此以免被误当作差分发现）：原有的并行分支在
-`signal` 已中止时「发一个调用的帧就 break」，剩下的调用既无 start 也无 end。按 pi 的
-`prepareToolCall` 优先返回 immediate 错误结果（`:655-661`）改为**每个已 start 的调用都补一个
-`Operation aborted` 错误 end**。哨兵：`PiLoopTest.abortedSignalFailsEveryToolCallWithoutExecutingIt`。
+**中止路径**（差分未覆盖）：批次开始前 `signal` 已中止时，pi 只为**第一个**调用发帧
+—— start → 准备 → end → `break`（`:514-516` / `:542-544`），后续调用既无 start 也无 end。
+本节初版把 pi 误读成「每个已 start 的调用都补一个 `Operation aborted` 错误 end」，
+当时的实现与哨兵跟着钉住了这个自创形状。两相拆分时按 pi 真实形状改回
+（`PiLoopTest.abortedParallelBatchFramesOnlyTheFirstCallLikePi`）。
 
-## 5. P1 归档
+## 5. P1 归档（已结案）
 
-| # | pi 行为 | pi-java 行为 | 理由 | 是否可观察 |
-|---|---|---|---|---|
-| P1-1 | 并行批次内 `tool_execution_end` 按**完成序**发出；被 `beforeToolCall` 拦下的调用在准备循环内立即收尾（`:534-542`），其 end 排在所有真正执行过的调用**之前** | end 按**源序**发出（完成序恒等于源序） | `PiLoop.ToolRunner` 是**单相同步端口**，没有 pi `prepareToolCall` 的「immediate（未执行）vs prepared（已执行）」二分，同步实现里没有「完成序」这个概念 | **是** —— 但在并行批次**内部**，且只影响 end 的相对次序；`start` 全部早于任何 `end` 这一结构保证两侧一致 |
-
-对应代码：`ConformanceDiff.Relaxation.PARALLEL_TOOL_END_ORDER`，仅对 S4 生效。
-该放宽被 `ConformanceTest.declaredRelaxationsAreStillEffective` 强制要求**仍然生效** ——
-一旦失效（例如将来把端口改成两相）测试会红，提醒删除豁免而不是让它长期留存。
+**P1-1（S4 的 end 次序）— 已关闭，规则已删除。** 曾经唯一的放宽规则
+`PARALLEL_TOOL_END_ORDER` 存在，是因为 `PiLoop.ToolRunner` 是单相同步端口，
+没有 pi `prepareToolCall` 的「immediate（准备相定局）vs prepared（执行完成）」二分，
+被拒调用的 end 因此排不到准备循环里去。端口拆成 `prepare` / `execute` 两相后
+（对齐 `agent-loop.ts:607-675` / `:677-764`），该二分与「immediate 在准备循环内收尾」
+一并落地：规则文件、`ConformanceTest.RELAXATIONS` 表与
+`declaredRelaxationsAreStillEffective` 守卫全部删除，**十个剧本自该步起全部严格
+逐帧比较**。若将来要新增放宽规则，放回流程见 `ConformanceDiff` 的 javadoc
+（归类 + 理由 + 等效性守卫，缺一不可）。
 
 ## 6. 本次差分**未覆盖**的范围
 
@@ -122,7 +135,7 @@ JAVA_HOME="D:/soft/jdk/graalvm-jdk-25" \
 > 判据：「零 P0；差异按 P1/P2 归档」
 
 - **零 P0**：达成。唯一的 P0（§4.1）已修并重跑验证。
-- **差异归档**：1 条 P1（§5），0 条 P2。
+- **差异归档**：1 条 P1（§5），0 条 P2。—— P1-1 其后已**结案**（放宽规则删除，S4 起严格），见 §5。
 
 ## 8. 追加：S9（2026-09-13，`docs/31 §7` 第 6 条）
 

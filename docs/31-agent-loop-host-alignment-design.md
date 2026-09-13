@@ -904,6 +904,41 @@ pi 的归约器写四个字段，Java 侧对照：
 `timestamp = null` 也不是疏漏：那是全仓 `ProvisionedEntry` 的约定（`LaneView:95/102/110`、
 `Session:236` 同样传 `null`），语义是「身份由存储赋，尚未提交」。
 
+---
+
+### 8.15 第 9 步遗留 A 项：端口两相拆分 —— 已实施（2026-09-13，commit `aaba914`）
+
+`PiLoop.ToolRunner` 从单相 `run(ToolCall)` 拆成 `prepare` / `execute`，对齐 pi
+`agent-loop.ts` 的 `prepareToolCall`（`:607-675`）与 `executePreparedToolCall` +
+`finalizeExecutedToolCall`（`:677-764`）。准备相产物是密封的 `Preparation`
+（`ImmediateOutcome` | `Prepared`）；`Prepared` 对循环**半透明** —— 只回吐 `call()`，
+工具句柄与钩子改写后的参数留在签发者 `PiToolRunner` 里（镜像 pi 的
+`PreparedToolCall.tool` / `.args`）。
+
+**直接收益**：L5 唯一放宽规则 `PARALLEL_TOOL_END_ORDER` 连表带守卫删除，十个剧本
+首次**全部严格**逐帧比对。反证实验确认严格性有牙：把 end 摆放改回源序批量 →
+S4 恰在第 16/17/18 帧变红。
+
+**顺带修掉的四处分歧**（全部先读 pi 源码定案，非臆断）：
+
+| 分歧 | pi 事实（`agent-loop.ts`） | 旧 Java 行为 |
+|---|---|---|
+| 钩子与查找的顺序 | 查找→校验→`before_tool`（:613-626） | 钩子先于查找 |
+| null registry | `tools?.find` → `Tool X not found`（:613-618） | 靠 catch 吞 NPE，文案是 JVM 诊断消息 |
+| 中止与拒绝同时命中 | 中止检查排在 block 分支前（:636-661） | 拒绝先赢、还能带 `terminate` |
+| 拒绝兜底文案 | `reason \|\| "Tool execution was blocked"`（:643） | `"Tool call denied"` |
+
+**一条被推翻的旧结论**：docs/29 §4 初版宣称「所有 start 都早于任何 end 是 pi 并行
+批次的结构保证」，并据 pi 的 `:655-661` 把中止路径改成「每个已 start 的调用补一个
+`Operation aborted` end」。**两条都不成立**：pi 的准备循环是 start/准备交替（immediate
+的 end 会插到后续 start 之前），且 immediate 收尾后 `break`（:514-516），中止批次只有
+第一个调用有帧。S4 录制里被拒调用恰好源序最后，才让旧说法蒙对了帧序。哨兵已重钉为
+pi 形状（`abortedParallelBatchFramesOnlyTheFirstCallLikePi`），docs/29 §4/§5 同步更正。
+
+**遗留**：B 项（延迟任务真并发 = pi 的 `Promise.all`）仍开放 —— 当前串行执行在
+确定性工具下帧序与 pi 一致，真并发需要先想清楚差分侧怎么验证非确定完成序。
+`QueueMode.All` 的宿主层行为变更仍待用户确认。
+
 ⇒ **两份视图各自自洽，且按设计必须不同**。要真正统一，得先把「会话历史 ⊃ agent 状态」
 这条 pi 的不变量建出来（entry 上区分「只进历史」与「进历史且进上下文」），那是另一个课题，
 不是把 append 搬个家。**不实施，理由记录在此。**
