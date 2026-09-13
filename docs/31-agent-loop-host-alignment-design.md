@@ -976,6 +976,43 @@ pi 形状（`abortedParallelBatchFramesOnlyTheFirstCallLikePi`），docs/29 §4/
 全 reactor `clean verify` 绿。**结构修正**：§8.15 插错了位置，把 §8.14 与其结语（「两份
 视图」段）切开了 —— 已挪回 §8.14 末尾。
 
+### 8.17 end 载荷 = 完整结果树，流式更新补上生产者 —— 已实施（2026-09-13，commit `0fb6c95`）
+
+钩子对齐（§8.16）之后继续逐行读 `executePreparedToolCall`（`agent-loop.ts:677-718`）与
+`emitToolExecutionEnd`（`:774-782`），查出两处分歧。**两处的根因是同一个**：两侧
+conformance 归一化恰好都丢弃 `result`/`partialResult`/`args` —— 差分对这两帧只比
+`id`/`name`/`isError`，所以 L5 的 10/10 从未看过这些载荷。丢字段的豁免必须两侧同时做，
+否则「比对通过」只是「没在看」：
+
+| 分歧 | pi 事实 | 旧 Java 行为 |
+|---|---|---|
+| `tool_execution_end.result` | `finalized.result` **整棵树**（`:779`）；失败路径是 `createErrorToolResult`：`content=[text]`、`details` 为**空对象**非 null（`:767-772`） | 只带 `details`/`text` 替身，错误结果的 `details` 干脆是 null |
+| `tool_execution_update` | 工具经 update 回调流出的每个部分结果直接成帧（`:690-704`），`args` 用**原始**调用参数（`:696`），执行落定后 `acceptingUpdates` 闩丢弃迟到回调（`:688`） | 事件类型存在但**从无生产者**（`PiToolRunner` 给工具传 null 回调） |
+
+**移植**（package 1）：`ToolOutcome` 的 `result` 改为完整 `ToolResult<?>`，
+`terminate()` 从结果对象派生（批次门判据 `result.terminate === true`，`:590`）；
+`ToolRunner.execute(Prepared, Sink)` 开事件汇（pi 把 `emit` 递进
+`executePreparedToolCall`，`:679`），`PiToolRunner` 用 `AtomicBoolean` 闩镜像
+`acceptingUpdates`；`createErrorToolResult` 落在 `PiLoopTools`（截断/中止/立即失败
+三路共用）。**L5 盲区补齐**：两侧归一化纳入 end 的完整 `result` 树与 update 的
+`partialResult`（`terminate` 只留 true、`addedToolNames` 只留非空、null/undefined
+同落线上 —— 规则逐字镜像，两侧文件互为对偶）；剧本工具新增 `updates`/`details`
+字段；新增 **S11**（流式更新 + details 载荷上 wire）与 **S12**（terminate 批次门：
+混合批次继续、全真才停 —— 「Ghost turn 永不被消费」即停止的可观察证据）。
+12 份 pi 基准全部重算，**严格 12/12**；顺手补回 pi 侧 runner 清单里漏提交的 S10 id
+（其基准此前只能靠手改副本生成）。
+
+**反证实验**（每组恰好红预测集合，还原后全绿）：end 降级为 `details` ⇒
+S2/S3/S4/S9/S10/S11/S12 七红（S1/S5/S6/S7/S8 无执行过的 end，绿得其所）；
+错误结果 `details` 改 null ⇒ **仅 S5**（截断路径）红；every 门改 any ⇒ **仅 S12** 红
+（混合批次提前停）；去闩 + args 换成改写后参数 ⇒ `PiToolRunnerTest` 对应两例分红。
+还原后 agent-core **381/381**、全 reactor `clean verify` 绿。
+
+**仍未闭环（package 2，A7）**：pi 的 `createToolResultMessage`（`:784-797`）把
+`details`/`usage`/`addedToolNames` 也放在结果**消息**上，随 entry 落库；
+pi-java 的 `Message.ToolResultMessage` 仍只有 `(toolUseId, toolName, content, isError)`。
+事件的 `result` 现在已完整，消息层的缺席记录在 `PiToolRunner` 类 javadoc。
+
 ---
 
 ## 9. 与既有文档的关系
