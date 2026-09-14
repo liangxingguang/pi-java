@@ -1393,6 +1393,169 @@ freshUsageAnchorFiresThresholdWithPureTokensAfter 钉 estimatedTokensAfter）。
 
 ---
 
+### 8.22 自动重试环 3d —— **设计稿（2026-09-15，待审核，未实施）**
+
+> 本节是 3d 的准入设计文档。**未经审核认可前不写任何实施代码。**
+> pi 事实全部逐行读自 `packages/coding-agent/src/core/agent-session.ts`、
+> `packages/ai/src/utils/retry.ts`、`packages/agent/src/agent-loop.ts`、
+> `packages/coding-agent/src/core/settings-manager.ts`、
+> `packages/coding-agent/src/core/compaction/compaction.ts`（3c 已读的 overflow/压缩路不复述）。
+
+#### 8.22.1 pi 事实（两环全景）
+
+**环 A：post-run ①（会话级续跑重试）**。`_handlePostAgentRun` :1123
+`_isRetryableError(msg) && await _prepareRetry(msg)` ⇒ true 即 `agent.continue()`。判据链：
+
+- `_isRetryableError`（:2876-2880）：第一行 `isContextOverflow(msg, this.model?.contextWindow ?? 0)`
+  ⇒ **false**（溢出交压缩，交接在分类器这一层，3c 已落判据本身）；否则
+  `isRetryableAssistantError`（retry.ts:235-240）：`stopReason==="error"` ∧ `errorMessage` 非空
+  ∧ **不**命中配额排除表（`NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN`，6 条拼接正则 :7-24：
+  `GoUsageLimitError|FreeUsageLimitError|Monthly usage limit reached|available balance|
+  insufficient_quota|out of budget|quota exceeded|billing`）∧ **命中**白名单
+  （`RETRYABLE_PROVIDER_ERROR_PATTERN`，30 条 :26-90：overloaded / `rate.?limit` /
+  too many requests / 429/500/502/503/504/524 / service·server·internal.?error /
+  provider.?returned.?error / 连接网络族 / timeout·terminated / websocket 族 /
+  stream 早断族 / retry delay / gRPC `ResourceExhausted`…）。两表都 `new RegExp(patterns.join("|"), "i")`。
+  **null/缺失 ⇒ false —— 默认不重试**，与 pi-java 现状的「null ⇒ true」黑名单正好反转。
+- `_prepareRetry`（:2917-2965）：`enabled` 复查 ⇒ false；`_retryAttempt++`；
+  **`> maxRetries` ⇒ `--` 还原后 false**（保完成计数给终局失败事件）；
+  `delayMs = retryDelayMs(settings, attempt)`（:111-115：`base * 2^max(0,attempt-1)`、
+  `Number.isSafeInteger` 护栏、`min(…, maxAgentDelayMs ?? 60_000)`）；发
+  `auto_retry_start{attempt, maxAttempts, delayMs, errorMessage||"Unknown error"}`；
+  **只摘工作副本**（尾是 assistant ⇒ `state.messages = slice(0,-1)`，:2937-2941，日志保留 ——
+  用户历史里看得见那次失败）；可中止 sleep：退避中被 abort ⇒
+  `auto_retry_end{success:false, attempt, finalError:"Retry cancelled"}` + 计数清零 + false
+  （:2948-2957）；成功睡完 ⇒ true ⇒ continue（摘除后尾非 assistant ⇒ 纯续跑，3c 已落）。
+- **计数是会话级**（`_retryAttempt` :339，跨 prompt 存活），三个复位点：
+  ① assistant message_end 且 `stopReason!=="error"` 且 `attempt>0` ⇒ 发
+  `auto_retry_end{success:true, attempt}` + 清零（:698-706，防同轮多 ring 累加）；
+  ② post-run 终局失败：`msg.stopReason==="error"` ∧ `attempt>0`（① 返回 false 之后）⇒
+  发 `auto_retry_end{success:false, attempt, finalError:msg.errorMessage}` + 清零
+  （:1127-1134）；③ 退避 sleep 中止（上）。**运行边界不复位**。
+- `agent_end` 装饰（:666）：每个 pass 的 agent_end 带
+  `willRetry = _willRetryAfterAgentEnd(event)`（:721-733）：`!enabled ∨ attempt >= maxRetries`
+  ⇒ false；否则**倒扫 `event.messages` 找第一条 assistant** 过 `_isRetryableError`。
+  `event.messages` = 本 pass 的 newMessages（agent-loop.ts:217/:253）。装饰先于复位
+  （:666 在 :694-706 前 ⇒ 用 ring 前计数）。预算耗尽链：末次错误 pass 的 agent_end
+  `willRetry` 已 false ⇒ 紧接终局失败 `auto_retry_end` ⇒ 再走 ②③。
+- `abort()`（:1639-1646）与 `dispose()`（:876-885）先 `abortRetry()`；
+  `isRetrying` = `_retryAbortController` 非空（:2977-2979）；isIdle 含重试。
+- **`retryAssistantCall`（retry.ts:174-224）不在环 A** —— 环 A 的退避环就是
+  post-run ① + continue；retryAssistantCall 只被**环 B**（摘要）与 bedrock 使用（grep 实测：
+  coding-agent/compaction/compaction.ts:598、harness 层（排除面）、bedrock api）。
+
+**环 B：摘要重试**。compaction/branch-summary 的每次摘要 LLM 调用走
+`completeSummarization`（coding-agent/compaction/compaction.ts:578-600）：
+`retryAssistantCall(produce, settings.retry, signal, callbacks)` —— **与环 A 同一份
+`settings.retry` 预算/退避**；callbacks ⇒ 会话事件 `summarization_retry_scheduled
+{attempt,maxAttempts,delayMs,errorMessage}` / `summarization_retry_attempt_start
+{source:"compaction",reason}|{source:"branchSummary"}` / `summarization_retry_finished`
+（:2888-2911、:1941-1942、:3243-3244）。retryAssistantCall 语义：abort 终局**不重试**
+（但曾 schedule 过 ⇒ 报 `onRetryFinished(false,…)`；退避中被 abort ⇒ 归一化成
+`{...response去掉errorMessage, stopReason:"aborted"}` 形状）；非白名单错误 ⇒ 直接返回；
+预算耗尽 ⇒ 返回末次错误。重试耗尽后 `getSummarizationFailure`（:545-553）
+（error ⇒ `"Summarization failed: <errorMessage||Unknown error>"`；length ⇒
+`"…generation hit the token cap and the summary is incomplete"`）然后 **throw**
+（:712-718；摘要里出现 toolCall 也 throw）⇒ 上层 catch 落
+`compaction_end{errorMessage}`。**没有静默截断兜底**。
+
+**设置**：`getRetrySettings()`（settings-manager.ts:927-933）=
+`enabled??true / maxRetries??3 / baseDelayMs??2000 / maxAgentDelayMs??60000`；
+`setRetryEnabled` 写全局 + markModified + save。`retry.provider.*`（timeoutMs /
+maxRetries / maxRetryDelayMs??60000）是 **SDK/provider 层**，与本两环不同层。
+
+**L5 预期**：ScriptedStreams 无 error 停因、无摘要调用 ⇒ 预期 **12/12 不动**。
+
+#### 8.22.2 pi-java 现状差距
+
+| 面 | 现状 | 差距 |
+|---|---|---|
+| 环位置 | `SessionRunner.drive` 外层 do-while 整场重跑；压缩/队列在**引擎环内**（3c） | **顺序反转**：pi ①重试→②压缩；pi-java 先对错误尾跑 ②（T1 error⇒估算可过线）再由外层重试。非溢出可重试错误 + 过阈值 ⇒ 事件与日志次序都不同。attempt 是 **per-drive 局部**，pi 会话级跨 prompt |
+| 判据 | `isRetryableError(String)` 黑名单：`null⇒true`，仅溢出一刀（窗口传 null） | 白名单反转（见上）；stopReason/errorMessage 双闸；溢出交接改读**真窗口**（case1 虽不消耗窗口，行为等价，形状须对齐消息对象 API） |
+| 事件 | AutoRetryStart/End 由 SessionRunner 按 attempt 时点发；退避无 cap | message_end 成功复位事件缺（:698-706）；"Retry cancelled" 分支缺；终局失败 finalError 来源不同；`agent_end.willRetry` 现在是本次 shouldRetry 局部量，且 **AgentEnd 每 drive 一条**（pi 每 pass 一条带装饰）；`summarization_retry_*` 三事件无 |
+| 摘尾 | `AgentHarness.dropTrailingErrorAssistant` → RunLifecycle:318 **摘日志尾 + 重建副本** | pi 只摘副本、日志保留（唯一调用方在 3d 后消失）⇒ 公开 API 删除 |
+| 环 B | `LlmSummaryGenerator` 单次调用，**失败/空输出静默回退截断摘要**（:118） | pi：同预算重试 + 失败/length/toolCall **throw**；兜底是发明，掩盖 `compaction_end{errorMessage}` |
+| 设置 | `MAX_RETRIES=3`/`BASE_DELAY_MS=2000` 常量；开关内存 volatile | maxRetries/baseDelayMs/maxAgentDelayMs 不可配；enabled 未持久化（pi save+markModified） |
+
+#### 8.22.3 改动方案
+
+**pi-java-ai**：新 `com.pijava.ai.utils.RetryableError` —— `isRetryableAssistantError(AssistantMessage)`
+（两拼接正则逐字移植，`CASE_INSENSITIVE`，与 overflow.ts 同层同文件位）；
+`RetryBackoff.delayMs(base, maxAgentCap, attempt)`（纯函数，两环共用，safe 值 + cap）。
+**不动** `com.pijava.ai.http.RetryPolicy`（HTTP 层，是 pi SDK/provider 层的 pi-java 方言，另列清点）。
+
+**agent-core**：
+- `RetrySettings` record（harness 方言，4 字段 ≙ getRetrySettings 返回）；
+  `HarnessConfig`/`ExecutionContext` 新三槽（18 参兼容 ctor 续用 + compact 默认）：
+  `Supplier<RetrySettings> retrySettings`（默认 `true/3/2000/60_000` ≙ pi 默认）、
+  `BooleanSupplier retryAborted`（默认 `() -> false`）、`RetryObserver retryObserver`（默认 NOOP）。
+- 新 `RetryObserver`（接口，与 CompactionObserver 并列）：`onAutoRetryStart(attempt,maxAttempts,delayMs,errorMessage)`、
+  `onAutoRetryEnd(success,attempt,finalError)`、`onSummarizationRetryScheduled(attempt,maxAttempts,delayMs,errorMessage)`、
+  `onSummarizationRetryAttemptStart(source,reason)`、`onSummarizationRetryFinished()`。
+- `LaneState.retryAttempt`（int，会话级；运行边界不复位）。`PiLaneSink.onMessageEnd`
+  在 3c 闩复位点旁：`stopReason!=="error" ∧ attempt>0` ⇒ `onAutoRetryEnd(true,attempt,null)` + 清零。
+- 新 `PostRunRetry`（package 私有，= `_isRetryableError` + `_prepareRetry` + `_willRetryAfterAgentEnd`）；
+  `PostRunCompactionCheck.checkAfterRun` 改名/扩为 pi 全形：
+  `①retry → 终局失败复位块 → ②compaction → ③queue`（委托 PostRunRetry + 现有 check）。
+  ① 命中时摘尾＝role-only **副本**（日志不动，pi :2937-2941；与 R2 同形状、各自原位不互用）。
+  退避 sleep 在引擎环内（阻塞驱动方言），每 50ms 轮询 `retryAborted`。
+- `AgentHarness` 公开 `boolean retryWouldFollow(AssistantMessage)` ≙ `_willRetryAfterAgentEnd`
+  单判（enabled/预算/倒扫消息）—— coding-agent 装饰 AgentEnd 用；引擎 ① 处再算一遍
+  （pi 也是装饰、① 各算各的，不共享缓存）。**删** `dropTrailingErrorAssistant`（公开 + RunLifecycle）。
+- `SummaryGenerator.generate` 加 `reason` 参；`LlmSummaryGenerator` 内装 retryAssistantCall
+  同形环（produce=单发，读 retrySettings，可被 run abort/`retryAborted` 中断 ⇒ 归一 aborted），
+  回调走 `RetryObserver`（source="compaction"，reason 透传）；`getSummarizationFailure`
+  + toolCall 检查逐条移植后 **throw IllegalStateException** ⇒ 现有 catch 链落
+  `compaction_end{errorMessage: "Auto-compaction failed: …"}`。**撤** 失败/空输出截断兜底
+  （空输出 ≙ pi 空文本摘要，合法）。`SummaryGenerator.truncating()` 默认槽保留（harness 方言，非产品路）。
+
+**coding-agent**：
+- `AgentSession.assemble`：`.retrySettings(…从设置读…)`、`.retryAborted(owner::retryAborted)`、
+  `.retryObserver(匿名 → AgentSessionEvent.AutoRetryStart/End + 新
+  SummarizationRetryScheduled/AttemptStart/Finished 三变体)`；`setAutoRetryEnabled` 持久化。
+- `SessionRunner.drive`：do-while **撤**；一次 `prompt()`（或 continueRun）即全剧；
+  AgentEnd 改**每 pass** 一条（downstream 包装收 `PiLoop.Event.AgentEnd`，
+  `willRetry = harness.retryWouldFollow(尾 assistant)`）；RunSummary `attempts` 改读
+  `outcome.passRunIds().size()`；异常兜底 catch 保留（引擎内部失败面，实施时核对
+  pi agent.ts:520-527 的 failureMessage 路在 pi-java 引擎是否已有对应物，**不臆造**）。
+- `JsonEventMapper`：AutoRetry 族既有；summarization 族新增映射。
+
+**测试计划**：① ai 白名单表驱动（每条至少一命中样本、6 排除、null/非 error ⇒ false、
+大小写）；② PostRunRetry 逐守卫（预算 `>=` 装饰 vs `>` 还原链、start 四字段、role-only
+副本摘尾日志不动、abort⇒"Retry cancelled"+清零、终局失败 finalError+清零、message_end
+成功复位事件）；③ **顺序哨兵**：可重试错误尾 + 高用量过阈值 ⇒ 重试先跑、本轮**无**压缩
+entry、`auto_retry_start` 早于任何 compaction 事件（钉住与旧行为相反的那一钉）；
+④ 环 B 事件链（瞬断重试成功 / 确定性错误快失败 / 预算耗尽 ⇒ `compaction_end{errorMessage}`
+含 "Summarization failed" / length / toolCall）；⑤ E2E：error→退避→continue 成功双 pass、
+`passRunIds=2`、AutoRetryStart+End(success) 顺序、③ 队列与重试闩/计数互不污染；
+⑥ 反向实验 ~6（白名单换回黑名单、①/② 换序、撤成功复位、abort 不可取消、兜底不撤、
+装饰改扫全局尾）各自预测红名单后动刀。
+
+#### 8.22.4 需要审核的裁决点
+
+1. **两环都进 agent-core**：① 进引擎 post-run（新 `PostRunRetry`，SessionRunner do-while 撤）——
+   否则 ①→② 顺序无法对齐；设置/中止/事件经 ExecutionContext 注入（§4.2 与 3c 续裁决）。
+2. **AgentEnd 每 pass 一条 + `retryWouldFollow` 公开判据**（装饰与 ① 各算各的，保 pi 形状）；
+   payload 沿用现有 accumulatedMessages（频率对齐、载荷差异登记 8.22.5-3）。
+3. **事件走新 `RetryObserver` 槽**（auto_retry_* + summarization_retry_* 共五法），不进
+   HookSystem（续 3c 裁决③理由）；coding-agent 映射到会话事件面。
+4. **白名单判据归位 ai**（与 overflow.ts 同层）；`_isRetryableError` 溢出交接改传**真窗口**。
+5. **摘要路加 reason 参、重试环入 generator、撤截断兜底改 throw**；`truncating()` 默认槽保留。
+6. **`dropTrailingErrorAssistant` 删除**：pi 的摘尾只动副本；重试摘尾在 PostRunRetry 原位实现。
+
+#### 8.22.5 取证新发现（登记，不入 3d）
+
+- `retry.provider.*`（SDK 层 timeoutMs/maxRetries/maxRetryDelayMs）↔ pi-java ai HTTP
+  `RetryPolicy` 的映射对照 —— 独立清点项。
+- **branch summary 在 pi-java 无实现**（grep 零命中）—— pi `branch-summarization.ts:349-353`
+  的 `source:"branchSummary"` 重试路形状保留，功能本体列清单项。
+- TUI/RPC 对 auto_retry / summarization_retry 的渲染（倒计时、`isRetrying`、isIdle 含重试）
+  —— 并入命令/界面面清点。
+- pi 的 agent_end 载荷是**本 pass newMessages**，pi-java 是 accumulatedMessages（3d 前既有
+  选择）；3d 只改频率，载荷全量对照列清单项。
+
+---
+
 ## 9. 与既有文档的关系
 
 | 文档 | 关系 |
