@@ -2,7 +2,9 @@ package com.pijava.agent.harness;
 
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.compaction.SummaryGenerator;
@@ -60,6 +62,14 @@ import com.pijava.telemetry.TelemetryContext;
  * @param summaryGenerator   generates the compaction summary (default: truncating)
  * @param compactionObserver pi {@code compaction_start}/{@code compaction_end} 会话
  *                           事件的宿主观察口（3c）；默认 {@code NOOP}
+ * @param retrySettings      自动重试设置的晚读口（3d，{@code docs/31 §8.22}）：
+ *                           两环（post-run ① 与摘要重试）每次判定都重读，宿主
+ *                           setter 即时生效（pi {@code getRetrySettings()}）。
+ *                           默认 {@code RetrySettings::defaults}（pi 的 ?? 链）
+ * @param retryAborted       退避睡眠的中止观察口（3d）；pi 是 AbortController
+ *                           信号，Java 方言为每 50ms 轮询本谓词。默认恒 false
+ * @param retryObserver      {@code auto_retry_*} / {@code summarization_retry_*}
+ *                           会话事件的宿主观察口（3d）；默认 {@code NOOP}
  */
 public record HarnessConfig(
     StreamFn streamFn,
@@ -83,7 +93,10 @@ public record HarnessConfig(
     ToolExecution toolExecution,
     Consumer<StreamEvent> streamListener,
     SummaryGenerator summaryGenerator,
-    com.pijava.agent.compaction.CompactionObserver compactionObserver
+    com.pijava.agent.compaction.CompactionObserver compactionObserver,
+    Supplier<RetrySettings> retrySettings,
+    BooleanSupplier retryAborted,
+    RetryObserver retryObserver
 ) {
     /** Canonical constructor applying default values and defensive copies. */
     public HarnessConfig {
@@ -100,6 +113,9 @@ public record HarnessConfig(
         if (compactionObserver == null) compactionObserver = com.pijava.agent.compaction.CompactionObserver.NOOP;
         if (contextWindow == null) contextWindow = ignored -> maxInputTokens;
         if (maxOutputTokens == null) maxOutputTokens = ignored -> 0;
+        if (retrySettings == null) retrySettings = RetrySettings::defaults;
+        if (retryAborted == null) retryAborted = () -> false;
+        if (retryObserver == null) retryObserver = RetryObserver.NOOP;
     }
 
     /** Create a new configuration builder. */
@@ -121,7 +137,7 @@ public record HarnessConfig(
              null, null, toolRegistry, toolContext, commandPrefix, compactionSettings,
              skills, retryPolicy, telemetry, thinkingLevelMap, steeringMode,
              followUpMode, toolExecution, streamListener, SummaryGenerator.truncating(),
-             null);
+             null, null, null, null);
     }
 
     public static final class Builder {
@@ -147,6 +163,9 @@ public record HarnessConfig(
         private Consumer<StreamEvent> streamListener = event -> { };
         private SummaryGenerator summaryGenerator = SummaryGenerator.truncating();
         private com.pijava.agent.compaction.CompactionObserver compactionObserver;
+        private Supplier<RetrySettings> retrySettings;
+        private BooleanSupplier retryAborted;
+        private RetryObserver retryObserver;
 
         public Builder streamFn(StreamFn fn) { this.streamFn = fn; return this; }
         public Builder model(ModelId<?> m) { this.model = m; return this; }
@@ -194,6 +213,21 @@ public record HarnessConfig(
             this.compactionObserver = observer; return this;
         }
 
+        /** Set the late-read retry settings supplier (3d; default: {@code RetrySettings::defaults}). */
+        public Builder retrySettings(Supplier<RetrySettings> settings) {
+            this.retrySettings = settings; return this;
+        }
+
+        /** Set the retry-backoff abort predicate (3d; default: never aborted). */
+        public Builder retryAborted(BooleanSupplier aborted) {
+            this.retryAborted = aborted; return this;
+        }
+
+        /** Set the retry observer (3d; default: {@code NOOP}). */
+        public Builder retryObserver(RetryObserver observer) {
+            this.retryObserver = observer; return this;
+        }
+
         /** Build the {@link HarnessConfig}, validating required fields. */
         public HarnessConfig build() {
             if (streamFn == null) throw new IllegalStateException("streamFn is required");
@@ -205,7 +239,8 @@ public record HarnessConfig(
                                      compactionSettings, skills,
                                      retryPolicy, telemetry, thinkingLevelMap,
                                      steeringMode, followUpMode, toolExecution,
-                                     streamListener, summaryGenerator, compactionObserver);
+                                     streamListener, summaryGenerator, compactionObserver,
+                                     retrySettings, retryAborted, retryObserver);
         }
     }
 }

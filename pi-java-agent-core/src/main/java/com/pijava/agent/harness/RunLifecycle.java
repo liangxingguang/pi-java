@@ -309,25 +309,7 @@ final class RunLifecycle {
         ctx.publishState(laneName);
     }
 
-    /**
-     * Remove the trailing error assistant entry from the lane transcript
-     * (pi {@code _prepareRetry} keeps the errored message only in session
-     * history, not in agent state), so a retry continues from the prior
-     * context without re-prompting.
-     */
-    void dropTrailingErrorAssistant(String laneName) {
-        var lane = ctx.requireLane(laneName);
-        var entries = lane.transcript;
-        if (entries.isEmpty()
-                || !(entries.get(entries.size() - 1) instanceof Entry.Message m)
-                || !"assistant".equals(m.message().role())) {
-            return;
-        }
-        String stopReason = lane.newestOwn != null ? lane.newestOwn.stopReason() : null;
-        if (HarnessUtils.isErrorStopReason(stopReason)) {
-            entries.remove(entries.size() - 1);
-            // 日志被改 ⇒ 工作副本跟着重建，否则重试会带着那条残缺的助手消息发出去。
-            HarnessUtils.rebuildLaneMessages(lane);
-        }
-    }
+    // 3d：dropTrailingErrorAssistant 已删除 —— pi 的 _prepareRetry 只摘**工作副本**尾
+    // （日志保留失败消息，用户历史可见），该动作住在 PostRunRetry 原位；
+    // 「摘日志尾 + 重建副本」是与 pi 相悖的旧方言（docs/31 §8.22 裁决①）。
 }

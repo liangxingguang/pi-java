@@ -33,11 +33,13 @@ public final class CompactionService {
      * @param settings        compaction settings
      * @param summaryGenerator generates the summary of the discarded prefix
      * @param tokensBefore    压缩前的上下文估算（pi {@code preparation.tokensBefore}）
+     * @param reason          触发原因（"manual"/"threshold"/"overflow"），透传给摘要
+     *                        生成器做环 B 事件装饰（3d）；可为 null
      */
     public static CompactionResult compact(List<Entry> transcript,
                                            CompactionSettings settings,
                                            SummaryGenerator summaryGenerator,
-                                           long tokensBefore) {
+                                           long tokensBefore, String reason) {
         if (transcript.isEmpty()) {
             throw new IllegalStateException("Nothing to compact: transcript too small");
         }
@@ -48,11 +50,19 @@ public final class CompactionService {
             .map(e -> ((Entry.Message) e).message())
             .toList();
         SummaryGenerator.SummaryResult summaryResult = summaryGenerator
-            .summarize(discardedMessages, null, null, settings.reserveTokens());
+            .summarize(discardedMessages, null, null, settings.reserveTokens(), reason);
         String firstKept = transcript.get(cut).id();
         return new CompactionResult(
             summaryResult.text(), firstKept, tokensBefore, null,
             summaryResult.usage(), null);
+    }
+
+    /** 无触发原因的旧式调用（测试）：{@code reason = null}。 */
+    public static CompactionResult compact(List<Entry> transcript,
+                                           CompactionSettings settings,
+                                           SummaryGenerator summaryGenerator,
+                                           long tokensBefore) {
+        return compact(transcript, settings, summaryGenerator, tokensBefore, null);
     }
 
     /**

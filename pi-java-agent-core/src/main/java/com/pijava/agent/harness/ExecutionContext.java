@@ -1,6 +1,7 @@
 package com.pijava.agent.harness;
 
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -54,16 +55,29 @@ record ExecutionContext(
     SummaryGenerator summaryGenerator,
     java.util.function.BiConsumer<ModelId<?>, String> turnConfigApplier,
     TelemetryContext telemetry,
-    com.pijava.agent.compaction.CompactionObserver compactionObserver
+    com.pijava.agent.compaction.CompactionObserver compactionObserver,
+    Supplier<RetrySettings> retrySettings,
+    BooleanSupplier retryAborted,
+    RetryObserver retryObserver
 ) {
     ExecutionContext {
         // 与 HarnessConfig 的规范默认同置：直接构造 ExecutionContext 的装配（测试、
-        // 未来的第二宿主）不许从这两个槽读到 null。
+        // 未来的第二宿主）不许从这些槽读到 null（3d 起含 retrySettings/
+        // retryAborted/retryObserver 三槽——pi 的 getRetrySettings() ?? 链即默认值）。
         if (maxOutputTokens == null) {
             maxOutputTokens = ignored -> 0;
         }
         if (compactionObserver == null) {
             compactionObserver = com.pijava.agent.compaction.CompactionObserver.NOOP;
+        }
+        if (retrySettings == null) {
+            retrySettings = RetrySettings::defaults;
+        }
+        if (retryAborted == null) {
+            retryAborted = () -> false;
+        }
+        if (retryObserver == null) {
+            retryObserver = RetryObserver.NOOP;
         }
     }
 

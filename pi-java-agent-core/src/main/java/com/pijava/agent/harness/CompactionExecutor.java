@@ -248,7 +248,7 @@ final class CompactionExecutor {
             if (plan != null && !plan.keepEntries().isEmpty()) {
                 compacted = plan.keepEntries();
             } else {
-                var built = compactTranscript(lane, settings);
+                var built = compactTranscript(lane, settings, reason);
                 compacted = built.kept();
                 result = built.result();
             }
@@ -361,12 +361,13 @@ final class CompactionExecutor {
     /** 压缩体产物：新转录列表 + 结果对象（{@code estimatedTokensAfter} 由调用方在重建后补）。 */
     private record Built(List<Entry> kept, CompactionResult result) {}
 
-    private Built compactTranscript(LaneState lane, CompactionSettings settings) {
+    private Built compactTranscript(LaneState lane, CompactionSettings settings, String reason) {
         // tokensBefore 单一来源：pi 的三条路（threshold/manual/overflow）都从
         // prepareCompaction :667 的 estimateContextTokens 读，这里同形 —— 落库的
         // Entry.Compaction.tokensBefore 因此是「用量优先」值，与触发判据同源。
+        // reason 透传给摘要生成器（3d 环 B 的 attempt_start 事件装饰）。
         var result = CompactionService.compact(lane.transcript, settings,
-            ctx.summaryGenerator(), contextTokens(lane));
+            ctx.summaryGenerator(), contextTokens(lane), reason);
         var retainedTail = keptMessagesFrom(lane.transcript, result.firstKeptEntryId());
         var compactionEntry = new Entry.Compaction(
             UUID.randomUUID().toString(), lane.nextSeq(), HarnessUtils.lastEntryId(lane),

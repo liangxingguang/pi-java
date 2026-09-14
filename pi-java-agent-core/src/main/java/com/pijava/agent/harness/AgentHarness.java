@@ -133,7 +133,8 @@ public class AgentHarness implements AutoCloseable {
             hookSystem, lane, () -> lane.compactionSettings, config.thinkingLevelMap(),
             tokenCounter, snapshotService, queueManager, () -> lane.toolExecution,
             () -> eventBus::broadcastStream, config.summaryGenerator(),
-            lane::applyTurn, telemetry, config.compactionObserver());
+            lane::applyTurn, telemetry, config.compactionObserver(),
+            config.retrySettings(), config.retryAborted(), config.retryObserver());
         this.runLifecycle = new RunLifecycle(execCtx);
         this.piEngine = new PiLaneEngine(execCtx, runLifecycle);
     }
@@ -346,9 +347,15 @@ public class AgentHarness implements AutoCloseable {
         runLifecycle.restoreRecords(laneName, records);
     }
 
-    /** Drop the trailing error assistant entry so a retry continues from the prior context. */
-    public void dropTrailingErrorAssistant(String laneName) {
-        runLifecycle.dropTrailingErrorAssistant(laneName);
+    /**
+     * 装饰 {@code agent_end.willRetry} 的公开入口（pi {@code _willRetryAfterAgentEnd}，
+     * {@code agent-session.ts:721-733}；3d，{@code docs/31 §8.22}）。宿主的用法与 pi
+     * 一致：收到一次 {@code agent_end}，倒扫<b>它自带的 messages</b> 找最后一条助手
+     * 消息，再调本法。真实的摘尾/重跑发生在引擎的 post-run ①（{@code checkAfterRun}），
+     * 本法只答「会不会重试」，与 ① 各算各的、互不共享缓存。
+     */
+    public boolean retryWouldFollow(com.pijava.ai.message.Message.AssistantMessage lastAssistant) {
+        return piEngine.retryWouldFollow(lastAssistant);
     }
 
     /** Return the final assistant message from the most recent run (default lane). */

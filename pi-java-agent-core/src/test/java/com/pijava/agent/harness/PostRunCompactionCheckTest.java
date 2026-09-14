@@ -69,7 +69,8 @@ class PostRunCompactionCheckTest {
             null, null, null,
             new HookSystem(lane), lane, () -> settings, null,
             new ExecutionContext.TokenCounter(), null, null, null, null,
-            SummaryGenerator.truncating(), null, NoopTelemetryContext.INSTANCE, obs);
+            SummaryGenerator.truncating(), null, NoopTelemetryContext.INSTANCE, obs,
+            null, null, null);
     }
 
     private static final ToIntFunction<ModelId<?>> WINDOW_200 = id -> 200;

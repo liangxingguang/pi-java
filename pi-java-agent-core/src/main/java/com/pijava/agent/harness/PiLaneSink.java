@@ -313,6 +313,15 @@ final class PiLaneSink implements PiLoop.Sink {
                 if (!"error".equals(stopReason) && !"length".equals(stopReason)) {
                     lane.overflowRecoveryAttempted = false;
                 }
+                // 非 error 收尾 ⇒ 重试链成功终止：发 auto_retry_end{success:true,
+                // attempt} 并清零计数（pi {@code agent-session.ts:698-706}；
+                // package 3d，{@code docs/31 §8.22}）。判据只排除 error ——
+                // **length 也复位**（pi 原文是 `stopReason !== "error"`）。
+                if (!"error".equals(stopReason) && lane.retryAttempt > 0) {
+                    int attempt = lane.retryAttempt;
+                    lane.retryAttempt = 0;
+                    ctx.retryObserver().onAutoRetryEnd(true, attempt, null);
+                }
                 // 循环可能把被中断的一轮改写成 aborted（PiLoopRunner.markAborted）。
                 // lane.partial 必须跟着走：determineOutcome 与 lastAssistantMessage 都读它，
                 // 不同步的话 abort 会被记成 completed。

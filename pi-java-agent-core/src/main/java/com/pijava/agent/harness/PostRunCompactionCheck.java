@@ -9,16 +9,23 @@ import com.pijava.ai.message.Message;
 import com.pijava.ai.utils.ContextOverflow;
 
 /**
- * 运行收口后的压缩判定 —— pi {@code _handlePostAgentRun} 的 ②③ 段与
- * {@code _checkCompaction}（{@code agent-session.ts:1116-1144, 2154-2258}）的
- * 逐条移植（package 3c，{@code docs/31 §8.21}）。
+ * 运行收口后的收尾判定 —— pi {@code _handlePostAgentRun}（①②③ 全序，① 委托
+ * {@link PostRunRetry}）与 {@code _checkCompaction}（{@code agent-session.ts:
+ * 1116-1144, 2154-2258}）的逐条移植（package 3c 落 ②③，3d 补 ① 与终局失败，
+ * {@code docs/31 §8.21/§8.22}）。
  *
  * <p><b>输入消息的来源</b>与 pi 一致：post-run 读事件跟踪的
  * {@link PiLaneSink#lastAssistant()}（pi {@code _lastAssistantMessage}，读后即清，
  * 每个 pass 一个新 sink）；prompt 起手前读对工作副本的扫描
  * （pi {@code _findLastAssistantMessage}，{@code :737-745}，且
- * {@code skipAbortedCheck=false} —— 它专抓被中止的响应，{@code :1258-1263}）。
- * ① 的重试门（{@code _isRetryableError && _prepareRetry}）在 3d 移植，这里不含。</p>
+ * {@code skipAbortedCheck=false} —— 它专抓被中止的响应，{@code :1258-1263}）。</p>
+ *
+ * <p><b>3d 起 ① 也在场</b>：{@link #checkAfterRun} 是 {@code _handlePostAgentRun}
+ * 的全序 <b>①重试 → 终局失败收尾 → ②压缩 → ③队列</b> —— ① 住在
+ * {@link PostRunRetry}（{@code _isRetryableError && _prepareRetry}），命中即
+ * continue，本轮<b>不</b>跑 ②；① 没救活的 error 链在这里收口（终局失败事件 +
+ * 清零）。{@link #checkBeforePrompt} 照旧只跑 ②（pi :1258-1263 调的就是
+ * {@code _checkCompaction}，没有重试环）。</p>
  *
  * <p><b>守卫顺序照 pi</b>：G0 设置未启用 ⇒ false；G1 跳过 aborted（仅 post-run）；
  * 窗口 :2161；G3 sameModel 只罩 C1/C2（换模型后的旧溢出错误不该压新模型）；
@@ -47,15 +54,30 @@ final class PostRunCompactionCheck {
 
     private final ExecutionContext ctx;
     private final CompactionExecutor compactions;
+    private final PostRunRetry retry;
 
     PostRunCompactionCheck(ExecutionContext ctx, CompactionExecutor compactions) {
         this.ctx = ctx;
         this.compactions = compactions;
+        this.retry = new PostRunRetry(ctx);
     }
 
     /**
-     * pi {@code _handlePostAgentRun}（{@code :1116-1144}）的 ②③ 段：跑一次
-     * {@code _checkCompaction(msg)}，为 true 或队列有货 ⇒ 驱动再 continue 一轮。
+     * pi {@code _handlePostAgentRun}（{@code :1116-1144}）的全序，返回
+     * 「驱动再 continue 一轮」与否：
+     *
+     * <ol>
+     *   <li><b>①</b>（3d）：{@code _isRetryableError(msg) && await _prepareRetry(msg)}
+     *       ⇒ true。prepareRetry 自己负责 auto_retry_start、只摘副本尾、退避睡眠与
+     *       取消路径（取消 ⇒ false，落到终局块下面）。</li>
+     *   <li><b>终局失败</b>（3d，{@code :1127-1134}）：error 收尾且 {@code
+     *       _retryAttempt > 0} ⇒ 发 {@code auto_retry_end{success:false, attempt,
+     *       finalError: msg.errorMessage}}（透传，null ≙ pi 的 undefined）+ 清零。
+     *       走到这里说明 ① 没救活：预算耗尽（{@code >} 守卫回退计数）或链被中止。</li>
+     *   <li><b>②</b>：{@code _checkCompaction(msg, true)}。</li>
+     *   <li><b>③</b>：队列有货（pi {@code :1143} —— 只能是 agent_end 扩展塞的，
+     *       3c 无扩展层，判据照抄）。</li>
+     * </ol>
      *
      * @param lastAssistant 本 pass 事件跟踪的最后一个助手消息；{@code null} ⇒ false
      *                      （pi {@code :1118-1121} 的 !msg 短路）
@@ -64,12 +86,29 @@ final class PostRunCompactionCheck {
         if (lastAssistant == null) {
             return false;
         }
+        if (retry.isRetryableError(lastAssistant) && retry.prepareRetry(lane, lastAssistant)) {
+            return true;
+        }
+        if ("error".equals(lastAssistant.stopReason()) && lane.retryAttempt > 0) {
+            ctx.retryObserver().onAutoRetryEnd(false, lane.retryAttempt, lastAssistant.errorMessage());
+            lane.retryAttempt = 0;
+        }
         if (check(laneName, lane, lastAssistant, true)) {
             return true;
         }
         // pi :1143 —— 队列在这之后还有货只能是 agent_end 扩展塞的（3c 无扩展层，
         // 但判据照抄：它同样驱动 continue）。
         return CompactionExecutor.hasQueuedMessages(lane);
+    }
+
+    /**
+     * pi {@code _willRetryAfterAgentEnd}（{@code :721-733}）的引擎侧入口 ——
+     * 委托 {@link PostRunRetry#retryWouldFollow}。宿主用它装饰
+     * {@code agent_end.willRetry}（3d，{@code docs/31 §8.22} 裁决①：环在引擎，
+     * 装饰数据也出自引擎），与 ① 各算各的。
+     */
+    boolean retryWouldFollow(LaneState lane, Message.AssistantMessage lastAssistant) {
+        return retry.retryWouldFollow(lane, lastAssistant);
     }
 
     /**

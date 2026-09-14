@@ -150,6 +150,17 @@ public final class PiLaneEngine {
         throw new IllegalStateException("Cannot continue from message role: assistant");
     }
 
+    /**
+     * pi {@code _willRetryAfterAgentEnd}（{@code agent-session.ts:721-733}）的公开
+     * 入口（3d，{@code docs/31 §8.22}）：宿主在转发 {@code agent_end} 前调用，用它
+     * 装饰 {@code willRetry} 字段。「倒扫本次 agent_end 的 messages 找最后一条助手
+     * 消息」是调用方的事（pi 扫的就是 event.messages）。计数读车道的会话级
+     * {@code retryAttempt}（① 与装饰各算各的，与 pi 一致）。
+     */
+    public boolean retryWouldFollow(Message.AssistantMessage lastAssistant) {
+        return postRun.retryWouldFollow(ctx.lane(), lastAssistant);
+    }
+
     // ═══════════════════════════════════════════════════════════
     // 驱动
     // ═══════════════════════════════════════════════════════════

@@ -112,6 +112,19 @@ public final class LaneState {
      */
     boolean overflowRecoveryAttempted;
 
+    /**
+     * 自动重试的当前尝试计数（pi {@code _retryAttempt}，
+     * {@code agent-session.ts:339}；package 3d，{@code docs/31 §8.22}）。
+     *
+     * <p><b>会话级</b>：跨 run 存活、运行边界<b>不</b>复位（pi 只在三处动它 ——
+     * ①助手 {@code message_end} 且 stopReason ≠ error ⇒ 发成功事件后清零
+     * （:698-706，{@link PiLaneSink} 负责）；②退避中被中止 ⇒ 清零（
+     * {@link PostRunRetry} 负责）；③终局失败后由 checkAfterRun 清零）。
+     * 与 {@link #overflowRecoveryAttempted} 同族：都是 pi 的 session 级字段，
+     * 故住车道而非 ActiveRun。</p>
+     */
+    int retryAttempt;
+
     // ═══════════════════════════════════════════════════════════
     // 配置（pi AgentState 的字段：model / thinkingLevel / systemPrompt / tools）
     // ═══════════════════════════════════════════════════════════
