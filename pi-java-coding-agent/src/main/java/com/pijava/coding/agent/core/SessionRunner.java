@@ -3,18 +3,16 @@ package com.pijava.coding.agent.core;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.pijava.agent.entry.Entry;
-import com.pijava.agent.harness.PiLaneEngine;
 import com.pijava.agent.harness.PiLoop;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
-import com.pijava.ai.utils.ContextOverflow;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,24 +21,27 @@ import org.slf4j.LoggerFactory;
  * Drives one harness run on a virtual thread and persists the produced
  * transcript/records into the session (Phase 4 §13.1).
  *
- * <p>P6-5d: 支持自动重试（对齐 pi {@code _willRetryAfterAgentEnd}）——run 以
- * {@code error} 结束时，若会话启用 auto-retry 且尝试次数未耗尽且未被
- * {@code abort_retry} 中止，则重跑。每次尝试发 {@code AgentEnd(willRetry)}，
- * 命中重试时发 {@code AutoRetryStart}，最终发 {@code AutoRetryEnd}。重试带
- * 指数退避（{@code baseDelayMs * 2^(attempt-1)}，可被 {@code abort_retry} 中止），
- * 上下文溢出错误不重试（交由压缩处理，对齐 pi {@code isContextOverflow}）。</p>
+ * <p><b>3d（docs/31 §8.22）后本类不再有重试环</b>：auto-retry 的 ①（预算、退避、
+ * 摘尾、取消）与会话级 {@code retryAttempt} 全部住进 agent-core 引擎
+ * （{@code PostRunRetry}，pi {@code _handlePostAgentRun} 的 ①→②→③ 全序）。
+ * 宿主层只驱动一次，剩下三件事：</p>
+ * <ul>
+ *   <li>{@code agent_end} <b>每 pass 一条</b>（下游 sink 包装收
+ *       {@code PiLoop.Event.AgentEnd}），{@code willRetry} 装饰 = pi
+ *       {@code _willRetryAfterAgentEnd}（{@code agent-session.ts:666, 721-733}：
+ *       倒扫本 pass 消息找尾 assistant 交 {@code harness.retryWouldFollow}）；</li>
+ *   <li>{@code auto_retry_*} / {@code summarization_retry_*} 事件经
+ *       {@code RetryObserver}（AgentSession.assemble 装配）映射到会话事件面，
+ *       不再由本类按时点手发；</li>
+ *   <li>run summary 的 {@code attempts} = 实际跑过的 pass 数
+ *       （{@code RunOutcome.passRunIds().size()}）。</li>
+ * </ul>
  */
 final class SessionRunner {
 
     private static final Logger LOG = LoggerFactory.getLogger(SessionRunner.class);
 
     private SessionRunner() {}
-
-    /** 单次 run 的最大自动重试次数（对齐 pi 默认 {@code maxRetries}）。 */
-    private static final int MAX_RETRIES = 3;
-
-    /** 重试指数退避的基准延迟（对齐 pi 默认 {@code baseDelayMs}）。 */
-    private static final long BASE_DELAY_MS = 2_000;
 
     static void drive(
             AgentSession owner,
@@ -52,10 +53,9 @@ final class SessionRunner {
             EntryObserver entryObserver) {
         var laneName = owner.laneName();
         var stopReason = new AtomicReference<>("completed");
-        var errorMessage = new AtomicReference<String>(null);
-        // Run summary (§8): wall-clock of the whole drive (incl. retry backoff)
-        // and stream usage accumulated here; tool/step counters come from the
-        // lane records filtered by the runIds collected below.
+        // Run summary (§8): wall-clock of the whole drive (incl. the engine's
+        // retry backoff) and stream usage accumulated here; tool/step counters
+        // come from the lane records filtered by the pass run ids collected below.
         final long driveStartNanos = System.nanoTime();
         // Mutable boxes (lambda capture requires effectively-final references).
         long[] inputTokens = {0};
@@ -68,9 +68,6 @@ final class SessionRunner {
             }
             if (event instanceof StreamEvent.StreamError err) {
                 stopReason.set("error");
-                if (err.error() != null && err.error().getMessage() != null) {
-                    errorMessage.set(err.error().getMessage());
-                }
             }
             if (event instanceof StreamEvent.UsageInfo usage) {
                 // TokenCounter is the session-wide accumulator and cannot be
@@ -88,103 +85,37 @@ final class SessionRunner {
                 streamObserver.onStreamEvent(event);
             }
         })) {
-            owner.resetRetryAbort();
-            int attempt = 0;
+            // 3d：驱动只有这一次 —— pi 的 ①重试→②压缩→③队列全序在引擎 post-run
+            // 里跑（docs/31 §8.22），宿主层的 do-while 与 dropTrailingErrorAssistant
+            // 一并撤销（重试的摘尾只动副本，住在 PostRunRetry）。
+            // 驱动只有 PiLoop 一条（docs/31 §6）：harness.prompt 就是 pi 的
+            // Agent.prompt —— 起手与收口都在其中，调用方只提供会话层的事件接收器。
             List<Entry> transcript = List.of();
-            boolean shouldRetry;
-            do {
-                shouldRetry = false;
-                try {
-                    // pi alignment (_prepareRetry + agent.continue): a retry
-                    // keeps the prior context and continues from the transcript
-                    // tail instead of re-prompting (which would duplicate the
-                    // user message under append semantics).
-                    //
-                    // 驱动只有 PiLoop 一条（docs/31 §6）：harness.prompt /
-                    // continueRun 就是 pi 的 Agent.prompt / Agent.continue，
-                    // 起手与收口都在其中，调用方只提供会话层的事件接收器。
-                    PiLaneEngine.RunOutcome outcome;
-                    if (attempt == 0) {
-                        outcome = owner.harness()
-                            .prompt(laneName, prompt, List.of(), persistPerEntry(owner, laneName));
-                    } else {
-                        owner.harness().dropTrailingErrorAssistant(laneName);
-                        outcome = owner.harness()
-                            .continueRun(laneName, persistPerEntry(owner, laneName));
-                    }
-                    // 用户 prompt 的 entry 由引擎起手写入，此处补一次落盘
-                    // （docs/27 §2.1：pi 的 `_appendEntry` → `_persist` 逐条写）。
-                    flush(owner, laneName);
-                    // Immediate user echo (pi alignment: agent-loop emits
-                    // message_start/message_end(user) before streaming; the
-                    // frontend relies on this to render the prompt instantly
-                    // instead of only at agent_end's whole-table replacement).
-                    // Only the first attempt — retries continue the same lane
-                    // and would re-echo the same prompt. Takes the LAST user
-                    // message: runs append to the transcript, so the newest
-                    // user entry is this run's prompt (findFirst would echo a
-                    // stale earlier turn).
-                    if (attempt == 0) {
-                        owner.harness().snapshot(laneName).transcript().stream()
-                            .filter(Entry.Message.class::isInstance)
-                            .map(e -> ((Entry.Message) e).message())
-                            .filter(m -> m instanceof Message.UserMessage)
-                            .reduce((first, second) -> second)
-                            .ifPresent(m -> owner.emitSessionEvent(
-                                new AgentSessionEvent.UserMessageReceived(m)));
-                    }
-                    // Collect this attempt's runId (operation id == runId,
-                    // ActionExecutor) so the run summary can filter lane
-                    // records to only this drive — a retry re-rolls the id.
-                    // 引擎在收口时关掉操作，所以必须用返回值里带出的 id，
-                    // 不能事后再查 snapshot().operation()（那时已为 null）。
-                    if (outcome.runId() != null) {
-                        runIds.add(outcome.runId());
-                    }
-                    transcript = outcome.transcript();
-                } catch (Exception e) {
-                    LOG.warn("[session] harness run error, stopReason=error", e);
-                    stopReason.set("error");
-                    if (e.getMessage() != null) {
-                        errorMessage.set(e.getMessage());
-                    }
-                    var error = new StreamEvent.StreamError(
-                        "error", e, AssistantMessage.empty());
-                    if (streamObserver != null) {
-                        streamObserver.onStreamEvent(error);
-                    } else {
-                        queue.add(Optional.of(error));
-                    }
-                }
-                shouldRetry = "error".equals(stopReason.get())
-                    && isRetryableError(errorMessage.get())
-                    && owner.autoRetryEnabled()
-                    && attempt < MAX_RETRIES
-                    && !owner.retryAborted();
-                // Flush this run's entries before AgentEnd so the full-history
-                // payload matches stateSync's accumulatedEntries() source
-                // (id-deduped, safe to call again below).
+            try {
+                var outcome = owner.harness()
+                    .prompt(laneName, prompt, List.of(), passEvents(owner, laneName));
+                // 用户 prompt 的 entry 由引擎起手写入，此处补一次落盘
+                // （docs/27 §2.1：pi 的 `_appendEntry` → `_persist` 逐条写）。
                 flush(owner, laneName);
-                var endMessages = owner.accumulatedMessages();
-                LOG.info("[session] AgentEnd emit: messages={} persistedIds={} shouldRetry={}",
-                    endMessages.size(),
-                    owner.session() == null ? -1 : owner.persistedEntryIds().size(),
-                    shouldRetry);
-                owner.emitSessionEvent(new AgentSessionEvent.AgentEnd(endMessages, shouldRetry));
-                if (shouldRetry) {
-                    attempt++;
-                    long delayMs = retryDelayMs(attempt);
-                    owner.emitSessionEvent(new AgentSessionEvent.AutoRetryStart(
-                        attempt, MAX_RETRIES, delayMs, errorMessage.get()));
-                    abortableSleep(delayMs, owner);
+                // 收集本次驱动实际跑过的全部 pass 的 run id（①续跑不换
+                // session 运行身份、每 pass 各 roll 一个 —— passRunIds 记账），
+                // 供 run summary 把 lane records 过滤到本 drive。
+                runIds.addAll(outcome.passRunIds());
+                transcript = outcome.transcript();
+            } catch (Exception e) {
+                // 兜底保留：引擎内部失败面（操作没跑到收尾）。重试判定的
+                // 那条路已归引擎 —— 这里只可能剩非重试类异常。
+                LOG.warn("[session] harness run error, stopReason=error", e);
+                stopReason.set("error");
+                var error = new StreamEvent.StreamError(
+                    "error", e, AssistantMessage.empty());
+                if (streamObserver != null) {
+                    streamObserver.onStreamEvent(error);
+                } else {
+                    queue.add(Optional.of(error));
                 }
-            } while (shouldRetry);
-
-            if (attempt > 0) {
-                boolean success = !"error".equals(stopReason.get());
-                owner.emitSessionEvent(new AgentSessionEvent.AutoRetryEnd(
-                    success, attempt, success ? null : errorMessage.get()));
             }
+
             entriesFuture.complete(transcript);
             // Consecutive runs now append to the lane transcript (pi alignment),
             // so the end-of-run delivery must dedupe by entry id — replays of
@@ -210,7 +141,9 @@ final class SessionRunner {
                 .withTotals(new RunSummaryAggregator.Totals(
                     inputTokens[0], outputTokens[0], costUsd[0]));
             printRunSummary(owner, summary.withMeta(
-                attempt + 1,
+                // attempts = 实际 pass 数（①续跑的每个 continue 也算一 pass）；
+                // 起手即抛的兜底路上集合为空 ⇒ 计 1（至少试过一次）。
+                Math.max(1, runIds.size()),
                 (System.nanoTime() - driveStartNanos) / 1_000_000,
                 stopReason.get()));
             statusFuture.complete(new RunStatus(
@@ -236,11 +169,64 @@ final class SessionRunner {
     }
 
     /**
-     * Emit the run summary (design §8.2): {@code LOG.info} always (lands in
-     * the log file), plus {@code System.err} in non-TUI modes — stdout is
-     * occupied by the assistant body and must never be mixed. The interactive
-     * TUI renders its own panels, so it only gets the log line.
+     * 下游 sink 包装（每 pass 一收）：MessageEnd 逐条落盘、首 pass 的
+     * AgentStart 上发用户回显、AgentEnd 补 flush 并发<b>每 pass 一条</b>的
+     * {@code AgentEnd(willRetry)}（pi 的 agent_end 装饰，:666）。
      */
+    private static PiLoop.Sink passEvents(AgentSession owner, String laneName) {
+        var echoed = new AtomicBoolean();
+        return event -> {
+            if (event instanceof PiLoop.Event.MessageEnd) {
+                // docs/27 §2.1：每条 entry 产生后即写（崩溃窗口 = 一条 entry）。
+                flush(owner, laneName);
+            }
+            if (event instanceof PiLoop.Event.AgentStart
+                    && echoed.compareAndSet(false, true)) {
+                // Immediate user echo (pi alignment: agent-loop emits
+                // message_start/message_end(user) before streaming; the
+                // frontend relies on this to render the prompt instantly
+                // instead of only at agent_end's whole-table replacement).
+                // 3d 起回显挪到 pass 起点 —— AgentEnd 已在 pass 收尾处发，
+                // 驱动返回后再回显就会排在第一条 agent_end 之后。只发首
+                // pass（续跑 pass 不重复）；取尾条 user = 本 drive 的 prompt。
+                owner.harness().snapshot(laneName).transcript().stream()
+                    .filter(Entry.Message.class::isInstance)
+                    .map(e -> ((Entry.Message) e).message())
+                    .filter(m -> m instanceof Message.UserMessage)
+                    .reduce((first, second) -> second)
+                    .ifPresent(m -> owner.emitSessionEvent(
+                        new AgentSessionEvent.UserMessageReceived(m)));
+            }
+            if (event instanceof PiLoop.Event.AgentEnd end) {
+                // Flush this pass's entries before AgentEnd so the full-history
+                // payload matches stateSync's accumulatedEntries() source
+                // (id-deduped, safe to call again at end of drive).
+                flush(owner, laneName);
+                var willRetry = willRetryAfter(owner, end.messages());
+                LOG.info("[session] AgentEnd emit (pass): messages={} willRetry={}",
+                    owner.accumulatedMessages().size(), willRetry);
+                owner.emitSessionEvent(new AgentSessionEvent.AgentEnd(
+                    owner.accumulatedMessages(), willRetry));
+            }
+        };
+    }
+
+    /**
+     * pi {@code _willRetryAfterAgentEnd}（{@code agent-session.ts:721-733}）的宿主侧：
+     * 倒扫<b>本 pass 的消息</b>找第一条 assistant（= 尾 assistant），交引擎公开判据
+     * （enabled/预算门 + 溢出交接 + ai 白名单）。装饰与 ① 各算各的、不共享缓存
+     * （pi 也是这个形状，§8.22 裁决②）。
+     */
+    private static boolean willRetryAfter(AgentSession owner, List<Message> passMessages) {
+        Message.AssistantMessage lastAssistant = null;
+        for (int i = passMessages.size() - 1; i >= 0 && lastAssistant == null; i--) {
+            if (passMessages.get(i) instanceof Message.AssistantMessage a) {
+                lastAssistant = a;
+            }
+        }
+        return owner.harness().retryWouldFollow(lastAssistant);
+    }
+
     /**
      * 把尚未落盘的 entry / record 写入持久会话（docs/27 §2.1）。
      *
@@ -254,24 +240,6 @@ final class SessionRunner {
         if (owner.session() != null) {
             SessionPersistence.persistPending(owner, owner.session(), laneName);
         }
-    }
-
-    /**
-     * 逐条落盘的接收器（docs/27 §2.1）。
-     *
-     * <p>{@code PiLaneSink} 先把 entry 挂进车道 transcript，**再**把事件转给下游，所以在
-     * {@code MessageEnd} 上 flush 恰好是「每条 entry 产生后立即写」。pi 的
-     * {@code session-manager._persist} 就是这个时机，崩溃窗口因此是"一条 entry"；
-     * 此前 pi-java 只在 run 边界批量 flush，窗口是"一整个 run"（多轮 + 工具调用）。</p>
-     *
-     * <p>幂等：{@code persistPending} 按 id 去重，重复调用只做集合查表。</p>
-     */
-    private static PiLoop.Sink persistPerEntry(AgentSession owner, String laneName) {
-        return event -> {
-            if (event instanceof PiLoop.Event.MessageEnd) {
-                flush(owner, laneName);
-            }
-        };
     }
 
     private static void printRunSummary(AgentSession owner, RunSummaryAggregator.Summary summary) {
@@ -291,55 +259,6 @@ final class SessionRunner {
     private static boolean isTui(AgentSession owner) {
         var args = owner.sessionArgs();
         return !args.print() && (args.mode() == null || "text".equals(args.mode()));
-    }
-
-    private static List<Message> messages(List<Entry> transcript) {
-        return transcript.stream()
-            .filter(Entry.Message.class::isInstance)
-            .map(e -> ((Entry.Message) e).message())
-            .toList();
-    }
-
-    /**
-     * 错误是否可自动重试（pi {@code isRetryableAssistantError}）：上下文溢出不重试，
-     * 交由压缩处理，避免空耗重试预算。
-     *
-     * <p><b>3c 起的单一真源</b>（{@code docs/31 §8.21}）：溢出判定交 ai 层的
-     * {@link ContextOverflow}（pi {@code overflow.ts} 的逐字正则移植）。此前这里的
-     * 18 条小写 contains 特征串是 pi 模式的**近似副本**，与 pi 的 25 条
-     * case-insensitive 正则存在出入 —— 现在两路读同一份判据。窗口操作数传
-     * {@code null}：本判据只在 error 收尾上触发（case 2 要 stop、case 3 要 length，
-     * 均不可达），且错误消息不带 usage。</p>
-     *
-     * <p>「null ⇒ true」的保守形状与黑名单语义保留；换成 pi 的白名单判据
-     * （{@code retry.ts:235-240}）是 3d 的事。</p>
-     */
-    static boolean isRetryableError(String errorMessage) {
-        if (errorMessage == null) {
-            return true;
-        }
-        var synthetic = new Message.AssistantMessage(
-            List.of(), "error", null, null, null, null, null, null, errorMessage);
-        return !ContextOverflow.isContextOverflow(synthetic, null);
-    }
-
-    /** 指数退避延迟：{@code baseDelayMs * 2^(attempt-1)}（pi {@code _prepareRetry}）。 */
-    static long retryDelayMs(int attempt) {
-        return BASE_DELAY_MS * (1L << (attempt - 1));
-    }
-
-    /** 退避睡眠（每 50ms 轮询 {@code abort_retry}，可中止）。 */
-    private static void abortableSleep(long delayMs, AgentSession owner) {
-        long end = System.nanoTime() + delayMs * 1_000_000L;
-        while (System.nanoTime() < end && !owner.retryAborted()) {
-            long remainingMs = (end - System.nanoTime()) / 1_000_000L;
-            try {
-                Thread.sleep(Math.min(50, Math.max(1, remainingMs)));
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            }
-        }
     }
 
     private static int exitCode(String stopReason) {

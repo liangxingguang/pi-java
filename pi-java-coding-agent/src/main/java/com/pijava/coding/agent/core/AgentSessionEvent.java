@@ -54,6 +54,20 @@ public sealed interface AgentSessionEvent {
     record AutoRetryEnd(boolean success, int attempt, String finalError)
         implements AgentSessionEvent {}
 
+    /** pi {@code summarization_retry_scheduled}（环 B，agent-session.ts:2894-2900）。 */
+    record SummarizationRetryScheduled(int attempt, int maxAttempts, long delayMs,
+                                       String errorMessage) implements AgentSessionEvent {}
+
+    /**
+     * pi {@code summarization_retry_attempt_start}（:2902-2905，载荷 = source 对象）。
+     * compaction 路带 reason；branchSummary 路 reason 为 null（线格式省略该键）。
+     */
+    record SummarizationRetryAttemptStart(String source, String reason)
+        implements AgentSessionEvent {}
+
+    /** pi {@code summarization_retry_finished}（:2907-2909，无载荷字段）。 */
+    record SummarizationRetryFinished() implements AgentSessionEvent {}
+
     record BashExecutionUpdate(String id, String delta) implements AgentSessionEvent {}
 
     /** pi: "manual" | "threshold" | "overflow" */

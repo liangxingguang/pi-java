@@ -10,7 +10,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import com.pijava.agent.entry.Entry;
@@ -20,6 +23,8 @@ import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.compaction.LlmSummaryGenerator;
 import com.pijava.agent.harness.AgentHarness;
 import com.pijava.agent.harness.HarnessConfig;
+import com.pijava.agent.harness.RetryObserver;
+import com.pijava.agent.harness.RetrySettings;
 import com.pijava.agent.harness.ToolExecution;
 import com.pijava.agent.harness.WatchHandle;
 import com.pijava.agent.session.ContextEntries;
@@ -109,9 +114,15 @@ public final class AgentSession implements AutoCloseable {
     private ExtensionUI extensionUI = ExtensionUI.noop();
     // resources_discover：扩展贡献的主题候选（启动时选第一个可用）。
     private List<Path> themePaths = List.of();
-    // P6-5d: auto-retry / 会话级 bash 状态（RPC 末批命令）。
-    private volatile boolean autoRetryEnabled;
-    private volatile boolean retryAborted;
+    // 3d（docs/31 §8.22）：pi 的重试中止是「仅退避睡眠存活」的
+    // _retryAbortController（agent-session.ts:2948 建、:2963 finally 弃）——
+    // 会话侧等价的窗口模拟：onAutoRetryStart 开窗（先清残留计数，≙ 新 controller）、
+    // onAutoRetryEnd 关窗；abortRetry() 只在窗口内置旗（窗口外是 no-op，与 pi 一致，
+    // 不再有「下次 run 前复位」的 resetRetryAbort —— pi 没有这个概念）。
+    // enabled 不再存字段：pi 的 autoRetryEnabled 存取都直通 settingsManager
+    // （读 effective.retry.enabled ?? true，写 global + markModified + save）。
+    private volatile boolean retrySleepActive;
+    private final AtomicBoolean retryCancel = new AtomicBoolean();
     private volatile AbortSignal bashAbortSignal;
 
     private AgentSession(AgentHarness harness, SessionServices services,
@@ -279,6 +290,67 @@ public final class AgentSession implements AutoCloseable {
                 }
             }
         };
+        // 3d（docs/31 §8.22）：两环的运行时设置与事件。设置 = 每决策现读
+        // settings.accessors().getRetrySettings()（pi 的 getRetrySettings() 不缓存）；
+        // 中止旗与事件仍经 sessionRef 晚绑定（harness 先于会话构造）。
+        // 环 A 的 auto_retry_* 由引擎 ①（PostRunRetry）发，环 B 的
+        // summarization_retry_* 由摘要生成器内的 retryAssistantCall 环发 ——
+        // 同一份 observer 接两路。窗口簿记（begin/endRetrySleep）≙ pi 的
+        // _retryAbortController 建/弃。
+        Supplier<RetrySettings> retrySettings = settings.accessors()::getRetrySettings;
+        BooleanSupplier retryAborted = () -> {
+            var session = sessionRef.get();
+            return session != null && session.retryAborted();
+        };
+        var retryObserver = new RetryObserver() {
+            @Override
+            public void onAutoRetryStart(int attempt, int maxAttempts, long delayMs,
+                                         String errorMessage) {
+                var session = sessionRef.get();
+                if (session != null) {
+                    session.beginRetrySleep();
+                    session.emitSessionEvent(new AgentSessionEvent.AutoRetryStart(
+                        attempt, maxAttempts, delayMs, errorMessage));
+                }
+            }
+
+            @Override
+            public void onAutoRetryEnd(boolean success, int attempt, String finalError) {
+                var session = sessionRef.get();
+                if (session != null) {
+                    session.endRetrySleep();
+                    session.emitSessionEvent(new AgentSessionEvent.AutoRetryEnd(
+                        success, attempt, finalError));
+                }
+            }
+
+            @Override
+            public void onSummarizationRetryScheduled(int attempt, int maxAttempts,
+                                                      long delayMs, String errorMessage) {
+                var session = sessionRef.get();
+                if (session != null) {
+                    session.emitSessionEvent(new AgentSessionEvent.SummarizationRetryScheduled(
+                        attempt, maxAttempts, delayMs, errorMessage));
+                }
+            }
+
+            @Override
+            public void onSummarizationRetryAttemptStart(String source, String reason) {
+                var session = sessionRef.get();
+                if (session != null) {
+                    session.emitSessionEvent(new AgentSessionEvent.SummarizationRetryAttemptStart(
+                        source, reason));
+                }
+            }
+
+            @Override
+            public void onSummarizationRetryFinished() {
+                var session = sessionRef.get();
+                if (session != null) {
+                    session.emitSessionEvent(new AgentSessionEvent.SummarizationRetryFinished());
+                }
+            }
+        };
         var harness = AgentHarness.create(HarnessConfig.builder()
             .streamFn(recordingStreamFn)
             .model(model)
@@ -289,7 +361,10 @@ public final class AgentSession implements AutoCloseable {
             // 3c（docs/31 §8.21，裁决④）：isRecoverableLength 的操作数 =
             // pi model.maxTokens = 目录 maxOutputTokens；未编目 ⇒ 0 ⇒ 判据恒 false。
             .maxOutputTokens(models::maxOutputTokens)
-            .summaryGenerator(new LlmSummaryGenerator(recordingStreamFn, () -> model))
+            // 3d 环 B：摘要调用包在 retryAssistantCall 同形环里 —— 与环 A
+            // 同一份 retry 预算、同一个中止旗观察口、同一个 observer（§8.22.3）。
+            .summaryGenerator(new LlmSummaryGenerator(recordingStreamFn, () -> model,
+                retrySettings, retryAborted, retryObserver))
             .thinkingLevel(SessionSetup.thinkingLevelFor(args))
             .systemPrompt(SessionSetup.systemPromptFor(args))
             .activeTools(SessionSetup.activeTools(args, toolList))
@@ -301,6 +376,13 @@ public final class AgentSession implements AutoCloseable {
             .skills(SessionSetup.discoverSkills(args))
             .telemetry(telemetry)
             .compactionObserver(compactionObserver)
+            // 3d 环 A/B 三件套（docs/31 §8.22.3）：settings 晚读口（每次 run 现取，
+            // 覆盖 setAutoRetryEnabled 之后的路径）、中止观察口（退避睡眠窗口）、
+            // 事件观察器（auto_retry_* / summarization_retry_* 映射到会话事件面）。
+            // 缺了这三行不会编译报错 —— 槽位有静默默认值，但设置与事件全断。
+            .retrySettings(retrySettings)
+            .retryAborted(retryAborted)
+            .retryObserver(retryObserver)
             .build());
         var agentSession = new AgentSession(
             harness, services, args,
@@ -482,6 +564,9 @@ public final class AgentSession implements AutoCloseable {
 
     /** Abort the current run (cross-thread safe via the harness AbortSignal). */
     public void abort() {
+        // pi abort()（:1639-1646）第一步就是 abortRetry() —— 若正卡在 ① 的
+        // 退避睡眠里，先把它掐掉（"Retry cancelled"），再中止 run 本身。
+        abortRetry();
         harness.abort(laneName());
     }
 
@@ -779,29 +864,48 @@ public final class AgentSession implements AutoCloseable {
         return signal != null && signal.isAborted();
     }
 
-    /** 启用/停用自动重试（RPC {@code set_auto_retry}）。 */
+    /**
+     * 启用/停用自动重试（RPC {@code set_auto_retry}）—— pi
+     * {@code setAutoRetryEnabled}（{@code agent-session.ts:2988-2990}）直通
+     * {@code settingsManager.setRetryEnabled}：写<b>全局</b> retry.enabled +
+     * markModified + save（即时落盘，不同于其余攒到 close 的 setter）。
+     */
     public void setAutoRetryEnabled(boolean enabled) {
-        autoRetryEnabled = enabled;
+        services.settings().accessors().setRetryEnabled(enabled);
     }
 
-    /** 自动重试是否启用。 */
+    /** 自动重试是否启用 —— pi {@code get autoRetryEnabled} = {@code getRetryEnabled()}（默认 true）。 */
     public boolean autoRetryEnabled() {
-        return autoRetryEnabled;
+        return services.settings().accessors().getRetryEnabled();
     }
 
-    /** 中止当前 run 的待处理重试（RPC {@code abort_retry}）。 */
+    /**
+     * 中止进行中的重试退避睡眠（RPC {@code abort_retry}）。pi
+     * {@code abortRetry}（:2972-2974）= {@code _retryAbortController?.abort()} ——
+     * controller 只在 ① 的退避睡眠内存活，<b>窗口外调用是 no-op</b>（不会顺延
+     * 取消下一次重试）。3d 起由 observer 的窗口簿记等价模拟。
+     */
     public void abortRetry() {
-        retryAborted = true;
+        if (retrySleepActive) {
+            retryCancel.set(true);
+        }
     }
 
-    /** 是否已请求中止重试（SessionRunner 轮询）；每次 drive 启动前重置。 */
+    /** 退避睡眠中引擎轮询的中止观察口。 */
     boolean retryAborted() {
-        return retryAborted;
+        return retryCancel.get();
     }
 
-    /** 重置重试中止标志（SessionRunner 每次 run 前调用）。 */
-    void resetRetryAbort() {
-        retryAborted = false;
+    /** 打开退避睡眠窗口（{@code auto_retry_start} 处，≙ pi :2948 建 controller；先清残留旗）。 */
+    void beginRetrySleep() {
+        retryCancel.set(false);
+        retrySleepActive = true;
+    }
+
+    /** 关闭退避睡眠窗口（{@code auto_retry_end} 处，≙ pi :2963 finally —— 睡完/取消都弃）。 */
+    void endRetrySleep() {
+        retrySleepActive = false;
+        retryCancel.set(false);
     }
 
     /** 可供 fork 的用户消息（RPC {@code get_fork_messages}，对齐 pi
@@ -817,6 +921,8 @@ public final class AgentSession implements AutoCloseable {
     /** Flush settings, persist pending writes and close the harness. */
     @Override
     public void close() {
+        // pi dispose()（:876-885）第一步 abortRetry() —— 关窗时掐掉待完成的退避睡眠。
+        abortRetry();
         if (session != null) {
             SessionPersistence.persistPending(this, session, laneName());
             session.close();

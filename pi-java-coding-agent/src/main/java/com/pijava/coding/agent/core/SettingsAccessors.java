@@ -178,4 +178,46 @@ public final class SettingsAccessors {
         manager.global().doubleEscapeAction = action;
         manager.markModified("doubleEscapeAction");
     }
+
+    /**
+     * 自动重试开关（pi {@code getRetryEnabled}，settings-manager.ts:914-916：
+     * {@code retry?.enabled ?? true} —— 默认开）。
+     */
+    public boolean getRetryEnabled() {
+        var retry = manager.effective().retry;
+        return retry == null || retry.enabled() == null || retry.enabled();
+    }
+
+    /**
+     * 两环共用的重试设置（pi {@code getRetrySettings}，:927-933 的 {@code ??} 链：
+     * {@code enabled=true / maxRetries=3 / baseDelayMs=2000 /
+     * maxAgentDelayMs=60_000}）。每次调用现读合并视图 —— pi 也是每决策现读
+     * {@code getRetrySettings()}，不缓存。
+     */
+    public com.pijava.agent.harness.RetrySettings getRetrySettings() {
+        var retry = manager.effective().retry;
+        return new com.pijava.agent.harness.RetrySettings(
+            getRetryEnabled(),
+            retry == null || retry.maxRetries() == null ? 3 : retry.maxRetries(),
+            retry == null || retry.baseDelayMs() == null ? 2_000 : retry.baseDelayMs(),
+            retry == null || retry.maxAgentDelayMs() == null
+                ? 60_000L : retry.maxAgentDelayMs());
+    }
+
+    /**
+     * 写全局 {@code retry.enabled}（record 不可变 ⇒ 拷贝重建；其余字段原样保留）。
+     * pi {@code setRetryEnabled}（:918-924）＝ 全局改写 + markModified + save ——
+     * 与其余仅 markModified（close 时统一 flush）的 setter 不同，这里<b>即时</b>
+     * flush，对齐 pi 的 {@code save()}。
+     */
+    public void setRetryEnabled(boolean enabled) {
+        var global = manager.global();
+        var retry = global.retry;
+        global.retry = retry == null
+            ? new Settings.Retry(enabled, null, null, null, null)
+            : new Settings.Retry(enabled, retry.maxRetries(), retry.baseDelayMs(),
+                retry.maxAgentDelayMs(), retry.provider());
+        manager.markModified("retry");
+        manager.flush();
+    }
 }

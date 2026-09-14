@@ -57,6 +57,8 @@ public final class Settings {
     public String httpProxy;
     public String tuiMode;
     public Tui tui;
+    /** 自动重试设置（3d，docs/31 §8.22；对齐 pi {@code RetrySettings}）。 */
+    public Retry retry;
 
     /** Unknown fields passthrough (aligned with pi's extensible settings). */
     private final Map<String, Object> unknown = new HashMap<>();
@@ -82,6 +84,32 @@ public final class Settings {
     public void removeUnknown(String key) {
         unknown.remove(key);
     }
+
+    /**
+     * Retry settings (JSON boundary representation) — 对齐 pi
+     * {@code RetrySettings}（settings-manager.ts:41-47，3d/docs/31 §8.22）。
+     * 全字段可选（≙ pi 的 {@code ?}），缺省值在消费点（{@code SettingsAccessors
+     * #getRetrySettings}）按 pi 的 {@code ??} 链兜底。两环共用同一份预算：
+     * post-run ① 与摘要重试。
+     */
+    public record Retry(
+        Boolean enabled,
+        Integer maxRetries,
+        Long baseDelayMs,
+        Long maxAgentDelayMs,
+        ProviderRetry provider
+    ) {}
+
+    /**
+     * pi {@code ProviderRetrySettings}（:35-38）—— SDK/provider 层的 HTTP
+     * 重试形状。与上面两环<b>不同层</b>（登记清点项：↔ ai 层 {@code RetryPolicy}
+     * 的映射对照）；此处仅保 JSON 往返不丢。
+     */
+    public record ProviderRetry(
+        Long timeoutMs,
+        Integer maxRetries,
+        Long maxRetryDelayMs
+    ) {}
 
     /** Compaction settings (JSON boundary representation). */
     public record Compaction(

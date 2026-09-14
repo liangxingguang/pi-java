@@ -71,11 +71,14 @@ public final class JsonEventMapper {
             }
             case AgentSessionEvent.CompactionStart c -> {
                 node.put("type", "compaction_start");
-                node.put("reason", c.reason().name());
+                // pi 线格式是小写字面量 "manual"/"threshold"/"overflow"
+                // （枚举名只是 Java 侧形状；与 compaction_end 同法 toLowerCase）。
+                node.put("reason", c.reason().name().toLowerCase());
             }
             case AgentSessionEvent.CompactionEnd c -> {
                 node.put("type", "compaction_end");
-                node.put("reason", c.reason().name());
+                // 与 compaction_start 同理：pi 线上是小写字面量。
+                node.put("reason", c.reason().name().toLowerCase());
                 node.set("result", MAPPER.valueToTree(c.result()));
                 node.put("aborted", c.aborted());
                 node.put("willRetry", c.willRetry());
@@ -94,6 +97,24 @@ public final class JsonEventMapper {
                 node.put("attempt", r.attempt());
                 node.put("finalError", r.finalError());
             }
+            case AgentSessionEvent.SummarizationRetryScheduled s -> {
+                node.put("type", "summarization_retry_scheduled");
+                node.put("attempt", s.attempt());
+                node.put("maxAttempts", s.maxAttempts());
+                node.put("delayMs", s.delayMs());
+                node.put("errorMessage", s.errorMessage());
+            }
+            case AgentSessionEvent.SummarizationRetryAttemptStart s -> {
+                node.put("type", "summarization_retry_attempt_start");
+                node.put("source", s.source());
+                // pi 的载荷 = source 对象展开：compaction 路含 reason，
+                // branchSummary 路没有这个键（null ⇒ 省略）。
+                if (s.reason() != null) {
+                    node.put("reason", s.reason());
+                }
+            }
+            case AgentSessionEvent.SummarizationRetryFinished f ->
+                node.put("type", "summarization_retry_finished");
             case AgentSessionEvent.BashExecutionUpdate b -> {
                 node.put("type", "bash_execution_update");
                 node.put("id", b.id());

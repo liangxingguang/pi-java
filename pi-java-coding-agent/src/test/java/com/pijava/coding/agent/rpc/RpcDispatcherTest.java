@@ -257,22 +257,24 @@ class RpcDispatcherTest {
 
     @Test
     void autoRetryRerunsAfterError() throws Exception {
+        // 3d：环 A 住引擎、默认开启（pi retry.enabled ?? true），不再手动 setter
+        // （那如今是落盘写）；错误文本必须命中 pi 白名单才会重试（"boom" 不可重试）。
         var partial = AssistantMessage.empty().withStopReason("error");
         var errorSeq = List.<StreamEvent>of(
             new StreamEvent.Start(AssistantMessage.empty()),
-            new StreamEvent.StreamError("error", new RuntimeException("boom"), partial));
+            new StreamEvent.StreamError("error", new RuntimeException("overloaded"), partial));
         var ctx = context("faux-retry",
             List.of(errorSeq, textStream("recovered").get(0)));
-        ctx.session().setAutoRetryEnabled(true);
 
         var events = new java.util.concurrent.CopyOnWriteArrayList<AgentSessionEvent>();
         try (var sub = ctx.session().subscribe(events::add)) {
+            // 退避 2s（baseDelayMs 默认）⇒ 超时放宽。
             var status = ctx.session().processPrompt("go")
-                .statusFuture().get(5, TimeUnit.SECONDS);
+                .statusFuture().get(15, TimeUnit.SECONDS);
             assertThat(status.exitCode()).isEqualTo(0);
             assertThat(status.reason()).isEqualTo("stop");
         }
-        // 首轮 error → 重试 → 第二轮成功：AutoRetryStart/End 均发射
+        // 首轮 error → 引擎环 A 退避续跑 → 第二轮成功：AutoRetryStart/End 均发射
         assertThat(events).anyMatch(e -> e instanceof AgentSessionEvent.AutoRetryStart);
         assertThat(events).anyMatch(e ->
             e instanceof AgentSessionEvent.AutoRetryEnd end && end.success());
@@ -288,10 +290,22 @@ class RpcDispatcherTest {
             "--provider", provider, "--model", "hello", "--no-session"});
         var providers = ProviderRegistry.create();
         providers.register(FauxProvider.sequence(provider, sequences));
-        var session = AgentSession.create(args, providers,
-            new ToolContext(tmp.toString(), Map.of(),
-                new DefaultShellExecutor(), new DefaultFileSystem()));
-        return new Ctx(session, args);
+        // 3d：setRetryEnabled 即刻落盘（pi save 同义），set_auto_retry RPC 会走它。
+        // FileSettingsStorage 在构造时捕获 user.home，构造发生在 AgentSession.create
+        // 里 ⇒ 属性窗口只包住 create，测试不碰真实用户目录。
+        var home = Files.createTempDirectory("pi-java-rpc-home");
+        String savedHome = System.getProperty("user.home");
+        System.setProperty("user.home", home.toString());
+        try {
+            var session = AgentSession.create(args, providers,
+                new ToolContext(tmp.toString(), Map.of(),
+                    new DefaultShellExecutor(), new DefaultFileSystem()));
+            return new Ctx(session, args);
+        } finally {
+            if (savedHome != null) {
+                System.setProperty("user.home", savedHome);
+            }
+        }
     }
 
     private static List<List<StreamEvent>> textStream(String text) {
