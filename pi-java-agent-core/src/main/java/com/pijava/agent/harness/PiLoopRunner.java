@@ -242,7 +242,7 @@ final class PiLoopRunner {
                     finalMessage = fromPartial(done.partial());
                     break;
                 } else if (event instanceof StreamEvent.StreamError err) {
-                    finalMessage = fromPartial(err.partial());
+                    finalMessage = withErrorShape(fromPartial(err.partial()), err);
                     break;
                 }
             }
@@ -300,6 +300,36 @@ final class PiLoopRunner {
             return message;
         }
         return message.withStopReason("aborted");
+    }
+
+    /**
+     * 错误轮的终局消息必须携带错误本身（pi：provider 层把 {@code stopReason:"error"}
+     * 和 {@code errorMessage} 文本写在消息上，pi 的重试分类器只读消息）。pi-java 的
+     * provider 方言把错误文本放在 {@code StreamError} 的 Throwable 上，partial 可能是
+     * 连 stopReason 都没有的 identityBase 空快照（AbstractChatApi）或只带 stopReason
+     * 的 builder 快照（StreamPartialBuilder.emitError）—— 缺哪个槽补哪个：
+     * stopReason ← {@code err.reason()}（缺省 "error"），errorMessage ←
+     * {@code err.error().getMessage()}。partial 自带的终局/文本优先，不覆写。
+     *
+     * <p>3d（docs/31 §8.22）：不补则 post-run 重试环 A 的白名单分类器（要求非空
+     * errorMessage）在真实 provider 路径上恒 false —— 环 A 形同虚设。与
+     * {@code LlmSummaryGenerator.terminal} 的补齐同形（先例即在那里）。</p>
+     */
+    private static Message.AssistantMessage withErrorShape(
+            Message.AssistantMessage projected, StreamEvent.StreamError err) {
+        String stopReason = projected.stopReason();
+        String errorMessage = projected.errorMessage();
+        boolean fixReason = stopReason == null || stopReason.isEmpty();
+        boolean fixText = (errorMessage == null || errorMessage.isEmpty()) && err.error() != null;
+        if (!fixReason && !fixText) {
+            return projected;
+        }
+        String reason = err.reason() == null || err.reason().isEmpty() ? "error" : err.reason();
+        return new Message.AssistantMessage(projected.content(),
+            fixReason ? reason : stopReason,
+            projected.deferred(), projected.api(), projected.provider(), projected.model(),
+            projected.usage(), projected.timestamp(),
+            fixText ? err.error().getMessage() : errorMessage);
     }
 
     /** pi: 除 start/done/error 之外的流事件都是 update。 */

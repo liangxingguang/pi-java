@@ -48,10 +48,25 @@ class AgentHarnessTest {
     }
 
     private AgentHarness createHarness(StreamFn sf) {
-        return AgentHarness.create(new HarnessConfig(
-                sf, MODEL, ModelThinkingLevel.off(), "",
-                Set.of(), 200_000, null, null, null,
-                null, java.util.Map.of(), com.pijava.ai.http.RetryPolicy.defaultPolicy(), com.pijava.telemetry.NoopTelemetryContext.INSTANCE, com.pijava.ai.thinking.ThinkingLevelMap.empty(), QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(), event -> { }));
+        return AgentHarness.create(HarnessConfig.builder()
+                .streamFn(sf)
+                .model(MODEL)
+                .thinkingLevel(ModelThinkingLevel.off())
+                .systemPrompt("")
+                .activeTools(Set.of())
+                .maxInputTokens(200_000)
+                .telemetry(com.pijava.telemetry.NoopTelemetryContext.INSTANCE)
+                .thinkingLevelMap(com.pijava.ai.thinking.ThinkingLevelMap.empty())
+                .steeringMode(QueueMode.defaultMode())
+                .followUpMode(QueueMode.defaultMode())
+                .toolExecution(ToolExecution.defaultMode())
+                .streamListener(event -> { })
+                // 本类钉的是轮次语义。3d 环 A 默认开启，且错误文本如今会投影进
+                // 终局消息（PiLoopRunner.withErrorShape）—— 白名单错误（如
+                // "connection refused"）会退避续跑，不是本类要钉的东西，统一关掉；
+                // 环 A 自己的行为由 PostRunRetryTest 与宿主 E2E 钉。
+                .retrySettings(() -> new RetrySettings(false, 3, 2_000, 60_000L))
+                .build());
     }
 
     // ── Turn semantics ───────────────────────────────────────
@@ -312,5 +327,50 @@ class AgentHarnessTest {
         var result = harness.lastAssistantMessage();
         assertThat(result).isNotNull();
         assertThat(result.stopReason()).isEqualTo("error");
+    }
+
+    // ── 3d（docs/31 §8.22）：StreamError 终局形状 ──────────────────
+    // pi 把错误带在消息上（stopReason + errorMessage）；pi-java 的 provider 方言
+    // 把文本放在 Throwable 上、partial 可能是 identityBase 空快照。不补齐 ⇒
+    // 重试环 A 的白名单分类器在真实 provider 路径上恒 false。
+
+    @Test
+    void streamErrorProjectsThrowableTextAndStopReasonOntoMessage() {
+        // identityBase 形状：partial 连 stopReason 都没有。
+        var harness = createHarness((model, context, options) -> StreamIterator.from(List.of(
+                new StreamEvent.Start(AssistantMessage.empty()),
+                new StreamEvent.StreamError("error", new RuntimeException("overloaded_error"),
+                        AssistantMessage.empty()))));
+        harness.prompt("test");
+
+        var result = harness.lastAssistantMessage();
+        assertThat(result.stopReason()).isEqualTo("error");
+        assertThat(result.errorMessage()).isEqualTo("overloaded_error");
+    }
+
+    @Test
+    void streamErrorAbortedReasonProjectsAbortedStopReason() {
+        var harness = createHarness((model, context, options) -> StreamIterator.from(List.of(
+                new StreamEvent.Start(AssistantMessage.empty()),
+                new StreamEvent.StreamError("aborted", new RuntimeException("cancelled"),
+                        AssistantMessage.empty()))));
+        harness.prompt("test");
+
+        assertThat(harness.lastAssistantMessage().stopReason()).isEqualTo("aborted");
+    }
+
+    @Test
+    void streamErrorPartialOwnErrorMessageWinsOverThrowableText() {
+        var partial = AssistantMessage.empty()
+                .withStopReason("error")
+                .withErrorMessage("provider text");
+        var harness = createHarness((model, context, options) -> StreamIterator.from(List.of(
+                new StreamEvent.Start(AssistantMessage.empty()),
+                new StreamEvent.StreamError("error", new RuntimeException("fallback"), partial))));
+        harness.prompt("test");
+
+        var result = harness.lastAssistantMessage();
+        assertThat(result.stopReason()).isEqualTo("error");
+        assertThat(result.errorMessage()).isEqualTo("provider text");
     }
 }

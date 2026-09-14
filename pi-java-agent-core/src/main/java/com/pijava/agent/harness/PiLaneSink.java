@@ -324,9 +324,13 @@ final class PiLaneSink implements PiLoop.Sink {
                 }
                 // 循环可能把被中断的一轮改写成 aborted（PiLoopRunner.markAborted）。
                 // lane.partial 必须跟着走：determineOutcome 与 lastAssistantMessage 都读它，
-                // 不同步的话 abort 会被记成 completed。
+                // 不同步的话 abort 会被记成 completed。errorMessage 同路同步
+                // （3d，docs/31 §8.22：错误文本由 withErrorShape 补在终局消息上，
+                // partial 侧可能没有 —— 不跟就丢，宿主 E2E 与分类器读不到文本）。
                 if (lane.partial != null) {
-                    lane.partial = lane.partial.withStopReason(assistant.stopReason());
+                    lane.partial = lane.partial
+                        .withStopReason(assistant.stopReason())
+                        .withErrorMessage(assistant.errorMessage());
                 }
                 var durationMs = llmDurationMs();
                 var entry = append(lane, message);

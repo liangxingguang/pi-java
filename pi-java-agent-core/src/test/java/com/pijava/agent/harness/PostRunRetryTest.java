@@ -230,8 +230,21 @@ class PostRunRetryTest {
     @Test
     void retryWinsBeforeCompactionThisPass() {
         // 序哨兵（§8.22.3-③）：瞬断 error + 阈值已过 ⇒ ① continue，②**不发**。
+        // 「阈值已过」必须是真的：窗口 200 − reserve 10 ⇒ 线在 190，尾助手无 usage
+        // ⇒ T1 折回 chars/4 估算 —— 旧版 1 条 "hello" 读数 ≈2，② 在**任何**顺序下
+        // 都不发，哨兵恒真（3d 换序反证当场现形）。1000+ 字符 ⇒ 估算 ≈252 > 190。
         var msg = error("overloaded");
-        var lane = laneWith(msg);
+        var lane = new LaneState();
+        var bigUser = user("x".repeat(1_000));
+        lane.messages.add(bigUser);
+        lane.messages.add(msg);
+        // ② 还得过 runAutoCompaction 的 :638 静默跳（空 transcript ⇒ 直接 SKIPPED，
+        // 不发事件）—— 序哨兵要有牙，日志必须非空且末条不是压缩。
+        var now = java.time.Instant.now();
+        lane.transcript.add(new com.pijava.agent.entry.Entry.Message(
+            "e-user", 0, null, now, bigUser, null));
+        lane.transcript.add(new com.pijava.agent.entry.Entry.Message(
+            "e-asst", 1, "e-user", now, msg, null));
         var retries = new RetryLines();
         var compactions = new CompactionLines();
         var ctx = ctx(lane, FAST, () -> false, retries,
