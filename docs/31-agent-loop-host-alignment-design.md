@@ -1393,7 +1393,7 @@ freshUsageAnchorFiresThresholdWithPureTokensAfter 钉 estimatedTokensAfter）。
 
 ---
 
-### 8.22 自动重试环 3d —— **设计稿（2026-09-15，待审核，未实施）**
+### 8.22 自动重试环 3d —— **已实施（2026-09-15，设计经用户审核通过；实施记录见 8.22.6）**
 
 > 本节是 3d 的准入设计文档。**未经审核认可前不写任何实施代码。**
 > pi 事实全部逐行读自 `packages/coding-agent/src/core/agent-session.ts`、
@@ -1553,6 +1553,84 @@ entry、`auto_retry_start` 早于任何 compaction 事件（钉住与旧行为�
   —— 并入命令/界面面清点。
 - pi 的 agent_end 载荷是**本 pass newMessages**，pi-java 是 accumulatedMessages（3d 前既有
   选择）；3d 只改频率，载荷全量对照列清单项。
+
+#### 8.22.6 实施记录（2026-09-15）
+
+**提交**：`101a8ca` feat(ai)（retry.ts 白名单反转判据 `RetryableError` + `RetryBackoff`
+指数退避；表驱动 55 例）
+→ `2f920a0` refactor(agent-core)（新 `PostRunRetry`（环 ① 本体）+ `RetrySettings`/
+`RetryObserver`/ExecutionContext 三槽 + `checkAfterRun` 全序 ①→终局失败→②→③；
+`LlmSummaryGenerator` 装 `retryAssistantCall` 同形环、撤截断兜底改 throw；
+`dropTrailingErrorAssistant` 删）
+→ `f27b1bd` fix(agent-core)（provider 错误投影：`PiLoopRunner.withErrorShape` 补
+stopReason/errorMessage，`PiLaneSink` 的 abort 重写同步 errorMessage）
+→ `3607641` feat(coding-agent)（SessionRunner do-while 撤、`agent_end` 每 pass 一条 +
+`retryWouldFollow` 装饰、用户回声挪首个 `agent_start`、retry 三件套接线、`abortRetry`
+controller 生命周期、`setAutoRetryEnabled` 即刻持久化、`JsonEventMapper` summarization 族）。
+全 reactor `mvn -o -am clean verify` 绿（telemetry 26 / ai 336 / agent-core 436 /
+session-backend-sqlite 35 / coding-agent 218 / tui 188(1 skip) / protocol 14 / server 2 /
+web 37 / evals 43(17 为 smoke skip)；BOM/root/client/dist 无测试）；
+L5 strict **12/12**（`agent-core` 的 `harness.conformance.ConformanceTest`，同轮复跑确认；
+3d 零改动 `conformance/` ⇒ pi-out 基线仍有效）。
+设计测试计划 ①–⑤ 全落：① `RetryableErrorTest` 55 例表驱动 + `RetryBackoffTest`（含
+safe-integer 与 cap 回退）；② `PostRunRetryTest` 12 例逐守卫；③ 顺序哨兵
+`retryWinsBeforeCompactionThisPass`；④ `CompactionServiceTest` 9 例环 B 事件链；
+⑤ E2E `AgentSessionRetryEventOrderTest.retryEventsKeepPiOrderWithSingleEcho`
+（单回声全序）。
+
+**形状按设计，实施期修正六处：**
+
+1. **provider 错误投影是环 ① 的活命条件**（`f27b1bd`）——pi 把 `stopReason`/
+   `errorMessage` 盖在助手消息上，pi-java 只把文本放在 `StreamError` Throwable、投影出的
+   partial 可能只是 identityBase 空壳。不补投影则白名单判据在真 provider 路上**恒 false**、
+   环 ① 纯装饰（单测喂手工消息看不出来）。修正：`withErrorShape` 只在投影缺失处补
+   reason/message（partial 自带终局与 text 优先，先例 `LlmSummaryGenerator.terminal`）；
+   `PiLaneSink` 的 abort 重写同步 errorMessage，让文本活到 `determineOutcome`。
+2. **顺序哨兵夹具要「有牙」**：原夹具读数 ~2 token、永不过 `window - reserve`，空 transcript
+   又撞 `runAutoCompaction` 的 `:638` 静默跳 ⇒ ①②换序**不可观测**。补 1000 字符轮 +
+   预置 transcript 后「环 ② 不发射」才是真断言（RE 换序恰此一红）。
+3. **用户回声挪到首个 `agent_start`**：`agent_end` 改每 pass 一条后，回声留在原处会排在
+   第一次 `agent_end` 之后，顺序破。
+4. **`abortRetry` 取 pi 的 controller 生命周期**：只在退避睡眠在飞时有效，窗口由 observer
+   的 `beginRetrySleep`/`endRetrySleep` 开/关（替换原 `resetRetryAbort`）；`abort()` 与
+   `close()` 先调 `abortRetry()`（pi `:1639`/`:876`）。
+5. **`setAutoRetryEnabled` 即刻持久化**（pi `setRetryEnabled` = 全局写 + markModified +
+   save），且判定端每轮经设置**实时读**，不缓存。
+6. **`Settings.unknown()` 的 `Map.copyOf` → `unmodifiableMap(new HashMap<>(…))`**：`Map.copyOf`
+   拒 null 值 ⇒ 任何「未知字段值为 null」的设置无法 round-trip。3d 的 `retry: null`
+   （`??` 链默认值语义下的合法形状）撞上 3d 之前的读取端即 **NPE**（`SettingsManager.migrate`
+   读 `queueMode`/`websockets` 处是暴露点）。回归测试
+   `SettingsManagerTest.futureUnknownFieldWithNullValueLoadsRoundTripAsUnknown`；该修复
+   **独立成提交** `aa7d6ac`（`fix(coding-agent)`），因它修的是存量健壮性，不是 3d 的功能面。
+
+**反向实验（先预测红名单再动刀，六红全中）：**
+- RE-1 撤白名单（退回黑名单形状）⇒ 恰 1 红 `RetryableErrorTest.deterministicErrorsAreNotRetryable` ✓
+- RE-2 退避睡眠改不可中止 ⇒ 恰 1 红 `abortDuringBackoffEmitsCancelledEndAndZeros` ✓
+- RE-3 摘终局失败块 ⇒ 恰 2 红 `terminalFailureEmitsFinalErrorOnceBudgetDead`
+  + `terminalFailureFinalErrorPassesThroughEmptyAsPi` ✓
+- RE-4 装饰门 `>=` 改 `<` ⇒ 恰 1 红 `decorationGatesMirrorPiOrder` ✓
+- RE-5 摘 `PiLaneSink` 的 message_end 成功复位 ⇒ 红
+  `retryEventsKeepPiOrderWithSingleEcho` **并** `RpcDispatcherTest.autoRetryRerunsAfterError`
+  （预测 1、实得 2——RPC 路同样穿过该复位点，复位点的第二处钉，非串扰）✓
+- RE-6 撤环 B 的 throw（退回截断兜底）⇒ 恰 3 红 `CompactionServiceTest` 的
+  `errorResponseThrowsSummarizationFailure` / `exhaustedBudgetThrowsFinalErrorWithEvents` /
+  `lengthStopThrowsIncompleteCapMessage` ✓
+- （①②换序的 RE 见 `f27b1bd` 提交信息：撤/换后恰顺序哨兵一红。）
+
+**注意（环境/工具，非代码问题）：**
+- **本地仓库陷阱**：Maven 本地库是 `D:/repository`（非 `~/.m2`），其中 pi-java 各模块构件
+  可能**陈旧**（实测 09-13 版）。单模块 `-pl <M> test` **不带 `-am`** 会解析到旧构件 ⇒
+  假绿/假红（本轮一次孤立运行即用旧 `Settings` 复现了 6. 的 NPE）。改动底层模块
+  **必须带 `-am`**；配 `-Dtest=` 用时一并加 `-Dsurefire.failIfNoSpecifiedTests=false`。
+- **`web` 的 `PiWebServerAuthTest` 对负载敏感**：本轮三次全 reactor 红、第四次绿，
+  红时恰在 15s 轮询预算处（`createWeb` 启动延迟），单独跑与轻载下均绿 —— 记为环境敏感，
+  非 3d 回归。
+- **`mvn … | tail` 吞退出码**：管道退出码取 `tail`，需 `PIPESTATUS[0]`（本轮首跑即因此
+  把 FAILURE 误读为 exit 0）。
+
+**存量登记（越线，拆分列清点项、不进本包）**：`coding-agent/AgentSession.java` 现 **988 行**
+（8.21.6 记录时 837，本包 +136）；`agent-core/AgentHarness.java` 现 **502 行**，本包（`2f920a0`
++15）首次越 500 线 —— 两处均未夹带结构拆分。
 
 ---
 
