@@ -79,6 +79,27 @@ class SettingsManagerTest {
     }
 
     @Test
+    void futureUnknownFieldWithNullValueLoadsRoundTripAsUnknown() throws Exception {
+        // Regression (3d closeout): after 3d, flush writes keys a pre-3d binary
+        // has no field for (e.g. "retry": null) — for that older reader they
+        // are unknown null-valued keys, and Map.copyOf in unknown() threw NPE
+        // inside migrate() on every load. Unknown nulls must load and
+        // round-trip; the reproducible future-proof shape is a key no current
+        // field claims.
+        var raw = """
+            {"theme":"dark","someFieldFromTomorrow":null}""";
+        var parsed = Json.mapper().readValue(raw, Settings.class);
+        assertThat(parsed.unknown()).containsKey("someFieldFromTomorrow");
+        assertThat(parsed.unknown().get("someFieldFromTomorrow")).isNull();
+
+        var storage = new InMemorySettingsStorage();
+        storage.writeGlobal(parsed);
+        var reloaded = SettingsManager.withStorage(storage).effective();
+        assertThat(reloaded.unknown()).containsKey("someFieldFromTomorrow");
+        assertThat(Json.mapper().writeValueAsString(reloaded)).contains("\"someFieldFromTomorrow\":null");
+    }
+
+    @Test
     void migratesLegacyQueueModeAndWebsockets() {
         var storage = new InMemorySettingsStorage();
         var global = new Settings();

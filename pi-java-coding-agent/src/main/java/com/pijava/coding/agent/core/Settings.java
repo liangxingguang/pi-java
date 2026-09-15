@@ -74,10 +74,16 @@ public final class Settings {
         unknown.put(key, value);
     }
 
-    /** All unknown fields preserved from parsing, as an immutable copy. */
+    /**
+     * All unknown fields preserved from parsing, as an immutable view.
+     * Deliberately <em>not</em> {@code Map.copyOf}: an unrecognized field may
+     * legitimately carry JSON {@code null} — e.g. a key written by a newer
+     * build that an older binary has no field for — and the point of this map
+     * is to round-trip such fields without loss or a load-time NPE.
+     */
     @JsonAnyGetter
     public Map<String, Object> unknown() {
-        return Map.copyOf(unknown);
+        return java.util.Collections.unmodifiableMap(new HashMap<>(unknown));
     }
 
     /** Remove a legacy key from the unknown passthrough (migration). */
