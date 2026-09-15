@@ -8,6 +8,9 @@ import com.pijava.ai.message.Message;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.function.Supplier;
 
 /**
@@ -136,8 +139,11 @@ final class PiLoopTools {
      * 再逐个执行收尾，被拒绝调用的 end 排错了位置 —— L5 的 S4 只能靠
      * {@code PARALLEL_TOOL_END_ORDER} 放宽规则勉强对上，本方法按 pi 重排后该规则已删。</p>
      *
-     * <p>延迟任务当前在 Java 里**串行**执行（确定性工具下与 pi 的完成序一致）；
-     * 真正的并行执行是另一条独立缺口（B），与本方法的发射顺序无关。</p>
+     * <p><b>两套顺序不同源</b>（package B，{@code docs/31 §8.23}）：延迟任务现以
+     * <b>虚拟线程真并发</b>执行（pi 的 {@code Promise.all}），end 帧因此是**完成序**，
+     * 而结果消息与 {@code terminate} 仍按**源序**（收束段按 entries 顺序取结果）。
+     * 宿主侧唯一的串行化点是 {@link PiLaneSink#emit} —— 工具的 update 回调会在
+     * 各自的工具线程上直呼事件链。</p>
      */
     private static Batch executeParallel(List<ContentBlock.ToolUseContent> calls,
                                          Context context, PiLoop.Config config,
@@ -172,9 +178,23 @@ final class PiLoopTools {
                 break;
             }
         }
+        // pi 的 `await Promise.all(entries.map(e => e()))`（:547-549）：全部执行票**同时**开跑，
+        // 结果**按源序**收回。两套顺序由此分家 —— end 帧是**完成序**（各任务在完成时自己发），
+        // 消息与 terminate 是**源序**（本循环按 entries 顺序取）。
+        //
+        // 虚拟线程 × 1/任务、不设上限（pi 的 Promise.all 同样不设），批级作用域 = pi 的
+        // Promise.all 作用域。**故意不 `shutdownNow`**：pi 的中止是协作式的，已启动的调用
+        // 一定跑到返回并发出自己的 end（agent-loop.ts:677-718 把 signal 交给工具本体，
+        // 没有「abort ⇒ 取消执行」的竞速）。
         var outcomes = new ArrayList<PiLoop.ToolOutcome>();
-        for (var entry : entries) {
-            outcomes.add(entry.get());
+        try (var workers = Executors.newVirtualThreadPerTaskExecutor()) {
+            var futures = new ArrayList<Future<PiLoop.ToolOutcome>>(entries.size());
+            for (var entry : entries) {
+                futures.add(workers.submit(entry::get));
+            }
+            for (var future : futures) {
+                outcomes.add(awaitOutcome(future));
+            }
         }
         var messages = new ArrayList<Message.ToolResultMessage>();
         for (var outcome : outcomes) {
@@ -183,6 +203,34 @@ final class PiLoopTools {
             messages.add(outcome.message());
         }
         return new Batch(List.copyOf(messages), allTerminate(outcomes));
+    }
+
+    /**
+     * 取一个执行票的结果 —— pi 的 {@code Promise.all} **没有** try/catch（{@code :547-549}）：
+     * 任务若抛出，整个批次 reject、异常向上冒到 run 的外层收口。Java 把它包成
+     * {@code ExecutionException}，这里**解包原样重抛**（不换成新类型，保同一形状；
+     * 非受检的 {@code Error} 也照原样冒）。
+     *
+     * <p>{@code InterruptedException} 没有 pi 对应物（宿主中断 = Java 方言）：恢复中断位后
+     * 抛出，由调用方收口 —— 与 {@code PostRunRetry.sleepInterruptible} 的「线程中断按中止
+     * 形状处理」同族，只是这里在批次中途、没有可返回的部分结果。</p>
+     */
+    private static PiLoop.ToolOutcome awaitOutcome(Future<PiLoop.ToolOutcome> future) {
+        try {
+            return future.get();
+        } catch (ExecutionException e) {
+            var cause = e.getCause();
+            if (cause instanceof RuntimeException runtime) {
+                throw runtime;
+            }
+            if (cause instanceof Error error) {
+                throw error;
+            }
+            throw new IllegalStateException(cause);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while awaiting the tool batch", e);
+        }
     }
 
     /**

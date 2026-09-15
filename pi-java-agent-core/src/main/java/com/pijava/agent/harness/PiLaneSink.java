@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -60,8 +61,17 @@ final class PiLaneSink implements PiLoop.Sink {
      */
     private final Set<Message> alreadyPresent;
 
-    /** 本次工具调用的终止标记与起算时刻，由 {@link PiToolRunner} 回填。 */
-    private final Map<String, Boolean> toolTerminate = new HashMap<>();
+    /** 事件串行化的监视器（{@code docs/31 §8.23}）—— 见 {@link #emit}。 */
+    private final Object emitLock = new Object();
+
+    /**
+     * 本次工具调用的终止标记与起算时刻，由 {@link PiToolRunner} 回填。
+     *
+     * <p>{@code terminate} 是两表中**唯一**会被工具线程写的（执行票在自己的线程上定局，
+     * {@code PiLaneEngine.observing} 在 {@code execute} 返回处回填）⇒ 并发映射；
+     * 起算表只在准备相与收束后被碰（都在引擎线程），保持 {@code HashMap}。</p>
+     */
+    private final Map<String, Boolean> toolTerminate = new ConcurrentHashMap<>();
     private final Map<String, Long> toolStartNanos = new HashMap<>();
 
     /**
@@ -263,14 +273,21 @@ final class PiLaneSink implements PiLoop.Sink {
 
     @Override
     public void emit(PiLoop.Event event) {
-        if (event instanceof PiLoop.Event.MessageStart start) {
-            onMessageStart(start.message());
-        }
-        if (event instanceof PiLoop.Event.MessageEnd end) {
-            onMessageEnd(end.message());
-        }
-        if (downstream != null) {
-            downstream.emit(event);
+        // 事件通往宿主的**唯一漏斗**。package B（docs/31 §8.23）起它全程串行化：工具批次
+        // 真并发后，工具的 update 回调在**各自的工具线程**上直呼这里，而宿主消费者
+        // （会话事件、TUI/RPC/web、记录发射）此前都按单线程写。加锁即把它们还原成 pi 的
+        // 运行时语义 —— pi 是 JS 单线程 + 逐个 await emit，并发只存在于工具体；
+        // synchronized 可重入，消费者内部再回调 emit 不会自锁。
+        synchronized (emitLock) {
+            if (event instanceof PiLoop.Event.MessageStart start) {
+                onMessageStart(start.message());
+            }
+            if (event instanceof PiLoop.Event.MessageEnd end) {
+                onMessageEnd(end.message());
+            }
+            if (downstream != null) {
+                downstream.emit(event);
+            }
         }
     }
 
