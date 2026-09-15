@@ -1634,7 +1634,7 @@ safe-integer 与 cap 回退）；② `PostRunRetryTest` 12 例逐守卫；③ �
 
 ---
 
-### 8.23 工具批次真并发（B）—— **已实施（2026-09-16，设计经用户审核通过；实施记录见 8.23.7，顺序规则见 8.23.8）**
+### 8.23 工具批次真并发（B）—— **已实施（2026-09-16，设计经用户审核通过；实施记录见 8.23.7，顺序规则见 8.23.8，update 时机见 8.24）**
 
 > 本节是 B 的准入设计文档。**未经审核认可前不写任何实施代码。**
 > pi 事实逐行读自 `packages/agent/src/agent-loop.ts:409-591`（`executeToolCalls` /
@@ -1677,8 +1677,11 @@ message，逐个成组；`signal?.aborted ⇒ break`（`:476-478`）。它与并
 工具本体，**没有**任何「abort ⇒ 取消执行」的竞速；是否提前收手由工具自己观察信号决定。
 已启动的 thunk 一定跑到返回、并发出自己的 end。
 
-**流式更新**（`:682-706`）：`onUpdate` 把每个分片 `push` 成**待决 Promise**，工具返回后
-`await Promise.all(updateEvents)` —— 更新帧在该工具 **end 之前**成批落地，**不是内联发射**。
+**流式更新**（`:682-706`）：`onUpdate` 把每个分片**内联**发成
+`tool_execution_update`（`emit(...)` 在回调里同步调用，`:692-702`），返回的 Promise 收进
+`updateEvents`；工具返回后 `await Promise.all(updateEvents)`（`:706`）—— 被推迟的是
+**完成**（该工具的全部 update 处理完才发它的 end），**不是发射点**。
+> ⚠️ 本节初版写作「成批落地，**不是内联发射**」，措辞有误，已按 §8.24.1 的逐行重读更正。
 
 **异常**：thunk 内部 `executePreparedToolCall` 自己有 catch（`:708-714` 转错误结果），
 收尾段也有（`:754-757`）；**`Promise.all` 本身没有 try/catch** ⇒ thunk 若仍抛出，
@@ -1771,6 +1774,8 @@ for (var entry : entries) { outcomes.add(entry.get()); }   // ← 串行执行
 2. **`tool_execution_update` 的发射时机差异**：pi 收集成 Promise、在该工具 end 前成批落地
    （`:690-706`），pi-java 内联发射。单工具下同形；**多工具交错**时 L5 覆盖不到
    （剧本工具不产 update 交错）。
+   → **已立案为包 C，见 §8.24**（结论：发射点两侧一致；「成批」指的是完成序保证，
+   在同步漏斗下平凡成立；交错盲区用新剧本 S14 补上）。
 3. **宿主消费者的并发契约**：收敛到 `PiLaneSink.emit` 的锁后仍是「互斥的单线程调用」，
    但 TUI/RPC/web 的消费者此前没有任何显式线程声明 —— 清点项（B 之后调用方来自引擎线程
    **与**工具线程两种，锁保证互斥，但「总是哪个线程」不再唯一）。
@@ -2000,6 +2005,177 @@ pi executeToolCallsParallel (agent-loop.ts:487-561)
 | 定序剧本 | `conformance/scripts/S4.json`、`S12.json:9-10`、`S13.json:8-9` |
 | pi 侧真相 | `conformance/pi-out/S12.pi.jsonl:27-30`、`S13.pi.jsonl:11-20` |
 | pi 原实现 | `agent-loop.ts:497-503` / `:506-517` / `:520-541` / `:547-549` / `:550-555` / `:589-591` |
+
+### 8.24 `tool_execution_update` 的发射时机（C）—— **待审核（2026-09-16）**
+
+> 本节是 C 的准入设计文档。**未经审核认可前不写任何实施代码。**
+> 来源是 §8.23.5-2 的登记项。pi 事实逐行读自 `packages/agent/src/agent-loop.ts:677-718`、
+> `packages/agent/src/agent.ts:175/418/544-591`、`packages/coding-agent/src/core/agent-session.ts:643-667`；
+> pi-java 现状读自 `PiToolRunner.execute`、`PiLoop.Sink`、`PiLaneSink.emit` 与 `conformance/`。
+
+#### 8.24.1 pi 事实
+
+**`executePreparedToolCall`（`agent-loop.ts:677-718`）全貌：**
+
+```ts
+const updateEvents: Promise<void>[] = [];          // :682
+let acceptingUpdates = true;                        // :683
+try {
+    const result = await prepared.tool.execute(     // :686  ← 工具本体
+        prepared.toolCall.id, prepared.args as never, signal,
+        (partialResult) => {                        // :690  ← 工具回调，**同步**进入
+            if (!acceptingUpdates) return;          // :691  闩落下后静默丢弃
+            updateEvents.push(                      // :692
+                Promise.resolve(
+                    emit({ type: "tool_execution_update", ... }),   // :694  ← **内联调用**
+                ),
+            );
+        },
+    );
+    acceptingUpdates = false;                       // :705
+    await Promise.all(updateEvents);                // :706  ← 完成序保证
+    return { result, isError: false };
+} catch (error) {                                   // :708
+    acceptingUpdates = false;                       // :709
+    await Promise.all(updateEvents);                // :710  错误路径同样先收干净
+    return { result: createErrorToolResult(...), isError: true };
+} finally { acceptingUpdates = false; }             // :715-717
+```
+
+**两条语义必须分开，这是本节的核心更正：**
+
+| # | 语义 | 依据 |
+|---|---|---|
+| ① | **发射点内联** —— `emit(update)` 在工具回调里**同步调用** ⇒ 帧进入消费者的顺序 = 工具调用 `onUpdate` 的顺序 | `:692-702`（`emit(...)` 是实参，`Promise.resolve` 只包返回值） |
+| ② | **完成序保证** —— 该工具的全部 update 发射**完成之后**才发它的 end | `:706`（`await Promise.all`）先于 `:539`（`emitToolExecutionEnd`） |
+
+> ⚠️ **§8.23.1 的措辞需要更正**：原文写「更新帧在该工具 end 之前成批落地，**不是内联发射**」。
+> 按上面逐行读，**发射点是内联的**；被 `Promise.all` 推迟的是**完成**（await），不是发射。
+> 「成批」描述的是 ②，不是 ①。更正随本节一并落到 §8.23.1。
+
+**宿主侧的 `emit` 是异步的，②因此有实际内容**（这是「完成」在本产品的所指）：
+
+| 环节 | 位置 | 事实 |
+|---|---|---|
+| 循环收到的 sink | `agent.ts:418` | `(event) => this.processEvents(event)` —— 箭头本身同步，**但返回 Promise** |
+| 实际处理 | `agent.ts:544` | `private async processEvents(...)` |
+| 首个 await | `agent.ts:588-590` | `for (const listener of this.listeners) await listener(event, signal)` |
+| listener 契约 | `agent.ts:175` | `Promise<void> \| void` —— **允许异步** |
+| 产品里的 listener | `agent-session.ts:402` → `:643` | `subscribe(this._handleAgentEvent)`，而它是 `async`，首个 await 在 `:667` `await this._emitExtensionEvent(event)` |
+
+⇒ 产品语义：**工具不被消费者阻塞**（`emit` 的 Promise 只收集、不 await），工具一路往前跑；
+阻塞被推迟到工具返回后的 `:706`。②因此是一条真保证：end 帧一定排在**已被消费者处理完**的
+update 之后。
+
+**conformance 路径的 sink 不同**：`conformance/pi/run.test.ts` 传的是
+`async (event) => { stream.push(event); }` —— 函数体**同步**（`stream.push` 是同步入队），
+所以在 L5 里 ① 与 ② 合成一条：帧按内联顺序入队。
+
+#### 8.24.2 pi-java 现状与差距
+
+`PiToolRunner.execute`（`PiToolRunner.java:150-169`）：
+
+```java
+executed = registry.execute(call.toolName(), call.toolCallId(), state.args(), signal,
+    partial -> {                                     // :155  工具回调，同步进入
+        if (acceptingUpdates.get()) {                // :157  pi :691 的闩
+            emit.emit(new PiLoop.Event.ToolExecutionUpdate(...));   // :158  ← **内联调用**
+        }
+    }, toolContext);
+```
+
+三个面逐项对照：
+
+| 面 | pi | pi-java | 判定 |
+|---|---|---|---|
+| ① 发射点 | 内联调用（`:692-702`） | 内联调用（`PiToolRunner.java:158`） | ✅ **一致** |
+| ② 完成序保证 | `await Promise.all(updateEvents)`（`:706`） | **平凡成立** —— `PiLoop.Sink.emit` 返回 `void`（`PiLoop.java:81-83`），发射即完成 | ✅ **等价** |
+| ③ 消费者阻塞语义 | 工具**不**被消费者阻塞（Promise 只收集）；阻塞推迟到 `:706` | 工具线程**被**消费者阻塞（`PiLaneSink.emit:275-292` 同步过锁） | ⚠️ **有差异**，但只影响墙钟与「消费者慢时谁被卡住」，**不改变帧序**（帧序由发射点决定，两侧相同） |
+
+**②为何是「等价」而不是「缺失」**：`PiLoop.Sink.emit` 的契约是同步 `void`，事件链上
+**不存在「发射未完成」这个状态** ⇒ pi 的完成序保证在这里没有可违反的余地。
+它不是「没实现」，是「无事可做」。
+
+**③为何不发生**：pi 的 ③ 只有在**宿主消费者是异步的**时候才有可观测内容；
+pi-java 的 `Sink` 契约（`void`）在**类型层面**排除了异步消费者 —— TUI / RPC / web /
+JSONL 遥测的消费者面全是同步调用。⇒ 结构性不可达。
+
+#### 8.24.3 改动方案
+
+**生产代码：零改动。** 差距判定为「无」（②③两项分别等价 / 不可达）。
+
+**证据侧：新增一条能把「update 交错」照出来的剧本。** 理由 ——
+
+> 现有 **13 个剧本一个也产生不了 update 交错**：两侧的桩都是「睡够 → 背靠背发 N 条 update
+> → 返回」，`for` 循环里没有任何可插入点，别的调用的帧**不可能**落在同一工具的两条 update
+> 之间（pi 侧 `stream.push` 同步、Java 侧 `emit` 同步）。也就是说 **update 与并发批次的
+> 交错关系目前是 L5 的纯盲区**，不是「覆盖到了但没差异」。
+
+剧本格式加一个**可选**字段：
+
+| 字段 | 语义 | 缺省 | 对既有录制的影响 |
+|---|---|---|---|
+| `updateEveryMs` | 相邻两条 update 之间睡这么久；**首条之前仍先睡 `delayMs`** | `0`（背靠背） | **无** —— 既有 13 个剧本都不写它 ⇒ 帧与今天逐字节相同 |
+
+新增 **S14「流式更新与并发批次的交错」**，用**声明出来的时序**钉住交错点（同 S13 的
+`delayMs` 思路：凡交错必须是被声明的事实，不是运行时巧合）：
+
+```
+tools: [ streamer(delayMs 0, updates 3, updateEveryMs 150),   ← 声明在前
+         blip   (delayMs 375, updates 0) ]                    ← 声明在后
+
+预期帧序（pi 与 pi-java 都应如此）：
+  start tc1 streamer
+  start tc2 blip
+  update tc1 partial 1        ← @150
+  update tc1 partial 2        ← @300
+  end    tc2 blip             ← @375   ★ B 的 end 落在 A 的两条 update 之间
+  update tc1 partial 3        ← @450
+  end    tc1 streamer         ← @450
+  message tc1 streamer / message tc2 blip      ← 结果消息源序
+```
+
+★ 那一行是本节要买的东西：**它同时排除两种误读** ——「update 在该工具 end 前成批落地」
+（则会看到 `u1 u2 u3 end tc1` 连成一块、`end tc2` 不在中间）与「end 早于所有 update」。
+
+#### 8.24.4 需要审核的裁决点
+
+1. **本包是否接受「零生产改动」的结论**（推荐接受）—— 即 C 的交付物是**证据 + 一处措辞更正**，
+   不是代码。若不接受，请指出认为 ③（消费者阻塞语义）需要对齐的理由。
+2. **是否扩剧本格式加 `updateEveryMs` 并新增 S14**（推荐：加）——
+   纯可选字段、零影响既有录制（pi 侧重录后 12 个旧剧本应逐字节不变，本身就是一次回归校验）；
+   代价是 PI 侧 runner 与 Java 侧 runner 各加约 5 行 + 重跑录制。
+3. **③（pi 不被消费者阻塞 / pi-java 被阻塞）的处置**（推荐：登记为结构性差异，不修）——
+   要「对齐」它就得把 `PiLoop.Sink.emit` 改成异步契约，那会波及整个宿主层，
+   而收益只是墙钟。**若裁决为「要修」，它应是一个独立大包，不在 C 内。**
+
+#### 8.24.5 未覆盖登记（诚实标注）
+
+| 项 | 为何覆盖不到 |
+|---|---|
+| ② 完成序保证本身 | 需要一个**异步消费者**才能观察「发射未完成」的状态；`PiLoop.Sink` 契约是同步 `void` ⇒ 不可达 |
+| ③ 消费者阻塞语义 | 同上；且它是墙钟性质，L5 的帧比对结构上看不见 |
+| `acceptingUpdates` 闩在「工具返回后仍有迟到 update」时的行为 | pi 侧桩工具返回后不会再有 update；两侧都是 `finally` 落闩，形状相同但没有剧本能证明 |
+| **串行路径**下的 update 时机 | 串行路径无并发，无所谓交错；`updateEveryMs` 在串行路径下同样生效（会拖长该调用） |
+
+#### 8.24.6 测试计划
+
+① **L5 差分**：新增 S14，重跑 pi 侧录制，`ConformanceTest` 的 `SCENARIOS` 增至 `S1…S14`，
+   **14/14 严格逐帧**。同时校验 12 个旧剧本的 `.pi.jsonl` 在重录后**逐字节不变**
+   （`git diff --stat conformance/pi-out/` 只应出现 S14）。
+② **反证（先预测红名单再动刀）**，本包唯一能让结论变假的实验：
+   - **RE-1（关键）**：把 Java 侧 `PiToolRunner` 的 update 改成「收集进列表、在该工具 end 前统一发」
+     （＝**我原先误读的那个形状**）⇒ **S14 必须红**，其余 13 个剧本应全绿（它们没有交错，
+     两种形状同形）。**若 S14 不变红，说明它没有牙、这次扩格式是白花钱** —— 必须在 §8.24.7
+     如实记下来，并重新考虑证据形式。
+   - RE-2：去掉 `acceptingUpdates` 闩 ⇒ 预期**全绿**（没有剧本在工具返回后还发 update）——
+     这条是**预期不红**的对照，用来证明前一条的红不是偶然。
+③ **E2E**：不新增。C 无生产改动，`ToolBatchConcurrencyTest.concurrentUpdatesSurviveTheEmitFunnel`
+   （4 工具 × 3 update 的闩锁夹具）已经钉住 Java 侧的「每工具 update FIFO + 宿主不重入」。
+
+#### 8.24.7 实施记录
+
+（待裁决后填写。）
 
 ---
 
