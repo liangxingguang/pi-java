@@ -1634,6 +1634,173 @@ safe-integer 与 cap 回退）；② `PostRunRetryTest` 12 例逐守卫；③ �
 
 ---
 
+### 8.23 工具批次真并发（B）—— **设计稿（待审核）**
+
+> 本节是 B 的准入设计文档。**未经审核认可前不写任何实施代码。**
+> pi 事实逐行读自 `packages/agent/src/agent-loop.ts:409-591`（`executeToolCalls` /
+> `executeToolCallsSequential` / `executeToolCallsParallel` / `executePreparedToolCall` /
+> `finalizeExecutedToolCall`）；pi-java 现状读自 `PiLoopTools`、`PiToolRunner`、
+> `PiLaneEngine`、`PiLaneSink`、`JsonlFileTelemetry` 与 `conformance/` 剧本格式。
+> 前序：§8.17（end 载荷 + 流式更新）、§8.18（结果消息载荷 A7）、§8.19-§8.22。
+
+#### 8.23.1 pi 事实
+
+**批次门**（`:409-424`）：`config.toolExecution === "sequential"` **或**批内任一工具的
+`executionMode === "sequential"` ⇒ 整批走串行路径（已对齐，`PiLoopTools.useSequentialPath`）。
+
+**并行路径三段**（`:487-561`）：
+
+1. **准备循环**（串行、源序）：逐调用发 `tool_execution_start` → `await prepareToolCall`
+   （查找 → 校验 → `before_tool` → 中止检查 → 拒绝检查）⇒
+   - `kind === "immediate"`（拒绝 / 未找到 / 参数非法 / 已中止）**当场**发
+     `tool_execution_end` 并 push 定局结果，`aborted ⇒ break`（`:506-517`）——它的 end
+     因此排在**所有真正执行过的调用之前**；
+   - `kind === "prepared"` ⇒ push 一个 **thunk**（`async () => {…}`，`:520-541`），
+     **此刻还没执行**；入队后再查中止，`aborted ⇒ break`（`:542-544`）。
+2. **执行段**（`:547-549`）：`await Promise.all(entries.map(e => e()))` —— 全部 thunk
+   **真并发**启动，pi 不设并发上限。每个 thunk **自己**在完成时 `await emitToolExecutionEnd`
+   （`:539`）⇒ **end 帧 = 完成序**；thunk 首查 `signal?.aborted` ⇒ 不执行、直接发
+   `createErrorToolResult("Operation aborted")` 的 end（`:521-528`）。
+   `Promise.all` **保持输入顺序** ⇒ `orderedFinalizedCalls` 是**源序**。
+3. **收束**（`:550-560`）：按**源序**逐条 `createToolResultMessage` + `emitToolResultMessage`；
+   `terminate = 非空 ∧ every(result.terminate === true)`（`:589-591`）。
+
+**两套顺序不同源（本包核心事实）**：`tool_execution_end`（与 `tool_execution_update`）=
+**完成序**（谁先完成谁先发）；`toolResult` **消息**（`message_start`/`message_end`）=
+**源序**，且在**全部 end 之后**统一发。
+
+**串行路径**（`:431-485`）：每个调用 start → 准备 → 执行 → 收尾 → end → **立刻**发其
+message，逐个成组；`signal?.aborted ⇒ break`（`:476-478`）。它与并行路径的
+「ends 全先、messages 全后」**是两种形状**（已对齐）。
+
+**中止是协作式的，不打断在飞**：`executePreparedToolCall`（`:677-718`）把 `signal` 交给
+工具本体，**没有**任何「abort ⇒ 取消执行」的竞速；是否提前收手由工具自己观察信号决定。
+已启动的 thunk 一定跑到返回、并发出自己的 end。
+
+**流式更新**（`:682-706`）：`onUpdate` 把每个分片 `push` 成**待决 Promise**，工具返回后
+`await Promise.all(updateEvents)` —— 更新帧在该工具 **end 之前**成批落地，**不是内联发射**。
+
+**异常**：thunk 内部 `executePreparedToolCall` 自己有 catch（`:708-714` 转错误结果），
+收尾段也有（`:754-757`）；**`Promise.all` 本身没有 try/catch** ⇒ thunk 若仍抛出，
+整个批次 reject、向上冒到 run 的外层收口。
+
+#### 8.23.2 pi-java 现状与差距
+
+`PiLoopTools.executeParallel`（`:142-186`）**已是两相结构**：准备循环串行（start /
+准备 / immediate 当场收尾 / break）、prepared 打包成 `Supplier<ToolOutcome>`（end 在
+supplier 内发射）、收束按源序发消息 —— **形状与 pi 一致**。
+
+差距**只有一处**（`:175-178`）：
+
+```java
+var outcomes = new ArrayList<PiLoop.ToolOutcome>();
+for (var entry : entries) { outcomes.add(entry.get()); }   // ← 串行执行
+```
+
+后果两条：① **耗时 = 累加**而非取最大（用户可感知：N 个慢工具慢 N 倍）；
+② **end 帧 = 源序**（pi 是完成序）—— 但瞬时工具下两序**同形**，故 L5 钉不出这处差异
+（`conformance/scripts/S4.json`、`S10.json` 的工具都即时返回，见 8.23.6）。
+
+**并发面审计**（B 把这些面从单线程变多线程，逐个过了一遍）：
+
+| 面 | 现状 | 结论 |
+|---|---|---|
+| `AbortSignal` | `volatile boolean` | ✅ 可并发 |
+| `ToolRegistry.tools` | `ConcurrentHashMap` | ✅ |
+| `ToolContext` | 全 final（cwd/env/shell/fs） | ✅ 共享安全；`shell`/`fs` 实现自身需可重入（pi 同契约） |
+| `HookSystem` 注册表 | `ConcurrentHashMap` | ✅；钩子**体**将在工具线程执行（pi 同） |
+| `PiLaneEngine.observing.execute` → `sink.noteToolTerminate` | `HashMap.put` | ⚠️ **将变成工具线程写** ⇒ 需并发映射 |
+| `PiToolRunner` 的 `onUpdate` → `emit` | 内联同步调用 | ⚠️ **工具线程调用宿主事件链** ⇒ 需串行化点 |
+| `PiLaneSink` 其余状态（`lane.messages`/`records`/`transcript`、批次表、`stepIndex`…） | 只在 `message_end`（**收束后**、源序）与准备相被碰 | ✅ 不在并发窗口内 |
+| `JsonlFileTelemetry.writeLine` | `synchronized (lock)` | ✅ |
+| `JsonlFileTelemetry.currentStack` | 全局 `ArrayDeque`（javadoc 却写 "on this thread"） | ⚠️ 见 8.23.5-1；约束：**工具线程不得触碰遥测绑定** |
+
+#### 8.23.3 改动方案
+
+**`PiLoopTools`（执行段）**：
+
+- 真并发：每批次建一个 `Executors.newVirtualThreadPerTaskExecutor()`，全部 thunk 一次性提交，
+  **按源序 `get()` 收结果**（消息与 `terminate` 的源序由此天然保持），批次结束即关闭
+  （`try`-with-resources；**不** `shutdownNow` —— pi 不打断在飞任务）。虚拟线程 × 1/任务、
+  不设上限 —— pi 的 `Promise.all` 同样不设。
+- **thunk 内部一个字不改**：end 的发射位置已经在 thunk 里，并发后顺序自动变成完成序。
+- `Future.get()` 的 `ExecutionException` ⇒ **解包原样重抛**（保 pi「批次级失败、异常向上冒」
+  的形状）；`InterruptedException` ⇒ 恢复中断位并**按中止处理**（Java 方言，先例
+  `PostRunRetry.sleepInterruptible`）。
+- 不使用预览 API（结构化并发在 JDK 25 仍属预览）——`ExecutorService` 是正式面。
+
+**`PiLaneSink`（串行化点）**：
+
+- `emit` 全程 `synchronized`（专用 `lock` 对象，先例 `JsonlFileTelemetry.writeLine`）。
+  它是**所有事件通往宿主的唯一漏斗**（`PiLaneEngine` 的每一处发射都经它），加锁即把宿主
+  消费者重新变回「单线程事件循环」—— 这正是 pi 的运行时语义（JS 单线程 + `await emit`），
+  并发只存在于**工具体**。
+- `toolTerminate` 换 `ConcurrentHashMap`（唯一会被工具线程写的映射；读点在收束之后）。
+
+**不动**：串行路径、`failTruncated`、准备循环、`acceptingUpdates` 闩、批次门、两相端口。
+
+#### 8.23.4 需要审核的裁决点
+
+1. **并发手段**：每批次一个虚拟线程 executor（推荐）/ 复用共享池 / `Thread.ofVirtual()`
+   手工 join。批级作用域 = pi 的 `Promise.all` 作用域，且天然跟随批次生命周期。
+2. **串行化点落在 `PiLaneSink.emit`**（推荐）——宿主消费者（会话事件、TUI/RPC/web、记录发射）
+   因此**不需要**任何改动，保持既有单线程假设；代价是工具线程若在某消费者上阻塞会被拖住
+   （pi 的 `await emit` 同）。
+3. **遥测**：本轮**不在工具线程绑定跨度**（推荐：现状本就不绑，保持「遥测绑定只在引擎线程」
+   的约束），把 `currentStack` 的线程归属**登记为独立清点项**（8.23.5-1）。
+   不在本包内顺手改 ThreadLocal —— 那会静默弄丢「跨线程继承」这一既有行为，须先实测
+   流式回调的线程归属。
+4. **中止语义照 pi**：不打断在飞；已启动的调用跑完、各发自己的 end。用户若期待
+   「abort 立刻停」，这是**有意与 pi 一致**的行为，文档写明。
+5. **异常解包原样重抛**，不换类型（照 pi 批次级失败向上冒）。
+6. **验证手段用 latch 交替夹具**（推荐，确定性）：「A 等 B」—— 并发下 B 先完成、A 后完成，
+   断言 end 顺序 = `[B, A]` 而消息顺序 = `[A, B]`；**串行实现下 A 等不到 B ⇒ 夹具必然失败
+   （而非侥幸通过）** ⇒ 天然有牙且不 flaky。**不做时长阈值断言**（flaky，且 latch 已直接
+   证明并发）。
+7. **是否给 L5 剧本格式加 `delayMs`**（可选加项）：加则能录一条**差分**场景（慢调用后完成），
+   把「完成序」变成两侧同录的硬证据（剧本格式现为
+   `(name, executionMode, details, updates)`，**无延迟字段**）；代价是扩格式（两侧 runner
+   同步）+ **重跑 pi 侧录制**。不加，则 B 的证据只到单元/E2E 级、L5 维持不动。
+
+#### 8.23.5 取证新发现（登记，不入 B）
+
+1. **`JsonlFileTelemetry.currentStack` 是全局 `ArrayDeque`，javadoc 却写 "on this thread"**
+   —— 文档与实现不符。当前唯一 `pushCurrent` 调用点（`PiLaneSink.beginRequest`）与
+   `recordEvent` 调用点（`PayloadRecordingStreamFn`）**是否同线程未实测**。清点项：线程归属
+   实测 + 是否改 ThreadLocal（含 `recordEvent` 的语义）。
+2. **`tool_execution_update` 的发射时机差异**：pi 收集成 Promise、在该工具 end 前成批落地
+   （`:690-706`），pi-java 内联发射。单工具下同形；**多工具交错**时 L5 覆盖不到
+   （剧本工具不产 update 交错）。
+3. **宿主消费者的并发契约**：收敛到 `PiLaneSink.emit` 的锁后仍是「互斥的单线程调用」，
+   但 TUI/RPC/web 的消费者此前没有任何显式线程声明 —— 清点项（B 之后调用方来自引擎线程
+   **与**工具线程两种，锁保证互斥，但「总是哪个线程」不再唯一）。
+4. **内置工具的线程安全审计**（`coding-agent` 侧 read/write/edit/bash/glob…）：pi 的契约是
+   「工具必须可并发执行」；本轮**只审计不改**，发现共享状态的工具单独立项。
+5. **`approvalHandler` 与钩子体在工具线程执行**（pi 同）：交互类钩子（权限询问）需自己保证
+   线程安全。
+
+#### 8.23.6 测试计划
+
+① **并发夹具（latch 交替）**，落在 `ToolBatchParityTest`/`PiLoopTest`：
+   - `laterCallFinishesFirstEndsFirstButMessagesStaySourceOrder`：A 等 B ⇒ end 顺序 `[c2, c1]`、
+     消息顺序 `[c1, c2]`；
+   - `abortedBatchStillEmitsInFlightEnds`：中止后已启动的调用各发 end（协作式、不打断）；
+   - `immediateEndStaysAheadOfConcurrentEnds`：准备相 immediate（拒绝）的 end **仍排在**
+     并发 end 之前（S4 形状）—— 这批不变量在并发下必须重钉；
+   - 既有 `ToolBatchParityTest` 三例（terminate 语义）保持绿。
+② **L5 差分**：预期**不动**（S4/S10 工具即时返回 ⇒ 完成序 = 源序，两侧录制同形）——
+   必须实跑确认 12/12。若采纳裁决点 7，则新增 **S13**「慢调用后完成」并重跑 pi 侧录制后比对。
+③ **反证（先预测红名单再动刀）**：
+   - RE-1 thunks 改回串行 ⇒ 恰红 ① 的 latch 夹具（并发夹具**必然**失败，非侥幸）；
+   - RE-2 摘 `PiLaneSink.emit` 的锁 ⇒ 并发交错探测器（两线程各发 N 个 update，sink 进入即记
+     「重入」）**应**红。**诚实标注：该哨兵是概率性的**（大 N + 交替提高概率），是本包
+     **已知的验证弱点**，反证时必须确认它能红；
+   - RE-3 immediate 收尾挪到收束之后 ⇒ 恰红 `immediateEndStaysAheadOfConcurrentEnds`。
+④ **E2E**：`AgentHarness` 层一个双工具批次（`prompt(lane, text, images, downstream)` 注入
+   记录型 sink），钉 end 完成序 + 消息源序 + `terminate` 语义 + 转录落盘顺序（源序）。
+
+---
+
 ## 9. 与既有文档的关系
 
 | 文档 | 关系 |
