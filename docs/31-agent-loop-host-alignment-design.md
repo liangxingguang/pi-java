@@ -1634,7 +1634,7 @@ safe-integer 与 cap 回退）；② `PostRunRetryTest` 12 例逐守卫；③ �
 
 ---
 
-### 8.23 工具批次真并发（B）—— **设计稿（待审核）**
+### 8.23 工具批次真并发（B）—— **已实施（2026-09-16，设计经用户审核通过；实施记录见 8.23.7）**
 
 > 本节是 B 的准入设计文档。**未经审核认可前不写任何实施代码。**
 > pi 事实逐行读自 `packages/agent/src/agent-loop.ts:409-591`（`executeToolCalls` /
@@ -1798,6 +1798,85 @@ for (var entry : entries) { outcomes.add(entry.get()); }   // ← 串行执行
    - RE-3 immediate 收尾挪到收束之后 ⇒ 恰红 `immediateEndStaysAheadOfConcurrentEnds`。
 ④ **E2E**：`AgentHarness` 层一个双工具批次（`prompt(lane, text, images, downstream)` 注入
    记录型 sink），钉 end 完成序 + 消息源序 + `terminate` 语义 + 转录落盘顺序（源序）。
+
+#### 8.23.7 实施记录（2026-09-16）
+
+**提交**：`66d4793` feat(agent-core)（`PiLoopTools` 执行段改真并发 +
+`awaitOutcome` 解包重抛；`PiLaneSink.emit` 全程 `synchronized`、`toolTerminate` 换
+`ConcurrentHashMap`）→ `13c5ee6` test(agent-core)（`ToolBatchConcurrencyTest` 6 例；
+L5 剧本格式加 `delayMs`（两侧 runner 同步）；S4/S12 用延迟钉完成序、新 **S13**；
+pi 侧重录；`PiLoopTest` 那条断言按名字收窄）。
+全 reactor `mvn -o clean verify` 绿（telemetry 26 / ai 336 / **agent-core 443** /
+session-backend-sqlite 35 / coding-agent 218 / tui 188(1 skip) / protocol 14 / server 2 /
+web 37 / evals 43(17 为 smoke skip)；BOM/root/client/dist 无测试）；
+L5 strict **13/13**（S1–S13，含新 S13），**连跑 7 轮全绿** —— 这正是本包要修掉的 flake
+（见下第 1 条）。
+
+**形状按设计，实施期修正五处：**
+
+1. **§8.23.6 ②「L5 预期不动」被证伪 —— 这是本包最重要的一条更正。** 真并发落地后
+   S12 立刻红：`8 轮里 3 绿 5 红，红的一律且只有 S12`，diff 是 `pi: tc3 的 end 在 tc4 前 /
+   java: tc4 在 tc3 前`。根因**不是**实现错，是设计的证据假设错：S12 第二批两个调用是同一个
+   `term1`（**等延迟**），而 pi 那边「等延迟 ⇒ 源序」是 **JS 微任务队列的副产品**
+   （thunk 体在源序里同步进入队列），**不是 pi 的语义承诺**；Java 的真线程没有那条队列，
+   等延迟就是纯竞速。S4 的 ok1/ok2 同形（8 轮全绿，是运气而非不变量）。
+   处置 = 采纳裁决点 7：剧本加 `delayMs`，把**完成序变成声明出来的、两侧同录的证据**
+   —— S4 的 `ok2`、S12 拆出 `term2`（20ms/40ms），S13 则把「后声明者先完成」直接做成
+   场景。pi 侧重录结果：**S4 逐字节不变**（延迟不改帧，只定序），S12 只有 `term1→term2`
+   的改名。
+2. **`PiLoopTest.parallelBatchEmitsEveryStartBeforeAnyEnd` 的断言比它的名字宽**：名字说的是
+   「start 全在前」，断言却多钉了 end 的具体顺序（`bash, read, grep`）—— 那正是「三个瞬时
+   桩恰好同序」的意外。改为「start 源序 + end 任意排列 + 每个调用恰一 start 一 end」。
+   与 1. 同源：**凡钉到「等延迟下的顺序」的断言都是运行时运气，不是被测对象。**
+3. **完成序夹具的第一版没牙（实测失败）**：原写法让 `faster` 在自己的执行体里
+   `countDown` 再返回，而 end 是在**执行体返回之后**才发的 ⇒ `end:slower` 可以先于
+   `end:faster`，与断言相反。改为**观察端放行**：sink 记下 `end:faster` 时放行闩锁，
+   `slower` 在自己的执行体里等它 —— 源序发射 end 的实现于是**必然超时**。
+   同时删掉 `batchRunsItsCallsSimultaneously` 里对 end 具体顺序的断言（同上，是运气），
+   该用例只钉「两个调用同时在跑」。
+4. **`abortedBatchStillEmitsInFlightEnds` 需要「先跑起来再中止」的编排**：第一版让 `faster`
+   自由置位中止，于是与 `slower` 的**执行前中止检查**竞速（谁先谁后不定，中止若先到，
+   `slower` 走的是「不执行、直接发 aborted 结果」那条路，用例虽仍绿但测的不是在飞语义）。
+   改为第二个闩锁：`faster` 先等 `slower` 的执行体真的开跑再置位。
+5. **`immediateEndStaysAheadOfConcurrentEnds` 未按计划落地（有意）**：pi 的形状里准备循环
+   **跑完才提交**全部执行票，所以 immediate 的 end 结构上就在并发 end 之前，根本没有可交错的
+   窗口 —— 用闩锁去钉它只是演戏。该不变量由 **S4** 承接（被拒调用的 end 在 ok1/ok2 之前），
+   且现在有 `delayMs` 定序。§8.23.6 ③ 计划的 RE-3 因此改为动「在飞调用的 end」那条路。
+
+**并发面审计的落地结果**（8.23.2 表逐项兑现）：`PiLaneSink.emit` 加锁与 `toolTerminate`
+换并发映射是**唯一**两处必要改动；`AbortSignal`/`ToolRegistry`/`ToolContext`/`HookSystem`
+注册表/`writeLine` 均原样可用。8.23.5-1 的 `JsonlFileTelemetry.currentStack` 仍是清点项
+（约束「工具线程不得触碰遥测绑定」本轮成立：新增的并发路径只经 `PiLaneSink`，不经遥测绑定）。
+
+**反向实验（先预测红名单再动刀，三红全中）：**
+
+- RE-1 执行段改回串行 `entry.get()` ⇒ 恰 3 红（`batchRunsItsCallsSimultaneously` /
+  `laterCallFinishingFirstEndsFirstButMessagesStaySourceOrder` /
+  `harnessRunsTheRealToolBatchSimultaneously`，均为闩锁超时）+ **L5 恰 S13 一红**，
+  其余 12 个剧本绿（串行 = 源序，pi 的录制除 S13 外都是源序）✓
+- RE-2 摘 `PiLaneSink.emit` 的 `synchronized` ⇒ 恰 1 红
+  `harnessSerializesConcurrentToolEventsForTheHost`，L5 **全绿**（帧序与这把锁无关）✓
+  —— 8.23.6 ③ 曾把该哨兵诚实标注为「概率性」；实测（8 调用 × 20 更新，宿主侧计数
+  并发进入）能稳定报红，且**带锁侧是确定性的**：锁在则永不重叠。
+- RE-3 让在飞调用在中止后**不发自己的 end** ⇒ 恰 1 红 `abortedBatchStillEmitsInFlightEnds`，
+  L5 全绿 ✓
+- 三处补丁全部还原，还原后 `mvn -o clean verify` 绿（上列数字取自该轮）。
+
+**注意（环境/工具，非代码问题）：**
+
+- **`mvn surefire:test -pl <M>` 不带 `-am` 会解析到 `D:/repository` 的陈旧 pi-java 构件** ——
+  本轮用它做「连跑 N 轮」的复现实验时，13 个剧本全部以
+  `NoSuchMethodError: AssistantMessage.withIdentity(...)` 报错，一度被误读为「新实现全红」。
+  连跑必须每次走 `-am … test`。与 §8.22.6 记的是同一个陷阱的**新面孔**（那边是假绿，这边是
+  假红）。
+- **`-Dtest=A+B` 静默匹配零个测试**（配 `failIfNoSpecifiedTests=false` 时表现为 exit 0），
+  多类必须用逗号：`-Dtest=A,B`。本轮一次 RE 首跑因此把「没跑」读成了「全绿」。
+
+**存量登记（越线，拆分列清点项、不进本包）**：`agent-core` 侧无新增越线文件
+（`PiLoopTools` 305 行 / `PiLaneSink` 469 行）；`coding-agent` 的
+`core/AgentSession.java` 988 行、`agent-core/AgentHarness.java` 502 行两处存量与 §8.22.6 同，
+本包未触碰。8.23.5 的五条清点项（遥测线程归属、update 发射时机、宿主消费者线程契约、
+内置工具线程安全、钩子在工具线程执行）**全部仍开放**。
 
 ---
 
