@@ -205,7 +205,8 @@ final class ConformanceRunner {
             return executed(call, tool != null && tool.isError(),
                 tool != null && tool.terminate(),
                 tool == null ? null : tool.details(),
-                tool == null ? 0 : tool.updates(), emit);
+                tool == null ? 0 : tool.updates(),
+                tool == null ? 0 : tool.delayMs(), emit);
         }
 
         /**
@@ -236,13 +237,19 @@ final class ConformanceRunner {
          * 执行成功的调用结果消息标记恒为 {@code false}。结果的 {@code details} 与 pi 侧
          * 桩同形：{@code script.details ?? {}}（{@code run.test.ts:319}）。
          *
+         * <p>{@code delayMs > 0} 时**先睡够再流 updates、再返回**（{@code docs/31 §8.23.7}）：
+         * 并行批次的 end 是完成序，两个等延迟的调用谁先完成在两侧都不可约。把延迟写进剧本，
+         * 完成序才是声明出来的、两侧可比对的证据。睡眠在工具自己的线程上 —— 串行路径同样经过
+         * 这里，但那些剧本的 {@code delayMs} 都是 0。</p>
+         *
          * <p>{@code updates > 0} 时在返回结果**之前**经 {@code emit} 流出 N 条
          * {@code tool_execution_update}，载荷用原始调用参数 —— 这正是 pi
          * {@code executePreparedToolCall} 里工具回调的效果（{@code :690-704}）。</p>
          */
         private static PiLoop.ToolOutcome executed(PiLoop.ToolCall call, boolean failedText,
                                                    boolean terminate, Object details,
-                                                   int updates, PiLoop.Sink emit) {
+                                                   int updates, int delayMs, PiLoop.Sink emit) {
+            sleepQuietly(delayMs);
             for (int i = 1; i <= updates; i++) {
                 // partial 是**整个** AgentToolResult（types.ts:361-377：details 必填），
                 // 与 pi 侧桩 push 的形状逐字段相同，帧才可比
@@ -260,10 +267,24 @@ final class ConformanceRunner {
             return new PiLoop.ToolOutcome(messageOf(call, result, false), result, false);
         }
 
+        /**
+         * 剧本声明的工具延迟。中断按「提前返回」处理（恢复中断位）—— 宿主中断是 Java 方言，
+         * pi 侧没有对应物，不制造两侧不同的帧。
+         */
+        private static void sleepQuietly(int delayMs) {
+            if (delayMs <= 0) {
+                return;
+            }
+            try {
+                Thread.sleep(delayMs);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
         List<Message> steering() {
             return drain(steering);
         }
-
         List<Message> followUp() {
             return drain(followUp);
         }

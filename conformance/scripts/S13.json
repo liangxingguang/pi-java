@@ -1,0 +1,21 @@
+{
+  "id": "S13",
+  "name": "并行批次：end 是完成序，结果消息是源序",
+  "systemPrompt": "You are helpful.",
+  "prompt": "Completion order",
+  "toolExecution": "parallel",
+  "tools": [
+    { "name": "slowish", "delayMs": 160, "updates": 2 },
+    { "name": "quickish" }
+  ],
+  "responses": [
+    {
+      "content": [
+        { "type": "toolCall", "name": "slowish", "arguments": { "n": 1 } },
+        { "type": "toolCall", "name": "quickish", "arguments": { "n": 2 } }
+      ],
+      "stopReason": "toolUse"
+    },
+    { "content": [{ "type": "text", "text": "Both seen", "chunks": ["Both ", "seen"] }], "stopReason": "stop" }
+  ]
+}

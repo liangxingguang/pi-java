@@ -4,7 +4,11 @@
   "systemPrompt": "You are helpful.",
   "prompt": "Run a batch",
   "toolExecution": "parallel",
-  "tools": [{ "name": "ok1" }, { "name": "ok2" }, { "name": "denied", "reject": true }],
+  "tools": [
+    { "name": "ok1" },
+    { "name": "ok2", "delayMs": 30 },
+    { "name": "denied", "reject": true }
+  ],
   "responses": [
     {
       "content": [

@@ -305,6 +305,11 @@ class PiLoopTest {
         // 先于任何 closure 跑完，「所有 start 早于任何 end」成立 —— 这是本桩（StubTools 恒
         // 给执行票）的形状，不是 pi 的结构保证：一个 immediate 调用的 end 会插进批次
         // 后续的 start 之前（S4 剧本正是如此，见 docs/29 §4）。
+        //
+        // 断言到此为止：**end 的相对次序不是不变量**。package B（docs/31 §8.23）起延迟任务
+        // 真并发，三个等延迟的桩谁先抢到串行化锁是任意的；pi 那边的「源序」是 JS 微任务队列
+        // 的副产品（工具体在源序里同步进入），不是语义承诺。这里只钉住「本桩形状下 start
+        // 全在前、且每个调用恰好一 start 一 end」。
         var rec = new Recorder();
         var context = Context.of(new ArrayList<>());
         var partial = AssistantMessage.empty();
@@ -323,14 +328,18 @@ class PiLoopTest {
                 new StubTools()),
             rec);
 
-        assertThat(rec.frames.stream().filter(f -> f.startsWith("tool_execution_")).toList())
-            .containsExactly(
-                "tool_execution_start:bash",
-                "tool_execution_start:read",
-                "tool_execution_start:grep",
-                "tool_execution_end:bash",
-                "tool_execution_end:read",
-                "tool_execution_end:grep");
+        var frames = rec.frames.stream().filter(f -> f.startsWith("tool_execution_")).toList();
+        var starts = frames.stream().filter(f -> f.startsWith("tool_execution_start:")).toList();
+        var ends = frames.stream().filter(f -> f.startsWith("tool_execution_end:")).toList();
+        assertThat(starts).containsExactly(
+            "tool_execution_start:bash",
+            "tool_execution_start:read",
+            "tool_execution_start:grep");
+        assertThat(ends).containsExactlyInAnyOrder(
+            "tool_execution_end:bash",
+            "tool_execution_end:read",
+            "tool_execution_end:grep");
+        assertThat(frames.indexOf(ends.getFirst())).isGreaterThan(frames.indexOf(starts.getLast()));
     }
 
     @Test

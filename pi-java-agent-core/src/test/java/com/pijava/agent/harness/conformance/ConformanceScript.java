@@ -77,9 +77,14 @@ record ConformanceScript(
      * @param updates       执行期间经 update 回调流出的部分结果条数；缺省 0。
      *                      两侧都把它翻成 {@code tool_execution_update} 帧 ——
      *                      这是 L5 观察「工具流式更新是否发射」的唯一通道
+     * @param delayMs       该工具的**声明延迟**（毫秒）；缺省 0。两侧都先睡够再流 updates、
+     *                      再返回结果。见 {@code docs/31 §8.23.7}：并行批次的 end 是
+     *                      <b>完成序</b>，而等延迟的两个调用谁先完成在两侧都不可约 ——
+     *                      把延迟写进剧本，完成序才是**声明出来的**、可比对的证据，
+     *                      而不是「恰好在我的运行时里同序」的偶然
      */
     record Tool(String name, boolean reject, boolean isError, boolean terminate,
-                String executionMode, Object details, int updates) {}
+                String executionMode, Object details, int updates, int delayMs) {}
 
     /**
      * 一段助手响应里的内容块。
@@ -127,7 +132,8 @@ record ConformanceScript(
                 node.path("executionMode").isMissingNode()
                     ? null : node.path("executionMode").asText(),
                 detailsOf(node.path("details")),
-                node.path("updates").asInt(0)));
+                node.path("updates").asInt(0),
+                node.path("delayMs").asInt(0)));
         }
         var responses = new ArrayList<Response>();
         for (var node : root.path("responses")) {

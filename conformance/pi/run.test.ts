@@ -45,6 +45,15 @@ interface ScriptTool {
 	details?: unknown;
 	/** Partial results streamed through `onUpdate` before the call resolves. */
 	updates?: number;
+	/**
+	 * Declared latency in ms — sleep this long *before* streaming updates and
+	 * resolving. Parallel batches emit `tool_execution_end` in **completion
+	 * order**, and which of two equal-latency calls finishes first is
+	 * unreducible on both sides (here it is a JS microtask-queue artifact, in
+	 * Java a real thread race). Writing the latency into the script makes the
+	 * completion order a *declared*, diffable fact instead of luck.
+	 */
+	delayMs?: number;
 }
 
 interface ScriptContent {
@@ -380,6 +389,11 @@ async function runScript(script: Script): Promise<string[]> {
 		parameters: Type.Object({}, { additionalProperties: true }),
 		executionMode: t.executionMode,
 		execute: async (_toolCallId, _params, _signal, onUpdate) => {
+			// Declared latency first, then updates, then the result — mirrors the
+			// Java conformance driver (`ConformanceRunner.executed`).
+			if ((t.delayMs ?? 0) > 0) {
+				await new Promise((resolve) => setTimeout(resolve, t.delayMs));
+			}
 			// Streamed updates mirror the Java conformance driver: each partial is a
 			// whole AgentToolResult (types.ts:361-377 — `details` is a required field),
 			// pushed before the call resolves → `tool_execution_update` frames (agent-loop.ts:690-704).
@@ -494,7 +508,7 @@ function canonical(value: unknown): unknown {
 }
 
 describe("L5 conformance (pi side)", () => {
-	const ids = ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12"];
+	const ids = ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12", "S13"];
 	for (const id of ids) {
 		const scriptPath = join(SCRIPTS_DIR, `${id}.json`);
 		it(`runs ${id}`, async (ctx) => {

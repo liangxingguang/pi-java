@@ -6,7 +6,8 @@
   "toolExecution": "parallel",
   "tools": [
     { "name": "plainish" },
-    { "name": "term1", "terminate": true }
+    { "name": "term1", "terminate": true, "delayMs": 20 },
+    { "name": "term2", "terminate": true, "delayMs": 40 }
   ],
   "responses": [
     {
@@ -19,7 +20,7 @@
     {
       "content": [
         { "type": "toolCall", "name": "term1", "arguments": {} },
-        { "type": "toolCall", "name": "term1", "arguments": {} }
+        { "type": "toolCall", "name": "term2", "arguments": {} }
       ],
       "stopReason": "toolUse"
     },

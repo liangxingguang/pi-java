@@ -29,13 +29,19 @@ import static org.assertj.core.api.Assertions.assertThat;
  * </pre>
  *
  * <p>比对口径见 {@code docs/23c §2.3}（归一化）与 {@code §2.4}（P0/P1/P2 归档）：
- * 十个剧本全部**严格**逐帧比较 —— 曾有的唯一放宽规则（S4 的
+ * 全部剧本**严格**逐帧比较 —— 曾有的唯一放宽规则（S4 的
  * {@code PARALLEL_TOOL_END_ORDER}）已随 {@code ToolRunner} 的两相拆分删除。</p>
+ *
+ * <p><b>剧本里的延迟是声明出来的</b>（{@code docs/31 §8.23.7}）：并行批次的
+ * {@code tool_execution_end} 按**完成序**发射，两个等延迟的调用谁先完成在两侧都不可约
+ * （pi 侧是 JS 微任务队列的副产品，Java 侧是真线程竞速）。所以凡是同一批里有多个调用
+ * 会同跑的剧本，都要用 {@code delayMs} 把完成序写死 —— 否则差分测的是运行时运气，
+ * 而不是被测对象。</p>
  */
 class ConformanceTest {
 
     private static final List<String> SCENARIOS = List.of(
-        "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12");
+        "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12", "S13");
 
     @TestFactory
     Stream<DynamicTest> runsEveryScenarioAgainstPi() {
