@@ -34,8 +34,10 @@ import org.slf4j.LoggerFactory;
  * {@code counter}, {@code timing}.  Dimensions registered via {@link #with}
  * are merged into every line.  Child spans opened from a {@link TelemetrySpan}
  * inherit its trace/span ids as parent; {@link #pushCurrent}/{@link
- * #popCurrent} let worker threads bind event lines to a span opened on
- * another thread.</p>
+ * #popCurrent} let a thread bind event lines to a span opened on another
+ * thread.  Bindings are <b>per thread</b>: an event recorded without a binding
+ * on its own thread is left unattributed rather than hanging off a foreign
+ * span.</p>
  */
 public final class JsonlFileTelemetry implements TelemetryContext {
 
@@ -54,7 +56,25 @@ public final class JsonlFileTelemetry implements TelemetryContext {
     private Path file;
     private boolean degraded;
     private final Map<String, String> dimensions;
-    private final Deque<JsonlSpan> currentStack = new ArrayDeque<>();
+
+    /**
+     * Per-thread stack of spans bound via {@link #pushCurrent}, whose top is the
+     * host span of {@link #recordEvent} lines recorded on that same thread.
+     *
+     * <p><b>Why thread-local.</b> The stack is read and written without holding
+     * {@link #lock}, which guards file IO only.  A single shared deque therefore
+     * lets concurrent threads corrupt it and, worse, lets a thread read
+     * <em>someone else's</em> span — attributing an event to the wrong request
+     * silently.  Per-thread stacks turn that mis-attribution into a detectable
+     * absence (the event line simply carries no {@code traceId}).</p>
+     *
+     * <p>Nothing calls {@link ThreadLocal#remove()}: a thread that pushed and
+     * popped leaves an empty deque behind, which costs nothing and dies with the
+     * thread (production runs each prompt on a fresh virtual thread — see
+     * {@code docs/31 §8.25}).</p>
+     */
+    private final ThreadLocal<Deque<JsonlSpan>> currentStack =
+        ThreadLocal.withInitial(ArrayDeque::new);
 
     private JsonlFileTelemetry(Path tracesDir, boolean recordPayloads, Map<String, String> dimensions) {
         this.tracesDir = tracesDir;
@@ -104,6 +124,11 @@ public final class JsonlFileTelemetry implements TelemetryContext {
             }
             throw e;
         } finally {
+            // Symmetric with the push above.  Without it the stack grows without
+            // bound and a recordEvent after the callback returns would bind to an
+            // already-ended span.  Unbinding is paired (popCurrent peeks first), so
+            // an inner span returning leaves an outer binding intact.
+            popCurrent(span);
             span.close();
         }
     }
@@ -143,7 +168,7 @@ public final class JsonlFileTelemetry implements TelemetryContext {
         if (!recordPayloads) {
             return;
         }
-        var current = currentStack.peek();
+        var current = currentStack.get().peek();
         String traceId = current != null ? current.traceId : null;
         String spanId = current != null ? current.spanId : null;
         var line = baseLine("event", traceId);
@@ -156,8 +181,8 @@ public final class JsonlFileTelemetry implements TelemetryContext {
     }
 
     /**
-     * Bind a span opened on this or another thread as the current span for
-     * event recording on this thread.  Must be paired with {@link
+     * Bind a span (opened on this or another thread) as the current span for
+     * event recording <b>on this thread</b>.  Must be paired with {@link
      * #popCurrent} in a finally block.
      *
      * @param span the span to bind
@@ -165,20 +190,23 @@ public final class JsonlFileTelemetry implements TelemetryContext {
     @Override
     public void pushCurrent(TelemetrySpan span) {
         if (span instanceof JsonlSpan js) {
-            currentStack.push(js);
+            currentStack.get().push(js);
         }
     }
 
     /**
-     * Remove a span previously bound with {@link #pushCurrent}.  Only pops
-     * if it is the current top (guards against unbalanced pairs).
+     * Remove a span previously bound with {@link #pushCurrent} on this thread.
+     * Only pops if it is the current top (guards against unbalanced pairs).
      *
      * @param span the span to unbind
      */
     @Override
     public void popCurrent(TelemetrySpan span) {
-        if (span instanceof JsonlSpan js && currentStack.peek() == js) {
-            currentStack.pop();
+        if (span instanceof JsonlSpan js) {
+            var stack = currentStack.get();
+            if (stack.peek() == js) {
+                stack.pop();
+            }
         }
     }
 

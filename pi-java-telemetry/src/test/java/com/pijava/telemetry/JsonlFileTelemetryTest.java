@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -233,6 +234,105 @@ class JsonlFileTelemetryTest {
             .findFirst().orElseThrow();
         assertThat(event.get("spanId").asText()).isEqualTo(toolStart.get("spanId").asText());
         assertThat(event.get("traceId").asText()).isEqualTo(toolStart.get("traceId").asText());
+    }
+
+    /**
+     * 跨线程归属（{@code docs/31 §8.25.6} ①-a）：A 线程绑定的跨度对 B 线程不可见。
+     *
+     * <p>夹具是确定性的 —— A 推入后在 finally 里才弹出，B 在 join 之前运行，因此
+     * 共享栈的旧实现必然让 B 读到 A 的跨度（RE-1 的牙）。</p>
+     *
+     * <p><b>正向对照不可省</b>：没有 {@code on=owner} 那条断言，「{@code spanId}
+     * 永远为 null」也能让后半段通过。</p>
+     */
+    @Test
+    void recordEventOnlySeesSpansBoundOnItsOwnThread() throws Exception {
+        var telemetry = JsonlFileTelemetry.create(tempDir).withPayloads(true);
+        var span = telemetry.openSpan(new SpanOptions("harness.run"));
+        telemetry.pushCurrent(span);
+        AtomicReference<Throwable> foreignFailure = new AtomicReference<>();
+        try {
+            telemetry.recordEvent("llm.payload.request", Map.of("on", "owner"));
+            var other = Thread.ofVirtual().start(() -> {
+                try {
+                    telemetry.recordEvent("llm.payload.request", Map.of("on", "foreign"));
+                } catch (Throwable t) {
+                    foreignFailure.set(t);
+                }
+            });
+            other.join();
+            assertThat(foreignFailure.get()).isNull();
+        } finally {
+            telemetry.popCurrent(span);
+            span.close();
+        }
+
+        var lines = readLines(onlyTraceFile());
+        assertThat(lines).hasSize(4);
+        var spanStart = lines.stream()
+            .filter(n -> "span_start".equals(n.get("kind").asText()))
+            .findFirst().orElseThrow();
+
+        // 正向对照：绑定线程自己记的事件带上该跨度
+        var owner = eventMarkedOn(lines, "owner");
+        assertThat(owner.get("spanId").asText()).isEqualTo(spanStart.get("spanId").asText());
+        assertThat(owner.get("traceId").asText()).isEqualTo(spanStart.get("traceId").asText());
+
+        // 被钉住的一条：另一线程读不到别人的绑定，宁可无归属也不挂错的跨度
+        var foreign = eventMarkedOn(lines, "foreign");
+        assertThat(foreign.has("spanId")).isFalse();
+        assertThat(foreign.has("traceId")).isFalse();
+    }
+
+    /**
+     * A2 的针（{@code docs/31 §8.25.6} ④）：{@code startSpan} 回调返回后解绑 ——
+     * 此前它只 push 不 pop，栈无界增长，且此后的事件行会绑到**已结束**的跨度上。
+     */
+    @Test
+    void startSpanUnbindsItsSpanWhenTheCallbackReturns() throws IOException {
+        var telemetry = JsonlFileTelemetry.create(tempDir).withPayloads(true);
+
+        telemetry.startSpan(new SpanOptions("llm.request"), span -> null);
+        telemetry.recordEvent("llm.payload.request", Map.of("on", "after"));
+
+        var lines = readLines(onlyTraceFile());
+        var after = eventMarkedOn(lines, "after");
+        assertThat(after.has("spanId")).isFalse();
+        assertThat(after.has("traceId")).isFalse();
+    }
+
+    /**
+     * A2 的一半：解绑是**配对**的（{@code popCurrent} 的 {@code peek() == span} 守卫），
+     * 内层 span 返回不会把外层的绑定一起弹掉。
+     *
+     * <p>⚠️ 两层都必须从 {@link JsonlFileTelemetry#startSpan} 进：{@code JsonlSpan.startSpan}
+     * 根本不碰当前栈（登记为 {@code docs/31 §8.25.5-9}），从 span 对象进就测不到这个守卫。</p>
+     */
+    @Test
+    void innerSpanUnbindingLeavesOuterSpanBound() throws IOException {
+        var telemetry = JsonlFileTelemetry.create(tempDir).withPayloads(true);
+
+        telemetry.startSpan(new SpanOptions("outer"), outer -> {
+            telemetry.startSpan(new SpanOptions("inner"), inner -> null);
+            telemetry.recordEvent("llm.payload.request", Map.of("on", "nested"));
+            return null;
+        });
+
+        var lines = readLines(onlyTraceFile());
+        var outerStart = lines.stream()
+            .filter(n -> "span_start".equals(n.get("kind").asText())
+                && "outer".equals(n.get("name").asText()))
+            .findFirst().orElseThrow();
+        var nested = eventMarkedOn(lines, "nested");
+        assertThat(nested.get("spanId").asText()).isEqualTo(outerStart.get("spanId").asText());
+    }
+
+    /** 按 {@code payload.on} 取出事件行（三条线程归属用例共用的标记位）。 */
+    private static JsonNode eventMarkedOn(List<JsonNode> lines, String marker) {
+        return lines.stream()
+            .filter(n -> "event".equals(n.get("kind").asText()))
+            .filter(n -> marker.equals(n.get("payload").get("on").asText()))
+            .findFirst().orElseThrow();
     }
 
     @Test
