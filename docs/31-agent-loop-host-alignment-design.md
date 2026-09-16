@@ -2367,8 +2367,10 @@ push/pop 是「供 event 行在**批量 worker 线程**绑定当前栈顶 span�
 `currentStack` 的 `push/peek/pop` **完全在 `lock` 之外**——`lock`（`:52`）只护文件 IO。
 默认路径无害，但下面两条路把「第二条线程」真的带进来了：
 
-1. **手动压缩与运行重叠**（确定性可达，不需要竞速）：TUI 的 `/compact`（`MiscCommands`，
-   跑在**主/渲染线程**）与 RPC 的 `compact`（`RpcDispatcher:158`，跑在 **stdin 读线程**）
+1. **手动压缩与运行重叠**（确定性可达，不需要竞速）：TUI 的 `/compact`
+   （`core/slash/builtin/MiscCommands:124-127`，经 `CommandUtil.simple` 在 `execute` 里
+   **同步**跑 `body.run(...)` ⇒ 跑在**分派该命令的线程**上，TUI 即主/渲染线程）与 RPC 的
+   `compact`（`RpcDispatcher:158`，跑在 **stdin 读线程**）
    都走 `RunLifecycle.compact:237-239` → `new CompactionExecutor(ctx).compact(...)`，
    而**那里没有 `lane.isRunning()` 门**（只查 transcript 是否为空、末条是否已是压缩，
    `CompactionExecutor:84-89`）。摘要生成器拿到的又是**同一个** `recordingStreamFn`
