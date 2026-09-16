@@ -2579,14 +2579,17 @@ A1+A2 合计约 10 行生产改动，**不改任何对外签名**（`pushCurrent
 **「所有 start 早于所有 end」**。它不碰遥测（该用例用 `Recorder`），且：
 
 - 单独跑该测试类 **10/10 绿**；整模块套件 **3/3 绿**；第二次 `clean verify` 绿；
-- 但它是**真竞态**：准备循环按调用逐个发 start、并把执行票**在循环内**交出去
-  （`docs/29 §4.1`：`:520-541` 的延迟任务），所以 task₁ 的 end 可以落在 start₂/start₃ 之间。
-  `docs/29 §4.1` 已明说「所有 start 早于任何 end **不是**该模式的保证」，
-  §8.23.7 第 2 条也已把这条用例的断言放宽为「start 源序 + end 任意排列」——
-  **唯独第三条断言（全 start 早于全 end）留了下来**，它就是残留的那半个运气断言。
-- **不在本包修**（遥测无关，且其属于 §8.23 的收口面）。修法一行：删掉 `:338`，
-  或按 §8.23.7 的口径改成「每个调用恰一 start 一 end」（后者已由
-  `containsExactly`/`containsExactlyInAnyOrder` 覆盖）。**请裁决是否顺手修**。
+- ~~但它是**真竞态**：准备循环按调用逐个发 start、并把执行票**在循环内**交出去
+  （`docs/29 §4.1`：`:520-541` 的延迟任务），所以 task₁ 的 end 可以落在 start₂/start₃ 之间。~~
+  ⇒ **该诊断已证伪（2026-09-17）**：Java 侧 `PiLoopTools.executeParallel:190-194` 是
+  **准备循环跑完才 `submit`**（循环里只登记 thunk），故本桩形状下「全 start 早于全 end」
+  是**结构保证**，不是运气。真正的根因是**测试桩自己不是线程安全的** —— `Recorder.frames`
+  用一个普通 `ArrayList` 收帧，而包 B 之后 `end` 帧由 **worker 线程**发出：实测 300 轮
+  坏 5 轮。诊断、修复与量化见 **§8.27.7**。
+- **已在 §8.27.7 修**：改的是**桩**（三个测试 sink 换 `CopyOnWriteArrayList`），
+  **不是删 `:338`** —— 删掉它就丢掉了「本桩形状下全 start 早于全 end」这条真实覆盖。
+  `docs/29 §4.1` 那条撤回仍然有效：它说的是「pi 的并行分支**不保证**该性质」（immediate
+  调用会在准备循环里发 end，S4 即如此），与本桩形状不矛盾。
   参照：§8.23.7 已记过同类先例（`web` 的 `PiWebServerAuthTest` 对负载敏感，三红一绿）。
 
 **新登记**：§8.25.5-9（`JsonlSpan.startSpan` 不碰当前栈 / 接口 javadoc 未写明绑定语义）、
@@ -2766,6 +2769,59 @@ JSON 线程转储里的结构化层级（与判据无关）。四条没有一条
 全部调用点（`add`/`clear`/`addAll`/`stream`/`forEach`/`copyOf`/下标）对 COW 语义相同。
 `RunLifecycle.restoreRecords:298-299` 的 `clear()`+`addAll()` 在 COW 上**不是原子**，
 但它跑在恢复边界（车道未运行、`synchronized (lane)` 内），无并发读者 —— 与 `ArrayList` 时等价。
+
+#### 8.27.7 同一根因的**测试侧**兄弟：`PiLoopTest.parallelBatchEmitsEveryStartBeforeAnyEnd` 的 flake
+
+§8.25.7 登记过一次**未复现的全 reactor flake**，当时的诊断是「**真竞态**：准备循环按调用逐个发
+start、并把执行票**在循环内**交出去 ⇒ task₁ 的 end 可以落在 start₂/start₃ 之间」，处置建议是
+「修法一行：**删掉 `:338`**」。**该诊断已证伪，本条更正它并给出真正的根因与修法。**
+
+**① 结构上不存在那条竞态。** `PiLoopTools.executeParallel:148-206` 的形状是：准备循环按源序发
+`tool_execution_start`、并把「执行票」登记成 **thunk** 存进 `entries`；`workers.submit(...)`
+**只在准备循环跑完之后**（`:190-194`）才发生。所以「全 start 早于任何 end」在本桩形状下是
+**结构保证**，不是运气 —— 与 `docs/29 §4.1` 说 pi「不保证」并不矛盾：那条说的是 pi 的
+**immediate 分支**（调用在准备相当场失败、在自己的闭包里发 end，S4/S13 剧本即如此），
+而本用例的 `StubTools` 恒给执行票、且不中止，走的正是没有 immediate、没有 abort 的那一支。
+
+**② 真根因：测试桩不是线程安全的。** 包 B 之后 `end` 帧由 **worker 线程**发出，而
+`Recorder.frames` 是一个普通 `ArrayList` —— 引擎线程与多个 worker 并发 `add`，会**丢帧**。
+丢掉的若是某个 `tool_execution_end`，`frames.indexOf(...)` 就可能落到 start 之前（甚至
+`ends` 只有 2 条、`ends.getFirst()` 位置反而更早），断言假红。
+
+**量化（临时探针，`ScratchSinkRaceProbe`，跑完即删）**：两个 sink 各 300 轮，每轮 3 个并行
+工具在函数体里闩锁会合，收帧的表分别是 `ArrayList` 与 `CopyOnWriteArrayList`：
+
+```
+PROBE sink=ArrayList          rounds=300 丢帧/脏帧=5  次序坏=0  抛异常=0
+PROBE sink=CopyOnWriteArrayList rounds=300 丢帧/脏帧=0  次序坏=0  抛异常=0
+```
+
+5/300 ≈ 1.7% —— 与「全 reactor 跑几轮才红一次的未复现 flake」的量级吻合。
+（探针第一版报的是 300/300 全坏：它的 `emit` 把非工具事件也 `add` 了一个 `null`，是探针
+自己的 bug，修掉后才是上表。）
+
+**③ 修法：改桩，不删断言。** 删 `:338` 会丢掉一条**真实覆盖**（本桩形状下全 start 早于全 end
+—— 它正好是「相位③在整批结束后才回填结果消息」那条实现的哨兵）。四处收帧的表换成
+`CopyOnWriteArrayList`：
+
+| 文件 | 字段 |
+|---|---|
+| `PiLoopTest.java:113` | `Recorder.frames` |
+| `PiLoopTest.java:135` | `StubTools.invoked`（`execute` 跑在 worker 线程上） |
+| `PiLaneEngineTest.java:133` | `Recorder.frames` |
+| `PiLoopTurnHooksTest.java:153` | `Recorder.frames` |
+
+同类夹具里**只有 `ToolBatchConcurrencyTest` 本来就是对的**（它收帧用 `ConcurrentLinkedQueue`，
+是当时唯一按「帧可能来自 worker」写的夹具）—— 这三个是漏网的。
+`PiLoopTest:319-324` 的用例 javadoc 记下「本断言靠结构 + 桩线程安全**两条**，缺一不可」，
+免得后人再把 ② 的症状误诊回 ①。
+
+**④ 验证**：三个类连跑 5 轮，每轮 `Tests run: 7, Failures: 0, Errors: 0`。
+**本处只改测试**，零生产代码改动（生产侧的同类问题是 §8.27.1，已在 `0e76e5a` 修）。
+
+**⑤ 口径更正（无损）**：`docs/29 §4.1` 那条撤回依然有效，本次是**收窄它的适用面** ——
+它讲的是「pi 的并行分支**不保证**全 start 早于全 end」（对 immediate 分支成立，S4/S13 已证），
+不能外推成「所有带并行工具的用例都不许这么断言」。§8.25.7 的 ⚠️ 块已就地更正并保留原诊断。
 
 ---
 
