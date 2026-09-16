@@ -2680,7 +2680,7 @@ JSON 线程转储里的结构化层级（与判据无关）。四条没有一条
 |---|---|---|---|---|
 | 11 | **顺序路径的 `batchSize` 语义错** | `batchSize` 在 `closeToolSpan`（`PiLaneSink.java:456`）按**当时**的 `batchCallIds.size()` 写，而 `batchCallIds` 只在 `noteToolStart`（`:217`）追加、在助手消息落定时清空（`:326`），读取由**结果消息**驱动（`:358` → `emitToolRecords:418` → `closeToolSpan:430`）。并行路径相位③在整批后回填 ⇒ 恒为 `N` ✅；**顺序路径逐调用成组**（`PiLoopTools.java:96-113`）⇒ 第 k 个调用收尾时只有 k 个成员登记过，`batchSize` = **1,2,3,…,N** ❌ | **生产可达**，不是角落：`BashTool`/`EditTool`/`WriteTool` 都是 `ExecutionMode.Sequential`，一个这样的调用即让**整批降级**（`useSequentialPath:76-88`，对应 S10）。pi 自己的录制 `conformance/pi-out/S10.pi.jsonl:11-18` 就是 `… → end tc1 → message_start tc1 → **message_end tc1** → start tc2 → …`。**未覆盖**：L5 差分是**帧级**的、不含遥测属性；`HarnessToolExecutionSpansTest.java:146` 只有单调用批（两种读法同值）。同根的另一处：`toolIndex`（`:222`）**两条路径都正确**（列表单调增长） | **进 §8.25.5-1/-2 的 pi 跨度词汇包**（用户裁决）。理由：`batchSize` 挂在**遗留**的 `tool.execute` 跨度族上，而 pi 的工具跨度属性只有 `pi.tool.name`/`call_id`/`replay`/`recovery`/`is_error`（`packages/agent/src/harness/telemetry.ts:422-448`）——**根本没有 batchSize**；那包要重建整个族，届时自然定案（很可能是删）。**本包不改行为、不补测试** |
 | 12 | **批内 join 是源序，异常选择与 pi 不同**（且作用域更强） | `PiLoopTools.java:195-197` 按**源序**逐个 `future.get()`；pi 用 `await Promise.all(...)`（`agent-loop.ts:547-549`），**最早抛出者**（时间序）获胜。另有两处差异：**(a) 作用域更强** —— 抛异常后 `finally` 走 `close()`，它**等全部 worker 终止**才让异常向上冒，因此 pi-java 的失败路径耗时是 `max(全部工具)`，pi 是「首个失败」；pi 那边**迟到的 `tool_execution_end` 可以落在 `agent_end` 之后**，pi-java 结构上不可能（`ExecutorService.java:368-407`）。**(b) 触发条件两侧不同构** —— pi 的 `catch` 无类型，工具体抛什么都转成结果，thunk 只可能因**宿主 sink 失败**而 reject；pi-java 的 `catch (Exception)` 使 `Error`（OOM/`StackOverflowError`/`AssertionError`）与 sink 失败才逃得出去 | 可达性窄（"同批 ≥2 条抛 `Error`"），且**不影响帧序**（相位③恒源序）、不影响 `terminate`（序无关）。**但 (b) 有一条更重的下游**：`SessionRunner` 两处都是 `catch (Exception)`，`Error` 两条都不接 ⇒ `statusFuture`/`entriesFuture` **永不完成**、不发 `AgentEnd`/`AgentSettled`、虚拟线程带未捕获 `Error` 死去 —— 宿主**永久挂起**（车道却已 idle）。这是**宿主层缺口**，经同一个门到达 | **登记，不改**（用户裁决）：可达性窄；按完成序重抛会引入 pi-java 从未有过的跨线程顺序语义。**备注**：这个角落若要贴近 pi，**恰恰**是 `StructuredTaskScope` 能帮上的一点（它按完成序选异常）——但为它引入预览不值得，真要改是 3 行、不依赖任何预览 API。宿主那半边（`Error` 不接）与 pi 的 `handleRunFailure`（把异常**压成文本**、合成 assistant 消息、promise **resolve**）是另一处更大差距，另立包 |
-| 13 | **`lane.records` 被工具线程写入**（数据竞争，**包 B 引入**） | `LaneState.records` 是**普通 `ArrayList`**（`LaneState.java:79`），却有一个**工具线程**写者：`PiToolRunner.execute:172` 在**worker 线程**上调 `hooks.fireAfterTool(...)`（`PiLoopTools.java:172` 的 worker lambda 里）→ `HookSystem.fireAfterTool:200` 的 `catch` → `recordHookError:334` `lane.records.add(...)`。同时宿主在**别的线程**读它：`SnapshotService.java:75` `lane.records.stream()`、`:81` `List.copyOf(lane.records)`（由 HTTP 请求线程经 `WebDispatcher` 到达） | **两条今天可达的路径**：①同一并行批里**两个**工具的 `after_tool` 钩子都抛异常 ⇒ 两条虚拟线程并发 `add`（丢记录；扩容期还会 `ArrayIndexOutOfBoundsException`）；②批次在飞时来一个 web/RPC 快照请求 ⇒ `ConcurrentModificationException`（或复制期 `AIOOBE`）。**包 B 之前不可能**：那时工具在引擎线程上顺序跑。§8.23.2 的审计只覆盖了「工具线程不得触碰**遥测绑定**」，漏了宿主记录表。`before_tool` 走 `prepare`（引擎线程），安全 | **待裁决**（本包只登记，不动行为）。方向有二：把 `records` 换成 `CopyOnWriteArrayList`（最小改动），或**让 worker 侧不直写宿主状态** —— 即 `recordHookError` 改走 `PiLaneSink.emit` 那条**唯一漏斗**（更贴包 B 的设计原则：「工具线程只经 emit 进宿主」）。**无论选哪条，都要先补一条并发夹具**（两条 worker 的 `after_tool` 同时抛 ⇒ 记录条数守恒） |
+| 13 | **`lane.records` 被工具线程写入**（数据竞争，**包 B 引入**） | `LaneState.records` 是**普通 `ArrayList`**（`LaneState.java:79`），却有一个**工具线程**写者：`PiToolRunner.execute:172` 在**worker 线程**上调 `hooks.fireAfterTool(...)`（`PiLoopTools.java:172` 的 worker lambda 里）→ `HookSystem.fireAfterTool:200` 的 `catch` → `recordHookError:334` `lane.records.add(...)`。同时宿主在**别的线程**读它：`SnapshotService.java:75` `lane.records.stream()`、`:81` `List.copyOf(lane.records)`（由 HTTP 请求线程经 `WebDispatcher` 到达） | **两条今天可达的路径**：①同一并行批里**两个**工具的 `after_tool` 钩子都抛异常 ⇒ 两条虚拟线程并发 `add`（丢记录；扩容期还会 `ArrayIndexOutOfBoundsException`）；②批次在飞时来一个 web/RPC 快照请求 ⇒ `ConcurrentModificationException`（或复制期 `AIOOBE`）。**包 B 之前不可能**：那时工具在引擎线程上顺序跑。§8.23.2 的审计只覆盖了「工具线程不得触碰**遥测绑定**」，漏了宿主记录表。`before_tool` 走 `prepare`（引擎线程），安全 | **已裁决并落地（2026-09-17，用户裁「先修复」）**：换成 **`CopyOnWriteArrayList`**（`LaneState.java:103`）。「走漏斗」那条**不采用** —— 它只覆盖工具线程这一条通路，而宿主线程的 `abort:303` 与运行中压缩同样在写这张表；且它要把 pi **没有**的「钩子错误」塞进与 pi 事件 **1:1** 的 `PiLoop.Event` 端口。**RE 已验齿**（回退成 `ArrayList` ⇒ **5 跑 2 红**，`ConcurrentModificationException` 冒在 `SnapshotService:75`）⇒ **修复后 8 跑 8 绿**。实施记录、影响面与**未覆盖的三条相邻问题**（可见性 / 运行中替换 transcript / 压缩 attempt 读-改-写）见 **§8.27** |
 
 #### 8.26.6 未来触发条件
 
@@ -2690,6 +2690,82 @@ JSON 线程转储里的结构化层级（与判据无关）。四条没有一条
 绕不开 `FailedException` 的包装，且仍须先证明**无行为差异**。在此之前，
 `ToolExecution.java:7-9` 的那句"`StructuredTaskScope` … is avoided"**仍然正确**，
 其依据即本节。
+
+---
+
+### 8.27 `lane.records` 的跨线程访问（§8.26.5-13）—— **已实施（2026-09-17）**
+
+> 判据仍是**行为**（「分支所有功能都和 pi 表现一样」）。pi 是单线程 + 逐个 `await emit`，
+> 工具体里不可能有第二条线程碰宿主状态；Java 的包 B（§8.23）引入真并发之后，
+> 「谁在哪个线程碰宿主状态」第一次需要按**共享对象**逐个过一遍。
+
+#### 8.27.1 事实：这张审计表有一个工具线程写者、以及多个宿主读者
+
+| 角色 | 位置 | 线程 |
+|---|---|---|
+| **写** | `HookSystem.recordHookError:334`（`lane.records.add`）← `fireAfterTool:200` 的 `catch` ← `PiToolRunner.execute:172` | **worker**（`PiLoopTools:169-176` 的并行任务体）。只有 `after_tool` 走这条；`before_tool` 在 `prepare`（引擎线程）⇒ 安全 |
+| 写 | `PiLaneSink:397/:404/:429/:432`（步 / 用量 / 工具记录） | 引擎线程（在 `emit` 的 `emitLock` 内） |
+| 写 | `RunLifecycle:69/:137/:182`、`QueueManager:77/:109`、`HarnessUtils:119`、`CompactionExecutor:327-337` | 引擎线程；`CompactionExecutor` 也可能在**宿主线程**（运行中的 `/compact`） |
+| 写 | `AgentHarness.abort:303` / `close:488`（`AbortRequested`） | **宿主线程** —— 公开 API `abort(String):296` 正是「`lane.isRunning()` 时也照写」，即批次在飞时照样写 |
+| 读 | `SnapshotService:75`（`stream()`）、`:81`（`List.copyOf`） | **任意线程**：宿主的 `snapshot()`（`WebDispatcher:236`、`RpcDispatcher:365`、TUI 轮询）与引擎线程的 `publishState` |
+| 读 | `CompactionExecutor:348`（遍历数 attempt）、`PiLaneEngine:443`（`copyOf`） | 引擎线程 / 宿主线程 |
+
+它此前是**普通 `ArrayList`**（`LaneState.java:79`；改后字段在 `:103`）。
+
+#### 8.27.2 为什么 §8.23.2 的审计漏了它
+
+§8.23.2 那次审计的对象是**「工具线程不得触碰遥测绑定」**（结论：`toolTerminate` 要并发映射；
+`toolStartNanos`/`toolAllowed` 只在引擎线程 ⇒ 保持 `HashMap`）。那条结论**按对象成立**，
+但**不能外推**成「车道状态里没有别的工具线程写者」——`lane.records` 根本不在那次审计的对象里。
+**教训**：并发审计的单位是**「共享对象 × 全部线程」**，不是「某条已知的破坏路径」。
+（同形的问题在 §8.25 的 D 包又出现一次：那次只盯 `currentStack`，漏了压缩与在飞请求的重叠。）
+
+#### 8.27.3 裁决：换容器（`CopyOnWriteArrayList`），**不**走漏斗
+
+§8.26.5-13 登记的两个方向，取前者：
+
+| | 换容器（**采用**） | worker 侧改走 `PiLaneSink.emit` 漏斗（**不采用**） |
+|---|---|---|
+| 改动面 | `LaneState` 一行 + 字段 javadoc | `HookSystem` 的错误记账要变成事件、`PiToolRunner` 的错误路径要重排 |
+| 覆盖范围 | **全部**跨线程写点，含宿主线程的 `abort`（`:303`）与运行中压缩（两者今天就在写这张表） | 只覆盖「工具线程的钩子错误」一条，其余仍要另想办法 |
+| 与 pi 端口的关系 | 无影响 | 要把 pi **没有**的「钩子错误」事件塞进 `PiLoop.Event` —— 那是与 pi 事件 **1:1** 的端口，塞进去就破坏了它的对齐意义（同 §8.26.3 的口径） |
+| 代价 | 每次 `add` 复制一次数组 | 要让 worker 去抢宿主的闩锁 |
+
+**为什么接受复制代价**：这张表是**只追加的旁路审计**（`docs/28` 选项 C 已把恢复改读 entry、
+`records` 降级为审计），且引擎在**每条 entry 落定时已经整体复制它一次**
+（`PiLaneSink.onMessageEnd:369` → `publishState` → `SnapshotService:81` 的 `List.copyOf`）
+⇒ COW 的复制与既有量级同阶，不改复杂度。
+
+#### 8.27.4 本次**未**覆盖的相邻问题（如实登记，不许外推）
+
+| 项 | 为什么不在本包 | 归处 |
+|---|---|---|
+| `transcript` / `messages` / `partial` / `runId` 等字段的**可见性** —— 宿主线程 `snapshot()` 与引擎线程追加之间没有 happens-before | 这些字段的写者**唯一**（引擎线程，加 `synchronized (lane)` 的 reset/restore，都在无运行态），**不产生结构破坏**；宿主拿到的是副本，最坏是「少最后一条」 | 只登记，不改 |
+| `transcript` 在**运行中被整体替换**（压缩的 `clear()`+`addAll()`、reset、restore）与运行期追加并发 | 根因不是容器类型，而是**运行中 `/compact` 没有 `isRunning` 门**（`RunLifecycle.compact:237-239`） | §8.25.5-6/-7（同根因） |
+| `CompactionExecutor.compactionAttempt:348-354` 的**读-改-写**（数一遍再写 attempt）不原子 | COW 只让集合安全，不让「读-改-写」原子；两条压缩并发时仍可能同号。根因同上 | §8.25.5-6/-7 |
+
+**本包只修「会被结构破坏的那个集合」**：丢记录 / 抛 CME 是**崩溃**，读到过期值是**陈旧**，
+两者不同级；把后者顺手做掉，等于夹带修改 §8.25 已登记的设计门。
+
+#### 8.27.5 夹具与 RE
+
+`LaneRecordsConcurrencyTest.concurrentHookErrorsAllLandInTheRecordLog`（agent-core）：
+八个并行工具的 `after_tool` 钩子先在闩锁上互等（**八个都进场**才由读者线程统一放行），
+放行后同时抛出 ⇒ 八条虚拟线程的 `records.add` 挤进同一窗口，而读者线程同时在
+`harness.snapshot("default")`。三条断言：钩子都到了（并发真的发生，顺序批次等不到闩锁）、
+读者**没抛**、`UsageCause.HOOK` 记录**恰好 8 条**（一条不丢）。
+
+| | 结果 |
+|---|---|
+| **RE（把 `records` 回退成 `ArrayList`）** | **5 跑 2 红** —— `ConcurrentModificationException` 冒在 `SnapshotService:75` 的 `stream()`（栈顶 `ArrayList$ArrayListSpliterator.tryAdvance:1695`），正是登记里写的「批次在飞时来一个快照请求」那条路径 |
+| **修复后** | **8 跑 8 绿** |
+
+#### 8.27.6 影响面
+
+零行为改动（并发正确性本身除外）：`records` 的声明类型仍是 `List<LaneRecord>`，
+全部调用点（`add`/`clear`/`addAll`/`stream`/`forEach`/`copyOf`/下标）对 COW 语义相同。
+`RunLifecycle.restoreRecords:298-299` 的 `clear()`+`addAll()` 在 COW 上**不是原子**，
+但它跑在恢复边界（车道未运行、`synchronized (lane)` 内），无并发读者 —— 与 `ArrayList` 时等价。
 
 ---
 
