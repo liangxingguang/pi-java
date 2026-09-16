@@ -1774,8 +1774,8 @@ for (var entry : entries) { outcomes.add(entry.get()); }   // ← 串行执行
 2. **`tool_execution_update` 的发射时机差异**：pi 收集成 Promise、在该工具 end 前成批落地
    （`:690-706`），pi-java 内联发射。单工具下同形；**多工具交错**时 L5 覆盖不到
    （剧本工具不产 update 交错）。
-   → **已立案为包 C，见 §8.24**（结论：发射点两侧一致；「成批」指的是完成序保证，
-   在同步漏斗下平凡成立；交错盲区用新剧本 S14 补上）。
+   → **已结案为包 C，见 §8.24**（结论：发射点两侧一致；「成批」指的是完成序保证，
+   在同步漏斗下平凡成立；交错盲区由新剧本 S14 补上，RE-1 证明该剧本有牙）。
 3. **宿主消费者的并发契约**：收敛到 `PiLaneSink.emit` 的锁后仍是「互斥的单线程调用」，
    但 TUI/RPC/web 的消费者此前没有任何显式线程声明 —— 清点项（B 之后调用方来自引擎线程
    **与**工具线程两种，锁保证互斥，但「总是哪个线程」不再唯一）。
@@ -2006,7 +2006,7 @@ pi executeToolCallsParallel (agent-loop.ts:487-561)
 | pi 侧真相 | `conformance/pi-out/S12.pi.jsonl:27-30`、`S13.pi.jsonl:11-20` |
 | pi 原实现 | `agent-loop.ts:497-503` / `:506-517` / `:520-541` / `:547-549` / `:550-555` / `:589-591` |
 
-### 8.24 `tool_execution_update` 的发射时机（C）—— **待审核（2026-09-16）**
+### 8.24 `tool_execution_update` 的发射时机（C）—— **已实施（2026-09-16，设计经用户审核通过；实施记录见 8.24.7）**
 
 > 本节是 C 的准入设计文档。**未经审核认可前不写任何实施代码。**
 > 来源是 §8.23.5-2 的登记项。pi 事实逐行读自 `packages/agent/src/agent-loop.ts:677-718`、
@@ -2173,9 +2173,61 @@ tools: [ streamer(delayMs 0, updates 3, updateEveryMs 150),   ← 声明在前
 ③ **E2E**：不新增。C 无生产改动，`ToolBatchConcurrencyTest.concurrentUpdatesSurviveTheEmitFunnel`
    （4 工具 × 3 update 的闩锁夹具）已经钉住 Java 侧的「每工具 update FIFO + 宿主不重入」。
 
-#### 8.24.7 实施记录
+#### 8.24.7 实施记录（2026-09-16）
 
-（待裁决后填写。）
+**裁决**：两条裁决点均按推荐 —— ① 接受「生产代码零改动」的结案；② 扩剧本格式加
+`updateEveryMs` 并新增 S14。
+
+**提交**：`aa2ff00` docs（设计稿）→ 实施提交 `test(agent-core)`（`conformance/pi/run.test.ts`
+加字段与间隔；`ConformanceScript.Tool` 加 `updateEveryMs`；`ConformanceRunner.executed`
+加参数与「首条紧跟 delayMs、其后每条之间睡」；`ConformanceTest` 的 `SCENARIOS` 增至 S14；
+新剧本 `conformance/scripts/S14.json` + 录制 `conformance/pi-out/S14.pi.jsonl`）。
+**生产代码确认零改动** —— `git status` 里 `pi-java-agent-core/src/main/` 一个文件都没动。
+
+**pi 侧录制**：14/14（`npx vitest --run --config vitest.conformance.config.ts`，2.44s）。
+**旧的 13 个 `.pi.jsonl` 重录后逐字节不变**（`sha256sum -c` 13/13 OK）—— 这正是「缺省 0
+＝背靠背」所要的证据：新字段对既有剧本**零影响**，且这一次重录本身构成一次回归校验。
+
+**S14 的形状**（`conformance/pi-out/S14.pi.jsonl:11-17`，`streamer` 3 条 update 每 300ms、
+`blip` 750ms 后结束）：
+
+```
+start tc1 streamer
+start tc2 blip
+update tc1 partial 1      ← @300
+update tc1 partial 2      ← @600
+end    tc2 blip           ← @750   ★ 别个调用的 end 落在本调用两条 update 之间
+update tc1 partial 3      ← @900
+end    tc1 streamer       ← @900
+message tc1 / message tc2 ← 结果消息源序（turn_end.toolResults ["streamer","blip"]）
+```
+
+★ 那一行就是本包买到的判别力：它同时排除「该工具的 update 成批落在自己 end 之前」
+（则会看到 `end blip` 排到 `partial 1` 之前）与「end 早于所有 update」两种误读。
+
+**反向实验（先预测红名单再动刀）：**
+
+- **RE-1（关键，命中）**：把 `ConformanceRunner.executed` 的 update 改成「收进列表、在
+  返回前统一发」（＝ §8.23.1 初版误读的那个形状）⇒ **恰 `[14]` = S14 一红，其余 13 绿**，
+  diff 正是 `java: end tc2 blip / partial 1 / partial 2` 对 `pi: partial 1 / partial 2 /
+  end tc2 blip`。**S14 有牙**，扩格式不是白花钱。
+- **RE-2（对照，预期不红，实测不红）**：去掉 `PiToolRunner` 的 `acceptingUpdates` 闩
+  ⇒ **14/14 全绿**。这条是「预期不红」的对照组，用来证明 RE-1 的红不是偶然；
+  它同时说明**该闩在 L5 里是盲区**（见下）。
+- 两处补丁全部还原，`grep` 复查无残留，`PiToolRunner.java` 回到未改动状态。
+
+**稳定性**：L5 **14/14 连跑 5 轮全绿**（S14 的时序靠 150ms 余量声明，不靠竞速）。
+全 reactor `mvn -o clean verify` **BUILD SUCCESS**（14 模块全绿，11:41 min —— 本轮
+`pi-java-tui` 的 `NoMode2027JLineBackendTest` 单模块耗时拉到 07:30，非失败）：
+telemetry 26 / ai 336 / **agent-core 444**（较 B 的 443 **+1 = S14**）/ session-backend-sqlite 35 /
+coding-agent 218 / tui 188(1 skip) / protocol 14 / server 2 / web 37 / evals 43(17 为 smoke skip)；
+`checkstyle:check -pl pi-java-agent-core` exit 0。
+
+**未覆盖（诚实标注，与 §8.24.5 一致）**：② 完成序保证与 ③ 消费者阻塞语义二者都要
+**异步消费者**才能观察，而 `PiLoop.Sink.emit` 的契约是同步 `void` ⇒ 结构性不可达；
+`acceptingUpdates` 闩由 RE-2 证实 L5 覆盖不到（没有剧本在工具返回后还发 update）。
+8.23.5 的清单从本包起的余项：遥测线程归属、宿主消费者线程契约、内置工具线程安全、
+钩子在工具线程执行。
 
 ---
 
