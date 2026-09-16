@@ -4,8 +4,9 @@
 > 以及 `docs/24` / `docs/08b` / `docs/09b` / `docs/27` / `docs/phase1-pi-code-mapping` 等
 > 二十余份文档里 —— 没有一处能一眼看全，也没有一处说得清「谁挡着」。本台账把它们合并成一张表。
 >
-> **基准**：HEAD `5dfa640`（2026-09-17），分支 `agent-core-pi-loop`，领先 `main` **96** / 落后 0。
-> 全 reactor `mvn -o clean verify` 绿；telemetry 31 / ai 336 / agent-core **450**。
+> **基准**：本台账写于 `4af78f9`（2026-09-17），分支 `agent-core-pi-loop` —— 当时领先本地 `main` **98** / 落后 0。
+> 分支位置与测试计数会随提交漂移，**引用时以 `git rev-list --left-right --count main...HEAD` 为准**，不要抄这里的数字。
+> 当时全 reactor `mvn -o clean verify` 绿；telemetry 31 / ai 336 / agent-core **450**。
 >
 > **本台账不复制原节论证** —— 每条只给「是什么 / 出处 / 谁挡着 / 修法素描」。
 > 要读论证、证据与反向实验，按出处回原节。
