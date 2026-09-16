@@ -62,15 +62,12 @@ class HarnessToolExecutionSpansTest {
     }
 
     /**
-     * StreamFn: first LLM call replies with a tool_use for the named tool,
-     * every later call stops — so the harness executes the tool once and the
-     * run finishes instead of looping on tool_use forever.
+     * StreamFn: the first LLM call replies with the given assistant message
+     * (carrying the batch's tool_use blocks), every later call stops — so the
+     * harness executes the batch once and the run finishes instead of looping
+     * on tool_use forever.
      */
-    private static StreamFn toolUseThenStopStreamFn(String toolCallId, String toolName) {
-        var toolUse = AssistantMessage.empty()
-                .withContent(List.of(new ContentBlock.ToolUseContent(
-                    toolCallId, toolName, Map.of("text", "hello"))))
-                .withStopReason("tool_use");
+    private static StreamFn toolUseThenStopStreamFn(AssistantMessage toolUse) {
         var stop = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent("done")))
                 .withStopReason("stop");
@@ -84,15 +81,36 @@ class HarnessToolExecutionSpansTest {
         };
     }
 
+    /** Single-call batch convenience overload. */
+    private static StreamFn toolUseThenStopStreamFn(String toolCallId, String toolName) {
+        return toolUseThenStopStreamFn(AssistantMessage.empty()
+                .withContent(List.of(new ContentBlock.ToolUseContent(
+                    toolCallId, toolName, Map.of("text", "hello"))))
+                .withStopReason("tool_use"));
+    }
+
     private static AgentHarness harness(JsonlFileTelemetry telemetry,
             ToolRegistry registry, StreamFn streamFn) {
+        return harness(telemetry, registry, streamFn, ToolExecution.defaultMode());
+    }
+
+    /**
+     * 同上，但可指定工具批次的执行模式。
+     *
+     * <p>这里必须**显式**给模式：夹具的 {@code activeTools} 是空的，于是
+     * {@code PiLoopTools.useSequentialPath} 的「工具自带 {@code ExecutionMode.Sequential}
+     * 即整批降级」那条分支查不到工具（{@code Context.toolNamed} 走的是 {@code context.tools}，
+     * 不是注册表），只剩模式这一条判据。工具本身照旧按名从注册表取，所以能正常执行。</p>
+     */
+    private static AgentHarness harness(JsonlFileTelemetry telemetry, ToolRegistry registry,
+            StreamFn streamFn, ToolExecution toolExecution) {
         return AgentHarness.create(new HarnessConfig(
                 streamFn, MODEL, ModelThinkingLevel.off(), "",
                 Set.of(), 200_000, registry, null, null,
             null, Map.of(),
                 com.pijava.ai.http.RetryPolicy.defaultPolicy(),
                 telemetry, com.pijava.ai.thinking.ThinkingLevelMap.empty(),
-                QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),
+                QueueMode.defaultMode(), QueueMode.defaultMode(), toolExecution,
                 event -> { }));
     }
 
@@ -176,6 +194,61 @@ class HarnessToolExecutionSpansTest {
         assertThat(finished.get(0).terminate()).isFalse();
         assertThat(finished.get(0).durationMs()).isNotNull();
         assertThat(finished.get(0).durationMs()).isGreaterThanOrEqualTo(0);
+    }
+
+    /**
+     * 顺序路径的**多调用**批次：`batchSize` 是本批的调用**总数**，不是前缀数
+     * （{@code docs/31 §8.26.5-11}）。
+     *
+     * <p>上面的单调用用例两种读法同值（{@code batchSize == 1}），测不出这个缺陷；
+     * 双调用的顺序批才把它们分开 —— 旧实现读的是「结果消息落定时已 start 过的个数」，
+     * 首个调用收尾时只有它自己登记过 ⇒ 会记成 1。</p>
+     *
+     * <p>第一条断言同时钉住了「走的确实是顺序路径」：逐调用成组是那个读法出错的
+     * **前提**，也是 pi 自己的录制形状（{@code conformance/pi-out/S10.pi.jsonl:11-18}）。</p>
+     */
+    @Test
+    void sequentialBatchReportsTheWholeBatchSizeOnEverySpan(@TempDir Path tracesDir) throws IOException {
+        var registry = new ToolRegistry(null);
+        registry.register(echoTool("echo-a"));
+        registry.register(echoTool("echo-b"));
+        var telemetry = JsonlFileTelemetry.create(tracesDir);
+        var batch = AssistantMessage.empty()
+            .withContent(List.of(
+                new ContentBlock.ToolUseContent("call-a", "echo-a", Map.of("text", "one")),
+                new ContentBlock.ToolUseContent("call-b", "echo-b", Map.of("text", "two"))))
+            .withStopReason("tool_use");
+        var h = harness(telemetry, registry, toolUseThenStopStreamFn(batch),
+            new ToolExecution.Sequential());
+
+        h.prompt("run two tools");
+
+        var lines = readLines(tracesDir);
+        var toolEvents = new ArrayList<String>();
+        for (var line : lines) {
+            String kind = line.get("kind").asText();
+            if (("span_start".equals(kind) || "span_end".equals(kind))
+                    && line.get("attrs").has("toolCallId")) {
+                toolEvents.add(kind + ":" + line.get("attrs").get("toolCallId").asText());
+            }
+        }
+        assertThat(toolEvents).containsExactly(
+            "span_start:call-a", "span_end:call-a",
+            "span_start:call-b", "span_end:call-b");
+
+        var toolEnds = lines.stream()
+            .filter(n -> "span_end".equals(n.get("kind").asText())
+                && n.get("attrs").has("toolCallId"))
+            .toList();
+        assertThat(toolEnds)
+            .extracting(n -> n.get("attrs").get("toolIndex").asInt())
+            .containsExactly(0, 1);
+        for (var end : toolEnds) {
+            assertThat(end.get("attrs").get("batchSize").asInt())
+                .as("每个调用都记本批总数（callId=%s）",
+                    end.get("attrs").get("toolCallId").asText())
+                .isEqualTo(2);
+        }
     }
 
     @Test

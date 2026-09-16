@@ -18,6 +18,7 @@ import com.pijava.agent.record.ReplayKind;
 import com.pijava.agent.record.StepKind;
 import com.pijava.agent.record.UsageCause;
 import com.pijava.ai.Usage;
+import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.telemetry.SpanOptions;
@@ -84,20 +85,32 @@ final class PiLaneSink implements PiLoop.Sink {
     private final Map<String, TelemetrySpan> toolSpans = new HashMap<>();
 
     /**
-     * 本轮的**工具批次**成员（按 start 顺序）。
+     * 本轮的**工具批次**成员（按 start 顺序），用于 {@code toolIndex}。
      *
      * <p>{@code ToolExecutionPipeline} 曾按批次整体处理，所以跨度带 {@code toolIndex} /
      * {@code batchSize}；pi 的驱动是逐调用经过端口，批次形状只在
      * {@code PiLoopTools} 里。这里用「助手消息落定后清空」重建同一个批次 ——
-     * 一个助手消息之后的全部 start 恰是同一批，**与 end 的先后无关**。</p>
-     *
-     * <p>⚠️ 由此得到的 {@code batchSize} **只在并行路径上**等于批大小：它的读取时刻由
-     * 结果消息决定，而顺序路径是**逐调用成组**发出的（{@code PiLoopTools.executeSequential}；
-     * pi 侧同形，见 {@code conformance/pi-out/S10.pi.jsonl}）⇒ 顺序批次里第 k 个调用读到
-     * 的是 k。详见 {@code docs/31 §8.26.5-11}。{@code toolIndex} 两条路径都正确
-     * （列表单调增长）。</p>
+     * 一个助手消息之后的全部 start 恰是同一批，**与 end 的先后无关**。
+     * {@code toolIndex} 因此两条路径都正确（列表在准备相单调增长）。</p>
      */
     private final List<String> batchCallIds = new ArrayList<>();
+
+    /**
+     * 本批的**调用总数**，{@code batchSize} 属性的取值来源；在助手消息落定时定下。
+     *
+     * <p>为什么不读 {@link #batchCallIds}{@code .size()}：那个列表在**准备相**逐调用增长，
+     * 而 {@code batchSize} 的**写入时刻**由结果消息决定 —— 并行路径在整批 join 之后写
+     * （相位③，此刻列表恰好含全批），顺序路径**逐调用成组**写
+     * （{@code PiLoopTools.executeSequential}，第 k 个收尾时只 start 过 k 个）
+     * ⇒ 读列表拿到的是**前缀数 1,2,…,N**。pi 自己的录制正是那个形状
+     * （{@code conformance/pi-out/S10.pi.jsonl:11-18}）。</p>
+     *
+     * <p>总数在那条助手消息落定时就已知（它携带全部 tool_use 块），而帧序保证
+     * {@code message_end(assistant)} **先于**该批任何 {@code tool_execution_start}
+     * （{@code agent-loop.ts}；{@code PiLoopTest} 逐帧钉住）⇒ 写入时它必已就位。
+     * 详见 {@code docs/31 §8.26.5-11}。</p>
+     */
+    private int batchCallCount;
 
     /** 本次请求实际发给 provider 的消息数，由引擎的 {@code transformContext} 回填。 */
     private int assembledMessageCount;
@@ -254,6 +267,22 @@ final class PiLaneSink implements PiLoop.Sink {
     }
 
     /**
+     * 助手消息里的工具调用数 = 本批的调用总数（{@code batchSize} 的取值）。
+     *
+     * <p>读助手消息而不是数 {@link #batchCallIds}：那里数的是**已经 start 过的**，而
+     * 「本批有多少个」在助手消息落定时就已全部可见。</p>
+     */
+    private static int countToolCalls(Message.AssistantMessage assistant) {
+        int count = 0;
+        for (var block : assistant.content()) {
+            if (block instanceof ContentBlock.ToolUseContent) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
      * 原始帧旁路：维护 {@code lane.partial} 与 token 记账。
      *
      * <p>两点都只能在这里做：① pi-java 把用量做成独立的
@@ -327,8 +356,11 @@ final class PiLaneSink implements PiLoop.Sink {
                 // post-run 压缩检查看的是它，**不是**对工作副本的扫描：一轮没发过
                 // 助手消息的运行收口时为 null（副本里可能躺着上一轮的）。
                 this.lastAssistant = assistant;
-                // 助手消息落定 ⇒ 本轮的批次结束（pi 的顺序是 message_end → 全部 start → 各自 end）。
+                // 助手消息落定 ⇒ 本轮的批次结束：清成员表，并把**本批总数**定下来
+                // （batchSize 的来源 —— 它携带全部 tool_use 块，而帧序保证本条先于该批任何
+                // tool_execution_start；见 batchCallCount 的 javadoc）。
                 batchCallIds.clear();
+                batchCallCount = countToolCalls(assistant);
                 // 成功收尾（非 error/非 length）⇒ 溢出恢复闩锁复位
                 // （pi {@code agent-session.ts:694-696}；package 3c）。
                 String stopReason = assistant.stopReason();
@@ -445,13 +477,12 @@ final class PiLaneSink implements PiLoop.Sink {
     /**
      * 关闭该调用的 {@code tool.execute} 跨度并补齐属性。
      *
-     * <p>{@code batchSize} 只能在**收尾时**写，但并行路径上成立的依据**不是**「pi 保证一批的
-     * 全部 start 早于任何 end」—— 那句是 {@code docs/29 §4.1} 已明文撤回的错误描述。真实依据
-     * 是**相位③**：并行批次的结果消息在整批 join 之后才按源序回补
-     * （{@code PiLoopTools.executeParallel}），故此处的 {@code batchCallIds} 已含全批。</p>
-     *
-     * <p>⚠️ **顺序路径没有这个性质**（逐调用成组，第 k 个调用收尾时只登记过 k 个），
-     * 故那里的 {@code batchSize} 是前缀数而非批大小。见 {@code docs/31 §8.26.5-11}。</p>
+     * <p>{@code batchSize} 取 {@link #batchCallCount} —— 助手消息落定时定下的**本批总数**
+     * （见该字段的 javadoc），<b>不读</b> {@link #batchCallIds}{@code .size()}：那个列表在准备相
+     * 逐调用增长，而这里的读取时刻由**结果消息**驱动，顺序路径（逐调用成组）读数时会少算
+     * （{@code docs/31 §8.26.5-11}，pi 自己的录制 {@code S10.pi.jsonl:11-18} 即该形状）。
+     * 并行路径的相位③（结果在整批 join 之后按源序回补）因此不再是这个属性成立的前提，
+     * 只是与它一致的一个来源。</p>
      *
      * <p>没有跨度的调用（被 {@code PiLoopTools.failTruncated} 直接失败掉的截断调用
      * ——它**没有经过**工具端口）只是没有可观测性记录，不补一个假的。</p>
@@ -463,7 +494,7 @@ final class PiLaneSink implements PiLoop.Sink {
         if (span == null) {
             return;
         }
-        span.addAttribute("batchSize", batchCallIds.size());
+        span.addAttribute("batchSize", batchCallCount);
         // 缺席即放行：只有 PiToolRunner 的拒绝分支才回填 false。截断失败掉的调用没有跨度，
         // 走不到这里。
         span.addAttribute("allowed", allowed == null || allowed);
