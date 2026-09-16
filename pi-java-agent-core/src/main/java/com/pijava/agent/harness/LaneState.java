@@ -4,6 +4,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.entry.Entry;
@@ -75,8 +76,31 @@ public final class LaneState {
     /** Summary of the newest own entry (for stopReason checks). */
     NewestOwn newestOwn;
 
-    /** Internal operation records for debugging and audit. */
-    public final List<LaneRecord> records = new ArrayList<>();
+    /**
+     * Internal operation records for debugging and audit.
+     *
+     * <p><b>并发容器（COW），不是 {@link ArrayList}</b> —— {@code docs/31 §8.27}。
+     * package B（{@code §8.23}）让工具调用真并发之后，这张表多了一个**工具线程**写者：
+     * {@code PiToolRunner.execute} 在 worker 线程上跑 {@code after_tool} 钩子，钩子抛异常时
+     * {@code HookSystem.recordHookError} 直接 {@code add} 一条 {@code UsageCause.HOOK} 记录
+     * （{@code PiToolRunner:172} → {@code HookSystem:200} → {@code :334}）。同时宿主线程在**读**它 ——
+     * {@code SnapshotService} 的 {@code stream()}/{@code copyOf}（TUI/web/RPC 的快照请求）。
+     * 普通 {@code ArrayList} 在这条路径上会**丢记录**，或让读者抛
+     * {@code ConcurrentModificationException}。</p>
+     *
+     * <p><b>为什么是换容器而不是「让 worker 侧改走 {@code PiLaneSink.emit} 那条唯一漏斗」</b>：
+     * 本表是**只追加的旁路审计**（{@code docs/28} 选项 C 已把它降级，恢复不再读它），
+     * 读多写少、且每条 entry 落定时已经被整体复制一次（{@code SnapshotService:81}），
+     * COW 的复制代价与既有量级同阶。换容器一处即覆盖**全部**跨线程写点（含宿主线程的
+     * abort 记录与运行中的压缩记录），而漏斗那条路要把「钩子错误」塞进
+     * {@link PiLoop.Event} —— 那是与 pi 事件 1:1 的端口，塞一个 pi 没有的事件会破坏端口的
+     * 对齐意义；让 worker 去抢宿主闩锁则要重排 {@code PiToolRunner} 的错误路径。</p>
+     *
+     * <p>⚠️ 本表**不是**车道状态里唯一的跨线程访问点，本处只修「会被结构破坏」的那一个：
+     * {@code transcript}/{@code messages}/{@code partial} 等字段的**可见性**与其在运行中
+     * 被整体替换（压缩）的问题不属于本改动的范围，见 {@code docs/31 §8.27.4}。</p>
+     */
+    public final List<LaneRecord> records = new CopyOnWriteArrayList<>();
 
     /**
      * 当前运行；{@code null} 表示车道空闲（{@code docs/31 §3.2}）。
