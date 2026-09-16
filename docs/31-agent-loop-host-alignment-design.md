@@ -2432,37 +2432,68 @@ A1+A2 合计约 10 行生产改动，**不改任何对外签名**（`pushCurrent
 `worker 线程` 措辞删掉。零代码风险，但**留下数据竞争**，且等于承认「worker 线程绑定」这条
 设计意图作废。
 
-**方案 C（pi 形状，推荐另立包）—— 删掉环境态**：`recordEvent` 改成挂 span 对象
-（`span.addEvent`），父级经请求选项显式传（对齐 `ProviderRequestOptions.telemetryContext`），
-`pushCurrent`/`popCurrent` 整个删除。**这是唯一能让 §8.25.1 的 9 条用例里有更多条成立的形状**，
-但它要动 `StreamOptions`（把 `llmSpan` 从 `PiLaneSink` 送到 `PayloadRecordingStreamFn`，
-而后者根本看不到 sink），并连带 §8.25.2 面④ 的跨度词汇。**不属于本包。**
+**方案 C（pi 形状，已裁：另立包，不属本包）—— 删掉环境态**：`recordEvent` 改成挂 span 对象
+（`span.addEvent`），父级显式传（对齐 pi 的两层：`ProviderRequestOptions.telemetryContext`
+`packages/ai/src/types.ts:126-127` 与 `withTelemetryContext`/`TELEMETRY_CONTEXT_KEY`
+`packages/agent/src/harness/context.ts:27-36`），`pushCurrent`/`popCurrent` 整个删除。
+**这是唯一能让 §8.25.1 的 9 条用例里有更多条成立的形状**，也是 §8.25.2 面④ 两层差距的地基。
 
-#### 8.25.4 需要审核的裁决点
+**裁决（2026-09-16）：C 并入 §8.25.5-1/-2 那个包，作它的地基；D 只做 A。** 三点理由：
 
-1. **本包是否采纳方案 A**（推荐采纳；若只想要零风险，选方案 B，但面③的错配与数据竞争会留在仓里）。
-2. **A2 要不要做**（推荐做）—— 它是「`startSpan` 自己发了 push 却不 pop」，属明确的自相矛盾；
-   代价是 2 行 + 一条用例。若认为「生产不可达就不算」也行，请裁决。
-3. **§8.25.2 面④ 的两层差距（adapter 契约 9 条 / 跨度词汇 12 个）要不要立包**（推荐立包，
-   但**不并入 D**）—— 这是本包取证的最大产出，也是最贵的一项。**它是判据「所有功能和 pi
-   表现一样」的直接相关项**：pi 侧 trace 里是 `pi.harness.tool`，pi-java 侧是 `tool.execute`，
-   拿两份 trace 对照的人会立刻看出不是一套东西。要不要按判据收进来、什么时候收，请裁决。
-4. **面③-1/③-2 那两道「门」（并发 prompt、运行中手动压缩）要不要在本包一起加**（推荐：**不加**，
-   登记为 §8.25.5-6/7）。
+1. **C 单独做，对判据的收益是 0**。判据是「分支所有功能都和 pi 表现一样」，而
+   `llm.payload.request/response` 这套 event 行是 **pi-java 独有构造** —— pi 侧没有对应物，
+   无从对齐。C 换来的是**内部构造**更好（无环境态可错配、事件天然归属），
+   不是可观察表现更像 pi。它的可观察收益全部落在 §8.25.5-1/-2（跨度词汇、adapter 契约）上，
+   而那两项已裁为另立包。
+2. **C 的接线是真正的工作量，不是删代码**。父级要跨 `StreamFn.stream(model, context, options)`
+   从 `PiLaneSink.beginRequest`（agent-core）走到 `PayloadRecordingStreamFn`（coding-agent），
+   而后者看不到 sink。pi-java 的对应物是 `StreamOptions`（3 字段 record，**5 个构造点**）
+   与 `Context`（**13 个 `new Context(` 构造点**）；`StreamOptions` 的 javadoc 明说它对齐
+   pi 的 `SimpleStreamOptions` **+ `StreamOptions`**，而 `telemetryContext` 在 pi 属于
+   **更下一层**的 `ProviderRequestOptions` ⇒ 加到 `StreamOptions` 上等于把 pi 的两层并成一层，
+   挂 `Context` 更贴但波及 13 个构造点。**这是一个要单独裁决的形状问题**，不适合塞进 D。
+3. **A 是 C 的回归基线**（不是技术前提）。C 要删的 `pushCurrent`/`popCurrent`，今天唯一的生产
+   使用者是 `PiLaneSink:173/:193`。A 之后「绑定 == 同线程」被 ①-a/①-b 钉成不变量，
+   C 的 diff 于是应当**逐字节不变**，而这个「不变」正由 A 的测试守住；不做 A 直接做 C，
+   删完之后没有任何既存断言兜底。
+   ⚠️ **注意「学神不学形」**：pi 的 span event 是随 span 落地的结构化小属性，
+   而 pi-java 的 payload event 是**整份请求/响应负载的独立行**。照搬 `span.addEvent` 会把整个
+   消息列表塞进 span 行、`--trace-payloads` 的文件结构与离线消费方式剧变（见 §8.25.5-3）。
+   C 的正确形态多半是 `recordEvent(span, name, payload)`（显式父 + 仍是独立行），不是 `addEvent`。
+
+**唯一支持「C 进 D」的论据**（记录在案，不予采纳）：§8.25.4-4 裁了「不加那两道门」，
+而 C 是那两道门**结构性替代** —— 不加门也不会错。但它的验收目标是「构造更好」而非
+「表现更像 pi」，与判据不同源，故仍随 -1/-2 一起走。
+
+**若 §8.25.5-1/-2 长期不做，C 也不要单独做**：脱离那两项，它是纯结构改动，
+没有一个可观察目标来验收，等于无法证伪。
+
+#### 8.25.4 需要审核的裁决点 —— **已裁（2026-09-16）**
+
+1. **本包是否采纳方案 A** ⇒ **采纳方案 A**（A1+A2+A3+A4）。（方案 B 落选：它留下数据竞争
+   与面③的静默错配；且 A 的成本只有约 10 行。）
+2. **A2 要不要做** ⇒ **做**。`startSpan` 自己发了 `pushCurrent` 却不 `popCurrent`，
+   属明确的自相矛盾（栈无界增长 + 回调返回后的 `recordEvent` 绑到已结束的 span）。
+3. **§8.25.2 面④ 的两层差距（adapter 契约 9 条 / 跨度词汇 12 个）要不要立包** ⇒
+   **D 之后另立包**，且**方案 C 并入该包作地基**（理由见 §8.25.3 方案 C 的裁决块）。
+   D 不碰这两层，也不碰 C。
+4. **面③-1/③-2 那两道「门」（并发 prompt、运行中手动压缩）要不要在本包一起加** ⇒
+   **不加，登记为 §8.25.5-6/-7**。
    **理由是一条重要区分**：A1 改的是**归属**（同一件事，只是记对了地方），加门改的是**行为**
    （今天允许的调用会变成拒绝）。后者必须先与 pi 对照才能定 —— pi 的 `/compact` 在运行中到底
    允不允许、pi 的会话有没有「一条 prompt 在飞」的门，本包**没有取证**，不能顺手加。
    A1 之后这两条路径的最坏后果从「静默错配」降为「事件行缺 `traceId`」，不再需要抢在同一包里修。
+   （「C 是不加门的结构性替代」这条论据已记录、但随 -3 一起推迟；见 §8.25.3。）
 
 #### 8.25.5 登记（本包不修，另立包）
 
 | # | 项 | 现状 | 代价素描 |
 |---|---|---|---|
-| 1 | **跨度词汇与属性词汇不对齐 pi 的 typed schema** | pi 12 个 `pi.*` 跨度，pi-java 4 个、零同名 | 大：12 个跨度的 start/end 属性 + 事件 + `errorWhen` 条件；其中 8 个 pi-java 今天没有对应发射点 |
-| 2 | **pi 的 adapter 契约（9 条）pi-java 只大致满足 2 条** | 无 `setStatus`、无 span 级事件、settle 后开子 span 不是 no-op | 中：要么补 API（`setStatus` / `addEvent`），要么显式声明「pi-java 的 JsonlFileTelemetry 不是 pi adapter 的实现」并写明差异 |
-| 3 | **`recordEvent` 的环境态语义本身** | 无 span 绑定 ⇒ 事件行无 `traceId`/`spanId`（与 pi「事件必有宿主 span」相反） | 与方案 C 同一件事 |
-| 4 | **`JsonlFileTelemetry.with(...)` 返回新实例**（新文件/新锁/新栈） | 当前唯一构造点用对了；但这是**约定**不是**类型**保证 | 小：加断言/注释，或让 `with` 共享栈与文件 |
-| 5 | **`docs/18` §7.3 描述的 worker 线程 push/pop 已无实现** | 已随第 9 步作废 | 文档项，随 A3 一并处理 |
+| 1 | **跨度词汇与属性词汇不对齐 pi 的 typed schema**（**并含方案 C 的构造改造作地基**，裁决见 §8.25.3） | pi 12 个 `pi.*` 跨度，pi-java 4 个、零同名 | 大：先做 C（删环境态、父级显式传、事件归属 span），再对齐 12 个跨度的 start/end 属性 + 事件 + `errorWhen` 条件；其中 8 个 pi-java 今天没有对应发射点 |
+| 2 | **pi 的 adapter 契约（9 条）pi-java 只大致满足 2 条**（**同包，依赖 1 的 C**） | 无 `setStatus`、无 span 级事件、settle 后开子 span 不是 no-op | 中：要么补 API（`setStatus` / `addEvent`），要么显式声明「pi-java 的 JsonlFileTelemetry 不是 pi adapter 的实现」并写明差异 |
+| 3 | **`recordEvent` 的环境态语义本身** | 无 span 绑定 ⇒ 事件行无 `traceId`/`spanId`（与 pi「事件必有宿主 span」相反） | 与方案 C 同一件事。⚠️ **不能照搬 `span.addEvent`**：pi 的 event 是随 span 落地的小属性，pi-java 的是整份负载的独立行（见 §8.25.3 裁决块第 3 条） |
+| 4 | **`JsonlFileTelemetry.with(...)` 返回新实例**（新文件/新锁/新栈） | 当前唯一构造点用对了；但这是**约定**不是**类型**保证。**A1 之后新实例各自持有独立的 ThreadLocal**（仍是新文件/新锁） | 小：加断言/注释，或让 `with` 共享栈与文件 |
+| 5 | ~~**`docs/18` §7.3 描述的 worker 线程 push/pop 已无实现**~~ | **已由 A3 结案**（2026-09-16）：§5.2/§7.3 两处重写，并补上「默认路径同线程是调用形状的产物」这句 | —— |
 | 6 | **并发 prompt 没有门**：`AgentSession.processPrompt`（`:529-547`）无条件起虚拟线程；`LaneState.activeRun`（`:86`）非 volatile 无锁；`PiLaneEngine:90-92` / `RunLifecycle:147-150` 是 check-then-act | 「无门可挡」（未见这么调的生产调用方） | 中：要一条**会话级**串行保证；且须先对照 pi（pi 有没有同等的门） |
 | 7 | **运行中手动 `/compact` 没有门**：`RunLifecycle.compact:237-239` 直通 `CompactionExecutor`，后者只查 transcript 空与末条是否压缩（`:84-89`） | 可与运行重叠，走同一 `streamFn`/telemetry | 中：同理，先取证 pi 的 `/compact` 在运行中是否允许；**这是行为改动，不是归属改动** |
 | 8 | **摘要请求没有自己的跨度**（面⑥） | 自动压缩的 payload 行 `traceId` 为 null | 与方案 C / 本表第 1、3 项同族 |

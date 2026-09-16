@@ -106,10 +106,15 @@ default void addAttribute(String key, Object value) { }
 
 ### 5.2 parent-child 表达
 
-**不依赖 ThreadLocal**：span 对象自带 traceId/spanId/parentSpanId，子 span 以
+**parent 关系不依赖 ThreadLocal**：span 对象自带 traceId/spanId/parentSpanId，子 span 以
 parent 对象打开——天然解决 `runRawBatch` 虚拟线程并行（worker 线程直接引用
-parent span 对象开子 span）。exporter 另提供 `pushCurrent/popCurrent` 包内 API，
-供 event 行（payload 记录点）在批量 worker 线程绑定当前栈顶 span。
+parent span 对象开子 span）。
+
+**event 归属才是线程局部的**：`llm.payload.request/response` 这类 event 行没有自己的
+span 对象，靠 `pushCurrent/popCurrent` 绑定的**当前线程栈顶**取 traceId/spanId。
+该栈在 `JsonlFileTelemetry` 里是 `ThreadLocal`（`docs/31 §8.25`，2026-09-16 起）——
+**绑与读必须同线程**；跨线程读不到他人的绑定（此前是共享 `ArrayDeque`，
+跨线程会**读到别人的 span**，属静默错配，且读写全在文件锁之外）。
 
 ### 5.3 Span 清单
 
@@ -198,9 +203,14 @@ Args(@Option "--trace-payloads") → AgentSession.assemble() 直接读
 
 ### 7.3 关联机制
 
-wrapper 与 executeStreamAssistant 同线程：exporter 的当前栈顶即 `llm.request`
-span，event 行自动带正确 traceId/spanId。批量 worker 线程在 lambda 首尾
-push/pop parent span。
+`PiLaneSink.beginRequest`（`llm.request` span 的打开点，`:173`）push、`endRequest`
+（`:193`）pop；记录点（`PayloadRecordingStreamFn` 的请求/响应两处）取**当前线程**栈顶
+= 本次请求的 `llm.request` span，event 行因此自动带正确 traceId/spanId。
+
+⚠️ 默认路径上这三处同线程（同一调用栈），**但那是调用形状的产物，不是结构保证**：
+生产每次 prompt 换一条新虚拟线程（`AgentSession:545`），运行中 `/compact` 与并发
+prompt 都会落到别的线程上。栈是 `ThreadLocal`（`docs/31 §8.25`）⇒ 那种情形下
+**读不到绑定**（event 行缺 traceId），不会读到别人的 span。
 
 ## 8. Run Summary
 
