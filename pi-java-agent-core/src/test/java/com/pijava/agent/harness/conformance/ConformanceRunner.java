@@ -206,7 +206,8 @@ final class ConformanceRunner {
                 tool != null && tool.terminate(),
                 tool == null ? null : tool.details(),
                 tool == null ? 0 : tool.updates(),
-                tool == null ? 0 : tool.delayMs(), emit);
+                tool == null ? 0 : tool.delayMs(),
+                tool == null ? 0 : tool.updateEveryMs(), emit);
         }
 
         /**
@@ -245,12 +246,23 @@ final class ConformanceRunner {
          * <p>{@code updates > 0} 时在返回结果**之前**经 {@code emit} 流出 N 条
          * {@code tool_execution_update}，载荷用原始调用参数 —— 这正是 pi
          * {@code executePreparedToolCall} 里工具回调的效果（{@code :690-704}）。</p>
+         *
+         * <p>{@code updateEveryMs > 0} 时相邻两条 update 之间让出这么久（{@code docs/31 §8.24}）：
+         * 背靠背发 update 时两侧的桩都在同步循环里，**任何别的帧都插不进来**，于是
+         * 「一个工具的 update 与并发批次里别的帧交错」在剧本里结构上跑不到。S14 用它
+         * 把交错变成声明出来的事实。</p>
          */
         private static PiLoop.ToolOutcome executed(PiLoop.ToolCall call, boolean failedText,
                                                    boolean terminate, Object details,
-                                                   int updates, int delayMs, PiLoop.Sink emit) {
+                                                   int updates, int delayMs, int updateEveryMs,
+                                                   PiLoop.Sink emit) {
             sleepQuietly(delayMs);
             for (int i = 1; i <= updates; i++) {
+                // 首条 update 紧跟 delayMs；其后每条之间睡 updateEveryMs（docs/31 §8.24）。
+                // 它存在的唯一理由：背靠背发 update 时**别的帧插不进来**，交错结构上跑不到。
+                if (i > 1) {
+                    sleepQuietly(updateEveryMs);
+                }
                 // partial 是**整个** AgentToolResult（types.ts:361-377：details 必填），
                 // 与 pi 侧桩 push 的形状逐字段相同，帧才可比
                 emit.emit(new PiLoop.Event.ToolExecutionUpdate(call.toolCallId(),

@@ -54,6 +54,15 @@ interface ScriptTool {
 	 * completion order a *declared*, diffable fact instead of luck.
 	 */
 	delayMs?: number;
+	/**
+	 * Sleep this long between adjacent partial results (ms); default 0 = back to
+	 * back. The first partial still comes right after `delayMs`. Without it no
+	 * frame can land between two partials of one call on either side (both
+	 * harnesses stream them in a synchronous loop), so "a tool's updates
+	 * interleaving with a concurrent batch" is unreachable in a script — see
+	 * `docs/31 §8.24`. S14 uses it to make the interleaving a declared fact.
+	 */
+	updateEveryMs?: number;
 }
 
 interface ScriptContent {
@@ -398,6 +407,12 @@ async function runScript(script: Script): Promise<string[]> {
 			// whole AgentToolResult (types.ts:361-377 — `details` is a required field),
 			// pushed before the call resolves → `tool_execution_update` frames (agent-loop.ts:690-704).
 			for (let i = 1; i <= (t.updates ?? 0); i++) {
+				// First partial lands right after `delayMs`; later ones are spaced
+				// by `updateEveryMs` — byte-for-byte the same pacing as the Java
+				// driver (`ConformanceRunner.executed`), see docs/31 §8.24.
+				if (i > 1 && (t.updateEveryMs ?? 0) > 0) {
+					await new Promise((resolve) => setTimeout(resolve, t.updateEveryMs));
+				}
 				onUpdate?.({
 					content: [{ type: "text" as const, text: `partial ${i}` }],
 					details: {},
@@ -508,7 +523,7 @@ function canonical(value: unknown): unknown {
 }
 
 describe("L5 conformance (pi side)", () => {
-	const ids = ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12", "S13"];
+	const ids = ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12", "S13", "S14"];
 	for (const id of ids) {
 		const scriptPath = join(SCRIPTS_DIR, `${id}.json`);
 		it(`runs ${id}`, async (ctx) => {

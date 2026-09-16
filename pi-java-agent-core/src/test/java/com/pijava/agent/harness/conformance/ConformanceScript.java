@@ -82,9 +82,15 @@ record ConformanceScript(
      *                      <b>完成序</b>，而等延迟的两个调用谁先完成在两侧都不可约 ——
      *                      把延迟写进剧本，完成序才是**声明出来的**、可比对的证据，
      *                      而不是「恰好在我的运行时里同序」的偶然
+     * @param updateEveryMs 相邻两条 update 之间睡这么久（毫秒）；缺省 0 = 背靠背。
+     *                      首条 update 之前仍先睡 {@code delayMs}。见 {@code docs/31 §8.24}：
+     *                      背靠背发 update 时**任何别的帧都插不进来**（两侧的桩都是同步
+     *                      循环），于是「update 与并发批次的交错」结构上跑不到 ——
+     *                      本字段把交错变成声明出来的事实，S14 用它
      */
     record Tool(String name, boolean reject, boolean isError, boolean terminate,
-                String executionMode, Object details, int updates, int delayMs) {}
+                String executionMode, Object details, int updates, int delayMs,
+                int updateEveryMs) {}
 
     /**
      * 一段助手响应里的内容块。
@@ -133,7 +139,8 @@ record ConformanceScript(
                     ? null : node.path("executionMode").asText(),
                 detailsOf(node.path("details")),
                 node.path("updates").asInt(0),
-                node.path("delayMs").asInt(0)));
+                node.path("delayMs").asInt(0),
+                node.path("updateEveryMs").asInt(0)));
         }
         var responses = new ArrayList<Response>();
         for (var node : root.path("responses")) {

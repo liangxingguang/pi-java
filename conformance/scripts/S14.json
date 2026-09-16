@@ -1,0 +1,21 @@
+{
+  "id": "S14",
+  "name": "流式更新与并发批次的交错：update 内联发射，不是成批落在自己的 end 前",
+  "systemPrompt": "You are helpful.",
+  "prompt": "Interleaved updates",
+  "toolExecution": "parallel",
+  "tools": [
+    { "name": "streamer", "delayMs": 300, "updates": 3, "updateEveryMs": 300 },
+    { "name": "blip", "delayMs": 750 }
+  ],
+  "responses": [
+    {
+      "content": [
+        { "type": "toolCall", "name": "streamer", "arguments": { "n": 1 } },
+        { "type": "toolCall", "name": "blip", "arguments": { "n": 2 } }
+      ],
+      "stopReason": "toolUse"
+    },
+    { "content": [{ "type": "text", "text": "Both seen", "chunks": ["Both ", "seen"] }], "stopReason": "stop" }
+  ]
+}
