@@ -2231,6 +2231,270 @@ coding-agent 218 / tui 188(1 skip) / protocol 14 / server 2 / web 37 / evals 43(
 
 ---
 
+### 8.25 遥测的「当前跨度」与它的线程归属（包 D 设计稿，待审核）
+
+> **本包清 §8.23.5 第 1 条**（原文照抄）：
+> 「`JsonlFileTelemetry.currentStack` 是全局 `ArrayDeque`，javadoc 却写 "on this thread"
+> —— 文档与实现不符。当前唯一 `pushCurrent` 调用点（`PiLaneSink.beginRequest`）与
+> `recordEvent` 调用点（`PayloadRecordingStreamFn`）**是否同线程未实测**。清点项：线程归属
+> 实测 + 是否改 ThreadLocal（含 `recordEvent` 的语义）。」
+>
+> 本包回答三问：① 今天到底同不同线程；② 「全局栈 + javadoc 写 on this thread」算不算缺陷；
+> ③ 改不改、怎么改。
+> **取证后结论比登记时重**：默认路径确实同线程（面①），但**有两条今天就跑得到的路径**
+> 让跨线程读写同一个栈成真（面③：运行中 `/compact`、并发 prompt），后果不是「读不到」
+> 而是**读到别人的跨度**（静默错配）。另外捞到一条大得多的东西（面④：pi 的跨度词汇与
+> adapter 契约），**本包不顺手做它**。
+
+#### 8.25.1 pi 事实：pi 的遥测层**没有「当前跨度」这个构造**
+
+pi 有独立的遥测包 `packages/telemetry`（`@earendil-works/pi-telemetry`），契约就是 357 行
+里的两个接口：
+
+```ts
+export interface TelemetryContext {
+	startSpan<T>(options: SpanOptions, callback: (span: TelemetrySpan) => T | Promise<T>): Promise<T>;
+}
+
+export interface TelemetrySpan extends TelemetryContext {
+	addEvent(name: string, attributes?: SpanAttributes): void;
+	setAttributes(attributes: SpanAttributes): void;
+	setStatus(status: SpanStatus): void;
+}
+```
+
+| # | 结构性事实 | 出处 |
+|---|---|---|
+| ① | **接口只有一个方法**。没有 `currentSpan` / `pushCurrent` / `peek` —— 跨度只能经 `startSpan(options, callback)` 拿到，且**以回调参数**交到手上 | `packages/telemetry/src/index.ts:11-20` |
+| ② | **事件挂在跨度对象上**（`span.addEvent(name, attrs)`），不挂在任何环境态上 | `:15` |
+| ③ | **父级是显式参数**：请求侧的父上下文随请求选项走 —— `ProviderRequestOptions.telemetryContext`，注释原文 *"Explicit parent context for telemetry produced by this logical request."*；`SimpleStreamOptions extends StreamOptions extends ProviderRequestOptions` | `packages/ai/src/types.ts:126-127` / `:179` / `:313` |
+
+⇒ pi 对「这条 event / 这个 span 属于谁」的答案是**把它写成参数**。**它没有一个可以被错配的
+环境态**，所以「线程归属」在 pi 侧不是一个「处理得好不好」的问题 —— **是没有这个构造**。
+任何线程拿到 span 对象就能往里写事件，天然并发安全，也天然不需要线程局部存储。
+
+pi 还把这套契约固化成一份**可移植的一致性套件**（`createTelemetryAdapterConformance`，
+任何 adapter 实现都得跑）：
+
+| 组 | 用例 | 断言要点 | pi-java 对照 |
+|---|---|---|---|
+| callback lifecycle | admits once synchronously and preserves the result | 回调**同步**入场一次；返回值原样传出；span `status=ok` 且已 settled | 部分 ✓（同步入场与返回，无 promise 形态） |
+| callback lifecycle | preserves synchronous and asynchronous rejection values | 抛出的**同一个值**原样穿透（同步 / 异步 / `undefined` / 不可读对象四路）；状态 error | 部分 ✓（异常同一对象原样穿透；无异步形态） |
+| status | uses last explicit status without automatic overwrite | 显式 `ok` 之后即使抛异常**仍为 ok** —— 自动置错不得覆盖显式值 | **✗ 无 `setStatus`** |
+| recording | merges attributes and records ordered events | 属性合并（后写胜）；事件**有序**记在 span 上 | 属性 ✓ / **事件 ✗**（走环境态） |
+| recording | ignores failed attribute calls atomically | 一次失败的属性写入**不得部分生效** | n/a（逐个 `addAttribute`，无批量写） |
+| recording | makes calls after settlement inert | 回调返回后对 span 的任何调用都是 no-op（**含开子 span：不记录**） | **✗ 部分**（`close()` 幂等、迟到 `addAttribute` 不落盘；但迟到 `startSpan` **会**开子 span 并落盘） |
+| parentage | records nested and concurrent child relationships | 根 `parentId=null`；并发子各自挂父；结束序 `second-child < first-child < parent` | ✓（`parentSpanId` + 文件行序） |
+| passivity | suppresses unreadable telemetry payload failures | 选项不可读时仍**入场一次并返回结果**，只是什么都不记 | n/a（Java 无「不可读对象」惯用法） |
+| passivity | ignores failed status calls atomically | 失败的 `setStatus` 被吞掉；同回调的 rejection 仍把状态置 error | n/a（同上） |
+
+**pi 的跨度词汇**则是一份 typed schema（`packages/agent/src/harness/telemetry.ts`，635 行）
+里声明出来的 12 个名字，逐个带 `description` / `parents` / `startAttributes` / `endAttributes`
+/ `events` / `status.errorWhen`：
+
+| pi | pi-java |
+|---|---|
+| `pi.ai.request` | `llm.request` |
+| `pi.harness.run` | `harness.run` |
+| `pi.harness.tool` | `tool.execute` |
+| `pi.harness.compaction` | `compaction.apply` |
+| `pi.harness.turn` / `pi.harness.step` / `pi.harness.checkpoint` / `pi.harness.navigation` / `pi.harness.hook` / `pi.harness.sleep` / `pi.harness.event_handler` / `pi.session.write` | —— 无 |
+
+**4/4 名称全不相同，且 pi-java 一个 `pi.` 前缀都没有**；属性名同样是两套（pi 用
+`pi.lane.name` / `pi.operation.outcome` / `pi.step.attempt` …，pi-java 用 `lane` / `outcome` /
+`attempt` …）。这一条超出本包范围，登记为 §8.25.5-1。
+
+#### 8.25.2 pi-java 现状与差距
+
+**面① 线程归属 —— 默认路径同线程，但「同线程」不是保证**
+
+先看默认路径（单次运行、无重叠）。`pushCurrent` / `popCurrent` 在生产代码里各**只有一个**
+调用点，`recordEvent` 只有两处，四处全部落在**同一个栈帧**里：
+
+```
+本次运行的虚拟线程 ─┐
+                  │  PiLoopRunner.stream()  的一次调用（:190 起）
+  transformContext│  PiLaneEngine.beforeRequest(:303) → PiLaneSink.beginRequest(:162)
+     :193         │                                    ├─ pushCurrent(llmSpan)        ← 触摸①
+                  │                                    └─ llmSpan = parent.openSpan("llm.request") :167
+  streamFn.stream │  PayloadRecordingStreamFn.stream:94 → recordEvent(llm.payload.request)   ← 触摸②
+     :214         │
+  while(iter)     │  ResponseRecordingIterator.next:162 → recordEvent(llm.payload.response)  ← 触摸③
+     :220-225     │
+  emit(MessageEnd)│  PiLaneSink.emit(:275) → onMessageEnd(:308) → endRequest(:184)
+                  │                                    └─ popCurrent(llmSpan)        ← 触摸④
+                  └─
+  ── 工具批次在此之后（endRequest 已 pop，栈为空）⇒ B 的并发只发生在栈已空时 ──
+```
+
+三处按行号可查的证据：`PiLoopRunner:193`（transformContext 钩子，就在 `:214` 取流的
+**同一个方法体里**）、`PiLoopRunner:214`（`config.streamFn().stream(...)`）、
+`PiLoopRunner:220-225`（同线程拉迭代器 —— `recordEvent` 长在 `next()` 里，由消费者线程调用）。
+再加上 `AgentHarness` 只持**一个** `LaneState`（`AgentHarness.java:60`；多车道容器
+`LaneRegistry` 已删，见 `:52-58`）⇒ 一个 harness 一条车道。
+
+**但「这条线程」是哪条线程，值得先钉清楚**：生产里 **不是**调用方线程。
+`AgentSession.processPrompt`（`:545`）是 `Thread.startVirtualThread(() -> SessionRunner.drive(...))`
+—— **每个 prompt 一条新虚拟线程**，调用方立刻返回（TUI 主线程继续渲染、RPC stdin 线程继续读）：
+
+| 宿主入口 | 调用 `processPrompt` 的线程 | harness 跑在 |
+|---|---|---|
+| TUI（`PiTuiApp:353-360` / `InteractiveMode:47-50`） | **主/渲染线程** | 每次一条新虚拟线程（事件经 `TuiEventDispatcher` 回投主线程） |
+| RPC（`RpcDispatcher:279-285`） | stdin 读线程（`RpcMode:44-47`） | 同上 |
+| Web WS（`WebDispatcher:134-138`） | WebSocket 回调线程 | 同上 |
+| print/json（`PrintMode:35-38/:57-60`） | 主线程 | 同上 |
+
+⇒ **默认路径下全局 `ArrayDeque` 的行为与 ThreadLocal 逐位相同**（只有一条线程碰它），但
+这条线程**每次运行都换一条**，且宿主侧随时有别的线程活着 —— 于是「同线程」是**当前调用形状
+的产物，不是结构保证**。面③的三条路径今天就打破了它。
+
+**面② 文档与实现**：`TelemetryContext.pushCurrent` 的 javadoc 写「as the current span for
+`recordEvent` **on this thread**」（`TelemetryContext.java:72-73`），而实现是
+`JsonlFileTelemetry.currentStack` —— 一个**恒被共享**的 `ArrayDeque`（`:57`）。
+**javadoc 在效果上没说错，错的是它没有被兑现**：没有任何类型或实现让「读的那个线程＝写的那个
+线程」成立。它是一句愿望，不是一条保证。
+
+同一处还有第二层文档不符：`docs/18` §5.2 写「**不依赖 ThreadLocal**」，紧跟着说
+push/pop 是「供 event 行在**批量 worker 线程**绑定当前栈顶 span」（§7.3 再写一遍「批量 worker
+线程在 lambda 首尾 push/pop parent span」）—— 而**共享栈恰恰做不到「worker 线程各自绑定」**：
+两个 worker 同时 push，`peek()` 拿到的是别人的 span。那份设计文档自己给的用途，实现没有提供。
+（另：§7.3 描述的 `ToolExecutionPipeline.executeStages` 形状已随第 9 步作废 —— 新循环里
+`tool.execute` 跨度的开/关都在**引擎线程**上（`noteToolStart` / `emitToolRecords`），
+今天没有任何 worker 线程 push。）
+
+**面③ 两条今天就可达的破坏路径（本包真正的发现）**
+
+`currentStack` 的 `push/peek/pop` **完全在 `lock` 之外**——`lock`（`:52`）只护文件 IO。
+默认路径无害，但下面两条路把「第二条线程」真的带进来了：
+
+1. **手动压缩与运行重叠**（确定性可达，不需要竞速）：TUI 的 `/compact`（`MiscCommands`，
+   跑在**主/渲染线程**）与 RPC 的 `compact`（`RpcDispatcher:158`，跑在 **stdin 读线程**）
+   都走 `RunLifecycle.compact:237-239` → `new CompactionExecutor(ctx).compact(...)`，
+   而**那里没有 `lane.isRunning()` 门**（只查 transcript 是否为空、末条是否已是压缩，
+   `CompactionExecutor:84-89`）。摘要生成器拿到的又是**同一个** `recordingStreamFn`
+   （`AgentSession.java:366-367`）⇒ 它的 `recordEvent` 读的是**共享栈顶**，而此刻栈顶正是
+   那条**正在运行的请求**的 `llm.request` span。**压缩的 payload 行被挂到了别的线程的
+   请求跨度上**；同时 `push`/`pop`（`:168`/`:181`）与这次 `peek` 之间无同步 ⇒ 数据竞争
+   （`ArrayDeque` 扩容搬运时可以把内部状态写坏，不只是错配）。
+2. **并发 prompt**：`AgentSession.processPrompt`（`:529-547`）**没有 in-flight 门**，
+   无条件起虚拟线程；上层的 `PiLaneEngine:90-92` / `RunLifecycle:147-150` 那个
+   「lane not idle」检查是 check-then-act，而 `LaneState.activeRun`（`:86`）**既非 volatile
+   也无锁** ⇒ 两条线程可以都认为车道空闲。两条 run 线程于是共用同一个 `currentStack`。
+   **诚实标注：没有找到确实这么调的生产调用方**（TUI/RPC/Web 都是 fire-and-forget，且一次
+   只发一条），所以这条是「**无门可挡**」而不是「已观测到」。
+3. **`fork` 共享同一实例**：`AgentHarness.fork()`（`:150-152`）返回 `new AgentHarness(config)`
+   —— **同一个 `HarnessConfig`**，于是同一份 `telemetry()` 与同一个 `currentStack`；
+   `AgentSession.forkCopy:765` / `forkFromEntry:792` / `forkInMemory:828` 都走它。
+   父会话与 fork 会话的 run 一旦重叠，又是跨线程共享栈（是否重叠取决于调用方，代码不挡）。
+   **一处顺带发现**：`fork()` 的 javadoc（`:147-148`）列了共享的三个不可变依赖
+   （streamFn / toolRegistry / toolContext），并断言「隔离度只增不减」—— 它**没提 telemetry**，
+   而 telemetry 恰恰是这几个依赖里唯一**带可变状态**（`currentStack` + `writer`）的那个。
+
+三条的性质是同一个：**全局栈让「谁绑的」与「谁读的」可以解耦，而解耦的方向恰好是错的**——
+不是「读不到」（那还看得见），而是**读到别人的**（静默错误）。这正是 A1 要买的东西
+（见 §8.25.3）。
+
+**面④ 与 pi 的两层差距**（取证时发现，**超出本包**）：见 §8.25.1 的两张表 ——
+① **adapter 契约**：pi 的 9 条一致性用例里，pi-java 只有 2 条（parentage、属性合并）大致成立，
+`setStatus` 与 span 级事件**结构上不存在**；② **跨度词汇**：pi 声明 12 个 `pi.*` 跨度名，
+pi-java 有 4 个且无一同名。
+
+**面⑤ 一个已经处理对了的点（记录，免得被面③误伤）**：`JsonlFileTelemetry.with(...)`
+返回的是**新实例**（`:130`）⇒ 新文件、新锁、**新栈**。若 harness 与 payload wrapper 各拿一份，
+`pushCurrent` 就对 `recordEvent` 不可见，事件会丢 `traceId/spanId`。实测**没有**这个问题：
+全仓只有一个 exporter 构造点（`AgentSession.java:265`），同一实例同时交给 harness 与 wrapper，
+`:263-264` 的注释正是为此写的。
+
+**面⑥ 自动压缩的 payload 行本就丢归属（今天就已经如此）**：自动压缩跑在 run 线程
+（`PiLaneEngine:328` 阈值 / `:101` 运行前 / `:184` 运行后），触发时 `endRequest` 早已
+`popCurrent` ⇒ 摘要那次请求的 `llm.payload.request` / `llm.payload.response` 两行
+**没有 `traceId`/`spanId`**。它不属于面③的「错配」，但同属一处设计缺口：**这条请求没有
+自己的跨度可绑** —— `CompactionExecutor:238-239` 开的 `compaction.apply` 走的是 `openSpan`
+（不进栈），`LlmSummaryGenerator` 也没有任何 push。登记见 §8.25.5-8。
+
+#### 8.25.3 改动方案
+
+**方案 A（推荐）—— 让实现兑现 javadoc，且修两处真错**
+
+| # | 改动 | 理由 | 生产可观察性 |
+|---|---|---|---|
+| A1 | `currentStack` → `ThreadLocal<ArrayDeque<JsonlSpan>>` | 「on this thread」由**构造**保证；顺带消除面③的数据竞争；单线程下与今天**逐位相同** | 默认路径**无变化**；面③-1（手动压缩重叠）从「挂到**别人**的 span」变为「**不挂** span」—— 把静默错误换成**可检测的缺失** |
+| A2 | `startSpan` 补对称的 `pop`（`finally` 里） | 它已经有 `pushCurrent(span)`（`:98`）却从不 `popCurrent` ⇒ ① 栈无界增长；② 回调返回后的 `recordEvent` 会绑到一个**已结束**的 span（错配） | 无（生产路径只用 `openSpan`，`startSpan` 仅测试与公开 API 可达） |
+| A3 | 更正 `docs/18` §5.2 / §7.3 的措辞 | 「不依赖 ThreadLocal」与「worker 线程 push/pop」两句在 A1 之后要重写：不依赖 ThreadLocal 说的是 **parent 关系**（对，且不变），push/pop 说的是 **event 绑定**（A1 之后才是真的） | —— |
+| A4 | 新增钉住线程归属的测试（§8.25.6） | 把「未实测」变成**实测且被测试守住**的证据 | —— |
+
+A1+A2 合计约 10 行生产改动，**不改任何对外签名**（`pushCurrent`/`popCurrent`/`recordEvent`
+的名字、参数、语义都不动）。
+
+**方案 B —— 只改文档**：把 javadoc 改成「当前线程或任意线程绑定的栈顶」，把 `docs/18` 的
+`worker 线程` 措辞删掉。零代码风险，但**留下数据竞争**，且等于承认「worker 线程绑定」这条
+设计意图作废。
+
+**方案 C（pi 形状，推荐另立包）—— 删掉环境态**：`recordEvent` 改成挂 span 对象
+（`span.addEvent`），父级经请求选项显式传（对齐 `ProviderRequestOptions.telemetryContext`），
+`pushCurrent`/`popCurrent` 整个删除。**这是唯一能让 §8.25.1 的 9 条用例里有更多条成立的形状**，
+但它要动 `StreamOptions`（把 `llmSpan` 从 `PiLaneSink` 送到 `PayloadRecordingStreamFn`，
+而后者根本看不到 sink），并连带 §8.25.2 面④ 的跨度词汇。**不属于本包。**
+
+#### 8.25.4 需要审核的裁决点
+
+1. **本包是否采纳方案 A**（推荐采纳；若只想要零风险，选方案 B，但面③的错配与数据竞争会留在仓里）。
+2. **A2 要不要做**（推荐做）—— 它是「`startSpan` 自己发了 push 却不 pop」，属明确的自相矛盾；
+   代价是 2 行 + 一条用例。若认为「生产不可达就不算」也行，请裁决。
+3. **§8.25.2 面④ 的两层差距（adapter 契约 9 条 / 跨度词汇 12 个）要不要立包**（推荐立包，
+   但**不并入 D**）—— 这是本包取证的最大产出，也是最贵的一项。**它是判据「所有功能和 pi
+   表现一样」的直接相关项**：pi 侧 trace 里是 `pi.harness.tool`，pi-java 侧是 `tool.execute`，
+   拿两份 trace 对照的人会立刻看出不是一套东西。要不要按判据收进来、什么时候收，请裁决。
+4. **面③-1/③-2 那两道「门」（并发 prompt、运行中手动压缩）要不要在本包一起加**（推荐：**不加**，
+   登记为 §8.25.5-6/7）。
+   **理由是一条重要区分**：A1 改的是**归属**（同一件事，只是记对了地方），加门改的是**行为**
+   （今天允许的调用会变成拒绝）。后者必须先与 pi 对照才能定 —— pi 的 `/compact` 在运行中到底
+   允不允许、pi 的会话有没有「一条 prompt 在飞」的门，本包**没有取证**，不能顺手加。
+   A1 之后这两条路径的最坏后果从「静默错配」降为「事件行缺 `traceId`」，不再需要抢在同一包里修。
+
+#### 8.25.5 登记（本包不修，另立包）
+
+| # | 项 | 现状 | 代价素描 |
+|---|---|---|---|
+| 1 | **跨度词汇与属性词汇不对齐 pi 的 typed schema** | pi 12 个 `pi.*` 跨度，pi-java 4 个、零同名 | 大：12 个跨度的 start/end 属性 + 事件 + `errorWhen` 条件；其中 8 个 pi-java 今天没有对应发射点 |
+| 2 | **pi 的 adapter 契约（9 条）pi-java 只大致满足 2 条** | 无 `setStatus`、无 span 级事件、settle 后开子 span 不是 no-op | 中：要么补 API（`setStatus` / `addEvent`），要么显式声明「pi-java 的 JsonlFileTelemetry 不是 pi adapter 的实现」并写明差异 |
+| 3 | **`recordEvent` 的环境态语义本身** | 无 span 绑定 ⇒ 事件行无 `traceId`/`spanId`（与 pi「事件必有宿主 span」相反） | 与方案 C 同一件事 |
+| 4 | **`JsonlFileTelemetry.with(...)` 返回新实例**（新文件/新锁/新栈） | 当前唯一构造点用对了；但这是**约定**不是**类型**保证 | 小：加断言/注释，或让 `with` 共享栈与文件 |
+| 5 | **`docs/18` §7.3 描述的 worker 线程 push/pop 已无实现** | 已随第 9 步作废 | 文档项，随 A3 一并处理 |
+| 6 | **并发 prompt 没有门**：`AgentSession.processPrompt`（`:529-547`）无条件起虚拟线程；`LaneState.activeRun`（`:86`）非 volatile 无锁；`PiLaneEngine:90-92` / `RunLifecycle:147-150` 是 check-then-act | 「无门可挡」（未见这么调的生产调用方） | 中：要一条**会话级**串行保证；且须先对照 pi（pi 有没有同等的门） |
+| 7 | **运行中手动 `/compact` 没有门**：`RunLifecycle.compact:237-239` 直通 `CompactionExecutor`，后者只查 transcript 空与末条是否压缩（`:84-89`） | 可与运行重叠，走同一 `streamFn`/telemetry | 中：同理，先取证 pi 的 `/compact` 在运行中是否允许；**这是行为改动，不是归属改动** |
+| 8 | **摘要请求没有自己的跨度**（面⑥） | 自动压缩的 payload 行 `traceId` 为 null | 与方案 C / 本表第 1、3 项同族 |
+
+#### 8.25.6 测试计划
+
+① **实测（本包核心证据，两条）**
+   - ①-a **单元级**：`JsonlFileTelemetryTest` 加「A 线程 `pushCurrent`、B 线程 `recordEvent`」
+     夹具，钉住「B 的事件行**不带** A 的 `spanId`」；并配一条正向对照「A **自己**的事件行
+     带 A 的 `spanId`」—— 否则「`spanId` 永远为 null」也能让前一条通过。
+   - ①-b **E2E**：用一个记录线程号的遥测装饰器包住真实 `JsonlFileTelemetry`，跑一次真
+     `AgentHarness` 运行（含请求/响应两处真 `recordEvent`），断言 `pushCurrent` /
+     `recordEvent` / `popCurrent` 三处的 `Thread.currentThread().threadId()` **全部相等**。
+     落点 `agent-core` 侧，自带一个与 `PayloadRecordingStreamFn` 同形的最小 wrapper
+     （后者是 `coding-agent` 的包内类，`agent-core` 看不到它）。
+② **RE-1（关键，单元级）**：把 A1 还原成**共享** `ArrayDeque` ⇒ ①-a 的第一条断言
+   **必须红**（B 的行带上了 A 的 `spanId`）。若不变红，说明夹具没有牙、必须重做 ——
+   照实记进实施记录。
+③ **RE-2（关键，可达性级）**：把面③-1 做成夹具 —— `prompt` 跑在**独立线程**上（照抄生产
+   形状 `AgentSession:545`），工具体闩住不放；测试线程随即调 `harness.compact(...)`。预测：
+   - A1 生效 ⇒ 压缩那次的 payload 行**没有 `traceId`**（自己的跨度没绑，也不去借别人的）；
+   - 还原成共享栈 ⇒ 同一行**带上了那条在飞请求的 `spanId`**（面③-1 的错配，直接可观测）。
+   这条的意义是把「单元夹具里的错配」证成「今天就跑得到」，**是本包最重要的一条证据**。
+   成本较高（需要闩锁夹具 + 独立线程 + 会真调一次摘要生成器）；若实测发现摘要生成器的桩
+   难以在测试里驱动，退化为只用 ①-a + ②，并**如实标注 ③ 未做**。
+④ **A2 的针**：`startSpan` 返回之后再 `recordEvent` ⇒ 断言**不带**那个已结束 span 的 id
+   （今天会带上 —— 这正是 A2 修的那半个错）。
+⑤ **回归面**：`JsonlFileTelemetryTest`、`HarnessTelemetrySpansTest`、`HarnessToolExecutionSpansTest`、
+   `PayloadRecordingStreamFnTest` 应**全绿** —— 单线程下 A1 与今天逐位相同，
+   A2 只在「回调返回后再 `recordEvent`」时可观察。
+⑥ **全 reactor**：`mvn -o clean verify` + `checkstyle:check -pl pi-java-telemetry,pi-java-agent-core`。
+
+---
+
 ## 9. 与既有文档的关系
 
 | 文档 | 关系 |
