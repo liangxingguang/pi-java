@@ -33,7 +33,9 @@ import org.slf4j.LoggerFactory;
  * <p>Line kinds: {@code span_start}, {@code span_end}, {@code event},
  * {@code counter}, {@code timing}.  Dimensions registered via {@link #with}
  * are merged into every line.  Child spans opened from a {@link TelemetrySpan}
- * inherit its trace/span ids as parent; {@link #pushCurrent}/{@link
+ * inherit its trace/span ids as parent — unless that span has already settled,
+ * in which case the child is inert ({@link TelemetrySpan} has the rule);
+ * {@link #pushCurrent}/{@link
  * #popCurrent} let a thread bind event lines to a span opened on another
  * thread.  Bindings are <b>per thread</b>: an event recorded without a binding
  * on its own thread is left unattributed rather than hanging off a foreign
@@ -315,11 +317,6 @@ public final class JsonlFileTelemetry implements TelemetryContext {
 
         private void markError() {
             status = "error";
-        }
-
-        /** Mark this span as aborted (user cancellation rather than failure). */
-        public void markAborted() {
-            status = "aborted";
         }
 
         @Override
