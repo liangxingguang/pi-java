@@ -5,9 +5,11 @@ package com.pijava.agent.harness;
  * (aligned with pi's {@code ToolExecutionMode}).
  *
  * <p>Phase 3: {@code Parallel} runs the calls of one turn on a virtual-thread
- * executor (StructuredTaskScope is a preview API in JDK 25, so it is avoided);
- * {@code Sequential} executes them one at a time (debug/compatibility
- * fallback).</p>
+ * executor (StructuredTaskScope is a preview API in JDK 25, so it is avoided;
+ * the full reasoning — including why its <em>default</em> policy of cancelling
+ * siblings on first failure also conflicts with pi — is in {@code docs/31
+ * §8.26}); {@code Sequential} executes them one at a time
+ * (debug/compatibility fallback).</p>
  */
 public sealed interface ToolExecution {
 

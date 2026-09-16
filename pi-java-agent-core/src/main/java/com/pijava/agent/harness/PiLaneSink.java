@@ -89,8 +89,13 @@ final class PiLaneSink implements PiLoop.Sink {
      * <p>{@code ToolExecutionPipeline} 曾按批次整体处理，所以跨度带 {@code toolIndex} /
      * {@code batchSize}；pi 的驱动是逐调用经过端口，批次形状只在
      * {@code PiLoopTools} 里。这里用「助手消息落定后清空」重建同一个批次 ——
-     * pi 的顺序是 message_end → 全部 start → 各自 end，所以一个助手消息之后的全部 start
-     * 恰是同一批。</p>
+     * 一个助手消息之后的全部 start 恰是同一批，**与 end 的先后无关**。</p>
+     *
+     * <p>⚠️ 由此得到的 {@code batchSize} **只在并行路径上**等于批大小：它的读取时刻由
+     * 结果消息决定，而顺序路径是**逐调用成组**发出的（{@code PiLoopTools.executeSequential}；
+     * pi 侧同形，见 {@code conformance/pi-out/S10.pi.jsonl}）⇒ 顺序批次里第 k 个调用读到
+     * 的是 k。详见 {@code docs/31 §8.26.5-11}。{@code toolIndex} 两条路径都正确
+     * （列表单调增长）。</p>
      */
     private final List<String> batchCallIds = new ArrayList<>();
 
@@ -440,8 +445,13 @@ final class PiLaneSink implements PiLoop.Sink {
     /**
      * 关闭该调用的 {@code tool.execute} 跨度并补齐属性。
      *
-     * <p>{@code batchSize} 只能在**收尾时**写：pi 保证一批的全部 start 早于任何 end
-     * （{@code docs/29 §4.1}），所以到收尾时同一批的成员已经全部登记。</p>
+     * <p>{@code batchSize} 只能在**收尾时**写，但并行路径上成立的依据**不是**「pi 保证一批的
+     * 全部 start 早于任何 end」—— 那句是 {@code docs/29 §4.1} 已明文撤回的错误描述。真实依据
+     * 是**相位③**：并行批次的结果消息在整批 join 之后才按源序回补
+     * （{@code PiLoopTools.executeParallel}），故此处的 {@code batchCallIds} 已含全批。</p>
+     *
+     * <p>⚠️ **顺序路径没有这个性质**（逐调用成组，第 k 个调用收尾时只登记过 k 个），
+     * 故那里的 {@code batchSize} 是前缀数而非批大小。见 {@code docs/31 §8.26.5-11}。</p>
      *
      * <p>没有跨度的调用（被 {@code PiLoopTools.failTruncated} 直接失败掉的截断调用
      * ——它**没有经过**工具端口）只是没有可观测性记录，不补一个假的。</p>
