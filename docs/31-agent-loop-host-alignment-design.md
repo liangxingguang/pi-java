@@ -942,7 +942,7 @@ S4 恰在第 16/17/18 帧变红。
 第一个调用有帧。S4 录制里被拒调用恰好源序最后，才让旧说法蒙对了帧序。哨兵已重钉为
 pi 形状（`abortedParallelBatchFramesOnlyTheFirstCallLikePi`），docs/29 §4/§5 同步更正。
 
-**遗留**：B 项（延迟任务真并发 = pi 的 `Promise.all`）仍开放 —— 当前串行执行在
+**遗留**（⚠️ **本行已过期：B 项于 2026-09-16 由 §8.23 实施闭环**，`delayMs` 剧本解决了此处「差分侧怎么验证非确定完成序」；下行保留为历史记录）：B 项（延迟任务真并发 = pi 的 `Promise.all`）仍开放 —— 当前串行执行在
 确定性工具下帧序与 pi 一致，真并发需要先想清楚差分侧怎么验证非确定完成序。
 `QueueMode.All` 的宿主层行为变更仍待用户确认。
 
@@ -1056,7 +1056,7 @@ L5 {S2,S3,S4,S9,S10,S11,S12} 七红、S5 绿得其所（其消息来自宿主 `f
 `findEntries(EntryQuery.all())` 在本测试形状下不保证旧序 ⇒ 按 toolName 定位而非下标。
 agent-core **383/383**、ai/web/sqlite 模块绿、全 reactor `clean verify` 绿。
 
-**遗留不变**：B 项（真并发 = pi 的 `Promise.all`）与 `QueueMode.All` 宿主层仍待用户；
+**遗留不变**（⚠️ B 项**已于 2026-09-16 由 §8.23 实施闭环**）：~~B 项（真并发 = pi 的 `Promise.all`）~~ 与 `QueueMode.All` 宿主层仍待用户；
 `addedToolNames` 的 provider 层消费者（pi 的 native deferred tools）在 pi-java 今日
 无对应物，字段按 pi 形状预留（Phase 2c MCP）。
 
@@ -1114,7 +1114,7 @@ L5 全绿 —— 证明消息帧与持久化两条链各自独立被钉住。
 **遗留**：3b（`estimateContextTokens` 移植 + `checkThreshold` 操作数改
 `model.contextWindow` + `contextWindow>0` 护栏；现 `ContextEstimator` javadoc
 声称对齐实为 chars/3.5，属**虚假声明**，随 3b 修正）、3c（`_checkCompaction`
-四守卫；`isContextOverflow`/`isRecoverableLength` 定义尚未定位）—— 后已落地（§8.21，判据定位于 `packages/ai/src/utils/overflow.ts`）；B 项
+四守卫；`isContextOverflow`/`isRecoverableLength` 定义尚未定位）—— 后已落地（§8.21，判据定位于 `packages/ai/src/utils/overflow.ts`）；B 项（**⚠️ 已于 2026-09-16 由 §8.23 实施闭环，下行该项过期**）
 （真并发）与 `QueueMode.All` 待用户。agent-core **384/384**、ai **237/237**、
 全 reactor `clean verify` 绿。
 
@@ -3250,3 +3250,4 @@ agent-core **450**（本包 +2）。
 | `docs/29` | L5 差分报告，本文 §7 验收第 1 条的依据 |
 | `docs/30` | 折叠链退休；`records` 降级为旁路审计由它确立 |
 | `docs/03` | 类级设计；§2.1-§2.3 已按本文的结论重写（§8.13），§2 以本文为准、本文以 pi 源码为准 |
+| `docs/32` | **未结项台账** —— 本文各处 §8.x 登记表的合并索引（带行号引用与「谁挡着」），查「还有什么没做完」从它进 |
