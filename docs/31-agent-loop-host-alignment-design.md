@@ -2231,7 +2231,7 @@ coding-agent 218 / tui 188(1 skip) / protocol 14 / server 2 / web 37 / evals 43(
 
 ---
 
-### 8.25 遥测的「当前跨度」与它的线程归属（包 D 设计稿，待审核）
+### 8.25 遥测的「当前跨度」与它的线程归属（D）—— **已实施（2026-09-16，设计经用户审核通过；实施记录见 8.25.7）**
 
 > **本包清 §8.23.5 第 1 条**（原文照抄）：
 > 「`JsonlFileTelemetry.currentStack` 是全局 `ArrayDeque`，javadoc 却写 "on this thread"
@@ -2497,6 +2497,8 @@ A1+A2 合计约 10 行生产改动，**不改任何对外签名**（`pushCurrent
 | 6 | **并发 prompt 没有门**：`AgentSession.processPrompt`（`:529-547`）无条件起虚拟线程；`LaneState.activeRun`（`:86`）非 volatile 无锁；`PiLaneEngine:90-92` / `RunLifecycle:147-150` 是 check-then-act | 「无门可挡」（未见这么调的生产调用方） | 中：要一条**会话级**串行保证；且须先对照 pi（pi 有没有同等的门） |
 | 7 | **运行中手动 `/compact` 没有门**：`RunLifecycle.compact:237-239` 直通 `CompactionExecutor`，后者只查 transcript 空与末条是否压缩（`:84-89`） | 可与运行重叠，走同一 `streamFn`/telemetry | 中：同理，先取证 pi 的 `/compact` 在运行中是否允许；**这是行为改动，不是归属改动** |
 | 8 | **摘要请求没有自己的跨度**（面⑥） | 自动压缩的 payload 行 `traceId` 为 null | 与方案 C / 本表第 1、3 项同族 |
+| 9 | **`JsonlSpan.startSpan` 根本不碰当前栈**（实施 A2 时发现） | 同一个 `startSpan`，两个实现行为不同：`JsonlFileTelemetry.startSpan` push（A2 后也 pop），`JsonlSpan.startSpan`（`:338-349`）只开子 span、**既不 push 也不 pop**。而接口 `startSpan` 的 javadoc（`TelemetryContext:16-25`）**一个字都没提「绑定为当前跨度」** ⇒ 「`startSpan` 会绑定」是一处**未文档化的局部行为**，三个实现里只有一个有它（`Otel`/`Noop` 都没有） | 小：A2 选择**保留 push、补齐 pop**（仓内唯一依赖者是一条既有单测；生产路径只用 `openSpan` + `PiLaneSink` 的显式 push）。反方向（**删掉 push**，让所有实现都不碰栈）同样自洽 —— 该行为既无文档也无生产消费者。选哪个都行，**但它该被写进 javadoc**，否则下一个写遥测装饰器的人会踩空 |
+| 10 | **接口的 `openSpan` 默认实现不可用**（同一处发现） | `TelemetryContext:32-39` 的 default `openSpan` 在**自己的回调里**就把 span 关掉，返回一个**已结束**的 span。真实实现（`JsonlFileTelemetry:137`、`OtelTelemetryContext:96`）**各自覆写**才没出问题 | 小：写装饰器时**必须显式转发 `openSpan`**，否则 harness 拿到的全是已结束的 span（本包的测试装饰器就踩过，已在注释里钉住）。要么把 default 改成抛 `UnsupportedOperationException`，要么在 javadoc 里写明「必须覆写」 |
 
 #### 8.25.6 测试计划
 
@@ -2525,6 +2527,62 @@ A1+A2 合计约 10 行生产改动，**不改任何对外签名**（`pushCurrent
    `PayloadRecordingStreamFnTest` 应**全绿** —— 单线程下 A1 与今天逐位相同，
    A2 只在「回调返回后再 `recordEvent`」时可观察。
 ⑥ **全 reactor**：`mvn -o clean verify` + `checkstyle:check -pl pi-java-telemetry,pi-java-agent-core`。
+
+#### 8.25.7 实施记录（2026-09-16）
+
+**提交**（分支 `agent-core-pi-loop`）：
+
+| # | 提交 | 内容 |
+|---|---|---|
+| 1 | `fc09c2c` | 裁决落地（§8.25.3 C 的推迟理由 / §8.25.4 四问 / §8.25.5-5 结案）+ **A3**（`docs/18` §5.2、§7.3 重写） |
+| 2 | `cf55aba` | **A1 + A2**（`JsonlFileTelemetry`）+ 单元级 A4（三条用例） |
+| 3 | `40504b5` | agent-core 侧 A4（①-b、③） |
+
+**A1/A2 的实际形状**：`currentStack` 由共享 `ArrayDeque` 改为
+`ThreadLocal<Deque<JsonlSpan>>`（`ThreadLocal.withInitial(ArrayDeque::new)`，不调
+`remove()` —— 空 deque 随线程消亡，生产每 prompt 一条新虚拟线程）；`startSpan` 的
+`finally` 里补 `popCurrent(span)`，**在 `close()` 之前**（先解绑再结束）。`popCurrent`
+保留 `peek() == span` 守卫，因此内层解绑不会弹掉外层。**对外签名零改动**，
+`Noop`/`Otel`/`JsonlSpan` 三个实现无需跟随。
+
+**反向实验（先预测、后动刀）：**
+
+| RE | 动刀 | 预测 | 实测 |
+|---|---|---|---|
+| RE-1 | `currentStack` 还原成共享 deque | 恰 ①-a 第一条断言红，其余 15 条绿 | ✅ 命中。`recordEventOnlySeesSpansBoundOnItsOwnThread:283`，`Expecting value to be false but was true` —— B 线程的事件行带上了 A 的 `spanId`。**「其余 15 条绿」本身就是证据**：单线程下共享栈与 ThreadLocal 不可区分，与「A1 不改变默认路径输出」相符 |
+| RE-A2 | 摘掉 `startSpan` 的 `popCurrent` | 两条解绑用例红 | ✅ 命中（`:300`、`:327`），其余 14 条绿 |
+| RE-2 | `currentStack` 还原成共享 deque | ③ 红：摘要请求的 payload 行**带上在飞请求的 `spanId`** | ✅ 命中。`HarnessTelemetryThreadAttributionTest:353`，`Expecting value to be false but was true`。**并用探针把「借到的是哪条」也钉实**：断言「摘要行的 `spanId` == 最后一条 `llm.request` span_start 的 `spanId`」—— 探针**通过**（失败点后移到紧随其后的那条），即借到的**逐字就是**在飞那条请求的跨度，与 §8.25.6 ③ 的预测逐字相符 |
+
+**一处「第一版没牙」的夹具（照实记）**：`innerSpanUnbindingLeavesOuterSpanBound`
+第一版从 **span 对象**进（`outer.startSpan(...)`），而 `JsonlSpan.startSpan`
+（`:338-349`）**根本不碰当前栈** ⇒ 该用例在任何实现下都通过，测不到
+`popCurrent` 的配对守卫。RE-A2 的第一轮（只有 1 红）把它照了出来；改为两层都从
+`JsonlFileTelemetry.startSpan` 进之后，RE-A2 才变成 2 红。**这条与 §8.25.5-9 是同一个发现的两面。**
+
+**判据**：
+
+- `pi-java-telemetry` **29/29** 绿（`JsonlFileTelemetryTest` 13 → **16**）、checkstyle 0 违规；
+- `pi-java-agent-core` **446/446** 绿（444 + 2）、checkstyle 0 违规；新测试**连跑 5 轮绿**；
+- 全 reactor `mvn -o clean verify` **BUILD SUCCESS**（14 模块，全部 checkstyle 0 违规）。
+
+**⚠️ 一次未复现的全 reactor flake（与 D 无关，登记备查）**：第一次 `clean verify` 有一红
+`PiLoopTest.parallelBatchEmitsEveryStartBeforeAnyEnd:338`（`agent-core` 446 里的 1），
+断言是 `frames.indexOf(ends.getFirst()) > frames.indexOf(starts.getLast())` ——
+**「所有 start 早于所有 end」**。它不碰遥测（该用例用 `Recorder`），且：
+
+- 单独跑该测试类 **10/10 绿**；整模块套件 **3/3 绿**；第二次 `clean verify` 绿；
+- 但它是**真竞态**：准备循环按调用逐个发 start、并把执行票**在循环内**交出去
+  （`docs/29 §4.1`：`:520-541` 的延迟任务），所以 task₁ 的 end 可以落在 start₂/start₃ 之间。
+  `docs/29 §4.1` 已明说「所有 start 早于任何 end **不是**该模式的保证」，
+  §8.23.7 第 2 条也已把这条用例的断言放宽为「start 源序 + end 任意排列」——
+  **唯独第三条断言（全 start 早于全 end）留了下来**，它就是残留的那半个运气断言。
+- **不在本包修**（遥测无关，且其属于 §8.23 的收口面）。修法一行：删掉 `:338`，
+  或按 §8.23.7 的口径改成「每个调用恰一 start 一 end」（后者已由
+  `containsExactly`/`containsExactlyInAnyOrder` 覆盖）。**请裁决是否顺手修**。
+  参照：§8.23.7 已记过同类先例（`web` 的 `PiWebServerAuthTest` 对负载敏感，三红一绿）。
+
+**新登记**：§8.25.5-9（`JsonlSpan.startSpan` 不碰当前栈 / 接口 javadoc 未写明绑定语义）、
+-10（接口 `openSpan` 的默认实现返回**已结束**的 span，装饰器必须显式转发）。
 
 ---
 
