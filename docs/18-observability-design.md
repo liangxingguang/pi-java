@@ -101,7 +101,11 @@ default void addAttribute(String key, Object value) { }
 - `traceId` = runId（pi 对齐：operation id IS runId）；`sessionId` 经
   `telemetry.with("sessionId", id)` 注入，exporter 把维度并进每行
 - spanId：8 字节 hex
-- status：`ok` / `error` / `aborted`
+- status：`ok` / `error` —— 与 pi 的 `SpanStatus` 同词汇（`packages/telemetry/src/index.ts:12`）。
+  **中止不是状态，是结果属性**：`harness.run` 的结束属性 `outcome` 记
+  `completed` / `aborted` / `failed` / `declined`，与 pi 的 `pi.operation.outcome` 同口径。
+  （本节原写的第三种状态 `aborted` 从未被任何发射点写过，其死码已于 2026-09-17 删除；
+  见 `docs/31 §8.28`。`span_end` 行自动带 `durationMs` 字段，不是 attribute。）
 - span_end 缺失（进程崩溃）：离线分析按文件尾悬挂判定，可接受
 
 ### 5.2 parent-child 表达
@@ -118,12 +122,23 @@ span 对象，靠 `pushCurrent/popCurrent` 绑定的**当前线程栈顶**取 tr
 
 ### 5.3 Span 清单
 
+四个跨度名**全部是 pi-java 自有词汇**。pi 声明了 12 个 `pi.*` 名，但 v0.85.1 的实况是
+**11/12 一个发射点都没有**（唯一有发射点的 `pi.harness.hook` 覆盖的是另一件事），两份 schema
+没有 `events:` 声明，生产路径**从不安装真 adapter**。故按本分支判据（**行为**，不是文档）
+**不采用 `pi.*` 名** —— 取证与裁决见 `docs/31 §8.28.1` / `§8.28.3`（选项 A）。
+
 | span name | 打开点 / 关闭点 | 关键 attributes |
 |-----------|----------------|-----------------|
-| `harness.run` | `ActionExecutor.run()` open（存 LaneState 新字段 `runSpan`）；`executeTryFinishRun()` 终态 + terminate 路径关闭 | lane、promptChars、outcome、stopReason、attemptCount、inputTokens/outputTokens（累计）、durationMs |
-| `llm.request` | `executeStreamAssistant` 包裹 streamFn 调用段（回调式） | attempt、model、messageCount、toolCount、thinking、inputTokens、outputTokens、stopReason、errorClass、durationMs |
-| `tool.execute` | `ToolExecutionPipeline.executeStages` 每 call 一个，包 before_hook 判定 + raw 执行 + after_hook | toolCallId、toolName、toolIndex、batchSize、allowed、isError、terminate、argsChars、durationMs |
-| `compaction.apply` | `applyCompaction` 回调式 | reason(auto/manual/overflow)、estimatedTokens、tokensBefore、entriesBefore/After、durationMs |
+| `harness.run` | `RunSpanFactory.openRunSpan`（`RunLifecycle.startRun:56`、`startContinue:134` 两处起手）；`RunSpanFactory.closeRunSpan`（`RunLifecycle.finishRun:187` 终局收口） | start：lane、promptChars；end：outcome（`completed`/`aborted`/`failed`/`declined`）、stopReason |
+| `llm.request` | 回调式：`PiLaneSink.beginRequest:185` 开并 `pushCurrent`（事件行靠它归属），`PiLaneSink.endRequest:206-215` 关并 `popCurrent` | start：attempt、model、messageCount、toolCount、thinking；end：inputTokens、outputTokens、stopReason |
+| `tool.execute` | `PiLaneSink.noteToolStart:237` 每 call 一个（父级 = 该次运行的 `harness.run` 跨度）；`closeToolSpan` 在**结果消息**落定时关 | start：toolCallId、toolName、toolIndex、argsChars；end：batchSize、allowed、isError、terminate、durationMs |
+| `compaction.apply` | `CompactionExecutor.applyCompaction:239` 回调式（父级同上；`finally` 里关） | start：reason（auto/manual/overflow）、estimatedTokens、entriesBefore；end：entriesAfter |
+
+> 2026-09-17 更正：本表原先写的打开/关闭点是 `ActionExecutor.run()` /
+> `executeTryFinishRun()` / `executeStreamAssistant` / `ToolExecutionPipeline.executeStages`
+> —— 那**四个类都已随 `PiLoop` 驱动（`docs/28`）删除**，属性列也与实测不符
+> （`harness.run` 从来没有 `attemptCount`/累计 token 属性，`compaction.apply` 没有
+> `tokensBefore`）。上表按现役代码逐处重写。
 
 计数器：`harness.turn`（已有）、`harness.run`、`llm.requests`、
 `llm.tokens.input`、`llm.tokens.output`、`tool.executions`、`tool.errors`、

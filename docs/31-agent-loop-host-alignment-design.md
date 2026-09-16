@@ -2494,8 +2494,8 @@ A1+A2 合计约 10 行生产改动，**不改任何对外签名**（`pushCurrent
 
 | # | 项 | 现状 | 代价素描 |
 |---|---|---|---|
-| 1 | **跨度词汇与属性词汇不对齐 pi 的 typed schema**（**并含方案 C 的构造改造作地基**，裁决见 §8.25.3） | pi 12 个 `pi.*` 跨度，pi-java 4 个、零同名 | 大：先做 C（删环境态、父级显式传、事件归属 span），再对齐 12 个跨度的 start/end 属性 + 事件 + `errorWhen` 条件；其中 8 个 pi-java 今天没有对应发射点 |
-| 2 | **pi 的 adapter 契约（9 条）pi-java 只大致满足 2 条**（**同包，依赖 1 的 C**） | 无 `setStatus`、无 span 级事件、settle 后开子 span 不是 no-op | 中：要么补 API（`setStatus` / `addEvent`），要么显式声明「pi-java 的 JsonlFileTelemetry 不是 pi adapter 的实现」并写明差异 |
+| 1 | ~~**跨度词汇与属性词汇不对齐 pi 的 typed schema**（**并含方案 C 的构造改造作地基**，裁决见 §8.25.3）~~ | **已结案（2026-09-17，docs/31 §8.28）：结案为「不做」。** 取证翻转了前提 —— pi v0.85.1 声明的 12 个 `pi.*` 跨度里 **11 个没有任何发射点**，唯一有发射点的 `pi.harness.hook` 覆盖的是 pi-java 里对应概念的另一半；两份 schema **没有 `events:` 声明**、生产**从不安装真 adapter**（默认 `NOOP_TELEMETRY_CONTEXT`）⇒「对齐 12 个跨度的属性/事件/`errorWhen`」**没有对齐对象**。按判据（行为，不是文档），改名换到的是文档对齐。**方案 C（删环境态）随同一并结案**（§8.28.7-1） | —— |
+| 2 | ~~**pi 的 adapter 契约（9 条）pi-java 只大致满足 2 条**（**同包，依赖 1 的 C**）~~ | **已结案（2026-09-17，docs/31 §8.28）：只修真实差异，其余显式声明。** 9 条逐条分诊（§8.28.4）：**第 6 条是真差且零 API 变更可修** —— 父已结算后开的子跨度曾照常落盘，已按 pi 语义降级为 noop（`35c4758`）；第 1、2 条的异步半边与第 4 条的「事件」是**结构性 / 语义不可对齐**（`Function` vs `Promise`、`recordEvent` 整份负载 vs span 上小属性），已写进 javadoc（`c3eef82`）；第 3、5、9 条依赖 `setStatus`，**不补**（无观察者 + 半对齐更难解释）。⚠️ 口径：**不是「pi-java 的 adapter 不满足 pi 的契约」，而是「pi-java 的 adapter 比 pi 多，且 pi 那 9 条只对着一个测试用实现」** | —— |
 | 3 | **`recordEvent` 的环境态语义本身** | 无 span 绑定 ⇒ 事件行无 `traceId`/`spanId`（与 pi「事件必有宿主 span」相反） | 与方案 C 同一件事。⚠️ **不能照搬 `span.addEvent`**：pi 的 event 是随 span 落地的小属性，pi-java 的是整份负载的独立行（见 §8.25.3 裁决块第 3 条） |
 | 4 | **`JsonlFileTelemetry.with(...)` 返回新实例**（新文件/新锁/新栈） | 当前唯一构造点用对了；但这是**约定**不是**类型**保证。**A1 之后新实例各自持有独立的 ThreadLocal**（仍是新文件/新锁） | 小：加断言/注释，或让 `with` 共享栈与文件 |
 | 5 | ~~**`docs/18` §7.3 描述的 worker 线程 push/pop 已无实现**~~ | **已由 A3 结案**（2026-09-16）：§5.2/§7.3 两处重写，并补上「默认路径同线程是调用形状的产物」这句 | —— |
@@ -2822,6 +2822,312 @@ PROBE sink=CopyOnWriteArrayList rounds=300 丢帧/脏帧=0  次序坏=0  抛异�
 **⑤ 口径更正（无损）**：`docs/29 §4.1` 那条撤回依然有效，本次是**收窄它的适用面** ——
 它讲的是「pi 的并行分支**不保证**全 start 早于全 end」（对 immediate 分支成立，S4/S13 已证），
 不能外推成「所有带并行工具的用例都不许这么断言」。§8.25.7 的 ⚠️ 块已就地更正并保留原诊断。
+
+---
+
+### 8.28 §8.25.5 最后两条的**前提证伪**与重新裁决 —— **已实施（2026-09-17，设计经用户审核通过；实施记录见 8.28.9）**
+
+> **裁决（2026-09-17，用户「继续推进」⇒ 采纳本文档四项推荐）**：
+> 1. 第 1 条**结案为「不做」**；方案 C 随之**一并结案**；
+> 2. 第 2 条**只修 §8.28.4 第 6 条**（settled 父 ⇒ 子跨度惰性）+ 写差异声明 javadoc，其余显式声明差异；
+> 3. §8.28.5 的 ②③ **不修**（② 今天就不可达 ⇒ 登记；③ 删，已随本包落地）；④ 仅登记；
+> 4. §8.28.6 的 `batchSize` **修语义、不删**。
+> **唯一留白**：是否另立 `TelemetryAdapterConformance` 套件（§8.28.7 末尾）—— 本包未做，随时可加。
+
+> **本包清 §8.25.5 第 1、2 条**（原文照抄）：
+>
+> 1. 「**跨度词汇与属性词汇不对齐 pi 的 typed schema**（**并含方案 C 的构造改造作地基**，
+>    裁决见 §8.25.3）」，处置栏：*「大：先做 C（删环境态、父级显式传、事件归属 span），再对齐
+>    12 个跨度的 start/end 属性 + 事件 + `errorWhen` 条件；其中 8 个 pi-java 今天没有对应发射点」*
+> 2. 「**pi 的 adapter 契约（9 条）pi-java 只大致满足 2 条**（**同包，依赖 1 的 C**）」，
+>    处置栏：*「中：要么补 API（`setStatus` / `addEvent`），要么显式声明「pi-java 的
+>    JsonlFileTelemetry 不是 pi adapter 的实现」并写明差异」*
+>
+> **取证后结论翻转**：第 1 条的处置建立在一个**假前提**上 —— 「pi 发射 12 个跨度」。pi v0.85.1
+> 的实况是 **11/12 一个发射点都没有**，唯一有发射点的那个（`pi.harness.hook`）覆盖的是
+> pi-java 里对应概念的另一半；而且 **pi 的生产遥测是 noop**（没有任何地方装过真 adapter）。
+> 于是「对齐 12 个跨度的属性/事件/`errorWhen`」**没有对齐对象**。按本分支判据（**行为**，
+> 不是文档），这两条要么收窄、要么结案。本文档给证据、三个选项与推荐，**您裁决后才写代码**
+> —— 已于 2026-09-17 裁决并实施（见本节题头与 §8.28.9）。
+>
+> 取证底座：pi 钉住版本 `D:\workplaceForai\pi-v0.85.1` @ `d981de12`（Release v0.85.1），
+> 另与 `D:\workplaceForai\pi` @ `71dca871b` 做过差分，**遥测源码逐行相同**。
+
+#### 8.28.1 取证：pi v0.85.1 的遥测实况
+
+**表 1 —— 声明的 12 个名字 vs 发射点：只有 1 个被发射**
+
+声明处是 `packages/agent/src/harness/telemetry.ts` 的两份 schema（`AI_TELEMETRY_SCHEMA:42-118`
++ `HARNESS_TELEMETRY_SCHEMA:233-592`），名字共 12 个：
+
+```
+pi.ai.request             telemetry.ts:45
+pi.harness.run            telemetry.ts:236
+pi.harness.compaction     telemetry.ts:258
+pi.harness.navigation     telemetry.ts:280
+pi.harness.checkpoint     telemetry.ts:302
+pi.harness.turn           telemetry.ts:328
+pi.harness.step           telemetry.ts:354
+pi.harness.tool           telemetry.ts:400
+pi.harness.hook           telemetry.ts:453   ← 唯一有发射点
+pi.harness.sleep          telemetry.ts:490
+pi.harness.event_handler  telemetry.ts:524
+pi.session.write          telemetry.ts:545
+```
+
+三条**本机复跑**的取证命令（排除 `telemetry.ts` 自身）：
+
+| 取证 | 结果 |
+|---|---|
+| `grep -rn --include=*.ts -E '"pi\.(harness\|ai\|session)\.[a-z_]+"' packages/*/src` | **只两条真命中**：`hooks.ts:377` 的 `pi.harness.hook`。另两条 `pi.session.name`（`session/values.ts:194`、`session/fork-policy.ts:16`）是**值键不是跨度名**，别误读 |
+| `grep -rn --include=*.ts -E 'startHarnessSpan\(\|startAiSpan\(' packages/*/src` | `startHarnessSpan(` **唯一**调用点 `hooks.ts:376`；`startAiSpan(` **零**调用点 |
+| `ls packages/telemetry/src` | `index.ts` / `memory.ts` / `noop.ts` / `testing/` —— **没有 JSONL adapter、没有 OTel adapter** |
+
+**表 2 —— 唯一发射者的形状**（`hooks.ts:370-397`，`invokeToolRegistration`）
+
+- 只被 `beforeTool:164` 与 `afterTool:307` 调用 ⇒ 其余钩子名（`before_run` / `before_drive` /
+  `before_compaction` / `before_navigation` / `after_response` …）**直接调 handler、无跨度**。
+- 开始属性：`pi.lane.name`、`pi.operation.id`、`pi.hook.name`、`pi.hook.registration_id`（条件展开）。
+- 结束属性：`pi.hook.outcome` ∈ {`blocked`（`before_tool` 且 handler 返回了 `block`）/ `completed`
+  / `failed`}；失败路径**两个 API 都调** —— `setAttributes` 然后 `setStatus`（`:394-397`）。
+- **无事件**：`addEvent` 在整个生产源码里**没有调用点**，且两份 schema **都没有 `events:` 声明**
+  ⇒ pi 的「跨度事件」词汇是**空集**。
+
+**表 3 —— adapter 实况：生产从不安装**
+
+- `getTelemetryContext`（`packages/agent/src/harness/context.ts:31`）缺省 `NOOP_TELEMETRY_CONTEXT`；
+  `withTelemetryContext` 全仓只有**两处**调用者 —— `telemetry.ts:145` 与 `:633`，**都在跨度回调
+  包装器内部**（即「装了也只是把自己再装回去」）⇒ 生产路径上**没有任何真 adapter 被安装**，
+  `InMemoryTelemetryContext` 只出现在测试里。
+- 9 条一致性套件（`packages/telemetry/src/testing/conformance.ts:61-315`）**只注册了一个 adapter**
+  （`conformance.test.ts:5-12` 的 `InMemoryTelemetryContext`）。要「一致性」的对象在 pi 里只有一个。
+- ⚠️ pi-java 反而**多**两个 adapter（JSONL / OTel）—— 那是 pi-java 的**扩展**，不是缺口。本次
+  调查正因为把扩展读成了缺口，才把「无 `setStatus`」登记成待补项（见 §8.28.4 的 ⚠️）。
+
+**表 4 —— schema 是「被测试守住的文档」，不是运行行为**
+
+`packages/agent/test/harness/telemetry.test.ts:22-38` 逐字节比对 `docs/telemetry-schema.md`
+（checked in，13KB）与 `renderAgentTelemetrySchemaMarkdown()` 的输出，并断言 harness schema 的
+键恰是那 11 个名字。⇒ 这套词汇在 pi 的角色是**契约文档 + 生成物守门**。它**不发任何跨度**。
+
+**表 5 —— L5 录制语料**里**没有**遥测行，「用差分证明词汇对齐」这条路不存在
+
+`conformance/pi-out/S1..S14.pi.jsonl` 与 `java-out/*`：grep `span|telemetry|trace|"name":"pi.`
+**零命中**。结构原因：`run.test.ts` 的 `Normalizer.frame()`（`:346-388`）只切 10 种 `AgentEvent`，
+`default: return {type:"unknown"}`，且 runner 从不安装 adapter ⇒ 语料**不可能**含跨度行。
+
+#### 8.28.2 前提证伪（逐条对着登记栏的原话）
+
+| 登记栏原话 | 实况 | 判定 |
+|---|---|---|
+| 「其中 **8 个** pi-java 今天没有对应发射点」 | 不是 8 个 —— **11/12 在 pi 里也没有发射点** | 证伪 |
+| 「再对齐 12 个跨度的 start/end 属性 **+ 事件** + `errorWhen` 条件」 | 「事件」在 pi 是**空集**（无 `events:` 声明、生产无 `addEvent`）；`errorWhen` 是 schema 里给 adapter 读的**散文文本**，不是运行时可观察物 | **无对象** |
+| （隐含）「pi 的跨度有可观察输出」 | pi 生产 adapter = noop ⇒ 一次真实运行**一个跨度都不落** | **无可观察目标** |
+
+⚠️ 这是 §8.26.3「不为对齐技术名词引入 pi 没有的机制」的**镜像**：那次是「pi 没有而我们要忍住」，
+这次是**「pi 有一份文档、没有行为」**。按判据（行为），把 pi-java 的 4 个自有跨度名改成 `pi.*`
+换到的是**文档对齐**，不是表现对齐 —— 正是 §8.23.8 ⑥ / §8.26.3 反复拒绝的「学形不学神」。
+
+#### 8.28.3 第 1 条（跨度词汇）的三个选项与推荐
+
+| 选项 | 内容 | 代价 | 收益 |
+|---|---|---|---|
+| **A（推荐）结案为「不做」** | 保留 4 个自有名；把 pi 的 12 名与「schema 非行为」这组事实登记备查；`docs/18 §5.3` 加一句说明为何不采用 `pi.*` 名 | **零代码** | 判据不被污染；消掉一条会反复误导后人的「待对齐」 |
+| B 只改名（4 个自有名 → `pi.*`） | 名对齐，属性名不动 | 中：动 `docs/18 §5.3`、3 个测试类、离线消费约定 | **负**：名对了语义仍不同（§8.28.4），且 pi 根本不发这些跨度 |
+| C 全量重建（12 个） | 按 schema 补齐 12 个跨度 + 属性 + `errorWhen` | 大 | **负且危险**：11 个在 pi 是**死声明**，重建等于**发明 pi 没有的行为**，直接违反判据 |
+
+推荐 **A**。理由一句话：**判据只认行为；pi 在这件事上的行为是「声明一份 schema，一个都不发」。**
+
+#### 8.28.4 第 2 条（adapter 契约）的重新裁决
+
+登记栏的处置是二选一（补 API / 声明差异）。取证后逐条分诊 —— 9 条 × {pi 语义 | pi-java 现状 | 判定}：
+
+| # | pi 用例 | pi-java 现状 | 判定 |
+|---|---|---|---|
+| 1 | `admits once synchronously and preserves the result` | `NoopTelemetryContext.startSpan:21` 同步入场一次、原样返回 ✓。但 pi 的返回是 `Promise<T>`（**异步回调可满足**），pi-java 的签名是 `Function`（同步） | 部分 ✓ / **结构性不可满足**（改签名才可能）→ 声明差异 |
+| 2 | `preserves synchronous and asynchronous rejection values` | 同步半边 ✓（`JsonlFileTelemetry.startSpan:127-130` 原样穿透并 `markError`）；异步半边结构性不可满足 | 同上 |
+| 3 | `uses last explicit status without automatic overwrite`（后写胜、显式不被自动覆盖） | **✗ 无 `setStatus`**；状态由 `startSpan` 的 catch **自动**置 error | **真差**，但补它要新增公共 API（见下） |
+| 4 | `merges attributes and records ordered events` | 属性是**逐键** `addAttribute` —— 无「批量写入后写胜」语义，因而也没有第 5 条的原子性概念；**事件**：pi-java 的 `recordEvent` 是**整份负载的独立行**，pi 的 `addEvent` 是**挂在 span 上的小属性** | **不是同一个东西**（⚠️ §8.25.3 已裁「不能照搬 `addEvent`」）→ 声明差异 |
+| 5 | `ignores failed attribute calls atomically` | 无批量 API | n/a |
+| 6 | `makes calls after settlement inert` | **✗ 半真**：`close()` 幂等 ✓（`JsonlFileTelemetry:326`）、迟到 `addAttribute` 不落盘 ✓（`:310`）；**但迟到 `startSpan`/`openSpan` 会开子跨度并落盘**（`:343`/`:356` 无 `ended` 检查）。pi 的规则是**「settled 父 ⇒ 子降级为 noop：回调照跑、什么都不记」**（`packages/telemetry/src/memory.ts:126`，本机复核原文 `if (parent?.settled) return NOOP_TELEMETRY_CONTEXT.startSpan(options, callback);`） | **真差，且零 API 变更可修** |
+| 7 | `records nested and concurrent child relationships` | ✓（`parentSpanId` + 文件行序） | **唯一已满足** |
+| 8 | `suppresses unreadable telemetry payload failures` | Java 无「不可读对象」惯用法 | n/a |
+| 9 | `ignores failed status calls atomically` | 同上（无 `setStatus`） | n/a |
+
+**推荐：只修第 6 条（settled 父 ⇒ 子惰性），其余以「显式差异声明」结案。**
+
+**不补 `setStatus` / `addEvent` / `setAttributes` 的三条理由**：
+
+1. 它们服务的是 pi **schema-typed** 的跨度族，而那份 schema 在 pi 里 11/12 无发射点、生产是
+   noop（§8.28.1）⇒ 补完也**没有观察者**。
+2. `addEvent` 与 pi-java 的 `recordEvent` **不是同一个东西** —— 照搬会把整份消息列表塞进 span 行，
+   `--trace-payloads` 的文件结构与离线消费方式剧变（§8.25.3 的 ⚠️ 已裁过）。
+3. 补完 `setStatus` 仍要声明两处**结构性**差异 —— **同步 vs `Promise`**、**无 `end()` vs 有 `close()`**
+   —— 收益被吃掉大半，属「半个对齐」，反而更难解释。
+
+⚠️ **差异声明必须写进 javadoc，而不只是文档**：pi 的 `TelemetrySpan` **没有 `end()`**
+（结算由 `startSpan` 拥有，`packages/telemetry/README.md:103`），pi 的 `SpanStatus` **只有 `ok|error`**
+（`packages/telemetry/src/index.ts:12`）；pi-java 的 `TelemetrySpan extends AutoCloseable` 且有
+`close()`，另有 `TelemetryContext.openSpan`（无回调开跨度）、`recordEvent` + `pushCurrent/popCurrent`
+与**两个 pi 没有的 adapter**（JSONL / OTel）。**这些都是 pi-java 的扩展，不是缺陷** —— 但今天
+javadoc 里一个字都没说 ⇒ 下一个拿 pi 契约来对表的人会**再次**把它们误判成缺口（**本次调查正是
+这么误判的**，见 §8.25.5-2/-10 的登记口气）。
+
+#### 8.28.5 顺带捞到的四条（三条此前未登记）
+
+| # | 发现 | 出处 | 处置 |
+|---|---|---|---|
+| ① | 父已结算后开的子跨度**仍落盘**（= §8.28.4 第 6 条） | `JsonlFileTelemetry.java:343` / `:356` | **已修**（本包唯一的行为改动，零 API 变更；RE 见 §8.28.9） |
+| ② | `RunLifecycle.reset` 把 `lane.runSpan` 置 null 却**不 `close()`**（只有 `closeRunSpan` 关） | `RunLifecycle.java:228` vs `:54` | **裁决：仅登记，不改** —— **今天就不可达**（证明见下），按 §3.3/§4.1 的口径「零调用者不补代码」，改它就是投机代码 |
+| ③ | `JsonlSpan.markAborted()` **全仓无调用者**（另两处 `markAborted` 是 `PiLoopRunner` 上无关的静态方法） | `JsonlFileTelemetry.java:321` | **已删**（`7add447`）：`aborted` 是 pi-java 自造且**死掉**的第三种状态，而 pi 的 `SpanStatus` 只有 `ok\|error`（`packages/telemetry/src/index.ts:12`）；中止由 `harness.run` 的 `outcome` 属性表达，与 pi 的 `pi.operation.outcome` 同口径 |
+| ④ | 开/关顺序不对称：`PiLaneSink.endRequest:197-198` 是 `close()` 再 `popCurrent()`，而 `JsonlFileTelemetry.startSpan:131-132` 是 `popCurrent()` 再 `close()` | 两处 | **仅登记**：今天无影响（`popCurrent` 的守卫是 `peek()==span`，与是否已结算无关） |
+
+**② 为什么不可达**（两条互相独立的路，各查一遍）：
+
+1. `runSpan != null` ⟺ 运行在飞 ⟹ `activeRun != null` ⟹ `reset` 在**读到那行之前就抛**
+   （`RunLifecycle.reset:216-219` 先查 `lane.isRunning()`，而 `isRunning` 就是
+   `activeRun != null`，`LaneState:190`）。`runSpan` 只有两个写入点
+   （`startRun:56`、`startContinue:134`），都由 `begin(lane)` 起手，而 `begin` 的第一句
+   同样是「车道非空闲即抛」（`:147-150`）；两个清零点成对
+   （`closeRunSpan` 关跨度并置 null：`RunSpanFactory:45`，随后 `finishRun:188` 才
+   `activeRun = null`）。⇒ **`reset` 走到 `:228` 时 `runSpan` 恒为 null。**
+2. 唯一「先清 `activeRun`、不碰 `runSpan`」的地方是 `restoreRecords:307`（崩溃恢复），
+   而它唯一的调用者是会话加载（`SessionPersistence.restoreFromRecordLog:140`，
+   文档自己写着「The operation is never resumed mid-flight」）—— 那条路上本进程
+   **还没有启动过任何 run**，`runSpan` 同样是 null。
+
+**触发条件（若将来失效，届时才需要修）**：出现不带 `isRunning` 门的 reset 变体，或
+`restoreRecords` 被运行中调用 —— 那时 `:228` 会静默漏一个只有 `span_start` 的跨度。
+修法是一行（把 `lane.runSpan = null` 换成 `runSpans.closeRunSpan(lane, "reset")`）。
+
+#### 8.28.6 缺陷 A（`batchSize`）的新归宿
+
+§8.26.5-11 原裁「进 pi 跨度词汇包」，理由是「那包要重建整个族，届时自然定案（很可能是删）」。
+**该前提随本包证伪而消失**（§8.28.3 选项 A 不重建）⇒ `batchSize` 需要自己的处置。
+
+事实不变：并行路径恒为 `N` ✅；**顺序路径是前缀数 1,2,…,N** ❌ ——
+`batchSize` 在 `closeToolSpan`（`PiLaneSink.java:466`）读 `batchCallIds.size()`，而这张表在
+`noteToolStart`（`:222`）追加、在助手消息落定时清空（`:331`），**由结果消息驱动收尾**；顺序路径
+逐调用成组（`PiLoopTools.executeSequential:96-113`）⇒ 第 k 个收尾时只登记了 k 个。
+**生产可达**：一个 `ExecutionMode.Sequential` 工具即让整批降级；pi 自己的录制
+`conformance/pi-out/S10.pi.jsonl:11-18` 就是 `… → end tc1 → message_start tc1 → message_end tc1 → start tc2 → …`。
+
+**裁决（2026-09-17）：修语义、不删。** `tool.execute` 是 pi-java **自有**的跨度族，`batchSize` 服务
+pi-java 自己的离线分析契约（`docs/18 §5.3`）；正确读法是「这批工具调用的**总数**」，而总数在相位①
+拿到助手消息时就已知（不必等逐个收尾）—— 故本包把取值改为**助手消息落定时定下的本批总数**
+（`batchCallCount`），收尾时只读不算。`toolIndex` 不动：列表在准备相单调增长，
+`size() - 1` 两条路径本来就对。实施与 RE 见 §8.28.9。
+
+#### 8.28.7 四项裁决（2026-09-17）
+
+1. **第 1 条（跨度词汇）⇒ A：结案为「不做」。** 保留 4 个自有跨度名，不改成 `pi.*`；
+   §8.25.5-1 按 §3.3/§3.4 的写法**结案标注**。
+   **方案 C（删环境态）随之一并结案** —— §8.25.3 把它并进本包的唯一理由是「对齐 12 个跨度 /
+   adapter 契约需要它」，理由消失后它回到「无可观察目标、不可证伪」；而 §8.25.3 自己写明
+   「若 §8.25.5-1/-2 长期不做，C 也不要单独做」⇒ 现在正是那句话所指的情形。
+   ⇒ **同族的第 3、8 条一并失去处置载体**（第 3 条的处置栏写的是「与方案 C 同一件事」，
+   第 8 条「摘要请求没有自己的跨度」服务的是同一份 schema）—— 但**不在本包顺手结案**：
+   第 3 条的可观察面（事件行有没有 `traceId`/`spanId`）已被 package D 的 A1/A2 改过语义
+   （现在的规则是「无绑定就留空，不借别人的」），第 8 条要判的是「摘要该不该有自己的跨度」，
+   那是 pi-java 自己的产品问题。两条各自另立裁决，**留白在此备查**。
+2. **第 2 条（adapter 契约）⇒ 只修第 6 条 + 写差异声明 javadoc。** 已落地。
+   ⚠️ 注意结案口径：**不是**「pi-java 的 adapter 不满足 pi 的契约」，而是
+   **「pi-java 的 adapter 比 pi 多，且 pi 自己那 9 条只对着一个测试用实现」** ——
+   可满足的按 pi 语义满足，不可满足的（同步 vs `Promise`、`close()` vs 无 `end()`）
+   以**结构性差异**声明，不假装对齐。
+3. **§8.28.5 的 ②③ ⇒ ② 仅登记（今天就不可达）、③ 删。** 已落地。
+4. **§8.28.6 的 `batchSize` ⇒ 修语义。** 已落地。
+
+**留白（本包未做，随时可加）**：是否另立 `TelemetryAdapterConformance` 套件，照仓内现成范式
+（`agent-core` 的 `ConformanceGroup{1,2,3}Test` 抽象基类 × 3 个 backend 子类、`evals` 的
+`ChatApiConformanceSuite`）把「可满足的 pi 用例 + 每条差异的断言」一起钉住。
+**倾向：暂不做** —— pi 那 9 条套件的注册表里只有一个测试用 adapter，本包把可满足的两条
+（生命周期 / 结算惰性）都补了夹具，再套一层抽象基类要先有第二个 adapter 才划算；
+若将来加 OTel 之外的真 adapter，从那条用例集起手即可。
+
+#### 8.28.8 实施切分（2026-09-17 实际执行）
+
+| # | 内容 | 模块 | 可独立编译 | 落到 |
+|---|---|---|---|---|
+| 1 | settled 父 ⇒ 子跨度惰性（`JsonlFileTelemetry` 两处入口）+ 夹具 | telemetry | ✓ | `35c4758` |
+| 2 | 差异声明 javadoc（`TelemetryContext` / `TelemetrySpan` / `JsonlFileTelemetry`：扩展清单 + 结构性差异） | telemetry | ✓ | `c3eef82` |
+| 3 | `TelemetryAdapterConformance` 套件 | telemetry | ✓ | **未做**（见 §8.28.7 留白） |
+| 4 | 删 `JsonlSpan.markAborted`（② 仅登记，未改） | telemetry | ✓ | `7add447` |
+| 5 | `batchSize` 语义修复 + 夹具 | agent-core | ✓ | `7f0cfb9` |
+| 6 | `docs/18 §5.1/§5.3` 更正 + §8.25.5-1/-2 **结案标注** | docs | — | 本提交 |
+
+#### 8.28.9 实施记录（2026-09-17）
+
+**提交**（分支 `agent-core-pi-loop`）：
+
+| # | 提交 | 内容 |
+|---|---|---|
+| 1 | `35c4758` | settled 父 ⇒ 子跨度惰性（`startSpan` / `openSpan` 两处入口）+ 2 条夹具 |
+| 2 | `c3eef82` | 差异声明 javadoc（`TelemetryContext` / `TelemetrySpan` / `JsonlFileTelemetry` 三处） |
+| 3 | `7add447` | 删掉不可达的 `aborted` 状态（`markAborted`） |
+| 4 | `7f0cfb9` | `batchSize` 语义修复 + 多调用顺序批夹具 |
+
+> ⚠️ §8.28.5 / §8.28.6 里的行号是**改动前**的位置（取证时逐条核过的就是那些行）；
+> 本包落地后 `JsonlFileTelemetry`、`PiLaneSink` 两处均有下移，引用时以符号名为准。
+
+**① settled 父 ⇒ 子跨度惰性**（`JsonlFileTelemetry.JsonlSpan`）：`startSpan` 与 `openSpan`
+各加一个 `if (ended)` 早退，把子跨度**降级为 noop 上下文**（`NoopTelemetryContext.INSTANCE`）——
+照 pi 的原文语义（`packages/telemetry/src/memory.ts:126`），不是"记在已结算的父下面"。
+noop 的那两处天然满足其余要求：回调同步入场一次、返回值/异常原样穿透、
+`openSpan` 回来的惰性 span 忽略 `addAttribute`/`close`（调用方无需特判）。**零 API 变更。**
+
+夹具 `childSpanOpenedAfterItsParentSettledIsInert` 同时钉住三件事：返回值 `7` 原样穿透、
+回调恰入场一次、异常**同一对象**穿透、且**行数一行不增**（含 `openSpan` 那条腿）。
+必须配正向对照 `childSpanOpenedBeforeItsParentSettledIsRecorded` ——
+否则「什么都不记」在「本来就什么都不记」的实现上也是绿的。
+
+**② 差异声明 javadoc**：三份 javadoc 各写清「哪些是 pi-java 的扩展、哪两处是**不可闭合的
+结构性差异**（同步 `Function` vs `Promise`、`AutoCloseable.close()` vs 无 `end()`），
+以及 `addEvent`/`setStatus` **不移植是决定而非疏漏**」。这条不是文档洁癖：本次调查
+**正是因为**把扩展读成了缺口，才把「无 `setStatus`」登记成待补项（§8.28.4 的 ⚠️）。
+
+**③ `markAborted` 删除**：删除后 `status` 的取值闭集就是 `ok` / `error`，与 pi 的
+`SpanStatus`（`packages/telemetry/src/index.ts:12`）一致；中止由 `harness.run` 的
+`outcome` 属性表达（`RunSpanFactory.closeRunSpan` 写 `OperationOutcome`，
+取值 `completed` / `aborted` / `failed` / `declined`）—— 与 pi 的
+`pi.operation.outcome` ∈ {completed, aborted, failed, suspended} 同口径：
+**中止是结果属性，不是状态。**
+
+**④ `batchSize` 语义修复**（`PiLaneSink`）：新增字段 `batchCallCount`，在助手消息落定
+（`onMessageEnd` 的助手分支）时由 `countToolCalls(assistant)` 定下（数助手消息里的
+`ToolUseContent` 块），`closeToolSpan` 改为读它，不再读 `batchCallIds.size()`。
+两个前提都成立：① 总数在那条助手消息落定时就已知；② 帧序保证 `message_end(assistant)`
+**先于**该批任何 `tool_execution_start`。`toolIndex` 不动。
+
+夹具 `sequentialBatchReportsTheWholeBatchSizeOnEverySpan`：**双调用**顺序批。既有的
+`toolCallEmitsExecuteSpanCountersAndAuditRecords` 只有单调用批（两种读法同值
+`batchSize == 1`），测不出这个缺陷 —— 这正是它先前躲过检测的原因。
+第一条断言把**路径**钉住（`start:a, end:a, start:b, end:b` 逐调用成组，即缺陷的前提，
+也是 pi 自己 `S10.pi.jsonl:11-18` 的形状；`ToolExecution.defaultMode()` 是 Parallel，
+夹具的 `activeTools` 又是空的，故显式传 `new ToolExecution.Sequential()`）。
+
+**RE（关键，两条）**：
+
+| RE | 做法 | 结果 |
+|---|---|---|
+| RE-1 | 把 `closeToolSpan` 的读改回 `batchCallIds.size()` | **恰一条红**：`expected: 2 but was: 1`，落在 `call-a` 上（call-b 尚未 start）—— 与预测逐字相符 |
+| RE-2 | 首次运行（未显式给执行模式）时的路径形状 | 实测 `start:a, start:b, end:a, end:b`（**并行**路径）⇒ 夹具当时**没有牙**：并行路径两种读法同值。据此才补上 `new ToolExecution.Sequential()`。**如实记录：第一版夹具是运气夹具。** |
+
+**回归**：`mvn -o -pl pi-java-telemetry -am verify` 与
+`mvn -o -pl pi-java-agent-core -am verify` 全绿（telemetry 31 / agent-core 448，
+checkstyle + spotbugs 零违规）。
+
+⚠️ **`-am` 不可省**（本包又踩一次）：不带 `-am` 的 `verify` 会拿 `D:/repository` 里的
+**旧** `pi-java-ai` 构件，agent-core 的 448 条里 208 条报 `NoSuchMethod` —— 那是构件陈旧，
+不是本包改坏了什么（memory `jdk25-mvn-am`）。
+
+**未覆盖 / 留白（如实登记）**：
+
+- `TelemetryAdapterConformance` 套件**未做**（§8.28.7 留白，倾向暂不做）。
+- §8.25.5-3（`recordEvent` 的环境态语义）与 -8（摘要请求没有自己的跨度）**未结案**，
+  理由见 §8.28.7-1（各自的观察面与本包的证伪不是同一件事）。
+- §8.28.5-②（`reset` 漏关 run span）**未改**，可达性论证见 §8.28.5；
+  若将来出现不带 `isRunning` 门的 reset 变体，届时修（一行）。
 
 ---
 
