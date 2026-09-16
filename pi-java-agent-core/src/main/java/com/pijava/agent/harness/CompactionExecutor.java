@@ -15,6 +15,7 @@ import com.pijava.agent.record.OperationOutcome;
 import com.pijava.agent.record.StepKind;
 import com.pijava.ai.message.Message;
 import com.pijava.telemetry.SpanOptions;
+import com.pijava.telemetry.TelemetrySpan;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -248,7 +249,7 @@ final class CompactionExecutor {
             if (plan != null && !plan.keepEntries().isEmpty()) {
                 compacted = plan.keepEntries();
             } else {
-                var built = compactTranscript(lane, settings, reason);
+                var built = compactTranscript(lane, settings, reason, span);
                 compacted = built.kept();
                 result = built.result();
             }
@@ -361,13 +362,48 @@ final class CompactionExecutor {
     /** 压缩体产物：新转录列表 + 结果对象（{@code estimatedTokensAfter} 由调用方在重建后补）。 */
     private record Built(List<Entry> kept, CompactionResult result) {}
 
-    private Built compactTranscript(LaneState lane, CompactionSettings settings, String reason) {
-        // tokensBefore 单一来源：pi 的三条路（threshold/manual/overflow）都从
-        // prepareCompaction :667 的 estimateContextTokens 读，这里同形 —— 落库的
-        // Entry.Compaction.tokensBefore 因此是「用量优先」值，与触发判据同源。
-        // reason 透传给摘要生成器（3d 环 B 的 attempt_start 事件装饰）。
-        var result = CompactionService.compact(lane.transcript, settings,
-            ctx.summaryGenerator(), contextTokens(lane), reason);
+    /**
+     * 压缩体：跑摘要生成器 + 装配新的转录列表。
+     *
+     * <p><b>摘要请求的宿主跨度</b>（{@code docs/31 §8.29}）：摘要是一次**真正的
+     * LLM 调用**，但它的 payload 行（{@code llm.payload.request/response}，由
+     * {@code PayloadRecordingStreamFn} 发出）此前**没有归属** —— 压缩路径从不
+     * {@code pushCurrent}，行上既无 {@code traceId} 也无 {@code spanId}。这里补
+     * {@code compaction.summary} 子跨度（父 = {@code compaction.apply}）并在摘要
+     * 生成期间绑定为当前跨度，与 {@code PiLaneSink.beginRequest} 对主循环请求做的
+     * 是同一件事。</p>
+     *
+     * <p>三点须留意：① <b>不</b>复用 {@code llm.request} 名 —— 否则「按名数
+     * {@code llm.request} = agent 轮数」这条既有聚合口径静默失效；② 生成器的重试
+     * 环（3d 环 B）在<b>同一条</b>跨度下发生，重试的每次请求行都绑到它，从行数看得见
+     * 重试；③ 非 LLM 的截断兜底生成器（{@code SummaryGenerator.truncating()}）没有
+     * LLM 调用，这条跨度仍然出现但只有 {@code summaryChars}、没有事件行与 token ——
+     * 跨度描述的是「摘要这一步」，不是「一定发生了一次请求」。</p>
+     */
+    private Built compactTranscript(LaneState lane, CompactionSettings settings, String reason,
+                                    TelemetrySpan parent) {
+        var summarySpan = parent.openSpan(new SpanOptions("compaction.summary",
+            java.util.Map.of("reason", reason)));
+        CompactionResult result;
+        try {
+            ctx.telemetry().pushCurrent(summarySpan);
+            // tokensBefore 单一来源：pi 的三条路（threshold/manual/overflow）都从
+            // prepareCompaction :667 的 estimateContextTokens 读，这里同形 —— 落库的
+            // Entry.Compaction.tokensBefore 因此是「用量优先」值，与触发判据同源。
+            // reason 透传给摘要生成器（3d 环 B 的 attempt_start 事件装饰）。
+            result = CompactionService.compact(lane.transcript, settings,
+                ctx.summaryGenerator(), contextTokens(lane), reason);
+            summarySpan.addAttribute("summaryChars", result.summary().length());
+            var usage = result.usage();
+            if (usage != null) {
+                summarySpan.addAttribute("inputTokens", usage.input());
+                summarySpan.addAttribute("outputTokens", usage.output());
+            }
+        } finally {
+            // 与 PiLaneSink.endRequest 同序：先 close 再 pop。
+            summarySpan.close();
+            ctx.telemetry().popCurrent(summarySpan);
+        }
         var retainedTail = keptMessagesFrom(lane.transcript, result.firstKeptEntryId());
         var compactionEntry = new Entry.Compaction(
             UUID.randomUUID().toString(), lane.nextSeq(), HarnessUtils.lastEntryId(lane),

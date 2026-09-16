@@ -293,9 +293,11 @@ class HarnessTelemetryThreadAttributionTest {
      * ③：面③-1 的可达性 —— **运行中手动 `/compact`**（生产形状：prompt 在另一条线程上，
      * 手动压缩从宿主线程进来；{@code RunLifecycle.compact:237-239} 没有 `isRunning` 门）。
      *
-     * <p>预测（{@code docs/31 §8.25.6} ③）：A1 生效 ⇒ 摘要那次请求的 payload 行**没有
-     * `traceId`**（自己的跨度没绑，也不去借别人的）；还原成共享栈 ⇒ 同一行会带上那条
-     * 在飞请求的 `spanId`。后者就是「静默错配」在生产路径上的样子。</p>
+     * <p>预测（{@code docs/31 §8.25.6} ③）：A1 生效 ⇒ 摘要那次请求的 payload 行不带
+     * 那条在飞请求的 {@code spanId}；还原成共享栈 ⇒ 同一行会带上它。后者就是「静默错配」
+     * 在生产路径上的样子。当时 A1 下这条行的形状是「没有 {@code traceId}」，
+     * **§8.29 之后改为「归于压缩自己的 {@code compaction.summary} 跨度」** —— 不变量
+     * （不借用别人的绑定）不变，只是被观测的那一行现在有了自己的合法归属。</p>
      */
     @Test
     void compactionFromAnotherThreadDoesNotInheritTheInFlightRequestSpan(@TempDir Path tracesDir)
@@ -344,9 +346,17 @@ class HarnessTelemetryThreadAttributionTest {
         // 前提：摘要请求确实跑到了（否则这条实验什么也没证明）
         var summarization = summarizationRequests(lines);
         assertThat(summarization).as("手动压缩应当调到摘要生成器").isNotEmpty();
-        assertThat(summarization.get(0).has("traceId")).as("摘要请求是另一条线程发起的，"
-            + "它没有自己的绑定 —— 宁可无归属，也不该挂上在飞请求的跨度").isFalse();
-        assertThat(summarization.get(0).has("spanId")).isFalse();
+
+        // 摘要请求的宿主是**压缩自己的**跨度（§8.29 起压缩路径也 push）。这条断言
+        // 原先写的是「没有 traceId/spanId」，§8.29 给它补上归属后改为：**归属必须是
+        // 它自己那条**，而不是从在飞请求那里借来的 —— 要守的不变量是「不借用」，
+        // 「宁可无归属」只是当时没有归属时的兜底说法。
+        var compactionSummarySpan = lines.stream()
+            .filter(n -> "span_start".equals(n.get("kind").asText()))
+            .filter(n -> "compaction.summary".equals(n.get("name").asText()))
+            .findFirst().orElseThrow();
+        assertThat(summarization.get(0).path("spanId").asText())
+            .isEqualTo(compactionSummarySpan.path("spanId").asText());
 
         // 正向对照：在飞那一轮的请求行**带**自己的 traceId（不是「一行都没有」）
         var llmStart = lines.stream()
@@ -354,10 +364,13 @@ class HarnessTelemetryThreadAttributionTest {
                 && "llm.request".equals(n.get("name").asText()))
             .reduce((first, second) -> second).orElseThrow();
         var runRequests = eventsNamed(lines, "llm.payload.request").stream()
-            .filter(n -> n.has("traceId"))
+            .filter(n -> !n.get("payload").get("sys").asText()
+                .startsWith(SUMMARIZATION_PROMPT_PREFIX))
             .toList();
         assertThat(runRequests).isNotEmpty();
-        assertThat(runRequests.get(runRequests.size() - 1).get("spanId").asText())
-            .isEqualTo(llmStart.get("spanId").asText());
+        assertThat(runRequests.get(runRequests.size() - 1).path("spanId").asText())
+            .isEqualTo(llmStart.path("spanId").asText());
+        assertThat(summarization.get(0).path("spanId").asText())
+            .isNotEqualTo(llmStart.path("spanId").asText());
     }
 }
