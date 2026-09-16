@@ -9,6 +9,21 @@ import java.util.function.Function;
  *
  * <p>Implementations may be no-op, logging-only, or full OpenTelemetry
  * exporters. The callback style ensures spans are always closed.</p>
+ *
+ * <p><b>Port note — extensions over pi, and two structural differences.</b>
+ * This interface is a port of pi's {@code packages/telemetry} contract, but pi's
+ * {@code TelemetryContext} declares <em>exactly one</em> method
+ * ({@code startSpan(options, callback)}).  Everything else here — {@link #openSpan},
+ * {@link #recordEvent}, {@link #pushCurrent}/{@link #popCurrent},
+ * {@link #recordsPayloads}, {@link #with} and the two metric methods — is a
+ * pi-java addition, as are the {@link JsonlFileTelemetry} and
+ * {@link OtelTelemetryContext} adapters (pi ships only a no-op adapter plus a
+ * test-only in-memory one).  Two differences are <em>structural</em> and cannot
+ * be closed: the callback here is synchronous ({@link Function}) where pi returns
+ * a {@code Promise}, and a span here is {@link AutoCloseable} where pi's has no
+ * {@code end()} because {@code startSpan} owns settlement.  pi's
+ * {@code addEvent}/{@code setStatus} are deliberately not ported — see
+ * {@link TelemetrySpan}.  Evidence and adjudication: {@code docs/31 §8.28}.</p>
  */
 @FunctionalInterface
 public interface TelemetryContext {
