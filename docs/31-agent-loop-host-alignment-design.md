@@ -632,7 +632,7 @@ pi 用 `async/await`，Java 没有。**这不是障碍**：pi 的 `runLoop` 里�
 |---|---|---|---|
 | 1 | 流中途 abort 被记成 COMPLETED | pi 把 signal 交给 streamFunction 由 provider 收尾（`agent-loop.ts:307-311`）；pi-java 的同步 `StreamIterator` 不能假定 provider 照做 | **补循环侧保证**：拉取途中信号一响就停止消费，被切断的一轮标 `aborted`（A8）。provider 给出终局判定时**不覆盖** |
 | 2 | 出错的运行被记成 COMPLETED | `determineOutcome` 返回 `"error"`，而 `RunLifecycle.outcome()` 只认 `OperationOutcome` 取值 ⇒ 落默认分支。span 属性写着 error，记录写着 COMPLETED | **修**：`"error"` → FAILED |
-| 3 | 无 `tool.execute` 跨度、无 tool.executions/tool.errors | `ToolExecutionPipeline` 独占这些，`PiToolRunner` 没有 | **修**：跨度在 `PiLaneSink.noteToolStart` 开、结果消息处关；`batchSize` 在收尾时补（pi 保证全部 start 早于任何 end） |
+| 3 | 无 `tool.execute` 跨度、无 tool.executions/tool.errors | `ToolExecutionPipeline` 独占这些，`PiToolRunner` 没有 | **修**：跨度在 `PiLaneSink.noteToolStart` 开、结果消息处关；`batchSize` 在收尾时补（~~pi 保证全部 start 早于任何 end~~ —— 该依据**已撤回**，`docs/29 §4.1`；真实依据与「顺序路径上这个属性语义有误」见 `docs/31 §8.26.5-11`） |
 | 4 | `StepAttempt.durationMs` 恒为 null | `PiLaneSink` 传硬 `null` | **修**：传实测毫秒 |
 | 5 | run span 的 `outcome` 是 `tool_use` | 消息级的 `tool_use`/`length` 被当成了**运行**结局；到达终局的运行必然已消费完全部工具调用 | **修**：`determineOutcome` 归一为 `completed` |
 | 6 | 截断的调用**有** `ToolFinished` 记录（旧路径没有） | pi 的 `failToolCallsFromTruncatedMessage` **同样**发 start/end（`agent-loop.ts:379-405`） | **改测试**：记录在，但 `executed == 0` |
@@ -2505,6 +2505,9 @@ A1+A2 合计约 10 行生产改动，**不改任何对外签名**（`pushCurrent
 | 9 | **`JsonlSpan.startSpan` 根本不碰当前栈**（实施 A2 时发现） | 同一个 `startSpan`，两个实现行为不同：`JsonlFileTelemetry.startSpan` push（A2 后也 pop），`JsonlSpan.startSpan`（`:338-349`）只开子 span、**既不 push 也不 pop**。而接口 `startSpan` 的 javadoc（`TelemetryContext:16-25`）**一个字都没提「绑定为当前跨度」** ⇒ 「`startSpan` 会绑定」是一处**未文档化的局部行为**，三个实现里只有一个有它（`Otel`/`Noop` 都没有） | 小：A2 选择**保留 push、补齐 pop**（仓内唯一依赖者是一条既有单测；生产路径只用 `openSpan` + `PiLaneSink` 的显式 push）。反方向（**删掉 push**，让所有实现都不碰栈）同样自洽 —— 该行为既无文档也无生产消费者。选哪个都行，**但它该被写进 javadoc**，否则下一个写遥测装饰器的人会踩空 |
 | 10 | **接口的 `openSpan` 默认实现不可用**（同一处发现） | `TelemetryContext:32-39` 的 default `openSpan` 在**自己的回调里**就把 span 关掉，返回一个**已结束**的 span。真实实现（`JsonlFileTelemetry:137`、`OtelTelemetryContext:96`）**各自覆写**才没出问题 | 小：写装饰器时**必须显式转发 `openSpan`**，否则 harness 拿到的全是已结束的 span（本包的测试装饰器就踩过，已在注释里钉住）。要么把 default 改成抛 `UnsupportedOperationException`，要么在 javadoc 里写明「必须覆写」 |
 
+> **本表续见 §8.26.5**（编号自 11 起）：那三条是 §8.26（工具批次与结构化并发）调查中登记的，
+> 与本节同族 —— 都出在「并发下被工具线程触碰的宿主共享状态」或「遗留的工具跨度族」上。
+
 #### 8.25.6 测试计划
 
 ① **实测（本包核心证据，两条）**
@@ -2588,6 +2591,105 @@ A1+A2 合计约 10 行生产改动，**不改任何对外签名**（`pushCurrent
 
 **新登记**：§8.25.5-9（`JsonlSpan.startSpan` 不碰当前栈 / 接口 javadoc 未写明绑定语义）、
 -10（接口 `openSpan` 的默认实现返回**已结束**的 span，装饰器必须显式转发）。
+
+---
+
+### 8.26 工具批次与结构化并发（裁决）
+
+> **触发**：用户提问「适合使用结构并发来实现工具调用么」。§8.23.3 记过一条非目标
+> ——「不使用预览 API（结构化并发在 JDK 25 仍属预览），`ExecutorService` 是正式面」
+> （`:1733`）——但只给了「预览」**一条**理由，且无出处；也没人问过「预览转正之后呢」。
+> 本节补齐依据，结论是：**预览只是三条理由里最弱的一条**。调查另发现三个真实缺陷，
+> 登记在 §8.26.5（编号续 §8.25.5，自 11 起）。
+
+#### 8.26.1 作为**原则**：批次**已经是**结构化的
+
+问题不是"要不要结构化"，而是"要不要把 `ExecutorService` 换成 JDK 的预览 API"。
+
+| 保证 | 现有实现 | 证据 |
+|---|---|---|
+| 派生任务不逃出作用域 | 作用域 = 批次方法体：`try (var workers = Executors.newVirtualThreadPerTaskExecutor())` | `PiLoopTools.java:190` |
+| 退出时**所有** worker 确已终止 | `ExecutorService.close()` 的契约就是"waits until all tasks have completed execution and the executor has terminated"；被中断时先 `shutdownNow()` 再**继续等** | 本机 JDK 源码 `java.base/java/util/concurrent/ExecutorService.java:368-407` |
+| 结果确定性收拢 | `entries` 位置即源序 → `futures` 同序 → `outcomes` 按序回填；消息与 `terminate` 均源序 | `PiLoopTools.java:153-205` |
+| 退出**不**取消在飞任务（pi 的要求） | 故意不 `shutdownNow` | `PiLoopTools.java:186-188`；`ToolBatchConcurrencyTest.abortedBatchStillEmitsInFlightEnds` |
+| 宿主事件仍互斥 | 唯一漏斗 `emitLock` | `PiLaneSink.java:274-292` |
+
+即：`close()` 等全部 worker 结束这条，**恰好就是** `StructuredTaskScope` 卖的那条保证 ——
+现有实现已经用它自己的方式拿到了。副作用是它的作用域**比 pi 的更强**（pi 的 `Promise.all`
+在缺陷 B 那条路径上会提前拒绝，见 §8.26.5-12）。
+
+#### 8.26.2 作为 **JDK API**：不适合。三条**互相独立**的否决理由
+
+**① 默认策略会中断兄弟工具线程，与 pi 正面冲突**（判据层面的否决；**与预览无关，转正后依然成立**）。
+本机 JDK 25.0.4 源码（`lib/src.zip` → `java.base/java/util/concurrent/`，下同）：
+
+- 无参 `open()` 的 `@implSpec` 明写等价于 `Joiner.awaitAllSuccessfulOrThrow()`
+  （`StructuredTaskScope.java:905-908`）；后者的 javadoc 原文：
+  *"The `Joiner` **cancels** the scope and causes `join` to throw if any subtask fails"*
+  （`:613-619`）。
+- **取消不是抽象的**：`onComplete` → `cancel()`（`StructuredTaskScopeImpl.java:187-191`），
+  `cancel()` → `interruptAll()`（`:147-153`），`interruptAll()` 逐个 **`t.interrupt()`**
+  （`:134-140`）⇒ 首个失败会**打断正在跑的工具线程**。
+- 这与 pi 的语义**正面相反**：pi 的中止是**协作式**的，在飞的调用跑到返回、自己发
+  `tool_execution_end`，兄弟**不**被打断（`agent-loop.ts:521-529`；§8.23.4 裁决④）。
+  pi-java 为此**故意不 `shutdownNow`**（`PiLoopTools.java:186-188`），并由
+  `ToolBatchConcurrencyTest.abortedBatchStillEmitsInFlightEnds` 钉住。
+  ⇒ 采用默认策略等于**主动引入一个 pi 明确拒绝的行为**。
+- 要关掉它必须显式换 `Joiner.awaitAll()`（`:632-634`，*"**does not cancel the scope if a
+  subtask fails**"*）——花代价买一个**必须立刻停用**的能力。
+- 另有一处不可忽略：`join()` 把异常包成 `FailedException`（`StructuredTaskScopeImpl.java:258`
+  `throw new FailedException(e)`），而 `awaitOutcome`（`PiLoopTools.java:218-234`）刻意
+  **解包原样重抛**（保 pi「批次级失败、异常向上冒」的形状）⇒ 宿主侧 `catch (SpecificException)`
+  会失效。
+
+**② 构建代价：`--enable-preview` 是全树、且污染产物**。
+`javac --enable-preview` "要求 -source 或 --release 一起使用"，`java --enable-preview`
+"允许应用程序使用**此版本**中的预览功能"（本机 JDK `-help` 原文）⇒ 开关**绑定发行版**；
+编译出的 class 带 preview 标记，只能在**完全相同的 JDK** 上加载。而 pi-java 的产物是
+**库 + CLI + fat jar + native 二进制**，消费者拿不走。现状：根 `pom.xml:33` `java.release=25`、
+`:88` `<release>`，全树**无任何** `--enable-preview`。
+
+**③ native 与 API 稳定性**。
+`-Pnative` 产 `pi-java` 二进制（`pi-java-dist/pom.xml:88-113`），而
+`docs/10-phase5-native-design.md:539` 的核实前提正是"无 `--enable-preview`"；native-image
+不支持 preview 特性。时限那一半：五度预览（JEP 505 为第五次），JDK 25 刚把
+`ShutdownOnFailure`/`ShutdownOnSuccess` 换成 `Joiner` + 静态 `open()`，转正拟在 JDK 28
+⇒ 今天写的明天要重写。
+
+#### 8.26.3 为什么不「学形」
+
+判据是**行为**（「分支所有功能都和 pi 表现一样」），不是技术名词对齐。pi 的工具批次在
+**结构上**已经等价于一个作用域（**批次 = 作用域、退出即 join、结果确定收拢**），
+差别只在**仲裁者**（pi：JS 微任务队列 / Java：调度器）与**能否取消**（pi：不能）。
+换成 `StructuredTaskScope` 能得到的只有：取消（**必须关掉**）、批超时（**pi 没有**）、
+`ScopedValue` 继承（**仓内无一个 `ScopedValue` 使用点，没有可继承的东西**）、
+JSON 线程转储里的结构化层级（与判据无关）。四条没有一条是行为收益。
+同 §8.25.3 的 ⚠️ 口径、也同 §8.23.8 ⑥「**复刻微任务队列不是可选项**」。
+
+#### 8.26.4 唯一有吸引力的东西：批超时 —— 恰恰不能要
+
+`Configuration.withTimeout(Duration)`（超时即取消作用域、`join()` 抛 `TimeoutException`，
+`StructuredTaskScope.java:787`/`:819`）是现有实现**确实没有**的能力——但
+**pi 的 `Promise.all` 没有批超时**。加了就是行为不一致，按判据不能加。
+（现有实现也刻意不设：`PiLoopTools.java:186-188`。若要加，必须作为**新能力**提出，
+不能包装成对齐。）
+
+#### 8.26.5 登记（续 §8.25.5，编号自 11 起）
+
+| # | 项 | 症状 | 现状/可达性 | 处置 |
+|---|---|---|---|---|
+| 11 | **顺序路径的 `batchSize` 语义错** | `batchSize` 在 `closeToolSpan`（`PiLaneSink.java:456`）按**当时**的 `batchCallIds.size()` 写，而 `batchCallIds` 只在 `noteToolStart`（`:217`）追加、在助手消息落定时清空（`:326`），读取由**结果消息**驱动（`:358` → `emitToolRecords:418` → `closeToolSpan:430`）。并行路径相位③在整批后回填 ⇒ 恒为 `N` ✅；**顺序路径逐调用成组**（`PiLoopTools.java:96-113`）⇒ 第 k 个调用收尾时只有 k 个成员登记过，`batchSize` = **1,2,3,…,N** ❌ | **生产可达**，不是角落：`BashTool`/`EditTool`/`WriteTool` 都是 `ExecutionMode.Sequential`，一个这样的调用即让**整批降级**（`useSequentialPath:76-88`，对应 S10）。pi 自己的录制 `conformance/pi-out/S10.pi.jsonl:11-18` 就是 `… → end tc1 → message_start tc1 → **message_end tc1** → start tc2 → …`。**未覆盖**：L5 差分是**帧级**的、不含遥测属性；`HarnessToolExecutionSpansTest.java:146` 只有单调用批（两种读法同值）。同根的另一处：`toolIndex`（`:222`）**两条路径都正确**（列表单调增长） | **进 §8.25.5-1/-2 的 pi 跨度词汇包**（用户裁决）。理由：`batchSize` 挂在**遗留**的 `tool.execute` 跨度族上，而 pi 的工具跨度属性只有 `pi.tool.name`/`call_id`/`replay`/`recovery`/`is_error`（`packages/agent/src/harness/telemetry.ts:422-448`）——**根本没有 batchSize**；那包要重建整个族，届时自然定案（很可能是删）。**本包不改行为、不补测试** |
+| 12 | **批内 join 是源序，异常选择与 pi 不同**（且作用域更强） | `PiLoopTools.java:195-197` 按**源序**逐个 `future.get()`；pi 用 `await Promise.all(...)`（`agent-loop.ts:547-549`），**最早抛出者**（时间序）获胜。另有两处差异：**(a) 作用域更强** —— 抛异常后 `finally` 走 `close()`，它**等全部 worker 终止**才让异常向上冒，因此 pi-java 的失败路径耗时是 `max(全部工具)`，pi 是「首个失败」；pi 那边**迟到的 `tool_execution_end` 可以落在 `agent_end` 之后**，pi-java 结构上不可能（`ExecutorService.java:368-407`）。**(b) 触发条件两侧不同构** —— pi 的 `catch` 无类型，工具体抛什么都转成结果，thunk 只可能因**宿主 sink 失败**而 reject；pi-java 的 `catch (Exception)` 使 `Error`（OOM/`StackOverflowError`/`AssertionError`）与 sink 失败才逃得出去 | 可达性窄（"同批 ≥2 条抛 `Error`"），且**不影响帧序**（相位③恒源序）、不影响 `terminate`（序无关）。**但 (b) 有一条更重的下游**：`SessionRunner` 两处都是 `catch (Exception)`，`Error` 两条都不接 ⇒ `statusFuture`/`entriesFuture` **永不完成**、不发 `AgentEnd`/`AgentSettled`、虚拟线程带未捕获 `Error` 死去 —— 宿主**永久挂起**（车道却已 idle）。这是**宿主层缺口**，经同一个门到达 | **登记，不改**（用户裁决）：可达性窄；按完成序重抛会引入 pi-java 从未有过的跨线程顺序语义。**备注**：这个角落若要贴近 pi，**恰恰**是 `StructuredTaskScope` 能帮上的一点（它按完成序选异常）——但为它引入预览不值得，真要改是 3 行、不依赖任何预览 API。宿主那半边（`Error` 不接）与 pi 的 `handleRunFailure`（把异常**压成文本**、合成 assistant 消息、promise **resolve**）是另一处更大差距，另立包 |
+| 13 | **`lane.records` 被工具线程写入**（数据竞争，**包 B 引入**） | `LaneState.records` 是**普通 `ArrayList`**（`LaneState.java:79`），却有一个**工具线程**写者：`PiToolRunner.execute:172` 在**worker 线程**上调 `hooks.fireAfterTool(...)`（`PiLoopTools.java:172` 的 worker lambda 里）→ `HookSystem.fireAfterTool:200` 的 `catch` → `recordHookError:334` `lane.records.add(...)`。同时宿主在**别的线程**读它：`SnapshotService.java:75` `lane.records.stream()`、`:81` `List.copyOf(lane.records)`（由 HTTP 请求线程经 `WebDispatcher` 到达） | **两条今天可达的路径**：①同一并行批里**两个**工具的 `after_tool` 钩子都抛异常 ⇒ 两条虚拟线程并发 `add`（丢记录；扩容期还会 `ArrayIndexOutOfBoundsException`）；②批次在飞时来一个 web/RPC 快照请求 ⇒ `ConcurrentModificationException`（或复制期 `AIOOBE`）。**包 B 之前不可能**：那时工具在引擎线程上顺序跑。§8.23.2 的审计只覆盖了「工具线程不得触碰**遥测绑定**」，漏了宿主记录表。`before_tool` 走 `prepare`（引擎线程），安全 | **待裁决**（本包只登记，不动行为）。方向有二：把 `records` 换成 `CopyOnWriteArrayList`（最小改动），或**让 worker 侧不直写宿主状态** —— 即 `recordHookError` 改走 `PiLaneSink.emit` 那条**唯一漏斗**（更贴包 B 的设计原则：「工具线程只经 emit 进宿主」）。**无论选哪条，都要先补一条并发夹具**（两条 worker 的 `after_tool` 同时抛 ⇒ 记录条数守恒） |
+
+#### 8.26.6 未来触发条件
+
+`StructuredTaskScope` **在 JDK 28 转正**（`@PreviewFeature` 摘掉、API 冻结）**且**
+`-Pnative` 退役（或 native-image 支持 preview）之后，才值得重新评估。届时：
+唯一可用策略是 `Joiner.awaitAll()`（默认策略**必定**冲突，见 §8.26.2 ①），
+绕不开 `FailedException` 的包装，且仍须先证明**无行为差异**。在此之前，
+`ToolExecution.java:7-9` 的那句"`StructuredTaskScope` … is avoided"**仍然正确**，
+其依据即本节。
 
 ---
 
