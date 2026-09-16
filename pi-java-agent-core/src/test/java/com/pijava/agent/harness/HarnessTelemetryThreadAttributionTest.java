@@ -322,12 +322,15 @@ class HarnessTelemetryThreadAttributionTest {
                 failure.set(t);
             }
         });
-        assertThat(entered.await(10, TimeUnit.SECONDS))
-            .as("harness 的第二轮请求应当已进入流").isTrue();
-
-        // 宿主线程发起手动压缩 —— 摘要生成器走同一份 recordingStreamFn，
-        // 于是 recordEvent 发生在**另一条线程**上
+        var enteredInTime = entered.await(10, TimeUnit.SECONDS);
+        // 放行必须在 finally 里：这条 await 失败时也不能把那轮请求留在闩上 ——
+        // surefire 复用同一个 JVM，残留的活线程会干扰后续测试类的时序
         try {
+            assertThat(enteredInTime)
+                .as("harness 的第二轮请求应当已进入流").isTrue();
+
+            // 宿主线程发起手动压缩 —— 摘要生成器走同一份 recordingStreamFn，
+            // 于是 recordEvent 发生在**另一条线程**上
             h.compact(CompactionSettings.defaults());
         } finally {
             release.countDown();
