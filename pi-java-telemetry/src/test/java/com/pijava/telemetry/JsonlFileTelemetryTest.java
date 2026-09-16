@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 /** JsonlFileTelemetry writes span_start/span_end/event/counter JSONL lines. */
 class JsonlFileTelemetryTest {
@@ -325,6 +327,55 @@ class JsonlFileTelemetryTest {
             .findFirst().orElseThrow();
         var nested = eventMarkedOn(lines, "nested");
         assertThat(nested.get("spanId").asText()).isEqualTo(outerStart.get("spanId").asText());
+    }
+
+    /**
+     * pi 的 adapter 契约「makes calls after settlement inert」的子跨度那一半
+     * （{@code docs/31 §8.28.4} 第 6 条）：父已结算后开子跨度，回调照跑一次、
+     * 返回值与异常原样穿透，但**什么都不记** —— pi 是把它降级成 noop 上下文
+     * （{@code packages/telemetry/src/memory.ts:126}），而不是记在已结算的父下面。
+     */
+    @Test
+    void childSpanOpenedAfterItsParentSettledIsInert() throws IOException {
+        var telemetry = JsonlFileTelemetry.create(tempDir);
+        var parent = telemetry.openSpan(new SpanOptions("harness.run"));
+        parent.close();
+        int linesAfterParent = readLines(onlyTraceFile()).size();
+
+        var calls = new AtomicInteger();
+        var value = parent.startSpan(new SpanOptions("late-child"), child -> {
+            calls.incrementAndGet();
+            child.addAttribute("ignored", true);
+            return 7;
+        });
+        var late = parent.openSpan(new SpanOptions("late-open"));
+        late.addAttribute("ignored", true);
+        late.close();
+        var boom = new IllegalStateException("boom");
+        var thrown = catchThrowable(() ->
+            parent.startSpan(new SpanOptions("late-throw"), child -> {
+                throw boom;
+            }));
+
+        assertThat(value).as("回调返回值原样穿透").isEqualTo(7);
+        assertThat(calls.get()).as("回调仍然同步入场一次").isEqualTo(1);
+        assertThat(thrown).as("异常同一对象原样穿透").isSameAs(boom);
+        assertThat(readLines(onlyTraceFile())).as("已结算的父下面什么都不记")
+            .hasSize(linesAfterParent);
+    }
+
+    /** 正向对照：同一次调用在父**未**结算时会落盘 —— 否则上面那条「什么都没记」是空断言。 */
+    @Test
+    void childSpanOpenedBeforeItsParentSettledIsRecorded() throws IOException {
+        var telemetry = JsonlFileTelemetry.create(tempDir);
+
+        telemetry.startSpan(new SpanOptions("outer"), outer ->
+            outer.startSpan(new SpanOptions("inner"), inner -> 7));
+
+        assertThat(readLines(onlyTraceFile()))
+            .filteredOn(n -> "span_start".equals(n.get("kind").asText()))
+            .extracting(n -> n.get("name").asText())
+            .containsExactly("outer", "inner");
     }
 
     /** 按 {@code payload.on} 取出事件行（三条线程归属用例共用的标记位）。 */

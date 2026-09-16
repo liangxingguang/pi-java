@@ -341,6 +341,14 @@ public final class JsonlFileTelemetry implements TelemetryContext {
 
         @Override
         public <T> T startSpan(SpanOptions options, Function<? super TelemetrySpan, ? extends T> body) {
+            if (ended) {
+                // A child of a settled span is inert: pi's adapter contract
+                // ("makes calls after settlement inert") runs the callback and
+                // preserves its result or rejection, but records nothing —
+                // packages/telemetry/src/memory.ts:126 downgrades to the no-op
+                // context.  docs/31 §8.28.4.
+                return NoopTelemetryContext.INSTANCE.startSpan(options, body);
+            }
             var child = new JsonlSpan(nextSpanId(), options, this);
             try {
                 return body.apply(child);
@@ -354,6 +362,11 @@ public final class JsonlFileTelemetry implements TelemetryContext {
 
         @Override
         public TelemetrySpan openSpan(SpanOptions options) {
+            if (ended) {
+                // Same rule as startSpan above; the inert span ignores close()
+                // and addAttribute(), so callers need no special case.
+                return NoopTelemetryContext.INSTANCE.openSpan(options);
+            }
             return new JsonlSpan(nextSpanId(), options, this);
         }
 
