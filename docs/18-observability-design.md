@@ -122,7 +122,7 @@ span 对象，靠 `pushCurrent/popCurrent` 绑定的**当前线程栈顶**取 tr
 
 ### 5.3 Span 清单
 
-四个跨度名**全部是 pi-java 自有词汇**。pi 声明了 12 个 `pi.*` 名，但 v0.85.1 的实况是
+五个跨度名**全部是 pi-java 自有词汇**。pi 声明了 12 个 `pi.*` 名，但 v0.85.1 的实况是
 **11/12 一个发射点都没有**（唯一有发射点的 `pi.harness.hook` 覆盖的是另一件事），两份 schema
 没有 `events:` 声明，生产路径**从不安装真 adapter**。故按本分支判据（**行为**，不是文档）
 **不采用 `pi.*` 名** —— 取证与裁决见 `docs/31 §8.28.1` / `§8.28.3`（选项 A）。
@@ -132,13 +132,22 @@ span 对象，靠 `pushCurrent/popCurrent` 绑定的**当前线程栈顶**取 tr
 | `harness.run` | `RunSpanFactory.openRunSpan`（`RunLifecycle.startRun:56`、`startContinue:134` 两处起手）；`RunSpanFactory.closeRunSpan`（`RunLifecycle.finishRun:187` 终局收口） | start：lane、promptChars；end：outcome（`completed`/`aborted`/`failed`/`declined`）、stopReason |
 | `llm.request` | 回调式：`PiLaneSink.beginRequest:185` 开并 `pushCurrent`（事件行靠它归属），`PiLaneSink.endRequest:206-215` 关并 `popCurrent` | start：attempt、model、messageCount、toolCount、thinking；end：inputTokens、outputTokens、stopReason |
 | `tool.execute` | `PiLaneSink.noteToolStart:237` 每 call 一个（父级 = 该次运行的 `harness.run` 跨度）；`closeToolSpan` 在**结果消息**落定时关 | start：toolCallId、toolName、toolIndex、argsChars；end：batchSize、allowed、isError、terminate、durationMs |
-| `compaction.apply` | `CompactionExecutor.applyCompaction:239` 回调式（父级同上；`finally` 里关） | start：reason（auto/manual/overflow）、estimatedTokens、entriesBefore；end：entriesAfter |
+| `compaction.apply` | `openSpan`：`CompactionExecutor.applyCompaction:240`（父级同上；`finally` 里 `close`） | start：reason（`manual`/`threshold`/`overflow`）、estimatedTokens、entriesBefore；end：entriesAfter |
+| `compaction.summary` | `openSpan` + `pushCurrent`：`CompactionExecutor.compactTranscript:385`（父级 = `compaction.apply`；摘要生成期间绑定，`finally` 里 `close` 后 `popCurrent`） | start：reason；end：summaryChars、inputTokens、outputTokens（后两者仅当生成器报了用量） |
 
 > 2026-09-17 更正：本表原先写的打开/关闭点是 `ActionExecutor.run()` /
 > `executeTryFinishRun()` / `executeStreamAssistant` / `ToolExecutionPipeline.executeStages`
 > —— 那**四个类都已随 `PiLoop` 驱动（`docs/28`）删除**，属性列也与实测不符
 > （`harness.run` 从来没有 `attemptCount`/累计 token 属性，`compaction.apply` 没有
-> `tokensBefore`）。上表按现役代码逐处重写。
+> `tokensBefore`）；同一轮里 `compaction.apply` 的「回调式」与 reason 取值 `auto`
+> 也是错的（它是 `openSpan` + `finally`，reason 是 `threshold`）。上表按现役代码逐处重写。
+>
+> `compaction.summary` 是 **2026-09-17** 新加的（`docs/31 §8.29`）：摘要是一次真正的
+> LLM 调用（走同一个 `streamFn`），此前它的负载行是**孤儿** —— 无 `traceId`/`spanId`，
+> 且是链路上唯一花掉 token 却不留痕的调用。它**不**复用 `llm.request` 名，正是为了让
+> 「按名数 `llm.request` = agent 轮数」这条既有聚合口径不被改写；同理，摘要的用量
+> **不**计入 `llm.requests`/`llm.tokens.*` 三个计数器（那是主循环的聚合），要聚合按这个
+> 跨度名取。
 
 计数器：`harness.turn`（已有）、`harness.run`、`llm.requests`、
 `llm.tokens.input`、`llm.tokens.output`、`tool.executions`、`tool.errors`、
@@ -218,14 +227,20 @@ Args(@Option "--trace-payloads") → AgentSession.assemble() 直接读
 
 ### 7.3 关联机制
 
-`PiLaneSink.beginRequest`（`llm.request` span 的打开点，`:173`）push、`endRequest`
-（`:193`）pop；记录点（`PayloadRecordingStreamFn` 的请求/响应两处）取**当前线程**栈顶
-= 本次请求的 `llm.request` span，event 行因此自动带正确 traceId/spanId。
+主循环：`PiLaneSink.beginRequest`（`llm.request` span 的打开点，`:185`）push、
+`endRequest`（`:211`）pop；记录点（`PayloadRecordingStreamFn` 的请求/响应两处）取
+**当前线程**栈顶 = 本次请求的 `llm.request` span，event 行因此自动带正确 traceId/spanId。
 
-⚠️ 默认路径上这三处同线程（同一调用栈），**但那是调用形状的产物，不是结构保证**：
-生产每次 prompt 换一条新虚拟线程（`AgentSession:545`），运行中 `/compact` 与并发
-prompt 都会落到别的线程上。栈是 `ThreadLocal`（`docs/31 §8.25`）⇒ 那种情形下
-**读不到绑定**（event 行缺 traceId），不会读到别人的 span。
+压缩：摘要走的是**同一个** `streamFn`，归属也走同一套机制 ——
+`CompactionExecutor.compactTranscript:389` 在摘要生成期间 push `compaction.summary`
+跨度、`finally` 里 pop，于是摘要的请求/响应行绑到**压缩自己**的跨度上
+（2026-09-17 之前这里没有 push，那些行是孤儿行；见 `docs/31 §8.29`）。
+
+⚠️ 这两处同线程是**调用形状的产物，不是结构保证**：生产每次 prompt 换一条新虚拟线程
+（`AgentSession:545`），运行中 `/compact` 会落到另一条线程上（`RunLifecycle.compact`
+没有 `isRunning` 门，`docs/31 §8.25.5-7`），并发 prompt 同样没有门。栈是 `ThreadLocal`
+（`docs/31 §8.25`）⇒ 谁都没绑定时**读不到绑定**（event 行缺 traceId），而不会读到
+别人的 span；压缩那一路因为自带绑定，即便与在飞请求重叠也记在自己名下。
 
 ## 8. Run Summary
 

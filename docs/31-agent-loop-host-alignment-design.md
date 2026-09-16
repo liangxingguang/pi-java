@@ -2501,7 +2501,7 @@ A1+A2 合计约 10 行生产改动，**不改任何对外签名**（`pushCurrent
 | 5 | ~~**`docs/18` §7.3 描述的 worker 线程 push/pop 已无实现**~~ | **已由 A3 结案**（2026-09-16）：§5.2/§7.3 两处重写，并补上「默认路径同线程是调用形状的产物」这句 | —— |
 | 6 | **并发 prompt 没有门**：`AgentSession.processPrompt`（`:529-547`）无条件起虚拟线程；`LaneState.activeRun`（`:86`）非 volatile 无锁；`PiLaneEngine:90-92` / `RunLifecycle:147-150` 是 check-then-act | 「无门可挡」（未见这么调的生产调用方） | 中：要一条**会话级**串行保证；且须先对照 pi（pi 有没有同等的门） |
 | 7 | **运行中手动 `/compact` 没有门**：`RunLifecycle.compact:237-239` 直通 `CompactionExecutor`，后者只查 transcript 空与末条是否压缩（`:84-89`） | 可与运行重叠，走同一 `streamFn`/telemetry | 中：同理，先取证 pi 的 `/compact` 在运行中是否允许；**这是行为改动，不是归属改动** |
-| 8 | **摘要请求没有自己的跨度**（面⑥） | 自动压缩的 payload 行 `traceId` 为 null | 与方案 C / 本表第 1、3 项同族 |
+| 8 | ~~**摘要请求没有自己的跨度**（面⑥）~~ | **已结案（2026-09-17，docs/31 §8.29）：修。** 新跨度 `compaction.summary`（父 = `compaction.apply`），摘要生成期间绑定为当前跨度 ⇒ 请求行与响应行都归属到它，收尾还带 `summaryChars` 与 token；形状取 B（**不**复用 `llm.request` 名，免得改变既有按名聚合的口径） | —— |
 | 9 | **`JsonlSpan.startSpan` 根本不碰当前栈**（实施 A2 时发现） | 同一个 `startSpan`，两个实现行为不同：`JsonlFileTelemetry.startSpan` push（A2 后也 pop），`JsonlSpan.startSpan`（`:338-349`）只开子 span、**既不 push 也不 pop**。而接口 `startSpan` 的 javadoc（`TelemetryContext:16-25`）**一个字都没提「绑定为当前跨度」** ⇒ 「`startSpan` 会绑定」是一处**未文档化的局部行为**，三个实现里只有一个有它（`Otel`/`Noop` 都没有） | 小：A2 选择**保留 push、补齐 pop**（仓内唯一依赖者是一条既有单测；生产路径只用 `openSpan` + `PiLaneSink` 的显式 push）。反方向（**删掉 push**，让所有实现都不碰栈）同样自洽 —— 该行为既无文档也无生产消费者。选哪个都行，**但它该被写进 javadoc**，否则下一个写遥测装饰器的人会踩空 |
 | 10 | **接口的 `openSpan` 默认实现不可用**（同一处发现） | `TelemetryContext:32-39` 的 default `openSpan` 在**自己的回调里**就把 span 关掉，返回一个**已结束**的 span。真实实现（`JsonlFileTelemetry:137`、`OtelTelemetryContext:96`）**各自覆写**才没出问题 | 小：写装饰器时**必须显式转发 `openSpan`**，否则 harness 拿到的全是已结束的 span（本包的测试装饰器就踩过，已在注释里钉住）。要么把 default 改成抛 `UnsupportedOperationException`，要么在 javadoc 里写明「必须覆写」 |
 
@@ -3029,7 +3029,9 @@ pi-java 自己的离线分析契约（`docs/18 §5.3`）；正确读法是「这
    第 8 条「摘要请求没有自己的跨度」服务的是同一份 schema）—— 但**不在本包顺手结案**：
    第 3 条的可观察面（事件行有没有 `traceId`/`spanId`）已被 package D 的 A1/A2 改过语义
    （现在的规则是「无绑定就留空，不借别人的」），第 8 条要判的是「摘要该不该有自己的跨度」，
-   那是 pi-java 自己的产品问题。两条各自另立裁决，**留白在此备查**。
+   那是 pi-java 自己的产品问题。两条各自另立裁决。
+   ⇒ **第 8 条已于 2026-09-17 另行裁决为「修」，落地见 §8.29**（形状选 B：新跨度名
+   `compaction.summary`）；**第 3 条仍未结案**，留白在此备查。
 2. **第 2 条（adapter 契约）⇒ 只修第 6 条 + 写差异声明 javadoc。** 已落地。
    ⚠️ 注意结案口径：**不是**「pi-java 的 adapter 不满足 pi 的契约」，而是
    **「pi-java 的 adapter 比 pi 多，且 pi 自己那 9 条只对着一个测试用实现」** ——
@@ -3124,10 +3126,118 @@ checkstyle + spotbugs 零违规）。
 **未覆盖 / 留白（如实登记）**：
 
 - `TelemetryAdapterConformance` 套件**未做**（§8.28.7 留白，倾向暂不做）。
-- §8.25.5-3（`recordEvent` 的环境态语义）与 -8（摘要请求没有自己的跨度）**未结案**，
-  理由见 §8.28.7-1（各自的观察面与本包的证伪不是同一件事）。
+- §8.25.5-3（`recordEvent` 的环境态语义）**未结案**，理由见 §8.28.7-1（它的观察面与
+  本包的证伪不是同一件事）。
+- ~~§8.25.5-8（摘要请求没有自己的跨度）未结案~~ ⇒ **已由 §8.29 结案（2026-09-17）**。
 - §8.28.5-②（`reset` 漏关 run span）**未改**，可达性论证见 §8.28.5；
   若将来出现不带 `isRunning` 门的 reset 变体，届时修（一行）。
+
+---
+
+### 8.29 摘要请求的宿主跨度（§8.25.5-8）—— **已实施（2026-09-17，设计经用户审核通过）**
+
+> **裁决（2026-09-17，用户）**：修。形状取**选项 B（新跨度名 `compaction.summary`）**
+> —— 三个备选与取舍见 §8.29.2。落地：`CompactionExecutor` 一处 + 两条新用例；另有一条
+> 既有特征化断言按新语义改判（§8.29.5）。
+
+#### 8.29.1 缺陷（取证）
+
+摘要是一次**真正的 LLM 调用**，走的是与主循环**同一个** `streamFn`
+（`AgentSession:366` 把 `recordingStreamFn` 交给 `LlmSummaryGenerator`，后者在 `:226`
+调 `streamFn.stream(...)`），于是 `PayloadRecordingStreamFn` 照常为它发出
+`llm.payload.request` / `llm.payload.response` 事件行。但事件行的归属靠**当前线程的绑定**
+（`JsonlFileTelemetry:173-179` 读 `currentStack` 栈顶），而压缩路径**从不 `pushCurrent`**：
+
+| 环节 | 主循环 | 压缩摘要 |
+|---|---|---|
+| 开跨度 | `PiLaneSink.beginRequest:185` 开 `llm.request` | 只有外层的 `compaction.apply`（`CompactionExecutor:240`），且它走 `openSpan`（不碰栈） |
+| 绑定 | `PiLaneSink:191` `pushCurrent` | **无** |
+| 事件行 | 带 `traceId`/`spanId` | `traceId` 为 null，连 `spanId` 键都没有 |
+
+后果三条：① 摘要那次请求连不回哪一次运行、哪一次压缩（`--trace-payloads` 开着时负载
+整份在盘上，却是**孤儿行**）；② 运行中手动 `/compact`（§8.25.5-7 无门）与在飞请求重叠时，
+同一份文件里主循环那些行有 id、摘要那些行没有，离线分析只能猜；③ 摘要是全链路上
+**唯一一处花掉 token 却不在 trace 里留痕**的 LLM 调用 —— `compaction.apply` 的 start/end
+属性只有 `reason/estimatedTokens/entriesBefore/entriesAfter`（`:240-242`/`:282`），
+`docs/18 §1` 承诺的「每轮 LLM 调用埋点」在它身上是空的。
+
+#### 8.29.2 形状裁决：三个备选
+
+| # | 做法 | 判 |
+|---|---|---|
+| A | 摘要调用复用 `llm.request` 名，作 `compaction.apply` 的子跨度 | ✗ **静默改变既有聚合口径**：按跨度名数 `llm.request` 从此不再等于 agent 轮数；而「摘要」与「agent 一轮请求」本来也不是一件事 |
+| **B** | 新名 **`compaction.summary`**，父 = `compaction.apply`，摘要生成期间绑定为当前跨度 | ✓ **采用**。既有按名聚合一律不受影响（只多一个名），且它正是挂摘要时长与用量的地方；登记项的原话就是「摘要请求**没有自己的跨度**」 |
+| C | 不新开跨度，把事件行绑到 `compaction.apply` 上 | ✗ 让「只记元数据的操作跨度」变成「带整份负载的跨度」，与该跨度既有的用法不一致；且摘要只是压缩的一个子步骤，绑在父上就再也分不出它的耗时 |
+
+**非目标（决策而非疏漏）**：不新增 `llm.*` 计数器。摘要是 LLM 调用，但
+`llm.requests`/`llm.tokens.*`（`PiLaneSink:214-221`）服务的是**主循环**的聚合，把摘要
+混进去会改变既有指标语义；`compaction.summary` 跨度自身带 `inputTokens`/`outputTokens`，
+需要聚合时按跨度名取（`docs/18 §5.3` 同步登记）。
+
+#### 8.29.3 落地
+
+`CompactionExecutor.compactTranscript`（唯一调用点 `:252`，在 `applyCompaction` 的压缩体
+内）改为接收父跨度 `TelemetrySpan`：
+
+1. `parent.openSpan(new SpanOptions("compaction.summary", Map.of("reason", reason)))` ——
+   父是 `compaction.apply`，因此同一条 trace、`parentSpanId` 指向它；
+2. 摘要生成期间 `ctx.telemetry().pushCurrent(summarySpan)`，`finally` 里先 `close()`
+   再 `popCurrent`（与 `PiLaneSink.endRequest:210-211` 同序）；
+3. 收尾属性：`summaryChars`，以及 `result.usage()` 非空时的 `inputTokens`/`outputTokens`。
+
+三点须留意（已写进 javadoc）：① **不**复用 `llm.request` 名；② 生成器的重试环（3d 环 B）
+**在同一条跨度下**发生，每次重试的请求行都绑到它，重试次数从行数看得见；③ 非 LLM 的
+截断兜底生成器（`SummaryGenerator.truncating()`）没有 LLM 调用，这条跨度仍会出现
+（只有 `summaryChars`、无事件行与 token）—— 跨度描述的是「摘要这一步」，**不是**
+「一定发生了一次请求」。
+
+落点在 `compactTranscript` 而非 `LlmSummaryGenerator`，理由有二：**接线**上，harness 侧
+`ctx.telemetry()` 就是 `PayloadRecordingStreamFn` 持有的那一个 exporter 实例
+（`AgentSession:265-266` 与 `:377` 同一份），无需给 `com.pijava.agent.compaction` 注入遥测；
+**安全**上，正因为不注入，就不存在「注入了另一个实例 ⇒ 绑定静默失效」这条路
+（`with(...)` 返回新实例，§8.25.5-4）。可达性亦已核对：阈值/溢出压缩从
+`PostRunCompactionCheck:163/:180/:204` 进（run 已终局，`llm.request` 的 push 早被
+`endRequest` pop 掉），手动 `/compact` 从 `RunLifecycle.compact` 进；A1 之后栈是
+`ThreadLocal`，另一线程的重叠压缩不会互相污染。
+
+#### 8.29.4 测试与 RE
+
+新夹具 `HarnessCompactionSummarySpanTest`（2 条），接线照生产形状：同一个
+`JsonlFileTelemetry`（`withPayloads(true)`）既进 `HarnessConfig.telemetry`、又包住
+`streamFn`（`PayloadRecordingStreamFn` 的最小同形替身，`agent-core` 看不到那个包内类）。
+断言：摘要的**请求行与响应行**都绑 `compaction.summary`；该跨度的 `parentSpanId` =
+`compaction.apply` 的 spanId、traceId 同源；收尾带 `summaryChars` 与 token。第二条用例是
+正向对照 —— 主循环的请求行仍绑 `llm.request`，摘要那个绑定既不抢它、也不在 pop 后残留。
+
+**RE-1（关键）**：停掉 `pushCurrent` ⇒ **恰两条红**（每个类各一条），失败点都落在「归属」
+断言上：`expected: "afc24a46a19cc3b5" but was: ""`（另一条 `"991328bc"`）。
+断言一律用 `path(...)` 而非 `get(...)` 读 JSON —— 键缺席时得到 `""` 而不是 NPE，
+回归时读到的就是上面那句「没绑上」，而不是栈里一个空指针。
+
+#### 8.29.5 顺带改判：一条既有特征化断言
+
+`HarnessTelemetryThreadAttributionTest.compactionFromAnotherThreadDoesNotInheritTheInFlightRequestSpan`
+（§8.25.6 ③）原先断言**摘要请求行没有 `traceId`/`spanId`** —— 那是「没有归属」时期对
+不变量「**不借用**在飞请求的跨度」的写法。补上归属后按新语义重写：
+
+- 保留的不变量：摘要行的 `spanId` **≠** 在飞那条 `llm.request` 的 spanId（不借用）；
+- 新增的正向面：摘要行的 `spanId` **=** `compaction.summary` 跨度的 spanId（有自己的归属）。
+
+⚠️ 同一条用例的 `runRequests` 筛选也得跟着改：它原来靠 `has("traceId")` 把摘要行排除，
+现在摘要行也有 traceId ⇒ 改为按系统提示前缀排除（否则「最后一条请求行」会取到摘要那条）。
+这是**前提变更**引起的夹具维护，不是断言被削弱。
+
+#### 8.29.6 未覆盖 / 留白
+
+- 重试的**每次**尝试没有各自的跨度（主循环那边每次 attempt 一条 `llm.request`，因为重试环
+  在更外层）。内层环共享一条 —— 够用，但不对称，登记备查。
+- 截断兜底生成器下那条「无事件、无 token」的跨度形状**无测试**（生产装的是
+  `LlmSummaryGenerator`，缺省才是 `truncating()`）。
+- §8.25.5-3（`recordEvent` 的环境态语义）**仍未结案**：本条解决「摘要请求该有自己的跨度」，
+  第 3 条问的是「没有宿主跨度时事件行怎么办」的兜底规则，面不同。
+
+**回归**：`mvn -o -pl pi-java-agent-core -am test` 绿 —— telemetry 31 / ai 336 /
+agent-core **450**（本包 +2）。
 
 ---
 
