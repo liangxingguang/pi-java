@@ -3,6 +3,7 @@ package com.pijava.agent.harness;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.pijava.ai.AbortSignal;
@@ -106,7 +107,10 @@ class PiLoopTest {
 
     /** 把事件压成可读的帧标签，便于逐帧断言。 */
     private static final class Recorder implements PiLoop.Sink {
-        private final List<String> frames = new ArrayList<>();
+        // COW，不是 ArrayList：工具帧由 **worker 线程**发出（并行任务体，见 PiLoopTools
+        // 的 executeParallel），而引擎线程也在往同一张表里记帧。普通 ArrayList 会丢帧 ——
+        // 300 轮实测坏 5 轮，这正是曾经那次 PiLoopTest:338 flake 的根因（docs/31 §8.27.7）。
+        private final List<String> frames = new CopyOnWriteArrayList<>();
 
         @Override
         public void emit(PiLoop.Event event) {
@@ -127,7 +131,8 @@ class PiLoopTest {
 
     /** 记录工具调用次数，返回固定成功结果。 */
     private static final class StubTools implements PiLoop.ToolRunner {
-        private final List<String> invoked = new ArrayList<>();
+        // 同样的理由：execute 跑在 worker 线程上（docs/31 §8.27.7）。
+        private final List<String> invoked = new CopyOnWriteArrayList<>();
 
         @Override
         public PiLoop.Preparation prepare(PiLoop.ToolCall call) {
@@ -310,6 +315,13 @@ class PiLoopTest {
         // 真并发，三个等延迟的桩谁先抢到串行化锁是任意的；pi 那边的「源序」是 JS 微任务队列
         // 的副产品（工具体在源序里同步进入），不是语义承诺。这里只钉住「本桩形状下 start
         // 全在前、且每个调用恰好一 start 一 end」。
+        //
+        // ⚠️ 本断言成立靠**两条**，缺一不可（docs/31 §8.27.7）：
+        //   ① 结构：`PiLoopTools.executeParallel:190-194` 是**准备循环跑完才 submit**
+        //      （Java 侧的执行票只是 thunk）⇒ 全 start 天然早于任何 end；
+        //   ② 桩的线程安全：帧由 worker 线程发出，收帧的表必须是并发容器。
+        // 曾经那次非复现 flake 出在 ② —— 旧口径误诊为「准备循环内交票 ⇒ 真竞态」（① 才是
+        // 事实），实测根因是 Recorder 用普通 ArrayList 丢帧：300 轮坏 5 轮。
         var rec = new Recorder();
         var context = Context.of(new ArrayList<>());
         var partial = AssistantMessage.empty();

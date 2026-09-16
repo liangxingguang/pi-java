@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.pijava.agent.entry.Entry;
@@ -128,7 +129,8 @@ class PiLaneEngineTest {
 
     /** 收集 PiLoop 事件的帧标签。 */
     private static final class Recorder implements PiLoop.Sink {
-        private final List<String> frames = new ArrayList<>();
+        // COW：工具帧由 worker 线程发（docs/31 §8.27.7），普通 ArrayList 会丢帧。
+        private final List<String> frames = new CopyOnWriteArrayList<>();
 
         @Override public void emit(PiLoop.Event event) {
             frames.add(switch (event) {

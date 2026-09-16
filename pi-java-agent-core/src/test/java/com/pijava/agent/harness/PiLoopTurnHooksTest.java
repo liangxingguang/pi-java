@@ -3,6 +3,7 @@ package com.pijava.agent.harness;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.pijava.ai.api.StreamIterator;
@@ -148,7 +149,8 @@ class PiLoopTurnHooksTest {
 
     /** 把事件压成帧标签，便于断言「这个事件出现在哪个位置」。 */
     private static final class Recorder implements PiLoop.Sink {
-        private final List<String> frames = new ArrayList<>();
+        // COW：工具帧由 worker 线程发（docs/31 §8.27.7），普通 ArrayList 会丢帧。
+        private final List<String> frames = new CopyOnWriteArrayList<>();
 
         @Override
         public void emit(PiLoop.Event event) {
