@@ -3454,6 +3454,187 @@ telemetry 31 / ai 336 不动；`mvn -o clean verify` 全 reactor **BUILD SUCCESS
 
 ---
 
+### 8.31 provider 路由跟着模型走 + thinking `signature` 容忍缺失（P1/P2）—— **设计（待用户审核）**
+
+> **来源**：生产事故。2026-09-17 22:14 web UI 报 `` `signature` is not set ``（日志见 8.31.1）。
+> **本包两条缺陷一起做**（用户裁决「P1/P2 一起」）：P1 是**触发条件的根因**（模型与协议错配），
+> P2 是**致命反应的根因**（错配之外，真实 anthropic 兼容端点也会踩）。单做 P2 ⇒ 模型仍走错协议；
+> 单做 P1 ⇒ 兼容端点/relay 的 thinking 仍会把整轮 run 打死。
+> **状态**：设计未实施 —— 按流程「设计文档落地 → 用户审核 → 才许写代码」。
+
+#### 8.31.0 两条缺陷的一句话与判据
+
+| # | 缺陷 | pi 的参照（判据＝行为相同） |
+|---|---|---|
+| **P1** | **适配器不跟模型走**。StreamFn 把**会话级** provider 名闭包死，`model.provider()` 被完全忽略 ⇒ 切到别的 provider 的模型，请求仍用旧适配器发出去 | `compat.ts:262`/`:287` `resolveApiProvider(model.api)` —— 模型自带 `api`，派发**跟着模型** |
+| **P2** | `AnthropicMessagesApi` 对 thinking 的 `signature` 用**严格必填**访问器，而线上不保证该字段存在（它由后续 `signature_delta` 补、relay 还可能不给） | `anthropic-messages.ts:633` `thinkingSignature: event.content_block.signature ?? ""` |
+
+#### 8.31.1 事故证据链（全链可回放）
+
+1. **用户动作**：会话内把模型切到 `teamorouter/deepseek-v4-flash`、thinking 提到 `high`
+   （会话树帧 `model_change{provider:"teamorouter",modelId:"deepseek-v4-flash"}`，2026-09-17 22:12:33）。
+2. **第 1 个 `llm.request` 成功**：`trace-unknown-20260917-141431.jsonl` 行 4-5 —— 4200ms、
+   `inputTokens=1781 outputTokens=153 stopReason=tool_use`。随后 bash 工具执行成功。
+3. **第 2 个 `llm.request` 即死**：同行 14-15 —— 1586ms、**`inputTokens=0 outputTokens=0`、
+   `stopReason:"error"`**；日志侧（`~/.pi-java/logs/pi-java.log:562`）
+   `[ws->client] {"message":"`signature` is not set","type":"error"}`，
+   且错误帧**之前一个内容帧都没有**（`persistPending`/`agent_start` 之后 1.57s 空白），
+   收尾 `attempts=1 stopReason=error / tokens: in=1781 out=153`、`run end ... outcome=error`。
+4. **报文的唯一来源**：Stainless 生成的 `com/anthropic/core/Values.kt:174`
+   （`is JsonMissing -> throw AnthropicInvalidDataException("\`$name\` is not set")`）。
+   **openai SDK 里连 `"signature"` 字面量都没有** ⇒ 见该报文 ⇔ 走了 anthropic 协议。
+5. **pi-java 里唯一能触发它的两处**：`AnthropicMessagesApi.java:122`
+   （`block.thinking().map(t -> t.signature())`，content_block_start）与 `:145`
+   （`delta.asSignature().signature()`，signature_delta）。抛点落在
+   `:168` 的 `catch (Exception e) → emitError`，故**任何日志都没有堆栈**
+   （`AbstractChatApi:85` 的 `[ai] LLM stream failed` 从未触发）。
+6. **矛盾的解释（= P1 的指纹）**：`llm.request` 跨度的 `"model"` 属性写的是
+   `RunSpanFactory.modelLabel(ctx.model().get())`（`PiLaneSink:187`）＝**模型自己的**
+   `provider/name`；而适配器由 `DefaultProviders.streamFnFor` 里的**会话级** provider 名决定
+   （见 8.31.2）—— **标签是模型、适配器是另一个**，所以「trace 说 teamorouter/deepseek、
+   报错却是 anthropic SDK 的」。
+
+#### 8.31.2 P1 —— 适配器不跟模型走
+
+**现状（四个事实合起来才致命）**
+
+| 环节 | 位置 | 行为 |
+|---|---|---|
+| 会话级 provider 名 | `DefaultProviders.java:60` + `AgentSession.java:254` | `--provider` > `settings.defaultProvider` > `"google"`；本机 `settings.json` 是 `"anthropic"`，`web-ui.sh:24` 只传 `--mode web --port` ⇒ **`"anthropic"`** |
+| 闭包 | `DefaultProviders.java:75-84` | `streamFnFor` 把该名字闭包进 lambda，**每个请求** `providers.get(providerName)`，**从不看 `model.provider()`** |
+| 不可换 | `AgentSession.java:261`（建一次）→ `:355`（交给 harness）；`AgentHarness.java:43` `private final StreamFn streamFn` | 适配器在会话生命周期内**结构上不可替换** |
+| 切模型 | `RpcDispatcher.java:136` → `AgentHarness.java:429 setModel` | 只换模型对象；`AgentSession:366` 的摘要生成器共用同一条 StreamFn ⇒ 压缩请求也不换 |
+
+**pi 的参照**：`compat.ts:262`/`:287` 先 `getBuiltinProviderForModel(model)`，未命中则
+`resolveApiProvider(model.api)` —— 派发键是**模型的 `api`**；凭据同样跟着模型
+（`:225-231` `withEnvApiKey` → `getEnvApiKey(model.provider, ...)`）。会话的 default provider
+在 pi 只决定**起手用哪个模型**，不决定此后每个请求的适配器。
+
+**影响面（不止本事故）**：任何「模型的 provider ≠ 会话 default provider」的请求都打错适配器。
+今日可达的两种：
+① `models.json` 自定义 provider（团队路由器、opencode 一类）—— 本事故；
+② 内建目录里**别的** provider 的模型（`DefaultModelResolver.java:113` 会照 `provider/model`
+解析出 `ModelId(provider, name)`，目录由 `ModelsJsonConfig.allModels()` 提供 = 内建 ∪ models.json）。
+
+**修法（最小面，签名零改动）**
+
+```java
+public static StreamFn streamFnFor(Args args, String defaultProvider,
+                                   ProviderRegistry providers, Settings settings) {
+    var fallback = resolveProviderName(args, defaultProvider);       // 仅作回退
+    return (model, context, options) -> {
+        var provider = providers.get(model.provider()).orElse(null);
+        if (provider == null) {                                      // 见 8.31.7 裁决点 ①
+            System.err.println("[provider] \"" + model.provider()
+                + "\" is not registered; falling back to \"" + fallback + "\"");
+            provider = providers.get(fallback).orElseThrow(
+                () -> new IllegalStateException("Unknown provider: " + fallback));
+        }
+        return streamBlocking(provider, model, context, options,
+            apiOptions(args, model.provider(), settings, Credentials::resolveApiKey));
+    };
+}
+```
+
+- **凭据跟着模型**：`apiOptions`（`:113`）的 provider 参数改为 `model.provider()`，
+  链不变（CLI `--api-key` > `settings.defaultApiKey` > `Credentials.resolveApiKey(provider)`）——
+  与 pi 的 `getEnvApiKey(model.provider)` 同形。
+- **baseUrl 不动**：`settings.defaultBaseUrl` 仍是「内建 provider 指向 relay」的全局覆盖，
+  且 `ModelsJsonProvider.java:39-47` 已把自己的 `baseUrl` **钉死**在 `createApi` 里
+  （注释 :42-45 明写「models.json 的 baseUrl 必须赢过它」）⇒ 本事故里 teamorouter 的
+  正确端点 `/v1` 已经是对的，**P1 不需要碰 apiOptions 的优先级**。
+- **不动**：`ModelId`（record 只有 provider+name）、`ModelInfo`、catalog、`ApiOptions` 形状、
+  StreamRequest、任何宿主层（TUI/RPC/web）代码。
+
+#### 8.31.3 P2 —— thinking `signature` 用严格必填访问器
+
+**现状**（`AnthropicMessagesApi.java`）：`:117-127` content_block_start 分支读
+`block.thinking().map(t -> t.signature()).orElse("")`（读点在 `:121-122`）；`:145` signature_delta 分支读
+`delta.asSignature().signature()`。**字段缺失即抛**，而：
+- Anthropic 的 thinking 块 `signature` 由后续 `signature_delta` 补 —— 起点不带它是**合法**的；
+- relay/兼容端点为非 Anthropic 模型合成 thinking 时，常常**整个流都不给** `signature`（本事故）；
+- `pi-java` 自己的重放规则（`:282-299 appendThinkingBlock`：空签名降级为 text，降级点在 `:289-293`）**已经**承认
+  空签名是正常状态 —— 读的时候却把它当必填，前后矛盾。
+
+**pi 的参照（三处，都是容忍）**：`:631` `thinking: event.content_block.thinking ?? ""`；
+`:633` `thinkingSignature: event.content_block.signature ?? ""`；
+`:700-706` signature_delta **只改块、不 push 事件**；
+`:1293-1320` 请求侧重放（`hasThinkingSignature` → thinking / 否则降级 text，与 pi-java `:282-299`
+同规则）。
+
+**修法**：改用 SDK 的**非抛异常面** —— `ThinkingBlock._signature(): JsonField<String>`
+（`ThinkingBlock.kt:65`）与 `SignatureDelta._signature()`（`SignatureDelta.kt:54`），
+两者都是 public、Java 可见（`javap` 已核）；`JsonField.asString(): Optional<String>`
+对 `JsonMissing`/`JsonNull` 返回空（`getRequired` 才是抛的那条，且它是 Kotlin `internal`、
+Java 侧连符号都被 mangling 成 `getRequired$anthropic_java_core`）。
+
+```java
+// :120-127
+var initial = block.thinking()
+        .map(t -> t._signature().asString().orElse("")).orElse("");
+// :145
+return builder.emitThinkingSignature(
+        delta.asSignature()._signature().asString().orElse(""));
+```
+
+- **signature_delta 缺字段 ⇒ 不再追加**。pi 那边 `block.thinkingSignature += event.delta.signature`
+  在 JS 里会拼出字面量 `"undefined"` —— 那是 pi 的事故（TS 类型谎报 required），**不复制**；
+  本处以空串处理并在 javadoc 写明这处**故意与 pi 的字面行为不同**（真 Anthropic 不可达）。
+- **空签名照旧降级**：`:123-125` 的 `if (!initial.isEmpty())` 守卫保留；`emitThinkingSignature("")`
+  即使被调用也只是空追加（`StreamPartialBuilder:145-151`），不改块内容。
+
+#### 8.31.4 本包**不做**、但登记（都有 `file:line` 证据）
+
+| # | 登记项 | 证据 | 为什么不在本包 |
+|---|---|---|---|
+| R1 | content_block_start 的**初始 thinking 文本被丢弃** | pi `:631` 收 `thinking ?? ""`；pi-java `:121` 只读 signature，`emitThinkingStart()`（`StreamPartialBuilder:121-128`）也不接受初始文本 | 要动 `StreamPartialBuilder` 的事件形状 ⇒ 另立包 |
+| R2 | `redacted_thinking` **未处理** | pi `:637-645` 映射为 thinking（`"[Reasoning redacted]"` + `signature = data`）；pi-java 落到 text 分支（`:128-130`） | 新增块类型支持，与本包的两条缺陷不同面 |
+| R3 | signature 会发一条 `ThinkingDelta` 事件 | pi `:700-706` **只改块、不 push**；pi-java `emitThinkingSignature` 返回 `ThinkingDelta(idx,"",snapshot)` | 改的是 `StreamEvent` 通道形状 ⇒ 需 L5 剧本先覆盖（§8.24 同口径：不钉没剧本的顺序/形状） |
+| R4 | **per-model `api` 表达不出** | pi `types.ts` 的 `Model.api` 是派发键；pi-java `ModelInfo:27-37` 无该字段、`models.json` 的 `api` 在 **provider 级**（`ModelsJsonConfig:147-160`） | P1 做到「provider 级派发」即覆盖今日全部已注册 provider；单 provider 多 API（pi 的 fireworks/opencode）**今日无表达方式**，加字段是投机代码（同 §8.25.5 C1 口径） |
+| R5 | **空签名重放策略不可配** | pi 有 `Model.compat.allowEmptySignature`（`types.ts:714`；`anthropic-messages.ts:1304` 三态；`generate-models.ts:2242-2253` 给 Kimi 系打开）；pi-java `ModelInfo` 无 `compat` ⇒ 恒降级 text（`:289-293`） | 需要 catalog/compat 字段 + models.json schema 扩展 ⇒ 另立包 |
+| R6 | `ModelsJsonProvider` 钉死 baseUrl ⇒ **CLI `--base-url` 对它失效** | `ModelsJsonProvider.java:39-47`（`pinned` 无条件覆盖 `options.baseUrl()`），而注释 `:42-45` 声称「CLI --base-url 仍然适用」—— **注释与实现不符** | 本包不动 apiOptions 优先级；登记待裁决（要么改注释、要么让 CLI 赢） |
+
+#### 8.31.5 验证计划（RE 先行：先证明夹具会红）
+
+| RE | 夹具 | 现状（**应红**） | 改后（应绿） |
+|---|---|---|---|
+| **RE-P1** | `DefaultProvidersTest`（同 package，已测 `apiOptions`）：`ProviderRegistry.create()` 注册两个**桩** provider（protocol 不同、各自记下被调用），`apiOptions` 走假 settings；调 `streamFnFor(args, "A", registry, settings)` 拿 StreamFn，**用 provider="B" 的 ModelId 调它** | 打进 A 的适配器 ⇒ 断言 B 被调用时**红** | 打进 B |
+| **RE-P2** | 反射调 `AnthropicMessagesApi.mapEvent`（手法照 `AnthropicMessagesApiBuildParamsTest:29-36`），喂 `RawMessageStreamEvent.ofContentBlockStart(...)`，块为 `ContentBlock.ofThinking(ThinkingBlock.builder().thinking("x").build())`（**不给 signature** ⇒ `JsonMissing`） | 抛 `AnthropicInvalidDataException("`signature` is not set")` ⇒ 断言不抛时**红**；报文**逐字等于生产事故** | 返回 `ThinkingStart`、不抛 |
+| RE-P2b | 同上，块**带** `signature("sig")` | 绿（现状也绿） | 绿（防回归：签名仍要进块，`partial` 里可见） |
+
+**回归**：`mvn -o -pl pi-java-ai -am test`、`-pl pi-java-agent-core -am test`（带 `-am`，见 memory
+`jdk25-mvn-am`）、`mvn -o clean verify` 全 reactor；**L5 差分必须真跑**（剧本用桩 StreamFn，
+**预期不动**——但本项目已有**两次**「预期不动」被证伪的前科，故只报实测数字）。
+基线（`docs/32:9`，提交时以 `git rev-list --left-right --count main...HEAD` 与实测为准）：
+telemetry 31 / ai 336 / agent-core 450。
+**不引入任何新依赖**（RE-P2 用反射，沿用仓库既有手法）。
+
+#### 8.31.6 影响与风险
+
+- **行为变更面**：仅「已注册 provider 且 `model.provider()` ≠ 会话 default provider」的请求
+  —— 从**错误适配器**变为**正确适配器**。这正是判据要的（pi 就是这么派的）。
+- **不新增硬失败**：未注册的 provider 走回退 + stderr 警告（裁决点 ①），与今日行为一致。
+- **对用户当前配置的净效果**：`anthropic/claude-*`（经 relay）**不变**；
+  `teamorouter/deepseek-v4-flash` 从「打 relay 的 anthropic 端点」变为
+  「打 models.json 声明的 `openai-completions` 端点」—— 与 `models.json` 的声明一致，
+  且 P2 之后即使仍走 anthropic 端点也不再打死整轮 run。
+- **风险**：① 某个 provider 名在目录里有、注册表里无 ⇒ 回退路径被首次触发（今日不可见，
+  警告可观测）；② 压缩摘要与主请求共用 StreamFn ⇒ 摘要也随模型换适配器（**与 pi 一致**，
+  但属行为变更，需在 L5/实测里确认无回归）。
+
+#### 8.31.7 待你裁决的两点
+
+1. **未注册 provider 的兜底**：**推荐**「回退会话 provider + stderr 警告」（不新增硬失败，
+   改动最外科）；备选「直接抛 `Unknown provider`」（更响，但会把今天能跑的路径变成报错）。
+2. **R1/R2 是否顺手做**（初始 thinking 文本 + `redacted_thinking`）：**推荐不做**
+   —— 它们要动 `StreamPartialBuilder` 的事件形状，与本包两条缺陷不同面，另立一包更干净。
+
+#### 8.31.8 实施记录（待实施后回填）
+
+（未实施。实施后在此回填：RE 实测红/绿、测试计数、L5 实测、commit 哈希、`docs/32` 落行。）
+
+---
+
 ## 9. 与既有文档的关系
 
 | 文档 | 关系 |
