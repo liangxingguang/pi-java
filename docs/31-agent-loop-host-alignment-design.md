@@ -3583,17 +3583,17 @@ return builder.emitThinkingSignature(
 - **空签名照旧降级**：`:123-125` 的 `if (!initial.isEmpty())` 守卫保留；`emitThinkingSignature("")`
   即使被调用也只是空追加（`StreamPartialBuilder:145-151`），不改块内容。
 
-#### 8.31.4 本包**不做**、但登记（都有 `file:line` 证据）
+#### 8.31.4 本包**不做**、但登记（都有 `file:line` 证据）—— ⚠️ 行号为 2026-09-17 快照；R1/R2/R7 已由 §8.33 包① 实施（状态见 §8.33.9），本表保留实施前的证据原样
 
 | # | 登记项 | 证据 | 为什么不在本包 |
 |---|---|---|---|
-| R1 | content_block_start 的**初始 thinking 文本被丢弃** | pi `:631` 收 `thinking ?? ""`；pi-java `:121` 只读 signature，`emitThinkingStart()`（`StreamPartialBuilder:121-128`）也不接受初始文本 | 要动 `StreamPartialBuilder` 的事件形状 ⇒ 另立包 |
-| R2 | `redacted_thinking` **未处理** | pi `:637-645` 映射为 thinking（`"[Reasoning redacted]"` + `signature = data`）；pi-java 落到 text 分支（`:128-130`） | 新增块类型支持，与本包的两条缺陷不同面 |
+| R1 | content_block_start 的**初始 thinking 文本被丢弃** | pi `:632`（分支 `:629`）收 `thinking ?? ""`；pi-java `:121` 只读 signature，`emitThinkingStart()`（`StreamPartialBuilder:121-128`）也不接受初始文本 | 要动 `StreamPartialBuilder` 的事件形状 ⇒ 另立包 |
+| R2 | `redacted_thinking` **未处理** | pi `:638-647` 映射为 thinking（`"[Reasoning redacted]"` + `signature = data`）；pi-java 落到 text 分支（`:128-130`） | 新增块类型支持，与本包的两条缺陷不同面 |
 | R3 | signature 会发一条 `ThinkingDelta` 事件 | pi `:700-706` **只改块、不 push**；pi-java `emitThinkingSignature` 返回 `ThinkingDelta(idx,"",snapshot)` | 改的是 `StreamEvent` 通道形状 ⇒ 需 L5 剧本先覆盖（§8.24 同口径：不钉没剧本的顺序/形状） |
 | R4 | **per-model `api` 表达不出** | pi `types.ts` 的 `Model.api` 是派发键；pi-java `ModelInfo:27-37` 无该字段、`models.json` 的 `api` 在 **provider 级**（`ModelsJsonConfig:147-160`） | P1 做到「provider 级派发」即覆盖今日全部已注册 provider；单 provider 多 API（pi 的 fireworks/opencode）**今日无表达方式**，加字段是投机代码（同 §8.25.5 C1 口径） |
 | R5 | **空签名重放策略不可配** | pi 有 `Model.compat.allowEmptySignature`（`types.ts:714`；`anthropic-messages.ts:1304` 三态；`generate-models.ts:2242-2253` 给 Kimi 系打开）；pi-java `ModelInfo` 无 `compat` ⇒ 恒降级 text（`:289-293`） | 需要 catalog/compat 字段 + models.json schema 扩展 ⇒ 另立包 |
 | R6 | `ModelsJsonProvider` 钉死 baseUrl ⇒ **CLI `--base-url` 对它失效** | `ModelsJsonProvider.java:39-47`（`pinned` 无条件覆盖 `options.baseUrl()`），而注释 `:42-45` 声称「CLI --base-url 仍然适用」—— **注释与实现不符** | 本包不动 apiOptions 优先级；登记待裁决（要么改注释、要么让 CLI 赢） |
-| R7 | **初始 signature 不在 `ThinkingStart.partial` 里** | `StreamPartialBuilder:121-128 emitThinkingStart()` 先 `blocks.add(ThinkingContent(""))` 再 `snapshot()` 返回，而 `emitThinkingSignature(initial)` 在**之后**才 `blocks.set(idx, …)`（`:145-151`）⇒ 事件自己的 partial 看不到初始 signature。pi `:631-633` 是先建好带 `thinking ?? ""`/`signature ?? ""` 的块**再** push `thinking_start` | 与 R1 同根（`emitThinkingStart` 不接受初始内容），但 R7 连**已经读到的** signature 也进不去首个 partial ⇒ 要动事件形状 |
+| R7 | **初始 signature 不在 `ThinkingStart.partial` 里** | `StreamPartialBuilder:121-128 emitThinkingStart()` 先 `blocks.add(ThinkingContent(""))` 再 `snapshot()` 返回，而 `emitThinkingSignature(initial)` 在**之后**才 `blocks.set(idx, …)`（`:145-151`）⇒ 事件自己的 partial 看不到初始 signature。pi `:630-635` 建块（含 `thinking`/`thinkingSignature`）、`:636` 入 `content`、`:637` 才 push `thinking_start` | 与 R1 同根（`emitThinkingStart` 不接受初始内容），但 R7 连**已经读到的** signature 也进不去首个 partial ⇒ 要动事件形状 |
 | R8 | `emitThinkingSignature` **先于** `emitThinkingStart` ⇒ `IndexOutOfBoundsException` | `StreamPartialBuilder:145-151` 用 `Math.max(0, thinkingBlockIndex)`，`thinkingBlockIndex` 初始 -1 ⇒ 对**空** `blocks` 做 `set(0, …)`；同族的 `emitThinkingDelta`（`:131-137`）有惰性建块分支，`emitThinkingSignature` 没有 —— **两侧不对称** | 生产不可达（signature 恒跟在 content_block_start 之后）；改它要么加同样的惰性分支、要么钉死前置断言，属投机代码 |
 
 
@@ -3692,7 +3692,7 @@ telemetry 31 / ai 336 / agent-core 450。
 
 ---
 
-### 8.32 B 类功能缺口的补全路线（判定 + 包划分）—— 设计（**待用户审核**）
+### 8.32 B 类功能缺口的补全路线（判定 + 包划分）—— **路线已批准**（用户 2026-09-17「按照顺序」⇒ ①→②→③→④→⑤；包① 已实施，见 §8.33；②–⑥ 待逐包设计）
 
 #### 8.32.0 这一节解决什么
 
@@ -3711,12 +3711,12 @@ B 类九条（台账 `docs/32 §3`）此前每条只有一行「修法素描」�
 | B3 | 重试的宿主渲染 | **可做，但拆三块**：RPC（帧已对，只差状态字段）/ TUI（**结构性盲区：整模块零订阅**）/ web（需产品裁决） | 包④ / 包⑤ | 见 §8.32.2 第 7 条 |
 | B4 | `addedToolNames` 的 provider 层消费者 | **结案为不做**（机制归属原判是错的） | — | 见 §8.32.2 第 6 条 |
 | B5 | 宿主 `catch (Exception)` 不接 `Error` ⇒ 永久挂起 | **可做，两步**：① `catch (Throwable)`（一行，零风险）② `handleRunFailure` 落引擎侧（**自有风险，需裁决**） | 包③ | pi `agent.ts:502-535`；pi-java `SessionRunner:94-117`/`:151-168` |
-| B6 | 初始 thinking 文本被丢弃 | **可做** | 包① | pi `anthropic-messages.ts:632` `thinking ?? ""` vs pi-java `AnthropicMessagesApi:128-129` 只读 `_signature()` |
-| B7 | `redacted_thinking` 未处理 | **可做；SDK 路由已实证** | 包① | pi `:638-647`；SDK `ContentBlock.kt:549-553` |
+| B6 | 初始 thinking 文本被丢弃 | **可做** → **已做**（§8.33） | 包① | pi `anthropic-messages.ts:632` `thinking ?? ""` vs pi-java `AnthropicMessagesApi:128-129` 只读 `_signature()` |
+| B7 | `redacted_thinking` 未处理 | **可做（SDK 路由已实证）** → **已做**（§8.33） | 包① | pi `:638-647`；SDK `ContentBlock.kt:549-553` |
 | B8 | 空签名重放策略不可配（`compat.allowEmptySignature`） | **可做，但被 P2 前置** | 包② | pi `types.ts:714`、`:193`/`:1047`/`:1227`/`:1302-1314`；pi-java `ModelInfo` 无 `compat`，且 `ModelsJsonSchema` `ignoreUnknown=true` **静默吞掉**用户写的 `compat` |
-| B9 | 初始 signature 进不了 `ThinkingStart.partial` | **可做；与 B6 是同一处改动** | 包① | pi 先建块（`:630-635`）再 push（`:637`）；pi-java `StreamPartialBuilder:127` 先 `snapshot()` 返回、`AnthropicMessagesApi:131` 才改块且**返回值被丢弃** |
+| B9 | 初始 signature 进不了 `ThinkingStart.partial` | **可做（与 B6 是同一处改动）** → **已做**（§8.33） | 包① | pi 先建块（`:630-635`）再 push（`:637`）；pi-java `StreamPartialBuilder:127` 先 `snapshot()` 返回、`AnthropicMessagesApi:131` 才改块且**返回值被丢弃** |
 
-#### 8.32.2 本轮新挖到的七条（**均不在** §8.31.4 表内）
+#### 8.32.2 本轮新挖到的八条（**均不在** §8.31.4 表内）
 
 | # | 发现 | 证据 | 影响 |
 |---|---|---|---|
@@ -3727,8 +3727,9 @@ B 类九条（台账 `docs/32 §3`）此前每条只有一行「修法素描」�
 | **P5** | §8.31.4 的 pi 行号**整体错位 1 行** | 实测 R1 = `:632`（文档写 `:631`）、R2 = `:638-647`（写 `:637-645`）、R7 = 建块 `:630-635`/入 content `:636`/push `:637` | 文档更正，搭本轮车 |
 | **P6** | **落盘 thinking 块的字段名与 pi 不同**：pi-java 写 `{"type":"thinking","text":…}`，pi 写 `{"type":"thinking","thinking":…}` | pi `session-manager.ts:1030-1056` 是 `JSON.stringify(entry)` 原样落盘，块形状即 `types.ts:357-365`（`thinking` / `thinkingSignature?` / `redacted?`）；pi-java `SessionJson.blockNode:129-132` 写 `text`、`MessageJsonCodec:142` 读 `text` | ① `SessionJson` 类注释自称「shape matches pi **byte-for-byte**」，**与实现不符**；② pi-java **解码不了 pi 写的会话文件**（`requireString(node,"text")` 抛 schema 错）；③ 同仓内 `FrameNormalizer.java:224` 用的却是 pi 形状 `{"type":"thinking","thinking":…}` —— **两处口径不一致** |
 | **P7** | `auto_retry_end` 成功路多写一个 `"finalError":null` 键 | pi `rpc-mode.ts`/`json-event.ts:48-51` 透传 ⇒ `undefined` 被 `JSON.stringify` **省略**；pi-java `JsonEventMapper.java:94-99` 无条件 `put`。同文件 `:110-113` 对 `SummarizationRetryAttemptStart.reason` **已做**「null ⇒ 省略」 | 线格式 1 键差异（包④） |
+| **P8** | **L5 两侧的 scripted stream 对 thinking 块不对称**：pi 侧 `ScriptedStream` 的 `queueMicrotask` 循环**只**处理 `text` / `toolCall` ⇒ thinking 块**不推任何** `thinking_start/delta/end`；Java 侧 `ScriptedStreams.eventsFor` 的 `case "thinking"` **推** `ThinkingStart`+`ThinkingEnd`（经 `PiLoopRunner.isUpdateEvent:335-343` 变成两条 `message_update` 帧） | pi `conformance/pi/run.test.ts` 的 `ScriptedStream` 推事件循环；pi-java `ScriptedStreams.java:73-79` | **裁决点 E 的前提被证伪**（见 §8.33.9）：任何声明 thinking 块的剧本都会**因夹具不对称**而红（Java 每块多两帧），**与生产行为无关**。谁先加 thinking 剧本谁先撞红 —— 必须先修 pi 侧孪生。登记不改（今日 14 个剧本无一声明 thinking） |
 
-> P5 的更正**已在本节就地完成**（下文引用的行号一律为实测值）。§8.31.4 原表按维护规则「就地改写、不增删行」留待与包①一同改。
+> P5 的更正**已在本节就地完成**（下文引用的行号一律为实测值）。§8.31.4 原表的行号更正**已随包① 就地完成**（R1 `:632`、R2 `:638-647`、R7 `:630-635`/`:636`/`:637`）；该表记录的是**实施前**的证据，故不加「已修」字样，只在其标题行注明状态。
 
 #### 8.32.3 包划分与依赖
 
@@ -3747,7 +3748,7 @@ B 类九条（台账 `docs/32 §3`）此前每条只有一行「修法素描」�
 
 #### 8.32.4 B4 为什么结案为不做（**修正原登记**）
 
-原登记（`docs/31:1059-1061`、`docs/32:88`）写的是「`addedToolNames` 的 provider 层消费者 …
+原登记（`docs/31:1059-1061`、`docs/32 §3 B 表` 的 B4 行，现 `docs/32:94`）写的是「`addedToolNames` 的 provider 层消费者 …
 对应 pi 的 **native deferred tools**，pi-java 今日无对应物（**Phase 2c MCP**）」。**这话两头都错**：
 
 1. **机制归属错**：`addedToolNames` 不是 MCP —— **pi 根本没有 MCP**。它是**扩展系统**的产物：
@@ -3784,7 +3785,7 @@ L5 剧本（`conformance/scripts/S*.json`）是**帧级**且**直接驱动 `PiLo
 
 ---
 
-### 8.33 包①：thinking 块的采集、落盘与回读（B6+B7+B9+P1+P4+P6）—— 设计（**待用户审核**）
+### 8.33 包①：thinking 块的采集、落盘与回读（B6+B7+B9+P1+P4+P6）—— **已实施**（2026-09-18，实施记录见 §8.33.9）
 
 #### 8.33.0 范围与不变量
 
@@ -3936,7 +3937,7 @@ case "thinking" -> new ContentBlock.ThinkingContent(
 |---|---|---|---|
 | **C** | 落盘 thinking 块的**文本字段名**：保持 `text` 还是改 pi 的 `thinking`？ | (a) 保持 `text`，只新增 `thinkingSignature`/`redacted` 两键<br>(b) 改 `thinking` + 旧键兜底读 | **(b)** —— `SessionJson` 类注释自称 byte-for-byte（`:22-27`），`FrameNormalizer:224` 已用 pi 形状，而 (a) 会把既存错误**固化进新字段**；兜底读（B2）让旧文件照常可读，代价只有一处 if |
 | **D** | redacted 的 `data` 缺失时怎么办？ | (a) 照 pi 的字面行为拼 `"undefined"`<br>(b) `_data()` 容忍 ⇒ 空串 | **(b)**，并在 javadoc 写明**故意不复刻**（同 §8.31 对 `signature_delta` 的既有口径） |
-| **E** | 是否新增 L5 剧本覆盖 B6/B7？（S15：一段 `content_block_start` 带非空 `thinking` + 一段 `redacted_thinking`） | 做 / 不做 | **做** —— 这是 B6/B7 唯一能被差分钉住的路径；同时**如实登记** signature/redacted 不可测 |
+| **E** | 是否新增 L5 剧本覆盖 B6/B7？（S15：一段 `content_block_start` 带非空 `thinking` + 一段 `redacted_thinking`） | 做 / 不做 | ~~**做**~~ → **不做**。**原推荐（「这是 B6/B7 唯一能被差分钉住的路径」）在实施时被证伪**，两条独立理由见 §8.33.9-E：① L5 用**桩 Stream**驱动 `PiLoop`，`content_block_start` 的解析与落盘**都不在它的路径上**，剧本零牙；② 两侧 scripted stream 对 thinking 块本身不对称（P8）⇒ 剧本会**因夹具**而红 |
 
 #### 8.33.5 RE 夹具（**先红，不红不许改生产代码**）
 
@@ -3989,6 +3990,128 @@ case "thinking" -> new ContentBlock.ThinkingContent(
 3. L5 差分**真跑** ≥3 轮并报实测（14/14 或新增 S15 后的 15/15）。
 4. `docs/32` 补行（B6/B7/B8/B9 状态、P1–P7 新登记、B4 改为「结案为不做 + 触发条件」）；
    `docs/31:1059-1061` 与 `docs/31 §8.31.4` 的行号按 §8.32.2-P5 就地更正。
+
+#### 8.33.9 实施记录（2026-09-18）
+
+**结论：A/B 两处改动全部落地；验收 4 条逐条对上，另有 2 处务必读的更正与 1 条新增登记。**
+
+**A. 采集侧（`pi-java-ai`）—— 逐条红灯**
+
+先给**夹具清单**（方法名 + 现文件行号），下表与它一一对应；设计文档里用的 B6-1/B7-2 只是**条目号**，
+不是测试方法名 —— 一条测试里可能塞了两条断言（下面各自注明）。
+
+| 夹具（方法名） | 位置 | 覆盖 |
+|---|---|---|
+| `initialThinkingTextLandsInFirstPartialAndSurvivesDeltas` | `AnthropicMessagesApiThinkingSignatureTest:210` | **B6**（两条断言：首个 partial 的文本 + 经 delta 后 `prepost`） |
+| `initialThinkingSignatureLandsInFirstPartial` | 同上 `:238` | **B9** |
+| `redactedThinkingBlockStartsAsThinkingWithOpaqueSignature` | 同上 `:265` | **B7**（两条断言：SDK 路由凭据 + 修复后形状） |
+| `thinkingEndCarriesSignatureAndRedactedIntoPartial` | `PiMessagesApiTest:107` | **P4** |
+| `thinkingSignatureAndRedactedSurviveJsonlRoundTrip` | `JsonlSessionStorageTest:58` | **P1 + P6**（`agent-core`，见 B） |
+| `legacyThinkingTextKeyStillDecodes` | 同上 `:89` | **P6 反向兼容**（`agent-core`，见 B） |
+| `ContentBlockJsonTest`（新文件，2 条） | `pi-java-ai/.../message/` | 证伪点 1，**回归门**（见 D1） |
+
+**实施前的实际红（`AnthropicMessagesApiThinkingSignatureTest`，新增 3 条）**：
+
+| 夹具 | 实施前的实际红 | 现状 |
+|---|---|---|
+| B6 `initialThinkingTextLandsInFirstPartialAndSurvivesDeltas:210` | ✗ `expected: "pre" but was: ""` —— **修复前 pi-java 整个没读 `event.content_block.thinking`** | ✓ |
+| B9 `initialThinkingSignatureLandsInFirstPartial:238` | ✗ `expected: "sig" but was: ""` —— 初始签名被 `emitThinkingSignature(initial)` 的**返回值直接丢弃、从未 submit** | ✓ |
+| B7 `redactedThinkingBlockStartsAsThinkingWithOpaqueSignature:265` | ✗ —— 第 1 条断言（SDK 路由）**是绿的**，第 2 条炸：旧行为返回 `TextStart` | ✓ |
+
+> **B7 的两条断言要分开读**：前半段是 **SDK 反序列化路由的活凭据**（`ContentBlock.kt:549-553` 手写
+> 反序列化器把 `"redacted_thinking"` 路由到 `redactedThinking` 变体）—— 它**实测为真**
+> ⇒ **B7 的修法不作废**（证伪点 2 关闭）。后半段钉形状：`text=="[Reasoning redacted]"`、
+> `signature=="opaque"`、`redacted==true`，且 `content()` 里**不许留空 `TextContent`**。
+> 这两半在**同一条测试**里，所以「路由断言通过」这件事在红灯报告里看得见、但没有独立成条。
+
+**P4 的红是补做的**（`PiMessagesApiTest:107`，新增 1 条）：
+
+| 夹具 | 实施前的实际红 | 现状 |
+|---|---|---|
+| P4 `thinkingEndCarriesSignatureAndRedactedIntoPartial:107` | ✗ `expected: "sig-9" but was: ""` | ✓ |
+
+> ⚠️ **顺序颠倒**：这条夹具最初写在生产修复**之后**（违反 RE 先行）⇒ 用
+> `git stash push -- pi-java-ai/.../PiMessagesApi.java` 还原生产代码、跑出上面那条红、再
+> `git stash pop`。如实记在这里，不粉饰。
+
+> **过程注（不是夹具）**：B6/B9 最初合写在**一条**测试里，B6 先炸 ⇒ B9 的红看不见，后拆成两条
+> ——与下面 B 的两处「被挡住」是同一个坑。
+
+**B. 落盘侧（`pi-java-agent-core`）—— 逐条红灯（`JsonlSessionStorageTest`，新增 2 条）**
+
+一次运行 `Tests run: 11, Failures: 1, Errors: 1`（该类 9 → 11）：
+
+| 夹具 | 实施前的实际红 | 现状 |
+|---|---|---|
+| `thinkingSignatureAndRedactedSurviveJsonlRoundTrip:58` | ✗ **Failure** 在 `:67` —— `assertThat(raw)` 的键名包含断言不成立（落盘仍是 `type`+`text`） | ✓ |
+| `legacyThinkingTextKeyStillDecodes:89` | ✗ **Error** 在 `:97` —— 新键那半 `MessageJsonCodec.decodeBlock` 抛错（旧解码器只认 `text`） | ✓ |
+
+> ⚠️ **两条红各自「挡住」了一半**，必须如实报：
+> ① 往返夹具**键名断言在前**（`:67`，`P6` 的键名），**签名回读断言在 `:79`**（`P1`）
+> —— 所以 **P1 的「回读」红从未被独立观察到**：修完键名之后才走到 `:79` 并通过，**没有单独的红灯记录**。
+> ② `legacyThinkingTextKeyStillDecodes` 一条用例里放了**旧键**（`:91`）与**新键**（`:97`）两半，
+> **新键那半先抛** ⇒ **旧键那半（P6 反向兼容，设计要求「保持绿」）也没被独立观察到**。
+> 这两处与「一条夹具里塞两个断言 ⇒ 后一个的红看不见」是同一个坑，**本包第二次踩**（第一次在 B6/B9）。
+
+**C. 裁决点 C/D/E 与实施时的三个实测更正**
+
+- **裁决点 C 取 (b)**（改 pi 的 `thinking` + 旧键兜底读）：照设计。
+- **裁决点 D 取 (b)**（`_data()` 容忍 ⇒ 空串）：照设计，javadoc 已写明**故意不复刻** pi 的字面 `"undefined"`。
+- **裁决点 E 由「做」改为「不做」** —— **原推荐被证伪**，两条独立理由：
+  1. **前提错**：E 的理由是「B6/B7 唯一能被差分钉住的路径」，但 L5 是用**桩 Stream** 驱动 `PiLoop`
+     （pi 侧 `run.test.ts` 的 `ScriptedStream`、java 侧 `ScriptedStreams.eventsFor` 手搓 `StreamEvent`），
+     **`content_block_start` 的解析与落盘都不在 L5 的路径上** ⇒ 剧本对 B6/B7/P1/P6 **零牙**。
+  2. **夹具不对称**：pi 侧推事件循环**只**处理 `text`/`toolCall`（thinking 块零 `thinking_*` 事件），
+     Java 侧 `case "thinking"` 推 `ThinkingStart`+`ThinkingEnd` ⇒ 剧本会**因夹具**而红。**已立为 P8 / E8。**
+  ⇒ 本包**不新增剧本**；L5 报的是既有 14 条的实测（见 F）。
+- **新增发现 P8**（见 §8.32.2 末行）：即上面第 2 条。
+- **`docs/03 §5.2` 的处置与原设计不同**：该节**根本没写过 thinking 块的形状**（grep 已证），
+  且整节（header / entry / record / lane / fact 五行）**都与实现脱节** ⇒ 改为就地加一条 ⚠️ 勘误指向
+  「以 `JsonlCodec`/`EntryJsonCodec`/`SessionJson` 为准」，不逐项重写草图。
+- **`ContentBlock.ThinkingContent` 加第四组件的真实代价**（设计只说「零 call-site churn」）：**漏了模式解构**。
+  `pi-java-tui/.../MessageBubble.java:87` 的 `case ContentBlock.ThinkingContent(var text, _)` **是**嵌套模式
+  ⇒ 编译失败（`需要 String,String,boolean / 找到 String,String`）。便捷构造器盖不住 `case` 的模式。
+  修法 `(var text, _, _)` + 一行注释。**这是本包唯一在编译期就自曝的破坏面**。
+
+**D. 证伪点复核（§8.33.7 四条）**
+
+1. **Jackson 会不会因缺 `redacted` 而读不了旧 JSON？** ⇒ **不会**，实测见新夹具
+   `ContentBlockJsonTest`（`pi-java-ai/.../message/`）：`{"type":"thinking","text":"old"}` 正常读出、
+   `redacted` 取布尔缺省 `false`；带 `redacted:true` 的往返也相等。
+   ⚠️ **这条夹具从一开始就是绿的**（没有红可验）⇒ 它是**回归门**、不是 RE 证据，如实标注。
+   附：生产链路**没有**任何一处用 Jackson 读 `ContentBlock`（已全仓 grep）⇒ 本项其实只在公开 API 面上有意义。
+2. **B7 兜底风险**（反序列化失败 ⇒ 四变体全 null ⇒ 静默落 text）：夹具**已显式**断言
+   `isRedactedThinking()`（即 B7 那条测试的**第 1 条断言**，实测**通过**）⇒ **不作废**。
+3. **访问器名**：`isRedactedThinking()` / `redactedThinking()` / `isThinking()` / `thinking()` 全部实测存在，与设计一致。
+4. **「L5 不动」不许写成预测**：见 F，**报实测数字**。
+
+**E. B3 的实测（设计里「需实测确认 SQLite 侧没有第二份手写块编解码」）**
+
+✅ **确认无第二份**：`pi-java-session-backend-sqlite` 全模块 `ThinkingContent` **零命中**；
+`SqliteCodecs` 只把载荷交给 `SessionJson.mapper()`（`:31`/`:39`），entry 行编码走
+`EntryRows.java:34-41` 的 `SessionJson.mapper().valueToTree(entry)` ⇒ **与 JSONL 同一条 `blockNode`
+与同一个 `MessageJsonCodec`**，改一处两后端同时生效。**B3 无需额外改动。**
+
+**F. 实测数字（全部真跑，非预测）**
+
+| 项 | 实测 |
+|---|---|
+| L5 差分 | **3 轮全绿，每轮 14/14**（`Tests run: 14, Failures: 0, Errors: 0`；1.257 s / 1.518 s / 1.532 s）。**不加 S15**（裁决点 E 的更正） |
+| `mvn -o clean verify` | **BUILD SUCCESS**，14 个模块全绿；checkstyle **0 violations**（逐模块）；spotbugs **11/11 模块 `BugInstance size is 0`** |
+| ai | **346**（原 340 ⇒ `+6`：thinking-signature 3 条 + `PiMessagesApiTest` 1 条 + `ContentBlockJsonTest` 2 条） |
+| agent-core | **462**（含 L5 的 14 条动态用例） |
+| `JsonlSessionStorageTest` | **11**（原 9 ⇒ `+2`） |
+
+**G. 实施期观察（本包不做，已登记）**
+
+`PiWebServerAuthTest.acceptsConnectionWithValidToken:97` 在**全 reactor 跑**时红过一次
+（`Expecting actual not to be null`：连接已建立，但 15 s 内没等到 `ready` 帧），同轮 `clean verify`
+复跑绿（2.160 s）。**隔离复跑 6 次：红 1 / 绿 5**（红的那次 15.05 s，绿的都是 1.3 s 上下）。
+⇒ **非确定性** ⇒ 不可能是包① 的回归（回归会确定性红）；且 `git diff` 里 `pi-java-web/` 零改动、
+`WebDispatcher.start()`（`resubscribe()` 之后才 `send(Ready)`）不在任何被改路径上。
+**未定位根因**，登记为 **A12**（见 `docs/32`），本包不动。
+⚠️ **不是本次新发现**：`§8.23.7` 早有同一条（`docs/31:1625`「三次全 reactor 红、第四次绿」、
+`:2593` 同）—— 那在前、包① 在后，**同一现象**，本次只是又一次复现 + 一次隔离计数（红 1 / 绿 5）。
 
 
 ---

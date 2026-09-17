@@ -41,16 +41,21 @@
 
 | 类 | 含义 | 条数 | 谁能推进 |
 |---|---|---:|---|
-| **A** | 要**证据**才能定案（多数要先读 pi 源码） | 11 | 我（读 pi 源码 / 清点） |
-| **B** | **功能缺口**（pi 有、pi-java 无） | 8 | 我（另立包，多数需先出设计文档） |
-| **C** | 已裁决**不改 / 不做**，带触发条件 | 10 | 不推进，除非触发条件成立 |
+| **A** | 要**证据**才能定案（多数要先读 pi 源码） | 12 | 我（读 pi 源码 / 清点） |
+| **B** | **功能缺口**（pi 有、pi-java 无） | 7 | 我（另立包，多数需先出设计文档） |
+| **C** | 已裁决**不改 / 不做**，带触发条件 | 11 | 不推进，除非触发条件成立 |
 | **D** | 小账（遥测/注释级，一处一行） | 7 | 我，随时可做 |
-| **E** | 结构债（>500 行文件等） | 7 | 我，与功能包搭车 |
+| **E** | 结构债（>500 行文件等） | 8 | 我，与功能包搭车 |
 | **F** | **待用户拍板** | 6 | **你** |
-| **G** | 已结案（**别重开**） | 15 | —— |
+| **G** | 已结案（**别重开**） | 20 | —— |
 | **H** | `docs/31` 之外，机械扫描**待复核** | 69（有重复，见 §9） | 我（逐条复核后才能定档） |
 
 > B/C/F 三类的本次增量（B6–B9 / C8–C10 / F6）全部来自 §8.31 的登记表，实现时又新发现两条（B9/C10）。
+> **2026-09-18（包①，§8.33）后的变动**：B6/B7/B9 与 P1/P4/P6 实施 ⇒ 移入 G（+5 行）；B4 **结案为不做** ⇒
+> 移入 C（C11）；§8.32.2 的 P2/P3/P7 立为 **B10/B11/B12**（跨模型重放闸 / 空 text 块 / `finalError` 键），
+> P8 立为 **E8**（L5 夹具对 thinking 块不对称）；P5（行号错位）已就地更正 ⇒ 入 G。
+> 又新登记 **A12**（`PiWebServerAuthTest` 负载敏感 flake，**§8.23.7 早已记过**，非新缺陷）⇒ A 类 11→12 行。
+> 故 B 类的「条数」不增反减是**结案**的结果，不是漏记。
 
 **收敛路径**：A 类与 F 类是真正的闸门 —— A 挡在「读 pi / 清点」上，F 挡在「你的决定」上；
 B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做，没有一条阻塞合并。
@@ -73,6 +78,7 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | A9 | **per-model 压缩设置**（pi `getCompactionSettings(model)`，settings-manager.ts:891-901） | `docs/31:1322` | pi-java 的 settings supplier **无模型参数** |
 | A10 | `approvalHandler` 与钩子体在**工具线程**执行 ⇒ 交互类钩子（权限询问）需自证线程安全 | `docs/31:1784` | 清点项（pi 同形状） |
 | A11 | **内置工具线程安全审计**（`coding-agent` 侧 read/write/edit/bash/glob…） | `docs/31:1782` | 本轮**只审计不改**；审计本身尚未开始。pi 的契约是「工具必须可并发执行」 |
+| A12 | `PiWebServerAuthTest.acceptsConnectionWithValidToken:97` 在全 reactor 跑时**偶发红**（15 s 内没等到 `ready` 帧） | §8.33.9-G（`docs/31:4080`）；**早在 §8.23.7 已记过**（`docs/31:1625`「三次全 reactor 红、第四次绿」、`:2593` 同） | **未定位根因**。隔离复跑 6 次红 1 绿 5（红那次 15.05 s，绿均 ~1.3 s）⇒ **非确定性**；且 `pi-java-web/` 在包① 的 `git diff` 里零改动 ⇒ **与包① 无关**（§8.23.7 在前、包① 在后，同一现象，非新缺陷）。**需先定位根因**，未定位前不修、不加超时（那是掩盖） |
 
 > A4 / A5 取证之后会变成**行为改动**，需你拍板 ⇒ 见 F 类。
 
@@ -85,12 +91,15 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | B1 | **branch summary 无实现**（pi `branch-summarization.ts:349-353`） | `docs/31:1550` | `source:"branchSummary"` 的重试路**形状**已保留，功能本体缺 ⇒ 另立包 |
 | B2 | compaction **`details` 生产者**恒 null | `docs/31:1324` | **已实施**（§8.30，`4380796`）⇒ 见 G 类；同族四处（摘要 prompt/`previousSummary`/请求参数/split turn）另立，§8.30.7 |
 | B3 | TUI/RPC 对 **auto_retry / summarization_retry 的渲染**（倒计时、`isRetrying`、isIdle 含重试） | `docs/31:1552` | 并入「命令/界面面」清点 |
-| B4 | `addedToolNames` 的 **provider 层消费者** | `docs/31:1060` | 字段已按 pi 形状预留；对应 pi 的 native deferred tools，pi-java 今日**无对应物**（Phase 2c MCP） |
+| B4 | `addedToolNames` 的 **provider 层消费者** | `docs/31:1060` | **结案为不做**（机制归属原判是错的：`addedToolNames` 来自**扩展系统**，不是 MCP；pi 侧 `extensions/wrapper.ts:17-37` → `deferred-tools.ts:8-39`）⇒ 见 C 类 C11 |
 | B5 | 宿主层：`SessionRunner` 两处 `catch (Exception)` **不接 `Error`** ⇒ `statusFuture`/`entriesFuture` 永不完成、不发 `AgentEnd`/`AgentSettled`、宿主**永久挂起** | `docs/31:2685`（§8.26.5-12 的下游） | pi 的 `handleRunFailure` 把异常**压成文本**、合成 assistant 消息、promise **resolve** —— 另一处更大的差距，另立包 |
-| B6 | content_block_start 的**初始 thinking 文本被丢弃** | `docs/31:3590`、§8.31.4 | `emitThinkingStart()` 不接受初始内容（pi `:631` 收 `thinking ?? ""`）；与 B9 同根，一并做 ⇒ 需动 `StreamPartialBuilder` 事件形状 |
-| B7 | **`redacted_thinking` 未处理** | `docs/31:3591`、§8.31.4 | pi `:637-645` 映射为 thinking（`"[Reasoning redacted]"` + `signature = data`）；pi-java 落到 text 分支 ⇒ 新增块类型支持 |
-| B8 | **空签名重放策略不可配**（pi 的 `Model.compat.allowEmptySignature`） | `docs/31:3594`、§8.31.4 | pi 侧三态 + `generate-models.ts:2242-2253` 给 Kimi 系打开；pi-java `ModelInfo` 无 `compat` ⇒ 需 catalog/compat 字段 + models.json schema 扩展 |
-| B9 | **初始 signature 进不了 `ThinkingStart.partial`**（实现时才发现的） | `docs/31:3596`、§8.31.4 | `emitThinkingStart` 先 `snapshot()` 返回、`emitThinkingSignature(initial)` 在其**之后**才改块（`StreamPartialBuilder:121-128` vs `:145-151`）；pi 是先建好块再 push。与 B6 同根 |
+| B6 | content_block_start 的**初始 thinking 文本被丢弃** | `docs/31:3590`、§8.31.4 | **已实施**（§8.33 包①）⇒ 见 G 类 |
+| B7 | **`redacted_thinking` 未处理** | `docs/31:3591`、§8.31.4 | **已实施**（§8.33 包①；SDK 路由 `ContentBlock.kt:549-553` 已实证）⇒ 见 G 类 |
+| B8 | **空签名重放策略不可配**（pi 的 `Model.compat.allowEmptySignature`） | `docs/31:3594`、§8.31.4 | pi 侧三态 + `generate-models.ts:2242-2253` 给 Kimi 系打开；pi-java `ModelInfo` 无 `compat` ⇒ 需 catalog/compat 字段 + models.json schema 扩展。**被 B10 前置**（§8.33.9-P2） |
+| B9 | **初始 signature 进不了 `ThinkingStart.partial`**（实现时才发现的） | `docs/31:3596`、§8.31.4 | **已实施**（§8.33 包①，与 B6 同一处改动）⇒ 见 G 类 |
+| B10 | **pi 的 `transform-messages.ts` 整段缺失**（跨模型重放闸：`isSameModel = provider && api && model.id`；跨模型丢 redacted、thinking 降级 text） | §8.32.2-P2（`docs/31:3723`） | 逐条移植 `transform-messages.ts:85-122`；**是 B8 的前置** —— 不加此闸，B8 会让跨模型重放**比今天更错**。归包② |
+| B11 | **空 text 块不丢**（重放时会把空 `TextContent` 原样发给 Anthropic） | §8.32.2-P3（`docs/31:3724`） | 照 pi `anthropic-messages.ts:1281-1282` 的 `if (block.text.trim().length === 0) continue;` 补闸；**B7 修好后**这处才可能被触发（redacted 走错分支留下的空块） |
+| B12 | **`auto_retry_end` 成功路多写 `"finalError":null`** | §8.32.2-P7（`docs/31:3730`） | pi 侧 `undefined` 被 `JSON.stringify` 省略；pi-java `JsonEventMapper.java:94-99` 无条件 `put`。同文件 `:110-113` 已有「null ⇒ 省略」先例 ⇒ 照抄。归包④ |
 
 ---
 
@@ -108,6 +117,7 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | C8 | signature 会**多发一条** `ThinkingDelta` 事件（pi 只改块、不 push） | `docs/31:3592`、§8.31.4 | 改的是 `StreamEvent` 通道形状，且**无剧本可证**（同 §8.24 口径：不钉没剧本的形状） | L5 剧本覆盖 `SignatureDelta` 的形状 |
 | C9 | **per-model `api` 表达不出**（单 provider 多 API，pi 的 fireworks/opencode） | `docs/31:3593`、§8.31.4 | `models.json` 的 `api` 在 **provider 级**；P1 做到 provider 级派发即覆盖今日全部已注册 provider，加字段是投机代码（同 C1 口径） | 出现单 provider 多 API 的真实需求 |
 | C10 | `emitThinkingSignature` **先于** `emitThinkingStart` ⇒ `IndexOutOfBoundsException`（实现时才发现的） | `docs/31:3597`、§8.31.4 | 生产不可达；且与同族的 `emitThinkingDelta`（有惰性建块分支）**不对称** ⇒ 加分支属投机代码 | 出现「先 `signature_delta` 后 `content_block_start`」的真事件序列 |
+| C11 | `addedToolNames` 的 **provider 层消费者**（原 B4） | `docs/31:3749`（§8.32.4） | **结案为不做**，且**机制归属原判是错的**：`addedToolNames` 来自 pi 的**扩展系统**（`extensions/wrapper.ts:17-37` → `deferred-tools.ts:8-39`），不是 MCP；消费侧的闸是 `openai-completions.ts:838-840` 的 `compat.deferredToolsMode === "kimi"` | ① 扩展系统落地且真产出 `addedToolNames`；② 出现 `deferredToolsMode` 为真的 provider；③ 有用户报告 deferred tools 不生效 |
 
 ---
 
@@ -136,6 +146,7 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | E5 | `EventParser.java` **515** 行 —— **已登记例外**（TamboUI same-package 覆写） | `pi-java-tui/.../dev/tamboui/tui/event/EventParser.java` |
 | E6 | 拆分超限文件（`SqliteSessionStorage`、`AgentHarness`） | `docs/09b:117` |
 | E7 | `appendEntry` / `appendRecord` 在 JSONL/Memory 两处重复 —— **判断项，保留**（差异小且各自持有锁语义） | `docs/09b:140` |
+| E8 | **L5 两侧 scripted stream 对 thinking 块不对称**：pi 侧 `ScriptedStream` 的推事件循环**只**处理 `text`/`toolCall`（thinking 块零 `thinking_*` 事件），Java 侧 `ScriptedStreams.eventsFor` 的 `case "thinking"` 推 `ThinkingStart`+`ThinkingEnd`（⇒ 每块多两条 `message_update` 帧） | §8.32.2-**P8**（`docs/31:3731`）；`conformance/pi/run.test.ts` vs `ScriptedStreams.java:73-79` |
 
 > 仓库规则是「文件 ≤ 500 行」；E1–E4 是唯一破口的四处（E5 有例外登记）。
 > 拆分点已在 §8.23.5 / `docs/28` 讨论过，没有一条与功能耦合 ⇒ 可随时做。
@@ -173,6 +184,11 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | §8.21.5 重试判据白/黑名单反转 | `docs/31:1316-1321`、§8.22 | 2026-09-15（`f27b1bd`） |
 | **B2** compaction `details` 生产者恒 null（含摘要尾部 `<read-files>`/`<modified-files>`） | `docs/31:1324`、§8.30.8 | 2026-09-17，`4380796` |
 | **§8.31 P1+P2** 生产事故根因：① 适配器不跟 `model.provider()` 走（StreamFn 闭包会话 provider）② thinking `signature` 用严格必填访问器打死整轮 run | `docs/31:3457`、§8.31.8 | 2026-09-17，`fb4866d`（P2）/ `922ef4c`（P1）；**未做端到端复现**，见 §8.31.8 末 |
+| **B6 / B9** 初始 thinking 文本与初始 signature 进不了 `content_block_start` 的第一个 partial（`ThinkingStart.partial`） | `docs/31:3787`、§8.33.9-A | 2026-09-18，包① |
+| **B7** `redacted_thinking` 被当 text 块（载荷丢失、且回落成 `TextStart`） | `docs/31:3787`、§8.33.9-A | 2026-09-18，包①（SDK 路由 `ContentBlock.kt:549-553` 实证） |
+| **P1 / P6** thinking 块的 `signature`/`redacted` 既不落盘也不回读；落盘键名 `text` 与 pi 的 `thinking` 不一致 | `docs/31:3787`、§8.33.9-B | 2026-09-18，包①（旧键 `text` 仍兜底读） |
+| **P4** pi-messages 车道的 `thinking_end` 从不装配 signature/redacted | `docs/31:3787`、§8.33.9-A | 2026-09-18，包① |
+| **P5** §8.31.4 的 pi 行号整体错位 1 行 | §8.32.2-P5；已就地更正（R1 `:632`、R2 `:638-647`、R7 `:630-635`/`:636`/`:637`） | 2026-09-18，包① |
 | §8.15「**遗留**：B 项（延迟任务真并发 = pi 的 `Promise.all`）仍开放」 | §8.23 | 2026-09-16 —— **原文那行是过期陈述，已被 §8.23 取代**（本地已回填标记） |
 
 > 最后一条特别提一下：`docs/31:945`（以及 `:1059` / `:1117` 两处重复）写着 B 项「仍开放 / 待用户」，

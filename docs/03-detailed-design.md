@@ -1400,6 +1400,16 @@ public class CommandRegistry {
 {"kind":"fact","seq":2,"fact":"model.default","value":"claude-sonnet-4-20250514"}
 ```
 
+> ⚠️ **上面这段是 Phase 1 的早期草图，已与实现脱节**（2026-09-18 逐条核对）。实际编解码以
+> `JsonlCodec` / `EntryJsonCodec` / `SessionJson` 为准，差异如下：
+> header 用 `createdAt`（非 `timestamp`）与 `parentSessionId`（非 `parent_session`）；
+> entry 用 `parentId` / `timestamp` / `message`（非 `parent_id` / `payload:{role,blocks}`），
+> 消息内容是**扁平**的块数组 `content`；record 的 `intent` 是**对象**且必带 `kind`
+> （`run`/`compaction`/`navigation`，非字符串）；lane 只有 `{seq,lane,leafId}`
+> （没有 `action:create`/`action:move`）；fact 是 `{fact:"name"|"label", name|label, targetId}`
+> （非 `{fact:"session.name", value}`）。
+> 内容块键名另见 `docs/31 §8.33`：thinking 块的文本字段是 `thinking`（不是 `text`）。
+
 ### 5.3 分支语义
 
 分支通过 `SessionRepository.fork()` 创建，不是简单的文件复制：
