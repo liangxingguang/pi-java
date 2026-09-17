@@ -127,8 +127,23 @@ public final class SessionJson {
                 node.put("text", t.text());
             }
             case ContentBlock.ThinkingContent t -> {
+                // Key names follow pi (types.ts:357-365): the reasoning text field is
+                // `thinking`, not `text` — pi persists entries verbatim via
+                // JSON.stringify (session-manager.ts:1030-1056), so `thinking` is what
+                // byte-for-byte means here (docs/31 §8.33 P6). The reader accepts the
+                // legacy `text` key so existing ~/.pi-java sessions keep loading.
                 node.put("type", "thinking");
-                node.put("text", t.text());
+                node.put("thinking", t.text());
+                // pi's `thinkingSignature?`/`redacted?` are optional (omitted when
+                // undefined). ThinkingContent folds absent into ""/false, so those
+                // sentinels are what get omitted here — an empty signature and a
+                // false flag mean exactly the same thing to the replay rule.
+                if (!t.signature().isEmpty()) {
+                    node.put("thinkingSignature", t.signature());
+                }
+                if (t.redacted()) {
+                    node.put("redacted", true);
+                }
             }
             case ContentBlock.ImageContent i -> {
                 node.put("type", "image");

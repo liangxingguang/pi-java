@@ -121,6 +121,28 @@ final class MessageJsonCodec {
         return Instant.ofEpochMilli(timestampNode.asLong());
     }
 
+    /**
+     * Read a thinking block's text field. New key {@code thinking} wins; the
+     * legacy key {@code text} is the fallback.
+     *
+     * <p>pi names the field {@code thinking} ({@code types.ts:358}) and persists
+     * entries verbatim ({@code session-manager.ts:1030-1056}), so {@code thinking}
+     * is the shape that matches pi byte-for-byte. pi-java wrote {@code text} until
+     * this change (docs/31 §8.33 P6) — sessions already on disk in
+     * {@code ~/.pi-java} still carry it, so both must be accepted.</p>
+     */
+    private static String thinkingText(JsonNode node) {
+        JsonNode current = node.get("thinking");
+        if (current != null && !current.isNull()) {
+            return JsonlCodec.requireString(node, "thinking");
+        }
+        return JsonlCodec.requireString(node, "text");
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value;
+    }
+
     static List<ContentBlock> decodeBlocks(JsonNode node) {
         if (node == null || !node.isArray()) {
             throw JsonlCodec.DecodeError.schema("has invalid content");
@@ -139,7 +161,10 @@ final class MessageJsonCodec {
         String type = JsonlCodec.requireString(node, "type");
         return switch (type) {
             case "text" -> new ContentBlock.TextContent(JsonlCodec.requireString(node, "text"));
-            case "thinking" -> new ContentBlock.ThinkingContent(JsonlCodec.requireString(node, "text"));
+            case "thinking" -> new ContentBlock.ThinkingContent(
+                thinkingText(node),
+                nullToEmpty(JsonlCodec.optionalString(node, "thinkingSignature")),
+                JsonlCodec.optionalBoolean(node, "redacted"));
             case "image" -> new ContentBlock.ImageContent(
                 JsonlCodec.requireString(node, "mediaType"),
                 JsonlCodec.requireString(node, "data"));

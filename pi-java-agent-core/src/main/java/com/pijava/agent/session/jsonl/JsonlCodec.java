@@ -367,6 +367,18 @@ public final class JsonlCodec {
         return value.textValue();
     }
 
+    /** Read an optional boolean field, defaulting to {@code false} when absent. */
+    public static boolean optionalBoolean(JsonNode node, String field) {
+        JsonNode value = node.get(field);
+        if (value == null || value.isNull()) {
+            return false;
+        }
+        if (!value.isBoolean()) {
+            throw DecodeError.schema("has invalid " + field);
+        }
+        return value.booleanValue();
+    }
+
     /** Read an optional object field as a map, or {@code null} when absent. */
     public static Map<String, Object> optionalObject(JsonNode node, String field) {
         JsonNode value = node.get(field);

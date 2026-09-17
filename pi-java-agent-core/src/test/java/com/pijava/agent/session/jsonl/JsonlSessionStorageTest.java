@@ -9,6 +9,7 @@ import com.pijava.agent.entry.ProvisionedEntry;
 import com.pijava.agent.session.Session;
 import com.pijava.agent.session.SessionError;
 import com.pijava.agent.session.SessionErrorCode;
+import com.pijava.agent.session.SessionJson;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 
@@ -24,6 +25,79 @@ class JsonlSessionStorageTest {
     private static ProvisionedEntry<Entry.Message> message(String id, String text) {
         return new ProvisionedEntry<>(new Entry.Message(id, 0, null, null,
             new Message.UserMessage(List.of(new ContentBlock.TextContent(text))), null));
+    }
+
+    private static ProvisionedEntry<Entry.Message> thinkingMessage(
+            String id, String text, String signature, boolean redacted) {
+        return new ProvisionedEntry<>(new Entry.Message(id, 0, null, null,
+            new Message.AssistantMessage(
+                List.of(new ContentBlock.ThinkingContent(text, signature, redacted)),
+                "end_turn", null, null, null, null, null, null, null), null));
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // 包①（docs/31 §8.33）：thinking 的 signature/redacted 必须落盘且回读
+    // ══════════════════════════════════════════════════════════════════
+
+    /**
+     * <b>P1 + P6</b>：thinking 块的 {@code signature} 与 {@code redacted} 必须
+     * **落盘并回读**，且键名与 pi 一致。
+     *
+     * <p>修复前 {@code SessionJson.blockNode} 只写 {@code type}+{@code text}
+     * （{@code :129-132}），{@code MessageJsonCodec.decodeBlock} 只读 {@code text}
+     * 且走 1 参构造器 ⇒ 签名恒 {@code ""}。后果是 B7/B8 即使落地，**resume 之后
+     * 也失效**：空签名只剩「降级成 text」一态可走，redacted 载荷丢了更无法回升。</p>
+     *
+     * <p>键名按 pi（{@code types.ts:357-365}）：pi 的会话文件是
+     * {@code JSON.stringify(entry)} 原样落盘（{@code session-manager.ts:1030-1056}），
+     * 所以 thinking 块的文本字段在 pi 侧叫 {@code thinking} 而不是 {@code text}。
+     * {@code SessionJson} 的类注释自称「shape matches pi byte-for-byte」——
+     * 此前名实不符，且同仓 {@code FrameNormalizer:224} 用的已经是 pi 形状。</p>
+     */
+    @Test
+    void thinkingSignatureAndRedactedSurviveJsonlRoundTrip() throws Exception {
+        Path dir = Files.createTempDirectory("pi-jsonl-thinking");
+        var repo = JsonlSessionRepository.over(dir);
+        var session = repo.create(new JsonlSessionCreateOptions(null, "cwd", null, null));
+        session.appendEntry(thinkingMessage("m1", "reason", "sig-1", true), "main");
+        session.storage().drain();
+        Path file = repo.list(JsonlSessionListOptions.all()).getFirst().path();
+
+        String raw = Files.readString(file);
+        assertThat(raw)
+            .as("P6：落盘键名必须与 pi 一致（thinking / thinkingSignature / redacted）")
+            .contains("\"thinking\":\"reason\"")
+            .contains("\"thinkingSignature\":\"sig-1\"")
+            .contains("\"redacted\":true");
+
+        var storage = JsonlSessionStorage.load(FS, file);
+        var entry = (Entry.Message) storage
+            .findEntries(com.pijava.agent.session.EntryQuery.all()).getFirst();
+        var block = (ContentBlock.ThinkingContent) entry.message().content().getFirst();
+        assertThat(block.text()).isEqualTo("reason");
+        assertThat(block.signature())
+            .as("P1：签名必须回读出来，否则 resume 后重放没有签名可用")
+            .isEqualTo("sig-1");
+        assertThat(block.redacted()).isTrue();
+    }
+
+    /**
+     * <b>P6 反向兼容</b>：用户 {@code ~/.pi-java} 下已有按旧键 {@code text} 落盘的会话
+     * 文件，改键名不能把它们读废。读取侧必须**两种键都认**（新键优先）。
+     */
+    @Test
+    void legacyThinkingTextKeyStillDecodes() throws Exception {
+        var legacy = SessionJson.mapper().readTree("{\"type\":\"thinking\",\"text\":\"old\"}");
+        assertThat(MessageJsonCodec.decodeBlock(legacy))
+            .as("旧键 text 必须照常解码（缺 signature/redacted ⇒ 空串与 false）")
+            .isEqualTo(new ContentBlock.ThinkingContent("old", "", false));
+
+        var current = SessionJson.mapper().readTree(
+            "{\"type\":\"thinking\",\"thinking\":\"r\",\"thinkingSignature\":\"s\","
+                + "\"redacted\":true}");
+        assertThat(MessageJsonCodec.decodeBlock(current))
+            .as("新键必须解码，且 redacted 要带上")
+            .isEqualTo(new ContentBlock.ThinkingContent("r", "s", true));
     }
 
     @Test
