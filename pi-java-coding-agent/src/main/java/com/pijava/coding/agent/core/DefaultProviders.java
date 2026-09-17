@@ -68,18 +68,35 @@ public final class DefaultProviders {
     }
 
     /**
-     * Build a {@link StreamFn} that routes through the provider selected by
-     * {@code args.provider()} or the settings default, using the CLI API key,
-     * the settings key, or the environment/file credential store.
+     * Build a {@link StreamFn} that routes **each request by the model's own
+     * provider** ({@code model.provider()}), using the CLI API key, the
+     * settings key, or the environment/file credential store.
+     *
+     * <p>与 pi 同形：{@code compat.ts:262}/{@code :287} 的
+     * {@code resolveApiProvider(model.api)} —— 派发键是**模型**，凭据也跟模型
+     * （{@code compat.ts:225-231} {@code getEnvApiKey(model.provider, ...)}）。
+     * 会话级的 {@code defaultProvider} 自此只决定**起手模型**（
+     * {@code AgentSession} 的 {@code models.resolve}）与**未注册 provider 的回退**
+     * （见下），不再决定每个请求的适配器 —— 此前它把适配器闭包死，导致切到别的
+     * provider 的模型仍用旧适配器发请求（生产事故见 {@code docs/31 §8.31}）。</p>
+     *
+     * <p>回退（裁决 ①，{@code docs/31 §8.31.7}）：模型的 provider 不在注册表里时
+     * （目录里的自定义 id、或未实现协议的 provider），回退到会话 provider 并往
+     * stderr 留一行警告 —— 不新增硬失败。baseUrl/apiKey 的解析链原样保留（CLI
+     * {@code --base-url} &gt; settings 默认 &gt; 凭据存储），只是按模型 provider 取名。</p>
      */
     public static StreamFn streamFnFor(Args args, String defaultProvider,
                                        ProviderRegistry providers, Settings settings) {
-        var providerName = resolveProviderName(args, defaultProvider);
+        var fallbackName = resolveProviderName(args, defaultProvider);
         return (model, context, options) -> {
-            var provider = providers.get(providerName)
-                .orElseThrow(() -> new IllegalStateException("Unknown provider: " + providerName));
+            var provider = providers.get(model.provider()).orElseGet(() -> {
+                System.err.println("[provider] unknown model provider \"" + model.provider()
+                    + "\"; falling back to \"" + fallbackName + "\"");
+                return providers.get(fallbackName).orElseThrow(
+                    () -> new IllegalStateException("Unknown provider: " + fallbackName));
+            });
             return streamBlocking(provider, model, context, options,
-                apiOptions(args, providerName, settings, Credentials::resolveApiKey));
+                apiOptions(args, model.provider(), settings, Credentials::resolveApiKey));
         };
     }
 
