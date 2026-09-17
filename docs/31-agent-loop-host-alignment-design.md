@@ -3241,6 +3241,165 @@ agent-core **450**（本包 +2）。
 
 ---
 
+### 8.30 压缩产物的文件清单 `details`（B2）—— **设计（待用户审核）**
+
+> 类别 **B（功能缺口：pi 有、pi-java 无）**。出处：`docs/32 §3 B2`，原登记在本文 `§8.21.5`。
+> 判据仍是**行为**：落库的 `Entry.Compaction` 形状 + 摘要文本的尾部块。
+> **本节是设计，尚未写码** —— 审核通过后实施，实施记录续在 §8.30.x，同时把本行抬头改成
+> 「**已实施（日期，设计经用户审核通过；实施记录见 8.30.x）**」。
+
+#### 8.30.1 缺口的确切形状
+
+pi 每次压缩产出两样东西，pi-java **都没有**：
+
+| # | pi 的行为 | 出处（`v0.85.1`） | pi-java 现状 |
+|---|---|---|---|
+| ① | `details = {readFiles: string[], modifiedFiles: string[]}`，**两键恒在**、数组可为空、去重、排序 | `coding-agent/.../compaction/compaction.ts:962`（legacy）、`agent/.../harness/compaction/compaction.ts:813`（harness） | `CompactionService.compact:57` 直接传 `null` ⇒ `Entry.Compaction.details` **恒 null**，落盘时整个键缺席（`Entry` 类头 `@JsonInclude(NON_NULL)`） |
+| ② | 摘要**文本**尾部追加 `<read-files>` / `<modified-files>` 两块 | 同上 `:951` / `:812`，块本体在 `harness/compaction/utils.ts:62-72` | 无 |
+| ③ | 清单由 **assistant 的 toolCall 块**确定性抽取，**从不问模型** | `utils.ts:24-51` | 无 |
+| ④ | 清单**跨压缩累积**：上一份 compaction entry 的 `details` 回灌（`readFiles`→read、`modifiedFiles`→edited） | `compaction.ts:46-76`（harness）/ `:42-70`（legacy） | 无（且第一份就恒 null，谈不上累积） |
+
+③④ 要强调：`readFiles`/`modifiedFiles` **不是**模型输出的解析结果 —— 没有任何 prompt 请求它们；
+模型侧只看到 ② 拼在摘要尾部的文本。所以这是一次**纯确定性**移植，没有模型行为的不确定性，
+也不需要任何夹具上的模型响应形状假设（这一点决定了它的验证方式，见 §8.30.6）。
+
+#### 8.30.2 pi 的逐字形状（取证）
+
+`FileOperations`（`utils.ts:5-12`）：三个 `Set<string>` —— `read` / `written` / `edited`。
+
+`extractFileOpsFromMessage`（`utils.ts:24-51`）：只看 `role === "assistant"` 且 `content` 是数组的消息；
+逐块取 `type === "toolCall"`，读 `arguments.path`（**是字符串才算**），再按**工具名硬编码**分派 ——
+`read`→read、`write`→written、`edit`→edited；**其它工具名一律不记**（`bash`/`glob`/`grep` 都不记）。
+pi-java 三个内置工具的名字与之逐字相同：`ReadTool:35` / `WriteTool:33` / `EditTool:44`。
+
+`computeFileLists`（`utils.ts:54-59`）：`modified = edited ∪ written`；
+`readFiles = read ∖ modified` 后排序；`modifiedFiles = modified` 后排序。
+**排序口径**：JS 默认 `sort()` 按 UTF-16 码元序，Java `String.compareTo` 同为 UTF-16 码元序
+（含代理对时也比码元）⇒ **两侧逐字相同**，不需要自定义比较器。
+
+`formatFileOperations`（`utils.ts:62-72`）：两块各自形如
+`\n\n<read-files>\n{p1}\n{p2}\n</read-files>`；两块之间**没有**额外分隔（每块自带 `\n\n` 前缀）；
+两块都空 ⇒ 返回 `""`（摘要文本一个字符都不变）。
+
+`extractFileOperations`（harness `compaction.ts:46-76`）：先回灌上一份 compaction 的 `details`
+（`readFiles`→read、`modifiedFiles`→edited，**逐元素判字符串**），再逐条消息抽 `toolCall`。
+
+顺带登记一条**同族的**缺口：pi 的 `previousSummary` / split-turn 等 §8.30.7 另列。
+
+#### 8.30.3 pi-java 的接线点（都已就位，只缺生产者）
+
+| 位置 | 现状 |
+|---|---|
+| `CompactionResult.java:24` 的 `details` 组件 | 在 |
+| `Entry.java:144` `Entry.Compaction.details` | 在（`@JsonInclude(NON_NULL)`） |
+| `EntryJsonCodec.java:63` `optionalObject(node, "details")` | 在（解码侧本来就吃这个键） |
+| `CompactionExecutor.java:411` 把 `result.details()` 写进 entry | 在 |
+| **`CompactionService.compact:52-57`** | **`summarize(...)` 之后直接 `new CompactionResult(..., null)` —— 唯一的缺口** |
+
+即：**消费链一条不缺，缺的只有生产者**。这也解释了为什么 B2 一直留着：没有任何一处会因为
+`details == null` 而报错，它是**静默**缺的。
+
+#### 8.30.4 设计
+
+新增两个类，改一个方法（都在 `pi-java-agent-core/…/compaction/`）：
+
+1. **`FileOperations`**（包内可见，~20 行）：三个 `LinkedHashSet<String>` 累加器。
+   pi 侧也是可变对象，不改形状换不可变 —— 逐个 `Set.add` 与 pi 的 `fileOps.read.add(path)` 同构。
+2. **`CompactionFiles`**（~110 行）：
+   - `extractFromMessage(Message m, FileOperations ops)` —— 读 `ContentBlock.ToolUseContent`
+     （pi-java 里 pi 的 `toolCall` 块叫这个名字，`ContentBlock.java:79`：`(id, name, arguments)`），
+     `arguments()` 已经是 `Map<String,Object>`（不是 JSON 字符串）⇒ 判据是
+     `args.get("path") instanceof String`；
+   - `compute(FileOperations ops)` → `record Lists(List<String> readFiles, List<String> modifiedFiles)`；
+   - `format(List<String> readFiles, List<String> modifiedFiles)` → 逐字照 `utils.ts:62-72`；
+   - `details(List<String> readFiles, List<String> modifiedFiles)` → 有序字典；
+   - `extract(List<Message> messages, List<Entry> transcript)` —— 含 ④ 的累积回灌。
+3. **`CompactionService.compact` 收尾**改成：
+
+   ```java
+   var fileOps = CompactionFiles.extract(discardedMessages, transcript);
+   var lists = CompactionFiles.compute(fileOps);
+   String summary = summaryResult.text() + CompactionFiles.format(lists.readFiles(), lists.modifiedFiles());
+   return new CompactionResult(summary, firstKept, tokensBefore, null, summaryResult.usage(),
+       CompactionFiles.details(lists.readFiles(), lists.modifiedFiles()));
+   ```
+
+**为什么累积回灌放在 `CompactionService` 而不是别处**：只有它同时拿得到 `transcript`
+（可回扫上一次的 `Entry.Compaction`）和 `discardedMessages`。回扫规则照 pi：
+**从尾往前**找最后一份 `Entry.Compaction`（harness `:642-648`）。pi-java 的 marker 由
+`CompactionExecutor:423` 的 `kept.add(0, compactionEntry)` 放在**转录下标 0**，所以每次都是一击命中，
+但回扫写法要保留 —— 它不依赖「marker 恰在头部」这个实现细节。
+
+**`fromHook` 的取舍（必须登记）**：pi legacy 的回灌带一个额外守卫 `!prevCompaction.fromHook`
+（`coding-agent/.../compaction/compaction.ts:52`，注释说该字段只为会话文件兼容而留），
+harness 那份只做形状守卫。pi-java 的 `Entry.Compaction` **没有 `fromHook` 字段**
+（`Entry.java:135-146`）⇒ 采用 **harness 的形状守卫**（对象、非 null、非数组、逐元素判字符串），
+并登记一条差异：**若将来有 hook 写下的 compaction entry，它也会被回灌**。
+（`CompactionExecutor:246-250` 的 `before_compaction` 钩子若返回 `keepEntries`，会**整份替换**转录，
+因此钩子可以塞进一份自己写的 `Entry.Compaction` —— 这正是 pi legacy 那个 `fromHook` 要挡的情形，
+所以这不是空谈。）今天 pi-java 无该生产者，判为可接受。
+
+**一个 Java 侧的具体陷阱**：`Map.copyOf` / `Map.of` 的**迭代序不保证**，
+而 pi 写出的是 `{"readFiles":…,"modifiedFiles":…}`。为保持 JSONL 逐字节可比，
+详情字典用 `Collections.unmodifiableMap(new LinkedHashMap<>(…))` 构造，**不要用 `Map.of`**。
+
+#### 8.30.5 边界与不做
+
+- **不动** `CompactionResult` / `Entry.Compaction` 的字段（`details` 早就在，形状不用改）。
+- **不动** 切点算法、`tokensBefore`、`usage`、`retainedTail`、重试环与钩子。
+- **不改** 其它 entry 类型的 `details`（`BranchSummary` / `Message.tool.details` 各有各的生产者，
+  B1 那包才会碰前者）。
+- **不为空清单发明特殊值**：pi 写 `{readFiles:[], modifiedFiles:[]}`，pi-java 同样写空数组，
+  **不是** `null`、**不是**缺键。这是本包可见的、也是最容易被"顺手优化掉"的一处。
+- **不**把这件事并入 `docs/32` 素描里建议的「`/compact` 命令面复查」——
+  它是摘要生成路的**纯生产者**逻辑，与命令面无关，混在一起审两种行为不合算。
+
+#### 8.30.6 验证
+
+新夹具 `CompactionFileOpsTest`（`pi-java-agent-core` 的 `com.pijava.agent.compaction` 包）：
+
+1. `read`/`write`/`edit` 各一次 ⇒ 三集合各 1，且 `readFiles` 只含那条 read；
+2. **被 read 又被 edit 的路径只进 `modifiedFiles`**（`read ∖ modified` 的差分规则）；
+3. 乱序 + 重复工具调用 ⇒ 去重且排序（这条同时钉住「JS `sort()` ≡ `String.compareTo`」）；
+4. **无任何文件操作** ⇒ `details` 仍是**两键空数组的对象**，且摘要文本尾部**没有任何块**；
+5. **累积**：先压一次（内含 `read a.ts` 的 assistant 轮），再压一次（第二批不含 `a.ts`）
+   ⇒ 第二份 `details.readFiles` **仍含 `a.ts`**；
+6. **逐字节**断言摘要尾部的 `<read-files>` / `<modified-files>` 文本（含 `\n\n` 前缀与块间衔接）；
+7. `bash`/`glob` 等工具名**不入账**（防"顺手把其它工具也记上"）。
+
+**RE（反向实验）**：
+- 停掉生产者（还原成传 `null`）⇒ 第 4/5/6 条红；
+- 只停掉**累积回灌** ⇒ **第 5 条恰一红**，其余全绿（证明累积是独立的一处，不是被别的断言顺带覆盖）；
+- 把 `read ∖ modified` 的差分去掉 ⇒ 第 2 条红。
+
+**回归**：`mvn -o -pl pi-java-agent-core -am test`（`-am` 必须带，见 memory `jdk25-mvn-am`），
+再全 reactor `mvn -o clean verify`。L5 差分剧本不压缩，**预期 12/12 不动**——
+若动了，说明碰到的是别的东西，要停下来查。
+预计规模：主源码 ~130 行 + 测试 ~150 行 ⇒ **1 个 commit**（`feat(agent-core)`）。
+
+#### 8.30.7 本包**不含**：压缩摘要路的其余四处（各自另立）
+
+复核 `LlmSummaryGenerator` / `CompactionService` 时发现摘要路还有四处更深的差距。
+它们**都不并入本包** —— 免得一次审核裹进四种行为变更：
+
+| # | 差距 | 出处 | 为何不并入 |
+|---|---|---|---|
+| a | **摘要 prompt 是另写的简版**：pi 的 `SUMMARIZATION_SYSTEM_PROMPT`（harness `compaction.ts:420-422`）、六段式 `SUMMARIZATION_PROMPT`（`:424-455`，含 `### Done/### In Progress/### Blocked`、`## Key Decisions`、`## Next Steps`、`## Critical Context`）、`<conversation>` 信封（`:561-577`）与 `serializeConversation`（`utils.ts:91-132`，含 `[Assistant tool calls]:` / `[Tool result]:` 与 `TOOL_RESULT_MAX_CHARS = 2000` 截断）pi-java **全无**（`LlmSummaryGenerator:297-326` 是自写的四段简版，只有 `[User]:` / `[Assistant]:`） | 对比 `LlmSummaryGenerator:51-55` / `:297-314` vs 上述 | 改的是**模型看到的东西**，意义最大，也最该单独审 |
+| b | `previousSummary` 未传（`CompactionService:53` 恒 `null`）⇒ pi 的 `UPDATE_SUMMARIZATION_PROMPT` 那条路在 pi-java 是**死码** | harness `:650-654`、`:457` | 与 (a) 同一处装配，宜同包 |
+| c | 摘要请求未设 `maxTokens = min(floor(0.8·reserveTokens), model.maxTokens)`、未设 `thinkingLevel`、未用 `customInstructions`（`reserveTokens` 参数在 pi-java 收了但没用） | `LlmSummaryGenerator:221-222` 传 `OptionalInt.empty()` / `ThinkingConfig.OFF` vs harness `:559-566`、`:585-589` | 同上（同一处请求装配） |
+| d | **split turn**：pi 在切点落在 turn 中间时对 `turnPrefixMessages` 单独摘要，两段用 `\n\n---\n\n**Turn Context (split turn):**\n\n` 拼接（`TURN_PREFIX_SUMMARIZATION_PROMPT`） | harness `:672`、`:679-684`、`:691-695`、`:774`、`:709-722` | 是**切点算法本身**的变更，独立且更大 |
+
+⇒ 建议后续顺序：**(a+b+c) 一包 → (d) 一包 → B1 → B5 → B3 → B4**。
+
+⚠️ 同处的记账问题：`docs/13:45` 把这条链记成「目标对齐度 **90%**（结构化摘要流程对齐 pi；
+`serializeConversation` 完整细节渐进）」—— 按上述取证，**该数字是低报**（prompt 文本、序列化、
+请求参数、`previousSummary` 四条都不一致）。待 (a+b+c) 那包落地时一并订正。
+
+**归档动作**（实施后做，`docs/32 §10.1`）：本包在 §8.30 落地后，于 `docs/32` 的 B2 行按
+「改行不改号」补指向，并在 G 类留一行；§0.1 的「已复核」小节列表需加上 `§8.30`。
+
+---
+
 ## 9. 与既有文档的关系
 
 | 文档 | 关系 |
