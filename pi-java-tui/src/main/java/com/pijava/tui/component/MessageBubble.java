@@ -84,7 +84,10 @@ public final class MessageBubble {
                     }
                     yield split;
                 }
-                case ContentBlock.ThinkingContent(var text, _) -> dim(
+                // `signature`/`redacted` ride along for replay only; the visible text is
+                // already the right thing to draw (a redacted block's text is pi's
+                // "[Reasoning redacted]" placeholder — anthropic-messages.ts:641).
+                case ContentBlock.ThinkingContent(var text, _, _) -> dim(
                     TextLayout.split(TextLayout.escapeMarkup(text), false));
                 case ContentBlock.ToolUseContent(var id, var name, var arguments) ->
                     new ToolCallCard(toolName(name), toolArgs(arguments), "running").lines();

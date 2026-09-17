@@ -31,6 +31,9 @@ public final class StreamPartialBuilder {
     private final StringBuilder toolArgBuf = new StringBuilder();
     private String toolCallId = "";
     private String toolCallName = "";
+    // Redacted flag of the *current* thinking block. Carried on every block
+    // rewrite so a later signature/delta cannot silently clear it.
+    private boolean thinkingRedacted;
 
     private int nextContentIndex;
     // Each stream owns its block index so interleaved text/thinking/tool
@@ -119,10 +122,37 @@ public final class StreamPartialBuilder {
 
     /** Emit thinking-block-start. Adds a placeholder {@link ContentBlock.ThinkingContent}. */
     public StreamEvent.ThinkingStart emitThinkingStart() {
+        return emitThinkingStart("", "", false);
+    }
+
+    /**
+     * Emit thinking-block-start carrying the provider's pre-set content.
+     *
+     * <p>Anthropic puts text and signature inside {@code content_block_start} and
+     * pi builds the block with them <b>before</b> pushing the start event
+     * ({@code anthropic-messages.ts:630-635} build, {@code :636} into
+     * {@code output.content}, {@code :637} push) — so pi's first {@code partial}
+     * already sees both. Same for {@code redacted_thinking} ({@code :638-647}).</p>
+     *
+     * <p><b>The buffers must be seeded, not just the block</b>: every later
+     * {@code emitThinkingDelta} rebuilds the block from {@code thinkingBuf}, so a
+     * block-only initial value would be wiped by the first delta.</p>
+     *
+     * @param initialText      pre-set reasoning text, or null/empty
+     * @param initialSignature pre-set signature (the opaque payload when redacted)
+     * @param redacted         provider redaction marker
+     */
+    public StreamEvent.ThinkingStart emitThinkingStart(
+            String initialText, String initialSignature, boolean redacted) {
+        var text = initialText == null ? "" : initialText;
+        var sig = initialSignature == null ? "" : initialSignature;
         thinkingBuf.setLength(0);
+        thinkingBuf.append(text);
         thinkingSigBuf.setLength(0);
+        thinkingSigBuf.append(sig);
+        thinkingRedacted = redacted;
         thinkingBlockIndex = blocks.size();
-        blocks.add(new ContentBlock.ThinkingContent(""));
+        blocks.add(new ContentBlock.ThinkingContent(text, sig, redacted));
         int idx = nextContentIndex++;
         return new StreamEvent.ThinkingStart(idx, snapshot());
     }
@@ -137,7 +167,7 @@ public final class StreamPartialBuilder {
         }
         int idx = thinkingBlockIndex;
         blocks.set(idx, new ContentBlock.ThinkingContent(
-            thinkingBuf.toString(), thinkingSigBuf.toString()));
+            thinkingBuf.toString(), thinkingSigBuf.toString(), thinkingRedacted));
         return new StreamEvent.ThinkingDelta(idx, delta, snapshot());
     }
 
@@ -146,8 +176,30 @@ public final class StreamPartialBuilder {
         thinkingSigBuf.append(signature);
         int idx = Math.max(0, thinkingBlockIndex);
         blocks.set(idx, new ContentBlock.ThinkingContent(
-            thinkingBuf.toString(), thinkingSigBuf.toString()));
+            thinkingBuf.toString(), thinkingSigBuf.toString(), thinkingRedacted));
         return new StreamEvent.ThinkingDelta(idx, "", snapshot());
+    }
+
+    /**
+     * Write the provider's final signature/redacted flags onto the current
+     * thinking block <b>without emitting an event</b>.
+     *
+     * <p>pi's {@code pi-messages} lane does exactly this: the wire's
+     * {@code thinking_end} carries {@code contentSignature}/{@code redacted}
+     * ({@code pi-messages.ts:60-64}, assigned at {@code :236-240}) — there is no
+     * separate signature event to emit.</p>
+     *
+     * @param signature provider signature, or null/empty
+     * @param redacted  provider redaction marker
+     */
+    public void applyThinkingSignature(String signature, boolean redacted) {
+        thinkingSigBuf.setLength(0);
+        thinkingSigBuf.append(signature == null ? "" : signature);
+        thinkingRedacted = redacted;
+        if (thinkingBlockIndex >= 0) {
+            blocks.set(thinkingBlockIndex, new ContentBlock.ThinkingContent(
+                thinkingBuf.toString(), thinkingSigBuf.toString(), thinkingRedacted));
+        }
     }
 
     /** Emit thinking-block-end. */

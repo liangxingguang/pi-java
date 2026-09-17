@@ -37,8 +37,17 @@ public sealed interface ContentBlock {
      * <p>{@code signature} carries the provider's tamper-evidence token for the
      * thinking text (Anthropic extended thinking). Replay requires it; without
      * a signature adapters downgrade the block to plain text.</p>
+     *
+     * <p>{@code redacted} is pi's safety-filter marker ({@code types.ts:364}):
+     * the text is a fixed placeholder and {@code signature} holds the opaque
+     * encrypted payload, which must be replayed **verbatim** as
+     * {@code redacted_thinking} rather than as a signed {@code thinking} block.</p>
+     *
+     * @param text      the visible reasoning text ({@code "[Reasoning redacted]"} when redacted)
+     * @param signature provider signature token, or the opaque payload when redacted
+     * @param redacted  {@code true} if the provider redacted this block's reasoning
      */
-    record ThinkingContent(String text, String signature) implements ContentBlock {
+    record ThinkingContent(String text, String signature, boolean redacted) implements ContentBlock {
         /** Compact constructor normalizing a null signature to empty. */
         public ThinkingContent {
             signature = signature == null ? "" : signature;
@@ -46,7 +55,12 @@ public sealed interface ContentBlock {
 
         /** Backwards-compatible constructor for pre-signature call sites. */
         public ThinkingContent(String text) {
-            this(text, "");
+            this(text, "", false);
+        }
+
+        /** Backwards-compatible constructor for pre-redacted call sites. */
+        public ThinkingContent(String text, String signature) {
+            this(text, signature, false);
         }
     }
 

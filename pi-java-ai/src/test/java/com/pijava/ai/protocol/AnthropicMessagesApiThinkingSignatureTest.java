@@ -9,12 +9,14 @@ import com.anthropic.models.messages.RawContentBlockDeltaEvent;
 import com.anthropic.models.messages.RawContentBlockStartEvent;
 import com.anthropic.models.messages.RawContentBlockStopEvent;
 import com.anthropic.models.messages.RawMessageStreamEvent;
+import com.anthropic.models.messages.RedactedThinkingBlock;
 import com.anthropic.models.messages.SignatureDelta;
 import com.anthropic.models.messages.ThinkingBlock;
 import com.anthropic.models.messages.ThinkingDelta;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.message.AssistantMessage;
+import com.pijava.ai.message.ContentBlock.TextContent;
 import com.pijava.ai.message.ContentBlock.ThinkingContent;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
@@ -77,6 +79,10 @@ class AnthropicMessagesApiThinkingSignatureTest {
         StreamEvent feedJson(String json, Class<?> type) throws Exception {
             var parsed = ObjectMappers.jsonMapper().readValue(json, type);
             if (parsed instanceof ThinkingBlock block) {
+                return feed(RawMessageStreamEvent.ofContentBlockStart(
+                    RawContentBlockStartEvent.builder().index(0).contentBlock(block).build()));
+            }
+            if (parsed instanceof RedactedThinkingBlock block) {
                 return feed(RawMessageStreamEvent.ofContentBlockStart(
                     RawContentBlockStartEvent.builder().index(0).contentBlock(block).build()));
             }
@@ -183,5 +189,104 @@ class AnthropicMessagesApiThinkingSignatureTest {
         assertThat(out).isInstanceOf(StreamEvent.ThinkingDelta.class);
         assertThat(firstThinking(((StreamEvent.ThinkingDelta) out).partial()).signature())
             .isEqualTo("sig-456");
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // 包①（docs/31 §8.33）：初始文本/签名 + redacted_thinking
+    // ══════════════════════════════════════════════════════════════════
+
+    /**
+     * <b>B6</b>：{@code content_block_start} 里预置的 {@code thinking} 必须随首个
+     * {@code ThinkingStart.partial} 投影，并活着穿过后续 delta。
+     *
+     * <p>pi 的次序是「先建好带初值的块（{@code anthropic-messages.ts:630-635}）→ 入 content
+     * （{@code :636}）→ 才 push {@code thinking_start}（{@code :637}）」；修复前 pi-java
+     * **整个没读** {@code event.content_block.thinking}。</p>
+     *
+     * <p>第二条断言（{@code prepost}）才是真正钉住修法的：{@code emitThinkingDelta} 用
+     * 缓冲**覆盖**块，所以初始文本必须被 seed 进缓冲，否则会被第一个 delta 冲掉。</p>
+     */
+    @Test
+    void initialThinkingTextLandsInFirstPartialAndSurvivesDeltas() throws Exception {
+        var stream = new Stream();
+
+        var start = stream.feedJson(
+            "{\"type\":\"thinking\",\"thinking\":\"pre\",\"signature\":\"sig\"}", ThinkingBlock.class);
+
+        assertThat(start).isInstanceOf(StreamEvent.ThinkingStart.class);
+        assertThat(firstThinking(((StreamEvent.ThinkingStart) start).partial()).text())
+            .as("B6：pi 在 :632 是 `thinking ?? \"\"`，预置文本必须收下")
+            .isEqualTo("pre");
+
+        stream.feedJson("{\"type\":\"thinking_delta\",\"thinking\":\"post\"}", ThinkingDelta.class);
+        var end = stream.stop();
+
+        assertThat(firstThinking(((StreamEvent.ThinkingEnd) end).partial()).text())
+            .as("B6：缓冲必须被 seed —— 否则初始文本会被第一个 delta 覆盖冲掉")
+            .isEqualTo("prepost");
+    }
+
+    /**
+     * <b>B9</b>：初始 {@code signature} 必须进**首个** {@code ThinkingStart.partial}。
+     *
+     * <p>修复前 {@code emitThinkingStart()} 先 {@code snapshot()} 返回（{@code StreamPartialBuilder:127}），
+     * {@code AnthropicMessagesApi:131} 才拿 {@code emitThinkingSignature(initial)} 去改块
+     * —— 而且那个返回值**被直接丢弃、从未 submit**。于是初始签名只能从**下一个**事件的
+     * partial 起才可见，与 pi 的「先入块、后 push」差一拍。</p>
+     */
+    @Test
+    void initialThinkingSignatureLandsInFirstPartial() throws Exception {
+        var stream = new Stream();
+
+        var start = stream.feedJson(
+            "{\"type\":\"thinking\",\"thinking\":\"pre\",\"signature\":\"sig\"}", ThinkingBlock.class);
+
+        assertThat(firstThinking(((StreamEvent.ThinkingStart) start).partial()).signature())
+            .as("B9：pi 在 :633 收 signature，块在 push 事件前已入 content ⇒ 首个 partial 就该有")
+            .isEqualTo("sig");
+    }
+
+    /**
+     * <b>B7</b>：{@code redacted_thinking} 必须走 thinking 通道，且留下**不透明载荷**。
+     *
+     * <p>前半段是 SDK 反序列化**路由**的活凭据（不是 javap 推断）：pi-java 拿到的是
+     * {@code ContentBlock}，只有 SDK 的 {@code ContentBlock.Deserializer} 把
+     * {@code "redacted_thinking"} 路由到 {@code redactedThinking} 变体，
+     * 生产的 {@code isRedactedThinking()} 才可能为真。SDK 是**手写**反序列化器
+     * （{@code ContentBlock.kt:549-553}），失败时兜底 {@code ContentBlock(_json = json)}
+     * —— 四个变体**全为 null**，会静默掉进 text 分支，所以这条必须显式断言。</p>
+     *
+     * <p>后半段钉住修复后的形状：pi {@code :638-647} 映射为 thinking 块，
+     * 文本固定 {@code "[Reasoning redacted]"}、{@code thinkingSignature = data}、
+     * {@code redacted: true}；且因为它收不到任何 delta，走错分支会在消息里留下
+     * 一个空 {@code TextContent("")}。</p>
+     */
+    @Test
+    void redactedThinkingBlockStartsAsThinkingWithOpaqueSignature() throws Exception {
+        String json = "{\"type\":\"redacted_thinking\",\"data\":\"opaque\"}";
+
+        var routed = ObjectMappers.jsonMapper()
+            .readValue(json, com.anthropic.models.messages.ContentBlock.class);
+        assertThat(routed.isRedactedThinking())
+            .as("SDK 必须把 redacted_thinking 路由到该变体，否则 B7 的修法作废（docs/31 §8.33.7-2）")
+            .isTrue();
+        assertThat(routed.redactedThinking().orElseThrow()._data().asString())
+            .contains("opaque");
+
+        var stream = new Stream();
+        var start = stream.feedJson(json, RedactedThinkingBlock.class);
+
+        assertThat(start)
+            .as("B7：redacted 块必须走 thinking 通道，不是 text")
+            .isInstanceOf(StreamEvent.ThinkingStart.class);
+        var block = firstThinking(((StreamEvent.ThinkingStart) start).partial());
+        assertThat(block.text()).isEqualTo("[Reasoning redacted]");
+        assertThat(block.signature()).isEqualTo("opaque");
+        assertThat(block.redacted()).isTrue();
+
+        var end = stream.stop();
+        assertThat(((StreamEvent.ThinkingEnd) end).partial().content())
+            .as("B7：走对分支就不该留下空 TextContent（那个空块会被原样发给 Anthropic）")
+            .noneMatch(TextContent.class::isInstance);
     }
 }

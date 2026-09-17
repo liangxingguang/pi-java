@@ -95,6 +95,33 @@ class PiMessagesApiTest {
         assertThat(done.reason()).isEqualTo("stop");
     }
 
+    /**
+     * <b>P4</b>（docs/31 §8.33）：pi-messages 车道的 {@code thinking_end} **带**
+     * {@code contentSignature}/{@code redacted}（wire 形状见 {@code pi-messages.ts:60-64}，
+     * pi 在 {@code :236-240} 把两者装配回块）。这四个字段在
+     * {@link PiMessagesEvent.ThinkingEnd} 早已声明，但适配器此前只调无参
+     * {@code emitThinkingEnd()} ⇒ 签名在这条车道上恒空 ——
+     * B7/B8 的忠实度到不了 web / harness 车道。
+     */
+    @Test
+    void thinkingEndCarriesSignatureAndRedactedIntoPartial() throws Exception {
+        var baseUrl = startServer(thinkingSse());
+        var api = api(baseUrl);
+        var events = collect(api, "think");
+
+        var end = last(events, StreamEvent.ThinkingEnd.class);
+        var block = end.partial().content().stream()
+            .filter(ContentBlock.ThinkingContent.class::isInstance)
+            .map(ContentBlock.ThinkingContent.class::cast)
+            .findFirst().orElseThrow();
+
+        assertThat(block.text()).isEqualTo("ponder");
+        assertThat(block.signature())
+            .as("thinking_end 的 contentSignature 必须落进 partial，否则下一轮重放没有签名可用")
+            .isEqualTo("sig-9");
+        assertThat(block.redacted()).isTrue();
+    }
+
     @Test
     void errorEventMapsToStreamError() throws Exception {
         var baseUrl = startServer(errorSse());
@@ -199,6 +226,20 @@ class PiMessagesApiTest {
             + event("{\"type\":\"text_delta\",\"contentIndex\":0,\"delta\":\"Hello\"}")
             + event("{\"type\":\"text_delta\",\"contentIndex\":0,\"delta\":\" world\"}")
             + event("{\"type\":\"text_end\",\"contentIndex\":0,\"content\":\"Hello world\"}")
+            + event("{\"type\":\"done\",\"reason\":\"stop\","
+                + "\"usage\":{\"input\":10,\"output\":5,\"cacheRead\":0,\"cacheWrite\":0,"
+                + "\"totalTokens\":15,\"cost\":{\"input\":0,\"output\":0,\"cacheRead\":0,"
+                + "\"cacheWrite\":0,\"total\":0}}}")
+            + "data: [DONE]\n\n";
+    }
+
+    /** P4 夹具：thinking_end 带 contentSignature/redacted（pi-messages wire 形状）。 */
+    private static String thinkingSse() {
+        return event("{\"type\":\"start\"}")
+            + event("{\"type\":\"thinking_start\",\"contentIndex\":0}")
+            + event("{\"type\":\"thinking_delta\",\"contentIndex\":0,\"delta\":\"ponder\"}")
+            + event("{\"type\":\"thinking_end\",\"contentIndex\":0,\"content\":\"ponder\","
+                + "\"contentSignature\":\"sig-9\",\"redacted\":true}")
             + event("{\"type\":\"done\",\"reason\":\"stop\","
                 + "\"usage\":{\"input\":10,\"output\":5,\"cacheRead\":0,\"cacheWrite\":0,"
                 + "\"totalTokens\":15,\"cost\":{\"input\":0,\"output\":0,\"cacheRead\":0,"

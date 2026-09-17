@@ -114,10 +114,21 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                     pendingToolId[0] = tu.id();
                     return builder.emitToolCallStart();
                 }
-                if (block.isThinking()) {
+                if (block.isRedactedThinking()) {
+                    // B7（docs/31 §8.33）：pi 把 redacted 映射成 thinking 块 ——
+                    // 文本固定 "[Reasoning redacted]"、thinkingSignature = data、redacted: true
+                    // （anthropic-messages.ts:638-647），且同样「先入 content、后 push 事件」。
+                    // 落到 text 分支会留下一个空 TextContent，那个空块会被原样发给 Anthropic。
                     isToolBlock[0] = false;
                     isThinkingBlock[0] = true;
-                    var start = builder.emitThinkingStart();
+                    // pi 在 :642 是 `thinkingSignature: event.content_block.data` 直取 ——
+                    // TS 类型谎报 required，缺字段会拼出字面量 "undefined"。此处**故意不复刻**，
+                    // 用非抛异常的 _data()（与下面的 signature 同一口径）。
+                    return builder.emitThinkingStart("[Reasoning redacted]",
+                            block.redactedThinking().orElseThrow()._data().asString().orElse(""),
+                            true);
+                }
+                if (block.isThinking()) {
                     // 签名必须**容忍缺失**（P2，docs/31 §8.31）：Anthropic 的 thinking 块其
                     // signature 由后续 signature_delta 补，relay/兼容端点为非 Anthropic 模型
                     // 合成思考时更可能整个流都不给。SDK 的严格访问器 signature() 会抛
@@ -125,12 +136,17 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                     // pi 在同一位置是 `event.content_block.signature ?? ""`
                     // （anthropic-messages.ts:633）。_signature() 是非抛异常面：
                     // 字段缺失即 JsonMissing ⇒ asString() 为空 ⇒ 取空串。
-                    var initial = block.thinking()
-                            .map(t -> t._signature().asString().orElse("")).orElse("");
-                    if (!initial.isEmpty()) {
-                        builder.emitThinkingSignature(initial);
-                    }
-                    return start;
+                    //
+                    // B6/B9：初始**文本**同签名一道随首个 ThinkingStart.partial 投影
+                    // （pi :630-637 是先建好带初值的块、再 push 事件）。此前只补了签名，
+                    // 且是在 snapshot() 之后补的 —— 既丢了文本，签名也进不了首个 partial。
+                    isToolBlock[0] = false;
+                    isThinkingBlock[0] = true;
+                    var tb = block.thinking().orElseThrow();
+                    return builder.emitThinkingStart(
+                            tb._thinking().asString().orElse(""),
+                            tb._signature().asString().orElse(""),
+                            false);
                 }
                 isToolBlock[0] = false;
                 isThinkingBlock[0] = false;

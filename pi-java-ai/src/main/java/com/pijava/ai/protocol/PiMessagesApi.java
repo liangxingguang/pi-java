@@ -89,8 +89,16 @@ public final class PiMessagesApi extends AbstractChatApi {
                         publisher.submit(builder.emitThinkingStart());
                     case PiMessagesEvent.ThinkingDelta d ->
                         publisher.submit(builder.emitThinkingDelta(d.delta()));
-                    case PiMessagesEvent.ThinkingEnd thinkingEnd ->
+                    case PiMessagesEvent.ThinkingEnd thinkingEnd -> {
+                        // P4（docs/31 §8.33）：pi 在 thinking_end 上把 contentSignature/redacted
+                        // 装配回块 —— `Object.assign(entry, {thinkingSignature: event.contentSignature,
+                        // redacted: event.redacted})`（pi-messages.ts:236-240，事件形状见 :60-64）。
+                        // 这四个字段在 PiMessagesEvent:43 早已声明，此前**从未被填过** ⇒
+                        // 签名在这条车道上恒空，B7/B8 的忠实度到不了 web/harness 车道。
+                        builder.applyThinkingSignature(
+                            thinkingEnd.contentSignature(), thinkingEnd.redacted());
                         publisher.submit(builder.emitThinkingEnd());
+                    }
                     case PiMessagesEvent.ToolCallStart s -> {
                         toolIds.put(s.contentIndex(), s.id());
                         publisher.submit(builder.emitToolCallStart());
