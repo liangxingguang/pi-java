@@ -19,7 +19,7 @@
 
 | 档 | 范围 | 本次做法 |
 |---|---|---|
-| **已复核** | `docs/31` 的二十处登记表（§8.2 / §8.3 / §8.6 / §8.7 / §8.9 / §8.15 / §8.18 / §8.19 / §8.21.5 / §8.22.5 / §8.23.5 / §8.24.5 / §8.25.5 / §8.26.5 / §8.27.4 / §8.28.5 / §8.28.7 / §8.29.6 / §8.30.8） | 逐节读原文核对，带**逐字标记**与行号 |
+| **已复核** | `docs/31` 的二十一处登记表（§8.2 / §8.3 / §8.6 / §8.7 / §8.9 / §8.15 / §8.18 / §8.19 / §8.21.5 / §8.22.5 / §8.23.5 / §8.24.5 / §8.25.5 / §8.26.5 / §8.27.4 / §8.28.5 / §8.28.7 / §8.29.6 / §8.30.8 / §8.31.4） | 逐节读原文核对，带**逐字标记**与行号 |
 | **待复核** | `docs/31` **之外**的文档与主源码 javadoc —— **69 条**（H 类） | 机械扫描，**未逐条复核**，只保证出处准确 |
 
 ### 0.2 一个必须先说的更正
@@ -42,13 +42,15 @@
 | 类 | 含义 | 条数 | 谁能推进 |
 |---|---|---:|---|
 | **A** | 要**证据**才能定案（多数要先读 pi 源码） | 11 | 我（读 pi 源码 / 清点） |
-| **B** | **功能缺口**（pi 有、pi-java 无） | 4 | 我（另立包，多数需先出设计文档） |
-| **C** | 已裁决**不改 / 不做**，带触发条件 | 7 | 不推进，除非触发条件成立 |
+| **B** | **功能缺口**（pi 有、pi-java 无） | 8 | 我（另立包，多数需先出设计文档） |
+| **C** | 已裁决**不改 / 不做**，带触发条件 | 10 | 不推进，除非触发条件成立 |
 | **D** | 小账（遥测/注释级，一处一行） | 7 | 我，随时可做 |
 | **E** | 结构债（>500 行文件等） | 7 | 我，与功能包搭车 |
-| **F** | **待用户拍板** | 5 | **你** |
-| **G** | 已结案（**别重开**） | 14 | —— |
+| **F** | **待用户拍板** | 6 | **你** |
+| **G** | 已结案（**别重开**） | 15 | —— |
 | **H** | `docs/31` 之外，机械扫描**待复核** | 69（有重复，见 §9） | 我（逐条复核后才能定档） |
+
+> B/C/F 三类的本次增量（B6–B9 / C8–C10 / F6）全部来自 §8.31 的登记表，实现时又新发现两条（B9/C10）。
 
 **收敛路径**：A 类与 F 类是真正的闸门 —— A 挡在「读 pi / 清点」上，F 挡在「你的决定」上；
 B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做，没有一条阻塞合并。
@@ -85,6 +87,10 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | B3 | TUI/RPC 对 **auto_retry / summarization_retry 的渲染**（倒计时、`isRetrying`、isIdle 含重试） | `docs/31:1552` | 并入「命令/界面面」清点 |
 | B4 | `addedToolNames` 的 **provider 层消费者** | `docs/31:1060` | 字段已按 pi 形状预留；对应 pi 的 native deferred tools，pi-java 今日**无对应物**（Phase 2c MCP） |
 | B5 | 宿主层：`SessionRunner` 两处 `catch (Exception)` **不接 `Error`** ⇒ `statusFuture`/`entriesFuture` 永不完成、不发 `AgentEnd`/`AgentSettled`、宿主**永久挂起** | `docs/31:2685`（§8.26.5-12 的下游） | pi 的 `handleRunFailure` 把异常**压成文本**、合成 assistant 消息、promise **resolve** —— 另一处更大的差距，另立包 |
+| B6 | content_block_start 的**初始 thinking 文本被丢弃** | `docs/31:3590`、§8.31.4 | `emitThinkingStart()` 不接受初始内容（pi `:631` 收 `thinking ?? ""`）；与 B9 同根，一并做 ⇒ 需动 `StreamPartialBuilder` 事件形状 |
+| B7 | **`redacted_thinking` 未处理** | `docs/31:3591`、§8.31.4 | pi `:637-645` 映射为 thinking（`"[Reasoning redacted]"` + `signature = data`）；pi-java 落到 text 分支 ⇒ 新增块类型支持 |
+| B8 | **空签名重放策略不可配**（pi 的 `Model.compat.allowEmptySignature`） | `docs/31:3594`、§8.31.4 | pi 侧三态 + `generate-models.ts:2242-2253` 给 Kimi 系打开；pi-java `ModelInfo` 无 `compat` ⇒ 需 catalog/compat 字段 + models.json schema 扩展 |
+| B9 | **初始 signature 进不了 `ThinkingStart.partial`**（实现时才发现的） | `docs/31:3596`、§8.31.4 | `emitThinkingStart` 先 `snapshot()` 返回、`emitThinkingSignature(initial)` 在其**之后**才改块（`StreamPartialBuilder:121-128` vs `:145-151`）；pi 是先建好块再 push。与 B6 同根 |
 
 ---
 
@@ -99,6 +105,9 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | C5 | 开/关**顺序不对称**：`PiLaneSink.endRequest:197-198` 是 `close()` 再 `popCurrent()`，`JsonlFileTelemetry.startSpan:131-132` 相反 | `docs/31:2983` | 今天无影响（`popCurrent` 的守卫是 `peek()==span`，与是否已结算无关） | —— |
 | C6 | §8.24.5 四条未覆盖：② 完成序保证本身 · ③ 消费者阻塞语义 · `acceptingUpdates` 闩的迟到 update · 串行路径下的 update 时机 | `docs/31:2156-2159` | 前两条**不可达**（`PiLoop.Sink` 契约是同步 `void` ⇒ 排除异步消费者）；后两条无剧本可证 | —— |
 | C7 | 是否另立 **`TelemetryAdapterConformance` 套件** | `docs/31:3043` | **倾向不做** —— pi 那 9 条套件的注册表里只有一个测试用 adapter，无第二个 adapter 时套抽象基类不划算 | 出现 OTel 之外的真 adapter |
+| C8 | signature 会**多发一条** `ThinkingDelta` 事件（pi 只改块、不 push） | `docs/31:3592`、§8.31.4 | 改的是 `StreamEvent` 通道形状，且**无剧本可证**（同 §8.24 口径：不钉没剧本的形状） | L5 剧本覆盖 `SignatureDelta` 的形状 |
+| C9 | **per-model `api` 表达不出**（单 provider 多 API，pi 的 fireworks/opencode） | `docs/31:3593`、§8.31.4 | `models.json` 的 `api` 在 **provider 级**；P1 做到 provider 级派发即覆盖今日全部已注册 provider，加字段是投机代码（同 C1 口径） | 出现单 provider 多 API 的真实需求 |
+| C10 | `emitThinkingSignature` **先于** `emitThinkingStart` ⇒ `IndexOutOfBoundsException`（实现时才发现的） | `docs/31:3597`、§8.31.4 | 生产不可达；且与同族的 `emitThinkingDelta`（有惰性建块分支）**不对称** ⇒ 加分支属投机代码 | 出现「先 `signature_delta` 后 `content_block_start`」的真事件序列 |
 
 ---
 
@@ -142,6 +151,7 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | F3 | **`_emitSessionCompactFailed`**（扩展层事件） | `docs/31:1326` | 发不发 —— 扩展层在 `docs/27 §4` 排除面内，observer 目前只保证会话事件 `compaction_end.errorMessage` |
 | F4 | A4 / A5 两道门（运行中 `/compact`、并发 prompt） | `docs/31:2502-2503` | 取证后确认是**行为改动**，不是我单方面能定的 |
 | F5 | **合并到 `main` 的时机** | —— | 我建议**现在**：见 §1「收敛路径」，无任何一项挡着合并 |
+| F6 | `ModelsJsonProvider` 钉死 baseUrl ⇒ **CLI `--base-url` 对它失效**，且注释与实现**不符** | `docs/31:3595`、§8.31.4 | 二选一：**改注释**（认下「models.json 的 baseUrl 恒赢」）还是**让 CLI 赢**（改实现，`args.baseUrl()` 提到 pinned 之前） |
 
 ---
 
@@ -162,6 +172,7 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | §8.3-6 `prepareNextTurn` 的 `context` 通道缺失 | `docs/31:474-490` | 2026-09-13 |
 | §8.21.5 重试判据白/黑名单反转 | `docs/31:1316-1321`、§8.22 | 2026-09-15（`f27b1bd`） |
 | **B2** compaction `details` 生产者恒 null（含摘要尾部 `<read-files>`/`<modified-files>`） | `docs/31:1324`、§8.30.8 | 2026-09-17，`4380796` |
+| **§8.31 P1+P2** 生产事故根因：① 适配器不跟 `model.provider()` 走（StreamFn 闭包会话 provider）② thinking `signature` 用严格必填访问器打死整轮 run | `docs/31:3457`、§8.31.8 | 2026-09-17，`fb4866d`（P2）/ `922ef4c`（P1）；**未做端到端复现**，见 §8.31.8 末 |
 | §8.15「**遗留**：B 项（延迟任务真并发 = pi 的 `Promise.all`）仍开放」 | §8.23 | 2026-09-16 —— **原文那行是过期陈述，已被 §8.23 取代**（本地已回填标记） |
 
 > 最后一条特别提一下：`docs/31:945`（以及 `:1059` / `:1117` 两处重复）写着 B 项「仍开放 / 待用户」，

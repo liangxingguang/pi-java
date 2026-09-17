@@ -3454,13 +3454,13 @@ telemetry 31 / ai 336 不动；`mvn -o clean verify` 全 reactor **BUILD SUCCESS
 
 ---
 
-### 8.31 provider 路由跟着模型走 + thinking `signature` 容忍缺失（P1/P2）—— **设计（待用户审核）**
+### 8.31 provider 路由跟着模型走 + thinking `signature` 容忍缺失（P1/P2）—— **已实施**
 
 > **来源**：生产事故。2026-09-17 22:14 web UI 报 `` `signature` is not set ``（日志见 8.31.1）。
 > **本包两条缺陷一起做**（用户裁决「P1/P2 一起」）：P1 是**触发条件的根因**（模型与协议错配），
 > P2 是**致命反应的根因**（错配之外，真实 anthropic 兼容端点也会踩）。单做 P2 ⇒ 模型仍走错协议；
 > 单做 P1 ⇒ 兼容端点/relay 的 thinking 仍会把整轮 run 打死。
-> **状态**：设计未实施 —— 按流程「设计文档落地 → 用户审核 → 才许写代码」。
+> **状态**：已实施并提交（`8.31.8`）。裁决点 ①/② 均按推荐执行。
 
 #### 8.31.0 两条缺陷的一句话与判据
 
@@ -3593,6 +3593,9 @@ return builder.emitThinkingSignature(
 | R4 | **per-model `api` 表达不出** | pi `types.ts` 的 `Model.api` 是派发键；pi-java `ModelInfo:27-37` 无该字段、`models.json` 的 `api` 在 **provider 级**（`ModelsJsonConfig:147-160`） | P1 做到「provider 级派发」即覆盖今日全部已注册 provider；单 provider 多 API（pi 的 fireworks/opencode）**今日无表达方式**，加字段是投机代码（同 §8.25.5 C1 口径） |
 | R5 | **空签名重放策略不可配** | pi 有 `Model.compat.allowEmptySignature`（`types.ts:714`；`anthropic-messages.ts:1304` 三态；`generate-models.ts:2242-2253` 给 Kimi 系打开）；pi-java `ModelInfo` 无 `compat` ⇒ 恒降级 text（`:289-293`） | 需要 catalog/compat 字段 + models.json schema 扩展 ⇒ 另立包 |
 | R6 | `ModelsJsonProvider` 钉死 baseUrl ⇒ **CLI `--base-url` 对它失效** | `ModelsJsonProvider.java:39-47`（`pinned` 无条件覆盖 `options.baseUrl()`），而注释 `:42-45` 声称「CLI --base-url 仍然适用」—— **注释与实现不符** | 本包不动 apiOptions 优先级；登记待裁决（要么改注释、要么让 CLI 赢） |
+| R7 | **初始 signature 不在 `ThinkingStart.partial` 里** | `StreamPartialBuilder:121-128 emitThinkingStart()` 先 `blocks.add(ThinkingContent(""))` 再 `snapshot()` 返回，而 `emitThinkingSignature(initial)` 在**之后**才 `blocks.set(idx, …)`（`:145-151`）⇒ 事件自己的 partial 看不到初始 signature。pi `:631-633` 是先建好带 `thinking ?? ""`/`signature ?? ""` 的块**再** push `thinking_start` | 与 R1 同根（`emitThinkingStart` 不接受初始内容），但 R7 连**已经读到的** signature 也进不去首个 partial ⇒ 要动事件形状 |
+| R8 | `emitThinkingSignature` **先于** `emitThinkingStart` ⇒ `IndexOutOfBoundsException` | `StreamPartialBuilder:145-151` 用 `Math.max(0, thinkingBlockIndex)`，`thinkingBlockIndex` 初始 -1 ⇒ 对**空** `blocks` 做 `set(0, …)`；同族的 `emitThinkingDelta`（`:131-137`）有惰性建块分支，`emitThinkingSignature` 没有 —— **两侧不对称** | 生产不可达（signature 恒跟在 content_block_start 之后）；改它要么加同样的惰性分支、要么钉死前置断言，属投机代码 |
+
 
 #### 8.31.5 验证计划（RE 先行：先证明夹具会红）
 
@@ -3629,9 +3632,63 @@ telemetry 31 / ai 336 / agent-core 450。
 2. **R1/R2 是否顺手做**（初始 thinking 文本 + `redacted_thinking`）：**推荐不做**
    —— 它们要动 `StreamPartialBuilder` 的事件形状，与本包两条缺陷不同面，另立一包更干净。
 
-#### 8.31.8 实施记录（待实施后回填）
+#### 8.31.8 实施记录（已实施）
 
-（未实施。实施后在此回填：RE 实测红/绿、测试计数、L5 实测、commit 哈希、`docs/32` 落行。）
+**提交**：设计 `f52df6b` → P2 `fb4866d`（`pi-java-ai`）→ P1 `922ef4c`（`pi-java-coding-agent`）。
+提交后分支位置：`git rev-list --left-right --count main...HEAD` = **0 behind / 105 ahead**。
+
+**RE 实测（先证红，再证绿）**
+
+| RE | 首跑（**红**，修复前） | 改后 |
+|---|---|---|
+| RE-P1 | 恰 1 红：`streamFnRoutesByModelProviderNotSessionProvider:134` —— actual `["alpha"]`（会话 provider）vs expected `["beta"]`（模型 provider），**即缺陷本身**；同文件其余 8 个用例照旧绿 | 9/9 绿 |
+| RE-P2 | 恰 2 红：`thinkingBlockWithoutSignatureStillStreams:122`、`signatureDeltaWithoutSignatureDoesNotKillTheStream:169`，报文**逐字等于生产事故**：``StreamError[reason=error, error=com.anthropic.errors.AnthropicInvalidDataException: `signature` is not set, partial=AssistantMessage[…]]`` | 4/4 绿 |
+| RE-P2b | 绿（防回归，修复前后都该绿） | 绿 |
+
+**夹具踩到的三个坑（已写进测试 javadoc，供后来者避开）**
+
+1. **SDK 的 builder 自己就拦**：`ThinkingBlock.builder().thinking("x").build()` 抛的是
+   「`` `signature` is required, but was not set ``」——**另一条**报文、来源是 builder 而非适配器
+   ⇒ 从 builder 进**测不到**被修的那一行。夹具改为 `ObjectMappers.jsonMapper().readValue(...)`
+   （线上的真实入口）。
+2. `emitThinkingStart()` 的 partial 在 `emitThinkingSignature(initial)` **之前**快照 ⇒ 断言要落在
+   `ThinkingEnd`/`ThinkingDelta` 的 partial 上（这是新登记 **R7**，见 `8.31.4`）。
+3. 只喂 `signature_delta`、不给前置 `content_block_start` ⇒ `emitThinkingSignature` 对空 `blocks`
+   做 `set(0, …)` 抛 `IndexOutOfBoundsException`（新登记 **R8**）。夹具改成**一条流共享一个
+   builder + 一组块态数组**（照 `streamInternal` 的形状），而不是每个事件一个新 builder。
+
+**回归实测**
+
+- `mvn -o clean verify`（全 reactor，含 checkstyle + spotbugs）：**BUILD SUCCESS**，5 分 58 秒。
+- 测试计数（实测）：telemetry **31** / ai **340** / agent-core **460** / session-sqlite 35 /
+  coding-agent 220 / tui 188（1 skipped）/ protocol 14 / client 2 / server 2 / web 37 /
+  evals 43（17 skipped）。
+  - ai 相对 `8.31.5` 引的基线 336 **+4**，恰等于本包新增测试文件的 4 个用例 ✅。
+  - agent-core 460 比台账基准 450 **多 10**：**与本包无关**（本包未触碰 agent-core 任何文件），
+    来自台账写成之后落地的包（§8.30/B2 等）；**未逐项追平**，如实登记。
+- **L5 差分（真跑，共 4 轮 14/14 绿）**：`clean verify` 内 1 轮 +
+  `mvn -o -pl pi-java-agent-core -am -Dtest=ConformanceTest -Dsurefire.failIfNoSpecifiedTests=false test`
+  独立 3 轮。剧本用桩 StreamFn ⇒ 「预期不动」这次**成立**（本项目两次前科，故报实测数字而非预期）。
+- ⚠️ **不带 `-am` 的独立跑会假红（本次又撞一次）**：14/14 Error，
+  `NoSuchMethodError: 'AssistantMessage AssistantMessage.withIdentity(String,String,String,Instant)'`
+  —— agent-core 解析到 `~/.m2` 里的**旧 `pi-java-ai`**。这正是 memory `jdk25-mvn-am` 记的坑；
+  **看到这条 `NoSuchMethodError` 先想 -am，不要当成回归**。
+
+**裁决落实**
+
+- 裁决点 ①：取推荐 —— 未注册 model provider ⇒ **回退会话 provider + stderr 一行警告**
+  （`[provider] unknown model provider "…"; falling back to "…"`），不新增硬失败。
+- 裁决点 ②：取推荐 —— **不做** R1/R2（初始 thinking 文本、`redacted_thinking`），另立包。
+
+**本包**未**覆盖的（如实登记）**
+
+- **未用 22:14 那次会话做端到端复现**：验证止于单元 + 差分两级；「用户再切一次
+  `teamorouter/deepseek-v4-flash` 是否不再报错」**没有被实测过**。P1 的正确性证据是
+  「适配器选择跟着模型」这一条被夹具钉住，而不是「事故会话重放通过」。
+- **事故里「第 1 个请求成功、第 2 个请求死」的差异仍未证**（`8.31.1` 第 2/3 条）：
+  当时 `--trace-payloads` 是**关**的，没有 request/response 载荷可比。下次复现需开
+  `--trace-payloads` 才能定论（是「第 1 个响应本就带 signature、第 2 个不带」，还是别的形状差异）。
+
 
 ---
 
