@@ -118,9 +118,16 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                     isToolBlock[0] = false;
                     isThinkingBlock[0] = true;
                     var start = builder.emitThinkingStart();
+                    // 签名必须**容忍缺失**（P2，docs/31 §8.31）：Anthropic 的 thinking 块其
+                    // signature 由后续 signature_delta 补，relay/兼容端点为非 Anthropic 模型
+                    // 合成思考时更可能整个流都不给。SDK 的严格访问器 signature() 会抛
+                    // AnthropicInvalidDataException("`signature` is not set") 打死整轮 run；
+                    // pi 在同一位置是 `event.content_block.signature ?? ""`
+                    // （anthropic-messages.ts:633）。_signature() 是非抛异常面：
+                    // 字段缺失即 JsonMissing ⇒ asString() 为空 ⇒ 取空串。
                     var initial = block.thinking()
-                            .map(t -> t.signature()).orElse("");
-                    if (initial != null && !initial.isEmpty()) {
+                            .map(t -> t._signature().asString().orElse("")).orElse("");
+                    if (!initial.isEmpty()) {
                         builder.emitThinkingSignature(initial);
                     }
                     return start;
@@ -142,7 +149,13 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                     return builder.emitThinkingDelta(delta.asThinking().thinking());
                 }
                 if (delta.isSignature()) {
-                    return builder.emitThinkingSignature(delta.asSignature().signature());
+                    // 同上的容忍规则（P2，docs/31 §8.31）：缺字段 ⇒ 空串，不抛。
+                    // pi 的 `block.thinkingSignature += event.delta.signature`（anthropic-messages.ts:705）
+                    // 在 JS 里会把 undefined 拼成字面量 "undefined" —— 那是 pi 的事故
+                    // （TS 类型谎报 required），这里**故意不复制**；真 Anthropic 的
+                    // signature_delta 恒带该字段，该分支不可达。
+                    return builder.emitThinkingSignature(
+                            delta.asSignature()._signature().asString().orElse(""));
                 }
                 return null;
             }
