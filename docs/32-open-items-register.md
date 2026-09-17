@@ -42,9 +42,9 @@
 | 类 | 含义 | 条数 | 谁能推进 |
 |---|---|---:|---|
 | **A** | 要**证据**才能定案（多数要先读 pi 源码） | 12 | 我（读 pi 源码 / 清点） |
-| **B** | **功能缺口**（pi 有、pi-java 无） | 7 | 我（另立包，多数需先出设计文档） |
+| **B** | **功能缺口**（pi 有、pi-java 无） | 9 | 我（另立包，多数需先出设计文档） |
 | **C** | 已裁决**不改 / 不做**，带触发条件 | 11 | 不推进，除非触发条件成立 |
-| **D** | 小账（遥测/注释级，一处一行） | 7 | 我，随时可做 |
+| **D** | 小账（遥测/注释级，一处一行） | 8 | 我，随时可做 |
 | **E** | 结构债（>500 行文件等） | 8 | 我，与功能包搭车 |
 | **F** | **待用户拍板** | 6 | **你** |
 | **G** | 已结案（**别重开**） | 20 | —— |
@@ -55,6 +55,12 @@
 > 移入 C（C11）；§8.32.2 的 P2/P3/P7 立为 **B10/B11/B12**（跨模型重放闸 / 空 text 块 / `finalError` 键），
 > P8 立为 **E8**（L5 夹具对 thinking 块不对称）；P5（行号错位）已就地更正 ⇒ 入 G。
 > 又新登记 **A12**（`PiWebServerAuthTest` 负载敏感 flake，**§8.23.7 早已记过**，非新缺陷）⇒ A 类 11→12 行。
+> **2026-09-18（包② 设计，§8.34）**：包② 取证推翻了我方**四处错引**（`appendThinkingBlock` 是 `:311-328`
+> 不是 `:295-312`、text 块闸位在 `:284-286` 不是 `:268-270`、`isSameModel` 在 `transform-messages.ts:95-98`
+> 不是 `:89`、compat 声明在 `types.ts:713-714` 不是 `:193`），并更正 **B8 的「三态」为两态**；
+> 新登记 **B13**（重放产不出 `redacted_thinking` 线格 —— `redacted()` 在生产代码**零读点**）、
+> **B14**（`transform-messages.ts` 其余四条变换）、**D8**（`AnthropicMessagesApi:299-301` 的假注释）
+> ⇒ B 类 7→9 行、D 类 7→8 行。
 > 故 B 类的「条数」不增反减是**结案**的结果，不是漏记。
 
 **收敛路径**：A 类与 F 类是真正的闸门 —— A 挡在「读 pi / 清点」上，F 挡在「你的决定」上；
@@ -95,11 +101,13 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | B5 | 宿主层：`SessionRunner` 两处 `catch (Exception)` **不接 `Error`** ⇒ `statusFuture`/`entriesFuture` 永不完成、不发 `AgentEnd`/`AgentSettled`、宿主**永久挂起** | `docs/31:2685`（§8.26.5-12 的下游） | pi 的 `handleRunFailure` 把异常**压成文本**、合成 assistant 消息、promise **resolve** —— 另一处更大的差距，另立包 |
 | B6 | content_block_start 的**初始 thinking 文本被丢弃** | `docs/31:3590`、§8.31.4 | **已实施**（§8.33 包①）⇒ 见 G 类 |
 | B7 | **`redacted_thinking` 未处理** | `docs/31:3591`、§8.31.4 | **已实施**（§8.33 包①；SDK 路由 `ContentBlock.kt:549-553` 已实证）⇒ 见 G 类 |
-| B8 | **空签名重放策略不可配**（pi 的 `Model.compat.allowEmptySignature`） | `docs/31:3594`、§8.31.4 | pi 侧三态 + `generate-models.ts:2242-2253` 给 Kimi 系打开；pi-java `ModelInfo` 无 `compat` ⇒ 需 catalog/compat 字段 + models.json schema 扩展。**被 B10 前置**（§8.33.9-P2） |
+| B8 | **空签名重放策略不可配**（pi 的 `Model.compat.allowEmptySignature`，`types.ts:713-714`） | `docs/31:3594`、§8.31.4、**§8.34** | ⚠️ **更正：行为上只有两态**，不是三态 —— `undefined` 与 `false` **完全等价**（`anthropic-messages.ts:193` 的 `?? false`），只有 `true` 不同（已实测）。启用的模型也不是「Kimi 系」而是**三处**：Fireworks 全部 anthropic-messages 模型（`generate-models.ts:1427`，无 allowlist）、Kimi Coding 全部（`:2242`/`:2253`）、Xiaomi（`:1075`，但**休眠**）。pi-java `ModelInfo` 无 `compat` 且 `ModelsJsonSchema` 会**静默吞掉**用户写的 `compat` ⇒ 需 compat 字段 + models.json schema 扩展。**被 B10 前置**。归包②，设计见 §8.34 |
 | B9 | **初始 signature 进不了 `ThinkingStart.partial`**（实现时才发现的） | `docs/31:3596`、§8.31.4 | **已实施**（§8.33 包①，与 B6 同一处改动）⇒ 见 G 类 |
-| B10 | **pi 的 `transform-messages.ts` 整段缺失**（跨模型重放闸：`isSameModel = provider && api && model.id`；跨模型丢 redacted、thinking 降级 text） | §8.32.2-P2（`docs/31:3723`） | 逐条移植 `transform-messages.ts:85-122`；**是 B8 的前置** —— 不加此闸，B8 会让跨模型重放**比今天更错**。归包② |
-| B11 | **空 text 块不丢**（重放时会把空 `TextContent` 原样发给 Anthropic） | §8.32.2-P3（`docs/31:3724`） | 照 pi `anthropic-messages.ts:1281-1282` 的 `if (block.text.trim().length === 0) continue;` 补闸；**B7 修好后**这处才可能被触发（redacted 走错分支留下的空块） |
+| B10 | **pi 的 `transform-messages.ts` 整段缺失**（跨模型重放闸：`isSameModel = provider && api && model.id`；跨模型丢 redacted、thinking 降级 text） | §8.32.2-P2（`docs/31:3723`） | 移植 `transform-messages.ts:95-116` 的 **thinking 五分支**（`:95-98` 判据 + `:101-116` 分支）；**设计见 §8.34**；**是 B8 的前置** —— 不加此闸，B8 会让跨模型重放**比今天更错**。归包② |
+| B11 | **空 text 块不丢**（重放时会把空 `TextContent` 原样发给 Anthropic） | §8.32.2-P3（`docs/31:3724`） | 照 pi `anthropic-messages.ts:1282` 的 `if (block.text.trim().length === 0) continue;` 补闸（pi-java 无闸处在 `AnthropicMessagesApi:284-286`）；**设计见 §8.34**。归包② |
 | B12 | **`auto_retry_end` 成功路多写 `"finalError":null`** | §8.32.2-P7（`docs/31:3730`） | pi 侧 `undefined` 被 `JSON.stringify` 省略；pi-java `JsonEventMapper.java:94-99` 无条件 `put`。同文件 `:110-113` 已有「null ⇒ 省略」先例 ⇒ 照抄。归包④ |
+| B13 | **重放路径产不出 `redacted_thinking` 线格** —— pi-java 全仓没有代码路径能发出该块 | §8.34.2-2（`docs/31:4201`） | `redacted()` 在 `pi-java-ai` 生产代码**零读点** ⇒ redacted 块落进 `AnthropicMessagesApi:323-327` 的有签名分支，被当作**带签名的 thinking 块**发出、签名位放的是**加密载荷**。pi 的对照是 `anthropic-messages.ts:1289-1295`。归包② |
+| B14 | **`transform-messages.ts` 的其余四条变换全部缺失**（一条聚合行） | §8.34.3（`docs/31:4242`） | ① 图片降级为占位文本（`transform-messages.ts:35-57`，按 `model.input` 判定）；② 跨模型剥离 toolCall 的 `thoughtSignature`（`:131-134`）；③ 跨模型归一 toolCall id（`:136-142`）；④ **孤儿 toolCall 合成 `toolResult`**（`:158-220`「No result provided」）＋ 跳过 `error`/`aborted` 助手消息（`:194-197`）。④ 是**真功能**、其余三条是清理 ⇒ 不塞进包②（会让 200 行变 800 行），另立 |
 
 ---
 
@@ -132,6 +140,7 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | D5 | **截断兜底生成器**下那条「无事件、无 token」的跨度形状**无测试** | `docs/31:3234` |
 | D6 | `SummaryGenerator.java:12` javadoc「until Phase 6 wires the real summarization flow」**已过期**（生产装的是 `LlmSummaryGenerator`） | 主源码 |
 | D7 | `client` / `protocol` / `server` 三个 `package-info.java` 写「Phase 6 will implement…」—— 三个模块都已实现 | 主源码 |
+| D8 | `AnthropicMessagesApi.java:299-301` 的注释写「ThinkingContent is dropped: replaying thinking blocks requires the original signature…」—— 而**它下面 `:288` 正是在重放**（生产源码里的假陈述） | §8.34.2-7（`docs/31:4227`） |
 
 ---
 
