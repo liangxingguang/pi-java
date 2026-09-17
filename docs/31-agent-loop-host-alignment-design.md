@@ -3241,12 +3241,13 @@ agent-core **450**（本包 +2）。
 
 ---
 
-### 8.30 压缩产物的文件清单 `details`（B2）—— **设计（待用户审核）**
+### 8.30 压缩产物的文件清单 `details`（B2）—— **已实施（2026-09-17，设计经用户审核通过；实施记录见 8.30.8）**
 
 > 类别 **B（功能缺口：pi 有、pi-java 无）**。出处：`docs/32 §3 B2`，原登记在本文 `§8.21.5`。
 > 判据仍是**行为**：落库的 `Entry.Compaction` 形状 + 摘要文本的尾部块。
 > **本节是设计，尚未写码** —— 审核通过后实施，实施记录续在 §8.30.x，同时把本行抬头改成
 > 「**已实施（日期，设计经用户审核通过；实施记录见 8.30.x）**」。
+> → **2026-09-17 已完成**：抬头已改，实施记录见 §8.30.8（含三条 RE 与一处**预测不符的更正**）。
 
 #### 8.30.1 缺口的确切形状
 
@@ -3397,6 +3398,59 @@ harness 那份只做形状守卫。pi-java 的 `Entry.Compaction` **没有 `from
 
 **归档动作**（实施后做，`docs/32 §10.1`）：本包在 §8.30 落地后，于 `docs/32` 的 B2 行按
 「改行不改号」补指向，并在 G 类留一行；§0.1 的「已复核」小节列表需加上 `§8.30`。
+
+#### 8.30.8 实施记录（2026-09-17）
+
+**commit**：`4380796`（`feat(agent-core): 压缩产物写文件清单 details 与摘要尾部两块`，
+4 文件 +423/-2）。文档侧归档（本节与 `docs/32`）是其后那个 `docs` 提交。
+
+**落地内容**（`docs/31` 之外只碰了 `docs/32` 的登记）：
+
+| 文件 | 变化 |
+|---|---|
+| `compaction/FileOperations.java`（新，25 行） | 三个 `LinkedHashSet` 累加器 |
+| `compaction/CompactionFiles.java`（新，183 行） | `collect` / `extractFromMessage` / `carryOver` / `addPaths` / `compute` / `format` + 内嵌 `record Lists`（`formatted()` / `details()`） |
+| `compaction/CompactionService.java`（改 6 行） | `collect` → 摘要尾部拼 `formatted()`、`details` 取 `lists.details()` |
+| `compaction/CompactionFileOpsTest.java`（新，209 行，10 条用例） | 下面的表 |
+
+**API 与设计的一处偏离**：设计写的是 `extract`/`compute`/`format`/`details` 四个顶层方法，
+实现收成 `collect(messages, transcript) → Lists` 一个入口，`formatted()`/`details()` 挂在
+`Lists` 上。理由：两个产物**同源**（同一次抽取），拆成四个方法会让调用方自己记住「这两处必须
+用同一份清单」—— 那是把不变量交给调用方。语义逐条不变。
+
+**三条 RE 的实测**（每条都先停掉一处真实现，跑完再复原）：
+
+| RE | 停掉什么 | 预期 | 实测 |
+|---|---|---|---|
+| RE-1 | `CompactionService` 的生产者（还原成 `null` + 裸文本） | 4/5/6 红 | **10/10 全红**（2 failures + 8 errors，errors 是 `details()` 为 null 的 NPE）✔ 有牙 |
+| RE-2 | `CompactionFiles.collect` 的累积回灌 | **恰 1 红** | **2 红** —— `fileOpsCarryOverAcrossSuccessiveCompactions` + `malformedPreviousDetailsIsIgnored` |
+| RE-3 | `compute` 的 `read ∖ modified` 差分 | 1 红 | **恰 1 红**：`aPathBothReadAndEditedCountsAsModifiedOnly` ✔ |
+
+⚠️ **RE-2 与预测不符，以实测为准**：设计说「恰一红」，实际是两条 —— 因为
+`malformedPreviousDetailsIsIgnored`（8.30.6 里未单列，实现时补的）**也是**一条依赖「读上一份
+details」的用例。要守的性质没变，但提法要改准确：**停掉累积回灌会打死恰好那两条读上一份
+details 的用例，其余 8 条一条不动** —— 这才是「累积没有被别的断言顺带覆盖」的证据。
+预测错的原因是设计时把这条额外夹具（形状守卫）算成了"抽取"侧，实际它走的是回灌侧。
+
+**一条工具链坑（本轮踩到，记下来）**：`mvn -o -pl pi-java-agent-core` **不带 `-am`** 时，
+`pi-java-ai` 从本地仓库 `D:/repository` 取，而那份构件比工作树的 `Message.AssistantMessage`
+**旧**（3 参构造 vs 9 参）⇒ `SessionJson` / `MessageJsonCodec` 编译失败，报的是**假红**。
+memory `jdk25-mvn-am` 记的「假绿/假红」两向都成立，本次撞的是后一向的**编译期**形态
+（此前记的是测试期形态）：**该带 `-am` 的场景必须带**。
+
+**回归**：`mvn -o -pl pi-java-agent-core -am test` 绿 —— agent-core **460**（本包 +10），
+telemetry 31 / ai 336 不动；`mvn -o clean verify` 全 reactor **BUILD SUCCESS**（14 个模块），
+警告只有既有的 shade 重叠资源。**L5 差分 14/14 不动**（与设计预期一致：剧本不压缩）。
+
+**未覆盖 / 留白**：
+
+- **`Entry.Compaction.details` 的落盘往返无单测**：本轮钉的是 `CompactionResult.details`
+  的产出，`EntryJsonCodec:63` 的编解码由既有 JSONL 一致性组覆盖形状，但**没有**一条用例
+  断言「压缩产物的 JSONL 行里 details 是两键对象」。要补得靠一条端到端压缩夹具。
+- 钩子写下的 compaction entry 会被回灌（§8.30.4 登记的差异）**无测试** —— 今天无该生产者。
+- 摘要属于「被丢弃前缀」的**边界**：本包只看 `discardedMessages`（pi 的
+  `messagesToSummarize`）；pi 在 split turn 下还会再抽 `turnPrefixMessages`
+  （`compaction.ts:691-695`）—— 那是 (d) 那包的事，此处**不预埋**。
 
 ---
 
