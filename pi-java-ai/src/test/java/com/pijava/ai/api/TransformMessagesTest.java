@@ -37,12 +37,12 @@ class TransformMessagesTest {
     private static final String API = "anthropic-messages";
 
     private static Message.AssistantMessage sameModel(ContentBlock... blocks) {
-        return new Message.AssistantMessage(List.of(blocks), "end_turn", null,
+        return new Message.AssistantMessage(List.of(blocks), "stop", null,
             API, TARGET.provider(), TARGET.modelName(), null, null, null);
     }
 
     private static Message.AssistantMessage foreignModel(ContentBlock... blocks) {
-        return new Message.AssistantMessage(List.of(blocks), "end_turn", null,
+        return new Message.AssistantMessage(List.of(blocks), "stop", null,
             API, "teamorouter", "deepseek-v4-flash", null, null, null);
     }
 

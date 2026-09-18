@@ -32,7 +32,7 @@ class JsonlSessionStorageTest {
         return new ProvisionedEntry<>(new Entry.Message(id, 0, null, null,
             new Message.AssistantMessage(
                 List.of(new ContentBlock.ThinkingContent(text, signature, redacted)),
-                "end_turn", null, null, null, null, null, null, null), null));
+                "stop", null, null, null, null, null, null, null), null));
     }
 
     // ══════════════════════════════════════════════════════════════════

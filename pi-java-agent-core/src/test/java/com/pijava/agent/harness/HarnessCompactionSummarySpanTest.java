@@ -96,13 +96,13 @@ class HarnessCompactionSummarySpanTest {
             var text = summarization ? SUMMARY_TEXT : "assistant reply";
             var partial = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent(text)))
-                .withStopReason("end_turn");
+                .withStopReason("stop");
             return StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.TextEnd(0, text, partial),
                 new StreamEvent.UsageInfo(SUMMARY_INPUT_TOKENS, SUMMARY_OUTPUT_TOKENS, partial,
                     Usage.of(SUMMARY_INPUT_TOKENS, SUMMARY_OUTPUT_TOKENS)),
-                new StreamEvent.StreamDone("end_turn", null, partial)));
+                new StreamEvent.StreamDone("stop", null, partial)));
         };
     }
 

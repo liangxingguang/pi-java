@@ -53,7 +53,7 @@ class AnthropicMessagesApiBuildParamsTest {
      * —— 名字与覆盖面对不上，正是 §8.34.5-a 的「夹具没牙」。</p>
      */
     private static Message.AssistantMessage assistant(ContentBlock... blocks) {
-        return new Message.AssistantMessage(List.of(blocks), "end_turn", null,
+        return new Message.AssistantMessage(List.of(blocks), "stop", null,
             "anthropic-messages", "anthropic", "claude-sonnet-5", null, null, null);
     }
 

@@ -59,14 +59,14 @@ class AnthropicThinkingReplayTest {
 
     /** An assistant message whose identity matches {@link #TARGET} (same-model replay). */
     private static Message.AssistantMessage sameModel(ContentBlock... blocks) {
-        return new Message.AssistantMessage(List.of(blocks), "end_turn", null,
+        return new Message.AssistantMessage(List.of(blocks), "stop", null,
             "anthropic-messages", TARGET.provider(), TARGET.modelName(),
             null, null, null);
     }
 
     /** An assistant message stamped by a different provider/model. */
     private static Message.AssistantMessage foreignModel(ContentBlock... blocks) {
-        return new Message.AssistantMessage(List.of(blocks), "end_turn", null,
+        return new Message.AssistantMessage(List.of(blocks), "stop", null,
             "anthropic-messages", "teamorouter", "deepseek-v4-flash",
             null, null, null);
     }

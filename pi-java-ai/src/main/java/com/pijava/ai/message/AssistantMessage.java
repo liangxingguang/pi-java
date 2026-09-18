@@ -29,8 +29,11 @@ import com.pijava.ai.stream.StreamEvent;
  * @param id           unique message identifier (generated on first event)
  * @param content      current content blocks (text, thinking, tool calls)
  * @param usage        token usage so far (may be null early in the stream)
- * @param stopReason   final stop reason ("end_turn", "stop", "tool_use",
- *                     "error", "length", "aborted"), or null if still streaming
+ * @param stopReason   final stop reason (pi {@code StopReason}: "stop", "tool_use",
+ *                     "length", "error", "aborted"), or null if still streaming.
+ *                     ⚠️ **没有 "end_turn"** —— 那是 Anthropic 线格上的取值，pi 在
+ *                     {@code mapStopReason}（{@code anthropic-messages.ts:1467}）里就翻成了
+ *                     {@code "stop"}，故它从不进消息（docs/31 §8.35.14 裁决 D2／提交 ③）
  * @param api          provider protocol discriminator (pi {@code Model.api}),
  *                     or null when the producer does not know it
  * @param provider     provider name (pi {@code AssistantMessage.provider}), or null

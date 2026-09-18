@@ -185,11 +185,11 @@ class HarnessTelemetryThreadAttributionTest {
             var text = summarization ? "[summary of the discarded prefix]" : "assistant reply";
             var partial = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent(text)))
-                .withStopReason("end_turn");
+                .withStopReason("stop");
             return StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.TextEnd(0, text, partial),
-                new StreamEvent.StreamDone("end_turn", null, partial)));
+                new StreamEvent.StreamDone("stop", null, partial)));
         };
     }
 

@@ -196,7 +196,9 @@ public sealed interface StreamEvent {
 
     /**
      * The stream finished normally.
-     * @param reason stop reason: "end_turn", "stop", "tool_use", "length"
+     * @param reason stop reason: "stop", "tool_use", "length"（pi {@code StopReason} 的词表；
+     *               ⚠️ 不含 "end_turn" —— 那是 Anthropic 线格取值，车道在映射时就翻了，
+     *               见 {@code AssistantMessage#stopReason}）
      * @param usage final token usage (may be null)
      * @param partial final complete assistant message snapshot
      */

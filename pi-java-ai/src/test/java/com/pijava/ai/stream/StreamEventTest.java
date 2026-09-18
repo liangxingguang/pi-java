@@ -143,10 +143,10 @@ class StreamEventTest {
     @Test
     void streamDone() {
         var usage = new StreamEvent.UsageInfo(200, 100, null);
-        var partial = EMPTY.withStopReason("end_turn");
-        var event = new StreamEvent.StreamDone("end_turn", usage, partial);
+        var partial = EMPTY.withStopReason("stop");
+        var event = new StreamEvent.StreamDone("stop", usage, partial);
 
-        assertThat(event.reason()).isEqualTo("end_turn");
+        assertThat(event.reason()).isEqualTo("stop");
         assertThat(event.usage()).isSameAs(usage);
         assertThat(event.partial()).isSameAs(partial);
     }
