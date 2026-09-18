@@ -18,6 +18,7 @@ import com.google.genai.types.Tool;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.api.TransformMessages;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -65,7 +66,11 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
         var builder = new StreamPartialBuilder();
         String finishReason = null;
         try {
-            var contents = toGoogleContents(request.messages());
+            // 共享预通道先于本车道的映射跑（pi google-shared.ts:138 在 contents 转换前调
+            // transformMessages）—— 跨模型重放的 thinking 块在此降级为文本，
+            // toGoogleContents 的 ThinkingContent 分支（丢块）才不会把它整段吞掉。
+            var contents = toGoogleContents(TransformMessages.apply(
+                request.messages(), request.modelId(), apiName()));
             var config = buildConfig(request);
 
             publisher.submit(builder.emitStart());

@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.api.TransformMessages;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.http.PiHttpClient;
 import com.pijava.ai.message.ContentBlock;
@@ -206,7 +207,11 @@ public final class MistralConversationsApi extends AbstractChatApi {
             system.put("content", systemPrompt);
             messages.add(system);
         }
-        request.messages().stream().<Map<String, Object>>map(msg -> {
+        // 共享预通道先于本车道的映射跑（pi mistral-conversations.ts:139 在消息转换前调
+        // transformMessages）—— 本车道的 extractText 只收 TextContent，
+        // 不过闸则跨模型重放的 thinking 文本无声消失。
+        TransformMessages.apply(request.messages(), request.modelId(), apiName())
+            .stream().<Map<String, Object>>map(msg -> {
             var m = new HashMap<String, Object>();
             switch (msg) {
                 case Message.UserMessage(var content) -> {
