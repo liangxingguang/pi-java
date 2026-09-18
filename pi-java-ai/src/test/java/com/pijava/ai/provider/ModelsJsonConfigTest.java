@@ -192,6 +192,38 @@ class ModelsJsonConfigTest {
         assertThat(model.compat()).isEqualTo(ModelCompat.of(true));
     }
 
+    /**
+     * <b>B19</b>：{@code compat.requiresReasoningContentOnAssistantMessages} 从 models.json 读进
+     * {@link com.pijava.ai.catalog.ModelCompat}，且**三态**原样保留。
+     *
+     * <p>与 {@code OpenAICompletionsReasoningReplayTest.explicitCompatFalseDisablesTheEmptyFill}
+     * 分工：那条钉**行为**（显式 false 关掉回填），这条钉**入口**（文件里写的 false 真的变成
+     * {@code FALSE} 而不是被吞成「没写」）。两者都会红，但红的含义不同 —— 入口若把
+     * {@code null} 与 {@code false} 归一，行为侧是怎么也测不出来的。</p>
+     */
+    @Test
+    void readsRequiresReasoningContentFromCompatBlock() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "openai-completions",
+              "models": [
+                {"id": "m1", "compat": {"requiresReasoningContentOnAssistantMessages": false}},
+                {"id": "m2"}
+              ]
+            }}}
+            """);
+
+        var explicit = config.catalog().find(ModelId.of("relay", "m1")).orElseThrow();
+        assertThat(explicit.compat().requiresReasoningContentOnAssistantMessages()).isFalse();
+        // ⚠️ 不能写成 isEqualTo(false) 的地方：null 与 false **不是一回事** ——
+        // null = 按 provider/baseUrl 自动判（three-state，见 ModelCompat 的 javadoc）。
+        assertThat(explicit.compat().requiresReasoningContentOnAssistantMessages()).isNotNull();
+
+        var absent = config.catalog().find(ModelId.of("relay", "m2")).orElseThrow();
+        assertThat(absent.compat().requiresReasoningContentOnAssistantMessages()).isNull();
+    }
+
     @Test
     void missingApiThrowsWithProviderId() {
         var config = write("""

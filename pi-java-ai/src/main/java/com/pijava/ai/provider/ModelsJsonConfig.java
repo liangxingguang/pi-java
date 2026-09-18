@@ -214,14 +214,22 @@ public final class ModelsJsonConfig {
     /**
      * Map a models.json {@code compat} block onto {@link ModelCompat}.
      *
-     * <p>An absent block, or an absent key inside it, both mean {@link ModelCompat#NONE} —
-     * pi normalizes with {@code ?? false} ({@code anthropic-messages.ts:193}), so there is no
-     * third state to preserve (docs/31 §8.34.4 决策 3).</p>
+     * <p>{@code allowEmptySignature} is normalized — an absent block, or an absent key inside it,
+     * both mean {@code false} (pi {@code anthropic-messages.ts:193} normalizes with
+     * {@code ?? false}), so there is no third state to preserve (docs/31 §8.34.4 决策 3).</p>
+     *
+     * <p>⚠️ {@code requiresReasoningContentOnAssistantMessages} is **not** normalized the same way:
+     * it stays three-state (absent ⇒ {@code null}), because its absent meaning is "detect from the
+     * provider/baseUrl" and only an explicit value overrides that (pi's {@code getCompat} is
+     * {@code explicit ?? detected}, {@code openai-completions.ts:1643}). Collapsing {@code null}
+     * into {@code false} here would silently disable the deepseek replay path.</p>
      */
     private static ModelCompat compatOf(CompatDef def) {
-        if (def == null || def.allowEmptySignature() == null) {
+        if (def == null) {
             return ModelCompat.NONE;
         }
-        return ModelCompat.of(def.allowEmptySignature());
+        return new ModelCompat(
+            def.allowEmptySignature() != null && def.allowEmptySignature(),
+            def.requiresReasoningContentOnAssistantMessages());
     }
 }

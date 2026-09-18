@@ -59,10 +59,22 @@ public final class ModelsJsonSchema {
      * are still ignored — that is deliberate: it lets a pi models.json round-trip, and it is
      * safer than turning {@code ignoreUnknown} off globally (which would make any typo in a
      * user's models.json a hard error).</p>
+     *
+     * @param allowEmptySignature whether a thinking block may be replayed with an empty signature
+     *                            (Anthropic lane). Absent ⇒ {@code false}
+     * @param requiresReasoningContentOnAssistantMessages whether assistant history must always
+     *                            carry {@code reasoning_content}, filled with {@code ""} when
+     *                            there is no reasoning to send (pi
+     *                            {@code openai-completions.ts:1356-1362}). ⚠️ **Three-state**:
+     *                            absent ⇒ auto-detect from provider/baseUrl, and only an explicit
+     *                            value overrides the detection (pi's {@code getCompat} is
+     *                            {@code explicit ?? detected})
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record CompatDef(
-        @JsonProperty("allowEmptySignature") Boolean allowEmptySignature
+        @JsonProperty("allowEmptySignature") Boolean allowEmptySignature,
+        @JsonProperty("requiresReasoningContentOnAssistantMessages")
+        Boolean requiresReasoningContentOnAssistantMessages
     ) {}
 
     /** Per-million-token pricing. */
