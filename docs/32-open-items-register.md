@@ -42,7 +42,7 @@
 | 类 | 含义 | 条数 | 谁能推进 |
 |---|---|---:|---|
 | **A** | 要**证据**才能定案（多数要先读 pi 源码） | 12 | 我（读 pi 源码 / 清点） |
-| **B** | **功能缺口**（pi 有、pi-java 无） | 9 | 我（另立包，多数需先出设计文档） |
+| **B** | **功能缺口**（pi 有、pi-java 无） | 10 | 我（另立包，多数需先出设计文档） |
 | **C** | 已裁决**不改 / 不做**，带触发条件 | 11 | 不推进，除非触发条件成立 |
 | **D** | 小账（遥测/注释级，一处一行） | 8 | 我，随时可做 |
 | **E** | 结构债（>500 行文件等） | 8 | 我，与功能包搭车 |
@@ -61,6 +61,10 @@
 > 新登记 **B13**（重放产不出 `redacted_thinking` 线格 —— `redacted()` 在生产代码**零读点**）、
 > **B14**（`transform-messages.ts` 其余四条变换）、**D8**（`AnthropicMessagesApi:299-301` 的假注释）
 > ⇒ B 类 7→9 行、D 类 7→8 行。
+> **2026-09-18（包② 开工侦察）**：6 条线格夹具**先红证毕**（`Tests run: 12, Failures: 6`，逐条 actual 见 §8.34.5）；
+> 新登记 **B15**（扩展开启在生产上不可达 —— 「目录元数据 → 请求路径」通道整体缺失，`compat` 与
+> `thinkingLevelMap` 是同一断链的两个受害者）⇒ B 类 9→10 行；证伪点 2 **结论反转**
+> （pi 的 trim 不对称**不可观察** ⇒ 不照抄，见 §8.34.6-2）。
 > 故 B 类的「条数」不增反减是**结案**的结果，不是漏记。
 
 **收敛路径**：A 类与 F 类是真正的闸门 —— A 挡在「读 pi / 清点」上，F 挡在「你的决定」上；
@@ -108,6 +112,7 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | B12 | **`auto_retry_end` 成功路多写 `"finalError":null`** | §8.32.2-P7（`docs/31:3730`） | pi 侧 `undefined` 被 `JSON.stringify` 省略；pi-java `JsonEventMapper.java:94-99` 无条件 `put`。同文件 `:110-113` 已有「null ⇒ 省略」先例 ⇒ 照抄。归包④ |
 | B13 | **重放路径产不出 `redacted_thinking` 线格** —— pi-java 全仓没有代码路径能发出该块 | §8.34.2-2（`docs/31:4201`） | `redacted()` 在 `pi-java-ai` 生产代码**零读点** ⇒ redacted 块落进 `AnthropicMessagesApi:323-327` 的有签名分支，被当作**带签名的 thinking 块**发出、签名位放的是**加密载荷**。pi 的对照是 `anthropic-messages.ts:1289-1295`。归包② |
 | B14 | **`transform-messages.ts` 的其余四条变换全部缺失**（一条聚合行） | §8.34.3（`docs/31:4242`） | ① 图片降级为占位文本（`transform-messages.ts:35-57`，按 `model.input` 判定）；② 跨模型剥离 toolCall 的 `thoughtSignature`（`:131-134`）；③ 跨模型归一 toolCall id（`:136-142`）；④ **孤儿 toolCall 合成 `toolResult`**（`:158-220`「No result provided」）＋ 跳过 `error`/`aborted` 助手消息（`:194-197`）。④ 是**真功能**、其余三条是清理 ⇒ 不塞进包②（会让 200 行变 800 行），另立 |
+| B15 | **扩展开启（extended thinking）在生产上不可达** —— 目录的 `reasoning` 标记永远传不到请求 | §8.34.4-决策 5 | 链路逐段实测：`models.json` 的 `reasoning:true` 只落成 `ModelCapability.THINKING`（`ModelsJsonConfig:191-193`），`thinkingLevelMap` 硬写 `empty()`（`:208`）；`HarnessConfig.thinkingLevelMap` 默认 `empty()`（`:159`）且 `Builder.thinkingLevelMap` **零主源调用者**；`forLevel` 在空 map 上**恒返回 `ThinkingConfig.OFF`**（`ThinkingLevelMap:26-34`）⇒ `DefaultProviders:111-113` 门恒假 ⇒ `extra` 永无 `thinking.budgetTokens` ⇒ `AnthropicMessagesApi:269-276` 永不发 `thinking`。**`ThinkingLevelMap.of(` 亦只有测试调用者** ⇒ 非空 map 在生产上**不可构造**。根因＝「**目录元数据 → 请求路径**」这条通道**整体缺失**（B8 的 `compat` 是同一断链的**第二个**受害者）⇒ 两者应合为**一次**投送修复。**它改变「发什么请求」**（比包② 重）⇒ 须**自己一包**。⚠️ `StreamSimple:44` 虽手持 `ModelInfo`，但**生产上是死的**（3 个调用点全在 `StreamSimpleTest`）—— 别把它当接缝 |
 
 ---
 

@@ -4263,42 +4263,130 @@ at least 挂到 Anthropic 与 pi-messages 两条**真重放签名**的车道；G
 **决策 4 —— 跨模型的 redacted 是「丢」还是「降级 text」？** 照 pi：**丢**（`:105`，无降级分支）。
 这条反直觉（文本还在，为何不降级），但它是 pi 的**明文选择**（注释给了理由：不透明密文跨模型无效）。
 
+**决策 5（§8.34.10 侦察后新增，**2026-09-18 已裁**）—— `compat` 怎么从目录走到适配器？**
+
+> 这一条**不在**原设计的 A–E 里：原设计只定了 `ModelCompat` 的**形状**（决策 2），
+> 没定**投送路径**。侦察发现「适配器拿不到 `ModelInfo`」是真的断链，故补此决策。
+
+**实测的断链**（§8.34.10-6）：活路径上**只有 `ModelId`**，一路到底都是：
+`AgentSession:267`（`resolve` 返回 `ModelId<?>`）→ `HarnessConfig.model:76`（`ModelId<?>`）
+→ `ExecutionContext.model:36`（`Supplier<ModelId<?>>`）→ `PiLoop.Config.model:245`
+→ `PiLoopRunner:214` → `PayloadRecordingStreamFn:97` → `DefaultProviders:91` lambda
+→ `StreamRequest:117`。harness 里**没有任何** `ModelInfo`／`ModelCatalog`。
+⚠️ `StreamSimple:44` 确实拿着 `ModelInfo`，但**它在生产上是死的**（3 个调用点全在
+`StreamSimpleTest`，主源零调用者）—— 它**不是**可用接缝，别被它骗。
+
+**三个候选**：
+
+| | 做法 | 代价 | 评价 |
+|---|---|---|---|
+| **(A)** | `StreamRequest` 加第 8 组件 `ModelCompat compat`（**保留 7 参便捷构造器** ⇒ 测试零改签）；取数点在 `DefaultProviders.streamBlocking`（`providers` 在其闭包内 ⇒ `provider.builtinModels().find(model)`） | `pi-java-ai` 2 文件 + `pi-java-coding-agent` 1 文件 | **推荐** |
+| (B) | 走 `extra` 通道（`"compat.allowEmptySignature"`），与 `thinking.budgetTokens` 同形 | 零签名改动 | 非类型化；且那个"同形先例"本身是**休眠**的（见下） |
+| (C) | 学 `contextWindow` 的先例（`HarnessConfig:81-82` 的 `ToIntFunction<ModelId<?>>`，宿主层 `AgentSession:360` 注入 `models::contextWindow`） | **12 个主源文件 + ~34 个测试文件** | 最"正统"但要动 `StreamFn` 签名；与包② 收益不成比例 |
+
+**推荐 (A)**：类型安全、测试零改签、把 `compat` 放在「**目标模型的属性**」这个语义位置上
+（与 pi 的 `model.compat` **同位**，而不是折成一堆散键）。**且一次修好同一接缝上的四个 compat 键**
+—— 包③/④ 要的 `supportsStrictTools`／`supportsToolReferences`／`deferredToolsMode`
+全落进同一个字段，不必各修一次。
+
+**顺带发现（新登记 B15，**不在本包**）**：同一个断链让**扩展开启在生产上不可达**。
+`models.json` 的 `reasoning:true` 只落成 `ModelCapability.THINKING`（`ModelsJsonConfig:191-193`），
+而 `thinkingLevelMap` 硬写 `empty()`（`:208`）；`HarnessConfig.thinkingLevelMap` 默认 `empty()`（`:159`）
+且 `Builder.thinkingLevelMap` **零主源调用者**；`forLevel` 在空 map 上**恒返回 `ThinkingConfig.OFF`**
+（`ThinkingLevelMap:26-34`）⇒ `DefaultProviders:111-113` 门恒假 ⇒ `extra` 永无
+`thinking.budgetTokens` ⇒ `AnthropicMessagesApi:269-276` 永不发 `thinking` 配置。
+**`ThinkingLevelMap.of(` 也只有测试调用者** ⇒ 非空 map 在生产上**不可构造**。
+⇒ 根因不是某处写错，是**「目录元数据 → 请求路径」这个通道整体缺失**；
+`compat` 只是它的第二个受害者。B15 需要**自己的设计包**（它改变**发什么请求**，比本包重）。
+
+**裁决（用户，2026-09-18）＝ (A) 的加强版：`StreamRequest` 带整个 `ModelInfo`**，
+不是窄 `ModelCompat` 字段。理由：一步到位 —— `compat` 与 `thinkingLevelMap`（B15）**共用同一载体**，
+且适配器拿到的是**目标模型的完整元数据**，正是 pi 的形状（pi 的请求构建器本来就收
+`model: Model<TApi>`，`compat` 只是它上面一个可选字段）。
+
+**落地形状（让「改语义」不炸读取面）**：`StreamRequest` 第 1 组件由 `ModelId<?>` 改为 `ModelInfo`，**同时给**：
+
+- **7 参便捷构造器**（收 `ModelId<?>` ⇒ 内部合成 `ModelInfo.minimal(id)`）⇒ **17 个测试构造点与
+  evals 套件零改签**（构造面 `new StreamRequest(` 实测 17 测试 + 3 主源）；
+- **`modelId()` 便捷访问器** ⇒ 22 处 `.model()` 读数（**10 个文件**，全部只要 `.provider()`/`.modelName()`）
+  **机械替换**为 `modelId()`，可 sed；
+- 取数点 `DefaultProviders.streamBlocking`：`provider.builtinModels().find(model)`
+  （`providers` 在该 lambda 闭包内），**查不到则回落 `ModelInfo.minimal(modelId)`**
+  ⇒ 保住今天「任意 `ModelId` 都收」的宽容度，**线上线格零变化**（`modelId()` 与原 `model` 逐字段相同）。
+
+⚠️ **给 B14 留的话（图片降级那条）**：合成出来的 `ModelInfo` 的 `capabilities` 是**空集**，
+与「这个模型确实不支持图片」**不可区分** ⇒ B14 读 `model.input` 判定时必须把「**未知**」与
+「**不支持**」分开，否则目录未命中的模型会被**误降级**掉图片。
+
 #### 8.34.5 夹具计划（**先红后绿**；一条夹具一个断言）
 
 ⚠️ **吸取包① 的两次教训**：**不许**把两条断言塞进一条测试（后一个的红会被前一个挡住），
 **不许**夹具后写（包① 的 P4 被迫用 `git stash` 补红）。
 
-| # | 夹具 | 期望的**红** |
-|---|---|---|
-| P2-a1 | 跨模型 + redacted ⇒ 出参**不含**该块 | 现状：**含**（且是错误线格） |
-| P2-a2 | 同模型 + redacted ⇒ 线格是 `redacted_thinking` 且 `data` == 载荷（B13） | 现状：`ofThinking(...signature=载荷)` |
-| P2-b1 | 同模型 + 有签名 + **空文本** ⇒ 仍是 thinking 块（文本可空） | 现状：被 `:315-317` **丢掉**（`text.isBlank()`） |
-| P2-c1 | 有签名 + 空文本 + **跨模型** ⇒ 丢（别把 b 的豁免漏给跨模型） | 现状：也丢（**可能会绿** ⇒ 视为回归门，如实标注） |
-| P2-d1 | 跨模型 + 无签名 + 非空文本 ⇒ 降级 `text` | 现状：降级（**会绿** ⇒ 回归门） |
-| P2-d2 | 同模型 + 无签名 + 非空文本 ⇒ **保留为 thinking**（现状会降级） | 现状：降级 text |
-| B8-1 | `ModelCompat.allowEmptySignature=true` + 同模型 + 无签名 ⇒ 出参是 `{type:"thinking",signature:""}` | 现状：降级 text |
-| B8-2 | 同键缺席 / `false` ⇒ 两者行为**相同**（钉死「两态」） | 现状：无法表达 |
-| B8-3 | models.json 写 `compat":{"allowEmptySignature":true}` ⇒ 读到 `ModelInfo.compat()` | 现状：**静默丢**（这是 §8.34.2-6 的实测转夹具） |
-| P3-1 | 助手消息含一条空白 text 块 ⇒ 出参**不含**该块 | 现状：含空块 |
-| P3-2 | 该消息**只剩**空块 ⇒ 整条消息不出（pi `:1331`） | 现状：发空块消息 |
+⚠️ **第三条规则（§8.34.10-4 实测推出来的）**：钉**闸**的夹具**断言 `TransformMessages` 的输出**，
+**不许断言线格** —— 在 Anthropic 车道上，闸的四条非 redacted 分支**产出的线格与「跳过闸」完全相同**
+（结构性惰性），断言线格会绿、且绿的原因与本次修法无关。
+**只有 redacted 那两条（P2-a1/P2-a2）与 B8/P3 可以打线格。**
 
-> 「**会绿**」两条（P2-c1 / P2-d1）老实标注为**回归门**而非 RE 证据 —— 包① 的
-> `ContentBlockJsonTest` 已经吃过一次这个口径。
+| # | 夹具（方法名） | 期望出参（线格压成 `类型:载荷`） | 现状（**实测**） | 判定 |
+|---|---|---|---|---|
+| 1 | `redactedSameModelReplaysAsRedactedThinking` | `["text:hi","redacted:opaque-payload"]` | `["text:hi","thinking:opaque-payload"]` | 🔴 **B13**（P2-a2） |
+| 2 | `redactedCrossModelIsDropped` | `["text:hi"]` | `["text:hi","thinking:opaque-payload"]` | 🔴 P2-a1 |
+| 3 | `signatureWithTextCrossModelDowngradesToText` | `["text:hi","text:reasoning body"]` | `["text:hi","thinking:sig-abc"]` | 🔴 闸 (e) |
+| 4 | `signatureWithBlankTextCrossModelIsDropped` | `["text:hi"]` | `["text:hi","thinking:sig-abc"]` | 🔴 闸 (c) |
+| 5 | `blankAssistantTextBlockIsNotSent` | `["text:hi","text:real answer"]` | `["text:hi","text:","text:   ","text:real answer"]` | 🔴 P3-1 |
+| 6 | `blankUserTextBlockIsNotSent` | `["text:hi"]` | `["text:   ","text:hi"]` | 🔴 P3-3（**用户**车道） |
+| 7 | `signatureWithBlankTextSameModelKeepsThinking` | `["text:hi","thinking:sig-abc"]` | 同 | 🟢 回归门 |
+| 8 | `signatureWithTextSameModelKeepsThinking` | `["text:hi","thinking:sig-abc"]` | 同 | 🟢 回归门 |
+| 9 | `noSignatureSameModelDowngradesToText` | `["text:hi","text:reasoning body"]` | 同 | 🟢 回归门（B8 的**对照面**） |
+| 10 | `blankThinkingWithoutSignatureIsDropped` | `["text:hi"]` | 同 | 🟢 回归门 |
+| 11 | `blankThinkingWithoutSignatureCrossModelIsDropped` | `["text:hi"]` | 同 | 🟢 回归门 |
+| 12 | `whitespaceOnlySignatureWithBlankTextIsDropped` | `["text:hi"]` | 同 | 🟢 回归门（钉证伪点 2 的结论） |
+
+**实测**：`Tests run: 12, Failures: 6` —— 红灯 **6**、绿 **6**，与上表逐条对上
+（文件 `pi-java-ai/src/test/java/com/pijava/ai/protocol/AnthropicThinkingReplayTest.java`）。
+
+**B8 三条挪到 Phase B**（要先有 `ModelCompat` 与决策 5 的投送路径）：B8-1（`true` ⇒ 线格是
+`{type:"thinking",signature:""}`）、B8-2（缺席/`false` 行为相同 ⇒ 钉死两态）、
+B8-3（models.json 的 `compat` 键 ⇒ 读到 `ModelInfo.compat()`，这条**不**依赖投送，Phase B 内先做）。
+**闸**那一层的夹具（断言 `TransformMessages` 输出）同样在 Phase B —— 先建**空过**的
+`TransformMessages`（证明这条缝本身零行为改动），写夹具 ⇒ 红 ⇒ 再填分支。
+
+> 「**会绿**」那 6 条老实标注为**回归门**而非 RE 证据 —— 包① 的 `ContentBlockJsonTest`
+> 已经吃过一次这个口径。**红灯数字只算 6。**
+
+**§8.34.5-a 两条新教训（都是本次实测撞出来的，续在包① 的「夹具没牙」家族之后）**
+
+- **形态 (4)：夹具的观测面比被测车道宽。** `render` 走的是**出参里全部消息的全部块**，
+  而夹具带了 `user("hi")` ⇒ 期望值**必须以 `"text:hi"` 开头**。第一版全漏了这条前缀，
+  跑出 **12 条全红**——而那个红**与本次要修的行为毫无关系**。
+  **教训：红灯必须逐条读 `actual`**，「Failures: 6」这种数字不区分「红对了」与「红错了」。
+  （这条尤其阴：它把 6 条回归门也染红了，**症状**恰好长得像「到处都是差距」。）
+- **形态 (5)：设计阶段凭记忆列的差异表本身是错的。** 原表三条判定全错 ——
+  P2-b1 说「现状被 `:315-317` 丢掉」（实为 `:315` 要求**文本与签名同空**，有签名就不会丢 ⇒ **绿**）；
+  P2-c1 说「可能会绿」（实为 `:323` 原样发 thinking ⇒ **红**）；
+  P2-d2 说「同模型+无签名+非空文本 ⇒ 保留为 thinking，现状降级 text 是差距」
+  （**pi 侧也是降级 text**，`:1296-1316` 的 `allowEmptySignature` 缺省 false ⇒ **根本不是差距**）。
+  **教训：差集必须逐分支对读两侧源码再列**；凭记忆写出的「差异表」会把红灯数、回归门数同时写错。
 
 #### 8.34.6 证伪点（实施前必须打掉的）
 
-1. **`isSameModel` 的输入在 pi-java 齐不齐？** —— `Message.AssistantMessage` 有 `api`/`provider`/`model`
-   三元（`Message.java:65-75`），但**它们是落盘字段**：老会话里为 null 时，`null.equals(...)` 语义
-   会**误判为跨模型** ⇒ 要把「缺身份 ⇒ 判同还是判异」定下来（pi 的 `===` 在 `undefined` 下也是 false
-   ⇒ **判异**才算忠实，但会把所有老会话的 thinking 块降级。**须实测老会话样本再定**）。
+1. **`isSameModel` 的输入在 pi-java 齐不齐？** —— ✅ **已答（§8.34.10-2/3）**：三项输入齐备
+   （`api` 由适配器的 `apiName()` 提供）；**老会话判异 = 与现状逐字相同** ⇒ 决策 C 取**判异**，风险实测为 0。
 2. **`appendThinkingBlock` 的 `trim()`** 会不会与 pi 的「真值判定」（`:109` 用真值，`:1297` 用 `trim`）
-   打架？—— pi 自己**就不一致**（空白签名在 `:109` 算「有」、在 `:1297` 算「无」）。**照抄这个不一致**
-   还是取其一？推荐**照抄**（判据是行为一致），但要在 javadoc 里写明这是 pi 的既有不对称。
+   打架？—— ✅ **已答（结论与原推荐相反）**：pi 自己确实**不一致**（纯空白签名在闸 `:109` 算「有」、
+   在落线 `:1297` 算「无」），**但这个不对称在出参上不可观察** —— 凡两者会分歧的路径都被落线
+   重新归并：`:1298` `if (block.thinking.trim().length === 0 && !hasThinkingSignature) continue;`
+   又用 `trim` 判文本 ⇒ 纯空白签名 + 空文本**仍然被丢**；而纯空白签名 + 有文本时
+   `:1304` 的 `!hasThinkingSignature` 分支把两个来源**都**收敛成 `text`。
+   ⇒ **原推荐的「照抄」是多余的复杂度**：**不照抄**，pi-java 保持 `:313` 的 `trim` 口径
+   （行为相同、代码更简单）。结论由夹具 12（`whitespaceOnlySignatureWithBlankTextIsDropped`）钉住。
+   **教训：「pi 内部不自洽」不等于「有不一致要复刻」—— 先证明它可观察。**
 3. **重试不重跑闸**（`:576-579`）—— pi-java 的重试环是否也持有已构造的 params？**需实测**，
    否则会出现「pi 重试用旧块 / pi-java 重试用新块」的隐藏差异。
 4. **`compat` 落 models.json 后，`AiCli` 的写回路径**会不会把它抹掉？**需清点写侧**（本次只查了读侧）。
-5. **加第 11 个组件会不会再撞一次嵌套模式解构？** —— 包① 踩过（`MessageBubble:87`）。
-   已 grep：`ThinkingContent` 的三参 `case` 是**唯一**一处；`ModelInfo` 的 `case`/`instanceof` 解构**未清点** ⇒ 开工第一件事。
+5. **加第 11 个组件会不会再撞一次嵌套模式解构？** —— ✅ **已答（§8.34.10-1）**：全仓**零**
+   `case ModelInfo(...)` / `instanceof ModelInfo` ⇒ **无模式破坏面**。
 
 #### 8.34.7 需要拍板的点
 
@@ -4327,6 +4415,58 @@ at least 挂到 Anthropic 与 pi-messages 两条**真重放签名**的车道；G
 - 不关 `ignoreUnknown`（决策 2 的理由）。
 - 不动 `pi-java-web` 的同名 `ModelInfo`。
 - 不给任何 compat 键做「将来可能用得上」的预留（判据是行为）。
+
+#### 8.34.10 开工前侦察（**实测**，2026-09-18；两条发现改变实施形状）
+
+**（1）`ModelInfo` 无模式破坏面 —— 与包① 相反。**
+全仓 grep：**零** `case ModelInfo(...)`、**零** `instanceof ModelInfo`；`ModelInfo` 只出现在
+构造函数、字段访问与类型位置（含 `pi-java-agent-core/.../StreamSimple.java:44` 的形参）。
+⇒ 加第 11 个组件**不会**重演包① 的 `MessageBubble:87`（那条是**唯一**的三参嵌套模式）。
+⚠️ 仍要避开的**同名陷阱**：`pi-java-web` 的 `ModelInfo`（`WebProtocol.java:29`，3 组件）是**另一个类**。
+
+**（2）`isSameModel` 的三项输入在重放点全部可得，但 `api` 的来源要挑一下。**
+- 目标侧：`StreamRequest.model()` 是 **`ModelId<?>`**（`model/ModelId.java:10-13`，**只有 `provider` + `modelName`，没有 `api`**）
+  —— 因为 pi-java 的 `api` 是**provider 级**（即台账 C9 那条）。
+- 消息侧：`Message.AssistantMessage`（`Message.java:65-75`）有 `api`/`provider`/`model`；
+  写入点在 `AbstractChatApi.identityBase:45-49`（`apiName()` / `request.model().provider()` / `.modelName()`）。
+- ⇒ 判定式取
+  `Objects.equals(msg.provider(), target.provider()) && Objects.equals(msg.api(), apiName()) && Objects.equals(msg.model(), target.modelName())`，
+  其中 `api` 一项由**适配器自己的 `apiName()`** 提供（`AnthropicMessagesApi:42` → `"anthropic-messages"`）。
+  **这不是权宜** —— pi-java 里「即将发出的请求的 api」本就等于正在执行的那个适配器。
+
+**（3）老会话实测（决策 C 的风险 = 0，我原先的担心不成立）。**
+`~/.pi-java/agent/sessions/--D--workplaceForai-pi-java--/`：
+- `2026-08-30` 的会话：assistant 消息**无** `api`/`provider`/`model`；thinking 块是旧键
+  `{"type":"thinking","text":"…"}`（**无签名**，其中一条还是 `"text":""`）。
+- `2026-09-10` 的会话：assistant 消息**有**身份（`"api":"anthropic-messages"`、
+  `"provider":"teamorouter"` 与 `"provider":"anthropic"`、`"model":"claude-opus-4-8"`）；
+  thinking 块**同样无签名**（包① 之前没有任何东西落过签名）。
+
+⇒ **判异对存量数据是零影响**：老消息身份为 null ⇒ 判异 ⇒ 无签名的 thinking 块**降级为 text**，
+而**今天的行为也是降级为 text**（`AnthropicMessagesApi:318-322`）—— 逐字相同。
+我原先担心的「判异会把全部老 thinking 块降级」描述的**正是现状**，不是新损害。
+（反过来说：若判**同**，老消息会翻转成「保留为 thinking 块」= **凭空虚增**一处行为差异。故判异同时更忠实、更保守。）
+
+**（4）⚠️ 对 Anthropic 车道，闸的五条分支里有**四条是惰性**的 —— 夹具必须打闸、不许打线格。**
+把 pi 的闸与 pi 的适配器**逐条对照**（`transform-messages.ts:95-116` × `anthropic-messages.ts:1296-1321`）：
+
+| pi 闸的分支 | 若**跳过闸**、只走适配器，线格是什么 | 是否惰性 |
+|---|---|---|
+| `:109` 同模型 + 真值签名 ⇒ 保留（文本可空） | `:1315-1321` thinking + 原签名 —— **相同** | ✅ 惰性 |
+| `:111` 空文本且无真值签名 ⇒ 丢 | `:1298` 同条件 `continue` —— **相同** | ✅ 惰性 |
+| `:112` 同模型 + 无签名 ⇒ 保留为 thinking | `:1297` `hasThinkingSignature=false` ⇒ `:1302` 分支 ⇒ **text**（除非 allowEmptySignature）—— 与「保留」的下场**相同** | ✅ 惰性 |
+| `:113-116` 跨模型 + 无签名 ⇒ **降级为 text** | 适配器单独也会把它变成 text（同上）—— **相同** | ✅ 惰性 |
+| `:104-105` **redacted**：同模型保留 / 跨模型丢 | 适配器**完全不看 `redacted`**（`:1289` 的 `if` 在 pi 里是 redacted 专用分支，pi-java **无对应物**）⇒ 同模型产出 `thinking(签名=密文)`、跨模型**照样送** | ❌ **非惰性** |
+
+⇒ **结论一**：在 Anthropic 车道上，**唯一真正改变线格的分支是 redacted**（即 B13）。
+⇒ **结论二**：凡是要钉「闸本身」的夹具（保留/丢弃/降级），**必须断言 `TransformMessages` 的输出**
+（闸之后的 `List<Message>`），**不许断言线格** —— 后者会绿，而且绿的原因与本次修法无关。
+这正是「夹具没牙」的**第三种形态**（前两种：夹具后写、一条塞两断言）：**断言落在了下游早就做对的地方**。
+§8.34.5 里那两条原本标注为「会绿」的行（P2-c1 / P2-d1）由此**升格为解释**：它们不是偶然绿，是**结构性惰性**。
+
+**（5）闸的价值主要在**非 Anthropic 车道**。**
+`PiMessagesApi:225-226` 对**任何** thinking 块一律送 `{type:"thinking","thinking":text}`（签名与 `redacted` 全丢）
+⇒ 在它那里，闸的「跨模型降级 / 丢弃」是**真的会改变送出去的东西**。故共享预通道不是为 Anthropic 修的。
 
 
 ---
