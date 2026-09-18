@@ -4905,6 +4905,57 @@ checkstyle/spotbugs 零违规）。
 这一类「夹具缺前提」与 §8.34.11 的「夹具写在实现之后」是**同族但不同**的形态：
 那个是**没有红灯可看**，这个是**有红灯但红灯换了个意思**。
 
+#### 8.35.12 B19 夹具「先红证毕」：13 红 4 绿（其中 3 条是**两侧同绿**的对照）
+
+**夹具**（新增两个类，共 17 个用例）：
+
+| 类 | 覆盖 | 形态 |
+|---|---|---|
+| `OpenAICompletionsReasoningTest` | **收**（6 例） | 本地 HTTP server 喂线格 SSE，走真实 SDK 路径（同 `OpenAIResponsesApiTest`） |
+| `OpenAICompletionsReasoningReplayTest` | **发**（11 例） | 录制请求体的桩（同 `LaneTransformMessagesWiringTest`），断言打在**序列化后的请求体**上 |
+
+**红 13**（actual 逐字抄回）：
+
+| 用例 | actual | 为什么算红得对 |
+|---|---|---|
+| `reasoningContentDeltaEmitsThinkingBlockSignedWithFieldName` | `["Start","TextStart","TextDelta","TextEnd","StreamDone"]` | 请求**发出去了**、文本**收到了** ⇒ 红在「thinking 事件缺失」这一层，不在更前面 |
+| `reasoningFieldIsAcceptedAndBecomesTheSignature` | `NoSuchElement` at `thinkingSignature`（**没有** `ThinkingStart`） | 同上 |
+| `probeOrderPrefersReasoningContentWhenBothArePresent` | `NoSuchElement`（同上） | 同上 |
+| `reasoningAccumulatesIntoASingleBlock` | `["Start","TextStart","TextDelta","TextEnd","StreamDone"]` | 同上 |
+| `endsFollowBlockCreationOrderNotAFixedOrder` | `["Start","TextStart","TextDelta","TextEnd","StreamDone"]` | 同上 |
+| `reasoningContentSignatureReplaysThatFieldName` | 请求体 `{"messages":[{"content":"hi","role":"user"},{"role":"assistant","content":"answer"}],"model":"glm-5.3-flash","stream_options":{"include_usage":true},"stream":true}` | **这是事故第二半的实证**：provider `openai`（非 deepseek）⇒ 带签名的 thinking 块**整块发不回去** |
+| `reasoningSignatureReplaysThatFieldName` | 同上请求体 | 同上 |
+| `multipleThinkingBlocksJoinWithNewline` | 同上请求体 | 同上 |
+| `whitespaceOnlyThinkingBlocksAreExcludedFromTheJoin` | 同上请求体 | 同上 |
+| `unknownSignatureDropsTheTextAndKeepsOnlyTheEmptyFill` | `…{"role":"assistant","content":"answer","reasoning_content":"REASON-A"}` | 现役代码**不看签名**：未知签名照样按 `reasoning_content` 发 |
+| `thinkingOnlyAssistantMessageIsDropped` | `…{"role":"assistant"}`（**既无 content 也无 tool_calls**） | 今天真会发出这种消息（部分 provider 直接 400）；pi `:1365-1372` 是 `continue` |
+| `deepseekProviderGetsTheEmptyReasoningContent` | `…{"role":"assistant","content":"answer"}` | 规则 (ii) 今天不存在 |
+| `deepseekBaseUrlGetsTheEmptyReasoningContent` | `…{"role":"assistant","content":"answer"}`（model 名 `some-reasoner`） | 同上 |
+
+**绿 4，必须分开定性**：
+
+1. `nonStringReasoningValueIsIgnored`（收侧）：今天**绿**是因为**什么都不收** —— 它两侧同绿，
+   **不是证据**。它的牙要靠**变异探针**证明（去掉 `typeof === "string"` 那半 ⇒ 必须转红）。
+2. `nonReasoningModelGetsNoEmptyFill` / `ordinaryRelayGetsNoEmptyFill` / `explicitCompatFalseDisablesTheEmptyFill`
+   （发侧）：三条**对照**，同样两侧同绿。前两条钉住 (ii) 的**两个合取项**
+   （`compat && model.reasoning`）、第三条钉住**显式覆盖**。
+3. ⇒ **教训（新形态）**：**「两侧同绿」的夹具必须配一条变异探针**，否则它只是装饰。
+   这与 §8.35.10 的「红得不是地方」是一对：那条说**红要红对**，这条说**绿也要问为什么绿**。
+
+**夹具前置**：`ModelCompat` 加了第二个组件
+（`Boolean requiresReasoningContentOnAssistantMessages`，**三态**：`null` = 探测、
+`true`/`false` = 用户显式覆盖）。它是 `explicitCompatFalseDisablesTheEmptyFill` 的**编译前置**
+（不给就写不出「显式 false ≠ 未指定」这条），且**落地时零消费者**（行为改动为零，
+所以不影响其它 13 条红的性质）。`ModelCompat.of(boolean)` 与 `NONE` 语义不变
+（`NONE = (false, null)`），既有调用点与 `ModelsJsonConfigTest` 全部原样。
+
+**顺带登记（读 pi 该函数时发现，不在 B19 范围）**：
+
+**B24** —— `choice.usage` 回退缺失。pi 在 `openai-completions.ts:565-568` 有一段：
+`chunk.usage` 缺席时再读 `choice.usage`，注释点名 **Moonshot** 把 usage 放在 choice 里。
+pi-java `OpenAICompletionsApi:124-127` 只看 `chunk.usage()` ⇒ 那条 relay 上**计费永远是 0**
+（而 `~/.pi-java` 的用量统计、压缩阈值、上下文估算全都吃 usage）。
+
 ---
 
 ## 9. 与既有文档的关系

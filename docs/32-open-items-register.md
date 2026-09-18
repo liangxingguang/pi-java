@@ -82,8 +82,11 @@
 > `stop_reason`，`length` 机制在该车道**整段死掉**）与 **B21**（请求侧无 `compat.thinkingFormat`；
 > ⚠️ 该 relay 上 pi **也不发** ⇒ **与本次事故无关**，如实标注）。
 > ⇒ B 类 13→**16** 行，并更正 §1 汇总里滞后的 10（那行自包② 起就没跟上）。
-> ⚠️ **口径说明**：本类历来的「条数」是**递增记账**，我不去重构它的定义 —— 底稿可核对的是
-> §3 表**共 21 行**，其中标了「已实施/结案」的 9 条、**仍开放 12 条**（B19/B20/B21 已计入）。
+> ⚠️ **口径说明**：本类历来的「条数」是**递增记账**，我不去重构它的定义。
+> **2026-09-19 复核计数**（`grep -c '^| B[0-9]* |'`）：B 类**共 24 行**（B1–B24），
+> 其中行内含「已实施」的 **8 条**、**仍开放 16 条**。B2x 是实施中陆续发现的：
+> B22/B23（§8.35.10，responses 车道 `id` / 文本块无 `textSignature`）、
+> B24（§8.35.12，`choice.usage` 回退缺失）—— **都是写夹具时撞出来的**。
 > 三者合为「**响应侧字段覆盖与收尾语义**」包（设计见 `docs/31 §8.35`）；
 > ⚠️ **前置依赖**：B19 一旦落地，该车道就开始产 thinking 块 ⇒ B10 的跨模型重放闸
 > **只挂 Anthropic 一条车道**这件事立刻可观察 ⇒ **B10 的剩余范围是本包的前置，不是后续**。
@@ -143,6 +146,7 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 
 | B22 | **`openai-responses` 车道回放助手文本消息即抛 —— 缺 `id`** | §8.35.10（`docs/31`） | `ResponsesMessageConverter:186-194` 构造 `ResponseOutputMessage` 时**不设 `id`**，而 SDK 标它必填 ⇒ `IllegalStateException: `+`id` is required, but was not set`（`Check.kt:12` ← `ResponseOutputMessage.kt:348`）。pi **有**回填（`openai-responses-shared.ts:237-242`）：先试 `parseTextSignature(textBlock.textSignature)?.id`，取不到则 `msg_pi_${msgIndex}` / `msg_pi_${msgIndex}_${textBlockIndex}`，>64 字符压成 `msg_${shortHash}`。**可达性**：今天 CLI **不可达**（`DefaultProviders:147` 恒传 `Map.of()`，而协议覆盖读 `extra["protocol"]`；`ModelsJsonProvider:61-69` 只认完两条车道；`AZURE_OPENAI_RESPONSES` 全树只有枚举本身 ⇒ Azure 车道无 provider 创建）⇒ 属**潜在**缺陷。**仍必修**：它是本包该车道夹具的前置（不修则夹具红在「请求没发出」，闸挂没挂**测不到**），且是纯移植缺口。**写夹具时发现**，不在原审计范围内 |
 | B23 | **文本块无 `textSignature`（`TextContent(String text)` 只有 1 个组件）** | §8.35.10（`docs/31`） | pi 的文本块带回执签名 `encodeTextSignatureV1(item.id, item.phase)`（`openai-responses-shared.ts:701`，读侧 `:55`/`:228`）⇒ 回放时能取回**原** `msg_xxx` 与 `phase`。pi-java 无此组件 ⇒ 即便修了 B22，回填也只能是 `msg_pi_N` 合成值。属「文本块载荷」缺口（与 B19 的 thinking 载荷同族、**另一条**），须自己一包 |
+| B24 | **`openai-completions` 车道不读 `choice.usage` 回退** —— 该形状的 relay 上计费恒为 0 | §8.35.12（`docs/31`） | pi 在 `chunk.usage` 缺席时再读 `choice.usage`（`openai-completions.ts:565-568`，注释点名 **Moonshot** 把 usage 放在 choice 里）；pi-java `OpenAICompletionsApi:124-127` 只看 `chunk.usage()`。**后果不止「少显示一个数」**：`~/.pi-java` 的用量统计、上下文阈值判定、`ContextUsageEstimator` 都吃 usage ⇒ 那条 relay 上压缩时机会**晚于 pi**。**写 B19 夹具读 pi 该函数时发现**，不在原审计范围；**本包不改**（与 reasoning/stopReason 不同层） |
 
 ---
 
