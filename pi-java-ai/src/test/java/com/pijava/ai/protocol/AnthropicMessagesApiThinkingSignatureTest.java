@@ -47,14 +47,26 @@ class AnthropicMessagesApiThinkingSignatureTest {
     private static final ApiOptions OPTIONS = new ApiOptions(
         "https://api.example.invalid", "test-key", Duration.ofSeconds(5), 0, Map.of());
 
-    private static final Method MAP_EVENT;
+    private static final Class<?> STOP_STATE_TYPE = loadStopState();
 
-    static {
+    private static final Method MAP_EVENT = findMapEvent();
+
+    private static Class<?> loadStopState() {
         try {
-            MAP_EVENT = AnthropicMessagesApi.class.getDeclaredMethod("mapEvent",
+            return Class.forName("com.pijava.ai.protocol.AnthropicMessagesApi$StopState");
+        } catch (ClassNotFoundException e) {
+            throw new IllegalStateException(
+                "StopState 改名/消失了，夹具需同步（docs/31 §8.35.14）", e);
+        }
+    }
+
+    private static Method findMapEvent() {
+        try {
+            var method = AnthropicMessagesApi.class.getDeclaredMethod("mapEvent",
                 RawMessageStreamEvent.class, StreamPartialBuilder.class,
-                boolean[].class, boolean[].class, boolean[].class, String[].class, String[].class);
-            MAP_EVENT.setAccessible(true);
+                boolean[].class, boolean[].class, String[].class, String[].class, STOP_STATE_TYPE);
+            method.setAccessible(true);
+            return method;
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("mapEvent 的签名变了，夹具需同步（docs/31 §8.31）", e);
         }
@@ -67,13 +79,21 @@ class AnthropicMessagesApiThinkingSignatureTest {
         private final StreamPartialBuilder builder = new StreamPartialBuilder();
         private final boolean[] isToolBlock = {false};
         private final boolean[] isThinkingBlock = {false};
-        private final boolean[] toolCallSeen = {false};
         private final String[] pendingToolName = {""};
         private final String[] pendingToolId = {""};
+        // B20 把 `toolCallSeen` 换成了 stop reason 状态（pi 只看 message_delta.stop_reason）；
+        // 本夹具不喂 message_delta，故只需一个空实例。
+        private final Object stopState;
+
+        Stream() throws ReflectiveOperationException {
+            var ctor = STOP_STATE_TYPE.getDeclaredConstructor();
+            ctor.setAccessible(true);
+            stopState = ctor.newInstance();
+        }
 
         StreamEvent feed(RawMessageStreamEvent event) throws Exception {
             return (StreamEvent) MAP_EVENT.invoke(api, event, builder,
-                isToolBlock, isThinkingBlock, toolCallSeen, pendingToolName, pendingToolId);
+                isToolBlock, isThinkingBlock, pendingToolName, pendingToolId, stopState);
         }
 
         StreamEvent feedJson(String json, Class<?> type) throws Exception {

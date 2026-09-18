@@ -11,8 +11,10 @@ import com.anthropic.core.http.StreamResponse;
 import com.anthropic.models.messages.ContentBlockParam;
 import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.MessageParam;
+import com.anthropic.models.messages.RawMessageDeltaEvent;
 import com.anthropic.models.messages.RawMessageStreamEvent;
 import com.anthropic.models.messages.RedactedThinkingBlockParam;
+import com.anthropic.models.messages.StopReason;
 import com.anthropic.models.messages.TextBlockParam;
 import com.anthropic.models.messages.Tool;
 import com.anthropic.models.messages.ToolResultBlockParam;
@@ -36,8 +38,21 @@ import com.pijava.ai.stream.StreamPartialBuilder;
  *
  * <p>Phase 6: added {@code (ApiOptions, String apiKeyEnvVar)} constructor and
  * {@code baseUrl} override support for Anthropic-compatible providers (MiniMax etc.).</p>
+ *
+ * <p><b>B20</b>（{@code docs/31 §8.35.14}）：{@code message_delta.stop_reason} 经
+ * {@code mapStopReason} 映射（pi {@code anthropic-messages.ts:1464-1493} 逐字移植），
+ * 收尾按 pi 的判序走 {@code pending → error → done} 三分支（{@code :779-804}）。
+ * 修复前车道**不看** wire 上的 stop reason，一律发 {@code "end_turn"} ⇒ 「被 max_tokens
+ * 截断」对宿主层的 {@code length} 门不可见、「refusal / sensitive」不报错。</p>
+ *
+ * <p>⚠️ pi 收尾的第一段是 {@code options.signal?.aborted}（{@code :779-781}），在 pi-java
+ * 的车道层**结构上不可达**：{@link StreamRequest} 不带信号，中止由宿主层
+ * {@code PiLoopRunner.markAborted} 承担。此处**不**把信号塞进请求（§8.35.14 第三节③）。</p>
  */
 public final class AnthropicMessagesApi extends AbstractChatApi {
+
+    /** pi 累加器的 stop reason 初值（{@code anthropic-messages.ts:526}），非 pi 词汇表取值。 */
+    private static final String PENDING = "pending";
 
     @Override
     public String apiName() {
@@ -76,9 +91,9 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         var builder = new StreamPartialBuilder();
         var isToolBlock = new boolean[]{false};
         var isThinkingBlock = new boolean[]{false};
-        var toolCallSeen = new boolean[]{false};
         var pendingToolName = new String[]{""};
         var pendingToolId = new String[]{""};
+        var stop = new StopState();
         try {
             var params = buildParams(request);
             publisher.submit(builder.emitStart());
@@ -87,23 +102,82 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                          client.messages().createStreaming(params)) {
                 sr.stream().forEach(raw -> {
                     StreamEvent se = mapEvent(raw, builder, isToolBlock,
-                            isThinkingBlock, toolCallSeen, pendingToolName, pendingToolId);
-                    if (se != null) publisher.submit(se);
+                            isThinkingBlock, pendingToolName, pendingToolId, stop);
+                    if (se != null) {
+                        if (se instanceof StreamEvent.StreamError) {
+                            // pi 在这一层是 throw（未知 stop reason、SDK 异常都会抛穿整条流），
+                            // 收尾的分支**根本不会跑**。pi-java 的 mapEvent 把异常转成事件，
+                            // 故在此记账 —— 收尾据此不再补第二个终局事件（§8.35.14 第三节①）。
+                            stop.errored = true;
+                        }
+                        publisher.submit(se);
+                    }
                 });
             }
-            publisher.submit(builder.emitDone(toolCallSeen[0] ? "tool_use" : "end_turn"));
+            submitTail(builder, publisher, stop);
         } catch (Exception e) {
             publisher.submit(builder.emitError("error", e));
         }
+    }
+
+    /**
+     * 收尾三段判（pi {@code anthropic-messages.ts:779-804} 的四段去掉首段 abort）。
+     *
+     * <pre>
+     * signal aborted        → throw "Request was aborted"                        // 车道层不可达
+     * stopReason == pending → throw "Anthropic stream ended without a stop reason"
+     * stopReason == aborted/error → throw (errorMessage || "An unknown error occurred")
+     * 其余                  → push {type:"done", reason: stopReason}; stream.end()
+     * </pre>
+     *
+     * <p>⚠️ 与 pi 的差别不在判序、在 **throw 的去处**：pi 抛进自己的 {@code catch}，
+     * 那里发 {@code {type:"error"}} 并结束流 ⇒ 一条流**只有一个**终局事件。pi-java 的
+     * 等价物是 {@code emitError}，故前三个分支**必须**在这里返回 —— 修复前是无条件
+     * {@code emitDone}，物理错误轮次在通道上是「先 error 后 done」两条。</p>
+     */
+    private static void submitTail(StreamPartialBuilder builder,
+                                   SubmissionPublisher<StreamEvent> publisher,
+                                   StopState stop) {
+        if (stop.errored) {
+            return; // 循环内已发过 error：pi 在那一层 throw，收尾不跑
+        }
+        if (PENDING.equals(stop.reason)) {
+            publisher.submit(builder.emitError("error",
+                    new IllegalStateException("Anthropic stream ended without a stop reason")));
+            return;
+        }
+        if ("error".equals(stop.reason)) {
+            publisher.submit(builder.emitError("error", new IllegalStateException(
+                    stop.errorMessage != null ? stop.errorMessage : "An unknown error occurred")));
+            return;
+        }
+        publisher.submit(builder.emitDone(stop.reason));
+    }
+
+    /**
+     * 一条流的 stop reason 状态 —— pi 累加器里的 {@code output.stopReason} 与
+     * {@code output.errorMessage} 两个字段（{@code anthropic-messages.ts:526} 起）。
+     *
+     * <p>初值 {@code "pending"} 是 pi 的哨兵值：收尾据此区分「流看完了但**一个** stop reason
+     * 都没观测到」与「正常结束」。修复前 pi-java 用局部变量兜底成 {@code "end_turn"}，
+     * 把前者伪装成后者（§8.35.14 第三节②）。</p>
+     *
+     * <p>{@code errored} 是 pi-java 侧新增的（pi 靠 throw 逃逸循环，不需要这个位）：
+     * 见 {@link #submitTail} 的说明。</p>
+     */
+    private static final class StopState {
+        private String reason = PENDING;
+        private String errorMessage;
+        private boolean errored;
     }
 
     private StreamEvent mapEvent(RawMessageStreamEvent event,
                                   StreamPartialBuilder builder,
                                   boolean[] isToolBlock,
                                   boolean[] isThinkingBlock,
-                                  boolean[] toolCallSeen,
                                   String[] pendingToolName,
-                                  String[] pendingToolId) {
+                                  String[] pendingToolId,
+                                  StopState stop) {
         try {
             if (event.isContentBlockStart()) {
                 var block = event.asContentBlockStart().contentBlock();
@@ -111,7 +185,9 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                     var tu = block.toolUse().orElseThrow();
                     isToolBlock[0] = true;
                     isThinkingBlock[0] = false;
-                    toolCallSeen[0] = true;
+                    // B20：这里原来还置一个 `toolCallSeen` 标志，收尾据此二选一
+                    // （`tool_use` / `end_turn`）。pi 不看工具块、只看
+                    // `message_delta.stop_reason` ⇒ 该标志随本包一并删除。
                     pendingToolName[0] = tu.name();
                     pendingToolId[0] = tu.id();
                     return builder.emitToolCallStart();
@@ -188,6 +264,20 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                 return builder.emitTextEnd();
             }
             if (event.isMessageDelta()) {
+                var delta = event.asMessageDelta().delta();
+                // pi `:738-744`：`if (event.delta.stop_reason)` 是 JS 真值判断 ⇒
+                // 键缺失、JSON null、空串三种都按「本事件没观测到 stop reason」处理。
+                var rawStopReason = delta._stopReason();
+                if (!rawStopReason.isMissing() && !rawStopReason.isNull()) {
+                    var raw = rawStopReason.asKnown().map(StopReason::asString).orElse("");
+                    if (!raw.isEmpty()) {
+                        var mapped = mapStopReason(raw, refusalExplanation(delta));
+                        stop.reason = mapped.reason();
+                        if (mapped.errorMessage() != null) {
+                            stop.errorMessage = mapped.errorMessage();
+                        }
+                    }
+                }
                 var usage = event.asMessageDelta().usage();
                 return builder.emitUsage(
                         usage.inputTokens().orElse(0L),
@@ -200,6 +290,58 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
             return builder.emitError("error", e);
         }
         return null;
+    }
+
+    /**
+     * pi {@code anthropic-messages.ts:1464-1493} {@code mapStopReason} 的逐字移植。
+     *
+     * <p>⚠️ 两处**刻意偏差**，都关乎词汇表而非语义：</p>
+     * <ol>
+     *   <li>pi 返回 {@code "toolUse"}（camelCase），pi-java 的词汇表是 {@code "tool_use"}
+     *       （{@code StreamEvent.StreamDone} 的 javadoc、{@code PiMessagesApi:244-246}
+     *       在 pi 消息通道上做的是同一次翻译）⇒ 此处落 {@code "tool_use"}。</li>
+     *   <li>返回值是记录而不是 pi 的对象字面量（{@code {stopReason, errorMessage?}}）——
+     *       同形，只是 Java 需要显式类型。</li>
+     * </ol>
+     *
+     * <p>未知取值**抛** {@code IllegalStateException}，与 pi 的 {@code default: throw} 一致；
+     * 它由 {@code mapEvent} 的 catch 转成 {@code StreamError}（文案相同），随后收尾不再补事件。</p>
+     *
+     * @param raw          wire 上的原始取值（{@code StopReason.asString()}；SDK 1.15.0 的
+     *                     {@code StopReason.Known} 不含 {@code sensitive} 一类新值，未知值会被
+     *                     {@code known()} 抛掉，只能读原始字符串）
+     * @param explanation  {@code stop_details.explanation}，无则 null
+     */
+    private static MappedStopReason mapStopReason(String raw, String explanation) {
+        return switch (raw) {
+            case "end_turn" -> new MappedStopReason("stop", null);
+            case "max_tokens" -> new MappedStopReason("length", null);
+            case "tool_use" -> new MappedStopReason("tool_use", null);
+            case "refusal" -> new MappedStopReason("error",
+                    explanation != null && !explanation.isEmpty()
+                            ? explanation
+                            : "The model refused to complete the request");
+            case "pause_turn" -> new MappedStopReason("stop", null); // 重发即可，stop 足够
+            case "stop_sequence" -> new MappedStopReason("stop", null); // 未供 stop 序列，不该出现
+            case "sensitive" -> new MappedStopReason("error", "Provider stopped with: sensitive");
+            default -> throw new IllegalStateException("Unhandled stop reason: " + raw);
+        };
+    }
+
+    /** pi {@code mapStopReason} 的返回形状 {@code { stopReason, errorMessage? }}。 */
+    private record MappedStopReason(String reason, String errorMessage) {}
+
+    /**
+     * {@code message_delta.delta.stop_details.explanation}（pi {@code :1475} 的
+     * {@code stopDetails?.explanation}）。
+     *
+     * <p>走非抛异常面 {@code _explanation()}（P2 处理 {@code signature} 的同一口径）：
+     * 字段缺失或类型不符都退化成「没有说明」，由调用方落 pi 的默认文案。</p>
+     */
+    private static String refusalExplanation(RawMessageDeltaEvent.Delta delta) {
+        return delta._stopDetails().asKnown()
+                .flatMap(details -> details._explanation().asString())
+                .orElse(null);
     }
 
     private MessageCreateParams buildParams(StreamRequest request) {
