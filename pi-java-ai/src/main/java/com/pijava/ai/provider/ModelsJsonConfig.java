@@ -18,10 +18,12 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
 import com.pijava.ai.catalog.BuiltinCatalog;
 import com.pijava.ai.catalog.ModelCatalog;
+import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
+import com.pijava.ai.provider.ModelsJsonSchema.CompatDef;
 import com.pijava.ai.provider.ModelsJsonSchema.ModelDef;
 import com.pijava.ai.provider.ModelsJsonSchema.ProviderDef;
 import com.pijava.ai.provider.ModelsJsonSchema.Root;
@@ -205,6 +207,21 @@ public final class ModelsJsonConfig {
         return new ModelInfo(
             ModelId.of(providerId, model.id()),
             displayName, Set.copyOf(caps), contextWindow, maxTokens, false,
-            pricing, com.pijava.ai.thinking.ThinkingLevelMap.empty(), headers, samplingParams);
+            pricing, com.pijava.ai.thinking.ThinkingLevelMap.empty(), headers, samplingParams,
+            compatOf(model.compat()));
+    }
+
+    /**
+     * Map a models.json {@code compat} block onto {@link ModelCompat}.
+     *
+     * <p>An absent block, or an absent key inside it, both mean {@link ModelCompat#NONE} —
+     * pi normalizes with {@code ?? false} ({@code anthropic-messages.ts:193}), so there is no
+     * third state to preserve (docs/31 §8.34.4 决策 3).</p>
+     */
+    private static ModelCompat compatOf(CompatDef def) {
+        if (def == null || def.allowEmptySignature() == null) {
+            return ModelCompat.NONE;
+        }
+        return ModelCompat.of(def.allowEmptySignature());
     }
 }

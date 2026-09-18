@@ -45,8 +45,8 @@ public abstract class AbstractChatApi implements ChatApi {
     private AssistantMessage identityBase(StreamRequest request, Instant timestamp) {
         var base = AssistantMessage.empty().withIdentity(
             apiName(),
-            request.model() == null ? null : request.model().provider(),
-            request.model() == null ? null : request.model().modelName(),
+            request.model() == null ? null : request.modelId().provider(),
+            request.model() == null ? null : request.modelId().modelName(),
             timestamp);
         return base;
     }
@@ -81,7 +81,7 @@ public abstract class AbstractChatApi implements ChatApi {
                     } catch (Exception e) {
                         // Best-effort logging must never break error delivery.
                         var model = request.model() == null ? "unknown"
-                            : request.model().provider() + "/" + request.model().modelName();
+                            : request.modelId().provider() + "/" + request.modelId().modelName();
                         LOG.warn("[ai] LLM stream failed for model {}", model, e);
                         publisher.closeExceptionally(e);
                     }
@@ -173,8 +173,8 @@ public abstract class AbstractChatApi implements ChatApi {
             }
             var attached = event.partial().withIdentity(
                 apiName(),
-                request.model() == null ? null : request.model().provider(),
-                request.model() == null ? null : request.model().modelName(),
+                request.model() == null ? null : request.modelId().provider(),
+                request.model() == null ? null : request.modelId().modelName(),
                 timestamp);
             downstream.onNext(StreamEvent.withPartial(event, attached));
         }

@@ -185,7 +185,7 @@ public final class PiMessagesApi extends AbstractChatApi {
                 options.put("maxTokens", request.maxTokens());
             }
             var body = JSON.createObjectNode();
-            body.put("model", request.model().modelName());
+            body.put("model", request.modelId().modelName());
             body.set("context", context);
             body.set("options", options);
             return JSON.writeValueAsString(body);

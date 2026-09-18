@@ -178,7 +178,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
 
     private String buildRequestBody(StreamRequest request) throws JsonProcessingException {
         var body = new HashMap<String, Object>();
-        body.put("model", request.model().modelName());
+        body.put("model", request.modelId().modelName());
         body.put("stream", true);
         body.put("messages", toMistralMessages(request));
 

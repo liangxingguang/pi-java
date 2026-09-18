@@ -74,7 +74,7 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
             boolean thinkingStarted = false;
             try (ResponseStream<GenerateContentResponse> stream =
                          client.models.generateContentStream(
-                                 request.model().modelName(), contents, config)) {
+                                 request.modelId().modelName(), contents, config)) {
 
                 for (var response : stream) {
                     // Safety filter check

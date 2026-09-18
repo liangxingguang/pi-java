@@ -46,7 +46,23 @@ public final class ModelsJsonSchema {
         @JsonProperty("contextWindow") Integer contextWindow,
         @JsonProperty("maxTokens") Integer maxTokens,
         @JsonProperty("headers") Map<String, String> headers,
-        @JsonProperty("samplingParams") Map<String, Object> samplingParams
+        @JsonProperty("samplingParams") Map<String, Object> samplingParams,
+        @JsonProperty("compat") CompatDef compat
+    ) {}
+
+    /**
+     * Per-model provider compatibility flags (pi {@code Model.compat}).
+     *
+     * <p>Listed explicitly so the key is a **known** one: while these records ignore unknown
+     * properties, an unlisted {@code compat} would be swallowed silently and the flag would
+     * appear to do nothing (docs/31 §8.34.2-6, 决策 2). Unknown properties *inside* {@code compat}
+     * are still ignored — that is deliberate: it lets a pi models.json round-trip, and it is
+     * safer than turning {@code ignoreUnknown} off globally (which would make any typo in a
+     * user's models.json a hard error).</p>
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record CompatDef(
+        @JsonProperty("allowEmptySignature") Boolean allowEmptySignature
     ) {}
 
     /** Per-million-token pricing. */

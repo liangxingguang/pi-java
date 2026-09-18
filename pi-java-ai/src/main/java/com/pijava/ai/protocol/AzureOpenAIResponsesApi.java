@@ -75,7 +75,7 @@ public final class AzureOpenAIResponsesApi extends AbstractChatApi {
         }
         Map<String, String> map = AzureOptions.parseDeploymentNameMap(
             System.getenv("AZURE_OPENAI_DEPLOYMENT_NAME_MAP"));
-        String modelId = request.model().modelName();
+        String modelId = request.modelId().modelName();
         return map.getOrDefault(modelId, modelId);
     }
 

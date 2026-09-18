@@ -138,7 +138,7 @@ public class OpenAICompletionsApi extends AbstractChatApi {
 
     static ChatCompletionCreateParams buildParams(StreamRequest request) {
         var builder = ChatCompletionCreateParams.builder()
-                .model(request.model().modelName());
+                .model(request.modelId().modelName());
 
         // 系统提示是请求上的独立字段（pi openai-completions.ts:1214 读 context.systemPrompt），
         // 不在消息列表里。
@@ -152,7 +152,7 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                 var text = extractText(msg.content());
                 if (!text.isEmpty()) builder.addUserMessage(text);
             } else if (msg instanceof Message.AssistantMessage assistant) {
-                addAssistantMessage(builder, assistant, request.model().provider());
+                addAssistantMessage(builder, assistant, request.modelId().provider());
             } else if (msg instanceof Message.ToolResultMessage tool) {
                 // Tool results must be sent back to the model, otherwise it
                 // cannot see the outcome and keeps repeating the same tool

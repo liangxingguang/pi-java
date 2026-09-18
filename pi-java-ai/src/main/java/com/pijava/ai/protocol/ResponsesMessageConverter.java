@@ -44,7 +44,7 @@ final class ResponsesMessageConverter {
 
     /** 构建 Responses 流式请求参数（model 用 request 的 modelName）。 */
     static ResponseCreateParams buildParams(StreamRequest request, ResponsesOptions ropts) {
-        return buildParams(request, ropts, request.model().modelName());
+        return buildParams(request, ropts, request.modelId().modelName());
     }
 
     /**

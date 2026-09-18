@@ -5,15 +5,20 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.anthropic.models.messages.ContentBlockParam;
 import com.anthropic.models.messages.MessageCreateParams;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.catalog.ModelCompat;
+import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
+import com.pijava.ai.model.PricingInfo;
+import com.pijava.ai.thinking.ThinkingLevelMap;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -309,5 +314,60 @@ class AnthropicThinkingReplayTest {
             sameModel(new ContentBlock.ThinkingContent("", "   "))));
 
         assertThat(actual).containsExactly("text:hi");
+    }
+
+    // ------------------------------------------------- Phase B：B8（compat 投送）
+
+    /**
+     * 请求的目标模型带目录元数据 {@code compat.allowEmptySignature}（B8）。
+     *
+     * <p>与 {@link #request} 的差别**只有 compat 那一位** —— 其余字段全同，保证对照干净。
+     * B8 要证的不是「compat 能存进 ModelInfo」，而是「它经 {@code StreamRequest} 到达落线
+     * 的那个唯一行为点」；「能存进去」由 {@code ModelsJsonConfigTest} 单独钉（B8-3）。</p>
+     */
+    private static StreamRequest requestWithCompat(boolean allowEmptySignature,
+                                                   List<Message> messages) {
+        var info = new ModelInfo(TARGET, TARGET.modelName(), Set.of(), 0, 0, false,
+            PricingInfo.UNKNOWN, ThinkingLevelMap.empty(), Map.of(), Map.of(),
+            ModelCompat.of(allowEmptySignature));
+        return new StreamRequest(info, null, messages, List.of(), 100, 0.5, Map.of());
+    }
+
+    private List<String> wireWithCompat(boolean allowEmptySignature,
+                                        List<Message> messages) throws Exception {
+        return render(buildParams(requestWithCompat(allowEmptySignature, messages)));
+    }
+
+    /**
+     * <b>B8-1</b>（{@code allowEmptySignature = true}）：无签名 thinking 落成
+     * {@code {type:"thinking", thinking, signature:""}}，**不是** text。
+     *
+     * <p>pi `anthropic-messages.ts:1300-1306`。出参压成 {@code thinking:} ——
+     * 签名是空串（正是这条夹具要钉的：块**是** thinking，且签名为空）。</p>
+     */
+    @Test
+    void allowEmptySignatureKeepsThinkingWithEmptySignature() throws Exception {
+        var actual = wireWithCompat(true, List.of(
+            user("hi"),
+            sameModel(new ContentBlock.ThinkingContent("reasoning body"))));
+
+        assertThat(actual).containsExactly("text:hi", "thinking:");
+    }
+
+    /**
+     * <b>B8-2</b>：显式 {@code false} 与**缺席**同行为 ⇒ 钉死「二态」。
+     *
+     * <p>pi `:193` 是 `model.compat?.allowEmptySignature ?? false` —— 缺席与 false 归一，
+     * 不存在第三态（§8.34.4 决策 3）。这条与回归门
+     * {@link #noSignatureSameModelDowngradesToText}（compat 缺席）必须给出**同一个线格**；
+     * 两条一起才把「两态」钉成可测事实，而不是注释里的断言。</p>
+     */
+    @Test
+    void explicitlyFalseCompatMatchesAbsentCompat() throws Exception {
+        var actual = wireWithCompat(false, List.of(
+            user("hi"),
+            sameModel(new ContentBlock.ThinkingContent("reasoning body"))));
+
+        assertThat(actual).containsExactly("text:hi", "text:reasoning body");
     }
 }

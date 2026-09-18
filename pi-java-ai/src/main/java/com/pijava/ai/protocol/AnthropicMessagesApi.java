@@ -12,6 +12,7 @@ import com.anthropic.models.messages.ContentBlockParam;
 import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.MessageParam;
 import com.anthropic.models.messages.RawMessageStreamEvent;
+import com.anthropic.models.messages.RedactedThinkingBlockParam;
 import com.anthropic.models.messages.TextBlockParam;
 import com.anthropic.models.messages.Tool;
 import com.anthropic.models.messages.ToolResultBlockParam;
@@ -21,6 +22,7 @@ import com.anthropic.models.messages.ToolUseBlockParam;
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.ToolDefinition;
+import com.pijava.ai.api.TransformMessages;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
@@ -201,8 +203,17 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
     }
 
     private MessageCreateParams buildParams(StreamRequest request) {
+        // pi anthropic-messages.ts:1029 —— 共享预通道跑在**适配器之外**，
+        // 在消息进入落线逻辑之前决定哪些块活下来（docs/31 §8.34.4 决策 1）。
+        var messages = TransformMessages.apply(
+                request.messages(), request.modelId(), apiName());
+        // pi anthropic-messages.ts:193 `model.compat?.allowEmptySignature ?? false` ——
+        // 经 StreamRequest 带到 :1047 的形参、再落到 :1304 的唯一行为点（决策 5 投送）。
+        // 缺席与 false 同义（pi 的 `?? false` 是二态，不是三态）。
+        var allowEmptySignature = request.model() != null
+                && request.model().compat().allowEmptySignature();
         var builder = MessageCreateParams.builder()
-                .model(request.model().modelName())
+                .model(request.modelId().modelName())
                 .maxTokens(request.maxTokens() > 0 ? request.maxTokens() : 4096L);
 
         // 系统提示是请求上的独立字段（pi anthropic-messages.ts:1074 读 context.systemPrompt），
@@ -212,8 +223,8 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
             builder.system(systemText);
         }
 
-        for (int i = 0; i < request.messages().size(); i++) {
-            var msg = request.messages().get(i);
+        for (int i = 0; i < messages.size(); i++) {
+            var msg = messages.get(i);
 
             // Anthropic requires tool_result blocks inside a user message
             // (pi anthropic-messages.ts maps toolResult -> role "user" and
@@ -221,8 +232,8 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
             if (msg instanceof Message.ToolResultMessage) {
                 var resultBlocks = new ArrayList<ContentBlockParam>();
                 int j = i;
-                while (j < request.messages().size()
-                        && request.messages().get(j) instanceof Message.ToolResultMessage tool) {
+                while (j < messages.size()
+                        && messages.get(j) instanceof Message.ToolResultMessage tool) {
                     resultBlocks.add(toToolResultBlock(tool));
                     j++;
                 }
@@ -234,7 +245,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                 continue;
             }
 
-            var blockParams = toBlockParams(msg);
+            var blockParams = toBlockParams(msg, allowEmptySignature);
             if (blockParams.isEmpty()) continue;
 
             var role = msg instanceof Message.UserMessage
@@ -278,14 +289,23 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         return builder.build();
     }
 
-    private List<ContentBlockParam> toBlockParams(Message msg) {
+    private List<ContentBlockParam> toBlockParams(Message msg, boolean allowEmptySignature) {
         var result = new ArrayList<ContentBlockParam>();
         for (var block : msg.content()) {
             if (block instanceof ContentBlock.TextContent tc) {
+                // pi 两条车道都按 trim 判空丢弃文本块：assistant 车道 `:1282`
+                // （`if (block.text.trim().length === 0) continue;`）、user 车道
+                // `:1262-1268` 的 filteredBlocks + `:1269 continue`（另有字符串形态内容
+                // 的 `:1241-1246`）。pi-java 的 toBlockParams 两条车道共用 ⇒ 一处即够。
+                // 整个消息的块被清空后不再落线，由调用点 `blockParams.isEmpty()` 承担，
+                // 对应 pi 的 `:1269`/`:1331` 两处 continue。
+                if (tc.text() == null || tc.text().trim().isEmpty()) {
+                    continue;
+                }
                 result.add(ContentBlockParam.ofText(
                         TextBlockParam.builder().text(tc.text()).build()));
             } else if (block instanceof ContentBlock.ThinkingContent th) {
-                appendThinkingBlock(result, th);
+                appendThinkingBlock(result, th, allowEmptySignature);
             } else if (block instanceof ContentBlock.ToolUseContent tu) {
                 var input = ToolUseBlockParam.Input.builder()
                         .putAllAdditionalProperties(toJsonValues(tu.arguments()))
@@ -296,28 +316,57 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                         .input(input)
                         .build()));
             }
-            // ThinkingContent is dropped: replaying thinking blocks requires
-            // the original signature, and assistant history only needs the
-            // tool_use/text content for the model to continue correctly.
+            // 其余变体（ImageContent / UrlImageContent / DiffContent）此处**静默丢弃**
+            // —— pi 在 user 车道把图片映射成 `{type:"image",source:{...}}`
+            // （`anthropic-messages.ts:1250-1260`），pi-java 的 Anthropic 车道缺这条。
+            // 已登记为 B16，本包不动（行为变更须先过设计）。
         }
         return result;
     }
 
     /**
-     * Replay a thinking block per pi's rule (anthropic-messages.ts:1188-1211):
-     * with a signature → thinking block carrying it; without → downgrade to
-     * plain text; empty thinking and no signature → skip entirely.
+     * 落线：一块 thinking 变成什么线格（pi {@code anthropic-messages.ts:1287-1321}，逐分支对照）。
+     *
+     * <pre>
+     * block.redacted                  → {type:"redacted_thinking", data: signature}   // :1289-1294
+     * hasSignature = !!sig &amp;&amp; trim 非空                                                  // :1296
+     * text trim 为空 且 无签名          → 丢弃                                             // :1298
+     * 无签名 → allowEmptySignature ? {type:"thinking",thinking,signature:""} : {type:"text",text}  // :1300-1312
+     * 有签名                          → {type:"thinking",thinking,signature}           // :1313-1319
+     * </pre>
+     *
+     * <p>⚠️ 此处**不再判同模型/异模型**：那个决定已由闸（{@code TransformMessages}）做完，
+     * 能走到这里的 thinking 恒是同模型的（异模型的在闸里已降级成 TextContent 或被丢弃）。
+     * pi 在同一位置也不判身份 —— 判身份的是 {@code transformMessages} 那一层。</p>
+     *
+     * <p>⚠️ 与 pi 的**一处刻意偏差**：pi `:1316` 落线的是**未 trim** 的
+     * {@code thinkingSignature}（它只在 `:1296` 的判空里 trim 过）。pi-java 落 trim 后的值
+     * （沿用包①之前 `:318` 的写法）。差别只在签名首尾带空白时可见，而真 Anthropic 的
+     * 签名是无空白 base64；两处判空语义一致，故本包**不改**这一处（§8.34.6-2）。</p>
      */
     private void appendThinkingBlock(List<ContentBlockParam> result,
-                                     ContentBlock.ThinkingContent th) {
-        var signature = th.signature() == null ? "" : th.signature().trim();
-        var text = th.text() == null ? "" : th.text();
-        if (text.isBlank() && signature.isEmpty()) {
+                                     ContentBlock.ThinkingContent th,
+                                     boolean allowEmptySignature) {
+        if (th.redacted()) {
+            result.add(ContentBlockParam.ofRedactedThinking(
+                    RedactedThinkingBlockParam.builder().data(th.signature()).build()));
             return;
         }
-        if (signature.isEmpty()) {
-            result.add(ContentBlockParam.ofText(
-                    TextBlockParam.builder().text(text).build()));
+        var signature = th.signature() == null ? "" : th.signature().trim();
+        var text = th.text() == null ? "" : th.text();
+        var hasSignature = !signature.isEmpty();
+        if (text.trim().isEmpty() && !hasSignature) {
+            return;
+        }
+        if (!hasSignature) {
+            result.add(allowEmptySignature
+                    ? ContentBlockParam.ofThinking(
+                        com.anthropic.models.messages.ThinkingBlockParam.builder()
+                                .thinking(text)
+                                .signature("")
+                                .build())
+                    : ContentBlockParam.ofText(
+                        TextBlockParam.builder().text(text).build()));
             return;
         }
         result.add(ContentBlockParam.ofThinking(

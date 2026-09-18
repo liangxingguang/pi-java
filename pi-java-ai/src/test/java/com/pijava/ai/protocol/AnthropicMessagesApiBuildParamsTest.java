@@ -37,6 +37,26 @@ class AnthropicMessagesApiBuildParamsTest {
         return (MessageCreateParams) method.invoke(api, request);
     }
 
+    /**
+     * 生产形状的助手消息：身份三元组由 {@code AbstractChatApi} 出口挂上
+     * （{@code api} = 适配器名、{@code provider}/{@code model} = 目标模型，见
+     * {@code AbstractChatApi:174-178}），会话恢复时由 {@code MessageJsonCodec:41-49} 原样读回。
+     *
+     * <p>⚠️ 这不是「为迁就新规则而补的字段」：pi 的 {@code AssistantMessage} 里
+     * {@code provider}/{@code api}/{@code model} 是 <b>required</b> ——「无身份的助手消息」
+     * 在 pi 里根本不存在。包②（docs/31 §8.34）之前，本文件用
+     * {@code AssistantMessage(content)} 兼容构造器造出了那个 pi 造不出的状态，旧适配器
+     * 不看身份所以恒绿；而新规则是**条件**规则（同模型才重放签名），夹具就必须给出条件。</p>
+     *
+     * <p>不这么做还有一层代价：身份为 {@code null} ⇒ 判**异模型** ⇒ thinking 在闸里
+     * 就被降级/丢弃，于是下面那三条夹具**根本走不到**它们各自点名的那条落线分支
+     * —— 名字与覆盖面对不上，正是 §8.34.5-a 的「夹具没牙」。</p>
+     */
+    private static Message.AssistantMessage assistant(ContentBlock... blocks) {
+        return new Message.AssistantMessage(List.of(blocks), "end_turn", null,
+            "anthropic-messages", "anthropic", "claude-sonnet-5", null, null, null);
+    }
+
     @Test
     void passesToolsToTheRequest() throws Exception {
         var request = new StreamRequest(
@@ -170,10 +190,10 @@ class AnthropicMessagesApiBuildParamsTest {
             List.of(
                 new Message.UserMessage(
                     List.of(new ContentBlock.TextContent("list files"))),
-                new Message.AssistantMessage(List.of(
+                assistant(
                     new ContentBlock.ThinkingContent("I should list files.", "sig_abc"),
                     new ContentBlock.ToolUseContent(
-                        "toolu_01", "ls", Map.of("path", "."))))),
+                        "toolu_01", "ls", Map.of("path", ".")))),
             List.of(), 100, 0.5, Map.of());
 
         var params = buildParams(request);
@@ -194,8 +214,7 @@ class AnthropicMessagesApiBuildParamsTest {
             List.of(
                 new Message.UserMessage(
                     List.of(new ContentBlock.TextContent("hi"))),
-                new Message.AssistantMessage(List.of(
-                    new ContentBlock.ThinkingContent("implicit reasoning")))),
+                assistant(new ContentBlock.ThinkingContent("implicit reasoning"))),
             List.of(), 100, 0.5, Map.of());
 
         var params = buildParams(request);
@@ -216,8 +235,7 @@ class AnthropicMessagesApiBuildParamsTest {
             List.of(
                 new Message.UserMessage(
                     List.of(new ContentBlock.TextContent("hi"))),
-                new Message.AssistantMessage(List.of(
-                    new ContentBlock.ThinkingContent("  ")))),
+                assistant(new ContentBlock.ThinkingContent("  "))),
             List.of(), 100, 0.5, Map.of());
 
         var params = buildParams(request);

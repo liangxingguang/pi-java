@@ -5,7 +5,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.model.ModelCapability;
+import com.pijava.ai.model.ModelId;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -116,6 +118,78 @@ class ModelsJsonConfigTest {
         assertThat(m1.maxOutputTokens()).isEqualTo(16_384);
         assertThat(m1.pricing().inputPrice()).isEqualTo(1.5);
         assertThat(m1.pricing().outputPrice()).isEqualTo(6.0);
+    }
+
+    // ------------------------------------------------- B8-3：models.json 的 compat 块
+
+    /**
+     * <b>B8-3</b>：{@code compat.allowEmptySignature} 从 models.json 读进
+     * {@link com.pijava.ai.catalog.ModelInfo#compat()}。
+     *
+     * <p>与 B8-1/B8-2（{@code AnthropicThinkingReplayTest}）分工：那两条钉**投送与落线**
+     * （compat 从 {@code StreamRequest} 到唯一行为点），这条钉**入口**（文件 → 目录元数据）。
+     * 两者互不依赖 —— 这条不经过 {@code StreamRequest}，所以即使投送链断了也照样绿。</p>
+     */
+    @Test
+    void readsAllowEmptySignatureFromCompatBlock() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "anthropic-messages",
+              "models": [{"id": "m1", "compat": {"allowEmptySignature": true}}]
+            }}}
+            """);
+
+        var model = config.catalog().find(ModelId.of("relay", "m1")).orElseThrow();
+
+        assertThat(model.compat().allowEmptySignature()).isTrue();
+    }
+
+    /**
+     * <b>B8-3</b>：没有 {@code compat} 块 ⇒ 全 false（{@link ModelCompat#NONE}）。
+     *
+     * <p>pi `anthropic-messages.ts:193` 的 `?? false` 把「缺席」与「false」归一 ⇒ **二态**，
+     * 不是三态（§8.34.4 决策 3）。这条与上一条合起来把二态钉成事实。</p>
+     */
+    @Test
+    void absentCompatBlockMeansNoFlags() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "anthropic-messages",
+              "models": [{"id": "m1"}]
+            }}}
+            """);
+
+        var model = config.catalog().find(ModelId.of("relay", "m1")).orElseThrow();
+
+        assertThat(model.compat()).isEqualTo(ModelCompat.NONE);
+    }
+
+    /**
+     * <b>B8-3</b>：{@code compat} 块里**未知**的键被忽略（pi-java 只做被消费的那些标志）。
+     *
+     * <p>⚠️ 这是与 pi 的一处**刻意不同**：pi 的 compat 接口有八个字段，pi-java 只携带被实际
+     * 消费的一个（{@code ModelCompat} 的 javadoc 记着这条）。忽略未知键使「pi 新加的 compat
+     * 标志」不会把文件打崩 —— 代价是新标志会**静默失效**，故此处显式钉住该行为，
+     * 免得日后误以为是解析 bug。</p>
+     */
+    @Test
+    void ignoresUnknownKeysInsideCompatBlock() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "anthropic-messages",
+              "models": [{"id": "m1", "compat": {
+                "allowEmptySignature": true,
+                "someFutureFlag": 1
+              }}]
+            }}}
+            """);
+
+        var model = config.catalog().find(ModelId.of("relay", "m1")).orElseThrow();
+
+        assertThat(model.compat()).isEqualTo(ModelCompat.of(true));
     }
 
     @Test
