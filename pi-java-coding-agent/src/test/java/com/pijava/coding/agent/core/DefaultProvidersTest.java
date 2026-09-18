@@ -2,6 +2,7 @@ package com.pijava.coding.agent.core;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Flow;
 
@@ -12,12 +13,17 @@ import com.pijava.ai.api.ChatApi;
 import com.pijava.ai.api.ProviderApi;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.catalog.BuiltinCatalog;
 import com.pijava.ai.catalog.ModelCatalog;
+import com.pijava.ai.catalog.ModelCompat;
+import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
+import com.pijava.ai.model.PricingInfo;
 import com.pijava.ai.provider.Provider;
 import com.pijava.ai.provider.ProviderRegistry;
 import com.pijava.ai.stream.StreamEvent;
+import com.pijava.ai.thinking.ThinkingLevelMap;
 import com.pijava.coding.agent.cli.ArgsParser;
 
 import org.junit.jupiter.api.Test;
@@ -154,15 +160,82 @@ class DefaultProvidersTest {
         assertThat(calls).containsExactly("alpha");
     }
 
+    // ── 决策 5（docs/31 §8.34.4）：请求带整个 ModelInfo，不是只有 id ───────
+
+    /**
+     * <b>RE-决策 5</b>：适配器收到的是**目录里的整个 {@link ModelInfo}**。
+     *
+     * <p>要证的正是这条**通道**本身。包② 开工前 {@code streamBlocking} 只投
+     * {@link ModelId}（走 7 参便捷构造器 ⇒ {@code ModelInfo.minimal}），于是 models.json
+     * 里的 per-model 标志到不了适配器 —— {@code compat.allowEmptySignature} 与
+     * extended thinking 两条都因此不可达（docs/32 B15）。</p>
+     *
+     * <p>⚠️ 与 {@code AnthropicThinkingReplayTest} 的 B8-1 **分工必须说清**：B8-1 自己造
+     * {@code StreamRequest}，所以它只证明「落线读了 compat」；把本方法所在的投送链改回只投
+     * id，B8-1 **照样绿**。缺了本夹具，决策 5 就没有任何一条夹具守着。</p>
+     */
+    @Test
+    void streamFnCarriesCatalogModelMetadata() {
+        var info = new ModelInfo(ModelId.of("alpha", "alpha-model"), "Alpha Model",
+            Set.of(), 128_000, 16_384, false, PricingInfo.UNKNOWN,
+            ThinkingLevelMap.empty(), Map.of(), Map.of(), ModelCompat.of(true));
+        var alpha = new RecordingProvider("alpha", new ArrayList<>(),
+            BuiltinCatalog.of(List.of(info)));
+        var registry = ProviderRegistry.create();
+        registry.register(alpha);
+
+        var args = ArgsParser.parse(new String[] {"--provider", "alpha"});
+        var streamFn = DefaultProviders.streamFnFor(args, "alpha", registry, new Settings());
+
+        streamFn.stream(ModelId.of("alpha", "alpha-model"),
+            Context.of(List.of()), StreamOptions.defaults());
+
+        assertThat(alpha.requests).hasSize(1);
+        assertThat(alpha.requests.get(0).model().compat().allowEmptySignature()).isTrue();
+    }
+
+    /**
+     * <b>回归门</b>：目录里**查不到**该模型 ⇒ 退化为 {@code ModelInfo.minimal}，但 id 仍在。
+     *
+     * <p>钉的是「容忍未知模型」这条既有行为不被本次改动破坏：id 是所有适配器都要读的
+     * （线格上的 model 名、消息身份三元组），不能因为目录未命中就丢；而合成的元数据
+     * compat 为 false ≡ pi 的 {@code ?? false}，是安全方向（§8.34.4 决策 5）。</p>
+     */
+    @Test
+    void unknownModelStillCarriesItsId() {
+        var alpha = new RecordingProvider("alpha", new ArrayList<>());
+        var registry = ProviderRegistry.create();
+        registry.register(alpha);
+
+        var args = ArgsParser.parse(new String[] {"--provider", "alpha"});
+        var streamFn = DefaultProviders.streamFnFor(args, "alpha", registry, new Settings());
+
+        streamFn.stream(ModelId.of("alpha", "ghost-model"),
+            Context.of(List.of()), StreamOptions.defaults());
+
+        assertThat(alpha.requests).hasSize(1);
+        assertThat(alpha.requests.get(0).modelId())
+            .isEqualTo(ModelId.of("alpha", "ghost-model"));
+        assertThat(alpha.requests.get(0).model().compat().allowEmptySignature()).isFalse();
+    }
+
     /** 桩 provider：只把自己被调用的名字记进共享日志，不触网。 */
     private static final class RecordingProvider implements Provider {
 
         private final String name;
         private final List<String> calls;
+        private final ModelCatalog catalog;
+        /** 适配器**实际收到**的请求 —— 决策 5 的观测面。 */
+        private final List<StreamRequest> requests = new ArrayList<>();
 
         RecordingProvider(String name, List<String> calls) {
+            this(name, calls, ModelCatalog.empty());
+        }
+
+        RecordingProvider(String name, List<String> calls, ModelCatalog catalog) {
             this.name = name;
             this.calls = calls;
+            this.catalog = catalog;
         }
 
         @Override public String name() { return name; }
@@ -175,14 +248,20 @@ class DefaultProvidersTest {
 
         @Override public <T extends ProviderApi> T createApi(Class<T> apiType, ApiOptions options) {
             calls.add(name);
-            return apiType.cast(new RecordingChatApi());
+            return apiType.cast(new RecordingChatApi(requests));
         }
 
-        @Override public ModelCatalog builtinModels() { return ModelCatalog.empty(); }
+        @Override public ModelCatalog builtinModels() { return catalog; }
     }
 
-    /** 桩 ChatApi：满足接口即可，事件流为空（本夹具只观测适配器选择）。 */
+    /** 桩 ChatApi：满足接口即可，事件流为空（本夹具只观测适配器选择/请求载荷）。 */
     private static final class RecordingChatApi implements ChatApi {
+
+        private final List<StreamRequest> requests;
+
+        RecordingChatApi(List<StreamRequest> requests) {
+            this.requests = requests;
+        }
 
         @Override public Flow.Publisher<StreamEvent> stream(StreamRequest request,
                                                             ApiOptions options) {
@@ -190,6 +269,7 @@ class DefaultProvidersTest {
         }
 
         @Override public StreamIterator streamBlocking(StreamRequest request, ApiOptions options) {
+            requests.add(request);
             return StreamIterator.from(List.of());
         }
 
