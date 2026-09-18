@@ -4570,9 +4570,15 @@ base64；两处**判空语义一致**（`isEmpty` vs `trim().isEmpty()` 在该�
 
 > **状态**：设计已落地并经用户审核；本包**按 B19 → B20 的顺序逐条实施**。
 > **B19（收/发两侧）已闭环**（§8.35.13，`ffc43e2`/`b916d29`/`478fe91`/`7369ae6`）；
-> **B22** 顺带修（§8.35.11）；**B20（stop reason 映射）是下一个**，其首提交为 D1 的 P0 只读探针。
+> **B22** 顺带修（§8.35.11）；**B20 设计定稿已落地**（§8.35.14，**待用户审核**），
+> 实施计划 ⑩ 个提交；D1 的「P0 只读探针」作为首个提交**被用户否决**，改为提交 ④ 的**真实车道门**。
 > 本包**不占**既有 ③/④ 序号（③ = B5 宿主层 `Error` 通道、④ = B3/B12），文中称 **「响应侧字段覆盖包」**。
-> 登记：`docs/32` 的 **B19 / B20 / B21**（B 类 13→16 行，B22/B23 随接线夹具、B24 随 B19 登记，现 24 行）。
+> 登记：`docs/32` 的 **B19 / B20 / B21**（B 类 13→16 行，B22/B23 随接线夹具、B24 随 B19、
+> **B25/B26 随 §8.35.14 的审计更正**登记）。
+>
+> ⚠️ **§8.35.14 撤回本节两处结论**（复核 pi 源码所证伪，非笔误）：
+> ① §8.35.2 末行「Responses ✅ 已对齐」**作废**（实为 α/β/γ/δ/ε 五处差距）；
+> ② §8.35.2 末段「`rawStopReason` 零消费者 ⇒ 不移植」的**结论**作废（读点在**生产者层** Google 车道，2 处）。
 
 #### 8.35.0 立案：一次生产事故，牵出的是一整层
 
@@ -4666,7 +4672,7 @@ pi 的两条（**必须拆开照抄，不能合成一个门**）：
 | **openai-completions** | `:132` 硬写 `toolCall.started() ? "tool_use" : "stop"` | `:571-577` + `mapStopReason(:1550-1571)`：stop/end→stop、length→length、function_call/tool_calls→toolUse、content_filter/network_error→error+text、未知→error+text | 同上 |
 | **Google** | `:149-156` 把 `finishReason().toString().toLowerCase()` **原样透传** | `google-shared.ts:379-411`：`STOP`→stop、`MAX_TOKENS`→**length**、其余（SAFETY/RECITATION/…共 15 种）→**error** | `MAX_TOKENS`→`"max_tokens"`（≠length）、`SAFETY`→`"safety"`（≠error） |
 | **Mistral** | `:151-154` 只把 `tool_calls` 归一成 `tool_use`，其余原样 | `mistral-conversations.ts:926-941`：`stop`→stop、`length`/**`model_length`**→length、`tool_calls`→toolUse、`error`→error+text、未知→error+text | 无 error 兜底、无 `model_length`、**无 errorMessage** |
-| **Responses** | `:190-197` `mapStopReason(...)` | `openai-responses-shared.ts:763-796` | ✅ 已对齐（唯一一条） |
+| **Responses** | `:190-197` `mapStopReason(...)` | `openai-responses-shared.ts:763-796` | ~~✅ 已对齐（唯一一条）~~ ⚠️ **该判定已在 §8.35.14 第四节作废**：复核出 **α/β/γ/δ/ε 五处**差距（default 不抛、`incomplete` 无文案、`done("error")`、`response.failed` 文案、出错后继续消费） |
 
 **为什么这条比「少一个字段」严重得多 —— 它是 `length` 机制的活命条件。**
 
@@ -4702,9 +4708,11 @@ pi 的规则是「**length 截断 ⇒ 本回合全部工具调用判失败、不
 ⇒ 列为本包**裁决点 D2**（§8.35.8），**不擅自改**（要动一批夹具，且既有转录已在盘上）。
 
 **顺带复核 `rawStopReason`（`:1080` 的旧裁定）**：旧裁定说它在对齐面「零消费者」⇒ 不移植。
-本次**全仓复核支持并加强**该裁定：pi 侧 `rawStopReason` 的引用**只有一处** —— 声明
-（`packages/ai/src/types.ts:443`）；**八个适配器写它，零个消费者读它**（`packages/*/src` 全文扫描，
-除 `packages/ai/src/api/*` 外无命中）。⇒ **维持不做**，本包不引入该字段。
+本次**全仓复核推翻了该结论**（详见 §8.35.14 第五节）——「在对齐面 `packages/agent/src` 没有消费者」这句**是对的**，
+但**读点在生产者层**：`google-generative-ai.ts:272-273` 与 `google-vertex.ts:289-290` 两处用它拼
+`"Provider stopped with: ${raw}"`，而那正是**本包第五节 Google 车道收尾文案的唯一来源**。
+原文的「八个适配器写它，零个消费者读它」已作废（写点 10 处、读点 2 处）。
+⇒ **移出「本包不引入」清单**，改列**裁决点 D5**（§8.35.14 第五节）。
 
 #### 8.35.3 非本事故因素：请求侧 `compat.thinkingFormat`（B21）
 
@@ -4785,7 +4793,8 @@ pi-java 的等价物是 `emitError("error", new RuntimeException(文本))`，由
   `detected` **恒 false**（`:1642`），只有用户显式写 `model.compat` 才开；pi-java 无此 flag ⇒ **不可表达**。
   ⚠️ 它与 B19 的修法**在同一处**（真要加是 4 行），但**无用户需求证据** ⇒ 本包不做。
 - **B21**：请求侧 `thinkingFormat`（§8.35.3）。
-- **`rawStopReason`**：维持不做（§8.35.2 末）。
+- **`rawStopReason`**：~~维持不做（§8.35.2 末）~~ ⚠️ **已改判** —— 该条「零消费者」的结论在
+  §8.35.14 第五节被证伪，改列**裁决点 D5**（建议全量移植）。
 - **Responses 车道不看 `supportsFinishReason`**：pi 的 responses 映射**没有**该 compat 分支
   （`:763-796`，缺 status 直接 `return {stopReason:"stop"}`）⇒ pi-java 照抄「不看」，**不补**。
 - **Bedrock 等 pi 有、pi-java 没有的车道**：无车道 ⇒ 无「响应侧」可覆盖。
@@ -4807,7 +4816,7 @@ P2/P3，确认「可见 token ≈ 计费 token」（今天 2/127 ⇒ 目标 >100
 核对转录 `stopReason`（依 D2）。**探针仍走真实车道、trace 目录重定向**，不碰 `~/.pi-java` 的会话。
 
 **不做**：不动 `content` 的纯字符串形态（§8.35.1-2）；不抽公共 `mapStopReason`（§8.35.5）；
-不引入 `rawStopReason`；不做 `reasoning_details` / `requiresThinkingAsText`；不改请求侧 `thinkingFormat`；
+~~不引入 `rawStopReason`~~（**已改判**，见 §8.35.14 第五节 D5）；不做 `reasoning_details` / `requiresThinkingAsText`；不改请求侧 `thinkingFormat`；
 不碰 `PiMessagesApi` 的闸与它自己的 wire 形状（§8.34.11-（1）的裁决不变）。
 
 #### 8.35.10 B10 接线夹具「先红证毕」：5 红 1 绿，其中 **2 条红得不是地方**（新登记 B22/B23）
@@ -5022,6 +5031,181 @@ models.json 那侧的入口夹具同样探针过（`compatOf` 退回二态 ⇒ �
 
 **未做（如实登记）**：B24（`choice.usage` 回退，另一层）仍开放；B20（stop reason 映射）
 是**下一个包**，其首个提交是 D1 的 P0 只读探针。
+
+#### 8.35.14 B20 设计定稿：三条裁决落地 + **两处审计更正**（含新裁决点 D5）
+
+本节是 B20 的**实施蓝图**。它同时**撤回 §8.35.2 的一行结论**（Responses「✅ 已对齐」）
+与**一段结论**（`rawStopReason` 零消费者）—— 两者都是本次复核 pi 源码时被**证伪**的，故按
+「登记发现」的规矩先把更正写在这里，再动代码。
+
+##### 一、裁决回执（用户已拍板）
+
+| # | 裁决 | 落地 |
+|---|---|---|
+| **D1** | **直接照 pi 严格版**（放弃「P0 只读探针」作为首个提交，§8.35.8 的建议(a)后半段**被否**） | 提交 ④：`supportsFinishReason` 默认 `true`，缺 `finish_reason` ⇒ **抛** |
+| **D2** | Anthropic 正常结束 `end_turn` → **`"stop"`** | 提交 ③（独立，因其动 7 个测试文件） |
+| **D3** | Google / Mistral **并入**本包，但**提交分车道** | 提交 ⑤ / ⑥ |
+| **D4** | B10 接线先于本包 | 已执行（§8.35.11） |
+
+**D1 的残留风险如实登记**：P0 探针被否 ⇒「这个 relay 到底发不发 `finish_reason`」**仍未观测**。
+补偿不是探针而是**门**：提交 ④ 的完成条件包含 §8.35.9 ④ 的**真实车道回归**——用配置里的
+`teamorouter` 跑一次真实请求（trace 目录重定向、不碰 `~/.pi-java` 的会话），**确认线格里有
+`finish_reason`** 才算过。若届时发现它不发，则停下来回头请裁决（严格版会让今天能跑的 relay 全失败）。
+
+##### 二、逐车道 pi 语义（定稿，逐行出处）
+
+| 车道 | 映射 | 取值表 | 收尾文案（缺 reason / error 兜底） |
+|---|---|---|---|
+| **Anthropic** | `mapStopReason(reason, stopDetails)` `anthropic-messages.ts:1464-1493` | `end_turn`→stop、`max_tokens`→**length**、`tool_use`→toolUse、`refusal`→error+`stopDetails?.explanation \|\| "The model refused to complete the request"`、`pause_turn`/`stop_sequence`→stop、`sensitive`→error+`"Provider stopped with: sensitive"`、**其余 throw** | `"Anthropic stream ended without a stop reason"` / `"An unknown error occurred"` |
+| **completions** | `:1550-1571` | `null`→stop、`stop`/`end`→stop、`length`→length、`function_call`/`tool_calls`→toolUse、`content_filter`→error+`"Provider finish_reason: content_filter"`、`network_error`→error+`"Provider finish_reason: network_error"`、**其余 error**+`` `Provider finish_reason: ${reason}` ``（**不抛**） | `"Stream ended without finish_reason"` / **`"Provider returned an error stop reason"`**（措辞与其他三条不同） |
+| **Google** | `google-shared.ts:379-411` | `STOP`→stop、`MAX_TOKENS`→length、**15 个**（BLOCKLIST/PROHIBITED_CONTENT/SPII/SAFETY/IMAGE_SAFETY/IMAGE_PROHIBITED_CONTENT/IMAGE_RECITATION/IMAGE_OTHER/RECITATION/FINISH_REASON_UNSPECIFIED/OTHER/LANGUAGE/MALFORMED_FUNCTION_CALL/UNEXPECTED_TOOL_CALL/NO_IMAGE）→error（**无文案**）、**其余 throw** | `"Google stream ended without a finish reason"` / 由 **`rawStopReason`** 拼 `` `Provider stopped with: ${raw}` ``，缺失才 `"An unknown error occurred"` |
+| **Mistral** | `:926-941` | `null`→stop、`stop`→stop、`length`/**`model_length`**→length、`tool_calls`→toolUse、`error`→error+`"Provider stopped with: error"`、**其余 error**+`` `Provider stopped with: ${reason}` ``（**不抛**） | `"Mistral stream ended without a finish reason"` / `"An unknown error occurred"` |
+| **Responses** | `openai-responses-shared.ts:763-796` | 见第四节（**本包要修**） | `"OpenAI Responses stream ended without a stop reason"` / `"An unknown error occurred"` |
+
+**completions 独有的中间一步**（`openai-completions.ts:685-687`，夹在 abort 检查与 error 检查**之间**）：
+`!hasFinishReason && !compat.supportsFinishReason` ⇒ 就地改写为 `toolCall?toolUse:stop` —— 即
+**容忍版**（D1 的选项 (b)）在 pi 里**存在**，只是默认关着（`detected.supportsFinishReason` 恒 `true`，`:1638`）。
+
+##### 三、pi-java 的三个结构性偏差（本包修两个、注明一个）
+
+**① `error` 之后仍发 `done`（γ 的车道侧形态）** —— 五个车道**无一例外**：`mapEvent`/事件循环的
+`catch` 已经 `builder.emitError(...)`，但 `streamInternal` 随后**照样** `emitDone(...)`。
+pi 在收尾处是 **`throw`**，外层 `catch` 发完 `{type:"error"}` 就 `stream.end()`——**一条流只有一个终局事件**。
+今天 pi-java 的物理错误轮次在通道上是「先 `error` 后 `done`」两条。
+⇒ 收尾必须**先判后发**：`error`/`aborted` 走 `emitError` 且**不再** `emitDone`。
+
+**② 没有 `pending` 概念** —— pi 的累加器初值 `stopReason: "pending"`（`:526`/`:333`/`:75`/`:222`/`:444`），
+收尾拿它当「**一个 stop reason 都没观测到**」的哨兵；pi-java 各车道用**局部变量兜底成 `"stop"`**
+（Google `:161`、Mistral `:79`/`:104`），把「什么都没看到」伪装成「正常结束」。
+⇒ 严格版（D1）要的就是**区分这两件事**。
+
+**③ aborted 半段在车道层不可达（本包不改，只注明）** —— `StreamRequest` **没有** abort signal
+（pi 的 `options.signal`），故 pi 收尾的第一个检查（`:779`/`:682`/`:264`/`:150`）与
+`stopReason === "aborted"` 分支在车道层**结构上不可达**；pi-java 把它上提到宿主层
+`PiLoopRunner.markAborted`（`:291-303`，已有 javadoc 说明「provider 层看不见信号」）。
+⇒ **维持该分工**，各车道补一句注释指向它，**不**把 signal 塞进 `StreamRequest`。
+
+##### 四、审计更正 A：§8.35.2 表格末行「**Responses ✅ 已对齐**」**作废**
+
+那一行是**唯一**被判为已对齐的，本次逐行复核 `openai-responses-shared.ts` + `openai-responses.ts`
+后发现**五处**差距。**先说为什么它比前四条更值得写清楚**：pi 的 `errorMessage` 是重试分类器
+`RetryableError.isRetryableAssistantError`（`pi-java-ai`/`utils/RetryableError.java:140-150`）的
+**唯一输入**（要求 `stopReason=="error"` ∧ `errorMessage` 非空 ∧ 命中瞬断白名单）——文案丢了，
+环 A 在那条路径上就恒 false。
+
+| # | 位置 | pi | pi-java 现状 | 后果 |
+|---|---|---|---|---|
+| **α** | `mapStopReason` 的 `default`（`:789-791`） | **`throw new Error("Unhandled stop reason: …")`** | `:201` `default -> "stop"` | 新状态被当成**正常结束** |
+| **β** | `incomplete` 且非 `max_output_tokens`（`:771-781`） | `stopReason:"error"` + `"Response incomplete: X"`（无 reason 时 `"Response incomplete without a provider reason"`），经外层 catch 成 `{type:"error"}` | `:197` 只回 `"error"`，**无文案、且不发 error 事件** | 转录取不到原因；重试分类器拿不到文本 |
+| **γ** | 终局事件的**类型** | pi **从不**发 `done("error")`（收尾处 `:184-189` 先 throw） | `:174` `emitDone("error")` | 「done = 成功」这条协议不变量被破 |
+| **δ** | `response.failed` 的文案（`:749-757`） | `` `${error.code \|\| "unknown"}: ${error.message \|\| "no message"}` `` → 退化 `incomplete: X` → `"Unknown error (no error details in response)"` | `:205-211` `code + ": " + message`，退化 `"Response failed without error details"` | 三处文案都不同（`code()` 为 null 时 NPE 风险另计） |
+| **ε** | 出错后是否继续消费 | `throw` ⇒ **终止整条流** | `:105`/`:109` `emitError` 后**继续迭代**，后面的 `completed`/`outputTextDelta` 照样处理 | 出错后仍可能补出文本/工具调用 |
+
+⇒ 更正为「**Responses 车道同样是缺口，且是本次唯一一处『被判为已对齐、实为有缺口』的车道**」。
+`§8.35.2` 那行**保留原文并加作废批注**（历史记录性质，与本仓一贯做法一致）。
+
+##### 五、审计更正 B：`rawStopReason` 的「**零消费者**」结论被证伪 ⇒ 新裁决点 **D5**
+
+`Message.java:55-59` 与 §8.35.2 末段的原始论证是「pi 侧引用只有一处（声明），八个适配器写、**零个消费者读**」。
+**复核推翻**：pi 侧**有两个读点**，都在 Google 车道收尾，且它是那句文案的**唯一来源**：
+
+- `packages/ai/src/api/google-generative-ai.ts:272-273`
+- `packages/ai/src/api/google-vertex.ts:289-290`
+
+```
+const errorMessage = output.rawStopReason
+    ? `Provider stopped with: ${output.rawStopReason}`
+    : "An unknown error occurred";
+```
+
+写点 10 处（`anthropic:744`、`bedrock:292`、`google:217`、`google-vertex:234`、`mistral:614`、
+`completions:572`、`responses-shared:588`/`:747`），声明在 `types.ts:443`。
+⇒ 原文的**措辞**其实是对的（「在对齐面（`packages/agent/src`）没有消费者」——两个读点都在
+**生产者层**），但**结论「故不移植」是错的**：pi-java 也要实现那一层，缺了它就**产不出** pi 的文案。
+
+**D5（请裁决）**：
+
+| 选项 | 内容 | 代价 |
+|---|---|---|
+| **(a)**（我建议） | **全量移植**：`AssistantMessage` 加第 10 个组件 + 五条车道写点 + `MessageJsonCodec` + `fromPartial`/`withStopReason`/`withErrorShape` 全投影 + 夹具 | 主源码 20 个构造点、codec、测试都要过一遍 |
+| **(b)** | 只做 Google 的**文案行为**：车道内局部量，**不加**消息字段 | 文案对齐、转录仍缺键 |
+| **(c)** | 维持不做 | 转录缺键 + Google 文案退化成 `"An unknown error occurred"` |
+
+**建议 (a)**，与 D2 同一条理由：D2 之所以要改，是因为「**每一份** Anthropic 转录的取值都不同」；
+`rawStopReason` 是**全车道、每一条消息**都写的键，属同一等级，不是边角。⚠️ 而 (b) 会让
+「文案对了、键还是没有」这种半对齐状态更难排查。
+
+##### 六、新发现 C：partial 的 `stopReason` **初值**应为 `"pending"`（与 D5 同类，建议并做）
+
+pi 五条车道的累加器都从 `stopReason: "pending"` 起（臂注：`:526`/`:333`/`:75`/`:222`/`:444`），
+且**只在终局事件改写** ⇒ 流进行中的**每一个** `message_update`（以及 `message_start`）载荷里
+`stopReason` 都是 `"pending"`。pi-java 的 `StreamPartialBuilder.stopReason` 初值是 `null`
+（序列化时键主动省略，`Message.java:61`）⇒ 两边**每一条中间帧**都不同。
+
+**为什么 S 系列差分测不到**：那套剧本走 `faux` provider，它的 partial 从一开始就是
+`stopReason: options.stopReason ?? "stop"`（`faux.ts:93`）⇒ 两侧都是 `"stop"`，**结构上覆盖不到**
+（与 §8.33「桩盖不住」同一形态）。
+
+**落地两选**：① `StreamPartialBuilder` 字段初值改 `"pending"`（收尾检查随之成为**字面量**）；
+② 各车道用局部布尔判「有没有观测到」。**建议 ①**（两件事一次做对），**但必须标注外溢**：
+`StreamPartialBuilder` 也被 **`PiMessagesApi`** 使用，而它不是 pi 的车道（§8.34.11-（1））；
+初值改动会让它的 partial 也带 `"pending"`——**这是可接受的**（pi-java 自有协议的 partial 形状本就
+跟随同一 builder），但要在提交信息里写明，**不改**它的任何其他行为。
+
+##### 七、提交计划（每项**独立可编译**，200–500 行内）
+
+| # | 提交 | 内容 |
+|---|---|---|
+| ① | `feat(ai): ModelCompat.supportsFinishReason` | `ModelCompat` 加第三组件（**默认 true**，与 `allowEmptySignature` **方向相反**）+ `ModelsJsonSchema.CompatDef` + `ModelsJsonConfig.compatOf` + 入口夹具 |
+| ② | `fix(ai): Anthropic 车道 stop reason 映射与收尾` | `mapStopReason`（含 `refusal` 取 `stopDetails.explanation`）+ 收尾三分支 + **不再 error 后发 done** |
+| ③ | `fix(ai): Anthropic 正常结束取值改为 stop（D2）` | `:94` 硬写点 + `AssistantMessage`/`StreamEvent` 词汇表 + 7 个测试文件（约 13 处） |
+| ④ | `fix(ai): openai-completions 车道 stop reason 映射与严格收尾（D1）` | `mapStopReason` + `supportsFinishReason` 门 + 收尾 |
+| ⑤ | `fix(ai): Google 车道 stop reason 映射与收尾` | 映射按**原始字符串**（Java SDK 1.15.0 的 `Known` **缺** IMAGE_*/NO_IMAGE 四种，未知值会被 `knownEnum()` 吞成 UNSPECIFIED，只能读 `toString()`）+ **新测试类** |
+| ⑥ | `fix(ai): Mistral 车道 stop reason 映射与收尾` | 同上 + **新测试类** |
+| ⑦ | `fix(ai): Responses 车道收尾语义更正` | α/β/γ/δ/ε 五条 |
+| ⑧ | `test(ai): 跨层回归门（线格 → 消息 → PiLoopRunner 的 length 门）` | §8.35.6 末行 |
+| ⑨ | （D5=(a)）`feat(ai): 助手消息携带 rawStopReason` | 第 10 个组件 + 五条车道写点 + codec |
+| ⑩ | （D5=(a)）`fix(ai): partial 的 stopReason 初值改为 pending` | `StreamPartialBuilder` 初值 + 外溢说明 |
+
+**收尾不抽公共方法（考虑后否决）**：五条车道的收尾看似同形，但**措辞逐条不同**
+（pending noun 五样、error 兜底 completions 是 `"Provider returned an error stop reason"`、
+Google 走 `rawStopReason`），抽出来只会变成一个 7 参外壳，反而**藏掉** pi 的逐车道差异
+⇒ 按 pi 的形状**各车道内联**（每处约 10 行）。
+
+##### 八、夹具计划（修订版；**每条先跑一遍把 actual 抄回本节**——§8.34.5 的纪律）
+
+| 夹具 | 喂什么 | 断言 | 今天 |
+|---|---|---|---|
+| `AnthropicMessagesApiTest` | `message_delta:{stop_reason:"max_tokens"}` | `StreamDone.reason()=="length"` | 红 |
+| 同上 | `stop_reason:"refusal"` + `stop_details:{explanation:"…"}` | `StreamError` 且文案 == explanation | 红 |
+| 同上 | `stop_reason:"end_turn"` | `"stop"`（D2） | 红 |
+| 同上 | `stop_reason:"sensitive"` | error + `"Provider stopped with: sensitive"` | 红 |
+| 同上 | 未知 `stop_reason` | error + `"Unhandled stop reason: X"`（**α 同形**） | 红 |
+| 同上 | 整条流无 `message_delta.stop_reason` | error + `"Anthropic stream ended without a stop reason"` | 红 |
+| `OpenAICompletionsApiTest` | `finish_reason:"length"` | `"length"` | 红 |
+| 同上 | `finish_reason:"content_filter"` | error + `"Provider finish_reason: content_filter"` | 红 |
+| 同上 | **整条流无** `finish_reason` | error + `"Stream ended without finish_reason"`（D1 严格） | 红 |
+| 同上 | 同上 + `compat.supportsFinishReason:false` | **不**报错：`toolCall?toolUse:stop` | 红 |
+| `GoogleGenerativeAiApiTest`（新类） | `finishReason:"MAX_TOKENS"` / `"SAFETY"` | `"length"` / error | 红 |
+| `MistralConversationsApiTest`（新类） | `"model_length"` / `"error"` / 未知值 | `"length"` / error+`"Provider stopped with: error"` / error+`"Provider stopped with: X"` | 红 |
+| `ResponsesStreamProcessor` 相关 | `response.incomplete` + `incomplete_details.reason!="max_output_tokens"` | **`StreamError`**（不是 done）且文案 `"Response incomplete: X"` | 红 |
+| 同上 | 未终局的流 | error + `"…before a terminal response event"` | 绿（对照） |
+| **跨层回归门** | 线格 → 消息 → `PiLoopRunner` | `length` 截断 ⇒ `PiLoopTools.run(..., **true**)`，工具**不执行** | 红 |
+
+⚠️ 每条**先红证毕**；R1 类「两侧同绿」的对照各做**变异探针**（§8.35.12 的教训形态 (6)：夹具
+若写在实现之后就没有红灯可看）。
+
+##### 九、验证与不做
+
+**验证**：① 逐条先红证毕（actual 抄回第八节）；② 跨层回归门；③ `mvn -o clean verify` 全 reactor
+绿 + checkstyle 零违规；④ **真实车道回归**（D1 的那道门）：`teamorouter` 跑一次真实请求、trace
+目录重定向，**确认线格里出现 `finish_reason`**；⑤ Anthropic 车道真实请求一次，核对转录 `stopReason`（D2）。
+
+**不做**：不把 abort signal 塞进 `StreamRequest`（第三节 ③ 已定）；不抽公共收尾方法（第七节末）；
+不碰 `PiMessagesApi` 的闸与协议形状（§8.34.11-（1）不变）；不做 `reasoning_details` /
+`requiresThinkingAsText`（§8.35.7）；不改请求侧 `thinkingFormat`（B21）；不引入 `rawStopReason`
+以外的 pi 消息字段（`responseModel`/`responseId`/`providerThinkingLevel`/`diagnostics`/`endTurn`
+的排除结论**维持**——它们**没有**本次这种「生产者层读点」的反例）。
 
 ---
 
