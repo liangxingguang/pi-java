@@ -1,18 +1,22 @@
 package com.pijava.ai.protocol;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.SubmissionPublisher;
+import java.util.function.Supplier;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.openai.core.JsonField;
 import com.openai.core.JsonValue;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
 import com.openai.models.FunctionDefinition;
 import com.openai.models.FunctionParameters;
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam;
+import com.openai.models.chat.completions.ChatCompletionChunk;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
 import com.openai.models.chat.completions.ChatCompletionFunctionTool;
 import com.openai.models.chat.completions.ChatCompletionMessageFunctionToolCall;
@@ -48,6 +52,20 @@ public class OpenAICompletionsApi extends AbstractChatApi {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     /**
+     * Wire names probed for reasoning text, **in probe order** — the first non-empty string
+     * wins (pi {@code openai-completions.ts:597-620}).
+     *
+     * <p>⚠️ Do not "unify" this with the replay-side list of accepted signature names
+     * ({@code :280-282}): pi keeps **two arrays with different orders on purpose**. This one
+     * decides which field is read when a relay returns two of them at once (chutes.ai sends
+     * both {@code reasoning_content} and {@code reasoning} with the same text, {@code :600-602}
+     * ⇒ {@code reasoning_content} wins); the other is only an {@code includes} test, where
+     * order cannot matter.</p>
+     */
+    private static final List<String> REASONING_PROBE_FIELDS =
+        List.of("reasoning_content", "reasoning", "reasoning_text");
+
+    /**
      * Create an adapter for the given options.
      *
      * @param options API options (apiKey or {@code OPENAI_API_KEY} required)
@@ -75,6 +93,11 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                                    SubmissionPublisher<StreamEvent> publisher) {
         var builder = new StreamPartialBuilder();
         boolean textStarted = false;
+        boolean thinkingStarted = false;
+        // pi 收尾时按**建块序**发 text_end / thinking_end（openai-completions.ts:674-676），
+        // 而建块序由线格决定（同一个 delta 里两者都有时 content 先处理、块先建）⇒ 记序，
+        // 不写死「先 thinking 还是先 text」。
+        var blockEnds = new ArrayDeque<Supplier<StreamEvent>>();
         var toolCall = new ToolCallAccumulator();
         try {
             var params = buildParams(request, apiName());
@@ -100,9 +123,28 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                             if (!textStarted) {
                                 publisher.submit(builder.emitTextStart());
                                 textStarted = true;
+                                blockEnds.add(builder::emitTextEnd);
                             }
                             publisher.submit(builder.emitTextDelta(text));
                         }
+                    }
+
+                    // Reasoning (pi :597-620). The three wire names are not modelled by the
+                    // SDK, so they are read off `_additionalProperties()`. The matched name
+                    // becomes the block's signature — that is what lets replay send the text
+                    // back under the **same** field without guessing (see addAssistantMessage).
+                    var reasoning = firstReasoningField(delta);
+                    if (reasoning != null) {
+                        if (!thinkingStarted) {
+                            // pi rewrites the signature to "reasoning_content" for provider
+                            // `opencode-go` (:615-617). Deliberately not ported: pi-java has no
+                            // such provider (16 builtins + models.json) ⇒ the branch is
+                            // unreachable. This is a decision, not an oversight.
+                            publisher.submit(builder.emitThinkingStart("", reasoning.field(), false));
+                            thinkingStarted = true;
+                            blockEnds.add(builder::emitThinkingEnd);
+                        }
+                        publisher.submit(builder.emitThinkingDelta(reasoning.text()));
                     }
 
                     // Tool calls — accumulate deltas; emit ToolCallEnd at finish.
@@ -127,8 +169,10 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                     }
                 }
             }
-            // Emit block-end events before StreamDone
-            if (textStarted) publisher.submit(builder.emitTextEnd());
+            // Emit block-end events before StreamDone, in **creation order** (pi :674-676)
+            for (var end : blockEnds) {
+                publisher.submit(end.get());
+            }
             toolCall.finish(publisher::submit, builder);
             String reason = toolCall.started() ? "tool_use" : "stop";
             publisher.submit(builder.emitDone(reason));
@@ -136,6 +180,43 @@ public class OpenAICompletionsApi extends AbstractChatApi {
             publisher.submit(builder.emitError("error", e));
         }
     }
+
+    /**
+     * Find the delta's reasoning text: the first **non-empty string** among
+     * {@link #REASONING_PROBE_FIELDS}, together with the name it arrived under
+     * (pi {@code openai-completions.ts:597-620}).
+     *
+     * <p>pi reads them off {@code choice.delta as Record<string, unknown>} and guards with
+     * {@code typeof value === "string"} — a numeric or object value is not reasoning, which is
+     * why {@link JsonValue#asString()} (empty for those) is the right accessor.</p>
+     *
+     * @param delta the chunk's delta
+     * @return the field name and text, or {@code null} when the delta carries no reasoning
+     */
+    private static ReasoningField firstReasoningField(ChatCompletionChunk.Choice.Delta delta) {
+        var extra = delta._additionalProperties();
+        for (var field : REASONING_PROBE_FIELDS) {
+            JsonField<?> raw = extra.get(field);
+            if (raw == null) {
+                continue;
+            }
+            var text = raw.asString().orElse(null);
+            if (text != null && !text.isEmpty()) {
+                return new ReasoningField(field, text);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * A reasoning value found on a delta.
+     *
+     * @param field the wire name it arrived under. Replayed **verbatim** as the thinking block's
+     *              signature (pi {@code :615-618}) — that self-description is the whole point:
+     *              the replay side reads the signature instead of guessing a field name
+     * @param text  the non-empty reasoning text
+     */
+    private record ReasoningField(String field, String text) {}
 
     static ChatCompletionCreateParams buildParams(StreamRequest request, String apiName) {
         var builder = ChatCompletionCreateParams.builder()
