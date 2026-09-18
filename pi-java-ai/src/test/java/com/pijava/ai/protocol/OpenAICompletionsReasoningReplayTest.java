@@ -173,7 +173,7 @@ class OpenAICompletionsReasoningReplayTest {
         try (var server = new RecordingServer()) {
             var model = model("deepseek", "deepseek-v4-pro",
                 Set.of(ModelCapability.TEXT, ModelCapability.THINKING),
-                new ModelCompat(false, false));
+                new ModelCompat(false, false, true));
             var body = body(server, model,
                 assistant(model, new ContentBlock.TextContent("answer")));
 

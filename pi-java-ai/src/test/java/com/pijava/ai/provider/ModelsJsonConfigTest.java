@@ -224,6 +224,50 @@ class ModelsJsonConfigTest {
         assertThat(absent.compat().requiresReasoningContentOnAssistantMessages()).isNull();
     }
 
+    /**
+     * <b>B20</b>：{@code compat.supportsFinishReason} 从 models.json 读进
+     * {@link com.pijava.ai.catalog.ModelCompat}，且**缺席即 {@code true}**。
+     *
+     * <p>⚠️ 这条钉的是**方向**。三个 compat 标志的缺席语义各不相同（见 {@code ModelCompat} 的
+     * javadoc）：{@code allowEmptySignature} 缺席 ≙ {@code false}、
+     * {@code requiresReasoningContentOnAssistantMessages} 缺席 ≙ 探测（{@code null}）、
+     * 本标志缺席 ≙ <b>{@code true}</b>。落地时最容易犯的错是「顺手归一成 {@code ?? false}」——
+     * 那会让**每一条**没写 compat 的 models.json 模型静默退回「缺 finish_reason 也算成功」的
+     * 容忍版，而且**行为侧测不出来**（容忍版只是不报错，不会红）。</p>
+     *
+     * <p>与 {@code OpenAICompletionsApi} 的行为夹具分工：那条钉「显式 {@code false} 真的放宽了
+     * 检查」，这条钉「入口没把缺席读成 false」。</p>
+     */
+    @Test
+    void readsSupportsFinishReasonFromCompatBlock() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "openai-completions",
+              "models": [
+                {"id": "relaxed", "compat": {"supportsFinishReason": false}},
+                {"id": "strict", "compat": {"supportsFinishReason": true}},
+                {"id": "keyAbsent", "compat": {"allowEmptySignature": true}},
+                {"id": "blockAbsent"}
+              ]
+            }}}
+            """);
+
+        assertThat(config.catalog().find(ModelId.of("relay", "relaxed")).orElseThrow()
+            .compat().supportsFinishReason()).isFalse();
+        assertThat(config.catalog().find(ModelId.of("relay", "strict")).orElseThrow()
+            .compat().supportsFinishReason()).isTrue();
+        // ⚠️ 下面两条走的**不是**同一条路，必须分开钉：
+        //   keyAbsent   ⇒ compat 块在、键不在 ⇒ compatOf 的 `== null ||` 分支
+        //   blockAbsent ⇒ 连块都没有 ⇒ compatOf(null) ⇒ ModelCompat.NONE 的第三位
+        // 只写一条的话，另一条路径上的「顺手归一成 ?? false」就测不出来。
+        assertThat(config.catalog().find(ModelId.of("relay", "keyAbsent")).orElseThrow()
+            .compat().supportsFinishReason()).isTrue();
+        assertThat(config.catalog().find(ModelId.of("relay", "blockAbsent")).orElseThrow()
+            .compat().supportsFinishReason()).isTrue();
+        assertThat(ModelCompat.NONE.supportsFinishReason()).isTrue();
+    }
+
     @Test
     void missingApiThrowsWithProviderId() {
         var config = write("""

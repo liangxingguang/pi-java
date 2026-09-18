@@ -69,12 +69,19 @@ public final class ModelsJsonSchema {
      *                            absent ⇒ auto-detect from provider/baseUrl, and only an explicit
      *                            value overrides the detection (pi's {@code getCompat} is
      *                            {@code explicit ?? detected})
+     * @param supportsFinishReason whether a stream ending without any {@code finish_reason} is an
+     *                            error (pi {@code openai-completions.ts:685-692}). ⚠️ **Two-state
+     *                            with default {@code true}** — the opposite direction to
+     *                            {@code allowEmptySignature}: pi's detected value is the constant
+     *                            {@code true} ({@code detectCompat:1638}), so an absent key means
+     *                            "strict", and only an explicit {@code false} relaxes it
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record CompatDef(
         @JsonProperty("allowEmptySignature") Boolean allowEmptySignature,
         @JsonProperty("requiresReasoningContentOnAssistantMessages")
-        Boolean requiresReasoningContentOnAssistantMessages
+        Boolean requiresReasoningContentOnAssistantMessages,
+        @JsonProperty("supportsFinishReason") Boolean supportsFinishReason
     ) {}
 
     /** Per-million-token pricing. */

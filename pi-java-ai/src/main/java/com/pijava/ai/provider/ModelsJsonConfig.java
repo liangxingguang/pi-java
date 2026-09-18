@@ -223,6 +223,12 @@ public final class ModelsJsonConfig {
      * provider/baseUrl" and only an explicit value overrides that (pi's {@code getCompat} is
      * {@code explicit ?? detected}, {@code openai-completions.ts:1643}). Collapsing {@code null}
      * into {@code false} here would silently disable the deepseek replay path.</p>
+     *
+     * <p>⚠️ {@code supportsFinishReason} is normalized with the **opposite** default —
+     * absent ⇒ {@code true}. That is not an oversight: pi's detected value for this flag is the
+     * constant {@code true} ({@code detectCompat:1638}, no branch anywhere in the function), so
+     * {@code explicit ?? detected} really does collapse to "absent ⇒ strict", with no third state
+     * to carry. See {@link ModelCompat}'s javadoc for the three flags side by side.</p>
      */
     private static ModelCompat compatOf(CompatDef def) {
         if (def == null) {
@@ -230,6 +236,7 @@ public final class ModelsJsonConfig {
         }
         return new ModelCompat(
             def.allowEmptySignature() != null && def.allowEmptySignature(),
-            def.requiresReasoningContentOnAssistantMessages());
+            def.requiresReasoningContentOnAssistantMessages(),
+            def.supportsFinishReason() == null || def.supportsFinishReason());
     }
 }
