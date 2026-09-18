@@ -23,6 +23,7 @@ import com.openai.models.chat.completions.ChatCompletionToolMessageParam;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.api.TransformMessages;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
@@ -76,7 +77,7 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         boolean textStarted = false;
         var toolCall = new ToolCallAccumulator();
         try {
-            var params = buildParams(request);
+            var params = buildParams(request, apiName());
             publisher.submit(builder.emitStart());
 
             try (var streamResponse = client.chat().completions().createStreaming(params)) {
@@ -136,7 +137,7 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         }
     }
 
-    static ChatCompletionCreateParams buildParams(StreamRequest request) {
+    static ChatCompletionCreateParams buildParams(StreamRequest request, String apiName) {
         var builder = ChatCompletionCreateParams.builder()
                 .model(request.modelId().modelName());
 
@@ -147,7 +148,12 @@ public class OpenAICompletionsApi extends AbstractChatApi {
             builder.addSystemMessage(systemText);
         }
 
-        for (var msg : request.messages()) {
+        // 共享预通道必须先于本车道的映射跑（pi openai-completions.ts:1212 在
+        // convertMessages 之前调 transformMessages）：跨模型重放的带签名 thinking 块
+        // 在此降级为文本，本车道才看得见那段文本。
+        var messages = TransformMessages.apply(request.messages(), request.modelId(), apiName);
+
+        for (var msg : messages) {
             if (msg instanceof Message.UserMessage) {
                 var text = extractText(msg.content());
                 if (!text.isEmpty()) builder.addUserMessage(text);

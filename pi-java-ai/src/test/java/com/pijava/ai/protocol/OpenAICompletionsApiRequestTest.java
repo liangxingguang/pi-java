@@ -38,7 +38,7 @@ class OpenAICompletionsApiRequestTest {
                         "Successfully wrote 15 bytes to hello.py")),
                     false)));
 
-        var params = OpenAICompletionsApi.buildParams(request);
+        var params = OpenAICompletionsApi.buildParams(request, "openai-completions");
 
         assertThat(params.messages()).hasSize(3);
 
@@ -77,7 +77,7 @@ class OpenAICompletionsApiRequestTest {
                     new ContentBlock.TextContent("hello!")))),
             List.of(), -1, -1, java.util.Map.of());
 
-        var params = OpenAICompletionsApi.buildParams(request);
+        var params = OpenAICompletionsApi.buildParams(request, "openai-completions");
 
         assertThat(params.messages()).hasSize(3);
         assertThat(params.messages().stream()
@@ -91,15 +91,20 @@ class OpenAICompletionsApiRequestTest {
     }
     @Test
     void deepseekThinkingContentIsRoundTripped() {
+        // ⚠️ 助手消息必须带**身份**（api/provider/model）：共享预通道
+        // TransformMessages 按「同模型否」决定 thinking 块留还是降级为文本，
+        // 不带身份的消息会被判成**跨模型**（docs/31 §8.35.5 的接线）。
         var request = StreamRequest.of(ModelId.of("deepseek", "deepseek-chat"),
             List.of(
                 new Message.UserMessage(List.of(
                     new ContentBlock.TextContent("hi"))),
                 new Message.AssistantMessage(List.of(
                     new ContentBlock.ThinkingContent("let me reason"),
-                    new ContentBlock.TextContent("answer")))));
+                    new ContentBlock.TextContent("answer")),
+                    "stop", null, "openai-completions", "deepseek", "deepseek-chat",
+                    null, null, null)));
 
-        var params = OpenAICompletionsApi.buildParams(request);
+        var params = OpenAICompletionsApi.buildParams(request, "openai-completions");
 
         var assistant = params.messages().stream()
             .filter(ChatCompletionMessageParam::isAssistant)
@@ -118,9 +123,11 @@ class OpenAICompletionsApiRequestTest {
                     new ContentBlock.TextContent("hi"))),
                 new Message.AssistantMessage(List.of(
                     new ContentBlock.ThinkingContent("let me reason"),
-                    new ContentBlock.TextContent("answer")))));
+                    new ContentBlock.TextContent("answer")),
+                    "stop", null, "openai-completions", "openai", "gpt-4o-mini",
+                    null, null, null)));
 
-        var params = OpenAICompletionsApi.buildParams(request);
+        var params = OpenAICompletionsApi.buildParams(request, "openai-completions");
 
         var assistant = params.messages().stream()
             .filter(ChatCompletionMessageParam::isAssistant)
