@@ -42,7 +42,7 @@
 | 类 | 含义 | 条数 | 谁能推进 |
 |---|---|---:|---|
 | **A** | 要**证据**才能定案（多数要先读 pi 源码） | 12 | 我（读 pi 源码 / 清点） |
-| **B** | **功能缺口**（pi 有、pi-java 无） | 16 | 我（另立包，多数需先出设计文档） |
+| **B** | **功能缺口**（pi 有、pi-java 无） | 18 | 我（另立包，多数需先出设计文档） |
 | **C** | 已裁决**不改 / 不做**，带触发条件 | 11 | 不推进，除非触发条件成立 |
 | **D** | 小账（遥测/注释级，一处一行） | 8 | 我，随时可做 |
 | **E** | 结构债（>500 行文件等） | 8 | 我，与功能包搭车 |
@@ -141,9 +141,10 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | B20 | **stop reason 映射跨车道缺失 —— 四条车道里三条「不读」或「原样透传」** | §8.35.2（`docs/31:4657`） | 逐车道审计（全部实测）：① **`AnthropicMessagesApi:190-193`** 处理 `message_delta` 时**只取 `usage`**，`event.delta.stop_reason` **全文件零读取**（pi `anthropic-messages.ts:743-745`），而 `:94` 硬写 `toolCallSeen[0] ? "tool_use" : "end_turn"` ⇒ `max_tokens`/`refusal`/未知值**全部丢失**；② **`OpenAICompletionsApi:132`** 硬写 `toolCall.started() ? "tool_use" : "stop"`（pi `:571-577`）；③ **`GoogleGenerativeAiApi:149-156`** 把枚举 `toString().toLowerCase()` 原样透传（`MAX_TOKENS`→`max_tokens`、`SAFETY`→`safety`，pi `google-shared.ts:379-411` 分别是 `length`/`error`）；④ **`MistralConversationsApi:151-154`** 半映射（无 `error` 兜底、无 `model_length`、无 `errorMessage`，pi `mistral-conversations.ts:926-941`）。只有 `ResponsesStreamProcessor:190-197` 已对齐 pi（`openai-responses-shared.ts:763-796`）。**功能后果（主车道 Anthropic）**：`length` **永不可达** ⇒ `PiLoopRunner:108` 的「length 截断 ⇒ 本回合**全部**工具调用判失败」（pi `agent-loop.ts:206-208`）**永不生效**（截断的工具参数会被**执行**），且 `ContextOverflow:118`/`:138`、`CompactionExecutor:310`、`PiLaneSink:367`、`LlmSummaryGenerator:160` 五处 `length` 分支同时是死代码。⚠️ `"end_turn"` 是 pi-java **自有**取值（`AssistantMessage:32`/`StreamEvent:199` 都列它，而 `LaneState:261` 的词汇表**不列** ⇒ 自家也不一致），pi 该处是 `"stop"` ⇒ **转录载荷分歧**；改不改口径＝**裁决点 D2**（§8.35.8） |
 | B21 | **请求侧无 `compat.thinkingFormat`**（能力缺口，**非本次事故因素**） | §8.35.3（`docs/31:4707`） | pi 按 provider 发 **10 种** thinking 开关形状（`openai-completions.ts:866`/`:879`/`:887`/`:892`/`:897`/`:914`/`:924`/`:934`/`:939`/`:948`：zai / qwen / qwen-chat-template / chat-template / baseten / deepseek / openrouter / ant-ling / together / string-thinking —— 其中 `detectCompat:1644-1654` 只会**产出 6 种**，其余靠用户显式写 `model.compat`）—— 而 pi-java 的请求侧只有 `DefaultProviders:112-116` 的 `thinking.budgetTokens`。⚠️ **如实标注**：`api.teamorouter.cn` 不匹配 pi **任何**探测模式（`detectCompat:1581-1600` 逐条比对：z.ai / together / moonshot / openrouter / cloudflare / nvidia / ant-ling / deepseek 全不匹配）⇒ pi 在该 relay 上**也不发**任何 thinking 配置 ⇒ **与本次事故无关**；只在改用 zai/deepseek/qwen 等**原生** provider 时才可观察。**不并入本包**（它管「发什么请求」，与响应侧字段覆盖无关），须自己一包 |
 
----
+| B22 | **`openai-responses` 车道回放助手文本消息即抛 —— 缺 `id`** | §8.35.10（`docs/31`） | `ResponsesMessageConverter:186-194` 构造 `ResponseOutputMessage` 时**不设 `id`**，而 SDK 标它必填 ⇒ `IllegalStateException: `+`id` is required, but was not set`（`Check.kt:12` ← `ResponseOutputMessage.kt:348`）。pi **有**回填（`openai-responses-shared.ts:237-242`）：先试 `parseTextSignature(textBlock.textSignature)?.id`，取不到则 `msg_pi_${msgIndex}` / `msg_pi_${msgIndex}_${textBlockIndex}`，>64 字符压成 `msg_${shortHash}`。**可达性**：今天 CLI **不可达**（`DefaultProviders:147` 恒传 `Map.of()`，而协议覆盖读 `extra["protocol"]`；`ModelsJsonProvider:61-69` 只认完两条车道；`AZURE_OPENAI_RESPONSES` 全树只有枚举本身 ⇒ Azure 车道无 provider 创建）⇒ 属**潜在**缺陷。**仍必修**：它是本包该车道夹具的前置（不修则夹具红在「请求没发出」，闸挂没挂**测不到**），且是纯移植缺口。**写夹具时发现**，不在原审计范围内 |
+| B23 | **文本块无 `textSignature`（`TextContent(String text)` 只有 1 个组件）** | §8.35.10（`docs/31`） | pi 的文本块带回执签名 `encodeTextSignatureV1(item.id, item.phase)`（`openai-responses-shared.ts:701`，读侧 `:55`/`:228`）⇒ 回放时能取回**原** `msg_xxx` 与 `phase`。pi-java 无此组件 ⇒ 即便修了 B22，回填也只能是 `msg_pi_N` 合成值。属「文本块载荷」缺口（与 B19 的 thinking 载荷同族、**另一条**），须自己一包 |
 
-## 4. C 类 —— 已裁决「不改 / 不做」（带触发条件）
+---
 
 | # | 条目 | 出处 | 裁决理由（一句话） | 触发条件 |
 |---|---|---|---|---|

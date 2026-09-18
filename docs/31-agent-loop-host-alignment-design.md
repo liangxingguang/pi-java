@@ -4808,6 +4808,63 @@ P2/P3，确认「可见 token ≈ 计费 token」（今天 2/127 ⇒ 目标 >100
 不引入 `rawStopReason`；不做 `reasoning_details` / `requiresThinkingAsText`；不改请求侧 `thinkingFormat`；
 不碰 `PiMessagesApi` 的闸与它自己的 wire 形状（§8.34.11-（1）的裁决不变）。
 
+#### 8.35.10 B10 接线夹具「先红证毕」：5 红 1 绿，其中 **2 条红得不是地方**（新登记 B22/B23）
+
+**夹具**：`pi-java-ai/src/test/java/com/pijava/ai/protocol/LaneTransformMessagesWiringTest.java`
+（新增）。**为什么用录制请求体的 HTTP 桩而不是反射私有构建器**：本包正要给各车道的构建器
+**加形参**（api 名）⇒ 反射夹具会在实现落地的瞬间编译不过，「先红」会退化成编译期红、看不到
+行为红；桩录的是**请求字节**，形参怎么改都不影响它。它同时是**唯一**能守住「五条车道都挂了闸」
+的夹具 —— `TransformMessagesTest` 只证**闸本身**（把某条车道的接线拆掉，它照样全绿）。
+
+**实测**（`mvn -o -pl pi-java-ai test -Dtest=LaneTransformMessagesWiringTest`）：
+`Tests run: 6, Failures: 5, Errors: 0`。逐条 actual（**已抄回**）：
+
+| 车道 | actual 请求体 | 红的原因 |
+|---|---|---|
+| openai-completions | `{"messages":[{"content":"hi","role":"user"},{"role":"assistant","content":"VISIBLE"}],"model":"gpt-4o",...}` | **对**：thinking 文本被 `:235` 的 `"deepseek"` 门拦下 |
+| google | `{"contents":[{"parts":[{"text":"hi"}],"role":"user"},{"parts":[{"text":"VISIBLE"}],"role":"model"}],...}` | **对**：`toGoogleContents:212-213` 返回 `List.of()` |
+| mistral | `{"stream":true,"messages":[{"role":"user","content":"hi"},{"role":"assistant","content":"VISIBLE"}],...}` | **对**：`extractText` 只收 `TextContent` |
+| openai-responses | `""` | ❌ **不是地方**：请求**根本没发出**（见 B22） |
+| azure-openai-responses | `""` | ❌ **同上** |
+| （回归门）同模型 deepseek 重放 | — | **绿**（预期） |
+
+**B22：responses 车道回放助手文本消息即抛 —— 缺 `id`。**
+
+```
+java.lang.IllegalStateException: `id` is required, but was not set
+  at com.openai.core.Check.checkRequired(Check.kt:12)
+  at ...ResponseOutputMessage$Builder.build(ResponseOutputMessage.kt:348)
+  at ResponsesMessageConverter.addAssistantItems(ResponsesMessageConverter.java:194)
+  at ResponsesMessageConverter.convertMessages(:115) → buildParams(:60/:47)
+  at OpenAIResponsesApi.streamInternal(OpenAIResponsesApi.java:54)
+```
+
+pi 侧**有**回填（`openai-responses-shared.ts:228-242`）：文本块的 id 取
+`parseTextSignature(textBlock.textSignature)?.id`，**取不到时**回退
+`msg_pi_${msgIndex}`（首个文本块）或 `msg_pi_${msgIndex}_${textBlockIndex}`（后续文本块），
+超 64 字符再压成 `msg_${shortHash(msgId)}`（「OpenAI requires id to be max 64 characters」）。
+pi-java 的 `:186-194` **一个都不设** ⇒ SDK 必填校验直接抛。
+
+- **可达性（如实标注）**：该车道今天**从 CLI 不可达** —— `DefaultProviders.apiOptions:147`
+  恒传 `Map.of()`，而协议覆盖读的是 `ApiOptions.extra["protocol"]`（`ConfigurableProvider:108-113`）
+  ⇒ 无人设置；`ModelsJsonProvider:61-69` 只认 `openai-completions`/`anthropic-messages`；
+  `AZURE_OPENAI_RESPONSES` 全树**只有枚举本身**（`Protocol.java:28`）⇒ Azure 车道**没有任何
+  provider 创建它**。故属**潜在**缺陷，不是线上已在崩的东西。
+- **但仍必修**：① 它是本包该车道夹具的**前置** —— 不修则夹具永远红在「没发出请求」上，
+  「闸有没有挂上」这件事**测不到**；② 它是 pi 有、pi-java 无的**纯移植缺口**，
+  对称号成立（判据是行为，不是有没有人已经踩到）；③ 修法只有 10 行，且**照抄 pi 的取值规则**。
+
+**B23：文本块无 `textSignature`（新登记，本包不做）。** pi 的文本块带签名
+（`encodeTextSignatureV1(item.id, item.phase)`，`openai-responses-shared.ts:701`），pi-java 是
+`record TextContent(String text)`（`ContentBlock.java:29`）—— 组件都没有。后果：即便修了 B22，
+回填的 id 也**只能永远是 `msg_pi_N` 合成值**，pi 那条「取回原 `msg_xxx` / `phase`」的路径不可达。
+这属于「文本块载荷」的缺口（与 §8.35.1 的 thinking 载荷同族但**另一条**），须自己一包。
+
+**教训（进 §8.35.6 的夹具纪律）：「先红证毕」必须**同时**复核**红的原因**。**
+本包 5 条红里有 **2 条**是因为**请求压根没发出去**——若只看「5 红」就开工，这两条车道会在实现
+落地后**要么永远红、要么被顺手改成假绿**（例如把断言放宽成「不抛异常就算过」）。判据是
+**actual 里得看得见那一层的东西**：本包要求 actual 是**请求体**，一旦是 `""` 就说明红在更前面。
+
 ---
 
 ## 9. 与既有文档的关系
