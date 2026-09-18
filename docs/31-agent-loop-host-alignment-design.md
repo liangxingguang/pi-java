@@ -4865,6 +4865,46 @@ pi-java 的 `:186-194` **一个都不设** ⇒ SDK 必填校验直接抛。
 落地后**要么永远红、要么被顺手改成假绿**（例如把断言放宽成「不抛异常就算过」）。判据是
 **actual 里得看得见那一层的东西**：本包要求 actual 是**请求体**，一旦是 `""` 就说明红在更前面。
 
+#### 8.35.11 B10 接线**已闭环**（4 个提交）+ 顺带修 B22
+
+**落地提交**（`b-class-gap-fill` 分支）：
+
+| 提交 | 内容 |
+|---|---|
+| `9953790` | 夹具先红证毕 + 登记 B22/B23（§8.35.10） |
+| `55ade86` | **B22**：responses 车道回放助手消息补 `id` |
+| `a7d55d8` | 接线 1/4：`openai-completions`（`buildParams` 加 `apiName` 形参） |
+| `d2a9c44` | 接线 2/4：`google` + `mistral`（各一行过闸） |
+| `175a383` | 接线 3/4：`openai-responses` + `azure-openai-responses`（共用转换器，`apiName` 由调用方传） |
+
+**最终状态**：六条车道**全部**过共享预通道 —— `anthropic-messages`（包②已挂）+ 上表五条；
+**`pi-messages` 按裁决仍不挂**（§8.34.11-（1）：它不是 pi 的车道，给它按 pi 的闸改行为＝发明）。
+`LaneTransformMessagesWiringTest` **6/6 绿**；`mvn -o clean verify` 全 reactor 绿（14 模块，
+checkstyle/spotbugs 零违规）。
+
+**接线形状（给下一个人的三条）**：
+
+1. **apiName 一律由调用方传，不在转换器里写常量。** 闸的同模型判据是
+   `Objects.equals(msg.api(), apiName)`，而 `msg.api()` 是 `AbstractChatApi` 用**它自己的
+   `apiName()`** 盖的章 ⇒ 两处必须同源。responses 两条车道共用
+   `ResponsesMessageConverter` 但 api 名不同，正是这条的试金石：所以把 `buildParams`
+   收成唯一签名 `(request, ropts, modelName, apiName)`、**删掉 2 参重载** ——
+   留着重载就是留一个「传错名字也编译得过」的口子。
+2. **闸必须先于车道自己的映射。** pi 六处调用点全在各自的消息转换之前
+   （`transform-messages.ts` 的输出再进 `convertMessages`）。反过来做（先映射再补闸）
+   等于没挂：thinking 块在映射里已经被丢掉了（Google/Mistral/Responses 三条车道今天
+   就是这么丢的）。
+3. **不抽公共 `mapStopReason`，同理不抽公共「过闸包装层」。** 前者是 pi 自己的形状
+   （四份独立函数），后者目前只是 5 行重复；`ResponsesMessageConverter` 那种
+   「共用一个转换器、各自传名字」是**例外**而不是可以推广的范式。
+
+**顺带的存量为证**：把闸挂上后，`OpenAICompletionsApiRequestTest` 两条既有用例转红 ——
+它们用 `new AssistantMessage(content)`（api/provider/model 全 null）构造助手消息，
+**信息量本来就不足以区分「同模型」与「跨模型」**（闸落地前这个区别在该车道上不影响输出，
+所以没人发现）。修法是**把前提补明**（给消息真实身份），断言原样不动 —— 不是放宽断言。
+这一类「夹具缺前提」与 §8.34.11 的「夹具写在实现之后」是**同族但不同**的形态：
+那个是**没有红灯可看**，这个是**有红灯但红灯换了个意思**。
+
 ---
 
 ## 9. 与既有文档的关系
