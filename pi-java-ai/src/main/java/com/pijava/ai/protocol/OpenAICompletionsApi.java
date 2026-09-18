@@ -40,8 +40,45 @@ import com.pijava.ai.stream.StreamPartialBuilder;
  *
  * <p>Phase 2a: emits the full 13-event protocol with {@code partial} snapshots
  * via {@link StreamPartialBuilder}.</p>
+ *
+ * <h3>B20：stop reason 从线格读、收尾按 pi 严格判定（docs/31 §8.35.14）</h3>
+ *
+ * <p>修复前本车道**完全不读** {@code choice.finish_reason}，收尾固定发
+ * {@code toolCall.started() ? "tool_use" : "stop"}。后果有两个：被 {@code length}
+ * 截断的轮次在 pi-java 里记成正常结束（宿主层的截断判定因此永不命中），
+ * 以及 {@code content_filter}/{@code network_error} 这类**服务端主动停**的信号
+ * 整段丢弃。</p>
+ *
+ * <p>现在按 pi {@code openai-completions.ts} 逐行对齐：映射表 {@code :1550-1571}
+ * （<b>未知值不抛</b>，落 {@code "error"} + {@code Provider finish_reason: X}），
+ * 读取点 {@code :571-577}，收尾 {@code :678-695}。</p>
+ *
+ * <p><b>三个刻意的偏差/不可达点</b>（均为 pi-java 结构所致，非遗漏）：</p>
+ * <ol>
+ *   <li><b>abort 检查不可达</b>（pi {@code :678}/{@code :682}）：{@link StreamRequest}
+ *       没有 signal（pi 的 {@code options.signal}）⇒ 中止上提到宿主层
+ *       {@code PiLoopRunner.markAborted}（{@code :291-303}）。</li>
+ *   <li><b>{@code default} 分支只可能命中 SDK 认得的值</b>：{@code openai-java 4.42}
+ *       的 {@code FinishReason.Known} 只有 5 个（stop/length/tool_calls/content_filter/
+ *       function_call），但 {@code asString()} 对**任意字符串**都给出线格原值
+ *       （实测：{@code "network_error"} → {@code "network_error"}），故 pi 的
+ *       {@code network_error} 特例与 {@code default} 都**可达**。
+ *       ⚠️ 不要改用 {@code known()} —— 它对未知值**抛**
+ *       {@code OpenAIInvalidDataException}（实测），而 pi 在这一格要的是
+ *       「落 error 事件」而不是「抛」。同族的 Anthropic SDK 行为相反（未知值进
+ *       {@code asKnown()}），两处都别照抄。</li>
+ *   <li><b>空字符串≙缺席</b>：pi 写的是 {@code if (choice.finish_reason)} —— 对
+ *       {@code ""} 为假 ⇒ 不发 {@code hasFinishReason}。SDK 侧 {@code ""} 是
+ *       {@code Optional.of} 存在值，故必须显式过滤（见 {@link #rawFinishReason}）。</li>
+ * </ol>
  */
 public class OpenAICompletionsApi extends AbstractChatApi {
+
+    /**
+     * pi 累加器的 stop reason 初值（{@code openai-completions.ts:333}），非 pi 词汇表取值。
+     * 收尾拿它当「一个 finish reason 都没观测到」的哨兵。
+     */
+    private static final String PENDING = "pending";
 
     @Override
     public String apiName() {
@@ -121,6 +158,10 @@ public class OpenAICompletionsApi extends AbstractChatApi {
     protected void streamInternal(StreamRequest request,
                                    SubmissionPublisher<StreamEvent> publisher) {
         var builder = new StreamPartialBuilder();
+        var stop = new StopState();
+        // pi :396 —— 有没有**观测到** finish_reason，与 output.stopReason 是两个量：
+        // 前者驱动严格判定，后者只记映射结果。
+        boolean hasFinishReason = false;
         boolean textStarted = false;
         boolean thinkingStarted = false;
         // pi 收尾时按**建块序**发 text_end / thinking_end（openai-completions.ts:674-676），
@@ -144,6 +185,20 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                     }
                     var choice = chunk.choices().get(0);
                     var delta = choice.delta();
+
+                    // finish_reason 先于 delta 处理（pi :571-577 就在 `if (choice.delta)` 之前）：
+                    // 一个 chunk 同时带终局标记与内容时，pi 的 partial 是同对象、后发的 delta
+                    // 已经看得见新 stopReason。pi-java 的快照在发事件时拍，故此处先后不影响
+                    // 可观测结果 —— 仍照 pi 的次序放，免得后人以为顺序无关是「随便放」。
+                    var rawFinishReason = rawFinishReason(choice);
+                    if (rawFinishReason != null) {
+                        var mapped = mapStopReason(rawFinishReason);
+                        stop.reason = mapped.reason();
+                        if (mapped.errorMessage() != null) {
+                            stop.errorMessage = mapped.errorMessage();
+                        }
+                        hasFinishReason = true;
+                    }
 
                     // Text content
                     if (delta.content().isPresent()) {
@@ -203,11 +258,91 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                 publisher.submit(end.get());
             }
             toolCall.finish(publisher::submit, builder);
-            String reason = toolCall.started() ? "tool_use" : "stop";
-            publisher.submit(builder.emitDone(reason));
+
+            // ⚠️ pi 的两处 abort 检查（:678 / :682）在车道层**结构上不可达** —— 见类 javadoc。
+            // 中止由宿主层 PiLoopRunner.markAborted（:291-303）负责。
+
+            // compat 缺席 ≙ true（pi 的 detected 是常量 true，detectCompat:1638）。
+            // 请求不带模型元数据（StreamRequest.of(ModelId…)）时同样取严格版。
+            boolean supportsFinishReason = request.model() == null
+                || request.model().compat().supportsFinishReason();
+
+            // pi :685-687 —— **容忍版**：有 finish_reason 能力却没观测到时，就地改写成正常结束。
+            // pi 里这条恒不生效（detected 恒 true），只有 models.json 显式写 false 才放开；
+            // 保留下来是因为它是 D1 严格判定的**对照面**（放宽的唯一途径）。
+            if (!hasFinishReason && !supportsFinishReason) {
+                stop.reason = toolCall.started() ? "tool_use" : "stop";
+            }
+            // pi :688-690 —— 先判 error：走 error 通道且**不再**发 done。
+            // 兜底文案是 pi 逐字（与其他三条车道的措辞不同，别「统一」）。
+            if ("error".equals(stop.reason)) {
+                publisher.submit(builder.emitError("error", new IllegalStateException(
+                    stop.errorMessage != null ? stop.errorMessage
+                        : "Provider returned an error stop reason")));
+                return;
+            }
+            // pi :691-693 —— 严格版：**没观测到** finish_reason 是错误，不是「正常结束」。
+            // 后半（累加器仍停在 pending）在 pi 里结构上不可达（上面的容忍分支已改写它），
+            // 保留原样以与 pi 那一行逐字对应。
+            if ((supportsFinishReason && !hasFinishReason) || PENDING.equals(stop.reason)) {
+                publisher.submit(builder.emitError("error",
+                    new IllegalStateException("Stream ended without finish_reason")));
+                return;
+            }
+            publisher.submit(builder.emitDone(stop.reason));
         } catch (Exception e) {
             publisher.submit(builder.emitError("error", e));
         }
+    }
+
+    /**
+     * 线格上的 {@code finish_reason} 原值，缺席/JSON null/**空串**都给 {@code null}
+     * （pi {@code openai-completions.ts:571} 的 {@code if (choice.finish_reason)} 是**真值**判断）。
+     *
+     * <p>⚠️ 用 {@code asString()}（线格原值），**不要**用 {@code known()}：后者对 SDK 不认识的
+     * 取值抛 {@code OpenAIInvalidDataException}（实测 {@code 4.42.0}），而 pi 在那种取值上要的是
+     * 「落 error 事件 + 文案」。</p>
+     *
+     * @param choice 本帧的 choice
+     * @return 非空的原值，或 {@code null} 表示「没有 finish_reason」
+     */
+    private static String rawFinishReason(ChatCompletionChunk.Choice choice) {
+        return choice.finishReason()
+            .map(fr -> fr.asString())
+            .filter(raw -> !raw.isEmpty())
+            .orElse(null);
+    }
+
+    /**
+     * pi {@code mapStopReason}（{@code openai-completions.ts:1550-1571}）。
+     *
+     * <p>与 Anthropic 车道的关键差别：**未知取值不抛**，而是落 {@code "error"} +
+     * {@code Provider finish_reason: X}。{@code toolUse} 按 pi-java 的词表写作
+     * {@code "tool_use"}（边界翻译在 {@code PiMessagesApi:244-246}）。</p>
+     *
+     * @param reason 线格原值（保证非空，见 {@link #rawFinishReason}）
+     * @return 映射后的 pi-java stop reason + 可选错误文案
+     */
+    private static MappedStopReason mapStopReason(String reason) {
+        return switch (reason) {
+            case "stop", "end" -> new MappedStopReason("stop", null);
+            case "length" -> new MappedStopReason("length", null);
+            case "function_call", "tool_calls" -> new MappedStopReason("tool_use", null);
+            case "content_filter" ->
+                new MappedStopReason("error", "Provider finish_reason: content_filter");
+            case "network_error" ->
+                new MappedStopReason("error", "Provider finish_reason: network_error");
+            default -> new MappedStopReason("error", "Provider finish_reason: " + reason);
+        };
+    }
+
+    /** 映射结果（pi 的 {@code {stopReason, errorMessage?}}）。 */
+    private record MappedStopReason(String reason, String errorMessage) {}
+
+    /** 累加器的 stop reason 状态（pi 的 {@code output.stopReason}/{@code errorMessage} 那一对）。 */
+    private static final class StopState {
+        private String reason = PENDING;
+        private String errorMessage;
     }
 
     /**
