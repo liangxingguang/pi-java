@@ -108,11 +108,12 @@ final class ResponsesMessageConverter {
         if (systemPrompt != null && !systemPrompt.isEmpty()) {
             items.add(inputMessage(EasyInputMessage.Role.SYSTEM, systemPrompt));
         }
+        var msgIndex = 0;
         for (var msg : request.messages()) {
             if (msg instanceof Message.UserMessage user) {
                 items.add(toUserItem(user.content()));
             } else if (msg instanceof Message.AssistantMessage assistant) {
-                addAssistantItems(items, assistant);
+                addAssistantItems(items, assistant, msgIndex);
             } else if (msg instanceof Message.ToolResultMessage tool) {
                 var text = extractText(tool.content());
                 items.add(ResponseInputItem.ofFunctionCallOutput(
@@ -122,6 +123,9 @@ final class ResponsesMessageConverter {
                             text.isEmpty() ? "(no tool output)" : text))
                         .build()));
             }
+            // pi 在循环体末尾自增（openai-responses-shared.ts:349），且**每种角色**都算一个
+            // 下标 —— 回填 id 里的 `msg_pi_${msgIndex}` 用的是这个全量下标，不是「第几条助手消息」。
+            msgIndex++;
         }
         return items;
     }
@@ -162,8 +166,25 @@ final class ResponsesMessageConverter {
             .build());
     }
 
+    /**
+     * Append pi's replay items for one assistant message.
+     *
+     * <p>{@code msgIndex} is the message's index in the **whole** message list (pi
+     * {@code openai-responses-shared.ts:184}/{@code :349}); it is only used to synthesize
+     * the output-message {@code id}, which the Responses API treats as **required** — leaving
+     * it unset makes the SDK throw before the request is ever sent
+     * ({@code ResponseOutputMessage.Builder.build} → {@code Check.checkRequired},
+     * registered as B22).</p>
+     *
+     * <p>pi derives that id from the text block's replay signature and only falls back to
+     * {@code msg_pi_${msgIndex}} when there is none ({@code :228-237}). pi-java's
+     * {@link ContentBlock.TextContent} carries no signature at all (registered as B23), so the
+     * fallback branch is the only reachable one — and pi's 64-character hash branch
+     * ({@code msg_${shortHash(msgId)}}) is unreachable for the same reason, hence not ported.</p>
+     */
     private static void addAssistantItems(List<ResponseInputItem> items,
-                                          Message.AssistantMessage assistant) {
+                                          Message.AssistantMessage assistant,
+                                          int msgIndex) {
         var text = new StringBuilder();
         var toolCalls = new ArrayList<ResponseFunctionToolCall>();
         for (var block : assistant.content()) {
@@ -184,6 +205,7 @@ final class ResponsesMessageConverter {
         if (!text.isEmpty()) {
             items.add(ResponseInputItem.ofResponseOutputMessage(
                 ResponseOutputMessage.builder()
+                    .id("msg_pi_" + msgIndex)
                     .role(JsonValue.from("assistant"))
                     .status(ResponseOutputMessage.Status.COMPLETED)
                     .content(List.of(ResponseOutputMessage.Content.ofOutputText(
