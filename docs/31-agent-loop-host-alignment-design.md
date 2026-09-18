@@ -4570,8 +4570,9 @@ base64；两处**判空语义一致**（`isEmpty` vs `trim().isEmpty()` 在该�
 
 > **状态**：设计已落地并经用户审核；本包**按 B19 → B20 的顺序逐条实施**。
 > **B19（收/发两侧）已闭环**（§8.35.13，`ffc43e2`/`b916d29`/`478fe91`/`7369ae6`）；
-> **B22** 顺带修（§8.35.11）；**B20 设计定稿已落地**（§8.35.14，**待用户审核**），
-> 实施计划 ⑩ 个提交；D1 的「P0 只读探针」作为首个提交**被用户否决**，改为提交 ④ 的**真实车道门**。
+> **B22** 顺带修（§8.35.11）；**B20 设计定稿已落地并经用户审核**（§8.35.14 + 实施记录 §8.35.15），
+> 实施计划 ⑩ 个提交（③–⑧ 已落地、⑨/⑩ 待实施）；D1 的「P0 只读探针」作为首个提交**被用户否决**，
+> 改为提交 ④ 的**真实车道门**（已过，见 §8.35.15 六-4）。
 > 本包**不占**既有 ③/④ 序号（③ = B5 宿主层 `Error` 通道、④ = B3/B12），文中称 **「响应侧字段覆盖包」**。
 > 登记：`docs/32` 的 **B19 / B20 / B21**（B 类 13→16 行，B22/B23 随接线夹具、B24 随 B19、
 > **B25/B26 随 §8.35.14 的审计更正**登记）。
@@ -5046,6 +5047,11 @@ models.json 那侧的入口夹具同样探针过（`compatOf` 退回二态 ⇒ �
 | **D2** | Anthropic 正常结束 `end_turn` → **`"stop"`** | 提交 ③（独立，因其动 7 个测试文件） |
 | **D3** | Google / Mistral **并入**本包，但**提交分车道** | 提交 ⑤ / ⑥ |
 | **D4** | B10 接线先于本包 | 已执行（§8.35.11） |
+| **D5** | `rawStopReason` 是否移植（第五节被证伪的「零消费者」结论 ⇒ 新裁决点） | **(a) 全量移植** | 提交 ⑨ |
+| **B26** | 第六节的「partial 的 `stopReason` 初值应为 `"pending"`」（新发现 C）是否**一并做** | **一并做** | 提交 ⑩（外溢说明见第六节末） |
+
+⚠️ D5/B26 的答复在设计稿 `163d2ea` **之后**到达，故第七节的 ⑨/⑩ 两行在设计稿里只带
+条件标签 `（D5=(a)）`；本表是它的定稿。
 
 **D1 的残留风险如实登记**：P0 探针被否 ⇒「这个 relay 到底发不发 `finish_reason`」**仍未观测**。
 补偿不是探针而是**门**：提交 ④ 的完成条件包含 §8.35.9 ④ 的**真实车道回归**——用配置里的
@@ -5163,7 +5169,7 @@ pi 五条车道的累加器都从 `stopReason: "pending"` 起（臂注：`:526`/
 | ⑤ | `fix(ai): Google 车道 stop reason 映射与收尾` | 映射按**原始字符串**（Java SDK 1.15.0 的 `Known` **缺** IMAGE_*/NO_IMAGE 四种，未知值会被 `knownEnum()` 吞成 UNSPECIFIED，只能读 `toString()`）+ **新测试类** |
 | ⑥ | `fix(ai): Mistral 车道 stop reason 映射与收尾` | 同上 + **新测试类** |
 | ⑦ | `fix(ai): Responses 车道收尾语义更正` | α/β/γ/δ/ε 五条 |
-| ⑧ | `test(ai): 跨层回归门（线格 → 消息 → PiLoopRunner 的 length 门）` | §8.35.6 末行 |
+| ⑧ | `test(agent-core): 跨层回归门（线格 → 消息 → PiLoopRunner 的 length 门）`（设计稿原写 `test(ai)`，实施时据实改模块，理由见 §8.35.15 五） | §8.35.6 末行 |
 | ⑨ | （D5=(a)）`feat(ai): 助手消息携带 rawStopReason` | 第 10 个组件 + 五条车道写点 + codec |
 | ⑩ | （D5=(a)）`fix(ai): partial 的 stopReason 初值改为 pending` | `StreamPartialBuilder` 初值 + 外溢说明 |
 
@@ -5173,6 +5179,9 @@ Google 走 `rawStopReason`），抽出来只会变成一个 7 参外壳，反而
 ⇒ 按 pi 的形状**各车道内联**（每处约 10 行）。
 
 ##### 八、夹具计划（修订版；**每条先跑一遍把 actual 抄回本节**——§8.34.5 的纪律）
+
+> **本表的「今天」列是预测，不是证据** —— 逐条实测的 actual（含 ③–⑦ 的红灯原文、两处预测更正、
+> 逐车道 SDK 读法）已抄回 **§8.35.15 一/二/三**。本节保留预测原文并在错处就地加注，以便对照。
 
 | 夹具 | 喂什么 | 断言 | 今天 |
 |---|---|---|---|
@@ -5185,12 +5194,12 @@ Google 走 `rawStopReason`），抽出来只会变成一个 7 参外壳，反而
 | `OpenAICompletionsApiTest` | `finish_reason:"length"` | `"length"` | 红 |
 | 同上 | `finish_reason:"content_filter"` | error + `"Provider finish_reason: content_filter"` | 红 |
 | 同上 | **整条流无** `finish_reason` | error + `"Stream ended without finish_reason"`（D1 严格） | 红 |
-| 同上 | 同上 + `compat.supportsFinishReason:false` | **不**报错：`toolCall?toolUse:stop` | 红 |
+| 同上 | 同上 + `compat.supportsFinishReason:false` | **不**报错：`toolCall?toolUse:stop` | ⚠️ **预测有误：实为对照面**（④ 实测两侧同绿 —— 旧实现从不判定、恒发 `"stop"`，与该格同值）；更正见 §8.35.15 二-1 |
 | `GoogleGenerativeAiApiTest`（新类） | `finishReason:"MAX_TOKENS"` / `"SAFETY"` | `"length"` / error | 红 |
 | `MistralConversationsApiTest`（新类） | `"model_length"` / `"error"` / 未知值 | `"length"` / error+`"Provider stopped with: error"` / error+`"Provider stopped with: X"` | 红 |
 | `ResponsesStreamProcessor` 相关 | `response.incomplete` + `incomplete_details.reason!="max_output_tokens"` | **`StreamError`**（不是 done）且文案 `"Response incomplete: X"` | 红 |
-| 同上 | 未终局的流 | error + `"…before a terminal response event"` | 绿（对照） |
-| **跨层回归门** | 线格 → 消息 → `PiLoopRunner` | `length` 截断 ⇒ `PiLoopTools.run(..., **true**)`，工具**不执行** | 红 |
+| 同上 | 未终局的流 | error + `"…before a terminal response event"` | 绿（对照）—— ⑦ 实测成立，但理由与预测不同（旧实现照发 `done(stop)`，与「有终局事件」同形）；更正见 §8.35.15 二-2 |
+| **跨层回归门** | 线格 → 消息 → `PiLoopRunner` | `length` 截断 ⇒ `PiLoopTools.run(..., **true**)`，工具**不执行** | 红 —— ⑧ 实测：变异探针（回退提交 ④）下 `expected: 0 but was: 1`，转录 `[user, assistant(tool_use), tool, assistant(stop)]`；夹具落在 **agent-core** 而非 `ai`（偏差说明见 §8.35.15 五） |
 
 ⚠️ 每条**先红证毕**；R1 类「两侧同绿」的对照各做**变异探针**（§8.35.12 的教训形态 (6)：夹具
 若写在实现之后就没有红灯可看）。
@@ -5206,6 +5215,102 @@ Google 走 `rawStopReason`），抽出来只会变成一个 7 参外壳，反而
 `requiresThinkingAsText`（§8.35.7）；不改请求侧 `thinkingFormat`（B21）；不引入 `rawStopReason`
 以外的 pi 消息字段（`responseModel`/`responseId`/`providerThinkingLevel`/`diagnostics`/`endTurn`
 的排除结论**维持**——它们**没有**本次这种「生产者层读点」的反例）。
+
+---
+
+#### 8.35.15 B20 **实施记录**（提交 ③–⑧；red actual 已抄回 §8.35.14 第八节）
+
+> **状态**：③–⑧ 已落地（`d2254a2`/`811aa31`/`7f437b4`/`9f4c4bb`/`775f3a6`/`1007246`）；
+> ⑨（D5=(a) `rawStopReason`）、⑩（B26 partial 初值 `pending`）**待实施**。
+> 每步的验证面一律是 `mvn -o clean verify`（全 14 模块 BUILD SUCCESS + checkstyle/spotbugs 零违规）
+> 加该模块的定向测试，逐提交列在下表，不再重复。
+
+##### 一、逐提交落地与实测
+
+| # | 提交 | 内容 | 夹具 | 实测（"修复前" = 用 `git checkout --` 回退该车道后跑新夹具得到的 actual） | 计数 |
+|---|---|---|---|---|---|
+| ③ | `d2254a2` | **D2** 词表清理：`AssistantMessage`/`StreamEvent` 的 `stopReason` javadoc 写明取值域、7 个测试文件 13 处 `"end_turn"`→`"stop"` | —（纯词表） | 零行为改动 ⇒ 全绿；那些夹具此前用 pi 造不出的取值而恒绿（`determineOutcome` 把非 `aborted`/`error` 一律记 `completed`） | ai 410 |
+| ④ | `811aa31` | **D1** completions：读 `finish_reason` + `mapStopReason` + 严格/容忍两分支 | `OpenAICompletionsApiTest`（8 条） | **6 红 2 绿**：`length`⇒`"stop"`；`tool_calls`（线格里**无** tool 块）⇒`"stop"`；contentFilter / networkError / unknown / 无 `finish_reason` 四格 ⇒ `Expected size: 1 but was: 0`，实际 `[Start, TextStart, TextDelta, TextEnd, StreamDone]` | ai 410 |
+| ⑤ | `7f437b4` | Google：读点从 response 级换成**候选级** + 映射 + 四段收尾 | `GoogleGenerativeAiApiTest`（**新建**，8 条） | **7 红 1 绿**，修复前终局值是**线格原值**：`max_tokens` / `safety` / `finish_reason_unspecified` / `no_image` / `brand_new` / （无 finishReason 时也是）`finish_reason_unspecified` / `stop`；绿的是 `stopFinishReasonMapsToStop`（对照面） | ai 418 |
+| ⑥ | `9f4c4bb` | Mistral：读点从 delta 守卫**之后**挪出 + 映射 + 四段收尾 + `[DONE]` 改 `break` | `MistralConversationsApiTest`（**新建**，8 条） | **5 红 3 绿**：`model_length`⇒`StreamDone(model_length)`；只带 finish_reason 的终帧⇒`StreamDone(stop)`；`error`⇒`StreamDone(error)` 且 0 条 error；未知值⇒`StreamDone(brand_new_reason)`；无取值⇒`StreamDone(stop)` | ai 426 |
+| ⑦ | `775f3a6` | Responses：α/β/γ/δ/ε 五条 | `OpenAIResponsesApiTest`（新增 8 条 + 加强 1 条 + 删 1 条） | **7 红 1 对照**：incomplete+content_filter ⇒ `[Start, TextStart, TextDelta, StreamDone(error)]` 且 **0 条 error**；incomplete 无 reason ⇒ `[Start, StreamDone(error)]`；未知 status ⇒ `[Start, StreamDone(stop)]`；failed 三条退化文案 ⇒ 全部 `"Response failed without error details"` / `"\`message\` is not set"`（SDK 异常文本）；error 事件后**仍照发**内容（`Hi AFTER-ERROR`）与 `StreamDone(stop)` | ai 426→433 |
+| ⑧ | `1007246` | **跨层回归门**（见第五节） | `CrossLayerLengthGateTest`（**新建**，2 条） | **1 红 1 对照**（变异探针见第五节） | agent-core 462→464 |
+
+##### 二、第八节两处预测的更正（实现后才知道）
+
+1. **completions 的 `explicitlyDisabledFinishReasonSupportEndsNormally` 预测「红」实为 ④ 的对照面** ——
+   它测的是**容忍分支**（`supportsFinishReason:false`），而旧实现从不判定、恒发 `"stop"`，与该格同值
+   ⇒ 它没有红灯可看，是「两侧同绿」的对照。
+2. **Responses 的「未终局的流」预测「绿（对照）」实测成立**，但理由与预测不同：不是因为旧实现也判，
+   而是它**照发 `done(stop)`**，与「有终局事件」这一断言恰好同形 ⇒ 加强后（断言文案）才是真对照。
+
+⇒ **教训（§8.34.5 形态 (6) 的又一例）**：「今天应当红/绿」这一列是**预测**，不是证据；
+凡预测为「绿」的行都必须当场标成**对照面**并说明它为何在两侧同绿，否则它会被读成「已覆盖」。
+
+##### 三、逐车道 SDK 读法（四次探针的合计结论；全部为**实测**，非推断）
+
+| 车道 | SDK / 形态 | 「有没有观测到」怎么读 | 未知值的命运 | 陷阱 |
+|---|---|---|---|---|
+| Anthropic | `anthropic-java` | message_delta 的 `stop_reason` | 抛（pi 的 `default` 也是抛） | `asKnown()` **不抛**（与 openai-java 相反） |
+| completions | openai-java 4.42.0 | `choice.finishReason()` → `Optional`，**键缺席与 JSON null 同为 `empty()`** | 落 error 事件（不抛） | `known()` 对未知/空值**抛**；故只能 `asString()`（`network_error` 不在 `Known` 里，专钉这条）；pi 的 `if (choice.finish_reason)` 是**真值**判断 ⇒ 空串算「没观测到」 |
+| Google | google-genai 1.15.0 | **必须读候选级** `candidate.finishReason()`（`Optional`） | 抛（pi 的 `default` 抛） | response 级 `finishReason()` 在候选没有该字段时**自己造**一个 `FINISH_REASON_UNSPECIFIED`、**永不返回 null** ⇒「没观测到」与「线格真的发了 UNSPECIFIED」不可区分（⑤ 的红证给出了观测证据）；`knownEnum()` 对未知值与 SDK 词表**缺**的 `NO_IMAGE` **都静默吞成 UNSPECIFIED** |
+| Mistral | 无官方 SDK（手写 SSE） | `choice.finish_reason` 真值判断 | 落 error 事件 + **自带文案**（不抛） | 读点必须在 delta 处理**之前**才是 pi 的形状，但那样会漏「同帧的 tool_call 终帧」⇒ ⑥ 保留一处**刻意偏差**并在读点注明 |
+| Responses | openai-java 4.42.0 | `ResponseStatus`（Enum 模式，未知值照常反序列化） | 抛（pi 的 `default` 抛） | `ResponseError.code()`/`message()` 在字段缺席**或为 null** 时**抛** `OpenAIInvalidDataException`（`'message' is not set`）⇒ δ 必须先问 `_code()`/`_message()` 的存在性，否则 pi 的 `"unknown"`/`"no message"` 兜底会退化成 SDK 异常文本 |
+
+##### 四、**四处 `default` 互不相同**（照 pi 写，别「统一」清单）
+
+| 车道 | 未知取值的落点 | pi 出处 |
+|---|---|---|
+| Anthropic | **throw** | `anthropic-messages.ts:1464-1493` |
+| Google | **throw**（`Unhandled stop reason: X`） | `google-shared.ts:379-411` |
+| Responses | **throw**（α 修复前是 `"stop"`） | `openai-responses-shared.ts:763-796` |
+| completions | **落 error 事件**（`Provider finish_reason: X`） | `openai-completions.ts:1550-1571` |
+| Mistral | **落 error 事件且文案做进映射**（`Provider stopped with: X`） | `mistral-conversations.ts:926-941` |
+
+同一条 pi 的五种落法 ⇒ 第七节末「收尾不抽公共方法」的否决理由在此得到逐条印证。
+
+##### 五、⑧ 跨层回归门（本包的核心那一格）
+
+**为什么要它**：缺口是「夹具在宿主层，缺口在协议层」（§8.35.2 结语，`:4696`）。`AgentLoopL1Test`
+的 ③ 用例用 `scriptedStreamFn` **伪造**一条 `stopReason=="length"` 的助手消息，只能证「门**给定**
+截断消息会关」，证不了「任何真实车道会从线格上产出这样一条消息」。
+
+**夹具**`pi-java-agent-core/src/test/java/com/pijava/agent/harness/CrossLayerLengthGateTest.java`
+（新建）：本地 `HttpServer` 起 **completions 线格**桩（第 1 个响应 = 参数完整的工具调用 +
+`finish_reason:"length"`；第 2 个 = 重试后的正常收尾），经**真实** `OpenAICompletionsApi` 落成助手消息，
+交给 `AgentHarness`/`PiLoopRunner`，断言三跳：① 消息 ⇒ 门（`executed == 0`、回灌的是**失败**结果且
+文案含 `hit the output token limit`）；② 线格 ⇒ 消息（第一条助手消息 `stopReason == "length"`）；
+③ 回合继续（重试的正常收尾生效）。
+
+| 夹具 | 性质 | 实测 |
+|---|---|---|
+| `lengthFromTheWireStopsToolExecutionInThisTurn` | 门（本包核心） | **红**：变异探针 = 把 `OpenAICompletionsApi` 换回提交 ④ 之前的版本（那一版根本不读 `finish_reason`）⇒ `expected: 0 but was: 1`，转录 `[user, assistant(tool_use), tool, assistant(stop)]` —— 截断的调用被当真送进执行器，回灌的还是**成功**结果 |
+| `toolCallFinishReasonFromTheWireExecutesTheTool` | **对照面** | 同一变异下仍绿（它不涉及 `length` 门）；但它自己在夹具写错时**会红**：第一版 SSE 写成 `data: data: {...}`（`chunk()` 已带前缀、外层又套一次）⇒ 两条夹具同时红成 `assistant(error: Error reading response)`（SDK 把整行当 JSON 解，`SseMessage.kt:62-64`）⇒ 证明它确实在守「线格真的送到了工具调用」 |
+
+⚠️ **与设计稿的一处偏差**：第七节表格把本提交写作 `test(ai)`，但 `PiLoopRunner` 在 **agent-core**、
+且 `ai` 依赖不到它 ⇒ 夹具只能落在 `agent-core`（它依赖 `ai`，能同时看到两侧）。模块标签据实记为
+`test(agent-core)`。
+
+**一条可复用的教训**：跨层夹具的**失败信息必须能区分「门没关」与「线格没送到」** —— ⑧ 的第一版
+把断言顺序写成「先线格、后门」，变异探针下红的是**线格**那一跳（`expected "length" but was "tool_use"`），
+正题（工具被当真执行了）反被藏在后面。改为「先门、后线格」后，红灯第一次就说出本包那句话。
+
+##### 六、未覆盖 / 不可达事项（如实登记，**不用假夹具补**）
+
+1. **abort 检查四条车道在车道层都不可达** —— `StreamRequest` 没有 signal，中止由宿主
+   `PiLoopRunner.markAborted` 在流外处理（第三节 ③）。④–⑦ 的四条车道 javadoc 各自写明。
+2. **Responses 的 `pending` 哨兵不可达**（⑦）—— `sawTerminal` 只由 `finalizeResponse` / `failed`
+   两支写入，前者必经 `mapStopReason` 写下非 pending 取值、后者直接 throw；pi 侧同一对前置条件。
+   留着只为与 pi 收尾四段**同形**，**不是**补缺口。
+3. **`formatProviderError` 层 pi-java 没有**（⑦）—— pi 车道 catch 会把 `errorMessage` 过一遍该函数，
+   本仓文案是未包装的原文。
+4. **D1 真实车道闸**（第九节 ④）：**已过** —— teamorouter 真实请求拿到 `done(stop)` ⇒ 该 relay 的线格里
+   确有 `finish_reason`（探针只打印非机密事实，用完已删）。
+5. **D2 真实车道检查**（第九节 ⑤）：**本环境无法执行** —— 配置里 anthropic 车道也被 `defaultBaseUrl`
+   送去同一个 relay，而它没有 `/v1/messages` 路由（404 `route_not_found`）。**未**用改造 baseUrl 的方式
+   绕过。⇒ D2 目前只有车道级夹具背书。
+6. **Mistral 真实请求**：`MISTRAL_API_KEY` 未配置，取不到凭证；**未**用其他 provider 的 key 顶替。
+7. **其余 abort/哨兵之外的「绿」行**：逐条已在上表标为对照面，并注明它在两侧同绿的理由（第二节 1/2）。
 
 ---
 
