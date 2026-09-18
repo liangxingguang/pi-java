@@ -27,6 +27,24 @@ import com.pijava.ai.stream.ToolCallBuilder;
  * <p>Phase 2a: emits the full 13-event protocol with {@code partial} snapshots
  * via {@link StreamPartialBuilder}. Mistral has no official Java SDK; uses
  * {@link PiHttpClient} for JSON requests and SSE parsing.</p>
+ *
+ * <h3>B20：stop reason 从线格读、收尾按 pi 严格判定（docs/31 §8.35.14）</h3>
+ *
+ * <p>pi 的收尾（{@code mistral-conversations.ts:150-161}）是四段判：abort →
+ * {@code pending} → {@code error} → done。本车道此前**一段都没有**，而且读点位置也是错的：
+ * 取值在 {@code processSseData} 里读，却排在那道 {@code if (delta == null) return} **之后**
+ * ——「只有 finish_reason、没有 delta」的终帧取值被整块丢掉；读到的取值又只翻
+ * {@code tool_calls}→{@code tool_use} 一种，其余原样发出去（{@code model_length} 发成
+ * {@code "model_length"}、{@code error} 发成 {@code done("error")}），局部变量还兜底成
+ * {@code "stop"} 把「什么都没看到」伪装成「正常收尾」。</p>
+ *
+ * <p>两处与 pi 的取舍已写在各读点旁，汇总：</p>
+ * <ul>
+ *   <li><b>abort 检查（pi {@code :150}）不可达</b> —— {@code StreamRequest} 没有 signal，
+ *       中止由宿主 {@code PiLoopRunner.markAborted} 在流外处理（§8.35.14 第三节 ③）。</li>
+ *   <li><b>读点排在 delta 处理之后</b>（pi 是之前）—— 只此一处刻意偏差，理由见读点注释；
+ *       pi 的 {@code rawStopReason}（{@code :614}）本包不写，留待第 ⑨ 包（D5）。</li>
+ * </ul>
  */
 public final class MistralConversationsApi extends AbstractChatApi {
 
@@ -37,6 +55,12 @@ public final class MistralConversationsApi extends AbstractChatApi {
 
     private static final String DEFAULT_BASE_URL = "https://api.mistral.ai/v1";
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    /**
+     * pi 累加器的 stop reason 初值（{@code mistral-conversations.ts:222}），
+     * 非 pi 词汇表取值；收尾拿它当「一个 finish reason 都没观测到」的哨兵。
+     */
+    private static final String PENDING = "pending";
 
     private final PiHttpClient http;
     private final String apiKey;
@@ -76,84 +100,137 @@ public final class MistralConversationsApi extends AbstractChatApi {
 
             var toolCallBuilders = new HashMap<String, ToolCallBuilder>();
             var textStarted = new boolean[]{false};
-            String finishReason = "stop";
+            var stop = new StopState();
 
             while (sseEvents.hasNext()) {
                 var sse = sseEvents.next();
                 if ("[DONE]".equals(sse.data())) {
-                    if (textStarted[0]) publisher.submit(builder.emitTextEnd());
-                    publisher.submit(builder.emitDone(finishReason));
-                    return;
+                    // pi 的解析器把 `[DONE]` 当作**迭代结束**（mistral-conversations.ts:494
+                    // 的哨兵 + `:458` 的 `return`）⇒ 收尾判定在循环**之外**统一跑。
+                    // 此前这里提前 `emitDone` + `return`，整段收尾判定被跳过。
+                    break;
                 }
-                finishReason = processSseData(sse.data(), publisher, builder,
-                        toolCallBuilders, textStarted);
+                processSseData(sse.data(), publisher, builder,
+                        toolCallBuilders, textStarted, stop);
             }
             if (textStarted[0]) publisher.submit(builder.emitTextEnd());
-            publisher.submit(builder.emitDone(finishReason));
+            // ⚠️ pi 的 abort 检查（:150）在车道层**结构上不可达** —— `StreamRequest` 没有
+            // signal，中止由宿主 `PiLoopRunner.markAborted` 在流外处理（§8.35.14 第三节 ③）。
+            if (PENDING.equals(stop.reason)) {
+                // 严格收尾（pi :154-155）：一个 finish reason 都没观测到 ⇒ 绝不当成正常结束。
+                throw new IllegalStateException("Mistral stream ended without a finish reason");
+            }
+            // pi :157 还比了 `"aborted"`，那个值只由上面的 abort 检查写入 ⇒ 不可达。
+            if ("error".equals(stop.reason)) {
+                // pi :158：文案取 `errorMessage`（**映射里**给的），缺失才兜底。
+                throw new IllegalStateException(stop.errorMessage != null
+                        ? stop.errorMessage : "An unknown error occurred");
+            }
+            publisher.submit(builder.emitDone(stop.reason));
         } catch (Exception e) {
+            // pi 的 catch（:166-171）只发一条 error 就结束 ⇒ 一条流**只有一个**终局事件。
             publisher.submit(builder.emitError("error", e));
         }
     }
 
+    /** pi 的 {@code output.stopReason} + {@code output.errorMessage} 两件套。 */
+    private static final class StopState {
+        private String reason = PENDING;
+        private String errorMessage;
+    }
+
+    /**
+     * 线格取值 → pi 的 {@code StopReason}（pi {@code mistral-conversations.ts:926-941}）。
+     *
+     * <p>⚠️ 与 Google 车道的**形状差异**：Mistral 把文案**做进映射**（{@code error} 与
+     * {@code default} 两支都自带 {@code Provider stopped with: …}），而 Google 的映射只返回
+     * 裸 {@code "error"}、文案由收尾处用 {@code rawStopReason} 拼。两处都照 pi 写，别「统一」。</p>
+     *
+     * <p>⚠️ 与 completions / Google 又不同的一处：本车道的未知取值 pi **不抛**（落 error 事件），
+     * 与 completions 同向、与 Anthropic / Google 反向。</p>
+     */
+    private static MappedStopReason mapChatStopReason(String reason) {
+        if (reason == null) {
+            // pi 的 `if (reason === null) return {stopReason:"stop"}`（`:927`）。调用点的
+            // 真值守卫已挡掉 null 与空串 ⇒ 流路径上不可达，留着是为了与 pi 逐行同形。
+            return new MappedStopReason("stop", null);
+        }
+        return switch (reason) {
+            case "stop" -> new MappedStopReason("stop", null);
+            case "length", "model_length" -> new MappedStopReason("length", null);
+            case "tool_calls" -> new MappedStopReason("tool_use", null);
+            case "error" -> new MappedStopReason("error", "Provider stopped with: error");
+            default -> new MappedStopReason("error", "Provider stopped with: " + reason);
+        };
+    }
+
+    /** 映射结果：pi 的 {@code { stopReason, errorMessage? }}。 */
+    private record MappedStopReason(String reason, String errorMessage) {}
+
     @SuppressWarnings("unchecked") // SSE response JSON parsing with generic Map types
-    private String processSseData(String data,
+    private void processSseData(String data,
                                   SubmissionPublisher<StreamEvent> publisher,
                                   StreamPartialBuilder builder,
                                   Map<String, ToolCallBuilder> toolBuilders,
-                                  boolean[] textStarted) {
-        String finishReason = "stop";
+                                  boolean[] textStarted,
+                                  StopState stop) {
         try {
             var json = MAPPER.readValue(data, Map.class);
             var choices = (List<Map<String, Object>>) json.get("choices");
-            if (choices == null || choices.isEmpty()) return finishReason;
+            if (choices == null || choices.isEmpty()) return;
 
             var choice = choices.get(0);
+            // delta 缺失不再整段早退：终帧「只有 finish_reason、没有 delta」是合法形状，
+            // 原先那道 `if (delta == null) return;` 会把它的取值整块丢掉。
             var delta = (Map<String, Object>) choice.get("delta");
-            if (delta == null) return finishReason;
-
-            // Text delta
-            var content = (String) delta.get("content");
-            if (content != null && !content.isEmpty()) {
-                if (!textStarted[0]) {
-                    publisher.submit(builder.emitTextStart());
-                    textStarted[0] = true;
+            if (delta != null) {
+                // Text delta
+                var content = (String) delta.get("content");
+                if (content != null && !content.isEmpty()) {
+                    if (!textStarted[0]) {
+                        publisher.submit(builder.emitTextStart());
+                        textStarted[0] = true;
+                    }
+                    publisher.submit(builder.emitTextDelta(content));
                 }
-                publisher.submit(builder.emitTextDelta(content));
+
+                // Tool call delta
+                var toolCalls = (List<Map<String, Object>>) delta.get("tool_calls");
+                if (toolCalls != null) {
+                    for (var tc : toolCalls) {
+                        var index = String.valueOf(tc.getOrDefault("index", "0"));
+                        var tcId = (String) tc.get("id");
+                        var function = (Map<String, Object>) tc.get("function");
+                        if (function == null) continue;
+
+                        var name = (String) function.get("name");
+                        var args = (String) function.get("arguments");
+
+                        var toolBuilder = toolBuilders.computeIfAbsent(index,
+                                k -> new ToolCallBuilder());
+
+                        if (tcId != null && name != null && !toolBuilder.isStarted()) {
+                            toolBuilder.start(tcId, name);
+                            publisher.submit(builder.emitToolCallStart());
+                        }
+                        if (args != null) {
+                            toolBuilder.append(args);
+                            publisher.submit(builder.emitToolCallDelta(
+                                    toolBuilder.id(), args));
+                        }
+                    }
+                }
             }
 
-            // Tool call delta
-            var toolCalls = (List<Map<String, Object>>) delta.get("tool_calls");
-            if (toolCalls != null) {
-                for (var tc : toolCalls) {
-                    var index = String.valueOf(tc.getOrDefault("index", "0"));
-                    var tcId = (String) tc.get("id");
-                    var function = (Map<String, Object>) tc.get("function");
-                    if (function == null) continue;
-
-                    var name = (String) function.get("name");
-                    var args = (String) function.get("arguments");
-
-                    var toolBuilder = toolBuilders.computeIfAbsent(index,
-                            k -> new ToolCallBuilder());
-
-                    if (tcId != null && name != null && !toolBuilder.isStarted()) {
-                        toolBuilder.start(tcId, name);
-                        publisher.submit(builder.emitToolCallStart());
-                    }
-                    if (args != null) {
-                        toolBuilder.append(args);
-                        publisher.submit(builder.emitToolCallDelta(
-                                toolBuilder.id(), args));
-                    }
-                }
-            }
-
-            // Finish reason — emit ToolCallEnd when tool_use, before StreamDone
+            // Finish reason —— 放在 delta 处理**之后**（pi 是之前，`mistral-conversations.ts:613`）：
+            // 下面那步「tool_use 补发 ToolCallEnd」要看工具块是否已完整，而工具块是上面刚折进来
+            // 的 ⇒ 顺序反了会把同帧的 tool_call 终帧漏掉。**刻意偏差**，只此一处。
             var reason = (String) choice.get("finish_reason");
             if (reason != null && !reason.isEmpty()) {
-                var normalized = "tool_calls".equals(reason) ? "tool_use" : reason;
-                finishReason = normalized;
-                if ("tool_use".equals(normalized)) {
+                var mapped = mapChatStopReason(reason);
+                stop.reason = mapped.reason();
+                stop.errorMessage = mapped.errorMessage();
+                if ("tool_use".equals(stop.reason)) {
                     for (var tb : toolBuilders.values()) {
                         if (tb.isComplete()) {
                             publisher.submit(builder.emitToolCallEnd(
@@ -174,7 +251,6 @@ public final class MistralConversationsApi extends AbstractChatApi {
         } catch (JsonProcessingException e) {
             // Skip unparseable data lines
         }
-        return finishReason;
     }
 
     private String buildRequestBody(StreamRequest request) throws JsonProcessingException {
