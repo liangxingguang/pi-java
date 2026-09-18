@@ -31,6 +31,30 @@ import com.pijava.ai.stream.StreamPartialBuilder;
  * <p>Phase 2a: emits the full 13-event protocol with {@code partial} snapshots.
  * Google returns complete function-call arguments in a single response
  * (no delta aggregation needed).</p>
+ *
+ * <h3>B20：stop reason 从线格读、收尾按 pi 严格判定（docs/31 §8.35.14）</h3>
+ *
+ * <p>pi 的收尾（{@code google-generative-ai.ts:264-278}）是四段判：abort →
+ * {@code pending} → {@code error} → done。本车道此前**一段都没有**，而且读点本身是错的：
+ * 读的是 {@code response} 级访问器，实测（google-genai 1.15.0 源码
+ * {@code GenerateContentResponse:352-364}）它在候选没有 finishReason 时自己**造**一个
+ * {@code FINISH_REASON_UNSPECIFIED} 返回、**永不返回 null** ⇒ 「没观测到」与
+ * 「线格真的发了 {@code FINISH_REASON_UNSPECIFIED}」不可区分（旧代码的 {@code != null}
+ * 兜底是死代码）；读到之后又只 {@code toLowerCase()} 就当作取值发出去 —— 线格词表
+ * （{@code STOP}/{@code MAX_TOKENS}/{@code SAFETY}…）于是被当成 pi 词表用了。</p>
+ *
+ * <p>三处与 pi 的取舍已写在各读点旁，汇总：</p>
+ * <ul>
+ *   <li><b>abort 检查（pi {@code :264}）不可达</b> —— {@code StreamRequest} 没有 signal，
+ *       中止由宿主 {@code PiLoopRunner.markAborted} 在流外处理（§8.35.14 第三节 ③）。</li>
+ *   <li><b>映射按原始字符串</b>（pi {@code mapStopReason} 收的是 SDK 枚举）—— 实测
+ *       google-genai 的 {@code FinishReason.knownEnum()} 对未知值与 SDK 词表缺的
+ *       {@code NO_IMAGE} **都**静默吞成 {@code FINISH_REASON_UNSPECIFIED}（两者不可区分，
+ *       且都不抛 —— 与 openai-java 的 {@code known()} 抛异常相反），只有 {@code toString()}
+ *       保留线格原值。</li>
+ *   <li><b>{@code promptFeedback.blockReason} 的自查是 pi-java 扩展</b>（pi 无此分支），
+ *       保留不动；它已符合「先 error 后不发 done」。</li>
+ * </ul>
  */
 public final class GoogleGenerativeAiApi extends AbstractChatApi {
 
@@ -40,6 +64,12 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
     }
 
     private static final String DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com";
+
+    /**
+     * pi 累加器的 stop reason 初值（{@code google-generative-ai.ts:75}），
+     * 非 pi 词汇表取值；收尾拿它当「一个 finish reason 都没观测到」的哨兵。
+     */
+    private static final String PENDING = "pending";
 
     private final Client client;
 
@@ -64,7 +94,13 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
     protected void streamInternal(StreamRequest request,
                                    SubmissionPublisher<StreamEvent> publisher) {
         var builder = new StreamPartialBuilder();
-        String finishReason = null;
+        // pi 累加器初值（google-generative-ai.ts:75）—— **非** pi 词汇表取值，收尾拿它
+        // 当「一个 finish reason 都没观测到」的哨兵（`:268`）。
+        String stopReason = PENDING;
+        // pi 的 output.rawStopReason（`:217`）：映射**前**的线格原值，收尾用它拼错误文案
+        // （`:272-273`）。第 ⑨ 包（D5）把它升成消息字段，此处先作局部量。
+        String rawStopReason = null;
+        boolean toolCallSeen = false;
         try {
             // 共享预通道先于本车道的映射跑（pi google-shared.ts:138 在 contents 转换前调
             // transformMessages）—— 跨模型重放的 thinking 块在此降级为文本，
@@ -106,62 +142,124 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
                     // Process candidates
                     if (response.candidates().isEmpty()) continue;
                     for (var candidate : response.candidates().get()) {
-                        if (candidate.content().isEmpty()) continue;
-                        var parts = candidate.content().get().parts();
-                        if (parts.isEmpty()) continue;
-
-                        for (var part : parts.get()) {
-                            // Thinking block — Google's thought() is a boolean flag
-                            // indicating the text content represents model thinking
-                            if (part.thought().isPresent() && part.thought().get()
-                                    && part.text().isPresent()) {
-                                String thought = part.text().get();
-                                if (!thinkingStarted) {
-                                    publisher.submit(builder.emitThinkingStart());
-                                    thinkingStarted = true;
+                        // content/parts 缺失**不再** `continue` —— pi 的形状是
+                        // `if (candidate?.content?.parts) { … }`（`google-generative-ai.ts:104`），
+                        // 而且 finish reason 的读点在**候选体末尾**（`:216`）、必须在同一个
+                        // 候选体里跑到（工具块与 finishReason 常在**同一帧**，见下面那步），
+                        // `continue` 会把它整块跳过。
+                        var maybeParts = candidate.content().flatMap(c -> c.parts());
+                        if (maybeParts.isPresent()) {
+                            for (var part : maybeParts.get()) {
+                                // Thinking block — Google's thought() is a boolean flag
+                                // indicating the text content represents model thinking
+                                if (part.thought().isPresent() && part.thought().get()
+                                        && part.text().isPresent()) {
+                                    String thought = part.text().get();
+                                    if (!thinkingStarted) {
+                                        publisher.submit(builder.emitThinkingStart());
+                                        thinkingStarted = true;
+                                    }
+                                    publisher.submit(builder.emitThinkingDelta(thought));
+                                    continue;
                                 }
-                                publisher.submit(builder.emitThinkingDelta(thought));
-                                continue;
-                            }
 
-                            // Text
-                            if (part.text().isPresent()) {
-                                String text = part.text().get();
-                                if (!textStarted) {
-                                    publisher.submit(builder.emitTextStart());
-                                    textStarted = true;
+                                // Text
+                                if (part.text().isPresent()) {
+                                    String text = part.text().get();
+                                    if (!textStarted) {
+                                        publisher.submit(builder.emitTextStart());
+                                        textStarted = true;
+                                    }
+                                    publisher.submit(builder.emitTextDelta(text));
                                 }
-                                publisher.submit(builder.emitTextDelta(text));
-                            }
 
-                            // Function call (Google returns complete args — no delta)
-                            if (part.functionCall().isPresent()) {
-                                FunctionCall fc = part.functionCall().get();
-                                String id = fc.id().orElse(
-                                        fc.name().orElse("unknown") + "_"
-                                                + System.currentTimeMillis());
-                                String name = fc.name().orElse("");
-                                Map<String, Object> args = fc.args().orElse(Map.of());
+                                // Function call (Google returns complete args — no delta)
+                                if (part.functionCall().isPresent()) {
+                                    FunctionCall fc = part.functionCall().get();
+                                    String id = fc.id().orElse(
+                                            fc.name().orElse("unknown") + "_"
+                                                    + System.currentTimeMillis());
+                                    String name = fc.name().orElse("");
+                                    Map<String, Object> args = fc.args().orElse(Map.of());
 
-                                publisher.submit(builder.emitToolCallStart());
-                                publisher.submit(builder.emitToolCallDelta(id, ""));
-                                publisher.submit(builder.emitToolCallEnd(id, name));
+                                    toolCallSeen = true;
+                                    publisher.submit(builder.emitToolCallStart());
+                                    publisher.submit(builder.emitToolCallDelta(id, ""));
+                                    publisher.submit(builder.emitToolCallEnd(id, name));
+                                }
                             }
                         }
-                    }
 
-                    // Finish reason
-                    if (response.finishReason() != null) {
-                        finishReason = response.finishReason().toString().toLowerCase();
+                        // Finish reason —— 读**候选级** `Optional`，不是 response 级访问器。
+                        // 实测（google-genai 1.15.0 源码 `GenerateContentResponse:352-364`）：
+                        // response 级访问器在候选**没有** finishReason 时自己**造**一个
+                        // `FINISH_REASON_UNSPECIFIED` 返回、**永不返回 null** ⇒ 拿它读，
+                        // 「没观测到」与「线格真的发了 FINISH_REASON_UNSPECIFIED」不可区分
+                        // （旧代码正是拿它读的，`!= null` 那个兜底是死代码）。
+                        // 候选级 `Optional` 才是 pi 的 `if (candidate?.finishReason)` 真值测试的
+                        // 同形物；`toString()` 给线格原值（`FinishReason:106-108` 即
+                        // `return this.value`），空串按真值测试算「没观测到」。
+                        var finish = candidate.finishReason();
+                        if (finish.isPresent() && !finish.get().toString().isEmpty()) {
+                            rawStopReason = finish.get().toString();
+                            stopReason = mapStopReason(rawStopReason);
+                            if (toolCallSeen && "stop".equals(stopReason)) {
+                                // pi :219-220 —— Google 的 STOP 同时表示「正常收尾」与
+                                // 「调工具收尾」，已有工具块时补成 toolUse。
+                                stopReason = "tool_use";
+                            }
+                        }
                     }
                 }
             }
             if (thinkingStarted) publisher.submit(builder.emitThinkingEnd());
             if (textStarted) publisher.submit(builder.emitTextEnd());
-            publisher.submit(builder.emitDone(finishReason != null ? finishReason : "stop"));
+            // ⚠️ pi 的 abort 检查（:264）在车道层**结构上不可达** —— `StreamRequest` 没有
+            // signal，中止由宿主 `PiLoopRunner.markAborted` 在流外处理（§8.35.14 第三节 ③）。
+            if (PENDING.equals(stopReason)) {
+                // 严格收尾（pi :268-269）：一个 finish reason 都没观测到 ⇒ **绝不**当成
+                // 正常结束。这是本车道此前最大的缺口 —— `null` 兜底成 "stop" 把
+                // 「什么都没看到」伪装成「正常收尾」。
+                throw new IllegalStateException("Google stream ended without a finish reason");
+            }
+            // pi 此处还比了 `"aborted"`（:271），那个值只由上面的 abort 检查写入 ⇒
+            // 在 pi-java 结构上不可达，故只比 `"error"`。
+            if ("error".equals(stopReason)) {
+                // pi :271-277：文案由 `rawStopReason` 拼，缺失才兜底。
+                throw new IllegalStateException(rawStopReason != null
+                        ? "Provider stopped with: " + rawStopReason
+                        : "An unknown error occurred");
+            }
+            publisher.submit(builder.emitDone(stopReason));
         } catch (Exception e) {
+            // pi 的 catch（:285-290）只发一条 error 就 `stream.end()` ⇒ 一条流**只有一个**
+            // 终局事件；上面的 throw 落在这里，`emitDone` 不会被发出去。
             publisher.submit(builder.emitError("error", e));
         }
+    }
+
+    /**
+     * 线格原值 → pi 的 {@code StopReason}（pi {@code google-shared.ts:379-411}）。
+     *
+     * <p>pi 收的是 SDK 枚举、用 exhaustive switch + {@code default: throw}；本车道收的是
+     * 原始字符串（理由见 {@code streamInternal} 的读点注释），故把 17 个取值**显式列出**、
+     * 其余 throw —— 与 pi 的 switch 逐值等价：枚举之外的线格值在 pi 侧同样落到
+     * {@code default}。</p>
+     *
+     * <p>⚠️ 那 15 个错误取值 pi **不给文案**（返回裸 {@code "error"}），文案由收尾处用
+     * {@code rawStopReason} 拼成 {@code Provider stopped with: X} —— 两处分写，别合并。</p>
+     */
+    private static String mapStopReason(String reason) {
+        return switch (reason) {
+            case "STOP" -> "stop";
+            case "MAX_TOKENS" -> "length";
+            case "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "SAFETY",
+                 "IMAGE_SAFETY", "IMAGE_PROHIBITED_CONTENT", "IMAGE_RECITATION",
+                 "IMAGE_OTHER", "RECITATION", "FINISH_REASON_UNSPECIFIED", "OTHER",
+                 "LANGUAGE", "MALFORMED_FUNCTION_CALL", "UNEXPECTED_TOOL_CALL",
+                 "NO_IMAGE" -> "error";
+            default -> throw new IllegalStateException("Unhandled stop reason: " + reason);
+        };
     }
 
     private GenerateContentConfig buildConfig(StreamRequest request) {
