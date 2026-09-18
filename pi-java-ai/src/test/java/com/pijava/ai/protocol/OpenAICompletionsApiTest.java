@@ -35,10 +35,10 @@ class OpenAICompletionsApiTest {
             100, 0.5, Map.of());
 
         var method = OpenAICompletionsApi.class.getDeclaredMethod(
-            "buildParams", StreamRequest.class, String.class);
+            "buildParams", StreamRequest.class, String.class, String.class);
         method.setAccessible(true);
         var params = (ChatCompletionCreateParams) method.invoke(
-            api, request, "openai-completions");
+            api, request, "openai-completions", "https://api.openai.com/v1");
 
         var tools = params.tools().orElseThrow();
         assertThat(tools).hasSize(1);

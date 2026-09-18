@@ -38,7 +38,7 @@ class OpenAICompletionsApiRequestTest {
                         "Successfully wrote 15 bytes to hello.py")),
                     false)));
 
-        var params = OpenAICompletionsApi.buildParams(request, "openai-completions");
+        var params = OpenAICompletionsApi.buildParams(request, "openai-completions", null);
 
         assertThat(params.messages()).hasSize(3);
 
@@ -77,7 +77,7 @@ class OpenAICompletionsApiRequestTest {
                     new ContentBlock.TextContent("hello!")))),
             List.of(), -1, -1, java.util.Map.of());
 
-        var params = OpenAICompletionsApi.buildParams(request, "openai-completions");
+        var params = OpenAICompletionsApi.buildParams(request, "openai-completions", null);
 
         assertThat(params.messages()).hasSize(3);
         assertThat(params.messages().stream()
@@ -94,17 +94,21 @@ class OpenAICompletionsApiRequestTest {
         // ⚠️ 助手消息必须带**身份**（api/provider/model）：共享预通道
         // TransformMessages 按「同模型否」决定 thinking 块留还是降级为文本，
         // 不带身份的消息会被判成**跨模型**（docs/31 §8.35.5 的接线）。
+        //
+        // ⚠️ 决定发回哪个字段的是 **签名**（收侧抄下来的线格字段名，pi
+        // openai-completions.ts:1310-1318），不是 provider —— B19 之前这里靠
+        // 「provider == deepseek 就发 reasoning_content」近似，签名反而被丢掉。
         var request = StreamRequest.of(ModelId.of("deepseek", "deepseek-chat"),
             List.of(
                 new Message.UserMessage(List.of(
                     new ContentBlock.TextContent("hi"))),
                 new Message.AssistantMessage(List.of(
-                    new ContentBlock.ThinkingContent("let me reason"),
+                    new ContentBlock.ThinkingContent("let me reason", "reasoning_content"),
                     new ContentBlock.TextContent("answer")),
                     "stop", null, "openai-completions", "deepseek", "deepseek-chat",
                     null, null, null)));
 
-        var params = OpenAICompletionsApi.buildParams(request, "openai-completions");
+        var params = OpenAICompletionsApi.buildParams(request, "openai-completions", null);
 
         var assistant = params.messages().stream()
             .filter(ChatCompletionMessageParam::isAssistant)
@@ -113,10 +117,14 @@ class OpenAICompletionsApiRequestTest {
         assertThat(assistant.content().get().asText()).isEqualTo("answer");
         assertThat(assistant._additionalProperties())
             .containsKey("reasoning_content");
+        assertThat(assistant._additionalProperties().get("reasoning_content"))
+            .isEqualTo(com.openai.core.JsonValue.from("let me reason"));
     }
 
     @Test
-    void nonDeepseekThinkingIsNotRoundTripped() {
+    void unsignedThinkingIsNotRoundTripped() {
+        // 决定权在签名：没有签名（空串）的 thinking 块**不发**，与 provider 无关 ——
+        // 这正是 B19 从「按 provider 名开闸」改成「按签名自描述」的要点。
         var request = StreamRequest.of(ModelId.of("openai", "gpt-4o-mini"),
             List.of(
                 new Message.UserMessage(List.of(
@@ -127,7 +135,7 @@ class OpenAICompletionsApiRequestTest {
                     "stop", null, "openai-completions", "openai", "gpt-4o-mini",
                     null, null, null)));
 
-        var params = OpenAICompletionsApi.buildParams(request, "openai-completions");
+        var params = OpenAICompletionsApi.buildParams(request, "openai-completions", null);
 
         var assistant = params.messages().stream()
             .filter(ChatCompletionMessageParam::isAssistant)

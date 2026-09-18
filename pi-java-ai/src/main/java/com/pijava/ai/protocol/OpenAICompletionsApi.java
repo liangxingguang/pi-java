@@ -28,8 +28,10 @@ import com.openai.models.chat.completions.ChatCompletionToolMessageParam;
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.TransformMessages;
+import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
 
@@ -49,6 +51,18 @@ public class OpenAICompletionsApi extends AbstractChatApi {
     protected final OpenAIClient client;
     protected final String apiKey;
 
+    /**
+     * The **effective** base URL this adapter talks to, after the {@link ApiOptions} override and
+     * the OpenAI default have been applied.
+     *
+     * <p>Kept because replay has to read it: pi's {@code detectCompat} classifies relay houses from
+     * {@code model.baseUrl} ({@code openai-completions.ts:1592}), and pi-java's {@code ModelInfo}
+     * carries no base URL — the effective one lives here. Detecting at request time (rather than
+     * baking a flag into the catalog) is what makes {@code --base-url} and settings overrides
+     * visible to the decision.</p>
+     */
+    protected final String baseUrl;
+
     private static final ObjectMapper JSON = new ObjectMapper();
 
     /**
@@ -64,6 +78,21 @@ public class OpenAICompletionsApi extends AbstractChatApi {
      */
     private static final List<String> REASONING_PROBE_FIELDS =
         List.of("reasoning_content", "reasoning", "reasoning_text");
+
+    /**
+     * Wire names accepted as a thinking block's **signature** when replaying it back
+     * (pi {@code openai-completions.ts:278}). The signature is what the collect side stamped
+     * on the block — i.e. the field the provider actually sent — so replay sends the text
+     * back under that same name instead of guessing (see {@code addAssistantMessage}).
+     *
+     * <p>⚠️ Deliberately a **second array**, not a reuse of {@link #REASONING_PROBE_FIELDS}:
+     * pi's two lists are in different orders ({@code :597} probes {@code reasoning_content}
+     * first, {@code :278} lists {@code reasoning} first). Here the order cannot matter (it is
+     * an {@code includes} test), but the pair exists for two different questions and must not
+     * be collapsed.</p>
+     */
+    private static final List<String> REASONING_SIGNATURE_FIELDS =
+        List.of("reasoning", "reasoning_content", "reasoning_text");
 
     /**
      * Create an adapter for the given options.
@@ -82,7 +111,7 @@ public class OpenAICompletionsApi extends AbstractChatApi {
      */
     public OpenAICompletionsApi(ApiOptions options, String apiKeyEnvVar) {
         this.apiKey = resolveApiKey(options, apiKeyEnvVar);
-        var baseUrl = options.baseUrl() != null && !options.baseUrl().isBlank()
+        this.baseUrl = options.baseUrl() != null && !options.baseUrl().isBlank()
                 ? options.baseUrl() : "https://api.openai.com/v1";
         this.client = OpenAIOkHttpClient.builder()
                 .apiKey(apiKey).baseUrl(baseUrl).build();
@@ -100,7 +129,7 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         var blockEnds = new ArrayDeque<Supplier<StreamEvent>>();
         var toolCall = new ToolCallAccumulator();
         try {
-            var params = buildParams(request, apiName());
+            var params = buildParams(request, apiName(), baseUrl);
             publisher.submit(builder.emitStart());
 
             try (var streamResponse = client.chat().completions().createStreaming(params)) {
@@ -218,7 +247,19 @@ public class OpenAICompletionsApi extends AbstractChatApi {
      */
     private record ReasoningField(String field, String text) {}
 
-    static ChatCompletionCreateParams buildParams(StreamRequest request, String apiName) {
+    /**
+     * Build the wire request.
+     *
+     * @param request the stream request
+     * @param apiName the lane's name, used by the shared pre-pass
+     *                ({@link TransformMessages}) to decide what to downgrade
+     * @param baseUrl the adapter's **effective** base URL; replay needs it because the
+     *                {@code deepseek}-family relay detection reads it (pi
+     *                {@code detectCompat:1592} classifies from {@code model.baseUrl})
+     * @return the request body
+     */
+    static ChatCompletionCreateParams buildParams(StreamRequest request, String apiName,
+                                                  String baseUrl) {
         var builder = ChatCompletionCreateParams.builder()
                 .model(request.modelId().modelName());
 
@@ -239,7 +280,7 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                 var text = extractText(msg.content());
                 if (!text.isEmpty()) builder.addUserMessage(text);
             } else if (msg instanceof Message.AssistantMessage assistant) {
-                addAssistantMessage(builder, assistant, request.modelId().provider());
+                addAssistantMessage(builder, assistant, request.model(), baseUrl);
             } else if (msg instanceof Message.ToolResultMessage tool) {
                 // Tool results must be sent back to the model, otherwise it
                 // cannot see the outcome and keeps repeating the same tool
@@ -284,18 +325,50 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         return out;
     }
 
-    /** Serializes an assistant message including its tool calls. */
+    /**
+     * Serializes an assistant message including its tool calls and its reasoning.
+     *
+     * <p>pi applies **two independent** reasoning rules here, and this method ports both:</p>
+     * <ol>
+     *   <li><b>Signature-driven replay</b> ({@code :1310-1318}), with **no provider gate**: the
+     *       thinking block's signature is the wire name the provider sent that text under, so it
+     *       is also the name to send it back under. Only signatures in
+     *       {@link #REASONING_SIGNATURE_FIELDS} qualify; anything else (an Anthropic signature,
+     *       say) is dropped rather than sent as an unknown parameter. Multiple blocks are joined
+     *       with a single {@code "\n"}.</li>
+     *   <li><b>Empty-string backfill</b> ({@code :1356-1362}): relay houses in the deepseek family
+     *       reject assistant history that lacks {@code reasoning_content}, so one is added as
+     *       {@code ""}. Guarded by the compat flag <i>and</i> {@code model.reasoning}, and skipped
+     *       when rule (i) already set that exact key.</li>
+     * </ol>
+     *
+     * @param builder  the request builder
+     * @param assistant the assistant message to serialize
+     * @param model    the request's target model — its capabilities give pi's
+     *                 {@code model.reasoning}, its compat gives the explicit override
+     * @param baseUrl  the adapter's effective base URL, for the deepseek relay detection
+     */
     private static void addAssistantMessage(
             ChatCompletionCreateParams.Builder builder,
-            Message.AssistantMessage assistant, String provider) {
+            Message.AssistantMessage assistant, ModelInfo model, String baseUrl) {
         var text = new StringBuilder();
-        var reasoning = new StringBuilder();
+        var reasoning = new ArrayList<String>();
+        String signature = null;
         var toolCalls = new ArrayList<ChatCompletionMessageToolCall>();
         for (var block : assistant.content()) {
             if (block instanceof ContentBlock.TextContent tc) {
                 text.append(tc.text());
             } else if (block instanceof ContentBlock.ThinkingContent thinking) {
-                reasoning.append(thinking.text());
+                // pi :1289 —— 纯空白块不算推理：既不进连接，也不参与签名的选取。
+                if (thinking.text().trim().isEmpty()) {
+                    continue;
+                }
+                // 签名取**第一个非空块**的（pi :1313 取 nonEmptyThinkingBlocks[0]），
+                // 不是取第一个已知签名的 —— 块序在这里是有意义的。
+                if (signature == null) {
+                    signature = thinking.signature();
+                }
+                reasoning.add(thinking.text());
             } else if (block instanceof ContentBlock.ToolUseContent toolUse) {
                 toolCalls.add(ChatCompletionMessageToolCall.ofFunction(
                     ChatCompletionMessageFunctionToolCall.builder()
@@ -314,18 +387,55 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         if (!toolCalls.isEmpty()) {
             ab.toolCalls(toolCalls);
         }
-        // DeepSeek thinking mode requires reasoning_content on assistant
-        // history messages; without it the API rejects the turn with 400.
-        // This field is DeepSeek-specific: only round-trip it for providers
-        // that demand it, so OpenAI/Mistral/vLLM never receive an unknown
-        // parameter on the same OpenAI-compatible path.
-        if (!reasoning.isEmpty() && "deepseek".equalsIgnoreCase(provider)) {
-            ab.putAdditionalProperty("reasoning_content",
-                com.openai.core.JsonValue.from(reasoning.toString()));
+
+        // 规则 (i)：签名即线格名，原样发回。pi 在这条路径上还有一层 reasoning_details
+        // 分支（preservedReasoningDetails，OpenAI 加密推理详情）；pi-java 不解析该结构
+        // ⇒ 那个 if 恒真，故不移植。
+        boolean reasoningContentSent = false;
+        if (signature != null && REASONING_SIGNATURE_FIELDS.contains(signature)) {
+            ab.putAdditionalProperty(signature, JsonValue.from(String.join("\n", reasoning)));
+            reasoningContentSent = "reasoning_content".equals(signature);
         }
-        if (!text.isEmpty() || !toolCalls.isEmpty() || !reasoning.isEmpty()) {
+
+        // 规则 (ii)：deepseek 一类 relay 的助手历史必带 reasoning_content，缺了就补空串。
+        // ⚠️ 门是「reasoning_content 这个键还没被写」而不是「什么都没写」—— 签名是
+        // `reasoning` 时 pi 会**两个字段都发**（reasoning 有内容、reasoning_content 空串）。
+        // ⚠️ 第二个合取项 model.reasoning 是**同一条**门（pi :1357 写在一行里）：非推理模型
+        // 即使挂在 deepseek 上也不补，否则等于给普通对话凭空塞一个推理字段。
+        if (!reasoningContentSent
+                && requiresReasoningContentOnAssistantMessages(model, baseUrl)
+                && model.capabilities().contains(ModelCapability.THINKING)) {
+            ab.putAdditionalProperty("reasoning_content", JsonValue.from(""));
+        }
+
+        // pi :1365-1372 —— 既无内容又无工具调用的助手消息整条丢掉（有 provider 不接受
+        // 空助手消息）。⚠️ reasoning **不算内容**：只带 thinking 的消息就是要丢的那种。
+        if (!text.isEmpty() || !toolCalls.isEmpty()) {
             builder.addMessage(ab.build());
         }
+    }
+
+    /**
+     * pi {@code detectCompat:1592}：deepseek 家族靠 provider 名**或** baseUrl 判。
+     *
+     * <p>provider 名是精确比较（pi 是 {@code ===}），baseUrl 是小写子串匹配。models.json
+     * 的 {@code compat} 显式给值时以它为准（pi 的 {@code getCompat} = {@code explicit ?? detected}）。</p>
+     *
+     * <p>⚠️ 这只回答 compat **那一半**；pi 的条件是它与 {@code model.reasoning} 的合取，
+     * 调用点补上另一半。</p>
+     *
+     * @param model   the request's target model
+     * @param baseUrl the adapter's effective base URL
+     * @return {@code true} when this relay house demands {@code reasoning_content} on
+     *         assistant history
+     */
+    private static boolean requiresReasoningContentOnAssistantMessages(ModelInfo model, String baseUrl) {
+        var explicit = model.compat().requiresReasoningContentOnAssistantMessages();
+        if (explicit != null) {
+            return explicit;
+        }
+        return "deepseek".equals(model.id().provider())
+            || (baseUrl != null && baseUrl.toLowerCase().contains("deepseek.com"));
     }
 
     private static String toArgumentsJson(Map<String, Object> arguments) {
