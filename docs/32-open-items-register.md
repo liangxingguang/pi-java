@@ -42,7 +42,7 @@
 | 类 | 含义 | 条数 | 谁能推进 |
 |---|---|---:|---|
 | **A** | 要**证据**才能定案（多数要先读 pi 源码） | 12 | 我（读 pi 源码 / 清点） |
-| **B** | **功能缺口**（pi 有、pi-java 无） | 10 | 我（另立包，多数需先出设计文档） |
+| **B** | **功能缺口**（pi 有、pi-java 无） | 16 | 我（另立包，多数需先出设计文档） |
 | **C** | 已裁决**不改 / 不做**，带触发条件 | 11 | 不推进，除非触发条件成立 |
 | **D** | 小账（遥测/注释级，一处一行） | 8 | 我，随时可做 |
 | **E** | 结构债（>500 行文件等） | 8 | 我，与功能包搭车 |
@@ -72,6 +72,21 @@
 > **B18**（`PiMessagesApi` 丢签名与 `redacted` —— 包② **刻意**没给它挂闸，因为它不是 pi 的车道，
 > 见 §8.34.11-（1））⇒ B 类 10→**13** 行。**B15 减半**：投送链已由包② 修好，
 > 只剩「`thinkingLevelMap` 生产上不可构造」那半边。
+
+> **2026-09-18（生产事故取证，§8.35）**：用户报告一次运行「中断」（会话 `2026-09-10T15-13-13`，
+> `glm-5.3-flash` via `api.teamorouter.cn`：最后一个请求 201 s 后返回 `out=1014`，
+> 而 assistant 消息 **`content: []`** ⇒ 前端静默停住）。经**真实 `openai` 车道**复现
+> （P2/P3 两条探针：可见内容 2 / 1 字符，relay 计费 127 / 102 输出 token ⇒ 纯推理回复形态）
+> ⇒ 根因＝**响应侧 reasoning 字段被整段丢弃**，登记 **B19**；同一次取证**顺带核实**了
+> **B20**（stop reason 映射**跨四车道**缺失 —— 审计发现连主车道 Anthropic 也从不读
+> `stop_reason`，`length` 机制在该车道**整段死掉**）与 **B21**（请求侧无 `compat.thinkingFormat`；
+> ⚠️ 该 relay 上 pi **也不发** ⇒ **与本次事故无关**，如实标注）。
+> ⇒ B 类 13→**16** 行，并更正 §1 汇总里滞后的 10（那行自包② 起就没跟上）。
+> ⚠️ **口径说明**：本类历来的「条数」是**递增记账**，我不去重构它的定义 —— 底稿可核对的是
+> §3 表**共 21 行**，其中标了「已实施/结案」的 9 条、**仍开放 12 条**（B19/B20/B21 已计入）。
+> 三者合为「**响应侧字段覆盖与收尾语义**」包（设计见 `docs/31 §8.35`）；
+> ⚠️ **前置依赖**：B19 一旦落地，该车道就开始产 thinking 块 ⇒ B10 的跨模型重放闸
+> **只挂 Anthropic 一条车道**这件事立刻可观察 ⇒ **B10 的剩余范围是本包的前置，不是后续**。
 
 **收敛路径**：A 类与 F 类是真正的闸门 —— A 挡在「读 pi / 清点」上，F 挡在「你的决定」上；
 B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做，没有一条阻塞合并。
@@ -122,6 +137,9 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | B16 | **`sanitizeSurrogates` 全仓无对应物** —— 出站文本未做孤对代理清理 | §8.34.11 | pi 在自己的**每个** API 适配器里都用它包裹出站 text/thinking（全仓 **54 处**调用），pi-java 自己的模块**零处**（`.agents/` 里 vendored tamboui 的那几处是宽度计算，无关）。孤对代理字符会让请求体 JSON 非法 ⇒ provider 400。**跨车道**（不是 Anthropic 独有）⇒ 须先设计「在哪一层做一次」而不是逐适配器抄 |
 | B17 | **Anthropic 车道静默丢弃图片块** | §8.34.11 | `AnthropicMessagesApi.toBlockParams` 只处理 Text/Thinking/ToolUse ⇒ `ImageContent`/`UrlImageContent`/`DiffContent` **无声消失**。pi 在 user 车道把它们映射成 `{type:"image",source:{type:"base64",...}}`（`anthropic-messages.ts:1250-1260`）。**不是「图片进不了 Message」**：Google / OpenAI-Responses / PiMessages 三条车道**都**映射了图片 ⇒ 是 Anthropic 车道独缺 |
 | B18 | **`PiMessagesApi` 对任何 thinking 块丢签名与 `redacted`** | §8.34.11-（1） | `PiMessagesApi:225-226` 一律送 `{type:"thinking","thinking":text}`。**包② 刻意没给它挂闸** —— 它是 pi-java **自己的** wire 形状（pi 的 6 个请求构建器里无对应物），在一条 pi 没有的车道上按 pi 的闸改行为＝**发明**行为。故单独登记，让它自己的规则被独立设计 |
+| B19 | **`openai-completions` 车道整段丢弃响应侧 reasoning（收），重放侧又把字段名写死成 `deepseek`（发）** —— **本次事故根因** | §8.35.1（`docs/31:4604`） | **收**：`OpenAICompletionsApi:96-105` 只读 `delta.content()`，`delta._additionalProperties()` **从未被查**（SDK 侧可读 —— `ChatCompletionChunk$Choice$Delta` 有该方法，已 `javap` 实证）；pi 依次试 `reasoning_content`/`reasoning`/`reasoning_text` 并**用命中的字段名当 `thinkingSignature`**（`openai-completions.ts:597-620`、`:615-618`）⇒ 重放时**自描述**。**发**：`:235` 只给 `"deepseek".equalsIgnoreCase(provider)` 发 `reasoning_content`，pi 则按**签名**回填（`:1310-1318`，**无 provider 门**）。事故形态：纯推理回复 ⇒ 可见内容为空 ⇒ 前端静默停住；带答案回复 ⇒ 计费与可见严重不符（复现 P2：**127 计费 / 2 可见**）。⚠️ 同族但**不在本行**：`reasoning_details`（OpenRouter/llama.cpp 的结构化形状，`:661-671`/`:342`/`:1283`）—— 本行只覆盖三个**纯文本**字段名 |
+| B20 | **stop reason 映射跨车道缺失 —— 四条车道里三条「不读」或「原样透传」** | §8.35.2（`docs/31:4657`） | 逐车道审计（全部实测）：① **`AnthropicMessagesApi:190-193`** 处理 `message_delta` 时**只取 `usage`**，`event.delta.stop_reason` **全文件零读取**（pi `anthropic-messages.ts:743-745`），而 `:94` 硬写 `toolCallSeen[0] ? "tool_use" : "end_turn"` ⇒ `max_tokens`/`refusal`/未知值**全部丢失**；② **`OpenAICompletionsApi:132`** 硬写 `toolCall.started() ? "tool_use" : "stop"`（pi `:571-577`）；③ **`GoogleGenerativeAiApi:149-156`** 把枚举 `toString().toLowerCase()` 原样透传（`MAX_TOKENS`→`max_tokens`、`SAFETY`→`safety`，pi `google-shared.ts:379-411` 分别是 `length`/`error`）；④ **`MistralConversationsApi:151-154`** 半映射（无 `error` 兜底、无 `model_length`、无 `errorMessage`，pi `mistral-conversations.ts:926-941`）。只有 `ResponsesStreamProcessor:190-197` 已对齐 pi（`openai-responses-shared.ts:763-796`）。**功能后果（主车道 Anthropic）**：`length` **永不可达** ⇒ `PiLoopRunner:108` 的「length 截断 ⇒ 本回合**全部**工具调用判失败」（pi `agent-loop.ts:206-208`）**永不生效**（截断的工具参数会被**执行**），且 `ContextOverflow:118`/`:138`、`CompactionExecutor:310`、`PiLaneSink:367`、`LlmSummaryGenerator:160` 五处 `length` 分支同时是死代码。⚠️ `"end_turn"` 是 pi-java **自有**取值（`AssistantMessage:32`/`StreamEvent:199` 都列它，而 `LaneState:261` 的词汇表**不列** ⇒ 自家也不一致），pi 该处是 `"stop"` ⇒ **转录载荷分歧**；改不改口径＝**裁决点 D2**（§8.35.8） |
+| B21 | **请求侧无 `compat.thinkingFormat`**（能力缺口，**非本次事故因素**） | §8.35.3（`docs/31:4707`） | pi 按 provider 发 **10 种** thinking 开关形状（`openai-completions.ts:866`/`:879`/`:887`/`:892`/`:897`/`:914`/`:924`/`:934`/`:939`/`:948`：zai / qwen / qwen-chat-template / chat-template / baseten / deepseek / openrouter / ant-ling / together / string-thinking —— 其中 `detectCompat:1644-1654` 只会**产出 6 种**，其余靠用户显式写 `model.compat`）—— 而 pi-java 的请求侧只有 `DefaultProviders:112-116` 的 `thinking.budgetTokens`。⚠️ **如实标注**：`api.teamorouter.cn` 不匹配 pi **任何**探测模式（`detectCompat:1581-1600` 逐条比对：z.ai / together / moonshot / openrouter / cloudflare / nvidia / ant-ling / deepseek 全不匹配）⇒ pi 在该 relay 上**也不发**任何 thinking 配置 ⇒ **与本次事故无关**；只在改用 zai/deepseek/qwen 等**原生** provider 时才可观察。**不并入本包**（它管「发什么请求」，与响应侧字段覆盖无关），须自己一包 |
 
 ---
 

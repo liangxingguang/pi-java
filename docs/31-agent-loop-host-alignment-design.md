@@ -4566,6 +4566,250 @@ base64；两处**判空语义一致**（`isEmpty` vs `trim().isEmpty()` 在该�
 
 ---
 
+### 8.35 响应侧字段覆盖与收尾语义（设计 · **待审**）
+
+> **状态**：**设计已落地，等用户审核**（本仓规则：先出设计 → 审核 → 才许写代码）。
+> 本包**不占**既有 ③/④ 序号（③ = B5 宿主层 `Error` 通道、④ = B3/B12），文中称 **「响应侧字段覆盖包」**。
+> 登记：`docs/32` 的 **B19 / B20 / B21**（B 类 13→16 行）。
+
+#### 8.35.0 立案：一次生产事故，牵出的是一整层
+
+**事故**（用户 2026-09-18 问「为什么中断了」）：会话
+`~/.pi-java/agent/sessions/--D--workplaceForai-pi-java--/2026-09-10T15-13-13-817Z_ffffffff-ee64-7816-ee45-2d112ca0ae6d.jsonl`，
+provider `openai` / model `glm-5.3-flash` / baseUrl `https://api.teamorouter.cn/v1`
+（`~/.pi-java/agent/settings.json`）。最后一个请求 `attempt 6` 于 22:33:06.623 发出，**201 s** 后返回，
+relay 报 `usage: input 67416 / output 1014`，而落盘的助手消息是（`seq 275`）：
+
+```json
+{"role":"assistant","content":[],"stopReason":"stop","api":"openai-completions",
+ "provider":"openai","model":"glm-5.3-flash","usage":{"input":67416.0,"output":1014.0,...}}
+```
+
+⇒ **1014 个输出 token 换回一条空消息**，且 `stopReason` 是「正常结束」。前端表现为**静默停住**（不报错）。
+
+**复现**（走**真实 `openai` 车道**，不是手搓 HTTP；`--trace-payloads` +
+`-Dpi-java.traces.dir=/tmp/pi-probe`，未污染 `~/.pi-java` 的会话）：
+
+| 探针 | 提问 | pi-java 可见内容 | relay 计费 output |
+|---|---|---|---|
+| P2 | 1–100 之间质数共几个？ | `{"text":"25"}` —— **2 字符** | **127** |
+| P3 | (x+5)×3−12=30，x=? | `{"text":"9"}` —— **1 字符** | **102** |
+
+P2 的答案**是对的**（数出 25 个质数必须真推理）⇒ 推理确实发生过，
+**125 / 127 的输出 token 在 pi-java 的消息里不存在**。事故只是同一现象的极端形态：**全部输出都是推理 ⇒ 可见内容为空**。
+
+**这一层有多大**：把「响应侧字段」逐个清点后发现，**不止 reasoning 一处**（§8.35.2），
+而且**最重的一处在主车道 Anthropic 上**。故本包名不再叫「completions 车道收尾语义」。
+
+#### 8.35.1 根因一：`openai-completions` 车道的 reasoning 往返（B19）
+
+**（1）收：三个字段名一个都没读。**
+
+| | pi（`openai-completions.ts`） | pi-java（`OpenAICompletionsApi.java`） |
+|---|---|---|
+| 推理文本 | `:597-620` 依次试 `reasoning_content` / `reasoning` / `reasoning_text`，取**第一个非空** | `:96-105` 只读 `delta.content()` |
+| 未知字段的读取方式 | `choice.delta as Record<string, unknown>` | `delta._additionalProperties()` —— **`pi-java-ai/src/main` 全仓只用过一次**（`OpenRouterImagesApi:63`，且在 **message** 上），**delta 上零次** |
+| 签名 | `:615-618` **用命中的字段名当 `thinkingSignature`** | 无 |
+| 事件 | `thinking_start` / `thinking_delta` / `thinking_end` | 一个都不产 |
+
+**「字段名当签名」是本条设计的关键**：pi 重放时不再猜「该用哪个字段名发回去」，而是**读签名**
+（`OPENAI_COMPLETIONS_REASONING_FIELDS.includes(signature)`，`:1316`）⇒ 消息**自描述**。
+所以只补「收」而不补「签名」，重放侧仍然发不出去。**两者是一次改动，不可拆。**
+
+⚠️ **两处数组顺序不同，别顺手「修正」成一致**：接收循环的试探序是
+`["reasoning_content","reasoning","reasoning_text"]`（`:597`），重放识别用的常量是
+`["reasoning","reasoning_content","reasoning_text"]`（`:280-282`）。前者决定「同一条响应里两个字段都有时取哪个」
+（chutes.ai 会同时返回两个 ⇒ pi 取 `reasoning_content`），后者只是 `includes` 判定 ⇒ 顺序无关。**照抄。**
+
+⚠️ **`opencode-go` 特例在 pi-java 不可达**：pi 在两处把 `reasoning` 改写成 `reasoning_content`
+（`:615-617` 收、`:1312-1314` 发）。pi-java 的内置 provider 里**没有 `opencode-go`**（16 个内置 + models.json），
+⇒ **不移植**，但要在代码注释里写明「**有意**省略，理由是 provider 不可达」，否则后来者会当成漏抄。
+
+**SDK 能力（已 `javap` 实证，2026-09-18，`openai-java-core-4.42.0`）**：
+`ChatCompletionChunk$Choice$Delta` 有 `_additionalProperties(): Map<String, JsonValue>` ⇒ 未知字段可读；
+`Choice.finishReason(): Optional<FinishReason>`，`FinishReason` 同时有 `asString()`（原始线格字符串）与
+`known()`（未知值落 `Value._UNKNOWN`，不抛）。⇒ **一律取 `asString()`**，与 pi 的字符串 switch 同形。
+
+**（2）发：pi 有两条独立规则，pi-java 合成了门。**
+
+```java
+// :235（现役）
+if (!reasoning.isEmpty() && "deepseek".equalsIgnoreCase(provider)) {
+    ab.putAdditionalProperty("reasoning_content", com.openai.core.JsonValue.from(reasoning.toString()));
+}
+```
+
+pi 的两条（**必须拆开照抄，不能合成一个门**）：
+
+| | pi 位置 | 条件 | 行为 |
+|---|---|---|---|
+| (i) 签名回填 | `:1310-1318` | 第一个非空 thinking 块的签名 ∈ 三个已知字段名 | `assistantMsg[签名] = 全部 thinking 块 join("\n")`，**无 provider 门** |
+| (ii) 补空串 | `:1356-1362` | `compat.requiresReasoningContentOnAssistantMessages`（`detectCompat:1643` **＝ `isDeepSeek`**）**且** `model.reasoning` **且** 上面没写过 | `assistantMsg.reasoning_content = ""` |
+
+⇒ 现役那个 `"deepseek"` 门**不是错的**：它是 (ii) 的**近似**（`isDeepSeek` 还看 baseUrl 含 `deepseek.com`），
+但它**顶替**了本该独立存在的 (i)，缺了 `model.reasoning` 这一半条件，且把 (i)(ii) 合成了一个动作。
+后果：**在非 deepseek 的 relay 上，thinking 块永远发不回去**（pi 会发）⇒ 多轮推理连续性在 pi-java 上不存在。
+
+⚠️ **`content` 的形态别动**：pi `:1300-1307` 有一段注释说明 assistant 的 `content` **必须是纯字符串**
+（送 `[{type:"text",...}]` 数组会让某些模型（DeepSeek V3.2 via NVIDIA NIM）**照着回显块结构**，
+产出 `[{'type':'text','text':'[{...}]'}]` 这种递归嵌套）。pi-java `:239` 已是纯字符串 ⇒ 保持。
+
+#### 8.35.2 根因二：stop reason 映射跨车道缺失（B20）—— **本包最重的一条**
+
+**审计**（五条「有响应」的车道逐个查，全部实测）：
+
+| 车道 | pi-java 现状 | pi 参照 | 差在哪 |
+|---|---|---|---|
+| **Anthropic** | `:190-193` 处理 `message_delta` **只取 `usage`**；`event.delta.stop_reason` **全文件零读取**；`:94` 硬写 `toolCallSeen[0] ? "tool_use" : "end_turn"` | `anthropic-messages.ts:743-745` + `mapStopReason(:1464-1493)`：`end_turn`→stop、`max_tokens`→**length**、`tool_use`→toolUse、`refusal`→error+explanation、`pause_turn`/`stop_sequence`→stop、`sensitive`→error、**未知值抛错** | `max_tokens` / `refusal` / 未知值**全丢** |
+| **openai-completions** | `:132` 硬写 `toolCall.started() ? "tool_use" : "stop"` | `:571-577` + `mapStopReason(:1550-1571)`：stop/end→stop、length→length、function_call/tool_calls→toolUse、content_filter/network_error→error+text、未知→error+text | 同上 |
+| **Google** | `:149-156` 把 `finishReason().toString().toLowerCase()` **原样透传** | `google-shared.ts:379-411`：`STOP`→stop、`MAX_TOKENS`→**length**、其余（SAFETY/RECITATION/…共 15 种）→**error** | `MAX_TOKENS`→`"max_tokens"`（≠length）、`SAFETY`→`"safety"`（≠error） |
+| **Mistral** | `:151-154` 只把 `tool_calls` 归一成 `tool_use`，其余原样 | `mistral-conversations.ts:926-941`：`stop`→stop、`length`/**`model_length`**→length、`tool_calls`→toolUse、`error`→error+text、未知→error+text | 无 error 兜底、无 `model_length`、**无 errorMessage** |
+| **Responses** | `:190-197` `mapStopReason(...)` | `openai-responses-shared.ts:763-796` | ✅ 已对齐（唯一一条） |
+
+**为什么这条比「少一个字段」严重得多 —— 它是 `length` 机制的活命条件。**
+
+`length` 机制**已经实现了**（§8.21 包 3c、L1 ③），消费点五处：`PiLoopRunner:108`、
+`ContextOverflow:118`/`:138`、`CompactionExecutor:310`、`PiLaneSink:367`、`LlmSummaryGenerator:160`。
+**但在主车道 Anthropic 上 `stopReason` 永远不会是 `"length"`** ⇒ 五处**同时失效**。最危险的是第一处：
+
+```java
+// PiLoopRunner:106-108（现役）
+// pi: length 截断 ⇒ 全部失败，不执行（:206-208 分派，:379-404 实现）
+var batch = PiLoopTools.run(toolCalls, context, config, emit,
+    "length".equals(message.stopReason()));
+```
+
+pi 的规则是「**length 截断 ⇒ 本回合全部工具调用判失败、不执行**」（`agent-loop.ts:206-208`）
+—— 被 `max_tokens` 截断的工具参数**可能是不完整的 JSON**。pi-java 在主车道上拿不到 `length`
+⇒ 传 `false` ⇒ **这些截断调用会被真的执行**。（Mistral 车道同样；Google 车道透传成 `"max_tokens"`，也不是 `"length"`。）
+
+⚠️ **为什么一直没被发现**：`length` 机制的夹具**全部直接构造** `AssistantMessage(stopReason="length")`，
+**没有一条从线格走到消息**。这是 §8.33 教训形态 (6)「夹具写在实现之后 ⇒ 没有红灯可看」的**跨层**复现
+（夹具在宿主层，缺口在协议层）⇒ 本包的夹具计划必须包含**跨层那一条**（§8.35.6 末行）。
+
+**另有一处口径分歧：`"end_turn"`。**
+
+`AnthropicMessagesApi:94` 的 `"end_turn"` 是 pi-java **自有**取值，且**自家文档都不一致**：
+
+- `AssistantMessage.java:32` 把它列为 `stopReason` 的**首选**取值；`StreamEvent.java:199` 同；
+- **但 `LaneState.java:261` 的词汇表是 `"stop" | "tool_use" | "error" | "length" | null`** —— **不含 `end_turn`**；
+- 全仓夹具（`TransformMessagesTest`、`AnthropicThinkingReplayTest`、`JsonlSessionStorageTest`、`StreamEventTest`…）都按 `end_turn` 写。
+
+而 pi 在这一处的取值是 **`"stop"`**（`anthropic-messages.ts:1466`）⇒ **每一份 Anthropic 会话转录里
+`stopReason` 与 pi 不同**；转录是**载荷**，按 §8.18 A7 的口径属于对齐面。
+⇒ 列为本包**裁决点 D2**（§8.35.8），**不擅自改**（要动一批夹具，且既有转录已在盘上）。
+
+**顺带复核 `rawStopReason`（`:1080` 的旧裁定）**：旧裁定说它在对齐面「零消费者」⇒ 不移植。
+本次**全仓复核支持并加强**该裁定：pi 侧 `rawStopReason` 的引用**只有一处** —— 声明
+（`packages/ai/src/types.ts:443`）；**八个适配器写它，零个消费者读它**（`packages/*/src` 全文扫描，
+除 `packages/ai/src/api/*` 外无命中）。⇒ **维持不做**，本包不引入该字段。
+
+#### 8.35.3 非本事故因素：请求侧 `compat.thinkingFormat`（B21）
+
+pi 的请求侧有 **10 种** thinking 开关形状（`openai-completions.ts:866`/`:879`/`:887`/`:892`/`:897`/
+`:914`/`:924`/`:934`/`:939`/`:948`：zai / qwen / qwen-chat-template / chat-template / baseten /
+deepseek / openrouter / ant-ling / together / string-thinking；其中 `detectCompat:1644-1654` 只会**产出 6 种**，
+其余 4 种只有用户显式写 `model.compat` 才可能出现）。pi-java 请求侧**没有这个概念**
+（`DefaultProviders:112-116` 只放 `thinking.budgetTokens`）。
+
+**但如实标注：这与本次事故无关。** `api.teamorouter.cn` **不匹配 pi 的任何探测模式**
+（`detectCompat:1581-1600` 逐条比对：z.ai / together / moonshot / openrouter / cloudflare / nvidia /
+ant-ling / deepseek 全不匹配）⇒ **pi 在该 relay 上什么都不发**。
+能力缺口为真，但它管「**发什么请求**」，与本包「响应侧字段覆盖」不是同一层 ⇒ **须自己一包**，本包不碰。
+
+#### 8.35.4 前置依赖：B10 的闸只有一根线 —— 本包的**前置**，不是后续
+
+§8.34.11-（4）已如实定性：「通道已建、只接了一根线」——`TransformMessages` 只被
+`AnthropicMessagesApi` 调用。**本包让 B19 落地后，completions 车道开始产 thinking 块**，
+一旦跨模型重放（换成 Anthropic 模型），那条车道就**带着 thinking 块**发请求，而闸不在这条线上
+⇒ 会**引入**一条比今天更错的路径。⇒ 顺序：**B10 接线 → B19 → B20**（B10 的剩余范围见 `docs/32` B10）。
+
+#### 8.35.5 修法落点
+
+| # | 文件 | 改什么 | 参照 |
+|---|---|---|---|
+| 1 | **B10 剩余**：`OpenAICompletionsApi` / `GoogleGenerativeAiApi` / `MistralConversationsApi` / `AzureOpenAIResponsesApi` 的请求构建处 | 挂 `TransformMessages` 闸（**`PiMessagesApi` 除外** —— 它不是 pi 的车道，§8.34.11-（1）） | `transform-messages.ts:95-116` |
+| 2 | `OpenAICompletionsApi:94-105` | content 之前按 pi 顺序探三个 reasoning 字段；命中 ⇒ `emitThinkingStart("", 字段名, false)` + `emitThinkingDelta(text)`；收流前 `if (thinkingStarted) emitThinkingEnd()` | `:597-620`、`:478-489` |
+| 3 | `OpenAICompletionsApi:200-240` | 拆成 (i)(ii) 两条（§8.35.1-2）：去掉 `"deepseek"` 门、改读**第一个非空 thinking 块的签名**并校验 ∈ 三字段名；`requiresReasoningContentOnAssistantMessages` 那条另写 | `:1310-1318`、`:1356-1362`、`:1643` |
+| 4 | `AnthropicMessagesApi:190-193` + `:94` | `message_delta` 里加读 `event.delta().stopReason()` / `stopDetails()` → `mapStopReason`；`:94` 的硬写换成映射结果 + 无 `message_delta` 时的兜底 | `:743-745`、`:1464-1493` |
+| 5 | `OpenAICompletionsApi:132` | 同 4（`choice.finishReason()` → `asString()` → 映射） | `:1550-1571` |
+| 6 | `GoogleGenerativeAiApi:149-156` | 换掉 `toLowerCase()` 透传 | `google-shared.ts:379-411` |
+| 7 | `MistralConversationsApi:151-154` | 补 `length`/`model_length`/`error`/未知 + errorMessage | `mistral-conversations.ts:926-941` |
+| 8 | `ModelCompat` | 加两个 flag：`supportsFinishReason`（**默认 `true`** —— pi 的 `detectCompat:1638` 是常量 true，只有用户显式关才 false）、`requiresReasoningContentOnAssistantMessages`（默认 = provider 名 `deepseek` 或 baseUrl 含 `deepseek.com`，`detectCompat:1643`）。⚠️ 前者默认方向与 `allowEmptySignature`（`?? false`）**相反** ⇒ 必须写进 record 的 javadoc，否则下一个人会照 `NONE` 的语义读错 | `types.ts:713-714`、`:1638`、`:1643`、`:1691-1700` |
+| 9 | `ModelsJsonSchema.CompatDef` | 暴露上面两个（否则用户关不掉 `supportsFinishReason`） | `docs/31 §8.34.4` |
+
+**映射函数放哪**：**按车道各写一份**（不抽公共工具类）—— pi 自己就是四份独立的 `mapStopReason`
+（`anthropic-messages.ts:1464` / `openai-completions.ts:1550` / `google-shared.ts:379` /
+`openai-responses-shared.ts:763`，**case 集各不相同**；`google-shared` 还多一个 `mapStopReasonString`），
+抽公共会把四套语义塞进一个 switch。`ResponsesStreamProcessor:190-197` 已是正确范式：**照它的形状写另外四份**
+（含「pi 注释标 wonky 的照抄」这种注释级细节）。
+
+**错误文本通道已通，无需新管道**：pi 在 `stopReason === "error"` 时
+`throw new Error(errorMessage || "Provider returned an error stop reason")`（`:687-689`）⇒ 文本随异常走；
+pi-java 的等价物是 `emitError("error", new RuntimeException(文本))`，由
+`PiLoopRunner:318-333 withErrorShape`（`err.error().getMessage()`）落到消息的 `errorMessage` 上。
+**这条通道是活的且致命的**：`RetryableError:141` 与 `ContextOverflow:89-90` 都读它
+（§8.22：3d 的重试环白名单要求非空 `errorMessage`）⇒ 映射产出的 errorMessage 文本必须**逐字**照抄 pi。
+
+#### 8.35.6 夹具计划（**先红证毕**）
+
+夹具形态**已有范式**：`OpenAIResponsesApiTest` 用 `com.sun.net.httpserver.HttpServer` 起本地 SSE 服务，
+喂固定线格、断言事件序列（`textFlowEmitsTextEventsThenDone` / `thinkingFlowEmitsThinkingEvents` 等）。
+**注意：Google 与 Mistral 两条车道现在连一个测试类都没有**（`pi-java-ai/src/test/.../protocol/` 下无
+`GoogleGenerativeAiApiTest`、无 `MistralConversationsApiTest`）⇒ 本包要为它们**新建**测试类。
+
+| 夹具 | 喂什么线格 | 断言 | 今天应当 |
+|---|---|---|---|
+| `OpenAICompletionsApiTest`（新增流用例） | `delta:{reasoning_content:"…"}` 后接 `delta:{content:"…"}`，末帧 `finish_reason:"stop"` | `ThinkingStart` 签名 == `"reasoning_content"`；`ThinkingDelta` 文本；`TextStart` 在其后 | **红**（现在不产任何 thinking 事件） |
+| 同上 | `finish_reason:"length"` | `StreamDone.reason() == "length"` | **红**（现在是 `"stop"`） |
+| 同上 | `finish_reason:"content_filter"` | `StreamError` 且文本 == `"Provider finish_reason: content_filter"` | **红** |
+| 同上 | **整条流无** `finish_reason` | `StreamError` 且文本 == `"Stream ended without finish_reason"` | **红**（依 D1） |
+| 同上 | 重放：thinking 块签名 == `"reasoning"` | 出参 assistant 消息带 `reasoning` 键、值为 thinking 文本 | **红**（现在只给 `deepseek` 发 `reasoning_content`） |
+| `AnthropicMessagesApiTest`（新增流用例） | `message_delta:{stop_reason:"max_tokens"}` | `StreamDone.reason() == "length"` | **红**（现在 `"end_turn"`） |
+| 同上 | `message_delta:{stop_reason:"refusal", stop_details:{explanation:"…"}}` | `error` + explanation 文本 | **红** |
+| 同上 | `stop_reason:"end_turn"` | 依 D2 | 依 D2 |
+| `GoogleGenerativeAiApiTest`（新类） | `finishReason:"MAX_TOKENS"` / `"SAFETY"` | `"length"` / `"error"` | **红** |
+| `MistralConversationsApiTest`（新类） | `finish_reason:"model_length"` / 未知值 | `"length"` / `"error"` + 文本 | **红** |
+| **跨层回归门**（本包核心） | 线格 ⇒ 消息 ⇒ `PiLoopRunner` | `length` 截断时 `PiLoopTools.run` 收到 `true`（本回合工具**不执行**） | **红** |
+
+⚠️ 每条**先跑一遍存证**，把 actual 抄回本节（§8.34.5 的做法）—— 本仓既有纪律。
+
+#### 8.35.7 本包不含（如实登记）
+
+- **`reasoning_details`**（OpenRouter / llama.cpp 的**结构化**形状）：`openai-completions.ts:661-671` 收、
+  `:342` 把它 `JSON.stringify` 进签名位、`:1283` `parseOpenAIReasoningDetails` 发。**另一套机制**，
+  本包只做三个**纯文本**字段名。可达性未取证的，不顺手做。
+- **`requiresThinkingAsText`**（`:1293`：把 thinking 当**文本**发回 `content` 而不是发回 reasoning 字段）：
+  `detected` **恒 false**（`:1642`），只有用户显式写 `model.compat` 才开；pi-java 无此 flag ⇒ **不可表达**。
+  ⚠️ 它与 B19 的修法**在同一处**（真要加是 4 行），但**无用户需求证据** ⇒ 本包不做。
+- **B21**：请求侧 `thinkingFormat`（§8.35.3）。
+- **`rawStopReason`**：维持不做（§8.35.2 末）。
+- **Responses 车道不看 `supportsFinishReason`**：pi 的 responses 映射**没有**该 compat 分支
+  （`:763-796`，缺 status 直接 `return {stopReason:"stop"}`）⇒ pi-java 照抄「不看」，**不补**。
+- **Bedrock 等 pi 有、pi-java 没有的车道**：无车道 ⇒ 无「响应侧」可覆盖。
+
+#### 8.35.8 裁决点（**请用户拍板**）
+
+| # | 问题 | 选项 | 我的建议 |
+|---|---|---|---|
+| **D1** | 缺 `finish_reason` 时的**严格程度** | (a) 照 pi：`supportsFinishReason` 默认 true ⇒ **抛**「Stream ended without finish_reason」；(b) 默认容忍（缺失时按「有 toolCall ⇒ tool_use，否则 stop」） | **(a)**，但**先测**：pi-java 的历史日志里**没有原始帧**，**这个 relay 到底发不发 `finish_reason` 从未被观测过**。（a）若猜错会让今天能跑的 relay 直接失败。⇒ **实施第 1 个提交 = P0 只读不判**：把读到的 `finish_reason`（**含缺席**）落进诊断/日志，用**现有 provider** 跑一次，据观测结果决定严格版。P0 零行为改动，但**要写代码** ⇒ 请裁决它能否作为本包第 1 个提交 |
+| **D2** | Anthropic 车道的 `"end_turn"` 口径 | (a) 改成 pi 的 `"stop"`；(b) 保留 `end_turn`，只补 `max_tokens`/`refusal` 等**非正常**取值 | **(a)** —— 「正常结束」是**每一条**助手消息的取值，口径分歧最大；且全部消费点只比较 `error`/`length`/`aborted` ⇒ 盘上的旧转录不会坏 |
+| **D3** | Google / Mistral 两条车道**是否并入本包** | (a) 并入（一次把「收尾语义」做齐）；(b) 只做 Anthropic + completions | **(a)** —— 四条车道共用同一参照系与同一夹具形状，拆开会把审计表撕成两半；**但提交仍分车道**（每车道一次 commit，200–500 行） |
+| **D4** | 顺序 | B10 接线**先于**本包？（§8.35.4） | **是** |
+
+#### 8.35.9 验证与不做
+
+**验证**：① 每条夹具**先红证毕**（actual 抄回 §8.35.6）；② 跨层回归门（线格 → 消息 → `PiLoopRunner`）；
+③ `mvn -o clean verify` 全 reactor 绿 + checkstyle 零违规；④ **真实车道回归**：用 `openai` 车道重跑
+P2/P3，确认「可见 token ≈ 计费 token」（今天 2/127 ⇒ 目标 >100/127）；⑤ Anthropic 车道重跑一条真实请求，
+核对转录 `stopReason`（依 D2）。**探针仍走真实车道、trace 目录重定向**，不碰 `~/.pi-java` 的会话。
+
+**不做**：不动 `content` 的纯字符串形态（§8.35.1-2）；不抽公共 `mapStopReason`（§8.35.5）；
+不引入 `rawStopReason`；不做 `reasoning_details` / `requiresThinkingAsText`；不改请求侧 `thinkingFormat`；
+不碰 `PiMessagesApi` 的闸与它自己的 wire 形状（§8.34.11-（1）的裁决不变）。
+
+---
+
 ## 9. 与既有文档的关系
 
 | 文档 | 关系 |
