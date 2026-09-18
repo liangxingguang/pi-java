@@ -4116,9 +4116,10 @@ case "thinking" -> new ContentBlock.ThinkingContent(
 
 ---
 
-### 8.34 包②：thinking/text 的**请求侧重放规则**（P2 + P3 + B8）—— **设计待审**
+### 8.34 包②：thinking/text 的**请求侧重放规则**（P2 + P3 + B8）—— **已实施**（2026-09-18，实施记录见 §8.34.11）
 
-> **状态：只有设计，没有代码。** 按 `docs/00` 的流程，本节须先经审核，通过后才动 `pi-java-ai`。
+> **状态：已实施。** 设计经审核通过（决策 5 由用户裁决为「含，但改带整个 ModelInfo」），
+> 红夹具先提交（`22ebcc2`）再动生产代码。实施记录与实测数字见 §8.34.11。
 > 双取证：pi 检出 `D:\workplaceForai\pi` @ `71dca871b`、pi-java @ `33eb309`；**承重引文逐条手工复核过**。
 
 #### 8.34.0 先更正上一轮（我方）的四处错引
@@ -4355,7 +4356,7 @@ B8-3（models.json 的 `compat` 键 ⇒ 读到 `ModelInfo.compat()`，这条**�
 > 「**会绿**」那 6 条老实标注为**回归门**而非 RE 证据 —— 包① 的 `ContentBlockJsonTest`
 > 已经吃过一次这个口径。**红灯数字只算 6。**
 
-**§8.34.5-a 两条新教训（都是本次实测撞出来的，续在包① 的「夹具没牙」家族之后）**
+**§8.34.5-a 三条新教训（都是本次实测撞出来的，续在包① 的「夹具没牙」家族之后）**
 
 - **形态 (4)：夹具的观测面比被测车道宽。** `render` 走的是**出参里全部消息的全部块**，
   而夹具带了 `user("hi")` ⇒ 期望值**必须以 `"text:hi"` 开头**。第一版全漏了这条前缀，
@@ -4368,6 +4369,13 @@ B8-3（models.json 的 `compat` 键 ⇒ 读到 `ModelInfo.compat()`，这条**�
   P2-d2 说「同模型+无签名+非空文本 ⇒ 保留为 thinking，现状降级 text 是差距」
   （**pi 侧也是降级 text**，`:1296-1316` 的 `allowEmptySignature` 缺省 false ⇒ **根本不是差距**）。
   **教训：差集必须逐分支对读两侧源码再列**；凭记忆写出的「差异表」会把红灯数、回归门数同时写错。
+- **形态 (6)：夹具写在实现之后 ⇒ 没有红灯可看**（§8.34.11 的 B8-1 与决策 5 两条）。
+  红灯是 RE 的**唯一**证据来源；夹具后写，就只剩「它今天绿」这一句空话 —— 而空过的实现、
+  恰巧正确的路径、以及「断言落在下游早就做对的地方」**都会绿**。
+  **补救只能靠变异探针**（改一行生产代码看它是否变红），代价是**变异点由人挑** ——
+  挑错变异点会得出「夹具没牙」的**错误结论**（本包实测：改 `allowEmptySignature` 硬写 false，
+  B8-1 恰 1 红、B8-2 仍绿 —— 后者**本就该**对该变异失明，因为 B8-2 钉的是**归一**不是分叉）。
+  **教训：能先写就先写；已经后写的，**在文档里标明**并给出变异实测，不许含糊成「已测」**。
 
 #### 8.34.6 证伪点（实施前必须打掉的）
 
@@ -4468,6 +4476,93 @@ B8-3（models.json 的 `compat` 键 ⇒ 读到 `ModelInfo.compat()`，这条**�
 `PiMessagesApi:225-226` 对**任何** thinking 块一律送 `{type:"thinking","thinking":text}`（签名与 `redacted` 全丢）
 ⇒ 在它那里，闸的「跨模型降级 / 丢弃」是**真的会改变送出去的东西**。故共享预通道不是为 Anthropic 修的。
 
+
+---
+
+#### 8.34.11 实施记录（2026-09-18，**已实施**）
+
+**落地清单**（每项都能指到 §8.34 的决策号）：
+
+| 文件 | 改动 | 决策 |
+|---|---|---|
+| `catalog/ModelCompat.java` | **新增**。`record ModelCompat(boolean allowEmptySignature)` + `NONE`/`of`。pi 的 compat 接口有八个字段，此处只携带**被实际消费的一个**；javadoc 记明 | 决策 3 |
+| `catalog/ModelInfo.java` | 第 11 个组件 `compat`；compact ctor `null ⇒ NONE`；10 参便捷构造器；`minimal(id)` 工厂 | 决策 5 |
+| `api/StreamRequest.java` | 组件 1 `ModelId<?>` → **`ModelInfo model`**；7 参便捷构造器（合成 `ModelInfo.minimal`）⇒ 17 处测试构造点零改动；新增 `modelId()` 访问器 ⇒ 10 个文件 22 处读点机械替换 | 决策 5 |
+| `api/TransformMessages.java` | **新增**。pi `transform-messages.ts` 的**闸**：`isSameModel` + thinking 五分支。非 assistant 消息原样放行（`toolResult` 的 id 归一是 B14，本包不做） | 决策 1 |
+| `protocol/AnthropicMessagesApi.java` | ① `buildParams` 开头调闸；② `toBlockParams` 补**空文本跳过**（B11，两条车道共用一处）；③ `appendThinkingBlock` 重写为 pi 落线四分支，含 **redacted → `redacted_thinking`**（B13）与 `allowEmptySignature` 分叉；④ 删 D8 的**假注释**；⑤ 读 `request.model().compat()` | 决策 2/5 |
+| `provider/ModelsJsonSchema.java` | `ModelDef` 加 `compat` 键；新增 `CompatDef`（块内未知键仍忽略） | B8 |
+| `provider/ModelsJsonConfig.java` | `CompatDef → ModelCompat` 映射（缺席/键缺席 ⇒ `NONE`） | 决策 3 |
+| `coding/agent/core/DefaultProviders.java` | `streamBlocking` 改投 `provider.builtinModels().find(model)` 的真实 `ModelInfo`，未命中退化为 `minimal` | 决策 5 |
+
+**实测数字**（`mvn -o -pl pi-java-ai test`，本机 JDK 25 / GraalVM）：
+
+| 阶段 | ai 模块 | 说明 |
+|---|---|---|
+| 开工（`22ebcc2` 红夹具） | `367 / 6` | 线格 6 红 = 本轮要修的缺口 |
+| + 投送与 compat 字段 | `358 / 6` | **行为中性**：只有 6 条预定的红（比预期更有力 —— 计划里的「空过版」那一步被这条证据取代） |
+| + 闸（`TransformMessages` 五分支） | `367 / 3` | 3 条跨模型 thinking 线格**转绿**；剩 3 条（redacted 同模型 + 两条空文本）仍红 —— **正是闸管不到、必须由落线承担的**（闸/落线的分工由此被数字证实） |
+| + 落线四分支 | `367 / 0` | 全绿 |
+| + Phase B（B8-1/B8-2/B8-3） | `372 / 0` | 见下 |
+
+**全仓**（`mvn -o clean verify`，11 模块，exit 0 / BUILD SUCCESS，checkstyle 零违规）：
+telemetry 31 · **ai 372** · agent-core 462 · session-sqlite 35 · **coding-agent 222** · tui 188（1 skipped）
+· protocol 14 · server 2 · web 37 · evals 43（17 skipped）。**零 Failures 零 Errors。**
+
+**实施中被证伪/更正的三处**（都不是笔误，是判断错）：
+
+**（1）决策 1 对 `PiMessagesApi` 的定性是错的 —— 本包**没有**给它挂闸。**
+决策 1 原文把 `PiMessagesApi` 描述为「真重放签名」的车道。实测（`:225-226`）**相反**：它对任何 thinking
+块一律送 `{type:"thinking","thinking":text}`，**签名与 `redacted` 全丢**。更关键的是它是 pi-java
+**自己的** wire 形状（pi 侧无对应物，pi 的 6 个请求构建器里没有它）—— 在一条 pi 没有的车道上按 pi
+的闸改行为，等于**发明**行为而非对齐。
+⇒ **裁决：不挂闸**；该车道自己的「签名全丢」缺口**单独登记为 B18**，不在本包发明规则。
+
+**（2）pi 落线不 trim 签名，pi-java 落 trim —— 保留偏差并写明。**
+pi `:1316` 落线的是**未 trim** 的 `thinkingSignature`（它只在 `:1296` 的**判空**里 trim）。
+pi-java 沿用包① 之前 `:318` 的 trim。差别只在签名首尾带空白时可见，而真 Anthropic 的签名是无空白
+base64；两处**判空语义一致**（`isEmpty` vs `trim().isEmpty()` 在该处等价，见 §8.34.6-2 的证伪否定）。
+⇒ 保留 trim，在 `appendThinkingBlock` 的 javadoc 里**明文记为刻意偏差**，供日后翻案。
+
+**（3）一个既有绿测试因闸而**报错**（不是失败）—— 根因是夹具造了 pi 造不出的状态。**
+`AnthropicMessagesApiBuildParamsTest.replaysThinkingBlockWithSignature` ⇒ `NoSuchElement`。
+根因（**逐段实测**，非推断）：该夹具用 `AssistantMessage(content)` 兼容构造器造出**身份三元组为 null**
+的助手消息，而闸按 pi 的 `===` 语义判它**异模型** ⇒ 丢签名。
+而 pi 的 `AssistantMessage` 里 `provider`/`api`/`model` 是 **required** ——「无身份的助手消息」在 pi 里
+**不存在**；生产侧 `AbstractChatApi:174-178` 恒挂三元组（`apiName()` / `provider` / `modelName`，正是闸
+比较的三个值），会话恢复侧 `MessageJsonCodec:41-49` 原样读回。⇒ **夹具缺陷，不是闸缺陷。**
+修法 = 给三条 thinking 夹具**补上生产形状的身份**（新 `assistant(...)` 助手）。这不只是「让它过」：
+另两条（`downgradesThinkingWithoutSignatureToText` / `skipsEmptyThinkingWithoutSignature`）在身份为 null 时
+**根本走不到**它们各自点名的落线分支（已在闸里被降级/丢弃）⇒ 名字与覆盖面对不上，正是 §8.34.5-a 的
+「夹具没牙」。补身份后三条各自回到自己那一层。
+
+**RE 证据**（每条新夹具都实测过「红得动」；不是事后补的断言）：
+
+| 夹具 | 变异探针 | 实测 |
+|---|---|---|
+| `TransformMessagesTest` 3 条行为红 | 闸返原样（空过版） | 恰 3 红，5 门绿 |
+| `AnthropicThinkingReplayTest` 6 条红 | 落线保持旧实现 | 恰 6 红，6 门绿 |
+| **B8-1** `allowEmptySignatureKeepsThinkingWithEmptySignature` | `allowEmptySignature` 硬写 `false` | **恰 1 红**（B8-2 与其余门全绿 —— B8-2 钉的是**归一**，本就该对该变异失明） |
+| **决策 5** `DefaultProvidersTest.streamFnCarriesCatalogModelMetadata` | `streamBlocking` 改回只投 `ModelId` | **恰 1 红**（`unknownModelStillCarriesItsId` 仍绿 —— 它钉的是回退路径） |
+
+⚠️ **B8-1 与决策 5 两条夹具是事后补的**（先写了实现，再写夹具），因此**不能**声称「先红后绿」；
+它们的「有牙」是**用变异探针实测**出来的，上表两行即证据。**这一形态记入 §8.34.5-a 的第六种**：
+不是「夹具没牙」，而是「**夹具写在实现之后 ⇒ 没有红灯可看**」—— 补救只能靠变异，代价是**变异点由人挑**
+（挑错变异点就会得出「夹具没牙」的错误结论）。
+
+**（4）闸只挂了一条车道 —— 是范围裁剪，须写明。**
+§8.34.4 决策 1 说闸「不属于任何一条车道」。**实施落点却是**：`pi-java-ai/src/main` 里只有
+`AnthropicMessagesApi` 调它。其余五条车道的请求构建器（`OpenAICompletionsApi`、`GoogleGenerativeAiApi`、
+`MistralConversationsApi`、`AzureOpenAIResponsesApi`、`PiMessagesApi`）**都存在、都没挂**。
+理由：本包的 18 条夹具全在 Anthropic 车道上，往未取证的车道挂规则＝**在没夹具的地方改行为**。
+⇒ **如实定性为「通道已建、只接了一根线」**，后果是那五条车道上跨模型重放**今天仍未生效**
+（§8.34.10-（5）已预言「闸的价值主要在非 Anthropic 车道」）⇒ 接线**另立包**。
+
+**本包不含（如实登记，均已进 docs/32）**：
+- **B16**：pi 的 `sanitizeSurrogates` 在全仓**无对应物**（pi 侧 54 处调用）。孤对代理字符会让请求体 JSON 非法 ⇒ 400。
+- **B17**：`AnthropicMessagesApi.toBlockParams` 对 `ImageContent`/`UrlImageContent`/`DiffContent` **静默丢弃**
+  —— pi 在 user 车道把图片映射成 `{type:"image",source:{...}}`（`:1250-1260`），而 pi-java 的
+  Google/Responses/PiMessages 三条车道**都**映射了图片 ⇒ 不是「图片进不了 Message」，是 Anthropic 车道独缺。
+- **B18**：`PiMessagesApi` 对任何 thinking 块丢签名与 `redacted`（本包刻意不动，见上（1））。
 
 ---
 

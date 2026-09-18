@@ -66,6 +66,12 @@
 > `thinkingLevelMap` 是同一断链的两个受害者）⇒ B 类 9→10 行；证伪点 2 **结论反转**
 > （pi 的 trim 不对称**不可观察** ⇒ 不照抄，见 §8.34.6-2）。
 > 故 B 类的「条数」不增反减是**结案**的结果，不是漏记。
+> **2026-09-18（包② 实施，§8.34.11）**：**B8/B10/B11/B13 全部实施** ⇒ 移入 G（+4 行）；
+> D8 已修（删假注释）⇒ G。实施中**又新发现三条** ⇒ **B16**（`sanitizeSurrogates` 全仓无对应物，
+> pi 侧 54 处调用跨**所有**车道）、**B17**（Anthropic 车道静默丢弃图片块，另三条车道都映射了 ⇒ 该车道独缺）、
+> **B18**（`PiMessagesApi` 丢签名与 `redacted` —— 包② **刻意**没给它挂闸，因为它不是 pi 的车道，
+> 见 §8.34.11-（1））⇒ B 类 10→**13** 行。**B15 减半**：投送链已由包② 修好，
+> 只剩「`thinkingLevelMap` 生产上不可构造」那半边。
 
 **收敛路径**：A 类与 F 类是真正的闸门 —— A 挡在「读 pi / 清点」上，F 挡在「你的决定」上；
 B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做，没有一条阻塞合并。
@@ -105,14 +111,17 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | B5 | 宿主层：`SessionRunner` 两处 `catch (Exception)` **不接 `Error`** ⇒ `statusFuture`/`entriesFuture` 永不完成、不发 `AgentEnd`/`AgentSettled`、宿主**永久挂起** | `docs/31:2685`（§8.26.5-12 的下游） | pi 的 `handleRunFailure` 把异常**压成文本**、合成 assistant 消息、promise **resolve** —— 另一处更大的差距，另立包 |
 | B6 | content_block_start 的**初始 thinking 文本被丢弃** | `docs/31:3590`、§8.31.4 | **已实施**（§8.33 包①）⇒ 见 G 类 |
 | B7 | **`redacted_thinking` 未处理** | `docs/31:3591`、§8.31.4 | **已实施**（§8.33 包①；SDK 路由 `ContentBlock.kt:549-553` 已实证）⇒ 见 G 类 |
-| B8 | **空签名重放策略不可配**（pi 的 `Model.compat.allowEmptySignature`，`types.ts:713-714`） | `docs/31:3594`、§8.31.4、**§8.34** | ⚠️ **更正：行为上只有两态**，不是三态 —— `undefined` 与 `false` **完全等价**（`anthropic-messages.ts:193` 的 `?? false`），只有 `true` 不同（已实测）。启用的模型也不是「Kimi 系」而是**三处**：Fireworks 全部 anthropic-messages 模型（`generate-models.ts:1427`，无 allowlist）、Kimi Coding 全部（`:2242`/`:2253`）、Xiaomi（`:1075`，但**休眠**）。pi-java `ModelInfo` 无 `compat` 且 `ModelsJsonSchema` 会**静默吞掉**用户写的 `compat` ⇒ 需 compat 字段 + models.json schema 扩展。**被 B10 前置**。归包②，设计见 §8.34 |
+| B8 | **空签名重放策略不可配**（pi 的 `Model.compat.allowEmptySignature`，`types.ts:713-714`） | `docs/31:3594`、§8.31.4、**§8.34** | ⚠️ **更正：行为上只有两态**，不是三态 —— `undefined` 与 `false` **完全等价**（`anthropic-messages.ts:193` 的 `?? false`），只有 `true` 不同（已实测）。启用的模型也不是「Kimi 系」而是**三处**：Fireworks 全部 anthropic-messages 模型（`generate-models.ts:1427`，无 allowlist）、Kimi Coding 全部（`:2242`/`:2253`）、Xiaomi（`:1075`，但**休眠**）。pi-java `ModelInfo` 无 `compat` 且 `ModelsJsonSchema` 会**静默吞掉**用户写的 `compat` ⇒ 需 compat 字段 + models.json schema 扩展。**被 B10 前置**。归包②，设计见 §8.34。**已实施**（§8.34.11 包②：`ModelCompat` + `ModelInfo` 第 11 组件 + `ModelsJsonSchema.CompatDef` + 投送链）⇒ 见 G 类 |
 | B9 | **初始 signature 进不了 `ThinkingStart.partial`**（实现时才发现的） | `docs/31:3596`、§8.31.4 | **已实施**（§8.33 包①，与 B6 同一处改动）⇒ 见 G 类 |
-| B10 | **pi 的 `transform-messages.ts` 整段缺失**（跨模型重放闸：`isSameModel = provider && api && model.id`；跨模型丢 redacted、thinking 降级 text） | §8.32.2-P2（`docs/31:3723`） | 移植 `transform-messages.ts:95-116` 的 **thinking 五分支**（`:95-98` 判据 + `:101-116` 分支）；**设计见 §8.34**；**是 B8 的前置** —— 不加此闸，B8 会让跨模型重放**比今天更错**。归包② |
-| B11 | **空 text 块不丢**（重放时会把空 `TextContent` 原样发给 Anthropic） | §8.32.2-P3（`docs/31:3724`） | 照 pi `anthropic-messages.ts:1282` 的 `if (block.text.trim().length === 0) continue;` 补闸（pi-java 无闸处在 `AnthropicMessagesApi:284-286`）；**设计见 §8.34**。归包② |
+| B10 | **pi 的 `transform-messages.ts` 整段缺失**（跨模型重放闸：`isSameModel = provider && api && model.id`；跨模型丢 redacted、thinking 降级 text） | §8.32.2-P2（`docs/31:3723`） | 移植 `transform-messages.ts:95-116` 的 **thinking 五分支**（`:95-98` 判据 + `:101-116` 分支）；**设计见 §8.34**；**是 B8 的前置** —— 不加此闸，B8 会让跨模型重放**比今天更错**。归包②。**已实施但只挂了一条车道**（§8.34.11 包②：新增 `TransformMessages.java`）。⚠️ **实测：`pi-java-ai/src/main` 里只有 `AnthropicMessagesApi` 调它**，而 OpenAI-Completions / Google / Mistral / Azure-Responses / PiMessages **五条车道的请求构建器都存在、都没挂**。这是**刻意的范围裁剪**（本包的夹具全在 Anthropic），**不是**「其余车道不存在」—— 后果是那五条车道上跨模型重放规则**今天仍未生效**（§8.34.10-（5）已指出闸的价值主要在非 Anthropic 车道）⇒ **另立包**。⇒ 见 G 类 |
+| B11 | **空 text 块不丢**（重放时会把空 `TextContent` 原样发给 Anthropic） | §8.32.2-P3（`docs/31:3724`） | 照 pi `anthropic-messages.ts:1282` 的 `if (block.text.trim().length === 0) continue;` 补闸（pi-java 无闸处在 `AnthropicMessagesApi:284-286`）；**设计见 §8.34**。归包②。**已实施**（§8.34.11：`toBlockParams` 的 `if (tc.text().trim().isEmpty()) continue;`，两条车道共用一处）⇒ 见 G 类 |
 | B12 | **`auto_retry_end` 成功路多写 `"finalError":null`** | §8.32.2-P7（`docs/31:3730`） | pi 侧 `undefined` 被 `JSON.stringify` 省略；pi-java `JsonEventMapper.java:94-99` 无条件 `put`。同文件 `:110-113` 已有「null ⇒ 省略」先例 ⇒ 照抄。归包④ |
-| B13 | **重放路径产不出 `redacted_thinking` 线格** —— pi-java 全仓没有代码路径能发出该块 | §8.34.2-2（`docs/31:4201`） | `redacted()` 在 `pi-java-ai` 生产代码**零读点** ⇒ redacted 块落进 `AnthropicMessagesApi:323-327` 的有签名分支，被当作**带签名的 thinking 块**发出、签名位放的是**加密载荷**。pi 的对照是 `anthropic-messages.ts:1289-1295`。归包② |
+| B13 | **重放路径产不出 `redacted_thinking` 线格** —— pi-java 全仓没有代码路径能发出该块 | §8.34.2-2（`docs/31:4201`） | `redacted()` 在 `pi-java-ai` 生产代码**零读点** ⇒ redacted 块落进 `AnthropicMessagesApi:323-327` 的有签名分支，被当作**带签名的 thinking 块**发出、签名位放的是**加密载荷**。pi 的对照是 `anthropic-messages.ts:1289-1295`。归包②。**已实施**（§8.34.11：`appendThinkingBlock` 的 redacted 分支 → `ContentBlockParam.ofRedactedThinking`，载荷进 `data`）⇒ 见 G 类 |
 | B14 | **`transform-messages.ts` 的其余四条变换全部缺失**（一条聚合行） | §8.34.3（`docs/31:4242`） | ① 图片降级为占位文本（`transform-messages.ts:35-57`，按 `model.input` 判定）；② 跨模型剥离 toolCall 的 `thoughtSignature`（`:131-134`）；③ 跨模型归一 toolCall id（`:136-142`）；④ **孤儿 toolCall 合成 `toolResult`**（`:158-220`「No result provided」）＋ 跳过 `error`/`aborted` 助手消息（`:194-197`）。④ 是**真功能**、其余三条是清理 ⇒ 不塞进包②（会让 200 行变 800 行），另立 |
-| B15 | **扩展开启（extended thinking）在生产上不可达** —— 目录的 `reasoning` 标记永远传不到请求 | §8.34.4-决策 5 | 链路逐段实测：`models.json` 的 `reasoning:true` 只落成 `ModelCapability.THINKING`（`ModelsJsonConfig:191-193`），`thinkingLevelMap` 硬写 `empty()`（`:208`）；`HarnessConfig.thinkingLevelMap` 默认 `empty()`（`:159`）且 `Builder.thinkingLevelMap` **零主源调用者**；`forLevel` 在空 map 上**恒返回 `ThinkingConfig.OFF`**（`ThinkingLevelMap:26-34`）⇒ `DefaultProviders:111-113` 门恒假 ⇒ `extra` 永无 `thinking.budgetTokens` ⇒ `AnthropicMessagesApi:269-276` 永不发 `thinking`。**`ThinkingLevelMap.of(` 亦只有测试调用者** ⇒ 非空 map 在生产上**不可构造**。根因＝「**目录元数据 → 请求路径**」这条通道**整体缺失**（B8 的 `compat` 是同一断链的**第二个**受害者）⇒ 两者应合为**一次**投送修复。**它改变「发什么请求」**（比包② 重）⇒ 须**自己一包**。⚠️ `StreamSimple:44` 虽手持 `ModelInfo`，但**生产上是死的**（3 个调用点全在 `StreamSimpleTest`）—— 别把它当接缝 |
+| B15 | **扩展开启（extended thinking）在生产上不可达** —— 目录的 `reasoning` 标记永远传不到请求 | §8.34.4-决策 5 | 链路逐段实测：`models.json` 的 `reasoning:true` 只落成 `ModelCapability.THINKING`（`ModelsJsonConfig:191-193`），`thinkingLevelMap` 硬写 `empty()`（`:208`）；`HarnessConfig.thinkingLevelMap` 默认 `empty()`（`:159`）且 `Builder.thinkingLevelMap` **零主源调用者**；`forLevel` 在空 map 上**恒返回 `ThinkingConfig.OFF`**（`ThinkingLevelMap:26-34`）⇒ `DefaultProviders:111-113` 门恒假 ⇒ `extra` 永无 `thinking.budgetTokens` ⇒ `AnthropicMessagesApi:269-276` 永不发 `thinking`。**`ThinkingLevelMap.of(` 亦只有测试调用者** ⇒ 非空 map 在生产上**不可构造**。根因＝「**目录元数据 → 请求路径**」这条通道**整体缺失**（B8 的 `compat` 是同一断链的**第二个**受害者）⇒ 两者应合为**一次**投送修复。**它改变「发什么请求」**（比包② 重）⇒ 须**自己一包**。⚠️ `StreamSimple:44` 虽手持 `ModelInfo`，但**生产上是死的**（3 个调用点全在 `StreamSimpleTest`）—— 别把它当接缝。**⚠️ 投送链那半边已由包② 修好（§8.34.11）**：`StreamRequest` 现带整个 `ModelInfo`、`DefaultProviders.streamBlocking` 已投真目录元数据 ⇒ **本行只剩「`thinkingLevelMap` 生产上不可构造」这半边**，难度显著下降 |
+| B16 | **`sanitizeSurrogates` 全仓无对应物** —— 出站文本未做孤对代理清理 | §8.34.11 | pi 在自己的**每个** API 适配器里都用它包裹出站 text/thinking（全仓 **54 处**调用），pi-java 自己的模块**零处**（`.agents/` 里 vendored tamboui 的那几处是宽度计算，无关）。孤对代理字符会让请求体 JSON 非法 ⇒ provider 400。**跨车道**（不是 Anthropic 独有）⇒ 须先设计「在哪一层做一次」而不是逐适配器抄 |
+| B17 | **Anthropic 车道静默丢弃图片块** | §8.34.11 | `AnthropicMessagesApi.toBlockParams` 只处理 Text/Thinking/ToolUse ⇒ `ImageContent`/`UrlImageContent`/`DiffContent` **无声消失**。pi 在 user 车道把它们映射成 `{type:"image",source:{type:"base64",...}}`（`anthropic-messages.ts:1250-1260`）。**不是「图片进不了 Message」**：Google / OpenAI-Responses / PiMessages 三条车道**都**映射了图片 ⇒ 是 Anthropic 车道独缺 |
+| B18 | **`PiMessagesApi` 对任何 thinking 块丢签名与 `redacted`** | §8.34.11-（1） | `PiMessagesApi:225-226` 一律送 `{type:"thinking","thinking":text}`。**包② 刻意没给它挂闸** —— 它是 pi-java **自己的** wire 形状（pi 的 6 个请求构建器里无对应物），在一条 pi 没有的车道上按 pi 的闸改行为＝**发明**行为。故单独登记，让它自己的规则被独立设计 |
 
 ---
 
@@ -145,7 +154,7 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | D5 | **截断兜底生成器**下那条「无事件、无 token」的跨度形状**无测试** | `docs/31:3234` |
 | D6 | `SummaryGenerator.java:12` javadoc「until Phase 6 wires the real summarization flow」**已过期**（生产装的是 `LlmSummaryGenerator`） | 主源码 |
 | D7 | `client` / `protocol` / `server` 三个 `package-info.java` 写「Phase 6 will implement…」—— 三个模块都已实现 | 主源码 |
-| D8 | `AnthropicMessagesApi.java:299-301` 的注释写「ThinkingContent is dropped: replaying thinking blocks requires the original signature…」—— 而**它下面 `:288` 正是在重放**（生产源码里的假陈述） | §8.34.2-7（`docs/31:4227`） |
+| D8 | `AnthropicMessagesApi.java:299-301` 的注释写「ThinkingContent is dropped: replaying thinking blocks requires the original signature…」—— 而**它下面 `:288` 正是在重放**（生产源码里的假陈述） | §8.34.2-7（`docs/31:4227`） | **已修**（§8.34.11，包②：随 `toBlockParams` 重写删除；注释现指向 B17 的真实缺口）⇒ 见 G 类 |
 
 ---
 
@@ -204,6 +213,11 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | **P4** pi-messages 车道的 `thinking_end` 从不装配 signature/redacted | `docs/31:3787`、§8.33.9-A | 2026-09-18，包① |
 | **P5** §8.31.4 的 pi 行号整体错位 1 行 | §8.32.2-P5；已就地更正（R1 `:632`、R2 `:638-647`、R7 `:630-635`/`:636`/`:637`） | 2026-09-18，包① |
 | §8.15「**遗留**：B 项（延迟任务真并发 = pi 的 `Promise.all`）仍开放」 | §8.23 | 2026-09-16 —— **原文那行是过期陈述，已被 §8.23 取代**（本地已回填标记） |
+| **B8** 空签名重放策略不可配（`compat.allowEmptySignature`） | `docs/31:4119`、§8.34.11 | 2026-09-18，包②（`ModelCompat` + `ModelInfo` 第 11 组件 + `CompatDef` + 投送链；两态已实测） |
+| **B10** `transform-messages.ts` 跨模型重放闸整段缺失 | `docs/31:4119`、§8.34.11 | 2026-09-18，包②（`TransformMessages.java`）。⚠️ **只挂了 Anthropic 一条车道** ⇒ 接线另立包 |
+| **B11** 空 text 块不丢 | `docs/31:4119`、§8.34.11 | 2026-09-18，包②（`toBlockParams` 的 trim 判空） |
+| **B13** 重放路径产不出 `redacted_thinking` 线格 | `docs/31:4119`、§8.34.11 | 2026-09-18，包②（`appendThinkingBlock` 的 redacted 分支） |
+| **D8** `AnthropicMessagesApi:299-301` 的假注释（写「ThinkingContent is dropped」，而它其实被路由到 `appendThinkingBlock`） | §8.34、§8.34.11 | 2026-09-18，包②（随 `toBlockParams` 重写一并删除） |
 
 > 最后一条特别提一下：`docs/31:945`（以及 `:1059` / `:1117` 两处重复）写着 B 项「仍开放 / 待用户」，
 > 而 §8.23 已于 2026-09-16 实施闭环 —— 这正是你问的「信息不知道在哪里」的典型样本。
