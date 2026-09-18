@@ -21,12 +21,12 @@ class ContextOverflowTest {
 
     private static Message.AssistantMessage error(String message) {
         return new Message.AssistantMessage(List.<ContentBlock>of(), "error", null,
-            null, null, null, null, null, message);
+            null, null, null, null, null, message, null);
     }
 
     private static Message.AssistantMessage with(String stopReason, Usage usage) {
         return new Message.AssistantMessage(List.<ContentBlock>of(), stopReason, null,
-            null, null, null, usage, null, null);
+            null, null, null, usage, null, null, null);
     }
 
     private static Usage usage(double input, double output, double cacheRead) {
@@ -91,7 +91,7 @@ class ContextOverflowTest {
     void errorOnlyPatternsIgnoreOtherStopReasons() {
         // 模式判据只戴 error 收尾的帽子（overflow.ts:135）。
         var sameText = new Message.AssistantMessage(List.<ContentBlock>of(), "stop", null,
-            null, null, null, null, null, "prompt is too long");
+            null, null, null, null, null, "prompt is too long", null);
         assertThat(ContextOverflow.isContextOverflow(sameText, null)).isFalse();
     }
 

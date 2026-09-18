@@ -98,7 +98,9 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
         // 当「一个 finish reason 都没观测到」的哨兵（`:268`）。
         String stopReason = PENDING;
         // pi 的 output.rawStopReason（`:217`）：映射**前**的线格原值，收尾用它拼错误文案
-        // （`:272-273`）。第 ⑨ 包（D5）把它升成消息字段，此处先作局部量。
+        // （`:272-273`）。第 ⑨ 包（D5）把它升成消息字段：观测到 finish reason 时下面
+        // `builder.noteRawStopReason(...)` 落消息，本局部量留作**同一处**的文案来源
+        // （与 pi 一样是「一个量、两个去处」，别只留一个）。
         String rawStopReason = null;
         boolean toolCallSeen = false;
         try {
@@ -202,6 +204,8 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
                         var finish = candidate.finishReason();
                         if (finish.isPresent() && !finish.get().toString().isEmpty()) {
                             rawStopReason = finish.get().toString();
+                            // pi `:217-218`：原值先落消息（⑨/D5），映射结果再落 stopReason。
+                            builder.noteRawStopReason(rawStopReason);
                             stopReason = mapStopReason(rawStopReason);
                             if (toolCallSeen && "stop".equals(stopReason)) {
                                 // pi :219-220 —— Google 的 STOP 同时表示「正常收尾」与

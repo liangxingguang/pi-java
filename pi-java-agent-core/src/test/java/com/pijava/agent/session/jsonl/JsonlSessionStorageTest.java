@@ -32,7 +32,7 @@ class JsonlSessionStorageTest {
         return new ProvisionedEntry<>(new Entry.Message(id, 0, null, null,
             new Message.AssistantMessage(
                 List.of(new ContentBlock.ThinkingContent(text, signature, redacted)),
-                "stop", null, null, null, null, null, null, null), null));
+                "stop", null, null, null, null, null, null, null, null), null));
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -269,7 +269,7 @@ class JsonlSessionStorageTest {
         session.appendEntry(new ProvisionedEntry<>(new Entry.Message("e1", 0, null, null,
             new Message.AssistantMessage(List.of(new ContentBlock.TextContent("hi")),
                 "error", null, "anthropic-messages", "anthropic", "claude-sonnet-5",
-                usage, at, "boom"), null)), "main");
+                usage, at, "boom", "refusal"), null)), "main");
         session.appendEntry(new ProvisionedEntry<>(new Entry.Message("e2", 0, null, null,
             new Message.AssistantMessage(List.of(new ContentBlock.TextContent("old"))),
             null)), "main");
@@ -286,6 +286,9 @@ class JsonlSessionStorageTest {
         assertThat(rich.timestamp()).isEqualTo(at);
         assertThat(rich.errorMessage()).isEqualTo("boom");
         assertThat(rich.stopReason()).isEqualTo("error");
+        // ⑨（D5）：线格原值随消息落库再读回（pi types.ts:443；pi 的消息整体 stringify
+        // 落盘 ⇒ 它在 pi 的转录里同样是一个键）。
+        assertThat(rich.rawStopReason()).isEqualTo("refusal");
         var plain = assistantAt(storage.findEntries(
             com.pijava.agent.session.EntryQuery.all()), "e2");
         assertThat(plain.usage()).isNull();
@@ -304,6 +307,7 @@ class JsonlSessionStorageTest {
         assertThat(plainMessage.has("usage")).isFalse();
         assertThat(plainMessage.has("timestamp")).isFalse();
         assertThat(plainMessage.has("errorMessage")).isFalse();
+        assertThat(plainMessage.has("rawStopReason")).isFalse();
     }
 
     private static Message.AssistantMessage assistantAt(List<Entry> entries, String entryId) {

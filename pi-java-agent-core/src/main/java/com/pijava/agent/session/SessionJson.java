@@ -114,6 +114,11 @@ public final class SessionJson {
             if (assistant.errorMessage() != null) {
                 node.put("errorMessage", assistant.errorMessage());
             }
+            // ⑨（D5）：线格原值随消息落库（pi types.ts:443）。pi 把消息整体 stringify
+            // 落盘 ⇒ 这个键在 pi 的转录里同样出现；未观测到 ⇒ null ⇒ 键省略（同 A7 规则）。
+            if (assistant.rawStopReason() != null) {
+                node.put("rawStopReason", assistant.rawStopReason());
+            }
         }
         return node;
     }

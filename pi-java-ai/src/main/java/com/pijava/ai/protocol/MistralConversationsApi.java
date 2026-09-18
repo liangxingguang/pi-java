@@ -43,7 +43,7 @@ import com.pijava.ai.stream.ToolCallBuilder;
  *   <li><b>abort 检查（pi {@code :150}）不可达</b> —— {@code StreamRequest} 没有 signal，
  *       中止由宿主 {@code PiLoopRunner.markAborted} 在流外处理（§8.35.14 第三节 ③）。</li>
  *   <li><b>读点排在 delta 处理之后</b>（pi 是之前）—— 只此一处刻意偏差，理由见读点注释；
- *       pi 的 {@code rawStopReason}（{@code :614}）本包不写，留待第 ⑨ 包（D5）。</li>
+ *       pi 的 {@code rawStopReason}（{@code :614}）随第 ⑨ 包（D5）落地，写在同一个读点旁。</li>
  * </ul>
  */
 public final class MistralConversationsApi extends AbstractChatApi {
@@ -227,6 +227,8 @@ public final class MistralConversationsApi extends AbstractChatApi {
             // 的 ⇒ 顺序反了会把同帧的 tool_call 终帧漏掉。**刻意偏差**，只此一处。
             var reason = (String) choice.get("finish_reason");
             if (reason != null && !reason.isEmpty()) {
+                // pi `:614`：原值先落消息（⑨/D5），映射结果再落 stop.reason。
+                builder.noteRawStopReason(reason);
                 var mapped = mapChatStopReason(reason);
                 stop.reason = mapped.reason();
                 stop.errorMessage = mapped.errorMessage();

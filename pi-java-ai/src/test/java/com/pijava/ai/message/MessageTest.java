@@ -133,7 +133,7 @@ class MessageTest {
         var usage = new com.pijava.ai.Usage(10, 5, 1, 2, null, null, 18,
                 com.pijava.ai.Usage.Cost.zero());
         var msg = new Message.AssistantMessage(List.of(), "stop", null,
-                "anthropic-messages", "anthropic", "claude-sonnet-5", usage, at, null);
+                "anthropic-messages", "anthropic", "claude-sonnet-5", usage, at, null, null);
 
         assertThat(msg.api()).isEqualTo("anthropic-messages");
         assertThat(msg.provider()).isEqualTo("anthropic");
@@ -156,6 +156,7 @@ class MessageTest {
         var partial = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent("hello")))
                 .withStopReason("error")
+                .withRawStopReason("refusal")
                 .withIdentity("openai-responses", "openai", "mock", at)
                 .withErrorMessage("boom")
                 .withUsage(new com.pijava.ai.stream.StreamEvent.UsageInfo(7, 3, null, usage));
@@ -164,6 +165,7 @@ class MessageTest {
 
         assertThat(msg.content()).hasSize(1);
         assertThat(msg.stopReason()).isEqualTo("error");
+        assertThat(msg.rawStopReason()).isEqualTo("refusal");
         assertThat(msg.deferred()).isNull();
         assertThat(msg.api()).isEqualTo("openai-responses");
         assertThat(msg.provider()).isEqualTo("openai");
@@ -207,7 +209,7 @@ class MessageTest {
         var usage = new com.pijava.ai.Usage(1, 2, 0, 0, null, null, 3,
                 com.pijava.ai.Usage.Cost.zero());
         var msg = new Message.AssistantMessage(List.of(), "stop", null,
-                "pi-messages", "pi", "model-x", usage, at, "err");
+                "pi-messages", "pi", "model-x", usage, at, "err", null);
 
         var rewritten = msg.withStopReason("aborted");
 

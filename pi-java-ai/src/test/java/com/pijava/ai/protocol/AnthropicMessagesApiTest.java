@@ -88,6 +88,21 @@ class AnthropicMessagesApiTest {
     }
 
     /**
+     * ⑨（D5）：{@code rawStopReason} 是**映射前**的线格原值（pi {@code :744}）。
+     *
+     * <p>取值刻意选一个与映射结果**不同**的（线格 {@code max_tokens} ⇒ 消息
+     * {@code length}）：若某天有人把它写成「从 {@code stopReason} 反推」，这条立刻红。</p>
+     */
+    @Test
+    void rawStopReasonKeepsTheUnmappedWireValue() throws Exception {
+        var events = collect(streamWithDelta("{\"stop_reason\":\"max_tokens\",\"stop_sequence\":null}"));
+
+        var done = last(events, StreamEvent.StreamDone.class);
+        assertThat(done.reason()).isEqualTo("length");
+        assertThat(done.partial().rawStopReason()).isEqualTo("max_tokens");
+    }
+
+    /**
      * {@code refusal} ⇒ {@code error} + 文案取 {@code stop_details.explanation}
      * （pi {@code :1472-1476} 的 {@code stopDetails?.explanation || "The model refused…"}）。
      */

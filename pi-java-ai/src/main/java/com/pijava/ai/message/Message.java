@@ -52,11 +52,21 @@ public sealed interface Message {
      * 溢出恢复行为就和 pi 不一样。生产路径由 {@code AbstractChatApi} 在事件出口挂载、
      * 经 {@link #fromPartial} 转入终局消息。</p>
      *
+     * <p>{@code rawStopReason}（⑨，docs/31 §8.35.14 裁决 D5）是线格上的**原值**：
+     * 五条车道都在观测到它的时候就地写下（Anthropic {@code :744}、Google {@code :217}、
+     * Mistral {@code :614}、completions {@code :572}、Responses {@code shared:588}／
+     * {@code :747}），Google 还拿它当收尾文案的**唯一来源**（{@code :272-273}）。
+     * 它**不是** {@code stopReason} 的反推 —— 前者是线格词汇
+     * （{@code "max_tokens"}／{@code "MAX_TOKENS"}／{@code "tool_calls"}），
+     * 后者是 pi 的 {@code StopReason}。pi 的消息整体 stringify 落盘 ⇒ 它同样是转录里的键。</p>
+     *
      * <p>pi 类型上的 {@code responseModel}/{@code responseId}/
-     * {@code providerThinkingLevel}/{@code diagnostics}/{@code rawStopReason}/
+     * {@code providerThinkingLevel}/{@code diagnostics}/
      * {@code endTurn} 在对齐面（packages/agent/src）没有任何消费者（grep 全数命中的
      * 只有 prompt-templates/skills 的同名局部量），故不移植；哪天 pi 的消费进
-     * 对齐面，清点时重开。</p>
+     * 对齐面，清点时重开。（⚠️ {@code rawStopReason} 原本也在这张清单上，§8.35.14 第五节
+     * 的复核把它移出：pi 有**两个读点**，都在 Google 车道的**生产者层**——「对齐面没有消费者」
+     * 的措辞是对的，但「故不移植」的结论错了，因为那一层 pi-java 也要实现。）</p>
      *
      * <p>可选字段全部「null ≙ pi 的 undefined」：序列化时键主动省略（Jackson 会把
      * null 写出来，JS 的 stringify 会丢 undefined —— 规则同 §8.18 的 A7）。
@@ -71,7 +81,8 @@ public sealed interface Message {
         String model,
         com.pijava.ai.Usage usage,
         java.time.Instant timestamp,
-        String errorMessage
+        String errorMessage,
+        String rawStopReason
     ) implements Message {
         /** Compact constructor that defensively copies the content blocks. */
         public AssistantMessage {
@@ -83,12 +94,12 @@ public sealed interface Message {
          * written before stop reasons were recorded, carries neither field.
          */
         public AssistantMessage(List<ContentBlock> content) {
-            this(content, null, null, null, null, null, null, null, null);
+            this(content, null, null, null, null, null, null, null, null, null);
         }
 
         /** Compatibility constructor for the pre-3a (content, stopReason, deferred) shape. */
         public AssistantMessage(List<ContentBlock> content, String stopReason, DeferredHandle deferred) {
-            this(content, stopReason, deferred, null, null, null, null, null, null);
+            this(content, stopReason, deferred, null, null, null, null, null, null, null);
         }
 
         /**
@@ -108,7 +119,8 @@ public sealed interface Message {
                 partial.model(),
                 usageOf(partial.usage()),
                 partial.timestamp(),
-                partial.errorMessage());
+                partial.errorMessage(),
+                partial.rawStopReason());
         }
 
         /**
@@ -140,7 +152,7 @@ public sealed interface Message {
          */
         public AssistantMessage withStopReason(String newStopReason) {
             return new AssistantMessage(content, newStopReason, deferred,
-                api, provider, model, usage, timestamp, errorMessage);
+                api, provider, model, usage, timestamp, errorMessage, rawStopReason);
         }
 
         @Override

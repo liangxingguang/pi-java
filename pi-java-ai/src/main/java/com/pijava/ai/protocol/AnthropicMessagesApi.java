@@ -271,6 +271,8 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                 if (!rawStopReason.isMissing() && !rawStopReason.isNull()) {
                     var raw = rawStopReason.asKnown().map(StopReason::asString).orElse("");
                     if (!raw.isEmpty()) {
+                        // pi `:744`：原值先落消息（⑨/D5），映射结果再落 stopReason。
+                        builder.noteRawStopReason(raw);
                         var mapped = mapStopReason(raw, refusalExplanation(delta));
                         stop.reason = mapped.reason();
                         if (mapped.errorMessage() != null) {

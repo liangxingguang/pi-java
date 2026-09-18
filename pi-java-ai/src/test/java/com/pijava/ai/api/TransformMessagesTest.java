@@ -38,12 +38,12 @@ class TransformMessagesTest {
 
     private static Message.AssistantMessage sameModel(ContentBlock... blocks) {
         return new Message.AssistantMessage(List.of(blocks), "stop", null,
-            API, TARGET.provider(), TARGET.modelName(), null, null, null);
+            API, TARGET.provider(), TARGET.modelName(), null, null, null, null);
     }
 
     private static Message.AssistantMessage foreignModel(ContentBlock... blocks) {
         return new Message.AssistantMessage(List.of(blocks), "stop", null,
-            API, "teamorouter", "deepseek-v4-flash", null, null, null);
+            API, "teamorouter", "deepseek-v4-flash", null, null, null, null);
     }
 
     private static List<Message> applied(List<Message> messages) {

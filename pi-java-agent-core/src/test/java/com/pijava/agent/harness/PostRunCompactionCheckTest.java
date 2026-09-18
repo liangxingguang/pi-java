@@ -95,7 +95,7 @@ class PostRunCompactionCheckTest {
             String model, Usage usage, Long timestampMs, String errorMessage) {
         return new Message.AssistantMessage(List.of(), stopReason, null, null,
             provider, model, usage,
-            timestampMs == null ? null : Instant.ofEpochMilli(timestampMs), errorMessage);
+            timestampMs == null ? null : Instant.ofEpochMilli(timestampMs), errorMessage, null);
     }
 
     private static Message.AssistantMessage overflowError() {

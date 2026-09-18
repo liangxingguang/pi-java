@@ -262,7 +262,7 @@ final class PiLoopRunner {
             // api 在循环层不可见 —— pi-java 的 ModelId 没有协议维度，故留 null，键省略）。
             finalMessage = new Message.AssistantMessage(List.of(), "aborted", null,
                 null, config.model().provider(), config.model().modelName(),
-                null, java.time.Instant.now(), "Request was aborted");
+                null, java.time.Instant.now(), "Request was aborted", null);
         }
         finalMessage = markAborted(finalMessage, signal, cutShort);
         if (addedPartial) {
@@ -329,7 +329,8 @@ final class PiLoopRunner {
             fixReason ? reason : stopReason,
             projected.deferred(), projected.api(), projected.provider(), projected.model(),
             projected.usage(), projected.timestamp(),
-            fixText ? err.error().getMessage() : errorMessage);
+            fixText ? err.error().getMessage() : errorMessage,
+            projected.rawStopReason());
     }
 
     /** pi: 除 start/done/error 之外的流事件都是 update。 */

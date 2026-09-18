@@ -167,7 +167,7 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
     private static Message.AssistantMessage normalizeAborted(Message.AssistantMessage response) {
         return new Message.AssistantMessage(response.content(), "aborted", response.deferred(),
             response.api(), response.provider(), response.model(), response.usage(),
-            response.timestamp(), null);
+            response.timestamp(), null, response.rawStopReason());
     }
 
     /** pi 的 {@code message.errorMessage || "Unknown error"}（空串 ≙ falsy）。 */
@@ -275,7 +275,8 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
                     projected.provider(), projected.model(),
                     backfillUsage ? usage : projected.usage(),
                     projected.timestamp(),
-                    backfillError ? errorMessage : projected.errorMessage());
+                    backfillError ? errorMessage : projected.errorMessage(),
+                    projected.rawStopReason());
             }
             return projected;
         }
@@ -285,7 +286,7 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
         }
         blocks.addAll(toolCalls);
         return new Message.AssistantMessage(blocks, reason, null, null, null, null,
-            usage, null, errorMessage);
+            usage, null, errorMessage, null);
     }
 
     private static Usage synthesizeUsage(StreamEvent.UsageInfo ui) {

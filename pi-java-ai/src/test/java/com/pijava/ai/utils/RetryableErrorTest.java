@@ -19,7 +19,7 @@ class RetryableErrorTest {
 
     private static Message.AssistantMessage error(String message) {
         return new Message.AssistantMessage(List.<ContentBlock>of(), "error", null,
-            null, null, null, null, null, message);
+            null, null, null, null, null, message, null);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -108,7 +108,7 @@ class RetryableErrorTest {
     @ValueSource(strings = {"stop", "length", "toolUse", "aborted"})
     void nonErrorStopReasonsAreNotRetryable(String stopReason) {
         var message = new Message.AssistantMessage(List.<ContentBlock>of(), stopReason, null,
-            null, null, null, null, null, "overloaded");
+            null, null, null, null, null, "overloaded", null);
         assertThat(RetryableError.isRetryableAssistantError(message)).isFalse();
     }
 

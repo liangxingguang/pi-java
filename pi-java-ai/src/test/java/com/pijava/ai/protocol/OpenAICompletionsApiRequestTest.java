@@ -106,7 +106,7 @@ class OpenAICompletionsApiRequestTest {
                     new ContentBlock.ThinkingContent("let me reason", "reasoning_content"),
                     new ContentBlock.TextContent("answer")),
                     "stop", null, "openai-completions", "deepseek", "deepseek-chat",
-                    null, null, null)));
+                    null, null, null, null)));
 
         var params = OpenAICompletionsApi.buildParams(request, "openai-completions", null);
 
@@ -133,7 +133,7 @@ class OpenAICompletionsApiRequestTest {
                     new ContentBlock.ThinkingContent("let me reason"),
                     new ContentBlock.TextContent("answer")),
                     "stop", null, "openai-completions", "openai", "gpt-4o-mini",
-                    null, null, null)));
+                    null, null, null, null)));
 
         var params = OpenAICompletionsApi.buildParams(request, "openai-completions", null);
 

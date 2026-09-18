@@ -55,7 +55,7 @@ class CompactionThresholdGateTest {
             List.of(new ContentBlock.TextContent("ok")), "stop", null,
             null, null, null,
             new Usage(totalTokens, 0, 0, 0, null, null, totalTokens, Usage.Cost.zero()),
-            null, null);
+            null, null, null);
     }
 
     private static Entry.Compaction marker(String id) {

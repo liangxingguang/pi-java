@@ -54,7 +54,7 @@ class AnthropicMessagesApiBuildParamsTest {
      */
     private static Message.AssistantMessage assistant(ContentBlock... blocks) {
         return new Message.AssistantMessage(List.of(blocks), "stop", null,
-            "anthropic-messages", "anthropic", "claude-sonnet-5", null, null, null);
+            "anthropic-messages", "anthropic", "claude-sonnet-5", null, null, null, null);
     }
 
     @Test

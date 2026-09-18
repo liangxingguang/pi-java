@@ -40,6 +40,14 @@ import com.pijava.ai.stream.StreamEvent;
  * @param model        model id (pi {@code AssistantMessage.model}), or null
  * @param timestamp    creation instant (pi {@code timestamp}: number of epoch ms), or null
  * @param errorMessage error-path message text (pi {@code errorMessage}), or null
+ * @param rawStopReason the **unmapped** wire stop reason (pi {@code rawStopReason},
+ *                     {@code types.ts:443}), or null when the lane observed none.
+ *                     <p>⑨（D5）：它是线格的**原值**（Anthropic {@code "max_tokens"}、
+ *                     Google {@code "MAX_TOKENS"}、completions {@code "tool_calls"}、
+ *                     Mistral {@code "model_length"}、Responses 的复合量
+ *                     {@code "incomplete.max_output_tokens"}），**不是** {@link #stopReason}
+ *                     的反推 —— 五条车道都写作 {@code output.rawStopReason = <线格取值>}，
+ *                     Google 还拿它当收尾文案的唯一来源（{@code google-generative-ai.ts:272}）。</p>
  */
 public record AssistantMessage(
     String id,
@@ -50,7 +58,8 @@ public record AssistantMessage(
     String provider,
     String model,
     Instant timestamp,
-    String errorMessage
+    String errorMessage,
+    String rawStopReason
 ) {
     /** Compact constructor that defensively copies the content blocks. */
     public AssistantMessage {
@@ -60,7 +69,7 @@ public record AssistantMessage(
     /** Compatibility constructor for pre-3a snapshots without identity fields. */
     public AssistantMessage(
             String id, List<ContentBlock> content, StreamEvent.UsageInfo usage, String stopReason) {
-        this(id, content, usage, stopReason, null, null, null, null, null);
+        this(id, content, usage, stopReason, null, null, null, null, null, null);
     }
 
     /** Create an empty initial snapshot. */
@@ -76,37 +85,51 @@ public record AssistantMessage(
     /** Create a copy with a new id. */
     public AssistantMessage withId(String newId) {
         return new AssistantMessage(newId, content, usage, stopReason,
-            api, provider, model, timestamp, errorMessage);
+            api, provider, model, timestamp, errorMessage, rawStopReason);
     }
 
     /** Create a copy with updated content blocks. */
     public AssistantMessage withContent(List<ContentBlock> newContent) {
         return new AssistantMessage(id, newContent, usage, stopReason,
-            api, provider, model, timestamp, errorMessage);
+            api, provider, model, timestamp, errorMessage, rawStopReason);
     }
 
     /** Create a copy with updated usage. */
     public AssistantMessage withUsage(StreamEvent.UsageInfo newUsage) {
         return new AssistantMessage(id, content, newUsage, stopReason,
-            api, provider, model, timestamp, errorMessage);
+            api, provider, model, timestamp, errorMessage, rawStopReason);
     }
 
     /** Create a copy with an updated stop reason. */
     public AssistantMessage withStopReason(String newStopReason) {
         return new AssistantMessage(id, content, usage, newStopReason,
-            api, provider, model, timestamp, errorMessage);
+            api, provider, model, timestamp, errorMessage, rawStopReason);
     }
 
     /** Create a copy with the provider identity + creation time attached. */
     public AssistantMessage withIdentity(String newApi, String newProvider, String newModel,
                                          Instant newTimestamp) {
         return new AssistantMessage(id, content, usage, stopReason,
-            newApi, newProvider, newModel, newTimestamp, errorMessage);
+            newApi, newProvider, newModel, newTimestamp, errorMessage, rawStopReason);
     }
 
     /** Create a copy with an error-path message text attached (pi {@code errorMessage}). */
     public AssistantMessage withErrorMessage(String newErrorMessage) {
         return new AssistantMessage(id, content, usage, stopReason,
-            api, provider, model, timestamp, newErrorMessage);
+            api, provider, model, timestamp, newErrorMessage, rawStopReason);
+    }
+
+    /**
+     * Create a copy carrying the line's **unmapped** stop reason (pi
+     * {@code rawStopReason}, {@code types.ts:443}).
+     *
+     * <p>⑨（D5）：pi 的五条车道都在**观测到线格取值的那一刻**就地写这个字段
+     * （{@code anthropic:744}／{@code google:217}／{@code mistral:614}／
+     * {@code completions:572}／{@code responses-shared:588}），故它从那一刻起的
+     * **每一帧** partial 上都在 —— 车道在同一个位置调本方法，形状即同。</p>
+     */
+    public AssistantMessage withRawStopReason(String newRawStopReason) {
+        return new AssistantMessage(id, content, usage, stopReason,
+            api, provider, model, timestamp, errorMessage, newRawStopReason);
     }
 }

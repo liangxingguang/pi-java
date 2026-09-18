@@ -141,7 +141,7 @@ class LaneTransformMessagesWiringTest {
                 List.of(new ContentBlock.ThinkingContent(FOREIGN_TEXT, "reasoning_content", false),
                     new ContentBlock.TextContent("VISIBLE")),
                 "stop", null, "openai-completions", "deepseek", "deepseek-v4-flash",
-                null, null, null);
+                null, null, null, null);
             var request = new StreamRequest(ModelId.of("deepseek", "deepseek-v4-flash"), null,
                 List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi"))),
                     sameModel),
@@ -158,7 +158,7 @@ class LaneTransformMessagesWiringTest {
         var foreign = new Message.AssistantMessage(
             List.of(new ContentBlock.ThinkingContent(FOREIGN_TEXT, "sig-foreign", false),
                 new ContentBlock.TextContent("VISIBLE")),
-            "stop", null, "anthropic-messages", "anthropic", "claude-x", null, null, null);
+            "stop", null, "anthropic-messages", "anthropic", "claude-x", null, null, null, null);
         return new StreamRequest(target, null,
             List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi"))), foreign),
             List.of(), -1, -1, Map.of());

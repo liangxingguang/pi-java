@@ -129,6 +129,42 @@ class OpenAIResponsesApiTest {
         assertThat(done.reason()).isEqualTo("length");
     }
 
+    /**
+     * ⑨（D5）：{@code rawStopReason} 是**映射前**的线格原值，且在本车道是
+     * **复合量**（pi {@code :588}）：{@code incompleteReason ? `${status}.${incompleteReason}`
+     * : status}。
+     *
+     * <p>取值刻意选这个复合形：它既不等于映射结果 {@code "length"}、也不等于任一单项
+     * ——「从 {@code stopReason} 反推」或「只留 status」两种写法都会红。</p>
+     */
+    @Test
+    void rawStopReasonIsTheStatusAndIncompleteReasonComposite() throws Exception {
+        var api = api(startServer(incompleteSse("max_output_tokens")));
+
+        var done = last(collect(api, "hi"), StreamEvent.StreamDone.class);
+
+        assertThat(done.reason()).isEqualTo("length");
+        assertThat(done.partial().rawStopReason()).isEqualTo("incomplete.max_output_tokens");
+    }
+
+    /**
+     * ⑨（D5）：{@code response.failed} 支也写原值（pi {@code :747}），写的是 **status**，
+     * 且它落在**错误消息**上 —— pi 的 catch 之后 {@code stream.push({type:"error",
+     * …, error: output})} 带的就是这条被改写过的消息。
+     */
+    @Test
+    void failedResponseRawStopReasonIsTheStatus() throws Exception {
+        var api = api(startServer(failedSse()));
+
+        var errors = collect(api, "hi").stream()
+            .filter(StreamEvent.StreamError.class::isInstance)
+            .map(StreamEvent.StreamError.class::cast)
+            .toList();
+
+        assertThat(errors).as("失败支应恰有一条错误事件").hasSize(1);
+        assertThat(errors.get(0).partial().rawStopReason()).isEqualTo("failed");
+    }
+
     // ══════════════════════════════════════════════════════════════════
     // B20 提交 ⑦：α/β/γ/δ/ε 五条（pi openai-responses.ts:181-192 +
     // openai-responses-shared.ts:588-596/741-760/763-796）

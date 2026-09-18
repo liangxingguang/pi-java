@@ -121,6 +121,21 @@ class OpenAICompletionsApiTest {
     }
 
     /**
+     * ⑨（D5）：{@code rawStopReason} 是**映射前**的线格原值（pi {@code :572}）。
+     *
+     * <p>线格 {@code tool_calls} 与消息 {@code "tool_use"} 取值不同（后者是 pi-java 的词表，
+     * 见 {@code PiMessagesApi:244-246}）⇒「从 {@code stopReason} 反推」在这条上立刻红。</p>
+     */
+    @Test
+    void rawStopReasonKeepsTheUnmappedWireValue() throws Exception {
+        var events = collect(stream(chunk("{\"content\":\"done\"}"), finishChunk("tool_calls")));
+
+        var done = last(events, StreamEvent.StreamDone.class);
+        assertThat(done.reason()).isEqualTo("tool_use");
+        assertThat(done.partial().rawStopReason()).isEqualTo("tool_calls");
+    }
+
+    /**
      * {@code finish_reason:"content_filter"} ⇒ error + {@code "Provider finish_reason:
      * content_filter"}（pi {@code :1562-1563}）。
      */

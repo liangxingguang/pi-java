@@ -86,7 +86,7 @@ class PostRunRetryTest {
 
     private static Message.AssistantMessage error(String errorMessage) {
         return new Message.AssistantMessage(List.<ContentBlock>of(), "error", null,
-            null, null, null, null, null, errorMessage);
+            null, null, null, null, null, errorMessage, null);
     }
 
     private static Message.UserMessage user(String text) {

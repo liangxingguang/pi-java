@@ -136,7 +136,13 @@ final class ResponsesStreamProcessor {
                     // pi 的 `response.failed` 分支（shared :745-755）：先记 sawTerminal 再 throw。
                     // throw 终止整条流（ε）—— 不是「发一条 error 继续读」。
                     sawTerminal = true;
-                    throw new IllegalStateException(failedMessage(event.failed().get().response()));
+                    // pi `:747`：本支也写原值（写的是 **status**，不是复合量）。pi 的 catch 之后
+                    // `stream.push({type:"error", …, error: output})` 带的就是这条被改写过的消息
+                    // ⇒ 它在 pi 侧**可观测**（错误消息上带着 status），故照写。
+                    var failed = event.failed().get().response();
+                    builder.noteRawStopReason(failed.status()
+                        .map(Object::toString).orElse(null));
+                    throw new IllegalStateException(failedMessage(failed));
                 } else if (event.error().isPresent()) {
                     // pi :743-744 同样是 throw。⚠️ pi 的模板串 `${event.code}` / `${event.message}`
                     // 在字段缺席时渲染成 JS 的 `undefined`，本车道保留 pi-java 既有的 `unknown`
@@ -224,11 +230,22 @@ final class ResponsesStreamProcessor {
     private static void finalizeResponse(StreamPartialBuilder builder,
                                          SubmissionPublisher<StreamEvent> publisher,
                                          Response response, StopState stop) {
+        var status = response.status().orElse(null);
+        String incompleteReason = incompleteReason(response);
+        // pi shared `:588`：原值是**复合量**（⑨/D5）——
+        // `incompleteReason ? `${status}.${incompleteReason}` : status`。
+        // status 缺席 ⇒ 赋 undefined ≙ 传 null（快照上键缺席，与 pi 同形）。
+        // ⚠️ 写在 emitUsage **之前**：pi 的 finalizeResponse 里「先记原值、再改
+        // stopReason」不夹任何 push（本车道的 usage 事件是 pi-java 自有的投影），
+        // 故顺序在 pi 侧不可观测 —— 这里按「先记状态、再发事件」的统一纪律写。
+        builder.noteRawStopReason(incompleteReason != null
+            ? status + "." + incompleteReason
+            : (status == null ? null : status.toString()));
         if (response.usage().isPresent()) {
             var u = response.usage().get();
             publisher.submit(builder.emitUsage(u.inputTokens(), u.outputTokens()));
         }
-        var mapped = mapStopReason(response.status().orElse(null), incompleteReason(response));
+        var mapped = mapStopReason(status, incompleteReason);
         stop.reason = mapped.reason();
         stop.errorMessage = mapped.errorMessage();
         if (hasToolUse(builder) && "stop".equals(stop.reason)) {

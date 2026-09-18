@@ -228,7 +228,7 @@ class OpenAICompletionsReasoningReplayTest {
     private static Message.AssistantMessage assistant(ModelInfo model, ContentBlock... content) {
         return new Message.AssistantMessage(List.of(content), "stop", null,
             "openai-completions", model.id().provider(), model.id().modelName(),
-            null, null, null);
+            null, null, null, null);
     }
 
     private static ContentBlock thinking(String text, String signature) {

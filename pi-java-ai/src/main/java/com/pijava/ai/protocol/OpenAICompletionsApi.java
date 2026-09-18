@@ -192,6 +192,8 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                     // 可观测结果 —— 仍照 pi 的次序放，免得后人以为顺序无关是「随便放」。
                     var rawFinishReason = rawFinishReason(choice);
                     if (rawFinishReason != null) {
+                        // pi `:572`：原值先落消息（⑨/D5），映射结果再落 stop.reason。
+                        builder.noteRawStopReason(rawFinishReason);
                         var mapped = mapStopReason(rawFinishReason);
                         stop.reason = mapped.reason();
                         if (mapped.errorMessage() != null) {

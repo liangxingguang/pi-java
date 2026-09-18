@@ -23,6 +23,13 @@ public final class StreamPartialBuilder {
     private final List<ContentBlock> blocks = new ArrayList<>();
     private StreamEvent.UsageInfo usage;
     private String stopReason;
+    /**
+     * 线格**原值**（pi {@code output.rawStopReason}，{@code types.ts:443}）—— 与
+     * {@link #stopReason} 的映射结果分开存。⑨（D5）：五条车道都在观测到线格取值的那一刻
+     * 经 {@link #noteRawStopReason} 写入，故此后**每一帧** partial 都快照到它（pi 写的是
+     * 同一个可变对象，形状相同）。
+     */
+    private String rawStopReason;
 
     // Per-block accumulators
     private final StringBuilder textBuf = new StringBuilder();
@@ -59,9 +66,28 @@ public final class StreamPartialBuilder {
 
     // ── Snapshot ─────────────────────────────────────────────
 
-    /** Return the current {@link AssistantMessage} snapshot. */
+    /**
+     * Return the current {@link AssistantMessage} snapshot.
+     *
+     * <p>⚠️ 走**全参**构造器而不是 4 参兼容构造器：兼容构造器把后 6 个可选字段一并置 null
+     * （它服务的是「旧形状」），会静默丢掉 {@link #rawStopReason}。身份四元与本字段由
+     * {@code AbstractChatApi} 在事件出口经 wither 挂载／携带（3a、⑨）。</p>
+     */
     public AssistantMessage snapshot() {
-        return new AssistantMessage(messageId, List.copyOf(blocks), usage, stopReason);
+        return new AssistantMessage(messageId, List.copyOf(blocks), usage, stopReason,
+            null, null, null, null, null, rawStopReason);
+    }
+
+    /**
+     * 记下**线格原值**（pi {@code output.rawStopReason} 的就地赋值）。
+     *
+     * <p>⑨（D5）：五条车道的调用点与 pi 的写点**逐处对应**（{@code anthropic:744}、
+     * {@code google:217}、{@code mistral:614}、{@code completions:572}、
+     * {@code responses-shared:588}/{@code :747}）。传 null 即 pi 的赋 {@code undefined}
+     * （收尾处 {@code status} 缺席时就是这一支）⇒ 快照上键缺席，与 pi 同形。</p>
+     */
+    public void noteRawStopReason(String raw) {
+        this.rawStopReason = raw;
     }
 
     /** Return the current content index (next slot). */

@@ -73,6 +73,22 @@ class GoogleGenerativeAiApiTest {
     }
 
     /**
+     * ⑨（D5）：{@code rawStopReason} 是**映射前**的线格原值（pi {@code :217}），
+     * 也是本车道收尾文案的唯一来源（pi {@code :272-273}）。
+     *
+     * <p>线格 {@code MAX_TOKENS}（大写、SDK 枚举名）与消息 {@code "length"} 取值不同 ⇒
+     * 「从 {@code stopReason} 反推」这种写法在这条上立刻红。</p>
+     */
+    @Test
+    void rawStopReasonKeepsTheUnmappedWireValue() throws Exception {
+        var events = collect(text("partial"), finish("MAX_TOKENS"));
+
+        var done = last(events, StreamEvent.StreamDone.class);
+        assertThat(done.reason()).isEqualTo("length");
+        assertThat(done.partial().rawStopReason()).isEqualTo("MAX_TOKENS");
+    }
+
+    /**
      * {@code SAFETY} ⇒ error + {@code "Provider stopped with: SAFETY"}。
      *
      * <p>⚠️ 文案**不在**映射里：pi 的 {@code mapStopReason} 对那 15 个取值只返回裸

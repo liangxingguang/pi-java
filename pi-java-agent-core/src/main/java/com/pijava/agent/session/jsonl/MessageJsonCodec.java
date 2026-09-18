@@ -47,7 +47,8 @@ final class MessageJsonCodec {
                 JsonlCodec.optionalString(node, "model"),
                 decodeUsage(node.get("usage")),
                 decodeTimestamp(node.get("timestamp")),
-                JsonlCodec.optionalString(node, "errorMessage"));
+                JsonlCodec.optionalString(node, "errorMessage"),
+                JsonlCodec.optionalString(node, "rawStopReason"));
             case "tool" -> new Message.ToolResultMessage(
                 JsonlCodec.requireString(node, "toolUseId"),
                 JsonlCodec.requireString(node, "toolName"),

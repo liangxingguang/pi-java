@@ -71,6 +71,21 @@ class MistralConversationsApiTest {
         assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo("length");
     }
 
+    /**
+     * ⑨（D5）：{@code rawStopReason} 是**映射前**的线格原值（pi {@code :614}）。
+     *
+     * <p>线格 {@code model_length} 与消息 {@code "length"} 取值不同 ⇒「从
+     * {@code stopReason} 反推」这种写法在这条上立刻红。</p>
+     */
+    @Test
+    void rawStopReasonKeepsTheUnmappedWireValue() throws Exception {
+        var events = collect(text("partial"), finish("model_length"));
+
+        var done = last(events, StreamEvent.StreamDone.class);
+        assertThat(done.reason()).isEqualTo("length");
+        assertThat(done.partial().rawStopReason()).isEqualTo("model_length");
+    }
+
     /** {@code stop} ⇒ {@code "stop"}（**对照面**）。 */
     @Test
     void stopFinishReasonMapsToStop() throws Exception {
