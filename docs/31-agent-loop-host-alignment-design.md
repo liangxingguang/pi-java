@@ -4566,11 +4566,13 @@ base64；两处**判空语义一致**（`isEmpty` vs `trim().isEmpty()` 在该�
 
 ---
 
-### 8.35 响应侧字段覆盖与收尾语义（设计 · **待审**）
+### 8.35 响应侧字段覆盖与收尾语义（**实施中**：B19 已闭环）
 
-> **状态**：**设计已落地，等用户审核**（本仓规则：先出设计 → 审核 → 才许写代码）。
+> **状态**：设计已落地并经用户审核；本包**按 B19 → B20 的顺序逐条实施**。
+> **B19（收/发两侧）已闭环**（§8.35.13，`ffc43e2`/`b916d29`/`478fe91`/`7369ae6`）；
+> **B22** 顺带修（§8.35.11）；**B20（stop reason 映射）是下一个**，其首提交为 D1 的 P0 只读探针。
 > 本包**不占**既有 ③/④ 序号（③ = B5 宿主层 `Error` 通道、④ = B3/B12），文中称 **「响应侧字段覆盖包」**。
-> 登记：`docs/32` 的 **B19 / B20 / B21**（B 类 13→16 行）。
+> 登记：`docs/32` 的 **B19 / B20 / B21**（B 类 13→16 行，B22/B23 随接线夹具、B24 随 B19 登记，现 24 行）。
 
 #### 8.35.0 立案：一次生产事故，牵出的是一整层
 
@@ -4955,6 +4957,71 @@ checkstyle/spotbugs 零违规）。
 `chunk.usage` 缺席时再读 `choice.usage`，注释点名 **Moonshot** 把 usage 放在 choice 里。
 pi-java `OpenAICompletionsApi:124-127` 只看 `chunk.usage()` ⇒ 那条 relay 上**计费永远是 0**
 （而 `~/.pi-java` 的用量统计、压缩阈值、上下文估算全都吃 usage）。
+
+#### 8.35.13 B19 **已闭环**（4 个提交，收/发两侧都落地）
+
+| 提交 | 内容 |
+|---|---|
+| `ffc43e2` | 夹具先红证毕（13 红 4 绿）+ `ModelCompat` 第二组件**编译前置** + §8.35.12 + B24 登记 |
+| `b916d29` | **收**：探三个线格字段、命中的名字写成 signature、块结束按建块序发 |
+| `478fe91` | **发**：签名自描述回放（规则 i）+ 空串回填（规则 ii）+ 落线跳过规则 + `baseUrl` 请求期探测 |
+| `7369ae6` | models.json 的 `compat` 暴露 `requiresReasoningContentOnAssistantMessages` |
+
+**收侧**（`OpenAICompletionsApi.streamInternal`）：`delta._additionalProperties()` 上按
+`reasoning_content` → `reasoning` → `reasoning_text` 探**第一个非空字符串**，命中的字段名
+**原样**当 `thinkingSignature`（pi `:597-620`）。`typeof === "string"` 那条守卫靠
+`JsonField.asString()` 表达（数字/对象取空）。收尾事件改按**建块序**发（pi `:674-676`），
+用 `ArrayDeque<Supplier<StreamEvent>>` 记序 —— **不能**写死「先 thinking 再 text」：同一个
+delta 里两者都有时 pi 先处理 content（`:584` 在 `:597` 之前）⇒ 文本块先建。
+
+**发侧**（`addAssistantMessage`）两条独立规则：
+
+- **(i) 签名即线格名**（pi `:1310-1318`，**无 provider 门**）：签名命中
+  `["reasoning","reasoning_content","reasoning_text"]` 才发，多块以**单个** `"\n"` 连接；
+  签名取**第一个非空块**的（`:1313`）。⚠️ 这个数组与收侧的探测数组**顺序不同且必须分开**
+  （`:278` vs `:597`）—— 收侧顺序有意义（chutes.ai 两个字段同时给、`reasoning_content` 胜），
+  发侧只是 `includes` 测试。
+- **(ii) 空串回填**（pi `:1356-1362`）：**两个合取项** —— 家族的 compat 判据
+  （provider 名精确等于 `deepseek` **或** baseUrl 小写含 `deepseek.com`，`:1592`）
+  **且** `model.reasoning`（= `ModelCapability.THINKING`，`ModelsJsonConfig:193` 的映射）。
+  ⚠️ 门是「`reasoning_content` **这个键**还没被写」而非「什么都没写」：签名是 `reasoning`
+  时 pi **两个字段都发**（`reasoning` 有内容、`reasoning_content` 空串）
+  —— `unknownSignatureDropsTheTextAndKeepsOnlyTheEmptyFill` 与
+  `reasoningSignatureReplaysThatFieldName` 从两个方向钉住这一条。
+
+**顺带修掉的一条落线规则**（pi `:1365-1372`）：既无文本又无工具调用的助手消息整条丢掉。
+旧守卫是 `if (!text.isEmpty() || !toolCalls.isEmpty() || !reasoning.isEmpty())` ——
+多出来的第三个析取项正好把该丢的那种消息发出去（行车事故里「1014 token 换回空消息」的形状）。
+⚠️ **reasoning 不算内容**：只带 thinking 的消息**就是要丢的那种**。
+
+**`baseUrl` 走请求期而不是目录期**：pi 从 `model.baseUrl` 判，pi-java 的 `ModelInfo` 没有
+baseUrl，有效值在适配器构造时定下 ⇒ 存成字段、由 `buildParams(request, apiName, baseUrl)`
+第三参透传。这样 `--base-url` / settings 覆盖才影响判据（目录期烘死会看不见它们）。
+5 处既有调用点随之更新（4 处直接调用 + 1 处反射 `getDeclaredMethod`）。
+
+**有意不移植**：① opencode-go 的签名改写（`:615-617`）—— pi-java 无该 provider，
+分支不可达，注释里写明了；② `reasoning_details` 那层（结构化形状）—— 仍在 B19 行之外。
+
+**两个存量用例编码的正是被替换掉的近似**，随语义改写（不是删）：
+
+| 用例 | 改法 |
+|---|---|
+| `deepseekThinkingContentIsRoundTripped` | thinking 块补上签名 `reasoning_content`（钉 (i)，**与 provider 无关**那一点由此可见：`StreamRequest.of` 合成的最小 `ModelInfo` 没有 THINKING 能力，它照样绿） |
+| `nonDeepseekThinkingIsNotRoundTripped` → `unsignedThinkingIsNotRoundTripped` | **空签名**的块不发 —— 决定权在签名、不在 provider 名 |
+
+⇒ 后者改名是**结论变了**的标记：旧名字断言的是「非 deepseek 不回放」，而 pi 的真规则是
+「没有签名不回放」。旧代码把这两件事混成一件（provider 名开闸），收侧写完签名才分得开
+—— **收侧写签名与发侧读签名是同一个决定的两半**，只做一半会让人以为「非 deepseek 不需要」。
+
+**验证**：`pi-java-ai` 396/396（395 + 新的入口夹具）；全 reactor `mvn -o clean verify` 绿、
+checkstyle 零违规。发侧 11/11 绿（此前 8 红），其中三条**两侧同绿**的对照各做**变异探针**、
+均**恰一条红**：去掉 `model.reasoning` 合取 ⇒ `nonReasoningModelGetsNoEmptyFill`；探测恒真
+⇒ `ordinaryRelayGetsNoEmptyFill`；显式 `false` 被忽略 ⇒ `explicitCompatFalseDisablesTheEmptyFill`。
+models.json 那侧的入口夹具同样探针过（`compatOf` 退回二态 ⇒ 恰一条红）—— 它是**实现之后**
+才写的（§8.35.12 教训形态 (6) 的适用条件），故必须补探针而不能以「绿」作证。
+
+**未做（如实登记）**：B24（`choice.usage` 回退，另一层）仍开放；B20（stop reason 映射）
+是**下一个包**，其首个提交是 D1 的 P0 只读探针。
 
 ---
 
