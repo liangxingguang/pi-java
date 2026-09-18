@@ -160,10 +160,10 @@ class OpenAIResponsesApiTest {
             List.of(), 4, -1, Map.of());
 
         var method = ResponsesMessageConverter.class.getDeclaredMethod(
-            "buildParams", StreamRequest.class, ResponsesOptions.class);
+            "buildParams", StreamRequest.class, ResponsesOptions.class, String.class, String.class);
         method.setAccessible(true);
         var params = (com.openai.models.responses.ResponseCreateParams) method.invoke(
-            null, request, ResponsesOptions.from(ApiOptions.defaults()));
+            null, request, ResponsesOptions.from(ApiOptions.defaults()), "gpt-4o", "openai-responses");
         assertThat(params.maxOutputTokens().orElseThrow()).isEqualTo(16);
     }
 
@@ -179,10 +179,10 @@ class OpenAIResponsesApiTest {
             Map.of("reasoningEffort", "high", "reasoningSummary", "auto"));
 
         var method = ResponsesMessageConverter.class.getDeclaredMethod(
-            "buildParams", StreamRequest.class, ResponsesOptions.class);
+            "buildParams", StreamRequest.class, ResponsesOptions.class, String.class, String.class);
         method.setAccessible(true);
         var params = (com.openai.models.responses.ResponseCreateParams) method.invoke(
-            null, request, ResponsesOptions.from(options));
+            null, request, ResponsesOptions.from(options), "gpt-4o", "openai-responses");
         var reasoning = params.reasoning().orElseThrow();
         assertThat(reasoning.effort().orElseThrow().toString()).isEqualTo("high");
         assertThat(reasoning.summary().orElseThrow().toString()).isEqualTo("auto");

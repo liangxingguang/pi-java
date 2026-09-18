@@ -51,7 +51,8 @@ public final class OpenAIResponsesApi extends AbstractChatApi {
     @Override
     protected void streamInternal(StreamRequest request,
                                   SubmissionPublisher<StreamEvent> publisher) {
-        var params = ResponsesMessageConverter.buildParams(request, responsesOptions);
+        var params = ResponsesMessageConverter.buildParams(
+            request, responsesOptions, request.modelId().modelName(), apiName());
         try (var stream = client.responses().createStreaming(params)) {
             ResponsesStreamProcessor.process(stream, publisher);
         }

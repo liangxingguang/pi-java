@@ -21,6 +21,7 @@ import com.openai.models.responses.ResponseFunctionToolCall;
 import com.openai.models.responses.Tool;
 
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.api.TransformMessages;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.thinking.ThinkingLevel;
@@ -42,22 +43,21 @@ final class ResponsesMessageConverter {
 
     private ResponsesMessageConverter() {}
 
-    /** 构建 Responses 流式请求参数（model 用 request 的 modelName）。 */
-    static ResponseCreateParams buildParams(StreamRequest request, ResponsesOptions ropts) {
-        return buildParams(request, ropts, request.modelId().modelName());
-    }
-
     /**
      * 构建 Responses 流式请求参数。
      *
      * @param modelName 覆盖 model 字段（Azure 传部署名）
+     * @param apiName   本车道的 api 名（{@code "openai-responses"} / {@code "azure-openai-responses"}），
+     *                  交给共享预通道做同模型判定；**必须由调用方传**，因为两条车道共用本类
+     *                  而这个串不同（pi 侧同样是两条独立构建器分别调 transformMessages）
      */
     static ResponseCreateParams buildParams(StreamRequest request, ResponsesOptions ropts,
-                                            String modelName) {
+                                            String modelName, String apiName) {
         var builder = ResponseCreateParams.builder()
             .model(modelName)
             .store(false)
-            .input(ResponseCreateParams.Input.ofResponse(convertMessages(request)));
+            .input(ResponseCreateParams.Input.ofResponse(
+                convertMessages(request, apiName)));
 
         var tools = new ArrayList<Tool>();
         for (var td : request.tools()) {
@@ -100,7 +100,7 @@ final class ResponsesMessageConverter {
 
     // ── Message conversion ─────────────────────────────────────────────
 
-    private static List<ResponseInputItem> convertMessages(StreamRequest request) {
+    private static List<ResponseInputItem> convertMessages(StreamRequest request, String apiName) {
         var items = new ArrayList<ResponseInputItem>();
         // 系统提示是请求上的独立字段（pi openai-responses-shared.ts:175 读
         // context.systemPrompt），不在消息列表里。
@@ -108,8 +108,12 @@ final class ResponsesMessageConverter {
         if (systemPrompt != null && !systemPrompt.isEmpty()) {
             items.add(inputMessage(EasyInputMessage.Role.SYSTEM, systemPrompt));
         }
+        // 共享预通道先于本车道的映射跑（pi openai-responses-shared.ts:172 在消息转换前调
+        // transformMessages）—— 跨模型重放的 thinking 块在此降级为文本，否则本车道的
+        // addAssistantItems 会把它连块带文本一起丢（见那里的注释）。
+        var messages = TransformMessages.apply(request.messages(), request.modelId(), apiName);
         var msgIndex = 0;
-        for (var msg : request.messages()) {
+        for (var msg : messages) {
             if (msg instanceof Message.UserMessage user) {
                 items.add(toUserItem(user.content()));
             } else if (msg instanceof Message.AssistantMessage assistant) {
