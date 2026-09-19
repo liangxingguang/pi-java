@@ -77,6 +77,10 @@ public class DefaultShellExecutor implements ShellExecutor {
 
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             var future = executor.submit(() -> {
+                // 包⑧（docs/35）：按**字符边界**增量解码后再报给汇 —— 8 KiB 的切点会
+                // 落在任意字节上，直接 new String(buf,0,n) 会把汉字/emoji 劈成替换符。
+                var sink = options.outputSink();
+                var chunkStream = sink == null ? null : new Utf8ChunkStream();
                 try (var is = process.getInputStream()) {
                     byte[] buf = new byte[8192];
                     int n;
@@ -86,7 +90,15 @@ public class DefaultShellExecutor implements ShellExecutor {
                             break;
                         }
                         output.write(buf, 0, n);
+                        if (sink != null) {
+                            emitTo(sink, chunkStream.accept(buf, 0, n));
+                        }
                     }
+                }
+                if (sink != null) {
+                    // 收尾：残片（真的只有半个字符）也要报出去，否则汇的拼接结果
+                    // 与终局 output() 不等。
+                    emitTo(sink, chunkStream.finish());
                 }
                 return process.waitFor();
             });
@@ -127,6 +139,18 @@ public class DefaultShellExecutor implements ShellExecutor {
     }
 
     // ── Shell resolution (mirrors pi's getShellConfig) ────────────
+
+    /**
+     * 把一块非空输出报给汇。空块不报 —— 免得给下游制造「有更新但内容没变」的帧。
+     *
+     * <p>汇抛异常时**不吞**：它属于宿主代码，静默吞掉会让「明明订阅了却什么都没收到」
+     * 变成不可诊断的哑失败。</p>
+     */
+    private static void emitTo(ShellOutputSink sink, String delta) {
+        if (!delta.isEmpty()) {
+            sink.onOutput(delta);
+        }
+    }
 
     private ShellConfig resolveShell() throws IOException {
         if (customShellPath != null && !customShellPath.isBlank()) {
