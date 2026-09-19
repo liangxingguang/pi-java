@@ -22,7 +22,23 @@ public final class StreamPartialBuilder {
     private final String messageId;
     private final List<ContentBlock> blocks = new ArrayList<>();
     private StreamEvent.UsageInfo usage;
-    private String stopReason;
+    /**
+     * 累加器的 stop reason —— **初值 {@code "pending"}**，与 pi 五条车道同形
+     * （{@code anthropic-messages.ts:526}、{@code google-generative-ai.ts:75}、
+     * {@code mistral-conversations.ts:222}、{@code openai-completions.ts:333}、
+     * {@code openai-responses.ts:139}），**只有终局事件改写它**。
+     *
+     * <p>⑩（B26）：故流进行中**每一帧**（{@code message_start} 与每个
+     * {@code message_update}）的载荷里它都是 {@code "pending"}；终局事件把它换成
+     * 车道的映射结果。<b>它不是 pi 的 {@code StopReason} 词汇表成员</b> ——
+     * pi 的**存盘**类型显式排除它（{@code harness/session/types.ts:13} 的
+     * {@code Exclude<StopReason, "pending">}，conformance
+     * {@code session/testing/conformance/session-repo.ts:264} 拿
+     * 「append 一条 pending」当反例）⇒ 它的含义是「还没有终局判定」，任何把它
+     * 当作落定取值的读取点都是错的（宿主侧由 {@code PiLoopRunner.markAborted}
+     * 显式折算，见该处注释）。</p>
+     */
+    private String stopReason = "pending";
     /**
      * 线格**原值**（pi {@code output.rawStopReason}，{@code types.ts:443}）—— 与
      * {@link #stopReason} 的映射结果分开存。⑨（D5）：五条车道都在观测到线格取值的那一刻

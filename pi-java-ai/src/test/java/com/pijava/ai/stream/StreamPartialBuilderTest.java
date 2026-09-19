@@ -78,4 +78,20 @@ class StreamPartialBuilderTest {
         assertThat(thinking.text()).isEqualTo("reasoning...");
         assertThat(thinking.signature()).isEqualTo("sig_abc");
     }
+
+    @Test
+    void stopReasonStartsAtPendingAndOnlyTerminalEventsRewriteIt() {
+        // ⑩（B26）：pi 五条车道的累加器都从 stopReason:"pending" 起、只在终局事件改写
+        // （anthropic-messages.ts:526 / google-generative-ai.ts:75 /
+        // mistral-conversations.ts:222 / openai-completions.ts:333 /
+        // openai-responses.ts:139）⇒ 流进行中**每一帧**都是 "pending"。
+        var builder = new StreamPartialBuilder();
+        assertThat(builder.snapshot().stopReason()).isEqualTo("pending");
+        assertThat(builder.emitStart().partial().stopReason()).isEqualTo("pending");
+        assertThat(builder.emitTextStart().partial().stopReason()).isEqualTo("pending");
+        assertThat(builder.emitTextDelta("hi").partial().stopReason()).isEqualTo("pending");
+
+        // 终局事件是唯一的改写点（这里是车道映射后的取值）。
+        assertThat(builder.emitDone("length").partial().stopReason()).isEqualTo("length");
+    }
 }

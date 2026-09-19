@@ -276,17 +276,26 @@ final class PiLoopRunner {
     }
 
     /**
-     * 被中断的一轮必须以 {@code aborted} 收尾，而不是徒留一个 {@code null}
+     * 被中断的一轮必须以 {@code aborted} 收尾，而不是徒留一个「没有终局判定」的
      * {@code stopReason}（那样 {@code determineOutcome} 会落到 {@code completed}，
-     * 而 {@code ContextEntries.NON_PROJECTED_STOP_REASONS} 又不含 {@code null}，
+     * 而 {@code ContextEntries.NON_PROJECTED_STOP_REASONS} 又不含它，
      * 于是这段残缺的响应会被当成正常回答投影进后续请求）。
      *
-     * <p><b>只在流真的被切断时改写</b>（{@code cutShort}，或 provider 连终局事件都没发、
-     * {@code stopReason} 为 {@code null}）。provider 报出了终局判定就必须采信它 ——
-     * 否则一个「进场前就已中止、但 provider 照样吐完 tool_use」的轮次会被改写成
-     * {@code aborted}，循环随即返回，pi 的 {@code prepareToolCall} 那条
-     * 「每个调用补一个 immediate 错误 end」的路径就永远走不到了
-     * （{@code agent-loop.ts:655-661}）。</p>
+     * <p><b>只在流真的被切断时改写</b>（{@code cutShort}，或 provider 连终局事件都没发）。
+     * provider 报出了终局判定就必须采信它 —— 否则一个「进场前就已中止、但 provider 照样
+     * 吐完 tool_use」的轮次会被改写成 {@code aborted}，循环随即返回，pi 的
+     * {@code prepareToolCall} 那条「每个调用补一个 immediate error end」的路径就永远
+     * 走不到了（{@code agent-loop.ts:655-661}）。</p>
+     *
+     * <p>⚠️ <b>⑩（B26）后这里的判据是字面量 {@code "pending"}，不再是 {@code null}</b>：
+     * {@code finalMessage} 由每个 update 事件的 partial 重建（{@code :237}），而
+     * {@code StreamPartialBuilder} 的初值已改成 pi 的 {@code "pending"} ⇒ 「没观测到终局」
+     * 从 {@code null} 变成了 {@code "pending"}。若仍按 {@code != null} 判，这一支会把
+     * {@code "pending"} 当成「provider 已给终局判定」原样放行 —— 而
+     * {@code NON_PROJECTED_STOP_REASONS} 不含 {@code "pending"}，A8 那个缺陷（残缺响应
+     * 被投影进后续上下文）就会复活。pi 侧没有这条检查，因为 pi 的 provider 自己把终局
+     * reason 写进同一个累加器对象；这里是把 pi 那条隐式不变量（落定的消息不是
+     * {@code "pending"}）在宿主侧显式写出来。</p>
      */
     private static Message.AssistantMessage markAborted(
             Message.AssistantMessage message, com.pijava.ai.AbortSignal signal, boolean cutShort) {
@@ -296,7 +305,11 @@ final class PiLoopRunner {
         if ("error".equals(message.stopReason()) || "aborted".equals(message.stopReason())) {
             return message;
         }
-        if (!cutShort && message.stopReason() != null) {
+        // ⑩：判据是字面量 "pending"（＝还没观测到终局判定）—— 见方法 javadoc。
+        // null 是同一状态的旧形状（非流式构造的消息、旧转录），一并按「没观测到」办。
+        String observed = message.stopReason();
+        boolean noTerminalYet = observed == null || "pending".equals(observed);
+        if (!cutShort && !noTerminalYet) {
             return message;
         }
         return message.withStopReason("aborted");
