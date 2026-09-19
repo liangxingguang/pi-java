@@ -185,3 +185,92 @@ record AgentSettled(Message message, List<Message> toolResults) implements Agent
 ## 9. 下一步
 
 用户审核 §8（含 §8.0 三个裁决点）之后才写代码；实施完成后追加**实施记录**。
+
+---
+
+## 10. 实施记录（2026-09-20，用户「通过 + 推 main」）
+
+**§8.0 三个裁决点已裁**：A ＝ **改在 `usageOf`**（宽：两线 ＋ 落盘）；B ＝ **给
+`AgentSettled` 加字段 ＋ 兼容构造器**；C ＝ `List<Message>`。三步全部落地，
+新增 **12 条**断言，五个探针**四个有牙、一个未命中**。
+
+### 10.1 三步与改动面
+
+| 步 | 改动 | 状态 |
+|---|---|---|
+| **1** | `pi-java-ai`：`usageOf` 兜零（`info == null` ⇒ `Usage.of(0,0)`） | ✅ |
+| **2** | `pi-java-coding-agent`：`AgentSettled` 加 `message`/`toolResults` ＋ 无参兼容构造器 ＋ `SessionRunner` 正常路填值 ＋ `JsonEventMapper` 的 `agent_settled` 支补载荷 | ✅ |
+| **3** | `pi-java-web`：`AgentEventTranslator` 的 `turn_end` 支补 `message`/`toolResults` | ✅ |
+
+⚠️ **计划外的一处改动**：`LlmSummaryGenerator`（见 §10.4-D1）—— **它才是本包的真实风险点**。
+
+### 10.2 实测红集（先红）
+
+- **步骤 1**：`AssistantMessageUsageTest` **4 跑 1 红**（`:40` `Expecting actual not to be
+  null`）—— 这次是**真正的断言红**（不是编译失败）。
+- **步骤 2**：`AgentSettledPayloadTest` **编译失败 8 处**（`message()`/`toolResults()` 不存在）。
+
+### 10.3 变异探针（**红集实测，不预测**）
+
+| # | 改坏什么 | 实测红集 | 条 |
+|---|---|---|---|
+| **P1** | `usageOf` 回到返回 null | `AssistantMessageUsageTest…:40`、`MessageTest.fromPartialWithoutUsageInfoSynthesizesZeroUsage:207` | **2** |
+| **P2** | 工具结果**也**兜零（反向） | `AssistantMessageUsageTest.toolResultUsageStaysNullWhenTheToolReportedNone:81`、`MessageTest.toolResultShouldPreserveErrorFlag:108` | **2** |
+| **P3** | `turn_end` 不带 `toolResults` | `AgentSettledPayloadTest…:102`、`:114` | **2** |
+| **P4** | 错误路发非空 `results` | **无** | **0** ⚠️ |
+| **P5** | `turn_end` 不带 `message` | `JsonEventMapperTest.agentSettledCarriesTheAssistantMessageWhenPresent:84` | **1** |
+
+**⚠️ P4 未命中（登记，不假装测过）**：错误路的 `AgentSettled`（`SessionRunner:180`）
+**没有夹具** —— 把它改成发非空结果，全树无一条红。⇒ **错误路的形状无守护**。
+可补：`SessionFailurePathTest` / `AgentSessionRetryEventOrderTest` 已经在驱动失败运行，
+在那里加一条断言即可（**登记，不在本包做**）。
+
+**P3 只打到 2 条**：设计稿预测「④⑦」，实测 mapper/web 那两条**打不到** —— 它们**手工
+构造** `AgentSettled`、不经 `SessionRunner`（与包⑦ 的 P1 同一类现象）。
+
+**P2 意外地有既有夹具**：`MessageTest.toolResultShouldPreserveErrorFlag:108` 也被打红 ——
+说明「工具结果不许兜零」这条不变量**本来就有人守**。
+
+### 10.4 与稿子的偏差（如实）
+
+| # | 稿子写的 | 实际做的 | 理由 |
+|---|---|---|---|
+| **D1** | 未提 | **改了 `LlmSummaryGenerator:270`**：判据从 `projected.usage() == null` 挪到 **`partial.usage() == null`** | ⚠️ **这是本包的真实风险点，夹具抓到的**：原来的 null 是「流里没报用量」的**信号**，而 B41 让 `usageOf` 恒兜零 ⇒ 信号被消灭 ⇒ **摘要跨度的 token 计数静默归零**（`HarnessCompactionSummarySpanTest` 期望 1200、实得 0）。partial 才是那件事的原件，从那里读同一语义 |
+| **D2** | §8.2(3)：「本回合」的界定要照 pi | 按**本次驱动**装 | pi 的 `turn_end` 是**每回合**一条、`AgentSettled` 是**每次驱动**一条；照字面取「最后一回合」会让该字段在常见形状下**恒空**（末回合通常是纯文本收尾）。颗粒度差异另登记 |
+| **D3** | §8.2(3)：错误路 `new AgentSettled()` | 同 | pi 那条路给的是**合成的失败消息**（`agent.ts:511-527`），Java 侧没有可给 ⇒ message 为 null、投影时省略。**残余偏差**，已登记 |
+| **D4** | §8.3 计划 8 条断言 | **12 条** | 多出的是「合成 usage 带 totalTokens」「无工具时是空数组不是 null」「兼容构造器」等 |
+
+### 10.5 未覆盖（如数）
+
+- ⚠️ **错误路的 `AgentSettled` 无夹具**（P4 未命中）：见 §10.3。
+- ⚠️ **`message` 为 null ⇒ 省略键** 是**残余偏差**（pi 那条路必有合成消息）：线上少一个键。
+- **端到端**：前端真的靠 `turn_end.toolResults` 渲染出工具结果未测 —— 且今天被
+  `agent_end` 的整表替换兜住 ⇒ **无可见差异可钉**。
+- **落盘形状的变化**（裁决 A 的代价）：既有会话文件（无 usage）与新写出的（零值 usage）
+  不同形；**回读兼容性未测**。
+- **`turn_end.message` 无消费者**（§4-A）：补它属对齐，不是有人要读。
+
+### 10.6 ⚠️ 顺带撞出的两条**既有** RPC 线偏差（本包未引入、未修）
+
+写夹具时撞出来的，证据是**实测的序列化结果**：
+
+1. **RPC 线的消息没有 `role` 判别值** —— `Message.role()` 是接口方法、不是 record 组件，
+   Jackson 不序列化它。实测 `{"content":[{"type":"text","text":"done"}],"stopReason":"stop"}`，
+   **没有 `role`**。web 线靠 `WebWireJson:28` 手工 `put("role", …)` 补上，**RPC 线没有
+   这道工序**。
+2. **工具结果的键名是 `toolUseId`，而 pi 线上叫 `toolCallId`**（`agent-loop.ts:784-798`
+   的字段名；web 线同样靠 `WebWireJson:34` 手工改名）。
+
+⇒ **登记**（不是本包范围）：这是一条独立的「RPC 线消息形状」复核项。
+
+### 10.7 全树验证 —— **BUILD SUCCESS（14 模块全绿）**
+
+`mvn -o clean verify`：**14 个模块全部 SUCCESS**（TUI 03:32、Web 56 s、AI 41 s、
+Agent Core 31 s），**spotbugs 11 处检查全部 `BugInstance size is 0`**，checkstyle 零违规。
+
+模块计数（实测）：ai **448**（＋4）· agent-core **487**（不变）· session-sqlite 35 ·
+coding-agent **257**（＋5）· web **48**（＋2）· telemetry 31 · protocol 14 · TUI 209（1 skipped）。
+
+> ⚠️ **`LlmSummaryGenerator` 那处改动的守护**：`HarnessCompactionSummarySpanTest`
+> 是本包**唯一**能抓到「兜零消灭信号」的夹具 —— 它在**没有**这条夹具的情况下会是
+> 一次静默的 token 计数归零。**夹具先于事故**，如实记。
