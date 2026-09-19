@@ -3,6 +3,7 @@ package com.pijava.coding.agent.core;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.entry.ProvisionedEntry;
@@ -17,6 +18,11 @@ import com.pijava.agent.session.RecordQuery;
 import com.pijava.coding.agent.cli.ArgsParser;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.provider.FauxProvider;
+import com.pijava.ai.provider.ProviderRegistry;
+import com.pijava.agent.tool.DefaultFileSystem;
+import com.pijava.agent.tool.DefaultShellExecutor;
+import com.pijava.agent.tool.ToolContext;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -71,9 +77,25 @@ class SessionResumeFoldTest {
         void run(com.pijava.agent.session.Session<?> session);
     }
 
+    /**
+     * Resume into a session backed by a persistent repository at {@code root}.
+     *
+     * <p>⚠️ **台账 A13：这里必须注入 {@link FauxProvider}。** 此前用
+     * {@code AgentSession.createWeb(args)}（无参版）⇒ 走 {@code DefaultProviders}
+     * 的**真实 provider（网络）**，而下面那条用例的断言隐含「首次调用必成功」；
+     * 全树负载下真调用变慢会触发引擎 post-run 的**重试环**，后者开一条**续跑
+     * operation**，于是「恰 2 条 `OperationStarted`」变成 3 条、且墙钟被退避拉到
+     * 300+ 秒。夹具不该依赖网络。</p>
+     */
     private static AgentSession resume(Path root) {
+        var providers = ProviderRegistry.create();
+        providers.register(FauxProvider.text("ok"));
         return AgentSession.createWeb(ArgsParser.parse(new String[] {
-            "--session-dir", root.toString()}));
+            "--provider", "faux", "--model", "hello",
+            "--session-dir", root.toString()}),
+            providers,
+            new ToolContext(System.getProperty("user.dir"), Map.of(),
+                new DefaultShellExecutor(), new DefaultFileSystem()));
     }
 
     /**

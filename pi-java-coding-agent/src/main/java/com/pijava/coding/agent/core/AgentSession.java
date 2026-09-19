@@ -156,6 +156,33 @@ public final class AgentSession implements AutoCloseable {
         return SessionPersistence.resolvePersistentWeb(session, args);
     }
 
+    /**
+     * Web 入口的**测试缝**（台账 A13）：与 {@link #createWeb(Args)} 同形，但注入
+     * providers 与 toolContext。持久化后端仍由 {@code args.sessionDir()} 决定 ——
+     * 测试靠它做 resume。
+     *
+     * <p>存在的理由：{@code createWeb} 用 {@code DefaultProviders} ⇒ 走**真实
+     * provider（网络）**，把单测变成网络依赖（{@code SessionResumeFoldTest} 曾因此在
+     * 全树负载下 311 s 才失败、断言因重试环多出一条续跑 operation）。既有重载里
+     * **没有**「持久化仓库 ＋ 注入 provider」这个组合。</p>
+     */
+    static AgentSession createWeb(Args args, ProviderRegistry providers,
+                                  ToolContext toolContext) {
+        var settings = SettingsManager.load(args.projectTrustOverride());
+        var effective = settings.effective();
+        var backend = effective.sessionBackend == null ? "jsonl" : effective.sessionBackend;
+        var sessionsRoot = Path.of(args.sessionDir() != null ? args.sessionDir()
+            : (effective.sessionDir != null ? effective.sessionDir
+                : Path.of(System.getProperty("user.home"), ".pi-java", "agent", "sessions").toString()));
+        var handle = "sqlite".equals(backend)
+            ? PersistentSessionRepositories.sqlite(sessionsRoot)
+            : PersistentSessionRepositories.jsonl(sessionsRoot);
+        var session = assemble(args, settings, providers, toolContext,
+            handle, handle.repository());
+        session.persistentRepository = handle;
+        return SessionPersistence.resolvePersistentWeb(session, args);
+    }
+
     public static AgentSession create(Args args) {
         var settings = SettingsManager.load(args.projectTrustOverride());
         var effective = settings.effective();
