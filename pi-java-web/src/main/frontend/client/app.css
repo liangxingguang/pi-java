@@ -627,17 +627,17 @@ html, body {
 @keyframes typing-dot {
   0%, 60%, 100% {
     opacity: 0.25;
-    transform: translateY(0);
+    transform: scale(0.6);
   }
   30% {
     opacity: 1;
-    transform: translateY(-3px);
+    transform: scale(1);
   }
 }
 
 .typing-dots {
   display: inline-flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 5px;
   height: 1rem;
 }

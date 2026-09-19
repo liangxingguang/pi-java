@@ -43,6 +43,32 @@ let currentModel: ModelInfo | undefined;
 let thinkingLevel = "off";
 let availableModels: ModelInfo[] = [];
 let errorMessage: string | undefined;
+// 最近一次用户发出的文本 —— 错误块的「Retry」重发它。
+let lastPromptText = "";
+
+// 三点的防闪：首段在 200ms 内到达时不该亮一下（否则就是一次闪烁）。
+const DOTS_DELAY_MS = 200;
+let dotsTimer: ReturnType<typeof setTimeout> | null = null;
+let dotsReady = false;
+
+/** 按「是否在等首段」维护防闪计时器；到点后重绘一次把三点亮出来。 */
+function syncWaitingDots(waiting: boolean): void {
+  if (!waiting) {
+    if (dotsTimer !== null) {
+      clearTimeout(dotsTimer);
+      dotsTimer = null;
+    }
+    dotsReady = false;
+    return;
+  }
+  if (dotsTimer === null && !dotsReady) {
+    dotsTimer = setTimeout(() => {
+      dotsTimer = null;
+      dotsReady = true;
+      renderApp();
+    }, DOTS_DELAY_MS);
+  }
+}
 let showModelDropdown = false;
 let modelFilter = "";
 let toolNames: string[] = [];
@@ -153,10 +179,7 @@ function handleServerMessage(msg: ServerMessage) {
     case "error":
       errorMessage = msg.message;
       renderApp();
-      setTimeout(() => {
-        errorMessage = undefined;
-        renderApp();
-      }, 5000);
+      // 不再 5 秒自动消失：错误块带「Retry」，自动消失会让那个按钮失效。
       break;
 
     case "sessions":
@@ -337,6 +360,7 @@ function updateStreamingContainer(message: AgentMessage | null, streaming: boole
 
 function handleSend(input: string) {
   if (!input.trim() || isStreaming) return;
+  lastPromptText = input;
   // DEBUG: 前端本地不追加 user 消息；可见性完全依赖 agent_end 携带全量 messages。
   // 若 agent_end 无 messages 字段，本回合 user+assistant 两帧都会从列表消失。
   console.log("[send] prompt=", input, "| messages.len=", messages.length, "| isStreaming=", isStreaming);
@@ -347,6 +371,13 @@ function handleSend(input: string) {
     editor.value = "";
     editor.attachments = [];
   }
+}
+
+/** 错误块的「Retry」：清掉错误、重发最近一条用户文本。 */
+function handleRetry() {
+  if (isStreaming || !lastPromptText) return;
+  errorMessage = undefined;
+  handleSend(lastPromptText);
 }
 
 function handleAbort() {
@@ -611,6 +642,8 @@ function renderApp() {
   const toolResultsById = buildToolResultsMap();
   // 已提交在跑、但还没有任何增量到达 ⇒ 「等 agent 结果」的那一段。
   const waiting = isStreaming && !streamingMessage;
+  syncWaitingDots(waiting);
+  const showDots = waiting && dotsReady;
 
   const appHtml = html`
     <!-- Mobile sidebar overlay -->
@@ -748,16 +781,11 @@ function renderApp() {
         </div>
       ` : ""}
 
-      <!-- Error banner -->
-      ${errorMessage ? html`
-        <div class="px-4 py-2 bg-destructive/10 text-destructive text-sm border-b border-destructive/20">
-          ${errorMessage}
-        </div>
-      ` : ""}
+      <!-- Error banner 已移进对话流（带 Retry），见 messages-scroll 内 -->
 
       <!-- Messages area -->
       <div class="flex-1 overflow-y-auto px-3 sm:px-4 py-4" id="messages-scroll">
-        ${messages.length === 0 && !isStreaming ? html`
+        ${messages.length === 0 && !isStreaming && !errorMessage ? html`
           <div class="flex items-center justify-center h-full text-muted-foreground text-sm">
             Send a message to start a conversation
           </div>
@@ -783,9 +811,22 @@ function renderApp() {
               ></streaming-message-container>
             </div>
 
-            ${waiting ? html`
+            ${showDots ? html`
               <div class="typing-dots mx-4 mb-3" role="status" aria-label="Assistant is working">
                 <span></span><span></span><span></span>
+              </div>
+            ` : ""}
+
+            <!-- 错误块（对话流内，带重试）—— 原先在顶部横幅、5 秒自动消失 -->
+            ${errorMessage ? html`
+              <div class="mx-4 mb-3 px-3 py-2 rounded-md flex items-center gap-3 text-sm bg-destructive/10 text-destructive border border-destructive/20">
+                <span class="flex-1 min-w-0 break-words">${errorMessage}</span>
+                ${lastPromptText ? html`
+                  <button
+                    class="px-2 py-1 text-xs rounded border border-destructive/30 hover:bg-destructive/10 transition-colors shrink-0"
+                    @click=${handleRetry}
+                  >Retry</button>
+                ` : ""}
               </div>
             ` : ""}
           </div>
