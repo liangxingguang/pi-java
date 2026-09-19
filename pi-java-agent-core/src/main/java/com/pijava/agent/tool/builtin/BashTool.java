@@ -107,61 +107,83 @@ public final class BashTool {
                         "Timeout exceeds maximum of " + MAX_TIMEOUT_SECONDS + " seconds");
                 }
 
-                var options = new ShellOptions(
-                    context.cwd(), context.env(), true,
-                    java.util.OptionalLong.of(timeout),
-                    signal
-                );
-                var shellResult = context.shell().execute(command, options);
-
-                if (shellResult.timedOut()) {
-                    String partial = shellResult.output();
-                    if (partial.length() > 2000) {
-                        partial = partial.substring(0, 2000) + "\n...(truncated)";
+                // 包⑧（docs/35）：流式部分结果。pi 侧只有 bash 一家真的流式
+                // （bash.ts:265/:297），其余六个内置工具声明为 `_onUpdate?`（故意未使用）。
+                // onUpdate 为 null 时不建发射器 —— 与 pi 的 `if (onUpdate)` 同。
+                BashUpdateEmitter emitter = onUpdate == null ? null
+                    : new BashUpdateEmitter(onUpdate, BashUpdateEmitter.THROTTLE_MS,
+                        System::nanoTime, BashUpdateEmitter.defaultScheduler());
+                try {
+                    if (emitter != null) {
+                        // 起手那条空载荷：在任何进程被拉起**之前**（bash.ts:296-298）。
+                        emitter.start();
                     }
-                    throw new RuntimeException("Command timed out after " + timeout + " seconds"
-                        + (partial.isBlank() ? "" : "\n\nPartial output before timeout:\n" + partial));
-                }
+                    var options = new ShellOptions(
+                        context.cwd(), context.env(), true,
+                        java.util.OptionalLong.of(timeout),
+                        signal,
+                        emitter
+                    );
+                    var shellResult = context.shell().execute(command, options);
+                    if (emitter != null) {
+                        // 收尾补冲一次（pi 的 finishOutput，bash.ts:306-314）。
+                        emitter.flush();
+                    }
 
-                String output = shellResult.output();
-                if (output.isEmpty()) {
-                    return ToolResult.success("(no output)");
-                }
+                    if (shellResult.timedOut()) {
+                        String partial = shellResult.output();
+                        if (partial.length() > 2000) {
+                            partial = partial.substring(0, 2000) + "\n...(truncated)";
+                        }
+                        throw new RuntimeException("Command timed out after " + timeout + " seconds"
+                            + (partial.isBlank() ? "" : "\n\nPartial output before timeout:\n" + partial));
+                    }
 
-                var truncation = TruncationUtils.truncateTail(output);
-                BashDetails details = null;
-                String outputText;
+                    String output = shellResult.output();
+                    if (output.isEmpty()) {
+                        return ToolResult.success("(no output)");
+                    }
 
-                if (truncation.truncated()) {
-                    // Save full output to temp file
-                    String tempPath = saveTempFile(output);
-                    details = new BashDetails(truncation, tempPath);
-                    int startLine = truncation.totalLines() - truncation.outputLines() + 1;
-                    int endLine = truncation.totalLines();
-                    if (truncation.lastLinePartial()) {
-                        outputText = truncation.content()
-                            + "\n\n[Showing last " + TruncationUtils.formatSize(truncation.outputBytes())
-                            + " of line " + endLine + " (line is "
-                            + TruncationUtils.formatSize(shellResult.outputBytes()) + ")."
-                            + "\nFull output saved to: " + tempPath + "]";
+                    var truncation = TruncationUtils.truncateTail(output);
+                    BashDetails details = null;
+                    String outputText;
+
+                    if (truncation.truncated()) {
+                        // Save full output to temp file
+                        String tempPath = saveTempFile(output);
+                        details = new BashDetails(truncation, tempPath);
+                        int startLine = truncation.totalLines() - truncation.outputLines() + 1;
+                        int endLine = truncation.totalLines();
+                        if (truncation.lastLinePartial()) {
+                            outputText = truncation.content()
+                                + "\n\n[Showing last " + TruncationUtils.formatSize(truncation.outputBytes())
+                                + " of line " + endLine + " (line is "
+                                + TruncationUtils.formatSize(shellResult.outputBytes()) + ")."
+                                + "\nFull output saved to: " + tempPath + "]";
+                        } else {
+                            outputText = truncation.content()
+                                + "\n\n[Showing lines " + startLine + "-" + endLine
+                                + " of " + truncation.totalLines()
+                                + " (" + TruncationUtils.formatSize(TruncationUtils.DEFAULT_MAX_BYTES)
+                                + " limit). Full output saved to: " + tempPath + "]";
+                        }
                     } else {
-                        outputText = truncation.content()
-                            + "\n\n[Showing lines " + startLine + "-" + endLine
-                            + " of " + truncation.totalLines()
-                            + " (" + TruncationUtils.formatSize(TruncationUtils.DEFAULT_MAX_BYTES)
-                            + " limit). Full output saved to: " + tempPath + "]";
+                        outputText = truncation.content();
                     }
-                } else {
-                    outputText = truncation.content();
-                }
 
-                if (shellResult.exitCode() != 0) {
-                    throw new RuntimeException((outputText.isEmpty() ? "" : outputText + "\n\n")
-                        + "Command exited with code " + shellResult.exitCode());
+                    if (shellResult.exitCode() != 0) {
+                        throw new RuntimeException((outputText.isEmpty() ? "" : outputText + "\n\n")
+                            + "Command exited with code " + shellResult.exitCode());
+                    }
+                    return new ToolResult<>(
+                        List.of(new ContentBlock.TextContent(outputText)),
+                        details, null, false, List.of());
+                } finally {
+                    if (emitter != null) {
+                        // pi 的 finally 只清定时器、不补发（bash.ts:367-369）。
+                        emitter.disarm();
+                    }
                 }
-                return new ToolResult<>(
-                    List.of(new ContentBlock.TextContent(outputText)),
-                    details, null, false, List.of());
             }
         };
     }
