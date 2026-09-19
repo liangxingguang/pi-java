@@ -207,6 +207,22 @@ final class SessionRunner {
                 // docs/27 §2.1：每条 entry 产生后即写（崩溃窗口 = 一条 entry）。
                 flush(owner, laneName);
             }
+            // 包⑦（docs/34）：工具执行生命周期事件出口。pi 的 AgentSessionEvent
+            // **复用** agent 联合（agent-session.ts:143-145）⇒ 这三条本就在会话事件
+            // 流上，RPC 线逐字节透传（json-event.ts:48-51）、pi 的 TUI 逐字段读它
+            // （interactive-mode.ts:3324-3365）。此前它们在这里被静默丢弃。
+            if (event instanceof PiLoop.Event.ToolExecutionStart s) {
+                owner.emitSessionEvent(new AgentSessionEvent.ToolExecutionStart(
+                    s.toolCallId(), s.toolName(), s.args()));
+            }
+            if (event instanceof PiLoop.Event.ToolExecutionUpdate u) {
+                owner.emitSessionEvent(new AgentSessionEvent.ToolExecutionUpdate(
+                    u.toolCallId(), u.toolName(), u.args(), u.partialResult()));
+            }
+            if (event instanceof PiLoop.Event.ToolExecutionEnd e) {
+                owner.emitSessionEvent(new AgentSessionEvent.ToolExecutionEnd(
+                    e.toolCallId(), e.toolName(), e.result(), e.isError()));
+            }
             if (event instanceof PiLoop.Event.AgentStart
                     && echoed.compareAndSet(false, true)) {
                 // Immediate user echo (pi alignment: agent-loop emits

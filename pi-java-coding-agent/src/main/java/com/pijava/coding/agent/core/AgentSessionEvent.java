@@ -1,6 +1,7 @@
 package com.pijava.coding.agent.core;
 
 import java.util.List;
+import java.util.Map;
 
 import com.pijava.agent.compaction.CompactionResult;
 import com.pijava.agent.entry.Entry;
@@ -69,6 +70,34 @@ public sealed interface AgentSessionEvent {
     record SummarizationRetryFinished() implements AgentSessionEvent {}
 
     record BashExecutionUpdate(String id, String delta) implements AgentSessionEvent {}
+
+    // ═══════════════════════════════════════════════════════════
+    // 工具执行生命周期（包⑦，docs/34）
+    // ═══════════════════════════════════════════════════════════
+    //
+    // pi 的这三条是 AgentEvent 联合的成员（agent/src/types.ts:443-446），会话层
+    // 联合**复用** agent 联合（agent-session.ts:143-145 的
+    // `Exclude<AgentEvent, {type:"agent_end"}> | {...}`）⇒ 它们就是 AgentSessionEvent。
+    //
+    // ⚠️ **每个字段都必填，pi 侧一个 `?` 都没有**（对照 package ④ 那套「按 `?` 省略
+    // 可空键」的纪律 —— 这里**一个键都不许省**，别照抄邻行）。
+    //
+    // 时刻语义（pi 已核，docs/34 §2.1 P3/P4）：
+    //   start 在**校验与 beforeToolCall 钩子之前**、工具即将执行时发；
+    //   end   在**执行并定稿（含 afterToolCall）之后**发，带完整 result 与另立的 isError。
+
+    /** pi {@code {type:"tool_execution_start"; toolCallId; toolName; args}}。 */
+    record ToolExecutionStart(String toolCallId, String toolName,
+                              Map<String, Object> args) implements AgentSessionEvent {}
+
+    /** pi {@code {type:"tool_execution_update"; …; args; partialResult}}。 */
+    record ToolExecutionUpdate(String toolCallId, String toolName,
+                               Map<String, Object> args, Object partialResult)
+        implements AgentSessionEvent {}
+
+    /** pi {@code {type:"tool_execution_end"; …; result; isError}}。 */
+    record ToolExecutionEnd(String toolCallId, String toolName,
+                            Object result, boolean isError) implements AgentSessionEvent {}
 
     /** pi: "manual" | "threshold" | "overflow" */
     enum CompactionReason { MANUAL, THRESHOLD, OVERFLOW }
