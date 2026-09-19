@@ -3692,7 +3692,7 @@ telemetry 31 / ai 336 / agent-core 450。
 
 ---
 
-### 8.32 B 类功能缺口的补全路线（判定 + 包划分）—— **路线已批准**（用户 2026-09-17「按照顺序」⇒ ①→②→③→④→⑤；包① 已实施，见 §8.33；包② 已实施，见 §8.34；**包③ 设计见 §8.36（待审）**；④–⑥ 待逐包设计）
+### 8.32 B 类功能缺口的补全路线（判定 + 包划分）—— **路线已批准**（用户 2026-09-17「按照顺序」⇒ ①→②→③→④→⑤；包① 已实施，见 §8.33；包② 已实施，见 §8.34；**包③ 已实施，见 §8.36.8**；④–⑥ 待逐包设计）
 
 #### 8.32.0 这一节解决什么
 
@@ -3710,7 +3710,7 @@ B 类九条（台账 `docs/32 §3`）此前每条只有一行「修法素描」�
 | B2 | compaction `details` 生产者 | **已结案** | — | `4380796`（§8.30.8） |
 | B3 | 重试的宿主渲染 | **可做，但拆三块**：RPC（帧已对，只差状态字段）/ TUI（**结构性盲区：整模块零订阅**）/ web（需产品裁决） | 包④ / 包⑤ | 见 §8.32.2 第 7 条 |
 | B4 | `addedToolNames` 的 provider 层消费者 | **结案为不做**（机制归属原判是错的） | — | 见 §8.32.2 第 6 条 |
-| B5 | 宿主 `catch (Exception)` 不接 `Error` ⇒ 永久挂起 | **可做，两步**：① `catch (Throwable)` ＋ `finally` 幂等兜底 ② `handleRunFailure` 落引擎侧。**两步均已裁**（2026-09-19：①取「两处 Throwable＋finally 兜底」；②**做，落引擎侧**）| 包③（**设计见 §8.36，待审**） | pi `agent.ts:484-525`；pi-java `SessionRunner:94-117`/`:151-168`；引擎 `PiLaneEngine.drive:168-207` |
+| B5 | 宿主 `catch (Exception)` 不接 `Error` ⇒ 永久挂起 | **可做，两步**：① `catch (Throwable)` ＋ `finally` 幂等兜底 ② `handleRunFailure` 落引擎侧。**两步均已裁**（2026-09-19：①取「两处 Throwable＋finally 兜底」；②**做，落引擎侧**）| 包③ —— **已实施**（§8.36.8，`16ca4d7`/`f16436b`/`d136097`） | pi `agent.ts:484-525`；pi-java `SessionRunner`；引擎 `PiLaneEngine.drive` |
 | B6 | 初始 thinking 文本被丢弃 | **可做** → **已做**（§8.33） | 包① | pi `anthropic-messages.ts:632` `thinking ?? ""` vs pi-java `AnthropicMessagesApi:128-129` 只读 `_signature()` |
 | B7 | `redacted_thinking` 未处理 | **可做（SDK 路由已实证）** → **已做**（§8.33） | 包① | pi `:638-647`；SDK `ContentBlock.kt:549-553` |
 | B8 | 空签名重放策略不可配（`compat.allowEmptySignature`） | **可做，但被 P2 前置**；**设计见 §8.34** | 包② | pi `types.ts:713-714`、`:193`(默认归一)/`:1047`(入参)/`:1227`(形参缺省)/`:1304`(**唯一行为点**)；⚠️ **更正：行为上只有两态**（`undefined ≡ false`，实测），不是三态；启用处为 Fireworks 全量 / Kimi Coding / Xiaomi(休眠)。pi-java `ModelInfo` 无 `compat`，且 `ModelsJsonSchema` `ignoreUnknown=true` **静默吞掉**用户写的 `compat` |
