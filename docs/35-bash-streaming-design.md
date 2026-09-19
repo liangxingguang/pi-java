@@ -206,3 +206,85 @@ var options = new ShellOptions(..., new ThrottledTailSink(onUpdate, throttleMs))
 ## 9. 下一步
 
 用户审核 §8（含 §8.0 三个裁决点）之后才写代码；实施完成后追加**实施记录**。
+
+---
+
+## 10. 实施记录（2026-09-20，用户「通过 + 推 main」）
+
+**§8.0 三个裁决点已裁**：A ＝ **走 `ShellOptions` 第五个可空组件**；B ＝ **照抄 100 ms**；
+C ＝ **sink 收增量、自己攒尾窗**（快照上限用 pi 的 51200）。两步全部落地，
+新增 **14 条**断言，五个变异探针**四个有牙、一个未命中**（见 §10.3）。
+
+### 10.1 两步与改动面
+
+| 步 | 改动 | 状态 |
+|---|---|---|
+| **1** | 新 `ShellOutputSink` ＋ 新 `Utf8ChunkStream` ＋ `ShellOptions` 加可空组件（**带 5 参兼容构造器 ⇒ 既有 3 处构造点零改动**）＋ `DefaultShellExecutor` 在既有 8 KiB 读循环里报增量 | ✅ |
+| **2** | 新 `BashUpdateEmitter`（逐位对齐 pi 的 `updateDirty`/`lastUpdateAt`/`updateTimer`）＋ `BashTool` 接线（起手空载荷 / 节流汇 / 收尾补冲 / finally 撤定时器） | ✅ |
+| **3** | 本文件 ＋ `docs/32` | ✅ |
+
+改动面（`git diff -w --stat`）：主源码 3 文件 **+64/−2**、新主源码 3 文件、新夹具 2 文件。
+⚠️ `BashTool` 的**原始** diff 是 116 行，但**忽略空白后只有 +24/−1** —— 其余是包 try 块带来的重缩进。
+
+### 10.2 实测红集（先红）
+
+**步骤 1 —— 编译失败 3 处**：`ShellOutputStreamingTest.java:69,88,96`
+（`Utf8ChunkStream` / `ShellOptions` 6 参构造不存在）。
+
+**步骤 2 —— 编译失败 5 处**：`BashUpdateEmitterTest.java:27,30,37,38,210`
+（`BashUpdateEmitter` 不存在）。
+
+### 10.3 变异探针（**红集实测，不预测**）
+
+| # | 改坏什么 | 实测红集 | 条 |
+|---|---|---|---|
+| **P1** | 起手不发空载荷 | `BashToolUpdateTest.bashEmitsUpdatesWhileRunningAndTheyAreCumulative:68` | **1** |
+| **P2** | 载荷改成**增量**（不是累积） | `BashUpdateEmitterTest`：`payloadIsTheAccumulatedSnapshotNotTheDelta:91`、`chunkInsideTheWindowIsCoalesced…:131`、`flushEmitsTheTailAndDisarms…:174`、`repeatedChunksInsideTheWindowArmOnlyOneTimer:155` | **4** |
+| **P3** | 去掉 100 ms 节流 | 同上四条（另一组行号） | **4** |
+| **P4** | 收尾不补冲 | `BashToolUpdateTest…:79`、`BashUpdateEmitterTest:174`、`:91` | **3**（跨两夹具） |
+| **P5** | 多字节按 `new String(buf,0,n)` 直接切 | **无** | **0** ⚠️ |
+
+**⚠️ P5 未命中 —— 探针测出夹具在集成层没牙，如实记：**
+
+`multiByteCharactersSurviveArbitraryChunkBoundaries` 是**逐字节喂 `Utf8ChunkStream`
+单元**，**不经过 `DefaultShellExecutor`** ⇒ 把 executor 里那行换成裸
+`new String(buf,0,n)` 它照样绿。「半个字符被切」这件事，
+**单元级有牙、集成级无牙**。
+
+**要真正补上**，夹具需要一个**字节精确**的假 shell（让 8 KiB 的切点确定性地落在
+某个多字节字符中间 —— 例如输出全由 3 字节字符组成时，8192 = 3×2730+2 ⇒ 每个读
+边界**必然**切断）。当前假 shell 是 `.cmd`/`sh` 脚本，做字节精确输出要处理
+cmd 的编码与 CRLF，不是这一包该顺手解决的事 ⇒ **登记在 §10.5，不假装测过**。
+
+**P2 与 P4 的对比也说明夹具分工**：P2（载荷变增量）打**不动**端到端那条
+（`lengths.isSorted()` 对增量也成立）⇒ 累积性只有单元夹具在钉。
+
+### 10.4 与稿子的偏差（如实）
+
+| # | 稿子写的 | 实际做的 | 理由 |
+|---|---|---|---|
+| **D1** | §8.2(2)：`ShellOptions` 加第五个组件，「3 处构造点各加一个实参」 | 加组件的**同时留一个 5 参兼容构造器** ⇒ 既有 3 处构造点**一个都没动** | 改动更小、且「不订阅」是绝大多数调用点的正确默认 |
+| **D2** | §8.2(4)：`ThrottledTailSink` 照 pi 的「三个位」 | 就叫 `BashUpdateEmitter`，并把 `Scheduler` 抽成可注入接口 | 节流语义靠「等 100 ms 再看」是运气断言 ⇒ 假时钟＋假调度器把每条边钉死（`docs/31 §8.23.8 ⑥` 的口径） |
+| **D3** | §8.3 计划 9 条断言 | **14 条**（shell 层 4 ＋ 发射器 8 ＋ 端到端 2） | 多出的是「重复分块只挂一个定时器」「无新输出时 flush 不发」「收尾撤定时器」等边角 |
+| **D4** | 未提 | **补了一条端到端夹具 `BashToolUpdateTest`** | B46 的要点就是「生产上从不发射」—— 只测发射器单元**证明不了生产路径会喂它** |
+| **D5** | 未提 | `BashTool` 的 `onUpdate` 为 null 时不建发射器 | pi 是 `if (onUpdate)`；pi-java 生产只有 `PiToolRunner:154` 一个调用者且恒传非 null，但仍照 pi 容忍 |
+
+### 10.5 未覆盖（如数）
+
+- ⚠️ **多字节跨块的集成级守护缺失**（§10.3 P5 未命中）：单元级有牙、集成级无牙。
+  补它需要字节精确的假 shell —— **登记，不假装测过**。
+- **端到端**：真实长命令在 web 上的连续刷新未测（需运行前端）。
+- **死锁**：裁决 B 的 ⚠️（定时器线程 → `PiLaneSink.emit` 的锁）**未写构造性夹具**。
+  论证是「工具线程在 `future.get()` 上等子进程时不持有那把锁，谁都不在持锁时等对方」
+  ⇒ 只是互斥、不会死锁。**这是论证不是实测**，如实标。
+- **截断窗滑动**的载荷（P8：相邻快照非前缀单调）—— 难造且无消费者可证，本轮不钉。
+
+### 10.6 全树验证 —— **BUILD SUCCESS（14 模块全绿）**
+
+`mvn -o clean verify`：**14 个模块全部 SUCCESS**（TUI 03:37、Web 52 s、AI 30 s、
+Agent Core 21 s），**spotbugs 全模块 `BugInstance size is 0`**，checkstyle 零违规。
+这是**完整的一次全绿**（包⑦ 那次被 web 的 WS flake 打断在最后一个模块）。
+
+模块计数（实测）：telemetry 31 · ai 444 · **agent-core 487**（＋10：步骤 1 的 4 条 ＋
+步骤 2 的 8 条 ＋ 端到端 2 条 —— 相对包⑦ 后的 477）· session-sqlite 35 ·
+coding-agent 252 · protocol 14 · web 46 · TUI 209（1 skipped，既有）。
