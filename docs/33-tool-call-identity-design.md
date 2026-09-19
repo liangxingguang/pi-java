@@ -389,9 +389,9 @@ case StreamEvent.ToolCallEnd e   -> { out.add(messageUpdate(e.partial()));   out
   全树绿即证。**若日后有新的 RPC 夹具手搓起点事件而不建块，会当场抛** —— 这是
   pi 的语义（照抛），不是缺陷。
 
-### 10.7 全树验证 —— ⚠️ **全树 `clean verify` 未通，卡在 `pi-java-tui` 的 spotbugs（存量，非本包）**
+### 10.7 全树验证 —— 先红后绿：卡在存量 spotbugs，用户裁决「真修」后 **全树通**
 
-**实测 `mvn -o clean verify`（15:10）**：reactor 走到 `pi-java-tui` 时
+**第一次 `mvn -o clean verify`（15:10）**：reactor 走到 `pi-java-tui` 时
 `spotbugs:check` 报 **4 bugs**，其后 7 个模块（protocol/client/server/web/evals/dist）
 被 **SKIPPED** ⇒ 全树未通。
 
@@ -410,24 +410,32 @@ Medium: Shared primitive "runToolCalls" ... [ChatScreen.java:151] 同上
 `runToolCalls` 出自 `b378b20`（2026-08-16 及更早），被点名的写点全在
 `onStreamEvent` —— 那是**包⑤ 之前**就存在的老路径（包⑤ 加的是 `onSessionEvent`）。
 
-**诚实交代两点**：
-1. **我不知道此前为何没被拦住**。`spotbugs:check` 确实绑在默认 `verify`
-   （根 `pom.xml:172-180`），且 `b378b20` 已是一个多月前 ⇒ 这期间任何一次
-   `clean verify` 都应当同样失败。我没有去追这个时间线（不属本包范围），
-   只把「它不是本包引入的」证到 `git` 级。
-2. **它可能是一个真问题，不是误报**：`runToolCalls++`（事件线程）＋
-   `resetRunTracking()` 清零（提交线程）＋ 渲染线程读，正是 memory 里
-   「并发审计的单位是『共享对象 × 全部线程』」那一类。**未修** —— TUI 是你明示
-   要降级的模块，且修法涉及行为语义，应在单独一包里裁。
+**诚实交代**：**我不知道此前为何没被拦住**。`spotbugs:check` 确实绑在默认 `verify`
+（根 `pom.xml:172-180`），且 `b378b20` 已是一个多月前 ⇒ 这期间任何一次
+`clean verify` 都应当同样失败。我没去追这条时间线，只把「它不是本包引入的」
+证到 `git` 级。
 
-**包⑥ 自己范围的验证（绕开 tui 门禁单独跑）**：
+**用户裁决（2026-09-20）：真修（3 处，最小）** ⇒ 落地：
+
+| 字段 | 改法 | 为什么这个改法 |
+|---|---|---|
+| `assistantStreamed` | `volatile boolean` | 单 boolean 读写无竞态，只缺可见性 |
+| `thinkingRendered` | `volatile boolean` | 同上 |
+| `runToolCalls` | `AtomicInteger`（`incrementAndGet`/`set`/`get`） | **不能只加 volatile** —— `++` 是读-改-写，volatile 不保证原子性（spotbugs 原文的 `AT_NONATOMIC_…`）。`finishRun` 顺带把两处取值收成**一次读**（标签里 "N calls" 与单复数判定必须一致） |
+
+零语义改动。**未给并发夹具** —— TUI 已按要求降级，且本仓口径认定这类时序断言是
+「运气断言」（§8.23.8 ⑥）。tui 模块验证：**`BugInstance size is 0`**、209 测试全绿。
+
+**修后全树 `mvn -o clean verify`：BUILD SUCCESS** —— 14 个模块全部 SUCCESS
+（TUI 03:56、Web 01:22、Coding Agent 54.7s），**11 处 `spotbugs:check` 全部
+`BugInstance size is 0`**，checkstyle 零违规。
+
+**包⑥ 自己范围的验证（修前绕开 tui 门禁单独跑）**：
 `mvn -o clean verify -pl pi-java-protocol,pi-java-client,pi-java-server,pi-java-web,
-pi-java-evals,pi-java-coding-agent -am`（**spotbugs 不跳**，覆盖除 tui/dist 外的全部
-模块 —— 只有 `pi-java-dist` 依赖 tui，见 `pi-java-dist/pom.xml:28`）。
+pi-java-evals,pi-java-coding-agent -am`（**spotbugs 不跳**；只有 `pi-java-dist`
+依赖 tui，见 `pi-java-dist/pom.xml:28`）⇒ 同样 BUILD SUCCESS，说明包⑥ 的改动
+在 tui 门禁之外**独立成立**。
 
-结果：**BUILD SUCCESS**，checkstyle 与 spotbugs 零违规。模块计数（实测）：
-telemetry 31 · **ai 444**（＋4）· **agent-core 473** · session-sqlite 35 ·
-**coding-agent 242**（＋9）· **web 41**（＋4）。
-
-> `pi-java-dist` 未单独验证：它唯一的事是打 fat jar / native，无本包新增测试；
-> 在 tui 门禁解开前它进不了 reactor。
+模块计数（实测）：telemetry 31 · **ai 444**（＋4）· **agent-core 473** ·
+session-sqlite 35 · **coding-agent 242**（＋9）· **web 41**（＋4）· tui 209；
+L5 差分 `ConformanceTest` **14/14** 绿（`ScriptedStreams` 未动，golden 完好）。
