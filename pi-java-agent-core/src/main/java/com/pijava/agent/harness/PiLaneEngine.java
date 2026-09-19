@@ -180,8 +180,20 @@ public final class PiLaneEngine {
             // continue 是完整的一起一收（finishRun + startContinue，各带 runId），
             // pi 的 agent.continue() 不换 session 运行身份 —— 差异由 passRunIds 记账。
             while (true) {
-                var sink = runPass(laneName, lane, passPrompts, downstream);
-                if (!postRun.checkAfterRun(laneName, lane, sink.lastAssistant())) {
+                var pass = startPass(laneName, lane, passPrompts, downstream);
+                try {
+                    drivePass(pass);
+                } catch (Throwable thrown) {
+                    // pi `agent.ts:500-504`：runWithLifecycle 的 catch **无类型**
+                    // （TS 的 catch 一律接得住），catch 体调 handleRunFailure ⇒ 把失败
+                    // 压成一条助手消息 + 四事件（`agent.ts:506-525`）。Java 的
+                    // Exception/Error 分裂是方言 —— 这里也要 Throwable，否则工具 worker
+                    // 或钩子抛的 Error 会直穿出去（B5 的另一半见 `RunFailure` 的 javadoc）。
+                    // **位置必须在 while 体内**：pi 的 `_handlePostAgentRun` 读的正是这条
+                    // 合成消息（`agent-session.ts:1123`），放到循环外它就进不了重试判定。
+                    RunFailure.settle(lane, pass.sink(), thrown);
+                }
+                if (!postRun.checkAfterRun(laneName, lane, pass.sink().lastAssistant())) {
                     break;
                 }
                 // pi 的 agent.continue() 在续跑前判「副本尾部 + 队列」（agent.ts:362-388），
@@ -207,12 +219,25 @@ public final class PiLaneEngine {
     }
 
     /**
-     * 一个 pass = 一次 PiLoop 驱动（pi 的 {@code agent.prompt()} 或
-     * {@code agent.continue()} 的一跑）。sink 每 pass 新建 ⇒ pi 的
-     * {@code _lastAssistantMessage}「读后即清」在这里由 sink 的生命周期天然承担。
+     * 一个 pass 的**起手物**（pi 的「一个 {@code _runAgentPrompt} 调用」的静态部分）。
+     *
+     * <p>拆出来只为让 {@link #drive} 手里有 sink —— pass 抛出时要靠它把合成消息发进
+     * 事件链（{@link RunFailure}，{@code docs/31 §8.36.5}），而 sink 原本是
+     * {@code runPass} 的局部变量。</p>
      */
-    private PiLaneSink runPass(String laneName, LaneState lane, List<Message> prompts,
-                               PiLoop.Sink downstream) {
+    private record Pass(PiLaneSink sink, PiLoop.Config config, Context runContext,
+                        List<Message> prompts) {}
+
+    /**
+     * 起手一个 pass：建 present 集合与 sink、装配配置、装系统提示、拷工作副本。
+     *
+     * <p>工作副本的一份**拷贝**：pi 的 {@code createContextSnapshot()} 交的就是
+     * {@code this._state.messages.slice()}（{@code agent.ts:437-443}），循环往这份拷贝里推消息，
+     * 车道的副本由 {@link PiLaneSink} 在 {@code message_end} 上跟进 —— 与 pi 的
+     * {@code processEvents} 同形。</p>
+     */
+    private Pass startPass(String laneName, LaneState lane, List<Message> prompts,
+                           PiLoop.Sink downstream) {
         // 起手时已在转录里的消息：PiLoop 会为它们重发 message_start/end 的，一律不再落盘。
         Set<Message> present = Collections.newSetFromMap(new IdentityHashMap<>());
         present.addAll(transcriptMessages(lane));
@@ -223,16 +248,21 @@ public final class PiLaneEngine {
         // transformContext 只改消息，够不着这两样（pi 的钩子签名是 (messages) => messages）。
         var systemPrompt = assembler.buildSystemPrompt(lane);
         sink.systemPrompt(systemPrompt);
-        // 工作副本的一份**拷贝**：pi 的 createContextSnapshot() 交的就是
-        // this._state.messages.slice()（agent.ts:437-443），循环往这份拷贝里推消息，
-        // 车道的副本由 PiLaneSink 在 message_end 上跟进 —— 与 pi 的 processEvents 同形。
         var runContext = new Context(systemPrompt, new ArrayList<>(lane.messages), activeTools(lane));
-        if (prompts.isEmpty()) {
-            PiLoop.continueRun(runContext, config, sink);
+        return new Pass(sink, config, runContext, prompts);
+    }
+
+    /**
+     * 跑一个 pass = 一次 PiLoop 驱动（pi 的 {@code agent.prompt()} 或
+     * {@code agent.continue()} 的一跑）。sink 每 pass 新建 ⇒ pi 的
+     * {@code _lastAssistantMessage}「读后即清」在这里由 sink 的生命周期天然承担。
+     */
+    private static void drivePass(Pass pass) {
+        if (pass.prompts().isEmpty()) {
+            PiLoop.continueRun(pass.runContext(), pass.config(), pass.sink());
         } else {
-            PiLoop.run(prompts, runContext, config, sink);
+            PiLoop.run(pass.prompts(), pass.runContext(), pass.config(), pass.sink());
         }
-        return sink;
     }
 
     // ═══════════════════════════════════════════════════════════
