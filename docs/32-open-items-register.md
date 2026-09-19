@@ -42,7 +42,7 @@
 | 类 | 含义 | 条数 | 谁能推进 |
 |---|---|---:|---|
 | **A** | 要**证据**才能定案（多数要先读 pi 源码） | 12 | 我（读 pi 源码 / 清点） |
-| **B** | **功能缺口**（pi 有、pi-java 无） | 35 | 我（另立包，多数需先出设计文档） |
+| **B** | **功能缺口**（pi 有、pi-java 无） | 40 | 我（另立包，多数需先出设计文档） |
 | **C** | 已裁决**不改 / 不做**，带触发条件 | 11 | 不推进，除非触发条件成立 |
 | **D** | 小账（遥测/注释级，一处一行） | 8 | 我，随时可做 |
 | **E** | 结构债（>500 行文件等） | 8 | 我，与功能包搭车 |
@@ -136,6 +136,15 @@
 > **B31/B32/B33**（`get_state` 取值）与 **B19 剩余**（`reasoning_details` 结构化形状 —— 即
 > `AgentEventTranslator` 那条 web 推送链上游）。
 
+> **2026-09-19（包⑥ 起，`docs/33`）**：**流程与文档约定双变更**（用户同日提出，已采纳 ⇒ 见
+> §10 维护规则 6/7）：**一包一文档**（`docs/31` 冻结为历史）＋ **命题 → 逐条验证 → 才写实施稿**。
+> `docs/33` 是第一份按新流程写的文件，其 §3 列出**三条被自己取证推翻的命题** —— 其中
+> **R1「B28/B29 是 web 直接吃的」是错的**（web 走 `AgentEventTranslator`，**不经过** `JsonEventMapper`）；
+> **R3「给 `tool_execution_*` 补载荷」被推翻为投机**（前端根本不读那三个事件的载荷，
+> `client/main.ts:302-305`）。
+> 包⑥ 因此重述为**三面同根**：核心（起点身份）＋ RPC 面（B28/B29）＋ **web 面（B40，新）**。
+> ⇒ B 类 35→**40** 行（新登记 B40–B44）。
+
 **收敛路径**：A 类与 F 类是真正的闸门 —— A 挡在「读 pi / 清点」上，F 挡在「你的决定」上；
 B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做，没有一条阻塞合并。
 **没有任何一项挡着合并到 `main`。**
@@ -207,6 +216,11 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | B37 | **`ChatScreen.lastError` 常驻状态栏，pi 没有这个构造** | §8.38.3-F（`docs/31`） | pi-java `ChatScreen.statusBar():215-222` 的优先级是 `lastError != null` ⇒ 红字整行、盖过 snapshot；而 `lastError`（`:38`）**只写不清**（唯一赋值 `:123`，`resetRunTracking():140-142` 不碰，**全仓零复位点**）⇒ 一次流错误之后状态栏**永久红着**直到进程退出。pi 的错误**只**进聊天区（`showError:4273-4277`），pi 的 footer **没有错误态**（`components/footer.ts` 里只有 context 百分比会被染红，`:155`）。且 pi-java **同时**在聊天区也追加一条（`ChatScreen:124`）⇒ **双报**，多出来的那条永不消失。**§8.38.7 裁决点 C**。**2026-09-19 已修（§8.38.9，`42d49ec`）**：`lastError` 字段与状态栏那条红字分支删除，错误只进聊天区；`onSessionEvent` 的 `showError` 按 pi 拼 `Error: ` 前缀。⇒ 见 G 类 |
 | B38 | **pi 在 `compaction_end` **重建整个聊天区**（＋取消/失败两条消息）** —— pi-java 的 TUI 对压缩一无所知 | §8.38.3-D（`docs/31`） | pi `interactive-mode.ts:3400-3449`：`chatContainer.clear()` → `renderSessionEntries(entries.slice(1))` → 追加压缩摘要消息（`createCompactionSummaryMessage`）＋ 有 `usage` 时加开销提示；`aborted` ⇒ manual `showError("Compaction cancelled")` / 否则 `showStatus("Auto-compaction cancelled")`；`errorMessage != null` ⇒ manual `showError` / 否则红字一行。**这不是「少显示一行」而是整表替换**。包⑤ **只做了指示器生命周期那一半**（`CompactionStart` 置 / `CompactionEnd` 清 —— 不做会留下永久转圈，`docs/31 §8.38.9-(6)`）；重建要有 pi-java 侧的「会话上下文条目」对应物（pi 走 `sessionManager.buildContextEntries()` ＋ `renderSessionEntries`），**今天不存在** ⇒ 另立 |
 | B39 | **压缩窗口的 Esc 换绑**（B36 的宿主面） | §8.38.3-E（`docs/31`） | pi 在压缩窗口把 Esc 换成 `abortCompaction()`；pi-java 的 Esc 恒走 `PiTuiApp:407 case INTERRUPT -> mode.abort()`。⚠️ **重试窗口不需要换绑**：pi-java 的 `AgentSession.abort()` **第一步就是 `abortRetry()`**（`:602-605`，≙ pi `:1641-1643` 的四连），所以 `(esc to cancel)` 这句提示在重试窗口里是**真的**（§8.38.9-(4)）。缺的只有压缩那半边，且它被 B36 挡着（无 `abortCompaction` 可绑） |
+| B40 | **web 在 `ToolCall*` 上不推 `message_update`** —— 工具调用期间前端拿不到工具卡 | `docs/33 §2.2 P17`（`AgentEventTranslator:65-88` 只对 Text/ThinkingDelta 推） | 前端渲染的是**累积消息**（`client/main.ts:272-276`），且渲染侧**已就绪**（`pi-web-ui/dist/components/Messages.js:74-88` 会渲染 `chunk.type === "toolCall"`，名字取 `this.tool?.name \|\| this.toolCall.name`）⇒ 缺的**只是推送**。⚠️ **不是**「前端拿不到工具名/结果」—— 那两条前端有取法（name 从 message 块、结果从 `turn_end.toolResults`）。**包⑥ 修** |
+| B41 | **终局 assistant 消息的 `usage` 可空**（pi 必填 `Usage`，流起点即零值对象） | `docs/33 §2.1 P1/P2`、`§2.2 P14` | pi `AssistantMessage.usage: Usage` **必填**（`types.ts:439`），流起点初始化为全零（`anthropic-messages.ts:518-525`）；pi-java 的 `usageOf` 对 `null` 返回 `null`（`Message.java:131-142`）＋ `MessageMixin` 的 `NON_NULL` ⇒ **整键消失**。**登记不修**（`docs/33 §5 N3`：它与「mapper 每帧兜零」风险档不同，会动现有终局投影） |
+| B42 | **`turn_end` 不带 `toolResults`** | `docs/33 §4-A` | 前端 `client/main.ts:286-296` 按 `toolCallId` 从 `turn_end.toolResults` 收工具结果；pi-java 把 `AgentSettled` 翻成空 `{type:"turn_end"}`（`AgentEventTranslator:51-54`）。**今天不可观测**（`agent_end.messages` 含 toolResult 消息，整表替换兜住）⇒ **登记不修** |
+| B43 | **`tool_execution_end` 语义错位**：pi 是「工具跑完」（带 `result`/`isError`），pi-java 发的是「模型把调用吐完」 | `docs/33 §4-B` | pi `agent-loop.ts:767` 区 vs `AgentEventTranslator:77-78`。**今天不可观测**（前端不读这三个事件的载荷 —— `client/main.ts:302-305` 只 `renderApp()`）⇒ **登记不修**，随前端扩展重估 |
+| B44 | **两个桩的 `ToolCallStart` partial 与 pi 不同形** | `docs/33 §4-F/§4-G` | `FauxProvider:95-103`（空身份块）与 `ScriptedStreams:54`/`:85`（`blank = scripted("stop", List.of())`，**空内容**，全部事件共用）。⚠️ **`ScriptedStreams` 不能改** —— 它驱动 L5，改它＝改 L5 帧＝与 pi 侧共享的 golden 失效（`ConformanceRunner:138`）⇒ 包⑥ **只改 `FauxProvider`**，L5 桩的形状差异如实保留 |
 
 ---
 
@@ -427,3 +441,9 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 3. **就地改写、不增删行**：回填指向时保持行数与其它条目不变，否则本文件里的行号引用会集体失效。
 4. 分类变动（如 A→C）时**改行不改号**，在「裁决理由」列写明。
 5. H 类逐条复核后，按结论分流到 A–G 或 §9.5；**复核一条就搬一条**，不要批量搬。
+6. **一包一文档（用户 2026-09-19）**：自 `docs/33` 起，**每个包在自己的文件里**记设计、取证与实施记录，
+   **不再往 `docs/31` 追加**。`docs/31`（§8.1–§8.38）**冻结为历史**，不重写。本台账仍是**唯一索引** ——
+   每条登记仍要在这里留行（出处写新文档的章节）。
+7. **流程（用户 2026-09-19 提出，已采纳）**：包内三步可见 —— ① **命题表**（每条断言 `file:line` 待核，
+   **不写分步计划**）；② **逐条代码验证**（打勾/推翻，**被推翻的当场列出**）；③ 基于核过的表写实施稿，
+   **用户审核后才写代码**。理由：实施后报「与设计稿有偏差」的根因全部落在**没核的命题**上。
