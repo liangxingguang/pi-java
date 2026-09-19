@@ -4,6 +4,7 @@ import com.pijava.agent.entry.Entry;
 import com.pijava.agent.harness.SessionSnapshot;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.stream.StreamEvent;
+import com.pijava.coding.agent.core.AgentSessionEvent;
 import com.pijava.coding.agent.core.EntryObserver;
 import com.pijava.coding.agent.core.StreamObserver;
 import com.pijava.tui.component.ChatMessage;
@@ -12,6 +13,7 @@ import com.pijava.tui.component.EditorComponent;
 import com.pijava.tui.component.MetaKind;
 import com.pijava.tui.component.SlashCompleter;
 import com.pijava.tui.component.StatusBar;
+import com.pijava.tui.component.StatusIndicator;
 import com.pijava.tui.util.TamboUIAdapter;
 import dev.tamboui.toolkit.element.Element;
 import dev.tamboui.toolkit.elements.Column;
@@ -35,7 +37,12 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     private SessionSnapshot snapshot;
     private final StringBuilder assistantDraft = new StringBuilder();
     private final StringBuilder thinkingDraft = new StringBuilder();
-    private String lastError;
+    // 唯一一个激活指示器槽（pi activeStatusIndicator）。volatile：写入在渲染线程，
+    // 读取还来自 inline 模式的倒计时唤醒线程（hasTickingIndicator）。
+    private volatile StatusIndicator indicator;
+    // pi 的取消提示取自用户键位表（keyText("app.interrupt")）；默认值与
+    // KeybindingsManager 的默认 app.interrupt 绑定一致，PiTuiApp 构造时改用实际绑定。
+    private String interruptHint = "esc";
     // Text of the user message optimistically shown on submit; matched against
     // the transcript entry when the run completes so it isn't duplicated.
     private String pendingUserText;
@@ -120,8 +127,11 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
             case StreamEvent.UsageInfo ignored -> { }
             case StreamEvent.StreamDone ignored -> { }
             case StreamEvent.StreamError(var reason, var error, var partial) -> {
-                lastError = reason + (error != null ? ": " + error.getMessage() : "");
-                chatPanel.append(new ChatMessage.Error(lastError));
+                // 错误只进聊天区 —— pi 的 footer 没有错误态，错误仅经 showError
+                // 落进 chatContainer。这里原先还往状态栏写一条常驻红字，且只写不清
+                // ⇒ 双报且多出来的那条永不消失（台账 B37）。
+                chatPanel.append(new ChatMessage.Error(
+                    reason + (error != null ? ": " + error.getMessage() : "")));
                 chatPanel.setDraft(null);
             }
         }
@@ -211,14 +221,122 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
         return TamboUIAdapter.column(children);
     }
 
-    /** Bottom status bar (error first, then snapshot or an empty row). */
+    /**
+     * Bottom status bar (indicator first, then the snapshot, then an empty row).
+     *
+     * <p>指示器优先于快照：pi 把重试/压缩的进度放在同一个状态槽里
+     * （{@code showStatusIndicator}），状态栏的形状承载不了它（{@code SessionSnapshot}
+     * 没有重试状态位，docs/31 §8.38.2-(2)）。</p>
+     */
     public Element statusBar() {
-        if (lastError != null) {
-            return TamboUIAdapter.text("[red]" + lastError + "[/]").red().length(1);
+        var active = indicator;
+        if (active != null) {
+            return TamboUIAdapter.text(" " + active.textAt(System.nanoTime())).length(1);
         }
         return snapshot == null
             ? TamboUIAdapter.row().length(1)
             : new StatusBar().render(snapshot);
+    }
+
+    // ── 会话事件面（pi interactive-mode.ts:3173-3503 的 switch）──
+
+    /**
+     * 会话级事件 → 指示器 / 聊天区。**只在渲染线程被调用**（经 {@code SessionEventChannel}）。
+     *
+     * <p>覆盖 pi 的五个重试/摘要重试 case，外加压缩指示器的置/清位
+     * （pi {@code compaction_start}/{@code compaction_end} 的指示器那一半）。
+     * 不做：{@code agent_end} 不看 {@code willRetry}（pi 也不看）、压缩结束时的
+     * 聊天区重建与取消消息（台账 B38）、Esc 换绑（pi-java 的 {@code abort()} 已经
+     * 先调 {@code abortRetry()}，提示反而是真的）。</p>
+     *
+     * @param event 会话事件
+     */
+    public void onSessionEvent(AgentSessionEvent event) {
+        switch (event) {
+            case AgentSessionEvent.AutoRetryStart start -> setIndicator(
+                StatusIndicator.retry(start.attempt(), start.maxAttempts(),
+                    start.delayMs(), interruptHint));
+            case AgentSessionEvent.AutoRetryEnd ended -> {
+                clearIndicator(StatusIndicator.Kind.RETRY);
+                if (!ended.success()) {
+                    // 成功不报错（正常响应就是答案）；失败才把终局错误写进聊天区。
+                    showError("Retry failed after " + ended.attempt() + " attempts: "
+                        + (ended.finalError() == null || ended.finalError().isEmpty()
+                            ? "Unknown error" : ended.finalError()));
+                }
+            }
+            case AgentSessionEvent.SummarizationRetryScheduled scheduled -> {
+                showError(scheduled.errorMessage());
+                setIndicator(StatusIndicator.retry(scheduled.attempt(),
+                    scheduled.maxAttempts(), scheduled.delayMs(), interruptHint));
+            }
+            case AgentSessionEvent.SummarizationRetryAttemptStart start -> {
+                clearIndicator(StatusIndicator.Kind.RETRY);
+                setIndicator("branchSummary".equals(start.source())
+                    ? new StatusIndicator.BranchSummary(interruptHint)
+                    : new StatusIndicator.Compaction(start.reason(), interruptHint));
+            }
+            case AgentSessionEvent.SummarizationRetryFinished ignored ->
+                clearIndicator(StatusIndicator.Kind.RETRY);
+            case AgentSessionEvent.CompactionStart start ->
+                setIndicator(new StatusIndicator.Compaction(literalOf(start.reason()), interruptHint));
+            case AgentSessionEvent.CompactionEnd ignored ->
+                clearIndicator(StatusIndicator.Kind.COMPACTION);
+            default -> { }
+        }
+    }
+
+    /** 置指示器（pi {@code showStatusIndicator}：单槽，旧的直接被替换）。 */
+    private void setIndicator(StatusIndicator next) {
+        indicator = next;
+    }
+
+    /** 枚举 → pi 的线格式字面量（{@code CompactionObserver} 的 {@code "manual"} 等）。 */
+    private static String literalOf(AgentSessionEvent.CompactionReason reason) {
+        return switch (reason) {
+            case MANUAL -> "manual";
+            case THRESHOLD -> "threshold";
+            case OVERFLOW -> "overflow";
+        };
+    }
+
+    /**
+     * 清指示器（pi {@code clearStatusIndicator}，{@code :2115-2134}）。
+     *
+     * <p>⚠️ 给了 kind 时 <b>kind 不匹配即 no-op</b> —— 这是 pi 的第一句守卫，照抄：
+     * 「摘要重试完成清 retry」不会误清并发中的 compaction 指示器。{@code kind} 为
+     * null 表示无条件清（pi 的无参重载）。</p>
+     *
+     * @param kind 期望清除的种类，或 null
+     */
+    public void clearIndicator(StatusIndicator.Kind kind) {
+        if (kind != null && (indicator == null || indicator.kind() != kind)) {
+            return;
+        }
+        indicator = null;
+    }
+
+    /** 是否有含倒计时的指示器（inline 模式的 1 Hz 唤醒据此决定要不要重绘）。 */
+    public boolean hasTickingIndicator() {
+        var active = indicator;
+        return active != null && active.ticking();
+    }
+
+    /** The active status indicator, or null (test hook). */
+    public StatusIndicator indicator() {
+        return indicator;
+    }
+
+    /** 取消提示键名（pi 的 {@code keyText("app.interrupt")}，默认 {@code esc}）。 */
+    public void setInterruptHint(String hint) {
+        if (hint != null && !hint.isEmpty()) {
+            this.interruptHint = hint;
+        }
+    }
+
+    /** 往聊天区追加一条错误（pi {@code showError}，{@code :4273-4277}：红字 + {@code Error: } 前缀）。 */
+    private void showError(String message) {
+        chatPanel.append(new ChatMessage.Error("Error: " + message));
     }
 
     /** Forward a key event: slash completion first, then the editor. */

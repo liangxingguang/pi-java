@@ -10,6 +10,7 @@ import com.pijava.coding.agent.core.KeybindingsManager;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
 import com.pijava.coding.agent.core.slash.SlashContext;
 import com.pijava.coding.agent.modes.InteractiveMode;
+import com.pijava.tui.component.KeybindingHints;
 import com.pijava.tui.component.SlashCompleter;
 import com.pijava.tui.screen.ChatScreen;
 import com.pijava.tui.screen.ModelSelectorScreen;
@@ -18,6 +19,7 @@ import com.pijava.tui.screen.SessionListScreen;
 import com.pijava.tui.screen.SettingsScreen;
 import com.pijava.tui.screen.TreeSelectorScreen;
 import com.pijava.tui.screen.WelcomeOverlay;
+import com.pijava.tui.util.CountdownWake;
 import com.pijava.tui.util.InlineRenderContext;
 import com.pijava.tui.util.InlineTuiShell;
 import com.pijava.tui.util.ScrollConfig;
@@ -57,6 +59,8 @@ public final class PiTuiApp {
     private final KeybindingsManager keys;
     private final TuiEventDispatcher dispatcher;
     private final ScrollInputNormalizer normalizer;
+    // 会话事件通道（pi subscribeToAgent）：唯一一处结构性接线，见 SessionEventChannel。
+    private final SessionEventChannel sessionEvents;
     private AgentSession session;
     private ToolkitRunner runner;
     private WatchHandle<com.pijava.agent.harness.SessionSnapshot> snapshotHandle;
@@ -65,6 +69,8 @@ public final class PiTuiApp {
     private volatile ScreenOverlay overlay;
     private volatile boolean running = true;
     private InlineTuiShell inlineShell;
+    // inline 模式专用的 1 Hz 倒计时唤醒（fullscreen 每帧重绘，不需要）。
+    private CountdownWake countdownWake;
     private ScrollbackTranscript transcript;
     private boolean welcomeShown;
     private final InlineRenderContext renderContext = new InlineRenderContext();
@@ -94,7 +100,10 @@ public final class PiTuiApp {
         this.dispatcher = dispatcher;
         this.normalizer = new ScrollInputNormalizer(scrollConfig);
         this.session = mode.session();
+        this.sessionEvents = new SessionEventChannel(dispatcher, chatScreen::onSessionEvent);
         chatScreen.setSlashCommands(loadSlashItems());
+        chatScreen.setInterruptHint(
+            KeybindingHints.keyText(keys.strokeFor(KeybindingsManager.INTERRUPT)));
         chatScreen.onSubmit(this::submitPrompt);
     }
 
@@ -115,6 +124,7 @@ public final class PiTuiApp {
         showWelcomeOnce();
         this.runner = runner;
         runner.eventRouter().addGlobalHandler(this::onEvent);
+        sessionEvents.open(session, null);
         snapshotHandle = session.watchSession();
         snapshotHandle.subscribe(snapshot ->
             dispatcher.dispatch(() -> chatScreen.updateSnapshot(snapshot)));
@@ -135,6 +145,7 @@ public final class PiTuiApp {
                 return shell.replaceLastBlock(lineCount, block);
             }
         });
+        sessionEvents.open(session, null);
         snapshotHandle = session.watchSession();
         snapshotHandle.subscribe(snapshot ->
             dispatcher.dispatch(() -> chatScreen.updateSnapshot(snapshot)));
@@ -142,6 +153,10 @@ public final class PiTuiApp {
         // dirty, so the idle loop never repaints and the terminal scrollback
         // stays exactly where the user scrolled it.
         dispatcher.setWake(shell::markDirty);
+        // ...but an on-demand redraw means the retry countdown would freeze:
+        // one 1 Hz nudge while a ticking indicator is alive (fullscreen
+        // recomputes it per frame instead — see CountdownWake).
+        countdownWake = CountdownWake.start(chatScreen::hasTickingIndicator, shell::markDirty);
     }
 
     /** Apply the CSS theme to the inline render context. */
@@ -435,6 +450,8 @@ public final class PiTuiApp {
     private void switchSession(AgentSession newSession) {
         this.session = newSession;
         mode.switchSession(newSession);
+        // 会话事件通道与快照订阅都跟着换会话重接（各自先摘旧句柄）。
+        sessionEvents.open(newSession, null);
         if (snapshotHandle != null) {
             snapshotHandle.close();
         }
@@ -445,6 +462,11 @@ public final class PiTuiApp {
 
     private void exit() {
         running = false;
+        sessionEvents.close();
+        if (countdownWake != null) {
+            countdownWake.close();
+            countdownWake = null;
+        }
         if (inlineShell != null) {
             inlineShell.quit();
         }
@@ -453,4 +475,8 @@ public final class PiTuiApp {
         }
     }
 
+    /** The session-event channel (test hook). */
+    SessionEventChannel sessionEvents() {
+        return sessionEvents;
+    }
 }
