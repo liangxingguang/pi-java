@@ -3692,7 +3692,7 @@ telemetry 31 / ai 336 / agent-core 450。
 
 ---
 
-### 8.32 B 类功能缺口的补全路线（判定 + 包划分）—— **路线已批准**（用户 2026-09-17「按照顺序」⇒ ①→②→③→④→⑤；包① 已实施，见 §8.33；包② 已实施，见 §8.34；**包③ 已实施，见 §8.36.8**；④–⑥ 待逐包设计）
+### 8.32 B 类功能缺口的补全路线（判定 + 包划分）—— **路线已批准**（用户 2026-09-17「按照顺序」⇒ ①→②→③→④→⑤；包① 已实施，见 §8.33；包② 已实施，见 §8.34；**包③ 已实施，见 §8.36.8**；**包④ 部分已实施，见 §8.37**；**包⑤ 设计见 §8.38（待审）**；⑥ 待设计）
 
 #### 8.32.0 这一节解决什么
 
@@ -3708,7 +3708,7 @@ B 类九条（台账 `docs/32 §3`）此前每条只有一行「修法素描」�
 |---|---|---|---|---|
 | B1 | branch summary 无实现 | **阻塞于裁决** —— 范围**远超台账**：缺的不止是摘要函数，是**整棵同会话树导航** | 包⑥ | §8.31.4 只登记了「无实现」；实测 pi 侧 `agent-session.ts:3136-3167 navigateTree` / `:3226-3251` / `:3280-3300` 全无对应物 |
 | B2 | compaction `details` 生产者 | **已结案** | — | `4380796`（§8.30.8） |
-| B3 | 重试的宿主渲染 | **可做，但拆三块**：RPC（帧已对，只差状态字段）/ TUI（**结构性盲区：整模块零订阅**）/ web（需产品裁决） | 包④ / 包⑤ | 见 §8.32.2 第 7 条；**包④ 设计见 §8.37（待审）** |
+| B3 | 重试的宿主渲染 | **可做，但拆三块**：RPC（帧已对，只差状态字段）/ TUI（**结构性盲区：整模块零订阅**）/ web（需产品裁决） | 包④ / 包⑤ | 见 §8.32.2 第 7 条；**包④ 设计见 §8.37（部分已实施）**；**包⑤ 设计见 §8.38（待审）** |
 | B4 | `addedToolNames` 的 provider 层消费者 | **结案为不做**（机制归属原判是错的） | — | 见 §8.32.2 第 6 条 |
 | B5 | 宿主 `catch (Exception)` 不接 `Error` ⇒ 永久挂起 | **可做，两步**：① `catch (Throwable)` ＋ `finally` 幂等兜底 ② `handleRunFailure` 落引擎侧。**两步均已裁**（2026-09-19：①取「两处 Throwable＋finally 兜底」；②**做，落引擎侧**）| 包③ —— **已实施**（§8.36.8，`16ca4d7`/`f16436b`/`d136097`） | pi `agent.ts:484-525`；pi-java `SessionRunner`；引擎 `PiLaneEngine.drive` |
 | B6 | 初始 thinking 文本被丢弃 | **可做** → **已做**（§8.33） | 包① | pi `anthropic-messages.ts:632` `thinking ?? ""` vs pi-java `AnthropicMessagesApi:128-129` 只读 `_signature()` |
@@ -3740,8 +3740,8 @@ B 类九条（台账 `docs/32 §3`）此前每条只有一行「修法素描」�
 | **③** | 宿主失败通路：B5（**设计见 §8.36，待审**；两步均已裁：第 1 步＝活性收口（两处 `Throwable`＋`finally`），第 2 步＝`handleRunFailure` **落引擎侧**） | `agent-core`（+ `coding-agent` 宿主） | 无 | 无（会话层事件不在 L5 帧内） |
 | **④** | RPC 重试面：B3-块1 + P7。⚠️ **设计取证后修正**：面**不止** `coding-agent/rpc` —— `get_state` 的
 `isCompacting`/`sessionFile`/`pendingMessageCount` 三个字段要动 `agent-core`（**待裁**，§8.37.8 裁决点 A）；
-审计另挖出同形态 2 处 ＋ 漏键 2 处（§8.37.3 的 B/C 组，**待裁**，裁决点 B）。**设计见 §8.37（待审）** | `coding-agent/rpc` ＋ `agent-core` | 无 | 无 |
-| **⑤** | TUI 重试面：B3-块2（含**结构改动**：TUI 长出一条会话事件订阅通道） | `tui` | 无（与 ④ 同源但互不依赖） | 无 |
+审计另挖出同形态 2 处 ＋ 漏键 2 处（§8.37.3 的 B/C 组，**待裁**，裁决点 B）。**实施记录见 §8.37.9**（B 组＋B3-块1 已落；C 组证伪、拆成 `pi-java-ai` 新包；D 组按裁决 C 不动） | `coding-agent/rpc` ＋ `agent-core` | 无 | 无 |
+| **⑤** | TUI 重试面：B3-块2（含**结构改动**：TUI 长出一条会话事件订阅通道）。⚠️ **设计取证后修正**：面**不止**重试 —— 同一条通道还盖住压缩事件的渲染（含 `compaction_end` 的**聊天区整表重建**）、以及 `queue_update`/`thinking_level_changed`/`session_info_changed` 三个**零发射**事件（§8.38.3）。**设计见 §8.38（待审）** | `tui` | 无（与 ④ 同源但互不依赖） | 无 |
 | **⑥** | branch summary：B1（**待裁决**） | `agent-core` + `coding-agent` | 无 | 无（结构上覆盖不到） |
 
 **冲突点**：包①的 B7 重放分支与包②的 B8 策略分支**落在同一个 `appendThinkingBlock`**（`AnthropicMessagesApi:311-328`，唯一私有调用点 `:288`）。
@@ -6253,6 +6253,279 @@ pi 是「重建 frame」（顶层 `usage` ＋ 处理过的 `assistantMessageEven
 - L5 的划界声明见 §8.37.6：L5 全绿**不构成**本包任何一条断言成立的证据。
 
 **修正 §8.37 标题**：本包**部分实施** —— B 组 ＋ B3-块1 已落；C 组拆出；D 组按裁决 C 不动。
+
+---
+
+### 8.38 包⑤：TUI 重试面（B3-块2）—— **设计（待审）**
+
+#### 8.38.0 这一包解决什么
+
+§8.32.3 把包⑤定义为「TUI 重试面：B3-块2（含**结构改动**：TUI 长出一条会话事件订阅通道）」，
+面 = `tui`，无依赖，**不动 L5 帧**。本节把 B3-块2 那句素描（§8.32.1 的
+「TUI（**结构性盲区：整模块零订阅**）」）落成**可执行清单**。
+
+**本节不含代码改动。** 请审 §8.38.3 的清单与 §8.38.7 的五个裁决点。
+
+⚠️ **先更正素描的一半。** §8.22.5 的登记原文是「TUI/RPC 对 auto_retry / summarization_retry
+的渲染（**倒计时、`isRetrying`、isIdle 含重试**）」。本轮取证逐条核过：**「倒计时」对**，
+**「`isRetrying`」错** —— pi 的 `isRetrying` 是 `agent-session.ts:2977` 的一个 getter，
+**全仓零读点**（`grep -rn "isRetrying" packages/*/src` 只命中它自己那一行）；
+`isIdle`（`:921`）只在 `:616`（内部等待）、`:1649`、`:2648`（→ 扩展 `contextActions`）用，
+**与渲染无关**；pi 的 TUI **从不读这两个属性**（§8.38.1 的 22 个 case 里没有）。
+⇒ 本包**不引入** `isRetrying`/`isIdle` 这两个名字，沿用 §8.32.1 已有的更正口径。
+
+#### 8.38.1 契约：pi 的 TUI 会话事件面
+
+**先分清两个「TUI」——这是本节最容易走错的地方**：
+
+| 概念 | 位置 | 认不认识会话事件 |
+|---|---|---|
+| 通用 TUI 组件库 `@earendil-works/pi-tui` | `packages/tui/src` | **完全不认识**（`grep -rni "retry\|compaction" packages/tui/src` ⇒ **0 命中**） |
+| pi 自己的终端交互界面（"TUI mode"） | `packages/coding-agent/src/modes/interactive/interactive-mode.ts`（6620 行，类 `InteractiveMode`） | **就是它** |
+
+⇒ pi-java 的 `pi-java-tui` 对位的是**右边那一列**，不是左边。左边那列在 pi-java 的对应物是
+`dev.tamboui.*`（第三方，不在本包面内）。
+
+**(1) 订阅与分发。** `interactive-mode.ts:3159-3163`：
+
+```ts
+	private subscribeToAgent(): void {
+		this.unsubscribe = this.session.subscribe(async (event) => {
+			await this.handleEvent(event);
+		});
+	}
+```
+
+`handleEvent`（`:3165-3172`）先 `this.footer.invalidate()`，再进 `switch (event.type)`；
+**22 个 case**（`:3173` agent_start … `:3499` summarization_retry_finished）。退订在
+`:1970-1971` 与 `:6611-6612`。订阅 API 的原文签名在 `agent-session.ts:851-863`
+（`subscribe(listener: AgentSessionEventListener): () => void`，多监听器、逐个摘除）。
+
+**(2) 指示器模型 —— retry 真正被渲染的地方。** pi 的 TUI 有**唯一一个激活指示器槽**：
+
+- `StatusIndicatorKind = "working" | "retry" | "compaction" | "branchSummary"`
+  （`components/status-indicator.ts:7`）；`StatusIndicator extends Loader`（`:9`），
+  渲染成「转圈帧 + 空格 + 消息」（`packages/tui/src/components/loader.ts:93-100`）。
+- `showStatusIndicator(ind):2102-2113` —— 先 `dispose()` 旧的、`statusContainer.clear()`，
+  然后**优先嵌进编辑器上边框**（`setEditorWorkingStatusIndicator:2095-2100`），嵌不进才落进
+  `statusContainer`。
+- ⚠️ `clearStatusIndicator(kind?):2115-2134` 的**第一句是守卫**：
+
+  ```ts
+  		if (kind && this.activeStatusIndicator?.kind !== kind) {
+  			return;
+  		}
+  ```
+
+  ⇒ 清 `retry` **不会**误清 `compaction`。**这是本包必须照抄的语义**（§8.38.4 第 2 步）。
+
+**(3) retry 的可见渲染（逐字）。** `components/status-indicator.ts:51-81`：
+
+```ts
+	constructor(ui: TUI, attempt: number, maxAttempts: number, delayMs: number) {
+		const retryMessage = (seconds: number) =>
+			`Retrying (${attempt}/${maxAttempts}) in ${seconds}s... (${keyText("app.interrupt")} to cancel)`;
+		super(
+			"retry",
+			ui,
+			(spinner) => theme.fg("warning", spinner),
+			(text) => theme.fg("muted", text),
+			retryMessage(Math.ceil(delayMs / 1000)),
+		);
+		this.countdown = new CountdownTimer(
+			delayMs,
+			ui,
+			(seconds) => {
+				this.setMessage(retryMessage(seconds));
+			},
+			() => {
+				this.countdown = undefined;
+			},
+		);
+	}
+```
+
+- `keyText("app.interrupt")` 展开成 **`esc`**（`keybindings.ts:93`）⇒ 用户看到的是
+  **`Retrying (1/3) in 4s... (esc to cancel)`**。
+- 倒计时 `components/countdown-timer.ts:14-31`：初值 `Math.ceil(timeoutMs/1000)`，
+  `setInterval(..., 1000)` 每秒 `remainingSeconds--` → `onTick(seconds)` → `tui?.requestRender()`；
+  归零 `dispose()` + `onExpire()`。
+
+**(4) 五个重试/摘要重试事件的处理器（逐字，`interactive-mode.ts`）。**
+
+| case | 行 | 做什么 |
+|---|---|---|
+| `auto_retry_start` | `:3451-3462` | 存旧 Esc 到 `retryEscapeHandler`；把 `defaultEditor.onEscape` **换成** `() => this.session.abortRetry()`；`showStatusIndicator(new RetryStatusIndicator(ui, attempt, maxAttempts, delayMs))` |
+| `auto_retry_end` | `:3464-3477` | 还原 Esc；`clearStatusIndicator("retry")`；**只有 `!success` 才** `showError(...)`，文案是「Retry failed after N attempts: \<finalError\>」（`finalError` 为空时退化成 `Unknown error`，拼法逐字见 `:3473`） |
+| `summarization_retry_scheduled` | `:3479-3486` | `showError(event.errorMessage)` **＋** 同一个 `RetryStatusIndicator` |
+| `summarization_retry_attempt_start` | `:3488-3497` | `clearStatusIndicator("retry")`；`source === "branchSummary"` ⇒ `BranchSummaryStatusIndicator`，否则 `CompactionStatusIndicator(reason)` |
+| `summarization_retry_finished` | `:3499-3503` | `clearStatusIndicator("retry")` |
+
+**(5) 两个「消息面」出口（错误进聊天区，不进状态栏）。**
+
+- `showStatus(msg):3537-3551` —— 往**聊天区**追加「空行 + dim 文本」；且**连续两条 status 会
+  覆盖前一条**（`:3542-3546`，防刷屏）。
+- `showError(msg):4273-4277` —— 往**聊天区**追加「空行 + 红字 `Error: <msg>`」。
+- 旁证：pi 的 **footer 没有错误态**（`components/footer.ts` 里只有 context 百分比会被染红，
+  `:155`）⇒ 在 pi 里，错误**只**经聊天区呈现。
+
+**(6) 顺带钉住两条「pi 不做什么」**（本仓纪律：先看 pi 的类型/代码，别跟着邻行照抄）：
+
+- `agent_end:3367-3380` **不看 `event.willRetry`**（该分支内 `willRetry` 零出现）——
+  它只做四件事：关终端进度、`clearStatusIndicator("working")`、丢掉未完成的流式组件、
+  `pendingTools.clear()`。
+- `agent_settled:3382-3384` 只调 `checkShutdownRequested()`（`:4036-4039`：`shutdownRequested`
+  为真才 `shutdown()`）。
+
+#### 8.38.2 事实基线：pi-java 侧现状
+
+**(1) 「零订阅」属实。** `grep -rn "AgentSessionEvent" pi-java-tui/src` ⇒ **0 命中**
+（`src/main` + `src/test`）。TUI 今天三条取数通路，**没有一条**经过会话事件：
+
+| 通路 | 落点 | 载体 |
+|---|---|---|
+| 观察者回调 | `PiTuiLauncher.java:49-51` `mode.setObservers(entry -> …, event -> …)` | `EntryObserver` / `StreamObserver` |
+| 快照订阅 | `PiTuiApp.java:118-120` `session.watchSession()` | `WatchHandle<SessionSnapshot>` |
+| transcript 快照 | `PiTuiApp.java:212-214` `transcript.sync(...)` | 回滚区打印 |
+
+订阅 API 在 pi-java 侧**已经存在**：`AgentSession.subscribe(Consumer<AgentSessionEvent>)`
+→ `AutoCloseable`（`AgentSession.java:650-661`），底层 `SessionEventHub`（`SessionEventHub.java:15-37`，
+`CopyOnWriteArrayList`，单个监听器抛异常被隔离）。**今天的生产订阅者只有两个**：
+`RpcDispatcher`（`:62`/`:126`/`:222`/`:233`）与 `WebDispatcher`（`WebDispatcher.java:170-177`）。
+⇒ 本包**不需要**新增发布侧 API，只需要**接上**。
+
+**(2) 状态栏的形状承载不了重试态。** `SessionSnapshot`（`agent-core`）：
+
+```java
+public record SessionSnapshot(
+    String name,
+    String model,
+    String phase,
+    long totalTokens,
+    int turnCount,
+    List<String> activeTools,
+    List<LaneInfo> lanes
+) {}
+```
+
+⇒ **没有任何重试/压缩状态位**。`StatusBar.render(SessionSnapshot)`（`component/StatusBar.java:15-24`）
+渲染「名字 ／ `● running`（`:28` 判 `"running".equals(snapshot.phase())`）／ tokens ／ model」。
+⇒ 重试态**只能**从事件通道来 —— 这正是本包要建的那条通道。
+
+**(3) 状态栏的错误行是「常驻」的，且与 pi 相悖。** `ChatScreen.statusBar():215-222` 的优先级是
+`lastError != null` ⇒ 红字整行、**盖过 snapshot**。而 `lastError`（`:38`）**只写不清**：
+唯一赋值在 `:123`（`StreamError`），`resetRunTracking():140-142` 不碰它，**全仓零复位点**。
+⇒ 一次流错误之后，状态栏**永久红着**直到进程退出。对照 §8.38.1-(5)：pi 的错误**只**进聊天区。
+（pi-java 其实**也**在聊天区追加了一条 —— `ChatScreen:124` `chatPanel.append(new ChatMessage.Error(...))`
+—— 所以这是**双报**，多出来的那条永远不消失。）
+
+**(4) Esc 是固定绑定，pi 是临时换绑。** pi-java：`PiTuiApp.java:407`
+`case KeybindingsManager.INTERRUPT -> mode.abort()`（`app.interrupt` 默认 `esc`，
+`KeybindingsManager.java:58`）。pi：retry 窗口把 Esc 换成 `abortRetry()`、压缩窗口换成
+`abortCompaction()`（`:3453-3456` / `:3391-3394`）。
+两侧的取消原语：`AgentSession.abortRetry()` **已有**（`AgentSession.java:923`）；
+**`abortCompaction` 全仓零命中**（`grep -rn "abortCompaction" --include=*.java` ⇒ 无）。
+
+#### 8.38.3 审计：同一结构缺口还盖住了什么（**本轮新发现，均不在 §8.32.1 表内**）
+
+把面从「重试」扩到「pi 的 TUI 事件面」之后：
+
+| # | 发现 | 证据（两侧） | 影响 |
+|---|---|---|---|
+| A | **`queue_update` 在 pi-java 零发射点** | pi 发 `agent-session.ts:594`、TUI 处理 `:3197`；pi-java 只有定义（`AgentSessionEvent.java:36`）＋ 映射（`JsonEventMapper:67`），**全仓无发射** | 队列变化永不通知任何宿主 |
+| B | **`thinking_level_changed` 同样零发射** | pi 发 `:1830`、TUI 处理 `:3215`；pi-java 只有定义（`:43`）＋ 映射（`JsonEventMapper:76`） | 同上（`/thinking` 改了级别，宿主收不到） |
+| C | `session_info_changed` 零发射 | 同上形态；pi `:3116` / TUI `:3209` | **= 已入账 B30**，本包不重复登记 |
+| D | **pi 的 TUI 在 `compaction_end` 重建整个聊天区** | `:3400-3449`：`chatContainer.clear()` → `renderSessionEntries(entries.slice(1))` → 追加压缩摘要消息（`createCompactionSummaryMessage`）＋ 有 `usage` 时加开销提示 | pi-java 的 TUI 对压缩**一无所知**：聊天区不重建、不插摘要 |
+| E | **pi 的压缩窗口换绑 Esc → `abortCompaction()`** | `:3391-3394`；pi-java **无 `abortCompaction`** | TUI 无法取消压缩 |
+| F | **pi-java 的 `lastError` 常驻状态栏，pi 没有这个构造** | 见 §8.38.2-(3) | 与 pi 相悖，且是**双报** |
+| G | pi 的 `agent_end` **不看** `willRetry` | `:3367-3380` 内 `willRetry` 零出现 | 反向约束：**别自作聪明**加 willRetry 分支 |
+
+⚠️ **D 是其中最重的一条**：它不是「少显示一行」，而是**压缩完成后聊天区的整表替换**。
+§8.36 的宿主层已把压缩事件链打通（`CompactionStart/End` 有发射点、`get_state.isCompacting`
+在包④改真），但**TUI 这条消费端一次都没接**。
+
+#### 8.38.4 分步计划
+
+**第 1 步（结构，唯一的一处）：会话事件订阅通道。**
+
+- 落点：`PiTuiLauncher.runInteractive` 的 `mode.setObservers(...)`（`PiTuiLauncher.java:49-51`）
+  紧邻处，`session.subscribe(ev -> dispatcher.dispatch(() -> chatScreen.onSessionEvent(ev)))`，
+  持有 `AutoCloseable` 并在退出路径关闭（沿用 `RpcDispatcher:325-327` 的写法）。
+- `ChatScreen` 新增 `onSessionEvent(AgentSessionEvent)` —— **只在渲染线程被调用**，
+  与 `onEntry`/`onStreamEvent` 同纪律（`TuiEventDispatcher` 的 `drain()` 是唯一排空点，
+  `PiTuiApp.java:173`/`:200`）。
+- ⚠️ **通道必须在写下它的那一刻就跑通一次**（§8.36.6 形态 (7) 的教训：注入点不能凭空想象）。
+- 这条通道是**唯一**的结构改动；之后每多接一个事件只是多一个 `case`。
+
+**第 2 步：指示器槽 + 清位守卫。**
+
+- pi-java 的对应物是状态栏那一行。新增一个值对象（`kind` + 文本 + 可选的截止时刻），
+  `ChatScreen.statusBar()` 的优先级改为 **指示器 > 错误行 > snapshot**（具体见裁决点 C）。
+- ⚠️ **`clearIndicator(kind)` 的守卫必须照抄**：kind 不匹配即 no-op（§8.38.1-(2)）。
+  否则「摘要重试清 retry」会把并发的 compaction 指示器一起清掉 —— 这正是 pi 用 kind 防的事。
+
+**第 3 步：重试五个事件 + 倒计时文本。**
+
+- `AutoRetryStart` → 置 retry 指示器。文本**逐字**照 pi：
+  `` `Retrying (${attempt}/${maxAttempts}) in ${seconds}s... (${keyText("app.interrupt")} to cancel)` ``，
+  首帧 `seconds = ceil(delayMs/1000)`，`keyText("app.interrupt")` 在 pi-java 侧即
+  `KeybindingsManager.strokeFor(INTERRUPT)` 的 `esc`（`KeybindingsManager.java:58`）。
+- **倒计时怎么驱动**（裁决点 B）：pi 用 `setInterval` 每秒 `requestRender`。pi-java 两侧节奏**不同**：
+  fullscreen 是 `TuiEventDispatcher` + `TamboUIAdapter.createRunner()` 的 `.tickRate(Duration.ofMillis(33))`
+  （`TamboUIAdapter.java:50`）⇒ **每帧都在重绘**，倒计时可以**按帧从截止时刻重算**、不需要定时器；
+  inline 模式是 `dirty` **按需**（`InlineTuiShell.java:60`/`:275-276`）⇒ 必须有东西每秒把它弄脏。
+- `AutoRetryEnd` → 清 retry；**只有 `!success`** 才往聊天区追加
+  `Error: Retry failed after N attempts: <finalError | Unknown error>`（照 `:3473` 的拼法）。
+- `SummarizationRetryScheduled` → `showError(errorMessage)` ＋ retry 指示器；
+  `…AttemptStart` → 清 retry，再按 `source` 选指示器；`…Finished` → 清 retry。
+- ⚠️ `…AttemptStart` 的 `branchSummary` 分支：**branch summary 在 pi-java 无实现（B1）**
+  ⇒ 那条路今天**不可达**（裁决点 D）。
+
+**第 4 步（取决于裁决点 A）：压缩面。**
+
+- `CompactionStart` → compaction 指示器，文本照 `CompactionStatusIndicator`（`status-indicator.ts:85-100`）：
+  `manual` ⇒ `Compacting context... (esc to cancel)`；
+  `threshold` ⇒ `Auto-compacting... (esc to cancel)`；
+  `overflow` ⇒ `Context overflow detected, Auto-compacting... (esc to cancel)`。
+- `CompactionEnd` → 清 compaction；`aborted` ⇒ manual `showError("Compaction cancelled")` /
+  否则 `showStatus("Auto-compaction cancelled")`；`result != null` ⇒ **重建聊天区**（§8.38.3-D）；
+  `errorMessage != null` ⇒ manual `showError` / 否则红字一行。
+- ⚠️ D 的重建要有 pi-java 侧的「会话上下文条目」对应物（pi 走 `sessionManager.buildContextEntries()`
+  ＋ `renderSessionEntries`）。**这一条今天不存在** ⇒ 若裁决做，本包要连它一起设计。
+
+#### 8.38.5 测试计划（**L5 结构上不覆盖任何一条**）
+
+§8.32.5 第 3 条：一切宿主渲染（TUI 文本/状态栏）**结构上不可能**被 L5 差分覆盖，本包第 1–4 步
+全部落在该边界内 ⇒ **全部靠定点用例**，L5 全绿**不构成**本包任何一条断言成立的证据。
+
+- 通道存在性：`ChatScreen` 收到经 `TuiEventDispatcher` 转来的事件（线程归属：断言**只在渲染线程**被调用）。
+- 指示器文本**逐字符**等于 pi 的格式串（含 `(esc to cancel)` 与 `ceil(delayMs/1000)` 的首帧）。
+- 清位守卫：先置 retry、再清 compaction ⇒ **retry 仍在**（这条是 §8.38.1-(2) 的那句 `return` 的钉子）。
+- 倒计时推进：判定方式取决于裁决点 B。
+- **变异探针**（本仓纪律，§8.36.6 / §8.37.9 同）：每条断言配一个「改坏它就红」的探针，且
+  **注入点必须在写下它的那一刻就跑一次**。
+
+#### 8.38.6 不做
+
+- **不给 `agent_end` 加 `willRetry` 分支** —— pi 自己不看（§8.38.3-G）。「顺手做得更细」在这里
+  恰好就是**偏离**。
+- **不做编辑器上边框嵌入**（pi 的 `renderInBorder`）—— pi-java 的 `EditorComponent` **没有边框、
+  也没有嵌入位**（`grep -n "border\|renderTopBorder" EditorComponent.java` ⇒ 0 命中）
+  ⇒ pi 的「优先嵌编辑器、否则落 statusContainer」这层二分在 pi-java 塌缩成一条路。
+- **不修 `queue_update` / `thinking_level_changed` 的发射侧** —— 那是 `coding-agent` 的面，
+  不是 `tui` 的面（裁决点 E）。
+- **不动 L5 剧本、不动 `conformance/`**。
+- **不引入 `isRetrying` / `isIdle`**（§8.38.0）。
+
+#### 8.38.7 需要用户裁决的五个点
+
+| # | 问题 | 推荐 |
+|---|---|---|
+| **A** | 面：只做**重试**（第 1–3 步），还是**连压缩事件一起**（第 4 步）？ | **只做重试（1–3 步）**，压缩事件（D/E）登记另立。理由：① 本包的素描就是「重试面」；② D 的重建聊天区要一个**今天不存在**的「会话上下文条目」API，是本包体量的数倍；③ 通道一次做成，压缩面将来只是加 `case`。**但**第 3 步已经要用 `CompactionStatusIndicator` 的**文本**（`…AttemptStart` 的分派）⇒ 指示器种类要一次备齐 |
+| **B** | 倒计时的驱动：fullscreen **按帧重算**（无定时器）＋ inline 模式一个 1 Hz wake？还是两条路统一走 1 Hz 定时器？ | **按上面那条分叉**。依据是两侧节奏**本来就不同**（`tickRate(33ms)` vs `dirty` 按需）⇒ 统一走定时器会让 fullscreen 每帧算两次、且引入一个得记得 dispose 的定时器 |
+| **C** | `lastError` 常驻状态栏（§8.38.3-F）：本包**顺手修**，还是登记另立？ | **顺手修**。它是「重试失败的错误该显示在哪」的**同一个决定** —— 第 3 步要往聊天区写 `Error: Retry failed …`，那时状态栏还红着一条旧错误，本包等于**亲手制造**这个矛盾。修法按判据取「状态栏不再承载错误、错误只进聊天区」（与 pi 同）；若担心可见性，退一步是「新 run 开始时清除」——**这条留给裁决** |
+| **D** | `…AttemptStart` 的 `branchSummary` 分支（B1 未实现、今天不可达）：照写还是留空？ | **照写**。成本是 `if` 的一个分支，B1 落地后自动生效；但**写清今天不可达 ⇒ 无夹具**，不得为它造一个假的可达性 |
+| **E** | `queue_update` / `thinking_level_changed` 的**发射侧**（§8.38.3-A/B）：登记另立，还是并入本包？ | **登记另立**。发射侧在 `agent-core`/`coding-agent`，本包面是 `tui`；跨面会把一次审计拆成两次（同 §8.37.8 裁决点 A 的口径） |
 
 ---
 
