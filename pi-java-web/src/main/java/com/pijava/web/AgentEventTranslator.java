@@ -50,7 +50,7 @@ final class AgentEventTranslator {
             }
             case AgentSessionEvent.AgentSettled ignored -> {
                 streaming = false;
-                out.add(new WebServerMessage.AgentEvent(typeNode("turn_end")));
+                out.add(turnEnd(ignored));
             }
             case AgentSessionEvent.BashExecutionUpdate b -> out.add(bashOutput(b));
             // 包⑦（docs/34）：工具执行生命周期事件的**真源**。此前 web 的
@@ -134,8 +134,31 @@ final class AgentEventTranslator {
         return new WebServerMessage.AgentEvent(node);
     }
 
-    // ── 工具执行生命周期（包⑦，docs/34）────────────────────────────────
+    /**
+     * {@code turn_end} 帧（包⑨，docs/36，B42）。
+     *
+     * <p>pi 的 {@code turn_end} 是 {@code { message, toolResults }}，两个字段都必填
+     * （{@code agent/src/types.ts:438}）。前端按 {@code toolCallId} 去重后把
+     * {@code toolResults} 追加进消息列表（{@code client/main.ts:325-337}）；
+     * 此前这里发的是**只有类型**的空帧 ⇒ 那条路恒空（今天靠 {@code agent_end} 的整表
+     * 替换兜住）。</p>
+     *
+     * <p>⚠️ {@code message} 在错误/中止路为 null ⇒ 省略该键（pi 那条路给合成的失败
+     * 消息，Java 侧没有可给）。这是**残余偏差**，已登记。</p>
+     */
+    private WebServerMessage turnEnd(AgentSessionEvent.AgentSettled settled) {
+        var node = typeNode("turn_end");
+        if (settled.message() != null) {
+            node.set("message", WebWireJson.messageNode(settled.message()));
+        }
+        var results = node.putArray("toolResults");
+        for (var m : settled.toolResults()) {
+            results.add(WebWireJson.messageNode(m));
+        }
+        return new WebServerMessage.AgentEvent(node);
+    }
 
+    // ── 工具执行生命周期（包⑦，docs/34）────────────────────────────────
     private WebServerMessage toolExecutionStart(AgentSessionEvent.ToolExecutionStart s) {
         var node = typeNode("tool_execution_start");
         node.put("toolCallId", s.toolCallId());

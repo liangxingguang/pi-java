@@ -1,5 +1,6 @@
 package com.pijava.coding.agent.core;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -147,13 +148,21 @@ final class SessionRunner {
                     }
                 }
             }
+            var driveToolResults = new ArrayList<Message>();
             for (var entry : transcript) {
                 if (owner.deliveredEntryIds().add(entry.id())) {
                     owner.emitSessionEvent(new AgentSessionEvent.EntryAppended(entry));
+                    if (entry instanceof Entry.Message em
+                            && em.message() instanceof Message.ToolResultMessage result) {
+                        driveToolResults.add(result);
+                    }
                 }
             }
             flush(owner, laneName);
-            owner.emitSessionEvent(new AgentSessionEvent.AgentSettled());
+            // 包⑨（docs/36，B42）：pi 的 turn_end 两个字段都必填
+            // （types.ts:438）⇒ 终局助手消息 ＋ 本次驱动的工具结果。
+            owner.emitSessionEvent(new AgentSessionEvent.AgentSettled(
+                tailAssistant(transcript), driveToolResults));
             var summary = RunSummaryAggregator.aggregate(
                 owner.harness().snapshot(laneName).records(), runIds)
                 .withTotals(new RunSummaryAggregator.Totals(

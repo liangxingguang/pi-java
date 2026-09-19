@@ -43,11 +43,49 @@ class JsonEventMapperTest {
         assertThat(node.get("messages").isArray()).isTrue();
     }
 
+    /**
+     * 包⑨（docs/36，B42）更新：`agent_settled`（≙ pi 的 `turn_end`）不再只有类型 ——
+     * pi 的 {@code turn_end} 是 {@code { message, toolResults }}，两个字段都必填
+     * （{@code agent/src/types.ts:438}）。
+     */
     @Test
-    void agentSettledHasNoExtraFields() {
+    void agentSettledCarriesMessageAndToolResults() {
         var node = JsonEventMapper.toWire(new AgentSessionEvent.AgentSettled());
+
         assertThat(node.get("type").asText()).isEqualTo("agent_settled");
-        assertThat(node.size()).isEqualTo(1);
+        assertThat(node.get("toolResults").isArray())
+            .as("pi 的工具结果恒是数组（无工具时发 []）").isTrue();
+        assertThat(node.get("toolResults")).isEmpty();
+        assertThat(node.has("message"))
+            .as("无转写时省略 message（pi 那条路给合成失败消息 —— 残余偏差，已登记）")
+            .isFalse();
+    }
+
+    @Test
+    void agentSettledCarriesTheAssistantMessageWhenPresent() {
+        var assistant = new Message.AssistantMessage(
+            List.of(new ContentBlock.TextContent("done")), "stop", null);
+        var result = new Message.ToolResultMessage("call_1", "write",
+            List.of(new ContentBlock.TextContent("ok")), null, null, List.of(), false);
+
+        var node = JsonEventMapper.toWire(
+            new AgentSessionEvent.AgentSettled(assistant, List.of(result)));
+
+        // ⚠️ 这里**不**断 `role` —— `Message.role()` 是接口方法、不是 record 组件，
+        // Jackson 不把它序列化（web 线的 `WebWireJson:28` 正因如此手工 put("role")）。
+        // RPC 线的消息因此没有 role 判别值 —— **既有形状**，本包不改，
+        // 已作为待核项登记（docs/36 §10）。
+        // ⚠️ 本条撞出两条**既有的** RPC 线偏差（**不是**本包引入，已在 docs/36 §10 登记）：
+        //  ① `Message.role()` 是接口方法、不是 record 组件 ⇒ Jackson 不序列化它，
+        //     消息在 RPC 线上**没有 role 判别值**（web 线靠 `WebWireJson:28` 手工
+        //     put("role") 补上，RPC 线没有这道工序）。
+        //  ② 工具结果用的是 record 组件名 **`toolUseId`**，而 pi 线上叫 **`toolCallId`**
+        //     （`createToolResultMessage` 的字段名；web 线同样靠 `WebWireJson:34` 手工改名）。
+        assertThat(node.get("message").get("stopReason").asText()).isEqualTo("stop");
+        assertThat(node.get("toolResults")).hasSize(1);
+        assertThat(node.get("toolResults").get(0).get("toolUseId").asText())
+            .isEqualTo("call_1");
+        assertThat(node.get("toolResults").get(0).get("isError").asBoolean()).isFalse();
     }
 
     @Test

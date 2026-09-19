@@ -27,8 +27,40 @@ public sealed interface AgentSessionEvent {
     /** Agent 一次 run 结束（转录完成）。 */
     record AgentEnd(List<Message> messages, boolean willRetry) implements AgentSessionEvent {}
 
-    /** Agent 完全静默（无后续 follow-up / 重试待处理）。 */
-    record AgentSettled() implements AgentSessionEvent {}
+    /**
+     * Agent 一次 run 结束（转录完成）。
+     *
+     * <p>包⑨（docs/36，B42）：pi 的 {@code turn_end} 是
+     * {@code { message: AgentMessage; toolResults: ToolResultMessage[] }}，
+     * <b>两个字段都必填、一个 {@code ?} 都没有</b>（{@code agent/src/types.ts:438}），
+     * 且<b>原样上 RPC/JSON 线</b>（{@code json-event.ts:48-51}）。</p>
+     *
+     * <p>⚠️ <b>颗粒度偏差（如实）</b>：pi 的 {@code turn_end} 是<b>每回合</b>一条，
+     * 而这里是<b>每次驱动</b>一条。若照字面取「最后一回合的工具结果」，该字段在常见
+     * 形状下<b>反而恒空</b>（最后那回合通常是纯文本收尾、没有工具调用）⇒ 本类按
+     * <b>本次驱动</b>装。颗粒度差异本身另登记。</p>
+     *
+     * @param message     终局助手消息（pi 的错误/中止路发合成的失败消息）；无转写时可为 null
+     * @param toolResults 本次驱动的工具结果（pi 无工具回合同样发空数组，非 null）
+     */
+    record AgentSettled(Message message, List<Message> toolResults) implements AgentSessionEvent {
+
+        /** 防 null 的紧凑构造器（pi 恒发数组）。 */
+        public AgentSettled {
+            toolResults = toolResults == null ? List.of() : List.copyOf(toolResults);
+        }
+
+        /**
+         * 兼容构造器：错误/中止路拿不到转写时用。
+         *
+         * <p>pi 那条路也发 {@code {message(合成失败消息), toolResults: []}}
+         * （{@code agent-loop.ts:216}、{@code agent.ts:511-527}）—— Java 侧该处没有
+         * 合成消息可给，故 message 为 null，投影时按 pi 的可空键纪律省略。</p>
+         */
+        public AgentSettled() {
+            this(null, List.of());
+        }
+    }
 
     /** 一条新 entry 追加进会话转录。 */
     record EntryAppended(Entry entry) implements AgentSessionEvent {}

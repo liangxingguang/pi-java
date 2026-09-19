@@ -90,6 +90,44 @@ class AgentEventTranslatorTest {
         assertThat(translator.isStreaming()).isFalse();
     }
 
+    /**
+     * 包⑨（docs/36，B42）：pi 的 {@code turn_end} 是 {@code {message, toolResults}}，
+     * 两个字段都必填（{@code agent/types.ts:438}）。前端按 {@code toolCallId} 去重后
+     * 把 {@code toolResults} 追加进消息列表（{@code client/main.ts:325-337}）。
+     */
+    @Test
+    void turnEndCarriesTheToolResultsTheFrontendCollects() {
+        var assistant = new Message.AssistantMessage(
+            List.of(new ContentBlock.TextContent("done")), "stop", null);
+        var result = new Message.ToolResultMessage("call-1", "bash",
+            List.of(new ContentBlock.TextContent("out")), null, null, List.of(), false);
+
+        var msgs = translator.translate(
+            new AgentSessionEvent.AgentSettled(assistant, List.of(result)));
+
+        var ev = ((WebServerMessage.AgentEvent) msgs.get(0)).event();
+        assertThat(ev.get("type").asText()).isEqualTo("turn_end");
+        assertThat(ev.get("message").get("role").asText()).isEqualTo("assistant");
+        assertThat(ev.get("toolResults")).hasSize(1);
+        // 前端按这个键去重 ⇒ web 线的名字必须是 pi 的 `toolCallId`
+        // （WebWireJson 手工改名，与 RPC 线的 record 组件名 toolUseId 不同）。
+        assertThat(ev.get("toolResults").get(0).get("toolCallId").asText())
+            .isEqualTo("call-1");
+        assertThat(ev.get("toolResults").get(0).get("role").asText())
+            .isEqualTo("toolResult");
+    }
+
+    @Test
+    void turnEndWithoutToolsStillCarriesAnEmptyArray() {
+        // 反向：无工具回合同样是**空数组**（pi 恒发数组，不是省略键）。
+        var msgs = translator.translate(new AgentSessionEvent.AgentSettled());
+
+        var ev = ((WebServerMessage.AgentEvent) msgs.get(0)).event();
+        assertThat(ev.get("toolResults").isArray()).isTrue();
+        assertThat(ev.get("toolResults")).isEmpty();
+        assertThat(ev.has("message")).as("无转写时省略 message（残余偏差，已登记）").isFalse();
+    }
+
     @Test
     void agentEndConvertsMessagesToPiShape() {
         var msgs = translator.translate(new AgentSessionEvent.AgentEnd(

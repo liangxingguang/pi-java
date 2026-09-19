@@ -70,8 +70,21 @@ public final class JsonEventMapper {
                     messages.add(MAPPER.valueToTree(m));
                 }
             }
-            case AgentSessionEvent.AgentSettled ignored ->
+            case AgentSessionEvent.AgentSettled s -> {
+                // 包⑨（docs/36，B42）：pi 的 turn_end 是
+                // { message, toolResults }，**两个字段都必填**（types.ts:438），
+                // 且原样上 RPC/JSON 线（json-event.ts:48-51）。
                 node.put("type", "agent_settled");
+                // ⚠️ message 在错误/中止路为 null（pi 那条路给合成的失败消息，Java 侧
+                // 没有可给）⇒ 省略；这是**残余偏差**，已登记（docs/36 §10）。
+                if (s.message() != null) {
+                    node.set("message", MAPPER.valueToTree(s.message()));
+                }
+                var results = node.putArray("toolResults");
+                for (var m : s.toolResults()) {
+                    results.add(MAPPER.valueToTree(m));
+                }
+            }
             case AgentSessionEvent.EntryAppended a -> {
                 node.put("type", "entry_appended");
                 node.set("entry", MAPPER.valueToTree(a.entry()));
