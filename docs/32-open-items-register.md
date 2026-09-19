@@ -47,7 +47,7 @@
 | **D** | 小账（遥测/注释级，一处一行） | 8 | 我，随时可做 |
 | **E** | 结构债（>500 行文件等） | 8 | 我，与功能包搭车 |
 | **F** | **待用户拍板** | 6 | **你** |
-| **G** | 已结案（**别重开**） | 20 | —— |
+| **G** | 已结案（**别重开**） | 21 | —— |
 | **H** | `docs/31` 之外，机械扫描**待复核** | 69（有重复，见 §9） | 我（逐条复核后才能定档） |
 
 > B/C/F 三类的本次增量（B6–B9 / C8–C10 / F6）全部来自 §8.31 的登记表，实现时又新发现两条（B9/C10）。
@@ -94,6 +94,12 @@
 > ⚠️ **前置依赖**：B19 一旦落地，该车道就开始产 thinking 块 ⇒ B10 的跨模型重放闸
 > **只挂 Anthropic 一条车道**这件事立刻可观察 ⇒ **B10 的剩余范围是本包的前置，不是后续**。
 
+> **2026-09-19（包③ ＝ B5，§8.36）**：B5 实施闭环（`16ca4d7` / `f16436b`，记录见 §8.36.8）
+> ⇒ 移入 G（+1 行）。按上段「复核计数」的口径：B 类 26 行里**已实施 12 条、尚无落地记录 14 条**。
+> ⚠️ 本包的设计稿（`38f991c`）被**自己的变异探针实测证伪两处**（P2 的红集、夹具 2b 的注入点），
+> 已就地更正 §8.36.5/§8.36.6 —— 这正是「**注入点必须在写下它的那一刻就跑一次**」那条教训
+> （§8.36.8 末）：设计稿能钉住「要钉的命题」，钉不住「用哪根钉子」。
+
 **收敛路径**：A 类与 F 类是真正的闸门 —— A 挡在「读 pi / 清点」上，F 挡在「你的决定」上；
 B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做，没有一条阻塞合并。
 **没有任何一项挡着合并到 `main`。**
@@ -129,7 +135,7 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | B2 | compaction **`details` 生产者**恒 null | `docs/31:1324` | **已实施**（§8.30，`4380796`）⇒ 见 G 类；同族四处（摘要 prompt/`previousSummary`/请求参数/split turn）另立，§8.30.7 |
 | B3 | TUI/RPC 对 **auto_retry / summarization_retry 的渲染**（倒计时、`isRetrying`、isIdle 含重试） | `docs/31:1552` | 并入「命令/界面面」清点 |
 | B4 | `addedToolNames` 的 **provider 层消费者** | `docs/31:1060` | **结案为不做**（机制归属原判是错的：`addedToolNames` 来自**扩展系统**，不是 MCP；pi 侧 `extensions/wrapper.ts:17-37` → `deferred-tools.ts:8-39`）⇒ 见 C 类 C11 |
-| B5 | 宿主层：`SessionRunner` 两处 `catch (Exception)` **不接 `Error`** ⇒ `statusFuture`/`entriesFuture` 永不完成、不发 `AgentEnd`/`AgentSettled`、宿主**永久挂起** | `docs/31:2685`（§8.26.5-12 的下游） | pi 的 `handleRunFailure` 把异常**压成文本**、合成 assistant 消息、promise **resolve** —— 另一处更大的差距，并入本包。**设计已出**（`docs/31 §8.36`，2026-09-19，**待审**）：第 1 步＝活性收口（两处 `catch (Throwable)` ＋ `finally` 幂等兜底，对齐引擎侧 `PiLaneEngine.drive:200` 的既有纪律）；第 2 步＝`handleRunFailure` 落引擎侧（**2026-09-19 已裁：做，落引擎侧** ⇒ 落点定在 `PiLaneEngine.drive` 的 `while` **之内**，判据是 pi 的失败消息会进重试判定 `agent-session.ts:1123`），连带宿主读尾 assistant 定 `stopReason`（`print-mode.ts:139-155`）。附带登记 §8.36.7-**14**（`RunLifecycle.begin` 之后抛出 ⇒ `activeRun` 泄漏，今天无生产路径）与 **-15**（宿主层失败路的 `agent_end` 形状不一致：路 C 空数组、路 A 干脆不发） |
+| B5 | 宿主层：`SessionRunner` 两处 `catch (Exception)` **不接 `Error`** ⇒ `statusFuture`/`entriesFuture` 永不完成、不发 `AgentEnd`/`AgentSettled`、宿主**永久挂起** | `docs/31:2685`（§8.26.5-12 的下游） | pi 的 `handleRunFailure` 把异常**压成文本**、合成 assistant 消息、promise **resolve** —— 另一处更大的差距，并入本包。**设计**（`docs/31 §8.36`，2026-09-19）：第 1 步＝活性收口（两处 `catch (Throwable)` ＋ `finally` 幂等兜底，对齐引擎侧 `PiLaneEngine.drive` 的既有纪律）；第 2 步＝`handleRunFailure` 落引擎侧（**2026-09-19 已裁：做，落引擎侧** ⇒ 落点定在 `PiLaneEngine.drive` 的 `while` **之内**，判据是 pi 的失败消息会进重试判定 `agent-session.ts:1123`），连带宿主读尾 assistant 定 `stopReason`（`print-mode.ts:139-155`）。附带登记 §8.36.7-**14**（`RunLifecycle.begin` 之后抛出 ⇒ `activeRun` 泄漏，今天无生产路径）与 **-15**（宿主层失败路的 `agent_end` 形状不一致：路 C 空数组、路 A 干脆不发）。**已实施**（§8.36.8 实施记录，2026-09-19，`16ca4d7` / `f16436b`；五条变异探针实测，其中 P2 的实测红集与设计稿不符 ⇒ 已就地更正 §8.36.6）⇒ 见 G 类 |
 | B6 | content_block_start 的**初始 thinking 文本被丢弃** | `docs/31:3590`、§8.31.4 | **已实施**（§8.33 包①）⇒ 见 G 类 |
 | B7 | **`redacted_thinking` 未处理** | `docs/31:3591`、§8.31.4 | **已实施**（§8.33 包①；SDK 路由 `ContentBlock.kt:549-553` 已实证）⇒ 见 G 类 |
 | B8 | **空签名重放策略不可配**（pi 的 `Model.compat.allowEmptySignature`，`types.ts:713-714`） | `docs/31:3594`、§8.31.4、**§8.34** | ⚠️ **更正：行为上只有两态**，不是三态 —— `undefined` 与 `false` **完全等价**（`anthropic-messages.ts:193` 的 `?? false`），只有 `true` 不同（已实测）。启用的模型也不是「Kimi 系」而是**三处**：Fireworks 全部 anthropic-messages 模型（`generate-models.ts:1427`，无 allowlist）、Kimi Coding 全部（`:2242`/`:2253`）、Xiaomi（`:1075`，但**休眠**）。pi-java `ModelInfo` 无 `compat` 且 `ModelsJsonSchema` 会**静默吞掉**用户写的 `compat` ⇒ 需 compat 字段 + models.json schema 扩展。**被 B10 前置**。归包②，设计见 §8.34。**已实施**（§8.34.11 包②：`ModelCompat` + `ModelInfo` 第 11 组件 + `ModelsJsonSchema.CompatDef` + 投送链）⇒ 见 G 类 |
@@ -249,6 +255,7 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | **B11** 空 text 块不丢 | `docs/31:4119`、§8.34.11 | 2026-09-18，包②（`toBlockParams` 的 trim 判空） |
 | **B13** 重放路径产不出 `redacted_thinking` 线格 | `docs/31:4119`、§8.34.11 | 2026-09-18，包②（`appendThinkingBlock` 的 redacted 分支） |
 | **D8** `AnthropicMessagesApi:299-301` 的假注释（写「ThinkingContent is dropped」，而它其实被路由到 `appendThinkingBlock`） | §8.34、§8.34.11 | 2026-09-18，包②（随 `toBlockParams` 重写一并删除） |
+| **B5** 宿主失败通路的活性收口（两处 `catch (Throwable)` ＋ `finally` 幂等兜底 ＋ 读尾 assistant 定终局）＋ `handleRunFailure` 落引擎侧 | `docs/31`、§8.36.5 / §8.36.6 / §8.36.8 | 2026-09-19，包③，`16ca4d7`（agent-core：`RunFailure` + 两相拆分）/ `f16436b`（coding-agent：宿主侧）。夹具各 3/3，五条变异探针实测（P1/P2/P3/P5 各恰一条红；P4 ⇒ C 组两条 + 宿主 A3）。⚠️ **实测证伪设计稿两处**：① P2 的红集是 `{B1}` 而非 `{A1,B1,B3}` —— `finally` 只在「外层 catch 体自身再抛」那条路上是出口；② 夹具 2b 的注入点必须是 `AgentEnd`（`MessageUpdate` 上抛的 `Error` 会被引擎吞掉）。**L5 的 14 个剧本全绿不是本包第 2 步的证据**（桩 Stream 造不出引擎内抛出） |
 
 > 最后一条特别提一下：`docs/31:945`（以及 `:1059` / `:1117` 两处重复）写着 B 项「仍开放 / 待用户」，
 > 而 §8.23 已于 2026-09-16 实施闭环 —— 这正是你问的「信息不知道在哪里」的典型样本。

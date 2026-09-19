@@ -5704,28 +5704,32 @@ pi 的 print 模式**不**看任何流信号 —— 它在 `agent.prompt()` **re
 **`exitCode = 1`**；否则逐 text 块打印（`print-mode.ts:139-155`）。
 
 ⇒ Java 的对应点**也不是事件处理器，而是 `SessionRunner.drive` 里 `harness().prompt(...)` 返回之后、
-`statusFuture` 落定之前**（`:96` 与 `:149` 之间）对**尾 assistant** 的一次读 —— 与 pi 同形「跑完再读」。
+`statusFuture` 落定之前**（`:104` 拿到 `outcome.transcript()` 与 `:137` 的 `entriesFuture.complete` 之间）
+对**尾 assistant** 的一次读 —— 与 pi 同形「跑完再读」。
 
-**落法**（三行，读的是已经在手上的 `transcript`）：
+**落法**（读的是已经在手上的 `transcript`）：
 
 ```java
 // pi print-mode.ts:139-155：跑完之后读尾 assistant 定终局，而不是看流信号。
-// 只有「宿主全程没观测到任何终局」时才生效 —— 引擎把异常吞成消息正是这种形状
-// （没有 StreamDone/StreamError 到达 onStreamEvent）。正常路径上 sawTerminal 已置位，
-// 这里一字不改行为。tail 取自 outcome.transcript()（≙ 车道的 _state.messages），
-// 合成消息已被 PiLaneSink 写进去（夹具 1 的 C3）。
-if (!sawTerminal.get()) {
-    var tail = lastAssistant(transcript);
-    if (tail != null && ("error".equals(tail.stopReason()) || "aborted".equals(tail.stopReason()))) {
-        stopReason.set(tail.stopReason());
-    }
+var tail = tailAssistant(transcript);
+if (tail != null && ("error".equals(tail.stopReason()) || "aborted".equals(tail.stopReason()))) {
+    stopReason.set(tail.stopReason());
 }
 ```
 
-- **`sawTerminal` 是新增的一个 `AtomicBoolean`**，在 `:66-71` 的两个终局分支（`StreamDone`／`StreamError`）
-  里置位。**为什么加它而不是复用 `stopReason` 的初值 `"completed"` 当哨兵**：那个写法要额外假设
-  「`"completed"` 不会出现在 provider 词表里」（今天成立，但那是**另一处**的事实，写进这里就成了隐式耦合）；
-  一个显式布尔把「观测到过终局」这件事直接写在代码里。改动量同为一行。
+- ⚠️ **与本节初稿（`38f991c` 之前）的两处偏差，实施时按「照抄 pi」改正**（这一节是本步的**唯一**依据，
+  故以 pi 原文为准改这里，而不是让代码迁就初稿）：
+  1. **初稿那个 `if (!sawTerminal.get())` 闸被删掉** —— pi **无条件**读尾（`print-mode.ts:139-155`
+     里没有任何「观测到过终局就跳过」的条件）。加闸会**真出错**：一次驱动可能跑**多个 pass**、
+     每个 pass **至少一条** `StreamDone`（多轮工具调用每轮一条）⇒ 夹具 1 里工具批次炸掉时
+     `sawTerminal` **早已置位**（前一轮工具调用的 `StreamDone` 就置了它）、`stopReason` 停在
+     `"tool_use"` ⇒ **崩溃的 run 被记成 `(0, "tool_use")`、退出码 0** —— 正是本步要修的那个病。
+     「见过终局」与「这次运行以失败收场」是**两件事**，初稿把它们当成一件了。
+  2. **判定必须读「转录的最后一条消息」而不是「最后一条助手消息」** —— pi 是
+     `state.messages[last]?.role === "assistant"`，**不往回找**更早的助手。初稿的 `lastAssistant`
+     是倒扫跳过非消息条目后**继续找助手**（会把「尾条是工具结果」这种正常形状误判成尾条是崩溃的
+     助手消息）。落地版 `tailAssistant` 照抄 pi：倒扫跳过非消息条目，遇到**第一条**消息条目就定案
+     —— 是助手则返回，否则 `null`。
 - 判定**复用 `exitCode` 的既有词表**（`error`→1、`aborted`→130），不新造取值。
 - 与 B20 ⑩ 同口径：`"completed"` 是「什么都没观测到」的既有缺省，本次不动它的语义。
 
@@ -5762,12 +5766,18 @@ if (!sawTerminal.get()) {
 
 **先划清「谁钉谁」**（不划清就会出现「一条夹具同时钉两步、回退任一步都变红」的假绿灯）：
 
-| 夹具 | 注入点 | 钉的是 |
-|---|---|---|
-| **1** | Sequential 工具抛 `AssertionError`（引擎内） | **第 2 步**（引擎合成）＋ 第 2 步带来的活性 |
-| **2a** | 会话监听器在 `AgentSettled` 上抛 `AssertionError` | **第 1 步的 `:151`**（与 ①-b 的兜底） |
-| **2b** | 会话监听器在 pass 内事件（`MessageUpdate`）上抛 `AssertionError` | **第 1 步的 `:105`** |
-| **3** | 同夹具 1，但异常文本命中瞬断白名单 | **第 2 步的 placement**（catch 必须在 `while` 里） |
+| 夹具 | 注入点 | 钉的是 | 住哪 |
+|---|---|---|---|
+| **1** | Sequential 工具抛 `AssertionError`（引擎内） | **第 2 步**（引擎合成）＋ 第 2 步带来的活性 | **agent-core**（C 组；`PiLoop.Event` 只在引擎边界可见）＋ **coding-agent**（A 组） |
+| **2a** | 会话监听器在 `AgentSettled` 上抛 `AssertionError` | **第 1 步的外层 catch**（与 ①-b 的兜底） | coding-agent |
+| **2b** | 会话监听器在 `AgentEnd` 上抛 `AssertionError` | **第 1 步的引擎外 catch**（`Error` 逃出 `harness.prompt` 之后谁来接） | coding-agent |
+| **3** | 同夹具 1，但异常文本命中瞬断白名单 | **第 2 步的 placement**（catch 必须在 `while` 里） | **agent-core** |
+
+⚠️ **实施细化（比本表的括号更窄）**：夹具 1 的断言分**两个模块**写 —— C 组（形状：`PiLoop.Event` 四事件、
+合成消息字段、转录与结算）**只能**在 agent-core 断言（`PiLoop.Event` 不越过引擎边界），
+A 组（future 落定、会话事件面、无 `StreamError`）**只能**在 coding-agent 断言。
+⇒ 落地为 `agent-core:EngineFailureSettlementTest` ＋ `coding-agent:SessionFailurePathTest`
+（后者另含夹具 2a/2b），不是「夹具 1 整条住在某一侧」。
 
 **夹具 1（引擎内 `Error`：合成 + 活性）** —— 走 §8.36.1 的**生产可达路径**：
 
@@ -5788,51 +5798,87 @@ if (!sawTerminal.get()) {
 - ⚠️ **夹具不能拿 provider 当注入点**（§8.36.1 末条已实证 `AbstractChatApi:104` 会把 provider 的
   `Throwable` 兜成事件）；**也不用** `before_run` 钩子 —— 它在 `RunLifecycle.begin` **之后**抛，
   还会连带暴露 `activeRun` 泄漏（§8.36.7），会把两件事混在一条红里。
-- ⚠️ **A1 在第 2 步之后是被两条独立的纪律同时保住的**（合成后的正常返回 ＋ 第 1 步的 `finally`）
-  ⇒ **A1 不是第 2 步的判别器**，C1/C2/C3 才是（见 P4/P5）。
+- ⚠️ **A1 在第 2 步之后是被两条独立的纪律同时保住的**（合成后的正常返回 ＋ 第 1 步的
+  `catch (Throwable)` 体里的两次 `complete`）⇒ **A1 不是第 2 步的判别器**，C1/C2/C3 才是（见 P4/P5）。
+  ⚠️ **实测修正**：那第二条纪律**不是** `finally`（`finally` 只在「外层 catch 体自身再抛」那一条路上
+  才是出口，见 P2 行）—— 初稿把两条纪律里的第二条写成了 `finally`，P2 的实测把它纠正了。
 
-**夹具 2a（宿主 `:151`：catch 体自己抛）**：
+**夹具 2a（宿主的外层 catch：catch 体自己抛）** —— 行号按落地后的 `SessionRunner`：
 
 - 注入点：`session.subscribe(...)` 注册一个**在 `AgentSettled` 上抛 `AssertionError`** 的监听器
-  （`SessionEventHub.emit` 只隔离 `RuntimeException`，`Error` 穿出 —— 已逐行确认）；
-- 路径：条目投递的 `emitSessionEvent(EntryAppended)`（`:134`）先抛 ⇒ 路径 C ⇒ 其 `catch` 体在
-  `AgentEnd`（`:160`）与 `AgentSettled`（`:161`）之间**再次**被同一监听器打断 ⇒ 只能靠 `finally` 兜底；
-- 断言：**(B1)** 两个 future 都落定（钉 ①-b）；**(B2)** 会话事件流里出现 `StreamError`（钉 `:151` 的 `catch (Throwable)`）。
+  （`SessionEventHub.emit:35` 只隔离 `RuntimeException`，`Error` 穿出 —— 已逐行确认）；
+- 路径：正常收尾路的 `AgentSettled`（`:156`）先抛 ⇒ **外层 catch**（`:169`）⇒ 其 catch 体在
+  `AgentEnd`（`:179`）之后发 `AgentSettled`（`:180`）时**再次**被同一监听器打断 ⇒ catch 尾部
+  两次 `complete`（`:181-182`）跑不到 ⇒ **只有 `finally`（`:193-194`）能救这两个 future**；
+- 断言：**(B1)** 两个 future 都落定（钉 `finally` 兜底）；**(B2)** 会话事件流里出现 `StreamError`
+  （钉 `:169` 的 `catch (Throwable)`）。
 
-**夹具 2b（宿主 `:105`：Error 逃出引擎之后谁来接）**：
+**夹具 2b（宿主的内层 catch：`Error` 逃出引擎之后谁来接）**：
 
-- 注入点：同一 `subscribe(...)`，但监听器**只在 pass 内事件上抛**（如 `MessageUpdate`），
-  **不**在 `AgentSettled`/`EntryAppended` 上抛；
-- 路径：抛出点在引擎的 `sink.emit` **之内** ⇒ 穿 `PiLoop.run` ⇒ 引擎 catch 接住 ⇒ 合成再 `emit`
-  ⇒ 同一监听器**第二次**抛（§8.36.5 下游表末行）⇒ 逃出 `harness.prompt` ⇒ **宿主 `:105`**；
+- 注入点：同一 `subscribe(...)`，但监听器**只在 `AgentEnd` 上抛**，
+  **不**在 `AgentSettled`/`EntryAppended` 上抛。
+- ⚠️ **与本节初稿的偏差（实施时改正）**：初稿写的是「监听器在 **pass 内事件（`MessageUpdate`）** 上抛」，
+  **这个形状造不出要钉的东西**。原因：`HarnessEventBus.broadcastStream:38` 与
+  `SessionEventHub.emit:35` 都**只隔离 `RuntimeException`** ⇒ `MessageUpdate` 监听器抛的 `Error` 会
+  穿回 `PiLoop.run`，被**引擎**的 catch 接住 —— 而引擎 catch 体（`RunFailure.settle`）发的四事件里
+  **只有 `AgentEnd` 会走到会话监听面**（`MessageStart`/`MessageEnd`/`TurnEnd` 只是 `PiLoop.Event`，
+  宿主不经由 `emitSessionEvent` 转发它们）⇒ 监听器**不会被第二次触发**，`Error` 被引擎吞掉，
+  一切正常完成。**唯一能把 `Error` 送出 `harness.prompt` 的形状**是让监听器在 `AgentEnd` 上抛：
+  那正是「引擎 catch 体自己抛」那条路（§8.36.5 下游表末行）。
+- 路径（两条 `AgentEnd` 发射点，都在引擎之内）：pass 正常收尾时 `passEvents` 投递的
+  `AgentEnd`（`SessionRunner:235`）先抛 ⇒ 引擎 catch（`PiLaneEngine` 的 `catch (Throwable)`）接住
+  ⇒ `RunFailure.settle` 再 `emit(AgentEnd([failure]))` ⇒ 同一监听器**第二次**抛 ⇒ 逃出
+  `harness.prompt` ⇒ **宿主内层 catch（`:105`）**；
 - 断言：**(B3)** 两个 future 都落定；**(B4)** 会话事件流里出现 `StreamError`；**(B5)** 会话事件流里
-  **没有** `AgentEnd` —— 这条**才是 P1 的判别器**：`:105` 若回退成 `catch (Exception)`，这个 `Error`
-  就会掉到 `:151`（那里是 `Throwable`），于是 `:160` 的 `AgentEnd(List.of(), false)` 就会冒出来。
-- ⚠️ **B4 不是 P1 的判别器**（两条路都发 `StreamError`，只是一个来自 `:105`、一个来自 `:151`）
-  —— 把它当判别器就会得到一个「回退也绿」的假探针。
+  **没有载荷为空的 `AgentEnd`** —— 这条**才是 P1 的判别器**：`:105` 若回退成 `catch (Exception)`，
+  这个 `Error` 就会掉到 `:169`（那里是 `Throwable`），于是 `:179` 的
+  `AgentEnd(List.of(), false)` 就会冒出来（登记 -15(a)）。
+- ⚠️ **B4 不是 P1 的判别器**（两条路都发 `StreamError`，只是一个来自 `:105`、一个来自 `:169`）
+  —— 把它当判别器就会得到一个「回退也绿」的假探针。**B5 的断言写法也要跟着改**：初稿写「没有 `AgentEnd`」，
+  但落到 `AgentEnd` 上抛的注入点后，事件流里**必然**有若干条 `AgentEnd`（`passEvents` 那条先发出去才抛的），
+  真正缺的是**空载荷**的那一条 ⇒ 断言改成 `noneMatch(end -> end.messages().isEmpty())`。
 
 **夹具 3（第 2 步的 placement：catch 必须在 `while` 里）**：
 
 - **同一注入点**，但 `boomTool.execute(...)` 抛 `new AssertionError("connection refused")`
   —— 文本命中瞬断白名单（`RetryableError:87` 的 `connection.?refused`）；
+- ⚠️ **与本节初稿的偏差（实施时改正，且必须改，否则夹具根本跑不起来）**：初稿说「同一注入点」，
+  即批次里**只有**一个抛错的工具 —— **那个形状不可达**。`_prepareRetry` 摘掉工作副本尾部的失败助手
+  （`agent-session.ts:2941-2945`）之后，副本尾停在 `stopReason="tool_use"` 的那条助手消息上，
+  而 `Agent.continue()` **要求尾部不是助手**（`agent.ts:372`，否则抛
+  `Cannot continue from message role: assistant`）⇒ 第二个 pass 起不来、夹具 3 恒红。
+  **pi 自己也是这样**（同一段代码），所以这不是缺陷、也不该绕 —— 而是要把剧本改成 **pi 的可达形状**：
+  批次里放**两个工具 `[echo, boom]`**，顺序路径会先把 `echo` 的结果消息落进工作副本
+  （`PiLoopTools:96-113` 逐调用成组），摘尾后尾部是工具结果消息 ⇒ `continue()` 遂行。
+  ⇒ 落地夹具的批次 = `[echo, boom]`，`echo` 是**必需**的、不是装饰。
 - 引擎的合成消息于是带 `errorMessage="connection refused"` ⇒ `PostRunRetry.isRetryableError` 为真
   ⇒ `_prepareRetry` 跑 ⇒ 发 `auto_retry_start`、摘工作副本尾、起第 2 个 pass；
-- 断言：**(D1)** 会话事件流里出现 `auto_retry_start`（**只有 catch 在 `while` 内才可能出现** —— 环住在循环里）；
-  **(D2)** 转录里**留着**那条失败助手消息（日志保留、只摘副本，`:2937-2941`）；
-  **(D3)** `FauxProvider.sequence` 第二 pass 正常收尾 ⇒ 终局 `status()` 是成功、`retryAttempt == 1`。
+- 断言：**(D1)** 重试观察者收到 `auto_retry_start`/`auto_retry_end`（**只有 catch 在 `while` 内才可能出现**
+  —— 环住在循环里）；**(D2)** 转录里**留着**那条失败助手消息（日志保留、只摘副本，`:2937-2941`）；
+  **(D3)** `FauxProvider.sequence` 第二 pass 正常收尾 ⇒ 终局成功（`retryAttempt == 1`）。
+- ⚠️ **D1/D3 的观测面按模块分**：初稿写的是「会话事件流里出现 `auto_retry_start`」与
+  「`status()` 是成功」—— 那是**宿主侧**的说法。夹具 3 落在 agent-core（与夹具 1 的 C 组同侧），
+  引擎侧能直接看到的是 `RetryObserver` 回调与引擎自己的转录/记录 ⇒ 落地断言取这两个：
+  `RetryObserver` 收到 `start|1|3|connection refused` + `end|true|1|null`，末条助手 `stopReason=="stop"`、
+  末条 `OperationFinished` 为 `COMPLETED`。宿主的 `status()`／`retryAttempt` 由 §8.22 的既有用例守，
+  不在这里重复。
 - ⚠️ 若第 2 个 pass 也抛，就会走到预算耗尽/终局失败那条路 ⇒ 剧本给第二 pass 一条正常响应，保持确定性。
 - ⚠️ D1 **只**靠「合成的失败消息进了 `checkAfterRun`」这一条；不要把 D1 和 C1 混在一条用例里
   ——C1 在「catch 在循环外」时**仍然是绿的**（消息照样合成，只是晚了一步）。
 
 **变异探针（五条，各自必须恰一条红）**：
 
-| 探针 | 回退 | 预期（**唯一**红灯） | 为什么别的都不红 |
-|---|---|---|---|
-| P1 | 宿主 `:105` 只回退成 `catch (Exception)` | 夹具 2b ⇒ **B5**（`Error` 掉到 `:151`，那里是 `Throwable` ⇒ `AgentEnd(List.of(), false)` 冒出来） | B4 两条路都发 `StreamError`（见夹具 2b 的 ⚠️）；B3 由 ①-b 兜住；夹具 1/2a/3 走不到 `:105` |
-| P2 | 删宿主 `finally` 里的两行 `complete` | 夹具 1 ⇒ **A1**（`TimeoutException`）、夹具 2a ⇒ **B1**、夹具 2b ⇒ **B3** ⇒ **三条红**（这是**唯一**允许多红的探针：它钉的是「兜底那一层」，那条纪律是所有路的公共出口） | — |
-| P3 | 宿主 `:151` 只回退成 `catch (Exception)` | 夹具 2a ⇒ **B2**（`StreamError` 缺） | B1 由 ①-b 兜住；2a 的 `Error` 不经过 `:105` |
-| P4 | **引擎侧合成整体删掉**（异常照旧冒到宿主；第 1 步保留） | 夹具 1 ⇒ **C1/C2/C3**（没有合成消息） | A1 由第 1 步的 `finally` 保；A2/A3 会跟着红 —— 但它们**不是** P4 的目标断言，实施时把 C 组与 A 组**分在两个 `@Test`** 里，让 P4 的红点落在 C 组的用例上 |
-| P5 | **把引擎的 catch 移到 `while` 之外** | 夹具 3 ⇒ **D1**（`auto_retry_start` 不出现） | 夹具 1 的 C1/C2/C3 **仍绿**（消息照样合成，只是晚一步）⇒ P5 与 P4 钉的是**两件不同的事** |
+| 探针 | 回退 | 预期（**唯一**红灯） | 为什么别的都不红 | **实测（2026-09-19）** |
+|---|---|---|---|---|
+| P1 | 宿主内层 catch 只回退成 `catch (Exception)` | 夹具 2b ⇒ **B5**（`Error` 掉到外层 catch，那里是 `Throwable` ⇒ 空载荷 `AgentEnd` 冒出来） | B4 两条路都发 `StreamError`（见夹具 2b 的 ⚠️）；B3 由 `finally` 兜住；夹具 1/2a/3 走不到内层 catch | ✔ **恰一条红**：`SessionFailurePathTest.listenerErrorOnAgentEndReachesHostFailurePath` 的 **B5** |
+| P2 | 删宿主 `finally` 里的两行 `complete` | 夹具 1 ⇒ **A1**（`TimeoutException`）、夹具 2a ⇒ **B1**、夹具 2b ⇒ **B3** ⇒ **三条红**（这是**唯一**允许多红的探针：它钉的是「兜底那一层」，那条纪律是所有路的公共出口） | — | ⚠️ **只有一条红**：`listenerErrorOnAgentSettledStillSettlesFutures` 的 **B1**（`TimeoutException`，11.16 s）。**A1 与 B3 没红** —— 两条路各自的 catch 体里的 `complete` 就是正常出口：A1 走的是「引擎**正常返回**、全程无异常」，B3 走的是内层 catch 的 `:181-182`（那条路 listener 只在 `AgentEnd` 上抛，catch 体里 `AgentEnd` 之后没有第二次抛出 ⇒ 尾部的 `complete` 跑得到）。⇒ **初稿把 `finally` 说成「所有路的公共出口」是错的**，它只是**外层 catch 体自身再抛**那一条路的出口。此结论使「P2 是唯一允许多红的探针」这一豁免**失去理由** —— 五条探针实际都是恰一条红 |
+| P3 | 宿主外层 catch 只回退成 `catch (Exception)` | 夹具 2a ⇒ **B2**（`StreamError` 缺） | B1 由 `finally` 兜住；2a 的 `Error` 不经过内层 catch | ✔ **恰一条红**：`listenerErrorOnAgentSettledStillSettlesFutures` 的 **B2** |
+| P4 | **引擎侧合成整体删掉**（异常照旧冒到宿主；第 1 步保留） | 夹具 1 ⇒ **C1/C2/C3**（没有合成消息） | A1 由第 1 步的 `catch (Throwable)` 保；A2/A3 会跟着红 —— 但它们**不是** P4 的目标断言，实施时把 C 组与 A 组**分在两个 `@Test`** 里，让 P4 的红点落在 C 组的用例上 | ✔ C 组**两个用例全红**（`engineThrowSynthesizesFailureMessage`、`synthesizedFailureMessageEntersTranscriptAndSettlesRunAsFailed`）＋ ⚠️ **多一条红**：`SessionFailurePathTest.engineInternalErrorSettlesRunWithErrorStatus` 的 **A3**（没有合成消息 ⇒ 流上只剩宿主外层 catch 补的那条 `StreamError`）。断言 **A2** 与 A3 在同一用例里 ⇒ A 组与 C 组**分不开**（初稿说「分在两个 `@Test` 里」只对了 C 组那一半）。A1 **没红**、且**不是** `finally` 保的，是**外层 `catch (Throwable)` 体里的两次 `complete`（`:181-182`）**保的 —— 与 P2 行同一个道理，见上 |
+| P5 | **把引擎的 catch 移到 `while` 之外** | 夹具 3 ⇒ **D1**（`auto_retry_start` 不出现） | 夹具 1 的 C1/C2/C3 **仍绿**（消息照样合成，只是晚一步）⇒ P5 与 P4 钉的是**两件不同的事** | ✔ **恰一条红**：`EngineFailureSettlementTest.retryableFailureTextEntersPostRunRetryDecision` 的 **D1**；C 组与全部 coding-agent 用例绿 |
+
+**探针执行方式（可复现）**：改前把 `PiLaneEngine.java`／`SessionRunner.java` 备份到 `/tmp/b5bak/`，
+每条探针独立改、跑、记，跑完从备份恢复并用 `diff` 逐字节比对确认（恢复后 `diff` 三者皆空）。
+**探针不入库**（不是代码，是一次性的验证动作）；这里记的是**结果**。
 
 **P1/P3 的「恰一条红」依赖夹具 2a/2b 分家**：2a 的监听器挂在 `AgentSettled` 上、2b 的只挂在 pass 内事件上
 —— 若用一个「什么都抛」的监听器，两条夹具会互相污染，P1/P2/P3 就都变成多红。**这是实施时最容易踩的坑**。
@@ -5866,7 +5912,58 @@ if (!sawTerminal.get()) {
 | # | 发现 | 可达性 | 处置 |
 |---|---|---|---|
 | **14** | **`RunLifecycle.begin` 之后抛出的东西会让 `activeRun` 泄漏** —— `startRun:52-72` 的顺序是 `begin(lane)`（`:145-157` 里就把 `activeRun` 装上了）→ `openRunSpan` → `fireBeforeRun` → `transcript.add` → `records.add` → `publishState`；而**保护它的 `try/finally` 在 `PiLaneEngine.drive` 里，不在 `run` 里** ⇒ 这一段的抛出既不由 `drive` 的 finally 收口，也没有别的收口 ⇒ 车道**永久忙**（后续每次 `prompt` 都撞 `begin:150` 的 `IllegalStateException("not idle")`，`waitForIdle` 永远等下去）。**与 B5 同因（收口缺 finally）但不同层** | 今天**无生产路径**：`fireBeforeRun` 的生产注册者**零**（`onBeforeRun` 全仓只有声明）；`publishState` 的唯一下游 `watch()` 也**零**生产调用者；`openRunSpan` 是遥测。⇒ 只有测试能触发 | **登记，不改**（同 §8.32.6 的「投机代码」口径）。触发条件：出现 `before_run`／lane `watch` 的生产注册者，或遥测实现开始抛 |
-| **15** | **宿主层的失败路与 `agent_end` 的形状不一致**（两个面，同一个未决决定）：**（a）路 C 的载荷是空数组** —— `SessionRunner:160` `new AgentSessionEvent.AgentEnd(List.of(), false)`，而**同一事件的正常路径带的是整表**（`:208-209` `owner.accumulatedMessages()`）⇒ 前端整表替换（`client/main.ts:260`）会把 web 历史清空；**（b）路 A 根本不发 `AgentEnd`**（`:105` 的 catch 续走 `:119-149`，不经过 `:160`）⇒ RPC 的 `streaming` 仍为真、web 仍转圈。pi 四处 `agent_end` 发射点**没有一处**是空数组，也**没有一处**缺少它 —— `agent-loop.ts:217/253/272` 传本轮**累积**消息 `newMessages`（起点是本轮 prompt 消息，恒非空），`agent.ts:526` 传 `[failureMessage]` | **（a）今天可达**（路 C ＝ 引擎**之外**的抛出 ＋ catch 体自身抛 ⇒ 一次会话监听者的 `Error` 就够）；**（b）今天可达**（`harness.prompt` 抛出的宿主层 Throwable，见 §8.36.6 夹具 2b） | **登记，不改**（产品面：改的是 `AgentEnd` 的载荷与发射点语义，且要**先定**「宿主层的失败该发什么」—— pi 没有对应形状可抄，因为 pi 没有「引擎外抛出」这一层；**最可能的答案**是照 `:208-209` 统一用 `accumulatedMessages()`，但那要另出设计与验证）。触发条件：RPC/`get_state` 的 `streaming` 卡住被报，或用户报 web 历史丢失 |
+| **15** | **宿主层的失败路与 `agent_end` 的形状不一致**（两个面，同一个未决决定）：**（a）路 C 的载荷是空数组** —— `SessionRunner:179` `new AgentSessionEvent.AgentEnd(List.of(), false)`，而**同一事件的正常路径带的是整表**（`:235-236` `owner.accumulatedMessages()`）⇒ 前端整表替换（`client/main.ts:260`）会把 web 历史清空；**（b）路 A 根本不发 `AgentEnd`**（`:105` 的 catch 续走 `:123-168`，不经过 `:179`）⇒ RPC 的 `streaming` 仍为真、web 仍转圈。pi 四处 `agent_end` 发射点**没有一处**是空数组，也**没有一处**缺少它 —— `agent-loop.ts:217/253/272` 传本轮**累积**消息 `newMessages`（起点是本轮 prompt 消息，恒非空），`agent.ts:526` 传 `[failureMessage]` | **（a）今天可达**（路 C ＝ 引擎**之外**的抛出 ＋ catch 体自身抛 ⇒ 一次会话监听者的 `Error` 就够）；**（b）今天可达**（`harness.prompt` 抛出的宿主层 Throwable，见 §8.36.6 夹具 2b） | **登记，不改**（产品面：改的是 `AgentEnd` 的载荷与发射点语义，且要**先定**「宿主层的失败该发什么」—— pi 没有对应形状可抄，因为 pi 没有「引擎外抛出」这一层；**最可能的答案**是照 `:235-236` 统一用 `accumulatedMessages()`，但那要另出设计与验证）。触发条件：RPC/`get_state` 的 `streaming` 卡住被报，或用户报 web 历史丢失 |
+
+#### 8.36.8 实施记录（包③ 第 1 步 ＋ 第 2 步）
+
+**交付物**（四个文件，按可独立编译的模块分两次提交）：
+
+| 模块 | 文件 | 性质 | 内容 |
+|---|---|---|---|
+| pi-java-agent-core | `harness/RunFailure.java`（新，93 行） | 生产 | `handleRunFailure` 的逐条移植：`synthesize`（消息字面量）＋ `settle`（四事件） |
+| pi-java-agent-core | `harness/PiLaneEngine.java`（改） | 生产 | `runPass` 拆成 `startPass`/`drivePass`，中间夹 `catch (Throwable)` → `RunFailure.settle`；**位置在重试 `while` 体内** |
+| pi-java-agent-core | `harness/EngineFailureSettlementTest.java`（新，333 行） | 测试 | 夹具 1 的 **C 组** ＋ 夹具 3（D 组），3 个用例 |
+| pi-java-coding-agent | `core/SessionRunner.java`（改） | 生产 | 第 1 步：两处 `catch (Exception)` → `catch (Throwable)` ＋ `finally` 幂等兜底；第 2 步：`tailAssistant` 读尾 |
+| pi-java-coding-agent | `core/SessionFailurePathTest.java`（新，244 行） | 测试 | 夹具 1 的 **A 组** ＋ 夹具 2a ＋ 夹具 2b，3 个用例 |
+
+**与设计稿（`38f991c` 的 §8.36.5/§8.36.6）的六处偏差 —— 全部以 pi 原文为准改设计，不改代码去迁就稿子**：
+
+| # | 稿子说 | 实际 | 为什么以实际为准 |
+|---|---|---|---|
+| 1 | 宿主读尾加 `if (!sawTerminal.get())` 闸 | **闸删掉**，无条件读 | pi `print-mode.ts:139-155` 无此条件；且加闸会**真出错**（多 pass ⇒ 前面的 `StreamDone` 已置位 ⇒ 崩溃 run 记成 `(0,"tool_use")`）。§8.36.5 已改写 |
+| 2 | 判定用 `lastAssistant`（倒扫跳过非消息条目后**继续找助手**） | 改 `tailAssistant`（遇到第一条消息条目就定案，**不往回找**） | pi 是 `state.messages[last]?.role === "assistant"`。§8.36.5 已改写 |
+| 3 | 夹具 2b 的监听器抛在 **`MessageUpdate`** | 抛在 **`AgentEnd`** | `broadcastStream`/`SessionEventHub.emit` 只隔离 `RuntimeException`，但 `MessageUpdate` 上抛的 `Error` 会被**引擎**吞掉（catch 体只把 `AgentEnd` 送到会话面）⇒ 造不出「逃出 `harness.prompt`」。§8.36.6 已改写 |
+| 4 | 夹具 2b 的 B5 = 「没有 `AgentEnd`」 | = 「没有**载荷为空**的 `AgentEnd`」 | 注入点在 `AgentEnd` 上 ⇒ `passEvents` 那条**先发出去才抛**，流里必然有 `AgentEnd` |
+| 5 | 夹具 3 的批次 = 只有一个抛错工具 | 批次 = **`[echo, boom]`** | 单元素批次**不可达**：摘尾后副本尾停在 `tool_use` 助手消息上，`Agent.continue()` 拒（`agent.ts:372`）。**pi 同形** ⇒ 复刻 pi 的可达形状。§8.36.6 已改写 |
+| 6 | P2 ⇒ 三条红（A1/B1/B3）；「`finally` 是所有路的公共出口」 | P2 ⇒ **只有 B1 一条红** | `finally` 只在「外层 catch 体自身再抛」那条路才是出口（2a）；A1 走正常收尾、B3 走内层 catch 体尾部的 `complete`。§8.36.6 的探针表已按实测改写，并撤回「P2 是唯一允许多红的探针」这条豁免 |
+
+**变异探针**：五条全部执行，结果见 §8.36.6 的探针表（P1/P3/P5 恰一条红；P2 恰一条红但**与预期集合不同**；
+P4 ⇒ C 组两条 ＋ 宿主 A3 一条）。**每条都实测过、恢复后 `diff` 逐字节为空**。
+
+**覆盖面边界（划界声明，防止后人拿错证据）**：
+
+- **第 1 步**改的是会话层事件与 future ⇒ 按 §8.32.5 第 1 条，L5 剧本（帧级、直接驱动 `PiLoop`）
+  **结构上覆盖不到** ⇒ 只有夹具 2a/2b 能守。
+- **第 2 步**落在引擎内、合成消息**走 `sink`** ⇒ 帧上**原则上可见**（属于 L5 的观测面），但 L5 的剧本
+  用不抛的桩 Stream 与 faux 工具 ⇒ **造不出引擎内抛出**，等价于覆盖不到。
+  ⇒ **L5 的 14 个剧本全绿不能作为第 2 步的证据**；第 2 步的证据只有夹具 1（C 组）与夹具 3。
+- 同理，`mvn clean verify` 全绿只说明「没打断既有面」，不构成对本包的**正面**证据 —— 正面证据是
+  夹具 + 五条探针。
+
+**全量验证（2026-09-19）**：
+
+- `mvn -o clean verify` ⇒ **BUILD SUCCESS**，14 个模块全 SUCCESS（含 checkstyle）。
+- 测试计数：ai 440、**agent-core 468**、session-backend-sqlite 35、**coding-agent 225**、
+  telemetry 31、tui 14、protocol 2、client 37，零 Failures/Errors。
+- **L5 的一致性剧本 `conformance.ConformanceTest` 14/14 绿** —— 但见上面的划界声明。
+- 本包新增：`EngineFailureSettlementTest` **3/3**、`SessionFailurePathTest` **3/3**。
+- checkstyle 每模块报 **0 violation**；`checkstyle-result.xml` 里的 warning 全部落在
+  **本包未触碰**的既有文件上（`AgentHarness` 502 行、`PiLaneSink` 510 行、`AgentSession` 988 行、
+  `RpcDispatcher` 601 行，及若干既有未用 import）—— 本包新增/改动的四个文件**零 warning**。
+
+**顺带记录一条教训（形态 (7)）**：本包的夹具是**先写探针、后写夹具**（§8.36.6 的稿子先钉死「谁红」），
+结果六处偏差里有**四处**是「稿子凭空想象注入形状」错掉的（#3/#5/#6，以及 #1/#2 的判定细节）——
+**注入点必须在写下它的那一刻就跑一次**。稿子能钉住的只有「要钉的命题」，钉不住「用哪根钉子」。
 
 ---
 
