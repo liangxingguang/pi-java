@@ -50,12 +50,19 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     // the streaming path (TextEnd). Transcript entries must not render it a
     // second time — the transcript snapshot may contain extra blocks (e.g.
     // thinking) or reordered deltas that would otherwise duplicate the bubble.
-    private boolean assistantStreamed;
+    //
+    // ⚠️ 三个字段都跨线程：写点在 onStreamEvent（会话事件派发线程），读点在
+    // onEntry / finishRun（渲染与提交线程）⇒ 需要可见性保证（台账 B45）。
+    // volatile 只加可见性、不改语义 —— 单个 boolean 的读写本身无竞态。
+    private volatile boolean assistantStreamed;
     // Thinking bubbles are committed at ThinkingEnd; without a TextEnd the
     // transcript entry would otherwise render them a second time.
-    private boolean thinkingRendered;
+    private volatile boolean thinkingRendered;
     // Tool calls observed in the current run (drives the turn separator).
-    private int runToolCalls;
+    // ⚠️ 用 AtomicInteger 而不是 volatile int：`++` 是读-改-写，
+    // volatile 不保证原子性（spotbugs 原文 AT_NONATOMIC_OPERATIONS_ON_SHARED_VARIABLE）。
+    private final java.util.concurrent.atomic.AtomicInteger runToolCalls =
+        new java.util.concurrent.atomic.AtomicInteger();
 
     /** Receive a complete transcript entry (dedupes streamed assistant text). */
     @Override
@@ -121,7 +128,7 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
                 chatPanel.setDraft(null);
                 thinkingRendered = true;
             }
-            case StreamEvent.ToolCallStart ignored -> runToolCalls++;
+            case StreamEvent.ToolCallStart ignored -> runToolCalls.incrementAndGet();
             case StreamEvent.ToolCallDelta ignored -> { }
             case StreamEvent.ToolCallEnd ignored -> { }
             case StreamEvent.UsageInfo ignored -> { }
@@ -148,7 +155,7 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
 
     /** Reset per-run tool accounting (called before each prompt submission). */
     public void resetRunTracking() {
-        runToolCalls = 0;
+        runToolCalls.set(0);
     }
 
     /**
@@ -157,15 +164,16 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
      * Elapsed time is measured from submission to status completion.
      */
     public void finishRun(long elapsedNanos) {
-        if (runToolCalls <= 0) {
+        int calls = runToolCalls.get();   // 读一次，标签里的两处取值必须一致
+        if (calls <= 0) {
             return;
         }
         long seconds = Math.max(0, elapsedNanos / 1_000_000_000L);
         String worked = seconds >= 60
             ? "Worked for " + (seconds / 60) + "m " + (seconds % 60) + "s"
             : "Worked for " + seconds + "s";
-        String label = worked + " • Local tools: " + runToolCalls
-            + (runToolCalls == 1 ? " call" : " calls");
+        String label = worked + " • Local tools: " + calls
+            + (calls == 1 ? " call" : " calls");
         chatPanel.append(new ChatMessage.TurnSeparator(label));
     }
     /** Refresh the status bar from a session snapshot. */
