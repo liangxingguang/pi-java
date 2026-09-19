@@ -3692,7 +3692,7 @@ telemetry 31 / ai 336 / agent-core 450。
 
 ---
 
-### 8.32 B 类功能缺口的补全路线（判定 + 包划分）—— **路线已批准**（用户 2026-09-17「按照顺序」⇒ ①→②→③→④→⑤；包① 已实施，见 §8.33；包② 已实施，见 §8.34；**包③ 已实施，见 §8.36.8**；**包④ 部分已实施，见 §8.37**；**包⑤ 设计见 §8.38（待审）**；⑥ 待设计）
+### 8.32 B 类功能缺口的补全路线（判定 + 包划分）—— **路线已批准**（用户 2026-09-17「按照顺序」⇒ ①→②→③→④→⑤；包① 已实施，见 §8.33；包② 已实施，见 §8.34；**包③ 已实施，见 §8.36.8**；**包④ 部分已实施，见 §8.37**；**包⑤ 已实施，见 §8.38.9**；⑥ 待设计）
 
 #### 8.32.0 这一节解决什么
 
@@ -3708,7 +3708,7 @@ B 类九条（台账 `docs/32 §3`）此前每条只有一行「修法素描」�
 |---|---|---|---|---|
 | B1 | branch summary 无实现 | **阻塞于裁决** —— 范围**远超台账**：缺的不止是摘要函数，是**整棵同会话树导航** | 包⑥ | §8.31.4 只登记了「无实现」；实测 pi 侧 `agent-session.ts:3136-3167 navigateTree` / `:3226-3251` / `:3280-3300` 全无对应物 |
 | B2 | compaction `details` 生产者 | **已结案** | — | `4380796`（§8.30.8） |
-| B3 | 重试的宿主渲染 | **可做，但拆三块**：RPC（帧已对，只差状态字段）/ TUI（**结构性盲区：整模块零订阅**）/ web（需产品裁决） | 包④ / 包⑤ | 见 §8.32.2 第 7 条；**包④ 设计见 §8.37（部分已实施）**；**包⑤ 设计见 §8.38（待审）** |
+| B3 | 重试的宿主渲染 | **可做，但拆三块**：RPC（帧已对，只差状态字段）/ TUI（**结构性盲区：整模块零订阅**）/ web（需产品裁决） | 包④ / 包⑤ | 见 §8.32.2 第 7 条；**包④ 设计见 §8.37（部分已实施）**；**包⑤ 已实施，见 §8.38.9** |
 | B4 | `addedToolNames` 的 provider 层消费者 | **结案为不做**（机制归属原判是错的） | — | 见 §8.32.2 第 6 条 |
 | B5 | 宿主 `catch (Exception)` 不接 `Error` ⇒ 永久挂起 | **可做，两步**：① `catch (Throwable)` ＋ `finally` 幂等兜底 ② `handleRunFailure` 落引擎侧。**两步均已裁**（2026-09-19：①取「两处 Throwable＋finally 兜底」；②**做，落引擎侧**）| 包③ —— **已实施**（§8.36.8，`16ca4d7`/`f16436b`/`d136097`） | pi `agent.ts:484-525`；pi-java `SessionRunner`；引擎 `PiLaneEngine.drive` |
 | B6 | 初始 thinking 文本被丢弃 | **可做** → **已做**（§8.33） | 包① | pi `anthropic-messages.ts:632` `thinking ?? ""` vs pi-java `AnthropicMessagesApi:128-129` 只读 `_signature()` |
@@ -6256,7 +6256,7 @@ pi 是「重建 frame」（顶层 `usage` ＋ 处理过的 `assistantMessageEven
 
 ---
 
-### 8.38 包⑤：TUI 重试面（B3-块2）—— **设计（待审）**
+### 8.38 包⑤：TUI 重试面（B3-块2）—— **已实施**（`42d49ec`，记录见 §8.38.9）
 
 #### 8.38.0 这一包解决什么
 
@@ -6526,6 +6526,93 @@ public record SessionSnapshot(
 | **C** | `lastError` 常驻状态栏（§8.38.3-F）：本包**顺手修**，还是登记另立？ | **顺手修**。它是「重试失败的错误该显示在哪」的**同一个决定** —— 第 3 步要往聊天区写 `Error: Retry failed …`，那时状态栏还红着一条旧错误，本包等于**亲手制造**这个矛盾。修法按判据取「状态栏不再承载错误、错误只进聊天区」（与 pi 同）；若担心可见性，退一步是「新 run 开始时清除」——**这条留给裁决** |
 | **D** | `…AttemptStart` 的 `branchSummary` 分支（B1 未实现、今天不可达）：照写还是留空？ | **照写**。成本是 `if` 的一个分支，B1 落地后自动生效；但**写清今天不可达 ⇒ 无夹具**，不得为它造一个假的可达性 |
 | **E** | `queue_update` / `thinking_level_changed` 的**发射侧**（§8.38.3-A/B）：登记另立，还是并入本包？ | **登记另立**。发射侧在 `agent-core`/`coding-agent`，本包面是 `tui`；跨面会把一次审计拆成两次（同 §8.37.8 裁决点 A 的口径） |
+
+#### 8.38.9 实施记录（2026-09-19，`42d49ec`）
+
+**已实施：第 1–3 步 ＋ 压缩指示器的最小一半；B37 就地修。** 用户回「按照推荐实施」⇒ 五个裁决点全部按推荐项落地。
+
+**(1) 第 1 步落地处与设计稿不同（据实记）。** 稿子写在 `PiTuiLauncher.runInteractive` 的
+`mode.setObservers(...)` 紧邻处；实施时改落 **`PiTuiApp`**，并在 `start` / `startInline` /
+`switchSession` 三处接线。理由：`PiTuiApp` **已经**是快照订阅的落点（`start`/`startInline` 各建一次
+`watchSession()`、`switchSession` 先 `close()` 再重接），而 `/session` 切会话时**启动器那个订阅会指向旧会话**
+—— 把两个订阅放在同一处，「跟着换会话重接」是同一句代码的既有形状，不是新发明的纪律。
+
+新增 `app/SessionEventChannel`（76 行）：`open(AgentSession, Source)` / `close()` / `isOpen()`。
+`Source` 是 `AgentSession#subscribe` 的**形状**（`@FunctionalInterface`），生产传 `null` ⇒ 用
+`session::subscribe`；测试用可替换源，因为**可用的 emit 全在 run 里（要 provider）**。
+
+**(2) 指示器槽与清位守卫。** 新增 `component/StatusIndicator`（sealed，三种 kind：
+`RETRY`/`COMPACTION`/`BRANCH_SUMMARY`）。`ChatScreen` 持**唯一一个**槽（`volatile`：写入在渲染线程，
+读取还来自 inline 的唤醒线程），`statusBar()` 优先级改为 **指示器 > 快照 > 空行**。
+守卫逐字照 pi（`interactive-mode.ts:2115-2118`）：
+`kind != null && (indicator == null || indicator.kind() != kind)` ⇒ **return**。
+
+⚠️ **守卫不是装饰，今天就有活干**：`summarization_retry_attempt_start` 把槽换成 compaction 之后，
+收尾的 `summarization_retry_finished` 清的是 `retry` ⇒ 守卫拦住 ⇒ compaction 指示器**留到
+`compaction_end`**（pi 同）。三条用例钉住它。
+
+**(3) 倒计时按裁决点 B 分叉。** 不引入定时器：
+- fullscreen：`ToolkitRunner.tickRate(33ms)` 每帧调 `root()` → `statusBar()` → `textAt(now)` 重算；
+- inline：新增 `util/CountdownWake`（57 行）—— 1 Hz 守护线程，**只在** `hasTickingIndicator()`
+  为真时 `shell::markDirty()`（pi 的 `CountdownTimer` 只在重试窗口内每秒 `requestRender`）。
+`ceil` 语义：`remainingMs = max(0, deadline - now) / 1_000_000`（**先降到毫秒**），
+再 `(remainingMs + 999) / 1000`。⚠️ 首次实现漏了 `/ 1_000_000`，夹具当场报
+`in 4499996s` —— 「注入点写下就跑」再次证明有效（这个错**肉眼审不出来**）。
+
+**(4) 文本逐字照 pi。** `Retrying (1/3) in 4s... (esc to cancel)`；取消提示键走
+`KeybindingHints.keyText(keys.strokeFor(INTERRUPT))`（新增 `component/KeybindingHints`，46 行，
+对应 pi `keybinding-hints.ts#formatKeyText`）⇒ 今天恒 `esc`。⚠️ 如实标注一处**不可表达**：
+pi 的键位串修饰键顺序不统一（既有 `ctrl+shift+up` 也有 `shift+ctrl+o`），`formatKeyText` 只拆分重连、
+不重排；布尔三元组表达不了原串顺序 ⇒ pi-java 取固定顺序 ctrl→alt→shift，今天唯一调用点无修饰键、
+顺序不可观测。
+
+**(5) B37 就地修（裁决点 C）。** 删掉 `ChatScreen` 的 `lastError` 字段与状态栏那条红字分支
+（错误只进聊天区，与 pi 的 `showError` 一致），双报随之消失。`onSessionEvent` 新增
+`showError(String)` ⇒ 渲染成 `Error: <msg>`（pi `:4273-4277` 的前缀）。
+
+**(6) 一处**超出**裁决 A 的最小扩面，理由必须写下来。** §8.38.4 第 3 步会让
+`summarization_retry_attempt_start` 置一个 **compaction** 指示器，而第 4 步（压缩事件）按裁决不做
+⇒ **没有任何事件会清它** ⇒ 引入一个「永久转圈」。故补上压缩指示器的**生命周期**那一半：
+`CompactionStart → 置`、`CompactionEnd → 清`。**不做**的仍是第 4 步的其余三件（聊天区重建、
+`aborted`/`errorMessage` 两条消息、Esc 换绑）⇒ 登记 **B38/B39**。
+副作用是顺带补齐了 pi 的**手动/阈值压缩**可见面（`Compacting context... (esc to cancel)` 等）。
+
+**(7) 测试（L5 结构上覆盖不到任何一条）。** 新增 21 条定点用例，`pi-java-tui` **209/209 绿**：
+- `ChatScreenSessionEventTest` 14 条：文本逐字符、`ceil` 首帧与逐秒退格、到点归 0、
+  成功路不写聊天区、空 `finalError` ⇒ `Unknown error`、**清位守卫**（两个方向）、
+  三种 compaction 文案、`…AttemptStart` 的分派、branchSummary 分支（只钉文本）、
+  `hasTickingIndicator`、无关事件不抛、**渲染断言**（指示器盖过快照）。
+- `SessionEventChannelTest` 3 条：事件在 `drain()` 前**不上屏**（证明走的是渲染线程队列）、
+  重开先摘旧句柄、重复 close 无害。`PiTuiAppSessionChannelTest` 1 条：`startInline` 真的接上。
+  `KeybindingHintsTest` 3 条。
+
+**变异探针（5 个，逐个跑过、逐个复现红灯）**：
+
+| # | 改坏什么 | 实测红集 |
+|---|---|---|
+| P1 | `ceil` 改 `floor`（`(remainingMs+999)/1000` → `/1000`） | **恰 3 条**：`autoRetryStart…:49`、`theCancelHint…:66`、`theIndicatorWins…:211`（都断言首帧秒数） |
+| P2 | `clearIndicator` 去掉守卫（无条件清） | **恰 3 条**：`clearingAnotherKind…:108`、`clearingRetryDoesNotKill…:120`、`summarizationRetryAttemptStartSwaps…:164` |
+| P3 | 通道直调 `sink.accept`（不经队列） | **恰 1 条**：`sessionEventsReachTheScreenOnlyAfterTheRenderThreadDrains:44` |
+| P4 | `AutoRetryEnd` 去掉 `!success` 判定 | **恰 1 条**：`autoRetryEndOnSuccessWritesNothing:88` |
+| P5 | `CompactionEnd` 不清位 | **恰 1 条**：`compactionTextFollowsPiPerReason:139` |
+
+**(8) 未覆盖（如实登记）。**
+- **端到端 emit 未覆盖**：「harness 真的发出 `AutoRetryStart` 并上屏」需要一个真 run（要 provider）；
+  夹具覆盖的是「通道 ＋ 槽 ＋ 文本」，`PiTuiAppSessionChannelTest` 只证明**接线存在**。
+  这是本包唯一的实质缺口，但它在**两侧都**要 provider —— 与 L5 的 `faux` 桩不同轨。
+- **`switchSession` 重接未覆盖**（触发路径在 overlay 里，无夹具）。
+- **inline 的 1 Hz 唤醒未覆盖**（要真终端循环；`CountdownWake` 的 `active` 门与唤醒动作都很薄，
+  但它没有夹具 —— 记在这里）。
+- `ChatScreen` 现 **492 行**、`PiTuiApp` **482 行**（均 < 500，但下一次改动必须拆分）。
+
+**(9) 依裁决点 D：`branchSummary` 分支照写、注明今天不可达。** 无夹具造假的「可达性」——
+用例只钉文本与 kind（`summarization_retry_attempt_start` 的 source 在生产恒为 `"compaction"`，
+`LlmSummaryGenerator:151`）。
+
+**(10) 依裁决点 E：B34/B35 的发射侧未动**（面在 `agent-core`/`coding-agent`）。
+
+**(11) 一处「不做」的反向确认（§8.38.3-G）：`agent_end` 不加 `willRetry` 分支** —— pi 自己不看
+（`:3367-3380` 内 `willRetry` 零出现），本包 `onSessionEvent` 用 `default -> { }` 让未列事件一律静默。
 
 ---
 
