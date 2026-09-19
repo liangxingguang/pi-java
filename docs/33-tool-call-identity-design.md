@@ -21,8 +21,9 @@
 | **RPC / JSON 标准输出** | `message_update` **恒缺顶层 `usage`**；`toolcall_start` **缺 `id`/`toolName`** | RPC 客户端（编辑器集成/脚本） |
 | **web** | 工具调用的三个事件上**不推 `message_update`** ⇒ 前端手上最后一条 `message_update` 是工具调用**之前**那条 ⇒ 工具卡要等 `agent_end` 整表替换才出现 | web UI（用户已明示：web 将替代 TUI） |
 
-**范围**：核心一处修复 ＋ 两个消费面各接一次。**不含**：前端改动（`pi-webui` 是仓库外，
-且它的渲染已经就绪 —— 见 P8）。
+**范围**：核心一处修复 ＋ 两个消费面各接一次。**不含**：前端改动（前端源码在
+**本仓** `pi-java-web/src/main/frontend/`，其渲染侧**已经就绪** —— 见 P25 ⇒ 本包只需要把
+推送补上，不必动前端）。
 
 ---
 
@@ -61,14 +62,20 @@
 | P20 | `RpcDispatcher.emitEvent` 调 `toWire` 时**只捕 `IOException`** | `RpcDispatcher:311-320` | **已核** |
 | P21 | 其余 `ToolCallStart` 消费者**不读 partial**：`PiLoopRunner:357`（只是 `isUpdateEvent` 的成员判定）、`PrintMode:88`（忽略）、`ChatScreen`（只 `runToolCalls++`） | 各自出处 | **已核** |
 
-### 2.3 前端侧（`pi-webui`，**仓库外，只读**）
+### 2.3 前端侧（`pi-java-web/src/main/frontend/`，**本仓**）
+
+> ⚠️ **出处更正（R4）**：本节初稿把前端源码指到**仓库外**的 `/d/workplaceForai/pi-webui`。
+> 权威位置是**本仓** `pi-java-web/src/main/frontend/`。两份的 `client/main.ts` 各自独立，
+> 但**组件来自同一个 npm 包**（`@mariozechner/pi-web-ui@0.66.1`，两处 `node_modules` 里
+> `dist/components/Messages.js` **逐字节相同**）⇒ 四条命题**结论不变**，只有出处要改。
 
 | # | 命题 | 出处 | 判定 |
 |---|---|---|---|
-| P22 | `message_update` → `updateStreamingContainer(event.message, true)`，即前端渲染的是**累积消息** | `client/main.ts:272-276` | **已核** |
-| P23 | 三个 `tool_execution_*` **只调 `renderApp()`，完全不读载荷** | `client/main.ts:302-305` | **已核** |
-| P24 | `turn_end` 按 `toolCallId` 去重后 append `event.toolResults` | `client/main.ts:286-296` | **已核** |
-| P25 | 渲染组件（npm `@mariozechner/pi-web-ui@0.66.1`）**会**渲染 `chunk.type === "toolCall"` 的内容块，且工具名取 `this.tool?.name \|\| this.toolCall.name`（**回落到消息块里的 name**） | `node_modules/@mariozechner/pi-web-ui/dist/components/Messages.js:74-88`、`:223` | **已核** |
+| P22 | `message_update` → `updateStreamingContainer(event.message, true)`，即前端渲染的是**累积消息** | `client/main.ts:279-282` | **已核** |
+| P23 | 三个 `tool_execution_*` **只调 `renderApp()`，完全不读载荷** | `client/main.ts:316-320` | **已核** |
+| P24 | `turn_end` 按 `toolCallId` 去重后 append `event.toolResults` | `client/main.ts:302-310` | **已核** |
+| P25 | 渲染组件**会**渲染 `chunk.type === "toolCall"` 的内容块，且工具名取 `this.tool?.name \|\| this.toolCall.name`（**回落到消息块里的 name**） | `frontend/node_modules/@mariozechner/pi-web-ui/dist/components/Messages.js:74`、`:88`、`:223` | **已核** |
+| P26 | 流式容器另收一个 `toolResultsById`（由 `messages` 里的 toolResult 消息建图），即**结果从消息列表来、不从事件载荷来** | `client/main.ts:611`、`:776` | **已核** |
 
 ---
 
@@ -81,6 +88,7 @@
 | **R1** | 「B28/B29 是 **web** 流式界面直接吃的」 | **错**：web 走 `AgentEventTranslator`，**完全不经过** `JsonEventMapper`（P17/P18） | B28/B29 是 **RPC 面**，与 web 无关 |
 | **R2** | 「web 前端在工具执行期间拿不到工具名 / 拿不到结果」 | **半错**：名与结果前端**有**取法（P25 从 message 块取 name；P24 从 `turn_end.toolResults` 取结果）——但它们**都到不了**，因为 pi-java 在 ToolCall* 上不推 `message_update`（P17）、且 `turn_end` 无 `toolResults`（见 §4-A） | 真缺口是**推送时机**，不是载荷字段 |
 | **R3** | 「给 `tool_execution_start` 补 `toolCallId`/`toolName`」 | **推翻为投机**：前端根本不读这三个事件的载荷（P23）；且 `docs/15:148` 原文就写着「载荷对齐前端 `tool_execution_*` 的空处理」。按本仓 C1/C9 的口径（「加发射是投机代码」）⇒ **不做** | 从范围里删掉 |
+| **R4** | 「前端源码在**仓库外** `/d/workplaceForai/pi-webui`」 | **错**：权威位置是**本仓** `pi-java-web/src/main/frontend/`（我按 `maxdepth 3` 找、它在该深度之下）。⚠️ 结论未变 —— 两条 `main.ts` 的行为与 npm 组件版本一致（§2.3） | 只改出处，不改判定 |
 
 > ⚠️ **流程教训（本文档是第一个按新流程写的）**：R1/R2/R3 三条都是**没读代码就断言**的产物。
 > 新流程要求每条命题先落表、逐条核过，才允许进实施稿。
@@ -91,7 +99,7 @@
 
 | # | 发现 | 证据 | 处置 |
 |---|---|---|---|
-| **A** | **`turn_end` 不带 `toolResults`** —— pi-java 把 `AgentSettled` 翻成空 `{type:"turn_end"}`，而前端按 `toolCallId` 从 `turn_end.toolResults` 收工具结果 | `AgentEventTranslator:51-54` vs `client/main.ts:286-296` | **今天不可观测**（`agent_end.messages` 里含 toolResult 消息，整表替换兜住）⇒ **登记不修** |
+| **A** | **`turn_end` 不带 `toolResults`** —— pi-java 把 `AgentSettled` 翻成空 `{type:"turn_end"}`，而前端按 `toolCallId` 从 `turn_end.toolResults` 收工具结果 | `AgentEventTranslator:51-54` vs `client/main.ts:302-310` | **今天不可观测**（`agent_end.messages` 里含 toolResult 消息，整表替换兜住）⇒ **登记不修** |
 | **B** | **`tool_execution_end` 的语义错位**：pi 是「**工具跑完**」（带 `result`/`isError`），pi-java 发的是「**模型把调用吐完**」（`StreamEvent.ToolCallEnd`） | `agent-loop.ts:767` 区（pi）vs `AgentEventTranslator:77-78` | 今天不可观测（前端不读载荷，P23）⇒ **登记不修**，随前端扩展重估 |
 | **C** | `PiMessagesEvent.ToolCallStart` **已有 `toolName` 字段**，调用点只取 `id` | `PiMessagesEvent:46` vs `PiMessagesApi:104` | 本包**顺手传**（一个实参），否则该车道的起点身份仍然是空的 |
 | **D** | `FauxProvider.toolCall` 的起点块也是空身份 —— 改核心而**不改桩**，会让 L5 桩与生产**不同形** | `FauxProvider:95-103` | 本包**必须同改**，否则「夹具会把人脑里的模型当作契约」 |
@@ -109,7 +117,7 @@
 | N2 | `usage` 归一化的公开落点 | **裁决点**（不是事实问题）：① 给 `StreamEvent.UsageInfo` 加 `toUsage()`；② 在 `Message.AssistantMessage` 开公开静态。倾向 ① —— 它把「StreamEvent 变体 → 领域类型」的投影留在 `pi-java-ai` 里，与 `snapshot()`/`withUsage()` 同层 | `AssistantMessage:55`、`Message.java:131-142` |
 | N3 | 「`UsageInfo == null` 时写什么」两处口径 | **pi 恒写零值对象**（P2）⇒ 线格式必须**恒写**；而 `usageOf` 现在对 null 返回 **null**（P14）⇒ **两处口径不一样，且焦区别在于**：`usageOf` 服务**终局消息**（pi 该处也是必填 `Usage`，所以它**同样**是缺口），mapper 服务**每一帧**。**裁决点**：本包只修 mapper（低风险），把「终局消息 `usage` 可空」**另登记**（它会动现有终局投影，风险不同档） | `Message.java:131-142`、`types.ts:439` |
 | N4 | 改 `FauxProvider` 是否动 L5 | **不动**（§4-G）；但**不能**顺手改 `ScriptedStreams`（§4-F） | `ConformanceRunner:138`、`ScriptedStreams:54/85` |
-| N5 | web 推 `message_update` 的帧量 | `ToolCallDelta` 与 `TextDelta` 同量级（都是每块一条），前端 `updateStreamingContainer` 的重绘频率因此与今天**文本流一致** ⇒ 不引入新的量级。⚠️ **未实测**：真实前端下的重绘成本没有测量手段（仓库外），若日后可见卡顿，那是**新的一包**，不是本包能默认决定的 | `AgentEventTranslator:65-88`、`client/main.ts:272-276` |
+| N5 | web 推 `message_update` 的帧量 | `ToolCallDelta` 与 `TextDelta` 同量级（都是每块一条），前端 `updateStreamingContainer` 的重绘频率因此与今天**文本流一致** ⇒ 不引入新的量级。⚠️ **未实测**：真实前端下的重绘成本没有测量手段，若日后可见卡顿，那是**新的一包**，不是本包能默认决定的 | `AgentEventTranslator:65-88`、`client/main.ts:279-282` |
 
 ### 5.1 由 N1–N5 带出的新增登记
 
@@ -130,7 +138,7 @@
 | 1 | 给 `tool_execution_start/update/end` 补载荷 | 前端不读（P23）⇒ 投机（见 R3） |
 | 2 | 修 `tool_execution_end` 的语义错位（§4-B） | 今天不可观测；真修要 web 改吃 agent-core 的工具事件，是**另一包** |
 | 3 | 补 `turn_end.toolResults`（§4-A） | 今天被 `agent_end` 兜住；无消费者可证 |
-| 4 | 改前端（`pi-webui`） | 仓库外、只读；且 P25 表明渲染侧已就绪 |
+| 4 | 改前端（`pi-java-web/src/main/frontend/`） | 渲染侧**已经就绪**（P25 会渲染 `toolCall` 块、名字回落到块里的 `name`）⇒ 本包只需补推送。改前端不在本包范围 |
 | 5 | 动 `PiMessagesApi` 的**其它**缺口（B18 签名/redacted） | 那是它自己的规则，本包只传一个已有字段（§4-C） |
 
 ---
