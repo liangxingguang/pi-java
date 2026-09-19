@@ -198,8 +198,6 @@ class SessionResumeFoldTest {
     }
 
     /** Guards the test's own assumption that records survive a round trip. */
-
-    /** Guards the test's own assumption that records survive a round trip. */
     @Test
     void seededRecordsAreReadable() throws Exception {
         Path root = seed(session -> {
