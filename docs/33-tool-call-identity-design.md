@@ -294,3 +294,140 @@ case StreamEvent.ToolCallEnd e   -> { out.add(messageUpdate(e.partial()));   out
 ## 9. 下一步
 
 用户审核 §8 之后才写代码；实施完成后在 `docs/33` 追加**实施记录**（含实测红集、偏差、未覆盖如数）。
+
+---
+
+## 10. 实施记录（2026-09-19/20，用户「包6审核通过，开始实施」）
+
+**结论：§8 实施稿四步全部落地；五个变异探针全部有牙；全树 `clean verify` 绿。**
+新增 17 条断言（稿子计划 9 条），既有测试零回归。
+
+### 10.1 四步与改动面
+
+| 步 | 模块 | 改动 | 状态 |
+|---|---|---|---|
+| 1 | `pi-java-ai` | `emitToolCallStart(String,String)` 签名改死 ＋ 六个调用点 ＋ `FauxProvider` 桩 ＋ `UsageInfo.toUsage()` | ✅ |
+| 2 | `pi-java-coding-agent` | `JsonEventMapper`：`message_update` 恒写 `usage` ＋ 新私有 `assistantMessageEvent(StreamEvent)` 给起点补身份（照抛） | ✅ |
+| 3 | `pi-java-web` | `AgentEventTranslator`：三个工具增量各**增加**一条 `message_update` | ✅ |
+| 4 | 本文件 | 本节 | ✅ |
+
+改动面（`git diff --stat`）：主源码 12 文件、+124/−17；新夹具 3 文件。
+**`ScriptedStreams` 未动**（§4-F：改它＝改 L5 帧）；既有 `AgentEventTranslatorTest`
+（11 条）与 `JsonEventMapperTest`（12 条）**零改动、全绿**。
+
+### 10.2 实测红集（先红）
+
+**步骤 1 —— 红是「编译失败」，不是断言红**（如实记）：
+`StreamPartialBuilderToolIdentityTest.java:28,44,58,79`，四条全是
+`method emitToolCallStart ... cannot be applied to given types`（`required: no arguments`）。
+签名不存在时夹具**无法编译**，故这一步拿不到断言级红 —— 这是本包唯一一处
+「先红」打了折的地方。
+
+**步骤 2 —— `JsonEventMapperMessageUpdateTest`：9 跑 7 红**
+- ERROR（NPE）：`usageInfoEventWithoutPartialStillGetsZeroUsage`、
+  `toolcallStartCarriesIdAndToolNameFromThePartialBlock`、
+  `usageNormalizationPrefersTheFullBreakdownOverTheCounts`
+- FAILURE：`messageUpdateAlwaysCarriesTopLevelUsage`（`Expecting actual not to be null`）、
+  `messageUpdateWithoutUsageWritesZeroValuedObjectNotMissingKey`（同）、
+  `toolcallStartThrowsWhenTheBlockIsNotAToolCall`（`Expecting code to raise a throwable`）、
+  `toolcallStartWireKeysAreOrderedTypeUsageAssistantMessageEvent`
+- 恒绿 2 条：`nonToolCallStreamEventsKeepTheirOwnFields`、
+  `toolcallDeltaIsUntouchedByTheIdentityRule`（反向确认，本来就该绿）
+
+**步骤 3 —— `AgentEventTranslatorToolCallVisibilityTest`：4 跑 3 红**
+`:56` `:75` `:91`（`containsExactly` 序列不符，今天只有一条 `tool_execution_*`）；
+反向断言 `textDeltaStillPushesExactlyOneMessageUpdate` 恒绿。
+
+### 10.3 变异探针（**红集实测，不预测**）
+
+| # | 改坏什么 | 实测红集 | 条 |
+|---|---|---|---|
+| **P1** | mapper 去掉顶层 `usage` | `messageUpdateAlwaysCarriesTopLevelUsage:49`、`messageUpdateWithoutUsageWritesZeroValuedObjectNotMissingKey:66`、`toolcallStartWireKeysAreOrderedTypeUsageAssistantMessageEvent:140`、`usageInfoEventWithoutPartialStillGetsZeroUsage:165`(NPE)、`usageNormalizationPrefersTheFullBreakdownOverTheCounts:153`(NPE) | **5** |
+| **P2** | 起点不补 `toolName`（写空串） | `toolcallStartCarriesIdAndToolNameFromThePartialBlock:86` | **1** |
+| **P3** | 抛换成写空串 | `toolcallStartThrowsWhenTheBlockIsNotAToolCall:97` | **1** |
+| **P4** | 核心不 seed 块（回空占位） | ai：`toolCallStartIndexPointsAtTheSeededBlock:86`、`toolCallStartSeedsIdentityBlockBeforeSnapshot:33`；coding：`toolcallStartCarriesIdAndToolNameFromThePartialBlock:85` | **3**（跨模块） |
+| **P5** | web 不推 `message_update` | `toolCallStartAlsoPushes…:56`、`toolCallDeltaAlsoPushes…:75`、`toolCallEndAlsoPushes…:91` | **3** |
+
+**P1 与 P4 都比稿子预测的更大**（稿子 P1 猜「①②」＝2 条，实测 5 条；P4 猜「①③」＝2 条，
+实测跨模块 3 条）。这正是「红集实测、不预测」这条口径的价值 —— 预测的两个都偏小。
+
+### 10.4 与稿子的偏差（如实）
+
+| # | 稿子写的 | 实际做的 | 理由 |
+|---|---|---|---|
+| **D1** | §8.2(6)：`message_update` 加在 `tool_execution_*` **之前** | **之后** | 两条理由同向：① 既有夹具 `AgentEventTranslatorTest:53-59` 断言 `get(0)` 的类型，后置可零回归（§8.3 要求它保持绿）；② 前端的 `message_update` 是**命令式** `updateStreamingContainer`（`client/main.ts:302-305`），而 `tool_execution_*` 会 `renderApp()` 重渲染 —— 命令式那次放最后才不会被随后的重渲染覆盖。已写进代码注释 |
+| **D2** | §8.3：步骤 3「`AgentEventTranslatorTest` **扩**」 | 另起 `AgentEventTranslatorToolCallVisibilityTest` | 让红集无歧义，且不动既有绿文件（该文件 11 条零改动） |
+| **D3** | §8.3 计划 9 条断言 | **17 条**（ai 4 ＋ mapping 9 ＋ web 4） | 每条都配反向断言；多出的是「键序」「非工具增量不被污染」「`UsageInfo` 无 partial 不 NPE」「文本路径不翻倍」 |
+| **D4** | 步骤 1「先红」 | 只能拿到**编译失败** | 签名变更使夹具无法编译；如实记为打折处 |
+
+### 10.5 未覆盖（如数）
+
+- **端到端**：真实 provider 的 `toolcall_start` 帧未测（要 provider）；夹具走
+  `StreamPartialBuilder` 造帧 —— 这正是为了避开两个桩的非 pi 形状（§4-F）。
+- **真实前端**：`updateStreamingContainer` 的重绘成本未测（N5）—— 判据沉默，不假装测过。
+- **分块到达**（首块只有 id、name 稍后）：pi-java 的 `ToolCallAccumulator` 与 pi 同形，
+  但**没有**夹具造这个序列（今天没有可见差异可钉）。
+- **D1 的第 ② 条理由是推断，不是实测**：`renderApp()` 是否会覆盖命令式设的消息，
+  我没有前端运行手段去证；第 ① 条（既有夹具）是**编译期/运行期可证**的硬理由。
+  如实标注：D1 的选择由硬理由独立成立，②只是同向的加分项。
+- **两处归一化并存**：`Message.AssistantMessage.usageOf`（终局，null⇒null）与
+  `UsageInfo.toUsage()`（每帧，调用方兜零）现在各有一份合成逻辑。合并会改变终局投影
+  ⇒ 按裁决 C 不动，差额登记 B41。
+
+### 10.6 顺带观察（未修，登记）
+
+- **`PiWebServerAuthTest.acceptsConnectionWithValidToken:97` 首跑全量 web 套件时红过一次**
+  （15 s 内未收到 `ready` 帧）。随后：单跑 1 次绿、全量 2 次绿 ⇒ 判为**非必现**。
+  **我没有证明它与本包无因果**，只证明了不可复现；与本次改动无直接关联（该测试不碰
+  `AgentEventTranslator`），不擅自归因、不在本包修。
+- **`JsonEventMapper` 现在对自洽性有硬要求**：`toolcall_start` 的 `partial.content[index]`
+  必须是 `ToolUseContent`，否则抛（照 pi）。生产侧**全部六个调用点都经
+  `StreamPartialBuilder`**，块先入后取快照 ⇒ 结构上恒满足。但**测试里手搓
+  `ToolCallStart` 的桩**（`ScriptedStreams:85`、`EngineFailureSettlementTest:94`、
+  `PiLoopTest:92`、`AgentSessionToolIntegrationTest:54`、`SessionFailurePathTest:101`）
+  形状不合 pi 的读法 —— 它们今天不流经 mapper（L5 走帧级差分、不经 RPC 线），
+  全树绿即证。**若日后有新的 RPC 夹具手搓起点事件而不建块，会当场抛** —— 这是
+  pi 的语义（照抛），不是缺陷。
+
+### 10.7 全树验证 —— ⚠️ **全树 `clean verify` 未通，卡在 `pi-java-tui` 的 spotbugs（存量，非本包）**
+
+**实测 `mvn -o clean verify`（15:10）**：reactor 走到 `pi-java-tui` 时
+`spotbugs:check` 报 **4 bugs**，其后 7 个模块（protocol/client/server/web/evals/dist）
+被 **SKIPPED** ⇒ 全树未通。
+
+```
+Medium: Operation on the "runToolCalls" shared variable is not atomic
+        [ChatScreen] At ChatScreen.java:[124] AT_NONATOMIC_OPERATIONS_ON_SHARED_VARIABLE
+Medium: Shared primitive "assistantStreamed" ... [ChatScreen.java:92, :109]
+        AT_STALE_THREAD_WRITE_OF_PRIMITIVE
+Medium: Shared primitive "thinkingRendered" ... [ChatScreen.java:93, :122] 同上
+Medium: Shared primitive "runToolCalls" ... [ChatScreen.java:151] 同上
+```
+
+**归属（可证）**：本包工作树在 `pi-java-tui/` 下 **0 个改动文件**
+（`git status --porcelain -- pi-java-tui/ | wc -l` = 0）⇒ 这 4 条是 **HEAD 上的存量**，
+与包⑥ 无因果。字段来源也是实证的：`assistantStreamed` 出自 `d1e8d3a`、
+`runToolCalls` 出自 `b378b20`（2026-08-16 及更早），被点名的写点全在
+`onStreamEvent` —— 那是**包⑤ 之前**就存在的老路径（包⑤ 加的是 `onSessionEvent`）。
+
+**诚实交代两点**：
+1. **我不知道此前为何没被拦住**。`spotbugs:check` 确实绑在默认 `verify`
+   （根 `pom.xml:172-180`），且 `b378b20` 已是一个多月前 ⇒ 这期间任何一次
+   `clean verify` 都应当同样失败。我没有去追这个时间线（不属本包范围），
+   只把「它不是本包引入的」证到 `git` 级。
+2. **它可能是一个真问题，不是误报**：`runToolCalls++`（事件线程）＋
+   `resetRunTracking()` 清零（提交线程）＋ 渲染线程读，正是 memory 里
+   「并发审计的单位是『共享对象 × 全部线程』」那一类。**未修** —— TUI 是你明示
+   要降级的模块，且修法涉及行为语义，应在单独一包里裁。
+
+**包⑥ 自己范围的验证（绕开 tui 门禁单独跑）**：
+`mvn -o clean verify -pl pi-java-protocol,pi-java-client,pi-java-server,pi-java-web,
+pi-java-evals,pi-java-coding-agent -am`（**spotbugs 不跳**，覆盖除 tui/dist 外的全部
+模块 —— 只有 `pi-java-dist` 依赖 tui，见 `pi-java-dist/pom.xml:28`）。
+
+结果：**BUILD SUCCESS**，checkstyle 与 spotbugs 零违规。模块计数（实测）：
+telemetry 31 · **ai 444**（＋4）· **agent-core 473** · session-sqlite 35 ·
+**coding-agent 242**（＋9）· **web 41**（＋4）。
+
+> `pi-java-dist` 未单独验证：它唯一的事是打 fat jar / native，无本包新增测试；
+> 在 tui 门禁解开前它进不了 reactor。
