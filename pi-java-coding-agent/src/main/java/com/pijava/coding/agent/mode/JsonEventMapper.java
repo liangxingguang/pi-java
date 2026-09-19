@@ -5,6 +5,8 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import com.pijava.ai.Usage;
+import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.coding.agent.core.AgentSessionEvent;
@@ -48,7 +50,16 @@ public final class JsonEventMapper {
         switch (event) {
             case AgentSessionEvent.MessageUpdate u -> {
                 node.put("type", "message_update");
-                node.set("assistantMessageEvent", MAPPER.valueToTree(u.streamEvent()));
+                // pi 恒写顶层 usage（json-event.ts:60 `usage: event.message.usage`），
+                // 且**永不为 undefined** —— 流起点就被初始化成零值对象
+                // （anthropic-messages.ts:518-525、openai-completions.ts:325-332）。
+                // ⇒ 缺 UsageInfo 时兜零，**不省键**。注意这与 B41（终局 assistant
+                // 消息的 usage 可空、缺则整键消失）是两条不同的口径，见 docs/33 §8.0 裁决 C。
+                var partial = u.streamEvent().partial();   // ⚠️ UsageInfo 变体可为 null
+                var info = partial == null ? null : partial.usage();
+                node.set("usage", MAPPER.valueToTree(
+                    info == null ? Usage.of(0, 0) : info.toUsage()));
+                node.set("assistantMessageEvent", assistantMessageEvent(u.streamEvent()));
             }
             case AgentSessionEvent.AgentEnd e -> {
                 node.put("type", "agent_end");
@@ -157,5 +168,35 @@ public final class JsonEventMapper {
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             return "{}";
         }
+    }
+
+    /**
+     * 增量的线格式：剥 {@code partial}（由 {@link StreamEventMixin} 完成），
+     * 并给 {@code toolcall_start} **补身份**。
+     *
+     * <p>pi {@code modes/json-event.ts:19-31}：起点事件从
+     * {@code event.partial.content[event.contentIndex]} 读 id/name 缀上去，
+     * 那个位置**不是 toolCall 就抛** —— 这是「partial 与 contentIndex 必须自洽」
+     * 的不变量断言，不是可降级的容错点。可空链 {@code toolCall?.type} 意味着
+     * **越界也算错位**，故这里把下界与上界一并判掉。</p>
+     *
+     * <p>抛出的后果已核（docs/33 §5-N1）：{@code SessionEventHub} 逐个 listener
+     * {@code catch (RuntimeException)} ⇒ 丢该客户端的这一帧 ＋ 一条 warning，
+     * 连接与其它监听器不受影响。</p>
+     */
+    private static ObjectNode assistantMessageEvent(StreamEvent event) {
+        var delta = (ObjectNode) MAPPER.valueToTree(event);
+        if (event instanceof StreamEvent.ToolCallStart start) {
+            var content = start.partial().content();
+            int index = start.contentIndex();
+            if (index < 0 || index >= content.size()
+                    || !(content.get(index) instanceof ContentBlock.ToolUseContent toolCall)) {
+                throw new IllegalStateException(
+                    "toolcall_start content at index " + index + " is not a tool call");
+            }
+            delta.put("id", toolCall.id());
+            delta.put("toolName", toolCall.name());
+        }
+        return delta;
     }
 }
