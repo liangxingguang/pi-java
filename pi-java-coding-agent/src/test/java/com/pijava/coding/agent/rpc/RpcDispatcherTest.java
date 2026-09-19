@@ -24,6 +24,7 @@ import com.pijava.coding.agent.core.AgentSessionEvent;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;
@@ -176,6 +177,53 @@ class RpcDispatcherTest {
             .contains("\"command\":\"get_state\"")
             .contains("\"success\":true")
             .contains("\"model\":\"faux-state/hello\"");
+
+        // 包④（docs/31 §8.37）：state 载荷的四个字段此前写死 false/null/null/0，
+        // 现在逐字段取自会话。这里钉住静态会话下的取值 —— 真值侧
+        // （压缩进行中 / 有排队 / 有落盘路径）各自在下面或 agent-core 侧钉。
+        var payload = payloadOf(output, "2");
+        assertThat(payload.get("isCompacting").asBoolean()).isFalse();
+        assertThat(payload.get("pendingMessageCount").asInt()).isZero();
+        assertThat(payload.get("messageCount").asInt()).isZero();
+        assertThat(payload.get("isStreaming").asBoolean()).isFalse();
+        assertThat(payload.get("sessionId").asText()).isEqualTo("session");
+        assertThat(payload.get("sessionName").asText()).isEqualTo("session");
+        assertThat(payload.get("steeringMode").asText()).isEqualTo("one-at-a-time");
+        assertThat(payload.get("followUpMode").asText()).isEqualTo("one-at-a-time");
+        // --no-session ⇒ 无落盘路径。pi 的 `sessionFile?: string`（rpc-types.ts:103）
+        // 是可选的，JSON.stringify 对 undefined **省略键** —— 必须是缺键，
+        // **不是** `"sessionFile":null`（NON_NULL 是契约的一部分）。
+        assertThat(payload.has("sessionFile")).isFalse();
+    }
+
+    @Test
+    void getStatePendingMessageCountCountsOnlySteerAndFollowUp() throws Exception {
+        // pi 的 pendingMessageCount = _steeringMessages.length + _followUpMessages.length
+        // （agent-session.ts:1619-1621）—— **不含** nextRun 队列。这颗哨兵就是钉住
+        // 「不数 nextRun」这一条：三个队列各放一条，计数必须是 2。
+        var ctx = context("faux-pending", textStream("Hi"));
+        var out = new ByteArrayOutputStream();
+        var dispatcher = new RpcDispatcher(ctx.session(), new JsonlWriter(out), ctx.args());
+
+        dispatcher.handleLine("{\"id\":\"1\",\"type\":\"get_state\"}");
+        assertThat(payloadOf(out.toString(StandardCharsets.UTF_8), "1")
+            .get("pendingMessageCount").asInt()).isZero();
+
+        var harness = ctx.session().harness();
+        var lane = ctx.session().laneName();
+        harness.steer(lane, "steer me");
+        harness.followUp(lane, "follow up");
+        harness.nextRun(lane, "next run");
+
+        out.reset();
+        dispatcher.handleLine("{\"id\":\"2\",\"type\":\"get_state\"}");
+
+        var payload = payloadOf(out.toString(StandardCharsets.UTF_8), "2");
+        assertThat(payload.get("pendingMessageCount").asInt())
+            .as("steer 1 + followUp 1；nextRun 不计入（pi 只数那两个数组）")
+            .isEqualTo(2);
+        // 反向：排队的消息**不在**转录里 —— 计数不是 messageCount 的别名。
+        assertThat(payload.get("messageCount").asInt()).isZero();
     }
 
     @Test
@@ -281,6 +329,28 @@ class RpcDispatcherTest {
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────
+
+    /**
+     * 取出某条 response 行的 {@code data} 载荷（信封 = {@code {id, command, success, data}}）。
+     */
+    private static JsonNode payloadOf(String output, String id) throws Exception {
+        var mapper = new ObjectMapper();
+        for (String line : output.lines().toList()) {
+            if (line.isBlank()) {
+                continue;
+            }
+            var node = mapper.readTree(line);
+            if ("response".equals(asText(node, "type")) && id.equals(asText(node, "id"))) {
+                return node.get("data");
+            }
+        }
+        throw new AssertionError("no response payload for id=" + id + " in:\n" + output);
+    }
+
+    private static String asText(JsonNode node, String field) {
+        var value = node.get(field);
+        return value == null || value.isNull() ? null : value.asText();
+    }
 
     private record Ctx(AgentSession session, com.pijava.coding.agent.cli.Args args) {}
 

@@ -471,6 +471,41 @@ public final class AgentSession implements AutoCloseable {
         return session == null ? name : session.getMetadata().id();
     }
 
+    /**
+     * 是否有压缩在飞（pi {@code AgentSession.isCompacting}，{@code agent-session.ts:983-990}）。
+     *
+     * <p>pi 读三个专用中止控制器；pi-java 的等价窗口由压缩的两个入口置/清，
+     * 见 {@link AgentHarness#isCompacting(String)}。RPC {@code get_state} 是唯一消费者。</p>
+     */
+    public boolean isCompacting() {
+        return harness.isCompacting(laneName());
+    }
+
+    /**
+     * 会话的 JSONL 落盘路径（pi {@code AgentSession.sessionFile}，{@code :1008-1010}）。
+     *
+     * <p>pi 的类型是 {@code string | undefined} —— 非文件后端（sqlite / in-memory /
+     * {@code --no-session}）取不到路径，回 {@code null} ≙ undefined，
+     * 线格式上**省略该键**（{@code docs/31 §8.37.4}）。</p>
+     */
+    public String sessionFile() {
+        var metadata = session == null ? null : session.getMetadata();
+        return metadata instanceof JsonlSessionMetadata jsonl ? jsonl.path().toString() : null;
+    }
+
+    /**
+     * 待处理消息数 = steer 队列 + followUp 队列（pi {@code pendingMessageCount}，
+     * {@code :1619-1621}）。
+     *
+     * <p><b>不含</b> nextRun 队列 —— pi 的 {@code _steeringMessages.length +
+     * _followUpMessages.length} 只数那两个数组。队列的只读视图由
+     * {@link com.pijava.agent.harness.LaneSnapshot#queues()} 给出，无需新增访问器。</p>
+     */
+    public int pendingMessageCount() {
+        var queues = harness.snapshot(laneName()).queues();
+        return queues.steer().size() + queues.followUp().size();
+    }
+
     /** The CLI arguments this session was assembled from ({@code /new}). */
     public Args sessionArgs() {
         return args;

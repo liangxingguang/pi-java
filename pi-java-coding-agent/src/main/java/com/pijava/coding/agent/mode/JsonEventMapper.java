@@ -15,6 +15,14 @@ import com.pijava.coding.agent.core.AgentSessionEvent;
  * <p>关键规则：{@code message_update} 事件中的 {@code assistantMessageEvent}
  * 去掉累积快照 {@code partial}（每个 {@code StreamEvent} 变体都带），只留增量 ——
  * 否则每个 delta 都会重复整条消息。其余事件按字段原样透传。</p>
+ *
+ * <p><b>可空键的纪律（{@code docs/31 §8.37.4}）</b>：pi 对非 {@code message_update}
+ * 事件是<b>原样透传</b>（{@code json-event.ts:48-51}），所以线上「有没有这个键」
+ * 完全由 {@code JSON.stringify} 决定 —— <b>{@code undefined} 被省略，{@code null} 被保留</b>。
+ * 于是 Java 的 {@code null} 该不该写，取决于 pi 那个字段的类型<b>有没有 {@code ?}</b>：
+ * 有 {@code ?} ⇒ 主动省略（本文件里 {@code finalError} / {@code result} /
+ * {@code errorMessage} / {@code id} / {@code reason} 五处）；是必填 ⇒ 照写。
+ * <b>新加一个事件时，先去看 pi 的类型声明，不要跟着邻行照抄。</b></p>
  */
 public final class JsonEventMapper {
 
@@ -79,10 +87,18 @@ public final class JsonEventMapper {
                 node.put("type", "compaction_end");
                 // 与 compaction_start 同理：pi 线上是小写字面量。
                 node.put("reason", c.reason().name().toLowerCase());
-                node.set("result", MAPPER.valueToTree(c.result()));
+                // pi 的 payload 里 result 是 `CompactionResult | undefined`（:164），
+                // 取消/中止/失败/R1 闩锁四路都显式写 undefined ⇒ JSON.stringify **省略键**。
+                if (c.result() != null) {
+                    node.set("result", MAPPER.valueToTree(c.result()));
+                }
                 node.put("aborted", c.aborted());
                 node.put("willRetry", c.willRetry());
-                node.put("errorMessage", c.errorMessage());
+                // 同理：`errorMessage?: string`（:167）—— 成功路（CompactionExecutor
+                // 的 applyCompaction 成功分支）也传 null，故缺省即不写。
+                if (c.errorMessage() != null) {
+                    node.put("errorMessage", c.errorMessage());
+                }
             }
             case AgentSessionEvent.AutoRetryStart r -> {
                 node.put("type", "auto_retry_start");
@@ -95,7 +111,12 @@ public final class JsonEventMapper {
                 node.put("type", "auto_retry_end");
                 node.put("success", r.success());
                 node.put("attempt", r.attempt());
-                node.put("finalError", r.finalError());
+                // pi 的 `finalError?: string`（agent-session.ts:170）。三个发射点里
+                // **成功复位**（:700-706）根本不写这个键 ⇒ 每次重试成功都会多一个
+                // "finalError":null。Java 的可空引用 ≙ pi 的 `string | undefined`。
+                if (r.finalError() != null) {
+                    node.put("finalError", r.finalError());
+                }
             }
             case AgentSessionEvent.SummarizationRetryScheduled s -> {
                 node.put("type", "summarization_retry_scheduled");
@@ -117,7 +138,11 @@ public final class JsonEventMapper {
                 node.put("type", "summarization_retry_finished");
             case AgentSessionEvent.BashExecutionUpdate b -> {
                 node.put("type", "bash_execution_update");
-                node.put("id", b.id());
+                // pi 的 `id?: string`（agent-session.ts:185，取值 `options?.id`，
+                // :3027）：RPC 的 bash 命令 id 可选，缺省即无该键。
+                if (b.id() != null) {
+                    node.put("id", b.id());
+                }
                 node.put("delta", b.delta());
             }
             default -> node.put("type", "unsupported_event");
