@@ -102,18 +102,36 @@ final class SessionRunner {
                 // 供 run summary 把 lane records 过滤到本 drive。
                 runIds.addAll(outcome.passRunIds());
                 transcript = outcome.transcript();
-            } catch (Exception e) {
+            } catch (Throwable t) {
                 // 兜底保留：引擎内部失败面（操作没跑到收尾）。重试判定的
                 // 那条路已归引擎 —— 这里只可能剩非重试类异常。
-                LOG.warn("[session] harness run error, stopReason=error", e);
+                // B5 第 1 步（docs/31 §8.36.4）：`Exception` → `Throwable` —— pi 的
+                // catch 无类型（`agent.ts:500`），Java 的 Exception/Error 分裂是方言，
+                // 不是 pi 的形状。只接 Exception 会让 Error 直穿：两个 future 永不完成，
+                // SessionResult.status()/entries() 是 join ⇒ 打印模式永久挂起。
+                LOG.warn("[session] harness run error, stopReason=error", t);
                 stopReason.set("error");
                 var error = new StreamEvent.StreamError(
-                    "error", e, AssistantMessage.empty());
+                    "error", t, AssistantMessage.empty());
                 if (streamObserver != null) {
                     streamObserver.onStreamEvent(error);
                 } else {
                     queue.add(Optional.of(error));
                 }
+            }
+
+            // B5 第 2 步（docs/31 §8.36.5）：pi `modes/print-mode.ts:139-155` —— 跑完之后
+            // 读**转录尾条**定终局，而不是看流信号。引擎把 pass 内的抛出收成一条失败助手
+            // 消息后，流上不会再有任何终局信号（那次 pass 的 StreamDone 早在工具批次之前
+            // 就发过了）⇒ 只看流信号会把崩溃的 run 记成 (0, completed)。
+            // **无条件读**（没有「见过终局就跳过」的闸）：一次驱动可能跑多个 pass、
+            // 每 pass 至少一条 StreamDone ⇒「见过终局」与「这次运行以失败收场」是两回事。
+            // 判据逐字照抄 pi：尾条是助手且 stopReason 为 error/aborted 才改写 ——
+            // 正常路径上尾条与流信号同源同值，不产生行为差异。
+            var tail = tailAssistant(transcript);
+            if (tail != null && ("error".equals(tail.stopReason())
+                    || "aborted".equals(tail.stopReason()))) {
+                stopReason.set(tail.stopReason());
             }
 
             entriesFuture.complete(transcript);
@@ -148,10 +166,11 @@ final class SessionRunner {
                 stopReason.get()));
             statusFuture.complete(new RunStatus(
                 exitCode(stopReason.get()), stopReason.get()));
-        } catch (Exception e) {
-            LOG.error("[session] drive failed; emitting empty AgentEnd (run=" + laneName + ")", e);
+        } catch (Throwable t) {
+            // B5 第 1 步（docs/31 §8.36.4）：同 `:105` 那处，`Exception` → `Throwable`。
+            LOG.error("[session] drive failed; emitting empty AgentEnd (run=" + laneName + ")", t);
             var error = new StreamEvent.StreamError(
-                "error", e, AssistantMessage.empty());
+                "error", t, AssistantMessage.empty());
             if (streamObserver != null) {
                 streamObserver.onStreamEvent(error);
             } else {
@@ -165,6 +184,14 @@ final class SessionRunner {
             if (streamObserver == null) {
                 queue.add(Optional.empty());
             }
+            // B5 第 1 步的「活性」那一半（docs/31 §8.36.4 ①-b）：照抄引擎侧
+            // PiLaneEngine.drive 的同一条纪律 —— 无论从哪条路离开（含 catch 体
+            // 自己再抛、含 Error 直穿 try-with-resources），两个 future 都必须落定。
+            // 否则 SessionResult.status()/entries() 是 join ⇒ 打印模式只能 Ctrl-C。
+            // complete() 幂等：正常路径上这两次调用都是无操作。
+            // 不承诺 OOM 极端下的活性：若 complete 自身再抛，JVM 已在崩溃态。
+            entriesFuture.complete(List.of());
+            statusFuture.complete(new RunStatus(1, "error"));
         }
     }
 
@@ -209,6 +236,25 @@ final class SessionRunner {
                     owner.accumulatedMessages(), willRetry));
             }
         };
+    }
+
+    /**
+     * pi print 模式的「读尾」（{@code modes/print-mode.ts:139-155}）：转录的
+     * <b>最后一条消息</b>是助手消息时返回它，否则 {@code null}。
+     *
+     * <p>pi 的判据是 {@code state.messages[last]?.role === "assistant" &&
+     * (stopReason === "error" || stopReason === "aborted")} —— 尾条**不是**助手就不判，
+     * 不会往回找更早的助手。这里照抄：倒扫跳过非消息条目（entry 表里还有别的变体），
+     * 遇到第一条消息条目就定案。</p>
+     */
+    private static Message.AssistantMessage tailAssistant(List<Entry> transcript) {
+        for (int i = transcript.size() - 1; i >= 0; i--) {
+            if (transcript.get(i) instanceof Entry.Message entry) {
+                return entry.message() instanceof Message.AssistantMessage assistant
+                    ? assistant : null;
+            }
+        }
+        return null;
     }
 
     /**
