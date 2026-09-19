@@ -99,6 +99,8 @@ pi-java 的会话层**没有出口** —— 而 pi 有，且 RPC 线逐字节透
 | **C** | `PiLoop.Event.ToolExecutionUpdate` 的 `args` 口径：pi 用 `prepared.toolCall.arguments`（**原始、未校验**），与 start 取的是**同一个**量 | `agent-loop.ts:698` | 已核，无需改动（pi-java 由 `PiToolRunner:158` 传入） |
 | **D** | 截断路径（`stopReason === "length"`）会为**永不执行**的工具调用发 start＋end（`isError: true`） | `agent-loop.ts:385-401` | pi-java 的 `PiLoopTools:45` javadoc 已记该语义 ⇒ 无缺口 |
 | **E** | pi 的 `update` **不保证跨工具不交错**（fire-and-forget 进数组），文档原文「may interleave across tools」 | `agent-loop.ts:692-704`、`docs/extensions.md:657` | pi-java 的 `PiLaneSink` 全局串行化（P13）⇒ 本仓顺序**更严**，属扩展不是缺口；如实登记 |
+| **F** | ⚠️ **pi-java 的内置工具没有一条调 `onUpdate`** ⇒ `tool_execution_update` **在生产上永不发射**（只有测试桩发）。pi 侧 7 个工具全都有：`bash.ts` / `edit.ts` / `find.ts` / `grep.ts` / `ls.ts` / `read.ts` / `write.ts` | 生产 grep：`onUpdate.onUpdate` 在 `pi-java-agent-core/src/main` 与 `pi-java-coding-agent/src/main` **零命中**（唯二命中是 `PiLoop:71` 的 record 定义与 `PiToolRunner:158` 的 emit，都不是工具侧调用）；pi 侧 `grep -l onUpdate packages/coding-agent/src/core/tools/*.ts` 命中 7 个文件 | ⇒ **登记 B46**（不在本包）：本包的 `update` 面**结构性只能被测试桩行使**，直到 B46 落地。如实写进 §8.5 |
+| **G** | pi-java 另有一套**自己的** bash 流式通道：`AgentSessionEvent.BashExecutionUpdate`（web 上收成 `bashOutput`），但它是 RPC `bash` **命令**的产物、且**阻塞不流式**（`AgentSession:871-872` 的 javadoc 原文「v1 阻塞执行，不增量流式」） | `AgentSession.java:873-886`、`AgentEventTranslator` 的 `bashOutput` 支 | 与 `tool_execution_update` **不是一回事**（一个是用户发起的 shell，一个是工具调用）⇒ 不相干，别混 |
 
 ---
 
@@ -216,8 +218,14 @@ case AgentSessionEvent.ToolExecutionStart s -> out.add(toolExecution("tool_execu
 
 ### 8.5 未覆盖（预登记）
 
-- **端到端**：真实工具（Bash 的累计快照 update）在 web 上的可见性未测 —— 需运行前端。
-- **`result` 的保真度**：N2/裁决 B 落实后仍可能与 pi 的省略语义有差（待核）。
+- **`update` 面在生产上结构性不可达（§4-F，登记 B46）**：pi-java 的内置工具**没有一条**
+  调 `onUpdate` ⇒ 本包补好的 `tool_execution_update` 通路**只有测试桩能行使**。
+  夹具会如实写明这一点，**不假装它有生产覆盖**。
+- **端到端**：真实工具（Bash 的累计快照 update）在 web 上的可见性未测 —— 需运行前端，
+  且受 §4-F 阻塞（pi-java 的 bash 根本不发 update）。
+- **`result` 的保真度**：裁决 B 落实后仍可能与 pi 的省略语义有残差（N2 的已核部分是
+  「Java 侧默认序列化会多三个键」，投影能消掉；但 `details` 的 null/undefined 之别
+  只在运行时可见）。
 - **TUI**：不改（§6-4）。
 
 ---
@@ -226,3 +234,119 @@ case AgentSessionEvent.ToolExecutionStart s -> out.add(toolExecution("tool_execu
 
 用户审核 §8（含 §8.0 三个裁决点）之后才写代码；实施完成后追加**实施记录**
 （含实测红集、偏差、未覆盖如数）。
+
+---
+
+## 10. 实施记录（2026-09-20，用户「照稿实施」）
+
+**§8.0 三个裁决点已裁**：A ＝ **web 帧带载荷**；B ＝ **`result` 走显式投影**；
+C ＝ 3 个 record。四步全部落地，新增 **16 条**断言，五个变异探针全部有牙。
+
+### 10.1 四步与改动面
+
+| 步 | 模块 | 改动 | 状态 |
+|---|---|---|---|
+| 1 | `pi-java-coding-agent` | `AgentSessionEvent` 加 3 个变体 ＋ `SessionRunner.passEvents` 三处转发 | ✅ |
+| 2 | `pi-java-coding-agent` | `JsonEventMapper` 三支（照 pi 透传，全字段必填）＋ 新 public `toolPayload(Object)` 显式投影 | ✅ |
+| 3 | `pi-java-web` | `AgentEventTranslator` **换源**：真实工具执行事件 → `tool_execution_*`；流式 `ToolCall*` 分支**只留** `message_update` | ✅ |
+| 4 | 本文件 ＋ `docs/32` | 实施记录 ＋ B43 结案 ＋ B46 登记 | ✅ |
+
+**`pi-java-agent-core` 生产代码零改动**（R1 兑现）。改动面：主源码 5 文件、
+既有夹具 2 文件更新、新夹具 3 文件。
+
+### 10.2 实测红集（先红）
+
+**步骤 1 —— 红是「编译失败」，不是断言红**（与包⑥ 步骤 1 同形）：
+`AgentSessionToolExecutionEventTest.java:82,83,87,92,144`，五处 `cannot find symbol`
+（`AgentSessionEvent.ToolExecutionStart/End` 不存在）。
+
+**步骤 2 —— `JsonEventMapperToolExecutionTest`：8 跑 8 红**（3 FAILURE ＋ 5 NPE ERROR），
+全部八条。
+
+**步骤 3 —— `AgentEventTranslatorToolExecutionTest`：6 跑 6 红**（5 FAILURE ＋ 1
+`IndexOutOfBounds`），全部六条。
+
+### 10.3 变异探针（**红集实测，不预测**）
+
+| # | 改坏什么 | 实测红集 | 条 |
+|---|---|---|---|
+| **P1** | `passEvents` 三条都不转发 | `toolExecutionStartAndEndReachTheSessionEventStream:100`、`toolExecutionEndPrecedesTheAgentEndOfThatPass:151` | **2** |
+| **P2** | mapper 的 `toolName` 写空串 | `toolExecutionStartCarriesThreeFields:31` | **1** |
+| **P3** | web 保留旧源（两处都发） | 包⑦：`streamToolCallEventsNoLongerFabricate…:104`、`streamToolCallDeltaAndEndDoNotFabricateEither:116`；**包⑥**：`toolCallStartAlsoPushes…:57`、`toolCallDeltaAlsoPushes…:76`、`toolCallEndAlsoPushes…:92` | **5**（跨两个夹具） |
+| **P4** | `isError` 恒 false | `toolExecutionEndCarriesIsErrorTrueOnFailure:70` | **1** |
+| **P5** | `args` 换成空 map | `toolExecutionStartCarriesThreeFields:32`、`argsAndResultsArePassedThroughAsObjectsNotStrings:79`（均 NPE） | **2** |
+
+**P1 与稿子的预测不同**：稿子写「①②⑤ 有牙」＝3 条，实测 **2 条** —— web 夹具
+（⑤）直接构造 `AgentSessionEvent.ToolExecution*`、**不经 `passEvents`**，所以 P1
+打不到它。这是「红集实测、不预测」又一次兑现。
+**P3 反过来更大**：它同时打红**包⑥ 的夹具** 3 条 —— 说明那两个夹具确实在钉同一件事。
+
+**P1 的一次自我纠正**：第一版探针我只关掉 start（留 end），红集只有 **1** 条；
+改成三条全关才得 2 条。这顺带证明两个用例**不冗余**（一个钉「在不在」、
+一个钉「顺序对不对」）。
+
+### 10.4 与稿子的偏差（如实）
+
+| # | 稿子写的 | 实际做的 | 理由 |
+|---|---|---|---|
+| **D1** | §8.2(4) 只写「删掉 tool_execution_*，保留 message_update」 | 同时**更新了包⑥ 的夹具**（`AgentEventTranslatorToolCallVisibilityTest` 三条） | 那是**必然**：包⑥ 的夹具钉的正是「流式增量产出 `tool_execution_*`」这条**被本包删掉**的行为。不改就会红。改动是把 `containsExactly("tool_execution_start","message_update")` 收成单条 `message_update` |
+| **D2** | 未提 | **删除**了 `AgentEventTranslatorTest.toolCallEventsEmitToolExecution` | 它钉的是同一条被删的行为，且其正反两面已由新夹具完整覆盖 ⇒ 留着重写＝重复钉同一不变量 |
+| **D3** | §8.3 计划 9 条断言 | **16 条**（coding-agent 10 ＋ web 6） | 多出的是「顺序」「非 ToolResult 载荷不炸」「result 投影的省略/保留双向」「delta/end 也不伪造」 |
+| **D4** | 步骤 1「先红」 | 只能拿到**编译失败** | 新类型不存在 ⇒ 夹具无法编译（与包⑥ 步骤 1 同形，如实记） |
+| **D5** | 未提 | `toolPayload` 做成 **public**、web 侧直接复用 | 「省哪三个键」是容易两边写歪的细节，两个面必须同一形状 ⇒ 只留一处定义。`pi-java-web` 本就依赖 `pi-java-coding-agent`，不引入新依赖方向 |
+
+### 10.5 未覆盖（如数）
+
+- **`update` 面在生产上结构性不可达** —— §4-F/**B46**：pi-java 的内置工具没有一条
+  调 `onUpdate`。夹具里那条 `toolExecutionUpdateIsPushedWithItsPayload` 是**手工构造
+  事件**喂进去的，如实标注：它钉的是**投影**，不是生产通路。
+- **端到端**：真实工具在 web 上的可见性未测（需运行前端，且受 B46 阻塞）。
+- **`result` 保真度残差**：投影消掉了三个多余键；`details` 的 `null`/`undefined` 之别
+  只在运行时可见，未测。
+- **TUI**：不改（§6-4）。
+
+### 10.6 顺带观察（未修，登记）
+
+- ⚠️ **`SessionResumeFoldTest.resumeSettlesACrashOpenedOperationSoANewRunCanOpen`
+  在全树跑时红过一次**（该用例耗时 **311 s**，断言「恰 2 条 `OperationStarted`」实际
+  3 条）。隔离复跑**绿**（30 s）。
+  **机制（有据，非猜测）**：该用例经 `AgentSession.createWeb` 建会话 ⇒ 走**真实
+  provider**（网络），而断言隐含「首次调用必成功」。负载下真调用变慢 ⇒ 引擎 post-run
+  的**重试环**（docs/31 §8.22）开了**续跑 operation** —— 多出的那条记录正是
+  `OperationStarted[… intent=Run[originalPrompt=[]]…]`（空 prompt ＝ 续跑），
+  seq 83 也远在后。311 s 即退避重试的墙钟。
+  **未证**：我没有用「回退本包再跑全树」去证明非因果；**能证的是**：该用例无工具调用，
+  本包新增的发射（`ToolExecution*`）在那条路径上**一次都不会触发**。
+  ⇒ **登记 A13 待裁**（把它改成注入 FauxProvider，是测试面的一次收口）。
+
+### 10.7 全树验证
+
+**第一次 `mvn -o clean verify`：BUILD FAILURE，卡在 `pi-java-web`** —— 三条红，**同一个
+症状**（WebSocket 收不到 `ready` 帧）：
+
+```
+PiWebServerAuthTest.acceptsConnectionWithValidToken:97
+PiWebServerAuthTest.rejectsConnectionWithWrongToken:74
+PiWebServerIntegrationTest.settingsRoundtrip:82 → awaitType:218 → awaitAny:263
+    Timed out waiting for ready; received so far: []
+```
+
+**归属（结构论证，非「看着像 flake」）**：`ready` 由 `WebDispatcher.start()` 在
+**WS 连接时无条件**发出（`:61-64`：先 `resubscribe()`，紧接 `send.accept(new Ready())`），
+而 `resubscribe()`（`:171-177`）**只订阅、不做同步重放** ⇒ 本包改的
+`AgentEventTranslator.translate()` 是在**之后**的会话事件上才被调用，
+**结构上不可能挡住 `ready`**。
+
+**复跑证据**：`pi-java-web` 模块隔离重跑 **46/46 绿**；且此前一次
+`-pl ...,pi-java-web,... -am` 亦全绿。⇒ 判为**负载敏感的既有 flake 家族**
+（**A12** 早已登记过其中一条、同一症状）⇒ 本包**未修**，但把 A12 扩记为「三条同症状」。
+
+**`SessionResumeFoldTest` 这次没有复现**（Coding Agent 01:12 SUCCESS）——
+但 §10.6 的 A13 仍成立（那次是 311 s，这次不是）。
+
+**修后重跑 `mvn -o -pl pi-java-web -am test`：全部 SUCCESS。** 模块计数（实测）：
+telemetry 31 · **ai 444** · **agent-core 473** · session-sqlite 35 ·
+**coding-agent 252**（＋10）· **web 46**（＋6）。
+
+> ⚠️ **未做到**：一次**完整**的 `mvn -o clean verify` 全绿 —— 那次被 WS flake 打断在
+> web。除 web 外全部模块在该轮已 SUCCESS，web 单独复跑绿。**如实记，不粉饰**。
