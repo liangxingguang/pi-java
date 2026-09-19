@@ -79,33 +79,41 @@ final class CompactionExecutor {
      */
     void compact(String laneName, CompactionSettings settings) {
         var lane = ctx.requireLane(laneName);
-        ctx.compactionObserver().onStart("manual");
-        CompactionRun run;
+        // pi :1969 —— 手动路在 compaction_start **之前**建控制器（自动路的 :2291 相反）。
+        // 守卫（"Already compacted"）、压缩体、中止三条抛出路径都在窗口内；
+        // 清位在 finally，与 pi 的 :2117 `_clearManualCompactionState()` 同形。
+        lane.enterCompaction();
         try {
-            if (lane.transcript.isEmpty()) {
-                throw new NothingToCompactException(laneName);
+            ctx.compactionObserver().onStart("manual");
+            CompactionRun run;
+            try {
+                if (lane.transcript.isEmpty()) {
+                    throw new NothingToCompactException(laneName);
+                }
+                if (lane.transcript.getLast() instanceof Entry.Compaction) {
+                    throw new NothingToCompactException(laneName);
+                }
+                run = applyCompaction(laneName, lane, settings,
+                    (int) contextTokens(lane), "manual", false);
+            } catch (RuntimeException e) {
+                // pi 的 catch（:2092-2104）：end{manual, aborted: 取消类, errorMessage:
+                // 非取消类才有 "Compaction failed: " 前缀} 后再抛。取消分支的 end 已由
+                // applyCompaction 的发中止检查承担（aborted:true），这里不重复发。
+                if (!"Compaction cancelled".equals(e.getMessage())) {
+                    ctx.compactionObserver().onEnd("manual", null, false, false,
+                        "Compaction failed: " + (e.getMessage() == null ? "compaction failed" : e.getMessage()));
+                }
+                throw e;
             }
-            if (lane.transcript.getLast() instanceof Entry.Compaction) {
-                throw new NothingToCompactException(laneName);
+            if (run.aborted()) {
+                // pi :2049-2051 在 try 内抛 "Compaction cancelled"（end{aborted:true}
+                // 走它的 catch）；这里等价：end 已在体内发过，只差抛出。
+                throw new IllegalStateException("Compaction cancelled");
             }
-            run = applyCompaction(laneName, lane, settings,
-                (int) contextTokens(lane), "manual", false);
-        } catch (RuntimeException e) {
-            // pi 的 catch（:2092-2104）：end{manual, aborted: 取消类, errorMessage:
-            // 非取消类才有 "Compaction failed: " 前缀} 后再抛。取消分支的 end 已由
-            // applyCompaction 的发中止检查承担（aborted:true），这里不重复发。
-            if (!"Compaction cancelled".equals(e.getMessage())) {
-                ctx.compactionObserver().onEnd("manual", null, false, false,
-                    "Compaction failed: " + (e.getMessage() == null ? "compaction failed" : e.getMessage()));
-            }
-            throw e;
+            ctx.publishState(laneName);
+        } finally {
+            lane.exitCompaction();
         }
-        if (run.aborted()) {
-            // pi :2049-2051 在 try 内抛 "Compaction cancelled"（end{aborted:true}
-            // 走它的 catch）；这里等价：end 已在体内发过，只差抛出。
-            throw new IllegalStateException("Compaction cancelled");
-        }
-        ctx.publishState(laneName);
     }
 
     /**
@@ -189,6 +197,10 @@ final class CompactionExecutor {
             return AutoCompactionOutcome.SKIPPED;
         }
         ctx.compactionObserver().onStart(reason);
+        // pi :2290 发 compaction_start、:2291 才建控制器 —— 上面的三条前置守卫
+        // （无模型 / 无设置 / prepareCompaction 空返回）都已 return，与 pi 的
+        // :2276/:2286 一样**不进**窗口。清位在 finally（pi :2450）。
+        lane.enterCompaction();
         try {
             var run = applyCompaction(laneName, lane, settings,
                 (int) contextTokens(lane), reason, willRetry);
@@ -209,6 +221,8 @@ final class CompactionExecutor {
                 : "Auto-compaction failed: " + message;
             ctx.compactionObserver().onEnd(reason, null, false, false, formatted);
             return AutoCompactionOutcome.SKIPPED;
+        } finally {
+            lane.exitCompaction();
         }
     }
 

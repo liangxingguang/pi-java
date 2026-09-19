@@ -378,6 +378,18 @@ public class AgentHarness implements AutoCloseable {
         runLifecycle.compact(laneName, settings);
     }
 
+    /**
+     * Whether a compaction is in flight on this lane（pi {@code AgentSession.isCompacting}，
+     * {@code agent-session.ts:983-990}；包④，{@code docs/31 §8.37}）。
+     *
+     * <p>pi 的三控制器析取在 pi-java 收敛成一个窗口 —— 由
+     * {@code CompactionExecutor} 的两个入口置/清（{@link LaneState#isCompacting()}）。
+     * 唯一的消费者是 RPC {@code get_state.isCompacting}。</p>
+     */
+    public boolean isCompacting(String laneName) {
+        return requireLane(laneName).isCompacting();
+    }
+
     // ═══════════════════════════════════════════════════════════
     // Skills
     // ═══════════════════════════════════════════════════════════

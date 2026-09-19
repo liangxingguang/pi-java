@@ -149,6 +149,41 @@ public final class LaneState {
      */
     int retryAttempt;
 
+    /**
+     * 在飞压缩计数（pi {@code AgentSession.isCompacting}，
+     * {@code agent-session.ts:983-990}；包④，{@code docs/31 §8.37}）。
+     *
+     * <p>pi 读的是<b>三个专用中止控制器</b>（{@code _autoCompactionAbortController}、
+     * {@code _compactionAbortController}、{@code _branchSummaryAbortController}）
+     * 任一存在。pi-java 的压缩借 {@link #abortSignal()}、没有 per-operation 取消句柄，
+     * 且分支摘要尚未移植（第三个控制器无对应物）⇒ 等价的判据只剩「有没有压缩在飞」。
+     * 用<b>计数</b>而非布尔：布尔会把「漏配对的清位」静默吃掉，计数失衡可观测。</p>
+     *
+     * <p>置位点是压缩的两个入口 —— {@code CompactionExecutor.compact}（pi {@code :1969}，
+     * 在 {@code compaction_start} <b>之前</b>）与 {@code CompactionExecutor.runAutoCompaction}
+     * （pi {@code :2291}，在 {@code compaction_start} <b>之后</b>、前置守卫已返回之后）；
+     * 清位恒在同一个 {@code finally}（pi {@code :2117}/{@code :2450}）。</p>
+     *
+     * <p>与 {@link #overflowRecoveryAttempted} 同族：pi 的字段住 {@code AgentSession}，
+     * 故住车道而非 ActiveRun。</p>
+     */
+    private int compactionInFlight;
+
+    /** 进入压缩窗口（pi {@code this._compactionAbortController = new AbortController()}）。 */
+    void enterCompaction() {
+        compactionInFlight++;
+    }
+
+    /** 离开压缩窗口 —— 与 {@link #enterCompaction()} 成对，恒在 {@code finally} 里。 */
+    void exitCompaction() {
+        compactionInFlight--;
+    }
+
+    /** 是否有压缩在飞（pi {@code isCompacting} 的三控制器析取，collapsed 成一个窗口）。 */
+    boolean isCompacting() {
+        return compactionInFlight > 0;
+    }
+
     // ═══════════════════════════════════════════════════════════
     // 配置（pi AgentState 的字段：model / thinkingLevel / systemPrompt / tools）
     // ═══════════════════════════════════════════════════════════
