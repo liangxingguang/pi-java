@@ -3708,7 +3708,7 @@ B 类九条（台账 `docs/32 §3`）此前每条只有一行「修法素描」�
 |---|---|---|---|---|
 | B1 | branch summary 无实现 | **阻塞于裁决** —— 范围**远超台账**：缺的不止是摘要函数，是**整棵同会话树导航** | 包⑥ | §8.31.4 只登记了「无实现」；实测 pi 侧 `agent-session.ts:3136-3167 navigateTree` / `:3226-3251` / `:3280-3300` 全无对应物 |
 | B2 | compaction `details` 生产者 | **已结案** | — | `4380796`（§8.30.8） |
-| B3 | 重试的宿主渲染 | **可做，但拆三块**：RPC（帧已对，只差状态字段）/ TUI（**结构性盲区：整模块零订阅**）/ web（需产品裁决） | 包④ / 包⑤ | 见 §8.32.2 第 7 条 |
+| B3 | 重试的宿主渲染 | **可做，但拆三块**：RPC（帧已对，只差状态字段）/ TUI（**结构性盲区：整模块零订阅**）/ web（需产品裁决） | 包④ / 包⑤ | 见 §8.32.2 第 7 条；**包④ 设计见 §8.37（待审）** |
 | B4 | `addedToolNames` 的 provider 层消费者 | **结案为不做**（机制归属原判是错的） | — | 见 §8.32.2 第 6 条 |
 | B5 | 宿主 `catch (Exception)` 不接 `Error` ⇒ 永久挂起 | **可做，两步**：① `catch (Throwable)` ＋ `finally` 幂等兜底 ② `handleRunFailure` 落引擎侧。**两步均已裁**（2026-09-19：①取「两处 Throwable＋finally 兜底」；②**做，落引擎侧**）| 包③ —— **已实施**（§8.36.8，`16ca4d7`/`f16436b`/`d136097`） | pi `agent.ts:484-525`；pi-java `SessionRunner`；引擎 `PiLaneEngine.drive` |
 | B6 | 初始 thinking 文本被丢弃 | **可做** → **已做**（§8.33） | 包① | pi `anthropic-messages.ts:632` `thinking ?? ""` vs pi-java `AnthropicMessagesApi:128-129` 只读 `_signature()` |
@@ -3738,7 +3738,9 @@ B 类九条（台账 `docs/32 §3`）此前每条只有一行「修法素描」�
 | **①** | thinking 块的**采集 → 落盘 → 回读**：B6 + B7 + B9 + P1 + P4 + P6 | `ai`（采集）+ `agent-core`（落盘） | 无 | **B6/B7 可被新剧本测到**（`FrameNormalizer:223-224` 保留 `type` 与 `text`）；signature/redacted **两侧都被归一化抹掉** ⇒ 不可测 |
 | **②** | thinking/text 的**请求侧重放规则**：P2 + P3 + B8（**并新登记 B13**：redacted 落线） | `ai`（+ `coding-agent` 配置链） | **① 已完成**（§8.33；B7 引入的 `redacted` 位正是 P2 的输入） | 无 thinking 剧本 ⇒ 不动 |
 | **③** | 宿主失败通路：B5（**设计见 §8.36，待审**；两步均已裁：第 1 步＝活性收口（两处 `Throwable`＋`finally`），第 2 步＝`handleRunFailure` **落引擎侧**） | `agent-core`（+ `coding-agent` 宿主） | 无 | 无（会话层事件不在 L5 帧内） |
-| **④** | RPC 重试面：B3-块1 + P7 | `coding-agent/rpc` | 无 | 无 |
+| **④** | RPC 重试面：B3-块1 + P7。⚠️ **设计取证后修正**：面**不止** `coding-agent/rpc` —— `get_state` 的
+`isCompacting`/`sessionFile`/`pendingMessageCount` 三个字段要动 `agent-core`（**待裁**，§8.37.8 裁决点 A）；
+审计另挖出同形态 2 处 ＋ 漏键 2 处（§8.37.3 的 B/C 组，**待裁**，裁决点 B）。**设计见 §8.37（待审）** | `coding-agent/rpc` ＋ `agent-core` | 无 | 无 |
 | **⑤** | TUI 重试面：B3-块2（含**结构改动**：TUI 长出一条会话事件订阅通道） | `tui` | 无（与 ④ 同源但互不依赖） | 无 |
 | **⑥** | branch summary：B1（**待裁决**） | `agent-core` + `coding-agent` | 无 | 无（结构上覆盖不到） |
 
@@ -5487,7 +5489,7 @@ provider 照样吐完帧」那一支（`:206-213` 的 `abortedAtEntry`，**不�
 
 ---
 
-### 8.36 包③：宿主的失败通路（B5）—— **设计待审**（2026-09-19）
+### 8.36 包③：宿主的失败通路（B5）—— **已实施**（2026-09-19，实施记录见 §8.36.8）
 
 > 路线 §8.32.3 的第 ③ 包（面 = `agent-core` + `coding-agent` 宿主）。§8.32.6-C 的建议是
 > 「先只做第 1 步（一行 `catch (Throwable)`），第 2 步单列设计后再定」。**2026-09-19 用户两处裁决**：
@@ -5964,6 +5966,202 @@ P4 ⇒ C 组两条 ＋ 宿主 A3 一条）。**每条都实测过、恢复后 `d
 **顺带记录一条教训（形态 (7)）**：本包的夹具是**先写探针、后写夹具**（§8.36.6 的稿子先钉死「谁红」），
 结果六处偏差里有**四处**是「稿子凭空想象注入形状」错掉的（#3/#5/#6，以及 #1/#2 的判定细节）——
 **注入点必须在写下它的那一刻就跑一次**。稿子能钉住的只有「要钉的命题」，钉不住「用哪根钉子」。
+
+---
+
+### 8.37 包④：RPC 重试面（B3-块1 + P7）—— **设计待审**（2026-09-19）
+
+#### 8.37.0 这一包解决什么
+
+§8.32.3 把包④定义为「RPC 重试面：B3-块1 + P7」，面 = `coding-agent/rpc`、无依赖。
+本节把 B3-块1 那句素描（§8.32.1 的「RPC（帧已对，**只差状态字段**）」）落成**可执行清单**，
+并按判据（分支所有功能都和 pi 表现一样）把审计面从「重试那几条」扩到**整个 RPC 线格式工厂**。
+
+**本节不含代码改动。** 请审 §8.37.3 的三组清单与 §8.37.7 的三个裁决点。
+
+#### 8.37.1 契约：RPC 线格式的唯一定义处
+
+pi `modes/rpc/rpc-mode.ts:355-356`：
+
+```ts
+unsubscribe = session.subscribe((event) => {
+    output(toJsonEvent(event));
+```
+
+**每一个** RPC 事件帧都是 `toJsonEvent(event)`。pi-java 同形：`RpcDispatcher.java:317`
+`out.write(JsonEventMapper.toWire(event))`。⇒ `modes/json-event.ts` 就是 RPC 线格式的**完整契约**。
+（`get_state` 的载荷走另一条路：`RpcSessionState` + `RpcResponse`。）
+
+pi `json-event.ts` 的两条规则：
+
+- `:48-51` 非 `message_update` 事件**原样透传**（`return event`）—— 于是**省略与否由 `JSON.stringify` 决定**：
+  **`undefined` 被省略，`null` 被保留**。这是本包一半差异的总根源。
+- `:20-38` `message_update` 是**重建**的，不是透传。
+
+#### 8.37.2 事实基线（逐字）
+
+**B3-块1 —— `get_state` 的状态字段。**
+
+pi `rpc-mode.ts:450-465` 逐字段取自会话，四个字段的定义点在 `agent-session.ts`：
+
+| 字段 | pi 取值 | 定义处 |
+|---|---|---|
+| `isCompacting` | 三个压缩中止控制器**任一在飞** | `:984-990` |
+| `sessionFile` | `sessionManager.getSessionFile()`（`string \| undefined`） | `:1008-1010` |
+| `sessionId` | `sessionManager.getSessionId()`（**必为 string**） | `:1013-1015` |
+| `pendingMessageCount` | `_steeringMessages.length + _followUpMessages.length` | `:1619-1621` |
+
+pi-java `RpcDispatcher.buildState()`（`:336-354`）把这**四个都写死**：`false` / `null` / `null` / `0`。
+`RpcSessionState` 的**记录形状与 pi 逐字段相同**（12 个分量一一对应）⇒ 缺的不是形状，是取值。
+
+⚠️ **本轮新发现（不在任何既有素描里）**：这四个字段里**只有一个**是现成的 —— `sessionId()` 已存在于
+`AgentSession:470`（`buildState` 却传 `null`）。其余三个**pi-java 没有对应物**：
+
+- `sessionFile`：`JsonlSessionRepository:250` 已有文件名构造，但没暴露到会话级；
+- `pendingMessageCount`：队列在 `LaneState.followUpQueue`/`steerQueue`，只有 `LaneState.snapshot():209` 一条出口；
+- `isCompacting`：**全仓零命中**（只有 `RpcSessionState` 那个记录分量）。
+
+⇒ 「只差状态字段」**低估了工作量**。尤其 `isCompacting`：pi 读的是三个**专用**中止控制器，而 pi-java 的压缩
+借 `lane.abortSignal()`（`CompactionExecutor:256`）、**没有 per-operation 取消句柄** ⇒ 等价物要**新造状态**。
+
+**P7 —— `auto_retry_end` 的 `finalError`。**
+
+pi 三个发射点：
+
+| 路 | pi 原文 | 线上 |
+|---|---|---|
+| 成功复位 `:700-706` | **根本不写 `finalError` 键** | 无该键 |
+| 终局失败 `:1127-1135` | `finalError: msg.errorMessage` | 有值；`errorMessage` 若 `undefined` ⇒ 无键 |
+| 退避中被中止 `:2955-2960` | `finalError: "Retry cancelled"` | 有值 |
+
+pi-java `JsonEventMapper:94-99` 的 `:98` **无条件写**。三个实参来源：`PiLaneSink:377`（成功路传 `null`）、
+`PostRunCompactionCheck:93`（传 `lastAssistant.errorMessage()`，可空）、`PostRunRetry:86`（`"Retry cancelled"`）。
+
+⚠️ **意图已经写在接口上、却丢在序列化边界**：`RetryObserver:31-34` 的 javadoc 原文写着
+「成功复位（`finalError=null`）……可为 null ≙ pi 的 undefined **透传**」—— 但映射器没做这个透传。
+⇒ 后果落在**每次重试成功**这条路上：线上多一个 `"finalError":null`。
+
+#### 8.37.3 审计：把面扩到整个工厂（**本轮新发现，均不在 §8.32.1 表内**）
+
+按 §8.23.2/§8.26 的教训 —— **审计单位是「规则 × 该文件全部同类调用」**，不是被报告的那一处 ——
+把 `JsonEventMapper.toWire` 每个 `put`/`set` 实参的**可空性**逐个对着 pi 的类型声明核了一遍。
+结果：同一形态共 **4 处**（含 P7），另有 **2 处漏键**。
+
+**B 组 · 省略语义（`null` 该省略而没省略）**
+
+| # | 键 | pi 侧证据 | pi-java 侧 | 生产可达性 |
+|---|---|---|---|---|
+| B1 | `auto_retry_end.finalError` | `:700-706` 不写 | `:98` | ✅ **每次重试成功** |
+| B2 | `compaction_end.result` | `:2100`/`:2201`/`:2311`/`:2366` 显式 `undefined` | `:82` | ✅ `CompactionExecutor:98/:210/:258` 三路传 `null` ＋ `PostRunCompactionCheck:168` |
+| B3 | `compaction_end.errorMessage` | `:2085`/`:2309`/`:2364`/`:2408` 不写该键 | `:85` | ✅ **成功路也传 `null`**（`CompactionExecutor:289`）⇒ 每次成功压缩都多一键 |
+| B4 | `bash_execution_update.id` | `:3027` `id: options?.id`（可选） | `:120` | ✅ `bash` 命令的 `id` 可选（`RpcCommand.Bash`），缺省即 `null` |
+
+参考实现：同文件 `:107-113` 对 `SummarizationRetryAttemptStart.reason` **已经**用了 `if (… != null)`，
+且有夹具 `JsonEventMapperTest.summarizationRetryAttemptStartOmitsReasonForBranchSummary` ——
+即**这条纪律在本文件里已有一半**，只是没贯彻。
+
+**已核为非缺陷的（写下来防止下轮重复取证）**：`auto_retry_start.errorMessage`（`:92`）与
+`summarization_retry_scheduled.errorMessage`（`:105`）在 pi 侧都是**必填 `string`**，pi-java 两个调用点
+都已带兜底（`PostRunRetry:76` 的 `piOrFallback`、`LlmSummaryGenerator:175` 的 `messageOrFallback` 均返回
+`"Unknown error"`）⇒ **恒非空**。`agent_end` / `queue_update` / `thinking_level_changed` / `entry_appended`
+/ `compaction_start` 的键两侧一致。
+
+**C 组 · 帧形状（pi 重建 `message_update` 时补的键，pi-java 没有）**
+
+| # | 缺什么 | pi 侧证据 | 影响 |
+|---|---|---|---|
+| C1 | `message_update` **顶层 `usage`** | `:11-15` 类型里必填；`:56-60` 装配 `usage: event.message.usage` | **每一个流式帧**都少一个对象。pi 的注释（`:41-45`）明说保留 usage / toolCall id / toolName 的理由是「它们**尺寸恒定**」—— 剥掉 `partial` 时它们不该一起丢 |
+| C2 | `toolcall_start` 的 **`id` + `toolName`** | `:23-30`：从 `event.partial.content[contentIndex]` 取，`type !== "toolCall"` 时**抛错** | 客户端在 `toolcall_start` 时拿不到工具名。pi-java 的 `ToolCallStart` 只有 `(contentIndex, partial)`（`StreamEvent:146`），而 `partial` 在线上被剥 ⇒ 信息缺失 |
+
+**D 组 · 登记不修（无生产者）**
+
+`session_info_changed`：`JsonEventMapper:64-67` 有映射，但**全仓没有生产者**（grep 只命中映射器自身）。
+pi `agent-session.ts:3114-3119` 在 `setSessionName` 里发；pi-java 的 `set_session_name`
+（`RpcDispatcher:168-171`）只调 `session.setSessionName(name)` 就回响应，**不发事件** ⇒ RPC 客户端永远
+不知道名字变了。且该事件的 `name` 在 pi 是 `string | undefined`（`:159`）⇒ `:66` 的 `node.put("name", …)`
+是 B 组形态的**第 5 处**，但今天**不可达**。
+
+⇒ **本包不动 D 组**（改一个不可达的分支＝死代码、写不出红灯的夹具）。**登记**，见 §8.37.7 裁决点 C。
+
+#### 8.37.4 落地设计
+
+**（一）B 组：给 `toWire` 加一条显式纪律。** 四处改法一致，照 `:107-113` 的现成写法：
+
+```java
+case AgentSessionEvent.AutoRetryEnd r -> {
+    node.put("type", "auto_retry_end");
+    node.put("success", r.success());
+    node.put("attempt", r.attempt());
+    if (r.finalError() != null) {
+        node.put("finalError", r.finalError());
+    }
+}
+```
+
+`compaction_end.result` 同理（`valueToTree` **前**先判 `null`），`errorMessage` / `bash_execution_update.id` 同理。
+
+**为什么不给 `ObjectMapper` 挂全局 `NON_NULL`**：pi 只在 `undefined` 时省略、**保留 `null`**，
+而「哪里是 `undefined`、哪里是 `null`」在 pi 由**每个类型声明**决定 ⇒ 逐个判才与 pi 的 `?:` 一一对应；
+且 `toWire` 返回的 `ObjectNode` 还要被 `RpcResponse` 再包一层，全局开关会越界作用到响应壳上。
+**纪律写进方法 javadoc**：新加事件时，先看 pi 那个字段的类型有没有 `?`。
+
+**（二）C 组：`message_update` 的装配搬到与 pi 同构的位置。**
+pi 是「重建 frame」（顶层 `usage` ＋ 处理过的 `assistantMessageEvent`），pi-java 现在是「透传剥 `partial`」。
+改法 = `:42-43` 补 `node.set("usage", …)`；`toolcall_start` 分支补 `id`/`toolName`
+（从 `partial.content().get(contentIndex)` 取，非 `ToolUseContent` 时照 pi `:26` **抛**）。
+
+⚠️ **C1 的取值口径是本设计里唯一取不到逐字对应的地方，也是最容易改错的**：pi 取
+`event.message.usage`（`json-event.ts:58`），即**当前助手消息的累积 usage**。
+但 pi-java 的 `AgentSessionEvent.MessageUpdate` **只带 `StreamEvent`、不带消息**（`AgentSessionEvent:21`）。
+`StreamEvent` 每个变体都带 `partial`（`AssistantMessage`），其 `usage()` 就是那个累积值 ——
+**可以取到，但要走 `partial`**。实施时必须用一条夹具把「取的是 `partial().usage()`」钉死。
+
+**（三）B3-块1：四个状态字段。**
+
+| 字段 | 改法 | 依赖 |
+|---|---|---|
+| `sessionId` | `buildState()` 改调 `session.sessionId()`（`:470` 已有） | 无 |
+| `pendingMessageCount` | 队列在 `LaneState`（agent-core）；需一条**只读**访问器把 `steerQueue.size()+followUpQueue.size()` 透到会话层 | **动 agent-core** |
+| `sessionFile` | `JsonlSessionRepository:250` 已有文件名构造，需透到会话级；`--no-session`/in-memory 时为 `undefined` ⇒ **照 B 组纪律省略** | **动 agent-core ＋ coding-agent** |
+| `isCompacting` | **新造状态**：在三个压缩入口置/清一个在飞标志（pi 的第三个控制器 `_branchSummaryAbortController` 在 pi-java 无对应物） | **动 agent-core** |
+
+⇒ **本包的面不止 `coding-agent/rpc`**：§8.32.3 的 ④ 行写「面 = `coding-agent/rpc`、无依赖」，
+实测**不成立**（三个字段要动 agent-core）。**裁决点 A**。
+
+#### 8.37.5 测试计划（L5 结构上覆盖不到 ⇒ 全部定点）
+
+1. `JsonEventMapperTest` 增 B 组四条「**省略**」断言（成功路 `finalError` 缺席、`compaction_end` 失败路缺 `result`、
+   成功路缺 `errorMessage`、`bash` 无 id 时缺 `id`），**每条配一条反向断言**（有值时**必须**在）——
+   否则「一律删键」这种改坏法也能让夹具变绿。
+2. `JsonEventMapperTest` 增 C1「`message_update` 顶层 `usage` == `partial().usage()`」；
+   C2「`toolcall_start` 带 `id`/`toolName`」＋「`contentIndex` 处不是工具调用时抛」。
+3. `RpcDispatcherTest` 增：`get_state` 四个字段取值（含 `pendingMessageCount` 在有排队时的计数、
+   `isCompacting` 在压缩进行中为真、`--no-session` 时 `sessionFile` 缺键）。
+4. **变异探针**：每处改回原样，确认**恰一条**红。⚠️ 沿用 §8.36 的教训（形态 (7)）：
+   **探针要在写下它的那一刻就跑**，稿子钉不住「用哪根钉子」。
+
+#### 8.37.6 覆盖面边界（必须写进实施记录）
+
+- L5 的 14 个剧本**结构上**造不出本包任何一处差异：产物是 `PiLoop` 帧（`conformance/{pi,java}-out/*.jsonl`），
+  **不是 RPC 线格式**，也不含 `get_state`。⇒ **L5 全绿不构成本包任何一条断言成立的证据。**
+- 本包**无** pi-out 差分基线可用；断言全部建立在**逐字读 pi 源码**上。
+- D 组今天不可达 ⇒ **本包不为它写夹具**（写不出红灯的夹具没有牙，形态 (6)/(7)）。
+
+#### 8.37.7 不变量（本包承诺不动）
+
+- `RpcSessionState` 的**记录形状**（12 个分量）零改动 —— 只是取值变真。
+- `AgentSessionEvent` 的**变体形状**零改动（`AutoRetryEnd.finalError` 仍是 `String`，即 pi 的
+  `string | undefined` 映射到 Java 的可空引用）。
+- **不碰** `WebWireJson` / `AgentEventTranslator`（web 是**另一条线**，属 §8.32.6 裁决点 D）。
+- **不碰** `PrintMode` 用的 `toStreamEventWire`（逐条 `StreamEvent` 的另一种输出，不在本包）。
+
+#### 8.37.8 需要用户裁决的点
+
+| # | 问题 | 推荐 |
+|---|---|---|
+| A | 本包**面**超出 §8.32.3 的 ④ 行（三个状态字段要动 agent-core）。是（i）承认扩面、把 ④ 做成「RPC 面全对齐」，还是（ii）把 `isCompacting`/`sessionFile`/`pendingMessageCount` 拆到新包、④ 只做 `sessionId`＋P7？ | **(i)**。四者同属「`get_state` 说真话」，拆开＝把一次审计拆成两次；且 `isCompacting` 单独成包也仍要设计 |
+| B | C 组（`usage` / `toolcall_start` 的 id+toolName）**改的是每个流式帧**，超出「重试面」。是否并入 ④？ | **并入**。同一文件、同一契约、同一组夹具；不并入就得为新包复制一份取证。⚠️ 它改的是**前端可见帧**，若 web UI 正在投产，建议排到一次前端可同步的时间窗 |
+| C | D 组（`session_info_changed` 无生产者） | **登记不修、另立**：它牵出 `set_session_name` 的事件面，与 B1 号（branch summary）同属「会话信息面」 |
 
 ---
 
