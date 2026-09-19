@@ -5969,7 +5969,7 @@ P4 ⇒ C 组两条 ＋ 宿主 A3 一条）。**每条都实测过、恢复后 `d
 
 ---
 
-### 8.37 包④：RPC 重试面（B3-块1 + P7）—— **设计待审**（2026-09-19）
+### 8.37 包④：RPC 重试面（B3-块1 + P7）—— **部分已实施**（2026-09-19；B 组＋B3-块1 见 §8.37.9，C 组证伪拆出）
 
 #### 8.37.0 这一包解决什么
 
@@ -6162,6 +6162,97 @@ pi 是「重建 frame」（顶层 `usage` ＋ 处理过的 `assistantMessageEven
 | A | 本包**面**超出 §8.32.3 的 ④ 行（三个状态字段要动 agent-core）。是（i）承认扩面、把 ④ 做成「RPC 面全对齐」，还是（ii）把 `isCompacting`/`sessionFile`/`pendingMessageCount` 拆到新包、④ 只做 `sessionId`＋P7？ | **(i)**。四者同属「`get_state` 说真话」，拆开＝把一次审计拆成两次；且 `isCompacting` 单独成包也仍要设计 |
 | B | C 组（`usage` / `toolcall_start` 的 id+toolName）**改的是每个流式帧**，超出「重试面」。是否并入 ④？ | **并入**。同一文件、同一契约、同一组夹具；不并入就得为新包复制一份取证。⚠️ 它改的是**前端可见帧**，若 web UI 正在投产，建议排到一次前端可同步的时间窗 |
 | C | D 组（`session_info_changed` 无生产者） | **登记不修、另立**：它牵出 `set_session_name` 的事件面，与 B1 号（branch summary）同属「会话信息面」 |
+
+#### 8.37.9 实施记录（B 组 ＋ B3-块1；**C 组被证伪后拆出**）
+
+> **过程披露**：用户本轮只回了「继续」，**未对 §8.37.8 三个裁决点作明确裁决**。执行时按三个**推荐项**走
+> （A 承认扩面 / B 并入 / C 登记不修），并在汇报里点名。裁决 B 的落地情况见下面「C 组」一行 ——
+> **并入这个动作没有发生**，原因是它在实施中先被证伪了。
+
+**交付物**（按可独立编译的模块分两次提交）：
+
+| 模块 | 文件 | 性质 | 内容 |
+|---|---|---|---|
+| pi-java-agent-core | `harness/LaneState.java`（改） | 生产 | 新增 `compactionInFlight` 计数 ＋ `enterCompaction()`/`exitCompaction()`/`isCompacting()` |
+| pi-java-agent-core | `harness/CompactionExecutor.java`（改） | 生产 | 手动路在 `compaction_start` **前**开窗（pi `:1969` 先于 `:1970`）；自动路在**后**开窗（pi `:2290` 先于 `:2291`）；两条都在 `finally` 关窗（pi `:2117`/`:2450`） |
+| pi-java-agent-core | `harness/AgentHarness.java`（改） | 生产 | `isCompacting(String laneName)` 只读转发（唯一消费者是 RPC `get_state`） |
+| pi-java-agent-core | `harness/CompactionInFlightTest.java`（新） | 测试 | 5 个用例：手动窗口 2 ＋ 自动窗口 3 |
+| pi-java-coding-agent | `core/AgentSession.java`（改） | 生产 | `isCompacting()` / `sessionFile()` / `pendingMessageCount()` |
+| pi-java-coding-agent | `rpc/RpcSessionState.java`（改） | 生产 | `@JsonInclude(NON_NULL)`（**是契约的一部分**，见下） |
+| pi-java-coding-agent | `rpc/RpcDispatcher.java`（改） | 生产 | `buildState()` 四个字段（`isCompacting`/`sessionFile`/`sessionId`/`pendingMessageCount`）由写死改真值 |
+| pi-java-coding-agent | `mode/JsonEventMapper.java`（改） | 生产 | B 组四处可空键按 pi 的 `?` 主动省略 |
+| pi-java-coding-agent | `mode/JsonEventMapperTest.java`（改） | 测试 | B 组三条省略断言 ＋ 反向断言 |
+| pi-java-coding-agent | `rpc/RpcDispatcherTest.java`（改） | 测试 | `get_state` 取值 ＋ `pendingMessageCount` 三队列判别 |
+| pi-java-coding-agent | `core/SessionRpcStateTest.java`（新） | 测试 | 三个 getter 的正/反两路（含 `sessionFile` 的 JSONL 正例） |
+
+**四类偏差 —— 全部以 pi 原文为准，改设计而不改代码去迁就稿子**：
+
+| # | 稿子说 | 实际 | 为什么以实际为准 |
+|---|---|---|---|
+| 1 | §8.37.4 表：`pendingMessageCount` 需要新增 agent-core 只读访问器 | **不需要**。`LaneSnapshot.queues()`（`SnapshotService:84` 从 `LaneState.queueSnapshot()` 建）已暴露 `steer`/`followUp`/`nextRun` | 既有面已够；新增访问器是发明 |
+| 2 | §8.37.4 表：`sessionFile` 要在 agent-core 加读取口 | **不需要**。`instanceof JsonlSessionMetadata → path()` 是同类既有写法（`AgentSession:683`） | 同上 |
+| 3 | §8.37.3 D 组：`session_info_changed` 的 `name:null`「写不出红灯夹具」 | **部分错**：直接 `JsonEventMapper.toWire` 一个 `name=null` 的事件**是**能写夹具的 | 只有**行为可达性**那条论证站得住（无生产者）。按裁决 C 本包**不动**它，此更正仅为台账准确 |
+| 4 | §8.37.8 裁决 B「C 组并入 ④」 | **未并入 —— C 组被证伪**（见下节） | 不是排期问题，是**设计稿的取值来源是空的** |
+
+**C 组（C1 `message_update` 顶层 `usage` ＋ C2 `toolcall_start` 的 `id`/`toolName`）被证伪并拆成新包**：
+
+- **C1**：稿子让实现者取 `partial().usage()`。实际那是 pi-java **方言** ——
+  `StreamEvent.UsageInfo`（可空，且自带自引用的 `partial` 字段，仅靠 `StreamEventMixin` 剥除），
+  **不是** pi 必填的 `com.pijava.ai.Usage`（`packages/ai/src/types.ts:383-404`）。
+  原样序列化会发出 `{type:"usage", inputTokens, outputTokens, usage:{…}}` 这种双份形状。
+  正确的值要走 `Message.AssistantMessage` 私有的 `usageOf(UsageInfo)` 归一化，**外加**一个
+  「无 `UsageInfo` 时写不写键」的裁决（pi 恒写；pi-java 自己的 javadoc 说「键省略」）。
+- **C2**：稿子让实现者从 `partial.content().get(contentIndex)` 取 `id`/`toolName`。
+  实际 `StreamPartialBuilder.emitToolCallStart()` 插的是**空占位**
+  `ToolUseContent("", "", Map.of())` —— 真值握在适配器手里
+  （`AnthropicMessagesApi.java:191-193` 暂存 `pendingToolName`/`pendingToolId`，到
+  `emitToolCallDelta`/`emitToolCallEnd` 才落到块上）。**取值来源结构上是空的。**
+- **共同根因**：pi-java 的流式 partial 比 pi 的 `AssistantMessage` **更稀疏**
+  （usage 可空；start 时刻的工具调用是占位）。⇒ 修在 `pi-java-ai` 模块，牵动
+  全部 5 个适配器 ＋ `StreamPartialBuilder` ⇒ **是一个新包，不是 ④ 的脚注**。
+- ⚠️ **裁决 A 的扩面因此比稿子更大**：不止「三个状态字段要动 agent-core」，
+  C 组还要动 `pi-java-ai`。这条扩面**本包没有执行**，如实登记。
+- C 组也**没有** diff 基线可依赖：§8.37.6 说的「L5 产物是 PiLoop 帧、不是 RPC 线格式」同样适用。
+
+**新发现的 `get_state` 三处偏差（本包**未**修，已登记进 `docs/32`）**：
+
+| # | 字段 | pi-java 现状 | pi | 性质 |
+|---|---|---|---|---|
+| B31 | `model` | `"provider/id"` **字符串** | 整个 `Model<any>` **对象**（`rpc-types.ts:97`） | 线格式差一档。`RpcSessionState` 的 javadoc 里当年是**刻意**选字符串，但判据是行为 ⇒ 是缺口 |
+| B32 | `sessionName` | 恒有值，默认 `"session"` | `string \| undefined` —— 未发生过 `session_info` 前**缺键**（`rpc-types.ts:105`） | 缺省值把它变成了「永远有名字」 |
+| B33 | `messageCount` | `session.entryCount()`（**转录条数**） | `session.messages.length`（**工作副本**，`rpc-mode.ts:462`） | 压缩后两者会分叉（转录含 `Entry.Compaction` 等非消息条目） |
+
+**变异探针（7 条，全部实测；恢复后 `git diff` 逐字节为空）**：
+
+| 探针 | 改回原样 | 实测红 | 与预期的差 |
+|---|---|---|---|
+| P3 | 自动路 `enterCompaction()` 挪到 `onStart` **之前** | **恰 1 条**（`autoCompactionOpensTheWindowAfterStartAndClosesIt`） | 无 |
+| P5 | 手动路 `enterCompaction()` 挪到 `onStart` **之后** | **2 条**（两个手动用例） | 无 —— 两条夹具分别钉两个入口，互不掩护 |
+| P2 | 手动路删掉 `finally { exitCompaction(); }` | **2 条**（两个手动用例） | 无 |
+| P9 | `pendingMessageCount` 加上 `nextRun` | **2 条**（agent-core 层 1 ＋ RPC 层 1） | 无 —— 两层各有一条独立夹具 |
+| P10 | `sessionFile()` 恒返回 `null` | **恰 1 条**（`SessionRpcStateTest` 的正例）；`RpcDispatcherTest` **保持绿** | 无 —— 这正说明 RPC 层只能守「缺键」一侧，正例必须落在 `core` 包，**这就是新开一个夹具文件的理由** |
+| P6 | B 组三处改回无条件写 | **恰 3 条**（一一对应） | 无 |
+| P7 | 删掉 `RpcSessionState` 的 `@JsonInclude(NON_NULL)` | **恰 1 条**（`getStateReturnsPayload`） | 无 —— 证明 NON_NULL 是**载荷**、不是装饰 |
+
+**一条自己踩到的坑（属于形态 (6)/(7) 的续集）**：`CompactionInFlightTest` 第一版把
+「观察者窗口」当成「在飞窗口」，于是两条手动断言写成 `onStart` 缺席、自动断言写成 `onStart == true`
+—— **三条都红，而实现是对的**。pi 原文两个入口的顺序**恰好相反**（手动 `:1969` 建控制器在先、
+`:2290` 发事件在先），所以 `onStart` 里采样到的值本就应该相反。⇒ 现在这两条相反本身成了**要钉的命题**，
+而不是要抹平的噪音。**教训：夹具会把人脑里的模型当作契约 —— 断言「某个值在某个时刻是什么」之前，
+先把那一时刻双方各处于什么状态从源码里读一遍。**
+
+**全量验证（2026-09-19）**：
+
+- `mvn -o -pl pi-java-agent-core,pi-java-coding-agent -am test` ⇒ **BUILD SUCCESS**。
+- 测试计数：telemetry 31、ai 440、**agent-core 473**、session-backend-sqlite 35、**coding-agent 233**，零 Failures/Errors。
+- 本包新增：`CompactionInFlightTest` **5/5**、`SessionRpcStateTest` **4/4**；
+  `JsonEventMapperTest` 12/12、`RpcDispatcherTest` 11/11。
+- ⚠️ **`mvn` 的 `-am` 陷阱又现**：`mvn -o -pl pi-java-agent-core test`（不带 `-am`）会从 `~/.m2`
+  取**陈旧**的 `pi-java-ai` 构件，报出 9 条与本包无关的 `AssistantMessage` 构造器错误。
+  **带 `-am` 即消失。**（与 memory `jdk25-mvn-am` 同一条）
+- L5 的划界声明见 §8.37.6：L5 全绿**不构成**本包任何一条断言成立的证据。
+
+**修正 §8.37 标题**：本包**部分实施** —— B 组 ＋ B3-块1 已落；C 组拆出；D 组按裁决 C 不动。
 
 ---
 
