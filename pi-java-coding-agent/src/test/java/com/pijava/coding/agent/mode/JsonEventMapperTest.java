@@ -75,15 +75,13 @@ class JsonEventMapperTest {
         // Jackson 不把它序列化（web 线的 `WebWireJson:28` 正因如此手工 put("role")）。
         // RPC 线的消息因此没有 role 判别值 —— **既有形状**，本包不改，
         // 已作为待核项登记（docs/36 §10）。
-        // ⚠️ 本条撞出两条**既有的** RPC 线偏差（**不是**本包引入，已在 docs/36 §10 登记）：
-        //  ① `Message.role()` 是接口方法、不是 record 组件 ⇒ Jackson 不序列化它，
-        //     消息在 RPC 线上**没有 role 判别值**（web 线靠 `WebWireJson:28` 手工
-        //     put("role") 补上，RPC 线没有这道工序）。
-        //  ② 工具结果用的是 record 组件名 **`toolUseId`**，而 pi 线上叫 **`toolCallId`**
-        //     （`createToolResultMessage` 的字段名；web 线同样靠 `WebWireJson:34` 手工改名）。
+        // ⚠️ 包⑩（docs/37）**已修**这两条**既有**的 RPC 线偏差（此处随之更新）：
+        //  ① 消息现在带 `role` 判别值（线级投影补上）。
+        //  ② 工具结果的键名已从 record 组件名 `toolUseId` 改为 pi 的 **`toolCallId`**。
+        assertThat(node.get("message").get("role").asText()).isEqualTo("assistant");
         assertThat(node.get("message").get("stopReason").asText()).isEqualTo("stop");
         assertThat(node.get("toolResults")).hasSize(1);
-        assertThat(node.get("toolResults").get(0).get("toolUseId").asText())
+        assertThat(node.get("toolResults").get(0).get("toolCallId").asText())
             .isEqualTo("call_1");
         assertThat(node.get("toolResults").get(0).get("isError").asBoolean()).isFalse();
     }

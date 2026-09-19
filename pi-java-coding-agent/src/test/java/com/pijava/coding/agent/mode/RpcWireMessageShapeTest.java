@@ -59,4 +59,84 @@ class RpcWireMessageShapeTest {
         assertThat(node.get("messages").get(0).get("timestamp").asLong())
             .isEqualTo(1_700_000_000_000L);
     }
+
+    // ── ②③④ role 判别值 ────────────────────────────────────────────
+
+    @Test
+    void everyMessageCarriesItsRoleLiteral() {
+        var messages = List.<Message>of(
+            new Message.UserMessage(List.of(new ContentBlock.TextContent("hi"))),
+            timestampedAssistant(),
+            new Message.ToolResultMessage("c1", "bash",
+                List.of(new ContentBlock.TextContent("out")), Map.of(),
+                null, List.of(), false));
+
+        var node = JsonEventMapper.toWire(new AgentSessionEvent.AgentEnd(messages, false));
+
+        assertThat(node.get("messages").get(0).get("role").asText()).isEqualTo("user");
+        assertThat(node.get("messages").get(1).get("role").asText()).isEqualTo("assistant");
+        assertThat(node.get("messages").get(2).get("role").asText()).isEqualTo("toolResult");
+    }
+
+    @Test
+    void toolResultUsesPiFieldNameToolCallId() {
+        var result = new Message.ToolResultMessage("c1", "bash",
+            List.of(new ContentBlock.TextContent("out")), Map.of(),
+            null, List.of(), false);
+
+        var node = JsonEventMapper.toWire(
+            new AgentSessionEvent.AgentEnd(List.<Message>of(result), false));
+
+        var m = node.get("messages").get(0);
+        assertThat(m.get("toolCallId").asText()).as("pi 叫 toolCallId").isEqualTo("c1");
+        assertThat(m.has("toolUseId")).as("record 组件名不上线").isFalse();
+    }
+
+    // ── ⑤ 内容块的判别字面量 ────────────────────────────────────────
+
+    @Test
+    void contentBlockDiscriminatorsMatchPi() {
+        var assistant = new Message.AssistantMessage(List.of(
+            new ContentBlock.TextContent("t"),
+            new ContentBlock.ThinkingContent("why"),
+            new ContentBlock.ToolUseContent("c1", "bash", Map.of("cmd", "ls"))),
+            "tool_use", null, "anthropic", "anthropic", "m", Usage.of(1, 2), null, null, null);
+
+        var content = JsonEventMapper.toWire(
+            new AgentSessionEvent.AgentEnd(List.<Message>of(assistant), false))
+            .get("messages").get(0).get("content");
+
+        assertThat(content.get(0).get("type").asText()).isEqualTo("text");
+        assertThat(content.get(1).get("type").asText())
+            .as("pi 的判别值是 thinking").isEqualTo("thinking");
+        assertThat(content.get(1).get("thinking").asText())
+            .as("pi 的字段名是 thinking（不是 text）").isEqualTo("why");
+        assertThat(content.get(2).get("type").asText())
+            .as("pi 的判别值是 toolCall（不是 tool_use）").isEqualTo("toolCall");
+        assertThat(content.get(2).get("name").asText()).isEqualTo("bash");
+        assertThat(content.get(2).get("arguments").get("cmd").asText()).isEqualTo("ls");
+    }
+
+    // ── ⑥ 可选键按 pi 的 `?` 缺席即省略 ─────────────────────────────
+
+    @Test
+    void absentOptionalKeysAreOmittedNotWrittenEmpty() {
+        var result = new Message.ToolResultMessage("c1", "bash",
+            List.of(new ContentBlock.TextContent("out")), Map.of(),
+            null, List.of(), false);
+        var assistant = new Message.AssistantMessage(
+            List.of(new ContentBlock.ThinkingContent("why")),
+            "stop", null, "anthropic", "anthropic", "m", Usage.of(1, 2), null, null, null);
+
+        var node = JsonEventMapper.toWire(
+            new AgentSessionEvent.AgentEnd(List.<Message>of(result, assistant), false));
+
+        assertThat(node.get("messages").get(0).has("addedToolNames"))
+            .as("pi 的 addedToolNames? 缺席即省略").isFalse();
+        var thinking = node.get("messages").get(1).get("content").get(0);
+        assertThat(thinking.has("signature"))
+            .as("pi 的 signature? 缺席即省略").isFalse();
+        assertThat(thinking.has("redacted"))
+            .as("pi 的 redacted? 缺席即省略（false 也算缺席）").isFalse();
+    }
 }
