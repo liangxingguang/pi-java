@@ -3692,7 +3692,7 @@ telemetry 31 / ai 336 / agent-core 450。
 
 ---
 
-### 8.32 B 类功能缺口的补全路线（判定 + 包划分）—— **路线已批准**（用户 2026-09-17「按照顺序」⇒ ①→②→③→④→⑤；包① 已实施，见 §8.33；**包② 设计见 §8.34（待审）**；③–⑥ 待逐包设计）
+### 8.32 B 类功能缺口的补全路线（判定 + 包划分）—— **路线已批准**（用户 2026-09-17「按照顺序」⇒ ①→②→③→④→⑤；包① 已实施，见 §8.33；包② 已实施，见 §8.34；**包③ 设计见 §8.36（待审）**；④–⑥ 待逐包设计）
 
 #### 8.32.0 这一节解决什么
 
@@ -3737,7 +3737,7 @@ B 类九条（台账 `docs/32 §3`）此前每条只有一行「修法素描」�
 |---|---|---|---|---|
 | **①** | thinking 块的**采集 → 落盘 → 回读**：B6 + B7 + B9 + P1 + P4 + P6 | `ai`（采集）+ `agent-core`（落盘） | 无 | **B6/B7 可被新剧本测到**（`FrameNormalizer:223-224` 保留 `type` 与 `text`）；signature/redacted **两侧都被归一化抹掉** ⇒ 不可测 |
 | **②** | thinking/text 的**请求侧重放规则**：P2 + P3 + B8（**并新登记 B13**：redacted 落线） | `ai`（+ `coding-agent` 配置链） | **① 已完成**（§8.33；B7 引入的 `redacted` 位正是 P2 的输入） | 无 thinking 剧本 ⇒ 不动 |
-| **③** | 宿主失败通路：B5 | `agent-core`（+ `coding-agent` 宿主） | 无 | 无（会话层事件不在 L5 帧内） |
+| **③** | 宿主失败通路：B5（**设计见 §8.36，待审**；第 1 步＝活性收口，第 2 步＝`handleRunFailure` 待裁） | `agent-core`（+ `coding-agent` 宿主） | 无 | 无（会话层事件不在 L5 帧内） |
 | **④** | RPC 重试面：B3-块1 + P7 | `coding-agent/rpc` | 无 | 无 |
 | **⑤** | TUI 重试面：B3-块2（含**结构改动**：TUI 长出一条会话事件订阅通道） | `tui` | 无（与 ④ 同源但互不依赖） | 无 |
 | **⑥** | branch summary：B1（**待裁决**） | `agent-core` + `coding-agent` | 无 | 无（结构上覆盖不到） |
@@ -5484,6 +5484,212 @@ provider 照样吐完帧」那一支（`:206-213` 的 `abortedAtEntry`，**不�
 **中间读点（裁决 a）的最终行为** —— 8.4 那张表即现状，**无**折算代码：`HarnessUtils.deriveNewestOwn:93`
 读到的 `NewestOwn.stopReason` 与 `RunSpanFactory.closeRunSpan:46` 写到 `harness.run` 跨度上的属性，
 在「流进行中」这一刻都是 `"pending"`。两者都是 pi-java 自有旁路审计面（pi 跨度词汇表无此二属性，§8.28）。
+
+---
+
+### 8.36 包③：宿主的失败通路（B5）—— **设计待审**（2026-09-19）
+
+> 路线 §8.32.3 的第 ③ 包（面 = `agent-core` + `coding-agent` 宿主）。§8.32.6-C 的建议是
+> 「先只做第 1 步（一行 `catch (Throwable)`），第 2 步单列设计后再定」。本节把**第 1 步设计到可实施**、
+> 把**第 2 步设计到可裁决**，并据实登记一处同族但今天不可达的兄弟缺口。
+> 依例：**设计（含裁决点）经用户审核通过后才写代码**。
+
+#### 8.36.0 范围与不变量
+
+**做**：让「引擎抛出的东西不是 `Exception`」不再让宿主永久挂起。
+
+**不变量（本包承诺不动）**：
+
+- 引擎侧任何 run 语义：`PiLaneEngine.drive` 的 `finally` 收口（`:200-205`）、`PostRunRetry` 的判定、
+  `stopReason` 的取值口径、`HarnessUtils.determineOutcome` 的四态。
+- L5 帧（§8.32.5 第 1 条：**会话层事件结构上不在帧里**，本包无处可测差分）。
+- 不引入 pi-java 从未有过的「从异常重试」入口（§8.32.6-C 点名的风险）。
+- 不改「引擎抛异常时前端收到什么」——那是第 2 步（§8.36.5），本包**只保证不再挂起**。
+
+#### 8.36.1 事实基线（逐字）
+
+**工程形状**（`SessionRunner.java:63-167`，四层嵌套）：
+
+```
+try (registration = harness().onStreamEvent(...)) {          // (:63)  X
+    List<Entry> transcript = List.of();                     // (:83)
+    try { outcome = harness().prompt(...); flush; ... }      // (:84-101)
+    catch (Exception e) { …发 StreamError… }                 // (:105)  B  ← 引擎抛出
+    entriesFuture.complete(transcript);                      // (:119)
+    …条目投递 (:122-135) · emit AgentSettled (:138) · run summary (:139-147)…
+    statusFuture.complete(new RunStatus(exitCode, stopReason)); // (:149)
+} catch (Exception e) { …LOG.error · 发 StreamError · emit AgentEnd(List.of(), false)
+                          · emit AgentSettled · statusFuture=(1,error) · entriesFuture=[]… }  // (:151)  C  ← 宿主自身
+finally { if (streamObserver == null) queue.add(Optional.empty()); }  // (:164-167)  只关队列
+```
+
+**四条离开路径 × 今天的收口**（这是本包的全部事实基础）：
+
+| # | 抛出点 | 今天谁接 | `entriesFuture` | `statusFuture` | `AgentEnd` | `AgentSettled` |
+|---|---|---|---|---|---|---|
+| **A** | **B 区内**抛 `Exception`（`harness.prompt`／`flush`／`runIds`／`transcript`） | `:105` `catch (Exception)` | ✅ 落定（= 局部初值 `List.of()`） | ✅ `(1,error)` | ❌ | ✅ `:138` |
+| **B** | **B 区内**抛 `Error`（工具 worker、钩子、引擎内部） | **无人接** | ❌ **永不完成** | ❌ **永不完成** | ❌ | ❌ |
+| **C** | **B 区外、(X) 区内**抛 `Exception`（条目投递／`emitSessionEvent`／`RunSummaryAggregator`／`printRunSummary`／`flush`） | `:151` `catch (Exception)` | ✅ 落定（= `List.of()`） | ✅ `(1,error)` | ✅ `:160` | ✅ `:161` |
+| **D** | **B 区外、(X) 区内**抛 `Error` | **无人接** | ❌ **永不完成** | ❌ **永不完成** | ❌ | ❌ |
+
+**两个事实要点**：
+
+1. 路径 B/D 上，`finally`（`:164-167`）**照跑**，所以 `queue` 一定关闭、流一定终止 ——
+   挂起的**不是流，是两个 future**。而 `SessionResult.entries()/status()` 是 `join()`（`:37/:42`）。
+2. **车道本身没卡**：引擎侧 `PiLaneEngine.drive:200-205` 自己的 `finally` 已经把 `activeRun` 卸下、
+   `run.done()` 完成（该处注释原文「驱动**抛出**时同样要收口…异常路径按 error 结算，原异常照常向上抛」）。
+   ⇒ **引擎已经有的那条纪律，宿主没有**。这是本包的判据形状（§8.36.3）。
+
+**消费者与各自的挂起形态**（全仓实测，共 4 个）：
+
+| 消费者 | 代码 | 挂起形态 |
+|---|---|---|
+| 打印模式 | `PrintMode.java:38`／`:61` `result.status().exitCode()` | **`pi-java -p` 永久挂起**，只能 Ctrl-C（`status().join()` 永不返回） |
+| 斜杠命令 | `SkillsCommands.java:55` `result.entries()` | 同上（`entries().join()`） |
+| 交互模式 | `PiTuiApp.java:357` `statusFuture().thenAccept(...)` | 回调**永不触发** ⇒ 停在 streaming 态 |
+| RPC | `RpcDispatcher.java:283` `streaming = true`，`:313-316` 由 `AgentEnd`**或** `AgentSettled` 清 | 两条都不发 ⇒ `streaming` 恒真（`get_state` 也这么报） |
+| web | `WebDispatcher.java:137` 发射后不管，`client/main.ts:256-258` `case "agent_end": streamingMessage = null` | 前端转圈不止 |
+
+**`Error` 的到达路径**（生产可达，非角落）：
+
+- **工具 worker**：`PiToolRunner:113/163/175` 是 `catch (Exception e)` ⇒ 工具体抛的 `Error` 不被接、
+  原样冒到 `FutureTask`；`PiLoopTools.awaitOutcome:218-234` **刻意**解包原样重抛（javadoc 原文
+  「非受检的 `Error` 也照原样冒」）⇒ 直接穿出 `PiLoop.run` → `harness.prompt` → 路径 B。
+  这正是 §8.26.5-12 自己登记的那条下游（「宿主那半边见 B5」）。
+- **钩子**：`HookSystem.fireVoid:319-327` 是 `catch (Exception e)` ⇒ 钩子抛的 `Error` 冒穿。
+- **引擎内部**：`PiLoop`／`PiLoopRunner`／`AgentHarness` **零个** catch 子句（已逐文件确认）。
+- **`Error` 的现实现实来源**：`StackOverflowError`（深层 JSON/正则）、`OutOfMemoryError`（大文件）、
+  `NoClassDefFoundError`／`ExceptionInInitializerError`（懒初始化）、`LinkageError`；
+  **native 产物上还有** native-image 自己的 `Error` 族。
+- ⚠️ **不是** provider 层：`AbstractChatApi:104` 的 `Flow.Subscriber.onError(Throwable)` 已把
+  provider 侧的 `Throwable` 兜成 `StreamError` 事件 ⇒ **provider 的 `Error` 到不了路径 B**。
+  （这条决定了夹具不能拿 provider 当注入点，见 §8.36.4。）
+
+#### 8.36.2 pi 的对照（`packages/agent/src/agent.ts`）
+
+| pi | 逐字 | pi-java 现状 |
+|---|---|---|
+| 执行体收口 | `runWithLifecycle:484-504`：`try { await executor(signal) } catch (error) { await this.handleRunFailure(error, signal.aborted) } finally { this.finishRun() }` —— **`catch` 无类型** | 两条 `catch` 都写死 `Exception`；`finally` 只关队列 |
+| 失败被「压成文本」 | `handleRunFailure:506-521`：合成一条 assistant 消息 —— `content:[{type:"text",text:""}]`、`api/provider/model` 取自 `_state.model`、`usage: EMPTY_USAGE`、`stopReason: aborted ? "aborted" : "error"`、`errorMessage: error instanceof Error ? error.message : String(error)`、`timestamp: Date.now()` | **无对应物**（第 2 步） |
+| 失败**照常走事件链** | `:522-525` 依次 `processEvents(message_start/message_end/turn_end/agent_end)` ⇒ 监听者**一定**看到 `agent_end`，promise **resolve**（不 reject） | 路径 A **不发 `AgentEnd`**；路径 B/D 什么都不发 |
+| 「没有 Error/Exception 之分」 | TS 的 `catch` 一律接得住（栈溢出在 JS 是 `RangeError`） | Java 的 `Exception`／`Error` 分裂是**方言**，pi 侧**没有**这个可错配的形状 |
+
+#### 8.36.3 判定：差距的**精确形状**
+
+不是「少了一个 `handleRunFailure`」（那是第 2 步），而是：
+
+> **宿主的收口写在 `catch` 里，而不是写在 `finally` 里 —— 于是「收口是否发生」取决于
+> 「抛出来的东西是不是 `Exception`」。**
+
+引擎侧已经把这条纪律写对了（`PiLaneEngine.drive:200-205` 的 `finally`），宿主侧没有。
+按判据（分支所有功能都和 pi 表现一样）：pi 的承诺是**「一个 run 一定会落定，且一定发 `agent_end`」**——
+pi-java 今天两条都不保证（落定只在 `Exception` 世界保证，`agent_end` 只在路径 C 保证）。
+**本包只收「落定」这一半**；`agent_end` 那一半是第 2 步（§8.36.5）。
+
+#### 8.36.4 设计（第 1 步，可实施）
+
+**①-a 行为：两处 `catch (Exception)` → `catch (Throwable)`**（`:105`、`:151` 各一处，两处字面替换）。
+
+- 效果：`Error` 与 `Exception` 同待遇 —— 路径 B 走 A 的收口、路径 D 走 C 的收口，`StreamError`
+  事件随之发出（因此**可见**），日志有 `LOG.warn/error`。
+- 依据：pi 的 `catch` 无类型（§8.36.2 第 4 行）；这是**把 Java 方言造成的缺口补回 pi 的形状**，不是发明。
+- 编译面核查：`StreamEvent.StreamError(String, Throwable, AssistantMessage)`（`StreamEvent.java:214`）
+  的第 2 参数本来就是 `Throwable` ⇒ 无需改任何签名。
+
+**①-b 活性：`finally` 补幂等兜底**（`:164-167`）：
+
+```java
+} finally {
+    if (streamObserver == null) {
+        queue.add(Optional.empty());
+    }
+    // 兜底收口（照抄引擎侧 PiLaneEngine.drive:200-205 的同一条纪律）：无论从哪条路离开
+    // ——含 catch 体自己再抛、含 Error 直接穿出——两个 future 都必须落定，否则
+    // SessionResult.status()/entries()（join）永久挂起，打印模式只能 Ctrl-C。
+    // complete() 幂等：正常路径上这两次调用都是无操作。
+    entriesFuture.complete(List.of());
+    statusFuture.complete(new RunStatus(1, "error"));
+}
+```
+
+**为什么两半都要**（各自单独不成立）：
+
+| 只有 ①-a | 只有 ①-b |
+|---|---|
+| catch 体自己抛（`emitSessionEvent` 的监听器抛 `Error` —— `SessionEventHub.emit:29-37` **只隔离 `RuntimeException`**、`Error` 穿出）⇒ 路径 C 的收口死在 `AgentEnd` 与 `AgentSettled` 之间 ⇒ **仍然挂起** | `Error` 被静默吞掉（无 `StreamError` 事件、无日志）⇒ 打印模式只会「什么都没发生地退出 1」，`-v` 也看不到原因 |
+
+**如实标注两处边界**：
+
+1. **不承诺 OOM 极端下的活性**：若 `finally` 里的 `complete` 自身因 OOM 再抛，`statusFuture` 仍可能不落定。
+   本包把「**结构性挂起**」堵死；「JVM 已在崩溃态」不在承诺范围内。这条写进 javadoc。
+2. `entriesFuture.complete(List.of())` 在兜底路上给**空表**（与 `:163` 同口径）。残余转录仍可由
+   `harness.snapshot(lane).transcript()` 取到 —— 但那是第 2 步要不要接的问题，本包不改语义。
+
+#### 8.36.5 第 2 步（**本包只设计，待裁**）：`handleRunFailure` 的落点
+
+pi 把它放在 `Agent`（= pi-java 的**引擎**：`PiLaneEngine` + `PiLaneSink`），不是会话层。
+落引擎侧的**收益**是形状忠实（失败变成一条**消息**，进转录、进 `message_end`/`agent_end`，
+前端的整表替换于是拿到一条真实存在的失败助手消息）；**代价**是 §8.32.6-C 点名的两条，逐条核过：
+
+| 点名的风险 | 核过之后的实际情况 |
+|---|---|
+| 「打开一条 pi-java 从未有过的**从异常重试**入口」 | **结构上不会**：pi-java 的重试环住在引擎 `PiLaneEngine.drive` 的 `while` 内（`postRun.checkAfterRun`），而合成失败消息的 `catch` 在 `while` **之外** ⇒ 那个 pass 结束后循环已退出。风险**比 C 的担心小** |
+| 「可能让宿主把失败记成 **completed** 而非 error」 | **是真的**，而且必须同时解决：宿主的 `stopReason`（`SessionRunner:66-73`）**只**由 `StreamEvent.StreamDone/StreamError` 喂，合成一条 `Message` 不会改它 ⇒ 若引擎把异常吞成消息，宿主会报 `(0, completed)`、**崩溃的 run 退出码 0**。⇒ 第 2 步必须**同时**决定「失败怎么到宿主」（补发 `StreamError`，或让宿主读尾 assistant 的 `stopReason`） |
+| **新发现（本包登记，比上面两条更可达）** | 路径 **A**（引擎抛**普通 `Exception`**）今天**也不发 `AgentEnd`** ⇒ web 前端（`client/main.ts:256` 靠 `agent_end` 清 `streamingMessage`）**在非 `Error` 的引擎崩溃上同样永久转圈**。这不是 `Error` 问题，是「两条失败路形状不同」的问题 —— 归第 2 步一次成形（本包不改，理由：**前端收到什么**是产品面，且改动会碰 `AgentEnd` 的载荷语义） |
+
+**另需裁决的落点问题**：C 写的是「落**引擎**侧」。但宿主侧也能做（在 `:105`/`:151` 合成消息）。
+按判据（pi 的形状）应落引擎侧；按**风险**宿主侧更小（引擎的 run 语义一行不动）。
+第 2 步实施时另出详细设计，本包**不预设**。
+
+#### 8.36.6 夹具与验证（**先红证毕**）
+
+**夹具 1（主：`Error` 不再挂起）** —— 走 §8.36.1 的**生产可达路径**：
+
+- 剧本：`FauxProvider.sequence` 第一 pass 发一个**自定义工具**的 `ToolCallEnd`（`ExecutionMode.Sequential`，
+  走 `executeSequential`——工具体在**引擎线程**上跑，最短路径）；
+- 注入点：`harness.setActiveTools(Set.of(boomTool))`（`AgentHarness:458` 公开）；
+- `boomTool.execute(...)` 抛 `new AssertionError("boom")` ⇒ 穿 `PiToolRunner` 的 `catch (Exception)`
+  ⇒ 穿 `PiLoopTools.executeSequential` ⇒ 穿 `PiLoop.run` ⇒ 穿 `harness.prompt` ⇒ **路径 B**；
+- 断言：**(A1)** `statusFuture().get(10, SECONDS)` 完成且 `(1,"error")`；**(A2)** 事件流里出现 `StreamError`。
+- **今天的红灯**：`get(10s)` 抛 `TimeoutException`（这就是缺陷本身）；`result.stream().toList()` 能正常终止
+  （`finally` 关队列），所以红点精确落在 future 上。
+- ⚠️ **夹具不能拿 provider 当注入点**（§8.36.1 末条已实证 `AbstractChatApi:104` 会把 provider 的
+  `Throwable` 兜成事件）；**也不用** `before_run` 钩子 —— 它在 `RunLifecycle.begin` **之后**抛，
+  还会连带暴露 `activeRun` 泄漏（§8.36.7），会把两件事混在一条红里。
+
+**夹具 2（兜底那一半：catch 体自己抛）**：
+
+- 注入点：`session.subscribe(...)` 注册一个**在 `AgentSettled` 上抛 `AssertionError`** 的监听器
+  （`SessionEventHub.emit` 只隔离 `RuntimeException`，`Error` 穿出 —— 已逐行确认）；
+- 路径：条目投递的 `emitSessionEvent(EntryAppended)`（`:134`）先抛 ⇒ 路径 C ⇒ 其 `catch` 体在
+  `AgentEnd`（`:160`）与 `AgentSettled`（`:161`）之间**再次**被同一监听器打断 ⇒ 只能靠 `finally` 兜底；
+- 断言：**(B1)** 两个 future 都落定；**(B2)** 事件流里出现 `StreamError`（钉住 `:151` 的 `catch (Throwable)`）。
+
+**变异探针（三条，各自必须恰一条红）**：
+
+| 探针 | 回退 | 预期 |
+|---|---|---|
+| P1 | `:105` 只回退成 `catch (Exception)` | 夹具 1 ⇒ A2 红（`StreamError` 缺；A1 由 ①-b 兜住仍绿） |
+| P2 | 删 `finally` 里的两行 `complete` | 夹具 1 ⇒ A1 红（`TimeoutException`）、夹具 2 ⇒ B1 红 |
+| P3 | `:151` 只回退成 `catch (Exception)` | 夹具 2 ⇒ B2 红 |
+
+**全量**：`mvn -o -pl pi-java-coding-agent -am test`（**必须带 `-am`**，memory `jdk25-mvn-am`）＋
+`mvn -o clean verify`（14 模块、checkstyle 零违规）。
+
+**覆盖面边界（必须写进实施记录）**：本包改的是**会话层事件与 future**，按 §8.32.5 第 1 条，
+L5 剧本（帧级、直接驱动 `PiLoop`）**结构上覆盖不到** ⇒ 只有上面的定点用例能守。
+
+#### 8.36.7 本包**不做**与**附带登记**
+
+**不做**：第 2 步（§8.36.5）；路径 A 的 `AgentEnd` 缺失；`AgentEnd(List.of(), false)` 的**载荷**
+是否该改成 `accumulatedMessages()`（`:160` —— 前端 `main.ts:260` 拿它**整表替换**，`List.of()`
+会让 web 上的历史被清空；这条**今天就存在**，属第 2 步的产品面，本包不动）。
+
+**附带登记（本包只记，不改）**：
+
+| # | 发现 | 可达性 | 处置 |
+|---|---|---|---|
+| **14** | **`RunLifecycle.begin` 之后抛出的东西会让 `activeRun` 泄漏** —— `startRun:52-72` 的顺序是 `begin(lane)`（`:145-157` 里就把 `activeRun` 装上了）→ `openRunSpan` → `fireBeforeRun` → `transcript.add` → `records.add` → `publishState`；而**保护它的 `try/finally` 在 `PiLaneEngine.drive` 里，不在 `run` 里** ⇒ 这一段的抛出既不由 `drive` 的 finally 收口，也没有别的收口 ⇒ 车道**永久忙**（后续每次 `prompt` 都撞 `begin:150` 的 `IllegalStateException("not idle")`，`waitForIdle` 永远等下去）。**与 B5 同因（收口缺 finally）但不同层** | 今天**无生产路径**：`fireBeforeRun` 的生产注册者**零**（`onBeforeRun` 全仓只有声明）；`publishState` 的唯一下游 `watch()` 也**零**生产调用者；`openRunSpan` 是遥测。⇒ 只有测试能触发 | **登记，不改**（同 §8.32.6 的「投机代码」口径）。触发条件：出现 `before_run`／lane `watch` 的生产注册者，或遥测实现开始抛 |
 
 ---
 
