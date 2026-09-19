@@ -49,15 +49,10 @@ class AgentEventTranslatorTest {
             .isEqualTo("hello");
     }
 
-    @Test
-    void toolCallEventsEmitToolExecution() {
-        var start = translator.translate(new AgentSessionEvent.MessageUpdate(
-            new StreamEvent.ToolCallStart(0, partial(""))));
-        assertThat(type(start.get(0))).isEqualTo("tool_execution_start");
-        var end = translator.translate(new AgentSessionEvent.MessageUpdate(
-            new StreamEvent.ToolCallEnd(0, "call-1", "bash", java.util.Map.of(), partial(""))));
-        assertThat(type(end.get(0))).isEqualTo("tool_execution_end");
-    }
+    // ⚠️ 包⑦（docs/34）**删除**了 `toolCallEventsEmitToolExecution`：它钉的是
+    // 「StreamEvent.ToolCall* → tool_execution_*」这条**已被裁决删掉**的伪造路径。
+    // 换源后的正反两面（真正的工具执行事件 → tool_execution_*；流式增量**不再**
+    // 伪造）由 AgentEventTranslatorToolExecutionTest 覆盖。
 
     @Test
     void streamErrorEmitsTopLevelError() {

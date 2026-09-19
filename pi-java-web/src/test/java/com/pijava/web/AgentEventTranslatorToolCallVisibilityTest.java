@@ -23,8 +23,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 会渲染 {@code chunk.type === "toolCall"}，工具名回落到块里的 {@code name}）。</p>
  *
  * <p>故本包在三个工具增量上**增加**一条 {@code message_update}（携带累积
- * {@code partial}），**保留**既有的三个 {@code tool_execution_*}
- * （{@code docs/15:148} 有意为之，既有测试断言它们）。</p>
+ * {@code partial}）。⚠️ <b>包⑦（docs/34）换源后更新</b>：那三条 {@code tool_execution_*}
+ * 已改由**真正的工具执行事件**驱动（{@link AgentEventTranslatorToolExecutionTest}），
+ * 流式增量上**只剩** {@code message_update} —— 本夹具随之从
+ * {@code containsExactly("tool_execution_start", "message_update")} 收成单条。</p>
  */
 class AgentEventTranslatorToolCallVisibilityTest {
 
@@ -52,10 +54,9 @@ class AgentEventTranslatorToolCallVisibilityTest {
     void toolCallStartAlsoPushesAMessageUpdateCarryingTheToolCallBlock() {
         var msgs = translator.translate(new AgentSessionEvent.MessageUpdate(toolCallStart()));
 
-        // ⑥ 不回归：三个 tool_execution_* 仍在。
-        assertThat(types(msgs)).containsExactly("tool_execution_start", "message_update");
+        assertThat(types(msgs)).containsExactly("message_update");
 
-        var update = event(msgs.get(1));
+        var update = event(msgs.get(0));
         assertThat(update.get("message").get("role").asText()).isEqualTo("assistant");
         var block = update.get("message").get("content").get(0);
         assertThat(block.get("type").asText()).isEqualTo("toolCall");
@@ -72,8 +73,8 @@ class AgentEventTranslatorToolCallVisibilityTest {
 
         var msgs = translator.translate(new AgentSessionEvent.MessageUpdate(delta));
 
-        assertThat(types(msgs)).containsExactly("tool_execution_update", "message_update");
-        var block = event(msgs.get(1)).get("message").get("content").get(0);
+        assertThat(types(msgs)).containsExactly("message_update");
+        var block = event(msgs.get(0)).get("message").get("content").get(0);
         assertThat(block.get("type").asText()).isEqualTo("toolCall");
         assertThat(block.get("name").asText()).isEqualTo("write");
     }
@@ -88,8 +89,8 @@ class AgentEventTranslatorToolCallVisibilityTest {
 
         var msgs = translator.translate(new AgentSessionEvent.MessageUpdate(end));
 
-        assertThat(types(msgs)).containsExactly("tool_execution_end", "message_update");
-        var block = event(msgs.get(1)).get("message").get("content").get(0);
+        assertThat(types(msgs)).containsExactly("message_update");
+        var block = event(msgs.get(0)).get("message").get("content").get(0);
         assertThat(block.get("type").asText()).isEqualTo("toolCall");
         assertThat(block.get("arguments").get("path").asText()).isEqualTo("a.txt");
     }
