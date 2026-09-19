@@ -101,7 +101,9 @@ public final class PiMessagesApi extends AbstractChatApi {
                     }
                     case PiMessagesEvent.ToolCallStart s -> {
                         toolIds.put(s.contentIndex(), s.id());
-                        publisher.submit(builder.emitToolCallStart());
+                        // 包⑥（§4-C）：PiMessagesEvent.ToolCallStart:46 的 toolName
+                        // 字段此前**从未被这个调用点取用** ⇒ 该车道的起点身份为空。
+                        publisher.submit(builder.emitToolCallStart(s.id(), s.toolName()));
                     }
                     case PiMessagesEvent.ToolCallDelta d -> {
                         toolJson.put(d.contentIndex(),

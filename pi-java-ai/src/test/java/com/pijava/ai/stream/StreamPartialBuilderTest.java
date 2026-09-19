@@ -14,7 +14,7 @@ class StreamPartialBuilderTest {
 
         builder.emitTextStart();
         builder.emitTextDelta("告诉");
-        builder.emitToolCallStart();
+        builder.emitToolCallStart("id1", "write");
         builder.emitToolCallDelta("id1", "{\"path\":\"hello.py\"");
         builder.emitTextDelta("我你想实现的功能");
         builder.emitToolCallDelta("id1", ",\"content\":\"print(\\\"hello\\\")\"}");

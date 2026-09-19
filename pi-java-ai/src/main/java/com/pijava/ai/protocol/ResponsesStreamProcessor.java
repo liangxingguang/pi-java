@@ -196,7 +196,8 @@ final class ResponsesStreamProcessor {
             var fc = item.functionCall().get();
             toolCalls.put(outputIndex,
                 new FunctionCallState(fc.callId(), fc.name(), fc.arguments()));
-            publisher.submit(builder.emitToolCallStart());
+            // 包⑥：起点即带身份（上两行刚取到 callId/name）。
+            publisher.submit(builder.emitToolCallStart(fc.callId(), fc.name()));
         }
     }
 

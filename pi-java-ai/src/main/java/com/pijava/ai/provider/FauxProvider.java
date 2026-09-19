@@ -96,8 +96,11 @@ public final class FauxProvider implements Provider {
                 .withStopReason("tool_use");
         return new FauxProvider("faux-tool", List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
+                // 包⑥：桩的起点块与生产同形（带 id/name）—— 改核心而不改桩会让
+                // 夹具把人脑里的模型当契约。
                 new StreamEvent.ToolCallStart(0, AssistantMessage.empty()
-                        .withContent(List.of(new ContentBlock.ToolUseContent("", "", java.util.Map.of())))),
+                        .withContent(List.of(new ContentBlock.ToolUseContent(
+                            callId, toolName, java.util.Map.of())))),
                 new StreamEvent.ToolCallEnd(0, callId, toolName, args, finalMsg.withStopReason(null)),
                 new StreamEvent.StreamDone("tool_use", null, finalMsg)
         ), 0);

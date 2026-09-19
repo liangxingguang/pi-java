@@ -190,7 +190,9 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                     // `message_delta.stop_reason` ⇒ 该标志随本包一并删除。
                     pendingToolName[0] = tu.name();
                     pendingToolId[0] = tu.id();
-                    return builder.emitToolCallStart();
+                    // 包⑥：起点即带身份 —— pi 在此刻块已带 id/name 入 content
+                    // （anthropic-messages.ts:648-660），两个值上一行刚取到。
+                    return builder.emitToolCallStart(pendingToolId[0], pendingToolName[0]);
                 }
                 if (block.isRedactedThinking()) {
                     // B7（docs/31 §8.33）：pi 把 redacted 映射成 thinking 块 ——

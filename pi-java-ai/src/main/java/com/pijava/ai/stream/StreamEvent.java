@@ -192,6 +192,23 @@ public sealed interface StreamEvent {
                                      AssistantMessage partial, Usage usage) {
             return new UsageInfo(inputTokens, outputTokens, partial, usage);
         }
+
+        /**
+         * 归一为领域类型 {@link Usage}（包⑥ 裁决 B）。
+         *
+         * <p>有全量分解用全量（含 cache/cost）；否则按 input/output 合成 ——
+         * {@link Usage#of(double, double)} 给出 {@code totalTokens = input + output}
+         * 与零 {@code cost}，与 pi 流起点那个初值对象同形（{@code anthropic-messages.ts:518-525}、
+         * {@code openai-completions.ts:325-332}）；{@code cacheWrite1h}/{@code reasoning}
+         * 缺席，被 {@code @JsonInclude(NON_NULL)} 省略，pi 同。</p>
+         *
+         * <p>与 {@code Message.AssistantMessage.usageOf} 的分工：那个服务<b>终局消息</b>
+         * （{@code UsageInfo == null} ⇒ 返回 null ⇒ 键省略，见登记 B41），本方法服务
+         * <b>每一帧</b>的线格式；调用方负责「无 UsageInfo 时兜零值对象」。</p>
+         */
+        public Usage toUsage() {
+            return usage != null ? usage : Usage.of(inputTokens, outputTokens);
+        }
     }
 
     /**

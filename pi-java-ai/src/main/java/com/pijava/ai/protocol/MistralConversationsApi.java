@@ -211,7 +211,8 @@ public final class MistralConversationsApi extends AbstractChatApi {
 
                         if (tcId != null && name != null && !toolBuilder.isStarted()) {
                             toolBuilder.start(tcId, name);
-                            publisher.submit(builder.emitToolCallStart());
+                            // 包⑥：起点即带身份（上行的 null 判定已保证两者非空）。
+                            publisher.submit(builder.emitToolCallStart(tcId, name));
                         }
                         if (args != null) {
                             toolBuilder.append(args);

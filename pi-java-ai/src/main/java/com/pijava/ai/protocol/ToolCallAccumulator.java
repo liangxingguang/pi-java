@@ -37,7 +37,9 @@ final class ToolCallAccumulator {
         }
         if (!started) {
             started = true;
-            emit.accept(builder.emitToolCallStart());
+            // 包⑥：起点即带身份 —— 此刻**可能只知其一**（首块只给 id），
+            // 另一处为空串，与 pi 的 completions 车道同形（P6）。
+            emit.accept(builder.emitToolCallStart(id, name));
         }
         if (chunkArguments != null) {
             emit.accept(builder.emitToolCallDelta(id, chunkArguments));

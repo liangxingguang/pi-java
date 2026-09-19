@@ -185,7 +185,8 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
                                     Map<String, Object> args = fc.args().orElse(Map.of());
 
                                     toolCallSeen = true;
-                                    publisher.submit(builder.emitToolCallStart());
+                                    // 包⑥：起点即带身份（Google 一次给全，无 delta）。
+                                    publisher.submit(builder.emitToolCallStart(id, name));
                                     publisher.submit(builder.emitToolCallDelta(id, ""));
                                     publisher.submit(builder.emitToolCallEnd(id, name));
                                 }

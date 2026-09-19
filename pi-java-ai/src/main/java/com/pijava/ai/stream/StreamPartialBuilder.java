@@ -254,13 +254,33 @@ public final class StreamPartialBuilder {
     // Tool call block
     // ═══════════════════════════════════════════════════════════
 
-    /** Emit tool-call-start. Adds a placeholder {@link ContentBlock.ToolUseContent}. */
-    public StreamEvent.ToolCallStart emitToolCallStart() {
+    /**
+     * Emit tool-call-start carrying the call's identity.
+     *
+     * <p>pi 的五条车道都在发出 {@code toolcall_start} <b>之前</b>先把块建好、塞进
+     * {@code output.content}，再 push 起点事件（{@code anthropic-messages.ts:648-660}、
+     * {@code openai-completions.ts:497-536}）⇒ pi 的起点 {@code partial} 里那个位置
+     * <b>已经是</b>带 {@code id}/{@code name} 的 toolCall 块。本方法同序：<b>先入
+     * {@code blocks} 再取快照</b>。</p>
+     *
+     * <p><b>签名不留无参重载</b>：六个调用点在起点都拿得到 id/name（至少其一），
+     * 留一条无参的路就是留一条「空身份」的路。</p>
+     *
+     * <p>⚠️ 顺带修好一条隐性偏差：{@link #emitToolCallDelta} 从
+     * {@link #toolCallId}/{@link #toolCallName} 重建块，而 {@code toolCallName}
+     * 此前<b>只有 {@link #emitToolCallEnd} 才写</b> ⇒ 整个参数流期间块上的 name
+     * 恒为空串。此处 seed 之后，参数流全程携带工具名。</p>
+     *
+     * @param id   provider 的调用 ID；null 视作空串
+     * @param name 工具名；null 视作空串（起点 name 为空是 pi 自己也有的形状，
+     *             见 {@code openai-completions.ts:534-536} 的「稍后就地补」）
+     */
+    public StreamEvent.ToolCallStart emitToolCallStart(String id, String name) {
         toolArgBuf.setLength(0);
-        toolCallId = "";
-        toolCallName = "";
+        toolCallId = id == null ? "" : id;
+        toolCallName = name == null ? "" : name;
         toolBlockIndex = blocks.size();
-        blocks.add(new ContentBlock.ToolUseContent("", "", Map.of()));
+        blocks.add(new ContentBlock.ToolUseContent(toolCallId, toolCallName, Map.of()));
         int idx = nextContentIndex++;
         return new StreamEvent.ToolCallStart(idx, snapshot());
     }
