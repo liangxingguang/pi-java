@@ -78,6 +78,12 @@ final class WebWireJson {
             if (assistant.errorMessage() != null) {
                 node.put("errorMessage", assistant.errorMessage());
             }
+            // ⑨（D5）：线格原值随消息上 wire（pi types.ts:443）。与上面这一族同口径 ——
+            // pi 的消息本就全形状，前端不认识这些键、零行为影响 ⇒ 同步纯为形状对齐。
+            // 缺席规则同 toolResult 支（null ⇒ 键省略，Jackson 会写出 null 故必须主动省）。
+            if (assistant.rawStopReason() != null) {
+                node.put("rawStopReason", assistant.rawStopReason());
+            }
         }
         return node;
     }

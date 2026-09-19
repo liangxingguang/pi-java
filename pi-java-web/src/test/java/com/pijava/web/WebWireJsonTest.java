@@ -81,12 +81,9 @@ class WebWireJsonTest {
         // client/main.ts:261/286 直贴不判重），不是遗漏 —— 这条断言就是那条偏离的哨兵。
         var usage = new com.pijava.ai.Usage(10, 5, 1, 2, null, null, 18,
             com.pijava.ai.Usage.Cost.zero());
-        // 末位 rawStopReason（⑨/D5）：喂 null ⇒ 线上无该键。⚠️ wire 是否投影它**尚未裁决**
-        // （WebWireJson.messageNode 现按 3a 的字段清单逐键写出，不含该键；partial 投影更是
-        // 只带 role+content）—— 登记在 §8.35.15 ⑨ 的实测行里，等用户裁；本行只解掉配对。
         var m = new Message.AssistantMessage(List.of(new ContentBlock.TextContent("hi")),
             "stop", null, "openai-responses", "openai", "mock", usage,
-            java.time.Instant.ofEpochMilli(1_700_000_000_000L), null, null);
+            java.time.Instant.ofEpochMilli(1_700_000_000_000L), null, "max_tokens");
         var node = WebWireJson.messageNode(m);
         assertThat(node.get("stopReason").asText()).isEqualTo("stop");
         assertThat(node.get("api").asText()).isEqualTo("openai-responses");
@@ -97,12 +94,18 @@ class WebWireJsonTest {
         assertThat(node.has("timestamp")).isFalse();
         assertThat(node.get("errorMessage")).isNull();
         assertThat(node.get("deferred")).isNull();
+        // ⑨（D5）：线格原值与映射结果并列上 wire（pi 的消息本就全形状，3a 口径）。
+        // 先断存在性再读值：缺键时读出的是 NPE，说不清是「没投影」还是「值不对」。
+        assertThat(node.has("rawStopReason")).isTrue();
+        assertThat(node.get("rawStopReason").asText()).isEqualTo("max_tokens");
 
         var bare = WebWireJson.messageNode(new Message.AssistantMessage(
             List.of(new ContentBlock.TextContent("old"))));
         assertThat(bare.get("api")).isNull();
         assertThat(bare.get("usage")).isNull();
         assertThat(bare.get("stopReason")).isNull();
+        // 反向保证：缺席（null）时**不写键**，不是写一个 JSON null。
+        assertThat(bare.has("rawStopReason")).isFalse();
     }
 
     @Test
