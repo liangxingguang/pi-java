@@ -4566,12 +4566,12 @@ base64；两处**判空语义一致**（`isEmpty` vs `trim().isEmpty()` 在该�
 
 ---
 
-### 8.35 响应侧字段覆盖与收尾语义（**实施中**：B19 已闭环）
+### 8.35 响应侧字段覆盖与收尾语义（**B19/B20 均已闭环**）
 
 > **状态**：设计已落地并经用户审核；本包**按 B19 → B20 的顺序逐条实施**。
 > **B19（收/发两侧）已闭环**（§8.35.13，`ffc43e2`/`b916d29`/`478fe91`/`7369ae6`）；
 > **B22** 顺带修（§8.35.11）；**B20 设计定稿已落地并经用户审核**（§8.35.14 + 实施记录 §8.35.15），
-> 实施计划 ⑩ 个提交（③–⑨ 已落地、⑩ 待裁决；见 §8.35.15 七/八）；D1 的「P0 只读探针」作为首个提交**被用户否决**，
+> 实施计划 ⑩ 个提交（③–⑩ **全部落地**；见 §8.35.15 七/八）；D1 的「P0 只读探针」作为首个提交**被用户否决**，
 > 改为提交 ④ 的**真实车道门**（已过，见 §8.35.15 六-4）。
 > 本包**不占**既有 ③/④ 序号（③ = B5 宿主层 `Error` 通道、④ = B3/B12），文中称 **「响应侧字段覆盖包」**。
 > 登记：`docs/32` 的 **B19 / B20 / B21**（B 类 13→16 行，B22/B23 随接线夹具、B24 随 B19、
@@ -5220,8 +5220,9 @@ Google 走 `rawStopReason`），抽出来只会变成一个 7 参外壳，反而
 
 #### 8.35.15 B20 **实施记录**（提交 ③–⑧；red actual 已抄回 §8.35.14 第八节）
 
-> **状态**：③–⑨ 已落地（`d2254a2`/`811aa31`/`7f437b4`/`9f4c4bb`/`775f3a6`/`1007246`/`4619b78`）；
-> ⑩（B26 partial 初值 `pending`）**设计已修订、待裁决**（第八节：外溢比原稿大，含一处**必需**的收尾转换）。
+> **状态**：③–⑩ **全部落地**（`d2254a2`/`811aa31`/`7f437b4`/`9f4c4bb`/`775f3a6`/`1007246`/`4619b78`/`32784aa`，
+> 外加 web wire 的 `a8c0a62`）。⑩（B26 partial 初值 `pending`）的两处待裁**已裁并已落地**（第八节 → 8.7/8.8）：
+> (a) 两个中间读点**照报**、零折算；(b) web wire **补上** `rawStopReason`。
 > 每步的验证面一律是 `mvn -o clean verify`（全 14 模块 BUILD SUCCESS + checkstyle/spotbugs 零违规）
 > 加该模块的定向测试，逐提交列在下表，不再重复。
 
@@ -5235,6 +5236,8 @@ Google 走 `rawStopReason`），抽出来只会变成一个 7 参外壳，反而
 | ⑥ | `9f4c4bb` | Mistral：读点从 delta 守卫**之后**挪出 + 映射 + 四段收尾 + `[DONE]` 改 `break` | `MistralConversationsApiTest`（**新建**，8 条） | **5 红 3 绿**：`model_length`⇒`StreamDone(model_length)`；只带 finish_reason 的终帧⇒`StreamDone(stop)`；`error`⇒`StreamDone(error)` 且 0 条 error；未知值⇒`StreamDone(brand_new_reason)`；无取值⇒`StreamDone(stop)` | ai 426 |
 | ⑦ | `775f3a6` | Responses：α/β/γ/δ/ε 五条 | `OpenAIResponsesApiTest`（新增 8 条 + 加强 1 条 + 删 1 条） | **7 红 1 对照**：incomplete+content_filter ⇒ `[Start, TextStart, TextDelta, StreamDone(error)]` 且 **0 条 error**；incomplete 无 reason ⇒ `[Start, StreamDone(error)]`；未知 status ⇒ `[Start, StreamDone(stop)]`；failed 三条退化文案 ⇒ 全部 `"Response failed without error details"` / `"\`message\` is not set"`（SDK 异常文本）；error 事件后**仍照发**内容（`Hi AFTER-ERROR`）与 `StreamDone(stop)` | ai 426→433 |
 | ⑧ | `1007246` | **跨层回归门**（见第五节） | `CrossLayerLengthGateTest`（**新建**，2 条） | **1 红 1 对照**（变异探针见第五节） | agent-core 462→464 |
+| ⑨ | `4619b78` | `rawStopReason` 全量移植（D5=(a)） | 见第七节 | 8 条变异探针，逐条红灯见第七节 | ai 439 / agent-core 464 |
+| ⑩ | `32784aa` | partial 初值改 `"pending"`（B26）＋ `markAborted` 判据换字面量 ＋ web wire（`a8c0a62`） | 见第八节 8.8 | 3 条变异探针，逐条红灯见 8.8 | ai 440 / agent-core 465 |
 
 ##### 二、第八节两处预测的更正（实现后才知道）
 
@@ -5354,7 +5357,11 @@ codec 一写一读（`SessionJson` / `MessageJsonCodec`）。
 
 **计数**：ai **439** → agent-core **464**；`mvn -o clean verify` 全 **14** 模块 BUILD SUCCESS、checkstyle **0** 违规。
 
-##### 八、⑩ 设计**修订**（B26；**待裁决**——原稿只写「初值 + 外溢说明」，实测发现外溢比原稿大）
+##### 八、⑩ 实施记录（B26；**两处已裁、已落地** `32784aa` + `a8c0a62`）
+
+> 原稿只写「初值 + 外溢说明」，实测发现外溢比原稿大（以下 8.1–8.5 是**修订稿**，
+> 落笔于实现之前；8.8 是实施记录）。裁决：(a) 两个中间读点**照报 `"pending"`**；
+> (b) web wire **补上**。两处裁决均取建议项。
 
 ###### 8.1 新发现（pi 侧）：`"pending"` 是**非持久化**取值
 
@@ -5362,7 +5369,10 @@ pi 的**存盘**消息类型显式排除它：`harness/session/types.ts:13` ＝
 `stopReason: Exclude<StopReason, "pending">`；会话层**拒绝** append 一条 pending 助手消息
 （conformance `session/testing/conformance/session-repo.ts:264` 就是拿它当反例）。
 即：`"pending"` 在 pi 里是**流的中间态**，一旦「落定」必须已被改写。pi 五条车道都从
-`stopReason: "pending"` 起（`anthropic:526`/`google:75`/`mistral:222`/`completions:333`/`responses:139`），
+`stopReason: "pending"` 起（`anthropic-messages.ts:526`/`openai-completions.ts:333`/`google-generative-ai.ts:75`/
+`mistral-conversations.ts:222`/`openai-responses.ts:139`；pi 侧 `grep` 实际共 **10** 处，另含
+`azure-openai-responses:95`/`bedrock-converse-stream:138`/`google-vertex:93`/`openai-codex-responses:252`/
+`pi-messages:186`，pi-java 只实现上述 5 条车道），
 **只有终局事件改写它** —— 所以「流跑完还停在 pending」在 pi 里等于「provider 没给终局判定」，
 而这个状态**不会**进会话。
 
@@ -5420,22 +5430,60 @@ provider 照样吐完帧」那一支（`:206-213` 的 `abortedAtEntry`，**不�
 1. `StreamPartialBuilder.stopReason` 初值 `null` → `"pending"`（+ javadoc 注明：pi 词汇表外的哨兵值、
    与 §8.35.14 六 的出处）。
 2. `PiLoopRunner.markAborted:299` 的 `!= null` → `!"pending".equals(...)`（**必需**，8.3）。
+   实施时保留 `null` 分支（`observed == null || "pending".equals(observed)`）：非流式构造的消息与
+   旧转录仍是 `null`，与 `"pending"` 同属「没观测到终局」，一并折算。
 3. 外溢标注：`PiMessagesApi` 同样使用该 builder ⇒ 它的 partial 也会带 `"pending"`（**可接受**；
    它是 pi-java 自有协议、不是 pi 的车道），**不改**它的其他行为。
 4. 两个中间读点按 8.6-(a) 的裁决处理（保留 null 语义 ⇒ 加一处 `"pending"` 折算并注明；或照报 `"pending"`
-   并接受审计面取值变化）。
+   并接受审计面取值变化）。⇒ **裁决：(a) 照报** ⇒ 零折算、零代码改动（8.1 表即最终行为）。
 5. 夹具：`StreamPartialBuilderTest` 新增「初值即 `"pending"`」+ `PiLoopRunner` 的
    `abortedAtEntry` 支（8.3）各一条；逐条探针（§8.34.11 形态 (6)）。
 
-###### 8.7 两处**待用户裁决**
+###### 8.7 两处裁决（**均已裁**，取建议项）
 
 - **(a)** 8.4 的两个中间读点：保留今天的 `null` 语义（把 `"pending"` 折算回「没观测到」），
-  还是照报 `"pending"`（审计面取值随之变化）？**建议后者**：审计面如实反映消息、且少一层折算；
-  但这是 pi 无对应物的自有面，故请裁。
+  还是照报 `"pending"`（审计面取值随之变化）？**裁决：照报**（取建议项）—— 审计面如实反映消息、
+  且少一层折算；这是 pi 无对应物的自有面，故交用户裁定。
 - **(b)** `pi-java-web` 的 wire 是否投影 `rawStopReason`（⑨ 的编译器发现，见第七节）？
   `WebWireJson.messageNode` 现按 3a 的字段清单**逐键写出**（不含该键）、其 partial 投影更**只带 role+content**
    ⇒ 今天的 wire 是**裁剪过的**投影，不是消息镜像。**建议**随 3a 的「纯为形状对齐」口径补上（4 行），
-  但**未**擅自改 —— ⑨ 只解了配对。
+  但**未**擅自改 —— ⑨ 只解了配对。**裁决：补上**（取建议项），随 3a 的「纯为形状对齐」口径，
+  实现见 `a8c0a62`（含一条缺席哨兵：旧形状消息不得凭空长出该键）。
+
+###### 8.8 实施记录（`32784aa` + `a8c0a62`）
+
+**形状**：`StreamPartialBuilder.stopReason` 初值 `= "pending"`；`PiLoopRunner.markAborted` 的判据
+**换成字面量**（8.3 那条**必需**的转换）；`WebWireJson.messageNode` 补 `rawStopReason` 键（裁决 b；
+缺席规则同 `toolResult` 支：null ⇒ 键省略，因为 Jackson 会写出显式 `null`）。
+
+**计数**：ai **439 → 440**（`StreamPartialBuilderTest` +1）、agent-core **464 → 465**
+（`PendingStopReasonSettlementTest` **新建** 1 条）、web **37**（`WebWireJsonTest` 8 条，改造既有用例）；
+`mvn -o clean verify` 全 **14** 模块 BUILD SUCCESS、checkstyle **0** 违规。
+
+**三条变异探针**（前两条的夹具写在实现之后 ⇒ 无红灯可看，只能靠探针证有牙，§8.34.11 形态 (6)；
+第三条的夹具是改造既有用例、本可看红灯，一并记录）：
+
+| 探针（把什么改坏） | 恰红的夹具 | 红灯原文 |
+|---|---|---|
+| `StreamPartialBuilder` 初值退回 `null` | `StreamPartialBuilderTest.stopReasonStartsAtPendingAndOnlyTerminalEventsRewriteIt` | `expected: "pending" but was: null`（5/5 → 4/5） |
+| `markAborted` 判据去掉 `"pending".equals(...)` 项 | `PendingStopReasonSettlementTest.pendingPartialIsNeverSettledAsPending` | `expected: "aborted" but was: "pending"`（1/1 → 0/1） |
+| wire 投影改成 `if (false)` | `WebWireJsonTest.assistantCarriesIdentityAndMetricsButNoTimestamp` | `Expecting value to be true but was false`（8/8 → 7/8） |
+
+⚠️ 第三条探针**第一版的红灯是 NPE**（直接读缺键的 `.asText()`），说不清是「没投影」还是「值不对」——
+按 §8.35.15 五 的纪律改成**先断存在性**（`assertThat(node.has("rawStopReason")).isTrue()`）再读值，
+第二遍才拿到自解释的红灯；夹具里那条注释就是这次改动的痕迹。
+
+**为什么必须新建 `PendingStopReasonSettlementTest`**：⑩ 唯一能伤到的路径是「**进场前**就已中止
+（`abortedAtEntry`）＋ provider 照样吐帧、但不发终局事件」，而既有夹具两条都结构性覆盖不到 ——
+`MidStreamAbortTest` 走「**拉取途中**中止」（`cutShort` 支，收尾不看 `stopReason`）且 partial 用
+`AssistantMessage.empty()` 直造、走不到 builder；L5 差分的 `FauxProvider:81-82` 用
+`msg.withStopReason(null)` 造帧。新夹具两者都占：`AbortSignal` 在 `PiLoop.run` **之前** abort ＋
+真实 `StreamPartialBuilder` 造三帧（`emitStart`/`emitTextStart`/`emitTextDelta`）、**无** `done`/`error`；
+断言分两段 —— 中间帧 `containsOnly("pending")`、落定消息 `isEqualTo("aborted")`。
+
+**中间读点（裁决 a）的最终行为** —— 8.4 那张表即现状，**无**折算代码：`HarnessUtils.deriveNewestOwn:93`
+读到的 `NewestOwn.stopReason` 与 `RunSpanFactory.closeRunSpan:46` 写到 `harness.run` 跨度上的属性，
+在「流进行中」这一刻都是 `"pending"`。两者都是 pi-java 自有旁路审计面（pi 跨度词汇表无此二属性，§8.28）。
 
 ---
 
