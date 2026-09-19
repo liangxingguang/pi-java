@@ -70,12 +70,29 @@ final class AgentEventTranslator {
             }
             case StreamEvent.TextDelta delta -> out.add(messageUpdate(delta.partial()));
             case StreamEvent.ThinkingDelta delta -> out.add(messageUpdate(delta.partial()));
-            case StreamEvent.ToolCallStart ignored ->
+            // 包⑥（B40）：工具增量上**增加**一条 message_update —— 前端在
+            // tool_execution_* 上只 renderApp()、不读载荷，它手上最后一条
+            // message_update 此前是工具调用**之前**那条 ⇒ 工具卡要等 agent_end
+            // 整表替换才出现。三个 tool_execution_* **保留**（docs/15:148 有意为之）。
+            //
+            // ⚠️ 顺序：message_update 缀在 tool_execution_* **之后**（docs/33 §8.2(6)
+            // 写的顺序相反）。两条理由同向：① 既有夹具 AgentEventTranslatorTest:53-59
+            // 断言 get(0) 的类型，后置可让它保持绿、零回归；② 前端的 message_update
+            // 是**命令式** setMessage（client/main.ts:302-305 的
+            // updateStreamingContainer），而 tool_execution_* 会 renderApp() 重渲染；
+            // 把命令式那次放在最后，才不会被随后的重渲染覆盖。
+            case StreamEvent.ToolCallStart s -> {
                 out.add(new WebServerMessage.AgentEvent(typeNode("tool_execution_start")));
-            case StreamEvent.ToolCallDelta ignored ->
+                out.add(messageUpdate(s.partial()));
+            }
+            case StreamEvent.ToolCallDelta s -> {
                 out.add(new WebServerMessage.AgentEvent(typeNode("tool_execution_update")));
-            case StreamEvent.ToolCallEnd ignored ->
+                out.add(messageUpdate(s.partial()));
+            }
+            case StreamEvent.ToolCallEnd s -> {
                 out.add(new WebServerMessage.AgentEvent(typeNode("tool_execution_end")));
+                out.add(messageUpdate(s.partial()));
+            }
             case StreamEvent.StreamError err -> {
                 streaming = false;
                 out.add(new WebServerMessage.Error(errorText(err)));
