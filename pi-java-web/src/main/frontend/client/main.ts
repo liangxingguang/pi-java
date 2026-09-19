@@ -609,6 +609,8 @@ function renderApp() {
   if (!app) return;
 
   const toolResultsById = buildToolResultsMap();
+  // 已提交在跑、但还没有任何增量到达 ⇒ 「等 agent 结果」的那一段。
+  const waiting = isStreaming && !streamingMessage;
 
   const appHtml = html`
     <!-- Mobile sidebar overlay -->
@@ -768,13 +770,24 @@ function renderApp() {
               .isStreaming=${isStreaming}
             ></message-list>
 
-            <streaming-message-container
-              class="${isStreaming ? '' : 'hidden'}"
-              .tools=${[]}
-              .isStreaming=${isStreaming}
-              .pendingToolCalls=${new Set()}
-              .toolResultsById=${toolResultsById}
-            ></streaming-message-container>
+            <!-- 等待首个增量时 pi-web-ui 自己会渲染一个闪烁的 2×4 方块；用外层
+                 容器把它藏掉。⚠️ 不能直接给组件加 hidden 类 —— 它在
+                 connectedCallback 里设了内联 display:block，会盖过类规则。 -->
+            <div class="${waiting ? 'hidden' : ''}">
+              <streaming-message-container
+                class="${isStreaming ? '' : 'hidden'}"
+                .tools=${[]}
+                .isStreaming=${isStreaming}
+                .pendingToolCalls=${new Set()}
+                .toolResultsById=${toolResultsById}
+              ></streaming-message-container>
+            </div>
+
+            ${waiting ? html`
+              <div class="typing-dots mx-4 mb-3" role="status" aria-label="Assistant is working">
+                <span></span><span></span><span></span>
+              </div>
+            ` : ""}
           </div>
         `}
       </div>

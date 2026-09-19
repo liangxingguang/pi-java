@@ -619,3 +619,47 @@ html, body {
   color: var(--muted-foreground);
   flex-shrink: 0;
 }
+
+/* ── 等待 agent 结果时的三点头 ──
+   pi-web-ui 在「已开始流式、但首个增量未到」时渲染的是一个闪烁的 2×4 方块
+   （StreamingMessageContainer 的 `if (!this._message)` 支）；这里用三点动画替代它。 */
+
+@keyframes typing-dot {
+  0%, 60%, 100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+.typing-dots {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 5px;
+  height: 1rem;
+}
+
+.typing-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted-foreground);
+  animation: typing-dot 1.2s ease-in-out infinite;
+}
+
+.typing-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.typing-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .typing-dots span {
+    animation-duration: 2.4s;
+  }
+}
