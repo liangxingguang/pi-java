@@ -267,7 +267,13 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
             StringBuilder text, List<ContentBlock> toolCalls, Usage usage, String errorMessage) {
         if (partial != null && partial.stopReason() != null) {
             var projected = Message.AssistantMessage.fromPartial(partial);
-            boolean backfillUsage = usage != null && projected.usage() == null;
+            // ⚠️ 包⑨（docs/36 B41）：判据从 `projected.usage() == null` 挪到
+            // **`partial.usage() == null`**。原来那个 null 是「流里没报用量」的信号，
+            // 而 B41 让 `usageOf` 恒兜零（pi 的 AssistantMessage.usage 必填）⇒ 投影上
+            // 的 null 消失了、信号被消灭 ⇒ 摘要跨度的 token 计数会静默归零
+            // （夹具 HarnessCompactionSummarySpanTest 抓到的正是这条）。
+            // partial 才是「这一次流有没有报用量」的原件，从这里读同一语义。
+            boolean backfillUsage = usage != null && partial.usage() == null;
             boolean backfillError = errorMessage != null && projected.errorMessage() == null;
             if (backfillUsage || backfillError) {
                 projected = new Message.AssistantMessage(projected.content(),

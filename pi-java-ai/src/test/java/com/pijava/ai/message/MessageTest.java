@@ -192,12 +192,20 @@ class MessageTest {
         assertThat(usage.cost()).isEqualTo(com.pijava.ai.Usage.Cost.zero());
     }
 
-    /** 3a：没有 UsageInfo ⇒ usage 为 null（线上键省略，null ≙ pi 的 undefined）。 */
+    /**
+     * 3a（**包⑨ 更新**）：没有 UsageInfo 时 usage 由 null 改为**零值对象**。
+     *
+     * <p>pi 的 {@code AssistantMessage.usage: Usage} 必填且**永不为空**
+     * （{@code ai/src/types.ts:439}；pi 的 11 个适配器 + lazy + faux + 中止/错误路
+     * 全都显式给零值，落盘条目也带）⇒ 这里返回 null 会让键从两条线上整段消失。
+     * 见 {@code docs/36}（B41）。⚠️ **工具结果**的 usage 仍可为空 —— 那是 pi 的可选字段。</p>
+     */
     @Test
-    void fromPartialWithoutUsageInfoLeavesUsageNull() {
+    void fromPartialWithoutUsageInfoSynthesizesZeroUsage() {
         var msg = Message.AssistantMessage.fromPartial(AssistantMessage.empty());
 
-        assertThat(msg.usage()).isNull();
+        assertThat(msg.usage()).as("兜零，不再是 null").isNotNull();
+        assertThat(msg.usage().totalTokens()).isZero();
         assertThat(msg.api()).isNull();
         assertThat(msg.timestamp()).isNull();
     }

@@ -126,12 +126,27 @@ public sealed interface Message {
         /**
          * 把 partial 上的 {@link com.pijava.ai.stream.StreamEvent.UsageInfo} 归一为
          * 完整 {@link com.pijava.ai.Usage}：有全量分解用全量（含 cache/cost），只有
-         * input/output 计数的合成（cache 0、cost 零）；无 UsageInfo ⇒ null（键省略）。
+         * input/output 计数的合成（cache 0、cost 零）。
+         *
+         * <p><b>无 UsageInfo ⇒ 兜零值对象，不返回 null</b>（包⑨ B41，{@code docs/36}）。
+         * pi 的 {@code AssistantMessage.usage: Usage} 是<b>必填</b>
+         * （{@code ai/src/types.ts:439}），而且 pi <b>没有任何一条路径</b>会产出没 usage
+         * 的助手消息 —— 11 个 provider 适配器、{@code lazy.ts} 的装配失败、{@code faux}、
+         * 中止/错误路（{@code agent.ts:511-527} 的 {@code EMPTY_USAGE}、
+         * {@code recovery.ts:28-40} 的 {@code ZERO_USAGE}）<b>全都显式给零值</b>；
+         * <b>落盘的助手条目也带 usage</b>（{@code session-manager.ts:1029-1056} 整条
+         * stringify）。此前这里返回 null，经 RPC 的 {@code NON_NULL} mixin 与 web 的
+         * {@code WebWireJson:75} 双重 null 判断 ⇒ <b>键从线上整段消失</b>。</p>
+         *
+         * <p>⚠️ <b>只管助手消息</b>：pi 的 {@code ToolResultMessage.usage} 是<b>可选</b>的
+         * （{@code types.ts:459}），工具没报用量时线上确实没有该键
+         * （{@code createErrorToolResult} 根本不带）⇒ 工具结果那边<b>保持 null ⇒ 省略</b>，
+         * 兜零是引入偏差（{@code docs/36 §3-R4}）。</p>
          */
         private static com.pijava.ai.Usage usageOf(
                 com.pijava.ai.stream.StreamEvent.UsageInfo info) {
             if (info == null) {
-                return null;
+                return com.pijava.ai.Usage.of(0, 0);
             }
             if (info.usage() != null) {
                 return info.usage();
