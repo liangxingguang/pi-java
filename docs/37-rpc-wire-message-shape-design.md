@@ -206,3 +206,72 @@ private static final ObjectMapper MAPPER = new ObjectMapper()
 
 用户审核 §8（含 §8.0 四个裁决点）之后才写代码；实施完成后追加**实施记录**。
 ⚠️ **其中步 1（止血）建议无论如何先落** —— 它是生产上的真故障。
+
+---
+
+## 10. 实施记录（2026-09-20，用户「通过 + 推 main」）
+
+**§8.0 裁决已裁**：A ＝ **写 epoch 毫秒**；B ＝ **手工 put `role`**；C 的待核**有结果**
+（见 §10.4-D1，是个硬约束）；D 退为登记（见 §10.5）。四步全部落地，新增 **6 条**断言，
+五个探针**全部有牙**。
+
+### 10.1 四步与改动面
+
+| 步 | 改动 | 状态 |
+|---|---|---|
+| **1（止血）** | `JsonEventMapper` 注册 `Instant → epoch 毫秒` 的 serializer | ✅ **单独一次提交**（`5435666`） |
+| **2–3** | 新的 `messageNode(Message)` 节点级投影：`role`、`toolCallId` 改名、内容块判别字面量、可选键按 pi 的 `?` 省略；三处调用点（`agent_end.messages`、`agent_settled` 的 `message`/`toolResults`）接上 | ✅ |
+| **4** | 本文件 ＋ `docs/32` | ✅ |
+
+### 10.2 实测红集（先红）
+
+**包⑩ 整包：`RpcWireMessageShapeTest` 6 跑 6 红** —— 含**两条**
+`IllegalArgumentException: Instant not supported`（止血的直接证据）。
+⚠️ 为了让**步 1 单独可绿**，落地止血时先把尚未实现的 4 条断言移出夹具，
+在步 2–3 里补回（如实记）。
+
+### 10.3 变异探针（**红集实测，不预测**）
+
+| # | 改坏什么 | 实测红集 | 条 |
+|---|---|---|---|
+| **P1** | 去掉 Instant serializer | `messageWithTimestampDoesNotThrow:50`、`timestampIsWrittenAsEpochMilliseconds:56`、`everyMessageCarriesItsRoleLiteral:74`（连带因抛而红） | **3** |
+| **P2** | `role` 写死 | `everyMessageCarriesItsRoleLiteral:76`、`JsonEventMapperTest.agentSettledCarriesTheAssistantMessageWhenPresent:81` | **2** |
+| **P3** | 写回 `toolUseId` | `toolResultUsesPiFieldNameToolCallId:91`、`JsonEventMapperTest…:84` | **2** |
+| **P4** | 可选键恒写 | `absentOptionalKeysAreOmittedNotWrittenEmpty:135` | **1** |
+| **P5** | 判别值写回 `tool_use` | `contentBlockDiscriminatorsMatchPi:115` | **1** |
+
+⚠️ **P1 第一次没生效**：我用多行 perl 删注册块，**正则没匹配上**、探针等于没打，
+红集读到 0。改用 Edit 工具才拿到真红集。**这是本项目第二次踩多行 sed/perl 的坑**
+（首次在包⑤）—— 记在这里，别再犯。
+
+### 10.4 与稿子的偏差（如实）
+
+| # | 稿子写的 | 实际做的 | 理由 |
+|---|---|---|---|
+| **D1** | §8.0 裁决 C：「内容块改名先核爆炸半径再定」 | **核出了硬约束**：`SessionJson` 只注册了 `ContentBlock` 的 **serializer**、**没有 deserializer**（`SessionJson.java:194`）⇒ **读既有会话文件靠的正是注解里的判别名**（`tool_use` 等）。**改注解会让旧会话文件读不出来** | ⇒ 改用**节点级投影**（只在线这一层改名），这也是 `WebWireJson` 一直在手工构造块的原因 |
+| **D2** | §8.1：步 2 与 步 3 分两次提交 | **合成一次** | 两者都在同一个新方法 `messageNode` 里，拆开任一步都不产生可独立验证的中间态 |
+| **D3** | §8.2(5)：`timestamp`（裁决 D，「若无干净取值链则退为登记」） | **退为登记** | `Message` 本体没有 timestamp（时间戳在 `Entry` 上），而 `agent_end.messages` 是 `List<Message>` ⇒ **没有干净的取值链**。硬凑会把 Entry 的时间戳假装成消息的时间戳 |
+| **D4** | §8.3 计划 7 条 | **6 条** | 没写「端到端带上 timestamp 走 RPC 线」那条 —— 见 §10.5 的夹具缺口 |
+
+### 10.5 未覆盖（如数）
+
+- ⚠️ **夹具缺口（A16）**：`FauxProvider` 绕过 `AbstractChatApi` ⇒ **造不出带 timestamp
+  的消息**。本夹具**手工构造**带 `Instant` 的消息 ⇒ 它钉得住「mapper 会不会抛」，
+  **钉不住「生产会不会走到这里」**。端到端那条因此没写。
+- **`UserMessage`/`ToolResultMessage` 的 `timestamp`**（裁决 D）：**退为登记** —— pi 两者都
+  必填，但 Java 的消息记录里没有这个字段（在 `Entry` 上）⇒ 线上仍缺这两个键。
+- **`entry_appended.entry` 里的消息**：`Entry` 走 `MAPPER.valueToTree(a.entry())`，
+  **不经过** 新的 `messageNode` ⇒ 那条路上的消息**仍是旧形状**。⇒ 登记。
+- **`UserMessage.content` 的裸字符串形态**（§6-2）：不做。
+
+### 10.6 全树验证 —— **BUILD SUCCESS（14 模块全绿）**
+
+`mvn -o clean verify`：**14 个模块全部 SUCCESS**（TUI 03:44、Web 01:12、AI 38 s），
+**spotbugs 全模块 `BugInstance size is 0`**，checkstyle 零违规。
+
+模块计数（实测）：telemetry 31 · ai 448 · agent-core 487 · session-sqlite 35 ·
+coding-agent **263**（＋6）· protocol 14 · server 2 · web 48 · TUI 209（1 skipped）。
+
+> ⚠️ **本包的价值集中在步 1**：那一步修的是**生产上的真故障**（RPC 客户端收不到
+> `agent_end`）。其余三步是形状对齐（对外可见性远低于步 1）。**两截的价值不对称**，
+> 如实记。
