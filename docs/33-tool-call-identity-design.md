@@ -143,16 +143,154 @@
 
 ---
 
-## 7. 下一步
+## 8. 实施稿（步骤 3 的产物；**待用户审核后才写代码**）
 
-1. ~~核掉 §5 的 N1–N5~~ ⇒ **已完成**（§5）；
-2. 出**实施稿**：分步计划 ＋ 测试计划（先红）＋ 变异探针设计 ＋ 裁决点（N2／N3 ＋ 下面这条）；
-3. 用户审核之后才写代码。
+### 8.0 裁决点 —— 已裁（2026-09-19，用户「三个裁决点按照推荐方案来实施」）
 
-**进实施稿前已知的三个裁决点**（不预设结论）：
-
-| # | 问题 | 选项 |
+| # | 裁决 | 后果 |
 |---|---|---|
-| A | `toolcall_start` 的**读法** | ① 照 pi：读 `partial.content[contentIndex]`，不是 toolCall 就**抛**（N1 说后果＝丢一帧＋日志）；② 退化：读不到就写空串并登记。⚠️ **两个桩都不满足 pi 的读法**（§4-F）⇒ 无论选哪个，「夹具必须走生产形状（`StreamPartialBuilder`）」是硬约束 |
-| B | `usage` 归一化的落点（N2） | ① `StreamEvent.UsageInfo.toUsage()`；② `Message.AssistantMessage` 公开静态 |
-| C | N3 的两处口径 | ① 只改 mapper，终局消息的 `usage` 另登记（**倾向**）；② 一并改 `usageOf` |
+| **A** | **照 pi 抛**：读 `partial.content[contentIndex]`，不是 `ToolUseContent` 就抛 | N1 已核：`SessionEventHub` 逐个 listener 隔离 ⇒ 抛错 = 丢该客户端一帧 ＋ 一条 warning，**不丢连接** |
+| **B** | 归一化落在 **`StreamEvent.UsageInfo.toUsage()`** | 「StreamEvent 变体 → 领域类型」的投影留在 `pi-java-ai`，与 `snapshot()`/`withUsage()` 同层 |
+| **C** | **只改 mapper**（每帧兜零）；终局消息 `usage` 可空**另登记 B41** | 不动现有终局投影 |
+
+### 8.1 分步（每步一个可独立编译的模块 ⇒ 一次提交）
+
+| 步 | 模块 | 内容 |
+|---|---|---|
+| **1** | `pi-java-ai` | 核心：`emitToolCallStart(id, name)` ＋ 六个调用点 ＋ `FauxProvider` 桩同改 ＋ `UsageInfo.toUsage()` |
+| **2** | `pi-java-coding-agent` | RPC 线：`JsonEventMapper` 的 `message_update` 恒写 `usage` ＋ `toolcall_start` 补 `id`/`toolName`（照抛） |
+| **3** | `pi-java-web` | web 线：`AgentEventTranslator` 在 `ToolCallStart/Delta/End` 上**增加** `message_update` |
+| **4** | `docs/33` | 实施记录（含实测红集、未覆盖、与稿子的偏差） |
+
+### 8.2 精确改动
+
+**(1) `StreamPartialBuilder.emitToolCallStart(String id, String name)`** —— 签名**改死**（不留无参重载：六个调用点全都拿得到值，留重载＝留一条「空身份」的路）。
+
+```java
+public StreamEvent.ToolCallStart emitToolCallStart(String id, String name) {
+    toolArgBuf.setLength(0);
+    toolCallId = id == null ? "" : id;
+    toolCallName = name == null ? "" : name;
+    toolBlockIndex = blocks.size();
+    blocks.add(new ContentBlock.ToolUseContent(toolCallId, toolCallName, Map.of()));
+    int idx = nextContentIndex++;
+    return new StreamEvent.ToolCallStart(idx, snapshot());
+}
+```
+块**先入 `blocks` 再取快照** —— 与 pi 同序（P4/P5：`anthropic-messages.ts:648-660`、`openai-completions.ts:503-521`）。
+`Map.of()` 即 pi 起点的空 `arguments`。⚠️ 这同时**修好了一条隐性偏差**：`emitToolCallDelta` 从
+`toolCallId`/`toolCallName` 重建块（`:339-342`），而 `toolCallName` 此前**只有 `emitToolCallEnd` 才写**
+⇒ 整个参数流期间块上的 name 恒为空串。
+
+**(2) 六个调用点**（P10 已核各自都持有值）：
+
+| 文件:行 | 改法 |
+|---|---|
+| `AnthropicMessagesApi:193` | `emitToolCallStart(pendingToolId[0], pendingToolName[0])` |
+| `GoogleGenerativeAiApi:188` | `emitToolCallStart(id, name)`（局部量已算出） |
+| `MistralConversationsApi:214` | `emitToolCallStart(tcId, name)` |
+| `PiMessagesApi:104` | `emitToolCallStart(s.id(), s.toolName())` ← **§4-C**：`PiMessagesEvent.ToolCallStart:46` 早有该字段 |
+| `ResponsesStreamProcessor:199` | `emitToolCallStart(fc.callId(), fc.name())` |
+| `ToolCallAccumulator:40` | `emitToolCallStart(id, name)`（字段，**可能为空串** —— P6：pi 同形） |
+
+**(3) `FauxProvider:99`** —— 桩的起点块改成 `ToolUseContent(callId, toolName, Map.of())`（§4-D）。
+⚠️ **`ScriptedStreams` 不动**（§4-F：改它＝改 L5 帧）。
+
+**(4) `StreamEvent.UsageInfo.toUsage()`** —— 新增公开实例方法：
+
+```java
+/** 归一为领域类型（裁决 B）；无全量分解时按 input/output 合成（cache 0、cost 零）。 */
+public Usage toUsage() {
+    return usage != null ? usage : Usage.of(inputTokens, outputTokens);
+}
+```
+`Usage.of` 已给出 `totalTokens = input + output` 与零 `cost` ⇒ 与 pi 的初值对象**同形**
+（`cacheWrite1h`/`reasoning` 缺席，被 `@JsonInclude(NON_NULL)` 省略，pi 同）。
+
+**(5) `JsonEventMapper` 的 `MessageUpdate` 支**：
+
+```java
+case AgentSessionEvent.MessageUpdate u -> {
+    node.put("type", "message_update");
+    // pi 恒写（json-event.ts:58）：流起点 usage 就是零值对象（anthropic-messages.ts:518-525）
+    // ⇒ 缺 UsageInfo 时兜零，**不省键**（这与 B41 的终局口径不同，见裁决 C）。
+    var partial = u.streamEvent().partial();          // ⚠️ UsageInfo 的 partial 可为 null
+    var info = partial == null ? null : partial.usage();
+    node.set("usage", MAPPER.valueToTree(info == null ? Usage.of(0, 0) : info.toUsage()));
+    node.set("assistantMessageEvent", assistantMessageEvent(u.streamEvent()));
+}
+```
+新增私有方法（剥 partial 由既有 mixin 完成，此处只补身份）：
+
+```java
+private static ObjectNode assistantMessageEvent(StreamEvent event) {
+    var delta = (ObjectNode) MAPPER.valueToTree(event);
+    if (event instanceof StreamEvent.ToolCallStart start) {
+        var content = start.partial().content();
+        int index = start.contentIndex();
+        if (index < 0 || index >= content.size()
+                || !(content.get(index) instanceof ContentBlock.ToolUseContent toolCall)) {
+            throw new IllegalStateException(
+                "toolcall_start content at index " + index + " is not a tool call");
+        }
+        delta.put("id", toolCall.id());
+        delta.put("toolName", toolCall.name());
+    }
+    return delta;
+}
+```
+键序与 pi 同（`type, usage, assistantMessageEvent`；身份键缀在增量字段后）。
+
+**(6) `AgentEventTranslator` 的三支** —— **增加**而非替换（三个 `tool_execution_*` 保留：既有测试
+`AgentEventTranslatorTest:53-59` 断言它们、`docs/15:148` 有意为之、且补 message_update 正是前端真正会渲染的那条）：
+
+```java
+case StreamEvent.ToolCallStart s -> {
+    out.add(messageUpdate(s.partial()));
+    out.add(new WebServerMessage.AgentEvent(typeNode("tool_execution_start")));
+}
+case StreamEvent.ToolCallDelta d -> { out.add(messageUpdate(d.partial())); out.add(...update...); }
+case StreamEvent.ToolCallEnd e   -> { out.add(messageUpdate(e.partial()));   out.add(...end...); }
+```
+`messageUpdate(partial)` 走既有 `WebWireJson.assistantNode`（P18：toolCall 块的投影**已经存在**）。
+
+### 8.3 测试计划（**先红**）
+
+| 模块 | 新夹具 | 条 | 钉什么 |
+|---|---|---|---|
+| `pi-java-ai` | `StreamPartialBuilderToolIdentityTest` | 3 | 起点事件的 `partial.content[idx]` **就是** `ToolUseContent(id, name, {})`；未知 id/name 传空 ⇒ 块上是空串（pi 同形）；随后 `emitToolCallDelta` **不丢** name（回归上面那条隐性偏差） |
+| `pi-java-coding-agent` | `JsonEventMapperMessageUpdateTest` | 4 | ① `usage` **恒在**，取值 = partial 的 usage 归一化；② 无 usage ⇒ **零值对象**（四个计数 + `totalTokens:0` + 零 `cost`）；③ `toolcall_start` 带 `id`/`toolName`（**夹具走 `StreamPartialBuilder` 造帧** —— 两个桩都不满足 pi 的读法，§4-F）；④ 块不是 toolCall ⇒ **抛** |
+| `pi-java-web` | `AgentEventTranslatorTest` 扩 | 2 | ⑤ `ToolCallStart/Delta/End` 各**多**产生一条 `message_update`，且其中 `message.content[]` 含 `{type:"toolCall"}`；⑥ 三个 `tool_execution_*` **仍在**（不回归） |
+
+**先红**：夹具按目标形状写，实施前先跑一次并**记录红集**（本仓纪律：写下注入点的那一刻就跑）。
+**既有测试**：`JsonEventMapperTest:15-27`（断言 partial 被剥）与 `AgentEventTranslatorTest:53-59`
+**应当保持绿** —— 前者是反向断言，后者被第 6 条刻意保留。`StreamPartialBuilderTest` 会因签名变更
+**编译失败** ⇒ 机械更新调用点（不算行为改动）。
+
+### 8.4 变异探针设计（**红集不预测，跑完实测记录** —— 包⑤ 起的口径）
+
+| # | 改坏什么 | 期望能证明 |
+|---|---|---|
+| P1 | mapper 的 `usage` 去掉（回到今天） | ①② 有牙 |
+| P2 | `toolcall_start` 不补 `id`/`toolName` | ③ 有牙 |
+| P3 | 抛换成写空串 | ④ 有牙 |
+| P4 | `emitToolCallStart` 不 seed 块（回到空占位） | ①③ 有牙 |
+| P5 | web 不推 `message_update`（回到今天） | ⑤ 有牙 |
+
+### 8.5 不做（汇总，理由见 §6）
+
+补 `tool_execution_*` 载荷 · 修 `tool_execution_end` 语义 · 补 `turn_end.toolResults` ·
+改前端 · 改 `ScriptedStreams` · 动终局消息的 `usage`（B41） · 动 `PiMessagesApi` 的其它缺口。
+
+### 8.6 未覆盖（预登记，实施后如数）
+
+- **端到端**：真实 provider 的 `toolcall_start` 帧未测（要 provider）；夹具走 builder 造帧。
+- **真实前端**：`updateStreamingContainer` 的重绘成本未测（N5）—— 判据沉默，不假装测过。
+- **分块到达**（首块只有 id、name 稍后）：pi-java 的 `ToolCallAccumulator` 与 pi 同形，
+  但**没有**夹具造这个序列（今天没有可见差异可钉）。
+
+---
+
+## 9. 下一步
+
+用户审核 §8 之后才写代码；实施完成后在 `docs/33` 追加**实施记录**（含实测红集、偏差、未覆盖如数）。
