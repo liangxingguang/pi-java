@@ -178,12 +178,23 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                 for (var chunk : streamResponse.stream().toList()) {
                     if (chunk.choices().isEmpty()) {
                         if (chunk.usage().isPresent()) {
-                            var u = chunk.usage().get();
-                            publisher.submit(builder.emitUsage(u.promptTokens(), u.completionTokens()));
+                            publisher.submit(builder.emitUsage(
+                                OpenAICompletionsUsage.parse(chunk.usage().get(), request.model())));
                         }
                         continue;
                     }
                     var choice = chunk.choices().get(0);
+
+                    // pi `:566-573`：`choice.usage` 回退（Moonshot 型 relay 把 usage 放在
+                    // choice 里而非顶层 chunk）。条件同时要求 `!chunk.usage` 与 choice 存在；
+                    // 位置在 delta 处理**之前**（照 pi 的次序）。
+                    if (chunk.usage().isEmpty()) {
+                        var choiceUsage = OpenAICompletionsUsage.choiceUsage(choice._additionalProperties());
+                        if (choiceUsage != null) {
+                            publisher.submit(builder.emitUsage(
+                                OpenAICompletionsUsage.parse(choiceUsage, request.model())));
+                        }
+                    }
                     var delta = choice.delta();
 
                     // finish_reason 先于 delta 处理（pi :571-577 就在 `if (choice.delta)` 之前）：
@@ -250,8 +261,8 @@ public class OpenAICompletionsApi extends AbstractChatApi {
 
                     // Usage
                     if (chunk.usage().isPresent()) {
-                        var u = chunk.usage().get();
-                        publisher.submit(builder.emitUsage(u.promptTokens(), u.completionTokens()));
+                        publisher.submit(builder.emitUsage(
+                            OpenAICompletionsUsage.parse(chunk.usage().get(), request.model())));
                     }
                 }
             }
