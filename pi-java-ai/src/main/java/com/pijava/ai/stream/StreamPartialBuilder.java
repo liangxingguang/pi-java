@@ -346,11 +346,32 @@ public final class StreamPartialBuilder {
         // Assign before snapshot() so the emitted event's partial carries the
         // usage — consumers (ActionExecutor's token counter) only accept
         // UsageInfo whose partial().usage() is non-null.
-        long inputTokens = (long) usage.input();
-        long outputTokens = (long) usage.output();
-        var usageInfo = new StreamEvent.UsageInfo(inputTokens, outputTokens, null, usage);
+        var usageInfo = usageInfoOf(usage);
         this.usage = usageInfo;
-        return new StreamEvent.UsageInfo(inputTokens, outputTokens, snapshot(), usage);
+        return new StreamEvent.UsageInfo(usageInfo.inputTokens(), usageInfo.outputTokens(),
+            snapshot(), usage);
+    }
+
+    /**
+     * Record usage <b>without</b> emitting an event.
+     *
+     * <p>pi mutates {@code output.usage} in place, so a value captured mid-stream is
+     * observable on every later partial with no extra event. Anthropic's
+     * {@code message_start} capture is exactly that ({@code anthropic-messages.ts:615-625},
+     * comment: <i>"This ensures we have input token counts even if the stream is aborted
+     * early"</i>). Using {@link #emitUsage(Usage)} there would add a frame pi does not
+     * have; this method keeps the frame count identical while still putting the usage
+     * on the partial.</p>
+     *
+     * @param usage the full usage breakdown captured so far
+     */
+    public void noteUsage(Usage usage) {
+        this.usage = usageInfoOf(usage);
+    }
+
+    private static StreamEvent.UsageInfo usageInfoOf(Usage usage) {
+        return new StreamEvent.UsageInfo(
+            (long) usage.input(), (long) usage.output(), null, usage);
     }
 
     /** Emit stream-done. */

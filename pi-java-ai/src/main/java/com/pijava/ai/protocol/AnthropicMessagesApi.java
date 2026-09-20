@@ -94,6 +94,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         var pendingToolName = new String[]{""};
         var pendingToolId = new String[]{""};
         var stop = new StopState();
+        var usageState = new AnthropicUsageState(request.model());
         try {
             var params = buildParams(request);
             publisher.submit(builder.emitStart());
@@ -102,7 +103,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                          client.messages().createStreaming(params)) {
                 sr.stream().forEach(raw -> {
                     StreamEvent se = mapEvent(raw, builder, isToolBlock,
-                            isThinkingBlock, pendingToolName, pendingToolId, stop);
+                            isThinkingBlock, pendingToolName, pendingToolId, stop, usageState);
                     if (se != null) {
                         if (se instanceof StreamEvent.StreamError) {
                             // pi 在这一层是 throw（未知 stop reason、SDK 异常都会抛穿整条流），
@@ -177,8 +178,27 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                                   boolean[] isThinkingBlock,
                                   String[] pendingToolName,
                                   String[] pendingToolId,
-                                  StopState stop) {
+                                  StopState stop,
+                                  AnthropicUsageState usageState) {
         try {
+            if (event.isMessageStart()) {
+                // pi `:615-625`：**首帧保留** —— 五字段无条件 `|| 0` 写入，注释逐字
+                // "This ensures we have input token counts even if the stream is aborted
+                // early"。pi 在此**不 push 任何事件**（它没有 usage 事件，usage 是
+                // output 对象上的字段）⇒ 本处用 noteUsage 而非 emitUsage，**帧数不变**。
+                var u = event.asMessageStart().message().usage();
+                Long oneHour = u._cacheCreation().asKnown()
+                        .flatMap(c -> c._ephemeral1hInputTokens().asKnown())
+                        .orElse(null);
+                usageState.onMessageStart(
+                        u._inputTokens().asKnown().orElse(null),
+                        u._outputTokens().asKnown().orElse(null),
+                        u._cacheReadInputTokens().asKnown().orElse(null),
+                        u._cacheCreationInputTokens().asKnown().orElse(null),
+                        oneHour);
+                builder.noteUsage(usageState.usage());
+                return null;
+            }
             if (event.isContentBlockStart()) {
                 var block = event.asContentBlockStart().contentBlock();
                 if (block.isToolUse()) {
@@ -282,10 +302,21 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                         }
                     }
                 }
-                var usage = event.asMessageDelta().usage();
-                return builder.emitUsage(
-                        usage.inputTokens().orElse(0L),
-                        usage.outputTokens());
+                // pi `:763-787`：四字段**各自 `!= null`** 才覆盖（注释逐字 "Only update
+                // usage fields if present (not null). Preserves input_tokens from
+                // message_start when proxies omit it in message_delta."）⇒ `0` 是合法值。
+                // `reasoning` 走 `output_tokens_details.thinking_tokens`（与四字段不同层）；
+                // `cacheWrite1h` **不在覆盖列表里**。`totalTokens` 重算与计价在
+                // `if (event.usage)` **块外**，无条件执行（在 AnthropicUsageState 里）。
+                var deltaUsage = event.asMessageDelta().usage();
+                usageState.onMessageDelta(
+                        deltaUsage.inputTokens().orElse(null),
+                        deltaUsage._outputTokens().asKnown().orElse(null),
+                        deltaUsage.cacheReadInputTokens().orElse(null),
+                        deltaUsage.cacheCreationInputTokens().orElse(null),
+                        deltaUsage.outputTokensDetails()
+                                .flatMap(d -> d._thinkingTokens().asKnown()).orElse(null));
+                return builder.emitUsage(usageState.usage());
             }
             if (event.isMessageStop()) {
                 return null; // StreamDone emitted in streamInternal finally

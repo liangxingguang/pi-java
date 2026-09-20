@@ -64,7 +64,8 @@ class AnthropicMessagesApiThinkingSignatureTest {
         try {
             var method = AnthropicMessagesApi.class.getDeclaredMethod("mapEvent",
                 RawMessageStreamEvent.class, StreamPartialBuilder.class,
-                boolean[].class, boolean[].class, String[].class, String[].class, STOP_STATE_TYPE);
+                boolean[].class, boolean[].class, String[].class, String[].class,
+                STOP_STATE_TYPE, AnthropicUsageState.class);
             method.setAccessible(true);
             return method;
         } catch (ReflectiveOperationException e) {
@@ -84,6 +85,9 @@ class AnthropicMessagesApiThinkingSignatureTest {
         // B20 把 `toolCallSeen` 换成了 stop reason 状态（pi 只看 message_delta.stop_reason）；
         // 本夹具不喂 message_delta，故只需一个空实例。
         private final Object stopState;
+        // 包 H1 步 3 起 mapEvent 多收一个 usage 累加器（docs/42）；本夹具不喂 usage，
+        // 传一个无模型的实例即可（model == null ⇒ 不计价）。
+        private final AnthropicUsageState usageState = new AnthropicUsageState(null);
 
         Stream() throws ReflectiveOperationException {
             var ctor = STOP_STATE_TYPE.getDeclaredConstructor();
@@ -93,7 +97,7 @@ class AnthropicMessagesApiThinkingSignatureTest {
 
         StreamEvent feed(RawMessageStreamEvent event) throws Exception {
             return (StreamEvent) MAP_EVENT.invoke(api, event, builder,
-                isToolBlock, isThinkingBlock, pendingToolName, pendingToolId, stopState);
+                isToolBlock, isThinkingBlock, pendingToolName, pendingToolId, stopState, usageState);
         }
 
         StreamEvent feedJson(String json, Class<?> type) throws Exception {
