@@ -219,7 +219,7 @@ pi-java 已有一个 **headless RPC 层**，本质是「stdio 上的 JSON 协议
 - 网关 token 鉴权（`~/.pi-java/web/gateway-token` + `PI_JAVA_WEB_TOKEN`，对齐 pivot-ui 思路）。`GatewayToken` 首启自动生成落盘；`PiWebServer.onOpen` 校验 `?token=`（常数时间比较），失败 `close 4401`；`/api/config` 返回 `requiresAuth`。
 - 会话重命名（`setSessionName` → `sessionNameChanged`）/ 会话统计（`getSessionStats` → `sessionStats`）；错误提示走既有 `error` 消息 + 前端横幅；多 tab 每连接独立会话（既有设计）。
 - 前端：`getWsUrl()` 读 localStorage token 并追加 `?token=`，`requiresAuth` 且无 token 时 prompt；sidebar 增加重命名按钮。
-- `phase1-pi-code-mapping.md` 增补 web 条目（§13）。
+- ~~`phase1-pi-code-mapping.md` 增补 web 条目（§13）。~~ ⚠️ **2026-09-20：该对照表已删**，web 条目的现役记录见 `docs/map/05-tui-web.md`。
 - **验证**：`mvn clean verify` 零错误零警告、checkstyle/spotbugs 通过、无 `System.out.println`。
 - **Commit**：`feat(web): gateway token auth + polish`。
 
@@ -259,4 +259,4 @@ pi-java 已有一个 **headless RPC 层**，本质是「stdio 上的 JSON 协议
 - `pi-java-coding-agent/.../spi/WebEntryPoint.java`（新增 SPI）
 - `pi-java-coding-agent/.../Main.java`（`--mode web` 分支）
 - `pi-java-coding-agent/.../cli/Args.java` + `ArgsParser.java`（`--port`）
-- `docs/phase1-pi-code-mapping.md`（web UI 条目）
+- ~~`docs/phase1-pi-code-mapping.md`（web UI 条目）~~ ⚠️ **2026-09-20：已删**，见 `docs/map/05-tui-web.md`。

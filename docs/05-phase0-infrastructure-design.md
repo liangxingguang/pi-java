@@ -124,9 +124,11 @@ pi-java/
     ├── 02-architecture-design.md
     ├── 03-detailed-design.md
     ├── 04-implementation-plan.md
-    ├── 05-phase0-infrastructure-design.md  ← 本文档
-    └── review-report.md
+    └── 05-phase0-infrastructure-design.md  ← 本文档
 ```
+
+> ⚠️ **2026-09-20 文档整理**：本树原列的 `review-report.md`（2026-08-10 的一次性设计文档审查报告）
+> **已删**。本节的模块清单与接口签名定义**仍然有效**，删的只是那份审查报告。
 
 **说明**：
 - Phase 0 只定义 **所有模块的公用接口签名**（`telemetry` + `ai` + `agent-core` 三个核心模块），其余模块只建目录 + `package-info.java` 占位

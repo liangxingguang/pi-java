@@ -2130,7 +2130,7 @@ Phase 5 已于 2026-08-18 放弃原生分发（实测 149MB vs ≤30MB 目标）
 
 ### v1.5（2026-08-22 P6-28 ImageApi/EmbeddingApi 落地）
 
-原延后项 P6-28（`ImageApi`/`EmbeddingApi`，需破坏 `ProviderApi permits ChatApi`）按用户指示实现，设计文档 `docs/12-phase6-image-embedding-design.md`。用户两次决策：**ImageApi 直接复刻 pi 的 `openrouter-images.ts` 模式**（独立 provider，不挂靠 OpenAI）；**EmbeddingApi 一起做**（pi 无 embedding provider，pi-java 独有，OpenAI `/v1/embeddings`）。
+原延后项 P6-28（`ImageApi`/`EmbeddingApi`，需破坏 `ProviderApi permits ChatApi`）按用户指示实现，设计文档 ~~`docs/12-phase6-image-embedding-design.md`~~（⚠️ **2026-09-20：该设计文档已删** —— 它长期停在「草稿待审核」且未再推进；**实现本身仍在**，见 `pi-java-ai` 的 `ImageApi`/`EmbeddingApi`）。用户两次决策：**ImageApi 直接复刻 pi 的 `openrouter-images.ts` 模式**（独立 provider，不挂靠 OpenAI）；**EmbeddingApi 一起做**（pi 无 embedding provider，pi-java 独有，OpenAI `/v1/embeddings`）。
 
 - `ProviderApi permits ChatApi, ImageApi, EmbeddingApi`（一次破坏性变更到三能力）。
 - 新增 `ImageApi`/`ImageRequest`/`ImageResult`/`ImageStopReason`（对齐 pi `ImagesFunction`/`ImagesContext`/`AssistantImages`/`ImagesStopReason`）与 `EmbeddingApi`/`EmbeddingRequest`/`EmbeddingResult`。

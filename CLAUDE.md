@@ -64,7 +64,9 @@ commands: `mvn clean verify`, `mvn test -pl <module>`, `mvn checkstyle:check`, `
 D:\workplaceForai\pi
 
 ## pi ↔ pi-java 对照表
-- [Phase 1-6 代码对照表](docs/phase1-pi-code-mapping.md) — 逐文件/包级对齐度 + 差异说明（Phase 1-6 全模块）
+- [模块对齐地图（量化）](docs/40-module-alignment-map.md) — 逐模块加权完成度 + 缺口 + 计划；明细在 `docs/map/`
+  （⚠️ 2026-09-20：原 `docs/phase1-pi-code-mapping.md` 已删 —— 它映射到 pi **已删除**的目录结构、
+    其「~92% 完成度」出自被此后 49% 的提交超越的旧文档，且与本项目判据（行为）不可通约）
 
 ## 运行环境
 jdk:D:\soft\jdk\graalvm-jdk-25

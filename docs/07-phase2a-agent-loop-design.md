@@ -2,7 +2,9 @@
 
 > **目标**：跑通 `pi-java -p "hello"` → LLM → 返回响应的完整链路。不需要工具调用。
 > **工时**：2 周（9 项任务）
-> **输入文档**：`03-detailed-design.md` §2、`04-implementation-plan.md` §4、`phase1-pi-code-mapping.md`
+> **输入文档**：`03-detailed-design.md` §2、`04-implementation-plan.md` §4、~~`phase1-pi-code-mapping.md`~~
+> （⚠️ **2026-09-20：该对照表已删** —— 它映射到 pi 已删的目录结构、百分比口径与本项目判据不可通约。
+> 现役对照物是 `docs/40-module-alignment-map.md` ＋ `docs/map/`）
 > **前置阶段**：Phase 1（`pi-java-ai` 可用）
 
 ---

@@ -1,5 +1,9 @@
 # 01 基础设施层（telemetry / protocol / client / server）
 
+> ⚠️ **2026-09-20 文档整理**：本文件「台账条目」列里的 `phase1-pi-code-mapping:NN` 出处**已失效** ——
+> 那份对照表已删（映射到 pi 已删的目录结构、百分比口径与本项目判据不可通约）。
+> 标 `H` 的条目指 `docs/32 §9` 的 H 类；其原文需按 `git log --diff-filter=D` 取回。
+
 > 基准：`pi-java` @ `34849a2`（main，2026-09-20）；`pi` @ 工作区 HEAD（`packages/protocol` 最新提交 `4a6ed0194`）。
 > 判定单位 = **能力单元**（CLI 参数 / RPC 方法 / 事件类型 / 配置键 / span 名 / 契约级导出类型）；内部类与私有方法不计。
 > 每条给两侧 `file:line`。

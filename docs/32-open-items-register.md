@@ -1,8 +1,13 @@
 # 32 - 未结项台账（open items register）
 
 > **这份文件解决一个问题**：本分支「还有什么没做完 / 没对齐」此前散在 `docs/31` 的十九个小节，
-> 以及 `docs/24` / `docs/08b` / `docs/09b` / `docs/27` / `docs/phase1-pi-code-mapping` 等
+> 以及 `docs/24` / `docs/08b` / `docs/27` 等
 > 二十余份文档里 —— 没有一处能一眼看全，也没有一处说得清「谁挡着」。本台账把它们合并成一张表。
+>
+> ⚠️ **2026-09-20 文档整理**：`docs/09b`（Phase 4 审查报告）与 `docs/phase1-pi-code-mapping`
+> （功能对照表）**已删** —— 前者是一次性审查报告，后者映射到 pi 已删的目录结构、其百分比口径
+> 与本项目判据不可通约。**§9.3 / §9.4 里指向这两份的 `file:line` 出处已失效**，条目内容本身
+> 仍然有效（本次复核时已就地补上真实证据）；需要原文时按 `git log --diff-filter=D` 取回。
 >
 > **基准**：本台账写于 `4af78f9`（2026-09-17），分支 `agent-core-pi-loop` —— 当时领先本地 `main` **98** / 落后 0。
 > 分支位置与测试计数会随提交漂移，**引用时以 `git rev-list --left-right --count main...HEAD` 为准**，不要抄这里的数字。
@@ -493,7 +498,10 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | web 端 `queue_update` / `compaction_*` / `auto_retry_*` **暂不推前端** | `AgentEventTranslator.java:57` |
 | `keybindings.json` 用户覆盖 → Phase 6 | `KeybindingsManager.java:14` |
 
-### 9.3 持久化 / 存储（`docs/09`、`docs/09b`、`docs/27`、`docs/30`）
+### 9.3 持久化 / 存储（`docs/09`、~~`docs/09b`~~、`docs/27`、`docs/30`）
+
+> ⚠️ **2026-09-20**：`docs/09b` **已删**（一次性审查报告）⇒ 下表 `docs/09b:NN` 出处失效，
+> 条目内容仍有效（前四条本次已就地补真实证据）。
 
 | 条目 | 出处 | 备注 |
 |---|---|---|
@@ -510,6 +518,10 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | ⚠️ **对外协议变更**：`agent_end` wire 多出 `stopReason` | 同上 `:399` | **需知悉** |
 
 ### 9.4 Provider / AI 层
+
+> ⚠️ **2026-09-20**：`docs/phase1-pi-code-mapping` **已删**（映射到 pi 已删目录、百分比口径不可通约）
+> ⇒ 下表 `phase1-pi-code-mapping:NN` 出处失效。**条目内容仍有效**，但**逐条复核时必须按 pi 当前源码重新取证**，
+> 不要回原文对照。
 
 | 条目 | 出处 |
 |---|---|
