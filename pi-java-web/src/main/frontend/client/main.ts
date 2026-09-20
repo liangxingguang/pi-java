@@ -39,6 +39,12 @@ let connected = false;
 let messages: AgentMessage[] = [];
 let isStreaming = false;
 let streamingMessage: AgentMessage | null = null;
+// 「工具在跑（或工具跑完、下一轮首个增量还没到）」—— 这一段里流式容器仍挂着上一条
+// assistant 消息，pi-web-ui 会一直渲染它的流式光标（2×4 的脉冲方块），点状等待动画
+// 就得更替它。置/复位见 handleAgentEvent：tool_execution_start 置位，任一次
+// message_update 复位 —— **故意不用 tool_execution_end 复位**：工具结束到下一轮首个
+// token 之间那段模型延迟同样是「等结果」，那时容器里还是旧消息。
+let awaitingTool = false;
 let currentModel: ModelInfo | undefined;
 let thinkingLevel = "off";
 let availableModels: ModelInfo[] = [];
@@ -273,11 +279,13 @@ function handleAgentEvent(event: any) {
   switch (event.type) {
     case "agent_start":
       isStreaming = true;
+      awaitingTool = false;
       renderApp();
       break;
 
     case "agent_end":
       isStreaming = false;
+      awaitingTool = false;
       streamingMessage = null;
       if (event.messages) {
         // agent_end 携带完整累计 transcript（后端 AgentEnd 权威收口）——整表替换，
@@ -300,6 +308,7 @@ function handleAgentEvent(event: any) {
       break;
 
     case "message_update":
+      awaitingTool = false;
       streamingMessage = event.message;
       updateStreamingContainer(event.message, true);
       break;
@@ -337,6 +346,12 @@ function handleAgentEvent(event: any) {
       break;
 
     case "tool_execution_start":
+      // 「等工具结果」的起点。工具批里每个工具都会发一条 start，但只需要一个布尔 ——
+      // 复位只认 message_update（下一轮首个增量），故批内多个工具不会互相清掉。
+      awaitingTool = true;
+      renderApp();
+      break;
+
     case "tool_execution_update":
     case "tool_execution_end":
       renderApp();
@@ -640,8 +655,14 @@ function renderApp() {
   if (!app) return;
 
   const toolResultsById = buildToolResultsMap();
-  // 已提交在跑、但还没有任何增量到达 ⇒ 「等 agent 结果」的那一段。
-  const waiting = isStreaming && !streamingMessage;
+  // 已提交在跑、但还没有任何增量到达 ⇒ 容器里空着，整块藏掉（pi-web-ui 在那一支
+  // 渲染的正是一个 2×4 的脉冲方块）。
+  const emptyStream = isStreaming && !streamingMessage;
+  // 等工具结果 / 等下一轮首个增量 ⇒ 容器里还留着上一条 assistant 消息（正文 + 工具卡），
+  // **不能整块藏**（会连正文和工具卡一起藏了），只藏掉它的流式光标，改用同一套三点头。
+  const toolWaiting = isStreaming && awaitingTool && !emptyStream;
+  // 两种等待共用一套三点头（含同一份防闪计时）。
+  const waiting = emptyStream || toolWaiting;
   syncWaitingDots(waiting);
   const showDots = waiting && dotsReady;
 
@@ -798,10 +819,12 @@ function renderApp() {
               .isStreaming=${isStreaming}
             ></message-list>
 
-            <!-- 等待首个增量时 pi-web-ui 自己会渲染一个闪烁的 2×4 方块；用外层
+            <!-- 等待首段时 pi-web-ui 自己会渲染一个闪烁的 2×4 方块；用外层
                  容器把它藏掉。⚠️ 不能直接给组件加 hidden 类 —— 它在
-                 connectedCallback 里设了内联 display:block，会盖过类规则。 -->
-            <div class="${waiting ? 'hidden' : ''}">
+                 connectedCallback 里设了内联 display:block，会盖过类规则。
+                 等工具结果时容器里还有内容要留，故那一档只藏光标（app.css 的
+                 .hide-stream-cursor），三点头照常在下面亮。 -->
+            <div class="${emptyStream ? 'hidden' : ''} ${toolWaiting ? 'hide-stream-cursor' : ''}">
               <streaming-message-container
                 class="${isStreaming ? '' : 'hidden'}"
                 .tools=${[]}
