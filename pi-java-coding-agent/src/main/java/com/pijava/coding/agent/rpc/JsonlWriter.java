@@ -6,6 +6,8 @@ import java.nio.charset.StandardCharsets;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import com.pijava.coding.agent.core.WireJson;
+
 /**
  * 单行 JSON 序列化（一行一个 JSON 对象，LF 结尾，逐行 flush）。
  *
@@ -14,7 +16,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  */
 public final class JsonlWriter {
 
-    private static final ObjectMapper JSON = new ObjectMapper();
+    /**
+     * 命令响应线（{@code get_entries}/{@code get_tree}/…）会把会话条目里的
+     * {@link com.pijava.ai.message.Message.AssistantMessage} 序列化回客户端 ——
+     * 那条消息带着身份缝挂的 {@code Instant timestamp}。此前这里是**裸**
+     * ObjectMapper ⇒ 传 {@code success:false}（台账 B52）。同形止血见
+     * {@link WireJson}。
+     */
+    private static final ObjectMapper JSON = new ObjectMapper()
+        .registerModule(WireJson.instantAsEpochMillis());
 
     private final OutputStream out;
 

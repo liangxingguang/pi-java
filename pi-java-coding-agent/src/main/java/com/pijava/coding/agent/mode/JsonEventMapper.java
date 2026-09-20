@@ -11,6 +11,7 @@ import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.coding.agent.core.AgentSessionEvent;
+import com.pijava.coding.agent.core.WireJson;
 
 /**
  * {@link AgentSessionEvent} → RPC/print 线格式（对齐 pi {@code json-event.ts}）。
@@ -32,30 +33,12 @@ public final class JsonEventMapper {
     private static final ObjectMapper MAPPER = new ObjectMapper()
         .addMixIn(StreamEvent.class, StreamEventMixin.class)
         .addMixIn(Message.class, MessageMixin.class)
-        // 包⑩（docs/37）**止血**：pi 的 `timestamp` 是 Unix 毫秒数
-        // （`ai/src/types.ts` 三个 message interface 都声明 `timestamp: number`）。
-        // 此前这里是**裸** ObjectMapper —— 没注册任何模块 ⇒ 带 `Instant` 的消息
-        // **直接抛** `IllegalArgumentException: Java 8 date/time type Instant not
-        // supported`，而 `AbstractChatApi:73` 给每条消息都挂了 `Instant.now()`
-        // ⇒ 生产上 RPC 客户端**收不到 agent_end**（`SessionEventHub` 逐个 listener
-        // catch 掉该帧，见 docs/33 §5-N1）。
-        //
-        // 为什么不加 jsr310 依赖：落盘层（`SessionJson:200-203`）本来就是**手写**
-        // serializer 把 Instant 写成毫秒整数，这里照同一手法，不引入新依赖。
-        .registerModule(new com.fasterxml.jackson.databind.module.SimpleModule("pi-rpc-wire")
-            .addSerializer(java.time.Instant.class, new EpochMilliSerializer()));
-
-    /** {@code Instant} → Unix 毫秒整数（pi 的 `timestamp: number`）。 */
-    static final class EpochMilliSerializer
-            extends com.fasterxml.jackson.databind.JsonSerializer<java.time.Instant> {
-        @Override
-        public void serialize(java.time.Instant value,
-                              com.fasterxml.jackson.core.JsonGenerator gen,
-                              com.fasterxml.jackson.databind.SerializerProvider serializers)
-                throws java.io.IOException {
-            gen.writeNumber(value.toEpochMilli());
-        }
-    }
+        // 包⑩（docs/37）**止血**：此前这里是**裸** ObjectMapper ⇒ 带 `Instant` 的消息
+        // 直接抛 `Java 8 date/time type Instant not supported`，而 `AbstractChatApi`
+        // 给每条消息都挂了 `Instant.now()` ⇒ 生产上 RPC 客户端**收不到 agent_end**
+        // （`SessionEventHub` 逐个 listener catch 掉该帧，见 docs/33 §5-N1）。
+        // 包⑪ 把同一手法提成 `WireJson`（同一成因还咬了命令线，台账 B52）。
+        .registerModule(WireJson.instantAsEpochMillis());
 
     /** 对 StreamEvent 全变体忽略 {@code partial} 字段。 */
     @JsonIgnoreProperties("partial")

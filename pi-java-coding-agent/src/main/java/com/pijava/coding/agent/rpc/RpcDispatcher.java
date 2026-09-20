@@ -27,6 +27,7 @@ import com.pijava.coding.agent.cli.ThinkingLevels;
 import com.pijava.coding.agent.core.AgentSession;
 import com.pijava.coding.agent.core.AgentSessionEvent;
 import com.pijava.coding.agent.core.PromptConfig;
+import com.pijava.coding.agent.core.WireJson;
 import com.pijava.coding.agent.export.HtmlExporter;
 import com.pijava.coding.agent.mode.JsonEventMapper;
 import com.pijava.coding.agent.cli.Args;
@@ -40,7 +41,14 @@ import com.pijava.coding.agent.cli.Args;
  */
 public final class RpcDispatcher {
 
-    private static final ObjectMapper JSON = new ObjectMapper();
+    /**
+     * in-memory 会话（{@code --no-session}）的 {@code export_html}/{@code export_jsonl}
+     * 会**内联**序列化条目（{@link #entryWithRole}）⇒ 带上身份缝挂的 {@code Instant}。
+     * 此前这里是**裸** ObjectMapper ⇒ {@code export_html} 抛（台账 B52）。同形止血见
+     * {@link WireJson}。
+     */
+    private static final ObjectMapper JSON = new ObjectMapper()
+        .registerModule(WireJson.instantAsEpochMillis());
 
     private final JsonlWriter out;
     private final Args args;
