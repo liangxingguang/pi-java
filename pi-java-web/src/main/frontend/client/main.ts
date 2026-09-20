@@ -39,12 +39,6 @@ let connected = false;
 let messages: AgentMessage[] = [];
 let isStreaming = false;
 let streamingMessage: AgentMessage | null = null;
-// 「工具在跑（或工具跑完、下一轮首个增量还没到）」—— 这一段里流式容器仍挂着上一条
-// assistant 消息，pi-web-ui 会一直渲染它的流式光标（2×4 的脉冲方块），点状等待动画
-// 就得更替它。置/复位见 handleAgentEvent：tool_execution_start 置位，任一次
-// message_update 复位 —— **故意不用 tool_execution_end 复位**：工具结束到下一轮首个
-// token 之间那段模型延迟同样是「等结果」，那时容器里还是旧消息。
-let awaitingTool = false;
 let currentModel: ModelInfo | undefined;
 let thinkingLevel = "off";
 let availableModels: ModelInfo[] = [];
@@ -52,28 +46,44 @@ let errorMessage: string | undefined;
 // 最近一次用户发出的文本 —— 错误块的「Retry」重发它。
 let lastPromptText = "";
 
-// 三点的防闪：首段在 200ms 内到达时不该亮一下（否则就是一次闪烁）。
+// ── 等 agent 结果的静默钟 ──
+// 唯一的判据：**run 在跑、但最近 DOTS_DELAY_MS 内没有任何增量到达** ⇒ 亮三点。
+// 这一条同时覆盖了「首个 token 未到」「工具在跑」「工具跑完到下一轮首个 token 之间那段
+// 模型延迟」「自动重试退避」「压缩」全部静默窗口 —— 也就是 pi-web-ui 那个 2×4 流式光标
+// 此前出现过的所有位置（光标本身已由 app.css 全局藏掉，三点是唯一的等待指示）。
+// 200ms 同时也是防闪阈值：首段/下一个增量在 200ms 内到达时，三点根本不亮（而不是亮一下
+// 再消失）。
 const DOTS_DELAY_MS = 200;
-let dotsTimer: ReturnType<typeof setTimeout> | null = null;
-let dotsReady = false;
+/** 最近一次「有事发生」（run 开始 / 任一增量）的时刻。 */
+let lastActivityAt = 0;
+let silenceTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** 按「是否在等首段」维护防闪计时器；到点后重绘一次把三点亮出来。 */
-function syncWaitingDots(waiting: boolean): void {
-  if (!waiting) {
-    if (dotsTimer !== null) {
-      clearTimeout(dotsTimer);
-      dotsTimer = null;
-    }
-    dotsReady = false;
-    return;
+/** 此刻是否处于「静默等待」。 */
+function waitingSilent(): boolean {
+  return isStreaming && performance.now() - lastActivityAt >= DOTS_DELAY_MS;
+}
+
+/** 排一次「静默满点」的重绘，让三点到点自己亮出来；已经静默就无需排（三点正亮着）。 */
+function syncSilenceTimer(): void {
+  if (silenceTimer !== null) {
+    clearTimeout(silenceTimer);
+    silenceTimer = null;
   }
-  if (dotsTimer === null && !dotsReady) {
-    dotsTimer = setTimeout(() => {
-      dotsTimer = null;
-      dotsReady = true;
-      renderApp();
-    }, DOTS_DELAY_MS);
-  }
+  if (!isStreaming) return;
+  const elapsed = performance.now() - lastActivityAt;
+  if (elapsed >= DOTS_DELAY_MS) return;
+  silenceTimer = setTimeout(() => {
+    silenceTimer = null;
+    renderApp();
+  }, DOTS_DELAY_MS - elapsed);
+}
+
+/** 记一次活动（run 开始 / 任一增量）：把静默钟归零；三点若正亮着，立刻收掉。 */
+function noteActivity(): void {
+  const wasWaiting = waitingSilent();
+  lastActivityAt = performance.now();
+  syncSilenceTimer();
+  if (wasWaiting) renderApp();
 }
 let showModelDropdown = false;
 let modelFilter = "";
@@ -279,13 +289,12 @@ function handleAgentEvent(event: any) {
   switch (event.type) {
     case "agent_start":
       isStreaming = true;
-      awaitingTool = false;
+      lastActivityAt = performance.now();   // run 开始＝一次活动 ⇒ 静默钟从头起算
       renderApp();
       break;
 
     case "agent_end":
       isStreaming = false;
-      awaitingTool = false;
       streamingMessage = null;
       if (event.messages) {
         // agent_end 携带完整累计 transcript（后端 AgentEnd 权威收口）——整表替换，
@@ -308,9 +317,11 @@ function handleAgentEvent(event: any) {
       break;
 
     case "message_update":
-      awaitingTool = false;
       streamingMessage = event.message;
       updateStreamingContainer(event.message, true);
+      // 增量＝活动：重置静默钟（三点若正亮着会就此收掉）。容器自己更新文字，
+      // 故这里不重绘整个 app —— 只有三点可见性真的变了才重绘。
+      noteActivity();
       break;
 
     case "message_end":
@@ -346,14 +357,10 @@ function handleAgentEvent(event: any) {
       break;
 
     case "tool_execution_start":
-      // 「等工具结果」的起点。工具批里每个工具都会发一条 start，但只需要一个布尔 ——
-      // 复位只认 message_update（下一轮首个增量），故批内多个工具不会互相清掉。
-      awaitingTool = true;
-      renderApp();
-      break;
-
     case "tool_execution_update":
     case "tool_execution_end":
+      // 工具事件**不算活动** —— 它们不带来内容增量，静默钟照跑，故「工具在跑」这一段
+      // 会自然落到三点上（点由静默到点时的重绘亮出，这里只是顺带重绘）。
       renderApp();
       break;
 
@@ -655,17 +662,10 @@ function renderApp() {
   if (!app) return;
 
   const toolResultsById = buildToolResultsMap();
-  // 已提交在跑、但还没有任何增量到达 ⇒ 容器里空着，整块藏掉（pi-web-ui 在那一支
-  // 渲染的正是一个 2×4 的脉冲方块）。
-  const emptyStream = isStreaming && !streamingMessage;
-  // 等工具结果 / 等下一轮首个增量 ⇒ 容器里还留着上一条 assistant 消息（正文 + 工具卡），
-  // **不能整块藏**（会连正文和工具卡一起藏了），只藏掉它的流式光标，改用同一套三点头。
-  const toolWaiting = isStreaming && awaitingTool && !emptyStream;
-  // 两种等待共用一套三点头（含同一份防闪计时）。
-  const waiting = emptyStream || toolWaiting;
-  syncWaitingDots(waiting);
-  const showDots = waiting && dotsReady;
-
+  // run 在跑、但静默满 DOTS_DELAY_MS ⇒ 亮三点（覆盖首段未到、工具在跑、工具跑完到下一轮
+  // 首个 token 之间、重试退避、压缩 —— 见文件头「静默钟」那段）。这是全 UI 唯一的等待指示。
+  const waiting = waitingSilent();
+  syncSilenceTimer();
   const appHtml = html`
     <!-- Mobile sidebar overlay -->
     <div
@@ -819,22 +819,19 @@ function renderApp() {
               .isStreaming=${isStreaming}
             ></message-list>
 
-            <!-- 等待首段时 pi-web-ui 自己会渲染一个闪烁的 2×4 方块；用外层
-                 容器把它藏掉。⚠️ 不能直接给组件加 hidden 类 —— 它在
-                 connectedCallback 里设了内联 display:block，会盖过类规则。
-                 等工具结果时容器里还有内容要留，故那一档只藏光标（app.css 的
-                 .hide-stream-cursor），三点头照常在下面亮。 -->
-            <div class="${emptyStream ? 'hidden' : ''} ${toolWaiting ? 'hide-stream-cursor' : ''}">
-              <streaming-message-container
-                class="${isStreaming ? '' : 'hidden'}"
-                .tools=${[]}
-                .isStreaming=${isStreaming}
-                .pendingToolCalls=${new Set()}
-                .toolResultsById=${toolResultsById}
-              ></streaming-message-container>
-            </div>
+            <!-- 流式容器**常挂**、可见性由组件自理：没有消息时它渲染空内容，那个 2×4 光标
+                 已被 app.css 全局藏掉。⚠️ 此前是把它包进一个按状态加/摘 hidden 类的外层
+                 div —— 那层的类只在 renderApp() 时更新，而流式期间的增量并不触发 renderApp，
+                 于是「agent_start 到第一次 ≥200ms 静默之间」整段文字被 display:none 藏着
+                 （连续快流时肉眼就是「文字不流、到暂停才蹦出来」）；去掉那层即根除。 -->
+            <streaming-message-container
+              .tools=${[]}
+              .isStreaming=${isStreaming}
+              .pendingToolCalls=${new Set()}
+              .toolResultsById=${toolResultsById}
+            ></streaming-message-container>
 
-            ${showDots ? html`
+            ${waiting ? html`
               <div class="typing-dots mx-4 mb-3" role="status" aria-label="Assistant is working">
                 <span></span><span></span><span></span>
               </div>

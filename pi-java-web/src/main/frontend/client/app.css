@@ -621,19 +621,16 @@ html, body {
 }
 
 /* ── 等待 agent 结果时的三点头 ──
-   pi-web-ui 在「已开始流式、但首个增量未到」时渲染的是一个闪烁的 2×4 方块
-   （StreamingMessageContainer 的 `if (!this._message)` 支）；这里用三点动画替代它。
+   pi-web-ui 的流式光标是一个闪烁的 2×4 方块（`w-2 h-4` = 8×16px 的 animate-pulse），
+   出现在 StreamingMessageContainer 的两支里：`if (!this._message)`（还没有消息）与
+   `this.isStreaming`（已有消息，光标缀在消息末尾）。本仓**一律不用它** —— 等待指示只有
+   三点头（判据见 main.ts 的「静默钟」），故在这里全局藏掉。
 
-   同一个方块还会在「容器里已有消息且在流式中」那一支**再出现一次**
-   （`StreamingMessageContainer.js:89` 的流式光标）—— 「等工具结果」整段就在那一支里：
-   那时容器挂着上一条 assistant 消息（正文 + 工具卡），不能像上面那样整块藏掉，故由
-   main.ts 给外层容器加 `.hide-stream-cursor`，只把光标换成下面这套三点头。
+   ⚠️ 组件 `createRenderRoot()` 返回 `this` ⇒ 它渲染进 light DOM，全局样式够得着；且本文件
+   在 `@import "@mariozechner/pi-web-ui/app.css"` **之后**、规则**未分层**，故盖过 Tailwind
+   的 `@layer utilities`（不靠书写顺序、也不靠 !important）。 */
 
-   ⚠️ 组件 `createRenderRoot()` 返回 `this` ⇒ 它渲染进 light DOM，全局样式够得着；
-   且本文件在 `@import "@mariozechner/pi-web-ui/app.css"` **之后**，未分层规则盖过
-   Tailwind 的 `@layer utilities`（display 的胜负在这里不靠书写顺序）。 */
-
-.hide-stream-cursor streaming-message-container span.animate-pulse {
+streaming-message-container span.animate-pulse {
   display: none;
 }
 
