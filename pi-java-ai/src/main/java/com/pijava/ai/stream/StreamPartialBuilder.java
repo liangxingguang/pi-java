@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import com.pijava.ai.Usage;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 
@@ -313,14 +314,43 @@ public final class StreamPartialBuilder {
     // Meta events
     // ═══════════════════════════════════════════════════════════
 
-    /** Emit usage info. */
+    /**
+     * Emit usage info carrying only input/output counts.
+     *
+     * <p>Convenience for lanes that do not (yet) report a cache/cost breakdown; it
+     * delegates to {@link #emitUsage(Usage)} so there is a single shape.</p>
+     *
+     * @param inputTokens  input token count
+     * @param outputTokens output token count
+     * @return the emitted usage event
+     */
     public StreamEvent.UsageInfo emitUsage(long inputTokens, long outputTokens) {
+        return emitUsage(Usage.of(inputTokens, outputTokens));
+    }
+
+    /**
+     * Emit usage info carrying the provider's full breakdown (cache/cost/reasoning).
+     *
+     * <p>包 H1 步 2（{@code docs/42 §8.2}）：这是加宽后的入口。此前 {@code emitUsage}
+     * 只收两个 {@code long}，cache/cost/reasoning 全无入口 ⇒ 四分量在生产上恒为 0。
+     * 现在全量分解同时进入两条通道：事件自身的 {@code usage()} 与 partial 上的
+     * {@code usage()}（后者是 {@code JsonEventMapper} 写线格式时读的那个）。</p>
+     *
+     * <p>计数通道（{@link StreamEvent.UsageInfo#inputTokens()}）仍从全量分解派生 ——
+     * {@code PiLaneSink} 与 {@code SessionRunner} 的累加器读的是它。</p>
+     *
+     * @param usage the full usage breakdown
+     * @return the emitted usage event
+     */
+    public StreamEvent.UsageInfo emitUsage(Usage usage) {
         // Assign before snapshot() so the emitted event's partial carries the
         // usage — consumers (ActionExecutor's token counter) only accept
         // UsageInfo whose partial().usage() is non-null.
-        var usageInfo = new StreamEvent.UsageInfo(inputTokens, outputTokens, null);
+        long inputTokens = (long) usage.input();
+        long outputTokens = (long) usage.output();
+        var usageInfo = new StreamEvent.UsageInfo(inputTokens, outputTokens, null, usage);
         this.usage = usageInfo;
-        return new StreamEvent.UsageInfo(inputTokens, outputTokens, snapshot());
+        return new StreamEvent.UsageInfo(inputTokens, outputTokens, snapshot(), usage);
     }
 
     /** Emit stream-done. */

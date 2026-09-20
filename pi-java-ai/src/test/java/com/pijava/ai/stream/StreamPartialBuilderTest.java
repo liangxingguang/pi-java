@@ -55,6 +55,43 @@ class StreamPartialBuilderTest {
         assertThat(usage.partial().usage().inputTokens()).isEqualTo(123);
         assertThat(usage.partial().usage().outputTokens()).isEqualTo(45);
     }
+
+    @Test
+    void emitUsageWithFullBreakdownCarriesEveryComponentToBothChannels() {
+        // 包 H1 步 2（docs/42 §8.3）：`emitUsage(Usage)` 是加宽后的入口。
+        // 两条通道都要拿到全量分解：事件自身的 `usage()` 与 partial 上的 `usage()`。
+        var builder = new StreamPartialBuilder();
+        builder.emitStart();
+        builder.emitTextStart();
+
+        var full = new com.pijava.ai.Usage(1000, 250, 400, 80, 20.0, 12.0, 1730,
+            new com.pijava.ai.Usage.Cost(0.003, 0.00375, 0.00012, 0.0004, 0.00727));
+        var usage = builder.emitUsage(full);
+
+        assertThat(usage.usage()).isEqualTo(full);
+        assertThat(usage.partial()).isNotNull();
+        assertThat(usage.partial().usage()).isNotNull();
+        assertThat(usage.partial().usage().usage()).isEqualTo(full);
+
+        // 计数通道仍从全量分解派生，供 PiLaneSink / SessionRunner 的累加器使用
+        assertThat(usage.inputTokens()).isEqualTo(1000);
+        assertThat(usage.outputTokens()).isEqualTo(250);
+    }
+
+    @Test
+    void toUsagePrefersTheFullBreakdownOverTheSynthesizedCounts() {
+        var builder = new StreamPartialBuilder();
+        builder.emitStart();
+
+        var full = new com.pijava.ai.Usage(10, 20, 30, 40, null, null, 100,
+            new com.pijava.ai.Usage.Cost(1, 2, 3, 4, 10));
+        var usage = builder.emitUsage(full);
+
+        assertThat(usage.toUsage()).isEqualTo(full);
+        // 全量分解在场时，合成路径（cache 归零）不得被走到
+        assertThat(usage.toUsage().cacheRead()).isEqualTo(30);
+        assertThat(usage.toUsage().cost().total()).isEqualTo(10);
+    }
     @Test
     void lenientMapperAcceptsModelJsonQuirks() throws Exception {
         // Trailing comma + unquoted field name, common in model-generated args.
