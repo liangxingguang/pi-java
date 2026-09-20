@@ -26,21 +26,144 @@
 
 ## 规模
 
-| 模块 | pi 包 / 路径 | pi LOC | java 路径 | java LOC | 比例 |
-|---|---|---|---|---|---|
-| 会话后端 · SQLite（src） | `packages/session-backends/sqlite-node/src` | 1973 | `pi-java-session-backend-sqlite/src/main` | 2875 | **1.46×** |
-| 会话后端 · SQLite（test） | 同上 `test/`（+`benchmark/` 178） | 1909 | `pi-java-session-backend-sqlite/src/test` | 282 | 0.15× |
-| 会话后端 · JSONL（src） | `packages/agent/src/harness/session/jsonl` | 1894 | `pi-java-agent-core/.../agent/session/jsonl` | 1863 | 0.98× |
-| 会话后端 · Memory（src） | `memory.ts` + `in-memory-storage-state.ts` | 802 | `pi-java-agent-core/.../agent/session/memory` | 304 | 0.38× |
-| 会话契约层（含上述后端） | `packages/agent/src/harness/session`（全目录） | 7108 | `pi-java-agent-core/.../agent/session`（全目录） | 4194 | 0.59× |
-| 评测（src） | `packages/evals/src` | 1964 | `pi-java-evals/src/main` | 773 | 0.39× |
-| 评测（test） | `packages/evals/test` | 476 | `pi-java-evals/src/test` | 412 | 0.87× |
-| **chord（src）** | `packages/chord/src` | **5822** | **—** | **0** | **0.00×** |
-| **chord（test）** | `packages/chord/test` | **3553** | **—** | **0** | **0.00×** |
-| **防漂移脚本** | `scripts/`（40 文件） | **8314** | **—** | **0** | **0.00×** |
+> ⚠️ **本节已于 2026-09-20 重测**：pi 从 `71dca871b` 前进 111 个提交到 `3390bd936`。下表 `pi 旧` / `pi 新` 两列给出漂移。
 
-> pi 的评测框架 `vitest-evals@0.15.0` 是**外部 npm 包**（`packages/evals/package.json:20` devDependencies），
-> 不在 pi 仓库内 —— 所以上表 pi 的 1964 行只是 pi 自己的 5 个 eval + 5 个集成文件，**不含框架本体**。
+| 模块 | pi 包 / 路径 | pi 旧 | pi 新 | 变化 | java LOC | 新比例 |
+|---|---|---|---|---|---|---|
+| 会话后端 · SQLite（src） | `packages/session-backends/sqlite-node/src` | 1973 | **1973** | **未变** | 2875 | 1.46× |
+| 会话后端 · SQLite（test） | 同上 `test/`（+`benchmark/` 178） | 1909 | **1909** | **未变** | 282 | 0.15× |
+| 会话后端 · JSONL（src） | `packages/agent/src/harness/session/jsonl` | 1894 | **1894** | **未变** | 1863 | 0.98× |
+| 会话后端 · Memory（src） | `memory.ts`(453) + `in-memory-storage-state.ts`(349) | 802 | **802** | **未变** | 304 | 0.38× |
+| 会话契约层（含上述后端） | `packages/agent/src/harness/session`（全目录） | 7108 | **7108** | **未变** | 4194 | 0.59× |
+| 评测（src） | `packages/evals/src` | 1964 | **1446** | **−518** | 773 | 0.53× |
+| 评测（test） | `packages/evals/test` | 476 | **815** | **+339** | 412 | 0.51× |
+| **chord（src）** | `packages/chord/src` | 5822 | **6503** | **+681** | **0** | 0.00× |
+| **chord（test）** | `packages/chord/test` | 3553 | **4376** | **+823** | **0** | 0.00× |
+| **durable（新包）** | `packages/durable/src` | — | **757** | **全新** | **0** | 0.00× |
+| durable（test / docs） | 同包 `test/` 636、`docs/` 3114 | — | **3750** | **全新** | 0 | 0.00× |
+| **pico3（新，在 agent 内）** | `packages/agent/src/harness/pico3` | — | **7994** | **全新** | **0** | 0.00× |
+| pico3（test） | `packages/agent/test/harness/pico3` | — | **7135** | **全新** | 0 | 0.00× |
+| **micro（新，在 coding-agent 内）** | `packages/coding-agent/src/experimental/micro` | — | **1524** | **全新** | **0** | 0.00× |
+| **防漂移脚本** | `scripts/`（40 文件，**文件清单未变**） | 8314 | **8325** | **+11** | **0** | 0.00× |
+
+> **pi 的包数 11 → 12**：新增 `packages/durable`（`@earendil-works/pi-durable`，version 0.86.1，依赖 `chord` + `pi-ai`）。
+> `packages/agent/src` 从 25305 行涨到 **33353**（+8048，其中 **pico3 占 7994** ⇒ agent 的其余部分零增长）。
+> pi 的评测框架仍是**外部 npm 包**：`vitest-evals@0.15.0` + **新增 `@vitest-evals/core@0.15.0`** + **新增 `autoevals@0.3.0`**（`packages/evals/package.json`）。
+
+---
+
+## 重测：pi `71dca871b` → `3390bd936`（111 提交）
+
+> ⚠️ **取证方式**：重测期间发现 `D:/workplaceForai/pi` 的工作树**中途从 `3390bd936` 翻回 `71dca871b`**（`git rev-parse HEAD` 实测为旧提交、`git status` 干净）。
+> 因此**所有新状态读取改用 `git show 3390bd936:<path>`**，不依赖工作树；判定口径 / 权重规则 / 范围裁决均未改动。
+
+### 引用漂移总账
+
+| 口径 | 数 | 说明 |
+|---|---:|---|
+| 从本文解析出的 pi 引用路径 | **73** | 去重后的 `file`（含 `packages/`、`scripts/`） |
+| **逐字节未变（引用原样有效）** | **64** | `git diff --quiet 71dca871b..3390bd936 -- <path>` 为空 ⇒ **行号与内容都没动** |
+| **变了** | **9** | 见下表 |
+
+| 变了的路经 | 性质 | 影响 |
+|---|---|---|
+| `packages/agent/src/harness/session/**`（全目录） | — | **逐字节未变** ⇒ 存储后端 / JSONL / Memory / 会话契约的**全部引用原样有效** |
+| `packages/session-backends/sqlite-node/src/sqlite/**` | — | **逐字节未变** ⇒ **SQLite schema 与全部行引用原样有效** |
+| `packages/chord/src/**`（除 delta） | — | **逐字节未变**（`facets/host.ts`、`services/*`、`node/*`、`context/`、`json.ts`、`api.ts`、`types.ts` 全同） |
+| `packages/agent/src/search/index.ts` | — | 未变（`SessionSearchService` 仍在 `:20`） |
+| `packages/protocol`、`packages/server`、`packages/client` | — | **整个包未变** |
+| `packages/coding-agent/src/core/session-manager.ts` | **实质** | **B55**（+246/−121，367 行变动） |
+| `packages/coding-agent/src/modes/interactive/interactive-mode.ts` | 行号 | `/share` 分派 `:3002-3003` → **`:3080-3081`**；handler `:6151` → **`:6279-6280`** |
+| `packages/coding-agent/src/modes/interactive/session-share.ts` | 行号 | `shareSession` `:45-46` → **`:57`**；**新增导出** `createShareTrailingEntries`（`:25`） |
+| `packages/coding-agent/src/core/slash-commands.ts` | 无漂移 | `/share` 仍在 **`:27`**（`:28` 新增 `bug` 命令，share 行号未动） |
+| `packages/chord/src/delta/index.ts` | 行号（内部） | 1267 → **1948**；**20 个导出锚点行号全部未变**，仅 ~6 个内部锚点漂移 |
+| `packages/evals/**` | **实质** | 整包重构（见下） |
+| `scripts/check-entry-graphs.mjs`、`scripts/local-release.mjs`、`scripts/build-coding-agent-bundle.mjs` | 配置 | 仅新增 `pi-durable` 工作区条目（+1/+1/+17 行）；**门集合未变** |
+
+**只漂行号（判定不变）的引用：10 条** —— chord delta 内部锚点 **7 条**（`:205-227`、`:536-588`、`:435-748`、`:642-648`、`:670-673`、`:982-984`、`:1028-1064`；逐个 `sed -n` 比对确认内容已不同）＋ `/share` **3 条**（`interactive-mode` ×2、`session-share` ×1）。
+**另有 5 条 chord delta 锚点连行号都没动**（`:30-36`、`:48-60`、`:764-936`、`:938-1011`、`:1014-1026`），**64 个整文件逐字节未变** ⇒ 本文绝大多数引用一条都不用改。
+
+### B55 重新取证（实质变化）
+
+pi 的 `SessionManager.list` **不再是「同步全量」** —— 现在是**并发 + 可中止 + 增量发布部分结果**：
+
+| 项 | 旧（71dca871b） | 新（3390bd936） |
+|---|---|---|
+| `SessionListProgress` 类型 | `:768`，签名 `(loaded, total) => void` | **`:795-800`**，签名 **`(loaded, total, partialSessions?: readonly SessionInfo[]) => void`** |
+| 增量发布节流 | 无 | **`CURRENT_SESSION_LIST_PUBLISH_INTERVAL = 10`**（`:804`）：`loaded === 1 \|\| loaded % 10 === 0 \|\| loaded === files.length` 时才带 `partialSessions`（`:875`） |
+| `listSessionsFromDir` | `:812`，串行 | **`:852-881`**，走 **`buildSessionInfosWithConcurrency`**（`:835`） |
+| `AbortSignal` | 无 | `listSessionsFromDir`（`:855`）、`list`（`:1762`）、**`listAll`（`:1779-1804`）** 全部新增 `signal?: AbortSignal`；`signal?.throwIfAborted()`（`:853`、`:884`） |
+| `SessionManager.list` | `:1670` | **`:1758-1771`**，且把 `partialSessions` 用 `includeSession` 过滤后再转发（`:1768-1769`） |
+| `listAll` | `:1685` | **`:1779-1804`**（重载签名增加 `signal`，参数解析改类型判别 `:1786-1801`） |
+| `findMostRecentSession` | — | `:660`（A12 相关，未变语义） |
+
+**结论：B55 判定仍为「缺失」，但差距从 1 项扩到 4 项** —— pi-java 的 `SessionRepository.list` 缺
+① 进度回调、② **部分结果增量发布**（`partialSessions`）、③ **`AbortSignal` 中止**、④ **并发扫描**。
+`SessionListProgress` 的新签名意味着 pi 的调用方（交互式选择器）能在扫描未完成时**先渲染已加载的会话**；pi-java 只能等全量返回。
+
+### SQLite schema 重新对齐
+
+**pi 的表数没变（仍是 7 张），DDL 逐字节未变** ⇒ **本文「SQLite schema 逐表对齐」18 行判定 100% 不变，零改动**。
+证据：`git diff 71dca871b..3390bd936 -- packages/session-backends` 只命中 `CHANGELOG.md` 与 `package.json`（版本号 0.85.1 → 0.86.1）；
+`packages/session-backends/sqlite-node/src/sqlite/migrations/001_initial.sql` 与 `migrations.ts`、`repo.ts`、`storage.ts`、`session/*.ts`、`test/repo.test.ts` **全部逐字节未变**。
+⇒ 同名 3 表、pi 独有 4 表、java 独有 10 表、触发器 2 条 —— **分叉格局一字未改**。
+
+### `evals` 缩了 518 行：不是删能力，是换架构
+
+`src` 1964 → 1446（−518），但**能力是净增的**。逐文件账：
+
+**删除（−）**：`src/vitest-evals/{artifacts 113, harness-table 204, reporter 124, setup 8, summary 438}` = **887** ·
+`src/pi-harness.ts` 302 · `src/providers.eval.ts` 410 · `src/models.eval.ts` 151 · `src/extensions.eval.ts` 127 · `src/docs.eval.ts` 70 · `scripts/run-evals.mjs` 120（在 `scripts/`，不计入 src）。
+**新增（+）**：`src/harness.ts` **537** · `src/report.ts` **483** · `src/cli.ts` **192** · `src/docker.ts` **175** · `src/plan.ts` **59** = **1446**（正好等于新 src 总量）。
+
+**去向映射**（能力没丢，换了家）：
+
+| 旧位置 | 新位置 | 证据 |
+|---|---|---|
+| `vitest-evals/summary.ts`（对照报告） | `src/report.ts` | `summarizeEvalObservations`（`:359`）、`formatEvalComparisonReport`（`:436`）、`EvalComparisonReport`（`:75`）、`PairedMetricSummary`（`:36`）、`EvalSetComparison`（`:43`） |
+| `vitest-evals/artifacts.ts`（会话快照） | `src/report.ts` | `PI_SESSION_SNAPSHOT_ARTIFACT = "piSessionJsonl"`（`:9`）、`persistSession`（`:121-134`，落 `session.jsonl`） |
+| `vitest-evals/reporter.ts`（落盘） | `src/report.ts` | `readTaskObservation`（`:136`）、`classifyCaseStatus`（`:101`）、`erroredObservation`（`:118`） |
+| `vitest-evals/harness-table.ts`（A/B 对照） | `src/report.ts` + `src/plan.ts` | `BlockedPair`（`:58`）、`VariantTotals`（`:62`）；`plan.ts` 的 `DOCUMENTATION_VARIANTS`（`:1`）与 `createTaskPlan`（`:39`） |
+| `pi-harness.ts`（真 harness） | `src/harness.ts` | `createPiCodingAgentHarness`（`:471-475`）、`resolveModelSelection`（`:70`）、`applyIsolatedEnvironment`（`:82`）、`verifySystemPrompt`（`:257`）、**新增** `createPiDocumentationEvalHarness`（`:517-523`）、`DOCUMENTATION_EVAL_TOOLS`（`:485`）、`resolveDocumentationVariant`（`:487`） |
+| `scripts/run-evals.mjs`（CLI） | `src/cli.ts` | `parseEvalCli`（`:27`）、`compareDiscovery`（`:106`）、`cli`（`:114`） |
+| `*.eval.ts` 5 个 | `evals/*.eval.ts` 7 个 + `evals/{acme-server,configured-runtime}.ts` | 见下 |
+| — | **`src/docker.ts`（全新）** | `buildImages`（`:38`）、`requireEvalAuthFile`（`:67`）、`createDockerContext`（`:126`）、`discoverCases`（`:137`）＋ `docker/Dockerfile`(44) + `entrypoint.ts`(152) |
+
+**评测用例的变化**：`docs.eval`/`extensions.eval`/`models.eval`/`providers.eval` → 拆成
+`documentation-audit.eval.ts`(64) · `extensions.docs.eval.ts`(60) · `models.docs.eval.ts`(40) · `custom-provider.docs.eval.ts`(72) · `openai-provider.docs.eval.ts`(62) · **`tui.docs.eval.ts`(264，全新)** · `smoke.eval.ts`(18)，
+外加助手 `acme-server.ts`(154)、`configured-runtime.ts`(120)。
+**判分器升级**：`createJudge` 仍在（`tui.docs.eval.ts:13`）＋ **`StructuredOutputJudge`/`ToolCallJudge`**（`extensions.docs.eval.ts:2`）＋ **`autoevals` 的 `Levenshtein`**（`tui.docs.eval.ts:12`）。
+**双轨入口**：`package.json` `"eval": "npm run eval:host && npm run eval:docs --"` ⇒ `eval:host`（vitest）+ `eval:docs`（自研 CLI）。
+
+### chord：能力集合未变，只有 delta 内部长大
+
+**关键更正**：`delta/index.ts` 1267 → 1948（+681）**不是新增能力** ——
+`overlap`(81)、`isBase`(70)、`TrackerOptions`(108)、`Tracker<T>`(112)、`encoder`(1105)、`decoder`(1198)、`isReplace`(64)、`assertValidOp`(785)、`assertValidWireOp`(828)、`assertSafePath`(891)、`PathError`(922)、`UnsafePathError`(766)、`RESERVED_SEGMENTS`(764)、`apply`(938)、`applyImmutable`(1014)、`track`(435) —— **全部在旧 HEAD 就已存在，且行号一字未变**（逐个 `git show 71dca871b:... | grep -n` 比对）。
++681 行全在 **`decoder()` 之后**（旧 `:1198`→`:1267` 收尾 69 行；新 `:1198`→`:1948` 收尾 750 行），是**内部加固**：
+batch 作用域的 arity 省略、base 批次清空路径字典（恢复点语义）、稀疏数组拒绝、`undefined`/`delete`/`defineProperty` 明确抛错、克隆与代理保留量优化。
+**⇒ chord 能力清单 21 行判定全部不变。** 只有内部锚点漂了 5 处（见上「只漂行号」）。
+
+**chord 的消费者新增两个**：`packages/durable`（`package.json` 依赖 `@earendil-works/chord ^0.86.1`）与
+`packages/agent/src/harness/pico3`（`chord.ts`、`jsonl.ts`、`memory.ts`、`session.ts`、`types.ts`、`view.ts` 六个文件 import `@earendil-works/chord/delta`）。
+⇒ 消费者从 5 个包变 **7 个包**（agent / client / coding-agent / durable / protocol / server / **pico3 所在的 agent**）。
+
+### 防漂移脚本：文件清单与门集合都没变
+
+`scripts/` **40 个文件，文件清单逐条 diff 为空**（`diff <(git ls-tree 71dca871b scripts) <(git ls-tree 3390bd936 scripts)` 无输出）；
+`check-*.mjs` 仍是 **7 个**（含 1 个测试）。行数 8314 → 8325（**+11**）。
+唯一改动：`check-entry-graphs.mjs:24` 与 `local-release.mjs:13` 各加一行 `packages/durable` 工作区条目 —— **为容纳新包而扩白名单，不是新门**。
+`package.json:21` 的 `check` 链仍是 **7 个检查器**（`check:pinned-deps`/`check:runtime-deps`/`check:ts-imports`/`check:entry-graphs`/`check:shrinkwrap`/`check:install-lock:coding-agent`/`check:browser-smoke`）。
+**⇒ 脚本表 40 行判定全部不变。**
+
+### 新增子系统（pi 111 提交里长出来的三块，pi-java 零对应物）
+
+| 子系统 | 路径 | LOC（src / test / docs） | 消费者 | 说明 |
+|---|---|---|---|---|
+| **`durable`**（Pico5） | `packages/durable` | **757** / 636 / **3114**（`pico-v5.md` 2031 行**规范**） | **0**（仅自身 README/package.json） | 「Durable conversation, task, and document runtime」。导出 `MemoryStorage`、`ROOT_CONVERSATION_ID` 与 19 个类型（`ConversationRecord`/`EntryRecord`/`TaskRecord`/`DocumentRecord`/`Input`/`Storage`/`StorageWrite`/`Cursor`/`Page`…）。`Storage` 接口 12 个方法：`commit(writes[],ctx)` 原子批量、`mintId()`、`conversation(id)`、`scanConversations(cursor,limit)`、`entry(id)`、`findLatestHeadMarker(convId, atOrBeforeEntryId)`、`scanEntries(query,cursor,limit)`、`task(id)`、`scanTasks(query,cursor,limit)`、`input(id)`、`inputByRequest(convId, requestId)`、`close(ctx)`。核心不变量（`docs/pico-v5.md:34-52`）：「一次 Session 提交跨 record 与 document **原子**」「可见进度**全部持久**，无易失发布路径」「外部副作用不在 Session 变更事务内运行」 |
+| **`pico3`** | `packages/agent/src/harness/pico3` | **7994** / 7135 / — | `micro`（4 文件） | Pico3 内核。最大：`session.ts` 1497、`types.ts` 1038、`harness.ts` 812、`kinds/generation.ts` 641、`scheduler.ts` 486、`kinds/tool.ts` 479、`view.ts` 477。**自带两个存储后端**：`jsonl.ts`(339) `JsonlStorage extends MemoryStorage`（目录 + `main.jsonl` + sticky/task sidecars + fsync + 撕裂尾截断 `:334-338`）与 `memory.ts`(278) `MemoryStorage`。还有 chord 视图桥 `chord.ts`(178)：`attachChordView`/`createPicoConversationService`/`PicoHarnessService` |
+| **`micro`** | `packages/coding-agent/src/experimental/micro` | **1524** / — / README 39 | **0**（独立入口 `main.ts`） | 「A small local coding agent built on the experimental Pico3 harness」。`README.md:3-5` 明说「Unlike `mini`, it has **no server, worker, RPC, or client/session process split**. One process owns the model runtime, Pico harness, JSONL storage, and TUI」。会话落 `~/.pi/agent/experimental/micro-sessions/<cwd-hash>/`，**每 session 一个 Pico3 `JsonlStorage` 目录**（`main.jsonl` + sidecars），**用 `proper-lockfile` 做文件系统锁防两进程同占**（`sessions.ts:39-44`，`retries: 0` 直接抛 `Micro session is already open`） |
+
+**⚠️ 三者**：`durable` 与 `micro` **零消费者**、`pico3` 只被 `micro` 消费 ⇒ 都是 **pi 的前瞻性建设，不是已发布能力**。给权重时按「若接上有多重要」计（与 chord 同口径），并单列。
 
 ---
 
@@ -54,7 +177,7 @@ pi-java 对应 = `pi-java-agent-core/.../agent/session/SessionStorage.java:19-93
 |---|---|---|---|---|---|---|---|
 | 1 | 2 | create 建会话 | 三后端 | `session/types.ts:639`（`SessionRepo.create`）；sqlite `sqlite/repo.ts:180` | `SessionRepository.java:18`；sqlite `SqliteSessionRepository.java` | 对齐 | — |
 | 2 | 2 | list 列会话 | 三后端 | `session/types.ts:641`；sqlite `repo.ts:250` | `SessionRepository.java:27` | 对齐 | — |
-| 3 | 1 | list 带进度回调 `onProgress` | 三后端 | `coding-agent/src/core/session-manager.ts:814`（`SessionListProgress`）、`:1670`、`:1685` | **无**（`list` 是同步全量） | **缺失** | **B55** |
+| 3 | 1 | list 带进度回调 `onProgress` ＋ **增量部分结果** ＋ **`AbortSignal`** ＋ **并发扫描** | 三后端 | ⚠️ **重测（`3390bd936`）**：`SessionListProgress` **`:795-800`**，签名 **`(loaded, total, partialSessions?) => void`**；节流常量 `CURRENT_SESSION_LIST_PUBLISH_INTERVAL = 10`（`:804`）；`listSessionsFromDir` **`:852-881`**（走 `buildSessionInfosWithConcurrency` `:835`）；`list` **`:1758-1771`**、`listAll` **`:1779-1804`** 均新增 `signal?: AbortSignal`；`signal?.throwIfAborted()` `:853`/`:884`。旧引用 `:814`/`:1670`/`:1685` 已失效 | **无**（`SessionRepository.list` 是同步全量、无回调、无中止、无并发） | **缺失**（差距由 1 项扩到 **4 项**） | **B55** |
 | 4 | 2 | open 打开 + 独占写者 | 三后端 | `session/types.ts:640` | `SessionRepository.java:24` | 对齐 | — |
 | 5 | 2 | delete 删会话 | 三后端 | `session/types.ts:642` | `SessionRepository.java:30` | 对齐 | — |
 | 6 | 2 | fork（`branch`/`tree` 双 scope） | 三后端 | `session/types.ts:608-637`（`ForkOptions` 判别联合） | `session/ForkOptions.java` | 对齐 | — |
@@ -135,33 +258,38 @@ pi-java 把它们拆成 8 张**用途专用表**（`lanes`/`lane_moves`/`records
 
 ## 评测对齐
 
-pi 侧：`packages/evals`（自研 5 个 eval 文件 + 5 个 `vitest-evals` 集成文件），框架本体是外部 npm 包 `vitest-evals@0.15.0`。
-pi-java 侧：`pi-java-evals`（**自研框架** `EvalSuite`/`EvalCase`/`EvalRunner`/`EvalReporter` ＋ 协议一致性套件）。
+pi 侧（⚠️ **重测后**）：`packages/evals` 已**重构** —— 框架本体仍是外部 npm 包，但现在有**三个**：
+`vitest-evals@0.15.0` + **`@vitest-evals/core@0.15.0`**（新）+ **`autoevals@0.3.0`**（新，LLM 判分器）。
+pi 自己的代码从「5 个 eval + 5 个 vitest-evals 集成」变成「**`src/{harness,report,cli,docker,plan}.ts`（1446 行）＋ `evals/*.eval.ts` 7 个 + `docker/`**」。
+pi-java 侧：`pi-java-evals`（**自研框架** `EvalSuite`/`EvalCase`/`EvalRunner`/`EvalReporter` ＋ 协议一致性套件）—— **本包零改动**。
 
-| # | 权重 | 能力 | pi 有 | java 有 | 判定 | 证据 |
+| # | 权重 | 能力 | pi 有（新 `3390bd936`） | java 有 | 判定 | 证据 |
 |---|---|---|---|---|---|---|
-| 1 | 1 | 声明式 eval 定义（`describeEval(name, {harness}, it => …)`） | ✅ `src/smoke.eval.ts:4`、`src/docs.eval.ts:48` | ✅ 但形状不同（`EvalSuite.name()`/`cases()`，`api/EvalSuite.java:8/11`） | **对齐（形状不同）** | pi `evals/src/smoke.eval.ts:4`；java `evals/api/EvalSuite.java:8-11` |
-| 2 | 3 | **真 coding-agent harness**（临时目录起真会话、驱动 prompt、回读 transcript/usage） | ✅ `src/pi-harness.ts:5-12`（`createAgentSessionFromServices`/`SessionManager`/`SettingsManager`）＋ `:14`（`createHarness` from vitest-evals）；`:68` `resolveModelSelection` 读 `PI_PROVIDER`/`PI_MODEL` | **无**（`EvalContext` 只给 `Provider`/`ChatApi`/`AgentHarness`，`api/EvalContext.java:14-27`；无临时目录会话、无 transcript 回读） | **缺失** | pi `evals/src/pi-harness.ts:1-80`；java `evals/api/EvalContext.java` |
-| 3 | 2 | **LLM-as-judge 评分**（`createJudge`） | ✅ `src/extensions.eval.ts:4/37`、`src/models.eval.ts:4/15`、`src/providers.eval.ts:10` | **无**（只有布尔 pass/fail，`api/EvalResult.java:13-17`） | **缺失** | pi `evals/src/extensions.eval.ts:37`；java `evals/api/EvalResult.java` |
-| 4 | 2 | **baseline vs candidate A/B 对照表 + 重复次数**（`evalHarnessTable`） | ✅ `src/vitest-evals/harness-table.ts:22-43`（`EvalHarnessTablePairOptions`/`CandidatesOptions`，`repetitions`） | **无** | **缺失** | pi `evals/src/vitest-evals/harness-table.ts:22-43` |
-| 5 | 2 | **对照报告汇总**（paired metric / correctness lift / 诊断） | ✅ `src/vitest-evals/summary.ts:300`（`summarizeHarnessComparisons`）、`:374`（`formatHarnessComparisonReport`）；438 行 | **无** | **缺失** | pi `evals/src/vitest-evals/summary.ts:300/374` |
-| 6 | 2 | **vitest reporter：harness-run 落 JSONL 产物** | ✅ `src/vitest-evals/reporter.ts:16`（`appendHarnessRunReport`）、`schemaVersion:1` 记录、`:13` 读 `PI_EVAL_ARTIFACT_DIR` | **部分**：`EvalReporter` 只有进程内回调（`api/EvalReporter.java:14/23`），**不落盘** | **缺失** | pi `evals/src/vitest-evals/reporter.ts:16-40`；java `evals/api/EvalReporter.java:14` |
-| 7 | 2 | **会话 JSONL 快照作为 test attachment** | ✅ `src/vitest-evals/artifacts.ts:15`（`PI_SESSION_SNAPSHOT_ARTIFACT = "piSessionJsonl"`）、`:18` `recordEvalSessionArtifact`；`setup.ts:5` 在 `afterEach` 自动挂 | **无** | **缺失** | pi `evals/src/vitest-evals/artifacts.ts:15/18`、`setup.ts:5` |
-| 8 | 2 | **从 run 里查工具调用**（`toolCalls(result.session)`） | ✅ `src/docs.eval.ts:5/66-71` | **无**（java 直接断言 `StreamEvent` 序列） | **缺失** | pi `evals/src/docs.eval.ts:5/66` |
-| 9 | 3 | eval 运行器脚本（CLI：`--provider`/`--model`/`--repetitions`，落 `.eval/<ISO>_<uuid>/`） | ✅ `packages/evals/scripts/run-evals.mjs:12-16`（`PI_EVAL_ARTIFACT_DIR`）、`package.json` `"eval": "node scripts/run-evals.mjs"` | **部分**：`runner/EvalRunner.java:38`（`runAll`，纯内存） | **存疑** | pi `evals/scripts/run-evals.mjs:12`；java `evals/runner/EvalRunner.java:38` |
-| 10 | 2 | **docs 审计 eval**（逐页文档 vs 实现比对，`submit_documentation_audit` 工具） | ✅ `src/docs.eval.ts:11-46`（自定义工具 + `constrainedSampling: {type:"json_schema"}`）、`:52` 逐页 `it.for(documentationPages)` | **无** | **缺失** | pi `evals/src/docs.eval.ts:11-52` |
-| 11 | 2 | **扩展作者 eval**（让模型写 `.pi/extensions/hello.ts` 再判） | ✅ `src/extensions.eval.ts:16-34`（`extensionSource`/`loadedExtensions`/`extensionErrors`） | **部分**：`ExtensionLifecycleTest.java:29`（装配后工具/命令可见，**不让模型写扩展**） | **存疑** | pi `evals/src/extensions.eval.ts:16-34`；java `evals/test/.../ExtensionLifecycleTest.java:29` |
-| 12 | 2 | **模型作者 eval**（让模型往 models.json 写模型条目） | ✅ `src/models.eval.ts:17-46`（`ModelAuthoringResult`/`summarizeModel`，8 个字段逐一比对） | **无** | **缺失** | pi `evals/src/models.eval.ts:17-46` |
-| 13 | 2 | **provider 集成 eval**（起本地 HTTP mock server 走完整 provider 解析） | ✅ `src/providers.eval.ts:3-8`（`createServer`/`/docs` capability 发现/NDJSON 流）、410 行 | **部分**：`ProviderSmokeTest.java:38`（真 provider ping，需 `-Dpi.eval.smoke=true`）、`ProviderCatalogConformance.java:17`（17 个 provider 的目录级检查） | **存疑** | pi `evals/src/providers.eval.ts:1-70`；java `evals/test/.../smoke/ProviderSmokeTest.java:38` |
+| 1 | 1 | 声明式 eval 定义（`describeEval(name, {harness}, it => …)`） | ✅ `evals/documentation-audit.eval.ts:6`、`evals/tui.docs.eval.ts:13`（仍来自 `vitest-evals`） | ✅ 但形状不同（`EvalSuite.name()`/`cases()`，`api/EvalSuite.java:8/11`） | **对齐（形状不同）** | pi `evals/evals/documentation-audit.eval.ts:6`；java `evals/api/EvalSuite.java:8-11` |
+| 2 | 3 | **真 coding-agent harness**（临时目录起真会话、驱动 prompt、回读 transcript/usage） | ✅ **`src/harness.ts:471-475`**（`createPiCodingAgentHarness`，302→**537** 行）＋ `:70` `resolveModelSelection` 读 `PI_PROVIDER`/`PI_MODEL` ＋ **新增** `:82` `applyIsolatedEnvironment`、`:257` `verifySystemPrompt`、`:517-523` `createPiDocumentationEvalHarness`、`:485` `DOCUMENTATION_EVAL_TOOLS`、`:487` `resolveDocumentationVariant` | **无**（`EvalContext` 只给 `Provider`/`ChatApi`/`AgentHarness`，`api/EvalContext.java:14-27`；无临时目录会话、无 transcript 回读） | **缺失** | pi `evals/src/harness.ts:471-523`；java `evals/api/EvalContext.java` |
+| 3 | 2 | **LLM-as-judge 评分** | ✅ **升级**：`createJudge` 仍在（`evals/tui.docs.eval.ts:13`）＋ **`autoevals` 的 `Levenshtein`**（`tui.docs.eval.ts:12`）＋ **`StructuredOutputJudge`/`ToolCallJudge`**（`evals/extensions.docs.eval.ts:2`） | **无**（只有布尔 pass/fail，`api/EvalResult.java:13-17`） | **缺失** | pi `evals/evals/tui.docs.eval.ts:12-13`、`extensions.docs.eval.ts:2`；java `evals/api/EvalResult.java` |
+| 4 | 2 | **baseline vs candidate A/B 对照表 + 重复次数** | ✅ **迁到 `src/report.ts`**：`PairedMetricSummary:36`、`EvalSetComparison:43`、`BlockedPair:58`、`VariantTotals:62`、`EvalComparisonReport:75`；变体计划在 `src/plan.ts:1`（`DOCUMENTATION_VARIANTS = ["without_docs","with_docs"]`） | **无** | **缺失** | pi `evals/src/report.ts:36-75`、`src/plan.ts:1` |
+| 5 | 2 | **对照报告汇总**（paired metric / correctness lift / 诊断） | ✅ **迁到 `src/report.ts:359`**（`summarizeEvalObservations`）、**`:436`**（`formatEvalComparisonReport`）；483 行 | **无** | **缺失** | pi `evals/src/report.ts:359/436` |
+| 6 | 2 | **reporter：harness-run 落产物** | ✅ **迁到 `src/report.ts`**：`readTaskObservation:136`、`persistSession:121-134`（落 `session.jsonl`）、`classifyCaseStatus:101`、`erroredObservation:118` | **部分**：`EvalReporter` 只有进程内回调（`api/EvalReporter.java:14/23`），**不落盘** | **缺失** | pi `evals/src/report.ts:101-136`；java `evals/api/EvalReporter.java:14` |
+| 7 | 2 | **会话 JSONL 快照作为 test attachment** | ✅ **迁到 `src/report.ts:9`**（`PI_SESSION_SNAPSHOT_ARTIFACT = "piSessionJsonl"`） | **无** | **缺失** | pi `evals/src/report.ts:9/121-134` |
+| 8 | 2 | **从 run 里查工具调用**（`toolCalls(...)`） | ✅ `evals/documentation-audit.eval.ts:6/57` | **无**（java 直接断言 `StreamEvent` 序列） | **缺失** | pi `evals/evals/documentation-audit.eval.ts:6/57` |
+| 9 | 3 | eval 运行器 CLI | ✅ **迁到 `src/cli.ts:27`**（`parseEvalCli`）、`:106`（`compareDiscovery`）、`:114`（`cli`）；**双轨入口** `package.json` `"eval": "npm run eval:host && npm run eval:docs --"` | **部分**：`runner/EvalRunner.java:38`（`runAll`，纯内存） | **存疑** | pi `evals/src/cli.ts:27`；java `evals/runner/EvalRunner.java:38` |
+| 10 | 2 | **docs 审计 eval**（逐页文档 vs 实现比对） | ✅ `evals/documentation-audit.eval.ts:10-57`（`submitAudit` 工具 + `toolCalls` 断言恰一次） | **无** | **缺失** | pi `evals/evals/documentation-audit.eval.ts:10-57` |
+| 11 | 2 | **扩展作者 eval** | ⚠️ **语义变了**：旧「让模型写 `.pi/extensions/hello.ts`」→ 新 `evals/extensions.docs.eval.ts:1-30`「Create and use a tool extension」，走 `createPiDocumentationEvalHarness` + `StructuredOutputJudge`/`ToolCallJudge` | **部分**：`ExtensionLifecycleTest.java:29`（装配后工具/命令可见，**不让模型写扩展**） | **存疑** | pi `evals/evals/extensions.docs.eval.ts:1-30` |
+| 12 | 2 | **模型作者 eval** | ✅ `evals/models.docs.eval.ts`（151→**40** 行，判分器抽到 `evals/configured-runtime.ts` 的 `inspectAddedModel`） | **无** | **缺失** | pi `evals/evals/models.docs.eval.ts`、`configured-runtime.ts` |
+| 13 | 2 | **provider 集成 eval**（起本地 HTTP mock server） | ✅ **拆成 3 个**：`evals/acme-server.ts:1-154`（mock server 本体）＋ `custom-provider.docs.eval.ts`(72) ＋ `openai-provider.docs.eval.ts`(62) | **部分**：`ProviderSmokeTest.java:38`（真 provider ping）、`ProviderCatalogConformance.java:17` | **存疑** | pi `evals/evals/acme-server.ts:1-154` |
 | 14 | 3 | **ChatApi 协议一致性套件**（C1–C10） | **无直接对应物**（pi 无 StreamEvent 序列校验器） | ✅ `ChatApiConformanceSuite.java:30`（C1–C10）、`StreamEventOrderValidator.java:21` | **对齐（java 反超）** | java `evals/conformance/ChatApiConformanceSuite.java:30-44`；pi 无 |
-| 15 | 2 | 简单 smoke eval（"Paris" 一问） | ✅ `src/smoke.eval.ts:6-15`（断 `output`/`errors`/`usage.provider`/`usage.model`/`totalTokens>0`） | **部分**：`ProviderSmokeTest.java:39`（只断收到 `StreamDone`） | **存疑** | pi `evals/src/smoke.eval.ts:6-15`；java `evals/test/.../smoke/ProviderSmokeTest.java:39` |
-| 16 | 3 | eval 框架本体 | 外部 npm `vitest-evals@0.15.0`（`package.json:20`） | 自研（`EvalSuite`/`EvalCase`/`EvalContext`/`EvalResult`/`EvalReporter`/`EvalRunner`，6 接口 130 行） | **对齐（自研替代）** | pi `evals/package.json:20`；java `evals/api/*.java` |
-| 17 | 1 | 框架单测 | ✅ `test/vitest-evals/{artifacts,harness-table,summary}.test.ts`（442 行）＋ `test/pi-harness.test.ts`（34） | ✅ `test/conformance/StreamEventOrderValidatorTest.java`（56）、`test/ChatApiConformanceTest.java`（63）、`test/ProviderCatalogTest.java`（26） | 对齐 | 两侧 test 目录 |
+| 15 | 2 | 简单 smoke eval（"Paris" 一问） | ✅ `evals/smoke.eval.ts:10-16`（断 `output`/`errors`/`usage` 对象/`totalTokens>0`） | **部分**：`ProviderSmokeTest.java:39`（只断收到 `StreamDone`） | **存疑** | pi `evals/evals/smoke.eval.ts:10-16` |
+| 16 | 3 | eval 框架本体 | **外部 npm ×3**：`vitest-evals@0.15.0` + `@vitest-evals/core@0.15.0` + `autoevals@0.3.0` | 自研（`EvalSuite`/`EvalCase`/`EvalContext`/`EvalResult`/`EvalReporter`/`EvalRunner`，6 接口 130 行） | **对齐（自研替代）** | pi `evals/package.json` devDependencies；java `evals/api/*.java` |
+| 17 | 1 | 框架单测 | ✅ `test/{acme-server,comparison,configured-runtime,harness,plan,report}.test.ts`（476→**815** 行） | ✅ `test/conformance/StreamEventOrderValidatorTest.java`（56）、`test/ChatApiConformanceTest.java`（63）、`test/ProviderCatalogTest.java`（26） | 对齐 | 两侧 test 目录 |
+| **18** | **3** | **Docker eval 执行**（构建镜像 / 容器内跑 / 隔离 auth 文件） | ✅ **全新**：`src/docker.ts:38`（`buildImages`）、`:67`（`requireEvalAuthFile`）、`:126`（`createDockerContext`）、`:137`（`discoverCases`）＋ `docker/Dockerfile`(44) ＋ `docker/entrypoint.ts`(152) ＋ `docker/install-runtime.mjs`(62) | **无** | **缺失（新增）** | pi `evals/src/docker.ts:38-137`、`evals/docker/*` |
+| **19** | **2** | **文档变体任务计划**（`without_docs`/`with_docs` 对照实验的任务编排） | ✅ **全新**：`src/plan.ts:1`（`DOCUMENTATION_VARIANTS`）、`:4`（`DiscoveredEvalCase`）、`:11`（`EvalTask`）、`:21`（`parseDiscoveredCases`）、`:39`（`createTaskPlan`） | **无** | **缺失（新增）** | pi `evals/src/plan.ts:1-59` |
+| **20** | **2** | **TUI 文档审计 eval**（264 行，含 Levenshtein 判分与 footer 上下文判据） | ✅ **全新**：`evals/tui.docs.eval.ts:12-13`（`Levenshtein` + `createJudge`）、`:192`（`contextFooterJudge`） | **无** | **缺失（新增）** | pi `evals/evals/tui.docs.eval.ts` |
 
-**行数**：17 行 —— 对齐 4 / 缺失 9 / 存疑 4。
-**权重**：**Σ = 36**（无权重 0 行 ⇒ 计入分母 17 行）。
-**净结论**：pi 的 evals 是**「真 agent 端到端 + LLM 判分 + A/B 对照」**；pi-java 的 evals 是**「协议/目录一致性」**。
-两者只在「有一个跑套件的 runner」这一点上重叠。**pi 的 5 个 eval 文件（1964 行）中，pi-java 一个都没有对应物**（`docs.eval`/`extensions.eval`/`models.eval`/`providers.eval`/`smoke.eval` 的语义面）。
+**行数**：20 行（旧 17 + **新增 3**） —— 对齐 4 / 缺失 12 / 存疑 4。
+**权重**：**Σ = 43**（旧 36 + 新增 3 行 7 点；无权重 0 行 ⇒ 计入分母 20 行）。
+**净结论（重测后）**：pi 的评测**架构换了、能力净增** —— 删掉的是 `vitest-evals/` 包装层（887 行）与旧 eval 文件，新增的是自研 `harness`/`report`/`cli`/`docker`/`plan` 与 3 项能力（Docker 执行、变体计划、TUI 审计）。
+**pi-java 一个都没有对应物**（20 行里 12 缺失 + 4 存疑），本包零改动。
 台账 `docs/32:443`「evals 完整测试矩阵」= 唯一相关条目，仍是 OPEN。
 
 ---
@@ -173,13 +301,20 @@ pi-java 侧：`pi-java-evals`（**自研框架** `EvalSuite`/`EvalCase`/`EvalRun
 - `grep -rln "Plugin|plugin" --include=*.java pi-java-agent-core/src/main pi-java-coding-agent/src/main` ⇒ **零命中**。
 - `grep -rn "chord|Chord" docs/*.md` ⇒ **零命中**（`docs/32` 也没有）⇒ **未登记**。
 
-**pi 侧 LOC**：`packages/chord/src` **5822**，`test/` **3553**，合计 **9375**。
+**pi 侧 LOC（重测后）**：`packages/chord/src` **6503**（旧 5822，**+681**，全部在 `delta/index.ts`），`test/` **4376**（旧 3553，**+823**：新增 `delta-clone.test.ts` 76、`delta-retention.test.ts` 31、`delta-retention.worker.ts` 223、`delta-traversal.bench.ts` 187、`delta.test.ts` +308），合计 **10879**。
 **chord 不是 pi 的内部包**：`README.md:3-6` 明说「developed as a standalone package in the Pi monorepo, but it is **not a Pi package**: it does not depend on any other Pi workspace package」。
-**chord 是 5 个 pi 包的真依赖**：`packages/{agent,client,coding-agent,protocol,server}/package.json` 均声明 `"@earendil-works/chord": "^0.85.1"`。
+**chord 的消费者（重测后 7 个包）**：`packages/{agent,client,coding-agent,protocol,server}/package.json` 均声明 `"@earendil-works/chord": "^0.85.1"`（agent `:58`/client `:50`/coding-agent `:52`/protocol `:42`/server `:50`），
+**新增** `packages/durable/package.json`（`^0.86.1`）与 `packages/agent/src/harness/pico3/*`（6 个文件 import `@earendil-works/chord/delta`：`chord.ts:2`、`jsonl.ts:18`、`memory.ts:2`、`session.ts:3`、`types.ts:12`、`view.ts:1`）。
 
 **chord 是「不是 Pi 包」的独立运行时**：`README.md:3-6` 明说 standalone、零 Pi 依赖；`PLANNING.md:26-37` 把它列为**硬约束**并**明文禁止**把 Session / Harness / AgentLane / server / TUI 等变成 chord 概念；自检见 `test/boundary.test.ts:11-33`。
 
-**最大三个源文件**：`src/delta/index.ts` **1267**、`src/facets/host.ts` **906**、`src/services/consumer.ts` **660**。
+**最大三个源文件**：`src/delta/index.ts` **1948**（旧 1267）、`src/facets/host.ts` **906**（未变）、`src/services/consumer.ts` **660**（未变）。
+
+> ⚠️ **重测更正**：`delta/index.ts` 的 +681 行**不是新能力**。逐个 `git show 71dca871b:… | grep -n` 比对确认：
+> **20 个导出锚点（`Op`:30 / `WireOp`:48 / `isReplace`:64 / `isBase`:70 / `overlap`:81 / `TrackerOptions`:108 / `Tracker<T>`:112 / `track`:435 / `RESERVED_SEGMENTS`:764 / `UnsafePathError`:766 / `assertValidOp`:785 / `assertValidWireOp`:828 / `assertSafePath`:891 / `PathError`:922 / `apply`:938 / `applyImmutable`:1014 / `Encoder`:1097 / `encoder`:1105 / `Decoder`:1194 / `decoder`:1198）在旧 HEAD 就已存在且行号一字未变**。
+> 增长全在 `decoder()` 之后（旧 `:1198`→`:1267` 收尾 69 行 → 新 `:1198`→`:1948` 收尾 750 行），是内部加固：
+> batch 作用域的 arity 省略（`encoder():1800-1830`）、base 批次清空路径字典（恢复点语义）、稀疏数组拒绝（`:1268`/`:1322`）、`defineProperty` 抛错（`:1331`）、克隆与代理保留量优化。
+> **⇒ 下面 21 行判定全部不变**；仅 5 处内部锚点漂号（见「重测」节）。
 
 | # | 权重 | 能力 | pi 证据（file:line） | 说明 |
 |---|---|---|---|
@@ -279,11 +414,68 @@ pi 的 `packages/coding-agent/src/experimental/`（9192 行，顶层 18 个文�
 
 ---
 
+## 整块缺失：pi 111 提交新增的三块（`durable` / `pico3` / `micro`）
+
+**pi-java 有无对应物：零。** 证据：`grep -rli "pico\|durable\|micro-session" --include=*.java .` 零命中；`packages/` 12 个包中 pi-java 只对应 11 个（缺 `durable`）。
+**三者均无已发布消费者**（`durable` 0、`micro` 0、`pico3` 仅被 `micro` 用）⇒ 是 pi 的**前瞻性建设**。权重按「若接上有多重要」计（与 chord 同口径）。
+
+### `durable`（Pico5 存储契约 + MemoryStorage）—— `packages/durable`
+
+`docs/pico-v5.md`（**2031 行规范**）＋ `pico-v5-chord-usage.md`(384) ＋ `pico-v5-handoff.md`(341) ＋ `chord-delta-findings.md`(358)。
+核心不变量（`docs/pico-v5.md:34-52`）：「一次 Session 提交跨 record 与 document **原子**」「可见进度**全部持久**，无易失发布路径」「外部副作用不在 Session 变更事务内运行」「条目与 ID 提交后永不复用」。
+
+| # | 权重 | 能力 | pi 证据（`3390bd936`） | java | 判定 |
+|---|---|---|---|---|---|
+| D-1 | 3 | **原子批量提交**（跨 conversation/entry/task/input 四类记录一个事务） | `src/types.ts:305-306`（`commit(writes, ctx)`）、`:292-297`（`StorageWrite` 四变体） | ❌ | **缺失** |
+| D-2 | 2 | **全局记录 ID 铸造** `mintId()` | `src/types.ts:309` | ❌ | **缺失** |
+| D-3 | 2 | conversation 查询/扫描（fork 链） | `src/types.ts:312/315`（`conversation`/`scanConversations`） | ❌ | **缺失** |
+| D-4 | 3 | **entry 查询/扫描 + `findLatestHeadMarker`**（可见范围下界） | `src/types.ts:318/322/329` | ❌ | **缺失** |
+| D-5 | 2 | task 记录（持久状态机 `TaskState<S,R>`）查询/扫描 | `src/types.ts:164/205/334/337` | ❌ | **缺失** |
+| D-6 | 2 | input 记录 + `inputByRequest`（会话域 host 去重键） | `src/types.ts:344/347` | ❌ | **缺失** |
+| D-7 | 3 | **document**（chord ops 表示的可变 JSON + 偶发完整 base） | `docs/pico-v5.md:44`；`src/types.ts:219/258`（`DocumentRecord`/`DocumentCreate`） | ❌ | **缺失** |
+| D-8 | 2 | `MemoryStorage` 实现（detached in-memory） | `src/memory-storage.ts:112`（372 行） | ❌ | **缺失** |
+
+**Σ权重 = 19**（无权重 0 行）。
+
+### `pico3`（Pico3 内核 + 自带两个后端）—— `packages/agent/src/harness/pico3`
+
+| # | 权重 | 能力 | pi 证据（`3390bd936`） | java | 判定 |
+|---|---|---|---|---|---|
+| P-1 | 3 | 会话/条目/任务契约 | `session.ts`（**1497**）、`types.ts`（**1038**） | ❌ | **缺失** |
+| P-2 | 3 | **`JsonlStorage`**（目录 + `main.jsonl` + sticky/task sidecars + fsync + 撕裂尾截断） | `jsonl.ts:58`（`extends MemoryStorage`）、`:73` `open`、`:195` `commit`、`:281` `truncate`、`:334-338`（尾截断） | ❌ | **缺失** |
+| P-3 | 3 | **`MemoryStorage`**（pico3 版，278 行） | `memory.ts:25` | ❌ | **缺失** |
+| P-4 | 2 | `Harness` + kinds（generation/tool/collapse/job/post-tools/frames/plugin/entries） | `harness.ts`（**812**）、`kinds/generation.ts`（641）、`kinds/tool.ts`（479）、`kinds/collapse.ts`（274）、`kinds/job.ts`（187）、`kinds/post-tools.ts`（165） | ❌ | **缺失** |
+| P-5 | 2 | 调度与背压（`scheduler.ts` 486 / `bounded.ts` 100） | `scheduler.ts`、`bounded.ts:1`（`Bounded`） | ❌ | **缺失** |
+| P-6 | 3 | **chord 视图桥**（把会话视图经 chord 复制出去） | `chord.ts:1-178`（`attachChordView`/`createPicoConversationService`/`PicoHarnessService`/`ChordViewBridge`） | ❌ | **缺失** |
+| P-7 | 2 | 系统段声明 | `system.ts:376`（`defineSystemSection`/`systemSections`/`SystemSection`） | ❌ | **缺失** |
+| P-8 | 1 | `membrane.ts`（草稿不逃逸事务） | `membrane.ts`（123 行） | ❌ | **缺失** |
+
+**Σ权重 = 19**（无权重 0 行）。
+
+### `micro`（建在 Pico3 上的本地编码代理）—— `packages/coding-agent/src/experimental/micro`
+
+`README.md:3-5` 自述「Unlike `mini`, it has **no server, worker, RPC, or client/session process split**. One process owns the model runtime, Pico harness, JSONL storage, and TUI」。
+
+| # | 权重 | 能力 | pi 证据（`3390bd936`） | java | 判定 |
+|---|---|---|---|---|---|
+| M-1 | 2 | 会话目录布局 + `--continue` 取该 cwd 最新 | `sessions.ts:22`（`selectSession`）、`:15-17`（`cwdKey` sha256 前 24 位）、`README.md:18`（`~/.pi/agent/experimental/micro-sessions/<cwd-hash>/`） | ❌ | **缺失** |
+| M-2 | 2 | **文件系统锁**（一 session 一进程，`retries: 0` 直接抛） | `sessions.ts:39-44`（`lockfile.lock(path, {realpath:false, retries:0})` ⇒ `Micro session is already open`） | ❌ | **缺失** |
+| M-3 | 2 | Pico3 `JsonlStorage` 落盘（`main.jsonl` + sidecars） | `README.md:19-20`；`runtime.ts`（526）、`tui.ts`（567） | ❌ | **缺失** |
+
+**Σ权重 = 6**（无权重 0 行）。
+
+### 三块合计
+
+**Σ权重 = 44**（durable 19 + pico3 19 + micro 6）；**Σ(w×系数) = 0.0**（**44 行全部缺失**）⇒ **加权完成度 0.0%**。
+
+---
+
 ## 整块缺失：防漂移脚本
 
 **pi-java 有无对应物**：**没有 `scripts/`、没有 `tools/`、没有 ArchUnit / PMD / japicmp / forbidden-apis**
 （`grep -rn "archunit" --include=pom.xml .` 零命中）。
-pi `scripts/` 共 **40 个文件 / 8314 行**，其中 **8 个是真·漂移校验器**（+1 个 `--dry-run` 校验模式 +1 个 lockstep 断言），4 个是它们的测试，其余 26 个是构建/发布/剖析/分析/库/一次性复现。
+pi `scripts/` 共 **40 个文件 / 8325 行**（旧 40 / 8314，**+11**；**文件清单逐条 diff 为空、`check-*.mjs` 仍是 7 个**），其中 **8 个是真·漂移校验器**（+1 个 `--dry-run` 校验模式 +1 个 lockstep 断言），4 个是它们的测试，其余 26 个是构建/发布/剖析/分析/库/一次性复现。
+**重测唯一改动**：`check-entry-graphs.mjs:24` 与 `local-release.mjs:13` 各加一行 `packages/durable` 工作区条目（为容纳新包扩白名单，**不是新门**）；`package.json:21` 的 `check` 链仍是 7 个检查器。
 
 | # | 权重 | 脚本 | 校验什么 | java 有对应物 |
 |---|---|---|---|---|
@@ -367,8 +559,10 @@ pi `scripts/` 共 **40 个文件 / 8314 行**，其中 **8 个是真·漂移校�
 | **⚠️ 新发现（未登记）：SQLite schema 分叉** | `docs/32` **零处**提到 | pi 7 张表 / java 11(+2) 张、**同名只有 3 个**、pi 的 `scalar_values`/`list_values`/`usage_ledger`/`branch_meta` 全缺、java 多出 9 张专用表 | 见上「SQLite schema 逐表对齐」；`grep -n "schema\|branch_meta\|scalar_values\|usage_ledger\|list_values" docs/32-open-items-register.md` 只命中 B8 无关行 |
 | **⚠️ 新发现（未登记）：JSONL v4 头部双向不可读** | `docs/32` 零处 | pi 写 `{v:4, storageVersion:1, …}` 且 `codec.ts:35-46` 强校验 `v===4 && storageVersion>=1`；java 写 `{version:4, …}` 无 `storageVersion` ⇒ **pi 读不了 java 文件，java 读不了 pi 文件**。事务行 kind 交集只有 `entry` | pi `jsonl/types.ts:4-5`、`codec.ts:35-46`、`commit.ts:3-29`；java `JsonlV4Header.java:24-31`、`JsonlCodec.java:85-88/139-183` |
 | **⚠️ 新发现（未登记）：9 处 javadoc 引用不存在的 pi 文件** | `docs/32` 零处 | `pi-java-session-backend-sqlite` 主源码 17 处「aligned with pi `X`」里，**9 处 X 不存在**：`branch-cache.ts`（`BranchCache.java:12`）、`branch-tips.ts`（`BranchTipRows.java:8`）、`storage/facts.ts`（`FactRows.java:8`）、`storage/lanes.ts`（`LaneRows.java:10`）、`storage/records.ts`（`RecordRows.java:16`）、`storage/sessions.ts`（`SessionRows.java:13`，pi 实为 `session/session-row.ts`）、`writer-leases.ts`/`storage/writer-leases.ts`（`WriterLeaseRows.java:8`、`WriterLease.java:8`）、`search-backend.ts`（`SqliteSessionSearch.java:13`）。**`WriterLease.java:8` 最严重**：pi 明文删掉了 writer_lease（`repo.test.ts:368-376`） | `find D:/workplaceForai/pi -iname "<name>"` 逐个验证，全部 ABSENT |
-| **⚠️ 新发现（未登记）：chord 整块零对应、零文档** | `docs/32` 零处；`grep -rn "chord\|Chord" docs/*.md` 零命中 | pi 侧 9375 行（src 5822 + test 3553），是 5 个 pi 包的真依赖 | 见「整块缺失：chord」 |
-| **⚠️ 新发现（未登记）：防漂移脚本整块零对应** | `docs/32` 零处 | pi `scripts/` 40 文件 / 8314 行，其中 8 个真漂移门；pi-java 无 `scripts/`/`tools/`/ArchUnit | 见「整块缺失：防漂移脚本」 |
+| **⚠️ 新发现（未登记）：chord 整块零对应、零文档** | `docs/32` 零处；`grep -rn "chord\|Chord" docs/*.md` 零命中 | pi 侧 **10879** 行（src 6503 + test 4376，**重测后**；旧 9375），是 **7 个** pi 包的真依赖 | 见「整块缺失：chord」 |
+| **⚠️ 新发现（未登记）：pi 新增三块（`durable` / `pico3` / `micro`）零对应、零文档** | `docs/32` 零处；`grep -rli "pico\|durable" --include=*.java .` 零命中 | **重测新增**：`packages/durable`（757 src + 3114 行规范）、`packages/agent/src/harness/pico3`（7994 src）、`packages/coding-agent/src/experimental/micro`（1524）＝ **10275 行，全部无对应物**。pi 包数 **11 → 12** | 见「整块缺失：pi 111 提交新增的三块」 |
+| **⚠️ 取证坑：pi 工作树中途回退（未登记）** | — | 重测期间 `D:/workplaceForai/pi` 的工作树**从 `3390bd936` 翻回 `71dca871b`**（`git rev-parse HEAD` 实测旧提交、`git status` 干净）⇒ 直接读工作树会**静默拿到旧状态**。本文件全部新状态读数改用 **`git show 3390bd936:<path>`**。建议后续复测一律走 `git show`，别信工作树 | `git rev-parse HEAD` 两次读数不一致 |
+| **⚠️ 新发现（未登记）：防漂移脚本整块零对应** | `docs/32` 零处 | pi `scripts/` 40 文件 / **8325** 行（重测后；旧 8314，文件清单未变），其中 8 个真漂移门；pi-java 无 `scripts/`/`tools/`/ArchUnit | 见「整块缺失：防漂移脚本」 |
 | **⚠️ 更正：`/share` 不是 chord 能力** | 任务线索把 `/share` 列在 chord 名下 | **不成立**：pi 的 `/share`（`slash-commands.ts:27` → `interactive-mode.ts:3002-3003` → `session-share.ts:45-46`）**零 chord import**；chord 侧的 `SlashCommands` 服务只注册 `reload`/`model`/`thinking`/`compact`（`services/slash-commands-provider.ts:104/123/173/206`）。⇒ `/share` 该挂 **coding-agent 的 slash 命令面**，不是 chord 面 | `session-share.ts:1-13`（import 列表无 chord）；`slash-commands-provider.ts:104/123/173/206` |
 | **⚠️ 更正：pi 的 `experimental/mini/` 不用 chord** | 若把 `experimental/` 整块算作 chord 消费面会多算 | `mini/`（13 文件）**自带 RPC + stdio**：`mini/worker/run.ts:1-7` docblock 自述「speaks JSON over its **stdio pipes**」，`mini/shared/protocol.ts:56` 自带 `defineService` shim。⇒ 它是**平行实验**，与 chord 无关 | `mini/worker/run.ts:1-7`；`mini/shared/protocol.ts:56` |
 | **⚠️ 环境风险（未登记）：pi 的跨进程传输在 Windows 直接抛** | `docs/32` 零处 | `client/src/unix.ts:35` Windows 抛错；`process.ts:55-70` spawn 带 `windowsHide:true`。pi-java 的开发环境是 Windows 11 ⇒ **该子系统在 Windows 上本就不可用**，做对齐时要考虑可移植性 | `client/src/unix.ts:34-35`；`process.ts:55-70` |
@@ -377,53 +571,66 @@ pi `scripts/` 共 **40 个文件 / 8314 行**，其中 **8 个是真·漂移校�
 
 ## 汇总（未加权）
 
-按**能力单元**逐行统计（存储后端 35 行 + schema 18 行 + 评测 17 行 = **70 行** 参与对齐判定）：
+> ⚠️ **已随 pi `3390bd936` 重算**（评测 17→20 行；整块缺失新增三块 44 行）。
+
+按**能力单元**逐行统计（存储后端 35 行 + schema 18 行 + 评测 20 行 = **73 行** 参与对齐判定）：
 
 | 档 | 存储后端 | SQLite schema | 评测 | 合计 |
 |---|---|---|---|---|
 | **对齐** | 16 | 1 | 4 | **21** |
-| **缺失** | 12 | 15 | 9 | **36** |
+| **缺失** | 12 | 15 | 12 | **39** |
 | **存疑** | 7 | 2 | 4 | **13** |
-| 合计 | 35 | 18 | 17 | **70** |
+| 合计 | 35 | 18 | 20 | **73** |
 
-**未加权完成度（按行数）= 21 / 70 = 30.0%**；**按系数（对齐 1 / 存疑 0.5 / 缺失 0）= (21 + 13×0.5) / 70 = 27.5 / 70 = 39.3%**。
+**未加权完成度（按行数）= 21 / 73 = 28.8%**；**按系数（对齐 1 / 存疑 0.5 / 缺失 0）= (21 + 13×0.5) / 73 = 27.5 / 73 = 37.7%**。
 
-**整块缺失（不参与上面 70 行，单列）**：
+**整块缺失（不参与上面 73 行，单列）**：
 | 子系统 | pi LOC | java LOC | 能力行数 |
 |---|---|---|---|
-| chord | 9375（src 5822 / test 3553） | **0** | 21 行（**20 缺失** + #21 对称 RPC 是 pi 自己也没实现的 planned 项） |
-| 多进程会话架构（`coding-agent/src/experimental`） | 9192 | 0（`pi-java-server` 563 行为单进程近似物） | 4 行 |
-| 防漂移脚本（`scripts/`） | 8314（40 文件） | **0** | 40 行（其中 8 行是真漂移门） |
+| chord | 10879（src 6503 / test 4376；旧 9375） | **0** | 21 行（**20 缺失** + #21 对称 RPC 是 pi 自己也没实现的 planned 项） |
+| 多进程会话架构（`coding-agent/src/experimental`） | 9192（未变） | 0（`pi-java-server` 563 行为单进程近似物） | 4 行 |
+| **`durable` / `pico3` / `micro`（新增）** | **10275**（757 + 7994 + 1524） | **0** | **44 行（全部缺失）** |
+| 防漂移脚本（`scripts/`） | 8325（40 文件） | **0** | 40 行（其中 8 行是真漂移门） |
 
-**若把整块缺失并入总计（按行数）**：对齐 21 / 缺失 36+20+4+40=100 / 存疑 13 / 合计 134 ⇒ **15.7%**。
+**若把整块缺失并入总计（按行数）**：对齐 21 / 缺失 39+20+4+44+40=147 / 存疑 13 / 合计 **182** ⇒ **11.5%**。
 
-**范围外但顺带量到的规模**：pi `packages/agent/src/harness/session` 7108 行 ↔ java `agent-core/.../agent/session` 4194 行（0.59×）；
-pi `packages/evals/src` 1964 ↔ java `pi-java-evals/src/main` 773（0.39×）。
+**范围外但顺带量到的规模**：pi `packages/agent/src/harness/session` 7108 行 ↔ java `agent-core/.../agent/session` 4194 行（0.59×，**两侧均未变**）；
+pi `packages/evals/src` 1446 ↔ java `pi-java-evals/src/main` 773（0.53×）。
 
 ---
 
 ## 加权汇总
 
+> ⚠️ **本表已于 2026-09-20 随 pi `3390bd936` 重算**。旧值括注在「旧」列。判定口径 / 权重规则 / 范围裁决未改动；F9 已裁「chord 与多进程要做」⇒ 其权重照常计入（不再有「待裁」）。
+
 **权重规则**：权重 = 用户可观察影响 × 频率（**3** = 每轮对话都走 / 默认路径；**2** = 每次会话走 / 常用命令；**1** = 低频 / 边缘 / 纯内部；**0** = 非目标，**排除出分母**）。
 **完成系数**：对齐 = 1.0 ／ 存疑 = 0.5 ／ 缺失 = 0。
 
-| 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度（按系数） |
-|---|---:|---:|---:|---:|
-| 存储后端（分母 33 行） | 66 | 36.0 | **54.5%** | 53.0%（17.5/33） |
-| SQLite schema（分母 17 行） | 40 | 5.5 | **13.8%** | 11.8%（2/17） |
-| 评测（分母 17 行） | 36 | 12.5 | **34.7%** | 35.3%（6/17） |
-| **小计（本范围，不含整块缺失）** | **142** | **54.0** | **38.0%** | **38.1%（25.5/67）** |
-| chord（分母 20 行） | 55 | 0.0 | **0.0%** | 0.0% |
-| 多进程（分母 4 行） | 11 | 0.0 | **0.0%** | 0.0% |
-| 防漂移脚本（分母 9 行） | 12 | 2.5 | **20.8%** | 16.7%（1.5/9） |
-| **整块缺失小计** | **78** | **2.5** | **3.2%** | — |
+| 域 | Σ权重（旧） | Σ权重（新） | Σ(w×系数) | 加权完成度（旧→新） | 未加权完成度（按系数） |
+|---|---:|---:|---:|---|---:|
+| 存储后端（分母 33 行） | 66 | **66** | 36.0 | 54.5% → **54.5%**（未变） | 53.0%（17.5/33） |
+| SQLite schema（分母 17 行） | 40 | **40** | 5.5 | 13.8% → **13.8%**（未变） | 11.8%（2/17） |
+| 评测（分母 **17→20** 行） | 36 | **43** | 12.5 | 34.7% → **29.1%** | 30.0%（6/20） |
+| **小计（本范围）** | 142 | **149** | **54.0** | 38.0% → **36.2%** | **36.4%（25.5/70）** |
+| chord（分母 20 行） | 55 | **55** | 0.0 | 0.0% → **0.0%**（未变） | 0.0% |
+| 多进程（分母 4 行） | 11 | **11** | 0.0 | 0.0% → **0.0%**（未变） | 0.0% |
+| 防漂移脚本（分母 9 行） | 12 | **12** | 2.5 | 20.8% → **20.8%**（未变） | 16.7%（1.5/9） |
+| **新增三子系统（分母 44 行）** | — | **44** | **0.0** | — → **0.0%** | 0.0% |
+| **整块缺失小计** | 78 | **122** | **2.5** | 3.2% → **2.0%** | 1.9%（1.5/77） |
 
-**模块合计（含 chord＋多进程）**：Σ权重 220 ／ Σ(w×c) 56.5 ／ **加权完成度 = 56.5/220 = 25.7%**（未加权 27.0% = 27/100）
-**模块合计（不含，若裁决不做 chord＋多进程）**：Σ权重 154 ／ Σ(w×c) 56.5 ／ **加权完成度 = 56.5/154 = 36.7%**（未加权 35.5% = 27/76）
+**模块合计（全部计入，含 chord＋多进程＋新增三块）**：Σ权重 **271** ／ Σ(w×c) **56.5** ／ **加权完成度 = 56.5/271 = 20.8%**（未加权 18.4% = 27/147）
+　　（旧：220 / 56.5 / **25.7%** ⇒ **−4.9 pp**）
+**模块合计（不含 chord＋多进程，但仍含新增三块与脚本）**：Σ权重 **205** ／ Σ(w×c) **56.5** ／ **加权完成度 = 56.5/205 = 27.6%**
+**本范围（仅存储后端＋schema＋评测）**：Σ权重 **149** ／ Σ(w×c) **54.0** ／ **36.2%**
 
-> **裁决影响**：裁掉 chord＋多进程把加权完成度从 25.7% 抬到 **36.7%**（+11.0 pp）—— 因为它们 66 点权重**全部落在缺失**，而分子一分不加。
+> **重测影响**：总分从 25.7% 掉到 **20.8%（−4.9 pp）**，**全部来自 pi 新增的 44 点权重**（`durable` 19 + `pico3` 19 + `micro` 6），它们**一分不得**；
+> 本范围自身只降 1.8 pp（38.0% → 36.2%），且**降因是评测新增 3 行 7 点权重**（Docker 执行 / 变体计划 / TUI 审计），不是既有判定变差 ——
+> **存储后端与 SQLite schema 的加权完成度一字未动**（pi 的 schema 与三后端逐字节未变）。
 
-### 权重 0（排除出分母）的行 —— 共 35 行
+### 权重 0（排除出分母）的行 —— 共 35 行（未变）
+
+| 域 | 行 | 为什么 0 |
+|---|---|---|
 
 | 域 | 行 | 为什么 0 |
 |---|---|---|
@@ -434,7 +641,7 @@ pi `packages/evals/src` 1964 ↔ java `pi-java-evals/src/main` 773（0.39×）�
 | 防漂移脚本 | 30 行非漂移门（`#1`–`#5`、`#11`、`#13`–`#18`、`#21`–`#24`、`#26`–`#36`、`#38`–`#40`） | 构建 / 发布 / 剖析 / 本地分析 / 库 / 夹具 / 测试 / 一次性脚本，不是漂移校验器 |
 | 防漂移脚本 | `#12` `check-ts-relative-imports.mjs` | 是**真漂移门**，但校验「TS 相对 import 不得以 `.js` 结尾」—— **Java 无扩展名 import，语义不适用** ⇒ 非目标 |
 
-### 权重 3 的单元清单（每轮对话都走 / 默认路径）—— 共 42 条
+### 权重 3 的单元清单（每轮对话都走 / 默认路径）—— 共 50 条（旧 42 + 新增 8）
 
 | 域 | # | 单元 | 判定 |
 |---|---|---|---|
@@ -457,25 +664,35 @@ pi `packages/evals/src` 1964 ↔ java `pi-java-evals/src/main` 773（0.39×）�
 | schema | 14 | **`branch_tips`** | **缺失** |
 | schema | — | **触发器 `trg_entries_validate` / `trg_usage_ledger_validate`** | **缺失** |
 | 评测 | 2 | **真 coding-agent harness** | **缺失** |
-| 评测 | 9 | **eval 运行器脚本** | **存疑** |
+| 评测 | 9 | **eval 运行器 CLI** | **存疑** |
 | 评测 | 14 | ChatApi 协议一致性套件 | 对齐 |
 | 评测 | 16 | eval 框架本体 | 对齐 |
+| **评测（新增）** | **18** | **Docker eval 执行** | **缺失** |
 | chord | 1,2,3,4,6,7,8,9,11,12,13,14,15,17,18,19,20 | 17 条（Facet 装配 / FacetEnvironment / 图校验 / 拓扑激活 / Loader / token / 双模式 / Provider 面 / facade / binding / 控制面 / 复制状态 / wire 语法 / Delta / apply / 基础设施 / Node 打包） | **全缺失** |
 | 多进程 | C-1 / C-2 / C-4 | worker 子进程 / 三层拓扑 / 跨进程服务 RPC | **全缺失** |
+| **新增三块** | **D-1 / D-4 / D-7** | **durable**：原子批量提交 / entry 查询扫描+head marker / document | **全缺失** |
+| **新增三块** | **P-1 / P-2 / P-3 / P-6** | **pico3**：会话契约 / `JsonlStorage` / `MemoryStorage` / chord 视图桥 | **全缺失** |
 
-**权重 3 且非对齐 = 36 条**：本范围 **16 条**（存储 `#8`/`#9`/`#13`/`#14`/`#31` 缺失 + `#19` 存疑；schema `#2`/`#4`/`#5`/`#7`/`#10`/`#14`/`触发器` 缺失 + `#3` 存疑；评测 `#2` 缺失 + `#9` 存疑 ⇒ 缺失 13 + 存疑 3）+ chord 17 条 + 多进程 3 条。
+**权重 3 且非对齐 = 44 条**：本范围 **17 条**（存储 `#8`/`#9`/`#13`/`#14`/`#31` 缺失 + `#19` 存疑；schema `#2`/`#4`/`#5`/`#7`/`#10`/`#14`/`触发器` 缺失 + `#3` 存疑；评测 `#2` 缺失 + `#9` 存疑 + **新增 `#18` Docker 缺失** ⇒ 缺失 14 + 存疑 3）＋ chord 17 条 ＋ 多进程 3 条 ＋ **新增三块 7 条**（`durable` D-1/D-4/D-7、`pico3` P-1/P-2/P-3/P-6，**全缺失**）。
 
-**「最该先修」= 本范围那 16 条权重 3 且非对齐的单元** —— 其中 13 条是**纯缺失**（拿 0 分），3 条是**存疑**（拿半分）。
+**「最该先修」= 本范围那 17 条**（旧 16 + 评测新增 `#18` Docker）—— 其中 **14 条是纯缺失**（拿 0 分），3 条是**存疑**（拿半分）。
+**新增三块的 7 条权重 3** 属前瞻性建设（零消费者），不计入「最该先修」。
 
 ### 两条关键差距的加权影响
 
-| 差距 | 涉及行（权重） | 现状 Σ(w×c) | 若修复后 Σ(w×c) | 对「含 chord＋多进程」总分的影响 | 对「不含」总分的影响 |
+| 差距 | 涉及行（权重） | 现状 Σ(w×c) | 若修复后 Σ(w×c) | 对「全部计入」总分的影响 | 对「不含 chord＋多进程」总分的影响 |
 |---|---|---:|---:|---|---|
-| **SQLite schema 分叉** | `schema#1`(2) `#2`(3) `#4`(3) `#5`(3) `#6`(2) `#7`(3) `#10`(3) `#14`(3) `触发器`(3) = **Σ权重 25** | 0 | 25 | 56.5→81.5 ⇒ **25.7% → 37.0%（+11.3 pp）** | 56.5→81.5 /154 ⇒ **36.7% → 52.9%（+16.2 pp）** |
-| **JSONL v4 双向不可读** | `存储#30`(2) `#31`(3) = **Σ权重 5** | 0 | 5 | 56.5→61.5 ⇒ **25.7% → 28.0%（+2.3 pp）** | 56.5→61.5 /154 ⇒ **36.7% → 39.9%（+3.2 pp）** |
-| 两条同时修 | Σ权重 30 | 0 | 30 | 56.5→86.5 ⇒ **25.7% → 39.3%（+13.6 pp）** | 56.5→86.5 /154 ⇒ **36.7% → 56.2%（+19.5 pp）** |
+| **SQLite schema 分叉** | `schema#1`(2) `#2`(3) `#4`(3) `#5`(3) `#6`(2) `#7`(3) `#10`(3) `#14`(3) `触发器`(3) = **Σ权重 25** | 0 | 25 | 56.5→81.5 ⇒ **20.8% → 30.1%（+9.3 pp）** | 56.5→81.5 /205 ⇒ **27.6% → 39.8%（+12.2 pp）** |
+| **JSONL v4 双向不可读** | `存储#30`(2) `#31`(3) = **Σ权重 5** | 0 | 5 | 56.5→61.5 ⇒ **20.8% → 22.7%（+1.9 pp）** | 56.5→61.5 /205 ⇒ **27.6% → 30.0%（+2.4 pp）** |
+| 两条同时修 | Σ权重 30 | 0 | 30 | 56.5→86.5 ⇒ **20.8% → 31.9%（+11.1 pp）** | 56.5→86.5 /205 ⇒ **27.6% → 42.2%（+14.6 pp）** |
 
-**读法**：SQLite schema 分叉是**单点最大拖累**（权重 25，占本范围 Σ权重 142 的 **17.6%**，且一分不得）；JSONL v4 不可读权重只有 5，但它是**用户可见的硬故障**（换机/换工具后会话直接读不出来），修它性价比最高（权重 5 换 3.2 pp）。
+> ⚠️ **重测后分母变了**（220 → 271：新增三块 44 点 + 评测 7 点）⇒ 同样两条差距的**百分点贡献被稀释**（旧 +11.3 pp / +2.3 pp → 新 **+9.3 pp / +1.9 pp**）。
+> 但**绝对权重未变**（schema 分叉仍 25 点、JSONL 仍 5 点），且 **SQLite schema 分叉仍是单点最大拖累**（占全部分母 271 的 **9.2%**、占本范围 149 的 **16.8%**）。
+
+**读法**：
+- **SQLite schema 分叉是单点最大拖累** —— 权重 25，**一分不得**，一项吃掉 9.3 pp。
+- **JSONL v4 不可读权重只有 5，但性价比最高** —— 权重 5 换 1.9 pp（每点权重 0.39 pp，是 schema 分叉的 **1.6 倍**效率），且它是**用户可见的硬故障**（换机/换工具后会话直接读不出来），不是形状偏差。
+- **新增三块（`durable`/`pico3`/`micro`）是新增的第二大拖累** —— 44 点权重全缺失；但它们**零消费者**，属前瞻性建设，修复紧迫度低于上两条。
 
 ---
 
@@ -501,7 +718,7 @@ pi `packages/evals/src` 1964 ↔ java `pi-java-evals/src/main` 773（0.39×）�
 
 ---
 
-## 缺失清单（全部 36 条 + 整块 64 条）
+## 缺失清单（全部 39 条 + 整块 109 条）
 
 ### A. 存储后端（12 条）
 
@@ -540,24 +757,28 @@ pi `packages/evals/src` 1964 ↔ java `pi-java-evals/src/main` 773（0.39×）�
 | M35 | `entries` 表列集分叉（缺 `custom_type`、时间类型 `INTEGER` vs `TEXT`，见 `#2`） | `001_initial.sql:20-30` |
 | M36 | `branch_tips` 缺 `base_branch_id`/`base_seq` ⇒ 无分支分段（见 `#14`） | `branch-entries.ts:97-111` |
 
-### C. 评测（9 条）
+### C. 评测（12 条）
 
-| # | 缺失项 | pi 证据 |
+| # | 缺失项 | pi 证据（`3390bd936`） |
 |---|---|---|
-| M25 | 真 coding-agent harness（临时目录真会话 + transcript/usage 回读） | `evals/src/pi-harness.ts:5-80` |
-| M26 | LLM-as-judge 评分（`createJudge`） | `evals/src/extensions.eval.ts:37`；`models.eval.ts:15` |
-| M27 | baseline vs candidate A/B 对照表 + repetitions | `evals/src/vitest-evals/harness-table.ts:22-43` |
-| M28 | 对照报告汇总（paired metric / correctness lift） | `evals/src/vitest-evals/summary.ts:300/374` |
-| M29 | reporter 落 JSONL 产物（`PI_EVAL_ARTIFACT_DIR`） | `evals/src/vitest-evals/reporter.ts:16` |
-| M30 | 会话 JSONL 快照作为 test attachment | `evals/src/vitest-evals/artifacts.ts:15/18`；`setup.ts:5` |
-| M31 | 从 run 查工具调用（`toolCalls(result.session)`） | `evals/src/docs.eval.ts:5/66` |
-| M32 | docs 审计 eval（逐页文档 vs 实现） | `evals/src/docs.eval.ts:11-52` |
-| M33 | 模型作者 eval（让模型往 models.json 写条目） | `evals/src/models.eval.ts:17-46` |
+| M25 | 真 coding-agent harness（临时目录真会话 + transcript/usage 回读） | `evals/src/harness.ts:471-523` |
+| M26 | LLM-as-judge 评分（`createJudge` + `StructuredOutputJudge`/`ToolCallJudge` + `autoevals`） | `evals/evals/tui.docs.eval.ts:12-13`；`extensions.docs.eval.ts:2` |
+| M27 | baseline vs candidate A/B 对照表 + 变体计划 | `evals/src/report.ts:36-75`；`src/plan.ts:1/39` |
+| M28 | 对照报告汇总（paired metric / correctness lift） | `evals/src/report.ts:359/436` |
+| M29 | reporter 落产物（`session.jsonl`） | `evals/src/report.ts:121-136` |
+| M30 | 会话 JSONL 快照作为 test attachment | `evals/src/report.ts:9` |
+| M31 | 从 run 查工具调用（`toolCalls`） | `evals/evals/documentation-audit.eval.ts:6/57` |
+| M32 | docs 审计 eval（逐页文档 vs 实现） | `evals/evals/documentation-audit.eval.ts:10-57` |
+| M33 | 模型作者 eval（让模型往 models.json 写条目） | `evals/evals/models.docs.eval.ts` + `configured-runtime.ts` |
+| **M37** | **Docker eval 执行**（构建镜像 / 容器内跑 / 隔离 auth） | `evals/src/docker.ts:38/67/126/137` + `evals/docker/*` |
+| **M38** | **文档变体任务计划**（`without_docs`/`with_docs`） | `evals/src/plan.ts:1-59` |
+| **M39** | **TUI 文档审计 eval**（264 行） | `evals/evals/tui.docs.eval.ts:12-13/192` |
 
-### D. 整块缺失：chord（20 条能力 + 4 条多进程）
+### D. 整块缺失：chord（20 条能力 + 4 条多进程 + 44 条新增三块）
 
 见上「整块缺失：chord」表 —— 能力 **#1–#20 全部缺失**（#21 对称 RPC 是 pi 自己也没实现的 planned 项，`PLANNING.md:3`）。
 多进程 C-1 ~ C-4 全部缺失。
+**新增（重测）**：`durable` D-1~D-8（Σ权重 19）、`pico3` P-1~P-8（Σ权重 19）、`micro` M-1~M-3（Σ权重 6）—— **44 条全部缺失**，见「整块缺失：pi 111 提交新增的三块」。
 
 ### E. 整块缺失：防漂移脚本（8 条真漂移门）
 

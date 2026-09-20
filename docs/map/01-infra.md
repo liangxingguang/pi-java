@@ -4,7 +4,11 @@
 > 那份对照表已删（映射到 pi 已删的目录结构、百分比口径与本项目判据不可通约）。
 > 标 `H` 的条目指 `docs/32 §9` 的 H 类；其原文需按 `git log --diff-filter=D` 取回。
 
-> 基准：`pi-java` @ `34849a2`（main，2026-09-20）；`pi` @ 工作区 HEAD（`packages/protocol` 最新提交 `4a6ed0194`）。
+> 基准：`pi-java` @ `34849a2`（main，2026-09-20）；`pi` @ **`3390bd936`**（2026-09-20，工作区 HEAD）。
+> **pi 侧引用已于 2026-09-20 对新 HEAD 全量复测**（旧 HEAD `71dca871b` → 新 `3390bd936`，111 个提交）：
+> `packages/{telemetry,protocol,client,server}/src` 两提交间**零改动**（`git diff --name-only` 空），
+> 四模块的 CHANGELOG/package.json 只有版本号节（0.85.1 → 0.86.1）；全文件 582 条 `file:line` 引用**全部命中、零漂移**。
+> 唯一变化在范围外：`packages/chord/src/delta/`（内部重构）与 `packages/coding-agent/src/experimental/micro/`（新子系统）⇒ 见 §规模与整块缺失的复测注。
 > 判定单位 = **能力单元**（CLI 参数 / RPC 方法 / 事件类型 / 配置键 / span 名 / 契约级导出类型）；内部类与私有方法不计。
 > 每条给两侧 `file:line`。
 
@@ -27,7 +31,8 @@
 证据链：
 
 - pi 现 `packages/protocol/src/` 只有 `cbor/`、`codec.ts`、`framing.ts`、`index.ts`、`protocol.ts`（`ls` 实测）——**没有 `schemas.ts`**。
-- `grep -rl 'server_snapshot\|session_progress\|session_removed\|session_snapshot\|ServerSnapshotSchema\|SessionSnapshotSchema\|SessionPhaseSchema\|TranscriptItemSchema\|ModelMetadataSchema\|SessionMetadataSchema\|ProtocolThinkingLevel' --include='*.ts' packages/` → **全部零命中**。
+- `grep -rl 'server_snapshot\|session_progress\|session_removed\|session_snapshot\|ServerSnapshotSchema\|SessionSnapshotSchema\|SessionPhaseSchema\|TranscriptItemSchema\|ModelMetadataSchema\|SessionMetadataSchema\|ProtocolThinkingLevel' --include='*.ts' packages/` → **全部零命中**（**2026-09-20 在新 HEAD `3390bd936` 复跑，结论不变**）。
+  ⚠️ 单独 grep `CommandSchema` 会命中一处 `packages/coding-agent/src/experimental/session-worker.ts:123` —— 那是**无关**的 `SessionWorkerCommandSchema`（worker 控制协议，5 变体：shutdown/discover_workers/session_demand/operation/operation_cancel），**不是**会话 RPC 的 `CommandSchema`。
 - pi 侧最后一个含 `CommandSchema` 的 `schemas.ts` 是 `1bd9c3f67`（2026-08-08，`PROTOCOL_VERSION = 1`）；它在 `e52de91d0`「feat(protocol): add service-addressed session RPC」（**2026-08-13**）被换成 `rpc.ts` + 瘦身版 `schemas.ts`。该提交同时删掉 `packages/client/src/session-handle.ts`(111)、`packages/client/src/state.ts`(156)、`packages/server/src/protocol.ts`(382)、`packages/server/src/sessions.ts`(346)、`packages/server/src/snapshots.ts`(62)。
 - `git show e52de91d0^:packages/protocol/src/schemas.ts` 与 pi-java 逐项对上：9 个命令同名同字段、`SessionSnapshot` 14 字段同序、`ProtocolErrorCode` 7 值同集、`ServerHello{version, connectionId, snapshot}`、`ServerEvent` 4 变体、`PROTOCOL_VERSION = 1`（= `ProtocolVersion.java:9`）。
 - 反证：pi 的 `Command` 判别键**始终**是 `command`（`1bd9c3f67:385`、`6189e53b3:291`、`e52de91d0^`），pi-java 用的是 `type`（`Command.java:14`、`CommandResult.java:16`）⇒ 连旧 pi 也没完全照抄。
@@ -47,15 +52,19 @@
 
 ## 规模
 
-| 模块 | pi 包 | pi LOC | java LOC | 比例 |
-|---|---|---|---|---|
-| pi-java-telemetry | `packages/telemetry`（`src/`，含 `testing/`） | 935 | 787 | 84% |
-| pi-java-protocol | `packages/protocol`（`src/`） | 869 | 748 | 86% |
-| pi-java-client | `packages/client`（`src/`） | 1135 | 374 | 33% |
-| pi-java-server | `packages/server`（`src/`） | 1966 | 563 | 29% |
+> **2026-09-20 复测**（旧 HEAD `71dca871b` → 新 `3390bd936`）：四模块 `src/` 零改动 ⇒ **LOC 与文件数全部不变**。
+
+| 模块 | pi 包 | pi 文件数 | pi LOC | java 文件数 | java LOC | 比例 | 旧 LOC | 变化 |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| pi-java-telemetry | `packages/telemetry`（`src/`，含 `testing/`） | 6 | 935 | 6 | 787 | 84% | 935 | 不变 |
+| pi-java-protocol | `packages/protocol`（`src/`） | 8 | 869 | 23 | 748 | 86% | 869 | 不变 |
+| pi-java-client | `packages/client`（`src/`） | 8 | 1135 | 7 | 374 | 33% | 1135 | 不变 |
+| pi-java-server | `packages/server`（`src/`） | 16 | 1966 | 14 | 563 | 29% | 1966 | 不变 |
 
 > 两侧均只计 `src/`（`main`）生产代码，不含测试。行数比不构成判据，仅示量级 —— 见 §0.1。
-> 参照量级：pi `packages/chord`（RPC 基座，pi-java 无对应包）**5822 LOC**；pi `packages/server/src/testing/` 431 LOC；pi `packages/telemetry/src/testing/` 339 LOC。
+> 参照量级（**复测后**）：pi `packages/chord`（RPC 基座，pi-java 无对应包）**6503 LOC / 24 文件**（旧 5822 —— 本轮 `src/delta/` 重构 +681）；
+> pi `packages/server/src/testing/` 431 LOC（不变）；pi `packages/telemetry/src/testing/` 339 LOC（不变）。
+> pi 侧测试量：telemetry 243 / protocol 567 / client 799 / server 1057 LOC（均不变）；java 侧：telemetry 678 / protocol 214 / client **0** / server 212 LOC。
 
 ---
 
@@ -184,7 +193,7 @@
 | S15 | `onConnectionCountChanged` 观察者 | 配置键 | `server/src/types.ts:11`、`server/src/server.ts:523-529` | 无 | **缺失** | — | 0 |
 | S16 | `onError` 观察者 | 配置键 | `server/src/types.ts:12`、`server/src/server.ts:531-537` | 无 | **缺失** | — | 0 |
 | S17 | 宿主契约 `ServerHost` / `RoutedSessionHandle` / `RoutedServerServiceHost` / `RoutedServerPresentation` | 契约级导出类型 | `server/src/types.ts:17-64` | `PiServerService.java:14` + `PiSessionRuntime.java:92`（会话控制面，形状不同） | 存疑（形状） | — | 0 |
-| S18 | `SessionRouter`（多 attachment、opening 去重、disconnect 清理、draining） | 契约级导出类型 | `server/src/session-router.ts:32-80` | `PiServer.java:43`（`ConcurrentHashMap` 租约表，无 opening 去重） | 存疑（形状） | — | 0 |
+| S18 | `SessionRouter`（多 attachment、opening 去重、disconnect 清理、draining） | 契约级导出类型 | `server/src/session-router.ts:34-80` | `PiServer.java:43`（`ConcurrentHashMap` 租约表，无 opening 去重） | 存疑（形状） | — | 0 |
 | S19 | Unix 监听器 + `getUnixSocketPath` + `createUnixListener` + `createUnixServer` preset | RPC 方法 | `server/src/transports/unix/address.ts:4`、`listener.ts:388`、`preset.ts:11` | `UnixSocketListener.java:19`（仅 bind/accept；**路径由调用方给，无 serverId→路径派生**） | **缺失** | — | 0 |
 | S20 | `UnixListenerOptions`（`mode` 0o600 / `maxPendingBytes` 慢对端断连 / `gracefulCloseTimeoutMs`） | 配置键 | `server/src/transports/unix/types.ts:3-14`、`listener.ts:191` | 无 | **缺失** | — | 0 |
 | S21 | 服务端测试基础设施（`createTestServer` / `ProtocolTestClient` / `TestHarness` / `TestServerHost` / `Deferred`） | 契约级导出类型 | `server/src/testing/index.ts:1-6`、`testing/client.ts`(183)、`testing/host.ts`(215)、`testing/server.ts`(28) | 无（只有 1 个自建 `MemService` 的集成测试） | **缺失** | — | 0 |
@@ -200,8 +209,8 @@
 | 子系统 | pi LOC | 说明 |
 |---|---|---|
 | **Chord service-addressed RPC 全层**（`RpcTarget`/`ServiceCall` 路由 + `cancel` + `service_update` 订阅/水合 + `attachment` 通知 + 校验型增量解码器） | ~1700（估：`protocol/src/protocol.ts` 111 + `codec.ts` 141 + `server/src/session-router.ts` 312 + `server/src/server.ts` 约 700 + `client/src/client.ts` 约 400） | pi-java **零对应物**。这不是「少几条命令」—— 是**寻址模型不同**：pi 把会话/服务当可寻址端点（`RpcTarget` 两态 + `ServiceCall{serviceId, member, args}`），pi-java 把一切压成 9 个固定命令。见 §0.2。 |
-| **RPC 基座包 `packages/chord`** | 5822 | pi 的 protocol/client/server 三层都建立在 Chord 的 `defineService`/`ReplicatedState`/`ServiceCall`/`ServiceProviderUpdate` 之上；pi-java 无对应包（Maven 依赖图里没有）。**这是上一条缺失的根因。** |
-| **coding-agent 侧的接线层**（client-runtime / coordinator / session-worker / services/*） | 7356（`src/experimental/` 6852 + `src/cli/experimental/` 504） | pi 的 `--serve`/`--connect` 面全在这里；pi-java 的 `pi-java-client`/`pi-java-server` **无任何生产消费者**（§0.3），`PiServerService` 无实现类。 |
+| **RPC 基座包 `packages/chord`** | 6503（**复测**；旧 5822） | pi 的 protocol/client/server 三层都建立在 Chord 的 `defineService`/`ReplicatedState`/`ServiceCall`/`ServiceProviderUpdate` 之上；pi-java 无对应包（Maven 依赖图里没有）。**这是上一条缺失的根因。** 本轮 chord 只动 `src/delta/`（内部重构，+1160/−394），`src/services/`、`src/api.ts`、`src/index.ts`、`src/context`、`src/facets` **零改动** ⇒ 服务寻址 RPC 的基座未变。 |
+| **coding-agent 侧的接线层**（client-runtime / coordinator / session-worker / services/*） | 11197（**复测**：`src/experimental/` 10693 + `src/cli/experimental/` 504；旧 7356） | pi 的 `--serve`/`--connect` 面全在这里；pi-java 的 `pi-java-client`/`pi-java-server` **无任何生产消费者**（§0.3），`PiServerService` 无实现类。本轮 `src/experimental/` **+3841**，其中 **`micro/` 是全新子系统**（8 文件 ~1524 LOC）—— 但 `grep -rn defineService micro/` **零命中**、只 import `chord/context`，**完全不经过 pi-protocol/pi-client/pi-server** ⇒ 它是「进程内控制面」的**另一条路线**，**不构成本层的新能力单元**；另 `client.ts` +15 行是「操作响应可能早于其终局转录事件」的**时序修复**（行为修正，非新单元）。 |
 | **telemetry testing/（conformance 套件 + 类型化 schema 词汇）** | ~490（`testing/` 339 + `index.ts:26-354` 的类型化部分） | pi-java 只有 3 个自建测试类（678 行），无 runner 无关的一致性套件、无 `defineTelemetrySchema`。台账 C7 裁决「倾向不做」，触发条件＝出现 OTel 之外的真 adapter。 |
 | **server testing/ 测试基础设施** | 431 | pi-java 的 server 测试只有一个集成测试（212 行），自建桩；pi 有可复用的 `ProtocolTestClient`/`TestHarness`/`createTestServer`。 |
 | **Unix 传输的可配置面**（权限 mode / 慢对端背压 / 优雅关闭超时 / serverId→路径派生 / 客户端服务发现） | ~380（估：`server/src/transports/unix/` 477 中约 300 + `client/src/unix.ts` 中约 80） | pi-java 两侧各一个极简实现（`UnixSocketListener.java` 77 行 / `UnixSocketTransport.java` 39 行），只有 bind/accept 与 connect。 |
@@ -269,6 +278,11 @@
 
 > 分母口径：`protocol`/`client`/`server` 三模块按用户裁决整体排除（依据＝pi 删了 `schemas.ts`，见 §0.2），
 > 单列一行、权重填 0、不参与计算 ⇒ 模块合计 = telemetry。**未加权列**仍照旧给出三模块的数字，便于对照。
+
+> **2026-09-20 复测（新 HEAD `3390bd936`）**：本层**单元无增无删**、**判定无变动** ⇒ **Σ权重 35 / Σ(w×c) 17.5 / 50.0% 全部不变**。
+> 复测依据：① 四模块 `src/` 两提交间零改动（⇒ 582 条引用零漂移、无行为变更、无删除）；② `packages/chord/src/services|api.ts|index.ts|context|facets` 零改动，
+> 且 chord 全 `src/` 唯一的导出签名增删是 `track<T>(root, options): Tracker<T>` 的**原样位移**（`src/delta/index.ts`）⇒ **服务寻址 RPC 层没有长出新的能力单元**；
+> ③ 新出现的 `coding-agent/src/experimental/micro/` **零 `defineService`**、不 import pi-protocol/pi-client/pi-server ⇒ 不属本层（详见「整块缺失」第 3 行）。
 
 ### 权重 3 的单元（7 条 —— 最该先修）
 
