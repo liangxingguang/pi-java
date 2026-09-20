@@ -60,4 +60,19 @@ public record Usage(
         return new Usage(input, output, 0, 0, null, null,
             totalTokens, Cost.zero());
     }
+
+    /**
+     * Return a copy of this usage with only {@code cost} replaced.
+     *
+     * <p>pi's {@code calculateCost} mutates {@code usage.cost} in place; this record is
+     * immutable, so the calculator returns a fresh {@link Cost} and the caller attaches
+     * it here ({@code docs/42 §8.2}).</p>
+     *
+     * @param cost the new cost breakdown
+     * @return a copy carrying {@code cost} and every token field unchanged
+     */
+    public Usage withCost(Cost cost) {
+        return new Usage(input, output, cacheRead, cacheWrite, cacheWrite1h, reasoning,
+            totalTokens, cost);
+    }
 }
