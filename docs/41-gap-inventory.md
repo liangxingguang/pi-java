@@ -9,7 +9,15 @@
 **范围**：已剔除**裁决 R5**（2026-09-21「只做 pi 主流发布版可达的功能」）判定的非目标 ——
 `chord` · `pico3` · `micro` · `packages/durable` · 多进程子系统 · `protocol`/`client`/`server` 三模块 ·
 pi `harness/` 里 `AgentHarness` 独有物（具名钩子 / `HarnessEvent` / `run_suspend` / effect gate / `reduceLaneSnapshot` / lane）。
-判据与排除清单见 `docs/40 §0.5` 与 `§5.3`。
+
+**R5 判据**：从 **`bin pi → dist/bundle/cli.js ← src/cli.ts → main()`** 这条线可达，才算对齐目标；不可达者权重 0、不进分母、不进缺口表。
+⚠️ **harness 按「细分」口径**（用户 2026-09-21 选定）：只踢 harness **独有**；
+`harness/compaction`、`harness/messages`、`harness/session`、`harness/tools` 在主流 `coding-agent/src/core/*` 有**独立副本** ⇒ **仍算主流**，锚点应改指 `core/*`。
+实证：`AgentHarness` 在 `coding-agent/src/{core,modes}` ＋ `main.ts` ＋ `cli.ts` **零消费者**；主流唯一的值导入是 `core/sdk.ts` 的 `Agent` ＋ `setDefaultStreamFn`（都在**顶层** `agent.ts`/`stream-fn.ts`）。
+
+> ⚠️ **2026-09-21：R5 在 `docs/40` 的落地已被用户指示回退** ⇒ `docs/40` 现在仍是 2026-09-20 口径
+> （**F7/F9 写「要做」**、总表仍含 `chord` 行、头条仍 44.31%），**与 R5 相悖**。本文件的排除面**以 R5 为准**，
+> 不依赖 `docs/40`。R5 若要重新落进 `docs/40`/`docs/32`/`docs/map`，见 §7.4。
 
 ---
 
@@ -663,5 +671,8 @@ JSONL `nextSeq` 高水位字段 ·
 ### 7.4 本清单**未覆盖**
 
 - 未改任何生产代码、未动 `docs/32` 台账、未重算 `docs/40` 总表的分母。
+- ⚠️ **R5 在 `docs/40`/`docs/32`/`docs/map` 的落地未做**（`docs/40` 的那份半成品已按用户指示**回退**）⇒
+  那三处仍是 2026-09-20 口径，**与 R5 相悖**。要重新落地，按「细分口径」推：`docs/40`（总表重算、§1.3/§3.1/§3.4/§5.1/§6/§7/§8/§10）＋
+  `docs/32`（F7/F9 翻「不做」、B62 结案、C12 注明终局）＋ `docs/map/01`·`03`·`06` 的注。
 - 各模块报告的**行号漂移**（agent-core 2 处锚点、tui 8 条、session 4 条、telemetry 3 处、coding-agent 8 条、ai 4 条）**已就地登记在各自 §x.7**，未回改 `docs/map/*`。
 - **R5 的 harness 细分口径**已按裁决执行（只踢 harness 独有）；`docs/map/03` 里引 harness 副本的单元（`compaction`/`messages`/`session`/`tools`）**锚点应改指主流副本**，**未改**，登记在 `docs/map/03`。
