@@ -1,5 +1,6 @@
 package com.pijava.tui.app;
 
+import java.nio.file.Path;
 import java.time.Duration;
 
 import com.pijava.ai.message.AssistantMessage;
@@ -21,6 +22,7 @@ import dev.tamboui.tui.TuiConfig;
 import dev.tamboui.tui.event.Event;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,13 +34,23 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class PiTuiAppInputTest {
 
+    /**
+     * 夹具会话的落盘目录（docs/39 裁决 B）。
+     *
+     * <p>空 args ⇒ 既无 {@code --session-dir} 也无 {@code --no-session} ⇒ 走持久
+     * 路径，在开发者**真实 home** 的 {@code --<模块目录>--} 下每次跑测试留一个会话
+     * 文件。这些残渣只会被别的项目（web 的 {@code ready}）扫到 —— A12 的自放大回路。</p>
+     */
+    @TempDir
+    Path sessionDir;
+
     @Test
     void slashCommandsRespondToSendKey() throws Exception {
         var backend = new FakeBackend();
         var runner = ToolkitRunner.create(
             TuiConfig.builder().backend(backend).build());
         try (var session = AgentSession.create(
-                ArgsParser.parse(new String[] {}))) {
+                ArgsParser.parse(new String[] {"--session-dir", sessionDir.toString()}))) {
             var chatScreen = new ChatScreen();
             var mode = new InteractiveMode(session);
             var dispatcher = new TuiEventDispatcher();
@@ -93,7 +105,7 @@ class PiTuiAppInputTest {
         var runner = ToolkitRunner.create(
             TuiConfig.builder().backend(backend).build());
         try (var session = AgentSession.create(
-                ArgsParser.parse(new String[] {}))) {
+                ArgsParser.parse(new String[] {"--session-dir", sessionDir.toString()}))) {
             var chatScreen = new ChatScreen();
             var mode = new InteractiveMode(session);
             var dispatcher = new TuiEventDispatcher();
@@ -141,7 +153,7 @@ class PiTuiAppInputTest {
             .tickRate(Duration.ofMillis(50))
             .build());
         try (var session = AgentSession.create(
-                ArgsParser.parse(new String[] {}))) {
+                ArgsParser.parse(new String[] {"--session-dir", sessionDir.toString()}))) {
             var chatScreen = new ChatScreen();
             var mode = new InteractiveMode(session);
             var dispatcher = new TuiEventDispatcher();
@@ -200,7 +212,7 @@ class PiTuiAppInputTest {
         var runner = ToolkitRunner.create(
             TuiConfig.builder().backend(backend).build());
         try (var session = AgentSession.create(
-                ArgsParser.parse(new String[] {}))) {
+                ArgsParser.parse(new String[] {"--session-dir", sessionDir.toString()}))) {
             var chatScreen = new ChatScreen();
             var mode = new InteractiveMode(session);
             var dispatcher = new TuiEventDispatcher();
@@ -243,7 +255,7 @@ class PiTuiAppInputTest {
         var runner = ToolkitRunner.create(
             TuiConfig.builder().backend(backend).build());
         try (var session = AgentSession.create(
-                ArgsParser.parse(new String[] {}))) {
+                ArgsParser.parse(new String[] {"--session-dir", sessionDir.toString()}))) {
             var chatScreen = new ChatScreen();
             var mode = new InteractiveMode(session);
             var dispatcher = new TuiEventDispatcher();
@@ -293,7 +305,7 @@ class PiTuiAppInputTest {
         var runner = ToolkitRunner.create(
             TuiConfig.builder().backend(backend).build());
         try (var session = AgentSession.create(
-                ArgsParser.parse(new String[] {}))) {
+                ArgsParser.parse(new String[] {"--session-dir", sessionDir.toString()}))) {
             var chatScreen = new ChatScreen();
             var mode = new InteractiveMode(session);
             var dispatcher = new TuiEventDispatcher();
@@ -346,7 +358,7 @@ class PiTuiAppInputTest {
         var runner = ToolkitRunner.create(
             TuiConfig.builder().backend(backend).build());
         try (var session = AgentSession.create(
-                ArgsParser.parse(new String[] {}))) {
+                ArgsParser.parse(new String[] {"--session-dir", sessionDir.toString()}))) {
             var chatScreen = new ChatScreen();
             var mode = new InteractiveMode(session);
             var dispatcher = new TuiEventDispatcher();
@@ -405,7 +417,7 @@ class PiTuiAppInputTest {
         var runner = ToolkitRunner.create(
             TuiConfig.builder().backend(backend).build());
         try (var session = AgentSession.create(
-                ArgsParser.parse(new String[] {}))) {
+                ArgsParser.parse(new String[] {"--session-dir", sessionDir.toString()}))) {
             var chatScreen = new ChatScreen();
             var mode = new InteractiveMode(session);
             var dispatcher = new TuiEventDispatcher();
@@ -573,7 +585,7 @@ class PiTuiAppInputTest {
         var runner = ToolkitRunner.create(
             TuiConfig.builder().backend(backend).build());
         try (var session = AgentSession.create(
-                ArgsParser.parse(new String[] {}))) {
+                ArgsParser.parse(new String[] {"--session-dir", sessionDir.toString()}))) {
             var chatScreen = new ChatScreen();
             var mode = new InteractiveMode(session);
             var dispatcher = new TuiEventDispatcher();
@@ -618,7 +630,7 @@ class PiTuiAppInputTest {
         var runner = ToolkitRunner.create(
             TuiConfig.builder().backend(backend).build());
         try (var session = AgentSession.create(
-                ArgsParser.parse(new String[] {}))) {
+                ArgsParser.parse(new String[] {"--session-dir", sessionDir.toString()}))) {
             var chatScreen = new ChatScreen();
             var mode = new InteractiveMode(session);
             var dispatcher = new TuiEventDispatcher();

@@ -1,5 +1,7 @@
 package com.pijava.tui.app;
 
+import java.nio.file.Path;
+
 import com.pijava.coding.agent.cli.ArgsParser;
 import com.pijava.coding.agent.core.AgentSession;
 import com.pijava.coding.agent.core.KeybindingsManager;
@@ -9,6 +11,7 @@ import com.pijava.tui.util.InlineTuiShell;
 import com.pijava.tui.util.TuiEventDispatcher;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -21,10 +24,15 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class PiTuiAppSessionChannelTest {
 
+    /** 夹具会话落盘到临时目录（docs/39 裁决 B）：空 args 会写到开发者真实 home。 */
+    @TempDir
+    Path sessionDir;
+
     @Test
     void startInlineOpensTheChannelOnTheSession() throws Exception {
         var shell = InlineTuiShell.createForTest(new FakeBackend());
-        var session = AgentSession.create(ArgsParser.parse(new String[] { }));
+        var session = AgentSession.create(
+            ArgsParser.parse(new String[] {"--session-dir", sessionDir.toString()}));
         var app = new PiTuiApp(new InteractiveMode(session), new ChatScreen(),
             new KeybindingsManager(), new TuiEventDispatcher());
 

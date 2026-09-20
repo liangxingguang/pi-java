@@ -1,5 +1,6 @@
 package com.pijava.tui.app;
 
+import java.nio.file.Path;
 import java.time.Duration;
 
 import com.pijava.ai.message.AssistantMessage;
@@ -16,6 +17,7 @@ import dev.tamboui.toolkit.app.ToolkitRunner;
 import dev.tamboui.tui.TuiConfig;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -24,6 +26,15 @@ import static org.assertj.core.api.Assertions.assertThat;
  * drive the row-level chat viewport through the ScrollInputNormalizer.
  */
 class PiTuiAppScrollTest {
+
+    /**
+     * 夹具会话落盘到临时目录（docs/39 裁决 B）：空 args 会写到开发者真实 home。
+     *
+     * <p>这里是 {@code static} —— 会话由静态助手 {@link #start} 建，静态
+     * {@code @TempDir} 是 JUnit 5 支持的每类一份临时目录。</p>
+     */
+    @TempDir
+    static Path sessionDir;
 
     private static final String SCROLL_UP = "\u001b[<64;5;5M";
     private static final String SCROLL_DOWN = "\u001b[<65;5;5M";
@@ -83,7 +94,8 @@ class PiTuiAppScrollTest {
             .tickRate(Duration.ofMillis(50))
             .mouseCapture(true)
             .build());
-        var session = AgentSession.create(ArgsParser.parse(new String[] {}));
+        var session = AgentSession.create(
+            ArgsParser.parse(new String[] {"--session-dir", sessionDir.toString()}));
         var chatScreen = new ChatScreen();
         var mode = new InteractiveMode(session);
         var dispatcher = new TuiEventDispatcher();
