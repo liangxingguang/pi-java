@@ -1,11 +1,13 @@
 package com.pijava.coding.agent.core.slash;
 
+import java.nio.file.Path;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.pijava.coding.agent.core.AgentSession;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -13,6 +15,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * quit/hotkeys flows work.
  */
 class SlashCommandTest {
+
+    /** 夹具会话落盘到临时目录（docs/39 裁决 B）：空 args 会写到开发者真实 home。 */
+    @TempDir
+    Path sessionDir;
 
     @Test
     void registersAllBuiltinCommands() {
@@ -101,7 +107,8 @@ class SlashCommandTest {
         // Use a session stub: AgentSession cannot be null here, so we build the
         // context with a real session created with minimal args.
         var session = AgentSession.create(
-            com.pijava.coding.agent.cli.ArgsParser.parse(new String[] {}));
+            com.pijava.coding.agent.cli.ArgsParser.parse(
+                new String[] {"--session-dir", sessionDir.toString()}));
         var context = SlashContext.of(session);
         CompletionStage<String> stage = registry.dispatch("/name demo", context);
         var result = stage.toCompletableFuture().join();

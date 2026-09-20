@@ -789,7 +789,7 @@ public final class AgentSession implements AutoCloseable {
     /** The most recent session, or empty ({@code -c}). */
     public Optional<AgentSession> latestSession() {
         if (persistentRepository != null) {
-            return persistentRepository.latest().map(meta -> {
+            return persistentRepository.latest(System.getProperty("user.dir")).map(meta -> {
             SessionPersistence.attach(this, persistentRepository, meta);
             return this;
         });

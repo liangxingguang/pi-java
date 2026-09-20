@@ -39,6 +39,16 @@ class SessionResumeFoldTest {
 
     private static final String LANE = AgentHarness.DEFAULT_LANE;
 
+    /**
+     * The cwd the seeded session is created under.
+     *
+     * <p>⚠️ **docs/39**：必须与 resume 路径查找的 cwd 相同。会话按项目目录存放
+     * （pi {@code getDefaultSessionDir(cwd)}），而 {@code resolvePersistentWeb}
+     * 读的就是 {@code user.dir}；夹具原先写死字面量 {@code "cwd"}，只有在
+     * 「跨全部项目取最新」那种越界扫描下才碰巧能被找到。</p>
+     */
+    private static final String CWD = System.getProperty("user.dir");
+
     private static ProvisionedEntry<Entry.Message> userMessage(String id, String text) {
         return new ProvisionedEntry<>(new Entry.Message(id, 0, null, null,
             new Message.UserMessage(List.of(new ContentBlock.TextContent(text))), null));
@@ -64,7 +74,7 @@ class SessionResumeFoldTest {
         Path root = Files.createTempDirectory("pi-resume-fold");
         var handle = PersistentSessionRepositories.jsonl(root);
         try {
-            var session = handle.create("cwd", null);
+            var session = handle.create(CWD, null);
             session.createLane(LANE, null);
             seed.run(session);
         } finally {
@@ -200,7 +210,7 @@ class SessionResumeFoldTest {
     private static List<LaneRecord.OperationStarted> openOperations(Path root) {
         var handle = PersistentSessionRepositories.jsonl(root);
         try {
-            var meta = handle.latest().orElseThrow();
+            var meta = handle.latest(CWD).orElseThrow();
             return handle.open(meta).findOpenOperations(LANE, 10);
         } finally {
             handle.close();
@@ -211,7 +221,7 @@ class SessionResumeFoldTest {
     private static List<LaneRecord> recordsFrom(Path root) {
         var handle = PersistentSessionRepositories.jsonl(root);
         try {
-            var meta = handle.latest().orElseThrow();
+            var meta = handle.latest(CWD).orElseThrow();
             return handle.open(meta).findRecords(new RecordQuery(
                 LANE, null, null, null, null, EntryOrder.OLDEST_FIRST, null));
         } finally {
@@ -229,7 +239,7 @@ class SessionResumeFoldTest {
 
         var handle = PersistentSessionRepositories.jsonl(root);
         try {
-            var meta = handle.latest().orElseThrow();
+            var meta = handle.latest(CWD).orElseThrow();
             var records = handle.open(meta).findRecords(new RecordQuery(
                 LANE, null, null, null, null, EntryOrder.OLDEST_FIRST, null));
             assertThat(records).hasSize(2);

@@ -149,7 +149,9 @@ final class SessionPersistence {
     static AgentSession resolvePersistentWeb(AgentSession session, Args args) {
         var handle = session.persistentRepository();
         var cwd = System.getProperty("user.dir");
-        var latest = handle.latest();
+        // Scoped to this project's directory (docs/39 §6.1) —— 全项目扫描是 A12
+        // 的根因：`ready` 压在它后面，成本随全部会话文件数线性增长。
+        var latest = handle.latest(cwd);
         return latest.map(meta -> {
             attach(session, handle, meta);
             return session;
@@ -165,7 +167,7 @@ final class SessionPersistence {
         var handle = session.persistentRepository();
         var cwd = System.getProperty("user.dir");
         if (args.continue_()) {
-            return handle.latest().map(meta -> {
+            return handle.latest(cwd).map(meta -> {
                 attach(session, handle, meta);
                 return session;
             }).orElseThrow(() -> new IllegalStateException("No previous session to continue"));

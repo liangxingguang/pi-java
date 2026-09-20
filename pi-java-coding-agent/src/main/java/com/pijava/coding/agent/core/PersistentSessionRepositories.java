@@ -18,10 +18,12 @@ import com.pijava.agent.session.SessionError;
 import com.pijava.agent.session.SessionErrorCode;
 import com.pijava.agent.session.SessionMutation;
 import com.pijava.agent.session.SessionRepository;
+import com.pijava.agent.session.jsonl.DefaultJsonlFileSystem;
 import com.pijava.agent.session.jsonl.JsonlCodec;
 import com.pijava.agent.session.jsonl.JsonlSessionCreateOptions;
 import com.pijava.agent.session.jsonl.JsonlSessionListOptions;
 import com.pijava.agent.session.jsonl.JsonlSessionMetadata;
+import com.pijava.agent.session.jsonl.JsonlSessionRepoFileSystem;
 import com.pijava.agent.session.jsonl.JsonlSessionRepository;
 import com.pijava.agent.session.jsonl.JsonlSessionStorage;
 import com.pijava.agent.session.memory.MemorySessionMetadata;
@@ -37,7 +39,16 @@ final class PersistentSessionRepositories {
 
     /** JSONL repository handle (default backend). */
     static RepositoryHandle jsonl(Path sessionsRoot) {
-        var repo = JsonlSessionRepository.over(sessionsRoot);
+        return jsonl(sessionsRoot, new DefaultJsonlFileSystem());
+    }
+
+    /**
+     * JSONL handle over an injected file system — the seam a fixture needs to
+     * <em>count</em> how many session files a scan opens (docs/39 §6.2), the
+     * deterministic stand-in for the timing question A12 was about.
+     */
+    static RepositoryHandle jsonl(Path sessionsRoot, JsonlSessionRepoFileSystem fs) {
+        var repo = new JsonlSessionRepository(sessionsRoot, fs);
         return new RepositoryHandle() {
             @Override
             public Session<?> create(String cwd, String parentSessionId) {
@@ -55,9 +66,8 @@ final class PersistentSessionRepositories {
             }
 
             @Override
-            public Optional<? extends SessionMetadata> latest() {
-                var all = repo.list(JsonlSessionListOptions.all());
-                return all.stream().findFirst();
+            public Optional<? extends SessionMetadata> latest(String cwd) {
+                return list(cwd).stream().findFirst();
             }
 
             @Override
@@ -136,8 +146,8 @@ final class PersistentSessionRepositories {
             }
 
             @Override
-            public Optional<? extends SessionMetadata> latest() {
-                return list(null).stream().findFirst();
+            public Optional<? extends SessionMetadata> latest(String cwd) {
+                return list(cwd).stream().findFirst();
             }
 
             @Override
@@ -241,7 +251,22 @@ final class PersistentSessionRepositories {
 
         Optional<? extends SessionMetadata> find(String idOrPrefix);
 
-        Optional<? extends SessionMetadata> latest();
+        /**
+         * The most recent session <b>in {@code cwd}'s own project directory</b>,
+         * or empty.
+         *
+         * <p>Scoped to one project, matching pi's {@code continueRecent(cwd)} →
+         * {@code getDefaultSessionDir(cwd)} → {@code findMostRecentSession(dir)}
+         * ({@code session-manager.ts:1589}, {@code :483}, {@code :636}). Scanning
+         * <em>every</em> project instead made {@code -c} and the web {@code ready}
+         * frame cost O(all session files) — measured 1082 ms for 2125 files vs
+         * 5 ms for an empty root (docs/39 §3), and it could resume a session
+         * belonging to a different project.</p>
+         *
+         * <p>A {@code null} {@code cwd} means "no project scope": every directory
+         * (JSONL) / every row (SQLite). Production callers always pass one.</p>
+         */
+        Optional<? extends SessionMetadata> latest(String cwd);
 
         List<? extends SessionMetadata> list(String cwd);
 

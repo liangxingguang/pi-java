@@ -21,6 +21,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class SessionResumeCompactionTest {
 
+    /**
+     * The cwd the seeded session is created under — must match what
+     * {@code resolvePersistentWeb} looks in ({@code user.dir}), because sessions
+     * are stored per project directory (docs/39 §6.1).
+     */
+    private static final String CWD = System.getProperty("user.dir");
+
     private static ProvisionedEntry<Entry.Message> message(String id, String parentId, String text) {
         return new ProvisionedEntry<>(new Entry.Message(id, 0, parentId, null,
             new Message.UserMessage(List.of(new ContentBlock.TextContent(text))), null));
@@ -38,7 +45,7 @@ class SessionResumeCompactionTest {
         // Seed a compacted session: [m1, m2, c1, m3]
         var handle = PersistentSessionRepositories.jsonl(root);
         try {
-            var session = handle.create("cwd", null);
+            var session = handle.create(CWD, null);
             session.appendEntry(message("m1", null, "q1"), "main");
             session.appendEntry(message("m2", "m1", "r1"), "main");
             session.appendEntry(compaction("c1", "m2", "m2"), "main");
@@ -71,7 +78,7 @@ class SessionResumeCompactionTest {
         // Seed a compacted session: [m1, c1, m2]
         var handle = PersistentSessionRepositories.jsonl(root);
         try {
-            var session = handle.create("cwd", null);
+            var session = handle.create(CWD, null);
             session.appendEntry(message("m1", null, "q1"), "main");
             session.appendEntry(compaction("c1", "m1", "m1"), "main");
             session.appendEntry(message("m2", "c1", "q2"), "main");
