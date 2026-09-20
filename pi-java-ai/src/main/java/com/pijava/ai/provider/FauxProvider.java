@@ -1,20 +1,18 @@
 package com.pijava.ai.provider;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.SubmissionPublisher;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.ChatApi;
 import com.pijava.ai.api.ProviderApi;
-import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.ModelCatalog;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
-import com.pijava.ai.message.Message;
+import com.pijava.ai.protocol.AbstractChatApi;
 import com.pijava.ai.stream.StreamEvent;
 
 /**
@@ -145,7 +143,25 @@ public final class FauxProvider implements Provider {
 
     // ── FauxChatApi ───────────────────────────────────────────
 
-    private static final class FauxChatApi implements ChatApi {
+    /**
+     * 夹具的 {@code ChatApi} —— 包⑪（docs/38，台账 A16）**改为继承
+     * {@link AbstractChatApi}**，即走**生产同一条**身份挂载缝。
+     *
+     * <p>此前它直接实现 {@code ChatApi}、**绕过**了那个唯一的挂载点 ⇒ 一切经 faux
+     * 驱动的夹具都在**另一个形状**上跑（消息不带 {@code api}/{@code provider}/
+     * {@code model}/{@code timestamp}）。包⑩ 的 B48（RPC 线在带 timestamp 的消息上
+     * **抛**）就是这么藏住的。</p>
+     *
+     * <p>而且要照 pi：pi 的 faux <b>挂得比 pi-java 还真</b> ——
+     * {@code cloneMessage} 写 {@code api}/{@code provider}/{@code model}/
+     * {@code timestamp}/{@code usage} 五项（{@code ai/src/providers/faux.ts:281-291}），
+     * 默认 {@code api="faux"}（{@code :23}）。⇒ <b>pi-java 的 faux 才是异类</b>。</p>
+     *
+     * <p>继承之后，{@code stream()} 的「先订阅后发射」竞态、{@code streamBlocking}、
+     * {@code send} 三条全由基类提供（{@code send} 经 {@code fromPartial} 产出全字段
+     * 终局消息）—— 这里只需实现协议名与事件重放。</p>
+     */
+    private static final class FauxChatApi extends AbstractChatApi {
 
         private final FauxProvider provider;
         private final long delayMs;
@@ -155,51 +171,27 @@ public final class FauxProvider implements Provider {
             this.delayMs = delayMs;
         }
 
-        /**
-         * Attaches the subscriber <em>before</em> the producer can publish,
-         * mirroring {@link com.pijava.ai.protocol.AbstractChatApi#stream}: the
-         * producer virtual thread starts lazily on the first {@code subscribe},
-         * at most once. {@code SubmissionPublisher.submit} silently discards an
-         * item when no subscriber is attached yet, so a producer started eagerly
-         * would lose the first event.
-         */
         @Override
-        public java.util.concurrent.Flow.Publisher<StreamEvent> stream(
-                StreamRequest request, ApiOptions options) {
-            var publisher = new java.util.concurrent.SubmissionPublisher<StreamEvent>();
-            var started = new AtomicBoolean();
-            return subscriber -> {
-                publisher.subscribe(subscriber);
-                if (started.compareAndSet(false, true)) {
-                    Thread.startVirtualThread(() -> {
-                        try {
-                            for (var event : provider.nextResponse()) {
-                                if (delayMs > 0) Thread.sleep(delayMs);
-                                publisher.submit(event);
-                            }
-                            publisher.close();
-                        } catch (Exception e) {
-                            publisher.closeExceptionally(e);
-                        }
-                    });
-                }
-            };
+        public String apiName() {
+            // pi 的 faux 默认 api 字面量（providers/faux.ts:23）。
+            return "faux";
         }
 
         @Override
-        public StreamIterator streamBlocking(StreamRequest request, ApiOptions options) {
-            return StreamIterator.from(provider.nextResponse());
-        }
-
-        @Override
-        public Message send(StreamRequest request, ApiOptions options) {
-            var blocks = new ArrayList<ContentBlock>();
+        protected void streamInternal(StreamRequest request,
+                SubmissionPublisher<StreamEvent> publisher) {
             for (var event : provider.nextResponse()) {
-                if (event instanceof StreamEvent.StreamDone done) {
-                    return new Message.AssistantMessage(done.partial().content());
+                if (delayMs > 0) {
+                    try {
+                        Thread.sleep(delayMs);
+                    } catch (InterruptedException e) {
+                        // 基类按「异常 ⇒ closeExceptionally」处理；中断也走那条路。
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException("interrupted while replaying", e);
+                    }
                 }
+                publisher.submit(event);
             }
-            return new Message.AssistantMessage(blocks);
         }
     }
 }

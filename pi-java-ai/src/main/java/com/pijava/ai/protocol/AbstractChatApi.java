@@ -171,11 +171,11 @@ public abstract class AbstractChatApi implements ChatApi {
                 downstream.onNext(event);
                 return;
             }
-            var attached = event.partial().withIdentity(
+            var attached = withTerminalUsage(event, event.partial().withIdentity(
                 apiName(),
                 request.model() == null ? null : request.modelId().provider(),
                 request.model() == null ? null : request.modelId().modelName(),
-                timestamp);
+                timestamp));
             downstream.onNext(StreamEvent.withPartial(event, attached));
         }
 
@@ -189,6 +189,48 @@ public abstract class AbstractChatApi implements ChatApi {
             downstream.onComplete();
         }
     }
+
+    /**
+     * 终局事件（{@code StreamDone}／{@code StreamError}）的快照补计量：车道整条流
+     * 没报过用量（{@code StreamPartialBuilder} 的 {@code usage} 字段仍为 null）⇒
+     * 取事件自带的 {@link com.pijava.ai.stream.StreamEvent.UsageInfo}，没有就给
+     * {@link #ZERO_USAGE}。中间帧**不管** —— 车道可能流到一半才报用量，那时键缺席
+     * 与 pi 的「还没有」同形。
+     *
+     * <p><b>为什么归缝管</b>：pi 的 {@code AssistantMessage.usage} 是<b>必填</b>
+     * （{@code ai/src/types.ts:439}），且 pi <b>没有任何一条路径</b>会产出没 usage 的
+     * 助手消息 —— 11 个 provider 适配器、{@code lazy.ts}、中止/错误路
+     * （{@code agent.ts:511-527} 的 {@code EMPTY_USAGE}、{@code recovery.ts:28-40}
+     * 的 {@code ZERO_USAGE}）全都显式给零值（包⑨ B41 逐条核过，{@code docs/36}）；
+     * pi 的 faux 更是每条消息都经 {@code cloneMessage} 写
+     * {@code usage: cloned.usage ?? DEFAULT_USAGE}（{@code providers/faux.ts:289}）。</p>
+     *
+     * <p>不影响既有车道：正常报过用量的流在 {@code partial.usage() != null} 处直接返回。</p>
+     *
+     * <p>⚠️ <b>边界</b>：生产者<b>自己挂过身份</b>的事件（{@code partial.api() != null}，
+     * 即 conformance 桩那一类）在 {@code onNext} 的早返回处走掉，<b>不经这里</b> ——
+     * 那是「生产者已成形」的通道，本包不动它。</p>
+     */
+    private static AssistantMessage withTerminalUsage(
+            StreamEvent event, AssistantMessage partial) {
+        if (partial.usage() != null) {
+            return partial;
+        }
+        return switch (event) {
+            case StreamEvent.StreamDone done -> partial.withUsage(
+                done.usage() != null ? done.usage() : ZERO_USAGE);
+            case StreamEvent.StreamError ignored -> partial.withUsage(ZERO_USAGE);
+            default -> partial;
+        };
+    }
+
+    /**
+     * 零用量值对象（pi 的 {@code DEFAULT_USAGE}／{@code EMPTY_USAGE} 对应物）。
+     * {@code partial} 组件为 null —— 与 {@code StreamPartialBuilder} 把用量挂到快照上
+     * 时的形状一致（那是「消息的 usage 字段」，不是「usage 事件的快照」）。
+     */
+    private static final com.pijava.ai.stream.StreamEvent.UsageInfo ZERO_USAGE =
+        new com.pijava.ai.stream.StreamEvent.UsageInfo(0, 0, null);
 
     /**
      * Provider-specific streaming logic.
