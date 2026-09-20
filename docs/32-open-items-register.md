@@ -20,7 +20,7 @@
 | 档 | 范围 | 本次做法 |
 |---|---|---|
 | **已复核** | `docs/31` 的二十一处登记表（§8.2 / §8.3 / §8.6 / §8.7 / §8.9 / §8.15 / §8.18 / §8.19 / §8.21.5 / §8.22.5 / §8.23.5 / §8.24.5 / §8.25.5 / §8.26.5 / §8.27.4 / §8.28.5 / §8.28.7 / §8.29.6 / §8.30.8 / §8.31.4） | 逐节读原文核对，带**逐字标记**与行号 |
-| **待复核** | `docs/31` **之外**的文档与主源码 javadoc —— **69 条**（H 类） | 机械扫描，**未逐条复核**，只保证出处准确 |
+| **待复核** | `docs/31` **之外**的文档与主源码 javadoc —— **62 条**（H 类；⚠️ **2026-09-20 更正：原记 69，实测 §9.1–§9.4 共 62 行**；§9.5 另有 10 条**误报样本**，明确「别去追」，不计入） | 机械扫描，**未逐条复核**，只保证出处准确 |
 
 ### 0.2 一个必须先说的更正
 
@@ -39,16 +39,41 @@
 
 ## 1. 汇总
 
-| 类 | 含义 | 条数 | 谁能推进 |
-|---|---|---:|---|
-| **A** | 要**证据**才能定案（多数要先读 pi 源码） | 14 | 我（读 pi 源码 / 清点） |
-| **B** | **功能缺口**（pi 有、pi-java 无） | 41 | 我（另立包，多数需先出设计文档） |
-| **C** | 已裁决**不改 / 不做**，带触发条件 | 11 | 不推进，除非触发条件成立 |
-| **D** | 小账（遥测/注释级，一处一行） | 8 | 我，随时可做 |
-| **E** | 结构债（>500 行文件等） | 8 | 我，与功能包搭车 |
-| **F** | **待用户拍板** | 6 | **你** |
-| **G** | 已结案（**别重开**） | 22 | —— |
-| **H** | `docs/31` 之外，机械扫描**待复核** | 69（有重复，见 §9） | 我（逐条复核后才能定档） |
+| 类 | 含义 | 表内行数 | **未结** | 谁能推进 |
+|---|---|---:|---:|---|
+| **A** | 要**证据**才能定案（多数要先读 pi 源码） | 17 | **14** | 我（读 pi 源码 / 清点） |
+| **B** | **功能缺口**（pi 有、pi-java 无） | 66 | **39** | 我（另立包，多数需先出设计文档） |
+| **C** | 已裁决**不改 / 不做**，带触发条件 | 12 | —— | 不推进，除非触发条件成立 |
+| **D** | 小账（遥测/注释级，一处一行） | 10 | —— | 我，随时可做 |
+| **E** | 结构债（>500 行文件等） | 8 | —— | 我，与功能包搭车 |
+| **F** | **待用户拍板** | 9 | **9** | **你** |
+| **G** | 已结案（**别重开**） | 34 | —— | —— |
+| **H** | `docs/31` 之外，机械扫描**待复核** | **62**（§9.1–§9.4 实测；⚠️ 原记 69） | —— | 我（逐条复核后才能定档） |
+
+**真正的闸门 = A 未结 14 ＋ B 未结 39 ＋ F 待裁 9 ＝ 62 条。** C/D/E 三类随时可做，没有一条阻塞合并。
+
+### 1.0 计数方法与 2026-09-20 重建
+
+| | 旧表 | 实测（重建后） | 差 |
+|---|---:|---:|---|
+| A 表内行数 | 14 | **17** | −3（旧表写的是**未结**数，与另两类不同口径） |
+| B 表内行数 | 41 | **66** | **−25** |
+| C / D / F | 11 / 8 / 6 | **12 / 10 / 9** | 各 +1 / +2 / +3（本次新登记 C12 / D9 / D10 / F7–F9） |
+| G 表内行数 | 22 | **34** | **−12**（另有 1 行此前**塞了两条**，已拆） |
+
+**根因：旧表的「条数」列在三种语义间摇摆** —— A 列写**未结**数，B 列写**递增记账**（每次登记加一、结案不减；§1.1 里那句自述「本类历来的『条数』是递增记账，我不去重构它的定义」即此），C–F 列写**总行数**。三种语义并排在一列，就是「还剩多少没对齐」一直答不准的直接原因。
+
+**本表的计数方法**（可复现）：
+
+```
+表内行数 = grep -c '^| X[0-9]* |' docs/32-open-items-register.md
+未结     = 表内行数 − 行内含结案标记（见 G 类 / 已修 / 已实施 / 已落地 / 结案 / 无遗留）的条数
+```
+
+本次重建同时修掉的**结构缺陷**：① §4「C 类」**小节标题此前不存在**（C 表直接挂在 `---` 后，§3 跳到 §5）⇒ 已补；
+② `B46` 与 `B47` **挤在同一行**（`||` 分隔）⇒ 已拆，任何按 `^| B` 抓的脚本此前都会漏 B47。
+
+### 1.1 变更记录（保留原文，按时间；**其中「条数」一律按当时的递增记账口径读**）
 
 > B/C/F 三类的本次增量（B6–B9 / C8–C10 / F6）全部来自 §8.31 的登记表，实现时又新发现两条（B9/C10）。
 > **2026-09-18（包①，§8.33）后的变动**：B6/B7/B9 与 P1/P4/P6 实施 ⇒ 移入 G（+5 行）；B4 **结案为不做** ⇒
@@ -173,8 +198,8 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | A1 | `Entry` 八种类型 ↔ `ContextEntries.toMessages` 的转换**逐项核对** | `docs/31:467` | 未核。「⇒ 仍待做」字样仍在 |
 | A2 | 下游消费者不依赖 `transcript()` —— **未清点** | `docs/31:471` | TUI / web / RPC / SQLite 四个读取点未清点，`messages` 取代它是否等价未验证 |
 | A3 | `AgentLoopTurnUpdate.thinkingLevel` **差分结构上覆盖不到**（S9） | `docs/31:584` | 该通道不出现在任何帧上；要覆盖必须**先把形状折进帧**，否则「加了剧本」是错觉 |
-| A4 | 运行中手动 `/compact` **有没有门** —— 先取证 pi | `docs/31:2503` | pi 侧未取证；**这是行为改动，不是归属改动** |
-| A5 | 并发 prompt **有没有门** —— 同样先取证 pi | `docs/31:2502` | 同上；且要的是一条**会话级**串行保证 |
+| A4 | 运行中手动 `/compact` 的**中止语义** —— 原问法是「有没有门」 | `docs/31:2503` | ⚠️ **2026-09-20 取证更正：原问法错了**。pi **没有 `isRunning` 门**，但 `compact()` **第一行就是 `await this.abort()`**（`agent-session.ts:1967-1968`）—— 先中止在飞运行再压缩。pi-java **两者都没有**（`CompactionExecutor:77-83`、`RunLifecycle:237-239`、`AgentSession:641`）⇒ **真缺口是「缺 abort-first」，不是「缺门」**。修法是行为改动 ⇒ 见 F4 |
+| A5 | 并发 prompt 的**路由语义** —— 原问法是「有没有门」 | `docs/31:2502` | ⚠️ **2026-09-20 取证更正：原问法错了**。pi-java **有门**（`PiLaneEngine.java:90-91` 在 `lane.isRunning()` 时抛 `IllegalStateException`）。真差的是 pi 的两条**路由语义**：① 运行中 prompt 必须显式带 `streamingBehavior`（`'steer'`\|`'followUp'`），否则抛**带指引的**错误（`agent-session.ts:1219-1232`）；② **压缩中禁 prompt**（`:1192-1196`）。修法是行为改动 ⇒ 见 F4 |
 | A6 | 宿主消费者的**并发契约**未声明（TUI / RPC / web） | `docs/31:1779` | 收敛到 `PiLaneSink.emit` 的锁后仍互斥，但「总是哪个线程」不再唯一，无显式声明 |
 | A7 | `retry.provider.*`（timeoutMs/maxRetries/maxRetryDelayMs）↔ ai HTTP `RetryPolicy` 的映射对照 | `docs/31:1548` | 独立清点项，未做 |
 | A8 | `agent_end` **载荷全量对照**（pi = 本 pass `newMessages`；pi-java = `accumulatedMessages`） | `docs/31:1554` | 3d 只改了频率，载荷未对照 |
@@ -211,16 +236,16 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | B13 | **重放路径产不出 `redacted_thinking` 线格** —— pi-java 全仓没有代码路径能发出该块 | §8.34.2-2（`docs/31:4201`） | `redacted()` 在 `pi-java-ai` 生产代码**零读点** ⇒ redacted 块落进 `AnthropicMessagesApi:323-327` 的有签名分支，被当作**带签名的 thinking 块**发出、签名位放的是**加密载荷**。pi 的对照是 `anthropic-messages.ts:1289-1295`。归包②。**已实施**（§8.34.11：`appendThinkingBlock` 的 redacted 分支 → `ContentBlockParam.ofRedactedThinking`，载荷进 `data`）⇒ 见 G 类 |
 | B14 | **`transform-messages.ts` 的其余四条变换全部缺失**（一条聚合行） | §8.34.3（`docs/31:4242`） | ① 图片降级为占位文本（`transform-messages.ts:35-57`，按 `model.input` 判定）；② 跨模型剥离 toolCall 的 `thoughtSignature`（`:131-134`）；③ 跨模型归一 toolCall id（`:136-142`）；④ **孤儿 toolCall 合成 `toolResult`**（`:158-220`「No result provided」）＋ 跳过 `error`/`aborted` 助手消息（`:194-197`）。④ 是**真功能**、其余三条是清理 ⇒ 不塞进包②（会让 200 行变 800 行），另立 |
 | B15 | **扩展开启（extended thinking）在生产上不可达** —— 目录的 `reasoning` 标记永远传不到请求 | §8.34.4-决策 5 | 链路逐段实测：`models.json` 的 `reasoning:true` 只落成 `ModelCapability.THINKING`（`ModelsJsonConfig:191-193`），`thinkingLevelMap` 硬写 `empty()`（`:208`）；`HarnessConfig.thinkingLevelMap` 默认 `empty()`（`:159`）且 `Builder.thinkingLevelMap` **零主源调用者**；`forLevel` 在空 map 上**恒返回 `ThinkingConfig.OFF`**（`ThinkingLevelMap:26-34`）⇒ `DefaultProviders:111-113` 门恒假 ⇒ `extra` 永无 `thinking.budgetTokens` ⇒ `AnthropicMessagesApi:269-276` 永不发 `thinking`。**`ThinkingLevelMap.of(` 亦只有测试调用者** ⇒ 非空 map 在生产上**不可构造**。根因＝「**目录元数据 → 请求路径**」这条通道**整体缺失**（B8 的 `compat` 是同一断链的**第二个**受害者）⇒ 两者应合为**一次**投送修复。**它改变「发什么请求」**（比包② 重）⇒ 须**自己一包**。⚠️ `StreamSimple:44` 虽手持 `ModelInfo`，但**生产上是死的**（3 个调用点全在 `StreamSimpleTest`）—— 别把它当接缝。**⚠️ 投送链那半边已由包② 修好（§8.34.11）**：`StreamRequest` 现带整个 `ModelInfo`、`DefaultProviders.streamBlocking` 已投真目录元数据 ⇒ **本行只剩「`thinkingLevelMap` 生产上不可构造」这半边**，难度显著下降 |
-| B16 | **`sanitizeSurrogates` 全仓无对应物** —— 出站文本未做孤对代理清理 | §8.34.11 | pi 在自己的**每个** API 适配器里都用它包裹出站 text/thinking（全仓 **54 处**调用），pi-java 自己的模块**零处**（`.agents/` 里 vendored tamboui 的那几处是宽度计算，无关）。孤对代理字符会让请求体 JSON 非法 ⇒ provider 400。**跨车道**（不是 Anthropic 独有）⇒ 须先设计「在哪一层做一次」而不是逐适配器抄 |
-| B17 | **Anthropic 车道静默丢弃图片块** | §8.34.11 | `AnthropicMessagesApi.toBlockParams` 只处理 Text/Thinking/ToolUse ⇒ `ImageContent`/`UrlImageContent`/`DiffContent` **无声消失**。pi 在 user 车道把它们映射成 `{type:"image",source:{type:"base64",...}}`（`anthropic-messages.ts:1250-1260`）。**不是「图片进不了 Message」**：Google / OpenAI-Responses / PiMessages 三条车道**都**映射了图片 ⇒ 是 Anthropic 车道独缺 |
+| B16 | **`sanitizeSurrogates` 全仓无对应物** —— 出站文本未做孤对代理清理 | §8.34.11 | pi 在自己的**每个** API 适配器里都用它包裹出站 text/thinking（全仓 **57 处**调用；⚠️ **2026-09-20 更正：原记 54，实测 57**），pi-java 自己的模块**零处**（`.agents/` 里 vendored tamboui 的那几处是宽度计算，无关）。孤对代理字符会让请求体 JSON 非法 ⇒ provider 400。**跨车道**（不是 Anthropic 独有）⇒ 须先设计「在哪一层做一次」而不是逐适配器抄 |
+| B17 | **图片块在四条车道里被三条静默丢弃**（原记「Anthropic 车道独缺」） | §8.34.11；**2026-09-20 扩范围（`docs/40` 取证）** | `AnthropicMessagesApi.toBlockParams` 只处理 Text/Thinking/ToolUse ⇒ `ImageContent`/`UrlImageContent`/`DiffContent` **无声消失**。⚠️ **2026-09-20 更正两处**：① **不是 Anthropic 独缺** —— `OpenAICompletionsApi.buildParams`（`:417`/`:427`/`:330`）用 `extractText()` 把 user 与 toolResult **拍平成纯文本**、`MistralConversationsApi`（`:290`/`:330`）同样 ⇒ **四条车道丢三条**，pi 侧三条都映射（`openai-completions.ts:1248-1250`/`:1415-1416`、`mistral-conversations.ts:798`）；② **漏了 toolResult 路径** —— `toToolResultBlock`→`toTextBlocks`（`:536-545`）只收 `TextContent` ⇒ **`ReadTool`（`ReadTool.java:86` 返回 `ImageContent`）读一张图，模型完全看不到图**，而 pi 的 `convertContentBlocks`（`anthropic-messages.ts:121-160`，toolResult 调用点 `:1206`）两条路径都处理。**后果是静默数据丢失**（不报错、内容为空），是本台账里唯一的这一类 |
 | B18 | **`PiMessagesApi` 对任何 thinking 块丢签名与 `redacted`** | §8.34.11-（1） | `PiMessagesApi:225-226` 一律送 `{type:"thinking","thinking":text}`。**包② 刻意没给它挂闸** —— 它是 pi-java **自己的** wire 形状（pi 的 6 个请求构建器里无对应物），在一条 pi 没有的车道上按 pi 的闸改行为＝**发明**行为。故单独登记，让它自己的规则被独立设计 |
-| B19 | **`openai-completions` 车道整段丢弃响应侧 reasoning（收），重放侧又把字段名写死成 `deepseek`（发）** —— **本次事故根因** | §8.35.1（`docs/31:4604`） | **收**：`OpenAICompletionsApi:96-105` 只读 `delta.content()`，`delta._additionalProperties()` **从未被查**（SDK 侧可读 —— `ChatCompletionChunk$Choice$Delta` 有该方法，已 `javap` 实证）；pi 依次试 `reasoning_content`/`reasoning`/`reasoning_text` 并**用命中的字段名当 `thinkingSignature`**（`openai-completions.ts:597-620`、`:615-618`）⇒ 重放时**自描述**。**发**：`:235` 只给 `"deepseek".equalsIgnoreCase(provider)` 发 `reasoning_content`，pi 则按**签名**回填（`:1310-1318`，**无 provider 门**）。事故形态：纯推理回复 ⇒ 可见内容为空 ⇒ 前端静默停住；带答案回复 ⇒ 计费与可见严重不符（复现 P2：**127 计费 / 2 可见**）。⚠️ 同族但**不在本行**：`reasoning_details`（OpenRouter/llama.cpp 的结构化形状，`:661-671`/`:342`/`:1283`）—— 本行只覆盖三个**纯文本**字段名。**已实施（§8.35.13，4 个提交）**：**收** `b916d29`（探三个线格字段、命中的名字写成 signature、收尾按建块序发）、**发** `478fe91`（签名自描述回放 + deepseek 家族空串回填 + 落线跳过规则 + `baseUrl` 请求期探测；旧守卫多出的 `|| !reasoning.isEmpty()` 正是「只带 thinking 的消息被发出去」的来源）、models.json 暴露 `7369ae6`；顺带把两个存量用例按真规则改写（`nonDeepseekThinkingIsNotRoundTripped` → `unsignedThinkingIsNotRoundTripped` —— 决定权在签名、不在 provider 名）。发侧 11/11（此前 8 红），三条「两侧同绿」对照各做变异探针恰一条红 ⇒ 见 G 类 |
+| B19 | **`openai-completions` 车道整段丢弃响应侧 reasoning（收），重放侧又把字段名写死成 `deepseek`（发）** —— **本次事故根因** | §8.35.1（`docs/31:4604`） | **收**：`OpenAICompletionsApi:96-105` 只读 `delta.content()`，`delta._additionalProperties()` **从未被查**（SDK 侧可读 —— `ChatCompletionChunk$Choice$Delta` 有该方法，已 `javap` 实证）；pi 依次试 `reasoning_content`/`reasoning`/`reasoning_text` 并**用命中的字段名当 `thinkingSignature`**（`openai-completions.ts:597-620`、`:615-618`）⇒ 重放时**自描述**。**发**：`:235` 只给 `"deepseek".equalsIgnoreCase(provider)` 发 `reasoning_content`，pi 则按**签名**回填（`:1310-1318`，**无 provider 门**）。事故形态：纯推理回复 ⇒ 可见内容为空 ⇒ 前端静默停住；带答案回复 ⇒ 计费与可见严重不符（复现 P2：**127 计费 / 2 可见**）。⚠️ 同族但**不在本行**：`reasoning_details`（OpenRouter/llama.cpp 的结构化形状，`:661-671`/`:342`/`:1283`）—— 本行只覆盖三个**纯文本**字段名。**已实施（§8.35.13，4 个提交）**：**收** `b916d29`（探三个线格字段、命中的名字写成 signature、收尾按建块序发）、**发** `478fe91`（签名自描述回放 + deepseek 家族空串回填 + 落线跳过规则 + `baseUrl` 请求期探测；旧守卫多出的 `\|\| !reasoning.isEmpty()` 正是「只带 thinking 的消息被发出去」的来源）、models.json 暴露 `7369ae6`；顺带把两个存量用例按真规则改写（`nonDeepseekThinkingIsNotRoundTripped` → `unsignedThinkingIsNotRoundTripped` —— 决定权在签名、不在 provider 名）。发侧 11/11（此前 8 红），三条「两侧同绿」对照各做变异探针恰一条红 ⇒ 见 G 类 |
 | B20 | **stop reason 映射跨车道缺失 —— 四条车道里三条「不读」或「原样透传」** | §8.35.2（`docs/31:4657`） | 逐车道审计（全部实测）：① **`AnthropicMessagesApi:190-193`** 处理 `message_delta` 时**只取 `usage`**，`event.delta.stop_reason` **全文件零读取**（pi `anthropic-messages.ts:743-745`），而 `:94` 硬写 `toolCallSeen[0] ? "tool_use" : "end_turn"` ⇒ `max_tokens`/`refusal`/未知值**全部丢失**；② **`OpenAICompletionsApi:132`** 硬写 `toolCall.started() ? "tool_use" : "stop"`（pi `:571-577`）；③ **`GoogleGenerativeAiApi:149-156`** 把枚举 `toString().toLowerCase()` 原样透传（`MAX_TOKENS`→`max_tokens`、`SAFETY`→`safety`，pi `google-shared.ts:379-411` 分别是 `length`/`error`）；④ **`MistralConversationsApi:151-154`** 半映射（无 `error` 兜底、无 `model_length`、无 `errorMessage`，pi `mistral-conversations.ts:926-941`）。只有 `ResponsesStreamProcessor:190-197` ~~已对齐 pi~~（⚠️ **该判定已作废**，见 B25/B26 段落与 §8.35.14 第四节：复核出 α/β/γ/δ/ε **五处**差距）。**功能后果（主车道 Anthropic）**：`length` **永不可达** ⇒ `PiLoopRunner:108` 的「length 截断 ⇒ 本回合**全部**工具调用判失败」（pi `agent-loop.ts:206-208`）**永不生效**（截断的工具参数会被**执行**），且 `ContextOverflow:118`/`:138`、`CompactionExecutor:310`、`PiLaneSink:367`、`LlmSummaryGenerator:160` 五处 `length` 分支同时是死代码。⚠️ `"end_turn"` 是 pi-java **自有**取值（`AssistantMessage:32`/`StreamEvent:199` 都列它，而 `LaneState:261` 的词汇表**不列** ⇒ 自家也不一致），pi 该处是 `"stop"` ⇒ **转录载荷分歧**；改不改口径＝~~**裁决点 D2**（§8.35.8）~~ **已裁：改成 `"stop"`**。<br>**2026-09-19 设计定稿（§8.35.14，待审）**：D1=**直接照 pi 严格版**（`supportsFinishReason` 默认 true，缺 `finish_reason` ⇒ 抛；原「P0 只读探针」首提交**被否决**，改为提交 ④ 的**真实车道门**）、D2=改成 `"stop"`、D3=Google/Mistral **并入**但**分车道提交**、D4=B10 先行（已执行）。**同批撤回两处旧结论**：① §8.35.2 末行「Responses ✅ 已对齐」**作废**（α/β/γ/δ/ε 五处）；② 「`rawStopReason` 零消费者 ⇒ 不移植」的**结论作废**（读点在**生产者层** Google 车道 2 处，是 `"Provider stopped with: X"` 文案的唯一来源）⇒ 改列 **D5**（建议全量移植，另立 B25）。另新发现：pi 五条车道的 partial 初值 `stopReason:"pending"` ⇒ **每一条中间帧**载荷都不同（B26）。实施计划 ⑩ 个提交（① `supportsFinishReason` → ② Anthropic 映射收尾 → ③ `end_turn`→`stop` → ④ completions 严格收尾 → ⑤ Google → ⑥ Mistral → ⑦ Responses α–ε → ⑧ 跨层回归门 → ⑨⑩ 依 D5）<br>**2026-09-19 实施进度（§8.35.15 实施记录）**：**③–⑩ 全部落地**（`d2254a2`/`811aa31`/`7f437b4`/`9f4c4bb`/`775f3a6`/`1007246`/`4619b78`/`32784aa`）；⑩ 的两处待裁**已裁取建议项并落地** —— (a) 两个中间读点**照报 `"pending"`**（零折算），(b) web wire **补上** `rawStopReason`（`a8c0a62`）。⑩ 的**必需**配套＝`PiLoopRunner.markAborted` 的收尾判据换成字面量 `"pending"`（否则 A8 复活，论证见 `docs/31 §8.35.15 八-8.3`）。逐条实测（含 6/7/5/7 条红灯的 actual、两处「今天应当红」的预测更正、五次 SDK 探针读法、五处 `default` 互不相同清单、⑩ 的三条变异探针、未覆盖登记）见 `docs/31 §8.35.15`。**D1 真实车道闸已过**（teamorouter 真实请求拿到 `done(stop)` ⇒ 线格里确有 `finish_reason`）；**D2 的真实车道检查本环境无法执行**（relay 无 `/v1/messages` 路由，404 `route_not_found`，未绕过）。⚠️ 一处与设计稿的偏差：⑧ 的模块标签据实记 `test(agent-core)`（`PiLoopRunner` 在 agent-core，`ai` 依赖不到它） |
 | B21 | **请求侧无 `compat.thinkingFormat`**（能力缺口，**非本次事故因素**） | §8.35.3（`docs/31:4707`） | pi 按 provider 发 **10 种** thinking 开关形状（`openai-completions.ts:866`/`:879`/`:887`/`:892`/`:897`/`:914`/`:924`/`:934`/`:939`/`:948`：zai / qwen / qwen-chat-template / chat-template / baseten / deepseek / openrouter / ant-ling / together / string-thinking —— 其中 `detectCompat:1644-1654` 只会**产出 6 种**，其余靠用户显式写 `model.compat`）—— 而 pi-java 的请求侧只有 `DefaultProviders:112-116` 的 `thinking.budgetTokens`。⚠️ **如实标注**：`api.teamorouter.cn` 不匹配 pi **任何**探测模式（`detectCompat:1581-1600` 逐条比对：z.ai / together / moonshot / openrouter / cloudflare / nvidia / ant-ling / deepseek 全不匹配）⇒ pi 在该 relay 上**也不发**任何 thinking 配置 ⇒ **与本次事故无关**；只在改用 zai/deepseek/qwen 等**原生** provider 时才可观察。**不并入本包**（它管「发什么请求」，与响应侧字段覆盖无关），须自己一包 |
 
-| B22 | **`openai-responses` 车道回放助手文本消息即抛 —— 缺 `id`** | §8.35.10（`docs/31`） | `ResponsesMessageConverter:186-194` 构造 `ResponseOutputMessage` 时**不设 `id`**，而 SDK 标它必填 ⇒ `IllegalStateException: `+`id` is required, but was not set`（`Check.kt:12` ← `ResponseOutputMessage.kt:348`）。pi **有**回填（`openai-responses-shared.ts:237-242`）：先试 `parseTextSignature(textBlock.textSignature)?.id`，取不到则 `msg_pi_${msgIndex}` / `msg_pi_${msgIndex}_${textBlockIndex}`，>64 字符压成 `msg_${shortHash}`。**可达性**：今天 CLI **不可达**（`DefaultProviders:147` 恒传 `Map.of()`，而协议覆盖读 `extra["protocol"]`；`ModelsJsonProvider:61-69` 只认完两条车道；`AZURE_OPENAI_RESPONSES` 全树只有枚举本身 ⇒ Azure 车道无 provider 创建）⇒ 属**潜在**缺陷。**仍必修**：它是本包该车道夹具的前置（不修则夹具红在「请求没发出」，闸挂没挂**测不到**），且是纯移植缺口。**写夹具时发现**，不在原审计范围内 |
+| B22 | **`openai-responses` 车道回放助手文本消息即抛 —— 缺 `id`** | §8.35.10（`docs/31`） | `ResponsesMessageConverter:186-194` 构造 `ResponseOutputMessage` 时**不设 `id`**，而 SDK 标它必填 ⇒ `IllegalStateException: `+`id` is required, but was not set`（`Check.kt:12` ← `ResponseOutputMessage.kt:348`）。pi **有**回填（`openai-responses-shared.ts:237-242`）：先试 `parseTextSignature(textBlock.textSignature)?.id`，取不到则 `msg_pi_${msgIndex}` / `msg_pi_${msgIndex}_${textBlockIndex}`，>64 字符压成 `msg_${shortHash}`。**可达性**：今天 CLI **不可达**（`DefaultProviders:147` 恒传 `Map.of()`，而协议覆盖读 `extra["protocol"]`；`ModelsJsonProvider:61-69` 只认完两条车道；`AZURE_OPENAI_RESPONSES` 全树只有枚举本身 ⇒ Azure 车道无 provider 创建）⇒ 属**潜在**缺陷。**仍必修**：它是本包该车道夹具的前置（不修则夹具红在「请求没发出」，闸挂没挂**测不到**），且是纯移植缺口。**写夹具时发现**，不在原审计范围内。<br>✅ **已修（2026-09-20 核出）**：`ResponsesMessageConverter.java:210-212` 已设 `.id("msg_pi_" + msgIndex)`。⚠️ **但只实现了合成 id 分支** —— pi 的 `parseTextSignature(...)?.id` **优先**分支随 B23 一起仍缺（`openai-responses-shared.ts:237-242`）⇒ 本行**部分结案**：抛异常已消除，回填值仍与 pi 不同 |
 | B23 | **文本块无 `textSignature`（`TextContent(String text)` 只有 1 个组件）** | §8.35.10（`docs/31`） | pi 的文本块带回执签名 `encodeTextSignatureV1(item.id, item.phase)`（`openai-responses-shared.ts:701`，读侧 `:55`/`:228`）⇒ 回放时能取回**原** `msg_xxx` 与 `phase`。pi-java 无此组件 ⇒ 即便修了 B22，回填也只能是 `msg_pi_N` 合成值。属「文本块载荷」缺口（与 B19 的 thinking 载荷同族、**另一条**），须自己一包 |
-| B24 | **`openai-completions` 车道不读 `choice.usage` 回退** —— 该形状的 relay 上计费恒为 0 | §8.35.12（`docs/31`） | pi 在 `chunk.usage` 缺席时再读 `choice.usage`（`openai-completions.ts:565-568`，注释点名 **Moonshot** 把 usage 放在 choice 里）；pi-java `OpenAICompletionsApi:124-127` 只看 `chunk.usage()`。**后果不止「少显示一个数」**：`~/.pi-java` 的用量统计、上下文阈值判定、`ContextUsageEstimator` 都吃 usage ⇒ 那条 relay 上压缩时机会**晚于 pi**。**写 B19 夹具读 pi 该函数时发现**，不在原审计范围；**本包不改**（与 reasoning/stopReason 不同层） |
+| B24 | **`openai-completions` 车道不读 `choice.usage` 回退** —— 该形状的 relay 上计费恒为 0 | §8.35.12（`docs/31`） | pi 在 `chunk.usage` 缺席时再读 `choice.usage`（`openai-completions.ts:565-568`，注释点名 **Moonshot** 把 usage 放在 choice 里）；pi-java `OpenAICompletionsApi:124-127` 只看 `chunk.usage()`。**后果不止「少显示一个数」**：`~/.pi-java` 的用量统计、上下文阈值判定、`ContextUsageEstimator` 都吃 usage ⇒ 那条 relay 上压缩时机会**晚于 pi**。⚠️ **2026-09-20 补：原记低估了两处** —— ① `choice.usage` 只是**一路**回退；即便走标准 `chunk.usage`，java 也**不读 `prompt_tokens_details.cached_tokens`**（`openai-completions.ts:565-568`/`:1507-1540` 对照）；② `usage.cost` **永不计算**（见 **B57**）⇒ 本行与 B56/B57 同属「usage 层欠账」，**建议合并成一个包**（`docs/40` 实测：单修 usage 域把它从 19.0% 拉到 71.4%，是 `ai` 模块四条 P0 里 76% 的收益） |
 | B25 | **助手消息缺 `rawStopReason`** —— 且它是 Google 车道错误文案的**唯一来源** | §8.35.14 第五节（`docs/31`） | `Message.java:55-59` 原裁定「对齐面零消费者 ⇒ 不移植」**被证伪**：pi 侧**读点 2 处**，都在**生产者层**（`google-generative-ai.ts:272-273`、`google-vertex.ts:289-290`）用它拼 `` `Provider stopped with: ${raw}` ``；**写点 10 处**（anthropic:744 / bedrock:292 / google:217 / google-vertex:234 / mistral:614 / completions:572 / responses-shared:588、:747），声明 `types.ts:443`。原文措辞「对齐面（`packages/agent/src`）无消费者」是对的，**结论错**——pi-java 也要实现生产者层。**全车道、每一条消息**都写它 ⇒ 与 D2 同等级（「每一份转录都差一个键」）。⇒ **裁决点 D5**：建议 (a) 全量移植（消息第 10 组件 + 五条车道写点 + `MessageJsonCodec` + 全投影 + 夹具；主源码 20 个构造点）。**已裁：(a) 全量移植** ⇒ **已落地**为 B20 提交 ⑨（`4619b78`；实测与 8 条变异探针见 `docs/31 §8.35.15 七`）。⚠️ 一处曾遗留**待裁**：`pi-java-web` 的 wire 是否投影该键 —— **2026-09-19 已裁：补上**，落地 `a8c0a62`（`WebWireJson.messageNode` 逐键写出该键，缺席规则同 `toolResult` 支：null ⇒ 键省略），含一条缺席哨兵（旧形状消息不得凭空长出该键）。**本行至此无遗留** |
 | B26 | **partial 的 `stopReason` 初值应为 `"pending"`** —— 中间帧载荷全线不同 | §8.35.14 第六节（`docs/31`） | pi 五条车道的累加器都从 `stopReason: "pending"` 起、只在终局事件改写（`anthropic-messages.ts:526`/`openai-completions.ts:333`/`google-generative-ai.ts:75`/`mistral-conversations.ts:222`/`openai-responses.ts:139`；pi 侧实际共 **10** 处，另含 azure/bedrock/vertex/codex/pi-messages，pi-java 只实现上述 5 条车道）⇒ 流进行中**每一个** `message_update` 与 `message_start` 的载荷都带 `"pending"`；pi-java 的 `StreamPartialBuilder.stopReason` 初值是 `null`（键主动省略）。**S 系列差分测不到**：剧本走 `faux`，它从一开始就是 `"stop"`（`faux.ts:93`）⇒ **结构上覆盖不到**（§8.33「桩盖不住」同一形态）。落地：builder 初值改 `"pending"`（收尾检查随之成为字面量），⚠️ **外溢** `PiMessagesApi`（不是 pi 的车道，§8.34.11-（1））—— 可接受但要写明。⇒ 与 D5 同类，建议**一并做**。**已裁：一并做** ⇒ 落地为 B20 提交 ⑩。**2026-09-19 设计修订（`docs/31 §8.35.15 八`；写下时标「待裁决」，随后**已裁取建议项**）**：原稿「初值 + 外溢说明」**不够** —— ① 新发现 pi 的**存盘**类型显式排除 `"pending"`（`harness/session/types.ts:13` ＋ conformance `session-repo.ts:264` 拒绝 append pending），即「pending ＝ 流的中间态、落定前必须已被改写」；② `PiLoopRunner:237` 每个 update 都 `fromPartial(partial)` 重建终局消息 ⇒ 中间快照的 `"pending"` 会流进终局消息（真实车道形状，非桩）；③ ⇒ **必需**转换：`markAborted:299` 的 `message.stopReason() != null`（＝「provider 有没有给终局判定」）在 ⑩ 后**恒真**，会让「进场前已中止、provider 照样吐帧」那一支原样留下 `"pending"`，而 `ContextEntries.NON_PROJECTED_STOP_REASONS` 不含它 ⇒ **打断的响应被投影进后续上下文（A8 复活）**，必须改成 `!"pending".equals(...)`；④ 另有两个中间读点取值由 `null` 变 `"pending"`（`HarnessUtils.deriveNewestOwn`→`LaneRecord.stopReason`、`RunSpanFactory.closeRunSpan`→跨度属性），二者是 pi 无对应物的旁路审计面 ⇒ 判据沉默、**待裁**；⑤ 经逐条复核**不受影响**的收尾检查已列表给理由（安全网走 `AssistantMessage.empty()`，仍为 `null`）。外溢 `PiMessagesApi` 的口径照原样写进提交信息。<br>**2026-09-19 已落地（`32784aa`，B20 提交 ⑩）**：初值 `"pending"` ＋ `markAborted` 判据换字面量（**保留 `null` 分支**：非流式构造的消息与旧转录同属「没观测到终局」）＋ 新建 `PendingStopReasonSettlementTest`（1 条，走 `abortedAtEntry` ＋ 真实 builder 造帧 —— ⑩ 唯一能伤到的路径，`MidStreamAbortTest` 与 L5 `FauxProvider` 两条夹具**结构性覆盖不到**）。两处待裁**已裁取建议项**：④ 的两个中间读点**照报 `"pending"`**（零折算）；⑤ 的复核结论照旧。三条变异探针（`expected: "pending" but was: null` / `expected: "aborted" but was: "pending"` / `Expecting value to be true but was false`）见 `docs/31 §8.35.15 八-8.8`。**本行至此无遗留** |
 | B27 | **`JsonEventMapper` 的「`null` ⇒ 省略」纪律没贯彻 —— 同族三处可空键被无条件写出** | §8.37.3-B 组（`docs/31`） | pi 的规则（`json-event.ts:48-51` 原样透传 ＋ `JSON.stringify` = **省略 `undefined`、保留 `null`**）在 pi-java 只贯彻了一半（`:107-113` 的 `reason` 做了，其余没做）。逐处：① `compaction_end.result`（`:82`；pi `agent-session.ts:2100`/`:2201`/`:2311`/`:2366` 显式 `undefined`）—— ✅ 可达，`CompactionExecutor:98/:210/:258` ＋ `PostRunCompactionCheck:168` 四路传 `null`；② `compaction_end.errorMessage`（`:85`）—— ✅ **成功路也传 `null`**（`CompactionExecutor:289`）⇒ **每次成功压缩**都多一键；③ `bash_execution_update.id`（`:120`；pi `:3027` `id: options?.id`）—— ✅ `bash` 命令的 `id` 可选，缺省即 `null`。第 ④ 处 `session_info_changed.name`（`:66`，pi `:159` 是 `string \| undefined`）**今天不可达**（无生产者，见 B30）⇒ 一并登记、不修。**已核为非缺陷**：`auto_retry_start.errorMessage`/`summarization_retry_scheduled.errorMessage` 两侧都有兜底（`PostRunRetry:76`、`LlmSummaryGenerator:175`）⇒ 恒非空。<br>**2026-09-19 已修 ①②③（`docs/31 §8.37.9`）**：三处都改成「`null` ⇒ 不写键」，每条配一条**反向**断言（有值时必须在 —— 否则「一律删键」也能让夹具变绿）。变异探针 P6 把三处改回无条件写 ⇒ **恰 3 条红**（一一对应）。④（`session_info_changed.name`）按裁决 C **不动**，同 B30。⚠️ 另更正一处设计稿：D 组「写不出红灯夹具」**部分错** —— 直接 `toWire` 一个 `name=null` 的事件**是**写得出的，站得住的只有「行为不可达」那条 |
@@ -249,10 +274,27 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | B52 | ⚠️ **「带 `Instant` 的消息过裸 mapper 会抛」还咬着另外两条线**：**命令线**（`JsonlWriter`：`get_entries`/`get_tree`/… 把会话条目里的助手消息序列化回客户端）与**导出线**（`RpcDispatcher`：`--no-session` 的 `export_html`/`export_jsonl` **内联**序列化条目） | `docs/38 §10.6-2`（包⑪ 实施中发现） | 与 B48 同一成因（包⑩ 只修了**事件线** `JsonEventMapper`）：这两处都是**裸** `ObjectMapper` ⇒ 消息带 `Instant timestamp` 时直接抛，而抛是**静默**的（客户端只看到 `success:false`，或导出命令失败）。**登记即修（包⑪，同一包）**：把包⑩ 的手写 serializer 提成 `core/WireJson.instantAsEpochMillis()`，两处各注册一次；夹具⑤（`RpcModeEndToEndTest` 的 `get_entries` 段）钉住回归面，并已用探针证明有牙（退回裸 mapper ⇒ 恰一条红）。⚠️ 这条记录了「实现先引用、台账后补」的漂移：三处代码注释写着「台账 B52」而**台账里当时没有这一条** —— 补登记即为此。**结案**（入 G） |
 | B53 | ⚠️ **`find()` 与 `latest()` 同病**：`PersistentSessionRepositories.find()`（`:52`）**也走 `all()`** ⇒ `--session <id>` / `--session-id`（以及 `--fork/-r`）同样是 **O(全部会话文件)**，且同样**跨项目**。pi 的对应物 `findLocalSessionByExactId(id, cwd, sessionDir)` 是**项目内** | `docs/39 §6.4`（包⑫ 顺带发现，**未修**） | 与 A12 **同根但不同命**：`latest()` 的越界是纯 bug（pi 无此形状），而 `--session <id>` 的**跨项目查找**可能有人真在用 ⇒ 改它会改**行为裁决**，不能搭 A12 的车。**另立一包**：先取证 pi 的 `-r/--session` 有没有跨项目路径（`main.ts:432` 用的是 `findLocalSessionByExactId`），再定 |
 | B54 | ⚠️ **`--no-session` 在 web 路径被完全忽略**：`SessionPersistence.resolvePersistentWeb(session, args)` 的 `args` 形参**一句话都没用** ⇒ `--mode web --no-session` **仍然建持久会话**（`PiWebServerAuthTest` 正是这么传的） | `docs/39 §6.4`（包⑫ 顺带发现，**未修**） | 两条都是「设计选择」，冲突时谁赢**没定义**：`--mode web` 的「总是持久化」有 javadoc 依据（刷新/重连不丢历史），`--no-session` 的语义是「别落盘」。**要你裁**。⚠️ 注意 `--no-session` 在**非 web** 路径是生效的（`AgentSessionTest.noSessionDoesNotRegister` 就钉着它）⇒ 这是 web 专属的偏差 |
-| B55 | **pi 的会话列表 API 带 `onProgress`**（`session-manager.ts:812`、`:772`：异步、可报进度），pi-java 的 `list` 是**同步全量** | `docs/39 §6.4`（包⑫ 顺带发现，**未修**） | 对应的是**交互式选择器**那条车道（TUI/RPC 的 `-r` 面），本轮**没对照过**。⚠️ 别和 A12 混：A12 修的是**范围**，不是「把越界扫描做快」——**明确不做**并发/异步化（§6.3-3） |
-| B46 | ⚠️ **pi-java 的 `BashTool` 从不调 `onUpdate`** ⇒ `tool_execution_update` **在生产上永不发射**（只有测试桩发） | `docs/34 §4-F`（登记处）＋ **包⑧ 取证更正（`docs/35 §2`）** | **2026-09-20 重新定范围（包⑧ 侦察）**：原记「pi 侧 7 个工具**全都有**」是**错的** —— 那是拿 `grep -l onUpdate` 数的，命中的是**声明**不是调用。逐行核过后：pi 侧**只有 `bash.ts` 真的调**（`:265` 与 `:297` 两处），`read`/`write`/`edit`/`grep`/`find`/`ls` 六家一律声明为 `_onUpdate?`（**下划线＝声明但不用**，TypeScript 的「故意未使用」约定）且全文再无引用；`powershell` 复用 `createShellToolDefinition` 故同样有。⇒ 本条的**真实范围只有 bash 一家**（pi-java 侧的 `BashTool` ＋ `ShellExecutor`）。pi-java 侧同法核过：7 个工具都收 `ToolUpdateCallback` 但**没有一条**调它 ⇒ 缺口成立、范围收窄。**包⑧ 修**。✅ **包⑧ 已修（2026-09-20）**：新 `ShellOutputSink` ＋ `ShellOptions` 第五个可空组件 ＋ `DefaultShellExecutor` 在既有 8 KiB 读循环里报增量 ＋ 新 `Utf8ChunkStream`（跨块多字节按字符边界解码）＋ 新 `BashUpdateEmitter`（逐位对齐 pi 的 `updateDirty`/`lastUpdateAt`/`updateTimer`，节流 100 ms）＋ `BashTool` 接线。**真实 `BashTool` 现在会发 `tool_execution_update`**（端到端夹具 `BashToolUpdateTest` 钉住）。见 `docs/35 §10` || B47 | **`pi-java-tui` 的 `tool_execution_*` 语义**：`ChatScreen.runToolCalls` 由 `StreamEvent.ToolCallStart` 计数（「模型吐完调用」），而 pi 的 TUI 由**真实工具执行事件**驱动 | `docs/34 §6-4` | 包⑦ **刻意不改**：会改变 `runToolCalls` 的计数时机（TUI 已按要求降级）。**登记不修**，待 TUI 退役或重估 |
+| B55 | **pi 的会话列表 API 带 `onProgress`**（`session-manager.ts:812`、**`:768`** —— ⚠️ **2026-09-20 更正：原记 `:772`，实测 `SessionListProgress` 类型在 `:768`**；`:812` 的 `listSessionsFromDir(dir, onProgress, …)` 正确。异步、可报进度），pi-java 的 `list` 是**同步全量** | `docs/39 §6.4`（包⑫ 顺带发现，**未修**） | 对应的是**交互式选择器**那条车道（TUI/RPC 的 `-r` 面），本轮**没对照过**。⚠️ 别和 A12 混：A12 修的是**范围**，不是「把越界扫描做快」——**明确不做**并发/异步化（§6.3-3） |
+| B56 | ⚠️ **`Usage` 的四个分量在生产上恒为 0** —— `cacheRead` / `cacheWrite` / `cacheWrite1h` / `reasoning` **全仓零生产者** | `docs/40 §2.1`（2026-09-20 实测，**本台账此前未登记**） | 五条车道的 `emitUsage` 全部只传两个数（`AnthropicMessagesApi:286`、`GoogleGenerativeAiApi:141`、`MistralConversationsApi:251`、`OpenAICompletionsApi:182`/`:254`、`ResponsesStreamProcessor:247`）⇒ `Usage.of(a,b)` 把 `cacheRead`/`cacheWrite` **钉死 0**（`Usage.java:53-54`）。**而下游已在读**：`ContextOverflow.java:110`/`:120` 算 `input + cacheRead`、`ContextUsageEstimator.java:78` 算 `input + output + cacheRead + cacheWrite`、`SessionState.java:329-330` 累加两者。**后果**：开了 prompt caching 的请求（Anthropic 的 `cache_read` 常远大于 `input`）**上下文占用被低估 ⇒ 压缩触发晚于 pi**。落盘面已备好（`EntryJsonCodec.java:118-126`）只是没人填。**与 B24/B57 同属 usage 层，建议合并一个包** |
+| B57 | ⚠️ **`calculateCost` 整段无对应物** ⇒ `Usage.Cost` 恒零 ⇒ **成本永远显示 0** | `docs/40 §2.1`（**未登记**） | pi 有 `calculateCost`（`models.ts:891-911`，含 1h 缓存按 2× 输入价、`tiers` 阶梯价）；pi-java 全仓无对应物 ⇒ `SessionState.java:332` 与 `SessionRunner.java:78-79` 累加的 `cost().total()` **恒为 0**。`PricingInfo` 只有 input/output 两个分量，**不足以支撑**（pi 是四种）。与 B56 同域、**建议同包** |
+| B58 | ⚠️ **`openai` provider 的默认 wire 与 pi 不同** —— pi 绑 `openai-responses`，pi-java 绑 `openai-completions` | `docs/40 §2.1`（**未登记**） | pi `providers/openai.ts:8-15` 是 `api: openAIResponsesApi()`；pi-java `provider/OpenAIProvider.java:24-26` 默认 `OPENAI_COMPLETIONS`（responses 需显式 `extra.protocol`）⇒ **同一模型两侧发不同 wire**。⚠️ 修法是**换一个枚举值**（四条 P0 里投入产出比最高），但**改的是默认路径的行为** ⇒ 需裁决「跟随 pi」还是「登记为刻意偏差」 |
+| B59 | ⚠️ **SQLite schema 与 pi 完全分叉** —— pi **7 张表**、pi-java **11(+2)**，**同名只有 3 个** | `docs/40 §3.4`、`docs/map/06`（**未登记**） | pi 有 java 无 **4 张**：`scalar_values`（**承载整个 durable operation 状态机**，13 个值命名空间）· `list_values` · `usage_ledger`（`id` 与 `entries.id` 共享命名空间，触发器强制）· `branch_meta`（`base_branch_id`/`base_seq` 承载分支分段，压缩边界依赖它）。java 有 pi 无 **10 张**（含 FTS5 全文检索 —— pi 全仓 `grep fts5\|MATCH` **零命中**）。**根因不是少几张表，是两种存储范式**：pi 的 `Write` 联合只有 4 个 kind（`entry`/`usage`/`value`/`list`，`session/commit.ts:3-29`），java 的 `SessionMutation` 是 `entry`/`record`/`lane`/`fact`（`JsonlCodec.java:139-183`），**交集只有 `entry`**。⚠️ 另：pi **明文删掉了 `writer_leases`**（`repo.test.ts:369` 断言该表不存在）而 pi-java 有它，且 `WriterLeaseRows.java:8` 的 javadoc 引 `writer-leases.ts` —— **那个文件在 pi 里不存在**（见 C12）。`docs/40` 实测：**单点最大拖累，权重 25 一分不得，吃掉该模块 16.2pp**。**修前须裁决** ⇒ 见 F8 |
+| B60 | ⚠️ **JSONL v4 头部与事务行两侧互不可读** —— pi 与 pi-java **读不了对方的会话文件** | `docs/40 §3.4`、`docs/map/06`（**未登记**） | pi 写 `{v:4, storageVersion:1}` 且强校验 `v===4 && storageVersion>=1`（`jsonl/types.ts:4-5`、`codec.ts:35-46`）；pi-java 写 `{version:4}`、**无 `storageVersion`**（`JsonlV4Header.java:24-31`）。事务行 kind 交集只有 `entry`（pi：`entry`/`usage`/`value`/`list`；java：`entry`/`record`/`lane`/`fact`）。⚠️ pi-java 的 javadoc 又写「aligned with pi `JsonlV4Header`」—— **pi 里没有这个类型**（pi 是 `JsonlStorageHeader`）。**用户可见的硬故障**：换机 / 换工具后会话直接读不出来。`docs/40` 实测性价比最高（权重 5 换 +3.2pp） |
+| B61 | ⚠️ **pi-java 的 `Entry` 面是 pi 的 v3 形状** —— java **8 类**，pi 当前 v4 只有 **4 类** | `docs/40 §3.4`、`docs/map/03`（**未登记**） | java 多出的 `model_change`/`thinking_level_change`/`active_tools_change`/`custom_message`（`Entry.java:24-32`）在 pi 侧**只存在于 v3 legacy 迁移代码**（`jsonl/legacy-v3.ts:39`/`:66`/`:72`/`:77`）。**不是「java 扩展」，是格式代差**。与 B60 **同根因**（JSONL v4 线格式），建议**同包** |
+| B62 | ⚠️ **pi 的 `packages/chord` 整块零对应、零文档** —— 5,822 行（+3,553 测试） | `docs/40 §5.2`、`docs/map/06`（**未登记**） | chord 是「不是 Pi 包」的独立 RPC 运行时（自检 `test/boundary.test.ts:11-33`），提供 facet 装配 / 依赖图校验 / 拓扑激活 / 保形 reload / Service token / singleton-keyed 双模式 / `RemoteServiceProvider` 全操作面 / 稳定 facade / 消费者 binding / 控制面协议 / 复制状态 / delta 词汇（六元 ＋ 路径字典压缩）/ 原型污染防护 / Node 打包与 bundle 加载等 **20 项能力**（逐条见 `docs/map/06` 的 chord 节）。它是 pi 的 `agent`/`protocol`/`server`/`client` 与 `coding-agent/src/experimental/` 的**真依赖**。⚠️ `packages/tui` **完全不消费 chord**（0 命中）。**做不做是裁决项** ⇒ 见 F9 |
+| B63 | **pi 的防漂移脚本 40 文件 / 8,314 行零对应**（其中 **8 个是真漂移门**） | `docs/40 §5.2`、`docs/map/06`（**未登记**） | 8 个真门：`check-browser-smoke` · `check-entry-graphs`（逐 entry 强制 `maxFiles` 预算与 `forbid` 路径）· `check-lockfile-commit` · `check-pinned-deps` · `check-runtime-deps` · `generate-coding-agent-install-lock --check` · `generate-coding-agent-shrinkwrap --check` · `sync-versions`（lockstep）。**pi-java 的部分替代物**：Checkstyle（含 500 行 FileLength）· SpotBugs · maven-enforcer（`dependencyConvergence`）· **L5 跨语言差分**（pi 没有，比 pi 任何脚本都强）。⚠️ 一处实际破口：`pi-java-web/src/main/frontend/package.json:11-17` 的 7 个依赖**全用 `^`**，而 pi 的 `check-pinned-deps` 要求精确版本 |
+| B64 | ⚠️ **上下文文件发现（`AGENTS.md` / `CLAUDE.md`）整块缺失** ⇒ **每次会话的系统提示词都少这一段** | `docs/40 §3.3`、`docs/map/04`（**未登记**） | pi 按 **5 个候选名**向上遍历发现并注入系统提示词（`resource-loader.ts:72`）；pi-java 全仓 `grep "AGENTS` **零命中**，且 `--no-context-files`/`-nc` 这条 flag **零消费者**。⚠️ **本行的权重被单元粒度封顶**：作为单个能力单元只占 `coding-agent` Σ权重的 1.3%（全对齐只抬 +1.4pp），但它是一条**每轮 prompt 都走的默认路径**，真实分量应等价 **10+ 个权重 3 单元**（见 `docs/40 §0.6`） |
+| B65 | ⚠️ **TUI 的 `MarkdownRenderer` 与 `SyntaxHighlighter` 是生产死代码** ⇒ **TUI 完全不渲染 Markdown** | `docs/40 §4`、`docs/map/05`（**未登记**） | `MarkdownRenderer.java:21` 全仓 grep **只命中自身与测试**；助手消息实际走 `MessageBubble.java:80` 的纯文本 `TextLayout.split(escapeMarkup(text))` ⇒ 表格 / mermaid / 代码高亮 / 链接 / 删除线 / LaTeX **全不可达**，而 pi 的**所有**消息（assistant/user/compaction/branch/skill/custom）都经 `Markdown` 组件（`markdown.ts` 1,015 行）。⚠️ 按裁决 R3（TUI 优先级最低）**排期靠后，但「接线还是删声明」要先定** —— 留着会让人以为 Markdown 是能用的 |
+| B66 | ⚠️ **TUI 的 6 个已声明键位一个都没接线** | `docs/40 §4`、`docs/map/05`（**未登记**） | `KeybindingsManager.java:22-29` 定义了 `MODEL_CYCLE` / `THINKING_CYCLE` / `TOOLS_EXPAND` / `THINKING_TOGGLE` / `EXTERNAL_EDITOR` / `DEQUEUE`，而 `PiTuiApp.java:437` 的 `default -> { /* … → Phase 6 */ }` **一个都没接**。实际生效的 `app.*` 只有 5 个（INTERRUPT/CLEAR/EXIT/MODEL_SELECT/FOLLOW_UP），pi 侧约 **40 个**。同 B65，排期靠后但需先定「接线还是删声明」 |
+| B46 | ⚠️ **pi-java 的 `BashTool` 从不调 `onUpdate`** ⇒ `tool_execution_update` **在生产上永不发射**（只有测试桩发） | `docs/34 §4-F`（登记处）＋ **包⑧ 取证更正（`docs/35 §2`）** | **2026-09-20 重新定范围（包⑧ 侦察）**：原记「pi 侧 7 个工具**全都有**」是**错的** —— 那是拿 `grep -l onUpdate` 数的，命中的是**声明**不是调用。逐行核过后：pi 侧**只有 `bash.ts` 真的调**（`:265` 与 `:297` 两处），`read`/`write`/`edit`/`grep`/`find`/`ls` 六家一律声明为 `_onUpdate?`（**下划线＝声明但不用**，TypeScript 的「故意未使用」约定）且全文再无引用；`powershell` 复用 `createShellToolDefinition` 故同样有。⇒ 本条的**真实范围只有 bash 一家**（pi-java 侧的 `BashTool` ＋ `ShellExecutor`）。pi-java 侧同法核过：7 个工具都收 `ToolUpdateCallback` 但**没有一条**调它 ⇒ 缺口成立、范围收窄。**包⑧ 修**。✅ **包⑧ 已修（2026-09-20）**：新 `ShellOutputSink` ＋ `ShellOptions` 第五个可空组件 ＋ `DefaultShellExecutor` 在既有 8 KiB 读循环里报增量 ＋ 新 `Utf8ChunkStream`（跨块多字节按字符边界解码）＋ 新 `BashUpdateEmitter`（逐位对齐 pi 的 `updateDirty`/`lastUpdateAt`/`updateTimer`，节流 100 ms）＋ `BashTool` 接线。**真实 `BashTool` 现在会发 `tool_execution_update`**（端到端夹具 `BashToolUpdateTest` 钉住）。见 `docs/35 §10` |
+| B47 | **`pi-java-tui` 的 `tool_execution_*` 语义**：`ChatScreen.runToolCalls` 由 `StreamEvent.ToolCallStart` 计数（「模型吐完调用」），而 pi 的 TUI 由**真实工具执行事件**驱动 | `docs/34 §6-4` | 包⑦ **刻意不改**：会改变 `runToolCalls` 的计数时机（TUI 已按要求降级）。**登记不修**，待 TUI 退役或重估 |
 
 ---
+
+## 4. C 类 —— 已裁决**不改 / 不做**（带触发条件）
+
+> ⚠️ **2026-09-20 补**：本节此前**没有标题**（C 表直接挂在 `---` 后面，§3 跳到 §5），
+> 任何按小节抓取的脚本都会漏掉这 11 条。已补。
 
 | # | 条目 | 出处 | 裁决理由（一句话） | 触发条件 |
 |---|---|---|---|---|
@@ -267,6 +309,7 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | C9 | **per-model `api` 表达不出**（单 provider 多 API，pi 的 fireworks/opencode） | `docs/31:3593`、§8.31.4 | `models.json` 的 `api` 在 **provider 级**；P1 做到 provider 级派发即覆盖今日全部已注册 provider，加字段是投机代码（同 C1 口径） | 出现单 provider 多 API 的真实需求 |
 | C10 | `emitThinkingSignature` **先于** `emitThinkingStart` ⇒ `IndexOutOfBoundsException`（实现时才发现的） | `docs/31:3597`、§8.31.4 | 生产不可达；且与同族的 `emitThinkingDelta`（有惰性建块分支）**不对称** ⇒ 加分支属投机代码 | 出现「先 `signature_delta` 后 `content_block_start`」的真事件序列 |
 | C11 | `addedToolNames` 的 **provider 层消费者**（原 B4） | `docs/31:3749`（§8.32.4） | **结案为不做**，且**机制归属原判是错的**：`addedToolNames` 来自 pi 的**扩展系统**（`extensions/wrapper.ts:17-37` → `deferred-tools.ts:8-39`），不是 MCP；消费侧的闸是 `openai-completions.ts:838-840` 的 `compat.deferredToolsMode === "kimi"` | ① 扩展系统落地且真产出 `addedToolNames`；② 出现 `deferredToolsMode` 为真的 provider；③ 有用户报告 deferred tools 不生效 |
+| C12 | **旧 schemas 协议层 ＋ `SessionHandle` ＋ `writer_leases` 机制**（用户裁决 2026-09-20：「pi 删掉的，pi-java 也删」） | `docs/40 §5.1`（裁决 R1） | pi 的 `packages/protocol/src/schemas.ts`（9 命令 / 9 结果 / 4 事件 / 快照族 / 闭集错误码）被 `e52de91d0`（2026-08-13「feat(protocol): add service-addressed session RPC」）**替换**，同提交删掉 `client/src/session-handle.ts`(111)、`state.ts`(156) 与 5 个测试文件；`writer_leases` 亦被删（`repo.test.ts:369` **断言该表不存在**、`:376` 用例名「ignores a stale writer_lease table」）。⚠️ **「三个模块整块作废」是错的 —— 分界按层不按模块**：CBOR / framing（`cbor/`、`codec.ts`、`framing.ts`）**pi 仍在且逐条相同 ⇒ 那部分是对齐的**；作废的只是旧 schemas 那一层；而 **service-addressed RPC 是 pi 的现架构、pi-java 完全没有 ⇒ 那是真缺口（见 F7）**。三模块**消费者为零**（只被彼此 ＋ 1 个集成测试 import；CLI 零 `--serve`/`--connect`）⇒ 删除零连带（根 `pom.xml` 去 3 行 modules ＋ `bom` 去 3 行 ＋ 删 3 个目录） | 无（已裁决，待执行）；若日后要做 RPC，按 pi 现架构重做 |
 
 ---
 
@@ -282,6 +325,8 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | D6 | `SummaryGenerator.java:12` javadoc「until Phase 6 wires the real summarization flow」**已过期**（生产装的是 `LlmSummaryGenerator`） | 主源码 |
 | D7 | `client` / `protocol` / `server` 三个 `package-info.java` 写「Phase 6 will implement…」—— 三个模块都已实现 | 主源码 |
 | D8 | `AnthropicMessagesApi.java:299-301` 的注释写「ThinkingContent is dropped: replaying thinking blocks requires the original signature…」—— 而**它下面 `:288` 正是在重放**（生产源码里的假陈述） | §8.34.2-7（`docs/31:4227`） | **已修**（§8.34.11，包②：随 `toBlockParams` 重写删除；注释现指向 B17 的真实缺口）⇒ 见 G 类 |
+| D9 | ⚠️ **9 处 javadoc 引用不存在的 pi 文件**（`pi-java-session-backend-sqlite` 的 17 处「aligned with pi `X`」里 9 处 X 不存在） | `docs/40 §8`、`docs/map/06`（2026-09-20 实测，**未登记**） | 逐个 `find -iname` 验证，全部 ABSENT：`branch-cache.ts`（`BranchCache.java:12`）· `branch-tips.ts`（`BranchTipRows.java:8`）· `storage/facts.ts`（`FactRows.java:8`）· `storage/lanes.ts`（`LaneRows.java:10`）· `storage/records.ts`（`RecordRows.java:16`）· `storage/sessions.ts`（`SessionRows.java:13`，pi 实为 `session/session-row.ts`）· **`writer-leases.ts`（`WriterLeaseRows.java:8` ＋ `WriterLease.java:8`）** · `search-backend.ts`（`SqliteSessionSearch.java:13`）。⚠️ **最严重的是 `writer-leases.ts`** —— pi **明文删掉了该机制**，而 javadoc 还在声称对齐它 ⇒ 读者会以为这是有效契约。**修法**：随 C12 一并清理；其余 8 处改指向真实文件或删 |
+| D10 | `client/src/unix.ts:34-35` **在 Windows 直接抛错** ⇒ 该子系统在开发环境（Windows 11）本就不可用 | `docs/40 §8`、`docs/map/06`（**未登记**） | 记录性质：解释「为什么这套东西从没被真跑过」。**随 C12 一并处理** |
 
 ---
 
@@ -292,10 +337,10 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | E1 | `AgentSession.java` **988** 行 | `pi-java-coding-agent/.../core/AgentSession.java` |
 | E2 | `RpcDispatcher.java` **601** 行 | `pi-java-coding-agent/.../rpc/RpcDispatcher.java` |
 | E3 | `PiLaneSink.java` **510** 行 | `pi-java-agent-core/.../harness/PiLaneSink.java` |
-| E4 | `AgentHarness.java` **502** 行 | `pi-java-agent-core/.../harness/AgentHarness.java` |
+| E4 | `AgentHarness.java` **514** 行（⚠️ 2026-09-20 更正：原记 502，实测 514） | `pi-java-agent-core/.../harness/AgentHarness.java` |
 | E5 | `EventParser.java` **515** 行 —— **已登记例外**（TamboUI same-package 覆写） | `pi-java-tui/.../dev/tamboui/tui/event/EventParser.java` |
-| E6 | 拆分超限文件（`SqliteSessionStorage`、`AgentHarness`） | `docs/09b:117` |
-| E7 | `appendEntry` / `appendRecord` 在 JSONL/Memory 两处重复 —— **判断项，保留**（差异小且各自持有锁语义） | `docs/09b:140` |
+| E6 | 拆分超限文件（`SqliteSessionStorage`、`AgentHarness`） | `docs/09b:117` | ⚠️ **2026-09-20 更正：`SqliteSessionStorage` 部分已解决** —— `docs/09b §5` 已压到 498 行、**实测现为 463 行**（已拆出 `storage/` 子包 10 文件）⇒ **本行只剩 `AgentHarness`（＝ E4）**，建议合并进 E4 |
+| E7 | `appendEntry` / `appendRecord` 在 JSONL/Memory 两处重复 —— **判断项，保留**（差异小且各自持有锁语义） | `docs/09b:140` | ⚠️ **2026-09-20 更正：少算一处** —— 实际**三处**：`JsonlSessionStorage.java:170`/`:187`、`MemorySessionStorage.java:79`/`:94`、**`SqliteSessionStorage.java:264`/`:289`** |
 | E8 | **L5 两侧 scripted stream 对 thinking 块不对称**：pi 侧 `ScriptedStream` 的推事件循环**只**处理 `text`/`toolCall`（thinking 块零 `thinking_*` 事件），Java 侧 `ScriptedStreams.eventsFor` 的 `case "thinking"` 推 `ThinkingStart`+`ThinkingEnd`（⇒ 每块多两条 `message_update` 帧） | §8.32.2-**P8**（`docs/31:3731`）；`conformance/pi/run.test.ts` vs `ScriptedStreams.java:73-79` |
 
 > 仓库规则是「文件 ≤ 500 行」；E1–E4 是唯一破口的四处（E5 有例外登记）。
@@ -312,7 +357,10 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | F3 | **`_emitSessionCompactFailed`**（扩展层事件） | `docs/31:1326` | 发不发 —— 扩展层在 `docs/27 §4` 排除面内，observer 目前只保证会话事件 `compaction_end.errorMessage` |
 | F4 | A4 / A5 两道门（运行中 `/compact`、并发 prompt） | `docs/31:2502-2503` | 取证后确认是**行为改动**，不是我单方面能定的 |
 | F5 | **合并到 `main` 的时机** | —— | 我建议**现在**：见 §1「收敛路径」，无任何一项挡着合并 |
-| F6 | `ModelsJsonProvider` 钉死 baseUrl ⇒ **CLI `--base-url` 对它失效**，且注释与实现**不符** | `docs/31:3595`、§8.31.4 | 二选一：**改注释**（认下「models.json 的 baseUrl 恒赢」）还是**让 CLI 赢**（改实现，`args.baseUrl()` 提到 pinned 之前） |
+| F6 | `ModelsJsonProvider` 钉死 baseUrl ⇒ **CLI `--base-url` 对它失效**，且注释与实现**不符** | `docs/31:3595`、§8.31.4；⚠️ **2026-09-20 归属更正**：实现在 `pi-java-ai`，**症状在 `coding-agent` 可见**（`Args.baseUrl` 有解析 `ArgsParser.java:36`、`Main.java` 不消费、由 `DefaultProviders` 转交） | 二选一：**改注释**（认下「models.json 的 baseUrl 恒赢」）还是**让 CLI 赢**（改实现，`args.baseUrl()` 提到 pinned 之前） |
+| F7 | **RPC 要不要做**（pi 的 `client`/`server` 是**重写**了，不是删掉） | `docs/40 §5.1`（裁决 R1 的延伸） | pi 现在有 service-addressed RPC 全层：`RpcTarget` / `RequestEnvelope.target` / `CancelEnvelope` / `AttachmentEnvelope` / `subscribeService` ＋ `ServiceSubscription` / `service_update` 推送 / `SessionRouter` / Unix 服务发现与传输预设 / 消息级 schema 严格校验 / 增量解码器，底座是 `packages/chord`。pi-java **几乎没有**（`server` 加权 0%）。**需要你定**：① **做**（一大块，含 chord ⇒ 见 F9）；② **不做**（则 C12 的删除就是终局，并把 `protocol`/`client`/`server` 三模块整体移除） |
+| F8 | **SQLite 跟 pi 的 4-kind `Write` 模型，还是保留 java 的 `entry`/`record`/`lane`/`fact`？** | `docs/40 §3.4`、**B59** | pi 的存储范式是 `entry`/`usage`/`value`/`list` 四个 kind（`value`/`list` 是**通用**的标量/列表值，`scalar_values` 一张表承载 13 个命名空间、含整个 durable operation 状态机）；java 是 `entry`/`record`/`lane`/`fact` 四个 kind ＋ 另开 10 张专用表。**两者交集只有 `entry`**。**需要你定**：① **跟 pi**（要重写 `SessionMutation` 与 schema，`lane`/`record`/`fact` 全部改道 `scalar_values`）；② **保留 java 的**（则登记为**刻意偏差**，并把 4 张缺表的语义逐个映射到 java 的等价物）。⚠️ 这条决定 B59 / B60 / B61 三行的修法方向 |
+| F9 | **`chord`（5,822 行）＋ 多进程子系统（~3,000 行）做不做？** | `docs/40 §5.2`、**B62** | 实测影响：**裁掉它们把存储层从 25.7% 抬到 36.7%（+11.0pp）** —— 因为它们的 66 点权重**全部落在缺失**、分子一分不加。它们同时是 F7（RPC）的**前置**（chord 是 pi RPC 的基座）。**需要你定**：① **做**；② **不做**（则 F7 的「不做」分支基本确定）；③ **只做通用原语档**（pi 的 `agent`/`protocol`/`server`/`client` 只用 `JsonValue`/`isJsonValue`/`Context` 等 15 处，**不含**多进程拓扑） |
 
 ---
 
@@ -320,7 +368,8 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 
 | 条目 | 结案处 | 日期 / commit |
 |---|---|---|
-| §8.25.5-1 跨度词汇对齐 pi typed schema（**并含方案 C「删环境态」**） | `docs/31:2497`、§8.28.7-1 | 2026-09-17，结案为**不做** || §8.25.5-2 adapter 契约 9 条 —— 只修真实差异的那条（父已结算后开子跨度降级 noop） | `docs/31:2498`、§8.28.4 | `35c4758` / `c3eef82` |
+| §8.25.5-1 跨度词汇对齐 pi typed schema（**并含方案 C「删环境态」**） | `docs/31:2497`、§8.28.7-1 | 2026-09-17，结案为**不做** |
+| §8.25.5-2 adapter 契约 9 条 —— 只修真实差异的那条（父已结算后开子跨度降级 noop） | `docs/31:2498`、§8.28.4 | `35c4758` / `c3eef82` |
 | §8.25.5-5 `docs/18 §7.3` 描述的 worker push/pop 已无实现 | `docs/31:2501` | 2026-09-16（A3） |
 | §8.25.5-8 摘要请求没有自己的跨度 | `docs/31:2504`、§8.29 | `798cccd` / `5dfa640` |
 | §8.26.5-11 顺序路径 `batchSize` 语义错 | `docs/31:2684`、§8.28.6 | `7f0cfb9` |
@@ -397,8 +446,8 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | STDIN 传输下命令内的交互式 stdin（如 `read`）与命令输入**共享管道** | `docs/08b:555` |
 | Codex 启动 logo ASCII 动画（frames 帧驱动）**未移植** | `docs/08b:579` |
 | 模型 arguments 截断到连 `command` 字段都不完整时，命令**仍无法恢复** | `docs/08b:607` |
-| Anthropic 路径的**思考内容仍按 `TextContent` 处理** | `docs/08b:628` |
-| webui 未决字段待 Stage A 实机钉死 | `docs/15:150` |
+| Anthropic 路径的**思考内容仍按 `TextContent` 处理** | `docs/08b:628` | ⚠️ **2026-09-20：已过期** —— 包①（`docs/31 §8.33`）后已发 `ThinkingStart`/`ThinkingContent`（`AnthropicMessagesApi.java:207`/`:226` 两处 `emitThinkingStart(...)`；`MessageBubble.java:90-92` 有 `case ContentBlock.ThinkingContent(...)`） |
+| webui 未决字段待 Stage A 实机钉死 | `docs/15:150` | ⚠️ **2026-09-20：已定，但结论与设计稿相反** —— Stage A–D 全部完成（`docs/15:199-218`），落地的是**不给消息带 timestamp**（有意偏离，`WebWireJson.java:64-66` 注释原文），前端直贴不判重 |
 | web 端 `queue_update` / `compaction_*` / `auto_retry_*` **暂不推前端** | `AgentEventTranslator.java:57` |
 | `keybindings.json` 用户覆盖 → Phase 6 | `KeybindingsManager.java:14` |
 
@@ -409,11 +458,11 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | `pendingWrites` **欠写不收敛**（一旦欠账则永远欠着），修复**重新进入待办** | `docs/27:149`、`docs/28:336`、`docs/30:171` | 三处同指一事 |
 | **日志不变量不再有生产端守卫**（随折叠链删除） | `docs/30:174` | |
 | 会话恢复的**定位语义** 待核 | `docs/27:100` | |
-| `/import` 与 `/export`（JSONL）是**占位符，未实现** | `docs/09b:93` | 扫描标 CLOSED，**文本说未实现——应为 OPEN** |
+| `/import` 与 `/export`（JSONL）是**占位符，未实现** | `docs/09b:93` | ⚠️ **2026-09-20：台账这格错了 —— 应为 CLOSED**。两条 slash 命令**已接线**（`MiscCommands.java:38` export HTML/JSONL、`:61` import）⇒ 原判「扫描标 CLOSED 但文本说未实现 ⇒ 应为 OPEN」是把**旧文档的文本**当成了现状 |
 | `/new` 文案陈旧 | `docs/09b:94` | |
 | Compaction v2「部分落地」（丢弃 usage） | `docs/09b:95` | |
-| 根 entry 的 `parentId` 被**省略**而非输出 `"parentId":null` | `docs/09b:103` | |
-| JSONL 扫描式搜索后端（按需） | `docs/09:1633`、`phase1-pi-code-mapping:220` | |
+| 根 entry 的 `parentId` 被**省略**而非输出 `"parentId":null` | `docs/09b:103` | ⚠️ **2026-09-20：已修（陈旧）** —— `JsonlCodec.java:149-152` 显式 `putNull("parentId")`，注释直引 pi 的 `requireNullableId`；`docs/09b §5` 亦记已修 |
+| JSONL 扫描式搜索后端（按需） | `docs/09:1633`、`phase1-pi-code-mapping:220` | ⚠️ **2026-09-20：口径错 —— 不是 pi 对齐缺口**。pi **没有任何搜索实现**（`agent/src/search/index.ts:20` 只有接口，唯一引用是类型断言 `test/harness/types.test.ts:384`）⇒ 这是 **pi-java 自设目标**，不该记在「pi 有 java 无」下 |
 | 多进程读并发压测 | `phase1-pi-code-mapping:397` | |
 | `DeferredHandle` **无生产者** | `docs/superpowers/plans/2026-09-12-…md:16` | |
 | ⚠️ **对外协议变更**：`agent_end` wire 多出 `stopReason` | 同上 `:399` | **需知悉** |
@@ -479,3 +528,10 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 7. **流程（用户 2026-09-19 提出，已采纳）**：包内三步可见 —— ① **命题表**（每条断言 `file:line` 待核，
    **不写分步计划**）；② **逐条代码验证**（打勾/推翻，**被推翻的当场列出**）；③ 基于核过的表写实施稿，
    **用户审核后才写代码**。理由：实施后报「与设计稿有偏差」的根因全部落在**没核的命题**上。
+8. **计数口径（2026-09-20 立，因 §1 重建）**：§1 汇总的「未结」列**只有一个语义** ——
+   **表内行数 − 行内含结案标记的条数**，且**行数由命令实测、不手记**（命令见 §1.0）。
+   ⚠️ **禁止再往这一列写「递增记账」数**（每次登记加一、结案不减）—— 那是本次重建要修的根因：
+   三种语义挤在一列，导致「还剩多少没对齐」连续多轮答不准。**登记时只加行，不改数字；
+   结案时在行内加标记，数字由命令重算。**
+9. **行内结案标记用固定词**（2026-09-20 立）：`⇒ 见 G 类` / `已修` / `已实施` / `已落地` / `结案` / `无遗留`。
+   新造词会让 §1.0 的计数命令漏数。**部分结案**的写「部分结案」并在行内说明剩余范围。
