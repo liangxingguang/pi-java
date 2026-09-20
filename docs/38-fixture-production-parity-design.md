@@ -5,7 +5,8 @@
 >
 > **判据**：分支所有功能都和 pi 表现一样（行为，不是文档、不是 API 形状）。
 >
-> **本文件当前状态**：命题**已逐条核过**；§8 待审核。
+> **本文件当前状态**：命题**已逐条核过**；§8 已实施，**§10 实施记录已落**（含 §10.6 两处
+> 超出 §8 的改动，**待用户过目**）。
 
 ---
 
@@ -157,3 +158,103 @@ private static final class FauxChatApi extends AbstractChatApi {
 
 用户审核 §8（含 §8.0 三个裁决点）之后才写代码；实施完成后追加**实施记录**
 （含**每一条变红夹具的判断**）。
+
+---
+
+## 10. 实施记录（2026-09-20）
+
+### 10.1 落地了什么
+
+| 步 | 模块 | 内容 |
+|---|---|---|
+| 1 | `pi-java-ai` | `FauxChatApi` 改**继承 `AbstractChatApi`**（`apiName()="faux"` ＋ `streamInternal` 重放），删掉自己那套 `stream`/`streamBlocking`/`send`；新夹具 `FauxProviderIdentityTest`（4 条） |
+| 1′ | `pi-java-ai` | ⚠️ **超出 §8 的一处**（见 §10.6）：`AbstractChatApi` 新增**终局事件补计量** `withTerminalUsage` ＋ `ZERO_USAGE` |
+| 1″ | `pi-java-coding-agent` | ⚠️ **实施中发现**（见 §10.6）：把包⑩ 的「`Instant → epoch 毫秒`」止血提成 `WireJson`，并给**命令线**（`JsonlWriter`）与**导出线**（`RpcDispatcher`）补上同一处 —— 这两处此前是裸 `ObjectMapper`（台账 B52） |
+| 3 | `pi-java-coding-agent` | `RpcModeEndToEndTest` 加 `get_entries` 一段（§8.3 ⑤ 的回归面） |
+
+### 10.2 三个裁决点执行情况
+
+| # | 裁决 | 执行 |
+|---|---|---|
+| A | 继承 `AbstractChatApi`（走同一个缝） | ✅ 照做。`grep "implements ChatApi"` 现在只剩 `AbstractChatApi` 自己 —— **全仓再无旁路桩** |
+| B | 只做 `FauxProvider` | ✅ 照做；§4-D 的「其它测试侧桩」**已清点**：`editing` 两个测试桩（`AbstractChatApiTest.ZeroIoApi`、`DefaultProvidersTest.RecordingChatApi`）**本来就继承基类** ⇒ 唯一绕路的就是 `FauxChatApi`，本条无欠账 |
+| C | 红了逐个判断、不许批量改断言 | ✅ 见 §10.5（全量只红一条，且判定为**既有** A12，证据在下面） |
+
+### 10.3 夹具与实测（§8.3 五条）
+
+`pi-java-ai` 452 条全绿（含新夹具 4 条）：
+
+| # | 夹具 | 结果 |
+|---|---|---|
+| ① | `streamedPartialsCarryTheFiveIdentityFields` | ✅ |
+| ② | `oneStreamKeepsASingleTimestamp` | ✅ |
+| ③ | `terminalMessageCarriesUsageToo` | ✅ |
+| ④ | `sendReturnsAFullyIdentifiedMessage` | ✅ |
+| ⑤ | `RpcModeEndToEndTest`（faux 驱动的 RPC 线上 `get_entries` 带 timestamp 且不抛） | ✅ |
+
+⚠️ **夹具是先有实现、后补夹具的**（本包在工作区里已改完才补证）⇒ **没有红灯可看**，
+故 §8.4 的四条变异探针**不能省**（§10.4）。
+
+### 10.4 变异探针实测红集（§8.4；**跑出来的，不是预测的**）
+
+| # | 改坏什么 | 实测红集 |
+|---|---|---|
+| P1 | faux 不挂身份（`FauxChatApi` 覆盖 `stream()` 走旧路＝改动前） | **4/4 全红**（①②③④） |
+| P2 | 每个事件各取一次 `Instant.now()` | 恰 1 条：② |
+| P3 | `send()` 留在旧路（自己拼消息、不过缝） | 恰 1 条：④ |
+| P4 | `apiName()` 返回别的 | 3 条：①③④（② 仍绿 —— 它只钉「同一个 timestamp」） |
+
+夹具⑤ 单独做了一次同类探针：把 `JsonlWriter` 的 mapper 退回裸 `ObjectMapper`
+⇒ `RpcModeEndToEndTest.fullPromptLoopOverPipes` **恰一条红** ⇒ ⑤ 钉的正是 B52 那条回归面。
+
+⚠️ 探针实施坑（记下来省下次的时间）：`FauxProvider.java` 是 **CRLF**，锚点用 `\n` 拼会**找不到**；
+`mvn -pl <模块>` **不带 `-am`** 会用 `~/.m2` 的旧构件，跑出的红/绿都可能是假的（见 §10.5）。
+
+### 10.5 P8 连带影响实测（§8.1 步 2）—— 全量结果与逐条判断
+
+全量 `mvn -fae test`（14 模块，6:16）：**13 SUCCESS / 1 FAILURE**，模块条数
+telemetry 31、ai 452、agent-core 487、sqlite 35、coding-agent 263、protocol 14、server 2、
+TUI 14（3:42 min）、evals/protocol/client SUCCESS、dist SKIPPED。
+
+**唯一一条红**：`pi-java-web` 的 `PiWebServerAuthTest.acceptsConnectionWithValidToken`
+（判定：**既有 A12，非本包引入**）。判断过程与证据：
+
+1. 全量里的症状是**收不到 `ready` 帧**（客户端 17:02:14.348 连上 → 17:02:29.353 断开，
+   15 s 超时），且同批**通过**的 `PiWebServerIntegrationTest` 在同一位置也等了 **4.3 s**
+   才收到 `ready` ⇒ 这是「`ready` 的时延 = `AgentSession.createWeb` 全量（settings 载入
+   ＋ 模型目录 ＋ 会话恢复）耗时」在负载下超了夹具的 15 s 窗口，与 A12 记的**同一症状家族**。
+2. ⚠️ **第一轮"基线对照"证据作废**（如实记）：我用 `mvn -pl pi-java-web surefire:test`
+   （**不带 `-am`**）想跑基线，三次**确定性红**、症状是 `Failed to create agent session: null`
+   —— 抓到栈是 `Settings.unknown() → Map.copyOf` **NPE**。但当前源码里**根本没有**
+   `Map.copyOf`（aa7d6ac 早已修掉）⇒ 那个类来自 `~/.m2` 里的**旧 jar**。即：**那条红是
+   假红**，与基线/改动**都无关**，是「单模块跑吃了旧构件」的产物。
+3. 正确的对照：`mvn -pl pi-java-web -am test -Dtest=PiWebServerAuthTest`（全链编译、机器空闲）
+   —— **基线 3/3 绿（2.13 s）**、**带本包改动 3/3 绿（2.06 s）**，两侧对称 ⇒ 本包**不引入**
+   这条红，也没有把这个窗口变差。
+
+⚠️ **P8 的结论要按字面读**：挂上身份后全量**0 条新红**。这**不**证明「那几条守卫
+（`sameModel`／stale／估算）现在与 pi 同形」—— 更可能的解释是**它们在夹具里依然没被行使**
+（那是 A16 的原发现，本包只解决了「路不同」，没解决「有没有走到」）。**不许把绿当成对。**
+
+### 10.6 ⚠️ 超出 §8 的两处（**请用户过目**）
+
+| # | 改动 | 为什么做了 | 风险 |
+|---|---|---|---|
+| 1 | `AbstractChatApi.withTerminalUsage`：终局事件（`StreamDone`/`StreamError`）快照若整条流**没报过用量**，补事件自带的 `UsageInfo`、没有则补 `ZERO_USAGE` | 夹具③ 要钉「pi 的 faux 每条消息都带 `usage`」（`faux.ts:289` 的 `cloned.usage ?? DEFAULT_USAGE`），而 pi-java 的用量挂在**缝**上 ⇒ 不补则 faux 的终局消息 `usage` 恒 null、与 pi 不同形 | ⚠️ **这是生产路径改动**（§6-2 明写「不顺手改生产路径」）。若你裁决不要，**夹具③ 就得改成只钉 faux 自己的事件**（即由 `FauxProvider` 造带 usage 的消息），缝不动 |
+| 2 | `WireJson`（提取包⑩ 的止血）＋ `JsonlWriter`／`RpcDispatcher` 注册 | 实施中发现**同成因**咬在命令线（`get_entries`/`get_tree`）与导出线（`export_html`/`export_jsonl`）：那两处也是裸 mapper ⇒ 带 `Instant` 的消息**直接抛**，客户端只看到 `success:false`。⑤ 就是钉它 | 低（纯补一件事，两处各 +1 行注册）；已登记台账 **B52**（此前代码注释引用了这个号，但**台账里并没有这一条** —— 本包补登记） |
+
+### 10.7 未覆盖（如实登记）
+
+- **真实 provider 仍不在夹具范围内**（§8.5 原样）：本包只让 faux 与生产同形，不等于
+  真实车道的消息形状被钉住。
+- **P8 那几条守卫的实际行为**：本包没测（见 §10.5 的告警）。要真回答「faux 驱动下压缩估算
+  与溢出守卫读到的身份对不对」，得**另立夹具**去行使它们。
+- **A12（web `ready` 帧时延）**：本包只补了证据（§10.5），**没有定位根因**，故未修。
+
+### 10.8 提交
+
+| commit | 内容 |
+|---|---|
+| `feat(ai)` | faux 走身份缝 ＋ 夹具 4 条（含 §10.6-1 的补计量） |
+| `fix(coding-agent)` | `WireJson` ＋ 命令线/导出线止血 ＋ ⑤ 回归面夹具 |
+

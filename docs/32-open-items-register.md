@@ -41,8 +41,8 @@
 
 | 类 | 含义 | 条数 | 谁能推进 |
 |---|---|---:|---|
-| **A** | 要**证据**才能定案（多数要先读 pi 源码） | 12 | 我（读 pi 源码 / 清点） |
-| **B** | **功能缺口**（pi 有、pi-java 无） | 40 | 我（另立包，多数需先出设计文档） |
+| **A** | 要**证据**才能定案（多数要先读 pi 源码） | 11 | 我（读 pi 源码 / 清点） |
+| **B** | **功能缺口**（pi 有、pi-java 无） | 41 | 我（另立包，多数需先出设计文档） |
 | **C** | 已裁决**不改 / 不做**，带触发条件 | 11 | 不推进，除非触发条件成立 |
 | **D** | 小账（遥测/注释级，一处一行） | 8 | 我，随时可做 |
 | **E** | 结构债（>500 行文件等） | 8 | 我，与功能包搭车 |
@@ -145,6 +145,17 @@
 > 包⑥ 因此重述为**三面同根**：核心（起点身份）＋ RPC 面（B28/B29）＋ **web 面（B40，新）**。
 > ⇒ B 类 35→**40** 行（新登记 B40–B44）。
 
+> **2026-09-20（包⑪ 实施，`docs/38 §10`）**：**A16 结案**（`FauxChatApi` 改继承
+> `AbstractChatApi`，走生产同一条身份挂载缝；pi 侧取证还推翻了「pi 的 faux 也不挂身份」这个我原先
+> 的假设 —— 它挂得**比 pi-java 还真**，五项全写）＋ 同期发现并修复 **B52**（同一成因的裸 mapper
+> 还咬着**命令线**与**导出线**：带 `Instant` 的消息一抛了之，客户端只看到 `success:false`）
+> ⇒ B 类 40→**41** 行、但两条**同包结案**（A 类 12→**11** 行）。夹具 5 条全绿、四个变异探针
+> 实测红集 4/4、恰 1、恰 1、3（**先实现后补夹具 ⇒ 没有红灯可看，只能靠探针**）。
+> ⚠️ **全量 0 条新红不构成「守卫已对齐」的证据**：P8 那几条守卫（`sameModel`/stale/估算）
+> 更可能**在夹具里依然没被行使** —— 本包只解决「路不同」。⚠️ 唯一那条全量红（web `ready` 帧）
+> 判定为**既有 A12**：对称隔离跑（基线 2.13 s / 带改动 2.06 s）两侧都 3/3 绿；另记一条会骗人的
+> 坑 —— `-pl` **不带 `-am`** 会吃 `~/.m2` 旧构件、跑出确定性**假红**（见 A12 行）。
+
 **收敛路径**：A 类与 F 类是真正的闸门 —— A 挡在「读 pi / 清点」上，F 挡在「你的决定」上；
 B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做，没有一条阻塞合并。
 **没有任何一项挡着合并到 `main`。**
@@ -166,11 +177,11 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | A9 | **per-model 压缩设置**（pi `getCompactionSettings(model)`，settings-manager.ts:891-901） | `docs/31:1322` | pi-java 的 settings supplier **无模型参数** |
 | A10 | `approvalHandler` 与钩子体在**工具线程**执行 ⇒ 交互类钩子（权限询问）需自证线程安全 | `docs/31:1784` | 清点项（pi 同形状） |
 | A11 | **内置工具线程安全审计**（`coding-agent` 侧 read/write/edit/bash/glob…） | `docs/31:1782` | 本轮**只审计不改**；审计本身尚未开始。pi 的契约是「工具必须可并发执行」 |
-| A12 | **web 的 WebSocket「收不到 `ready` 帧」是**一个症状家族**，全 reactor 负载下偶发红**：`PiWebServerAuthTest.acceptsConnectionWithValidToken:97`、`PiWebServerAuthTest.rejectsConnectionWithWrongToken:74`、`PiWebServerIntegrationTest.settingsRoundtrip:82`（`Timed out waiting for ready; received so far: []`） | §8.33.9-G（`docs/31:4080`）；**早在 §8.23.7 已记过**（`docs/31:1625`「三次全 reactor 红、第四次绿」、`:2593` 同）；**包⑦（`docs/34 §10.7`）扩记为三条同症状** | **未定位根因**。隔离复跑 6 次红 1 绿 5（红那次 15.05 s，绿均 ~1.3 s）⇒ **非确定性**；且 `pi-java-web/` 在包① 的 `git diff` 里零改动 ⇒ **与包① 无关**（§8.23.7 在前、包① 在后，同一现象，非新缺陷）。**需先定位根因**，未定位前不修、不加超时（那是掩盖） |
+| A12 | **web 的 WebSocket「收不到 `ready` 帧」是**一个症状家族**，全 reactor 负载下偶发红**：`PiWebServerAuthTest.acceptsConnectionWithValidToken:97`、`PiWebServerAuthTest.rejectsConnectionWithWrongToken:74`、`PiWebServerIntegrationTest.settingsRoundtrip:82`（`Timed out waiting for ready; received so far: []`） | §8.33.9-G（`docs/31:4080`）；**早在 §8.23.7 已记过**（`docs/31:1625`「三次全 reactor 红、第四次绿」、`:2593` 同）；**包⑦（`docs/34 §10.7`）扩记为三条同症状** | **未定位根因**。隔离复跑 6 次红 1 绿 5（红那次 15.05 s，绿均 ~1.3 s）⇒ **非确定性**；且 `pi-java-web/` 在包① 的 `git diff` 里零改动 ⇒ **与包① 无关**（§8.23.7 在前、包① 在后，同一现象，非新缺陷）。**需先定位根因**，未定位前不修、不加超时（那是掩盖）。**2026-09-20（包⑪ 收尾）补证据**：全量 `mvn -fae test`（14 模块）里唯一那条红就是本症状——客户端 15 s 没等到 `ready`（同批**通过**的 `PiWebServerIntegrationTest` 在同一处也等了 4.3 s）⇒ `ready` 的时延＝`AgentSession.createWeb` 全量耗时（settings 载入＋模型目录＋会话恢复），负载下超窗。**对照实验（`-pl pi-java-web -am`，机器空闲）**：基线 3/3 绿 2.13 s、带包⑪ 3/3 绿 2.06 s ⇒ 与包⑪ 无关。⚠️ **顺带记一个会骗人的坑**：`mvn -pl pi-java-web`（**不带 `-am`**）吃 `~/.m2` 旧构件，会跑出**确定性假红**（症状不同：`Failed to create agent session: null`，栈在 `Settings.unknown()→Map.copyOf` —— 那是 aa7d6ac **之前**的类）⇒ **别把那条假红当 A12** |
 | A13 | **`SessionResumeFoldTest.resumeSettlesACrashOpenedOperationSoANewRunCanOpen` 在全 reactor 跑时偶发红**（该用例耗时 **311 s**，断言「恰 2 条 `OperationStarted`」实际 3 条） | `docs/34 §10.6`（包⑦ 实测） | **机制有据**：该用例经 `AgentSession.createWeb` 建会话 ⇒ **真实 provider（网络）**，而断言隐含「首次调用必成功」；负载下真调用变慢 ⇒ post-run **重试环**开了**续跑 operation**（多出的记录是 `OperationStarted[…intent=Run[originalPrompt=[]]…]` ＝空 prompt 续跑，`seq=83` 远在后）；311 s 即退避墙钟。隔离复跑**绿**（30 s）。⚠️ **未证**：没用「回退本包再跑全树」证明非因果；**能证的是**该用例无工具调用 ⇒ 包⑦ 新增的发射在那条路径上一次都不触发。**待裁**：修法是把它改成注入 `FauxProvider`（测试面收口，非生产改动）。<br>✅ **已修（2026-09-20，用户裁决「修」）**：给 `AgentSession` 加一条包私有测试缝 `createWeb(args, providers, toolContext)`（既有重载里**没有**「持久化仓库 ＋ 注入 provider」这个组合），`SessionResumeFoldTest.resume()` 改为注入 `FauxProvider.text("ok")`。**实测确认诊断**：改前该夹具耗时 **30 s**、改后 **1.1–1.4 s** ⇒ 那 30 秒确实是**真网络调用**；连跑 5 次绿，coding-agent 252 全绿 |
 | A14 | **夹具在集成层无牙**：`ShellOutputStreamingTest.multiByteCharactersSurviveArbitraryChunkBoundaries` 逐字节喂 `Utf8ChunkStream` **单元**，**不经过 `DefaultShellExecutor`** ⇒ 把 executor 里那行换成裸 `new String(buf,0,n)` 它照样绿 | `docs/35 §10.3`（包⑧ 变异探针 **P5 实测红集 = 0**） | **变异探针测出来的**，不是猜的 ⇒ **单元级有牙、集成级无牙**。补它需要一个**字节精确**的假 shell，让 8 KiB 的切点确定性地落在多字节字符中间（输出全由 3 字节字符组成时，8192 = 3×2730+2 ⇒ 每个读边界**必然**切断）；当前假 shell 是 `.cmd`/`sh` 脚本，做字节精确输出要处理 cmd 的编码与 CRLF ⇒ **登记，不假装测过** |
 | A15 | **错误路的 `AgentSettled` 没有夹具** ⇒ 它的形状无守护 | `docs/36 §10.3`（包⑨ 变异探针 **P4 实测红集 = 0**） | 把 `SessionRunner:180` 的错误路改成发**非空** `toolResults`，全树无一条红。同理**探针测出来的**，不是猜的。可补：`SessionFailurePathTest` / `AgentSessionRetryEventOrderTest` 已经在驱动失败运行 ⇒ 在那里加一条断言即可。**登记** |
-| A16 | ⚠️ **夹具与生产在「消息身份」这一点上不同路** —— `FauxProvider` 自带的 `FauxChatApi` **直接实现 `ChatApi`、绕过 `AbstractChatApi`**（身份/时间戳的挂载点） | `docs/37 §4-B`（包⑩ 取证） | ⇒ **夹具永远造不出带 `Instant`/身份四元的消息**。这正是 B48 那条「带 timestamp 就抛」的 RPC 故障**能藏这么久**的结构性原因：所有 RPC 夹具都用 faux ⇒ timestamp 恒 null ⇒ 永不触发。⚠️ 补它＝改测试基础设施（牵动既有全部 faux 夹具的行为）⇒ **登记，单独一包**。**这是「测试与生产不同路」这一类问题的第一次具名登记** |
+| A16 | ⚠️ **夹具与生产在「消息身份」这一点上不同路** —— `FauxProvider` 自带的 `FauxChatApi` **直接实现 `ChatApi`、绕过 `AbstractChatApi`**（身份/时间戳的挂载点） | `docs/37 §4-B`（包⑩ 取证） | ⇒ **夹具永远造不出带 `Instant`/身份四元的消息**。这正是 B48 那条「带 timestamp 就抛」的 RPC 故障**能藏这么久**的结构性原因：所有 RPC 夹具都用 faux ⇒ timestamp 恒 null ⇒ 永不触发。⚠️ 补它＝改测试基础设施（牵动既有全部 faux 夹具的行为）⇒ **登记，单独一包**。**这是「测试与生产不同路」这一类问题的第一次具名登记**。✅ **包⑪ 已修（2026-09-20，`docs/38 §10`）**：`FauxChatApi` 改**继承 `AbstractChatApi`**（`apiName()="faux"`＋`streamInternal`）⇒ 走**同一条**身份挂载缝；新夹具 `FauxProviderIdentityTest`（4 条）＋ RPC 回归面 ⑤，**四个变异探针证明有牙**（P1 全红 / P2 恰 ① / P3 恰 ④ / P4 三条）。⚠️ 两条如实登记的边界：**① 全量 0 条新红 ≠ 那几条守卫（`sameModel`/stale/估算）已与 pi 同形** —— 更可能是它们**在夹具里依然没被行使**（本包只解决「路不同」，没解决「有没有走到」）；**② 该包顺带把「实现后补夹具」这件事的证伪手段从"红灯"换成了变异探针**（夹具先有实现后补，无红灯可看）。§4-D 的「其它测试侧桩」**已清点**：`AbstractChatApiTest.ZeroIoApi`／`DefaultProvidersTest.RecordingChatApi` 本来就继承基类 ⇒ 全仓再无旁路桩。**结案**（入 G） |
 
 > A4 / A5 取证之后会变成**行为改动**，需你拍板 ⇒ 见 F 类。
 
@@ -230,6 +241,7 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | B49 | **`turn_end` 的颗粒度**：pi 是**每回合**一条，pi-java 的 `AgentSettled` 是**每次驱动**一条 | `docs/36 §10.4-D2` | 包⑨ 按「本次驱动」装 `toolResults`（照字面取末回合会**恒空**）。要真对齐得让 pi-java 也发 per-turn 事件 —— 那是**事件时序**的改动，另一包。**登记不修** |
 | B50 | **`UserMessage`/`ToolResultMessage` 的 `timestamp` 仍缺**（pi 两者都**必填**：`ai/src/types.ts:417-421`、`:452-468`） | `docs/37 §10.5`（裁决 D 退为登记） | pi-java 的**消息记录里没有这个字段** —— 时间戳在 `Entry` 上；而 `agent_end.messages` 是 `List<Message>` ⇒ **没有干净的取值链**。硬凑会把 Entry 的时间戳假装成消息的时间戳。**登记不修**：要修得先把「消息自带时间戳」这件事在数据层立起来 |
 | B51 | **`entry_appended.entry` 里的消息仍是旧形状** | `docs/37 §10.5` | `Entry` 走 `MAPPER.valueToTree(a.entry())`，**不经过**包⑩ 新增的 `messageNode` ⇒ 那条路上的消息**没有 `role`、键名仍是 `toolUseId`、判别值仍是 `tool_use`**。**登记**：修法是给 `Entry` 里的 message 也走同一条投影（要先定 `Entry` 的线格式该长什么样） |
+| B52 | ⚠️ **「带 `Instant` 的消息过裸 mapper 会抛」还咬着另外两条线**：**命令线**（`JsonlWriter`：`get_entries`/`get_tree`/… 把会话条目里的助手消息序列化回客户端）与**导出线**（`RpcDispatcher`：`--no-session` 的 `export_html`/`export_jsonl` **内联**序列化条目） | `docs/38 §10.6-2`（包⑪ 实施中发现） | 与 B48 同一成因（包⑩ 只修了**事件线** `JsonEventMapper`）：这两处都是**裸** `ObjectMapper` ⇒ 消息带 `Instant timestamp` 时直接抛，而抛是**静默**的（客户端只看到 `success:false`，或导出命令失败）。**登记即修（包⑪，同一包）**：把包⑩ 的手写 serializer 提成 `core/WireJson.instantAsEpochMillis()`，两处各注册一次；夹具⑤（`RpcModeEndToEndTest` 的 `get_entries` 段）钉住回归面，并已用探针证明有牙（退回裸 mapper ⇒ 恰一条红）。⚠️ 这条记录了「实现先引用、台账后补」的漂移：三处代码注释写着「台账 B52」而**台账里当时没有这一条** —— 补登记即为此。**结案**（入 G） |
 | B46 | ⚠️ **pi-java 的 `BashTool` 从不调 `onUpdate`** ⇒ `tool_execution_update` **在生产上永不发射**（只有测试桩发） | `docs/34 §4-F`（登记处）＋ **包⑧ 取证更正（`docs/35 §2`）** | **2026-09-20 重新定范围（包⑧ 侦察）**：原记「pi 侧 7 个工具**全都有**」是**错的** —— 那是拿 `grep -l onUpdate` 数的，命中的是**声明**不是调用。逐行核过后：pi 侧**只有 `bash.ts` 真的调**（`:265` 与 `:297` 两处），`read`/`write`/`edit`/`grep`/`find`/`ls` 六家一律声明为 `_onUpdate?`（**下划线＝声明但不用**，TypeScript 的「故意未使用」约定）且全文再无引用；`powershell` 复用 `createShellToolDefinition` 故同样有。⇒ 本条的**真实范围只有 bash 一家**（pi-java 侧的 `BashTool` ＋ `ShellExecutor`）。pi-java 侧同法核过：7 个工具都收 `ToolUpdateCallback` 但**没有一条**调它 ⇒ 缺口成立、范围收窄。**包⑧ 修**。✅ **包⑧ 已修（2026-09-20）**：新 `ShellOutputSink` ＋ `ShellOptions` 第五个可空组件 ＋ `DefaultShellExecutor` 在既有 8 KiB 读循环里报增量 ＋ 新 `Utf8ChunkStream`（跨块多字节按字符边界解码）＋ 新 `BashUpdateEmitter`（逐位对齐 pi 的 `updateDirty`/`lastUpdateAt`/`updateTimer`，节流 100 ms）＋ `BashTool` 接线。**真实 `BashTool` 现在会发 `tool_execution_update`**（端到端夹具 `BashToolUpdateTest` 钉住）。见 `docs/35 §10` || B47 | **`pi-java-tui` 的 `tool_execution_*` 语义**：`ChatScreen.runToolCalls` 由 `StreamEvent.ToolCallStart` 计数（「模型吐完调用」），而 pi 的 TUI 由**真实工具执行事件**驱动 | `docs/34 §6-4` | 包⑦ **刻意不改**：会改变 `runToolCalls` 的计数时机（TUI 已按要求降级）。**登记不修**，待 TUI 退役或重估 |
 
 ---
@@ -300,8 +312,7 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 
 | 条目 | 结案处 | 日期 / commit |
 |---|---|---|
-| §8.25.5-1 跨度词汇对齐 pi typed schema（**并含方案 C「删环境态」**） | `docs/31:2497`、§8.28.7-1 | 2026-09-17，结案为**不做** |
-| §8.25.5-2 adapter 契约 9 条 —— 只修真实差异的那条（父已结算后开子跨度降级 noop） | `docs/31:2498`、§8.28.4 | `35c4758` / `c3eef82` |
+| §8.25.5-1 跨度词汇对齐 pi typed schema（**并含方案 C「删环境态」**） | `docs/31:2497`、§8.28.7-1 | 2026-09-17，结案为**不做** || §8.25.5-2 adapter 契约 9 条 —— 只修真实差异的那条（父已结算后开子跨度降级 noop） | `docs/31:2498`、§8.28.4 | `35c4758` / `c3eef82` |
 | §8.25.5-5 `docs/18 §7.3` 描述的 worker push/pop 已无实现 | `docs/31:2501` | 2026-09-16（A3） |
 | §8.25.5-8 摘要请求没有自己的跨度 | `docs/31:2504`、§8.29 | `798cccd` / `5dfa640` |
 | §8.26.5-11 顺序路径 `batchSize` 语义错 | `docs/31:2684`、§8.28.6 | `7f0cfb9` |
@@ -331,6 +342,8 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | **B5** 宿主失败通路的活性收口（两处 `catch (Throwable)` ＋ `finally` 幂等兜底 ＋ 读尾 assistant 定终局）＋ `handleRunFailure` 落引擎侧 | `docs/31`、§8.36.5 / §8.36.6 / §8.36.8 | 2026-09-19，包③，`16ca4d7`（agent-core：`RunFailure` + 两相拆分）/ `f16436b`（coding-agent：宿主侧）。夹具各 3/3，五条变异探针实测（P1/P2/P3/P5 各恰一条红；P4 ⇒ C 组两条 + 宿主 A3）。⚠️ **实测证伪设计稿两处**：① P2 的红集是 `{B1}` 而非 `{A1,B1,B3}` —— `finally` 只在「外层 catch 体自身再抛」那条路上是出口；② 夹具 2b 的注入点必须是 `AgentEnd`（`MessageUpdate` 上抛的 `Error` 会被引擎吞掉）。**L5 的 14 个剧本全绿不是本包第 2 步的证据**（桩 Stream 造不出引擎内抛出） |
 | **B37** `ChatScreen.lastError` 常驻状态栏（pi 没有这个构造，且是双报） | `docs/31`、§8.38.3-F / §8.38.9-(5) | 2026-09-19，包⑤，`42d49ec`（删字段与状态栏分支；错误只进聊天区） |
 | **B3** TUI/RPC 对 auto_retry / summarization_retry 的渲染 —— **两条块全部落地** | `docs/31`、§8.37.9 / §8.38.9 | 块1（`get_state` 四状态字段）＝包④ `3cf1181`；块2（TUI 订阅通道 ＋ 指示器 ＋ 五个事件）＝包⑤ `42d49ec`。⚠️ 行内原措辞「`isRetrying` / isIdle 含重试」是**登记时的猜测**，取证已更正（pi 零消费者）—— **结案的是真正存在的缺口，不是那三个名字** |
+| **A16** 夹具与生产不同路（faux 绕过身份缝） | `docs/38 §10` | 2026-09-20，包⑪（`FauxChatApi` 继承 `AbstractChatApi`） |
+| **B52** 命令线/导出线的裸 mapper（带 `Instant` 的消息一抛了之） | `docs/38 §10.6-2` | 2026-09-20，包⑪（提成 `WireJson` ＋ 两处注册） |
 
 > 最后一条特别提一下：`docs/31:945`（以及 `:1059` / `:1117` 两处重复）写着 B 项「仍开放 / 待用户」，
 > 而 §8.23 已于 2026-09-16 实施闭环 —— 这正是你问的「信息不知道在哪里」的典型样本。
