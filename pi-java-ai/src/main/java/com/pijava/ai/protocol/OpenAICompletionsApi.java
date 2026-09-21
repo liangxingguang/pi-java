@@ -34,6 +34,7 @@ import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
+import com.pijava.ai.utils.SanitizeUnicode;
 
 /**
  * OpenAI Chat Completions adapter using the official {@code openai-java} SDK.
@@ -415,7 +416,8 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         // 不在消息列表里。
         var systemText = request.systemPrompt();
         if (systemText != null && !systemText.isEmpty()) {
-            builder.addSystemMessage(systemText);
+            // pi openai-completions.ts:1251 —— instruction/system 文本净化。
+            builder.addSystemMessage(SanitizeUnicode.surrogates(systemText));
         }
 
         // 共享预通道必须先于本车道的映射跑（pi openai-completions.ts:1212 在
@@ -426,7 +428,9 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         for (var msg : messages) {
             if (msg instanceof Message.UserMessage) {
                 var text = extractText(msg.content());
-                if (!text.isEmpty()) builder.addUserMessage(text);
+                // pi :1257/:1264 —— user 内容净化。java 的 user 恒为**串形态**上线路
+                // ⇒ 对齐 pi 的串分支 :1257（整串净化）。
+                if (!text.isEmpty()) builder.addUserMessage(SanitizeUnicode.surrogates(text));
             } else if (msg instanceof Message.AssistantMessage assistant) {
                 addAssistantMessage(builder, assistant, request.model(), baseUrl);
             } else if (msg instanceof Message.ToolResultMessage tool) {
@@ -435,7 +439,8 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                 // call (observed as duplicated write blocks in the TUI).
                 builder.addMessage(ChatCompletionToolMessageParam.builder()
                     .toolCallId(tool.toolUseId())
-                    .content(extractText(tool.content()))
+                    // pi :1416 —— 净化的是**拼好之后**的串（pi 先 join("\n") 再净化）。
+                    .content(SanitizeUnicode.surrogates(extractText(tool.content())))
                     .build());
             }
         }
@@ -505,7 +510,9 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         var toolCalls = new ArrayList<ChatCompletionMessageToolCall>();
         for (var block : assistant.content()) {
             if (block instanceof ContentBlock.TextContent tc) {
-                text.append(tc.text());
+                // pi :1295 —— assistant 文本**逐块**净化后再 join("")（不是拼完再净化：
+                // 跨块边界的孤高+孤低在 pi 会被各自删除，拼完再净化则会成对复活）。
+                text.append(SanitizeUnicode.surrogates(tc.text()));
             } else if (block instanceof ContentBlock.ThinkingContent thinking) {
                 // pi :1289 —— 纯空白块不算推理：既不进连接，也不参与签名的选取。
                 if (thinking.text().trim().isEmpty()) {

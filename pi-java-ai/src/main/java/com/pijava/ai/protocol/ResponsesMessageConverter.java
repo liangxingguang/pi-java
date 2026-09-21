@@ -25,6 +25,7 @@ import com.pijava.ai.api.TransformMessages;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.thinking.ThinkingLevel;
+import com.pijava.ai.utils.SanitizeUnicode;
 
 /**
  * OpenAI Responses 协议的消息/工具转换与请求构建。
@@ -106,7 +107,8 @@ final class ResponsesMessageConverter {
         // context.systemPrompt），不在消息列表里。
         var systemPrompt = request.systemPrompt();
         if (systemPrompt != null && !systemPrompt.isEmpty()) {
-            items.add(inputMessage(EasyInputMessage.Role.SYSTEM, systemPrompt));
+            items.add(inputMessage(EasyInputMessage.Role.SYSTEM,
+                SanitizeUnicode.surrogates(systemPrompt)));
         }
         // 共享预通道先于本车道的映射跑（pi openai-responses-shared.ts:172 在消息转换前调
         // transformMessages）—— 跨模型重放的 thinking 块在此降级为文本，否则本车道的
@@ -123,8 +125,10 @@ final class ResponsesMessageConverter {
                 items.add(ResponseInputItem.ofFunctionCallOutput(
                     ResponseInputItem.FunctionCallOutput.builder()
                         .callId(tool.toolUseId())
+                        // pi :92/:97 —— 净化的是**选中之后**的串（含占位串；占位串是纯 ASCII，
+                        // 净化是恒等变换，口径与 pi 一致）。
                         .output(ResponseInputItem.FunctionCallOutput.Output.ofString(
-                            text.isEmpty() ? "(no tool output)" : text))
+                            SanitizeUnicode.surrogates(text.isEmpty() ? "(no tool output)" : text)))
                         .build()));
             }
             // pi 在循环体末尾自增（openai-responses-shared.ts:349），且**每种角色**都算一个
@@ -145,13 +149,16 @@ final class ResponsesMessageConverter {
         var hasImage = content.stream().anyMatch(b -> b instanceof ContentBlock.ImageContent
             || b instanceof ContentBlock.UrlImageContent);
         if (!hasImage) {
-            return inputMessage(EasyInputMessage.Role.USER, extractText(content));
+            // pi :231 —— user 串形态：整串净化。
+            return inputMessage(EasyInputMessage.Role.USER,
+                SanitizeUnicode.surrogates(extractText(content)));
         }
         var parts = new ArrayList<ResponseInputContent>();
         for (var block : content) {
             if (block instanceof ContentBlock.TextContent tc && !tc.text().isEmpty()) {
+                // pi :238 —— user 有图分支：**逐项**净化。
                 parts.add(ResponseInputContent.ofInputText(
-                    ResponseInputText.builder().text(tc.text()).build()));
+                    ResponseInputText.builder().text(SanitizeUnicode.surrogates(tc.text())).build()));
             } else if (block instanceof ContentBlock.ImageContent img) {
                 parts.add(ResponseInputContent.ofInputImage(ResponseInputImage.builder()
                     .detail(ResponseInputImage.Detail.AUTO)
@@ -193,7 +200,8 @@ final class ResponsesMessageConverter {
         var toolCalls = new ArrayList<ResponseFunctionToolCall>();
         for (var block : assistant.content()) {
             if (block instanceof ContentBlock.TextContent tc) {
-                text.append(tc.text());
+                // pi :283 —— assistant 文本**逐块**净化（跨块边界的孤高+孤低在 pi 会被各自删除）。
+                text.append(SanitizeUnicode.surrogates(tc.text()));
             } else if (block instanceof ContentBlock.ToolUseContent toolUse) {
                 toolCalls.add(ResponseFunctionToolCall.builder()
                     .callId(toolUse.id())
