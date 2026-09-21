@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import com.pijava.ai.catalog.ModelCompat;
+import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 
@@ -311,6 +312,97 @@ class ModelsJsonConfigTest {
         assertThatThrownBy(() -> ModelsJsonConfig.load(path))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining(path.toString());
+    }
+
+    // ── 包 H1 步 6：cost 扩键（J10）＋ 半价→UNKNOWN（J11，裁决 F）
+
+    /** 单 provider 单 model 的最小配置，返回那个 model 的目录条目。 */
+    private ModelInfo modelWith(String... modelFields) {
+        var config = write("{\"providers\":{\"p\":{\"baseUrl\":\"https://x.invalid\","
+            + "\"api\":\"openai-completions\",\"models\":[{\"id\":\"m\""
+            + (modelFields.length == 0 ? "" : "," + String.join(",", modelFields)) + "}]}}}");
+        return config.catalog().listModels().stream()
+            .filter(m -> m.id().modelName().equals("m"))
+            .findFirst().orElseThrow();
+    }
+
+    /**
+     * T11（A2 的钉子，裁决 F）：{@code cost} 写了但只给一半 ⇒ 整体按<b>「未知」</b>
+     * （-1）处理，而不是「免费」（0）。pi 的 zod 对存在的 cost 强制四费率齐全
+     * （{@code model-config.ts:125-130}）⇒ 半价在 pi 是校验失败，静默落 0 是引入偏差。
+     */
+    @Test
+    void halfPriceCostBecomesUnknownNotFree() {
+        var m = modelWith("\"cost\": {\"input\": 1.5}");
+        assertThat(m.pricing().isKnown()).isFalse();
+        assertThat(m.pricing().inputPrice()).isEqualTo(-1);
+        assertThat(m.pricing().outputPrice()).isEqualTo(-1);
+    }
+
+    /**
+     * 对照的一条：{@code cost} 整块缺席 ⇒ <b>免费</b>（四费率 0）—— 照抄 pi
+     * {@code provider-composer.ts:165} 的 {@code definition.cost ?? {input:0,output:0,
+     * cacheRead:0,cacheWrite:0}}。「缺席=刻意免费」「存在但残缺=未知」是 pi 的两个不同语义。
+     */
+    @Test
+    void absentCostMeansFreePerPiDefault() {
+        var m = modelWith();
+        assertThat(m.pricing().isKnown()).isTrue();
+        assertThat(m.pricing().inputPrice()).isZero();
+        assertThat(m.pricing().outputPrice()).isZero();
+        assertThat(m.pricing().cacheReadPrice()).isZero();
+        assertThat(m.pricing().cacheWritePrice()).isZero();
+    }
+
+    /**
+     * J10：{@code cacheRead}/{@code cacheWrite} 键抵达 {@code PricingInfo} ——
+     * 此前 {@code Cost} 只声明两键且 {@code ignoreUnknown=true}，用户写了 cache 价
+     * 被<b>静默吞掉</b>。
+     */
+    @Test
+    void cacheRateKeysAreHonored() {
+        var m = modelWith("\"cost\": {\"input\": 1, \"output\": 2,"
+            + " \"cacheRead\": 0.1, \"cacheWrite\": 1.25}");
+        assertThat(m.pricing().inputPrice()).isEqualTo(1);
+        assertThat(m.pricing().outputPrice()).isEqualTo(2);
+        assertThat(m.pricing().cacheReadPrice()).isEqualTo(0.1);
+        assertThat(m.pricing().cacheWritePrice()).isEqualTo(1.25);
+        assertThat(m.pricing().isCachePricingKnown()).isTrue();
+    }
+
+    /** 裁决 B 在本入口的样子：input/output 齐全、cache 未写 ⇒ -1（未知），不是 0（免费）。 */
+    @Test
+    void absentCacheRatesAreUnknownNotFree() {
+        var m = modelWith("\"cost\": {\"input\": 1, \"output\": 2}");
+        assertThat(m.pricing().isKnown()).isTrue();
+        assertThat(m.pricing().isCachePricingKnown()).isFalse();
+        assertThat(m.pricing().cacheReadPrice()).isEqualTo(-1);
+        assertThat(m.pricing().cacheWritePrice()).isEqualTo(-1);
+    }
+
+    /** J10：{@code tiers} 抵达 {@code PricingInfo.CostTier}（pi {@code ModelCostTierSchema}）。 */
+    @Test
+    void costTiersAreParsed() {
+        var m = modelWith("\"cost\": {\"input\": 1, \"output\": 2, \"cacheRead\": 0.1,"
+            + " \"cacheWrite\": 1.25, \"tiers\": [{\"inputTokensAbove\": 272000,"
+            + " \"input\": 2.4, \"output\": 4.8, \"cacheRead\": 0.24, \"cacheWrite\": 3.0}]}");
+        assertThat(m.pricing().tiers()).hasSize(1);
+        var tier = m.pricing().tiers().get(0);
+        assertThat(tier.inputTokensAbove()).isEqualTo(272_000);
+        assertThat(tier.inputPrice()).isEqualTo(2.4);
+        assertThat(tier.outputPrice()).isEqualTo(4.8);
+        assertThat(tier.cacheReadPrice()).isEqualTo(0.24);
+        assertThat(tier.cacheWritePrice()).isEqualTo(3.0);
+    }
+
+    /** tier 缺任一必填数 ⇒ 与 pi 一样按校验失败拒载（不静默补 0 造出假价）。 */
+    @Test
+    void incompleteTierIsRejected() {
+        assertThatThrownBy(() -> modelWith("\"cost\": {\"input\": 1, \"output\": 2,"
+            + " \"cacheRead\": 0.1, \"cacheWrite\": 1.25,"
+            + " \"tiers\": [{\"inputTokensAbove\": 272000, \"input\": 2.4}]}"))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("tier");
     }
 
     private ModelsJsonConfig write(String json) {

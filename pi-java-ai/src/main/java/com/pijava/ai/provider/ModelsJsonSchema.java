@@ -84,10 +84,36 @@ public final class ModelsJsonSchema {
         @JsonProperty("supportsFinishReason") Boolean supportsFinishReason
     ) {}
 
-    /** Per-million-token pricing. */
+    /**
+     * Per-million-token pricing (pi {@code ModelCostSchema},
+     * {@code model-config.ts:125-139}: four rates + optional {@code tiers}).
+     *
+     * <p>包 H1 步 6（J10，{@code docs/42}）：此前只声明两键，而本记录是
+     * {@code ignoreUnknown=true} ⇒ 用户在 models.json 里写的
+     * {@code cacheRead}/{@code cacheWrite}/{@code tiers} 被<b>静默吞掉</b>。
+     * 字段类型保持宽松的 {@code Double}（pi 的 zod 对存在的 cost 强制四费率齐全）——
+     * 残缺要能活着走到 {@link ModelsJsonConfig} 的裁决 F 兜底（半价 ⇒ 未知，
+     * 不是免费），而不是在 Jackson 层炸掉整个文件。</p>
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record Cost(
         @JsonProperty("input") Double input,
-        @JsonProperty("output") Double output
-    ) {}
+        @JsonProperty("output") Double output,
+        @JsonProperty("cacheRead") Double cacheRead,
+        @JsonProperty("cacheWrite") Double cacheWrite,
+        @JsonProperty("tiers") List<CostTierDef> tiers
+    ) {
+        /**
+         * One request-wide pricing tier (pi {@code ModelCostTierSchema}：
+         * 五个字段全部必填，缺任一 ⇒ 拒载，见 {@code ModelsJsonConfig#pricingFrom})。
+         */
+        @JsonIgnoreProperties(ignoreUnknown = true)
+        public record CostTierDef(
+            @JsonProperty("inputTokensAbove") Double inputTokensAbove,
+            @JsonProperty("input") Double input,
+            @JsonProperty("output") Double output,
+            @JsonProperty("cacheRead") Double cacheRead,
+            @JsonProperty("cacheWrite") Double cacheWrite
+        ) {}
+    }
 }

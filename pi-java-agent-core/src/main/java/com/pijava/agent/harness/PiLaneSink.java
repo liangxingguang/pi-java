@@ -17,7 +17,6 @@ import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.record.ReplayKind;
 import com.pijava.agent.record.StepKind;
 import com.pijava.agent.record.UsageCause;
-import com.pijava.ai.Usage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
@@ -433,9 +432,15 @@ final class PiLaneSink implements PiLoop.Sink {
             toolCount(), RunSpanFactory.thinkingLabel(ctx.thinkingLevel().get()), durationMs));
         // 无条件发射（docs/21）：零 token 的一轮（error / abort）恰恰是折叠需要 stopReason
         // 的那种情形，按 tokens>0 设门槛会把它丢掉。
+        // A3（docs/42 步 6）：记录带的是**终局消息的全量 usage** —— pi 的
+        // session-manager.ts:1152 起就整只传 Usage 对象（appendUsage(usage: Usage)）。
+        // 终局消息的 usage 由 fromPartial 从 partial 携带的 UsageInfo 投影（3a），
+        // B41 兜零值 ⇒ 恒非 null。旧代码这里的 Usage.of(i, o) 把
+        // cacheRead/cacheWrite/cacheWrite1h/reasoning/cost 整段丢掉 ⇒
+        // 会话账（SessionState.applyRecord 读的正是这条记录）四分量与 costTotal 恒 0。
         lane.records.add(new LaneRecord.UsageRecord(
             UUID.randomUUID().toString(), 0, laneName, null,
-            Usage.of(inputTokens, outputTokens), UsageCause.ASSISTANT, lane.runId,
+            assistant.usage(), UsageCause.ASSISTANT, lane.runId,
             entry.id(), null, attempt, assistant.stopReason()));
         ctx.addTokens(inputTokens + outputTokens);
     }

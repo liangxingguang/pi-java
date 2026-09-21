@@ -10,6 +10,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.record.LaneRecord;
+import com.pijava.agent.session.SessionMutation;
+import com.pijava.agent.session.SessionState;
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ExecutionMode;
 import com.pijava.agent.tool.ToolContext;
@@ -17,6 +19,7 @@ import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.agent.tool.ToolResult;
 import com.pijava.agent.tool.ToolUpdateCallback;
 import com.pijava.ai.AbortSignal;
+import com.pijava.ai.Usage;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
@@ -66,9 +69,14 @@ class PiLaneEngineTest {
     /** 纯文本助手响应。 */
     private static List<StreamEvent> textTurn(String text) {
         var partial = AssistantMessage.empty();
+        // ⚠️ usage 要挂到 partial 上（包 H1 步 6 起夹具的硬要求）：生产的
+        // StreamPartialBuilder.emitUsage 先 this.usage = info 再 snapshot() ⇒
+        // usage 帧之后的每个 partial 都携带它；终局消息由 fromPartial 投影，
+        // UsageRecord 读的正是投影结果（A3 起不再读 sink 的旁路累加器）。
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent(text)))
-            .withStopReason("stop");
+            .withStopReason("stop")
+            .withUsage(new StreamEvent.UsageInfo(11, 7, null, null));
         return List.of(
             new StreamEvent.Start(partial),
             new StreamEvent.TextDelta(0, text, done),
@@ -81,7 +89,8 @@ class PiLaneEngineTest {
         var partial = AssistantMessage.empty();
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.ToolUseContent(callId, name, args)))
-            .withStopReason("tool_use");
+            .withStopReason("tool_use")
+            .withUsage(new StreamEvent.UsageInfo(5, 3, null, null));
         return List.of(
             new StreamEvent.Start(partial),
             new StreamEvent.ToolCallEnd(0, callId, name, args, done),
@@ -254,10 +263,63 @@ class PiLaneEngineTest {
         var usage = records.stream().filter(LaneRecord.UsageRecord.class::isInstance)
             .map(r -> (LaneRecord.UsageRecord) r).toList();
         assertThat(usage).hasSize(1);
-        // UsageInfo 是独立帧、不属于生命周期事件，只有原始帧旁路才能拿到它。
+        // A3（包 H1 步 6）起记录读的是**终局消息的 usage**（fromPartial 投影自 partial
+        // 携带的 UsageInfo），不再是 sink 的旁路累加器 —— 两分量形状下数值相同。
         assertThat(usage.get(0).usage().input()).isEqualTo(11);
         assertThat(usage.get(0).usage().output()).isEqualTo(7);
         assertThat(usage.get(0).stopReason()).isEqualTo("stop");
+    }
+
+    /**
+     * T10（docs/42 §8.3）：桩流喂非零全量分解 ⇒ 走完 {@code PiLaneSink} 后
+     * {@code UsageRecord.usage()} 四分量与 cost 都非零，且会话账
+     * （{@code SessionState.getStats()}，读的就是这条记录）跟着动起来。
+     *
+     * <p>A3 的钉子 —— 修复前这里是 {@code Usage.of(inputTokens, outputTokens)}，
+     * cache/reasoning/cost 恒 0 ⇒ 四分量与 costTotal 两条断言全红（M7 探针同色）。</p>
+     */
+    @Test
+    void fullUsageBreakdownReachesRecordAndSessionLedger() {
+        var full = new Usage(100, 20, 40, 10, 6.0, 8.0, 170,
+            new Usage.Cost(0.30, 0.15, 0.02, 0.04, 0.51));
+        var partial = AssistantMessage.empty();
+        var done = AssistantMessage.empty()
+            .withContent(List.of(new ContentBlock.TextContent("hi")))
+            .withStopReason("stop")
+            .withUsage(new StreamEvent.UsageInfo(100, 20, null, full));
+        var h = harness(scripted(List.of(List.of(
+            new StreamEvent.Start(partial),
+            new StreamEvent.UsageInfo(100, 20, done),
+            new StreamEvent.StreamDone("stop", null, done)))), null);
+
+        h.prompt(AgentHarness.DEFAULT_LANE, "hi", List.of(), new Recorder());
+
+        var record = recordsOf(h).stream()
+            .filter(LaneRecord.UsageRecord.class::isInstance)
+            .map(r -> (LaneRecord.UsageRecord) r)
+            .findFirst().orElseThrow();
+        var u = record.usage();
+        assertThat(u.input()).isEqualTo(100);
+        assertThat(u.output()).isEqualTo(20);
+        assertThat(u.cacheRead()).isEqualTo(40);
+        assertThat(u.cacheWrite()).isEqualTo(10);
+        assertThat(u.cacheWrite1h()).isEqualTo(6.0);
+        assertThat(u.reasoning()).isEqualTo(8.0);
+        assertThat(u.totalTokens()).isEqualTo(170);
+        assertThat(u.cost().total()).isEqualTo(0.51);
+
+        // 会话账投影：SessionState.applyRecord 从这条记录累加四个量（J14 的存储层
+        // 早已能读写全字段 —— 缺的一直只是发射端喂的东西）。committed(...) 是存储层
+        // 落账时的重编号原语（JsonlSessionStorage 提交的就是它），seq 须从 1 起。
+        var state = new SessionState();
+        state.applyMutation(new SessionMutation.Lane(1, record.lane(), null));
+        state.applyMutation(new SessionMutation.Record(
+            record.committed(2, java.time.Instant.now())));
+        var stats = state.getStats();
+        assertThat(stats.costTotal()).isEqualTo(0.51);
+        assertThat(stats.cachedTokens()).isEqualTo(40);
+        assertThat(stats.uncachedTokens()).isEqualTo(110);
+        assertThat(stats.totalTokens()).isEqualTo(170);
     }
 
     /** 一轮工具：结果消息落盘源序、工具记录带结果 entry id、工具真的被执行。 */

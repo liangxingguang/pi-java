@@ -24,6 +24,7 @@ import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
 import com.pijava.ai.provider.ModelsJsonSchema.CompatDef;
+import com.pijava.ai.provider.ModelsJsonSchema.Cost;
 import com.pijava.ai.provider.ModelsJsonSchema.ModelDef;
 import com.pijava.ai.provider.ModelsJsonSchema.ProviderDef;
 import com.pijava.ai.provider.ModelsJsonSchema.Root;
@@ -198,9 +199,7 @@ public final class ModelsJsonConfig {
         }
         var contextWindow = model.contextWindow() != null ? model.contextWindow() : 128_000;
         var maxTokens = model.maxTokens() != null ? model.maxTokens() : 16_384;
-        var pricing = model.cost() != null && model.cost().input() != null && model.cost().output() != null
-            ? new PricingInfo(model.cost().input(), model.cost().output())
-            : new PricingInfo(0, 0);
+        var pricing = pricingFrom(providerId, model.id(), model.cost());
         var displayName = model.name() != null && !model.name().isBlank() ? model.name() : model.id();
         var headers = model.headers() != null ? model.headers() : Map.<String, String>of();
         var samplingParams = model.samplingParams() != null ? model.samplingParams() : Map.<String, Object>of();
@@ -209,6 +208,50 @@ public final class ModelsJsonConfig {
             displayName, Set.copyOf(caps), contextWindow, maxTokens, false,
             pricing, com.pijava.ai.thinking.ThinkingLevelMap.empty(), headers, samplingParams,
             compatOf(model.compat()));
+    }
+
+    /**
+     * models.json 的 {@code cost} → {@link PricingInfo}（包 H1 步 6，
+     * {@code docs/42} 的 J10/J11 ＋ 裁决 B/F）。三个分支对应 pi 的三种语义：
+     *
+     * <ul>
+     *   <li><b>cost 整块缺席</b> ⇒ 四费率全 0（<b>免费</b>）—— 照抄 pi
+     *       {@code provider-composer.ts:165} 的 {@code definition.cost ?? {input:0,
+     *       output:0, cacheRead:0, cacheWrite:0}}；缺席是用户的<b>明示</b>。</li>
+     *   <li><b>cost 存在但 input/output 不全</b> ⇒ {@link PricingInfo#UNKNOWN}
+     *       （全 -1，<b>未知</b>）—— 裁决 F（T11 的钉子）：pi 的 zod 对存在的 cost
+     *       强制四费率齐全（{@code model-config.ts:125-130}），半价在 pi 是<b>校验失败</b>；
+     *       宽松加载器不炸文件，但绝不把残缺降级成免费（修复前正是 0/0 ⇒ 「免费」）。</li>
+     *   <li><b>input/output 齐全</b> ⇒ cache 费率未写时取 -1（未知，裁决 B 的口径）；
+     *       {@code tiers} 逐档映射，pi 的 {@code ModelCostTierSchema} 五字段全必填 ⇒
+     *       缺任一按校验失败拒载（不静默补 0 造出假价）。</li>
+     * </ul>
+     */
+    private static PricingInfo pricingFrom(String providerId, String modelId, Cost cost) {
+        if (cost == null) {
+            return new PricingInfo(0, 0, 0, 0, List.of());
+        }
+        if (cost.input() == null || cost.output() == null) {
+            return PricingInfo.UNKNOWN;
+        }
+        double cacheRead = cost.cacheRead() != null ? cost.cacheRead() : -1;
+        double cacheWrite = cost.cacheWrite() != null ? cost.cacheWrite() : -1;
+        var tiers = new ArrayList<PricingInfo.CostTier>();
+        if (cost.tiers() != null) {
+            for (var tier : cost.tiers()) {
+                if (tier.inputTokensAbove() == null || tier.input() == null
+                        || tier.output() == null || tier.cacheRead() == null
+                        || tier.cacheWrite() == null) {
+                    throw new IllegalStateException("models.json provider \"" + providerId
+                        + "\", model \"" + modelId + "\": every cost tier needs all five numbers"
+                        + " (inputTokensAbove / input / output / cacheRead / cacheWrite)");
+                }
+                tiers.add(new PricingInfo.CostTier(
+                    tier.inputTokensAbove(), tier.input(), tier.output(),
+                    tier.cacheRead(), tier.cacheWrite()));
+            }
+        }
+        return new PricingInfo(cost.input(), cost.output(), cacheRead, cacheWrite, tiers);
     }
 
     /**
