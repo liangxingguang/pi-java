@@ -29,6 +29,7 @@ import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
+import com.pijava.ai.utils.SanitizeUnicode;
 
 /**
  * Anthropic Messages API adapter using the official {@code anthropic-java} SDK.
@@ -397,7 +398,8 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         // 不在消息列表里 —— pi 的 Message 没有 system 角色。
         var systemText = request.systemPrompt();
         if (systemText != null && !systemText.isEmpty()) {
-            builder.system(systemText);
+            // pi anthropic-messages.ts:1089/:1098 —— system 文本净化（两分支各一处）。
+            builder.system(SanitizeUnicode.surrogates(systemText));
         }
 
         for (int i = 0; i < messages.size(); i++) {
@@ -479,8 +481,9 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                 if (tc.text() == null || tc.text().trim().isEmpty()) {
                     continue;
                 }
+                // pi :1276(user 串)/:1284(user 文本块)/:1318(assistant 文本块) —— 一律净化。
                 result.add(ContentBlockParam.ofText(
-                        TextBlockParam.builder().text(tc.text()).build()));
+                        TextBlockParam.builder().text(SanitizeUnicode.surrogates(tc.text())).build()));
             } else if (block instanceof ContentBlock.ThinkingContent th) {
                 appendThinkingBlock(result, th, allowEmptySignature);
             } else if (block instanceof ContentBlock.ToolUseContent tu) {
@@ -535,20 +538,22 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         if (text.trim().isEmpty() && !hasSignature) {
             return;
         }
+        // pi :1340/:1345/:1351 —— thinking 三分支的文本一律净化（值域同一，一处即可）。
+        var sanitized = SanitizeUnicode.surrogates(text);
         if (!hasSignature) {
             result.add(allowEmptySignature
                     ? ContentBlockParam.ofThinking(
                         com.anthropic.models.messages.ThinkingBlockParam.builder()
-                                .thinking(text)
+                                .thinking(sanitized)
                                 .signature("")
                                 .build())
                     : ContentBlockParam.ofText(
-                        TextBlockParam.builder().text(text).build()));
+                        TextBlockParam.builder().text(sanitized).build()));
             return;
         }
         result.add(ContentBlockParam.ofThinking(
                 com.anthropic.models.messages.ThinkingBlockParam.builder()
-                        .thinking(text)
+                        .thinking(sanitized)
                         .signature(signature)
                         .build()));
     }
@@ -568,8 +573,9 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         var result = new ArrayList<ToolResultBlockParam.Content.Block>();
         for (var block : blocks) {
             if (block instanceof ContentBlock.TextContent tc) {
+                // pi :144/:152（convertContentBlocks，tool result 唯一调用者）—— 净化。
                 result.add(ToolResultBlockParam.Content.Block.ofText(
-                        TextBlockParam.builder().text(tc.text()).build()));
+                        TextBlockParam.builder().text(SanitizeUnicode.surrogates(tc.text())).build()));
             }
         }
         return result;
