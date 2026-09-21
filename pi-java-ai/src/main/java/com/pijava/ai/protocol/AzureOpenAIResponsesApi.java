@@ -62,7 +62,7 @@ public final class AzureOpenAIResponsesApi extends AbstractChatApi {
         var params = ResponsesMessageConverter.buildParams(
             request, responsesOptions, deploymentName, apiName());
         try (var stream = client.responses().createStreaming(params)) {
-            ResponsesStreamProcessor.process(stream, publisher);
+            ResponsesStreamProcessor.process(stream, publisher, request.model());
         }
     }
 

@@ -9,8 +9,12 @@ import com.openai.models.responses.Response;
 import com.openai.models.responses.ResponseOutputItem;
 import com.openai.models.responses.ResponseStatus;
 import com.openai.models.responses.ResponseStreamEvent;
+import com.openai.models.responses.ResponseUsage;
 
+import com.pijava.ai.Usage;
+import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.model.CostCalculator;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
 
@@ -62,9 +66,15 @@ final class ResponsesStreamProcessor {
 
     private ResponsesStreamProcessor() {}
 
-    /** 消费 Responses 流并发布 pi-java 事件。 */
+    /**
+     * 消费 Responses 流并发布 pi-java 事件。
+     *
+     * @param model 终局 usage 的计价用模型（pi {@code finalizeResponse} 里的
+     *              {@code calculateCost(model, …)}）；{@code null} ⇒ 不计价
+     */
     static void process(StreamResponse<ResponseStreamEvent> stream,
-                        SubmissionPublisher<StreamEvent> publisher) {
+                        SubmissionPublisher<StreamEvent> publisher,
+                        ModelInfo model) {
         var builder = new StreamPartialBuilder();
         var slotTypes = new HashMap<Long, String>();
         var toolCalls = new HashMap<Long, FunctionCallState>();
@@ -128,10 +138,12 @@ final class ResponsesStreamProcessor {
                         builder, publisher, slotTypes, toolCalls);
                 } else if (event.completed().isPresent()) {
                     sawTerminal = true;
-                    finalizeResponse(builder, publisher, event.completed().get().response(), stop);
+                    finalizeResponse(builder, publisher, event.completed().get().response(),
+                        stop, model);
                 } else if (event.incomplete().isPresent()) {
                     sawTerminal = true;
-                    finalizeResponse(builder, publisher, event.incomplete().get().response(), stop);
+                    finalizeResponse(builder, publisher, event.incomplete().get().response(),
+                        stop, model);
                 } else if (event.failed().isPresent()) {
                     // pi 的 `response.failed` 分支（shared :745-755）：先记 sawTerminal 再 throw。
                     // throw 终止整条流（ε）—— 不是「发一条 error 继续读」。
@@ -230,7 +242,8 @@ final class ResponsesStreamProcessor {
      */
     private static void finalizeResponse(StreamPartialBuilder builder,
                                          SubmissionPublisher<StreamEvent> publisher,
-                                         Response response, StopState stop) {
+                                         Response response, StopState stop,
+                                         ModelInfo model) {
         var status = response.status().orElse(null);
         String incompleteReason = incompleteReason(response);
         // pi shared `:588`：原值是**复合量**（⑨/D5）——
@@ -243,8 +256,7 @@ final class ResponsesStreamProcessor {
             ? status + "." + incompleteReason
             : (status == null ? null : status.toString()));
         if (response.usage().isPresent()) {
-            var u = response.usage().get();
-            publisher.submit(builder.emitUsage(u.inputTokens(), u.outputTokens()));
+            publisher.submit(builder.emitUsage(normalizeUsage(response.usage().get(), model)));
         }
         var mapped = mapStopReason(status, incompleteReason);
         stop.reason = mapped.reason();
@@ -253,6 +265,40 @@ final class ResponsesStreamProcessor {
             // pi :593-595 —— 内容里有工具块时 stop 补成 toolUse
             stop.reason = "tool_use";
         }
+    }
+
+    /**
+     * 终局 usage 归一 —— pi {@code openai-responses-shared.ts:559-582}（{@code finalizeResponse}
+     * 的 usage 段）的逐条移植（包 H1 步 5，{@code docs/42 §2.1 P11}）。
+     *
+     * <ul>
+     *   <li><b>减法</b>（{@code :571}）：OpenAI 把 cached 与 cache-write <b>都含在</b>
+     *       {@code input_tokens} 里（注释逐字点名）⇒ 两个都减，且有 {@code Math.max(0, …)}
+     *       钳位（与 completions 同、与 Google 反 —— P13）。</li>
+     *   <li><b>{@code totalTokens} 直取</b> provider 的 {@code total_tokens}（{@code :576}，
+     *       P3 的「直取派」）—— 与 completions 车道的自算相反，两条各自照 pi。</li>
+     *   <li><b>{@code reasoning} 用 {@code || 0}</b>（{@code :575}）⇒ 恒为数字。</li>
+     *   <li><b>{@code cacheWrite1h} 从不设置</b> ⇒ {@code null}。</li>
+     * </ul>
+     *
+     * <p>⚠️ 读法：全部走 {@code _field().asKnown()} 而不是类型化访问器 —— pi 对缺字段写
+     * {@code || 0}，SDK 的类型化访问器（{@code inputTokens()}）在字段缺席时<b>抛</b>
+     * （{@code §8.35.14} 记录的同类坑），{@code asKnown().orElse(0)} 才与 pi 同语义。</p>
+     */
+    private static Usage normalizeUsage(ResponseUsage u, ModelInfo model) {
+        long cached = u._inputTokensDetails().asKnown()
+            .flatMap(d -> d._cachedTokens().asKnown()).orElse(0L);
+        long cacheWrite = u._inputTokensDetails().asKnown()
+            .flatMap(d -> d._cacheWriteTokens().asKnown()).orElse(0L);
+        long reasoning = u._outputTokensDetails().asKnown()
+            .flatMap(d -> d._reasoningTokens().asKnown()).orElse(0L);
+        long input = Math.max(0, u._inputTokens().asKnown().orElse(0L) - cached - cacheWrite);
+        var usage = new Usage(input, u._outputTokens().asKnown().orElse(0L),
+            cached, cacheWrite, null, (double) reasoning,
+            u._totalTokens().asKnown().orElse(0L), Usage.Cost.zero());
+        return model == null
+            ? usage
+            : usage.withCost(CostCalculator.calculateCost(model.pricing(), usage));
     }
 
     /** pi 的 {@code output.stopReason} + {@code output.errorMessage} 两件套。 */

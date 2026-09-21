@@ -14,6 +14,7 @@ import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.TransformMessages;
 import com.pijava.ai.api.ToolDefinition;
+import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.http.PiHttpClient;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -111,7 +112,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
                     break;
                 }
                 processSseData(sse.data(), publisher, builder,
-                        toolCallBuilders, textStarted, stop);
+                        toolCallBuilders, textStarted, stop, request.model());
             }
             if (textStarted[0]) publisher.submit(builder.emitTextEnd());
             // ⚠️ pi 的 abort 检查（:150）在车道层**结构上不可达** —— `StreamRequest` 没有
@@ -173,9 +174,23 @@ public final class MistralConversationsApi extends AbstractChatApi {
                                   StreamPartialBuilder builder,
                                   Map<String, ToolCallBuilder> toolBuilders,
                                   boolean[] textStarted,
-                                  StopState stop) {
+                                  StopState stop,
+                                  ModelInfo model) {
         try {
             var json = MAPPER.readValue(data, Map.class);
+
+            // Usage —— 位置照 pi：usage 应用（{@code :596-611}）在「choices 空帧早退」
+            // （{@code :613} 的 `if (!choice) continue`）**之前**。两个后果：
+            // ① Mistral 真会把 usage 放在终局 {@code choices: []} 帧上 —— 早退在前会
+            //    整帧丢掉（修复前的形状，M5fix 探针实测恰红这一条）；
+            // ② 同帧既有内容又有 usage 时，UsageInfo 排在本帧 delta **之前** —— 与 pi
+            //    的 partial 可见性同向（pi 先写 output.usage，后 push 的 delta 带着它）。
+            //    UsageInfo 本身是 pi-java 自有的投影（pi 无 usage 事件）。
+            var usage = (Map<String, Object>) json.get("usage");
+            if (usage != null) {
+                publisher.submit(builder.emitUsage(MistralUsage.parse(usage, model)));
+            }
+
             var choices = (List<Map<String, Object>>) json.get("choices");
             if (choices == null || choices.isEmpty()) return;
 
@@ -241,14 +256,6 @@ public final class MistralConversationsApi extends AbstractChatApi {
                         }
                     }
                 }
-            }
-
-            // Usage
-            var usage = (Map<String, Object>) json.get("usage");
-            if (usage != null) {
-                long promptTokens = ((Number) usage.getOrDefault("prompt_tokens", 0)).longValue();
-                long completionTokens = ((Number) usage.getOrDefault("completion_tokens", 0)).longValue();
-                publisher.submit(builder.emitUsage(promptTokens, completionTokens));
             }
 
         } catch (JsonProcessingException e) {

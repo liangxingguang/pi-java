@@ -16,12 +16,14 @@ import com.google.genai.types.HttpOptions;
 import com.google.genai.types.Part;
 import com.google.genai.types.Tool;
 
+import com.pijava.ai.Usage;
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.TransformMessages;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.model.CostCalculator;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
 
@@ -132,13 +134,28 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
                         }
                     }
 
-                    // Usage metadata
+                    // Usage metadata —— pi google-generative-ai.ts:231-250 的逐条移植
+                    // （包 H1 步 5，docs/42 §2.1 P12/P13）。
                     if (response.usageMetadata().isPresent()) {
                         var usage = response.usageMetadata().get();
-                        long input = usage.promptTokenCount().orElse(0);
-                        long output = usage.candidatesTokenCount().orElse(0)
-                                + usage.thoughtsTokenCount().orElse(0);
-                        publisher.submit(builder.emitUsage(input, output));
+                        long cached = usage.cachedContentTokenCount().orElse(0);
+                        // ⚠️ pi 的减法**没有** Math.max(0, …) 钳位（:233-234；vertex 同），
+                        // 与 OpenAI 两条车道相反 ⇒ 越界 cached 产出负 input 是 pi 行为。
+                        // docs/42 裁决 D「照抄」，夹具 negativeInputIsNotClampedAwayAsPiDoes
+                        // 钉着；补钳位会红那条，且须重开裁决 D。
+                        long input = usage.promptTokenCount().orElse(0) - cached;
+                        long thoughts = usage.thoughtsTokenCount().orElse(0);
+                        // P12 双写：thoughts 既折进 output（candidates + thoughts）
+                        // 又单设 reasoning —— 一个量、两个去处。
+                        long output = usage.candidatesTokenCount().orElse(0) + thoughts;
+                        // totalTokens 直取 totalTokenCount（P3：本车道属「直取」派）
+                        var u = new Usage(input, output, cached, 0,
+                                null, (double) thoughts,
+                                usage.totalTokenCount().orElse(0), Usage.Cost.zero());
+                        var model = request.model();
+                        publisher.submit(builder.emitUsage(model == null
+                                ? u
+                                : u.withCost(CostCalculator.calculateCost(model.pricing(), u))));
                     }
 
                     // Process candidates
