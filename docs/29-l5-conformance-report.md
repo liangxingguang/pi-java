@@ -139,7 +139,7 @@ end 随各自完成」——**代码与自己的文档相反**，这条从第 2 
 | thinking 内容块 | 剧本未含 thinking 块 |
 | ~~`prepareNextTurn` / `shouldStopAfterTurn`~~ | ~~八个剧本里两者恒为 `null`~~ —— **`prepareNextTurn` 已由 S9 覆盖**，见 §8；`shouldStopAfterTurn` 仍是盲区 |
 | `terminate` 语义（**every** 而非 any，`:589-591`） | 无剧本置 `terminate: true` |
-| `usage` / token 记账 | 按 `docs/23c §2.3` 归一化时**有意丢弃**，L5 结构上不覆盖 |
+| ~~`usage` / token 记账~~ | **本行两度过时**：按 `docs/23c §2.3`「有意丢弃」——❌ 3a（`docs/31 §8.19`）起 usage 已**进帧**（但两侧恒零 ⇒ 差分空转，即 `docs/42` A1）；**2026-09-22 包H1 步 7 起由 S15 实质覆盖**（全部分量＋可选键＋小数 cost 逐字节差分），见 §10 |
 | 车道 / 记录日志 / 持久化 | 有意排除：本次直连 `PiLoop`，对标 `agentLoop`，非 pi 的 harness 层 |
 | 工具批次中途 abort | 剧本不覆盖；改由 §4.1 末尾的单测兜底 |
 | 多轮 steer 与 follow-up 的组合 | S6/S8 各只覆盖一种、各只有一轮 |
@@ -253,3 +253,31 @@ pi 自身的一处配置坏死在此记录：`packages/agent/vitest.config.ts` �
 
 即：`LaneOperationFold` 是一套**仅存在于 pi-java** 的构造，其 javadoc 的行号引用指向 pi 已删除的
 667 行旧 `reducer.ts`。退休与「跟 legacy 还是跟 harness」的裁决耦合，见 `docs/28` 的后续步骤。
+
+## 10. 追加：S15 —— 剧本加 usage（2026-09-22，包H1 步 7 / `docs/42` 裁决 C）
+
+A1 的终结：**usage 第一次被差分实质观察**。剧本模型加可选 `usage`（字段名＝pi 的
+`Usage` 键名，pi 侧零翻译；缺省 ⇒ 两侧同零，S1–S14 一字不动）；S15 单轮文本回合挂
+**全分解**：四分量非零（100/20/40/10）、可选键在场（`cacheWrite1h=6`/`reasoning=8`
+⇒ 钉「非空才带」与 pi 侧 stringify 丢 undefined 的对偶）、`totalTokens=170`、
+cost 五字段全取**二分小数**。
+
+**二分小数是刻意的**：JS `JSON.stringify` 与 Java `Double.toString` 的小数格式在
+`<1e-3` 分叉（`0.00002` vs `2.0E-5`），二分小数（0.125、0.03125…）的最短往返表示
+两侧逐字一致 ⇒ 差分测的是**接线与键集**，不是两门语言浮点打印的方言差异。
+
+**锚点重验**（原 §2 的 worktree 已被清理，重建）：`git worktree add --detach
+D:/workplaceForai/pi-v0.85.1 v0.85.1` ＋ `npm ci --ignore-scripts` ⇒ 重生成 S1–S14
+**剥 CRLF 后与已提交基线 14/14 逐字节相同**（孪生改动行为守恒、环境无漂移），
+S15 基线同批落盘。L5 现为 **15/15**。
+
+**探针实测红集**（细节在 `docs/42 §10`）：桩恒零→恰 S15 红；`usageOf` 丢
+`cacheWrite1h`→恰 S15 红；`num()` 整数归一失效→**15/15 全红** —— usage 渲染被
+每一个剧本观察，形状守护从此不是摆设。
+
+**新登记（剧本夹具盲区，未修）**：裁决 C 预告的「thinking 不对称」已核实 ——
+**pi 侧桩对 thinking 块不发任何生命周期事件**（`conformance/pi/run.test.ts` 的
+forEach 只有 text/toolCall 分支，thinking 只进 `final` 的内容），而 Java 桩发
+`thinking_start`/`thinking_end` 帧 ⇒ **含 thinking 的剧本结构上必红**。与 usage
+正交（`usage.reasoning` 只是数字），S15 不依赖它。要补 thinking 断面，需先给
+pi 侧桩补 thinking 事件（孪生同路，`docs/38` 口径）⇒ 独立裁决项。

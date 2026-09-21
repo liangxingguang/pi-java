@@ -40,13 +40,17 @@ pi `harness/` 里 `AgentHarness` 独有物（具名钩子 / `HarnessEvent` / `ru
 **面貌**：缺失 47 条（已剔除 R5 的 24 个长尾 provider 端点）。**杠杆极集中** —— 权重 3 的未对齐共 10 条
 （8 缺失 + 2 存疑），占全模块权重的 **43.7%**。
 
+> ⚠️ **2026-09-22 更新**：上段数字是 **H1 之前**的快照。**H1（usage 域）已闭环**（`docs/42 §10`）⇒
+> 划掉 8 条缺失（§1.1 三条权重 3 ＋ §1.2 五条权重 2）、§1.4 两条、§1.5 三条死功能救活 ＋ 新增一条
+> `UsageInfo.from` 死码登记。权重与完成度**待下一次 `docs/40` 重算**，这里不发明新数。
+
 ### 1.1 缺失（权重 3 —— 全是大件，最高优先级）
 
 | 功能 | 权重 | 用户可观察后果 | 台账号 |
 |---|---:|---|---|
-| `usage.cacheRead` 生产者 | 3 | 开 prompt caching 时上下文占用被**低估** ⇒ 压缩时机晚于 pi（下游 `ContextOverflow`/`ContextUsageEstimator` **已在读**这个数） | — |
-| `usage.cacheWrite` / `cacheWrite1h` 生产者 | 3 | 同上；`uncachedTokens` 把 cacheWrite 算进未缓存量 | — |
-| `usage.cost` 计算（`calculateCost`） | 3 | **成本恒显示 0**（含 1h 缓存 2× 输入价、阶梯价 `tiers`） | — |
+| ~~`usage.cacheRead` 生产者~~ | 3 | ✅ **H1 已闭环**（步 2–5，`docs/42 §10`；台账 B56）。原后果：开 prompt caching 时上下文占用被**低估** ⇒ 压缩时机晚于 pi（下游 `ContextOverflow`/`ContextUsageEstimator` **已在读**这个数） | B56 |
+| ~~`usage.cacheWrite` / `cacheWrite1h` 生产者~~ | 3 | ✅ **H1 已闭环**（步 3–5；`cacheWrite1h` 只有 Anthropic 报、真 key 端到端预登记于 `docs/42 §8.5-3`）。原后果：`uncachedTokens` 把 cacheWrite 算进未缓存量 | B56 |
+| ~~`usage.cost` 计算（`calculateCost`）~~ | 3 | ✅ **H1 已闭环**（步 1 P16 逐条 ＋ 各车道挂价；台账 B57）。原后果：**成本恒显示 0**（含 1h 缓存 2× 输入价、阶梯价 `tiers`） | B57 |
 | `transformMessages` 其余 4/5 条变换 | 3 | 跨模型切换时孤儿 toolCall / 图片 / id 归一全不处理 ⇒ provider 400 | B14 |
 | Anthropic `cache_control` 标记 | 3 | Anthropic 车道**永不提示缓存** ⇒ 每轮全价、延迟更高 | — |
 | `openrouter` chat 面 | 3 | 主流 7 家之一整条不可用（现只有 images 面） | — |
@@ -60,15 +64,15 @@ pi `harness/` 里 `AgentHarness` 独有物（具名钩子 / `HarnessEvent` / `ru
 | `xai` provider 端点 | 2 | 主流 7 家之一不可用 |
 | **`ImageContent` 收发**（anthropic ＋ openai-completions ＋ mistral 三条车道 **＋ toolResult 路径**） | 2 | **ReadTool 读图模型完全看不到图**（比台账写的更严重） |
 | 孤儿 toolCall 合成 `toolResult` | 2 | 中断/切换模型后历史缺 tool_result ⇒ provider 400 |
-| `Model.cost`（含 `cacheRead`/`cacheWrite`/`tiers`） | 2 | 与 `usage.cost` 同因 |
+| ~~`Model.cost`（含 `cacheRead`/`cacheWrite`/`tiers`）~~ | 2 | ✅ **H1 已闭环**（步 1 `PricingInfo` 五组件 ＋ 步 6 models.json `cost` 扩键/半价→UNKNOWN/tier 拒载）。⚠️ 残留＝**数据面**：内置目录的 cache 价未编（裁决 B：−1 表「未知」，不编假价） |
 | **`Model.compat` 缺 49/52 个字段** | 2 | 有行为后果的：`supportsStore` / `maxTokensField` / `supportsDeveloperRole` / `requiresToolResultName` / `thinkingFormat` / `cacheControlFormat` / `sessionAffinityFormat` / `supportsMidConvoSystemMessages` / `supportsMidConvoToolAdditions` / `supportsMidConvoToolChanges` |
 | 内置模型目录数据规模（35 条手写 vs pi 41 provider 生成） | 2 | 大量模型查不到 ⇒ 退化为 `ModelInfo.minimal` |
 | **`ANTHROPIC_AUTH_TOKEN`（`Authorization: Bearer`）** | 2 | **Bearer 型网关（TeamoRouter 一类）连不上 Anthropic 车道** |
 | provider 凭证优先级链（stored → authToken → oauthToken → apiKey） | 2 | 多凭证来源时行为与 pi 不一致 |
-| `usage.reasoning` 生产者 | 2 | 推理 token 用量不可见 |
-| `choice.usage` 回退（Moonshot 型 relay） | 2 | 只在 `choice.usage` 报量的 relay **用量全为 0** |
-| `parseChunkUsage` 归一（`prompt_tokens_details.cached_tokens` 等三路 + 减法语义） | 2 | 即使 relay 报了缓存量也读不到 |
-| **`message_start` 首帧 usage 保留 ＋ `message_delta` 逐字段覆盖** | 2 | 早断流时 **input token 被清零**（pi 专门为「提前中止也保住 input」写了首帧捕获） |
+| ~~`usage.reasoning` 生产者~~ | 2 | ✅ **H1 已闭环**（步 3 `output_tokens_details.thinking_tokens`／步 4 `completion_tokens_details.reasoning_tokens`／步 5 Responses·Google；Mistral 恒 null＝pi 同）。原后果：推理 token 用量不可见 |
+| ~~`choice.usage` 回退（Moonshot 型 relay）~~ | 2 | ✅ **H1 步 4 已闭环**（位置照 pi 在 delta 处理之前；台账 B24）。原后果：只在 `choice.usage` 报量的 relay **用量全为 0** |
+| ~~`parseChunkUsage` 归一（`prompt_tokens_details.cached_tokens` 等三路 + 减法语义）~~ | 2 | ✅ **H1 步 4 已闭环**（三路 `??` 链＋`Math.max` 减法；台账 B24）。原后果：即使 relay 报了缓存量也读不到 |
+| ~~**`message_start` 首帧 usage 保留 ＋ `message_delta` 逐字段覆盖**~~ | 2 | ✅ **H1 步 3 已闭环**（`AnthropicUsageState`，T2/T3/T4 钉）。原后果：早断流时 **input token 被清零** |
 | 请求侧 `compat.thinkingFormat`（10 种 thinking 开关形状） | 2 | **非 Anthropic 系的推理模型无法开思考** |
 | `simple-options`（`clampMaxTokensToContext` / thinking budget） | 2 | maxTokens 不按 contextWindow 夹取 ⇒ 可能被 provider 拒绝 |
 | 工具状态增量（`toolsAdded`/`toolsRemoved` ＋ 线格 `tool_addition`/`tool_removal`） | 2 | 中途增删工具无法表达（**取代已作废的 C11**） |
@@ -95,8 +99,8 @@ constrained sampling / grammar · `transport` 选择 · `session-resources` 清�
 | **`done` 事件载荷** | 3 | pi 带 `message: AssistantMessage` / java 带 `usage` + `partial` |
 | `error` 事件载荷 | 2 | pi 带 `error: AssistantMessage` / java 带 `Throwable` |
 | `provider-retry` | 2 | pi 读 `x-should-retry` 头 / java 用状态码集合 ⇒ 服务端显式要求重试时**不理会** |
-| `usage.totalTokens` 合成口径 | 2 | pi = `input+output+cacheRead+cacheWrite` / java = `input+output` ⇒ **今天数值相同（因缓存分量恒 0），修好 1.1 前三条后即分歧** |
-| `usage.totalTokens` 之外的 usage 形状 | 2 | — |
+| ~~`usage.totalTokens` 合成口径~~ | 2 | ✅ **H1 已对齐**——不是统一成一个公式，而是**逐车道照 pi**：Responses/Google 直取 provider 值（P11/P12）、completions 自算四分量和（P9）、Mistral 优先 provider `||` 自算（P14）、Anthropic 四分量求和。L5 由 S15 差分钉住（`docs/42 §10.1`） |
+| ~~`usage.totalTokens` 之外的 usage 形状~~ | 2 | ✅ **H1 已闭环**：`UsageInfo.usage()` 生产非 null（步 2）、`UsageRecord` 传全量（步 6 A3）、`usageOf` 两侧键序/可选键由 S15 逐字节钉（步 7） |
 | `Model.reasoning` → `ModelCapability.THINKING` | 2 | 形状不同（pi 是模型元数据布尔 / java 是能力集成员） |
 | `models.json` 自定义 provider 形状 | 2 | — |
 
@@ -104,13 +108,14 @@ constrained sampling / grammar · `transport` 选择 · `session-resources` 清�
 
 | 构造 | 状态 |
 |---|---|
-| `Usage` 的 `cacheRead`/`cacheWrite`/`cacheWrite1h`/`reasoning` **四分量零生产者** | `emitUsage` 只收 input/output ⇒ 生产恒 0/null |
-| `Usage.Cost` 恒零 | 成本累加恒 0 |
+| ~~`Usage` 的 `cacheRead`/`cacheWrite`/`cacheWrite1h`/`reasoning` **四分量零生产者**~~ | ✅ **H1 步 2–5 已救活**（B56）。原状态：`emitUsage` 只收 input/output ⇒ 生产恒 0/null |
+| ~~`Usage.Cost` 恒零~~ | ✅ **H1 步 1＋各车道挂价已救活**（B57）。原状态：成本累加恒 0 |
+| `StreamEvent.UsageInfo.from(...)` 零调用者 | **H1 步 7 时核对**（`docs/42 §10.1` A4）：加宽管线走的是 `emitUsage(Usage)`，这个静态工厂仍是死码；不删（R5 面），登记 |
 | **`ThinkingLevelMap` 非空实例生产不可构造** | 生产构造点全部 `empty()` ⇒ `forLevel` 恒 `OFF` ⇒ 请求里**永无 `thinking.budgetTokens`**（**B15 剩的这半边**） |
 | `StreamSimple` | 主源码零调用（**别当接缝**） |
 | `DeferredHandle` | 零生产者（两侧同状） |
 | `ToolResultMessage.usage` / `details` | 两者皆无生产者 |
-| `StreamEvent.UsageInfo` 的 `usage` 分量 | 恒 null |
+| ~~`StreamEvent.UsageInfo` 的 `usage` 分量~~ | ✅ **H1 步 2 已救活**（J1/J2/J4）。原状态：恒 null |
 
 ### 1.6 修法建议（报告已复核边际）
 
@@ -617,7 +622,7 @@ JSONL `nextSeq` 高水位字段 ·
 
 | 包 | 模块 | 内容 | 为什么排这 |
 |---|---|---|---|
-| **H1** | `ai` | **usage 域两条**：四分量生产者 ＋ `calculateCost` | **+5.50pp**，占四条 P0 的 **76%**，且同属一个域 |
+| ~~**H1**~~ | `ai` | ✅ **已闭环**（2026-09-22，七提交 `5b703a9..7c3db0d`，实施记录 `docs/42 §10`；范围比原两条宽——四分量生产者＋`calculateCost`＋全车道归一＋下游接线＋L5 S15 差分） | 原 **+5.50pp**，占四条 P0 的 **76%** |
 | **H2** | `ai` | **图片三条车道 ＋ toolResult 路径** | `ReadTool` 读图模型**完全看不到图**（静默） |
 | **H3** | `coding-agent` | **上下文文件发现**（`AGENTS.md`/`CLAUDE.md` ＋ `--no-context-files` 联动） | **每次会话都走**，现在**静默失效**；同时救活一个死 flag |
 | **H4** | `coding-agent` | **扩展钩子桥接**（暴露 `hookSystem()`） | 8 个引擎钩子**已经在 `HookSystem` 里** ⇒ 这是**接线不是新建**，最省的一包 |
