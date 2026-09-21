@@ -84,6 +84,16 @@ interface ScriptResponse {
 	content: ScriptContent[];
 	stopReason: "stop" | "length" | "toolUse" | "aborted" | "error";
 	/**
+	 * Whole `Usage` object for the terminal message — S15 (docs/42 步 7 / 裁决 C).
+	 * Absent ⇒ all-zero (the pre-step-7 A1 state; twin of the Java side's
+	 * `ZERO_USAGE`). The script's field names *are* pi's `Usage` keys, so this
+	 * side needs no translation — the Java twin maps them one-by-one into
+	 * `com.pijava.ai.Usage`. Only the terminal message carries it: partial
+	 * snapshots of both mocks stay zero, and usage on a partial never reaches a
+	 * frame anyway (both normalizers render `message_update` as evt+detail).
+	 */
+	usage?: AssistantMessage["usage"];
+	/**
 	 * Prepend an echo of what this request actually carried (message count /
 	 * model / systemPrompt) to the first text block.
 	 *
@@ -169,6 +179,7 @@ function buildContent(blocks: ScriptContent[]): AssistantMessage["content"] {
 function createAssistantMessage(
 	content: AssistantMessage["content"],
 	stopReason: AssistantMessage["stopReason"],
+	usage: AssistantMessage["usage"] = createUsage(),
 ): AssistantMessage {
 	return {
 		role: "assistant",
@@ -176,7 +187,7 @@ function createAssistantMessage(
 		api: "openai-responses",
 		provider: "openai",
 		model: "mock",
-		usage: createUsage(),
+		usage,
 		stopReason,
 		timestamp: Date.now(),
 	};
@@ -207,8 +218,11 @@ class ScriptedStream extends EventStream<AssistantMessageEvent, AssistantMessage
 		);
 
 		const stop = response.stopReason;
-		const final = createAssistantMessage(buildContent(response.content), stop);
+		// Scripted usage rides the terminal message only (docs/42 步 7); absent ⇒ zero.
+		const final = createAssistantMessage(buildContent(response.content), stop, response.usage);
 		// Partial before each delta: pi's loop reads `event.partial` on every update.
+		// Stays zero on both twins — usage attaches to the terminal, and a partial's
+		// usage never reaches a `message_update` frame (evt+detail only).
 		const blank = createAssistantMessage([], "stop");
 		// Content-index-aligned view of the finalized blocks, so `toolcall_end`
 		// carries the tool call it actually belongs to.
@@ -523,7 +537,7 @@ function canonical(value: unknown): unknown {
 }
 
 describe("L5 conformance (pi side)", () => {
-	const ids = ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12", "S13", "S14"];
+	const ids = ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12", "S13", "S14", "S15"];
 	for (const id of ids) {
 		const scriptPath = join(SCRIPTS_DIR, `${id}.json`);
 		it(`runs ${id}`, async (ctx) => {

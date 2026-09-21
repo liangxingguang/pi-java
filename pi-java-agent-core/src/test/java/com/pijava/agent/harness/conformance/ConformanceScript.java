@@ -113,8 +113,35 @@ record ConformanceScript(
      *                    整体替换上下文的后果在帧里完全不可观察，剧本会在钩子根本没被调用时
      *                    照样通过 —— 一条不可能为它存在的理由而失败的用例。回显把这次请求的
      *                    形状折进助手消息的文本，差分才真正覆盖到那条通道。</p>
+     * @param usage       终局消息携带的整只 {@code Usage}（包 H1 步 7，裁决 C）；
+     *                    缺省 ⇒ 两侧各自的恒零桩（A1 的旧状态）。字段名就是 pi 的
+     *                    {@code Usage} 键名 —— 剧本是两侧共用的唯一输入，pi 侧无需翻译，
+     *                    Java 侧由 {@code ScriptedStreams} 一一对进 {@link com.pijava.ai.Usage}。
      */
-    record Response(List<Content> content, String stopReason, boolean echoRequest) {}
+    record Response(List<Content> content, String stopReason, boolean echoRequest,
+                    UsageScript usage) {}
+
+    /**
+     * 剧本声明的整只 usage（S15；{@code docs/42} 步 7 / 裁决 C 的产物）。
+     *
+     * <p>形状 = pi {@code types.ts} 的 {@code Usage}：四必填计数 + 两个可选键
+     * （{@code cacheWrite1h}/{@code reasoning}）+ {@code totalTokens} + 五字段
+     * {@code cost}。可选键的<b>缺席</b>才是本字段想钉的东西之一 —— 见
+     * {@code FrameNormalizer.usageOf} 的「非空才带」规则，pi 侧靠
+     * {@code JSON.stringify} 丢 undefined，两侧必须同样省略。</p>
+     *
+     * <p>⚠️ {@code cost} 的数值一律取<b>二进制精确</b>的小数（如 0.125、0.03125）：
+     * JS 的 {@code JSON.stringify} 与 Java 的 {@code Double.toString} 只在
+     * {@code <1e-3} 处进位记数法且格式不同（{@code 0.00002} ≠ {@code 2.0E-5}），
+     * 十进制小数的最短往返表示两语言一致 —— 用二分小数把这个格式分叉彻底避开。</p>
+     */
+    record UsageScript(long input, long output, long cacheRead, long cacheWrite,
+                       Long cacheWrite1h, Long reasoning, long totalTokens,
+                       CostScript cost) {}
+
+    /** 剧本声明的成本（pi {@code Usage.cost} 的五字段）。 */
+    record CostScript(double input, double output, double cacheRead, double cacheWrite,
+                      double total) {}
 
     /** 在完成第 {@code afterTurn} 轮（0 基）之后注入的一条消息。 */
     record Injection(int afterTurn, String text) {}
@@ -146,7 +173,8 @@ record ConformanceScript(
         for (var node : root.path("responses")) {
             responses.add(new Response(contentOf(node.path("content")),
                 node.path("stopReason").asText("stop"),
-                node.path("echoRequest").asBoolean(false)));
+                node.path("echoRequest").asBoolean(false),
+                usageScriptOf(node)));
         }
         return new ConformanceScript(
             root.path("id").asText(),
@@ -202,6 +230,41 @@ record ConformanceScript(
             return null;
         }
         return MAPPER.convertValue(node, Object.class);
+    }
+
+    /**
+     * 响应的 {@code usage}：缺省/非对象 ⇒ {@code null}（两侧回落到各自的恒零桩）。
+     * 写了 usage 就必须写全 {@code cost} —— pi 的类型里 cost 是必填，残缺剧本在
+     * 装载期就炸，而不是产出一条两边都"自圆其说"的畸形基线。
+     */
+    private static UsageScript usageScriptOf(JsonNode response) {
+        var usage = response.path("usage");
+        if (!usage.isObject()) {
+            return null;
+        }
+        var cost = usage.path("cost");
+        if (!cost.isObject()) {
+            throw new IllegalStateException("script usage requires a five-field cost");
+        }
+        return new UsageScript(
+            usage.path("input").asLong(),
+            usage.path("output").asLong(),
+            usage.path("cacheRead").asLong(),
+            usage.path("cacheWrite").asLong(),
+            optionalLong(usage, "cacheWrite1h"),
+            optionalLong(usage, "reasoning"),
+            usage.path("totalTokens").asLong(),
+            new CostScript(
+                cost.path("input").asDouble(),
+                cost.path("output").asDouble(),
+                cost.path("cacheRead").asDouble(),
+                cost.path("cacheWrite").asDouble(),
+                cost.path("total").asDouble()));
+    }
+
+    private static Long optionalLong(JsonNode parent, String field) {
+        var value = parent.get(field);
+        return value == null || value.isNull() ? null : value.asLong();
     }
 
     private static Map<String, Object> argumentsOf(JsonNode node) {

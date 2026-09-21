@@ -162,7 +162,7 @@ final class ConformanceRunner {
                 }
             }
             return new ConformanceScript.Response(
-                List.copyOf(content), response.stopReason(), true);
+                List.copyOf(content), response.stopReason(), true, response.usage());
         }
 
         /**

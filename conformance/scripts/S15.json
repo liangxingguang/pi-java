@@ -1,0 +1,24 @@
+{
+  "id": "S15",
+  "name": "usage 全分解（四分量＋可选 cacheWrite1h/reasoning＋二分小数 cost）",
+  "systemPrompt": "You are helpful.",
+  "prompt": "Hello",
+  "toolExecution": "parallel",
+  "tools": [],
+  "responses": [
+    {
+      "content": [{ "type": "text", "text": "Hi there!", "chunks": ["Hi th", "ere!"] }],
+      "stopReason": "stop",
+      "usage": {
+        "input": 100,
+        "output": 20,
+        "cacheRead": 40,
+        "cacheWrite": 10,
+        "cacheWrite1h": 6,
+        "reasoning": 8,
+        "totalTokens": 170,
+        "cost": { "input": 0.125, "output": 0.25, "cacheRead": 0.03125, "cacheWrite": 0.0625, "total": 0.46875 }
+      }
+    }
+  ]
+}

@@ -23,9 +23,14 @@ import com.pijava.ai.stream.StreamEvent;
  *   <li>3a（docs/31 §8.19）：每个快照携带与 pi 侧 {@code createAssistantMessage}
  *       （run.test.ts）逐字对应的身份与计量 —— {@code api="openai-responses"}、
  *       {@code provider="openai"}、{@code model="mock"}（**恒定**，脚本换模型只影响
- *       请求、不改消息上的 model 字段）、全零 {@code usage}、{@code timestamp=now}
+ *       请求、不改消息上的 model 字段）、{@code timestamp=now}
  *       （不进帧，两侧都不可复现）。真实 adapter 走
  *       {@code AbstractChatApi} 出口挂载，桩这里直接挂。</li>
+ *   <li>步 7（docs/42 裁决 C）：{@code usage} 来自剧本 —— 写了就挂到**终局消息**，
+ *       没写两侧同零（A1 的旧状态）。空白快照（每次 delta 的 partial）恒零：
+ *       pi 侧的 mock 同样只在 {@code final} 上挂（run.test.ts），且 partial 上的
+ *       usage 不进 message_update 帧（两侧 Normalizer 都只渲染 evt+detail），
+ *       挂上去只会制造无观察者的第二真值源。</li>
  * </ol>
  */
 final class ScriptedStreams {
@@ -37,12 +42,31 @@ final class ScriptedStreams {
     private ScriptedStreams() {}
 
     /** 与 pi 侧 {@code createAssistantMessage} 同形的桩快照。 */
-    private static AssistantMessage scripted(String stopReason, List<ContentBlock> content) {
+    private static AssistantMessage scripted(String stopReason, List<ContentBlock> content,
+                                             Usage usage) {
         return AssistantMessage.empty()
             .withContent(content)
             .withStopReason(stopReason)
             .withIdentity("openai-responses", "openai", "mock", Instant.now())
-            .withUsage(new StreamEvent.UsageInfo(0, 0, null, ZERO_USAGE));
+            .withUsage(new StreamEvent.UsageInfo(
+                (long) usage.input(), (long) usage.output(), null, usage));
+    }
+
+    /** 剧本的 usage → 领域类型；缺省 ⇒ 恒零桩（A1 的旧状态，两侧一致）。 */
+    private static Usage usageOf(ConformanceScript.UsageScript spec) {
+        if (spec == null) {
+            return ZERO_USAGE;
+        }
+        // ⚠️ Long ⇒ Double 没有隐式路径（方法调用转换只做一次盒/拆箱，
+        // unbox→widen→box 不合法）—— 可选键显式装箱。
+        Double cacheWrite1h =
+            spec.cacheWrite1h() == null ? null : Double.valueOf(spec.cacheWrite1h());
+        Double reasoning =
+            spec.reasoning() == null ? null : Double.valueOf(spec.reasoning());
+        return new Usage(spec.input(), spec.output(), spec.cacheRead(), spec.cacheWrite(),
+            cacheWrite1h, reasoning, spec.totalTokens(),
+            new Usage.Cost(spec.cost().input(), spec.cost().output(),
+                spec.cost().cacheRead(), spec.cost().cacheWrite(), spec.cost().total()));
     }
 
     /**
@@ -51,7 +75,7 @@ final class ScriptedStreams {
      * @return 该响应的完整流事件序列
      */
     static List<StreamEvent> eventsFor(ConformanceScript.Response response, AtomicInteger callIds) {
-        var blank = scripted("stop", List.of());
+        var blank = scripted("stop", List.of(), ZERO_USAGE);
         var events = new ArrayList<StreamEvent>();
         var content = new ArrayList<ContentBlock>();
         events.add(new StreamEvent.Start(blank));
@@ -92,7 +116,7 @@ final class ScriptedStreams {
         }
 
         var stopReason = internalStopReason(response.stopReason());
-        var terminal = scripted(stopReason, List.copyOf(content));
+        var terminal = scripted(stopReason, List.copyOf(content), usageOf(response.usage()));
         if ("aborted".equals(response.stopReason()) || "error".equals(response.stopReason())) {
             // pi: aborted 走 error 事件，而不是 done —— done.reason 的闭集里没有 aborted
             events.add(new StreamEvent.StreamError(response.stopReason(), null, terminal));
