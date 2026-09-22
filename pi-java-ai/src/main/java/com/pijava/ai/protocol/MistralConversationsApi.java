@@ -3,6 +3,7 @@ package com.pijava.ai.protocol;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.SubmissionPublisher;
@@ -299,14 +300,18 @@ public final class MistralConversationsApi extends AbstractChatApi {
         // 共享预通道先于本车道的映射跑（pi mistral-conversations.ts:139 在消息转换前调
         // transformMessages）—— 本车道的 extractText 只收 TextContent，
         // 不过闸则跨模型重放的 thinking 文本无声消失。
+        // pi :517 —— 车道的图片能力位来自同一个 model.input.includes("image")。
+        boolean supportsImages = request.model().supportsImageInput();
         TransformMessages.apply(request.messages(), request.modelId(), apiName(), request.model())
             .stream().<Map<String, Object>>map(msg -> {
             var m = new HashMap<String, Object>();
             switch (msg) {
                 case Message.UserMessage(var content) -> {
-                    m.put("role", "user");
-                    // pi :795/:802 —— java 的 user 恒为串形态 ⇒ 对齐 pi 的串分支（整串净化）。
-                    m.put("content", SanitizeUnicode.surrogates(extractText(content)));
+                    var userMessage = userMessage(content, supportsImages);
+                    if (userMessage != null) {
+                        messages.add(userMessage);
+                    }
+                    return null; // 已自行落线（pi :805/:811/:814 三条分支各有去向）
                 }
                 case Message.AssistantMessage a -> {
                     m.put("role", "assistant");
@@ -318,15 +323,135 @@ public final class MistralConversationsApi extends AbstractChatApi {
                     // provider 投影只读 toolUseId + content（pi 的适配器同样不读它们）
                     m.put("role", "tool");
                     m.put("tool_call_id", t.toolUseId());
-                    // pi :853 —— 逐 part 净化后再 join（同为「先净化后拼」）。
-                    m.put("content", extractSanitizedText(t.content()));
+                    // pi :870 —— name 恒带（java 旧实现不发；docs/44 待裁决③ 整块照抄的顺带项）。
+                    m.put("name", t.toolName());
+                    m.put("content", toolContent(t, supportsImages));
                 }
             }
             return m;
-        }).forEach(messages::add);
+        }).filter(java.util.Objects::nonNull).forEach(messages::add);
         return messages;
     }
 
+    // ── 图片（包 H2，docs/44 步4）──────────────────────────────────────
+
+    /**
+     * user 消息落线 —— pi {@code mistral-conversations.ts:792-815}。无图片 ⇒ **串形态**（pi-java 的
+     * 既有形状；pi 的串分支在 pi-java 结构上不可达，见 {@code docs/44 §6}）；有图片 ⇒ 块数组。
+     *
+     * @return 该落的消息；{@code null} ＝ pi 的 {@code :814 continue}（整条消息不落线）
+     */
+    private Map<String, Object> userMessage(List<ContentBlock> content, boolean supportsImages) {
+        boolean hadImages = content.stream().anyMatch(MistralConversationsApi::isImageBlock);
+        if (!hadImages) {
+            var m = new LinkedHashMap<String, Object>();
+            m.put("role", "user");
+            // pi :795/:802 —— java 的 user 恒为串形态 ⇒ 对齐 pi 的串分支（整串净化）。
+            m.put("content", SanitizeUnicode.surrogates(extractText(content)));
+            return m;
+        }
+        var chunks = new ArrayList<Map<String, Object>>();
+        for (var block : content) {
+            if (block instanceof ContentBlock.TextContent tc) {
+                chunks.add(textChunk(SanitizeUnicode.surrogates(tc.text())));
+            } else if (block instanceof ContentBlock.ImageContent img) {
+                chunks.add(imageChunk("data:" + img.mediaType() + ";base64," + img.data()));
+            } else if (block instanceof ContentBlock.UrlImageContent url) {
+                // java 扩展（pi 无此类型）：线格本名就是 image_url ⇒ 按它下发（docs/44 D4）。
+                chunks.add(imageChunk(url.url()));
+            }
+        }
+        if (!chunks.isEmpty()) {
+            var m = new LinkedHashMap<String, Object>();
+            m.put("role", "user");
+            m.put("content", chunks);
+            return m;
+        }
+        if (hadImages && !supportsImages) {
+            // pi :809-811 —— ⚠️ 共享闸已先把图片换成文本块 ⇒ 此分支在两侧都不可达
+            // （同 completions 车道的收集门，docs/44 §9）。照抄保留。
+            var m = new LinkedHashMap<String, Object>();
+            m.put("role", "user");
+            m.put("content", "(image omitted: model does not support images)");
+            return m;
+        }
+        return null; // pi :814 —— `continue`
+    }
+
+    /**
+     * 工具结果的 content 块数组 —— pi {@code :851-874}：文本块在前（{@link #buildToolResultText}），
+     * 图片块按 {@code supportsImages} 追加。
+     */
+    private List<Map<String, Object>> toolContent(Message.ToolResultMessage tool,
+                                                  boolean supportsImages) {
+        // pi :852-854 —— **逐 part 净化再 join("\n")**（与 Anthropic 的 toolResult 口径相反）。
+        var text = tool.content().stream()
+                .filter(ContentBlock.TextContent.class::isInstance)
+                .map(b -> SanitizeUnicode.surrogates(((ContentBlock.TextContent) b).text()))
+                .collect(java.util.stream.Collectors.joining("\n"));
+        boolean hasImages = tool.content().stream().anyMatch(MistralConversationsApi::isImageBlock);
+        var chunks = new ArrayList<Map<String, Object>>();
+        chunks.add(textChunk(
+                buildToolResultText(text, hasImages, supportsImages, tool.isError())));
+        if (supportsImages) {
+            for (var block : tool.content()) {
+                if (block instanceof ContentBlock.ImageContent img) {
+                    chunks.add(imageChunk("data:" + img.mediaType() + ";base64," + img.data()));
+                } else if (block instanceof ContentBlock.UrlImageContent url) {
+                    chunks.add(imageChunk(url.url()));
+                }
+            }
+        }
+        return chunks;
+    }
+
+    /**
+     * pi {@code mistral-conversations.ts:877-897} 的 {@code buildToolResultText} —— **整块逐行照抄**
+     * （{@code docs/44} 待裁决 ③）：错误前缀 ＋ trim ＋ 不支持时的图片省略后缀 ＋ 三个占位串。
+     * ⚠️ 本函数是 java 侧三处**非图片**行为变更的来源：{@code "[tool error] "} 前缀、文本 trim、
+     * 空结果的 {@code "(no tool output)"}（旧实现发空串且完全不看 {@code isError}）。
+     */
+    private static String buildToolResultText(String text, boolean hasImages,
+                                              boolean supportsImages, boolean isError) {
+        var trimmed = text.trim();
+        var errorPrefix = isError ? "[tool error] " : "";
+        if (!trimmed.isEmpty()) {
+            var imageSuffix = hasImages && !supportsImages
+                    ? "\n[tool image omitted: model does not support images]" : "";
+            return errorPrefix + trimmed + imageSuffix;
+        }
+        if (hasImages) {
+            if (supportsImages) {
+                return isError ? "[tool error] (see attached image)" : "(see attached image)";
+            }
+            return isError
+                    ? "[tool error] (image omitted: model does not support images)"
+                    : "(image omitted: model does not support images)";
+        }
+        return isError ? "[tool error] (no tool output)" : "(no tool output)";
+    }
+
+    /** 一个内容块。⚠️ pi 的线格键名是 {@code imageUrl}，序列化时映射成 {@code image_url}（{@code :416}）。 */
+    private static Map<String, Object> chunk(String type, String key, String value) {
+        var chunk = new LinkedHashMap<String, Object>();
+        chunk.put("type", type);
+        chunk.put(key, value);
+        return chunk;
+    }
+
+    private static Map<String, Object> textChunk(String text) {
+        return chunk("text", "text", text);
+    }
+
+    private static Map<String, Object> imageChunk(String url) {
+        return chunk("image_url", "image_url", url);
+    }
+
+    /** pi 的图片判据是 {@code type === "image"}；java 的 URL 图片同等对待（docs/44 D4）。 */
+    private static boolean isImageBlock(ContentBlock block) {
+        return block instanceof ContentBlock.ImageContent
+                || block instanceof ContentBlock.UrlImageContent;
+    }
     private List<Map<String, Object>> toMistralTools(List<ToolDefinition> definitions) {
         return definitions.stream().<Map<String, Object>>map(def -> {
             var tool = new HashMap<String, Object>();

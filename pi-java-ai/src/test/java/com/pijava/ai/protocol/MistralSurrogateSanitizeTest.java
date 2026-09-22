@@ -125,8 +125,13 @@ class MistralSurrogateSanitizeTest {
 
     /**
      * <b>逐块</b>净化（assistant 与 tool result 两侧同口径：pi 先 {@code map(sanitize)} 再
-     * {@code join}）。判别串跨块边界造：块1 尾孤高 ＋ 块2 首孤低 ⇒ 逐块 {@code "AB"}、
-     * 先拼接则 {@code "A🙈B"}。
+     * {@code join}）。判别串跨块边界造：块1 尾孤高 ＋ 块2 首孤低 ⇒ 逐块删掉两侧、
+     * 先拼接再净化才会配成 emoji。
+     *
+     * <p>⚠️ 包 H2 步4 改了 tool result 侧的**拼接方式**：pi 是 {@code join("\n")}
+     * （{@code mistral-conversations.ts:853}），java 旧实现是无分隔符 {@code concat}
+     * ⇒ 现在两侧的**结果串**不同（assistant 仍 {@code "AB"}，tool 变 {@code "A\nB"}）。
+     * 两侧**都**满足「跨块边界不许成对」这条不变量 —— 换行不是代理，join 只会拆散相邻关系。</p>
      */
     @Test
     void assistantAndToolTextAreSanitizedPerBlockNotAcrossBlocks() throws Exception {
@@ -140,7 +145,7 @@ class MistralSurrogateSanitizeTest {
             new Message.ToolResultMessage("call_1", "ls", List.of(
                 new ContentBlock.TextContent("A" + HIGH),
                 new ContentBlock.TextContent(LOW + "B")), false)));
-        assertThat(toolBody).as("tool result 逐块 ⇒ 跨块边界不许成对").contains("AB");
+        assertThat(toolBody).as("tool result 逐块 + join(\"\\n\") ⇒ 边界被换行隔开").contains("A\\nB");
         assertThat(toolBody).as("拼接后再净化才会出现的形态").doesNotContain("A" + EMOJI + "B");
     }
 
