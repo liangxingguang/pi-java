@@ -4,7 +4,8 @@
 > （`RetryableError` 两个新模式 · `ANTHROPIC_AUTH_TOKEN` Bearer · provider 凭证优先级链）。
 > `docs/41 §7.2` 的补全次序（H1→H6→…）**经用户 2026-09-22 改判**：ai 模块整体先行 ⇒ 本包为
 > ai 批次首包，代号 **A0**。
-> **状态**：**设计，待用户审核。** 审核通过后才写代码；实施记录续在本文件末尾（§10 预留）。
+> **状态**：**已实施完毕**（用户 2026-09-22「按设计实施」⇒ §7 三条建议全部采纳，见 §8）。
+> 实施记录见 §9（实测校正）与 §10（逐步台账）。
 > **基准**：pi @ `3390bd936`（已核 `git rev-parse HEAD` ＋ 工作树干净）· pi-java @ `9173cd8`
 > **证据**：本文件所有 `file:line` 均已实读（含两份并行取证报告）；pi 侧路径相对 `D:\workplaceForai\pi`，
 > java 侧相对 `D:\workplaceForai\pi-java`。
@@ -191,6 +192,27 @@ AI 模块既有 surefire 坑：`-pl pi-java-ai -am -Dsurefire.failIfNoSpecifiedT
 7. **`ANTHROPIC_AUTH_TOKEN` 之外的 Bearer 型网关**（如用户环境里给 `MISTRAL_*` 也配 Bearer）——
    pi 无此物，不做；登记备查。
 
+**实施中新发现（§9 详述，一律「照缝移植 ＋ 登记」）**：
+
+8. **pi 同族的三条缝**（与 P5 同根：这些路径 pi 自己也不净化，java 同样不净化，各配 guard 夹具）：
+   - `openai-completions.ts:1339` 签名驱动的 reasoning 字段（`assistantMsg[signature] = ….join("\n")`）；
+   - `openai-responses-shared.ts:322` `function_call.arguments = JSON.stringify(...)`；
+   - `google-shared.ts:274` `functionCall.args = block.arguments ?? {}`。
+9. **四个落点「面不存在」**（不是漏净化，是整个形态没解析）：Google 的 thinking 两分支
+   （java 一律丢 thinking，`GoogleGenerativeAiApi:337`）· Mistral 的数组形态 content 两处
+   （`delta.content` 只按 String 读）。后者更严重一层：**数组形态会让车道抛 ClassCastException**，
+   属本车道的形态缺口，另立项。
+10. **pi 的 OAuth 分支还有两个面未移植**：系统提示前置 `"You are Claude Code, Anthropic's
+    official CLI for Claude."`（`anthropic-messages.ts:1078-1090`）与工具名 `toClaudeCodeName`；
+    java 的 anthropic OAuth 流（`OAuthProviders`）目前只在 `AuthCommand` 里用 ⇒ 接线另立项。
+11. **pi 的两枚浏览器头未移植**：`accept` ／ `anthropic-dangerous-direct-browser-access`
+    （pi 恒传 `dangerouslyAllowBrowser: true`）——java 无浏览器场景，移植反而是噪音。
+12. **三处重复的「逐块 vs 拼接」口径**：assistant 文本（completions/responses/Mistral）
+    与 tool result（Mistral）在 pi 是**先净化后拼**，java 已照此落（步3/步4 的跨块边界夹具钉住）；
+    而 tool result（completions/responses/Google）在 pi 是**先拼后净化**，java 亦照此。
+    ⚠️ 两者在「块1 尾孤高 ＋ 块2 首孤低」这一例上答案不同（前者 `"AB"`、后者 `"A🙈B"`）
+    —— **照点移植意味着这个差别必须保留**，别「统一」。
+
 ---
 
 ## 7. 待裁决（两点，请审核时给结论）
@@ -200,3 +222,81 @@ AI 模块既有 surefire 坑：`-pl pi-java-ai -am -Dsurefire.failIfNoSpecifiedT
 | ① | 凭证种类载体：`ApiOptions` 新组件（D5-A）还是 `extra` 键（D5-B） | **A**（显式、类型安全；波及 6 处构造点，机械改动） |
 | ② | OAuth 形态（`sk-ant-oat` ＋ 两枚身份头）是否纳入本包（D7） | **纳入**（改动小；缺它则 `ANTHROPIC_OAUTH_TOKEN` 拿到手也不会走 Bearer 形态） |
 | ③ | 净化范围是否**逐点照抄**（含 P5 那条缝） | **照抄**（否则无法逐条对账） |
+
+---
+
+## 8. 裁决与执行
+
+**用户 2026-09-22「按设计实施」** ⇒ §7 三条建议**全部采纳**：① 载体 A（`ApiOptions` 新组件）·
+② OAuth 形态纳入 · ③ 净化逐点照抄。步 1–9 全部落地，提交清单：
+
+| 步 | 提交 | 内容 |
+|---|---|---|
+| — | `a5051ca` | 本设计文档 |
+| 1 | `34ca389` | `SanitizeUnicode`（code-unit 循环）＋ pi 正则 oracle 双向差分 |
+| 2 | `e5c5e41` | Anthropic 车道 6 落线点（pi 11 处） |
+| 3 | `acb32a2` | OpenAI-completions 4 点 ＋ responses 5 点（pi 各 7 处） |
+| 4 | `fa98d5e` | Google 3 点 ＋ openrouter-images 1 点 ＋ Mistral 请求 4 点 |
+| 5 | `14c45f0` | Mistral 响应路径（流式增量）1 点 |
+| 6 | `d9e7099` | `RetryableError` 两个模式 |
+| 7 | `4492d3e` | 凭证载体 `AuthKind` ＋ Anthropic 按 kind 分派（D5-A/D6） |
+| 8 | `5f3833d` | OAuth 身份头 ＋ `sk-ant-oat` 值识别（D7） |
+| 9 | 本提交 | 回归 ＋ 台账回填（§9/§10 ＋ `docs/41`/`docs/32` 回填） |
+
+---
+
+## 9. 实施中的实测校正（相对本设计正文）
+
+1. **D4 的落点表按逐行实读校正**（设计写的是「估计值」）。pi 在范围内的 42 处调用 →
+   java **24 个落线点**，差额由三类构成：
+   | 车道 | pi | java | 差额来源 |
+   |---|---:|---:|---|
+   | Anthropic | 11 | 6 | thinking 3→1（值域同一）· user 3→1（两角色共用）· system 2→1（两分支）· tool result 2→1（串/块两形） |
+   | completions | 7 | 4 | user 2→1 · ＋grammar 1（D2 不落）＋ `:1339` 1（照缝，§6-8） |
+   | responses | 7 | 5 | tool result 2→1 · ＋grammar 1 ＋ `:322` 1（照缝） |
+   | Google | 7 | 3 | text 3→1 · ＋thinking 2（面不存在，§6-9） |
+   | openrouter-images | 1 | 1 | — |
+   | Mistral | 9 | 5 | 请求面 user 2→1 · ＋响应面 2（面不存在）|
+2. **D3「待实证」定案 —— 序列化器对孤高代理有三种口径**（都在线格上实测）：
+   - **UTF-8 字节生成器**（`anthropic-java` ／ `openai-java` 的 SDK）⇒ 写成 JSON **转义**
+     `\uD83D`（6 个 ASCII 字符）：孤对代理**能成功出站**、被 provider 判非法 ⇒ 正是 pi JSDoc
+     说的 400 症状。
+   - **`com.google.genai`** ⇒ 替换成 **`?`**（既不转义也不抛错）⇒ 该车道上表现为**静默错字**。
+   - **Jackson 的 char 型生成器**（Mistral 的 `writeValueAsString`、`toArgumentsJson`）⇒ 孤高代理
+     **原样留在 Java 串里**（断言可以直接做 code-unit 探测）。
+   ⇒ 「我们出站的字符串里没有孤对代理」仍是唯一有效口径（设计 D3 的判断成立）。
+3. **D6 的展开**：两个 token 层插在「**默认 env 的 `ANTHROPIC_API_KEY` 层之前**」——
+   设计正文只列了相对次序，实施时明确到「java 既有的 profile 两层 → token 两层 → 默认 env
+   → 默认 file」。理由：pi 的 `ANTHROPIC_API_KEY` 在 `ANTHROPIC_AUTH_TOKEN`/`_OAUTH_TOKEN`
+   之后，若把 token 层放最后，「两边都配」时会挑到 key，与 pi 相反（探针②实测钉住）。
+4. **新增测试缝**：`EnvApiKeyResolver` 加了注入式环境读取口（生产仍是 `System::getenv`）——
+   凭证链的次序断言必须在可控环境里跑；`envVarName` 只服务于 `source` 文案。
+5. **步7/步8 分两个提交**（同一分派点）：第一次只做载体 ＋ Bearer 分派，第二次加身份头 ＋
+   值识别 —— 这样「裁决②不纳入」的退路在提交史上可见。
+6. **实测口径两处写错又改对**（记为新形态：**断言写在实现之前，但断言依据是「我以为的 SDK 行为」**）：
+   - ① `openai-java` 的 `JsonValue.convert(String.class)` **不做 JSON 往返** ⇒ 值就是原 Java 串，
+      `\uD83D` 转义断言注定错，改成「与脏串逐字相等 ＋ code-unit 探测」。
+   - ② `anthropic-java` **自带**一枚 `user-agent: AnthropicClientImpl/Java 2.52.0` ⇒
+     「无身份头」的判据是「**不是** claude-cli 那枚」，不是「头不存在」。
+   ⇒ 教训：凡断言「某 SDK 的某个默认行为」前，先跑一次把实测值打出来。
+
+---
+
+## 10. 实施记录（逐步：先红 → 实现 → 探针 → 回归）
+
+| 步 | 先红（实测） | 探针（实测红集） | 回归 |
+|---|---|---|---|
+| 1 | 3 用例 **2 红**（差分两条；配对保留那条在桩下平凡绿） | 「跳 2 改跳 1」⇒ **3/3 红**，含「配对 emoji 与 oracle 一致」「干净串不动」 | ai **516 → 519** |
+| 2 | 9 用例 **8 红**（唯一绿＝配对门） | 逐点：system ⇒ 2 红 · 文本块 ⇒ 3 红 · thinking ⇒ 3 红 · tool result ⇒ 2 红（每次含线格那条） | ai 528 |
+| 3 | completions 8 用例 **6 红** · responses 9 用例 **7 红** | 按机制四条：两条 system ⇒ 各 2 红 · user（1＋2 点）⇒ 2/3 红 · tool result ⇒ 各 2 红 · assistant 逐块 ⇒ 各 3 红（他车道零红） | ai 545 |
+| 4 | Google 7 用例 **4 红** · Mistral 6 用例 **5 红** · OpenRouter 2 用例 **1 红** | 每车道一轮全落点注入：Google ⇒ 4 红 · Mistral ⇒ 5 红 · OpenRouter ⇒ 1 红（**跨车道零红**） | ai 560 |
+| 5 | 2 用例 **1 红** | 注掉净化 ⇒ 恰 1 红、门仍绿 | ai 562 |
+| 6 | `RetryableErrorTest` 57 用例 **2 红**，恰为新加的第 [2]、[10] 条 | 删 `"520"` ⇒ 恰 [10] 红 · 删高需求 ⇒ 恰 [2] 红 | ai 562 → 564 · agent-core 489 · L5 15/15 |
+| 7 | 两批 12 用例：编译失败（API 尚不存在）⇒ 落实现后 8＋4 全绿 | ① 分派塌成 apiKey ⇒ 恰 2 红{Bearer, OAuth} · ② token 两层挪到 API_KEY 之后 ⇒ 恰 2 红{两条优先性} · ③ token 层不限 anthropic ⇒ 恰 1 红 | ai 576 · coding-agent 266 |
+| 8 | 3 用例 **2 红**（Bearer 那条是回归门） | 去掉 `x-app` ⇒ 恰 2 红、门仍绿 | ai 579 |
+| 9 | — | — | **telemetry 31 · ai 579 · agent-core 489 · L5 15/15 · 零 `System.out` · checkstyle 0 违规** |
+
+**基线对照**：设计 §5 写的是「ai 346 ／ agent-core 489 ／ telemetry 31」—— 346 是 H1 **之前**的读数，
+实施时的真实起点是 **516**（H1 已把它推到 516），收尾 **579**（**+63**＝净化 6 个测试类 33 条
+＋ 凭证 12 条 ＋ `RetryableErrorTest` 参数化 +2 ＋ 步5 的 2 条 ＋ 步1 的 3 条，逐步合计与逐次
+实测的 519/528/545/560/562/564/576/579 完全一致）。agent-core 489 与 telemetry 31 与设计一致。

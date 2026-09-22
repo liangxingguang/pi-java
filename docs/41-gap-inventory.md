@@ -67,8 +67,8 @@ pi `harness/` 里 `AgentHarness` 独有物（具名钩子 / `HarnessEvent` / `ru
 | ~~`Model.cost`（含 `cacheRead`/`cacheWrite`/`tiers`）~~ | 2 | ✅ **H1 已闭环**（步 1 `PricingInfo` 五组件 ＋ 步 6 models.json `cost` 扩键/半价→UNKNOWN/tier 拒载）。⚠️ 残留＝**数据面**：内置目录的 cache 价未编（裁决 B：−1 表「未知」，不编假价） |
 | **`Model.compat` 缺 49/52 个字段** | 2 | 有行为后果的：`supportsStore` / `maxTokensField` / `supportsDeveloperRole` / `requiresToolResultName` / `thinkingFormat` / `cacheControlFormat` / `sessionAffinityFormat` / `supportsMidConvoSystemMessages` / `supportsMidConvoToolAdditions` / `supportsMidConvoToolChanges` |
 | 内置模型目录数据规模（35 条手写 vs pi 41 provider 生成） | 2 | 大量模型查不到 ⇒ 退化为 `ModelInfo.minimal` |
-| **`ANTHROPIC_AUTH_TOKEN`（`Authorization: Bearer`）** | 2 | **Bearer 型网关（TeamoRouter 一类）连不上 Anthropic 车道** |
-| provider 凭证优先级链（stored → authToken → oauthToken → apiKey） | 2 | 多凭证来源时行为与 pi 不一致 |
+| ~~**`ANTHROPIC_AUTH_TOKEN`（`Authorization: Bearer`）**~~ | 2 | ✅ **A0 步7/8 已闭环**（`ApiOptions.authKind` ＋ `Credentials` 带 kind ＋ 车道按 kind 分派；Bearer ／ OAuth（含两枚身份头）／ x-api-key 三分派，值里含 `sk-ant-oat` 也认）。⚠️ 残留：**anthropic OAuth 流仍未接进请求路径**（只在 `AuthCommand` 里用）＋ pi OAuth 分支的系统提示前缀/工具名两个面未移植（`docs/43 §6-10`） |
+| ~~provider 凭证优先级链（stored → authToken → oauthToken → apiKey）~~ | 2 | ✅ **A0 步7 已闭环**（`Credentials.resolveCredential`：profile env → profile file → `ANTHROPIC_AUTH_TOKEN`(BEARER) → `ANTHROPIC_OAUTH_TOKEN`(OAUTH) → 默认 env → 默认 file；两个 token 仅 Anthropic、profile 层不出 `_AUTH_TOKEN_<PROFILE>` 变体）。原后果：多凭证来源时行为与 pi 不一致 |
 | ~~`usage.reasoning` 生产者~~ | 2 | ✅ **H1 已闭环**（步 3 `output_tokens_details.thinking_tokens`／步 4 `completion_tokens_details.reasoning_tokens`／步 5 Responses·Google；Mistral 恒 null＝pi 同）。原后果：推理 token 用量不可见 |
 | ~~`choice.usage` 回退（Moonshot 型 relay）~~ | 2 | ✅ **H1 步 4 已闭环**（位置照 pi 在 delta 处理之前；台账 B24）。原后果：只在 `choice.usage` 报量的 relay **用量全为 0** |
 | ~~`parseChunkUsage` 归一（`prompt_tokens_details.cached_tokens` 等三路 + 减法语义）~~ | 2 | ✅ **H1 步 4 已闭环**（三路 `??` 链＋`Math.max` 减法；台账 B24）。原后果：即使 relay 报了缓存量也读不到 |
@@ -78,7 +78,7 @@ pi `harness/` 里 `AgentHarness` 独有物（具名钩子 / `HarnessEvent` / `ru
 | 工具状态增量（`toolsAdded`/`toolsRemoved` ＋ 线格 `tool_addition`/`tool_removal`） | 2 | 中途增删工具无法表达（**取代已作废的 C11**） |
 | 提示词分段 `sections` ＋ 渲染 | 2 | 无法按名替换单段提示词 |
 | `ContextOverflow` 的两条新行为（z.ai 放宽正则 ＋ Cerebras 改按 provider 门控） | 2 | z.ai 的 `Prompt too long` 匹配不上 ⇒ 不触发溢出恢复；Cerebras 模式对**任意** provider 都命中 ⇒ **误判溢出** |
-| `RetryableError` 的两个新模式（`"currently experiencing high demand"` / `"520"`） | 2 | 高需求错误与 HTTP 520 **不重试，直接失败** |
+| ~~`RetryableError` 的两个新模式（`"currently experiencing high demand"` / `"520"`）~~ | 2 | ✅ **A0 步6 已闭环**（按 pi 逐字顺序插入，子串匹配语义照抄）。原后果：高需求错误与 HTTP 520 **不重试，直接失败** |
 
 ### 1.3 缺失（权重 1）
 
@@ -86,10 +86,14 @@ pi `harness/` 里 `AgentHarness` 独有物（具名钩子 / `HarnessEvent` / `ru
 `ToolUseContent.thoughtSignature` / `.namespace` · `TextContent.textSignature` · 跨模型 toolCall id 归一 ·
 图片降级为占位文本 · `Model.input` 能力位 · `ThinkingLevel` 词表含 `"max"` · `ImagesModel` 注册表 ·
 `AssistantMessage.responseModel`/`responseId`/`providerThinkingLevel`/`diagnostics`/`endTurn` · `Model.promptCache` ·
-`MistralConversationsCompat` · `ANTHROPIC_OAUTH_TOKEN` · **`sanitizeSurrogates`（pi 57 处调用，java 零）** ·
+`MistralConversationsCompat` · ~~`ANTHROPIC_OAUTH_TOKEN`~~ · ~~**`sanitizeSurrogates`（pi 57 处调用，java 零）**~~ ·
 constrained sampling / grammar · `transport` 选择 · `session-resources` 清理注册表 · `JsonObject` 类型约束
 
-> **`sanitizeSurrogates` 单独点名**：孤对代理字符原样出站 ⇒ **provider 400**。权重虽 1，但它是**硬故障**。
+> ~~**`sanitizeSurrogates` 单独点名**：孤对代理字符原样出站 ⇒ **provider 400**。权重虽 1，但它是**硬故障**。~~
+> ✅ **A0 步1–5 已闭环**（`SanitizeUnicode` ＋ 24 个落线点：Anthropic 6 ／ completions 4 ／ responses 5 ／
+> Google 3 ／ openrouter-images 1 ／ Mistral 请求 4 ＋ 响应 1）。差额见 `docs/43 §9-1`：grammar 2 处随 grammar 包、
+> 4 处「面不存在」（Google thinking ／ Mistral 数组形态 content）、3 处**照缝**（pi 自己也不净化的路径）。
+> ✅ `ANTHROPIC_OAUTH_TOKEN` 随 A0 步7/8 闭环（Bearer ＋ 身份头形态）。
 
 ### 1.4 需完善（存疑 —— 两侧都有、行为不同）
 
@@ -112,6 +116,7 @@ constrained sampling / grammar · `transport` 选择 · `session-resources` 清�
 | ~~`Usage.Cost` 恒零~~ | ✅ **H1 步 1＋各车道挂价已救活**（B57）。原状态：成本累加恒 0 |
 | `StreamEvent.UsageInfo.from(...)` 零调用者 | **H1 步 7 时核对**（`docs/42 §10.1` A4）：加宽管线走的是 `emitUsage(Usage)`，这个静态工厂仍是死码；不删（R5 面），登记 |
 | **`ThinkingLevelMap` 非空实例生产不可构造** | 生产构造点全部 `empty()` ⇒ `forLevel` 恒 `OFF` ⇒ 请求里**永无 `thinking.budgetTokens`**（**B15 剩的这半边**） |
+| **`RetryPolicy` 五个预设零调用者** | 包 A0 步6 的发现（J5）：`anthropic()`/`openai()`/`google()`/`mistral()`/`deepseek()` 五预设**零调用者**，`PiHttpClient` 走 `defaultPolicy()`（`{408,409,429}` ∪ 任意 5xx；`Retry-After` 只读 429/503）。是否接线属 `x-should-retry`／传输重试那包的范围（A6） |
 | `StreamSimple` | 主源码零调用（**别当接缝**） |
 | `DeferredHandle` | 零生产者（两侧同状） |
 | `ToolResultMessage.usage` / `details` | 两者皆无生产者 |
@@ -136,6 +141,21 @@ constrained sampling / grammar · `transport` 选择 · `session-resources` 清�
 2. **报告计数内部不一致**：`02-ai.md:88` 写「21 个长尾」但列 22 项；`:265` 写 22；缺失清单标题写「（14）」但列 15 项。
 3. **报告漏收的两条 OpenAI 缓存缺口**：`api/openai-prompt-cache.ts`（`prompt_cache_key` / `prompt_cache_retention="24h"`）java 零命中；`cacheRetention` 只接进 `openai-responses` 一条车道。
 4. **行号小漂移**：`ModelCapability` 的 `IMAGE_INPUT` 在 `:16`、`THINKING` 在 `:19`；`ModelInfo` 在 `catalog/` 而非 `model/`；`Protocol` 在 `provider/` 而非 `protocol/`。
+
+**包 A0 逐行实读时新撞出的（`docs/43 §6` 详述）**：
+
+5. **§1.3 的「`sanitizeSurrogates`（pi 57 处）」计数偏高**：逐行实读全仓是 **46 处 / 9 文件**
+   （anthropic 11 · mistral 9 · completions 7 · responses 7 · google-shared 6 · bedrock 3 ·
+   generative-ai 1 · vertex 1 · openrouter-images 1）；扣掉 java 未移植的两条车道（bedrock 3、vertex 1）
+   ⇒ 范围内 **42 处**、java 落 **24 点**。
+6. **pi 同族的三条缝**（pi 自己也不净化的路径，java 照缝）：`completions:1339` 签名驱动 reasoning 字段 ·
+   `responses:322` `function_call.arguments` · `google-shared:274` `functionCall.args`。三条各配 guard 夹具。
+7. **四个落点「面不存在」**：Google 的 thinking 两分支（java 一律丢 thinking）· Mistral 的数组形态
+   `delta.content` 两处（java 只按 String 读 ⇒ **会抛 ClassCastException**，属该车道的形态缺口）。
+8. **pi OAuth 分支的两个额外面**（`anthropic-messages.ts:1078-1090` 系统提示前缀 ＋ `toClaudeCodeName` 工具名）
+   未移植；两枚浏览器头（`accept` / `anthropic-dangerous-direct-browser-access`）有意不移植。
+9. **序列化器对孤对代理有三种口径**（线格实测）：SDK 的 UTF-8 字节生成器 ⇒ 转义 `\uD83D`（**孤对能出站**）·
+   `com.google.genai` ⇒ 替换成 `?`（**静默错字**）· Jackson char 型 ⇒ 原样留在串里。
 
 ---
 
@@ -618,11 +638,16 @@ JSONL `nextSeq` 高水位字段 ·
 
 ### 7.2 补全包清单（建议次序）
 
+> ⚠️ **2026-09-22 用户改判：ai 模块整体先行** —— 下面的 H1→H6→I1–I3→C1→D1–D5 次序**已被取代**。
+> H1 之后不走 H2，而是先把 `pi-java-ai` 的剩余缺口清完（代号 **A0**…），H2–H6 与后续梯队**顺延**。
+> A0（硬故障与凭证小件）**已闭环**：见 `docs/43`（设计 ＋ §8 提交清单 ＋ §9 实测校正 ＋ §10 逐步记录）。
+
 **第一梯队 —— 权重 3 的缺失 ＋ 硬故障（用户今天会撞到）**
 
 | 包 | 模块 | 内容 | 为什么排这 |
 |---|---|---|---|
 | ~~**H1**~~ | `ai` | ✅ **已闭环**（2026-09-22，七提交 `5b703a9..7c3db0d`，实施记录 `docs/42 §10`；范围比原两条宽——四分量生产者＋`calculateCost`＋全车道归一＋下游接线＋L5 S15 差分） | 原 **+5.50pp**，占四条 P0 的 **76%** |
+| ~~**A0**~~ | `ai` | ✅ **已闭环**（2026-09-22，九提交 `34ca389..5f3833d`，设计/记录 `docs/43`）——`sanitizeSurrogates` 24 个落线点 ＋ `RetryableError` 两模式 ＋ Anthropic Bearer/OAuth 凭证链（`AuthKind`） | 三件事都是「今天会撞到且有硬后果」：provider 400 ／ 不重试直接失败 ／ Bearer 型网关连不上 |
 | **H2** | `ai` | **图片三条车道 ＋ toolResult 路径** | `ReadTool` 读图模型**完全看不到图**（静默） |
 | **H3** | `coding-agent` | **上下文文件发现**（`AGENTS.md`/`CLAUDE.md` ＋ `--no-context-files` 联动） | **每次会话都走**，现在**静默失效**；同时救活一个死 flag |
 | **H4** | `coding-agent` | **扩展钩子桥接**（暴露 `hookSystem()`） | 8 个引擎钩子**已经在 `HookSystem` 里** ⇒ 这是**接线不是新建**，最省的一包 |
