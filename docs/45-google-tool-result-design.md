@@ -2,8 +2,8 @@
 
 > **来源**：`docs/32` **B84** 行（由包 H2 步 6 实测证伪后拆出，用户 2026-09-22 裁决「另立一包」）·
 > `docs/44 §10-1`（实测证据）· `docs/41 §7.2`（ai 批次）。
-> **状态**：**设计待审**（未写任何实现代码）。
-> **基准**：pi @ `3390bd936` · pi-java @ `edcf21f`
+> **状态**：**已实施**（2026-09-23 用户裁决「按照建议实施」，§9 五点全采纳；六步提交见 §9）。
+> **基准**：pi @ `3390bd936` · pi-java @ `efedec4`（设计）／`4890057`（步5）
 > **证据纪律**：pi 侧一律 `git show 3390bd936:<path>`（**不读工作树**）；SDK 侧一律 `javap`／探针实测。
 > pi 路径相对 `D:\workplaceForai\pi`，java 路径相对 `D:\workplaceForai\pi-java`。
 > **证据分级**：本文所有断言分三级 —— ①**实读**（贴 `file:line`）②**实测**（贴跑出来的值）
@@ -421,3 +421,88 @@ final class GoogleMessageConverter {
 - **`UrlImageContent` 在工具结果里的处置** —— pi 无此类型；java 的 `blockParts` 里 `UrlImageContent`
   走 `fileData` 是**已有**行为（用户图片），本包**不动**，也不把它算进 `hasImages`（照 pi 只认 `image`）。
 - **`read.ts` 的两条**（B85）与**其余 B86 形状偏差** —— 各自在册。
+
+---
+
+## 9. 裁决与执行
+
+**用户 2026-09-23 裁决**（「按照建议实施」）：§7 五点**全部按建议采纳** ——
+① 升 `google-genai` 1.72.0 · ② `functionCall.id` 门两侧照抄 · ③ 车道侧能力门用
+`supportsImageInput()`（并如实登记不可达）· ④ 空白助手文本块跳过并入 · ⑤ 拆
+`GoogleMessageConverter` ＋ `ToolResultContent` 分支置空。
+
+| 步 | 提交 | 内容 |
+|---|---|---|
+| 设计 | `efedec4` | `docs/45` 设计 |
+| 1 | `a22ccca` | `google-genai` 1.15.0 ⇒ 1.72.0 ＋ SDK 能力探针（编译即证明） |
+| 2 | `f77dfb4` | 拆出 `GoogleMessageConverter`（纯搬移，零行为改动） |
+| 3 | `2b46773` | 两个模型谓词（`requiresToolCallId`／`supportsMultimodalFunctionResponse`） |
+| 4 | `b1bf735` | toolResult 分支（三分支重写 ＋ 合并 ＋ 独立图片回合 ＋ 内嵌 parts ＋ D6 置空） |
+| 5 | `4890057` | assistant 侧：空白文本块跳过 ＋ `functionCall.id` 门 |
+| 6 | （本提交） | 台账（`docs/32`／`docs/41`／本文件 §9-§11） |
+
+**行数**：车道 `GoogleGenerativeAiApi` 407 ⇒ **325**；新增 `GoogleMessageConverter` **346** ⇒ 两者 ≤ 500。
+（设计 §3-D2 估「车道 ≈330／转换器 ≈200」，实际 325／346 —— 转换器比估计大，
+因为 javadoc 逐条带 pi 行号，见 §10-1。）
+
+---
+
+## 10. 实施中的实测校正（相对本设计正文）
+
+1. **⚠️ D9 的 `imageParts` 复用**在 Java SDK 上**写不出来**。设计给的是「一个 `imageParts`
+   列表喂两处」（pi 的 TS 里两处都是 `Part`，形状相同）。实测：Java SDK 里这是**两个类型** ——
+   内嵌要 `FunctionResponsePart`（`FunctionResponse.Builder.parts(List<FunctionResponsePart>)`），
+   独立回合要 `Part`（`Content.Builder.parts(List<Part>)`）⇒ 两条路径**各自从 `images` 现算**
+   （`functionResponseImagePart` 与 `inlineDataPart`）。D9 那段是伪 Java，照抄编译不过。
+
+2. **⚠️ 步4 的一条「先红」是空过**：`gemini2OmitsFunctionResponseId`（断言「不发 id」）
+   在**修复前也绿** —— 老实现发的是 `{"text":…}`，压根没有 `functionResponse` 可谈 id。
+   这是「缺席断言在缺陷态恒真」的形态（与 H2 步6 的「纯搬移无红灯」同族但更隐蔽：
+   它看起来是一条**有内容**的断言）。处置＝补一条前置断言「这确实是个 `functionResponse`
+   且 `name=="read"`」，把它变成非空。**教训：凡断言「某键缺席」，先钉「承载它的那个对象在场」。**
+
+3. **⚠️ 车道侧能力门（D4）按预测确认为不可达 —— 已实测，不是推断**：把
+   `model != null && model.supportsImageInput()` 整个换成 `true` ⇒ **零红**（23/23 绿）。
+   根因与包 H2 两处同形：共享闸按**同一个 `ModelInfo`**、**同一个判据**先跑过 ⇒
+   车道永远收不到图片。⇒ 并入 **B86**（同一形态第 3 例），代码注释写明
+   「**没有出参，不是夹具没牙**」。
+
+4. **空白判据的 NBSP 缝（登记）**：pi 是 `!block.text || block.text.trim() === ""`，
+   JS 的 `trim()` 会剥掉 U+00A0(NBSP)／U+FEFF 等；Java 的 `isBlank()`
+   （`Character.isWhitespace`）**不认** NBSP ⇒ 一个**纯 NBSP** 的助手文本块
+   在 pi 被跳过、在 java 上线。可达性：需要 provider 发一个纯 NBSP 的文本块。
+   ⚠️ 三种 Java 写法里 `isBlank()` **最接近** pi（`trim()` 连 U+2000–U+200A 都不剥，
+   比 `isBlank()` 离得更远）⇒ 取 `isBlank()`，差别如实登记。
+
+5. **1.15.0 上探针的红是「编译错误」，但增量编译会退化成运行时错**：clean 构建下是
+   `找不到符号：类 FunctionResponsePart`；若只改 BOM 不 clean，测试类不重编 ⇒
+   运行时 `NoClassDefFoundError: com/google/genai/types/FunctionResponsePart`。
+   **两种都红**，但归因不同 —— 引用这条探针时要说清是哪一种。
+
+6. **实测确认**：`Part.fromFunctionResponse` 在 1.72.0 上从两参变**两参＋varargs**，
+   旧调用点（`fromFunctionResponse(name, response)`）照常编译 ⇒ 十类 `javap` 的
+   「只增不减」结论在**调用点**上也成立（不只签名表）。
+
+---
+
+## 11. 实施记录（逐步：先红 → 实现 → 变异探针 → 回归）
+
+每步一个提交，`ai` 模块用例数逐包递增：
+
+| 步 | 先红（实测） | 变异探针（实测红集） | ai 用例 |
+|---|---|---|---|
+| 1 | —（依赖升级，非行为改动）；**探针＝编译即证明** | ① 降回 1.15.0 ⇒ 探针红（clean＝编译错误／增量＝`NoClassDefFoundError`） | 643 → **645** |
+| 2 | —（零行为改动，无红灯可看） | 无（纯搬家：红/绿集恒等，回归即证明） | 645（不变） |
+| 3 | 编译红（方法不存在） | ① `>=3` 改 `>3` ⇒ 3 红 ② 删 `major == null \|\|` ⇒ 2 红 ③ 删 `toLowerCase` ⇒ 1 红 | → **655** |
+| 4 | `10 / Failures 8 / Errors 1`（9 红，唯一绿的是**空过**，见 §10-2） | ① `name` 换成 `toolUseId` ⇒ 3 红 ② `output` 键改 `content` ⇒ 4 红 ③ 去合并 ⇒ 2 红 ④ 去独立图片回合 ⇒ 1 红 ⑤ `isError` 取反 ⇒ 5 红 ⑥ 去内嵌 `parts` ⇒ 1 红 ⑦ **拆掉车道侧能力门 ⇒ 零红**（§10-3） | → **665** |
+| 5 | `6 / Failures 4`（两条「带 id」是对照面，今天恒带 ⇒ 绿） | ① `requiresToolCallId` 恒真 ⇒ 2 红（两侧的「2.5 不发 id」）② 拆掉空白判断 ⇒ 3 红 | → **671** |
+| 6 | — | — | 671（不变） |
+
+**最终回归**：ai **671** · telemetry 31 · agent-core **489** · **L5 15/15** ·
+checkstyle 0 违规 · 两个触碰的文件 ≤ 500 行 · 触碰的 main 源零 `System.out`。
+
+⚠️ **一次未复现的偶发红（登记）**：`agent-core` 全套第一次跑 `BUILD FAILURE`
+（失败详情被当时的输出过滤吃掉，未留证），随后**两次**全绿（489/489）。
+与 `docs/31 §8.27.7` 修掉的那次 `PiLoopTest` flake 同族形态 —— 未复现即不追，
+但**如实记下**：本包的最后一次全绿**不代表**那次红不存在。
+

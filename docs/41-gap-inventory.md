@@ -51,7 +51,7 @@ pi `harness/` 里 `AgentHarness` 独有物（具名钩子 / `HarnessEvent` / `ru
 | ~~`usage.cacheRead` 生产者~~ | 3 | ✅ **H1 已闭环**（步 2–5，`docs/42 §10`；台账 B56）。原后果：开 prompt caching 时上下文占用被**低估** ⇒ 压缩时机晚于 pi（下游 `ContextOverflow`/`ContextUsageEstimator` **已在读**这个数） | B56 |
 | ~~`usage.cacheWrite` / `cacheWrite1h` 生产者~~ | 3 | ✅ **H1 已闭环**（步 3–5；`cacheWrite1h` 只有 Anthropic 报、真 key 端到端预登记于 `docs/42 §8.5-3`）。原后果：`uncachedTokens` 把 cacheWrite 算进未缓存量 | B56 |
 | ~~`usage.cost` 计算（`calculateCost`）~~ | 3 | ✅ **H1 已闭环**（步 1 P16 逐条 ＋ 各车道挂价；台账 B57）。原后果：**成本恒显示 0**（含 1h 缓存 2× 输入价、阶梯价 `tiers`） | B57 |
-| ~~`transformMessages` 其余 4/5 条变换~~ | 3 | ✅ **图片切片已随 H2 落地**（`docs/44` 步1：`downgradeUnsupportedImages` ＋ `replaceImagesWithPlaceholder`，逐行照抄 `transform-messages.ts:12-57`）。**B14 收窄为三条**：跨模型剥离 `thoughtSignature` / 跨模型归一 toolCall id / 孤儿 toolCall 合成 toolResult —— 仍未做（原后果：跨模型切换时孤儿 toolCall ⇒ provider 400） | B14 |
+| ~~`transformMessages` 其余 4/5 条变换~~ | 3 | ✅ **图片切片已随 H2 落地**（`docs/44` 步1：`downgradeUnsupportedImages` ＋ `replaceImagesWithPlaceholder`，逐行照抄 `transform-messages.ts:12-57`）。**B14 收窄为三条**：跨模型剥离 `thoughtSignature` / 跨模型归一 toolCall id / 孤儿 toolCall 合成 toolResult —— 仍未做（原后果：跨模型切换时孤儿 toolCall ⇒ provider 400）。⚠️ **2026-09-23 包B84 点名**：归一 toolCall id 这一条**不只关乎 anthropic** —— pi 的 `normalizeToolCallId`（`transform-messages.ts:136-142`）在 `requiresToolCallId` 为真时**跨模型重放到 Google 车道**同样生效（gemini 3+／`claude-*`／`gpt-oss-*`），B84 落地后那些模型的 `id` 仍是原值（可能带 `|` 或超 64 字符）而 pi 会归一。内置两个 gemini-2.5 上该谓词为假 ⇒ 归一是恒等变换、缺口不可达 | B14 |
 | Anthropic `cache_control` 标记 | 3 | Anthropic 车道**永不提示缓存** ⇒ 每轮全价、延迟更高 | — |
 | `openrouter` chat 面 | 3 | 主流 7 家之一整条不可用（现只有 images 面） | — |
 | `SystemMessage`（transcript 系统消息模型） | 3 | 会话中途改系统提示/工具集**无法表达** | — |
@@ -62,7 +62,7 @@ pi `harness/` 里 `AgentHarness` 独有物（具名钩子 / `HarnessEvent` / `ru
 | 功能 | 权重 | 后果 |
 |---|---:|---|
 | `xai` provider 端点 | 2 | 主流 7 家之一不可用 |
-| ~~**`ImageContent` 收发**（anthropic ＋ openai-completions ＋ mistral 三条车道 **＋ toolResult 路径**）~~ | 2 | ✅ **H2 已闭环**（`docs/44`，七提交 `af5139e..9bbcd48`）—— 共享闸（非视觉降级）＋ 四车道九个落线点（Anthropic 2 ／ completions 2 ／ Mistral 2 ／ responses 1 ＋ 闸 1）。⚠️ **Google 不在内**：实测其工具结果**整条路径**不存在（不是缺图片），已拆出去另立一包（`docs/32` B84）。原后果：**ReadTool 读图模型完全看不到图**（比台账写的更严重） | B17 |
+| ~~**`ImageContent` 收发**（anthropic ＋ openai-completions ＋ mistral 三条车道 **＋ toolResult 路径**）~~ | 2 | ✅ **H2 已闭环**（`docs/44`，七提交 `af5139e..9bbcd48`）—— 共享闸（非视觉降级）＋ 四车道九个落线点（Anthropic 2 ／ completions 2 ／ Mistral 2 ／ responses 1 ＋ 闸 1）。⚠️ **Google 不在内**：实测其工具结果**整条路径**不存在（不是缺图片），已拆出去另立一包（`docs/32` B84）—— ✅ **B84 已闭环**（`docs/45`，2026-09-23）。原后果：**ReadTool 读图模型完全看不到图**（比台账写的更严重） | B17 |
 | 孤儿 toolCall 合成 `toolResult` | 2 | 中断/切换模型后历史缺 tool_result ⇒ provider 400 |
 | ~~`Model.cost`（含 `cacheRead`/`cacheWrite`/`tiers`）~~ | 2 | ✅ **H1 已闭环**（步 1 `PricingInfo` 五组件 ＋ 步 6 models.json `cost` 扩键/半价→UNKNOWN/tier 拒载）。⚠️ 残留＝**数据面**：内置目录的 cache 价未编（裁决 B：−1 表「未知」，不编假价） |
 | **`Model.compat` 缺 49/52 个字段** | 2 | 有行为后果的：`supportsStore` / `maxTokensField` / `supportsDeveloperRole` / `requiresToolResultName` / `thinkingFormat` / `cacheControlFormat` / `sessionAffinityFormat` / `supportsMidConvoSystemMessages` / `supportsMidConvoToolAdditions` / `supportsMidConvoToolChanges` |
@@ -643,6 +643,10 @@ JSONL `nextSeq` 高水位字段 ·
 > ⚠️ **2026-09-22 用户改判：ai 模块整体先行** —— 下面的 H1→H6→I1–I3→C1→D1–D5 次序**已被取代**。
 > H1 之后不走 H2，而是先把 `pi-java-ai` 的剩余缺口清完（代号 **A0**…），H2–H6 与后续梯队**顺延**。
 > A0（硬故障与凭证小件）**已闭环**：见 `docs/43`（设计 ＋ §8 提交清单 ＋ §9 实测校正 ＋ §10 逐步记录）。
+> H2（图片内容）**已闭环**：见 `docs/44`；其顺带证伪的 Google 工具结果路径**另立 B84 并已闭环**：
+> 见 `docs/45`（设计 ＋ §9 裁决与执行 ＋ §10 实测校正 ＋ §11 逐步台账）。
+> ⚠️ **B84 是 `ai` 模块里最后一件「硬故障」**（Gemini 多轮工具调用此前整条是坏的）——
+> `§1` 里余下的 `ai` 缺口（1.1–1.6）均非硬故障，可按 §7.2 的梯队继续。
 
 **第一梯队 —— 权重 3 的缺失 ＋ 硬故障（用户今天会撞到）**
 
@@ -651,6 +655,7 @@ JSONL `nextSeq` 高水位字段 ·
 | ~~**H1**~~ | `ai` | ✅ **已闭环**（2026-09-22，七提交 `5b703a9..7c3db0d`，实施记录 `docs/42 §10`；范围比原两条宽——四分量生产者＋`calculateCost`＋全车道归一＋下游接线＋L5 S15 差分） | 原 **+5.50pp**，占四条 P0 的 **76%** |
 | ~~**A0**~~ | `ai` | ✅ **已闭环**（2026-09-22，九提交 `34ca389..5f3833d`，设计/记录 `docs/43`）——`sanitizeSurrogates` 24 个落线点 ＋ `RetryableError` 两模式 ＋ Anthropic Bearer/OAuth 凭证链（`AuthKind`） | 三件事都是「今天会撞到且有硬后果」：provider 400 ／ 不重试直接失败 ／ Bearer 型网关连不上 |
 | ~~**H2**~~ | `ai` | ✅ **已闭环**（2026-09-22，七提交 `af5139e..9bbcd48`，设计/记录 `docs/44`）—— 图片四车道（Anthropic ／ completions ／ Mistral ／ responses）＋ 共享非视觉降级闸 ＋ 拆两条超限车道。⚠️ **Google 拆出去另立一包**（实测其工具结果整条路径不存在，`docs/32` B84） | 原：`ReadTool` 读图模型**完全看不到图**（静默） |
+| ~~**B84**~~ | `ai` | ✅ **已闭环**（2026-09-23，六提交 `efedec4`(设计) `a22ccca` `f77dfb4` `2b46773` `b1bf735` `4890057` ＋ 台账，设计/记录 `docs/45`）—— Google 车道**三分支重写** ＋ 工具结果整块移植（`functionResponse` 全形／合并进同一 user 回合／gemini<3 独立图片回合／gemini3+ 内嵌 `parts`／`id` 门）＋ **`google-genai` 1.15.0⇒1.72.0**（1.15.0 写不出内嵌 `parts`）＋ 空白助手文本块跳过 ＋ 拆 `GoogleMessageConverter`。ai 643⇒**671** | **硬故障**：Gemini 的多轮工具调用此前是坏的（工具结果落成 model 轮纯文本，模型看不到对应关系） |
 | **H3** | `coding-agent` | **上下文文件发现**（`AGENTS.md`/`CLAUDE.md` ＋ `--no-context-files` 联动） | **每次会话都走**，现在**静默失效**；同时救活一个死 flag |
 | **H4** | `coding-agent` | **扩展钩子桥接**（暴露 `hookSystem()`） | 8 个引擎钩子**已经在 `HookSystem` 里** ⇒ 这是**接线不是新建**，最省的一包 |
 | **H5** | `ai` ＋ `agent-core` | **B15 扩展思考打通**（与 B8 共用载体 ⇒ 一次投送修复） | 把死功能救活；改一行 ＋ 生产侧构造 |
