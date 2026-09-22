@@ -22,6 +22,7 @@ import com.anthropic.models.messages.ToolUnion;
 import com.anthropic.models.messages.ToolUseBlockParam;
 
 import com.pijava.ai.api.ApiOptions;
+import com.pijava.ai.api.AuthKind;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.api.TransformMessages;
@@ -81,18 +82,36 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         // 包 A0 步7（docs/43 D5/D7）：按**凭证种类**分派，对应 pi
         // api/anthropic-messages.ts:906-989 的三分支（github-copilot / OAuth / 默认）。
         var auth = resolveAuth(options, apiKeyEnvVar);
+        // pi :906-908 的判据是**值**（`apiKey.includes("sk-ant-oat")`）——CLI 直给／文件凭证
+        // 里的 oat 值同样走 OAuth 形态；AuthKind.OAUTH（来自 ANTHROPIC_OAUTH_TOKEN）是
+        // pi-java 的显式载体。两者都认。
+        var oauth = auth.kind() == AuthKind.OAUTH || auth.value().contains(OAUTH_TOKEN_MARKER);
         var builder = AnthropicOkHttpClient.builder();
-        switch (auth.kind()) {
-            case BEARER -> builder.authToken(auth.value());
-            // 身份头两枚在步8 接（docs/43 D7）。
-            case OAUTH -> builder.authToken(auth.value());
-            case API_KEY -> builder.apiKey(auth.value());
+        if (oauth || auth.kind() == AuthKind.BEARER) {
+            builder.authToken(auth.value());
+            if (oauth) {
+                // pi :951-970 的 OAuth 分支：两枚身份头（另两枚 accept ／
+                // anthropic-dangerous-direct-browser-access 是浏览器场景产物，不移植）。
+                builder.putHeader("user-agent", "claude-cli/" + CLAUDE_CODE_VERSION);
+                builder.putHeader("x-app", "cli");
+            }
+        } else {
+            builder.apiKey(auth.value());
         }
         if (options.baseUrl() != null && !options.baseUrl().isBlank()) {
             builder.baseUrl(options.baseUrl());
         }
         this.client = builder.build();
     }
+
+    /**
+     * pi {@code anthropic-messages.ts:906-908} 的 OAuth 值标记；
+     * 版本常量取 {@code :87} 的硬编码值 —— <b>照抄同值</b>，不读运行时版本。
+     */
+    private static final String OAUTH_TOKEN_MARKER = "sk-ant-oat";
+
+    /** pi {@code anthropic-messages.ts:87} 的硬编码常量。 */
+    private static final String CLAUDE_CODE_VERSION = "2.1.251";
 
     @Override
     protected void streamInternal(StreamRequest request,
