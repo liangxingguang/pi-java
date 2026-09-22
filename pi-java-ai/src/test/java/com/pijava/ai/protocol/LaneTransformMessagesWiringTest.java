@@ -72,7 +72,7 @@ class LaneTransformMessagesWiringTest {
             drainQuietly(() -> api.streamBlocking(
                 request(ModelId.of("google", "gemini-2.5-pro")), ApiOptions.defaults()));
 
-            // 今天：toGoogleContents 的 ThinkingContent 分支返回 List.of()（静默丢弃）。
+            // 今天：GoogleMessageConverter.blockParts 的 ThinkingContent 分支返回 List.of()（静默丢弃）。
             assertThat(server.body()).contains(FOREIGN_TEXT);
         }
     }

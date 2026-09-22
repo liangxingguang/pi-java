@@ -1,6 +1,5 @@
 package com.pijava.ai.protocol;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.SubmissionPublisher;
@@ -9,7 +8,6 @@ import com.google.genai.Client;
 import com.google.genai.ResponseStream;
 import com.google.genai.types.Content;
 import com.google.genai.types.FunctionCall;
-import com.google.genai.types.FunctionDeclaration;
 import com.google.genai.types.GenerateContentConfig;
 import com.google.genai.types.GenerateContentResponse;
 import com.google.genai.types.HttpOptions;
@@ -20,9 +18,6 @@ import com.pijava.ai.Usage;
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.TransformMessages;
-import com.pijava.ai.api.ToolDefinition;
-import com.pijava.ai.message.ContentBlock;
-import com.pijava.ai.message.Message;
 import com.pijava.ai.model.CostCalculator;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
@@ -109,8 +104,8 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
         try {
             // 共享预通道先于本车道的映射跑（pi google-shared.ts:138 在 contents 转换前调
             // transformMessages）—— 跨模型重放的 thinking 块在此降级为文本，
-            // toGoogleContents 的 ThinkingContent 分支（丢块）才不会把它整段吞掉。
-            var contents = toGoogleContents(TransformMessages.apply(
+            // 转换器的 ThinkingContent 分支（丢块）才不会把它整段吞掉。
+            var contents = GoogleMessageConverter.toContents(TransformMessages.apply(
                 request.messages(), request.modelId(), apiName(), request.model()));
             var config = buildConfig(request);
 
@@ -307,89 +302,11 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
         // Tools
         if (!request.tools().isEmpty()) {
             builder.tools(List.of(Tool.builder()
-                    .functionDeclarations(toGoogleFunctions(request.tools()))
+                    .functionDeclarations(GoogleMessageConverter.functions(request.tools()))
                     .build()));
         }
 
         return builder.build();
-    }
-
-    private List<Content> toGoogleContents(List<Message> messages) {
-        var contents = new ArrayList<Content>();
-        for (var msg : messages) {
-            var role = msg instanceof Message.UserMessage ? "user" : "model";
-            var parts = new ArrayList<Part>();
-            for (var block : msg.content()) {
-                parts.addAll(toGoogleParts(block));
-            }
-            if (!parts.isEmpty()) {
-                contents.add(Content.builder()
-                        .role(role)
-                        .parts(parts)
-                        .build());
-            }
-        }
-        return contents;
-    }
-
-    private List<Part> toGoogleParts(ContentBlock block) {
-        return switch (block) {
-            // pi google-shared.ts:207/:212（user 串/文本项）、:242（assistant 文本块）
-                    // —— 均为「该块的文本」，java 两角色共用这一处 ⇒ 一处即够。
-            case ContentBlock.TextContent tc ->
-                    List.of(Part.fromText(SanitizeUnicode.surrogates(tc.text())));
-            case ContentBlock.ThinkingContent tc ->
-                    List.of(); // Gemini has its own thinking protocol; do not echo it as text
-            case ContentBlock.DiffContent diff ->
-                    List.of(); // display-only artifact; not part of the LLM request
-            case ContentBlock.ToolUseContent tc -> {
-                var fc = FunctionCall.builder()
-                        .name(tc.name())
-                        .args(tc.arguments());
-                if (tc.id() != null && !tc.id().isEmpty()) {
-                    fc.id(tc.id());
-                }
-                yield List.of(Part.builder()
-                        .functionCall(fc.build())
-                        .build());
-            }
-            case ContentBlock.ToolResultContent tc -> {
-                    // Extract text from content blocks for the function response
-                    String text = tc.content().stream()
-                        .filter(ContentBlock.TextContent.class::isInstance)
-                        .map(b -> ((ContentBlock.TextContent) b).text())
-                        .collect(java.util.stream.Collectors.joining("\n"));
-                    // pi google-shared.ts:301 —— 净化的是拼好之后的 responseValue。
-                    yield List.of(Part.fromFunctionResponse(tc.toolUseId(),
-                            Map.of("content", SanitizeUnicode.surrogates(text))));
-                }
-            case ContentBlock.ImageContent ic ->
-                    List.of(Part.fromBytes(
-                            java.util.Base64.getDecoder().decode(ic.data()),
-                            ic.mediaType()));
-            case ContentBlock.UrlImageContent url ->
-                    // Gemini 走 fileData（URL 图片，P6-19）。
-                    List.of(Part.builder()
-                            .fileData(com.google.genai.types.FileData.builder()
-                                    .fileUri(url.url())
-                                    .build())
-                            .build());
-        };
-    }
-
-    private List<FunctionDeclaration> toGoogleFunctions(
-            List<ToolDefinition> tools) {
-        return tools.stream().<FunctionDeclaration>map(tool -> {
-            var builder = FunctionDeclaration.builder()
-                    .name(tool.name());
-            if (tool.description() != null && !tool.description().isEmpty()) {
-                builder.description(tool.description());
-            }
-            if (tool.inputSchema() != null) {
-                builder.parametersJsonSchema(tool.inputSchema());
-            }
-            return builder.build();
-        }).toList();
     }
 
     private static String resolveApiKey(ApiOptions options) {

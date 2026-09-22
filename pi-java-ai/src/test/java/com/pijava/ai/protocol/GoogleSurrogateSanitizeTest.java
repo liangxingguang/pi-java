@@ -157,20 +157,22 @@ class GoogleSurrogateSanitizeTest {
     /**
      * <b>照缝登记</b>（P5 家族）：工具调用的 {@code args} **不净化** —— pi
      * {@code shared:274} 原样放 {@code block.arguments ?? {}}；java 的
-     * {@code toGoogleParts} 同样原样放。钉住这个缝不被顺手补掉。
+     * {@code GoogleMessageConverter.blockParts} 同样原样放。钉住这个缝不被顺手补掉。
      *
-     * <p>观测面取**出参**（反射私有 {@code toGoogleParts}）而不是线格：{@code com.google.genai}
+     * <p>观测面取**出参**（反射包私有 {@code blockParts}）而不是线格：{@code com.google.genai}
      * 的序列化器把孤高代理写成 {@code ?}（{@code docs/43 §10} 实测），在线格上「未净化」
      * 与「净化」只差一个空格，判别力弱且依赖第三方编码器行为。</p>
+     *
+     * <p>⚠️ 包 B84 步2 把这个方法从 {@code GoogleGenerativeAiApi} 搬到了
+     * {@link GoogleMessageConverter}（纯搬移）—— 反射目标随之改类，方法名
+     * {@code toGoogleParts} ⇒ {@code blockParts}。</p>
      */
     @Test
     void functionCallArgumentsKeepLoneSurrogate() throws Exception {
-        var api = new GoogleGenerativeAiApi(new ApiOptions(
-            "http://localhost:1", "test-key", Duration.ofSeconds(5), 0, Map.of()));
-        var method = GoogleGenerativeAiApi.class.getDeclaredMethod("toGoogleParts", ContentBlock.class);
+        var method = GoogleMessageConverter.class.getDeclaredMethod("blockParts", ContentBlock.class);
         method.setAccessible(true);
         var parts = (List<?>) method.invoke(
-            api, new ContentBlock.ToolUseContent("call_1", "ls", Map.of("text", dirty("arg"))));
+            null, new ContentBlock.ToolUseContent("call_1", "ls", Map.of("text", dirty("arg"))));
         var part = (com.google.genai.types.Part) parts.get(0);
 
         var args = part.functionCall().orElseThrow().args().orElseThrow();
