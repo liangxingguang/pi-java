@@ -8,7 +8,9 @@ import java.util.concurrent.SubmissionPublisher;
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
 import com.anthropic.core.http.StreamResponse;
+import com.anthropic.models.messages.Base64ImageSource;
 import com.anthropic.models.messages.ContentBlockParam;
+import com.anthropic.models.messages.ImageBlockParam;
 import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.MessageParam;
 import com.anthropic.models.messages.RawMessageDeltaEvent;
@@ -451,7 +453,8 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                 continue;
             }
 
-            var blockParams = toBlockParams(msg, allowEmptySignature);
+            var blockParams = toBlockParams(msg, allowEmptySignature,
+                    msg instanceof Message.UserMessage);
             if (blockParams.isEmpty()) continue;
 
             var role = msg instanceof Message.UserMessage
@@ -495,7 +498,8 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         return builder.build();
     }
 
-    private List<ContentBlockParam> toBlockParams(Message msg, boolean allowEmptySignature) {
+    private List<ContentBlockParam> toBlockParams(Message msg, boolean allowEmptySignature,
+                                                  boolean allowImages) {
         var result = new ArrayList<ContentBlockParam>();
         for (var block : msg.content()) {
             if (block instanceof ContentBlock.TextContent tc) {
@@ -522,13 +526,37 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                         .name(tu.name())
                         .input(input)
                         .build()));
+            } else if (allowImages && block instanceof ContentBlock.ImageContent img) {
+                result.add(ContentBlockParam.ofImage(toImageBlock(img)));
             }
-            // 其余变体（ImageContent / UrlImageContent / DiffContent）此处**静默丢弃**
-            // —— pi 在 user 车道把图片映射成 `{type:"image",source:{...}}`
-            // （`anthropic-messages.ts:1250-1260`），pi-java 的 Anthropic 车道缺这条。
-            // 已登记为 B16，本包不动（行为变更须先过设计）。
+            // 其余变体静默丢弃，**逐条有据**：
+            //  - ImageContent：只在 user 车道发（pi :1250-1260）；assistant 分支 pi
+            //    压根没有 image 分支（`:1307-1369` 的 if text / else if thinking /
+            //    else if toolCall，无 else）⇒ 靠 `allowImages` 挡掉，照抄。
+            //  - UrlImageContent：java 扩展（pi 无此类型）。SDK 虽有 UrlImageSource，
+            //    但 pi 的 TS 类型里没有 URL 图片来源 ⇒ 用它＝发明行为（docs/44 D4 选项 A）。
+            //  - DiffContent：显示专用（ContentBlock.DiffContent 的 javadoc）。
         }
         return result;
+    }
+
+    /**
+     * 一块 {@code ImageContent} 落成什么线格 —— pi {@code anthropic-messages.ts:1250-1260}（user）
+     * 与 {@code :156-163}（tool result，同形）：
+     * {@code {type:"image", source:{type:"base64", media_type, data}}}。
+     *
+     * <p>⚠️ {@code media_type} 是**照抄**，不做白名单：pi 的联合类型只写
+     * jpeg/png/gif/webp，但那是 TS 的 {@code as} 断言（运行时不校验），而
+     * {@code PathUtils.detectImageMimeType} 会返回 {@code image/bmp} ⇒ pi 也会把 bmp 发出去。
+     * 照缝（{@code docs/44 J14}）；真被 provider 拒的话，两侧一起拒。</p>
+     */
+    private static ImageBlockParam toImageBlock(ContentBlock.ImageContent img) {
+        return ImageBlockParam.builder()
+                .source(Base64ImageSource.builder()
+                        .mediaType(Base64ImageSource.MediaType.of(img.mediaType()))
+                        .data(img.data())
+                        .build())
+                .build();
     }
 
     /**
@@ -587,7 +615,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
 
     private static ContentBlockParam toToolResultBlock(Message.ToolResultMessage tool) {
         var resultContent = ToolResultBlockParam.Content.ofBlocks(
-                toTextBlocks(tool.content()));
+                convertContentBlocks(tool.content()));
         var toolResult = ToolResultBlockParam.builder()
                 .toolUseId(tool.toolUseId())
                 .content(resultContent)
@@ -596,16 +624,59 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         return ContentBlockParam.ofToolResult(toolResult);
     }
 
-    private static List<ToolResultBlockParam.Content.Block> toTextBlocks(List<ContentBlock> blocks) {
-        var result = new ArrayList<ToolResultBlockParam.Content.Block>();
+    /**
+     * 工具结果的 content 落线 —— pi {@code anthropic-messages.ts:128-174} 的
+     * {@code convertContentBlocks}（**唯一**调用者 {@code :1216}＝{@code convertToolResult}），
+     * 逐分支对照：
+     *
+     * <pre>
+     * 无图片 ⇒ 各文本块 join("\n") 成**一个**块，净化的是**拼好之后**的串     // :142-144
+     * 有图片 ⇒ 逐块映射（text 净化 ／ image 走 {type:"image",source:{…}}）      // :147-163
+     * 映射后**没有文本块**（判的是块类型，不是非空）⇒ 头部插 "(see attached image)"  // :166-172
+     * </pre>
+     *
+     * <p>⚠️ 三处与 user 分支（{@link #toBlockParams}）**刻意不同**，别顺手统一（{@code docs/44 D3}）：
+     * ① 空文本块**不**过滤；② 无文本时**补**占位块；③ 多文本块**合并**成一个。</p>
+     *
+     * <p>⚠️ 顺带的行为变更：旧实现 {@code toTextBlocks} 是「一块一文本块」，本方法改成
+     * join 成一个 —— 与 pi 对齐（真实工具都只产一个文本块，线上不可观察）。</p>
+     *
+     * <p>⚠️ 净化位置也跟着 pi 从「逐块」挪到「拼完」（{@code docs/43 §9-2} 记的两种口径之别）：
+     * 跨块边界的「尾孤高 ＋ 首孤低」在 join 后会**配对成活**，逐块净化则会各自删掉。</p>
+     */
+    private static List<ToolResultBlockParam.Content.Block> convertContentBlocks(
+            List<ContentBlock> blocks) {
+        boolean hasImages = blocks.stream()
+                .anyMatch(ContentBlock.ImageContent.class::isInstance);
+        if (!hasImages) {
+            // pi :142-144 —— `content.map(c => c.text).join("\n")` 后净化。
+            String joined = blocks.stream()
+                    .filter(ContentBlock.TextContent.class::isInstance)
+                    .map(b -> ((ContentBlock.TextContent) b).text())
+                    .collect(java.util.stream.Collectors.joining("\n"));
+            return List.of(ToolResultBlockParam.Content.Block.ofText(
+                    TextBlockParam.builder().text(SanitizeUnicode.surrogates(joined)).build()));
+        }
+        var out = new ArrayList<ToolResultBlockParam.Content.Block>(blocks.size());
         for (var block : blocks) {
             if (block instanceof ContentBlock.TextContent tc) {
-                // pi :144/:152（convertContentBlocks，tool result 唯一调用者）—— 净化。
-                result.add(ToolResultBlockParam.Content.Block.ofText(
+                out.add(ToolResultBlockParam.Content.Block.ofText(
                         TextBlockParam.builder().text(SanitizeUnicode.surrogates(tc.text())).build()));
+            } else if (block instanceof ContentBlock.ImageContent img) {
+                out.add(ToolResultBlockParam.Content.Block.ofImage(toImageBlock(img)));
             }
+            // pi 的 content 类型只可能是 Text 或 Image（`:128` 的入参签名）⇒ 它那句
+            // `block.type === "text" ? text : image` 的 else 只可能是图片。java 的
+            // List<ContentBlock> 无限定（Thinking/ToolUse/Diff 都可能出现）⇒ 这里**跳过**
+            // 而不是像 pi 那样把它们当图片发出去（pi 那条分支在类型上不可达）。
         }
-        return result;
+        // pi :166 —— `hasText` 判的是**块类型**：一个空文本块照样算「有文本」。
+        boolean hasText = out.stream().anyMatch(ToolResultBlockParam.Content.Block::isText);
+        if (!hasText) {
+            out.add(0, ToolResultBlockParam.Content.Block.ofText(
+                    TextBlockParam.builder().text("(see attached image)").build()));
+        }
+        return List.copyOf(out);
     }
 
     private static Map<String, com.anthropic.core.JsonValue> toJsonValues(
