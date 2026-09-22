@@ -3,7 +3,9 @@
 > **来源**：`docs/41 §1.2`（**`ImageContent` 收发**，权重 2，台账 **B17**）·
 > `docs/41 §1.1`（`transformMessages` 其余 4/5 条变换，权重 3，台账 **B14** —— 本包只取其中的**图片降级**那一条）。
 > `docs/41 §7.2` 的 **H2** 行；ai 批次第二包（A0 之后）。
-> **状态**：**设计待审核**（未写一行生产代码；`AnthropicMessagesApi.java:526-529` 的注释早就写明「行为变更须先过设计」）。
+> **状态**：**已实施完毕**（用户 2026-09-22「按照建议实施」⇒ §7 四条建议全部采纳，见 §9；
+> 实施中途追加两条裁决：Google 拆出去另立一包 · 超限文件另开「拆文件」提交）。
+> 实施记录见 §9（裁决与执行）、§10（实测校正）、§11（逐步台账）。
 > **基准**：pi @ `3390bd936`（已核 `git rev-parse HEAD`）· pi-java @ `1da2221`
 > **证据**：所有 `file:line` 均已实读 —— pi 侧一律 `git show 3390bd936:<path>`（**不读工作树**），
 > SDK 侧一律 `javap` 实测。pi 侧路径相对 `D:\workplaceForai\pi`，java 侧相对 `D:\workplaceForai\pi-java`。
@@ -303,3 +305,89 @@ mistral 的 user 路径与共享闸里都出现）—— 这条差分是**唯一
 - **`ImageContent.java` 的字段顺序**（java `mediaType,data` vs pi `data,mimeType`，J1）—— 纯形状，无行为后果，不动。
 - **`DiffContent` 的丢弃**（各车道一致，且 `ContentBlock.java:116-119` 已说明是显示专用）。
 - **Anthropic 的 URL 图片**（D4 选项 C）。
+- **Google 车道的工具结果路径**（见 §9-1）—— 实测**整条不存在**，随本包拆出去另立一包。
+
+---
+
+## 9. 裁决与执行
+
+**用户 2026-09-22 裁决**（「按照建议实施」）：§7 四条**全部按建议采纳** ——
+① 未知按支持 · ② `UrlImageContent` 选项 A · ③ Mistral 工具结果整块照抄 · ④ `read.ts` 两条只登记。
+**追加裁决**（实施中途，见 §10-1）：Google 拆出去另立一包；超限文件另开「拆文件」提交。
+
+| 步 | 提交 | 内容 |
+|---|---|---|
+| 设计 | `af5139e` | `docs/44` 设计 |
+| 1 | `7d6e5ab` | `ModelInfo.supportsImageInput()` ＋ `TransformMessages` 图片降级闸 |
+| 2 | `ec0396b` | Anthropic：user 图片 ＋ `convertContentBlocks` 替换 `toTextBlocks` |
+| 3 | `d209546` | completions：user 数组形态 ＋ 工具结果图片 ＋ 合成 user 消息 |
+| 4 | `437277d` | Mistral：user 块数组 ＋ `buildToolResultText` 整块 |
+| 5 | `ebf4364` | responses：工具结果 ⇒ `convertToolResultOutput` |
+| 6 | `9bbcd48` | 拆两条超限车道的「消息→线格」转换（零行为改动） |
+
+**落线点统计**：闸 1 道（共享预通道）＋ 车道 4 条（Anthropic 2 点 ／ completions 2 点 ／
+Mistral 2 点 ／ responses 1 点）。原设计写「7 个落线点 ＋ 1 道闸」，实际是 **9 个落线点 ＋ 1 道闸**
+（Anthropic 与 completions 各比设计多算了一处 —— 设计把「user 分支」与「toolResult 分支」
+当成一个点，实际是两处独立代码路径）。
+
+---
+
+## 10. 实施中的实测校正（相对本设计正文）
+
+1. **⚠️ 步 6（Google）被实测证伪，整步改判**。设计假设「Google 的工具结果路径存在，只是没带图片」。
+   实测（临时夹具把真请求体打出来）：同一份消息过 Google 车道，工具结果落成
+   `{"parts":[{"text":"file-a.txt"}],"role":"model"}` —— **一条 model 轮的纯文本，`functionResponse`
+   根本不存在**。pi 落的是 `{"role":"user","parts":[{"functionResponse":{"name":"ls","response":{"output":"file-a.txt"}}}]}`。
+   即：**Google 车道的工具结果整条路径缺失**（不止缺图片），`toGoogleParts` 里那个
+   `ToolResultContent` 分支实际不可达，且它把 `toolUseId` 传给了 `Part.fromFunctionResponse(name, …)`
+   的 **name** 形参（`javap` 实测第一个形参就是 name）—— 真要走它，发出去的 name 是错的。
+   ⇒ 按用户裁决拆出去另立一包（登记见 `docs/32`）。
+
+2. **⚠️ 设计 §4 步2 的一条预期红被证伪**：设计写「跨块『尾孤高 ＋ 首孤低』在 join 前后结果不同」。
+   实测**恒等** —— pi 的 toolResult 是 `join("\n")`，而换行永不是代理 ⇒ join 只会**拆散**相邻关系、
+   不会**制造**它（`"A"+HIGH` 与 `LOW+"B"` 之间隔着换行，两侧各自作为孤对被删）。那条用例改成钉
+   **分隔符**（把 `joining("\n")` 改成 `("")` 就会红），这也顺带修正了 `docs/43 §9-2` 那句
+   「两种口径答案不同」的**适用范围**：只在**无分隔符**的拼接上分叉。
+
+3. **⚠️ 两处「车道侧能力门」在两侧都不可观察**。completions（`openai-completions.ts:1424`）与
+   responses（`openai-responses-shared.ts:91`）各有一道独立于共享闸的图片门，**去掉它零红** ——
+   共享闸已按**同一个 model** 把非视觉模型的图片换成了文本块 ⇒ 车道永远收不到图片。
+   照抄保留（pi 也保留），但代码里注明「**没有出参、没有夹具能钉住它** —— 不是夹具没牙」。
+   ⚠️ 这条要**如实说**：它不是「夹具写得好」，是「这一行在两侧都不可达」。
+
+4. **占位串**参与 join**：非视觉模型的工具结果正文是 `"ok\n(tool image omitted: …)"` 而不是 `"ok"`
+   —— 共享闸换成**文本块**之后，车道再 join。这正是 pi 两层叠加的形状（先改内容、再选分支）。
+   另有同族现象：非视觉模型的 **user** 消息在 Mistral／completions 上**退回串形态**
+   （闸换掉图片后 `hadImages` 为假）。
+
+5. **Mistral 侧顺带改了 4 处非图片行为**（§7 ③ 采纳的后果）：`name` 字段、`[tool error] ` 前缀、
+   文本 trim、`join("\n")` 分隔符，外加空结果的 `"(no tool output)"`（旧实现发空串）。
+   全部逐条有用例。
+
+6. **`extractText` 是死码**：`AnthropicMessagesApi` 里那个私有方法全仓零调用者，拆文件时删掉。
+
+7. **存量超限**：`AnthropicMessagesApi` 696 行 ／ `OpenAICompletionsApi` 729 行（原本 625／612，
+   本包各加 ~70）⇒ 步 6 拆出两个转换器后为 **494 ／ 366**。protocol 包现全部 ≤ 500。
+
+---
+
+## 11. 实施记录（逐步：先红 → 实现 → 变异探针 → 回归）
+
+每步一个提交，`ai` 模块用例数逐包递增：
+
+| 步 | 先红（实测） | 变异探针（实测红集） | ai 用例 |
+|---|---|---|---|
+| 1 | `Tests run 11 / Failures 6`（闸体缺席态） | ① 删 `capabilities.isEmpty()` ⇒ 2 红（两个 unknown 用例）② 删去重 ⇒ 2 红 ③ toolResult 用 user 文案 ⇒ 1 红 ④ `isImageBlock` 去掉 URL ⇒ 1 红 | 579 → **593** |
+| 2 | `14 / Failures 7 / Errors 3`（3 条 Error ＝「只带图片的用户消息让整个请求失败」，SDK 抛 `` `messages` is required ``） | ① 去 `allowImages` 门 ⇒ 1 红 ② 去占位符补块 ⇒ 1 红 ③ `joining("\n")→("")` ⇒ 2 红 ④ `hasText` 改判非空 ⇒ 1 红 | → **607** |
+| 3 | `13 / Failures 9 / Errors 1` | ① 合成消息挪进内层循环 ⇒ 1 红 ② 占位串换空 ⇒ 1 红 ③ 过滤空文本块 ⇒ 1 红 ④ **去能力门 ⇒ 零红**（见 §10-3） | → **620** |
+| 4 | `13 / Failures 10 / Errors 1` | A 关图片追加门 ⇒ 2 红 B 去错误前缀 ⇒ 1 红 C 去 trim ⇒ 1 红 D `join` 分隔符 ⇒ 3 红（含 A0 的 `MistralSurrogateSanitizeTest`）E 去 `name` ⇒ 1 红 F 占位串换空 ⇒ 1 红 | → **633** |
+| 5 | `10 / Failures 5` | ① 去 `detail("auto")` ⇒ 3 红 ② 无条件推 `input_text` ⇒ 2 红 ③ `join` 分隔符 ⇒ 2 红 ④ **去能力门 ⇒ 零红** | → **643** |
+| 6 | —（零行为改动，无红灯可看） | 无（纯搬家：红/绿集恒等，回归即证明） | 643（不变） |
+
+**最终回归**：ai **643** · telemetry 31 · agent-core 489 · sqlite 35 · coding-agent 266 ·
+**L5 15/15** · checkstyle 0 违规 · protocol 包全部文件 ≤ 500 行 · 触碰的 main 源零 `System.out`。
+
+**夹具纪律的三处应用**（`docs/41 §7.3` 两条教训）：每步先问「这个夹具在什么情况下会红」——
+步 3／步 5 的两个能力门**答不上来**（实测零红），如实登记为「没有出参」而不是硬造一条假红；
+步 2 的一条预期红被实测证伪后**改钉真实的不变量**（分隔符）而不是删掉用例。
+

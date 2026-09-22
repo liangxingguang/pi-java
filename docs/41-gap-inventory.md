@@ -51,7 +51,7 @@ pi `harness/` 里 `AgentHarness` 独有物（具名钩子 / `HarnessEvent` / `ru
 | ~~`usage.cacheRead` 生产者~~ | 3 | ✅ **H1 已闭环**（步 2–5，`docs/42 §10`；台账 B56）。原后果：开 prompt caching 时上下文占用被**低估** ⇒ 压缩时机晚于 pi（下游 `ContextOverflow`/`ContextUsageEstimator` **已在读**这个数） | B56 |
 | ~~`usage.cacheWrite` / `cacheWrite1h` 生产者~~ | 3 | ✅ **H1 已闭环**（步 3–5；`cacheWrite1h` 只有 Anthropic 报、真 key 端到端预登记于 `docs/42 §8.5-3`）。原后果：`uncachedTokens` 把 cacheWrite 算进未缓存量 | B56 |
 | ~~`usage.cost` 计算（`calculateCost`）~~ | 3 | ✅ **H1 已闭环**（步 1 P16 逐条 ＋ 各车道挂价；台账 B57）。原后果：**成本恒显示 0**（含 1h 缓存 2× 输入价、阶梯价 `tiers`） | B57 |
-| `transformMessages` 其余 4/5 条变换 | 3 | 跨模型切换时孤儿 toolCall / 图片 / id 归一全不处理 ⇒ provider 400 | B14 |
+| ~~`transformMessages` 其余 4/5 条变换~~ | 3 | ✅ **图片切片已随 H2 落地**（`docs/44` 步1：`downgradeUnsupportedImages` ＋ `replaceImagesWithPlaceholder`，逐行照抄 `transform-messages.ts:12-57`）。**B14 收窄为三条**：跨模型剥离 `thoughtSignature` / 跨模型归一 toolCall id / 孤儿 toolCall 合成 toolResult —— 仍未做（原后果：跨模型切换时孤儿 toolCall ⇒ provider 400） | B14 |
 | Anthropic `cache_control` 标记 | 3 | Anthropic 车道**永不提示缓存** ⇒ 每轮全价、延迟更高 | — |
 | `openrouter` chat 面 | 3 | 主流 7 家之一整条不可用（现只有 images 面） | — |
 | `SystemMessage`（transcript 系统消息模型） | 3 | 会话中途改系统提示/工具集**无法表达** | — |
@@ -62,7 +62,7 @@ pi `harness/` 里 `AgentHarness` 独有物（具名钩子 / `HarnessEvent` / `ru
 | 功能 | 权重 | 后果 |
 |---|---:|---|
 | `xai` provider 端点 | 2 | 主流 7 家之一不可用 |
-| **`ImageContent` 收发**（anthropic ＋ openai-completions ＋ mistral 三条车道 **＋ toolResult 路径**） | 2 | **ReadTool 读图模型完全看不到图**（比台账写的更严重） |
+| ~~**`ImageContent` 收发**（anthropic ＋ openai-completions ＋ mistral 三条车道 **＋ toolResult 路径**）~~ | 2 | ✅ **H2 已闭环**（`docs/44`，七提交 `af5139e..9bbcd48`）—— 共享闸（非视觉降级）＋ 四车道九个落线点（Anthropic 2 ／ completions 2 ／ Mistral 2 ／ responses 1 ＋ 闸 1）。⚠️ **Google 不在内**：实测其工具结果**整条路径**不存在（不是缺图片），已拆出去另立一包（`docs/32` B84）。原后果：**ReadTool 读图模型完全看不到图**（比台账写的更严重） | B17 |
 | 孤儿 toolCall 合成 `toolResult` | 2 | 中断/切换模型后历史缺 tool_result ⇒ provider 400 |
 | ~~`Model.cost`（含 `cacheRead`/`cacheWrite`/`tiers`）~~ | 2 | ✅ **H1 已闭环**（步 1 `PricingInfo` 五组件 ＋ 步 6 models.json `cost` 扩键/半价→UNKNOWN/tier 拒载）。⚠️ 残留＝**数据面**：内置目录的 cache 价未编（裁决 B：−1 表「未知」，不编假价） |
 | **`Model.compat` 缺 49/52 个字段** | 2 | 有行为后果的：`supportsStore` / `maxTokensField` / `supportsDeveloperRole` / `requiresToolResultName` / `thinkingFormat` / `cacheControlFormat` / `sessionAffinityFormat` / `supportsMidConvoSystemMessages` / `supportsMidConvoToolAdditions` / `supportsMidConvoToolChanges` |
@@ -133,7 +133,9 @@ constrained sampling / grammar · `transport` 选择 · `session-resources` 清�
 | **四条全修** | **+6.81pp** |
 
 - **B15 与 B8 共用同一载体**（`StreamRequest` 已带整个 `ModelInfo`）⇒ 两者应合成**一次投送修复**。
-- **B17（图片）须先出设计包再改** —— `AnthropicMessagesApi.java:465` 源码注释已写明「行为变更须先过设计」。
+- ~~**B17（图片）须先出设计包再改** —— `AnthropicMessagesApi.java:526-529` 源码注释已写明「行为变更须先过设计」。~~
+  ✅ **H2 已闭环**（`docs/44`，2026-09-22）：先出设计（`af5139e`）再实施，七提交 `af5139e..9bbcd48`。
+  那条注释已随实现删除。⚠️ **Google 车道被实测证伪**（工具结果整条路径不存在）⇒ 拆出去另立一包。
 
 ### 1.7 抽取时撞出的偏差（须登记）
 
@@ -648,7 +650,7 @@ JSONL `nextSeq` 高水位字段 ·
 |---|---|---|---|
 | ~~**H1**~~ | `ai` | ✅ **已闭环**（2026-09-22，七提交 `5b703a9..7c3db0d`，实施记录 `docs/42 §10`；范围比原两条宽——四分量生产者＋`calculateCost`＋全车道归一＋下游接线＋L5 S15 差分） | 原 **+5.50pp**，占四条 P0 的 **76%** |
 | ~~**A0**~~ | `ai` | ✅ **已闭环**（2026-09-22，九提交 `34ca389..5f3833d`，设计/记录 `docs/43`）——`sanitizeSurrogates` 24 个落线点 ＋ `RetryableError` 两模式 ＋ Anthropic Bearer/OAuth 凭证链（`AuthKind`） | 三件事都是「今天会撞到且有硬后果」：provider 400 ／ 不重试直接失败 ／ Bearer 型网关连不上 |
-| **H2** | `ai` | **图片三条车道 ＋ toolResult 路径** | `ReadTool` 读图模型**完全看不到图**（静默） |
+| ~~**H2**~~ | `ai` | ✅ **已闭环**（2026-09-22，七提交 `af5139e..9bbcd48`，设计/记录 `docs/44`）—— 图片四车道（Anthropic ／ completions ／ Mistral ／ responses）＋ 共享非视觉降级闸 ＋ 拆两条超限车道。⚠️ **Google 拆出去另立一包**（实测其工具结果整条路径不存在，`docs/32` B84） | 原：`ReadTool` 读图模型**完全看不到图**（静默） |
 | **H3** | `coding-agent` | **上下文文件发现**（`AGENTS.md`/`CLAUDE.md` ＋ `--no-context-files` 联动） | **每次会话都走**，现在**静默失效**；同时救活一个死 flag |
 | **H4** | `coding-agent` | **扩展钩子桥接**（暴露 `hookSystem()`） | 8 个引擎钩子**已经在 `HookSystem` 里** ⇒ 这是**接线不是新建**，最省的一包 |
 | **H5** | `ai` ＋ `agent-core` | **B15 扩展思考打通**（与 B8 共用载体 ⇒ 一次投送修复） | 把死功能救活；改一行 ＋ 生产侧构造 |
