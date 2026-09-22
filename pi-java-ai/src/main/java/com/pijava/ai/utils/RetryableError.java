@@ -62,6 +62,7 @@ public final class RetryableError {
         buildProviderErrorPattern(List.of(
             // Generic provider load, HTTP status, and server-side transient failures.
             "overloaded",
+            "currently experiencing high demand", // retry.ts:29（紧跟 overloaded）
             "rate.?limit",
             "too many requests",
             "429",
@@ -69,6 +70,7 @@ public final class RetryableError {
             "502",
             "503",
             "504",
+            "520", // retry.ts:37（插在 504 与 524 之间）
             "524",
             "service.?unavailable",
             "server.?error",

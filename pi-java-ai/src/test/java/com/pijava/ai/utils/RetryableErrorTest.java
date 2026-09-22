@@ -29,6 +29,9 @@ class RetryableErrorTest {
     @ParameterizedTest
     @ValueSource(strings = {
         "The model is currently overloaded",
+        // pi 白名单里紧跟 "overloaded" 的那条（retry.ts:29）—— 移植时曾整条漏掉
+        // （docs/43 包A0 步6）：高需求文案不重试、直接失败。
+        "The model is currently experiencing high demand, please try again later",
         "Rate limit reached for gpt-5",
         "Too many requests",
         "429 status code",
@@ -36,6 +39,9 @@ class RetryableErrorTest {
         "502 Bad Gateway",
         "503 Service Unavailable",
         "504 Gateway Timeout",
+        // pi 白名单里插在 504 与 524 之间的那条（retry.ts:37）—— 同批漏掉的一条；
+        // ⚠️ 子串匹配（pi 的既有语义，照抄不收紧）：凡含 "520" 的文本都会命中。
+        "520 status code",
         "524 origin timeout",
         "server error, please wait",
         "Provider returned error: upstream gone",
