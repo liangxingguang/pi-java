@@ -31,6 +31,49 @@ final class GoogleMessageConverter {
     private GoogleMessageConverter() {
     }
 
+    /** pi {@code google-shared.ts:175} 的正则 {@code /^gemini(?:-live)?-(\d+)/}。 */
+    private static final java.util.regex.Pattern GEMINI_VERSION =
+            java.util.regex.Pattern.compile("^gemini(?:-live)?-(\\d+)");
+
+    /**
+     * 该模型的工具调用／工具结果要不要带显式 {@code id}（pi {@code google-shared.ts:165-172}）。
+     *
+     * <p>三个来源：Cloud Code Assist 上的 {@code claude-*}／{@code gpt-oss-*}（无版本可言，
+     * 恒要），以及 gemini 主版本 ≥ 3。⚠️ <b>非 gemini 且非那两个前缀 ⇒ 假</b> ——
+     * 与 {@link #supportsMultimodalFunctionResponse} 的「非 gemini 恒真」**相反**，
+     * 两者不是同一个谓词的两个名字（夹具 {@code theTwoPredicatesDisagreeOnNonGemini} 钉着）。</p>
+     */
+    static boolean requiresToolCallId(String modelId) {
+        var major = geminiMajorVersion(modelId);
+        return modelId.startsWith("claude-") || modelId.startsWith("gpt-oss-")
+                || (major != null && major >= 3);
+    }
+
+    /**
+     * gemini 主版本号，读不到给 {@code null}（pi {@code :174-178}）。
+     *
+     * <p>⚠️ 正则前**先小写化** —— 目录 id 的大小写是用户输入，{@code models.json} 里
+     * 写 {@code GEMINI-3-PRO} 也得认（pi 同样先 {@code toLowerCase()}）。</p>
+     */
+    private static Integer geminiMajorVersion(String modelId) {
+        var m = GEMINI_VERSION.matcher(modelId.toLowerCase(java.util.Locale.ROOT));
+        return m.find() ? Integer.parseInt(m.group(1)) : null;
+    }
+
+    /**
+     * 工具结果里的图片能不能<b>内嵌</b>进 {@code functionResponse.parts}
+     * （pi {@code google-shared.ts:180-186}）。
+     *
+     * <p>gemini 主版本 ≥ 3 ⇒ 真；gemini &lt; 3 ⇒ 假（另起一条 user 图片回合）；
+     * ⚠️ <b>非 gemini 恒真</b> —— 「不是 Gemini ⇒ 不受 Gemini 版本限制」。
+     * 把它「顺手统一」成 {@code major != null && major >= 3} 会让 claude／gpt-oss
+     * 多出一条 user 图片回合。</p>
+     */
+    static boolean supportsMultimodalFunctionResponse(String modelId) {
+        var major = geminiMajorVersion(modelId);
+        return major == null || major >= 3;
+    }
+
     /** 消息列表 → {@code Content[]}。 */
     static List<Content> toContents(List<Message> messages) {
         var contents = new ArrayList<Content>();
