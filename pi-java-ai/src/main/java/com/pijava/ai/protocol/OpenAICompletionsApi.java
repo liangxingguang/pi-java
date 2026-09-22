@@ -17,13 +17,18 @@ import com.openai.models.FunctionDefinition;
 import com.openai.models.FunctionParameters;
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam;
 import com.openai.models.chat.completions.ChatCompletionChunk;
+import com.openai.models.chat.completions.ChatCompletionContentPart;
+import com.openai.models.chat.completions.ChatCompletionContentPartImage;
+import com.openai.models.chat.completions.ChatCompletionContentPartText;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
 import com.openai.models.chat.completions.ChatCompletionFunctionTool;
 import com.openai.models.chat.completions.ChatCompletionMessageFunctionToolCall;
+import com.openai.models.chat.completions.ChatCompletionMessageParam;
 import com.openai.models.chat.completions.ChatCompletionMessageToolCall;
 import com.openai.models.chat.completions.ChatCompletionStreamOptions;
 import com.openai.models.chat.completions.ChatCompletionTool;
 import com.openai.models.chat.completions.ChatCompletionToolMessageParam;
+import com.openai.models.chat.completions.ChatCompletionUserMessageParam;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
@@ -426,23 +431,39 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         var messages = TransformMessages.apply(request.messages(), request.modelId(), apiName,
                 request.model());
 
-        for (var msg : messages) {
-            if (msg instanceof Message.UserMessage) {
-                var text = extractText(msg.content());
-                // pi :1257/:1264 —— user 内容净化。java 的 user 恒为**串形态**上线路
-                // ⇒ 对齐 pi 的串分支 :1257（整串净化）。
-                if (!text.isEmpty()) builder.addUserMessage(SanitizeUnicode.surrogates(text));
+        for (int i = 0; i < messages.size(); i++) {
+            var msg = messages.get(i);
+            if (msg instanceof Message.UserMessage user) {
+                addUserMessage(builder, user);
             } else if (msg instanceof Message.AssistantMessage assistant) {
                 addAssistantMessage(builder, assistant, request.model(), baseUrl);
-            } else if (msg instanceof Message.ToolResultMessage tool) {
-                // Tool results must be sent back to the model, otherwise it
-                // cannot see the outcome and keeps repeating the same tool
-                // call (observed as duplicated write blocks in the TUI).
-                builder.addMessage(ChatCompletionToolMessageParam.builder()
-                    .toolCallId(tool.toolUseId())
-                    // pi :1416 —— 净化的是**拼好之后**的串（pi 先 join("\n") 再净化）。
-                    .content(SanitizeUnicode.surrogates(extractText(tool.content())))
-                    .build());
+            } else if (msg instanceof Message.ToolResultMessage) {
+                // pi :1398-1455 —— **连续的** toolResult 合成一组：各自落一条 tool 消息，
+                // 但图片**合并收集**进**同一条**合成 user 消息（不是一条结果配一条）。
+                var imageParts = new ArrayList<ChatCompletionContentPart>();
+                int j = i;
+                while (j < messages.size()
+                        && messages.get(j) instanceof Message.ToolResultMessage tool) {
+                    builder.addMessage(ChatCompletionToolMessageParam.builder()
+                        .toolCallId(tool.toolUseId())
+                        // pi :1416 —— 净化的是**选中之后**的串（含两个占位串）。
+                        .content(SanitizeUnicode.surrogates(toolResultText(tool.content())))
+                        .build());
+                    // pi :1424 —— 图片收集**另有**一道能力门（与共享闸冗余，pi 两处都写）。
+                    // ⚠️ 这道门在 pi 与 pi-java **两侧都不可观察**：共享闸（TransformMessages）
+                    // 已按同一个 model 把非视觉模型的图片换成了文本块 ⇒ 这里永远收不到图片。
+                    // 照抄保留（pi 也保留），但**没有任何夹具能钉住它** —— 不是夹具没牙，
+                    // 是这一行没有出参（docs/44 §9 的变异探针 4 实测：去掉它零红）。
+                    if (request.model().supportsImageInput()) {
+                        collectImageParts(tool.content(), imageParts);
+                    }
+                    j++;
+                }
+                i = j - 1;
+                if (!imageParts.isEmpty()) {
+                    // pi :1448-1456 —— 合成的 user 消息（文案逐字）。
+                    builder.addMessage(syntheticToolImageMessage(imageParts));
+                }
             }
         }
 
@@ -608,5 +629,101 @@ public class OpenAICompletionsApi extends AbstractChatApi {
             if (block instanceof ContentBlock.TextContent tc) sb.append(tc.text());
         }
         return sb.toString();
+    }
+
+    // ── 图片（包 H2，docs/44 步3）──────────────────────────────────────
+
+    /**
+     * user 消息落线 —— pi {@code openai-completions.ts:1255-1277}。
+     *
+     * <p>无图片 ⇒ **串形态**（pi-java 的既有形状，见 {@code docs/44 §6} 的登记：pi 的串分支
+     * 在 pi-java 结构上不可达 —— {@code UserMessage.content} 恒为列表）；有图片 ⇒ **数组形态**
+     * {@code [{type:"text"},{type:"image_url",image_url:{url:"data:<mime>;base64,<data>"}}]}。</p>
+     *
+     * <p>⚠️ 有图分支**不过滤**空文本块（pi {@code :1267} 只判 {@code content.length === 0}）
+     * —— 与 Anthropic 的 user 分支（过滤）**刻意不同**，别顺手统一（{@code docs/44 D3}）。</p>
+     */
+    private static void addUserMessage(ChatCompletionCreateParams.Builder builder,
+                                       Message.UserMessage user) {
+        boolean hasImages = user.content().stream().anyMatch(OpenAICompletionsApi::isImageBlock);
+        if (!hasImages) {
+            var text = extractText(user.content());
+            // pi :1257 —— user 串形态：整串净化。
+            if (!text.isEmpty()) builder.addUserMessage(SanitizeUnicode.surrogates(text));
+            return;
+        }
+        var parts = new ArrayList<ChatCompletionContentPart>();
+        for (var block : user.content()) {
+            if (block instanceof ContentBlock.TextContent tc) {
+                // pi :1261 —— 有图分支：**逐项**净化。
+                parts.add(ChatCompletionContentPart.ofText(ChatCompletionContentPartText.builder()
+                        .text(SanitizeUnicode.surrogates(tc.text())).build()));
+            } else if (block instanceof ContentBlock.ImageContent img) {
+                parts.add(imageUrlPart("data:" + img.mediaType() + ";base64," + img.data()));
+            } else if (block instanceof ContentBlock.UrlImageContent url) {
+                // java 扩展（pi 无此类型）：image_url 本来就收 URL ⇒ 按线格本名下发（docs/44 D4）。
+                parts.add(imageUrlPart(url.url()));
+            }
+        }
+        if (parts.isEmpty()) return; // pi :1267 —— `content.length === 0 ⇒ continue`
+        builder.addMessage(ChatCompletionUserMessageParam.builder()
+                .content(ChatCompletionUserMessageParam.Content.ofArrayOfContentParts(parts))
+                .build());
+    }
+
+    /**
+     * 工具结果的 tool 消息正文 —— pi {@code :1405-1412}：
+     * 各文本块 {@code join("\n")} 后净化；空串时按「有图 ／ 无图」落两个占位串之一。
+     *
+     * <p>⚠️ 顺带的行为变更：旧实现是**无分隔符拼接**、且空串原样发（没有 {@code "(no tool output)"}）。
+     * 两处都随本步与 pi 对齐。</p>
+     */
+    private static String toolResultText(List<ContentBlock> content) {
+        var text = content.stream()
+                .filter(ContentBlock.TextContent.class::isInstance)
+                .map(b -> ((ContentBlock.TextContent) b).text())
+                .collect(java.util.stream.Collectors.joining("\n"));
+        if (!text.isEmpty()) return text;
+        return content.stream().anyMatch(OpenAICompletionsApi::isImageBlock)
+                ? "(see attached image)" : "(no tool output)";
+    }
+
+    /** 收集图片块（能力门在调用点，pi {@code :1424}）。 */
+    private static void collectImageParts(List<ContentBlock> content,
+                                          List<ChatCompletionContentPart> out) {
+        for (var block : content) {
+            if (block instanceof ContentBlock.ImageContent img) {
+                out.add(imageUrlPart("data:" + img.mediaType() + ";base64," + img.data()));
+            } else if (block instanceof ContentBlock.UrlImageContent url) {
+                out.add(imageUrlPart(url.url()));
+            }
+        }
+    }
+
+    /**
+     * pi {@code :1448-1456} 的合成 user 消息：一句固定文案 ＋ 收集到的图片块。
+     * 文案是纯 ASCII 字面量，pi 也不净化。
+     */
+    private static ChatCompletionUserMessageParam syntheticToolImageMessage(
+            List<ChatCompletionContentPart> imageParts) {
+        var parts = new ArrayList<ChatCompletionContentPart>(imageParts.size() + 1);
+        parts.add(ChatCompletionContentPart.ofText(ChatCompletionContentPartText.builder()
+                .text("Attached image(s) from tool result:").build()));
+        parts.addAll(imageParts);
+        return ChatCompletionUserMessageParam.builder()
+                .content(ChatCompletionUserMessageParam.Content.ofArrayOfContentParts(parts))
+                .build();
+    }
+
+    private static ChatCompletionContentPart imageUrlPart(String url) {
+        return ChatCompletionContentPart.ofImageUrl(ChatCompletionContentPartImage.builder()
+                .imageUrl(ChatCompletionContentPartImage.ImageUrl.builder().url(url).build())
+                .build());
+    }
+
+    /** pi 的图片判据是 {@code type === "image"}；java 的 URL 图片同等对待（docs/44 D4）。 */
+    private static boolean isImageBlock(ContentBlock block) {
+        return block instanceof ContentBlock.ImageContent
+                || block instanceof ContentBlock.UrlImageContent;
     }
 }
