@@ -203,11 +203,13 @@ public final class MistralConversationsApi extends AbstractChatApi {
                 // Text delta
                 var content = (String) delta.get("content");
                 if (content != null && !content.isEmpty()) {
+                    // pi mistral-conversations.ts:626 —— 流式文本增量净化（本车道唯一的响应面落点）。
+                    var textDelta = SanitizeUnicode.surrogates(content);
                     if (!textStarted[0]) {
                         publisher.submit(builder.emitTextStart());
                         textStarted[0] = true;
                     }
-                    publisher.submit(builder.emitTextDelta(content));
+                    publisher.submit(builder.emitTextDelta(textDelta));
                 }
 
                 // Tool call delta
