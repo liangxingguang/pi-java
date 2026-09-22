@@ -51,7 +51,7 @@ class OpenAICompletionsSurrogateSanitizeTest {
     private static ChatCompletionCreateParams buildParams(String systemPrompt, List<Message> messages) {
         var request = new StreamRequest(ModelId.of("deepseek", "deepseek-chat"), systemPrompt,
             messages, List.of(), 100, 0.5, Map.of());
-        return OpenAICompletionsApi.buildParams(request, "openai-completions", null);
+        return OpenAICompletionsMessageConverter.buildParams(request, "openai-completions", null);
     }
 
     /** 出参里**全部**文本载荷（system ／ user ／ assistant 文本 ／ tool result）。 */

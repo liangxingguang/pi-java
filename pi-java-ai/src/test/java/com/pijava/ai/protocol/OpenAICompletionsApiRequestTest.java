@@ -38,7 +38,7 @@ class OpenAICompletionsApiRequestTest {
                         "Successfully wrote 15 bytes to hello.py")),
                     false)));
 
-        var params = OpenAICompletionsApi.buildParams(request, "openai-completions", null);
+        var params = OpenAICompletionsMessageConverter.buildParams(request, "openai-completions", null);
 
         assertThat(params.messages()).hasSize(3);
 
@@ -77,7 +77,7 @@ class OpenAICompletionsApiRequestTest {
                     new ContentBlock.TextContent("hello!")))),
             List.of(), -1, -1, java.util.Map.of());
 
-        var params = OpenAICompletionsApi.buildParams(request, "openai-completions", null);
+        var params = OpenAICompletionsMessageConverter.buildParams(request, "openai-completions", null);
 
         assertThat(params.messages()).hasSize(3);
         assertThat(params.messages().stream()
@@ -108,7 +108,7 @@ class OpenAICompletionsApiRequestTest {
                     "stop", null, "openai-completions", "deepseek", "deepseek-chat",
                     null, null, null, null)));
 
-        var params = OpenAICompletionsApi.buildParams(request, "openai-completions", null);
+        var params = OpenAICompletionsMessageConverter.buildParams(request, "openai-completions", null);
 
         var assistant = params.messages().stream()
             .filter(ChatCompletionMessageParam::isAssistant)
@@ -135,7 +135,7 @@ class OpenAICompletionsApiRequestTest {
                     "stop", null, "openai-completions", "openai", "gpt-4o-mini",
                     null, null, null, null)));
 
-        var params = OpenAICompletionsApi.buildParams(request, "openai-completions", null);
+        var params = OpenAICompletionsMessageConverter.buildParams(request, "openai-completions", null);
 
         var assistant = params.messages().stream()
             .filter(ChatCompletionMessageParam::isAssistant)

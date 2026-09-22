@@ -53,7 +53,7 @@ class OpenAIImageContentTest {
 
     private static ChatCompletionCreateParams build(ModelInfo model, List<Message> messages) {
         var request = new StreamRequest(model, null, messages, List.of(), -1, -1, Map.of());
-        return OpenAICompletionsApi.buildParams(request, "openai-completions", null);
+        return OpenAICompletionsMessageConverter.buildParams(request, "openai-completions", null);
     }
 
     /** 全部消息压成 {@code role:…}，user 的数组形态展开成 {@code text:…} ／ {@code image:…}。 */

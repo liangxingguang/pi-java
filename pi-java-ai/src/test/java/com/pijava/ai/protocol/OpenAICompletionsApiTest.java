@@ -13,7 +13,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
 
-import com.openai.models.chat.completions.ChatCompletionCreateParams;
 import com.sun.net.httpserver.HttpServer;
 
 import com.pijava.ai.api.ApiOptions;
@@ -76,11 +75,9 @@ class OpenAICompletionsApiTest {
                     "properties", Map.of("path", Map.of("type", "string"))))),
             100, 0.5, Map.of());
 
-        var method = OpenAICompletionsApi.class.getDeclaredMethod(
-            "buildParams", StreamRequest.class, String.class, String.class);
-        method.setAccessible(true);
-        var params = (ChatCompletionCreateParams) method.invoke(
-            api, request, "openai-completions", "https://api.openai.com/v1");
+        // 拆文件提交后 buildParams 住在 OpenAICompletionsMessageConverter（同包 package-private static）。
+        var params = OpenAICompletionsMessageConverter.buildParams(
+            request, "openai-completions", "https://api.openai.com/v1");
 
         var tools = params.tools().orElseThrow();
         assertThat(tools).hasSize(1);
