@@ -26,6 +26,7 @@ import com.pijava.ai.message.Message;
 import com.pijava.ai.model.CostCalculator;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
+import com.pijava.ai.utils.SanitizeUnicode;
 
 /**
  * Google Gemini API adapter using the official {@code google-genai} SDK.
@@ -292,7 +293,8 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
         var systemText = request.systemPrompt();
         if (systemText != null && !systemText.isEmpty()) {
             builder.systemInstruction(
-                    Content.fromParts(Part.fromText(systemText)));
+                    // pi google-generative-ai.ts:393 —— systemInstruction 净化（整串）。
+                    Content.fromParts(Part.fromText(SanitizeUnicode.surrogates(systemText))));
         }
 
         if (request.maxTokens() > 0) {
@@ -332,8 +334,10 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
 
     private List<Part> toGoogleParts(ContentBlock block) {
         return switch (block) {
+            // pi google-shared.ts:207/:212（user 串/文本项）、:242（assistant 文本块）
+                    // —— 均为「该块的文本」，java 两角色共用这一处 ⇒ 一处即够。
             case ContentBlock.TextContent tc ->
-                    List.of(Part.fromText(tc.text()));
+                    List.of(Part.fromText(SanitizeUnicode.surrogates(tc.text())));
             case ContentBlock.ThinkingContent tc ->
                     List.of(); // Gemini has its own thinking protocol; do not echo it as text
             case ContentBlock.DiffContent diff ->
@@ -355,8 +359,9 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
                         .filter(ContentBlock.TextContent.class::isInstance)
                         .map(b -> ((ContentBlock.TextContent) b).text())
                         .collect(java.util.stream.Collectors.joining("\n"));
+                    // pi google-shared.ts:301 —— 净化的是拼好之后的 responseValue。
                     yield List.of(Part.fromFunctionResponse(tc.toolUseId(),
-                            Map.of("content", text)));
+                            Map.of("content", SanitizeUnicode.surrogates(text))));
                 }
             case ContentBlock.ImageContent ic ->
                     List.of(Part.fromBytes(

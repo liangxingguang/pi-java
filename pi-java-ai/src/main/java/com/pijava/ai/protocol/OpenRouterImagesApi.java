@@ -21,6 +21,7 @@ import com.pijava.ai.api.ImageRequest;
 import com.pijava.ai.api.ImageResult;
 import com.pijava.ai.api.ImageStopReason;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.utils.SanitizeUnicode;
 
 /**
  * OpenRouter 图片生成适配器（P6-28）—— 对齐 pi {@code openrouter-images.ts}：
@@ -90,8 +91,10 @@ public final class OpenRouterImagesApi implements ImageApi {
     /** ContentBlock → ChatCompletionContentPart（text / image_url data URI）。 */
     private ChatCompletionContentPart toContentPart(ContentBlock block) {
         if (block instanceof ContentBlock.TextContent t) {
+            // pi openrouter-images.ts:141 —— prompt 文本项净化（图片项不净化，pi 侧同理）。
             return ChatCompletionContentPart.ofText(
-                ChatCompletionContentPartText.builder().text(t.text()).build());
+                ChatCompletionContentPartText.builder()
+                    .text(SanitizeUnicode.surrogates(t.text())).build());
         }
         if (block instanceof ContentBlock.ImageContent img) {
             var url = "data:" + img.mediaType() + ";base64," + img.data();

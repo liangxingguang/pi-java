@@ -21,6 +21,7 @@ import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
 import com.pijava.ai.stream.ToolCallBuilder;
+import com.pijava.ai.utils.SanitizeUnicode;
 
 /**
  * Mistral Chat Completions API adapter using raw HTTP + SSE.
@@ -290,7 +291,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
         if (systemPrompt != null && !systemPrompt.isEmpty()) {
             var system = new HashMap<String, Object>();
             system.put("role", "system");
-            system.put("content", systemPrompt);
+            system.put("content", SanitizeUnicode.surrogates(systemPrompt)); // pi :789
             messages.add(system);
         }
         // 共享预通道先于本车道的映射跑（pi mistral-conversations.ts:139 在消息转换前调
@@ -302,18 +303,21 @@ public final class MistralConversationsApi extends AbstractChatApi {
             switch (msg) {
                 case Message.UserMessage(var content) -> {
                     m.put("role", "user");
-                    m.put("content", extractText(content));
+                    // pi :795/:802 —— java 的 user 恒为串形态 ⇒ 对齐 pi 的串分支（整串净化）。
+                    m.put("content", SanitizeUnicode.surrogates(extractText(content)));
                 }
                 case Message.AssistantMessage a -> {
                     m.put("role", "assistant");
-                    m.put("content", extractText(a.content()));
+                    // pi :822 —— 逐块净化后再拼（不是拼完再净化）。
+                    m.put("content", extractSanitizedText(a.content()));
                 }
                 case Message.ToolResultMessage t -> {
                     // 具名模式而非组件解构：details/usage/addedToolNames 是结构化载荷，
                     // provider 投影只读 toolUseId + content（pi 的适配器同样不读它们）
                     m.put("role", "tool");
                     m.put("tool_call_id", t.toolUseId());
-                    m.put("content", extractText(t.content()));
+                    // pi :853 —— 逐 part 净化后再 join（同为「先净化后拼」）。
+                    m.put("content", extractSanitizedText(t.content()));
                 }
             }
             return m;
@@ -338,6 +342,19 @@ public final class MistralConversationsApi extends AbstractChatApi {
         return blocks.stream()
                 .filter(c -> c instanceof ContentBlock.TextContent)
                 .map(c -> ((ContentBlock.TextContent) c).text())
+                .reduce("", String::concat);
+    }
+
+    /**
+     * pi {@code mistral-conversations.ts:822/:853} 的逐块口径：**先净化每块再拼**
+     * （不是拼完再净化 —— 跨块边界的孤高+孤低在 pi 会被各自删掉，拼完再净化则会让它们
+     * 配对成活 emoji）。拼接方式沿用本车道既有的 {@code concat}（无分隔符），
+     * 与 pi 的 {@code join("\n")} 的差别是本车道的既有偏差，不在本包范围内。
+     */
+    private String extractSanitizedText(List<ContentBlock> blocks) {
+        return blocks.stream()
+                .filter(c -> c instanceof ContentBlock.TextContent)
+                .map(c -> SanitizeUnicode.surrogates(((ContentBlock.TextContent) c).text()))
                 .reduce("", String::concat);
     }
 
