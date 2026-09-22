@@ -1,12 +1,14 @@
 package com.pijava.ai.catalog;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
+import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.ai.thinking.ThinkingLevelMap;
 
 /**
@@ -25,9 +27,28 @@ public record CatalogModel(
     int maxOutputTokens,
     boolean deprecated,
     double inputPrice,
-    double outputPrice
+    double outputPrice,
+    Map<String, String> thinkingLevelMap
 ) {
-    /** 转换为 {@link ModelInfo}（thinkingLevelMap 回落 empty）。 */
+    /**
+     * 九参便捷构造（包H5 之前的老形状）—— {@code thinkingLevelMap} 缺席 ≙ 空表。
+     */
+    public CatalogModel(
+        String provider,
+        String model,
+        String displayName,
+        List<String> capabilities,
+        int maxInputTokens,
+        int maxOutputTokens,
+        boolean deprecated,
+        double inputPrice,
+        double outputPrice
+    ) {
+        this(provider, model, displayName, capabilities, maxInputTokens, maxOutputTokens,
+            deprecated, inputPrice, outputPrice, null);
+    }
+
+    /** 转换为 {@link ModelInfo}（thinkingLevelMap 缺席 ≙ 空表）。 */
     public ModelInfo toModelInfo() {
         Set<ModelCapability> caps = capabilities == null ? Set.of()
             : capabilities.stream()
@@ -38,10 +59,29 @@ public record CatalogModel(
             displayName == null ? model : displayName,
             caps, maxInputTokens, maxOutputTokens, deprecated,
             new PricingInfo(inputPrice, outputPrice),
-            ThinkingLevelMap.empty());
+            thinkingLevelMapOf());
     }
 
-    /** 从 {@link ModelInfo} 转换（丢弃 thinkingLevelMap）。 */
+    /**
+     * 目录 wire 形状 ⇒ {@link ThinkingLevelMap}。
+     *
+     * <p>⚠️ <b>三态靠 Map 保住</b>：JSON {@code {"xhigh": null}} 与「没有 xhigh 键」在
+     * Jackson 上都读成 {@code null}，所以这里是 {@code Map<String, String>} 而不是
+     * 7 个字段（与 {@code ModelsJsonConfig} 同口径）。</p>
+     */
+    private ThinkingLevelMap thinkingLevelMapOf() {
+        if (thinkingLevelMap == null || thinkingLevelMap.isEmpty()) {
+            return ThinkingLevelMap.empty();
+        }
+        var entries = new java.util.LinkedHashMap<ModelThinkingLevel, java.util.Optional<String>>();
+        for (var entry : thinkingLevelMap.entrySet()) {
+            ModelThinkingLevel.parse(entry.getKey()).ifPresent(level ->
+                entries.put(level, java.util.Optional.ofNullable(entry.getValue())));
+        }
+        return ThinkingLevelMap.of(entries);
+    }
+
+    /** 从 {@link ModelInfo} 转换（thinkingLevelMap 双向保留）。 */
     public static CatalogModel fromModelInfo(ModelInfo info) {
         return new CatalogModel(
             info.id().provider(),
@@ -52,7 +92,20 @@ public record CatalogModel(
             info.maxOutputTokens(),
             info.deprecated(),
             info.pricing().inputPrice(),
-            info.pricing().outputPrice());
+            info.pricing().outputPrice(),
+            fromThinkingLevelMap(info.thinkingLevelMap()));
+    }
+
+    /** {@link ThinkingLevelMap} ⇒ 目录 wire 形状（空值写成 JSON {@code null}）。 */
+    private static Map<String, String> fromThinkingLevelMap(ThinkingLevelMap map) {
+        if (map == null || map.entries().isEmpty()) {
+            return null;
+        }
+        var out = new java.util.LinkedHashMap<String, String>();
+        for (var entry : map.entries().entrySet()) {
+            out.put(entry.getKey().label(), entry.getValue().orElse(null));
+        }
+        return out;
     }
 
     private static String capabilityName(ModelCapability c) {

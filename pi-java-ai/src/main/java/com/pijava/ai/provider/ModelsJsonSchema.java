@@ -47,7 +47,8 @@ public final class ModelsJsonSchema {
         @JsonProperty("maxTokens") Integer maxTokens,
         @JsonProperty("headers") Map<String, String> headers,
         @JsonProperty("samplingParams") Map<String, Object> samplingParams,
-        @JsonProperty("compat") CompatDef compat
+        @JsonProperty("compat") CompatDef compat,
+        @JsonProperty("thinkingLevelMap") Map<String, String> thinkingLevelMap
     ) {}
 
     /**

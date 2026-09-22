@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -29,6 +30,8 @@ import com.pijava.ai.provider.ModelsJsonSchema.ModelDef;
 import com.pijava.ai.provider.ModelsJsonSchema.ProviderDef;
 import com.pijava.ai.provider.ModelsJsonSchema.Root;
 import com.pijava.ai.provider.builtin.ProviderCatalog;
+import com.pijava.ai.thinking.ModelThinkingLevel;
+import com.pijava.ai.thinking.ThinkingLevelMap;
 
 /**
  * Loader for the user's custom-provider config at
@@ -206,8 +209,31 @@ public final class ModelsJsonConfig {
         return new ModelInfo(
             ModelId.of(providerId, model.id()),
             displayName, Set.copyOf(caps), contextWindow, maxTokens, false,
-            pricing, com.pijava.ai.thinking.ThinkingLevelMap.empty(), headers, samplingParams,
+            pricing, thinkingLevelMapOf(model.thinkingLevelMap()), headers, samplingParams,
             compatOf(model.compat()));
+    }
+
+    /**
+     * models.json 的 {@code thinkingLevelMap} ⇒ {@link ThinkingLevelMap}
+     * （pi {@code ThinkingLevelMapSchema}，{@code model-config.ts:55-64}）。
+     *
+     * <p>⚠️ <b>三态靠 {@code Map} 保住</b>：JSON {@code {"xhigh": null}} 与「没有 xhigh 键」
+     * 在 Jackson 上都会读成 {@code null}，所以这里读的是 {@code Map<String, String>}
+     * （<b>Map 保留「键在场」</b>）而不是 7 个 {@code String} 字段。
+     * 值 {@code null} ⇒ {@link Optional#empty()} ≙ pi 的显式 {@code null}（不支持）。</p>
+     *
+     * <p>未知键被忽略（pi 的 schema 只列 {@code off|minimal|low|medium|high|xhigh|max}）。</p>
+     */
+    private static ThinkingLevelMap thinkingLevelMapOf(Map<String, String> def) {
+        if (def == null || def.isEmpty()) {
+            return ThinkingLevelMap.empty();
+        }
+        var entries = new LinkedHashMap<ModelThinkingLevel, Optional<String>>();
+        for (var entry : def.entrySet()) {
+            ModelThinkingLevel.parse(entry.getKey()).ifPresent(level ->
+                entries.put(level, Optional.ofNullable(entry.getValue())));
+        }
+        return ThinkingLevelMap.of(entries);
     }
 
     /**
