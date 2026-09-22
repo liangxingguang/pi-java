@@ -29,7 +29,10 @@
 
         <version.anthropic-java>2.52.0</version.anthropic-java>
         <version.openai-java>4.42.0</version.openai-java>
-        <version.google-genai>1.15.0</version.google-genai>
+        <!-- 包B84：1.15.0 的 FunctionResponse 无 parts 字段（javap 实测），且 Part.fromJson
+             静默丢弃未知键 ⇒ pi 的 gemini 3+ 内嵌 functionResponse.parts 写不出来。
+             1.72.0 有 FunctionResponsePart（javap ＋ 序列化探针实测）。 -->
+        <version.google-genai>1.72.0</version.google-genai>
 
         <version.junit>5.12.2</version.junit>
         <version.assertj>3.27.4</version.assertj>
