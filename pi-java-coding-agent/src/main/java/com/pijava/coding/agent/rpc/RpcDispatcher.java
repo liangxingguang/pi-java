@@ -469,24 +469,15 @@ public final class RpcDispatcher {
         return commands;
     }
 
+    /**
+     * 线格式的思考级别（{@code "off"|"minimal"|…|"max"}）。
+     *
+     * <p>包H5：改用 {@link ModelThinkingLevel#label()} —— 它逐字对齐 pi 的字面量
+     * （{@code types.ts:84-85}）。此前是手写 switch，且 {@code "max"} 缺分支
+     * （java 那时只有 5 级、把 max 并进 xhigh）。</p>
+     */
     private static String thinkingWire(ModelThinkingLevel level) {
-        if (level instanceof ModelThinkingLevel.Off) {
-            return "off";
-        }
-        if (level instanceof ModelThinkingLevel.Enabled e) {
-            return thinkingWire(e.level());
-        }
-        return "off";
-    }
-
-    private static String thinkingWire(ThinkingLevel level) {
-        return switch (level) {
-            case ThinkingLevel.Minimal() -> "minimal";
-            case ThinkingLevel.Low() -> "low";
-            case ThinkingLevel.Medium() -> "medium";
-            case ThinkingLevel.High() -> "high";
-            case ThinkingLevel.XHigh() -> "xhigh";
-        };
+        return level == null ? "off" : level.label();
     }
 
     private static String queueWire(QueueMode mode) {

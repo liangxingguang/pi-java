@@ -55,16 +55,15 @@ public record ResponsesOptions(
             stringOrNull(extra.get("sessionId")));
     }
 
-    /** 解析 wire 值（"minimal"|"low"|"medium"|"high"|"xhigh"|"max"）为 ThinkingLevel。 */
+    /**
+     * 解析 wire 值（{@code "minimal"|"low"|"medium"|"high"|"xhigh"|"max"}）为 {@link ThinkingLevel}。
+     *
+     * <p>⚠️ 包H5：此前 {@code "max"} 被并进 {@link ThinkingLevel.XHigh} —— 那是 pi-java 的
+     * 5 级方言。pi 的 {@code ThinkingLevel} 是 6 级（{@code types.ts:84}），故改走
+     * {@link ThinkingLevel#parse}。</p>
+     */
     private static ThinkingLevel parseLevel(String raw) {
-        return switch (raw.toLowerCase(Locale.ROOT)) {
-            case "minimal" -> new ThinkingLevel.Minimal();
-            case "low" -> new ThinkingLevel.Low();
-            case "medium" -> new ThinkingLevel.Medium();
-            case "high" -> new ThinkingLevel.High();
-            case "xhigh", "max" -> new ThinkingLevel.XHigh();
-            default -> null;
-        };
+        return ThinkingLevel.parse(raw).orElse(null);
     }
 
     private static String stringOrNull(Object value) {

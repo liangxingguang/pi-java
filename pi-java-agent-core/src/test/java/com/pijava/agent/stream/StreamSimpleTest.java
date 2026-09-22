@@ -3,6 +3,7 @@ package com.pijava.agent.stream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import com.pijava.agent.harness.Context;
@@ -16,7 +17,6 @@ import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
-import com.pijava.ai.thinking.ThinkingConfig;
 import com.pijava.ai.thinking.ThinkingLevel;
 import com.pijava.ai.thinking.ThinkingLevelMap;
 
@@ -90,10 +90,18 @@ class StreamSimpleTest {
         assertThat(err.reason()).isEqualTo("error");
     }
 
+    /**
+     * 包H5 步1：{@link StreamSimple} 只把级别<b>原样</b>投下去，<b>不翻译</b>。
+     *
+     * <p>⚠️ 本方法取代了旧的 {@code translatesThinkingLevel}，并把断言<b>反过来</b>：
+     * 旧断言钉「表把 {@code Low} 翻成 {@code budgetTokens=2048}」；那正是包H5 拆掉的
+     * 错层行为（翻译要 {@code model.compat}/{@code thinkingLevelMap}，而这一层只有
+     * {@code ModelInfo} 的<b>拷贝</b>，且 pi 的车道才做翻译）。</p>
+     */
     @Test
-    void translatesThinkingLevel() {
+    void passesThinkingLevelThroughUntranslated() {
         var thinkingMap = ThinkingLevelMap.of(Map.of(
-                new ThinkingLevel.Low(), ThinkingConfig.withBudget(2048)
+                ModelThinkingLevel.of(new ThinkingLevel.Low()), Optional.of("low")
         ));
         var model = new ModelInfo(
                 ModelId.of("anthropic", "claude"),
@@ -103,11 +111,11 @@ class StreamSimpleTest {
         var messages = List.<Message>of(new Message.UserMessage(
                 List.of(new ContentBlock.TextContent("think deep"))));
 
-        var thinkingUsed = new ThinkingConfig[1];
+        var reasoningUsed = new java.util.concurrent.atomic.AtomicReference<Optional<ThinkingLevel>>();
         StreamIterator iter = StreamSimple.stream(model, Context.of(messages),
                 ModelThinkingLevel.of(new ThinkingLevel.Low()),
                 (msgs, mdl, opts) -> {
-                    thinkingUsed[0] = opts.thinking();
+                    reasoningUsed.set(opts.reasoning());
                     var partial = AssistantMessage.empty().withStopReason("stop");
                     return StreamIterator.from(List.of(
                             new StreamEvent.Start(AssistantMessage.empty()),
@@ -118,8 +126,6 @@ class StreamSimpleTest {
         // Consume iterator
         while (iter.hasNext()) iter.next();
 
-        assertThat(thinkingUsed[0]).isNotNull();
-        assertThat(thinkingUsed[0].enabled()).isTrue();
-        assertThat(thinkingUsed[0].budgetTokens()).hasValue(2048);
+        assertThat(reasoningUsed.get()).contains(new ThinkingLevel.Low());
     }
 }

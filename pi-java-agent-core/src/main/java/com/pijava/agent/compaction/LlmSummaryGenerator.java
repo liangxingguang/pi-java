@@ -2,6 +2,7 @@ package com.pijava.agent.compaction;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
 import java.util.function.BooleanSupplier;
@@ -17,7 +18,6 @@ import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
-import com.pijava.ai.thinking.ThinkingConfig;
 import com.pijava.ai.utils.RetryBackoff;
 import com.pijava.ai.utils.RetryableError;
 
@@ -219,7 +219,7 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
         var user = new Message.UserMessage(
             List.of(new ContentBlock.TextContent(buildPrompt(compressed, previousSummary))));
         var options = new StreamOptions(
-            OptionalInt.empty(), OptionalDouble.empty(), ThinkingConfig.OFF);
+            OptionalInt.empty(), OptionalDouble.empty(), Optional.empty());
         var toolCalls = new ArrayList<ContentBlock>();
         StringBuilder text = new StringBuilder();
         Usage[] usage = {null};

@@ -1,58 +1,58 @@
 package com.pijava.ai.thinking;
 
 import java.util.List;
-import java.util.Set;
+import java.util.Locale;
+import java.util.Optional;
 
 /**
- * Thinking depth — five-level scale.
+ * 思考深度 —— <b>6 级</b>刻度（pi {@code ThinkingLevel}，{@code types.ts:84}）。
  *
- * <p>Aligned with pi's {@code ThinkingLevel}: "minimal" | "low" | "medium" |
- * "high" | "xhigh" | "max". Used as keys in {@link ThinkingLevelMap} to
- * translate into provider-specific {@link ThinkingConfig} parameters.</p>
+ * <p>pi 的字面量：{@code "minimal" | "low" | "medium" | "high" | "xhigh" | "max"}。</p>
  *
- * <p>Note: "off" is NOT a ThinkingLevel — it is represented by
- * {@link ModelThinkingLevel.Off}.</p>
+ * <p>⚠️ <b>包H5 的改动</b>：pi-java 此前只有 5 级 —— 把 pi 的 {@code "max"} 并进了
+ * {@link XHigh}（{@code cli/ThinkingLevels.java:31} 的 {@code case "xhigh", "max" ->}）。
+ * 这与 pi 的刻度不同（pi 的 {@code clampThinkingLevel} 与 {@code thinkingLevelMap}
+ * 都按 6 级走），故拆开。</p>
+ *
+ * <p>{@code "off"} <b>不是</b> {@code ThinkingLevel} —— 它是 {@link ModelThinkingLevel.Off}。</p>
  */
 public sealed interface ThinkingLevel {
-    record Minimal() implements ThinkingLevel {}  // ~1024 tokens
-    record Low() implements ThinkingLevel {}      // ~2048 tokens
-    record Medium() implements ThinkingLevel {}   // ~8192 tokens
-    record High() implements ThinkingLevel {}     // ~16384 tokens
-    record XHigh() implements ThinkingLevel {}    // model maximum
+    record Minimal() implements ThinkingLevel {}
+    record Low() implements ThinkingLevel {}
+    record Medium() implements ThinkingLevel {}
+    record High() implements ThinkingLevel {}
+    record XHigh() implements ThinkingLevel {}
+    record Max() implements ThinkingLevel {}
 
     /**
-     * Human-readable label for this level (e.g. "minimal", "low").
-     * Used for serialization and display; avoids reflective
-     * {@code getClass().getSimpleName().toLowerCase()} chains.
+     * pi 字面量（{@code "minimal"} … {@code "max"}）。
+     *
+     * <p>逐字对齐 pi：{@code XHigh} ⇒ {@code "xhigh"}、{@code Max} ⇒ {@code "max"}
+     * —— 二者<b>不再合并</b>。</p>
      */
     default String label() {
-        return getClass().getSimpleName().toLowerCase();
+        return getClass().getSimpleName().toLowerCase(Locale.ROOT);
     }
 
-    /** Five levels in natural order (for clamp fallback). */
+    /** 6 级，顺序与 pi 的 {@code EXTENDED_THINKING_LEVELS}（去掉 {@code off}）一致。 */
     static List<ThinkingLevel> ordered() {
         return List.of(new Minimal(), new Low(), new Medium(),
-                       new High(), new XHigh());
+                       new High(), new XHigh(), new Max());
     }
 
-    /**
-     * Fallback logic: try upward first (more thinking is usually safer than less),
-     * then downward. Falls back to {@link Minimal} if nothing matches.
-     * Aligned with pi {@code clampThinkingLevel()}.
-     */
-    static ThinkingLevel clamp(ThinkingLevel requested,
-                                Set<ThinkingLevel> supported) {
-        var ordered = ordered();
-        if (supported.contains(requested)) return requested;
-        int idx = ordered.indexOf(requested);
-        // Try upward first
-        for (int i = idx + 1; i < ordered.size(); i++) {
-            if (supported.contains(ordered.get(i))) return ordered.get(i);
+    /** pi 字面量 ⇒ 级别。未知值（含 {@code "off"}）返回空。 */
+    static Optional<ThinkingLevel> parse(String raw) {
+        if (raw == null) {
+            return Optional.empty();
         }
-        // Then downward
-        for (int i = idx - 1; i >= 0; i--) {
-            if (supported.contains(ordered.get(i))) return ordered.get(i);
-        }
-        return new Minimal(); // ultimate fallback
+        return switch (raw.toLowerCase(Locale.ROOT)) {
+            case "minimal" -> Optional.of(new Minimal());
+            case "low" -> Optional.of(new Low());
+            case "medium" -> Optional.of(new Medium());
+            case "high" -> Optional.of(new High());
+            case "xhigh" -> Optional.of(new XHigh());
+            case "max" -> Optional.of(new Max());
+            default -> Optional.empty();
+        };
     }
 }

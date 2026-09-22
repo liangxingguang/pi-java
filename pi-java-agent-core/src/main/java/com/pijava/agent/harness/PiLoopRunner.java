@@ -2,6 +2,7 @@ package com.pijava.agent.harness;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 import com.pijava.agent.harness.PiLoop.Config;
@@ -12,7 +13,8 @@ import com.pijava.agent.harness.PiLoop.Sink;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
-import com.pijava.ai.thinking.ThinkingConfig;
+import com.pijava.ai.thinking.ModelThinkingLevel;
+import com.pijava.ai.thinking.ThinkingLevel;
 
 /**
  * {@link PiLoop} 的内部实现：双循环、助手流翻译、以及驱动它们的小工具。
@@ -200,7 +202,7 @@ final class PiLoopRunner {
         var llmContext = new Context(context.systemPrompt(), llmMessages, context.tools());
         var options = new StreamOptions(
             java.util.OptionalInt.empty(), java.util.OptionalDouble.empty(),
-            thinkingConfig(config));
+            reasoningOf(config));
 
         var signal = config.signal();
         // 进入本次拉取时信号是否**已经**中止。它区分两件事：
@@ -372,7 +374,22 @@ final class PiLoopRunner {
         return Message.AssistantMessage.fromPartial(partial);
     }
 
-    private static ThinkingConfig thinkingConfig(Config config) {
-        return config.thinkingLevelMap().forLevel(config.thinking());
+    /**
+     * {@link ModelThinkingLevel} ⇒ pi 的 {@code SimpleStreamOptions.reasoning}。
+     *
+     * <p>pi {@code agent.ts:465}：{@code reasoning: thinkingLevel === "off" ? undefined : thinkingLevel}
+     * —— <b>{@code "off"} 在请求侧就是「不传」</b>（请求构建再按 {@code thinkingEnabled} 分流，
+     * {@code anthropic-messages.ts:1161-1180}）。</p>
+     *
+     * <p>⚠️ <b>包H5 的改动</b>：此前这里调 {@code thinkingLevelMap().forLevel(...)} 把级别
+     * <b>翻译成配置</b>再投下去。那是<b>错层</b> —— 翻译要读 {@code model.compat} 与
+     * {@code model.thinkingLevelMap}，而引擎层只有 {@code ModelId}。现在原样投级别，
+     * 翻译归车道（{@code anthropic-messages.ts:858-904}）。</p>
+     */
+    private static Optional<ThinkingLevel> reasoningOf(Config config) {
+        return switch (config.thinking()) {
+            case ModelThinkingLevel.Off o -> Optional.empty();
+            case ModelThinkingLevel.Enabled e -> Optional.of(e.level());
+        };
     }
 }

@@ -15,13 +15,12 @@ import com.pijava.ai.thinking.ModelThinkingLevel;
 
 /**
  * Convenience wrapper around {@link StreamFn} that automatically handles
- * thinking-level translation and context-overflow pre-detection.
+ * thinking-level passthrough and context-overflow pre-detection.
  *
  * <p>Aligned with pi's {@code streamSimple()}. Phase 2a responsibilities:
  * <ol>
- *   <li>Translate {@link ModelThinkingLevel} → provider-specific
- *       {@link com.pijava.ai.thinking.ThinkingConfig} via
- *       {@link ModelInfo#thinkingLevelMap()}</li>
+ *   <li>Pass {@link ModelThinkingLevel} down as {@code reasoning}（<b>不翻译</b> ——
+ *       翻译归车道，见 {@link com.pijava.agent.harness.StreamOptions}）</li>
  *   <li>Call {@link ContextEstimator#checkOverflow} before the request</li>
  * </ol>
  *
@@ -48,8 +47,11 @@ public final class StreamSimple {
 
         var messages = context.messages();
 
-        // 1. Translate thinking level → provider config
-        var thinkingConfig = model.thinkingLevelMap().forLevel(reasoning);
+        // 1. Pass the level down untranslated（pi agent.ts:465：off ⇒ 不传）
+        var reasoningOption = switch (reasoning) {
+            case ModelThinkingLevel.Off o -> java.util.Optional.<com.pijava.ai.thinking.ThinkingLevel>empty();
+            case ModelThinkingLevel.Enabled e -> java.util.Optional.of(e.level());
+        };
 
         // 2. Pre-check for context overflow
         int overflow = ContextEstimator.checkOverflow(
@@ -74,7 +76,7 @@ public final class StreamSimple {
         var options = new StreamOptions(
                 java.util.OptionalInt.empty(),
                 java.util.OptionalDouble.empty(),
-                thinkingConfig
+                reasoningOption
         );
 
         return streamFn.stream(model.id(), context, options);

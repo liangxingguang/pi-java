@@ -429,17 +429,14 @@ final class WebDispatcher {
         return new ModelInfo(model.provider(), model.modelName(), name);
     }
 
+    /**
+     * 线格式的思考级别（{@code "off"|"minimal"|…|"max"}）。
+     *
+     * <p>包H5：改用 {@link ModelThinkingLevel#label()}（逐字对齐 pi 的
+     * {@code types.ts:84-85}），取代手写 switch —— 后者缺 {@code "max"} 分支。</p>
+     */
     private static String thinkingWire(ModelThinkingLevel level) {
-        if (level instanceof ModelThinkingLevel.Enabled e) {
-            return switch (e.level()) {
-                case ThinkingLevel.Minimal() -> "minimal";
-                case ThinkingLevel.Low() -> "low";
-                case ThinkingLevel.Medium() -> "medium";
-                case ThinkingLevel.High() -> "high";
-                case ThinkingLevel.XHigh() -> "xhigh";
-            };
-        }
-        return "off";
+        return level == null ? "off" : level.label();
     }
 
     /** 从会话文件路径提取 id（JSONL 文件名 {@code <iso>_<id>.jsonl}）。 */

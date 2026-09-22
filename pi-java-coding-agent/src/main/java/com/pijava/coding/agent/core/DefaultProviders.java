@@ -110,18 +110,17 @@ public final class DefaultProviders {
             com.pijava.agent.harness.StreamOptions options,
             ApiOptions apiOptions) {
         var api = provider.createApi(ChatApi.class, apiOptions);
-        var extra = new java.util.LinkedHashMap<String, Object>();
-        var thinking = options.thinking();
-        if (thinking != null && thinking.enabled()
-                && thinking.budgetTokens().isPresent()) {
-            extra.put("thinking.budgetTokens", thinking.budgetTokens().getAsInt());
-        }
         // 系统提示与工具定义都来自 Context（pi 的 Context）；它们不再走消息列表或 options。
         //
         // 模型**元数据**（而非只有 id）必须随请求走：pi 的请求构建器拿到整个 Model<TApi>，
         // 从上面读 compat / input / thinkingLevelMap（docs/31 §8.34.4 决策 5）。此前只投
         // ModelId ⇒ 目录里的 per-model 开关到不了适配器。目录里查不到时退化为
         // ModelInfo.minimal（compat 缺席 ≡ pi 的 `?? false`，安全方向）。
+        //
+        // ⚠️ 包H5：`extra["thinking.budgetTokens"]` 那条<b>休眠</b>通道已删 —— 它此前
+        // 从未被写入过（门恒假），且 pi 的 reasoning 是**未翻译的级别**、由车道自己翻译
+        // （anthropic-messages.ts:858-904）。翻译所需的 compat/thinkingLevelMap 就在
+        // modelInfo 上，故随 StreamRequest 一起走。
         var modelInfo = provider.builtinModels().find(model)
                 .orElseGet(() -> ModelInfo.minimal(model));
         var request = new com.pijava.ai.api.StreamRequest(
@@ -129,7 +128,8 @@ public final class DefaultProviders {
             ToolRegistry.definitionsOf(context.tools()),
             options.maxTokens().orElse(-1),
             options.temperature().orElse(-1),
-            extra);
+            java.util.Map.of(),
+            options.reasoning());
         return api.streamBlocking(request, apiOptions);
     }
 

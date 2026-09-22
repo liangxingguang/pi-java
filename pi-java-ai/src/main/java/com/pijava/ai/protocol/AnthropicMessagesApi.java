@@ -1,8 +1,6 @@
 package com.pijava.ai.protocol;
 
 import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 import java.util.concurrent.SubmissionPublisher;
 
 import com.anthropic.client.AnthropicClient;
@@ -20,7 +18,6 @@ import com.anthropic.models.messages.ToolUnion;
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.AuthKind;
 import com.pijava.ai.api.StreamRequest;
-import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.api.TransformMessages;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
@@ -475,18 +472,11 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
             builder.temperature(request.temperature());
         }
 
-        // pi alignment (anthropic-messages.ts:1047-1051): budget-based
-        // extended thinking, threaded through StreamRequest.extra by the
-        // harness StreamFn. The SDK builder leaves `type` as JsonMissing,
-        // so it must be set explicitly or the API ignores the config.
-        var budget = request.extra().get("thinking.budgetTokens");
-        if (budget instanceof Number n && n.longValue() > 0) {
-            builder.thinking(com.anthropic.models.messages.ThinkingConfigParam.ofEnabled(
-                    com.anthropic.models.messages.ThinkingConfigEnabled.builder()
-                            .budgetTokens(n.longValue())
-                            .type(com.anthropic.core.JsonValue.from("enabled"))
-                            .build()));
-        }
+        // ⚠️ 包H5：此处原有一条从 `request.extra().get("thinking.budgetTokens")` 读预算、
+        // 发 `ThinkingConfigParam.ofEnabled(...)` 的代码。它是**休眠**的 —— 唯一的写者
+        // （`DefaultProviders`）门恒假（`ThinkingLevelMap` 生产恒空）⇒ 键从未在场。
+        // 已随包H5 步1 删除；思考请求改由 `AnthropicThinking.resolve` 从
+        // `request.reasoning()` ＋ `request.model()` 计算（步5）。
 
         return builder.build();
     }

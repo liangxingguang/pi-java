@@ -109,8 +109,8 @@ final class PayloadRecordingStreamFn implements StreamFn {
             .map(PayloadRecordingStreamFn::tool).toList());
         payload.put("maxTokens", options.maxTokens().isPresent() ? options.maxTokens().getAsInt() : -1);
         payload.put("temperature", options.temperature().isPresent() ? options.temperature().getAsDouble() : -1);
-        var thinking = options.thinking();
-        payload.put("thinking", thinking != null && thinking.enabled());
+        var thinking = options.reasoning();
+        payload.put("thinking", thinking != null && thinking.isPresent());
         return payload;
     }
 

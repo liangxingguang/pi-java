@@ -244,25 +244,15 @@ class AnthropicMessagesApiBuildParamsTest {
         assertThat(messages).hasSize(1);
     }
 
+    /**
+     * ⚠️ 包H5 步1：<b>没有 reasoning ⇒ 不发 thinking 参数</b>（pi
+     * {@code anthropic-messages.ts:872-875} 的 {@code !options?.reasoning} 分支）。
+     *
+     * <p>本方法取代了旧的 {@code noBudgetTokensLeaveThinkingUnset} —— 那个名字里的
+     * 「budget tokens」属于 {@code extra["thinking.budgetTokens"]} 那条<b>已删的休眠通道</b>。</p>
+     */
     @Test
-    void extraBudgetTokensEnableThinking() throws Exception {
-        var request = new StreamRequest(
-            ModelId.of("anthropic", "claude-sonnet-5"),
-            null,
-            List.of(new Message.UserMessage(
-                List.of(new ContentBlock.TextContent("hi")))),
-            List.of(), 2048, -1,
-            Map.of("thinking.budgetTokens", 2048));
-
-        var params = buildParams(request);
-
-        var thinking = params.thinking().orElseThrow();
-        assertThat(thinking.isEnabled()).isTrue();
-        assertThat(thinking.asEnabled().budgetTokens()).isEqualTo(2048L);
-    }
-
-    @Test
-    void noBudgetTokensLeaveThinkingUnset() throws Exception {
+    void absentReasoningLeavesThinkingUnset() throws Exception {
         var request = new StreamRequest(
             ModelId.of("anthropic", "claude-sonnet-5"),
             null,

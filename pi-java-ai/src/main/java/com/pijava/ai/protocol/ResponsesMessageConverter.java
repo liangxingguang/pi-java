@@ -331,7 +331,10 @@ final class ResponsesMessageConverter {
             case ThinkingLevel.Minimal() -> "minimal";
             case ThinkingLevel.Low() -> "low";
             case ThinkingLevel.Medium() -> "medium";
-            case ThinkingLevel.High(), ThinkingLevel.XHigh() -> "high"; // OpenAI caps at "high"
+            // ⚠️ 包H5：pi 的 responses 车道走 `clampThinkingLevel` ＋ `thinkingLevelMap`，
+            // 不硬编码；这条平行路径**不在本包范围**（docs/46 §9），此处只为让新增的
+            // `Max` 有分支 —— 行为与改动前的 `XHigh` 一致（都落到 "high"）。
+            case ThinkingLevel.High(), ThinkingLevel.XHigh(), ThinkingLevel.Max() -> "high";
         };
     }
 
