@@ -152,11 +152,11 @@ public final class RpcDispatcher {
                     out.write(RpcResponse.ok(g.id(), "get_available_models",
                         availableModels()));
                 case RpcCommand.SetThinkingLevel s -> {
-                    session.harness().setThinkingLevel(ThinkingLevels.parse(s.level()));
+                    session.setThinkingLevel(ThinkingLevels.parse(s.level()));
                     out.write(RpcResponse.ok(s.id(), "set_thinking_level"));
                 }
                 case RpcCommand.CycleThinkingLevel c -> {
-                    session.harness().setThinkingLevel(cycleThinking(session));
+                    session.setThinkingLevel(cycleThinking(session));
                     out.write(RpcResponse.ok(c.id(), "cycle_thinking_level"));
                 }
                 case RpcCommand.GetAvailableThinkingLevels g ->

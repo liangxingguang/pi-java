@@ -45,13 +45,25 @@ final class SessionSetup {
         return Set.copyOf(toolList);
     }
 
-    /** CLI thinking 参数 → ModelThinkingLevel（无则回落模型模式 / off）。 */
-    static ModelThinkingLevel thinkingLevelFor(Args args) {
+    /**
+     * CLI thinking 参数 → {@link ModelThinkingLevel}。
+     *
+     * <p>档位照 pi {@code agent-session.ts:1992-2005}：<b>① 显式值</b>（{@code --thinking}）
+     * → <b>② per-model 设置</b> → <b>③ 全局默认</b>。java 没有 ② 的设置键 ⇒ 登记不做
+     * （{@code docs/46 §7 B15-残留-5}）；模型名后缀（{@code claude:high}）是 pi-java
+     * 自己的 CLI 形态，插在 ① 与 ③ 之间。</p>
+     *
+     * @param defaultThinkingLevel {@code settings.defaultThinkingLevel}；可为 {@code null}
+     */
+    static ModelThinkingLevel thinkingLevelFor(Args args, String defaultThinkingLevel) {
         if (args.thinking() != null) {
             return ThinkingLevels.parse(args.thinking());
         }
         var fromModel = ThinkingLevels.parseFromModelPattern(args.model());
-        return fromModel != null ? fromModel : ModelThinkingLevel.off();
+        if (fromModel != null) {
+            return fromModel;
+        }
+        return ThinkingLevels.parse(defaultThinkingLevel);
     }
 
     /** 系统提示：CLI 显式值 → 默认提示 + append 段。 */

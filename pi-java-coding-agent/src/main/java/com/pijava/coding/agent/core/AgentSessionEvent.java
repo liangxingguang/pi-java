@@ -7,7 +7,7 @@ import com.pijava.agent.compaction.CompactionResult;
 import com.pijava.agent.entry.Entry;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
-import com.pijava.ai.thinking.ThinkingLevel;
+import com.pijava.ai.thinking.ModelThinkingLevel;
 
 /**
  * 会话级事件 —— 对齐 pi {@code AgentSessionEvent}（{@code _eventListeners} + {@code _emit}）。
@@ -72,8 +72,15 @@ public sealed interface AgentSessionEvent {
     /** 会话名变更。 */
     record SessionInfoChanged(String name) implements AgentSessionEvent {}
 
-    /** 思考等级变更。 */
-    record ThinkingLevelChanged(ThinkingLevel level) implements AgentSessionEvent {}
+    /**
+     * 思考等级变更（pi {@code agent-session.ts:1955} 的 {@code thinking_level_changed}）。
+     *
+     * <p>⚠️ 包H5 步8：组件类型由 {@code ThinkingLevel} 改为 {@link ModelThinkingLevel}
+     * —— pi 的载荷可以是 {@code "off"}，而 {@code ThinkingLevel} <b>表达不了 off</b>
+     * （它是 {@code ModelThinkingLevel} 才有的状态）。线格式由
+     * {@code JsonEventMapper} 写 {@code label()}（小写字符串，与 pi 逐字一致）。</p>
+     */
+    record ThinkingLevelChanged(ModelThinkingLevel level) implements AgentSessionEvent {}
 
     record CompactionStart(CompactionReason reason) implements AgentSessionEvent {}
 

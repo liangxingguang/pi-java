@@ -1,15 +1,18 @@
 package com.pijava.coding.agent.cli;
 
 import com.pijava.ai.thinking.ModelThinkingLevel;
-import com.pijava.ai.thinking.ThinkingLevel;
 
 /**
  * Maps the {@code --thinking} CLI string to {@link ModelThinkingLevel}
  * (Phase 3 design §9.3).
  *
- * <p>pi's {@code "max"} level is merged into pi-java's {@code XHigh}
- * (label {@code "xhigh"}). Unknown values fall back to {@code Off} and are
- * reported as parse warnings by {@link ArgsParser}.</p>
+ * <p>pi 的字面量：{@code "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"}。
+ * Unknown values fall back to {@code Off} and are reported as parse warnings by
+ * {@link ArgsParser}.</p>
+ *
+ * <p>⚠️ <b>包H5 步8</b>：此前 pi-java 只有 5 级、把 {@code "max"} <b>并进</b>
+ * {@code XHigh}；pi 的 {@code ThinkingLevel} 是 6 级（{@code types.ts:84}），
+ * 故改为委托 {@link ModelThinkingLevel#parse}。</p>
  */
 public final class ThinkingLevels {
 
@@ -22,15 +25,7 @@ public final class ThinkingLevels {
      * @return the mapped thinking level (unknown values fall back to off)
      */
     public static ModelThinkingLevel parse(String raw) {
-        return switch (raw == null ? "off" : raw.toLowerCase()) {
-            case "off" -> ModelThinkingLevel.off();
-            case "minimal" -> ModelThinkingLevel.of(new ThinkingLevel.Minimal());
-            case "low" -> ModelThinkingLevel.of(new ThinkingLevel.Low());
-            case "medium" -> ModelThinkingLevel.of(new ThinkingLevel.Medium());
-            case "high" -> ModelThinkingLevel.of(new ThinkingLevel.High());
-            case "xhigh", "max" -> ModelThinkingLevel.of(new ThinkingLevel.XHigh());
-            default -> ModelThinkingLevel.off();
-        };
+        return ModelThinkingLevel.parse(raw).orElseGet(ModelThinkingLevel::off);
     }
 
     /** All accepted raw values, for validation and help text. */

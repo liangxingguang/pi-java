@@ -24,8 +24,10 @@ class ThinkingLevelsTest {
             .isEqualTo(ModelThinkingLevel.of(new ThinkingLevel.High()));
         assertThat(ThinkingLevels.parse("xhigh"))
             .isEqualTo(ModelThinkingLevel.of(new ThinkingLevel.XHigh()));
+        // ⚠️ 包H5 步8：pi 的 ThinkingLevel 是 6 级（types.ts:84），"max" 有自己的级别
+        // —— 此前 pi-java 把它并进 XHigh（5 级方言）。
         assertThat(ThinkingLevels.parse("max"))
-            .isEqualTo(ModelThinkingLevel.of(new ThinkingLevel.XHigh()));
+            .isEqualTo(ModelThinkingLevel.of(new ThinkingLevel.Max()));
     }
 
     @Test

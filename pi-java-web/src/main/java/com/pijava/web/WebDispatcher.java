@@ -19,7 +19,6 @@ import com.pijava.agent.session.SessionJson;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.provider.ModelsJsonConfig;
 import com.pijava.ai.thinking.ModelThinkingLevel;
-import com.pijava.ai.thinking.ThinkingLevel;
 import com.pijava.coding.agent.cli.Args;
 import com.pijava.coding.agent.cli.ThinkingLevels;
 import com.pijava.coding.agent.core.AgentSession;
@@ -81,7 +80,7 @@ final class WebDispatcher {
                         currentModelInfo(), thinkingWire(session.harness().getThinkingLevel())));
                 }
                 case WebClientMessage.SetThinkingLevel t -> {
-                    session.harness().setThinkingLevel(ThinkingLevels.parse(t.level()));
+                    session.setThinkingLevel(ThinkingLevels.parse(t.level()));
                     send.accept(new WebServerMessage.ModelChanged(
                         currentModelInfo(), thinkingWire(session.harness().getThinkingLevel())));
                 }

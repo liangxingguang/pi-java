@@ -107,7 +107,8 @@ public final class JsonEventMapper {
             }
             case AgentSessionEvent.ThinkingLevelChanged t -> {
                 node.put("type", "thinking_level_changed");
-                node.set("level", MAPPER.valueToTree(t.level()));
+                // pi 的载荷是小写字符串（"off"/"minimal"/…/"max"）—— 与 thinkingWire 同形。
+                node.put("level", t.level().label());
             }
             case AgentSessionEvent.CompactionStart c -> {
                 node.put("type", "compaction_start");

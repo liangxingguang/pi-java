@@ -53,6 +53,7 @@ import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.model.DefaultModelResolver;
 import com.pijava.ai.provider.ProviderRegistry;
 import com.pijava.ai.stream.StreamEvent;
+import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.coding.agent.cli.Args;
 import com.pijava.coding.agent.core.session.InMemorySessionRepository;
 import com.pijava.coding.agent.core.session.SessionInfo;
@@ -392,7 +393,7 @@ public final class AgentSession implements AutoCloseable {
             // 同一份 retry 预算、同一个中止旗观察口、同一个 observer（§8.22.3）。
             .summaryGenerator(new LlmSummaryGenerator(recordingStreamFn, () -> model,
                 retrySettings, retryAborted, retryObserver))
-            .thinkingLevel(SessionSetup.thinkingLevelFor(args))
+            .thinkingLevel(SessionSetup.thinkingLevelFor(args, settings.effective().defaultThinkingLevel))
             .systemPrompt(SessionSetup.systemPromptFor(args))
             .activeTools(SessionSetup.activeTools(args, toolList))
             .toolRegistry(tools)
@@ -473,6 +474,30 @@ public final class AgentSession implements AutoCloseable {
     /** The underlying harness (used by the session repository and TUI). */
     public AgentHarness harness() {
         return harness;
+    }
+
+    /**
+     * 设置思考级别，**变化时**广播 {@link AgentSessionEvent.ThinkingLevelChanged}
+     * （pi {@code agent-session.ts:1934-1962} 的 {@code setThinkingLevel}）。
+     *
+     * <p>⚠️ 包H5 步8：此前这个事件<b>零生产者</b> —— 声明了、被 {@code JsonEventMapper}
+     * 消费了，但没人发。生产调用点（RPC 的 {@code set_thinking_level} ／
+     * {@code cycle_thinking_level}、Web 的 {@code SetThinkingLevel}、{@code processPrompt}）
+     * 原先都直呼 {@code harness().setThinkingLevel(...)}，绕过了会话事件流。</p>
+     *
+     * <p>pi 的 {@code isChanging} 门：级别没变就<b>不发</b>（也不写 transcript）。</p>
+     *
+     * <p>⚠️ pi 还会在这里把级别<b>夹到模型可用集</b>（{@code clampThinkingLevel}）并落
+     * transcript。夹取在 pi-java 由车道侧的 {@code AnthropicThinking.resolve} 按模型能力
+     * 处理（{@code docs/46 §3-D2} 的范围裁决）；transcript 落盘属另一条线，本包不做。</p>
+     */
+    public ModelThinkingLevel setThinkingLevel(ModelThinkingLevel level) {
+        var previous = harness.getThinkingLevel();
+        harness.setThinkingLevel(level);
+        if (!java.util.Objects.equals(previous, level)) {
+            emitSessionEvent(new AgentSessionEvent.ThinkingLevelChanged(level));
+        }
+        return level;
     }
 
     /** The assembled services. */
@@ -597,7 +622,7 @@ public final class AgentSession implements AutoCloseable {
             harness.setSystemPrompt(config.systemPrompt());
         }
         if (config.thinkingLevel() != null) {
-            harness.setThinkingLevel(config.thinkingLevel());
+            setThinkingLevel(config.thinkingLevel());
         }
 
         var queue = new LinkedBlockingQueue<Optional<StreamEvent>>();
