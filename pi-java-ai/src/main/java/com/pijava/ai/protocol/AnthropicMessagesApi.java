@@ -1,6 +1,7 @@
 package com.pijava.ai.protocol;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.SubmissionPublisher;
 
 import com.anthropic.client.AnthropicClient;
@@ -101,6 +102,9 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
      * 版本常量取 {@code :87} 的硬编码值 —— <b>照抄同值</b>，不读运行时版本。
      */
     private static final String OAUTH_TOKEN_MARKER = "sk-ant-oat";
+
+    /** pi {@code anthropic-messages.ts:182} 的 interleaved-thinking beta 名。 */
+    private static final String INTERLEAVED_THINKING_BETA = "interleaved-thinking-2025-05-14";
 
     /** pi {@code anthropic-messages.ts:87} 的硬编码常量。 */
     private static final String CLAUDE_CODE_VERSION = "2.1.251";
@@ -481,15 +485,33 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
             builder.addTool(ToolUnion.ofTool(toolBuilder.build()));
         }
 
-        if (request.temperature() >= 0) {
+        // pi anthropic-messages.ts:1104-1112 —— **温度与思考互斥**
+        // （pi 注释原文：「Temperature is incompatible with extended thinking」）。
+        // 门的判据是 `!options?.thinkingEnabled`，而 thinkingEnabled 就是「调用方给了 reasoning」
+        // （pi 的 streamSimple 在 !options?.reasoning 时才置 false，:872-876）⇒ 与模型能力无关。
+        //
+        // ⚠️ pi 还有两枚条件本包**未移植**（docs/46 §7 登记）：
+        // `compat.supportsMidConvoEffort !== true`（该旗标本包不做）与
+        // `compat.supportsTemperature`（java 无此旗标，pi 的探测默认是开）。
+        if (request.temperature() >= 0 && request.reasoning().isEmpty()) {
             builder.temperature(request.temperature());
         }
 
-        // ⚠️ 包H5：此处原有一条从 `request.extra().get("thinking.budgetTokens")` 读预算、
-        // 发 `ThinkingConfigParam.ofEnabled(...)` 的代码。它是**休眠**的 —— 唯一的写者
-        // （`DefaultProviders`）门恒假（`ThinkingLevelMap` 生产恒空）⇒ 键从未在场。
-        // 已随包H5 步1 删除；思考请求改由 `AnthropicThinking.resolve` 从
-        // `request.reasoning()` ＋ `request.model()` 计算（步5）。
+        // pi anthropic-messages.ts:1018-1025 —— interleaved-thinking beta 头。
+        // 条件是 `model.reasoning && thinkingEnabled === true && (interleavedThinking ?? true)
+        // && forceAdaptiveThinking !== true`。java 无 `interleavedThinking` 用户面 ⇒ 取 pi 的默认 true。
+        //
+        // ⚠️ 写法：pi 走的是**请求体字段** `params.betas`（非 beta 服务的 params 类型）。
+        // java 的非 beta `MessageCreateParams` 没有 betas 组件，但 SDK 提供了
+        // `putAdditionalBodyProperty` ⇒ 用它产出**与 pi 同形**的线格（不是 `anthropic-beta` 头，
+        // 那会换一种形状）。
+        if (request.model() != null
+                && request.model().capabilities().contains(com.pijava.ai.model.ModelCapability.THINKING)
+                && request.reasoning().isPresent()
+                && !request.model().compat().forceAdaptiveThinking()) {
+            builder.putAdditionalBodyProperty("betas",
+                com.anthropic.core.JsonValue.from(List.of(INTERLEAVED_THINKING_BETA)));
+        }
 
         return builder.build();
     }
