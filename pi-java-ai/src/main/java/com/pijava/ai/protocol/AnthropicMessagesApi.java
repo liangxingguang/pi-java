@@ -409,9 +409,22 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         // 缺席与 false 同义（pi 的 `?? false` 是二态，不是三态）。
         var allowEmptySignature = request.model() != null
                 && request.model().compat().allowEmptySignature();
+        // 包H5 步5：思考的三分支（pi anthropic-messages.ts:858-904 ＋ :1152-1180）。
+        // 级别**未翻译**地随 StreamRequest 进来，翻译所需的 compat/thinkingLevelMap 就在
+        // request.model() 上 —— 这正是包H5 把翻译从引擎层挪到车道的原因。
+        var thinking = AnthropicThinking.resolve(
+                request.model(),
+                request.reasoning(),
+                request.maxTokens() > 0
+                    ? java.util.OptionalInt.of(request.maxTokens())
+                    : java.util.OptionalInt.empty());
         var builder = MessageCreateParams.builder()
                 .model(request.modelId().modelName())
-                .maxTokens(request.maxTokens() > 0 ? request.maxTokens() : 4096L);
+                .maxTokens(thinking.maxTokens().isPresent()
+                    ? thinking.maxTokens().getAsInt()
+                    : (request.maxTokens() > 0 ? request.maxTokens() : 4096L));
+        thinking.thinking().ifPresent(builder::thinking);
+        thinking.outputConfig().ifPresent(builder::outputConfig);
 
         // 系统提示是请求上的独立字段（pi anthropic-messages.ts:1074 读 context.systemPrompt），
         // 不在消息列表里 —— pi 的 Message 没有 system 角色。

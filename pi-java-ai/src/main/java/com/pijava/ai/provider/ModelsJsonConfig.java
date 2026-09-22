@@ -280,6 +280,7 @@ public final class ModelsJsonConfig {
         return new ModelCompat(
             def.allowEmptySignature() != null && def.allowEmptySignature(),
             def.requiresReasoningContentOnAssistantMessages(),
-            def.supportsFinishReason() == null || def.supportsFinishReason());
+            def.supportsFinishReason() == null || def.supportsFinishReason(),
+            def.forceAdaptiveThinking() != null && def.forceAdaptiveThinking());
     }
 }

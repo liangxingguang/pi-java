@@ -75,13 +75,20 @@ public final class ModelsJsonSchema {
      *                            {@code allowEmptySignature}: pi's detected value is the constant
      *                            {@code true} ({@code detectCompat:1638}), so an absent key means
      *                            "strict", and only an explicit {@code false} relaxes it
+     * @param forceAdaptiveThinking whether the Anthropic lane uses adaptive thinking
+     *                            ({@code {type:"adaptive"}} ＋ {@code output_config.effort}) instead
+     *                            of budget-based ({@code {type:"enabled", budget_tokens}})
+     *                            (pi {@code anthropic-messages.ts:878, 1165}). ⚠️ **Two-state with
+     *                            default {@code false}** — pi's test is {@code === true}, so an
+     *                            absent key and {@code false} are indistinguishable
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record CompatDef(
         @JsonProperty("allowEmptySignature") Boolean allowEmptySignature,
         @JsonProperty("requiresReasoningContentOnAssistantMessages")
         Boolean requiresReasoningContentOnAssistantMessages,
-        @JsonProperty("supportsFinishReason") Boolean supportsFinishReason
+        @JsonProperty("supportsFinishReason") Boolean supportsFinishReason,
+        @JsonProperty("forceAdaptiveThinking") Boolean forceAdaptiveThinking
     ) {}
 
     /**

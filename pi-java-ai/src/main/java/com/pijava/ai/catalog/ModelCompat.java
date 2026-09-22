@@ -23,6 +23,9 @@ package com.pijava.ai.catalog;
  *   <tr><td>{@code supportsFinishReason}</td><td>{@code boolean}</td><td>{@code true}</td>
  *       <td>pi 的探测结果是**常量 `true`**（{@code detectCompat:1638}，无任何分支）⇒
  *           {@code explicit ?? true} 塌缩成二态、且方向与第一个标志**相反**</td></tr>
+ *   <tr><td>{@code forceAdaptiveThinking}</td><td>{@code boolean}</td><td>{@code false}</td>
+ *       <td>pi 的判据是 {@code === true}（{@code anthropic-messages.ts:878/1165}）⇒ 二态，
+ *           缺席与 {@code false} 不可区分</td></tr>
  * </table>
  *
  * @param allowEmptySignature pi {@code compat.allowEmptySignature}. When {@code true}, a thinking
@@ -59,10 +62,33 @@ package com.pijava.ai.catalog;
  *        于是「缺席 ≙ {@code true}」被归一在 {@link com.pijava.ai.provider.ModelsJsonConfig} 的
  *        {@code compatOf} 里，读侧永远拿到一个非空的布尔。
  *        反过来，正因为默认是 `true`，**唯一**能放宽严格检查的途径就是用户显式写 {@code false}。</p>
+ * @param forceAdaptiveThinking pi {@code compat.forceAdaptiveThinking}
+ *        ({@code anthropic-messages.ts:878, 1165}): Anthropic 车道的<b>思考形态分流开关</b>
+ *        —— {@code true} 时用 {@code {type:"adaptive", display}} ＋ {@code output_config.effort}
+ *        （由 {@code mapThinkingLevelToEffort} 定 effort）；{@code false} 时用
+ *        {@code {type:"enabled", budget_tokens}}。缺席 ≡ {@code false}
+ *        （pi 的判据是 {@code === true}）⇒ <b>二态</b>。
+ *
+ *        <p>⚠️ 它的值来自 pi 的<b>生成目录数据</b>（{@code generate-models.ts:1039} 的
+ *        {@code isAnthropicAdaptiveThinkingModel}），而那份数据<b>不在仓库里</b>
+ *        （{@code providers/data/} 被 gitignore）⇒ pi-java 的内置目录不会置位它，
+ *        只能由用户经 {@code models.json} 提供（{@code docs/46 §3-D5}）。</p>
  */
 public record ModelCompat(boolean allowEmptySignature,
                           Boolean requiresReasoningContentOnAssistantMessages,
-                          boolean supportsFinishReason) {
+                          boolean supportsFinishReason,
+                          boolean forceAdaptiveThinking) {
+
+    /**
+     * 三参便捷构造（包H5 之前的老形状）—— {@code forceAdaptiveThinking} 缺席 ≙ pi 的
+     * {@code undefined}，而 pi 的判据是 {@code === true} ⇒ 与 {@code false} 同义。
+     */
+    public ModelCompat(boolean allowEmptySignature,
+                       Boolean requiresReasoningContentOnAssistantMessages,
+                       boolean supportsFinishReason) {
+        this(allowEmptySignature, requiresReasoningContentOnAssistantMessages,
+             supportsFinishReason, false);
+    }
 
     /**
      * The default for models that declare nothing.
@@ -71,10 +97,10 @@ public record ModelCompat(boolean allowEmptySignature,
      * 不是「所有标志都关」——{@code supportsFinishReason} 的探测默认值就是开。
      * 写成 {@code false} 会让**每一条**没写 compat 的 models.json 模型静默退回容忍版。</p>
      */
-    public static final ModelCompat NONE = new ModelCompat(false, null, true);
+    public static final ModelCompat NONE = new ModelCompat(false, null, true, false);
 
     /** Flags with {@code allowEmptySignature} set, the rest left to detection. */
     public static ModelCompat of(boolean allowEmptySignature) {
-        return new ModelCompat(allowEmptySignature, null, true);
+        return new ModelCompat(allowEmptySignature, null, true, false);
     }
 }
