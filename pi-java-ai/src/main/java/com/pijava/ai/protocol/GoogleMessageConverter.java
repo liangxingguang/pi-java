@@ -78,7 +78,7 @@ final class GoogleMessageConverter {
                     contents.add(Content.builder().role("user").parts(parts).build());
                 }
                 case Message.AssistantMessage assistant -> {
-                    var parts = assistantParts(assistant);
+                    var parts = assistantParts(assistant, modelId);
                     if (parts.isEmpty()) {
                         continue;                       // pi :279
                     }
@@ -93,13 +93,38 @@ final class GoogleMessageConverter {
     /**
      * 助手消息的块 → Part（pi {@code :228-283}）。
      *
-     * <p>本步（步4）**刻意不动**两处行为，留给步5：空白文本块照旧上线、{@code functionCall.id}
-     * 照旧恒发。这样步4 的红灯只指向「工具结果落错角色」，不会混进别的偏差。</p>
+     * <p>文本与工具调用两条在这里**特判**（各有自己的规则），其余块仍走
+     * {@link #blockParts}（thinking／diff／块级 toolResult 丢块、图片落线）。</p>
      */
-    private static List<Part> assistantParts(Message.AssistantMessage msg) {
+    private static List<Part> assistantParts(Message.AssistantMessage msg, ModelId<?> modelId) {
         var parts = new ArrayList<Part>();
         for (var block : msg.content()) {
-            parts.addAll(blockParts(block));
+            if (block instanceof ContentBlock.TextContent tc) {
+                // pi :240 —— 空白文本块跳过。⚠️「除非它带 textSignature」那半句在 java
+                // **恒为假**（TextContent 没有签名字段，docs/45 D8）⇒ 实现就是「空白就跳」。
+                // ⚠️ 与 pi 的细微差别：pi 的 trim() 会剥掉 U+00A0(NBSP)／U+FEFF 等，
+                // Java 的 isBlank() 不认（Character.isWhitespace 排除它们）⇒ 一个**纯 NBSP**
+                // 的块在 pi 被跳过、在 java 上线（已登记）。
+                if (tc.text().isBlank()) {
+                    continue;
+                }
+                parts.add(Part.fromText(SanitizeUnicode.surrogates(tc.text())));
+            } else if (block instanceof ContentBlock.ToolUseContent tu) {
+                var fc = FunctionCall.builder()
+                        .name(tu.name())
+                        .args(tu.arguments());
+                // pi :271 —— id 受 requiresToolCallId 门控。⚠️ 本包**改掉了**此前「恒发 id」
+                // 的行为（docs/45 D3）：只关门的一侧会造出 pi 里不存在的状态
+                // （functionCall 有 id、functionResponse 没有）。null／空串仍不发
+                // —— 对应 pi 的 `block.id === undefined` 时那个键被 JSON.stringify 略去。
+                if (requiresToolCallId(modelId.modelName())
+                        && tu.id() != null && !tu.id().isEmpty()) {
+                    fc.id(tu.id());
+                }
+                parts.add(Part.builder().functionCall(fc.build()).build());
+            } else {
+                parts.addAll(blockParts(block));
+            }
         }
         return parts;
     }

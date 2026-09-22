@@ -1,23 +1,17 @@
 package com.pijava.ai.protocol;
 
-import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
-import com.pijava.ai.api.ApiOptions;
-import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
-import com.pijava.ai.stream.StreamEvent;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -97,16 +91,16 @@ class GoogleToolResultRoutingTest {
      */
     @Test
     void gemini2KeepsASeparateSyntheticImageTurn() throws Exception {
-        var contents = contentsOf(GEMINI_25, vision(GEMINI_25), mirroredConversation());
+        var contents = GoogleWireBody.contents(vision(GEMINI_25), mirroredConversation());
 
         assertThat(contents).as("pi 夹具钉的是 5 条").hasSize(5);
-        assertThat(parts(contents, 2)).as("合并后的 user 回合全是 functionResponse")
+        assertThat(GoogleWireBody.parts(contents, 2)).as("合并后的 user 回合全是 functionResponse")
             .allSatisfy(p -> assertThat(p.has("functionResponse")).isTrue());
-        assertThat(parts(contents, 2)).hasSize(2);
-        assertThat(parts(contents, 3).get(0).path("text").asText()).isEqualTo("Tool result image:");
-        assertThat(parts(contents, 3).get(1).path("inlineData").path("mimeType").asText())
+        assertThat(GoogleWireBody.parts(contents, 2)).hasSize(2);
+        assertThat(GoogleWireBody.parts(contents, 3).get(0).path("text").asText()).isEqualTo("Tool result image:");
+        assertThat(GoogleWireBody.parts(contents, 3).get(1).path("inlineData").path("mimeType").asText())
             .as("图片回合里是图").isEqualTo(IMAGE_MIME);
-        assertThat(parts(contents, 4).get(0).path("functionResponse").path("name").asText())
+        assertThat(GoogleWireBody.parts(contents, 4).get(0).path("functionResponse").path("name").asText())
             .as("被打断后 b 新起一回合").isEqualTo("read");
     }
 
@@ -118,10 +112,10 @@ class GoogleToolResultRoutingTest {
      */
     @Test
     void gemini3NestsImagesInsideFunctionResponse() throws Exception {
-        var contents = contentsOf(GEMINI_3, vision(GEMINI_3), mirroredConversation());
+        var contents = GoogleWireBody.contents(vision(GEMINI_3), mirroredConversation());
 
         assertThat(contents).as("pi 夹具钉的是 3 条").hasSize(3);
-        var turn = parts(contents, 2);
+        var turn = GoogleWireBody.parts(contents, 2);
         assertThat(turn).hasSize(3);
         var nested = turn.get(1).path("functionResponse").path("parts");
         assertThat(nested.isArray()).as("内嵌 parts 在场").isTrue();
@@ -134,12 +128,12 @@ class GoogleToolResultRoutingTest {
     /** 工具结果落成 **user** 回合的 {@code functionResponse}（不是 model 轮的文本）。 */
     @Test
     void toolResultBecomesAUserFunctionResponse() throws Exception {
-        var contents = contentsOf(GEMINI_25, vision(GEMINI_25),
+        var contents = GoogleWireBody.contents(vision(GEMINI_25),
             List.of(toolResult("call_a", text("file-a.txt"))));
 
         assertThat(contents).hasSize(1);
         assertThat(contents.get(0).path("role").asText()).isEqualTo("user");
-        var fn = parts(contents, 0).get(0).path("functionResponse");
+        var fn = GoogleWireBody.parts(contents, 0).get(0).path("functionResponse");
         assertThat(fn.path("name").asText()).as("name 是**工具名**").isEqualTo("read");
         assertThat(fn.path("response").path("output").asText()).isEqualTo("file-a.txt");
     }
@@ -147,10 +141,10 @@ class GoogleToolResultRoutingTest {
     /** {@code isError} ⇒ 键换成 {@code error}（pi {@code :314}）。 */
     @Test
     void failedToolResultUsesTheErrorKey() throws Exception {
-        var contents = contentsOf(GEMINI_25, vision(GEMINI_25),
+        var contents = GoogleWireBody.contents(vision(GEMINI_25),
             List.of(new Message.ToolResultMessage("call_a", "read", text("boom"), true)));
 
-        var response = parts(contents, 0).get(0).path("functionResponse").path("response");
+        var response = GoogleWireBody.parts(contents, 0).get(0).path("functionResponse").path("response");
         assertThat(response.has("error")).as("错误走 error 键").isTrue();
         assertThat(response.has("output")).as("不是 output 键").isFalse();
         assertThat(response.path("error").asText()).isEqualTo("boom");
@@ -161,32 +155,32 @@ class GoogleToolResultRoutingTest {
     /** 无文本、无图 ⇒ 空串（**不是**缺席 —— 键在场、值为 ""）。 */
     @Test
     void emptyToolResultYieldsAnEmptyResponseValue() throws Exception {
-        var contents = contentsOf(GEMINI_25, vision(GEMINI_25),
+        var contents = GoogleWireBody.contents(vision(GEMINI_25),
             List.of(toolResult("call_a", List.of())));
 
-        var response = parts(contents, 0).get(0).path("functionResponse").path("response");
+        var response = GoogleWireBody.parts(contents, 0).get(0).path("functionResponse").path("response");
         assertThat(response.path("output").asText()).isEmpty();
     }
 
     /** 无文本、**有图**且图片不内嵌（gemini-2.5）⇒ {@code "(see attached image)"}。 */
     @Test
     void imageOnlyToolResultYieldsTheAttachedImagePlaceholder() throws Exception {
-        var contents = contentsOf(GEMINI_25, vision(GEMINI_25),
+        var contents = GoogleWireBody.contents(vision(GEMINI_25),
             List.of(toolResult("call_a", List.of(new ContentBlock.ImageContent(IMAGE_MIME, IMAGE_B64)))));
 
-        assertThat(parts(contents, 0).get(0).path("functionResponse").path("response").path("output").asText())
+        assertThat(GoogleWireBody.parts(contents, 0).get(0).path("functionResponse").path("response").path("output").asText())
             .isEqualTo("(see attached image)");
     }
 
     /** 多个文本块 ⇒ {@code join("\n")}（pi {@code :287}）。 */
     @Test
     void multipleTextBlocksAreJoinedWithNewlines() throws Exception {
-        var contents = contentsOf(GEMINI_25, vision(GEMINI_25),
+        var contents = GoogleWireBody.contents(vision(GEMINI_25),
             List.of(toolResult("call_a", List.of(
                 new ContentBlock.TextContent("first"),
                 new ContentBlock.TextContent("second")))));
 
-        assertThat(parts(contents, 0).get(0).path("functionResponse").path("response").path("output").asText())
+        assertThat(GoogleWireBody.parts(contents, 0).get(0).path("functionResponse").path("response").path("output").asText())
             .isEqualTo("first\nsecond");
     }
 
@@ -195,10 +189,10 @@ class GoogleToolResultRoutingTest {
     /** gemini-2.5 ⇒ {@code functionResponse} **不带** {@code id}（{@code requiresToolCallId} 假）。 */
     @Test
     void gemini2OmitsFunctionResponseId() throws Exception {
-        var contents = contentsOf(GEMINI_25, vision(GEMINI_25),
+        var contents = GoogleWireBody.contents(vision(GEMINI_25),
             List.of(toolResult("call_a", text("alpha"))));
 
-        var fn = parts(contents, 0).get(0).path("functionResponse");
+        var fn = GoogleWireBody.parts(contents, 0).get(0).path("functionResponse");
         // ⚠️ 先钉「确实是个 functionResponse」——否则下面那条缺席断言在**修复前**
         // 也恒绿（老实现发的是 {"text":…}，压根没有 functionResponse 可谈 id）。
         assertThat(fn.path("name").asText()).isEqualTo("read");
@@ -208,10 +202,10 @@ class GoogleToolResultRoutingTest {
     /** gemini-3 ⇒ 带 {@code id}，取值是 {@code toolUseId}（pi {@code :316}）。 */
     @Test
     void gemini3IncludesFunctionResponseId() throws Exception {
-        var contents = contentsOf(GEMINI_3, vision(GEMINI_3),
+        var contents = GoogleWireBody.contents(vision(GEMINI_3),
             List.of(toolResult("call_a", text("alpha"))));
 
-        assertThat(parts(contents, 0).get(0).path("functionResponse").path("id").asText())
+        assertThat(GoogleWireBody.parts(contents, 0).get(0).path("functionResponse").path("id").asText())
             .isEqualTo("call_a");
     }
 
@@ -226,44 +220,11 @@ class GoogleToolResultRoutingTest {
      */
     @Test
     void nonVisionModelSeesTheGatePlaceholderInsteadOfAnImage() throws Exception {
-        var contents = contentsOf(GEMINI_25, textOnly(GEMINI_25),
+        var contents = GoogleWireBody.contents(textOnly(GEMINI_25),
             List.of(toolResult("call_a", List.of(new ContentBlock.ImageContent(IMAGE_MIME, IMAGE_B64)))));
 
         assertThat(contents).as("闸换掉了图 ⇒ 无独立图片回合").hasSize(1);
-        assertThat(parts(contents, 0).get(0).path("functionResponse").path("response").path("output").asText())
+        assertThat(GoogleWireBody.parts(contents, 0).get(0).path("functionResponse").path("response").path("output").asText())
             .isEqualTo("(tool image omitted: model does not support images)");
-    }
-
-    // ── 脚手架 ──────────────────────────────────────────────────────────
-
-    private static final ObjectMapper MAPPER = new ObjectMapper();
-
-    /** 真出站请求体的 {@code contents} 数组。 */
-    private static List<JsonNode> contentsOf(ModelId<?> id, ModelInfo model,
-                                             List<Message> messages) throws Exception {
-        try (var server = new RecordingHttpServer()) {
-            var api = new GoogleGenerativeAiApi(
-                new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()));
-            var request = new StreamRequest(model, null, messages, List.of(), -1, -1, Map.of());
-            try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {
-                var events = new ArrayList<StreamEvent>();
-                while (iter.hasNext() && events.size() < 100) {
-                    events.add(iter.next());
-                }
-            } catch (Exception ignored) {
-                // 桩回 400，请求体已录到
-            }
-            var root = MAPPER.readTree(server.body());
-            assertThat(root.has("contents")).as("请求体里有 contents（线格：" + server.body() + "）").isTrue();
-            var contents = new ArrayList<JsonNode>();
-            root.path("contents").forEach(contents::add);
-            return contents;
-        }
-    }
-
-    private static List<JsonNode> parts(List<JsonNode> contents, int index) {
-        var parts = new ArrayList<JsonNode>();
-        contents.get(index).path("parts").forEach(parts::add);
-        return parts;
     }
 }
