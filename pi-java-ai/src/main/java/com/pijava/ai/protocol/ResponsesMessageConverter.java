@@ -11,10 +11,13 @@ import com.openai.models.ReasoningEffort;
 import com.openai.models.responses.EasyInputMessage;
 import com.openai.models.responses.FunctionTool;
 import com.openai.models.responses.ResponseCreateParams;
+import com.openai.models.responses.ResponseFunctionCallOutputItem;
 import com.openai.models.responses.ResponseInputContent;
 import com.openai.models.responses.ResponseInputImage;
+import com.openai.models.responses.ResponseInputImageContent;
 import com.openai.models.responses.ResponseInputItem;
 import com.openai.models.responses.ResponseInputText;
+import com.openai.models.responses.ResponseInputTextContent;
 import com.openai.models.responses.ResponseOutputMessage;
 import com.openai.models.responses.ResponseOutputText;
 import com.openai.models.responses.ResponseFunctionToolCall;
@@ -22,6 +25,7 @@ import com.openai.models.responses.Tool;
 
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.TransformMessages;
+import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.thinking.ThinkingLevel;
@@ -122,14 +126,10 @@ final class ResponsesMessageConverter {
             } else if (msg instanceof Message.AssistantMessage assistant) {
                 addAssistantItems(items, assistant, msgIndex);
             } else if (msg instanceof Message.ToolResultMessage tool) {
-                var text = extractText(tool.content());
                 items.add(ResponseInputItem.ofFunctionCallOutput(
                     ResponseInputItem.FunctionCallOutput.builder()
                         .callId(tool.toolUseId())
-                        // pi :92/:97 —— 净化的是**选中之后**的串（含占位串；占位串是纯 ASCII，
-                        // 净化是恒等变换，口径与 pi 一致）。
-                        .output(ResponseInputItem.FunctionCallOutput.Output.ofString(
-                            SanitizeUnicode.surrogates(text.isEmpty() ? "(no tool output)" : text)))
+                        .output(convertToolResultOutput(request.model(), tool.content()))
                         .build()));
             }
             // pi 在循环体末尾自增（openai-responses-shared.ts:349），且**每种角色**都算一个
@@ -139,8 +139,77 @@ final class ResponsesMessageConverter {
         return items;
     }
 
-    private static ResponseInputItem inputMessage(EasyInputMessage.Role role, String text) {
-        return ResponseInputItem.ofEasyInputMessage(EasyInputMessage.builder()
+    /**
+     * 工具结果的 output 落线 —— pi {@code openai-responses-shared.ts:78-110} 的
+     * {@code convertToolResultOutput}，逐分支对照：
+     *
+     * <pre>
+     * 无图片 **或** 模型不支持图片 ⇒ 返回**字符串**
+     *     hasText ? text : images&gt;0 ? "(see attached image)" : "(no tool output)"   // :91-93
+     * 否则返回**块数组**：hasText 时先推 input_text，再逐个推 input_image(detail:"auto")  // :95-107
+     * </pre>
+     *
+     * <p>⚠️ 两处与 Anthropic 的 toolResult **刻意不同**（{@code docs/44 D3}）：
+     * ① {@code hasText} 为假时**不**推文本项（Anthropic 会补 {@code "(see attached image)"} 块）；
+     * ② 净化发生在**join 之后**（{@code :86-88} 先 join("\n") 再净化）。</p>
+     *
+     * <p>⚠️ 能力门与 {@code "(see attached image)"} 分支在 pi 与 java **两侧都不可达** ——
+     * 共享闸已按同一个 model 把非视觉模型的图片换成了文本块（{@code docs/44 §9}）。照抄保留。</p>
+     */
+    private static ResponseInputItem.FunctionCallOutput.Output convertToolResultOutput(
+            ModelInfo model, List<ContentBlock> content) {
+        // pi :86-89 —— 文本块 join("\n")；图片单独收集。
+        var text = content.stream()
+                .filter(ContentBlock.TextContent.class::isInstance)
+                .map(b -> ((ContentBlock.TextContent) b).text())
+                .collect(java.util.stream.Collectors.joining("\n"));
+        var images = content.stream()
+                .filter(ResponsesMessageConverter::isImageBlock)
+                .toList();
+        boolean hasText = !text.isEmpty();
+
+        if (images.isEmpty() || !model.supportsImageInput()) {
+            // pi :92/:97 —— 净化的是**选中之后**的串（含占位串；占位串是纯 ASCII，
+            // 净化是恒等变换，口径与 pi 一致）。
+            return ResponseInputItem.FunctionCallOutput.Output.ofString(SanitizeUnicode.surrogates(
+                hasText ? text : !images.isEmpty() ? "(see attached image)" : "(no tool output)"));
+        }
+
+        var output = new ArrayList<ResponseFunctionCallOutputItem>(images.size() + 1);
+        if (hasText) {
+            output.add(ResponseFunctionCallOutputItem.ofInputText(
+                ResponseInputTextContent.builder()
+                    .text(SanitizeUnicode.surrogates(text))
+                    .build()));
+        }
+        for (var block : images) {
+            output.add(ResponseFunctionCallOutputItem.ofInputImage(
+                ResponseInputImageContent.builder()
+                    .detail(ResponseInputImageContent.Detail.AUTO)
+                    .imageUrl(imageUrl(block))
+                    .build()));
+        }
+        return ResponseInputItem.FunctionCallOutput.Output.ofResponseFunctionCallOutputItemList(output);
+    }
+
+    /**
+     * pi 的图片判据是 {@code type === "image"}；java 的 URL 图片同等对待并**原样**下发
+     * （{@code docs/44 D4 选项 A}；{@code toUserItem} 里早就是这个口径）。
+     */
+    private static boolean isImageBlock(ContentBlock block) {
+        return block instanceof ContentBlock.ImageContent
+                || block instanceof ContentBlock.UrlImageContent;
+    }
+
+    private static String imageUrl(ContentBlock block) {
+        if (block instanceof ContentBlock.UrlImageContent url) {
+            return url.url();
+        }
+        var img = (ContentBlock.ImageContent) block;
+        return "data:" + img.mediaType() + ";base64," + img.data();
+    }
+
+    private static ResponseInputItem inputMessage(EasyInputMessage.Role role, String text) {        return ResponseInputItem.ofEasyInputMessage(EasyInputMessage.builder()
             .role(role)
             .content(EasyInputMessage.Content.ofTextInput(text))
             .build());
