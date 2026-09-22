@@ -1,6 +1,7 @@
 # 46 - 包H5：扩展思考打通（B15）
 
-> 状态：**设计待审**（2026-09-23）。本文档只落设计，不含实现。
+> 状态：**已实施**（2026-09-23，八步八提交 `2d229c9`..`b75450f`；见 §9 裁决与执行、
+> §10 实测校正、§11 实施记录）。
 > 上游：`docs/41 §7.2` 第一梯队 H5（「B15 扩展思考打通」）；`docs/32` 台账 **B15**；
 > `docs/31 §8.34.4 决策 5`（投送链，已由包② 落地）。
 > pi 锚点：`3390bd936`。**一切 pi 取证走 `git show 3390bd936:<path>`，不读工作树。**
@@ -454,6 +455,7 @@ record ThinkingLevelMapDef(Map<String, String> levels) {}   // 值 null ⇒ 显�
 | **B15-残留-6** | `CatalogModel` 的 `thinkingLevelMap` 是否需要 JSON 嵌套 schema（当前 DTO 是扁平 9 列） |
 | **B15-残留-7** | **其余 beta 头**未移植：pi 的 Anthropic 车道另有 5 个常量（`FINE_GRAINED_TOOL_STREAMING_BETA`／`SERVER_SIDE_FALLBACK_BETA`／`MID_CONVERSATION_OUTPUT_CONFIG_BETA`／`THINKING_BINDING_CONTROLS_BETA`／OAuth 两枚），pi-java **零 beta 头**；本包只落 interleaved 一枚（P25） |
 | **B15-残留-8** | `providerThinkingLevel`（P27）随 `supportsMidConvoEffort` 一起不做 ⇒ `AssistantMessage.providerThinkingLevel` 仍无生产者（与 `docs/41 §1.3` 那条合并登记） |
+| **B15-残留-9** | ⚠️ **`ModelThinkingLevels.supported` / `.clamp` 零生产调用者**（实测 grep `*/src/main`）—— 步2 逐字移植并钉了语义，但**没有任何生产路径调它**：`RpcDispatcher.availableThinkingLevels` 仍用 `ThinkingLevel.ordered()`，车道侧也不夹取。pi 的 `clampThinkingLevel` 在 8 条车道 ＋ `setThinkingLevel` 共 9 处被调（P18/P19）⇒ **接线是下一包的事**。这不是缺陷，是**范围裁决的直接后果**（D2：只做 Anthropic），如实登记 |
 
 ---
 
@@ -543,3 +545,89 @@ record ThinkingLevelMapDef(Map<String, String> levels) {}   // 值 null ⇒ 显�
 | 2 | `ThinkingConfig` 改四组件后，`PayloadRecordingStreamFn:112-113` 读 `enabled()` 的那处怎么改 | 读源码 |
 | 3 | `extra` 通道删掉 `thinking.budgetTokens` 后，`ApiOptions.extra()` 是否还有别的键 | grep |
 | 4 | `anthropic-java-core` 的 `JsonValue.from(Map)` 能否承载 `block_binding` 嵌套（若裁决④选硬写） | 序列化探针 |
+
+---
+
+## 9. 裁决与执行
+
+**2026-09-23 用户裁决：七点建议全部采纳**（「按七点建议全部实施」）。逐条落点：
+
+| # | 裁决 | 落点 |
+|---|---|---|
+| ① | **照 pi 重塑 `ThinkingLevelMap`** | 步1（`2d229c9`） |
+| ② | **只做 Anthropic 车道 ＋ 共享机制** | 步2–6 |
+| ③ | `clampMaxTokensToContext` **不做、登记偏差** | 步5（登记见 §7-1） |
+| ④ | `supportsMidConvoEffort` **不做、登记** | 步5（登记见 §7-2） |
+| ⑤ | 数据面 **schema 开键 ＋ 内置目录不编** | 步7（`078f3b6`） |
+| ⑥ | 入口三件 **一并做** | 步8（`b75450f`） |
+| ⑦ | 温度抑制 ＋ interleaved beta **一并做** | 步6（`32eee5f`） |
+
+**八个提交**（`docs/46` 设计为 `706c8ab`）：
+
+| 步 | 提交 | 内容 |
+|---|---|---|
+| 1 | `2d229c9` | 形状重塑（`ThinkingLevel` ＋Max／`ThinkingLevelMap` 改三态／删 `ThinkingConfig`／`ThinkingBudgets` 新增／投送链改带未翻译的 `reasoning`） |
+| 2 | `f79b0c9` | `ModelThinkingLevels.supported` / `.clamp`（pi `models.ts:922-955`） |
+| 3 | `034eed6` | `ThinkingBudgets.budgetFor` / `.adjust`（pi `simple-options.ts:55-94`） |
+| 4 | `5aee543` | `AnthropicThinking.mapLevelToEffort`（pi `:838-856`） |
+| 5 | `3c7e448` | Anthropic 思考**三分支**接线（**端到端红转绿**）＋ `ModelCompat.forceAdaptiveThinking` |
+| 6 | `32eee5f` | 温度抑制 ＋ interleaved-thinking beta |
+| 7 | `078f3b6` | 数据面（`ModelsJsonSchema` 开键 ＋ `CatalogModel` 补字段） |
+| 8 | `b75450f` | 入口三件（`defaultThinkingLevel` 接线 ／ `ThinkingLevelChanged` 生产者 ／ `parse("max")`） |
+
+---
+
+## 10. 实施中的实测校正（相对本设计正文）
+
+1. **`ThinkingConfig` 是删除、不是「保留但改职」**（修正 §3-D1）。设计说保留它当「车道请求选项」的载体；
+   实测更干净的做法是**直接删** —— pi 根本没有这个类型，车道按 `compat` 旗标现算即可，
+   而「车道选项」在 pi 上是 `AnthropicOptions` 的四个散字段、不是对象。删除后
+   `StreamOptions` 携带**未翻译的 `reasoning`**，与 pi 的 `SimpleStreamOptions` 同形。
+2. **`thinkingBudgets` 没进传输**（修正 §4 的 `StreamRequest` 签名）。设计给它加了第 9 个组件；
+   实测 **pi 的 harness 路径本来就不转发它**（P30：`AgentHarnessStreamOptions` 没有该字段），
+   故 `StreamOptions` / `StreamRequest` 都不带，车道用 `ThinkingBudgets.DEFAULT`。
+3. **`ModelThinkingLevels` 落在 `catalog` 包、不在 `thinking`**。设计把它与 `thinking/` 的类型并列；
+   实测放进 `thinking` 会与 `ModelInfo → ThinkingLevelMap` 形成**包级环**，而 pi 的这两个函数
+   本来就住在 `models.ts`（模型目录模块）⇒ `com.pijava.ai.catalog.ModelThinkingLevels`。
+4. **线格那道 min 与 `adjust` 内那道收缩是两道**（设计只写了后者）。pi 的
+   `streamSimple:899` 还有一次 `Math.min(budget, max(0, maxTokens - 1024))`；
+   两者之间存在**只有后者咬**的区间（`maxTokens-1024 < budget <= maxTokens`）⇒ 专门加了
+   用例 `wireRoomCapBitesWhereAdjustDidNot` 钉住。
+5. **`betas` 只在 beta 服务的 params 上**（SDK 实测）。`anthropic-java-core:2.52.0` 里
+   `betas` 是 `models.beta.messages.MessageCreateParams` 的组件（类型 `List<AnthropicBeta>`），
+   **非 beta 的 `MessageCreateParams` 没有它**；`AnthropicBeta.INTERLEAVED_THINKING_2025_05_14`
+   存在但只能配 beta 服务。改用 `putAdditionalBodyProperty("betas", …)` 注入 body 字段，
+   产出**与 pi 同形**的线格（用 `anthropic-beta` 头会换形状）。
+6. **`AgentSessionEvent.ThinkingLevelChanged` 的组件类型改了**（设计只说「补生产者」）。
+   pi 的载荷可以是 `"off"`，而 `ThinkingLevel` **表达不了 off** ⇒ 组件改 `ModelThinkingLevel`，
+   线格式改由 `JsonEventMapper` 写 `label()`。旧写法 `valueToTree(sealed record)` 产出的形状
+   **从未被验证过**（该事件此前零生产者）。
+7. **不带 `-am` 的假红**（两次踩到）：单模块 `-pl pi-java-coding-agent test` 会解析本地仓库
+   （`D:\repository`）里的**旧** `pi-java-ai` 构件 ⇒ 编译错误或断言失败，且**探针 runner 同样中招**
+   （第一次跑 P5 探针时静默无输出）。**凡跨模块的验证与探针，一律带 `-am`。**
+8. **夹具期望值错三次**（步5）：`adjust` 的 `<=` 收缩与线格二次 `min` 会让「按直觉写的期望」
+   偏小 —— 实现是对的、夹具错了。教训：**断言预算值前先把两道 min 算清**。
+
+---
+
+## 11. 实施记录（逐步：先红 → 实现 → 变异探针 → 回归）
+
+| 步 | 先红 | 变异探针（红集） | 回归 |
+|---|---|---|---|
+| 1 | ⚠️ **无先红** —— 新类型在旧代码上不存在（红只能是编译错误），而实现先于夹具完成 ⇒ 属 `docs/31 §8.34.11-(6)` 的「夹具写在实现之后」形态 | 6 条全中：P1 `explicitlyUnsupported` 丢一半→2／P2 `supportsExplicitOff` 恒真→1／P3 `extended()` 丢 off→1／P4 `ordered()` 丢 Max→2／P5 `parse("max")`→XHigh→1／P6 无防御拷贝→1 | ai 684（671＋14−1）· agent-core 478（489−14＋3）· coding-agent 266 · web 48 |
+| 2 | **7 红 / 9**（桩返回 `[off]`） | 5 条全中：P1 clamp 先向下→1／P2 opt-in 去掉→3／P3 显式不支持去掉→4／P4 空表兜底去掉→1 error／P5 reasoning 门去掉→2 | ai 693 |
+| 3 | **10 红 / 10**（桩返回 0） | 5 条全中（各恰 1 红）：max(0,…)／`<=`→`<`／base 缺席也加／XHigh·Max 自成一档／pick 反向 | ai 703 |
+| 4 | **4 红 / 6** | 4 条全中：判据改 `hasEntry`→1 error／minimal 不走 low→1／XHigh·Max 自成一档→1／medium 落 high→2 | ai 709 |
+| 5 | **9 红 / 12**（8 条 `thinking()` 为空 = 缺陷本身；1 条 max_tokens 未涨） | 5 条全中：总是发 disabled→1／去掉 adaptive→2 红 2 error／去掉 `\|\| 1024`→1／去掉线格 min→1／去掉能力门→1（⚠️ 首次零红是**探针工具**没改到文件，换 Edit 后命中） | ai 723 · agent-core 478 · coding-agent 266 · web 48 |
+| 6 | **3 红 / 7**（4 条「不发」用例缺陷态恒真） | 4 条全中（各恰 1 红）：温度门／beta 的 reasoning 门／beta 的 adaptive 取反／beta 的能力门 | ai 730 |
+| 7 | **4 红 / 6** | 4 条全中：DTO 恒丢弃→2／空值写空串→2 | ai 740 |
+| 8 | **2 红 / 5**（① ②）＋ **1 红**（③，就地改期望） | 4 条全中（各恰 1 红）：全局默认档／不发事件／去掉 isChanging 门／`parse("max")` | ai 740 · agent-core 478 · coding-agent 271 · web 48 |
+
+**最终全量**：`ai` **740** · `agent-core` **478** · `coding-agent` **271** · `web` **48** ·
+**L5 ConformanceTest 15/15** · checkstyle **0 违规** · 触及主源码无 `System.out` ·
+`AnthropicThinking` 169 行 ／ `ModelThinkingLevels` 95 行（均 ≤ 500）。
+
+**一处如实登记的空过**：步5 初版的 `explicitNullOffSuppressesTheDisabledParam` 是
+「缺席断言在缺陷态恒真」（包B84 的同型陷阱）⇒ 已补**前提断言**（同一模型开 reasoning 时**会发**
+thinking）。步6 的 4 条「不发」用例在缺陷态同样恒真，但它们**与同文件的「会发」用例成对**
+（只差一个条件），故有牙 —— 变异探针各 1 红即证。

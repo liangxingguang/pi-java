@@ -115,7 +115,7 @@ constrained sampling / grammar · `transport` 选择 · `session-resources` 清�
 | ~~`Usage` 的 `cacheRead`/`cacheWrite`/`cacheWrite1h`/`reasoning` **四分量零生产者**~~ | ✅ **H1 步 2–5 已救活**（B56）。原状态：`emitUsage` 只收 input/output ⇒ 生产恒 0/null |
 | ~~`Usage.Cost` 恒零~~ | ✅ **H1 步 1＋各车道挂价已救活**（B57）。原状态：成本累加恒 0 |
 | `StreamEvent.UsageInfo.from(...)` 零调用者 | **H1 步 7 时核对**（`docs/42 §10.1` A4）：加宽管线走的是 `emitUsage(Usage)`，这个静态工厂仍是死码；不删（R5 面），登记 |
-| **`ThinkingLevelMap` 非空实例生产不可构造** | 生产构造点全部 `empty()` ⇒ `forLevel` 恒 `OFF` ⇒ 请求里**永无 `thinking.budgetTokens`**（**B15 剩的这半边**） |
+| ~~**`ThinkingLevelMap` 非空实例生产不可构造**~~ | ✅ **包H5 已救活**（`docs/46`，2026-09-23）—— 且**不止是接线**：形状也重塑了。原状态：生产构造点全部 `empty()` ⇒ `forLevel` 恒 `OFF` ⇒ 请求里**永无 `thinking.budgetTokens`**。⚠️ **新残留**：`ModelThinkingLevels.supported/clamp` 零生产调用者（`docs/46 §7 B15-残留-9`） |
 | **`RetryPolicy` 五个预设零调用者** | 包 A0 步6 的发现（J5）：`anthropic()`/`openai()`/`google()`/`mistral()`/`deepseek()` 五预设**零调用者**，`PiHttpClient` 走 `defaultPolicy()`（`{408,409,429}` ∪ 任意 5xx；`Retry-After` 只读 429/503）。是否接线属 `x-should-retry`／传输重试那包的范围（A6） |
 | `StreamSimple` | 主源码零调用（**别当接缝**） |
 | `DeferredHandle` | 零生产者（两侧同状） |
@@ -658,7 +658,7 @@ JSONL `nextSeq` 高水位字段 ·
 | ~~**B84**~~ | `ai` | ✅ **已闭环**（2026-09-23，六提交 `efedec4`(设计) `a22ccca` `f77dfb4` `2b46773` `b1bf735` `4890057` ＋ 台账，设计/记录 `docs/45`）—— Google 车道**三分支重写** ＋ 工具结果整块移植（`functionResponse` 全形／合并进同一 user 回合／gemini<3 独立图片回合／gemini3+ 内嵌 `parts`／`id` 门）＋ **`google-genai` 1.15.0⇒1.72.0**（1.15.0 写不出内嵌 `parts`）＋ 空白助手文本块跳过 ＋ 拆 `GoogleMessageConverter`。ai 643⇒**671** | **硬故障**：Gemini 的多轮工具调用此前是坏的（工具结果落成 model 轮纯文本，模型看不到对应关系） |
 | **H3** | `coding-agent` | **上下文文件发现**（`AGENTS.md`/`CLAUDE.md` ＋ `--no-context-files` 联动） | **每次会话都走**，现在**静默失效**；同时救活一个死 flag |
 | **H4** | `coding-agent` | **扩展钩子桥接**（暴露 `hookSystem()`） | 8 个引擎钩子**已经在 `HookSystem` 里** ⇒ 这是**接线不是新建**，最省的一包 |
-| **H5** | `ai` ＋ `agent-core` | **B15 扩展思考打通**（与 B8 共用载体 ⇒ 一次投送修复） | 把死功能救活；改一行 ＋ 生产侧构造 |
+| ~~**H5**~~ | `ai` ＋ `agent-core` | ✅ **已闭环**（2026-09-23，八提交 `2d229c9`..`b75450f`，设计/记录 `docs/46`）—— 范围**比原估的大**：实测 java 的 `ThinkingLevelMap` 形状本身是 Phase 2a 的**发明**（pi 一直是 `Partial<Record<ModelThinkingLevel, string\|null>>`，`80f06d363` 起从未变过）⇒ 先重塑形状（删发明类型 `ThinkingConfig`、`ThinkingLevel` 补 `Max`），再做 `supported`/`clamp`、预算纯函数、`mapLevelToEffort`、Anthropic **三分支**（adaptive／enabled／disabled）、温度抑制 ＋ interleaved beta、数据面（models.json 开键 ＋ 目录 DTO 补字段）、入口三件。ai 671⇒**740** | 原估「改一行 ＋ 生产侧构造」**不成立**：形状不对，光接线接不上 |
 | **H6** | `session` | **JSONL v4 双向不可读**（B60/B61 同包） | **性价比最高**（每点 0.39pp）；**硬故障**：换机/换工具会话读不出来 |
 
 **第二梯队 —— 接线与死功能（投入小、可见性高）**
