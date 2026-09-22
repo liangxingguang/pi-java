@@ -423,7 +423,8 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         // 共享预通道必须先于本车道的映射跑（pi openai-completions.ts:1212 在
         // convertMessages 之前调 transformMessages）：跨模型重放的带签名 thinking 块
         // 在此降级为文本，本车道才看得见那段文本。
-        var messages = TransformMessages.apply(request.messages(), request.modelId(), apiName);
+        var messages = TransformMessages.apply(request.messages(), request.modelId(), apiName,
+                request.model());
 
         for (var msg : messages) {
             if (msg instanceof Message.UserMessage) {

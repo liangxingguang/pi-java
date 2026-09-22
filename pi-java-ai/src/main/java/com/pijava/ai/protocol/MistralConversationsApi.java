@@ -299,7 +299,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
         // 共享预通道先于本车道的映射跑（pi mistral-conversations.ts:139 在消息转换前调
         // transformMessages）—— 本车道的 extractText 只收 TextContent，
         // 不过闸则跨模型重放的 thinking 文本无声消失。
-        TransformMessages.apply(request.messages(), request.modelId(), apiName())
+        TransformMessages.apply(request.messages(), request.modelId(), apiName(), request.model())
             .stream().<Map<String, Object>>map(msg -> {
             var m = new HashMap<String, Object>();
             switch (msg) {

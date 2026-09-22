@@ -411,7 +411,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         // pi anthropic-messages.ts:1029 —— 共享预通道跑在**适配器之外**，
         // 在消息进入落线逻辑之前决定哪些块活下来（docs/31 §8.34.4 决策 1）。
         var messages = TransformMessages.apply(
-                request.messages(), request.modelId(), apiName());
+                request.messages(), request.modelId(), apiName(), request.model());
         // pi anthropic-messages.ts:193 `model.compat?.allowEmptySignature ?? false` ——
         // 经 StreamRequest 带到 :1047 的形参、再落到 :1304 的唯一行为点（决策 5 投送）。
         // 缺席与 false 同义（pi 的 `?? false` 是二态，不是三态）。

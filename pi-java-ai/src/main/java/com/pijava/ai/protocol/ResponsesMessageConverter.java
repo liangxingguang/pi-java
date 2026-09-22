@@ -113,7 +113,8 @@ final class ResponsesMessageConverter {
         // 共享预通道先于本车道的映射跑（pi openai-responses-shared.ts:172 在消息转换前调
         // transformMessages）—— 跨模型重放的 thinking 块在此降级为文本，否则本车道的
         // addAssistantItems 会把它连块带文本一起丢（见那里的注释）。
-        var messages = TransformMessages.apply(request.messages(), request.modelId(), apiName);
+        var messages = TransformMessages.apply(request.messages(), request.modelId(), apiName,
+                request.model());
         var msgIndex = 0;
         for (var msg : messages) {
             if (msg instanceof Message.UserMessage user) {

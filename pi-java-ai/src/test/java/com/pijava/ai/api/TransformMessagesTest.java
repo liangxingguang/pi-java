@@ -3,6 +3,7 @@ package com.pijava.ai.api;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
@@ -36,6 +37,16 @@ class TransformMessagesTest {
     private static final ModelId<?> TARGET = ModelId.of("anthropic", "claude-sonnet-5");
     private static final String API = "anthropic-messages";
 
+    /**
+     * 闸的第四形参（包 H2 新增）—— 本文件全部用例都喂**视觉模型**，让图片闸恒不触发：
+     * 这里钉的是 thinking 五分支，不是图片降级（那组在 {@code TransformMessagesImageDowngradeTest}）。
+     */
+    private static final ModelInfo VISION_TARGET = new ModelInfo(
+        TARGET, "Claude Sonnet 5",
+        java.util.Set.of(com.pijava.ai.model.ModelCapability.TEXT,
+            com.pijava.ai.model.ModelCapability.IMAGE_INPUT),
+        200_000, 8_192, false, com.pijava.ai.model.PricingInfo.UNKNOWN);
+
     private static Message.AssistantMessage sameModel(ContentBlock... blocks) {
         return new Message.AssistantMessage(List.of(blocks), "stop", null,
             API, TARGET.provider(), TARGET.modelName(), null, null, null, null);
@@ -47,7 +58,7 @@ class TransformMessagesTest {
     }
 
     private static List<Message> applied(List<Message> messages) {
-        return TransformMessages.apply(messages, TARGET, API);
+        return TransformMessages.apply(messages, TARGET, API, VISION_TARGET);
     }
 
     /** 只取第一条消息的内容块，压成 {@code 类型:载荷} —— 与线格夹具同一套词汇。 */
