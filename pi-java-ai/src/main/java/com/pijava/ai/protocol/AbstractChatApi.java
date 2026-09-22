@@ -8,6 +8,7 @@ import java.util.concurrent.SubmissionPublisher;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.pijava.ai.api.ApiOptions;
+import com.pijava.ai.api.AuthKind;
 import com.pijava.ai.api.ChatApi;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.api.StreamRequest;
@@ -248,18 +249,40 @@ public abstract class AbstractChatApi implements ChatApi {
      * 占位 key（P6-1 显式子任务），不抛异常。</p>
      */
     protected static String resolveApiKey(ApiOptions options, String envVar) {
+        return resolveAuth(options, envVar).value();
+    }
+
+    /**
+     * 解析凭证的**值 ＋ 形态**（包 A0 步7，{@code docs/43 D5}）。
+     *
+     * <p>形态只可能来自 {@code options}（由凭证解析层 {@code auth.Credentials} 定下）；
+     * 从**环境变量**回落来的值一律是 {@link AuthKind#API_KEY} —— 那条回落路径读的是
+     * {@code <PROVIDER>_API_KEY}，不是 token 变量。</p>
+     *
+     * @param options 请求选项（{@code apiKey} ＋ {@code authKind}）
+     * @param envVar  API key 环境变量名；空/缺席 ⇒ 本地无鉴权 provider（占位 {@code "local"}）
+     */
+    protected static ResolvedAuth resolveAuth(ApiOptions options, String envVar) {
         if (options.apiKey() != null && !options.apiKey().isBlank()) {
-            return options.apiKey();
+            return new ResolvedAuth(options.authKind(), options.apiKey());
         }
         if (envVar != null && !envVar.isBlank()) {
             var env = System.getenv(envVar);
             if (env != null && !env.isBlank()) {
-                return env;
+                return new ResolvedAuth(AuthKind.API_KEY, env);
             }
         }
         if (envVar == null || envVar.isBlank()) {
-            return "local";
+            return new ResolvedAuth(AuthKind.API_KEY, "local");
         }
         throw new IllegalStateException("No API key. Set " + envVar + " or pass apiKey.");
     }
+
+    /**
+     * 解析结果：凭证值 ＋ 它在线上该走的形态。
+     *
+     * @param kind  凭证形态（{@code x-api-key} ／ {@code Authorization: Bearer} ／ OAuth＋身份头）
+     * @param value 凭证值
+     */
+    protected record ResolvedAuth(AuthKind kind, String value) {}
 }

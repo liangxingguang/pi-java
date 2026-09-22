@@ -6,6 +6,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.sun.net.httpserver.HttpExchange;
@@ -23,6 +26,7 @@ final class RecordingHttpServer implements AutoCloseable {
 
     private final HttpServer server;
     private final AtomicReference<String> body = new AtomicReference<>("");
+    private final AtomicReference<Map<String, String>> headers = new AtomicReference<>(Map.of());
 
     RecordingHttpServer() throws IOException {
         server = HttpServer.create(new InetSocketAddress(0), 0);
@@ -31,6 +35,10 @@ final class RecordingHttpServer implements AutoCloseable {
     }
 
     private void handle(HttpExchange exchange) throws IOException {
+        // 请求头也录下来（凭证形态的观测面：Authorization ／ x-api-key ／ 身份头）。
+        var captured = new LinkedHashMap<String, String>();
+        exchange.getRequestHeaders().forEach((k, v) -> captured.put(k.toLowerCase(Locale.ROOT), v.get(0)));
+        headers.set(Map.copyOf(captured));
         try (InputStream in = exchange.getRequestBody();
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             in.transferTo(out);
@@ -54,6 +62,11 @@ final class RecordingHttpServer implements AutoCloseable {
 
     String body() {
         return body.get();
+    }
+
+    /** 最后一次请求的头（键已小写化）。 */
+    Map<String, String> headers() {
+        return headers.get();
     }
 
     @Override

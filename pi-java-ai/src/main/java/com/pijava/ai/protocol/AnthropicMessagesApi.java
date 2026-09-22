@@ -78,8 +78,16 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
      * @param apiKeyEnvVar the environment variable holding the API key
      */
     public AnthropicMessagesApi(ApiOptions options, String apiKeyEnvVar) {
-        var apiKey = resolveApiKey(options, apiKeyEnvVar);
-        var builder = AnthropicOkHttpClient.builder().apiKey(apiKey);
+        // 包 A0 步7（docs/43 D5/D7）：按**凭证种类**分派，对应 pi
+        // api/anthropic-messages.ts:906-989 的三分支（github-copilot / OAuth / 默认）。
+        var auth = resolveAuth(options, apiKeyEnvVar);
+        var builder = AnthropicOkHttpClient.builder();
+        switch (auth.kind()) {
+            case BEARER -> builder.authToken(auth.value());
+            // 身份头两枚在步8 接（docs/43 D7）。
+            case OAUTH -> builder.authToken(auth.value());
+            case API_KEY -> builder.apiKey(auth.value());
+        }
         if (options.baseUrl() != null && !options.baseUrl().isBlank()) {
             builder.baseUrl(options.baseUrl());
         }

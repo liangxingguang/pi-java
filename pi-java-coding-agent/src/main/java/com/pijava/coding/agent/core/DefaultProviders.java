@@ -3,9 +3,11 @@ package com.pijava.coding.agent.core;
 import com.pijava.agent.harness.StreamFn;
 import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.ai.api.ApiOptions;
+import com.pijava.ai.api.AuthKind;
 import com.pijava.ai.api.ChatApi;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.auth.Credentials;
+import com.pijava.ai.auth.RecordedCredential;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
@@ -97,7 +99,7 @@ public final class DefaultProviders {
                     () -> new IllegalStateException("Unknown provider: " + fallbackName));
             });
             return streamBlocking(provider, model, context, options,
-                apiOptions(args, model.provider(), settings, Credentials::resolveApiKey));
+                apiOptions(args, model.provider(), settings, Credentials::resolveCredential));
         };
     }
 
@@ -135,16 +137,30 @@ public final class DefaultProviders {
      * Resolve {@link ApiOptions} for a provider: baseUrl/apiKey priority is
      * CLI flag &gt; settings default &gt; credential resolver (null = none).
      */
+    /**
+     * 解析 {@link ApiOptions}：baseUrl/apiKey 的优先序为 CLI 旗标 &gt; settings 默认
+     * &gt; 凭证解析器（{@code null} = 无）。
+     *
+     * <p>包 A0 步7（{@code docs/43 D5/D6}）：凭证解析器返回的不再是裸字符串而是
+     * {@link RecordedCredential} —— 形态（{@code API_KEY} ／ {@code BEARER} ／ {@code OAUTH}）
+     * 随值一起装进 {@link ApiOptions}，车道才可能把它放对头。CLI/settings 直给的 key
+     * 恒为 {@code API_KEY}（那两层没有「token」这个概念）。</p>
+     */
     static ApiOptions apiOptions(Args args, String providerName, Settings settings,
-                                 Function<String, Optional<String>> credentialResolver) {
+                                 Function<String, Optional<RecordedCredential>> credentialResolver) {
         var baseUrl = firstNonBlank(args.baseUrl(), settings == null ? null : settings.defaultBaseUrl);
         var apiKey = firstNonBlank(args.apiKey(), settings == null ? null : settings.defaultApiKey);
+        var kind = AuthKind.API_KEY;
         if (apiKey == null && credentialResolver != null) {
-            apiKey = credentialResolver.apply(providerName).orElse(null);
+            var credential = credentialResolver.apply(providerName).orElse(null);
+            if (credential != null) {
+                apiKey = credential.value();
+                kind = credential.kind();
+            }
         }
         return new ApiOptions(baseUrl == null ? "" : baseUrl,
             apiKey == null ? "" : apiKey,
-            java.time.Duration.ofSeconds(120), 2, Map.of());
+            java.time.Duration.ofSeconds(120), 2, Map.of(), kind);
     }
 
     private static String firstNonBlank(String first, String second) {
