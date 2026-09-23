@@ -38,13 +38,14 @@ public final class ContextEntries {
 
     /**
      * Assistant stop reasons whose message carries no content worth sending
-     * back to the provider. Authority is pi's spec
-     * ({@code docs/harness-v2.md:164}): "Assistant responses with stop reason
-     * error, aborted, or deferred project to no provider message. A genuine
-     * output-limit length response remains in context." pi's current code
-     * ({@code session/context.ts:72}) filters {@code deferred} only, so this
-     * rule is a superset of pi's code and an exact match of its spec — cite
-     * the spec when claiming alignment.
+     * back to the provider. pi's spec ({@code docs/harness-v2.md:164}):
+     * "Assistant responses with stop reason error, aborted, or deferred
+     * project to no provider message. A genuine output-limit length response
+     * remains in context." and pi's current code ({@code
+     * packages/agent/src/harness/session/context.ts}, {@code isContextMessage},
+     * anchor 3390bd936) agree — both filter all three of {@code error},
+     * {@code aborted}, and {@code deferred}. This set is an exact port of
+     * pi's code.
      */
     private static final Set<String> NON_PROJECTED_STOP_REASONS =
         Set.of("deferred", "error", "aborted");
