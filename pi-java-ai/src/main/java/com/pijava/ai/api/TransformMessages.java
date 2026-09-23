@@ -1,7 +1,9 @@
 package com.pijava.ai.api;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import com.pijava.ai.catalog.ModelInfo;
@@ -19,14 +21,15 @@ import com.pijava.ai.model.ModelId;
  * （docs/31 §8.34.4 决策 1）。pi-java 此前没有对应物，重放规则住在
  * {@code AnthropicMessagesApi} 里 —— 位置就不对：以后每接一条车道都要再抄一遍。</p>
  *
- * <p><b>本包只落 thinking 五分支</b>（`transform-messages.ts:99-116`）。pi 的其余四条变换
- * （图片降级 `:35-57`、跨模型剥离 {@code thoughtSignature} `:131-134`、跨模型归一 toolCall id
- * `:136-142`、孤儿 toolCall 合成 toolResult `:158-220`）是 **B14**，**不在此实现**
- * —— 不留投机骨架。</p>
+ * <p><b>已落地的变换</b>：thinking 五分支（`transform-messages.ts:99-116`，包② docs/31 §8.34）、
+ * 图片降级（`:12-57`，包 H2 docs/44）、跨模型归一 toolCall id（`:136-142`，包B14 步3 ——
+ * 含 toolResult 侧的 id 换名 `:84-90`）。孤儿 toolCall 合成 toolResult（`:158-220`）由
+ * 同包内的 {@code OrphanToolResults}（步 4）承担。{@code thoughtSignature} 剥离
+ * （`:131-134`）在 java 上结构性不可达（{@code ToolUseContent} 无该字段），**不做**，
+ * 见 B14b / docs/47 §7-R1。</p>
  *
- * <p>⚠️ <b>2026-09-22 包 H2（{@code docs/44}）追加了图片降级那一条</b>（`transform-messages.ts:12-57`）——
- * 它必须与「车道开始发送图片」同时落地，否则给非视觉模型发图片＝从「静默丢图」换成「provider 400」。
- * B14 因此只剩三条变换（{@code thoughtSignature} ／ id 归一 ／ 孤儿合成）。</p>
+ * <p>pi 的第一、二遍共用一个 {@code transformMessages} 函数；java 侧按 D7 拆分：
+ * 第二遍在包内可见的 {@code OrphanToolResults} 中，由 5 参 {@link #apply} 串联。</p>
  *
  * @see <a href="https://github.com/earendil-works/pi">pi</a> {@code packages/ai/src/api/transform-messages.ts}
  */
@@ -58,16 +61,42 @@ public final class TransformMessages {
      */
     public static List<Message> apply(List<Message> messages, ModelId<?> target, String apiName,
                                       ModelInfo targetModel) {
-        // pi :73-74 —— 先补 null content 再降级。pi-java 不需要那一步：
-        // Message.UserMessage/ToolResultMessage 的紧凑构造器已经 List.copyOf ⇒ 结构上非 null。
+        // 镜像 pi 形参的可选性（normalizeToolCallId?）：无归一器 ＝ 不做 id 归一。
+        return apply(messages, target, apiName, targetModel, null);
+    }
+
+    /**
+     * Transform {@code messages} for a request to {@code target}.
+     *
+     * <p>4 参版即「无归一器」：镜像 pi 的 {@code normalizeToolCallId?} 可选性，
+     * 本步不改任何调用点（接线是步 5）。</p>
+     *
+     * @param normalize pi {@code :67} 的归一器；{@code null} ＝ 不做 id 归一
+     *                  （pi 的 {@code normalizeToolCallId?} 缺席）
+     * @return the transformed history
+     */
+    public static List<Message> apply(List<Message> messages, ModelId<?> target, String apiName,
+                                      ModelInfo targetModel, ToolCallIdNormalizer normalize) {
+        // pi :73-74 —— 先降级（java 的紧凑构造器已保证 content 非 null，无需先补空）。
         var messages0 = downgradeUnsupportedImages(messages, targetModel);
+        // pi :68 —— 原始 toolCall id → 归一后 id 的映射表，由本遍更早处理的助手消息填充。
+        var toolCallIdMap = new HashMap<String, String>();
         var out = new ArrayList<Message>(messages0.size());
         for (var msg : messages0) {
             if (msg instanceof Message.AssistantMessage a) {
-                out.add(gateAssistant(a, isSameModel(a, target, apiName)));
+                out.add(gateAssistant(a, isSameModel(a, target, apiName), target, normalize,
+                    toolCallIdMap));
+            } else if (msg instanceof Message.ToolResultMessage t) {
+                // P2（pi :84-90）：有映射且 ≠ 原值才换。java 的 Map.get 返回 null 与
+                // pi 的 `normalizedId && …` 真值门同义：映射不存在 ⇒ 不改。
+                var normalizedId = toolCallIdMap.get(t.toolUseId());
+                if (normalizedId != null && !normalizedId.equals(t.toolUseId())) {
+                    out.add(withToolUseId(t, normalizedId));
+                } else {
+                    out.add(t);
+                }
             } else {
-                // pi :79-81 用户消息直接放行；:83-92 的 toolResult 只在**有** toolCallId 映射时
-                // 才改，而 id 归一是 B14 ⇒ 此处恒原样。
+                // pi :79-81 user 消息原样放行。
                 out.add(msg);
             }
         }
@@ -160,6 +189,18 @@ public final class TransformMessages {
     }
 
     /**
+     * P2 的换 id 复制（pi {@code :86-88} 的 {@code {...msg, toolCallId: normalizedId}}）。
+     * 内容等价则返回原消息；换 id 时七个字段全带（只搬 id 会丢 details/usage/isError）。
+     */
+    private static Message withToolUseId(Message.ToolResultMessage msg, String toolUseId) {
+        if (toolUseId.equals(msg.toolUseId())) {
+            return msg;
+        }
+        return new Message.ToolResultMessage(toolUseId, msg.toolName(), msg.content(),
+                msg.details(), msg.usage(), msg.addedToolNames(), msg.isError());
+    }
+
+    /**
      * pi {@code :95-98}：{@code assistantMsg.provider === model.provider && assistantMsg.api ===
      * model.api && assistantMsg.model === model.id}。
      *
@@ -189,10 +230,12 @@ public final class TransformMessages {
      * 对象身份不是可观察行为；这里在有改动时才复制，复制时**九个字段全带**
      * —— 只搬 content 会丢掉身份三元组，而那正是闸自己的判据来源。</p>
      */
-    private static Message gateAssistant(Message.AssistantMessage msg, boolean same) {
+    private static Message gateAssistant(Message.AssistantMessage msg, boolean same,
+                                         ModelId<?> target, ToolCallIdNormalizer normalize,
+                                         Map<String, String> toolCallIdMap) {
         var content = new ArrayList<ContentBlock>(msg.content().size());
         for (var block : msg.content()) {
-            var gated = gateBlock(block, same);
+            var gated = gateBlock(block, same, target, normalize, msg, toolCallIdMap);
             if (gated != null) {
                 content.add(gated);
             }
@@ -226,7 +269,22 @@ public final class TransformMessages {
      *
      * @return 该块的替换物，或 {@code null} 表示**丢弃**
      */
-    private static ContentBlock gateBlock(ContentBlock block, boolean same) {
+    private static ContentBlock gateBlock(ContentBlock block, boolean same, ModelId<?> target,
+                                          ToolCallIdNormalizer normalize, Message.AssistantMessage msg,
+                                          Map<String, String> toolCallIdMap) {
+        if (block instanceof ContentBlock.ToolUseContent tu) {
+            // P5（pi :136-142）：同模型或无归一器 ⇒ 原样。
+            if (same || normalize == null) {
+                return block;
+            }
+            var normalizedId = normalize.normalize(tu.id(), target, msg);
+            // P5 关键半边：归一器返回原值 ⇒ 不记映射、不改写。
+            if (normalizedId.equals(tu.id())) {
+                return block;
+            }
+            toolCallIdMap.put(tu.id(), normalizedId);
+            return new ContentBlock.ToolUseContent(normalizedId, tu.name(), tu.arguments());
+        }
         if (!(block instanceof ContentBlock.ThinkingContent th)) {
             return block;
         }
