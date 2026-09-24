@@ -81,6 +81,21 @@ class LaneTransformMessagesWiringTest {
     }
 
     @Test
+    void anthropicAdapterConverterNormalizesToolIds() throws Exception {
+        var target = ModelId.of("anthropic", "claude-sonnet-5");
+        var id = "call|illegal";
+        var request = toolRequest(target, id);
+        var method = AnthropicMessagesApi.class.getDeclaredMethod("buildParams", StreamRequest.class);
+        method.setAccessible(true);
+        var options = new ApiOptions("https://example.test", "test-key", Duration.ofSeconds(1), 0, Map.of());
+        var api = new AnthropicMessagesApi(options, "ANTHROPIC_API_KEY");
+        var params = (com.anthropic.models.messages.MessageCreateParams) method.invoke(api, request);
+        var block = params.messages().get(1).content().asBlockParams().stream()
+            .filter(p -> p.isToolUse()).findFirst().orElseThrow().asToolUse();
+        assertThat(block.id()).isEqualTo("call_illegal");
+    }
+
+    @Test
     void completionsLaneDowngradesCrossModelThinkingToText() throws Exception {
         try (var server = new RecordingServer()) {
             var api = new OpenAICompletionsApi(
@@ -106,6 +121,18 @@ class LaneTransformMessagesWiringTest {
             request.modelId(), request.model());
         var functionCall = contents.get(1).parts().orElseThrow().get(0).functionCall().orElseThrow();
         assertThat(functionCall.id().orElseThrow()).isEqualTo("call_123_fc_123");
+    }
+
+    @Test
+    void googleLaneLeavesNonGatedModelIdUnchanged() {
+        var target = ModelId.of("google", "gemini-2.5-pro");
+        var request = toolRequest(target, "call_123|fc_123");
+        var contents = GoogleMessageConverter.toContents(
+            com.pijava.ai.api.TransformMessages.apply(request.messages(), request.modelId(),
+                "google-generative-ai", request.model(), GoogleToolCallIds.create()),
+            request.modelId(), request.model());
+        var functionCall = contents.get(1).parts().orElseThrow().get(0).functionCall().orElseThrow();
+        assertThat(functionCall.id()).isEmpty();
     }
 
     @Test
@@ -142,6 +169,10 @@ class LaneTransformMessagesWiringTest {
         var first = extractMistralToolId(request, MistralToolCallIds.create());
         var second = extractMistralToolId(request, MistralToolCallIds.create());
         assertThat(first).isEqualTo(second).hasSize(9);
+        var shared = MistralToolCallIds.create();
+        var collisionA = extractMistralToolId(toolRequest(target, "abcdefgh1234"), shared);
+        var collisionB = extractMistralToolId(toolRequest(target, "wxyz12345678"), shared);
+        assertThat(collisionA).isNotEqualTo(collisionB);
     }
 
     private static String extractMistralToolId(StreamRequest request,

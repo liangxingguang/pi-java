@@ -497,5 +497,4 @@ public final class MistralConversationsApi extends AbstractChatApi {
         throw new IllegalStateException(
                 "No Mistral API key found. Set MISTRAL_API_KEY or pass apiKey in ApiOptions.");
     }
-
 }

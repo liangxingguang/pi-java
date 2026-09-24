@@ -1,29 +1,20 @@
 package com.pijava.ai.protocol;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.SubmissionPublisher;
 
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
 import com.anthropic.core.http.StreamResponse;
-import com.anthropic.models.messages.ContentBlockParam;
 import com.anthropic.models.messages.MessageCreateParams;
-import com.anthropic.models.messages.MessageParam;
 import com.anthropic.models.messages.RawMessageDeltaEvent;
 import com.anthropic.models.messages.RawMessageStreamEvent;
 import com.anthropic.models.messages.StopReason;
-import com.anthropic.models.messages.Tool;
-import com.anthropic.models.messages.ToolUnion;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.AuthKind;
 import com.pijava.ai.api.StreamRequest;
-import com.pijava.ai.api.TransformMessages;
-import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
-import com.pijava.ai.utils.SanitizeUnicode;
 
 /**
  * Anthropic Messages API adapter using the official {@code anthropic-java} SDK.
@@ -404,117 +395,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
     }
 
     private MessageCreateParams buildParams(StreamRequest request) {
-        // pi anthropic-messages.ts:1029 —— 共享预通道跑在**适配器之外**，
-        // 在消息进入落线逻辑之前决定哪些块活下来（docs/31 §8.34.4 决策 1）。
-        var messages = TransformMessages.apply(
-                request.messages(), request.modelId(), apiName(), request.model(),
-                AnthropicToolCallIds.create());
-        // pi anthropic-messages.ts:193 `model.compat?.allowEmptySignature ?? false` ——
-        // 经 StreamRequest 带到 :1047 的形参、再落到 :1304 的唯一行为点（决策 5 投送）。
-        // 缺席与 false 同义（pi 的 `?? false` 是二态，不是三态）。
-        var allowEmptySignature = request.model() != null
-                && request.model().compat().allowEmptySignature();
-        // 包H5 步5：思考的三分支（pi anthropic-messages.ts:858-904 ＋ :1152-1180）。
-        // 级别**未翻译**地随 StreamRequest 进来，翻译所需的 compat/thinkingLevelMap 就在
-        // request.model() 上 —— 这正是包H5 把翻译从引擎层挪到车道的原因。
-        var thinking = AnthropicThinking.resolve(
-                request.model(),
-                request.reasoning(),
-                request.maxTokens() > 0
-                    ? java.util.OptionalInt.of(request.maxTokens())
-                    : java.util.OptionalInt.empty());
-        var builder = MessageCreateParams.builder()
-                .model(request.modelId().modelName())
-                .maxTokens(thinking.maxTokens().isPresent()
-                    ? thinking.maxTokens().getAsInt()
-                    : (request.maxTokens() > 0 ? request.maxTokens() : 4096L));
-        thinking.thinking().ifPresent(builder::thinking);
-        thinking.outputConfig().ifPresent(builder::outputConfig);
-
-        // 系统提示是请求上的独立字段（pi anthropic-messages.ts:1074 读 context.systemPrompt），
-        // 不在消息列表里 —— pi 的 Message 没有 system 角色。
-        var systemText = request.systemPrompt();
-        if (systemText != null && !systemText.isEmpty()) {
-            // pi anthropic-messages.ts:1089/:1098 —— system 文本净化（两分支各一处）。
-            builder.system(SanitizeUnicode.surrogates(systemText));
-        }
-
-        for (int i = 0; i < messages.size(); i++) {
-            var msg = messages.get(i);
-
-            // Anthropic requires tool_result blocks inside a user message
-            // (pi anthropic-messages.ts maps toolResult -> role "user" and
-            // merges consecutive tool results into one user message).
-            if (msg instanceof Message.ToolResultMessage) {
-                var resultBlocks = new ArrayList<ContentBlockParam>();
-                int j = i;
-                while (j < messages.size()
-                        && messages.get(j) instanceof Message.ToolResultMessage tool) {
-                    resultBlocks.add(AnthropicMessageConverter.toToolResultBlock(tool));
-                    j++;
-                }
-                i = j - 1;
-                builder.addMessage(MessageParam.builder()
-                    .role(MessageParam.Role.USER)
-                    .content(MessageParam.Content.ofBlockParams(resultBlocks))
-                    .build());
-                continue;
-            }
-
-            var blockParams = AnthropicMessageConverter.toBlockParams(msg, allowEmptySignature,
-                    msg instanceof Message.UserMessage);
-            if (blockParams.isEmpty()) continue;
-
-            var role = msg instanceof Message.UserMessage
-                    ? MessageParam.Role.USER : MessageParam.Role.ASSISTANT;
-            builder.addMessage(MessageParam.builder()
-                    .role(role)
-                    .content(MessageParam.Content.ofBlockParams(blockParams))
-                    .build());
-        }
-
-        for (var td : request.tools()) {
-            var inputSchema = Tool.InputSchema.builder()
-                    .putAllAdditionalProperties(AnthropicMessageConverter.toJsonValues(td.inputSchema()))
-                    .build();
-            var toolBuilder = Tool.builder()
-                    .name(td.name())
-                    .inputSchema(inputSchema);
-            if (td.description() != null && !td.description().isBlank()) {
-                toolBuilder.description(td.description());
-            }
-            builder.addTool(ToolUnion.ofTool(toolBuilder.build()));
-        }
-
-        // pi anthropic-messages.ts:1104-1112 —— **温度与思考互斥**
-        // （pi 注释原文：「Temperature is incompatible with extended thinking」）。
-        // 门的判据是 `!options?.thinkingEnabled`，而 thinkingEnabled 就是「调用方给了 reasoning」
-        // （pi 的 streamSimple 在 !options?.reasoning 时才置 false，:872-876）⇒ 与模型能力无关。
-        //
-        // ⚠️ pi 还有两枚条件本包**未移植**（docs/46 §7 登记）：
-        // `compat.supportsMidConvoEffort !== true`（该旗标本包不做）与
-        // `compat.supportsTemperature`（java 无此旗标，pi 的探测默认是开）。
-        if (request.temperature() >= 0 && request.reasoning().isEmpty()) {
-            builder.temperature(request.temperature());
-        }
-
-        // pi anthropic-messages.ts:1018-1025 —— interleaved-thinking beta 头。
-        // 条件是 `model.reasoning && thinkingEnabled === true && (interleavedThinking ?? true)
-        // && forceAdaptiveThinking !== true`。java 无 `interleavedThinking` 用户面 ⇒ 取 pi 的默认 true。
-        //
-        // ⚠️ 写法：pi 走的是**请求体字段** `params.betas`（非 beta 服务的 params 类型）。
-        // java 的非 beta `MessageCreateParams` 没有 betas 组件，但 SDK 提供了
-        // `putAdditionalBodyProperty` ⇒ 用它产出**与 pi 同形**的线格（不是 `anthropic-beta` 头，
-        // 那会换一种形状）。
-        if (request.model() != null
-                && request.model().capabilities().contains(com.pijava.ai.model.ModelCapability.THINKING)
-                && request.reasoning().isPresent()
-                && !request.model().compat().forceAdaptiveThinking()) {
-            builder.putAdditionalBodyProperty("betas",
-                com.anthropic.core.JsonValue.from(List.of(INTERLEAVED_THINKING_BETA)));
-        }
-
-        return builder.build();
+        return AnthropicRequestBuilder.buildParams(request);
     }
 
 }
