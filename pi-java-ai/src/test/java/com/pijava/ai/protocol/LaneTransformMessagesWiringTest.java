@@ -184,7 +184,7 @@ class LaneTransformMessagesWiringTest {
             drainQuietly(() -> api.streamBlocking(toolRequest(target, "abc-defgh1"), ApiOptions.defaults()));
             var second = toolIdFromBody(server.body());
             assertThat(first).isEqualTo("abcdefgh1");
-            assertThat(second).hasSize(9);
+            assertThat(second).isEqualTo("abcdefgh1");
         }
     }
 
