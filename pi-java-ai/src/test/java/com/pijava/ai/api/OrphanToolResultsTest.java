@@ -172,22 +172,19 @@ class OrphanToolResultsTest {
     }
 
     /**
-     * <b>用例 7</b> —— 钉 <b>P8 无条件 close ＋ P10 空则不触碰</b>（pi {@code :191-193}、
-     * {@code :206-210}）：无 toolCall 的助手**同样**先触发 P8 close —— call_1 此时仍未答 ⇒
-     * 在 assistant2 **之前**合成；随后到达的真结果原样放行，循环后不再重复合成
+     * <b>用例 7</b> —— 钉 <b>P8 边界</b>（pi {@code :191-193}）：无 toolCall 的助手也先触发
+     * P8 close —— call_1 此时仍未答 ⇒ 在 assistant2 **之前**合成；随后到达的真结果原样放行
      * （输出 = assistant1, 合成条, assistant2, 真结果）。
      *
-     * <p><b>会红</b>：P8/P16 的 close 缺席 ⇒ 无合成条；或 P10 误把空列表当重置并
-     * 吞掉后续 toolResult ⇒ 形状变化。</p>
+     * <p>⚠️ P10 的「空则不触碰」门仍按 pi 实现，但在此转录中 P8 已先清空 pending，
+     * 因而其效果不可单独观察。原 brief 把这个场景描述成「不产生合成」与 P8 顺序冲突；
+     * 本夹具按 pi 的实际可观察行为钉住 P8 边界。</p>
      *
-     * <p>⚠️ 与 brief 原文的偏差（task-4-report 登记）：brief 曾预期此转录「不产生合成」，
-     * 但按锚点代码 P8 对**每条** assistant 消息先 close（不限于带 toolCall 者），
-     * call_1 在 assistant2 边界处即被合成；P10 的「空则不触碰」门在 close 之后
-     * 观测等价（pending/ids 恒已为空），无法用任何转录区分 —— 夹具改钉 pi 的
-     * 真实可观察行为。</p>
+     * <p><b>会红</b>：P8/P16 的 close 缺席 ⇒ 无合成条；或 P8 顺序错误 ⇒ 输出顺序
+     * 变化。</p>
      */
     @Test
-    void assistantWithoutToolCallsDoesNotResetPending() {
+    void emptyToolCallAssistantClosesPendingAtAssistantBoundary() {
         var second = assistant();
         var out = OrphanToolResults.apply(
             List.of(assistant(toolUse("call_1", "read")), second,
