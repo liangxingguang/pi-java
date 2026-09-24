@@ -302,7 +302,8 @@ public final class MistralConversationsApi extends AbstractChatApi {
         // 不过闸则跨模型重放的 thinking 文本无声消失。
         // pi :517 —— 车道的图片能力位来自同一个 model.input.includes("image")。
         boolean supportsImages = request.model().supportsImageInput();
-        TransformMessages.apply(request.messages(), request.modelId(), apiName(), request.model())
+        TransformMessages.apply(request.messages(), request.modelId(), apiName(), request.model(),
+                MistralToolCallIds.create())
             .stream().<Map<String, Object>>map(msg -> {
             var m = new HashMap<String, Object>();
             switch (msg) {

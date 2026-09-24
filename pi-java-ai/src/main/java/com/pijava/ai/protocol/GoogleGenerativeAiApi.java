@@ -106,7 +106,8 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
             // transformMessages）—— 跨模型重放的 thinking 块在此降级为文本，
             // 转换器的 ThinkingContent 分支（丢块）才不会把它整段吞掉。
             var contents = GoogleMessageConverter.toContents(TransformMessages.apply(
-                request.messages(), request.modelId(), apiName(), request.model()),
+                request.messages(), request.modelId(), apiName(), request.model(),
+                GoogleToolCallIds.create()),
                 request.modelId(), request.model());
             var config = buildConfig(request);
 

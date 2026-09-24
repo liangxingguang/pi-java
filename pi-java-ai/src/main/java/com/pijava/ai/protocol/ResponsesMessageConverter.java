@@ -118,7 +118,7 @@ final class ResponsesMessageConverter {
         // transformMessages）—— 跨模型重放的 thinking 块在此降级为文本，否则本车道的
         // addAssistantItems 会把它连块带文本一起丢（见那里的注释）。
         var messages = TransformMessages.apply(request.messages(), request.modelId(), apiName,
-                request.model());
+                request.model(), ResponsesToolCallIds.create(apiName));
         var msgIndex = 0;
         for (var msg : messages) {
             if (msg instanceof Message.UserMessage user) {

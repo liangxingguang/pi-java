@@ -91,7 +91,7 @@ final class OpenAICompletionsMessageConverter {
         // convertMessages 之前调 transformMessages）：跨模型重放的带签名 thinking 块
         // 在此降级为文本，本车道才看得见那段文本。
         var messages = TransformMessages.apply(request.messages(), request.modelId(), apiName,
-                request.model());
+                request.model(), CompletionsToolCallIds.create());
 
         for (int i = 0; i < messages.size(); i++) {
             var msg = messages.get(i);
