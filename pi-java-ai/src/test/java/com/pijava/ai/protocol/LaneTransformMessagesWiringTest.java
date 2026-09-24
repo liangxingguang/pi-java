@@ -149,24 +149,26 @@ class LaneTransformMessagesWiringTest {
 
     @Test
     void openAiResponsesAdapterUsesOpenAiApiNameForToolId() throws Exception {
-        var body = captureResponsesBody(false, ModelId.of("openai", "gpt-4o"));
-        assertThat(body).contains("call_123|fc_");
+        var body = captureResponsesBody("openai-responses", false, ModelId.of("openai", "gpt-4o"));
+        assertThat(body).contains("\"call_id\":\"call_123|fc_abc\"");
     }
 
     @Test
     void azureResponsesAdapterUsesAzureApiNameForToolId() throws Exception {
-        var body = captureResponsesBody(true, ModelId.of("openai", "gpt-4o"));
-        assertThat(body).contains("call_123|fc_");
+        var body = captureResponsesBody("azure-openai-responses", true,
+            ModelId.of("openai", "gpt-4o"));
+        assertThat(body).contains("\"call_id\":\"call_123|fc_abc\"");
     }
 
-    private static String captureResponsesBody(boolean azure, ModelId<?> target) throws Exception {
+    private static String captureResponsesBody(String apiName, boolean azure, ModelId<?> target)
+            throws Exception {
         try (var server = new RecordingServer()) {
             var api = azure
                 ? new AzureOpenAIResponsesApi(new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0,
                     Map.of("azureBaseUrl", server.baseUrl())), "AZURE_OPENAI_API_KEY")
                 : new OpenAIResponsesApi(new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()),
                     "OPENAI_API_KEY");
-            drainQuietly(() -> api.streamBlocking(toolRequest(target, "call_123|abc"), ApiOptions.defaults()));
+            drainQuietly(() -> api.streamBlocking(responsesToolRequest(target, apiName), ApiOptions.defaults()));
             return server.body();
         }
     }
@@ -174,19 +176,15 @@ class LaneTransformMessagesWiringTest {
     @Test
     void mistralApiNormalizesCollisionAndResetsOnEachRequest() throws Exception {
         var target = ModelId.of("mistral", "mistral-large");
-        var first = captureMistralBody(toolRequest(target, "abcdefgh1234"));
-        var second = captureMistralBody(toolRequest(target, "wxyz12345678"));
-        assertThat(toolIdFromBody(first)).hasSize(9);
-        assertThat(toolIdFromBody(second)).hasSize(9);
-        assertThat(toolIdFromBody(first)).isNotEqualTo(toolIdFromBody(second));
-    }
-
-    private static String captureMistralBody(StreamRequest request) throws Exception {
         try (var server = new RecordingServer()) {
             var api = new MistralConversationsApi(
                 new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()));
-            drainQuietly(() -> api.streamBlocking(request, ApiOptions.defaults()));
-            return server.body();
+            drainQuietly(() -> api.streamBlocking(toolRequest(target, "abcdefgh1"), ApiOptions.defaults()));
+            var first = toolIdFromBody(server.body());
+            drainQuietly(() -> api.streamBlocking(toolRequest(target, "abc-defgh1"), ApiOptions.defaults()));
+            var second = toolIdFromBody(server.body());
+            assertThat(first).isEqualTo("abcdefgh1");
+            assertThat(second).hasSize(9);
         }
     }
 
@@ -198,6 +196,15 @@ class LaneTransformMessagesWiringTest {
         start = body.indexOf('"', start + 13) + 1;
         int end = body.indexOf('"', start);
         return body.substring(start, end);
+    }
+
+    private static StreamRequest responsesToolRequest(ModelId<?> target, String apiName) {
+        var source = new Message.AssistantMessage(List.of(
+            new ContentBlock.ToolUseContent("call_123|abc", "read", Map.of())), "stop", null,
+            apiName, target.provider(), "previous-model", null, null, null, null);
+        return new StreamRequest(target, null,
+            List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi"))), source),
+            List.of(), -1, -1, Map.of());
     }
 
     private static StreamRequest toolRequest(ModelId<?> target, String id) {
