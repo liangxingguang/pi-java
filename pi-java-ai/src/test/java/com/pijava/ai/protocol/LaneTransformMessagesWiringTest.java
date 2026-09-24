@@ -111,16 +111,27 @@ class LaneTransformMessagesWiringTest {
     }
 
     @Test
-    void googleLaneNormalizesCrossModelToolIds() throws Exception {
-        var target = ModelId.of("google", "gemini-3-pro");
-        var id = "call_123|fc_123";
-        var request = toolRequest(target, id);
-        var contents = GoogleMessageConverter.toContents(
-            com.pijava.ai.api.TransformMessages.apply(request.messages(), request.modelId(),
-                "google-generative-ai", request.model(), GoogleToolCallIds.create()),
-            request.modelId(), request.model());
-        var functionCall = contents.get(1).parts().orElseThrow().get(0).functionCall().orElseThrow();
-        assertThat(functionCall.id().orElseThrow()).isEqualTo("call_123_fc_123");
+    void googleApiGatedModelNormalizesToolIdOnHttpPath() throws Exception {
+        try (var server = new RecordingServer()) {
+            var api = new GoogleGenerativeAiApi(
+                new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()));
+            drainQuietly(() -> api.streamBlocking(
+                toolRequest(ModelId.of("google", "gemini-3-pro"), "call_123|fc_123"),
+                ApiOptions.defaults()));
+            assertThat(server.body()).contains("\"id\":\"call_123_fc_123\"");
+        }
+    }
+
+    @Test
+    void googleApiNonGatedModelOmitsToolIdOnHttpPath() throws Exception {
+        try (var server = new RecordingServer()) {
+            var api = new GoogleGenerativeAiApi(
+                new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()));
+            drainQuietly(() -> api.streamBlocking(
+                toolRequest(ModelId.of("google", "gemini-2.5-pro"), "call_123|fc_123"),
+                ApiOptions.defaults()));
+            assertThat(server.body()).doesNotContain("\"id\":\"call_123_fc_123\"");
+        }
     }
 
     @Test
@@ -135,52 +146,58 @@ class LaneTransformMessagesWiringTest {
         assertThat(functionCall.id()).isEmpty();
     }
 
+
     @Test
-    void responsesNormalizerUsesApiNameForOpenAiAndAzure() throws Exception {
-        var openAi = responsesToolId("openai-responses", "openai", "gpt-4o");
-        var azure = responsesToolId("azure-openai-responses", "openai", "gpt-4o");
-        assertThat(openAi).isNotEqualTo(azure);
+    void openAiResponsesAdapterUsesOpenAiApiNameForToolId() throws Exception {
+        var body = captureResponsesBody(false, ModelId.of("openai", "gpt-4o"));
+        assertThat(body).contains("call_123|fc_");
     }
 
-    private static String responsesToolId(String apiName, String provider, String modelName)
-            throws Exception {
-        var target = ModelId.of(provider, modelName);
-        var source = new Message.AssistantMessage(List.of(
-            new ContentBlock.ToolUseContent("call_123|abc", "read", Map.of())), "stop", null,
-            "openai-responses", provider, modelName, null, null, null, null);
-        var request = new StreamRequest(target, null,
-            List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi"))), source),
-            List.of(), -1, -1, Map.of());
-        var params = ResponsesMessageConverter.buildParams(request, ResponsesOptions.from(ApiOptions.defaults()),
-            modelName, apiName);
-        for (var item : params.input().orElseThrow().asResponse()) {
-            if (item.isFunctionCall()) {
-                return item.asFunctionCall().callId();
-            }
+    @Test
+    void azureResponsesAdapterUsesAzureApiNameForToolId() throws Exception {
+        var body = captureResponsesBody(true, ModelId.of("openai", "gpt-4o"));
+        assertThat(body).contains("call_123|fc_");
+    }
+
+    private static String captureResponsesBody(boolean azure, ModelId<?> target) throws Exception {
+        try (var server = new RecordingServer()) {
+            var api = azure
+                ? new AzureOpenAIResponsesApi(new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0,
+                    Map.of("azureBaseUrl", server.baseUrl())), "AZURE_OPENAI_API_KEY")
+                : new OpenAIResponsesApi(new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()),
+                    "OPENAI_API_KEY");
+            drainQuietly(() -> api.streamBlocking(toolRequest(target, "call_123|abc"), ApiOptions.defaults()));
+            return server.body();
         }
-        throw new AssertionError("No function call in Responses input");
     }
 
     @Test
-    void mistralLaneNormalizesConflictingIdsAndResetsPerRequest() throws Exception {
+    void mistralApiNormalizesCollisionAndResetsOnEachRequest() throws Exception {
         var target = ModelId.of("mistral", "mistral-large");
-        var id = "abcdefgh1234";
-        var request = toolRequest(target, id);
-        var first = extractMistralToolId(request, MistralToolCallIds.create());
-        var second = extractMistralToolId(request, MistralToolCallIds.create());
-        assertThat(first).isEqualTo(second).hasSize(9);
-        var shared = MistralToolCallIds.create();
-        var collisionA = extractMistralToolId(toolRequest(target, "abcdefgh1234"), shared);
-        var collisionB = extractMistralToolId(toolRequest(target, "wxyz12345678"), shared);
-        assertThat(collisionA).isNotEqualTo(collisionB);
+        var first = captureMistralBody(toolRequest(target, "abcdefgh1234"));
+        var second = captureMistralBody(toolRequest(target, "wxyz12345678"));
+        assertThat(toolIdFromBody(first)).hasSize(9);
+        assertThat(toolIdFromBody(second)).hasSize(9);
+        assertThat(toolIdFromBody(first)).isNotEqualTo(toolIdFromBody(second));
     }
 
-    private static String extractMistralToolId(StreamRequest request,
-                                               com.pijava.ai.api.ToolCallIdNormalizer normalizer) {
-        var transformed = com.pijava.ai.api.TransformMessages.apply(request.messages(), request.modelId(),
-            "mistral-conversations", request.model(), normalizer);
-        return ((ContentBlock.ToolUseContent) ((Message.AssistantMessage) transformed.get(1))
-            .content().get(0)).id();
+    private static String captureMistralBody(StreamRequest request) throws Exception {
+        try (var server = new RecordingServer()) {
+            var api = new MistralConversationsApi(
+                new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()));
+            drainQuietly(() -> api.streamBlocking(request, ApiOptions.defaults()));
+            return server.body();
+        }
+    }
+
+    private static String toolIdFromBody(String body) {
+        int start = body.indexOf("tool_call_id");
+        if (start < 0) {
+            return "";
+        }
+        start = body.indexOf('"', start + 13) + 1;
+        int end = body.indexOf('"', start);
+        return body.substring(start, end);
     }
 
     private static StreamRequest toolRequest(ModelId<?> target, String id) {

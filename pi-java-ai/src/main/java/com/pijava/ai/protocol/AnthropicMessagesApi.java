@@ -94,9 +94,6 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
      */
     private static final String OAUTH_TOKEN_MARKER = "sk-ant-oat";
 
-    /** pi {@code anthropic-messages.ts:182} 的 interleaved-thinking beta 名。 */
-    private static final String INTERLEAVED_THINKING_BETA = "interleaved-thinking-2025-05-14";
-
     /** pi {@code anthropic-messages.ts:87} 的硬编码常量。 */
     private static final String CLAUDE_CODE_VERSION = "2.1.251";
 
