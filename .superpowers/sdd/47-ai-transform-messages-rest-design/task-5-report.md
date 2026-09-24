@@ -14,6 +14,7 @@
 - RED: before production wiring, the new completions converter-path assertion observed the original pipe-containing id instead of the expected normalized/hash form. This was the four-argument overload behavior.
 - GREEN: after wiring, `LaneTransformMessagesWiringTest` passed 12 tests. The final focused fixture drives production paths for Anthropic (reflection into the real adapter request builder), Google gated and non-gated models (real converter), Mistral conflict plus fresh-request isolation (real transformation used by the adapter), Completions (real converter), and both Responses API-name paths through the shared converter. Existing HTTP adapter-path assertions cover Anthropic/Google/Mistral/OpenAI Responses/Azure Responses thinking replay.
 - Mutation probe: temporarily removed `CompletionsToolCallIds.create()` from `OpenAICompletionsMessageConverter`, ran the focused real converter-path test, and it failed (`expected ccccc..._tbuqnb14 but was ccccc...|ffffffff...`). The source was restored before the final commit; the restored test passed.
+- RED/mutation probes: removing Google adapter wiring made the gated HTTP assertion fail; removing Mistral adapter wiring made the Mistral request-body assertions fail. The earlier Completions mutation also failed. All production sources were restored before regression.
 - Mandatory regression passed:
   `export JAVA_HOME='D:\soft\jdk\graalvm-jdk-25' && /d/soft/apache-maven-3.9.9/bin/mvn -pl pi-java-ai test -am`
   Reactor completed successfully. Maven/checkstyle emitted pre-existing warnings (invalid local Doxia POM bytes and existing source warnings), but checkstyle reported 0 violations.
@@ -28,5 +29,5 @@ Both adapters call the shared `ResponsesMessageConverter.buildParams` with their
 
 ## Concerns / deviations
 
-- The final fix commit is `5bd70d6`; controller must cherry-pick `50b50a1` followed by `5bd70d6` from this detached isolated worktree.
+- Reviewed main commits are `3f7225d` and `ac58491`. The controller should cherry-pick the implementation `50b50a1`, then fix commits `5bd70d6`, `c8b0936`, and `8b5b5c6` from this detached isolated worktree.
 - The repository's existing checkstyle warnings remain outside this task; no new checkstyle violations were introduced.
