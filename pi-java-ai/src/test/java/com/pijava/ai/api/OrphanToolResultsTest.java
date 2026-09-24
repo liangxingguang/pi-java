@@ -27,7 +27,8 @@ class OrphanToolResultsTest {
     private static final ModelId<?> TARGET = ModelId.of("anthropic", "claude-sonnet-5");
     private static final String API = "anthropic-messages";
 
-    /** 本文件全部用例喂视觉模型，让图片闸恒不触发 —— 这里钉的是孤儿合成，不是图片降级。 */
+    /** 本文件全部用例喂视觉模型，让图片闸恒不触发 —— 这里钉的是孤儿合成，
+     * 不是图片降级。 */
     private static final ModelInfo VISION_TARGET = new ModelInfo(
         TARGET, "Claude Sonnet 5",
         Set.of(ModelCapability.TEXT, ModelCapability.IMAGE_INPUT),
