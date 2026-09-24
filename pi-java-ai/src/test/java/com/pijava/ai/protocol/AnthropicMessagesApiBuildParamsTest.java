@@ -95,10 +95,15 @@ class AnthropicMessagesApiBuildParamsTest {
         var params = buildParams(request);
 
         var messages = params.messages();
-        assertThat(messages).hasSize(2);
+        // 包B14 步4：转录尾的 toolu_01 未答 ⇒ 第二遍补一条合成 tool_result
+        // （"No result provided"，isError=true，Anthropic 落线映射为 user 角色）——
+        // 与 pi transform-messages.ts:158-232 同形，预期 3 条而非 2 条。
+        assertThat(messages).hasSize(3);
         var assistant = messages.get(1).content();
         var blocks = assistant.asBlockParams();
         assertThat(blocks).anyMatch(b -> b.isToolUse());
+        var trailing = messages.get(2).content().asBlockParams();
+        assertThat(trailing).anyMatch(b -> b.isToolResult());
     }
 
     @Test
@@ -199,7 +204,9 @@ class AnthropicMessagesApiBuildParamsTest {
         var params = buildParams(request);
 
         var messages = params.messages();
-        assertThat(messages).hasSize(2);
+        // 包B14 步4：转录尾的 toolu_01 未答 ⇒ 第二遍补一条合成 tool_result ——
+        // 与 pi transform-messages.ts:158-232 同形，预期 3 条而非 2 条。
+        assertThat(messages).hasSize(3);
         var blocks = messages.get(1).content().asBlockParams();
         var thinking = blocks.stream().filter(b -> b.isThinking()).findFirst().orElseThrow();
         assertThat(thinking.asThinking().thinking()).isEqualTo("I should list files.");

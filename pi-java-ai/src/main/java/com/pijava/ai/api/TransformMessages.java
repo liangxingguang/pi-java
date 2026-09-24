@@ -23,13 +23,14 @@ import com.pijava.ai.model.ModelId;
  *
  * <p><b>已落地的变换</b>：thinking 五分支（`transform-messages.ts:99-116`，包② docs/31 §8.34）、
  * 图片降级（`:12-57`，包 H2 docs/44）、跨模型归一 toolCall id（`:136-142`，包B14 步3 ——
- * 含 toolResult 侧的 id 换名 `:84-90`）。孤儿 toolCall 合成 toolResult（`:158-220`）由
- * 同包内的 {@code OrphanToolResults}（步 4）承担。{@code thoughtSignature} 剥离
+ * 含 toolResult 侧的 id 换名 `:84-90`）。孤儿 toolCall 合成 toolResult（`:158-232`）由
+ * 同包内的 {@code OrphanToolResults} 承担。{@code thoughtSignature} 剥离
  * （`:131-134`）在 java 上结构性不可达（{@code ToolUseContent} 无该字段），**不做**，
  * 见 B14b / docs/47 §7-R1。</p>
  *
  * <p>pi 的第一、二遍共用一个 {@code transformMessages} 函数；java 侧按 D7 拆分：
- * 第二遍在包内可见的 {@code OrphanToolResults} 中，由 5 参 {@link #apply} 串联。</p>
+ * 第二遍在包内可见的 {@link OrphanToolResults} 中，由 5 参 {@link #apply} 串联
+ * （4 参重载转发 5 参版 ⇒ 同样获得第二遍，pi 同形：归一器缺席不影响第二遍）。</p>
  *
  * @see <a href="https://github.com/earendil-works/pi">pi</a> {@code packages/ai/src/api/transform-messages.ts}
  */
@@ -100,7 +101,7 @@ public final class TransformMessages {
                 out.add(msg);
             }
         }
-        return List.copyOf(out);
+        return OrphanToolResults.apply(List.copyOf(out));
     }
 
     /**
