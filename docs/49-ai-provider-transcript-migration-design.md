@@ -521,12 +521,12 @@ F7/F8 都是**本包实测探针顺带撞出**的：读源码时没看见，dump
 - **focused**：`TranscriptsTest` 9、`MessageTextsTest` 7、`OrphanToolResultsHeldSystemMessageTest` 4、`LaneTranscriptSourceTest` 7、`PiMessagesRequestShapeTest` 2、`PiMessagesApiTest` 8（全绿）。
 - **模块回归**：`pi-java-ai` 819⇒**849**、`pi-java-agent-core` 484。
 - **静态门禁**：checkstyle 0 新违规（`checkstyle-result.xml` 的 29 条 warning 全是既有行）、`git diff --check` clean、无新增 `System.out.println`、新增文件 87/160/239 行（均 ≤500）。
-- ⚠️ **全 reactor `clean verify` 尚未跑**（见 §12.6）。
+- **全 reactor**：`mvn clean verify`（串行）**BUILD SUCCESS**，14/14 模块，7:08（TUI 3:18、Web 1:15）—— 本轮**没有**复现 `docs/48 §10.4` 记的 TUI 临时 JSONL 环境失败。
 
 ### 12.6 遗留与未做
 
-1. **全 reactor `mvn clean verify` 未跑** —— 本轮的验证止于 `pi-java-ai` ＋ `pi-java-agent-core`（含 `-am`）。TUI 的临时 JSONL 环境失败与 sqlite 的耗时是既有风险，跑法与记录方式见 `docs/48 §10.4`。
-2. **L-A（B87① 系统消息回读）仍未做** —— 本包不碰持久化；但 A2 之后「带系统消息的请求」已成公开 API 可达的输入，回读仍是**响亮失败**（会话 resume 报 schema 错）⇒ 建议下一个包就做。
-3. **L-K（F8 Responses ＋ 工具）** 是既有硬故障，建议优先于 A3 处理。
-4. 设计稿 §7.4-1 列的「completions / google / mistral / responses 四条车道的 pi 侧探针」**仍未补** —— A2b 的夹具改用了更强的观测面（本机真实出站体 `RecordingHttpServer`）并已逐条对齐 pi 的源码语义，但**没有**像 Anthropic 那样跑过 pi 的对应车道做差分。如实登记。
-5. §10 的 L-B…L-I 保持不变；新增 **L-J**（F7 Anthropic system 字符串形态）、**L-K**（F8 Responses 带工具硬故障）。
+1. **L-A（B87① 系统消息回读）仍未做** —— 本包不碰持久化；但 A2 之后「带系统消息的请求」已成公开 API 可达的输入，回读仍是**响亮失败**（会话 resume 报 schema 错）⇒ 建议下一个包就做。
+2. **L-K（F8 Responses ＋ 工具）** 是既有硬故障（`docs/32` **B88**），建议优先于 A3 处理。
+3. 设计稿 §7.4-1 列的「completions / google / mistral / responses 四条车道的 pi 侧探针」**仍未补** —— A2b 的夹具改用了更强的观测面（本机真实出站体 `RecordingHttpServer`）并已逐条对齐 pi 的源码语义，但**没有**像 Anthropic 那样跑过 pi 的对应车道做差分。如实登记。
+4. §10 的 L-B…L-I 保持不变；新增 **L-J**（F7 Anthropic system 字符串形态，⇒ `docs/32` **B89**）、**L-K**（F8 Responses 带工具硬故障 ⇒ **B88**）、**L-I**（F6 ⇒ **B90**）。
+5. **A2 未触及的既有偏差**（登记不改，避免顺手补）：三处私有 `extractText`（L-G）、`instructionRole`（L-F）、PiMessages 的 `options` 键不全（L-E）。
