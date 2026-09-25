@@ -12,11 +12,10 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
-import com.pijava.ai.api.Transcripts;
+import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.http.PiHttpClient;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
-import com.pijava.ai.message.MessageTexts;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
 
@@ -162,32 +161,16 @@ public final class PiMessagesApi extends AbstractChatApi {
 
     private static String buildBody(StreamRequest request) {
         try {
-            var transcript = Transcripts.resolveTranscript(request.transcript(), request.model());
+            // pi api/pi-messages.ts:374-390 —— body 是 `{model, context, options}`，而
+            // `context` **就是** TranscriptContext：只有 `messages`，系统提示与工具声明都在
+            // 消息数组里（`9e05370b2` 起形参从 `Context` 改成 `TranscriptContext`）。
+            // ⚠️ 旧实现发的是 `{systemPrompt?, messages, tools?}`（＝重构**前**的 `Context`）
+            // —— 包 A2 的 R2 把它对齐（docs/49 §4.2 F2）。本车道不折叠、不切头：对端自己读
+            // 数组里的系统消息。
             var context = JSON.createObjectNode();
-            // wire 上的 context 就是 pi 的 Context 类型：{systemPrompt?, messages, tools?}
-            // （pi api/pi-messages.ts 的 `{ model, context, options }` POST body）。
-            // ⚠️ 包 A2 只把**取值源**换成 transcript；线形状的对齐是下一步（docs/49 §9 R2）。
-            var initialSystemMessage = Transcripts.getInitialSystemMessage(transcript.messages());
-            var systemText = initialSystemMessage == null
-                ? "" : MessageTexts.getSystemMessageText(initialSystemMessage);
-            if (!systemText.isEmpty()) {
-                context.put("systemPrompt", systemText);
-            }
-            var conversation = Transcripts.withoutInitialSystemMessage(transcript.messages());
-            Transcripts.requireOnlyLeadingSystemMessage(conversation, "pi-messages");
             var messages = context.putArray("messages");
-            for (var msg : conversation) {
+            for (var msg : request.transcript().messages()) {
                 messages.add(toWireMessage(msg));
-            }
-            var currentTools = Transcripts.getCurrentTools(transcript.messages());
-            if (!currentTools.isEmpty()) {
-                var tools = context.putArray("tools");
-                for (var td : currentTools) {
-                    tools.addObject().put("type", "function")
-                        .put("name", td.name())
-                        .put("description", td.description())
-                        .set("parameters", JSON.valueToTree(td.inputSchema()));
-                }
             }
             var options = JSON.createObjectNode();
             if (request.temperature() >= 0) {
@@ -219,7 +202,45 @@ public final class PiMessagesApi extends AbstractChatApi {
             node.put("toolName", t.toolName());
             return node;
         }
+        if (msg instanceof Message.SystemMessage s) {
+            var node = wireMessage("system", s.content());
+            // 缺席纪律同 SessionJson 的 A7 规则：pi 写的是 `...(x ? {x} : {})`，
+            // 空集合在线上没有对应键，而 Jackson 会把它们照样写出来 ⇒ 主动省略。
+            if (s.timestamp() != null) {
+                node.put("timestamp", s.timestamp().toEpochMilli());
+            }
+            if (!s.sections().isEmpty()) {
+                node.set("sections", JSON.valueToTree(s.sections()));
+            }
+            if (!s.toolsAdded().isEmpty()) {
+                node.set("toolsAdded", toolDeclarations(s.toolsAdded()));
+            }
+            if (!s.toolsRemoved().isEmpty()) {
+                node.set("toolsRemoved", JSON.valueToTree(s.toolsRemoved()));
+            }
+            return node;
+        }
         throw new IllegalArgumentException("Unknown message type: " + msg);
+    }
+
+    /**
+     * pi 的 ai 层 {@code Tool} 形状（{@code types.ts:600-605}）：**三个**字段
+     * {@code {name, description, parameters}}。
+     *
+     * <p>⚠️ 这不是 java 的 {@link ToolDefinition} 全形（7 组件、字段名 {@code inputSchema}）
+     * —— 系统消息的 {@code toolsAdded} 在 pi 侧收的是 ai 层 {@code Tool[]}。同一件事在
+     * {@code SessionJson} 里仍按 7 组件写（{@code docs/32} **B87②** 登记的形状未定问题）
+     * ⇒ 本车道是**第一个**按 pi 形状写它的地方；B87② 决策时两处要一起收敛。</p>
+     */
+    private static ArrayNode toolDeclarations(List<ToolDefinition> tools) {
+        var arr = JSON.createArrayNode();
+        for (var td : tools) {
+            arr.addObject()
+                .put("name", td.name())
+                .put("description", td.description())
+                .set("parameters", JSON.valueToTree(td.inputSchema()));
+        }
+        return arr;
     }
 
     private static ObjectNode wireMessage(String role, List<ContentBlock> blocks) {
