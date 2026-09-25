@@ -4242,7 +4242,7 @@ result.add(ofThinking(ThinkingBlockParam.builder().thinking(text).signature(sign
 | e text 块 | 已是 no-op | **不动**（实测同对象） |
 | `allowEmptySignature` 三态 | 无 `compat` | **做**（两态） |
 | 空 text 块闸（P3，在**适配器**不在闸里） | 无 | **做** |
-| 其余四条变换：图片降级（`:35-57`）、跨模型 toolCall `thoughtSignature` 剥离（`:131-134`）、跨模型 toolCall id 归一（`:136-142`）、**孤儿 toolCall 合成 `toolResult`**（`:158-220`）、跳过 `error`/`aborted` 助手消息（`:194-197`） | 全无 | **不在本包** ⇒ 登记 **B14**（一条聚合行，带逐条出处） |
+| 其余四条变换：图片降级（`:35-57`）、跨模型 toolCall `thoughtSignature` 剥离（`:131-134`）、跨模型 toolCall id 归一（`:136-142`）、**孤儿 toolCall 合成 `toolResult`**（`:158-220`）、跳过 `error`/`aborted` 助手消息（`:194-197`） | 图片降级已由 H2 落地；B14 已落地 id 归一与孤儿结果合成（`bb08034`/`9141c34`/`b2a8da5`/`c0587e9`/`d88aa7c`，接线/夹具修复 `89cce36`，oracle 收口 `c6bce1c`）；`thoughtSignature` 剥离因 Java 形状不可达仍拆 B14b/R1 | **B14 已实施；B14b/R1、R2、R3、R4、R5 按其各自登记保留** |
 
 #### 8.34.4 四个决策与推荐
 

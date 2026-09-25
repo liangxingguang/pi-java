@@ -2,7 +2,6 @@ package com.pijava.ai.protocol;
 
 import com.pijava.ai.api.ToolCallIdNormalizer;
 import com.pijava.ai.utils.ShortHash;
-import com.pijava.ai.utils.ShortHash;
 
 /**
  * OpenAI Completions 车道的 toolCall id 归一器（包 B14 步2，pi P20）。

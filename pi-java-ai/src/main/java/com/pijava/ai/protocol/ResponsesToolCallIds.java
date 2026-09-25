@@ -1,12 +1,10 @@
 package com.pijava.ai.protocol;
 
 import com.pijava.ai.api.ToolCallIdNormalizer;
-import com.pijava.ai.message.Message;
-import com.pijava.ai.model.ModelId;
 import com.pijava.ai.utils.ShortHash;
 
-import java.util.Set;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * OpenAI Responses 车道的 toolCall id 归一器（包 B14 步2，pi P21）。

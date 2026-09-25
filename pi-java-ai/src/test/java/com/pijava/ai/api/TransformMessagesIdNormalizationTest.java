@@ -24,8 +24,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>归一器用<b>确定性的 lambda</b>（不依赖任何车道实现）—— 本文件只隔离步 3 的被测逻辑
  * （签名、映射表的填充/消费、门控），车道归一器本身的规则在各自车道夹具里（步 2）。</p>
  *
- * <p><b>有牙声明</b>：行为用例（1/5/6）在桩（toolCall/toolResult 一律原样）下红；
- * 2/4 是门/回归门形状（桩下即绿）。各用例 javadoc 标注它钉的命题与「什么情况下会红」；
+ * <p><b>有牙声明</b>：行为用例（1/6）在桩（toolCall/toolResult 一律原样）下红；用例 5 在桩下与映射表为空的观察等价；
+ * 2/3/4 是门/回归门形状（桩下即绿）。各用例 javadoc 标注它钉的命题与「什么情况下会红」；
  * 实测红灯记录见 task-3-report。</p>
  */
 class TransformMessagesIdNormalizationTest {

@@ -1,6 +1,6 @@
 # 47 - 包B14：`transformMessages` 剩余三条变换
 
-> **状态**：已批准（2026-09-23，§8 七点全按推荐执行）。实施中。
+> **状态**：**已完成（Task 0–7，2026-09-25）**。B14 的 ③ id normalization 与 ④ orphan result synthesis 已落地并完成六车道接线、oracle 夹具和回归；实际测试统计与全 reactor 结果见 §6 及 Task 7 收尾报告。
 > **上游**：`docs/41-gap-inventory.md §1.1` 台账 **B14**（一条聚合行，带逐条出处）。
 > **前身**：`docs/31 §8.34`（包② 落「闸」骨架，只做 thinking 五分支）＋ `docs/44`（包H2 追加图片降级）。
 > **锚点**：pi `3390bd936`。**取证一律 `git show 3390bd936:<path>`，不读工作树**。
@@ -324,10 +324,9 @@ package com.pijava.ai.utils;
  * <ol>
  *   <li>{@code Math.imul(a,b)} ≡ Java {@code int} 乘法（两者都是 32 位回绕）</li>
  *   <li>{@code (x >>> 0).toString(36)} ≡ {@link Integer#toUnsignedString(int, int)}</li>
- *   <li>常量 {@code 2654435761} / {@code 2246822507} / {@code 3266489909} 与
- *       {@code 1597334677} 都 &gt; {@code Integer.MAX_VALUE} ⇒
- *       **十进制字面量在 Java 里编译不过**，须写 {@code (int) 2654435761L}
- *       （{@code 0xdeadbeef} / {@code 0x41c6ce57} 是十六进制，可直接用）</li>
+ *   <li>常量 {@code 2654435761} / {@code 2246822507} / {@code 3266489909} 超过
+ *       {@code Integer.MAX_VALUE}，而 {@code 1597334677} <b>未超过</b>；前三者的
+ *       十进制 Java 字面量须写成 {@code (int) ...L}（十六进制形式可直接表达位模式）</li>
  * </ol>
  *
  * <p>出参必须与 pi 逐字节相同：Completions（P20）与 Responses（P21）把它拼进
@@ -422,9 +421,10 @@ public final class AnthropicToolCallIds {
 
 ## 6. 验收
 
+- **全包状态**：Task 0–7 已完成。Task 7 实跑 B14 聚焦集合 **75 tests, 0 failures, 0 errors**（`OrphanToolResultsTest` 11、oracle 4、id normalization 6、TransformMessages 9、lane wiring 14、ToolCallIds 31）；`pi-java-ai` reactor 回归与全 reactor 验证命令、实际结果记录于 `task-7-report.md`。预批准的七点决策保持不变：③/④已实施，② `thoughtSignature` 仍拆 B14b/R1；R2 timestamp、R3/R4 Responses id、R5 SystemMessage/heldSystemMessages 继续作为已知差异登记。
+
 - 全 reactor `mvn clean verify` **BUILD SUCCESS**，14/14 模块，checkstyle 0 违规，无 `System.out`。
-- `pi-java-ai` 测试数 **740 → ≥ 770**（预估 +30：ShortHash ~6、五归一器 ~15、
-  第一遍 ~4、第二遍 ~10，去重后）。
+- `pi-java-ai` 测试数 **740 → ≥ 770**（预估 +30：ShortHash ~6、五归一器 ~15、第一遍 ~4、第二遍 ~10，去重后）。
 - L5 ConformanceTest **15/15**（本包不动 agent-core 行为 ⇒ 预期零变化；若变红须解释）。
 - 夹具数（含 oracle 4 例）**全部有牙**：每条先答「它在什么情况下会红」。
 

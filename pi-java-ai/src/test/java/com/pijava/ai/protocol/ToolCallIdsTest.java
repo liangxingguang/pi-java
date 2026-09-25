@@ -1,6 +1,5 @@
 package com.pijava.ai.protocol;
 
-import com.pijava.ai.api.ToolCallIdNormalizer;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
@@ -167,6 +166,17 @@ class ToolCallIdsTest {
     }
 
     @Test
+    void completionsPipeCallIdAtLeast32Uses31CharPrefix() {
+        var n = CompletionsToolCallIds.create();
+        var target = ModelId.of("openai", "gpt-5");
+        var id = "c".repeat(35) + "|" + "f".repeat(10);
+        var hash = ShortHash.of(id).substring(0, 8);
+        var expected = "c".repeat(31) + "_" + hash;
+        assertThat(n.normalize(id, target, SOURCE)).isEqualTo(expected);
+        assertThat(expected).hasSize(40);
+    }
+
+    @Test
     void completionsMultiplePipesSliceNotSplit() {
         var n = CompletionsToolCallIds.create();
         var target = ModelId.of("openai", "gpt-5");
@@ -288,6 +298,7 @@ class ToolCallIdsTest {
         // 各自稳定（同实例重复调用走 idMap 命中路径）；长度恒 9（derive 的出口）
         assertThat(a).hasSize(9);
         assertThat(b).hasSize(9);
+        assertThat(a).isNotEqualTo(b);
         assertThat(n.normalize("abcdefgh1234", target, SOURCE)).isEqualTo(a);
         assertThat(n.normalize("wxyz12345678", target, SOURCE)).isEqualTo(b);
     }
