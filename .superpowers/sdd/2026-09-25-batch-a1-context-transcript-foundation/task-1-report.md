@@ -80,7 +80,8 @@ Focused transcript tests: 3/3 passed. Existing message/content regression: 18/18
 - Full reactor `clean verify` was not run in this task; it is a coordinator-level gate and the repository has a known long-running full-reactor build.
 
 ## Commit hashes
-Pending in this report until the implementation commit is created below.
+- Implementation commit: `209790c` (`feat(ai): add transcript system message types`), with the required plan attribution line.
+- The report is included in that implementation commit; this section records the commit hash after commit creation.
 
 ## Conclusions
 - SPEC COMPLIANCE: Pass for the coordinator-approved Java representation and Task 1 boundaries; the existing Message content contract is preserved.
