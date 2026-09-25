@@ -51,8 +51,10 @@ public final class OpenAIResponsesApi extends AbstractChatApi {
     @Override
     protected void streamInternal(StreamRequest request,
                                   SubmissionPublisher<StreamEvent> publisher) {
+        // pi openai-responses.ts:74：`supportsStrictMode: model.compat?.supportsStrictMode ?? false`
+        // —— 本车道的缺省是**不发** strict 键（azure 侧相反，见该车道）。
         var params = ResponsesMessageConverter.buildParams(
-            request, responsesOptions, request.modelId().modelName(), apiName());
+            request, responsesOptions, request.modelId().modelName(), apiName(), false);
         try (var stream = client.responses().createStreaming(params)) {
             ResponsesStreamProcessor.process(stream, publisher, request.model());
         }

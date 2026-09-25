@@ -59,8 +59,10 @@ public final class AzureOpenAIResponsesApi extends AbstractChatApi {
     protected void streamInternal(StreamRequest request,
                                   SubmissionPublisher<StreamEvent> publisher) {
         String deploymentName = resolveDeploymentName(request);
+        // pi azure-openai-responses.ts:296 / :319：`supportsStrictMode: model.compat?.supportsStrictMode ?? true`
+        // —— 与 openai-responses 车道（`?? false`）**缺省相反**，是 pi 的事实，别改成一致。
         var params = ResponsesMessageConverter.buildParams(
-            request, responsesOptions, deploymentName, apiName());
+            request, responsesOptions, deploymentName, apiName(), true);
         try (var stream = client.responses().createStreaming(params)) {
             ResponsesStreamProcessor.process(stream, publisher, request.model());
         }

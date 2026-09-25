@@ -72,11 +72,8 @@ class AzureOpenAIResponsesApiTest {
             List.of(new Message.UserMessage(
                 List.of(new ContentBlock.TextContent("hi")))),
             List.of(), 100, -1, Map.of());
-        var method = ResponsesMessageConverter.class.getDeclaredMethod(
-            "buildParams", StreamRequest.class, ResponsesOptions.class, String.class, String.class);
-        method.setAccessible(true);
-        var params = (com.openai.models.responses.ResponseCreateParams) method.invoke(
-            null, request, ResponsesOptions.from(ApiOptions.defaults()), "my-deploy", "azure-openai-responses");
+        var params = ResponsesMessageConverter.buildParams(request,
+            ResponsesOptions.from(ApiOptions.defaults()), "my-deploy", "azure-openai-responses", true);
         assertThat(params.model().orElseThrow().asString()).isEqualTo("my-deploy");
     }
 

@@ -57,11 +57,8 @@ class OpenAIResponsesImageContentTest {
     private static ResponseCreateParams build(ModelInfo model, List<Message> messages)
             throws Exception {
         var request = new StreamRequest(model, null, messages, List.of(), 100, 0.5, Map.of());
-        var method = ResponsesMessageConverter.class.getDeclaredMethod(
-            "buildParams", StreamRequest.class, ResponsesOptions.class, String.class, String.class);
-        method.setAccessible(true);
-        return (ResponseCreateParams) method.invoke(null, request,
-            ResponsesOptions.from(ApiOptions.defaults()), "gpt-5-mini", "openai-responses");
+        return ResponsesMessageConverter.buildParams(request,
+            ResponsesOptions.from(ApiOptions.defaults()), "gpt-5-mini", "openai-responses", false);
     }
 
     /** 工具结果那一项的 output 压成 {@code text:…} ／ {@code image:url:detail} ／ {@code string:…}。 */

@@ -1,6 +1,5 @@
 package com.pijava.ai.protocol;
 
-import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -52,11 +51,11 @@ class OpenAIResponsesSurrogateSanitizeTest {
     private static ResponseCreateParams buildParams(String systemPrompt, List<Message> messages)
             throws Exception {
         var request = new StreamRequest(TARGET, systemPrompt, messages, List.of(), 100, 0.5, Map.of());
-        var method = ResponsesMessageConverter.class.getDeclaredMethod(
-            "buildParams", StreamRequest.class, ResponsesOptions.class, String.class, String.class);
-        method.setAccessible(true);
-        return (ResponseCreateParams) method.invoke(null, request, ResponsesOptions.from(ApiOptions.defaults()),
-            "gpt-5-mini", "openai-responses");
+        // 同包直接调（本类与被测类同在 com.pijava.ai.protocol）。**不再走反射**：反射绑死
+        // 形参表 —— 包 B87/B88 给 buildParams 加 `supportsStrictMode` 时，本仓四处反射
+        // 调用点是以 21 个**运行期** `NoSuchMethod` 报出来的，编译期毫无提示。
+        return ResponsesMessageConverter.buildParams(request,
+            ResponsesOptions.from(ApiOptions.defaults()), "gpt-5-mini", "openai-responses", false);
     }
 
     /** 出参里**全部**文本载荷（system ／ user ／ assistant output_text ／ tool result 输出）。 */

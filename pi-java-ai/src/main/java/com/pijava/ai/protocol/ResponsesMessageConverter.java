@@ -5,6 +5,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.openai.core.JsonField;
+import com.openai.core.JsonMissing;
 import com.openai.core.JsonValue;
 import com.openai.models.Reasoning;
 import com.openai.models.ReasoningEffort;
@@ -58,9 +60,14 @@ final class ResponsesMessageConverter {
      * @param apiName   本车道的 api 名（{@code "openai-responses"} / {@code "azure-openai-responses"}），
      *                  交给共享预通道做同模型判定；**必须由调用方传**，因为两条车道共用本类
      *                  而这个串不同（pi 侧同样是两条独立构建器分别调 transformMessages）
+     * @param supportsStrictMode 本车道是否发 {@code strict}（pi 的两车道 compat **缺省相反**：
+     *                  {@code openai-responses.ts:74} 是 {@code ?? false}，
+     *                  {@code azure-openai-responses.ts:296} 是 {@code ?? true}）；由车道传，
+     *                  因为它随车道而变、不随模型而变 —— 见 {@link #strictField(boolean)}
      */
     static ResponseCreateParams buildParams(StreamRequest request, ResponsesOptions ropts,
-                                            String modelName, String apiName) {
+                                            String modelName, String apiName,
+                                            boolean supportsStrictMode) {
         // pi openai-responses.ts:119 / azure-openai-responses.ts:77 —— 车道入口先
         // resolveTranscript，之后再构建请求。
         var transcript = Transcripts.resolveTranscript(request.transcript(), request.model());
@@ -78,6 +85,7 @@ final class ResponsesMessageConverter {
                 .parameters(FunctionTool.Parameters.builder()
                     .putAllAdditionalProperties(toJsonValues(td.inputSchema()))
                     .build())
+                .strict(strictField(supportsStrictMode))
                 .build()));
         }
         if (!tools.isEmpty()) {
@@ -320,6 +328,32 @@ final class ResponsesMessageConverter {
     }
 
     // ── Tools ──────────────────────────────────────────────────────────
+
+    /**
+     * 工具声明的 {@code strict} 字段 —— pi {@code openai-responses-shared.ts:391-393}
+     * 的逐字落法：**不支持就整个键不发，支持就明确发**（{@code strict} 的值本身是
+     * {@code constrainedStrict ?? false}）。
+     *
+     * <p>⚠️ 两个车道的缺省**相反**，这是 pi 的事实而不是笔误：
+     * {@code openai-responses.ts:74} 写 {@code ?? false}、
+     * {@code azure-openai-responses.ts:296} 与 {@code :319} 写 {@code ?? true}。</p>
+     *
+     * <p>⚠️ 「不发」必须显式表达成 {@link JsonMissing}：SDK 把 {@code strict} 标成必填
+     * （{@code FunctionTool.Builder.build()} → {@code checkRequired("strict", strict)}），
+     * 而 {@code JsonMissing} 正是 SDK 公开的「本字段缺席」值 —— 它的类文档写的是
+     * 「will cause a JSON field to be omitted from the serialized JSON entirely」
+     * （{@code Values.kt:433-445}）。这不是绕过校验的技巧。B88 之前这里**根本不设**它，
+     * 于是请求在**构建期**就抛 {@code IllegalStateException}，桩服务器零请求
+     * （{@code docs/50 §7.1} 实测）。</p>
+     *
+     * <p>java 没有 {@code constrainedSampling}（{@code docs/50 §3 F6}），故 pi 的
+     * {@code constrainedStrict ?? false} 退化为恒 {@code false}；{@code prefer}
+     * （发 {@code true} ＋ 收紧 schema）与 {@code require}（不支持则抛）两支登记为
+     * {@code docs/50 §10 L-A}，不在此处造投机骨架。</p>
+     */
+    private static JsonField<Boolean> strictField(boolean supportsStrictMode) {
+        return supportsStrictMode ? JsonField.of(false) : JsonMissing.of();
+    }
 
     private static Map<String, JsonValue> toJsonValues(Map<String, Object> schema) {
         var out = new LinkedHashMap<String, JsonValue>();
