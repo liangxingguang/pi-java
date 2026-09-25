@@ -441,7 +441,7 @@ export JAVA_HOME='D:\soft\jdk\graalvm-jdk-25'
 | **R3** | `sections` 的两件事：①值 `null` = 删除（表达不了）②渲染顺序被 `Map.copyOf` 打乱 | ② 本包**修**（`LinkedHashMap` 保序，一行）；① **本包不改形状**，登记 L3 归 A4（今天零生产者，改形状会波及 A1 已落的 `SessionJson` 线格） | ①也本包改（形状变更波及 A1 落线，代价大） |
 | **R4** | `ModelCompat.supportsMidConvoSystemMessages`：本包加字段（消费点落地）vs 五车道硬编码 `false` | **加字段**（boxed `Boolean`，`null` ≙ pi 的 `undefined` ≙ 折叠），探测/目录接线归 A7 | 硬编码 false：省 1 个字段，代价是 A7 时要改 5 处调用点 |
 | **R5** | `OrphanToolResults` 的 held 系统消息放本包（A2d）还是随 A3 | **本包**：它是 F1（今天就能响亮撞到），且与工具增删的**生产者**无关 | 随 A3：本包留一个已知可达的 throw |
-| **R6** | 是否接受 §6 的六步拆分（A2a–A2e）与 A2b/A2c 的「先并存、后删旧」顺序 | 接受 | 一个原子提交（diff > 500 行） |
+| **R6** | 是否接受 §6 的**五**步拆分（A2a–A2e）与 A2b/A2c 的「先并存、后删旧」顺序 | 接受 | 一个原子提交（diff > 500 行） |
 
 ---
 
