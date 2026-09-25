@@ -12,12 +12,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MessageTest {
 
     /**
-     * 变体集合与 pi 的 {@code Message} 联合类型一致：恰好三个角色，**没有 system**
-     * （{@code packages/ai/src/types.ts:470}）。系统提示是 {@code Context.systemPrompt}
-     * 上的独立字段，不是消息。多出第四个变体意味着某处又把系统提示塞回了消息列表。
+     * The sealed message union includes the three legacy variants plus system.
      */
     @Test
-    void messageUnionHasExactlyPiThreeRoles() {
+    void messageUnionHasFourRolesIncludingSystem() {
         var variants = java.util.Arrays.stream(Message.class.getPermittedSubclasses())
                 .map(Class::getSimpleName)
                 .sorted()

@@ -328,6 +328,9 @@ public final class MistralConversationsApi extends AbstractChatApi {
                     m.put("name", t.toolName());
                     m.put("content", toolContent(t, supportsImages));
                 }
+                // Mechanical guard: adding Message.SystemMessage makes this sealed switch
+                // exhaustive only with an explicit unsupported-role failure. This preserves
+                // the existing provider wire mapping for user/assistant/tool messages.
                 default -> throw new IllegalArgumentException(
                     "Unsupported message role for Mistral projection: " + msg.role());
             }

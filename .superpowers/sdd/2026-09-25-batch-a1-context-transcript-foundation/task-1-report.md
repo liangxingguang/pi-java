@@ -1,25 +1,25 @@
 # Task 1 Implementation Report
 
 ## Scope
-Implemented the Batch A1 AI-layer transcript foundation in this worktree.
+Implemented the Batch A1 AI-layer transcript foundation in the controller worktree.
 
 ## Files changed
-- `D:\workplaceForai\pi-java\.claude\worktrees\agent-aff4e82dd7b12188f\pi-java-ai\src\main\java\com\pijava\ai\message\Message.java`
+- `D:\workplaceForai\pi-java\.claude\worktrees\batch-a1-context-transcript\pi-java-ai\src\main\java\com\pijava\ai\message\Message.java`
   - Added `Message.SystemMessage` as a fourth permitted variant.
   - Preserved the existing `Message.content()` return type (`List<ContentBlock>`).
   - Added the required five-argument text convenience constructor; text is represented by one `TextContent` block.
   - Added immutable/null-normalized timestamp metadata and tool/section collections.
   - Updated the type-level documentation to state system-message support and legacy `Context.systemPrompt` compatibility.
-- `D:\workplaceForai\pi-java\.claude\worktrees\agent-aff4e82dd7b12188f\pi-java-ai\src\main\java\com\pijava\ai\api\ToolReference.java`
+- `D:\workplaceForai\pi-java\.claude\worktrees\batch-a1-context-transcript\pi-java-ai\src\main\java\com\pijava\ai\api\ToolReference.java`
   - Added exact record shape `public record ToolReference(String name) {}`.
-- `D:\workplaceForai\pi-java\.claude\worktrees\agent-aff4e82dd7b12188f\pi-java-ai\src\main\java\com\pijava\ai\api\TranscriptContext.java`
+- `D:\workplaceForai\pi-java\.claude\worktrees\batch-a1-context-transcript\pi-java-ai\src\main\java\com\pijava\ai\api\TranscriptContext.java`
   - Added immutable record with null-to-empty defensive message-list normalization.
-- `D:\workplaceForai\pi-java\.claude\worktrees\agent-aff4e82dd7b12188f\pi-java-ai\src\test\java\com\pijava\ai\api\TranscriptContextTest.java`
+- `D:\workplaceForai\pi-java\.claude\worktrees\batch-a1-context-transcript\pi-java-ai\src\test\java\com\pijava\ai\api\TranscriptContextTest.java`
   - Added role/fields, defensive-copy, and null-normalization tests.
-- `D:\workplaceForai\pi-java\.claude\worktrees\agent-aff4e82dd7b12188f\pi-java-ai\src\test\java\com\pijava\ai\message\MessageTest.java`
+- `D:\workplaceForai\pi-java\.claude\worktrees\batch-a1-context-transcript\pi-java-ai\src\test\java\com\pijava\ai\message\MessageTest.java`
   - Updated the permitted-variant expectation from three to four variants.
-- `D:\workplaceForai\pi-java\.claude\worktrees\agent-aff4e82dd7b12188f\pi-java-ai\src\main\java\com\pijava\ai\protocol\MistralConversationsApi.java`
-  - Added an explicit default guard to the existing exhaustive switch, required by Java after adding sealed `SystemMessage`; no behavior changes for the original three variants.
+- `D:\workplaceForai\pi-java\.claude\worktrees\batch-a1-context-transcript\pi-java-ai\src\main\java\com\pijava\ai\protocol\MistralConversationsApi.java`
+  - Added an explicit unsupported-message default to the existing exhaustive switch, required by Java after adding sealed `SystemMessage`; this is a mechanical compile guard only and does not alter existing provider semantics or wire mapping.
 
 No StreamRequest overload, provider wiring, agent-core dependency, or provider request-shape change was added.
 
@@ -82,6 +82,36 @@ Focused transcript tests: 3/3 passed. Existing message/content regression: 18/18
 ## Commit hashes
 - Implementation commit: `209790c` (`feat(ai): add transcript system message types`), with the required plan attribution line.
 - The report is included in that implementation commit; this section records the commit hash after commit creation.
+
+## Fix round 1 (review findings)
+
+Review target: controller worktree `D:\workplaceForai\pi-java\.claude\worktrees\batch-a1-context-transcript`, range `e9a3f7e..HEAD`.
+
+1. **Mechanical Mistral sealed-switch guard.** Retained the explicit `default` only because Java requires an exhaustive branch after adding `Message.SystemMessage`. The branch throws `IllegalArgumentException("Unsupported message role for Mistral projection: " + msg.role())`; it does not create a wire message, alter existing user/assistant/tool mappings, or change provider semantics. Added an inline comment documenting this boundary.
+2. **MessageTest wording.** Renamed `messageUnionHasExactlyPiThreeRoles` to `messageUnionHasFourRolesIncludingSystem` and replaced the stale “exactly three/no system” comment with the current four-role contract.
+3. **Report provenance.** Updated all implementation paths to the controller worktree and replaced the old isolated commit metadata with controller commits/range. The original RED/GREEN evidence is preserved above.
+
+### Fix-round verification commands and exact outputs
+
+```bash
+git diff --check
+```
+Output: no output; exit 0.
+
+```bash
+export JAVA_HOME='D:\soft\jdk\graalvm-jdk-25' && /d/soft/apache-maven-3.9.9/bin/mvn -pl pi-java-ai -am -Dtest=MessageTest,ContentBlockJsonTest -Dsurefire.failIfNoSpecifiedTests=false test
+```
+Output: `BUILD SUCCESS`; `MessageTest` 16/16 and `ContentBlockJsonTest` 2/2 passed; parent, telemetry, and AI reactor modules `SUCCESS`.
+
+```bash
+export JAVA_HOME='D:\soft\jdk\graalvm-jdk-25' && /d/soft/apache-maven-3.9.9/bin/mvn -pl pi-java-ai -Dtest=TranscriptContextTest test
+```
+Output: `BUILD SUCCESS`; `Tests run: 3, Failures: 0, Errors: 0, Skipped: 0`.
+
+```bash
+git status --short
+```
+Output before this fix commit: only the intended `MessageTest.java`, `MistralConversationsApi.java`, and report changes; no unrelated files.
 
 ## Conclusions
 - SPEC COMPLIANCE: Pass for the coordinator-approved Java representation and Task 1 boundaries; the existing Message content contract is preserved.
