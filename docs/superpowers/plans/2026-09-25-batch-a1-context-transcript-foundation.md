@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Do not add or remove Maven dependencies.
-- Do not change provider wire consumers or provider-specific request builders in A1.
+- Do not change provider semantics, request payloads, or provider-specific routing in A1. A provider file may receive only the mechanical exhaustive-switch/default adaptation required for the Java compiler after adding `Message.SystemMessage`, with no handling beyond an explicit unsupported-message guard.
 - Do not add an independent persisted `SystemMessage` entry type; system messages remain `Entry.Message` payloads.
 - Preserve existing JSONL/SQLite message shape and old `Context`/`StreamRequest` construction paths.
 - Do not implement prompt-section replacement or tool incremental production; those are later A tasks.

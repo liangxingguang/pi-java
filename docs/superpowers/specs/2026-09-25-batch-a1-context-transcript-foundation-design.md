@@ -21,8 +21,7 @@ A1 includes:
 
 A1 explicitly excludes:
 
-- calling `ContextNormalizer` from provider implementations;
-- changing `StreamRequest` or provider wire signatures;
+- do not change provider semantics, request payloads, or provider-specific routing in A1; a provider file may receive only the mechanical exhaustive-switch/default adaptation required for the Java compiler after adding `Message.SystemMessage`, with no handling beyond an explicit unsupported-message guard;
 - prompt-section replay/replacement semantics;
 - producing system messages from `Entry.ActiveToolsChange`;
 - tool-addition/removal production or provider-specific `tool_addition`/`tool_removal` wire;
