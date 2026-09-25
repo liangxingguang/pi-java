@@ -197,6 +197,26 @@ final class FrameNormalizer {
                 out.put("isError", result.isError());
                 yield out;
             }
+            // A1（docs/48）新增的第四种消息。对齐剧本目前不产生系统消息（PiLoop 不发射
+            // 它，A1 也没有把 ActiveToolsChange 投影成系统消息），所以这一支**不可达**；
+            // 照 pi 的 SystemMessage 线格形状（ai/src/types.ts:491-509）留位，让将来的
+            // 剧本一旦引入就在差分里显形，而不是让帧归一化编译不过。
+            // content 与 user 同规：pi 是 `string | TextContent[]`，按序拼回字符串。
+            case Message.SystemMessage system -> {
+                var out = new LinkedHashMap<String, Object>();
+                out.put("role", "system");
+                out.put("content", textOf(system.content()));
+                if (!system.sections().isEmpty()) {
+                    out.put("sections", system.sections());
+                }
+                if (!system.toolsAdded().isEmpty()) {
+                    out.put("toolsAdded", system.toolsAdded());
+                }
+                if (!system.toolsRemoved().isEmpty()) {
+                    out.put("toolsRemoved", system.toolsRemoved());
+                }
+                yield out;
+            }
         };
     }
 

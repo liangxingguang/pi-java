@@ -85,6 +85,11 @@ final class GoogleMessageConverter {
                     contents.add(Content.builder().role("model").parts(parts).build());
                 }
                 case Message.ToolResultMessage tool -> addToolResult(contents, tool, modelId, model);
+                // Mechanical guard: adding Message.SystemMessage makes this sealed switch
+                // exhaustive only with an explicit unsupported-role failure. This preserves
+                // the existing provider wire mapping for user/assistant/tool messages.
+                default -> throw new IllegalArgumentException(
+                        "Unsupported message role for Google projection: " + msg.role());
             }
         }
         return contents;

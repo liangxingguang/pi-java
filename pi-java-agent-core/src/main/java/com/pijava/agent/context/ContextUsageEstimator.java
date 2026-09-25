@@ -164,6 +164,9 @@ public final class ContextUsageEstimator {
                 }
                 yield total;
             }
+            // pi 的 estimateTokens 没有 "system" 分支 —— 落到函数末尾的 return 0
+            // （compaction.ts:273-306 的 case 列表里没有 system）⇒ 系统消息不计字符。
+            case Message.SystemMessage ignored -> 0L;
         };
         return (int) Math.ceil(chars / 4.0);
     }
