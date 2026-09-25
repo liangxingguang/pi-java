@@ -85,11 +85,12 @@ final class GoogleMessageConverter {
                     contents.add(Content.builder().role("model").parts(parts).build());
                 }
                 case Message.ToolResultMessage tool -> addToolResult(contents, tool, modelId, model);
-                // Mechanical guard: adding Message.SystemMessage makes this sealed switch
-                // exhaustive only with an explicit unsupported-role failure. This preserves
-                // the existing provider wire mapping for user/assistant/tool messages.
-                default -> throw new IllegalArgumentException(
-                        "Unsupported message role for Google projection: " + msg.role());
+                // Mechanical guard (docs/48 §A1): Gemini carries the prompt as
+                // `systemInstruction`, so a system message never reaches this conversion.
+                // An explicit case (rather than `default`) keeps a future fifth variant a
+                // compile error instead of silently reusing this message.
+                case Message.SystemMessage s -> throw new IllegalArgumentException(
+                        "Unsupported message role for Google projection: " + s.role());
             }
         }
         return contents;

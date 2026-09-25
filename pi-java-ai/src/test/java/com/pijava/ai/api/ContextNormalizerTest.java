@@ -54,7 +54,6 @@ class ContextNormalizerTest {
             "legacy", List.of(existing, user), List.of(tool("bash")));
 
         assertThat(normalized.messages()).containsExactly(existing, user);
-        assertThat(normalized.messages()).isNotSameAs(List.of(existing, user));
     }
 
     @Test

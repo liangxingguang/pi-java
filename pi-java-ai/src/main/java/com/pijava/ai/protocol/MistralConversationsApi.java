@@ -328,11 +328,10 @@ public final class MistralConversationsApi extends AbstractChatApi {
                     m.put("name", t.toolName());
                     m.put("content", toolContent(t, supportsImages));
                 }
-                // Mechanical guard: adding Message.SystemMessage makes this sealed switch
-                // exhaustive only with an explicit unsupported-role failure. This preserves
-                // the existing provider wire mapping for user/assistant/tool messages.
-                default -> throw new IllegalArgumentException(
-                    "Unsupported message role for Mistral projection: " + msg.role());
+                // Mechanical guard (docs/48 §A1): system messages have no Mistral projection —
+                // the prompt travels as a request-level field, not as a message.
+                case Message.SystemMessage s -> throw new IllegalArgumentException(
+                    "Unsupported message role for Mistral projection: " + s.role());
             }
             return m;
         }).filter(java.util.Objects::nonNull).forEach(messages::add);
@@ -385,7 +384,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
     }
 
     /**
-     * 工具结果的 content 块数组 —— pi {@code :851-874}：文本块在前（{@link #buildToolResultText}），
+     * 工具结果的 content 块数组 —— pi {@code :851-874}：文本块在前（{@link MistralToolResultText#build}），
      * 图片块按 {@code supportsImages} 追加。
      */
     private List<Map<String, Object>> toolContent(Message.ToolResultMessage tool,
@@ -398,7 +397,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
         boolean hasImages = tool.content().stream().anyMatch(MistralConversationsApi::isImageBlock);
         var chunks = new ArrayList<Map<String, Object>>();
         chunks.add(textChunk(
-                buildToolResultText(text, hasImages, supportsImages, tool.isError())));
+                MistralToolResultText.build(text, hasImages, supportsImages, tool.isError())));
         if (supportsImages) {
             for (var block : tool.content()) {
                 if (block instanceof ContentBlock.ImageContent img) {
@@ -409,32 +408,6 @@ public final class MistralConversationsApi extends AbstractChatApi {
             }
         }
         return chunks;
-    }
-
-    /**
-     * pi {@code mistral-conversations.ts:877-897} 的 {@code buildToolResultText} —— **整块逐行照抄**
-     * （{@code docs/44} 待裁决 ③）：错误前缀 ＋ trim ＋ 不支持时的图片省略后缀 ＋ 三个占位串。
-     * ⚠️ 本函数是 java 侧三处**非图片**行为变更的来源：{@code "[tool error] "} 前缀、文本 trim、
-     * 空结果的 {@code "(no tool output)"}（旧实现发空串且完全不看 {@code isError}）。
-     */
-    private static String buildToolResultText(String text, boolean hasImages,
-                                              boolean supportsImages, boolean isError) {
-        var trimmed = text.trim();
-        var errorPrefix = isError ? "[tool error] " : "";
-        if (!trimmed.isEmpty()) {
-            var imageSuffix = hasImages && !supportsImages
-                    ? "\n[tool image omitted: model does not support images]" : "";
-            return errorPrefix + trimmed + imageSuffix;
-        }
-        if (hasImages) {
-            if (supportsImages) {
-                return isError ? "[tool error] (see attached image)" : "(see attached image)";
-            }
-            return isError
-                    ? "[tool error] (image omitted: model does not support images)"
-                    : "(image omitted: model does not support images)";
-        }
-        return isError ? "[tool error] (no tool output)" : "(no tool output)";
     }
 
     /** 一个内容块。⚠️ pi 的线格键名是 {@code imageUrl}，序列化时映射成 {@code image_url}（{@code :416}）。 */
