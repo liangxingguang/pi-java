@@ -67,6 +67,12 @@ class PiMessagesRequestShapeTest {
             assertThat(tool.path("description").asText()).isEqualTo("Look up a value");
             assertThat(tool.path("parameters").path("type").asText()).isEqualTo("object");
             assertThat(tool.has("inputSchema")).as(server.body()).isFalse();
+            // 键集**恰是**三个：包 B87② 之后本车道与 SessionJson 的系统消息落线共用
+            // Transcripts.toToolDeclaration，两处都要有这条牙（多一个键就说明哪里又自己
+            // 拼了形状）。AssertJ 的 Iterator 断言会先消费迭代器，故先落成 List。
+            var toolKeys = new java.util.ArrayList<String>();
+            tool.fieldNames().forEachRemaining(toolKeys::add);
+            assertThat(toolKeys).containsExactlyInAnyOrder("name", "description", "parameters");
             assertThat(messagesNode.get(1).path("role").asText()).isEqualTo("user");
         }
     }

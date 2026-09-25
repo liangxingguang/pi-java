@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.ToolDefinition;
+import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.http.PiHttpClient;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -227,18 +228,15 @@ public final class PiMessagesApi extends AbstractChatApi {
      * pi 的 ai 层 {@code Tool} 形状（{@code types.ts:600-605}）：**三个**字段
      * {@code {name, description, parameters}}。
      *
-     * <p>⚠️ 这不是 java 的 {@link ToolDefinition} 全形（7 组件、字段名 {@code inputSchema}）
-     * —— 系统消息的 {@code toolsAdded} 在 pi 侧收的是 ai 层 {@code Tool[]}。同一件事在
-     * {@code SessionJson} 里仍按 7 组件写（{@code docs/32} **B87②** 登记的形状未定问题）
-     * ⇒ 本车道是**第一个**按 pi 形状写它的地方；B87② 决策时两处要一起收敛。</p>
+     * <p>投影本身在 {@link Transcripts#toToolDeclaration} —— 包 B87② 之前这里是**第一个**
+     * 按 pi 形状写它的地方，而 {@code SessionJson} 的系统消息落线仍写
+     * {@link ToolDefinition} 全形（{@code docs/32} B87② 登记的形状未定问题）。两处现在
+     * 共用同一份投影，线上字节因此一致。</p>
      */
     private static ArrayNode toolDeclarations(List<ToolDefinition> tools) {
         var arr = JSON.createArrayNode();
         for (var td : tools) {
-            arr.addObject()
-                .put("name", td.name())
-                .put("description", td.description())
-                .set("parameters", JSON.valueToTree(td.inputSchema()));
+            arr.add(JSON.valueToTree(Transcripts.toToolDeclaration(td)));
         }
         return arr;
     }

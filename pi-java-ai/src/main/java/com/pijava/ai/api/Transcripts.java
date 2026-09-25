@@ -19,7 +19,10 @@ import com.pijava.ai.message.MessageTexts;
  *
  * <p>⚠️ 本类**不含** {@code getToolStateChanges} / {@code declarationsEqual} /
  * {@code hasToolRedefinitions} / {@code hasNonAdditiveToolChanges} / {@code resolveTranscriptTools}
- * —— 那些是包 A3（工具增删状态线）的，本包不造投机骨架。</p>
+ * —— 那些是包 A3（工具增删状态线）的，本包不造投机骨架。包 B87② 落地的
+ * {@link #toToolDeclaration} 是**例外**：它不是状态线，而是两个写者
+ * （{@code SessionJson} 的系统消息落线、{@code PiMessagesApi} 的线格）共用的投影，
+ * 两处线上形状不一致本身就是 B87② 那条缺口。</p>
  */
 public final class Transcripts {
 
@@ -37,6 +40,22 @@ public final class Transcripts {
             return null;
         }
         return messages.get(0) instanceof Message.SystemMessage system ? system : null;
+    }
+
+    /**
+     * pi {@code transcript.ts:123-130} —— 把工具剥成**声明形状**（三键
+     * {@code {name, description, parameters}}），pi 用它做「比较或持久化前的归一」
+     * （{@code declarationsEqual} 与 {@code getToolStateChanges} 都走它）。
+     *
+     * <p>java 的两个写者共用它：{@code SessionJson} 的系统消息落线与 {@code PiMessagesApi}
+     * 的线格 —— 包 B87② 之前这两处各写各的（一个是 {@code ToolDefinition} 全形、
+     * 一个是手写三键），线上形状因此不一致。</p>
+     *
+     * <p>⚠️ pi 在这里还有一支 {@code ...(constrainedSampling === undefined ? {} :
+     * { constrainedSampling })}，java 没有该字段（{@code docs/50 §10 L-A}）。</p>
+     */
+    public static ToolDeclaration toToolDeclaration(ToolDefinition tool) {
+        return new ToolDeclaration(tool.name(), tool.description(), tool.inputSchema());
     }
 
     /**

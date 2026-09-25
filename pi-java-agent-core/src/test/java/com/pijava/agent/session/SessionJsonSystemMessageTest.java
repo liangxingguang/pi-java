@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.api.ToolReference;
@@ -31,7 +32,7 @@ import org.junit.jupiter.api.Test;
  */
 class SessionJsonSystemMessageTest {
 
-    private static List<String> fieldNames(ObjectNode node) {
+    private static List<String> fieldNames(JsonNode node) {
         var names = new ArrayList<String>();
         node.fieldNames().forEachRemaining(names::add);
         return names;
@@ -70,6 +71,29 @@ class SessionJsonSystemMessageTest {
         assertThat(node.get("toolsRemoved").get(0).get("name").asText()).isEqualTo("write");
         assertThat(fieldNames(node)).containsExactlyInAnyOrder(
             "role", "content", "timestamp", "sections", "toolsAdded", "toolsRemoved");
+    }
+
+    /**
+     * 包 B87b（{@code docs/50 §4.3}）：{@code toolsAdded} 的**线格形状**是 pi 的 ai 层
+     * {@code Tool} —— 三个键 {@code {name, description, parameters}}（{@code types.ts:600-605}），
+     * 不是 {@code ToolDefinition} 全形（7 组件、schema 键名 {@code inputSchema}）。
+     *
+     * <p>收敛之前这里是 Jackson 对 record 的默认序列化；同仓的 {@code PiMessagesApi}
+     * 早已在写 pi 形状（它自己的 javadoc 就点名了这对并存）。两处现在共用
+     * {@code Transcripts.toToolDeclaration}。</p>
+     */
+    @Test
+    void toolsAddedIsWrittenInPiToolShape() {
+        var system = new Message.SystemMessage("base", Instant.ofEpochMilli(3), Map.of(),
+            List.of(new ToolDefinition("read", "Read files", Map.of("type", "object"))),
+            List.of());
+
+        var node = SessionJson.messageNode(system);
+
+        var tool = node.get("toolsAdded").get(0);
+        assertThat(fieldNames(tool)).as("pi 的 ai 层 Tool 只有这三个键")
+            .containsExactlyInAnyOrder("name", "description", "parameters");
+        assertThat(tool.get("parameters").get("type").asText()).isEqualTo("object");
     }
 
     /**

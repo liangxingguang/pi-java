@@ -17,6 +17,7 @@ import com.fasterxml.jackson.databind.node.TextNode;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.pijava.agent.entry.CustomMessageContent;
 import com.pijava.agent.entry.ProvisionedEntry;
+import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 
@@ -134,7 +135,11 @@ public final class SessionJson {
                 node.set("sections", MAPPER.valueToTree(system.sections()));
             }
             if (!system.toolsAdded().isEmpty()) {
-                node.set("toolsAdded", MAPPER.valueToTree(system.toolsAdded()));
+                // 包 B87②：pi 的 toolsAdded 是 ai 层 Tool（三键 {name,description,parameters}），
+                // 不是 ToolDefinition 全形 —— 走 Transcripts.toToolDeclaration 与
+                // PiMessagesApi 的线格共用一份投影（此前两处各写各的）。
+                node.set("toolsAdded", MAPPER.valueToTree(
+                    system.toolsAdded().stream().map(Transcripts::toToolDeclaration).toList()));
             }
             if (!system.toolsRemoved().isEmpty()) {
                 node.set("toolsRemoved", MAPPER.valueToTree(system.toolsRemoved()));
