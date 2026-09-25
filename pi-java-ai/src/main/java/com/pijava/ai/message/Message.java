@@ -61,10 +61,19 @@ public sealed interface Message
             toolsRemoved = toolsRemoved == null ? List.of() : List.copyOf(toolsRemoved);
         }
 
-        /** Construct a system message from one legacy text instruction. */
+        /**
+         * Construct a system message from one legacy text instruction.
+         *
+         * <p>A null text becomes an <b>empty text block</b>, not an empty content list ——
+         * pi 的 {@code SystemMessage.content} 是必填的 {@code string | TextContent[]}，
+         * 且 {@code createInitialSystemMessage}（{@code ai/src/utils/transcript.ts:12-22}）
+         * 在「只有工具、没有系统提示」时写的正是 {@code content: systemPrompt ?? ""}。
+         * 空列表会让「系统消息没有内容」这句话在类型上成立、在语义上是假的，下游
+         * （A2 的 provider 迁移）还得为它单开一支。</p>
+         */
         public SystemMessage(String text, Instant timestamp, Map<String, String> sections,
                              List<ToolDefinition> toolsAdded, List<ToolReference> toolsRemoved) {
-            this(text == null ? List.of() : List.of(new ContentBlock.TextContent(text)), timestamp,
+            this(List.of(new ContentBlock.TextContent(text == null ? "" : text)), timestamp,
                 sections, toolsAdded, toolsRemoved);
         }
 

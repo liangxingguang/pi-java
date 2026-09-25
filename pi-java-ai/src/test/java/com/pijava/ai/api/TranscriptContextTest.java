@@ -59,13 +59,20 @@ class TranscriptContextTest {
     @Test
     void nullCollectionsAndContentBecomeImmutableEmptyValues() {
         var system = new Message.SystemMessage((String) null, null, null, null, null);
+        var blockless = new Message.SystemMessage(
+            (List<ContentBlock>) null, Instant.EPOCH, null, null, null);
         var context = new TranscriptContext(null);
 
-        assertThat(system.content()).isEmpty();
+        // 空文本走「一个空文本块」而不是空列表 —— 见便捷构造器的 javadoc
+        // （pi 的 content 必填，createInitialSystemMessage 写的是 systemPrompt ?? ""）。
+        assertThat(system.content()).containsExactly(new ContentBlock.TextContent(""));
         assertThat(system.timestamp()).isNull();
         assertThat(system.sections()).isEmpty();
         assertThat(system.toolsAdded()).isEmpty();
         assertThat(system.toolsRemoved()).isEmpty();
+
+        // 规范化构造器里的 null 块列表才是「没有内容」。
+        assertThat(blockless.content()).isEmpty();
         assertThat(context.messages()).isEmpty();
     }
 }
