@@ -247,4 +247,27 @@ class MessageTest {
         args.put("key", "modified");
         assertThat(block.arguments()).containsEntry("key", "value");
     }
+
+    /**
+     * sections 的迭代顺序 = 插入顺序（包 A2 的 F3）。
+     *
+     * <p>pi 按 {@code Object.entries}/`values` 的插入顺序渲染 section 文本
+     * （{@code utils/text.ts:17}/{@code :30}）；{@code Map.copyOf} 的迭代顺序**未定义**
+     * ⇒ 这条断言在旧实现上可能偶然成立（见 {@code docs/49 §7.4-3} 的如实登记），
+     * 故它守的是「我们选定的语义」，不是一条必定会红的探针。</p>
+     */
+    @Test
+    void systemMessageSectionsKeepInsertionOrder() {
+        var sections = new java.util.LinkedHashMap<String, String>();
+        sections.put("gamma", "3");
+        sections.put("alpha", "1");
+        sections.put("beta", "2");
+
+        var message = new Message.SystemMessage(
+            "base", java.time.Instant.EPOCH, sections, List.of(), List.of());
+
+        assertThat(message.sections().keySet()).containsExactly("gamma", "alpha", "beta");
+        assertThat(MessageTexts.getSystemMessageText(message))
+            .isEqualTo("base\n\n3\n\n1\n\n2");
+    }
 }

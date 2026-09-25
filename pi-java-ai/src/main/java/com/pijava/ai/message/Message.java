@@ -1,8 +1,11 @@
 package com.pijava.ai.message;
 
 import java.time.Instant;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.api.ToolReference;
@@ -56,9 +59,33 @@ public sealed interface Message
         /** Normalize nullable fields and defensively copy all collections. */
         public SystemMessage {
             content = List.copyOf(content == null ? List.of() : content);
-            sections = sections == null ? Map.of() : Map.copyOf(sections);
+            sections = orderedSections(sections);
             toolsAdded = toolsAdded == null ? List.of() : List.copyOf(toolsAdded);
             toolsRemoved = toolsRemoved == null ? List.of() : List.copyOf(toolsRemoved);
+        }
+
+        /**
+         * 保序、拒 null 键值、不可变的 section 表。
+         *
+         * <p>pi 渲染 sections 的顺序是 {@code Object.entries}/{@code Object.values} 的
+         * <b>插入顺序</b>（{@code utils/text.ts:17}、{@code :30}、{@code utils/transcript.ts:80}），
+         * 而 {@code Map.copyOf} 的迭代顺序**未定义** ⇒ 用它会让「多个 section 的渲染文本」
+         * 与 pi 不一致（包 A2 的 F3，{@code docs/49 §4.2}）。</p>
+         *
+         * <p>null 键值仍然拒绝：{@code Map<String,String>} 没有「值在场但为 null」这个状态，
+         * 而 pi 用 {@code null} 表示**删除**具名段（{@code utils/transcript.ts:81-83}）——
+         * 那件事归包 A4 的形状裁决（{@code docs/49 §9 R3①}，登记 L3）。</p>
+         */
+        private static Map<String, String> orderedSections(Map<String, String> sections) {
+            if (sections == null || sections.isEmpty()) {
+                return Map.of();
+            }
+            var ordered = new LinkedHashMap<String, String>(sections.size());
+            for (var entry : sections.entrySet()) {
+                ordered.put(Objects.requireNonNull(entry.getKey(), "section name"),
+                    Objects.requireNonNull(entry.getValue(), "section value"));
+            }
+            return Collections.unmodifiableMap(ordered);
         }
 
         /**

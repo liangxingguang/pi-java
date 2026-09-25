@@ -3,14 +3,14 @@ package com.pijava.ai.catalog;
 /**
  * Per-model provider compatibility flags (pi {@code Model.compat}, {@code types.ts:713-714}).
  *
- * <p>Only flags pi-java actually **consults** are carried here — three so far. pi's own interface
+ * <p>Only flags pi-java actually **consults** are carried here — five so far. pi's own interface
  * has eight ({@code forceAdaptiveThinking}, {@code supportsStrictTools}, {@code deferredToolsMode},
  * …); each gets added when its consumer is ported, never speculatively
  * (docs/31 §8.34.4 决策 2). The field is a typed record rather than a {@code Map} for the same
  * reason: pi's compat is a per-provider typed interface, and a map would push type errors to the
  * read site.</p>
  *
- * <p>⚠️ <b>三个标志的「缺席」语义各不相同</b> —— 这是本记录最容易读错的地方，逐个写清：</p>
+ * <p>⚠️ <b>各标志的「缺席」语义各不相同</b> —— 这是本记录最容易读错的地方，逐个写清：</p>
  *
  * <table border="1">
  *   <caption>absent-case semantics</caption>
@@ -26,6 +26,10 @@ package com.pijava.ai.catalog;
  *   <tr><td>{@code forceAdaptiveThinking}</td><td>{@code boolean}</td><td>{@code false}</td>
  *       <td>pi 的判据是 {@code === true}（{@code anthropic-messages.ts:878/1165}）⇒ 二态，
  *           缺席与 {@code false} 不可区分</td></tr>
+ *   <tr><td>{@code supportsMidConvoSystemMessages}</td><td>{@link Boolean}</td>
+ *       <td><b>探测</b>（生成的模型目录）</td>
+ *       <td>pi 的默认是 {@code ?? false}，但「生成的模型目录会对有能力的模型开启它」
+ *           （{@code types.ts:731-732}）⇒ 缺席与显式 {@code false} 将来要分开 ⇒ 三态</td></tr>
  * </table>
  *
  * @param allowEmptySignature pi {@code compat.allowEmptySignature}. When {@code true}, a thinking
@@ -73,11 +77,37 @@ package com.pijava.ai.catalog;
  *        {@code isAnthropicAdaptiveThinkingModel}），而那份数据<b>不在仓库里</b>
  *        （{@code providers/data/} 被 gitignore）⇒ pi-java 的内置目录不会置位它，
  *        只能由用户经 {@code models.json} 提供（{@code docs/46 §3-D5}）。</p>
+ * @param supportsMidConvoSystemMessages pi {@code compat.supportsMidConvoSystemMessages}
+ *        ({@code types.ts:731-732}): when {@code true}, the transcript keeps system messages that
+ *        arrive **mid-conversation** instead of folding them into the leading one, and each lane
+ *        renders them in place (Anthropic text blocks / completions+mistral instruction messages /
+ *        Responses input items). Read by {@link com.pijava.ai.api.Transcripts#resolveTranscript}
+ *        ({@code docs/49 §5.4})。
+ *
+ *        <p>⚠️ **三态**：pi 的读取点写 {@code model.compat?.supportsMidConvoSystemMessages}
+ *        （{@code anthropic-messages.ts:517} 等），{@code undefined} 走折叠支；但该字段的探测
+ *        默认值来自**生成的模型目录**（「会对有能力的模型开启它」）⇒ 缺席 ≠ 显式 {@code false}。
+ *        包 A2 只加字段与消费点；探测与 {@code models.json}（{@code CompatDef}）接线**归 A7**
+ *        （{@code docs/49 §9 R4}）—— 所以在 A7 落地前，本标志在**生产上恒为缺席**，
+ *        每条车道都走「折叠」支（这正是 pi 在没有目录数据时的行为）。</p>
  */
 public record ModelCompat(boolean allowEmptySignature,
                           Boolean requiresReasoningContentOnAssistantMessages,
                           boolean supportsFinishReason,
-                          boolean forceAdaptiveThinking) {
+                          boolean forceAdaptiveThinking,
+                          Boolean supportsMidConvoSystemMessages) {
+
+    /**
+     * 四参便捷构造（包A2 之前的形状）—— {@code supportsMidConvoSystemMessages} 缺席 ≙ pi 的
+     * {@code undefined} ≙ 折叠支；探测/接线归 A7。
+     */
+    public ModelCompat(boolean allowEmptySignature,
+                       Boolean requiresReasoningContentOnAssistantMessages,
+                       boolean supportsFinishReason,
+                       boolean forceAdaptiveThinking) {
+        this(allowEmptySignature, requiresReasoningContentOnAssistantMessages,
+             supportsFinishReason, forceAdaptiveThinking, null);
+    }
 
     /**
      * 三参便捷构造（包H5 之前的老形状）—— {@code forceAdaptiveThinking} 缺席 ≙ pi 的
@@ -87,7 +117,7 @@ public record ModelCompat(boolean allowEmptySignature,
                        Boolean requiresReasoningContentOnAssistantMessages,
                        boolean supportsFinishReason) {
         this(allowEmptySignature, requiresReasoningContentOnAssistantMessages,
-             supportsFinishReason, false);
+             supportsFinishReason, false, null);
     }
 
     /**
@@ -97,10 +127,10 @@ public record ModelCompat(boolean allowEmptySignature,
      * 不是「所有标志都关」——{@code supportsFinishReason} 的探测默认值就是开。
      * 写成 {@code false} 会让**每一条**没写 compat 的 models.json 模型静默退回容忍版。</p>
      */
-    public static final ModelCompat NONE = new ModelCompat(false, null, true, false);
+    public static final ModelCompat NONE = new ModelCompat(false, null, true, false, null);
 
     /** Flags with {@code allowEmptySignature} set, the rest left to detection. */
     public static ModelCompat of(boolean allowEmptySignature) {
-        return new ModelCompat(allowEmptySignature, null, true, false);
+        return new ModelCompat(allowEmptySignature, null, true, false, null);
     }
 }
