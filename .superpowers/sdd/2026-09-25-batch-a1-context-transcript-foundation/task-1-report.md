@@ -80,8 +80,7 @@ Focused transcript tests: 3/3 passed. Existing message/content regression: 18/18
 - Full reactor `clean verify` was not run in this task; it is a coordinator-level gate and the repository has a known long-running full-reactor build.
 
 ## Commit hashes
-- Implementation commit: `209790c` (`feat(ai): add transcript system message types`), with the required plan attribution line.
-- The report is included in that implementation commit; this section records the commit hash after commit creation.
+- Implementation commit range: `e9a3f7e` (implementation) through `4122800` (controller report).
 
 ## Fix round 1 (review findings)
 
@@ -114,10 +113,20 @@ git status --short
 Output before this fix commit: only the intended `MessageTest.java`, `MistralConversationsApi.java`, and report changes; no unrelated files.
 
 ## Fix-round commit hashes
-- Fix commit: `3dd26a8` (`fix(ai): address transcript foundation review findings`).
-- Controller base implementation: `e9a3f7e`.
-- Controller prior report commit: `4122800`.
+- Fix commit range: `2847fa5` (fix implementation) through `2c9927a` (controller fix report).
+- Controller implementation range: `e9a3f7e..4122800`.
 
-## Conclusions
-- SPEC COMPLIANCE: Pass for the coordinator-approved Java representation and Task 1 boundaries; the existing Message content contract is preserved.
-- TASK QUALITY: Pass for TDD RED/GREEN evidence, immutable value types, focused regression, and no provider wiring.
+
+## Fix round 2 (controller metadata correction)
+
+The scoped re-review found only stale commit metadata. The report now names the controller implementation range `e9a3f7e..4122800` and the controller fix range `2847fa5..2c9927a`; isolated-worktree hashes are not presented as reviewed controller commits.
+
+### Exact verification command and output
+
+```bash
+git diff --check
+```
+
+Output: no output; exit 0.
+
+Only this report file was changed for fix round 2. Original RED/GREEN evidence and fix-round-1 evidence remain unchanged above.
