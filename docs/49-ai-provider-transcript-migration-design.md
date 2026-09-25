@@ -467,3 +467,66 @@ export JAVA_HOME='D:\soft\jdk\graalvm-jdk-25'
 - **已实测**：pi 的 `system-message-replay.test.ts` 9/9 绿；五个行为探针 5/5 绿（逐字输出在 §7.6）。探针文件是临时文件，跑完已从 pi 工作树删除（`git status` 干净）。
 - **仍未实测**（实施 A2b 时必须补）：completions / google / mistral / responses 四条车道的同类探针（§7.4-1）。
 - 本文档不含任何实现代码，符合 `docs/00 §3` 步骤 3 与 `docs/32 §10.7` 的「设计先行、审核后才写码」。
+
+---
+
+## 12. 实施记录（2026-09-26）
+
+**提交**：`7647097`（A2a）· `3576bc3`（A2b ＋ R5）· `01cb866`（A2c）· 本文回填（docs）
+
+### 12.1 裁决与执行
+
+用户 2026-09-26 裁决「按照建议实施」⇒ §9 的 R1–R6 **全部按建议执行**（R1 方案 A、R2 对齐、R3 只修保序、R4 加 boxed 字段、R5 放本包、R6 接受拆分）。
+
+**实际步序与 §6 计划不同**（两处，均有理由，见 §12.2）：
+
+| 计划 | 实际 | 为什么 |
+|---|---|---|
+| A2a helpers → A2b 形状并存 → A2c 删 legacy → A2d R5 → A2e PiMessages＋docs | **A2a** helpers → **A2b ＋ R5**（原子） → **A2c** PiMessages → docs | ① R5 是 A2b 的**前置条件**（§12.2-1）；② 「先并存后删旧」的中间态需要一份同时带 `transcript` 与三个 legacy 组件的 9 组件 record，可读性差于一次约 300 行的原子改签；③ A2e 的文档回填单独成提交 |
+
+### 12.2 实测校正（计划被实测推翻的地方）
+
+1. **R5 是 A2b 的前置条件，不是后续步骤**。设计稿把 R5 排在 A2b 之后（§6 的 A2d）。实测：`StreamRequest` 一旦带系统消息，Anthropic / Completions / Responses 三条车道**零请求**收场 + `IllegalStateException: unreachable message role` —— 因为三个车道把**含头**的消息表喂给 `TransformMessages`（pi 同形），而 `OrphanToolResults` 的 `else → throw` 在 A1 之后可达（F1）。R5 不前移，A2b 的三条车道根本发不出请求。
+2. **M5 零红**（设计稿预判「revert ⇒ RED-2 红」是错的）。`heldSystemMessages` 只在 `pendingToolCalls` 非空时入列，而下一次 `closePendingToolCalls` 必然走到 `if` 体内 ⇒ flush 放在 `if` **之内还是之外**在可达输入下**不可观察**。pi 的 `:184-185` 是防御性写法，照抄保留，**不当成有牙证据**。
+3. **M10 有牙**（设计稿预判「可能不红」是错的）：`Map.copyOf` 在这个三键夹具上确实换了顺序 ⇒ 恰 1 红。但顺序契约仍不可移植（JVM 实现未定义），故该夹具守的是「我们选定的语义」。
+
+### 12.3 实施中发现的缺口（F1–F8 汇总）
+
+| # | 缺口 | 状态 |
+|---|---|---|
+| **F1** | `OrphanToolResults` 的兜底 throw 在 A1 之后可达 | **已修**（R5，`3576bc3`） |
+| **F2** | PiMessages 线形状停在 pi `9e05370b2` 之前 | **已修**（A2c，`01cb866`） |
+| **F3** | `sections` 被 `Map.copyOf` 打乱渲染序 | **已修**（A2a，`7647097`） |
+| **F4** | 三处 javadoc 引用的 pi 行号失效 | **已修**（随 A2b） |
+| **F6** | Anthropic 工具声明缺 `eager_input_streaming` | 登记（L-I），不属 A2 |
+| **F7** | **Anthropic 的顶层 `system` 是字符串形态**（pi 是 `[{type:"text",text:…}]` 块数组） | **新登记**（L-J）；A-01 `cache_control` 需要块形态，届时一并裁决 |
+| **F8** | **Responses 车道带工具时抛 `` `strict` is required, but was not set ``** —— OpenAI SDK 的 `FunctionTool` 要求 `strict`，本仓从不设置 ⇒ 请求根本不发 | **新登记**（L-K）；**既有硬故障**（stash A2 后旧代码同样抛，实测确认）：今天走 `openai-responses` / azure 协议带工具的会话**全部失败** |
+| — | **B87② 的交互**：A2c 是本仓**第一个**按 pi 的 ai 层 `Tool` 形状（`{name,description,parameters}`）写 `toolsAdded` 的地方；`SessionJson` 仍写 `ToolDefinition` 全形 | 提请 `docs/32` B87② 决策时把两处一起收敛 |
+
+F7/F8 都是**本包实测探针顺带撞出**的：读源码时没看见，dump 出站体才暴露（与设计期 F6 同型 —— `docs/32 §10.7` 的「不准只读源码」在本包第三次兑现）。
+
+### 12.4 每步的证据
+
+**A2a（`7647097`）** — 先红：`Transcripts` / `MessageTexts` / `ModelCompat` 新组件全部「找不到符号」（编译失败）。
+变异探针：M6 去掉空段过滤 ⇒ 3 红（`MessageTextsTest` 2 ＋ `TranscriptsTest` 1，后者经 `getCurrentSystemPrompt`）；M9 timestamp 取最后一条 ⇒ 恰 1 红；M-TOOLS 先加后删 ⇒ 恰 1 红；M10 还原 `Map.copyOf` ⇒ 恰 1 红。回归：ai 819⇒836。
+
+**A2b ＋ R5（`3576bc3`）** — 先红（**把实现 stash 掉、用旧代码复跑新夹具**）：11/11 全红 —— `OrphanToolResultsHeldSystemMessageTest` 4 处 `IllegalStateException: unreachable message role`；`LaneTranscriptSourceTest` 7 处（5 个断言失败 ＋ 2 个「桩服务器零请求 ⇒ 线格解析 NPE」）。
+变异探针：M1 去掉 Anthropic 切头 ⇒ 恰 2 红；M3 `resolveTranscript` 不折叠 ⇒ 恰 2 红（单元 ＋ 车道）；M5 ⇒ **零红**（§12.2-2）。回归：ai 836⇒847、agent-core 484。
+
+**A2c（`01cb866`）** — 先红（stash 该文件）：`PiMessagesRequestShapeTest` 2/2 红，失败信息里打出的旧体逐字为
+`{"model":"gw","context":{"systemPrompt":"be brief","messages":[{"role":"user",…}],"tools":[{"type":"function",…}]},"options":{}}`。回归：ai 847⇒849。
+
+### 12.5 门禁结果
+
+- **focused**：`TranscriptsTest` 9、`MessageTextsTest` 7、`OrphanToolResultsHeldSystemMessageTest` 4、`LaneTranscriptSourceTest` 7、`PiMessagesRequestShapeTest` 2、`PiMessagesApiTest` 8（全绿）。
+- **模块回归**：`pi-java-ai` 819⇒**849**、`pi-java-agent-core` 484。
+- **静态门禁**：checkstyle 0 新违规（`checkstyle-result.xml` 的 29 条 warning 全是既有行）、`git diff --check` clean、无新增 `System.out.println`、新增文件 87/160/239 行（均 ≤500）。
+- ⚠️ **全 reactor `clean verify` 尚未跑**（见 §12.6）。
+
+### 12.6 遗留与未做
+
+1. **全 reactor `mvn clean verify` 未跑** —— 本轮的验证止于 `pi-java-ai` ＋ `pi-java-agent-core`（含 `-am`）。TUI 的临时 JSONL 环境失败与 sqlite 的耗时是既有风险，跑法与记录方式见 `docs/48 §10.4`。
+2. **L-A（B87① 系统消息回读）仍未做** —— 本包不碰持久化；但 A2 之后「带系统消息的请求」已成公开 API 可达的输入，回读仍是**响亮失败**（会话 resume 报 schema 错）⇒ 建议下一个包就做。
+3. **L-K（F8 Responses ＋ 工具）** 是既有硬故障，建议优先于 A3 处理。
+4. 设计稿 §7.4-1 列的「completions / google / mistral / responses 四条车道的 pi 侧探针」**仍未补** —— A2b 的夹具改用了更强的观测面（本机真实出站体 `RecordingHttpServer`）并已逐条对齐 pi 的源码语义，但**没有**像 Anthropic 那样跑过 pi 的对应车道做差分。如实登记。
+5. §10 的 L-B…L-I 保持不变；新增 **L-J**（F7 Anthropic system 字符串形态）、**L-K**（F8 Responses 带工具硬故障）。

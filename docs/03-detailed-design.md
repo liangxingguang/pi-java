@@ -98,18 +98,28 @@ public interface Provider {
 }
 
 // 流式请求
+// ⚠️ 包 A2（docs/49）改签：`systemPrompt`/`messages`/`tools` 三个组件合并为
+// `TranscriptContext transcript` —— 系统提示与工具声明都在它的系统消息里
+// （pi 的 `normalizeContext` / `TranscriptContext`）。`systemPrompt`/`messages`/`tools`
+// 的**兼容构造器**保留（内部调 `ContextNormalizer.normalize`），既有调用点零改动。
 public record StreamRequest(
-    ModelId<?> model,
-    List<Message> messages,
-    List<ToolDefinition> tools,     // 可为空
+    ModelInfo model,                // 目标模型的完整元数据（含 compat）
+    TranscriptContext transcript,   // 归一后的有序转录
     int maxTokens,                  // -1 表示使用默认值
     double temperature,             // -1 表示使用默认值
     Map<String, Object> extra       // provider 特定参数
 ) {
     public StreamRequest {
-        messages = List.copyOf(messages);
-        tools = List.copyOf(tools);
+        transcript = transcript == null ? new TranscriptContext(List.of()) : transcript;
         extra = Map.copyOf(extra);
+    }
+
+    /** 兼容构造器：pi 的公开入口形参（Context.systemPrompt/messages/tools）。 */
+    public StreamRequest(ModelInfo model, String systemPrompt, List<Message> messages,
+                         List<ToolDefinition> tools, int maxTokens, double temperature,
+                         Map<String, Object> extra) {
+        this(model, ContextNormalizer.normalize(systemPrompt, messages, tools),
+            maxTokens, temperature, extra);
     }
 }
 
