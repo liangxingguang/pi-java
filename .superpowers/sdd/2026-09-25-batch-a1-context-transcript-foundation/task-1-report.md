@@ -113,6 +113,11 @@ git status --short
 ```
 Output before this fix commit: only the intended `MessageTest.java`, `MistralConversationsApi.java`, and report changes; no unrelated files.
 
+## Fix-round commit hashes
+- Fix commit: `3dd26a8` (`fix(ai): address transcript foundation review findings`).
+- Controller base implementation: `e9a3f7e`.
+- Controller prior report commit: `4122800`.
+
 ## Conclusions
 - SPEC COMPLIANCE: Pass for the coordinator-approved Java representation and Task 1 boundaries; the existing Message content contract is preserved.
 - TASK QUALITY: Pass for TDD RED/GREEN evidence, immutable value types, focused regression, and no provider wiring.
