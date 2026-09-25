@@ -54,8 +54,8 @@ pi `harness/` 里 `AgentHarness` 独有物（具名钩子 / `HarnessEvent` / `ru
 | ~~`transformMessages` 其余 4/5 条变换~~ | 3 | ✅ **图片切片已随 H2 落地**（`docs/44` 步1：`downgradeUnsupportedImages` ＋ `replaceImagesWithPlaceholder`，逐行照抄 `transform-messages.ts:12-57`）。**B14 已落地**（主功能 `bb08034`/`9141c34`/`b2a8da5`/`c0587e9`/`d88aa7c`；最终接线/夹具修复 `89cce36`、oracle 收口 `c6bce1c`）：跨模型 toolCall id 归一（③）与孤儿 toolCall 合成 toolResult（④）均已实现；六车道接线与 pi oracle 夹具已回归。② `thoughtSignature` 剥离仍拆为 B14b/R1；R2 timestamp、R5 SystemMessage/heldSystemMessages、R3/R4 等按现有登记保留。原后果：跨模型切换时孤儿 toolCall ⇒ provider 400 | B14 |
 | Anthropic `cache_control` 标记 | 3 | Anthropic 车道**永不提示缓存** ⇒ 每轮全价、延迟更高 | — |
 | `openrouter` chat 面 | 3 | 主流 7 家之一整条不可用（现只有 images 面） | — |
-| `SystemMessage`（transcript 系统消息模型） | 3 | 会话中途改系统提示/工具集**无法表达** | — |
-| `normalizeContext` / `TranscriptContext` | 3 | 系统提示与消息列表的先后关系由各车道各自猜 | — |
+| `SystemMessage`（transcript 系统消息模型） | 3 | 🟡 **A1 已落数据形状**（`docs/48 §10`，2026-09-25，`f94d221..dc5ba44`）：`Message.SystemMessage` 第四变体 ＋ `ToolReference` ＋ `ContextEntries` 投影 ＋ `SessionJson` 落线。**仍未做**：五条 provider 车道仍读 `request.systemPrompt()`（消费迁移＝A2）、中途工具增删与 prompt sections 的生产（A3）、系统消息回读（B87①）。原后果：会话中途改系统提示/工具集**无法表达** | B87 |
+| `normalizeContext` / `TranscriptContext` | 3 | 🟡 **A1 已落纯适配器**（`ContextNormalizer`，`docs/48 §10`）：三个 AI 层值直传、六条归一规则逐条对齐，`TranscriptContext` 形状与 pi 一致。**生产零调用者** —— provider 消费迁移＝A2。原后果：系统提示与消息列表的先后关系由各车道各自猜 | B87 |
 
 ### 1.2 缺失（权重 2）
 
