@@ -1,6 +1,6 @@
 # 48 - pi-java-ai 下一步待做清单与设计入口
 
-**状态：已批准，Batch A（A1）进入实施**  
+**状态：已批准，Batch A1（Context/Transcript 基础）已实施完成；A2 及后续批次待开始**
 **创建基准：** pi-java `f0400a2`（B14 收尾）  
 **参考台账：** [`41-gap-inventory.md`](41-gap-inventory.md)、[`32-open-items-register.md`](32-open-items-register.md)、[`40-module-alignment-map.md`](40-module-alignment-map.md)  
 **参考设计：** [`03-detailed-design.md`](03-detailed-design.md)、[`42-usage-domain-design.md`](42-usage-domain-design.md)、[`43-ai-hardfail-credentials-design.md`](43-ai-hardfail-credentials-design.md)、[`44-ai-image-content-design.md`](44-ai-image-content-design.md)、[`45-google-tool-result-design.md`](45-google-tool-result-design.md)、[`46-ai-extended-thinking-design.md`](46-ai-extended-thinking-design.md)、[`47-ai-transform-messages-rest-design.md`](47-ai-transform-messages-rest-design.md)
@@ -132,8 +132,8 @@ flowchart TD
 
 | 批次 | 任务 | 优先级 | 依赖 | 状态 | Commit | 先红证据 | mutation probe/红集 | 回归证据 | 遗留 |
 |---|---|---:|---|---|---|---|---|---|---|
-| A | Context/Transcript 数据模型与 entry 投影设计落地 | P0 | 设计门1 | 🟡 实施中（数据模型已完成，entry 投影待完成） | `e9a3f7e..1bc9e07`（Task 1；已 cherry-pick 至 main 为 `f94d221..3491543`） | `TranscriptContextTest` RED：缺少 `Message.SystemMessage`/`ToolReference`/`TranscriptContext`；编译失败 | Task 1 RED → GREEN；Task 1 mutation/防御性拷贝断言；Task 1 review clean（两轮修订） | Task 1 focused：`TranscriptContextTest` 3/3；`MessageTest` 16/16；`ContentBlockJsonTest` 2/2；`git diff --check` clean | `ContextEntries` system payload 投影、`SessionJson` system JSON 尚未完成；Task 2 已暂停；**main 合并后 reactor compile 未通过：`GoogleMessageConverter.java:69` 的 `Message` 穷举 switch 尚未补 `SystemMessage` 机械分支**；后续需先补齐所有 sealed-switch 编译适配再继续回归 |
-| A | `normalizeContext` 与 provider 消费迁移 | P0 | A1 | 🟡 实施中（normalizer 已迁移，provider 消费迁移未开始） | `ContextNormalizer.java` / `ContextNormalizerTest.java`（待 review commit） | Task 2 RED 原始证据在 agent worktree；当前 main focused test 被 `GoogleMessageConverter.java:69` sealed-switch 编译错误阻塞，尚未到测试执行 | Task 2 mutation probe 未在 main 完成；review 尚未执行 | `ContextNormalizerTest` 尚未取得 GREEN（编译阻塞）；`git diff --check` 待提交前执行 | `ContextNormalizer` 只建立纯适配器，未接 provider；需先补齐新增 `SystemMessage` 导致的全仓机械 sealed-switch 编译适配，再继续 Task 2 回归和 review |
+| A | Context/Transcript 数据模型与 entry 投影设计落地 | P0 | 设计门1 | 🟢 已完成 | `f94d221..3491543`（Task 1）、`9065ec6`（全仓 sealed-switch 编译适配）、`7adea0d`（便捷构造器对齐设计）、`1956d6d`（Task 3：entry 投影＋session JSON）、`dc5ba44`（review 修复：≤500 行门禁＋显式 `case`＋删同义反复断言） | Task 1：`TranscriptContextTest` 编译失败（缺 `Message.SystemMessage`/`ToolReference`/`TranscriptContext`）；Task 3：`SessionJsonSystemMessageTest` 2 error（`timestamp`/可选字段键缺席）。Task 3 的 entry 投影测试**先红不成立**（`project` 已原样透传载荷）——按计划 §Execution Notes 记为结构性 RED 例外，改由 JSON 侧 mutation 守门 | M1 关掉前导插入 ⇒ 恰 1 红 `ContextNormalizerTest.prependsLegacySystemPromptAndCopiesTools:35`；M2 去掉 `SystemMessage.toolsAdded` 的 `List.copyOf` ⇒ 恰 1 红 `TranscriptContextTest.systemMessageAndTranscriptContextDefensivelyCopyCollections:54`；M3 关掉 `SessionJson` 的 system 分支 ⇒ 恰 2 红（`…WritesRoleContentAndTimestamp:51`、`…WritesNonEmptyOptionalFieldsUnderPiNames:66`）；M4 去掉「空值省略」门 ⇒ 恰 2 红（`…OmitsAbsentTimestamp:87`、`…WritesRoleContentAndTimestamp:54`）；M5 去掉重复守卫 ⇒ 恰 1 红 `…preservesExistingLeadingSystemMessageWithoutInjectingLegacyFields:56` | focused：`ContextNormalizerTest` 4/4、`TranscriptContextTest` 3/3、`MessageTest` 16/16、`ContentBlockJsonTest` 2/2；agent-core focused：`ContextEntriesTest` 17/17、`SessionJsonSystemMessageTest` 4/4、`JsonlSessionStorageTest` 11/11；模块回归 ai 819/819、agent-core 484/484；checkstyle 0 violations、`git diff --check` clean、无 `System.out.println`、改动文件均 ≤500 行 | 见 §10.3 遗留清单（`MessageJsonCodec` 回读、`toolsAdded` 线格形状、`sections` null 语义、TUI/web 无系统消息处理） |
+| A | `normalizeContext` 与 provider 消费迁移 | P0 | A1 | 🟡 实施中（normalizer 已闭环；provider 消费迁移未开始） | `c1c8bf6`（`ContextNormalizer`）、`dc5ba44`（review 修复） | Task 2 的原始 RED 在 agent worktree（编译缺 `ContextNormalizer`）；main 上受 `GoogleMessageConverter` 编译错误阻塞，已由 `9065ec6` 解除，改以 M1/M5 两条 mutation 补证 | M1（关掉前导插入）恰 1 红；M5（关掉重复守卫）恰 1 红 —— 见上一行 | `ContextNormalizerTest` 4/4 GREEN；ai 全模块 819/819；checkstyle 0 violations | 本行只完成「纯适配器」一半：**`ContextNormalizer` 在生产代码里零调用者**（grep 只有自身与测试），provider 消费迁移是 A2，需另行设计/批准 |
 | A | 工具增删状态线与 `tool_addition/removal` | P1 | A1/A2 | ⬜ 待开始 | — | — | — | — | — |
 | A | prompt sections 构建、替换和差分 | P1 | A1 | ⬜ 待开始 | — | — | — | — | — |
 | B | Anthropic `cache_control` | P0 | A1、设计门4 | ⬜ 待开始 | — | — | — | — | — |
@@ -217,7 +217,7 @@ flowchart TD
 
 ---
 
-## 9. 实施后回填约定（当前不执行）
+## 9. 实施后回填约定（自 2026-09-25 起执行）
 
 审核通过后，按以下顺序更新：
 
@@ -227,3 +227,51 @@ flowchart TD
 4. 仅在实际闭环后同步 `docs/41-gap-inventory.md` 和 `docs/32-open-items-register.md`；
 5. 批次完成后追加“裁决与执行”“实测校正”“实施记录”；
 6. 最终记录 focused tests、`pi-java-ai` 全模块回归、checkstyle、全 reactor 环境结果和剩余差异。
+
+---
+
+## 10. Batch A1 实施记录（2026-09-25）
+
+提交范围：`f94d221..3491543`（Task 1，先前已落）、`c1c8bf6`（Task 2）、`9065ec6`、`7adea0d`、`1956d6d`、`dc5ba44`。
+
+### 10.1 裁决与执行
+
+| # | 事项 | 裁决 | 落点 |
+|---|---|---|---|
+| A1-1 | 是否恢复独立 `Message.SystemMessage` | **恢复**，作为 `Message` 的第四变体；`Context.systemPrompt` 保留为兼容输入 | `Message.java:49-78` |
+| A1-2 | 是否新增 `Entry.SystemMessage` | **不新增**：系统消息仍以 `Entry.Message` 载荷存在 | `ContextEntries.project` 原样透传 |
+| A1-3 | `normalize` 的签名 | 三个 AI 层值直传（`String, List<Message>, List<ToolDefinition>`），不反向依赖 agent-core 的 `Context` | `ContextNormalizer.java:24-26` |
+| A1-4 | 前导系统消息的重复守卫 | **保留** —— pi 的 `normalizeContext` 没有这道门，这是 A1 兼容层的适配，不是对 pi 原函数的承诺 | 设计 §Normalization 规则 2；`ContextNormalizer.java:30-34` |
+| A1-5 | provider 文件的可改范围 | 只允许「让 Java 编译器能过的机械适配」，且不得超出显式不支持守卫 | `GoogleMessageConverter:89-93`、`MistralConversationsApi:333-336`、`ContextUsageEstimator:169-171` |
+| A1-6 | 便捷构造器的 null 文本 | **一个空文本块**（`text == null ? "" : text`），不是空列表 | `7adea0d`；`Message.java:64-78` |
+| A1-7 | `default` 还是显式 `case` | **显式 `case Message.SystemMessage`**：`default` 会把将来第五个变体一并吞进「不支持的角色」 | `dc5ba44` |
+
+### 10.2 实测校正
+
+1. **加一个 `Message` 变体会让全仓三处 pattern switch 不再穷举**（`GoogleMessageConverter.toContents`、`ContextUsageEstimator.estimateTokens`、conformance 的 `FrameNormalizer.messageOf`；`MistralConversationsApi` 此前已补）。第一次 `mvn compile` 报「成功」是**假的** —— agent-core 在 ai 的 jar 变化后没有被增量重编，只有 `mvn clean compile` 才暴露出 `ContextUsageEstimator.java:149`。与 `docs/32` 的「共享 `target` 假绿」同型，故本记录的回归一律走 clean。
+2. **`ContextUsageEstimator` 的 system 分支取 `0L` 不是机械兜底**：pi 的 `estimateTokens` 根本没有 `"system"` case，落到函数末尾的 `return 0`（`compaction.ts:273-306`）。
+3. **`SessionJson.messageNode` 的 `timestamp` 是「有才写」**，不是设计 §JSON shape 原文的「always write」：pi 的 `timestamp` 是必填 number，Java 的 `Instant` 可为 null（只有手写构造走得到），写 `null` 会造出 pi 里不存在的形状。这是**有意偏差**，由 `systemMessageNodeOmitsAbsentTimestamp` 钉住。
+4. **`MistralConversationsApi` 因 A1 的守卫从 500 行涨到 505 行**，违反计划 §Global Constraints 与 §6 门禁 5。`checkstyle:check` 不报，是因为 `checkstyle.xml:7` 把全局 severity 设成 `warning`、插件只在 error 上失败 —— 但仓库自己的 `checkstyle-result.xml` 一直记着这条。修复＝把 `buildToolResultText` **原样搬进** `MistralToolResultText`（纯搬移，pi 侧本就是独立函数），文件回到 478 行。
+5. **A1 的编译适配不能靠 `default` 兜底**：计划把它写成「机械适配」，但 `default` 的语义比「只处理 system」宽，故两处都改成显式 `case`。
+
+### 10.3 遗留清单（A1 未做，需后续设计包裁决）
+
+| # | 缺口 | 现状 | 影响 |
+|---|---|---|---|
+| L1 | **系统消息不能回读** | `MessageJsonCodec.decode` 对 `role: "system"` 抛 `unknown message role`（`:60`） | A1 的落线是**只写**的。今天不可达（无生产者），但 A2/A3 一旦接线，带系统消息的会话 resume 会直接报 schema 错 |
+| L2 | **`toolsAdded` 的线格形状未定** | `SessionJson` 用 `valueToTree` 原样写 `ToolDefinition`（7 个组件），而 pi 的 `toolsAdded` 是 ai 层 `Tool[]` ＝ `{name, description, parameters}`（`types.ts:600-605`），与同仓 `PayloadRecordingStreamFn:125-131` 的 `{name, inputSchema}` 也不一致 | 今天不可达；A3 一读这个字段就会撞上。现有测试只断言 `name`，抓不到多余/错名键 |
+| L3 | **`sections` 表达不了「删除」** | Java 是 `Map<String,String>`，pi 是 `Record<string, string \| null>`（`null` ＝ 删掉具名段，`types.ts:501`）；`Map.copyOf` 还会在 null 值上 NPE | A1 无 section 生产者，随 sections 包处理 |
+| L4 | **TUI / web 不认系统消息** | `ChatMessage.java:73` 会渲染成 `"Unknown message role: system"`；`WebWireJson` / `JsonEventMapper:226` 不产出 `sections`/`toolsAdded`/`toolsRemoved` | 在 A1 的模块范围之外，今天无生产者 ⇒ 是静默误渲染，不是响亮失败 |
+
+### 10.4 门禁结果
+
+- **focused**：`ContextNormalizerTest` 4/4、`TranscriptContextTest` 3/3、`MessageTest` 16/16、`ContentBlockJsonTest` 2/2、`ContextEntriesTest` 17/17、`SessionJsonSystemMessageTest` 4/4、`JsonlSessionStorageTest` 11/11。
+- **模块回归**：`pi-java-ai` 819/819、`pi-java-agent-core` 484/484。
+- **静态门禁**：checkstyle 0 violations（ai + agent-core）、`git diff --check` clean、无新增 `System.out.println`、无无说明的 `@SuppressWarnings`、改动文件均 ≤500 行。
+- **全 reactor**：`mvn clean verify`（串行）第一次在 `pi-java-tui` 的 `PiTuiAppInputTest.enterSubmitsAndLfInsertsNewline:292` 因临时目录 `NoSuchFileException` 失败 —— 即 §7 已登记的环境问题；该用例带 `-am` 单独复跑 10/10 绿，随后整条 reactor 复跑 **BUILD SUCCESS（14/14 模块，7:21）**。⚠️ 另记一条踩坑：`-pl pi-java-tui` **不带** `-am` 时该用例 10 个全 NPE，那是 `~/.m2` 旧构件，不是行为回归。
+
+### 10.5 审阅结论
+
+**SPEC COMPLIANCE：PASS**（一处已登记偏差）。无 provider 行为迁移 —— 主源码的 provider 改动只有两处机械守卫（`GoogleMessageConverter`、`MistralConversationsApi`）与 `ContextUsageEstimator` 的 `0L`，均不触碰 user/assistant/toolResult 的落线映射；`ContextNormalizer` 在生产代码里**零调用者**，五条 provider 车道仍读 `request.systemPrompt()`，A1 的 API 面是纯增量。未新增 `Entry.SystemMessage` 子类型（`Entry.java` 的 `@JsonSubTypes` 未动）。归一化逐条对齐设计 §Normalization 的六条规则；`Message.SystemMessage` / `TranscriptContext` / `ToolReference` 三个值类型与设计片段逐字一致。既有 user/assistant/tool 的 JSON 键集合由 `legacyMessageNodesKeepTheirExistingKeys` 用 `containsExactly` 钉住，形状不可能回归。无 Maven 依赖变更。唯一偏差是上文 §10.2-3 的 `timestamp` 条件写入 —— 已在代码注释与本节登记，不称「逐字合规」。
+
+**TASK QUALITY：PASS**（首轮 FAIL 一项，已修）。文件聚焦、record 不可变、无重复归一化逻辑、无无关清理、无新增 `@SuppressWarnings`、无 `System.out.println`。首轮唯一硬失败是 `MistralConversationsApi` 的 505 行破门禁，已由 `dc5ba44` 修复（纯搬移）；同轮删掉 `ContextNormalizerTest` 里一条同义反复断言（`isNotSameAs(List.of(...))` 恒真，没有牙）。测试有牙由五条 mutation 证明（红集见 §5 表格首行），其中 M3/M4 分别证明「分支存在」与「空值省略」各自被守住。
