@@ -132,7 +132,7 @@ flowchart TD
 
 | 批次 | 任务 | 优先级 | 依赖 | 状态 | Commit | 先红证据 | mutation probe/红集 | 回归证据 | 遗留 |
 |---|---|---:|---|---|---|---|---|---|---|
-| A | Context/Transcript 数据模型与 entry 投影设计落地 | P0 | 设计门1 | 🟡 实施中（数据模型已完成，entry 投影待完成） | `e9a3f7e..1bc9e07`（Task 1） | `TranscriptContextTest` RED：缺少 `Message.SystemMessage`/`ToolReference`/`TranscriptContext`；编译失败 | Task 1 RED → GREEN；Task 1 mutation/防御性拷贝断言；review clean（两轮修订） | focused：`TranscriptContextTest` 3/3；`MessageTest` 16/16；`ContentBlockJsonTest` 2/2；`git diff --check` clean | `ContextEntries` system payload 投影、`SessionJson` system JSON 尚未完成；Task 2 worktree 初次派发阻塞，未产生实现 commit |
+| A | Context/Transcript 数据模型与 entry 投影设计落地 | P0 | 设计门1 | 🟡 实施中（数据模型已完成，entry 投影待完成） | `e9a3f7e..1bc9e07`（Task 1；已 cherry-pick 至 main 为 `f94d221..3491543`） | `TranscriptContextTest` RED：缺少 `Message.SystemMessage`/`ToolReference`/`TranscriptContext`；编译失败 | Task 1 RED → GREEN；Task 1 mutation/防御性拷贝断言；Task 1 review clean（两轮修订） | Task 1 focused：`TranscriptContextTest` 3/3；`MessageTest` 16/16；`ContentBlockJsonTest` 2/2；`git diff --check` clean | `ContextEntries` system payload 投影、`SessionJson` system JSON 尚未完成；Task 2 已暂停；**main 合并后 reactor compile 未通过：`GoogleMessageConverter.java:69` 的 `Message` 穷举 switch 尚未补 `SystemMessage` 机械分支**；后续需先补齐所有 sealed-switch 编译适配再继续回归 |
 | A | `normalizeContext` 与 provider 消费迁移 | P0 | A1 | 🔴 先红（尚未开始；Task 2 首次子代理因错误 worktree 阻塞） | — | — | — | — | 重新派发必须基于 `worktree-batch-a1-context-transcript` 的 A1 基线；provider 消费迁移仍属于后续 A2 |
 | A | 工具增删状态线与 `tool_addition/removal` | P1 | A1/A2 | ⬜ 待开始 | — | — | — | — | — |
 | A | prompt sections 构建、替换和差分 | P1 | A1 | ⬜ 待开始 | — | — | — | — | — |
