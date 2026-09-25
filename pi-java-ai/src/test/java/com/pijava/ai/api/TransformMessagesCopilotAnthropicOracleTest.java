@@ -41,14 +41,16 @@ class TransformMessagesCopilotAnthropicOracleTest {
         false,
         PricingInfo.UNKNOWN);
 
-    private static Message.AssistantMessage foreignAssistant(ContentBlock... blocks) {
+    private static Message.AssistantMessage foreignAssistant(String api, String model,
+                                                              String stopReason,
+                                                              ContentBlock... blocks) {
         return new Message.AssistantMessage(
             List.of(blocks),
-            "stop",
+            stopReason,
             null,
-            "openai-completions",
+            api,
             "github-copilot",
-            "gpt-4o",
+            model,
             null,
             null,
             null,
@@ -87,6 +89,7 @@ class TransformMessagesCopilotAnthropicOracleTest {
     @Test
     void crossModelThinkingIsDowngradedToText() {
         var assistant = foreignAssistant(
+            "openai-completions", "gpt-4o", "stop",
             new ContentBlock.ThinkingContent("Let me think about this...", "reasoning_content"),
             new ContentBlock.TextContent("Hi there!"));
 
@@ -118,8 +121,9 @@ class TransformMessagesCopilotAnthropicOracleTest {
     void toolUseShapeHasNoThoughtSignatureComponent() {
         var output = apply(List.of(
             user("run a command"),
-            foreignAssistant(new ContentBlock.ToolUseContent(
-                "call_123", "bash", Map.of("command", "ls")))));
+            foreignAssistant("openai-responses", "gpt-5", "toolUse",
+                new ContentBlock.ToolUseContent(
+                    "call_123", "bash", Map.of("command", "ls")))));
         var toolUse = ((Message.AssistantMessage) output.get(1)).content().stream()
             .filter(ContentBlock.ToolUseContent.class::isInstance)
             .map(ContentBlock.ToolUseContent.class::cast)
@@ -145,8 +149,9 @@ class TransformMessagesCopilotAnthropicOracleTest {
     void trailingOrphanGetsNormalizedSyntheticErrorResult() {
         var output = apply(List.of(
             user("read the file"),
-            foreignAssistant(new ContentBlock.ToolUseContent(
-                "call_123|fc_123", "read", Map.of("path", "README.md")))));
+            foreignAssistant("openai-responses", "gpt-5", "toolUse",
+                new ContentBlock.ToolUseContent(
+                    "call_123|fc_123", "read", Map.of("path", "README.md")))));
 
         var synthetic = (Message.ToolResultMessage) output.getLast();
         assertThat(synthetic.toolUseId()).isEqualTo("call_123_fc_123");
@@ -166,7 +171,7 @@ class TransformMessagesCopilotAnthropicOracleTest {
     void selectiveOrphanSynthesisKeepsRealResultAndAddsOneMissingResult() {
         var output = apply(List.of(
             user("run commands"),
-            foreignAssistant(
+            foreignAssistant("openai-responses", "gpt-5", "toolUse",
                 new ContentBlock.ToolUseContent("call_1|fc_1", "read", Map.of()),
                 new ContentBlock.ToolUseContent("call_2|fc_2", "bash", Map.of())),
             result("call_1|fc_1", "read", "done", false)));

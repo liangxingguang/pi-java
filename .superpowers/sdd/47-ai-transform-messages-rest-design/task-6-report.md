@@ -9,7 +9,7 @@
 | 3 | Trailing orphan `call_123|fc_123` | `trailingOrphanGetsNormalizedSyntheticErrorResult` | `call_123_fc_123`, `read`, error, exact `No result provided` payload |
 | 4 | Two calls, only first answered | `selectiveOrphanSynthesisKeepsRealResultAndAddsOneMissingResult` | Real result is normalized and retained; exactly one synthetic error for second call |
 
-All behavior fixtures call the public five-argument `TransformMessages.apply` with target `ModelId.of("github-copilot", "claude-sonnet-4.6")`, a complete `ModelInfo`, and `AnthropicToolCallIds.create()`. Source assistant identity is `api=openai-completions`, `provider=github-copilot`, `model=gpt-4o`, matching the requested migration shape and pi oracle.
+All behavior fixtures call the public five-argument `TransformMessages.apply` with target `ModelId.of("github-copilot", "claude-sonnet-4.6")`, a complete `ModelInfo`, and `AnthropicToolCallIds.create()`. Case 1 uses source identity `api=openai-completions`, `provider=github-copilot`, `model=gpt-4o`, `stopReason=stop`; cases 2–4 use `api=openai-responses`, `provider=github-copilot`, `model=gpt-5`, `stopReason=toolUse`, matching the individual pi oracle scenarios.
 
 ## TDD evidence
 
