@@ -1,12 +1,11 @@
 # 48 - pi-java-ai 下一步待做清单与设计入口
 
-**状态：设计待审核（未写生产代码）**  
-**文档用途：** 作为 `pi-java-ai` 后续功能的范围、依赖、任务状态和验收入口。  
+**状态：已批准，Batch A（A1）进入实施**  
 **创建基准：** pi-java `f0400a2`（B14 收尾）  
 **参考台账：** [`41-gap-inventory.md`](41-gap-inventory.md)、[`32-open-items-register.md`](32-open-items-register.md)、[`40-module-alignment-map.md`](40-module-alignment-map.md)  
 **参考设计：** [`03-detailed-design.md`](03-detailed-design.md)、[`42-usage-domain-design.md`](42-usage-domain-design.md)、[`43-ai-hardfail-credentials-design.md`](43-ai-hardfail-credentials-design.md)、[`44-ai-image-content-design.md`](44-ai-image-content-design.md)、[`45-google-tool-result-design.md`](45-google-tool-result-design.md)、[`46-ai-extended-thinking-design.md`](46-ai-extended-thinking-design.md)、[`47-ai-transform-messages-rest-design.md`](47-ai-transform-messages-rest-design.md)
 
-> 本文档当前只建立待做清单和实施门槛。用户审核通过前，不得修改生产代码、测试代码、Maven 依赖或把任何任务标记为已实施。
+> 设计审核已通过；当前只允许按第 5 节逐项实施并回填证据，未完成任务不得标记为已完成。
 
 ---
 
@@ -133,8 +132,8 @@ flowchart TD
 
 | 批次 | 任务 | 优先级 | 依赖 | 状态 | Commit | 先红证据 | mutation probe/红集 | 回归证据 | 遗留 |
 |---|---|---:|---|---|---|---|---|---|---|
-| A | Context/Transcript 数据模型与 entry 投影设计落地 | P0 | 设计门1 | ⬜ 待开始 | — | — | — | — | — |
-| A | `normalizeContext` 与 provider 消费迁移 | P0 | A1 | ⬜ 待开始 | — | — | — | — | — |
+| A | Context/Transcript 数据模型与 entry 投影设计落地 | P0 | 设计门1 | 🟡 实施中（数据模型已完成，entry 投影待完成） | `e9a3f7e..1bc9e07`（Task 1） | `TranscriptContextTest` RED：缺少 `Message.SystemMessage`/`ToolReference`/`TranscriptContext`；编译失败 | Task 1 RED → GREEN；Task 1 mutation/防御性拷贝断言；review clean（两轮修订） | focused：`TranscriptContextTest` 3/3；`MessageTest` 16/16；`ContentBlockJsonTest` 2/2；`git diff --check` clean | `ContextEntries` system payload 投影、`SessionJson` system JSON 尚未完成；Task 2 worktree 初次派发阻塞，未产生实现 commit |
+| A | `normalizeContext` 与 provider 消费迁移 | P0 | A1 | 🔴 先红（尚未开始；Task 2 首次子代理因错误 worktree 阻塞） | — | — | — | — | 重新派发必须基于 `worktree-batch-a1-context-transcript` 的 A1 基线；provider 消费迁移仍属于后续 A2 |
 | A | 工具增删状态线与 `tool_addition/removal` | P1 | A1/A2 | ⬜ 待开始 | — | — | — | — | — |
 | A | prompt sections 构建、替换和差分 | P1 | A1 | ⬜ 待开始 | — | — | — | — | — |
 | B | Anthropic `cache_control` | P0 | A1、设计门4 | ⬜ 待开始 | — | — | — | — | — |
