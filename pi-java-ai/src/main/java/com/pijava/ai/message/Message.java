@@ -1,16 +1,23 @@
 package com.pijava.ai.message;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+
+import com.pijava.ai.api.ToolDefinition;
+import com.pijava.ai.api.ToolReference;
 
 /**
  * A message in a conversation with an LLM.
  *
- * <p><b>恰好三个变体</b>，与 pi 的 {@code Message} 联合类型一致
- * （{@code packages/ai/src/types.ts:470}：{@code UserMessage | AssistantMessage |
- * ToolResultMessage}）。<b>没有 system 角色</b> —— 系统提示不属于消息列表，
- * 它是 {@code Context.systemPrompt}，由各 provider 适配层映射到自己的 system 字段。</p>
+ * <p>The four variants are user, assistant, tool-result, and system messages.
+ * System messages carry the normalized system instruction and its optional
+ * transcript metadata. The legacy {@code Context.systemPrompt} remains a
+ * compatibility input and is not changed by this value type.</p>
  */
-public sealed interface Message {
+public sealed interface Message
+    permits Message.UserMessage, Message.AssistantMessage, Message.ToolResultMessage,
+            Message.SystemMessage {
 
     /** The role of the message author. */
     String role();
@@ -28,6 +35,42 @@ public sealed interface Message {
         @Override
         public String role() {
             return "user";
+        }
+    }
+
+    /**
+     * A normalized system instruction in the ordered transcript.
+     *
+     * <p>The text constructor stores the instruction as one text content block,
+     * preserving the existing {@code Message.content()} contract. Legacy
+     * callers may continue to supply {@code Context.systemPrompt}; this variant
+     * is the normalized transcript representation.</p>
+     */
+    record SystemMessage(
+        List<ContentBlock> content,
+        Instant timestamp,
+        Map<String, String> sections,
+        List<ToolDefinition> toolsAdded,
+        List<ToolReference> toolsRemoved
+    ) implements Message {
+        /** Normalize nullable fields and defensively copy all collections. */
+        public SystemMessage {
+            content = List.copyOf(content == null ? List.of() : content);
+            sections = sections == null ? Map.of() : Map.copyOf(sections);
+            toolsAdded = toolsAdded == null ? List.of() : List.copyOf(toolsAdded);
+            toolsRemoved = toolsRemoved == null ? List.of() : List.copyOf(toolsRemoved);
+        }
+
+        /** Construct a system message from one legacy text instruction. */
+        public SystemMessage(String text, Instant timestamp, Map<String, String> sections,
+                             List<ToolDefinition> toolsAdded, List<ToolReference> toolsRemoved) {
+            this(text == null ? List.of() : List.of(new ContentBlock.TextContent(text)), timestamp,
+                sections, toolsAdded, toolsRemoved);
+        }
+
+        @Override
+        public String role() {
+            return "system";
         }
     }
 

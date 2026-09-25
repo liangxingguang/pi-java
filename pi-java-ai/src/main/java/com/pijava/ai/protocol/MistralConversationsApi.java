@@ -328,6 +328,8 @@ public final class MistralConversationsApi extends AbstractChatApi {
                     m.put("name", t.toolName());
                     m.put("content", toolContent(t, supportsImages));
                 }
+                default -> throw new IllegalArgumentException(
+                    "Unsupported message role for Mistral projection: " + msg.role());
             }
             return m;
         }).filter(java.util.Objects::nonNull).forEach(messages::add);

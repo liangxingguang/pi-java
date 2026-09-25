@@ -24,7 +24,7 @@ class MessageTest {
                 .toList();
 
         assertThat(variants)
-                .containsExactly("AssistantMessage", "ToolResultMessage", "UserMessage");
+                .containsExactly("AssistantMessage", "SystemMessage", "ToolResultMessage", "UserMessage");
     }
 
     @Test
