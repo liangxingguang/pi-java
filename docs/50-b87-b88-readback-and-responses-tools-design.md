@@ -241,4 +241,43 @@ case "system" -> new Message.SystemMessage(
 
 ---
 
-## 12. 实施记录（待实施后回填）
+## 12. 实施记录（2026-09-26）
+
+**提交**：`47e7f57`（B88）· `9f86e8c`（B87a 系统消息回读）· `6275f13`（B87b `toolsAdded` 落线收敛）· 本文回填（docs）
+
+### 12.1 裁决与执行
+
+用户 2026-09-26 裁决「按照建议实施」⇒ §9 的 R1–R6 **全部按建议执行**：R1 读到 section 值为 `null` 时**响亮抛错**；R2 `toolsAdded` 落线**本包收敛**；R3 用 **`JsonMissing.of()`**（保住类型路径 ＋ 给出 pi 的字节）；R4 **不移植** `constrainedSampling`/`supportsStrictMode`（登记 L-A）；R5 azure 车道**照 pi 发** `strict:false`；R6 接受三步拆分。
+
+**步序与 §5 一致**（B88 → B87a → B87b），**无需调整** —— 与包 A2 不同，本包三件事互不构成前置条件。
+
+### 12.2 实测校正与实现偏离
+
+1. **M3 的红集是 4，不是设计稿预测的 1**。变异体把 `decodeSections(node.get("sections"))` 整个换成 `Map.of()`，**校验也一起消失**（null section 的抛错来自同一个 helper）⇒ 两条负向用例失去抛错源。实测红集：`roundTripsAFullSystemMessage`、`roundTripPreservesSectionOrder`、`rejectsNullSectionValueInsteadOfDroppingTheKey`、`rejectsMalformedSystemFields` —— 一条变异让四条断言现形，牙齿比预测的多。
+2. **M5/M6 的红集各 2 红（1 ＋ 1），与设计稿预测一致** —— M5（线格键名写成 `inputSchema`）与 M6（投影多带一个 `label`）都同时在**两个写者**的夹具上现形：`PiMessagesRequestShapeTest:68`/`:75`（ai 侧线格）与 `SessionJsonSystemMessageTest.toolsAddedIsWrittenInPiToolShape:95`（agent-core 侧落线）。这正是 B87② 收敛的意义 —— 形状漂移在哪一侧发生都会被抓到。
+   ⚠️ 取证代价：**跨模块的两个类名不能放进同一轮 `-Dtest`**（见下条），M5/M6 因此各跑了两次（模块分开）。
+3. **实现偏离设计一处**：`toToolDeclaration` 返回 `ToolDeclaration` **record**，不是 §4.3 草稿写的 `LinkedHashMap`。理由：① `Map.copyOf` 会打乱键序（A2 的 F3 同型），而返回裸 `LinkedHashMap` 又把不变性的责任推给调用方；② A3 的 `declarationsEqual` 需要一个可比较的类型。**线上字节不变**（键名与键集由两侧夹具钉住）。
+4. **设计期没预见到的连带面**：`buildParams` 加一个形参，撞出**五处反射 invoke**（`OpenAIResponsesApiTest` ×2、`OpenAIResponsesImageContentTest`、`OpenAIResponsesSurrogateSanitizeTest`、`AzureOpenAIResponsesApiTest`），全部以**运行期 `NoSuchMethod`** 报出来（21 个测试错误），**编译期毫无提示**。已顺带改成**同包直调** —— 这批夹具与被测类同在 `com.pijava.ai.protocol`，反射本就是多余的。
+5. **我自己写夹具时踩了「缺陷态恒真」**：`rejectsMalformedSystemFields` 初版每条只断言 `isInstanceOf(DecodeError.class)` —— 缺陷态抛的**也是** `DecodeError`（只是文案是 `has unknown message role`），于是它在先红那一轮里**绿着过去了**（与另两条红并排才看出来）。已改成每条都断言**消息里点名字段**。`docs/45 §10` 的 B84 同型教训在本包第二次兑现，这次是**写着夹具的人自己踩的**。
+6. **取证手法（跨模块 `-Dtest`）**：`mvn -pl pi-java-agent-core -am -Dtest='A(agent-core 的类),B(ai 的类)'` 时**只有 ai 侧那个类跑** —— agent-core 侧静默 0 测试（实测三次：M5 两次、M6 一次；每轮都是 `Tests run: 2` 且只有 `PiMessagesRequestShapeTest` 的类行），而 `-Dsurefire.failIfNoSpecifiedTests=false` 让整轮 **BUILD SUCCESS**。⇒ **跨模块取证必须按模块分别跑**；同一模块内多类名的逗号列表是正常的（`-Dtest='X,Y'` 在 agent-core 内实测跑出 9＋5）。这条与「假绿」同族，记在这里免得下一个人拿一个静默 0 测试的绿灯当证据。
+
+### 12.3 每步的证据
+
+**B88（`47e7f57`）** — 先红：新夹具 2/2 失败，失败点是「请求必须真的发出去」那条断言，异常逐字为 `` `strict` is required, but was not set ``（**桩零请求**）—— 与 B88 的症状同形。变异：M1（`strictField` 恒 `JsonMissing`）⇒ 恰 1 红（azure）；M2（openai 车道传 `true`）⇒ 恰 1 红（openai）。
+
+**B87a ＋ B87b（`9f86e8c`、`6275f13`）** — 先红（**两个实现同时 `git stash`**）：读侧 6 error `has unknown message role`（round-trip 与两种形状共 6 例）＋ 1 failure（null section 那条的文案不匹配）＋ 写侧 1 failure（`toolsAdded` 键集是 7 个）。两组红互不重叠，归因清楚。
+
+### 12.4 门禁结果
+
+- **focused 全绿**：`ResponsesToolsStrictWireTest` 2/2、`MessageJsonCodecSystemReadbackTest` 9/9、`SessionJsonSystemMessageTest` 5/5、`PiMessagesRequestShapeTest` 2/2（另 `OpenAIResponsesApiTest`／`AzureOpenAIResponsesApiTest`／`OpenAIResponsesImageContentTest`／`OpenAIResponsesSurrogateSanitizeTest` 随反射改直调一并复核）。
+- **模块回归**：`pi-java-ai` 849 ⇒ **851**（新夹具 2 例，无其他增减）；`pi-java-agent-core` 484 ⇒ **494**（回读夹具 9 例 ＋ `SessionJsonSystemMessageTest` 的键集 1 例）。**全绿**。
+- **全 reactor**：`mvn clean verify`（串行）**BUILD SUCCESS**，14/14 模块，**7:14**（TUI 3:19、Web 1:21）—— 未复现 `docs/48 §10.4` 的 TUI 临时 JSONL 环境失败。
+- **静态门禁**：checkstyle **0 新违规**（ai 29 条、agent-core 9 条 warning 全是既有条目 —— 包括 `ResponsesMessageConverter:237` 那条 170 字符的 `inputMessage` 既有行）；无新增 `System.out.println`（全仓 17 处均为既有）；改动/新增文件最长 432 行（`ResponsesMessageConverter`，门限 500）；`git diff --check` clean。
+- **§8 的六条一致性检查**：①～⑥ 全过（`JsonMissing` 的落点只有 `strictField` 一处；`has unknown message role` 只剩不可达的 default 兜底；`inputSchema` 在 agent-core 只剩读侧兼容那一行）。
+
+### 12.5 遗留与未做
+
+1. **L-A**（`constrainedSampling`/`supportsStrictMode`/grammar 工具）**仍未做** —— B88 只落缺省路径；它的家是 `docs/48` 的 B2 行（compat 字段）＋ 独立包。
+2. **L-B…L-F 不变**（`SystemMessage.content` 裸字符串形态、`sections` 的 null 删除语义、TUI/web、B89/B90 保持登记、A1 四个元数据键不回读）。
+3. **azure 真服务是否收得下 `strict:false` 仍未实测**（§11-2 的不确定性没变：两侧都只有「pi 会发」这半条证据）。
+4. **本包未触及 `docs/49 §12.6-3` 的「四条非 Anthropic 车道的 pi 侧探针」** —— 那是 A2 的遗留，与本包无关。
