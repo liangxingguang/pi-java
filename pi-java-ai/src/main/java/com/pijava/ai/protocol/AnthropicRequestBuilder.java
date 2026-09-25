@@ -11,7 +11,9 @@ import com.anthropic.models.messages.ToolUnion;
 
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.TransformMessages;
+import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.MessageTexts;
 import com.pijava.ai.utils.SanitizeUnicode;
 
 /** Builds the Anthropic Messages request after shared message transformation. */
@@ -24,8 +26,9 @@ final class AnthropicRequestBuilder {
     }
 
     static MessageCreateParams buildParams(StreamRequest request) {
+        var transcript = Transcripts.resolveTranscript(request.transcript(), request.model());
         var messages = TransformMessages.apply(
-                request.messages(), request.modelId(), "anthropic-messages", request.model(),
+                transcript.messages(), request.modelId(), "anthropic-messages", request.model(),
                 AnthropicToolCallIds.create());
         var allowEmptySignature = request.model() != null
                 && request.model().compat().allowEmptySignature();
@@ -43,18 +46,30 @@ final class AnthropicRequestBuilder {
         thinking.thinking().ifPresent(builder::thinking);
         thinking.outputConfig().ifPresent(builder::outputConfig);
 
-        var systemText = request.systemPrompt();
-        if (systemText != null && !systemText.isEmpty()) {
+        // 系统文本来自**前导系统消息**（pi :1043-1044），随后把它从会话数组里**切掉**
+        // （pi :1044 的 `transformedMessages.slice(1)`）—— 否则它会作为普通消息落线
+        // （旧实现就是那样：msg 不是 UserMessage ⇒ 走 ASSISTANT 分支，静默错发）。
+        var initialSystemMessage = Transcripts.getInitialSystemMessage(transcript.messages());
+        var systemText = initialSystemMessage == null
+                ? "" : MessageTexts.getSystemMessageText(initialSystemMessage);
+        if (!systemText.isEmpty()) {
             builder.system(SanitizeUnicode.surrogates(systemText));
         }
 
-        for (int i = 0; i < messages.size(); i++) {
-            var msg = messages.get(i);
+        // ⚠️ 切头用的是**变换后**的表（pi 同上），但「有没有头」按**变换前**判定 ——
+        // pi :1042-1044 正是这么写的，而第二遍（孤儿合成）不会移动下标 0 的系统消息。
+        var conversation = initialSystemMessage == null
+                ? messages : messages.subList(1, messages.size());
+        // 中途系统消息的原生渲染归 A3/A7（docs/49 L-D）；折叠后本断言恒成立。
+        Transcripts.requireOnlyLeadingSystemMessage(conversation, "anthropic-messages");
+
+        for (int i = 0; i < conversation.size(); i++) {
+            var msg = conversation.get(i);
             if (msg instanceof Message.ToolResultMessage) {
                 var resultBlocks = new ArrayList<ContentBlockParam>();
                 int j = i;
-                while (j < messages.size()
-                        && messages.get(j) instanceof Message.ToolResultMessage tool) {
+                while (j < conversation.size()
+                        && conversation.get(j) instanceof Message.ToolResultMessage tool) {
                     resultBlocks.add(AnthropicMessageConverter.toToolResultBlock(tool));
                     j++;
                 }
@@ -79,7 +94,7 @@ final class AnthropicRequestBuilder {
                     .build());
         }
 
-        for (var td : request.tools()) {
+        for (var td : Transcripts.getCurrentTools(transcript.messages())) {
             var inputSchema = Tool.InputSchema.builder()
                     .putAllAdditionalProperties(AnthropicMessageConverter.toJsonValues(td.inputSchema()))
                     .build();

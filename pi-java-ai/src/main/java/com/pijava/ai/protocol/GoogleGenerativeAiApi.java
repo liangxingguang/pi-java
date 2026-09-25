@@ -17,7 +17,10 @@ import com.google.genai.types.Tool;
 import com.pijava.ai.Usage;
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.api.TranscriptContext;
+import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.api.TransformMessages;
+import com.pijava.ai.message.MessageTexts;
 import com.pijava.ai.model.CostCalculator;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
@@ -102,14 +105,19 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
         String rawStopReason = null;
         boolean toolCallSeen = false;
         try {
+            // Google 车道**无条件折叠**（pi google-generative-ai.ts:65，不看 compat ——
+            // gemini 没有中途系统消息的概念），随后**去头**：系统提示走 systemInstruction，
+            // 不进 contents（pi google-shared.ts:192-193）。
+            var transcript = Transcripts.collapseSystemMessages(request.transcript());
+            var conversation = Transcripts.withoutInitialSystemMessage(transcript.messages());
             // 共享预通道先于本车道的映射跑（pi google-shared.ts:138 在 contents 转换前调
             // transformMessages）—— 跨模型重放的 thinking 块在此降级为文本，
             // 转换器的 ThinkingContent 分支（丢块）才不会把它整段吞掉。
             var contents = GoogleMessageConverter.toContents(TransformMessages.apply(
-                request.messages(), request.modelId(), apiName(), request.model(),
+                conversation, request.modelId(), apiName(), request.model(),
                 GoogleToolCallIds.create()),
                 request.modelId(), request.model());
-            var config = buildConfig(request);
+            var config = buildConfig(request, transcript);
 
             publisher.submit(builder.emitStart());
 
@@ -282,13 +290,15 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
         };
     }
 
-    private GenerateContentConfig buildConfig(StreamRequest request) {
+    private GenerateContentConfig buildConfig(StreamRequest request, TranscriptContext transcript) {
         var builder = GenerateContentConfig.builder();
 
-        // System instruction —— 请求上的独立字段（pi google-generative-ai.ts:380 读
-        // context.systemPrompt），不在消息列表里。
-        var systemText = request.systemPrompt();
-        if (systemText != null && !systemText.isEmpty()) {
+        // System instruction —— 来自**前导系统消息**（pi google-generative-ai.ts:374 的
+        // getInitialSystemMessage + `:390` 的 getSystemMessageText），不在 contents 里。
+        var initialSystemMessage = Transcripts.getInitialSystemMessage(transcript.messages());
+        var systemText = initialSystemMessage == null
+                ? "" : MessageTexts.getSystemMessageText(initialSystemMessage);
+        if (!systemText.isEmpty()) {
             builder.systemInstruction(
                     // pi google-generative-ai.ts:393 —— systemInstruction 净化（整串）。
                     Content.fromParts(Part.fromText(SanitizeUnicode.surrogates(systemText))));
@@ -301,10 +311,11 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
             builder.temperature((float) request.temperature());
         }
 
-        // Tools
-        if (!request.tools().isEmpty()) {
+        // Tools —— 重放后的当前工具表（pi google-generative-ai.ts:375 的 getCurrentTools）。
+        var tools = Transcripts.getCurrentTools(transcript.messages());
+        if (!tools.isEmpty()) {
             builder.tools(List.of(Tool.builder()
-                    .functionDeclarations(GoogleMessageConverter.functions(request.tools()))
+                    .functionDeclarations(GoogleMessageConverter.functions(tools))
                     .build()));
         }
 

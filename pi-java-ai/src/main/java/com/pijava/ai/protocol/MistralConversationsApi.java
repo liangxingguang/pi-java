@@ -13,12 +13,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.api.TranscriptContext;
+import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.api.TransformMessages;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.http.PiHttpClient;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.MessageTexts;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
 import com.pijava.ai.stream.ToolCallBuilder;
@@ -271,10 +274,12 @@ public final class MistralConversationsApi extends AbstractChatApi {
         var body = new HashMap<String, Object>();
         body.put("model", request.modelId().modelName());
         body.put("stream", true);
-        body.put("messages", toMistralMessages(request));
+        var transcript = Transcripts.resolveTranscript(request.transcript(), request.model());
+        body.put("messages", toMistralMessages(transcript, request));
 
-        if (!request.tools().isEmpty()) {
-            body.put("tools", toMistralTools(request.tools()));
+        var tools = Transcripts.getCurrentTools(transcript.messages());
+        if (!tools.isEmpty()) {
+            body.put("tools", toMistralTools(tools));
         }
         if (request.maxTokens() > 0) {
             body.put("max_tokens", request.maxTokens());
@@ -286,23 +291,32 @@ public final class MistralConversationsApi extends AbstractChatApi {
         return MAPPER.writeValueAsString(body);
     }
 
-    private List<Map<String, Object>> toMistralMessages(StreamRequest request) {
+    private List<Map<String, Object>> toMistralMessages(TranscriptContext transcript,
+                                                        StreamRequest request) {
         var messages = new ArrayList<Map<String, Object>>();
-        // 系统提示是请求上的独立字段（pi mistral-conversations.ts:523 读 context.systemPrompt），
-        // 不在消息列表里；Mistral 用一条 role=system 的消息承载它。
-        var systemPrompt = request.systemPrompt();
-        if (systemPrompt != null && !systemPrompt.isEmpty()) {
-            var system = new HashMap<String, Object>();
-            system.put("role", "system");
-            system.put("content", SanitizeUnicode.surrogates(systemPrompt)); // pi :789
-            messages.add(system);
+        // 系统提示来自**前导系统消息**（pi mistral-conversations.ts:787-789 的 `index === 0`
+        // 支 → getSystemMessageText），Mistral 用一条 role=system 的消息承载它。
+        // 折叠后头必在下标 0；原生中途系统消息路径归 A3/A7（docs/49 L-D）。
+        var initialSystemMessage = Transcripts.getInitialSystemMessage(transcript.messages());
+        if (initialSystemMessage != null) {
+            var systemText = MessageTexts.getSystemMessageText(initialSystemMessage);
+            if (!systemText.isEmpty()) {
+                var system = new HashMap<String, Object>();
+                system.put("role", "system");
+                system.put("content", SanitizeUnicode.surrogates(systemText)); // pi :789
+                messages.add(system);
+            }
         }
         // 共享预通道先于本车道的映射跑（pi mistral-conversations.ts:139 在消息转换前调
         // transformMessages）—— 本车道的 extractText 只收 TextContent，
         // 不过闸则跨模型重放的 thinking 文本无声消失。
         // pi :517 —— 车道的图片能力位来自同一个 model.input.includes("image")。
         boolean supportsImages = request.model().supportsImageInput();
-        TransformMessages.apply(request.messages(), request.modelId(), apiName(), request.model(),
+        // ⚠️ 与 pi 的差别只在**输入表**：pi 把系统消息留在表里、由 `:787` 的分支就地处理；
+        // java 在转换前去掉头（上面已落线），故此处喂去头后的表。两者出参逐条相同。
+        var conversation = Transcripts.withoutInitialSystemMessage(transcript.messages());
+        Transcripts.requireOnlyLeadingSystemMessage(conversation, apiName());
+        TransformMessages.apply(conversation, request.modelId(), apiName(), request.model(),
                 MistralToolCallIds.create())
             .stream().<Map<String, Object>>map(msg -> {
             var m = new HashMap<String, Object>();

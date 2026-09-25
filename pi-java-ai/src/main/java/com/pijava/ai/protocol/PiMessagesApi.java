@@ -12,9 +12,11 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.http.PiHttpClient;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.MessageTexts;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
 
@@ -160,19 +162,27 @@ public final class PiMessagesApi extends AbstractChatApi {
 
     private static String buildBody(StreamRequest request) {
         try {
+            var transcript = Transcripts.resolveTranscript(request.transcript(), request.model());
             var context = JSON.createObjectNode();
             // wire 上的 context 就是 pi 的 Context 类型：{systemPrompt?, messages, tools?}
             // （pi api/pi-messages.ts 的 `{ model, context, options }` POST body）。
-            if (request.systemPrompt() != null && !request.systemPrompt().isEmpty()) {
-                context.put("systemPrompt", request.systemPrompt());
+            // ⚠️ 包 A2 只把**取值源**换成 transcript；线形状的对齐是下一步（docs/49 §9 R2）。
+            var initialSystemMessage = Transcripts.getInitialSystemMessage(transcript.messages());
+            var systemText = initialSystemMessage == null
+                ? "" : MessageTexts.getSystemMessageText(initialSystemMessage);
+            if (!systemText.isEmpty()) {
+                context.put("systemPrompt", systemText);
             }
+            var conversation = Transcripts.withoutInitialSystemMessage(transcript.messages());
+            Transcripts.requireOnlyLeadingSystemMessage(conversation, "pi-messages");
             var messages = context.putArray("messages");
-            for (var msg : request.messages()) {
+            for (var msg : conversation) {
                 messages.add(toWireMessage(msg));
             }
-            if (!request.tools().isEmpty()) {
+            var currentTools = Transcripts.getCurrentTools(transcript.messages());
+            if (!currentTools.isEmpty()) {
                 var tools = context.putArray("tools");
-                for (var td : request.tools()) {
+                for (var td : currentTools) {
                     tools.addObject().put("type", "function")
                         .put("name", td.name())
                         .put("description", td.description())

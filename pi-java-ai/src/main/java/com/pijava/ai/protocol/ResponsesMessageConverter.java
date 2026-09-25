@@ -24,10 +24,13 @@ import com.openai.models.responses.ResponseFunctionToolCall;
 import com.openai.models.responses.Tool;
 
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.api.TranscriptContext;
+import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.api.TransformMessages;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.MessageTexts;
 import com.pijava.ai.thinking.ThinkingLevel;
 import com.pijava.ai.utils.SanitizeUnicode;
 
@@ -58,14 +61,17 @@ final class ResponsesMessageConverter {
      */
     static ResponseCreateParams buildParams(StreamRequest request, ResponsesOptions ropts,
                                             String modelName, String apiName) {
+        // pi openai-responses.ts:119 / azure-openai-responses.ts:77 —— 车道入口先
+        // resolveTranscript，之后再构建请求。
+        var transcript = Transcripts.resolveTranscript(request.transcript(), request.model());
         var builder = ResponseCreateParams.builder()
             .model(modelName)
             .store(false)
             .input(ResponseCreateParams.Input.ofResponse(
-                convertMessages(request, apiName)));
+                convertMessages(request, transcript, apiName)));
 
         var tools = new ArrayList<Tool>();
-        for (var td : request.tools()) {
+        for (var td : Transcripts.getCurrentTools(transcript.messages())) {
             tools.add(Tool.ofFunction(FunctionTool.builder()
                 .name(td.name())
                 .description(td.description())
@@ -105,22 +111,33 @@ final class ResponsesMessageConverter {
 
     // ── Message conversion ─────────────────────────────────────────────
 
-    private static List<ResponseInputItem> convertMessages(StreamRequest request, String apiName) {
+    private static List<ResponseInputItem> convertMessages(StreamRequest request,
+                                                           TranscriptContext transcript,
+                                                           String apiName) {
         var items = new ArrayList<ResponseInputItem>();
-        // 系统提示是请求上的独立字段（pi openai-responses-shared.ts:175 读
-        // context.systemPrompt），不在消息列表里。
-        var systemPrompt = request.systemPrompt();
-        if (systemPrompt != null && !systemPrompt.isEmpty()) {
+        // 系统文本来自**前导系统消息**（pi openai-responses-shared.ts:218-222 的
+        // `sourceIndex++ === 0` 支 → getSystemMessageText），落成 input 里的
+        // `{role:"system"}` 项 —— pi 在循环里就地转，折叠后头必在下标 0，故这里先落它。
+        var initialSystemMessage = Transcripts.getInitialSystemMessage(transcript.messages());
+        var systemText = initialSystemMessage == null
+            ? "" : MessageTexts.getSystemMessageText(initialSystemMessage);
+        if (!systemText.isEmpty()) {
             items.add(inputMessage(EasyInputMessage.Role.SYSTEM,
-                SanitizeUnicode.surrogates(systemPrompt)));
+                SanitizeUnicode.surrogates(systemText)));
         }
         // 共享预通道先于本车道的映射跑（pi openai-responses-shared.ts:172 在消息转换前调
         // transformMessages）—— 跨模型重放的 thinking 块在此降级为文本，否则本车道的
         // addAssistantItems 会把它连块带文本一起丢（见那里的注释）。
-        var messages = TransformMessages.apply(request.messages(), request.modelId(), apiName,
+        var messages = TransformMessages.apply(transcript.messages(), request.modelId(), apiName,
                 request.model(), ResponsesToolCallIds.create(apiName));
+        // 中途系统消息的原生渲染归 A3/A7（docs/49 L-D）；折叠后本断言恒成立。
+        Transcripts.requireOnlyLeadingSystemMessage(messages, apiName);
         var msgIndex = 0;
         for (var msg : messages) {
+            if (msg instanceof Message.SystemMessage) {
+                // 前导系统消息已在上面落成 input 项（pi :218-222 的同一支）。
+                continue;
+            }
             if (msg instanceof Message.UserMessage user) {
                 items.add(toUserItem(user.content()));
             } else if (msg instanceof Message.AssistantMessage assistant) {

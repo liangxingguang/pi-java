@@ -23,6 +23,8 @@ import com.openai.models.chat.completions.ChatCompletionToolMessageParam;
 import com.openai.models.chat.completions.ChatCompletionUserMessageParam;
 
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.api.Transcripts;
+import com.pijava.ai.message.MessageTexts;
 import com.pijava.ai.api.TransformMessages;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
@@ -79,22 +81,32 @@ final class OpenAICompletionsMessageConverter {
         var builder = ChatCompletionCreateParams.builder()
                 .model(request.modelId().modelName());
 
-        // 系统提示是请求上的独立字段（pi openai-completions.ts:1214 读 context.systemPrompt），
-        // 不在消息列表里。
-        var systemText = request.systemPrompt();
-        if (systemText != null && !systemText.isEmpty()) {
-            // pi openai-completions.ts:1251 —— instruction/system 文本净化。
+        var transcript = Transcripts.resolveTranscript(request.transcript(), request.model());
+        // 系统文本来自**前导系统消息**（pi :1249 的 `i === 0` 支 → `getSystemMessageText`）。
+        // pi 在消息循环里**就地**把它转成 instruction 消息；折叠后头必然在下标 0，
+        // 故这里先发它、循环里再跳过它 —— 同一线格顺序。
+        var initialSystemMessage = Transcripts.getInitialSystemMessage(transcript.messages());
+        var systemText = initialSystemMessage == null
+            ? "" : MessageTexts.getSystemMessageText(initialSystemMessage);
+        if (!systemText.isEmpty()) {
+            // pi :1251 —— instruction/system 文本净化。
             builder.addSystemMessage(SanitizeUnicode.surrogates(systemText));
         }
 
         // 共享预通道必须先于本车道的映射跑（pi openai-completions.ts:1212 在
         // convertMessages 之前调 transformMessages）：跨模型重放的带签名 thinking 块
         // 在此降级为文本，本车道才看得见那段文本。
-        var messages = TransformMessages.apply(request.messages(), request.modelId(), apiName,
+        var messages = TransformMessages.apply(transcript.messages(), request.modelId(), apiName,
                 request.model(), CompletionsToolCallIds.create());
+        // 中途系统消息的原生渲染归 A3/A7（docs/49 L-D）；折叠后本断言恒成立。
+        Transcripts.requireOnlyLeadingSystemMessage(messages, apiName);
 
         for (int i = 0; i < messages.size(); i++) {
             var msg = messages.get(i);
+            if (msg instanceof Message.SystemMessage) {
+                // 前导系统消息已在上面落成 instruction 消息（pi :1249 的同一支）。
+                continue;
+            }
             if (msg instanceof Message.UserMessage user) {
                 addUserMessage(builder, user);
             } else if (msg instanceof Message.AssistantMessage assistant) {
@@ -132,7 +144,7 @@ final class OpenAICompletionsMessageConverter {
         // Pass tools so the model emits structured tool_calls instead of
         // writing fake XML tool invocations into the text stream (which also
         // avoids garbled interleaving in the rendered bubble).
-        for (var td : request.tools()) {
+        for (var td : Transcripts.getCurrentTools(transcript.messages())) {
             builder.addTool(ChatCompletionTool.ofFunction(
                 ChatCompletionFunctionTool.builder()
                     .type(JsonValue.from("function"))

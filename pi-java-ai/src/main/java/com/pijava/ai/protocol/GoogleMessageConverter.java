@@ -89,6 +89,9 @@ final class GoogleMessageConverter {
                 // `systemInstruction`, so a system message never reaches this conversion.
                 // An explicit case (rather than `default`) keeps a future fifth variant a
                 // compile error instead of silently reusing this message.
+                // 包 A2 起这条不变量**真的**被调用点保证：`GoogleGenerativeAiApi` 先
+                // `collapseSystemMessages` 再 `withoutInitialSystemMessage`（pi
+                // google-shared.ts:192-193），折叠后至多一个头、且已被去掉。
                 case Message.SystemMessage s -> throw new IllegalArgumentException(
                         "Unsupported message role for Google projection: " + s.role());
             }
