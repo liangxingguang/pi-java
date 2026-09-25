@@ -2,11 +2,15 @@ package com.pijava.agent.session.jsonl;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.pijava.agent.session.SessionJson;
 import com.pijava.ai.Usage;
+import com.pijava.ai.api.ToolDefinition;
+import com.pijava.ai.api.ToolReference;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.DeferredHandle;
 import com.pijava.ai.message.Message;
@@ -57,8 +61,99 @@ final class MessageJsonCodec {
                 JsonlCodec.optionalAny(node, "usage"),
                 decodeStringList(node.get("addedToolNames")),
                 node.has("isError") && node.get("isError").asBoolean(false));
+            case "system" -> new Message.SystemMessage(
+                content,
+                decodeTimestamp(node.get("timestamp")),
+                decodeSections(node.get("sections")),
+                decodeToolsAdded(node.get("toolsAdded")),
+                decodeToolReferences(node.get("toolsRemoved")));
             default -> throw JsonlCodec.DecodeError.schema("has unknown message role");
         };
+    }
+
+    /**
+     * 系统消息的 {@code sections} —— pi 是 {@code Record<string, string | null>}
+     * （{@code types.ts:501}），java 的 {@code Map<String,String>} 只有「字符串」一态。
+     *
+     * <p>用 {@code LinkedHashMap} 是**语义**不是口味：插入序就是渲染序（pi 的
+     * {@code Object.entries}，{@code utils/text.ts:17}），包 A2 的 F3 已经把写侧改成保序
+     * 副本；读侧不保序的话 round-trip 会静默重排 prompt 的段落。
+     * {@link Message.SystemMessage} 的紧凑构造器会再拷一次，同样保序。</p>
+     */
+    private static Map<String, String> decodeSections(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return Map.of();
+        }
+        if (!node.isObject()) {
+            throw JsonlCodec.DecodeError.schema("has invalid sections");
+        }
+        var sections = new LinkedHashMap<String, String>();
+        node.fields().forEachRemaining(entry -> {
+            if (!entry.getValue().isTextual()) {
+                // pi 用 null 表示「删除具名段」；静默丢键会静默改变 prompt，读成空串会把
+                // 「删除」读成「清空」—— 两种都比抛错糟（docs/50 §9 R1）。删除语义本身是
+                // 包 A4 的形状裁决（docs/50 §10 L-C）。
+                throw JsonlCodec.DecodeError.schema(
+                    "has non-string section " + entry.getKey());
+            }
+            sections.put(entry.getKey(), entry.getValue().textValue());
+        });
+        return sections;
+    }
+
+    /**
+     * 系统消息的 {@code toolsAdded} —— **两种形状都读**：pi 的 ai 层 {@code Tool}
+     * （三键 {@code {name, description, parameters}}，{@code types.ts:600-605}）与
+     * A1 落线用的 {@code ToolDefinition} 全形（schema 键名是 {@code inputSchema}）。
+     *
+     * <p>读侧两种、写侧一种（包 B87b 之后只写 pi 形状）是**刻意**的：盘上已有的会话带的
+     * 是旧形，读不了等于把历史会话弄丢。</p>
+     *
+     * <p>A1 的四个元数据键（{@code label}/{@code promptSnippet}/{@code promptGuidelines}/
+     * {@code renderShell}）**不回读** —— pi 的 {@code toolsAdded} 是 ai 层 {@code Tool}，
+     * 本就不带它们（{@code docs/50 §10 L-F}）；三参便捷构造器给出与 pi 同义的缺省。</p>
+     */
+    private static List<ToolDefinition> decodeToolsAdded(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return List.of();
+        }
+        if (!node.isArray()) {
+            throw JsonlCodec.DecodeError.schema("has invalid toolsAdded");
+        }
+        var tools = new ArrayList<ToolDefinition>(node.size());
+        for (var item : node) {
+            if (!item.isObject()) {
+                throw JsonlCodec.DecodeError.schema("has invalid toolsAdded entry");
+            }
+            Map<String, Object> schema = JsonlCodec.optionalObject(item, "parameters");
+            if (schema == null) {
+                schema = JsonlCodec.optionalObject(item, "inputSchema");
+            }
+            if (schema == null) {
+                throw JsonlCodec.DecodeError.schema("has invalid toolsAdded entry");
+            }
+            tools.add(new ToolDefinition(JsonlCodec.requireString(item, "name"),
+                JsonlCodec.optionalString(item, "description"), schema));
+        }
+        return List.copyOf(tools);
+    }
+
+    /** 系统消息的 {@code toolsRemoved} —— pi 的 {@code ToolReference} 是 {@code {name}}（{@code types.ts:607-609}）。 */
+    private static List<ToolReference> decodeToolReferences(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return List.of();
+        }
+        if (!node.isArray()) {
+            throw JsonlCodec.DecodeError.schema("has invalid toolsRemoved");
+        }
+        var references = new ArrayList<ToolReference>(node.size());
+        for (var item : node) {
+            if (!item.isObject()) {
+                throw JsonlCodec.DecodeError.schema("has invalid toolsRemoved entry");
+            }
+            references.add(new ToolReference(JsonlCodec.requireString(item, "name")));
+        }
+        return List.copyOf(references);
     }
 
     /** {@code addedToolNames}：pi 只在非空时写出；缺席/非数组空表 ⇒ 空列表（缺省）。 */
