@@ -48,7 +48,7 @@
 - Test: `pi-java-ai/src/test/java/com/pijava/ai/api/TranscriptContextTest.java`
 
 **Interfaces:**
-- Produces `Message.SystemMessage` with `role() == "system"`, `content()`, `timestamp()`, optional `sections`, `toolsAdded`, and `toolsRemoved` fields represented as immutable collections.
+- Produces `Message.SystemMessage` with `role() == "system"`, the existing Java `List<ContentBlock> content()` contract (legacy text represented by one `TextContent`), `timestamp()`, and optional `sections`, `toolsAdded`, and `toolsRemoved` fields represented as immutable collections.
 - Produces `TranscriptContext(List<Message> messages)` with an immutable message list and a `messages()` accessor.
 - `SystemMessage` must not alter existing `UserMessage`, `AssistantMessage`, or `ToolResultMessage` constructors.
 
@@ -60,7 +60,7 @@ Add tests that construct a system message and assert:
 var system = new Message.SystemMessage(
     "base prompt", Instant.EPOCH, Map.of(), List.of(), List.of());
 assertThat(system.role()).isEqualTo("system");
-assertThat(system.content()).isEqualTo("base prompt");
+assertThat(system.content()).containsExactly(new ContentBlock.TextContent("base prompt"));
 assertThat(system.sections()).isEmpty();
 assertThat(new TranscriptContext(List.of(system)).messages()).containsExactly(system);
 ```
@@ -80,7 +80,7 @@ Expected: compilation failure because `Message.SystemMessage`, `ToolReference`, 
 
 - [ ] **Step 3: Implement the minimal immutable types**
 
-Add `SystemMessage` as a fourth `Message` sealed-interface record. Use `String content`, `Instant timestamp`, `Map<String,String> sections`, `List<ToolDefinition> toolsAdded`, and `List<ToolReference> toolsRemoved`; normalize null collections to empty and defensively copy them. Create `ToolReference` at `pi-java-ai/src/main/java/com/pijava/ai/api/ToolReference.java` with exact shape `public record ToolReference(String name) {}`; it must not depend on agent-core. Add `TranscriptContext` as a record that defensively copies its message list.
+Add `SystemMessage` as a fourth `Message` sealed-interface record. Its primary content component must remain `List<ContentBlock>` so it implements the existing `Message.content()` method; represent legacy text with one `ContentBlock.TextContent`. Add the convenience constructor `SystemMessage(String text, Instant timestamp, Map<String,String> sections, List<ToolDefinition> toolsAdded, List<ToolReference> toolsRemoved)` that creates that text block. Use `Map<String,String> sections`, `List<ToolDefinition> toolsAdded`, and `List<ToolReference> toolsRemoved`; normalize null collections to empty and defensively copy them. Create `ToolReference` at `pi-java-ai/src/main/java/com/pijava/ai/api/ToolReference.java` with exact shape `public record ToolReference(String name) {}`; it must not depend on agent-core. Add `TranscriptContext` as a record that defensively copies its message list.
 
 Update the `Message` class documentation and sealed permits so the public contract states that system messages are now representable, while legacy `Context.systemPrompt` remains a compatibility input.
 
@@ -186,7 +186,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - `ContextEntries.toMessages(...)` continues returning `List<Message>` but preserves `Entry.Message` whose payload is `Message.SystemMessage` in original order.
-- `SessionJson.messageNode(Message.SystemMessage)` emits `role: "system"`, `content`, `timestamp`, and non-empty future-compatible fields only when present; existing user/assistant/tool JSON remains unchanged.
+- `SessionJson.messageNode(Message.SystemMessage)` emits `role: "system"`, the existing pi-compatible `content` array of block nodes, `timestamp`, and non-empty future-compatible fields only when present; existing user/assistant/tool JSON remains unchanged.
 - `Entry.ActiveToolsChange`, model changes, and other non-message entries remain skipped in A1.
 
 - [ ] **Step 1: Write failing entry-projection and JSON tests**

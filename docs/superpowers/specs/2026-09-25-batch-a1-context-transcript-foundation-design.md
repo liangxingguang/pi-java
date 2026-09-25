@@ -40,7 +40,7 @@ Exact components:
 
 ```java
 record SystemMessage(
-    String content,
+    List<ContentBlock> content,
     Instant timestamp,
     Map<String, String> sections,
     List<ToolDefinition> toolsAdded,
@@ -48,12 +48,28 @@ record SystemMessage(
 ) implements Message
 ```
 
+The `content` component intentionally uses the existing Java `Message.content()` contract (`List<ContentBlock>`). Pi accepts `SystemMessage.content` as either a string or text-content array; Java represents the string form as a single `ContentBlock.TextContent`. Changing the shared `Message.content()` return type to `Object` would break every existing provider, agent-core, web, and stream consumer, so this is a compatibility adaptation rather than a new protocol claim.
+
 The record returns `"system"` from `role()`. Its compact constructor:
 
-- converts a null `content` to the empty string;
+- converts a null content/list to an empty list;
 - converts null `sections`, `toolsAdded`, and `toolsRemoved` to empty collections;
 - defensively copies every collection;
 - does not mutate or normalize section/tool contents beyond copying.
+
+Add a convenience constructor:
+
+```java
+public SystemMessage(String text, Instant timestamp,
+                     Map<String, String> sections,
+                     List<ToolDefinition> toolsAdded,
+                     List<ToolReference> toolsRemoved) {
+    this(List.of(new ContentBlock.TextContent(text == null ? "" : text)), timestamp,
+         sections, toolsAdded, toolsRemoved);
+}
+```
+
+The convenience constructor is for the legacy normalizer and tests; provider-facing code still sees the common `List<ContentBlock>` interface.
 
 `ToolReference` is an AI-layer value type in:
 
@@ -106,7 +122,7 @@ Rules:
 1. Treat null messages/tools as empty.
 2. If the first supplied message is already `Message.SystemMessage`, return a defensive copy of the supplied sequence and do not inject legacy fields. This duplicate guard belongs to the agent-initialization adapter in A1's compatibility layer; it is not a promise that pi's raw `normalizeContext` merges or deduplicates an already-normalized list.
 3. Otherwise create one leading `SystemMessage` only when `systemPrompt` is non-null/non-empty or tools are non-empty.
-4. The synthetic message uses `Instant.EPOCH`, the supplied prompt (or `""`), a copied empty `sections` map, copied tool definitions in `toolsAdded`, and an empty `toolsRemoved` list.
+4. The synthetic message uses `Instant.EPOCH`, the supplied prompt (or `""`) represented as one `ContentBlock.TextContent`, a copied empty `sections` map, copied tool definitions in `toolsAdded`, and an empty `toolsRemoved` list.
 5. Preserve every supplied message and its order.
 6. Never mutate caller-owned lists or objects.
 
@@ -120,7 +136,7 @@ No `normalize(StreamRequest)` overload is included in A1. `StreamRequest` remain
 
 Extend `SessionJson.messageNode` for `Message.SystemMessage`:
 
-- always write `role: "system"`, `content`, and `timestamp` as epoch milliseconds;
+- always write `role: "system"`, `content` as the pi-compatible array of content-block nodes, and `timestamp` as epoch milliseconds;
 - omit empty `sections`, `toolsAdded`, and `toolsRemoved` fields;
 - write non-empty optional fields under the pi names `sections`, `toolsAdded`, and `toolsRemoved`;
 - preserve all existing user/assistant/tool result node behavior exactly.
