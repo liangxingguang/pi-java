@@ -252,4 +252,37 @@ class ContextEntriesTest {
 
         assertThat(ContextEntries.toMessages(List.<Entry>of(assistant))).hasSize(1);
     }
+
+    // ── A1: 系统消息载荷（docs/48 §A1）─────────────────────────────────────
+
+    /**
+     * 系统消息是第四种 {@code Message} 变体，仍然以 {@code Entry.Message} 载荷的形式
+     * 存在于路径中（A1 **不**新增 {@code Entry.SystemMessage} 子类型）。投影必须原样、
+     * 原位带过 —— 既不能被 {@code project} 的 stopReason 过滤吃掉（它只看 assistant），
+     * 也不能被挪到首位或末位。
+     */
+    @Test
+    void systemMessagePayloadSurvivesProjectionInPlace() {
+        var system = new Message.SystemMessage(
+            "changed", Instant.ofEpochMilli(7), java.util.Map.of(), List.of(), List.of());
+        var before = message("u-1", null, "user", "before");
+        var after = message("u-2", "u-1", "user", "after");
+        var systemEntry = new Entry.Message("s-1", 0, "u-1", Instant.ofEpochMilli(7), system, null);
+
+        var messages = ContextEntries.toMessages(List.<Entry>of(before, systemEntry, after));
+
+        assertThat(messages).containsExactly(
+            new Message.UserMessage(List.of(new ContentBlock.TextContent("before"))),
+            system,
+            new Message.UserMessage(List.of(new ContentBlock.TextContent("after"))));
+    }
+
+    /** {@code Entry.ActiveToolsChange} 在 A1 里仍然不产消息（A3 的工具增删语义未裁决）。 */
+    @Test
+    void activeToolsChangeStillProducesNoMessage() {
+        var change = new Entry.ActiveToolsChange("t-1", 0, null, Instant.EPOCH,
+            List.of("bash"));
+
+        assertThat(ContextEntries.toMessages(List.<Entry>of(change))).isEmpty();
+    }
 }

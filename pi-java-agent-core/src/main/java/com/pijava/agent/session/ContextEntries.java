@@ -148,6 +148,11 @@ public final class ContextEntries {
      * compaction/branch summaries become user messages with pi's exact
      * prefix/suffix, custom_message entries become user messages carrying
      * their content, other entry types produce nothing.
+     *
+     * <p>A1（{@code docs/48} §A1）：系统消息（{@link Message.SystemMessage}）走
+     * 「message entries pass through」这一支 —— 它仍然是 {@code Entry.Message} 的载荷，
+     * A1 <b>不</b>新增 {@code Entry.SystemMessage} 子类型，也不把
+     * {@code Entry.ActiveToolsChange} 投影成系统消息（那是 A3 的工具增删语义）。</p>
      */
     public static List<Message> toMessages(List<Entry> leafPath) {
         List<Message> messages = new ArrayList<>();

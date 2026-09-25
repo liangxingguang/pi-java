@@ -120,6 +120,26 @@ public final class SessionJson {
                 node.put("rawStopReason", assistant.rawStopReason());
             }
         }
+        if (message instanceof Message.SystemMessage system) {
+            // A1（docs/48 §A1）：系统消息的 pi 形状（ai/src/types.ts:491-509）。role/content
+            // 已由上面的通用规则写好，这里只补系统消息特有的四项。三个可选字段的缺席规则
+            // 同 §8.18 的 A7：pi 写的是 `...(x ? {x} : {})`，空 Map/List 在线上没有对应键，
+            // 而 Jackson 会把它们照样写出来 ⇒ 必须主动省略。
+            // timestamp 缺席同样省略：pi 的 timestamp 是必填 number，Java 的 Instant 可为
+            // null（只有手写构造才走得到），写 null 会造出 pi 里不存在的形状。
+            if (system.timestamp() != null) {
+                node.put("timestamp", system.timestamp().toEpochMilli());
+            }
+            if (!system.sections().isEmpty()) {
+                node.set("sections", MAPPER.valueToTree(system.sections()));
+            }
+            if (!system.toolsAdded().isEmpty()) {
+                node.set("toolsAdded", MAPPER.valueToTree(system.toolsAdded()));
+            }
+            if (!system.toolsRemoved().isEmpty()) {
+                node.set("toolsRemoved", MAPPER.valueToTree(system.toolsRemoved()));
+            }
+        }
         return node;
     }
 
