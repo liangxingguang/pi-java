@@ -10,6 +10,7 @@ import java.util.Set;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
+import com.pijava.ai.thinking.ThinkingLevelMap;
 
 /**
  * Built-in model catalog with static data for the 5 Phase 1 providers.
@@ -30,17 +31,23 @@ public final class BuiltinCatalog implements ModelCatalog {
 
     // ── Per-provider factories ────────────────────────────────
 
-    /** Catalog of Anthropic Claude models. */
+    /**
+     * Catalog of Anthropic Claude models.
+     *
+     * <p>包 A7：每个模型经 {@link CatalogCompatRules#anthropic} 标注 compat ——
+     * pi 的**生成期**规则（{@code generate-models.ts:1142}）在这四个 id 里命中三个
+     * （`fable-5` / `opus-4-8` / `sonnet-4-6`），照抄谓词而不是硬编值。</p>
+     */
     public static ModelCatalog anthropicModels() {
         return new BuiltinCatalog(List.of(
-                model("claude-fable-5", "Claude Fable 5",
-                        200_000, 16_384, anthropicCaps(), 3.00, 15.00),
-                model("claude-opus-4-8", "Claude Opus 4.8",
-                        200_000, 32_768, anthropicCaps(), 15.00, 75.00),
-                model("claude-sonnet-4-6", "Claude Sonnet 4.6",
-                        200_000, 8_192, anthropicCaps(), 3.00, 15.00),
-                model("claude-haiku-4-5-20251001", "Claude Haiku 4.5",
-                        200_000, 8_192, anthropicCaps(), 0.80, 4.00)
+                anthropicModel("claude-fable-5", "Claude Fable 5",
+                        200_000, 16_384, 3.00, 15.00),
+                anthropicModel("claude-opus-4-8", "Claude Opus 4.8",
+                        200_000, 32_768, 15.00, 75.00),
+                anthropicModel("claude-sonnet-4-6", "Claude Sonnet 4.6",
+                        200_000, 8_192, 3.00, 15.00),
+                anthropicModel("claude-haiku-4-5-20251001", "Claude Haiku 4.5",
+                        200_000, 8_192, 0.80, 4.00)
         ));
     }
 
@@ -83,12 +90,21 @@ public final class BuiltinCatalog implements ModelCatalog {
     /**
      * Catalog of DeepSeek models (V4 series). 旧别名 {@code deepseek-chat}/
      * {@code deepseek-reasoner} 于 2026-07-24 弃用，故仅列 V4；Flash 支持工具调用。
+     *
+     * <p>包 A7：{@code deepseek-v4-pro} 经 {@link CatalogCompatRules#completions} 标注
+     * {@code supportsMidConvoSystemMessages}（pi {@code applyOpenAICompletionsTranscriptMetadata:875}）；
+     * 端点属性（`max_tokens`／store／developer 角色）由 {@link CompatResolver} 在请求期探测。</p>
+     *
+     * <p>⚠️ {@code deepseek-v4-flash} **不是** pi 的 id：pi 于 2026-09-10（`12f59336a`）把它改名成
+     * {@code deepseek-flash}（commit message：*Replace retired Flash aliases with the canonical
+     * deepseek-flash model*），而那条规则是**逐 id 写死**的 ⇒ flash 无论哪个名字都拿不到该标志。
+     * 本仓的 id 漂移登记为 {@code docs/32 B97}（归 A-08），本包**不**改 id。</p>
      */
     public static ModelCatalog deepseekModels() {
         return new BuiltinCatalog(List.of(
-                model("deepseek-v4-flash", "DeepSeek V4 Flash",
+                deepseekModel("deepseek-v4-flash", "DeepSeek V4 Flash",
                         1_048_576, 393_216, chatCaps(), 0.14, 0.28),
-                model("deepseek-v4-pro", "DeepSeek V4 Pro",
+                deepseekModel("deepseek-v4-pro", "DeepSeek V4 Pro",
                         1_048_576, 393_216, reasoningCaps(), 1.74, 3.48)
         ));
     }
@@ -146,18 +162,44 @@ public final class BuiltinCatalog implements ModelCatalog {
 
     // ── Helpers ───────────────────────────────────────────────
 
+    /**
+     * Anthropic 车道的内置条目：provider 固定为 {@code anthropic}，compat 由
+     * {@link CatalogCompatRules#anthropic}（pi 的生成期规则）算。
+     */
+    private static ModelInfo anthropicModel(String name, String display, int maxInput,
+                                             int maxOutput, double inPrice, double outPrice) {
+        return model(name, display, maxInput, maxOutput, anthropicCaps(), inPrice, outPrice,
+                CatalogCompatRules.anthropic("anthropic", name));
+    }
+
+    /** completions 车道的内置条目（DeepSeek）：compat 由 {@link CatalogCompatRules#completions} 算。 */
+    private static ModelInfo deepseekModel(String name, String display, int maxInput,
+                                            int maxOutput, Set<ModelCapability> caps,
+                                            double inPrice, double outPrice) {
+        return model(name, display, maxInput, maxOutput, caps, inPrice, outPrice,
+                CatalogCompatRules.completions("deepseek", name));
+    }
+
     private static ModelInfo model(String name, String display, int maxInput,
                                     int maxOutput, Set<ModelCapability> caps,
                                     double inPrice, double outPrice) {
+        return model(name, display, maxInput, maxOutput, caps, inPrice, outPrice,
+                ModelCompat.NONE);
+    }
+
+    private static ModelInfo model(String name, String display, int maxInput,
+                                    int maxOutput, Set<ModelCapability> caps,
+                                    double inPrice, double outPrice, ModelCompat compat) {
+        var provider = name.contains("claude") ? "anthropic"
+                : name.contains("gpt") ? "openai"
+                : name.contains("gemini") ? "google"
+                : name.contains("deepseek") ? "deepseek"
+                : name.contains("mistral") ? "mistral" : "unknown";
         return new ModelInfo(
-                ModelId.of(name.contains("claude") ? "anthropic"
-                        : name.contains("gpt") ? "openai"
-                        : name.contains("gemini") ? "google"
-                        : name.contains("deepseek") ? "deepseek"
-                        : name.contains("mistral") ? "mistral" : "unknown",
-                        name),
+                ModelId.of(provider, name),
                 display, caps, maxInput, maxOutput, false,
-                new PricingInfo(inPrice, outPrice));
+                new PricingInfo(inPrice, outPrice), ThinkingLevelMap.empty(), Map.of(), Map.of(),
+                compat);
     }
 
     /** OpenRouter image-generation model（provider 固定 openrouter-images）。 */

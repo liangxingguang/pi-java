@@ -170,10 +170,14 @@ class ModelsJsonConfigTest {
     /**
      * <b>B8-3</b>：{@code compat} 块里**未知**的键被忽略（pi-java 只做被消费的那些标志）。
      *
-     * <p>⚠️ 这是与 pi 的一处**刻意不同**：pi 的 compat 接口有八个字段，pi-java 只携带被实际
-     * 消费的一个（{@code ModelCompat} 的 javadoc 记着这条）。忽略未知键使「pi 新加的 compat
+     * <p>⚠️ 这是与 pi 的一处**刻意不同**：pi 的五个 compat 接口共 52 个字段（{@code types.ts:674}
+     * 起），而 {@link com.pijava.ai.catalog.ModelCompat} 只携带本仓真正消费的十四个
+     * —— 其余按 {@code docs/53 §4.4} 的归属表留给各自的包。忽略未知键使「pi 新加的 compat
      * 标志」不会把文件打崩 —— 代价是新标志会**静默失效**，故此处显式钉住该行为，
      * 免得日后误以为是解析 bug。</p>
+     *
+     * <p>⚠️ 但**已知键的取值**写错是**响亮**的：见 {@code anUnknownMaxTokensFieldIsALoudError}
+     * —— 那条钉的是「字段名会静默换掉」而这里钉的是「新键静默失效」，两者代价不同。</p>
      */
     @Test
     void ignoresUnknownKeysInsideCompatBlock() {
@@ -267,6 +271,145 @@ class ModelsJsonConfigTest {
         assertThat(config.catalog().find(ModelId.of("relay", "blockAbsent")).orElseThrow()
             .compat().supportsFinishReason()).isTrue();
         assertThat(ModelCompat.NONE.supportsFinishReason()).isTrue();
+    }
+
+    // ------------------------------------------------- 包 A7：compat 块扩到十四个键
+
+    /**
+     * <b>A7</b>：包 A7 新开的八个三态键从 models.json 原样读进
+     * {@link com.pijava.ai.catalog.ModelCompat}。
+     *
+     * <p>⚠️ 这条钉的是**入口没把它们归一掉**：五个 mid-convo/tool 标志之外，
+     * {@code supportsStore}／{@code supportsDeveloperRole}／{@code supportsStrictMode}
+     * 的缺席都要能区分「用户没写」（{@code null} ⇒ 目录值与探测值活下来）与
+     * 「用户写了 false」（压掉它们）。今天的 {@code models[]} 路径上两者行为相同
+     * （整条替换，{@code docs/53 §3 F7} 的 path C），但 A-16 补上逐字段合并时立刻需要
+     * （{@code docs/53 §9 R6}）。</p>
+     */
+    @Test
+    void readsTheEightThreeStateCompatKeysFromCompatBlock() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "openai-completions",
+              "models": [
+                {"id": "written", "compat": {
+                  "supportsMidConvoSystemMessages": true,
+                  "supportsMidConvoToolAdditions": false,
+                  "supportsMidConvoToolChanges": true,
+                  "supportsAdditionalTools": true,
+                  "supportsToolSearch": false,
+                  "supportsStore": false,
+                  "supportsDeveloperRole": true,
+                  "supportsStrictMode": true
+                }},
+                {"id": "absent"}
+              ]
+            }}}
+            """);
+
+        var written = config.catalog().find(ModelId.of("relay", "written")).orElseThrow();
+        assertThat(written.compat().supportsMidConvoSystemMessages()).isTrue();
+        assertThat(written.compat().supportsMidConvoToolAdditions()).isFalse();
+        assertThat(written.compat().supportsMidConvoToolChanges()).isTrue();
+        assertThat(written.compat().supportsAdditionalTools()).isTrue();
+        assertThat(written.compat().supportsToolSearch()).isFalse();
+        assertThat(written.compat().supportsStore()).isFalse();
+        assertThat(written.compat().supportsDeveloperRole()).isTrue();
+        assertThat(written.compat().supportsStrictMode()).isTrue();
+
+        var absent = config.catalog().find(ModelId.of("relay", "absent")).orElseThrow();
+        assertThat(absent.compat().supportsMidConvoSystemMessages()).isNull();
+        assertThat(absent.compat().supportsMidConvoToolAdditions()).isNull();
+        assertThat(absent.compat().supportsMidConvoToolChanges()).isNull();
+        assertThat(absent.compat().supportsAdditionalTools()).isNull();
+        assertThat(absent.compat().supportsToolSearch()).isNull();
+        assertThat(absent.compat().supportsStore()).isNull();
+        assertThat(absent.compat().supportsDeveloperRole()).isNull();
+        assertThat(absent.compat().supportsStrictMode()).isNull();
+    }
+
+    /** <b>A7</b>：{@code compat.supportsTemperature} 缺席 ≙ <b>{@code true}</b>（与 B20 同形的方向钉）。 */
+    @Test
+    void readsSupportsTemperatureFromCompatBlock() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "anthropic-messages",
+              "models": [
+                {"id": "suppressed", "compat": {"supportsTemperature": false}},
+                {"id": "explicit", "compat": {"supportsTemperature": true}},
+                {"id": "keyAbsent", "compat": {"allowEmptySignature": true}},
+                {"id": "blockAbsent"}
+              ]
+            }}}
+            """);
+
+        assertThat(config.catalog().find(ModelId.of("relay", "suppressed")).orElseThrow()
+            .compat().supportsTemperature()).isFalse();
+        assertThat(config.catalog().find(ModelId.of("relay", "explicit")).orElseThrow()
+            .compat().supportsTemperature()).isTrue();
+        assertThat(config.catalog().find(ModelId.of("relay", "keyAbsent")).orElseThrow()
+            .compat().supportsTemperature()).isTrue();
+        assertThat(config.catalog().find(ModelId.of("relay", "blockAbsent")).orElseThrow()
+            .compat().supportsTemperature()).isTrue();
+    }
+
+    /**
+     * <b>A7</b>：{@code compat.maxTokensField} 的两个合法取值映射到
+     * {@link com.pijava.ai.catalog.MaxTokensField}，缺席留 {@code null}（⇒ 请求期探测）。
+     */
+    @Test
+    void readsMaxTokensFieldFromCompatBlock() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "openai-completions",
+              "models": [
+                {"id": "plain", "compat": {"maxTokensField": "max_tokens"}},
+                {"id": "openai", "compat": {"maxTokensField": "max_completion_tokens"}},
+                {"id": "absent"}
+              ]
+            }}}
+            """);
+
+        assertThat(config.catalog().find(ModelId.of("relay", "plain")).orElseThrow()
+            .compat().maxTokensField())
+            .isEqualTo(com.pijava.ai.catalog.MaxTokensField.MAX_TOKENS);
+        assertThat(config.catalog().find(ModelId.of("relay", "openai")).orElseThrow()
+            .compat().maxTokensField())
+            .isEqualTo(com.pijava.ai.catalog.MaxTokensField.MAX_COMPLETION_TOKENS);
+        assertThat(config.catalog().find(ModelId.of("relay", "absent")).orElseThrow()
+            .compat().maxTokensField()).isNull();
+    }
+
+    /**
+     * <b>A7</b>：未知的 {@code maxTokensField} 取值是**响亮失败**，不是被忽略。
+     *
+     * <p>⚠️ 与同文件 {@code ignoresUnknownKeysInsideCompatBlock}（未知<b>键</b>被忽略）
+     * 是**不同**的两件事：那一条的代价是「新标志静默失效」，而这里的代价是
+     * 「线格上的**字段名**静默换掉」—— 没有任何其它症状。pi 的 zod 联合同样会拒绝未知取值。</p>
+     *
+     * <p>⚠️ 负向断言钉住**消息里的字段名与取值**：只断言 {@code isInstanceOf} 的话，
+     * 缺陷态（把未知取值吞成 {@code null}）抛的也是别的异常/不抛，测不出差别
+     * （{@code docs/50 §12.2-3} 的教训）。</p>
+     */
+    @Test
+    void anUnknownMaxTokensFieldIsALoudError() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "openai-completions",
+              "models": [{"id": "typo", "compat": {"maxTokensField": "max_token"}}]
+            }}}
+            """);
+
+        assertThatThrownBy(() -> config.catalog())
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("relay")
+            .hasMessageContaining("typo")
+            .hasMessageContaining("maxTokensField")
+            .hasMessageContaining("max_token");
     }
 
     @Test

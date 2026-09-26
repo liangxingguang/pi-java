@@ -6,7 +6,7 @@ import java.util.Locale;
  * pi 的五份 per-api compat 解析函数在 java 上的**合一**实现 ——
  * {@code detectCompat}/{@code getCompat}（{@code api/openai-completions.ts:1583}/{@code :1685}）、
  * {@code getCompat}（{@code api/openai-responses.ts:68}）、
- * {@code getAnthropicCompat}（{@code api/anthropic-messages.ts:208}）、
+ * {@code getAnthropicCompat}（{@code api/anthropic-messages.ts:206}）、
  * mistral 的直读（{@code api/mistral-conversations.ts:130}）。
  *
  * <p><b>为什么能合一</b>：pi 有五个接口是因为各车道的<b>字段集</b>不同；java 把五者并成了
@@ -38,7 +38,7 @@ public final class CompatResolver {
     }
 
     /**
-     * openai-completions 车道：pi {@code detectCompat:1583-1670} ＋ {@code getCompat:1685-1721}。
+     * openai-completions 车道：pi {@code detectCompat:1583-1679} ＋ {@code getCompat:1685-1721}。
      *
      * <p>本车道是 pi 唯一有真探测的一条（十四个 provider/baseUrl 谓词）。java 携带的四个
      * 被探测字段全部落在这里；其余（如 {@code thinkingFormat}/{@code supportsReasoningEffort}）
@@ -82,7 +82,7 @@ public final class CompatResolver {
             || isAntLing;
         var useMaxTokens = url.contains("chutes.ai") || isDeepSeek || isMoonshot
             || isCloudflareAiGateway || isTogether || isNvidia || isAntLing || isZai;
-        // detectCompat:1633 —— 判据**同时**看 provider 与模型 id 前缀（OpenRouter 上只有
+        // detectCompat:1630 —— 判据**同时**看 provider 与模型 id 前缀（OpenRouter 上只有
         // anthropic/* 与 openai/* 走 developer 角色）。
         var isOpenRouterDeveloperRoleModel = isOpenRouter
             && (modelName.startsWith("anthropic/") || modelName.startsWith("openai/"));
@@ -101,7 +101,7 @@ public final class CompatResolver {
     }
 
     /**
-     * anthropic-messages 车道：pi {@code getAnthropicCompat:208-219}。
+     * anthropic-messages 车道：pi {@code getAnthropicCompat:206-219}。
      *
      * <p>⚠️ 本车道<b>没有 URL 探测</b>：那条 {@code isOpenRouter} 只影响
      * {@code sendSessionAffinityHeaders}/{@code sessionAffinityFormat}，两个 java 都不携带

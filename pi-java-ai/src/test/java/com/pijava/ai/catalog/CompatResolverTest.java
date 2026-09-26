@@ -15,8 +15,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Tests for {@link CompatResolver} — pi 的五份 per-api compat 解析函数在 java 上的合一实现
  * （包 A7a，{@code docs/53}）。
  *
- * <p>逐条期望值来自 pi 的源码（{@code detectCompat:1583-1670}、
- * {@code getCompat:1685-1721}、{@code getAnthropicCompat:208-219}、
+ * <p>逐条期望值来自 pi 的源码（{@code detectCompat:1583-1679}、
+ * {@code getCompat:1685-1721}、{@code getAnthropicCompat:206-219}、
  * {@code openai-responses.ts:68-81}）与 **pi 自己的测试**
  * （{@code packages/ai/test/providers.test.ts}，锚点上 26/26 绿）。</p>
  */
@@ -47,7 +47,7 @@ class CompatResolverTest {
 
     @Test
     void completionsDetectsDeepSeekFromTheBaseUrlAlone() {
-        // pi detectCompat:1600 —— provider 名**或** baseUrl 子串，二者命中其一即可。
+        // pi detectCompat:1601 —— provider 名**或** baseUrl 子串，二者命中其一即可。
         var compat = CompatResolver.forCompletions(
             model("my-relay", "some-model"), "https://relay.deepseek.com/v1");
 
@@ -79,7 +79,7 @@ class CompatResolverTest {
 
     @Test
     void openRouterKeepsTheDeveloperRoleForVendorModelsOnly() {
-        // pi detectCompat:1633 —— OpenRouter 上只有 anthropic/* 与 openai/* 走 developer 角色。
+        // pi detectCompat:1630 —— OpenRouter 上只有 anthropic/* 与 openai/* 走 developer 角色。
         var vendor = CompatResolver.forCompletions(
             model("openrouter", "anthropic/claude-opus-4-8"), "https://openrouter.ai/api/v1");
         var own = CompatResolver.forCompletions(
@@ -87,7 +87,7 @@ class CompatResolverTest {
 
         assertThat(vendor.supportsDeveloperRole()).isTrue();
         assertThat(own.supportsDeveloperRole()).isFalse();
-        // ⚠️ 但 **store 是开的**：pi 的 `isNonStandard`（`detectCompat:1604-1617`）里
+        // ⚠️ 但 **store 是开的**：pi 的 `isNonStandard`（`detectCompat:1603-1617`）里
         // **没有** `isOpenRouter` —— 直觉上「OpenRouter 是聚合端点所以非标准」是**错的**。
         // 我不是靠读源码定这一条的：pi 的生成目录只写**与缺省不同的差量**，而
         // `OPENAI_COMPLETIONS_DEFAULT_COMPAT.supportsStore = true` ⇒ 若探测给 `false`，

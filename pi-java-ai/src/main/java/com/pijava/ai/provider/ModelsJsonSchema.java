@@ -74,7 +74,7 @@ public final class ModelsJsonSchema {
      *                            error (pi {@code openai-completions.ts:685-692}). ⚠️ **Two-state
      *                            with default {@code true}** — the opposite direction to
      *                            {@code allowEmptySignature}: pi's detected value is the constant
-     *                            {@code true} ({@code detectCompat:1638}), so an absent key means
+     *                            {@code true} ({@code detectCompat:1640}), so an absent key means
      *                            "strict", and only an explicit {@code false} relaxes it
      * @param forceAdaptiveThinking whether the Anthropic lane uses adaptive thinking
      *                            ({@code {type:"adaptive"}} ＋ {@code output_config.effort}) instead
@@ -82,6 +82,44 @@ public final class ModelsJsonSchema {
      *                            (pi {@code anthropic-messages.ts:878, 1165}). ⚠️ **Two-state with
      *                            default {@code false}** — pi's test is {@code === true}, so an
      *                            absent key and {@code false} are indistinguishable
+     * @param supportsMidConvoSystemMessages whether mid-conversation system messages are kept
+     *                            instead of folded into the leading one (pi {@code types.ts:731}).
+     *                            ⚠️ **Three-state**: the generated catalogue turns it on for
+     *                            capable models, so an absent key is not the same as an explicit
+     *                            {@code false} (writing {@code false} wins over the catalogue)
+     * @param supportsMidConvoToolAdditions whether a mid-conversation system message may carry its
+     *                            own {@code tools} (completions lane, Kimi shape). Absent ⇒
+     *                            {@code false} — pi's read points test {@code === true}
+     * @param supportsMidConvoToolChanges whether the Anthropic lane may emit mid-conversation
+     *                            {@code tool_addition}/{@code tool_removal} blocks (pi
+     *                            {@code types.ts:832}). Absent ⇒ {@code false}
+     * @param supportsAdditionalTools Responses lanes: message-anchored {@code additional_tools}
+     *                            items. Absent ⇒ {@code false}
+     * @param supportsToolSearch Responses lanes: the client-executed {@code tool_search} pair used
+     *                            when {@code additional_tools} is unavailable. Absent ⇒ {@code false}
+     * @param supportsTemperature whether the Anthropic lane may send {@code temperature} (pi
+     *                            {@code anthropic-messages.ts:1105-1110}). ⚠️ **Two-state with
+     *                            default {@code true}** — same shape as {@code supportsFinishReason}:
+     *                            the value pi detects is the constant {@code true}, and the
+     *                            generated catalogue writes {@code false} for the Opus 4.7+
+     *                            generation, so only an explicit {@code false} suppresses it
+     * @param maxTokensField which request field carries the output cap —
+     *                            {@code "max_tokens"} or {@code "max_completion_tokens"} (pi
+     *                            {@code openai-completions.ts:836-841}). ⚠️ **Three-state**: absent
+     *                            ⇒ detected from the provider/baseUrl. An unknown string is a hard
+     *                            error (see {@code ModelsJsonConfig.compatOf}) — a typo here would
+     *                            silently change the wire
+     * @param supportsStore whether the completions lane explicitly opts out of server-side
+     *                            retention by sending {@code store:false} (pi
+     *                            {@code openai-completions.ts:832-834}). Absent ⇒ detected
+     * @param supportsDeveloperRole whether the leading instruction message uses
+     *                            {@code role:"developer"} for reasoning models (pi
+     *                            {@code openai-completions.ts:1225}). Absent ⇒ detected
+     * @param supportsStrictMode Responses lanes: whether function tools carry {@code strict}
+     *                            (pi {@code openai-responses.ts:74} {@code ?? false},
+     *                            {@code azure-openai-responses.ts:296} {@code ?? true}). ⚠️ Absent
+     *                            ⇒ **the lane's** default — the two responses lanes disagree, so
+     *                            this key stays three-state
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record CompatDef(
@@ -89,7 +127,17 @@ public final class ModelsJsonSchema {
         @JsonProperty("requiresReasoningContentOnAssistantMessages")
         Boolean requiresReasoningContentOnAssistantMessages,
         @JsonProperty("supportsFinishReason") Boolean supportsFinishReason,
-        @JsonProperty("forceAdaptiveThinking") Boolean forceAdaptiveThinking
+        @JsonProperty("forceAdaptiveThinking") Boolean forceAdaptiveThinking,
+        @JsonProperty("supportsMidConvoSystemMessages") Boolean supportsMidConvoSystemMessages,
+        @JsonProperty("supportsMidConvoToolAdditions") Boolean supportsMidConvoToolAdditions,
+        @JsonProperty("supportsMidConvoToolChanges") Boolean supportsMidConvoToolChanges,
+        @JsonProperty("supportsAdditionalTools") Boolean supportsAdditionalTools,
+        @JsonProperty("supportsToolSearch") Boolean supportsToolSearch,
+        @JsonProperty("supportsTemperature") Boolean supportsTemperature,
+        @JsonProperty("maxTokensField") String maxTokensField,
+        @JsonProperty("supportsStore") Boolean supportsStore,
+        @JsonProperty("supportsDeveloperRole") Boolean supportsDeveloperRole,
+        @JsonProperty("supportsStrictMode") Boolean supportsStrictMode
     ) {}
 
     /**

@@ -18,6 +18,7 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
 import com.pijava.ai.catalog.BuiltinCatalog;
+import com.pijava.ai.catalog.MaxTokensField;
 import com.pijava.ai.catalog.ModelCatalog;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
@@ -210,7 +211,7 @@ public final class ModelsJsonConfig {
             ModelId.of(providerId, model.id()),
             displayName, Set.copyOf(caps), contextWindow, maxTokens, false,
             pricing, thinkingLevelMapOf(model.thinkingLevelMap()), headers, samplingParams,
-            compatOf(model.compat()));
+            compatOf(providerId, model, model.compat()));
     }
 
     /**
@@ -284,22 +285,34 @@ public final class ModelsJsonConfig {
      * Map a models.json {@code compat} block onto {@link ModelCompat}.
      *
      * <p>{@code allowEmptySignature} is normalized — an absent block, or an absent key inside it,
-     * both mean {@code false} (pi {@code anthropic-messages.ts:193} normalizes with
-     * {@code ?? false}), so there is no third state to preserve (docs/31 §8.34.4 决策 3).</p>
+     * both mean {@code false} (pi {@code anthropic-messages.ts:215} normalizes with
+     * {@code ?? false}), so there is no third state to preserve (docs/31 §8.34.4 决策 3).
+     * {@code supportsTemperature} is normalized with the **opposite** default ({@code true},
+     * exactly like {@code supportsFinishReason}): its detected value is the constant
+     * {@code true}, so only an explicit {@code false} suppresses the field.</p>
      *
      * <p>⚠️ {@code requiresReasoningContentOnAssistantMessages} is **not** normalized the same way:
      * it stays three-state (absent ⇒ {@code null}), because its absent meaning is "detect from the
      * provider/baseUrl" and only an explicit value overrides that (pi's {@code getCompat} is
-     * {@code explicit ?? detected}, {@code openai-completions.ts:1643}). Collapsing {@code null}
+     * {@code explicit ?? detected}, {@code openai-completions.ts:1700}). Collapsing {@code null}
      * into {@code false} here would silently disable the deepseek replay path.</p>
      *
-     * <p>⚠️ {@code supportsFinishReason} is normalized with the **opposite** default —
-     * absent ⇒ {@code true}. That is not an oversight: pi's detected value for this flag is the
-     * constant {@code true} ({@code detectCompat:1638}, no branch anywhere in the function), so
-     * {@code explicit ?? detected} really does collapse to "absent ⇒ strict", with no third state
-     * to carry. See {@link ModelCompat}'s javadoc for the three flags side by side.</p>
+     * <p>⚠️ <b>包 A7 的六个新键一律保持三态</b>（原样传 {@code Boolean}，不在这里归一）：
+     * {@code supportsMidConvoSystemMessages}／{@code supportsMidConvoToolAdditions}／
+     * {@code supportsMidConvoToolChanges}／{@code supportsAdditionalTools}／
+     * {@code supportsToolSearch}／{@code supportsStore}／{@code supportsDeveloperRole}／
+     * {@code supportsStrictMode}。理由是「用户没写」与「用户写了缺省值」必须可区分 ——
+     * 前者要**让目录值与探测值活下来**，后者要**压掉**它们。今天在
+     * {@code models[]} 里重定义一个内置模型时两者行为相同（整条替换、
+     * {@code docs/53 §3 F7} 的 path C），但 A-16 把逐字段合并的两条路补上时立刻需要
+     * （{@code docs/53 §9 R6}）。</p>
+     *
+     * <p>⚠️ {@code supportsFinishReason} 的归一方向与 {@code allowEmptySignature} **相反**
+     * —— 不是疏忽：pi 对该标志的探测值是常量 {@code true}（{@code detectCompat:1640}，
+     * 函数体内无任何分支碰它），所以 {@code explicit ?? detected} 真的塌缩成「缺席即严格」，
+     * 没有第三种状态可保。</p>
      */
-    private static ModelCompat compatOf(CompatDef def) {
+    private static ModelCompat compatOf(String providerId, ModelDef model, CompatDef def) {
         if (def == null) {
             return ModelCompat.NONE;
         }
@@ -307,6 +320,38 @@ public final class ModelsJsonConfig {
             def.allowEmptySignature() != null && def.allowEmptySignature(),
             def.requiresReasoningContentOnAssistantMessages(),
             def.supportsFinishReason() == null || def.supportsFinishReason(),
-            def.forceAdaptiveThinking() != null && def.forceAdaptiveThinking());
+            def.forceAdaptiveThinking() != null && def.forceAdaptiveThinking(),
+            def.supportsMidConvoSystemMessages(),
+            def.supportsMidConvoToolAdditions(),
+            def.supportsMidConvoToolChanges(),
+            def.supportsAdditionalTools(),
+            def.supportsToolSearch(),
+            def.supportsTemperature() == null || def.supportsTemperature(),
+            maxTokensFieldOf(providerId, model.id(), def.maxTokensField()),
+            def.supportsStore(),
+            def.supportsDeveloperRole(),
+            def.supportsStrictMode());
+    }
+
+    /**
+     * models.json 的 {@code maxTokensField} 串 ⇒ {@link MaxTokensField}
+     * （{@code docs/53 §4.3}）。
+     *
+     * <p>⚠️ 未知取值**响亮抛错**，而不是像同文件其它未知键那样被忽略：它是二值闭集，
+     * 写错一个字母会让线格上的**字段名**静默换掉（{@code max_completion_tokens} ↔
+     * {@code max_tokens}），而那种偏离没有任何其它症状。pi 的 zod 联合同样会拒绝未知取值
+     * （{@code model-config.ts} 的 {@code ProviderCompatSchema}）。</p>
+     */
+    private static MaxTokensField maxTokensFieldOf(String providerId, String modelId, String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return switch (value) {
+            case "max_tokens" -> MaxTokensField.MAX_TOKENS;
+            case "max_completion_tokens" -> MaxTokensField.MAX_COMPLETION_TOKENS;
+            default -> throw new IllegalStateException("models.json provider \"" + providerId
+                + "\", model \"" + modelId + "\": unknown compat.maxTokensField \"" + value
+                + "\" (expected \"max_tokens\" or \"max_completion_tokens\")");
+        };
     }
 }
