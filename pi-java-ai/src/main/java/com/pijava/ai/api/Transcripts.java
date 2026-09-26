@@ -365,24 +365,4 @@ public final class Transcripts {
             throw new IllegalStateException("tool declaration is not serializable", e);
         }
     }
-
-    /**
-     * 断言系统消息只出现在**下标 0** —— 中途系统消息的车道级原生渲染归 A3/A7
-     * （{@code docs/49 §10 L-D}），包 A2 只落「折叠」路径。
-     *
-     * <p>折叠之后本断言恒成立；只有 {@code supportsMidConvoSystemMessages} 为真
-     * （今天只能由测试显式构造 {@link ModelCompat} 得到，生产上该标志恒缺席）才可能触发。
-     * 与其让车道把它**静默**当成普通消息（Anthropic 曾把它当 assistant 文本发出去），
-     * 不如响亮失败。</p>
-     *
-     * @param api 车道名，用于异常文案（pi 的 api 判别字面量）
-     */
-    public static void requireOnlyLeadingSystemMessage(List<Message> messages, String api) {
-        for (int i = 1; i < messages.size(); i++) {
-            if (messages.get(i) instanceof Message.SystemMessage) {
-                throw new UnsupportedOperationException(
-                    api + " cannot render mid-conversation system messages yet (docs/49 L-D)");
-            }
-        }
-    }
 }

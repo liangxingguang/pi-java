@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openai.core.JsonValue;
 import com.openai.models.FunctionDefinition;
@@ -16,6 +17,7 @@ import com.openai.models.chat.completions.ChatCompletionContentPartText;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
 import com.openai.models.chat.completions.ChatCompletionFunctionTool;
 import com.openai.models.chat.completions.ChatCompletionMessageFunctionToolCall;
+import com.openai.models.chat.completions.ChatCompletionMessageParam;
 import com.openai.models.chat.completions.ChatCompletionMessageToolCall;
 import com.openai.models.chat.completions.ChatCompletionStreamOptions;
 import com.openai.models.chat.completions.ChatCompletionTool;
@@ -23,6 +25,7 @@ import com.openai.models.chat.completions.ChatCompletionToolMessageParam;
 import com.openai.models.chat.completions.ChatCompletionUserMessageParam;
 
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.message.MessageTexts;
 import com.pijava.ai.api.TransformMessages;
@@ -98,13 +101,39 @@ final class OpenAICompletionsMessageConverter {
         // 在此降级为文本，本车道才看得见那段文本。
         var messages = TransformMessages.apply(transcript.messages(), request.modelId(), apiName,
                 request.model(), CompletionsToolCallIds.create());
-        // 中途系统消息的原生渲染归 A3/A7（docs/49 L-D）；折叠后本断言恒成立。
-        Transcripts.requireOnlyLeadingSystemMessage(messages, apiName);
+        // 包 A3（R7）：`requireOnlyLeadingSystemMessage` 已删 —— 中途系统消息现在有落线支（见下）。
+
+        // 包 A3（docs/51 §4.4）：**两个标志都要**（pi :1223 的同式 —— 后者注释明写
+        // *Requires* 前者），且判据是 `=== true` ⇒ 缺席与 false 同义。
+        var compat = request.model() == null ? null : request.model().compat();
+        var transcriptTools = Transcripts.resolveTranscriptTools(transcript.messages(),
+            compat != null
+                && Boolean.TRUE.equals(compat.supportsMidConvoSystemMessages())
+                && Boolean.TRUE.equals(compat.supportsMidConvoToolAdditions()));
 
         for (int i = 0; i < messages.size(); i++) {
             var msg = messages.get(i);
-            if (msg instanceof Message.SystemMessage) {
-                // 前导系统消息已在上面落成 instruction 消息（pi :1249 的同一支）。
+            if (msg instanceof Message.SystemMessage system) {
+                // 包 A3（pi :1238-1252）：前导系统消息已在上面落成 instruction 消息，
+                // 这里只处理**中途**的 —— 它们可能顺带带来工具增量。
+                if (i == 0) {
+                    continue;
+                }
+                // ⚠️ Kimi 形状：`{role:"system", tools:[…]}` 先于文本落线，**一条系统消息
+                // 可能产出两条线上消息**。pi 的 TS 侧靠 `as unknown as` 塞进 SDK 类型；
+                // java 侧走 SDK 的未知键直通（原始 JSON 反序列化），通路与逐字节往返
+                // 证据见 SdkJsonEscapeHatchTest。只在 `anchorsAdditions` 为真时发 ——
+                // 否则那些工具已经在请求级 tools 字段里了。
+                if (transcriptTools.anchorsAdditions() && !system.toolsAdded().isEmpty()) {
+                    builder.addMessage(kimiToolSystemMessage(
+                        system.toolsAdded().stream().map(OpenAICompletionsMessageConverter::toTool)
+                            .toList()));
+                }
+                // pi :1249 —— 非前导走**分段差分更新**渲染（不是完整提示）。
+                var update = MessageTexts.renderSystemMessageUpdate(system);
+                if (!update.isEmpty()) {
+                    builder.addSystemMessage(SanitizeUnicode.surrogates(update));
+                }
                 continue;
             }
             if (msg instanceof Message.UserMessage user) {
@@ -144,18 +173,8 @@ final class OpenAICompletionsMessageConverter {
         // Pass tools so the model emits structured tool_calls instead of
         // writing fake XML tool invocations into the text stream (which also
         // avoids garbled interleaving in the rendered bubble).
-        for (var td : Transcripts.getCurrentTools(transcript.messages())) {
-            builder.addTool(ChatCompletionTool.ofFunction(
-                ChatCompletionFunctionTool.builder()
-                    .type(JsonValue.from("function"))
-                    .function(FunctionDefinition.builder()
-                        .name(td.name())
-                        .description(td.description())
-                        .parameters(FunctionParameters.builder()
-                            .putAllAdditionalProperties(toJsonValues(td.inputSchema()))
-                            .build())
-                        .build())
-                    .build()));
+        for (var td : transcriptTools.requestTools()) {
+            builder.addTool(toTool(td));
         }
         // Ask for usage in the stream so the token counter/status bar updates.
         builder.streamOptions(ChatCompletionStreamOptions.builder()
@@ -172,6 +191,43 @@ final class OpenAICompletionsMessageConverter {
         var out = new LinkedHashMap<String, JsonValue>();
         schema.forEach((key, value) -> out.put(key, JsonValue.from(value)));
         return out;
+    }
+
+    /** pi {@code convertTools} 的 function-tool 支（本仓不支持 grammar 工具，登记 L-A）。 */
+    private static ChatCompletionTool toTool(ToolDefinition td) {
+        return ChatCompletionTool.ofFunction(
+            ChatCompletionFunctionTool.builder()
+                .type(JsonValue.from("function"))
+                .function(FunctionDefinition.builder()
+                    .name(td.name())
+                    .description(td.description())
+                    .parameters(FunctionParameters.builder()
+                        .putAllAdditionalProperties(toJsonValues(td.inputSchema()))
+                        .build())
+                    .build())
+                .build());
+    }
+
+    /**
+     * pi {@code openai-completions.ts:1240-1246} 的 **Kimi 形状** ——
+     * {@code {role:"system", tools:[…]}}，一条系统消息可以在文本之外**多**产出一条线上消息。
+     *
+     * <p>⚠️ 这个形状在 openai-java 4.42.0 里**没有类型化对应物**：{@code ChatCompletionMessageParam}
+     * 的六个变体没有一个带 {@code tools}，{@code ChatCompletionSystemMessageParam} 只有
+     * content/name，且没有 beta 的 chat-completions 命名空间。这里走 SDK 的**未知键直通**
+     * （原始 JSON 反序列化 ⇒ 序列化时原样写出），通路与逐字节往返证据（含「省略 content
+     * 时线上也不出现 content」）见 {@code SdkJsonEscapeHatchTest}（{@code docs/51 §12.4}）。</p>
+     */
+    private static ChatCompletionMessageParam kimiToolSystemMessage(List<ChatCompletionTool> tools) {
+        var mapper = com.openai.core.ObjectMappers.jsonMapper();
+        var node = mapper.createObjectNode();
+        node.put("role", "system");
+        node.set("tools", mapper.valueToTree(tools));
+        try {
+            return mapper.treeToValue(node, ChatCompletionMessageParam.class);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("cannot build the Kimi tool system message", e);
+        }
     }
 
     /**
