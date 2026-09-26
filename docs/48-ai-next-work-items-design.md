@@ -1,6 +1,6 @@
 # 48 - pi-java-ai 下一步待做清单与设计入口
 
-**状态：已批准；Batch A 已闭环 A1、A2 与包 B87/B88（2026-09-25–26）—— A3 已闭环（四条车道全部原生渲染，`docs/51 §12`）；A4 已闭环（prompt sections 构建/替换/差分 ＋ 生产接线，`docs/52 §12`，2026-09-26）**
+**状态：已批准；Batch A 已闭环 A1、A2 与包 B87/B88（2026-09-25–26）—— A3 已闭环（四条车道全部原生渲染，`docs/51 §12`）；A4 已闭环（prompt sections 构建/替换/差分 ＋ 生产接线，`docs/52 §12`，2026-09-26）；A-07 设计稿已落地（`Model.compat` 的解析链、目录标注与已消费字段的生产者，`docs/53`，2026-09-26），待用户审核**
 > ⚠️ 本行是**活状态**，每包闭环后须回填（§9 步骤 7）。
 **创建基准：** pi-java `f0400a2`（B14 收尾）  
 **参考台账：** [`41-gap-inventory.md`](41-gap-inventory.md)、[`32-open-items-register.md`](32-open-items-register.md)、[`40-module-alignment-map.md`](40-module-alignment-map.md)  
@@ -139,7 +139,7 @@ flowchart TD
 | A | 工具增删状态线与 `tool_addition/removal` | P1 | A1/A2 | 🟢 | `bef15fa` `8a0f67c` `1700985` `f6665ec` `c59db5a` ＋ docs `61d0178` `3a088b1` | 先红：A3a 编译失败；A3b `git stash` ＋ pi 金标 ⇒ **10 红**；A3c 逐车道 `git stash` ⇒ Responses **4 红**、Anthropic **5 红**、Completions **3 红**（全部是「请求没有真的发出去」） | M1–M5 各 1–5 红 · M6–M11 各 1–5 红 · N1–N5 各 1–3 红 · A1–A5 各 1 红 · C1–C4 各 1–2 红 | ai 866⇒886、agent-core 494⇒505、conformance 15/15（金标已重生成为 pi `3390bd936` 的真实行为） | ⚠️ 实施中推翻过一处设计结论：Anthropic 与 Completions 一度被登记为「SDK 表达不了」（`docs/51 §3 F13` 初版、`docs/32` B92/B93），**实测两条 SDK 都有原始 JSON 直通** ⇒ 已落地并撤销登记（`docs/51 §12.4.1`）。四条车道的原生渲染在 A7 接线前仍**只有测试可达**（F5/F6）|
 | A | prompt sections 构建、替换和差分 | P1 | A1 | 🟢 已完成（`docs/52 §12`） | `92a4b99`（A4a 删除态）· `fc1404e`/`032de6d`（A4b 机制＋替换旧 builder）· `40bb3ea`/`e7c68cc`（A4c 生产者＋接线） | A4a：新夹具 **9 跑 8 红**（`NullPointerException: section value`，形状门在上游故红集不分叉）；A4b/A4c：新增的 `NON_NULL` 落线陷阱与「每轮刷新 context.tools」各由**新夹具先红**（后者 2 红、前者 1 红，见 §12） | M1 ⇒ 10 红 · M2 ⇒ 2 红 · M3 ⇒ 4 红 · M4 ⇒ 3 红 · M5 ⇒ 2 红 · M6 ⇒ 2 红 · B1 ⇒ 4 红 · B2–B5 各 1 红 · C1 ⇒ 2 红 · C2 ⇒ 3 红 · C3 ⇒ 3 红 · C4 ⇒ 1 红 · C5 ⇒ 5 红 | 全 reactor `mvn -o test` SUCCESS；`ai` 886⇒893、`agent-core` 504⇒519、`coding-agent` 272；checkstyle 0 新违规 | R1–R7 全按建议；⚠️ **探针自身出过两次假零红**（子串式落地检查、`perl -0pi` 不带 `/g`），且 **C4 的零红是夹具盲区而非探针问题**（补「同 run 内切工具」后恰 1 红）——三条新教训见 `docs/52 §12.5`；新登记 **B94**（内置工具无 `promptSnippet`）/ **B95**（`docs` 段无生产者）/ **B96**（录制格式扩字段）；`ensureInitialDeclaration` 与 `ToolChangeDeclaration.initialDeclaration` 按 R4 **删除**（`docs/51` F11 更正）；`AgentHarness` 514⇒523、`PiLaneSink` 533⇒556（存量超限各增 9/23 行，未拆） |
 | B | Anthropic `cache_control` | P0 | A1、设计门4 | ⬜ 待开始 | — | — | — | — | — |
-| B | `Model.compat` 字段、JSON 映射与 request consumers | P1 | 设计门7 | ⬜ 待开始 | — | — | — | — | — |
+| B | `Model.compat` 字段、JSON 映射与 request consumers | P1 | 设计门7 | 📐 设计待审核（`docs/53`，2026-09-26） | — | — | — | — | 设计期新发现 F1–F7（`docs/53 §3`）＋裁决点 R1–R8 |
 | B | 非 Anthropic `thinkingFormat` | P1 | B2 | ⬜ 待开始 | — | — | — | — | — |
 | B | `simple-options` max-token/thinking budget 夹取 | P1 | B2 | ⬜ 待开始 | — | — | — | — | — |
 | B | retry header 与 provider retry 预设接线 | P1 | B2/设计门8 | ⬜ 待开始 | — | — | — | — | — |
