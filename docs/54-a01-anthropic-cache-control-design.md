@@ -1,7 +1,8 @@
 # 54 - 包 A-01：Anthropic `cache_control`（缓存断点、选项通道与压缩路径）
 
-**状态：设计待审核（2026-09-27）—— 未写任何生产代码。**
-> ⚠️ 本行是**活状态**，裁决后改为「已裁决并闭环」，须与 §12 实施记录一致（`docs/32` **B91** 的教训）。
+**状态：已裁决并闭环（2026-09-27）** —— 用户裁决「按建议实施」⇒ §9 的 **R1–R8 全按建议**。
+提交 `13a04cf`（设计）· `8356ff8`（A1a）· `c7ee45b`（A1b＋A1c）；实施记录见 **§12**。
+> ⚠️ 本行是**活状态**（`docs/32` **B91** 的教训）。
 
 **对应任务：** `docs/48 §5` 批次 B 第 1 行（Anthropic `cache_control`，P0，依赖 A1 与设计门 4）。`docs/48 §2` 的 **A-01**。
 **参照台账：** `docs/41:55`（权重 3）、`docs/32` **B89**（顶层 `system` 字符串 vs 块数组，与本包一并裁决）。
@@ -116,11 +117,21 @@ java 的 OAuth 分支只设了两枚头（`AnthropicMessagesApi:74-80`），**�
 
 `StreamOptions.defaults()` · `StreamSimple:76` · `PiLoopRunner:224` · `LlmSummaryGenerator:221` ⇒ 加组件用**便捷构造器**可做到**零改签**（A-07 已验证同法有效，`docs/53 §12.3`）。
 
-### F10 —— 既有的 `system` 断言**同时接受两种形态**（B89 因此零连带红、也零守门）
+### F10 —— 既有的 `system` 断言（⚠️ 本条设计期**写错过**，实施期实测更正）
 
-`AnthropicSurrogateSanitizeTest.payloads()`（`:77-85`）是**唯一**读 `params.system()` 的 Anthropic 夹具，且它按 `s.isString()` / `s.asTextBlockParams()` **两分支**取值 —— 当初就是为两种形态写的。⇒ 改块形态**不会让它变红**（好消息：零连带改动），但也**没有既有夹具守 B89 的形状**（坏消息：先红只能来自新夹具）。
+**设计期初版写的**是：「`AnthropicSurrogateSanitizeTest.payloads()` 是唯一读 `system` 的 Anthropic 夹具……改块形态**零连带红**、也零既有守门」。
 
-⚠️ 连带后果：A-01 落地后 `s.isString()` 分支在该夹具里**变成死分支**（Anthropic 车道再也产不出字符串 `system`）⇒ 实施时**顺手简化**为直接取块。这是本包**唯一**预见到的既有夹具改动。
+**⚠️ 错在取证口径**：当时只 grep 了 **SDK 访问器** `params.system()`，漏了 **JSON 层**的 `body.path("system")`。实测更正如下 ——
+
+| 站点 | 形态 | 改块形态后 |
+|---|---|---|
+| `AnthropicSurrogateSanitizeTest.payloads()`（`:77-85`） | SDK 访问器，按 `isString()` / `asTextBlockParams()` **两分支**取值 | **不变红**（当初就为两种形态写的）⇒ 落地后 `isString()` 分支成死分支，已顺手简化 |
+| `AnthropicToolChangesWireTest:92` | JSON 层 `body.path("system").asText()` | 🔴 **红**（`ArrayNode.asText()` 返回 `""`） |
+| `AnthropicToolChangesWireTest:214` | 同上 | 🔴 **红** |
+| `LaneTranscriptSourceTest:59` | 同上 | 🔴 **红** |
+| `LaneTranscriptSourceTest:155` | 同上 | 🔴 **红** |
+
+⇒ **B89 有 4 处真实先红**（不是设计期以为的 0），四条断言已随本包改成块形态。**教训**：一句「某类夹具不存在」的结论必须按**所有观测口径**取证 —— 同一个字段在 SDK 对象、序列化 JSON、录制字节三个层面上有三个不同的访问器，只 grep 一个就会给出反向结论。
 
 ---
 
@@ -272,9 +283,11 @@ J1/J4/J5 的 SDK 输出键序是 `{text, type, cache_control…}` / `{input_sche
 本包的先红**不能靠编译失败**（新类不参与既有夹具），故用两种手法：
 
 1. **新夹具 + `git stash push -- <实现文件>` 复跑**（A2b 用过的手法，`docs/49 §12.2`）：13 条夹具在旧实现下应当**全红**，且红因分两类 —— `system` 是字符串（`AssertionError`）与「三处都没有 `cache_control`」。
-2. **`system` 形状的单独先红**：先说结论 —— **没有既有夹具守它**。设计期逐文件核过 `pi-java-ai/src/test` 里读 `params.system()` 的夹具只有 `AnthropicSurrogateSanitizeTest` 一处，而它按 `isString()` / `asTextBlockParams()` **两分支**取值（§3 F10）⇒ 改块形态**零连带红**。**B89 的先红因此只能由新夹具提供**（§7.1 的 P1/P2/P18 三条移植过去即可），这条要写进 §12。
+2. **`system` 形状的单独先红**：先说结论 —— **当初写错了，已有 4 处真实先红**（见 §3 F10 的更正表）：`AnthropicToolChangesWireTest:92/:214` 与 `LaneTranscriptSourceTest:59/:155` 都是 JSON 层的 `body.path("system").asText()`，改成块形态后 `ArrayNode.asText()` 返回 `""` ⇒ **4 红**（实测：`expected: "base prompt" but was: ""`）。
 
-   ⚠️ 另一个方向也要钉：`AnthropicToolChangesWireTest` 只断 `tools` 与 `messages`，**不断 `system`** ⇒ pi 的 `sysCtx` 那一支（顶层 system 带断点）在本包之前**完全无人守**。
+   ⚠️ 我设计期得出了**反向**结论，因为只 grep 了 SDK 访问器 `params.system()`。⇒ **B89 不需要靠新夹具先红**，四条既有断言就是它的红；那四条已随本包改成块形态。
+
+   ⚠️ 另一个方向：`AnthropicToolChangesWireTest` 原本只断 `tools` 与 `messages` 的**形状**，不断断点 ⇒ **断点本身**仍由新夹具（`AnthropicCacheControlWireTest`）守。
 
 3. **conformance 不受影响**（实测）：`conformance/java-out/*.jsonl` 的金标全是 `openai-responses`＋mock provider（`grep -l anthropic` 零命中），`"system"` 字段来自**消息记录**而非 anthropic 请求体 ⇒ A-01 不会动那道回归门，闭环时 conformance 应仍 15/15。
 
@@ -457,7 +470,7 @@ J9 RAW-PATCH = {"type":"tool_addition","tool":{"type":"tool_reference","name":"l
 
 ---
 
-## 10. 本次设计的取证方式与已知不足
+## 11. 本次设计的取证方式与已知不足
 
 **做了的：**
 
@@ -475,6 +488,122 @@ J9 RAW-PATCH = {"type":"tool_addition","tool":{"type":"tool_reference","name":"l
 
 ---
 
-## 11. 实施记录
+## 12. 实施记录（2026-09-27 闭环）
 
-（待裁决后填写。）
+### 12.0 裁决与执行
+
+用户裁决 **「按建议实施」** ⇒ §9 的 **R1–R8 全按建议**落地。三个提交：
+
+| 提交 | 内容 |
+|---|---|
+| `13a04cf` | 本设计稿（`docs/54`） |
+| `8356ff8` | **A1a**：`CacheRetention` ＋ `CacheBreakpointSpec` ＋ `CompatResolver.anthropicCacheControl` ＋ `ModelCompat` 扩到 16 组件 ＋ `CompatDef` 扩两个键 |
+| `c7ee45b` | **A1b ＋ A1c**（按 R3 合并）：`AnthropicRequestBuilder` 三处落点 ＋ `AnthropicMessagesApi` 读取 ＋ `StreamOptions` 扩组件 ＋ `DefaultProviders` 通道 ＋ `LlmSummaryGenerator` 的 `none` 生产者 ＋ wire 夹具 ＋ 通道两端夹具 |
+
+**回归**：全 reactor `mvn -o test` **SUCCESS**（14/14）；`ai` 942 ⇒ **977**、`agent-core` 519 ⇒ **520**、`coding-agent` 272 ⇒ **274**；**conformance 20/20 仍绿**；checkstyle 0 新违规；`git diff --check` clean；改动文件全部 ≤500 行（最长 `AnthropicRequestBuilder` 445）。
+
+### 12.1 对设计稿的三处实施偏离
+
+1. **R2 的位置**：`CacheRetention` 落在 **`com.pijava.ai.catalog`** 而非设计稿写的 `api`。理由：`api` **已**依赖 `catalog`（`StreamRequest` 用 `ModelInfo`）⇒ 放 `api` 会新增一条 `catalog → api` 的**包环**；放 `catalog` 与同类的词汇表类型（`ModelCompat`、`MaxTokensField`）同处，且 `api` 并不需要它（选项经 `ApiOptions.extra` 的字符串键过桥）。**行为零影响**，只是位置。
+2. **设计稿的 M4 无法表达**：它写的是「把 patch 移到 `MessageParam` 构造之后」，而实际实现用**整条替换**（`rows.set(last, new Row(...))`）而不是就地改 list ⇒ 没有「之后」这个时点。换成 **M4'**（把断点判定移到 `flushPendingSystemMessages()` **之前**）—— 这是更强的变异，因为它测的正是 **P11 的顺序语义**。
+3. **两处夹具期望值按实测改写**（不是实现错）：
+   - `none` 时 pi 的末条 user `content` 是**字符串**，java 恒为**块数组**（`AnthropicMessageConverter` 不产「串」形态）⇒ 该断言删掉、改为断块上没有断点。这是**既有**形状差异（归 `docs/41` A-18 的长尾），**不由本包引入**，已写进夹具注释。
+   - `aBuiltInAnthropicModelGetsBreakpointsByDefault` 最初按「简单工具形状」写，实测红 —— **内置 opus-4-8 带两个 mid-convo 标志**（A7b 的目录标注）⇒ 走**原生工具支**，末工具是占位符。改强为「断点在 `initialTools` 末项、占位符不挂」，这条因此成了**原生形状**的可达性钉子。
+
+### 12.2 形状改动：`ModelCompat` 14 ⇒ 16 组件
+
+设计稿漏了一条：**`supportsLongCacheRetention` / `supportsCacheControlOnTools` 当时根本不在 `ModelCompat` 里**（`docs/53 §4.4` 只把「消费」判给 A-01，没记「字段本身还没进 java」）。本包补上，并沿用 A-07 的手法 —— **14 参形态保留为便捷构造器** ⇒ 既有构造点**零改签**（A-07 那条「预测三处会编译失败是错的」的经验直接套用，这次连预测都不必做）。
+
+`CompatResolver.resolved` 因此多两个形参；四车道里**只有 `forAnthropic` 喂 `Boolean.TRUE, Boolean.TRUE`**（pi 的 `?? true`），其余三条传 `null`（≙ `undefined`，本包不动它们的读点）。
+
+### 12.3 ⚠️ 设计期的一处**错误结论**（已更正）
+
+设计稿 §3 F10 初版断言「没有既有夹具守 `system` 形状，B89 的先红只能来自新夹具」。**实测推翻**：
+
+```
+AnthropicToolChangesWireTest.sendsToolChangesInANativeSystemMessage          FAILURE
+  expected: "base prompt"  but was: ""
+AnthropicToolChangesWireTest.foldsUpdatesIntoTheSystemPromptWithoutNativeSupport  FAILURE
+LaneTranscriptSourceTest.anthropicLaneTakesSystemTextAndToolsFromTheTranscript    FAILURE
+  expected: "be brief"  but was: ""
+LaneTranscriptSourceTest.anthropicLaneCollapsesAMidListSystemMessageIntoTheHead   FAILURE
+  expected: "head\n\nmid"  but was: ""
+→ Tests run: 15, Failures: 4
+```
+
+**红因**：`ArrayNode.asText()` 返回 `""`。**根因**：我只 grep 了 **SDK 访问器** `params.system()`，漏了 **JSON 层**的 `body.path("system")`。四个站点（两文件各两处）已随本包改成块形态。
+
+**教训（已写进 §3 F10 与 §6.1）**：同一个字段在 **SDK 对象 / 序列化 JSON / 录制字节** 三个层面上有三个不同的访问器 —— 一句「某类夹具不存在」的结论必须按**所有观测口径**取证，只 grep 一个会给出**反向**结论。这与 A2 的「不准只读源码」是同一族的错误，只是这次错在**取证面**而不是**取值**。
+
+### 12.4 先红
+
+| 形态 | 证据 |
+|---|---|
+| **A1a** | 结构性：新类型/新方法在旧代码上**编译失败**（`docs/53` A7a 同型） |
+| **A1b（B89 的形状）** | **4 处既有断言**实测红（§12.3 的逐字输出）—— 比设计稿预期的「零」强 |
+| **A1b（断点本身）** | 新夹具 `AnthropicCacheControlWireTest`（15 条）＋ `AnthropicCacheControlTest`（19 条）；旧代码上编译失败 |
+| **A1c（通道）** | 两端各一条新夹具：`DefaultProvidersTest.cacheExtraCarriesTheRetentionAsAWireName`（宿主侧）与 `CompactionServiceTest.summarizationDisablesCacheRetention`（agent-core 侧） |
+
+### 12.5 变异矩阵（**实测**；设计期预测见 §6.2，逐条对账）
+
+**A1a（`AnthropicCacheControlTest`）**
+
+| 变异 | 红 | 预测 |
+|---|---|---|
+| long 门恒真 | **1** | 1 ✅ |
+| `none` 不生效 | **2** | 4（预测偏大：`none` 的两条 vs `default` 的两条被算重了） |
+| `forAnthropic` 两个缺省写成 `false` | **5** | — （预测表未列，实施时补） |
+| `parse` 未知值塌成 `SHORT` | **1** | — （预测表未列） |
+| 环境变量比较宽松化（trim ＋ 小写化） | **1** | 1 ✅ |
+
+**A1b／A1c（四份 ai 夹具 + 两份跨模块夹具）**
+
+| 变异 | 红 | 预测 |
+|---|---|---|
+| M1 关掉 `system` 断点 | **8** | 3（预测偏小：未算上跨文件夹具） |
+| M2 关掉工具断点 | **8** | 3（同上） |
+| M3 关掉消息断点 | **7** | 6 ✅ |
+| **M4'** 断点判定移到 flush 之前 | **1** | —（替代了原 M4；恰中 `tool_addition` 那条，正是 P11 的唯一可观察后果） |
+| M5 `supportsCacheControlOnTools` 门恒真 | **1** | 1 ✅ |
+| M6 long 门恒真 | **2** | 1（跨模块：`AnthropicCacheControlTest` 也红） |
+| M7 通道恒空（`DefaultProviders`） | **1** | 1 ✅ |
+| M8 摘要不发 `none` | **1** | 1 ✅ |
+
+⚠️ **M1/M2/M3 第一次跑全部「零红」**，原因不是夹具没牙而是**变异没落地**：探针用了 `...\{$` 这样的行尾锚点，而本仓源码是 **CRLF**（`file` 实测），`$` 在 `\r` 之前匹配不上。换成**不带 `$` 的单行模式**并**每次变异后 `grep` 复核**（`落地=1`）后，红集立刻出来。**这是本仓第 5 次 CRLF 陷阱**（`docs/52 §12.5`、`docs/53 §12.7` 之后）。
+
+### 12.6 验收 grep（实测）
+
+```bash
+# 1. 三处落点都在 —— ✅ 3 处 cacheControl(
+grep -c "cacheControl(" .../AnthropicRequestBuilder.java            # system 块 / 工具 / 消息重建
+
+# 2. 两个门只在解析层读 —— ✅ 恰在 catalog，车道零命中
+grep -rn "supportsLongCacheRetention\|supportsCacheControlOnTools" pi-java-ai/src/main
+
+# 3. 通道 —— ✅ StreamOptions 组件 ＋ DefaultProviders 转发 ＋ LlmSummaryGenerator 生产者
+grep -rn "cacheRetention" pi-java-agent-core/src/main pi-java-coding-agent/src/main
+
+# 4. 旧形状已消失 —— ✅ 0 命中
+grep -c "\.system(" .../AnthropicRequestBuilder.java
+```
+
+### 12.7 遗留与登记（落 `docs/32`）
+
+| 编号 | 内容 |
+|---|---|
+| ~~**B89**~~ | ✅ **随本包结案**：顶层 `system` 现为块数组（无条件） |
+| **B103** | Anthropic 会话亲和头族（`sendSessionAffinityHeaders` / `sessionAffinityFormat` / `sessionId` 通道）未落 |
+| **B104** | Responses 车道的 cache 半截实现需修正（缺两门、缺 `prompt_cache_options`） |
+| **B105** | completions 的 `cacheControlFormat`（A-02 之前不可达） |
+| **B106** | 宿主 `CacheWarmer` 整条未落 |
+| **B107** | **两条请求选项通道在生产上恒空**（`ApiOptions.extra` / `StreamRequest.extra`）；本包只打通 `cacheRetention` **一个**键 |
+| **B108** | `docs/41:55` 的权重行划掉 |
+
+**未做且如实登记**：本包**没有**夹具覆盖「本车道 `System.getenv(PI_CACHE_RETENTION)` → 出站体」这最后一跳（`System.getenv` 在进程内不可替换）。环境变量的语义由 `AnthropicCacheControlTest` 七种取值逐个钉住，缺的只是那一行赋值语句 —— 若它被改成 `null`，现有夹具不会红。
+
+### 12.8 本包方法论教训
+
+1. **取证面必须覆盖全部观测口径**（§12.3）：`params.system()` / `body.path("system")` / 录制字节是三个不同的访问器；一句「不存在」的结论只凭一个口径会**反向**。
+2. **CRLF 第 5 次**（§12.5）：变异探针的行尾锚点 `$` 静默失效 ⇒ **凡探针报「零红」，先 grep 复核变异是否落地**（这条 `docs/51 §12.4.2` 已写过一次，本次是「零红」而非「假红」，但根因相同）。
+3. **SDK 的整体序列化不可用**：`writeValueAsString(MessageCreateParams)` 得到 `{}` —— SDK 把请求包在 `body` 里。**观测面必须选真出站字节**（`RecordingHttpServer`），这也是 A2/A3 的既定手法。踩坑后才想起「项目早就有这个装置」，**别自造观测面**。
+4. **设计稿的预测要么实测、要么标注为预测**：本次「零既有守门」的错判与「M4 不可表达」都写进了本文档，不是抹掉重写。

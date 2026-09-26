@@ -634,9 +634,12 @@ PROBE-OPENAI   wire={"role":"system","tools":[{"type":"function","function":{"na
 （`model.reasoning && compat.supportsDeveloperRole`，缺席 ⇒ **假**）⇒ 那条车道两侧本来就同形，
 **两者别混**。
 ② **Anthropic 顶层 `system` 是字符串而不是块数组**（`docs/32` **B89**，与 `cache_control`
-一并归 A-01）：夹具因此断言字符串。
+一并归 A-01）：夹具因此断言字符串。✅ **已随包 A-01 结案**（`docs/54 §12`，`c7ee45b`）——
+`system` 现为块数组，本包的两处 `body.path("system").asText()` 断言正是 B89 的**先红**之一。
 ③ **没有 `cache_control`**（A-01）：§4.4 ⑥ 的「断点可落在 `tool_addition`/`tool_removal` 上」
-无从落，夹具只断言 `defer_loading` 的有无。三处的 `sections` 删除语义
+无从落，夹具只断言 `defer_loading` 的有无。✅ **已随包 A-01 落地**（`docs/54 §12`）——
+那个落点由 `AnthropicCacheControlWireTest.theBreakpointLandsOnTheToolAdditionAfterThePendingSystemFlush`
+钉住（pi 探针 P10/P11）。三处的 `sections` 删除语义
 （`docs/49 §9 R3①`）同样表达不了，夹具只用 content ＋非空 section。
 
 #### 12.4.4 验收 grep（§8）现状
