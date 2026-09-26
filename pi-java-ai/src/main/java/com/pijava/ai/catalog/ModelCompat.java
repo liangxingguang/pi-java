@@ -30,6 +30,20 @@ package com.pijava.ai.catalog;
  *       <td><b>探测</b>（生成的模型目录）</td>
  *       <td>pi 的默认是 {@code ?? false}，但「生成的模型目录会对有能力的模型开启它」
  *           （{@code types.ts:731-732}）⇒ 缺席与显式 {@code false} 将来要分开 ⇒ 三态</td></tr>
+ *   <tr><td>{@code supportsMidConvoToolAdditions}</td><td>{@link Boolean}</td>
+ *       <td>{@code false}（二态）</td>
+ *       <td>包 A3 加。读点写死 {@code === true}（{@code api/openai-completions.ts:810}）</td></tr>
+ *   <tr><td>{@code supportsMidConvoToolChanges}</td><td>{@link Boolean}</td>
+ *       <td>{@code false}（二态）</td>
+ *       <td>包 A3 加。读点是真值判断（{@code api/anthropic-messages.ts:1051}），
+ *           且注释明写 <i>Requires</i> {@code supportsMidConvoSystemMessages}</td></tr>
+ *   <tr><td>{@code supportsAdditionalTools}</td><td>{@link Boolean}</td>
+ *       <td>{@code false}（二态）</td>
+ *       <td>包 A3 加。与下一个是 **Responses 的两个独立机制**，命中其一即可锚定</td></tr>
+ *   <tr><td>{@code supportsToolSearch}</td><td>{@link Boolean}</td>
+ *       <td>{@code false}（二态）</td>
+ *       <td>包 A3 加。{@code additional_tools} 缺席时的替身：合成一对
+ *           {@code tool_search_call}/{@code tool_search_output}</td></tr>
  * </table>
  *
  * @param allowEmptySignature pi {@code compat.allowEmptySignature}. When {@code true}, a thinking
@@ -90,12 +104,61 @@ package com.pijava.ai.catalog;
  *        包 A2 只加字段与消费点；探测与 {@code models.json}（{@code CompatDef}）接线**归 A7**
  *        （{@code docs/49 §9 R4}）—— 所以在 A7 落地前，本标志在**生产上恒为缺席**，
  *        每条车道都走「折叠」支（这正是 pi 在没有目录数据时的行为）。</p>
+ * @param supportsMidConvoToolAdditions pi {@code compat.supportsMidConvoToolAdditions}
+ *        ({@code types.ts:733-734}, completions lane only): whether a mid-conversation system
+ *        message may carry its own {@code tools} — rendered as a Kimi-shaped
+ *        {@code {role:"system", tools:[…]}} message ({@code api/openai-completions.ts:1240-1246}).
+ *        注释明写 *Requires* {@code supportsMidConvoSystemMessages}，而读点把两个都写成
+ *        {@code === true}（{@code :809}、{@code :1223} 两处同式）⇒ 缺席与 {@code false} 行为相同
+ *        ⇒ **二态**。
+ * @param supportsMidConvoToolChanges pi {@code compat.supportsMidConvoToolChanges}
+ *        ({@code types.ts:832-833}, Anthropic lane only): whether the model accepts
+ *        mid-conversation {@code tool_addition}/{@code tool_removal} content blocks.
+ *        读点是**真值判断**（{@code anthropic-messages.ts:1052}），且与
+ *        {@code supportsMidConvoSystemMessages} 相与，还与两个结构性条件（初始工具非空、
+ *        无工具重定义）一起构成 {@code nativeToolChanges} 的**四条件门**（{@code docs/51 §2 P8}）。
+ *        缺席 ≡ {@code false} ⇒ **二态**。
+ * @param supportsAdditionalTools pi {@code compat.supportsAdditionalTools}
+ *        ({@code types.ts:768}, Responses lanes): whether the model supports
+ *        **message-anchored** {@code additional_tools} input items — one
+ *        {@code {type:"additional_tools", role:"developer", tools:[…]}} item per system message
+ *        that declares tools ({@code api/openai-responses-shared.ts:185-191}）。
+ *
+ *        <p>⚠️ 与下一个标志是 **Responses 的两个独立机制**，不是同一个开关的两档：命中
+ *        **其一**就能锚定（{@code openai-responses.ts:295} 的
+ *        {@code supportsAdditionalTools || supportsToolSearch}）。{@code additional_tools}
+ *        优先。</p>
+ * @param supportsToolSearch pi {@code compat.supportsToolSearch} ({@code types.ts:769-770},
+ *        Responses lanes): the model's stand-in when {@code additional_tools} is unavailable —
+ *        the lane synthesizes a **client-executed tool search pair**
+ *        ({@code tool_search_call} + {@code tool_search_output}, both
+ *        {@code execution:"client"}/{@code status:"completed"}) whose {@code call_id} is a
+ *        deterministic hash of the seed and the tool names ({@code openai-responses-shared.ts:193-208}）。
  */
 public record ModelCompat(boolean allowEmptySignature,
                           Boolean requiresReasoningContentOnAssistantMessages,
                           boolean supportsFinishReason,
                           boolean forceAdaptiveThinking,
-                          Boolean supportsMidConvoSystemMessages) {
+                          Boolean supportsMidConvoSystemMessages,
+                          Boolean supportsMidConvoToolAdditions,
+                          Boolean supportsMidConvoToolChanges,
+                          Boolean supportsAdditionalTools,
+                          Boolean supportsToolSearch) {
+
+    /**
+     * 五参便捷构造（包A3 之前的形状）—— 工具增删那四个标志缺席 ≙ pi 的 {@code undefined}
+     * ≙ {@code false}（四个读点全是真值判断或 {@code === true}）⇒ 单态塌缩是安全的；
+     * 探测与接线归 A7。
+     */
+    public ModelCompat(boolean allowEmptySignature,
+                       Boolean requiresReasoningContentOnAssistantMessages,
+                       boolean supportsFinishReason,
+                       boolean forceAdaptiveThinking,
+                       Boolean supportsMidConvoSystemMessages) {
+        this(allowEmptySignature, requiresReasoningContentOnAssistantMessages,
+             supportsFinishReason, forceAdaptiveThinking, supportsMidConvoSystemMessages,
+             null, null, null, null);
+    }
 
     /**
      * 四参便捷构造（包A2 之前的形状）—— {@code supportsMidConvoSystemMessages} 缺席 ≙ pi 的

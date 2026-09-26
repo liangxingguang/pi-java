@@ -1,7 +1,8 @@
 # 51 - 包 A3：工具增删状态线（生产者 ＋ 重放后半 ＋ 车道原生渲染）
 
-**状态：设计待审核** —— 审核通过前不写任何实现代码（`docs/00 §3` 步骤 3、`docs/48 §4` 审核门）。
+**状态：已批准（2026-09-26）—— 实施中，三步 A3a/A3b/A3c 全做，§9 R1–R7 全按建议裁决。**
 **基准：** pi-java `51aaddc`（包 B87/B88 文档收尾）；pi `3390bd936`（2026-09-20，已核 `git rev-parse HEAD` ＝ 该提交、`git status` 空）
+**裁决记录：** R1 三步全做 · R2 删 `Entry.ActiveToolsChange` · R3 本包补 `NextTurnUpdate.messages` · R4 用归一后序列化比 · R5 不带 `constrainedSampling`/`eager_input_streaming`（留注释指向）· R6 `toolCount()` 实测后定 · R7 接受三步拆分并删守卫
 **设计期实测：** ✅ pi 的 oracle 已跑通 —— `transcript-tool-changes.test.ts` **11/11 绿**（同族 `system-message-replay` ＋ `providers` 另 **35/35 绿**），逐字输出与补数据面的过程见 §7.2。Java 侧现状未跑（§7.3）。
 **上游：** [`32-open-items-register.md`](32-open-items-register.md) **B67**（系统消息 ＋ 工具状态增量）/ **B68**（`declareToolChanges`）；[`48-ai-next-work-items-design.md`](48-ai-next-work-items-design.md) §2 `A-11`、§5 实施表第三行
 **下游/相邻：** A4（`sections` 构建/替换/差分）、A7（`Model.compat` 扩展与目录探测）、B87④（TUI/web 认系统消息）、`docs/50 §10 L-A`（`constrainedSampling`/grammar 工具）、`docs/49 §10 L-I`（B90 `eager_input_streaming`）
