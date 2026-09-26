@@ -1,6 +1,6 @@
 # 48 - pi-java-ai 下一步待做清单与设计入口
 
-**状态：已批准；Batch A 已闭环 A1、A2 与包 B87/B88（2026-09-25–26）—— A3 已闭环（四条车道全部原生渲染，`docs/51 §12`）；A4 已闭环（prompt sections 构建/替换/差分 ＋ 生产接线，`docs/52 §12`，2026-09-26）；A-07 已闭环（`Model.compat` 的解析链、目录标注与已消费字段的生产者，`docs/53 §12`，2026-09-27）；A-01 已闭环（Anthropic 缓存断点 ＋ `cacheRetention` 选项通道 ＋ 压缩路径的 `none` 生产者，`docs/54 §12`，2026-09-27 —— **B89 结案**）—— 下一项＝ C 批次或 A-02/A-09/A-10/A-14**
+**状态：已批准；Batch A 已闭环 A1、A2 与包 B87/B88（2026-09-25–26）—— A3 已闭环（四条车道全部原生渲染，`docs/51 §12`）；A4 已闭环（prompt sections 构建/替换/差分 ＋ 生产接线，`docs/52 §12`，2026-09-26）；A-07 已闭环（`Model.compat` 的解析链、目录标注与已消费字段的生产者，`docs/53 §12`，2026-09-27）；A-01 已闭环（Anthropic 缓存断点 ＋ `cacheRetention` 选项通道 ＋ 压缩路径的 `none` 生产者，`docs/54 §12`，2026-09-27 —— **B89 结案**）—— 下一项＝ C 批次或 A-02/A-09/A-10/A-14。**2026-09-27：C 批次（终局事件载荷）设计稿已出 ⇒ [`docs/55`](55-c-terminal-event-payload-design.md)，待审核；审核通过前不写代码**
 > ⚠️ 本行是**活状态**，每包闭环后须回填（§9 步骤 7）。
 **创建基准：** pi-java `f0400a2`（B14 收尾）  
 **参考台账：** [`41-gap-inventory.md`](41-gap-inventory.md)、[`32-open-items-register.md`](32-open-items-register.md)、[`40-module-alignment-map.md`](40-module-alignment-map.md)  
@@ -145,9 +145,9 @@ flowchart TD
 | B | retry header 与 provider retry 预设接线 | P1 | B2/设计门8 | ⬜ 待开始 | — | — | — | — | — |
 | B | Anthropic OAuth credential → request path | P1 | A0 已完成、设计门8 | ⬜ 待开始 | — | — | — | — | — |
 | B | `ContextOverflow` z.ai/Cerebras 门控 | P1 | — | ⬜ 待开始 | — | — | — | — | — |
-| C | `done` 终局完整 assistant payload | P0 | 设计门5 | ⬜ 待开始 | — | — | — | — | — |
-| C | `error` 终局 assistant error payload | P0 | C1 | ⬜ 待开始 | — | — | — | — | — |
-| C | provider/agent/RPC 终局载荷迁移 | P0 | C1/C2 | ⬜ 待开始 | — | — | — | — | — |
+| C | `done` 终局完整 assistant payload | P0 | 设计门5 | 📐 设计待审核（[`docs/55`](55-c-terminal-event-payload-design.md)） | — | — | — | — | — |
+| C | `error` 终局 assistant error payload | P0 | C1 | 📐 设计待审核（同上，同包） | — | — | — | — | — |
+| C | provider/agent/RPC 终局载荷迁移 | P0 | C1/C2 | 📐 设计待审核（同上，同包） | — | — | — | — | — |
 | D | OpenAI 默认 wire 与显式 override 设计/实施 | P0 | 设计门6、R4裁决 | ⬜ 待开始 | — | — | — | — | — |
 | D | OpenRouter chat provider | P0 | D1 | ⬜ 待开始 | — | — | — | — | — |
 | D | xAI provider | P1 | D1 | ⬜ 待开始 | — | — | — | — | — |
