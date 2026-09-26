@@ -62,7 +62,7 @@ final class HarnessUtils {
     }
 
     /** Build a user message: text first, then images (pi agent.ts:402-406 order). */
-    static Message buildUserMessage(String prompt, List<PromptImage> images) {
+    static Message.UserMessage buildUserMessage(String prompt, List<PromptImage> images) {
         var content = new ArrayList<ContentBlock>();
         content.add(new ContentBlock.TextContent(prompt));
         if (images != null) {

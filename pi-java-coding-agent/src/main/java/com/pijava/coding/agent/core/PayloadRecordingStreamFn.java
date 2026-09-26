@@ -12,6 +12,7 @@ import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.message.AssistantMessage;
+import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
@@ -114,11 +115,32 @@ final class PayloadRecordingStreamFn implements StreamFn {
         return payload;
     }
 
-    /** Serialize a message as {@code {role, content}} (ContentBlock carries its own type info). */
+    /**
+     * Serialize a message as {@code {role, content}} (ContentBlock carries its own type info),
+     * plus the {@code SystemMessage} deltas.
+     *
+     * <p>⚠️ 包 A4c 起**系统消息的提示正文不在 {@code content} 里**：段表（{@code sections}）才是
+     * 提示的真源，{@code content} 只有中途追加的指令（起手那条恒为空串）。若只录
+     * {@code role}/{@code content}，录制里这条消息看起来是**空的** —— 而模型实际收到的是
+     * {@code content} ＋ 各段正文。故这里把三个 delta 字段一并录下（缺席即省略，
+     * 与 {@code SessionJson} 的落线纪律同）。</p>
+     */
     private static Map<String, Object> message(Message message) {
         var out = new LinkedHashMap<String, Object>();
         out.put("role", message.role());
         out.put("content", message.content());
+        if (message instanceof Message.SystemMessage system) {
+            if (!system.sections().isEmpty()) {
+                out.put("sections", system.sections());
+            }
+            if (!system.toolsAdded().isEmpty()) {
+                out.put("toolsAdded", system.toolsAdded().stream()
+                    .map(Transcripts::toToolDeclaration).toList());
+            }
+            if (!system.toolsRemoved().isEmpty()) {
+                out.put("toolsRemoved", system.toolsRemoved());
+            }
+        }
         return out;
     }
 

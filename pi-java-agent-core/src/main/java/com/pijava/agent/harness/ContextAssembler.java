@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import com.pijava.agent.entry.Entry;
@@ -12,6 +13,7 @@ import com.pijava.agent.prompt.SystemPromptOptions;
 import com.pijava.agent.prompt.SystemPrompts;
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ToolRegistry;
+import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.thinking.ModelThinkingLevel;
 
@@ -44,7 +46,7 @@ final class ContextAssembler {
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * 系统提示的**当前值**：走 pi 的结构化段（{@link SystemPrompts}），不再是拼字符串。
+     * 当前系统提示的**选项**（pi 的 {@code BuildSystemPromptOptions}）；什么都没配 ⇒ {@code null}。
      *
      * <p>入参的对应关系（逐条对 pi {@code BuildSystemPromptOptions}）：</p>
      * <ul>
@@ -71,7 +73,7 @@ final class ContextAssembler {
      * 「pi-java 的工具没有 promptSnippet/promptGuidelines」登记为缺口
      * （{@code docs/52 §12}）。</p>
      */
-    String buildSystemPrompt(LaneState lane) {
+    SystemPromptOptions promptOptions(LaneState lane) {
         var tools = activeToolsInRegistryOrder();
         var snippets = new LinkedHashMap<String, String>();
         var guidelines = new LinkedHashMap<String, List<String>>();
@@ -89,15 +91,15 @@ final class ContextAssembler {
         var appendSystemPrompt = ctx.appendSystemPrompt().get();
         if (!isPresent(customPrompt) && tools.isEmpty() && promptGuidelines.isEmpty()
                 && skills.isEmpty() && !isPresent(appendSystemPrompt)) {
-            // ⚠️ 什么都没配 ⇒ **空提示**，不是「默认提示」。这是 pi
+            // ⚠️ 什么都没配 ⇒ **没有提示**，而不是「默认提示」。这是 pi
             // `createInitialSystemMessage`（`utils/transcript.ts:12-22`）的空判据在 harness 层的
             // 对应物：pi 的 `createMutableAgentState` 见「提示与工具都空」就**不建**前导消息
             // （`agent.ts:84-85`），而 pi 生产恒由 coding-agent 供提示。agent-core 不该凭空造一份
             // —— 那会让 `AgentHarness` 的 SDK 用户（测试、evals、TUI）在毫无配置时凭白多出一条
             // 系统消息。`cwd` 不进这个判据：它恒有值，算进去就恒非空。
-            return "";
+            return null;
         }
-        var options = SystemPromptOptions.builder()
+        return SystemPromptOptions.builder()
             .customPrompt(customPrompt)
             .selectedTools(tools.stream().map(AgentTool::name).toList())
             .toolSnippets(snippets)
@@ -107,11 +109,45 @@ final class ContextAssembler {
             .skills(skills)
             .cwd(System.getProperty("user.dir", ""))
             .build();
-        return SystemPrompts.build(options);
     }
 
-    private static boolean isPresent(String value) {
-        return value != null && !value.isEmpty();
+    /**
+     * 渲染出的整份提示文本 —— **派生值**，不进任何行为判据。
+     *
+     * <p>两个用途：{@code Context.systemPrompt}（pi 生产路径上那个字段是死的，见
+     * {@code docs/52 §2 P12}；java 保留它是为了让请求录制／诊断看得见模型实际收到的提示）与
+     * {@link PiLaneSink} 的记账。pi 的等价物是
+     * {@code getSystemMessageText(state)}（{@code system-prompt.ts:196}）。</p>
+     */
+    String renderPrompt(LaneState lane) {
+        var options = promptOptions(lane);
+        return options == null ? "" : SystemPrompts.build(options);
+    }
+
+    /**
+     * pi {@code _preparePromptAndToolLoadout} 的**差分那一半**（{@code agent-session.ts:1158-1167}）：
+     * 把「模型当前拥有的段」（从转录重放）与「想要的段」比，产出补丁消息或 {@code null}。
+     *
+     * <p>产出的消息是 {@code {content: "", sections: 补丁, timestamp: now}} —— 与 pi 逐字同形。
+     * 它的 {@code toolsAdded} **不由这里写**：调用方把它放进 pending 之后，
+     * {@link ToolChangeDeclaration} 会把工具增删**合并进同一条消息**（pi 的
+     * {@code declareToolChanges} 锚点 = pending 里最后一条系统消息）。</p>
+     *
+     * <p>{@code messages} 是**差分基准**的来源，与 pi 同参数位（pi 默认
+     * {@code agent.state.messages}；压缩后传重建过的列表）。</p>
+     */
+    Message.SystemMessage promptLoadout(LaneState lane, List<Message> messages) {
+        var options = promptOptions(lane);
+        if (options == null) {
+            return null;
+        }
+        var current = Transcripts.getCurrentSystemMessage(messages);
+        var previous = current == null ? Map.<String, String>of() : current.sections();
+        var patch = SystemPrompts.diff(previous, SystemPrompts.buildSections(options));
+        if (patch == null) {
+            return null;
+        }
+        return new Message.SystemMessage("", Instant.now(), patch, List.of(), List.of());
     }
 
     /** 生效工具本体，**注册表序**（{@code activeTools} 是 Set，其迭代序不可作提示的输入）。 */
@@ -121,6 +157,10 @@ final class ContextAssembler {
         }
         var names = ctx.activeTools().get().stream().map(AgentTool::name).toList();
         return ctx.toolRegistry().activeOf(names);
+    }
+
+    private static boolean isPresent(String value) {
+        return value != null && !value.isEmpty();
     }
 
     // ═══════════════════════════════════════════════════════════

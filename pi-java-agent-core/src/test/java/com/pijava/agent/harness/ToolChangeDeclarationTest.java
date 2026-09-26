@@ -167,36 +167,6 @@ class ToolChangeDeclarationTest {
         assertThat(merged.toolsAdded()).extracting(ToolDefinition::name).containsExactly("echo");
     }
 
-    // ── initialDeclaration（pi createInitialSystemMessage ＋ agent.ts:84）──
-
-    @Test
-    void initialDeclarationIsUndefinedWhenPromptAndToolsAreBothEmpty() {
-        assertThat(ToolChangeDeclaration.initialDeclaration(null, List.of())).isNull();
-        assertThat(ToolChangeDeclaration.initialDeclaration("", List.of())).isNull();
-    }
-
-    /** 时间戳是 {@code 0}（{@code EPOCH}）而不是 {@code now} —— 起点声明可被认出来。 */
-    @Test
-    void initialDeclarationCarriesThePromptAndTheFullToolSetAtEpoch() {
-        var declaration = ToolChangeDeclaration.initialDeclaration("you are helpful",
-            List.of(decl("echo")));
-
-        assertThat(declaration.timestamp()).isEqualTo(Instant.EPOCH);
-        assertThat(declaration.content()).containsExactly(new ContentBlock.TextContent("you are helpful"));
-        assertThat(declaration.toolsAdded()).extracting(ToolDefinition::name).containsExactly("echo");
-        assertThat(declaration.toolsRemoved()).isEmpty();
-        assertThat(declaration.sections()).isEmpty();
-    }
-
-    /** 只有工具、没有提示 ⇒ 内容仍是**一个空文本块**（pi 的 {@code content: ""}）。 */
-    @Test
-    void initialDeclarationWithoutAPromptStillCarriesEmptyContent() {
-        var declaration = ToolChangeDeclaration.initialDeclaration("", List.of(decl("echo")));
-
-        assertThat(declaration).isNotNull();
-        assertThat(declaration.content()).containsExactly(new ContentBlock.TextContent(""));
-    }
-
     // ── 夹具 ─────────────────────────────────────────────────────────
 
     private static Message system(List<ToolDefinition> added) {

@@ -10,6 +10,7 @@ import com.pijava.agent.hook.RunEndContext;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.record.OperationOutcome;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.MessageTexts;
 import com.pijava.ai.thinking.ModelThinkingLevel;
 
 /**
@@ -43,23 +44,45 @@ final class RunLifecycle {
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * 用一个新 prompt 起一次运行（pi {@code Agent.prompt} 的前半）。
+     * 用一个新 prompt 起一次运行（pi {@code Agent.prompt} 的前半），不带起手段补丁。
      *
-     * <p>用户消息在这里落进 {@link LaneState#transcript}；{@code PiLoop} 随后还会为同一个
-     * prompt 发一对 {@code message_start}/{@code message_end}，引擎按**引用**抑制重复写入。</p>
+     * <p>⚠️ 用户 entry 在 {@code startRun} 里**先行**落盘（{@code docs/31 §4.2}），起手可能存在
+     * 的段补丁 entry 则由同一个方法写在它**之前** —— 与 pi 的
+     * {@code messages.unshift(updateMessage)} 同序。</p>
      *
      * @return 本次运行的 {@link ActiveRun}；调用方负责在收口时完成它的 {@code done}
      */
     ActiveRun startRun(String laneName, String prompt, List<PromptImage> images) {
+        return startRun(laneName, HarnessUtils.buildUserMessage(prompt, images), null);
+    }
+
+    /**
+     * 起一次运行，可选先把一条**段补丁**系统消息提交进日志。
+     *
+     * <p>pi 的 {@code prompt()} 把补丁 {@code unshift} 进待发列表，补丁与用户消息**都**经
+     * {@code message_end} 落盘 ⇒ 日志序是 {@code [system(补丁), user]}。java 的这两条都由本方法
+     * **先行**写入（用户 entry 先写是 {@code docs/31 §4.2} 的既定设计；两者都走「起手直接 append」
+     * 这条路，故都不算 {@code WriteDeferred}，见 {@link PiLaneSink#append}），于是补丁排在前。
+     * 循环仍会为这两条发 {@code message_start/end}：用户消息按对象引用抑制，补丁则按
+     * **时间戳**抑制 —— 它在 {@code declareToolChanges} 里会被复制一次（工具字段写回），
+     * 引用对不上（见 {@link PiLaneSink#suppressSystemMessageAt}）。</p>
+     *
+     * @param promptLoadout 可为 {@code null}（无变化，或续跑入口不带起手补丁）
+     */
+    ActiveRun startRun(String laneName, Message.UserMessage userMessage,
+                       Message.SystemMessage promptLoadout) {
         var lane = requireIdleLane(laneName);
         var run = begin(lane);
-        lane.runSpan = runSpans.openRunSpan(laneName, lane, prompt.length());
+        lane.runSpan = runSpans.openRunSpan(laneName, lane,
+            MessageTexts.contentText(userMessage.content()).length());
 
-        var userMessage = HarnessUtils.buildUserMessage(prompt, images);
         var promptList = List.<Message>of(userMessage);
         ctx.hookSystem().fireBeforeRun(laneName,
             new RunContext(laneName, lane.runId, promptList));
 
+        if (promptLoadout != null) {
+            lane.transcript.add(messageEntry(lane, promptLoadout));
+        }
         lane.transcript.add(messageEntry(lane, userMessage));
         recordConfigChanged(laneName);
 

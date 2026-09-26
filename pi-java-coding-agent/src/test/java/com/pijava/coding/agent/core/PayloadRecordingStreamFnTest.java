@@ -102,19 +102,22 @@ class PayloadRecordingStreamFnTest {
             // Request payload: model, systemPrompt, messages with role/content, tools, limits.
             var payload = request.get("payload");
             assertThat(payload.get("model").asText()).isEqualTo("faux-payload/hello");
-            // 系统提示是请求上的独立字段（pi 的 Context.systemPrompt），
-            // ⚠️ 但 messages[0] 自包 A3 起**不再**是用户消息：pi 的
-            // `createMutableAgentState`（agent.ts:84-85）在会话起点把「系统提示 ＋ 工具」
-            // 折成一条**前导系统消息**塞进 `state.messages`，java 的
-            // `PiLaneEngine.startPass` 做同一件事（docs/51 §12.2 F11）⇒ 工作副本的
-            // 第一条就是它、内容就是系统提示（故 payload 里提示出现两次：
-            // 一次作为 `systemPrompt` 字段、一次作为这条消息的 content）。
+            // 系统提示是请求上的独立字段（pi 的 Context.systemPrompt）。
+            // ⚠️ 包 A4c 起 messages[0] 的 **content 是空串**：提示不再是 content 文本，而是
+            // `sections` 里的具名段（pi 的 `_preparePromptAndToolLoadout` 产出的补丁消息，
+            // content 恒为 ""）。`systemPrompt` 字段仍带着**渲染后**的整份提示（派生值，
+            // 供诊断），两者的关系是 `getSystemMessageText(messages[0]) == systemPrompt`。
             assertThat(payload.hasNonNull("systemPrompt")).isTrue();
             assertThat(payload.get("messages").isArray()).isTrue();
-            assertThat(payload.get("messages").get(0).get("role").asText())
-                .isEqualTo("system");
-            assertThat(payload.get("messages").get(0).get("content").get(0).get("text").asText())
-                .isEqualTo(payload.get("systemPrompt").asText());
+            var head = payload.get("messages").get(0);
+            assertThat(head.get("role").asText()).isEqualTo("system");
+            assertThat(head.get("content").get(0).get("text").asText()).isEmpty();
+            assertThat(head.get("sections").fieldNames()).toIterable()
+                .as("提示段表：preamble 与 cwd 恒在，有工具时还有 tools/rules（pi 的段名）")
+                .contains("preamble", "cwd", "tools", "rules");
+            assertThat(head.get("sections").get("preamble").asText())
+                .isEqualTo("You are pi-java, an AI coding assistant. Help the user write, read, "
+                    + "and understand code. Use the provided tools when useful.");
             assertThat(payload.get("messages").get(1).get("role").asText())
                 .isEqualTo("user");
             assertThat(payload.get("tools").isArray()).isTrue();

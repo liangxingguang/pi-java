@@ -104,23 +104,6 @@ final class ToolChangeDeclaration {
         return inserted;
     }
 
-    /**
-     * pi {@code createInitialSystemMessage}（{@code utils/transcript.ts:10-23}）＋
-     * {@code createMutableAgentState} 的判据（{@code agent.ts:84-85}）—— 会话起点的前导声明。
-     *
-     * <p>提示与工具**都**空 ⇒ {@code null}（pi 的 {@code undefined}，「空转录保持为空」）。
-     * {@code timestamp} 是 {@code 0}（{@code Instant.EPOCH}），不是 {@code now} ——
-     * 与 {@code now} 的新建消息不同，pi 的起点声明是可以被认出来的。</p>
-     */
-    static Message.SystemMessage initialDeclaration(String systemPrompt, List<ToolDefinition> tools) {
-        boolean hasPrompt = systemPrompt != null && !systemPrompt.isEmpty();
-        boolean hasTools = tools != null && !tools.isEmpty();
-        if (!hasPrompt && !hasTools) {
-            return null;
-        }
-        return new Message.SystemMessage(systemPrompt == null ? "" : systemPrompt,
-            Instant.EPOCH, Map.of(), hasTools ? List.copyOf(tools) : List.of(), List.of());
-    }
 
     /**
      * pi {@code withToolChanges}（{@code :325-333}）—— 复制一条系统消息，工具字段换成

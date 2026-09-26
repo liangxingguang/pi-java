@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -60,6 +61,8 @@ final class PiLaneSink implements PiLoop.Sink {
      * 就是这么发的）。不抑制的话用户消息会被写两遍。</p>
      */
     private final Set<Message> alreadyPresent;
+    /** 起手已落盘的段补丁的时间戳（一次性抑制；见 suppressSystemMessageAt）。 */
+    private Instant suppressedSystemTimestamp;
 
     /** 事件串行化的监视器（{@code docs/31 §8.23}）—— 见 {@link #emit}。 */
     private final Object emitLock = new Object();
@@ -162,6 +165,20 @@ final class PiLaneSink implements PiLoop.Sink {
     /** 由引擎在 run 起点回填：系统提示不进消息列表，但 {@code before_request} 要看到它。 */
     void systemPrompt(String prompt) {
         this.systemPrompt = prompt;
+    }
+
+    /**
+     * 由引擎在 run 起点回填：这条**段补丁**系统消息已在 {@code RunLifecycle.startRun} 里落盘，
+     * 循环稍后发来的那一份是它的**副本**（{@code declareToolChanges} 把工具字段写回时复制），
+     * 引用对不上 {@link #alreadyPresent}。故按**时间戳**做一次性抑制。
+     *
+     * <p>为什么不是按引用：锚点那一支的 {@code withToolChanges} 有条件才复制
+     * （「无变化且自己也没声明过工具 ⇒ 原对象返回」），而补丁在起手时按定义**就是**变更，
+     * 必然走复制那一支。时间戳来自 {@code Instant.now()}，逐条唯一，且只对本 pass 的第一条
+     * 同时间戳的系统消息生效。</p>
+     */
+    void suppressSystemMessageAt(Instant timestamp) {
+        this.suppressedSystemTimestamp = timestamp;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -346,6 +363,12 @@ final class PiLaneSink implements PiLoop.Sink {
         // state.messages 的（docs/31 §4.2）。
         lane.messages.add(message);
         if (alreadyPresent.contains(message)) {
+            return;
+        }
+        if (message instanceof Message.SystemMessage system
+                && suppressedSystemTimestamp != null
+                && suppressedSystemTimestamp.equals(system.timestamp())) {
+            suppressedSystemTimestamp = null;
             return;
         }
         switch (message) {

@@ -227,10 +227,13 @@ class PiLaneEngineTest {
         h.prompt(AgentHarness.DEFAULT_LANE, "hi", List.of(), rec);
 
         var transcript = transcriptOf(h);
-        assertThat(transcript).hasSize(2);
-        assertThat(transcript.get(0)).isInstanceOf(Message.UserMessage.class);
-        assertThat(transcript.get(1)).isInstanceOf(Message.AssistantMessage.class);
-        assertThat(transcript.get(1).content().toString()).contains("hello");
+        // 包 A4c：起手先落一条**段补丁**系统消息（pi `_preparePromptAndToolLoadout` ⇒ `prompt()`
+        // 把它 `unshift` 进待发列表 ⇒ 日志序 [system(补丁), user]）。⚠️ 用户消息仍只有**一条**
+        // —— 本用例要钉的正是这一点。
+        assertThat(transcript).extracting(Message::role)
+            .containsExactly("system", "user", "assistant");
+        assertThat(transcript.stream().filter(Message.UserMessage.class::isInstance)).hasSize(1);
+        assertThat(transcript.get(2).content().toString()).contains("hello");
         // 下游看到的那一对用户帧仍在（界面依赖它即时回显），只是不重复落盘。
         assertThat(rec.frames).contains("message_start:user", "message_end:user");
     }
@@ -332,11 +335,12 @@ class PiLaneEngineTest {
         h.prompt(AgentHarness.DEFAULT_LANE, "run echo", List.of(), new Recorder());
 
         var transcript = transcriptOf(h);
-        assertThat(transcript).hasSize(4);
-        assertThat(transcript.get(1)).isInstanceOf(Message.AssistantMessage.class);
-        assertThat(transcript.get(2)).isInstanceOf(Message.ToolResultMessage.class);
-        assertThat(transcript.get(2).content().toString()).contains("echoed");
-        assertThat(transcript.get(3)).isInstanceOf(Message.AssistantMessage.class);
+        assertThat(transcript).extracting(Message::role)
+            .containsExactly("system", "user", "assistant", "tool", "assistant");
+        assertThat(transcript.get(2)).isInstanceOf(Message.AssistantMessage.class);
+        assertThat(transcript.get(3)).isInstanceOf(Message.ToolResultMessage.class);
+        assertThat(transcript.get(3).content().toString()).contains("echoed");
+        assertThat(transcript.get(4)).isInstanceOf(Message.AssistantMessage.class);
 
         var records = recordsOf(h);
         var tools = records.stream().filter(LaneRecord.ToolFinished.class::isInstance)
@@ -362,7 +366,10 @@ class PiLaneEngineTest {
         h.prompt(AgentHarness.DEFAULT_LANE, "first", List.of(), new Recorder());
         h.prompt(AgentHarness.DEFAULT_LANE, "second", List.of(), new Recorder());
 
-        assertThat(transcriptOf(h)).hasSize(4);
+        // 包 A4c：**只有第一次**起手落段补丁（第二次的差分是空的 —— 段表没变），
+        // 故形状是 [补丁, 一, 答一, 二, 答二]。
+        assertThat(transcriptOf(h)).extracting(Message::role)
+            .containsExactly("system", "user", "assistant", "user", "assistant");
         var records = recordsOf(h);
         assertThat(records.stream().filter(LaneRecord.OperationStarted.class::isInstance)).hasSize(2);
         assertThat(records.stream().filter(LaneRecord.OperationFinished.class::isInstance)).hasSize(2);
@@ -378,9 +385,10 @@ class PiLaneEngineTest {
         h.prompt(AgentHarness.DEFAULT_LANE, "go", List.of(), new Recorder());
 
         var transcript = transcriptOf(h);
-        assertThat(transcript).hasSize(4);
-        assertThat(((Message.ToolResultMessage) transcript.get(2)).isError()).isTrue();
-        assertThat(transcript.get(2).content().toString()).contains("nope");
+        assertThat(transcript).extracting(Message::role)
+            .containsExactly("system", "user", "assistant", "tool", "assistant");
+        assertThat(((Message.ToolResultMessage) transcript.get(3)).isError()).isTrue();
+        assertThat(transcript.get(3).content().toString()).contains("nope");
         assertThat(h.snapshot(AgentHarness.DEFAULT_LANE).operation()).isNull();
     }
 
