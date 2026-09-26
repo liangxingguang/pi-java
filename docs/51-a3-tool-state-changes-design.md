@@ -206,7 +206,7 @@ const transcriptTools = resolveTranscriptTools(context.messages,
 | **F8** | `ModelCompat` 缺本包要的三个标志 | `ModelCompat.java:94-98` |
 | **F9** | **`NextTurnUpdate` 缺 pi 的 `messages` 字段**（`types.ts:146-147`）—— 那是会话层把「分段差分系统消息」送进 `declareToolChanges` 的通道（`agent-session.ts:603-611`）。Java 只有 `context` | `PiLoop.java:198` vs `types.ts:143-152` |
 | **F10** | `Entry.ActiveToolsChange` 是**只读死形状**：生产无生产者，pi 主线也不发射（P14） | `Entry.java:121-131`、`EntryJsonCodec:42`、`ContextEntries` 不投影它 |
-| **F11** | ⚠️ **设计稿漏了 pi 的「前导声明」生产者**：pi 的 `createMutableAgentState`（`agent.ts:84-85`）在会话起点把「系统提示 ＋ 工具」折成一条**前导系统消息**塞进 `state.messages`（`timestamp: 0`），`declareToolChanges` 的对照基准正是它。Java 的 `Context` 把 `systemPrompt`/`tools` 放成独立字段、工作副本里什么都没有 ⇒ 照搬 `declareToolChanges` 会让**每个会话的第一轮都宣告「新增全部工具」**，而 pi 从不产生那条消息。⇒ 必须在起手补同一条声明（落点 `PiLaneEngine.startPass`，实施记录 §12.2） | pi `agent.ts:75-99`；反证：`conformance/pi-out/S2.pi.jsonl` 帧 3 起就是 user 消息，没有声明帧 |
+| **F11** | ⚠️ **设计稿漏了 pi 的「前导声明」生产者**：pi 的 `createMutableAgentState`（`agent.ts:84-85`）在会话起点把「系统提示 ＋ 工具」折成一条**前导系统消息**塞进 `state.messages`（`timestamp: 0`），`declareToolChanges` 的对照基准正是它。Java 的 `Context` 把 `systemPrompt`/`tools` 放成独立字段、工作副本里什么都没有 ⇒ 照搬 `declareToolChanges` 会让**每个会话的第一轮都宣告「新增全部工具」**，而 pi 从不产生那条消息。⇒ 必须在起手补同一条声明（落点 `PiLaneEngine.startPass`，实施记录 §12.2）。⚠️ **2026-09-26 更正：该落点已随包 A4c 删除** —— pi 的**生产**路径（`sdk.ts:368-372` 传空提示与空工具集）从不折前导消息，前导系统消息只由 `_preparePromptAndToolLoadout` 的段补丁产生；论证见 §12.2 的更正块与 `docs/52 §12.3` | pi `agent.ts:75-99`；反证：`conformance/pi-out/S2.pi.jsonl` 帧 3 起就是 user 消息，没有声明帧 |
 | **F12** | ⚠️ **10 个带工具的 conformance 剧本是陈旧的**：它们生成于 pi 还没有 `runAgentLoop:109` 起手宣告的版本（帧序里没有系统消息），且 pi 侧 runner 的 `Normalizer` 没有 `system` 分支 ⇒ **重新生成会以 `TypeError: tr.content.map is not a function` 崩掉**。⇒ 已补 runner 的 system 分支、重生成全部 15 份；两侧 echo 的 `n` 改成「provider 看到的」消息数（系统消息是提示状态，不是对话），`sys=` 分量删除（pi 侧 `streamFn` 收到的是 `normalizeContext({messages})`，该字段恒为 undefined）| `conformance/pi/run.test.ts:284-330`、§12.3 |
 | **F13** | ⚠️ **两条 SDK 都能用原始 JSON 构造它们类型系统里没有的形状**（这是 Anthropic 的 `tool_addition`/`tool_removal` 与 Completions 的 Kimi 形状能落地的**唯一**依据）：反序列化时把认不出的 `type` 收进 {@code _unknown}/{@code additionalProperties}，序列化**原样写出** ⇒ 非 beta 的 `MessageParam`/`ChatCompletionMessageParam` 可以承载 beta 形状。证据是 `SdkJsonEscapeHatchTest` 的**逐字节往返**（Anthropic 的 `tool_addition`、Completions 的 `{role:"system",tools:[…]}`、以及「省略 content 时线上也不出现 content」）。⚠️ **本设计稿的初版据 `javap` 的工厂方法清单判定「不可实施」—— 那是错的**：工厂只为**已知**变体生成，未知变体走的是另一条路。教训写进 §12.6 | `SdkJsonEscapeHatchTest`、§12.4 的逐条实测 |
 
@@ -472,6 +472,27 @@ $ cd D:/workplaceForai/pi/packages/ai && node scripts/generate-models.ts --stric
 ⇒ 不补这一条，**每个会话的第一轮都会宣告「新增全部工具」**，一条 pi 从不产生的系统消息
 （还会被 `PiLaneSession` 落盘）。补上之后第一轮两侧相等、无事发生，与 pi 一致。
 
+> **⚠️ 2026-09-26 更正（包 A4c，`docs/52 §12.3`）—— F11 的结论只对了一半，本包已删除该落点。**
+>
+> 上面那段的推理用的是 `agentLoop` 那条路（`normalizeContext(context.systemPrompt, context.tools)`
+> 会折前导消息），而 **pi 的生产路径（`Agent` 类）根本不折**：`sdk.ts:368-372` 构造 agent 时传
+> `systemPrompt: ""` 与 `tools: []`，`createInitialSystemMessage` 因此返回 `undefined`；
+> `createContextSnapshot()`（`agent.ts:450-456`）只交 `{messages, tools}`；请求期唯一的折叠点
+> `agent-loop.ts:357` 调的是 `normalizeContext({ messages: llmMessages })` —— **只传 messages**。
+> ⇒ **`Context.systemPrompt` 在 pi 生产上是死字段**，前导系统消息**只有一个来源**：
+> `_preparePromptAndToolLoadout` 产出的段补丁（`content: ""`），其 `toolsAdded` 由
+> `declareToolChanges` 合并进去。
+>
+> ⇒ 包 A4c 按 R4 **删除**了 `PiLaneEngine.ensureInitialDeclaration` 与
+> `ToolChangeDeclaration.initialDeclaration`，改由段补丁承担同一职责。A3 当时的实测证据
+> （conformance 金标里有声明帧）**仍然成立** —— 那些帧来自 `declareToolChanges` 自己新建那条
+> 系统消息，与「种子」无关；F12 的语料再生也没有推翻它。反过来说，A3 的种子让 java 的会话文件
+> **比 pi 多一条**（`content` 载提示文本而不是 `sections`），这正是 A4 要消掉的。
+>
+> **为什么补在工作副本而不是只补比较基准**（下一段）：这条论证在 A4c 之后**依然成立**，
+> 只是承担者从「种子」换成了「段补丁」—— 补丁同样落在转录里、同样被
+> `resolveTranscriptTools` 当 `requestTools` 的来源。
+
 **为什么补在工作副本而不是只补比较基准**：`resolveTranscriptTools` 的 `requestTools` 在锚定支下
 取的就是**前导消息声明的那些**（§2 P3）—— 声明不落在转录里，A3c 的「请求级工具表只增不减」
 就没有来源。
@@ -479,9 +500,11 @@ $ cd D:/workplaceForai/pi/packages/ai && node scripts/generate-models.ts --stric
 **⚠️ 两处已知差异（今天都不可观察，登记待 A4/A7）**：
 ① 提示文本在声明里被**冻结** —— pi 的前导消息内容同样是起点那份，中途的提示变化走
 **sections 差分**（A4）；java 的 sections 尚未落地 ⇒ 将来若系统提示能在会话中途变化，
-它会到不了模型。
+它会到不了模型。⇒ **A4c 已闭合**：段补丁就是差分，且 `PiLaneEngine.prepareNextTurn`
+把补丁交给循环。
 ② `rebuildLaneMessages`（压缩/恢复/重置）整体替换工作副本、丢掉这条声明，下一次起手按**当时**的
-工具集重建 ⇒ 被跨重建的工具增删不会作为增量宣告。
+工具集重建 ⇒ 被跨重建的工具增删不会作为增量宣告。⇒ **A4c 起不再适用**：段补丁**每次起手重新算**
+（`startPass` 的差分基准是工作副本），压缩重建之后照算。
 两者的前提都是「工具集在一次会话里会变」，而今天 `setActiveTools` 没有调用者（F6）。
 
 **先红（实测）**：`git stash push -- <PiLoop/PiLoopRunner/PiLaneEngine>` ＋ 新 corpus 复跑

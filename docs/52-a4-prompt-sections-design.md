@@ -1,6 +1,6 @@
 # 52 - 包 A4：prompt sections（构建、替换、差分）
 
-> **状态：设计待审核，未写任何生产代码。**
+> **状态：已闭环（2026-09-26）** —— R1–R7 全按建议实施；A4a/A4b/A4c 三步全落，实施记录见 §12。
 > 队列来源：`docs/48 §5` 批次 A 行「prompt sections 构建、替换和差分」（P1，依赖 A1）。
 > pi 参照锚点：`3390bd93630965a12a0a1a5c36ce890ec22f7e1d`（`git status` 空，工作树就在锚点上）。
 > 本包闭环时必须回填的地方：本文 §12、`docs/48 §5` 的 A 行、`docs/48 §10.3` 的 L3 行
@@ -713,4 +713,156 @@ renderSystemMessageUpdate(update) →
 
 ## 12. 实施记录
 
-_（待实施后回填：每步的 commit、先红证据、变异红集、回归证据、设计偏离与遗留。）_
+**六次提交，2026-09-26**：
+
+| 步 | commit | 内容 |
+|---|---|---|
+| **A4a** | `92a4b99` | `sections` 的删除态（ai ＋ agent-core 六处落点） |
+| **A4b-1** | `fc1404e` | `SystemPromptOptions` / `SystemPrompts` / `SkillsPrompt` ＋ `Skill.filePath()`（机制） |
+| **A4b-2** | `032de6d` | 删 `SystemPromptBuilder` ＋ `DEFAULT_SYSTEM_PROMPT`，迁 `ContextAssembler` / `HarnessConfig` / `SessionSetup` / `AgentSession` |
+| **A4c-1** | `40bb3ea` | 生产者 `promptLoadout` ＋ 两个调用点 ＋ 判 `ensureInitialDeclaration` 出局 ＋ `PromptLoadoutTest` |
+| **A4c-2** | `e7c68cc` | 每轮无条件交回 context（pi 的 `tools` 刷新）＋ 同 run 内切工具的夹具 |
+
+**回归**（全 reactor `mvn -o test`，见 §12.6）：`ai` 886⇒**893**、`agent-core` 504⇒**519**、
+`coding-agent` **272**、`tui` / `sqlite` 等其余模块不变；checkstyle 零新违规、`git diff --check`
+干净、改动文件无 `System.out.println`。
+
+### 12.1 A4a —— `sections` 的删除态（`92a4b99`）
+
+§4.1 的六处落点全部落地。**先红：9 跑 8 红**（`SystemMessageSectionsTest`），全部是
+`NullPointerException: section value`（`Message.java` 的 `orderedSections`）—— 形状门在上游，
+所以红集**不分叉**；渲染与重放两支由变异探针守（§12.5 的 M2/M3/M4）。
+
+⚠️ **实施中撞出的真陷阱（设计稿没预见）**：`SessionJson` 的 mapper 带
+`setSerializationInclusion(NON_NULL)` ⇒ `valueToTree(sections)` 会把**值为 `null` 的键整个丢掉**，
+「删掉 `obsolete` 段」静默变成「没提过 `obsolete`」—— 而两者的重放结果**不同**（前者删段、
+后者保留此前设过的值）。先红拿到了 **2 红**（`SessionJsonSystemMessageTest` 与
+`MessageJsonCodecSystemReadbackTest` 各一），改成逐项 `putNull` 后转绿。
+`PiMessagesApi` 的 mapper 今天没有这个策略，但同样改成逐项写 —— **不把语义绑在映射器的默认值上**。
+
+`TranscriptsTest` 与 `MessageTextsTest` 恢复成 pi `system-message-replay.test.ts` 的**逐字**
+输入与期望（此前为绕开缺失的删除态做过删改，见两个类的旧 banner）。
+
+### 12.2 A4b —— 移植 `system-prompt.ts` 并替换旧 builder（`fc1404e`、`032de6d`）
+
+19 条新夹具（`SystemPromptsTest`）全绿，其中两条是 pi oracle
+（`diffs sections into a patch`、`keeps the preamble untagged and replaces it like any section`）
+的逐字移植。pi 那条 `buildSystemPromptState({forceSystemPrompt})` 的断言**没有移植** —— 见 §1.2／L-I。
+
+**A4b-2 的连带面**（比设计稿预估的大，但都是「删除的必然结果」）：
+
+- `HarnessConfig` ＋ `appendSystemPrompt` / `promptGuidelines` 两个组件（18 参兼容构造器 ＋
+  Builder 同步）；`ExecutionContext` ＋ 两个 supplier；`LaneState` ＋ 两个字段；
+  `AgentHarness` ＋ 两个 setter ＋ 两个 getter。
+- `ContextAssembler.buildSystemPrompt` → `promptOptions` / `renderPrompt` / `promptLoadout` 三件。
+  其中 `renderPrompt` 是**派生值**（`Context.systemPrompt` 仍是它，pi 生产上那个字段是死的 ——
+  §2 P12；java 留着它只为让请求录制与诊断看得见模型实际收到的提示）。
+- **空配置判据**：什么都没配（无提示、无工具、无准则、无技能、无追加）⇒ **空提示**，不是默认提示。
+  这是 pi `createInitialSystemMessage` 的空判据在 harness 层的对应物；不加它，`AgentHarness` 的
+  SDK 用户会在毫无配置时凭白多出一条系统消息（3 个既有夹具当场变红，见 §12.4-3）。
+- `SessionSetup`：`systemPromptFor` 拆成 `customPromptFor` ＋ `appendSystemPromptFor` ＋
+  新增 `DEFAULT_PROMPT_GUIDELINES`（pi-java 原有的 7 条表达风格条目里，**去掉**了 pi 兜底已有的
+  两条「简洁」「写清路径」—— 逐字去重不会命中带句号的版本，留着就是重复项）。
+- `AgentSession.DEFAULT_SYSTEM_PROMPT` 删除；`AgentSessionTest` 的两条断言按新映射改写
+  （`--system-prompt` 与 `--append-system-prompt` 现在落在**两个槽**里）。
+
+### 12.3 A4c —— 生产者与接线（`40bb3ea`、`e7c68cc`）
+
+`ContextAssembler.promptLoadout` 按 §4.3 落地；`PiLaneEngine.startPass` 前置进 pending、
+`prepareNextTurn` 填 `NextTurnUpdate.messages`；`ensureInitialDeclaration` 与其移植件
+`ToolChangeDeclaration.initialDeclaration`（＋3 条夹具）**删除** —— R4 的结论。
+
+**四处实施中才定下来的细节**：
+
+1. **落盘序**：pi 的补丁与用户消息**都**经 `message_end` 落盘 ⇒ 日志序 `[system, user]`。java 的
+   用户 entry 由 `RunLifecycle.startRun` **先行**写（`docs/31 §4.2` 的既定设计，且那条 entry
+   因此**不算** `WriteDeferred`）⇒ 补丁也必须由 `startRun` 先写。
+2. **抑制**：补丁进循环后会被 `declareToolChanges` **复制**一次（工具字段写回），引用对不上
+   `alreadyPresent` ⇒ `PiLaneSink` 增加**按时间戳的一次性抑制**（`suppressSystemMessageAt`）。
+   ⚠️ 试过「把补丁也放进 `lane.messages` 让锚点分支返回原对象」——不行，`onMessageEnd` 无条件
+   `lane.messages.add`，会重复。
+3. **工具序**：`tools`/`rules` 两段按 `selectedTools` 顺序生成，而 `activeTools` 是 `Set`
+   （`Set.copyOf` 的迭代序**跨 JVM run 可变**）⇒ 走 `ToolRegistry.activeOf`（注册表序），
+   与 `PiLaneEngine.activeTools` 同一稳定源。这不是洁癖：用 Set 的序会让**每次启动的提示都不一样**，
+   续跑时吐出无意义的段补丁。
+4. **`Context.tools` 的刷新**（`e7c68cc`）：pi 的 `prepareNextTurnWithContext` 返回值里
+   `context: {...nextContext, tools: state.tools.slice()}` 是**每次都重建**的
+   （`agent-session.ts:605-608`），java 此前只在压缩时交回 ⇒ **同一 run 内**的 `setActiveTools`
+   对 `declareToolChanges` 不可见（段补丁说换了工具、工具声明一声不吭）。由探针 C4 撞出（§12.5）。
+
+**端到端夹具** `PromptLoadoutTest`（4 条）：起手补丁的形状与工具合并、跨 prompt 切工具
+（pi oracle `setActiveTools emits prompt sections and tool changes before the next request` 的镜像）、
+**同 run 内**切工具（走 `NextTurnUpdate` 通道）、段表没变则不产出补丁。
+
+**顺带修**：`PayloadRecordingStreamFn` 的消息投影只写 `role`/`content` ⇒ A4c 之后录制里那条系统消息
+看起来是**空的**（提示在 `sections` 里）。补上三个 delta 字段与一条夹具断言。
+
+### 12.4 设计偏离与实测更正
+
+1. **§4.2 的「三个文件」实际是两个**：`SystemPromptOptions`（record ＋ Builder）与
+   `SystemPrompts`（含 `buildRules`/`renderProjectContext`/`tag`），技能格式化独立成
+   `SkillsPrompt`。三件合计 208 ＋ 314 ＋ 86 ＝ 608 行，各自都在 500 行以内。
+2. **`docs` 段的取值**（R2-B 的落地）：正文按 pi-java 重写（`README.md` ＋ `docs/` ＋ 一段说明
+   `docs/` 是编号设计文档），**没有 `examples/` 那一行**（F12）；且整段只在
+   `documentation != null` 时产出 —— 而 `ContextAssembler` 今天**不传**它
+   （`SystemPromptOptions.DocumentationPaths` 无生产者）。⇒ **`docs` 段在今天只有测试可达**，
+   登记为 L-J。
+3. **空配置判据**（§12.2 的第五条）是**设计稿没写**的：`CrossTurnContextTest`（2 条）与
+   `HarnessTelemetrySpansTest`（1 条）当场变红，因为「渲染出的提示恒非空」让
+   `ensureInitialDeclaration` 对无工具无提示的 harness 也落了种子。判决：**补空判据**（而不是改夹具）
+   —— pi 的 `createMutableAgentState` 在「提示与工具都空」时不建前导消息。
+4. **`ToolChangeDeclaration.initialDeclaration` 的删除顺带减掉 3 条夹具**（agent-core 518⇒515）。
+5. **`AgentHarness.java` 514⇒523、`PiLaneSink.java` 533⇒556**：两条**存量超限**文件（`docs/32`
+   已登记）本包各增 9 / 23 行，未拆分。
+
+### 12.5 变异红集（全部实测；⚠️ 两条探针自己出过假零红）
+
+**A4a**（`ai` 三夹具 ＋ `agent-core` 两夹具）：
+
+| 探针 | 变异 | 红 |
+|---|---|---|
+| M1 | `orderedSections` 恢复拒 null 值 | **10 error**（3 个类） |
+| M2 | 完整提示不跳过 null 段 | **2 error** |
+| M3 | 更新渲染的条件取反（去掉 `Removed` 支） | **4 failure** |
+| M4 | 重放把 `remove` 换成 `put(key, null)` | **3 failure** |
+| M5 | `SessionJson` 落线回退 `valueToTree` | **2 failure** |
+| M6 | 读侧重新拒 null | **2 error** |
+
+**A4b**（`SystemPromptsTest`）：B1 `preamble` 也包标签 ⇒ **4 红** · B2 段名校验去掉 ⇒ **1 红** ·
+B3 空工具表写空串而非 `(none)` ⇒ **1 红** · B4 cwd 不做反斜杠归一 ⇒ **1 红** ·
+B5 准则去重去掉 ⇒ **1 红**。
+
+**A4c**（`PromptLoadoutTest`（＋`PiLaneEngineTest`））：C1 生产者恒不产出补丁 ⇒ **2 红** ·
+C2 差分两侧对调 ⇒ **3 红** · C3 起手不把补丁前置进 pending ⇒ **3 红** ·
+C4 下一轮不交回补丁 ⇒ **1 红**（⚠️ 首次实测**零红**，见下） · C5 sink 不做抑制 ⇒ **5 红**。
+
+⚠️ **本包的两条探针方法论教训**（接 A3 的两条，`docs/51 §12.4.2`）：
+
+1. **「变异落地」的检查必须确认原串也消失了**。B4 的 perl 因反斜杠转义失败（根本没改），
+   而落地检查用的是**子串**`options.cwd()` —— 它恰好是原串 `options.cwd().replace('\\','/')` 的
+   子串 ⇒ 检查通过、实跑零红，**假红报绿**。改成「原串计数必须下降」后拿到 1 红。
+2. **`perl -0pi` 不带 `/g` 只替换第一处**。C1 的目标行 `var options = promptOptions(lane);` 在
+   `ContextAssembler` 里出现**两次**（`renderPrompt` 与 `promptLoadout`），探针只改了前者 ⇒ 零红。
+   改成按行号定位后拿到 2 红。
+3. ⚠️ **「零红」也可能是夹具的盲区，而不是探针的问题**。C4（把 `NextTurnUpdate.messages` 改成恒
+   `null`）**真落地了**却是零红：当时**没有任何夹具**走那条通道（java 每次 `prompt()` 都是新 run，
+   起手那条路把跨 prompt 的场景全包了）。补上「同 run 内切工具」的夹具之后 C4 恰 1 红。
+   ⇒ **一个探针零红的三种成因**：变异没落地（1、2）、夹具没牙、**通道没夹具**。
+4. **`git checkout -- <file>` 会连未提交的实现改动一起还原**（本包踩了**两次**：A4a 的探针把
+   `Message.java`/`MessageTexts.java` 打回 HEAD；A4c 的 C4 把 tools-refresh 修复打回 HEAD）。
+   ⇒ 探针一律在**已提交**的工作树上跑，或先 `cp` 备份。
+
+### 12.6 遗留登记（落 `docs/32`，编号 B94 起）
+
+| 编号 | 事项 | 处置 |
+|---|---|---|
+| **B94** | **pi-java 的 8 个内置工具一个都没声明 `promptSnippet`/`promptGuidelines`**，而 pi 的 8 个全声明了（`read.ts:74`、`bash.ts:388`…，都是 `*ToolSystemPromptContribution`）。⇔ pi 的 `tools` 段**只收声明了片段的**工具（`system-prompt.ts:151`）—— 照该稀疏规则，pi-java 的段会是 `(none)`。本包因此用「有片段用片段、否则用描述」的回落保住工具清单，并把这份 `*ToolSystemPromptContribution` 的移植登记为缺口 | 新登记 |
+| **B95** | `docs` 段**没有生产者**：`SystemPromptOptions.DocumentationPaths` 只在夹具里构造过，`ContextAssembler` 不传。（pi 的三个路径是 `getReadmePath()/getDocsPath()/getExamplesPath()` 的包目录解析；pi-java 无 `examples/`，且需要一个「发行根」的解析策略） | 新登记 |
+| **B96** | `PayloadRecordingStreamFn` 的消息投影从「只写 role/content」扩到含三个 delta 字段 —— 记的是 **pi-java 自有**的录制格式（不是 pi 的线格），改动会改变既有 trace 文件的形状 | 新登记 |
+| L-A | `Context.systemPrompt` 在两侧都无行为读者（pi 生产是死字段）；java 保留它作**派生值**（请求录制/诊断） | 登记，与 pi 同 |
+| L-C | `forceSystemPrompt` / `before_agent_start` 的段写入面不可达（F8） | 登记，不在本包 |
+| L-D | 段级 prompt cache 断点（A-01 的落点）—— 本包已保证段边界稳定 | 指向 A-01 |
+| L-E | TUI/web 的 sections 渲染（B87④ 的另一半）—— ⚠️ A4c 之后系统消息**有生产可见的 sections**，这条从「静默误渲染」升级为**用户可见** | 指向宿主面，**优先级上调** |
+| L-F | pi 的告示「段名避开整数样的字符串」（JSON 对象会重排它们）—— java 今天无外部段写入者 | 登记 |
+| L-I | `buildSystemPromptState` 的 `forceSystemPrompt` 分支在图型上缺席 | 登记 |
+| L-J | `docs` 段（B95）与 `docs/52 §11` 的第三条已知不足同源 | 见 B95 |
