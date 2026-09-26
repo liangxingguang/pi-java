@@ -1,13 +1,13 @@
 # 53 - 包 A7：Model.compat（解析链、目录标注与已消费字段的生产者）
 
-> **状态：设计待用户审核**（未写任何生产代码）。审核通过后此处改为「已批准，进入实施」，
-> 闭环时再翻一次（`docs/48 §9` 步骤 7/8）。
+> **状态：已闭环（2026-09-27）** —— R1–R8 全按建议实施；A7a／A7b／A7c 三步全落（`9eee9f8`／
+> `22bde33`／`3770fd3`，收口 `3d7898e`），实施记录见 §12。四条车道原生渲染与 sections 段补丁
+> **从「测试可达」变成「生产可达」**（`docs/51 §3 F5/F6` 随之结案）。
 > 队列来源：`docs/48 §5` 批次 B 行「`Model.compat` 字段、JSON 映射与 request consumers」
 > （P1，依赖**设计门 7**）＋ `docs/48 §2` 的 **A-07**。
 > pi 参照锚点：`3390bd93630965a12a0a1a5c36ce890ec22f7e1d`（`git status` 空）。
-> **本包闭环时必须回填的地方**：本文 §12、`docs/48 §5` 的 B 行与 `docs/48 §2` 的 A-07 行、
-> `docs/41` 的 `Model.compat` / A-07 行、`docs/51 §3` 的 **F5/F6**（它们的根因就是本包）、
-> `docs/52 §12.6 L-*` 里与本包相邻的两条、`docs/32` 本包新登记的条目（编号从 **B97** 起）。
+> 本包闭环时**已**回填：本文 §12、`docs/48 §5` 的 B 行与 banner、`docs/41` 的 A-07 行、
+> `docs/51 §3` 的 **F5/F6**、`docs/32` 的 **B97–B102**。
 
 ---
 
@@ -556,28 +556,54 @@ public final class CompatResolver {
 
 ---
 
-## 6. 先红与变异矩阵（设计期预测；实施时如实改写）
+## 6. 先红与变异矩阵（**实测**；设计期的预测见 §12.4 的对账）
 
 ### 6.1 先红
 
-| 步 | 夹具 | 预期先红形态 |
+| 步 | 夹具 | 实际形态 |
 |---|---|---|
-| A7a | `CompatResolverTest`（新） | 编译失败（类不存在）；`AnthropicTemperatureCompatTest`（新，桩服务器抓出站体）在**旧代码**下抓到 `temperature` 而期望它缺席 ⇒ 1 红 |
-| A7a | `CompletionsMaxTokensFieldTest`（新） | 旧代码抓到的体含 `max_completion_tokens`，期望 `max_tokens`（deepseek）⇒ 1 红 |
-| A7b | `BuiltinCatalogCompatTest`（新） | 断言四个 Anthropic 内置模型的 compat 与 oracle 逐键相等 ⇒ 三个模型红 |
-| A7b | `PromptSectionLivenessTest`（新） | 组合夹具：`BuiltinCatalog.anthropicModels()` 找到 `claude-opus-4-8` ⇒ 构造含中途系统消息的转录 ⇒ `Transcripts.resolveTranscript` **保留**它 ⇒ 旧代码折叠 ⇒ 1 红（这是 D4 的钉子） |
-| A7c | 车道读点 | A7a/A7b 落地后，车道若不改走解析层，D1/D4 在**车道级**夹具上仍红（`AnthropicThinking` 的分支）⇒ 逐车道 1 红 |
+| A7a | `CompatResolverTest`（新，19 例） | 编译失败（类不存在，与 A3a/A4a 同型） |
+| A7b | `CatalogCompatRulesTest`（新，15 例） | 编译失败（类不存在）；其中 `theMidConvoRegexIsAnchored` / `theThreePredicatesDisagreeOnCase` 是**辨伪**用例 |
+| A7c | `AnthropicCompatWireTest`（新，6 例）／`CompletionsCompatWireTest`（新，5 例） | 编译失败（签名变更）＋ 见下面 M 矩阵：**逐条本包新增的行为在旧代码下都红**（M1/M3/M4/M5c/M6/M7/M8 的红集就是「旧行为」） |
 
-### 6.2 变异矩阵（设计期预测）
+⚠️ 本包**没有**做「stash 实现 ＋ 旧代码复跑」那一步（A2 的手法）—— 因为 A7c 改了四个签名，
+stash 主源码会让夹具无法编译。替代证据是 §6.2 的变异矩阵：每一处新行为的读点被改成旧行为都拿到了红。
 
-| 变异 | 预测红集 |
-|---|---|
-| M1 把「探测」写成常量 `false` | `CompatResolverTest` 的 deepseek 例 ＋ `CompletionsMaxTokensFieldTest` ⇒ 2 |
-| M2 把 `supportsTemperature` 的 `?? true` 写成 `?? false` | 三个 Anthropic 内置模型的温度夹具 ⇒ 1–3 |
-| M3 目录标注里去掉 `supportsMidConvoToolChanges`（只留 SystemMessages） | `BuiltinCatalogCompatTest` 的逐键断言 ⇒ 1 |
-| M4 把 `maxTokensField` 的读点写成恒 `max_completion_tokens` | deepseek 例 ⇒ 1 |
-| M5 把解析层的「覆盖优先」反过来（探测赢） | 显式 compat 的夹具 ⇒ 1–2 |
-| M6 车道仍读 `model.compat()` 而非解析结果 | 逐车道 ⇒ 1 each |
+### 6.2 变异矩阵（**实测红集**，八处；夹具集＝两个 wire 夹具 ＋ `CompatResolverTest` ＋ `CatalogCompatRulesTest` ＋ `TranscriptsTest`）
+
+| 变异 | 位置 | 落地检查 | **红集** |
+|---|---|---|---|
+| **M1** 去掉 `&& compat.supportsTemperature()` | `AnthropicRequestBuilder` | old=0 | **1**（`opus48DropsTheTemperatureField`） |
+| **M2** `AnthropicThinking` 改读 `model.compat().forceAdaptiveThinking()` | `AnthropicThinking` | old=0 | **0** ⇒ 见下 |
+| **M3** `maxTokensField == MAX_TOKENS` 恒假 | `OpenAICompletionsMessageConverter` | old=0 | **2** |
+| **M4** `supportsStore()` 恒假 | 同上 | old=0 | **1** |
+| **M5** 把 `&& Boolean.TRUE.equals(compat.supportsDeveloperRole());` 换成 `;` | 同上 | old=0 | **0** ⇒ 见下（**语义 no-op**） |
+| **M5c** 同上但换成 `&& false;` | 同上 | old=0 | **1** |
+| **M6** `resolveTranscript` 恒定折叠 | `Transcripts` | old=0 | **2** |
+| **M7** `useMaxTokens ? MAX_TOKENS : …` 换成恒 `MAX_COMPLETION_TOKENS` | `CompatResolver` | old=0 | **7** |
+| **M8** baseUrl 谓词 `contains("deepseek.com")` 换个串 | `CompatResolver` | old=0 | **2** |
+
+两条零红**都不是「夹具没牙」**，成因不同，都要记住：
+
+- **M2（零红，且**本该**零红）**：`forceAdaptiveThinking` 是**二态常量字段** —— pi 的探测值是常量
+  `false`（`getAnthropicCompat:214` 那一段里没有任何分支碰它），故 `explicit ?? false` 里
+  「解析」与「不解析」**必然同值**。⇒ 本包把 `compat` 传进 `AnthropicThinking` 是**形状改动**
+  （收口到单一解析点），**不是行为改动**。设计稿 §6.2 预测它「1–3 红」是**错的**。
+  代价如实登记：那一处**没有**行为层面的守护，只有形状层面的（`docs/53 §8` 的 grep 1）。
+- **M5（零红，**不该**零红）**：`A && B ;` 里的 `;` 让表达式**仍是** `A && B`（javac 把空语句折叠掉），
+  ⇒ 变异体等于原条件，是**语义 no-op**。这与包 A4 的 **M3**（`|| false`）**同型，第二次兑现**
+  （`docs/52 §12.5` 记的是同一条）。改成 `&& false;` 后（M5c）恰 1 红。
+  ⇒ **教训不变**：变异体要先问「它改的是不是条件本身」；`A && B` 上挂一个恒真/空语句
+  是**假变异**，不是零红。
+
+⚠️ 另一条与变异无关的坑：本文件的多行模式匹配在**CRLF** 工作副本上失败（`old=2` 报「没落地」）——
+这是本仓第 4 次撞 CRLF（`docs/51 §12.4.2` 记过两次，A7 一次，本次 M5b 一次）。
+**凡跨行模式，用单行锚点或显式 `\r?\n`。**
+
+⚠️ 还有一条**收口时才发现的漏网读点**：`OpenAICompletionsApi:248` 当时仍写
+`request.model().compat().supportsFinishReason()` —— 设计稿 §8 的 grep 1 就是为抓它而设的，
+抓到了。它在行为上是**解析不变**的（`resolved()` 对该字段原样透传），故收口提交
+（`3d7898e`）零行为改动，只为让 grep 成为**可靠**的门。
 
 ---
 
@@ -683,21 +709,24 @@ $ ./node_modules/.bin/vitest run packages/ai/test/providers.test.ts
 
 ---
 
-## 8. 验收 grep（实施后必须全过）
+## 8. 验收 grep（**实测结果**，逐步命令与输出见 §12.5）
 
-1. `grep -rn "model.compat()\|\.compat()\." pi-java-ai/src/main/java/com/pijava/ai/protocol/`
-   ⇒ **只允许**出现在 `CompatResolver` 的调用点（即车道里形如
-   `var compat = CompatResolver.resolve(request.model(), …)` 的那一行）；
-2. `grep -rn "supportsMidConvoSystemMessages\|supportsMidConvoToolChanges\|supportsAdditionalTools\|supportsToolSearch\|supportsMidConvoToolAdditions" pi-java-ai/src/main`
-   ⇒ 必须命中 `BuiltinCatalog` 与 `CompatDef`（生产者），不再只是 `ModelCompat` ＋ `Transcripts`；
-3. `grep -rn "deepseek" pi-java-ai/src/main/java/com/pijava/ai/protocol/OpenAICompletionsMessageConverter.java`
-   ⇒ 内联探测已搬走（只余注释里的出处说明）；
-4. `grep -rn "max_completion_tokens" pi-java-ai/src/main` ⇒ 只在读 `compat.maxTokensField()`
-   的结果那一处出现（不再是无条件写死）；
-5. `grep -rn "supportsTemperature" pi-java-ai/src/main` ⇒ 命中字段、`CompatDef`、目录标注、
-   `AnthropicRequestBuilder` 的读点；
-6. `docs` 侧：`docs/48 §5` 的 B 行、`docs/48 §2` 的 A-07 行、`docs/41` 的
-   `Model.compat` 行与 A-07 行、`docs/51 §3 F5/F6`、本文 §12。
+1. `grep -rn "compat()" --include=*.java pi-java-ai/src/main/java/com/pijava/ai/protocol/`
+   ⇒ 车道里**零命中**（只剩两行注释）。全仓 `main` 只剩 `ModelsJsonConfig:214` 的
+   `compatOf(providerId, model, model.compat())` —— 那是**定义变更**路径（models.json → ModelInfo），
+   不是读点，**允许**。✅
+2. `grep -rln "supportsMidConvoSystemMessages" pi-java-ai/src/main` ⇒ 命中**十个**文件，
+   生产者三个（`BuiltinCatalog`／`CatalogCompatRules`／`CompatResolver`）＋ `ModelsJsonSchema`/`ModelsJsonConfig`
+   （models.json 面）＋ 四个读点 ＋ `ModelCompat` 自身。✅（旧状态：只有 `ModelCompat` ＋ `Transcripts` 等读点）
+3. `grep -rn "deepseek" …/OpenAICompletionsMessageConverter.java` ⇒ **只剩注释**（内联探测已搬走）。✅
+4. `grep -rn "maxCompletionTokens\|MAX_COMPLETION_TOKENS" pi-java-ai/src/main` ⇒ 四处：枚举定义、
+   `CompatResolver` 的探测缺省、`ModelsJsonConfig` 的串映射、**唯一**的落线点
+   `OpenAICompletionsMessageConverter:207`（在读 `compat.maxTokensField()` 的分支内）。✅
+5. `grep -rln "supportsTemperature" pi-java-ai/src/main` ⇒ 五个文件：`ModelCompat`（字段）、
+   `CompatDef`（schema）、`ModelsJsonConfig`（归一）、`CatalogCompatRules`（标注）、
+   `CompatResolver`、`AnthropicRequestBuilder`（读点）。✅
+6. `docs` 侧：`docs/48 §5` 的 B 行、`docs/41` 的两行、`docs/51 §3 F5/F6`、`docs/32` 的
+   B97–B102、本文 §12 —— 全部已回填。✅
 
 ---
 
@@ -834,16 +863,97 @@ mid-convo 的代理，把 `supportsMidConvoToolChanges` 关掉但保留 `forceAd
 
 ---
 
-## 12. 实施记录
+## 12. 实施记录（2026-09-27 闭环）
 
-（实施后在此续写：逐步 commit、先红逐字输出、变异红集、回归证据、设计偏离与实测更正。）
+R1–R8 **全按建议实施**。提交：`9eee9f8`（A7a 解析层）· `22bde33`（A7b 目录标注 ＋ models.json 面）·
+`3770fd3`（A7c 车道接线）· `3d7898e`（收口：最后一处直接读点）· 文档 `docs/53`/`docs/48`/`docs/41`/`docs/32`。
 
-### 12.0 实施前的必答项与设计期自我更正
+### 12.0 设计期的两处自我更正（保留在此，免得只留在 §3/§7 里被漏读）
 
-- **必答**：§9 的 R1–R8 结论（R7 的判据原本是 §7.2，现已答，见 §7.2 与 §3 F7）。
-- **设计期自我更正（1 处，如实记录）**：§3 F7 的初版把「pi 的 `models[]` 逐字段合并、
-  java 整条替换」写成缺口 —— **读错了路径**。pi 是**三条**路径（`modelOverrides` 逐字段、
-  provider 级逐字段、`models[]` 整条替换），java 有的那条（`models[]`）**与 pi 一致**，
-  真正的差距在另外两条，而它们属 **A-16**。这个更正是本包把「先取证再下结论」写进流程的
-  一次兑现：**`docs/32 §10.7` 的「不准只读源码」** —— 我读了两侧源码就下了结论，
-  而真正解决问题的是**去读 pi 自己的 `models.md` 与 `provider-composer.ts`**。
+- **R7 的判据（§7.2）在实施前已答**：起初我把 F7 写成「pi 的 `models[]` 逐字段合并、java 整条替换」
+  ⇒ 缺口。**读错了路径**：pi 是**三条**路径（`modelOverrides` 逐字段、provider 级逐字段、
+  `models[]` 整条替换），java 有的那条**与 pi 一致**，真正的差距在另外两条（属 **A-16**）。
+  取证方式是**去读 pi 自己的 `docs/models.md` 与 `provider-composer.ts`** —— 我先前只读两侧源码
+  就下了结论，正是 `docs/32 §10.7`「不准只读源码」要防的那件事。
+- **§3 F5 的 id 漂移**：`deepseek/deepseek-v4-flash` 是 pi 于 2026-09-10（`12f59336a`）**改名**前的
+  退役别名（现名 `deepseek-flash`）；`mistral-large`/`mistral-small` 在 pi 目录里**不存在**。
+  ⇒ 本包**不**改 id（改它会改用户点名模型的方式），归 **A-08**，登记为 B97。
+
+### 12.1 A7a —— 解析层（`9eee9f8`）
+
+- `MaxTokensField`（新，2 值枚举 ＋ `wireName()`）、`CompatResolver`（新，186 行，四个 per-lane
+  静态方法 ＋ 私有 `resolved`/`pick`）。
+- `ModelCompat` 从 9 组件扩到 **14**（`supportsTemperature`、`maxTokensField`、`supportsStore`、
+  `supportsDeveloperRole`、`supportsStrictMode`）；**九参构造器保留为便捷构造器** ⇒ 既有 18 个
+  构造点**零改签**（与 §4.5 预期的「三处会编译失败」**相反**，见 §12.4）。
+- ⚠️ 一处**设计稿没写、实施中定下来的**：`supportsStrictMode` 的缺省**随车道相反**
+  （responses `?? false`／azure `?? true`）⇒ 由 `forResponses(model, strictModeDefault)` 的
+  **形参**给，而不是写死在解析器里 —— 否则「随车道变」的语义会被固化成一个值。
+
+### 12.2 A7b —— 目录标注 ＋ models.json 面（`22bde33`）
+
+- `CatalogCompatRules`（新，116 行）：pi 生成期的**三条纯字符串谓词逐字照抄**
+  （正则/`includes`/是否小写化**三处不一致，刻意保留**），加 `getAnthropicMessagesCompat`
+  的两条分支（mid-convo 两个标志同给、temperature 抑制）。
+- `BuiltinCatalog`：`anthropicModel(...)`/`deepseekModel(...)` 两个助手 ＋ 8 参 `model(...)`
+  重载；标注了 `claude-fable-5`／`claude-opus-4-8`／`claude-sonnet-4-6`（haiku 标注结果 ≡ `NONE`）
+  与 `deepseek-v4-pro`。
+- `CompatDef` 从 4 键扩到 **14** 键；`compatOf` 改签名（带 provider/model 上下文）以便
+  **未知 `maxTokensField` 响亮抛错**。
+- ⚠️ **一处设计稿没写**：`maxTokensField` 的未知取值是**抛弃**还是**报错** —— 实施选了报错
+  （理由：那是线格**字段名**，写错一个字母除「字段名换了」以外没有任何症状），
+  与同文件「未知**键**被忽略」的既有裁决**并存**（两者代价不同，夹具各钉一条）。
+
+### 12.3 A7c —— 车道接线（`3770fd3` ＋ `3d7898e`）
+
+- `Transcripts.resolveTranscript` 的形参从 `ModelInfo` **换成 `ModelCompat`**（四条车道 ＋ 夹具同步）。
+- 四条车道各在入口解析一次：`AnthropicRequestBuilder`（＋ 温度抑制 ＋ `AnthropicThinking` 收 compat）、
+  `OpenAICompletionsMessageConverter`（＋ `maxTokensField`／`store`／`developer` 角色／
+  删掉内联 deepseek 探测）、`ResponsesMessageConverter`（把车道的 `supportsStrictMode` 形参
+  **换成解析后的 `ModelCompat`**，两条 responses 车道各自喂缺省）、`MistralConversationsApi`。
+- 新夹具：`AnthropicCompatWireTest`（6）／`CompletionsCompatWireTest`（5）—— 都用**内置目录**的
+  真模型，每条都配了「配对用例」（缺席断言不空过）。
+
+### 12.4 与设计稿的对账（**4 处偏离／更正，全部实测**）
+
+1. **§4.5 预测错了**：设计稿说「三个九参规范构造器会编译失败、逼出改动」—— 实际**一处都没炸**，
+   因为 A7a 把九参形态**保留成便捷构造器**（写代码时才发现这个更省的形状）。
+   ⇒ 影响面从「18 个构造点要改」变成 **0**。
+2. **§5 的步骤划分微调**：设计稿把「`supportsTemperature`/`maxTokensField` 的读点」放在 A7a、
+   「`supportsStore`/`supportsDeveloperRole` 的读点」放在 A7b。实际把**四个新字段的读点全部**
+   放在 A7c（车道接线那一趟），A7a 只加字段与解析器 ⇒ 避免同一文件被改两遍。
+3. **§6.2 的预测红集与实测不符**（设计期是猜的）：见表内对账；两条零红各有成因（M2 二态、
+   M5 假变异）。
+4. **`AnthropicThinking` 的 `compat` 形参是形状改动、不是行为改动**（M2 零红，§6.2）——
+   设计稿把它算进「改行为」的读数里，实测**不成立**。
+
+### 12.5 验收 grep 的逐步实测
+
+| # | 命令 | 结果 |
+|---|---|---|
+| 1 | `grep -rn "compat()" --include=*.java pi-java-ai/src/main/java/com/pijava/ai/protocol/` | 车道**零命中**（两行注释除外）。收口前 `OpenAICompletionsApi:248` 命中一次 ⇒ `3d7898e` |
+| 1b | `grep -rn "\.compat()" --include=*.java pi-java-ai/src/main …` | 只剩 `ModelsJsonConfig:214`（定义变更路径，允许） |
+| 2 | `grep -rln "supportsMidConvoSystemMessages" pi-java-ai/src/main` | **10** 个文件（生产者 3 ＋ models.json 面 2 ＋ 读点 4 ＋ 字段自身） |
+| 3 | `grep -rn "deepseek" …/OpenAICompletionsMessageConverter.java` | 只剩注释 |
+| 4 | `grep -rn "maxCompletionTokens\|MAX_COMPLETION_TOKENS" pi-java-ai/src/main` | 4 处，落线点**唯一**且在 `compat.maxTokensField()` 的分支内 |
+| 5 | `grep -rln "supportsTemperature" pi-java-ai/src/main` | 5 个文件（字段／schema／归一／标注／解析／读点） |
+
+### 12.6 回归证据
+
+- `ai`：**893 ⇒ 942**（＋49：A7a 19 ＋ A7b 15 ＋ A7b 的 `ModelsJsonConfigTest` 4 ＋ A7c 11）。
+- 全 reactor `mvn -o test` **BUILD SUCCESS**（14/14）：telemetry 31 · ai 942 · agent-core 519 ·
+  sqlite 35 · coding-agent 272 · protocol 14 · client 2 · server 48 · tui/web/evals/dist 各自 SUCCESS。
+- **conformance 15/15 仍绿**（`docs/51 §12.4.2` 的金标未受本包影响）。
+- checkstyle 0 新违规；`git diff --check` clean；无 `System.out.println`；改动文件均 ≤500 行，
+  **两处存量超限**（`MistralConversationsApi` 508⇒512、`ResponsesMessageConverter` 544⇒545，
+  两条在 A7c **之前**就已超限）**未拆**，登记在 `docs/48 §5` 的 B 行。
+
+### 12.7 本包的方法论产出（写进 memory 与本记录）
+
+1. **「零红」的第四种成因：变异体语义等价**（M2 的 `forceAdaptiveThinking` 是二态常量字段）。
+   与 A4 的三条（变异没落地／夹具没牙／通道没夹具）并列。
+2. **「假变异」第 2 次兑现**（M5：`A && B ;` 被折叠成原条件）—— 与 A4 的 `|| false` 同型。
+   ⇒ 变异体落地检查之外，还要问「它到底改了哪个条件」。
+3. **CRLF 第 4 次**（多行模式匹配失败）⇒ 凡跨行模式用单行锚点。
+4. **验收 grep 的价值被实证**：唯一漏网的读点（`OpenAICompletionsApi:248`）是**设计期就写下的
+   grep** 抓到的，不是人眼找到的。
