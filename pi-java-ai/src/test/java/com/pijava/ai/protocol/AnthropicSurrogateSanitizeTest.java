@@ -73,16 +73,18 @@ class AnthropicSurrogateSanitizeTest {
         return (MessageCreateParams) method.invoke(api, request);
     }
 
-    /** 出参里**全部**字符串载荷（system ＋ 各消息块）—— 净化只管这一层。 */
+    /**
+     * 出参里**全部**字符串载荷（system ＋ 各消息块）—— 净化只管这一层。
+     *
+     * <p>包 A-01 之前这里按 {@code isString()} / {@code asTextBlockParams()} **两分支**取值
+     * （当初两种形态都可能）；A-01 把顶层 {@code system} 无条件改成块数组后，字符串那一
+     * 分支**永远走不到** ⇒ 已删。若哪天它又变回字符串，本条断言会以
+     * {@code Optional.empty} 静默少收一个载荷 —— 但那时 A-01 的
+     * {@code AnthropicCacheControlWireTest} 会先红（它断块形态）。</p>
+     */
     private static List<String> payloads(MessageCreateParams params) {
         var out = new ArrayList<String>();
-        params.system().ifPresent(s -> {
-            if (s.isString()) {
-                out.add(s.asString());
-            } else {
-                s.asTextBlockParams().forEach(b -> out.add(b.text()));
-            }
-        });
+        params.system().ifPresent(s -> s.asTextBlockParams().forEach(b -> out.add(b.text())));
         for (var m : params.messages()) {
             for (var b : m.content().asBlockParams()) {
                 if (b.isText()) {
