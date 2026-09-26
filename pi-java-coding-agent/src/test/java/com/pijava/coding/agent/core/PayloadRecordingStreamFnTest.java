@@ -102,11 +102,20 @@ class PayloadRecordingStreamFnTest {
             // Request payload: model, systemPrompt, messages with role/content, tools, limits.
             var payload = request.get("payload");
             assertThat(payload.get("model").asText()).isEqualTo("faux-payload/hello");
-            // 系统提示是请求上的独立字段（pi 的 Context.systemPrompt），不进消息列表 ——
-            // 所以 messages[0] 是用户消息，而不是合成出来的 system 消息。
+            // 系统提示是请求上的独立字段（pi 的 Context.systemPrompt），
+            // ⚠️ 但 messages[0] 自包 A3 起**不再**是用户消息：pi 的
+            // `createMutableAgentState`（agent.ts:84-85）在会话起点把「系统提示 ＋ 工具」
+            // 折成一条**前导系统消息**塞进 `state.messages`，java 的
+            // `PiLaneEngine.startPass` 做同一件事（docs/51 §12.2 F11）⇒ 工作副本的
+            // 第一条就是它、内容就是系统提示（故 payload 里提示出现两次：
+            // 一次作为 `systemPrompt` 字段、一次作为这条消息的 content）。
             assertThat(payload.hasNonNull("systemPrompt")).isTrue();
             assertThat(payload.get("messages").isArray()).isTrue();
             assertThat(payload.get("messages").get(0).get("role").asText())
+                .isEqualTo("system");
+            assertThat(payload.get("messages").get(0).get("content").get(0).get("text").asText())
+                .isEqualTo(payload.get("systemPrompt").asText());
+            assertThat(payload.get("messages").get(1).get("role").asText())
                 .isEqualTo("user");
             assertThat(payload.get("tools").isArray()).isTrue();
             assertThat(payload.get("maxTokens").asInt()).isEqualTo(-1);

@@ -486,11 +486,9 @@ public final class PiLaneEngine {
         if (ctx.toolRegistry() == null) {
             return List.of();
         }
-        Set<String> names = ctx.activeTools().get().stream()
+        var names = ctx.activeTools().get().stream()
             .map(AgentTool::name).collect(Collectors.toSet());
-        return ctx.toolRegistry().all().stream()
-            .filter(t -> names.contains(t.name()))
-            .toList();
+        return ctx.toolRegistry().activeOf(names);
     }
 
     private static List<Message> transcriptMessages(LaneState lane) {

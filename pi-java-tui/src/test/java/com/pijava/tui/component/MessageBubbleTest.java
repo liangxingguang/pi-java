@@ -131,7 +131,7 @@ class MessageBubbleTest {
     @Test
     void metadataKindsRenderIconAndColor() {
         for (var kind : new MetaKind[] {MetaKind.MODEL_CHANGE, MetaKind.THINKING_LEVEL,
-                MetaKind.ACTIVE_TOOLS, MetaKind.COMPACTION, MetaKind.BRANCH, MetaKind.CUSTOM}) {
+                MetaKind.COMPACTION, MetaKind.BRANCH, MetaKind.CUSTOM}) {
             var lines = MessageBubble.lines(new ChatMessage.System("hello", kind));
             assertThat(lines).hasSize(1);
             assertThat(lines.get(0).markup()).isEqualTo(kind.icon() + " hello");
@@ -147,9 +147,6 @@ class MessageBubbleTest {
         assertThat(ChatMessage.from(new Entry.ThinkingLevelChange(
                 "t", 0, null, null, "high")))
             .isEqualTo(new ChatMessage.System("Thinking: high", MetaKind.THINKING_LEVEL));
-        assertThat(ChatMessage.from(new Entry.ActiveToolsChange(
-                "a", 0, null, null, List.of("bash", "write"))))
-            .isEqualTo(new ChatMessage.System("Tools: bash, write", MetaKind.ACTIVE_TOOLS));
         assertThat(ChatMessage.from(new Entry.Compaction(
                 "c", 0, null, null, "kept 3 msgs", null, List.of(), 100, null, null)))
             .isEqualTo(new ChatMessage.System(

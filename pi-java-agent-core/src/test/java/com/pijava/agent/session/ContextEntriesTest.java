@@ -142,7 +142,6 @@ class ContextEntriesTest {
             message("a", null, "user", "q"),
             modelChange("mc", "a"),
             new Entry.ThinkingLevelChange("tlc", 0, "a", Instant.EPOCH, "high"),
-            new Entry.ActiveToolsChange("atc", 0, "a", Instant.EPOCH, List.of()),
             new Entry.Custom("c", 0, "a", Instant.EPOCH, "type", java.util.Map.of()));
         var msgs = ContextEntries.toMessages(path);
         assertThat(msgs).hasSize(1);
@@ -277,12 +276,20 @@ class ContextEntriesTest {
             new Message.UserMessage(List.of(new ContentBlock.TextContent("after"))));
     }
 
-    /** {@code Entry.ActiveToolsChange} 在 A1 里仍然不产消息（A3 的工具增删语义未裁决）。 */
+    /**
+     * 工具增删**不是** entry（包 A3 的裁决 R2，{@code docs/51 §9}）：{@code Entry.ActiveToolsChange}
+     * 已删，这条线走的是系统消息的 {@code toolsAdded}/{@code toolsRemoved} ⇒ 由
+     * {@code Message.SystemMessage} 那一支承载（见 {@code toolsAdded} 相关用例）。
+     */
     @Test
-    void activeToolsChangeStillProducesNoMessage() {
-        var change = new Entry.ActiveToolsChange("t-1", 0, null, Instant.EPOCH,
-            List.of("bash"));
+    void toolStateChangesRideOnSystemMessagesNotEntries() {
+        var change = new Message.SystemMessage("", Instant.EPOCH, java.util.Map.of(),
+            List.of(new com.pijava.ai.api.ToolDefinition("bash", "run", java.util.Map.of())),
+            List.of());
 
-        assertThat(ContextEntries.toMessages(List.<Entry>of(change))).isEmpty();
+        var messages = ContextEntries.toMessages(List.<Entry>of(
+            new Entry.Message("t-1", 0, null, Instant.EPOCH, change, null)));
+
+        assertThat(messages).containsExactly(change);
     }
 }

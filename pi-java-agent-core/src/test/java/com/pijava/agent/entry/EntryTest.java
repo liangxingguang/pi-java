@@ -60,15 +60,6 @@ class EntryTest {
     }
 
     @Test
-    void activeToolsChangeEntryDefensiveCopy() {
-        var tools = new java.util.ArrayList<>(List.of("bash", "read"));
-        var entry = new Entry.ActiveToolsChange("id-1", 3L, "parent",
-            Instant.now(), tools);
-        tools.clear();
-        assertThat(entry.activeToolNames()).containsExactly("bash", "read");
-    }
-
-    @Test
     void compactionEntry() {
         var entry = new Entry.Compaction("id-1", 4L, "parent", Instant.now(),
             "summary", "kept-1", List.of(), 100,

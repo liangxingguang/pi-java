@@ -39,8 +39,6 @@ final class EntryJsonCodec {
                 JsonlCodec.requireString(node, "modelId"));
             case "thinking_level_change" -> new Entry.ThinkingLevelChange(id, seq, parentId, timestamp,
                 JsonlCodec.requireString(node, "thinkingLevel"));
-            case "active_tools_change" -> new Entry.ActiveToolsChange(id, seq, parentId, timestamp,
-                stringList(node, "activeToolNames"));
             case "compaction" -> new Entry.Compaction(id, seq, parentId, timestamp,
                 JsonlCodec.requireString(node, "summary"),
                 JsonlCodec.optionalString(node, "firstKeptEntryId"),
@@ -81,21 +79,6 @@ final class EntryJsonCodec {
             return new CustomMessageContent.Blocks(blocks);
         }
         throw JsonlCodec.DecodeError.schema("has invalid content");
-    }
-
-    static List<String> stringList(JsonNode node, String field) {
-        JsonNode value = node.get(field);
-        if (value == null || !value.isArray()) {
-            throw JsonlCodec.DecodeError.schema("has invalid " + field);
-        }
-        var list = new java.util.ArrayList<String>(value.size());
-        for (var item : value) {
-            if (!item.isTextual()) {
-                throw JsonlCodec.DecodeError.schema("has invalid " + field);
-            }
-            list.add(item.textValue());
-        }
-        return list;
     }
 
     static com.pijava.ai.Usage decodeUsage(JsonNode node) {

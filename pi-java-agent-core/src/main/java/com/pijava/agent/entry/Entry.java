@@ -19,6 +19,15 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
  *
  * <p>Optional pi fields ({@code terminate}/{@code details}/{@code usage}/
  * {@code data}) are omitted from JSON when {@code null}.</p>
+ *
+ * <p>⚠️ <b>没有 {@code active_tools_change} 这个变体</b>（包 A3 的裁决 R2，{@code docs/51 §9}）。
+ * pi 主线**从不发射**它 —— {@code git grep active_tools_change} 在 {@code packages/agent/src} ＋
+ * {@code packages/coding-agent/src}（排除 {@code harness/}）零命中，它只活在
+ * {@code harness/session/jsonl/legacy-v3.ts}（v3 会话导入器）里，而 {@code docs/harness.md:1455}
+ * 明写那三个 legacy 节点「disappear from the tree」。⇒ <b>工具增删状态线在 pi 里就是系统消息</b>
+ * （{@code Message.SystemMessage} 的 {@code toolsAdded}/{@code toolsRemoved}），
+ * 不是一条 entry。此前本仓带着这个只读形状（无生产者、无消费者、{@code ContextEntries} 也不投影它），
+ * 它只会继续误导「工具状态线是一条 entry」。</p>
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
@@ -26,7 +35,6 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
     @JsonSubTypes.Type(value = Entry.Message.class, name = "message"),
     @JsonSubTypes.Type(value = Entry.ModelChange.class, name = "model_change"),
     @JsonSubTypes.Type(value = Entry.ThinkingLevelChange.class, name = "thinking_level_change"),
-    @JsonSubTypes.Type(value = Entry.ActiveToolsChange.class, name = "active_tools_change"),
     @JsonSubTypes.Type(value = Entry.Compaction.class, name = "compaction"),
     @JsonSubTypes.Type(value = Entry.BranchSummary.class, name = "branch_summary"),
     @JsonSubTypes.Type(value = Entry.Custom.class, name = "custom"),
@@ -52,7 +60,6 @@ public sealed interface Entry {
             case Message m -> "message";
             case ModelChange mc -> "model_change";
             case ThinkingLevelChange tlc -> "thinking_level_change";
-            case ActiveToolsChange atc -> "active_tools_change";
             case Compaction c -> "compaction";
             case BranchSummary bs -> "branch_summary";
             case Custom c -> "custom";
@@ -67,8 +74,6 @@ public sealed interface Entry {
             case ModelChange e -> new ModelChange(e.id(), seq, parentId, timestamp, e.provider(), e.modelId());
             case ThinkingLevelChange e ->
                 new ThinkingLevelChange(e.id(), seq, parentId, timestamp, e.thinkingLevel());
-            case ActiveToolsChange e ->
-                new ActiveToolsChange(e.id(), seq, parentId, timestamp, e.activeToolNames());
             case Compaction e -> new Compaction(e.id(), seq, parentId, timestamp, e.summary(),
                 e.firstKeptEntryId(), e.retainedTail(), e.tokensBefore(), e.details(), e.usage());
             case BranchSummary e -> new BranchSummary(e.id(), seq, parentId, timestamp, e.fromId(),
@@ -115,20 +120,6 @@ public sealed interface Entry {
         Instant timestamp,
         String thinkingLevel
     ) implements Entry {
-    }
-
-    /** The set of active tools was changed. */
-    record ActiveToolsChange(
-        String id,
-        long seq,
-        String parentId,
-        Instant timestamp,
-        List<String> activeToolNames
-    ) implements Entry {
-        /** Defensively copies {@code activeToolNames}. */
-        public ActiveToolsChange {
-            activeToolNames = List.copyOf(activeToolNames);
-        }
     }
 
     /** A context compaction occurred. */

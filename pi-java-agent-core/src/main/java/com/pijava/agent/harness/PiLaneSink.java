@@ -509,7 +509,25 @@ final class PiLaneSink implements PiLoop.Sink {
         span.close();
     }
 
+    /**
+     * 本次请求带的工具数 —— **生效子集**，不是注册表规模。
+     *
+     * <p>包 A3 的 R6（{@code docs/51 §9}）：设计稿要求「实测后定，不许凭直觉选」。
+     * 实测的结论是 <b>pi 侧没有这个属性</b> —— {@code git grep toolCount} 在 pi 的
+     * {@code packages/} 下零命中（只有 tui 的一个同名局部量），pi 的 {@code llm.request}
+     * 跨度里既没有 {@code toolCount} 也没有 {@code messageCount}。⇒ 本字段是 **pi-java 的
+     * 扩展**（{@code docs/31 §8.28} 的口径：adapter 比 pi 多，不是缺口），没有可对齐的 pi 真值
+     * ⇒ 定义由我们负责，正确答案是「这次请求带了多少工具」。
+     *
+     * <p>⚠️ 于是这里从 {@code all().size()} 改成生效子集：注册表里有 20 个工具、本次只装载 5 个时，
+     * 旧写法记 20。A3b 之后请求级工具表由转录重放决定、收敛到生效集
+     * （{@code declareToolChanges} 的终点），所以生效集才是对的那个数。</p>
+     */
     private int toolCount() {
-        return ctx.toolRegistry() == null ? 0 : ctx.toolRegistry().toToolDefinitions().size();
+        if (ctx.toolRegistry() == null) {
+            return 0;
+        }
+        var names = ctx.activeTools().get().stream().map(tool -> tool.name()).toList();
+        return ctx.toolRegistry().activeOf(names).size();
     }
 }

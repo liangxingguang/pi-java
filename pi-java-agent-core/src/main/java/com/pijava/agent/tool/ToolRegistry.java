@@ -55,6 +55,23 @@ public class ToolRegistry {
         return List.copyOf(tools.values());
     }
 
+    /**
+     * 注册表里**名字在 {@code names} 中**的那一子集 —— pi 的 {@code selectedTools} 过滤。
+     *
+     * <p>两处共用（包 A3 的 R6）：{@code PiLaneEngine.activeTools} 用它装配 {@code Context}
+     * 的工具表，{@code PiLaneSink.toolCount} 用它记账。此前记账读的是 {@code all().size()}
+     * —— 那是**注册表规模**，不是「本次请求带了多少工具」，工具装载变化后这个数不跟着动。</p>
+     *
+     * <p>⚠️ 顺序跟注册表（{@code tools} 是 {@code LinkedHashMap}），不跟 {@code names}
+     * ——{@code names} 是 {@code Set}，让它的迭代序渗进请求会引入不可复现的线格
+     * （与 pi 的 {@code names.flatMap(registry.get)} 同义：pi 跟 {@code names}，
+     * 但 pi 的 {@code selectedTools} 是有序数组；java 侧以注册表序为稳定源）。</p>
+     */
+    public List<AgentTool<?, ?>> activeOf(Collection<String> names) {
+        var active = new java.util.HashSet<String>(names);
+        return tools.values().stream().filter(tool -> active.contains(tool.name())).toList();
+    }
+
     /** Remove all registered tools. */
     public void clear() {
         tools.clear();

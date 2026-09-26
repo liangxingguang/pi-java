@@ -46,9 +46,6 @@ public sealed interface ChatMessage {
             case Entry.ThinkingLevelChange change ->
                 new System("Thinking: " + change.thinkingLevel(),
                     MetaKind.THINKING_LEVEL);
-            case Entry.ActiveToolsChange change ->
-                new System("Tools: " + String.join(", ", change.activeToolNames()),
-                    MetaKind.ACTIVE_TOOLS);
             case Entry.Compaction compaction ->
                 new System("Compacted context: " + compaction.summary(),
                     MetaKind.COMPACTION);

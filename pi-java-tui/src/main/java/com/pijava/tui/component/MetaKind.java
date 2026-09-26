@@ -18,8 +18,6 @@ public enum MetaKind {
     MODEL_CHANGE("⚙", Color.hex("#7dcfff")),
     /** Thinking level was changed ({@code Entry.ThinkingLevelChange}). */
     THINKING_LEVEL("🧠", Color.hex("#bb9af7")),
-    /** The active tool set was changed ({@code Entry.ActiveToolsChange}). */
-    ACTIVE_TOOLS("🔧", Color.hex("#7aa2f7")),
     /** Context was compacted ({@code Entry.Compaction}). */
     COMPACTION("🗜", Color.hex("#e0af68")),
     /** A branch summary was generated ({@code Entry.BranchSummary}). */
