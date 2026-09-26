@@ -329,6 +329,43 @@ class ModelsJsonConfigTest {
         assertThat(absent.compat().supportsStrictMode()).isNull();
     }
 
+    /**
+     * <b>A-01</b>：两个 cache 门从 models.json 读进 {@link com.pijava.ai.catalog.ModelCompat}。
+     *
+     * <p>与上面那条同形：缺席必须保持 {@code null}（＝「用户没写」），**不能**在
+     * {@code compatOf} 里就塌成 {@code true} —— 缺省由解析层按车道补
+     * （{@code forAnthropic} 的 {@code ?? true}），写死在这里会让 A-16 的逐字段合并失去
+     * 「有没有写过」这个信息。</p>
+     *
+     * <p>⚠️ 与 {@code supportsTemperature} 的处理**刻意不同**：那一位是原始
+     * {@code boolean}，所以 {@code compatOf} 必须当场给值（{@code ?? true}）；这两位是
+     * {@code Boolean}，保持三态。</p>
+     */
+    @Test
+    void readsTheTwoCacheGatesFromCompatBlock() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "anthropic-messages",
+              "models": [
+                {"id": "written", "compat": {
+                  "supportsLongCacheRetention": false,
+                  "supportsCacheControlOnTools": false
+                }},
+                {"id": "absent"}
+              ]
+            }}}
+            """);
+
+        var written = config.catalog().find(ModelId.of("relay", "written")).orElseThrow();
+        assertThat(written.compat().supportsLongCacheRetention()).isFalse();
+        assertThat(written.compat().supportsCacheControlOnTools()).isFalse();
+
+        var absent = config.catalog().find(ModelId.of("relay", "absent")).orElseThrow();
+        assertThat(absent.compat().supportsLongCacheRetention()).isNull();
+        assertThat(absent.compat().supportsCacheControlOnTools()).isNull();
+    }
+
     /** <b>A7</b>：{@code compat.supportsTemperature} 缺席 ≙ <b>{@code true}</b>（与 B20 同形的方向钉）。 */
     @Test
     void readsSupportsTemperatureFromCompatBlock() {

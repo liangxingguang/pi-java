@@ -137,7 +137,11 @@ public final class ModelsJsonSchema {
         @JsonProperty("maxTokensField") String maxTokensField,
         @JsonProperty("supportsStore") Boolean supportsStore,
         @JsonProperty("supportsDeveloperRole") Boolean supportsDeveloperRole,
-        @JsonProperty("supportsStrictMode") Boolean supportsStrictMode
+        @JsonProperty("supportsStrictMode") Boolean supportsStrictMode,
+        /** 包 A-01：{@code cacheRetention:"long"} 是否落成 Anthropic 的 {@code ttl:"1h"}；缺省 {@code true}。 */
+        @JsonProperty("supportsLongCacheRetention") Boolean supportsLongCacheRetention,
+        /** 包 A-01：是否把缓存断点挂到工具表末项；缺省 {@code true}。置 {@code false} 只撤工具那一处。 */
+        @JsonProperty("supportsCacheControlOnTools") Boolean supportsCacheControlOnTools
     ) {}
 
     /**

@@ -206,6 +206,17 @@ package com.pijava.ai.catalog;
  *        （{@code azure-openai-responses.ts:296/319}）⇒ 由
  *        {@link CompatResolver#forResponses} 的形参把车道缺省喂进来，本组件保持三态
  *        （{@code null} ＝「按车道缺省」）。</p>
+ * @param supportsLongCacheRetention pi {@code compat.supportsLongCacheRetention}（包 A-01）：
+ *        是否允许 `cacheRetention:"long"` 落成 Anthropic 的 {@code ttl:"1h"}。缺席
+ *        （{@code null}）≙ pi 的 {@code ?? true} —— 本组件**不**参与「断点发不发」的判断，
+ *        只控 ttl（{@code anthropic-messages.ts:79-82}）。⚠️ pi 的生成目录里**没有任何
+ *        anthropic 车道的模型**写过这个键（实测 `anthropic.json` 零命中，写它的全是
+ *        completions 车道：baseten / together / xai 等）⇒ 内置目录无需标注，
+ *        {@code models.json} 仍可覆盖。
+ * @param supportsCacheControlOnTools pi {@code compat.supportsCacheControlOnTools}（包 A-01）：
+ *        是否把断点挂到工具表末项上。缺席 ≙ {@code ?? true}。置 {@code false} 时**只**撤
+ *        工具那一处，{@code system} 与消息表照挂（pi {@code :1114} 的门只包住
+ *        {@code toolCacheControl}）。
  */
 public record ModelCompat(boolean allowEmptySignature,
                           Boolean requiresReasoningContentOnAssistantMessages,
@@ -220,7 +231,39 @@ public record ModelCompat(boolean allowEmptySignature,
                           MaxTokensField maxTokensField,
                           Boolean supportsStore,
                           Boolean supportsDeveloperRole,
-                          Boolean supportsStrictMode) {
+                          Boolean supportsStrictMode,
+                          Boolean supportsLongCacheRetention,
+                          Boolean supportsCacheControlOnTools) {
+
+    /**
+     * 十四参便捷构造（包 A-01 之前的**规范**构造 —— 那时组件就这十四个）：
+     * 包 A-01 新增的两个缺席 —— 两者 pi 的缺省都是 {@code true}，但这里保持 {@code null}
+     * （≙ pi 的 {@code undefined}）而**不是** {@code true}，因为缺席会被
+     * {@link CompatResolver} 补成车道缺省；在解析层之外直接读 {@code null} 的代码会
+     * NPE —— 这正是不许在车道里直接读 compat 的理由之一。保留该形态使包 A-01 之前的
+     * 构造点**零改签**。
+     */
+    public ModelCompat(boolean allowEmptySignature,
+                       Boolean requiresReasoningContentOnAssistantMessages,
+                       boolean supportsFinishReason,
+                       boolean forceAdaptiveThinking,
+                       Boolean supportsMidConvoSystemMessages,
+                       Boolean supportsMidConvoToolAdditions,
+                       Boolean supportsMidConvoToolChanges,
+                       Boolean supportsAdditionalTools,
+                       Boolean supportsToolSearch,
+                       boolean supportsTemperature,
+                       MaxTokensField maxTokensField,
+                       Boolean supportsStore,
+                       Boolean supportsDeveloperRole,
+                       Boolean supportsStrictMode) {
+        this(allowEmptySignature, requiresReasoningContentOnAssistantMessages,
+             supportsFinishReason, forceAdaptiveThinking, supportsMidConvoSystemMessages,
+             supportsMidConvoToolAdditions, supportsMidConvoToolChanges,
+             supportsAdditionalTools, supportsToolSearch,
+             supportsTemperature, maxTokensField, supportsStore, supportsDeveloperRole,
+             supportsStrictMode, null, null);
+    }
 
     /**
      * 九参便捷构造（包 A7 之前的**规范**构造 —— 那时组件就这九个）：

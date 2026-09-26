@@ -330,7 +330,12 @@ public final class ModelsJsonConfig {
             maxTokensFieldOf(providerId, model.id(), def.maxTokensField()),
             def.supportsStore(),
             def.supportsDeveloperRole(),
-            def.supportsStrictMode());
+            def.supportsStrictMode(),
+            // 包 A-01：两个 cache 门**原样透传可空值**（不像 `supportsTemperature` 那样在这里
+            // 就塌成 true）—— 它们的缺省由**解析层**按车道补（`forAnthropic` 的 `?? true`），
+            // 与 supportsStore/supportsDeveloperRole/supportsStrictMode 同形。
+            def.supportsLongCacheRetention(),
+            def.supportsCacheControlOnTools());
     }
 
     /**

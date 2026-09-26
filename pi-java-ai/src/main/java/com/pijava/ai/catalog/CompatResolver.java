@@ -1,6 +1,7 @@
 package com.pijava.ai.catalog;
 
 import java.util.Locale;
+import java.util.Optional;
 
 /**
  * pi 的五份 per-api compat 解析函数在 java 上的**合一**实现 ——
@@ -97,6 +98,12 @@ public final class CompatResolver {
             useMaxTokens ? MaxTokensField.MAX_TOKENS : MaxTokensField.MAX_COMPLETION_TOKENS,
             !isNonStandard,
             isOpenRouterDeveloperRoleModel || (!isNonStandard && !isOpenRouter),
+            // ⚠️ completions 车道的两个 cache 门（`cacheControlFormat` /
+            // `supportsLongCacheRetention` 的 completions 面）不在包 A-01 范围 —— 它们
+            // 只在 OpenRouter ＋ `anthropic/*` 上生效，而本仓没有 OpenRouter chat 车道
+            // ⇒ **A-02 之前不可达**（docs/54 §1.2、docs/32 B105 的登记）。
+            null,
+            null,
             null);
     }
 
@@ -106,10 +113,14 @@ public final class CompatResolver {
      * <p>⚠️ 本车道<b>没有 URL 探测</b>：那条 {@code isOpenRouter} 只影响
      * {@code sendSessionAffinityHeaders}/{@code sessionAffinityFormat}，两个 java 都不携带
      * ⇒ 本方法只做「两个 mid-convo 标志的 {@code ?? false}」。</p>
+     *
+     * <p>包 A-01 另加两个 cache 相关的 {@code ?? true}（{@code :212-213}）：两者 pi 的缺省
+     * 都是真，且**只**被本车道读。</p>
      */
     public static ModelCompat forAnthropic(ModelInfo model) {
         return resolved(base(model), null, Boolean.FALSE, null, Boolean.FALSE,
-            null, null, null, null, null, null);
+            null, null, null, null, null, null,
+            Boolean.TRUE, Boolean.TRUE);
     }
 
     /**
@@ -122,7 +133,8 @@ public final class CompatResolver {
      */
     public static ModelCompat forResponses(ModelInfo model, boolean strictModeDefault) {
         return resolved(base(model), null, Boolean.FALSE, null, null,
-            Boolean.FALSE, Boolean.FALSE, null, null, null, strictModeDefault);
+            Boolean.FALSE, Boolean.FALSE, null, null, null, strictModeDefault,
+            null, null);
     }
 
     /**
@@ -132,7 +144,44 @@ public final class CompatResolver {
      */
     public static ModelCompat forMistral(ModelInfo model) {
         return resolved(base(model), null, Boolean.FALSE, null, null,
-            null, null, null, null, null, null);
+            null, null, null, null, null, null, null, null);
+    }
+
+    /**
+     * anthropic 车道的**缓存断点**：pi {@code getCacheControl}（{@code anthropic-messages.ts:69-83}）
+     * 与 {@code resolveCacheRetention}（{@code :60-67}）的合一。
+     *
+     * <pre>
+     * retention = 选项 ?? (PI_CACHE_RETENTION === "long" ? "long" : "short")
+     * none       → 无 cacheControl（Optional.empty）
+     * long       → ttl = supportsLongCacheRetention ? "1h" : 无
+     * short      → 无 ttl
+     * </pre>
+     *
+     * <p>⚠️ <b>两处判据都不做「宽松化」</b>：① {@code PI_CACHE_RETENTION} 与 pi 的
+     * {@code === "long"} 逐字对应 —— <b>只认字面 {@code "long"}</b>，大小写敏感、不 trim，
+     * {@code "long "} / {@code "Long"} / {@code "1h"} 一律落到 {@code short}（实测 P4b）；
+     * ② {@code supportsLongCacheRetention} 的缺省是 <b>{@code true}</b>（pi 的 {@code ?? true}）
+     * —— 与 {@code NONE} 的「用户没写 compat」是两回事，别把缺省写成假。</p>
+     *
+     * @param model        目标模型（{@code null} 时按缺省走：断点照发、无 ttl）
+     * @param requested    请求期选项（{@code Optional.empty()} ≙ pi 的 {@code undefined}）
+     * @param envRetention {@code PI_CACHE_RETENTION} 的**原始**取值（{@code null} ≙ 未设）
+     * @return 断点规格；{@link Optional#empty()} ≙ pi 的 {@code cacheRetention:"none"}
+     */
+    public static Optional<CacheBreakpointSpec> anthropicCacheControl(
+            ModelInfo model,
+            Optional<CacheRetention> requested,
+            String envRetention) {
+        var retention = requested.orElseGet(
+            () -> "long".equals(envRetention) ? CacheRetention.LONG : CacheRetention.SHORT);
+        if (retention == CacheRetention.NONE) {
+            return Optional.empty();
+        }
+        var compat = forAnthropic(model);
+        var oneHour = retention == CacheRetention.LONG
+            && Boolean.TRUE.equals(compat.supportsLongCacheRetention());
+        return Optional.of(new CacheBreakpointSpec(oneHour));
     }
 
     // ── 内部 ────────────────────────────────────────────────────
@@ -162,7 +211,9 @@ public final class CompatResolver {
                                         MaxTokensField maxTokensField,
                                         Boolean store,
                                         Boolean developerRole,
-                                        Boolean strictMode) {
+                                        Boolean strictMode,
+                                        Boolean longCacheRetention,
+                                        Boolean cacheControlOnTools) {
         return new ModelCompat(
             c.allowEmptySignature(),
             pick(c.requiresReasoningContentOnAssistantMessages(), reasoningContentRequired),
@@ -177,7 +228,9 @@ public final class CompatResolver {
             c.maxTokensField() != null ? c.maxTokensField() : maxTokensField,
             pick(c.supportsStore(), store),
             pick(c.supportsDeveloperRole(), developerRole),
-            pick(c.supportsStrictMode(), strictMode));
+            pick(c.supportsStrictMode(), strictMode),
+            pick(c.supportsLongCacheRetention(), longCacheRetention),
+            pick(c.supportsCacheControlOnTools(), cacheControlOnTools));
     }
 
     private static Boolean pick(Boolean explicit, Boolean detected) {
