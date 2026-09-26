@@ -1,5 +1,7 @@
 package com.pijava.ai.protocol;
 
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.SubmissionPublisher;
 
 import com.anthropic.client.AnthropicClient;
@@ -13,6 +15,8 @@ import com.anthropic.models.messages.StopReason;
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.AuthKind;
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.catalog.CacheRetention;
+import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
 
@@ -86,6 +90,25 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
             builder.baseUrl(options.baseUrl());
         }
         this.client = builder.build();
+        this.cacheRetention = retentionOf(options);
+    }
+
+    /**
+     * 从 {@code ApiOptions.extra} 读 {@code cacheRetention}。
+     *
+     * <p>两种来源都认：直接塞 {@link CacheRetention} 值（java 内代码走这条），或塞线格字符串
+     * （{@code models.json}／CLI 直给走这条）。与 {@code ResponsesOptions} 读
+     * {@code reasoningEffort} 的两分支同形。⚠️ 非法字符串经
+     * {@link CacheRetention#parse} 落成 <b>缺席</b>（不是 {@code SHORT}），
+     * 好让 {@code PI_CACHE_RETENTION} 仍能生效。</p>
+     */
+    private static Optional<CacheRetention> retentionOf(ApiOptions options) {
+        Map<String, Object> extra = options.extra();
+        Object raw = extra == null ? null : extra.get("cacheRetention");
+        if (raw instanceof CacheRetention retention) {
+            return Optional.of(retention);
+        }
+        return CacheRetention.parse(raw == null ? null : raw.toString());
     }
 
     /**
@@ -96,6 +119,24 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
 
     /** pi {@code anthropic-messages.ts:87} 的硬编码常量。 */
     private static final String CLAUDE_CODE_VERSION = "2.1.251";
+
+    /**
+     * pi 的缓存保留期环境变量（{@code anthropic-messages.ts:64}）。
+     *
+     * <p>取值判据是**严格相等**（{@code === "long"}），不做 trim／小写化 ——
+     * 那一份严格性在 {@link CompatResolver#anthropicCacheControl} 里，本类只负责读原文。</p>
+     */
+    private static final String CACHE_RETENTION_ENV = "PI_CACHE_RETENTION";
+
+    /**
+     * 包 A-01：请求期的 {@code cacheRetention} 选项（pi {@code StreamOptions.cacheRetention}）。
+     *
+     * <p>在**构造期**读一次 —— 车道是每请求新建的（{@code DefaultProviders.streamBlocking}
+     * 里的 {@code provider.createApi(...)}），所以这个时点与 pi 的「每次 stream 调用读一次」
+     * 等价（{@code docs/54 §3 F1}）。取值经 {@code ApiOptions.extra} 的字符串键过桥，
+     * 与 {@code ResponsesOptions}/{@code AzureOptions} 同形。</p>
+     */
+    private final Optional<CacheRetention> cacheRetention;
 
     @Override
     protected void streamInternal(StreamRequest request,
@@ -392,7 +433,11 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
     }
 
     private MessageCreateParams buildParams(StreamRequest request) {
-        return AnthropicRequestBuilder.buildParams(request);
+        // 包 A-01：断点规格在这里解析一次（三源的合并：请求期选项 ?? 环境变量 ?? "short"），
+        // 随后由 AnthropicRequestBuilder 翻成 SDK 形状并挂到三处落点上。
+        return AnthropicRequestBuilder.buildParams(request,
+            CompatResolver.anthropicCacheControl(request.model(), cacheRetention,
+                System.getenv(CACHE_RETENTION_ENV)));
     }
 
 }

@@ -42,14 +42,16 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
  * <p>⚠️ <b>与 pi 夹具的三处有意差异</b>：</p>
  *
  * <ul>
- *   <li><b>顶层 {@code system} 是字符串而不是块数组</b>（{@code docs/32} **B89**）：
- *       pi 的 {@code system} 恒为 {@code [{type:"text",…}]}，java 走 SDK 的
- *       {@code builder.system(String)} ⇒ 线上是 {@code "system":"…"}。块形态与
- *       {@code cache_control} 一并归 A-01。</li>
- *   <li><b>没有 {@code cache_control}</b>（A-01）：pi 的 oracle 断言第一个工具带
- *       {@code cache_control:{type:"ephemeral"}}、且断点可落在 {@code tool_addition}/
- *       {@code tool_removal} 上 —— java 侧 {@code docs/51 §4.4 ⑥} 无从落，
- *       本夹具只断言 {@code defer_loading} 的有无。</li>
+ *   <li>~~<b>顶层 {@code system} 是字符串而不是块数组</b>（{@code docs/32} **B89**）
+ *       —— ✅ 已随包 A-01 结案~~：{@code system} 现为 {@code [{type:"text",…}]} 块数组
+ *       （pi {@code :1077-1097}），块上带缓存断点。⚠️ 本文件那两处
+ *       {@code body.path("system")} 断言正是 B89 的**先红**（旧字符串形状下
+ *       {@code ArrayNode} 不存在，{@code path(…).asText()} 返回 {@code ""}）。</li>
+ *   <li>~~<b>没有 {@code cache_control}</b>（A-01）~~：✅ 已随包 A-01 落地 ——
+ *       pi 的 oracle 断言第一个工具带 {@code cache_control:{type:"ephemeral"}}、且断点可落在
+ *       {@code tool_addition}/{@code tool_removal} 上（{@code docs/51 §4.4 ⑥} 的那个落点）。
+ *       本夹具仍只断言 {@code defer_loading} 的有无 —— 断点的断言在
+ *       {@code AnthropicCacheControlWireTest}。</li>
  *   <li><b>{@code sections} 的 {@code null} 删除语义</b>（{@code docs/49 §9 R3①}）：
  *       夹具只用 content ＋ 一个非空 section。</li>
  * </ul>
@@ -89,7 +91,10 @@ class AnthropicToolChangesWireTest {
         var body = capture(nativeModel(), removalTranscript());
 
         assertThat(betas(body)).contains(BETA);
-        assertThat(body.path("system").asText()).isEqualTo("base prompt");
+        // 包 A-01（结案 B89）：顶层 `system` 是**块数组**（pi :1077-1097），块上带缓存断点。
+        assertThat(body.path("system").isArray()).isTrue();
+        assertThat(body.path("system").get(0).path("type").asText()).isEqualTo("text");
+        assertThat(body.path("system").get(0).path("text").asText()).isEqualTo("base prompt");
         // 三段式：初始（活跃）＋ 占位符（deferred）＋ 后续声明（deferred）。
         assertThat(toolNames(body)).containsExactly(
             "base_tool", "__pi_deferred_placeholder__", "late_tool");
@@ -211,7 +216,7 @@ class AnthropicToolChangesWireTest {
     void foldsUpdatesIntoTheSystemPromptWithoutNativeSupport() throws Exception {
         var body = capture(model(ModelCompat.NONE), removalTranscript());
 
-        assertThat(body.path("system").asText())
+        assertThat(body.path("system").get(0).path("text").asText())
             .isEqualTo("base prompt\n\nupdated guidance\n\n<rules>\nnew rules\n</rules>");
         assertThat(toolNames(body)).containsExactly("late_tool");
         assertThat(roleNames(body)).containsExactly("user");

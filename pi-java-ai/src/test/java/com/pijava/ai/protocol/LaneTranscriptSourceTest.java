@@ -44,9 +44,8 @@ class LaneTranscriptSourceTest {
     /**
      * pi {@code anthropic-messages.ts:1043-1044}：文本进顶层 {@code system}，消息被切出数组。
      *
-     * <p>⚠️ 本车道的 {@code system} 是**字符串**形态，pi 是 {@code [{type:"text",text:…}]}
-     * 块数组（实测：{@code docs/49} 的 PR-3 探针）。这是**既有**线格偏差，包 A2 不动它
-     * —— 新登记 F7（A-01 {@code cache_control} 会需要块形态）。</p>
+     * <p>包 A-01：{@code system} 是**块数组**（{@code [{type:"text",text:…}]}），与 pi 同形
+     * —— 这条在 A-01 之前是字符串（新登记 F7/B89），A-01 落地时本断言随之改块形态。</p>
      */
     @Test
     void anthropicLaneTakesSystemTextAndToolsFromTheTranscript() throws Exception {
@@ -56,7 +55,7 @@ class LaneTranscriptSourceTest {
                 List.of(prompt(), user("hi"))));
 
             var body = MAPPER.readTree(server.body());
-            assertThat(body.path("system").asText()).isEqualTo(PROMPT);
+            assertThat(body.path("system").get(0).path("text").asText()).isEqualTo(PROMPT);
             assertThat(body.path("tools")).hasSize(1);
             assertThat(body.path("tools").get(0).path("name").asText()).isEqualTo("lookup");
             assertThat(roles(body.path("messages"))).containsExactly("user");
@@ -141,7 +140,7 @@ class LaneTranscriptSourceTest {
      * pi 的 {@code resolveTranscript(context, undefined)} 走**折叠**支
      * （{@code transcript.ts:113-120}）—— 中途系统消息的文本并入头、消息本身消失。
      *
-     * <p>期望值取自 pi 的实测探针 PR-4（{@code docs/49 §7.6}）：{@code system} 为
+     * <p>期望值取自 pi 的实测探针 PR-4（{@code docs/49 §7.6}）：{@code system} 块的正文为
      * {@code "head\n\nmid"}，会话数组只剩两条 user。</p>
      */
     @Test
@@ -152,7 +151,7 @@ class LaneTranscriptSourceTest {
                 List.of(prompt("head"), user("a"), lateSystem("mid"), user("b"))));
 
             var body = MAPPER.readTree(server.body());
-            assertThat(body.path("system").asText()).isEqualTo("head\n\nmid");
+            assertThat(body.path("system").get(0).path("text").asText()).isEqualTo("head\n\nmid");
             assertThat(roles(body.path("messages"))).containsExactly("user", "user");
         }
     }

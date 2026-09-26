@@ -14,6 +14,7 @@ import com.pijava.agent.harness.RetrySettings;
 import com.pijava.agent.harness.StreamFn;
 import com.pijava.agent.harness.StreamOptions;
 import com.pijava.ai.Usage;
+import com.pijava.ai.catalog.CacheRetention;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
@@ -218,8 +219,14 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
     private Message.AssistantMessage produceOnce(List<Message> compressed, String previousSummary) {
         var user = new Message.UserMessage(
             List.of(new ContentBlock.TextContent(buildPrompt(compressed, previousSummary))));
+        // 包 A-01：摘要请求主动关缓存 —— pi 的 `completeSummarization` 逐字照抄
+        // （`coding-agent/src/core/compaction/compaction.ts:600-605` 的
+        // `cacheRetention: "none"`）：一次性的摘要与主会话前缀不同，给它写缓存条目
+        // 既无收益、又会与主会话的缓存竞争。⚠️ pi 同一处还发 `sessionId: … ?? uuidv7()`
+        // （routing id），那属于会话亲和线、本包不做（docs/54 §1.2 的 B103）。
         var options = new StreamOptions(
-            OptionalInt.empty(), OptionalDouble.empty(), Optional.empty());
+            OptionalInt.empty(), OptionalDouble.empty(), Optional.empty(),
+            Optional.of(CacheRetention.NONE));
         var toolCalls = new ArrayList<ContentBlock>();
         StringBuilder text = new StringBuilder();
         Usage[] usage = {null};

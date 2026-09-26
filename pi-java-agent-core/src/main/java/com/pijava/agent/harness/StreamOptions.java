@@ -4,6 +4,7 @@ import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
 
+import com.pijava.ai.catalog.CacheRetention;
 import com.pijava.ai.thinking.ThinkingLevel;
 
 /**
@@ -27,13 +28,28 @@ import com.pijava.ai.thinking.ThinkingLevel;
  * @param temperature  sampling temperature (empty = use model default)
  * @param reasoning    pi {@code SimpleStreamOptions.reasoning}；<b>空 = 不开思考</b>
  *                     （pi 的 {@code "off"} 在请求侧就是「不传」，见 {@code agent.ts:465}）
+ * @param cacheRetention pi {@code SimpleStreamOptions.cacheRetention}（包 A-01）；空 = 用
+ *                     pi 的缺省链（{@code PI_CACHE_RETENTION} ?? {@code "short"}）。
+ *                     ⚠️ pi 的 {@code SimpleStreamOptions} 还有 {@code sessionId} 与
+ *                     {@code env}，两者各有归属、本记录<b>不带</b>（{@code docs/54 §3 F2}）
  */
 public record StreamOptions(
     OptionalInt maxTokens,
     OptionalDouble temperature,
-    Optional<ThinkingLevel> reasoning
+    Optional<ThinkingLevel> reasoning,
+    Optional<CacheRetention> cacheRetention
 ) {
-    /** Default options: no max tokens, no temperature, no thinking. */
+    /**
+     * 三参便捷构造（包 A-01 之前的**规范**构造）：{@code cacheRetention} 缺席 ≙ pi 的
+     * {@code undefined} ⇒ 走缺省链。保留该形态使包 A-01 之前的三个构造点**零改签**。
+     */
+    public StreamOptions(OptionalInt maxTokens,
+                         OptionalDouble temperature,
+                         Optional<ThinkingLevel> reasoning) {
+        this(maxTokens, temperature, reasoning, Optional.empty());
+    }
+
+    /** Default options: no max tokens, no temperature, no thinking, default cache retention. */
     public static StreamOptions defaults() {
         return new StreamOptions(
             OptionalInt.empty(),

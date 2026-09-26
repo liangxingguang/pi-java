@@ -8,6 +8,7 @@ import com.pijava.agent.harness.RetryObserver;
 import com.pijava.agent.harness.RetrySettings;
 import com.pijava.agent.harness.StreamFn;
 import com.pijava.ai.api.StreamIterator;
+import com.pijava.ai.catalog.CacheRetention;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -224,5 +225,31 @@ class CompactionServiceTest {
         return new com.pijava.agent.entry.Entry.Message(
             java.util.UUID.randomUUID().toString(), 0, null,
             java.time.Instant.now(), message, false);
+    }
+
+    // ── 包 A-01：摘要请求主动关缓存 ──────────────────────────────
+
+    /**
+     * 摘要请求带 {@code cacheRetention: NONE}（pi {@code completeSummarization}，
+     * {@code coding-agent/src/core/compaction/compaction.ts:603}）。
+     *
+     * <p>为什么值得钉：这是 {@code none} 在**生产**上的唯一生产者。没有它，
+     * 「压缩关缓存」就只存在于夹具里 —— 而宿主那条通道
+     * （{@code DefaultProviders.cacheExtra}）已由 {@code DefaultProvidersTest} 钉住，
+     * 两端合起来才让 pi 的这条行为真的可观察。</p>
+     */
+    @Test
+    void summarizationDisablesCacheRetention() {
+        var seen = new ArrayList<com.pijava.agent.harness.StreamOptions>();
+        var generator = new LlmSummaryGenerator(
+            (m, c, o) -> {
+                seen.add(o);
+                return StreamIterator.from(success("## Goal\nx"));
+            }, () -> MODEL);
+
+        generator.summarize(ONE, null, null, 16_384);
+
+        assertThat(seen).hasSize(1);
+        assertThat(seen.get(0).cacheRetention()).contains(CacheRetention.NONE);
     }
 }

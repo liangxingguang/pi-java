@@ -99,8 +99,29 @@ public final class DefaultProviders {
                     () -> new IllegalStateException("Unknown provider: " + fallbackName));
             });
             return streamBlocking(provider, model, context, options,
-                apiOptions(args, model.provider(), settings, Credentials::resolveCredential));
+                apiOptions(args, model.provider(), settings, Credentials::resolveCredential,
+                    cacheExtra(options)));
         };
+    }
+
+    /**
+     * 包 A-01：把 {@link com.pijava.agent.harness.StreamOptions#cacheRetention()} 放进
+     * {@code ApiOptions.extra} 的字符串键。
+     *
+     * <p>车道是**每请求新建**的（{@code provider.createApi(...)} 在 {@code streamBlocking} 里），
+     * 所以这里逐请求传值不会与其它请求串味；读取点是
+     * {@code AnthropicMessagesApi.retentionOf}（与 {@code ResponsesOptions} 同形）。
+     * ⚠️ 键缺席 ≙ pi 的 {@code undefined} ⇒ 车道回落到 {@code PI_CACHE_RETENTION} 与
+     * {@code "short"}，<b>不要</b>在这里塞默认值，否则会把环境变量静默屏蔽。</p>
+     *
+     * <p>包可见是为了夹具（{@code DefaultProvidersTest}）—— 这是「宿主 → 车道」这条
+     * 通道在宿主侧的唯一一环，变异掉它（恒返回空 map）应当恰有夹具变红。</p>
+     */
+    static Map<String, Object> cacheExtra(
+            com.pijava.agent.harness.StreamOptions options) {
+        return options.cacheRetention()
+            .<Map<String, Object>>map(r -> Map.of("cacheRetention", r.wireName()))
+            .orElseGet(Map::of);
     }
 
     private static StreamIterator streamBlocking(
@@ -148,6 +169,18 @@ public final class DefaultProviders {
      */
     static ApiOptions apiOptions(Args args, String providerName, Settings settings,
                                  Function<String, Optional<RecordedCredential>> credentialResolver) {
+        return apiOptions(args, providerName, settings, credentialResolver, Map.of());
+    }
+
+    /**
+     * 四参形态 ＋ 逐请求的 extra（包 A-01 起）。四参重载保持原签名，使既有调用点零改签。
+     *
+     * <p>⚠️ {@code extra} 是**与 {@code StreamRequest.extra} 不同的**那条通道：后者在本仓的
+     * 生产路径上恒为空（{@code docs/54 §3 F1} 的登记 B107）。</p>
+     */
+    static ApiOptions apiOptions(Args args, String providerName, Settings settings,
+                                 Function<String, Optional<RecordedCredential>> credentialResolver,
+                                 Map<String, Object> extra) {
         var baseUrl = firstNonBlank(args.baseUrl(), settings == null ? null : settings.defaultBaseUrl);
         var apiKey = firstNonBlank(args.apiKey(), settings == null ? null : settings.defaultApiKey);
         var kind = AuthKind.API_KEY;
@@ -160,7 +193,7 @@ public final class DefaultProviders {
         }
         return new ApiOptions(baseUrl == null ? "" : baseUrl,
             apiKey == null ? "" : apiKey,
-            java.time.Duration.ofSeconds(120), 2, Map.of(), kind);
+            java.time.Duration.ofSeconds(120), 2, extra == null ? Map.of() : extra, kind);
     }
 
     private static String firstNonBlank(String first, String second) {

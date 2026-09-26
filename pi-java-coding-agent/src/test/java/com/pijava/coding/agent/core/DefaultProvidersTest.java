@@ -14,6 +14,7 @@ import com.pijava.ai.api.ProviderApi;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.BuiltinCatalog;
+import com.pijava.ai.catalog.CacheRetention;
 import com.pijava.ai.catalog.ModelCatalog;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
@@ -276,5 +277,37 @@ class DefaultProvidersTest {
         @Override public Message send(StreamRequest request, ApiOptions options) {
             throw new UnsupportedOperationException("RE-P1 只观测适配器选择");
         }
+    }
+
+    // ── 包 A-01：「宿主 → 车道」的选项通道（宿主侧唯一一环）──────────────
+
+    /**
+     * 请求期的 {@code cacheRetention} 变成 {@code ApiOptions.extra} 的字符串键。
+     *
+     * <p>这条通道的**两端**各有夹具：本文件钉宿主侧的这一环（{@code StreamOptions} →
+     * {@code extra}），{@code AnthropicCacheControlWireTest} 钉车道侧的读取与落线。
+     * 少了任一端，「压缩摘要的 none 到不了车道」都不算被守住（{@code docs/53 §12.7} 的
+     * 「通道没夹具」是零红成因之一）。</p>
+     */
+    @Test
+    void cacheExtraCarriesTheRetentionAsAWireName() {
+        assertThat(DefaultProviders.cacheExtra(options(CacheRetention.NONE)))
+            .containsEntry("cacheRetention", "none");
+        assertThat(DefaultProviders.cacheExtra(options(CacheRetention.LONG)))
+            .containsEntry("cacheRetention", "long");
+        assertThat(DefaultProviders.cacheExtra(options(CacheRetention.SHORT)))
+            .containsEntry("cacheRetention", "short");
+    }
+
+    @Test
+    void cacheExtraIsEmptyWhenNoRetentionWasRequested() {
+        // ⚠️ 缺席必须**空着**：车道据此回落到 PI_CACHE_RETENTION 与 "short"。
+        // 在这里塞一个默认值会把环境变量静默屏蔽（docs/54 §4.4）。
+        assertThat(DefaultProviders.cacheExtra(StreamOptions.defaults())).isEmpty();
+    }
+
+    private static StreamOptions options(CacheRetention retention) {
+        return new StreamOptions(java.util.OptionalInt.of(64), java.util.OptionalDouble.empty(),
+            java.util.Optional.empty(), java.util.Optional.of(retention));
     }
 }
