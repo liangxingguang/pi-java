@@ -10,6 +10,7 @@ import com.openai.models.responses.ResponseFunctionCallOutputItem;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -58,7 +59,7 @@ class OpenAIResponsesImageContentTest {
             throws Exception {
         var request = new StreamRequest(model, null, messages, List.of(), 100, 0.5, Map.of());
         return ResponsesMessageConverter.buildParams(request,
-            ResponsesOptions.from(ApiOptions.defaults()), "gpt-5-mini", "openai-responses", false);
+            ResponsesOptions.from(ApiOptions.defaults()), "gpt-5-mini", "openai-responses", CompatResolver.forResponses(request.model(), false));
     }
 
     /** 工具结果那一项的 output 压成 {@code text:…} ／ {@code image:url:detail} ／ {@code string:…}。 */

@@ -29,6 +29,9 @@ import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.message.MessageTexts;
 import com.pijava.ai.api.TransformMessages;
+import com.pijava.ai.catalog.CompatResolver;
+import com.pijava.ai.catalog.MaxTokensField;
+import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -81,10 +84,18 @@ final class OpenAICompletionsMessageConverter {
      */
     static ChatCompletionCreateParams buildParams(StreamRequest request, String apiName,
                                                   String baseUrl) {
+        // 包 A7：车道的 compat 在这里**解析一次**（pi `getCompat(model)` 的落点，
+        // `openai-completions.ts:1685`），下面的读点全部改读它 —— 探测用的是车道传进来的
+        // **有效** baseUrl（与 pi 的 `model.baseUrl` 有一处刻意的形状偏差，docs/53 §9 R2）。
+        var compat = CompatResolver.forCompletions(request.model(), baseUrl);
+        // pi :1225 —— 指令消息的角色。非推理模型即使端点支持 developer 也一律 system。
+        var instructionRoleIsDeveloper = request.model() != null
+            && request.model().capabilities().contains(ModelCapability.THINKING)
+            && Boolean.TRUE.equals(compat.supportsDeveloperRole());
         var builder = ChatCompletionCreateParams.builder()
                 .model(request.modelId().modelName());
 
-        var transcript = Transcripts.resolveTranscript(request.transcript(), request.model());
+        var transcript = Transcripts.resolveTranscript(request.transcript(), compat);
         // 系统文本来自**前导系统消息**（pi :1249 的 `i === 0` 支 → `getSystemMessageText`）。
         // pi 在消息循环里**就地**把它转成 instruction 消息；折叠后头必然在下标 0，
         // 故这里先发它、循环里再跳过它 —— 同一线格顺序。
@@ -93,7 +104,8 @@ final class OpenAICompletionsMessageConverter {
             ? "" : MessageTexts.getSystemMessageText(initialSystemMessage);
         if (!systemText.isEmpty()) {
             // pi :1251 —— instruction/system 文本净化。
-            builder.addSystemMessage(SanitizeUnicode.surrogates(systemText));
+            addInstructionMessage(builder, SanitizeUnicode.surrogates(systemText),
+                instructionRoleIsDeveloper);
         }
 
         // 共享预通道必须先于本车道的映射跑（pi openai-completions.ts:1212 在
@@ -105,10 +117,8 @@ final class OpenAICompletionsMessageConverter {
 
         // 包 A3（docs/51 §4.4）：**两个标志都要**（pi :1223 的同式 —— 后者注释明写
         // *Requires* 前者），且判据是 `=== true` ⇒ 缺席与 false 同义。
-        var compat = request.model() == null ? null : request.model().compat();
         var transcriptTools = Transcripts.resolveTranscriptTools(transcript.messages(),
-            compat != null
-                && Boolean.TRUE.equals(compat.supportsMidConvoSystemMessages())
+            Boolean.TRUE.equals(compat.supportsMidConvoSystemMessages())
                 && Boolean.TRUE.equals(compat.supportsMidConvoToolAdditions()));
 
         for (int i = 0; i < messages.size(); i++) {
@@ -130,16 +140,19 @@ final class OpenAICompletionsMessageConverter {
                             .toList()));
                 }
                 // pi :1249 —— 非前导走**分段差分更新**渲染（不是完整提示）。
+                // ⚠️ 角色与前面那条**同源**：pi 的 `instructionRole` 一处算出、两处用
+                // （`:1225` 定义，`:1253` 与 `:1249` 都用它）。
                 var update = MessageTexts.renderSystemMessageUpdate(system);
                 if (!update.isEmpty()) {
-                    builder.addSystemMessage(SanitizeUnicode.surrogates(update));
+                    addInstructionMessage(builder, SanitizeUnicode.surrogates(update),
+                        instructionRoleIsDeveloper);
                 }
                 continue;
             }
             if (msg instanceof Message.UserMessage user) {
                 addUserMessage(builder, user);
             } else if (msg instanceof Message.AssistantMessage assistant) {
-                addAssistantMessage(builder, assistant, request.model(), baseUrl);
+                addAssistantMessage(builder, assistant, request.model(), compat);
             } else if (msg instanceof Message.ToolResultMessage) {
                 // pi :1398-1455 —— **连续的** toolResult 合成一组：各自落一条 tool 消息，
                 // 但图片**合并收集**进**同一条**合成 user 消息（不是一条结果配一条）。
@@ -181,10 +194,36 @@ final class OpenAICompletionsMessageConverter {
             .includeUsage(true)
             .build());
 
-        if (request.maxTokens() > 0) builder.maxCompletionTokens(request.maxTokens());
+        // pi :832-834 —— 支持就**显式**关掉服务端留存（注意值是 `false`，不是把开关原样发出去）。
+        if (Boolean.TRUE.equals(compat.supportsStore())) {
+            builder.store(false);
+        }
+        // pi :836-841 —— 输出上限的**字段名**随端点（非标准端点用 `max_tokens`）。
+        // 包 A7 之前这里恒发 `max_completion_tokens` ⇒ deepseek 一类的内置模型线格与 pi 不同。
+        if (request.maxTokens() > 0) {
+            if (compat.maxTokensField() == MaxTokensField.MAX_TOKENS) {
+                builder.maxTokens(request.maxTokens());
+            } else {
+                builder.maxCompletionTokens(request.maxTokens());
+            }
+        }
         if (request.temperature() >= 0) builder.temperature(request.temperature());
 
         return builder.build();
+    }
+
+    /**
+     * pi :1253（前导）与 {@code :1249}（中途更新）共用的一步：按 {@code instructionRole}
+     * 落一条指令消息。⚠️ 角色在 pi 里**一处算出、两处用**（{@code :1225} 定义）
+     * ⇒ 本仓也必须同源，否则「前导是 developer、中途是 system」这种半截形状会静默出现。
+     */
+    private static void addInstructionMessage(ChatCompletionCreateParams.Builder builder,
+                                              String text, boolean asDeveloperRole) {
+        if (asDeveloperRole) {
+            builder.addDeveloperMessage(text);
+        } else {
+            builder.addSystemMessage(text);
+        }
     }
 
     private static Map<String, JsonValue> toJsonValues(Map<String, Object> schema) {
@@ -250,12 +289,13 @@ final class OpenAICompletionsMessageConverter {
      * @param builder  the request builder
      * @param assistant the assistant message to serialize
      * @param model    the request's target model — its capabilities give pi's
-     *                 {@code model.reasoning}, its compat gives the explicit override
-     * @param baseUrl  the adapter's effective base URL, for the deepseek relay detection
+     *                 {@code model.reasoning}
+     * @param compat   the request's **resolved** compat ({@link CompatResolver}) — its
+     *                 {@code requiresReasoningContentOnAssistantMessages} drives rule (ii)
      */
     private static void addAssistantMessage(
             ChatCompletionCreateParams.Builder builder,
-            Message.AssistantMessage assistant, ModelInfo model, String baseUrl) {
+            Message.AssistantMessage assistant, ModelInfo model, ModelCompat compat) {
         var text = new StringBuilder();
         var reasoning = new ArrayList<String>();
         String signature = null;
@@ -309,8 +349,10 @@ final class OpenAICompletionsMessageConverter {
         // `reasoning` 时 pi 会**两个字段都发**（reasoning 有内容、reasoning_content 空串）。
         // ⚠️ 第二个合取项 model.reasoning 是**同一条**门（pi :1357 写在一行里）：非推理模型
         // 即使挂在 deepseek 上也不补，否则等于给普通对话凭空塞一个推理字段。
+        // ⚠️ 包 A7：第一个合取项现在来自**解析后**的 compat（探测已收进 CompatResolver，
+        // 那段内联的 deepseek 判据随之删除）。
         if (!reasoningContentSent
-                && requiresReasoningContentOnAssistantMessages(model, baseUrl)
+                && Boolean.TRUE.equals(compat.requiresReasoningContentOnAssistantMessages())
                 && model.capabilities().contains(ModelCapability.THINKING)) {
             ab.putAdditionalProperty("reasoning_content", JsonValue.from(""));
         }
@@ -320,29 +362,6 @@ final class OpenAICompletionsMessageConverter {
         if (!text.isEmpty() || !toolCalls.isEmpty()) {
             builder.addMessage(ab.build());
         }
-    }
-
-    /**
-     * pi {@code detectCompat:1592}：deepseek 家族靠 provider 名**或** baseUrl 判。
-     *
-     * <p>provider 名是精确比较（pi 是 {@code ===}），baseUrl 是小写子串匹配。models.json
-     * 的 {@code compat} 显式给值时以它为准（pi 的 {@code getCompat} = {@code explicit ?? detected}）。</p>
-     *
-     * <p>⚠️ 这只回答 compat **那一半**；pi 的条件是它与 {@code model.reasoning} 的合取，
-     * 调用点补上另一半。</p>
-     *
-     * @param model   the request's target model
-     * @param baseUrl the adapter's effective base URL
-     * @return {@code true} when this relay house demands {@code reasoning_content} on
-     *         assistant history
-     */
-    private static boolean requiresReasoningContentOnAssistantMessages(ModelInfo model, String baseUrl) {
-        var explicit = model.compat().requiresReasoningContentOnAssistantMessages();
-        if (explicit != null) {
-            return explicit;
-        }
-        return "deepseek".equals(model.id().provider())
-            || (baseUrl != null && baseUrl.toLowerCase().contains("deepseek.com"));
     }
 
     private static String toArgumentsJson(Map<String, Object> arguments) {

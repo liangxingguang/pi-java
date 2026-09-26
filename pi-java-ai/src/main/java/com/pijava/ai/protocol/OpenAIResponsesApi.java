@@ -7,6 +7,7 @@ import com.openai.client.okhttp.OpenAIOkHttpClient;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.stream.StreamEvent;
 
 /**
@@ -53,8 +54,10 @@ public final class OpenAIResponsesApi extends AbstractChatApi {
                                   SubmissionPublisher<StreamEvent> publisher) {
         // pi openai-responses.ts:74：`supportsStrictMode: model.compat?.supportsStrictMode ?? false`
         // —— 本车道的缺省是**不发** strict 键（azure 侧相反，见该车道）。
+        // 包 A7：缺省由**这里**喂进解析器，转换器只消费（docs/53 §4.1）。
         var params = ResponsesMessageConverter.buildParams(
-            request, responsesOptions, request.modelId().modelName(), apiName(), false);
+            request, responsesOptions, request.modelId().modelName(), apiName(),
+            CompatResolver.forResponses(request.model(), false));
         try (var stream = client.responses().createStreaming(params)) {
             ResponsesStreamProcessor.process(stream, publisher, request.model());
         }

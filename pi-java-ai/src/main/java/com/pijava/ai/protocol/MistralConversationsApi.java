@@ -17,6 +17,7 @@ import com.pijava.ai.api.TranscriptContext;
 import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.api.TransformMessages;
 import com.pijava.ai.api.ToolDefinition;
+import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.http.PiHttpClient;
 import com.pijava.ai.message.ContentBlock;
@@ -274,7 +275,10 @@ public final class MistralConversationsApi extends AbstractChatApi {
         var body = new HashMap<String, Object>();
         body.put("model", request.modelId().modelName());
         body.put("stream", true);
-        var transcript = Transcripts.resolveTranscript(request.transcript(), request.model());
+        // 包 A7：mistral 车道在 pi 里**没有** getCompat（直接读 partial，`mistral-conversations.ts:130`）
+        // ⇒ 这里补成显式解析，形状与另外三条车道一致（docs/53 §4.1）。
+        var transcript = Transcripts.resolveTranscript(request.transcript(),
+            CompatResolver.forMistral(request.model()));
         body.put("messages", toMistralMessages(transcript, request));
 
         var tools = Transcripts.getCurrentTools(transcript.messages());

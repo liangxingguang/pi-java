@@ -6,6 +6,7 @@ import java.util.Map;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
@@ -73,7 +74,7 @@ class AzureOpenAIResponsesApiTest {
                 List.of(new ContentBlock.TextContent("hi")))),
             List.of(), 100, -1, Map.of());
         var params = ResponsesMessageConverter.buildParams(request,
-            ResponsesOptions.from(ApiOptions.defaults()), "my-deploy", "azure-openai-responses", true);
+            ResponsesOptions.from(ApiOptions.defaults()), "my-deploy", "azure-openai-responses", CompatResolver.forResponses(request.model(), true));
         assertThat(params.model().orElseThrow().asString()).isEqualTo("my-deploy");
     }
 

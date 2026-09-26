@@ -10,6 +10,7 @@ import com.anthropic.models.messages.ThinkingConfigDisabled;
 import com.anthropic.models.messages.ThinkingConfigEnabled;
 import com.anthropic.models.messages.ThinkingConfigParam;
 
+import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -105,7 +106,7 @@ final class AnthropicThinking {
      * @param baseMaxTokens 调用方给的输出上限；空 ≙ pi 的 {@code options.maxTokens ?? model.maxTokens}
      *                      （两条路在 {@code adjust} 里同值，见 {@link ThinkingBudgets#adjust}）
      */
-    static Resolved resolve(ModelInfo model, Optional<ThinkingLevel> reasoning,
+    static Resolved resolve(ModelInfo model, ModelCompat compat, Optional<ThinkingLevel> reasoning,
                             OptionalInt baseMaxTokens) {
         if (model == null || !model.capabilities().contains(ModelCapability.THINKING)) {
             return new Resolved(Optional.empty(), Optional.empty(), OptionalInt.empty());
@@ -118,7 +119,9 @@ final class AnthropicThinking {
                 Optional.empty(), OptionalInt.empty());
         }
         var level = reasoning.get();
-        if (model.compat().forceAdaptiveThinking()) {
+        // ⚠️ `compat` 必须是**解析后**的（CompatResolver）—— 目录标注只给「覆盖」那一源，
+        // 而 pi 的判据读的是「目录已烘进去」的值（docs/53 §4.1）。
+        if (compat != null && compat.forceAdaptiveThinking()) {
             return new Resolved(Optional.of(adaptiveParam()),
                 Optional.of(outputConfig(model, level)), OptionalInt.empty());
         }

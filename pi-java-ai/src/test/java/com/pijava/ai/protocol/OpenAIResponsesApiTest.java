@@ -18,6 +18,7 @@ import com.sun.net.httpserver.HttpServer;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
@@ -329,7 +330,7 @@ class OpenAIResponsesApiTest {
             List.of(), 4, -1, Map.of());
 
         var params = ResponsesMessageConverter.buildParams(request,
-            ResponsesOptions.from(ApiOptions.defaults()), "gpt-4o", "openai-responses", false);
+            ResponsesOptions.from(ApiOptions.defaults()), "gpt-4o", "openai-responses", CompatResolver.forResponses(request.model(), false));
         assertThat(params.maxOutputTokens().orElseThrow()).isEqualTo(16);
     }
 
@@ -345,7 +346,7 @@ class OpenAIResponsesApiTest {
             Map.of("reasoningEffort", "high", "reasoningSummary", "auto"));
 
         var params = ResponsesMessageConverter.buildParams(request,
-            ResponsesOptions.from(options), "gpt-4o", "openai-responses", false);
+            ResponsesOptions.from(options), "gpt-4o", "openai-responses", CompatResolver.forResponses(request.model(), false));
         var reasoning = params.reasoning().orElseThrow();
         assertThat(reasoning.effort().orElseThrow().toString()).isEqualTo("high");
         assertThat(reasoning.summary().orElseThrow().toString()).isEqualTo("auto");

@@ -10,7 +10,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
-import com.pijava.ai.catalog.ModelInfo;
+import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.message.MessageTexts;
 
@@ -198,12 +198,15 @@ public final class Transcripts {
      * pi {@code transcript.ts:113-120} —— 模型接受中途系统消息就原样保留，否则折叠。
      *
      * <p>判据字段是 {@link ModelCompat#supportsMidConvoSystemMessages()}（pi
-     * {@code types.ts:731}）：{@code null}（用户没写）与 {@code false} 同义 —— pi 的
-     * {@code resolveTranscript(context, undefined)} 走折叠支。</p>
+     * {@code types.ts:731}）：{@code null}（没写）与 {@code false} 同义。
+     * ⚠️ <b>形参是**解析后**的 compat</b>（{@link com.pijava.ai.catalog.CompatResolver}）——
+     * pi 那条判据读的也是 {@code model.compat?}，但那是**生成目录已烘进去**的值；
+     * 本仓的目录标注只是「覆盖」那一源，探测与缺省归解析层（{@code docs/53 §4.1}）。
+     * 传未解析的 {@code model.compat()} 会在内置模型上得到「恒折叠」的错结果。</p>
      */
-    public static TranscriptContext resolveTranscript(TranscriptContext context, ModelInfo model) {
-        boolean supports = model != null
-            && Boolean.TRUE.equals(model.compat().supportsMidConvoSystemMessages());
+    public static TranscriptContext resolveTranscript(TranscriptContext context, ModelCompat compat) {
+        boolean supports = compat != null
+            && Boolean.TRUE.equals(compat.supportsMidConvoSystemMessages());
         return supports ? context : collapseSystemMessages(context);
     }
 

@@ -20,6 +20,7 @@ import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.api.TransformMessages;
 import com.pijava.ai.api.Transcripts;
+import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.message.MessageTexts;
@@ -49,14 +50,17 @@ final class AnthropicRequestBuilder {
     }
 
     static MessageCreateParams buildParams(StreamRequest request) {
-        var transcript = Transcripts.resolveTranscript(request.transcript(), request.model());
+        // 包 A7：车道的 compat 在这里**解析一次**（pi `getAnthropicCompat(model)` 的落点，
+        // `anthropic-messages.ts:206`），其余读点全部改读它 —— 不再有第二处读 `model.compat()`。
+        var compat = CompatResolver.forAnthropic(request.model());
+        var transcript = Transcripts.resolveTranscript(request.transcript(), compat);
         var messages = TransformMessages.apply(
                 transcript.messages(), request.modelId(), "anthropic-messages", request.model(),
                 AnthropicToolCallIds.create());
-        var allowEmptySignature = request.model() != null
-                && request.model().compat().allowEmptySignature();
+        var allowEmptySignature = compat.allowEmptySignature();
         var thinking = AnthropicThinking.resolve(
                 request.model(),
+                compat,
                 request.reasoning(),
                 request.maxTokens() > 0
                     ? java.util.OptionalInt.of(request.maxTokens())
@@ -84,14 +88,12 @@ final class AnthropicRequestBuilder {
         var conversation = initialSystemMessage == null
                 ? messages : messages.subList(1, messages.size());
 
-        var compat = request.model() == null ? null : request.model().compat();
         var initialTools = initialSystemMessage == null
                 ? List.<ToolDefinition>of() : initialSystemMessage.toolsAdded();
         // pi :1050-1055 的**四条件门**。四条都不能少：块只按名引用（表达不了重定义）、
         // Anthropic 拒绝「全部 deferred」的工具表（必须有活跃工具做锚）、
         // 以及那两个 compat 标志（后者注释明写 *Requires* 前者）。
-        boolean nativeToolChanges = compat != null
-                && Boolean.TRUE.equals(compat.supportsMidConvoSystemMessages())
+        boolean nativeToolChanges = Boolean.TRUE.equals(compat.supportsMidConvoSystemMessages())
                 && Boolean.TRUE.equals(compat.supportsMidConvoToolChanges())
                 && !initialTools.isEmpty()
                 && !Transcripts.hasToolRedefinitions(transcript.messages());
@@ -100,7 +102,7 @@ final class AnthropicRequestBuilder {
         if (request.model() != null
                 && request.model().capabilities().contains(com.pijava.ai.model.ModelCapability.THINKING)
                 && request.reasoning().isPresent()
-                && !request.model().compat().forceAdaptiveThinking()) {
+                && !compat.forceAdaptiveThinking()) {
             betas.add(INTERLEAVED_THINKING_BETA);
         }
         if (nativeToolChanges) {
@@ -113,7 +115,12 @@ final class AnthropicRequestBuilder {
         addMessages(builder, conversation, allowEmptySignature, nativeToolChanges);
         addTools(builder, transcript, initialTools, nativeToolChanges);
 
-        if (request.temperature() >= 0 && request.reasoning().isEmpty()) {
+        // pi :1104-1110 —— temperature 是**四重合取**：{@code temperature !== undefined} ＋
+        // {@code !thinkingEnabled} ＋ {@code supportsMidConvoEffort !== true} ＋
+        // {@code compat.supportsTemperature}。本仓缺第三项（`supportsMidConvoEffort` 的主体行为
+        // `block_binding` 在钉住的 SDK 上写不出来，docs/53 §10 B99），前两项就是下面的两个条件。
+        if (request.temperature() >= 0 && request.reasoning().isEmpty()
+                && compat.supportsTemperature()) {
             builder.temperature(request.temperature());
         }
         return builder.build();

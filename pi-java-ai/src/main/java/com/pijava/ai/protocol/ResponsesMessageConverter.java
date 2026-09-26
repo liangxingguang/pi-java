@@ -32,6 +32,8 @@ import com.pijava.ai.api.TranscriptContext;
 import com.pijava.ai.api.TranscriptTools;
 import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.api.TransformMessages;
+import com.pijava.ai.catalog.CompatResolver;
+import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -63,24 +65,23 @@ final class ResponsesMessageConverter {
      * @param apiName   本车道的 api 名（{@code "openai-responses"} / {@code "azure-openai-responses"}），
      *                  交给共享预通道做同模型判定；**必须由调用方传**，因为两条车道共用本类
      *                  而这个串不同（pi 侧同样是两条独立构建器分别调 transformMessages）
-     * @param supportsStrictMode 本车道是否发 {@code strict}（pi 的两车道 compat **缺省相反**：
+     * @param compat    本请求**解析后**的 compat（{@link CompatResolver#forResponses}）——
+     *                  ⚠️ 车道缺省（{@code supportsStrictMode} 的 {@code false}／{@code true}）
+     *                  由**调用方**在解析时喂进去（pi 的两车道 compat 缺省相反：
      *                  {@code openai-responses.ts:74} 是 {@code ?? false}，
-     *                  {@code azure-openai-responses.ts:296} 是 {@code ?? true}）；由车道传，
-     *                  因为它随车道而变、不随模型而变 —— 见 {@link #strictField(boolean)}
+     *                  {@code azure-openai-responses.ts:296} 是 {@code ?? true}）；本类只消费
      */
     static ResponseCreateParams buildParams(StreamRequest request, ResponsesOptions ropts,
                                             String modelName, String apiName,
-                                            boolean supportsStrictMode) {
+                                            ModelCompat compat) {
         // pi openai-responses.ts:119 / azure-openai-responses.ts:77 —— 车道入口先
         // resolveTranscript，之后再构建请求。
-        var transcript = Transcripts.resolveTranscript(request.transcript(), request.model());
+        var transcript = Transcripts.resolveTranscript(request.transcript(), compat);
         // 包 A3（docs/51 §4.4）：Responses 的**两个独立锚定机制**（命中其一即可）——
         // `additional_tools` 优先，缺席时退回合成的 tool_search 对（pi :180、:185-208）。
-        var compat = request.model() == null ? null : request.model().compat();
-        boolean supportsAdditionalTools = compat != null
-                && Boolean.TRUE.equals(compat.supportsAdditionalTools());
-        boolean supportsToolSearch = compat != null
-                && Boolean.TRUE.equals(compat.supportsToolSearch());
+        boolean supportsAdditionalTools = Boolean.TRUE.equals(compat.supportsAdditionalTools());
+        boolean supportsToolSearch = Boolean.TRUE.equals(compat.supportsToolSearch());
+        boolean supportsStrictMode = Boolean.TRUE.equals(compat.supportsStrictMode());
         var transcriptTools = Transcripts.resolveTranscriptTools(transcript.messages(),
                 supportsAdditionalTools || supportsToolSearch);
 

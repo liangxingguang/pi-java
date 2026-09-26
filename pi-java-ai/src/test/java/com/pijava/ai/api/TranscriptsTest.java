@@ -6,17 +6,12 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
 import com.pijava.ai.catalog.ModelCompat;
-import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
-import com.pijava.ai.model.ModelId;
-import com.pijava.ai.model.PricingInfo;
-import com.pijava.ai.thinking.ThinkingLevelMap;
 
 /**
  * pi {@code packages/ai/test/system-message-replay.test.ts} 的移植（重放那一半）。
@@ -141,11 +136,11 @@ class TranscriptsTest {
     void resolveCollapsesUnlessTheModelDeclaresMidConversationSystemMessages() {
         var context = transcript();
 
-        assertThat(Transcripts.resolveTranscript(context, model(null)))
+        assertThat(Transcripts.resolveTranscript(context, compat(null)))
             .isEqualTo(Transcripts.collapseSystemMessages(context));
-        assertThat(Transcripts.resolveTranscript(context, model(false)))
+        assertThat(Transcripts.resolveTranscript(context, compat(false)))
             .isEqualTo(Transcripts.collapseSystemMessages(context));
-        assertThat(Transcripts.resolveTranscript(context, model(true))).isSameAs(context);
+        assertThat(Transcripts.resolveTranscript(context, compat(true))).isSameAs(context);
     }
 
     /** pi 的 {@code model.compat?.supportsMidConvoSystemMessages} 默认缺席 ⇒ 折叠。 */
@@ -175,10 +170,12 @@ class TranscriptsTest {
                 List.of(tool("second")), List.of(new ToolReference("first")))));
     }
 
-    private static ModelInfo model(Boolean supportsMidConversationSystemMessages) {
-        return new ModelInfo(ModelId.of("test", "m"), "M", Set.of(),
-            100, 100, false, PricingInfo.UNKNOWN, ThinkingLevelMap.empty(), Map.of(), Map.of(),
-            new ModelCompat(false, null, true, false, supportsMidConversationSystemMessages));
+    /**
+     * 判据载体的最小构造 —— 包 A7 之后 {@code resolveTranscript} 收的是**解析后**的
+     * {@link ModelCompat}（不再是 {@code ModelInfo}），故这里直接给 compat。
+     */
+    private static ModelCompat compat(Boolean supportsMidConversationSystemMessages) {
+        return new ModelCompat(false, null, true, false, supportsMidConversationSystemMessages);
     }
 
     private static Map<String, String> sections(String... keyValues) {
