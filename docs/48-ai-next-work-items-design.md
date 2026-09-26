@@ -1,6 +1,7 @@
 # 48 - pi-java-ai 下一步待做清单与设计入口
 
-**状态：已批准，Batch A1（Context/Transcript 基础）已实施完成；A2 及后续批次待开始**
+**状态：已批准；Batch A 已闭环 A1、A2 与包 B87/B88（2026-09-25–26）—— 下一项＝ A3（工具增删状态线的生产者）**
+> ⚠️ 本行是**活状态**，每包闭环后须回填（§9 步骤 7）。
 **创建基准：** pi-java `f0400a2`（B14 收尾）  
 **参考台账：** [`41-gap-inventory.md`](41-gap-inventory.md)、[`32-open-items-register.md`](32-open-items-register.md)、[`40-module-alignment-map.md`](40-module-alignment-map.md)  
 **参考设计：** [`03-detailed-design.md`](03-detailed-design.md)、[`42-usage-domain-design.md`](42-usage-domain-design.md)、[`43-ai-hardfail-credentials-design.md`](43-ai-hardfail-credentials-design.md)、[`44-ai-image-content-design.md`](44-ai-image-content-design.md)、[`45-google-tool-result-design.md`](45-google-tool-result-design.md)、[`46-ai-extended-thinking-design.md`](46-ai-extended-thinking-design.md)、[`47-ai-transform-messages-rest-design.md`](47-ai-transform-messages-rest-design.md)
@@ -216,6 +217,8 @@ flowchart TD
 
 **审核回复入口：** 请直接指出需要修改的任务、优先级、范围、依赖或验收门槛；在收到明确审核通过前，本清单保持“设计待审核”，不开始实施。
 
+> ⚠️ **（2026-09-26 注）本节是获批前写下的审核邀请，措辞已过时** —— 本清单已于 2026-09-25 获批并进入实施。**当前状态一律以文首 banner 与 §5 实施表为准**，不要据本行判「尚未开工」。
+
 ---
 
 ## 9. 实施后回填约定（自 2026-09-25 起执行）
@@ -227,7 +230,9 @@ flowchart TD
 3. 每项完成后立即更新第 5 节对应行；
 4. 仅在实际闭环后同步 `docs/41-gap-inventory.md` 和 `docs/32-open-items-register.md`；
 5. 批次完成后追加“裁决与执行”“实测校正”“实施记录”；
-6. 最终记录 focused tests、`pi-java-ai` 全模块回归、checkstyle、全 reactor 环境结果和剩余差异。
+6. 最终记录 focused tests、`pi-java-ai` 全模块回归、checkstyle、全 reactor 环境结果和剩余差异；
+7. **闭环时回填文首 banner**：本文件第 3 行不是一次性盖章，而是**活状态** —— 每包闭环后改写为「已闭环 <包名>（<日期>）；下一项＝ <X>」；
+8. **每个包自己的设计文档也要翻**：`docs/49` / `docs/50` 这类「一包一文档」的顶部 `状态：设计待审核` 必须改为「已裁决并闭环（裁决、提交、§12 记录）」，否则与文末实施记录自相矛盾（2026-09-26 实测漏了 `docs/42`/`docs/49`/`docs/50` 三处，见 `docs/32` **B91**）。
 
 ---
 
