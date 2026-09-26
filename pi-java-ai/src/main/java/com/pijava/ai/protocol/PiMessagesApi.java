@@ -211,7 +211,19 @@ public final class PiMessagesApi extends AbstractChatApi {
                 node.put("timestamp", s.timestamp().toEpochMilli());
             }
             if (!s.sections().isEmpty()) {
-                node.set("sections", JSON.valueToTree(s.sections()));
+                // 逐项写，不走 valueToTree：值为 null 的段是 pi 的「删掉这一段」
+                // （types.ts:501），而 valueToTree 的 null 处理**取决于映射器的包含策略**
+                // —— 本类今天的默认策略保留 null，但把这件事绑在映射器的默认值上是脆的
+                // （SessionJson 的映射器带 NON_NULL，同样的写法在那里会把删除项丢掉）。
+                var sectionsNode = JSON.createObjectNode();
+                for (var entry : s.sections().entrySet()) {
+                    if (entry.getValue() == null) {
+                        sectionsNode.putNull(entry.getKey());
+                    } else {
+                        sectionsNode.put(entry.getKey(), entry.getValue());
+                    }
+                }
+                node.set("sections", sectionsNode);
             }
             if (!s.toolsAdded().isEmpty()) {
                 node.set("toolsAdded", toolDeclarations(s.toolsAdded()));

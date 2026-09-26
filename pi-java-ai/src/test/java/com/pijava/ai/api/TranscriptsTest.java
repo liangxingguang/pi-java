@@ -21,10 +21,11 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
 /**
  * pi {@code packages/ai/test/system-message-replay.test.ts} 的移植（重放那一半）。
  *
- * <p>⚠️ 与 pi 夹具的**唯一差异**：pi 的第 5 条系统消息用 {@code sections: { b: null }}
- * 表达「删掉 {@code b} 段」，java 的 {@code Map<String,String>} 表达不了 ⇒ 本夹具的
- * 输入改为只含 {@code a} 与 {@code c}（下划线组），**使得其余每条断言都仍是 pi 的逐字期望值**
- * （{@code docs/49 §9 R3①}、登记 L3）。</p>
+ * <p>⚠️ 本条包之前本夹具的输入是**被删改过的**：pi 的第 5 条系统消息用
+ * {@code sections: { b: null }} 表达「删掉 {@code b} 段」，而 java 的
+ * {@code Map<String,String>} 表达不了 ⇒ 当时把那一项去掉了（{@code docs/49 §9 R3①}、
+ * 登记 L3）。包 A4a 给了删除态载体 ⇒ 本夹具恢复成 pi 的**逐字**输入
+ * （{@code docs/52 §4.1}）。</p>
  */
 class TranscriptsTest {
 
@@ -41,8 +42,10 @@ class TranscriptsTest {
         assertThat(current).isNotNull();
         assertThat(current.content())
             .containsExactly(new ContentBlock.TextContent("base\n\nalso do this"));
-        assertThat(current.sections()).containsExactlyInAnyOrderEntriesOf(
-            Map.of("a", "<a>2</a>", "c", "<c>1</c>"));
+        // 逐字对齐 pi 的 :49：`b` 被第 5 条的 `null` 删掉，只剩 `a` 与 `c`，且**保序**
+        // （pi 的 Map 语义：覆盖保留首次位置）—— 用 containsExactly 而不是 InAnyOrder。
+        assertThat(current.sections()).containsExactly(
+            Map.entry("a", "<a>2</a>"), Map.entry("c", "<c>1</c>"));
         assertThat(current.toolsAdded()).containsExactly(tool("second"));
         assertThat(current.toolsRemoved()).isEmpty();
         assertThat(current.timestamp()).isEqualTo(TS_10);
@@ -158,16 +161,17 @@ class TranscriptsTest {
 
     // ── 夹具 ─────────────────────────────────────────────────────────
 
-    /** pi {@code :20-41} 的转录（第 5 条的 {@code b: null} 删除项按类注释去掉）。 */
+    /** pi {@code :20-41} 的转录，**原样**（含第 5 条的 {@code b: null}）。 */
     private static TranscriptContext transcript() {
         return new TranscriptContext(List.of(
-            new Message.SystemMessage("base", TS_10, sections("a", "<a>1</a>"),
+            new Message.SystemMessage("base", TS_10, sections("a", "<a>1</a>", "b", "<b>1</b>"),
                 List.of(tool("first")), List.of()),
             user("hello"),
             new Message.SystemMessage("also do this", Instant.ofEpochMilli(12),
                 Map.of(), List.of(), List.of()),
             assistant("ok"),
-            new Message.SystemMessage("", TS_14, sections("a", "<a>2</a>", "c", "<c>1</c>"),
+            new Message.SystemMessage("", TS_14,
+                sections("a", "<a>2</a>", "b", null, "c", "<c>1</c>"),
                 List.of(tool("second")), List.of(new ToolReference("first")))));
     }
 

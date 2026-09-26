@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -109,6 +110,32 @@ class SessionJsonSystemMessageTest {
         var node = SessionJson.messageNode(system);
 
         assertThat(fieldNames(node)).containsExactlyInAnyOrder("role", "content");
+    }
+
+    /**
+     * 包 A4a：{@code null} 值的段**必须留在线上**（pi 的 {@code Record<string,string|null>}，
+     * {@code types.ts:501}）。
+     *
+     * <p>⚠️ 这是个真陷阱：本类用的 {@code SessionJson.mapper()} 带
+     * {@code setSerializationInclusion(NON_NULL)}，**{@code valueToTree} 会把 null 值的条目
+     * 整个丢掉** —— 于是「删掉 {@code obsolete} 段」静默变成「没提过 {@code obsolete}」，
+     * 而两者的重放结果**完全不同**（前者删段，后者保留此前设过的值）。</p>
+     */
+    @Test
+    void systemMessageNodeKeepsRemovalSectionsAsExplicitNulls() {
+        var sections = new LinkedHashMap<String, String>();
+        sections.put("intro", "Base");
+        sections.put("obsolete", null);
+        var system = new Message.SystemMessage("base", Instant.ofEpochMilli(3), sections,
+            List.of(), List.of());
+
+        var node = SessionJson.messageNode(system);
+
+        assertThat(node.get("sections").has("obsolete"))
+            .as("删除项被 NON_NULL 丢掉 ⇒ 静默把「删除」读成「不提」")
+            .isTrue();
+        assertThat(node.get("sections").get("obsolete").isNull()).isTrue();
+        assertThat(node.get("sections").get("intro").asText()).isEqualTo("Base");
     }
 
     /** 既有三种消息的节点形状必须一字不动（A1 是纯增量）。 */

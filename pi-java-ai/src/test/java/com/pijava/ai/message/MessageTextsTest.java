@@ -13,10 +13,11 @@ import org.junit.jupiter.api.Test;
  * pi {@code packages/ai/test/system-message-replay.test.ts:86-98} 的移植：
  * {@code getSystemMessageText} / {@code renderSystemMessageUpdate} 的逐字期望值。
  *
- * <p>⚠️ 与 pi 夹具的**唯一差异**是我们去掉了 {@code sections: { b: null }} 那一项
- * （pi 用 {@code null} 表示「删掉具名段」，java 的 {@code Map<String,String>} 表达不了
- * —— {@code docs/49 §9 R3①}、登记 L3）。pi 期望串里的
- * {@code 'Removed system prompt section "b".'} 因此在本类中不存在。</p>
+ * <p>⚠️ 本条包之前本类是**被删改过的**：pi 的更新消息带 {@code sections: { b: null }}，
+ * 而 java 的 {@code Map<String,String>} 表达不了「值在场且为 null」，故当时去掉了那一项，
+ * 连带 pi 期望串里的 {@code 'Removed system prompt section "b".'} 也不存在
+ * （{@code docs/49 §9 R3①}、登记 L3）。包 A4a 给了删除态载体 ⇒ 本类恢复成 pi 的**逐字**
+ * 移植（{@code docs/52 §4.1}）。</p>
  */
 class MessageTextsTest {
 
@@ -67,10 +68,11 @@ class MessageTextsTest {
     @Test
     void rendersLaterUpdateFramedBySectionName() {
         var update = new Message.SystemMessage("", Instant.ofEpochMilli(14),
-            sections("a", "<a>2</a>", "c", "<c>1</c>"), List.of(), List.of());
+            sections("a", "<a>2</a>", "b", null, "c", "<c>1</c>"), List.of(), List.of());
 
         assertThat(MessageTexts.renderSystemMessageUpdate(update)).isEqualTo(
             "Updated system prompt section \"a\":\n\n<a>2</a>\n\n"
+                + "Removed system prompt section \"b\".\n\n"
                 + "Updated system prompt section \"c\":\n\n<c>1</c>");
     }
 

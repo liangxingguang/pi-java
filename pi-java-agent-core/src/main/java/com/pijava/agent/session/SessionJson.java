@@ -132,7 +132,19 @@ public final class SessionJson {
                 node.put("timestamp", system.timestamp().toEpochMilli());
             }
             if (!system.sections().isEmpty()) {
-                node.set("sections", MAPPER.valueToTree(system.sections()));
+                // ⚠️ 不能走 valueToTree：本 mapper 带 NON_NULL 包含策略，它会把**值为 null 的
+                // 段条目整个丢掉** ⇒ 「删掉 obsolete 段」静默变成「没提过 obsolete」，而两者的
+                // 重放结果不同（pi types.ts:501 的 `null` 是删除，缺席是「不改」）。
+                // ObjectNode.put 不经过包含策略，null 值写成 JSON null（包 A4a，docs/52 §4.1）。
+                var sectionsNode = MAPPER.createObjectNode();
+                for (var entry : system.sections().entrySet()) {
+                    if (entry.getValue() == null) {
+                        sectionsNode.putNull(entry.getKey());
+                    } else {
+                        sectionsNode.put(entry.getKey(), entry.getValue());
+                    }
+                }
+                node.set("sections", sectionsNode);
             }
             if (!system.toolsAdded().isEmpty()) {
                 // 包 B87②：pi 的 toolsAdded 是 ai 层 Tool（三键 {name,description,parameters}），

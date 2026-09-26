@@ -130,9 +130,8 @@ public final class Transcripts {
      * <p>「一条系统消息都没有且没有工具」⇒ {@code null}（pi {@code :71} 的
      * {@code timestamp === undefined && tools.length === 0}）。</p>
      *
-     * <p>⚠️ pi 的 sections 值可为 {@code null} 表示**删除**具名段（{@code :81-83}），
-     * java 的 {@code Map<String,String>} 没有这个状态 ⇒ 此处只落覆盖一支
-     * （{@code docs/49 §9 R3①}，登记 L3）。</p>
+     * <p>sections 值为 {@code null} ⇒ <b>删掉具名段</b>（pi {@code :81-83}）。⚠️ 顺序语义与
+     * pi 的 {@code Map} 一致：覆盖**保留首次位置**，删掉再设**排到末尾**。</p>
      *
      * <p>⚠️ 出参的 {@code sections}/{@code toolsAdded} 为空时是空集合，而 pi **省略键**
      * —— 落线由 {@code SessionJson} 的空值省略门负责（A1 的 M4 探针已钉住那道门）。</p>
@@ -152,7 +151,13 @@ public final class Transcripts {
             if (!text.isEmpty()) {
                 content.add(text);
             }
-            sections.putAll(system.sections());
+            for (var entry : system.sections().entrySet()) {
+                if (entry.getValue() == null) {
+                    sections.remove(entry.getKey());
+                } else {
+                    sections.put(entry.getKey(), entry.getValue());
+                }
+            }
         }
         var tools = getCurrentTools(messages);
         if (timestamp == null && tools.isEmpty()) {

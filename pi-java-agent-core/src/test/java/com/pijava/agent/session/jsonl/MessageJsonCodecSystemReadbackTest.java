@@ -26,10 +26,20 @@ import org.junit.jupiter.api.Test;
  *
  * <p>形状的对错由**写侧**钉住（{@code SessionJsonSystemMessageTest} 已断言 pi 的
  * 键集），本类钉的是**读回来的值**：字段不丢、sections 保序、两种 {@code toolsAdded}
- * 形状都认（pi 三键 ＋ A1 的七键旧形）、pi 的「{@code null} = 删除具名段」在 java
- * 的形状里表达不了 ⇒ **响亮**（{@code docs/50 §9 R1}）。</p>
+ * 形状都认（pi 三键 ＋ A1 的七键旧形）。pi 的「{@code null} ＝ 删除具名段」在包 A4a 之前
+ * 没有载体 ⇒ 当时是**响亮**（{@code docs/50 §9 R1}）；A4a 给了它载体
+ * （{@code docs/52 §4.1}）⇒ 现在**收下**并断言往返，其余非文本非 null 的值仍然**响亮**。</p>
  */
 class MessageJsonCodecSystemReadbackTest {
+
+    /** 保序表（{@code Map.of} 的迭代顺序未定义，夹具一律显式保序）。 */
+    private static java.util.Map<String, String> orderedSections(String... keyValues) {
+        var map = new java.util.LinkedHashMap<String, String>();
+        for (int i = 0; i < keyValues.length; i += 2) {
+            map.put(keyValues[i], keyValues[i + 1]);
+        }
+        return map;
+    }
 
     // ── round-trip：写侧能写的，读侧都要读回 ────────────────────────────
 
@@ -151,23 +161,59 @@ class MessageJsonCodecSystemReadbackTest {
         assertThat(back.toolsAdded().get(0).inputSchema()).containsEntry("type", "pi");
     }
 
-    // ── 响亮失败 ───────────────────────────────────────────────────────
+    // ── 删除段（包 A4a 改判）──────────────────────────────────────────
 
     /**
-     * pi 用 {@code null} 表达「删掉具名段」（{@code types.ts:501}），java 的
-     * {@code Map<String,String>} 没有这个状态。静默丢键会**静默改变 prompt**，读成
-     * 空串会把「删除」读成「清空」—— 两者都比抛错糟（{@code docs/50 §9 R1}）。
+     * pi 用 {@code null} 表达「删掉具名段」（{@code types.ts:501}）。
+     *
+     * <p>⚠️ <b>本条包之前这里断言的是抛错</b>（B87a 的 {@code docs/50 §9 R1}）：当时删除态
+     * 在 Java 的形状里没有载体，静默丢键会**静默改变 prompt**。A4a 给了它载体
+     * （{@code Map<String,String>} 允许 null 值，{@code docs/52 §4.1}）⇒ 现在读回来是
+     * 「值在场且为 null」，与 pi 同义。</p>
      */
     @Test
-    void rejectsNullSectionValueInsteadOfDroppingTheKey() throws Exception {
+    void readsARemovalSectionAsAnExplicitNull() throws Exception {
         var node = SessionJson.mapper().readTree("""
             {"role":"system","content":[{"type":"text","text":"p"}],"timestamp":0,
              "sections":{"intro":"Base","obsolete":null}}
             """);
 
-        assertThatThrownBy(() -> MessageJsonCodec.decode(node))
-            .isInstanceOf(JsonlCodec.DecodeError.class)
-            .hasMessageContaining("section");
+        var back = (Message.SystemMessage) MessageJsonCodec.decode(node);
+
+        assertThat(back.sections()).containsEntry("obsolete", null).containsEntry("intro", "Base");
+        assertThat(back.sections().keySet()).as("插入序 = 渲染序，删除项留在原位")
+            .containsExactly("intro", "obsolete");
+    }
+
+    /** 写侧 → 读侧 → 写侧的往返：删除项**逐字节**回到线上（含 NON_NULL 那道门）。 */
+    @Test
+    void roundTripsRemovalSections() {
+        var sections = new java.util.LinkedHashMap<String, String>();
+        sections.put("intro", "Base");
+        sections.put("obsolete", null);
+        var system = new Message.SystemMessage("p", Instant.EPOCH, sections, List.of(), List.of());
+
+        var back = (Message.SystemMessage) MessageJsonCodec.decode(SessionJson.messageNode(system));
+
+        assertThat(back.sections()).containsEntry("obsolete", null);
+        var rewired = SessionJson.messageNode(back);
+        assertThat(rewired.get("sections").has("obsolete"))
+            .as("第二次写线仍要带上删除项").isTrue();
+        assertThat(rewired.get("sections").get("obsolete").isNull()).isTrue();
+    }
+
+    /** 承上：删除段在**重放**里生效（`null` 删名，而不是覆盖成 null）。 */
+    @Test
+    void removalSectionsDeleteTheNameOnReplay() {
+        var messages = new java.util.ArrayList<Message>();
+        messages.add(new Message.SystemMessage("", Instant.EPOCH,
+            orderedSections("a", "1", "b", "1"), List.of(), List.of()));
+        messages.add(new Message.SystemMessage("", Instant.EPOCH,
+            orderedSections("b", null), List.of(), List.of()));
+
+        var current = com.pijava.ai.api.Transcripts.getCurrentSystemMessage(messages);
+
+        assertThat(current.sections()).containsExactly(Map.entry("a", "1"));
     }
 
     /**
@@ -196,6 +242,12 @@ class MessageJsonCodecSystemReadbackTest {
             "{\"role\":\"system\",\"content\":[],\"sections\":\"nope\"}")))
             .isInstanceOf(JsonlCodec.DecodeError.class)
             .hasMessageContaining("sections");
+
+        // 段的**值**非文本非 null（数字）—— 读成删除或读成空串都会静默改 prompt
+        assertThatThrownBy(() -> MessageJsonCodec.decode(SessionJson.mapper().readTree(
+            "{\"role\":\"system\",\"content\":[],\"sections\":{\"a\":1}}")))
+            .isInstanceOf(JsonlCodec.DecodeError.class)
+            .hasMessageContaining("section");
 
         // 移除项缺 name（`requireString` 的既有文案）
         assertThatThrownBy(() -> MessageJsonCodec.decode(SessionJson.mapper().readTree(

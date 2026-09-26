@@ -50,11 +50,19 @@ public final class MessageTexts {
      *
      * <p>section 的顺序就是 {@link Message.SystemMessage#sections()} 的迭代顺序 ——
      * pi 用 {@code Object.values} （插入顺序），故该 Map 必须**保序**构造。</p>
+     *
+     * <p>值为 {@code null} 的段（＝删除具名段）**不参与**渲染（pi 的
+     * {@code if (text !== null)}）。注意这与 {@link #renderSystemMessageUpdate} 不同：
+     * 那里删除要渲染成自己的帧。</p>
      */
     public static String getSystemMessageText(Message.SystemMessage message) {
         var parts = new ArrayList<String>();
         parts.add(contentText(message.content()));
-        parts.addAll(message.sections().values());
+        for (var value : message.sections().values()) {
+            if (value != null) {
+                parts.add(value);
+            }
+        }
         return parts.stream()
             .filter(part -> !part.isEmpty())
             .collect(Collectors.joining("\n\n"));
@@ -64,13 +72,9 @@ public final class MessageTexts {
      * pi {@code text.ts:23-40} —— 中途系统消息的「按名框住」渲染。
      *
      * <p>⚠️ 与 {@link #getSystemMessageText} 的**关键差别**：此处**不滤空段**
-     * （pi 只对 content 做 {@code length > 0} 判断，section 帧照发）。pi 自述这是
-     * 请求期文本、版本间可改（{@code text.ts:25-27}）。</p>
-     *
-     * <p>⚠️ pi 的 {@code value === null} 分支（{@code Removed system prompt section "x".}）
-     * 在 java 上**表达不了** —— {@code sections} 是 {@code Map<String,String>}，
-     * 没有「值在场但为 null」这个状态（{@code docs/49 §9 R3①}，登记 L3）。
-     * 故这里只写 {@code Updated} 一支，不写永远走不到的分支。</p>
+     * （pi 只对 content 做 {@code length > 0} 判断，section 帧照发），且值为 {@code null}
+     * 的段渲染成自己的删除帧而不是被跳过。pi 自述这是请求期文本、版本间可改
+     * （{@code text.ts:25-27}）。</p>
      */
     public static String renderSystemMessageUpdate(Message.SystemMessage message) {
         var parts = new ArrayList<String>();
@@ -79,8 +83,9 @@ public final class MessageTexts {
             parts.add(text);
         }
         for (var entry : message.sections().entrySet()) {
-            parts.add("Updated system prompt section \"" + entry.getKey() + "\":\n\n"
-                + entry.getValue());
+            parts.add(entry.getValue() == null
+                ? "Removed system prompt section \"" + entry.getKey() + "\"."
+                : "Updated system prompt section \"" + entry.getKey() + "\":\n\n" + entry.getValue());
         }
         return String.join("\n\n", parts);
     }

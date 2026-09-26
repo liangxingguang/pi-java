@@ -73,12 +73,17 @@ final class MessageJsonCodec {
 
     /**
      * 系统消息的 {@code sections} —— pi 是 {@code Record<string, string | null>}
-     * （{@code types.ts:501}），java 的 {@code Map<String,String>} 只有「字符串」一态。
+     * （{@code types.ts:501}）：文本值是「设成这段」，**{@code null} 是「删掉这段」**
+     * （{@code utils/transcript.ts:81-83}）。
      *
      * <p>用 {@code LinkedHashMap} 是**语义**不是口味：插入序就是渲染序（pi 的
      * {@code Object.entries}，{@code utils/text.ts:17}），包 A2 的 F3 已经把写侧改成保序
      * 副本；读侧不保序的话 round-trip 会静默重排 prompt 的段落。
      * {@link Message.SystemMessage} 的紧凑构造器会再拷一次，同样保序。</p>
+     *
+     * <p>JSON {@code null} 直接收下（包 A4 的形状裁决，{@code docs/52 §4.1}）——
+     * B87a 当时对它抛错是因为删除态还没有载体，那个载体现在有了。
+     * 其余非文本类型（数字／对象／数组）仍然抛：把它们读成删除或读成空串都会**静默改 prompt**。</p>
      */
     private static Map<String, String> decodeSections(JsonNode node) {
         if (node == null || node.isNull()) {
@@ -89,10 +94,11 @@ final class MessageJsonCodec {
         }
         var sections = new LinkedHashMap<String, String>();
         node.fields().forEachRemaining(entry -> {
+            if (entry.getValue().isNull()) {
+                sections.put(entry.getKey(), null);
+                return;
+            }
             if (!entry.getValue().isTextual()) {
-                // pi 用 null 表示「删除具名段」；静默丢键会静默改变 prompt，读成空串会把
-                // 「删除」读成「清空」—— 两种都比抛错糟（docs/50 §9 R1）。删除语义本身是
-                // 包 A4 的形状裁决（docs/50 §10 L-C）。
                 throw JsonlCodec.DecodeError.schema(
                     "has non-string section " + entry.getKey());
             }
