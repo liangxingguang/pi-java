@@ -314,8 +314,9 @@ public final class MistralConversationsApi extends AbstractChatApi {
         boolean supportsImages = request.model().supportsImageInput();
         // ⚠️ 与 pi 的差别只在**输入表**：pi 把系统消息留在表里、由 `:787` 的分支就地处理；
         // java 在转换前去掉头（上面已落线），故此处喂去头后的表。两者出参逐条相同。
+        // 包 A3（R7）：`requireOnlyLeadingSystemMessage` 已删 —— 中途系统消息现在**有**落线支
+        // （上面的 case），守卫从「响亮拒绝」变成死码。
         var conversation = Transcripts.withoutInitialSystemMessage(transcript.messages());
-        Transcripts.requireOnlyLeadingSystemMessage(conversation, apiName());
         TransformMessages.apply(conversation, request.modelId(), apiName(), request.model(),
                 MistralToolCallIds.create())
             .stream().<Map<String, Object>>map(msg -> {
@@ -342,10 +343,25 @@ public final class MistralConversationsApi extends AbstractChatApi {
                     m.put("name", t.toolName());
                     m.put("content", toolContent(t, supportsImages));
                 }
-                // Mechanical guard (docs/48 §A1): system messages have no Mistral projection —
-                // the prompt travels as a request-level field, not as a message.
-                case Message.SystemMessage s -> throw new IllegalArgumentException(
-                    "Unsupported message role for Mistral projection: " + s.role());
+                // 包 A3（docs/51 §4.4）：中途系统消息落成**第二条** role=system 消息 ——
+                // pi mistral-conversations.ts:787-790 对 `index === 0` 走
+                // getSystemMessageText、其余走 renderSystemMessageUpdate，两者都 `continue`
+                // 到同一条 role=system 落线。Mistral **没有**工具锚定机制
+                // （MistralConversationsCompat 只有 supportsMidConvoSystemMessages 一个标志，
+                // types.ts:849-852），所以这里只有文本。
+                //
+                // ⚠️ 下标 0 那一支在上面就落地了（`withoutInitialSystemMessage` 去掉了头），
+                // 故走到这里的系统消息**必然**是中途的 ⇒ 判据不必再算一次。
+                case Message.SystemMessage s -> {
+                    var update = MessageTexts.renderSystemMessageUpdate(s);
+                    if (!update.isEmpty()) {
+                        var system = new HashMap<String, Object>();
+                        system.put("role", "system");
+                        system.put("content", SanitizeUnicode.surrogates(update));
+                        messages.add(system);
+                    }
+                    return null; // 已自行落线
+                }
             }
             return m;
         }).filter(java.util.Objects::nonNull).forEach(messages::add);

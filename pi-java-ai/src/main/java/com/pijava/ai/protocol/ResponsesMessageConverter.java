@@ -22,11 +22,14 @@ import com.openai.models.responses.ResponseInputText;
 import com.openai.models.responses.ResponseInputTextContent;
 import com.openai.models.responses.ResponseOutputMessage;
 import com.openai.models.responses.ResponseOutputText;
+import com.openai.models.responses.ResponseToolSearchOutputItemParam;
 import com.openai.models.responses.ResponseFunctionToolCall;
 import com.openai.models.responses.Tool;
 
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.api.TranscriptContext;
+import com.pijava.ai.api.TranscriptTools;
 import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.api.TransformMessages;
 import com.pijava.ai.catalog.ModelInfo;
@@ -71,22 +74,26 @@ final class ResponsesMessageConverter {
         // pi openai-responses.ts:119 / azure-openai-responses.ts:77 —— 车道入口先
         // resolveTranscript，之后再构建请求。
         var transcript = Transcripts.resolveTranscript(request.transcript(), request.model());
+        // 包 A3（docs/51 §4.4）：Responses 的**两个独立锚定机制**（命中其一即可）——
+        // `additional_tools` 优先，缺席时退回合成的 tool_search 对（pi :180、:185-208）。
+        var compat = request.model() == null ? null : request.model().compat();
+        boolean supportsAdditionalTools = compat != null
+                && Boolean.TRUE.equals(compat.supportsAdditionalTools());
+        boolean supportsToolSearch = compat != null
+                && Boolean.TRUE.equals(compat.supportsToolSearch());
+        var transcriptTools = Transcripts.resolveTranscriptTools(transcript.messages(),
+                supportsAdditionalTools || supportsToolSearch);
+
         var builder = ResponseCreateParams.builder()
             .model(modelName)
             .store(false)
             .input(ResponseCreateParams.Input.ofResponse(
-                convertMessages(request, transcript, apiName)));
+                convertMessages(request, transcript, apiName, transcriptTools,
+                    supportsAdditionalTools, supportsToolSearch, supportsStrictMode)));
 
         var tools = new ArrayList<Tool>();
-        for (var td : Transcripts.getCurrentTools(transcript.messages())) {
-            tools.add(Tool.ofFunction(FunctionTool.builder()
-                .name(td.name())
-                .description(td.description())
-                .parameters(FunctionTool.Parameters.builder()
-                    .putAllAdditionalProperties(toJsonValues(td.inputSchema()))
-                    .build())
-                .strict(strictField(supportsStrictMode))
-                .build()));
+        for (var td : transcriptTools.requestTools()) {
+            tools.add(responseTool(td, supportsStrictMode, false));
         }
         if (!tools.isEmpty()) {
             builder.tools(tools);
@@ -121,7 +128,11 @@ final class ResponsesMessageConverter {
 
     private static List<ResponseInputItem> convertMessages(StreamRequest request,
                                                            TranscriptContext transcript,
-                                                           String apiName) {
+                                                           String apiName,
+                                                           TranscriptTools transcriptTools,
+                                                           boolean supportsAdditionalTools,
+                                                           boolean supportsToolSearch,
+                                                           boolean supportsStrictMode) {
         var items = new ArrayList<ResponseInputItem>();
         // 系统文本来自**前导系统消息**（pi openai-responses-shared.ts:218-222 的
         // `sourceIndex++ === 0` 支 → getSystemMessageText），落成 input 里的
@@ -138,15 +149,30 @@ final class ResponsesMessageConverter {
         // addAssistantItems 会把它连块带文本一起丢（见那里的注释）。
         var messages = TransformMessages.apply(transcript.messages(), request.modelId(), apiName,
                 request.model(), ResponsesToolCallIds.create(apiName));
-        // 中途系统消息的原生渲染归 A3/A7（docs/49 L-D）；折叠后本断言恒成立。
-        Transcripts.requireOnlyLeadingSystemMessage(messages, apiName);
+        // 包 A3（R7）：`requireOnlyLeadingSystemMessage` 已删 —— 中途系统消息现在有落线支。
         var msgIndex = 0;
-        for (var msg : messages) {
-            if (msg instanceof Message.SystemMessage) {
+        for (int i = 0; i < messages.size(); i++) {
+            var msg = messages.get(i);
+            // pi :218 —— `sourceIndex++ === 0 && msg.role === "system"`：判据是**下标 0**，
+            // 不是「第一条系统消息」，也不能用对象身份（transformMessages 可能换过对象）。
+            boolean isLeadingSystemMessage = i == 0 && msg instanceof Message.SystemMessage;
+            if (msg instanceof Message.SystemMessage system) {
                 // 前导系统消息已在上面落成 input 项（pi :218-222 的同一支）。
-                continue;
-            }
-            if (msg instanceof Message.UserMessage user) {
+                if (!isLeadingSystemMessage) {
+                    // 包 A3（pi :185-208 的 `appendSystemToolAdditions`）：就地锚定 ——
+                    // 只有 `anchorsAdditions` 为真时后续声明才作为**增量**发出去，
+                    // 否则它们已经在请求级 tools 字段里了。
+                    if (transcriptTools.anchorsAdditions() && !system.toolsAdded().isEmpty()) {
+                        anchorSystemToolAdditions(items, system, msgIndex,
+                            supportsAdditionalTools, supportsToolSearch, supportsStrictMode);
+                    }
+                    var update = MessageTexts.renderSystemMessageUpdate(system);
+                    if (!update.isEmpty()) {
+                        items.add(inputMessage(EasyInputMessage.Role.SYSTEM,
+                            SanitizeUnicode.surrogates(update)));
+                    }
+                }
+            } else if (msg instanceof Message.UserMessage user) {
                 items.add(toUserItem(user.content()));
             } else if (msg instanceof Message.AssistantMessage assistant) {
                 addAssistantItems(items, assistant, msgIndex);
@@ -157,9 +183,12 @@ final class ResponsesMessageConverter {
                         .output(convertToolResultOutput(request.model(), tool.content()))
                         .build()));
             }
-            // pi 在循环体末尾自增（openai-responses-shared.ts:349），且**每种角色**都算一个
-            // 下标 —— 回填 id 里的 `msg_pi_${msgIndex}` 用的是这个全量下标，不是「第几条助手消息」。
-            msgIndex++;
+            // pi :349 —— `if (!isLeadingSystemMessage) msgIndex++;`：**中途系统消息也算一个下标**
+            // （回填 id 里的 `msg_pi_${msgIndex}` 与 tool_search 的种子都用它）。
+            // 折叠支下中途系统消息为零 ⇒ 这条自增此前从未生效；A3 放开之后必须补上。
+            if (!isLeadingSystemMessage) {
+                msgIndex++;
+            }
         }
         return items;
     }
@@ -238,6 +267,89 @@ final class ResponsesMessageConverter {
             .role(role)
             .content(EasyInputMessage.Content.ofTextInput(text))
             .build());
+    }
+
+    /**
+     * pi {@code openai-responses-shared.ts:359-396} 的 {@code convertResponsesTools} ——
+     * 单个工具 → Responses 的 {@code Tool}。
+     *
+     * <p>{@code deferLoading} 是 pi 的 {@code toolSearchResult: true}（{@code :376}／{@code :389}）：
+     * 合成 {@code tool_search_output} 里的工具要打 {@code defer_loading: true}，
+     * 表示「这次搜索的结果、暂不装载」。</p>
+     *
+     * <p>⚠️ 与 pi 的两处既有差异（本包不动）：{@code supportsOpenAIGrammarTools} 的
+     * custom/grammar 分支（{@code :365-378}，登记 {@code docs/50 §10 L-A}），以及
+     * {@code supportsStrictMode} 的**缺省值由车道传**（pi 在 {@code :361} 默认 true，
+     * java 的两条车道 compat 缺省相反，见 {@code buildParams} 的 javadoc）。</p>
+     */
+    private static Tool responseTool(ToolDefinition td, boolean supportsStrictMode,
+                                     boolean deferLoading) {
+        var functionTool = FunctionTool.builder()
+            .name(td.name())
+            .description(td.description())
+            .parameters(FunctionTool.Parameters.builder()
+                .putAllAdditionalProperties(toJsonValues(td.inputSchema()))
+                .build())
+            .strict(strictField(supportsStrictMode));
+        if (deferLoading) {
+            functionTool.deferLoading(true);
+        }
+        return Tool.ofFunction(functionTool.build());
+    }
+
+    /**
+     * pi {@code openai-responses-shared.ts:182-210} 的 {@code appendSystemToolAdditions} ——
+     * 把一条系统消息声明的工具**就地锚定**在它自己的位置上。
+     *
+     * <p>两个机制（pi 的 {@code :185-208}）：{@code supportsAdditionalTools} ⇒ 一条
+     * {@code {type:"additional_tools", role:"developer", tools:[…]}}；否则
+     * {@code supportsToolSearch} ⇒ 合成**一对** {@code tool_search_call} +
+     * {@code tool_search_output}（都 {@code execution:"client"}／{@code status:"completed"}），
+     * {@code call_id} 由「种子 ＋ 名字列表」的哈希**确定性**生成 ⇒ 同一段转录每次重放得到同一个
+     * id（不这样的话缓存前缀与转录都不可复现）。</p>
+     *
+     * <p>⚠️ 两个都不支持 ⇒ 什么都不发（pi 的 {@code if (!options?.supportsToolSearch) return;}）——
+     * 但调用方已经用同一个「或」判据算过 {@code anchorsAdditions}，故这一支实际不可达，
+     * 照抄保留（同 {@code docs/44 §9} 的两处车道门）。</p>
+     */
+    private static void anchorSystemToolAdditions(List<ResponseInputItem> items,
+                                                  Message.SystemMessage system, int msgIndex,
+                                                  boolean supportsAdditionalTools,
+                                                  boolean supportsToolSearch,
+                                                  boolean supportsStrictMode) {
+        var anchored = system.toolsAdded().stream()
+            .map(td -> responseTool(td, supportsStrictMode, false)).toList();
+        if (supportsAdditionalTools) {
+            items.add(ResponseInputItem.ofAdditionalTools(
+                ResponseInputItem.AdditionalTools.builder()
+                    .role(JsonValue.from("developer"))
+                    .tools(anchored)
+                    .build()));
+            return;
+        }
+        if (!supportsToolSearch) {
+            return;
+        }
+        var names = system.toolsAdded().stream().map(ToolDefinition::name).toList();
+        var callId = "pi_tool_load_"
+            + com.pijava.ai.utils.ShortHash.of("system:" + msgIndex + ":" + String.join(",", names));
+        var arguments = new LinkedHashMap<String, Object>();
+        arguments.put("query", String.join(" ", names));
+        arguments.put("limit", names.size());
+        items.add(ResponseInputItem.ofToolSearchCall(ResponseInputItem.ToolSearchCall.builder()
+            .callId(callId)
+            .execution(ResponseInputItem.ToolSearchCall.Execution.CLIENT)
+            .status(ResponseInputItem.ToolSearchCall.Status.COMPLETED)
+            .arguments(JsonValue.from(arguments))
+            .build()));
+        items.add(ResponseInputItem.ofToolSearchOutput(
+            ResponseToolSearchOutputItemParam.builder()
+                .callId(callId)
+                .execution(ResponseToolSearchOutputItemParam.Execution.CLIENT)
+                .status(ResponseToolSearchOutputItemParam.Status.COMPLETED)
+                .tools(system.toolsAdded().stream()
+                    .map(td -> responseTool(td, supportsStrictMode, true)).toList())
+                .build()));
     }
 
     private static ResponseInputItem toUserItem(List<ContentBlock> content) {
