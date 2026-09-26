@@ -13,6 +13,7 @@ import com.openai.models.chat.completions.ChatCompletionChunk;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
 
@@ -243,10 +244,12 @@ public class OpenAICompletionsApi extends AbstractChatApi {
             // ⚠️ pi 的两处 abort 检查（:678 / :682）在车道层**结构上不可达** —— 见类 javadoc。
             // 中止由宿主层 PiLoopRunner.markAborted（:291-303）负责。
 
-            // compat 缺席 ≙ true（pi 的 detected 是常量 true，detectCompat:1638）。
-            // 请求不带模型元数据（StreamRequest.of(ModelId…)）时同样取严格版。
-            boolean supportsFinishReason = request.model() == null
-                || request.model().compat().supportsFinishReason();
+            // compat 缺席 ≙ true（pi 的 detected 是常量 true，detectCompat:1640）。
+            // 请求不带模型元数据（StreamRequest of(ModelId…)）时同样取严格版。
+            // 包 A7：走**解析后**的 compat —— 本标志是解析不变的（`resolved()` 原样透传），
+            // 改过来是为了让「车道不直接读 `model.compat()`」这条验收 grep 成立。
+            boolean supportsFinishReason = CompatResolver.forCompletions(request.model(), baseUrl)
+                .supportsFinishReason();
 
             // pi :685-687 —— **容忍版**：有 finish_reason 能力却没观测到时，就地改写成正常结束。
             // pi 里这条恒不生效（detected 恒 true），只有 models.json 显式写 false 才放开；
