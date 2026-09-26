@@ -598,7 +598,10 @@ renderSystemMessageUpdate(update) →
 ## 8. 验收 grep（实施后必须全过）
 
 1. `grep -rn "requireNonNull(entry.getValue()" pi-java/src/main` ⇒ 零命中；
-2. `grep -rn "has non-string section" pi-java/src/main` ⇒ 零命中（改成只拒**非文本非 null**）；
+2. `MessageJsonCodec.decodeSections` 仍拒**非文本非 null** 的值（数字／对象／数组）——
+   ⚠️ **文案不变**（仍是 `has non-string section <name>`），变的是条件：实施后
+   `grep -rn "has non-string section" --include=*.java .` **恰 1 命中**（`MessageJsonCodec:103`），
+   而「值为 JSON `null`」的那一支走的是 `put(key, null)`。**别按「零命中」复核。**
 3. `grep -rn "Removed system prompt section" pi-java-ai/src/main` ⇒ 恰 1 命中；
 4. `grep -rn "class SystemPromptBuilder" .` ⇒ 零命中（已删）；
 5. `grep -rn "## Available Tools\|## Active Skills" --include=*.java .` ⇒ 零命中；
