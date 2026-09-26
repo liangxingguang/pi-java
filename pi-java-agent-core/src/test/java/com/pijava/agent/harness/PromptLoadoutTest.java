@@ -121,6 +121,52 @@ class PromptLoadoutTest {
                 "system", "user", "assistant", "tool", "assistant");
     }
 
+    /**
+     * pi 的第二个调用点（{@code agent-session.ts:599-611}）：**同一个 run 之内**（
+     * {@code prepareNextTurnWithContext}）切工具，补丁经由 {@code NextTurnUpdate.messages}
+     * 交回循环。
+     *
+     * <p>⚠️ 没有这条夹具，那个通道**零覆盖**：java 的每次 {@code prompt()} 都是新 run，
+     * 而新 run 的 {@code startPass} 自己会算一次补丁 —— 于是「跨 prompt 切工具」这条（pi 的
+     * 那条 oracle）走的是起手那条路，`NextTurnUpdate.messages` 那一支被顺带掩盖。
+     * 变异探针 C4（把该支改成恒 {@code null}）首次实测**零红**，正是这个盲区的证据。</p>
+     */
+    @Test
+    void aToolSwitchInsideOneRunTravelsThroughTheNextTurnChannel() {
+        var requests = new CopyOnWriteArrayList<List<Message>>();
+        var h = harness(requests, scripted(List.of(
+            toolTurn("tc1", "first"),
+            textTurn("done"))), first());
+        var switched = new boolean[1];
+        h.hookSystem().onPrepareNextTurn(AgentHarness.DEFAULT_LANE, ctx -> {
+            if (!switched[0]) {
+                switched[0] = true;
+                h.setActiveTools(Set.of(second()));
+            }
+            return null;
+        });
+
+        h.prompt(AgentHarness.DEFAULT_LANE, "go", List.of(), null);
+
+        assertThat(switched[0]).as("钩子确实跑过（否则本用例恒绿）").isTrue();
+        assertThat(requests).hasSize(2);
+
+        var update = lastSystemMessage(requests.get(1));
+        assertThat(update).as("第二轮请求带一条段补丁").isNotNull();
+        assertThat(update.sections().keySet()).containsExactly("tools", "rules");
+        assertThat(update.sections().get("tools")).contains("second prompt snippet")
+            .doesNotContain("first prompt snippet");
+        assertThat(update.toolsAdded()).extracting(d -> d.name()).containsExactly("second");
+        assertThat(update.toolsRemoved()).extracting(r -> r.name()).containsExactly("first");
+        // 第一轮那次调用发生在切换之前 ⇒ 仍成功
+        var toolResults = requests.get(1).stream()
+            .filter(Message.ToolResultMessage.class::isInstance)
+            .map(Message.ToolResultMessage.class::cast)
+            .toList();
+        assertThat(toolResults).hasSize(1);
+        assertThat(toolResults.get(0).isError()).isFalse();
+    }
+
     /** 段表没变 ⇒ **不产出**补丁（pi 的 {@code diffSystemPromptSections} 返回 undefined）。 */
     @Test
     void anUnchangedLoadoutProducesNoSecondPatch() {

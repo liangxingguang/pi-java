@@ -420,7 +420,13 @@ public final class PiLaneEngine {
             update == null ? null : update.model(),
             update == null || update.thinkingLevel() == null ? null
                 : ModelThinkingLevel.of(LaneState.parseThinkingLabel(update.thinkingLevel())),
-            compacted ? rebuiltContext(lane) : null,
+            // ⚠️ **无条件**交回 context，与 pi 同形：`prepareNextTurnWithContext` 的返回值里
+            // `context: {...nextContext, tools: state.tools.slice()}` 是**每次都重建**的
+            // （`agent-session.ts:605-608`），于是**运行中**的 `setActiveTools`／改提示会随这条
+            // 通道刷进循环的 `AgentContext`。此前 java 只在压缩时交回 ⇒ `context.tools` 停在
+            // run 起手那一刻的快照，`declareToolChanges` 拿它当「可执行集」比较 ⇒ 同一 run 内的
+            // 工具变更**不会**产生 `toolsAdded`/`toolsRemoved`（包 A4c 的探针 C4 撞出来的）。
+            rebuiltContext(lane),
             loadout == null ? null : List.of(loadout));
     }
 
