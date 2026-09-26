@@ -1,14 +1,24 @@
 package com.pijava.ai.catalog;
 
 /**
- * Per-model provider compatibility flags (pi {@code Model.compat}, {@code types.ts:713-714}).
+ * Per-model provider compatibility flags (pi {@code Model.compat}).
  *
- * <p>Only flags pi-java actually **consults** are carried here — five so far. pi's own interface
- * has eight ({@code forceAdaptiveThinking}, {@code supportsStrictTools}, {@code deferredToolsMode},
- * …); each gets added when its consumer is ported, never speculatively
- * (docs/31 §8.34.4 决策 2). The field is a typed record rather than a {@code Map} for the same
- * reason: pi's compat is a per-provider typed interface, and a map would push type errors to the
- * read site.</p>
+ * <p>pi 有**五个** per-api 的 compat 接口（{@code types.ts:674} 的
+ * {@code OpenAICompletionsCompat} 27 字段、{@code :754} 的 {@code OpenAIResponsesCompat} 10、
+ * {@code :778} 的 {@code AnthropicMessagesCompat} 13、{@code :843} 的 {@code BedrockCompat} 1、
+ * {@code :849} 的 {@code MistralConversationsCompat} 1 —— 共 52）。本仓把五者**合一**成一个
+ * 类型（依据：除 {@code supportsMidConvoSystemMessages} 外每个字段只被一条车道读，而那一个在
+ * 四条车道上缺省同为 {@code false}；逐字段核对见 {@code docs/53 §2 P8}），并只携带 pi-java
+ * 真正**消费**的字段 —— 其余四十余个按 {@code docs/53 §4.4} 的归属表留给各自的包，**不投机加**。
+ * 字段是具名 record 组件而不是 {@code Map}：pi 的 compat 是 typed interface，用 Map 会把类型错误
+ * 推到读点。{@code docs/31 §8.34.4} 决策 2。</p>
+ *
+ * <p>⚠️ <b>本记录有两个生命周期，读点必须拿「解析后」的那一份</b>：目录标注与 models.json 给出的
+ * 是<b>部分</b> compat（「用户/目录写了什么」），而 pi 的车道读的是
+ * {@code explicit ?? detected ?? 字面量缺省} 之后的<b>全确定</b>形状。合一那一步是
+ * {@link CompatResolver}（pi 的 {@code detectCompat}/{@code getCompat}/{@code getAnthropicCompat}）。
+ * 直接读 {@code model.compat()} 只对「探测的默认值恰好等于字面量缺省」的字段安全 —— 这是
+ * {@code docs/53 §8} 第 1 条验收 grep 要钉的事。</p>
  *
  * <p>⚠️ <b>各标志的「缺席」语义各不相同</b> —— 这是本记录最容易读错的地方，逐个写清：</p>
  *
@@ -16,12 +26,12 @@ package com.pijava.ai.catalog;
  *   <caption>absent-case semantics</caption>
  *   <tr><th>标志</th><th>类型</th><th>缺席 ≙</th><th>为什么</th></tr>
  *   <tr><td>{@code allowEmptySignature}</td><td>{@code boolean}</td><td>{@code false}</td>
- *       <td>pi {@code ?? false}（{@code anthropic-messages.ts:193}）⇒ 二态</td></tr>
+ *       <td>pi {@code ?? false}（{@code anthropic-messages.ts:215}）⇒ 二态</td></tr>
  *   <tr><td>{@code requiresReasoningContentOnAssistantMessages}</td><td>{@link Boolean}</td>
  *       <td><b>探测</b>（provider/baseUrl）</td>
- *       <td>pi 的探测结果**依赖模型**（{@code isDeepSeek}，{@code detectCompat:1644}）⇒ 三态</td></tr>
+ *       <td>pi 的探测结果**依赖模型**（{@code isDeepSeek}，{@code detectCompat:1600}）⇒ 三态</td></tr>
  *   <tr><td>{@code supportsFinishReason}</td><td>{@code boolean}</td><td>{@code true}</td>
- *       <td>pi 的探测结果是**常量 `true`**（{@code detectCompat:1638}，无任何分支）⇒
+ *       <td>pi 的探测结果是**常量 `true`**（{@code detectCompat:1639}，无任何分支）⇒
  *           {@code explicit ?? true} 塌缩成二态、且方向与第一个标志**相反**</td></tr>
  *   <tr><td>{@code forceAdaptiveThinking}</td><td>{@code boolean}</td><td>{@code false}</td>
  *       <td>pi 的判据是 {@code === true}（{@code anthropic-messages.ts:878/1165}）⇒ 二态，
@@ -44,13 +54,30 @@ package com.pijava.ai.catalog;
  *       <td>{@code false}（二态）</td>
  *       <td>包 A3 加。{@code additional_tools} 缺席时的替身：合成一对
  *           {@code tool_search_call}/{@code tool_search_output}</td></tr>
+ *   <tr><td>{@code supportsTemperature}</td><td>{@code boolean}</td><td>{@code true}</td>
+ *       <td>包 A7 加。与 {@code supportsFinishReason} **同形**（探测值是常量
+ *           {@code true}）⇒ 二态，方向是「缺席即发」</td></tr>
+ *   <tr><td>{@code maxTokensField}</td><td>{@link MaxTokensField}</td>
+ *       <td><b>探测</b>（端点）</td>
+ *       <td>包 A7 加。探测按 provider/baseUrl 的八个谓词（{@code useMaxTokens}）⇒ 三态</td></tr>
+ *   <tr><td>{@code supportsStore}</td><td>{@link Boolean}</td><td><b>探测</b>（端点）</td>
+ *       <td>包 A7 加。探测是 {@code !isNonStandard}（十三个谓词）⇒ 三态</td></tr>
+ *   <tr><td>{@code supportsDeveloperRole}</td><td>{@link Boolean}</td>
+ *       <td><b>探测</b>（端点 ＋ 模型 id）</td>
+ *       <td>包 A7 加。探测是 {@code isOpenRouterDeveloperRoleModel || (!isNonStandard && !isOpenRouter)}
+ *           —— **同时看 provider 与 {@code model.id} 的前缀** ⇒ 三态</td></tr>
+ *   <tr><td>{@code supportsStrictMode}</td><td>{@link Boolean}</td>
+ *       <td><b>车道的缺省</b>（两侧相反）</td>
+ *       <td>包 A7 加。responses {@code ?? false}（{@code openai-responses.ts:73}）、
+ *           azure {@code ?? true}（{@code azure-openai-responses.ts:296}）⇒「缺席」不是单个
+ *           值而**取决于车道**，故缺省由 {@link CompatResolver#forResponses} 的形参给</td></tr>
  * </table>
  *
  * @param allowEmptySignature pi {@code compat.allowEmptySignature}. When {@code true}, a thinking
  *        block that has **no** signature is replayed as a {@code thinking} block carrying
  *        {@code signature:""} instead of being downgraded to plain text — some
  *        Anthropic-compatible providers emit and accept empty signatures. Absent ≡ {@code false}
- *        (pi normalizes with {@code ?? false}, {@code anthropic-messages.ts:193}), so this is a
+ *        (pi normalizes with {@code ?? false}, {@code anthropic-messages.ts:215}), so this is a
  *        **two-state** flag, not tri-state: {@code undefined} and {@code false} are
  *        indistinguishable in behavior (docs/31 §8.34.4 决策 3).
  * @param requiresReasoningContentOnAssistantMessages pi
@@ -60,10 +87,10 @@ package com.pijava.ai.catalog;
  *        DeepSeek-style relays reject the turn (400) without it.
  *
  *        <p>⚠️ Unlike {@code allowEmptySignature}, the absent case is **not** "false": pi
- *        resolves it against a detection ({@code detectCompat:1643} — provider {@code deepseek}
+ *        resolves it against a detection ({@code detectCompat:1600} — provider {@code deepseek}
  *        or a baseUrl containing {@code deepseek.com}), so this component is a **three-state**
  *        {@link Boolean}: {@code null} = detect, {@code true}/{@code false} = explicit user
- *        override from {@code models.json} ({@code getCompat:1691-1700} does
+ *        override from {@code models.json} ({@code getCompat:1700} does
  *        {@code explicit ?? detected}). Reading it as a plain boolean would silently disable
  *        the whole deepseek path.</p>
  * @param supportsFinishReason pi {@code compat.supportsFinishReason}
@@ -75,7 +102,7 @@ package com.pijava.ai.catalog;
  *
  *        <p>⚠️ **为什么它能塌缩成普通 `boolean`，而上面那个组件必须三态**：`explicit ?? detected`
  *        要保三态的前提是 **detected 随模型变**（上一个组件的 detected 是 {@code isDeepSeek}）。
- *        本标志的 detected 是 `detectCompat:1638` 里的字面量 `true` —— 函数体内**没有任何分支**
+ *        本标志的 detected 是 `detectCompat:1639` 里的字面量 `true` —— 函数体内**没有任何分支**
  *        碰过它 ⇒ `explicit ?? true` 里 `undefined` 与 `true` 行为完全相同，没有第三种状态可保。
  *        于是「缺席 ≙ {@code true}」被归一在 {@link com.pijava.ai.provider.ModelsJsonConfig} 的
  *        {@code compatOf} 里，读侧永远拿到一个非空的布尔。
@@ -88,22 +115,20 @@ package com.pijava.ai.catalog;
  *        （pi 的判据是 {@code === true}）⇒ <b>二态</b>。
  *
  *        <p>⚠️ 它的值来自 pi 的<b>生成目录数据</b>（{@code generate-models.ts:1039} 的
- *        {@code isAnthropicAdaptiveThinkingModel}），而那份数据<b>不在仓库里</b>
- *        （{@code providers/data/} 被 gitignore）⇒ pi-java 的内置目录不会置位它，
- *        只能由用户经 {@code models.json} 提供（{@code docs/46 §3-D5}）。</p>
+ *        {@code isAnthropicAdaptiveThinkingModel}）—— 那是**代码推导**的
+ *        （{@code generate-models.ts:585} 的纯字符串谓词，`fable-5`/`mythos-5`/`opus-4-6`…），
+ *        故包 A7 按同一份谓词把它标到内置目录上（{@code docs/53 §4.2}）。</p>
  * @param supportsMidConvoSystemMessages pi {@code compat.supportsMidConvoSystemMessages}
  *        ({@code types.ts:731-732}): when {@code true}, the transcript keeps system messages that
  *        arrive **mid-conversation** instead of folding them into the leading one, and each lane
  *        renders them in place (Anthropic text blocks / completions+mistral instruction messages /
  *        Responses input items). Read by {@link com.pijava.ai.api.Transcripts#resolveTranscript}
- *        ({@code docs/49 §5.4})。
+ *        ({@code docs/49 §5.4}）。
  *
  *        <p>⚠️ **三态**：pi 的读取点写 {@code model.compat?.supportsMidConvoSystemMessages}
  *        （{@code anthropic-messages.ts:517} 等），{@code undefined} 走折叠支；但该字段的探测
  *        默认值来自**生成的模型目录**（「会对有能力的模型开启它」）⇒ 缺席 ≠ 显式 {@code false}。
- *        包 A2 只加字段与消费点；探测与 {@code models.json}（{@code CompatDef}）接线**归 A7**
- *        （{@code docs/49 §9 R4}）—— 所以在 A7 落地前，本标志在**生产上恒为缺席**，
- *        每条车道都走「折叠」支（这正是 pi 在没有目录数据时的行为）。</p>
+ *        包 A2 只加字段与消费点；生产者由包 A7 补上（{@code docs/53 §4.2}）。</p>
  * @param supportsMidConvoToolAdditions pi {@code compat.supportsMidConvoToolAdditions}
  *        ({@code types.ts:733-734}, completions lane only): whether a mid-conversation system
  *        message may carry its own {@code tools} — rendered as a Kimi-shaped
@@ -134,6 +159,53 @@ package com.pijava.ai.catalog;
  *        ({@code tool_search_call} + {@code tool_search_output}, both
  *        {@code execution:"client"}/{@code status:"completed"}) whose {@code call_id} is a
  *        deterministic hash of the seed and the tool names ({@code openai-responses-shared.ts:193-208}）。
+ * @param supportsTemperature pi {@code compat.supportsTemperature}
+ *        ({@code anthropic-messages.ts:1104-1110}, Anthropic lane only): when {@code false} the
+ *        lane **omits** the {@code temperature} field. Claude Opus 4.7+ (and the
+ *        {@code forceAdaptiveThinking} generation) reject a non-default temperature, so pi's
+ *        generated catalogue writes {@code false} for those ids
+ *        ({@code generate-models.ts:604} 的 {@code isAnthropicTemperatureUnsupportedModel}）。
+ *
+ *        <p>⚠️ 它的读点是**四重合取**（{@code temperature !== undefined} ＋ 未开思考 ＋
+ *        {@code supportsMidConvoEffort !== true} ＋ 本标志），只有**最后一个**由本组件管 ——
+ *        前三项在 {@link com.pijava.ai.protocol.AnthropicRequestBuilder} 的读点里。（本仓没有
+ *        {@code supportsMidConvoEffort}，见 {@code docs/53 §10 B99}。）</p>
+ *
+ *        <p>⚠️ 与 {@code supportsFinishReason} 同形：探测值是常量 {@code true}
+ *        （{@code getAnthropicCompat:214} 的 {@code ?? true}，而 {@code isOpenRouter} 只影响
+ *        另外两个 java 不携带的字段）⇒ 二态，{@code explicit ?? true} 塌缩在 {@code compatOf} 里。</p>
+ * @param maxTokensField pi {@code compat.maxTokensField} ({@code openai-completions.ts:836-841},
+ *        completions lane only): which request field carries the output cap —
+ *        {@code max_tokens} or {@code max_completion_tokens}. OpenAI's own field is the default;
+ *        the non-standard endpoints (vLLM/Qwen/DeepSeek/Moonshot/Together/NVIDIA/Ant Ling/z.ai/
+ *        Cloudflare gateway/chutes.ai) take the plain name.
+ *
+ *        <p>⚠️ **三态**：探测按 provider/baseUrl（{@code useMaxTokens}，八个谓词，
+ *        {@code detectCompat:1626}），显式值赢（{@code getCompat:1695}）。</p>
+ * @param supportsStore pi {@code compat.supportsStore} ({@code openai-completions.ts:832-834},
+ *        completions lane only): when {@code true} the lane sends {@code store:false} —
+ *        i.e. it explicitly opts **out** of server-side retention. (⚠️ 读点写的是 {@code false}
+ *        这个值，不是把开关原样发出去 —— 标题是「支持这个字段」而不是「要存」。)
+ *
+ *        <p>探测是 {@code !isNonStandard}（十三个谓词，{@code detectCompat:1604}）⇒ **三态**。</p>
+ * @param supportsDeveloperRole pi {@code compat.supportsDeveloperRole}
+ *        ({@code openai-completions.ts:1225}, completions lane only): whether the leading
+ *        instruction message goes out with {@code role:"developer"} instead of {@code "system"} —
+ *        gated additionally on {@code model.reasoning}（非推理模型一律 {@code system}）。
+ *
+ *        <p>探测是 {@code isOpenRouterDeveloperRoleModel || (!isNonStandard && !isOpenRouter)}
+ *        （{@code detectCompat:1635}）：OpenRouter 上只有 {@code anthropic/*} 与 {@code openai/*}
+ *        走 developer 角色，而其**自有的**模型与所有非标准端点都退回 {@code system}
+ *        ⇒ 判据**同时看 provider 与模型 id 前缀** ⇒ 三态。</p>
+ * @param supportsStrictMode pi {@code compat.supportsStrictMode} (Responses lanes): whether
+ *        function tools carry the {@code strict} field. 包 B88 落的读点让「不支持」被表达成
+ *        **整个键不发**、支持则显式发一个值（{@code openai-responses-shared.ts:391-393}）。
+ *
+ *        <p>⚠️ 它是本记录里**唯一**「缺席语义随车道变」的组件：responses 的缺省是
+ *        {@code false}（{@code openai-responses.ts:73}）、azure 是 {@code true}
+ *        （{@code azure-openai-responses.ts:296/319}）⇒ 由
+ *        {@link CompatResolver#forResponses} 的形参把车道缺省喂进来，本组件保持三态
+ *        （{@code null} ＝「按车道缺省」）。</p>
  */
 public record ModelCompat(boolean allowEmptySignature,
                           Boolean requiresReasoningContentOnAssistantMessages,
@@ -143,12 +215,38 @@ public record ModelCompat(boolean allowEmptySignature,
                           Boolean supportsMidConvoToolAdditions,
                           Boolean supportsMidConvoToolChanges,
                           Boolean supportsAdditionalTools,
-                          Boolean supportsToolSearch) {
+                          Boolean supportsToolSearch,
+                          boolean supportsTemperature,
+                          MaxTokensField maxTokensField,
+                          Boolean supportsStore,
+                          Boolean supportsDeveloperRole,
+                          Boolean supportsStrictMode) {
+
+    /**
+     * 九参便捷构造（包 A7 之前的**规范**构造 —— 那时组件就这九个）：
+     * 包 A7 新增的五个缺席 —— {@code supportsTemperature} 缺席 ≙ {@code true}
+     * （pi 的探测值是常量 true）、其余四个 ≙ pi 的 {@code undefined}（走探测或车道缺省）。
+     * 保留该形态使包 A7 之前的 18 个构造点**零改签**。
+     */
+    public ModelCompat(boolean allowEmptySignature,
+                       Boolean requiresReasoningContentOnAssistantMessages,
+                       boolean supportsFinishReason,
+                       boolean forceAdaptiveThinking,
+                       Boolean supportsMidConvoSystemMessages,
+                       Boolean supportsMidConvoToolAdditions,
+                       Boolean supportsMidConvoToolChanges,
+                       Boolean supportsAdditionalTools,
+                       Boolean supportsToolSearch) {
+        this(allowEmptySignature, requiresReasoningContentOnAssistantMessages,
+             supportsFinishReason, forceAdaptiveThinking, supportsMidConvoSystemMessages,
+             supportsMidConvoToolAdditions, supportsMidConvoToolChanges,
+             supportsAdditionalTools, supportsToolSearch,
+             true, null, null, null, null);
+    }
 
     /**
      * 五参便捷构造（包A3 之前的形状）—— 工具增删那四个标志缺席 ≙ pi 的 {@code undefined}
-     * ≙ {@code false}（四个读点全是真值判断或 {@code === true}）⇒ 单态塌缩是安全的；
-     * 探测与接线归 A7。
+     * ≙ {@code false}（四个读点全是真值判断或 {@code === true}）⇒ 单态塌缩是安全的。
      */
     public ModelCompat(boolean allowEmptySignature,
                        Boolean requiresReasoningContentOnAssistantMessages,
@@ -162,7 +260,7 @@ public record ModelCompat(boolean allowEmptySignature,
 
     /**
      * 四参便捷构造（包A2 之前的形状）—— {@code supportsMidConvoSystemMessages} 缺席 ≙ pi 的
-     * {@code undefined} ≙ 折叠支；探测/接线归 A7。
+     * {@code undefined} ≙ 折叠支。
      */
     public ModelCompat(boolean allowEmptySignature,
                        Boolean requiresReasoningContentOnAssistantMessages,
@@ -188,7 +286,8 @@ public record ModelCompat(boolean allowEmptySignature,
      *
      * <p>⚠️ 注意第三位是 {@code true}：{@code NONE} 的意思是「用户没写任何 compat」，
      * 不是「所有标志都关」——{@code supportsFinishReason} 的探测默认值就是开。
-     * 写成 {@code false} 会让**每一条**没写 compat 的 models.json 模型静默退回容忍版。</p>
+     * 写成 {@code false} 会让**每一条**没写 compat 的 models.json 模型静默退回容忍版。
+     * 同理第十位（{@code supportsTemperature}）也是 {@code true}。</p>
      */
     public static final ModelCompat NONE = new ModelCompat(false, null, true, false, null);
 
