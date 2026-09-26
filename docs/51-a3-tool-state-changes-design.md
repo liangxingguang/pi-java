@@ -203,6 +203,8 @@ const transcriptTools = resolveTranscriptTools(context.messages,
 | **F8** | `ModelCompat` 缺本包要的三个标志 | `ModelCompat.java:94-98` |
 | **F9** | **`NextTurnUpdate` 缺 pi 的 `messages` 字段**（`types.ts:146-147`）—— 那是会话层把「分段差分系统消息」送进 `declareToolChanges` 的通道（`agent-session.ts:603-611`）。Java 只有 `context` | `PiLoop.java:198` vs `types.ts:143-152` |
 | **F10** | `Entry.ActiveToolsChange` 是**只读死形状**：生产无生产者，pi 主线也不发射（P14） | `Entry.java:121-131`、`EntryJsonCodec:42`、`ContextEntries` 不投影它 |
+| **F11** | ⚠️ **设计稿漏了 pi 的「前导声明」生产者**：pi 的 `createMutableAgentState`（`agent.ts:84-85`）在会话起点把「系统提示 ＋ 工具」折成一条**前导系统消息**塞进 `state.messages`（`timestamp: 0`），`declareToolChanges` 的对照基准正是它。Java 的 `Context` 把 `systemPrompt`/`tools` 放成独立字段、工作副本里什么都没有 ⇒ 照搬 `declareToolChanges` 会让**每个会话的第一轮都宣告「新增全部工具」**，而 pi 从不产生那条消息。⇒ 必须在起手补同一条声明（落点 `PiLaneEngine.startPass`，实施记录 §12.2） | pi `agent.ts:75-99`；反证：`conformance/pi-out/S2.pi.jsonl` 帧 3 起就是 user 消息，没有声明帧 |
+| **F12** | ⚠️ **10 个带工具的 conformance 剧本是陈旧的**：它们生成于 pi 还没有 `runAgentLoop:109` 起手宣告的版本（帧序里没有系统消息），且 pi 侧 runner 的 `Normalizer` 没有 `system` 分支 ⇒ **重新生成会以 `TypeError: tr.content.map is not a function` 崩掉**。⇒ 已补 runner 的 system 分支、重生成全部 15 份；两侧 echo 的 `n` 改成「provider 看到的」消息数（系统消息是提示状态，不是对话），`sys=` 分量删除（pi 侧 `streamFn` 收到的是 `normalizeContext({messages})`，该字段恒为 undefined）| `conformance/pi/run.test.ts:284-330`、§12.3 |
 
 ---
 
@@ -410,4 +412,103 @@ $ cd D:/workplaceForai/pi/packages/ai && node scripts/generate-models.ts --stric
 
 ## 12. 实施记录
 
-（待实施后填写，形状照 `docs/49 §12` / `docs/50 §12`。）
+（A3c 闭环后补完；下述两节在各自提交时即写入。）
+
+### 12.1 步骤 A3a —— 重放后半 ＋ ModelCompat 四字段（`bef15fa`，2026-09-26）
+
+**落地**：`ToolStateChanges` / `TranscriptTools` 两个结果类型；`Transcripts` 补
+`getDeclaredTools` / `declarationsEqual` / `getToolStateChanges` / `hasToolRedefinitions` /
+`hasNonAdditiveToolChanges` / `resolveTranscriptTools`；`ModelCompat` 加四个 `Boolean`
+（`supportsMidConvoToolAdditions` / `supportsMidConvoToolChanges` / `supportsAdditionalTools` /
+`supportsToolSearch`），并保留 5/4/3 参便捷构造器 ⇒ 既有构造点零改签。夹具照 pi 的
+`system-message-replay.test.ts:110-145` 那三条纯函数用例移植（包 A2 当时跳过它们，因为函数还不存在），
+另补 `getDeclaredTools` 与 `resolveTranscriptTools` 的直测。
+
+⚠️ **`declarationsEqual` 的一处有意偏差**（F7 / R4 的落地形态）：pi 的判据是
+`JSON.stringify`（**嵌套键序敏感**），而 Java 的 `inputSchema`/`parameters` 经 `Map.copyOf`
+之后插入序**已经丢了**（迭代序由哈希与每 JVM 的盐决定）⇒ 根本无「键序」可比。归一因此把嵌套 Map
+也**按键排序**（`ORDER_MAP_ENTRIES_BY_KEYS`）换确定性。两者只在「仅键序不同」时结论分叉，
+而那个输入在 Java 侧**已经构造不出来**。
+
+**变异红集（实测，与设计稿 §6 的预测对账后改写）**：
+
+| 探针 | 设计稿预测 | **实测** |
+|---|---|---|
+| M1 `hasNonAdditiveToolChanges` 去掉 `toolsRemoved` 支 | 1 红 | **2 红** |
+| M2 `declarationsEqual` 恒 `true` | 2 红 | **5 红** |
+| M3 `getToolStateChanges` 的 removals 改按 `current` 序 | 「没钉顺序就是零红」 | **3 红**（夹具钉了顺序，故有牙）|
+| M4 `resolveTranscriptTools` 去掉 `!hasNonAdditiveToolChanges` | 1 红 | **1 红** |
+| M5 `getDeclaredTools` 改成看 removals | 1 红 | **1 红** |
+
+先红来源与设计稿一致：**编译失败**（类型不存在）＋ 端口夹具在缺陷态无法成立。
+
+### 12.2 步骤 A3b —— 生产者（`8a0f67c`，2026-09-26）
+
+**落地**：`ToolChangeDeclaration`（pi `agent-loop.ts:281-333` 的四条分支 ＋
+`initialDeclaration`）；`PiLoop.run` 补 `runAgentLoop:109` 的**起手宣告**；
+`PiLoopRunner.runLoop` 的内层宣告改成 pi 的**无条件**形状并接上 `preparedMessages`；
+`NextTurnUpdate.messages`（R3）；`PiLaneEngine.startPass` 的**前导声明**（F11）；
+`Transcripts.toToolDefinition`（声明 → 全形的反向投影）。
+
+⚠️ **F11 是本包在实施中发现的设计缺口，必须记牢**：`declareToolChanges` 的对照基准是
+「转录里声明的工具」，而那条声明在 pi 里由 `createMutableAgentState`（`agent.ts:84-85`）
+在会话起点写死。Java 的 `Context` 把 `systemPrompt`/`tools` 放成**独立字段**、工作副本里什么都没有
+⇒ 不补这一条，**每个会话的第一轮都会宣告「新增全部工具」**，一条 pi 从不产生的系统消息
+（还会被 `PiLaneSession` 落盘）。补上之后第一轮两侧相等、无事发生，与 pi 一致。
+
+**为什么补在工作副本而不是只补比较基准**：`resolveTranscriptTools` 的 `requestTools` 在锚定支下
+取的就是**前导消息声明的那些**（§2 P3）—— 声明不落在转录里，A3c 的「请求级工具表只增不减」
+就没有来源。
+
+**⚠️ 两处已知差异（今天都不可观察，登记待 A4/A7）**：
+① 提示文本在声明里被**冻结** —— pi 的前导消息内容同样是起点那份，中途的提示变化走
+**sections 差分**（A4）；java 的 sections 尚未落地 ⇒ 将来若系统提示能在会话中途变化，
+它会到不了模型。
+② `rebuildLaneMessages`（压缩/恢复/重置）整体替换工作副本、丢掉这条声明，下一次起手按**当时**的
+工具集重建 ⇒ 被跨重建的工具增删不会作为增量宣告。
+两者的前提都是「工具集在一次会话里会变」，而今天 `setActiveTools` 没有调用者（F6）。
+
+**先红（实测）**：`git stash push -- <PiLoop/PiLoopRunner/PiLaneEngine>` ＋ 新 corpus 复跑
+⇒ **10 红**（S2/S3/S4/S5/S9–S14，即全部带工具的剧本），而 `ToolChangeDeclarationTest`
+（直测移植函数）仍 11/11 绿 —— **红来自接线，不是来自端口**。这条「红集切分」本身就是
+F11 的证据：pi 的帧序里有声明帧，旧实现没有。
+
+**变异红集（实测）**：M6 互换差分两入参 **5 红** · M8 声明改插末尾 **3 红** ·
+M9 短路回「只在有 pending 时」**3 红** · M10 锚点取首条而非末条系统消息 **1 红** ·
+M11 把 pending 自己的工具字段当事实 **1 红**。
+
+⚠️ **设计稿 §6 的 M7（去掉「空列表省略键」门）在 Java 上无牙**：Java 的表示里
+「空列表」与「键缺席」是同一件事，省略发生在**落线层**（`SessionJson` 的空值省略门，
+A1 的 M4 探针已钉住）。M7 移到那里去测，本包不重复。
+
+### 12.3 顺带修好的 corpus 缺陷（同上提交）
+
+`conformance/pi-out/*.pi.jsonl` 里 **10 个带工具的剧本是陈旧的**（F12）：生成于 pi 还没有
+`runAgentLoop:109` 起手宣告的版本。证据链：把 `conformance/pi/run.test.ts` 装回 pi 检出
+（`3390bd936`，`git status` 空）重跑，**5 个无工具的剧本逐字节复现**，10 个带工具的以
+`TypeError: tr.content.map is not a function` 崩掉 —— 崩溃点正是 Normalizer 的「其他角色
+落进 toolResult 分支」，也就是**声明消息**。
+
+处置：① pi 侧 runner 的 `Normalizer.message` 补 `system` 分支（与 `FrameNormalizer` 的
+system 支逐字对应）；② `toolsAdded` 在帧里按 pi 的**三键**归一（Java 的转录槽是七件套）；
+③ `ScriptTool.inputSchema()` 改成 typebox 的 `Type.object({}, {additionalProperties:true})` 形状；
+④ 两侧 echo 的 `n` 改成「provider 看到的」消息数、并删掉 `sys=` 分量
+（pi 的 `streamFn` 收到的是 `normalizeContext({messages})`，`systemPrompt` 恒 undefined ⇒
+那个分量在 pi 侧是常量，比它等于比夹具接线）。⑤ 重生成全部 15 份。
+
+**跑法**（重生成 pi 侧真相，务必照做且事后清理 pi 检出）：
+
+```
+cp conformance/pi/run.test.ts          <pi>/packages/agent/test/conformance/run.test.ts
+cp conformance/pi/vitest.conformance.config.ts <pi>/packages/agent/
+cd <pi> && CONFORMANCE_SCRIPTS=<pi-java>/conformance/scripts \
+  CONFORMANCE_OUT=<pi-java>/conformance/pi-out \
+  ./node_modules/.bin/vitest --run --config packages/agent/vitest.conformance.config.ts \
+  packages/agent/test/conformance/run.test.ts
+rm -rf <pi>/packages/agent/test/conformance <pi>/packages/agent/vitest.conformance.config.ts
+```
+
+⚠️ 用 `./node_modules/.bin/vitest`（shell 包装脚本）；`node ./node_modules/.bin/vitest` 会以
+`SyntaxError: missing ) after argument list` 失败。
+
+### 12.4 步骤 A3c —— 车道原生渲染（待实施）
