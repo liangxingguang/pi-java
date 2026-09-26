@@ -14,6 +14,7 @@ import com.pijava.agent.hook.ShouldStopAfterTurnContext;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.record.QueueKind;
 import com.pijava.agent.tool.AgentTool;
+import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.thinking.ModelThinkingLevel;
 
@@ -238,18 +239,60 @@ public final class PiLaneEngine {
      */
     private Pass startPass(String laneName, LaneState lane, List<Message> prompts,
                            PiLoop.Sink downstream) {
-        // 起手时已在转录里的消息：PiLoop 会为它们重发 message_start/end 的，一律不再落盘。
-        Set<Message> present = Collections.newSetFromMap(new IdentityHashMap<>());
-        present.addAll(transcriptMessages(lane));
-        var sink = new PiLaneSink(ctx, laneName, present, downstream);
-
-        var config = configFor(laneName, lane, sink);
         // 系统提示与工具在 run 起点装进 Context（pi 的 AgentContext）：
         // transformContext 只改消息，够不着这两样（pi 的钩子签名是 (messages) => messages）。
         var systemPrompt = assembler.buildSystemPrompt(lane);
+        var tools = activeTools(lane);
+        ensureInitialDeclaration(lane, systemPrompt, tools);
+
+        // 起手时已在转录里的消息：PiLoop 会为它们重发 message_start/end 的，一律不再落盘。
+        Set<Message> present = Collections.newSetFromMap(new IdentityHashMap<>());
+        present.addAll(transcriptMessages(lane));
+        if (!lane.messages.isEmpty() && lane.messages.get(0) instanceof Message.SystemMessage head) {
+            // 前导声明不是 entry（pi 的种子声明同样不进 session 文件）—— 放进 present 是为了
+            // 任何「重发工作副本」的路径都不会把它落盘。
+            present.add(head);
+        }
+        var sink = new PiLaneSink(ctx, laneName, present, downstream);
+
+        var config = configFor(laneName, lane, sink);
         sink.systemPrompt(systemPrompt);
-        var runContext = new Context(systemPrompt, new ArrayList<>(lane.messages), activeTools(lane));
+        var runContext = new Context(systemPrompt, new ArrayList<>(lane.messages), tools);
         return new Pass(sink, config, runContext, prompts);
+    }
+
+    /**
+     * pi {@code createMutableAgentState}（{@code agent.ts:84-85}）—— 工作副本不以系统消息开头时，
+     * 把「系统提示 ＋ 当前生效工具」折成一条**前导声明**补进去。
+     *
+     * <p><b>为什么这一步是必需的</b>：{@link ToolChangeDeclaration} 的对照基准是
+     * 「转录里声明的工具」，而那条声明在 pi 里由会话起点写死。java 的 {@code Context} 把
+     * {@code systemPrompt} 与 {@code tools} 放成**独立字段**，工作副本里本来什么都没有 ⇒
+     * 不补这一条的话，每次比较的基准都是空表，<b>每个会话的第一轮都会宣告「新增全部工具」</b>
+     * —— 一条 pi 从不产生的系统消息（还会被落盘）。补上之后第一轮的两侧相等、无事发生，
+     * 与 pi 一致。</p>
+     *
+     * <p><b>为什么放工作副本而不是只放比较基准</b>：{@code resolveTranscriptTools} 的
+     * {@code requestTools} 在锚定支下取的就是**前导消息声明的那些**
+     * （{@code docs/51 §2 P3}）—— 声明不落在转录里，A3c 的「请求级工具表只增不减」就没有来源。</p>
+     *
+     * <p>⚠️ <b>与 pi 的两处已知差异</b>（{@code docs/51 §12} 登记）：① 提示文本在这里被**冻结**
+     * ——pi 的前导消息内容同样是起点那份，中途的提示变化走 sections 差分（A4），java 的 sections
+     * 尚未落地 ⇒ 中途重建系统提示不会到达模型；② {@code rebuildLaneMessages}（压缩/恢复/重置）
+     * 会整体替换工作副本、丢掉这条声明，下一次起手按**当时**的工具集重建 ⇒ 被跨重建的工具增删
+     * 不会作为增量宣告。两者在今天都不可观察：生产上 {@code setActiveTools} 没有调用者，
+     * 工具集在一次会话里恒定（{@code docs/51 §3 F6}）。</p>
+     */
+    private static void ensureInitialDeclaration(LaneState lane, String systemPrompt,
+                                                 List<AgentTool<?, ?>> tools) {
+        if (!lane.messages.isEmpty() && lane.messages.get(0) instanceof Message.SystemMessage) {
+            return;
+        }
+        var declaration = ToolChangeDeclaration.initialDeclaration(systemPrompt,
+            ToolRegistry.definitionsOf(tools));
+        if (declaration != null) {
+            lane.messages.add(0, declaration);
+        }
     }
 
     /**

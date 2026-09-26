@@ -8,6 +8,7 @@ import java.util.Map;
 
 import com.pijava.agent.harness.PiLoop;
 import com.pijava.agent.tool.ToolResult;
+import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
@@ -197,11 +198,15 @@ final class FrameNormalizer {
                 out.put("isError", result.isError());
                 yield out;
             }
-            // A1（docs/48）新增的第四种消息。对齐剧本目前不产生系统消息（PiLoop 不发射
-            // 它，A1 也没有把 ActiveToolsChange 投影成系统消息），所以这一支**不可达**；
-            // 照 pi 的 SystemMessage 线格形状（ai/src/types.ts:491-509）留位，让将来的
-            // 剧本一旦引入就在差分里显形，而不是让帧归一化编译不过。
+            // A1（docs/48）新增的第四种消息；包 A3（docs/51 §12）之后它**有真实生产者**：
+            // `PiLoop.run` 起手宣告一次工具装载（pi 的 `declareToolChanges`，
+            // agent-loop.ts:109），内层迭代也会在工作集与可执行集不一致时补一条。
+            // 形状照 pi 的 SystemMessage 线格（ai/src/types.ts:491-509），与 pi 侧 runner 的
+            // `Normalizer.message` 的 system 分支**逐字对应**。
             // content 与 user 同规：pi 是 `string | TextContent[]`，按序拼回字符串。
+            // timestamp 不进帧（两侧都是 now/EPOCH 之外的取值，同 assistant 的豁免逻辑）。
+            // ⚠️ toolsAdded 走 `toToolDeclaration` 剥成 pi 的**三键**（pi 的 Tool 就是三键，
+            // 而 java 的转录槽装的是七件套 ToolDefinition）。
             case Message.SystemMessage system -> {
                 var out = new LinkedHashMap<String, Object>();
                 out.put("role", "system");
@@ -210,10 +215,15 @@ final class FrameNormalizer {
                     out.put("sections", system.sections());
                 }
                 if (!system.toolsAdded().isEmpty()) {
-                    out.put("toolsAdded", system.toolsAdded());
+                    out.put("toolsAdded", system.toolsAdded().stream()
+                        .map(Transcripts::toToolDeclaration)
+                        .map(ConformanceRunner::declarationOf)
+                        .toList());
                 }
                 if (!system.toolsRemoved().isEmpty()) {
-                    out.put("toolsRemoved", system.toolsRemoved());
+                    out.put("toolsRemoved", system.toolsRemoved().stream()
+                        .map(reference -> CanonicalJson.obj("name", reference.name()))
+                        .toList());
                 }
                 yield out;
             }

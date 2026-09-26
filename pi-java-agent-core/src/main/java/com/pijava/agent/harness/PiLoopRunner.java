@@ -57,6 +57,9 @@ final class PiLoopRunner {
             boolean hasMoreToolCalls = true;
 
             while (hasMoreToolCalls || !pending.isEmpty()) {
+                // pi: preparedMessages 在**内层每轮**重新起手（agent-loop.ts:179），
+                // 只有走了 prepareNextTurn 那一支才会被填上。
+                var prepared = List.<Message>of();
                 if (lastCompletedTurn != null) {
                     // pi: prepareNextTurn 在**下一轮的开头**调用一次（agent-loop.ts:176-183），
                     // 此时 shouldStopAfterTurn 已经放行 —— 顺序与本类此前的实现相反。
@@ -67,6 +70,7 @@ final class PiLoopRunner {
                             if (update.context() != null) {
                                 context = copyOf(update.context());
                             }
+                            prepared = update.preparedMessages();
                             config = withModelAndThinking(config, update);
                         }
                     }
@@ -80,16 +84,17 @@ final class PiLoopRunner {
                 }
                 messages = context.messages();
 
-                // pi: 下一轮助手响应之前先注入 pending 消息
-                if (!pending.isEmpty()) {
-                    for (var message : pending) {
-                        emit.emit(new Event.MessageStart(message));
-                        emit.emit(new Event.MessageEnd(message));
-                        messages.add(message);
-                        newMessages.add(message);
-                    }
-                    pending.clear();
+                // pi: prepareNextTurn 交回的分段差分消息与排队消息合并后，**无条件**过一遍
+                // declareToolChanges（agent-loop.ts:208-215）—— 不是「有 pending 才注入」：
+                // 工具集变了但没有 pending 消息时，恰恰要靠这一支新建一条声明消息。
+                var toProcess = ToolChangeDeclaration.declare(context, concat(prepared, pending));
+                for (var message : toProcess) {
+                    emit.emit(new Event.MessageStart(message));
+                    emit.emit(new Event.MessageEnd(message));
+                    messages.add(message);
+                    newMessages.add(message);
                 }
+                pending.clear();
 
                 var message = streamAssistantResponse(context, config, emit);
                 newMessages.add(message);
@@ -175,6 +180,22 @@ final class PiLoopRunner {
 
     private static ArrayList<Message> poll(Supplier<List<Message>> source) {
         return source == null ? new ArrayList<>() : new ArrayList<>(source.get());
+    }
+
+    /**
+     * pi 的 {@code [...preparedMessages, ...pendingMessages]}（{@code agent-loop.ts:209}）。
+     *
+     * <p>顺序不能反：「最后一条系统消息」是 {@code declareToolChanges} 的合并锚点，
+     * 而 pending 里的消息晚于 prepared。</p>
+     */
+    private static List<Message> concat(List<Message> prepared, List<Message> pending) {
+        if (prepared.isEmpty()) {
+            return pending;
+        }
+        var both = new ArrayList<Message>(prepared.size() + pending.size());
+        both.addAll(prepared);
+        both.addAll(pending);
+        return both;
     }
 
     // ═══════════════════════════════════════════════════════════════

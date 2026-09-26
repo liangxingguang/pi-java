@@ -67,6 +67,23 @@ public final class Transcripts {
     }
 
     /**
+     * {@link #toToolDeclaration} 的**反向**投影 —— 把线格上的声明形状装回转录里的工具槽。
+     *
+     * <p>⚠️ pi **没有**这个函数，因为 pi 的转录槽本就收声明形状（{@code SystemMessage.toolsAdded?: Tool[]}
+     * 里的 {@code Tool} 就是三键）。java 的形状不同：{@link Message.SystemMessage#toolsAdded()}
+     * 收的是 {@link ToolDefinition} 全形（包 A1 的取舍），所以在「把 {@code ToolStateChanges}
+     * 写回一条系统消息」这条路上需要一次声明 → 全形的转换。</p>
+     *
+     * <p>它**有损**（{@code label}/{@code promptSnippet}/{@code promptGuidelines}/{@code renderShell}
+     * 落回缺省），但那个方向本来就是 pi 的转录不具备的信息 —— 与
+     * {@code MessageJsonCodec.decodeToolsAdded} 从三键 JSON 读回 {@code ToolDefinition} 是同一件事，
+     * 且往返稳定（{@link #toToolDeclaration} 再剥一次仍是同一个声明）。</p>
+     */
+    public static ToolDefinition toToolDefinition(ToolDeclaration declaration) {
+        return new ToolDefinition(declaration.name(), declaration.description(), declaration.parameters());
+    }
+
+    /**
      * pi {@code transcript.ts:42-44} —— 丢掉前导系统消息（供「提示走独立字段」的 API 用）。
      *
      * <p>⚠️ 与 pi 的一处不可观察差异：pi 在没有前导系统消息时返回**同一个数组**，

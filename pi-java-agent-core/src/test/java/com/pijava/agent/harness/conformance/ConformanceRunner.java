@@ -14,6 +14,7 @@ import com.pijava.agent.harness.StreamFn;
 import com.pijava.agent.harness.StreamOptions;
 import com.pijava.agent.harness.ToolExecution;
 import com.pijava.ai.api.StreamIterator;
+import com.pijava.ai.api.ToolDeclaration;
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ExecutionMode;
 import com.pijava.agent.tool.ToolResult;
@@ -37,6 +38,19 @@ final class ConformanceRunner {
     private static final ModelId<?> BASE_MODEL = ModelId.of("openai", "mock");
 
     private ConformanceRunner() {}
+
+    /**
+     * 声明形状 → 帧里的普通 Map（{@code {name, description, parameters}}）。
+     *
+     * <p>走 Map 而不是让 Jackson 直接写 {@link ToolDeclaration} 记录：pi 的
+     * {@code canonical()} 会**递归排序对象键**，而 {@code CanonicalJson} 只递归 Map 与 List
+     * ⇒ 记录会按组件序写出，与 pi 的字典序对不上。</p>
+     */
+    static Map<String, Object> declarationOf(ToolDeclaration declaration) {
+        return CanonicalJson.obj("name", declaration.name(),
+            "description", declaration.description(),
+            "parameters", declaration.parameters());
+    }
 
     /** 跑完一个剧本，返回逐帧归一化后的 JSON 行。 */
     static List<String> run(ConformanceScript script) {
@@ -97,7 +111,14 @@ final class ConformanceRunner {
     private record ScriptTool(String name, ExecutionMode mode) implements AgentTool<Void, Void> {
         @Override public String label() { return name; }
         @Override public String description() { return "scripted tool " + name; }
-        @Override public Map<String, Object> inputSchema() { return Map.of(); }
+        /**
+         * 逐字对齐 pi 侧 runner 的 {@code Type.Object({}, { additionalProperties: true })} ——
+         * 声明的 schema 会进帧（{@code system.toolsAdded[].parameters}），两侧必须同形，
+         * 否则差分的红来自 schema 措辞而不是被测行为。
+         */
+        @Override public Map<String, Object> inputSchema() {
+            return Map.of("type", "object", "properties", Map.of(), "additionalProperties", true);
+        }
         @Override public ExecutionMode executionMode() { return mode; }
         @Override public ToolResult<Void> execute(String toolCallId, Void params,
                 com.pijava.ai.AbortSignal signal,
@@ -146,9 +167,19 @@ final class ConformanceRunner {
          */
         private static ConformanceScript.Response withEcho(
                 ConformanceScript.Response response, Context context, ModelId<?> model) {
-            var echo = "[n=" + context.messages().size()
-                + " model=" + model.provider() + "/" + model.modelName()
-                + " sys=" + (context.systemPrompt() == null ? "-" : context.systemPrompt()) + "]";
+            // `n` 数的是 **provider 看到的**消息（pi 的 `convertToLlm`/`identityConverter`
+            // 把系统消息滤掉 —— 那是提示状态，不是对话）。两侧必须同规，否则一条声明消息
+            // 就让 `n` 差 1，把措辞差异伪装成行为差异（docs/51 §12 F12）。
+            //
+            // 系统提示**不进 echo**：pi 的 `streamFn` 收到的是
+            // `normalizeContext({messages})`（agent-loop.ts:357），其 `systemPrompt` 在剧本里
+            // 恒为 undefined；java 的循环层 Context 却带着这个字段。比它等于比夹具接线，
+            // 不是比循环行为。
+            long n = context.messages().stream()
+                .filter(message -> !(message instanceof Message.SystemMessage))
+                .count();
+            var echo = "[n=" + n
+                + " model=" + model.provider() + "/" + model.modelName() + "]";
             var content = new ArrayList<ConformanceScript.Content>();
             for (int i = 0; i < response.content().size(); i++) {
                 var block = response.content().get(i);

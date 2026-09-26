@@ -188,18 +188,40 @@ public final class PiLoop {
                                   Context context) {}
 
     /**
-     * pi {@code AgentLoopTurnUpdate}（{@code types.ts:138-145}）：{@code prepareNextTurn}
-     * 的返回值。三个字段与 pi 一一对应，全部可选，{@code null} 表示「不改」。
+     * pi {@code AgentLoopTurnUpdate}（{@code types.ts:143-152}）：{@code prepareNextTurn}
+     * 的返回值。四个字段与 pi 一一对应，全部可选，{@code null} 表示「不改」。
      *
      * <p>{@code context} 是**整体替换**，不是合并 —— pi 的
      * {@code currentContext = nextTurnSnapshot.context ?? currentContext}。
      * 压缩正是靠这条通道把重建后的消息列表交回循环（{@code agent-session.ts:557-577}）。</p>
+     *
+     * <p>{@code messages} 是 pi 的 {@code preparedMessages}（{@code agent-loop.ts:180}）——
+     * 会话层**分段差分**产出的系统消息经由它进入「下一轮请求之前」的那批 pending。
+     * 它存在的意义是给 {@code declareToolChanges} 一个**可合并的锚点**：工具增删会写回
+     * 这条消息（而不是另起一条），因此模型看到的是一条同时带 sections 与 toolsAdded 的更新
+     * （{@code agent-session.ts:603-611} 的 {@code _preparePromptAndToolLoadout} 正是生产者）。
+     * 没有这条通道，「合并」那一支在 Java 上结构性不可达（{@code docs/51 §3 F9}）。</p>
+     *
+     * <p>⚠️ {@code null} 与**空列表**不同：前者＝不改（pi 的 {@code undefined}，
+     * 交给 {@code previousSnapshot?.messages}），后者＝「这一轮没有 prepared 消息」——
+     * 而 {@code declareToolChanges} 对两者一视同仁（都是空 pending 前缀），故此处不细分。</p>
      */
-    public record NextTurnUpdate(ModelId<?> model, ModelThinkingLevel thinking, Context context) {
+    public record NextTurnUpdate(ModelId<?> model, ModelThinkingLevel thinking, Context context,
+                                 List<Message> messages) {
 
-        /** 只改 model / thinking。 */
+        /** 只改 model / thinking（包 A3 之前的形状）。 */
         public NextTurnUpdate(ModelId<?> model, ModelThinkingLevel thinking) {
-            this(model, thinking, null);
+            this(model, thinking, null, null);
+        }
+
+        /** 只改 model / thinking / context（包 A3 之前的形状）。 */
+        public NextTurnUpdate(ModelId<?> model, ModelThinkingLevel thinking, Context context) {
+            this(model, thinking, context, null);
+        }
+
+        /** pi 的 {@code messages?: AgentMessage[]} —— {@code null} 视同「没有 prepared 消息」。 */
+        public List<Message> preparedMessages() {
+            return messages == null ? List.of() : messages;
         }
     }
 
@@ -274,15 +296,21 @@ public final class PiLoop {
      */
     public static List<Message> run(List<Message> prompts, Context context,
                                     Config config, Sink emit) {
-        var newMessages = new ArrayList<>(prompts);
-        // pi: {...context, messages: [...context.messages, ...prompts]} —— 扩展**同一**列表
-        context.messages().addAll(prompts);
+        // pi: initialMessages = declareToolChanges(context, prompts)（agent-loop.ts:109）——
+        // 起手先宣告一次工具装载，并把（可能新增的）声明消息**并进上下文**，于是内层循环
+        // 再跑 declareToolChanges 时两侧已经相等、不会再重复宣告。少了这一支，工具集在
+        // 「起手本来就与可执行集不一致」的上下文里（例如 conformance 那种只有工具的
+        // AgentContext）会把声明推迟到第一次内层迭代，帧序与 pi 不同。
+        var initialMessages = ToolChangeDeclaration.declare(context, prompts);
+        var newMessages = new ArrayList<>(initialMessages);
+        // pi: {...context, messages: [...context.messages, ...initialMessages]} —— 扩展**同一**列表
+        context.messages().addAll(initialMessages);
 
         emit.emit(new Event.AgentStart());
         emit.emit(new Event.TurnStart());
-        for (var prompt : prompts) {
-            emit.emit(new Event.MessageStart(prompt));
-            emit.emit(new Event.MessageEnd(prompt));
+        for (var message : initialMessages) {
+            emit.emit(new Event.MessageStart(message));
+            emit.emit(new Event.MessageEnd(message));
         }
 
         PiLoopRunner.runLoop(context, newMessages, config, emit);

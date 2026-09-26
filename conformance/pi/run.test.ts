@@ -283,6 +283,31 @@ class Normalizer {
 
 	message(m: AgentMessage): unknown {
 		if (m.role === "user") return { role: "user", content: m.content };
+		// A3 parity (docs/51 §12): `runAgentLoop` calls `declareToolChanges` **before** the
+		// first request (agent-loop.ts:109), so a context that does not already declare its
+		// tools gets a synthetic system message as the first frame. Twin of the Java
+		// `FrameNormalizer.system` branch — the two must stay byte-compatible.
+		// `timestamp` does NOT ride (Date.now() on both sides, same exclusion as the
+		// assistant branch); `sections`/`toolsAdded`/`toolsRemoved` drop when empty.
+		if (m.role === "system") {
+			const sm = m as unknown as {
+				content: string | Array<{ type: string; text?: string }>;
+				sections?: Record<string, string | null>;
+				toolsAdded?: Array<{ name: string; description: string; parameters: unknown }>;
+				toolsRemoved?: Array<{ name: string }>;
+			};
+			const out: Record<string, unknown> = {
+				role: "system",
+				content:
+					typeof sm.content === "string"
+						? sm.content
+						: sm.content.map((c) => c.text ?? "").join(""),
+			};
+			if (sm.sections !== undefined && Object.keys(sm.sections).length > 0) out.sections = sm.sections;
+			if (sm.toolsAdded?.length) out.toolsAdded = sm.toolsAdded;
+			if (sm.toolsRemoved?.length) out.toolsRemoved = sm.toolsRemoved;
+			return out;
+		}
 		if (m.role === "assistant") {
 			// 3a parity (docs/31 §8.19): provider identity + usage now render —
 			// twin of the Java FrameNormalizer assistant branch. The mock sets all
@@ -454,9 +479,17 @@ async function runScript(script: Script): Promise<string[]> {
 	const completedTurns = () => streamCalls - 1;
 	// Byte-for-byte the same echo as the Java runner's `Driver.withEcho` —
 	// changing one without the other turns a wording difference into a
-	// reported behavior difference.
+	// reported behavior difference. `n` counts the messages the **provider**
+	// sees, i.e. what `convertToLlm` (identityConverter) hands over — system
+	// messages are prompt state, not conversation (docs/51 §12 F12).
+	//
+	// The system prompt is deliberately NOT echoed: the stream function receives
+	// `normalizeContext({messages})` (agent-loop.ts:357), whose `systemPrompt` is
+	// always undefined here, while the Java side's loop-level Context carries the
+	// field. Echoing it would compare harness wiring, not loop behavior.
 	const withEcho = (response: ScriptResponse, context: Context, model: Model<any>): ScriptResponse => {
-		const echo = `[n=${context.messages.length} model=${model.provider}/${model.id} sys=${context.systemPrompt ?? "-"}]`;
+		const n = context.messages.filter((m) => (m as { role: string }).role !== "system").length;
+		const echo = `[n=${n} model=${model.provider}/${model.id}]`;
 		const content = response.content.map((block, index) =>
 			index === 0 && block.type === "text"
 				? { ...block, text: `${echo} ${block.text ?? ""}` }
