@@ -1,6 +1,9 @@
 # 51 - 包 A3：工具增删状态线（生产者 ＋ 重放后半 ＋ 车道原生渲染）
 
-**状态：已批准（2026-09-26）—— 实施中，三步 A3a/A3b/A3c 全做，§9 R1–R7 全按建议裁决。**
+**状态：A3a（`bef15fa`）与 A3b（`8a0f67c`）已闭环；A3c `1700985`/`f6665ec` 部分落地 ——
+Mistral 与 Responses 两条车道已原生渲染并删守卫、R2（删 `Entry.ActiveToolsChange`）与 R6（`toolCount` 实测改正）已落；
+⚠️ **Anthropic 与 Completions 两条车道被钉住的 SDK 类型族挡住**（要发的内容块在非 beta 族里不存在），
+需独立裁决 ⇒ 见 §3 **F13**、§12.4、§10 **L-G/L-H**、§12.5 的验收现状。**
 **基准：** pi-java `51aaddc`（包 B87/B88 文档收尾）；pi `3390bd936`（2026-09-20，已核 `git rev-parse HEAD` ＝ 该提交、`git status` 空）
 **裁决记录：** R1 三步全做 · R2 删 `Entry.ActiveToolsChange` · R3 本包补 `NextTurnUpdate.messages` · R4 用归一后序列化比 · R5 不带 `constrainedSampling`/`eager_input_streaming`（留注释指向）· R6 `toolCount()` 实测后定 · R7 接受三步拆分并删守卫
 **设计期实测：** ✅ pi 的 oracle 已跑通 —— `transcript-tool-changes.test.ts` **11/11 绿**（同族 `system-message-replay` ＋ `providers` 另 **35/35 绿**），逐字输出与补数据面的过程见 §7.2。Java 侧现状未跑（§7.3）。
@@ -205,6 +208,7 @@ const transcriptTools = resolveTranscriptTools(context.messages,
 | **F10** | `Entry.ActiveToolsChange` 是**只读死形状**：生产无生产者，pi 主线也不发射（P14） | `Entry.java:121-131`、`EntryJsonCodec:42`、`ContextEntries` 不投影它 |
 | **F11** | ⚠️ **设计稿漏了 pi 的「前导声明」生产者**：pi 的 `createMutableAgentState`（`agent.ts:84-85`）在会话起点把「系统提示 ＋ 工具」折成一条**前导系统消息**塞进 `state.messages`（`timestamp: 0`），`declareToolChanges` 的对照基准正是它。Java 的 `Context` 把 `systemPrompt`/`tools` 放成独立字段、工作副本里什么都没有 ⇒ 照搬 `declareToolChanges` 会让**每个会话的第一轮都宣告「新增全部工具」**，而 pi 从不产生那条消息。⇒ 必须在起手补同一条声明（落点 `PiLaneEngine.startPass`，实施记录 §12.2） | pi `agent.ts:75-99`；反证：`conformance/pi-out/S2.pi.jsonl` 帧 3 起就是 user 消息，没有声明帧 |
 | **F12** | ⚠️ **10 个带工具的 conformance 剧本是陈旧的**：它们生成于 pi 还没有 `runAgentLoop:109` 起手宣告的版本（帧序里没有系统消息），且 pi 侧 runner 的 `Normalizer` 没有 `system` 分支 ⇒ **重新生成会以 `TypeError: tr.content.map is not a function` 崩掉**。⇒ 已补 runner 的 system 分支、重生成全部 15 份；两侧 echo 的 `n` 改成「provider 看到的」消息数（系统消息是提示状态，不是对话），`sys=` 分量删除（pi 侧 `streamFn` 收到的是 `normalizeContext({messages})`，该字段恒为 undefined）| `conformance/pi/run.test.ts:284-330`、§12.3 |
+| **F13** | ⚠️ **A3c 对 Anthropic 与 Completions 不可实施**（对钉住的 SDK 类型族而言）：① Anthropic 的 `tool_addition`/`tool_removal` 内容块**只**存在于 `com.anthropic.models.beta.messages.*` —— 非 beta 的 `com.anthropic.models.messages.ContentBlockParam` 没有这两个变体（其 `ofMidConvSystem` 的载荷是 `List<TextBlockParam>`，纯文本）；要发它们必须把整条 Anthropic 请求（`MessageCreateParams`/`MessageParam`/`ContentBlockParam`/`ToolUnion`/思考配置，**连流式事件类型 `RawMessageStreamEvent` → `BetaRawMessageStreamEvent`**）迁到 beta 族。② Completions 的 Kimi 形状 `{role:"system", tools:[…]}` 在 `com.openai.models.chat.completions.ChatMessageParam**` 里**没有任何带 `tools` 的系统消息变体**（`ofSystem` 收的 `ChatCompletionSystemMessageParam` 只有 content/name），且 openai-java **4.42.0 没有 beta 的 chat-completions 命名空间** ⇒ 类型化参数完全表达不了，只能手搓 JSON body。③ 反过来，**Responses 完全可表达**（`ResponseInputItem.ofAdditionalTools`／`ofToolSearchCall`／`ofToolSearchOutput` ＋ `FunctionTool.deferLoading` 都在非 beta 族里）—— 已落地 | `javap` 实测（§12.4 逐条命令）、`com.anthropic…:2.52.0`、`com.openai…:4.42.0`（`pi-java-bom:30-31`）|
 
 ---
 
@@ -286,6 +290,12 @@ pending.clear();
 | **A3c** | 四条车道的原生渲染 ＋ 删守卫 | stash 实现 ＋ 旧代码复跑（现在会**响亮抛**，红是白送的） | A3b |
 
 ⚠️ 三步的**可达性不同**：A3a/A3b 走折叠支，**生产可达**；A3c 在 A7 落地前只有测试可达（F5）。这三步要不要全做，见 §9 R1。
+
+⚠️ **实施结论（2026-09-26）**：R1 裁决「三步全做」，但**第三步只做成了两条车道** ——
+Anthropic 与 Completions 要发的形状不在本项目钉住的 SDK 类型族里（§3 F13），
+各自需要一次车道级重写，已另立登记（§10 L-G/L-H）。**这不是设计稿能预见的**：
+§4.4 的三条行是按 pi 的 TS 形状写的，而 TS 侧 SDK 的结构类型容忍任意键，
+Java 侧的类型化参数不容忍。
 
 ---
 
@@ -396,6 +406,9 @@ $ cd D:/workplaceForai/pi/packages/ai && node scripts/generate-models.ts --stric
 | **L-D** | Anthropic 的 `supportsMidConvoEffort` / `insertThinkingLevelMessages` / `MID_CONVERSATION_OUTPUT_CONFIG_BETA` 一族 | 新登记：与工具的 mid-convo **同族但独立**（`anthropic-messages.ts:1029`、`:1434`），本包不碰 |
 | **L-E** | Responses 的 `instructionRole`（developer vs system）与 `supportsDeveloperRole` | 既有 `docs/41 A-07`；本包只照抄那个三元式，不改其判定 |
 | **L-F** | TUI/web 的系统消息渲染（B87④） | 仍归宿主面；本包后系统消息**会有真实生产者** ⇒ 它从「静默误渲染」升级为**生产可见**，优先级应上调 |
+| **L-G** | **Anthropic 的车道原生渲染**（F13） | 新登记：需要把整条 Anthropic 请求迁到 `com.anthropic.models.beta.messages.*`（`MessageCreateParams`/`BetaMessageParam`/`BetaContentBlockParam`/`BetaTool`/`BetaThinkingConfigParam`）**含流式事件类型** ⇒ 独立一包。**顺带会解决 B89**（顶层 `system` 的字符串 vs 块数组 —— beta 族的 `system()` 本来就是块数组）。本包只落了 Mistral／Responses |
+| **L-H** | **Completions 的 Kimi 形状**（F13） | 新登记：`{role:"system", tools:[…]}` 在 openai-java 4.42.0 里零表达能力（非 beta 无该变体、无 beta 命名空间）⇒ 只能手搓 JSON body（仓里有 `PiHttpClient` 这条现成通路）或升级 SDK 后重查。**别只落 `requestTools` 那一半** —— 那会让工具声明被静默丢弃，比响亮的守卫更糟 |
+| **L-I** | Responses 的 `tool_search_output` 的 `defer_loading` 与本仓 `FunctionTool` 的关系 | 已随本包落地并实测；登记仅为备忘：`FunctionTool.deferLoading` 是**非 beta** 就有的，不要误以为要迁 beta |
 
 ---
 
@@ -511,4 +524,70 @@ rm -rf <pi>/packages/agent/test/conformance <pi>/packages/agent/vitest.conforman
 ⚠️ 用 `./node_modules/.bin/vitest`（shell 包装脚本）；`node ./node_modules/.bin/vitest` 会以
 `SyntaxError: missing ) after argument list` 失败。
 
-### 12.4 步骤 A3c —— 车道原生渲染（待实施）
+### 12.4 步骤 A3c —— 车道原生渲染：**两条落地、两条被 SDK 挡住**（`1700985`，2026-09-26）
+
+**已落地**：
+
+| 车道 | 落了什么 |
+|---|---|
+| **Responses** | 门（`supportsAdditionalTools \|\| supportsToolSearch`）、`requestTools`、非前导系统消息就地锚定（`additional_tools` 项／合成的 `tool_search_call`+`tool_search_output` 对，`call_id` 确定性哈希）、前导走 `getSystemMessageText`／其余走 `renderSystemMessageUpdate`、删 `:142` 守卫 |
+| **Mistral** | 中途系统消息落成第二条 `role:system` 消息（`index === 0` 走完整提示、其余走分段更新）、删 `:318` 守卫 |
+| **agent-core / TUI** | R2 删 `Entry.ActiveToolsChange`；R6 `toolCount()` 改读生效子集（`ToolRegistry.activeOf`） |
+
+另外**修掉一处此前不可观察的下标偏差**：pi 的 `if (!isLeadingSystemMessage) msgIndex++`
+（`openai-responses-shared.ts:349`）把**中途系统消息也算一个下标** —— 回填 id 里的
+`msg_pi_${msgIndex}` 与 tool_search 的种子都用它。折叠支下中途系统消息为零 ⇒ 这条自增
+从未生效；A3 放开之后必须补上，否则 id 与 call_id 都与 pi 不同。
+
+**未落地（F13）—— 实测的 SDK 类型族证据**：
+
+```
+# Anthropic：非 beta 的 ContentBlockParam 没有 tool_addition/tool_removal
+javap -cp …/anthropic-java-core-2.52.0.jar com.anthropic.models.messages.ContentBlockParam
+  → 只有 ofText/ofImage/…/ofToolSearchToolResult/ofContainerUpload/ofMidConvSystem
+  → MidConversationSystemBlockParam.content() = List<TextBlockParam>（纯文本）
+jar tf … | grep -iE "tooladdition|toolremoval"
+  → 只命中 com/anthropic/models/beta/messages/BetaRequestTool{Addition,Removal}Block
+
+# Completions：没有任何带 tools 的系统消息参数
+javap -cp …/openai-java-core-4.42.0.jar 'com.openai.models.chat.completions.ChatCompletionMessageParam$Companion'
+  → ofDeveloper/ofSystem/ofUser/ofAssistant/ofTool/ofFunction（没有 kimi 那种）
+javap … ChatCompletionSystemMessageParam → content/name（没有 tools）
+jar tf … | grep -i "beta/chat/completions" → 空（没有 beta 命名空间可用）
+
+# Responses：反过来，全都在非 beta 族里（所以能落）
+javap … 'com.openai.models.responses.ResponseInputItem$Companion'
+  → ofAdditionalTools / ofToolSearchCall / ofToolSearchOutput  ✓
+javap … com.openai.models.responses.FunctionTool → deferLoading ✓
+```
+
+⇒ **Anthropic 与 Completions 的原生渲染各自是一次「车道级类型族迁移或手搓 body」**，
+不走「顺手一起做」。已登记为 §10 的 **L-G**（Anthropic）与 **L-H**（Completions）。
+
+**先红与变异（Responses）**：
+
+- 先红 = `git stash push -- ResponsesMessageConverter.java` ⇒ 夹具 **4 红**，且四条全部是
+  「请求没有真的发出去」—— 旧代码的 `requireOnlyLeadingSystemMessage` 在构建期响亮抛，
+  桩服务器零请求（**这正是设计稿 §6 预测的红形态**）。
+- 变异红集：N1 关掉锚定门 **3 红** · N2 锚定不看 `anchorsAdditions` **1 红** ·
+  N3 搜索结果不打 `defer_loading` **1 红** · N4 中途消息改用完整提示渲染 **2 红** ·
+  N5 `call_id` 失去确定性 **1 红**。
+- ⚠️ 探针脚本第一版对 N1/N3 **静默无效**（`perl -0pi -e 's/…\n…/'` 匹配不上 **CRLF**
+  行尾的 java 源文件）⇒ 两轮都跑出「零红」，靠 `grep` 复核才发现是探针没生效、
+  不是夹具没牙。**凡探针报「零红」，先复核变异是否真的落到文件里**（`docs/50 §12.2`
+  那条「夹具没牙」的镜像教训）。
+
+**⚠️ 两处已知差异（都在 Responses 夹具的类注释里写死）**：① 文本项的 role —— pi 的
+`instructionRole` 是 `model.reasoning && supportsDeveloperRole !== false`，java 恒发
+`system`（`supportsDeveloperRole` 未接进 `ModelCompat`）⇒ 夹具用 `reasoning:false` 的模型
+使两侧同形，差异本身登记 §10 **L-E**（`docs/41 A-07`）。② `sections` 的 `null` 删除语义
+（`docs/49 §9 R3①`）⇒ 夹具只用 content ＋工具字段。
+
+### 12.5 尚未做的验收（照 §8 的 grep 清单）
+
+| # | 现状 |
+|---|---|
+| §8-1／2／6 | ✅ 全过（A3a 的函数只在 `Transcripts` 与调用它们的车道）|
+| §8-2 的「删守卫」 | ⚠️ **两条未过**：`requireOnlyLeadingSystemMessage` 仍在 `AnthropicRequestBuilder:64` 与 `OpenAICompletionsMessageConverter:102`（F13 挡住的两条车道）；Mistral 与 Responses 的两处已删 |
+| §8-3／4（beta 头与占位符） | ❌ 未做（Anthropic，F13）|
+| §8-5（`ActiveToolsChange`） | ✅ 零命中 |
