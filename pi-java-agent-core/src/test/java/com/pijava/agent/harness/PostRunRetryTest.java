@@ -79,7 +79,7 @@ class PostRunRetryTest {
             new HookSystem(lane), lane, () -> compactionSettings, null,
             new ExecutionContext.TokenCounter(), null, null, null, null,
             SummaryGenerator.truncating(), null, NoopTelemetryContext.INSTANCE,
-            compactionObserver, () -> retrySettings, aborted, observer);
+            compactionObserver, () -> retrySettings, aborted, observer, null, null);
     }
 
     private static final RetrySettings FAST = new RetrySettings(true, 3, 1, 1_000L);

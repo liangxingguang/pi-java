@@ -199,6 +199,10 @@ public final class LaneState {
     ModelId<?> model;
     ModelThinkingLevel thinkingLevel;
     String systemPrompt;
+    /** 追加到系统提示 {@code rules} 段的准则条目（包 A4b；pi 的 {@code promptGuidelines}）。 */
+    List<String> promptGuidelines = List.of();
+    /** 追加提示（包 A4b；pi 的 {@code appendSystemPrompt}，渲染成 {@code addendum} 段）。 */
+    String appendSystemPrompt = "";
     Set<AgentTool<?, ?>> activeTools;
     CompactionSettings compactionSettings;
     /** steer / followUp 队列的排空模式（pi 在 Agent 上是纯内存的，不入日志）。 */

@@ -93,16 +93,34 @@ class AgentSessionTest {
         }
     }
 
+    /**
+     * 包 A4b：{@code --system-prompt} 与 {@code --append-system-prompt} 现在落在**两个槽**里
+     * —— 前者是 pi 的 {@code customPrompt}（替换默认 preamble 并抑制 tools/rules/docs 三段），
+     * 后者是 pi 的 {@code appendSystemPrompt}（渲染成 {@code addendum} 段）。
+     *
+     * <p>本条包之前两者被拼成**一个**基础串，所以这里原本断言的是拼接结果。</p>
+     */
     @Test
-    void appendSystemPromptIsJoined() {
+    void appendSystemPromptIsSentAsTheAddendumSection() {
         try (var session = AgentSession.create(
                 ArgsParser.parse(new String[] {
                     "--session-dir", sessionDir.toString(),
                     "--system-prompt", "base",
                     "--append-system-prompt", "extra-one",
                     "--append-system-prompt", "extra-two"}))) {
-            assertThat(session.harness().getSystemPrompt())
-                .isEqualTo("base\n\nextra-one\n\nextra-two");
+            assertThat(session.harness().getSystemPrompt()).isEqualTo("base");
+            assertThat(session.harness().getAppendSystemPrompt()).isEqualTo("extra-one\n\nextra-two");
+        }
+    }
+
+    /** 没给 {@code --system-prompt} ⇒ 空串 ＝ 走默认 preamble（不再是原来那份常量）。 */
+    @Test
+    void withoutAnExplicitPromptTheCustomPromptIsEmpty() {
+        try (var session = AgentSession.create(
+                ArgsParser.parse(new String[] {"--session-dir", sessionDir.toString()}))) {
+            assertThat(session.harness().getSystemPrompt()).isEmpty();
+            assertThat(session.harness().getAppendSystemPrompt()).isEmpty();
+            assertThat(session.harness().getPromptGuidelines()).isNotEmpty();
         }
     }
 

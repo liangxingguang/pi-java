@@ -66,14 +66,44 @@ final class SessionSetup {
         return ThinkingLevels.parse(defaultThinkingLevel);
     }
 
-    /** 系统提示：CLI 显式值 → 默认提示 + append 段。 */
-    static String systemPromptFor(Args args) {
-        var base = args.systemPrompt() != null
-            ? args.systemPrompt() : AgentSession.DEFAULT_SYSTEM_PROMPT;
-        if (args.appendSystemPrompt().isEmpty()) {
-            return base;
-        }
-        return base + "\n\n" + String.join("\n\n", args.appendSystemPrompt());
+    /**
+     * pi-java 默认的**表达风格条目** —— 进系统提示的 {@code rules} 段
+     * （pi {@code BuildSystemPromptOptions.promptGuidelines}，{@code system-prompt.ts:23-24}）。
+     *
+     * <p>包 A4b 之前这些条目是 {@code AgentSession.DEFAULT_SYSTEM_PROMPT} 的一部分（拼在
+     * preamble 正文里）。pi 的形状里 preamble 只是定位句、条目归 {@code rules} 段 ⇒ 移到
+     * 这里，正文与渲染顺序都保持。</p>
+     *
+     * <p>⚠️ 「简洁」与「写清文件路径」两条**不在这里**：pi 的 {@code buildRules} 有同义的两条
+     * <b>固定兜底</b>（{@code :115-116}），而 {@code buildRules} 按 trim 后的字面值去重
+     * （{@code :87-93}）。两条都写的话（pi-java 的原文带句号、pi 的兜底不带）会去重不掉，
+     * 段落里就多出一条重复项 —— 故这里只留五条，那两条交给兜底。</p>
+     */
+    static final List<String> DEFAULT_PROMPT_GUIDELINES = List.of(
+        "Tool calls are displayed to the user as cards with their results; "
+            + "do not repeat their contents in text",
+        "Before the first tool call, say in one sentence what you are about to do",
+        "While working, give a one-sentence update at key moments only "
+            + "(a finding, a direction change, a blocker)",
+        "Never end a sentence with a colon right before a tool call; use a period instead",
+        "End each turn with a one- or two-sentence summary: what changed and what is next");
+
+    /**
+     * 车道级自定义提示 —— pi 的 {@code customPrompt}。
+     *
+     * <p>只有 {@code --system-prompt} 给了值才非空。⚠️ pi 里这个入参**替换**默认 preamble
+     * 并**抑制** {@code tools}/{@code rules}/{@code docs} 三段（{@code system-prompt.ts:139-141}）
+     * —— 包 A4b 之前 pi-java 把它当成整份提示拼进基础串（工具清单仍由 builder 追加），
+     * 现在按 pi 的语义：给了自定义提示就没有那三段。</p>
+     */
+    static String customPromptFor(Args args) {
+        return args.systemPrompt() == null ? "" : args.systemPrompt();
+    }
+
+    /** {@code --append-system-prompt}（pi 的 {@code appendSystemPrompt} → {@code addendum} 段）。 */
+    static String appendSystemPromptFor(Args args) {
+        return args.appendSystemPrompt().isEmpty()
+            ? "" : String.join("\n\n", args.appendSystemPrompt());
     }
 
     /** 会话解析：--no-session 直接返回，否则按持久后端 resolve。 */

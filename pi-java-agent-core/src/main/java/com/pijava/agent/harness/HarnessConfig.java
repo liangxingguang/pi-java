@@ -1,5 +1,6 @@
 package com.pijava.agent.harness;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
@@ -70,6 +71,10 @@ import com.pijava.telemetry.TelemetryContext;
  *                           信号，Java 方言为每 50ms 轮询本谓词。默认恒 false
  * @param retryObserver      {@code auto_retry_*} / {@code summarization_retry_*}
  *                           会话事件的宿主观察口（3d）；默认 {@code NOOP}
+ * @param promptGuidelines   追加到系统提示 {@code rules} 段的准则条目（包 A4b）——
+ *                           pi {@code BuildSystemPromptOptions.promptGuidelines}
+ * @param appendSystemPrompt 追加提示（包 A4b）—— pi 的 {@code appendSystemPrompt}，
+ *                           渲染成系统提示的 {@code addendum} 段；空串 ＝ 不产出该段
  */
 public record HarnessConfig(
     StreamFn streamFn,
@@ -96,12 +101,16 @@ public record HarnessConfig(
     com.pijava.agent.compaction.CompactionObserver compactionObserver,
     Supplier<RetrySettings> retrySettings,
     BooleanSupplier retryAborted,
-    RetryObserver retryObserver
+    RetryObserver retryObserver,
+    List<String> promptGuidelines,
+    String appendSystemPrompt
 ) {
     /** Canonical constructor applying default values and defensive copies. */
     public HarnessConfig {
         activeTools = Set.copyOf(activeTools);
         skills = Map.copyOf(skills);
+        promptGuidelines = promptGuidelines == null ? List.of() : List.copyOf(promptGuidelines);
+        if (appendSystemPrompt == null) appendSystemPrompt = "";
         if (retryPolicy == null) retryPolicy = RetryPolicy.defaultPolicy();
         if (telemetry == null) telemetry = NoopTelemetryContext.INSTANCE;
         if (thinkingLevelMap == null) thinkingLevelMap = ThinkingLevelMap.empty();
@@ -137,7 +146,7 @@ public record HarnessConfig(
              null, null, toolRegistry, toolContext, commandPrefix, compactionSettings,
              skills, retryPolicy, telemetry, thinkingLevelMap, steeringMode,
              followUpMode, toolExecution, streamListener, SummaryGenerator.truncating(),
-             null, null, null, null);
+             null, null, null, null, List.of(), "");
     }
 
     public static final class Builder {
@@ -166,6 +175,8 @@ public record HarnessConfig(
         private Supplier<RetrySettings> retrySettings;
         private BooleanSupplier retryAborted;
         private RetryObserver retryObserver;
+        private List<String> promptGuidelines = List.of();
+        private String appendSystemPrompt = "";
 
         public Builder streamFn(StreamFn fn) { this.streamFn = fn; return this; }
         public Builder model(ModelId<?> m) { this.model = m; return this; }
@@ -228,6 +239,16 @@ public record HarnessConfig(
             this.retryObserver = observer; return this;
         }
 
+        /** 追加到系统提示 {@code rules} 段的准则条目（包 A4b；默认空）。 */
+        public Builder promptGuidelines(List<String> guidelines) {
+            this.promptGuidelines = guidelines == null ? List.of() : List.copyOf(guidelines); return this;
+        }
+
+        /** 追加提示（包 A4b；pi 的 {@code appendSystemPrompt}，渲染成 {@code addendum} 段）。 */
+        public Builder appendSystemPrompt(String text) {
+            this.appendSystemPrompt = text == null ? "" : text; return this;
+        }
+
         /** Build the {@link HarnessConfig}, validating required fields. */
         public HarnessConfig build() {
             if (streamFn == null) throw new IllegalStateException("streamFn is required");
@@ -240,7 +261,8 @@ public record HarnessConfig(
                                      retryPolicy, telemetry, thinkingLevelMap,
                                      steeringMode, followUpMode, toolExecution,
                                      streamListener, summaryGenerator, compactionObserver,
-                                     retrySettings, retryAborted, retryObserver);
+                                     retrySettings, retryAborted, retryObserver,
+                                     promptGuidelines, appendSystemPrompt);
         }
     }
 }

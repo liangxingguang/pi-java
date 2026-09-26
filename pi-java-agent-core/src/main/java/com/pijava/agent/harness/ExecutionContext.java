@@ -1,5 +1,6 @@
 package com.pijava.agent.harness;
 
+import java.util.List;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -58,7 +59,9 @@ record ExecutionContext(
     com.pijava.agent.compaction.CompactionObserver compactionObserver,
     Supplier<RetrySettings> retrySettings,
     BooleanSupplier retryAborted,
-    RetryObserver retryObserver
+    RetryObserver retryObserver,
+    Supplier<List<String>> promptGuidelines,
+    Supplier<String> appendSystemPrompt
 ) {
     ExecutionContext {
         // 与 HarnessConfig 的规范默认同置：直接构造 ExecutionContext 的装配（测试、
@@ -78,6 +81,12 @@ record ExecutionContext(
         }
         if (retryObserver == null) {
             retryObserver = RetryObserver.NOOP;
+        }
+        if (promptGuidelines == null) {
+            promptGuidelines = List::of;
+        }
+        if (appendSystemPrompt == null) {
+            appendSystemPrompt = () -> "";
         }
     }
 

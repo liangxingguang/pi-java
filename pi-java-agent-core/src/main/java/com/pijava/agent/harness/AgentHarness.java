@@ -98,6 +98,8 @@ public class AgentHarness implements AutoCloseable {
         lane.model = config.model();
         lane.thinkingLevel = config.thinkingLevel();
         lane.systemPrompt = config.systemPrompt();
+        lane.promptGuidelines = config.promptGuidelines();
+        lane.appendSystemPrompt = config.appendSystemPrompt();
         lane.activeTools = config.activeTools();
         this.maxInputTokens = config.maxInputTokens();
         this.toolRegistry = config.toolRegistry();
@@ -134,7 +136,8 @@ public class AgentHarness implements AutoCloseable {
             tokenCounter, snapshotService, queueManager, () -> lane.toolExecution,
             () -> eventBus::broadcastStream, config.summaryGenerator(),
             lane::applyTurn, telemetry, config.compactionObserver(),
-            config.retrySettings(), config.retryAborted(), config.retryObserver());
+            config.retrySettings(), config.retryAborted(), config.retryObserver(),
+            () -> lane.promptGuidelines, () -> lane.appendSystemPrompt);
         this.runLifecycle = new RunLifecycle(execCtx);
         this.piEngine = new PiLaneEngine(execCtx, runLifecycle);
     }
@@ -460,6 +463,33 @@ public class AgentHarness implements AutoCloseable {
     /** The current system prompt. */
     public String getSystemPrompt() {
         return lane.systemPrompt;
+    }
+
+    /**
+     * 系统提示 {@code rules} 段的追加准则条目（包 A4b）。
+     *
+     * <p>pi 的同一件事是 {@code BuildSystemPromptOptions.promptGuidelines} —— 它是**内容**
+     * （表达风格之类），因此由宿主给，而不是由本模块硬编码。</p>
+     */
+    public void setPromptGuidelines(List<String> guidelines) {
+        if (closed) throw new HarnessClosedException();
+        lane.promptGuidelines = guidelines == null ? List.of() : List.copyOf(guidelines);
+    }
+
+    /** 追加提示（包 A4b；pi 的 {@code appendSystemPrompt}，渲染成 {@code addendum} 段）。 */
+    public void setAppendSystemPrompt(String text) {
+        if (closed) throw new HarnessClosedException();
+        lane.appendSystemPrompt = text == null ? "" : text;
+    }
+
+    /** 当前追加提示（包 A4b）。 */
+    public String getAppendSystemPrompt() {
+        return lane.appendSystemPrompt;
+    }
+
+    /** 当前系统提示 {@code rules} 段的追加准则条目（包 A4b）。 */
+    public List<String> getPromptGuidelines() {
+        return List.copyOf(lane.promptGuidelines);
     }
 
     public Set<AgentTool<?, ?>> getActiveTools() {

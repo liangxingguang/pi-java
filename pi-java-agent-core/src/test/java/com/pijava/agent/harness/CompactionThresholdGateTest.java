@@ -43,7 +43,7 @@ class CompactionThresholdGateTest {
             new HookSystem(lane), lane, () -> settings, null,
             new ExecutionContext.TokenCounter(), null, null, null, null,
             SummaryGenerator.truncating(), null, NoopTelemetryContext.INSTANCE, null,
-            null, null, null);
+            null, null, null, null, null);
     }
 
     private static Entry messageEntry(String id, Message message) {
