@@ -20,6 +20,7 @@ import com.anthropic.models.messages.ToolUnion;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import com.pijava.ai.api.SimpleOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.api.TransformMessages;
@@ -76,12 +77,20 @@ final class AnthropicRequestBuilder {
                 request.reasoning(),
                 request.maxTokens() > 0
                     ? java.util.OptionalInt.of(request.maxTokens())
-                    : java.util.OptionalInt.empty());
+                    : java.util.OptionalInt.empty(),
+                request.transcript());
+        // 包 A-10：`.maxTokens(...)` 的回落**不再是**本仓自造的字面量 `4096L` ——
+        // pi 的回落是 `options?.maxTokens ?? model.maxTokens`
+        // （`anthropic-messages.ts:1072`，**低层** stream 里也有这一跳）。
+        // ⚠️ 回落**不夹取**（pi 只在 streamSimple 里夹）；夹取由 AbstractChatApi →
+        // SimpleOptions 在漏斗处做完，故生产路径上 request.maxTokens() 到这里已是解析值。
+        // 这条回落服务**直接调 buildParams** 的路径（夹具等），且必须与漏斗共用同一个
+        // 助手 —— 否则目录未命中的模型（ModelInfo.minimal，0/0）会产出 `max_tokens: 0`。
         var builder = MessageCreateParams.builder()
                 .model(request.modelId().modelName())
                 .maxTokens(thinking.maxTokens().isPresent()
                     ? thinking.maxTokens().getAsInt()
-                    : (request.maxTokens() > 0 ? request.maxTokens() : 4096L));
+                    : SimpleOptions.maxTokensOrDefault(request.model(), request.maxTokens()));
         thinking.thinking().ifPresent(builder::thinking);
         thinking.outputConfig().ifPresent(builder::outputConfig);
 

@@ -143,4 +143,15 @@ public record StreamRequest(
     public static StreamRequest of(ModelId<?> model, List<Message> messages) {
         return new StreamRequest(model, null, messages, List.of(), -1, -1, Map.of());
     }
+
+    /**
+     * 换一个输出上限的副本（包 A-10）。
+     *
+     * <p>消费方是 {@link SimpleOptions#resolveRequest}：pi 的夹取发生在车道的
+     * {@code streamSimple} 里，java 对应的是 {@code AbstractChatApi.stream} ——
+     * 那里把请求换成解析后的副本，车道就零改签地拿到 {@code maxTokens}。</p>
+     */
+    public StreamRequest withMaxTokens(int newMaxTokens) {
+        return new StreamRequest(model, transcript, newMaxTokens, temperature, extra, reasoning);
+    }
 }

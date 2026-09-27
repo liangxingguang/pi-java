@@ -10,6 +10,8 @@ import com.anthropic.models.messages.ThinkingConfigDisabled;
 import com.anthropic.models.messages.ThinkingConfigEnabled;
 import com.anthropic.models.messages.ThinkingConfigParam;
 
+import com.pijava.ai.api.SimpleOptions;
+import com.pijava.ai.api.TranscriptContext;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.model.ModelCapability;
@@ -99,15 +101,21 @@ final class AnthropicThinking {
      * 它要写 {@code thinking.block_binding}，而 {@code anthropic-java-core:2.52.0} 里
      * <b>没有任何 {@code BlockBinding} 类型</b>（实测 javap ＋ unzip 零命中）。</p>
      *
-     * <p>⚠️ <b>{@code clampMaxTokensToContext} 不在内</b>（{@code docs/46 §3-D4}，已登记偏差）：
-     * 它要 {@code TranscriptContext}。故本方法的 {@code maxTokens} 与 pi 的
-     * <b>可能不同</b>（长上下文下 pi 会再夹一次）。</p>
+     * <p>包 A-10 前后这里变了两处：<b>① </b>{@code clampMaxTokensToContext} 现在**在**内
+     * （pi {@code anthropic-messages.ts:896} 在 {@code adjustMaxTokensForThinking} **之后**
+     * 再夹一次 —— 因为 adjust 可能**抬高**上限：{@code base + budget}）。故 {@code transcript}
+     * 成为入参。<b>② </b>调用方给的 {@code baseMaxTokens} 在生产路径上**已经是漏斗解析过的
+     * 夹取值**（{@code AbstractChatApi} → {@code SimpleOptions}），与 pi 的
+     * {@code base.maxTokens} 同位；直接调 {@code buildParams} 的路径则拿回落值
+     * （{@code SimpleOptions.maxTokensOrDefault}），同样与 pi 的
+     * {@code options?.maxTokens ?? model.maxTokens} 同形。</p>
      *
      * @param baseMaxTokens 调用方给的输出上限；空 ≙ pi 的 {@code options.maxTokens ?? model.maxTokens}
      *                      （两条路在 {@code adjust} 里同值，见 {@link ThinkingBudgets#adjust}）
+     * @param transcript    夹取要读的会话（pi 的 {@code context}，{@code :896}）
      */
     static Resolved resolve(ModelInfo model, ModelCompat compat, Optional<ThinkingLevel> reasoning,
-                            OptionalInt baseMaxTokens) {
+                            OptionalInt baseMaxTokens, TranscriptContext transcript) {
         if (model == null || !model.capabilities().contains(ModelCapability.THINKING)) {
             return new Resolved(Optional.empty(), Optional.empty(), OptionalInt.empty());
         }
@@ -127,10 +135,12 @@ final class AnthropicThinking {
         }
         var adjusted = ThinkingBudgets.adjust(
             baseMaxTokens, model.maxOutputTokens(), level, ThinkingBudgets.DEFAULT);
-        long room = Math.max(0L, (long) adjusted.maxTokens() - ThinkingBudgets.MIN_ANSWER_TOKENS);
+        // pi :896 —— adjust 之后**再**夹一次（adjust 会把上限抬到 base + budget）。
+        var maxTokens = SimpleOptions.clampMaxTokensToContext(model, transcript, adjusted.maxTokens());
+        long room = Math.max(0L, (long) maxTokens - ThinkingBudgets.MIN_ANSWER_TOKENS);
         return new Resolved(
             Optional.of(enabledParam(Math.min(adjusted.thinkingBudget(), room))),
-            Optional.empty(), OptionalInt.of(adjusted.maxTokens()));
+            Optional.empty(), OptionalInt.of(maxTokens));
     }
 
     /** pi {@code :1173} —— {@code {type:"enabled", budget_tokens, display}}。 */

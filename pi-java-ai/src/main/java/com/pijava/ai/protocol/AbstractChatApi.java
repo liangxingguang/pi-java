@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.AuthKind;
 import com.pijava.ai.api.ChatApi;
+import com.pijava.ai.api.SimpleOptions;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.message.AssistantMessage;
@@ -66,16 +67,20 @@ public abstract class AbstractChatApi implements ChatApi {
      */
     @Override
     public Flow.Publisher<StreamEvent> stream(StreamRequest request, ApiOptions options) {
+        // 包 A-10：请求侧选项解析（pi 的 `buildBaseOptions` 那一层）在这里**一次**做完 ——
+        // pi 把它放在每条车道的 `streamSimple` 里，而 java 的 `stream` 就是 pi 的
+        // `streamSimple`（生产唯一入口是它）。解析后换副本，8 条车道零改签拿到 maxTokens。
+        var effective = resolvesRequestOptions() ? SimpleOptions.resolveRequest(request) : request;
         var publisher = new SubmissionPublisher<StreamEvent>();
         var started = new AtomicBoolean();
         // 身份挂载只发生一次/每次订阅一致：一个流一个 timestamp。
         var timestamp = Instant.now();
         return subscriber -> {
-            publisher.subscribe(new IdentitySubscriber(subscriber, request, timestamp));
+            publisher.subscribe(new IdentitySubscriber(subscriber, effective, timestamp));
             if (started.compareAndSet(false, true)) {
                 Thread.startVirtualThread(() -> {
                     try {
-                        streamInternal(request, publisher);
+                        streamInternal(effective, publisher);
                         publisher.close();
                     } catch (Exception e) {
                         // Best-effort logging must never break error delivery.
@@ -87,6 +92,23 @@ public abstract class AbstractChatApi implements ChatApi {
                 });
             }
         };
+    }
+
+    /**
+     * 本车道是否参与请求侧选项解析（{@code docs/57 §6 R2}）。
+     *
+     * <p>默认 {@code true}：pi 的 8 条 `streamSimple` 里有 8 条过 `buildBaseOptions`
+     * ⇒「默认跟着通用路径」这一侧是安全的。**两条必须覆写为 `false`**：</p>
+     *
+     * <ul>
+     *   <li>{@link PiMessagesApi} —— pi 的 pi-messages 车道**不过** `buildBaseOptions`
+     *       （{@code pi-messages.ts:431-443} 直接 `{...options}`），它的 envelope 里
+     *       `maxTokens` 恒缺席 ⇒ 不豁免会**凭空多发**一个字段。</li>
+     *   <li>{@code FauxProvider} 的 {@code FauxChatApi} —— 测试替身，保持确定性。</li>
+     * </ul>
+     */
+    protected boolean resolvesRequestOptions() {
+        return true;
     }
 
     @Override

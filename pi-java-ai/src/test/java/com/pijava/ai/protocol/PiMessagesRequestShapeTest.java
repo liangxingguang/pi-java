@@ -104,6 +104,44 @@ class PiMessagesRequestShapeTest {
         }
     }
 
+    /**
+     * ★ 包 A-10：本车道**不参与**请求侧选项解析 —— envelope 的 {@code options} 里
+     * <b>不得</b>出现 {@code maxTokens}。
+     *
+     * <p>pi 的 pi-messages 车道**不过** {@code buildBaseOptions}
+     * （{@code pi-messages.ts:431-443} 直接 {@code {...options, reasoning, toolChoice, debug}}）
+     * ⇒ 它的 {@code maxTokens} 恒为 {@code undefined}（缺席）。而 java 的
+     * {@code AbstractChatApi} 是**所有**车道的漏斗，默认会填上解析值 —— 故
+     * {@code PiMessagesApi} 必须显式豁免（{@code docs/57 §6 R2}）。
+     * 没有这条豁免，本车道会**凭空多发**一个字段。</p>
+     *
+     * <p>夹具刻意用 {@code ModelInfo.minimal}（目录未命中）：不豁免时漏斗会填
+     * {@code NO_MODEL_CAP_FALLBACK} ⇒ 断言必红。配对的正向证据在
+     * {@code AnthropicMaxTokensWireTest}／{@code CompletionsMaxTokensWireTest}
+     * （同样缺席、同样经漏斗，那两条**该有**）。</p>
+     */
+    @Test
+    void doesNotSendTheResolvedMaxTokens() throws Exception {
+        try (var server = new RecordingHttpServer()) {
+            var api = new PiMessagesApi(
+                new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()),
+                "PI_MESSAGES_API_KEY");
+            var request = new StreamRequest(ModelInfo.minimal(ModelId.of("pi-messages", "gw")),
+                null, List.<Message>of(prompt(), user("hi")), List.of(), -1, -1, Map.of());
+            try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {
+                while (iter.hasNext()) {
+                    iter.next();
+                }
+            } catch (Exception ignored) {
+                // 桩回 400
+            }
+
+            var options = MAPPER.readTree(server.body()).path("options");
+            assertThat(options.has("maxTokens")).as(server.body()).isFalse();
+            assertThat(options.has("temperature")).as(server.body()).isFalse();
+        }
+    }
+
     private static Message.SystemMessage prompt() {
         return new Message.SystemMessage("be brief", Instant.EPOCH, Map.of(),
             List.of(new ToolDefinition("lookup", "Look up a value", Map.of("type", "object"))),

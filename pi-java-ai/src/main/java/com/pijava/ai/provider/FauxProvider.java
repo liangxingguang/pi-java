@@ -176,6 +176,18 @@ public final class FauxProvider implements Provider {
             this.delayMs = delayMs;
         }
 
+        /**
+         * 测试替身**不参与**请求侧选项解析（包 A-10，{@code docs/57 §6 R2}）。
+         *
+         * <p>pi 的 faux 也不过 {@code buildBaseOptions}；更重要的是，本替身存在的意义是
+         * 重放**给定的**事件序列 —— 让它的请求被悄悄改写会让「夹具输入 = 断言前提」
+         * 这条链少一环。生产车道那半边由 `ai` 的 wire 夹具守。</p>
+         */
+        @Override
+        protected boolean resolvesRequestOptions() {
+            return false;
+        }
+
         @Override
         public String apiName() {
             // pi 的 faux 默认 api 字面量（providers/faux.ts:23）。

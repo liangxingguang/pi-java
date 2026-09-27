@@ -36,6 +36,21 @@ public final class PiMessagesApi extends AbstractChatApi {
         return "pi-messages";
     }
 
+    /**
+     * ⚠️ 本车道**不参与**请求侧选项解析（{@code docs/57 §6 R2}）。
+     *
+     * <p>pi 的 pi-messages 车道**不过** {@code buildBaseOptions}
+     * （{@code pi-messages.ts:431-443} 直接 {@code {...options, reasoning, toolChoice, debug}}）
+     * ⇒ 它的 envelope 里 {@code maxTokens} 恒为 {@code undefined}（缺席）。
+     * java 这边 {@link #buildBody} 的 {@code request.maxTokens() > 0} 门在解析前恒假
+     * —— 若不给这道豁免，本车道会**凭空多发**一个 {@code maxTokens} 字段，
+     * 那是对齐的**反向**破坏。</p>
+     */
+    @Override
+    protected boolean resolvesRequestOptions() {
+        return false;
+    }
+
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private final PiHttpClient client;
