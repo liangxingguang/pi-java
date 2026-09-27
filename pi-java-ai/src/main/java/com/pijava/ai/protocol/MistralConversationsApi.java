@@ -165,7 +165,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
         return switch (reason) {
             case "stop" -> new MappedStopReason("stop", null);
             case "length", "model_length" -> new MappedStopReason("length", null);
-            case "tool_calls" -> new MappedStopReason("tool_use", null);
+            case "tool_calls" -> new MappedStopReason("toolUse", null);
             case "error" -> new MappedStopReason("error", "Provider stopped with: error");
             default -> new MappedStopReason("error", "Provider stopped with: " + reason);
         };
@@ -247,7 +247,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
             }
 
             // Finish reason —— 放在 delta 处理**之后**（pi 是之前，`mistral-conversations.ts:613`）：
-            // 下面那步「tool_use 补发 ToolCallEnd」要看工具块是否已完整，而工具块是上面刚折进来
+            // 下面那步「toolUse 补发 ToolCallEnd」要看工具块是否已完整，而工具块是上面刚折进来
             // 的 ⇒ 顺序反了会把同帧的 tool_call 终帧漏掉。**刻意偏差**，只此一处。
             var reason = (String) choice.get("finish_reason");
             if (reason != null && !reason.isEmpty()) {
@@ -256,7 +256,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
                 var mapped = mapChatStopReason(reason);
                 stop.reason = mapped.reason();
                 stop.errorMessage = mapped.errorMessage();
-                if ("tool_use".equals(stop.reason)) {
+                if ("toolUse".equals(stop.reason)) {
                     for (var tb : toolBuilders.values()) {
                         if (tb.isComplete()) {
                             publisher.submit(builder.emitToolCallEnd(

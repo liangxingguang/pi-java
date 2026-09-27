@@ -255,7 +255,7 @@ public class OpenAICompletionsApi extends AbstractChatApi {
             // pi 里这条恒不生效（detected 恒 true），只有 models.json 显式写 false 才放开；
             // 保留下来是因为它是 D1 严格判定的**对照面**（放宽的唯一途径）。
             if (!hasFinishReason && !supportsFinishReason) {
-                stop.reason = toolCall.started() ? "tool_use" : "stop";
+                stop.reason = toolCall.started() ? "toolUse" : "stop";
             }
             // pi :688-690 —— 先判 error：走 error 通道且**不再**发 done。
             // 兜底文案是 pi 逐字（与其他三条车道的措辞不同，别「统一」）。
@@ -301,8 +301,8 @@ public class OpenAICompletionsApi extends AbstractChatApi {
      * pi {@code mapStopReason}（{@code openai-completions.ts:1550-1571}）。
      *
      * <p>与 Anthropic 车道的关键差别：**未知取值不抛**，而是落 {@code "error"} +
-     * {@code Provider finish_reason: X}。{@code toolUse} 按 pi-java 的词表写作
-     * {@code "tool_use"}（边界翻译在 {@code PiMessagesApi:244-246}）。</p>
+     * {@code Provider finish_reason: X}。{@code toolUse} 与 pi 同字面量（B109 起，
+     * 边界翻译已删 —— 见 {@code docs/56}）。</p>
      *
      * @param reason 线格原值（保证非空，见 {@link #rawFinishReason}）
      * @return 映射后的 pi-java stop reason + 可选错误文案
@@ -311,7 +311,7 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         return switch (reason) {
             case "stop", "end" -> new MappedStopReason("stop", null);
             case "length" -> new MappedStopReason("length", null);
-            case "function_call", "tool_calls" -> new MappedStopReason("tool_use", null);
+            case "function_call", "tool_calls" -> new MappedStopReason("toolUse", null);
             case "content_filter" ->
                 new MappedStopReason("error", "Provider finish_reason: content_filter");
             case "network_error" ->

@@ -76,7 +76,7 @@ class OpenAIResponsesApiTest {
         assertThat(end.name()).isEqualTo("get_weather");
         assertThat(end.arguments()).containsEntry("city", "Beijing");
         var done = last(events, StreamEvent.StreamDone.class);
-        assertThat(done.reason()).isEqualTo("tool_use");
+        assertThat(done.reason()).isEqualTo("toolUse");
     }
 
     @Test

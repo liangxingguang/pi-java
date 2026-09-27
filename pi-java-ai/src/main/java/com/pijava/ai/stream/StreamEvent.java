@@ -290,7 +290,7 @@ public sealed interface StreamEvent {
      * 两者必须同值。{@link #usage()} 是事件级的计量副本，允许为 null
      * （消息上的 usage 才是权威，出口缝会兜零）。</p>
      *
-     * @param reason stop reason: "stop", "tool_use", "length"（pi {@code StopReason} 的词表；
+     * @param reason stop reason: "stop", "toolUse", "length"（pi {@code StopReason} 的词表；
      *               ⚠️ 不含 "end_turn" —— 那是 Anthropic 线格取值，车道在映射时就翻了，
      *               见 {@code AssistantMessage#stopReason}）
      * @param usage final token usage (may be null)

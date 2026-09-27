@@ -117,7 +117,7 @@ public sealed interface Message
      * （{@code packages/ai/src/types.ts:427-449}）。
      *
      * <p>{@code stopReason} is the reason the turn ended ({@code stop} /
-     * {@code tool_use} / {@code length} / {@code error} / {@code aborted} /
+     * {@code toolUse} / {@code length} / {@code error} / {@code aborted} /
      * {@code deferred}), or {@code null} for messages that never came from a
      * completed stream. It is the single source of truth for the reason
      * (docs/22 D1) — readers must not keep a parallel copy.

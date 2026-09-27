@@ -234,7 +234,7 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
                             if (toolCallSeen && "stop".equals(stopReason)) {
                                 // pi :219-220 —— Google 的 STOP 同时表示「正常收尾」与
                                 // 「调工具收尾」，已有工具块时补成 toolUse。
-                                stopReason = "tool_use";
+                                stopReason = "toolUse";
                             }
                         }
                     }

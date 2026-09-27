@@ -96,7 +96,7 @@ class MistralConversationsApiTest {
     }
 
     /**
-     * {@code tool_calls} ⇒ {@code "tool_use"}，且工具块的 {@code ToolCallEnd} 先于终局事件。
+     * {@code tool_calls} ⇒ {@code "toolUse"}，且工具块的 {@code ToolCallEnd} 先于终局事件。
      *
      * <p>**对照面**：旧实现已翻这一种。留着是因为它同时钉住「ToolCallEnd 的补发依赖工具块
      * 已折进来」—— 读点若按 pi 挪到 delta 处理**之前**，这条会红成「没有 ToolCallEnd」。</p>
@@ -109,10 +109,10 @@ class MistralConversationsApiTest {
                 + "\"arguments\":\"{\\\"path\\\":\\\"a\\\"}\"}}]}}]"),
             finish("tool_calls"));
 
-        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo("tool_use");
+        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo("toolUse");
         // ⚠️ `classes()` 把终局渲染成 `StreamDone(取值)`，所以子序列里不能写裸 "StreamDone"。
         assertThat(classes(events)).containsSubsequence("ToolCallStart", "ToolCallEnd",
-            "StreamDone(tool_use)");
+            "StreamDone(toolUse)");
     }
 
     /**

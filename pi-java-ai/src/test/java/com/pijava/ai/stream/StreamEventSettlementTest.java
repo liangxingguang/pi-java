@@ -140,10 +140,10 @@ class StreamEventSettlementTest {
     @Test
     void doneSettleTakesTheReasonFromTheMessageWhenAbsent() {
         var done = StreamEvent.StreamDone.settle(
-            null, AssistantMessage.empty().withStopReason("tool_use"));
+            null, AssistantMessage.empty().withStopReason("toolUse"));
 
-        assertThat(done.reason()).isEqualTo("tool_use");
-        assertThat(done.partial().stopReason()).isEqualTo("tool_use");
+        assertThat(done.reason()).isEqualTo("toolUse");
+        assertThat(done.partial().stopReason()).isEqualTo("toolUse");
     }
 
     @Test

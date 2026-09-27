@@ -91,7 +91,7 @@ public final class FauxProvider implements Provider {
         var block = new ContentBlock.ToolUseContent(callId, toolName, args);
         var finalMsg = AssistantMessage.empty()
                 .withContent(List.of(block))
-                .withStopReason("tool_use");
+                .withStopReason("toolUse");
         return new FauxProvider("faux-tool", List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 // 包⑥：桩的起点块与生产同形（带 id/name）—— 改核心而不改桩会让
@@ -100,7 +100,7 @@ public final class FauxProvider implements Provider {
                         .withContent(List.of(new ContentBlock.ToolUseContent(
                             callId, toolName, java.util.Map.of())))),
                 new StreamEvent.ToolCallEnd(0, callId, toolName, args, finalMsg.withStopReason(null)),
-                StreamEvent.StreamDone.settle("tool_use", finalMsg)
+                StreamEvent.StreamDone.settle("toolUse", finalMsg)
         ), 0);
     }
 

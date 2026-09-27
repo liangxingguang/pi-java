@@ -263,7 +263,7 @@ final class ResponsesStreamProcessor {
         stop.errorMessage = mapped.errorMessage();
         if (hasToolUse(builder) && "stop".equals(stop.reason)) {
             // pi :593-595 —— 内容里有工具块时 stop 补成 toolUse
-            stop.reason = "tool_use";
+            stop.reason = "toolUse";
         }
     }
 

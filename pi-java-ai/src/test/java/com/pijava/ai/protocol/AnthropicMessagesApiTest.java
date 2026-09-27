@@ -103,6 +103,42 @@ class AnthropicMessagesApiTest {
     }
 
     /**
+     * ★ B109：线格 {@code stop_reason:"tool_use"} ⇒ 归一化停因 {@code "toolUse"}。
+     *
+     * <p>⚠️ **这条是补上的一处覆盖缺口**：B109 实施期的变异探针 M1 实测 —— 把本车道的映射
+     * 改回旧字面量 {@code "tool_use"}，整个 `ai` 模块**零红**（995 全绿）。即**主车道**
+     * （Anthropic）的归一化停因此前**没有任何夹具**。本条补上，并用 M1 复测证明它有牙
+     * （{@code docs/56 §12.9}）。</p>
+     *
+     * <p>本断言刻意把三件同名字面量分开：线格 {@code stop_reason} 是 {@code "tool_use"}
+     * （**不变量**，见下面的 {@code rawStopReason} 断言）、归一化停因是 {@code "toolUse"}。</p>
+     */
+    @Test
+    void toolUseStopReasonMapsToPiVocabulary() throws Exception {
+        var body = sse("message_start", "{\"type\":\"message_start\",\"message\":{"
+                + "\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\","
+                + "\"model\":\"claude-sonnet-4\",\"content\":[],"
+                + "\"stop_reason\":null,\"stop_sequence\":null,"
+                + "\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}")
+            + sse("content_block_start", "{\"type\":\"content_block_start\",\"index\":0,"
+                + "\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\","
+                + "\"name\":\"echo\",\"input\":{}}}")
+            + sse("content_block_stop", "{\"type\":\"content_block_stop\",\"index\":0}")
+            + sse("message_delta", "{\"type\":\"message_delta\","
+                + "\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},"
+                + "\"usage\":{\"output_tokens\":15}}")
+            + sse("message_stop", "{\"type\":\"message_stop\"}");
+        var events = collect(body);
+
+        var done = last(events, StreamEvent.StreamDone.class);
+        assertThat(done.reason()).isEqualTo("toolUse");
+        assertThat(done.partial().stopReason()).isEqualTo("toolUse");
+        assertThat(done.partial().rawStopReason())
+            .as("线格原值仍是 tool_use —— 归一化停因与线格原值是两个字段，不能混")
+            .isEqualTo("tool_use");
+    }
+
+    /**
      * {@code refusal} ⇒ {@code error} + 文案取 {@code stop_details.explanation}
      * （pi {@code :1472-1476} 的 {@code stopDetails?.explanation || "The model refused…"}）。
      */

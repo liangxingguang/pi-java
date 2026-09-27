@@ -168,7 +168,7 @@ class GoogleGenerativeAiApiTest {
     }
 
     /**
-     * 有工具块却是 {@code STOP} ⇒ {@code "tool_use"}（pi {@code :219-220}）。
+     * 有工具块却是 {@code STOP} ⇒ {@code "toolUse"}（pi {@code :219-220}）。
      *
      * <p>Google 的 {@code STOP} 同时表示「正常收尾」与「调工具收尾」，pi 用「内容里有没有
      * 工具块」把两者分开。⚠️ 工具块与 {@code finishReason} 在**同一帧**里 —— 这正是上面
@@ -180,7 +180,7 @@ class GoogleGenerativeAiApiTest {
             + "{\"name\":\"write\",\"args\":{}}}],\"role\":\"model\"},"
             + "\"finishReason\":\"STOP\""));
 
-        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo("tool_use");
+        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo("toolUse");
     }
 
     // ── 夹具脚手架 ──────────────────────────────────────────────────────

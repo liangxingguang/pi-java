@@ -76,7 +76,8 @@ class PiMessagesApiTest {
             StreamEvent.ToolCallDelta.class, StreamEvent.ToolCallEnd.class,
             StreamEvent.UsageInfo.class, StreamEvent.StreamDone.class);
         var done = last(events, StreamEvent.StreamDone.class);
-        assertThat(done.reason()).isEqualTo("tool_use");
+        // B109：pi 消息通道发的就是 "toolUse"，边界翻译已删 ⇒ 原样落地。
+        assertThat(done.reason()).isEqualTo("toolUse");
         var end = last(events, StreamEvent.ToolCallEnd.class);
         assertThat(end.name()).isEqualTo("write");
         assertThat(end.arguments()).containsEntry("path", "/tmp/x");

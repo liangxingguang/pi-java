@@ -127,7 +127,9 @@ public final class PiMessagesApi extends AbstractChatApi {
                             publisher.submit(builder.emitUsage(
                                 (long) done.usage().input(), (long) done.usage().output()));
                         }
-                        publisher.submit(builder.emitDone(mapDoneReason(done.reason())));
+                        // B109：pi 消息通道发的归一化停因就是 "toolUse"，与 pi-java 同字面量
+                        // ⇒ 原先这里的 mapDoneReason 边界翻译已成为恒等，随本包一并删除。
+                        publisher.submit(builder.emitDone(done.reason()));
                         return;
                     }
                     case PiMessagesEvent.Error err -> {
@@ -283,11 +285,6 @@ public final class PiMessagesApi extends AbstractChatApi {
     }
 
     // ── 事件映射辅助 ─────────────────────────────────────────────────────
-
-    /** pi 的 "toolUse" → pi-java 的 "tool_use"；其余原样。 */
-    private static String mapDoneReason(String reason) {
-        return "toolUse".equals(reason) ? "tool_use" : reason;
-    }
 
     /** toolcall_end 的 toolCall.arguments 是权威终值；补喂剩余 delta。 */
     private static void feedToolCallTail(StreamPartialBuilder builder,

@@ -383,14 +383,12 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
     /**
      * pi {@code anthropic-messages.ts:1464-1493} {@code mapStopReason} 的逐字移植。
      *
-     * <p>⚠️ 两处**刻意偏差**，都关乎词汇表而非语义：</p>
-     * <ol>
-     *   <li>pi 返回 {@code "toolUse"}（camelCase），pi-java 的词汇表是 {@code "tool_use"}
-     *       （{@code StreamEvent.StreamDone} 的 javadoc、{@code PiMessagesApi:244-246}
-     *       在 pi 消息通道上做的是同一次翻译）⇒ 此处落 {@code "tool_use"}。</li>
-     *   <li>返回值是记录而不是 pi 的对象字面量（{@code {stopReason, errorMessage?}}）——
-     *       同形，只是 Java 需要显式类型。</li>
-     * </ol>
+     * <p>⚠️ **一处**刻意偏差：返回值是记录而不是 pi 的对象字面量
+     * （{@code {stopReason, errorMessage?}}）—— 同形，只是 Java 需要显式类型。</p>
+     *
+     * <p>（原第二条偏差「pi 返回 {@code "toolUse"} 而 pi-java 落 {@code "tool_use"}」已随
+     * B109 消失：归一化词表现在与 pi 同字面量，见 {@code docs/56}。注意区分三个同名字面量
+     * —— 上面 {@code case} 的标号是**线格原值**，一直写作 {@code "tool_use"}，本包不动它。）</p>
      *
      * <p>未知取值**抛** {@code IllegalStateException}，与 pi 的 {@code default: throw} 一致；
      * 它由 {@code mapEvent} 的 catch 转成 {@code StreamError}（文案相同），随后收尾不再补事件。</p>
@@ -404,7 +402,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         return switch (raw) {
             case "end_turn" -> new MappedStopReason("stop", null);
             case "max_tokens" -> new MappedStopReason("length", null);
-            case "tool_use" -> new MappedStopReason("tool_use", null);
+            case "tool_use" -> new MappedStopReason("toolUse", null);
             case "refusal" -> new MappedStopReason("error",
                     explanation != null && !explanation.isEmpty()
                             ? explanation
