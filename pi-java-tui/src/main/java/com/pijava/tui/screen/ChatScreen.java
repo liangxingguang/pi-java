@@ -134,11 +134,8 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
             case StreamEvent.UsageInfo ignored -> { }
             case StreamEvent.StreamDone ignored -> { }
             case StreamEvent.StreamError err -> {
-                // 错误只进聊天区 —— pi 的 footer 没有错误态，错误仅经 showError
-                // 落进 chatContainer。这里原先还往状态栏写一条常驻红字，且只写不清
-                // ⇒ 双报且多出来的那条永不消失（台账 B37）。
-                // C 批次（docs/55 §6.3-14）：文本正源是消息（partial.errorMessage()），
-                // Throwable 只兜底 —— 见 StreamEvent.StreamError.textOf。
+                // 错误只进聊天区 —— pi 的 footer 没有错误态，错误仅经 showError 落进 chatContainer。
+                // 这里原先还往状态栏写一条常驻红字，且只写不清 ⇒ 双报且永不消失（台账 B37）。
                 var text = StreamEvent.StreamError.textOf(err);
                 chatPanel.append(new ChatMessage.Error(
                     err.reason() + (text != null ? ": " + text : "")));
