@@ -206,11 +206,12 @@ final class AgentEventTranslator {
         return node;
     }
 
+    /**
+     * C 批次（{@code docs/55 §6.3-14}）：文本正源是**消息**（{@code partial.errorMessage()}，
+     * 由生产者落定），{@code Throwable} 仅兜底；两者皆无时才退回 reason 文案。
+     */
     private static String errorText(StreamEvent.StreamError err) {
-        var t = err.error();
-        if (t != null) {
-            return t.getMessage() == null ? String.valueOf(t) : t.getMessage();
-        }
-        return "Stream error: " + err.reason();
+        var text = StreamEvent.StreamError.textOf(err);
+        return text != null ? text : "Stream error: " + err.reason();
     }
 }

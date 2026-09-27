@@ -20,6 +20,11 @@ import com.pijava.coding.agent.core.WireJson;
  * 去掉累积快照 {@code partial}（每个 {@code StreamEvent} 变体都带），只留增量 ——
  * 否则每个 delta 都会重复整条消息。其余事件按字段原样透传。</p>
  *
+ * <p><b>终局变体例外</b>（C 批次，{@code docs/55}）：{@code done}／{@code error}
+ * **不**用 {@code valueToTree} 透传整个 record —— 那会把 {@code StreamError} 的
+ * {@code Throwable} 连 {@code stackTrace} 一起落线。它们走
+ * {@link #terminalWireNode} 的显式扁平投影（pi **proxy 协议**的形状）。</p>
+ *
  * <p><b>可空键的纪律（{@code docs/31 §8.37.4}）</b>：pi 对非 {@code message_update}
  * 事件是<b>原样透传</b>（{@code json-event.ts:48-51}），所以线上「有没有这个键」
  * 完全由 {@code JSON.stringify} 决定 —— <b>{@code undefined} 被省略，{@code null} 被保留</b>。
@@ -58,15 +63,9 @@ public final class JsonEventMapper {
         switch (event) {
             case AgentSessionEvent.MessageUpdate u -> {
                 node.put("type", "message_update");
-                // pi 恒写顶层 usage（json-event.ts:60 `usage: event.message.usage`），
-                // 且**永不为 undefined** —— 流起点就被初始化成零值对象
-                // （anthropic-messages.ts:518-525、openai-completions.ts:325-332）。
-                // ⇒ 缺 UsageInfo 时兜零，**不省键**。注意这与 B41（终局 assistant
-                // 消息的 usage 可空、缺则整键消失）是两条不同的口径，见 docs/33 §8.0 裁决 C。
-                var partial = u.streamEvent().partial();   // ⚠️ UsageInfo 变体可为 null
-                var info = partial == null ? null : partial.usage();
-                node.set("usage", MAPPER.valueToTree(
-                    info == null ? Usage.of(0, 0) : info.toUsage()));
+                // pi 恒写顶层 usage（json-event.ts:60 `usage: event.message.usage`）
+                // 且不省键 —— 口径与取处在 normalizedUsage（C 批次起两处共用一个）。
+                node.set("usage", normalizedUsage(u.streamEvent()));
                 node.set("assistantMessageEvent", assistantMessageEvent(u.streamEvent()));
             }
             case AgentSessionEvent.AgentEnd e -> {
@@ -300,10 +299,77 @@ public final class JsonEventMapper {
     /** 把单个 {@link StreamEvent} 序列化为线格式 JSON（剥除 partial）。 */
     public static String toStreamEventWire(StreamEvent event) {
         try {
-            return MAPPER.writeValueAsString(event);
+            var terminal = terminalWireNode(event);
+            return MAPPER.writeValueAsString(terminal != null ? terminal : event);
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             return "{}";
         }
+    }
+
+    /**
+     * {@code message_update} 载荷里**恒写**的顶层 {@code usage}。
+     *
+     * <p>pi 恒写且**永不为 undefined** —— 流起点就被初始化成零值对象
+     * （{@code anthropic-messages.ts:518-525}、{@code openai-completions.ts:325-332}）
+     * ⇒ 缺 {@code UsageInfo} 时兜零，**不省键**。注意这与 B41（终局 assistant
+     * 消息的 usage 可空、缺则整键消失）是两条不同的口径，见 {@code docs/33 §8.0} 裁决 C。</p>
+     *
+     * <p>终局事件多一个取处：{@code StreamDone.usage}（事件级计量副本，
+     * {@code partial.usage()} 才是权威）。</p>
+     */
+    private static com.fasterxml.jackson.databind.JsonNode normalizedUsage(StreamEvent event) {
+        var partial = event.partial();
+        var info = partial == null ? null : partial.usage();
+        if (info == null && event instanceof StreamEvent.StreamDone done) {
+            info = done.usage();
+        }
+        return MAPPER.valueToTree(info == null ? Usage.of(0, 0) : info.toUsage());
+    }
+
+    /**
+     * 终局变体的线格式投影（C 批次，{@code docs/55 §6.3-13}；裁决 R5-(a)）。
+     *
+     * <p>pi 的 **RPC/JSON 线根本不发终局帧**（{@code modes/json-event.ts:33-39}
+     * 只在非终局增量上产生 {@code message_update}），但**proxy 协议** —— 同一契约的
+     * 另一份独立实现 —— 发，且是**扁平形状**（带宽考虑剥掉 partial）：
+     * {@code {type:"done"; reason; usage; providerThinkingLevel?}} /
+     * {@code {type:"error"; reason; errorMessage?; usage; providerThinkingLevel?}}
+     * （{@code agent/src/proxy.ts:42-58}）。本仓的宿主线有消费者（web/TUI 走
+     * 会话事件面），故保留帧、改用这个形状。</p>
+     *
+     * <p>⚠️ 此前这里是 {@code valueToTree(event)}：record 的 {@code error} 组件是一个
+     * {@code Throwable}，Jackson 会把 {@code cause}/{@code stackTrace}/{@code message}
+     * 一并序列化 ⇒ **JVM 栈帧上对外协议**（{@code docs/55 §5 F6}）。</p>
+     *
+     * <p>可空键按 pi 的 {@code ?} 省略（本文件顶部的纪律）：
+     * {@code errorMessage?} 缺则**不写**，{@code usage} 是必填（恒写零值对象）。
+     * {@code providerThinkingLevel} 两侧都没有（登记 B110）⇒ 不写。键序照 pi 的类型
+     * 声明；跨实现夹具必须按键取值，别断键序。</p>
+     *
+     * @return 终局变体的线格式节点；非终局变体返回 {@code null}（调用方自己投影）
+     */
+    private static ObjectNode terminalWireNode(StreamEvent event) {
+        return switch (event) {
+            case StreamEvent.StreamDone done -> {
+                var node = MAPPER.createObjectNode();
+                node.put("type", "done");
+                node.put("reason", done.reason());
+                node.set("usage", normalizedUsage(event));
+                yield node;
+            }
+            case StreamEvent.StreamError err -> {
+                var node = MAPPER.createObjectNode();
+                node.put("type", "error");
+                node.put("reason", err.reason());
+                var text = StreamEvent.StreamError.textOf(err);
+                if (text != null) {
+                    node.put("errorMessage", text);
+                }
+                node.set("usage", normalizedUsage(event));
+                yield node;
+            }
+            default -> null;
+        };
     }
 
     /**
@@ -360,7 +426,14 @@ public final class JsonEventMapper {
      * {@code catch (RuntimeException)} ⇒ 丢该客户端的这一帧 ＋ 一条 warning，
      * 连接与其它监听器不受影响。</p>
      */
-    private static ObjectNode assistantMessageEvent(StreamEvent event) {        var delta = (ObjectNode) MAPPER.valueToTree(event);
+    private static ObjectNode assistantMessageEvent(StreamEvent event) {
+        // 终局变体走**显式投影**（见 terminalWireNode）——不 valueToTree 整个 record，
+        // 否则 Throwable 的 stackTrace 会落线（docs/55 §5 F6）。
+        var terminal = terminalWireNode(event);
+        if (terminal != null) {
+            return terminal;
+        }
+        var delta = (ObjectNode) MAPPER.valueToTree(event);
         if (event instanceof StreamEvent.ToolCallStart start) {
             var content = start.partial().content();
             int index = start.contentIndex();

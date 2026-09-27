@@ -166,4 +166,86 @@ class JsonEventMapperMessageUpdateTest {
         assertThat(node.get("assistantMessageEvent").get("type").asText())
             .isEqualTo("usage");
     }
+
+    // ═══════════════════════════════════════════════════════════
+    // C 批次（docs/55 §6.3-13，裁决 R5-(a)）：终局变体的扁平投影
+    // ═══════════════════════════════════════════════════════════
+    //
+    // pi 的 RPC 线根本不发终局帧（modes/json-event.ts:33-39），但 proxy 协议
+    // ——同一契约的另一份独立实现——发，且是扁平形状（agent/src/proxy.ts:42-58）：
+    //   done  → { type, reason, usage, providerThinkingLevel? }
+    //   error → { type, reason, errorMessage?, usage, providerThinkingLevel? }
+    // 本仓宿主线有消费者，故保留帧、改用这个形状（在此之前是 valueToTree 整个
+    // record ⇒ StreamError 的 Throwable 连 stackTrace 一起上了对外协议）。
+
+    @Test
+    void terminalDoneFrameUsesTheFlattenedProxyShape() {
+        var partial = AssistantMessage.empty()
+            .withUsage(new StreamEvent.UsageInfo(120, 30, null, Usage.of(120, 30)))
+            .withStopReason("stop");
+
+        var node = JsonEventMapper.toWire(msgUpdate(
+            StreamEvent.StreamDone.settle("stop", partial)));
+
+        var delta = node.get("assistantMessageEvent");
+        assertThat(delta.get("type").asText()).isEqualTo("done");
+        assertThat(delta.get("reason").asText()).isEqualTo("stop");
+        assertThat(delta.get("usage").get("totalTokens").asDouble()).isEqualTo(150.0);
+        assertThat(delta.has("partial")).isFalse();
+        assertThat(delta.fieldNames()).toIterable()
+            .containsExactly("type", "reason", "usage");
+        // 顶层 usage 照旧恒写（两处共用同一个归一）。
+        assertThat(node.get("usage")).isNotNull();
+    }
+
+    @Test
+    void terminalErrorFrameHasNoStackTraceAndCarriesErrorMessage() {
+        var partial = AssistantMessage.empty()
+            .withContent(List.of(new ContentBlock.TextContent("alpha")));
+        var err = StreamEvent.StreamError.settle(
+            "error", new IllegalStateException("kaboom"), partial);
+
+        var node = JsonEventMapper.toWire(msgUpdate(err));
+
+        var delta = node.get("assistantMessageEvent");
+        assertThat(delta.get("type").asText()).isEqualTo("error");
+        assertThat(delta.get("reason").asText()).isEqualTo("error");
+        assertThat(delta.get("errorMessage").asText()).isEqualTo("kaboom");
+        assertThat(delta.fieldNames()).toIterable()
+            .containsExactly("type", "reason", "errorMessage", "usage");
+        // F6 的判别断言：Throwable 本体不再落线。
+        assertThat(delta.has("error")).isFalse();
+        assertThat(delta.toString())
+            .doesNotContain("stackTrace")
+            .doesNotContain("IllegalStateException");
+    }
+
+    @Test
+    void terminalErrorFrameOmitsErrorMessageWhenAbsent() {
+        // pi 的 `errorMessage?: string` ⇒ 无文本时**不写键**（同本文件顶部的纪律）。
+        var err = new StreamEvent.StreamError(
+            "error", null, AssistantMessage.empty().withStopReason("error"));
+
+        var delta = JsonEventMapper.toWire(msgUpdate(err)).get("assistantMessageEvent");
+
+        assertThat(delta.has("errorMessage")).isFalse();
+        assertThat(delta.fieldNames()).toIterable()
+            .containsExactly("type", "reason", "usage");
+    }
+
+    @Test
+    void toStreamEventWireProjectsTerminalsToo() {
+        // 第二个观测面（--mode json 的逐条输出）走的是同一个投影 —— 否则
+        // Throwable 会从另一条线漏出去。
+        var err = StreamEvent.StreamError.settle(
+            "aborted", new RuntimeException("boom"), AssistantMessage.empty());
+
+        var json = JsonEventMapper.toStreamEventWire(err);
+
+        assertThat(json)
+            .contains("\"type\":\"error\"")
+            .contains("\"reason\":\"aborted\"")
+            .contains("\"errorMessage\":\"boom\"");
+        assertThat(json).doesNotContain("stackTrace");
+    }
 }
