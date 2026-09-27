@@ -68,7 +68,14 @@ final class SessionRunner {
                 stopReason.set(done.reason());
             }
             if (event instanceof StreamEvent.StreamError err) {
-                stopReason.set("error");
+                // C 批次（docs/55 §5 F4）：采信车道给的 reason，不再一律塌成 "error"。
+                // pi 的两者语义不同（打印模式两者都退 1，但消息与状态保留 aborted，
+                // print-mode.ts:139-155 / agent.ts:526-542）；本仓的 PiLoopRunner 与
+                // RunFailure 也一直保留它 ⇒ 此前是同仓两套口径。
+                // ⚠️ 本改动**今天不可观察**：下面的读尾（B5 第 2 步）在尾条是
+                // error/aborted 的助手消息时会用 tail.stopReason() 覆盖这个值，
+                // 而流错误必然产生这样一条尾条 ⇒ 变异探针 M4 零红（docs/55 §12）。
+                stopReason.set(StreamEvent.isSettled(err.reason()) ? err.reason() : "error");
             }
             if (event instanceof StreamEvent.UsageInfo usage) {
                 // TokenCounter is the session-wide accumulator and cannot be
@@ -112,7 +119,7 @@ final class SessionRunner {
                 // SessionResult.status()/entries() 是 join ⇒ 打印模式永久挂起。
                 LOG.warn("[session] harness run error, stopReason=error", t);
                 stopReason.set("error");
-                var error = new StreamEvent.StreamError(
+                var error = StreamEvent.StreamError.settle(
                     "error", t, AssistantMessage.empty());
                 if (streamObserver != null) {
                     streamObserver.onStreamEvent(error);
@@ -178,7 +185,7 @@ final class SessionRunner {
         } catch (Throwable t) {
             // B5 第 1 步（docs/31 §8.36.4）：同 `:105` 那处，`Exception` → `Throwable`。
             LOG.error("[session] drive failed; emitting empty AgentEnd (run=" + laneName + ")", t);
-            var error = new StreamEvent.StreamError(
+            var error = StreamEvent.StreamError.settle(
                 "error", t, AssistantMessage.empty());
             if (streamObserver != null) {
                 streamObserver.onStreamEvent(error);

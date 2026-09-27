@@ -115,6 +115,43 @@ class SessionFailurePathTest {
     }
 
     // ═══════════════════════════════════════════════════════════
+    // C 批次（docs/55 §5 F4）：宿主状态保留车道的 reason
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * 中止与失败在 pi 里是**两个**语义（打印模式两者都退 1，但消息与状态保留
+     * {@code aborted}，{@code modes/print-mode.ts:139-155}／{@code agent.ts:526-542}）。
+     *
+     * <p>本处此前对**任何** {@code StreamError} 都写 {@code "error"}，而同一个仓里的
+     * {@code PiLoopRunner}（保留 reason）与 {@code RunFailure} 也一直保留它
+     * ⇒ 同仓两套口径。</p>
+     *
+     * <p>⚠️ <b>这条夹具钉的是端到端契约，不是那个改动的判别器</b>（{@code docs/55 §12}）：
+     * 实测变异探针 M4（把 {@code err.reason()} 改回塌成 {@code "error"}）**零红** ——
+     * 下面的读尾（{@code SessionRunner:132-136}，B5 第 2 步）在尾条是
+     * {@code error}/{@code aborted} 的助手消息时用 {@code tail.stopReason()} 覆盖了
+     * 监听器设的值，而流错误必然产生这样一条尾条。⇒ 该改动是**一致性**修复
+     * （去掉同仓两套口径），今天**不可观察**；夹具本身仍然值钱（它钉住
+     * 「aborted 能活着走到 RunStatus」，任何让读尾失效的改动都会打红它）。</p>
+     */
+    @Test
+    void abortedStreamErrorKeepsItsReason(@TempDir Path tmp) throws Exception {
+        var partial = AssistantMessage.empty().withStopReason("aborted");
+        var session = session("faux-aborted", List.of(List.of(
+                new StreamEvent.Start(AssistantMessage.empty()),
+                StreamEvent.StreamError.settle(
+                    "aborted", new RuntimeException("cancelled"), partial))),
+            tmp, Set.of());
+        try (session) {
+            var result = session.processPrompt("go", PromptConfig.defaults());
+
+            var status = result.statusFuture().get(10, TimeUnit.SECONDS);
+            assertThat(status.reason()).isEqualTo("aborted");
+            assertThat(status.exitCode()).isEqualTo(130);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // 夹具 1 的宿主半边（A 组）：引擎内 Error 的活性与终局
     // ═══════════════════════════════════════════════════════════
 

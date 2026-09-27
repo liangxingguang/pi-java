@@ -248,7 +248,7 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
                     break;
                 } else if (event instanceof StreamEvent.StreamError err) {
                     result = terminal(err.partial(), err.reason(), text, toolCalls, usage[0],
-                        err.error() == null ? null : err.error().getMessage());
+                        StreamEvent.StreamError.textOf(err));
                     break;
                 }
             }
@@ -268,6 +268,10 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
      * stopReason 都没有 —— 那是「流未成」的空快照，采信它会把 error 轮伪装成
      * 无终局的成功）⇒ 用收集到的 text + toolCall 块按 reason 合成（空文本合法，
      * 不塞占位块）。
+     *
+     * <p>C 批次（{@code docs/55}）：{@code errorMessage} 参数现为**兜底** —— 文本
+     * 的正源是消息上的 {@code partial.errorMessage()}（生产者落定，见
+     * {@code StreamError.settle}），只在消息上没有时才用这里传进来的值。</p>
      */
     private static Message.AssistantMessage terminal(
             com.pijava.ai.message.AssistantMessage partial, String reason,

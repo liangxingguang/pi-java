@@ -39,9 +39,13 @@ class AgentSessionRetryEventOrderTest {
 
     private static List<StreamEvent> errorSeq() {
         var partial = AssistantMessage.empty().withStopReason("error");
+        // C 批次（docs/55 §6.3-10）：走**生产者**的落定入口，不手搓裸 record ——
+        // 重试白名单分类器要的 "overloaded" 文本现在从消息上读
+        // （此前靠 PiLoopRunner.withErrorShape 补，那个补丁已删）。
         return List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
-            new StreamEvent.StreamError("error", new RuntimeException("overloaded"), partial));
+            StreamEvent.StreamError.settle(
+                "error", new RuntimeException("overloaded"), partial));
     }
 
     private static List<StreamEvent> textSeq(String text) {

@@ -61,8 +61,8 @@ class AgentHarnessTest {
                 .followUpMode(QueueMode.defaultMode())
                 .toolExecution(ToolExecution.defaultMode())
                 .streamListener(event -> { })
-                // 本类钉的是轮次语义。3d 环 A 默认开启，且错误文本如今会投影进
-                // 终局消息（PiLoopRunner.withErrorShape）—— 白名单错误（如
+                // 本类钉的是轮次语义。3d 环 A 默认开启，且错误文本如今会落进终局消息
+                // （C 批次起由**生产者**落定，见 docs/55）—— 白名单错误（如
                 // "connection refused"）会退避续跑，不是本类要钉的东西，统一关掉；
                 // 环 A 自己的行为由 PostRunRetryTest 与宿主 E2E 钉。
                 .retrySettings(() -> new RetrySettings(false, 3, 2_000, 60_000L))
@@ -329,18 +329,23 @@ class AgentHarnessTest {
         assertThat(result.stopReason()).isEqualTo("error");
     }
 
-    // ── 3d（docs/31 §8.22）：StreamError 终局形状 ──────────────────
-    // pi 把错误带在消息上（stopReason + errorMessage）；pi-java 的 provider 方言
-    // 把文本放在 Throwable 上、partial 可能是 identityBase 空快照。不补齐 ⇒
-    // 重试环 A 的白名单分类器在真实 provider 路径上恒 false。
+    // ── 终局错误消息的形状（3d 建、C 批次改口径）──────────────────
+    // pi 把错误带在消息上（stopReason + errorMessage），循环层只是
+    // `await response.result()`（agent-loop.ts:399-412）。
+    //
+    // ⚠️ C 批次（docs/55 §6.3-10）起，**落定归生产者**：这三条夹具因此改走
+    // `StreamError.settle`（＝真实车道的出口），不再手搓一条裸 record。此前它们
+    // 之所以能用手搓的裸 record 过关，是因为循环层有一个 `withErrorShape` 补丁
+    // 替 provider 补形状 —— 那正是本包删掉的东西。夹具现在钉的是**新契约**：
+    // 生产者落定 ⇒ 循环层原样投影。
 
     @Test
-    void streamErrorProjectsThrowableTextAndStopReasonOntoMessage() {
-        // identityBase 形状：partial 连 stopReason 都没有。
+    void settledStreamErrorProjectsOntoTheMessage() {
+        // 空快照（车道流到一半就断了）：settle 补 stopReason 与文本。
         var harness = createHarness((model, context, options) -> StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
-                new StreamEvent.StreamError("error", new RuntimeException("overloaded_error"),
-                        AssistantMessage.empty()))));
+                StreamEvent.StreamError.settle("error",
+                        new RuntimeException("overloaded_error"), AssistantMessage.empty()))));
         harness.prompt("test");
 
         var result = harness.lastAssistantMessage();
@@ -349,28 +354,31 @@ class AgentHarnessTest {
     }
 
     @Test
-    void streamErrorAbortedReasonProjectsAbortedStopReason() {
+    void settledStreamErrorKeepsTheAbortedReason() {
         var harness = createHarness((model, context, options) -> StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
-                new StreamEvent.StreamError("aborted", new RuntimeException("cancelled"),
-                        AssistantMessage.empty()))));
+                StreamEvent.StreamError.settle("aborted",
+                        new RuntimeException("cancelled"), AssistantMessage.empty()))));
         harness.prompt("test");
 
         assertThat(harness.lastAssistantMessage().stopReason()).isEqualTo("aborted");
     }
 
     @Test
-    void streamErrorPartialOwnErrorMessageWinsOverThrowableText() {
+    void settledStreamErrorKeepsWhatStreamedBeforeTheFailure() {
+        // F1：流到故障点为止的内容必须留在终局消息里（pi P4 实测）。
         var partial = AssistantMessage.empty()
-                .withStopReason("error")
-                .withErrorMessage("provider text");
+                .withContent(List.of(new ContentBlock.TextContent("before the failure")));
         var harness = createHarness((model, context, options) -> StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
-                new StreamEvent.StreamError("error", new RuntimeException("fallback"), partial))));
+                StreamEvent.StreamError.settle("error",
+                        new RuntimeException("boom"), partial))));
         harness.prompt("test");
 
         var result = harness.lastAssistantMessage();
         assertThat(result.stopReason()).isEqualTo("error");
-        assertThat(result.errorMessage()).isEqualTo("provider text");
+        assertThat(result.errorMessage()).isEqualTo("boom");
+        assertThat(result.content())
+                .containsExactly(new ContentBlock.TextContent("before the failure"));
     }
 }

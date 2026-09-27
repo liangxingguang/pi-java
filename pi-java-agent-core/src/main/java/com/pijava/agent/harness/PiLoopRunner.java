@@ -265,7 +265,15 @@ final class PiLoopRunner {
                     finalMessage = fromPartial(done.partial());
                     break;
                 } else if (event instanceof StreamEvent.StreamError err) {
-                    finalMessage = withErrorShape(fromPartial(err.partial()), err);
+                    // C 批次（docs/55 §6.3-10）：**拿到什么就是什么** —— pi 没有
+                    // 「替 provider 补形状」这一步（agent-loop.ts:399-412 只是
+                    // `await response.result()`）。生产者已在车道侧落定
+                    // （StreamPartialBuilder.emitError / StreamError.settle），
+                    // 这里再从 Throwable 反推文本只会造出第二个真值来源。
+                    // 本处原有一个 withErrorShape 补丁，随本包删除：它曾是 3d 重试环 A
+                    // 白名单分类器（要求非空 errorMessage）的活命条件，而那条不变量
+                    // 现在由生产者保证 —— 比补丁强。
+                    finalMessage = fromPartial(err.partial());
                     break;
                 }
             }
@@ -328,45 +336,14 @@ final class PiLoopRunner {
         if ("error".equals(message.stopReason()) || "aborted".equals(message.stopReason())) {
             return message;
         }
-        // ⑩：判据是字面量 "pending"（＝还没观测到终局判定）—— 见方法 javadoc。
-        // null 是同一状态的旧形状（非流式构造的消息、旧转录），一并按「没观测到」办。
-        String observed = message.stopReason();
-        boolean noTerminalYet = observed == null || "pending".equals(observed);
+        // ⑩：判据是「还没观测到终局判定」（＝占位值 "pending"，见
+        // StreamEvent.PENDING_STOP_REASON / isSettled）。null 是同一状态的旧形状
+        // （非流式构造的消息、旧转录），一并按「没观测到」办。
+        boolean noTerminalYet = !StreamEvent.isSettled(message.stopReason());
         if (!cutShort && !noTerminalYet) {
             return message;
         }
         return message.withStopReason("aborted");
-    }
-
-    /**
-     * 错误轮的终局消息必须携带错误本身（pi：provider 层把 {@code stopReason:"error"}
-     * 和 {@code errorMessage} 文本写在消息上，pi 的重试分类器只读消息）。pi-java 的
-     * provider 方言把错误文本放在 {@code StreamError} 的 Throwable 上，partial 可能是
-     * 连 stopReason 都没有的 identityBase 空快照（AbstractChatApi）或只带 stopReason
-     * 的 builder 快照（StreamPartialBuilder.emitError）—— 缺哪个槽补哪个：
-     * stopReason ← {@code err.reason()}（缺省 "error"），errorMessage ←
-     * {@code err.error().getMessage()}。partial 自带的终局/文本优先，不覆写。
-     *
-     * <p>3d（docs/31 §8.22）：不补则 post-run 重试环 A 的白名单分类器（要求非空
-     * errorMessage）在真实 provider 路径上恒 false —— 环 A 形同虚设。与
-     * {@code LlmSummaryGenerator.terminal} 的补齐同形（先例即在那里）。</p>
-     */
-    private static Message.AssistantMessage withErrorShape(
-            Message.AssistantMessage projected, StreamEvent.StreamError err) {
-        String stopReason = projected.stopReason();
-        String errorMessage = projected.errorMessage();
-        boolean fixReason = stopReason == null || stopReason.isEmpty();
-        boolean fixText = (errorMessage == null || errorMessage.isEmpty()) && err.error() != null;
-        if (!fixReason && !fixText) {
-            return projected;
-        }
-        String reason = err.reason() == null || err.reason().isEmpty() ? "error" : err.reason();
-        return new Message.AssistantMessage(projected.content(),
-            fixReason ? reason : stopReason,
-            projected.deferred(), projected.api(), projected.provider(), projected.model(),
-            projected.usage(), projected.timestamp(),
-            fixText ? err.error().getMessage() : errorMessage,
-            projected.rawStopReason());
     }
 
     /** pi: 除 start/done/error 之外的流事件都是 update。 */
