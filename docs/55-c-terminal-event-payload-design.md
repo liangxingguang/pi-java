@@ -1,10 +1,11 @@
 # 55 - C 批次：终局事件载荷（`done` / `error`）设计
 
-**状态：设计待审核（2026-09-27，尚未写一行生产代码）**
+**状态：已闭环（2026-09-27；R1–R9 全按建议实施，`3684a82`/`b8d7e48`/`882fcaa` ＋ docs，实施记录见 §12）**
 
 > 本包解决 `docs/48` **设计门 5**：「终局事件是否扩展现有 sealed record，是否保留旧访问器；
-> 完整 assistant message 如何避免重复构造和不一致」。审核通过前不得进入实施。
-> 审核回复入口：直接指出要改的裁决点（§7 R1–R9）、范围或门槛。
+> 完整 assistant message 如何避免重复构造和不一致」。
+> ⚠️ 实施期推翻了本文件的两处结论（`§5 F4` 的后果判断、`§9.1 E8` 的预测）——
+> 两处**已在原位标注并指向 §12.4**，别照旧结论行事。
 
 **参考台账：** `docs/48 §2`（A-05）、`docs/41 §1.4`（`done` 权重 3 / `error` 权重 2）、`docs/32`、`docs/07 §Phase2a`
 **参考设计：** `docs/31`（agent 宿主层）、`docs/49`–`docs/54`（A 批次各包）
@@ -172,6 +173,11 @@ P6.error.ident  = {"api":"anthropic-messages","provider":"anthropic","model":"cl
 
 ### F4（P1）`aborted` 在宿主状态里被塌成 `error`（J11）
 
+> ⚠️ **本条的后果判断在实施期被实测推翻**：`SessionRunner` 末尾的**读尾**会覆盖这个值，
+> 而流错误必然产生一条 `aborted` 的尾条 ⇒ 那处写法的值今天**不可观察**（变异探针 M4 零红）。
+> 改动仍按 R 侧实施（正确读法 ＋ 去掉同仓两套口径），但它是**一致性**修复不是行为修复。
+> 详见 **§12.4-1** 与新登记 `docs/32` **B117**。
+
 - **pi**：两者语义不同（打印模式两者都退 1，但消息与状态保留 `aborted`；P9/P12）。
 - **java**：`SessionRunner` 忽略 `err.reason()`；而 `PiLoopRunner`/`RunFailure` 保留 ⇒ **同仓两套口径**。
 - **后果**：`RunStatus.status()`、run summary、宿主报告里中止与失败不可分。
@@ -225,7 +231,7 @@ pi 无此取值。归 A-20 类清理（B112）。
 |---|---|---|
 | ① 车道侧单点 | 写 `stopReason` + `errorMessage`（pi `:823-824` 的对应物） | `StreamPartialBuilder.emitError` 增写 `errorMessage`（取 `Throwable` 文本，**已是 pi 的 `error.message` 语义**） |
 | ② 出口缝 | 挂身份 ＋ 保证「终局的 partial 必已落定、usage 非 null」 | `AbstractChatApi`：`withTerminalUsage` 保留；**新增**落定补全（`stopReason`/`errorMessage` 缺则补），并对**所有**终局事件生效（含旁路 `ChatApi` 实现） |
-| ③ 旁路生产者 | 直接调**同一**落定工厂 | `StreamEvent` 上新增静态工厂（名待定：`settle(...)`）；`QueueStreamIterator`、`FauxProvider`、`SessionRunner`、`send()`、`onComplete` 安全网全部改走它 |
+| ③ 旁路生产者 | 直接调**同一**落定工厂 | `StreamEvent` 上新增静态工厂 `StreamError.settle(reason, cause, partial)` / `StreamDone.settle(reason, partial)`（**落地名即此**）；`QueueStreamIterator`、`FauxProvider`、`SessionRunner`、`send()`、`onComplete` 安全网全部改走它 |
 
 > **「避免重复构造和不一致」的答案**：**一个工厂 + 三处落点**。工厂只做「在已有消息上补缺」
 > （不新建消息、不重组内容），故无论谁先落定，结果同值；`pi` 侧对应物就是那句就地赋值。
@@ -263,7 +269,12 @@ pi 无此取值。归 A-20 类清理（B112）。
     ② 两处兜底 `StreamError` 走工厂（文本进消息，空 partial 这一点保持）。
 13. `JsonEventMapper.assistantMessageEvent`：终端变体改**显式投影**为 pi proxy 的扁平形状
     （`{type:"done", reason, usage}` / `{type:"error", reason, errorMessage?, usage}`，P14），
-    **不再** `valueToTree` 整个 record（F6）。⚠️ 这是**唯一**改变对外线形状的一处 ⇒ 见 R5。
+    **不再** `valueToTree` 整个 record（F6）。
+    ⚠️ **实施时扩到两处**：`toStreamEventWire`（`--mode json` 的逐条输出）走**同一个**投影 ——
+    设计稿原写「这是**唯一**改变对外线形状的一处」，但那条线上同样漏 `Throwable`
+    （`stackTrace` 上 stdout），只修一处等于半修。两处共用 `terminalWireNode` 一个实现
+    （合 R3 的「单构造点」）。见 §12。
+    ⚠️ R5-(a) 的对外形状变更：见 `docs/32` 惯例的「需知悉」标注。
 14. `PrintMode` / `ChatScreen` / `AgentEventTranslator` / `PayloadRecordingStreamFn`：
     文本优先取 `partial.errorMessage()`，`Throwable` 仅兜底（行为等价，去重复）。
 
@@ -356,7 +367,10 @@ pi 的等价物是「流里的一条错误消息」，但 java 这条 catch 覆�
 
 ## 9. 先红与变异探针计划
 
-### 9.1 预测的先红（实施第一步实测并回填实际红集）
+### 9.1 先红（**实测见 §12.2**）
+
+> ⚠️ 下表是**设计期的预测**。实测结果与两处更正（E4 实为两条、**E5 实测绿**、E8 必须改写）
+> 都记在 **§12.2**；本表保留原样以免丢失「预测错在哪」的证据。
 
 | # | 夹具（新） | 断言 | 预测今日红 |
 |---|---|---|---|
@@ -364,12 +378,12 @@ pi 的等价物是「流里的一条错误消息」，但 java 这条 catch 覆�
 | E2 | `…keepsWhatStreamedBeforeTheFailure` | 先 `emitTextDelta("partial text")` 再 `emitError` ⇒ `partial().content()` 含该文本、`stopReason="error"` | **绿**（builder 已保留）→ 作对照，防「修坏了」 |
 | E3 | `StreamEventSettlementTest.missingTerminalIsAnError` | `streamBlocking` 的 `onComplete` 安全网推的是 `StreamError` 且文本非空 | 红（今天是 `StreamDone("stop")`） |
 | E4 | `QueueStreamIteratorTest.abortSettlesTheReasonAndText` | abort 路 `reason="aborted"`＋文本非空 | 红（今天无文本） |
-| E5 | `SessionFailurePathTest.abortedKeepsItsReason`（coding-agent） | 中止的 `StreamError` ⇒ `RunStatus.status()` 不塌成 `error` | 红 |
+| E5 | `SessionFailurePathTest.abortedKeepsItsReason`（coding-agent） | 中止的 `StreamError` ⇒ `RunStatus.status()` 不塌成 `error` | 红 ← ⚠️ **实测绿**，见 §12.4-1 |
 | E6 | `ChatApiTest.sendReturnsTheSettledError`（ai） | `send()` 遇错误 ⇒ 返回 `stopReason="error"` + 文本 | 红（今天空消息、null） |
 | E7 | `JsonEventMapperTest.terminalErrorFrameHasNoStackTrace` | 终局帧的 `assistantMessageEvent` 无 `stackTrace` 键、有 `errorMessage`；`done` 帧有 `reason`+`usage` | 红 |
-| E8 | `AgentHarnessTest.*`（改写 3 条） | 生产者落定后，`withErrorShape` 删除仍绿（**不是先红**，是回归） | 绿 |
+| E8 | `AgentHarnessTest.*`（改写 3 条） | 生产者落定后，`withErrorShape` 删除仍绿（**不是先红**，是回归） | 绿 ← ⚠️ **预测错**：裸 record 夹具必红，见 §12.4-2 |
 
-### 9.2 变异探针（每条预测红集，实施后回填实测）
+### 9.2 变异探针（**实测红集见 §12.3**）
 
 | 变异 | 目的 |
 |---|---|
@@ -411,9 +425,14 @@ pi 的等价物是「流里的一条错误消息」，但 java 这条 catch 覆�
    是**预测**（§9.1/§9.2），实施前不得当成已核事实；实测红集与预测不符时**就地更正本文件**（本仓惯例）。
 2. **`FauxChatApi` 绕过出口缝**（`docs/32 B48` 已登记）：落点②不覆盖它 ⇒ 靠落点①/@6.3-9 的生产者改动兜住；
    实施时须为「走 faux 的路径」单列一条夹具，否则那条路会静默留在旧形状。
+   ✅ **已落**：`FauxProviderTest.errorModeShouldReturnStreamError` 补三条断言
+   （`reason`／`partial.stopReason()`／`partial.errorMessage()`）。
 3. **真正的中止语义**仍是 R9 的旧论证（`cutShort` / `abortedAtEntry` 两分法），本包不动它 ⇒
    若某条中止路径的 `errorMessage` 在 pi 是 SDK 的原文而我们给的是 `"Request was aborted"`，属**残留差异**，
    实施时逐条比对并登记。
+   ✅ **实施比对**：`QueueStreamIterator.close()` 那条合成终局仍给 `"aborted"` ＋ 空内容
+   （它**没有累加器** —— pi 的对等物是 `lazy.ts` 的合成错误消息，同样没有已流出的内容）
+   ⇒ 与 pi 同形，无新登记。
 4. **对外协议变更**（R5-(a)）：`message_update.assistantMessageEvent` 的终局形状会变（不再有 `stackTrace`）
    ⇒ 按 `docs/32` 的惯例，这类变更要在收口时标注「需知悉」。
 5. **`errorMessage` 的取文本口径**：pi 是 `error instanceof Error ? error.message : JSON.stringify(error)`；
@@ -424,4 +443,113 @@ pi 的等价物是「流里的一条错误消息」，但 java 这条 catch 覆�
 
 ## 12. 实施记录（闭环时回填）
 
-_待填：裁决结果、提交号、逐条先红实测、变异红集、模块回归与全 reactor 结果、被实测推翻的设计结论。_
+**裁决结果**：R1–R9 **全部按建议**（2026-09-27 用户「按建议实施」）。即：不扩 record；
+保留三个访问器并升语义；单工厂 ＋ 三落点 ＋ 禁下游重建；缺终局改判 error；
+宿主线**保留终局帧但换成 pi proxy 的扁平形状**（(a)，(b) 登记 B115）；
+`done.usage` 嵌套包裹不动（B116）；`send()` 返回落定消息、`PiHttpException` 保留（B113）；
+3d 重试环判据不变；`markAborted` 保留。
+
+### 12.1 落地的生产代码
+
+**单工厂**：`StreamEvent.StreamError.settle(reason, cause, partial)` 与
+`StreamEvent.StreamDone.settle(reason, partial)`，共用两个私有助手
+（`settleMessage` / `settleReason`）与一个判据 `StreamEvent.isSettled(stopReason)` ＋
+常量 `StreamEvent.PENDING_STOP_REASON`（把此前散在两处的 `"pending"` 字面量收成一处）。
+工厂规则：**消息上已落定 ⇒ 消息是权威**（pi 的 `reason` 只是 `output.stopReason` 的冗余投影）。
+
+**三落点**：
+
+| 落点 | 文件 | 改动 |
+|---|---|---|
+| ① 车道侧 | `StreamPartialBuilder.emitError` | 走 `settle`（此前只写 `stopReason`）—— F1/F2 的根因修复 |
+| ② 出口缝 | `AbstractChatApi` | `onError` 走 `settle`；**安全网改推 `StreamError("error", ISE("stream completed without a terminal event"))`**（F3）；`send()` 两种终局都返回落定消息（F5），删掉永不填充的 `blocks` 累加器 |
+| ③ 旁路生产者 | `QueueStreamIterator`（close/abort/中断三路）、`FauxProvider`（三条终局）、`SessionRunner`（两处兜底） | 全部改走同一工厂 |
+
+**消费面**：`PiLoopRunner` **删 `withErrorShape`**（终局两臂变 `fromPartial(event.partial())`；
+`markAborted` 保留，判据改用 `isSettled`）；`LlmSummaryGenerator.terminal` 的文本源改
+`StreamError.textOf(event)`；`PrintMode` / `ChatScreen` / `AgentEventTranslator` /
+`PayloadRecordingStreamFn` 四处同样改 `textOf`（消息优先、`Throwable` 兜底）
+⇒ **全仓 `err.error()` 的读点从 6 处降到 1 处**（`textOf` 的兜底分支；R3 的判据成立）。
+
+**线形状（C2）**：`JsonEventMapper` 新增 `terminalWireNode` 显式投影 ＋ `normalizedUsage`
+（顶层 usage 与终局帧 usage 共用一个归一），`assistantMessageEvent` 与 `toStreamEventWire`
+**两处共用**之。
+
+### 12.2 先红（实测，回填 §9.1）
+
+`mvn -pl pi-java-ai test -Dtest='StreamEventSettlementTest,ChatApiTerminalSettlementTest,QueueStreamIteratorTest'`
+在**只加了两个工厂、未改任何消费面**时跑：**22 跑 6 红**，与预测逐条对上：
+
+| # | 夹具 | 预测 | **实测** |
+|---|---|---|---|
+| E1 | `builderErrorCarriesTheText` | 红 | ✅ 红（`errorMessage` 为 null） |
+| E2 | `builderErrorKeepsWhatStreamedBeforeTheFailure` | 绿（对照） | ✅ 绿 |
+| E3 | `missingTerminalIsAnErrorNotASuccess` | 红 | ✅ 红（当时是 `StreamDone("stop")`） |
+| E4 | `abortSettlesTheReasonAndText` ＋ `closeSettlesTheStopReasonOnTheSyntheticDone` | 红 | ✅ **两条**都红（设计稿只列了一条） |
+| E5 | `SessionFailurePathTest.abortedStreamErrorKeepsItsReason` | 红 | ⚠️ **绿**（见 §12.4 —— 设计稿的 F4 判断错了一半） |
+| E6 | `sendReturnsTheSettledError` | 红 | ✅ 红（当时返回空消息） |
+| E7 | `JsonEventMapperMessageUpdateTest` 终局帧四条 | 红 | ✅ 红（4 条全红） |
+| E8 | `AgentHarnessTest.*`（改写 3 条） | 绿（回归） | ✅ 绿（改走 `settle` 后） |
+| ＋ | `streamErrorExitsTheSeamSettled`（设计稿未列，实施时补） | — | ✅ 红（出口缝的 F1 面） |
+
+⚠️ 「先红」的准确口径：两个**工厂**是新增面（`settle` / `textOf`），编译前不存在 ⇒
+它们在实现后当然是绿的 —— 先红测的是**四条消费面**（builder / 安全网 / 旁路 / `send` / 线格式）。
+§9.1 的写法让人误以为工厂本身也能先红，实施时按上述口径测。
+
+### 12.3 变异探针（实测红集，回填 §9.2）
+
+| 变异 | 预测红集 | **实测** |
+|---|---|---|
+| M1 去掉 `emitError` 的落定 | E1/E4/E6 | **5 红**：`builderErrorCarriesTheText`、`builderErrorKeepsWhatStreamedBeforeTheFailure`、`builderErrorWithoutACauseStillSettlesTheReason`、`sendReturnsTheSettledError`、`streamErrorExitsTheSeamSettled`。⚠️ 预测里的 **E4 不在此列**（`QueueStreamIterator.abort` 走工厂、不经 builder） |
+| M2 去掉工厂的落定补全 | E3/E4/E6 | **12 红**（`StreamError` 面全灭，`StreamDone` 的 4 条仍绿 ⇒ 归因干净） |
+| M3 安全网改回 `StreamDone("stop")` | E3 | **1 红**：恰 `missingTerminalIsAnErrorNotASuccess` |
+| M4 `SessionRunner` 改回忽略 `reason()` | E5 | ⚠️ **0 红** —— 语义等价，见 §12.4 |
+| M5 `send()` 改回 `break` | E6 | **1 红**：恰 `sendReturnsTheSettledError` |
+| M6 终局帧改回 `valueToTree` | E7 | **3 红**：三条 `terminal*Frame*`（`toStreamEventWire` 那条仍绿 ⇒ 两处投影的隔离成立） |
+| M7 `QueueStreamIterator.abort` 传空 reason | E4 | **1 红**：恰 `abortSettlesTheReasonAndText` |
+
+每次变异**落地后都 grep 复核**（CRLF 的第 6 次提醒）：本次按单一整行字面量替换，不带 `$` 锚点。
+
+### 12.4 被实测推翻的设计结论（两处）
+
+1. **F4 的后果判断不成立 ⇒ M4 零红。** 设计稿写「`aborted` 在宿主状态里被塌成 `error`」。
+   实测：`SessionRunner:132-136` 的**读尾**（B5 第 2 步，pi `print-mode.ts:139-155` 的对应物）
+   在尾条是 `error`/`aborted` 的助手消息时用 `tail.stopReason()` **覆盖**监听器设的值，
+   而流错误必然产生这样一条尾条 ⇒ 监听器那一行的值今天**不可观察**。
+   **处置**：改动**保留**（它是正确读法、去掉同仓两套口径，且读尾失效时它就成了唯一来源），
+   但夹具的 javadoc 与代码注释都写明「本条钉端到端契约、不是该改动的判别器」，
+   并在 `docs/32 B117` 登记（读尾是权威、监听器值被遮蔽这件事本身没有文档）。
+2. **E8 不是「回归」而是「必须改写」。** 设计稿预测三条既有 `AgentHarnessTest` 夹具「删
+   `withErrorShape` 后仍绿」。实测：它们手搓**裸** `StreamError`（partial 只带 `stopReason`、
+   无 `errorMessage`），删掉补丁后 `stopReason` 会停在 `pending`/null ⇒ **必红**。
+   同类还有三条：`AgentSessionRetryEventOrderTest` / `SessionRunnerRetryContextTest` /
+   `RpcDispatcherTest.autoRetryRerunsAfterError`（都靠补丁把 `"overloaded"` 送进重试白名单）。
+   ⇒ 五条夹具全部改走 `StreamError.settle`（**生产者**的入口）。
+   这正是本仓已记过的形态：**夹具把人脑里的模型当契约** —— 手搓 record 之所以能过关，
+   靠的是被删掉的那个补丁。
+
+### 12.5 提交与回归
+
+- `C1a` `feat(ai): settle the terminal stream payloads at the producers` — §6.3 的 1–9
+- `C1b` `refactor(agent-core): read the terminal message instead of the throwable` — §6.3 的 10–12
+- `C2` `feat(coding-agent): project the terminal frame into the proxy wire shape` — §6.3 的 13–14
+- `C3` `docs(ai): close the C-batch terminal payload package` — 本文件 ＋ `docs/48` ＋ `docs/41` ＋ `docs/32`
+
+模块回归（实施后实测）：`ai` **995**、`agent-core` **520**、`coding-agent` **279**、
+`tui` 209（1 skip）、`web` 48、`evals` 43（17 skip）。
+⚠️ 跨模块跑 `-pl <mod>` 前必须先 `install` 上游模块：本次 `coding-agent` 一度因 `~/.m2` 的
+**旧 agent-core**（缺 `promptGuidelines`/`isCompacting`/`options.reasoning()`）编译失败 —— 那是
+陈旧构件，不是本包改动（`docs/32` 既有教训）。
+全 reactor `mvn test`：**BUILD SUCCESS（14/14、exit 0）**，日志 `/tmp/reactor-test.log`。
+
+⚠️ 一处存量顶格的连锁：`ChatScreen.java` **原本恰好 500 行**（本仓上限），本包的第一版改动把它顶到 503
+—— 已在收口时把新增注释压回单行、恢复 500。**该文件再无余量**，下次改动必须拆。
+
+### 12.6 需知悉的对外变更
+
+`message_update.assistantMessageEvent` 的**终局形状变了**：`done` 帧从
+`{type,reason,usage:<UsageInfo>}` 变成 `{type,reason,usage:<扁平 Usage>}`（不再有
+`inputTokens`/`outputTokens`/嵌套 `partial`），`error` 帧从 `{type,reason,error:<Throwable>}`
+变成 `{type,reason,errorMessage?,usage}`（**不再有 `stackTrace`/`cause`**）。
+同一投影也作用于 `--mode json` 的逐条输出（`toStreamEventWire`）。
+消费方按 pi 的 proxy 契约解析即可；键序不承诺（按 `docs/54 §12.8` 的教训：跨实现夹具按键取值）。

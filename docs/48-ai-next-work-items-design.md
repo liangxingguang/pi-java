@@ -1,6 +1,6 @@
 # 48 - pi-java-ai 下一步待做清单与设计入口
 
-**状态：已批准；Batch A 已闭环 A1、A2 与包 B87/B88（2026-09-25–26）—— A3 已闭环（四条车道全部原生渲染，`docs/51 §12`）；A4 已闭环（prompt sections 构建/替换/差分 ＋ 生产接线，`docs/52 §12`，2026-09-26）；A-07 已闭环（`Model.compat` 的解析链、目录标注与已消费字段的生产者，`docs/53 §12`，2026-09-27）；A-01 已闭环（Anthropic 缓存断点 ＋ `cacheRetention` 选项通道 ＋ 压缩路径的 `none` 生产者，`docs/54 §12`，2026-09-27 —— **B89 结案**）—— 下一项＝ C 批次或 A-02/A-09/A-10/A-14。**2026-09-27：C 批次（终局事件载荷）设计稿已出 ⇒ [`docs/55`](55-c-terminal-event-payload-design.md)，待审核；审核通过前不写代码**
+**状态：已批准；Batch A 已闭环 A1、A2 与包 B87/B88（2026-09-25–26）—— A3 已闭环（四条车道全部原生渲染，`docs/51 §12`）；A4 已闭环（prompt sections 构建/替换/差分 ＋ 生产接线，`docs/52 §12`，2026-09-26）；A-07 已闭环（`Model.compat` 的解析链、目录标注与已消费字段的生产者，`docs/53 §12`，2026-09-27）；A-01 已闭环（Anthropic 缓存断点 ＋ `cacheRetention` 选项通道 ＋ 压缩路径的 `none` 生产者，`docs/54 §12`，2026-09-27 —— **B89 结案**）—— 下一项＝ A-02/A-09/A-10/A-14。**2026-09-27：C 批次（终局事件载荷）设计稿已出 ⇒ [`docs/55`](55-c-terminal-event-payload-design.md)；同日按「R1–R9 全按建议」实施并闭环 ⇒ [`docs/55 §12`](55-c-terminal-event-payload-design.md)（`3684a82`/`b8d7e48`/`882fcaa` ＋ docs）**
 > ⚠️ 本行是**活状态**，每包闭环后须回填（§9 步骤 7）。
 **创建基准：** pi-java `f0400a2`（B14 收尾）  
 **参考台账：** [`41-gap-inventory.md`](41-gap-inventory.md)、[`32-open-items-register.md`](32-open-items-register.md)、[`40-module-alignment-map.md`](40-module-alignment-map.md)  
@@ -50,7 +50,7 @@ B14b/R1 单独列为 Batch F；R2/R3/R4 作为已知差异保留，除非后续�
 | A-02 | OpenRouter chat provider | P0 | OpenRouter 只有 images 面，普通对话不可用 | `ProviderCatalog` 仅注册 `OpenRouterImagesProvider`；`docs/41:55` | D | 无 |
 | A-03 | 统一 transcript/context 模型 | P0 | 缺少中途系统提示变化、工具变化和统一 provider context normalization | `Message` 只有 user/assistant/toolResult；`Context`/`StreamRequest` 分离 systemPrompt、messages、tools；`docs/41:56-58` | A | 无；挂靠 B14 R5 |
 | A-04 | OpenAI 默认 wire 裁决 | P0 | pi 的 `openai` 默认走 Responses，Java 默认走 Completions，协议能力和会话语义不同 | `OpenAIProvider` 默认路由；`docs/41:101` | D | 无 |
-| A-05 | `done` / `error` 终局事件载荷 | P0 | 下游拿不到与 pi 等价的最终 assistant/error message | `StreamEvent` 当前 `done` 主要携带 usage/partial，error 主要暴露 Throwable；`docs/41:102-103` | C | 无 |
+| A-05 | ~~`done` / `error` 终局事件载荷~~ | P0 | ✅ **已闭环**（[`docs/55 §12`](55-c-terminal-event-payload-design.md)，2026-09-27，`3684a82`/`b8d7e48`/`882fcaa`）：终局载荷＝**落定后的累加器**（单工厂 ＋ 三落点；`err.error()` 读点 6⇒1）；顺带修真缺陷两条（缺终局被报成成功、`send()` 吞错）。原后果：下游拿不到与 pi 等价的最终 assistant/error message —— `error.partial` 是**空**的（流到故障点的内容全丢）、错误文本只在 Throwable 上、宿主线还把 `stackTrace` 发上对外协议 | C | [`docs/55`](55-c-terminal-event-payload-design.md) |
 | A-06 | xAI provider | P1 | xAI 普通 provider 端点不可用 | 当前仅 OAuth/provider error 相关痕迹，无 xAI provider 注册；`docs/41:63-64` | D | 无 |
 | A-07 | `Model.compat` 扩展 | P1 | provider 无法依据模型能力决定 store、max-token 字段、developer role、缓存、会话亲和性和中途变化 | `ModelCompat` 当前只有少量已消费字段；`docs/41:67-68` | B/D | 无 |
 | A-08 | 内置模型目录覆盖 | P1 | 大量模型退化为 `ModelInfo.minimal`，模型能力和价格不完整 | 当前内置目录为手写/有限覆盖；`docs/41:68-69` | D | 无 |
@@ -145,9 +145,9 @@ flowchart TD
 | B | retry header 与 provider retry 预设接线 | P1 | B2/设计门8 | ⬜ 待开始 | — | — | — | — | — |
 | B | Anthropic OAuth credential → request path | P1 | A0 已完成、设计门8 | ⬜ 待开始 | — | — | — | — | — |
 | B | `ContextOverflow` z.ai/Cerebras 门控 | P1 | — | ⬜ 待开始 | — | — | — | — | — |
-| C | `done` 终局完整 assistant payload | P0 | 设计门5 | 📐 设计待审核（[`docs/55`](55-c-terminal-event-payload-design.md)） | — | — | — | — | — |
-| C | `error` 终局 assistant error payload | P0 | C1 | 📐 设计待审核（同上，同包） | — | — | — | — | — |
-| C | provider/agent/RPC 终局载荷迁移 | P0 | C1/C2 | 📐 设计待审核（同上，同包） | — | — | — | — | — |
+| C | `done` 终局完整 assistant payload | P0 | 设计门5 | 🟢 已完成（[`docs/55 §12`](55-c-terminal-event-payload-design.md)） | `3684a82`（C1a 单工厂＋三落点）· `b8d7e48`（C1b 删 `withErrorShape`、读消息不读 Throwable）· `882fcaa`（C2 终局帧投影） | 新夹具 **22 跑 6 红**（`builderErrorCarriesTheText`／`missingTerminalIsAnErrorNotASuccess`／`abortSettlesTheReasonAndText`／`closeSettlesTheStopReasonOnTheSyntheticDone`／`sendReturnsTheSettledError`／`streamErrorExitsTheSeamSettled`）；对照组 `builderErrorKeepsWhatStreamedBeforeTheFailure` 绿（内容保留那一半本来就对） | M1 ⇒ 5 红 · M2 ⇒ 12 红 · M3 ⇒ 恰 1 红 · **M4 ⇒ 0 红**（读尾覆盖，语义等价 ⇒ 新登记 B117）· M5 ⇒ 恰 1 红 · M6 ⇒ 3 红 · M7 ⇒ 恰 1 红（每次落地后 grep 复核） | 全 reactor `mvn test` **SUCCESS**（14/14）；`ai` 977⇒**995**、agent-core 520、coding-agent 279、tui 209（1 skip）、web 48、evals 43（17 skip） | R1–R9 全按建议；⚠️ **两处设计结论被实测推翻**：① F4「aborted 被塌成 error」不成立（读尾覆盖 ⇒ M4 零红，改动保留但注释/夹具 javadoc 写明它不是判别器）② E8 预测「三条既有夹具仍绿」错 —— 它们手搓**裸** `StreamError`、靠被删的补丁过关，连同重试三条共**五条夹具改走 `settle`**（`docs/55 §12.4`）；**需知悉**：终局帧对外形状变更（`stackTrace`/`cause` 不再上线，`done.usage` 改扁平）；新登记 **B109–B117** |
+| C | `error` 终局 assistant error payload | P0 | C1 | 🟢 已完成（同上，同包） | 同上 | 同上 | 同上 | 同上 | 同上 |
+| C | provider/agent/RPC 终局载荷迁移 | P0 | C1/C2 | 🟢 已完成（同上，同包） | 同上 | 同上 | 同上 | 同上 | 同上 |
 | D | OpenAI 默认 wire 与显式 override 设计/实施 | P0 | 设计门6、R4裁决 | ⬜ 待开始 | — | — | — | — | — |
 | D | OpenRouter chat provider | P0 | D1 | ⬜ 待开始 | — | — | — | — | — |
 | D | xAI provider | P1 | D1 | ⬜ 待开始 | — | — | — | — | — |
