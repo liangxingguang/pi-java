@@ -1,6 +1,6 @@
 # 56 - B109：归一化停因词表对齐 pi（`"tool_use"` → `"toolUse"`）设计
 
-**状态：待审（2026-09-27；设计稿，**未实施**）**
+**状态：已闭环（2026-09-27；R1–R7 全按建议实施，实施记录见 §12）**
 
 > 本包裁决 `docs/32` **B109**：「`stopReason` 的词表偏差 —— java 的 `"tool_use"` vs pi 的 `"toolUse"`」。
 > B109 原文的保留理由是「影响对外 `stopReason` 与既存转录的兼容（改词表 = 一次数据迁移），须单独裁决」。
@@ -9,9 +9,13 @@
 > ⚠️ **本包最容易出错的地方是「同名字面量」**：本仓有三个不同的东西都写作 `"tool_use"`，
 > 只有一个是本包的目标。先把 §2 读完再动任何一行。
 >
-> ⚠️ 设计期实测**推翻了一条预案**：初稿把 L5 差分当作最有价值的红灯源，实测它对本案
-> **结构上盲**（三条独立理由，§8.1）⇒ 红灯改由 evals 的**真实车道**提供（§8.2 第 2 条，R5）。
-> 该盲区本身已登记 **B120**。
+> ⚠️ **设计期的两处预测被实测推翻**（都在 §12 原位标注，别照旧结论行事）：
+> ① §8 把 L5 差分当作最有价值的红灯源 —— 实测它对本案**结构上盲**（§8.1，三条独立理由），
+> 红灯改由 evals 提供，该盲区登记 **B120**；
+> ② §8.2 称 evals 那条路「跑的是真车道」**不准确** —— provider 类是 `FauxProvider`，但事件列表是
+> `ConformanceFixtures` **手搓**的（§12.10）。
+> 另：探针实测**挖出一处真覆盖缺口** —— 主车道 Anthropic 的归一化停因原本**没有任何夹具**
+> （变异 M1 零红），已补并复测（§12.9）。
 
 **参考台账：** `docs/32`（B109 本行、B48 内容块判别值、B20 停因映射跨车道、B117）、`docs/41 §1.4`、`docs/48 §5`
 **参考设计：** `docs/55`（C 批次终局载荷 —— 本包改动的最主要**出口**都由它建立）、`docs/37`（RPC 线形状）
@@ -150,10 +154,22 @@ case "tool_use":
 | `FauxProvider:94` | `.withStopReason("tool_use")` | `"toolUse"` |
 | `FauxProvider:103` | `StreamDone.settle("tool_use", finalMsg)` | `"toolUse"` |
 
-javadoc 6 处：`AnthropicMessagesApi:386-390`（那对「刻意偏差」的第 1 条**整条作废**，因为偏差没有了）、
-`OpenAICompletionsApi:29`/`:305`、`MistralConversationsApi:44`、`AssistantMessage:32`、
-`Message:120`、`StreamEvent:293`。注释 3 处：`LaneState:300`（词汇表）、`HarnessUtils:139`、
-`AnthropicMessagesApi:262`。⚠️ `PiLaneSink:110`/`:382`、`PiLoopRunner:317` 说的是**「tool_use 块」＝②**，**不改**。
+**注释与文档**：改了 4 处 —— `AnthropicMessagesApi:386-390`（那对「刻意偏差」的第 1 条**整条作废**，
+因为偏差没有了；改为「一处偏差」＋ 一段分清三个同名字面量的话）、`OpenAICompletionsApi:305`、
+`AssistantMessage:32`、`Message:120`、`StreamEvent:293`；另加 `LaneState:300`（词汇表）与
+`HarnessUtils:136`/`:139`。
+
+⚠️ **实施时定的一条口径：历史引文保留原字面量。** 描述**已删除的旧代码**的 javadoc/注释
+**不跟着改** —— 改了就不再是那段代码的引文。故这三处**故意不动**：
+`AnthropicMessagesApi:262`（引 B20 删掉的 `toolCallSeen` 标志）、`MistralConversationsApi:44`
+（引旧的有缺陷映射）、`OpenAICompletionsApi:29`（引 B20 之前的固定取值）。
+它们带「原来」字样，是历史记录而非现役词汇。
+
+⚠️ `PiLaneSink:110`/`:382`、`PiLoopRunner:317` 说的是**「tool_use 块」＝②**，**不改**。
+
+⚠️ 同理**不动**的还有 ②③ 的全部落点：`ContentBlock:22` 的 `@JsonSubTypes` 判别名、
+`SessionJson:200`、`MessageJsonCodec:275`、`JsonEventMapper:273`、`HtmlExporter:214`、
+`AnthropicRequestBuilder:243`、以及 `AnthropicMessagesApi:405` 的 `case` 标号本身。
 
 ### 5.2 三座桥函数 —— 删除（决策 R4）
 
@@ -254,10 +270,13 @@ javadoc 6 处：`AnthropicMessagesApi:386-390`（那对「刻意偏差」的第 
 
 1. **新词表断言**：一条「`StreamDone.reason()` / `partial().stopReason()` 必须是 `"toolUse"`」的
    用例 ⇒ 旧实现下红。
-2. **★ R5 的收紧（本包唯一有牙的真实车道门）**：`ChatApiConformanceSuite:74` 现在两个字面量都放过。
-   **先**收紧为只认 `"toolUse"`（此时 `FauxProvider:103` 仍发 `"tool_use"`）⇒ **红**；
-   改完生产者 ⇒ 绿。**注意顺序**：收紧必须在改 `FauxProvider` **之前**落地，否则这条红灯取不到。
-   这条路是真的 —— evals 跑的是真 `FauxProvider` 经真 `ChatApi`（`MODEL = faux/eval`）。
+2. **★ R5 的收紧（本包有牙的夹具门）**：`ChatApiConformanceSuite:74` 现在两个字面量都放过。
+   **先**收紧为只认 `"toolUse"`（此时那条路的输入仍发 `"tool_use"`）⇒ **红**；
+   改完 ⇒ 绿。**注意顺序**：收紧必须在改它的输入**之前**落地，否则这条红灯取不到。
+   ⚠️ **本条的初稿写错了输入是谁，实测已更正**：初稿说「evals 跑的是真 `FauxProvider` 经真
+   `ChatApi`」⇒ 实际 provider 类是 `FauxProvider`，但**事件列表是 `ConformanceFixtures` 手搓的**
+   （`ChatApiConformanceTest:43` 用 `ConformanceFixtures.forCase(...)`）⇒ **这条门守的是夹具自己的
+   字面量，不守任何生产者车道**。所以要把 M2 打在 `ConformanceFixtures` 上（§12.9）。
 
 **§8.3 变异探针**
 
@@ -313,3 +332,137 @@ javadoc 6 处：`AnthropicMessagesApi:386-390`（那对「刻意偏差」的第 
   但如 §8.1 所述，**覆盖不等于能判别**：这条路对本案结构上盲。别再把它当验收证据（B120）。
 - **`/resume` 一条旧会话后**的观测面（遥测属性 / 终局帧）今日无夹具 —— 若 R2/R3 均不采纳，
   这里就是外来字面量的实际泄漏路径。
+
+---
+
+## 12. 实施记录（2026-09-27）
+
+### 12.1 决策的落地
+
+R1–R7 **全部按建议实施**，无一项被推翻：
+
+| # | 裁决 | 落地 |
+|---|---|---|
+| R1 | 保持字面量 | 未引入常量或 enum；`JsonlCodec` 里的两个常量只服务于迁移垫片 |
+| R2 | 旧转录读侧归一 | `JsonlCodec.readStopReason`（垫片）＋ `MessageJsonCodec` 改走它 |
+| R3 | 审计路径一并归一 | 同一方法 ＋ `RecordJsonCodec` 改走它 |
+| R4 | 删三座桥 | 三处全删（§12.3） |
+| R5 | 收紧 conformance | `ChatApiConformanceSuite:74` 只认 `"toolUse"` |
+| R6 | 守卫不修、登记 | 登记 **B118** |
+| R7 | 校验点不加、登记 | 登记 **B119** |
+
+### 12.2 改动面（实测）
+
+生产者 **9 处**（7 条车道 ＋ `FauxProvider` 2 处）；桥函数 **3 座删除**；
+读侧垫片 **1 个新方法 ＋ 2 个调用点**；夹具与注释 **约 60 处 / 30 文件**（含 `evals` 主源的
+`ConformanceFixtures`）。
+
+### 12.3 三座桥的删除是「净收益」而非「等值替换」
+
+`PiMessagesApi.mapDoneReason` 与 `ScriptedStreams.internalStopReason` 是**互为逆**的一对
+（入站 `toolUse→tool_use`、发射侧同向再翻一次），`FrameNormalizer.stopReasonOf` 是比对侧的逆。
+⇒ 三座桥同时存在时**往返一致**，删与不删都过（这正是 §8.1 说 L5 抓不到本案的原因）。
+删除后 `ScriptedStreams` 里那处**不对称**（done 用翻译值、error 用剧本原值）一并消失。
+
+### 12.4 与设计稿的偏差（两处，都如实记在此）
+
+1. **★ 设计稿的「先红」顺序未能按计划执行。** §8.2 要求「先收紧 R5、观察红、再改生产者」；
+   实际实施时工具通道（Bash 的安全分类器）大面积拒答，而 Edit 不受门控 ⇒ 生产者先落了地，
+   原计划的第一次红灯**没能取到**。⇒ 红灯证据改由**变异探针 M1–M3** 提供（它们各自把一处
+   生产者改回旧字面量，等价地测出「哪些夹具真的钉住了这个词表」）。⚠️ 这是**证据形式**的
+   替换，不是证据的缺失；但按本仓规矩必须写明，别读成「先红按计划完成了」。
+2. **历史引文不改**（§5.1 的 ⚠️ 三段）。设计稿把 `OpenAICompletionsApi:29`／
+   `MistralConversationsApi:44`／`AnthropicMessagesApi:262` 列进了「要改的注释」，实施时判定
+   它们描述的是**已删除的旧代码**，改了就不再是引文 ⇒ 故意不动。
+
+3. **顺带发现、未改**：`LaneRecord:179` 的 javadoc 把停因词汇表列成
+   `completed / tool_use / …` —— 其中 `tool_use` 已随本包改为 `toolUse`，但 **`completed` 本身
+   是个更早的偏差**（停因词汇表里没有它，它是**运行**结局的取值；停因那格应是 `stop`）。
+   不属 B109（本包只改词表的字面量，不改这份清单的成员）⇒ **只改 `tool_use`，`completed` 留下**，
+   如实记在此。
+
+### 12.5 未覆盖（设计稿 §11 的兑现）
+
+- ♻︎ **B120 的原样复现**：L5 差分**没有**被用作本案的验收面（设计稿已证它结构上盲）。
+- 真实 provider 车道验证：与 B20 的 D2 同样受限，本包**没有**解除该限制。
+- 旧会话的端到端读回：夹具是**字节级构造**的（`StopReasonMigrationTest` 用编码器造合法行、
+  再把归一化停因降级回旧写法），**不依赖** `~/.pi-java` 的存在；3353 个真实文件只用于
+  **设计期的样本取证**。
+- **`/resume` 一条真实旧会话后的观测面**仍无夹具 —— 垫片的单测覆盖了编解码层，
+  但「加载真实旧会话后遥测属性／终局帧写什么」没有端到端用例。
+
+### 12.6 回归（逐模块 ＋ 全 reactor）
+
+**全 reactor `mvn test`：BUILD SUCCESS（14/14，exit 0）** —— 本包的验收门。
+
+| 模块 | 用例 | 相对 C 批次 |
+|---|---:|---|
+| `ai` | **996** | 995 ⇒ **+1**（新增的 Anthropic 车道夹具，§12.9） |
+| `agent-core` | **525** | 520 ⇒ **+5**（`StopReasonMigrationTest`，R2/R3 的垫片） |
+| `telemetry` | 31 | — |
+| `session-backend-sqlite` | 35 | — |
+| `coding-agent` | 279 | — |
+| `tui` | 209（1 skip） | — |
+| `protocol` | 14 | — |
+| `server` | 2 | — |
+| `web` | 48 | — |
+| `evals` | 43（17 skip） | — |
+
+全部 **0 失败 0 错误**。
+
+⚠️ **计数口径**：取 **Maven 的模块汇总行**，不是 `surefire-reports/*.txt` 的求和 —— 后者目录里
+带着历次**筛选运行**留下的报告文件，求和会偏大（实测 `agent-core` 求和 533 ≠ 汇总 525）。
+⚠️ **带跳过的模块那两行是 `[WARNING]` 前缀而非 `[INFO]`**（`tui`／`evals`），按 `^\[INFO\]` 抓会
+**静默漏掉它们** —— 本次第一遍提取就漏了，靠改抓 `Skipped: [1-9]` 才发现。
+
+### 12.7 新登记
+
+**B118**（pi 的「报了 toolUse 却没工具块」守卫全仓缺失）· **B119**（停因闭集无校验点）·
+**B120**（L5 差分把停因归一掉 ⇒ 差分层对该字段结构性盲，本次实测发现）·
+**B121**（`stopReason` 仍是 `String` 而非闭集）。
+
+⚠️ **B120 的适用范围比本案宽**：它约束的是「两侧词表不同、出口又被归一」的**所有**字段 ——
+差分的「逐帧比对通过」在那种情形下**不构成对齐证据**。这条对后续任何跨实现差分工作都适用。
+
+### 12.8 需要知悉的对外影响
+
+归一化停因的词表变了 ⇒ **每一条走工具的车道**的对外 `stopReason` 从 `"tool_use"` 变成
+`"toolUse"`。受影响的面：宿主线终局帧（`message_update.assistantMessageEvent` 的 `done.reason`）、
+`--mode json` 的逐条输出、RPC 转录、web wire、遥测 span 的 `stopReason` 属性、HTML 导出。
+**消费方若按 `"tool_use"` 匹配需同步改**（本仓内已无此类消费方 —— 见 §4.2 的逐处核验）。
+`rawStopReason` **不受影响**（它一直是线格原值）。
+
+### 12.9 变异探针：两条零红，都不是「语义等价」
+
+设计稿 §8.3 预告「M1–M3 零红应属*变异体语义等价*那类」。**实测有两处零红，但成因都不是它** ——
+两条各自挖出一个真问题。
+
+| 探针 | 改回什么 | 预期 | **实测** |
+|---|---|---|---|
+| M1 | `AnthropicMessagesApi` 的映射 | 若干红 | ★ **0 红**（`ai` 995 全绿） |
+| M1′ | 同上，**补夹具之后**复测 | — | **恰 1 红**（新增的 `toolUseStopReasonMapsToPiVocabulary`） |
+| M2 | `FauxProvider.toolCall` 工厂 | evals 红 | ★ **0 红**（evals 20 全绿） |
+| M2′ | 改打 `ConformanceFixtures` | — | **2 红**（`ChatApiConformanceTest.casePasses` / `runnerRecordsPass`，文案 `C3-tool-lifecycle: expected toolUse reason, got tool_use`） |
+| M3 | `ResponsesStreamProcessor` 的映射 | 恰 1 红 | **恰 1 红**（`OpenAIResponsesApiTest.toolCallFlowEmitsToolEventsAndToolUseDone:79`） |
+
+**M1 的零红是真缺口，不是等价。** 它说明**主车道（Anthropic）的归一化停因此前没有任何夹具** ——
+整个 `ai` 模块 995 条用例里没有一条钉住它。这不是本包引入的（改前也没有），但本包正好改了它。
+⇒ 已补 `AnthropicMessagesApiTest.toolUseStopReasonMapsToPiVocabulary`（并把线格 `"tool_use"`
+与归一化 `"toolUse"` 分成两个断言），M1′ 复测**恰 1 红** ⇒ 新夹具确实有牙。
+
+**M2 的零红是探针打错了对象。** evals 的 `ChatApiConformanceTest` 用的是
+`ConformanceFixtures.forCase(...)` 手搓的 provider，**不是** `FauxProvider.toolCall` 工厂
+（§8.2 说的「evals 跑的是真车道」**不准确** —— 已在 `ChatApiConformanceSuite` 的 javadoc 里改正）。
+⇒ 重打 M2′，果然 2 红。
+
+⚠️ **教训（新成因）**：本仓 C 批次记过「零红有四种成因」（变异没落地／夹具没牙／通道没夹具／
+**变异体语义等价**）。本案给出**第五种：探针改错了对象** —— 改的那行确实在生产代码里，
+也确实是个真变异，但它**不在这条测试路径的输入上**。与「语义等价」的区别是决定性的：
+语义等价⇒不需要修；改错对象⇒**红灯只是还没找到正确的夹具，缺口可能真实存在**（M1 就是）。
+
+### 12.10 设计稿的两处预测被实测修正
+
+1. §8.2 把 evals 那条路称作「真的 —— 跑的是真 `FauxProvider` 经真 `ChatApi`」。**不准确**：
+   provider 类是 `FauxProvider`，但**事件列表是 `ConformanceFixtures` 手搓的** ⇒ 这条门守的是
+   **夹具自己的字面量**，不守任何生产者车道。已改 `ChatApiConformanceSuite` 的 javadoc 如实说明。
+2. §8.3 预告的零红成因（语义等价）**两条都不成立**，见 §12.9。

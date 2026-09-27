@@ -1,6 +1,6 @@
 # 48 - pi-java-ai 下一步待做清单与设计入口
 
-**状态：已批准；Batch A 已闭环 A1、A2 与包 B87/B88（2026-09-25–26）—— A3 已闭环（四条车道全部原生渲染，`docs/51 §12`）；A4 已闭环（prompt sections 构建/替换/差分 ＋ 生产接线，`docs/52 §12`，2026-09-26）；A-07 已闭环（`Model.compat` 的解析链、目录标注与已消费字段的生产者，`docs/53 §12`，2026-09-27）；A-01 已闭环（Anthropic 缓存断点 ＋ `cacheRetention` 选项通道 ＋ 压缩路径的 `none` 生产者，`docs/54 §12`，2026-09-27 —— **B89 结案**）—— 下一项＝ A-02/A-09/A-10/A-14。**2026-09-27：C 批次（终局事件载荷）设计稿已出 ⇒ [`docs/55`](55-c-terminal-event-payload-design.md)；同日按「R1–R9 全按建议」实施并闭环 ⇒ [`docs/55 §12`](55-c-terminal-event-payload-design.md)（`3684a82`/`b8d7e48`/`882fcaa` ＋ docs）**
+**状态：已批准；Batch A 已闭环 A1、A2 与包 B87/B88（2026-09-25–26）—— A3 已闭环（四条车道全部原生渲染，`docs/51 §12`）；A4 已闭环（prompt sections 构建/替换/差分 ＋ 生产接线，`docs/52 §12`，2026-09-26）；A-07 已闭环（`Model.compat` 的解析链、目录标注与已消费字段的生产者，`docs/53 §12`，2026-09-27）；A-01 已闭环（Anthropic 缓存断点 ＋ `cacheRetention` 选项通道 ＋ 压缩路径的 `none` 生产者，`docs/54 §12`，2026-09-27 —— **B89 结案**）—— 下一项＝ A-02/A-09/A-10/A-14。**2026-09-27：C 批次（终局事件载荷）设计稿已出 ⇒ [`docs/55`](55-c-terminal-event-payload-design.md)；同日按「R1–R9 全按建议」实施并闭环 ⇒ [`docs/55 §12`](55-c-terminal-event-payload-design.md)（`3684a82`/`b8d7e48`/`882fcaa` ＋ docs）**。**2026-09-27：B109（`stopReason` 词表偏差）已单独裁决为「对齐 pi」并闭环 ⇒ [`docs/56`](56-b109-stop-reason-vocabulary-design.md)（归一化停因 `"tool_use"`→`"toolUse"`；`docs/56 §12`）**
 > ⚠️ 本行是**活状态**，每包闭环后须回填（§9 步骤 7）。
 **创建基准：** pi-java `f0400a2`（B14 收尾）  
 **参考台账：** [`41-gap-inventory.md`](41-gap-inventory.md)、[`32-open-items-register.md`](32-open-items-register.md)、[`40-module-alignment-map.md`](40-module-alignment-map.md)  
