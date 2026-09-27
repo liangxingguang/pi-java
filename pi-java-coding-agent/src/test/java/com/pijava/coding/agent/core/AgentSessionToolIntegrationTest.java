@@ -45,7 +45,7 @@ class AgentSessionToolIntegrationTest {
             "content", "print(\"hello\")");
         var toolMsg = AssistantMessage.empty().withContent(List.of(
             new ContentBlock.ToolUseContent("id1", "write", argsMap)))
-            .withStopReason("tool_use");
+            .withStopReason("toolUse");
         var doneMsg = AssistantMessage.empty().withContent(List.of(
             new ContentBlock.TextContent("done"))).withStopReason("stop");
         providers.register(FauxProvider.sequence("faux-tool", List.of(
@@ -53,7 +53,7 @@ class AgentSessionToolIntegrationTest {
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.ToolCallStart(0, AssistantMessage.empty()),
                 new StreamEvent.ToolCallEnd(0, "id1", "write", argsMap, toolMsg),
-                new StreamEvent.StreamDone("tool_use", null, toolMsg)),
+                new StreamEvent.StreamDone("toolUse", null, toolMsg)),
             List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.TextStart(0, AssistantMessage.empty()),

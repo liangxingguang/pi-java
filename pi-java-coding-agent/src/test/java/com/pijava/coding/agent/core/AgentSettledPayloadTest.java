@@ -41,14 +41,14 @@ class AgentSettledPayloadTest {
         Map<String, Object> args = Map.of("path", "hello.py", "content", "print(1)");
         var toolMsg = AssistantMessage.empty().withContent(List.of(
             new ContentBlock.ToolUseContent("id1", "write", args)))
-            .withStopReason("tool_use");
+            .withStopReason("toolUse");
         return List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.ToolCallStart(0, AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.ToolUseContent(
                     "id1", "write", Map.of())))),
             new StreamEvent.ToolCallEnd(0, "id1", "write", args, toolMsg),
-            new StreamEvent.StreamDone("tool_use", null, toolMsg));
+            new StreamEvent.StreamDone("toolUse", null, toolMsg));
     }
 
     private static List<StreamEvent> doneSeq(String text) {

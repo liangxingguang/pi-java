@@ -94,7 +94,7 @@ class SessionFailurePathTest {
     private static List<StreamEvent> toolCallSeq(List<ContentBlock.ToolUseContent> calls) {
         var partial = AssistantMessage.empty()
             .withContent(new ArrayList<ContentBlock>(calls))
-            .withStopReason("tool_use");
+            .withStopReason("toolUse");
         var events = new ArrayList<StreamEvent>();
         events.add(new StreamEvent.Start(AssistantMessage.empty()));
         for (int i = 0; i < calls.size(); i++) {
@@ -102,7 +102,7 @@ class SessionFailurePathTest {
             events.add(new StreamEvent.ToolCallEnd(i, calls.get(i).id(), calls.get(i).name(),
                 calls.get(i).arguments(), partial));
         }
-        events.add(new StreamEvent.StreamDone("tool_use", null, partial));
+        events.add(new StreamEvent.StreamDone("toolUse", null, partial));
         return List.copyOf(events);
     }
 

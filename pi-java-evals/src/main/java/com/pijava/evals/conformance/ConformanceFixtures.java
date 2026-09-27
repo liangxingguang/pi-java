@@ -42,13 +42,13 @@ public final class ConformanceFixtures {
         var empty = AssistantMessage.empty();
         var args = Map.<String, Object>of("q", "hi");
         var block = new ContentBlock.ToolUseContent("call_1", "echo", args);
-        var done = empty.withContent(List.of(block)).withStopReason("tool_use");
+        var done = empty.withContent(List.of(block)).withStopReason("toolUse");
         return new FauxProvider("faux-tool", List.of(
             new StreamEvent.Start(empty),
             new StreamEvent.ToolCallStart(0, empty),
             new StreamEvent.ToolCallDelta(0, "call_1", "{\"q\":\"hi\"}", empty),
             new StreamEvent.ToolCallEnd(0, "call_1", "echo", args, done.withStopReason(null)),
-            new StreamEvent.StreamDone("tool_use", null, done)
+            new StreamEvent.StreamDone("toolUse", null, done)
         ), 0);
     }
 

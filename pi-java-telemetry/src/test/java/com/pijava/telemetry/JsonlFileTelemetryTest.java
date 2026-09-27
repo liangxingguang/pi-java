@@ -52,7 +52,7 @@ class JsonlFileTelemetryTest {
         String result = telemetry.startSpan(
             new SpanOptions("llm.request", Map.of("model", "claude-sonnet-4-6")),
             span -> {
-                span.addAttribute("stopReason", "tool_use");
+                span.addAttribute("stopReason", "toolUse");
                 return "done";
             });
 
@@ -74,7 +74,7 @@ class JsonlFileTelemetryTest {
         assertThat(end.get("spanId").asText()).isEqualTo(start.get("spanId").asText());
         assertThat(end.get("durationMs").asLong()).isGreaterThanOrEqualTo(0);
         assertThat(end.get("status").asText()).isEqualTo("ok");
-        assertThat(end.get("attrs").get("stopReason").asText()).isEqualTo("tool_use");
+        assertThat(end.get("attrs").get("stopReason").asText()).isEqualTo("toolUse");
     }
 
     @Test

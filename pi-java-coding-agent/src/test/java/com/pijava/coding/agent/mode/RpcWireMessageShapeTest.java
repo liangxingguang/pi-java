@@ -100,7 +100,7 @@ class RpcWireMessageShapeTest {
             new ContentBlock.TextContent("t"),
             new ContentBlock.ThinkingContent("why"),
             new ContentBlock.ToolUseContent("c1", "bash", Map.of("cmd", "ls"))),
-            "tool_use", null, "anthropic", "anthropic", "m", Usage.of(1, 2), null, null, null);
+            "toolUse", null, "anthropic", "anthropic", "m", Usage.of(1, 2), null, null, null);
 
         var content = JsonEventMapper.toWire(
             new AgentSessionEvent.AgentEnd(List.<Message>of(assistant), false))
