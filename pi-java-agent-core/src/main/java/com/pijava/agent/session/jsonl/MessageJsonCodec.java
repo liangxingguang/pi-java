@@ -44,7 +44,7 @@ final class MessageJsonCodec {
             case "user" -> new Message.UserMessage(content);
             case "assistant" -> new Message.AssistantMessage(
                 content,
-                JsonlCodec.optionalString(node, "stopReason"),
+                JsonlCodec.readStopReason(node),
                 decodeDeferred(node.get("deferred")),
                 JsonlCodec.optionalString(node, "api"),
                 JsonlCodec.optionalString(node, "provider"),

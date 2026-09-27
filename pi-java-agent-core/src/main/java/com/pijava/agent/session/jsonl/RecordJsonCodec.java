@@ -82,7 +82,7 @@ final class RecordJsonCodec {
                 JsonlCodec.optionalString(node, "toolCallId"),
                 node.has("attempt") && node.get("attempt").isIntegralNumber()
                     ? node.get("attempt").intValue() : null,
-                JsonlCodec.optionalString(node, "stopReason"));
+                JsonlCodec.readStopReason(node));
             default -> throw JsonlCodec.DecodeError.schema("has unknown record type " + type);
         };
     }
