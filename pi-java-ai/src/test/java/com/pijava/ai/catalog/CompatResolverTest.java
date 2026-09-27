@@ -197,6 +197,26 @@ class CompatResolverTest {
         assertThat(compat.supportsMidConvoToolChanges()).isNull();
     }
 
+    /**
+     * 包 A-10 第 6 步：{@code supportsMaxOutputTokens} 的车道缺省是 {@code true}
+     * （pi {@code openai-responses.ts:79} 的 {@code ?? true}），显式取值赢。
+     *
+     * <p>⚠️ 这条只钉<b>解析层</b>的取值；「门只在 openai-responses 上生效」那半边在
+     * {@code ResponsesMaxOutputTokensWireTest}（azure 侧根本**不读**本组件 ⇒ 它的取值
+     * 在 azure 上不可观察）。</p>
+     */
+    @Test
+    void responsesDefaultsMaxOutputTokensToTrue() {
+        var compat = CompatResolver.forResponses(model("openai", "gpt-5"), false);
+
+        assertThat(compat.supportsMaxOutputTokens()).isTrue();
+
+        var off = new ModelCompat(false, null, true, false, null, null, null, null, null,
+            true, null, null, null, null, null, null, null, null, Boolean.FALSE);
+        assertThat(CompatResolver.forResponses(model("openai", "gpt-5", off), false)
+            .supportsMaxOutputTokens()).isFalse();
+    }
+
     // ── mistral（pi 直读 partial ⇒ ?? false）───────────────────
 
     @Test

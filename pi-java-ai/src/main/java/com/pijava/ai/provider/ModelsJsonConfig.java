@@ -340,7 +340,11 @@ public final class ModelsJsonConfig {
             // 包 A-10：两个预算字段同样**原样透传可空值** —— 缺省由解析层按车道补
             // （completions 的探测值是 `false`／`undefined`，见 CompatResolver.forCompletions）。
             thinkingTokenBudgetFieldOf(providerId, model.id(), def.thinkingTokenBudgetField()),
-            def.supportsThinkingTokenBudget());
+            def.supportsThinkingTokenBudget(),
+            // 包 A-10 第 6 步：`supportsMaxOutputTokens` 的缺省（`true`）由解析层按车道补
+            // （CompatResolver.forResponses）⇒ 这里同样不归一 —— 「用户没写」必须能与
+            // 「用户写了 true」区分开，因为只有前者会吃车道缺省。
+            def.supportsMaxOutputTokens());
     }
 
     /**

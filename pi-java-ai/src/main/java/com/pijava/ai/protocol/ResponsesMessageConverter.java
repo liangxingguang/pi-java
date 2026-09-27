@@ -56,6 +56,22 @@ final class ResponsesMessageConverter {
     /** OpenAI Responses rejects max_output_tokens below 16. */
     static final int MIN_OUTPUT_TOKENS = 16;
 
+    /**
+     * **只有这条车道**理会 {@code compat.supportsMaxOutputTokens} 这道门（包 A-10 第 6 步）。
+     *
+     * <p>pi 的两条 Responses 副本在这一点上**不对称**：{@code openai-responses.ts:321} 写
+     * {@code if (options?.maxTokens && compat.supportsMaxOutputTokens)}，而
+     * {@code azure-openai-responses.ts:309} 的对应行**光秃秃**（{@code if (options?.maxTokens)}）
+     * —— azure 那份 compat 副本里连这个键都不存在。本仓两条车道共用本类 ⇒ 那份不对称只能落在
+     * **车道名**上：门在这条车道上生效，在别的车道名上恒开（azure 侧显式写
+     * {@code supportsMaxOutputTokens: false} 也无效，与 pi 一致）。
+     *
+     * <p>⚠️ 这个串必须与 {@code OpenAIResponsesApi.apiName()} 逐字一致（那里就是本键的命名处）。
+     * 若将来两条车道拆成两个转换器，这道门要跟着走 —— {@code docs/57 §11} 与探针 M5
+     * 是这条约束的登记处。</p>
+     */
+    private static final String MAX_OUTPUT_TOKENS_GATED_LANE = "openai-responses";
+
     private ResponsesMessageConverter() {}
 
     /**
@@ -63,8 +79,11 @@ final class ResponsesMessageConverter {
      *
      * @param modelName 覆盖 model 字段（Azure 传部署名）
      * @param apiName   本车道的 api 名（{@code "openai-responses"} / {@code "azure-openai-responses"}），
-     *                  交给共享预通道做同模型判定；**必须由调用方传**，因为两条车道共用本类
-     *                  而这个串不同（pi 侧同样是两条独立构建器分别调 transformMessages）
+     *                  交给共享预通道做同模型判定，**同时**决定 {@code max_output_tokens} 的
+     *                  {@code supportsMaxOutputTokens} 门是否生效（包 A-10 第 6 步，
+     *                  {@link #MAX_OUTPUT_TOKENS_GATED_LANE}）；**必须由调用方传**，因为两条车道
+     *                  共用本类而这两件事在 pi 侧都随车道变（pi 侧同样是两条独立构建器分别调
+     *                  transformMessages）
      * @param compat    本请求**解析后**的 compat（{@link CompatResolver#forResponses}）——
      *                  ⚠️ 车道缺省（{@code supportsStrictMode} 的 {@code false}／{@code true}）
      *                  由**调用方**在解析时喂进去（pi 的两车道 compat 缺省相反：
@@ -100,7 +119,7 @@ final class ResponsesMessageConverter {
             builder.tools(tools);
         }
 
-        if (request.maxTokens() > 0) {
+        if (request.maxTokens() > 0 && sendsMaxOutputTokens(apiName, compat)) {
             builder.maxOutputTokens(Math.max(request.maxTokens(), MIN_OUTPUT_TOKENS));
         }
         if (request.temperature() >= 0) {
@@ -128,6 +147,18 @@ final class ResponsesMessageConverter {
     }
 
     // ── Message conversion ─────────────────────────────────────────────
+
+    /**
+     * 本车道是否发 {@code max_output_tokens}（包 A-10 第 6 步）。
+     *
+     * <p>门只在 {@link #MAX_OUTPUT_TOKENS_GATED_LANE} 上生效 —— 这是 pi 两条副本的不对称
+     * （见该常量的 javadoc）。⚠️ 缺省是**开**：{@code null}（模型没写 compat）与
+     * {@code true} 行为相同。</p>
+     */
+    private static boolean sendsMaxOutputTokens(String apiName, ModelCompat compat) {
+        return !MAX_OUTPUT_TOKENS_GATED_LANE.equals(apiName)
+            || Boolean.TRUE.equals(compat.supportsMaxOutputTokens());
+    }
 
     private static List<ResponseInputItem> convertMessages(StreamRequest request,
                                                            TranscriptContext transcript,

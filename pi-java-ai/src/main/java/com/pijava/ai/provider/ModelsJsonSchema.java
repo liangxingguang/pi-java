@@ -149,7 +149,15 @@ public final class ModelsJsonSchema {
          */
         @JsonProperty("thinkingTokenBudgetField") String thinkingTokenBudgetField,
         /** 包 A-10（pi {@code types.ts:727}）：上一键的布尔别名，≙ {@code "thinking_token_budget"}。 */
-        @JsonProperty("supportsThinkingTokenBudget") Boolean supportsThinkingTokenBudget
+        @JsonProperty("supportsThinkingTokenBudget") Boolean supportsThinkingTokenBudget,
+        /**
+         * 包 A-10 第 6 步（pi {@code types.ts:773-774}，{@code OpenAIResponsesCompat}）：
+         * 端点是否接受 {@code max_output_tokens}；缺省 {@code true}。只有
+         * {@code openai-responses} 车道读它 —— {@code azure-openai-responses} 的副本
+         * **没有这道门**，故在本仓写 {@code false} 对 azure 无效（{@code docs/57 §6 R8} 的
+         * 第 6 步说明与 {@code ResponsesMessageConverter} 的车道名分支）。
+         */
+        @JsonProperty("supportsMaxOutputTokens") Boolean supportsMaxOutputTokens
     ) {}
 
     /**

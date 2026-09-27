@@ -110,7 +110,11 @@ public final class CompatResolver {
             // undefined`（pi 的注释明写「not set on the generated catalog」）⇒
             // 内置目录一个都不标，只有 models.json 显式覆盖可达。
             null,
-            Boolean.FALSE);
+            Boolean.FALSE,
+            // 包 A-10 第 6 步：`supportsMaxOutputTokens` 只被 **Responses** 车道读
+            // （pi `openai-responses.ts:79`；azure 那份副本连读点都没有）⇒ 本车道不定义它
+            // ⇒ 原样透传模型的显式取值（本车道的任何读点都不会碰它）。
+            null);
     }
 
     /**
@@ -126,7 +130,7 @@ public final class CompatResolver {
     public static ModelCompat forAnthropic(ModelInfo model) {
         return resolved(base(model), null, Boolean.FALSE, null, Boolean.FALSE,
             null, null, null, null, null, null,
-            Boolean.TRUE, Boolean.TRUE, null, null);
+            Boolean.TRUE, Boolean.TRUE, null, null, null);
     }
 
     /**
@@ -140,7 +144,12 @@ public final class CompatResolver {
     public static ModelCompat forResponses(ModelInfo model, boolean strictModeDefault) {
         return resolved(base(model), null, Boolean.FALSE, null, null,
             Boolean.FALSE, Boolean.FALSE, null, null, null, strictModeDefault,
-            null, null, null, null);
+            null, null, null, null,
+            // 包 A-10 第 6 步：pi `openai-responses.ts:79` 的 `?? true`（types.ts:773-774
+            // 的注释：「某些 Codex 协议网关会拒绝 max_output_tokens」）。
+            // ⚠️ azure 车道共用本方法 ⇒ 它拿到的也是这一份，但**它不读这个组件**
+            // （pi 的 azure 副本连门都没有）⇒ 该值在 azure 上不可观察。
+            Boolean.TRUE);
     }
 
     /**
@@ -150,7 +159,7 @@ public final class CompatResolver {
      */
     public static ModelCompat forMistral(ModelInfo model) {
         return resolved(base(model), null, Boolean.FALSE, null, null,
-            null, null, null, null, null, null, null, null, null, null);
+            null, null, null, null, null, null, null, null, null, null, null);
     }
 
     /**
@@ -221,7 +230,8 @@ public final class CompatResolver {
                                         Boolean longCacheRetention,
                                         Boolean cacheControlOnTools,
                                         ThinkingTokenBudgetField thinkingTokenBudgetField,
-                                        Boolean supportsThinkingTokenBudget) {
+                                        Boolean supportsThinkingTokenBudget,
+                                        Boolean supportsMaxOutputTokens) {
         return new ModelCompat(
             c.allowEmptySignature(),
             pick(c.requiresReasoningContentOnAssistantMessages(), reasoningContentRequired),
@@ -241,7 +251,8 @@ public final class CompatResolver {
             pick(c.supportsCacheControlOnTools(), cacheControlOnTools),
             c.thinkingTokenBudgetField() != null
                 ? c.thinkingTokenBudgetField() : thinkingTokenBudgetField,
-            pick(c.supportsThinkingTokenBudget(), supportsThinkingTokenBudget));
+            pick(c.supportsThinkingTokenBudget(), supportsThinkingTokenBudget),
+            pick(c.supportsMaxOutputTokens(), supportsMaxOutputTokens));
     }
 
     private static Boolean pick(Boolean explicit, Boolean detected) {

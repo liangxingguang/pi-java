@@ -196,6 +196,37 @@ class ModelsJsonConfigTest {
     }
 
     /**
+     * 包 A-10 第 6 步：{@code supportsMaxOutputTokens} 从 models.json 读进 {@code compat}，
+     * 且**原样保留三态**（「没写」必须与「写了 {@code true}」可分 —— 前者会吃车道缺省）。
+     *
+     * <p>⚠️ 本键的探测面同样是常量（pi {@code types.ts:774} 的 {@code Default: true}，
+     * 没有任何 detect 分支）⇒ {@code models.json} 是**唯一**能把它关掉的入口。</p>
+     */
+    @Test
+    void readsTheMaxOutputTokensKeyFromCompatBlockAndKeepsItThreeState() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "openai-responses",
+              "models": [
+                {"id": "off", "compat": {"supportsMaxOutputTokens": false}},
+                {"id": "on", "compat": {"supportsMaxOutputTokens": true}},
+                {"id": "silent", "compat": {"supportsStrictMode": true}}
+              ]
+            }}}
+            """);
+
+        var catalog = config.catalog();
+        assertThat(catalog.find(ModelId.of("relay", "off")).orElseThrow()
+            .compat().supportsMaxOutputTokens()).isFalse();
+        assertThat(catalog.find(ModelId.of("relay", "on")).orElseThrow()
+            .compat().supportsMaxOutputTokens()).isTrue();
+        assertThat(catalog.find(ModelId.of("relay", "silent")).orElseThrow()
+            .compat().supportsMaxOutputTokens())
+            .as("没写 ⇒ 保持 null（由解析层补车道缺省）").isNull();
+    }
+
+    /**
      * 包 A-10：{@code thinkingTokenBudgetField} 的未知取值也是**响亮**的
      * （理由与 {@code maxTokensField} 同：字段名会静默换掉，没有其它症状）。
      */

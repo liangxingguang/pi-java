@@ -226,6 +226,16 @@ package com.pijava.ai.catalog;
  *        {@code thinkingTokenBudgetField} 的布尔别名，≙ {@code "thinking_token_budget"}
  *        （vLLM）。探测面的值是 {@code false}；显式取值优先于它
  *        （pi {@code openai-completions.ts:1004-1010}）。
+ * @param supportsMaxOutputTokens pi {@code compat.supportsMaxOutputTokens}（包 A-10）：
+ *        Response 端点是否接受 {@code max_output_tokens} —— 缺席 ≡ {@code true}
+ *        （pi {@code openai-responses.ts:79} 的 {@code ?? true}，{@code types.ts:773-774}
+ *        的注释：「某些 Codex 协议网关会拒绝这个参数」）。
+ *
+ *        <p>⚠️ <b>本记录里唯一「门只被一条车道读」的组件</b>：pi 的 {@code azure-openai-responses.ts:309}
+ *        那份副本**没有这道门**（`if (options?.maxTokens)` 光秃秃）。⇒ 两条车道今天共用
+ *        {@link com.pijava.ai.protocol.ResponsesMessageConverter}，那条区别由**车道名**分支实现，
+ *        而**不是**由本组件的取值 —— 在 azure 车道上它根本不被读（显式写 {@code false} 也无效，
+ *        与 pi 一致）。⇒ 车道名分支是这条约束的唯一实现处，见 {@code docs/57 §11}。</p>
  */
 public record ModelCompat(boolean allowEmptySignature,
                           Boolean requiresReasoningContentOnAssistantMessages,
@@ -244,7 +254,45 @@ public record ModelCompat(boolean allowEmptySignature,
                           Boolean supportsLongCacheRetention,
                           Boolean supportsCacheControlOnTools,
                           ThinkingTokenBudgetField thinkingTokenBudgetField,
-                          Boolean supportsThinkingTokenBudget) {
+                          Boolean supportsThinkingTokenBudget,
+                          Boolean supportsMaxOutputTokens) {
+
+    /**
+     * 十八参便捷构造（包 A-10 之前的**规范**构造 —— 那时组件就这十八个）：
+     * 包 A-10 的第 6 步新增的 {@code supportsMaxOutputTokens} 缺席（{@code null}
+     * ≙ 「按车道缺省」）。
+     *
+     * <p>保留该形态的理由与下面几条相同（旧规范形态降级为便捷构造器）——
+     * 包 A-10 的第 5 步把组件数从 16 推到 18 时留的是**十六参**那一档，而
+     * {@code CompatResolver} 与第 5 步的夹具（{@code ThinkingTokenBudgetWireTest}）用的是
+     * 十八参那一档 ⇒ 加这一档让它们**零改签**。</p>
+     */
+    public ModelCompat(boolean allowEmptySignature,
+                       Boolean requiresReasoningContentOnAssistantMessages,
+                       boolean supportsFinishReason,
+                       boolean forceAdaptiveThinking,
+                       Boolean supportsMidConvoSystemMessages,
+                       Boolean supportsMidConvoToolAdditions,
+                       Boolean supportsMidConvoToolChanges,
+                       Boolean supportsAdditionalTools,
+                       Boolean supportsToolSearch,
+                       boolean supportsTemperature,
+                       MaxTokensField maxTokensField,
+                       Boolean supportsStore,
+                       Boolean supportsDeveloperRole,
+                       Boolean supportsStrictMode,
+                       Boolean supportsLongCacheRetention,
+                       Boolean supportsCacheControlOnTools,
+                       ThinkingTokenBudgetField thinkingTokenBudgetField,
+                       Boolean supportsThinkingTokenBudget) {
+        this(allowEmptySignature, requiresReasoningContentOnAssistantMessages,
+             supportsFinishReason, forceAdaptiveThinking, supportsMidConvoSystemMessages,
+             supportsMidConvoToolAdditions, supportsMidConvoToolChanges,
+             supportsAdditionalTools, supportsToolSearch,
+             supportsTemperature, maxTokensField, supportsStore, supportsDeveloperRole,
+             supportsStrictMode, supportsLongCacheRetention, supportsCacheControlOnTools,
+             thinkingTokenBudgetField, supportsThinkingTokenBudget, null);
+    }
 
     /**
      * 十六参便捷构造（包 A-10 之前的**规范**构造 —— 那时组件就这十六个）：
@@ -278,7 +326,7 @@ public record ModelCompat(boolean allowEmptySignature,
              supportsAdditionalTools, supportsToolSearch,
              supportsTemperature, maxTokensField, supportsStore, supportsDeveloperRole,
              supportsStrictMode, supportsLongCacheRetention, supportsCacheControlOnTools,
-             null, null);
+             null, null, null);
     }
 
     /**
