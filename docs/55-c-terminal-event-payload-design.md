@@ -530,10 +530,12 @@ pi 的等价物是「流里的一条错误消息」，但 java 这条 catch 覆�
 
 ### 12.5 提交与回归
 
-- `C1a` `feat(ai): settle the terminal stream payloads at the producers` — §6.3 的 1–9
-- `C1b` `refactor(agent-core): read the terminal message instead of the throwable` — §6.3 的 10–12
-- `C2` `feat(coding-agent): project the terminal frame into the proxy wire shape` — §6.3 的 13–14
-- `C3` `docs(ai): close the C-batch terminal payload package` — 本文件 ＋ `docs/48` ＋ `docs/41` ＋ `docs/32`
+- `C1a` `3684a82` `feat(ai): settle the terminal stream payloads at the producers` — §6.3 的 1–9
+- `C1b` `b8d7e48` `refactor(agent-core): read the terminal message instead of the throwable` — §6.3 的 10–12
+- `C2` `882fcaa` `feat(coding-agent): project the terminal frame into the proxy wire shape` — §6.3 的 13–14
+- `C2'` `caebeaf` `fix(tui): read the error bubble text from the settled message` — `ChatScreen` 的收口
+  （C2 之后单列，因为它同时是行数顶格的修复，见下）
+- `C3` `1c09569` `docs(ai): close the C-batch terminal payload package` — 本文件 ＋ `docs/48` ＋ `docs/41` ＋ `docs/32`
 
 模块回归（实施后实测）：`ai` **995**、`agent-core` **520**、`coding-agent` **279**、
 `tui` 209（1 skip）、`web` 48、`evals` 43（17 skip）。
