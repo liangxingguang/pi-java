@@ -78,7 +78,7 @@ public final class FauxProvider implements Provider {
                 new StreamEvent.TextStart(0, partial1),
                 new StreamEvent.TextDelta(0, text, msg.withStopReason(null)),
                 new StreamEvent.TextEnd(0, text, msg.withStopReason(null)),
-                new StreamEvent.StreamDone("stop", null, msg)
+                StreamEvent.StreamDone.settle("stop", msg)
         ), 0);
     }
 
@@ -100,18 +100,23 @@ public final class FauxProvider implements Provider {
                         .withContent(List.of(new ContentBlock.ToolUseContent(
                             callId, toolName, java.util.Map.of())))),
                 new StreamEvent.ToolCallEnd(0, callId, toolName, args, finalMsg.withStopReason(null)),
-                new StreamEvent.StreamDone("tool_use", null, finalMsg)
+                StreamEvent.StreamDone.settle("tool_use", finalMsg)
         ), 0);
     }
 
     /**
      * Convenience: create a FauxProvider that returns an error.
      * Produces: Start → StreamError.
+     *
+     * <p>C 批次（{@code docs/55}）：三条终局都经 {@code settle} 工厂落定。
+     * ⚠️ 这条尤其要紧 —— {@code FauxChatApi} 沿用的是生产那条身份挂载缝，
+     * 但**出口缝只补身份与计量、不造文本**（{@code docs/55 §11-2}）⇒ 桩若不落定，
+     * 一切经 faux 驱动的夹具就仍在旧形状上跑（错误文本只在 {@code Throwable} 上）。</p>
      */
     public static FauxProvider error(String message) {
         return new FauxProvider("faux-error", List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
-                new StreamEvent.StreamError("error",
+                StreamEvent.StreamError.settle("error",
                         new RuntimeException(message), AssistantMessage.empty())
         ), 0);
     }

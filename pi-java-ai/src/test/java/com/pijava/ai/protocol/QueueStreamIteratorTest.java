@@ -43,6 +43,33 @@ class QueueStreamIteratorTest {
         assertThat(iterator.hasNext()).isFalse();
     }
 
+    /**
+     * C 批次（{@code docs/55}）：这条合成错误**没有累加器**（pi 的对等物是
+     * {@code lazy.ts} 的合成错误消息），所以内容仍为空 —— 但落定那一半必须有：
+     * {@code reason} 与消息上的 {@code stopReason} 同值，且文本非空，否则下游
+     * （打印模式、重试分类器、宿主状态）只能回头读 {@code Throwable}。
+     */
+    @Test
+    void abortSettlesTheReasonAndText() {
+        var iterator = new QueueStreamIterator(new LinkedBlockingQueue<>());
+        iterator.abort(new RuntimeException("boom"));
+
+        var event = (StreamEvent.StreamError) iterator.next();
+        assertThat(event.reason()).isEqualTo("aborted");
+        assertThat(event.partial().stopReason()).isEqualTo("aborted");
+        assertThat(event.partial().errorMessage()).isEqualTo("boom");
+    }
+
+    @Test
+    void closeSettlesTheStopReasonOnTheSyntheticDone() {
+        var iterator = new QueueStreamIterator(new LinkedBlockingQueue<>());
+        iterator.close();
+
+        var done = (StreamEvent.StreamDone) iterator.next();
+        assertThat(done.reason()).isEqualTo("aborted");
+        assertThat(done.partial().stopReason()).isEqualTo("aborted");
+    }
+
     @Test
     void abortDropsBufferedEvents() {
         var queue = new LinkedBlockingQueue<StreamEvent>();

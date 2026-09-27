@@ -37,9 +37,10 @@ public final class StreamPartialBuilder {
      * {@code session/testing/conformance/session-repo.ts:264} 拿
      * 「append 一条 pending」当反例）⇒ 它的含义是「还没有终局判定」，任何把它
      * 当作落定取值的读取点都是错的（宿主侧由 {@code PiLoopRunner.markAborted}
-     * 显式折算，见该处注释）。</p>
+     * 显式折算，见该处注释）。判据与字面量见
+     * {@link StreamEvent#PENDING_STOP_REASON}／{@link StreamEvent#isSettled}。</p>
      */
-    private String stopReason = "pending";
+    private String stopReason = StreamEvent.PENDING_STOP_REASON;
     /**
      * 线格**原值**（pi {@code output.rawStopReason}，{@code types.ts:443}）—— 与
      * {@link #stopReason} 的映射结果分开存。⑨（D5）：五条车道都在观测到线格取值的那一刻
@@ -380,10 +381,24 @@ public final class StreamPartialBuilder {
         return new StreamEvent.StreamDone(reason, usage, snapshot());
     }
 
-    /** Emit stream-error. */
+    /**
+     * Emit stream-error, **settling the accumulator** before pushing it.
+     *
+     * <p>pi 的失败路是就地落定同一个对象：先删块的流式草稿字段，再
+     * {@code output.stopReason = aborted ? "aborted" : "error"}、
+     * {@code output.errorMessage = error.message}，最后
+     * {@code push({type:"error", reason, error: output})}
+     * （{@code anthropic-messages.ts:817-826}）。此前本方法只写 {@code stopReason}
+     * ⇒ 错误文本只能由下游各自从 {@code Throwable} 反推（{@code docs/55 §5 F1/F2}）。</p>
+     *
+     * <p>内容（{@link #snapshot()} 的 blocks）本来就保留 —— 那是 pi 的实测行为
+     * （{@code docs/55 §3.1} P4：中止时 {@code error.content} 是流到中止点的文本）。</p>
+     */
     public StreamEvent.StreamError emitError(String reason, Throwable error) {
-        this.stopReason = reason;
-        return new StreamEvent.StreamError(reason, error, snapshot());
+        var settled = StreamEvent.StreamError.settle(reason, error, snapshot());
+        // 让 builder 自身的状态与事件一致（快照上已落定，字段不能还停在旧值）。
+        this.stopReason = settled.partial().stopReason();
+        return settled;
     }
 
     // ── Helpers ──────────────────────────────────────────────

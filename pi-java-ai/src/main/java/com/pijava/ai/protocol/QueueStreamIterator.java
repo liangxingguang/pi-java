@@ -54,7 +54,7 @@ final class QueueStreamIterator implements StreamIterator {
             return event;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return new StreamError("error", e, AssistantMessage.empty());
+            return StreamError.settle("error", e, AssistantMessage.empty());
         }
     }
 
@@ -63,7 +63,9 @@ final class QueueStreamIterator implements StreamIterator {
         closed = true;
         // Unblock a consumer parked in hasNext()/next() take(): a closed stream
         // that never received a terminal event would otherwise hang forever.
-        queue.offer(new StreamDone("aborted", null, AssistantMessage.empty()));
+        // 这两条合成终局**没有累加器**（pi 的对等物是 `lazy.ts` 的合成错误消息），
+        // 所以内容仍为空 —— 但落定那一半必须走工厂，否则下游只能回头读 Throwable。
+        queue.offer(StreamDone.settle("aborted", AssistantMessage.empty()));
     }
 
     /**
@@ -83,6 +85,6 @@ final class QueueStreamIterator implements StreamIterator {
             return;
         }
         queue.clear();
-        queue.offer(new StreamError("aborted", cause, AssistantMessage.empty()));
+        queue.offer(StreamError.settle("aborted", cause, AssistantMessage.empty()));
     }
 }

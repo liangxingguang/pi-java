@@ -1,7 +1,6 @@
 package com.pijava.ai.protocol;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.concurrent.Flow;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.SubmissionPublisher;
@@ -13,7 +12,6 @@ import com.pijava.ai.api.ChatApi;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.message.AssistantMessage;
-import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
 
@@ -102,25 +100,44 @@ public abstract class AbstractChatApi implements ChatApi {
             }
             @Override public void onNext(StreamEvent e) { queue.offer(e); }
             @Override public void onError(Throwable t) {
-                queue.offer(new StreamEvent.StreamError("error", t,
-                    identityBase(request, netTimestamp)));
+                queue.offer(StreamEvent.StreamError.settle(
+                    "error", t, identityBase(request, netTimestamp)));
             }
             @Override public void onComplete() {
-                // Safety net: the SubmissionPublisher can drop the adapter's
-                // final StreamDone (submit() immediately followed by close()),
-                // which would leave QueueStreamIterator.hasNext() blocking
-                // forever on an empty queue. Emit a synthetic done so the
-                // iterator always terminates.
-                queue.offer(new StreamEvent.StreamDone(
-                    "stop", null, identityBase(request, netTimestamp)));
+                // Safety net (liveness only): the SubmissionPublisher can drop the
+                // adapter's final terminal (submit() immediately followed by
+                // close()), which would leave QueueStreamIterator.hasNext()
+                // blocking forever on an empty queue. Emit a synthetic *error* so
+                // the iterator always terminates — pi's rule for "clean EOF with
+                // no done/error" is an error, not a silent success
+                // (`agent/src/proxy.ts:236-247`: "Connection closed … before the
+                // response completed"). Reporting a `done("stop")` here made a
+                // dropped terminal look like an empty-but-successful turn
+                // (`docs/55 §5 F3`).
+                queue.offer(StreamEvent.StreamError.settle("error",
+                    new IllegalStateException("stream completed without a terminal event"),
+                    identityBase(request, netTimestamp)));
             }
         });
         return new QueueStreamIterator(queue);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>按**落定后的消息**返回，两种终局同法 —— pi 的 {@code complete()} 就是
+     * {@code stream(...).result()}，而 {@code AssistantMessageEventStream} 的
+     * {@code extractResult} 对 {@code done}／{@code error} **都 resolve**
+     * （{@code utils/event-stream.ts:92-103}、{@code compat.ts:269-276}）⇒
+     * 调用方读消息上的 {@code stopReason}／{@code errorMessage}，错误不进异常。</p>
+     *
+     * <p>此前遇 {@code StreamError} 只 {@code break}，然后返回一条空内容、无
+     * {@code stopReason}、无 {@code errorMessage} 的基底消息 —— 错误静默消失
+     * （{@code docs/55 §5 F5}）。{@link com.pijava.ai.http.PiHttpException} 只留给
+     * **本仓管道自身**的故障（车道内的错误已全部落进流，见登记 B113）。</p>
+     */
     @Override
     public Message send(StreamRequest request, ApiOptions options) {
-        var blocks = new ArrayList<ContentBlock>();
         var timestamp = Instant.now();
         try (var iter = streamBlocking(request, options)) {
             while (iter.hasNext()) {
@@ -129,15 +146,15 @@ public abstract class AbstractChatApi implements ChatApi {
                     // 全字段投影（3a 前只搬 content，usage/身份全丢）。
                     return Message.AssistantMessage.fromPartial(done.partial());
                 }
-                if (event instanceof StreamEvent.StreamError) {
-                    break;
+                if (event instanceof StreamEvent.StreamError err) {
+                    return Message.AssistantMessage.fromPartial(err.partial());
                 }
             }
         } catch (Exception e) {
             throw new com.pijava.ai.http.PiHttpException(0, "Streaming failed", e);
         }
-        return Message.AssistantMessage.fromPartial(
-            identityBase(request, timestamp).withContent(blocks));
+        // 走到这里只可能是管道自身故障（迭代器中断）—— 给一条基底消息，不假装是成功回答。
+        return Message.AssistantMessage.fromPartial(identityBase(request, timestamp));
     }
 
     /**
