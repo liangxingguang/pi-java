@@ -22,6 +22,7 @@ import com.pijava.ai.catalog.MaxTokensField;
 import com.pijava.ai.catalog.ModelCatalog;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
+import com.pijava.ai.catalog.ThinkingTokenBudgetField;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
@@ -335,7 +336,35 @@ public final class ModelsJsonConfig {
             // 就塌成 true）—— 它们的缺省由**解析层**按车道补（`forAnthropic` 的 `?? true`），
             // 与 supportsStore/supportsDeveloperRole/supportsStrictMode 同形。
             def.supportsLongCacheRetention(),
-            def.supportsCacheControlOnTools());
+            def.supportsCacheControlOnTools(),
+            // 包 A-10：两个预算字段同样**原样透传可空值** —— 缺省由解析层按车道补
+            // （completions 的探测值是 `false`／`undefined`，见 CompatResolver.forCompletions）。
+            thinkingTokenBudgetFieldOf(providerId, model.id(), def.thinkingTokenBudgetField()),
+            def.supportsThinkingTokenBudget());
+    }
+
+    /**
+     * models.json 的 {@code thinkingTokenBudgetField} 串 ⇒ {@link ThinkingTokenBudgetField}
+     * （包 A-10）。
+     *
+     * <p>⚠️ 未知取值**响亮抛错**，理由与 {@link #maxTokensFieldOf} 完全相同：它是三值闭集，
+     * 写错一个字母会让顶层预算字段的名字静默换掉，而那种偏离没有任何其它症状
+     * （pi 的 zod 联合 {@code ThinkingTokenBudgetField} 同样拒绝未知取值）。</p>
+     */
+    private static ThinkingTokenBudgetField thinkingTokenBudgetFieldOf(
+            String providerId, String modelId, String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return switch (value) {
+            case "thinking_token_budget" -> ThinkingTokenBudgetField.THINKING_TOKEN_BUDGET;
+            case "thinking_budget" -> ThinkingTokenBudgetField.THINKING_BUDGET;
+            case "thinking_budget_tokens" -> ThinkingTokenBudgetField.THINKING_BUDGET_TOKENS;
+            default -> throw new IllegalStateException("models.json provider \"" + providerId
+                + "\", model \"" + modelId + "\": unknown compat.thinkingTokenBudgetField \""
+                + value + "\" (expected \"thinking_token_budget\", \"thinking_budget\" or "
+                + "\"thinking_budget_tokens\")");
+        };
     }
 
     /**

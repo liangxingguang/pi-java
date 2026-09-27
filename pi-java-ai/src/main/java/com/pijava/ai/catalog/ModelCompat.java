@@ -217,6 +217,15 @@ package com.pijava.ai.catalog;
  *        是否把断点挂到工具表末项上。缺席 ≙ {@code ?? true}。置 {@code false} 时**只**撤
  *        工具那一处，{@code system} 与消息表照挂（pi {@code :1114} 的门只包住
  *        {@code toolCacheControl}）。
+ * @param thinkingTokenBudgetField pi {@code compat.thinkingTokenBudgetField}（包 A-10）：
+ *        顶层预算字段名（vLLM／Qwen／llama.cpp 三种拼写）。{@code null} ≙ pi 的
+ *        {@code undefined}（不发该字段）。⚠️ 探测面**只产出 {@code null} 与
+ *        {@code false}**（{@code detectCompat:1662-1663}，pi 的注释明写「not set on the
+ *        generated catalog」）⇒ 内置目录一个都不标，只有 {@code models.json} 可达。
+ * @param supportsThinkingTokenBudget pi {@code compat.supportsThinkingTokenBudget}（包 A-10）：
+ *        {@code thinkingTokenBudgetField} 的布尔别名，≙ {@code "thinking_token_budget"}
+ *        （vLLM）。探测面的值是 {@code false}；显式取值优先于它
+ *        （pi {@code openai-completions.ts:1004-1010}）。
  */
 public record ModelCompat(boolean allowEmptySignature,
                           Boolean requiresReasoningContentOnAssistantMessages,
@@ -233,7 +242,44 @@ public record ModelCompat(boolean allowEmptySignature,
                           Boolean supportsDeveloperRole,
                           Boolean supportsStrictMode,
                           Boolean supportsLongCacheRetention,
-                          Boolean supportsCacheControlOnTools) {
+                          Boolean supportsCacheControlOnTools,
+                          ThinkingTokenBudgetField thinkingTokenBudgetField,
+                          Boolean supportsThinkingTokenBudget) {
+
+    /**
+     * 十六参便捷构造（包 A-10 之前的**规范**构造 —— 那时组件就这十六个）：
+     * 包 A-10 新增的两个缺席（{@code null} ≙ pi 的 {@code undefined} ≙「探测值」
+     * —— {@code detectCompat:1662-1663} 恰好就是 {@code null}／{@code false}）。
+     *
+     * <p>保留该形态的**实证理由**：四个既有夹具（{@code AnthropicCacheControlTest:118}／
+     * {@code :168}、{@code AnthropicCacheControlWireTest:204}／{@code :227}）用的正是它
+     * —— 与包 A-01 留 14 参、包 A7 留 9 参是同一手法：**旧规范形态降级为便捷构造器**，
+     * 让新增组件「加在末尾」真的等于零改签。</p>
+     */
+    public ModelCompat(boolean allowEmptySignature,
+                       Boolean requiresReasoningContentOnAssistantMessages,
+                       boolean supportsFinishReason,
+                       boolean forceAdaptiveThinking,
+                       Boolean supportsMidConvoSystemMessages,
+                       Boolean supportsMidConvoToolAdditions,
+                       Boolean supportsMidConvoToolChanges,
+                       Boolean supportsAdditionalTools,
+                       Boolean supportsToolSearch,
+                       boolean supportsTemperature,
+                       MaxTokensField maxTokensField,
+                       Boolean supportsStore,
+                       Boolean supportsDeveloperRole,
+                       Boolean supportsStrictMode,
+                       Boolean supportsLongCacheRetention,
+                       Boolean supportsCacheControlOnTools) {
+        this(allowEmptySignature, requiresReasoningContentOnAssistantMessages,
+             supportsFinishReason, forceAdaptiveThinking, supportsMidConvoSystemMessages,
+             supportsMidConvoToolAdditions, supportsMidConvoToolChanges,
+             supportsAdditionalTools, supportsToolSearch,
+             supportsTemperature, maxTokensField, supportsStore, supportsDeveloperRole,
+             supportsStrictMode, supportsLongCacheRetention, supportsCacheControlOnTools,
+             null, null);
+    }
 
     /**
      * 十四参便捷构造（包 A-01 之前的**规范**构造 —— 那时组件就这十四个）：
@@ -241,7 +287,7 @@ public record ModelCompat(boolean allowEmptySignature,
      * （≙ pi 的 {@code undefined}）而**不是** {@code true}，因为缺席会被
      * {@link CompatResolver} 补成车道缺省；在解析层之外直接读 {@code null} 的代码会
      * NPE —— 这正是不许在车道里直接读 compat 的理由之一。保留该形态使包 A-01 之前的
-     * 构造点**零改签**。
+     * 构造点**零改签**。包 A-10 的两个新组件同样缺席（{@code null}）。
      */
     public ModelCompat(boolean allowEmptySignature,
                        Boolean requiresReasoningContentOnAssistantMessages,
@@ -262,7 +308,7 @@ public record ModelCompat(boolean allowEmptySignature,
              supportsMidConvoToolAdditions, supportsMidConvoToolChanges,
              supportsAdditionalTools, supportsToolSearch,
              supportsTemperature, maxTokensField, supportsStore, supportsDeveloperRole,
-             supportsStrictMode, null, null);
+             supportsStrictMode, null, null, null, null);
     }
 
     /**

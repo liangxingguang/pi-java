@@ -2,8 +2,16 @@ package com.pijava.ai.api;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 
+import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
+import com.pijava.ai.catalog.ModelThinkingLevels;
+import com.pijava.ai.catalog.ThinkingTokenBudgetField;
+import com.pijava.ai.model.ModelCapability;
+import com.pijava.ai.thinking.ModelThinkingLevel;
+import com.pijava.ai.thinking.ThinkingBudgets;
+import com.pijava.ai.thinking.ThinkingLevel;
 import com.pijava.ai.utils.Estimate;
 
 /**
@@ -143,5 +151,90 @@ public final class SimpleOptions {
     public static Optional<Map<String, Object>> samplingParamsOf(ModelInfo model) {
         var params = model == null ? null : model.samplingParams();
         return params == null || params.isEmpty() ? Optional.empty() : Optional.of(params);
+    }
+
+    // ── 顶层思考预算字段（pi openai-completions.ts:1004-1024，包 A-10）─────
+
+    /**
+     * pi {@code openai-completions.ts:1004-1010} {@code resolveThinkingTokenBudgetField}：
+     * 显式字段名优先，否则布尔别名 ⇒ {@code thinking_token_budget}（vLLM 拼写），否则无。
+     *
+     * <p>⚠️ 本字段**与 {@code thinkingFormat} 无关**（pi {@code :972-975} 的注释：同一台
+     * 服务器可能同时服务 zai／qwen／chat-template 形态的模型）⇒ 它在形态链条**之外**，
+     * 包 A-09 不重复落它。</p>
+     */
+    public static Optional<ThinkingTokenBudgetField> thinkingTokenBudgetField(ModelCompat compat) {
+        if (compat == null) {
+            return Optional.empty();
+        }
+        if (compat.thinkingTokenBudgetField() != null) {
+            return Optional.of(compat.thinkingTokenBudgetField());
+        }
+        return Boolean.TRUE.equals(compat.supportsThinkingTokenBudget())
+            ? Optional.of(ThinkingTokenBudgetField.THINKING_TOKEN_BUDGET)
+            : Optional.empty();
+    }
+
+    /**
+     * pi {@code openai-completions.ts:741-742} —— 车道的 {@code reasoningEffort}
+     * 是**夹取过**的级别，且 {@code "off"} 要变成 {@code undefined}。
+     *
+     * <pre>{@code
+     * const clampedReasoning = options?.reasoning ? clampThinkingLevel(model, options.reasoning) : undefined;
+     * const reasoningEffort = clampedReasoning === "off" ? undefined : clampedReasoning;
+     * }</pre>
+     *
+     * <p>⚠️ <b>接线这一处原本记在 A-09 名下</b>（{@code docs/57 §1.2}），本包提前落地：
+     * 顶层预算字段的**取值**要以夹取后的级别为准（{@code budgetForLevel} 只认模型支持的
+     * 级别），不夹就会在这个字段上算出与 pi 不同的预算。A-09 届时直接复用本方法，
+     * 不要再接一次（{@code docs/57 §12} 记为「归属前移」）。</p>
+     *
+     * <p>返回空 ≙ pi 的 {@code "off"} 或 {@code undefined}（java 的 {@link ThinkingLevel}
+     * 没有 {@code off} 这一档，它是{@link com.pijava.ai.thinking.ModelThinkingLevel} 的成员）。</p>
+     */
+    public static Optional<ThinkingLevel> clampedReasoningEffort(ModelInfo model,
+                                                                Optional<ThinkingLevel> reasoning) {
+        if (model == null || reasoning.isEmpty()) {
+            return Optional.empty();
+        }
+        var clamped = ModelThinkingLevels.clamp(model, ModelThinkingLevel.of(reasoning.get()));
+        return clamped instanceof ModelThinkingLevel.Enabled enabled
+            ? Optional.of(enabled.level()) : Optional.empty();
+    }
+
+    /**
+     * pi {@code openai-completions.ts:1012-1024} {@code resolveClampedThinkingBudget}：
+     * 预算按级别算出来，再夹到「天花板 − {@code MIN_ANSWER_TOKENS}」，非正 ⇒ 不发。
+     *
+     * <pre>{@code
+     * if (!options?.reasoningEffort || !model.reasoning) return undefined;
+     * const ceiling = params.max_tokens ?? params.max_completion_tokens ?? model.maxTokens;
+     * const budget = clampThinkingBudgetToAnswerRoom(
+     *     thinkingBudgetForLevel(options.reasoningEffort, options.thinkingBudgets), ceiling);
+     * return budget > 0 ? budget : undefined;
+     * }</pre>
+     *
+     * @param ceiling 线格上的输出上限。调用方给 {@link #maxTokensOrDefault} 的结果 ——
+     *                它与 pi 的 {@code params.max_tokens ?? params.max_completion_tokens
+     *                ?? model.maxTokens} 同值（生产路径上漏斗已把请求上限解析成夹取值，
+     *                故两侧的天花板同为**夹取后**的上限）。
+     * @param budgets 自定义预算表；java 今天没有选项通道（{@code docs/57 §6 R7} 登记）
+     *                ⇒ 调用方传 {@link ThinkingBudgets#DEFAULT}，与 pi 的
+     *                {@code options.thinkingBudgets === undefined} 等价。
+     */
+    public static OptionalInt clampedThinkingBudget(ModelInfo model, ModelCompat compat,
+                                                    Optional<ThinkingLevel> reasoning,
+                                                    ThinkingBudgets budgets, int ceiling) {
+        if (model == null || compat == null
+            || !model.capabilities().contains(ModelCapability.THINKING)) {
+            return OptionalInt.empty();
+        }
+        var level = clampedReasoningEffort(model, reasoning);
+        if (level.isEmpty()) {
+            return OptionalInt.empty();
+        }
+        var budget = ThinkingBudgets.clampThinkingBudgetToAnswerRoom(
+            budgets.budgetFor(level.get()), ceiling);
+        return budget > 0 ? OptionalInt.of(budget) : OptionalInt.empty();
     }
 }

@@ -141,7 +141,15 @@ public final class ModelsJsonSchema {
         /** 包 A-01：{@code cacheRetention:"long"} 是否落成 Anthropic 的 {@code ttl:"1h"}；缺省 {@code true}。 */
         @JsonProperty("supportsLongCacheRetention") Boolean supportsLongCacheRetention,
         /** 包 A-01：是否把缓存断点挂到工具表末项；缺省 {@code true}。置 {@code false} 只撤工具那一处。 */
-        @JsonProperty("supportsCacheControlOnTools") Boolean supportsCacheControlOnTools
+        @JsonProperty("supportsCacheControlOnTools") Boolean supportsCacheControlOnTools,
+        /**
+         * 包 A-10（pi {@code types.ts:725}）：顶层思考预算字段名，三值闭集
+         * {@code "thinking_token_budget" | "thinking_budget" | "thinking_budget_tokens"}
+         * （vLLM／Qwen／llama.cpp）。未知取值**响亮抛错**（同 {@code maxTokensField}）。
+         */
+        @JsonProperty("thinkingTokenBudgetField") String thinkingTokenBudgetField,
+        /** 包 A-10（pi {@code types.ts:727}）：上一键的布尔别名，≙ {@code "thinking_token_budget"}。 */
+        @JsonProperty("supportsThinkingTokenBudget") Boolean supportsThinkingTokenBudget
     ) {}
 
     /**

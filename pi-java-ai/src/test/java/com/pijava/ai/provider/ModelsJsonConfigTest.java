@@ -168,10 +168,60 @@ class ModelsJsonConfigTest {
     }
 
     /**
+     * 包 A-10：顶层思考预算的两个键从 models.json 读进 {@code compat}。
+     *
+     * <p>⚠️ 这两个字段的**探测面只产出 {@code null}/{@code false}**
+     * （pi {@code detectCompat:1662-1663}，注释：{@code not set on the generated catalog}）
+     * ⇒ 内置目录一个都不标，**models.json 是唯一可达入口** ⇒ 这条不是「顺带」，是那
+     * 两个字段在生产上的**唯一生产者**。</p>
+     */
+    @Test
+    void readsTheThinkingTokenBudgetKeysFromCompatBlock() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "openai-completions",
+              "models": [{"id": "m1", "compat": {
+                "thinkingTokenBudgetField": "thinking_budget_tokens",
+                "supportsThinkingTokenBudget": true
+              }}]
+            }}}
+            """);
+
+        var compat = config.catalog().find(ModelId.of("relay", "m1")).orElseThrow().compat();
+
+        assertThat(compat.thinkingTokenBudgetField())
+            .isEqualTo(com.pijava.ai.catalog.ThinkingTokenBudgetField.THINKING_BUDGET_TOKENS);
+        assertThat(compat.supportsThinkingTokenBudget()).isTrue();
+    }
+
+    /**
+     * 包 A-10：{@code thinkingTokenBudgetField} 的未知取值也是**响亮**的
+     * （理由与 {@code maxTokensField} 同：字段名会静默换掉，没有其它症状）。
+     */
+    @Test
+    void anUnknownThinkingTokenBudgetFieldIsALoudError() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "openai-completions",
+              "models": [{"id": "typo", "compat": {"thinkingTokenBudgetField": "thinking_budgt"}}]
+            }}}
+            """);
+
+        assertThatThrownBy(() -> config.catalog())
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("relay")
+            .hasMessageContaining("typo")
+            .hasMessageContaining("thinkingTokenBudgetField")
+            .hasMessageContaining("thinking_budgt");
+    }
+
+    /**
      * <b>B8-3</b>：{@code compat} 块里**未知**的键被忽略（pi-java 只做被消费的那些标志）。
      *
      * <p>⚠️ 这是与 pi 的一处**刻意不同**：pi 的五个 compat 接口共 52 个字段（{@code types.ts:674}
-     * 起），而 {@link com.pijava.ai.catalog.ModelCompat} 只携带本仓真正消费的十四个
+     * 起），而 {@link com.pijava.ai.catalog.ModelCompat} 只携带本仓真正消费的十八个
      * —— 其余按 {@code docs/53 §4.4} 的归属表留给各自的包。忽略未知键使「pi 新加的 compat
      * 标志」不会把文件打崩 —— 代价是新标志会**静默失效**，故此处显式钉住该行为，
      * 免得日后误以为是解析 bug。</p>

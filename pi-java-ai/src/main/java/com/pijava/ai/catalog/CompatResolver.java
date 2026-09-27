@@ -104,7 +104,13 @@ public final class CompatResolver {
             // ⇒ **A-02 之前不可达**（docs/54 §1.2、docs/32 B105 的登记）。
             null,
             null,
-            null);
+            null,
+            // 包 A-10：两个预算字段的**探测值**照 pi 的 `detectCompat:1662-1663` 原样
+            // —— `supportsThinkingTokenBudget: false` / `thinkingTokenBudgetField:
+            // undefined`（pi 的注释明写「not set on the generated catalog」）⇒
+            // 内置目录一个都不标，只有 models.json 显式覆盖可达。
+            null,
+            Boolean.FALSE);
     }
 
     /**
@@ -120,7 +126,7 @@ public final class CompatResolver {
     public static ModelCompat forAnthropic(ModelInfo model) {
         return resolved(base(model), null, Boolean.FALSE, null, Boolean.FALSE,
             null, null, null, null, null, null,
-            Boolean.TRUE, Boolean.TRUE);
+            Boolean.TRUE, Boolean.TRUE, null, null);
     }
 
     /**
@@ -134,7 +140,7 @@ public final class CompatResolver {
     public static ModelCompat forResponses(ModelInfo model, boolean strictModeDefault) {
         return resolved(base(model), null, Boolean.FALSE, null, null,
             Boolean.FALSE, Boolean.FALSE, null, null, null, strictModeDefault,
-            null, null);
+            null, null, null, null);
     }
 
     /**
@@ -144,7 +150,7 @@ public final class CompatResolver {
      */
     public static ModelCompat forMistral(ModelInfo model) {
         return resolved(base(model), null, Boolean.FALSE, null, null,
-            null, null, null, null, null, null, null, null);
+            null, null, null, null, null, null, null, null, null, null);
     }
 
     /**
@@ -213,7 +219,9 @@ public final class CompatResolver {
                                         Boolean developerRole,
                                         Boolean strictMode,
                                         Boolean longCacheRetention,
-                                        Boolean cacheControlOnTools) {
+                                        Boolean cacheControlOnTools,
+                                        ThinkingTokenBudgetField thinkingTokenBudgetField,
+                                        Boolean supportsThinkingTokenBudget) {
         return new ModelCompat(
             c.allowEmptySignature(),
             pick(c.requiresReasoningContentOnAssistantMessages(), reasoningContentRequired),
@@ -230,7 +238,10 @@ public final class CompatResolver {
             pick(c.supportsDeveloperRole(), developerRole),
             pick(c.supportsStrictMode(), strictMode),
             pick(c.supportsLongCacheRetention(), longCacheRetention),
-            pick(c.supportsCacheControlOnTools(), cacheControlOnTools));
+            pick(c.supportsCacheControlOnTools(), cacheControlOnTools),
+            c.thinkingTokenBudgetField() != null
+                ? c.thinkingTokenBudgetField() : thinkingTokenBudgetField,
+            pick(c.supportsThinkingTokenBudget(), supportsThinkingTokenBudget));
     }
 
     private static Boolean pick(Boolean explicit, Boolean detected) {

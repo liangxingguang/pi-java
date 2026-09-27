@@ -24,6 +24,7 @@ import com.openai.models.chat.completions.ChatCompletionTool;
 import com.openai.models.chat.completions.ChatCompletionToolMessageParam;
 import com.openai.models.chat.completions.ChatCompletionUserMessageParam;
 
+import com.pijava.ai.api.SimpleOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.api.Transcripts;
@@ -36,6 +37,7 @@ import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelCapability;
+import com.pijava.ai.thinking.ThinkingBudgets;
 import com.pijava.ai.utils.SanitizeUnicode;
 
 /**
@@ -208,10 +210,41 @@ final class OpenAICompletionsMessageConverter {
             }
         }
         if (request.temperature() >= 0) builder.temperature(request.temperature());
+        // 包 A-10：顶层思考预算字段（pi `:972-978`）。⚠️ 它在 `thinkingFormat` 形态链条
+        // **之外**（注释：同一台服务器可能同时服务 zai/qwen/chat-template 模型），
+        // 且落点**先于** samplingParams（pi 的 `:976` 早于 `:997`）。
+        writeThinkingTokenBudget(builder, request, compat);
         // 包 A-10：模型级采样参数（pi `:996-999`，**body 的最后一个变更** ⇒ 同名键压过具名字段）。
         SamplingParamsWriter.applyToCompletions(builder, request.model());
 
         return builder.build();
+    }
+
+    /**
+     * pi {@code openai-completions.ts:870-871} ＋ {@code :976-978}：
+     * 算好字段名与预算，两者都在才写。
+     *
+     * <pre>{@code
+     * const thinkingTokenBudgetField = resolveThinkingTokenBudgetField(compat);
+     * const thinkingBudget = resolveClampedThinkingBudget(model, options, params);
+     * ...
+     * if (thinkingTokenBudgetField && thinkingBudget !== undefined) {
+     *     Object.assign(params, { [thinkingTokenBudgetField]: thinkingBudget });
+     * }
+     * }</pre>
+     */
+    private static void writeThinkingTokenBudget(ChatCompletionCreateParams.Builder builder,
+                                                 StreamRequest request,
+                                                 ModelCompat compat) {
+        var field = SimpleOptions.thinkingTokenBudgetField(compat);
+        if (field.isEmpty()) {
+            return;
+        }
+        var ceiling = SimpleOptions.maxTokensOrDefault(request.model(), request.maxTokens());
+        SimpleOptions.clampedThinkingBudget(request.model(), compat, request.reasoning(),
+                ThinkingBudgets.DEFAULT, ceiling).ifPresent(budget ->
+                    builder.putAdditionalBodyProperty(field.get().wireName(),
+                        JsonValue.from(budget)));
     }
 
     /**

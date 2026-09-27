@@ -93,13 +93,19 @@ public record ThinkingBudgets(
             ? modelMaxTokens
             : Math.min(baseMaxTokens.getAsInt() + thinkingBudget, modelMaxTokens);
         if (maxTokens <= thinkingBudget) {
-            thinkingBudget = clampToAnswerRoom(thinkingBudget, maxTokens);
+            thinkingBudget = clampThinkingBudgetToAnswerRoom(thinkingBudget, maxTokens);
         }
         return new Adjusted(maxTokens, thinkingBudget);
     }
 
-    /** pi {@code simple-options.ts:75-77} {@code clampThinkingBudgetToAnswerRoom}。 */
-    private static int clampToAnswerRoom(int thinkingBudget, int ceiling) {
+    /**
+     * pi {@code simple-options.ts:75-77} {@code clampThinkingBudgetToAnswerRoom}。
+     *
+     * <p>包 A-10 起是 {@code public}：pi 的第二个消费者是
+     * {@code openai-completions.ts:1019} 的 {@code resolveClampedThinkingBudget}
+     * （顶层预算字段），它在包 A-09 之前就可达（那个字段与 {@code thinkingFormat} 无关）。</p>
+     */
+    public static int clampThinkingBudgetToAnswerRoom(int thinkingBudget, int ceiling) {
         return Math.min(thinkingBudget, Math.max(0, ceiling - MIN_ANSWER_TOKENS));
     }
 
