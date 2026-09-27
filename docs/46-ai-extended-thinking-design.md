@@ -172,6 +172,14 @@ pi 从未有过这个形状（见 §2.1 / §3-D1）。投送链（`StreamRequest
 
 ### D4 —— `maxTokens` 侧：**`adjustMaxTokensForThinking` 做，`clampMaxTokensToContext` 不做**（推荐，见 §8 ③）
 
+> ⚠️ **本决策已被包 A-10 推翻（2026-09-28，`docs/57 §12`）** —— 记录保留以显示推理链，
+> **不要再按它施工**。当时的阻塞理由（下面第二条）已被 A1/A2 消除：
+> `TranscriptContext`／`normalizeContext`／`SystemMessage` 三条权重 3 缺口**全部闭环**
+> （`docs/48 §10`、`docs/49 §12`）。⇒ A-10 已把 `clampMaxTokensToContext` 逐字移植到
+> `ai/api/SimpleOptions`（连带 `ai/utils/Estimate` 那份估算器），并发现本决策**漏判了更重的一半**：
+> `maxTokens` 当时在生产上**根本没有生产者**（台账 **B122**），故代价不是「长上下文下与 pi 不同」，
+> 而是**每条请求都不同**（Anthropic 发自家发明的 `4096`、其余五条车道一个上限都不发）。
+
 - `adjustMaxTokensForThinking`（P13）是**纯函数** ⇒ 逐字移植。
 - `clampMaxTokensToContext`（`simple-options.ts:15-19`）**签名要 `TranscriptContext`**，依赖
   `normalizeContext` ＋ `estimateContextTokens` —— 那是 `docs/41 §1.1` 单列的**三条权重 3 缺口**
@@ -447,7 +455,7 @@ record ThinkingLevelMapDef(Map<String, String> levels) {}   // 值 null ⇒ 显�
 
 | 编号 | 内容 |
 |---|---|
-| **B15-残留-1** | `clampMaxTokensToContext` 未移植 ⇒ **`max_tokens` 不被上下文钳制**（D4，已知偏差） |
+| ~~**B15-残留-1**~~ | ✅ **已闭环（包 A-10，`docs/57 §12`，2026-09-28）**：`clampMaxTokensToContext` 已移植（`ai/api/SimpleOptions` ＋ `ai/utils/Estimate`）。⚠️ 复核时发现本条**低估了原缺口** —— 不只是「不被钳制」，而是 `maxTokens` **没有任何生产者**（台账 **B122**）。D4 的两条阻塞理由中的第二条已随 A1/A2 消失 |
 | **B15-残留-2** | `supportsMidConvoEffort` ＋ `block_binding` 未做（SDK 无类型支持，D3） |
 | **B15-残留-3** | 其余 **7 条车道**的思考翻译未做（D2）—— 含 `compat.thinkingFormat` 10 形状 |
 | **B15-残留-4** | **adaptive 分支在内置目录上不可达**（数据缺席，D5）—— ⚠️ 与 H2/B84 的「共享闸先剥」**不同类**，登记时分开写 |

@@ -1,6 +1,8 @@
 # 57 - A-10：请求侧选项层与 `max_tokens`（pi `simple-options` 移植）设计
 
-**状态：已批准，进入实施（2026-09-28；用户裁决「按照建议实施」⇒ §6 的 R1–R12 全按建议）**
+**状态：已闭环（2026-09-28）。§6 的 R1–R12 全按用户裁决「按照建议实施」落地；7 个提交
+（`7fc23d2` → `8d04fe1` ＋ 本文档的闭环提交），`pi-java-ai` 996 ⇒ 1058 测试全绿，
+全 reactor `mvn -o test` 绿。实施记录与**四处被实测推翻的预测**见 §12。**
 
 > 本包裁决 `docs/48 §5` 的 **A-10** 行：「`simple-options` max-token/thinking budget 夹取」，
 > 以及 `docs/53 §4.4` 归属表分给它的两个 compat 字段
@@ -304,9 +306,14 @@ adaptive 分支（`fable-5` / `opus-4-8` / `sonnet-4-6` 三个内置模型命中
 | 12 | `ai/catalog/ModelInfo.java` | 无结构性改动；**可能**给 `minimal` 加一条注释（R4 的兜底只在目录未命中处生效） |
 | 13 | 夹具 | §8 的六条新用例 ＋ 既有 wire 夹具按实测校正（§7） |
 
-**行数预算**：`Estimate` ≈ 120 行、`SimpleOptions` ≈ 90 行 ⇒ **新类都在 500 行以下**。
+**行数预算**：`Estimate` ≈ 120 行、`SimpleOptions` ≈ 90 行 ⇒ **新类都在 500 行以下**
+（实测：`Estimate` 292 ＋ `EstimateTest` 244、`SimpleOptions` 240）。
 `AbstractChatApi`（305）＋约 25 行；`ResponsesMessageConverter` **已超限**（545，A7 之前即超），
 本包**不再加**（samplingParams 三行 ＋ 门三行 ⇒ 约 +8）；`MistralConversationsApi`（512）本包不动。
+
+⚠️ **实施后更正（第 7 步实测）**：`ResponsesMessageConverter` 的两处追加**不止 +8** ——
+第 4 步（samplingParams）＋3 ⇒ 548，第 6 步（门 ＋ 常量与谓词的 javadoc）＋30 ⇒ **578**。
+差额全在注释上；该文件**在包 A7 之前就已超限**，本包是既有债务的追加，如实登记（§12.5）。
 
 ---
 
@@ -403,8 +410,8 @@ RED-4／RED-5 是**结构性**先红（类不存在 ⇒ 编译失败），与包
 | **M2** | `clampMaxTokensToContext` 的减法项去掉（不扣 `estimateContextTokens`） | RED-4 的部分用例红 | **恰 4 红** ✅ 且**全在长上下文用例上**：`clampsToTheAvailableRoom`／`exhaustedContextFloorsAtOneToken`／`resolveMaxTokensClampsTheModelCapToo`／`theClampReachesTheWire`。⇒ 「夹具真的有牙，且只在余量不足时咬」被实测坐实 |
 | **M3** | `AbstractChatApi` 不替换 request（直接 `streamInternal(request, …)`） | RED-1/2/3 全红 ⇒ 证明落点确实是 R1 那一处 | ⚠️ **实测只有 3 红**：`theClampReachesTheWire` ＋ Completions 两条。**RED-1／RED-2 仍绿** —— 因为 Anthropic 的 builder **自带**同一个回落（P15，pi 的低层 `stream` 也有），两条路独立生效。⇒ **设计稿这行的预期是错的**，如实记在此（§12.3） |
 | **M4** | `PiMessagesApi.resolvesRequestOptions()` 改成 `true` | **恰 1 红** | **恰 1 红** ✅ `doesNotSendTheResolvedMaxTokens`，失败消息里直接打出 `"options":{"maxTokens":4096}` |
-| **M5** | `responsesForResponses` 的 `supportsMaxOutputTokens` 默认由 `true` 翻 `false` | **恰 1 红**（responses 那条）；azure 仍绿 | ⏳ 第 6 步实施时测 |
-| **M6** | `samplingParams` 的落点从「最后」挪到 `temperature` 之前 | RED-6 的配对用例红 | ⏳ 第 4 步实施时测 |
+| **M5** | `forResponses` 的 `supportsMaxOutputTokens` 缺省由 `true` 翻 `false` | **恰 1 红**（responses 那条）；azure 仍绿 | ⚠️ **实测 3 红**：解析层 `responsesDefaultsMaxOutputTokensToTrue` ＋ wire 的 `theOpenAiLaneSendsTheResolvedCapByDefault`／`theSixteenTokenFloorAppliesAfterTheCap`。**设计稿这行的预期又是错的**（写于只有一条 responses 夹具时）—— 但**探针的实质目的达成**：`theAzureLaneIgnoresTheGate` 保持绿 ⇒ 门确实没有泄漏到 azure（§12.3） |
+| **M6** | `samplingParams` 的落点从「最后」挪到 `temperature` 之前 | RED-6 的配对用例红 | ⚠️ **实测**：探针的**形状换了** —— 「挪位置」不可实现（两处落点都是 `SamplingParamsWriter` 的**唯一**调用，没有可挪的相对位置）⇒ 改成「**绕开类型化 setter** 直接 `putAdditionalBodyProperty`」。只变异 completions 那一处 ⇒ **1 红**；两处都变异 ⇒ **2 红**（与 `applyToResponses` 需分开路由的实测一致，`docs/57 §12.3`） |
 | **M7** | `NO_MODEL_CAP_FALLBACK` 由 `4096` 改成 `4097` | **恰 1 红**（RED-8） | ⚠️ **恰 2 红**：单测 `catalogMissUsesTheDocumentedFallback` ＋ RED-8（改断言之前只红了单测 —— 见 §8.1 的 RED-8 行修正） |
 
 ⚠️ 按 `docs/52 §12.5` 的教训，**每次变异后必须 grep 复核是否落地**（CRLF 已五次吃掉
@@ -473,3 +480,114 @@ RED-4／RED-5 是**结构性**先红（类不存在 ⇒ 编译失败），与包
 - **Azure 与 openai-responses 在 java 里共用同一个 converter**：P24 的「只有
   openai-responses 有门」靠 `apiName` 分支实现；若将来拆成两个 converter，那道门要跟着走
   —— 本文档与 M5 是这条约束的唯一记录处。
+
+---
+
+## 12. 实施记录（2026-09-28，闭环）
+
+### 12.1 提交
+
+| # | 提交 | 内容 |
+|---|---|---|
+| 1 | `7fc23d2` | `docs(ai)`：本设计稿（§1–§11） |
+| 2 | `c30341f` | `feat(ai)`：`Estimate` —— pi `ai/utils/estimate.ts` 的移植（＋17 条单测） |
+| 3 | `626032b` | `feat(ai)`：**给 `max_tokens` 装上生产者并夹到上下文窗口**（本包核心） |
+| 4 | `687858a` | `docs(ai)`：先红偏离 ＋ 两处被推翻的预测（M3／M7） |
+| 5 | `4adab3b` | `feat(ai)`：模型级 `samplingParams` 合进三条 OpenAI 兼容车道 |
+| 6 | `74470da` | `feat(ai)`：顶层思考预算字段（两个 compat 字段 ＋ 解析层 ＋ models.json ＋ 落点） |
+| 7 | `8d04fe1` | `feat(ai)`：Responses 的 `max_output_tokens` 与该键 compat 门 |
+| 8 | （本提交） | `docs(ai)`：闭环 —— §12 ＋ `docs/32`／`docs/41`／`docs/46`／`docs/48` 回填 ＋ 文首 banner |
+
+**测试计数阶梯**（全部实测，取 Maven 模块汇总行）：`996`（起点）→ `+17`（估算器）→
+`+23`（`SimpleOptions` 14 ＋ Anthropic wire 5 ＋ Completions wire 3 ＋ pi-messages 豁免 1）→
+`+6`（`samplingParams`）→ `+9`（预算字段 7 ＋ models.json 2）→ `+7`（Responses 门 5 ＋
+解析层 1 ＋ models.json 1）= **1058**。
+
+**新增文件**：`ai/utils/Estimate.java`（292）、`ai/api/SimpleOptions.java`（240）、
+`ai/catalog/ThinkingTokenBudgetField.java`、`ai/protocol/SamplingParamsWriter.java`（74）
+＋ 6 个测试类（`EstimateTest` 244、`SimpleOptionsTest`、`AnthropicMaxTokensWireTest`、
+`CompletionsMaxTokensWireTest`、`SamplingParamsWireTest` 160、`ThinkingTokenBudgetWireTest`、
+`ResponsesMaxOutputTokensWireTest` 156）。
+
+### 12.2 行为面（本包实际改变了什么）
+
+| 车道 | 改前 | 改后 |
+|---|---|---|
+| Anthropic（无思考 ／ adaptive） | 自家发明的 **`4096`** | `clamp(model.maxTokens)`（`sonnet-4-6` ⇒ 8192、`fable-5` ⇒ 16384，**实测落线**） |
+| OpenAI Completions | **一个上限都不发** | `max_tokens`／`max_completion_tokens`（按 compat）= 夹取后的模型上限 |
+| OpenAI Responses | **不发** | `max_output_tokens = max(clamp(model.maxTokens), 16)`，**且受 `supportsMaxOutputTokens` 门**（只有本车道理它） |
+| Azure Responses | **不发** | 同上但**无门**（pi 的副本就没有） |
+| Google ／ Mistral | **不发** | 各自的字段 + 夹取后的模型上限 |
+| **pi-messages** | 不发 | **不发**（`resolvesRequestOptions() = false`）——pi 的 pi-messages 不过 `buildBaseOptions`（P18），**豁免是正确性要求**，不豁免会凭空多发 `options.maxTokens`（M4 的失败消息里能直接看到 `"options":{"maxTokens":4096}`） |
+
+另有：模型级 `samplingParams` 落三条 OpenAI 兼容车道的 body **最后**（压过具名字段）；
+顶层思考预算字段（`thinking_token_budget`／`thinking_budget`／`thinking_budget_tokens`）
+在写了 compat 时落线，取值为「级别预算夹到 `天花板 − 1024`」，天花板读**夹取后**的输出上限。
+
+### 12.3 设计稿被实测推翻 / 需更正之处（**四处**，全部原位更正）
+
+1. **M3 的预期错了**（§8.2 已改）：预测「关掉漏斗 ⇒ RED-1/2/3 全红」，实测**只 3 红**
+   —— Anthropic 的 builder **自带同一个回落**（P15），两条路独立生效。
+2. **M7 的牙一开始没咬到目标**（§8.1 已改）：RED-8 原本拿 `NO_MODEL_CAP_FALLBACK`
+   自身比较 ⇒ 对常量取值不敏感，M7 只红了单测。改成**字面量** `4096` 后 M7 才真咬到它（2 红）。
+3. **M5 的预期错了**（§8.2 已改）：预测「恰 1 红」，实测 **3 红**（解析层 ＋ 两条 wire）。
+   但探针的**实质目的达成** —— `theAzureLaneIgnoresTheGate` 保持绿 ⇒ 门没泄漏到 azure。
+4. **§5 的行数预算错了**（§5 已改）：`ResponsesMessageConverter` 实为 545 → 548 → **578**
+   （不是 +8）。该文件**在包 A7 之前就已超限**，属既有债务的追加（§12.5）。
+
+**另有两处「实施方式」的偏离，如实记录：**
+
+- **第 3 步的先红没取到**（§8 开头已记）：`SimpleOptions` 与其夹具同批落地 ⇒ 旧实现下的红灯
+  取不到；等价证据由 M1–M4／M7 提供。⚠️ 第 6 步**取到了**真先红：撤掉门（回到本步之前的形态）
+  再跑新夹具 ⇒ **恰 1 红**（`theGateSuppressesTheFieldOnTheOpenAiLane`），azure 对照从头到尾绿。
+- **M6 的探针形状换了**（§8.2 已记）：「挪位置」不可实现（两处落点都是
+  `SamplingParamsWriter` 的唯一调用）⇒ 改成「绕开类型化 setter 直接写
+  `putAdditionalBodyProperty`」。⚠️ 实测这条又教会一件事：**两个 builder 类型需要分开路由**
+  （`ChatCompletionCreateParams.Builder` 与 `ResponseCreateParams.Builder` 没有共同的附加属性
+  接口）⇒ 只变异一处 1 红、两处都变异 2 红；`SamplingParamsWriter` 的 javadoc 一开始写反了，
+  按实测改正。
+
+**归属前移（1 处）**：`clampThinkingLevel` 的接线原记在 A-09 名下（§1.2），第 6 步实现在本包
+（`SimpleOptions.clampedReasoningEffort`）—— 理由：顶层预算字段的**取值**必须以夹取后的级别为准
+（`budgetForLevel` 只认模型支持的级别），不夹就会算出与 pi 不同的预算。
+`ModelThinkingLevels.clamp` 自此有了第一个生产调用者（`docs/46 §7` 的 B15-残留-9 部分结案）。
+**A-09 直接复用本方法，不要再接一次。**
+
+### 12.4 对照与不变量（实测）
+
+- **§7.1 的不变量**成立：三条 OpenAI 车道的既有 wire 夹具（`ResponsesToolsStrictWireTest`、
+  `ResponsesToolChangesWireTest`、`CompletionsCompatWireTest`）在 `samplingParams` 为空时
+  **零红**，即「除新增的 `max_*` 字段外其余键值逐字不变」。
+- **§7.2 的六条对照全部保持绿**（模块 1058 条全绿即其证据 —— 它们断言的是**精确值**，
+  被夹小就会红）。⇒ §7.2 的隐含前提「夹具的 `maxInputTokens − 估算 − 4096 ≥ 显式上限`」
+  **成立**：手搓真值的类给的都是 `maxInputTokens = 200_000`（估算在几十 token 量级）⇒ 夹取惰性。
+  ⚠️ 没有为让它们变绿而调过任何期望值。
+- **§7.3 的预测**「今日应当变红的既有断言 = 零」成立。
+- **§8 的「agent-core 侧零红」**：本包只动 `ai`，`StreamOptions` 的三个生产构造点未动 ⇒
+  引擎侧输入未变（第 3 步的全 reactor 绿 ＋ 闭环时的全 reactor 绿）。
+
+### 12.5 未覆盖 / 新增登记
+
+- **`ResponsesMessageConverter` 超限**（578 > 500）：**既有债务**（A7 之前即 545），本包 +30。
+  未拆分的理由：拆它要动 8 个读点的共享预通道，收益与风险不成比例 ⇒ 登记，留给专门的重构包。
+- **R4 的兜底不是 pi 的行为**（§6 R4）：`NO_MODEL_CAP_FALLBACK = 4096`，
+  ⚠️ 只在 `minimal`（0/0）那一格生效，且**该路径的字节与改前完全相同**（RED-8 钉字面量）。
+- **§11 的「目录未命中路径先测一次」已做**：内置目录里的模型**携带真上限**且**真的落线**
+  （RED-1 `claude-sonnet-4-6` ⇒ 8192、RED-2 `claude-fable-5` ⇒ 16384，都经 `AbstractChatApi`
+  的真实漏斗）；`ModelInfo.minimal` 那一格走兜底（RED-8 直调 `buildParams`）。
+- **真实 provider 车道验证**：与 B20 的 D2 同一限制（relay 无 `/v1/messages` 路由）——
+  本包**不新增**该限制，也**没有解除**它。
+- **`samplingParams` 的 per-request 半**（B125）与 **`thinkingBudgets` 自定义表**（B128）：
+  没有生产者 ⇒ 没有夹具能覆盖（如实登记，不臆造）。
+- **新登记 B122–B128**：已写入 `docs/32`（内容同 §10）。
+- **新增教训（本仓此前没记过的形态）**：`mvn -Dtest='A+B'` 的 `+` **不是分隔符** ⇒ surefire
+  一个用例都没跑，而 `failIfNoSpecifiedTests=false` 把它变成 `BUILD SUCCESS` 且**一行
+  `Tests run` 都不打**。本包第 6 步的第一次「绿」就是这么来的（重跑用逗号分隔才是 53 条真结果）。
+  ⇒ **每次筛选运行都要看到 `Tests run` 行；看不到就是没跑**（与「带 skip 的模块汇总行是
+  `[WARNING]` 前缀」同属「汇总行必须逐字看」的家族）。
+
+### 12.6 下一步
+
+**A-09（`compat.thinkingFormat` 的十种形状）** ⇒ 直接复用 `SimpleOptions.clampedReasoningEffort`
+（§12.3 的归属前移），不要再接一次夹取；`$var: thinking.budget` 用到 `thinkingBudgets` 时，
+接的是 §6 R7 登记的那个字段。

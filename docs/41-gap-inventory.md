@@ -74,7 +74,7 @@ pi `harness/` 里 `AgentHarness` 独有物（具名钩子 / `HarnessEvent` / `ru
 | ~~`parseChunkUsage` 归一（`prompt_tokens_details.cached_tokens` 等三路 + 减法语义）~~ | 2 | ✅ **H1 步 4 已闭环**（三路 `??` 链＋`Math.max` 减法；台账 B24）。原后果：即使 relay 报了缓存量也读不到 |
 | ~~**`message_start` 首帧 usage 保留 ＋ `message_delta` 逐字段覆盖**~~ | 2 | ✅ **H1 步 3 已闭环**（`AnthropicUsageState`，T2/T3/T4 钉）。原后果：早断流时 **input token 被清零** |
 | 请求侧 `compat.thinkingFormat`（10 种 thinking 开关形状） | 2 | **非 Anthropic 系的推理模型无法开思考** |
-| `simple-options`（`clampMaxTokensToContext` / thinking budget） | 2 | maxTokens 不按 contextWindow 夹取 ⇒ 可能被 provider 拒绝 |
+| ~~`simple-options`（`clampMaxTokensToContext` / thinking budget）~~ | 2 | ✅ **A-10 已闭环**（`docs/57 §12`，2026-09-28，`7fc23d2`→`8d04fe1`）：`maxTokens` 补上生产者（缺席 ⇒ 模型上限）＋ 夹到 `窗口 − 估算 − 4096`，落点在唯一漏斗 `AbstractChatApi.stream`；三条 OpenAI 车道另得模型级 `samplingParams` 与顶层思考预算字段。⚠️ **本行的措辞低估了原缺口**：真实情况是 `maxTokens` **在生产上没有任何生产者**（三处 `StreamOptions` 构造点全传 `OptionalInt.empty()`）⇒ Anthropic 发**自家发明的 `4096`**、其余五条车道**一个上限都不发**（台账 **B122**）。原后果行「不按 contextWindow 夹取 ⇒ 可能被 provider 拒绝」只描述了其中一半 |
 | 工具状态增量（`toolsAdded`/`toolsRemoved` ＋ 线格 `tool_addition`/`tool_removal`） | 2 | 中途增删工具无法表达（**取代已作废的 C11**） |
 | ~~提示词分段 `sections` ＋ 渲染~~ | 2 | ✅ **A4 已闭环**（`docs/52 §12`，2026-09-26，`92a4b99`/`fc1404e`/`032de6d`/`40bb3ea`/`e7c68cc`）：pi 的结构化系统提示三件事全落 —— 构建（`SystemPrompts` 移植，含 `buildRules`/段名校验/`preamble` 不包标签）、替换（`sections` 的 `null` ＝ 删除，含落线/读回/渲染/重放）、差分（`diffSystemPromptSections` ＋ `_preparePromptAndToolLoadout` 生产者，起手与每轮两个调用点）。原后果：无法按名替换单段提示词。遗留：**B94**（内置工具无 `promptSnippet`）/**B95**（`docs` 段无生产者）/**B96**（录制格式） |
 | `ContextOverflow` 的两条新行为（z.ai 放宽正则 ＋ Cerebras 改按 provider 门控） | 2 | z.ai 的 `Prompt too long` 匹配不上 ⇒ 不触发溢出恢复；Cerebras 模式对**任意** provider 都命中 ⇒ **误判溢出** |
