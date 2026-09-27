@@ -1,6 +1,6 @@
 # 57 - A-10：请求侧选项层与 `max_tokens`（pi `simple-options` 移植）设计
 
-**状态：设计待审核（2026-09-27）**
+**状态：已批准，进入实施（2026-09-28；用户裁决「按照建议实施」⇒ §6 的 R1–R12 全按建议）**
 
 > 本包裁决 `docs/48 §5` 的 **A-10** 行：「`simple-options` max-token/thinking budget 夹取」，
 > 以及 `docs/53 §4.4` 归属表分给它的两个 compat 字段
@@ -372,6 +372,13 @@ body 除了新增的 `max_*` 字段外，其余键与值逐字不变。**
 
 ## 8. 先红计划与变异探针
 
+> ⚠️ **实施期偏离（2026-09-28，如实记录）**：本节的「先红」要求在动实现**之前**跑夹具。
+> 第 2 步（估算器）做到了（类的缺失 ⇒ 编译失败先红，报文已留）；**第 3 步没有** ——
+> `SimpleOptions` 与其夹具**同批**落地 ⇒ 旧实现下的红灯**没能取到**。
+> 等价的红灯证据由 §8.2 的 M1–M4／M7 提供（每个探针都是「把实现改回旧行为」，
+> 与先红测的是同一件事）。⚠️ 这是**证据形式**的替换，不是证据的缺失；
+> 但按本仓规矩必须写明，别读成「先红按计划完成了」（同形先例：`docs/56 §12.4`）。
+
 ### 8.1 先红（写在实施之前）
 
 | # | 夹具 | 旧实现下的红 |
@@ -383,22 +390,22 @@ body 除了新增的 `max_*` 字段外，其余键与值逐字不变。**
 | **RED-5** | `Estimate` 单元：`usage` 命中／未命中两路 ＋ **时间戳守卫**（在 assistant 之后插一条更晚的 system ⇒ 锚点必须前移）＋ `system` 角色计入 | 同上，编译失败先红 |
 | **RED-6** | Completions wire：models.json 给 `samplingParams: {top_p: 0.9}` ⇒ 断言 `top_p` 在 body 里，**且是最后一个键**；配对用例：`samplingParams: {max_tokens: 7}` ⇒ 压过 `max_completion_tokens` | 今天不发 ⇒ 红 |
 | **RED-7** | Completions wire：`thinkingTokenBudgetField: "thinking_budget"` ＋ reasoning ⇒ 断言该字段存在且值 = `min(budgetForLevel, max_tokens - 1024)`；配对：无 reasoning ⇒ **字段缺席** | 今天不发 ⇒ 红 |
-| **RED-8** | Anthropic `buildParams`**直调**（不经漏斗）、模型为 `ModelInfo.minimal`、`maxTokens = -1` ⇒ 断言 `max_tokens == NO_MODEL_CAP_FALLBACK`（R4） | 今天得 `4096` ⇒ **若兜底恰好也是 4096 则绿** ⇒ 该用例的**牙来自 M7**（把兜底改成别的值），不是来自先红。⚠️ 这条要**如实**记为「先红不成立、改由变异守门」（`docs/48 §5` A 行 Task 3 有同形先例） |
+| **RED-8** | Anthropic `buildParams`**直调**（不经漏斗）、模型为 `ModelInfo.minimal`、`maxTokens = -1` ⇒ 断言 `max_tokens == 4096`（R4 的兜底**字面量**） | 今天得 `4096` ⇒ **先红不成立** ⇒ 该用例的牙来自变异探针 **M7**。⚠️ **两处实测修正**：① 断言写 `SimpleOptions.NO_MODEL_CAP_FALLBACK` 时 M7 **不咬它**（与常量自身比较 ⇒ 对取值不敏感，M7 只红了单测那条）⇒ 已把断言改成**字面量** 4096，M7 才真的咬到本条（`docs/57 §12`）；② 本条的**先红永久不成立**（旧代码的字面量恰好也是 4096）⇒ 如实记为「结构性先红不可得、改由变异守门」（`docs/48 §5` A 行 Task 3 有同形先例） |
 
 RED-4／RED-5 是**结构性**先红（类不存在 ⇒ 编译失败），与包 A7a/A4a 同形；它们在
 「先红证据」列里如实记为编译失败，不伪装成断言失败。
 
 ### 8.2 变异探针
 
-| 探针 | 变异 | 预期 |
-|---|---|---|
-| **M1** | `resolveMaxTokens` 里的**回落**改成恒返 `requested`（不复落到模型上限） | RED-1/2/3 红（值回到 -1 ⇒ Anthropic 又走兜底、其余不发） |
-| **M2** | `clampMaxTokensToContext` 的减法项去掉（不扣 `estimateContextTokens`） | RED-4 的部分用例红（长 context 不再夹小）—— **且应当只在长上下文用例上红**，这是「夹具真的有牙」的测量 |
-| **M3** | `AbstractChatApi` 不替换 request（直接 `streamInternal(request, …)`） | RED-1/2/3 全红 ⇒ 证明落点确实是 R1 那一处 |
-| **M4** | `PiMessagesApi.resolvesRequestOptions()` 改成 `true` | **恰 1 红**（新加的「pi-messages 不发 maxTokens」用例）⇒ 证明 R2 的豁免有牙 |
-| **M5** | `responseForResponses` 的 `supportsMaxOutputTokens` 默认由 `true` 翻 `false` | **恰 1 红**（responses 那条）；azure 那条**仍绿** ⇒ 证明 P24 的「只有 openai-responses 有门」被夹具钉住 |
-| **M6** | `samplingParams` 的落点从「最后」挪到 `temperature` 之前 | RED-6 的配对用例红（`max_tokens` 压不过具名字段）⇒ 证明钉的是**顺序**不是存在性 |
-| **M7** | `NO_MODEL_CAP_FALLBACK` 由 `4096` 改成 `4097` | **恰 1 红**（RED-8）⇒ 这是 RED-8 唯一的牙（它先红不成立，因为今天的字面量恰好也是 4096） |
+| 探针 | 变异 | 预期 | **实测红集**（第 3 步落地后） |
+|---|---|---|---|
+| **M1** | `maxTokensOrDefault` 里的**回落**改成恒返 `requested`（不复落到模型上限） | RED-1/2/3 红 | **12 红** ✅ 且跨三层：`SimpleOptionsTest` 6（`absentCapFallsBackToTheModelCap`／`catalogMissUsesTheDocumentedFallback`／`nullModelUsesTheFallbackWithoutClamping`／`resolveMaxTokensClampsTheModelCapToo`／`resolveRequestIsIdempotent`／`resolveRequestOnlyChangesTheOutputCap`）＋ Anthropic wire 4（RED-1／RED-2／RED-8／`theClampReachesTheWire`）＋ Completions wire 2（RED-3／`anotherModelSendsItsOwnCap`）。`PiMessages` 那条**仍绿** —— 豁免使它不经过这条路，正确 |
+| **M2** | `clampMaxTokensToContext` 的减法项去掉（不扣 `estimateContextTokens`） | RED-4 的部分用例红 | **恰 4 红** ✅ 且**全在长上下文用例上**：`clampsToTheAvailableRoom`／`exhaustedContextFloorsAtOneToken`／`resolveMaxTokensClampsTheModelCapToo`／`theClampReachesTheWire`。⇒ 「夹具真的有牙，且只在余量不足时咬」被实测坐实 |
+| **M3** | `AbstractChatApi` 不替换 request（直接 `streamInternal(request, …)`） | RED-1/2/3 全红 ⇒ 证明落点确实是 R1 那一处 | ⚠️ **实测只有 3 红**：`theClampReachesTheWire` ＋ Completions 两条。**RED-1／RED-2 仍绿** —— 因为 Anthropic 的 builder **自带**同一个回落（P15，pi 的低层 `stream` 也有），两条路独立生效。⇒ **设计稿这行的预期是错的**，如实记在此（§12.3） |
+| **M4** | `PiMessagesApi.resolvesRequestOptions()` 改成 `true` | **恰 1 红** | **恰 1 红** ✅ `doesNotSendTheResolvedMaxTokens`，失败消息里直接打出 `"options":{"maxTokens":4096}` |
+| **M5** | `responsesForResponses` 的 `supportsMaxOutputTokens` 默认由 `true` 翻 `false` | **恰 1 红**（responses 那条）；azure 仍绿 | ⏳ 第 6 步实施时测 |
+| **M6** | `samplingParams` 的落点从「最后」挪到 `temperature` 之前 | RED-6 的配对用例红 | ⏳ 第 4 步实施时测 |
+| **M7** | `NO_MODEL_CAP_FALLBACK` 由 `4096` 改成 `4097` | **恰 1 红**（RED-8） | ⚠️ **恰 2 红**：单测 `catalogMissUsesTheDocumentedFallback` ＋ RED-8（改断言之前只红了单测 —— 见 §8.1 的 RED-8 行修正） |
 
 ⚠️ 按 `docs/52 §12.5` 的教训，**每次变异后必须 grep 复核是否落地**（CRLF 已五次吃掉
 多行模式的锚点）。
