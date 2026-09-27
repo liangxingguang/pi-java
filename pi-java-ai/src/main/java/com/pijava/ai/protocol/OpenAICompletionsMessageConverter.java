@@ -208,6 +208,8 @@ final class OpenAICompletionsMessageConverter {
             }
         }
         if (request.temperature() >= 0) builder.temperature(request.temperature());
+        // 包 A-10：模型级采样参数（pi `:996-999`，**body 的最后一个变更** ⇒ 同名键压过具名字段）。
+        SamplingParamsWriter.applyToCompletions(builder, request.model());
 
         return builder.build();
     }
