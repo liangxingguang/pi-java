@@ -87,7 +87,7 @@ class EngineFailureSettlementTest {
     private static StreamFn toolCallStreamFn(List<ContentBlock.ToolUseContent> calls) {
         var partial = AssistantMessage.empty()
             .withContent(new ArrayList<ContentBlock>(calls))
-            .withStopReason("tool_use");
+            .withStopReason("toolUse");
         var events = new ArrayList<StreamEvent>();
         events.add(new StreamEvent.Start(AssistantMessage.empty()));
         for (int i = 0; i < calls.size(); i++) {
@@ -95,7 +95,7 @@ class EngineFailureSettlementTest {
             events.add(new StreamEvent.ToolCallEnd(i, calls.get(i).id(), calls.get(i).name(),
                 calls.get(i).arguments(), partial));
         }
-        events.add(new StreamEvent.StreamDone("tool_use", null, partial));
+        events.add(new StreamEvent.StreamDone("toolUse", null, partial));
         return (model, context, options) -> StreamIterator.from(events);
     }
 
@@ -271,7 +271,7 @@ class EngineFailureSettlementTest {
      * <p>剧本的第二个工具（{@code echo}）是**必需的**、不是装饰：{@code _prepareRetry}
      * 摘掉工作副本尾部的失败助手（{@code agent-session.ts:2941-2945}）之后，
      * {@code continue()} 要求尾部**不是**助手消息（{@code agent.ts:372}）—— 批次里若只有
-     * 抛错的工具，摘完尾巴停在 {@code tool_use} 助手消息上，续跑会抛
+     * 抛错的工具，摘完尾巴停在 {@code toolUse} 助手消息上，续跑会抛
      * "Cannot continue from message role: assistant"。pi 自己也是这样（同一段代码），
      * 所以这里不是绕开缺陷，而是复刻 pi 的可达形状：顺序路径会先落下 echo 的结果消息。</p>
      */

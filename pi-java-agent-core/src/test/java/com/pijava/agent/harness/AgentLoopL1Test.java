@@ -100,7 +100,7 @@ class AgentLoopL1Test {
         var executed = new AtomicInteger();
         var registry = new ToolRegistry(null);
         registry.register(recordingTool("echo", Map.of(), executed));
-        // First response: tool_use + length stop (truncated arguments). Second:
+        // First response: toolUse + length stop (truncated arguments). Second:
         // plain stop — the model "retried" after seeing the failure.
         var lengthStop = toolUsePartial("length", "echo", Map.of("text", "hello"));
         var finalStop = AssistantMessage.empty()
@@ -153,8 +153,8 @@ class AgentLoopL1Test {
             "required", List.of("text"));
         var registry = new ToolRegistry(null);
         registry.register(recordingTool("echo", schema, executed));
-        // First response: tool_use with a non-string "text" (violates schema).
-        var badCall = toolUsePartial("tool_use", "echo", Map.of("text", 123));
+        // First response: toolUse with a non-string "text" (violates schema).
+        var badCall = toolUsePartial("toolUse", "echo", Map.of("text", 123));
         var finalStop = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent("done")))
             .withStopReason("stop");
@@ -193,7 +193,7 @@ class AgentLoopL1Test {
             "required", List.of("text"));
         var registry = new ToolRegistry(null);
         registry.register(recordingTool("echo", schema, executed));
-        var goodCall = toolUsePartial("tool_use", "echo", Map.of("text", "hello"));
+        var goodCall = toolUsePartial("toolUse", "echo", Map.of("text", "hello"));
         var finalStop = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent("done")))
             .withStopReason("stop");
@@ -214,9 +214,9 @@ class AgentLoopL1Test {
         var stop = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent("done")))
             .withStopReason("stop");
-        // The tool_use is the ONLY response — the run must end on the deny.
+        // The toolUse is the ONLY response — the run must end on the deny.
         var h = harness(registry, scriptedStreamFn(List.of(
-            toolUsePartial("tool_use", "echo", Map.of("text", "hello")), stop)));
+            toolUsePartial("toolUse", "echo", Map.of("text", "hello")), stop)));
         h.hookSystem().onBeforeTool("default", ctx -> BeforeToolResult.denyAndTerminate("not allowed"));
 
         h.prompt("denied call");
@@ -263,8 +263,8 @@ class AgentLoopL1Test {
             .withContent(List.of(new ContentBlock.TextContent("done")))
             .withStopReason("stop");
         var h = harness(registry, scriptedStreamFn(List.of(
-            toolUsePartial("tool_use", "echo", Map.of("text", "hello")),
-            toolUsePartial("tool_use", "echo", Map.of("text", "hello")),
+            toolUsePartial("toolUse", "echo", Map.of("text", "hello")),
+            toolUsePartial("toolUse", "echo", Map.of("text", "hello")),
             stop)));
         h.hookSystem().onBeforeTool("default", ctx -> {
             if (denied.compareAndSet(false, true)) {

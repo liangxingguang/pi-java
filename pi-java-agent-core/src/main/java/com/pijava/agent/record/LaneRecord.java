@@ -176,7 +176,7 @@ public sealed interface LaneRecord {
     /**
      * A single LLM call attempt.
      *
-     * <p>The assistant stop reason ({@code completed} / {@code tool_use} /
+     * <p>The assistant stop reason ({@code completed} / {@code toolUse} /
      * {@code length} / {@code error} / {@code aborted}) lives on the
      * {@code resultEntryId} message entry, not here (docs/22 D1): the entry is
      * the single source of truth, so a resumed fold and the live lane cannot

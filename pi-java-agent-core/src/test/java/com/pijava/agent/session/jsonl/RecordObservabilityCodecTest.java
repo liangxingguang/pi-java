@@ -43,13 +43,13 @@ class RecordObservabilityCodecTest {
     void assistantEntryRoundTripsItsStopReason() {
         var entry = new Entry.Message("e-1", 11L, null, Instant.now(),
             new Message.AssistantMessage(
-                List.of(new ContentBlock.TextContent("done")), "tool_use", null), null);
+                List.of(new ContentBlock.TextContent("done")), "toolUse", null), null);
 
         var parsed = (Entry.Message) encodeThenParseEntry(entry);
 
         assertThat(parsed.message()).isInstanceOf(Message.AssistantMessage.class);
         assertThat(((Message.AssistantMessage) parsed.message()).stopReason())
-            .isEqualTo("tool_use");
+            .isEqualTo("toolUse");
     }
 
     @Test

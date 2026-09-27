@@ -115,7 +115,9 @@ final class ScriptedStreams {
             }
         }
 
-        var stopReason = internalStopReason(response.stopReason());
+        // B109：剧本与 pi-java 现在同词表 ⇒ 原先的 internalStopReason 翻译成为恒等，已删。
+        // 它顺带消掉一处不对称：error 分支一直用的是剧本原值，只有 done 走翻译。
+        var stopReason = response.stopReason();
         var terminal = scripted(stopReason, List.copyOf(content), usageOf(response.usage()));
         if ("aborted".equals(response.stopReason()) || "error".equals(response.stopReason())) {
             // pi: aborted 走 error 事件，而不是 done —— done.reason 的闭集里没有 aborted
@@ -124,10 +126,5 @@ final class ScriptedStreams {
             events.add(new StreamEvent.StreamDone(stopReason, null, terminal));
         }
         return List.copyOf(events);
-    }
-
-    /** 剧本用 pi 的写法（{@code toolUse}），pi-java 的停因枚举用 {@code tool_use}。 */
-    private static String internalStopReason(String scriptStopReason) {
-        return "toolUse".equals(scriptStopReason) ? "tool_use" : scriptStopReason;
     }
 }

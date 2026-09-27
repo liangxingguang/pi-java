@@ -81,17 +81,17 @@ class PiLoopTest {
             new StreamEvent.StreamDone("stop", null, done));
     }
 
-    /** 一段带单个工具调用的助手响应：stopReason = tool_use。 */
+    /** 一段带单个工具调用的助手响应：stopReason = toolUse。 */
     private static List<StreamEvent> toolTurn(String callId, String name, Map<String, Object> args) {
         var partial = AssistantMessage.empty();
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.ToolUseContent(callId, name, args)))
-            .withStopReason("tool_use");
+            .withStopReason("toolUse");
         return List.of(
             new StreamEvent.Start(partial),
             new StreamEvent.ToolCallStart(0, partial),
             new StreamEvent.ToolCallEnd(0, callId, name, args, done),
-            new StreamEvent.StreamDone("tool_use", null, done));
+            new StreamEvent.StreamDone("toolUse", null, done));
     }
 
     /** 一段以给定 stopReason 收尾的助手响应（无内容）。 */
@@ -330,12 +330,12 @@ class PiLoopTest {
                 new ContentBlock.ToolUseContent("c1", "bash", Map.of()),
                 new ContentBlock.ToolUseContent("c2", "read", Map.of()),
                 new ContentBlock.ToolUseContent("c3", "grep", Map.of())))
-            .withStopReason("tool_use");
+            .withStopReason("toolUse");
 
         PiLoop.run(List.of(user("go")), context,
             config(scripted(List.of(
                 List.of(new StreamEvent.Start(partial),
-                    new StreamEvent.StreamDone("tool_use", null, done)),
+                    new StreamEvent.StreamDone("toolUse", null, done)),
                 textTurn("done"))),
                 new StubTools()),
             rec);
@@ -371,7 +371,7 @@ class PiLoopTest {
             .withContent(List.of(
                 new ContentBlock.ToolUseContent("c1", "bash", Map.of()),
                 new ContentBlock.ToolUseContent("c2", "read", Map.of())))
-            .withStopReason("tool_use");
+            .withStopReason("toolUse");
 
         PiLoop.run(List.of(user("go")), context,
             new PiLoop.Config(
@@ -382,7 +382,7 @@ class PiLoopTest {
                 tools,
                 scripted(List.of(
                     List.of(new StreamEvent.Start(partial),
-                        new StreamEvent.StreamDone("tool_use", null, done)),
+                        new StreamEvent.StreamDone("toolUse", null, done)),
                     textTurn("stopped"))),
                 signal,
                 null, null, null, null, null, null),

@@ -179,7 +179,7 @@ class CompactionServiceTest {
             new ContentBlock.ToolUseContent("t1", "read", java.util.Map.of()))).withStopReason("toolUse");
         StreamFn fn = (m, c, o) -> StreamIterator.from(List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
-            new StreamEvent.StreamDone("tool_use", null, done)));
+            new StreamEvent.StreamDone("toolUse", null, done)));
         var events = new Events();
         assertThatThrownBy(() -> rig(fn, events).summarize(ONE, null, null, 16_384, "manual"))
             .isInstanceOf(IllegalStateException.class)

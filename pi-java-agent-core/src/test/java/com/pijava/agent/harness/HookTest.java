@@ -135,7 +135,7 @@ class HookTest {
         var h = com.pijava.agent.harness.AgentHarness.create(configWith(toolUseThenStopStreamFn(seenModels)));
         h.hookSystem().onShouldStopAfterTurn("default", ctx -> null);
         h.prompt("go");
-        // 弃权 ⇒ 循环继跑：tool_use 那一轮之后还有第二次请求。
+        // 弃权 ⇒ 循环继跑：toolUse 那一轮之后还有第二次请求。
         assertThat(seenModels).hasSize(2);
     }
 
@@ -153,12 +153,12 @@ class HookTest {
 
     // ── prepare_next_turn ─────────────────────────────────
 
-    /** Multi-turn StreamFn: transcripts without a toolResult get tool_use; with one, stop. */
+    /** Multi-turn StreamFn: transcripts without a toolResult get toolUse; with one, stop. */
     private static StreamFn toolUseThenStopStreamFn(java.util.List<String> seenModels) {
         var toolUse = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.ToolUseContent(
                     "call-1", "echo", java.util.Map.of())))
-                .withStopReason("tool_use");
+                .withStopReason("toolUse");
         var stop = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent("done")))
                 .withStopReason("stop");

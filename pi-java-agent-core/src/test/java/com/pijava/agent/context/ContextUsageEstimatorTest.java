@@ -131,7 +131,7 @@ class ContextUsageEstimatorTest {
         // pi :288：name.length + JSON.stringify(arguments).length
         var call = new Message.AssistantMessage(
             List.of(new ContentBlock.ToolUseContent("id-1", "echo", Map.of("a", "b"))),
-            "tool_use", null, null, null, null, null, null, null, null);
+            "toolUse", null, null, null, null, null, null, null, null);
         assertThat(ContextUsageEstimator.estimateTokens(call))
             .isEqualTo((int) Math.ceil((4 + "{\"a\":\"b\"}".length()) / 4.0)); // ceil(13/4)=4
     }
@@ -143,7 +143,7 @@ class ContextUsageEstimatorTest {
         // 实现里纯属形状对齐。这里钉可达形状：空参数 ⇒ "{}"。
         var call = new Message.AssistantMessage(
             List.of(new ContentBlock.ToolUseContent("id-1", "x", Map.of())),
-            "tool_use", null, null, null, null, null, null, null, null);
+            "toolUse", null, null, null, null, null, null, null, null);
         assertThat(ContextUsageEstimator.estimateTokens(call))
             .isEqualTo((int) Math.ceil((1 + "{}".length()) / 4.0)); // ceil(3/4)=1
     }
@@ -155,7 +155,7 @@ class ContextUsageEstimatorTest {
         var args = Map.<String, Object>of("l", java.util.Arrays.asList(null, "a"));
         var call = new Message.AssistantMessage(
             List.of(new ContentBlock.ToolUseContent("id-1", "e", args)),
-            "tool_use", null, null, null, null, null, null, null, null);
+            "toolUse", null, null, null, null, null, null, null, null);
         assertThat(ContextUsageEstimator.estimateTokens(call))
             .isEqualTo((int) Math.ceil((1 + "{\"l\":[null,\"a\"]}".length()) / 4.0));
     }
@@ -166,7 +166,7 @@ class ContextUsageEstimatorTest {
         cyclic.put("self", cyclic); // Jackson 序列化抛错
         var call = new Message.AssistantMessage(
             List.of(new ContentBlock.ToolUseContent("id-1", "e", cyclic)),
-            "tool_use", null, null, null, null, null, null, null, null);
+            "toolUse", null, null, null, null, null, null, null, null);
         assertThat(ContextUsageEstimator.estimateTokens(call))
             .isEqualTo((int) Math.ceil((1 + "[unserializable]".length()) / 4.0)); // ceil(17/4)=5
     }

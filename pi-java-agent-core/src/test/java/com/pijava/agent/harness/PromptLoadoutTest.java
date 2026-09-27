@@ -242,13 +242,13 @@ class PromptLoadoutTest {
         var partial = AssistantMessage.empty();
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.ToolUseContent(callId, name, Map.of())))
-            .withStopReason("tool_use")
+            .withStopReason("toolUse")
             .withUsage(new StreamEvent.UsageInfo(5, 3, null, null));
         return List.of(
             new StreamEvent.Start(partial),
             new StreamEvent.ToolCallEnd(0, callId, name, Map.of(), done),
             new StreamEvent.UsageInfo(5, 3, done),
-            new StreamEvent.StreamDone("tool_use", null, done));
+            new StreamEvent.StreamDone("toolUse", null, done));
     }
 
     /** 带片段与准则的工具（pi 的 {@code promptSnippet}/{@code promptGuidelines}）。 */

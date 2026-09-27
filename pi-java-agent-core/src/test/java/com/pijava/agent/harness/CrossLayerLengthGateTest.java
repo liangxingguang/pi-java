@@ -80,7 +80,7 @@ class CrossLayerLengthGateTest {
      *
      * <p><b>实测红灯</b>（变异探针 = 把 {@code OpenAICompletionsApi} 换回 B20 提交 ④ 之前的版本，
      * 那一版根本不读 {@code finish_reason}）：{@code expected: 0 but was: 1}，
-     * 转录 {@code [user, assistant(tool_use), tool, assistant(stop)]} —— 截断的调用被当真送进了
+     * 转录 {@code [user, assistant(toolUse), tool, assistant(stop)]} —— 截断的调用被当真送进了
      * 执行器，且回灌的是一条**成功**的工具结果。</p>
      */
     @Test
@@ -132,7 +132,7 @@ class CrossLayerLengthGateTest {
 
         assertThat(assistantMessages(h).get(0).stopReason())
             .as("转录：" + names(h))
-            .isEqualTo("tool_use");
+            .isEqualTo("toolUse");
         assertThat(executed.get()).isEqualTo(1);
         assertThat(h.lastAssistantMessage().stopReason()).isEqualTo("stop");
     }

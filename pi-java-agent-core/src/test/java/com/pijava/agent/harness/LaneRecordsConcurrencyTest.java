@@ -176,7 +176,7 @@ class LaneRecordsConcurrencyTest {
         return (model, context, options) -> StreamIterator.from(scripts.get(index.getAndIncrement()));
     }
 
-    /** 一段带多个工具调用的助手响应（{@code stopReason = tool_use}）。 */
+    /** 一段带多个工具调用的助手响应（{@code stopReason = toolUse}）。 */
     private static List<StreamEvent> toolTurn(List<String[]> calls) {
         var partial = AssistantMessage.empty();
         var blocks = new ArrayList<ContentBlock>();
@@ -188,8 +188,8 @@ class LaneRecordsConcurrencyTest {
             blocks.add(new ContentBlock.ToolUseContent(id, name, Map.of()));
             events.add(new StreamEvent.ToolCallEnd(i, id, name, Map.of(), partial));
         }
-        var done = AssistantMessage.empty().withContent(blocks).withStopReason("tool_use");
-        events.add(new StreamEvent.StreamDone("tool_use", null, done));
+        var done = AssistantMessage.empty().withContent(blocks).withStopReason("toolUse");
+        events.add(new StreamEvent.StreamDone("toolUse", null, done));
         return List.copyOf(events);
     }
 

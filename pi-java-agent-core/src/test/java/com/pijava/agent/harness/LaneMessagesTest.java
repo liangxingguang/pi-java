@@ -79,11 +79,11 @@ class LaneMessagesTest {
     private static List<StreamEvent> toolTurn(String callId, String name) {
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.ToolUseContent(callId, name, Map.of())))
-            .withStopReason("tool_use");
+            .withStopReason("toolUse");
         return List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.ToolCallEnd(0, callId, name, Map.of(), done),
-            new StreamEvent.StreamDone("tool_use", null, done));
+            new StreamEvent.StreamDone("toolUse", null, done));
     }
 
     private static List<StreamEvent> textTurn(String text) {
@@ -242,18 +242,18 @@ class LaneMessagesTest {
 
     /**
      * 带 500 用量的工具轮 —— 文本/参数都极短（字符估算约 0），但 provider 报了
-     * 巨量用量（3a：partial 的 UsageInfo 直落终局消息）。必须走 tool_use 停因，
+     * 巨量用量（3a：partial 的 UsageInfo 直落终局消息）。必须走 toolUse 停因，
      * 运行才会进入第二轮，{@code prepareNextTurn} 的阈值门才有机会开火。
      */
     private static List<StreamEvent> usageToolTurn(long reportedInput) {
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.ToolUseContent("c1", "echo", Map.of())))
-            .withStopReason("tool_use")
+            .withStopReason("toolUse")
             .withUsage(new StreamEvent.UsageInfo(reportedInput, 0, null));
         return List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.ToolCallEnd(0, "c1", "echo", Map.of(), done),
-            new StreamEvent.StreamDone("tool_use", null, done));
+            new StreamEvent.StreamDone("toolUse", null, done));
     }
 
     private Entry.Compaction firstCompaction(AgentHarness h) {

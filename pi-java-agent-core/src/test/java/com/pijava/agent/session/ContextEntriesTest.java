@@ -234,7 +234,7 @@ class ContextEntriesTest {
 
     @Test
     void completedToolUseAndLengthMessagesStillProject() {
-        for (String stopReason : List.of("stop", "tool_use", "length")) {
+        for (String stopReason : List.of("stop", "toolUse", "length")) {
             var assistant = assistantEntry("a-" + stopReason, "answer", stopReason);
 
             assertThat(ContextEntries.toMessages(List.<Entry>of(assistant)))

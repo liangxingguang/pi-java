@@ -65,7 +65,7 @@ class HarnessToolExecutionSpansTest {
      * StreamFn: the first LLM call replies with the given assistant message
      * (carrying the batch's tool_use blocks), every later call stops — so the
      * harness executes the batch once and the run finishes instead of looping
-     * on tool_use forever.
+     * on toolUse forever.
      */
     private static StreamFn toolUseThenStopStreamFn(AssistantMessage toolUse) {
         var stop = AssistantMessage.empty()
@@ -86,7 +86,7 @@ class HarnessToolExecutionSpansTest {
         return toolUseThenStopStreamFn(AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.ToolUseContent(
                     toolCallId, toolName, Map.of("text", "hello"))))
-                .withStopReason("tool_use"));
+                .withStopReason("toolUse"));
     }
 
     private static AgentHarness harness(JsonlFileTelemetry telemetry,
@@ -217,7 +217,7 @@ class HarnessToolExecutionSpansTest {
             .withContent(List.of(
                 new ContentBlock.ToolUseContent("call-a", "echo-a", Map.of("text", "one")),
                 new ContentBlock.ToolUseContent("call-b", "echo-b", Map.of("text", "two"))))
-            .withStopReason("tool_use");
+            .withStopReason("toolUse");
         var h = harness(telemetry, registry, toolUseThenStopStreamFn(batch),
             new ToolExecution.Sequential());
 

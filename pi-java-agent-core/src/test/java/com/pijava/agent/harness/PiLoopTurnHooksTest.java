@@ -81,11 +81,11 @@ class PiLoopTurnHooksTest {
         var partial = AssistantMessage.empty();
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.ToolUseContent(callId, name, Map.of())))
-            .withStopReason("tool_use");
+            .withStopReason("toolUse");
         return List.of(
             new StreamEvent.Start(partial),
             new StreamEvent.ToolCallEnd(0, callId, name, Map.of(), done),
-            new StreamEvent.StreamDone("tool_use", null, done));
+            new StreamEvent.StreamDone("toolUse", null, done));
     }
 
     private static Message user(String text) {

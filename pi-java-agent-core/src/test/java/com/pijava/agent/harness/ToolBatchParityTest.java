@@ -72,12 +72,12 @@ class ToolBatchParityTest {
                     .withContent(List.of(
                         new ContentBlock.ToolUseContent("c1", first, Map.of()),
                         new ContentBlock.ToolUseContent("c2", second, Map.of())))
-                    .withStopReason("tool_use");
+                    .withStopReason("toolUse");
                 return StreamIterator.from(List.of(
                     new StreamEvent.Start(AssistantMessage.empty()),
                     new StreamEvent.ToolCallEnd(0, "c1", first, Map.of(), partial),
                     new StreamEvent.ToolCallEnd(1, "c2", second, Map.of(), partial),
-                    new StreamEvent.StreamDone("tool_use", null, partial)));
+                    new StreamEvent.StreamDone("toolUse", null, partial)));
             }
             var done = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent("done")))

@@ -51,7 +51,7 @@ class QueueRecordEmissionTest {
         var toolUse = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.ToolUseContent(
                 "call-1", toolName, Map.of("text", "hello"))))
-            .withStopReason("tool_use");
+            .withStopReason("toolUse");
         var calls = new AtomicInteger();
         return (model, context, options) -> {
             var partial = calls.incrementAndGet() == 1 ? toolUse : DONE;

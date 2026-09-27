@@ -297,6 +297,6 @@ public final class LaneState {
         String entryId,
         String entryType,    // "message" | "thinking_level_change" | ...
         String role,         // "user" | "assistant" | "tool" (only for message type)
-        String stopReason    // "stop" | "tool_use" | "error" | "length" | null
+        String stopReason    // "stop" | "toolUse" | "error" | "length" | null
     ) {}
 }

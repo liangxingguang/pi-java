@@ -133,10 +133,10 @@ final class HarnessUtils {
      * {@code "error"} would mark the operation FAILED and pollute the lane's
      * {@code faulted} flag with a user-initiated stop.</p>
      *
-     * <p><b>这是「运行」的结局，不是「消息」的结局。</b> {@code tool_use} 与 {@code length}
+     * <p><b>这是「运行」的结局，不是「消息」的结局。</b> {@code toolUse} 与 {@code length}
      * 是消息级的未竟状态：到达终局的运行必然已经把工具调用全部消费完（{@code length}
      * 的调用则由 {@code PiLoopTools} 就地失败掉），因此两者都落 {@code "completed"}。
-     * 把它们原样当成运行结局，会让 span 的 {@code outcome} 属性变成 {@code "tool_use"}
+     * 把它们原样当成运行结局，会让 span 的 {@code outcome} 属性变成 {@code "toolUse"}
      * —— 而 {@link RunLifecycle#outcome} 只认 {@code OperationOutcome} 的取值，
      * 落到默认分支同样是 COMPLETED，两个记录因此自相矛盾。</p>
      */

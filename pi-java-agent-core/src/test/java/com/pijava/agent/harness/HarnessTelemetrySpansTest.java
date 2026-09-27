@@ -36,11 +36,11 @@ class HarnessTelemetrySpansTest {
     private static StreamFn streamFn(String reply) {
         var partial = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent(reply)))
-                .withStopReason("tool_use");
+                .withStopReason("toolUse");
         return (model, context, options) -> StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.TextEnd(0, reply, partial),
-                new StreamEvent.StreamDone("tool_use", null, partial)));
+                new StreamEvent.StreamDone("toolUse", null, partial)));
     }
 
     private List<JsonNode> readLines(Path tracesDir) throws IOException {
@@ -105,7 +105,7 @@ class HarnessTelemetrySpansTest {
                 && n.get("spanId").asText().equals(llmEndSpanId))
             .findFirst().orElseThrow();
         assertThat(llmEnd.get("attrs").get("model").asText()).isEqualTo("faux/test-model");
-        assertThat(llmEnd.get("attrs").get("stopReason").asText()).isEqualTo("tool_use");
+        assertThat(llmEnd.get("attrs").get("stopReason").asText()).isEqualTo("toolUse");
         assertThat(llmEnd.get("durationMs").asLong()).isGreaterThanOrEqualTo(0);
 
         // counters + timing lines

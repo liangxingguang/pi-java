@@ -89,13 +89,13 @@ class PiLaneEngineTest {
         var partial = AssistantMessage.empty();
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.ToolUseContent(callId, name, args)))
-            .withStopReason("tool_use")
+            .withStopReason("toolUse")
             .withUsage(new StreamEvent.UsageInfo(5, 3, null, null));
         return List.of(
             new StreamEvent.Start(partial),
             new StreamEvent.ToolCallEnd(0, callId, name, args, done),
             new StreamEvent.UsageInfo(5, 3, done),
-            new StreamEvent.StreamDone("tool_use", null, done));
+            new StreamEvent.StreamDone("toolUse", null, done));
     }
 
     // ── 夹具 ───────────────────────────────────────────────────────
@@ -419,7 +419,7 @@ class PiLaneEngineTest {
 
         assertThat(h.snapshot(AgentHarness.DEFAULT_LANE).operation()).isNull();
         assertLogIsWellFormed(h);
-        // 工具轮有两个助手步（tool_use + stop），序号必须 0、1 连续。
+        // 工具轮有两个助手步（toolUse + stop），序号必须 0、1 连续。
         assertThat(recordsOf(h).stream()
             .filter(LaneRecord.StepAttempt.class::isInstance)
             .map(r -> ((LaneRecord.StepAttempt) r).attempt()).toList())

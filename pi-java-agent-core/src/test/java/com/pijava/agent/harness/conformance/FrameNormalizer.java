@@ -26,8 +26,11 @@ import com.pijava.ai.stream.StreamEvent;
  * 流式更新干脆缺席）因此在差分里完全隐身。丢字段的豁免必须**两侧同时**做，否则
  * 「比对通过」只是「没在看」。</p>
  *
- * <p>停因是唯一的**枚举名**差异：pi 用 {@code toolUse}，pi-java 用 {@code tool_use}。
- * 这是命名约定而非行为差异，归一化时映射回 pi 的写法。</p>
+ * <p><b>停因不再需要归一</b>（B109，{@code docs/56}）：改前 pi 用 {@code toolUse}、
+ * pi-java 用 {@code tool_use}，归一化时映射回 pi 的写法；两侧词表对齐后
+ * {@code stopReasonOf} 成为恒等，已删。⚠️ 这一删除**不会**让本差分抓得到真生产者的
+ * 词表回归 —— L5 的停因由 {@link ScriptedStreams} 合成，七条真生产者不在本路径上
+ * （{@code docs/56 §8.1}）。</p>
  */
 final class FrameNormalizer {
 
@@ -62,7 +65,7 @@ final class FrameNormalizer {
                 "id", toolCallId(e.toolCallId()), "name", e.toolName(),
                 "result", resultOf(e.result()), "isError", e.isError());
             case PiLoop.Event.TurnEnd e -> CanonicalJson.obj(
-                "type", "turn_end", "stopReason", stopReasonOf(e.message().stopReason()),
+                "type", "turn_end", "stopReason", e.message().stopReason(),
                 "toolResults", toolNames(e.toolResults()));
             case PiLoop.Event.AgentEnd e -> CanonicalJson.obj(
                 "type", "agent_end", "messages", messagesOf(e.messages()));
@@ -163,7 +166,7 @@ final class FrameNormalizer {
                 var out = new LinkedHashMap<String, Object>();
                 out.put("role", "assistant");
                 out.put("content", blocksOf(assistant.content()));
-                out.put("stopReason", stopReasonOf(assistant.stopReason()));
+                out.put("stopReason", assistant.stopReason());
                 if (assistant.api() != null) {
                     out.put("api", assistant.api());
                 }
@@ -276,11 +279,6 @@ final class FrameNormalizer {
             names.add(result.toolName());
         }
         return names;
-    }
-
-    /** pi-java 的 {@code tool_use} 归一化回 pi 的 {@code toolUse}；其余逐字相同。 */
-    private static String stopReasonOf(String stopReason) {
-        return "tool_use".equals(stopReason) ? "toolUse" : stopReason;
     }
 
     /**
