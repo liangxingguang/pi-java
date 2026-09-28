@@ -1,8 +1,11 @@
 package com.pijava.ai.protocol;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 
+import com.openai.core.JsonValue;
 import com.openai.models.ReasoningEffort;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
 
@@ -38,8 +41,9 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
  * <p>⚠️ 两派 null 语义（R4，{@code docs/58 §2.4}）：{@code map?.[k] ?? k}（qwen／deepseek／
  * openrouter／together／string-thinking）与 {@code map?.[k] === undefined ? k : map[k]}
  * ＋{@code typeof === "string"}（zai／baseten）在「值是显式 null」时**结果相反**
- * （前者发级别名、后者不写）⇒ 分成 {@link #orLevel} 与 {@code strictEffort} 两个助手，
- * 逐形状照抄、不许统一。</p>
+ * （前者发级别名、后者不写）⇒ 分成 {@link #orLevel} 与 {@link #strictEffort} 两个助手，
+ * 逐形状照抄、不许统一。⚠️ 实施期发现：夹取先行使「显式 null」到不了写点 ⇒ 两派在
+ * 生产路径**语义等价**（R4 探针零红，见 {@link #strictEffort} 的 javadoc）。</p>
  *
  * <p>级别是**夹取后**的（A-10 的归属前移，{@link SimpleOptions#clampedReasoningEffort}
  * ≙ pi {@code :741-742}）—— 本类不再夹一次（{@code docs/57 §12.3}）。</p>
@@ -85,9 +89,45 @@ final class ThinkingFormatWriter {
                         .ifPresent(s -> builder.reasoningEffort(ReasoningEffort.of(s)));
                 }
             }
-            // 提交 4-6 逐臂落地（docs/58 §8）：其余十个形状今天在链路上不写任何字段。
-            case ZAI, QWEN, QWEN_CHAT_TEMPLATE, CHAT_TEMPLATE, BASETEN, DEEPSEEK,
-                 OPENROUTER, ANT_LING, TOGETHER, STRING_THINKING -> { }
+            case ZAI -> {
+                var thinking = new LinkedHashMap<String, Object>();
+                thinking.put("type", level.isPresent() ? "enabled" : "disabled");
+                if (level.isPresent()) {
+                    thinking.put("clear_thinking", false);                    // pi :878
+                }
+                put(builder, "thinking", thinking);
+                if (level.isPresent() && supportsEffort) {                    // pi :879-885
+                    strictEffort(map, level.get())
+                        .ifPresent(s -> builder.reasoningEffort(ReasoningEffort.of(s)));
+                }
+            }
+            case QWEN -> {
+                put(builder, "enable_thinking", level.isPresent());           // pi :887
+                if (level.isPresent() && supportsEffort) {                    // pi :888-892
+                    orLevel(map, level.get())
+                        .ifPresent(s -> builder.reasoningEffort(ReasoningEffort.of(s)));
+                }
+            }
+            case DEEPSEEK -> {
+                if (level.isPresent()) {
+                    put(builder, "thinking", Map.of("type", "enabled"));      // pi :922
+                } else if (map.supportsExplicitOff()) {                       // pi :924
+                    put(builder, "thinking", Map.of("type", "disabled"));
+                }
+                if (level.isPresent() && supportsEffort) {                    // pi :927-929
+                    orLevel(map, level.get())
+                        .ifPresent(s -> builder.reasoningEffort(ReasoningEffort.of(s)));
+                }
+            }
+            case ANT_LING ->
+                // ⚠️ 唯一**不回落级别名**的形状（docs/58 §2.4 第三行）：pi :942-944
+                // 只认 map[level] 的字符串值 —— 键缺席／显式 null 都不写，且本臂
+                // 从不写 reasoning_effort、也不读 supportsReasoningEffort。
+                level.map(ModelThinkingLevel::of).flatMap(map::mapped)
+                    .ifPresent(s -> put(builder, "reasoning", Map.of("effort", s)));
+            // 提交 5-6 逐臂落地（docs/58 §8）：其余六个形状今天在链路上不写任何字段。
+            case QWEN_CHAT_TEMPLATE, CHAT_TEMPLATE, BASETEN, OPENROUTER,
+                 TOGETHER, STRING_THINKING -> { }
         }
     }
 
@@ -97,5 +137,27 @@ final class ThinkingFormatWriter {
      */
     private static Optional<String> orLevel(ThinkingLevelMap map, ThinkingLevel level) {
         return Optional.of(map.mapped(ModelThinkingLevel.of(level)).orElse(level.label()));
+    }
+
+    /**
+     * {@code map?.[k] === undefined ? k : map[k]} 派 ＋ {@code typeof === "string"}
+     * （{@code docs/58 §2.4} 第二行，zai／baseten）：键缺席回落级别名，**显式 null 不写**。
+     *
+     * <p>⚠️ 与 {@link #orLevel} 的分歧只在「显式 null」一格，而夹取会把显式 null 的级别
+     * 踢出可用集（{@code getSupportedThinkingLevels} 的 {@code mapped === null ⇒ false}）
+     * ⇒ 在夹取后的级别上两个助手**语义等价**、R4 反向探针零红（变异体语义等价，
+     * {@code docs/58 §12} 记录）。照抄 pi 的两个表达式是**文本保真**，不是行为分歧。</p>
+     */
+    private static Optional<String> strictEffort(ThinkingLevelMap map, ThinkingLevel level) {
+        if (!map.hasEntry(ModelThinkingLevel.of(level))) {
+            return Optional.of(level.label());
+        }
+        return map.mapped(ModelThinkingLevel.of(level));      // 显式 null ⇒ 空 ⇒ 不写
+    }
+
+    /** {@code putAdditionalBodyProperty} 的薄包装（统一 {@code JsonValue.from}）。 */
+    private static void put(ChatCompletionCreateParams.Builder builder, String key,
+                            Object value) {
+        builder.putAdditionalBodyProperty(key, JsonValue.from(value));
     }
 }
