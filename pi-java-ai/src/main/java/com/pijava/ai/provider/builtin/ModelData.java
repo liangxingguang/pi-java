@@ -1,14 +1,17 @@
 package com.pijava.ai.provider.builtin;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import com.pijava.ai.catalog.BuiltinCatalog;
+import com.pijava.ai.catalog.CatalogCompatRules;
 import com.pijava.ai.catalog.ModelCatalog;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
+import com.pijava.ai.thinking.ThinkingLevelMap;
 
 /**
  * Built-in model data for Phase 6 China-focused providers.
@@ -128,8 +131,13 @@ public final class ModelData {
         var pricing = in < 0 || out < 0
             ? PricingInfo.UNKNOWN
             : new PricingInfo(in, out);
+        // 包 A-09：内置条目携带目录 compat（与 BuiltinCatalog.deepseekModel 的先例同形）
+        // —— 此前恒给 ModelCompat.NONE，moonshotai／xiaomi／qwen-token-plan 的
+        // thinkingFormat 目录值（探测给不出）就此丢失（docs/58 §3 缺口 7）。
         return new ModelInfo(
-            ModelId.of(provider, name), display, caps, maxIn, maxOut, false, pricing);
+            ModelId.of(provider, name), display, caps, maxIn, maxOut, false, pricing,
+            ThinkingLevelMap.empty(), Map.of(), Map.of(),
+            CatalogCompatRules.completions(provider, name));
     }
 
     private static Set<ModelCapability> chatCaps() {

@@ -1,5 +1,7 @@
 package com.pijava.ai.catalog;
 
+import java.util.Map;
+
 /**
  * pi 的**生成期**目录 compat 规则（{@code scripts/generate-models.ts}）里，与内置目录
  * **代码推导**相关的那几条 —— 逐字照抄谓词，而不是把生成出来的 JSON 值硬编进目录。
@@ -58,25 +60,73 @@ public final class CatalogCompatRules {
     }
 
     /**
-     * completions 车道的目录标注 —— pi {@code applyOpenAICompletionsTranscriptMetadata:875-900}。
+     * completions 车道的目录标注 —— pi {@code applyOpenAICompletionsTranscriptMetadata:875-900}
+     * ＋ 包 A-09 的 per-provider {@code thinkingFormat} 常量
+     * （{@code generate-models.ts:1416/:2426/:2476/:2533/:2784/:2874}）。
      *
-     * <p>⚠️ 那条规则**逐 id 写死**：{@code provider === "deepseek" && model.id === "deepseek-v4-pro"}
-     * 走 {@code isTextOnly}（只得 {@code supportsMidConvoSystemMessages}），而同族的
-     * {@code deepseek-flash} **不在**名单里 —— pi 自己的测试把这一点钉成了断言
+     * <p>⚠️ mid-convo 那条规则**逐 id 写死**：{@code provider === "deepseek" && model.id ===
+     * "deepseek-v4-pro"} 走 {@code isTextOnly}（只得 {@code supportsMidConvoSystemMessages}），
+     * 而同族的 {@code deepseek-flash} **不在**名单里 —— pi 自己的测试把这一点钉成了断言
      * （{@code test/providers.test.ts} 的 {@code supported}/{@code unsupported} 两份列表，
      * 锚点 26/26 绿）。</p>
+     *
+     * <p>{@code thinkingFormat} 的两类来源（{@code docs/58 §2.5(b)}）：<b>探测给不出的</b>
+     * （moonshotai／xiaomi／qwen-token-plan —— 探测会把它们误判成 {@code openai}）是
+     * **必要标注**；探测已给同值的（zai／deepseek／ant-ling）是**冗余照抄** —— pi 的目录
+     * 照写 ⇒ 这里也照写。⚠️ together／baseten／opencode／fireworks 的常量 java 不携带
+     * 那些 provider ⇒ 只落代码路径、不落目录（{@code docs/58 §9} 登记）。</p>
      *
      * <p>其余端点属性（{@code maxTokensField}／{@code supportsStore}／
      * {@code supportsDeveloperRole}／{@code requiresReasoningContentOnAssistantMessages}）
      * **不在这里标注**：它们在 pi 的目录里是**探测的差量**，而
-     * {@link CompatResolver#forCompletions} 在请求期会算出同一个值。</p>
+     * {@link CompatResolver#forCompletions} 在请求期会算出同一个值。⚠️ 已知例外：pi 的
+     * {@code xiaomiCompat} 写了 {@code requiresReasoningContentOnAssistantMessages: true}
+     * 而探测给不出 —— 属 A-09 之前的既有缺口，登记不改（{@code docs/32 B129}）。</p>
      */
     public static ModelCompat completions(String provider, String modelId) {
         var isNativeDeepSeekPro =
             "deepseek".equals(provider) && "deepseek-v4-pro".equals(modelId);
-        return isNativeDeepSeekPro
-            ? new ModelCompat(false, null, true, false, true, null, null, null, null)
-            : ModelCompat.NONE;
+        var format = thinkingFormatOf(provider);
+        if (format == null && !isNativeDeepSeekPro) {
+            return ModelCompat.NONE;
+        }
+        // ⚠️ zai 的 supportsReasoningEffort 在 pi 是**数据驱动**的（generate-models.ts:1396
+        //    `thinkingLevelMap !== undefined`）—— java 的内置条目今天没有级别表 ⇒ 不标
+        //    （null），由探测（isZai ⇒ false）兜底 ⇒ 与 pi 的有效值 false 等价；若日后
+        //    补上级别表，判据应改成 `!thinkingLevelMap.isEmpty()`（docs/58 §9 登记）。
+        //    qwen-token-plan 的 true 是 pi 的明文常量（generate-models.ts:2537，冗余照抄）。
+        var supportsEffort = "qwen-token-plan-cn".equals(provider) ? Boolean.TRUE : null;
+        return new ModelCompat(
+            false,
+            null,
+            true,
+            false,
+            // :875-900 —— deepseek-v4-pro 是 java 携带集里唯一拿 mid-convo 标志的 id。
+            isNativeDeepSeekPro ? Boolean.TRUE : null,
+            null, null, null, null,
+            true,
+            null, null, null, null,
+            null, null, null, null, null,
+            format, Map.of(), Map.of(), supportsEffort);
+    }
+
+    /**
+     * pi {@code generate-models.ts} 的 per-provider {@code thinkingFormat} 常量表 ——
+     * 只列 java **携带**的 provider（{@code docs/58 §2.5(b)}）。
+     */
+    private static ThinkingFormat thinkingFormatOf(String provider) {
+        if (provider == null) {
+            return null;
+        }
+        return switch (provider) {
+            case "zai", "zai-coding-cn" -> ThinkingFormat.ZAI;
+            case "moonshotai", "moonshotai-cn", "xiaomi", "xiaomi-token-plan-cn" ->
+                ThinkingFormat.DEEPSEEK;
+            case "qwen-token-plan-cn" -> ThinkingFormat.QWEN;
+            case "deepseek" -> ThinkingFormat.DEEPSEEK;
+            case "ant-ling" -> ThinkingFormat.ANT_LING;
+            default -> null;
+        };
     }
 
     // ── 照抄的谓词（generate-models.ts:578/585/604）──────────────

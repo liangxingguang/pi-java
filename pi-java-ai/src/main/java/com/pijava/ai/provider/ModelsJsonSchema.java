@@ -157,7 +157,19 @@ public final class ModelsJsonSchema {
          * **没有这道门**，故在本仓写 {@code false} 对 azure 无效（{@code docs/57 §6 R8} 的
          * 第 6 步说明与 {@code ResponsesMessageConverter} 的车道名分支）。
          */
-        @JsonProperty("supportsMaxOutputTokens") Boolean supportsMaxOutputTokens
+        @JsonProperty("supportsMaxOutputTokens") Boolean supportsMaxOutputTokens,
+        /**
+         * 包 A-09（pi {@code types.ts:696-707}）：思考开关的十一种线格形状；未知取值
+         * **响亮抛错**（与 {@code maxTokensField} 同口径 —— 静默降级会静默改变线格，
+         * pi 的 zod 联合同样拒绝未知取值）。缺省 ⇒ 按端点探测。
+         */
+        @JsonProperty("thinkingFormat") String thinkingFormat,
+        /** 包 A-09（pi {@code types.ts:708}）：{@code chat-template} 形状的 kwargs 声明（值可为标量或 {@code {$var, omitWhenOff?}}）。 */
+        @JsonProperty("chatTemplateKwargs") Map<String, Object> chatTemplateKwargs,
+        /** 包 A-09（pi {@code types.ts:710}）：{@code baseten} 形状的 args 声明，形状同上一键。 */
+        @JsonProperty("chatTemplateArgs") Map<String, Object> chatTemplateArgs,
+        /** 包 A-09（pi {@code types.ts:680}）：端点是否吃 {@code reasoning_effort}；缺省按探测。 */
+        @JsonProperty("supportsReasoningEffort") Boolean supportsReasoningEffort
     ) {}
 
     /**

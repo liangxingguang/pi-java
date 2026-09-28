@@ -1,6 +1,7 @@
 package com.pijava.ai.catalog;
 
 import com.pijava.ai.model.ModelId;
+import com.pijava.ai.provider.builtin.ModelData;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -108,11 +109,14 @@ class CatalogCompatRulesTest {
         assertThat(CatalogCompatRules.completions("deepseek", "deepseek-v4-pro")
             .supportsMidConvoSystemMessages()).isTrue();
         // ⚠️ 逐 id 写死：同族的 flash 拿不到（pi 自己的 providers.test.ts 把这点钉成断言）。
-        assertThat(CatalogCompatRules.completions("deepseek", "deepseek-v4-flash"))
-            .isEqualTo(ModelCompat.NONE);
-        assertThat(CatalogCompatRules.completions("deepseek", "deepseek-flash"))
-            .isEqualTo(ModelCompat.NONE);
-        // 别的 provider 上的同名 id 也不算（`provider === "deepseek"` 是判据的一半）。
+        // 包 A-09 后 flash 会拿到 provider 级的 thinkingFormat（deepseek ⇒ DEEPSEEK），
+        // 但 mid-convo 标志仍然缺席 —— 本用例钉的就是后者。
+        assertThat(CatalogCompatRules.completions("deepseek", "deepseek-v4-flash")
+            .supportsMidConvoSystemMessages()).isNull();
+        assertThat(CatalogCompatRules.completions("deepseek", "deepseek-flash")
+            .supportsMidConvoSystemMessages()).isNull();
+        // 别的 provider 上的同名 id 也不算（`provider === "deepseek"` 是判据的一半）——
+        // opencode 也不在 A-09 的格式常量表里（java 不携带该 provider）⇒ 仍是 NONE。
         assertThat(CatalogCompatRules.completions("opencode", "deepseek-v4-pro"))
             .isEqualTo(ModelCompat.NONE);
     }
@@ -121,8 +125,12 @@ class CatalogCompatRulesTest {
     void kimiK3IsNotCoveredHere() {
         // pi 对 Kimi K3 会给 supportsMidConvoToolAdditions —— 那是 moonshot/fireworks/opencode
         // 的规则，本仓的内置目录里没有这些模型 ⇒ 本抄本**不实现**它（docs/53 §4.4）。
-        assertThat(CatalogCompatRules.completions("moonshotai", "kimi-k3"))
-            .isEqualTo(ModelCompat.NONE);
+        // 包 A-09：moonshotai 的 provider 级常量给的是 thinkingFormat（docs/58 §2.5(b)），
+        // 与那个标志无关。
+        assertThat(CatalogCompatRules.completions("moonshotai", "kimi-k3")
+            .supportsMidConvoToolAdditions()).isNull();
+        assertThat(CatalogCompatRules.completions("moonshotai", "kimi-k3")
+            .thinkingFormat()).isEqualTo(ThinkingFormat.DEEPSEEK);
     }
 
     // ── 内置目录确实用上了这些规则 ─────────────────────────────
@@ -145,7 +153,11 @@ class CatalogCompatRulesTest {
         var flash = catalog.find(ModelId.of("deepseek", "deepseek-v4-flash")).orElseThrow();
 
         assertThat(pro.compat().supportsMidConvoSystemMessages()).isTrue();
-        assertThat(flash.compat()).isEqualTo(ModelCompat.NONE);
+        // 包 A-09：两条现在都携带 provider 级的 thinkingFormat（pi deepseekCompat :2784）；
+        // flash 仍然没有 mid-convo 标志。
+        assertThat(pro.compat().thinkingFormat()).isEqualTo(ThinkingFormat.DEEPSEEK);
+        assertThat(flash.compat().supportsMidConvoSystemMessages()).isNull();
+        assertThat(flash.compat().thinkingFormat()).isEqualTo(ThinkingFormat.DEEPSEEK);
     }
 
     @Test
@@ -181,5 +193,73 @@ class CatalogCompatRulesTest {
         assertThat(compat.supportsMidConvoSystemMessages()).isTrue();
         assertThat(compat.requiresReasoningContentOnAssistantMessages()).isTrue();
         assertThat(compat.maxTokensField()).isEqualTo(MaxTokensField.MAX_TOKENS);
+        // 包 A-09：目录标注的形状活过解析层（探测同值 ⇒ 冗余但一致）。
+        assertThat(compat.thinkingFormat()).isEqualTo(ThinkingFormat.DEEPSEEK);
+    }
+
+    // ── 包 A-09：per-provider 的 thinkingFormat 目录常量（docs/58 §2.5(b)）──
+
+    @Test
+    void theCatalogueAnnotatesTheFormatsDetectionCannotGive() {
+        // 探测给不出这三条（探测会把它们误判成 openai）⇒ pi 的目录常量是唯一来源。
+        assertThat(CatalogCompatRules.completions("moonshotai", "kimi-k2.5")
+            .thinkingFormat()).isEqualTo(ThinkingFormat.DEEPSEEK);
+        assertThat(CatalogCompatRules.completions("moonshotai-cn", "kimi-k2.5")
+            .thinkingFormat()).isEqualTo(ThinkingFormat.DEEPSEEK);
+        assertThat(CatalogCompatRules.completions("xiaomi", "mimo-v2-omni")
+            .thinkingFormat()).isEqualTo(ThinkingFormat.DEEPSEEK);
+        assertThat(CatalogCompatRules.completions("xiaomi-token-plan-cn", "mimo-v2-omni")
+            .thinkingFormat()).isEqualTo(ThinkingFormat.DEEPSEEK);
+        assertThat(CatalogCompatRules.completions("qwen-token-plan-cn", "qwen3-max")
+            .thinkingFormat()).isEqualTo(ThinkingFormat.QWEN);
+        // pi generate-models.ts:2537 —— qwen-token-plan 的 supportsReasoningEffort
+        // 是明文常量 true（探测本来也给 true ⇒ 冗余，照抄 pi 写出来）。
+        assertThat(CatalogCompatRules.completions("qwen-token-plan-cn", "qwen3-max")
+            .supportsReasoningEffort()).isEqualTo(Boolean.TRUE);
+    }
+
+    @Test
+    void theCatalogueMirrorsPisRedundantFormatConstants() {
+        // 这四条探测已给同值（冗余），但 pi 的目录照写 ⇒ 照抄（docs/58 §2.5(b)）。
+        assertThat(CatalogCompatRules.completions("zai", "glm-5.2").thinkingFormat())
+            .isEqualTo(ThinkingFormat.ZAI);
+        assertThat(CatalogCompatRules.completions("zai-coding-cn", "glm-5.2").thinkingFormat())
+            .isEqualTo(ThinkingFormat.ZAI);
+        assertThat(CatalogCompatRules.completions("ant-ling", "ling-1t").thinkingFormat())
+            .isEqualTo(ThinkingFormat.ANT_LING);
+        assertThat(CatalogCompatRules.completions("deepseek", "deepseek-v4-pro").thinkingFormat())
+            .isEqualTo(ThinkingFormat.DEEPSEEK);
+        // ⚠️ zai 的 supportsReasoningEffort 在 pi 是**数据驱动**的
+        // （generate-models.ts:1396：`thinkingLevelMap !== undefined`）—— java 的内置
+        // 条目今天没有级别表 ⇒ 不标（null），由探测（isZai ⇒ false）兜底 ⇒ 与 pi 的
+        // 有效值 false 等价（数据漂移登记见 docs/58 §9）。
+        assertThat(CatalogCompatRules.completions("zai", "glm-5.2").supportsReasoningEffort())
+            .isNull();
+        // 常量表之外的 provider 仍是 NONE（minimax 是 anthropic 车道、ollama 探测给 openai）。
+        assertThat(CatalogCompatRules.completions("ollama", "llama3.2"))
+            .isEqualTo(ModelCompat.NONE);
+    }
+
+    @Test
+    void theBuiltInModelDataCarriesTheCatalogueFormats() {
+        // ModelData.model(...) 现在走 CatalogCompatRules.completions（与
+        // BuiltinCatalog.deepseekModel 的先例同形）⇒ 内置条目真的携带标注。
+        var kimi = ModelData.moonshotAiModels()
+            .find(ModelId.of("moonshotai", "kimi-k2.5")).orElseThrow();
+        assertThat(kimi.compat().thinkingFormat()).isEqualTo(ThinkingFormat.DEEPSEEK);
+        var glm = ModelData.zaiModels().find(ModelId.of("zai", "glm-4.7")).orElseThrow();
+        assertThat(glm.compat().thinkingFormat()).isEqualTo(ThinkingFormat.ZAI);
+        var qwen = ModelData.qwenTokenPlanCnModels()
+            .find(ModelId.of("qwen-token-plan-cn", "qwen3-max")).orElseThrow();
+        assertThat(qwen.compat().thinkingFormat()).isEqualTo(ThinkingFormat.QWEN);
+        assertThat(qwen.compat().supportsReasoningEffort()).isTrue();
+        var ling = ModelData.antLingModels()
+            .find(ModelId.of("ant-ling", "ling-1t")).orElseThrow();
+        assertThat(ling.compat().thinkingFormat()).isEqualTo(ThinkingFormat.ANT_LING);
+        // 表外 provider 不受影响。
+        assertThat(ModelData.ollamaModels().find(ModelId.of("ollama", "llama3.2"))
+            .orElseThrow().compat()).isEqualTo(ModelCompat.NONE);
+        assertThat(ModelData.miniMaxModels().find(ModelId.of("minimax", "MiniMax-M2.5"))
+            .orElseThrow().compat()).isEqualTo(ModelCompat.NONE);
     }
 }

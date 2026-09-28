@@ -18,10 +18,12 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
 import com.pijava.ai.catalog.BuiltinCatalog;
+import com.pijava.ai.catalog.ChatTemplateKwargValue;
 import com.pijava.ai.catalog.MaxTokensField;
 import com.pijava.ai.catalog.ModelCatalog;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
+import com.pijava.ai.catalog.ThinkingFormat;
 import com.pijava.ai.catalog.ThinkingTokenBudgetField;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
@@ -344,7 +346,93 @@ public final class ModelsJsonConfig {
             // 包 A-10 第 6 步：`supportsMaxOutputTokens` 的缺省（`true`）由解析层按车道补
             // （CompatResolver.forResponses）⇒ 这里同样不归一 —— 「用户没写」必须能与
             // 「用户写了 true」区分开，因为只有前者会吃车道缺省。
-            def.supportsMaxOutputTokens());
+            def.supportsMaxOutputTokens(),
+            // 包 A-09：四个思考开关字段。`thinkingFormat`/`supportsReasoningEffort` 原样
+            // 透传可空值（缺省由 CompatResolver.forCompletions 的探测补）；两个模板 map
+            // 在这里就完成校验（$var 闭集、Literal 只收标量），null 由 ModelCompat 的
+            // compact 构造器归一成空表。
+            thinkingFormatOf(providerId, model.id(), def.thinkingFormat()),
+            chatTemplateValuesOf(providerId, model.id(), "chatTemplateKwargs",
+                def.chatTemplateKwargs()),
+            chatTemplateValuesOf(providerId, model.id(), "chatTemplateArgs",
+                def.chatTemplateArgs()),
+            def.supportsReasoningEffort());
+    }
+
+    /**
+     * models.json 的 {@code thinkingFormat} 串 ⇒ {@link ThinkingFormat}（包 A-09）。
+     *
+     * <p>⚠️ 未知取值**响亮抛错**，理由与 {@link #maxTokensFieldOf} 完全相同：它是十一值
+     * 闭集，写错一个字母会让思考开关的形状静默换掉（甚至整个不发），而那种偏离没有任何
+     * 其它症状（pi 的 zod 联合同样拒绝未知取值）。</p>
+     */
+    private static ThinkingFormat thinkingFormatOf(String providerId, String modelId,
+                                                   String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return ThinkingFormat.parse(value).orElseThrow(() -> new IllegalStateException(
+            "models.json provider \"" + providerId + "\", model \"" + modelId
+                + "\": unknown compat.thinkingFormat \"" + value + "\" (expected one of: "
+                + "openai, openrouter, deepseek, together, baseten, zai, qwen, "
+                + "chat-template, qwen-chat-template, string-thinking, ant-ling)"));
+    }
+
+    /**
+     * models.json 的 {@code chatTemplateKwargs}/{@code chatTemplateArgs} 对象 ⇒
+     * {@link ChatTemplateKwargValue} 表（包 A-09）。缺席（{@code null}）原样返回 ——
+     * 空表归一在 {@link ModelCompat} 的 compact 构造器（pi 的 {@code ?? {}}）。
+     */
+    private static Map<String, ChatTemplateKwargValue> chatTemplateValuesOf(
+            String providerId, String modelId, String keyName, Map<String, Object> raw) {
+        if (raw == null) {
+            return null;
+        }
+        var out = new LinkedHashMap<String, ChatTemplateKwargValue>();
+        raw.forEach((key, value) ->
+            out.put(key, kwargValueOf(providerId, modelId, keyName, key, value)));
+        return out;
+    }
+
+    /**
+     * 一个声明值的分类（pi {@code ChatTemplateKwargValue}，{@code types.ts:87-95}）：
+     * 标量（含 {@code null}）⇒ {@link ChatTemplateKwargValue.Literal}；
+     * {@code {$var, omitWhenOff?}} ⇒ {@link ChatTemplateKwargValue.Var}。
+     *
+     * <p>⚠️ 其余形状（数组、缺 {@code $var} 的对象、{@code $var} 不在三值闭集、
+     * {@code omitWhenOff} 不是布尔）**响亮抛错** —— 与本文件 {@code maxTokensField}
+     * 同口径：静默降级会静默改变线格（pi 的 zod 同样拒绝）。</p>
+     *
+     * <p>⚠️ {@code Literal(null)} 是**合法值**（「写这个键，值是 null」，pi
+     * {@code resolveChatTemplateKwargValue:1050} 的早返回）—— 别把 JSON null 当缺席吞掉
+     * （{@code docs/58} R11）。</p>
+     */
+    private static ChatTemplateKwargValue kwargValueOf(String providerId, String modelId,
+                                                       String keyName, String key, Object raw) {
+        var where = "models.json provider \"" + providerId + "\", model \"" + modelId
+            + "\": compat." + keyName + "." + key;
+        if (raw instanceof Map<?, ?> obj) {
+            if (!(obj.get("$var") instanceof String varName)) {
+                throw new IllegalStateException(where
+                    + " is an object without a string \"$var\" (expected a scalar or "
+                    + "{\"$var\": \"thinking.enabled\"|\"thinking.effort\"|\"thinking.budget\"})");
+            }
+            var var = ChatTemplateKwargValue.ThinkingVar.parse(varName).orElseThrow(
+                () -> new IllegalStateException(where + " has an unknown $var \"" + varName
+                    + "\" (expected \"thinking.enabled\", \"thinking.effort\" or "
+                    + "\"thinking.budget\")"));
+            var omit = obj.get("omitWhenOff");
+            if (omit != null && !(omit instanceof Boolean)) {
+                throw new IllegalStateException(where + ".omitWhenOff must be a boolean");
+            }
+            return new ChatTemplateKwargValue.Var(var, Boolean.TRUE.equals(omit));
+        }
+        if (raw == null || raw instanceof String || raw instanceof Number
+                || raw instanceof Boolean) {
+            return new ChatTemplateKwargValue.Literal(raw);
+        }
+        throw new IllegalStateException(where + " must be a string, number, boolean, null "
+            + "or a {$var} object");
     }
 
     /**

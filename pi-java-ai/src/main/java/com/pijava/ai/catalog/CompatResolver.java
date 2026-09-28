@@ -88,7 +88,21 @@ public final class CompatResolver {
         var isOpenRouterDeveloperRoleModel = isOpenRouter
             && (modelName.startsWith("anthropic/") || modelName.startsWith("openai/"));
 
-        return resolved(compat,
+        // 包 A-09：思考开关的两个探测值（pi :1629/:1637-1638/:1646-1656）。
+        // ⚠️ **不许把目录值塞进探测**（docs/58 §4.4 R7）：moonshotai／xiaomi／qwen-token-plan*
+        // 的 pi 值是**目录覆盖**（generate-models.ts 的 per-provider 常量），不是探测 ——
+        // 混进探测会让「models.json 用户显式写 thinkingFormat:"openai"」被吞掉。
+        var isGrok = provider.equals("xai") || url.contains("api.x.ai");   // pi :1629
+        var detectedFormat = isDeepSeek ? ThinkingFormat.DEEPSEEK
+            : isZai ? ThinkingFormat.ZAI
+            : isTogether ? ThinkingFormat.TOGETHER
+            : isAntLing ? ThinkingFormat.ANT_LING
+            : isOpenRouter ? ThinkingFormat.OPENROUTER
+            : ThinkingFormat.OPENAI;                                        // pi :1646-1656
+        var detectedEffort = !isGrok && !isZai && !isMoonshot && !isTogether
+            && !isCloudflareAiGateway && !isNvidia && !isAntLing;           // pi :1637-1638
+
+        return withCompletions(resolved(compat,
             isDeepSeek,
             Boolean.FALSE,
             Boolean.FALSE,
@@ -114,7 +128,50 @@ public final class CompatResolver {
             // 包 A-10 第 6 步：`supportsMaxOutputTokens` 只被 **Responses** 车道读
             // （pi `openai-responses.ts:79`；azure 那份副本连读点都没有）⇒ 本车道不定义它
             // ⇒ 原样透传模型的显式取值（本车道的任何读点都不会碰它）。
-            null);
+            null), detectedFormat, detectedEffort);
+    }
+
+    /**
+     * 包 A-09：只属于 completions 车道的四个字段（pi {@code getCompat:1712-1715} 里
+     * {@code thinkingFormat}/{@code chatTemplateKwargs}/{@code chatTemplateArgs}/
+     * {@code supportsReasoningEffort} 那四行）。
+     *
+     * <p><b>为什么不扩 {@link #resolved}</b>（{@code docs/58 §4.4} R8）：它已经 16 个位置
+     * 形参，塞 4 个会变 20 个且 anthropic／responses／mistral 三条**不读这些字段**的车道
+     * 跟着改签。四个新字段只被 completions 读（pi 的形态链条全在
+     * {@code openai-completions.ts}）⇒ 单独一个私有方法，其余三条车道**零改动**
+     * （它们的解析产物里这四个字段保持缺席 —— 而没有读点会碰它们）。</p>
+     *
+     * <p>两个模板 map 不过 {@code pick}：探测面恒给空表（pi {@code detectCompat:1659-1660}
+     * 的 {@code chatTemplateKwargs: {}}），{@code explicit ?? {}} ≙ 显式值直接用
+     * （compact 构造器已把缺席归一成 {@code Map.of()}）。</p>
+     */
+    private static ModelCompat withCompletions(ModelCompat c, ThinkingFormat detectedFormat,
+                                               Boolean detectedSupportsReasoningEffort) {
+        return new ModelCompat(
+            c.allowEmptySignature(),
+            c.requiresReasoningContentOnAssistantMessages(),
+            c.supportsFinishReason(),
+            c.forceAdaptiveThinking(),
+            c.supportsMidConvoSystemMessages(),
+            c.supportsMidConvoToolAdditions(),
+            c.supportsMidConvoToolChanges(),
+            c.supportsAdditionalTools(),
+            c.supportsToolSearch(),
+            c.supportsTemperature(),
+            c.maxTokensField(),
+            c.supportsStore(),
+            c.supportsDeveloperRole(),
+            c.supportsStrictMode(),
+            c.supportsLongCacheRetention(),
+            c.supportsCacheControlOnTools(),
+            c.thinkingTokenBudgetField(),
+            c.supportsThinkingTokenBudget(),
+            c.supportsMaxOutputTokens(),
+            c.thinkingFormat() != null ? c.thinkingFormat() : detectedFormat,
+            c.chatTemplateKwargs(),
+            c.chatTemplateArgs(),
+            pick(c.supportsReasoningEffort(), detectedSupportsReasoningEffort));
     }
 
     /**
@@ -252,7 +309,14 @@ public final class CompatResolver {
             c.thinkingTokenBudgetField() != null
                 ? c.thinkingTokenBudgetField() : thinkingTokenBudgetField,
             pick(c.supportsThinkingTokenBudget(), supportsThinkingTokenBudget),
-            pick(c.supportsMaxOutputTokens(), supportsMaxOutputTokens));
+            pick(c.supportsMaxOutputTokens(), supportsMaxOutputTokens),
+            // 包 A-09：四个 completions 专属字段**原样透传** ——「explicit ?? detected」
+            // 的合一发生在 withCompletions（只有 completions 车道调它）；其余三条车道
+            // 拿到的就是模型上的原值（可能是 null —— 而没有读点会碰它们）。
+            c.thinkingFormat(),
+            c.chatTemplateKwargs(),
+            c.chatTemplateArgs(),
+            c.supportsReasoningEffort());
     }
 
     private static Boolean pick(Boolean explicit, Boolean detected) {

@@ -1,5 +1,7 @@
 package com.pijava.ai.catalog;
 
+import java.util.Map;
+
 /**
  * Per-model provider compatibility flags (pi {@code Model.compat}).
  *
@@ -236,6 +238,18 @@ package com.pijava.ai.catalog;
  *        {@link com.pijava.ai.protocol.ResponsesMessageConverter}，那条区别由**车道名**分支实现，
  *        而**不是**由本组件的取值 —— 在 azure 车道上它根本不被读（显式写 {@code false} 也无效，
  *        与 pi 一致）。⇒ 车道名分支是这条约束的唯一实现处，见 {@code docs/57 §11}。</p>
+ * @param thinkingFormat pi {@code compat.thinkingFormat}（包 A-09，
+ *        {@code openai-completions.ts:873-970}，completions 车道独有）：思考开关的十一种
+ *        线格形状。{@code null} ≙「按端点探测」（六段三元链，回落 {@code openai}，
+ *        {@code detectCompat:1646-1656}），显式值赢 ⇒ **三态**；其余三条车道不读它。
+ * @param chatTemplateKwargs pi {@code compat.chatTemplateKwargs}（包 A-09，{@code types.ts:708}）：
+ *        {@code chat-template} 形状声明的 kwargs（{@code $var} 在请求期解析）。探测恒给空表
+ *        ⇒ {@code null} 被 compact 构造器归一成 {@code Map.of()}（pi 的 {@code ?? {}}）⇒ 二态。
+ * @param chatTemplateArgs pi {@code compat.chatTemplateArgs}（包 A-09，{@code types.ts:710}）：
+ *        {@code baseten} 形状声明的 args，语义同上一键。
+ * @param supportsReasoningEffort pi {@code compat.supportsReasoningEffort}（包 A-09）：端点是否吃
+ *        {@code reasoning_effort}。{@code null} ≙ 探测（七谓词否定合取，
+ *        {@code detectCompat:1637-1638}）⇒ **三态**。
  */
 public record ModelCompat(boolean allowEmptySignature,
                           Boolean requiresReasoningContentOnAssistantMessages,
@@ -255,7 +269,57 @@ public record ModelCompat(boolean allowEmptySignature,
                           Boolean supportsCacheControlOnTools,
                           ThinkingTokenBudgetField thinkingTokenBudgetField,
                           Boolean supportsThinkingTokenBudget,
-                          Boolean supportsMaxOutputTokens) {
+                          Boolean supportsMaxOutputTokens,
+                          ThinkingFormat thinkingFormat,
+                          Map<String, ChatTemplateKwargValue> chatTemplateKwargs,
+                          Map<String, ChatTemplateKwargValue> chatTemplateArgs,
+                          Boolean supportsReasoningEffort) {
+
+    /** Compact constructor（包 A-09）：两个模板 map 的 {@code null} 归一成空表（pi 的
+     *  {@code ?? {}}，{@code getCompat:1714-1715}）⇒ 二态、读点免判空；防御性复制
+     *  与本仓其它 record 一致。 */
+    public ModelCompat {
+        chatTemplateKwargs = chatTemplateKwargs == null
+            ? Map.of() : Map.copyOf(chatTemplateKwargs);
+        chatTemplateArgs = chatTemplateArgs == null
+            ? Map.of() : Map.copyOf(chatTemplateArgs);
+    }
+
+    /**
+     * 十九参便捷构造（包 A-10 之后的**规范**构造 —— 那时组件就这十九个）：包 A-09 新增的
+     * 四个缺席（{@code thinkingFormat}/{@code supportsReasoningEffort} 传 {@code null}
+     * ≙「按车道探测」，两个模板 map 归一成空表）。旧规范形态降级为便捷构造器 ⇒
+     * {@code CompatResolver.resolved} 与若干夹具（{@code CompatResolverTest:214}）
+     * **零改签**（与包 A-01/A7/A-10 同一手法）。
+     */
+    public ModelCompat(boolean allowEmptySignature,
+                       Boolean requiresReasoningContentOnAssistantMessages,
+                       boolean supportsFinishReason,
+                       boolean forceAdaptiveThinking,
+                       Boolean supportsMidConvoSystemMessages,
+                       Boolean supportsMidConvoToolAdditions,
+                       Boolean supportsMidConvoToolChanges,
+                       Boolean supportsAdditionalTools,
+                       Boolean supportsToolSearch,
+                       boolean supportsTemperature,
+                       MaxTokensField maxTokensField,
+                       Boolean supportsStore,
+                       Boolean supportsDeveloperRole,
+                       Boolean supportsStrictMode,
+                       Boolean supportsLongCacheRetention,
+                       Boolean supportsCacheControlOnTools,
+                       ThinkingTokenBudgetField thinkingTokenBudgetField,
+                       Boolean supportsThinkingTokenBudget,
+                       Boolean supportsMaxOutputTokens) {
+        this(allowEmptySignature, requiresReasoningContentOnAssistantMessages,
+             supportsFinishReason, forceAdaptiveThinking, supportsMidConvoSystemMessages,
+             supportsMidConvoToolAdditions, supportsMidConvoToolChanges,
+             supportsAdditionalTools, supportsToolSearch,
+             supportsTemperature, maxTokensField, supportsStore, supportsDeveloperRole,
+             supportsStrictMode, supportsLongCacheRetention, supportsCacheControlOnTools,
+             thinkingTokenBudgetField, supportsThinkingTokenBudget, supportsMaxOutputTokens,
+             null, null, null, null);
+    }
 
     /**
      * 十八参便捷构造（包 A-10 之前的**规范**构造 —— 那时组件就这十八个）：

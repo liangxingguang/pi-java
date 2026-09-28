@@ -4,9 +4,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
+import com.pijava.ai.catalog.ChatTemplateKwargValue;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
+import com.pijava.ai.catalog.ThinkingFormat;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 
@@ -664,6 +667,118 @@ class ModelsJsonConfigTest {
             + " \"tiers\": [{\"inputTokensAbove\": 272000, \"input\": 2.4}]}"))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("tier");
+    }
+
+    // ------------------------------------------------- 包 A-09：思考开关的四个键
+
+    /**
+     * 包 A-09：{@code thinkingFormat}／{@code supportsReasoningEffort}／两个模板 map
+     * 从 models.json 读进 {@code compat}。
+     *
+     * <p>⚠️ 三个形状（{@code chat-template}/{@code qwen-chat-template}/{@code string-thinking}）
+     * 在 pi 的生成数据里**没有任何生产者**（{@code docs/58 §2.5(c)}）⇒ models.json 是它们
+     * 的唯一入口，本条是那个入口的钉子。</p>
+     */
+    @Test
+    void readsTheThinkingFormatKeysFromCompatBlock() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "openai-completions",
+              "models": [{"id": "m1", "compat": {
+                "thinkingFormat": "chat-template",
+                "supportsReasoningEffort": false,
+                "chatTemplateKwargs": {
+                  "enable_thinking": {"$var": "thinking.enabled", "omitWhenOff": true},
+                  "effort": {"$var": "thinking.effort"},
+                  "budget": {"$var": "thinking.budget"},
+                  "mode": "fast",
+                  "count": 3,
+                  "flag": false,
+                  "nothing": null
+                },
+                "chatTemplateArgs": {"enable_thinking": {"$var": "thinking.enabled"}}
+              }}]
+            }}}
+            """);
+
+        var compat = config.catalog().find(ModelId.of("relay", "m1")).orElseThrow().compat();
+
+        assertThat(compat.thinkingFormat()).isEqualTo(ThinkingFormat.CHAT_TEMPLATE);
+        assertThat(compat.supportsReasoningEffort()).isFalse();
+        assertThat(compat.chatTemplateKwargs()).containsExactlyInAnyOrderEntriesOf(Map.of(
+            "enable_thinking", new ChatTemplateKwargValue.Var(
+                ChatTemplateKwargValue.ThinkingVar.ENABLED, true),
+            "effort", new ChatTemplateKwargValue.Var(ChatTemplateKwargValue.ThinkingVar.EFFORT),
+            "budget", new ChatTemplateKwargValue.Var(ChatTemplateKwargValue.ThinkingVar.BUDGET),
+            "mode", new ChatTemplateKwargValue.Literal("fast"),
+            "count", new ChatTemplateKwargValue.Literal(3),
+            "flag", new ChatTemplateKwargValue.Literal(false),
+            // ★ R11 的入口半边：字面量 null 是「写这个键，值是 null」，不是「键缺席」。
+            "nothing", new ChatTemplateKwargValue.Literal(null)));
+        assertThat(compat.chatTemplateArgs()).containsOnlyKeys("enable_thinking");
+    }
+
+    /** 包 A-09：{@code thinkingFormat} 的未知取值**响亮抛错**（同 {@code maxTokensField} 口径）。 */
+    @Test
+    void anUnknownThinkingFormatIsALoudError() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "openai-completions",
+              "models": [{"id": "typo", "compat": {"thinkingFormat": "openai-ish"}}]
+            }}}
+            """);
+
+        assertThatThrownBy(() -> config.catalog())
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("relay")
+            .hasMessageContaining("typo")
+            .hasMessageContaining("thinkingFormat")
+            .hasMessageContaining("openai-ish");
+    }
+
+    /** 包 A-09：{@code $var} 不在三值闭集 ⇒ 响亮抛错（pi 的 zod 同样拒绝）。 */
+    @Test
+    void anUnknownTemplateVarIsALoudError() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "openai-completions",
+              "models": [{"id": "m1", "compat": {
+                "chatTemplateKwargs": {"x": {"$var": "thinking.volume"}}
+              }}]
+            }}}
+            """);
+
+        assertThatThrownBy(() -> config.catalog())
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("$var")
+            .hasMessageContaining("thinking.volume");
+    }
+
+    /** 包 A-09：非标量字面量（数组／缺 {@code $var} 的对象）⇒ 响亮抛错，不静默丢弃。 */
+    @Test
+    void aNonScalarTemplateValueIsALoudError() {
+        var array = write("""
+            {"providers": {"relay": {
+              "api": "openai-completions",
+              "models": [{"id": "m1", "compat": {"chatTemplateArgs": {"x": [1, 2]}}}]
+            }}}
+            """);
+        assertThatThrownBy(() -> array.catalog())
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("chatTemplateArgs.x");
+
+        var noVar = write("""
+            {"providers": {"relay": {
+              "api": "openai-completions",
+              "models": [{"id": "m1", "compat": {"chatTemplateArgs": {"x": {"on": true}}}}]
+            }}}
+            """);
+        assertThatThrownBy(() -> noVar.catalog())
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("$var");
     }
 
     private ModelsJsonConfig write(String json) {

@@ -266,4 +266,115 @@ class CompatResolverTest {
         assertThat(MaxTokensField.MAX_COMPLETION_TOKENS.wireName())
             .isEqualTo("max_completion_tokens");
     }
+
+    // ── 包 A-09：思考开关的探测（pi detectCompat:1629-1660）─────────
+
+    @Test
+    void completionsDetectsTheThinkingFormatPerEndpoint() {
+        // pi :1646-1656 的六段三元链，**顺序即优先级**（deepseek > zai > together >
+        // ant-ling > openrouter > openai 回落）。
+        assertThat(CompatResolver.forCompletions(
+            model("deepseek", "deepseek-v4-pro"), "https://api.deepseek.com")
+            .thinkingFormat()).isEqualTo(ThinkingFormat.DEEPSEEK);
+        assertThat(CompatResolver.forCompletions(
+            model("", "glm-5.2"), "https://api.z.ai/api/paas/v4")
+            .thinkingFormat()).isEqualTo(ThinkingFormat.ZAI);
+        assertThat(CompatResolver.forCompletions(
+            model("together", "gpt-oss"), "https://api.together.ai/v1")
+            .thinkingFormat()).isEqualTo(ThinkingFormat.TOGETHER);
+        assertThat(CompatResolver.forCompletions(
+            model("ant-ling", "ling-1t"), "https://api.ant-ling.com/v1")
+            .thinkingFormat()).isEqualTo(ThinkingFormat.ANT_LING);
+        assertThat(CompatResolver.forCompletions(
+            model("openrouter", "anthropic/claude-opus-4-8"), "https://openrouter.ai/api/v1")
+            .thinkingFormat()).isEqualTo(ThinkingFormat.OPENROUTER);
+        assertThat(CompatResolver.forCompletions(
+            model("openai", "gpt-5"), "https://api.openai.com/v1")
+            .thinkingFormat()).isEqualTo(ThinkingFormat.OPENAI);
+    }
+
+    @Test
+    void completionsDetectsTheReasoningEffortSupport() {
+        // pi :1637-1638 —— 七谓词的否定合取。isGrok（:1629）是包 A-09 新增的谓词：
+        // xai 在 isNonStandard 里就有，但 effort 名单此前没有它。
+        assertThat(CompatResolver.forCompletions(
+            model("xai", "grok-4"), "https://api.x.ai/v1")
+            .supportsReasoningEffort()).isFalse();
+        assertThat(CompatResolver.forCompletions(
+            model("", "glm-5.2"), "https://api.z.ai/api/paas/v4")
+            .supportsReasoningEffort()).isFalse();
+        assertThat(CompatResolver.forCompletions(
+            model("moonshotai", "kimi-k2.5"), "https://api.moonshot.cn/v1")
+            .supportsReasoningEffort()).isFalse();
+        assertThat(CompatResolver.forCompletions(
+            model("openai", "gpt-5"), "https://api.openai.com/v1")
+            .supportsReasoningEffort()).isTrue();
+    }
+
+    @Test
+    void anExplicitThinkingFormatWinsOverTheDetection() {
+        // pi getCompat:1712 —— explicit ?? detected。⚠️ 这正是 R7「目录值不许进探测」
+        // 要保住的格子：deepseek 端点上用户显式写 openai 必须真的是 openai。
+        var explicit = new ModelCompat(false, null, true, false, null, null, null, null, null,
+            true, null, null, null, null, null, null, null, null, null,
+            ThinkingFormat.OPENAI, Map.of(), Map.of(), Boolean.FALSE);
+        var compat = CompatResolver.forCompletions(
+            model("deepseek", "deepseek-v4-pro", explicit), "https://api.deepseek.com");
+
+        assertThat(compat.thinkingFormat()).isEqualTo(ThinkingFormat.OPENAI);
+        assertThat(compat.supportsReasoningEffort()).isFalse();
+    }
+
+    @Test
+    void explicitTemplateMapsSurviveTheResolver() {
+        // 两个 map 不走 pick：探测面恒空 ⇒ 显式值直接活下来（pi 的 `?? {}`）。
+        var kwargs = Map.<String, ChatTemplateKwargValue>of("enable_thinking",
+            new ChatTemplateKwargValue.Var(ChatTemplateKwargValue.ThinkingVar.ENABLED, true));
+        var explicit = new ModelCompat(false, null, true, false, null, null, null, null, null,
+            true, null, null, null, null, null, null, null, null, null,
+            ThinkingFormat.CHAT_TEMPLATE, kwargs, Map.of(), null);
+        var compat = CompatResolver.forCompletions(
+            model("my-relay", "some-model", explicit), "https://relay.example.com/v1");
+
+        assertThat(compat.chatTemplateKwargs()).isEqualTo(kwargs);
+        // supportsReasoningEffort 缺席 ⇒ 探测（relay 不在七谓词名单 ⇒ 真）。
+        assertThat(compat.supportsReasoningEffort()).isTrue();
+    }
+
+    @Test
+    void theTemplateMapsAreEmptyNotNullByDefault() {
+        var compat = CompatResolver.forCompletions(
+            model("openai", "gpt-5"), "https://api.openai.com/v1");
+
+        assertThat(compat.chatTemplateKwargs()).isEmpty();
+        assertThat(compat.chatTemplateArgs()).isEmpty();
+    }
+
+    @Test
+    void theOtherLanesLeaveTheThinkingFieldsAlone() {
+        // R8：四个字段只被 completions 读 ⇒ 其余三条车道原样透传（默认缺席）。
+        assertThat(CompatResolver.forAnthropic(model("anthropic", "claude-fable-5"))
+            .thinkingFormat()).isNull();
+        assertThat(CompatResolver.forResponses(model("openai", "gpt-5"), false)
+            .supportsReasoningEffort()).isNull();
+        assertThat(CompatResolver.forMistral(model("mistral", "mistral-large-latest"))
+            .thinkingFormat()).isNull();
+    }
+
+    @Test
+    void thinkingFormatWireNamesArePisStrings() {
+        // ⚠️ 四个带连字符的名字**不等于**枚举名小写 ⇒ 必须逐个携带（parse 是精确匹配）。
+        assertThat(ThinkingFormat.CHAT_TEMPLATE.wireName()).isEqualTo("chat-template");
+        assertThat(ThinkingFormat.QWEN_CHAT_TEMPLATE.wireName())
+            .isEqualTo("qwen-chat-template");
+        assertThat(ThinkingFormat.STRING_THINKING.wireName()).isEqualTo("string-thinking");
+        assertThat(ThinkingFormat.ANT_LING.wireName()).isEqualTo("ant-ling");
+        assertThat(ThinkingFormat.OPENAI.wireName()).isEqualTo("openai");
+        // parse 与 wireName 互逆；未知与大小写偏差都落空（zod 是精确联合）。
+        for (var format : ThinkingFormat.values()) {
+            assertThat(ThinkingFormat.parse(format.wireName())).contains(format);
+        }
+        assertThat(ThinkingFormat.parse("OpenAI")).isEmpty();
+        assertThat(ThinkingFormat.parse("nonsense")).isEmpty();
+    }
 }
