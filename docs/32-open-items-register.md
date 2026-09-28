@@ -47,7 +47,7 @@
 | 类 | 含义 | 表内行数 | **未结** | 谁能推进 |
 |---|---|---:|---:|---|
 | **A** | 要**证据**才能定案（多数要先读 pi 源码） | 17 | **14** | 我（读 pi 源码 / 清点） |
-| **B** | **功能缺口**（pi 有、pi-java 无） | 86 | **58** | 我（另立包，多数需先出设计文档） |
+| **B** | **功能缺口**（pi 有、pi-java 无） | 91 | **62** | 我（另立包，多数需先出设计文档） |
 | **C** | 已裁决**不改 / 不做**，带触发条件 | 12 | —— | 不推进，除非触发条件成立 |
 | **D** | 小账（遥测/注释级，一处一行） | 10 | —— | 我，随时可做 |
 | **E** | 结构债（>500 行文件等） | 8 | —— | 我，与功能包搭车 |
@@ -55,7 +55,10 @@
 | **G** | 已结案（**别重开**） | 34 | —— | —— |
 | **H** | `docs/31` 之外，机械扫描**待复核** | **62**（§9.1–§9.4 实测；⚠️ 原记 69） | —— | 我（逐条复核后才能定档） |
 
-**真正的闸门 = A 未结 14 ＋ B 未结 58 ＝ 72 条**（F 类九条已于 **2026-09-20 全部裁定** ⇒ 转为工作项，不再是闸门；见 §7）。C/D/E 三类随时可做，没有一条阻塞合并。
+**真正的闸门 = A 未结 14 ＋ B 未结 62 ＝ 76 条**（F 类九条已于 **2026-09-20 全部裁定** ⇒ 转为工作项，不再是闸门；见 §7）。C/D/E 三类随时可做，没有一条阻塞合并。
+
+> **2026-09-29（包 A-09 收口）**：B 类新增 **B129–B133**（`docs/58 §10`）；其中 **B131 已裁决不改**
+> （pi 生成数据不可达，编号留 B 表以稳定代码引用）⇒ 未结 +4（58→62）。
 
 > **2026-09-20 第二次重建**（pi 重测 `71dca871b` → `3390bd936`，111 提交）：B 类 66 → **79**（新增 B67–B79，
 > 全部由 `docs/40 §1.3` 的 6 路重测撞出）；**C11 作废**（`addedToolNames` 被 pi 删除，裁决 R1）；
@@ -688,3 +691,8 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | B126 | **pi 的 `openai-codex-responses` 车道完全忽略 `maxTokens`** —— 全文件零命中（对比：另五条 OpenAI 系车道都写 `if (options?.maxTokens)`） | `docs/57 §3 P17`（包 A-10，2026-09-28） | java **无该车道** ⇒ 今天不适用。登记以防将来移植时「照抄别的 OpenAI 车道」而凭空多发一个上限 |
 | B127 | **Responses 车道的 reasoning 走一条平行通道** —— `ResponsesOptions.reasoningEffort()` 读的是 `ApiOptions.extra["reasoningEffort"]`（**调用方给的字符串**），而**不是** `request.reasoning()`（pi 的 `SimpleStreamOptions.reasoning`）；`effortString` 还硬编了映射（`ResponsesMessageConverter:490-502`，代码里已有注释承认） | `docs/57 §10`（包 A-10 复核时发现，2026-09-28） | 同一概念两条来源，与 `compat.thinkingFormat` 一族（**A-09**）⇒ 包 A-10 **不动**。要收口得先裁「`ApiOptions.extra` 的五个键存废」（B107 的尾巴） |
 | B128 | **`thinkingBudgets` 无选项通道**（pi `SimpleStreamOptions.thinkingBudgets`）＋ 其余零消费者 compat 字段清单 | `docs/57 §6 R7`／`docs/53 §4.4`（包 A-10，2026-09-28） | 包 A-10 硬写 `ThinkingBudgets.DEFAULT`，与 pi 的 `options.thinkingBudgets === undefined` 等价（pi 的 harness **也不传**）⇒ 两侧今天同值。加通道 = 加一个没有生产者的形状。⚠️ `supportsUsageInStreaming`／`requiresThinkingAsText` 等零消费者字段的完整清单见 `docs/53 §4.4`，A-10 **不新增** |
+| B129 | **xiaomi 目录的 `requiresReasoningContentOnAssistantMessages: true` 未标注** —— pi 的 `xiaomiCompat`（`generate-models.ts:2476`）写了它，而探测给不出（`isDeepSeek` 对 xiaomi 为假）⇒ pi 的 xiaomi 模型回放助手历史时补 `reasoning_content:""`，java 不补 | `docs/58 §11 第 6 条`（包 A-09，2026-09-29） | **先于 A-09 的既有缺口**（A-09 范围只有四字段）；修法＝`CatalogCompatRules.completions` 对 `xiaomi*` 补该标志（一行），宜与下一次回放侧包搭车 |
+| B130 | **zai 的 `supportsReasoningEffort` 是数据驱动的** —— pi 从 models.dev 的 `reasoning_options` 算（`generate-models.ts:1396`：`thinkingLevelMap !== undefined`），java 内置 zai 条目**没有级别表** ⇒ 目录不标（null）、探测给 false，与 pi 的有效值 false **今天等价** | `docs/58 §9`（包 A-09，2026-09-29） | 触发式：若 java 的 zai 条目补上 `thinkingLevelMap`，判据必须改成 `!model.thinkingLevelMap().isEmpty()`（同 pi 表达式）而非常量 |
+| B131 | **ant-ling 的 else-if 穿透角** —— 手搓 `{thinkingFormat:"ant-ling", supportsReasoningEffort:true}` ＋ 无级别 ＋ `map.off` 为字符串时，pi 的链条穿透到 `:965` 写 `reasoning_effort=off值`；java 的 switch 形状不复制该穿透 | `docs/58 §11 第 4 条`（包 A-09，2026-09-29） | **已裁决不改**：pi 生成数据不可达（`antLingCompat` 明文 `supportsReasoningEffort:false` ＋ 探测七谓词含 isAntLing）⇒ 只有手搓 models.json 可达；编号留在 B 表以稳定代码引用（`ThinkingFormatWriter` javadoc） |
+| B132 | **together／baseten／opencode*／fireworks 的目录常量只落代码路径** —— pi 对这些 provider 写了 `thinkingFormat`/`chatTemplateArgs` 常量（`generate-models.ts:189-197/:1452-1461` 等），java 不携带这些 provider ⇒ `CatalogCompatRules` 不标 | `docs/58 §9`（包 A-09，2026-09-29） | 随 provider 扩展搭车：形状逻辑今天已全部在 `ThinkingFormatWriter`，届时只补目录常量 |
+| B133 | **openrouter 形状今天不可达** —— `OPENROUTER` 臂逻辑已落且夹具有钉，但本仓只有 `openrouter-images`（非 chat 车道），生产上没有模型会命中该形状 | `docs/58 §9`（包 A-09，2026-09-29） | 与 **A-02**（OpenRouter chat provider）同批，顺带吸收 B105 的 `cacheControlFormat` 与 `openRouterRouting` |

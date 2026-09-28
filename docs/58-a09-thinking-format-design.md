@@ -1,6 +1,10 @@
 # 58 - A-09：`compat.thinkingFormat` 的十一种思考开关形状设计
 
-**状态：设计待审（2026-09-28）。尚无代码。**
+**状态：✅ 已闭环（2026-09-29，`2f8acb9`→`14a165e` ＋ docs）。实施记录见 §12。**
+**闭环要点：十一形状全落（含无生成数据生产者的三个）；⚠️ R4 的前提被实测证伪 ——
+夹取先行使两派 null 语义在生产路径语义等价（探针零红＝变异体语义等价）；⚠️ R11 真有一个
+SDK 级的坑：`JsonValue.from(map 含 null)` 静默丢 null（SDK mapper 带 NON_NULL）⇒ `put`
+必须经树，`SdkJsonEscapeHatchTest` 新探针双向钉住；新登记 B129–B133。**
 
 > 本包裁决 `docs/48 §5` 的 **A-09** 行（P1）与 `docs/53 §4.4` 归属表分给它的四个 compat 字段
 > （`thinkingFormat` / `chatTemplateKwargs` / `chatTemplateArgs` / `supportsReasoningEffort`）。
@@ -738,9 +742,14 @@ final class ThinkingFormatWriter {
 
 ## 9. 未覆盖与登记（预计）
 
+> **终态**：本节五条已落号 —— zai 数据漂移 ⇒ **B130**、不携带 provider 的目录常量 ⇒ **B132**、
+> openrouter 形状不可达 ⇒ **B133**；`thinkingBudgets`（R9）与 B127（R10）保持既有登记不动。
+> 实施期**另增**两条：xiaomi 的回放目录值 ⇒ **B129**、ant-ling 的 else-if 穿透角 ⇒ **B131**
+> （逐条见 `docs/32 §3` 与 §12.6）。
+
 - **`zai` 的 `supportsReasoningEffort` 数据漂移**：pi 从 models.dev 的 `reasoning_options` 算
   （`generate-models.ts:1396`），java 内置条目无级别表 ⇒ 取 `false`。若 java 的 zai 条目
-  日后补上 `thinkingLevelMap`，本判据应改成 `!model.thinkingLevelMap().isEmpty()`
+ 日后补上 `thinkingLevelMap`，本判据应改成 `!model.thinkingLevelMap().isEmpty()`
   （**同 pi 的表达式**）而不是常量。
 - **`together`／`baseten`／`opencode*`／`fireworks` 的目录常量**：java 不携带这些 provider
   ⇒ 只落**代码路径**，不落目录标注（登记）。
@@ -748,3 +757,121 @@ final class ThinkingFormatWriter {
   与 A-02 的 `openRouterRouting` 同批。
 - **`thinkingBudgets` 选项通道**：R9，仍不接。
 - **B127**（Responses 的平行 `reasoningEffort`）：R10，保持登记。
+
+---
+
+## 10. 登记终态（编号确认）
+
+| # | 内容 | 类别/状态 |
+|---|---|---|
+| **B129** | xiaomi 目录的 `requiresReasoningContentOnAssistantMessages: true`（pi `xiaomiCompat:2476`，探测给不出）未标注 —— **先于 A-09 的既有缺口**，不在本包四字段范围 | B 类未结 |
+| **B130** | zai 的 `supportsReasoningEffort` 数据漂移（§9 第一条；今天两侧有效值同 false ⇒ 等价） | B 类未结（触发式） |
+| **B131** | ant-ling 的 else-if 穿透角：手搓 `{thinkingFormat:"ant-ling", supportsReasoningEffort:true}` ＋ 无级别 ＋ `map.off` 字符串时，pi 的链条穿透到 `:965` 写 `reasoning_effort=off值`；switch 形状不复制。**pi 生成数据不可达**（`antLingCompat` 明文 false ＋ 探测七谓词含 isAntLing） | 已裁决不改（编号留在 B 表以稳定代码引用） |
+| **B132** | together／baseten／opencode*／fireworks 的目录常量只落代码路径（java 不携带这些 provider） | B 类未结（随 provider 扩展） |
+| **B133** | openrouter 形状逻辑已落、今天不可达（无 OpenRouter chat 车道），与 A-02 同批 | B 类未结（随 A-02） |
+
+R9（`thinkingBudgets` ⇒ B128）与 R10（Responses 平行通道 ⇒ B127）保持既有登记，本包不动。
+
+## 11. 设计结论被实测推翻 / 更正之处
+
+1. ★ **R4 的前提证伪**（§2.4/§5 R4/§7 探针表）：设计断言「统一成一种会改变线格：
+   `zai`/`baseten` 在 `map[k] == null` 时不发」—— 但**夹取先行**（A-10 归属前移）使
+   显式 null 的级别被 `getSupportedThinkingLevels` 踢出可用集，`map[夹取后级别]` 只可能是
+   缺席或字符串 ⇒ 两派在**一切可达输入**上语义等价。R4 探针实测**零红**（探针「零红」的
+   第五种成因：变异体语义等价）。两个助手仍照 pi 逐字保留（**文本保真**，非行为分歧）；
+   夹具改钉「夹取先行」本身（`anExplicitNullClampsTheLevelAway`：跳过夹取会发 `"medium"`
+   而红，真值 `"high"`）。§7 的「R4 反向探针必须恰红」预期作废。
+2. ★ **§4.5 草图的 `put` 有一个 SDK 级的坑**：`JsonValue.from(map 含 null)` 被 SDK mapper
+   的 NON_NULL inclusion **静默丢键** —— 恰好是 R11 警告的「最容易被静默做错」在**工具层**
+   的再现（设计只防了 `Optional` 语义层）。修法：`put` 先以无 inclusion 的 mapper 建树
+   （`NullNode` 存活）再 `JsonValue.from(tree)`；`SdkJsonEscapeHatchTest` 新用例把
+   「map 路丢／树路活」两个方向都钉死（升级 SDK 必须重跑）。
+3. **§7 先红预测「全红」不精确**：负对照用例（负断言）在零实现下**空绿** —— openai 段
+   8 例中实红 5、四臂 12 例中实红 10、三臂 6 例全红、模板段 9 例中实红 8。
+4. **ant-ling 穿透角**（§2.2 事实 3 的边界）：「落在 `:962-970` 的只有 openai」在
+   **手搓 compat** 下不严格成立（见 B131）；pi 生成数据内成立，switch 形状不复制穿透。
+5. **§4.6 草图的 baseten off 支冗余**：`hasEntry(off) ? mapped(off) : empty` ≡ `mapped(off)`
+   （缺席与显式 null 都返回空）—— 实现取等价简形，pi 语义逐项核对无差。
+6. **xiaomi 的目录回放值**（§2.5(b) 表未列全）：pi `xiaomiCompat` 还写了
+   `requiresReasoningContentOnAssistantMessages: true`，探测给不出 ⇒ 按范围纪律不扩权，
+   登记 B129。
+
+## 12. 实施记录（2026-09-29，闭环）
+
+### 12.1 提交
+
+| # | commit | 内容 |
+|---|---|---|
+| 1 | `cbbcaeb` | 本设计文档（2026-09-28） |
+| 2 | `2f8acb9` | 四字段能进、能解析（§4.1–4.4/4.6/4.7）：`ThinkingFormat`＋`ChatTemplateKwargValue`＋`ModelCompat` 19→23＋`withCompletions`＋目录常量＋models.json 四键 |
+| 3 | `a063d9e` | `openai` 臂＋R5（`reasoning_effort` 进类型化名单）＋预算上提（一次算、两消费）＋先红夹具骨架 |
+| 4 | `80128f4` | zai／qwen／deepseek／ant-ling 四臂 |
+| 5 | `9c249ef` | together／openrouter／string-thinking 三臂 |
+| 6 | `14a165e` | `$var` 解析＋qwen-chat-template／chat-template／baseten 三臂＋R11（含 SDK 树路修复） |
+| 7 | （本提交） | docs 收口：本文档 §10–12 ＋ `docs/32` B129–B133 ＋ `docs/41:76` 划行 ＋ `docs/48` banner/表行 ＋ `docs/57 §12.3` 回执 |
+
+### 12.2 行为面（本包实际改变了什么）
+
+- **completions 车道从「一个思考字段都不发」到十一形状全发**（§6 可达性表照单兑现）：
+  今天可达的修复＝openai 形状的 `reasoning_effort`（含 `map.off` 字符串的关闭支）＋
+  deepseek/zai/ant-ling 三个显式形状＋moonshotai*/xiaomi*/qwen-token-plan-cn 内置条目
+  的目录 `thinkingFormat`（此前 `ModelData` 恒给 `NONE`，探测把 moonshot/xiaomi/qwen
+  误判成 openai）。
+- **models.json** 新增四个 compat 键（`thinkingFormat`/`chatTemplateKwargs`/
+  `chatTemplateArgs`/`supportsReasoningEffort`），未知取值响亮抛错；`chat-template`/
+  `qwen-chat-template`/`string-thinking` 三形状自此有唯一入口。
+- **`SamplingParamsWriter`** 的类型化名单＋`reasoning_effort`（覆盖不并列，R5 实测
+  先红：`expected 1 but was 2`）。
+- **预算上提**（§4.5）：`buildParams` 一次算 `thinkingBudget`、链条 `$var` 与顶层字段
+  两消费 —— `ThinkingTokenBudgetWireTest` 7/7 保持绿（取值零变化）。
+- **零改动面**：其余三条车道（R8：`resolved` 不扩参、`withCompletions` 私有）；
+  `PiMessagesApi`/`FauxChatApi` 不经本链。
+
+### 12.3 先红与探针（全部实测）
+
+| 步骤 | 预测 | 实测 |
+|---|---|---|
+| 目录标注（提交 2） | 恰 3 红 | **恰 3 红**（moonshotai/xiaomi/qwen-token-plan-cn），既有 3 条 NONE 断言随口径更新 |
+| openai 臂（提交 3） | 全红 | 5 红＋3 负对照空绿（§11 第 3 条） |
+| R5 双写 | — | **1 红**（`expected: 1 but was: 2`，链条落地后、reroute 落地前如实观察到） |
+| 四臂（提交 4） | 各自红 | 10 红＋2 负对照空绿 |
+| 三臂（提交 5） | 各自红 | 6 红 |
+| 模板三臂（提交 6） | 各自红 | 8 红＋1 R6 对照空绿 |
+| **R4 探针**（strictEffort→orLevel） | 必须恰红 | **零红** ⇒ 前提证伪（§11 第 1 条） |
+| R4 替代探针（zai 回落拆除） | — | 恰 1 红（回落语义有牙） |
+| clear_thinking 守卫拆除 | — | 恰 1 红（enabled/disabled 形状差有牙） |
+| ANT_LING 顺带写 effort | — | 恰 1 红（臂终止性有牙） |
+| TOGETHER 门拆除 | — | 恰 1 红 |
+| OPENROUTER off-null 门拆除 | — | 恰 1 红 |
+| **R11a**（`Literal(null)` 改不写） | 必须恰红 | **恰 1 红** |
+| **R11b**（`put` 不经树） | — | **恰 1 红**（树路端到端承重） |
+| **R6**（chat-template 空声明回落 openai） | 必须恰红 | **恰 1 红** |
+
+每个探针回滚后复跑全绿；提交时 `grep PROBE` 零残留。
+
+### 12.4 测试与行数
+
+- `pi-java-ai`：1058 ⇒ **1108**（`ThinkingFormatWireTest` 35、`CompatResolverTest` +7、
+  `ModelsJsonConfigTest` +4、`CatalogCompatRulesTest` +3 改 3、`SdkJsonEscapeHatchTest` +1）。
+- 全 reactor `mvn test`：**14/14 SUCCESS**（收口时复跑）。checkstyle 零新违规。
+- 新文件：`ThinkingFormat` 90、`ChatTemplateKwargValue` 94、`ThinkingFormatWriter` 284。
+- `ModelCompat` 435 ⇒ **499**（≤500 达标：表行让位给 @param，沿用 A-01/A-10 先例）。
+- `OpenAICompletionsMessageConverter` 513 ⇒ **513**（存量超限；本包净零增 —— §4.5 的
+  「不再往里加」兑现）。
+- `ThinkingFormatWireTest` 722 行：测试文件，同目录既有先例 `ModelsJsonConfigTest` 793／
+  `OpenAIResponsesApiTest` 716 ⇒ 不拆，如实登记。
+
+### 12.5 教训（进记忆）
+
+1. **夹具「把人脑里的模型当契约」再现**（第六次形态）：R4 用例按设计稿的 §2.4 表断言
+   「显式 null ⇒ 级别名」，没先沿**夹取**读一遍可达状态 —— 真值是「null 级别被夹走」。
+   断言「某值在 T 时刻是什么」前，先从两侧源码把 T 时刻的**全部前级变换**走一遍。
+2. **探针零红的第五种成因实锤**：变异体语义等价（前四种：变异没落地/夹具没牙/通道没
+   夹具/假变异）。「设计稿说必须恰红」不是证据 —— 跑出来的红才是。
+3. **R11 的坑在工具层不在语义层**：设计防住了 `Optional` 表达不了 null，没防住 SDK 的
+   `JsonValue.from` 丢 null —— **每层抽象都要单独问一次「null 在这里怎么死」**。
+
+### 12.6 下一步
+
+`docs/48` banner 的候选顺位：**A-02**（OpenRouter chat 车道 —— 顺带吸收 B133/B105 与
+`openRouterRouting`）或 **A-14**（provider retry `x-should-retry`）。待用户裁决。

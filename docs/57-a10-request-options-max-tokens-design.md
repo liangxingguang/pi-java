@@ -553,6 +553,13 @@ RED-4／RED-5 是**结构性**先红（类不存在 ⇒ 编译失败），与包
 `ModelThinkingLevels.clamp` 自此有了第一个生产调用者（`docs/46 §7` 的 B15-残留-9 部分结案）。
 **A-09 直接复用本方法，不要再接一次。**
 
+> **A-09 回执（2026-09-29，`docs/58 §12`）**：已复用 —— `ThinkingFormatWriter.apply` 全文件
+> **只有一个**级别读点（`SimpleOptions.clampedReasoningEffort`），零二次夹取；且「夹取先行」
+> 被两条线格夹具钉死（`theLevelIsClampedBeforeItReachesTheWire`：xhigh⇒`"high"`；
+> `anExplicitNullClampsTheLevelAway`：显式 null 级别被夹走 ⇒ 跳过夹取会红）。
+> ⚠️ 顺带的发现：正因夹取先行，A-09 的 R4「两派 null 语义」在生产路径**语义等价**
+> （显式 null 的级别到不了写点）—— 详见 `docs/58 §11` 第 1 条。
+
 ### 12.4 对照与不变量（实测）
 
 - **§7.1 的不变量**成立：三条 OpenAI 车道的既有 wire 夹具（`ResponsesToolsStrictWireTest`、
