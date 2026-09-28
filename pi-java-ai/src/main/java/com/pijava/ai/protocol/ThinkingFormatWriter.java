@@ -125,9 +125,35 @@ final class ThinkingFormatWriter {
                 // 从不写 reasoning_effort、也不读 supportsReasoningEffort。
                 level.map(ModelThinkingLevel::of).flatMap(map::mapped)
                     .ifPresent(s -> put(builder, "reasoning", Map.of("effort", s)));
-            // 提交 5-6 逐臂落地（docs/58 §8）：其余六个形状今天在链路上不写任何字段。
-            case QWEN_CHAT_TEMPLATE, CHAT_TEMPLATE, BASETEN, OPENROUTER,
-                 TOGETHER, STRING_THINKING -> { }
+            case OPENROUTER -> {
+                // pi :934-940 —— 本臂不读 supportsReasoningEffort，也不写顶层 effort。
+                if (level.isPresent()) {
+                    put(builder, "reasoning",
+                        Map.of("effort", orLevel(map, level.get()).orElseThrow()));
+                } else if (map.supportsExplicitOff()) {                       // pi :938-940
+                    // `?? "none"` 派：off 缺席 ⇒ "none" 兜底；显式 null ⇒ 整键不发。
+                    put(builder, "reasoning", Map.of("effort",
+                        map.mapped(ModelThinkingLevel.off()).orElse("none")));
+                }
+            }
+            case TOGETHER -> {
+                put(builder, "reasoning", Map.of("enabled", level.isPresent())); // pi :951
+                if (level.isPresent() && supportsEffort) {                    // pi :952-954
+                    orLevel(map, level.get())
+                        .ifPresent(s -> builder.reasoningEffort(ReasoningEffort.of(s)));
+                }
+            }
+            case STRING_THINKING -> {
+                // pi :957-961 —— 顶层 thinking 是**字符串**（与 zai/deepseek 的对象相对）。
+                if (level.isPresent()) {
+                    put(builder, "thinking", orLevel(map, level.get()).orElseThrow());
+                } else if (map.supportsExplicitOff()) {                       // pi :959-961
+                    put(builder, "thinking",
+                        map.mapped(ModelThinkingLevel.off()).orElse("none"));
+                }
+            }
+            // 提交 6 落地（docs/58 §8）：其余三个形状今天在链路上不写任何字段。
+            case QWEN_CHAT_TEMPLATE, CHAT_TEMPLATE, BASETEN -> { }
         }
     }
 

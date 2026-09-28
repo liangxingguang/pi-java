@@ -364,6 +364,129 @@ class ThinkingFormatWireTest {
         assertThat(body.has("reasoning_effort")).isFalse();
     }
 
+    // ── together 形状（pi :946-954）────────────────────────────────────
+
+    /**
+     * {@code reasoning:{enabled}} **无门恒发**（pi :951 在 supportsReasoningEffort 之外）；
+     * effort 是 `??` 派且带门。⚠️ reasoning 对象里**没有** effort 键（与 openrouter 的
+     * 同名对象形状不同 —— 键集断言钉住区别）。
+     */
+    @Test
+    void togetherSendsTheEnabledReasoningFlag() throws Exception {
+        var on = body(model(compat(ThinkingFormat.TOGETHER, Boolean.TRUE, Map.of(), Map.of()),
+                ThinkingLevelMap.empty(), Map.of()),
+            Optional.of(new ThinkingLevel.Medium()));
+        assertThat(on.path("reasoning").path("enabled").asBoolean()).isTrue();
+        assertThat(on.path("reasoning").has("effort")).isFalse();
+        assertThat(on.path("reasoning_effort").asText()).isEqualTo("medium");
+
+        var off = body(model(compat(ThinkingFormat.TOGETHER, Boolean.TRUE, Map.of(), Map.of()),
+                ThinkingLevelMap.empty(), Map.of()),
+            Optional.empty());
+        assertThat(off.path("reasoning").path("enabled").asBoolean()).isFalse();
+        assertThat(off.has("reasoning_effort")).isFalse();
+    }
+
+    /** 映射值赢（pi :953 的 `??` 派）；门关 ⇒ reasoning 照发、effort 不发。 */
+    @Test
+    void togetherMapsTheEffortAndHonorsTheGate() throws Exception {
+        var map = ThinkingLevelMap.of(Map.of(
+            ModelThinkingLevel.of(new ThinkingLevel.Medium()), Optional.of("MED")));
+        assertThat(body(model(compat(ThinkingFormat.TOGETHER, Boolean.TRUE, Map.of(), Map.of()),
+                map, Map.of()), Optional.of(new ThinkingLevel.Medium()))
+            .path("reasoning_effort").asText()).isEqualTo("MED");
+        assertThat(body(model(compat(ThinkingFormat.TOGETHER, Boolean.FALSE, Map.of(), Map.of()),
+                ThinkingLevelMap.empty(), Map.of()), Optional.of(new ThinkingLevel.Medium()))
+            .has("reasoning_effort")).isFalse();
+    }
+
+    // ── openrouter 形状（pi :931-940）──────────────────────────────────
+
+    /**
+     * {@code reasoning:{effort}} 嵌套对象。⚠️ 本臂**不读** supportsReasoningEffort、
+     * 也从不写顶层 reasoning_effort —— 用关死的门钉住「不读」。
+     */
+    @Test
+    void openrouterSendsTheNestedEffort() throws Exception {
+        var map = ThinkingLevelMap.of(Map.of(
+            ModelThinkingLevel.of(new ThinkingLevel.Medium()), Optional.of("MED")));
+        var mapped = body(model(compat(ThinkingFormat.OPENROUTER, Boolean.FALSE,
+                Map.of(), Map.of()), map, Map.of()),
+            Optional.of(new ThinkingLevel.Medium()));
+        assertThat(mapped.path("reasoning").path("effort").asText()).isEqualTo("MED");
+        assertThat(mapped.path("reasoning").has("enabled")).isFalse();
+        assertThat(mapped.has("reasoning_effort")).isFalse();
+
+        assertThat(body(model(compat(ThinkingFormat.OPENROUTER, Boolean.FALSE,
+                Map.of(), Map.of()), ThinkingLevelMap.empty(), Map.of()),
+            Optional.of(new ThinkingLevel.Low()))
+            .path("reasoning").path("effort").asText()).isEqualTo("low");
+    }
+
+    /**
+     * 关闭支的 off 三态（pi :938-940）：缺席 ⇒ {@code "none"} 兜底（{@code ?? "none"} 派
+     * —— 与 deepseek 的「只当门用」不同，**值上线**）；字符串 ⇒ 映射值；显式 null ⇒ 键不发。
+     */
+    @Test
+    void openrouterOffStateUsesTheNoneFallback() throws Exception {
+        var offAbsent = body(model(compat(ThinkingFormat.OPENROUTER, null, Map.of(), Map.of()),
+                ThinkingLevelMap.empty(), Map.of()),
+            Optional.empty());
+        assertThat(offAbsent.path("reasoning").path("effort").asText()).isEqualTo("none");
+
+        var offString = body(model(compat(ThinkingFormat.OPENROUTER, null, Map.of(), Map.of()),
+                ThinkingLevelMap.of(Map.of(ModelThinkingLevel.off(), Optional.of("disable"))),
+                Map.of()),
+            Optional.empty());
+        assertThat(offString.path("reasoning").path("effort").asText()).isEqualTo("disable");
+
+        var offNull = body(model(compat(ThinkingFormat.OPENROUTER, null, Map.of(), Map.of()),
+                ThinkingLevelMap.of(Map.of(ModelThinkingLevel.off(), Optional.empty())),
+                Map.of()),
+            Optional.empty());
+        assertThat(offNull.has("reasoning")).isFalse();
+    }
+
+    // ── string-thinking 形状（pi :955-961）─────────────────────────────
+
+    /** 顶层 {@code thinking} 是**字符串**（与 zai/deepseek 的对象形状相对）。 */
+    @Test
+    void stringThinkingSendsTheTopLevelString() throws Exception {
+        var map = ThinkingLevelMap.of(Map.of(
+            ModelThinkingLevel.of(new ThinkingLevel.Medium()), Optional.of("MED")));
+        var mapped = body(model(compat(ThinkingFormat.STRING_THINKING, null, Map.of(), Map.of()),
+                map, Map.of()),
+            Optional.of(new ThinkingLevel.Medium()));
+        assertThat(mapped.path("thinking").isTextual()).isTrue();
+        assertThat(mapped.path("thinking").asText()).isEqualTo("MED");
+
+        var fallback = body(model(compat(ThinkingFormat.STRING_THINKING, null,
+                Map.of(), Map.of()), ThinkingLevelMap.empty(), Map.of()),
+            Optional.of(new ThinkingLevel.Low()));
+        assertThat(fallback.path("thinking").asText()).isEqualTo("low");
+    }
+
+    /** 关闭支的 off 三态与 openrouter 同派（`?? "none"`，pi :959-961）。 */
+    @Test
+    void stringThinkingOffStateUsesTheNoneFallback() throws Exception {
+        var offAbsent = body(model(compat(ThinkingFormat.STRING_THINKING, null,
+                Map.of(), Map.of()), ThinkingLevelMap.empty(), Map.of()),
+            Optional.empty());
+        assertThat(offAbsent.path("thinking").asText()).isEqualTo("none");
+
+        var offString = body(model(compat(ThinkingFormat.STRING_THINKING, null,
+                Map.of(), Map.of()),
+            ThinkingLevelMap.of(Map.of(ModelThinkingLevel.off(), Optional.of("off"))),
+            Map.of()), Optional.empty());
+        assertThat(offString.path("thinking").asText()).isEqualTo("off");
+
+        var offNull = body(model(compat(ThinkingFormat.STRING_THINKING, null,
+                Map.of(), Map.of()),
+            ThinkingLevelMap.of(Map.of(ModelThinkingLevel.off(), Optional.empty())),
+            Map.of()), Optional.empty());
+        assertThat(offNull.has("thinking")).isFalse();
+    }
+
     // ── 夹具 ────────────────────────────────────────────────────────────
 
     /** 显式 compat（≙ 用户在 models.json 里写 compat）—— 其余位与 NONE 同值。 */
