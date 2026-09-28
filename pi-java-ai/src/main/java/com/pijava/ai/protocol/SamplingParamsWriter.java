@@ -3,6 +3,7 @@ package com.pijava.ai.protocol;
 import java.util.LinkedHashMap;
 
 import com.openai.core.JsonValue;
+import com.openai.models.ReasoningEffort;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
 import com.openai.models.responses.ResponseCreateParams;
 
@@ -54,6 +55,12 @@ final class SamplingParamsWriter {
             }
             if (extra.remove("max_completion_tokens") instanceof Number maxTokens) {
                 builder.maxCompletionTokens(maxTokens.intValue());
+            }
+            // 包 A-09（R5，docs/58 §4.8）：形态链条（ThinkingFormatWriter）用类型化
+            // setter 写 reasoning_effort ⇒ 同名采样键必须走同一个 setter 覆盖，
+            // 否则非类型化通道会把它写成**两份**（docs/57 §10 的实测病理）。
+            if (extra.remove("reasoning_effort") instanceof String effort) {
+                builder.reasoningEffort(ReasoningEffort.of(effort));
             }
             extra.forEach((key, value) -> builder.putAdditionalBodyProperty(key, JsonValue.from(value)));
         });

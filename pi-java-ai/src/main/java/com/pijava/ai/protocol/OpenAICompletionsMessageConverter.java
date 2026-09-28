@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.OptionalInt;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -34,6 +36,7 @@ import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.catalog.MaxTokensField;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
+import com.pijava.ai.catalog.ThinkingTokenBudgetField;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelCapability;
@@ -210,10 +213,19 @@ final class OpenAICompletionsMessageConverter {
             }
         }
         if (request.temperature() >= 0) builder.temperature(request.temperature());
-        // 包 A-10：顶层思考预算字段（pi `:972-978`）。⚠️ 它在 `thinkingFormat` 形态链条
-        // **之外**（注释：同一台服务器可能同时服务 zai/qwen/chat-template 模型），
-        // 且落点**先于** samplingParams（pi 的 `:976` 早于 `:997`）。
-        writeThinkingTokenBudget(builder, request, compat);
+        // pi :870-871 —— 字段名与预算在形态链条**之前**一次算好、两处消费：链条的
+        // `$var: thinking.budget`（包 A-09）与顶层预算字段（包 A-10）同源同值
+        // （两侧算法各自零变化，只是上提成一次调用）。
+        var budgetField = SimpleOptions.thinkingTokenBudgetField(compat);
+        var ceiling = SimpleOptions.maxTokensOrDefault(request.model(), request.maxTokens());
+        var thinkingBudget = SimpleOptions.clampedThinkingBudget(request.model(), compat,
+            request.reasoning(), ThinkingBudgets.DEFAULT, ceiling);
+        // 包 A-09：思考开关的形状（pi :873-970）。
+        ThinkingFormatWriter.apply(builder, request, compat, thinkingBudget);
+        // 包 A-10：顶层思考预算字段（pi :972-978）。⚠️ 它在形态链条**之外**
+        // （注释：同一台服务器可能同时服务 zai/qwen/chat-template 模型），
+        // 且落点**先于** samplingParams（pi 的 :976 早于 :997）。
+        writeThinkingTokenBudget(builder, budgetField, thinkingBudget);
         // 包 A-10：模型级采样参数（pi `:996-999`，**body 的最后一个变更** ⇒ 同名键压过具名字段）。
         SamplingParamsWriter.applyToCompletions(builder, request.model());
 
@@ -221,30 +233,18 @@ final class OpenAICompletionsMessageConverter {
     }
 
     /**
-     * pi {@code openai-completions.ts:870-871} ＋ {@code :976-978}：
-     * 算好字段名与预算，两者都在才写。
-     *
-     * <pre>{@code
-     * const thinkingTokenBudgetField = resolveThinkingTokenBudgetField(compat);
-     * const thinkingBudget = resolveClampedThinkingBudget(model, options, params);
-     * ...
-     * if (thinkingTokenBudgetField && thinkingBudget !== undefined) {
-     *     Object.assign(params, { [thinkingTokenBudgetField]: thinkingBudget });
-     * }
-     * }</pre>
+     * pi {@code openai-completions.ts:976-978}：字段名与预算都在才写。
+     * 包 A-09 起取值上提到 {@link #buildParams}（pi 的 {@code :870-871} 同样是先算后用，
+     * 形态链条的 {@code $var: thinking.budget} 消费同一个值）—— 取值零变化。
      */
     private static void writeThinkingTokenBudget(ChatCompletionCreateParams.Builder builder,
-                                                 StreamRequest request,
-                                                 ModelCompat compat) {
-        var field = SimpleOptions.thinkingTokenBudgetField(compat);
-        if (field.isEmpty()) {
+                                                 Optional<ThinkingTokenBudgetField> field,
+                                                 OptionalInt budget) {
+        if (field.isEmpty() || budget.isEmpty()) {
             return;
         }
-        var ceiling = SimpleOptions.maxTokensOrDefault(request.model(), request.maxTokens());
-        SimpleOptions.clampedThinkingBudget(request.model(), compat, request.reasoning(),
-                ThinkingBudgets.DEFAULT, ceiling).ifPresent(budget ->
-                    builder.putAdditionalBodyProperty(field.get().wireName(),
-                        JsonValue.from(budget)));
+        builder.putAdditionalBodyProperty(field.get().wireName(),
+            JsonValue.from(budget.getAsInt()));
     }
 
     /**
