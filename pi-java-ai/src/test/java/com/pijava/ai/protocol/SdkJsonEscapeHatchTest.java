@@ -90,4 +90,39 @@ class SdkJsonEscapeHatchTest {
             .isEqualTo("{\"role\":\"system\",\"tools\":[{\"type\":\"function\","
                 + "\"function\":{\"name\":\"late_tool\"}}]}");
     }
+
+    /**
+     * <b>包 A-09（R11）的前提实测</b>：additional body property 里的**显式 null**。
+     *
+     * <p>pi 的 {@code JSON.stringify} 保 {@code "key": null}（{@code Literal(null)} 是
+     * 「写这个键，值是 null」）；SDK 的 {@code JsonValue.from(Map)} 走它自己的 mapper ——
+     * 若带 NON_NULL inclusion，null 值会被**静默丢掉**。两条路各测一次：</p>
+     * <ul>
+     *   <li>{@code JsonValue.from(map 含 null)} —— 实测被丢（下方断言钉住「不可用」）；</li>
+     *   <li>先以无 inclusion 设置的 mapper 建树（{@code NullNode} 保留），再
+     *       {@code JsonValue.from(tree)} —— 树序列化不经过 POJO inclusion ⇒ null 存活。</li>
+     * </ul>
+     *
+     * <p>⚠️ 与上面三条同一纪律：这条通路依赖 SDK 的序列化细节（不是文档化承诺）⇒
+     * 升级 SDK 必须重跑本类。</p>
+     */
+    @Test
+    void openAiAdditionalBodyPropertiesCanCarryAnExplicitNull() throws Exception {
+        var mapper = com.openai.core.ObjectMappers.jsonMapper();
+        var map = new java.util.LinkedHashMap<String, Object>();
+        map.put("keep", "x");
+        map.put("nul", null);
+
+        // ⚠️ 观测面是 JsonValue 本身，不是 CreateParams —— `writeValueAsString(params)`
+        // 得 `{}`（SDK 把请求包在 body 里，docs/54 §12 的 A-01 教训）。
+        var fromMap = mapper.writeValueAsString(com.openai.core.JsonValue.from(map));
+        assertThat(fromMap).contains("\"keep\":\"x\"");
+        assertThat(fromMap).as("JsonValue.from(map) 丢 null 值 ⇒ 不能直接喂 map")
+            .doesNotContain("nul");
+
+        var tree = new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(map);
+        var fromTree = mapper.writeValueAsString(com.openai.core.JsonValue.from(tree));
+        assertThat(fromTree).contains("\"keep\":\"x\"");
+        assertThat(fromTree).as("树路径必须保住显式 null").contains("\"nul\":null");
+    }
 }

@@ -5,12 +5,15 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import com.openai.core.JsonValue;
 import com.openai.models.ReasoningEffort;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
 
 import com.pijava.ai.api.SimpleOptions;
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.catalog.ChatTemplateKwargValue;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -152,8 +155,90 @@ final class ThinkingFormatWriter {
                         map.mapped(ModelThinkingLevel.off()).orElse("none"));
                 }
             }
-            // 提交 6 落地（docs/58 §8）：其余三个形状今天在链路上不写任何字段。
-            case QWEN_CHAT_TEMPLATE, CHAT_TEMPLATE, BASETEN -> { }
+            case QWEN_CHAT_TEMPLATE -> {
+                // pi :895-898 —— 固定形状、无门恒发，且不写 reasoning_effort。
+                var kwargs = new LinkedHashMap<String, Object>();
+                kwargs.put("enable_thinking", level.isPresent());
+                kwargs.put("preserve_thinking", true);                        // pi :897
+                put(builder, "chat_template_kwargs", kwargs);
+            }
+            case CHAT_TEMPLATE ->
+                // pi :900-902 —— 空声明 ⇒ 什么都不写、**且不回落 openai**（事实 2）。
+                chatTemplateValues(map, level, compat.chatTemplateKwargs(), thinkingBudget)
+                    .ifPresent(values -> put(builder, "chat_template_kwargs", values));
+            case BASETEN -> {
+                // pi :909-911 —— args 走与 chat-template 同一个 $var 解析。
+                chatTemplateValues(map, level, compat.chatTemplateArgs(), thinkingBudget)
+                    .ifPresent(values -> put(builder, "chat_template_args", values));
+                if (supportsEffort) {                                         // pi :913-918
+                    // 无级别时取 map.off，且同 `=== undefined` 语义：缺席／显式 null ⇒
+                    // 不写，字符串 ⇒ 写（pi 夹具 baseten-models.test.ts 的三态）。
+                    var effort = level.isPresent()
+                        ? strictEffort(map, level.get())
+                        : map.mapped(ModelThinkingLevel.off());
+                    effort.ifPresent(s -> builder.reasoningEffort(ReasoningEffort.of(s)));
+                }
+            }
+        }
+    }
+
+    /**
+     * pi {@code buildChatTemplateValues:1026-1042} —— 逐键解析声明表；
+     * 空表（或全部键被删）⇒ {@link Optional#empty()}（pi 的 {@code undefined}
+     * ⇒ 调用点不写 {@code chat_template_kwargs}/{@code chat_template_args}）。
+     */
+    private static Optional<Map<String, Object>> chatTemplateValues(
+            ThinkingLevelMap map, Optional<ThinkingLevel> level,
+            Map<String, ChatTemplateKwargValue> declared, OptionalInt thinkingBudget) {
+        if (declared.isEmpty()) {
+            return Optional.empty();
+        }
+        var out = new LinkedHashMap<String, Object>();
+        for (var entry : declared.entrySet()) {
+            resolveKwarg(out, entry.getKey(), map, level, entry.getValue(), thinkingBudget);
+        }
+        return out.isEmpty() ? Optional.empty() : Optional.of(out);
+    }
+
+    /**
+     * pi {@code resolveChatTemplateKwargValue:1044-1067}。
+     *
+     * <p>⚠️ <b>直接写进 {@code out}、不用 {@code Optional} 收返回值</b>（R11）：pi 的
+     * 字面量分支（{@code :1050} 的早返回）里 {@code null} 是<b>合法的上线值</b>
+     * （{@code "key": null}），{@code Optional} 表达不了「值是 null」⇒ 用返回值就会把
+     * {@code Literal(null)} 静默变成「不写」。本方法的 {@code return} 一律表示
+     * 「这个键不写」。</p>
+     */
+    private static void resolveKwarg(Map<String, Object> out, String key, ThinkingLevelMap map,
+                                     Optional<ThinkingLevel> level, ChatTemplateKwargValue value,
+                                     OptionalInt thinkingBudget) {
+        switch (value) {
+            case ChatTemplateKwargValue.Literal literal ->
+                out.put(key, literal.value());                                // pi :1050
+            case ChatTemplateKwargValue.Var var -> {
+                if (level.isEmpty() && var.omitWhenOff()) {
+                    return;                                                   // pi :1055
+                }
+                switch (var.var()) {
+                    case ENABLED -> out.put(key, level.isPresent());          // pi :1058
+                    case BUDGET ->
+                        // pi :1061 —— budget undefined ⇒ 键被删。
+                        thinkingBudget.ifPresent(budget -> out.put(key, budget));
+                    case EFFORT -> {
+                        var target = level.map(ModelThinkingLevel::of);       // pi :1065
+                        if (target.isPresent()) {
+                            if (!map.hasEntry(target.get())) {
+                                out.put(key, level.get().label());  // mappedValue === undefined
+                            } else {
+                                map.mapped(target.get()).ifPresent(s -> out.put(key, s));
+                            }                                                 // 显式 null ⇒ 不写
+                        } else {
+                            map.mapped(ModelThinkingLevel.off())
+                                .ifPresent(s -> out.put(key, s));
+                        }                          // off 缺席／null ⇒ 连 undefined 都不写
+                    }
+                }
+            }
         }
     }
 
@@ -181,9 +266,19 @@ final class ThinkingFormatWriter {
         return map.mapped(ModelThinkingLevel.of(level));      // 显式 null ⇒ 空 ⇒ 不写
     }
 
-    /** {@code putAdditionalBodyProperty} 的薄包装（统一 {@code JsonValue.from}）。 */
+    /** 无 inclusion 设置的 mapper：建树保 {@code NullNode}（{@link #put} 的说明）。 */
+    private static final ObjectMapper PLAIN_JSON = new ObjectMapper();
+
+    /**
+     * {@code putAdditionalBodyProperty} 的薄包装 —— ⚠️ **必须经树**
+     * （{@code SdkJsonEscapeHatchTest.openAiAdditionalBodyPropertiesCanCarryAnExplicitNull}
+     * 的实测）：SDK 自己的 mapper 带 NON_NULL inclusion ⇒ {@code JsonValue.from(map 含 null)}
+     * 会**静默丢掉** null 值，而 R11 的 {@code Literal(null)} 恰恰要上线成
+     * {@code "key": null}（pi 的 {@code JSON.stringify} 保留它）。先以无 inclusion 的
+     * mapper 建树，{@code NullNode} 在树序列化里存活。
+     */
     private static void put(ChatCompletionCreateParams.Builder builder, String key,
                             Object value) {
-        builder.putAdditionalBodyProperty(key, JsonValue.from(value));
+        builder.putAdditionalBodyProperty(key, JsonValue.from(PLAIN_JSON.valueToTree(value)));
     }
 }

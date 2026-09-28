@@ -487,6 +487,192 @@ class ThinkingFormatWireTest {
         assertThat(offNull.has("thinking")).isFalse();
     }
 
+    // ── qwen-chat-template 形状（pi :894-898）──────────────────────────
+
+    /**
+     * 固定的 {@code chat_template_kwargs:{enable_thinking, preserve_thinking:true}} ——
+     * **无门恒发**（用关死的 supportsReasoningEffort 钉住「臂不读门」），且从不写
+     * reasoning_effort。
+     */
+    @Test
+    void qwenChatTemplateSendsTheFixedKwargs() throws Exception {
+        var on = body(model(compat(ThinkingFormat.QWEN_CHAT_TEMPLATE, Boolean.FALSE,
+                Map.of(), Map.of()), ThinkingLevelMap.empty(), Map.of()),
+            Optional.of(new ThinkingLevel.Medium()));
+        assertThat(on.path("chat_template_kwargs").path("enable_thinking").asBoolean()).isTrue();
+        assertThat(on.path("chat_template_kwargs").path("preserve_thinking").asBoolean()).isTrue();
+        assertThat(on.has("reasoning_effort")).isFalse();
+
+        var off = body(model(compat(ThinkingFormat.QWEN_CHAT_TEMPLATE, Boolean.FALSE,
+                Map.of(), Map.of()), ThinkingLevelMap.empty(), Map.of()),
+            Optional.empty());
+        assertThat(off.path("chat_template_kwargs").path("enable_thinking").asBoolean()).isFalse();
+        assertThat(off.path("chat_template_kwargs").path("preserve_thinking").asBoolean()).isTrue();
+    }
+
+    // ── chat-template 形状 ＋ $var 解析（pi :899-903, :1026-1067）──────
+
+    /**
+     * ★ R11：声明表里的六种值全部上线 —— 三个 {@code $var}、字符串、数字、布尔，
+     * 以及**字面量 null**（pi {@code :1050} 的早返回让 {@code "nul": null} 原样写出，
+     * 不是「不写」）。照 pi 夹具 {@code openai-completions-thinking-token-budget.test.ts}
+     * 的口径。
+     */
+    @Test
+    void chatTemplateResolvesTheDeclaredValues() throws Exception {
+        var kwargs = Map.<String, ChatTemplateKwargValue>of(
+            "et", new ChatTemplateKwargValue.Var(ChatTemplateKwargValue.ThinkingVar.ENABLED),
+            "ef", new ChatTemplateKwargValue.Var(ChatTemplateKwargValue.ThinkingVar.EFFORT),
+            "lit", new ChatTemplateKwargValue.Literal("x"),
+            "n", new ChatTemplateKwargValue.Literal(5),
+            "b", new ChatTemplateKwargValue.Literal(true),
+            "nul", new ChatTemplateKwargValue.Literal(null));
+        var map = ThinkingLevelMap.of(Map.of(
+            ModelThinkingLevel.of(new ThinkingLevel.Medium()), Optional.of("MED")));
+
+        var kw = body(model(compat(ThinkingFormat.CHAT_TEMPLATE, null, kwargs, Map.of()),
+                map, Map.of()), Optional.of(new ThinkingLevel.Medium()))
+            .path("chat_template_kwargs");
+
+        assertThat(kw.path("et").asBoolean()).isTrue();
+        assertThat(kw.path("ef").asText()).isEqualTo("MED");
+        assertThat(kw.path("lit").asText()).isEqualTo("x");
+        assertThat(kw.path("n").asInt()).isEqualTo(5);
+        assertThat(kw.path("b").asBoolean()).isTrue();
+        assertThat(kw.has("nul")).as("字面量 null 是「写这个键，值是 null」").isTrue();
+        assertThat(kw.get("nul").isNull()).isTrue();
+    }
+
+    /** {@code omitWhenOff}：无级别 ⇒ 该键被删；**全部**被删 ⇒ 整个 kwargs 键不发（pi :1041）。 */
+    @Test
+    void chatTemplateOmitWhenOffDropsTheKey() throws Exception {
+        var kwargs = Map.<String, ChatTemplateKwargValue>of(
+            "et", new ChatTemplateKwargValue.Var(ChatTemplateKwargValue.ThinkingVar.ENABLED, true),
+            "lit", new ChatTemplateKwargValue.Literal("keep"));
+        var kw = body(model(compat(ThinkingFormat.CHAT_TEMPLATE, null, kwargs, Map.of()),
+                ThinkingLevelMap.empty(), Map.of()), Optional.empty())
+            .path("chat_template_kwargs");
+        assertThat(kw.has("et")).isFalse();
+        assertThat(kw.path("lit").asText()).isEqualTo("keep");
+
+        var onlyOmit = Map.<String, ChatTemplateKwargValue>of(
+            "et", new ChatTemplateKwargValue.Var(ChatTemplateKwargValue.ThinkingVar.ENABLED, true));
+        assertThat(body(model(compat(ThinkingFormat.CHAT_TEMPLATE, null, onlyOmit, Map.of()),
+                ThinkingLevelMap.empty(), Map.of()), Optional.empty())
+            .has("chat_template_kwargs")).isFalse();
+    }
+
+    /** {@code $var: thinking.budget}：与顶层预算字段**同源**（夹取后的值）；无级别 ⇒ 键被删。 */
+    @Test
+    void chatTemplateBudgetVarFollowsTheClampedBudget() throws Exception {
+        var kwargs = Map.<String, ChatTemplateKwargValue>of(
+            "tb", new ChatTemplateKwargValue.Var(ChatTemplateKwargValue.ThinkingVar.BUDGET));
+
+        // medium 的默认预算 8192；天花板 100_000 ⇒ 夹取惰性（与 ThinkingTokenBudgetWireTest 同值）。
+        var on = body(model(compat(ThinkingFormat.CHAT_TEMPLATE, null, kwargs, Map.of()),
+                ThinkingLevelMap.empty(), Map.of()), Optional.of(new ThinkingLevel.Medium()));
+        assertThat(on.path("chat_template_kwargs").path("tb").asInt()).isEqualTo(8192);
+
+        // pi 夹具 :200 —— 关思考时省略（budget undefined ⇒ 键被删；全删 ⇒ 整键不发）。
+        var off = body(model(compat(ThinkingFormat.CHAT_TEMPLATE, null, kwargs, Map.of()),
+                ThinkingLevelMap.empty(), Map.of()), Optional.empty());
+        assertThat(off.has("chat_template_kwargs")).isFalse();
+    }
+
+    /**
+     * §2.2 事实 2（R6 探针的靶子）：空声明 ⇒ **什么都不写、且不回落 openai** 的
+     * reasoning_effort —— 命中即终止。
+     */
+    @Test
+    void chatTemplateEmptyDeclarationDoesNotFallBackToOpenAi() throws Exception {
+        var body = body(model(compat(ThinkingFormat.CHAT_TEMPLATE, Boolean.TRUE,
+                Map.of(), Map.of()), ThinkingLevelMap.empty(), Map.of()),
+            Optional.of(new ThinkingLevel.Medium()));
+
+        assertThat(body.has("chat_template_kwargs")).isFalse();
+        assertThat(body.has("reasoning_effort")).isFalse();
+    }
+
+    /** {@code $var: thinking.effort} 的关闭支（pi :1065-1067）：off 三态。 */
+    @Test
+    void chatTemplateEffortVarOffStates() throws Exception {
+        var kwargs = Map.<String, ChatTemplateKwargValue>of(
+            "ef", new ChatTemplateKwargValue.Var(ChatTemplateKwargValue.ThinkingVar.EFFORT));
+
+        var offString = body(model(compat(ThinkingFormat.CHAT_TEMPLATE, null, kwargs, Map.of()),
+                ThinkingLevelMap.of(Map.of(ModelThinkingLevel.off(), Optional.of("none"))),
+                Map.of()), Optional.empty());
+        assertThat(offString.path("chat_template_kwargs").path("ef").asText())
+            .isEqualTo("none");
+
+        // off 缺席 ⇒ pi 返回 reasoningEffort（undefined）⇒ 键被删 ⇒ 全删 ⇒ 整键不发。
+        var offAbsent = body(model(compat(ThinkingFormat.CHAT_TEMPLATE, null, kwargs, Map.of()),
+                ThinkingLevelMap.empty(), Map.of()), Optional.empty());
+        assertThat(offAbsent.has("chat_template_kwargs")).isFalse();
+
+        // off 显式 null ⇒ typeof 检查不过 ⇒ 同样删。
+        var offNull = body(model(compat(ThinkingFormat.CHAT_TEMPLATE, null, kwargs, Map.of()),
+                ThinkingLevelMap.of(Map.of(ModelThinkingLevel.off(), Optional.empty())),
+                Map.of()), Optional.empty());
+        assertThat(offNull.has("chat_template_kwargs")).isFalse();
+    }
+
+    // ── baseten 形状（pi :904-920）─────────────────────────────────────
+
+    /**
+     * pi 目录的 baseten 常量形状（{@code chatTemplateArgs:{enable_thinking:{$var}}}，
+     * {@code generate-models.ts:1452-1461}）＋ 有级别 ⇒ args ＋ 映射后的 effort
+     * （照 pi 夹具 {@code baseten-models.test.ts:55-97} 的 "high" 态）。
+     */
+    @Test
+    void basetenSendsTheDeclaredArgsAndTheEffort() throws Exception {
+        var body = body(model(compat(ThinkingFormat.BASETEN, Boolean.TRUE, Map.of(),
+                basetenArgs()), ThinkingLevelMap.empty(), Map.of()),
+            Optional.of(new ThinkingLevel.Medium()));
+
+        assertThat(body.path("chat_template_args").path("enable_thinking").asBoolean()).isTrue();
+        assertThat(body.path("reasoning_effort").asText()).isEqualTo("medium");
+    }
+
+    /** 无级别 ⇒ {@code map.off} 的字符串值上线（pi :915-917；夹具的 "none" 态）。 */
+    @Test
+    void basetenOffStateSendsTheMappedOffValue() throws Exception {
+        var body = body(model(compat(ThinkingFormat.BASETEN, Boolean.TRUE, Map.of(),
+                basetenArgs()),
+            ThinkingLevelMap.of(Map.of(ModelThinkingLevel.off(), Optional.of("none"))),
+            Map.of()), Optional.empty());
+
+        assertThat(body.path("chat_template_args").path("enable_thinking").asBoolean()).isFalse();
+        assertThat(body.path("reasoning_effort").asText()).isEqualTo("none");
+    }
+
+    /** 门关 ⇒ args 照发、effort 不发；off 缺席 ＋ 无级别 ⇒ effort 也不发（夹具的 undefined 态）。 */
+    @Test
+    void basetenHonorsTheEffortGateAndTheOffTriState() throws Exception {
+        var gateClosed = body(model(compat(ThinkingFormat.BASETEN, Boolean.FALSE, Map.of(),
+                basetenArgs()), ThinkingLevelMap.empty(), Map.of()),
+            Optional.of(new ThinkingLevel.Medium()));
+        assertThat(gateClosed.path("chat_template_args").path("enable_thinking").asBoolean())
+            .isTrue();
+        assertThat(gateClosed.has("reasoning_effort")).isFalse();
+
+        var offAbsent = body(model(compat(ThinkingFormat.BASETEN, Boolean.TRUE, Map.of(),
+                basetenArgs()), ThinkingLevelMap.empty(), Map.of()), Optional.empty());
+        assertThat(offAbsent.has("reasoning_effort")).isFalse();
+
+        var offNull = body(model(compat(ThinkingFormat.BASETEN, Boolean.TRUE, Map.of(),
+                basetenArgs()),
+            ThinkingLevelMap.of(Map.of(ModelThinkingLevel.off(), Optional.empty())),
+            Map.of()), Optional.empty());
+        assertThat(offNull.has("reasoning_effort")).isFalse();
+    }
+
+    /** pi 目录常量的 args 形状（generate-models.ts:1459）。 */
+    private static Map<String, ChatTemplateKwargValue> basetenArgs() {
+        return Map.of("enable_thinking",
+            new ChatTemplateKwargValue.Var(ChatTemplateKwargValue.ThinkingVar.ENABLED));
+    }
+
     // ── 夹具 ────────────────────────────────────────────────────────────
 
     /** 显式 compat（≙ 用户在 models.json 里写 compat）—— 其余位与 NONE 同值。 */
