@@ -25,6 +25,14 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
  *                          (pi {@code Model.samplingParams}; default empty)
  * @param compat            provider compatibility flags (pi {@code Model.compat};
  *                          default {@link ModelCompat#NONE})
+ * @param api               pi {@code Model.api} 的线格名（如 {@code "anthropic-messages"}；
+ *                          包 A-02，pi {@code compat.ts:262} 的派发键）。{@code null} ≙
+ *                          「provider 的默认协议」——单协议 provider 的目录全部保持缺席，
+ *                          只有多协议 provider（内置 openrouter）与 models.json 的 per-model
+ *                          {@code api} 会写它。⚠️ 存**字符串**而不是
+ *                          {@link com.pijava.ai.provider.Protocol}：pi 的 {@code Api} 就是字符串
+ *                          联合，且 {@code catalog} 包不依赖 {@code provider} 包（免包环，
+ *                          {@code CacheRetention} 的同一裁决，{@code docs/54 §9 R2}）
  */
 public record ModelInfo(
     ModelId<?> id,
@@ -37,7 +45,8 @@ public record ModelInfo(
     ThinkingLevelMap thinkingLevelMap,
     Map<String, String> headers,
     Map<String, Object> samplingParams,
-    ModelCompat compat
+    ModelCompat compat,
+    String api
 ) {
     /** Compact constructor that defensively copies capabilities and defaults a null thinking map. */
     public ModelInfo {
@@ -50,6 +59,30 @@ public record ModelInfo(
         if (compat == null) {
             compat = ModelCompat.NONE;
         }
+        // 空串归一成缺席（pi 的 `undefined`；models.json 写 "api": "" 不算「选了一条车道」）。
+        api = api == null || api.isBlank() ? null : api;
+    }
+
+    /**
+     * 十一参便捷构造（包 A-02 之前的**规范**构造 —— 那时组件就这十一个）：
+     * {@code api} 缺席 ≙ provider 默认协议。旧规范形态降级为便捷构造器 ⇒
+     * 全部存量调用点**零改签**（与包 A-01/A-09/A-10 同一手法）。
+     */
+    public ModelInfo(
+        ModelId<?> id,
+        String displayName,
+        Set<ModelCapability> capabilities,
+        int maxInputTokens,
+        int maxOutputTokens,
+        boolean deprecated,
+        PricingInfo pricing,
+        ThinkingLevelMap thinkingLevelMap,
+        Map<String, String> headers,
+        Map<String, Object> samplingParams,
+        ModelCompat compat
+    ) {
+        this(id, displayName, capabilities, maxInputTokens, maxOutputTokens, deprecated,
+             pricing, thinkingLevelMap, headers, samplingParams, compat, null);
     }
 
     /** Convenience constructor for models without thinking support. */

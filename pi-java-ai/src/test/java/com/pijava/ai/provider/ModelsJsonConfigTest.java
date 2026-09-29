@@ -781,6 +781,49 @@ class ModelsJsonConfigTest {
             .hasMessageContaining("$var");
     }
 
+    /** 包 A-02（pi provider-composer.ts:142）：per-model api 进 ModelInfo；缺席 ⇒ null。 */
+    @Test
+    void perModelApiIsCarriedOntoModelInfo() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "openai-completions",
+              "models": [
+                {"id": "plain"},
+                {"id": "anthropic/claude-x", "api": "anthropic-messages"}
+              ]
+            }}}
+            """);
+
+        var catalog = config.catalog();
+        assertThat(catalog.find(ModelId.of("relay", "plain")).orElseThrow().api()).isNull();
+        assertThat(catalog.find(ModelId.of("relay", "anthropic/claude-x")).orElseThrow().api())
+            .isEqualTo("anthropic-messages");
+    }
+
+    /**
+     * 包 A-02：per-model {@code api} 是闭集键（pi {@code Protocol} 的线格名）——
+     * 写错一个字母会让模型静默走错车道，故与 {@code maxTokensField} 同口径响亮抛。
+     * 改前 {@code ModelDef.api()} 被静默吞掉，本用例红。
+     */
+    @Test
+    void anUnknownModelApiIsALoudError() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "openai-completions",
+              "models": [{"id": "m1", "api": "anthropic-message"}]
+            }}}
+            """);
+
+        assertThatThrownBy(() -> config.catalog())
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("relay")
+            .hasMessageContaining("m1")
+            .hasMessageContaining("unknown api")
+            .hasMessageContaining("anthropic-message");
+    }
+
     private ModelsJsonConfig write(String json) {
         var path = tmp.resolve("models-" + System.nanoTime() + ".json");
         try {

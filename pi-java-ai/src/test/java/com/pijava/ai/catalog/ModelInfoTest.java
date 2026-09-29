@@ -82,4 +82,47 @@ class ModelInfoTest {
         assertThat(ModelInfo.minimal(ModelId.of("x", "unknown-model")).supportsImageInput())
             .isTrue();
     }
+
+    // ------------------------------------------------ 包 A-02（docs/59 §4.1）：per-model api
+
+    /** 全部存量便捷构造（7/8/10/11 参）与 minimal ⇒ api 缺席 ≙ provider 默认协议。 */
+    @Test
+    void legacyConstructorsLeaveTheApiAbsent() {
+        var seven = new ModelInfo(
+            ModelId.of("openai", "gpt-5"), "GPT-5",
+            Set.of(ModelCapability.TEXT), 128_000, 16_384, false, PricingInfo.UNKNOWN);
+        var eleven = new ModelInfo(
+            ModelId.of("openai", "gpt-5"), "GPT-5",
+            Set.of(ModelCapability.TEXT), 128_000, 16_384, false, PricingInfo.UNKNOWN,
+            com.pijava.ai.thinking.ThinkingLevelMap.empty(), Map.of(), Map.of(),
+            ModelCompat.NONE);
+
+        assertThat(seven.api()).isNull();
+        assertThat(eleven.api()).isNull();
+        assertThat(ModelInfo.minimal(ModelId.of("x", "y")).api()).isNull();
+    }
+
+    /** 空串归一成缺席（pi 的 `undefined`；`"api": ""` 不算选了一条车道）。 */
+    @Test
+    void blankApiNormalizesToAbsent() {
+        var model = new ModelInfo(
+            ModelId.of("openrouter", "anthropic/claude-fable-5"), "Claude Fable 5",
+            Set.of(ModelCapability.TEXT), 1_000_000, 128_000, false, PricingInfo.UNKNOWN,
+            com.pijava.ai.thinking.ThinkingLevelMap.empty(), Map.of(), Map.of(),
+            ModelCompat.NONE, "  ");
+
+        assertThat(model.api()).isNull();
+    }
+
+    /** 显式 api 原样携带（派发点在宿主，docs/59 §4.6）。 */
+    @Test
+    void explicitApiIsCarried() {
+        var model = new ModelInfo(
+            ModelId.of("openrouter", "anthropic/claude-fable-5"), "Claude Fable 5",
+            Set.of(ModelCapability.TEXT), 1_000_000, 128_000, false, PricingInfo.UNKNOWN,
+            com.pijava.ai.thinking.ThinkingLevelMap.empty(), Map.of(), Map.of(),
+            ModelCompat.NONE, "anthropic-messages");
+
+        assertThat(model.api()).isEqualTo("anthropic-messages");
+    }
 }

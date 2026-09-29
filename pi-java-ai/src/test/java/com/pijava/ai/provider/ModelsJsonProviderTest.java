@@ -123,6 +123,42 @@ class ModelsJsonProviderTest {
         assertThat(api).isInstanceOf(com.pijava.ai.protocol.OpenAICompletionsApi.class);
     }
 
+    /**
+     * 包 A-02（pi {@code provider-composer.ts:142} 的 {@code definition.api ?? providerConfig.api}）：
+     * 模型自带的 {@code api} 必须进 provider 的可服务协议集，并且 {@code extra["protocol"]}
+     * 指到它时真的落到对应车道 —— 改前 supportedProtocols 只有 provider 级那一个，
+     * createApi 直接抛「does not support protocol」。
+     */
+    @Test
+    void perModelApiExtendsProtocolsAndIsServable() throws Exception {
+        var p = provider("mixed", """
+            {
+              "providers": {
+                "mixed": {
+                  "baseUrl": "https://relay.example.com/v1",
+                  "apiKey": "sk-inline",
+                  "api": "openai-completions",
+                  "models": [
+                    {"id": "gpt-x"},
+                    {"id": "anthropic/claude-x", "api": "anthropic-messages"}
+                  ]
+                }
+              }
+            }
+            """);
+
+        assertThat(p.supportedProtocols())
+            .contains(Protocol.OPENAI_COMPLETIONS, Protocol.ANTHROPIC_MESSAGES);
+
+        var api = p.createApi(ChatApi.class, new ApiOptions("", "", Duration.ofSeconds(1), 0,
+            Map.of("protocol", "anthropic-messages")));
+        assertThat(api).isInstanceOf(com.pijava.ai.protocol.AnthropicMessagesApi.class);
+
+        // 缺省协议不受影响：仍是 provider 级的 openai-completions。
+        var fallback = p.createApi(ChatApi.class, ApiOptions.defaults());
+        assertThat(fallback).isInstanceOf(com.pijava.ai.protocol.OpenAICompletionsApi.class);
+    }
+
     private java.nio.file.Path pathOf(String json) {
         try {
             var path = java.nio.file.Files.createTempFile("models", ".json");

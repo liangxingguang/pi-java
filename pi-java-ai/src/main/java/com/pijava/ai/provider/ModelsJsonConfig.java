@@ -160,8 +160,7 @@ public final class ModelsJsonConfig {
                 "models.json provider \"" + id + "\": \"api\" is required"
                 + " (e.g. \"openai-completions\" or \"anthropic-messages\")");
         }
-        var protocol = Protocol.valueOf(
-            def.api().toUpperCase(java.util.Locale.ROOT).replace('-', '_'));
+        var protocol = Protocol.fromWire(def.api());
         if (def.baseUrl() == null || def.baseUrl().isBlank()) {
             throw new IllegalStateException(
                 "models.json provider \"" + id + "\": \"baseUrl\" is required");
@@ -214,7 +213,29 @@ public final class ModelsJsonConfig {
             ModelId.of(providerId, model.id()),
             displayName, Set.copyOf(caps), contextWindow, maxTokens, false,
             pricing, thinkingLevelMapOf(model.thinkingLevelMap()), headers, samplingParams,
-            compatOf(providerId, model, model.compat()));
+            compatOf(providerId, model, model.compat()),
+            // 包 A-02（pi provider-composer.ts:142 的 `definition.api ?? providerConfig.api`）：
+            // per-model api 缺席 ⇒ null ≙ provider 级协议（派发点在宿主，docs/59 §4.6）。
+            modelApiOf(providerId, model.id(), model.api()));
+    }
+
+    /**
+     * models.json 的 per-model {@code api} ⇒ {@link ModelInfo#api()} 的线格名（包 A-02）。
+     * 缺席/空串 ⇒ {@code null}（provider 默认协议）；未知取值**响亮抛错**——与
+     * {@link #maxTokensFieldOf} 同口径：写错一个字母会让模型静默走错车道，而那种偏离
+     * 没有任何其它症状（pi 的 TypeBox 对 api 只校验非空串，但 java 的派发要过
+     * {@link Protocol#fromWire}，这里把失败提前到加载期、带上文件定位）。
+     */
+    private static String modelApiOf(String providerId, String modelId, String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Protocol.fromWire(value).wireName();
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("models.json provider \"" + providerId
+                + "\", model \"" + modelId + "\": unknown api \"" + value + "\"", e);
+        }
     }
 
     /**

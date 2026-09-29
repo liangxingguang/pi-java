@@ -25,8 +25,22 @@ public final class ModelsJsonProvider extends ConfigurableProvider {
 
     ModelsJsonProvider(String id, String displayName, ProviderDef def,
                        Protocol protocol, ModelCatalog catalog) {
-        this.config = ProviderConfig.single(
-            id, displayName, def.baseUrl(), null, protocol, catalog);
+        // 包 A-02：可服务协议集 = provider 级协议 ∪ 各模型自带 api（pi 的模型级派发
+        // `compat.ts:262` 在 java 的落点是 extra["protocol"]，而 resolveProtocol 会按本集合
+        // 校验 ⇒ 不扩容则 per-model api 被「does not support protocol」拒掉）。
+        // ⚠️ 校验已在 toModelInfo 的 modelApiOf 完成（buildProvider 先建 catalog），
+        // 这里的 fromWire 不会再抛。
+        var protocols = new java.util.LinkedHashSet<Protocol>();
+        protocols.add(protocol);
+        if (def.models() != null) {
+            for (var model : def.models()) {
+                if (model.api() != null && !model.api().isBlank()) {
+                    protocols.add(Protocol.fromWire(model.api()));
+                }
+            }
+        }
+        this.config = new ProviderConfig(
+            id, displayName, def.baseUrl(), null, protocol, Set.copyOf(protocols), catalog, null);
         this.inlineApiKey = def.apiKey();
     }
 

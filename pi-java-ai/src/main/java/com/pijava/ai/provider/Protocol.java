@@ -39,4 +39,24 @@ public enum Protocol {
     public String wireName() {
         return name().toLowerCase(Locale.ROOT).replace('_', '-');
     }
+
+    /**
+     * {@link #wireName} 的逆（包 A-02）：线格名 → 枚举。此前同一行
+     * {@code valueOf(toUpperCase.replace('-','_'))} 在 {@code ConfigurableProvider.resolveProtocol}
+     * 与 {@code ModelsJsonConfig.buildProvider} 各写一遍，per-model {@code api} 起第三处 ⇒ 收口。
+     *
+     * <p>⚠️ 未知值**响亮抛**（与本仓其它闭集键同口径）：静默回落会让模型走错车道，
+     * 而那种偏离没有任何其它症状。</p>
+     *
+     * @param wire kebab-case 协议名（如 {@code "anthropic-messages"}）
+     * @return 对应枚举
+     * @throws IllegalArgumentException 取值不在闭集内（含 {@code null}）
+     */
+    public static Protocol fromWire(String wire) {
+        try {
+            return valueOf(wire.toUpperCase(Locale.ROOT).replace('-', '_'));
+        } catch (IllegalArgumentException | NullPointerException e) {
+            throw new IllegalArgumentException("unknown api: " + wire, e);
+        }
+    }
 }
