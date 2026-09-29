@@ -118,6 +118,16 @@ public final class DefaultModelResolver implements ModelResolver {
             return resolve(Set.of(ModelCapability.TEXT), preferred);
         }
         var trimmed = pattern.trim();
+        // 包 A-02（pi parseModelPattern:209-216）：**精确匹配先行** —— OpenRouter 的
+        // ":batch"/":exacto" 一族 id 自带冒号，先切 thinking 后缀会把它们静默解析成
+        // 另一个模型（另一条车道、另一个价）。全串不中才走下面的冒号切分。
+        var exact = catalog.listModels().stream()
+            .filter(m -> matchesPattern(m, trimmed))
+            .map(m -> m.id())
+            .findFirst();
+        if (exact.isPresent()) {
+            return exact.get();
+        }
         var colon = trimmed.lastIndexOf(':');
         var base = colon > 0 ? trimmed.substring(0, colon) : trimmed;
 
@@ -171,5 +181,14 @@ public final class DefaultModelResolver implements ModelResolver {
             return ModelId.of(effectiveProvider, nameRef);
         }
         return matches.getFirst().id();
+    }
+
+    /**
+     * 精确匹配判据（包 A-02；pi {@code tryMatchModel} 的两种形态：全 id
+     * {@code provider/model} 或裸模型 id，忽略大小写——与本文件下方既有匹配同口径）。
+     */
+    private static boolean matchesPattern(com.pijava.ai.catalog.ModelInfo m, String pattern) {
+        return pattern.equalsIgnoreCase(m.id().provider() + "/" + m.id().modelName())
+            || pattern.equalsIgnoreCase(m.id().modelName());
     }
 }

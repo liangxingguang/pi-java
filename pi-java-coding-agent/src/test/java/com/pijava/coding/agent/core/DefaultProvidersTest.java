@@ -58,7 +58,7 @@ class DefaultProvidersTest {
     }
 
     @Test
-    void defaultProvidersIncludesSixteenBuiltins() {
+    void defaultProvidersIncludesTheBuiltins() {
         var names = DefaultProviders.defaultProviders().listAll().stream()
             .map(Provider::name)
             .toList();
@@ -66,8 +66,9 @@ class DefaultProvidersTest {
             "anthropic", "openai", "google", "deepseek", "mistral",
             "moonshotai-cn", "moonshotai", "zai-coding-cn", "zai",
             "qwen-token-plan-cn", "xiaomi", "xiaomi-token-plan-cn",
-            "minimax-cn", "minimax", "ant-ling", "ollama");
-        assertThat(names).hasSizeGreaterThanOrEqualTo(16);
+            "minimax-cn", "minimax", "ant-ling", "ollama",
+            "openrouter", "openrouter-images");
+        assertThat(names).hasSizeGreaterThanOrEqualTo(18);
     }
 
     @Test
@@ -247,8 +248,12 @@ class DefaultProvidersTest {
             return Set.of(ChatApi.class);
         }
 
+        /** 适配器工厂**实际收到**的 ApiOptions —— 包 A-02 的协议派发观测面。 */
+        private final List<ApiOptions> optionsSeen = new ArrayList<>();
+
         @Override public <T extends ProviderApi> T createApi(Class<T> apiType, ApiOptions options) {
             calls.add(name);
+            optionsSeen.add(options);
             return apiType.cast(new RecordingChatApi(requests));
         }
 
@@ -277,6 +282,75 @@ class DefaultProvidersTest {
         @Override public Message send(StreamRequest request, ApiOptions options) {
             throw new UnsupportedOperationException("RE-P1 只观测适配器选择");
         }
+    }
+
+    // ── 包 A-02（docs/59 §4.6）：车道跟着**模型的 api** 走 ─────────────────
+
+    /**
+     * <b>RE-派发</b>：目录里的 {@link ModelInfo#api()} 必须变成 {@code extra["protocol"]}
+     * 抵达 {@code createApi}（pi {@code compat.ts:262} 的 {@code resolveApiProvider(model.api)}
+     * 在本仓的落点）。改前 extra["protocol"] 生产上零写入者 ⇒ openrouter 的
+     * anthropic 车道模型会被发去 completions 车道。
+     */
+    @Test
+    void streamFnInjectsTheModelApiAsTheProtocolExtra() {
+        var anthropicModel = new ModelInfo(ModelId.of("alpha", "anthropic/claude-x"), "X",
+            Set.of(), 128_000, 16_384, false, PricingInfo.UNKNOWN,
+            ThinkingLevelMap.empty(), Map.of(), Map.of(), ModelCompat.NONE, "anthropic-messages");
+        var plainModel = new ModelInfo(ModelId.of("alpha", "plain"), "P",
+            Set.of(), 128_000, 16_384, false, PricingInfo.UNKNOWN);
+        var alpha = new RecordingProvider("alpha", new ArrayList<>(),
+            BuiltinCatalog.of(List.of(anthropicModel, plainModel)));
+        var registry = ProviderRegistry.create();
+        registry.register(alpha);
+
+        var args = ArgsParser.parse(new String[] {"--provider", "alpha"});
+        var streamFn = DefaultProviders.streamFnFor(args, "alpha", registry, new Settings());
+
+        streamFn.stream(ModelId.of("alpha", "anthropic/claude-x"),
+            Context.of(List.of()), StreamOptions.defaults());
+        assertThat(alpha.optionsSeen.get(0).extra())
+            .containsEntry("protocol", "anthropic-messages");
+
+        // api 缺席 ⇒ 不注入（provider 默认协议照旧）——「缺席≠默认值」的口径与 cacheExtra 同。
+        streamFn.stream(ModelId.of("alpha", "plain"),
+            Context.of(List.of()), StreamOptions.defaults());
+        assertThat(alpha.optionsSeen.get(1).extra()).doesNotContainKey("protocol");
+    }
+
+    /** cacheRetention 与 protocol 两条键互不干扰（注入是合表，不是换表）。 */
+    @Test
+    void protocolInjectionKeepsTheCacheRetentionExtra() {
+        var model = new ModelInfo(ModelId.of("alpha", "anthropic/claude-x"), "X",
+            Set.of(), 128_000, 16_384, false, PricingInfo.UNKNOWN,
+            ThinkingLevelMap.empty(), Map.of(), Map.of(), ModelCompat.NONE, "anthropic-messages");
+        var alpha = new RecordingProvider("alpha", new ArrayList<>(),
+            BuiltinCatalog.of(List.of(model)));
+        var registry = ProviderRegistry.create();
+        registry.register(alpha);
+
+        var args = ArgsParser.parse(new String[] {"--provider", "alpha"});
+        var streamFn = DefaultProviders.streamFnFor(args, "alpha", registry, new Settings());
+
+        streamFn.stream(ModelId.of("alpha", "anthropic/claude-x"),
+            Context.of(List.of()), options(CacheRetention.NONE));
+        assertThat(alpha.optionsSeen.get(0).extra())
+            .containsEntry("protocol", "anthropic-messages")
+            .containsEntry("cacheRetention", "none");
+    }
+
+    /** withModelProtocol 的三态：缺席不注入／在场注入／显式 extra 已有 protocol 不覆盖。 */
+    @Test
+    void withModelProtocolRespectsAnExplicitProtocolExtra() {
+        var base = new ApiOptions("", "sk", java.time.Duration.ofSeconds(1), 0,
+            Map.of("protocol", "openai-completions"));
+        var model = new ModelInfo(ModelId.of("alpha", "anthropic/claude-x"), "X",
+            Set.of(), 128_000, 16_384, false, PricingInfo.UNKNOWN,
+            ThinkingLevelMap.empty(), Map.of(), Map.of(), ModelCompat.NONE, "anthropic-messages");
+
+        assertThat(DefaultProviders.withModelProtocol(base, model).extra())
+            .containsEntry("protocol", "openai-completions");
+        assertThat(DefaultProviders.withModelProtocol(base, model)).isSameAs(base);
     }
 
     // ── 包 A-01：「宿主 → 车道」的选项通道（宿主侧唯一一环）──────────────

@@ -124,13 +124,34 @@ public final class DefaultProviders {
             .orElseGet(Map::of);
     }
 
+    /**
+     * 包 A-02（docs/59 §4.6）：{@link ModelInfo#api()} → {@code extra["protocol"]} ——
+     * pi {@code compat.ts:262} 的 {@code resolveApiProvider(model.api)} 在本仓的落点
+     * （{@code ConfigurableProvider.resolveProtocol} 是读点，会按 provider 的
+     * supportedProtocols 校验，不支持则响亮抛）。
+     *
+     * <p>⚠️ 三态口径与 {@link #cacheExtra} 一致：api 缺席 ⇒ <b>不注入</b>（provider
+     * 默认协议照旧），不要在这里塞默认值；extra 已有显式 {@code protocol} ⇒ 不覆盖
+     * （显式赢）。包可见是为了夹具。</p>
+     */
+    static ApiOptions withModelProtocol(ApiOptions options, ModelInfo modelInfo) {
+        var api = modelInfo == null ? null : modelInfo.api();
+        if (api == null || options.extra().containsKey("protocol")) {
+            return options;
+        }
+        var extra = new java.util.LinkedHashMap<>(options.extra());
+        extra.put("protocol", api);
+        // 六参构造：authKind 保真（B138 的同族教训）。
+        return new ApiOptions(options.baseUrl(), options.apiKey(), options.timeout(),
+            options.maxRetries(), extra, options.authKind());
+    }
+
     private static StreamIterator streamBlocking(
             Provider provider,
             ModelId<?> model,
             com.pijava.agent.harness.Context context,
             com.pijava.agent.harness.StreamOptions options,
             ApiOptions apiOptions) {
-        var api = provider.createApi(ChatApi.class, apiOptions);
         // 系统提示与工具定义都来自 Context（pi 的 Context）；它们不再走消息列表或 options。
         //
         // 模型**元数据**（而非只有 id）必须随请求走：pi 的请求构建器拿到整个 Model<TApi>，
@@ -144,6 +165,10 @@ public final class DefaultProviders {
         // modelInfo 上，故随 StreamRequest 一起走。
         var modelInfo = provider.builtinModels().find(model)
                 .orElseGet(() -> ModelInfo.minimal(model));
+        // 包 A-02（docs/59 §4.6）：车道跟着 modelInfo.api 走（pi compat.ts:262）。
+        // ⚠️ 必须**先**查 modelInfo 再 createApi —— 派发键在 modelInfo 上，此前 createApi
+        // 用的是不含 protocol 的 apiOptions，多协议 provider（openrouter）恒走默认车道。
+        var api = provider.createApi(ChatApi.class, withModelProtocol(apiOptions, modelInfo));
         var request = new com.pijava.ai.api.StreamRequest(
             modelInfo, context.systemPrompt(), context.messages(),
             ToolRegistry.definitionsOf(context.tools()),

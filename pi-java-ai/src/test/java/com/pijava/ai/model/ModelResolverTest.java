@@ -72,6 +72,29 @@ class ModelResolverTest {
         assertThat(resolved.modelName()).isEqualTo("gpt-5");
     }
 
+    /**
+     * 包 A-02（docs/59 §4.7）：pi {@code parseModelPattern:209-216} —— **精确匹配先行**。
+     * OpenRouter 的 {@code :batch}/{@code :exacto} 一族 id 自带冒号；改前冒号切分先行，
+     * 会把 batch id 静默解析成非 batch 模型（另一条车道、另一个价）。
+     */
+    @Test
+    void resolveMatchesColonIdsExactlyBeforeSplittingTheThinkingSuffix() {
+        var catalog = catalog(List.of(
+                info("openrouter", "anthropic/claude-fable-5", Set.of(ModelCapability.TEXT)),
+                info("openrouter", "anthropic/claude-fable-5:batch",
+                        Set.of(ModelCapability.TEXT))));
+        var resolver = new DefaultModelResolver(catalog);
+
+        assertThat(resolver.resolve("openrouter/anthropic/claude-fable-5:batch").modelName())
+                .isEqualTo("anthropic/claude-fable-5:batch");
+        // 裸模型名同样精确匹配先行。
+        assertThat(resolver.resolve("anthropic/claude-fable-5:batch").modelName())
+                .isEqualTo("anthropic/claude-fable-5:batch");
+        // 对照：真正的 thinking 后缀照旧被切掉（无精确命中才走到冒号切分）。
+        assertThat(resolver.resolve("openrouter/anthropic/claude-fable-5:high").modelName())
+                .isEqualTo("anthropic/claude-fable-5");
+    }
+
     @Test
     void resolvePatternIgnoresThinkingSuffix() {
         var catalog = catalog(List.of(
