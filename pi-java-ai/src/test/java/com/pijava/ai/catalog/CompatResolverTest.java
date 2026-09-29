@@ -377,4 +377,86 @@ class CompatResolverTest {
         assertThat(ThinkingFormat.parse("OpenAI")).isEmpty();
         assertThat(ThinkingFormat.parse("nonsense")).isEmpty();
     }
+
+    // ── 包 A-02（docs/59 §4.8）：completions 缓存面的两个探测值 ─────────
+
+    @Test
+    void completionsDetectsLongCacheRetentionForMostEndpoints() {
+        // pi detectCompat:1671-1677 —— 五谓词否定合取（together/cloudflare 两站/
+        // nvidia/ant-ling 不支持 1h/24h 档）。改前本车道对这一位**恒透传 null**
+        // （docs/59 G4）⇒ 长缓存的 completions 面（ttl 与 prompt_cache_retention）
+        // 全部够不着。
+        assertThat(CompatResolver.forCompletions(
+            model("openrouter", "openai/gpt-5.1"), "https://openrouter.ai/api/v1")
+            .supportsLongCacheRetention()).isTrue();
+        assertThat(CompatResolver.forCompletions(
+            model("deepseek", "deepseek-v4-pro"), "https://api.deepseek.com")
+            .supportsLongCacheRetention()).isTrue();
+        assertThat(CompatResolver.forCompletions(
+            model("together", "some-model"), "https://api.together.ai")
+            .supportsLongCacheRetention()).isFalse();
+        assertThat(CompatResolver.forCompletions(
+            model("ant-ling", "ling-1t"), "https://api.ant-ling.com")
+            .supportsLongCacheRetention()).isFalse();
+        // 显式值赢（getCompat:1720）。
+        var explicit = new ModelCompat(false, null, true, false, null, null, null, null, null,
+            true, null, null, null, null, Boolean.FALSE, null);
+        assertThat(CompatResolver.forCompletions(
+            model("openrouter", "openai/gpt-5.1", explicit), "https://openrouter.ai/api/v1")
+            .supportsLongCacheRetention()).isFalse();
+    }
+
+    @Test
+    void cacheControlFormatNeedsTheStrictOpenRouterProvider() {
+        // pi detectCompat:1632 —— `provider === "openrouter"` **严格等值** ＋ id 前缀
+        // "anthropic/"。⚠️ 与 isOpenRouter(:1595) 刻意不同：baseUrl 命中 openrouter.ai
+        // 的中转站**不**发 anthropic 形状的 cache_control。
+        assertThat(CompatResolver.forCompletions(
+            model("openrouter", "anthropic/claude-fable-5:batch"),
+            "https://openrouter.ai/api/v1").cacheControlFormat())
+            .isEqualTo(CacheControlFormat.ANTHROPIC);
+        // openai/ 前缀不够（只有 anthropic/ 走 :1632）。
+        assertThat(CompatResolver.forCompletions(
+            model("openrouter", "openai/gpt-5.1"),
+            "https://openrouter.ai/api/v1").cacheControlFormat()).isNull();
+        // ⚠️ RE-1 的钉子：baseUrl 是 openrouter.ai、provider 不是 ⇒ 不探测。
+        assertThat(CompatResolver.forCompletions(
+            model("my-relay", "anthropic/claude-x"),
+            "https://openrouter.ai/api/v1").cacheControlFormat()).isNull();
+    }
+
+    @Test
+    void explicitCacheControlFormatWinsOverTheDetection() {
+        // getCompat:1716 的 `explicit ?? detected`：显式键可以给非 openrouter 端点开这扇门。
+        var explicit = new ModelCompat(false, null, true, false, null, null, null, null, null,
+            true, null, null, null, null, null, null, null, null, null, null,
+            Map.of(), Map.of(), null, CacheControlFormat.ANTHROPIC, null);
+        assertThat(CompatResolver.forCompletions(
+            model("my-relay", "some-model", explicit), "https://relay.example.com")
+            .cacheControlFormat()).isEqualTo(CacheControlFormat.ANTHROPIC);
+    }
+
+    @Test
+    void openRouterRoutingIsNeverDetectedAndSurvivesThreeState() {
+        // pi :1657 的探测面 `openRouterRouting: {}` **无读者**（:981 读 raw compat）⇒
+        // java 探测恒 null；显式表原样透传（null 与空表线格可区分，docs/59 R6）。
+        assertThat(CompatResolver.forCompletions(
+            model("openrouter", "openai/gpt-5.1"), "https://openrouter.ai/api/v1")
+            .openRouterRouting()).isNull();
+        var explicit = new ModelCompat(false, null, true, false, null, null, null, null, null,
+            true, null, null, null, null, null, null, null, null, null, null,
+            Map.of(), Map.of(), null, null, Map.of("zdr", true));
+        assertThat(CompatResolver.forCompletions(
+            model("openrouter", "openai/gpt-5.1", explicit), "https://openrouter.ai/api/v1")
+            .openRouterRouting()).containsEntry("zdr", true);
+    }
+
+    @Test
+    void theOtherLanesLeaveTheTwoNewFieldsAlone() {
+        // 只有 completions 读这两个键（anthropic 车道自己算断点，A-01）⇒ 其余车道透传。
+        assertThat(CompatResolver.forAnthropic(model("anthropic", "claude-fable-5"))
+            .cacheControlFormat()).isNull();
+        assertThat(CompatResolver.forResponses(model("openai", "gpt-5"), false)
+            .openRouterRouting()).isNull();
+    }
 }

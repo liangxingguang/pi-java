@@ -450,6 +450,83 @@ class ModelsJsonConfigTest {
         assertThat(absent.compat().supportsCacheControlOnTools()).isNull();
     }
 
+    /**
+     * 包 A-02（docs/59 §4.11）：{@code cacheControlFormat} 单值闭集——命中映射到
+     * {@link com.pijava.ai.catalog.CacheControlFormat#ANTHROPIC}，缺席留 {@code null}
+     * （⇒ 请求期探测）。未知取值另有响亮抛错用例。
+     */
+    @Test
+    void readsTheCacheControlFormatKeyFromCompatBlock() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "openai-completions",
+              "models": [
+                {"id": "written", "compat": {"cacheControlFormat": "anthropic"}},
+                {"id": "absent"}
+              ]
+            }}}
+            """);
+
+        assertThat(config.catalog().find(ModelId.of("relay", "written")).orElseThrow()
+            .compat().cacheControlFormat())
+            .isEqualTo(com.pijava.ai.catalog.CacheControlFormat.ANTHROPIC);
+        assertThat(config.catalog().find(ModelId.of("relay", "absent")).orElseThrow()
+            .compat().cacheControlFormat()).isNull();
+    }
+
+    /** 包 A-02：{@code cacheControlFormat} 未知取值响亮抛（与 {@code maxTokensField} 同口径）。 */
+    @Test
+    void anUnknownCacheControlFormatIsALoudError() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "openai-completions",
+              "models": [{"id": "typo", "compat": {"cacheControlFormat": "anthroppic"}}]
+            }}}
+            """);
+
+        assertThatThrownBy(() -> config.catalog())
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("relay")
+            .hasMessageContaining("typo")
+            .hasMessageContaining("cacheControlFormat")
+            .hasMessageContaining("anthroppic");
+    }
+
+    /**
+     * 包 A-02（docs/59 §4.11/R6）：{@code openRouterRouting} 纯透传——内部键不校验、
+     * 值可空（{@code sort.partition:null} 必须活下来），缺席保持 {@code null}（不归一空表）。
+     */
+    @Test
+    void openRouterRoutingPassesThroughWithNullValuesIntact() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "openai-completions",
+              "models": [
+                {"id": "routed", "compat": {"openRouterRouting": {
+                  "order": ["a", "b"], "zdr": true, "sort": {"by": "price", "partition": null}
+                }}},
+                {"id": "absent"}
+              ]
+            }}}
+            """);
+
+        var routed = config.catalog().find(ModelId.of("relay", "routed")).orElseThrow()
+            .compat().openRouterRouting();
+        assertThat(routed).containsEntry("zdr", true);
+        assertThat(routed.get("order")).isEqualTo(List.of("a", "b"));
+        // ⚠️ 嵌套的 null 值必须活过 record 的防御性复制（Map.copyOf 会 NPE）。
+        @SuppressWarnings("unchecked")
+        var sort = (Map<String, Object>) routed.get("sort");
+        assertThat(sort).containsEntry("by", "price").containsKey("partition");
+        assertThat(sort.get("partition")).isNull();
+
+        assertThat(config.catalog().find(ModelId.of("relay", "absent")).orElseThrow()
+            .compat().openRouterRouting()).isNull();
+    }
+
     /** <b>A7</b>：{@code compat.supportsTemperature} 缺席 ≙ <b>{@code true}</b>（与 B20 同形的方向钉）。 */
     @Test
     void readsSupportsTemperatureFromCompatBlock() {

@@ -101,6 +101,16 @@ public final class CompatResolver {
             : ThinkingFormat.OPENAI;                                        // pi :1646-1656
         var detectedEffort = !isGrok && !isZai && !isMoonshot && !isTogether
             && !isCloudflareAiGateway && !isNvidia && !isAntLing;           // pi :1637-1638
+        // 包 A-02（pi detectCompat:1632）—— ⚠️ **严格 provider 等值**，baseUrl 命中
+        // openrouter.ai 的中转站不算（与 :1595 的 isOpenRouter 刻意不同：中转站没有
+        // anthropic 形状的 cache_control）。
+        var detectedCacheControlFormat =
+            provider.equals("openrouter") && modelName.startsWith("anthropic/")
+                ? CacheControlFormat.ANTHROPIC : null;
+        // 包 A-02（pi detectCompat:1671-1677）—— 五谓词否定合取（completions 面此前
+        // 恒透传 null，长缓存的 ttl 与 prompt_cache_retention 都够不着；B105）。
+        var detectedLongCacheRetention = !(isTogether || isCloudflareWorkersAi
+            || isCloudflareAiGateway || isNvidia || isAntLing);
 
         return withCompletions(resolved(compat,
             isDeepSeek,
@@ -112,12 +122,10 @@ public final class CompatResolver {
             useMaxTokens ? MaxTokensField.MAX_TOKENS : MaxTokensField.MAX_COMPLETION_TOKENS,
             !isNonStandard,
             isOpenRouterDeveloperRoleModel || (!isNonStandard && !isOpenRouter),
-            // ⚠️ completions 车道的两个 cache 门（`cacheControlFormat` /
-            // `supportsLongCacheRetention` 的 completions 面）不在包 A-01 范围 —— 它们
-            // 只在 OpenRouter ＋ `anthropic/*` 上生效，而本仓没有 OpenRouter chat 车道
-            // ⇒ **A-02 之前不可达**（docs/54 §1.2、docs/32 B105 的登记）。
             null,
-            null,
+            // 包 A-02：`supportsLongCacheRetention` 的 completions 探测面（B105 闭环；
+            // `cacheControlFormat` 的探测走 withCompletions 的合一位，与 thinkingFormat 同形）。
+            detectedLongCacheRetention,
             null,
             // 包 A-10：两个预算字段的**探测值**照 pi 的 `detectCompat:1662-1663` 原样
             // —— `supportsThinkingTokenBudget: false` / `thinkingTokenBudgetField:
@@ -128,7 +136,7 @@ public final class CompatResolver {
             // 包 A-10 第 6 步：`supportsMaxOutputTokens` 只被 **Responses** 车道读
             // （pi `openai-responses.ts:79`；azure 那份副本连读点都没有）⇒ 本车道不定义它
             // ⇒ 原样透传模型的显式取值（本车道的任何读点都不会碰它）。
-            null), detectedFormat, detectedEffort);
+            null), detectedFormat, detectedEffort, detectedCacheControlFormat);
     }
 
     /**
@@ -147,7 +155,8 @@ public final class CompatResolver {
      * （compact 构造器已把缺席归一成 {@code Map.of()}）。</p>
      */
     private static ModelCompat withCompletions(ModelCompat c, ThinkingFormat detectedFormat,
-                                               Boolean detectedSupportsReasoningEffort) {
+                                               Boolean detectedSupportsReasoningEffort,
+                                               CacheControlFormat detectedCacheControlFormat) {
         return new ModelCompat(
             c.allowEmptySignature(),
             c.requiresReasoningContentOnAssistantMessages(),
@@ -171,7 +180,11 @@ public final class CompatResolver {
             c.thinkingFormat() != null ? c.thinkingFormat() : detectedFormat,
             c.chatTemplateKwargs(),
             c.chatTemplateArgs(),
-            pick(c.supportsReasoningEffort(), detectedSupportsReasoningEffort));
+            pick(c.supportsReasoningEffort(), detectedSupportsReasoningEffort),
+            // 包 A-02：cacheControlFormat 是 explicit ?? detected（与 thinkingFormat 同形）；
+            // openRouterRouting 只透传（pi 探测面 :1657 的 {} 无读者，docs/59 §4.8/R6）。
+            c.cacheControlFormat() != null ? c.cacheControlFormat() : detectedCacheControlFormat,
+            c.openRouterRouting());
     }
 
     /**
@@ -316,7 +329,13 @@ public final class CompatResolver {
             c.thinkingFormat(),
             c.chatTemplateKwargs(),
             c.chatTemplateArgs(),
-            c.supportsReasoningEffort());
+            c.supportsReasoningEffort(),
+            // 包 A-02：两个新组件同样原样透传（cacheControlFormat 的「explicit ?? detected」
+            // 合一在 withCompletions；openRouterRouting 无探测面）。⚠️ 这里必须走 25 参规范
+            // 构造——若退回 23 参便捷构造会把这两个显式值丢成 null，withCompletions 就再也
+            // 读不到用户在 models.json 里写的 cacheControlFormat/openRouterRouting。
+            c.cacheControlFormat(),
+            c.openRouterRouting());
     }
 
     private static Boolean pick(Boolean explicit, Boolean detected) {

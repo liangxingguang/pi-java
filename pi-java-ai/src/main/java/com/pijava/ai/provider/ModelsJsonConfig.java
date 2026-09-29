@@ -18,6 +18,7 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
 import com.pijava.ai.catalog.BuiltinCatalog;
+import com.pijava.ai.catalog.CacheControlFormat;
 import com.pijava.ai.catalog.ChatTemplateKwargValue;
 import com.pijava.ai.catalog.MaxTokensField;
 import com.pijava.ai.catalog.ModelCatalog;
@@ -377,7 +378,28 @@ public final class ModelsJsonConfig {
                 def.chatTemplateKwargs()),
             chatTemplateValuesOf(providerId, model.id(), "chatTemplateArgs",
                 def.chatTemplateArgs()),
-            def.supportsReasoningEffort());
+            def.supportsReasoningEffort(),
+            // 包 A-02：cacheControlFormat 闭集响亮抛（与 maxTokensField 同口径）；
+            // openRouterRouting 纯透传（null 保持 null，不归一——docs/59 R6）。
+            cacheControlFormatOf(providerId, model.id(), def.cacheControlFormat()),
+            def.openRouterRouting());
+    }
+
+    /**
+     * models.json 的 {@code cacheControlFormat} 串 ⇒ {@link CacheControlFormat}（包 A-02）。
+     *
+     * <p>⚠️ 未知取值**响亮抛错**，理由与 {@link #maxTokensFieldOf} 完全相同：它是单值闭集，
+     * 写错会让 completions 线上的 {@code cache_control} 形状静默换掉（pi 的 TypeBox
+     * {@code Type.Literal("anthropic")} 同样拒绝未知取值）。</p>
+     */
+    private static CacheControlFormat cacheControlFormatOf(String providerId, String modelId,
+                                                           String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return CacheControlFormat.parse(value).orElseThrow(() -> new IllegalStateException(
+            "models.json provider \"" + providerId + "\", model \"" + modelId
+                + "\": unknown compat.cacheControlFormat \"" + value + "\" (expected \"anthropic\")"));
     }
 
     /**

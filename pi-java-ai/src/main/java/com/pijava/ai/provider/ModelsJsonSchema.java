@@ -169,7 +169,21 @@ public final class ModelsJsonSchema {
         /** 包 A-09（pi {@code types.ts:710}）：{@code baseten} 形状的 args 声明，形状同上一键。 */
         @JsonProperty("chatTemplateArgs") Map<String, Object> chatTemplateArgs,
         /** 包 A-09（pi {@code types.ts:680}）：端点是否吃 {@code reasoning_effort}；缺省按探测。 */
-        @JsonProperty("supportsReasoningEffort") Boolean supportsReasoningEffort
+        @JsonProperty("supportsReasoningEffort") Boolean supportsReasoningEffort,
+        /**
+         * 包 A-02（pi {@code model-config.ts:101}、{@code types.ts:737}）：completions 线上
+         * {@code cache_control} 的形状，单值闭集 {@code "anthropic"}；未知取值**响亮抛错**
+         * （与 {@code maxTokensField} 同口径）。缺省 ⇒ 按端点探测（openrouter ＋ anthropic/*）。
+         */
+        @JsonProperty("cacheControlFormat") String cacheControlFormat,
+        /**
+         * 包 A-02（pi {@code model-config.ts:102}、{@code types.ts:860} 的
+         * {@code OpenRouterRouting}）：原样发成请求体 {@code provider} 键的路由偏好表。
+         * ⚠️ **纯透传**（不校验内部键）—— pi 的 TypeBox 对象同样不拒未知键，且值可空
+         * （{@code sort.partition: null}）⇒ 用宽松的 {@code Map<String,Object>}，缺席保持
+         * {@code null}（不归一成空表，docs/59 R6）。
+         */
+        @JsonProperty("openRouterRouting") Map<String, Object> openRouterRouting
     ) {}
 
     /**

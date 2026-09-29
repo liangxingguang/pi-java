@@ -250,6 +250,20 @@ import java.util.Map;
  * @param supportsReasoningEffort pi {@code compat.supportsReasoningEffort}（包 A-09）：端点是否吃
  *        {@code reasoning_effort}。{@code null} ≙ 探测（七谓词否定合取，
  *        {@code detectCompat:1637-1638}）⇒ **三态**。
+ * @param cacheControlFormat pi {@code compat.cacheControlFormat}（包 A-02，
+ *        {@code openai-completions.ts:1632}/{@code :1073}，completions 车道独有）：线上
+ *        {@code cache_control} 的形状。{@code null} ≙「按端点探测」（判据
+ *        {@code provider === "openrouter" && id.startsWith("anthropic/")}，
+ *        {@code detectCompat:1632}），显式值赢 ⇒ **三态**；其余三条车道不读它。
+ * @param openRouterRouting pi {@code compat.openRouterRouting}（包 A-02，
+ *        {@code openai-completions.ts:980-982}，{@code types.ts:860} 的
+ *        {@code OpenRouterRouting}）：原样发成请求体的 {@code provider} 键。⚠️ **三态且
+ *        {@code null} 不归一成空表**（docs/59 R6）—— pi 的读点是 raw {@code model.compat}
+ *        的真值判断，缺席（{@code null}）不发这个键、空表（{@code {}} 为真值）发
+ *        {@code provider:{}}，二者**线格可区分**。⚠️ 读点在 pi 是 **raw compat**、不是
+ *        resolved（{@code :981} 写 {@code model.compat?.openRouterRouting}）；本仓照抄这条
+ *        不对称（探测面 {@code :1657} 的 {@code {}} 无读者，故 {@link CompatResolver} 对它
+ *        只做透传、不做 {@code explicit ?? detected}）。
  */
 public record ModelCompat(boolean allowEmptySignature,
                           Boolean requiresReasoningContentOnAssistantMessages,
@@ -273,16 +287,67 @@ public record ModelCompat(boolean allowEmptySignature,
                           ThinkingFormat thinkingFormat,
                           Map<String, ChatTemplateKwargValue> chatTemplateKwargs,
                           Map<String, ChatTemplateKwargValue> chatTemplateArgs,
-                          Boolean supportsReasoningEffort) {
+                          Boolean supportsReasoningEffort,
+                          CacheControlFormat cacheControlFormat,
+                          Map<String, Object> openRouterRouting) {
 
     /** Compact constructor（包 A-09）：两个模板 map 的 {@code null} 归一成空表（pi 的
      *  {@code ?? {}}，{@code getCompat:1714-1715}）⇒ 二态、读点免判空；防御性复制
-     *  与本仓其它 record 一致。 */
+     *  与本仓其它 record 一致。
+     *
+     *  <p>⚠️ {@code openRouterRouting}（包 A-02）**不归一**：缺席与空表线格可区分
+     *  （docs/59 R6）。复制用 {@code LinkedHashMap} 而非 {@code Map.copyOf} —— routing 的
+     *  值可空（如 {@code sort.partition: null}，{@code types.ts:884}），而 {@code Map.copyOf}
+     *  拒绝 {@code null} 值。</p> */
     public ModelCompat {
         chatTemplateKwargs = chatTemplateKwargs == null
             ? Map.of() : Map.copyOf(chatTemplateKwargs);
         chatTemplateArgs = chatTemplateArgs == null
             ? Map.of() : Map.copyOf(chatTemplateArgs);
+        openRouterRouting = openRouterRouting == null
+            ? null
+            : java.util.Collections.unmodifiableMap(
+                new java.util.LinkedHashMap<>(openRouterRouting));
+    }
+
+    /**
+     * 二十三参便捷构造（包 A-02 之前的**规范**构造 —— 那时组件就这二十三个）：包 A-02 新增的
+     * 两个缺席（{@code cacheControlFormat} 传 {@code null} ≙「按车道探测」，
+     * {@code openRouterRouting} 传 {@code null} ≙「无路由表」）。旧规范形态降级为便捷构造器 ⇒
+     * {@code CompatResolver} 之外的全部存量构造点与夹具**零改签**（与包 A-01/A-09/A-10 同一手法）。
+     */
+    public ModelCompat(boolean allowEmptySignature,
+                       Boolean requiresReasoningContentOnAssistantMessages,
+                       boolean supportsFinishReason,
+                       boolean forceAdaptiveThinking,
+                       Boolean supportsMidConvoSystemMessages,
+                       Boolean supportsMidConvoToolAdditions,
+                       Boolean supportsMidConvoToolChanges,
+                       Boolean supportsAdditionalTools,
+                       Boolean supportsToolSearch,
+                       boolean supportsTemperature,
+                       MaxTokensField maxTokensField,
+                       Boolean supportsStore,
+                       Boolean supportsDeveloperRole,
+                       Boolean supportsStrictMode,
+                       Boolean supportsLongCacheRetention,
+                       Boolean supportsCacheControlOnTools,
+                       ThinkingTokenBudgetField thinkingTokenBudgetField,
+                       Boolean supportsThinkingTokenBudget,
+                       Boolean supportsMaxOutputTokens,
+                       ThinkingFormat thinkingFormat,
+                       Map<String, ChatTemplateKwargValue> chatTemplateKwargs,
+                       Map<String, ChatTemplateKwargValue> chatTemplateArgs,
+                       Boolean supportsReasoningEffort) {
+        this(allowEmptySignature, requiresReasoningContentOnAssistantMessages,
+             supportsFinishReason, forceAdaptiveThinking, supportsMidConvoSystemMessages,
+             supportsMidConvoToolAdditions, supportsMidConvoToolChanges,
+             supportsAdditionalTools, supportsToolSearch,
+             supportsTemperature, maxTokensField, supportsStore, supportsDeveloperRole,
+             supportsStrictMode, supportsLongCacheRetention, supportsCacheControlOnTools,
+             thinkingTokenBudgetField, supportsThinkingTokenBudget, supportsMaxOutputTokens,
+             thinkingFormat, chatTemplateKwargs, chatTemplateArgs, supportsReasoningEffort,
+             null, null);
     }
 
     /**
