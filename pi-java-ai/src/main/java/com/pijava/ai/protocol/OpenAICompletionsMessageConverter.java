@@ -264,6 +264,18 @@ final class OpenAICompletionsMessageConverter {
         // （注释：同一台服务器可能同时服务 zai/qwen/chat-template 模型），
         // 且落点**先于** samplingParams（pi 的 :976 早于 :997）。
         writeThinkingTokenBudget(builder, budgetField, thinkingBudget);
+        // 包 A-02（pi :980-982）：OpenRouter 路由偏好 → body 的 `provider` 键。
+        // ⚠️ 读 **raw model.compat**（不是 resolved）—— pi 的读点写的就是
+        // `model.compat?.openRouterRouting`；探测/合并面（:1657/:1704）的 `{}` **无读者**
+        // ⇒ 这里同样只认显式值：null 不发键、空表发 `provider:{}`（JS 真值语义，
+        // 二者线格可区分；docs/59 R6，ModelCompat 的 compact 构造器为此不归一）。
+        // ⚠️ 经树（A-09 R11）：SDK mapper 的 NON_NULL inclusion 会静默丢 null 键 ——
+        // routing 的值可空（sort.partition，types.ts:884）；本类的 JSON 是无 inclusion
+        // 的普通 mapper（与 ThinkingFormatWriter.PLAIN_JSON 同物，就地复用不跨类借）。
+        var routing = request.model() == null ? null : request.model().compat().openRouterRouting();
+        if (routing != null) {
+            builder.putAdditionalBodyProperty("provider", JsonValue.from(JSON.valueToTree(routing)));
+        }
         // 包 A-10：模型级采样参数（pi `:996-999`，**body 的最后一个变更** ⇒ 同名键压过具名字段）。
         SamplingParamsWriter.applyToCompletions(builder, request.model());
 
