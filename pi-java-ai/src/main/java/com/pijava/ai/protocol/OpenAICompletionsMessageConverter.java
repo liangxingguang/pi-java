@@ -17,11 +17,13 @@ import com.openai.models.chat.completions.ChatCompletionContentPart;
 import com.openai.models.chat.completions.ChatCompletionContentPartImage;
 import com.openai.models.chat.completions.ChatCompletionContentPartText;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
+import com.openai.models.chat.completions.ChatCompletionDeveloperMessageParam;
 import com.openai.models.chat.completions.ChatCompletionFunctionTool;
 import com.openai.models.chat.completions.ChatCompletionMessageFunctionToolCall;
 import com.openai.models.chat.completions.ChatCompletionMessageParam;
 import com.openai.models.chat.completions.ChatCompletionMessageToolCall;
 import com.openai.models.chat.completions.ChatCompletionStreamOptions;
+import com.openai.models.chat.completions.ChatCompletionSystemMessageParam;
 import com.openai.models.chat.completions.ChatCompletionTool;
 import com.openai.models.chat.completions.ChatCompletionToolMessageParam;
 import com.openai.models.chat.completions.ChatCompletionUserMessageParam;
@@ -32,6 +34,7 @@ import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.message.MessageTexts;
 import com.pijava.ai.api.TransformMessages;
+import com.pijava.ai.catalog.CacheRetention;
 import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.catalog.MaxTokensField;
 import com.pijava.ai.catalog.ModelCompat;
@@ -77,6 +80,16 @@ final class OpenAICompletionsMessageConverter {
         List.of("reasoning", "reasoning_content", "reasoning_text");
 
     /**
+     * 三参便捷形态（包 A-02 之前的规范入口，全部存量夹具零改签）：retention 取
+     * {@link CacheRetention#SHORT} —— 对非 openrouter-anthropic 模型线格**零影响**
+     * （断点族被 cacheControlFormat 门关死；prompt_cache_retention 只在 LONG 出现）。
+     */
+    static ChatCompletionCreateParams buildParams(StreamRequest request, String apiName,
+                                                  String baseUrl) {
+        return buildParams(request, apiName, baseUrl, CacheRetention.SHORT);
+    }
+
+    /**
      * Build the wire request.
      *
      * @param request the stream request
@@ -85,10 +98,12 @@ final class OpenAICompletionsMessageConverter {
      * @param baseUrl the adapter's **effective** base URL; replay needs it because the
      *                {@code deepseek}-family relay detection reads it (pi
      *                {@code detectCompat:1592} classifies from {@code model.baseUrl})
+     * @param cacheRetention 三源合并后的保留期（包 A-02；pi {@code buildParams} 的同名形参，
+     *                {@code :349-357}）—— 断点族与 {@code prompt_cache_retention} 共用
      * @return the request body
      */
     static ChatCompletionCreateParams buildParams(StreamRequest request, String apiName,
-                                                  String baseUrl) {
+                                                  String baseUrl, CacheRetention cacheRetention) {
         // 包 A7：车道的 compat 在这里**解析一次**（pi `getCompat(model)` 的落点，
         // `openai-completions.ts:1685`），下面的读点全部改读它 —— 探测用的是车道传进来的
         // **有效** baseUrl（与 pi 的 `model.baseUrl` 有一处刻意的形状偏差，docs/53 §9 R2）。
@@ -99,6 +114,10 @@ final class OpenAICompletionsMessageConverter {
             && Boolean.TRUE.equals(compat.supportsDeveloperRole());
         var builder = ChatCompletionCreateParams.builder()
                 .model(request.modelId().modelName());
+        // 包 A-02（pi :858-859 的「建完再变异」）：消息与工具先收集进局部表，缓存断点
+        // 后处理（CompletionsCacheControl.apply 原位替换）之后再整体入 builder ——
+        // SDK 参数对象不可变，倒序 walk 又要求「最后一条挂得上的」在建完前不可知。
+        var wire = new ArrayList<ChatCompletionMessageParam>();
 
         var transcript = Transcripts.resolveTranscript(request.transcript(), compat);
         // 系统文本来自**前导系统消息**（pi :1249 的 `i === 0` 支 → `getSystemMessageText`）。
@@ -109,8 +128,8 @@ final class OpenAICompletionsMessageConverter {
             ? "" : MessageTexts.getSystemMessageText(initialSystemMessage);
         if (!systemText.isEmpty()) {
             // pi :1251 —— instruction/system 文本净化。
-            addInstructionMessage(builder, SanitizeUnicode.surrogates(systemText),
-                instructionRoleIsDeveloper);
+            wire.add(instructionMessage(SanitizeUnicode.surrogates(systemText),
+                instructionRoleIsDeveloper));
         }
 
         // 共享预通道必须先于本车道的映射跑（pi openai-completions.ts:1212 在
@@ -140,7 +159,7 @@ final class OpenAICompletionsMessageConverter {
                 // 证据见 SdkJsonEscapeHatchTest。只在 `anchorsAdditions` 为真时发 ——
                 // 否则那些工具已经在请求级 tools 字段里了。
                 if (transcriptTools.anchorsAdditions() && !system.toolsAdded().isEmpty()) {
-                    builder.addMessage(kimiToolSystemMessage(
+                    wire.add(kimiToolSystemMessage(
                         system.toolsAdded().stream().map(OpenAICompletionsMessageConverter::toTool)
                             .toList()));
                 }
@@ -149,15 +168,15 @@ final class OpenAICompletionsMessageConverter {
                 // （`:1225` 定义，`:1253` 与 `:1249` 都用它）。
                 var update = MessageTexts.renderSystemMessageUpdate(system);
                 if (!update.isEmpty()) {
-                    addInstructionMessage(builder, SanitizeUnicode.surrogates(update),
-                        instructionRoleIsDeveloper);
+                    wire.add(instructionMessage(SanitizeUnicode.surrogates(update),
+                        instructionRoleIsDeveloper));
                 }
                 continue;
             }
             if (msg instanceof Message.UserMessage user) {
-                addUserMessage(builder, user);
+                addUserMessage(wire, user);
             } else if (msg instanceof Message.AssistantMessage assistant) {
-                addAssistantMessage(builder, assistant, request.model(), compat);
+                addAssistantMessage(wire, assistant, request.model(), compat);
             } else if (msg instanceof Message.ToolResultMessage) {
                 // pi :1398-1455 —— **连续的** toolResult 合成一组：各自落一条 tool 消息，
                 // 但图片**合并收集**进**同一条**合成 user 消息（不是一条结果配一条）。
@@ -165,11 +184,11 @@ final class OpenAICompletionsMessageConverter {
                 int j = i;
                 while (j < messages.size()
                         && messages.get(j) instanceof Message.ToolResultMessage tool) {
-                    builder.addMessage(ChatCompletionToolMessageParam.builder()
+                    wire.add(ChatCompletionMessageParam.ofTool(ChatCompletionToolMessageParam.builder()
                         .toolCallId(tool.toolUseId())
                         // pi :1416 —— 净化的是**选中之后**的串（含两个占位串）。
                         .content(SanitizeUnicode.surrogates(toolResultText(tool.content())))
-                        .build());
+                        .build()));
                     // pi :1424 —— 图片收集**另有**一道能力门（与共享闸冗余，pi 两处都写）。
                     // ⚠️ 这道门在 pi 与 pi-java **两侧都不可观察**：共享闸（TransformMessages）
                     // 已按同一个 model 把非视觉模型的图片换成了文本块 ⇒ 这里永远收不到图片。
@@ -183,7 +202,7 @@ final class OpenAICompletionsMessageConverter {
                 i = j - 1;
                 if (!imageParts.isEmpty()) {
                     // pi :1448-1456 —— 合成的 user 消息（文案逐字）。
-                    builder.addMessage(syntheticToolImageMessage(imageParts));
+                    wire.add(ChatCompletionMessageParam.ofUser(syntheticToolImageMessage(imageParts)));
                 }
             }
         }
@@ -191,9 +210,28 @@ final class OpenAICompletionsMessageConverter {
         // Pass tools so the model emits structured tool_calls instead of
         // writing fake XML tool invocations into the text stream (which also
         // avoids garbled interleaving in the rendered bubble).
+        var wireTools = new ArrayList<ChatCompletionTool>();
         for (var td : transcriptTools.requestTools()) {
-            builder.addTool(toTool(td));
+            wireTools.add(toTool(td));
         }
+
+        // 包 A-02（B105；pi :814 取值、:858-859 落点）：anthropic 形状缓存断点的后处理
+        // —— cacheControlFormat 解析成 "anthropic" 且 retention != none 才有断点；
+        // 三落点次序（指令消息→工具末项→倒序会话消息）在 CompletionsCacheControl 里照抄。
+        CompletionsCacheControl.cacheControlOf(compat, cacheRetention)
+            .ifPresent(cc -> CompletionsCacheControl.apply(wire, wireTools, cc));
+        wire.forEach(builder::addMessage);
+        wireTools.forEach(builder::addTool);
+
+        // pi :825 —— prompt_cache_retention 的门**不含** cacheControlFormat（与断点族独立）。
+        // prompt_cache_key（:819-823）不移植：两个合取支都终结在
+        // clampOpenAIPromptCacheKey(options?.sessionId)，java 无该通道的生产者（B134；
+        // pi 在同样条件下也发不出这个键——clamp(undefined) → undefined）。
+        if (cacheRetention == CacheRetention.LONG
+                && Boolean.TRUE.equals(compat.supportsLongCacheRetention())) {
+            builder.putAdditionalBodyProperty("prompt_cache_retention", JsonValue.from("24h"));
+        }
+
         // Ask for usage in the stream so the token counter/status bar updates.
         builder.streamOptions(ChatCompletionStreamOptions.builder()
             .includeUsage(true)
@@ -249,16 +287,19 @@ final class OpenAICompletionsMessageConverter {
 
     /**
      * pi :1253（前导）与 {@code :1249}（中途更新）共用的一步：按 {@code instructionRole}
-     * 落一条指令消息。⚠️ 角色在 pi 里**一处算出、两处用**（{@code :1225} 定义）
+     * 造一条指令消息。⚠️ 角色在 pi 里**一处算出、两处用**（{@code :1225} 定义）
      * ⇒ 本仓也必须同源，否则「前导是 developer、中途是 system」这种半截形状会静默出现。
+     *
+     * <p>包 A-02 起返回参数对象而不是直写 builder —— 缓存断点的倒序 walk 要求消息
+     * 先收集完（pi 也是先建 {@code messages} 数组、{@code :858} 再变异）。</p>
      */
-    private static void addInstructionMessage(ChatCompletionCreateParams.Builder builder,
-                                              String text, boolean asDeveloperRole) {
-        if (asDeveloperRole) {
-            builder.addDeveloperMessage(text);
-        } else {
-            builder.addSystemMessage(text);
-        }
+    private static ChatCompletionMessageParam instructionMessage(String text,
+                                                                 boolean asDeveloperRole) {
+        return asDeveloperRole
+            ? ChatCompletionMessageParam.ofDeveloper(ChatCompletionDeveloperMessageParam.builder()
+                .content(text).build())
+            : ChatCompletionMessageParam.ofSystem(ChatCompletionSystemMessageParam.builder()
+                .content(text).build());
     }
 
     private static Map<String, JsonValue> toJsonValues(Map<String, Object> schema) {
@@ -321,7 +362,8 @@ final class OpenAICompletionsMessageConverter {
      *       when rule (i) already set that exact key.</li>
      * </ol>
      *
-     * @param builder  the request builder
+     * @param wire     the wire-message list under construction (包 A-02：缓存断点的倒序
+     *                 walk 要求先收集后变异，pi 的 {@code messages} 数组同形)
      * @param assistant the assistant message to serialize
      * @param model    the request's target model — its capabilities give pi's
      *                 {@code model.reasoning}
@@ -329,7 +371,7 @@ final class OpenAICompletionsMessageConverter {
      *                 {@code requiresReasoningContentOnAssistantMessages} drives rule (ii)
      */
     private static void addAssistantMessage(
-            ChatCompletionCreateParams.Builder builder,
+            List<ChatCompletionMessageParam> wire,
             Message.AssistantMessage assistant, ModelInfo model, ModelCompat compat) {
         var text = new StringBuilder();
         var reasoning = new ArrayList<String>();
@@ -395,7 +437,7 @@ final class OpenAICompletionsMessageConverter {
         // pi :1365-1372 —— 既无内容又无工具调用的助手消息整条丢掉（有 provider 不接受
         // 空助手消息）。⚠️ reasoning **不算内容**：只带 thinking 的消息就是要丢的那种。
         if (!text.isEmpty() || !toolCalls.isEmpty()) {
-            builder.addMessage(ab.build());
+            wire.add(ChatCompletionMessageParam.ofAssistant(ab.build()));
         }
     }
 
@@ -427,13 +469,16 @@ final class OpenAICompletionsMessageConverter {
      * <p>⚠️ 有图分支**不过滤**空文本块（pi {@code :1267} 只判 {@code content.length === 0}）
      * —— 与 Anthropic 的 user 分支（过滤）**刻意不同**，别顺手统一（{@code docs/44 D3}）。</p>
      */
-    private static void addUserMessage(ChatCompletionCreateParams.Builder builder,
+    private static void addUserMessage(List<ChatCompletionMessageParam> wire,
                                        Message.UserMessage user) {
         boolean hasImages = user.content().stream().anyMatch(OpenAICompletionsMessageConverter::isImageBlock);
         if (!hasImages) {
             var text = extractText(user.content());
             // pi :1257 —— user 串形态：整串净化。
-            if (!text.isEmpty()) builder.addUserMessage(SanitizeUnicode.surrogates(text));
+            if (!text.isEmpty()) {
+                wire.add(ChatCompletionMessageParam.ofUser(ChatCompletionUserMessageParam.builder()
+                    .content(SanitizeUnicode.surrogates(text)).build()));
+            }
             return;
         }
         var parts = new ArrayList<ChatCompletionContentPart>();
@@ -450,9 +495,9 @@ final class OpenAICompletionsMessageConverter {
             }
         }
         if (parts.isEmpty()) return; // pi :1267 —— `content.length === 0 ⇒ continue`
-        builder.addMessage(ChatCompletionUserMessageParam.builder()
+        wire.add(ChatCompletionMessageParam.ofUser(ChatCompletionUserMessageParam.builder()
                 .content(ChatCompletionUserMessageParam.Content.ofArrayOfContentParts(parts))
-                .build());
+                .build()));
     }
 
     /**

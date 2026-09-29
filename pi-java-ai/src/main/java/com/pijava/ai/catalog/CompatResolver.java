@@ -258,8 +258,7 @@ public final class CompatResolver {
             ModelInfo model,
             Optional<CacheRetention> requested,
             String envRetention) {
-        var retention = requested.orElseGet(
-            () -> "long".equals(envRetention) ? CacheRetention.LONG : CacheRetention.SHORT);
+        var retention = resolveCacheRetention(requested, envRetention);
         if (retention == CacheRetention.NONE) {
             return Optional.empty();
         }
@@ -267,6 +266,26 @@ public final class CompatResolver {
         var oneHour = retention == CacheRetention.LONG
             && Boolean.TRUE.equals(compat.supportsLongCacheRetention());
         return Optional.of(new CacheBreakpointSpec(oneHour));
+    }
+
+    /**
+     * pi {@code resolveCacheRetention}（{@code anthropic-messages.ts:60-67} 与
+     * {@code openai-completions.ts:342} **共用**的那个 helper）：请求期选项 ??
+     * {@code PI_CACHE_RETENTION === "long" ? long : short}。
+     *
+     * <p>包 A-02 提取成公共口：completions 车道（B105 的断点门与
+     * {@code prompt_cache_retention}）与 anthropic 车道（{@link #anthropicCacheControl}）
+     * 三源合并自此同源 —— 判据的严格性（只认字面 {@code "long"}）见
+     * {@link #anthropicCacheControl} 的 javadoc，不重复。</p>
+     *
+     * @param requested    请求期选项（{@code Optional.empty()} ≙ pi 的 {@code undefined}）
+     * @param envRetention {@code PI_CACHE_RETENTION} 的**原始**取值（{@code null} ≙ 未设）
+     * @return 合并结果，永不为 {@code null}（缺省 {@link CacheRetention#SHORT}）
+     */
+    public static CacheRetention resolveCacheRetention(Optional<CacheRetention> requested,
+                                                       String envRetention) {
+        return requested.orElseGet(
+            () -> "long".equals(envRetention) ? CacheRetention.LONG : CacheRetention.SHORT);
     }
 
     // ── 内部 ────────────────────────────────────────────────────

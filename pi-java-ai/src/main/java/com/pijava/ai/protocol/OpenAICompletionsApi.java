@@ -2,6 +2,8 @@ package com.pijava.ai.protocol;
 
 import java.util.ArrayDeque;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.SubmissionPublisher;
 import java.util.function.Supplier;
 
@@ -13,6 +15,7 @@ import com.openai.models.chat.completions.ChatCompletionChunk;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.catalog.CacheRetention;
 import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
@@ -121,6 +124,32 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                 ? options.baseUrl() : "https://api.openai.com/v1";
         this.client = OpenAIOkHttpClient.builder()
                 .apiKey(apiKey).baseUrl(baseUrl).build();
+        // 包 A-02（B105）：cacheRetention 的选项面（pi :342 的 options?.cacheRetention）。
+        this.cacheRetention = retentionOf(options);
+    }
+
+    /** pi 的缓存保留期环境变量（与 {@code AnthropicMessagesApi} 同一个，:64 / :342 共用 helper）。 */
+    private static final String CACHE_RETENTION_ENV = "PI_CACHE_RETENTION";
+
+    /**
+     * 请求期的 {@code cacheRetention} 选项（包 A-02）。三源合并（选项 ?? 环境变量 ?? short）
+     * 在请求期做（{@link CompatResolver#resolveCacheRetention}，与 anthropic 车道同源）。
+     */
+    private final Optional<CacheRetention> cacheRetention;
+
+    /**
+     * 从 {@code ApiOptions.extra} 读 {@code cacheRetention} —— 与
+     * {@code AnthropicMessagesApi.retentionOf} 逐字同形（两种来源都认：枚举值或线格字符串；
+     * 非法串经 {@link CacheRetention#parse} 落成**缺席**，好让 {@code PI_CACHE_RETENTION}
+     * 仍能生效）。
+     */
+    private static Optional<CacheRetention> retentionOf(ApiOptions options) {
+        Map<String, Object> extra = options.extra();
+        Object raw = extra == null ? null : extra.get("cacheRetention");
+        if (raw instanceof CacheRetention retention) {
+            return Optional.of(retention);
+        }
+        return CacheRetention.parse(raw == null ? null : raw.toString());
     }
 
     @Override
@@ -139,7 +168,11 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         var blockEnds = new ArrayDeque<Supplier<StreamEvent>>();
         var toolCall = new ToolCallAccumulator();
         try {
-            var params = OpenAICompletionsMessageConverter.buildParams(request, apiName(), baseUrl);
+            // 包 A-02（pi :342/:349-357）：cacheRetention 三源合并后进请求构建
+            // —— 断点族（cacheControlOf）与 prompt_cache_retention 共用这一个值。
+            var params = OpenAICompletionsMessageConverter.buildParams(request, apiName(), baseUrl,
+                CompatResolver.resolveCacheRetention(cacheRetention,
+                    System.getenv(CACHE_RETENTION_ENV)));
             publisher.submit(builder.emitStart());
 
             try (var streamResponse = client.chat().completions().createStreaming(params)) {
