@@ -262,4 +262,18 @@ class CatalogCompatRulesTest {
         assertThat(ModelData.miniMaxModels().find(ModelId.of("minimax", "MiniMax-M2.5"))
             .orElseThrow().compat()).isEqualTo(ModelCompat.NONE);
     }
+
+    /**
+     * 包 A-02（docs/59 §4.3/G8）：pi 生成器给 openrouter 的**全部** completions 条目写
+     * {@code thinkingFormat:"openrouter"}（生成数据实测；与探测同值 ⇒ 冗余照抄，
+     * 与 zai/deepseek/ant-ling 同口径）。改前 java 不携带 openrouter chat provider，
+     * 常量表没有这一臂 ⇒ 本用例红。
+     */
+    @Test
+    void openrouterCompletionsCarryTheOpenrouterThinkingFormat() {
+        assertThat(CatalogCompatRules.completions("openrouter", "openai/gpt-5.1").thinkingFormat())
+            .isEqualTo(ThinkingFormat.OPENROUTER);
+        assertThat(CatalogCompatRules.completions("openrouter", "anthropic/claude-fable-5:batch")
+            .thinkingFormat()).isEqualTo(ThinkingFormat.OPENROUTER);
+    }
 }

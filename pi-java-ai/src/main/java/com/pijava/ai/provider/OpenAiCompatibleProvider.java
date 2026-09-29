@@ -37,8 +37,9 @@ public abstract class OpenAiCompatibleProvider extends ConfigurableProvider {
         if (options.apiKey() != null && !options.apiKey().isBlank()) {
             return options;
         }
+        // 六参（包 A-02，B138）：占位 key 不改凭证形态。
         return new ApiOptions(
             options.baseUrl(), "ollama",
-            options.timeout(), options.maxRetries(), options.extra());
+            options.timeout(), options.maxRetries(), options.extra(), options.authKind());
     }
 }

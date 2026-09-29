@@ -31,7 +31,7 @@ public final class DefaultProviders {
     private DefaultProviders() {}
 
     /**
-     * Register the 16 built-in providers, any ServiceLoader-discovered
+     * Register the 18 built-in providers, any ServiceLoader-discovered
      * third-party {@code ProviderFactory} implementations, and the user's
      * {@code models.json} custom providers (which override builtins on
      * name collision). A malformed models.json warns and continues —

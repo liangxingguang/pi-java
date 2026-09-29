@@ -56,8 +56,9 @@ public final class ModelsJsonProvider extends ConfigurableProvider {
         // explicit user config and must win over it (CLI --base-url still
         // applies because DefaultProviders passes it through options.baseUrl —
         // indistinguishable here, accepted tradeoff).
+        // ⚠️ 两处重建都是六参（包 A-02，B138）：五参形态会把 authKind 归一成 API_KEY。
         var pinned = new ApiOptions(config.defaultBaseUrl(), options.apiKey(),
-            options.timeout(), options.maxRetries(), options.extra());
+            options.timeout(), options.maxRetries(), options.extra(), options.authKind());
         return super.createApi(apiType, withInlineKey(pinned));
     }
 
@@ -67,7 +68,7 @@ public final class ModelsJsonProvider extends ConfigurableProvider {
             return options;
         }
         return new ApiOptions(options.baseUrl(), inlineApiKey,
-            options.timeout(), options.maxRetries(), options.extra());
+            options.timeout(), options.maxRetries(), options.extra(), options.authKind());
     }
 
     @Override

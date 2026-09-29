@@ -125,6 +125,11 @@ public final class CatalogCompatRules {
             case "qwen-token-plan-cn" -> ThinkingFormat.QWEN;
             case "deepseek" -> ThinkingFormat.DEEPSEEK;
             case "ant-ling" -> ThinkingFormat.ANT_LING;
+            // 包 A-02：pi 生成器给 openrouter 的**全部** completions 条目写
+            // thinkingFormat:"openrouter"（生成数据实测；探测给同值 ⇒ 冗余照抄，
+            // 与 zai/deepseek/ant-ling 同口径）。A-09 时 java 不携带该 provider，
+            // 常量表没有这一臂（docs/58 §9 的「不携带 provider 常量」登记，B132 家族）。
+            case "openrouter" -> ThinkingFormat.OPENROUTER;
             default -> null;
         };
     }
