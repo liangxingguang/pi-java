@@ -13,6 +13,10 @@ import com.openai.errors.OpenAIException;
 import com.openai.errors.OpenAIIoException;
 import com.openai.errors.OpenAIServiceException;
 
+import com.anthropic.errors.AnthropicException;
+import com.anthropic.errors.AnthropicIoException;
+import com.anthropic.errors.AnthropicServiceException;
+
 import com.pijava.ai.api.ApiOptions;
 
 /**
@@ -82,6 +86,33 @@ public final class ProviderRetry {
 
     /** SDK {@link Headers} 聚成大小写不敏感的多值 Map（pi {@code Headers} 语义）。 */
     public static Map<String, List<String>> toHeaderMap(Headers headers) {
+        var map = new java.util.TreeMap<String, List<String>>(String.CASE_INSENSITIVE_ORDER);
+        for (String name : headers.names()) {
+            map.put(name, List.copyOf(headers.values(name)));
+        }
+        return map;
+    }
+
+    /**
+     * Anthropic SDK 异常投影（与 {@link #ofOpenAi} 同形，两个 SDK 无公共接口）。
+     */
+    public static ProviderFailure ofAnthropic(Throwable throwable) {
+        if (!(throwable instanceof AnthropicException exception)) {
+            return null;
+        }
+        if (exception instanceof AnthropicServiceException service) {
+            return new ProviderFailure(
+                    exception.getMessage(), service.statusCode(),
+                    toAnthropicHeaderMap(service.headers()), exception);
+        }
+        if (exception instanceof AnthropicIoException) {
+            return new ProviderFailure(exception.getMessage(), null, null, exception);
+        }
+        return null;
+    }
+
+    /** Anthropic {@link com.anthropic.core.http.Headers} 聚成大小写不敏感多值 Map。 */
+    public static Map<String, List<String>> toAnthropicHeaderMap(com.anthropic.core.http.Headers headers) {
         var map = new java.util.TreeMap<String, List<String>>(String.CASE_INSENSITIVE_ORDER);
         for (String name : headers.names()) {
             map.put(name, List.copyOf(headers.values(name)));

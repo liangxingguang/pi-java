@@ -17,6 +17,7 @@ import com.pijava.ai.api.AuthKind;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.CacheRetention;
 import com.pijava.ai.catalog.CompatResolver;
+import com.pijava.ai.http.ProviderRetry;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
 
@@ -89,7 +90,10 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         if (options.baseUrl() != null && !options.baseUrl().isBlank()) {
             builder.baseUrl(options.baseUrl());
         }
+        // A-14（G1）：SDK 内置重试关到 0，初始请求由 ProviderRetry 独占。
+        builder.maxRetries(0);
         this.client = builder.build();
+        this.providerRetry = ProviderRetry.optionsOf(options);
         this.cacheRetention = retentionOf(options);
     }
 
@@ -138,6 +142,9 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
      */
     private final Optional<CacheRetention> cacheRetention;
 
+    /** A-14：初始请求获取的重试选项。 */
+    private final ProviderRetry.Options providerRetry;
+
     @Override
     protected void streamInternal(StreamRequest request,
                                    SubmissionPublisher<StreamEvent> publisher) {
@@ -152,8 +159,11 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
             var params = buildParams(request);
             publisher.submit(builder.emitStart());
 
-            try (StreamResponse<RawMessageStreamEvent> sr =
-                         client.messages().createStreaming(params)) {
+            // A-14（R7）：只包初始请求获取；每次重试是全新 SDK 请求。
+            StreamResponse<RawMessageStreamEvent> sr = ProviderRetry.retry(
+                    () -> client.messages().createStreaming(params),
+                    ProviderRetry::ofAnthropic, providerRetry);
+            try (sr) {
                 sr.stream().forEach(raw -> {
                     StreamEvent se = mapEvent(raw, builder, isToolBlock,
                             isThinkingBlock, pendingToolName, pendingToolId, stop, usageState);
