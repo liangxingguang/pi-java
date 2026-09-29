@@ -20,6 +20,7 @@ import com.pijava.ai.api.ImageApi;
 import com.pijava.ai.api.ImageRequest;
 import com.pijava.ai.api.ImageResult;
 import com.pijava.ai.api.ImageStopReason;
+import com.pijava.ai.http.ProviderRetry;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.utils.SanitizeUnicode;
 
@@ -42,16 +43,26 @@ public final class OpenRouterImagesApi implements ImageApi {
         this.apiKey = resolveApiKey(options, apiKeyEnvVar);
         var baseUrl = options.baseUrl() != null && !options.baseUrl().isBlank()
             ? options.baseUrl() : "https://openrouter.ai/api/v1";
+        // A-14（G1）：SDK 内置重试关到 0，初始请求由 ProviderRetry 独占。
         this.client = OpenAIOkHttpClient.builder()
-            .apiKey(apiKey).baseUrl(baseUrl).build();
+            .apiKey(apiKey).baseUrl(baseUrl).maxRetries(0).build();
+        this.providerRetry = ProviderRetry.optionsOf(options);
     }
+
+    /** A-14：构造期选项（调用期未再传 options 时使用）。 */
+    private final ProviderRetry.Options providerRetry;
 
     @Override
     public ImageResult generate(ImageRequest request, ApiOptions options) {
         long timestamp = System.currentTimeMillis();
         try {
             var params = buildParams(request);
-            var response = client.chat().completions().create(params);
+            // A-14：非流式同样只包初始请求获取；调用期 options 优先于构造期。
+            var retryOptions = options != null
+                ? ProviderRetry.optionsOf(options) : providerRetry;
+            var response = ProviderRetry.retry(
+                () -> client.chat().completions().create(params),
+                ProviderRetry::ofOpenAi, retryOptions);
             var output = new ArrayList<ContentBlock>();
             if (!response.choices().isEmpty()) {
                 var message = response.choices().get(0).message();

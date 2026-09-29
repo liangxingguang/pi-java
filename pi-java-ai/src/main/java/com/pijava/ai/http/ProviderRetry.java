@@ -8,6 +8,13 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import com.openai.core.http.Headers;
+import com.openai.errors.OpenAIException;
+import com.openai.errors.OpenAIIoException;
+import com.openai.errors.OpenAIServiceException;
+
+import com.pijava.ai.api.ApiOptions;
+
 /**
  * Java 移植 pi {@code packages/ai/src/utils/provider-retry.ts}：SDK 以
  * {@code maxRetries: 0} 调用时，由本类独占 provider/SDK 传输层重试。
@@ -51,6 +58,46 @@ public final class ProviderRetry {
         public RetryDelayTooLongException(String message) {
             super(message);
         }
+    }
+
+    /**
+     * OpenAI 族 SDK 异常投影（completions/responses/azure/openrouter-images/
+     * embedding 共用）。非 {@link OpenAIException} 或无 status 的构造形态返回
+     * null ≙ pi {@code isProviderError} 为 false。
+     */
+    public static ProviderFailure ofOpenAi(Throwable throwable) {
+        if (!(throwable instanceof OpenAIException exception)) {
+            return null;
+        }
+        if (exception instanceof OpenAIServiceException service) {
+            return new ProviderFailure(
+                    exception.getMessage(), service.statusCode(), toHeaderMap(service.headers()), exception);
+        }
+        if (exception instanceof OpenAIIoException) {
+            // pi：IO 错误 status undefined ⇒ 可重试。
+            return new ProviderFailure(exception.getMessage(), null, null, exception);
+        }
+        return null;
+    }
+
+    /** SDK {@link Headers} 聚成大小写不敏感的多值 Map（pi {@code Headers} 语义）。 */
+    public static Map<String, List<String>> toHeaderMap(Headers headers) {
+        var map = new java.util.TreeMap<String, List<String>>(String.CASE_INSENSITIVE_ORDER);
+        for (String name : headers.names()) {
+            map.put(name, List.copyOf(headers.values(name)));
+        }
+        return map;
+    }
+
+    /**
+     * 从 {@link ApiOptions} 读重试选项：{@code maxRetries} 直取（null ⇒ 0），
+     * {@code maxRetryDelayMs} 经 {@code extra} 过桥（缺席 ⇒ 60000）。
+     */
+    public static Options optionsOf(ApiOptions options) {
+        long capMs = options.extra() != null
+                && options.extra().get("maxRetryDelayMs") instanceof Number number
+                ? number.longValue() : DEFAULT_MAX_RETRY_DELAY_MS;
+        return new Options(options.maxRetries(), capMs);
     }
 
     /** 退避睡眠出口（生产用 {@link Thread#sleep}，测试注入记录式实现）。 */

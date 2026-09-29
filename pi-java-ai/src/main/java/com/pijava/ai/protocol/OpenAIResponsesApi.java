@@ -8,6 +8,7 @@ import com.openai.client.okhttp.OpenAIOkHttpClient;
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.CompatResolver;
+import com.pijava.ai.http.ProviderRetry;
 import com.pijava.ai.stream.StreamEvent;
 
 /**
@@ -29,6 +30,9 @@ public final class OpenAIResponsesApi extends AbstractChatApi {
     private final OpenAIClient client;
     private final ResponsesOptions responsesOptions;
 
+    /** A-14：初始请求获取的重试选项。 */
+    private final ProviderRetry.Options providerRetry;
+
     /** Create an adapter for the given options (key from {@code OPENAI_API_KEY}). */
     public OpenAIResponsesApi(ApiOptions options) {
         this(options, "OPENAI_API_KEY");
@@ -44,8 +48,10 @@ public final class OpenAIResponsesApi extends AbstractChatApi {
         String apiKey = resolveApiKey(options, apiKeyEnvVar);
         String baseUrl = options.baseUrl() != null && !options.baseUrl().isBlank()
             ? options.baseUrl() : "https://api.openai.com/v1";
+        // A-14（G1）：SDK 内置重试关到 0，初始请求由 ProviderRetry 独占。
         this.client = OpenAIOkHttpClient.builder()
-            .apiKey(apiKey).baseUrl(baseUrl).build();
+            .apiKey(apiKey).baseUrl(baseUrl).maxRetries(0).build();
+        this.providerRetry = ProviderRetry.optionsOf(options);
         this.responsesOptions = ResponsesOptions.from(options);
     }
 
@@ -58,7 +64,11 @@ public final class OpenAIResponsesApi extends AbstractChatApi {
         var params = ResponsesMessageConverter.buildParams(
             request, responsesOptions, request.modelId().modelName(), apiName(),
             CompatResolver.forResponses(request.model(), false));
-        try (var stream = client.responses().createStreaming(params)) {
+        // A-14（R7）：只包初始请求获取。
+        var stream = ProviderRetry.retry(
+            () -> client.responses().createStreaming(params),
+            ProviderRetry::ofOpenAi, providerRetry);
+        try (stream) {
             ResponsesStreamProcessor.process(stream, publisher, request.model());
         }
     }

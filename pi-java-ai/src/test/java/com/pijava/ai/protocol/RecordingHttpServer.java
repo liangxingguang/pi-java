@@ -9,6 +9,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.sun.net.httpserver.HttpExchange;
@@ -24,14 +26,35 @@ import com.sun.net.httpserver.HttpServer;
  */
 final class RecordingHttpServer implements AutoCloseable {
 
+    /** A-14：脚本响应（队列空时回落恒 400 的默认桩）。 */
+    record Response(int status, Map<String, String> headers, byte[] body) {
+        Response(int status, String body) {
+            this(status, Map.of("Content-Type", "application/json"),
+                    body.getBytes(StandardCharsets.UTF_8));
+        }
+    }
+
     private final HttpServer server;
     private final AtomicReference<String> body = new AtomicReference<>("");
     private final AtomicReference<Map<String, String>> headers = new AtomicReference<>(Map.of());
+    private final AtomicInteger requestCount = new AtomicInteger();
+    private final ConcurrentLinkedQueue<Response> scripted = new ConcurrentLinkedQueue<>();
 
     RecordingHttpServer() throws IOException {
         server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/", this::handle);
         server.start();
+    }
+
+    /** A-14：排队一个脚本响应（FIFO，按请求顺序出队）。 */
+    RecordingHttpServer enqueue(Response response) {
+        scripted.add(response);
+        return this;
+    }
+
+    /** A-14：已处理的请求总数（重试观测面）。 */
+    int requestCount() {
+        return requestCount.get();
     }
 
     private void handle(HttpExchange exchange) throws IOException {
@@ -47,12 +70,19 @@ final class RecordingHttpServer implements AutoCloseable {
             // 断言都要拒（见 docs/43 §10 的实测记录）。
             body.set(out.toString(StandardCharsets.UTF_8));
         }
-        byte[] payload = "{\"error\":{\"message\":\"recorded\",\"type\":\"invalid_request_error\"}}"
-            .getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().set("Content-Type", "application/json");
-        exchange.sendResponseHeaders(400, payload.length);
+        requestCount.incrementAndGet();
+
+        Response response = scripted.poll();
+        if (response == null) {
+            // 默认桩：恒 400，让车道尽快收场。
+            response = new Response(400, Map.of("Content-Type", "application/json"),
+                    "{\"error\":{\"message\":\"recorded\",\"type\":\"invalid_request_error\"}}"
+                            .getBytes(StandardCharsets.UTF_8));
+        }
+        response.headers().forEach((k, v) -> exchange.getResponseHeaders().set(k, v));
+        exchange.sendResponseHeaders(response.status(), response.body().length);
         try (OutputStream os = exchange.getResponseBody()) {
-            os.write(payload);
+            os.write(response.body());
         }
     }
 

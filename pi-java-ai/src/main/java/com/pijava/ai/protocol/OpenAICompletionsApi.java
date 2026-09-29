@@ -17,6 +17,7 @@ import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.CacheRetention;
 import com.pijava.ai.catalog.CompatResolver;
+import com.pijava.ai.http.ProviderRetry;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
 
@@ -122,8 +123,10 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         this.apiKey = resolveApiKey(options, apiKeyEnvVar);
         this.baseUrl = options.baseUrl() != null && !options.baseUrl().isBlank()
                 ? options.baseUrl() : "https://api.openai.com/v1";
+        // A-14（G1）：SDK 内置重试关到 0，重试独占 ProviderRetry（pi requestOptions.maxRetries:0）。
         this.client = OpenAIOkHttpClient.builder()
-                .apiKey(apiKey).baseUrl(baseUrl).build();
+                .apiKey(apiKey).baseUrl(baseUrl).maxRetries(0).build();
+        this.providerRetry = ProviderRetry.optionsOf(options);
         // 包 A-02（B105）：cacheRetention 的选项面（pi :342 的 options?.cacheRetention）。
         this.cacheRetention = retentionOf(options);
     }
@@ -136,6 +139,9 @@ public class OpenAICompletionsApi extends AbstractChatApi {
      * 在请求期做（{@link CompatResolver#resolveCacheRetention}，与 anthropic 车道同源）。
      */
     private final Optional<CacheRetention> cacheRetention;
+
+    /** A-14：初始请求获取的重试选项（pi {@code ProviderRetryOptions}）。 */
+    private final ProviderRetry.Options providerRetry;
 
     /**
      * 从 {@code ApiOptions.extra} 读 {@code cacheRetention} —— 与
@@ -175,7 +181,11 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                     System.getenv(CACHE_RETENTION_ENV)));
             publisher.submit(builder.emitStart());
 
-            try (var streamResponse = client.chat().completions().createStreaming(params)) {
+            // A-14（R7）：只包初始请求获取；每次重试是全新 SDK 请求，X-Stainless-Retry-Count 恒 0。
+            var streamResponse = ProviderRetry.retry(
+                    () -> client.chat().completions().createStreaming(params),
+                    ProviderRetry::ofOpenAi, providerRetry);
+            try (streamResponse) {
 
                 for (var chunk : streamResponse.stream().toList()) {
                     if (chunk.choices().isEmpty()) {
