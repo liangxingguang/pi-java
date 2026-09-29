@@ -1,6 +1,8 @@
 # 59 - A-02：OpenRouter chat 车道（吸收 B133／B105／openRouterRouting）设计
 
-> **状态：设计稿，待审核；零行代码。**（2026-09-29）
+> **✅ 已闭环（2026-09-29，`63b1037`(设计)→`4f210e8`→`38daf44`→`f3e434c`→`e4ce857`→`3b65152`→`43926c0`＋docs 收口；实施记录见 §12）。**
+> R1–R8 全按建议实施（用户裁决 2026-09-29）；B105/B133 结案，新登记 B134–B138（B138 已随包修）。
+> ⚠️ 两处设计口径被实测更正（ProviderCatalog 计数 16→17 实为 17→18；RE-4「恰 1 红」实为 4 红），见 §11。
 > 判据＝与 pi 行为一致（不是文档一致）。参照 pi 工作树 `D:\workplaceForai\pi`（下文的 pi 行号均指它）。
 > 吸收面：`docs/32` **B105**（completions 的 `cacheControlFormat`）、**B133**（openrouter 思考形状不可达）、
 > `docs/53 §4.4` 归属表 **openRouterRouting → A-02** 三处登记，本包全部闭环。
@@ -546,3 +548,92 @@ ModelCompat/Converter/Api/DefaultProviders/DefaultModelResolver/ProviderCatalog/
 | B136 | models.json per-model `baseUrl` 被静默吞；`supportsMidConvoEffort` 不携带 | **新登** |
 | B137 | resolver 的 glob/scope 面 | **新登** |
 | B138 | `effectiveOptions`/`ModelsJsonProvider` 丢 `authKind` | **新登＋本包已修**（§4.5） |
+
+## 11. 设计结论被实测推翻 / 更正之处
+
+1. **ProviderCatalog 计数错**：设计稿沿旧 javadoc 写「16 → 17」，实测改前就是 **17**
+   （javadoc 漏数了 `openrouter-images`），实际 **17 → 18**。两条计数夹具
+   （`ProviderCatalogConformanceTest.catalogContainsSeventeenProviders`／
+   `ProviderRegistryTest.loadBuiltinProvidersRegistersSeventeen`）是注册触发的预期红，
+   随包改名 Eighteen。教训：**计数以夹具实测为准，不以 javadoc 为准**。
+2. **RE-4 预测被推翻**：§7 写「删串→数组改写支 ⇒ 恰一条红」，实测 **4 红**
+   （`batchModelGetsExactlyTheThreeBreakpoints`／`stringContentIsRewrittenIntoAPartArray`／
+   两条 LONG 用例的 `content.get(0)` NPE）——凡是字符串内容挂断点的夹具全部咬住，
+   预测低估了夹具面的覆盖。方向安全（有牙超预期），照实记录。
+3. **G7/B138 是设计期新发现**（非更正，记来源）：`ConfigurableProvider.effectiveOptions`、
+   `ModelsJsonProvider.createApi/withInlineKey`、`OpenAiCompatibleProvider.withPlaceholderKey`
+   **四处**五参 `ApiOptions` 重建把 `authKind` 静默归一成 `API_KEY`。生产上 baseUrl 恒空
+   ⇒ A0 步7 的车道头分派（BEARER/OAUTH）在到达车道前就被拆台。随包修（§4.5，R8），
+   先红 3 条（直调 `effectiveOptions` ＋ 两条真出站头 wire 夹具）。
+4. **`ThinkingLevel` 无 `Off` 变体**：off ≙ `Optional.empty()`（A-09 夹具口径）；
+   实施期更正了夹具初稿的 `new ThinkingLevel.Off()` 臆造写法。
+5. **perl 跨行变异第 6 次被 CRLF 破**：第 7 步的 TEMP-RED 变异没落地 ⇒ 夹具「全绿」
+   一度被误读；grep 复核发现后改用 Edit 工具做变异。记忆里的老教训
+   （「变异后必须 grep 复核是否落地」）再次验证。
+
+## 12. 实施记录（2026-09-29，闭环）
+
+### 12.1 提交
+
+| # | 提交 | 内容 |
+|---|---|---|
+| 1 | `63b1037` | 设计稿（本文档 §1–§10） |
+| 2 | `4f210e8` | §4.1/§4.2：`ModelInfo.api` 第 12 组件（String 线格名，R1）＋ `Protocol.fromWire` 收口 ＋ models.json per-model `api`（`modelApiOf` 响亮抛）＋ `ModelsJsonProvider.supportedProtocols` 扩容 |
+| 3 | `38daf44` | §4.3/§4.4/§4.5：`OpenRouterModels`（14 anthropic 全量＋10 completions 精选，R2）＋ `OpenRouterProvider`（per-protocol baseUrl pin，`pinnedOptions` 包可见）＋ `ProviderCatalog` 注册（17→18）＋ `CatalogCompatRules` openrouter 臂（G8）＋ **B138 authKind 四处修复** |
+| 4 | `f3e434c` | §4.6/§4.7：`DefaultProviders.withModelProtocol`（extra["protocol"] 首个生产写入者；modelInfo 查找提到 createApi 之前）＋ `DefaultModelResolver` 精确匹配先行（R4） |
+| 5 | `e4ce857` | §4.8/§4.11：`CacheControlFormat` 枚举 ＋ `ModelCompat` 23→25 组件（R6：routing 不归一）＋ `forCompletions` 两探测（`:1632` 严格 provider 等值／`:1671-1677`）＋ models.json 两键 |
+| 6 | `3b65152` | §4.9（**B105 闭环**）：`CompatResolver.resolveCacheRetention` 公共口（A-01 改走同源）＋ 车道 `retentionOf` ＋ `CompletionsCacheControl`（新文件，树改写三断点，R7）＋ `prompt_cache_retention`（R3）＋ converter 收集-后处理-入 builder 重构（3 参便捷形态缺省 SHORT，存量夹具零改签） |
+| 7 | `43926c0` | §4.10：routing 落线（raw compat 读点、经树、`:976→:981→:996` 同序）＋ **B133 收口夹具**（内置 gpt-5.1 → 嵌套 `reasoning:{effort}`，high 与 off→"none" 两支） |
+| 8 | （本提交） | docs 收口：本文档 §11–§12 ＋ `docs/32`（B105/B133 结案、B134–B138 新登）＋ `docs/41:55` 划行 ＋ `docs/48` banner/表行 ＋ `docs/53 §4.4` 回执 |
+
+### 12.2 行为面（本包实际改变了什么）
+
+1. `--provider openrouter`（或 models.json 之外首次可解析 `openrouter/...` 模型）⇒
+   chat 可用：anthropic 车道 14 条（baseUrl `https://openrouter.ai/api`，SDK 自拼
+   `/v1/messages`）、completions 车道目录 10 条＋任意未登记 id（minimal 退化，探测全中）。
+2. **车道跟着模型走**：`ModelInfo.api` → `extra["protocol"]`（pi `compat.ts:262` 的落点）；
+   models.json 的 per-model `api` 同时接通（此前被静默吞）。
+3. `:batch` 一族 id 不再被 resolver 静默解析成非 batch 模型（精确匹配先行）。
+4. **B105**：openrouter＋`anthropic/*` 在 completions 线上发 anthropic 形状 `cache_control`
+   三断点（串 content 改写成单分片数组；工具末项**无** `supportsCacheControlOnTools` 门）；
+   `PI_CACHE_RETENTION=long` ⇒ `ttl:"1h"` ＋ 顶层 `prompt_cache_retention:"24h"`
+   （后者对**所有** `supportsLongCacheRetention` 为真的 completions 端点生效，pi 同）。
+5. `compat.openRouterRouting`（models.json 唯一生产者）⇒ body `provider` 键原样
+   （嵌套 null 存活）；`{}` 发空对象、缺席不发——三态与 pi 的 JS 真值语义逐字对应。
+6. **B133**：openrouter 思考形状（A-09 已落臂）生产可达（内置目录＋探测双通道）。
+7. **B138**：BEARER/OAUTH 凭证形态活过 provider 层的四处 `ApiOptions` 重建
+   （此前生产路径上 A0 步7 的头分派永远只收到 API_KEY）。
+
+### 12.3 先红与探针（全部实测）
+
+| 步 | 先红 | 探针 |
+|---|---|---|
+| 2 | 行为红 2/2（协议集缺 ANTHROPIC_MESSAGES／未知 api 零异常） | —（红即牙） |
+| 3 | authKind 3 红（`expected BEARER but was API_KEY`／两条真出站头是 x-api-key）＋ rule 臂 1 红；目录/provider 新类为结构编译红 | 计数夹具 2 红＝注册生效的反证 |
+| 4 | resolver 1 红（`:batch` 解析成非 batch）＋注入 2 红（TEMP 还原接线恰 2 红、助手契约绿） | — |
+| 5 | 新访问器＝编译红（结构） | **RE-1** 判据放宽成 isOpenRouter ⇒ 恰 1 红；**RE-2** routing 归一 null→`Map.of()` ⇒ 恰 3 红 |
+| 6 | 5/7 红（3 断言＋2 NPE＝串未改写；两条对照组全程绿） | **RE-5** 工具断点挂首项 ⇒ 恰 1 红；**RE-4** 删串→数组支 ⇒ **4 红**（预测恰 1，§11-2） |
+| 7 | TEMP 关写入恰 2 红（explicit/empty；absent 对照与 B133 收口钉绿） | **RE-3** 不经树直塞 ⇒ 恰 1 红（null 键被吞）；**RE-ORDER** 挪到 sampling 后 ⇒ 恰 1 红 |
+
+### 12.4 测试与行数
+
+- `pi-java-ai` 1108 ⇒ **1156**（+48）；`pi-java-coding-agent` 279 ⇒ **282**（+3）；
+  全 reactor 回归绿（§12 收口时实测）。
+- 新文件：`OpenRouterModels`(238)、`OpenRouterProvider`(77)、`CacheControlFormat`(44)、
+  `CompletionsCacheControl`(177)、夹具 5 个文件。
+- 存量超限增量：**converter 513⇒570**（预算 ~545，注释密度超出；缓存主体已外置）、
+  **ModelCompat 499⇒564**、**ModelsJsonConfig 483⇒526（新超限）**——三处照
+  `docs/31` 存量超限口径登记，不在本包拆分。
+
+### 12.5 教训（进记忆）
+
+- **计数断言以夹具为准不以 javadoc 为准**（§11-1：设计稿抄了过期的「16 total」）。
+- perl 跨行变异在 CRLF 仓里**第 6 次**失效——变异操作的默认工具应是 Edit，
+  perl/sed 跨行必须先 `grep -c $'\r'` 判线尾。
+- 「行为红不可得」的新类型面（目录/provider 类）用**对照组＋注册反证**补牙：
+  计数夹具的红就是注册生效的证明。
+
+### 12.6 下一步
+
+`docs/48` banner 的候选顺位：**A-14**（provider retry `x-should-retry`）或 B134/B103
+（sessionId 通道族——本包把它的消费面又登记全了一条）。待用户裁决。

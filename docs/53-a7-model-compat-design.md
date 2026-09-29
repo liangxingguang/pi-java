@@ -497,8 +497,8 @@ public final class CompatResolver {
 | `supportsStrictMode` | ✅ 已消费（B88 的 Responses 面）；completions 面**零消费者** ⇒ 登记 |
 | `thinkingFormat` / `supportsReasoningEffort` | **A-09** |
 | `chatTemplateKwargs` / `chatTemplateArgs` | **A-09**（baseten / chat-template 形态） |
-| `openRouterRouting` | **A-02** |
-| `cacheControlFormat` / `supportsLongCacheRetention` | **A-01** |
+| `openRouterRouting` | **A-02** ✅ 已闭环（`docs/59 §12`，`43926c0`：raw compat 读点、经树落 `provider` 键、null/{}/有值三态） |
+| `cacheControlFormat` / `supportsLongCacheRetention` | **A-01**（anthropic 面）✅；completions 面随 **A-02** 闭环（`docs/59 §12.2-4`，B105） |
 | `thinkingTokenBudgetField` / `supportsThinkingTokenBudget` | **A-10** |
 | `requiresToolResultName` / `requiresAssistantAfterToolResult` | 零消费者（B86 已登记：加进来恒 `false` ＝ 死码） |
 | `supportsUsageInStreaming` / `requiresThinkingAsText` / `vercelGatewayRouting` / `zaiToolStream` / `supportsOpenAIGrammarTools` / `sendSessionAffinityHeaders` / `sessionAffinityFormat` / `vllmPriority` | 零消费者 ⇒ **新登记**（§10） |

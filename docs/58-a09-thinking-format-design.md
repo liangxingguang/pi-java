@@ -768,7 +768,7 @@ final class ThinkingFormatWriter {
 | **B130** | zai 的 `supportsReasoningEffort` 数据漂移（§9 第一条；今天两侧有效值同 false ⇒ 等价） | B 类未结（触发式） |
 | **B131** | ant-ling 的 else-if 穿透角：手搓 `{thinkingFormat:"ant-ling", supportsReasoningEffort:true}` ＋ 无级别 ＋ `map.off` 字符串时，pi 的链条穿透到 `:965` 写 `reasoning_effort=off值`；switch 形状不复制。**pi 生成数据不可达**（`antLingCompat` 明文 false ＋ 探测七谓词含 isAntLing） | 已裁决不改（编号留在 B 表以稳定代码引用） |
 | **B132** | together／baseten／opencode*／fireworks 的目录常量只落代码路径（java 不携带这些 provider） | B 类未结（随 provider 扩展） |
-| **B133** | openrouter 形状逻辑已落、今天不可达（无 OpenRouter chat 车道），与 A-02 同批 | B 类未结（随 A-02） |
+| **B133** | openrouter 形状逻辑已落、今天不可达（无 OpenRouter chat 车道），与 A-02 同批 | ✅ **已结案**（A-02，2026-09-29，`docs/59 §12.2-6`：openrouter chat provider 落地，收口夹具走真目录模型） |
 
 R9（`thinkingBudgets` ⇒ B128）与 R10（Responses 平行通道 ⇒ B127）保持既有登记，本包不动。
 
