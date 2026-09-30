@@ -30,15 +30,30 @@ import com.pijava.ai.thinking.ThinkingLevel;
  *                     （pi 的 {@code "off"} 在请求侧就是「不传」，见 {@code agent.ts:465}）
  * @param cacheRetention pi {@code SimpleStreamOptions.cacheRetention}（包 A-01）；空 = 用
  *                     pi 的缺省链（{@code PI_CACHE_RETENTION} ?? {@code "short"}）。
- *                     ⚠️ pi 的 {@code SimpleStreamOptions} 还有 {@code sessionId} 与
- *                     {@code env}，两者各有归属、本记录<b>不带</b>（{@code docs/54 §3 F2}）
+ * @param sessionId    pi {@code SimpleStreamOptions.sessionId}（包 B103）：会话亲和头/
+ *                     {@code prompt_cache_key} 的来源。空 ≙ pi 的 {@code undefined}。
+ *                     ⚠️ 压缩/摘要路径保持<b>空</b>（pi 在该路径显式传 routing id、
+ *                     不是主会话 id；{@code docs/61 §1.5}）。{@code env} 仍不带
+ *                     （{@code docs/54 §3 F2}）。
  */
 public record StreamOptions(
     OptionalInt maxTokens,
     OptionalDouble temperature,
     Optional<ThinkingLevel> reasoning,
-    Optional<CacheRetention> cacheRetention
+    Optional<CacheRetention> cacheRetention,
+    Optional<String> sessionId
 ) {
+    /**
+     * 四参便捷构造（包 B103 之前的**规范**构造）：{@code sessionId} 缺席 ≙ pi 的
+     * {@code undefined}。保留该形态使包 B103 之前的构造点**零改签**。
+     */
+    public StreamOptions(OptionalInt maxTokens,
+                         OptionalDouble temperature,
+                         Optional<ThinkingLevel> reasoning,
+                         Optional<CacheRetention> cacheRetention) {
+        this(maxTokens, temperature, reasoning, cacheRetention, Optional.empty());
+    }
+
     /**
      * 三参便捷构造（包 A-01 之前的**规范**构造）：{@code cacheRetention} 缺席 ≙ pi 的
      * {@code undefined} ⇒ 走缺省链。保留该形态使包 A-01 之前的三个构造点**零改签**。
@@ -46,7 +61,7 @@ public record StreamOptions(
     public StreamOptions(OptionalInt maxTokens,
                          OptionalDouble temperature,
                          Optional<ThinkingLevel> reasoning) {
-        this(maxTokens, temperature, reasoning, Optional.empty());
+        this(maxTokens, temperature, reasoning, Optional.empty(), Optional.empty());
     }
 
     /** Default options: no max tokens, no temperature, no thinking, default cache retention. */
