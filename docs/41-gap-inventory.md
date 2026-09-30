@@ -103,7 +103,7 @@ constrained sampling / grammar · `transport` 选择 · `session-resources` 清�
 | ~~**`done` 事件载荷**~~ | 3 | ✅ **C 批次已闭环**（`docs/55 §12`，2026-09-27，`3684a82`/`b8d7e48`/`882fcaa`）：`done.partial` **就是** pi 的 `done.message` —— 终局载荷＝**落定后的累加器**（`stopReason` 非占位值、`usage` 非 null、内容是整条流的累积块）。落定从宿主补丁（已删的 `PiLoopRunner.withErrorShape`）移回**生产者**：单工厂 `StreamDone.settle`/`StreamError.settle` ＋ 三落点（车道出口 `StreamPartialBuilder.emitError`、出口缝 `AbstractChatApi`、旁路生产者三条），下游一律读消息、禁止再从 `Throwable` 重建（`err.error()` 读点 6⇒1）。原后果：java 的 `done` 只带 `usage`＋`partial`、三个访问器语义未定义 | B114 |
 | ~~`error` 事件载荷~~ | 2 | ✅ **C 批次已闭环**（同上，同包）：`error.partial` **就是** pi 的 `error.error` —— 除 `done` 那三样外，错误路另有非空 `errorMessage`，且 **`content` 保留流到故障点为止的块**（pi 实测：中止时是已流出的那段文本）。顺带修两条真缺陷：**缺终局被报成成功**（`onComplete` 安全网曾推 `StreamDone("stop")`，pi 判 error）与**非流式 `send()` 吞错**（曾返回空消息）。原后果：网络中断后界面上「模型刚说的话」整段消失、错误文本只存在于 JVM 异常里 | B114 |
 | ~~**归一化停因词表**（`"tool_use"` vs pi 的 `"toolUse"`）~~ | 2 | ✅ **B109 已闭环**（`docs/56 §12`，2026-09-27）：归一化停因改为 pi 的 `"toolUse"`，每条走工具的车道都受影响 ⇒ 对外（终局帧／RPC 转录／web wire／遥测 span 属性）的 `stopReason` 从本包起与 pi 同字面量（宿主线终局帧顺带关掉 C 批次的一处残余）。⚠️ **三个同名字面量只动一个**：**内容块判别字面量**（=B48，`SessionJson` 无 deserializer ⇒ 注解不能改）与**线格原值／`rawStopReason`**（=B20）**逐字不动**，且被当作对照组。**安全依据**：主源码按停因字面量分支处**零处**比 `tool_use`（逐处核过）⇒ 行为面零风险。**真迁移**：`~/.pi-java` 下 3353 个会话文件带旧值 ⇒ 两条读路径经 `JsonlCodec.readStopReason` 垫片归一 | B118 · B119 · B120 · B121 |
-| `provider-retry` | 2 | pi 读 `x-should-retry` 头 / java 用状态码集合 ⇒ 服务端显式要求重试时**不理会** |
+| ~~`provider-retry`~~ | ~~2~~ | **已结案（A-14，2026-09-30，`docs/60 §12`）**：ProviderRetry 移植 pi 判据/延迟/cap，七车道 maxRetries(0)＋wrap，Mistral 补三头 |
 | ~~`usage.totalTokens` 合成口径~~ | 2 | ✅ **H1 已对齐**——不是统一成一个公式，而是**逐车道照 pi**：Responses/Google 直取 provider 值（P11/P12）、completions 自算四分量和（P9）、Mistral 优先 provider `||` 自算（P14）、Anthropic 四分量求和。L5 由 S15 差分钉住（`docs/42 §10.1`） |
 | ~~`usage.totalTokens` 之外的 usage 形状~~ | 2 | ✅ **H1 已闭环**：`UsageInfo.usage()` 生产非 null（步 2）、`UsageRecord` 传全量（步 6 A3）、`usageOf` 两侧键序/可选键由 S15 逐字节钉（步 7） |
 | `Model.reasoning` → `ModelCapability.THINKING` | 2 | 形状不同（pi 是模型元数据布尔 / java 是能力集成员） |
@@ -117,7 +117,7 @@ constrained sampling / grammar · `transport` 选择 · `session-resources` 清�
 | ~~`Usage.Cost` 恒零~~ | ✅ **H1 步 1＋各车道挂价已救活**（B57）。原状态：成本累加恒 0 |
 | `StreamEvent.UsageInfo.from(...)` 零调用者 | **H1 步 7 时核对**（`docs/42 §10.1` A4）：加宽管线走的是 `emitUsage(Usage)`，这个静态工厂仍是死码；不删（R5 面），登记 |
 | ~~**`ThinkingLevelMap` 非空实例生产不可构造**~~ | ✅ **包H5 已救活**（`docs/46`，2026-09-23）—— 且**不止是接线**：形状也重塑了。原状态：生产构造点全部 `empty()` ⇒ `forLevel` 恒 `OFF` ⇒ 请求里**永无 `thinking.budgetTokens`**。⚠️ **新残留**：`ModelThinkingLevels.supported/clamp` 零生产调用者（`docs/46 §7 B15-残留-9`） |
-| **`RetryPolicy` 五个预设零调用者** | 包 A0 步6 的发现（J5）：`anthropic()`/`openai()`/`google()`/`mistral()`/`deepseek()` 五预设**零调用者**，`PiHttpClient` 走 `defaultPolicy()`（`{408,409,429}` ∪ 任意 5xx；`Retry-After` 只读 429/503）。是否接线属 `x-should-retry`／传输重试那包的范围（A6） |
+| **`RetryPolicy` 五个预设零调用者（J5）** | 包 A0 步6 的发现。**A-14 更新（2026-09-30）**：Mistral 不再走 `defaultPolicy()`、改按 ApiOptions 建 policy（默认 0），五个预设仍零调用者，条目保留 |
 | `StreamSimple` | 主源码零调用（**别当接缝**） |
 | `DeferredHandle` | 零生产者（两侧同状） |
 | `ToolResultMessage.usage` / `details` | 两者皆无生产者 |

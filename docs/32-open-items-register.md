@@ -55,12 +55,14 @@
 | **G** | 已结案（**别重开**） | 34 | —— | —— |
 | **H** | `docs/31` 之外，机械扫描**待复核** | **62**（§9.1–§9.4 实测；⚠️ 原记 69） | —— | 我（逐条复核后才能定档） |
 
-**真正的闸门 = A 未结 14 ＋ B 未结 64 ＝ 78 条**（F 类九条已于 **2026-09-20 全部裁定** ⇒ 转为工作项，不再是闸门；见 §7）。C/D/E 三类随时可做，没有一条阻塞合并。
+**真正的闸门 = A 未结 13（A-14 已闭环）＋ B 未结 65 ＝ 78 条**（F 类九条已于 **2026-09-20 全部裁定** ⇒ 转为工作项，不再是闸门；见 §7）。C/D/E 三类随时可做，没有一条阻塞合并。
 
 > **2026-09-29（包 A-09 收口）**：B 类新增 **B129–B133**（`docs/58 §10`）；其中 **B131 已裁决不改**
 > （pi 生成数据不可达，编号留 B 表以稳定代码引用）⇒ 未结 +4（58→62）。
 > **2026-09-29（包 A-02 收口）**：**B105／B133 结案**（OpenRouter chat 车道落地，`docs/59 §12`）；
 > 新增 **B134–B138**（`docs/59 §10`），其中 **B138（authKind 丢失）已随包修复** ⇒ 未结 +4−2（62→64）。
+> **2026-09-30（包 A-14 收口）**：B 类新增 **B139**（`docs/60 §12`：Json mapper GETTER 不可见 ⇒ 嵌套 record
+> 序列化丢字段，Retry/ProviderRetry 已修、其余嵌套 record 待取证）⇒ 未结 +1（64→65）。
 
 > **2026-09-20 第二次重建**（pi 重测 `71dca871b` → `3390bd936`，111 提交）：B 类 66 → **79**（新增 B67–B79，
 > 全部由 `docs/40 §1.3` 的 6 路重测撞出）；**C11 作废**（`addedToolNames` 被 pi 删除，裁决 R1）；
@@ -707,4 +709,5 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | B135 | **错误 `metadata.raw` 追加未落** —— `openai-completions.ts:714-720`：OpenRouter 中转的 provider 错误在 `error.metadata.raw` 里带补充信息，pi 在 errorMessage 未含该串时追加一行 | `docs/59 §2.3 取证` | 属**错误归一化家族**（pi-java 无 `normalizeProviderError`/`formatProviderError` 对应物）⇒ 独立包裁决，不塞进车道 catch |
 | B136 | **models.json per-model `baseUrl` 被静默吞** —— `ModelDef.baseUrl()` 已解析、`toModelInfo` 不读（pi `provider-composer.ts` 是 `definition.baseUrl ?? providerConfig.baseUrl ?? defaults?.baseUrl`）；同族：`supportsMidConvoEffort`（fable-5.1 目录键）java 不携带（B98 清单补一笔） | `docs/59 §4.2/§1.2` | per-model `api` 已随 A-02 接通；`baseUrl` 需要 `ModelInfo` 加组件（与 **B100** 的「有效 baseUrl vs model.baseUrl」形状偏差同题）⇒ 独立裁决 |
 | B137 | **resolver 的 glob/scope 面** —— pi `model-resolver.ts:290+` 的 minimatch 通配（`provider/*`、`*sonnet*`）与 scope 诊断；java 只有精确/前后缀匹配 | `docs/59 §4.7` | A-02 只落了「精确匹配先行」（`:batch` 可达的最小修复）；glob 面另立 |
+| B139 | **嵌套 record 在 Json mapper 下序列化成空对象** —— mapper 关了 GETTER 可见性（`Json.java:16`），record 访问器被当 getter 忽略：Retry/ProviderRetry 自 3d 起 valueToTree 得 `{}`、provider 设置在 merge 后全丢（A-14 实施期实测） | `docs/60 §12` | Retry/ProviderRetry 已用显式 `@JsonProperty` 修复；同族的 `Settings.Compaction` 等嵌套 record **未扩查**，取证后独立修 |
 | ~~B138~~ | **provider 层四处五参 `ApiOptions` 重建丢 `authKind`** —— `ConfigurableProvider.effectiveOptions`／`ModelsJsonProvider.createApi`＋`withInlineKey`／`OpenAiCompatibleProvider.withPlaceholderKey` ⇒ 生产上 baseUrl 恒空 ⇒ `Credentials` 给的 BEARER/OAUTH 在进车道前被归一成 API_KEY（A0 步7 的头分派被上游拆台；OAuth 用户实际受影响面待 B82 接线后才可观察） | `docs/59 §3 G7`（设计期取证） | ✅ **已随包修复**（A-02，`38daf44`）：四处改六参构造；先红 3 条（直调 `effectiveOptions`＋两条真出站头 wire 夹具） |
