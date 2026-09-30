@@ -53,6 +53,34 @@ class SettingsManagerTest {
     }
 
     @Test
+    void providerRetrySettingsDefaultToAbsentRetriesAnd60sCap() {
+        var storage = new InMemorySettingsStorage();
+        var manager = SettingsManager.withStorage(storage);
+
+        var settings = manager.accessors().getProviderRetrySettings();
+
+        assertThat(settings.timeoutMs()).isNull();
+        assertThat(settings.maxRetries()).isNull();
+        assertThat(settings.maxRetryDelayMs()).isEqualTo(60_000L);
+    }
+
+    @Test
+    void providerRetrySettingsReadTheConfiguredProviderBlock() {
+        var storage = new InMemorySettingsStorage();
+        var global = new Settings();
+        global.retry = new Settings.Retry(null, null, null, null,
+                new Settings.ProviderRetry(5_000L, 2, 10_000L));
+        storage.writeGlobal(global);
+        var manager = SettingsManager.withStorage(storage);
+
+        var settings = manager.accessors().getProviderRetrySettings();
+
+        assertThat(settings.timeoutMs()).isEqualTo(5_000L);
+        assertThat(settings.maxRetries()).isEqualTo(2);
+        assertThat(settings.maxRetryDelayMs()).isEqualTo(10_000L);
+    }
+
+    @Test
     void untrustedProjectClearsProjectScope() {
         var storage = new InMemorySettingsStorage();
         var project = new Settings();

@@ -210,6 +210,25 @@ public final class SettingsAccessors {
      * 与其余仅 markModified（close 时统一 flush）的 setter 不同，这里<b>即时</b>
      * flush，对齐 pi 的 {@code save()}。
      */
+    /**
+     * Provider/SDK 层重试设置（pi {@code getProviderRetrySettings}，
+     * settings-manager.ts:966-972：timeoutMs/maxRetries 无默认（null ⇒ 缺席 ⇒
+     * 0），maxRetryDelayMs ?? 60000）。
+     */
+    public ProviderRetrySettings getProviderRetrySettings() {
+        var provider = manager.effective().retry == null
+            ? null : manager.effective().retry.provider();
+        return new ProviderRetrySettings(
+            provider == null ? null : provider.timeoutMs(),
+            provider == null ? null : provider.maxRetries(),
+            provider == null || provider.maxRetryDelayMs() == null
+                ? 60_000L : provider.maxRetryDelayMs());
+    }
+
+    /** pi {@code getProviderRetrySettings} 返回形状。 */
+    public record ProviderRetrySettings(
+            Long timeoutMs, Integer maxRetries, long maxRetryDelayMs) {}
+
     public void setRetryEnabled(boolean enabled) {
         var global = manager.global();
         var retry = global.retry;

@@ -6,6 +6,7 @@ import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonAnyGetter;
 import com.fasterxml.jackson.annotation.JsonAnySetter;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
  * Settings root object, aligned with pi's {@code Settings} interface
@@ -99,11 +100,13 @@ public final class Settings {
      * post-run ① 与摘要重试。
      */
     public record Retry(
-        Boolean enabled,
-        Integer maxRetries,
-        Long baseDelayMs,
-        Long maxAgentDelayMs,
-        ProviderRetry provider
+        // @JsonProperty：Json mapper 关了 getter 可见性，record 访问器会被当作
+        // getter 忽略（实测 valueToTree 得 {}）⇒ 显式钉住组件的 JSON 属性。
+        @JsonProperty("enabled") Boolean enabled,
+        @JsonProperty("maxRetries") Integer maxRetries,
+        @JsonProperty("baseDelayMs") Long baseDelayMs,
+        @JsonProperty("maxAgentDelayMs") Long maxAgentDelayMs,
+        @JsonProperty("provider") ProviderRetry provider
     ) {}
 
     /**
@@ -112,9 +115,9 @@ public final class Settings {
      * 的映射对照）；此处仅保 JSON 往返不丢。
      */
     public record ProviderRetry(
-        Long timeoutMs,
-        Integer maxRetries,
-        Long maxRetryDelayMs
+        @JsonProperty("timeoutMs") Long timeoutMs,
+        @JsonProperty("maxRetries") Integer maxRetries,
+        @JsonProperty("maxRetryDelayMs") Long maxRetryDelayMs
     ) {}
 
     /** Compaction settings (JSON boundary representation). */
