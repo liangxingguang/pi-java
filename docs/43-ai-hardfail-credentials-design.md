@@ -188,7 +188,7 @@ AI 模块既有 surefire 坑：`-pl pi-java-ai -am -Dsurefire.failIfNoSpecifiedT
 3. **`RetryPolicy` 五预设零调用者**（J5/D9）→ `docs/41 §1.5`。
 4. **`x-should-retry` ／ `provider-retry` 传输层判据未移植**（P10/J6）→ 原计划在 A6 裁决面，本包只登记。
 5. **`ANTHROPIC_AUTH_TOKEN` 的 profile 变体有意不加**（D6）。
-6. **java 的 anthropic OAuth 流未接进请求路径**（D7）——若裁决 ② 不纳入，此处为登记项。
+6. ~~**java 的 anthropic OAuth 流未接进请求路径**（D7）~~ —— ✅ **已闭环（2026-10-01 B1，`docs/63 §12`/`4a869c9`；台账 B82）**：stored 订阅 token 已进请求路径、走 x-api-key、5 分钟临期锁内单次刷新。
 7. **`ANTHROPIC_AUTH_TOKEN` 之外的 Bearer 型网关**（如用户环境里给 `MISTRAL_*` 也配 Bearer）——
    pi 无此物，不做；登记备查。
 

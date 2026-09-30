@@ -4,6 +4,7 @@
 **2026-09-29：✅ A-02 已闭环** ⇒ [`docs/59 §12`](59-a02-openrouter-chat-lane-design.md)（`4f210e8`→`43926c0`，R1–R8 全按建议——双车道 openrouter chat provider＋`ModelInfo.api` per-model 派发通道（`extra["protocol"]` 首个生产写入者）＋`:batch` id 的 resolver 精确匹配先行；**B105／B133 结案**（completions anthropic 形 cache_control 三断点＋`prompt_cache_retention`／openrouter 思考形状生产可达）、`openRouterRouting` 落线、**B138 随包修**（provider 层四处丢 `authKind`）；新登 **B134–B137**（sessionId 消费面／错误 metadata.raw／per-model baseUrl／resolver glob）；计数 17→18（evals 用例同步）。⚠️ **下一项＝ A-14**（provider retry `x-should-retry`）／B103（sessionId 通道族；待裁决）**
 **2026-09-30：✅ B103 已闭环（用户裁决方案 2）** ⇒ [`docs/61 §12`](61-b103-session-id-affinity-design.md)——`sessionId` 通道建成（StreamOptions＋DefaultProviders/AgentSession 接线）；体侧 `prompt_cache_key` 照落（码点截 64）；**升级 Anthropic SDK 2.52→2.66（零兼容破坏）**。⚠️ 官方 Java SDK streaming transport 不向用户透传任意头 ⇒ Anthropic/completions 的非标准亲和头登记为不可达差异 **B140**（responses 头透传）；ai 1195/1195 绿。
 **2026-09-30：✅ A-14 已闭环** ⇒ [`docs/60 §12`](60-a14-provider-retry-design.md)（`16a9144`→`f09c400` 7 commits，R1–R8 全按建议）—— 七条 SDK 车道全 `.maxRetries(0)`＋初始请求包 `ProviderRetry`（判据/延迟/cap 照 pi），Mistral 的 RetryPolicy 补三头＋60s cap，DefaultProviders 硬编码 2 ⇒ settings ?? 链；实施期发现运行时 genai 1.72 内置 RetryInterceptor（attempts(1) 关闭）、并修复 3d 起嵌套 record JSON 序列化丢失的潜在 bug；新登 **B139**，J5 更新。ai 1182、coding-agent 287 全绿**
+**2026-10-01：✅ B1 已闭环（Anthropic OAuth credential → request path）** ⇒ [`docs/63 §12`](63-b1-anthropic-oauth-request-path-design.md)（`4a869c9`，R1–R3 全按建议）—— stored OAuth 接上请求路径、Anthropic 订阅 token 走 **x-api-key（非 Bearer，照 pi `toAuth⇒{apiKey}`）**、5 分钟临期锁内单次刷新、失败不回落 env；台账 **B82 结案**（B81 系统提示前缀/工具名仍开，属 A-15）。ai **1208**、coding-agent **287** 全绿。⚠️ 下一项＝ **B2**（ContextOverflow z.ai/Cerebras 门控），随后 D3**
 > ⚠️ 本行是**活状态**，每包闭环后须回填（§9 步骤 7）。
 **创建基准：** pi-java `f0400a2`（B14 收尾）  
 **参考台账：** [`41-gap-inventory.md`](41-gap-inventory.md)、[`32-open-items-register.md`](32-open-items-register.md)、[`40-module-alignment-map.md`](40-module-alignment-map.md)  
@@ -101,17 +102,14 @@ flowchart TD
 
 统一 `done`/`error` 终局事件的载荷契约，检查 provider stream、agent 消费者、RPC/JSON 序列化和既有 pattern matching 的兼容性。
 
-### Batch D — Provider and model coverage
+### Batch D — Default wire
 
-包括 OpenAI 默认 Responses/Completions wire 裁决、OpenRouter chat、xAI、`models.json` 覆盖和内置模型目录。OpenAI 默认 wire 不能以改常量代替设计；必须先处理 Responses `item.id`/composite ID 与模型 compat 关系。
+只含 OpenAI 默认 Responses/Completions wire 裁决与已落地的 OpenRouter chat。OpenAI 默认 wire 不能以改常量代替设计；必须先处理 Responses `item.id`/composite ID 与模型 compat 关系。
 
-### Batch E — Long-tail protocol and metadata
-
-在主流请求契约稳定后处理低频 wire、模型/消息元数据、grammar、transport、session-resources、JsonObject 约束，并逐项判断无生产者代码应接线、删除还是保留。
-
-### Batch F — B14b/R1
-
-单独评估 Java 当前结构是否可达、是否需要消息/JSON/adapter 形状变更。没有结构证据时不得仅添加字段或测试假装完成。
+> ⚠️ **2026-09-30 完工边界裁决（用户）＋归属复核**：**「重构对齐」与「新 provider 接入」严格分开。**
+> - 纯「新 provider 接入」（xAI／Bedrock／Vertex／Codex／Cloudflare 的接入）**删除、不进对齐分母**。
+> - **现有车道主流可达的对齐项全部保留**：近期三项核心原列 D3 → B1 → B2 —— ✅ **B1 已闭环（2026-10-01，`docs/63`）**，现剩余 **B2（ContextOverflow 门控，P1）→ D3（OpenAI 默认 wire，P0）**（依赖序 B→D），另有 metadata／grammar／thoughtSignature／models.json 覆盖／目录机制等现有车道对齐项（见 §5）。
+> - 判据＝R5 主流可达性：现有 openai/anthropic/google 车道在 bin pi → main 这条线上会发生的就算对齐；只有新增当前不存在的 provider 后才发生的才算接入、删除。
 
 ---
 
@@ -130,7 +128,9 @@ flowchart TD
 
 ---
 
-## 5. 实施任务表（审核前全部待开始）
+## 5. 实施任务表
+
+> ⚠️ 本表**只列需求对齐项**（2026-09-30 裁决＋归属复核）：纯「新 provider 接入」任务已删除（xai／bedrock／vertex／codex／cloudflare 接入）；现有车道主流可达的对齐项全部保留（含 metadata、grammar、thoughtSignature、models.json 覆盖、目录机制等）。各粗行备注里标出了该行内被排除的「新 provider 独占」子项。
 
 状态定义：`⬜ 待开始` / `📐 设计待审核` / `🔴 先红` / `🟡 实施中` / `🟢 已完成` / `⛔ 阻塞`。
 
@@ -146,21 +146,19 @@ flowchart TD
 | B | 非 Anthropic `thinkingFormat` | P1 | B2 | 🟢 已完成（`docs/58 §12`） | `cbbcaeb`（设计）· `2f8acb9`（四字段能进能解析＋目录常量）· `a063d9e`（openai 臂＋R5＋预算上提）· `80128f4`（zai/qwen/deepseek/ant-ling）· `9c249ef`（together/openrouter/string-thinking）· `14a165e`（`$var`＋模板三臂＋R11 树路） | 目录标注**恰 3 红**（moonshotai/xiaomi/qwen-token-plan-cn）；openai 段 5 红（3 负对照空绿）；R5 双写 **1 红**（`expected 1 but was 2`）；四臂 10 红＋2 空绿；三臂 6 红；模板段 8 红＋1 空绿 —— ⚠️ §7 的「全红」预测不精确：**负断言在零实现下空绿** | **R4（设计探针）⇒ 零红 = 前提证伪**：夹取先行使显式 null 到不了写点 ⇒ 两派 null 语义**语义等价**（探针零红第五种成因：变异体等价）；替代探针（zai 回落拆除/clear_thinking 守卫/ANT_LING 终止性/TOGETHER 门/OPENROUTER off 门/**R11a** Literal(null)/**R11b** put 不经树/**R6** 空声明回落）⇒ **各恰 1 红**，全部回滚复绿 | `pi-java-ai` 1058⇒**1108**；全 reactor `mvn test` **14/14 SUCCESS**；checkstyle 0 新违规；`ModelCompat` 435⇒**499**（≤500 达标）；converter **513 净零增**（「不再往里加」兑现）；`ThinkingFormatWireTest` 722（测试文件，同 793/716 先例，登记不拆） | R1–R11 全按设计落地，⚠️ 但**两处设计结论被实测推翻**（`docs/58 §11`）：① R4 的「统一会改变线格」不成立（两助手保留＝文本保真）；② §4.5 草图的 `put` 直喂 `JsonValue.from(map 含 null)` 会被 SDK 的 NON_NULL **静默丢键** ⇒ 必须经树（`SdkJsonEscapeHatchTest` 新探针双向钉住，升级 SDK 须重跑）；另 §4.6 草图 baseten off 支冗余已取等价简形、ant-ling else-if 穿透角＝**B131**（pi 数据不可达，裁决不复制）；**新登记 B129–B133**；**归属前移回执**：`ThinkingFormatWriter` 只读 `SimpleOptions.clampedReasoningEffort`、零二次夹取（`docs/57 §12.3`） |
 | B | `simple-options` max-token/thinking budget 夹取 | P1 | B2 | 🟢 已完成（`docs/57 §12`） | `7fc23d2`（设计）· `c30341f`（估算器）· `626032b`（生产者＋夹取）· `687858a`（先红偏离＋更正）· `4adab3b`（`samplingParams`）· `74470da`（顶层预算字段）· `8d04fe1`（Responses 门）· `1d0b83e`（收口） | ⚠️ **真因不是「没夹取」**：`maxTokens` 在生产上**没有任何生产者**（三处 `StreamOptions` 构造点全传 `OptionalInt.empty()`）⇒ Anthropic 发**本仓自发明的 `4096`**、其余五条车道**一个上限都不发**（台账 `docs/41:77` 低估了它，**B122**）；第 3 步先红**没取到**（实现与夹具同批），第 6 步**取到真先红**（撤掉 `supportsMaxOutputTokens` 门 ⇒ 恰 1 红，azure 对照全程绿） | M3⇒**3**（设计预测「全红」，实为 3——Anthropic builder 自带同一回落）· M5⇒**3**（预测 1，azure 对照绿 ⇒ 门无泄漏）· M6⇒1／2（单个写者／两个写者）· M7⇒1 后 2（原断言拿常量自身比较＝没牙，改写**字面量**） | `pi-java-ai` 996⇒**1058**；全 reactor `mvn -o test` **14/14 SUCCESS**；checkstyle 0 新违规 | R1–R12 全按用户裁决「按照建议实施」；⚠️ **四处预测被实测推翻**（M3／M7／M5／§5 行数预算 +30 不是 +8）＋两处实施偏离；**归属前移 1 处**：`clampThinkingLevel` 的接线原记 A-09 ⇒ 实现在本包（`SimpleOptions.clampedReasoningEffort`），**A-09 直接复用、不要再接一次夹取**；**新教训：`mvn -Dtest='A+B'` 的 `+` 不是分隔符 ⇒ 零用例 `BUILD SUCCESS` 且一行 `Tests run` 都不打**；新登记 **B122–B128**；存量超限 `ResponsesMessageConverter` 548⇒578（A-07 之前即已超限） |
 | B | retry header 与 provider retry 预设接线 | P1 | B2/设计门8 | 🟢 已完成（[`docs/60 §12`](60-a14-provider-retry-design.md)，2026-09-30） | `16a9144..f09c400`（7 commits：ProviderRetry 环＋七车道 `maxRetries(0)`＋Mistral 三头/cap＋settings ?? 链接线） | RE-1/RE-2/RE-3/RE-4 各命中预期红（`docs/60 §12`） | 见 `docs/60 §12` 各步红集（撤短路/拆 wrap/关 genai 拦截器） | ai 1182/1182、coding-agent 287/287 | **B139**（GETTER NONE 下嵌套 record 序列化 `{}`）；J5 更新 |
-| B | Anthropic OAuth credential → request path | P1 | A0 已完成、设计门8 | ⬜ 待开始 | — | — | — | — | — |
+| B | Anthropic OAuth credential → request path | P1 | A0 已完成、设计门8 | 🟢 已完成（[`docs/63 §12`](63-b1-anthropic-oauth-request-path-design.md)，2026-10-01） | `4a869c9` | 接通前 `Credentials` 不读 OAuth store ⇒ stored 订阅 token 请求无凭证：由 `CredentialChainTest.storedAnthropicOauthYieldsApiKeyNotBearer` 等接线用例钉（同批新增，见下） | 5 分钟窗口 ⇒ `StoredOAuthCredentialsTest`：去窗口则不主动刷；toAuth 记 BEARER ⇒ `storedAnthropicOauthYieldsApiKeyNotBearer` 红；并发下刷新计数恒 1（锁内 DCL）；刷新失败恒抛不回落 | ai **1208/1208**、coding-agent **287/287**、checkstyle 0 | **B82 结案**（kind 经核实为 API_KEY 非原建议 OAUTH）；**B81**（系统提示前缀/工具名，A-15）仍开 |
 | B | `ContextOverflow` z.ai/Cerebras 门控 | P1 | — | ⬜ 待开始 | — | — | — | — | — |
 | C | `done` 终局完整 assistant payload | P0 | 设计门5 | 🟢 已完成（[`docs/55 §12`](55-c-terminal-event-payload-design.md)） | `3684a82`（C1a 单工厂＋三落点）· `b8d7e48`（C1b 删 `withErrorShape`、读消息不读 Throwable）· `882fcaa`（C2 终局帧投影） | 新夹具 **22 跑 6 红**（`builderErrorCarriesTheText`／`missingTerminalIsAnErrorNotASuccess`／`abortSettlesTheReasonAndText`／`closeSettlesTheStopReasonOnTheSyntheticDone`／`sendReturnsTheSettledError`／`streamErrorExitsTheSeamSettled`）；对照组 `builderErrorKeepsWhatStreamedBeforeTheFailure` 绿（内容保留那一半本来就对） | M1 ⇒ 5 红 · M2 ⇒ 12 红 · M3 ⇒ 恰 1 红 · **M4 ⇒ 0 红**（读尾覆盖，语义等价 ⇒ 新登记 B117）· M5 ⇒ 恰 1 红 · M6 ⇒ 3 红 · M7 ⇒ 恰 1 红（每次落地后 grep 复核） | 全 reactor `mvn test` **SUCCESS**（14/14）；`ai` 977⇒**995**、agent-core 520、coding-agent 279、tui 209（1 skip）、web 48、evals 43（17 skip） | R1–R9 全按建议；⚠️ **两处设计结论被实测推翻**：① F4「aborted 被塌成 error」不成立（读尾覆盖 ⇒ M4 零红，改动保留但注释/夹具 javadoc 写明它不是判别器）② E8 预测「三条既有夹具仍绿」错 —— 它们手搓**裸** `StreamError`、靠被删的补丁过关，连同重试三条共**五条夹具改走 `settle`**（`docs/55 §12.4`）；**需知悉**：终局帧对外形状变更（`stackTrace`/`cause` 不再上线，`done.usage` 改扁平）；新登记 **B109–B117** |
 | C | `error` 终局 assistant error payload | P0 | C1 | 🟢 已完成（同上，同包） | 同上 | 同上 | 同上 | 同上 | 同上 |
 | C | provider/agent/RPC 终局载荷迁移 | P0 | C1/C2 | 🟢 已完成（同上，同包） | 同上 | 同上 | 同上 | 同上 | 同上 |
 | D | OpenAI 默认 wire 与显式 override 设计/实施 | P0 | 设计门6、R4裁决 | ⬜ 待开始 | — | — | — | — | — |
-| D | OpenRouter chat provider | P0 | D1 | ⬜ 待开始 | — | — | — | — | — |
-| D | xAI provider | P1 | D1 | ⬜ 待开始 | — | — | — | — | — |
-| D | `models.json` provider/protocol/baseUrl 覆盖 | P1 | B2/D1 | ⬜ 待开始 | — | — | — | — | — |
-| D | 内置模型目录覆盖/生成机制 | P1 | B2/D1 | ⬜ 待开始 | — | — | — | — | — |
-| E | Bedrock/Vertex/Codex/Cloudflare wire | P2 | D | ⬜ 待开始 | — | — | — | — | — |
-| E | 模型/消息 metadata 长尾 | P2 | B2/D | ⬜ 待开始 | — | — | — | — | — |
-| E | grammar/transport/session-resources/JsonObject | P2 | D | ⬜ 待开始 | — | — | — | — | — |
-| E | 无生产者代码逐项裁决与清理 | P2 | E1-E3 | ⬜ 待开始 | — | — | — | — | — |
-| F | B14b/R1 `thoughtSignature` 可达性与设计 | P2 | 独立设计门 | ⬜ 待开始 | — | — | — | — | — |
+| D | OpenRouter chat provider | P0 | D1 | 🟢 已完成（包 A-02，[`docs/59 §12`](59-a02-openrouter-chat-lane-design.md)） | `4f210e8..43926c0`（双车道＋`ModelInfo.api` per-model 派发） | 见 `docs/59 §12` | 见 `docs/59 §12` | 全 reactor 14/14 | B105/B133 结案，B138 修 |
+| E | **模型/消息 metadata 对齐**（现有车道主流字段） | P2 | 现有车道 | ⬜ 待开始 | — | 取证见 2026-09-30 归属判定 | — | — | 对齐现有车道会发的：timestamp/api/provider/model/responseId/responseModel/rawStopReason/diagnostics/providerThinkingLevel/textSignature/thinkingSignature/redacted/refusal/annotations(空数组)/custom metadata(user_id)/Model.input/Model.promptCache/error.metadata.raw。**排除（codex 独占＝新 provider）**：`endTurn`。多项可能已落，实施前逐项核现状 |
+| E | **grammar / JsonObject 对齐** | P2 | 现有车道 | ⬜ 待开始 | — | 同上 | — | — | **对齐**：json_schema strict 结构化输出（bash/edit/write/read 主流真触发）、grammar 自定义工具（现有 openai 车道、扩展触发）、JsonObject（工具参数/JSON 约束必备）。**排除（codex 独占）**：transport 选择、session-resources 实质生命周期 |
+| E | **无生产者代码逐项裁决与清理** | P2 | — | ⬜ 待开始 | — | 同上 | — | — | 现有代码形状审计，照 pi 该删/该留/该接线：UsageInfo.from（pi 无 ⇒ 收敛）、supported/clamp（照 pi 对齐）、DeferredHandle（pi 也零生产 ⇒ 保留不接线）、**streamSimple（主流默认，旧“死码”登记作废 ⇒ 对齐）**、ToolResult details（内置工具主流产出）、toolResult.usage（保留形状）、RetryPolicy 预设裁决 |
+| F | **thoughtSignature 可达性与对齐（B14b/R1）** | P2 | 独立设计门 | ⬜ 待开始 | — | 同上 | — | — | 现有车道主流可达：anthropic 思考签名往返、responses encrypted_content 往返、**Google ToolCall.thoughtSignature 完整往返＋跨模型剥离**。**排除**：openai-responses.ts:359 的 xai include 分支（xai 独占） |
+| D | **models.json 对现有 provider 的覆盖**（api/protocol/baseUrl/headers/modelOverrides） | P1 | 主流 ModelRuntime | ⬜ 待开始 | — | 同上 | — | — | 全部针对现有 openai/anthropic/google，主流加载消费：provider/per-model api 覆盖、provider/per-model **baseUrl**（java 缺口 **B136**）、modelOverrides、headers/compat。不接新 provider |
+| D | **内置模型目录运行时覆盖/重生成机制** | P1 | 现有 provider | ⬜ 待开始 | — | 同上 | — | — | **对齐**：pi.dev 远程目录运行时覆盖＋ModelsStore 持久化、静态 generated 目录喂现有车道、为现有 provider 从 models.dev 重算数据。**排除**：生成器里「新增全新 provider 变换」（属接入工作） |
 
 > 审核通过前，这张表的状态、commit、证据列保持为空。实施时每完成一项立即更新，不等到批次收尾。
 
@@ -237,6 +235,17 @@ flowchart TD
 7. **闭环时回填文首 banner**：本文件第 3 行不是一次性盖章，而是**活状态** —— 每包闭环后改写为「已闭环 <包名>（<日期>）；下一项＝ <X>」；
 8. **每个包自己的设计文档也要翻**：`docs/49` / `docs/50` 这类「一包一文档」的顶部 `状态：设计待审核` 必须改为「已裁决并闭环（裁决、提交、§12 记录）」，否则与文末实施记录自相矛盾（2026-09-26 实测漏了 `docs/42`/`docs/49`/`docs/50` 三处，见 `docs/32` **B91**）。
 
+> ⚠️ **核心纪律（2026-09-30 用户强调）：每完成一项，立即做一次「全量状态对账」，不许只改一处、不许攒到收尾。**
+> 完成任一项时，逐项核对并更新该任务关联的**全部**状态点：
+> 1. 文首 **banner**（活状态：已闭环谁、下一项）；
+> 2. **§5 任务表**对应行（状态/commit/证据/遗留）；
+> 3. **本包设计文档**顶部状态与 §12 实施记录；
+> 4. **台账 `docs/32`**（新登记 / 结案 / 引用更新）；
+> 5. **历史遗留清单**（如 §10.3）——若该项消化了某条遗留，当场在该条标注最终处置，别让历史快照被误读成「还欠着」；
+> 6. 其它引用该状态的文档（docs/41、docs/48 概览等）。
+>
+> 判据：**一项闭环后，全仓不应再存在任何一处把它描述成「未完成 / 待开始 / 待审核」的地方。** 提交前用 grep 按该任务/包名复核一遍。发现不一致就是没做完，不算闭环。
+
 ---
 
 ## 10. Batch A1 实施记录（2026-09-25）
@@ -265,12 +274,14 @@ flowchart TD
 
 ### 10.3 遗留清单（A1 未做，需后续设计包裁决）
 
-| # | 缺口 | 现状 | 影响 |
-|---|---|---|---|
-| L1 | **系统消息不能回读** | `MessageJsonCodec.decode` 对 `role: "system"` 抛 `unknown message role`（`:60`） | A1 的落线是**只写**的。今天不可达（无生产者），但 A2/A3 一旦接线，带系统消息的会话 resume 会直接报 schema 错 |
-| L2 | **`toolsAdded` 的线格形状未定** | `SessionJson` 用 `valueToTree` 原样写 `ToolDefinition`（7 个组件），而 pi 的 `toolsAdded` 是 ai 层 `Tool[]` ＝ `{name, description, parameters}`（`types.ts:600-605`），与同仓 `PayloadRecordingStreamFn:125-131` 的 `{name, inputSchema}` 也不一致 | 今天不可达；A3 一读这个字段就会撞上。现有测试只断言 `name`，抓不到多余/错名键 |
-| L3 | **`sections` 表达不了「删除」** | Java 是 `Map<String,String>`，pi 是 `Record<string, string \| null>`（`null` ＝ 删掉具名段，`types.ts:501`）；`Map.copyOf` 还会在 null 值上 NPE | A1 无 section 生产者，随 sections 包处理 |
-| L4 | **TUI / web 不认系统消息** | `ChatMessage.java:73` 会渲染成 `"Unknown message role: system"`；`WebWireJson` / `JsonEventMapper:226` 不产出 `sections`/`toolsAdded`/`toolsRemoved` | 在 A1 的模块范围之外，今天无生产者 ⇒ 是静默误渲染，不是响亮失败 |
+> ⚠️ **2026-09-30 对账**：本表是 **A1 当时的历史快照**，不是当前未完成的活。L1–L3 已在后续包闭环，L4 属 TUI/web 模块（不在 ai 对齐范围）。
+
+| # | 缺口 | 现状（A1 当时） | 影响（A1 当时） | ✅ 最终处置（2026-09-30） |
+|---|---|---|---|---|
+| L1 | **系统消息不能回读** | `MessageJsonCodec.decode` 对 `role: "system"` 抛 `unknown message role`（`:60`） | A1 的落线是**只写**的。当时不可达（无生产者），但 A2/A3 一旦接线，带系统消息的会话 resume 会直接报 schema 错 | ✅ **已闭环**（B87①，`docs/50 §12`）：补 `case "system"` 回读 |
+| L2 | **`toolsAdded` 的线格形状未定** | `SessionJson` 用 `valueToTree` 原样写 `ToolDefinition`（7 个组件），而 pi 的 `toolsAdded` 是 ai 层 `Tool[]` ＝ `{name, description, parameters}`（`types.ts:600-605`），与同仓 `PayloadRecordingStreamFn:125-131` 的 `{name, inputSchema}` 也不一致 | 当时不可达；A3 一读这个字段就会撞上。现有测试只断言 `name`，抓不到多余/错名键 | ✅ **已收敛**（B87②，`docs/50 §12`）：统一到 pi 三键的 `ToolDeclaration` |
+| L3 | **`sections` 表达不了「删除」** | Java 是 `Map<String,String>`，pi 是 `Record<string, string \| null>`（`null` ＝ 删掉具名段，`types.ts:501`）；`Map.copyOf` 还会在 null 值上 NPE | A1 无 section 生产者，随 sections 包处理 | ✅ **已闭环**（A4，`docs/52 §12`）：null＝删除，逐项落盘 |
+| L4 | **TUI / web 不认系统消息** | `ChatMessage.java:73` 会渲染成 `"Unknown message role: system"`；`WebWireJson` / `JsonEventMapper:226` 不产出 `sections`/`toolsAdded`/`toolsRemoved` | 在 A1 的模块范围之外，当时无生产者 ⇒ 是静默误渲染，不是响亮失败 | ⏸ **不属 ai 对齐**：属 TUI/web 模块，做宿主面对齐时另处理 |
 
 ### 10.4 门禁结果
 
