@@ -16,6 +16,8 @@ import com.openai.errors.OpenAIServiceException;
 import com.anthropic.errors.AnthropicException;
 import com.anthropic.errors.AnthropicIoException;
 import com.anthropic.errors.AnthropicServiceException;
+import com.google.genai.errors.ApiException;
+import com.google.genai.errors.GenAiIOException;
 
 import com.pijava.ai.api.ApiOptions;
 
@@ -118,6 +120,21 @@ public final class ProviderRetry {
             map.put(name, List.copyOf(headers.values(name)));
         }
         return map;
+    }
+
+    /**
+     * Google {@code google-genai} SDK 异常投影。ApiException 无 headers
+     * （pi google-shared.ts 补 headers = undefined）⇒ 服务器 Retry-After 不可读，
+     * 重试只走指数退避。
+     */
+    public static ProviderFailure ofGoogle(Throwable throwable) {
+        if (throwable instanceof ApiException api) {
+            return new ProviderFailure(api.message(), api.code(), null, api);
+        }
+        if (throwable instanceof GenAiIOException io) {
+            return new ProviderFailure(io.getMessage(), null, null, io);
+        }
+        return null;
     }
 
     /**

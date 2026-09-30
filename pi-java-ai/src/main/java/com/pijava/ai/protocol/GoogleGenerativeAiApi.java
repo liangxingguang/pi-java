@@ -11,6 +11,7 @@ import com.google.genai.types.FunctionCall;
 import com.google.genai.types.GenerateContentConfig;
 import com.google.genai.types.GenerateContentResponse;
 import com.google.genai.types.HttpOptions;
+import com.google.genai.types.HttpRetryOptions;
 import com.google.genai.types.Part;
 import com.google.genai.types.Tool;
 
@@ -21,6 +22,7 @@ import com.pijava.ai.api.TranscriptContext;
 import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.api.TransformMessages;
 import com.pijava.ai.message.MessageTexts;
+import com.pijava.ai.http.ProviderRetry;
 import com.pijava.ai.model.CostCalculator;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
@@ -83,11 +85,22 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
         var apiKey = resolveApiKey(options);
         var baseUrl = options.baseUrl() != null && !options.baseUrl().isBlank()
                 ? options.baseUrl() : DEFAULT_BASE_URL;
+        // A-14（G1）：genai 1.72 的 RetryInterceptor 默认 2 attempts、上层不可见；
+        // attempts(1)（总尝试数＝1）关掉内置重试，初始请求由 ProviderRetry 独占。
+        var httpRetryOptions = HttpRetryOptions.builder().attempts(1).build();
         this.client = Client.builder()
                 .apiKey(apiKey)
-                .httpOptions(HttpOptions.builder().baseUrl(baseUrl).build())
+                .httpOptions(HttpOptions.builder()
+                        .baseUrl(baseUrl)
+                        .retryOptions(httpRetryOptions)
+                        .build())
                 .build();
+        // A-14：Google SDK 无内置重试，初始请求由 ProviderRetry 独占。
+        this.providerRetry = ProviderRetry.optionsOf(options);
     }
+
+    /** A-14：初始请求获取的重试选项。 */
+    private final ProviderRetry.Options providerRetry;
 
     // ── Internals ─────────────────────────────────────────────────
 
@@ -123,10 +136,12 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
 
             boolean textStarted = false;
             boolean thinkingStarted = false;
-            try (ResponseStream<GenerateContentResponse> stream =
-                         client.models.generateContentStream(
-                                 request.modelId().modelName(), contents, config)) {
-
+            // A-14（R7）：只包初始请求获取；Google 异常无 headers，重试走指数退避。
+            ResponseStream<GenerateContentResponse> stream = ProviderRetry.retry(
+                    () -> client.models.generateContentStream(
+                            request.modelId().modelName(), contents, config),
+                    ProviderRetry::ofGoogle, providerRetry);
+            try (stream) {
                 for (var response : stream) {
                     // Safety filter check
                     if (response.promptFeedback().isPresent()) {
