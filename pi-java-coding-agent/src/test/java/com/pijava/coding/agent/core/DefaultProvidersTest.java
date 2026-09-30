@@ -115,6 +115,44 @@ class DefaultProvidersTest {
         assertThat(opts.apiKey()).isEqualTo("sk-cli");
     }
 
+    @Test
+    void providerRetryDefaultsToZeroAttemptsAnd60sCap() {
+        var settings = new Settings();
+        var args = ArgsParser.parse(new String[] {});
+
+        var opts = DefaultProviders.apiOptions(args, "openai", settings, null);
+
+        assertThat(opts.maxRetries()).isZero();
+        assertThat(opts.extra()).containsEntry("maxRetryDelayMs", 60_000L);
+    }
+
+    @Test
+    void providerRetrySettingsFlowIntoApiOptions() {
+        var settings = new Settings();
+        settings.retry = new Settings.Retry(null, null, null, null,
+                new Settings.ProviderRetry(5_000L, 3, 10_000L));
+        var args = ArgsParser.parse(new String[] {});
+
+        var opts = DefaultProviders.apiOptions(args, "openai", settings, null);
+
+        assertThat(opts.maxRetries()).isEqualTo(3);
+        assertThat(opts.timeout()).isEqualTo(java.time.Duration.ofSeconds(5));
+        assertThat(opts.extra()).containsEntry("maxRetryDelayMs", 10_000L);
+    }
+
+    @Test
+    void providerRetryPreservesOtherExtraEntries() {
+        var settings = new Settings();
+        var args = ArgsParser.parse(new String[] {});
+
+        var opts = DefaultProviders.apiOptions(args, "openai", settings, null,
+                Map.of("cacheRetention", "long"));
+
+        assertThat(opts.extra())
+                .containsEntry("cacheRetention", "long")
+                .containsEntry("maxRetryDelayMs", 60_000L);
+    }
+
     // ── P1（docs/31 §8.31）：适配器跟着**模型**走 ─────────────────────────
 
     /**

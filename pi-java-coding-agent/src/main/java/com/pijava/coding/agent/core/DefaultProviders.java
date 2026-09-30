@@ -216,9 +216,26 @@ public final class DefaultProviders {
                 kind = credential.kind();
             }
         }
+        // A-14（G4/G5）：provider 重试设置在 Settings POJO 上按 pi 的 ?? 链现读
+        // （settings-manager.ts:966-972）：maxRetries 缺席 ⇒ 0；
+        // maxRetryDelayMs ?? 60000 经 extra 过桥；timeoutMs 明给则替换 120s 默认。
+        var providerRetry = settings != null && settings.retry != null
+            ? settings.retry.provider() : null;
+        int providerMaxRetries = providerRetry != null && providerRetry.maxRetries() != null
+            ? providerRetry.maxRetries() : 0;
+        long maxRetryDelayMs = providerRetry != null && providerRetry.maxRetryDelayMs() != null
+            ? providerRetry.maxRetryDelayMs() : 60_000L;
+        var mergedExtra = new java.util.LinkedHashMap<String, Object>();
+        if (extra != null) {
+            mergedExtra.putAll(extra);
+        }
+        mergedExtra.put("maxRetryDelayMs", maxRetryDelayMs);
+        var timeout = providerRetry != null && providerRetry.timeoutMs() != null
+            ? java.time.Duration.ofMillis(providerRetry.timeoutMs())
+            : java.time.Duration.ofSeconds(120);
         return new ApiOptions(baseUrl == null ? "" : baseUrl,
             apiKey == null ? "" : apiKey,
-            java.time.Duration.ofSeconds(120), 2, extra == null ? Map.of() : extra, kind);
+            timeout, providerMaxRetries, Map.copyOf(mergedExtra), kind);
     }
 
     private static String firstNonBlank(String first, String second) {
