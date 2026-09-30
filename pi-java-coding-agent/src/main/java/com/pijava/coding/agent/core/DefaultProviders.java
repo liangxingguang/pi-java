@@ -89,7 +89,8 @@ public final class DefaultProviders {
      * {@code --base-url} &gt; settings 默认 &gt; 凭据存储），只是按模型 provider 取名。</p>
      */
     public static StreamFn streamFnFor(Args args, String defaultProvider,
-                                       ProviderRegistry providers, Settings settings) {
+                                       ProviderRegistry providers, Settings settings,
+                                       String sessionId) {
         var fallbackName = resolveProviderName(args, defaultProvider);
         return (model, context, options) -> {
             var provider = providers.get(model.provider()).orElseGet(() -> {
@@ -100,8 +101,17 @@ public final class DefaultProviders {
             });
             return streamBlocking(provider, model, context, options,
                 apiOptions(args, model.provider(), settings, Credentials::resolveCredential,
-                    cacheExtra(options)));
+                    requestExtra(options, sessionId)));
         };
+    }
+
+    /**
+     * 无 sessionId 的重载（包 B103 之前的签名）：等价于会话 id 缺席 ⇒ 不注入亲和通道。
+     * 保留给存量调用与夹具。
+     */
+    public static StreamFn streamFnFor(Args args, String defaultProvider,
+                                       ProviderRegistry providers, Settings settings) {
+        return streamFnFor(args, defaultProvider, providers, settings, null);
     }
 
     /**
@@ -117,11 +127,21 @@ public final class DefaultProviders {
      * <p>包可见是为了夹具（{@code DefaultProvidersTest}）—— 这是「宿主 → 车道」这条
      * 通道在宿主侧的唯一一环，变异掉它（恒返回空 map）应当恰有夹具变红。</p>
      */
+    static Map<String, Object> requestExtra(
+            com.pijava.agent.harness.StreamOptions options, String sessionId) {
+        var extra = new java.util.LinkedHashMap<String, Object>();
+        options.cacheRetention().ifPresent(r -> extra.put("cacheRetention", r.wireName()));
+        // ⚠️ blank/null 不塞：键缺席 ≙ pi undefined（同 cacheRetention 口径），别塞默认值。
+        if (sessionId != null && !sessionId.isBlank()) {
+            extra.put("sessionId", sessionId);
+        }
+        return extra;
+    }
+
+    /** 包 B103 之前的夹具形态：只看 cacheRetention（等价于 sessionId 缺席）。 */
     static Map<String, Object> cacheExtra(
             com.pijava.agent.harness.StreamOptions options) {
-        return options.cacheRetention()
-            .<Map<String, Object>>map(r -> Map.of("cacheRetention", r.wireName()))
-            .orElseGet(Map::of);
+        return requestExtra(options, null);
     }
 
     /**

@@ -270,7 +270,7 @@ public final class AgentSession implements AutoCloseable {
             modelPattern = providerName;
         }
         var streamFn = DefaultProviders.streamFnFor(
-            args, effective.defaultProvider, providers, effective);
+            args, effective.defaultProvider, providers, effective, args.sessionId());
         // Trace exporter: same instance powers harness telemetry (spans/counters)
         // and payload recording (wrapper), so events bind to the llm.request span.
         var telemetry = PayloadRecordingStreamFn.exporter(args.sessionId(), args.tracePayloads());
