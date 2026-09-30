@@ -265,6 +265,15 @@ import java.util.Map;
  *        不对称（探测面 {@code :1657} 的 {@code {}} 无读者，故 {@link CompatResolver} 对它
  *        只做透传、不做 {@code explicit ?? detected}）。
  */
+/**
+ * @param sendSessionAffinityHeaders pi {@code compat.sendSessionAffinityHeaders}（包 B103，
+ *        types.ts:736-743/:789-798）：anthropic/completions 车道是否从 {@code sessionId} 发
+ *        会话亲和头。{@code null} ≙ 车道探测缺省（openrouter 端点 true，否则 false）。
+ *        responses 车道<b>无此开关</b>、不读该组件。
+ * @param sessionAffinityFormat pi {@code compat.sessionAffinityFormat}（包 B103）：亲和头形状
+ *        （{@code openai}/{@code openai-nosession}/{@code openrouter}）。{@code null} ≙
+ *        车道探测（openrouter 端点 openrouter，否则 openai；anthropic 未设 ⇒ x-session-affinity）。
+ */
 public record ModelCompat(boolean allowEmptySignature,
                           Boolean requiresReasoningContentOnAssistantMessages,
                           boolean supportsFinishReason,
@@ -289,7 +298,9 @@ public record ModelCompat(boolean allowEmptySignature,
                           Map<String, ChatTemplateKwargValue> chatTemplateArgs,
                           Boolean supportsReasoningEffort,
                           CacheControlFormat cacheControlFormat,
-                          Map<String, Object> openRouterRouting) {
+                          Map<String, Object> openRouterRouting,
+                          Boolean sendSessionAffinityHeaders,
+                          SessionAffinityFormat sessionAffinityFormat) {
 
     /** Compact constructor（包 A-09）：两个模板 map 的 {@code null} 归一成空表（pi 的
      *  {@code ?? {}}，{@code getCompat:1714-1715}）⇒ 二态、读点免判空；防御性复制
@@ -308,6 +319,47 @@ public record ModelCompat(boolean allowEmptySignature,
             ? null
             : java.util.Collections.unmodifiableMap(
                 new java.util.LinkedHashMap<>(openRouterRouting));
+    }
+
+    /**
+     * 二十五参便捷构造（包 B103 之前的**规范**构造 —— 那时组件就这二十五个）：包 B103 新增的
+     * 两个缺席（{@code null} ≙「按车道探测」）。旧规范形态降级为便捷构造 ⇒
+     * {@code CompatResolver.resolved} 与存量构造点**零改签**（与各包同一手法）。
+     */
+    public ModelCompat(boolean allowEmptySignature,
+                       Boolean requiresReasoningContentOnAssistantMessages,
+                       boolean supportsFinishReason,
+                       boolean forceAdaptiveThinking,
+                       Boolean supportsMidConvoSystemMessages,
+                       Boolean supportsMidConvoToolAdditions,
+                       Boolean supportsMidConvoToolChanges,
+                       Boolean supportsAdditionalTools,
+                       Boolean supportsToolSearch,
+                       boolean supportsTemperature,
+                       MaxTokensField maxTokensField,
+                       Boolean supportsStore,
+                       Boolean supportsDeveloperRole,
+                       Boolean supportsStrictMode,
+                       Boolean supportsLongCacheRetention,
+                       Boolean supportsCacheControlOnTools,
+                       ThinkingTokenBudgetField thinkingTokenBudgetField,
+                       Boolean supportsThinkingTokenBudget,
+                       Boolean supportsMaxOutputTokens,
+                       ThinkingFormat thinkingFormat,
+                       Map<String, ChatTemplateKwargValue> chatTemplateKwargs,
+                       Map<String, ChatTemplateKwargValue> chatTemplateArgs,
+                       Boolean supportsReasoningEffort,
+                       CacheControlFormat cacheControlFormat,
+                       Map<String, Object> openRouterRouting) {
+        this(allowEmptySignature, requiresReasoningContentOnAssistantMessages,
+             supportsFinishReason, forceAdaptiveThinking, supportsMidConvoSystemMessages,
+             supportsMidConvoToolAdditions, supportsMidConvoToolChanges,
+             supportsAdditionalTools, supportsToolSearch,
+             supportsTemperature, maxTokensField, supportsStore, supportsDeveloperRole,
+             supportsStrictMode, supportsLongCacheRetention, supportsCacheControlOnTools,
+             thinkingTokenBudgetField, supportsThinkingTokenBudget, supportsMaxOutputTokens,
+             thinkingFormat, chatTemplateKwargs, chatTemplateArgs, supportsReasoningEffort,
+             cacheControlFormat, openRouterRouting, null, null);
     }
 
     /**

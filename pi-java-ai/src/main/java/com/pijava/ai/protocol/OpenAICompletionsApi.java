@@ -71,7 +71,7 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         return "openai-completions";
     }
 
-    protected final OpenAIClient client;
+    private final OpenAIClient client;
     protected final String apiKey;
 
     /**
@@ -129,6 +129,16 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         this.providerRetry = ProviderRetry.optionsOf(options);
         // 包 A-02（B105）：cacheRetention 的选项面（pi :342 的 options?.cacheRetention）。
         this.cacheRetention = retentionOf(options);
+        // 包 B103：原始 sessionId（prompt_cache_key 用；非标准亲和头在 Java SDK streaming
+        // 不可达，登记 B140）。
+        this.sessionId = sessionIdOf(options);
+    }
+
+    /** 从 extra 读 sessionId（包 B103）；blank ⇒ null。 */
+    private static String sessionIdOf(ApiOptions options) {
+        Map<String, Object> extra = options.extra();
+        Object raw = extra == null ? null : extra.get("sessionId");
+        return raw == null || raw.toString().isBlank() ? null : raw.toString();
     }
 
     /** pi 的缓存保留期环境变量（与 {@code AnthropicMessagesApi} 同一个，:64 / :342 共用 helper）。 */
@@ -139,6 +149,9 @@ public class OpenAICompletionsApi extends AbstractChatApi {
      * 在请求期做（{@link CompatResolver#resolveCacheRetention}，与 anthropic 车道同源）。
      */
     private final Optional<CacheRetention> cacheRetention;
+
+    /** 包 B103：原始 sessionId（prompt_cache_key 用）。 */
+    private final String sessionId;
 
     /** A-14：初始请求获取的重试选项（pi {@code ProviderRetryOptions}）。 */
     private final ProviderRetry.Options providerRetry;
@@ -176,9 +189,10 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         try {
             // 包 A-02（pi :342/:349-357）：cacheRetention 三源合并后进请求构建
             // —— 断点族（cacheControlOf）与 prompt_cache_retention 共用这一个值。
+            var resolvedRetention = CompatResolver.resolveCacheRetention(cacheRetention,
+                System.getenv(CACHE_RETENTION_ENV));
             var params = OpenAICompletionsMessageConverter.buildParams(request, apiName(), baseUrl,
-                CompatResolver.resolveCacheRetention(cacheRetention,
-                    System.getenv(CACHE_RETENTION_ENV)));
+                resolvedRetention, sessionId);
             publisher.submit(builder.emitStart());
 
             // A-14（R7）：只包初始请求获取；每次重试是全新 SDK 请求，X-Stainless-Retry-Count 恒 0。

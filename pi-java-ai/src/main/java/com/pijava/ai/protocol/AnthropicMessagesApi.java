@@ -12,6 +12,8 @@ import com.anthropic.models.messages.RawMessageDeltaEvent;
 import com.anthropic.models.messages.RawMessageStreamEvent;
 import com.anthropic.models.messages.StopReason;
 
+import com.anthropic.backends.AnthropicBackend;
+
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.AuthKind;
 import com.pijava.ai.api.StreamRequest;
@@ -74,12 +76,14 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         // pi :906-908 的判据是**值**（`apiKey.includes("sk-ant-oat")`）——CLI 直给／文件凭证
         // 里的 oat 值同样走 OAuth 形态；AuthKind.OAUTH（来自 ANTHROPIC_OAUTH_TOKEN）是
         // pi-java 的显式载体。两者都认。
-        var oauth = auth.kind() == AuthKind.OAUTH || auth.value().contains(OAUTH_TOKEN_MARKER);
+        boolean oauth = auth.kind() == AuthKind.OAUTH
+            || auth.value().contains(OAUTH_TOKEN_MARKER);
+        boolean bearer = oauth || auth.kind() == AuthKind.BEARER;
         var builder = AnthropicOkHttpClient.builder();
-        if (oauth || auth.kind() == AuthKind.BEARER) {
+        if (bearer) {
             builder.authToken(auth.value());
             if (oauth) {
-                // pi :951-970 的 OAuth 分支：两枚身份头（另两枚 accept ／
+                // pi :951-970 的 OAuth 分支：两枚身份头（accept ／
                 // anthropic-dangerous-direct-browser-access 是浏览器场景产物，不移植）。
                 builder.putHeader("user-agent", "claude-cli/" + CLAUDE_CODE_VERSION);
                 builder.putHeader("x-app", "cli");

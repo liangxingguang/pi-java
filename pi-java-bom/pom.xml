@@ -27,7 +27,7 @@
         <version.jgit>7.6.0.202603022253-r</version.jgit>
         <version.java-websocket>1.5.7</version.java-websocket>
 
-        <version.anthropic-java>2.52.0</version.anthropic-java>
+        <version.anthropic-java>2.66.0</version.anthropic-java>
         <version.openai-java>4.42.0</version.openai-java>
         <!-- 包B84：1.15.0 的 FunctionResponse 无 parts 字段（javap 实测），且 Part.fromJson
              静默丢弃未知键 ⇒ pi 的 gemini 3+ 内嵌 functionResponse.parts 写不出来。

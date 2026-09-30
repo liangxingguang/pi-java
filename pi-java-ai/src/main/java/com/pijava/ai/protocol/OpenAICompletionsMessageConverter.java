@@ -104,6 +104,16 @@ final class OpenAICompletionsMessageConverter {
      */
     static ChatCompletionCreateParams buildParams(StreamRequest request, String apiName,
                                                   String baseUrl, CacheRetention cacheRetention) {
+        return buildParams(request, apiName, baseUrl, cacheRetention, null);
+    }
+
+    /**
+     * 包 B103：带原始 sessionId 的形态。会话亲和头挂解析后保留期门；{@code prompt_cache_key}
+     * 读<b>原始</b> sessionId、门看端点+保留期（pi openai-completions.ts:766-826）。
+     */
+    static ChatCompletionCreateParams buildParams(StreamRequest request, String apiName,
+                                                  String baseUrl, CacheRetention cacheRetention,
+                                                  String rawSessionId) {
         // 包 A7：车道的 compat 在这里**解析一次**（pi `getCompat(model)` 的落点，
         // `openai-completions.ts:1685`），下面的读点全部改读它 —— 探测用的是车道传进来的
         // **有效** baseUrl（与 pi 的 `model.baseUrl` 有一处刻意的形状偏差，docs/53 §9 R2）。
@@ -278,6 +288,18 @@ final class OpenAICompletionsMessageConverter {
         }
         // 包 A-10：模型级采样参数（pi `:996-999`，**body 的最后一个变更** ⇒ 同名键压过具名字段）。
         SamplingParamsWriter.applyToCompletions(builder, request.model());
+
+        // 包 B103（pi :766-826）：会话亲和头（params 级，与 responses 同一路径）
+        // + prompt_cache_key（门看端点+保留期）。
+        if (rawSessionId != null && !rawSessionId.isBlank()) {
+            // 头由 API 层经 client builder 注入（params 级头在 streaming 不透传）。
+            boolean officialOpenAi = baseUrl != null && baseUrl.contains("api.openai.com");
+            if ((officialOpenAi && cacheRetention != CacheRetention.NONE)
+                    || (cacheRetention == CacheRetention.LONG
+                        && Boolean.TRUE.equals(compat.supportsLongCacheRetention()))) {
+                builder.promptCacheKey(PromptCacheKeys.clamp(rawSessionId));
+            }
+        }
 
         return builder.build();
     }

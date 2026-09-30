@@ -53,7 +53,11 @@ public final class OpenAIResponsesApi extends AbstractChatApi {
             .apiKey(apiKey).baseUrl(baseUrl).maxRetries(0).build();
         this.providerRetry = ProviderRetry.optionsOf(options);
         this.responsesOptions = ResponsesOptions.from(options);
+        this.baseUrl = baseUrl;
     }
+
+    /** 包 B103：解析后的 base URL（openrouter 探测用）。 */
+    private final String baseUrl;
 
     @Override
     protected void streamInternal(StreamRequest request,
@@ -61,9 +65,11 @@ public final class OpenAIResponsesApi extends AbstractChatApi {
         // pi openai-responses.ts:74：`supportsStrictMode: model.compat?.supportsStrictMode ?? false`
         // —— 本车道的缺省是**不发** strict 键（azure 侧相反，见该车道）。
         // 包 A7：缺省由**这里**喂进解析器，转换器只消费（docs/53 §4.1）。
+        var compat = CompatResolver.forResponses(request.model(), false);
         var params = ResponsesMessageConverter.buildParams(
-            request, responsesOptions, request.modelId().modelName(), apiName(),
-            CompatResolver.forResponses(request.model(), false));
+            request, responsesOptions, request.modelId().modelName(), apiName(), compat,
+            SessionAffinityHeaders.responses(responsesOptions.sessionId(),
+                compat.sessionAffinityFormat(), request.modelId().provider(), baseUrl));
         // A-14（R7）：只包初始请求获取。
         var stream = ProviderRetry.retry(
             () -> client.responses().createStreaming(params),

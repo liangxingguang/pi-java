@@ -24,6 +24,7 @@ import com.pijava.ai.catalog.MaxTokensField;
 import com.pijava.ai.catalog.ModelCatalog;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
+import com.pijava.ai.catalog.SessionAffinityFormat;
 import com.pijava.ai.catalog.ThinkingFormat;
 import com.pijava.ai.catalog.ThinkingTokenBudgetField;
 import com.pijava.ai.model.ModelCapability;
@@ -382,7 +383,11 @@ public final class ModelsJsonConfig {
             // 包 A-02：cacheControlFormat 闭集响亮抛（与 maxTokensField 同口径）；
             // openRouterRouting 纯透传（null 保持 null，不归一——docs/59 R6）。
             cacheControlFormatOf(providerId, model.id(), def.cacheControlFormat()),
-            def.openRouterRouting());
+            def.openRouterRouting(),
+            // 包 B103：两个亲和字段原样透传可空值（缺省由车道构造期按 openrouter 探测补）。
+            def.sendSessionAffinityHeaders(),
+            SessionAffinityFormat.parse(def.sessionAffinityFormat())
+                .orElse(null));
     }
 
     /**

@@ -93,6 +93,16 @@ final class ResponsesMessageConverter {
     static ResponseCreateParams buildParams(StreamRequest request, ResponsesOptions ropts,
                                             String modelName, String apiName,
                                             ModelCompat compat) {
+        return buildParams(request, ropts, modelName, apiName, compat, java.util.Map.of());
+    }
+
+    /**
+     * 包 B103：带逐请求会话亲和头的形态（调用方按 compat/format 组装）。
+     */
+    static ResponseCreateParams buildParams(StreamRequest request, ResponsesOptions ropts,
+                                            String modelName, String apiName,
+                                            ModelCompat compat,
+                                            java.util.Map<String, String> affinityHeaders) {
         // pi openai-responses.ts:119 / azure-openai-responses.ts:77 —— 车道入口先
         // resolveTranscript，之后再构建请求。
         var transcript = Transcripts.resolveTranscript(request.transcript(), compat);
@@ -143,6 +153,8 @@ final class ResponsesMessageConverter {
         applyCacheRetention(builder, ropts);
         // 包 A-10：模型级采样参数（pi `openai-responses.ts:362-365`，**body 的最后一个变更**）。
         SamplingParamsWriter.applyToResponses(builder, request.model());
+        // 包 B103：会话亲和头（pi openai-responses.ts:258-267）。
+        affinityHeaders.forEach(builder::putAdditionalHeader);
         return builder.build();
     }
 
@@ -555,9 +567,9 @@ final class ResponsesMessageConverter {
         }
     }
 
-    /** pi: clampOpenAIPromptCacheKey —— key 上限 64 字符。 */
+    /** pi: clampOpenAIPromptCacheKey —— 按码点截前 64（包 B103，委托 {@link PromptCacheKeys}）。 */
     private static String clampCacheKey(String key) {
-        return key.length() > 64 ? key.substring(0, 64) : key;
+        return PromptCacheKeys.clamp(key);
     }
 
     /** OpenAI Responses 的 function_call item id 必须以 "fc_" 开头且 ≤64 字符。 */

@@ -183,7 +183,18 @@ public final class ModelsJsonSchema {
          * （{@code sort.partition: null}）⇒ 用宽松的 {@code Map<String,Object>}，缺席保持
          * {@code null}（不归一成空表，docs/59 R6）。
          */
-        @JsonProperty("openRouterRouting") Map<String, Object> openRouterRouting
+        @JsonProperty("openRouterRouting") Map<String, Object> openRouterRouting,
+        /**
+         * 包 B103（pi {@code types.ts:736-743/:789-798}）：anthropic/completions 车道是否
+         * 从 {@code sessionId} 发会话亲和头。缺省 ⇒ 车道探测（openrouter 端点 true，否则 false）。
+         */
+        @JsonProperty("sendSessionAffinityHeaders") Boolean sendSessionAffinityHeaders,
+        /**
+         * 包 B103（pi {@code types.ts:123}）：亲和头形状，三值闭集
+         * {@code "openai" | "openai-nosession" | "openrouter"}；未知串经
+         * {@link com.pijava.ai.catalog.SessionAffinityFormat#parse} 落成缺席（车道探测）。
+         */
+        @JsonProperty("sessionAffinityFormat") String sessionAffinityFormat
     ) {}
 
     /**
