@@ -51,6 +51,18 @@ class CredentialChainTest {
             new EnvApiKeyResolver(env::get), file());
     }
 
+    /** 五参形态：注入 stored OAuth 来源（包 B1）。 */
+    private java.util.Optional<RecordedCredential> resolve(String provider,
+            Credentials.StoredOAuthSource storedOAuth) {
+        return Credentials.resolveCredential(provider, profiles(),
+            new EnvApiKeyResolver(env::get), file(), storedOAuth);
+    }
+
+    private static OAuthCredential credentialValidForSeconds(long seconds) {
+        return new OAuthCredential("sub-access", "refresh-tok",
+            java.time.Instant.now().getEpochSecond() + seconds, null);
+    }
+
     // ── 四组合矩阵（D5/D6） ───────────────────────────────────────────────
 
     @Test
@@ -140,5 +152,52 @@ class CredentialChainTest {
         env.put("ANTHROPIC_AUTH_TOKEN_WORK", "profile-bearer");
 
         assertThat(resolve("anthropic")).isEmpty();
+    }
+
+    // ── 包 B1：stored OAuth 通道（docs/63） ──────────────────────────────
+
+    @Test
+    void storedAnthropicOauthYieldsApiKeyNotBearer() {
+        // ★ 钉 pi 的 toAuth 形态：Anthropic 订阅 access token 走 x-api-key（API_KEY），不是 Bearer。
+        var credential = resolve("anthropic", p -> java.util.Optional.of(credentialValidForSeconds(3600)));
+
+        assertThat(credential).isPresent();
+        assertThat(credential.get().kind()).isEqualTo(AuthKind.API_KEY);
+        assertThat(credential.get().kind()).isNotEqualTo(AuthKind.BEARER);
+        assertThat(credential.get().value()).isEqualTo("sub-access");
+        assertThat(credential.get().source()).isEqualTo("stored-oauth:anthropic");
+    }
+
+    @Test
+    void storedOauthWinsOverTokenEnvAndDefaultEnv() {
+        // pi：stored credential 仅次 CLI 直给、高于一切 ambient env。
+        env.put("ANTHROPIC_AUTH_TOKEN", "bearer-tok");
+        env.put("ANTHROPIC_OAUTH_TOKEN", "oat-tok");
+        env.put("ANTHROPIC_API_KEY", "plain-key");
+
+        var credential = resolve("anthropic", p -> java.util.Optional.of(credentialValidForSeconds(3600)));
+
+        assertThat(credential.get().kind()).isEqualTo(AuthKind.API_KEY);
+        assertThat(credential.get().value()).isEqualTo("sub-access");
+    }
+
+    @Test
+    void nonAnthropicStoredOauthDefaultsToBearer() {
+        // 非 anthropic 的 OAuth access token 暂记 BEARER（形态随各自包再细分）。
+        var credential = resolve("xai", p -> java.util.Optional.of(credentialValidForSeconds(3600)));
+
+        assertThat(credential.get().kind()).isEqualTo(AuthKind.BEARER);
+        assertThat(credential.get().value()).isEqualTo("sub-access");
+    }
+
+    @Test
+    void emptyStoredOauthFallsThroughToAmbient() {
+        // 来源返回 empty ⇒ 照常回落 token env（不阻断后续链）。
+        env.put("ANTHROPIC_AUTH_TOKEN", "bearer-tok");
+
+        var credential = resolve("anthropic", p -> java.util.Optional.empty());
+
+        assertThat(credential.get().kind()).isEqualTo(AuthKind.BEARER);
+        assertThat(credential.get().value()).isEqualTo("bearer-tok");
     }
 }

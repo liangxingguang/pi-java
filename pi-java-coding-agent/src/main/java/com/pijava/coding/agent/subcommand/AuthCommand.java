@@ -123,45 +123,13 @@ public final class AuthCommand {
         return "Bearer " + apiKey;
     }
 
+    /**
+     * 解析 provider 生效凭证 —— 复用共享链（包 B1）：{@code Credentials.resolveApiKey}
+     * 已含 stored OAuth 的读取与「临期 5 分钟锁内单次刷新」，auth 命令不再自持一份
+     * 读-刷新逻辑。顺序照 pi：stored credential 高于 ambient env。
+     */
     private static Optional<String> resolve(String provider) {
-        var credential = Credentials.resolveApiKey(provider);
-        if (credential.isPresent()) {
-            return credential;
-        }
-        var oauth = new OAuthCredentialStore().resolve(provider);
-        if (oauth.isEmpty()) {
-            return Optional.empty();
-        }
-        var oauthCredential = oauth.get();
-        if (oauthCredential.isExpired()) {
-            oauthCredential = refresh(provider, oauthCredential);
-            if (oauthCredential != null) {
-                new OAuthCredentialStore().store(provider, oauthCredential);
-            }
-        }
-        return Optional.ofNullable(
-            oauthCredential == null ? null : oauthCredential.accessToken());
-    }
-
-    /** 过期凭证尝试刷新；无 refresh token 或未注册 OAuth 配置时返回原值。 */
-    private static OAuthCredential refresh(String provider, OAuthCredential credential) {
-        if (credential.refreshToken().isBlank()) {
-            return credential;
-        }
-        var providerSpec = OAuthProviders.get(provider);
-        if (providerSpec.isEmpty()) {
-            return credential;
-        }
-        try {
-            return switch (providerSpec.get()) {
-                case OAuthProvider.Pkce(OAuthConfig c) -> new OAuthFlow(c).refresh(credential);
-                case OAuthProvider.Device(DeviceCodeConfig d) -> new DeviceCodeFlow(d).refresh(credential);
-            };
-        } catch (Exception e) {
-            System.out.println("OAuth token refresh failed for " + provider
-                + ": " + e.getMessage());
-            return credential;
-        }
+        return Credentials.resolveApiKey(provider);
     }
 
     /** 按 provider 流程判别执行 PKCE 或 device-code 登录。 */

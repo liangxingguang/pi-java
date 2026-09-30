@@ -46,4 +46,29 @@ class OAuthCredentialStoreTest {
         assertThat(store.resolve("any")).isEmpty();
         store.delete("any"); // 不抛异常
     }
+
+    // ── 包 B1 R2：原子 modify ────────────────────────────────────────────
+
+    @Test
+    void modifyAppliesAndPersistsUnderLock() {
+        var store = new OAuthCredentialStore(tmp.resolve("auth-oauth.json"));
+        store.store("anthropic", new OAuthCredential("old", "rt", 1_700_000_000L, null));
+
+        var result = store.modify("anthropic", current ->
+            new OAuthCredential("new", current.refreshToken(), current.expiresAtEpochSec(), current.baseUrl()));
+
+        assertThat(result.accessToken()).isEqualTo("new");
+        assertThat(store.resolve("anthropic").orElseThrow().accessToken()).isEqualTo("new");
+    }
+
+    @Test
+    void modifyOnMissingProviderReturnsNullWithoutCallingMutation() {
+        var store = new OAuthCredentialStore(tmp.resolve("auth-oauth.json"));
+
+        var result = store.modify("ghost", current -> {
+            throw new AssertionError("must not be called for absent provider");
+        });
+
+        assertThat(result).isNull();
+    }
 }
