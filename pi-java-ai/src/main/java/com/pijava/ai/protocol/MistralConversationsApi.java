@@ -2,6 +2,7 @@ package com.pijava.ai.protocol;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.time.Duration;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -82,8 +83,16 @@ public final class MistralConversationsApi extends AbstractChatApi {
         this.apiKey = resolveApiKey(options);
         this.baseUrl = options.baseUrl() != null && !options.baseUrl().isBlank()
                 ? options.baseUrl() : DEFAULT_BASE_URL;
+        // A-14（G3）：重试次数取选项（默认 0 ⇒ 不重试），cap 经 extra 过桥。
+        var policyBuilder = new com.pijava.ai.http.RetryPolicy.Builder()
+                .maxRetries(options.maxRetries());
+        if (options.extra() != null
+                && options.extra().get("maxRetryDelayMs") instanceof Number number) {
+            policyBuilder.maxRetryDelayMs(Duration.ofMillis(number.longValue()));
+        }
         this.http = PiHttpClient.builder()
                 .userAgent("pi-java/dev")
+                .retryPolicy(policyBuilder.build())
                 .build();
     }
 

@@ -131,14 +131,18 @@ public final class PiHttpClient implements AutoCloseable {
             throw new PiHttpException(0, "Request aborted");
         }
         try {
-            var response = http.send(request, HttpResponse.BodyHandlers.ofLines());
+            // A-14：body 收成字符串——错误响应要提取 provider message（cap 文案后缀），
+            // 成功流再按行切开喂 SseIterator。
+            var response = http.send(request, HttpResponse.BodyHandlers.ofString());
             int status = response.statusCode();
+            String body = response.body();
+            String providerMessage = status >= 400 ? providerErrorMessage(body) : "";
 
-            if (retryPolicy.shouldRetry(status) && attempt < retryPolicy.maxRetries()) {
+            if (retryPolicy.shouldRetry(status, response) && attempt < retryPolicy.maxRetries()) {
                 if (signal != null && signal.isAborted()) {
                     throw new PiHttpException(0, "Request aborted");
                 }
-                long delayMs = retryPolicy.delayMs(status, attempt, response);
+                long delayMs = retryPolicy.delayMs(status, attempt, response, providerMessage);
                 LOG.warn("[ai] HTTP {} for {}, retry {}/{} in {}ms (Retry-After: {})",
                     status, request.uri(), attempt + 1, retryPolicy.maxRetries(), delayMs,
                     response.headers().firstValue("Retry-After").orElse("n/a"));
@@ -152,7 +156,7 @@ public final class PiHttpClient implements AutoCloseable {
                 throw new PiHttpException(status, "HTTP " + status);
             }
 
-            return new SseIterator(response.body().iterator());
+            return new SseIterator(body.lines().iterator());
         } catch (java.io.IOException e) {
             if (retryPolicy.shouldRetry(e) && attempt < retryPolicy.maxRetries()) {
                 if (signal != null && signal.isAborted()) {
@@ -176,6 +180,30 @@ public final class PiHttpClient implements AutoCloseable {
             Thread.currentThread().interrupt();
             throw new PiHttpException(0, "Request interrupted", e);
         }
+    }
+
+    /**
+     * A-14：从错误响应体提取 provider message（pi 把 SDK error.message 拼在
+     * cap 文案后缀）。认两种常见形状：{@code {"error":{"message":...}}} 与
+     * {@code {"message":...}}；取不到给空串。
+     */
+    private static String providerErrorMessage(String body) {
+        if (body == null || body.isBlank()) {
+            return "";
+        }
+        try {
+            var root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(body);
+            var error = root.path("error");
+            if (!error.isMissingNode() && error.has("message")) {
+                return error.get("message").asText("");
+            }
+            if (root.has("message")) {
+                return root.get("message").asText("");
+            }
+        } catch (Exception ignored) {
+            // 非 JSON 错误体：cap 文案就不带后缀。
+        }
+        return "";
     }
 
     // ── Builder ────────────────────────────────────────────────
