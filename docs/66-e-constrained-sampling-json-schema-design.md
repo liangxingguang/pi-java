@@ -1,6 +1,6 @@
 # 66 — E：constrained sampling（json_schema strict）对齐
 
-**状态：📐 设计待审核，未写任何生产代码。**
+**状态：✅ 已裁决并闭环（2026-10-02，`5606ec9` 设计 ＋ `20737c1` 实现，§12 记录）。**
 **创建基准：** pi-java `e8ca465`（D-P1 收尾）
 **pi 锚点：** `3390bd936`（取证一律 `git show 3390bd936:<path>`）
 
@@ -293,4 +293,20 @@ checkstyle 0、`git diff --check`、无 `System.out`、文件 ≤500；全 react
 
 ## 12. 实施记录
 
-（闭环后回填。）
+**2026-10-02 闭环**：用户裁决「按照建议实施」⇒ R1–R6 全按建议。
+提交：`4cbfb49`（类型＋转换器＋解析器）、`20737c1`（五车道接线＋目录＋生产者＋拆分）。
+
+- **RED**：五车道 wire 夹具首跑 **6 红 2 对照绿**（completions/responses/azure/anthropic/google/mistral 正向；moonshot 与 gemini-2.5 对照）；agent-core 生产者夹具撤 ReadTool 覆盖验证恰 1 红后恢复。
+- **Mutation（实测，均 grep 复核、逐条复原）**：
+  - M1 completions 跳过 schema 转换 ⇒ 恰 1 红（completions 正向）；
+  - M2 completions 门恒真 ⇒ 恰 1 红（moonshot 对照）；
+  - M3 去 require 抛错 ⇒ 恰 1 红（requireUnconvertible）；
+  - M4 去目录 supportsStrictTools 标注 ⇒ 2 红（CatalogCompatRules ＋ anthropic wire）；
+  - M5 去 agent-core 生产者（ReadTool）⇒ 1 红。
+- **实施期纠正（两处，比设计当时认知更重要）**：
+  1. responses function tool 的 gate false 必须**显式 `JsonMissing.of()`**：跳过 setter 会被 `checkRequired("strict")` 判未设置（请求空、`` `strict` is required ``）—— B88 的同一约束在抽方法时复现；
+  2. PiMessagesApi 默认 mapper 是 ALWAYS 包含，ToolDeclaration 直接 `valueToTree` 会写出 `constrainedSampling:null`；改逐项写、仅在场时发键（与 SessionJson NON_NULL 字节一致）。
+- **回归**：pi-java-ai **1259/1259**、agent-core **528/528**、coding-agent **290/290**（均 -am）；checkstyle 0、`git diff --check` clean、无新增 `System.out`、文件 ≤500。
+- **拆分（R6）**：新增 CompletionToolWire／CompletionImageWire／ResponseToolWire／ResponseInputWire／MistralTools／MistralContent；三个超限文件（592/599/521）回落到 ≤496。
+- **无新登记 B 项**；未跑全 reactor verify（tui/evals/web 无调用面）。
+
