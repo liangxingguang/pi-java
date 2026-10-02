@@ -167,6 +167,10 @@ public final class SessionJson {
             case ContentBlock.TextContent t -> {
                 node.put("type", "text");
                 node.put("text", t.text());
+                // pi textSignature?: string — optional, omitted when undefined.
+                if (t.textSignature() != null) {
+                    node.put("textSignature", t.textSignature());
+                }
             }
             case ContentBlock.ThinkingContent t -> {
                 // Key names follow pi (types.ts:357-365): the reasoning text field is
@@ -201,6 +205,10 @@ public final class SessionJson {
                 node.put("id", t.id());
                 node.put("name", t.name());
                 node.set("arguments", MAPPER.valueToTree(t.arguments()));
+                // pi thoughtSignature?: string — optional, omitted when undefined.
+                if (t.thoughtSignature() != null) {
+                    node.put("thoughtSignature", t.thoughtSignature());
+                }
             }
             case ContentBlock.ToolResultContent t -> {
                 node.put("type", "tool_result");

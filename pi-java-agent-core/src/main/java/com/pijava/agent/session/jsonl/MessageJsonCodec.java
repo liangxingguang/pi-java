@@ -287,7 +287,9 @@ final class MessageJsonCodec {
         }
         String type = JsonlCodec.requireString(node, "type");
         return switch (type) {
-            case "text" -> new ContentBlock.TextContent(JsonlCodec.requireString(node, "text"));
+            case "text" -> new ContentBlock.TextContent(
+                JsonlCodec.requireString(node, "text"),
+                JsonlCodec.optionalString(node, "textSignature"));
             case "thinking" -> new ContentBlock.ThinkingContent(
                 thinkingText(node),
                 nullToEmpty(JsonlCodec.optionalString(node, "thinkingSignature")),
@@ -300,7 +302,8 @@ final class MessageJsonCodec {
             case "tool_use" -> new ContentBlock.ToolUseContent(
                 JsonlCodec.requireString(node, "id"),
                 JsonlCodec.requireString(node, "name"),
-                JsonlCodec.optionalObject(node, "arguments"));
+                JsonlCodec.optionalObject(node, "arguments"),
+                JsonlCodec.optionalString(node, "thoughtSignature"));
             case "tool_result" -> new ContentBlock.ToolResultContent(
                 JsonlCodec.requireString(node, "toolUseId"),
                 JsonlCodec.requireString(node, "toolName"),

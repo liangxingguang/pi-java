@@ -25,8 +25,21 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 })
 public sealed interface ContentBlock {
 
-    /** Plain text content. */
-    record TextContent(String text) implements ContentBlock {}
+    /**
+     * Plain text content.
+     *
+     * @param text          visible text
+     * @param textSignature Google thought-signature attached to a text part
+     *        ({@code TextContent.textSignature?}, {@code types.ts:353}); the
+     *        signature travels with the part on replay under the same
+     *        provider+model identity gate
+     */
+    record TextContent(String text, String textSignature) implements ContentBlock {
+        /** Backwards-compatible constructor for pre-signature call sites. */
+        public TextContent(String text) {
+            this(text, null);
+        }
+    }
 
     /**
      * Model reasoning/thinking text (e.g. DeepSeek {@code reasoning_content}).
@@ -86,14 +99,24 @@ public sealed interface ContentBlock {
     /**
      * A tool-use request emitted by the assistant.
      *
-     * @param id        unique call identifier
-     * @param name      tool name
-     * @param arguments tool arguments as a JSON-compatible map
+     * @param id               unique call identifier
+     * @param name             tool name
+     * @param arguments        tool arguments as a JSON-compatible map
+     * @param thoughtSignature provider thought-signature carried on the call
+     *        ({@code ToolCall.thoughtSignature?}, {@code types.ts:391}); Google
+     *        attaches it to {@code functionCall} parts, and the completions
+     *        legacy encrypted-reasoning path reads it back from history
      */
-    record ToolUseContent(String id, String name, Map<String, Object> arguments) implements ContentBlock {
+    record ToolUseContent(String id, String name, Map<String, Object> arguments,
+                          String thoughtSignature) implements ContentBlock {
         /** Compact constructor that defensively copies the arguments map. */
         public ToolUseContent {
             arguments = Map.copyOf(arguments);
+        }
+
+        /** Backwards-compatible constructor for pre-signature call sites. */
+        public ToolUseContent(String id, String name, Map<String, Object> arguments) {
+            this(id, name, arguments, null);
         }
     }
 

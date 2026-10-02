@@ -74,7 +74,7 @@ public final class MessageBubble {
         boolean prefixed = false;
         for (var block : blocks) {
             var blockLines = switch (block) {
-                case ContentBlock.TextContent(var text) -> {
+                case ContentBlock.TextContent(var text, _) -> {
                     var split = TextLayout.split(TextLayout.escapeMarkup(text), false);
                     if (!prefixed) {
                         // The bullet belongs to the assistant prose, not to a
@@ -89,7 +89,7 @@ public final class MessageBubble {
                 // "[Reasoning redacted]" placeholder — anthropic-messages.ts:641).
                 case ContentBlock.ThinkingContent(var text, _, _) -> dim(
                     TextLayout.split(TextLayout.escapeMarkup(text), false));
-                case ContentBlock.ToolUseContent(var id, var name, var arguments) ->
+                case ContentBlock.ToolUseContent(var id, var name, var arguments, _) ->
                     new ToolCallCard(toolName(name), toolArgs(arguments), "running").lines();
                 case ContentBlock.ToolResultContent(
                         var toolUseId, var toolName, var content, var isError) ->
@@ -136,7 +136,7 @@ public final class MessageBubble {
         var out = new ArrayList<LogicalLine>();
         for (var block : content) {
             switch (block) {
-                case ContentBlock.TextContent(var text) -> out.add(new LogicalLine(
+                case ContentBlock.TextContent(var text, _) -> out.add(new LogicalLine(
                     (isError ? "! " : "") + truncate(TextLayout.escapeMarkup(text), 500),
                     TOOL_INDENT, TOOL_INDENT, true,
                     isError ? Style.EMPTY.red() : Style.EMPTY.dim()));
