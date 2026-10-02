@@ -1,14 +1,17 @@
 package com.pijava.ai.protocol;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.SubmissionPublisher;
 import java.util.function.Supplier;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.openai.core.JsonField;
 import com.openai.core.JsonValue;
+import com.openai.core.ObjectMappers;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
 import com.openai.models.chat.completions.ChatCompletionChunk;
@@ -189,6 +192,9 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         // 不写死「先 thinking 还是先 text」。
         var blockEnds = new ArrayDeque<Supplier<StreamEvent>>();
         var toolCall = new ToolCallAccumulator();
+        // pi streamedReasoningDetails (:328): validated detail entries accumulated
+        // across chunks, serialized once onto the thinking block at finalization.
+        List<JsonNode> streamedDetails = null;
         try {
             // 包 A-02（pi :342/:349-357）：cacheRetention 三源合并后进请求构建
             // —— 断点族（cacheControlOf）与 prompt_cache_retention 共用这一个值。
@@ -273,6 +279,28 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                         publisher.submit(builder.emitThinkingDelta(reasoning.text()));
                     }
 
+                    // Reasoning details (pi :664-675): array of structured detail
+                    // objects on the delta; validated and merged into logical entries.
+                    JsonField<?> detailsField = delta._additionalProperties().get("reasoning_details");
+                    if (detailsField != null && detailsField.asArray().isPresent()) {
+                        for (var jsonValue : detailsField.asArray().orElseThrow()) {
+                            JsonNode detailNode =
+                                ObjectMappers.jsonMapper().convertValue(jsonValue, JsonNode.class);
+                            if (!CompletionReasoningDetails.isDetail(detailNode)) {
+                                continue;
+                            }
+                            if (!thinkingStarted) {
+                                publisher.submit(builder.emitThinkingStart("", "", false));
+                                thinkingStarted = true;
+                                blockEnds.add(builder::emitThinkingEnd);
+                            }
+                            if (streamedDetails == null) {
+                                streamedDetails = new ArrayList<>();
+                            }
+                            CompletionReasoningDetails.append(streamedDetails, detailNode);
+                        }
+                    }
+
                     // Tool calls — accumulate deltas; emit ToolCallEnd at finish.
                     // id / name / arguments may arrive in separate chunks
                     // (DeepSeek etc.); start on the first chunk whatever it
@@ -295,7 +323,9 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                     }
                 }
             }
-            // Emit block-end events before StreamDone, in **creation order** (pi :674-676)
+            // Emit block-end events before StreamDone, in **creation order** (pi :674-676).
+            // pi finishBlock applies streamed details before thinking_end (:440).
+            stampStreamedDetails(builder, streamedDetails);
             for (var end : blockEnds) {
                 publisher.submit(end.get());
             }
@@ -335,7 +365,24 @@ public class OpenAICompletionsApi extends AbstractChatApi {
             }
             publisher.submit(builder.emitDone(stop.reason));
         } catch (Exception e) {
+            // pi catch (:703-704) applies details onto thinking blocks before
+            // emitting the error, so the error partial keeps replay metadata.
+            stampStreamedDetails(builder, streamedDetails);
             publisher.submit(builder.emitError("error", e));
+        }
+    }
+
+    /** Serialize the accumulated reasoning details onto the current thinking block. */
+    private static void stampStreamedDetails(StreamPartialBuilder builder,
+                                             List<JsonNode> details) {
+        if (details == null) {
+            return;
+        }
+        try {
+            builder.applyThinkingSignature(
+                ObjectMappers.jsonMapper().writeValueAsString(details), false);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to serialize reasoning details", e);
         }
     }
 
