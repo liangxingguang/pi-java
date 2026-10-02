@@ -56,6 +56,16 @@ final class CompletionToolWire {
         return out;
     }
 
+    /** Serialize tool-call arguments, falling back to "{}". */
+    static String argumentsJson(Map<String, Object> arguments) {
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper()
+                .writeValueAsString(arguments);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            return "{}";
+        }
+    }
+
     /**
      * pi {@code openai-completions.ts:1240-1246} 的 <b>Kimi 形状</b>：
      * {@code {role:"system", tools:[…]}}。

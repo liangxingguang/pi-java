@@ -1,13 +1,11 @@
 package com.pijava.ai.protocol;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openai.core.JsonValue;
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam;
@@ -26,7 +24,6 @@ import com.openai.models.chat.completions.ChatCompletionUserMessageParam;
 
 import com.pijava.ai.api.SimpleOptions;
 import com.pijava.ai.api.StreamRequest;
-import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.message.MessageTexts;
 import com.pijava.ai.api.TransformMessages;
@@ -59,21 +56,6 @@ final class OpenAICompletionsMessageConverter {
     private OpenAICompletionsMessageConverter() {}
 
     private static final ObjectMapper JSON = new ObjectMapper();
-
-    /**
-     * Wire names accepted as a thinking block's **signature** when replaying it back
-     * (pi {@code openai-completions.ts:278}). The signature is what the collect side stamped
-     * on the block — i.e. the field the provider actually sent — so replay sends the text
-     * back under that same name instead of guessing (see {@link #addAssistantMessage}).
-     *
-     * <p>⚠️ Deliberately a **second array** with a different order from the collect side's
-     * probe list ({@code OpenAICompletionsApi.REASONING_PROBE_FIELDS}): pi's two lists are in
-     * different orders ({@code :597} probes {@code reasoning_content} first, {@code :278} lists
-     * {@code reasoning} first). Here the order cannot matter (it is an {@code includes} test),
-     * but the pair exists for two different questions and must not be collapsed.</p>
-     */
-    private static final List<String> REASONING_SIGNATURE_FIELDS =
-        List.of("reasoning", "reasoning_content", "reasoning_text");
 
     /**
      * 三参便捷形态（包 A-02 之前的规范入口，全部存量夹具零改签）：retention 取
@@ -366,6 +348,9 @@ final class OpenAICompletionsMessageConverter {
         var text = new StringBuilder();
         var reasoning = new ArrayList<String>();
         String signature = null;
+        // pi preservedReasoningDetails (:1301-1309): structured details suppress
+        // the raw reasoning field (mutex, :1330).
+        var preservedDetails = CompletionsReasoningWire.preserve(assistant);
         var toolCalls = new ArrayList<ChatCompletionMessageToolCall>();
         for (var block : assistant.content()) {
             if (block instanceof ContentBlock.TextContent tc) {
@@ -389,7 +374,7 @@ final class OpenAICompletionsMessageConverter {
                         .id(toolUse.id())
                         .function(ChatCompletionMessageFunctionToolCall.Function.builder()
                             .name(toolUse.name())
-                            .arguments(toArgumentsJson(toolUse.arguments()))
+                            .arguments(CompletionToolWire.argumentsJson(toolUse.arguments()))
                             .build())
                         .build()));
             }
@@ -402,11 +387,11 @@ final class OpenAICompletionsMessageConverter {
             ab.toolCalls(toolCalls);
         }
 
-        // 规则 (i)：签名即线格名，原样发回。pi 在这条路径上还有一层 reasoning_details
-        // 分支（preservedReasoningDetails，OpenAI 加密推理详情）；pi-java 不解析该结构
-        // ⇒ 那个 if 恒真，故不移植。
+        // 规则 (i)：签名即线格名，原样发回 —— 仅在无 structured details 时走
+        // （pi :1330 mutex：有 preserved ⇒ 不发裸 reasoning 字段）。
         boolean reasoningContentSent = false;
-        if (signature != null && REASONING_SIGNATURE_FIELDS.contains(signature)) {
+        if (preservedDetails == null
+                && signature != null && CompletionsReasoningWire.isReasoningField(signature)) {
             ab.putAdditionalProperty(signature, JsonValue.from(String.join("\n", reasoning)));
             reasoningContentSent = "reasoning_content".equals(signature);
         }
@@ -418,6 +403,13 @@ final class OpenAICompletionsMessageConverter {
         // 即使挂在 deepseek 上也不补，否则等于给普通对话凭空塞一个推理字段。
         // ⚠️ 包 A7：第一个合取项现在来自**解析后**的 compat（探测已收进 CompatResolver，
         // 那段内联的 deepseek 判据随之删除）。
+        // Structured details (pi :1373-1375). 经树（docs/58 R11）：普通 mapper
+        // 转树后 JsonValue.from，避免 NON_NULL 静默丢键。
+        if (preservedDetails != null) {
+            ab.putAdditionalProperty("reasoning_details",
+                JsonValue.from(JSON.valueToTree(preservedDetails)));
+        }
+
         if (!reasoningContentSent
                 && Boolean.TRUE.equals(compat.requiresReasoningContentOnAssistantMessages())
                 && model.capabilities().contains(ModelCapability.THINKING)) {
@@ -428,14 +420,6 @@ final class OpenAICompletionsMessageConverter {
         // 空助手消息）。⚠️ reasoning **不算内容**：只带 thinking 的消息就是要丢的那种。
         if (!text.isEmpty() || !toolCalls.isEmpty()) {
             wire.add(ChatCompletionMessageParam.ofAssistant(ab.build()));
-        }
-    }
-
-    private static String toArgumentsJson(Map<String, Object> arguments) {
-        try {
-            return JSON.writeValueAsString(arguments);
-        } catch (Exception e) {
-            return "{}";
         }
     }
 
