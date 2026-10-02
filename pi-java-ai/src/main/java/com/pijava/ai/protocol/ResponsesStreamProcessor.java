@@ -206,10 +206,12 @@ final class ResponsesStreamProcessor {
         } else if (item.functionCall().isPresent()) {
             slotTypes.put(outputIndex, TOOLCALL);
             var fc = item.functionCall().get();
+            // D3（docs/62）：id 复合 `call_id|item.id`（pi shared :485-489）。
+            var compositeId = compositeId(fc.callId(), fc.id().orElse(""));
             toolCalls.put(outputIndex,
-                new FunctionCallState(fc.callId(), fc.name(), fc.arguments()));
-            // 包⑥：起点即带身份（上两行刚取到 callId/name）。
-            publisher.submit(builder.emitToolCallStart(fc.callId(), fc.name()));
+                new FunctionCallState(compositeId, fc.name(), fc.arguments()));
+            // 包⑥：起点即带身份（上两行刚取到复合 id/name）。
+            publisher.submit(builder.emitToolCallStart(compositeId, fc.name()));
         }
     }
 
@@ -388,7 +390,16 @@ final class ResponsesStreamProcessor {
         return type.equals(slots.get(index));
     }
 
-    /** function_call 增量状态 —— arguments 累计缓冲。 */
+    /** D3：pi shared :488 的复合 id —— {@code `${call_id}|${item.id}`}。 */
+    static String compositeId(String callId, String itemId) {
+        return callId + "|" + itemId;
+    }
+
+    /**
+     * function_call 增量状态 —— arguments 累计缓冲。
+     * {@code callId} 是 D3 复合 id（{@code call_id|item.id}）：增量帧上的块 id
+     * 不能退回裸 call_id（{@code emitToolCallDelta} 会用它重建块）。
+     */
     private static final class FunctionCallState {
         final String callId;
         final String name;

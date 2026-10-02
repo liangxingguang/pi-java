@@ -11,9 +11,8 @@ import java.util.Set;
  *
  * <p>pi {@code openai-responses-shared.ts:155-176} ＋ {@code openai-responses.ts:31}。</p>
  *
- * <p>⚠️ <b>P33</b>：java 的 Responses 车道从不构造 {@code {call_id}|{item_id}} 复合 id，
- * {@code contains("|")} 在生产恒假 ⇒ 竖线分支**不可达**；但按 R3 照抄保留（pi 同形），
- * 不可达性由此处的注释钉住。</p>
+ * <p>D3（{@code docs/62}）起接收侧构造复合 id（{@code call_id|item.id}）⇒
+ * 竖线分支<b>生产可达</b>（P33 已结案）。</p>
  */
 public final class ResponsesToolCallIds {
 
@@ -22,6 +21,23 @@ public final class ResponsesToolCallIds {
             Set.of("openai", "openai-codex", "opencode");
 
     private ResponsesToolCallIds() {}
+
+    /**
+     * D3：pi shared :288/:331 的出站拆分 —— 复合 id 取 call_id 段
+     * （无 {@code |} 的旧 id 原样返回）。
+     */
+    public static String callIdOf(String id) {
+        int sep = id.indexOf('|');
+        return sep < 0 ? id : id.substring(0, sep);
+    }
+
+    /**
+     * D3：pi shared :289 的 item.id 段（{@code split("|")[1]}）；无第二段 ⇒ {@code null}。
+     */
+    public static String itemIdOf(String id) {
+        int sep = id.indexOf('|');
+        return sep < 0 || sep + 1 >= id.length() ? null : id.substring(sep + 1);
+    }
 
     /**
      * pi 的 {@code normalizeToolCallId} 闭包捕获了本车道的 api 名
@@ -37,7 +53,7 @@ public final class ResponsesToolCallIds {
             if (!id.contains("|")) {
                 return normalizeIdPart(id);
             }
-            // pi 的 split("|") 解构取前两段，多余段丢弃 —— Java 同形（P33：生产不可达，照抄保留）
+            // pi 的 split("|") 解构取前两段，多余段丢弃 —— Java 同形（D3 起生产可达）。
             String[] parts = id.split("\\|", -1);
             var callId = parts[0];
             var itemId = parts.length > 1 ? parts[1] : "";

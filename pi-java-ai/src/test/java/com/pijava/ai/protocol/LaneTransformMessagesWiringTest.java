@@ -148,16 +148,19 @@ class LaneTransformMessagesWiringTest {
 
 
     @Test
-    void openAiResponsesAdapterUsesOpenAiApiNameForToolId() throws Exception {
+    void openAiResponsesReplaySplitsCallIdAndDropsCrossModelItemId() throws Exception {
         var body = captureResponsesBody("openai-responses", false, ModelId.of("openai", "gpt-4o"));
-        assertThat(body).contains("\"call_id\":\"call_123|fc_abc\"");
+        // D3（docs/62）：call_id 只带 call_id 段；跨模型历史的 fc_ item id 省略。
+        assertThat(body).contains("\"call_id\":\"call_123\"");
+        assertThat(body).doesNotContain("\"id\":\"fc_abc\"");
     }
 
     @Test
-    void azureResponsesAdapterUsesAzureApiNameForToolId() throws Exception {
+    void azureResponsesReplaySplitsCallIdAndDropsCrossModelItemId() throws Exception {
         var body = captureResponsesBody("azure-openai-responses", true,
             ModelId.of("openai", "gpt-4o"));
-        assertThat(body).contains("\"call_id\":\"call_123|fc_abc\"");
+        assertThat(body).contains("\"call_id\":\"call_123\"");
+        assertThat(body).doesNotContain("\"id\":\"fc_abc\"");
     }
 
     private static String captureResponsesBody(String apiName, boolean azure, ModelId<?> target)

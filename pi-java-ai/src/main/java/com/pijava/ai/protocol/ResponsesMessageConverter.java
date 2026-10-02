@@ -38,6 +38,7 @@ import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.message.MessageTexts;
+import com.pijava.ai.model.ModelId;
 import com.pijava.ai.thinking.ThinkingLevel;
 import com.pijava.ai.utils.SanitizeUnicode;
 
@@ -221,11 +222,12 @@ final class ResponsesMessageConverter {
             } else if (msg instanceof Message.UserMessage user) {
                 items.add(toUserItem(user.content()));
             } else if (msg instanceof Message.AssistantMessage assistant) {
-                addAssistantItems(items, assistant, msgIndex);
+                addAssistantItems(items, assistant, msgIndex, request.modelId(), apiName);
             } else if (msg instanceof Message.ToolResultMessage tool) {
                 items.add(ResponseInputItem.ofFunctionCallOutput(
                     ResponseInputItem.FunctionCallOutput.builder()
-                        .callId(tool.toolUseId())
+                        // D3：tool result 只用复合 id 的 call_id 段（pi shared :331-346）。
+                        .callId(ResponsesToolCallIds.callIdOf(tool.toolUseId()))
                         .output(convertToolResultOutput(request.model(), tool.content()))
                         .build()));
             }
@@ -448,7 +450,8 @@ final class ResponsesMessageConverter {
      */
     private static void addAssistantItems(List<ResponseInputItem> items,
                                           Message.AssistantMessage assistant,
-                                          int msgIndex) {
+                                          int msgIndex,
+                                          ModelId<?> target, String apiName) {
         var text = new StringBuilder();
         var toolCalls = new ArrayList<ResponseFunctionToolCall>();
         for (var block : assistant.content()) {
@@ -456,12 +459,24 @@ final class ResponsesMessageConverter {
                 // pi :283 —— assistant 文本**逐块**净化（跨块边界的孤高+孤低在 pi 会被各自删除）。
                 text.append(SanitizeUnicode.surrogates(tc.text()));
             } else if (block instanceof ContentBlock.ToolUseContent toolUse) {
-                toolCalls.add(ResponseFunctionToolCall.builder()
-                    .callId(toolUse.id())
-                    .id(normalizeItemId(toolUse.id()))
+                // D3（pi shared :288-303）：拆分复合 id，按跨模型/非 fc_ 规则丢 item.id。
+                String callId = ResponsesToolCallIds.callIdOf(toolUse.id());
+                String itemId = ResponsesToolCallIds.itemIdOf(toolUse.id());
+                boolean sameProviderAndApi = java.util.Objects.equals(assistant.provider(), target.provider())
+                    && java.util.Objects.equals(assistant.api(), apiName);
+                boolean differentModel = sameProviderAndApi
+                    && !java.util.Objects.equals(assistant.model(), target.modelName());
+                boolean dropItemId =
+                    (differentModel && itemId != null && itemId.startsWith("fc_"))
+                    || (itemId != null && !itemId.startsWith("fc_"));
+                var callBuilder = ResponseFunctionToolCall.builder()
+                    .callId(callId)
                     .name(toolUse.name())
-                    .arguments(toArgumentsJson(toolUse.arguments()))
-                    .build());
+                    .arguments(toArgumentsJson(toolUse.arguments()));
+                if (itemId != null && !dropItemId) {
+                    callBuilder.id(itemId);
+                }
+                toolCalls.add(callBuilder.build());
             }
             // ThinkingContent is not replayed in v1: replaying requires the
             // reasoning signature (ResponseReasoningItem), which StreamPartialBuilder
@@ -570,12 +585,6 @@ final class ResponsesMessageConverter {
     /** pi: clampOpenAIPromptCacheKey —— 按码点截前 64（包 B103，委托 {@link PromptCacheKeys}）。 */
     private static String clampCacheKey(String key) {
         return PromptCacheKeys.clamp(key);
-    }
-
-    /** OpenAI Responses 的 function_call item id 必须以 "fc_" 开头且 ≤64 字符。 */
-    private static String normalizeItemId(String callId) {
-        var base = "fc_" + callId;
-        return base.length() > 64 ? base.substring(0, 64) : base;
     }
 
     private static String extractText(List<ContentBlock> blocks) {

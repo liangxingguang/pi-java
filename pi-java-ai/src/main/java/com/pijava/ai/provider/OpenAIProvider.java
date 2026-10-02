@@ -12,8 +12,9 @@ import com.pijava.ai.protocol.OpenAIEmbeddingApi;
 import com.pijava.ai.protocol.OpenAIResponsesApi;
 
 /**
- * OpenAI provider — GPT models via Chat Completions (default) or
- * OpenAI Responses (opt-in via {@code extra.protocol = "openai-responses"}).
+ * OpenAI provider — GPT models via OpenAI Responses (default, pi writes it
+ * statically, {@code providers/openai.ts:6-14}) or Chat Completions
+ * (opt-in via {@code extra.protocol = "openai-completions"}).
  * P6-28: also serves {@link EmbeddingApi} via {@code /v1/embeddings}.
  */
 public final class OpenAIProvider extends ConfigurableProvider {
@@ -22,7 +23,7 @@ public final class OpenAIProvider extends ConfigurableProvider {
     protected ProviderConfig config() {
         return new ProviderConfig(
             "openai", "OpenAI", "https://api.openai.com/v1",
-            "OPENAI_API_KEY", Protocol.OPENAI_COMPLETIONS,
+            "OPENAI_API_KEY", Protocol.OPENAI_RESPONSES,
             Set.of(Protocol.OPENAI_COMPLETIONS, Protocol.OPENAI_RESPONSES),
             BuiltinCatalog.openaiModels(), null);
     }

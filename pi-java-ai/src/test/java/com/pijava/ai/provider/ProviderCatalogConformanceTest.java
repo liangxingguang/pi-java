@@ -115,14 +115,15 @@ class ProviderCatalogConformanceTest {
     }
 
     @Test
-    void openaiProviderRoutesResponsesViaExtraProtocol() {
+    void openaiProviderDefaultsToResponsesAndHonorsProtocolOverride() {
         var provider = provider("openai");
+        // D3（docs/62）：默认 Responses（pi 写死）。
         assertThat(provider.createApi(ChatApi.class, keyedOptions()))
-            .isInstanceOf(OpenAICompletionsApi.class);
-        var responsesOptions = new ApiOptions("", "sk-test",
-            Duration.ofSeconds(1), 0, Map.of("protocol", "openai-responses"));
-        assertThat(provider.createApi(ChatApi.class, responsesOptions))
             .isInstanceOf(OpenAIResponsesApi.class);
+        var completionsOptions = new ApiOptions("", "sk-test",
+            Duration.ofSeconds(1), 0, Map.of("protocol", "openai-completions"));
+        assertThat(provider.createApi(ChatApi.class, completionsOptions))
+            .isInstanceOf(OpenAICompletionsApi.class);
     }
 
     private static Provider provider(String name) {
