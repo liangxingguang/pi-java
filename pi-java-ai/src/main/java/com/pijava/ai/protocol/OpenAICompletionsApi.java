@@ -124,8 +124,11 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         this.baseUrl = options.baseUrl() != null && !options.baseUrl().isBlank()
                 ? options.baseUrl() : "https://api.openai.com/v1";
         // A-14（G1）：SDK 内置重试关到 0，重试独占 ProviderRetry（pi requestOptions.maxRetries:0）。
-        this.client = OpenAIOkHttpClient.builder()
-                .apiKey(apiKey).baseUrl(baseUrl).maxRetries(0).build();
+        var clientBuilder = OpenAIOkHttpClient.builder()
+                .apiKey(apiKey).baseUrl(baseUrl).maxRetries(0);
+        // D-P1：models.json 合并来的 default headers（docs/65）。
+        putExtraHeaders(options, clientBuilder::putHeader);
+        this.client = clientBuilder.build();
         this.providerRetry = ProviderRetry.optionsOf(options);
         // 包 A-02（B105）：cacheRetention 的选项面（pi :342 的 options?.cacheRetention）。
         this.cacheRetention = retentionOf(options);

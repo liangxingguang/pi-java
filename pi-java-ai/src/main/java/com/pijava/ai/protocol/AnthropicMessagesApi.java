@@ -96,6 +96,8 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         }
         // A-14（G1）：SDK 内置重试关到 0，初始请求由 ProviderRetry 独占。
         builder.maxRetries(0);
+        // D-P1：models.json 合并来的 default headers（docs/65）。
+        putExtraHeaders(options, builder::putHeader);
         this.client = builder.build();
         this.providerRetry = ProviderRetry.optionsOf(options);
         this.cacheRetention = retentionOf(options);

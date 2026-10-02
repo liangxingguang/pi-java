@@ -47,12 +47,31 @@ public final class DefaultProviders {
 
     private static void registerModelsJsonProviders(ProviderRegistry registry) {
         try {
-            for (var provider : com.pijava.ai.provider.ModelsJsonConfig.loadDefault().buildProviders()) {
-                registry.register(provider);
-            }
+            registerModelsJsonProviders(registry,
+                com.pijava.ai.provider.ModelsJsonConfig.loadDefault());
         } catch (RuntimeException e) {
             System.err.println("Warning: failed to load models.json providers: "
                 + e.getMessage());
+        }
+    }
+
+    /** D-P1：用显式加载的 models.json 注册（夹具用同一代码路径，docs/65 §3 Step 4）。 */
+    static void registerModelsJsonProviders(ProviderRegistry registry,
+                                            com.pijava.ai.provider.ModelsJsonConfig config) {
+        for (String id : config.providerIds()) {
+            var def = config.provider(id);
+            var existing = registry.get(id);
+            if (existing.isPresent()) {
+                // 命中内置 provider id ⇒ 合并 catalog 后包装注册（R4：不改内置单例）。
+                var merged = com.pijava.ai.provider.ModelJsonMerge.merge(
+                    id, existing.get().builtinModels().listModels(), def);
+                registry.register(new com.pijava.ai.provider.OverrideProvider(
+                    existing.get(), com.pijava.ai.catalog.BuiltinCatalog.of(merged)));
+            } else {
+                // 未命中 ⇒ 独立 provider（原行为）。
+                registry.register(
+                    com.pijava.ai.provider.ModelsJsonConfig.buildProviderEntry(id, def));
+            }
         }
     }
 
@@ -103,6 +122,21 @@ public final class DefaultProviders {
                 apiOptions(args, model.provider(), settings, Credentials::resolveCredential,
                     requestExtra(options, sessionId)));
         };
+    }
+
+    /**
+     * D-P1：把 per-model {@code baseUrl} 与 {@code headers} 投影到请求选项
+     * （pi {@code Model.baseUrl/headers} 在车道构造期生效）。baseUrl 缺席 ⇒
+     * 保留 CLI/settings 原值；headers 经 {@code extra["headers"]} 交给 SDK client builder。
+     */
+    private static ApiOptions withPerModelOverrides(ApiOptions options, ModelInfo modelInfo) {
+        String baseUrl = modelInfo.baseUrl() != null ? modelInfo.baseUrl() : options.baseUrl();
+        var extra = new java.util.LinkedHashMap<String, Object>(options.extra());
+        if (modelInfo.headers() != null && !modelInfo.headers().isEmpty()) {
+            extra.put("headers", modelInfo.headers());
+        }
+        return new ApiOptions(baseUrl, options.apiKey(), options.timeout(),
+            options.maxRetries(), extra, options.authKind());
     }
 
     /**
@@ -185,10 +219,12 @@ public final class DefaultProviders {
         // modelInfo 上，故随 StreamRequest 一起走。
         var modelInfo = provider.builtinModels().find(model)
                 .orElseGet(() -> ModelInfo.minimal(model));
+        // D-P1（docs/65）：per-model baseUrl/headers（三源合并的产物）在请求面生效。
+        var effectiveOptions = withPerModelOverrides(apiOptions, modelInfo);
         // 包 A-02（docs/59 §4.6）：车道跟着 modelInfo.api 走（pi compat.ts:262）。
         // ⚠️ 必须**先**查 modelInfo 再 createApi —— 派发键在 modelInfo 上，此前 createApi
         // 用的是不含 protocol 的 apiOptions，多协议 provider（openrouter）恒走默认车道。
-        var api = provider.createApi(ChatApi.class, withModelProtocol(apiOptions, modelInfo));
+        var api = provider.createApi(ChatApi.class, withModelProtocol(effectiveOptions, modelInfo));
         var request = new com.pijava.ai.api.StreamRequest(
             modelInfo, context.systemPrompt(), context.messages(),
             ToolRegistry.definitionsOf(context.tools()),
@@ -196,7 +232,7 @@ public final class DefaultProviders {
             options.temperature().orElse(-1),
             java.util.Map.of(),
             options.reasoning());
-        return api.streamBlocking(request, apiOptions);
+        return api.streamBlocking(request, effectiveOptions);
     }
 
     /**

@@ -873,7 +873,9 @@ class ModelsJsonConfigTest {
             """);
 
         var catalog = config.catalog();
-        assertThat(catalog.find(ModelId.of("relay", "plain")).orElseThrow().api()).isNull();
+        // D-P1（docs/65）：三源 model.api ?? provider.api —— plain 继承 provider 级。
+        assertThat(catalog.find(ModelId.of("relay", "plain")).orElseThrow().api())
+            .isEqualTo("openai-completions");
         assertThat(catalog.find(ModelId.of("relay", "anthropic/claude-x")).orElseThrow().api())
             .isEqualTo("anthropic-messages");
     }

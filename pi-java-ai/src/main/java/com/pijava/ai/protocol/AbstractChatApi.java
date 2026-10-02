@@ -1,6 +1,7 @@
 package com.pijava.ai.protocol;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.concurrent.Flow;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.SubmissionPublisher;
@@ -280,6 +281,23 @@ public abstract class AbstractChatApi implements ChatApi {
      */
     protected abstract void streamInternal(StreamRequest request,
                                            SubmissionPublisher<StreamEvent> publisher);
+
+    /**
+     * D-P1：读取 {@code ApiOptions.extra["headers"]}（{@code Map<String,String>}），
+     * 逐条交给 SDK client builder（default headers）。
+     */
+    protected static void putExtraHeaders(ApiOptions options,
+                                           java.util.function.BiConsumer<String, String> sink) {
+        Map<String, Object> extra = options.extra();
+        Object raw = extra == null ? null : extra.get("headers");
+        if (raw instanceof Map<?, ?> map) {
+            map.forEach((key, value) -> {
+                if (key != null && value != null) {
+                    sink.accept(key.toString(), value.toString());
+                }
+            });
+        }
+    }
 
     /**
      * 解析 API key：优先 options.apiKey，否则回落环境变量。

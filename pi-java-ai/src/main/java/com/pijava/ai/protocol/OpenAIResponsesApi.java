@@ -49,8 +49,11 @@ public final class OpenAIResponsesApi extends AbstractChatApi {
         String baseUrl = options.baseUrl() != null && !options.baseUrl().isBlank()
             ? options.baseUrl() : "https://api.openai.com/v1";
         // A-14（G1）：SDK 内置重试关到 0，初始请求由 ProviderRetry 独占。
-        this.client = OpenAIOkHttpClient.builder()
-            .apiKey(apiKey).baseUrl(baseUrl).maxRetries(0).build();
+        var clientBuilder = OpenAIOkHttpClient.builder()
+            .apiKey(apiKey).baseUrl(baseUrl).maxRetries(0);
+        // D-P1：models.json 合并来的 default headers（docs/65）。
+        putExtraHeaders(options, clientBuilder::putHeader);
+        this.client = clientBuilder.build();
         this.providerRetry = ProviderRetry.optionsOf(options);
         this.responsesOptions = ResponsesOptions.from(options);
         this.baseUrl = baseUrl;

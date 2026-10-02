@@ -30,7 +30,30 @@ public final class ModelsJsonSchema {
         @JsonProperty("baseUrl") String baseUrl,
         @JsonProperty("apiKey") String apiKey,
         @JsonProperty("api") String api,
-        @JsonProperty("models") List<ModelDef> models
+        @JsonProperty("models") List<ModelDef> models,
+        @JsonProperty("headers") Map<String, String> headers,
+        @JsonProperty("modelOverrides") Map<String, ModelOverrideDef> modelOverrides,
+        @JsonProperty("compat") CompatDef compat
+    ) {}
+
+    /**
+     * One entry of a provider's {@code modelOverrides}: topmost per-model
+     * layer (pi {@code model-config.ts:189-209}, applied after models[] upsert).
+     * Every component is nullable — absent means keep the merged value.
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record ModelOverrideDef(
+        @JsonProperty("name") String name,
+        @JsonProperty("reasoning") Boolean reasoning,
+        @JsonProperty("thinkingLevelMap") Map<String, String> thinkingLevelMap,
+        @JsonProperty("input") List<String> input,
+        @JsonProperty("cost") Cost cost,
+        @JsonProperty("promptCache") Map<String, Double> promptCache,
+        @JsonProperty("contextWindow") Integer contextWindow,
+        @JsonProperty("maxTokens") Integer maxTokens,
+        @JsonProperty("samplingParams") Map<String, Object> samplingParams,
+        @JsonProperty("headers") Map<String, String> headers,
+        @JsonProperty("compat") CompatDef compat
     ) {}
 
     /** One model definition. */

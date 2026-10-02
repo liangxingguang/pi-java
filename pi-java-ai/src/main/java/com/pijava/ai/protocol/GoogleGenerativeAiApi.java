@@ -1,5 +1,6 @@
 package com.pijava.ai.protocol;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.SubmissionPublisher;
@@ -88,12 +89,18 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
         // A-14（G1）：genai 1.72 的 RetryInterceptor 默认 2 attempts、上层不可见；
         // attempts(1)（总尝试数＝1）关掉内置重试，初始请求由 ProviderRetry 独占。
         var httpRetryOptions = HttpRetryOptions.builder().attempts(1).build();
+        // D-P1：models.json 合并来的 default headers（docs/65）。
+        var extraHeaders = new LinkedHashMap<String, String>();
+        putExtraHeaders(options, extraHeaders::put);
+        var httpOptionsBuilder = HttpOptions.builder()
+                        .baseUrl(baseUrl)
+                        .retryOptions(httpRetryOptions);
+        if (!extraHeaders.isEmpty()) {
+            httpOptionsBuilder.headers(extraHeaders);
+        }
         this.client = Client.builder()
                 .apiKey(apiKey)
-                .httpOptions(HttpOptions.builder()
-                        .baseUrl(baseUrl)
-                        .retryOptions(httpRetryOptions)
-                        .build())
+                .httpOptions(httpOptionsBuilder.build())
                 .build();
         // A-14：Google SDK 无内置重试，初始请求由 ProviderRetry 独占。
         this.providerRetry = ProviderRetry.optionsOf(options);
