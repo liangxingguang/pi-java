@@ -43,6 +43,7 @@ pi `harness/` 里 `AgentHarness` 独有物（具名钩子 / `HarnessEvent` / `ru
 > ⚠️ **2026-09-22 更新**：上段数字是 **H1 之前**的快照。**H1（usage 域）已闭环**（`docs/42 §10`）⇒
 > 划掉 8 条缺失（§1.1 三条权重 3 ＋ §1.2 五条权重 2）、§1.4 两条、§1.5 三条死功能救活 ＋ 新增一条
 > `UsageInfo.from` 死码登记。权重与完成度**待下一次 `docs/40` 重算**，这里不发明新数。
+> （✅ 2026-10-02：该登记已随 A-20 删除结案，`docs/68`，`d5a3582`。）
 
 ### 1.1 缺失（权重 3 —— 全是大件，最高优先级）
 
@@ -115,12 +116,12 @@ constrained sampling / grammar · `transport` 选择 · `session-resources` 清�
 |---|---|
 | ~~`Usage` 的 `cacheRead`/`cacheWrite`/`cacheWrite1h`/`reasoning` **四分量零生产者**~~ | ✅ **H1 步 2–5 已救活**（B56）。原状态：`emitUsage` 只收 input/output ⇒ 生产恒 0/null |
 | ~~`Usage.Cost` 恒零~~ | ✅ **H1 步 1＋各车道挂价已救活**（B57）。原状态：成本累加恒 0 |
-| `StreamEvent.UsageInfo.from(...)` 零调用者 | **H1 步 7 时核对**（`docs/42 §10.1` A4）：加宽管线走的是 `emitUsage(Usage)`，这个静态工厂仍是死码；不删（R5 面），登记 |
+| ~~`StreamEvent.UsageInfo.from(...)` 零调用者~~ | ✅ **A-20 已删**（`docs/68 §12`，`d5a3582`，2026-10-02）：纯透传别名、pi 无对应物（pi 无 usage 事件） |
 | ~~**`ThinkingLevelMap` 非空实例生产不可构造**~~ | ✅ **包H5 已救活**（`docs/46`，2026-09-23）—— 且**不止是接线**：形状也重塑了。原状态：生产构造点全部 `empty()` ⇒ `forLevel` 恒 `OFF` ⇒ 请求里**永无 `thinking.budgetTokens`**。⚠️ **新残留**：`ModelThinkingLevels.supported/clamp` 零生产调用者（`docs/46 §7 B15-残留-9`） |
-| **`RetryPolicy` 五个预设零调用者（J5）** | 包 A0 步6 的发现。**A-14 更新（2026-09-30）**：Mistral 不再走 `defaultPolicy()`、改按 ApiOptions 建 policy（默认 0），五个预设仍零调用者，条目保留 |
-| `StreamSimple` | 主源码零调用（**别当接缝**） |
-| `DeferredHandle` | 零生产者（两侧同状） |
-| `ToolResultMessage.usage` / `details` | 两者皆无生产者 |
+| ~~**`RetryPolicy` 六预设零调用者（J5）**~~ | ✅ **A-20 已删**（`docs/68 §12`，`350f252`，2026-10-02）：defaultPolicy＋五命名预设全删，pi 无对应物；Mistral 按 ApiOptions 显式构造 |
+| ~~`StreamSimple`~~ | ✅ **A-20 已删**（`docs/68`，`de0ce06`）：pi 侧 streamSimple 是主流默认入口（sdk.ts:39），Java 对应物＝`AbstractChatApi`，本仓这个零调用类是死码 |
+| `DeferredHandle` | 零生产者（两侧同状）——A-20 裁决**留形状不接线**（`docs/68` J8，B111 维持） |
+| `ToolResultMessage.usage` / `details` | A-20 裁决（`docs/68` J9/J10）：**details 有生产者**（edit/bash/read 内置工具）；**usage 主流两侧同无**，留形状不接线 |
 | ~~`StreamEvent.UsageInfo` 的 `usage` 分量~~ | ✅ **H1 步 2 已救活**（J1/J2/J4）。原状态：恒 null |
 
 ### 1.6 修法建议（报告已复核边际）

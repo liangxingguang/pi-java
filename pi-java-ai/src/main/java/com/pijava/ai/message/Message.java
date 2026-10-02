@@ -273,6 +273,10 @@ public sealed interface Message
      * <p><b>provider 投影不读这三项</b> —— pi 的各协议适配器只从 {@code content}
      * 构造工具结果块（{@code details} 是给 UI/日志的结构化载荷，不进模型上下文）。</p>
      *
+     * <p>A-20（docs/68 J9/J10，2026-10-02）：{@code details} <b>主流有生产者</b>
+     * （edit 每次成功必放、bash/read 截断时放）；{@code usage} 两侧主流同无生产者，
+     * 留形状不接线。</p>
+     *
      * <p>{@code role()} 的 {@code "tool"} 是 pi-java 持久化方言（JSONL/SQLite 里
      * 写作 {@code "tool"}/{@code toolUseId}）；对外的 WS wire 由
      * {@code WebWireJson} 转回 pi 的 {@code "toolResult"}/{@code toolCallId} 拼写。

@@ -57,7 +57,7 @@
 | J2 | 它造**两个**对象：`this.usage = new UsageInfo(i, o, null)`（先赋值）＋ 返回 `new UsageInfo(i, o, snapshot())`。**两个的 `usage` 分量都是 null** | `:321` / `:323` |
 | J3 | 但 `snapshot()` **确实把 `this.usage` 装进 partial**（`AssistantMessage(..., usage, ...)`）⇒ partial 上有 `UsageInfo`，`JsonEventMapper` 正是读它 | `:93`（已实读）· `coding-agent/mode/JsonEventMapper.java:66-70` |
 | J4 | **生产侧 `UsageInfo.usage()` 恒为 null** —— 非 null 只出现在测试手工构造 | 全仓 grep；`ScriptedStreams.java:45` 等 5 处测试 |
-| J5 | `StreamEvent.UsageInfo.from(...)` **全仓零调用者**（含测试） | `StreamEvent.java:191-194` |
+| ~~J5~~ | ~~`StreamEvent.UsageInfo.from(...)` **全仓零调用者**（含测试）~~ —— ✅ **A-20 已删**（`docs/68`，`d5a3582`，2026-10-02；pi 无对应物） | 原 `StreamEvent.java:191-194` |
 | J6 | **6 个生产发射点，全是两参数**：anthropic `:286-288` · openai-completions `:182` 与 `:254`（**两处**）· openai-responses `:247` · google `:141` · mistral `:251` · pi-messages `:125-126` | 逐条实读 |
 | J7 | **Google 是唯一把 reasoning 折进 output 的车道**（`output = candidatesTokenCount + thoughtsTokenCount`）—— 与 pi **同形**，但没设 `reasoning` | `GoogleGenerativeAiApi.java:139-140` |
 | J8 | **pi-messages 是唯一把 `double` 显式截断成 `long` 的车道**（`(long) done.usage().input()`） | `PiMessagesApi.java:126` |
@@ -96,7 +96,7 @@
 | A1 | **L5 差分结构上跑不到 usage** —— 14 个剧本**零 `usage` 字段**；`ScriptedStreams` **从不发 `UsageInfo` 帧**，只在 partial 上挂 `ZERO_USAGE` ⇒ 两侧 usage **恒零且逐字相同** | `conformance/scripts/*.json`（grep 无）；`ScriptedStreams.java:34-35,45` | **本包的验证不能靠 L5**（§8.3）；是否扩展剧本见 §8.0 裁决点 C |
 | A2 | **`models.json` 半价 ⇒ 免费**（J11） | `ModelsJsonConfig.java:201-203` | **本包顺手修**（同属 cost 链，且是一行） |
 | A3 | **`PiLaneSink` 落 `UsageRecord` 丢全量**（J12） | `PiLaneSink.java:436-440` | **本包必修** —— 不修则四分量在会话账上仍是 0 |
-| A4 | `StreamEvent.UsageInfo.from(...)` 零调用者（J5） | `StreamEvent.java:191-194` | 本包若加宽管线，**它就是现成的入口**；否则登记 |
+| ~~A4~~ | ~~`StreamEvent.UsageInfo.from(...)` 零调用者（J5）~~ —— ✅ **A-20 已删**（`docs/68`，`d5a3582`）；加宽管线实际走 `emitUsage(Usage)` | 原 `StreamEvent.java:191-194` | 已结案 |
 | A5 | `pi.ai.usage.*` 遥测属性在 pi **有 schema 声明、生产零发射点** | pi `harness/telemetry.ts:94-103` | 非目标（R5 排除面） |
 | A6 | `ModelMetadata`（`pi-java-protocol`）**main 侧无生产者** | 唯一 `new` 在测试 | 属 C12/R5 面，登记 |
 
@@ -246,8 +246,9 @@ public StreamEvent.UsageInfo emitUsage(long in, long out) {        // 旧形状�
   事件**（`run.test.ts` 的 forEach 只有 text/toolCall 分支），Java 桩发 `thinking_start/end`
   ⇒ 含 thinking 的剧本结构上必红。**与 usage 正交**（`usage.reasoning` 只是数字）⇒ S15 不依赖它。
   该不对称登记为剧本夹具盲区（续记于 `docs/29 §10`），另裁。
-- **A4 核对**：`StreamEvent.UsageInfo.from(...)` 在生产上仍零调用者（步 2 走的是
-  `emitUsage(Usage)` ⇒ `new`）⇒ 按 §5 A4 预登记，已记入 `docs/41 §1.5`。
+- ~~**A4 核对**：`StreamEvent.UsageInfo.from(...)` 在生产上仍零调用者（步 2 走的是
+  `emitUsage(Usage)` ⇒ `new`）⇒ 按 §5 A4 预登记，已记入 `docs/41 §1.5`。~~
+  ✅ **2026-10-02 更正：A-20 已将该工厂删除**（`docs/68`，`d5a3582`）。
 
 ### 10.2 回归与门
 
@@ -272,4 +273,4 @@ F ✅步 6（半价⇒UNKNOWN、缺席⇒免费、tier 残缺⇒拒载）。
 1. 目录 cache 价数据（裁决 B 的数据面）——补数据是独立工作。
 2. `cacheWrite1h` 真 key 端到端（§8.5）。
 3. thinking 剧本不对称（§10.1，夹具层，另裁）。
-4. `UsageInfo.from` 零调用者（§10.1，死码，R5 面）。
+4. ~~`UsageInfo.from` 零调用者（§10.1，死码，R5 面）~~ —— ✅ **A-20 已删**（`docs/68`，`d5a3582`，2026-10-02）。

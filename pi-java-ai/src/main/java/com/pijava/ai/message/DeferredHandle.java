@@ -14,6 +14,9 @@ import java.util.Map;
  * deferral, so nothing constructs one outside tests. pi is in the same state —
  * its type exists but only the faux test provider returns one.</p>
  *
+ * <p>A-20（docs/68 J8，2026-10-02）：两侧同无真实生产者 ⇒ <b>留形状不接线</b>，
+ * B111 维持；未来出现真实 provider 生产者须先立设计包。</p>
+ *
  * @param provider    provider name (e.g. {@code "anthropic"})
  * @param modelId     model id the request was made against
  * @param api         provider API discriminator (e.g. {@code "anthropic-messages"})

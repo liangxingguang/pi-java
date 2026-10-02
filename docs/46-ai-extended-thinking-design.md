@@ -463,7 +463,7 @@ record ThinkingLevelMapDef(Map<String, String> levels) {}   // 值 null ⇒ 显�
 | **B15-残留-6** | `CatalogModel` 的 `thinkingLevelMap` 是否需要 JSON 嵌套 schema（当前 DTO 是扁平 9 列） |
 | **B15-残留-7** | **其余 beta 头**未移植：pi 的 Anthropic 车道另有 5 个常量（`FINE_GRAINED_TOOL_STREAMING_BETA`／`SERVER_SIDE_FALLBACK_BETA`／`MID_CONVERSATION_OUTPUT_CONFIG_BETA`／`THINKING_BINDING_CONTROLS_BETA`／OAuth 两枚），pi-java **零 beta 头**；本包只落 interleaved 一枚（P25） |
 | **B15-残留-8** | `providerThinkingLevel`（P27）随 `supportsMidConvoEffort` 一起不做 ⇒ `AssistantMessage.providerThinkingLevel` 仍无生产者（与 `docs/41 §1.3` 那条合并登记） |
-| **B15-残留-9** | ⚠️ **`ModelThinkingLevels.supported` / `.clamp` 零生产调用者**（实测 grep `*/src/main`）—— 步2 逐字移植并钉了语义，但**没有任何生产路径调它**：`RpcDispatcher.availableThinkingLevels` 仍用 `ThinkingLevel.ordered()`，车道侧也不夹取。pi 的 `clampThinkingLevel` 在 8 条车道 ＋ `setThinkingLevel` 共 9 处被调（P18/P19）⇒ **接线是下一包的事**。这不是缺陷，是**范围裁决的直接后果**（D2：只做 Anthropic），如实登记 |
+| ~~**B15-残留-9**~~ | ~~⚠️ **`ModelThinkingLevels.supported` / `.clamp` 零生产调用者**~~ —— ✅ **2026-10-02 结案（A-10＋A-20，docs/68）**：**clamp** 已由 A-10 接线于 `SimpleOptions.java:200`（经 completions 车道生产可达），`supported` 经 clamp 间接可达。⚠️ 其余车道的 clamp 仍待对齐 ⇒ 登记 **B142** |
 
 ---
 

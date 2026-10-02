@@ -24,7 +24,7 @@ provider / agent / 宿主 / 线上的全部生产点与消费点 —— 即 `doc
 - `providerThinkingLevel`（pi 的消息字段与 proxy 线字段，java 两侧都没有）⇒ B110；
 - `deferred` 终局（pi `done.reason` 含 `"deferred"`，java 无生产者）⇒ B111；
 - 宿主失败通路的**合成消息**（`RunFailure`，B5 已闭环，本包只确认不破坏）；
-- `StreamSimple` / `ContextEstimator` 那条**零生产者**的旧路（§10 B112，A-20 类）。
+- ~~`StreamSimple` / `ContextEstimator` 那条**零生产者**的旧路（§10 B112，A-20 类）~~ —— ✅ **A-20 已整体删除**（`docs/68`，`de0ce06`，2026-10-02）。
 
 **验收判据**（沿用本仓既定口径）：**行为等价** —— 对同一个 provider 结果，java 的终局承载物与 pi 的
 `done.message` / `error.error` **逐字段同值**（差异只许是本文件 §5/§10 明确登记的那些）。
@@ -411,7 +411,7 @@ pi 的等价物是「流里的一条错误消息」，但 java 这条 catch 覆�
 | B109 | **`reason`/`stopReason` 词表**：java `"tool_use"` vs pi `"toolUse"`（`AnthropicMessagesApi:388`、`PiMessagesApi:287` 已注明是有意偏差；`ChatApiConformanceSuite:74` 同时接受两者）⇒ 影响对外 `stopReason` 与存盘兼容，须单独裁决 |
 | B110 | `providerThinkingLevel`：pi 的消息字段（`types.ts:522`）与 proxy 线字段（P14），java 两侧都没有 |
 | B111 | `deferred` 终局：pi `done.reason` 含 `"deferred"`，java 无任何生产车道（`DeferredHandle` 只出现在解码/夹具） |
-| B112 | `StreamSimple` 的 `"overflow"` 停因路**零生产者**（`StreamSimple.java:62-70`、`ContextEstimator` 自陈「与 pi 无对应物」）⇒ 归 A-20 清理 |
+| ~~B112~~ | ~~`StreamSimple` 的 `"overflow"` 停因路**零生产者**~~ —— ✅ **A-20 结案（`de0ce06`，docs/68）**：两类整体删除，不补非投影集 |
 | B113 | `send()` 的 plumbing 异常包成 `PiHttpException`（pi 的等价物是一条错误消息）⇒ R7 的残余口径 |
 | B114 | `StreamError.error()` 这个 `Throwable` 组件在 pi 无对应物（保留供日志；只许 1 个读点） |
 | B115 | 宿主线是否**整体**不发终局帧（R5 的 (b) 项；需给 web 加派生错误面） |

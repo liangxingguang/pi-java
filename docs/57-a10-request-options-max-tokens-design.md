@@ -323,7 +323,7 @@ adaptive 分支（`fable-5` / `opus-4-8` / `sonnet-4-6` 三个内置模型命中
 |---|---|---|---|
 | **R1** | 夹取与回落的**落点** | **`AbstractChatApi.stream`**（唯一漏斗，把 request 换成解析后的副本再进 `streamInternal`） | ① pi 的语义是「每条车道的 `streamSimple` 都做」，java 的 `stream` **就是** pi 的 `streamSimple`（生产唯一入口是 `streamSimple`，P10）；② 放在这里 ⇒ 8 条车道**零改签**地拿到解析值，不需要在 8 处 `buildParams` 复制同一段；③ 放 `DefaultProviders` 会让 `ChatApi` 的**直接**调用方（RPC / web / SDK / evals / 夹具）拿不到，凭空造出一处 pi 没有的「只有 CLI 才夹取」 |
 | **R2** | 豁免车道与机制 | **`PiMessagesApi` 必须豁免**（pi 的 pi-messages 不过 `buildBaseOptions`，P18）＋ **`FauxChatApi` 豁免**（测试替身）。机制：`protected boolean resolvesRequestOptions()` 默认 `true`，两处覆写 `false` | ⚠️ 不豁免 `PiMessagesApi` 会**凭空多发**一个 `maxTokens` 字段 ⇒ 是对齐的**反向**破坏。默认 `true` 让「新车道默认跟着 pi 的通用路径」这一侧是安全的 |
-| **R3** | 估算器落点与命名 | **新建 `com.pijava.ai.utils.Estimate`**（对齐 pi 的文件名 `utils/estimate.ts`）；**不与** agent-core 的 `ContextUsageEstimator` 合流 | ① 模块方向不允许反向依赖（§4.4-3）；② 两份的语义**真的不同**（§2.2），合流必然要选一份 ⇒ 就等于放弃另一份的对齐；③ pi 自己就是三份并存。⚠️ **`agent-core` 另有一个 `ContextEstimator`**（自造 3.5 字符/token 启发式、生产不可达）—— 三处同名，javadoc 必须互相指路 |
+| **R3** | 估算器落点与命名 | **新建 `com.pijava.ai.utils.Estimate`**（对齐 pi 的文件名 `utils/estimate.ts`）；**不与** agent-core 的 `ContextUsageEstimator` 合流 | ① 模块方向不允许反向依赖（§4.4-3）；② 两份的语义**真的不同**（§2.2），合流必然要选一份 ⇒ 就等于放弃另一份的对齐；③ pi 自己就是三份并存。⚠️ **`agent-core` 另有一个 `ContextEstimator`**（自造 3.5 字符/token 启发式、生产不可达）—— 三处同名，javadoc 必须互相指路。✅ **2026-10-02 更新：该类已随 A-20 删除**（`docs/68`，`de0ce06`） |
 | **R4** | **目录未命中**（`minimal`：`maxInputTokens == 0 && maxOutputTokens == 0`）时发什么 | **保留 `4096` 兜底，并写成一条有名字的常量**（`SimpleOptions.NO_MODEL_CAP_FALLBACK`，带 javadoc 说明它**不是** pi 的行为）**＋ 登记**（不照抄 pi 的 `1`）。⚠️ **兜底必须落在共享助手里**（`SimpleOptions.maxTokensOrDefault`），由 **builder 的回落**与 **`AbstractChatApi` 的夹取**共用 —— 否则「直接调 `buildParams` 的夹具」那条路会产出 `max_tokens: 0`（§4.3 实测） | pi 的 0/0 格**不可达**（P26，它的模型必填真值）⇒ 没有可对齐的行为。而 java 这一格是**今天就有生产路径**的（`DefaultProviders:145` 的 `orElseGet`）。`max_tokens: 1` 会把会话变成一字一停；`0` 会被 Anthropic 直接 400。⇒ 取「无模型数据时的一个保守默认」并**如实登记**它不是 pi 的行为。反方：判据是行为等价 ⇒ 但那要求**存在**一个可对齐的 pi 行为，这里不存在 |
 | **R5** | `samplingParams` 是否本包做 | **做**，且只落**三条 OpenAI 兼容**车道（completions／responses／azure），**必须是 body 的最后一个变更** | ① 它在 `buildBaseOptions` 里，本包就是它的包；② `ModelInfo.samplingParams` **今天零消费者**（`docs/53 §4.4` 列在「零消费者」），不接就是一个没有消费者的字段；③ 顺序是**语义**（P22/P23：压过具名字段），夹具必须钉「最后一个」而不是「存在」。⚠️ **per-request 那一半没有生产者**（`StreamRequest.extra` 生产恒 `Map.of()`，B107）⇒ 只做模型级那一半，另一半**登记** |
 | **R6** | `maxTokens` 的哨兵形态 | **保持 `int` ＋ `-1`**，不改成 `OptionalInt` | pi 的 `options.maxTokens === 0` 与 `undefined` 是**两回事**（`??` 不回落 0）；java 的 `-1` 把两者合并。但：① pi 的 harness 从不传（P8）⇒ 0 无生产路径；② 改签会波及 20+ 构造点与全部夹具，收益是「不可达的一格」。⇒ 保持 ＋ **登记** |
@@ -448,6 +448,7 @@ RED-4／RED-5 是**结构性**先红（类不存在 ⇒ 编译失败），与包
   反向取末条；`system` 角色计入 vs 计 0）。java 现有 `ContextUsageEstimator` 是 compaction 那份；
   本包新增的是 `utils/estimate.ts` 那份；另有 `ContextEstimator`（自造启发式、生产不可达）。
   ⇒ **三处同名，后来的包不要试图「统一」它们**。
+  ✅ **2026-10-02 更新：`ContextEstimator` 已随 A-20 删除**（`docs/68`，`de0ce06`）。
 - **B124**：**`options.maxTokens === 0` 与 `undefined` 之别被 `int -1` 哨兵吞掉**（R6）；
   `temperature` 同族且**更真实**（`0` 是合法温度，R12）。pi 用 `??`／`!== undefined` 区分。
 - **B125**：**`ModelInfo.headers` 零消费者**（R11）；`samplingParams` 的**per-request 那一半**
