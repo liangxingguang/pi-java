@@ -1,5 +1,6 @@
 package com.pijava.ai.protocol;
 
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -206,6 +207,9 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
                                         publisher.submit(builder.emitThinkingStart());
                                         thinkingStarted = true;
                                     }
+                                    // pi :149-152：签名随文本 retain（非空覆盖、缺键不擦）。
+                                    part.thoughtSignature().ifPresent(bytes ->
+                                            builder.retainThinkingSignature(encodeThoughtSignature(bytes)));
                                     publisher.submit(builder.emitThinkingDelta(thought));
                                     continue;
                                 }
@@ -217,6 +221,9 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
                                         publisher.submit(builder.emitTextStart());
                                         textStarted = true;
                                     }
+                                    // pi :161-164：同上 retain 到 textSignature。
+                                    part.thoughtSignature().ifPresent(bytes ->
+                                            builder.retainTextSignature(encodeThoughtSignature(bytes)));
                                     publisher.submit(builder.emitTextDelta(text));
                                 }
 
@@ -228,12 +235,17 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
                                                     + System.currentTimeMillis());
                                     String name = fc.name().orElse("");
                                     Map<String, Object> args = fc.args().orElse(Map.of());
+                                    // pi :201-207：签名 truthy 才附着（空字节串同 falsy ⇒ 不发）。
+                                    String thoughtSignature = part.thoughtSignature()
+                                            .filter(bytes -> bytes.length > 0)
+                                            .map(GoogleGenerativeAiApi::encodeThoughtSignature)
+                                            .orElse(null);
 
                                     toolCallSeen = true;
                                     // 包⑥：起点即带身份（Google 一次给全，无 delta）。
                                     publisher.submit(builder.emitToolCallStart(id, name));
                                     publisher.submit(builder.emitToolCallDelta(id, ""));
-                                    publisher.submit(builder.emitToolCallEnd(id, name));
+                                    publisher.submit(builder.emitToolCallEnd(id, name, thoughtSignature));
                                 }
                             }
                         }
@@ -356,6 +368,14 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
         }
 
         return builder.build();
+    }
+
+    /**
+     * SDK Part.thoughtSignature 为 wire base64 解码后的 byte[]；pi-java 的块字段
+     * 存 base64 字符串（pi TS SDK 的形状），重放时再 decode。
+     */
+    private static String encodeThoughtSignature(byte[] bytes) {
+        return Base64.getEncoder().encodeToString(bytes);
     }
 
     private static String resolveApiKey(ApiOptions options) {

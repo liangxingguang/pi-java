@@ -51,6 +51,9 @@ public final class StreamPartialBuilder {
 
     // Per-block accumulators
     private final StringBuilder textBuf = new StringBuilder();
+    // Signature riding on the current text block (Google text parts). Empty
+    // buffer ⇒ null on the block (pi never persists an empty signature key).
+    private final StringBuilder textSigBuf = new StringBuilder();
     private final StringBuilder thinkingBuf = new StringBuilder();
     private final StringBuilder thinkingSigBuf = new StringBuilder();
     private final StringBuilder toolArgBuf = new StringBuilder();
@@ -134,6 +137,7 @@ public final class StreamPartialBuilder {
     /** Emit text-block-start. Adds a placeholder {@link ContentBlock.TextContent}. */
     public StreamEvent.TextStart emitTextStart() {
         textBuf.setLength(0);
+        textSigBuf.setLength(0);
         textBlockIndex = blocks.size();
         blocks.add(new ContentBlock.TextContent(""));
         int idx = nextContentIndex++;
@@ -150,8 +154,48 @@ public final class StreamPartialBuilder {
             nextContentIndex++;
         }
         int idx = textBlockIndex;
-        blocks.set(idx, new ContentBlock.TextContent(textBuf.toString()));
+        blocks.set(idx, new ContentBlock.TextContent(
+            textBuf.toString(), textSignatureOrNull()));
         return new StreamEvent.TextDelta(idx, delta, snapshot());
+    }
+
+    private String textSignatureOrNull() {
+        return textSigBuf.length() == 0 ? null : textSigBuf.toString();
+    }
+
+    /**
+     * Retain a thought signature onto the current text block during streaming
+     * (pi {@code retainThoughtSignature}, {@code google-shared.ts:139-143}).
+     *
+     * <p>Some backends send the signature only on the first delta for a part;
+     * a non-empty incoming signature overwrites, an empty/null one does not
+     * erase the stored signature. This does not move signatures across parts.</p>
+     */
+    public void retainTextSignature(String signature) {
+        if (signature != null && !signature.isEmpty()) {
+            textSigBuf.setLength(0);
+            textSigBuf.append(signature);
+            if (textBlockIndex >= 0) {
+                blocks.set(textBlockIndex, new ContentBlock.TextContent(
+                    textBuf.toString(), textSigBuf.toString()));
+            }
+        }
+    }
+
+    /**
+     * Retain a thought signature onto the current thinking block during
+     * streaming (same pi function, {@code google-generative-ai.ts:149-152}).
+     * Non-empty incoming overwrites; empty/null does not erase.
+     */
+    public void retainThinkingSignature(String signature) {
+        if (signature != null && !signature.isEmpty()) {
+            thinkingSigBuf.setLength(0);
+            thinkingSigBuf.append(signature);
+            if (thinkingBlockIndex >= 0) {
+                blocks.set(thinkingBlockIndex, new ContentBlock.ThinkingContent(
+                    thinkingBuf.toString(), thinkingSigBuf.toString(), thinkingRedacted));
+            }
+        }
     }
 
     /** Emit text-block-end. The text block is already finalized. */
@@ -303,11 +347,24 @@ public final class StreamPartialBuilder {
 
     /** Emit tool-call-end with the full tool name, ID, and parsed arguments. */
     public StreamEvent.ToolCallEnd emitToolCallEnd(String id, String name) {
+        return emitToolCallEnd(id, name, null);
+    }
+
+    /**
+     * Emit tool-call-end carrying the part's thought signature
+     * (pi {@code ...(part.thoughtSignature && { thoughtSignature })}，
+     * {@code google-generative-ai.ts:201-207}).
+     *
+     * @param thoughtSignature base64 signature attached to the functionCall
+     *        part, or null when absent
+     */
+    public StreamEvent.ToolCallEnd emitToolCallEnd(
+            String id, String name, String thoughtSignature) {
         this.toolCallId = id;
         this.toolCallName = name;
         int idx = Math.max(0, toolBlockIndex);
         Map<String, Object> args = parseArgs();
-        blocks.set(idx, new ContentBlock.ToolUseContent(id, name, args));
+        blocks.set(idx, new ContentBlock.ToolUseContent(id, name, args, thoughtSignature));
         return new StreamEvent.ToolCallEnd(idx, id, name, args, snapshot());
     }
 
