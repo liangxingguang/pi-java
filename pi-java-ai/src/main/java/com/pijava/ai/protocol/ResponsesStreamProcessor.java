@@ -1,6 +1,7 @@
 package com.pijava.ai.protocol;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.SubmissionPublisher;
 
@@ -78,6 +79,8 @@ final class ResponsesStreamProcessor {
         var builder = new StreamPartialBuilder();
         var slotTypes = new HashMap<Long, String>();
         var toolCalls = new HashMap<Long, FunctionCallState>();
+        // Reasoning capture + Azure backfill (pi shared :533-549/:686-697).
+        var reasoningCapture = new ResponsesReasoningCapture();
         var stop = new StopState();
         boolean sawTerminal = false;
         try {
@@ -135,15 +138,15 @@ final class ResponsesStreamProcessor {
                 } else if (event.outputItemDone().isPresent()) {
                     handleOutputItemDone(event.outputItemDone().get().item(),
                         event.outputItemDone().get().outputIndex(),
-                        builder, publisher, slotTypes, toolCalls);
+                        builder, publisher, slotTypes, toolCalls, reasoningCapture);
                 } else if (event.completed().isPresent()) {
                     sawTerminal = true;
                     finalizeResponse(builder, publisher, event.completed().get().response(),
-                        stop, model);
+                        stop, model, reasoningCapture);
                 } else if (event.incomplete().isPresent()) {
                     sawTerminal = true;
                     finalizeResponse(builder, publisher, event.incomplete().get().response(),
-                        stop, model);
+                        stop, model, reasoningCapture);
                 } else if (event.failed().isPresent()) {
                     // pi 的 `response.failed` 分支（shared :745-755）：先记 sawTerminal 再 throw。
                     // throw 终止整条流（ε）—— 不是「发一条 error 继续读」。
@@ -218,8 +221,10 @@ final class ResponsesStreamProcessor {
     private static void handleOutputItemDone(
             ResponseOutputItem item, long outputIndex,
             StreamPartialBuilder builder, SubmissionPublisher<StreamEvent> publisher,
-            Map<Long, String> slotTypes, Map<Long, FunctionCallState> toolCalls) {
+            Map<Long, String> slotTypes, Map<Long, FunctionCallState> toolCalls,
+            ResponsesReasoningCapture reasoningCapture) {
         if (item.reasoning().isPresent() && isSlot(slotTypes, outputIndex, THINKING)) {
+            reasoningCapture.capture(builder, item.reasoning().get());
             publisher.submit(builder.emitThinkingEnd());
         } else if (item.message().isPresent() && isSlot(slotTypes, outputIndex, TEXT)) {
             publisher.submit(builder.emitTextEnd());
@@ -245,7 +250,12 @@ final class ResponsesStreamProcessor {
     private static void finalizeResponse(StreamPartialBuilder builder,
                                          SubmissionPublisher<StreamEvent> publisher,
                                          Response response, StopState stop,
-                                         ModelInfo model) {
+                                         ModelInfo model,
+                                         ResponsesReasoningCapture reasoningCapture) {
+        // pi :533-549: backfill encrypted_content from the terminal output
+        // (Azure gives it only here), before usage/stop handling.
+        var terminalOutput = response._output().asKnown().orElse(List.of());
+        reasoningCapture.backfill(builder, terminalOutput);
         var status = response.status().orElse(null);
         String incompleteReason = incompleteReason(response);
         // pi shared `:588`：原值是**复合量**（⑨/D5）——

@@ -116,6 +116,11 @@ public final class StreamPartialBuilder {
         return nextContentIndex;
     }
 
+    /** Index of the current thinking block (for terminal backfill bookkeeping). */
+    public int thinkingBlockIndex() {
+        return Math.max(0, thinkingBlockIndex);
+    }
+
     /** Current usage info, or null. */
     public StreamEvent.UsageInfo usage() {
         return usage;
@@ -290,6 +295,43 @@ public final class StreamPartialBuilder {
         }
     }
 
+    /**
+     * Stamp the finalized Responses reasoning item: authoritative visible
+     * text plus the whole item serialized as the block signature
+     * (pi {@code openai-responses-shared.ts:686-697}).
+     *
+     * @param text     joined summary text (fallback joined content text), or
+     *                 {@code null} to keep the text accumulated from deltas
+     * @param itemJson {@code JSON.stringify} of the whole reasoning item
+     */
+    public void stampReasoning(String text, String itemJson) {
+        if (text != null) {
+            thinkingBuf.setLength(0);
+            thinkingBuf.append(text);
+        }
+        thinkingSigBuf.setLength(0);
+        thinkingSigBuf.append(itemJson == null ? "" : itemJson);
+        thinkingRedacted = false;
+        if (thinkingBlockIndex >= 0) {
+            blocks.set(thinkingBlockIndex, new ContentBlock.ThinkingContent(
+                thinkingBuf.toString(), thinkingSigBuf.toString(), false));
+        }
+    }
+
+    /**
+     * Restamp the signature on the thinking block at the given index,
+     * without touching the text buffers (Azure backfill, pi {@code :533-549}).
+     */
+    public void restampBlockSignature(int blockIndex, String signature) {
+        if (blockIndex < 0 || blockIndex >= blocks.size()) {
+            return;
+        }
+        if (blocks.get(blockIndex) instanceof ContentBlock.ThinkingContent th) {
+            blocks.set(blockIndex, new ContentBlock.ThinkingContent(
+                th.text(), signature, th.redacted()));
+        }
+    }
+
     /** Emit thinking-block-end. */
     public StreamEvent.ThinkingEnd emitThinkingEnd() {
         int idx = Math.max(0, thinkingBlockIndex);
@@ -341,7 +383,8 @@ public final class StreamPartialBuilder {
             nextContentIndex++;
         }
         int idx = toolBlockIndex;
-        parseAndSetToolBlock(idx);
+        blocks.set(idx, new ContentBlock.ToolUseContent(
+            toolCallId, toolCallName, ToolArgumentParser.parse(toolArgBuf.toString())));
         return new StreamEvent.ToolCallDelta(idx, id, jsonDelta, snapshot());
     }
 
@@ -363,7 +406,7 @@ public final class StreamPartialBuilder {
         this.toolCallId = id;
         this.toolCallName = name;
         int idx = Math.max(0, toolBlockIndex);
-        Map<String, Object> args = parseArgs();
+        Map<String, Object> args = ToolArgumentParser.parse(toolArgBuf.toString());
         blocks.set(idx, new ContentBlock.ToolUseContent(id, name, args, thoughtSignature));
         return new StreamEvent.ToolCallEnd(idx, id, name, args, snapshot());
     }
@@ -372,16 +415,7 @@ public final class StreamPartialBuilder {
     // Meta events
     // ═══════════════════════════════════════════════════════════
 
-    /**
-     * Emit usage info carrying only input/output counts.
-     *
-     * <p>Convenience for lanes that do not (yet) report a cache/cost breakdown; it
-     * delegates to {@link #emitUsage(Usage)} so there is a single shape.</p>
-     *
-     * @param inputTokens  input token count
-     * @param outputTokens output token count
-     * @return the emitted usage event
-     */
+    /** Emit usage carrying only input/output counts; delegates to {@link #emitUsage(Usage)}. */
     public StreamEvent.UsageInfo emitUsage(long inputTokens, long outputTokens) {
         return emitUsage(Usage.of(inputTokens, outputTokens));
     }
@@ -458,29 +492,4 @@ public final class StreamPartialBuilder {
         return settled;
     }
 
-    // ── Helpers ──────────────────────────────────────────────
-
-    @SuppressWarnings("unchecked") // Jackson ObjectMapper.readValue with generic Map type
-    private Map<String, Object> parseArgs() {
-        try {
-            return (Map<String, Object>) (Map<?, ?>) lenientMapper()
-                    .readValue(toolArgBuf.toString(), Map.class);
-        } catch (Exception e) {
-            return Map.of("_raw", toolArgBuf.toString());
-        }
-    }
-
-    /** ObjectMapper tolerant of common model-output JSON quirks. */
-    static com.fasterxml.jackson.databind.ObjectMapper lenientMapper() {
-        return new com.fasterxml.jackson.databind.ObjectMapper()
-            .enable(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_COMMENTS)
-            .enable(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_SINGLE_QUOTES)
-            .enable(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES)
-            .enable(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_TRAILING_COMMA);
-    }
-
-    private void parseAndSetToolBlock(int idx) {
-        Map<String, Object> args = parseArgs();
-        blocks.set(idx, new ContentBlock.ToolUseContent(toolCallId, toolCallName, args));
-    }
 }

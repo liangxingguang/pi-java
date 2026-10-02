@@ -65,16 +65,9 @@ public final class ToolCallBuilder {
      * Build the terminal {@link StreamEvent.ToolCallEnd} event.
      * Phase 2a: requires contentIndex and partial snapshot.
      */
-    @SuppressWarnings("unchecked") // Jackson ObjectMapper.readValue with generic Map type
     public StreamEvent.ToolCallEnd toEnd(int contentIndex, AssistantMessage partial) {
-        Map<String, Object> parsed;
-        try {
-            parsed = (Map<String, Object>) (Map<?, ?>)
-                    StreamPartialBuilder.lenientMapper()
-                            .readValue(arguments.toString(), Map.class);
-        } catch (Exception e) {
-            parsed = Map.of("_raw", arguments.toString());
-        }
+        // Same lenient parse as streamed tool calls (verbatim _raw on failure).
+        Map<String, Object> parsed = ToolArgumentParser.parse(arguments.toString());
         return new StreamEvent.ToolCallEnd(contentIndex, id, name, parsed, partial);
     }
 }
