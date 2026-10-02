@@ -36,7 +36,7 @@ public final class ContextOverflow {
 
     /** pi {@code OVERFLOW_PATTERNS}（overflow.ts:37-63），顺序与注释逐条对应。 */
     private static final List<Pattern> OVERFLOW_PATTERNS = List.of(
-        Pattern.compile("prompt is too long", Pattern.CASE_INSENSITIVE), // Anthropic token overflow
+        Pattern.compile("prompt (?:is )?too long", Pattern.CASE_INSENSITIVE), // Anthropic and z.ai token overflow
         Pattern.compile("request_too_large", Pattern.CASE_INSENSITIVE), // Anthropic request byte-size overflow (HTTP 413)
         Pattern.compile("input is too long for requested model", Pattern.CASE_INSENSITIVE), // Amazon Bedrock
         Pattern.compile("exceeds the context window", Pattern.CASE_INSENSITIVE), // OpenAI (Completions & Responses API)
@@ -59,9 +59,16 @@ public final class ContextOverflow {
         Pattern.compile("range of input length should be", Pattern.CASE_INSENSITIVE), // DashScope / Qwen Token Plan
         Pattern.compile("context[_ ]length[_ ]exceeded", Pattern.CASE_INSENSITIVE), // Generic fallback
         Pattern.compile("too many tokens", Pattern.CASE_INSENSITIVE), // Generic fallback
-        Pattern.compile("token limit exceeded", Pattern.CASE_INSENSITIVE), // Generic fallback
-        Pattern.compile("^4(?:00|13)\\s*(?:status code)?\\s*\\(no body\\)", Pattern.CASE_INSENSITIVE) // Cerebras: 400/413 with no body
+        Pattern.compile("token limit exceeded", Pattern.CASE_INSENSITIVE) // Generic fallback
     );
+
+    /**
+     * pi {@code CEREBRAS_BODYLESS_OVERFLOW_PATTERN}（overflow.ts:64）：
+     * <b>不在通用列表里</b>，只在 {@code provider === "cerebras"} 的分支上生效
+     * （overflow.ts:145-147）。
+     */
+    private static final Pattern CEREBRAS_BODYLESS_OVERFLOW = Pattern.compile(
+        "^4(?:00|13)\\s*(?:status code)?\\s*\\(no body\\)", Pattern.CASE_INSENSITIVE);
 
     /**
      * pi {@code NON_OVERFLOW_PATTERNS}（overflow.ts:74-78）：命中任何一条即
@@ -100,6 +107,11 @@ public final class ContextOverflow {
                     if (pattern.matcher(errorMessage).find()) {
                         return true;
                     }
+                }
+                // pi overflow.ts:145-147：Cerebras 的 bodyless 判据按 provider 门控。
+                if ("cerebras".equals(message.provider())
+                        && CEREBRAS_BODYLESS_OVERFLOW.matcher(errorMessage).find()) {
+                    return true;
                 }
             }
         }

@@ -20,8 +20,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ContextOverflowTest {
 
     private static Message.AssistantMessage error(String message) {
+        return error(null, message);
+    }
+
+    private static Message.AssistantMessage error(String provider, String message) {
         return new Message.AssistantMessage(List.<ContentBlock>of(), "error", null,
-            null, null, null, null, null, message, null);
+            null, provider, null, null, null, message, null);
     }
 
     private static Message.AssistantMessage with(String stopReason, Usage usage) {
@@ -65,11 +69,38 @@ class ContextOverflowTest {
         "context_length_exceeded",
         "too many tokens to process",
         "token limit exceeded",
-        "413 status code (no body)",
-        "400 (no body)",
+        // B2（docs/64）：z.ai 的无 is 形态 —— pi 首正则 /prompt (?:is )?too long/。
+        "Prompt too long",
+        "400: {\"code\":\"1261\",\"message\":\"Prompt too long\"}",
     })
     void errorMessagesAreOverflow(String message) {
         assertThat(ContextOverflow.isContextOverflow(error(message), null)).isTrue();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // B2：Cerebras bodyless 判据按 provider 门控（overflow.ts:145-147）
+    // ═══════════════════════════════════════════════════════════
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "413 status code (no body)",
+        "400 status code (no body)",
+        "400 (no body)",
+    })
+    void bodylessOverflowIsRejectedForOtherProviders(String message) {
+        // 该模式不在通用 OVERFLOW_PATTERNS 里：非 cerebras 一律不算溢出。
+        assertThat(ContextOverflow.isContextOverflow(error(null, message), null)).isFalse();
+        assertThat(ContextOverflow.isContextOverflow(error("openai", message), null)).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "413 status code (no body)",
+        "400 status code (no body)",
+        "400 (no body)",
+    })
+    void bodylessOverflowIsAcceptedOnlyForCerebras(String message) {
+        assertThat(ContextOverflow.isContextOverflow(error("cerebras", message), null)).isTrue();
     }
 
     // ═══════════════════════════════════════════════════════════
