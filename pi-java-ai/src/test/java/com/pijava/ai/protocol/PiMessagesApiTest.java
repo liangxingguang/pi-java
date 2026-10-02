@@ -83,6 +83,21 @@ class PiMessagesApiTest {
         assertThat(end.arguments()).containsEntry("path", "/tmp/x");
     }
 
+    /**
+     * Batch F 步 8（docs/67）：toolcall_end 的 toolCall.thoughtSignature 必须
+     * 透传进终态 partial —— 签名随工具块落盘，下一轮跨上下文重放才带得出。
+     */
+    @Test
+    void toolCallEndCarriesThoughtSignatureIntoPartial() throws Exception {
+        var baseUrl = startServer(thoughtSignatureSse());
+        var api = api(baseUrl);
+        var events = collect(api, "write");
+
+        var done = last(events, StreamEvent.StreamDone.class);
+        var block = (ContentBlock.ToolUseContent) done.partial().content().get(0);
+        assertThat(block.thoughtSignature()).isEqualTo("U0lHTg==");
+    }
+
     @Test
     void textFlowMapsToTextEvents() throws Exception {
         var baseUrl = startServer(textSse());
@@ -263,6 +278,21 @@ class PiMessagesApiTest {
                 + "\"usage\":{\"input\":8,\"output\":4,\"cacheRead\":0,\"cacheWrite\":0,"
                 + "\"totalTokens\":12,\"cost\":{\"input\":0,\"output\":0,\"cacheRead\":0,"
                 + "\"cacheWrite\":0,\"total\":0}}}")
+            + "data: [DONE]\n\n";
+    }
+
+    /** Batch F 夹具：toolcall_end 的 toolCall 带 thoughtSignature。 */
+    private static String thoughtSignatureSse() {
+        return event("{\"type\":\"start\"}")
+            + event("{\"type\":\"toolcall_start\",\"contentIndex\":0,"
+                + "\"id\":\"call_1\",\"toolName\":\"write\"}")
+            + event("{\"type\":\"toolcall_delta\",\"contentIndex\":0,"
+                + "\"delta\":\"{\\\"path\\\":\\\"x\\\"}\"}")
+            + event("{\"type\":\"toolcall_end\",\"contentIndex\":0,\"toolCall\":"
+                + "{\"id\":\"call_1\",\"name\":\"write\","
+                + "\"arguments\":{\"path\":\"x\"},"
+                + "\"thoughtSignature\":\"U0lHTg==\"}}")
+            + event("{\"type\":\"done\",\"reason\":\"toolUse\",\"usage\":null}")
             + "data: [DONE]\n\n";
     }
 

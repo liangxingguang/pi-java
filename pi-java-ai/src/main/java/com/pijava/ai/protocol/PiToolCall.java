@@ -11,10 +11,16 @@ import java.util.Map;
 public record PiToolCall(
     String id,
     String name,
-    Map<String, Object> arguments
+    Map<String, Object> arguments,
+    String thoughtSignature
 ) {
     /** Compact constructor that defensively copies the arguments map. */
     public PiToolCall {
         arguments = arguments == null ? Map.of() : Map.copyOf(arguments);
+    }
+
+    /** Backwards-compatible constructor for pre-signature call sites. */
+    public PiToolCall(String id, String name, Map<String, Object> arguments) {
+        this(id, name, arguments, null);
     }
 }

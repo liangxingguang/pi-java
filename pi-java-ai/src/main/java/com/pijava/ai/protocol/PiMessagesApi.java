@@ -132,7 +132,9 @@ public final class PiMessagesApi extends AbstractChatApi {
                         var tc = e.toolCall();
                         feedToolCallTail(builder, publisher, toolJson,
                             e.contentIndex(), tc);
-                        publisher.submit(builder.emitToolCallEnd(tc.id(), tc.name()));
+                        // Batch F（docs/67）：toolCall.thoughtSignature 随块透传。
+                        publisher.submit(
+                            builder.emitToolCallEnd(tc.id(), tc.name(), tc.thoughtSignature()));
                         toolJson.remove(e.contentIndex());
                         toolIds.remove(e.contentIndex());
                     }

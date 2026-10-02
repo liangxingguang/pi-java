@@ -25,8 +25,8 @@ import com.pijava.ai.model.ModelId;
  * 图片降级（`:12-57`，包 H2 docs/44）、跨模型归一 toolCall id（`:136-142`，包B14 步3 ——
  * 含 toolResult 侧的 id 换名 `:84-90`）。孤儿 toolCall 合成 toolResult（`:158-232`）由
  * 同包内的 {@code OrphanToolResults} 承担。{@code thoughtSignature} 剥离
- * （`:131-134`）在 java 上结构性不可达（{@code ToolUseContent} 无该字段），**不做**，
- * 见 B14b / docs/47 §7-R1。</p>
+ * （`:131-134`）随 Batch F 落地（docs/67）：{@code ToolUseContent} 已有该字段，
+ * 跨模型重放剥离、与 id 归一叠加。</p>
  *
  * <p>pi 的第一、二遍共用一个 {@code transformMessages} 函数；java 侧按 D7 拆分：
  * 第二遍在包内可见的 {@link OrphanToolResults} 中，由 5 参 {@link #apply} 串联
@@ -274,17 +274,27 @@ public final class TransformMessages {
                                           ToolCallIdNormalizer normalize, Message.AssistantMessage msg,
                                           Map<String, String> toolCallIdMap) {
         if (block instanceof ContentBlock.ToolUseContent tu) {
-            // P5（pi :136-142）：同模型或无归一器 ⇒ 原样。
+            // pi :131-134：跨模型且带签名 ⇒ 先剥离（别的模型的签名不可重放）。
+            boolean stripSignature =
+                !same && tu.thoughtSignature() != null && !tu.thoughtSignature().isEmpty();
+            // P5（pi :136-142）：同模型或无归一器 ⇒ id 不动，但剥离仍要跑。
             if (same || normalize == null) {
-                return block;
+                return stripSignature
+                    ? new ContentBlock.ToolUseContent(tu.id(), tu.name(), tu.arguments(), null)
+                    : block;
             }
             var normalizedId = normalize.normalize(tu.id(), target, msg);
-            // P5 关键半边：归一器返回原值 ⇒ 不记映射、不改写。
-            if (normalizedId.equals(tu.id())) {
+            // 剥离与 id 归一可叠加：归一器返回原值且不剥离 ⇒ 原样。
+            if (normalizedId.equals(tu.id()) && !stripSignature) {
                 return block;
             }
-            toolCallIdMap.put(tu.id(), normalizedId);
-            return new ContentBlock.ToolUseContent(normalizedId, tu.name(), tu.arguments());
+            if (!normalizedId.equals(tu.id())) {
+                // P5 关键半边：id 真变了才记映射。
+                toolCallIdMap.put(tu.id(), normalizedId);
+            }
+            String signature = stripSignature ? null : tu.thoughtSignature();
+            return new ContentBlock.ToolUseContent(
+                normalizedId, tu.name(), tu.arguments(), signature);
         }
         if (!(block instanceof ContentBlock.ThinkingContent th)) {
             return block;
