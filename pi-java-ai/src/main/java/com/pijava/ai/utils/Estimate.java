@@ -37,8 +37,9 @@ import com.pijava.ai.message.MessageTexts;
  *
  * <p>java 的 {@code com.pijava.agent.context.ContextUsageEstimator}（agent-core，包 3b）是
  * <b>②</b> 的忠实移植 —— 那份服务压缩触发，反向扫描正是它不需要逐条时间戳的原因。
- * 另一处 {@code com.pijava.agent.context.ContextEstimator} 是 <b>自造启发式</b>
- * （3.5 字符/token，与 pi 无对应物，生产不可达）。本类补的是 <b>①</b>。</p>
+ * 另一处自造启发式 {@code com.pijava.agent.context.ContextEstimator}
+ * （3.5 字符/token，与 pi 无对应物）已随 A-20（docs/68）删除。
+ * 本类补的是 <b>①</b>。</p>
  *
  * <p>⚠️ <b>不能把三者统一</b>：{@code pi-java-ai} 依赖不到 {@code pi-java-agent-core}
  * （两侧 pom 已核），而夹取发生在车道内；且语义差异是 pi 自己的（守卫之于压缩摘要插入、
