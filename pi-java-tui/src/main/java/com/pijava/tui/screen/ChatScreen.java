@@ -490,7 +490,7 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     private static String joinText(List<ContentBlock> blocks) {
         var builder = new StringBuilder();
         for (var block : blocks) {
-            if (block instanceof ContentBlock.TextContent(String text1)) {
+            if (block instanceof ContentBlock.TextContent(String text1, _)) {
                 builder.append(text1);
             }
         }

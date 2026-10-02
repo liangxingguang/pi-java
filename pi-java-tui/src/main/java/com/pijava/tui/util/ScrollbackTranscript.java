@@ -125,7 +125,7 @@ public final class ScrollbackTranscript {
     private static String joinText(List<ContentBlock> blocks) {
         var builder = new StringBuilder();
         for (var block : blocks) {
-            if (block instanceof ContentBlock.TextContent(String text)) {
+            if (block instanceof ContentBlock.TextContent(String text, _)) {
                 builder.append(text);
             }
         }
