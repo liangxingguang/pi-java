@@ -1,6 +1,5 @@
 package com.pijava.ai.api;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -108,31 +107,25 @@ class TransformMessagesCopilotAnthropicOracleTest {
 
     /**
      * Pi's second oracle supplies a {@code thoughtSignature} on a tool call
-     * and expects it removed during migration. Java's {@link
-     * ContentBlock.ToolUseContent} has no such record component, so the oracle
-     * is structurally inapplicable: there is no signature to strip and no
-     * production behavior to fake. The five-argument pass is still exercised
-     * with the corresponding tool call, while reflection records the shape
-     * evidence. This test will not turn red from deleting a nonexistent
-     * production stripping branch; it turns red only if Java accidentally
-     * grows the forbidden field.
+     * and expects it removed during migration (Batch F, docs/67): the source
+     * is a different model on the same provider, so the signature is stripped
+     * while id/name are kept.
      */
     @Test
-    void toolUseShapeHasNoThoughtSignatureComponent() {
+    void toolUseThoughtSignatureIsStrippedDuringMigration() {
         var output = apply(List.of(
             user("run a command"),
             foreignAssistant("openai-responses", "gpt-5", "toolUse",
                 new ContentBlock.ToolUseContent(
-                    "call_123", "bash", Map.of("command", "ls")))));
+                    "call_123", "bash", Map.of("command", "ls"), "U0lHTg=="))));
         var toolUse = ((Message.AssistantMessage) output.get(1)).content().stream()
             .filter(ContentBlock.ToolUseContent.class::isInstance)
             .map(ContentBlock.ToolUseContent.class::cast)
             .findFirst()
             .orElseThrow();
 
-        assertThat(Arrays.stream(ContentBlock.ToolUseContent.class.getRecordComponents())
-            .map(component -> component.getName()))
-            .doesNotContain("thoughtSignature");
+        assertThat(toolUse.thoughtSignature())
+            .as("跨模型迁移：thoughtSignature 必须剥离").isNull();
         assertThat(toolUse.id()).isEqualTo("call_123");
         assertThat(toolUse.name()).isEqualTo("bash");
     }

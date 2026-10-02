@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <tr><td>{@code shared:207}/{@code :212}</td><td>user 串 ／ user 文本项</td><td>{@code toGoogleParts} 文本分支（两角色共用）</td><td>整串 ／ 逐项</td></tr>
  *   <tr><td>{@code shared:242}</td><td>assistant 文本块</td><td>同上</td><td>逐块</td></tr>
  *   <tr><td>{@code shared:301}</td><td>tool result 的 responseValue</td><td>{@code toGoogleParts} 函数响应分支</td><td>选中串</td></tr>
- *   <tr><td>{@code shared:255}/{@code :262}</td><td>assistant thinking（同模型 ／ 跨模型两条分支）</td><td>—（java 一律丢 thinking，{@code :337}）</td><td>面不存在</td></tr>
+ *   <tr><td>{@code shared:255}/{@code :262}</td><td>assistant thinking（同模型 ／ 跨模型两条分支）</td><td>{@code assistantParts} thinking 支（Batch F）</td><td>同模型 thought part／跨模型文本</td></tr>
  * </table>
  *
  * <p>观测面＝**真出站请求体**（本地 {@link RecordingHttpServer} ＋ SDK 的 {@code baseUrl} 覆盖）：
@@ -140,17 +140,19 @@ class GoogleSurrogateSanitizeTest {
     // ── 登记面与回归门 ────────────────────────────────────────────────────
 
     /**
-     * <b>登记</b>：pi 在 {@code shared:255}/{@code :262} 净化 thinking 块，但 pi-java 的
-     * Google 车道**一律丢 thinking**（{@code :337}：Gemini 有自己的思考协议）⇒ 那两个落点
-     * 在 java 侧**无面**。本条钉住「丢」这件事本身，免得将来有人以为漏了净化。
+     * Batch F 起（docs/67）：同模型 thinking 以 {@code thought:true} part 上线，
+     * 文本经 {@code SanitizeUnicode.surrogates} 净化（pi {@code shared:245-255}）；
+     * 跨模型 thinking 仍在 transform 闸降级为文本。
      */
     @Test
-    void thinkingBlocksAreDroppedNotSanitized() throws Exception {
+    void thinkingBlocksAreReplayedAsThoughtPartsAndSanitized() throws Exception {
         var body = wireBody(null, List.of(user("hi"),
             assistant(new ContentBlock.TextContent("visible"),
                 new ContentBlock.ThinkingContent(dirty("thk"), "sig-1"))));
 
-        assertThat(body).as("thinking 文本不上线（java 丢块）").doesNotContain("thk");
+        assertThat(body).as("同模型 thinking 以 thought part 上线").contains("\"thought\":true");
+        assertThat(body).as("thinking 文本经净化上线").contains(clean("thk"));
+        assertThat(body).as("孤对代理不上线").doesNotContain("\\uD83D");
         assertThat(body).as("同一条助手消息的可见文本照常上线").contains("visible");
     }
 
