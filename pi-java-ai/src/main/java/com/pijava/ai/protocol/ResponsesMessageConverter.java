@@ -7,10 +7,13 @@ import java.util.Map;
 
 import com.openai.core.JsonMissing;
 import com.openai.core.JsonValue;
+import com.openai.core.ObjectMappers;
 import com.openai.models.Reasoning;
 import com.openai.models.ReasoningEffort;
 import com.openai.models.responses.EasyInputMessage;
 import com.openai.models.responses.ResponseCreateParams;
+import com.openai.models.responses.ResponseIncludable;
+import com.openai.models.responses.ResponseReasoningItem;
 import com.openai.models.responses.ResponseFunctionCallOutputItem;
 import com.openai.models.responses.ResponseInputContent;
 import com.openai.models.responses.ResponseInputImage;
@@ -147,6 +150,8 @@ final class ResponsesMessageConverter {
             rb.summary(Reasoning.Summary.of(
                 ropts.reasoningSummary() != null ? ropts.reasoningSummary() : "auto"));
             builder.reasoning(rb.build());
+            // pi openai-responses.ts:352 —— 仅此分支请求加密推理内容（xAI :359 排除）。
+            builder.include(List.of(ResponseIncludable.REASONING_ENCRYPTED_CONTENT));
         }
 
         applyCacheRetention(builder, ropts);
@@ -333,10 +338,22 @@ final class ResponsesMessageConverter {
                                           ModelId<?> target, String apiName) {
         var text = new StringBuilder();
         var toolCalls = new ArrayList<ResponseFunctionToolCall>();
+        var reasoningItems = new ArrayList<ResponseReasoningItem>();
         for (var block : assistant.content()) {
             if (block instanceof ContentBlock.TextContent tc) {
                 // pi :283 —— assistant 文本**逐块**净化（跨块边界的孤高+孤低在 pi 会被各自删除）。
                 text.append(SanitizeUnicode.surrogates(tc.text()));
+            } else if (block instanceof ContentBlock.ThinkingContent th) {
+                // pi shared :261-266 —— thinkingSignature 里是整个 reasoning item，
+                // 按块序重放。解析失败的签名无法重放 ⇒ 跳过该块（设计 R 裁决）。
+                if (!th.signature().isEmpty()) {
+                    try {
+                        reasoningItems.add(ObjectMappers.jsonMapper()
+                            .readValue(th.signature(), ResponseReasoningItem.class));
+                    } catch (Exception parseFailure) {
+                        // skip malformed item
+                    }
+                }
             } else if (block instanceof ContentBlock.ToolUseContent toolUse) {
                 // D3（pi shared :288-303）：拆分复合 id，按跨模型/非 fc_ 规则丢 item.id。
                 String callId = ResponsesToolCallIds.callIdOf(toolUse.id());
@@ -357,9 +374,11 @@ final class ResponsesMessageConverter {
                 }
                 toolCalls.add(callBuilder.build());
             }
-            // ThinkingContent is not replayed in v1: replaying requires the
-            // reasoning signature (ResponseReasoningItem), which StreamPartialBuilder
-            // does not retain. OpenAI re-derives reasoning for the current turn.
+        }
+        // Reasoning items precede the output message — the turn's block order is
+        // reasoning then text/calls (responses output has at most one message).
+        for (var reasoning : reasoningItems) {
+            items.add(ResponseInputItem.ofReasoning(reasoning));
         }
         if (!text.isEmpty()) {
             items.add(ResponseInputItem.ofResponseOutputMessage(
