@@ -34,13 +34,13 @@ class PiHttpClientSseTest {
 
     @Test
     void retryPolicyShouldRetryOn429() {
-        var policy = RetryPolicy.defaultPolicy();
+        var policy = new RetryPolicy.Builder().build();
         assertThat(policy.shouldRetry(429)).isTrue();
     }
 
     @Test
     void retryPolicyShouldRetryOn5xx() {
-        var policy = RetryPolicy.defaultPolicy();
+        var policy = new RetryPolicy.Builder().build();
         assertThat(policy.shouldRetry(500)).isTrue();
         assertThat(policy.shouldRetry(502)).isTrue();
         assertThat(policy.shouldRetry(503)).isTrue();
@@ -48,7 +48,7 @@ class PiHttpClientSseTest {
 
     @Test
     void retryPolicyShouldNotRetryOn4xx() {
-        var policy = RetryPolicy.defaultPolicy();
+        var policy = new RetryPolicy.Builder().build();
         assertThat(policy.shouldRetry(400)).isFalse();
         assertThat(policy.shouldRetry(401)).isFalse();
         assertThat(policy.shouldRetry(403)).isFalse();
@@ -57,7 +57,7 @@ class PiHttpClientSseTest {
 
     @Test
     void retryPolicyShouldNotRetryOn2xx() {
-        var policy = RetryPolicy.defaultPolicy();
+        var policy = new RetryPolicy.Builder().build();
         assertThat(policy.shouldRetry(200)).isFalse();
         assertThat(policy.shouldRetry(201)).isFalse();
     }
@@ -70,7 +70,7 @@ class PiHttpClientSseTest {
 
     @Test
     void retryPolicyShouldCalculateDelay() {
-        var policy = RetryPolicy.defaultPolicy();
+        var policy = new RetryPolicy.Builder().build();
         long delay = policy.delayMs(429, 1, null);
 
         // Should be > 0 with exponential backoff
@@ -79,19 +79,19 @@ class PiHttpClientSseTest {
 
     @Test
     void defaultRetryPolicyMaxRetries() {
-        var policy = RetryPolicy.defaultPolicy();
+        var policy = new RetryPolicy.Builder().build();
         assertThat(policy.maxRetries()).isPositive();
     }
 
     @Test
     void retryPolicyShouldRetryOnIoException() {
-        var policy = RetryPolicy.defaultPolicy();
+        var policy = new RetryPolicy.Builder().build();
         assertThat(policy.shouldRetry(new java.io.IOException("timeout"))).isTrue();
     }
 
     @Test
     void retryPolicyShouldNotRetryOnRuntimeException() {
-        var policy = RetryPolicy.defaultPolicy();
+        var policy = new RetryPolicy.Builder().build();
         assertThat(policy.shouldRetry(new RuntimeException("boom"))).isFalse();
     }
 }
