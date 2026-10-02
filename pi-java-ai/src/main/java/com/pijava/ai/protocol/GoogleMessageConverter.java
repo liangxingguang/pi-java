@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -104,40 +105,83 @@ final class GoogleMessageConverter {
     /**
      * 助手消息的块 → Part（pi {@code :228-283}）。
      *
-     * <p>文本与工具调用两条在这里**特判**（各有自己的规则），其余块仍走
-     * {@link #blockParts}（thinking／diff／块级 toolResult 丢块、图片落线）。</p>
+     * <p>文本、thinking、工具调用三条在这里**特判**：同 provider+model 身份门
+     * （pi {@code :231}，R6）＋base64 校验（{@link ThoughtSignatures}），
+     * 空文本块仅在带签名时保留（pi {@code :237-244}）。其余块仍走
+     * {@link #blockParts}（diff／块级 toolResult 丢块、图片落线）。</p>
      */
     private static List<Part> assistantParts(Message.AssistantMessage msg, ModelId<?> modelId) {
+        // pi :231 —— 同身份只比 provider＋model（R6，不比 api）。
+        boolean same = Objects.equals(msg.provider(), modelId.provider())
+                && Objects.equals(msg.model(), modelId.modelName());
         var parts = new ArrayList<Part>();
         for (var block : msg.content()) {
             if (block instanceof ContentBlock.TextContent tc) {
-                // pi :240 —— 空白文本块跳过。⚠️「除非它带 textSignature」那半句在 java
-                // **恒为假**（TextContent 没有签名字段，docs/45 D8）⇒ 实现就是「空白就跳」。
-                // ⚠️ 与 pi 的细微差别：pi 的 trim() 会剥掉 U+00A0(NBSP)／U+FEFF 等，
-                // Java 的 isBlank() 不认（Character.isWhitespace 排除它们）⇒ 一个**纯 NBSP**
-                // 的块在 pi 被跳过、在 java 上线（已登记）。
-                if (tc.text().isBlank()) {
+                String sig = ThoughtSignatures.resolve(same, tc.textSignature());
+                // pi :237-244 —— 空白块仅在**无签名**时跳过：Gemini 可能把签名
+                // 附着在空文本 part 上并要求回送，丢了会断推理链。
+                // ⚠️ 与 pi 的细微差别（已登记）：pi 的 trim() 剥 NBSP/U+FEFF，
+                // Java 的 isBlank() 不认 ⇒ 纯 NBSP 块在 pi 跳、在 java 上线。
+                if (tc.text().isBlank() && sig == null) {
                     continue;
                 }
-                parts.add(Part.fromText(SanitizeUnicode.surrogates(tc.text())));
+                var part = Part.builder().text(SanitizeUnicode.surrogates(tc.text()));
+                if (sig != null) {
+                    part.thoughtSignature(Base64.getDecoder().decode(sig));
+                }
+                parts.add(part.build());
+            } else if (block instanceof ContentBlock.ThinkingContent th) {
+                parts.addAll(thinkingParts(th, same));
             } else if (block instanceof ContentBlock.ToolUseContent tu) {
+                String sig = ThoughtSignatures.resolve(same, tu.thoughtSignature());
                 var fc = FunctionCall.builder()
                         .name(tu.name())
                         .args(tu.arguments());
-                // pi :271 —— id 受 requiresToolCallId 门控。⚠️ 本包**改掉了**此前「恒发 id」
-                // 的行为（docs/45 D3）：只关门的一侧会造出 pi 里不存在的状态
-                // （functionCall 有 id、functionResponse 没有）。null／空串仍不发
-                // —— 对应 pi 的 `block.id === undefined` 时那个键被 JSON.stringify 略去。
+                // pi :271 —— id 受 requiresToolCallId 门控：null/空串不发，
+                // 对应 pi 键被 JSON.stringify 略去。
                 if (requiresToolCallId(modelId.modelName())
                         && tu.id() != null && !tu.id().isEmpty()) {
                     fc.id(tu.id());
                 }
-                parts.add(Part.builder().functionCall(fc.build()).build());
+                var part = Part.builder().functionCall(fc.build());
+                if (sig != null) {
+                    part.thoughtSignature(Base64.getDecoder().decode(sig));
+                }
+                parts.add(part.build());
             } else {
                 parts.addAll(blockParts(block));
             }
         }
         return parts;
+    }
+
+    /**
+     * thinking 块 → Part（pi {@code :245-269}）：同身份 ⇒ {@code thought:true}
+     * ＋签名（空块无签名才跳）；跨身份 ⇒ 纯文本（空块跳）。
+     *
+     * <p>⚠️ 跨身份分支在主流上**结构性不可达**：前置的 transform 闸
+     * （{@code TransformMessages.gateBlock} d2）已把跨模型 thinking 转成文本；
+     * pi 自己也先跑 transform，故其 {@code :260-269} 同样不可达 —— 照 pi 逐字保留。</p>
+     */
+    private static List<Part> thinkingParts(ContentBlock.ThinkingContent th, boolean same) {
+        if (same) {
+            String sig = ThoughtSignatures.resolve(true, th.signature());
+            if (th.text().isBlank() && sig == null) {
+                return List.of();
+            }
+            var part = Part.builder()
+                    .thought(true)
+                    .text(SanitizeUnicode.surrogates(th.text()));
+            if (sig != null) {
+                part.thoughtSignature(Base64.getDecoder().decode(sig));
+            }
+            return List.of(part.build());
+        }
+        if (th.text().isBlank()) {
+            return List.of();
+        }
+        return List.of(Part.builder()
+                .text(SanitizeUnicode.surrogates(th.text())).build());
     }
 
     /**

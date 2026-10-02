@@ -137,4 +137,107 @@ class GoogleAssistantReplayTest {
         assertThat(GoogleWireBody.parts(contents, 1).get(0).path("functionCall").path("id").asText())
             .isEqualTo("call_a");
     }
+
+    // ── Batch F 步 3：thoughtSignature 重放（pi google-shared.ts:228-283）────
+
+    /** 带身份（provider+model）的助手消息，签名才会被重放。 */
+    private static Message assistantFrom(String provider, String model, ContentBlock... blocks) {
+        return new Message.AssistantMessage(List.of(blocks), null, null,
+            "google-generative-ai", provider, model, null, null, null, null);
+    }
+
+    @Test
+    void sameModelReplaysTextSignature() throws Exception {
+        var contents = GoogleWireBody.contents(vision(GEMINI_25), List.of(
+            user("hi"),
+            assistantFrom("google", "gemini-2.5-flash",
+                new ContentBlock.TextContent("answer", "U0lHTg=="))));
+
+        var part = GoogleWireBody.parts(contents, 1).get(0);
+        assertThat(part.path("text").asText()).isEqualTo("answer");
+        assertThat(part.path("thoughtSignature").asText()).isEqualTo("U0lHTg==");
+    }
+
+    @Test
+    void sameModelReplaysThinkingSignature() throws Exception {
+        var contents = GoogleWireBody.contents(vision(GEMINI_25), List.of(
+            user("hi"),
+            assistantFrom("google", "gemini-2.5-flash",
+                new ContentBlock.ThinkingContent("hmm", "U0lHTg=="))));
+
+        var part = GoogleWireBody.parts(contents, 1).get(0);
+        assertThat(part.path("thought").asBoolean()).isTrue();
+        assertThat(part.path("text").asText()).isEqualTo("hmm");
+        assertThat(part.path("thoughtSignature").asText()).isEqualTo("U0lHTg==");
+    }
+
+    @Test
+    void sameModelReplaysToolCallSignature() throws Exception {
+        var contents = GoogleWireBody.contents(vision(GEMINI_25), List.of(
+            user("hi"),
+            assistantFrom("google", "gemini-2.5-flash",
+                new ContentBlock.ToolUseContent("call_a", "read",
+                    Map.of("path", "a.txt"), "U0lHTg=="))));
+
+        var part = GoogleWireBody.parts(contents, 1).get(0);
+        assertThat(part.path("functionCall").path("name").asText()).isEqualTo("read");
+        assertThat(part.path("thoughtSignature").asText()).isEqualTo("U0lHTg==");
+    }
+
+    /** pi :237-244：空文本但带签名的 part 必须保留回送（空 part 也要回）。 */
+    @Test
+    void emptyTextWithSignatureIsKept() throws Exception {
+        var contents = GoogleWireBody.contents(vision(GEMINI_25), List.of(
+            user("hi"),
+            assistantFrom("google", "gemini-2.5-flash",
+                new ContentBlock.TextContent("", "U0lHTg=="))));
+
+        var parts = GoogleWireBody.parts(contents, 1);
+        assertThat(parts).hasSize(1);
+        assertThat(parts.get(0).path("text").asText()).isEqualTo("");
+        assertThat(parts.get(0).path("thoughtSignature").asText()).isEqualTo("U0lHTg==");
+    }
+
+    /**
+     * 跨身份：thinking 块降级为纯文本（无 thought:true、无签名），不是整块丢弃。
+     * pi :260-269。
+     */
+    @Test
+    void crossModelDowngradesThinkingToPlainText() throws Exception {
+        var contents = GoogleWireBody.contents(vision(GEMINI_25), List.of(
+            user("hi"),
+            assistantFrom("anthropic", "claude-sonnet-5",
+                new ContentBlock.ThinkingContent("hmm", "U0lHTg=="))));
+
+        var part = GoogleWireBody.parts(contents, 1).get(0);
+        assertThat(part.path("text").asText()).isEqualTo("hmm");
+        assertThat(part.has("thought")).isFalse();
+        assertThat(part.has("thoughtSignature")).isFalse();
+    }
+
+    /** 负对照：跨模型文本块上不附签名（M2 变异探针的有牙对照）。 */
+    @Test
+    void crossModelStripsSignatureFromText() throws Exception {
+        var contents = GoogleWireBody.contents(vision(GEMINI_25), List.of(
+            user("hi"),
+            assistantFrom("anthropic", "claude-sonnet-5",
+                new ContentBlock.TextContent("answer", "U0lHTg=="))));
+
+        var part = GoogleWireBody.parts(contents, 1).get(0);
+        assertThat(part.path("text").asText()).isEqualTo("answer");
+        assertThat(part.has("thoughtSignature")).isFalse();
+    }
+
+    /** 负对照：同模型但非法 base64 的签名被丢弃、文本存活（M3 变异探针的有牙对照）。 */
+    @Test
+    void invalidBase64SignatureIsDropped() throws Exception {
+        var contents = GoogleWireBody.contents(vision(GEMINI_25), List.of(
+            user("hi"),
+            assistantFrom("google", "gemini-2.5-flash",
+                new ContentBlock.TextContent("answer", "%%%%not-base64"))));
+
+        var part = GoogleWireBody.parts(contents, 1).get(0);
+        assertThat(part.path("text").asText()).isEqualTo("answer");
+        assertThat(part.has("thoughtSignature")).isFalse();
+    }
 }
