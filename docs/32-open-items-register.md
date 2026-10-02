@@ -55,7 +55,7 @@
 | **G** | 已结案（**别重开**） | 34 | —— | —— |
 | **H** | `docs/31` 之外，机械扫描**待复核** | **62**（§9.1–§9.4 实测；⚠️ 原记 69） | —— | 我（逐条复核后才能定档） |
 
-**真正的闸门 = A 未结 13（A-14 已闭环）＋ B 未结 65 ＝ 78 条**（F 类九条已于 **2026-09-20 全部裁定** ⇒ 转为工作项，不再是闸门；见 §7）。C/D/E 三类随时可做，没有一条阻塞合并。
+**真正的闸门 = A 未结 13（A-14 已闭环）＋ B 未结 65（B1 结 B82、B2 增 B141 ⇒ 净值不变）＝ 78 条**（F 类九条已于 **2026-09-20 全部裁定** ⇒ 转为工作项，不再是闸门；见 §7）。C/D/E 三类随时可做，没有一条阻塞合并。
 
 > **2026-09-29（包 A-09 收口）**：B 类新增 **B129–B133**（`docs/58 §10`）；其中 **B131 已裁决不改**
 > （pi 生成数据不可达，编号留 B 表以稳定代码引用）⇒ 未结 +4（58→62）。
@@ -63,6 +63,10 @@
 > 新增 **B134–B138**（`docs/59 §10`），其中 **B138（authKind 丢失）已随包修复** ⇒ 未结 +4−2（62→64）。
 > **2026-09-30（包 A-14 收口）**：B 类新增 **B139**（`docs/60 §12`：Json mapper GETTER 不可见 ⇒ 嵌套 record
 > 序列化丢字段，Retry/ProviderRetry 已修、其余嵌套 record 待取证）⇒ 未结 +1（64→65）。
+> **2026-10-01（包 B1 收口）**：**B82 结案**（stored OAuth 接请求路径，`docs/63 §12`）⇒ 未结 −1（65→64）。
+> **2026-10-02（包 B2 收口）**：B 类新增 **B141**（`docs/64 §12`：openai-java bodyless 文案
+> 为 `400: Unknown`、非 `status code (no body)` ⇒ Cerebras bodyless 正向不可达，门控照 pi 保留）
+> ⇒ 未结 +1（64→65）。
 
 > **2026-09-20 第二次重建**（pi 重测 `71dca871b` → `3390bd936`，111 提交）：B 类 66 → **79**（新增 B67–B79，
 > 全部由 `docs/40 §1.3` 的 6 路重测撞出）；**C11 作废**（`addedToolNames` 被 pi 删除，裁决 R1）；
@@ -711,4 +715,5 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | B137 | **resolver 的 glob/scope 面** —— pi `model-resolver.ts:290+` 的 minimatch 通配（`provider/*`、`*sonnet*`）与 scope 诊断；java 只有精确/前后缀匹配 | `docs/59 §4.7` | A-02 只落了「精确匹配先行」（`:batch` 可达的最小修复）；glob 面另立 |
 | B139 | **嵌套 record 在 Json mapper 下序列化成空对象** —— mapper 关了 GETTER 可见性（`Json.java:16`），record 访问器被当 getter 忽略：Retry/ProviderRetry 自 3d 起 valueToTree 得 `{}`、provider 设置在 merge 后全丢（A-14 实施期实测） | `docs/60 §12` | Retry/ProviderRetry 已用显式 `@JsonProperty` 修复；同族的 `Settings.Compaction` 等嵌套 record **未扩查**，取证后独立修 |
 | B140 | **官方 Java SDK streaming transport 不向用户透传任意头** —— Anthropic（2.66）与 OpenAI completions 车道：非标准会话亲和头（`x-session-affinity`/`x-session-id`，completions 三头）经 client default headers、params additionalHeaders、自定义 transport `Interceptor`、`Backend.prepareRequest` 全部实测在 streaming 不生效（前两者剥头、后两者不被调用）。pi 的 JS SDK 用开放 fetch/defaultHeaders 可发。**升级 2.52→2.66 零兼容破坏、但不解决此问题**（2026-09-30 实测） | `docs/61 §12` | **已裁决接受差异**（用户方案 2）：请求体侧 `prompt_cache_key` 照落；非标准头反向断言不出现。这些是第三方网关（Fireworks/OpenRouter-Anthropic）缓存命中优化头、官方端点不用、不影响正确性。如需 1:1 对齐，唯一路径＝SDK params 建体 + 本仓 `PiHttpClient` 发送 + SDK JsonMapper 解析 SSE（pi 对 SDK 满足不了的协议的同构做法） |
+| B141 | **openai-java 对 bodyless 400/413 产出 `400: Unknown`，不是 TS SDK 的 `400 status code (no body)`** —— `UnexpectedStatusCodeException` 的文案在 error missing 时回落 `"Unknown"`（`ErrorHandler.kt` 只在有 `error` 键时按 ErrorObject 解析），故 pi 的 `CEREBRAS_BODYLESS_OVERFLOW_PATTERN` 正向情形经官方 SDK **进不来**（与 B140 同属 SDK 生成文本差异，B2 实施期取证） | `docs/64 §2.4/§12` | **门控照 pi 保留、差异接受**：谓词形状逐字对齐（bodyless 模式移出通用列表、只对 `provider==="cerebras"` 生效），自造 `"(no body)"` 文案＝发明行为已明确不做；models.json 若加 id `cerebras` 通道即正确，真实正向待 SDK 文案变化或换传输 |
 | ~~B138~~ | **provider 层四处五参 `ApiOptions` 重建丢 `authKind`** —— `ConfigurableProvider.effectiveOptions`／`ModelsJsonProvider.createApi`＋`withInlineKey`／`OpenAiCompatibleProvider.withPlaceholderKey` ⇒ 生产上 baseUrl 恒空 ⇒ `Credentials` 给的 BEARER/OAUTH 在进车道前被归一成 API_KEY（A0 步7 的头分派被上游拆台；OAuth 用户实际受影响面待 B82 接线后才可观察） | `docs/59 §3 G7`（设计期取证） | ✅ **已随包修复**（A-02，`38daf44`）：四处改六参构造；先红 3 条（直调 `effectiveOptions`＋两条真出站头 wire 夹具） |
