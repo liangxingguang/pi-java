@@ -210,7 +210,10 @@ public final class PiHttpClient implements AutoCloseable {
 
     public static final class Builder {
         private String userAgent = "pi-java/dev";
-        private RetryPolicy retryPolicy = RetryPolicy.defaultPolicy();
+        // A-20（docs/68）：默认零重试——对齐 pi（retryProviderRequest 的
+        // maxRetries ?? 0；pi-messages 低层是单次 fetch）。需要重试的车道
+        // （Mistral）显式传入 policy。
+        private RetryPolicy retryPolicy = new RetryPolicy.Builder().maxRetries(0).build();
         private Duration connectTimeout = Duration.ofSeconds(30);
         private java.net.ProxySelector proxy;
 
