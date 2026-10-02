@@ -5,13 +5,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.openai.core.JsonField;
 import com.openai.core.JsonMissing;
 import com.openai.core.JsonValue;
 import com.openai.models.Reasoning;
 import com.openai.models.ReasoningEffort;
 import com.openai.models.responses.EasyInputMessage;
-import com.openai.models.responses.FunctionTool;
 import com.openai.models.responses.ResponseCreateParams;
 import com.openai.models.responses.ResponseFunctionCallOutputItem;
 import com.openai.models.responses.ResponseInputContent;
@@ -124,7 +122,7 @@ final class ResponsesMessageConverter {
 
         var tools = new ArrayList<Tool>();
         for (var td : transcriptTools.requestTools()) {
-            tools.add(responseTool(td, supportsStrictMode, false));
+            tools.add(ResponseToolWire.responseTool(td, supportsStrictMode, false));
         }
         if (!tools.isEmpty()) {
             builder.tools(tools);
@@ -188,7 +186,7 @@ final class ResponsesMessageConverter {
         var systemText = initialSystemMessage == null
             ? "" : MessageTexts.getSystemMessageText(initialSystemMessage);
         if (!systemText.isEmpty()) {
-            items.add(inputMessage(EasyInputMessage.Role.SYSTEM,
+            items.add(ResponseInputWire.inputMessage(EasyInputMessage.Role.SYSTEM,
                 SanitizeUnicode.surrogates(systemText)));
         }
         // 共享预通道先于本车道的映射跑（pi openai-responses-shared.ts:172 在消息转换前调
@@ -210,17 +208,17 @@ final class ResponsesMessageConverter {
                     // 只有 `anchorsAdditions` 为真时后续声明才作为**增量**发出去，
                     // 否则它们已经在请求级 tools 字段里了。
                     if (transcriptTools.anchorsAdditions() && !system.toolsAdded().isEmpty()) {
-                        anchorSystemToolAdditions(items, system, msgIndex,
+                        ResponseToolWire.anchorSystemToolAdditions(items, system, msgIndex,
                             supportsAdditionalTools, supportsToolSearch, supportsStrictMode);
                     }
                     var update = MessageTexts.renderSystemMessageUpdate(system);
                     if (!update.isEmpty()) {
-                        items.add(inputMessage(EasyInputMessage.Role.SYSTEM,
+                        items.add(ResponseInputWire.inputMessage(EasyInputMessage.Role.SYSTEM,
                             SanitizeUnicode.surrogates(update)));
                     }
                 }
             } else if (msg instanceof Message.UserMessage user) {
-                items.add(toUserItem(user.content()));
+                items.add(ResponseInputWire.toUserItem(user.content()));
             } else if (msg instanceof Message.AssistantMessage assistant) {
                 addAssistantItems(items, assistant, msgIndex, request.modelId(), apiName);
             } else if (msg instanceof Message.ToolResultMessage tool) {
@@ -311,126 +309,7 @@ final class ResponsesMessageConverter {
         return "data:" + img.mediaType() + ";base64," + img.data();
     }
 
-    private static ResponseInputItem inputMessage(EasyInputMessage.Role role, String text) {        return ResponseInputItem.ofEasyInputMessage(EasyInputMessage.builder()
-            .role(role)
-            .content(EasyInputMessage.Content.ofTextInput(text))
-            .build());
-    }
-
-    /**
-     * pi {@code openai-responses-shared.ts:359-396} 的 {@code convertResponsesTools} ——
-     * 单个工具 → Responses 的 {@code Tool}。
-     *
-     * <p>{@code deferLoading} 是 pi 的 {@code toolSearchResult: true}（{@code :376}／{@code :389}）：
-     * 合成 {@code tool_search_output} 里的工具要打 {@code defer_loading: true}，
-     * 表示「这次搜索的结果、暂不装载」。</p>
-     *
-     * <p>⚠️ 与 pi 的两处既有差异（本包不动）：{@code supportsOpenAIGrammarTools} 的
-     * custom/grammar 分支（{@code :365-378}，登记 {@code docs/50 §10 L-A}），以及
-     * {@code supportsStrictMode} 的**缺省值由车道传**（pi 在 {@code :361} 默认 true，
-     * java 的两条车道 compat 缺省相反，见 {@code buildParams} 的 javadoc）。</p>
-     */
-    private static Tool responseTool(ToolDefinition td, boolean supportsStrictMode,
-                                     boolean deferLoading) {
-        var functionTool = FunctionTool.builder()
-            .name(td.name())
-            .description(td.description())
-            .parameters(FunctionTool.Parameters.builder()
-                .putAllAdditionalProperties(toJsonValues(td.inputSchema()))
-                .build())
-            .strict(strictField(supportsStrictMode));
-        if (deferLoading) {
-            functionTool.deferLoading(true);
-        }
-        return Tool.ofFunction(functionTool.build());
-    }
-
-    /**
-     * pi {@code openai-responses-shared.ts:182-210} 的 {@code appendSystemToolAdditions} ——
-     * 把一条系统消息声明的工具**就地锚定**在它自己的位置上。
-     *
-     * <p>两个机制（pi 的 {@code :185-208}）：{@code supportsAdditionalTools} ⇒ 一条
-     * {@code {type:"additional_tools", role:"developer", tools:[…]}}；否则
-     * {@code supportsToolSearch} ⇒ 合成**一对** {@code tool_search_call} +
-     * {@code tool_search_output}（都 {@code execution:"client"}／{@code status:"completed"}），
-     * {@code call_id} 由「种子 ＋ 名字列表」的哈希**确定性**生成 ⇒ 同一段转录每次重放得到同一个
-     * id（不这样的话缓存前缀与转录都不可复现）。</p>
-     *
-     * <p>⚠️ 两个都不支持 ⇒ 什么都不发（pi 的 {@code if (!options?.supportsToolSearch) return;}）——
-     * 但调用方已经用同一个「或」判据算过 {@code anchorsAdditions}，故这一支实际不可达，
-     * 照抄保留（同 {@code docs/44 §9} 的两处车道门）。</p>
-     */
-    private static void anchorSystemToolAdditions(List<ResponseInputItem> items,
-                                                  Message.SystemMessage system, int msgIndex,
-                                                  boolean supportsAdditionalTools,
-                                                  boolean supportsToolSearch,
-                                                  boolean supportsStrictMode) {
-        var anchored = system.toolsAdded().stream()
-            .map(td -> responseTool(td, supportsStrictMode, false)).toList();
-        if (supportsAdditionalTools) {
-            items.add(ResponseInputItem.ofAdditionalTools(
-                ResponseInputItem.AdditionalTools.builder()
-                    .role(JsonValue.from("developer"))
-                    .tools(anchored)
-                    .build()));
-            return;
-        }
-        if (!supportsToolSearch) {
-            return;
-        }
-        var names = system.toolsAdded().stream().map(ToolDefinition::name).toList();
-        var callId = "pi_tool_load_"
-            + com.pijava.ai.utils.ShortHash.of("system:" + msgIndex + ":" + String.join(",", names));
-        var arguments = new LinkedHashMap<String, Object>();
-        arguments.put("query", String.join(" ", names));
-        arguments.put("limit", names.size());
-        items.add(ResponseInputItem.ofToolSearchCall(ResponseInputItem.ToolSearchCall.builder()
-            .callId(callId)
-            .execution(ResponseInputItem.ToolSearchCall.Execution.CLIENT)
-            .status(ResponseInputItem.ToolSearchCall.Status.COMPLETED)
-            .arguments(JsonValue.from(arguments))
-            .build()));
-        items.add(ResponseInputItem.ofToolSearchOutput(
-            ResponseToolSearchOutputItemParam.builder()
-                .callId(callId)
-                .execution(ResponseToolSearchOutputItemParam.Execution.CLIENT)
-                .status(ResponseToolSearchOutputItemParam.Status.COMPLETED)
-                .tools(system.toolsAdded().stream()
-                    .map(td -> responseTool(td, supportsStrictMode, true)).toList())
-                .build()));
-    }
-
-    private static ResponseInputItem toUserItem(List<ContentBlock> content) {
-        var hasImage = content.stream().anyMatch(b -> b instanceof ContentBlock.ImageContent
-            || b instanceof ContentBlock.UrlImageContent);
-        if (!hasImage) {
-            // pi :231 —— user 串形态：整串净化。
-            return inputMessage(EasyInputMessage.Role.USER,
-                SanitizeUnicode.surrogates(extractText(content)));
-        }
-        var parts = new ArrayList<ResponseInputContent>();
-        for (var block : content) {
-            if (block instanceof ContentBlock.TextContent tc && !tc.text().isEmpty()) {
-                // pi :238 —— user 有图分支：**逐项**净化。
-                parts.add(ResponseInputContent.ofInputText(
-                    ResponseInputText.builder().text(SanitizeUnicode.surrogates(tc.text())).build()));
-            } else if (block instanceof ContentBlock.ImageContent img) {
-                parts.add(ResponseInputContent.ofInputImage(ResponseInputImage.builder()
-                    .detail(ResponseInputImage.Detail.AUTO)
-                    .imageUrl("data:" + img.mediaType() + ";base64," + img.data())
-                    .build()));
-            } else if (block instanceof ContentBlock.UrlImageContent url) {
-                parts.add(ResponseInputContent.ofInputImage(ResponseInputImage.builder()
-                    .detail(ResponseInputImage.Detail.AUTO)
-                    .imageUrl(url.url())
-                    .build()));
-            }
-        }
-        return ResponseInputItem.ofEasyInputMessage(EasyInputMessage.builder()
-            .role(EasyInputMessage.Role.USER)
-            .content(EasyInputMessage.Content.ofResponseInputMessageContentList(parts))
-            .build());
-    }
+    // 输入项（inputMessage/toUserItem）已抽到 ResponseInputWire（docs/66，步骤 7）。
 
     /**
      * Append pi's replay items for one assistant message.
@@ -524,10 +403,6 @@ final class ResponsesMessageConverter {
      * （发 {@code true} ＋ 收紧 schema）与 {@code require}（不支持则抛）两支登记为
      * {@code docs/50 §10 L-A}，不在此处造投机骨架。</p>
      */
-    private static JsonField<Boolean> strictField(boolean supportsStrictMode) {
-        return supportsStrictMode ? JsonField.of(false) : JsonMissing.of();
-    }
-
     private static Map<String, JsonValue> toJsonValues(Map<String, Object> schema) {
         var out = new LinkedHashMap<String, JsonValue>();
         schema.forEach((key, value) -> out.put(key, JsonValue.from(value)));

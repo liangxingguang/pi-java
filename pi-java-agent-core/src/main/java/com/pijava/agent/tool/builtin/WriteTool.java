@@ -11,6 +11,9 @@ import com.pijava.agent.tool.ToolContext;
 import com.pijava.agent.tool.ToolResult;
 import com.pijava.agent.tool.ToolUpdateCallback;
 
+import com.pijava.ai.api.JsonSchemaSampling;
+import com.pijava.ai.api.StrictMode;
+
 /**
  * File writing tool. Creates parent directories, overwrites existing files.
  * Aligned with pi's {@code createWriteTool}.
@@ -50,6 +53,11 @@ public final class WriteTool {
                 );
             }
             @Override public ExecutionMode executionMode() { return new ExecutionMode.Sequential(); }
+
+            // docs/66：pi 的 write 默认 strict-prefer。
+            @Override public JsonSchemaSampling constrainedSampling() {
+                return new JsonSchemaSampling(StrictMode.PREFER);
+            }
 
             @Override
             public WriteInput prepareArguments(Map<String, Object> raw) {

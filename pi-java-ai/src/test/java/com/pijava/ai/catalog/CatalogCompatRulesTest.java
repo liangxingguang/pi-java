@@ -6,6 +6,8 @@ import com.pijava.ai.provider.builtin.ModelData;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
+
 /**
  * Tests for {@link CatalogCompatRules} — pi 生成期目录规则的 Java 抄本（包 A7b，{@code docs/53}）。
  *
@@ -51,10 +53,20 @@ class CatalogCompatRulesTest {
     }
 
     @Test
-    void haikuCarriesNothingThisRepoConsults() {
-        // pi 只给它 supportsStrictTools（java 不携带）⇒ 标注结果与「什么都没写」等价。
-        assertThat(CatalogCompatRules.anthropic("anthropic", "claude-haiku-4-5-20251001"))
-            .isEqualTo(ModelCompat.NONE);
+    void anthropicModelsCarryStrictTools() {
+        // docs/66：pi generate-models.ts:826-828 对全部 anthropic-messages 模型无条件
+        // supportsStrictTools:true（与 id 无关）；其余字段对 haiku 仍为 NONE。
+        var haiku = CatalogCompatRules.anthropic("anthropic", "claude-haiku-4-5-20251001");
+        assertThat(haiku.supportsStrictTools()).isTrue();
+        assertThat(haiku.forceAdaptiveThinking())
+            .as("haiku 不命中 adaptive，其余字段仍 NONE")
+            .isEqualTo(ModelCompat.NONE.forceAdaptiveThinking());
+        var fable = CatalogCompatRules.anthropic("anthropic", "claude-fable-5");
+        assertThat(fable.supportsStrictTools()).isTrue();
+        assertThat(fable.forceAdaptiveThinking()).isTrue();
+        // provider 非 anthropic ⇒ 不标注。
+        assertThat(CatalogCompatRules.anthropic("openrouter", "claude-fable-5")
+            .supportsStrictTools()).isFalse();
     }
 
     @Test
@@ -162,14 +174,18 @@ class CatalogCompatRulesTest {
 
     @Test
     void theOtherBuiltInProvidersCarryNoCompatAtAll() {
-        // pi 的目录对 google 条目根本没有 compat 键；openai 的 gpt-5* 在 pi 走 responses 车道
-        // 而本仓默认走 completions（A-04）⇒ 本包**不**标注它们（docs/53 §4.2）。
+        // google 条目无 compat 键；mistral 的恒支持写在车道代码里、目录不标注。
         assertThat(BuiltinCatalog.googleModels().listModels())
-            .allMatch(m -> m.compat().equals(ModelCompat.NONE));
-        assertThat(BuiltinCatalog.openaiModels().listModels())
             .allMatch(m -> m.compat().equals(ModelCompat.NONE));
         assertThat(BuiltinCatalog.mistralModels().listModels())
             .allMatch(m -> m.compat().equals(ModelCompat.NONE));
+        // docs/66：openai chat 模型标 supportsStrictMode:true；embedding 仍为 NONE。
+        var openai = BuiltinCatalog.openaiModels().listModels();
+        assertThat(openai).filteredOn(m -> m.compat().equals(ModelCompat.NONE))
+            .extracting(m -> m.id().modelName())
+            .containsExactlyInAnyOrder("text-embedding-3-small", "text-embedding-3-large");
+        assertThat(openai).filteredOn(m -> !m.compat().equals(ModelCompat.NONE))
+            .allMatch(m -> Boolean.TRUE.equals(m.compat().supportsStrictMode()));
     }
 
     @Test

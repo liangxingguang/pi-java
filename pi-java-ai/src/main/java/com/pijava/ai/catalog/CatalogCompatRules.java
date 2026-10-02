@@ -44,7 +44,7 @@ public final class CatalogCompatRules {
     public static ModelCompat anthropic(String provider, String modelId) {
         var id = modelId == null ? "" : modelId;
         var midConvo = "anthropic".equals(provider) && supportsMidConvoSystemMessages(id);
-        return new ModelCompat(
+        var partial = new ModelCompat(
             false,
             null,
             true,
@@ -57,6 +57,26 @@ public final class CatalogCompatRules {
             null,
             !isTemperatureUnsupportedModel(id),
             null, null, null, null);
+        // docs/66：pi generate-models.ts:826-828 对全部 anthropic-messages 模型无条件
+        // merge supportsStrictTools:true（与 id 无关）。
+        return withStrictTools(partial, "anthropic".equals(provider));
+    }
+
+    /** Copy a compat, overriding only {@code supportsStrictTools}. */
+    private static ModelCompat withStrictTools(ModelCompat c, boolean supportsStrictTools) {
+        return new ModelCompat(
+            c.allowEmptySignature(), c.requiresReasoningContentOnAssistantMessages(),
+            c.supportsFinishReason(), c.forceAdaptiveThinking(),
+            c.supportsMidConvoSystemMessages(), c.supportsMidConvoToolAdditions(),
+            c.supportsMidConvoToolChanges(), c.supportsAdditionalTools(),
+            c.supportsToolSearch(), c.supportsTemperature(), c.maxTokensField(),
+            c.supportsStore(), c.supportsDeveloperRole(), c.supportsStrictMode(),
+            c.supportsLongCacheRetention(), c.supportsCacheControlOnTools(),
+            c.thinkingTokenBudgetField(), c.supportsThinkingTokenBudget(),
+            c.supportsMaxOutputTokens(), c.thinkingFormat(), c.chatTemplateKwargs(),
+            c.chatTemplateArgs(), c.supportsReasoningEffort(), c.cacheControlFormat(),
+            c.openRouterRouting(), c.sendSessionAffinityHeaders(),
+            c.sessionAffinityFormat(), supportsStrictTools);
     }
 
     /**
@@ -108,6 +128,21 @@ public final class CatalogCompatRules {
             null, null, null, null,
             null, null, null, null, null,
             format, Map.of(), Map.of(), supportsEffort);
+    }
+
+    /**
+     * openai-responses 车道的目录标注 —— pi {@code applyStrictToolCompatMetadata}
+     * （{@code generate-models.ts:821-825}）：provider 为 openai 的 responses 模型
+     * 无条件写 {@code supportsStrictMode:true}。api（responses）门由调用方承担；
+     * 非 openai provider 返回 {@link ModelCompat#NONE}。
+     */
+    public static ModelCompat openaiResponses(String provider, String modelId) {
+        if (!"openai".equals(provider)) {
+            return ModelCompat.NONE;
+        }
+        return new ModelCompat(false, null, true, false,
+            null, null, null, null, null, true,
+            null, null, null, Boolean.TRUE);
     }
 
     /**

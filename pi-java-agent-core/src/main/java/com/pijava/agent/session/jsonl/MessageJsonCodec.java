@@ -139,9 +139,34 @@ final class MessageJsonCodec {
                 throw JsonlCodec.DecodeError.schema("has invalid toolsAdded entry");
             }
             tools.add(new ToolDefinition(JsonlCodec.requireString(item, "name"),
-                JsonlCodec.optionalString(item, "description"), schema));
+                JsonlCodec.optionalString(item, "description"), schema,
+                JsonlCodec.requireString(item, "name"), null, List.of(), "default",
+                decodeConstrainedSampling(item.get("constrainedSampling"))));
         }
         return List.copyOf(tools);
+    }
+
+    /**
+     * docs/66：pi 的 {@code constrainedSampling} 节点（{@code {type,strict}}）；
+     * 缺席/null ⇒ null（不约束）。仅 json_schema 形态（grammar 后续包加）；
+     * 未知 type/strict 取值响亮抛 schema 错。
+     */
+    private static com.pijava.ai.api.ConstrainedSampling decodeConstrainedSampling(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        var type = node.path("type").asText("");
+        if (!"json_schema".equals(type)) {
+            throw JsonlCodec.DecodeError.schema("has invalid constrainedSampling type");
+        }
+        var strictText = node.path("strict").asText("");
+        var strict = switch (strictText) {
+            case "prefer" -> com.pijava.ai.api.StrictMode.PREFER;
+            case "require" -> com.pijava.ai.api.StrictMode.REQUIRE;
+            default -> throw JsonlCodec.DecodeError.schema(
+                "has invalid constrainedSampling strict");
+        };
+        return new com.pijava.ai.api.JsonSchemaSampling(strict);
     }
 
     /** 系统消息的 {@code toolsRemoved} —— pi 的 {@code ToolReference} 是 {@code {name}}（{@code types.ts:607-609}）。 */

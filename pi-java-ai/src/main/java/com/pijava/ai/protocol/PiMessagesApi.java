@@ -265,7 +265,19 @@ public final class PiMessagesApi extends AbstractChatApi {
     private static ArrayNode toolDeclarations(List<ToolDefinition> tools) {
         var arr = JSON.createArrayNode();
         for (var td : tools) {
-            arr.add(JSON.valueToTree(Transcripts.toToolDeclaration(td)));
+            var declaration = Transcripts.toToolDeclaration(td);
+            // 逐项写：constrainedSampling 缺席（null）时**不发键** —— 本 mapper 是默认
+            // ALWAYS 包含，直接 valueToTree 会写出 null 值（与 pi 的 defined-only 不一致）。
+            var node = arr.addObject();
+            node.put("name", declaration.name());
+            if (declaration.description() != null) {
+                node.put("description", declaration.description());
+            }
+            node.set("parameters", JSON.valueToTree(declaration.parameters()));
+            if (declaration.constrainedSampling() != null) {
+                node.set("constrainedSampling",
+                    JSON.valueToTree(declaration.constrainedSampling()));
+            }
         }
         return arr;
     }

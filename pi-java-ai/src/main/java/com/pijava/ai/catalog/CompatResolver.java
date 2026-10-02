@@ -83,6 +83,9 @@ public final class CompatResolver {
             || isAntLing;
         var useMaxTokens = url.contains("chutes.ai") || isDeepSeek || isMoonshot
             || isCloudflareAiGateway || isTogether || isNvidia || isAntLing || isZai;
+        // pi detectCompat:1664 —— completions strict 门的五否定缺省（explicit 在 resolved pick）。
+        var detectedStrictMode = !isMoonshot && !isTogether && !isCloudflareAiGateway
+            && !isNvidia && !isCerebras;
         // detectCompat:1630 —— 判据**同时**看 provider 与模型 id 前缀（OpenRouter 上只有
         // anthropic/* 与 openai/* 走 developer 角色）。
         var isOpenRouterDeveloperRoleModel = isOpenRouter
@@ -122,7 +125,7 @@ public final class CompatResolver {
             useMaxTokens ? MaxTokensField.MAX_TOKENS : MaxTokensField.MAX_COMPLETION_TOKENS,
             !isNonStandard,
             isOpenRouterDeveloperRoleModel || (!isNonStandard && !isOpenRouter),
-            null,
+            detectedStrictMode,
             // 包 A-02：`supportsLongCacheRetention` 的 completions 探测面（B105 闭环；
             // `cacheControlFormat` 的探测走 withCompletions 的合一位，与 thinkingFormat 同形）。
             detectedLongCacheRetention,
@@ -198,9 +201,28 @@ public final class CompatResolver {
      * 都是真，且**只**被本车道读。</p>
      */
     public static ModelCompat forAnthropic(ModelInfo model) {
-        return resolved(base(model), null, Boolean.FALSE, null, Boolean.FALSE,
+        var partial = resolved(base(model), null, Boolean.FALSE, null, Boolean.FALSE,
             null, null, null, null, null, null,
             Boolean.TRUE, Boolean.TRUE, null, null, null);
+        // supportsStrictTools：pi `model.compat?.supportsStrictTools ?? false`（无探测），
+        // 显式值来自目录标注/models.json。resolved() 不携带该组件，故在此显式透传。
+        return new ModelCompat(
+            partial.allowEmptySignature(),
+            partial.requiresReasoningContentOnAssistantMessages(),
+            partial.supportsFinishReason(), partial.forceAdaptiveThinking(),
+            partial.supportsMidConvoSystemMessages(),
+            partial.supportsMidConvoToolAdditions(), partial.supportsMidConvoToolChanges(),
+            partial.supportsAdditionalTools(), partial.supportsToolSearch(),
+            partial.supportsTemperature(), partial.maxTokensField(),
+            partial.supportsStore(), partial.supportsDeveloperRole(),
+            partial.supportsStrictMode(), partial.supportsLongCacheRetention(),
+            partial.supportsCacheControlOnTools(), partial.thinkingTokenBudgetField(),
+            partial.supportsThinkingTokenBudget(), partial.supportsMaxOutputTokens(),
+            partial.thinkingFormat(), partial.chatTemplateKwargs(),
+            partial.chatTemplateArgs(), partial.supportsReasoningEffort(),
+            partial.cacheControlFormat(), partial.openRouterRouting(),
+            partial.sendSessionAffinityHeaders(), partial.sessionAffinityFormat(),
+            base(model).supportsStrictTools());
     }
 
     /**

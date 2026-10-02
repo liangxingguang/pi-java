@@ -16,6 +16,8 @@ import com.google.genai.types.FunctionResponse;
 import com.google.genai.types.FunctionResponsePart;
 import com.google.genai.types.Part;
 
+import com.pijava.ai.api.StrictJsonSchema;
+import com.pijava.ai.api.StrictSampling;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
@@ -338,18 +340,47 @@ final class GoogleMessageConverter {
         };
     }
 
-    /** 工具定义 → {@code FunctionDeclaration[]}。 */
-    static List<FunctionDeclaration> functions(List<ToolDefinition> tools) {
+    /**
+     * 工具定义 → {@code FunctionDeclaration[]}。
+     *
+     * @param supportsStrictMode pi {@code supportsGoogleStrictToolSampling}（id 谓词）：
+     *        true 且工具解析为 strict（docs/66）⇒ parametersJsonSchema 走 strict 转换
+     *        （pi {@code google-shared.ts:388-397}）
+     */
+    static List<FunctionDeclaration> functions(List<ToolDefinition> tools,
+                                                boolean supportsStrictMode) {
         return tools.stream().<FunctionDeclaration>map(tool -> {
+            var strict = Boolean.TRUE.equals(
+                StrictSampling.resolveStrict(tool, supportsStrictMode));
+            var schema = strict
+                ? StrictJsonSchema.convert(tool.inputSchema()) : tool.inputSchema();
             var builder = FunctionDeclaration.builder()
                     .name(tool.name());
             if (tool.description() != null && !tool.description().isEmpty()) {
                 builder.description(tool.description());
             }
             if (tool.inputSchema() != null) {
-                builder.parametersJsonSchema(tool.inputSchema());
+                builder.parametersJsonSchema(schema);
             }
             return builder.build();
         }).toList();
+    }
+
+    /**
+     * pi {@code supportsGoogleStrictToolSampling}（{@code google-shared.ts:404-407}）：
+     * Gemini 3+ 在 VALIDATED 模式下要求必填参数。逐字正则、不区分 api 变体。
+     */
+    static boolean supportsStrictSampling(String modelId) {
+        var matcher = java.util.regex.Pattern
+            .compile("^gemini(?:-live)?-(\\d+)")
+            .matcher(modelId == null ? "" : modelId.toLowerCase(java.util.Locale.ROOT));
+        return matcher.find() && Integer.parseInt(matcher.group(1)) >= 3;
+    }
+
+    /** 是否任一工具在 strict 模型上解析为 strict（pi {@code resolveGoogleFunctionCallingMode}）。 */
+    static boolean anyStrict(List<ToolDefinition> tools, boolean supportsStrictMode) {
+        return tools.stream()
+            .anyMatch(tool -> Boolean.TRUE.equals(
+                StrictSampling.resolveStrict(tool, supportsStrictMode)));
     }
 }

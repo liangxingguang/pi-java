@@ -336,9 +336,23 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
         // Tools —— 重放后的当前工具表（pi google-generative-ai.ts:375 的 getCurrentTools）。
         var tools = Transcripts.getCurrentTools(transcript.messages());
         if (!tools.isEmpty()) {
+            var supportsStrict = GoogleMessageConverter.supportsStrictSampling(
+                request.modelId().modelName());
             builder.tools(List.of(Tool.builder()
-                    .functionDeclarations(GoogleMessageConverter.functions(tools))
+                    .functionDeclarations(
+                        GoogleMessageConverter.functions(tools, supportsStrict))
                     .build()));
+            // pi google-shared.ts:423-436：strict 模型 ＋ 任一 strict 工具 ⇒ VALIDATED。
+            // （Java 无 toolChoice 生产者：none/any 两支不可达，直接按 strict 判定。）
+            if (GoogleMessageConverter.anyStrict(tools, supportsStrict)) {
+                builder.toolConfig(com.google.genai.types.ToolConfig.builder()
+                    .functionCallingConfig(
+                        com.google.genai.types.FunctionCallingConfig.builder()
+                            .mode(new com.google.genai.types.FunctionCallingConfigMode(
+                                com.google.genai.types.FunctionCallingConfigMode.Known.VALIDATED))
+                            .build())
+                    .build());
+            }
         }
 
         return builder.build();

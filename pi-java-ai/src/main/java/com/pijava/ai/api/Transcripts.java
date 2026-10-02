@@ -59,11 +59,11 @@ public final class Transcripts {
      * 的线格 —— 包 B87② 之前这两处各写各的（一个是 {@code ToolDefinition} 全形、
      * 一个是手写三键），线上形状因此不一致。</p>
      *
-     * <p>⚠️ pi 在这里还有一支 {@code ...(constrainedSampling === undefined ? {} :
-     * { constrainedSampling })}，java 没有该字段（{@code docs/50 §10 L-A}）。</p>
+     * <p>docs/66：携带 {@code constrainedSampling}（pi 同名字段，缺席则不投影）。</p>
      */
     public static ToolDeclaration toToolDeclaration(ToolDefinition tool) {
-        return new ToolDeclaration(tool.name(), tool.description(), tool.inputSchema());
+        return new ToolDeclaration(tool.name(), tool.description(), tool.inputSchema(),
+            tool.constrainedSampling());
     }
 
     /**
@@ -80,7 +80,9 @@ public final class Transcripts {
      * 且往返稳定（{@link #toToolDeclaration} 再剥一次仍是同一个声明）。</p>
      */
     public static ToolDefinition toToolDefinition(ToolDeclaration declaration) {
-        return new ToolDefinition(declaration.name(), declaration.description(), declaration.parameters());
+        return new ToolDefinition(declaration.name(), declaration.description(),
+            declaration.parameters(), declaration.name(), null, List.of(), "default",
+            declaration.constrainedSampling());
     }
 
     /**

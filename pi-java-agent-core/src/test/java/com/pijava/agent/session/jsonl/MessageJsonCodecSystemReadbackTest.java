@@ -65,6 +65,25 @@ class MessageJsonCodecSystemReadbackTest {
         assertThat(back.toolsRemoved()).extracting(ToolReference::name).containsExactly("write");
     }
 
+    /** docs/66：constrainedSampling 写读 round-trip。 */
+    @Test
+    void roundTripsConstrainedSampling() {
+        var strictTool = new ToolDefinition("read", "Read files",
+            Map.of("type", "object"), "read", null, List.of(), "default",
+            new com.pijava.ai.api.JsonSchemaSampling(com.pijava.ai.api.StrictMode.PREFER));
+        var system = new Message.SystemMessage("base", Instant.EPOCH, Map.of(),
+            List.of(strictTool), List.of());
+
+        var node = SessionJson.messageNode(system);
+        var written = node.path("toolsAdded").get(0).path("constrainedSampling");
+        assertThat(written.path("type").asText()).isEqualTo("json_schema");
+        assertThat(written.path("strict").asText()).isEqualTo("prefer");
+
+        var back = (Message.SystemMessage) MessageJsonCodec.decode(node);
+        assertThat(back.toolsAdded().get(0).constrainedSampling())
+            .isEqualTo(new com.pijava.ai.api.JsonSchemaSampling(com.pijava.ai.api.StrictMode.PREFER));
+    }
+
     /**
      * sections 的渲染序是**插入序**（pi 的 {@code Object.entries}，{@code utils/text.ts:17}）——
      * 写侧已改成保序副本（包 A2 的 F3），读侧必须跟着保序，否则 round-trip 会静默重排

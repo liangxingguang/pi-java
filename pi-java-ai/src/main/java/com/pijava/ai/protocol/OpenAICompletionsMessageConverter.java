@@ -10,15 +10,11 @@ import java.util.OptionalInt;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openai.core.JsonValue;
-import com.openai.models.FunctionDefinition;
-import com.openai.models.FunctionParameters;
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam;
 import com.openai.models.chat.completions.ChatCompletionContentPart;
-import com.openai.models.chat.completions.ChatCompletionContentPartImage;
 import com.openai.models.chat.completions.ChatCompletionContentPartText;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
 import com.openai.models.chat.completions.ChatCompletionDeveloperMessageParam;
-import com.openai.models.chat.completions.ChatCompletionFunctionTool;
 import com.openai.models.chat.completions.ChatCompletionMessageFunctionToolCall;
 import com.openai.models.chat.completions.ChatCompletionMessageParam;
 import com.openai.models.chat.completions.ChatCompletionMessageToolCall;
@@ -169,9 +165,8 @@ final class OpenAICompletionsMessageConverter {
                 // 证据见 SdkJsonEscapeHatchTest。只在 `anchorsAdditions` 为真时发 ——
                 // 否则那些工具已经在请求级 tools 字段里了。
                 if (transcriptTools.anchorsAdditions() && !system.toolsAdded().isEmpty()) {
-                    wire.add(kimiToolSystemMessage(
-                        system.toolsAdded().stream().map(OpenAICompletionsMessageConverter::toTool)
-                            .toList()));
+                    var gate = Boolean.TRUE.equals(compat.supportsStrictMode());
+                    wire.add(CompletionToolWire.kimiSystemMessage(system.toolsAdded(), gate));
                 }
                 // pi :1249 —— 非前导走**分段差分更新**渲染（不是完整提示）。
                 // ⚠️ 角色与前面那条**同源**：pi 的 `instructionRole` 一处算出、两处用
@@ -205,14 +200,15 @@ final class OpenAICompletionsMessageConverter {
                     // 照抄保留（pi 也保留），但**没有任何夹具能钉住它** —— 不是夹具没牙，
                     // 是这一行没有出参（docs/44 §9 的变异探针 4 实测：去掉它零红）。
                     if (request.model().supportsImageInput()) {
-                        collectImageParts(tool.content(), imageParts);
+                        CompletionImageWire.collectImageParts(tool.content(), imageParts);
                     }
                     j++;
                 }
                 i = j - 1;
                 if (!imageParts.isEmpty()) {
                     // pi :1448-1456 —— 合成的 user 消息（文案逐字）。
-                    wire.add(ChatCompletionMessageParam.ofUser(syntheticToolImageMessage(imageParts)));
+                    wire.add(ChatCompletionMessageParam.ofUser(
+                        CompletionImageWire.syntheticToolImageMessage(imageParts)));
                 }
             }
         }
@@ -221,8 +217,9 @@ final class OpenAICompletionsMessageConverter {
         // writing fake XML tool invocations into the text stream (which also
         // avoids garbled interleaving in the rendered bubble).
         var wireTools = new ArrayList<ChatCompletionTool>();
+        var strictGate = Boolean.TRUE.equals(compat.supportsStrictMode());
         for (var td : transcriptTools.requestTools()) {
-            wireTools.add(toTool(td));
+            wireTools.add(CompletionToolWire.toTool(td, strictGate));
         }
 
         // 包 A-02（B105；pi :814 取值、:858-859 落点）：anthropic 形状缓存断点的后处理
@@ -336,48 +333,7 @@ final class OpenAICompletionsMessageConverter {
                 .content(text).build());
     }
 
-    private static Map<String, JsonValue> toJsonValues(Map<String, Object> schema) {
-        var out = new LinkedHashMap<String, JsonValue>();
-        schema.forEach((key, value) -> out.put(key, JsonValue.from(value)));
-        return out;
-    }
-
-    /** pi {@code convertTools} 的 function-tool 支（本仓不支持 grammar 工具，登记 L-A）。 */
-    private static ChatCompletionTool toTool(ToolDefinition td) {
-        return ChatCompletionTool.ofFunction(
-            ChatCompletionFunctionTool.builder()
-                .type(JsonValue.from("function"))
-                .function(FunctionDefinition.builder()
-                    .name(td.name())
-                    .description(td.description())
-                    .parameters(FunctionParameters.builder()
-                        .putAllAdditionalProperties(toJsonValues(td.inputSchema()))
-                        .build())
-                    .build())
-                .build());
-    }
-
-    /**
-     * pi {@code openai-completions.ts:1240-1246} 的 **Kimi 形状** ——
-     * {@code {role:"system", tools:[…]}}，一条系统消息可以在文本之外**多**产出一条线上消息。
-     *
-     * <p>⚠️ 这个形状在 openai-java 4.42.0 里**没有类型化对应物**：{@code ChatCompletionMessageParam}
-     * 的六个变体没有一个带 {@code tools}，{@code ChatCompletionSystemMessageParam} 只有
-     * content/name，且没有 beta 的 chat-completions 命名空间。这里走 SDK 的**未知键直通**
-     * （原始 JSON 反序列化 ⇒ 序列化时原样写出），通路与逐字节往返证据（含「省略 content
-     * 时线上也不出现 content」）见 {@code SdkJsonEscapeHatchTest}（{@code docs/51 §12.4}）。</p>
-     */
-    private static ChatCompletionMessageParam kimiToolSystemMessage(List<ChatCompletionTool> tools) {
-        var mapper = com.openai.core.ObjectMappers.jsonMapper();
-        var node = mapper.createObjectNode();
-        node.put("role", "system");
-        node.set("tools", mapper.valueToTree(tools));
-        try {
-            return mapper.treeToValue(node, ChatCompletionMessageParam.class);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("cannot build the Kimi tool system message", e);
-        }
-    }
+    // Kimi 工具系统消息已抽到 CompletionToolWire.kimiSystemMessage（docs/66，步骤 7）。
 
     /**
      * Serializes an assistant message including its tool calls and its reasoning.
@@ -505,7 +461,7 @@ final class OpenAICompletionsMessageConverter {
      */
     private static void addUserMessage(List<ChatCompletionMessageParam> wire,
                                        Message.UserMessage user) {
-        boolean hasImages = user.content().stream().anyMatch(OpenAICompletionsMessageConverter::isImageBlock);
+        boolean hasImages = user.content().stream().anyMatch(CompletionImageWire::isImageBlock);
         if (!hasImages) {
             var text = extractText(user.content());
             // pi :1257 —— user 串形态：整串净化。
@@ -522,10 +478,11 @@ final class OpenAICompletionsMessageConverter {
                 parts.add(ChatCompletionContentPart.ofText(ChatCompletionContentPartText.builder()
                         .text(SanitizeUnicode.surrogates(tc.text())).build()));
             } else if (block instanceof ContentBlock.ImageContent img) {
-                parts.add(imageUrlPart("data:" + img.mediaType() + ";base64," + img.data()));
+                parts.add(CompletionImageWire.imagePart(
+                    "data:" + img.mediaType() + ";base64," + img.data()));
             } else if (block instanceof ContentBlock.UrlImageContent url) {
                 // java 扩展（pi 无此类型）：image_url 本来就收 URL ⇒ 按线格本名下发（docs/44 D4）。
-                parts.add(imageUrlPart(url.url()));
+                parts.add(CompletionImageWire.imagePart(url.url()));
             }
         }
         if (parts.isEmpty()) return; // pi :1267 —— `content.length === 0 ⇒ continue`
@@ -547,46 +504,9 @@ final class OpenAICompletionsMessageConverter {
                 .map(b -> ((ContentBlock.TextContent) b).text())
                 .collect(java.util.stream.Collectors.joining("\n"));
         if (!text.isEmpty()) return text;
-        return content.stream().anyMatch(OpenAICompletionsMessageConverter::isImageBlock)
+        return content.stream().anyMatch(CompletionImageWire::isImageBlock)
                 ? "(see attached image)" : "(no tool output)";
     }
 
-    /** 收集图片块（能力门在调用点，pi {@code :1424}）。 */
-    private static void collectImageParts(List<ContentBlock> content,
-                                          List<ChatCompletionContentPart> out) {
-        for (var block : content) {
-            if (block instanceof ContentBlock.ImageContent img) {
-                out.add(imageUrlPart("data:" + img.mediaType() + ";base64," + img.data()));
-            } else if (block instanceof ContentBlock.UrlImageContent url) {
-                out.add(imageUrlPart(url.url()));
-            }
-        }
-    }
-
-    /**
-     * pi {@code :1448-1456} 的合成 user 消息：一句固定文案 ＋ 收集到的图片块。
-     * 文案是纯 ASCII 字面量，pi 也不净化。
-     */
-    private static ChatCompletionUserMessageParam syntheticToolImageMessage(
-            List<ChatCompletionContentPart> imageParts) {
-        var parts = new ArrayList<ChatCompletionContentPart>(imageParts.size() + 1);
-        parts.add(ChatCompletionContentPart.ofText(ChatCompletionContentPartText.builder()
-                .text("Attached image(s) from tool result:").build()));
-        parts.addAll(imageParts);
-        return ChatCompletionUserMessageParam.builder()
-                .content(ChatCompletionUserMessageParam.Content.ofArrayOfContentParts(parts))
-                .build();
-    }
-
-    private static ChatCompletionContentPart imageUrlPart(String url) {
-        return ChatCompletionContentPart.ofImageUrl(ChatCompletionContentPartImage.builder()
-                .imageUrl(ChatCompletionContentPartImage.ImageUrl.builder().url(url).build())
-                .build());
-    }
-
-    /** pi 的图片判据是 {@code type === "image"}；java 的 URL 图片同等对待（docs/44 D4）。 */
-    private static boolean isImageBlock(ContentBlock block) {
-        return block instanceof ContentBlock.ImageContent
-                || block instanceof ContentBlock.UrlImageContent;
-    }
+    // 图片内容 helper 已抽到 CompletionImageWire（docs/66，步骤 7）。
 }

@@ -21,6 +21,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import com.pijava.ai.api.SimpleOptions;
+import com.pijava.ai.api.StrictJsonSchema;
+import com.pijava.ai.api.StrictSampling;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.api.TransformMessages;
@@ -144,7 +146,8 @@ final class AnthropicRequestBuilder {
         }
 
         addMessages(builder, conversation, allowEmptySignature, nativeToolChanges, cacheControl);
-        addTools(builder, transcript, initialTools, nativeToolChanges, toolCacheControl);
+        addTools(builder, transcript, initialTools, nativeToolChanges, toolCacheControl,
+            compat.supportsStrictTools());
 
         // pi :1104-1110 —— temperature 是**四重合取**：{@code temperature !== undefined} ＋
         // {@code !thinkingEnabled} ＋ {@code supportsMidConvoEffort !== true} ＋
@@ -174,19 +177,21 @@ final class AnthropicRequestBuilder {
     private static void addTools(MessageCreateParams.Builder builder,
                                  com.pijava.ai.api.TranscriptContext transcript,
                                  List<ToolDefinition> initialTools, boolean nativeToolChanges,
-                                 CacheControlEphemeral toolCacheControl) {
+                                 CacheControlEphemeral toolCacheControl,
+                                 boolean supportsStrictTools) {
         if (!nativeToolChanges) {
             var tools = Transcripts.getCurrentTools(transcript.messages());
             for (int i = 0; i < tools.size(); i++) {
                 builder.addTool(ToolUnion.ofTool(
-                    toAnthropicTool(tools.get(i), false, atLast(i, tools.size(), toolCacheControl))));
+                    toAnthropicTool(tools.get(i), false,
+                        atLast(i, tools.size(), toolCacheControl), supportsStrictTools)));
             }
             return;
         }
         for (int i = 0; i < initialTools.size(); i++) {
             builder.addTool(ToolUnion.ofTool(
                 toAnthropicTool(initialTools.get(i), false,
-                    atLast(i, initialTools.size(), toolCacheControl))));
+                    atLast(i, initialTools.size(), toolCacheControl), supportsStrictTools)));
         }
         builder.addTool(ToolUnion.ofTool(deferredToolPlaceholder()));
         var initialNames = new HashSet<String>();
@@ -197,7 +202,7 @@ final class AnthropicRequestBuilder {
             if (initialNames.contains(td.name())) {
                 continue;
             }
-            builder.addTool(ToolUnion.ofTool(toAnthropicTool(td, true, null)));
+            builder.addTool(ToolUnion.ofTool(toAnthropicTool(td, true, null, supportsStrictTools)));
         }
     }
 
@@ -208,12 +213,19 @@ final class AnthropicRequestBuilder {
 
     /**
      * 工具定义 → Anthropic 的 {@code Tool}；{@code deferLoading} ＝ pi 的
-     * {@code defer_loading: true}；{@code cacheControl} 非空时挂断点。
+     * {@code defer_loading: true}；{@code cacheControl} 非空时挂断点；
+     * {@code supportsStrictTools} 且工具解析为 strict（docs/66）⇒ inputSchema 走
+     * strict 转换 ＋ {@code strict:true}（pi {@code anthropic-messages.ts:1467-1488}）。
      */
     private static Tool toAnthropicTool(ToolDefinition td, boolean deferLoading,
-                                        CacheControlEphemeral cacheControl) {
+                                        CacheControlEphemeral cacheControl,
+                                        boolean supportsStrictTools) {
+        var strict = Boolean.TRUE.equals(
+            StrictSampling.resolveStrict(td, supportsStrictTools));
+        var schema = strict
+            ? StrictJsonSchema.convert(td.inputSchema()) : td.inputSchema();
         var inputSchema = Tool.InputSchema.builder()
-                .putAllAdditionalProperties(AnthropicMessageConverter.toJsonValues(td.inputSchema()))
+                .putAllAdditionalProperties(AnthropicMessageConverter.toJsonValues(schema))
                 .build();
         var toolBuilder = Tool.builder()
                 .name(td.name())
@@ -226,6 +238,9 @@ final class AnthropicRequestBuilder {
         }
         if (cacheControl != null) {
             toolBuilder.cacheControl(cacheControl);
+        }
+        if (strict) {
+            toolBuilder.strict(true);
         }
         return toolBuilder.build();
     }

@@ -54,9 +54,9 @@ public final class BuiltinCatalog implements ModelCatalog {
     /** Catalog of OpenAI GPT models. */
     public static ModelCatalog openaiModels() {
         return new BuiltinCatalog(List.of(
-                model("gpt-5", "GPT-5", 128_000, 16_384, frontierChatCaps(), 2.50, 10.00),
-                model("gpt-5-mini", "GPT-5 Mini", 128_000, 8_192, frontierChatCaps(), 0.50, 2.00),
-                model("gpt-5-nano", "GPT-5 Nano", 128_000, 4_096, chatCaps(), 0.15, 0.60),
+                openaiChatModel("gpt-5", "GPT-5", 128_000, 16_384, frontierChatCaps(), 2.50, 10.00),
+                openaiChatModel("gpt-5-mini", "GPT-5 Mini", 128_000, 8_192, frontierChatCaps(), 0.50, 2.00),
+                openaiChatModel("gpt-5-nano", "GPT-5 Nano", 128_000, 4_096, chatCaps(), 0.15, 0.60),
                 embeddingModel("text-embedding-3-small", "Text Embedding 3 Small"),
                 embeddingModel("text-embedding-3-large", "Text Embedding 3 Large")
         ));
@@ -170,6 +170,17 @@ public final class BuiltinCatalog implements ModelCatalog {
                                              int maxOutput, double inPrice, double outPrice) {
         return model(name, display, maxInput, maxOutput, anthropicCaps(), inPrice, outPrice,
                 CatalogCompatRules.anthropic("anthropic", name));
+    }
+
+    /**
+     * openai chat 车道的内置条目：docs/66 标 {@code supportsStrictMode}
+     * （{@link CatalogCompatRules#openaiResponses}）。
+     */
+    private static ModelInfo openaiChatModel(String name, String display, int maxInput,
+                                               int maxOutput, Set<ModelCapability> caps,
+                                               double inPrice, double outPrice) {
+        return model(name, display, maxInput, maxOutput, caps, inPrice, outPrice,
+                CatalogCompatRules.openaiResponses("openai", name));
     }
 
     /** completions 车道的内置条目（DeepSeek）：compat 由 {@link CatalogCompatRules#completions} 算。 */

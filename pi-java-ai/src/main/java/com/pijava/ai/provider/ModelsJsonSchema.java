@@ -217,7 +217,9 @@ public final class ModelsJsonSchema {
          * {@code "openai" | "openai-nosession" | "openrouter"}；未知串经
          * {@link com.pijava.ai.catalog.SessionAffinityFormat#parse} 落成缺席（车道探测）。
          */
-        @JsonProperty("sessionAffinityFormat") String sessionAffinityFormat
+        @JsonProperty("sessionAffinityFormat") String sessionAffinityFormat,
+        /** docs/66（pi {@code types.ts:826}）：Anthropic 车道是否接受 strict tool；缺省 {@code false}。 */
+        @JsonProperty("supportsStrictTools") Boolean supportsStrictTools
     ) {}
 
     /**

@@ -132,7 +132,7 @@ public class ToolRegistry {
         return tools.stream()
             .map(t -> new ToolDefinition(t.name(), t.description(), t.inputSchema(),
                 t.label(), t.promptSnippet().isEmpty() ? null : t.promptSnippet(),
-                t.promptGuidelines(), null))
+                t.promptGuidelines(), null, t.constrainedSampling()))
             .toList();
     }
 

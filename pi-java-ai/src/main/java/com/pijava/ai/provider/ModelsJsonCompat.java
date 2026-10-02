@@ -109,7 +109,8 @@ final class ModelsJsonCompat {
             // 包 B103：两个亲和字段原样透传可空值（缺省由车道构造期按 openrouter 探测补）。
             def.sendSessionAffinityHeaders(),
             SessionAffinityFormat.parse(def.sessionAffinityFormat())
-                .orElse(null));
+                .orElse(null),
+            def.supportsStrictTools() != null && def.supportsStrictTools());
     }
 
     /**
@@ -187,7 +188,9 @@ final class ModelsJsonCompat {
                 ? raw.sendSessionAffinityHeaders() : base.sendSessionAffinityHeaders(),
             raw.sessionAffinityFormat() != null
                 ? SessionAffinityFormat.parse(raw.sessionAffinityFormat()).orElse(null)
-                : base.sessionAffinityFormat());
+                : base.sessionAffinityFormat(),
+            raw.supportsStrictTools() != null
+                ? raw.supportsStrictTools() : base.supportsStrictTools());
     }
 
     /** base ChatTemplateKwargValue map 上叠加 raw JSON 层（raw 键经 kwargValueOf 转换）。 */
@@ -272,7 +275,9 @@ final class ModelsJsonCompat {
             override.sendSessionAffinityHeaders() != null
                 ? override.sendSessionAffinityHeaders() : base.sendSessionAffinityHeaders(),
             override.sessionAffinityFormat() != null
-                ? override.sessionAffinityFormat() : base.sessionAffinityFormat());
+                ? override.sessionAffinityFormat() : base.sessionAffinityFormat(),
+            override.supportsStrictTools() != null
+                ? override.supportsStrictTools() : base.supportsStrictTools());
     }
 
     /** 两个 raw JSON map 的键级合并（{@code override} 同键覆盖）；皆 null ⇒ null。 */

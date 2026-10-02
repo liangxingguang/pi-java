@@ -15,6 +15,8 @@ import com.pijava.agent.tool.PathUtils;
 import com.pijava.agent.tool.ToolContext;
 import com.pijava.agent.tool.ToolResult;
 import com.pijava.agent.tool.ToolUpdateCallback;
+import com.pijava.ai.api.JsonSchemaSampling;
+import com.pijava.ai.api.StrictMode;
 import com.pijava.ai.message.ContentBlock;
 
 /**
@@ -74,6 +76,11 @@ public final class EditTool {
                 );
             }
             @Override public ExecutionMode executionMode() { return new ExecutionMode.Sequential(); }
+
+            // docs/66：pi 的 edit 默认 strict-prefer。
+            @Override public JsonSchemaSampling constrainedSampling() {
+                return new JsonSchemaSampling(StrictMode.PREFER);
+            }
 
             @Override
             // unchecked cast unavoidable: Map<String,Object>::get returns Object,

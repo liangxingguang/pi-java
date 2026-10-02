@@ -273,6 +273,10 @@ import java.util.Map;
  * @param sessionAffinityFormat pi {@code compat.sessionAffinityFormat}（包 B103）：亲和头形状
  *        （{@code openai}/{@code openai-nosession}/{@code openrouter}）。{@code null} ≙
  *        车道探测（openrouter 端点 openrouter，否则 openai；anthropic 未设 ⇒ x-session-affinity）。
+ * @param supportsStrictTools pi {@code compat.supportsStrictTools}（docs/66，
+ *        {@code anthropic-messages.ts:216}）：Anthropic 车道是否接受 strict tool。
+ *        缺席 ≡ {@code false}（二态）；生成目录对全部 anthropic-messages 模型无条件
+ *        写 true（{@code generate-models.ts:826-828}）。
  */
 public record ModelCompat(boolean allowEmptySignature,
                           Boolean requiresReasoningContentOnAssistantMessages,
@@ -300,7 +304,8 @@ public record ModelCompat(boolean allowEmptySignature,
                           CacheControlFormat cacheControlFormat,
                           Map<String, Object> openRouterRouting,
                           Boolean sendSessionAffinityHeaders,
-                          SessionAffinityFormat sessionAffinityFormat) {
+                          SessionAffinityFormat sessionAffinityFormat,
+                          boolean supportsStrictTools) {
 
     /** Compact constructor（包 A-09）：两个模板 map 的 {@code null} 归一成空表（pi 的
      *  {@code ?? {}}，{@code getCompat:1714-1715}）⇒ 二态、读点免判空；防御性复制
@@ -359,7 +364,51 @@ public record ModelCompat(boolean allowEmptySignature,
              supportsStrictMode, supportsLongCacheRetention, supportsCacheControlOnTools,
              thinkingTokenBudgetField, supportsThinkingTokenBudget, supportsMaxOutputTokens,
              thinkingFormat, chatTemplateKwargs, chatTemplateArgs, supportsReasoningEffort,
-             cacheControlFormat, openRouterRouting, null, null);
+             cacheControlFormat, openRouterRouting, null, null, false);
+    }
+
+    /**
+     * 二十七参便捷构造（docs/66 加 {@code supportsStrictTools} 之前的**规范**构造）：
+     * 新组件缺席（{@code false} ≙ pi 的 {@code ?? false}）。旧规范形态降级为便捷构造 ⇒
+     * 既有 27 参构造点零改签。
+     */
+    public ModelCompat(boolean allowEmptySignature,
+                       Boolean requiresReasoningContentOnAssistantMessages,
+                       boolean supportsFinishReason,
+                       boolean forceAdaptiveThinking,
+                       Boolean supportsMidConvoSystemMessages,
+                       Boolean supportsMidConvoToolAdditions,
+                       Boolean supportsMidConvoToolChanges,
+                       Boolean supportsAdditionalTools,
+                       Boolean supportsToolSearch,
+                       boolean supportsTemperature,
+                       MaxTokensField maxTokensField,
+                       Boolean supportsStore,
+                       Boolean supportsDeveloperRole,
+                       Boolean supportsStrictMode,
+                       Boolean supportsLongCacheRetention,
+                       Boolean supportsCacheControlOnTools,
+                       ThinkingTokenBudgetField thinkingTokenBudgetField,
+                       Boolean supportsThinkingTokenBudget,
+                       Boolean supportsMaxOutputTokens,
+                       ThinkingFormat thinkingFormat,
+                       Map<String, ChatTemplateKwargValue> chatTemplateKwargs,
+                       Map<String, ChatTemplateKwargValue> chatTemplateArgs,
+                       Boolean supportsReasoningEffort,
+                       CacheControlFormat cacheControlFormat,
+                       Map<String, Object> openRouterRouting,
+                       Boolean sendSessionAffinityHeaders,
+                       SessionAffinityFormat sessionAffinityFormat) {
+        this(allowEmptySignature, requiresReasoningContentOnAssistantMessages,
+             supportsFinishReason, forceAdaptiveThinking, supportsMidConvoSystemMessages,
+             supportsMidConvoToolAdditions, supportsMidConvoToolChanges,
+             supportsAdditionalTools, supportsToolSearch,
+             supportsTemperature, maxTokensField, supportsStore, supportsDeveloperRole,
+             supportsStrictMode, supportsLongCacheRetention, supportsCacheControlOnTools,
+             thinkingTokenBudgetField, supportsThinkingTokenBudget, supportsMaxOutputTokens,
+             thinkingFormat, chatTemplateKwargs, chatTemplateArgs, supportsReasoningEffort,
+             cacheControlFormat, openRouterRouting,
+             sendSessionAffinityHeaders, sessionAffinityFormat, false);
     }
 
     /**

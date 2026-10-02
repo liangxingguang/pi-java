@@ -390,7 +390,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
      * @return 该落的消息；{@code null} ＝ pi 的 {@code :814 continue}（整条消息不落线）
      */
     private Map<String, Object> userMessage(List<ContentBlock> content, boolean supportsImages) {
-        boolean hadImages = content.stream().anyMatch(MistralConversationsApi::isImageBlock);
+        boolean hadImages = content.stream().anyMatch(MistralContent::isImageBlock);
         if (!hadImages) {
             var m = new LinkedHashMap<String, Object>();
             m.put("role", "user");
@@ -401,12 +401,14 @@ public final class MistralConversationsApi extends AbstractChatApi {
         var chunks = new ArrayList<Map<String, Object>>();
         for (var block : content) {
             if (block instanceof ContentBlock.TextContent tc) {
-                chunks.add(textChunk(SanitizeUnicode.surrogates(tc.text())));
+                chunks.add(MistralContent.textChunk(
+                    SanitizeUnicode.surrogates(tc.text())));
             } else if (block instanceof ContentBlock.ImageContent img) {
-                chunks.add(imageChunk("data:" + img.mediaType() + ";base64," + img.data()));
+                chunks.add(MistralContent.imageChunk(
+                    "data:" + img.mediaType() + ";base64," + img.data()));
             } else if (block instanceof ContentBlock.UrlImageContent url) {
                 // java 扩展（pi 无此类型）：线格本名就是 image_url ⇒ 按它下发（docs/44 D4）。
-                chunks.add(imageChunk(url.url()));
+                chunks.add(MistralContent.imageChunk(url.url()));
             }
         }
         if (!chunks.isEmpty()) {
@@ -437,54 +439,27 @@ public final class MistralConversationsApi extends AbstractChatApi {
                 .filter(ContentBlock.TextContent.class::isInstance)
                 .map(b -> SanitizeUnicode.surrogates(((ContentBlock.TextContent) b).text()))
                 .collect(java.util.stream.Collectors.joining("\n"));
-        boolean hasImages = tool.content().stream().anyMatch(MistralConversationsApi::isImageBlock);
+        boolean hasImages = tool.content().stream().anyMatch(MistralContent::isImageBlock);
         var chunks = new ArrayList<Map<String, Object>>();
-        chunks.add(textChunk(
+        chunks.add(MistralContent.textChunk(
                 MistralToolResultText.build(text, hasImages, supportsImages, tool.isError())));
         if (supportsImages) {
             for (var block : tool.content()) {
                 if (block instanceof ContentBlock.ImageContent img) {
-                    chunks.add(imageChunk("data:" + img.mediaType() + ";base64," + img.data()));
+                    chunks.add(MistralContent.imageChunk(
+                        "data:" + img.mediaType() + ";base64," + img.data()));
                 } else if (block instanceof ContentBlock.UrlImageContent url) {
-                    chunks.add(imageChunk(url.url()));
+                    chunks.add(MistralContent.imageChunk(url.url()));
                 }
             }
         }
         return chunks;
     }
 
-    /** 一个内容块。⚠️ pi 的线格键名是 {@code imageUrl}，序列化时映射成 {@code image_url}（{@code :416}）。 */
-    private static Map<String, Object> chunk(String type, String key, String value) {
-        var chunk = new LinkedHashMap<String, Object>();
-        chunk.put("type", type);
-        chunk.put(key, value);
-        return chunk;
-    }
+    // 内容块 helper 已抽到 MistralContent（docs/66，步骤 7）。
 
-    private static Map<String, Object> textChunk(String text) {
-        return chunk("text", "text", text);
-    }
-
-    private static Map<String, Object> imageChunk(String url) {
-        return chunk("image_url", "image_url", url);
-    }
-
-    /** pi 的图片判据是 {@code type === "image"}；java 的 URL 图片同等对待（docs/44 D4）。 */
-    private static boolean isImageBlock(ContentBlock block) {
-        return block instanceof ContentBlock.ImageContent
-                || block instanceof ContentBlock.UrlImageContent;
-    }
     private List<Map<String, Object>> toMistralTools(List<ToolDefinition> definitions) {
-        return definitions.stream().<Map<String, Object>>map(def -> {
-            var tool = new HashMap<String, Object>();
-            tool.put("type", "function");
-            var function = new HashMap<String, Object>();
-            function.put("name", def.name());
-            function.put("description", def.description());
-            function.put("parameters", def.inputSchema());
-            tool.put("function", function);
-            return tool;
-        }).toList();
+        return MistralTools.toTools(definitions);
     }
 
     private String extractText(List<ContentBlock> blocks) {
