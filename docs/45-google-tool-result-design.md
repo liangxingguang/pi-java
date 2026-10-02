@@ -415,7 +415,7 @@ final class GoogleMessageConverter {
 
 ## 8. 不在本包范围
 
-- **`thoughtSignature` 一整族**（D8 第一条）—— `docs/41:86` 已裁不做。
+- ~~**`thoughtSignature` 一整族**（D8 第一条）~~ —— 曾裁不做；✅ 已随 Batch F 落地（`docs/67`，2026-10-02）。
 - **跨模型 `normalizeToolCallId`**（B14③）—— 另立包，与另外四条车道一起做。
 - **Vertex 车道**（pi 有、java 无，R5 长尾）。
 - **`UrlImageContent` 在工具结果里的处置** —— pi 无此类型；java 的 `blockParts` 里 `UrlImageContent`
