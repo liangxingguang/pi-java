@@ -130,7 +130,6 @@ class PiLaneEngineTest {
             sf, MODEL, ModelThinkingLevel.off(), "system", active, 200_000,
             tool == null ? null : registry, tool == null ? null : context, null,
             null, Map.of(),
-            com.pijava.ai.http.RetryPolicy.defaultPolicy(),
             com.pijava.telemetry.NoopTelemetryContext.INSTANCE, ThinkingLevelMap.empty(),
             QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),
             event -> { }));

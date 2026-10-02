@@ -119,7 +119,6 @@ class LaneMessagesTest {
             streamFn, MODEL, ModelThinkingLevel.off(), "",
             Set.of(), maxInputTokens, registry, null, null,
             settings, Map.of(),
-            com.pijava.ai.http.RetryPolicy.defaultPolicy(),
             com.pijava.telemetry.NoopTelemetryContext.INSTANCE,
             com.pijava.ai.thinking.ThinkingLevelMap.empty(),
             QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),

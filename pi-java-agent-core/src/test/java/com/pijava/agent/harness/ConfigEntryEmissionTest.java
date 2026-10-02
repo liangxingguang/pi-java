@@ -53,7 +53,7 @@ class ConfigEntryEmissionTest {
         return AgentHarness.create(new HarnessConfig(
             textStreamFn("ok"), MODEL, level, "",
             Set.of(), 200_000, null, null, null,
-            null, java.util.Map.of(), com.pijava.ai.http.RetryPolicy.defaultPolicy(),
+            null, java.util.Map.of(),
             com.pijava.telemetry.NoopTelemetryContext.INSTANCE,
             com.pijava.ai.thinking.ThinkingLevelMap.empty(),
             QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),

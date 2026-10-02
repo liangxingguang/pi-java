@@ -35,7 +35,6 @@ class ConsecutiveRunsTest {
                 sf, MODEL, ModelThinkingLevel.off(), "",
                 Set.of(), 200_000, null, null, null,
             null, java.util.Map.of(),
-                com.pijava.ai.http.RetryPolicy.defaultPolicy(),
                 com.pijava.telemetry.NoopTelemetryContext.INSTANCE, com.pijava.ai.thinking.ThinkingLevelMap.empty(),
                 QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),
                 event -> { }));

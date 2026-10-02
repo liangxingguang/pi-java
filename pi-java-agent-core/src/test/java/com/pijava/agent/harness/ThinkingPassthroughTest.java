@@ -52,7 +52,6 @@ class ThinkingPassthroughTest {
                 sf, MODEL, level, "",
                 Set.of(), 200_000, null, null, null,
                 null, Map.of(),
-                com.pijava.ai.http.RetryPolicy.defaultPolicy(),
                 com.pijava.telemetry.NoopTelemetryContext.INSTANCE, map,
                 QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),
                 event -> { }));

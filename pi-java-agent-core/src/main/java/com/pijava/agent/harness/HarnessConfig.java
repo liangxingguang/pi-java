@@ -13,7 +13,6 @@ import com.pijava.agent.skill.Skill;
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ToolContext;
 import com.pijava.agent.tool.ToolRegistry;
-import com.pijava.ai.http.RetryPolicy;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -52,7 +51,6 @@ import com.pijava.telemetry.TelemetryContext;
  * @param commandPrefix      optional prefix for bash commands
  * @param compactionSettings compaction settings (null = no auto-compaction)
  * @param skills             named skills to register (default: empty)
- * @param retryPolicy        retry policy for the LLM HTTP client (default: default policy)
  * @param telemetry          telemetry context (default: no-op)
  * @param thinkingLevelMap   per-model thinking translation (default: empty = no thinking)
  * @param steeringMode       how steer-queue messages are drained (default: one-at-a-time)
@@ -90,7 +88,6 @@ public record HarnessConfig(
     String commandPrefix,
     CompactionSettings compactionSettings,
     Map<String, Skill> skills,
-    RetryPolicy retryPolicy,
     TelemetryContext telemetry,
     ThinkingLevelMap thinkingLevelMap,
     QueueMode steeringMode,
@@ -111,7 +108,6 @@ public record HarnessConfig(
         skills = Map.copyOf(skills);
         promptGuidelines = promptGuidelines == null ? List.of() : List.copyOf(promptGuidelines);
         if (appendSystemPrompt == null) appendSystemPrompt = "";
-        if (retryPolicy == null) retryPolicy = RetryPolicy.defaultPolicy();
         if (telemetry == null) telemetry = NoopTelemetryContext.INSTANCE;
         if (thinkingLevelMap == null) thinkingLevelMap = ThinkingLevelMap.empty();
         if (steeringMode == null) steeringMode = QueueMode.defaultMode();
@@ -138,13 +134,13 @@ public record HarnessConfig(
             String systemPrompt, Set<AgentTool<?, ?>> activeTools, int maxInputTokens,
             ToolRegistry toolRegistry, ToolContext toolContext, String commandPrefix,
             CompactionSettings compactionSettings,
-            Map<String, Skill> skills, RetryPolicy retryPolicy, TelemetryContext telemetry,
+            Map<String, Skill> skills, TelemetryContext telemetry,
             ThinkingLevelMap thinkingLevelMap, QueueMode steeringMode,
             QueueMode followUpMode, ToolExecution toolExecution,
             Consumer<StreamEvent> streamListener) {
         this(streamFn, model, thinkingLevel, systemPrompt, activeTools, maxInputTokens,
              null, null, toolRegistry, toolContext, commandPrefix, compactionSettings,
-             skills, retryPolicy, telemetry, thinkingLevelMap, steeringMode,
+             skills, telemetry, thinkingLevelMap, steeringMode,
              followUpMode, toolExecution, streamListener, SummaryGenerator.truncating(),
              null, null, null, null, List.of(), "");
     }
@@ -163,7 +159,6 @@ public record HarnessConfig(
         private String commandPrefix;
         private CompactionSettings compactionSettings;
         private Map<String, Skill> skills = Map.of();
-        private RetryPolicy retryPolicy = RetryPolicy.defaultPolicy();
         private TelemetryContext telemetry = NoopTelemetryContext.INSTANCE;
         private ThinkingLevelMap thinkingLevelMap = ThinkingLevelMap.empty();
         private QueueMode steeringMode = QueueMode.defaultMode();
@@ -203,7 +198,6 @@ public record HarnessConfig(
         public Builder skills(Map<String, Skill> s) {
             this.skills = Map.copyOf(s); return this;
         }
-        public Builder retryPolicy(RetryPolicy rp) { this.retryPolicy = rp; return this; }
         public Builder telemetry(TelemetryContext t) { this.telemetry = t; return this; }
         public Builder thinkingLevelMap(ThinkingLevelMap tlm) { this.thinkingLevelMap = tlm; return this; }
         public Builder steeringMode(QueueMode mode) { this.steeringMode = mode; return this; }
@@ -258,7 +252,7 @@ public record HarnessConfig(
                                      contextWindow, maxOutputTokens,
                                      toolRegistry, toolContext, commandPrefix,
                                      compactionSettings, skills,
-                                     retryPolicy, telemetry, thinkingLevelMap,
+                                     telemetry, thinkingLevelMap,
                                      steeringMode, followUpMode, toolExecution,
                                      streamListener, summaryGenerator, compactionObserver,
                                      retrySettings, retryAborted, retryObserver,
