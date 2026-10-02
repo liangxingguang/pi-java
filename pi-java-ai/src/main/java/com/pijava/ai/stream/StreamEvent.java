@@ -252,12 +252,6 @@ public sealed interface StreamEvent {
             this(inputTokens, outputTokens, partial, null);
         }
 
-        /** Build usage info from a full usage breakdown, if available. */
-        public static UsageInfo from(long inputTokens, long outputTokens,
-                                     AssistantMessage partial, Usage usage) {
-            return new UsageInfo(inputTokens, outputTokens, partial, usage);
-        }
-
         /**
          * 归一为领域类型 {@link Usage}（包⑥ 裁决 B）。
          *
