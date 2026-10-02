@@ -1,9 +1,9 @@
 # 67 - Batch F：thoughtSignature / 加密推理往返与跨模型剥离
 
-**状态：📐 设计待审核（2026-10-02，零行生产代码）—— 等待用户裁决 R1–R9。**
+**状态：✅ 已实现并闭环（2026-10-02，commits `648edfd`→`516517a`，R1–R9 全部按建议执行）。**
 
 > 对应台账：B14b/R1（`docs/47 §7-R1`、`docs/48` §5 F 行）＋ B19 剩余（completions
-> `reasoning_details` 结构化形状，`docs/32:187`）。pi 锚点 `3390bd936`。
+> `reasoning_details` 结构化形状，`docs/32:187`）均随本包关闭。pi 锚点 `3390bd936`。
 
 ---
 
@@ -267,4 +267,44 @@ legacy 单独路径 1 例。
 
 ## 12. 实施记录
 
-（闭环时回填：commit、RED 实测、M1–M9 红集、模块回归、偏离与台账变更。）
+### 12.1 步骤与 RED/GREEN 实测
+
+| 步 | Commit | 内容 | RED | GREEN |
+|---|---|---|---|---|
+| 1 | `648edfd` | 类型加宽＋落线读写 | RED① 编译失败 → RED② 5 红（3 fail+2 err／7） | 7/7 |
+| 2 | `777f400` | Google 采集三处 | 4/4 | 4/4 |
+| 3 | `f6dc09b` | Google 重放门 | 4/13（见偏差 a） | 13/13 |
+| 4 | `97150c8` | Responses 采集＋Azure 回填（提取 ResponsesReasoningCapture、ToolArgumentParser） | 2 errors | 2/2 |
+| 5 | `5cdb01f` | include 门＋reasoning 项重放 | 2/3 | 3/3 |
+| 6 | `9003a67` | completions details 采集 | 2 errors | 2/2 |
+| 7 | `24c4895` | completions details 重放；converter 512→496 | 3/3 | 3/3 |
+| 8 | `f4562f8` | 跨模型剥离＋PiMessages 透传 | 2/12 | 12/12 |
+| — | `080bb09` | 两个旧 oracle/夹具更新 | — | — |
+| — | `516517a` | TUI 余两处 record pattern | — | — |
+
+### 12.2 变异探针实测
+
+| 探针 | 实测红集 | 设计预测 |
+|---|---|---|
+| M1 Google 三处不读 | **4** 红（text/thinking/functionCall＋retain 对照） | 3 |
+| M2 重放门恒真 | **1**（crossModelStripsSignatureFromText） | 1 ✓ |
+| M3 去 base64 校验 | **1**（invalidBase64SignatureIsDropped） | 1 ✓ |
+| M4 不发 include | **1** | 1 ✓ |
+| M5 不序列化 reasoning item | **1**（capture；backfill 经 state json 仍绿） | 1 ✓ |
+| M6 去 Azure 回填 | **1** | 1 ✓ |
+| M7 completions 不采集 | **2** | 2 ✓ |
+| M8 去 legacy 解析 | **2**（B/C；signed A 绿） | 2 ✓ |
+| M9 去剥离 | **2**（basic＋stacking） | 1 |
+
+### 12.3 偏差与说明
+
+a. **步 3 RED 实为 4 红而非 5**：`crossModelDowngradesThinkingToPlainText` 在测试编写时即绿——前置的
+`TransformMessages` 闸（gateBlock d2）已把跨模型 thinking 转成文本。pi 也先跑 transform，
+故其 google-shared `:260-269` 跨身份分支同样**结构性不可达**；按 pi 逐字保留并在 javadoc 标注。
+b. **M1/M9 红数与预测差 1**：分别因 retain 对照组（M1）与 id 叠加组（M9）也断言该行为；探针真实有效。
+c. **畸形签名**：thinking 签名无法解析为 ResponseReasoningItem 时**跳过该块**（设计第 5 步裁决）；
+pi 的 `JSON.parse` 会抛——无畸形签名的生产路径，差异不可达。
+d. **ToolArgumentParser 提取**（计划外的一处拆分）：StreamPartialBuilder 加签名方法后达 528 行，
+lenient 解析整体搬到 stream 包新类，builder 490 行；ToolCallBuilder 复用之。
+e. **模块回归**：ai 1284、agent-core 535、coding-agent 290、web 48、evals 44（18 条 smoke 跳过为常态），
+全模块 checkstyle 零违规。

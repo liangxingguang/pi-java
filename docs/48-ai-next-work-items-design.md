@@ -7,7 +7,8 @@
 **2026-10-01：✅ B1 已闭环（Anthropic OAuth credential → request path）** ⇒ [`docs/63 §12`](63-b1-anthropic-oauth-request-path-design.md)（`4a869c9`，R1–R3 全按建议）—— stored OAuth 接上请求路径、Anthropic 订阅 token 走 **x-api-key（非 Bearer，照 pi `toAuth⇒{apiKey}`）**、5 分钟临期锁内单次刷新、失败不回落 env；台账 **B82 结案**（B81 系统提示前缀/工具名仍开，属 A-15）。ai **1208**、coding-agent **287** 全绿。
 **2026-10-02：✅ B2 已闭环（ContextOverflow z.ai/Cerebras 门控）** ⇒ [`docs/64 §12`](64-b2-context-overflow-zai-cerebras-gating-design.md)（`0d41f94`，R1–R3 全按建议）—— 首正则补 z.ai 无 is 形态（生产可达真漏检）、Cerebras bodyless 判据移出通用列表改 provider 门控分支（消过宽误判）；RED 6 红、两变异各恰 3 红；新登 **B141**（openai-java bodyless 文案 `400: Unknown` ⇒ Cerebras 正向不可达、门控照 pi 保留）。ai **1215**、agent-core **525** 全绿。
 **2026-10-02：✅ D3 已闭环（OpenAI 默认 Responses wire）** ⇒ [`docs/62 §12`](62-d3-openai-default-responses-wire-design.md)（`af2eaa9`，9 files +337/−34）—— 复合 id 链先行：接收存 `call_id|item.id`、重放拆分（output 只用 call_id、function_call 恢复真实 item.id、跨模型/非 fc_ 丢 id）、默认协议最后翻 responses；RED 6 红、M1/M2/M3 各恰 1 红；**2026-10-02：✅ D-P1 已闭环（models.json 对现有 provider 的覆盖合并）** ⇒ [`docs/65 §12`](65-d-models-json-existing-provider-override-design.md)（`cbe1f76`，15 files +1271/−256）—— provider 级 baseUrl/compat/headers 叠加每个内置模型 → models[] upsert（R1 api 继承）→ modelOverrides 最后逐字段覆盖；headers 经 client-builder default headers 出站、**streaming 实测生效**（R2）；拆 733 行的 ModelsJsonConfig 为 Config(330)/Compat(431)/Merge(256)。**B102、B136 结案**，闸门 76；ai **1231**、coding-agent **290** 全绿**
-**2026-10-02：✅ E json_schema strict constrained sampling 已闭环** ⇒ [`docs/66 §12`](66-e-constrained-sampling-json-schema-design.md)（`5606ec9`＋`20737c1`）—— sealed ConstrainedSampling＋StrictJsonSchema 转换器＋五车道（completions/responses/azure/anthropic/google/mistral）schema 转换与 strict 标志；anthropic/openai 目录无条件标注；read/bash/edit/write 默认 strict-prefer；旧测试更新 4 处；M1–M5 全命中。ai **1259**、agent-core **528**、coding-agent **290** 全绿；闸门仍 76；下一项＝ grammar/metadata/thoughtSignature/无生产者清理（见 §5）**
+**2026-10-02：✅ E json_schema strict constrained sampling 已闭环** ⇒ [`docs/66 §12`](66-e-constrained-sampling-json-schema-design.md)（`5606ec9`＋`20737c1`）—— sealed ConstrainedSampling＋StrictJsonSchema 转换器＋五车道（completions/responses/azure/anthropic/google/mistral）schema 转换与 strict 标志；anthropic/openai 目录无条件标注；read/bash/edit/write 默认 strict-prefer；旧测试更新 4 处；M1–M5 全命中。ai **1259**、agent-core **528**、coding-agent **290** 全绿；闸门仍 76**
+**2026-10-02：✅ Batch F 已闭环（thoughtSignature／加密推理往返与跨模型剥离）** ⇒ [`docs/67 §12`](67-f-thought-signature-design.md)（`648edfd`→`516517a`，R1–R9 全按建议）—— Google 签名采集（text/thinking/functionCall）与同身份/base64 重放门、Responses include＋reasoning item 序列化＋Azure 回填、Completions reasoning_details 结构化采集/重放＋legacy 路径、跨模型剥离＋PiMessages 透传；converter 512→496，另抽 ToolArgumentParser。**B14b/R1、B19 结案**；M1–M9 全命中（M1 实 4、M9 实 2 红）。ai **1284**、agent-core **535**、coding-agent **290** 全绿；下一项＝ grammar/metadata/无生产者清理（见 §5）**
 > ⚠️ 本行是**活状态**，每包闭环后须回填（§9 步骤 7）。
 **创建基准：** pi-java `f0400a2`（B14 收尾）  
 **参考台账：** [`41-gap-inventory.md`](41-gap-inventory.md)、[`32-open-items-register.md`](32-open-items-register.md)、[`40-module-alignment-map.md`](40-module-alignment-map.md)  
@@ -160,7 +161,7 @@ flowchart TD
 | E | **json_schema strict 约束采样**（docs/66） | P2 | 现有车道 | 🟢 已完成（[`docs/66 §12`](66-e-constrained-sampling-json-schema-design.md)，2026-10-02） | `5606ec9`＋`20737c1` | wire 夹具 6 红 2 对照绿；生产者夹具撤覆盖 1 红 | M1 跳过转换⇒1 · M2 门恒真⇒1 · M3 去 require⇒1 · M4 去目录标注⇒2 · M5 去生产者⇒1 | ai **1259**、agent-core **528**、coding-agent **290**（-am）；checkstyle 0 | gate false 须显式 JsonMissing；PiMessages 逐项写避免 null 键；拆分 6 个 wire helper |
 | E | **grammar / JsonObject 对齐** | P2 | 现有车道 | ⬜ 待开始 | — | 同上 | — | — | **对齐**：~~json_schema strict 结构化输出（bash/edit/write/read 主流真触发，docs/66 已落）~~、grammar 自定义工具（现有 openai 车道、扩展触发）、JsonObject（工具参数/JSON 约束必备）。**排除（codex 独占）**：transport 选择、session-resources 实质生命周期 |
 | E | **无生产者代码逐项裁决与清理** | P2 | — | ⬜ 待开始 | — | 同上 | — | — | 现有代码形状审计，照 pi 该删/该留/该接线：UsageInfo.from（pi 无 ⇒ 收敛）、supported/clamp（照 pi 对齐）、DeferredHandle（pi 也零生产 ⇒ 保留不接线）、**streamSimple（主流默认，旧“死码”登记作废 ⇒ 对齐）**、ToolResult details（内置工具主流产出）、toolResult.usage（保留形状）、RetryPolicy 预设裁决 |
-| F | **thoughtSignature 可达性与对齐（B14b/R1）** | P2 | 独立设计门 | ⬜ 待开始 | — | 同上 | — | — | 现有车道主流可达：anthropic 思考签名往返、responses encrypted_content 往返、**Google ToolCall.thoughtSignature 完整往返＋跨模型剥离**。**排除**：openai-responses.ts:359 的 xai include 分支（xai 独占） |
+| F | **thoughtSignature 可达性与对齐（B14b/R1）** | P2 | 独立设计门 | ✅ 已闭环 `docs/67`（2026-10-02） | `648edfd`→`516517a` | 1284 | 535 | 290 | Google thoughtSignature 往返＋跨模型剥离、Responses reasoning item＋Azure 回填、Completions reasoning_details（B19 结案）。**排除**：xAI include 分支 |
 | D | **models.json 对现有 provider 的覆盖**（api/protocol/baseUrl/headers/modelOverrides） | P1 | 主流 ModelRuntime | 🟢 已完成（[`docs/65 §12`](65-d-models-json-existing-provider-override-design.md)，2026-10-02） | `cbe1f76` | 纯函数合并器三阶段（叠加/upsert/topmost）＋ OverrideProvider 接线 | M-A 去 baseUrl 叠加 ⇒ 2 红；M-B 跳 headers 合成 ⇒ 1 红 | ai **1231/1231**、coding-agent **290/290**、checkstyle 0 | R1–R4 按建议；R2 client-builder headers streaming 生效；**B102、B136 结案**，闸门 76 |
 | D | **内置模型目录运行时覆盖/重生成机制** | P1 | 现有 provider | ⬜ 待开始 | — | 同上 | — | — | **对齐**：pi.dev 远程目录运行时覆盖＋ModelsStore 持久化、静态 generated 目录喂现有车道、为现有 provider 从 models.dev 重算数据。**排除**：生成器里「新增全新 provider 变换」（属接入工作） |
 
@@ -216,7 +217,7 @@ flowchart TD
 - [ ] OpenAI 默认 wire 的裁决范围是否足够；
 - [ ] `done`/`error` 是否合并为一个终局事件契约包；
 - [ ] Batch B、C、D 是否需要拆分或合并；
-- [ ] B14b/R1 是否继续单独设计；
+- [x] B14b/R1：已按 docs/67 对齐并闭环（2026-10-02）；
 - [ ] 是否接受先红、mutation probe、串行回归、双审阅结论作为每项完成条件；
 - [ ] 是否同意审核通过后才进入实施。
 

@@ -434,7 +434,7 @@ public final class AnthropicToolCallIds {
 
 | 号 | 内容 | 处理 |
 |---|---|---|
-| **R1** | **Google thought-signature 往返**（产出 `google-generative-ai.ts:207`／消费 `google-shared.ts:266-273`／剥离 `transform-messages.ts:131-134`／部分帧 `assistant-message-frame.ts:72/:278/:471-473`）—— 建议代号 **B14b**，须自己一份设计 | 另立包 |
+| **R1** | **Google thought-signature 往返**（产出 `google-generative-ai.ts:207`／消费 `google-shared.ts:266-273`／剥离 `transform-messages.ts:131-134`／部分帧 `assistant-message-frame.ts:72/:278/:471-473`）—— 代号 **B14b** | ✅ **已闭环：`docs/67`（Batch F，2026-10-02）** |
 | **R2** | `ToolResultMessage` / `UserMessage` 缺 `timestamp`（pi `types.ts:513/:550` 必填） | 另立形状包 |
 | **R3** | P20/P21 的 `\|` 分支在 java 不可达（P33：Responses 车道不建复合 id） | 照抄保留 ＋ 注释 |
 | **R4** | java 的 Responses 车道**丢 `item.id`**（pi `openai-responses-shared.ts:488/:509` 拼、`:290/:332` 拆）⇒ pi→java 会话迁移丢 `fc_*` | 另立包 |

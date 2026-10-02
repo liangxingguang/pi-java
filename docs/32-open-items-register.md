@@ -184,8 +184,8 @@
 > **口径提醒（用户 2026-09-19）**：**TUI 不是重要模块**，web UI 会逐步替代它 ⇒
 > 本台账里一切「只在 TUI 面可见」的条目（B38/B39 与 §9.2 那批）**优先级一律靠后**；
 > 与 web 客户端直接相关的是 **B28/B29**（流式帧载荷）、**B30/B34/B35**（事件无生产者）、
-> **B31/B32/B33**（`get_state` 取值）与 **B19 剩余**（`reasoning_details` 结构化形状 —— 即
-> `AgentEventTranslator` 那条 web 推送链上游）。
+> **B31/B32/B33**（`get_state` 取值）与 ~~B19 剩余**（`reasoning_details` 结构化形状 —— 即
+> `AgentEventTranslator` 那条 web 推送链上游）~~ **✅ 已随 Batch F 闭环（`docs/67`，2026-10-02）**。
 
 > **2026-09-19（包⑥ 起，`docs/33`）**：**流程与文档约定双变更**（用户同日提出，已采纳 ⇒ 见
 > §10 维护规则 6/7）：**一包一文档**（`docs/31` 冻结为历史）＋ **命题 → 逐条验证 → 才写实施稿**。
@@ -515,7 +515,7 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | **B8** 空签名重放策略不可配（`compat.allowEmptySignature`） | `docs/31:4119`、§8.34.11 | 2026-09-18，包②（`ModelCompat` + `ModelInfo` 第 11 组件 + `CompatDef` + 投送链；两态已实测） |
 | **B10** `transform-messages.ts` 跨模型重放闸整段缺失 | `docs/31:4119`、§8.34.11 | 2026-09-18，包②（`TransformMessages.java`）。⚠️ **只挂了 Anthropic 一条车道** ⇒ 接线另立包 |
 | **B10 接线**（五条车道挂闸，`PiMessagesApi` 按裁决不挂） | `docs/31`、§8.35.11 | 2026-09-18，`d2a9c44` / `175a383` 等 4 个提交（夹具 `LaneTransformMessagesWiringTest` 6/6，先红证毕 5 红 1 绿） |
-| **B19** `openai-completions` 响应侧 reasoning 收/发两侧（事故根因） | `docs/31:4604`、§8.35.13 | 2026-09-19，`ffc43e2`（夹具先红 13 红 4 绿）/ `b916d29`（收）/ `478fe91`（发）/ `7369ae6`（models.json）。⚠️ `reasoning_details` 结构化形状**仍在行外** |
+| **B19** `openai-completions` 响应侧 reasoning 收/发两侧（事故根因） | `docs/31:4604`、§8.35.13 | 2026-09-19，`ffc43e2`（夹具先红 13 红 4 绿）/ `b916d29`（收）/ `478fe91`（发）/ `7369ae6`（models.json）。✅ `reasoning_details` 结构化形状**已随 Batch F 闭环（`docs/67`，2026-10-02）** |
 | **§8.35.2 两处结论作废**（B20 设计定稿时逐行复核 pi 收尾语义所证伪） | `docs/31`、§8.35.14 第四/五节 | 2026-09-19。① 表格末行「Responses ✅ 已对齐」→ **α/β/γ/δ/ε 五处差距**（default 不抛 / `incomplete` 无文案 / `done("error")` / `failed` 文案 / 出错后继续消费）；② 「`rawStopReason` 零消费者 ⇒ 不移植」的**结论**错（读点在**生产者层** Google 车道 2 处）⇒ 改列 D5、登记 B25。**两处原文均保留并就地加作废批注**（历史记录性质）。教训形态：**「谁读它」要在生产者层问一遍，不能只问对齐面** |
 | **B11** 空 text 块不丢 | `docs/31:4119`、§8.34.11 | 2026-09-18，包②（`toBlockParams` 的 trim 判空） |
 | **B13** 重放路径产不出 `redacted_thinking` 线格 | `docs/31:4119`、§8.34.11 | 2026-09-18，包②（`appendThinkingBlock` 的 redacted 分支） |
