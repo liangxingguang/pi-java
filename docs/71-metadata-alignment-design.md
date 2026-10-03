@@ -4,7 +4,8 @@
 > 归属：`docs/48 §5` 行 E「模型/消息 metadata 对齐（现有车道主流字段）」—— 该清单的**最后一项**。
 > 编制日期：2026-10-03。
 >
-> **🚧 状态：待评审 —— 未获批准前不得写实现代码。** 裁决项见 §6（R1–R7）。
+> **✅ 状态：已批准（R1–R7 全按建议，用户「继续」）—— 实施中。**
+> 实施记录见 §12。
 
 ---
 
@@ -478,4 +479,101 @@ export function getPromptCacheTtlMs(model, options): number | undefined {
 - **R4 是刻意偏差**：与 pi 的无条件覆盖不同，理由写进代码注释与夹具 javadoc。
 - **B23 的收窄**要在 `docs/32` 显式做（原文说「只有 1 个组件」，实测已是 2 个）。
 
-<!-- §12 实施记录：批准并实施后回填（commit 序列、RED 实测、变异红集、偏差、台账） -->
+---
+
+## 12. 实施记录
+
+### 12.1 commit 序列
+
+| 步骤 | commit | 内容 |
+|---|---|---|
+| 设计 | `26cbb42` | docs/71 设计稿（待评审） |
+| 1 | `62d38a8` | **G1**：user/toolResult 的消息级 `timestamp`（字段＋生产者＋落盘/回读＋Estimate 守卫） |
+| 2+3 | `64fda0f` | **G2 请求侧**：`TextSignatureV1` 编解码 ＋ id 链（一文本块一条 output message） |
+| 4 | `7b5cf61` | **G3/G4 响应侧**：回执签名、refusal 权威内容合并、`phase=final_answer ⇒ stop` ＋ builder 两个原语 |
+| 5 | `c66d4b2` | **G5/G6** javadoc 更正 ＋ 三模块夹具的 8 参构造适配 |
+| 6 | （本提交） | §12 ＋ docs/48 §5 行 E ＋ docs/32 回填（收尾提交的 hash 不自引） |
+
+### 12.2 RED 实测
+
+| 步骤 | RED 类型 | 实红 |
+|---|---|---|
+| 1 | **编译红** | `UserMessage(content, timestamp)` / 8 参 `ToolResultMessage` 不存在。⚠️ 连带打到**主源码 3 处**（`TransformMessages:188/:200` 的全参复制、`MistralConversationsApi:338` 的 record 解构模式 `case Message.UserMessage(var content)`）＋夹具 8 处（ai 5、agent-core 3） |
+| 2 | 编译红 | `TextSignatureV1` 找不到符号（10 处） |
+| 3 | **真红 8/11** | 三条本来就成立（无签名回退、无 phase、无文本块）—— 其余 8 条正是 id 链/phase/一条一块的差异 |
+| 4 | **真红 5/8** | 三条本来就成立（refusal 两路一致、空 content 不覆盖、无 phase 对照） |
+| 5 | — | 零行为（javadoc） |
+
+⚠️ 步骤 1 还**翻了两个既有夹具的期望值**：`OpenAIResponsesSurrogateSanitizeTest.assistantTextIsSanitizedPerBlockNotAcrossBlocks` 原先断言两块**拼接**成 `"AB"` —— 那是本仓的形状，pi 一直是「一块一条」⇒ 拼接才是偏差。夹具改为反向禁止拼接形态。
+
+### 12.3 变异探针（§7.3 的 M1–M7）
+
+每次变异后 `grep` 复核落地，测完回滚。
+
+| 变异 | 红集 |
+|---|---|
+| **M1** 落盘无条件写 timestamp（缺席补 `now()`） | 恰 1：`messagesWithoutTimestampOmitTheKey` |
+| **M2** user 支不读 timestamp | 2：`decodeReadsTimestampForUserAndToolResult`、`writeThenReadRoundTripsTheTimestamp` |
+| **M2b** tool 支不读 timestamp | 恰 1：`decodeReadsTimestampForUserAndToolResult` |
+| **M3** `Estimate.epochMillis` 不含 user/toolResult | 恰 2：`userMessageTimestampAdvancesThePrefixGuard`、`toolResultMessageTimestampAdvancesThePrefixGuard` |
+| **M4** `parse` 不做 `"{"` 判定（恒当裸 id） | 8：`TextSignatureV1Test` 4（`parseV1Json`、`…WithoutPhase`、`…UnknownPhaseDrops`、`roundTrip`）＋ `ResponsesTextSignatureReplayTest` 4（`signatureIdWinsOverTheFallback`、`overlong…`、`exactlySixtyFour…`、`signaturePhaseIsReplayed`） |
+| **M5** 去掉 `> 64` 的 `shortHash` 分支 | 恰 1：`overlongSignatureIdIsShortHashed` |
+| **M6** `done` 支不合并权威内容 | 恰 2：`doneContentOverridesAccumulatedDeltas`、`refusalDeliveredOnlyInDoneContentSurvives` |
+| **M7** `phase` 不触发 stop | 恰 1：`finalAnswerPhaseSetsStopOnTheTextEndPartial` |
+
+**M1–M7 无零红。**
+
+### 12.4 判定与偏离（Ruling）
+
+| # | 判定 | 理由 | 判错的代价 |
+|---|---|---|---|
+| **A** | 合成 user 消息取 **entry 自己的时间戳**，不是 `now()` | pi `messages.ts:141-160` 的 `timestamp: m.timestamp` —— 这些消息是从**已落盘**的 entry 投影出来的（compaction/branchSummary/custom 三支）。只有**活提示词**（`agent.ts:422`）与**摘要请求**（`compaction.ts:582`）用 `Date.now()`。设计稿 §4.1 只写了后者 | 投影消息会拿到「读出来的时刻」而不是「写下去的时刻」⇒ 与 pi 的 `estimate.ts` 守卫和会话活动时间判据都不一致 |
+| **B** | **不留 7 参兼容构造器**（全参必须完整） | 留了就会让「忘了给时间戳」在编译期静默通过。代价是一次性改 13 处（6 个模块） | 未来新增字段时同样要全量改一遍 |
+| **C** | 步骤 2 与 3 合并成一次提交 | 只有 codec、没有消费者的一次提交＝一个零调用者的类 | 提交粒度与步骤编号不再一一对应 |
+| **D** | `StreamPartialBuilder` 的两个原语放进**步骤 4**（不在步骤 2） | 它们的使用者那一刻才出现；提前加＝造一段死代码 | 无 |
+| **E** | **G4 的观察面是 `text_end` 的 `partial`**，不是终局 reason | pi `:590` 的终局映射会**覆盖** phase 设的 stop（本仓 `ResponsesStreamProcessor:228` 同形）⇒ 「最终 reason 是 stop」这个断言没有判别力（改造前也是 stop）。夹具因此钉 `text_end`，并配一条反面对照 | 若哪天终局映射改了，这条夹具会随之失效 |
+| **F** | `done` 的**空 content 不覆盖**（pi 无条件覆盖） | 见 §4.2 的偏差说明：防「收尾不带 content 的 provider」把正文清空。夹具双向钉住 | 与 pi 在这一支上行为不同（登记如下） |
+| **G** | Responses 回放的 item **分组**维持「reasoning ⇒ 文本 ⇒ 工具调用」，不跟 pi 的**块序** | pi 在同一个循环里按块 push；本仓按类型分组。改它会动一条与本包无关的既有形状 ⇒ 登记 **B147** | 块序敏感的 provider（罕见）可能看到不同顺序 |
+| **H** | `ConformanceRunner` 的桩消息时间戳传 `null` | L5 比对的是帧序，pi 录制里没有可复现的时间戳；桩给值反而造出对不上的帧 | 无 |
+
+### 12.5 教训
+
+1. **`-fae` 会连 `clean` 一起跳过「依赖了失败模块」的模块**。首次 `clean test-compile -fae` 时 coding-agent 编译失败 ⇒ **web 模块整个被 SKIP**（它的 `target/` 里还是 17:00 的旧 class）；我随后那次 `test-compile` **漏写了 `clean`**，于是 Maven 对着陈旧 class 报「Nothing to compile - all classes are up to date」，一路装绿到运行时才以 `NoSuchMethodError` 现形。
+   ⇒ **判据**：`NoSuchMethodError` 指向**本仓另一个模块**的构造器时，先比对 `target/**/*.class` 与源码的 **mtime**，别信「up to date」。
+2. **给 record 加分量会从三个方向打穿**：主源码的 record **解构模式**、跨模块的**全参**构造调用、以及下游模块**未重编的旧 class**（只有第三种在运行期才现形）。
+3. **`mvn -Dtest='A+B'` 的 `+` 不是分隔符**（M4 第一次跑就撞上：一个用例没跑、`BUILD SUCCESS`、连 `Tests run` 行都不打）—— 该坑 `docs/57` 已记，本包第三次兑现。
+4. 「夹具写在实现之后」在本包**没有重犯**：步骤 1/2 编译红、步骤 3/4 真红。
+
+### 12.6 回归与门禁
+
+- **全 reactor `mvn -o clean test`：14/14 SUCCESS**（telemetry 31 ／ ai **1344** ／ agent-core **534** ／ sqlite 35 ／ coding-agent 319 ／ TUI ／ protocol ／ client ／ server ／ web ／ evals 44（18 skip）／ dist）
+- ai 1312 ⇒ **1344**（+32：Estimate 3、TextSignatureV1 10、ResponsesTextSignatureReplay 11、ResponsesOutputItemDoneCapture 8）
+- agent-core 527 ⇒ **534**（+7：MessageTimestampRoundTrip 6、HarnessUtilsUserTimestamp 1）
+- 三个模块的既有夹具按 8 参构造适配：coding-agent 4 处、web 3 处、sqlite 2 处
+
+### 12.7 门禁对照（§10）
+
+| # | 门槛 | 结果 |
+|---|---|---|
+| 1 | RED 先于实现 | 步骤 1/2 编译红；步骤 3 **8/11**、步骤 4 **5/8** 真红 |
+| 2 | GREEN | 目标夹具全绿（见 §12.6 的增量） |
+| 3 | 变异 M1–M7 记录红集 | §12.3（无零红） |
+| 4 | 回归全绿；checkstyle／spotbugs 0 新违规 | ✅（全 reactor clean test 14/14；见 §12.8 的 verify 记录） |
+| 5 | 无调试残留；改动文件 ≤500 | ✅（最大新增 `ResponsesOutputItemDoneCaptureTest` 约 250 行） |
+| 6 | §12 与 docs/48 §5 行 E 在收尾提交中回填 | ✅ —— 行 E 是清单**最后一项**，闭环后 `docs/48 §5` 无 `⬜` |
+
+### 12.8 新登记
+
+| # | 内容 | 处置 |
+|---|---|---|
+| **B147** | **Responses 回放的 item 分组与 pi 的块序不同** —— pi 在一个循环里按**块序** push（reasoning/文本/工具调用交错），本仓按「reasoning ⇒ 文本 ⇒ 工具调用」分组（`ResponsesMessageConverter.addAssistantItems` 的注释已写明） | 本包**不动**（与 G2 无关的既有形状）；块序敏感的 provider 极少，但若哪天要 1:1 对齐，改这里 |
+| **B148** | **`responseModel`/`diagnostics` 的移植条件** —— pi 有真消费者（`usage-totals.ts:44`／`cache-warmer.ts:345`／`bug-report.ts:194`／`interactive-mode.ts:3917`），但那些模块**本仓不存在** ⇒ 字段维持不移植，**等模块移植时一并做** | `Message.java` 的 javadoc 已按此更正（旧措辞「pi 没有任何消费者」是错的）；`providerThinkingLevel` 的同族更正挂 **B99**（真理由是 SDK 写不出 `block_binding`，不是「无消费者」） |
+| **B23** | **收窄**：`TextContent` **已有** `textSignature` 组件（Batch F 加的），原文「只有 1 个组件」作废；`ResponsesMessageConverter` 里那句「carries no signature at all (B23)」已在步骤 3 删掉 | 本包已改注释；B23 只剩「Responses 车道曾经不用它」这半句，**结案** |
+
+### 12.9 未覆盖
+
+- **web/RPC wire 仍不带消息 `timestamp`**（R2：维持 `WebWireJson.java:58-59` 的既有刻意偏离，改动要连 client 侧一起动）。
+- **`Model.promptCache` ＋ CacheWarmer**（R7：整块子系统，另立包）。
+- **`error.metadata.raw`（B135）**（R7：需先移植 `error-body.ts` 的错误体归一化层，另立包）。
+- **`metadata`/`user_id`**（R7：pi 自己都没有生产者 ⇒ 不做）。
+
