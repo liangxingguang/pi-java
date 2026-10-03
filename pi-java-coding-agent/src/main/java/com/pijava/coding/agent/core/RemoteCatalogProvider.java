@@ -86,16 +86,24 @@ public final class RemoteCatalogProvider implements Provider {
      */
     public static Provider wrap(Provider delegate, String catalogBaseUrl,
                                 Optional<Instant> localGeneratedAt) {
+        return wrap(delegate, catalogBaseUrl, localGeneratedAt, defaultHttpClient());
+    }
+
+    /**
+     * 注入 {@link HttpClient} 的形态：装配层应当**整批共用一个** —— 每包装一次就
+     * 新建一个客户端会让一次刷新拉起 N 个选择器线程。
+     */
+    public static Provider wrap(Provider delegate, String catalogBaseUrl,
+                                Optional<Instant> localGeneratedAt, HttpClient http) {
         var base = catalogBaseUrl == null || catalogBaseUrl.isBlank()
             ? DEFAULT_CATALOG_BASE_URL : catalogBaseUrl;
         return new RemoteCatalogProvider(delegate, URI.create(base),
-            localGeneratedAt == null ? null : localGeneratedAt.orElse(null),
-            HttpClient.newBuilder().connectTimeout(ATTEMPT_TIMEOUT).build());
+            localGeneratedAt == null ? null : localGeneratedAt.orElse(null), http);
     }
 
-    /** 默认 base URL + 无 localGeneratedAt 的便捷形态（夹具／非生产）。 */
-    public static Provider wrap(Provider delegate) {
-        return wrap(delegate, DEFAULT_CATALOG_BASE_URL, Optional.empty());
+    /** 单次包装用的默认客户端（4s 连接超时）。 */
+    public static HttpClient defaultHttpClient() {
+        return HttpClient.newBuilder().connectTimeout(ATTEMPT_TIMEOUT).build();
     }
 
     // ── Provider 委派 ─────────────────────────────────────────

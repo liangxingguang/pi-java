@@ -74,14 +74,17 @@ public final class DefaultProviders {
         var builtinIds = com.pijava.ai.provider.builtin.ProviderCatalog.all().stream()
             .map(com.pijava.ai.provider.Provider::name)
             .collect(java.util.stream.Collectors.toSet());
+        // 整批共用一个 HttpClient（否则一次刷新会拉起 N 个选择器线程）。
+        var http = RemoteCatalogProvider.defaultHttpClient();
+        var generatedAt = java.util.Optional.of(
+            com.pijava.ai.provider.builtin.ModelData.generatedAt());
         for (var provider : registry.listAll()) {
             if (!builtinIds.contains(provider.name())
                     || REMOTE_CATALOG_EXCLUDED.contains(provider.name())) {
                 continue;
             }
-            registry.register(RemoteCatalogProvider.wrap(provider, catalogBaseUrl,
-                java.util.Optional.of(
-                    com.pijava.ai.provider.builtin.ModelData.generatedAt())));
+            registry.register(RemoteCatalogProvider.wrap(
+                provider, catalogBaseUrl, generatedAt, http));
         }
     }
 
