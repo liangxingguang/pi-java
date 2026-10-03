@@ -1,9 +1,11 @@
 package com.pijava.ai.protocol;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.openai.core.JsonMissing;
 import com.openai.core.JsonValue;
@@ -190,6 +192,13 @@ final class ResponsesMessageConverter {
                                                            boolean supportsStrictMode,
                                                            Map<String, String> grammarProperties) {
         var items = new ArrayList<ResponseInputItem>();
+        // docs/32 B152：**回放侧**的同一次去重 —— 修复之前落盘的转录里已经带着重复的
+        // tool call（同 `call_id`），只靠流解析的去重救不回来 ⇒ 那种会话会**永远** 400。
+        // 判据同流侧：同 `call_id` 只认第一条（合法调用会拿到不同 call_id）。被丢掉的调用
+        // 对应的 `function_call_output` 也要一起丢，否则输出引用了输入里不存在的 call_id。
+        // ⚠️ 两个 set 必须分开：调用与结果各自去重（共用一个会把**第一条结果**当成重复丢掉）。
+        var emittedCalls = new HashSet<String>();
+        var emittedOutputs = new HashSet<String>();
         // 系统文本来自**前导系统消息**（pi openai-responses-shared.ts:218-222 的
         // `sourceIndex++ === 0` 支 → getSystemMessageText），落成 input 里的
         // `{role:"system"}` 项 —— pi 在循环里就地转，折叠后头必在下标 0，故这里先落它。
@@ -233,13 +242,16 @@ final class ResponsesMessageConverter {
                 items.add(ResponseInputWire.toUserItem(user.content()));
             } else if (msg instanceof Message.AssistantMessage assistant) {
                 addAssistantItems(items, assistant, msgIndex, request.modelId(), apiName,
-                    grammarProperties);
+                    grammarProperties, emittedCalls);
             } else if (msg instanceof Message.ToolResultMessage tool) {
                 // docs/69（pi shared:335-347）：grammar 工具的结果落 custom_tool_call_output。
                 var callId = ResponsesToolCallIds.callIdOf(tool.toolUseId());
-                var output = convertToolResultOutput(request.model(), tool.content());
-                items.add(ResponseToolWire.historyToolResult(callId, output,
-                    grammarProperties.containsKey(tool.toolName())));
+                // B152：同 call_id 的第二条结果一并丢掉（配对去重，见上面的两个 set）。
+                if (emittedOutputs.add(callId)) {
+                    var output = convertToolResultOutput(request.model(), tool.content());
+                    items.add(ResponseToolWire.historyToolResult(callId, output,
+                        grammarProperties.containsKey(tool.toolName())));
+                }
             }
             // pi :349 —— `if (!isLeadingSystemMessage) msgIndex++;`：**中途系统消息也算一个下标**
             // （回填 id 里的 `msg_pi_${msgIndex}` 与 tool_search 的种子都用它）。
@@ -346,7 +358,8 @@ final class ResponsesMessageConverter {
                                           Message.AssistantMessage assistant,
                                           int msgIndex,
                                           ModelId<?> target, String apiName,
-                                          Map<String, String> grammarProperties) {
+                                          Map<String, String> grammarProperties,
+                                          Set<String> emittedCalls) {
         var textMessages = new ArrayList<ResponseInputItem>();
         var toolCalls = new ArrayList<ResponseInputItem>();
         var reasoningItems = new ArrayList<ResponseReasoningItem>();
@@ -369,6 +382,10 @@ final class ResponsesMessageConverter {
             } else if (block instanceof ContentBlock.ToolUseContent toolUse) {
                 // D3（pi shared :288-303）：拆分复合 id，按跨模型/非 fc_ 规则丢 item.id。
                 String callId = ResponsesToolCallIds.callIdOf(toolUse.id());
+                // B152：同 call_id 的第二次调用不再发（连它的 output 一起丢，见调用方）。
+                if (!emittedCalls.add(callId)) {
+                    continue;
+                }
                 String itemId = ResponsesToolCallIds.itemIdOf(toolUse.id());
                 boolean sameProviderAndApi = java.util.Objects.equals(assistant.provider(), target.provider())
                     && java.util.Objects.equals(assistant.api(), apiName);

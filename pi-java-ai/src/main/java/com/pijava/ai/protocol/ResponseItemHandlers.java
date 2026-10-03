@@ -39,11 +39,19 @@ final class ResponseItemHandlers {
             ctx.slotTypes.put(outputIndex, ResponsesStreamProcessor.TEXT);
             ctx.publisher.submit(ctx.builder.emitTextStart());
         } else if (item.functionCall().isPresent()) {
-            ctx.slotTypes.put(outputIndex, ResponsesStreamProcessor.TOOLCALL);
             var fc = item.functionCall().get();
             // D3（docs/62）：id 复合 `call_id|item.id`（pi shared :485-489）。
             var compositeId = ResponsesStreamProcessor.compositeId(
                 fc.callId(), fc.id().orElse(""));
+            // docs/32 B152：端点偶发把**同一个 item** 投两次（`call_id`/`item.id`/参数逐字
+            // 相同，而 `fc_` 是端点分配的 ⇒ 同一个 item）。pi 照单全收，回放时于是发出两条
+            // 同 `call_id` 的 function_call，被中转（TeamoRouter→DeepSeek）以 400 拒
+            // （二分实证：只把重复那个的 id 改成唯一即恢复）。判据是复合 id 逐字相等 ——
+            // 合法的重复调用会拿到**不同**的 call_id，故不误伤。
+            if (alreadySeen(ctx, compositeId)) {
+                return;
+            }
+            ctx.slotTypes.put(outputIndex, ResponsesStreamProcessor.TOOLCALL);
             ctx.toolCalls.put(outputIndex,
                 new ResponsesStreamProcessor.FunctionCallState(
                     compositeId, fc.name(), initialArguments(fc)));
@@ -92,6 +100,16 @@ final class ResponseItemHandlers {
             return fromItem;
         }
         return accumulated == null || accumulated.isEmpty() ? "{}" : accumulated;
+    }
+
+    /** 本轮的 function_call 槽里是否已有同一个复合 id（docs/32 B152 的去重判据）。 */
+    private static boolean alreadySeen(ResponseEventContext ctx, String compositeId) {
+        for (var state : ctx.toolCalls.values()) {
+            if (state.callId.equals(compositeId)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** output_item.done：发布 end 并清理槽位。 */
