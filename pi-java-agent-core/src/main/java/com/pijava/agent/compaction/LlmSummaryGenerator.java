@@ -217,8 +217,10 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
      * 异常文本；流被截断没有终局 ⇒ 中止方言，与 PiLoopRunner 的 cutShort 同形）。
      */
     private Message.AssistantMessage produceOnce(List<Message> compressed, String previousSummary) {
+        // docs/71 G1：摘要请求的用户消息在构造点盖时间戳（pi compaction.ts:582 的 Date.now()）。
         var user = new Message.UserMessage(
-            List.of(new ContentBlock.TextContent(buildPrompt(compressed, previousSummary))));
+            List.of(new ContentBlock.TextContent(buildPrompt(compressed, previousSummary))),
+            java.time.Instant.now());
         // 包 A-01：摘要请求主动关缓存 —— pi 的 `completeSummarization` 逐字照抄
         // （`coding-agent/src/core/compaction/compaction.ts:600-605` 的
         // `cacheRetention: "none"`）：一次性的摘要与主会话前缀不同，给它写缓存条目

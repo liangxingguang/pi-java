@@ -83,6 +83,16 @@ public final class SessionJson {
                 }
             }
             node.put("isError", tool.isError());
+            // docs/71 G1：工具结果消息同样带时间戳（pi types.ts:549 必填）；缺席规则同 A7。
+            if (tool.timestamp() != null) {
+                node.put("timestamp", tool.timestamp().toEpochMilli());
+            }
+        }
+        if (message instanceof Message.UserMessage user) {
+            // docs/71 G1：用户消息的时间戳（pi types.ts:512 必填）。
+            if (user.timestamp() != null) {
+                node.put("timestamp", user.timestamp().toEpochMilli());
+            }
         }
         if (message instanceof Message.AssistantMessage assistant) {
             if (assistant.stopReason() != null) {

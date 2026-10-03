@@ -335,7 +335,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
             .stream().<Map<String, Object>>map(msg -> {
             var m = new HashMap<String, Object>();
             switch (msg) {
-                case Message.UserMessage(var content) -> {
+                case Message.UserMessage(var content, var ignoredTimestamp) -> {
                     var userMessage = userMessage(content, supportsImages);
                     if (userMessage != null) {
                         messages.add(userMessage);

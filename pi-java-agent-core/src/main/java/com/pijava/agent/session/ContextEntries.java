@@ -178,15 +178,15 @@ public final class ContextEntries {
             return m.message();
         }
         if (e instanceof Entry.Compaction c) {
-            return userMessage(compactionText(c.summary()));
+            return userMessage(compactionText(c.summary()), c.timestamp());
         }
         if (e instanceof Entry.BranchSummary bs && bs.summary() != null) {
-            return userMessage(branchSummaryText(bs.summary()));
+            return userMessage(branchSummaryText(bs.summary()), bs.timestamp());
         }
         if (e instanceof Entry.CustomMessage cm) {
             // pi messages.ts convertToLlm "custom" case: string -> single text
             // block, block list passes through; display/details never reach the LLM.
-            return new Message.UserMessage(cm.content().toBlocks());
+            return new Message.UserMessage(cm.content().toBlocks(), cm.timestamp());
         }
         return null;
     }
@@ -201,7 +201,12 @@ public final class ContextEntries {
         return BRANCH_SUMMARY_PREFIX + summary + BRANCH_SUMMARY_SUFFIX;
     }
 
-    private static Message userMessage(String text) {
-        return new Message.UserMessage(List.of(new ContentBlock.TextContent(text)));
+    /**
+     * docs/71 G1：合成的 user 消息取**entry 自己的**时间戳 —— pi
+     * {@code messages.ts:141-160} 的 {@code timestamp: m.timestamp}（不是 {@code Date.now()}：
+     * 这些是从**已落盘**的 entry 投影出来的，它们在写入时就有时刻）。
+     */
+    private static Message userMessage(String text, java.time.Instant timestamp) {
+        return new Message.UserMessage(List.of(new ContentBlock.TextContent(text)), timestamp);
     }
 }

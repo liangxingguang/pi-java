@@ -68,7 +68,8 @@ final class HarnessUtils {
         if (images != null) {
             images.forEach(img -> content.add(img.toContentBlock()));
         }
-        return new Message.UserMessage(content);
+        // pi agent.ts:422 —— 用户消息在构造点盖时间戳（docs/71 G1）。
+        return new Message.UserMessage(content, java.time.Instant.now());
     }
 
     /**

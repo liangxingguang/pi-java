@@ -354,6 +354,8 @@ class PiToolRunnerTest {
             .isEqualTo(List.of("mcp:late")).isEqualTo(outcome.result().addedToolNames());
         assertThat(outcome.message().content()).isEqualTo(outcome.result().content());
         assertThat(outcome.message().isError()).isFalse();
+        // docs/71 G1：工具结果消息在**执行路径**上也被盖上时间戳（pi types.ts:549 必填）。
+        assertThat(outcome.message().timestamp()).isNotNull();
     }
 
     // ═══ after_tool：pi 的 finalizeExecutedToolCall（agent-loop.ts:720-764）形状 ═══

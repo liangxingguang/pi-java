@@ -204,9 +204,10 @@ class TransformMessagesImageDowngradeTest {
      */
     @Test
     void unchangedMessagesKeepTheirIdentityAndChangedOnesKeepTheirFields() {
+        var timestamp = java.time.Instant.parse("2026-10-03T00:00:00Z");
         var untouched = new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")));
         var changed = new Message.ToolResultMessage("toolu_1", "read",
-                List.of(image()), "details-payload", null, List.of(), true);
+                List.of(image()), "details-payload", null, List.of(), true, timestamp);
 
         var out = TransformMessages.apply(List.of(untouched, changed), TARGET, API, NON_VISION);
 
@@ -215,6 +216,8 @@ class TransformMessagesImageDowngradeTest {
             assertThat(tool.details()).isEqualTo("details-payload");
             assertThat(tool.isError()).isTrue();
             assertThat(tool.toolName()).isEqualTo("read");
+            // docs/71 G1：改内容的复制路径必须**八字段全带**（时间戳不许被丢）。
+            assertThat(tool.timestamp()).isEqualTo(timestamp);
         });
     }
 }

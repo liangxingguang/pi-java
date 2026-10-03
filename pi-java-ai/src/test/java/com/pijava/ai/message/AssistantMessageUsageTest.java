@@ -74,7 +74,7 @@ class AssistantMessageUsageTest {
     @Test
     void toolResultUsageStaysNullWhenTheToolReportedNone() {
         var result = new Message.ToolResultMessage("call_1", "bash",
-            List.of(new ContentBlock.TextContent("out")), null, null, List.of(), false);
+            List.of(new ContentBlock.TextContent("out")), null, null, List.of(), false, null);
 
         assertThat(result.usage())
             .as("pi 的 ToolResultMessage.usage 可选 ⇒ 保持 null（兜零是引入偏差）")

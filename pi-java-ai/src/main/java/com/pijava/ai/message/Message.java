@@ -28,11 +28,26 @@ public sealed interface Message
     /** The content blocks that make up this message. */
     List<ContentBlock> content();
 
-    /** A message from the end user. */
-    record UserMessage(List<ContentBlock> content) implements Message {
+    /**
+     * A message from the end user.
+     *
+     * <p>docs/71 G1：{@code timestamp} 对齐 pi {@code UserMessage.timestamp}
+     * （{@code types.ts:512}，pi 侧**必填**；Java 由兼容构造器放宽为可空 —— 本仓
+     * 既有会话文件没有这个键）。</p>
+     */
+    record UserMessage(List<ContentBlock> content, java.time.Instant timestamp)
+            implements Message {
         /** Compact constructor that defensively copies the content blocks. */
         public UserMessage {
             content = List.copyOf(content);
+        }
+
+        /**
+         * 兼容构造器：无时间戳的旧数据解码路径与既有夹具。
+         * <b>生产构造点必须给值</b>（{@code HarnessUtils.buildUserMessage} 等）。
+         */
+        public UserMessage(List<ContentBlock> content) {
+            this(content, null);
         }
 
         @Override
@@ -285,7 +300,7 @@ public sealed interface Message
     record ToolResultMessage(String toolUseId, String toolName,
                              List<ContentBlock> content,
                              Object details, Object usage, List<String> addedToolNames,
-                             boolean isError) implements Message {
+                             boolean isError, java.time.Instant timestamp) implements Message {
         /** Compact constructor: defensive copies; empty {@code addedToolNames} ≙ pi 的省略。 */
         public ToolResultMessage {
             content = List.copyOf(content);
@@ -296,10 +311,13 @@ public sealed interface Message
          * Compatibility constructor for messages without a structured payload
          * (pi 的对象字面量里这些字段本就可选)。生产路径一律走全参构造，从结果对象
          * 转发 —— 见 {@code PiToolRunner.toOutcome}。
+         *
+         * <p>docs/71 G1：时间戳同理 —— 本构造器给 {@code null}（旧数据/夹具），
+         * <b>生产构造点必须用全参构造给值</b>。</p>
          */
         public ToolResultMessage(String toolUseId, String toolName,
                                  List<ContentBlock> content, boolean isError) {
-            this(toolUseId, toolName, content, null, null, List.of(), isError);
+            this(toolUseId, toolName, content, null, null, List.of(), isError, null);
         }
 
         @Override

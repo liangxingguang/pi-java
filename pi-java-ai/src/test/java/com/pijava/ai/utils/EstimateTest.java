@@ -220,6 +220,55 @@ class EstimateTest {
         assertThat(estimate.tokens()).isEqualTo(1);
     }
 
+    // ── docs/71 G1：user/toolResult 的时间戳也推进前缀守卫 ──────────────
+
+    /**
+     * pi {@code estimate.ts:91} 的推进对**每一条**消息生效（它的四个变体都有 timestamp）。
+     * 用户消息的时间戳晚于那条 assistant ⇒ 那条的 usage 描述不了含它的前缀 ⇒ 锚不成立。
+     */
+    @Test
+    void userMessageTimestampAdvancesThePrefixGuard() {
+        var earlier = Instant.parse("2026-01-01T00:00:00Z");
+        var later = Instant.parse("2026-01-02T00:00:00Z");
+
+        var estimate = Estimate.estimateContextTokens(List.of(
+            user("hi", later),
+            assistantMessage(earlier, usage(100, 10, 0, 0, 110),
+                new ContentBlock.TextContent("a"))));
+
+        assertThat(estimate.lastUsageIndex()).isNull();
+        assertThat(estimate.usageTokens()).isZero();
+    }
+
+    @Test
+    void toolResultMessageTimestampAdvancesThePrefixGuard() {
+        var earlier = Instant.parse("2026-01-01T00:00:00Z");
+        var later = Instant.parse("2026-01-02T00:00:00Z");
+
+        var estimate = Estimate.estimateContextTokens(List.of(
+            new Message.ToolResultMessage("call_1", "bash",
+                List.<ContentBlock>of(new ContentBlock.TextContent("out")),
+                null, null, List.<String>of(), false, later),
+            assistantMessage(earlier, usage(100, 10, 0, 0, 110),
+                new ContentBlock.TextContent("a"))));
+
+        assertThat(estimate.lastUsageIndex()).isNull();
+    }
+
+    /** 对照：user 时间戳**早于** assistant ⇒ 守卫不拦，锚仍成立。 */
+    @Test
+    void olderUserTimestampKeepsTheAnchor() {
+        var earlier = Instant.parse("2026-01-01T00:00:00Z");
+        var later = Instant.parse("2026-01-02T00:00:00Z");
+
+        var estimate = Estimate.estimateContextTokens(List.of(
+            user("hi", earlier),
+            assistantMessage(later, usage(100, 10, 0, 0, 110),
+                new ContentBlock.TextContent("a"))));
+
+        assertThat(estimate.lastUsageIndex()).isEqualTo(1);
+    }
+
     // ── 夹具脚手架 ──────────────────────────────────────────────────────
 
     private static Usage usage(double input, double output, double cacheRead,
@@ -229,6 +278,10 @@ class EstimateTest {
 
     private static Message user(String text) {
         return new Message.UserMessage(List.of(new ContentBlock.TextContent(text)));
+    }
+
+    private static Message user(String text, Instant timestamp) {
+        return new Message.UserMessage(List.of(new ContentBlock.TextContent(text)), timestamp);
     }
 
     private static Message.AssistantMessage assistantMessage(Instant timestamp, Usage usage,

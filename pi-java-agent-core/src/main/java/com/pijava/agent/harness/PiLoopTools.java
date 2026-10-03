@@ -253,7 +253,7 @@ final class PiLoopTools {
             var result = createErrorToolResult(text);
             var message = new Message.ToolResultMessage(call.id(), call.name(),
                 result.content(), result.details(), result.usage(),
-                result.addedToolNames(), true);
+                result.addedToolNames(), true, java.time.Instant.now());
             emit.emit(new PiLoop.Event.ToolExecutionEnd(call.id(), call.name(), result, true));
             emit.emit(new PiLoop.Event.MessageStart(message));
             emit.emit(new PiLoop.Event.MessageEnd(message));
@@ -271,7 +271,7 @@ final class PiLoopTools {
         // 与截断路径同理：消息从结果对象转发（pi :784-797 一条构造路）
         var message = new Message.ToolResultMessage(call.id(), call.name(),
             result.content(), result.details(), result.usage(),
-            result.addedToolNames(), true);
+            result.addedToolNames(), true, java.time.Instant.now());
         return new PiLoop.ToolOutcome(message, result, true);
     }
 

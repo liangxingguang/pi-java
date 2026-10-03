@@ -240,13 +240,24 @@ public final class Estimate {
     /** 一条带用量的助手消息在表里的位置。 */
     private record UsageAnchor(Usage usage, int index) {}
 
-    /** {@code SystemMessage}/{@code AssistantMessage} 的时间戳；其余消息没有 ⇒ {@code null}。 */
+    /**
+     * 四个变体的时间戳（docs/71 G1 之前只有 system/assistant 有字段）。
+     *
+     * <p>兼容构造器造出的消息仍可能是 {@code null}（旧数据解码）—— pi 的推进对每条
+     * 消息都做（{@code estimate.ts:91}），Java 对 null 跳过（见类 javadoc）。</p>
+     */
     private static Double epochMillis(Message message) {
         if (message instanceof Message.AssistantMessage assistant) {
             return epochMillis(assistant.timestamp());
         }
         if (message instanceof Message.SystemMessage system) {
             return epochMillis(system.timestamp());
+        }
+        if (message instanceof Message.UserMessage user) {
+            return epochMillis(user.timestamp());
+        }
+        if (message instanceof Message.ToolResultMessage tool) {
+            return epochMillis(tool.timestamp());
         }
         return null;
     }

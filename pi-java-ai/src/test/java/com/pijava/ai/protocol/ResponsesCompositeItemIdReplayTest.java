@@ -41,7 +41,7 @@ class ResponsesCompositeItemIdReplayTest {
     private static Message.ToolResultMessage toolResult(String compositeId) {
         return new Message.ToolResultMessage(compositeId, "get_weather",
             List.of(new ContentBlock.TextContent("sunny")), Map.of(), zeroUsage(),
-            List.of(), false);
+            List.of(), false, null);
     }
 
     private static Usage zeroUsage() {

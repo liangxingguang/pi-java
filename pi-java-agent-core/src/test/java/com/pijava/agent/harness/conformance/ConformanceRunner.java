@@ -259,9 +259,11 @@ final class ConformanceRunner {
         private static Message.ToolResultMessage messageOf(PiLoop.ToolCall call,
                                                            ToolResult<?> result,
                                                            boolean isError) {
+            // timestamp 传 null：L5 比对的是帧序，pi 侧录制里没有可复现的时间戳，
+            // 桩给 null ⇒ 键缺席 ⇒ 帧形状不变（docs/71 G1 只要求**生产者**有值）。
             return new Message.ToolResultMessage(call.toolCallId(), call.toolName(),
                 result.content(), result.details(), result.usage(),
-                result.addedToolNames(), isError);
+                result.addedToolNames(), isError, null);
         }
 
         /**

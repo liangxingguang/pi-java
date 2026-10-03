@@ -113,14 +113,14 @@ class MessageTest {
         var details = java.util.Map.of("kind", "card");
         var full = new Message.ToolResultMessage("toolu_02", "mcp",
                 List.of(new ContentBlock.TextContent("ok")), details, "usage-token",
-                new java.util.ArrayList<>(List.of("mcp:a")), false);
+                new java.util.ArrayList<>(List.of("mcp:a")), false, null);
 
         assertThat(full.details()).isEqualTo(details);
         assertThat(full.usage()).isEqualTo("usage-token");
         assertThat(full.addedToolNames()).containsExactly("mcp:a");
 
         var nullNames = new Message.ToolResultMessage("toolu_03", "mcp",
-                List.of(new ContentBlock.TextContent("ok")), null, null, null, true);
+                List.of(new ContentBlock.TextContent("ok")), null, null, null, true, null);
         assertThat(nullNames.addedToolNames()).isEmpty();
     }
 

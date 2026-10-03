@@ -41,7 +41,8 @@ final class MessageJsonCodec {
         String role = JsonlCodec.requireString(node, "role");
         List<ContentBlock> content = decodeBlocks(node.get("content"));
         return switch (role) {
-            case "user" -> new Message.UserMessage(content);
+            case "user" -> new Message.UserMessage(content,
+                decodeTimestamp(node.get("timestamp")));
             case "assistant" -> new Message.AssistantMessage(
                 content,
                 JsonlCodec.readStopReason(node),
@@ -60,7 +61,8 @@ final class MessageJsonCodec {
                 JsonlCodec.optionalAny(node, "details"),
                 JsonlCodec.optionalAny(node, "usage"),
                 decodeStringList(node.get("addedToolNames")),
-                node.has("isError") && node.get("isError").asBoolean(false));
+                node.has("isError") && node.get("isError").asBoolean(false),
+                decodeTimestamp(node.get("timestamp")));
             case "system" -> new Message.SystemMessage(
                 content,
                 decodeTimestamp(node.get("timestamp")),

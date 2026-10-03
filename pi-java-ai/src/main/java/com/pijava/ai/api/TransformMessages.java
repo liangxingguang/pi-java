@@ -180,25 +180,25 @@ public final class TransformMessages {
         return content.equals(msg.content()) ? msg : new Message.UserMessage(content);
     }
 
-    /** 内容未变则返回原消息；变了则**七个字段全带**（只搬 content 会丢 details/usage/isError）。 */
+    /** 内容未变则返回原消息；变了则**八个字段全带**（只搬 content 会丢 details/usage/isError/timestamp）。 */
     private static Message withContent(Message.ToolResultMessage msg, List<ContentBlock> content) {
         if (content.equals(msg.content())) {
             return msg;
         }
         return new Message.ToolResultMessage(msg.toolUseId(), msg.toolName(), content,
-                msg.details(), msg.usage(), msg.addedToolNames(), msg.isError());
+                msg.details(), msg.usage(), msg.addedToolNames(), msg.isError(), msg.timestamp());
     }
 
     /**
      * P2 的换 id 复制（pi {@code :86-88} 的 {@code {...msg, toolCallId: normalizedId}}）。
-     * 内容等价则返回原消息；换 id 时七个字段全带（只搬 id 会丢 details/usage/isError）。
+     * 内容等价则返回原消息；换 id 时八个字段全带（只搬 id 会丢 details/usage/isError/timestamp）。
      */
     private static Message withToolUseId(Message.ToolResultMessage msg, String toolUseId) {
         if (toolUseId.equals(msg.toolUseId())) {
             return msg;
         }
         return new Message.ToolResultMessage(toolUseId, msg.toolName(), msg.content(),
-                msg.details(), msg.usage(), msg.addedToolNames(), msg.isError());
+                msg.details(), msg.usage(), msg.addedToolNames(), msg.isError(), msg.timestamp());
     }
 
     /**
