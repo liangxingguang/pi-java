@@ -397,6 +397,18 @@ public final class StreamPartialBuilder {
         return new StreamEvent.ToolCallStart(idx, snapshot());
     }
 
+    /**
+     * pi {@code openai-responses-shared.ts:710} 的
+     * {@code item.arguments || partialJson || "{}"}：用**收尾项里的权威参数**替换流式累积的
+     * 草稿 —— delta 可能比它短，也可能整个没有（兼容端点只在 {@code output_item.done} 给）。
+     *
+     * <p>只改缓冲：紧随其后的 {@link #emitToolCallEnd} 会用新缓冲解析并落块。</p>
+     */
+    public void replaceToolArguments(String argumentsJson) {
+        toolArgBuf.setLength(0);
+        toolArgBuf.append(argumentsJson);
+    }
+
     /** Emit a tool-call argument delta. */
     public StreamEvent.ToolCallDelta emitToolCallDelta(String id, String jsonDelta) {
         this.toolCallId = id;

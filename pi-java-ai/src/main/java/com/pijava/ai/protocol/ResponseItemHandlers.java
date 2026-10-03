@@ -46,7 +46,7 @@ final class ResponseItemHandlers {
                 fc.callId(), fc.id().orElse(""));
             ctx.toolCalls.put(outputIndex,
                 new ResponsesStreamProcessor.FunctionCallState(
-                    compositeId, fc.name(), fc.arguments()));
+                    compositeId, fc.name(), initialArguments(fc)));
             // 包⑥：起点即带身份。
             ctx.publisher.submit(ctx.builder.emitToolCallStart(compositeId, fc.name()));
         } else if (item.customToolCall().isPresent()) {
@@ -59,6 +59,39 @@ final class ResponseItemHandlers {
             ctx.publisher.submit(ctx.builder.emitToolCallStart(
                 state.compositeId, state.name));
         }
+    }
+
+    /**
+     * pi {@code openai-responses-shared.ts:485-490} 的 {@code item.arguments || ""}：
+     * {@code response.output_item.added} 里的 function_call **可能没有** {@code arguments} 键
+     * —— OpenAI 自己发 {@code ""}，但兼容端点会整个省掉（2026-10-03 实测 TeamoRouter 的
+     * {@code /responses} 就是）。
+     *
+     * <p>⚠️ 这里**必须**走 {@code JsonField} 的容错读法：SDK 的必填访问器
+     * {@code ResponseFunctionToolCall.arguments()} 在缺键时抛
+     * {@code OpenAIInvalidDataException: `arguments` is not set} ⇒ 整轮 0 token 断流
+     * （夹具 {@code ResponsesFunctionCallMissingArgumentsTest} 钉住）。</p>
+     */
+    private static String initialArguments(
+            com.openai.models.responses.ResponseFunctionToolCall fc) {
+        var field = fc._arguments();
+        return field.isMissing() || field.isNull() ? "" : fc.arguments();
+    }
+
+    /**
+     * pi {@code openai-responses-shared.ts:710} 的
+     * {@code item.arguments || slot.block.partialJson || "{}"}：收尾项里的参数**优先**，
+     * 其次才是流式累积的草稿，都没有才给 {@code "{}"}。
+     *
+     * <p>注意 {@code ||} 的语义：收尾项给的是**空串**时同样落回草稿（与 {@code ??} 不同）。</p>
+     */
+    private static String authoritativeArguments(
+            com.openai.models.responses.ResponseFunctionToolCall fc, String accumulated) {
+        var fromItem = initialArguments(fc);
+        if (!fromItem.isEmpty()) {
+            return fromItem;
+        }
+        return accumulated == null || accumulated.isEmpty() ? "{}" : accumulated;
     }
 
     /** output_item.done：发布 end 并清理槽位。 */
@@ -93,6 +126,10 @@ final class ResponseItemHandlers {
                     ctx.slotTypes, outputIndex, ResponsesStreamProcessor.TOOLCALL)) {
             var state = ctx.toolCalls.remove(outputIndex);
             if (state != null) {
+                // pi :710 的 `item.arguments || partialJson || "{}"`：**收尾项里的参数是权威值**，
+                // 流式 delta 只是草稿（可能更短，也可能一个都没有）。
+                ctx.builder.replaceToolArguments(authoritativeArguments(
+                    item.functionCall().get(), state.args));
                 ctx.publisher.submit(ctx.builder.emitToolCallEnd(
                     state.callId, state.name));
             }
