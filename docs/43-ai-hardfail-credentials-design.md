@@ -78,8 +78,7 @@
 **登记**：P5 那条缝（普通工具参数重放不净化）**照缝移植**，并登记为 pi 自身缺口。
 
 ### D2 —— 工具参数边界：**只净化 grammar/custom 工具入参**（已定）
-照 P6。⚠️ java 侧 **grammar/custom 工具面本身缺失**（`docs/41 §1.3`：constrained sampling / grammar 权重 1）
-⇒ 本包**只落「普通工具参数不净化」这一半**（即什么都不做），grammar 那一半随 grammar 包补。
+照 P6。✅ **两半均已落**：本包当时只落「普通工具参数不净化」这一半；grammar 那一半已随 docs/69 补齐（两车道回放 custom 入参净化）。
 
 ### D3 —— 净化实现：**手写 code-unit 循环**（推荐）＋ **Java 正则作测试 oracle**（已定）
 - 实现：遍历 UTF-16 code unit，高代理(`0xD800-0xDBFF`)后紧跟低代理(`0xDC00-0xDFFF`)⇒ 两者保留并跳 2；
@@ -184,7 +183,7 @@ AI 模块既有 surefire 坑：`-pl pi-java-ai -am -Dsurefire.failIfNoSpecifiedT
 ## 6. 遗留登记（本包产出）
 
 1. **pi 自身缺口**：普通工具参数重放不净化（P5）——照缝移植，登记。
-2. **grammar/custom 工具入参净化**：随 grammar 包（D2）。
+2. ~~grammar/custom 工具入参净化~~：✅ 已随 docs/69 闭环（D2 两半合一）。
 3. **`RetryPolicy` 五预设零调用者**（J5/D9）→ `docs/41 §1.5`。
 4. **`x-should-retry` ／ `provider-retry` 传输层判据未移植**（P10/J6）→ 原计划在 A6 裁决面，本包只登记。
 5. **`ANTHROPIC_AUTH_TOKEN` 的 profile 变体有意不加**（D6）。

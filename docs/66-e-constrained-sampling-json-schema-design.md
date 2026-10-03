@@ -8,7 +8,7 @@
 > `read`/`bash`/`edit`/`write` 默认携带 `{type:"json_schema", strict:"prefer"}`，
 > 五条现有车道（completions／responses／anthropic／google／mistral）把工具参数
 > 转成 **strict JSON Schema** 并下发各自的 strict 标志。
-> **grammar（lark/regex）自定义工具拆到下一包**（R1），本包不做。
+> ~~**grammar（lark/regex）自定义工具拆到下一包**（R1），本包不做~~ —— ✅ 已由 [`docs/69`](69-grammar-json-object-design.md) 闭环。
 
 ---
 

@@ -88,11 +88,12 @@ pi `harness/` 里 `AgentHarness` 独有物（具名钩子 / `HarnessEvent` / `ru
 图片降级为占位文本 · `Model.input` 能力位 · `ThinkingLevel` 词表含 `"max"` · `ImagesModel` 注册表 ·
 `AssistantMessage.responseModel`/`responseId`/`providerThinkingLevel`/`diagnostics`/`endTurn` · `Model.promptCache` ·
 `MistralConversationsCompat` · ~~`ANTHROPIC_OAUTH_TOKEN`~~ · ~~**`sanitizeSurrogates`（pi 57 处调用，java 零）**~~ ·
-constrained sampling / grammar · `transport` 选择 · `session-resources` 清理注册表 · `JsonObject` 类型约束
+~~constrained sampling（docs/66）~~ / ~~grammar custom tool（docs/69）~~ · `transport` 选择 ·
+`session-resources` 清理注册表 · ~~`JsonObject`（docs/69 J8：编译期约束等价）~~
 
 > ~~**`sanitizeSurrogates` 单独点名**：孤对代理字符原样出站 ⇒ **provider 400**。权重虽 1，但它是**硬故障**。~~
 > ✅ **A0 步1–5 已闭环**（`SanitizeUnicode` ＋ 24 个落线点：Anthropic 6 ／ completions 4 ／ responses 5 ／
-> Google 3 ／ openrouter-images 1 ／ Mistral 请求 4 ＋ 响应 1）。差额见 `docs/43 §9-1`：grammar 2 处随 grammar 包、
+> Google 3 ／ openrouter-images 1 ／ Mistral 请求 4 ＋ 响应 1）。差额见 `docs/43 §9-1`：~~grammar 2 处随 docs/69 闭环~~、
 > 4 处「面不存在」（Google thinking ／ Mistral 数组形态 content）、3 处**照缝**（pi 自己也不净化的路径）。
 > ✅ `ANTHROPIC_OAUTH_TOKEN` 随 A0 步7/8 闭环（Bearer ＋ 身份头形态）。
 
