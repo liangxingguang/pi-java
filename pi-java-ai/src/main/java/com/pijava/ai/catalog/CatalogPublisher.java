@@ -17,7 +17,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /**
  * 模型目录发布工具 —— 校验 / 合并 / ETag 生成 / HTTP PUT 上传（设计 §7.2）。
  *
- * <p>wire 格式为 {@link CatalogModel} 数组（与 {@code RemoteCatalog} 一致）。</p>
+ * <p>wire 格式为 {@link CatalogModel} 数组。</p>
+ *
+ * <p>⚠️ 运行时的远程目录机制**不走这里** —— 它由 coding-agent 的
+ * {@code RemoteCatalogProvider} ＋ pi wire（{@code RemoteModelWire}）承担
+ * （docs/70）。本类是独立的自建目录工具链，挂在 {@code pi-ai catalog}
+ * 子命令上（{@code validate}/{@code merge}/{@code publish}）。</p>
  */
 public final class CatalogPublisher {
 
@@ -73,7 +78,7 @@ public final class CatalogPublisher {
 
     // ── ETag ─────────────────────────────────────────────────────────────
 
-    /** 基于内容生成 ETag（SHA-256，含引号 —— 与 RemoteCatalog 原样存储一致）。 */
+    /** 基于内容生成 ETag（SHA-256，含引号 —— 与 {@code ModelsStoreEntry.etag} 的原样存储口径一致）。 */
     public static String generateEtag(byte[] content) {
         try {
             var digest = MessageDigest.getInstance("SHA-256").digest(content);

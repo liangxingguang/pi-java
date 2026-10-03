@@ -40,7 +40,7 @@ public final class ModelsJsonProvider extends ConfigurableProvider {
             }
         }
         this.config = new ProviderConfig(
-            id, displayName, def.baseUrl(), null, protocol, Set.copyOf(protocols), catalog, null);
+            id, displayName, def.baseUrl(), null, protocol, Set.copyOf(protocols), catalog);
         this.inlineApiKey = def.apiKey();
     }
 

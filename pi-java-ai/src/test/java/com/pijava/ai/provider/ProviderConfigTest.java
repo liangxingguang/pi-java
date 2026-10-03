@@ -39,7 +39,7 @@ class ProviderConfigTest {
             "x", "X", "http://x", "X_KEY",
             Protocol.OPENAI_RESPONSES,
             Set.of(Protocol.OPENAI_COMPLETIONS),
-            ModelCatalog.empty(), null))
+            ModelCatalog.empty()))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("defaultProtocol");
     }

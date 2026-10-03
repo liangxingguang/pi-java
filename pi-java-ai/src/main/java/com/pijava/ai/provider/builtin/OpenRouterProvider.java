@@ -40,7 +40,7 @@ public final class OpenRouterProvider extends ConfigurableProvider {
             "openrouter", "OpenRouter", "https://openrouter.ai/api/v1",
             "OPENROUTER_API_KEY", Protocol.OPENAI_COMPLETIONS,
             Set.of(Protocol.OPENAI_COMPLETIONS, Protocol.ANTHROPIC_MESSAGES),
-            OpenRouterModels.catalog(), null);
+            OpenRouterModels.catalog());
     }
 
     @Override

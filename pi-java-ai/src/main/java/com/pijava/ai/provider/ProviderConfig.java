@@ -21,9 +21,6 @@ import com.pijava.ai.catalog.ModelCatalog;
  *                           does not specify one
  * @param supportedProtocols all protocols this provider can serve
  * @param builtinModels      built-in model catalog
- * @param modelsUrl          optional self-hosted models.json URL for a
- *                           runtime-refreshable catalog; {@code null} = static
- *                           {@code builtinModels}
  */
 public record ProviderConfig(
     String name,
@@ -32,8 +29,7 @@ public record ProviderConfig(
     String apiKeyEnvVar,
     Protocol defaultProtocol,
     Set<Protocol> supportedProtocols,
-    ModelCatalog builtinModels,
-    String modelsUrl
+    ModelCatalog builtinModels
 ) {
     /**
      * Validates required fields and copies the protocol set.
@@ -48,9 +44,6 @@ public record ProviderConfig(
         Objects.requireNonNull(defaultProtocol, "defaultProtocol");
         if (apiKeyEnvVar != null && apiKeyEnvVar.isBlank()) {
             apiKeyEnvVar = null;
-        }
-        if (modelsUrl != null && modelsUrl.isBlank()) {
-            modelsUrl = null;
         }
         builtinModels = builtinModels == null ? ModelCatalog.empty() : builtinModels;
         supportedProtocols = supportedProtocols == null || supportedProtocols.isEmpty()
@@ -67,16 +60,6 @@ public record ProviderConfig(
             String name, String displayName, String baseUrl,
             String apiKeyEnvVar, Protocol protocol, ModelCatalog models) {
         return new ProviderConfig(
-            name, displayName, baseUrl, apiKeyEnvVar, protocol, Set.of(protocol), models, null);
-    }
-
-    /** {@link #single} with a runtime-refreshable models.json URL. */
-    public static ProviderConfig singleWithModelsUrl(
-            String name, String displayName, String baseUrl,
-            String apiKeyEnvVar, Protocol protocol, ModelCatalog models,
-            String modelsUrl) {
-        return new ProviderConfig(
-            name, displayName, baseUrl, apiKeyEnvVar, protocol,
-            Set.of(protocol), models, modelsUrl);
+            name, displayName, baseUrl, apiKeyEnvVar, protocol, Set.of(protocol), models);
     }
 }
