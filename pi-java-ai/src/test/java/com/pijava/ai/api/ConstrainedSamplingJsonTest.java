@@ -38,6 +38,26 @@ class ConstrainedSamplingJsonTest {
     }
 
     @Test
+    void grammarSerializesToPiShape() throws Exception {
+        ConstrainedSampling sampling =
+            new GrammarSampling(java.util.Map.of("openai_lark", "root ::= \"yes\""));
+
+        assertThat(MAPPER.writeValueAsString(sampling))
+            .isEqualTo("{\"type\":\"grammar\",\"variants\":{\"openai_lark\":\"root ::= \\\"yes\\\"\"}}");
+    }
+
+    @Test
+    void readsGrammarShapeBack() throws Exception {
+        var parsed = MAPPER.readValue(
+            "{\"type\":\"grammar\",\"variants\":{\"openai_regex\":\"x+\"}}",
+            ConstrainedSampling.class);
+
+        assertThat(parsed).isInstanceOf(GrammarSampling.class);
+        assertThat(((GrammarSampling) parsed).variants())
+            .containsEntry("openai_regex", "x+");
+    }
+
+    @Test
     void toolDefinitionAndDeclarationCarrySampling() {
         var sampling = new JsonSchemaSampling(StrictMode.PREFER);
         var definition = new ToolDefinition("read", "d", java.util.Map.of("type", "object"),

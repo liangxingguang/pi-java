@@ -84,6 +84,30 @@ class MessageJsonCodecSystemReadbackTest {
             .isEqualTo(new com.pijava.ai.api.JsonSchemaSampling(com.pijava.ai.api.StrictMode.PREFER));
     }
 
+    /** docs/69：grammar constrainedSampling 写读 round-trip（variants 两键）。 */
+    @Test
+    void roundTripsGrammarSampling() {
+        var variants = new java.util.LinkedHashMap<String, String>();
+        variants.put("openai_lark", "root ::= \"x\"");
+        variants.put("openai_regex", "x+");
+        var grammarTool = new ToolDefinition("pick", "Pick an item",
+            Map.of("type", "object"), "pick", null, List.of(), "default",
+            new com.pijava.ai.api.GrammarSampling(variants));
+        var system = new Message.SystemMessage("base", Instant.EPOCH, Map.of(),
+            List.of(grammarTool), List.of());
+
+        var node = SessionJson.messageNode(system);
+        var written = node.path("toolsAdded").get(0).path("constrainedSampling");
+        assertThat(written.path("type").asText()).isEqualTo("grammar");
+        assertThat(written.path("variants").path("openai_lark").asText())
+            .isEqualTo("root ::= \"x\"");
+        assertThat(written.path("variants").path("openai_regex").asText()).isEqualTo("x+");
+
+        var back = (Message.SystemMessage) MessageJsonCodec.decode(node);
+        assertThat(back.toolsAdded().get(0).constrainedSampling())
+            .isEqualTo(new com.pijava.ai.api.GrammarSampling(variants));
+    }
+
     /**
      * sections 的渲染序是**插入序**（pi 的 {@code Object.entries}，{@code utils/text.ts:17}）——
      * 写侧已改成保序副本（包 A2 的 F3），读侧必须跟着保序，否则 round-trip 会静默重排

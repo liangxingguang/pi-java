@@ -147,26 +147,44 @@ final class MessageJsonCodec {
     }
 
     /**
-     * docs/66：pi 的 {@code constrainedSampling} 节点（{@code {type,strict}}）；
-     * 缺席/null ⇒ null（不约束）。仅 json_schema 形态（grammar 后续包加）；
-     * 未知 type/strict 取值响亮抛 schema 错。
+     * pi 的 {@code constrainedSampling} 节点：{@code {type:"json_schema",strict}} 或
+     * {@code {type:"grammar",variants:{openai_lark?,openai_regex?}}}（docs/66/69）；
+     * 缺席/null ⇒ null（不约束）。未知 type/strict 取值、grammar 变体非串 ⇒ 响亮抛 schema 错。
      */
     private static com.pijava.ai.api.ConstrainedSampling decodeConstrainedSampling(JsonNode node) {
         if (node == null || node.isNull()) {
             return null;
         }
         var type = node.path("type").asText("");
-        if (!"json_schema".equals(type)) {
-            throw JsonlCodec.DecodeError.schema("has invalid constrainedSampling type");
-        }
-        var strictText = node.path("strict").asText("");
-        var strict = switch (strictText) {
-            case "prefer" -> com.pijava.ai.api.StrictMode.PREFER;
-            case "require" -> com.pijava.ai.api.StrictMode.REQUIRE;
+        switch (type) {
+            case "json_schema" -> {
+                var strict = switch (node.path("strict").asText("")) {
+                    case "prefer" -> com.pijava.ai.api.StrictMode.PREFER;
+                    case "require" -> com.pijava.ai.api.StrictMode.REQUIRE;
+                    default -> throw JsonlCodec.DecodeError.schema(
+                        "has invalid constrainedSampling strict");
+                };
+                return new com.pijava.ai.api.JsonSchemaSampling(strict);
+            }
+            case "grammar" -> {
+                var variants = new java.util.LinkedHashMap<String, String>();
+                var variantsNode = node.get("variants");
+                if (variantsNode != null && variantsNode.isObject()) {
+                    var fields = variantsNode.fields();
+                    while (fields.hasNext()) {
+                        var entry = fields.next();
+                        if (!entry.getValue().isTextual()) {
+                            throw JsonlCodec.DecodeError.schema(
+                                "has invalid grammar variant");
+                        }
+                        variants.put(entry.getKey(), entry.getValue().textValue());
+                    }
+                }
+                return new com.pijava.ai.api.GrammarSampling(variants);
+            }
             default -> throw JsonlCodec.DecodeError.schema(
-                "has invalid constrainedSampling strict");
-        };
-        return new com.pijava.ai.api.JsonSchemaSampling(strict);
+                "has invalid constrainedSampling type");
+        }
     }
 
     /** 系统消息的 {@code toolsRemoved} —— pi 的 {@code ToolReference} 是 {@code {name}}（{@code types.ts:607-609}）。 */
