@@ -6,9 +6,9 @@ import java.util.List;
 /**
  * 模型目录缓存条目（对齐 pi {@code ModelsStoreEntry}）。
  *
- * <p>持久化时经 {@link CatalogModel} DTO 序列化（{@code ModelInfo} 不可直接
- * Jackson round-trip）。ETag 为不透明校验值，含引号原样存储、原样回填
- * {@code If-None-Match}。</p>
+ * <p>持久化时经 {@link RemoteModelWire}（pi Model wire 子集）序列化
+ * （{@code ModelInfo} 不可直接 Jackson round-trip）。ETag 为不透明校验值，
+ * 含引号原样存储、原样回填 {@code If-None-Match}。</p>
  */
 public record ModelsStoreEntry(
     List<ModelInfo> models,

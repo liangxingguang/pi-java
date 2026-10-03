@@ -4,101 +4,133 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
- * {@link ModelsStore} 的文件系统实现（每 provider 一个 JSON 文件）。
+ * {@link ModelsStore} 的文件实现：单文件 {@code models-store.json}，
+ * 形状为 {@code Map<providerId, Entry>}（对齐 pi
+ * {@code coding-agent/src/core/models-store.ts}），取代旧的「每 provider
+ * 一文件」实现（旧实现无生产调用者）。
  *
- * <p>持久化经 {@link CatalogModel} DTO（{@code ModelInfo} 不可直接 round-trip）；
- * ETag 原样存储（含引号）。默认目录 {@code ~/.pi-java/agent/catalogs/}。</p>
+ * <p>持久化统一走 pi wire（{@link RemoteModelWire}）；时间戳存 epoch milli。
+ * coding-agent 单进程，方法 synchronized 即足够（docs/70 R6）。读面对
+ * 缺失/损坏文件一律返回 empty（与旧实现一致），写失败抛出。</p>
  */
 public final class FileModelsStore implements ModelsStore {
 
-    private static final ObjectMapper JSON = new ObjectMapper();
+    /** File name inside the agent directory. */
+    public static final String FILE_NAME = "models-store.json";
 
-    private final Path dir;
+    private static final ObjectMapper JSON = new ObjectMapper()
+        .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
-    /** @param dir 缓存文件目录 */
-    public FileModelsStore(Path dir) {
-        this.dir = dir;
+    /** One persisted provider entry (pi wire). */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record StoredEntry(
+        List<RemoteModelWire> models,
+        Long lastModified,
+        Long checkedAt,
+        String etag) {
     }
 
-    /** 默认缓存目录。 */
-    public static Path defaultDir() {
-        return Path.of(System.getProperty("user.home"), ".pi-java", "agent", "catalogs");
+    private final Path file;
+
+    /** Store backed by {@code directory/models-store.json}. */
+    public FileModelsStore(Path directory) {
+        this.file = directory.resolve(FILE_NAME);
+    }
+
+    /**
+     * Default file: {@code $PI_JAVA_CODING_AGENT_DIR/models-store.json} or
+     * {@code ~/.pi-java/agent/models-store.json} —— 与
+     * {@link com.pijava.ai.provider.ModelsJsonConfig#defaultPath()} 同一 agent
+     * 目录约定（pi 把 models-store 也放在 agent 目录）。
+     */
+    public static Path defaultFile() {
+        var envDir = System.getenv("PI_JAVA_CODING_AGENT_DIR");
+        var agentDir = envDir != null && !envDir.isBlank()
+            ? Path.of(envDir)
+            : Path.of(System.getProperty("user.home"), ".pi-java", "agent");
+        return agentDir.resolve(FILE_NAME);
     }
 
     @Override
-    public Optional<ModelsStoreEntry> read(String providerId) {
-        Path file = fileFor(providerId);
+    public synchronized Optional<ModelsStoreEntry> read(String providerId) {
+        return Optional.ofNullable(loadMap().get(providerId))
+            .map(stored -> new ModelsStoreEntry(
+                toModelInfos(providerId, stored.models()),
+                stored.lastModified() != null
+                    ? java.time.Instant.ofEpochMilli(stored.lastModified()) : null,
+                stored.checkedAt() != null
+                    ? java.time.Instant.ofEpochMilli(stored.checkedAt()) : null,
+                stored.etag()));
+    }
+
+    @Override
+    public synchronized void write(String providerId, ModelsStoreEntry entry) {
+        var map = loadMap();
+        var wires = new ArrayList<RemoteModelWire>();
+        for (ModelInfo model : entry.models()) {
+            wires.add(RemoteModelWire.fromModelInfo(model));
+        }
+        map.put(providerId, new StoredEntry(
+            List.copyOf(wires),
+            entry.lastModified() != null ? entry.lastModified().toEpochMilli() : null,
+            entry.checkedAt() != null ? entry.checkedAt().toEpochMilli() : null,
+            entry.etag()));
+        save(map);
+    }
+
+    @Override
+    public synchronized void delete(String providerId) {
+        var map = loadMap();
+        if (map.remove(providerId) != null) {
+            save(map);
+        }
+    }
+
+    private Map<String, StoredEntry> loadMap() {
         if (!Files.isRegularFile(file)) {
-            return Optional.empty();
+            return new LinkedHashMap<>();
         }
         try {
-            JsonNode node = JSON.readTree(file.toFile());
-            var models = new ArrayList<ModelInfo>();
-            if (node.has("models")) {
-                for (var m : node.get("models")) {
-                    models.add(JSON.treeToValue(m, CatalogModel.class).toModelInfo());
-                }
-            }
-            return Optional.of(new ModelsStoreEntry(
-                List.copyOf(models),
-                instant(node, "lastModified"),
-                instant(node, "checkedAt"),
-                node.hasNonNull("etag") ? node.get("etag").asText() : null));
+            var type = JSON.getTypeFactory()
+                .constructMapType(LinkedHashMap.class, String.class, StoredEntry.class);
+            Map<String, StoredEntry> map = JSON.readValue(file.toFile(), type);
+            return map != null ? map : new LinkedHashMap<>();
         } catch (IOException e) {
-            return Optional.empty();
+            // Corrupt cache: treat as empty; next write recreates the file.
+            return new LinkedHashMap<>();
         }
     }
 
-    @Override
-    public void write(String providerId, ModelsStoreEntry entry) {
+    private void save(Map<String, StoredEntry> map) {
         try {
-            Files.createDirectories(dir);
-            ObjectNode node = JSON.createObjectNode();
-            var arr = node.putArray("models");
-            for (var model : entry.models()) {
-                arr.add(JSON.valueToTree(CatalogModel.fromModelInfo(model)));
+            if (file.getParent() != null) {
+                Files.createDirectories(file.getParent());
             }
-            putInstant(node, "lastModified", entry.lastModified());
-            putInstant(node, "checkedAt", entry.checkedAt());
-            if (entry.etag() != null) {
-                node.put("etag", entry.etag());
-            }
-            JSON.writeValue(fileFor(providerId).toFile(), node);
+            JSON.writeValue(file.toFile(), map);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }
 
-    @Override
-    public void delete(String providerId) {
-        try {
-            Files.deleteIfExists(fileFor(providerId));
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
+    private static List<ModelInfo> toModelInfos(
+            String providerId, List<RemoteModelWire> models) {
+        var result = new ArrayList<ModelInfo>();
+        if (models != null) {
+            for (var wire : models) {
+                result.add(wire.toModelInfo(providerId));
+            }
         }
-    }
-
-    private Path fileFor(String providerId) {
-        return dir.resolve(providerId.replaceAll("[^a-zA-Z0-9._-]", "_") + ".json");
-    }
-
-    private static Instant instant(JsonNode node, String field) {
-        return node.hasNonNull(field) ? Instant.ofEpochMilli(node.get(field).asLong()) : null;
-    }
-
-    private static void putInstant(ObjectNode node, String field, Instant value) {
-        if (value != null) {
-            node.put(field, value.toEpochMilli());
-        }
+        return List.copyOf(result);
     }
 }

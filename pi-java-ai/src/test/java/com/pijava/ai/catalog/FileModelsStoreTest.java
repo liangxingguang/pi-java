@@ -65,6 +65,20 @@ class FileModelsStoreTest {
     }
 
     @Test
+    void twoProvidersShareOneStoreFile() throws java.io.IOException {
+        var store = new FileModelsStore(tmp);
+        store.write("anthropic", ModelsStoreEntry.of(List.of(MODEL)));
+        store.write("openai", ModelsStoreEntry.of(List.of(MODEL)));
+
+        // 单文件 models-store.json（不再是每 provider 一文件）。
+        assertThat(tmp.resolve(FileModelsStore.FILE_NAME)).exists();
+        assertThat(Files.list(tmp).filter(Files::isRegularFile).count())
+            .as("catalog 目录下只有一个 models-store.json").isEqualTo(1L);
+        assertThat(store.read("anthropic")).isPresent();
+        assertThat(store.read("openai")).isPresent();
+    }
+
+    @Test
     void persistSurvivesNewInstance() {
         new FileModelsStore(tmp).write("q", ModelsStoreEntry.of(List.of(MODEL)));
         var fresh = new FileModelsStore(tmp).read("q").orElseThrow();
