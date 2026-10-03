@@ -4,8 +4,7 @@
 > 归属：docs/48 §5 行 D「内置模型目录运行时覆盖/重生成机制」（P1）。
 > 编制日期：2026-10-03。
 >
-> **✅ 状态：已批准（R1–R8 全按建议，2026-10-03）—— 实施中。**
-> 实施记录见 §12。
+> **✅ 状态：已闭环（2026-10-03）—— R1–R8 全按建议；实施记录见 §12。**
 
 ---
 
@@ -695,4 +694,108 @@ public static Instant generatedAt() { return GENERATED_AT; }
 - **G7 是最大形状风险**：若 R1 选 CatalogModel 方向，本包只对齐机制、不获得
   pi.dev 真实目录，功能价值大打折扣，故强烈建议 pi wire 方向。
 
-<!-- §12 实施记录：批准并实施后回填（commit 序列、RED 实测、变异红集、偏差、台账） -->
+---
+
+## 12. 实施记录
+
+**2026-10-03 全 7 步闭环**（§9 的步骤 3 与 4 合成一次提交，理由见 §12.4-K）。
+
+### 12.1 commit 序列
+
+| 步骤 | commit | 内容 |
+|---|---|---|
+| 设计 | `fcff3a6` | docs/70 批准（R1–R8 全按建议） |
+| 1 | `e92f547` | pi wire DTO（`RemoteModelWire`/`RemoteCostWire`）＋单文件 `FileModelsStore` |
+| 2 | `0a3f522` | `Provider.getModels/refreshModels` default ＋ `RefreshModelsContext`/`ModelsPublication`/`CatalogPublisherPort` |
+| 4 | `0d04310` | `ModelsStoreEntry.withCheckedAt` ＋ `ModelData.generatedAt`（R5） |
+| 3+4 | `b361b6b` | `RemoteCatalogProvider`（全分支）＋ 17 夹具 |
+| 5 | `d7ab24c` | `CatalogRefreshCoordinator` ＋ `ModelCatalogRefresh`（两阶段）＋ 装配/接线 |
+| 6a | `297060d` | FileModelsStore 的 spotbugs 空指针修（`mvn test` 不跑 spotbugs，见 §12.5） |
+| 6b | `711d898` | R4：删每 provider 的 models URL 通道 ＋ 孤儿 `RemoteCatalog`/`CatalogRefreshResult` |
+| 6c | `d30c1d3` | 装配层整批共用一个 `HttpClient`（每包装一次新建会让一次刷新拉起 N 个选择器线程）；删未用的单参 `wrap` |
+| 7 | `bf83ffa` | §12 回填 ＋ docs/48 §5 行 D ＋ docs/32 B143–B146 |
+
+### 12.2 RED 实测
+
+| 步骤 | RED | 实红 |
+|---|---|---|
+| 1 | 结构新增 ⇒ 编译红 | 新 API（`FileModelsStore.FILE_NAME`、`RemoteModelWire`）不存在；`git show HEAD:FileModelsStore.java \| grep -c FILE_NAME` = **0**。⚠️ 另有**两条夹具自身的编译错**（`twoProvidersShareOneStoreFile` 未声明 `IOException`、`RemoteModelWireTest` 漏 import `ModelId`）—— 那是夹具笔误、不是实现缺失，不构成 RED 证据 |
+| 2 | 结构新增 ⇒ 编译红 | 8 处「找不到符号」（三个新类型 ＋ `Provider.getModels/refreshModels`） |
+| 3+4 | **没取到** | 实现与夹具同批写 ⇒ 首跑 **4 红全是夹具错**（3 处 200 响应没给 `Last-Modified`，被 generatedAt 守卫挡掉；1 处把 404 的 overlay 语义当成「空」）⇒ 见 §12.5 第 1 条 |
+| 5 | **没取到** | 首跑 **零红**（29/29 一次绿）—— 同上 |
+| 6 | 回归为证 | 删除后 ai 1318⇒1312（`RemoteCatalogTest` 6 条）；`ConfigurableProviderRemoteCatalogTest` 80 行随 `modelsUrl` 面删除 |
+
+### 12.3 变异探针（§7.3 的 M1–M6）
+
+每次变异后 `grep` 复核落地，测完回滚、复跑全绿。
+
+| 变异 | 红集 |
+|---|---|
+| **M1** TTL 恒假（`isFresh` ⇒ false） | 恰 1：`freshEntrySkipsRequestButForceBypasses` |
+| **M2** validator 恒带（去掉 `!models.isEmpty()`） | 恰 1：`sendsValidatorOnlyWhenCachedBodyHasModels` |
+| **M3** merge 同 id 只追加不覆盖 | 恰 1：`mergesArrayShapeReplacingSameIdAndAppendingNewId` |
+| **M4** 去掉 generatedAt 守卫 | **3**（预测 1）：`generatedAtGuardDropsRemoteNotNewerThanLocal`、`notFoundZeroesLastModifiedAndClearsEtag`、`absentLastModifiedIsStoredAsEpochAndGuardedOut` |
+| **M5** 去掉世代检查（publish 恒 true） | 恰 1：`staleGenerationStillPersistsButSkipsUpdateAndReturnsFalse` |
+| **M6** 404/501 不置 `lastModified=EPOCH` | 恰 1：`notFoundZeroesLastModifiedAndClearsEtag` |
+
+**M1–M6 无零红**；M4 的红集比预测宽，因为「守卫」同时被三处用例当作判别器（两处直接、一处经 404 的第二相）。
+
+### 12.4 判定与偏离（Ruling）
+
+| # | 判定 | 理由 | 判错的代价 |
+|---|---|---|---|
+| **A** | `RefreshModelsContext` **不移植** pi 的 `credential` | pi 自己的 `withRemoteCatalog` 从不读它（§1.3 的逐字分支）；本仓无「要凭据才能拉目录」的 provider ⇒ 零读者；带上它会逼协调器接一条凭据解析链 | 出现此类 provider 时要加回一个分量并接解析链 |
+| **B** | 不移植 pi 的 `signal: AbortSignal` | 设计 R2 已裁：不支持中途取消，4s attempt timeout 封顶 | 靠 4s 硬超时兜底，长尾不可中断 |
+| **C** | `DefaultProviders.streamBlocking` 的模型解析改读 `getModels()`（按 `ModelId` 等值查找），不再 `builtinModels().find()` | 远程 overlay 只挂在 `getModels()` 上；读 `builtinModels()` 会让远端补进来的模型解析不到元数据（退化成 `ModelInfo.minimal`）⇒ 包装等于白做 | 无（这是本包的行为必需项） |
+| **D** | `ModelsPublication` 的删除工厂命名 `remove()` | record 分量叫 `delete` ⇒ 访问器已是 `delete()`，Java 不允许仅返回类型不同的重载 | 命名与设计稿 §4.1 草图的字面不同 |
+| **E** | `RefreshModelsContext.offline/online` 由 package-private 改 **public** | 夹具在 `com.pijava.coding.agent.core`、被构造对象在 `com.pijava.ai.catalog`；设计稿 §4.1 的草图没写修饰符 | 无 |
+| **F** | User-Agent 用本仓既有约定 `pi-java/dev`（`PiHttpClient` 等三处同值），**不**新造 pi 的 `pi/<version> (…)` 形状 | 本仓没有版本源（无 `VERSION` 常量、无资源过滤）；为目录端点单独发明第二种 UA 形状反而不一致 | 若 pi.dev 对 UA 有要求，需要补一个真的版本通道 |
+| **G** | **R4 的前提被证伪 ⇒ PUT 与 `CatalogPublisher`/`CatalogModel` 不删** | 「零生产调用」不成立：`AiCli` 把 `pi-ai catalog validate\|merge\|publish` 注册成真子命令，`publish` 就是 PUT 的生产者。设计 §2 表格那行「孤儿：仅自身测试」是**调研错误** | `pi-ai catalog publish` 这条 pi 没有的自创路径继续存在（登记 **B143**） |
+| **H** | 两阶段编排里单个 provider 失败**记账而不中断整批** | pi 的 `Promise.all` 会让一个 provider 的 reject 拖垮整批 —— 那个传播形状对本仓的「后台刷新、错误吞掉」没有价值；`ModelCatalogRefresh.Result` 承载逐 provider 的异常 | 与 pi 的失败传播形状不同；调用方若依赖「一个失败即整体失败」需改 |
+| **I** | 不设 `isDynamic(p)` 过滤，对列表内**所有** provider 调 `refreshModels` | Java 的 `refreshModels` 是 default no-op（不像 pi 是可选方法），静态 provider 天然无事可做 | 无（等价） |
+| **J** | `models-store.json` 默认位置＝**与 `ModelsJsonConfig.defaultPath()` 同一 agent 目录**（`PI_JAVA_CODING_AGENT_DIR` 或 `~/.pi-java/agent`） | 仓库既有的 agent 目录约定；设计 §4.3 的「`AgentDir.resolve(...)`」在本仓没有 `AgentDir` 类 | 无 |
+| **K** | §9 的步骤 3 与 4 **合成一次提交** | 它们改的是同一个方法体的分支集合，拆开只会造一个「只有前一半分支」的中间态 | 提交粒度与设计稿的步骤编号不再一一对应 |
+| **L** | `ModelData.generatedAt()` 取对齐锚点日期 `2026-09-20`（pi `3390bd9` 的提交日） | 该常量必须 ≤ 远端 `Last-Modified` 才有 overlay；取「今天」的风险是远端目录一概被守卫掉（§4.7 注释已写明刷新模型表时必须同步） | 若内表刷新而常量没跟，新模型进不来 |
+
+### 12.5 教训
+
+1. **夹具写在实现之后 ⇒ 首跑的红/绿都不构成证据**（「零红」的第 6 种成因）。步骤 3+4 的首跑 4 红全是**夹具**错（守卫 vs 缺 `Last-Modified`、404 的 overlay 语义），步骤 5 首跑零红。两处都只能靠 §12.3 的变异探针补证 —— 与 `docs/58` 的第 (6) 形态同源。
+2. **`mvn test` 不跑 spotbugs**（它绑在 `verify`）⇒ 「模块测试全绿」≠ 可提交。本包因此多出一个 `fix(ai)` commit（`297060d`）。
+3. **`mvn spotbugs:check` 的 `default-cli` 用 `target/classes`**：换掉源码但不重编译，取证无效。判定 `StrictSampling` 那条是否既有，第一次只 `cp` 源码就跑 ⇒ 结论不算数，补了 `compile` 才作数（见 §12.6）。
+4. **`git rm` 之后不能再 `git add <同一路径>`**（`pathspec did not match any files`），而已经 staged 的删除会被**下一条不带 pathspec 的 `commit` 一并收走** —— 本次让 `fix(ai)` 那次提交吞了 3 个删除，用 `git reset --soft HEAD~2` 重做。
+5. **404/501 的 overlay 语义**：同一次 `refreshModels` 调用里，404 分支**只 persist 不带 update** ⇒ 本次调用内 `dynamic` 仍是离线相恢复的那份（pi 亦如此）。「overlay 空」是**下一次**刷新的效果。设计稿 §7.1-4 的措辞「overlay 空」不够精确，夹具已按实测口径写（并断言第二相归空）。
+6. **收尾那次 `-am` 回归里 agent-core 的 `ConformanceTest[14]`（S14）假红**（该用例 96.07 s、报帧序不一致；隔离复跑 1.6 s 15/15 绿）。agent-core 本包**一行未动**，同一份代码在前一次全 reactor `mvn -o test`（14/14 SUCCESS）里是绿的 ⇒ 负载敏感。登记 **B146**，不在本包修。
+
+### 12.6 回归与门禁
+
+- **全 reactor `mvn -o test`**（cleanup 之后）：**14/14 SUCCESS** —— telemetry 31 ／ ai 1312 ／ agent-core 527 ／ sqlite 35 ／ coding-agent 319（307 ⇒ 319）／ TUI（4:42）／ protocol／client／server／web（52 s）／evals／dist；
+- cleanup 使 ai 1318 ⇒ **1312**（删 `RemoteCatalogTest` 的 6 条）；
+- ⚠️ 收尾那次 `-am` 回归里 agent-core 的 `ConformanceTest[14]`（S14）**假红**，隔离复跑 15/15 绿（§12.5-6，登记 B146）；
+- 本包新增 spotbugs 违规 **0**（`FileModelsStore` 两处已修）；
+- ⚠️ **`mvn clean verify` 在今天的主干上红**，原因是**既有**的 `StrictSampling.resolveStrict` `NP_BOOLEAN_RETURN_NULL`（`spotbugs-exclude.xml` 空）。已用「换回 HEAD 源码 ＋ **重新编译** ＋ 再跑」复核：同样报 —— 与本包无关（登记 **B144**）。本包因此**未能**跑到 §10.4 的全 reactor `verify` 全绿，如实记录。
+- checkstyle：ai 与 coding-agent 0 新违规。
+
+### 12.7 门禁对照（§10）
+
+| # | 门槛 | 结果 |
+|---|---|---|
+| 1 | RED 先于实现 | 步骤 1/2 编译红；步骤 3+4/5 **未取到**（§12.2 + §12.5-1），由 M1–M6 变异补证 |
+| 2 | GREEN | 目标夹具全绿：`RemoteCatalogProviderTest` 17 、`CatalogRefreshCoordinatorTest` 5 、`ModelCatalogRefreshTest` 4 、`DefaultProvidersRemoteCatalogTest` 3 、`ProviderDynamicProtocolTest` 2 、`FileModelsStoreTest` 5 、`RemoteModelWireTest` 3 、`ModelDataGeneratedAtTest` 2 |
+| 3 | 变异 M1–M6 记录红集 | §12.3（无零红） |
+| 4 | 回归 ai/coding-agent（-am）全绿；checkstyle 0 新违规 | ✅（spotbugs 见 §12.6 的既有项） |
+| 5 | 无调试残留；改动文件 ≤500 | ✅（最大新增文件 `RemoteCatalogProvider.java` 302 行、`RemoteCatalogProviderTest.java` 428 行） |
+| 6 | §12 与 docs/48 行 D 在收尾提交中回填 | ✅ |
+
+### 12.8 新登记
+
+| # | 内容 | 处置 |
+|---|---|---|
+| **B143** | **`pi-ai catalog` 是本仓自创的 CLI 面（`validate`/`merge`/`publish`，`publish`＝HTTP PUT 上传），pi 无对应物**；R4 原判「零生产调用」被证伪 | 保留（见 §12.4-G）。待裁决：整条命令删掉，还是维持为自建工具链 |
+| **B144** | **`mvn clean verify` 在 ai 模块因既有 `StrictSampling.resolveStrict` 的 `NP_BOOLEAN_RETURN_NULL` 失败**（`spotbugs-exclude.xml` 为空；换源重编译复核为既有） | 待裁决：`Optional<Boolean>` 化（改公开 API）／加 exclude 条目／维持红。⚠️ 在修好前，任何包的「`mvn clean verify` 零错误」自验证都**物理上做不到** |
+| **B145** | **TUI 启动/登录后的定向目录刷新未接线**（设计 R8 明示随 TUI 包）—— 今天只有 RPC 模式启动后台刷新；`pi-ai` CLI 与 print 模式不刷（pi 的 `main.ts:163` 也是 `allowModelNetwork:false`，口径一致） | 随 TUI 包；编排入口 `ModelCatalogRefresh` 已可调用 |
+
+### 12.9 未覆盖
+
+- **不覆盖 404/501 的「跨进程」语义**：`FileModelsStore` 用 `synchronized`（R6 裁决，单进程）—— 多进程同时刷新同一 agent 目录没有锁。
+- **`pi-ai catalog` 那条工具链与新远程目录机制并存**：两套 wire（`CatalogModel` vs `RemoteModelWire`）今天都活着；本包**没有**把它们合流（见 B143 的裁决）。
+
