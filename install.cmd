@@ -13,7 +13,7 @@ set "REPO=%~dp0"
 set "MODULES=java.base,java.compiler,java.desktop,java.management,java.naming,java.net.http,java.security.jgss,java.sql,jdk.httpserver,jdk.jfr,jdk.unsupported,jdk.crypto.ec,jdk.localedata"
 
 echo [install] building fat jar...
-call "%MVN%" -q -pl pi-java-dist -am package -DskipTests
+call "%MVN%" -q -pl pi-java-dist -am clean package -DskipTests
 if errorlevel 1 (
     echo [install] build failed
     exit /b 1

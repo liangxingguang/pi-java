@@ -12,8 +12,8 @@ set "PORT=%1"
 if "%PORT%"=="" set "PORT=8787"
 set "JAR=pi-java-dist\target\pi-java.jar"
 
-echo [pi-java web] building (incremental)...
-call "%MVN%" -q -pl pi-java-dist -am package -DskipTests
+echo [pi-java web] building (clean - incremental builds were observed to leave a stale fat jar)...
+call "%MVN%" -q -pl pi-java-dist -am clean package -DskipTests
 if errorlevel 1 (
     echo [pi-java web] build failed
     exit /b 1

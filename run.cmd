@@ -11,7 +11,7 @@ rem Silence JDK 25 native-access warnings (JLine/TamboUI Panama backend)
 set "MAVEN_OPTS=--enable-native-access=ALL-UNNAMED"
 
 echo [pi-java] building (incremental)...
-call "%MVN%" -q -pl pi-java-tui -am install -DskipTests
+call "%MVN%" -q -pl pi-java-tui -am clean install -DskipTests
 if errorlevel 1 (
     echo [pi-java] build failed
     exit /b 1
