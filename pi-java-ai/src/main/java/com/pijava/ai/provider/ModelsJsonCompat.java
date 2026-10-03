@@ -110,7 +110,8 @@ final class ModelsJsonCompat {
             def.sendSessionAffinityHeaders(),
             SessionAffinityFormat.parse(def.sessionAffinityFormat())
                 .orElse(null),
-            def.supportsStrictTools() != null && def.supportsStrictTools());
+            def.supportsStrictTools() != null && def.supportsStrictTools(),
+            def.supportsOpenAIGrammarTools());
     }
 
     /**
@@ -190,7 +191,10 @@ final class ModelsJsonCompat {
                 ? SessionAffinityFormat.parse(raw.sessionAffinityFormat()).orElse(null)
                 : base.sessionAffinityFormat(),
             raw.supportsStrictTools() != null
-                ? raw.supportsStrictTools() : base.supportsStrictTools());
+                ? raw.supportsStrictTools() : base.supportsStrictTools(),
+            raw.supportsOpenAIGrammarTools() != null
+                ? raw.supportsOpenAIGrammarTools()
+                : base.supportsOpenAIGrammarTools());
     }
 
     /** base ChatTemplateKwargValue map 上叠加 raw JSON 层（raw 键经 kwargValueOf 转换）。 */
@@ -277,7 +281,10 @@ final class ModelsJsonCompat {
             override.sessionAffinityFormat() != null
                 ? override.sessionAffinityFormat() : base.sessionAffinityFormat(),
             override.supportsStrictTools() != null
-                ? override.supportsStrictTools() : base.supportsStrictTools());
+                ? override.supportsStrictTools() : base.supportsStrictTools(),
+            override.supportsOpenAIGrammarTools() != null
+                ? override.supportsOpenAIGrammarTools()
+                : base.supportsOpenAIGrammarTools());
     }
 
     /** 两个 raw JSON map 的键级合并（{@code override} 同键覆盖）；皆 null ⇒ null。 */

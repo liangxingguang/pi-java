@@ -219,7 +219,9 @@ public final class ModelsJsonSchema {
          */
         @JsonProperty("sessionAffinityFormat") String sessionAffinityFormat,
         /** docs/66（pi {@code types.ts:826}）：Anthropic 车道是否接受 strict tool；缺省 {@code false}。 */
-        @JsonProperty("supportsStrictTools") Boolean supportsStrictTools
+        @JsonProperty("supportsStrictTools") Boolean supportsStrictTools,
+        /** docs/69（pi {@code types.ts}: grammar 能力位）：是否支持 OpenAI custom tool 文法；缺省 ⇒ 门关。 */
+        @JsonProperty("supportsOpenAIGrammarTools") Boolean supportsOpenAIGrammarTools
     ) {}
 
     /**

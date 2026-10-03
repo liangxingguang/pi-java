@@ -230,6 +230,34 @@ class ModelsJsonConfigTest {
     }
 
     /**
+     * docs/69：{@code supportsOpenAIGrammarTools} 从 models.json 读进 {@code compat}，
+     * 原样保留三态（缺省 ⇒ null ⇒ 门关）。
+     */
+    @Test
+    void readsTheGrammarToolsKeyFromCompatBlock() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "openai-responses",
+              "models": [
+                {"id": "on", "compat": {"supportsOpenAIGrammarTools": true}},
+                {"id": "off", "compat": {"supportsOpenAIGrammarTools": false}},
+                {"id": "silent", "compat": {"supportsStrictMode": true}}
+              ]
+            }}}
+            """);
+
+        var catalog = config.catalog();
+        assertThat(catalog.find(ModelId.of("relay", "on")).orElseThrow()
+            .compat().supportsOpenAIGrammarTools()).isTrue();
+        assertThat(catalog.find(ModelId.of("relay", "off")).orElseThrow()
+            .compat().supportsOpenAIGrammarTools()).isFalse();
+        assertThat(catalog.find(ModelId.of("relay", "silent")).orElseThrow()
+            .compat().supportsOpenAIGrammarTools())
+            .as("没写 ⇒ null（门关）").isNull();
+    }
+
+    /**
      * 包 A-10：{@code thinkingTokenBudgetField} 的未知取值也是**响亮**的
      * （理由与 {@code maxTokensField} 同：字段名会静默换掉，没有其它症状）。
      */

@@ -76,7 +76,8 @@ public final class CatalogCompatRules {
             c.supportsMaxOutputTokens(), c.thinkingFormat(), c.chatTemplateKwargs(),
             c.chatTemplateArgs(), c.supportsReasoningEffort(), c.cacheControlFormat(),
             c.openRouterRouting(), c.sendSessionAffinityHeaders(),
-            c.sessionAffinityFormat(), supportsStrictTools);
+            c.sessionAffinityFormat(), supportsStrictTools,
+            c.supportsOpenAIGrammarTools());
     }
 
     /**
@@ -135,14 +136,44 @@ public final class CatalogCompatRules {
      * （{@code generate-models.ts:821-825}）：provider 为 openai 的 responses 模型
      * 无条件写 {@code supportsStrictMode:true}。api（responses）门由调用方承担；
      * 非 openai provider 返回 {@link ModelCompat#NONE}。
+     *
+     * <p>docs/69（pi {@code applyOpenAIGrammarToolCompatMetadata:831-854}）：gpt-5+
+     * （{@code /^gpt-(\d+)/} 组 ≥5）再置 {@code supportsOpenAIGrammarTools:true}。</p>
      */
     public static ModelCompat openaiResponses(String provider, String modelId) {
         if (!"openai".equals(provider)) {
             return ModelCompat.NONE;
         }
-        return new ModelCompat(false, null, true, false,
+        var strict = new ModelCompat(false, null, true, false,
             null, null, null, null, null, true,
             null, null, null, Boolean.TRUE);
+        return withGrammarTools(strict, isGpt5OrLater(modelId) ? Boolean.TRUE : null);
+    }
+
+    /** Copy a compat, overriding only {@code supportsOpenAIGrammarTools}. */
+    private static ModelCompat withGrammarTools(ModelCompat c,
+                                                 Boolean supportsOpenAIGrammarTools) {
+        return new ModelCompat(
+            c.allowEmptySignature(), c.requiresReasoningContentOnAssistantMessages(),
+            c.supportsFinishReason(), c.forceAdaptiveThinking(),
+            c.supportsMidConvoSystemMessages(), c.supportsMidConvoToolAdditions(),
+            c.supportsMidConvoToolChanges(), c.supportsAdditionalTools(),
+            c.supportsToolSearch(), c.supportsTemperature(), c.maxTokensField(),
+            c.supportsStore(), c.supportsDeveloperRole(), c.supportsStrictMode(),
+            c.supportsLongCacheRetention(), c.supportsCacheControlOnTools(),
+            c.thinkingTokenBudgetField(), c.supportsThinkingTokenBudget(),
+            c.supportsMaxOutputTokens(), c.thinkingFormat(), c.chatTemplateKwargs(),
+            c.chatTemplateArgs(), c.supportsReasoningEffort(), c.cacheControlFormat(),
+            c.openRouterRouting(), c.sendSessionAffinityHeaders(),
+            c.sessionAffinityFormat(), c.supportsStrictTools(),
+            supportsOpenAIGrammarTools);
+    }
+
+    /** pi {@code generate-models.ts:834} 谓词：{@code /^gpt-(\d+)/} 组 ≥5。 */
+    private static boolean isGpt5OrLater(String modelId) {
+        var matcher = java.util.regex.Pattern.compile("^gpt-(\\d+)")
+            .matcher(modelId == null ? "" : modelId);
+        return matcher.find() && Integer.parseInt(matcher.group(1)) >= 5;
     }
 
     /**

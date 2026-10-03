@@ -145,6 +145,45 @@ class CatalogCompatRulesTest {
             .thinkingFormat()).isEqualTo(ThinkingFormat.DEEPSEEK);
     }
 
+    // ── docs/69：grammar 能力位（generate-models.ts:831-854）────
+
+    @Test
+    void gpt5AndLaterGetGrammarToolsOnOpenaiResponses() {
+        // pi 谓词：provider openai ＋ /^gpt-(\d+)/ 组 ≥5；与 supportsStrictMode 一起给。
+        for (var id : List.of("gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-5-2025-08-07")) {
+            var compat = CatalogCompatRules.openaiResponses("openai", id);
+            assertThat(compat.supportsOpenAIGrammarTools()).as(id).isTrue();
+            assertThat(compat.supportsStrictMode()).as(id).isTrue();
+        }
+        // gpt-4* 只拿 supportsStrictMode
+        for (var id : List.of("gpt-4.1", "gpt-4o")) {
+            var compat = CatalogCompatRules.openaiResponses("openai", id);
+            assertThat(compat.supportsOpenAIGrammarTools()).as(id).isNull();
+            assertThat(compat.supportsStrictMode()).as(id).isTrue();
+        }
+        // 非 openai provider ⇒ NONE
+        assertThat(CatalogCompatRules.openaiResponses("github-copilot", "gpt-5"))
+            .isEqualTo(ModelCompat.NONE);
+    }
+
+    @Test
+    void theBuiltInCatalogOpensTheGrammarGateForGpt5() {
+        var catalog = BuiltinCatalog.openaiModels();
+        for (var id : List.of("gpt-5", "gpt-5-mini", "gpt-5-nano")) {
+            var m = catalog.find(ModelId.of("openai", id)).orElseThrow();
+            assertThat(CompatResolver.forResponses(m, false).supportsOpenAIGrammarTools())
+                .as(id).isTrue();
+            // Java 形状：catalog 标注函数两车道共用 ⇒ completions 也读同一份（pi 生成器
+            // 只标 responses api，但 Java 的标注在 CatalogCompatRules 这一层合一）。
+            assertThat(CompatResolver.forCompletions(m, "https://api.openai.com/v1")
+                .supportsOpenAIGrammarTools()).as(id).isTrue();
+        }
+        var embedding = catalog.find(ModelId.of("openai", "text-embedding-3-small"))
+            .orElseThrow();
+        assertThat(CompatResolver.forResponses(embedding, false).supportsOpenAIGrammarTools())
+            .as("非 gpt-5 模型门保持缺席").isNull();
+    }
+
     // ── 内置目录确实用上了这些规则 ─────────────────────────────
 
     @Test

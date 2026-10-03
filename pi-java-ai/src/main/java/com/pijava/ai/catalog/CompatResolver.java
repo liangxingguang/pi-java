@@ -139,7 +139,10 @@ public final class CompatResolver {
             // 包 A-10 第 6 步：`supportsMaxOutputTokens` 只被 **Responses** 车道读
             // （pi `openai-responses.ts:79`；azure 那份副本连读点都没有）⇒ 本车道不定义它
             // ⇒ 原样透传模型的显式取值（本车道的任何读点都不会碰它）。
-            null), detectedFormat, detectedEffort, detectedCacheControlFormat);
+            null,
+            // docs/69：grammar 能力位显式-only（目录标注/models.json），无探测。
+            compat.supportsOpenAIGrammarTools()), detectedFormat, detectedEffort,
+            detectedCacheControlFormat, compat.supportsOpenAIGrammarTools());
     }
 
     /**
@@ -159,7 +162,8 @@ public final class CompatResolver {
      */
     private static ModelCompat withCompletions(ModelCompat c, ThinkingFormat detectedFormat,
                                                Boolean detectedSupportsReasoningEffort,
-                                               CacheControlFormat detectedCacheControlFormat) {
+                                               CacheControlFormat detectedCacheControlFormat,
+                                               Boolean supportsOpenAIGrammarTools) {
         return new ModelCompat(
             c.allowEmptySignature(),
             c.requiresReasoningContentOnAssistantMessages(),
@@ -187,7 +191,8 @@ public final class CompatResolver {
             // 包 A-02：cacheControlFormat 是 explicit ?? detected（与 thinkingFormat 同形）；
             // openRouterRouting 只透传（pi 探测面 :1657 的 {} 无读者，docs/59 §4.8/R6）。
             c.cacheControlFormat() != null ? c.cacheControlFormat() : detectedCacheControlFormat,
-            c.openRouterRouting());
+            c.openRouterRouting(),
+            null, null, false, supportsOpenAIGrammarTools);
     }
 
     /**
@@ -203,7 +208,7 @@ public final class CompatResolver {
     public static ModelCompat forAnthropic(ModelInfo model) {
         var partial = resolved(base(model), null, Boolean.FALSE, null, Boolean.FALSE,
             null, null, null, null, null, null,
-            Boolean.TRUE, Boolean.TRUE, null, null, null);
+            Boolean.TRUE, Boolean.TRUE, null, null, null, null);
         // supportsStrictTools：pi `model.compat?.supportsStrictTools ?? false`（无探测），
         // 显式值来自目录标注/models.json。resolved() 不携带该组件，故在此显式透传。
         return new ModelCompat(
@@ -222,7 +227,7 @@ public final class CompatResolver {
             partial.chatTemplateArgs(), partial.supportsReasoningEffort(),
             partial.cacheControlFormat(), partial.openRouterRouting(),
             partial.sendSessionAffinityHeaders(), partial.sessionAffinityFormat(),
-            base(model).supportsStrictTools());
+            base(model).supportsStrictTools(), null);
     }
 
     /**
@@ -238,10 +243,12 @@ public final class CompatResolver {
             Boolean.FALSE, Boolean.FALSE, null, null, null, strictModeDefault,
             null, null, null, null,
             // 包 A-10 第 6 步：pi `openai-responses.ts:79` 的 `?? true`（types.ts:773-774
-            // 的注释：「某些 Codex 协议网关会拒绝 max_output_tokens」）。
+            // 的注释：「某些 Codex 协议网关会」拒绝 max_output_tokens）。
             // ⚠️ azure 车道共用本方法 ⇒ 它拿到的也是这一份，但**它不读这个组件**
             // （pi 的 azure 副本连门都没有）⇒ 该值在 azure 上不可观察。
-            Boolean.TRUE);
+            Boolean.TRUE,
+            // docs/69：grammar 能力位显式-only（无探测），两 responses 车道读同一份。
+            base(model).supportsOpenAIGrammarTools());
     }
 
     /**
@@ -251,7 +258,7 @@ public final class CompatResolver {
      */
     public static ModelCompat forMistral(ModelInfo model) {
         return resolved(base(model), null, Boolean.FALSE, null, null,
-            null, null, null, null, null, null, null, null, null, null, null);
+            null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     /**
@@ -326,6 +333,8 @@ public final class CompatResolver {
      *
      * @param detected 本车道的探测值；{@code null} 表示<b>本车道不定义这个字段</b>
      *                 （pi 的相应接口里没有它）⇒ 原样透传模型的覆盖
+     * @param supportsOpenAIGrammarTools docs/69：grammar 能力位只来自显式 compat（无探测），
+     *                 null 表示门关
      */
     private static ModelCompat resolved(ModelCompat c,
                                         Boolean reasoningContentRequired,
@@ -342,7 +351,8 @@ public final class CompatResolver {
                                         Boolean cacheControlOnTools,
                                         ThinkingTokenBudgetField thinkingTokenBudgetField,
                                         Boolean supportsThinkingTokenBudget,
-                                        Boolean supportsMaxOutputTokens) {
+                                        Boolean supportsMaxOutputTokens,
+                                        Boolean supportsOpenAIGrammarTools) {
         return new ModelCompat(
             c.allowEmptySignature(),
             pick(c.requiresReasoningContentOnAssistantMessages(), reasoningContentRequired),
@@ -372,11 +382,13 @@ public final class CompatResolver {
             c.chatTemplateArgs(),
             c.supportsReasoningEffort(),
             // 包 A-02：两个新组件同样原样透传（cacheControlFormat 的「explicit ?? detected」
-            // 合一在 withCompletions；openRouterRouting 无探测面）。⚠️ 这里必须走 25 参规范
-            // 构造——若退回 23 参便捷构造会把这两个显式值丢成 null，withCompletions 就再也
-            // 读不到用户在 models.json 里写的 cacheControlFormat/openRouterRouting。
+            // 合一在 withCompletions；openRouterRouting 无探测面）。docs/69：grammar 能力位
+            // 无探测、显式-only。⚠️ 这里必须走 canonical 29 参构造——退便捷构造会把
+            // cacheControlFormat/openRouterRouting/grammar 三个显式值丢成缺省。
             c.cacheControlFormat(),
-            c.openRouterRouting());
+            c.openRouterRouting(),
+            // affinity 两字段与 strictTools 在 resolved 这一层保持既有缺省（null/null/false）。
+            null, null, false, supportsOpenAIGrammarTools);
     }
 
     private static Boolean pick(Boolean explicit, Boolean detected) {
