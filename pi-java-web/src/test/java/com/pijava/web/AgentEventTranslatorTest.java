@@ -100,7 +100,7 @@ class AgentEventTranslatorTest {
         var assistant = new Message.AssistantMessage(
             List.of(new ContentBlock.TextContent("done")), "stop", null);
         var result = new Message.ToolResultMessage("call-1", "bash",
-            List.of(new ContentBlock.TextContent("out")), null, null, List.of(), false);
+            List.of(new ContentBlock.TextContent("out")), null, null, List.of(), false, null);
 
         var msgs = translator.translate(
             new AgentSessionEvent.AgentSettled(assistant, List.of(result)));

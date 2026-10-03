@@ -33,10 +33,10 @@ class SqliteToolResultPayloadTest {
         session.appendEntry(new ProvisionedEntry<>(new Entry.Message("e1", 0, null, null,
             new Message.ToolResultMessage("call-1", "rich",
                 List.of(new ContentBlock.TextContent("ok")), details, usage,
-                List.of("mcp:late"), false), null)), "main");
+                List.of("mcp:late"), false, null), null)), "main");
         session.appendEntry(new ProvisionedEntry<>(new Entry.Message("e2", 0, null, null,
             new Message.ToolResultMessage("call-2", "plain",
-                List.of(new ContentBlock.TextContent("ok")), null, null, List.of(), true),
+                List.of(new ContentBlock.TextContent("ok")), null, null, List.of(), true, null),
             null)), "main");
         session.storage().drain();
         repo.close();

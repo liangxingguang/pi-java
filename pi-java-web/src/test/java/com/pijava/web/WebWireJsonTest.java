@@ -61,14 +61,14 @@ class WebWireJsonTest {
         // 且 pi 的省略规则同守 —— undefined/null/空 ⇒ 键缺席，不给前端送 null 噪声。
         var m = new Message.ToolResultMessage("call-1", "rich",
             List.of(new ContentBlock.TextContent("ok")), Map.of("kind", "card"),
-            Map.of("input", 3, "output", 5), List.of("mcp:late"), false);
+            Map.of("input", 3, "output", 5), List.of("mcp:late"), false, null);
         var node = WebWireJson.messageNode(m);
         assertThat(node.get("details").get("kind").asText()).isEqualTo("card");
         assertThat(node.get("usage").get("input").asInt()).isEqualTo(3);
         assertThat(node.get("addedToolNames").get(0).asText()).isEqualTo("mcp:late");
 
         var bare = WebWireJson.messageNode(new Message.ToolResultMessage("call-2", "plain",
-            List.of(new ContentBlock.TextContent("ok")), null, null, List.of(), true));
+            List.of(new ContentBlock.TextContent("ok")), null, null, List.of(), true, null));
         assertThat(bare.get("details")).isNull();
         assertThat(bare.get("usage")).isNull();
         assertThat(bare.get("addedToolNames")).isNull();

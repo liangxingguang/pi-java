@@ -66,7 +66,7 @@ class JsonEventMapperTest {
         var assistant = new Message.AssistantMessage(
             List.of(new ContentBlock.TextContent("done")), "stop", null);
         var result = new Message.ToolResultMessage("call_1", "write",
-            List.of(new ContentBlock.TextContent("ok")), null, null, List.of(), false);
+            List.of(new ContentBlock.TextContent("ok")), null, null, List.of(), false, null);
 
         var node = JsonEventMapper.toWire(
             new AgentSessionEvent.AgentSettled(assistant, List.of(result)));

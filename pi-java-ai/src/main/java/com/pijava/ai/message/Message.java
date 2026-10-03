@@ -156,13 +156,29 @@ public sealed interface Message
      * （{@code "max_tokens"}／{@code "MAX_TOKENS"}／{@code "tool_calls"}），
      * 后者是 pi 的 {@code StopReason}。pi 的消息整体 stringify 落盘 ⇒ 它同样是转录里的键。</p>
      *
-     * <p>pi 类型上的 {@code responseModel}/{@code responseId}/
-     * {@code providerThinkingLevel}/{@code diagnostics}/
-     * {@code endTurn} 在对齐面（packages/agent/src）没有任何消费者（grep 全数命中的
-     * 只有 prompt-templates/skills 的同名局部量），故不移植；哪天 pi 的消费进
-     * 对齐面，清点时重开。（⚠️ {@code rawStopReason} 原本也在这张清单上，§8.35.14 第五节
-     * 的复核把它移出：pi 有**两个读点**，都在 Google 车道的**生产者层**——「对齐面没有消费者」
-     * 的措辞是对的，但「故不移植」的结论错了，因为那一层 pi-java 也要实现。）</p>
+     * <p>⚠️ <b>以下五个 pi 字段不移植，但**每个的理由各不相同**</b>（2026-10-03 复核，
+     * {@code docs/71 §1.4}）—— 旧注释把它们笼统写成「对齐面没有任何消费者」，
+     * 那个措辞只对其中两个成立：</p>
+     * <ul>
+     * <li>{@code responseId}（{@code types.ts:522}）、{@code endTurn}
+     *     （{@code :531-535}）：<b>零消费者</b>真的成立 —— 全仓只有同车道内的读点
+     *     （{@code openai-codex-responses.ts:1534/:1546}）与一个 write-only 生产者。
+     *     维持不移植。</li>
+     * <li>{@code responseModel}（{@code :521}）、{@code diagnostics}（{@code :525}）：
+     *     pi **有**真消费者（用量费用分组 {@code coding-agent/core/usage-totals.ts:44}、
+     *     缓存保温归属 {@code cache-warmer.ts:345}、bug 报告 {@code bug-report.ts:194}、
+     *     UI 计数 {@code interactive-mode.ts:3917}）—— 但那些模块**本仓一个都没有**
+     *     （{@code RunSummaryAggregator} 是按 run 汇总，不按 {@code provider/responseModel}
+     *     分组）⇒ 移植会变成「只有生产者没有消费者」。**等那些模块移植时一并做**
+     *     （{@code docs/32} 已登记）。</li>
+     * <li>{@code providerThinkingLevel}（{@code :523-524}）：唯一消费者在
+     *     {@code packages/ai} 自己的 Anthropic 车道（{@code anthropic-messages.ts:1370-1376}
+     *     读它做**中途 effort 绑定**）—— 那层 pi-java 也要实现，但该行为被
+     *     <b>B99</b>（钉住的 SDK 写不出 {@code thinking.block_binding}）挡着 ⇒
+     *     **理由挂 B99，不是「无消费者」**。</li>
+     * </ul>
+     * <p>（{@code rawStopReason} 原本也在这张清单上，§8.35.14 第五节的复核把它移出：
+     * pi 的两个读点都在 Google 车道的**生产者层** —— 那一层 pi-java 也要实现。）</p>
      *
      * <p>可选字段全部「null ≙ pi 的 undefined」：序列化时键主动省略（Jackson 会把
      * null 写出来，JS 的 stringify 会丢 undefined —— 规则同 §8.18 的 A7）。

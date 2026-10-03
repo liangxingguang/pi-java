@@ -69,7 +69,7 @@ class RpcWireMessageShapeTest {
             timestampedAssistant(),
             new Message.ToolResultMessage("c1", "bash",
                 List.of(new ContentBlock.TextContent("out")), Map.of(),
-                null, List.of(), false));
+                null, List.of(), false, null));
 
         var node = JsonEventMapper.toWire(new AgentSessionEvent.AgentEnd(messages, false));
 
@@ -82,7 +82,7 @@ class RpcWireMessageShapeTest {
     void toolResultUsesPiFieldNameToolCallId() {
         var result = new Message.ToolResultMessage("c1", "bash",
             List.of(new ContentBlock.TextContent("out")), Map.of(),
-            null, List.of(), false);
+            null, List.of(), false, null);
 
         var node = JsonEventMapper.toWire(
             new AgentSessionEvent.AgentEnd(List.<Message>of(result), false));
@@ -123,7 +123,7 @@ class RpcWireMessageShapeTest {
     void absentOptionalKeysAreOmittedNotWrittenEmpty() {
         var result = new Message.ToolResultMessage("c1", "bash",
             List.of(new ContentBlock.TextContent("out")), Map.of(),
-            null, List.of(), false);
+            null, List.of(), false, null);
         var assistant = new Message.AssistantMessage(
             List.of(new ContentBlock.ThinkingContent("why")),
             "stop", null, "anthropic", "anthropic", "m", Usage.of(1, 2), null, null, null);
