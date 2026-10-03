@@ -72,6 +72,25 @@ class GrammarToolsWireTest {
     }
 
     @Test
+    void larkWinsWhenBothVariantsArePresent() throws Exception {
+        var variants = new LinkedHashMap<String, String>();
+        variants.put("openai_lark", "root ::= \"lark\"");
+        variants.put("openai_regex", "regex");
+        try (var server = new RecordingHttpServer()) {
+            var api = new OpenAICompletionsApi(options(server));
+            drain(api, request(gateOpenModel(),
+                grammarTool("pick", variants, grammarSchema("query"))));
+
+            var grammar = MAPPER.readTree(server.body()).path("tools").get(0)
+                .path("custom").path("format").path("grammar");
+            assertThat(grammar.path("syntax").asText())
+                .as("pi：两变体都在 ⇒ lark 优先").isEqualTo("lark");
+            assertThat(grammar.path("definition").asText())
+                .isEqualTo("root ::= \"lark\"");
+        }
+    }
+
+    @Test
     void fallsBackToFunctionWhenGateClosed() throws Exception {
         try (var server = new RecordingHttpServer()) {
             var api = new OpenAICompletionsApi(options(server));
