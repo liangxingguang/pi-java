@@ -62,6 +62,11 @@ public final class FileModelsStore implements ModelsStore {
         return agentDir.resolve(FILE_NAME);
     }
 
+    /** Store at the default agent-directory location ({@link #defaultFile()}). */
+    public static FileModelsStore defaultStore() {
+        return new FileModelsStore(defaultFile().getParent());
+    }
+
     @Override
     public synchronized Optional<ModelsStoreEntry> read(String providerId) {
         return Optional.ofNullable(loadMap().get(providerId))

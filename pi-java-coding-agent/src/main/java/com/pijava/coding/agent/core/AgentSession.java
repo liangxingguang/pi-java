@@ -129,7 +129,8 @@ public final class AgentSession implements AutoCloseable {
         var handle = "sqlite".equals(backend)
             ? PersistentSessionRepositories.sqlite(sessionsRoot)
             : PersistentSessionRepositories.jsonl(sessionsRoot);
-        var session = assemble(args, settings, DefaultProviders.defaultProviders(),
+        var session = assemble(args, settings,
+            DefaultProviders.defaultProviders(effective.catalogBaseUrl),
             new ToolContext(
                 System.getProperty("user.dir"),
                 Map.of(),
@@ -177,7 +178,7 @@ public final class AgentSession implements AutoCloseable {
         var handle = "sqlite".equals(backend)
             ? PersistentSessionRepositories.sqlite(sessionsRoot)
             : PersistentSessionRepositories.jsonl(sessionsRoot);
-        return create(args, handle, DefaultProviders.defaultProviders(),
+        return create(args, handle, DefaultProviders.defaultProviders(effective.catalogBaseUrl),
             new ToolContext(
                 System.getProperty("user.dir"),
                 Map.of(),
@@ -190,7 +191,7 @@ public final class AgentSession implements AutoCloseable {
     static AgentSession create(Args args, InMemorySessionRepository repository) {
         var settings = SettingsManager.load(args.projectTrustOverride());
         var effective = settings.effective();
-        return create(args, repository, DefaultProviders.defaultProviders(),
+        return create(args, repository, DefaultProviders.defaultProviders(effective.catalogBaseUrl),
             new ToolContext(
                 System.getProperty("user.dir"),
                 Map.of(),

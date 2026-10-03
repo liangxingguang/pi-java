@@ -38,11 +38,51 @@ public final class DefaultProviders {
      * aligned with pi's diagnostics behavior.
      */
     public static ProviderRegistry defaultProviders() {
+        return defaultProviders(null);
+    }
+
+    /**
+     * {@link #defaultProviders()} ＋ 给内置 provider 包上 pi.dev 远程目录
+     * （pi {@code model-runtime.ts:183-190}：radius 之外一律 {@code withRemoteCatalog}）。
+     *
+     * <p>顺序：内置 → ServiceLoader → models.json 覆盖（**内层**）→ 远程包装
+     * （**外层**）。包反了会让远端目录与用户配置互相错位覆盖。</p>
+     *
+     * @param catalogBaseUrl 远程目录根；null/空 ⇒ {@code https://pi.dev}
+     */
+    public static ProviderRegistry defaultProviders(String catalogBaseUrl) {
         var registry = ProviderRegistry.create();
         registry.loadBuiltinProviders();
         registry.discoverFromServiceLoader();
         registerModelsJsonProviders(registry);
+        wrapRemoteCatalogs(registry, catalogBaseUrl);
         return registry;
+    }
+
+    /**
+     * 不包远程目录的内置 provider。pi 排除 radius；本仓的等价项是图片 provider ——
+     * pi 的图片目录在独立的 {@code images-models.ts}，不对应
+     * {@code /api/models/providers/<id>}。
+     *
+     * <p>第三方 ServiceLoader provider 与 models.json 自定义 provider 也不包：
+     * pi 的 {@code withRemoteCatalog} 只套在生成的内置目录上。</p>
+     */
+    private static final java.util.Set<String> REMOTE_CATALOG_EXCLUDED =
+        java.util.Set.of("openrouter-images");
+
+    private static void wrapRemoteCatalogs(ProviderRegistry registry, String catalogBaseUrl) {
+        var builtinIds = com.pijava.ai.provider.builtin.ProviderCatalog.all().stream()
+            .map(com.pijava.ai.provider.Provider::name)
+            .collect(java.util.stream.Collectors.toSet());
+        for (var provider : registry.listAll()) {
+            if (!builtinIds.contains(provider.name())
+                    || REMOTE_CATALOG_EXCLUDED.contains(provider.name())) {
+                continue;
+            }
+            registry.register(RemoteCatalogProvider.wrap(provider, catalogBaseUrl,
+                java.util.Optional.of(
+                    com.pijava.ai.provider.builtin.ModelData.generatedAt())));
+        }
     }
 
     private static void registerModelsJsonProviders(ProviderRegistry registry) {
@@ -217,7 +257,12 @@ public final class DefaultProviders {
         // 从未被写入过（门恒假），且 pi 的 reasoning 是**未翻译的级别**、由车道自己翻译
         // （anthropic-messages.ts:858-904）。翻译所需的 compat/thinkingLevelMap 就在
         // modelInfo 上，故随 StreamRequest 一起走。
-        var modelInfo = provider.builtinModels().find(model)
+        // ⚠️ 读 getModels()（当前生效目录）而不是 builtinModels()：远程目录包装
+        // （RemoteCatalogProvider）把 overlay 放在 getModels() 上，读 builtinModels()
+        // 会让远端补进来的模型解析不到元数据。
+        var modelInfo = provider.getModels().stream()
+                .filter(candidate -> candidate.id().equals(model))
+                .findFirst()
                 .orElseGet(() -> ModelInfo.minimal(model));
         // D-P1（docs/65）：per-model baseUrl/headers（三源合并的产物）在请求面生效。
         var effectiveOptions = withPerModelOverrides(apiOptions, modelInfo);

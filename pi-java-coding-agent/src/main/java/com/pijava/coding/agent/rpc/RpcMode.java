@@ -22,18 +22,30 @@ public final class RpcMode {
      * @return 进程退出码
      */
     public static int run(InputStream in, OutputStream out, Args args) {
-        return run(in, out, args, null, null);
+        return run(in, out, args, null, null, true);
     }
 
     /**
      * 测试用重载：注入 {@link ProviderRegistry} 与 {@link ToolContext}
-     * （FauxProvider 驱动的端到端测试避免真实网络）。
+     * （FauxProvider 驱动的端到端测试避免真实网络），且**不**启动后台目录刷新。
      */
     static int run(InputStream in, OutputStream out, Args args,
                    ProviderRegistry providers, ToolContext toolContext) {
+        return run(in, out, args, providers, toolContext, false);
+    }
+
+    private static int run(InputStream in, OutputStream out, Args args,
+                           ProviderRegistry providers, ToolContext toolContext,
+                           boolean backgroundCatalogRefresh) {
         try (var session = providers == null
                 ? AgentSession.create(args)
                 : AgentSession.create(args, providers, toolContext)) {
+            // pi main.ts:924-932 —— RPC 模式在后台刷目录；不阻塞启动、错误吞掉、
+            // 离线（--offline / PI_OFFLINE）时整个跳过。
+            if (backgroundCatalogRefresh) {
+                com.pijava.coding.agent.core.ModelCatalogRefresh.startBackground(
+                    session.services().providers(), args);
+            }
             var reader = new JsonlReader(in);
             var writer = new JsonlWriter(out);
             var dispatcher = new RpcDispatcher(session, writer, args);

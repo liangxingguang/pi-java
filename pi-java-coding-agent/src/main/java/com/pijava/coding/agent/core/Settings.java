@@ -56,6 +56,8 @@ public final class Settings {
     public String sessionDir;
     public String sessionBackend;
     public String httpProxy;
+    /** 远程模型目录的根 URL（docs/70 R7）；null/空 ⇒ {@code https://pi.dev}。 */
+    public String catalogBaseUrl;
     public String tuiMode;
     public Tui tui;
     /** 自动重试设置（3d，docs/31 §8.22；对齐 pi {@code RetrySettings}）。 */
