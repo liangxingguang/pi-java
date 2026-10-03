@@ -188,6 +188,30 @@ public final class StreamPartialBuilder {
     }
 
     /**
+     * pi {@code openai-responses-shared.ts:700} 的 {@code slot.block.text = …}：用
+     * **权威内容**替换当前文本块的累计文本（流式 delta 只是草稿）。块下标未定
+     * （还没有 text 块）时只改缓冲。
+     *
+     * <p>⚠️ 调用方负责「空内容不覆盖」的判定（docs/71 R4 的刻意偏差）。</p>
+     */
+    public void replaceText(String text) {
+        textBuf.setLength(0);
+        textBuf.append(text);
+        if (textBlockIndex >= 0) {
+            blocks.set(textBlockIndex, new ContentBlock.TextContent(text, textSignatureOrNull()));
+        }
+    }
+
+    /**
+     * pi {@code openai-responses-shared.ts:442-446} 的 {@code output.stopReason = "stop"}：
+     * 就地设停止原因（不经终局事件）。⚠️ 终局事件的映射会再覆盖一次 —— 两侧同形
+     * （pi {@code :590}），所以这一支只在 {@code text_end} 的 {@code partial} 上可观察。
+     */
+    public void forceStopReason(String reason) {
+        this.stopReason = reason;
+    }
+
+    /**
      * Retain a thought signature onto the current thinking block during
      * streaming (same pi function, {@code google-generative-ai.ts:149-152}).
      * Non-empty incoming overwrites; empty/null does not erase.
