@@ -772,7 +772,7 @@ public static Instant generatedAt() { return GENERATED_AT; }
 - cleanup 使 ai 1318 ⇒ **1312**（删 `RemoteCatalogTest` 的 6 条）；
 - ⚠️ 收尾那次 `-am` 回归里 agent-core 的 `ConformanceTest[14]`（S14）**假红**，隔离复跑 15/15 绿（§12.5-6，登记 B146）；
 - 本包新增 spotbugs 违规 **0**（`FileModelsStore` 两处已修）；
-- ⚠️ **`mvn clean verify` 在今天的主干上红**，原因是**既有**的 `StrictSampling.resolveStrict` `NP_BOOLEAN_RETURN_NULL`（`spotbugs-exclude.xml` 空）。已用「换回 HEAD 源码 ＋ **重新编译** ＋ 再跑」复核：同样报 —— 与本包无关（登记 **B144**）。本包因此**未能**跑到 §10.4 的全 reactor `verify` 全绿，如实记录。
+- ⚠️ **`mvn clean verify` 在收尾时是红的**，原因是**既有**的 `StrictSampling.resolveStrict` `NP_BOOLEAN_RETURN_NULL`（`spotbugs-exclude.xml` 当时为空）。已用「换回 HEAD 源码 ＋ **重新编译** ＋ 再跑」复核：同样报 —— 与本包无关（登记 **B144**）。本包因此**未能**跑到 §10.4 的全 reactor `verify` 全绿，如实记录。⇒ 包闭环后按用户裁决**已修**（加排除条目，见 `docs/32 B144`）；此后全 reactor `mvn -o verify -DskipTests` **14/14 SUCCESS**，主干自 2026-08-17 引入 spotbugs 以来第一次 `verify` 全绿。
 - checkstyle：ai 与 coding-agent 0 新违规。
 
 ### 12.7 门禁对照（§10）

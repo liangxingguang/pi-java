@@ -7,4 +7,15 @@
 
     <!-- Phase 0: no exclusions yet. Add entries here as needed
          when false positives are identified in later phases. -->
+
+    <!-- B144：resolveStrict 的返回是刻意的三态 —— Boolean.TRUE（本车道可以走
+         strict）/ null（本车道不用 strict）/ 抛异常（require 但不可行）。它**从不
+         返回 FALSE**，所以 Boolean 不是「可空的 boolean」而是三态判别值；
+         NP_BOOLEAN_RETURN_NULL 在这里是误报。改成 Optional<Boolean> 会改 ai 的
+         公开 API 且语义上仍是二态，故按本仓排除机制处理（docs/32 B144）。 -->
+    <Match>
+        <Class name="com.pijava.ai.api.StrictSampling"/>
+        <Method name="resolveStrict"/>
+        <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
+    </Match>
 </FindBugsFilter>
