@@ -23,4 +23,9 @@ public record ModelsStoreEntry(
     public static ModelsStoreEntry of(List<ModelInfo> models) {
         return new ModelsStoreEntry(List.copyOf(models), null, null, null);
     }
+
+    /** 同一条目但更新 {@code checkedAt}（pi {@code {...stored, checkedAt}}）。 */
+    public ModelsStoreEntry withCheckedAt(Instant newCheckedAt) {
+        return new ModelsStoreEntry(models, lastModified, newCheckedAt, etag);
+    }
 }

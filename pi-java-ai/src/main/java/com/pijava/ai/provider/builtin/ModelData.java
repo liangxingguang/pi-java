@@ -21,6 +21,24 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
  */
 public final class ModelData {
 
+    /**
+     * 静态模型表的快照时间（对齐 pi {@code modelDataManifest.generatedAt}，
+     * docs/70 R5/§4.7）：所有内置 provider 的目录共用这一个时间戳。
+     *
+     * <p>语义是「这批数据对应的 pi 生成数据是哪天的」，不是「代码什么时候写的」——
+     * 远程目录的守卫（{@code RemoteCatalogProvider.remoteModels}）会**丢弃
+     * Last-Modified 不晚于此值**的远端目录，所以值取太大等于远程覆盖永远不生效。
+     * 当前值 = pi 对齐锚点 {@code 3390bd9}（2026-09-20）的日期。<b>刷新内置模型表时
+     * 必须同步更新它。</b></p>
+     */
+    private static final java.time.Instant GENERATED_AT =
+        java.time.Instant.parse("2026-09-20T00:00:00Z");
+
+    /** 静态模型表的快照时间；见 {@link #GENERATED_AT}。 */
+    public static java.time.Instant generatedAt() {
+        return GENERATED_AT;
+    }
+
     private ModelData() {}
 
     /** Moonshot AI China (Kimi) models. */
