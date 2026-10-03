@@ -22,10 +22,8 @@ import java.util.Map;
  * 直接读 {@code model.compat()} 只对「探测的默认值恰好等于字面量缺省」的字段安全 —— 这是
  * {@code docs/53 §8} 第 1 条验收 grep 要钉的事。</p>
  *
- * <p>docs/69 J8：pi 的 {@code JsonObject}（{@code types.ts:421-460}）是纯编译期类型
- * 机器、无任何运行时读点；Java 侧的 {@code Map<String,Object>} ＋ Jackson 已是等价静态
- * 约束 ⇒ 零代码，在此说明结案。</p>
- *
+ * <p>docs/69 J8：pi 的 {@code JsonObject}（types.ts:421-460）是纯编译期类型机器、无运行时
+ * 读点；Java 的 {@code Map<String,Object>}＋Jackson 即等价静态约束 ⇒ 零代码，在此结案。</p>
  * <p>⚠️ <b>各标志的「缺席」语义各不相同</b> —— 这是本记录最容易读错的地方，逐个写清：</p>
  *
  * <table border="1">
@@ -77,11 +75,8 @@ import java.util.Map;
  *       <td>包 A7 加。responses {@code ?? false}（{@code openai-responses.ts:74}）、
  *           azure {@code ?? true}（{@code azure-openai-responses.ts:296}）⇒「缺席」不是单个
  *           值而**取决于车道**，故缺省由 {@link CompatResolver#forResponses} 的形参给</td></tr>
- *   <tr><td>{@code supportsOpenAIGrammarTools}</td><td>{@link Boolean}</td>
- *       <td>{@code false}（二态）</td>
- *       <td>docs/69 加。读点 {@code === true}；生成目录对 gpt-5+ 开启
- *           （{@code generate-models.ts:831-854}）。null≙false，门用
- *           {@code Boolean.TRUE.equals}</td></tr>
+ *   <tr><td>{@code supportsOpenAIGrammarTools}</td><td>{@link Boolean}</td><td>{@code false}</td>
+ *       <td>docs/69：读点 {@code === true}，生成目录 gpt-5+ 开启（generate-models.ts:831-854），null≙false</td></tr>
  * </table>
  *
  * @param allowEmptySignature pi {@code compat.allowEmptySignature}. When {@code true}, a thinking

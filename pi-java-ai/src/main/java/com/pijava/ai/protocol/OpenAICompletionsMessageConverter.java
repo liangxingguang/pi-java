@@ -13,7 +13,6 @@ import com.openai.models.chat.completions.ChatCompletionContentPart;
 import com.openai.models.chat.completions.ChatCompletionContentPartText;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
 import com.openai.models.chat.completions.ChatCompletionDeveloperMessageParam;
-import com.openai.models.chat.completions.ChatCompletionMessageFunctionToolCall;
 import com.openai.models.chat.completions.ChatCompletionMessageParam;
 import com.openai.models.chat.completions.ChatCompletionMessageToolCall;
 import com.openai.models.chat.completions.ChatCompletionStreamOptions;
@@ -22,6 +21,7 @@ import com.openai.models.chat.completions.ChatCompletionTool;
 import com.openai.models.chat.completions.ChatCompletionToolMessageParam;
 import com.openai.models.chat.completions.ChatCompletionUserMessageParam;
 
+import com.pijava.ai.api.GrammarInputProperties;
 import com.pijava.ai.api.SimpleOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.Transcripts;
@@ -108,6 +108,10 @@ final class OpenAICompletionsMessageConverter {
         var wire = new ArrayList<ChatCompletionMessageParam>();
 
         var transcript = Transcripts.resolveTranscript(request.transcript(), compat);
+        // docs/69（pi :338-341）：grammar 能力表请求起点一次算出，出站与回放共读。
+        boolean grammarGate = Boolean.TRUE.equals(compat.supportsOpenAIGrammarTools());
+        var grammarProperties = GrammarInputProperties.create(
+            Transcripts.getDeclaredTools(transcript.messages()), grammarGate);
         // 系统文本来自**前导系统消息**（pi :1249 的 `i === 0` 支 → `getSystemMessageText`）。
         // pi 在消息循环里**就地**把它转成 instruction 消息；折叠后头必然在下标 0，
         // 故这里先发它、循环里再跳过它 —— 同一线格顺序。
@@ -148,7 +152,8 @@ final class OpenAICompletionsMessageConverter {
                 // 否则那些工具已经在请求级 tools 字段里了。
                 if (transcriptTools.anchorsAdditions() && !system.toolsAdded().isEmpty()) {
                     var gate = Boolean.TRUE.equals(compat.supportsStrictMode());
-                    wire.add(CompletionToolWire.kimiSystemMessage(system.toolsAdded(), gate));
+                    wire.add(CompletionToolWire.kimiSystemMessage(
+                        system.toolsAdded(), gate, grammarGate));
                 }
                 // pi :1249 —— 非前导走**分段差分更新**渲染（不是完整提示）。
                 // ⚠️ 角色与前面那条**同源**：pi 的 `instructionRole` 一处算出、两处用
@@ -163,7 +168,7 @@ final class OpenAICompletionsMessageConverter {
             if (msg instanceof Message.UserMessage user) {
                 addUserMessage(wire, user);
             } else if (msg instanceof Message.AssistantMessage assistant) {
-                addAssistantMessage(wire, assistant, request.model(), compat);
+                addAssistantMessage(wire, assistant, request.model(), compat, grammarProperties);
             } else if (msg instanceof Message.ToolResultMessage) {
                 // pi :1398-1455 —— **连续的** toolResult 合成一组：各自落一条 tool 消息，
                 // 但图片**合并收集**进**同一条**合成 user 消息（不是一条结果配一条）。
@@ -201,7 +206,7 @@ final class OpenAICompletionsMessageConverter {
         var wireTools = new ArrayList<ChatCompletionTool>();
         var strictGate = Boolean.TRUE.equals(compat.supportsStrictMode());
         for (var td : transcriptTools.requestTools()) {
-            wireTools.add(CompletionToolWire.toTool(td, strictGate));
+            wireTools.add(CompletionToolWire.toTool(td, strictGate, grammarGate));
         }
 
         // 包 A-02（B105；pi :814 取值、:858-859 落点）：anthropic 形状缓存断点的后处理
@@ -344,7 +349,8 @@ final class OpenAICompletionsMessageConverter {
      */
     private static void addAssistantMessage(
             List<ChatCompletionMessageParam> wire,
-            Message.AssistantMessage assistant, ModelInfo model, ModelCompat compat) {
+            Message.AssistantMessage assistant, ModelInfo model, ModelCompat compat,
+                    Map<String, String> grammarProperties) {
         var text = new StringBuilder();
         var reasoning = new ArrayList<String>();
         String signature = null;
@@ -369,14 +375,8 @@ final class OpenAICompletionsMessageConverter {
                 }
                 reasoning.add(thinking.text());
             } else if (block instanceof ContentBlock.ToolUseContent toolUse) {
-                toolCalls.add(ChatCompletionMessageToolCall.ofFunction(
-                    ChatCompletionMessageFunctionToolCall.builder()
-                        .id(toolUse.id())
-                        .function(ChatCompletionMessageFunctionToolCall.Function.builder()
-                            .name(toolUse.name())
-                            .arguments(CompletionToolWire.argumentsJson(toolUse.arguments()))
-                            .build())
-                        .build()));
+                toolCalls.add(CompletionToolWire.historyToolCall(
+                    toolUse, grammarProperties));
             }
         }
         var ab = ChatCompletionAssistantMessageParam.builder();
