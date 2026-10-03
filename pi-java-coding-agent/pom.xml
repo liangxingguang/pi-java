@@ -61,18 +61,7 @@
         </dependency>
     </dependencies>
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <!-- Keep trace files out of ~/.pi-java during tests. -->
-                    <systemPropertyVariables>
-                        <pi-java.traces.dir>${project.build.directory}/traces</pi-java.traces.dir>
-                    </systemPropertyVariables>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
+    <!-- 测试产物（trace / 日志）的落点由**根 pom** 的 surefire 统一给定
+         （{@code pi-java.traces.dir} / {@code PI_JAVA_LOG_DIR} → 本模块 target/），
+         这里不再重复配置。 -->
 </project>

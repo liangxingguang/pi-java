@@ -2,6 +2,7 @@ package com.pijava.web;
 
 import java.net.ServerSocket;
 import java.net.URI;
+import java.nio.file.Path;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -10,15 +11,39 @@ import com.pijava.coding.agent.cli.ArgsParser;
 
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Stage D 网关 token 鉴权：无 token / 错误 token 被拒（close 4401），
  * 正确 token 通过并收 {@code ready}。
+ *
+ * <p>⚠️ 与 {@link PiWebServerIntegrationTest} 同理：起服务会把 {@code user.home}
+ * 下的默认会话根/设置当真，故每个用例把它指到临时目录。</p>
  */
 class PiWebServerAuthTest {
+
+    @TempDir
+    Path fakeHome;
+
+    private String savedUserHome;
+
+    @BeforeEach
+    void isolateUserHome() {
+        savedUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", fakeHome.toString());
+    }
+
+    @AfterEach
+    void restoreUserHome() {
+        if (savedUserHome != null) {
+            System.setProperty("user.home", savedUserHome);
+        }
+    }
 
     private static final String TOKEN = "secret-token";
 

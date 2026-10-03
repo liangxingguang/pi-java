@@ -11,6 +11,10 @@
 -->
 <configuration>
 
+    <!-- 日志目录：默认 {@code ~/.pi-java/logs}，可用 {@code -DPI_JAVA_LOG_DIR=...} 覆盖
+         （测试用 —— 否则每个跑测试的模块都会往用户的真实日志里写；见 docs/32 B150）。 -->
+    <property name="PI_LOG_DIR" value="${PI_JAVA_LOG_DIR:-${user.home}/.pi-java/logs}"/>
+
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <target>System.err</target>
         <encoder>
@@ -19,9 +23,9 @@
     </appender>
 
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>${user.home}/.pi-java/logs/pi-java.log</file>
+        <file>${PI_LOG_DIR}/pi-java.log</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-            <fileNamePattern>${user.home}/.pi-java/logs/pi-java.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <fileNamePattern>${PI_LOG_DIR}/pi-java.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
             <maxFileSize>10MB</maxFileSize>
             <maxHistory>5</maxHistory>
             <totalSizeCap>50MB</totalSizeCap>

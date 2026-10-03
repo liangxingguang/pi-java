@@ -52,6 +52,10 @@ class PayloadRecordingStreamFnTest {
     @Test
     void tracePayloadsRecordsRequestAndResponseBoundToLlmSpan(@TempDir Path tracesDir)
             throws Exception {
+        // ⚠️ 保存-还原，**不要** clearProperty：surefire 会经 `-D` 给这个属性一个
+        // 「测试产物落 target/」的值，clear 掉等于把整个 JVM 之后的测试都退回用户真实
+        // 的 ~/.pi-java/logs/traces（2026-10-03 实测：一次 run 漏 4 个 trace 文件）。
+        var savedTracesDir = System.getProperty("pi-java.traces.dir");
         System.setProperty("pi-java.traces.dir", tracesDir.toString());
         try {
             var done = AssistantMessage.empty().withContent(List.of(
@@ -129,13 +133,14 @@ class PayloadRecordingStreamFnTest {
             assertThat(respPayload.get("message").get("content").get(0).get("text").asText())
                 .isEqualTo("hello");
         } finally {
-            System.clearProperty("pi-java.traces.dir");
+            restoreTracesDir(savedTracesDir);
         }
     }
 
     @Test
     void withoutTracePayloadsOnlySpanAndMetricLinesAreWritten(@TempDir Path tracesDir)
             throws Exception {
+        var savedTracesDir = System.getProperty("pi-java.traces.dir");
         System.setProperty("pi-java.traces.dir", tracesDir.toString());
         try {
             var done = AssistantMessage.empty().withContent(List.of(
@@ -166,7 +171,16 @@ class PayloadRecordingStreamFnTest {
             assertThat(lines.stream().anyMatch(n -> "counter".equals(n.get("kind").asText())
                 && "harness.turn".equals(n.get("name").asText()))).isTrue();
         } finally {
+            restoreTracesDir(savedTracesDir);
+        }
+    }
+
+    /** 还原（而不是清空）—— 见第一个用例的说明。 */
+    private static void restoreTracesDir(String saved) {
+        if (saved == null) {
             System.clearProperty("pi-java.traces.dir");
+        } else {
+            System.setProperty("pi-java.traces.dir", saved);
         }
     }
 }

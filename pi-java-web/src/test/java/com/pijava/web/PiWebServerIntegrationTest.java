@@ -16,7 +16,12 @@ import com.pijava.web.WebProtocol.WebServerMessage;
 
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -25,10 +30,36 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 验证 {@code /api/config}、WS {@code ready}、{@code getState} /
  * {@code getModels} / {@code getSessions} 控制面往返，以及 Stage D
  * 会话重命名往返。
+ *
+ * <p>⚠️ 每个用例把 {@code user.home} 指到临时目录（同包/邻包的既有隔离手法，
+ * 见 {@code ThinkingLevelEntryTest}／{@code SessionRunnerRetryContextTest}）。
+ * 不这么做的话 web 服务会拿**真实**的 {@code ~/.pi-java}：会话根
+ * （{@code createWeb} 的默认落在 {@code ~/.pi-java/agent/sessions}）与
+ * {@code settings.json} 都会被测试写脏 —— 2026-10-03 实测每跑一次就朝用户真实的
+ * 会话文件追加一条 {@code fact: name}，而 {@code settingsRoundtrip} 会重写
+ * 用户的 {@code settings.json}。</p>
  */
 class PiWebServerIntegrationTest {
 
     private static final String TOKEN = "test-token";
+
+    @TempDir
+    Path fakeHome;
+
+    private String savedUserHome;
+
+    @BeforeEach
+    void isolateUserHome() {
+        savedUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", fakeHome.toString());
+    }
+
+    @AfterEach
+    void restoreUserHome() {
+        if (savedUserHome != null) {
+            System.setProperty("user.home", savedUserHome);
+        }
+    }
 
     private static int freePort() throws Exception {
         try (var socket = new ServerSocket(0)) {
