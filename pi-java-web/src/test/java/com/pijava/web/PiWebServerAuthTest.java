@@ -2,6 +2,7 @@ package com.pijava.web;
 
 import java.net.ServerSocket;
 import java.net.URI;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -14,7 +15,6 @@ import org.java_websocket.handshake.ServerHandshake;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -27,21 +27,32 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class PiWebServerAuthTest {
 
-    @TempDir
-    Path fakeHome;
-
+    private Path fakeHome;
     private String savedUserHome;
 
     @BeforeEach
-    void isolateUserHome() {
+    void isolateUserHome() throws Exception {
+        // 同 PiWebServerIntegrationTest：手建临时目录（不用 @TempDir）——见那里的说明。
+        fakeHome = Files.createTempDirectory("pi-web-auth-test-home");
         savedUserHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
     }
 
     @AfterEach
-    void restoreUserHome() {
+    void restoreUserHome() throws Exception {
         if (savedUserHome != null) {
             System.setProperty("user.home", savedUserHome);
+        }
+        if (fakeHome != null && Files.exists(fakeHome)) {
+            try (var paths = Files.walk(fakeHome)) {
+                paths.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
+                    try {
+                        Files.deleteIfExists(path);
+                    } catch (Exception ignored) {
+                        // 仍被占用 —— 留给 OS 回收
+                    }
+                });
+            }
         }
     }
 

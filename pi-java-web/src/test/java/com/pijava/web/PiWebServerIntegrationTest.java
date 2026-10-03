@@ -19,8 +19,8 @@ import org.java_websocket.handshake.ServerHandshake;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -43,21 +43,41 @@ class PiWebServerIntegrationTest {
 
     private static final String TOKEN = "test-token";
 
-    @TempDir
-    Path fakeHome;
-
+    private Path fakeHome;
     private String savedUserHome;
 
     @BeforeEach
-    void isolateUserHome() {
+    void isolateUserHome() throws Exception {
+        // ⚠️ 用 Files.createTempDirectory 而**不是** @TempDir：logback 可能在 user.home 被换掉
+        // 之后才初始化，把 FILE appender 开在这个临时目录里并一直占着 ⇒ Windows 上 JUnit 的
+        // @TempDir 清理会以 "Failed to close extension context" 失败。仓库既有的两个隔离用例
+        // （ThinkingLevelEntryTest / SessionRunnerRetryContextTest）走的正是这条手建路径。
+        fakeHome = Files.createTempDirectory("pi-web-test-home");
         savedUserHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
     }
 
     @AfterEach
-    void restoreUserHome() {
+    void restoreUserHome() throws Exception {
         if (savedUserHome != null) {
             System.setProperty("user.home", savedUserHome);
+        }
+        deleteBestEffort(fakeHome);
+    }
+
+    /** 尽力删（被占的文件删不掉就算了）—— 不能让清理本身失败。 */
+    private static void deleteBestEffort(Path root) throws Exception {
+        if (root == null || !Files.exists(root)) {
+            return;
+        }
+        try (var paths = Files.walk(root)) {
+            paths.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (Exception ignored) {
+                    // 仍被占用（logback 的文件 appender）—— 留给 OS 的临时目录回收
+                }
+            });
         }
     }
 
