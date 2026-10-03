@@ -55,9 +55,9 @@ import com.pijava.ai.stream.StreamPartialBuilder;
  */
 final class ResponsesStreamProcessor {
 
-    private static final String TEXT = "text";
-    private static final String THINKING = "thinking";
-    private static final String TOOLCALL = "toolcall";
+    static final String TEXT = "text";
+    static final String THINKING = "thinking";
+    static final String TOOLCALL = "toolcall";
 
     /**
      * pi 累加器的 stop reason 初值（{@code openai-responses.ts:139}），非 pi 词汇表取值；
@@ -75,166 +75,120 @@ final class ResponsesStreamProcessor {
      */
     static void process(StreamResponse<ResponseStreamEvent> stream,
                         SubmissionPublisher<StreamEvent> publisher,
-                        ModelInfo model) {
+                        ModelInfo model,
+                        Map<String, String> grammarProperties) {
         var builder = new StreamPartialBuilder();
-        var slotTypes = new HashMap<Long, String>();
-        var toolCalls = new HashMap<Long, FunctionCallState>();
         // Reasoning capture + Azure backfill (pi shared :533-549/:686-697).
-        var reasoningCapture = new ResponsesReasoningCapture();
+        var ctx = ResponseEventContext.of(builder, publisher, grammarProperties,
+            new ResponsesReasoningCapture());
         var stop = new StopState();
         boolean sawTerminal = false;
         try {
             publisher.submit(builder.emitStart());
             for (var event : stream.stream().toList()) {
                 if (event.outputItemAdded().isPresent()) {
-                    handleOutputItemAdded(event.outputItemAdded().get().item(),
-                        event.outputItemAdded().get().outputIndex(),
-                        builder, publisher, slotTypes, toolCalls);
+                    var added = event.outputItemAdded().get();
+                    ResponseItemHandlers.added(added.item(), added.outputIndex(), ctx);
                 } else if (event.reasoningSummaryTextDelta().isPresent()) {
                     var d = event.reasoningSummaryTextDelta().get();
-                    if (isSlot(slotTypes, d.outputIndex(), THINKING)) {
+                    if (isSlot(ctx.slotTypes, d.outputIndex(), THINKING)) {
                         publisher.submit(builder.emitThinkingDelta(d.delta()));
                     }
                 } else if (event.reasoningTextDelta().isPresent()) {
                     var d = event.reasoningTextDelta().get();
-                    if (isSlot(slotTypes, d.outputIndex(), THINKING)) {
+                    if (isSlot(ctx.slotTypes, d.outputIndex(), THINKING)) {
                         publisher.submit(builder.emitThinkingDelta(d.delta()));
                     }
                 } else if (event.reasoningSummaryPartDone().isPresent()) {
                     var d = event.reasoningSummaryPartDone().get();
-                    if (isSlot(slotTypes, d.outputIndex(), THINKING)) {
+                    if (isSlot(ctx.slotTypes, d.outputIndex(), THINKING)) {
                         publisher.submit(builder.emitThinkingDelta("\n\n"));
                     }
                 } else if (event.outputTextDelta().isPresent()) {
                     var d = event.outputTextDelta().get();
-                    if (isSlot(slotTypes, d.outputIndex(), TEXT)) {
+                    if (isSlot(ctx.slotTypes, d.outputIndex(), TEXT)) {
                         publisher.submit(builder.emitTextDelta(d.delta()));
                     }
                 } else if (event.refusalDelta().isPresent()) {
                     var d = event.refusalDelta().get();
-                    if (isSlot(slotTypes, d.outputIndex(), TEXT)) {
+                    if (isSlot(ctx.slotTypes, d.outputIndex(), TEXT)) {
                         publisher.submit(builder.emitTextDelta(d.delta()));
                     }
                 } else if (event.functionCallArgumentsDelta().isPresent()) {
                     var d = event.functionCallArgumentsDelta().get();
-                    var state = toolCalls.get(d.outputIndex());
+                    var state = ctx.toolCalls.get(d.outputIndex());
                     if (state != null) {
                         state.args += d.delta();
                         publisher.submit(builder.emitToolCallDelta(state.callId, d.delta()));
                     }
                 } else if (event.functionCallArgumentsDone().isPresent()) {
                     var d = event.functionCallArgumentsDone().get();
-                    var state = toolCalls.get(d.outputIndex());
-                    if (state != null) {
-                        // 补齐尾部 delta，使 builder 缓冲与权威 arguments 一致
-                        if (d.arguments().startsWith(state.args)) {
-                            String tail = d.arguments().substring(state.args.length());
-                            if (!tail.isEmpty()) {
-                                state.args = d.arguments();
-                                publisher.submit(builder.emitToolCallDelta(state.callId, tail));
-                            }
+                    var state = ctx.toolCalls.get(d.outputIndex());
+                    if (state != null && d.arguments().startsWith(state.args)) {
+                        // 补齐尾部 delta，使 builder 缓冲与权威 arguments 一致。
+                        String tail = d.arguments().substring(state.args.length());
+                        if (!tail.isEmpty()) {
+                            state.args = d.arguments();
+                            publisher.submit(builder.emitToolCallDelta(state.callId, tail));
                         }
                     }
+                } else if (event.customToolCallInputDelta().isPresent()) {
+                    ResponsesCustomCalls.inputDelta(
+                        event.customToolCallInputDelta().get(), ctx);
+                } else if (event.customToolCallInputDone().isPresent()) {
+                    ResponsesCustomCalls.inputDone(
+                        event.customToolCallInputDone().get(), ctx);
                 } else if (event.outputItemDone().isPresent()) {
-                    handleOutputItemDone(event.outputItemDone().get().item(),
-                        event.outputItemDone().get().outputIndex(),
-                        builder, publisher, slotTypes, toolCalls, reasoningCapture);
+                    var done = event.outputItemDone().get();
+                    ResponseItemHandlers.done(done.item(), done.outputIndex(), ctx);
                 } else if (event.completed().isPresent()) {
                     sawTerminal = true;
-                    finalizeResponse(builder, publisher, event.completed().get().response(),
-                        stop, model, reasoningCapture);
+                    finalizeResponse(builder, publisher,
+                        event.completed().get().response(),
+                        stop, model, ctx.reasoningCapture);
                 } else if (event.incomplete().isPresent()) {
                     sawTerminal = true;
-                    finalizeResponse(builder, publisher, event.incomplete().get().response(),
-                        stop, model, reasoningCapture);
+                    finalizeResponse(builder, publisher,
+                        event.incomplete().get().response(),
+                        stop, model, ctx.reasoningCapture);
                 } else if (event.failed().isPresent()) {
                     // pi 的 `response.failed` 分支（shared :745-755）：先记 sawTerminal 再 throw。
-                    // throw 终止整条流（ε）—— 不是「发一条 error 继续读」。
                     sawTerminal = true;
-                    // pi `:747`：本支也写原值（写的是 **status**，不是复合量）。pi 的 catch 之后
-                    // `stream.push({type:"error", …, error: output})` 带的就是这条被改写过的消息
-                    // ⇒ 它在 pi 侧**可观测**（错误消息上带着 status），故照写。
+                    // pi `:747`：本支也写原值（写的是 **status**）⇒ 错误消息上可观测，照写。
                     var failed = event.failed().get().response();
                     builder.noteRawStopReason(failed.status()
                         .map(Object::toString).orElse(null));
                     throw new IllegalStateException(failedMessage(failed));
                 } else if (event.error().isPresent()) {
-                    // pi :743-744 同样是 throw。⚠️ pi 的模板串 `${event.code}` / `${event.message}`
-                    // 在字段缺席时渲染成 JS 的 `undefined`，本车道保留 pi-java 既有的 `unknown`
-                    // 兜底（SDK 的 `message()` 缺席时会抛，见 §8.35.14 实施记录）。
+                    // pi :743-744 同样是 throw。字段缺席时保留 pi-java 既有「unknown」兜底。
                     var e = event.error().get();
                     throw new IllegalStateException("Error Code "
                         + e.code().orElse("unknown") + ": " + e.message());
                 }
             }
             if (!sawTerminal) {
-                // pi :758-760（在 shared 的循环**之外**）：整条流没有任何终局事件。
+                // pi :758-760（shared 循环**之外**）：整条流没有任何终局事件。
                 throw new IllegalStateException(
                     "OpenAI Responses stream ended before a terminal response event");
             }
             // ⚠️ pi 的 pending 检查（openai-responses.ts:185-186）在本车道**结构上不可达**：
-            // sawTerminal 只由 finalizeResponse / failed 两支写入，而前者必经 mapStopReason 写下
-            // 一个非 pending 的取值、后者直接 throw ⇒ 走到这里时哨兵早已被覆盖。pi 侧同一对
-            // 前置条件 ⇒ 这条在 pi 里同样不可达。留着是为了与 pi 的收尾四段同形，**不是**补缺口
-            // （与 Google/Mistral 车道「局部量兜底成 stop」那种真缺口不同，见各车道 javadoc）。
+            // sawTerminal 只由 finalizeResponse / failed 两支写入，前者必经 mapStopReason 写下
+            // 非 pending 取值、后者直接 throw。留着与 pi 收尾同形，不是补缺口。
             if (PENDING.equals(stop.reason)) {
                 throw new IllegalStateException(
                     "OpenAI Responses stream ended without a stop reason");
             }
-            // pi 此处还比了 `"aborted"`（:188），那个值只由 abort 检查写入 ⇒ 结构上不可达（见类 javadoc）。
+            // pi 此处还比了 `"aborted"`（:188），那个值只由 abort 检查写入 ⇒ 结构上不可达。
             if ("error".equals(stop.reason)) {
                 throw new IllegalStateException(stop.errorMessage != null
                     ? stop.errorMessage : "An unknown error occurred");
             }
             publisher.submit(builder.emitDone(stop.reason));
         } catch (Exception e) {
-            // pi 的 catch（openai-responses.ts:194-205）只 push 一条 {type:"error"} 就 stream.end()
-            // ⇒ 一条流**只有一个**终局事件；上面的 throw 全落在这里，emitDone 不会被发出去。
+            // pi 的 catch（openai-responses.ts:194-205）只 push 一条 error ⇒ 一条流
+            // 只有一个终局事件；上面的 throw 全落在这里，emitDone 不会被发出去。
             publisher.submit(builder.emitError("error", e));
         }
-    }
-
-    // ── Item 生命周期 ──────────────────────────────────────────────────
-
-    private static void handleOutputItemAdded(
-            ResponseOutputItem item, long outputIndex,
-            StreamPartialBuilder builder, SubmissionPublisher<StreamEvent> publisher,
-            Map<Long, String> slotTypes, Map<Long, FunctionCallState> toolCalls) {
-        if (item.reasoning().isPresent()) {
-            slotTypes.put(outputIndex, THINKING);
-            publisher.submit(builder.emitThinkingStart());
-        } else if (item.message().isPresent()) {
-            slotTypes.put(outputIndex, TEXT);
-            publisher.submit(builder.emitTextStart());
-        } else if (item.functionCall().isPresent()) {
-            slotTypes.put(outputIndex, TOOLCALL);
-            var fc = item.functionCall().get();
-            // D3（docs/62）：id 复合 `call_id|item.id`（pi shared :485-489）。
-            var compositeId = compositeId(fc.callId(), fc.id().orElse(""));
-            toolCalls.put(outputIndex,
-                new FunctionCallState(compositeId, fc.name(), fc.arguments()));
-            // 包⑥：起点即带身份（上两行刚取到复合 id/name）。
-            publisher.submit(builder.emitToolCallStart(compositeId, fc.name()));
-        }
-    }
-
-    private static void handleOutputItemDone(
-            ResponseOutputItem item, long outputIndex,
-            StreamPartialBuilder builder, SubmissionPublisher<StreamEvent> publisher,
-            Map<Long, String> slotTypes, Map<Long, FunctionCallState> toolCalls,
-            ResponsesReasoningCapture reasoningCapture) {
-        if (item.reasoning().isPresent() && isSlot(slotTypes, outputIndex, THINKING)) {
-            reasoningCapture.capture(builder, item.reasoning().get());
-            publisher.submit(builder.emitThinkingEnd());
-        } else if (item.message().isPresent() && isSlot(slotTypes, outputIndex, TEXT)) {
-            publisher.submit(builder.emitTextEnd());
-        } else if (item.functionCall().isPresent() && isSlot(slotTypes, outputIndex, TOOLCALL)) {
-            var state = toolCalls.remove(outputIndex);
-            if (state != null) {
-                publisher.submit(builder.emitToolCallEnd(state.callId, state.name));
-            }
-        }
-        slotTypes.remove(outputIndex);
     }
 
     // ── 终止事件 ────────────────────────────────────────────────────────
@@ -396,7 +350,7 @@ final class ResponsesStreamProcessor {
 
     // ── Helpers ─────────────────────────────────────────────────────────
 
-    private static boolean isSlot(Map<Long, String> slots, long index, String type) {
+    static boolean isSlot(Map<Long, String> slots, long index, String type) {
         return type.equals(slots.get(index));
     }
 
@@ -410,7 +364,7 @@ final class ResponsesStreamProcessor {
      * {@code callId} 是 D3 复合 id（{@code call_id|item.id}）：增量帧上的块 id
      * 不能退回裸 call_id（{@code emitToolCallDelta} 会用它重建块）。
      */
-    private static final class FunctionCallState {
+    static final class FunctionCallState {
         final String callId;
         final String name;
         String args;

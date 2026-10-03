@@ -95,15 +95,17 @@ final class ResponsesMessageConverter {
     static ResponseCreateParams buildParams(StreamRequest request, ResponsesOptions ropts,
                                             String modelName, String apiName,
                                             ModelCompat compat) {
-        return buildParams(request, ropts, modelName, apiName, compat, java.util.Map.of());
+        return buildParams(request, ropts, modelName, apiName, compat,
+            java.util.Map.of(), java.util.Map.of());
     }
 
     /**
-     * 包 B103：带逐请求会话亲和头的形态（调用方按 compat/format 组装）。
+     * docs/69 + 包 B103：grammar 能力表（custom tool 出站/回放）与逐请求会话亲和头。
      */
     static ResponseCreateParams buildParams(StreamRequest request, ResponsesOptions ropts,
                                             String modelName, String apiName,
                                             ModelCompat compat,
+                                            java.util.Map<String, String> grammarProperties,
                                             java.util.Map<String, String> affinityHeaders) {
         // pi openai-responses.ts:119 / azure-openai-responses.ts:77 —— 车道入口先
         // resolveTranscript，之后再构建请求。
@@ -121,11 +123,13 @@ final class ResponsesMessageConverter {
             .store(false)
             .input(ResponseCreateParams.Input.ofResponse(
                 convertMessages(request, transcript, apiName, transcriptTools,
-                    supportsAdditionalTools, supportsToolSearch, supportsStrictMode)));
+                    supportsAdditionalTools, supportsToolSearch, supportsStrictMode,
+                    grammarProperties)));
 
         var tools = new ArrayList<Tool>();
         for (var td : transcriptTools.requestTools()) {
-            tools.add(ResponseToolWire.responseTool(td, supportsStrictMode, false));
+            tools.add(ResponseToolWire.responseTool(td, supportsStrictMode,
+                grammarProperties, false));
         }
         if (!tools.isEmpty()) {
             builder.tools(tools);
@@ -182,7 +186,8 @@ final class ResponsesMessageConverter {
                                                            TranscriptTools transcriptTools,
                                                            boolean supportsAdditionalTools,
                                                            boolean supportsToolSearch,
-                                                           boolean supportsStrictMode) {
+                                                           boolean supportsStrictMode,
+                                                           Map<String, String> grammarProperties) {
         var items = new ArrayList<ResponseInputItem>();
         // 系统文本来自**前导系统消息**（pi openai-responses-shared.ts:218-222 的
         // `sourceIndex++ === 0` 支 → getSystemMessageText），落成 input 里的
@@ -214,7 +219,8 @@ final class ResponsesMessageConverter {
                     // 否则它们已经在请求级 tools 字段里了。
                     if (transcriptTools.anchorsAdditions() && !system.toolsAdded().isEmpty()) {
                         ResponseToolWire.anchorSystemToolAdditions(items, system, msgIndex,
-                            supportsAdditionalTools, supportsToolSearch, supportsStrictMode);
+                            supportsAdditionalTools, supportsToolSearch, supportsStrictMode,
+                            grammarProperties);
                     }
                     var update = MessageTexts.renderSystemMessageUpdate(system);
                     if (!update.isEmpty()) {
@@ -225,14 +231,14 @@ final class ResponsesMessageConverter {
             } else if (msg instanceof Message.UserMessage user) {
                 items.add(ResponseInputWire.toUserItem(user.content()));
             } else if (msg instanceof Message.AssistantMessage assistant) {
-                addAssistantItems(items, assistant, msgIndex, request.modelId(), apiName);
+                addAssistantItems(items, assistant, msgIndex, request.modelId(), apiName,
+                    grammarProperties);
             } else if (msg instanceof Message.ToolResultMessage tool) {
-                items.add(ResponseInputItem.ofFunctionCallOutput(
-                    ResponseInputItem.FunctionCallOutput.builder()
-                        // D3：tool result 只用复合 id 的 call_id 段（pi shared :331-346）。
-                        .callId(ResponsesToolCallIds.callIdOf(tool.toolUseId()))
-                        .output(convertToolResultOutput(request.model(), tool.content()))
-                        .build()));
+                // docs/69（pi shared:335-347）：grammar 工具的结果落 custom_tool_call_output。
+                var callId = ResponsesToolCallIds.callIdOf(tool.toolUseId());
+                var output = convertToolResultOutput(request.model(), tool.content());
+                items.add(ResponseToolWire.historyToolResult(callId, output,
+                    grammarProperties.containsKey(tool.toolName())));
             }
             // pi :349 —— `if (!isLeadingSystemMessage) msgIndex++;`：**中途系统消息也算一个下标**
             // （回填 id 里的 `msg_pi_${msgIndex}` 与 tool_search 的种子都用它）。
@@ -335,9 +341,10 @@ final class ResponsesMessageConverter {
     private static void addAssistantItems(List<ResponseInputItem> items,
                                           Message.AssistantMessage assistant,
                                           int msgIndex,
-                                          ModelId<?> target, String apiName) {
+                                          ModelId<?> target, String apiName,
+                                          Map<String, String> grammarProperties) {
         var text = new StringBuilder();
-        var toolCalls = new ArrayList<ResponseFunctionToolCall>();
+        var toolCalls = new ArrayList<ResponseInputItem>();
         var reasoningItems = new ArrayList<ResponseReasoningItem>();
         for (var block : assistant.content()) {
             if (block instanceof ContentBlock.TextContent tc) {
@@ -365,14 +372,8 @@ final class ResponsesMessageConverter {
                 boolean dropItemId =
                     (differentModel && itemId != null && itemId.startsWith("fc_"))
                     || (itemId != null && !itemId.startsWith("fc_"));
-                var callBuilder = ResponseFunctionToolCall.builder()
-                    .callId(callId)
-                    .name(toolUse.name())
-                    .arguments(toArgumentsJson(toolUse.arguments()));
-                if (itemId != null && !dropItemId) {
-                    callBuilder.id(itemId);
-                }
-                toolCalls.add(callBuilder.build());
+                toolCalls.add(ResponseToolWire.historyItem(toolUse, callId, itemId,
+                    dropItemId, grammarProperties));
             }
         }
         // Reasoning items precede the output message — the turn's block order is
@@ -393,9 +394,7 @@ final class ResponsesMessageConverter {
                             .build())))
                     .build()));
         }
-        for (var call : toolCalls) {
-            items.add(ResponseInputItem.ofFunctionCall(call));
-        }
+        items.addAll(toolCalls);
     }
 
     // ── Tools ──────────────────────────────────────────────────────────

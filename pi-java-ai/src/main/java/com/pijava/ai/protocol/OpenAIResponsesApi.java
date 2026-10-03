@@ -6,6 +6,7 @@ import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
 
 import com.pijava.ai.api.ApiOptions;
+import com.pijava.ai.api.GrammarInputProperties;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.http.ProviderRetry;
@@ -69,8 +70,15 @@ public final class OpenAIResponsesApi extends AbstractChatApi {
         // —— 本车道的缺省是**不发** strict 键（azure 侧相反，见该车道）。
         // 包 A7：缺省由**这里**喂进解析器，转换器只消费（docs/53 §4.1）。
         var compat = CompatResolver.forResponses(request.model(), false);
+        // docs/69（pi openai-responses.ts:147-150）：grammar 能力表请求起点一次算出。
+        var grammarProperties = GrammarInputProperties.create(
+            com.pijava.ai.api.Transcripts.getDeclaredTools(
+                com.pijava.ai.api.Transcripts.resolveTranscript(
+                    request.transcript(), compat).messages()),
+            Boolean.TRUE.equals(compat.supportsOpenAIGrammarTools()));
         var params = ResponsesMessageConverter.buildParams(
             request, responsesOptions, request.modelId().modelName(), apiName(), compat,
+            grammarProperties,
             SessionAffinityHeaders.responses(responsesOptions.sessionId(),
                 compat.sessionAffinityFormat(), request.modelId().provider(), baseUrl));
         // A-14（R7）：只包初始请求获取。
@@ -78,7 +86,8 @@ public final class OpenAIResponsesApi extends AbstractChatApi {
             () -> client.responses().createStreaming(params),
             ProviderRetry::ofOpenAi, providerRetry);
         try (stream) {
-            ResponsesStreamProcessor.process(stream, publisher, request.model());
+            ResponsesStreamProcessor.process(stream, publisher, request.model(),
+                grammarProperties);
         }
     }
 }

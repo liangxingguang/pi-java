@@ -10,6 +10,7 @@ import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
 
 import com.pijava.ai.api.ApiOptions;
+import com.pijava.ai.api.GrammarInputProperties;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.http.ProviderRetry;
@@ -69,16 +70,23 @@ public final class AzureOpenAIResponsesApi extends AbstractChatApi {
         String deploymentName = resolveDeploymentName(request);
         // pi azure-openai-responses.ts:296 / :319：`supportsStrictMode: model.compat?.supportsStrictMode ?? true`
         // —— 与 openai-responses 车道（`?? false`）**缺省相反**，是 pi 的事实，别改成一致。
-        // 包 A7：缺省由**这里**喂进解析器，转换器只消费（docs/53 §4.1）。
+        var compat = CompatResolver.forResponses(request.model(), true);
+        // docs/69（pi azure :108-111）：grammar 能力表请求起点一次算出。
+        var grammarProperties = GrammarInputProperties.create(
+            com.pijava.ai.api.Transcripts.getDeclaredTools(
+                com.pijava.ai.api.Transcripts.resolveTranscript(
+                    request.transcript(), compat).messages()),
+            Boolean.TRUE.equals(compat.supportsOpenAIGrammarTools()));
         var params = ResponsesMessageConverter.buildParams(
             request, responsesOptions, deploymentName, apiName(),
-            CompatResolver.forResponses(request.model(), true));
+            compat, grammarProperties, Map.of());
         // A-14（R7）：只包初始请求获取。
         var stream = ProviderRetry.retry(
             () -> client.responses().createStreaming(params),
             ProviderRetry::ofOpenAi, providerRetry);
         try (stream) {
-            ResponsesStreamProcessor.process(stream, publisher, request.model());
+            ResponsesStreamProcessor.process(stream, publisher, request.model(),
+                grammarProperties);
         }
     }
 
