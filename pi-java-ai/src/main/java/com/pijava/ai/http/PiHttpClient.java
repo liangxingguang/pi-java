@@ -38,8 +38,6 @@ public final class PiHttpClient implements AutoCloseable {
     private final HttpClient http;
     private final String userAgent;
     private final RetryPolicy retryPolicy;
-    private final Duration connectTimeout;
-    private final java.net.ProxySelector proxy;
 
     private PiHttpClient(Builder builder) {
         var httpBuilder = HttpClient.newBuilder()
@@ -51,8 +49,6 @@ public final class PiHttpClient implements AutoCloseable {
         this.http = httpBuilder.build();
         this.userAgent = builder.userAgent;
         this.retryPolicy = builder.retryPolicy;
-        this.connectTimeout = builder.connectTimeout;
-        this.proxy = builder.proxy;
     }
 
     // ── Public API ─────────────────────────────────────────────
@@ -288,7 +284,7 @@ public final class PiHttpClient implements AutoCloseable {
                     // Empty line = event boundary
                     if (!data.isEmpty()) {
                         nextEvent = new ServerSentEvent(id, event,
-                                data.length() > 0 && data.charAt(data.length() - 1) == '\n'
+                                data.charAt(data.length() - 1) == '\n'
                                         ? data.substring(0, data.length() - 1)
                                         : data.toString());
                         return;
@@ -297,19 +293,18 @@ public final class PiHttpClient implements AutoCloseable {
                     id = "";
                     event = "";
                     data.setLength(0);
-                } else if (line.startsWith(":")) {
-                    // Comment line — ignore
-                } else if (line.startsWith("id:")) {
-                    id = line.substring(3).strip();
-                } else if (line.startsWith("event:")) {
-                    event = line.substring(6).strip();
-                } else if (line.startsWith("data:")) {
-                    if (!data.isEmpty()) {
-                        data.append('\n');
+                } else if (!line.startsWith(":")) {
+                    if (line.startsWith("id:")) {
+                        id = line.substring(3).strip();
+                    } else if (line.startsWith("event:")) {
+                        event = line.substring(6).strip();
+                    } else if (line.startsWith("data:")) {
+                        if (!data.isEmpty()) {
+                            data.append('\n');
+                        }
+                        data.append(line.substring(5).strip());
                     }
-                    data.append(line.substring(5).strip());
                 }
-                // Other fields are ignored
             }
             // End of stream
             done = true;

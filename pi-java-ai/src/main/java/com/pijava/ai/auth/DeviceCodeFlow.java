@@ -167,26 +167,26 @@ public final class DeviceCodeFlow {
                     error = text(codeNode, "code");
                 }
             }
-            if ("authorization_pending".equals(error)
-                    || "deviceauth_authorization_pending".equals(error)
-                    || (config.deviceStyle() == DeviceCodeConfig.DeviceAuthStyle.OPENAI_CODEX
-                        && (response.statusCode() == 403 || response.statusCode() == 404))) {
-                // still waiting for the user
-            } else if ("slow_down".equals(error)) {
-                slowDowns++;
-                long serverInterval = node.has("interval") ? node.get("interval").asLong() : 0;
-                intervalMs = serverInterval > 0
-                    ? Math.max(MIN_INTERVAL_MS, serverInterval * 1_000)
-                    : Math.max(MIN_INTERVAL_MS, intervalMs + SLOW_DOWN_INCREMENT_MS);
-            } else if ("expired_token".equals(error)) {
-                throw new IOException("Device code expired. Please restart login.");
-            } else if ("access_denied".equals(error) || "denied".equals(error)) {
-                throw new IOException("Device authorization was denied.");
-            } else if (error != null) {
-                throw new IOException("Device token request failed: " + error);
-            } else {
-                throw new IOException("Device token request failed (HTTP " + response.statusCode()
-                    + "): " + response.body());
+            if (!"authorization_pending".equals(error)
+                    && !"deviceauth_authorization_pending".equals(error)
+                    && (config.deviceStyle() != DeviceCodeConfig.DeviceAuthStyle.OPENAI_CODEX
+                    || (response.statusCode() != 403 && response.statusCode() != 404))) {
+                if ("slow_down".equals(error)) {
+                    slowDowns++;
+                    long serverInterval = node.has("interval") ? node.get("interval").asLong() : 0;
+                    intervalMs = serverInterval > 0
+                        ? Math.max(MIN_INTERVAL_MS, serverInterval * 1_000)
+                        : Math.max(MIN_INTERVAL_MS, intervalMs + SLOW_DOWN_INCREMENT_MS);
+                } else if ("expired_token".equals(error)) {
+                    throw new IOException("Device code expired. Please restart login.");
+                } else if ("access_denied".equals(error) || "denied".equals(error)) {
+                    throw new IOException("Device authorization was denied.");
+                } else if (error != null) {
+                    throw new IOException("Device token request failed: " + error);
+                } else {
+                    throw new IOException("Device token request failed (HTTP " + response.statusCode()
+                        + "): " + response.body());
+                }
             }
             sleep(intervalMs);
         }
@@ -287,7 +287,7 @@ public final class DeviceCodeFlow {
             if (entry.getValue() == null || entry.getValue().isBlank()) {
                 continue;
             }
-            if (sb.length() > 0) {
+            if (!sb.isEmpty()) {
                 sb.append('&');
             }
             sb.append(encode(entry.getKey())).append('=').append(encode(entry.getValue()));
@@ -299,17 +299,15 @@ public final class DeviceCodeFlow {
         return URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8);
     }
 
-    private static boolean openBrowser(String url) {
+    private static void openBrowser(String url) {
         try {
             if (Desktop.isDesktopSupported()
                     && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
                 Desktop.getDesktop().browse(URI.create(url));
-                return true;
             }
         } catch (Exception ignored) {
             // 无桌面环境时用户手动打开
         }
-        return false;
     }
 
     private static void sleep(long millis) {

@@ -1,5 +1,10 @@
 package com.pijava.ai.auth;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+
 import java.awt.Desktop;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -20,17 +25,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
-
 /**
  * OAuth2 授权码 + PKCE 流程（P6-17）。
  *
  * <p>启动 loopback 回调服务器（随机端口 + 随机路径），生成 PKCE verifier/challenge，
  * 打开浏览器跳转授权页，收到 {@code code} 后换取 token。无控制台/远程场景下
- * {@link Interaction#prompt} 提供手动粘贴授权码或回调 URL 的兜底。token 请求
+ *  提供手动粘贴授权码或回调 URL 的兜底。token 请求
  * 支持表单与 JSON 两种编码（对齐 provider 差异）。</p>
  */
 public final class OAuthFlow {
@@ -135,14 +135,14 @@ public final class OAuthFlow {
     private record CodeResult(String code, String error) {}
 
     private static void handleCallback(HttpExchange exchange, CompletableFuture<CodeResult> future) {
-        try {
+        try (exchange) {
             var query = exchange.getRequestURI().getQuery();
             var code = param(query, "code");
             var error = param(query, "error");
             var description = param(query, "error_description");
             if (error != null) {
                 sendHtml(exchange, 400, "<h1>Authorization failed</h1><p>"
-                    + escapeHtml(description == null ? error : description) + "</p>");
+                        + escapeHtml(description == null ? error : description) + "</p>");
                 future.complete(new CodeResult(null, error + (description == null ? "" : ": " + description)));
             } else if (code != null) {
                 sendHtml(exchange, 200, "<h1>Signed in</h1><p>You may now close this page.</p>");
@@ -153,8 +153,6 @@ public final class OAuthFlow {
             }
         } catch (IOException e) {
             future.complete(new CodeResult(null, e.getMessage()));
-        } finally {
-            exchange.close();
         }
     }
 
@@ -316,7 +314,7 @@ public final class OAuthFlow {
             if (entry.getValue() == null || entry.getValue().isBlank()) {
                 continue;
             }
-            if (sb.length() > 0) {
+            if (!sb.isEmpty()) {
                 sb.append('&');
             }
             sb.append(encode(entry.getKey())).append('=').append(encode(entry.getValue()));

@@ -28,7 +28,7 @@ public final class ContextNormalizer {
         var normalized = new ArrayList<Message>(suppliedMessages.size() + 1);
 
         if (!suppliedMessages.isEmpty()
-                && suppliedMessages.get(0) instanceof Message.SystemMessage) {
+                && suppliedMessages.getFirst() instanceof Message.SystemMessage) {
             normalized.addAll(suppliedMessages);
             return new TranscriptContext(normalized);
         }

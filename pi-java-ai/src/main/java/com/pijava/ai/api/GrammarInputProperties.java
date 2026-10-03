@@ -31,11 +31,10 @@ public final class GrammarInputProperties {
     public static ResolvedGrammar resolve(ToolDefinition tool,
                                           boolean supportsOpenAIGrammarTools) {
         var config = tool.constrainedSampling();
-        if (!(config instanceof GrammarSampling grammarConfig)
+        if (!(config instanceof GrammarSampling(Map<String, String> variants))
                 || !supportsOpenAIGrammarTools) {
             return null;
         }
-        var variants = grammarConfig.variants();
         var lark = variants.get("openai_lark");
         var regex = variants.get("openai_regex");
         var hasLark = lark != null && !lark.isBlank();
@@ -82,7 +81,7 @@ public final class GrammarInputProperties {
         }
         if (!(schema.get("required") instanceof List<?> required)
                 || required.size() != 1
-                || !(required.get(0) instanceof String property)) {
+                || !(required.getFirst() instanceof String property)) {
             throw new IllegalArgumentException(
                 "grammar constrained sampling requires exactly one required string property");
         }

@@ -114,11 +114,8 @@ public final class Credentials {
             }
         }
         var envValue = env.resolveApiKey(provider);
-        if (envValue.isPresent()) {
-            return Optional.of(plain(envValue.get(), "env:" + providerEnvVar(provider)));
-        }
-        return file.resolveApiKey(provider)
-            .map(value -> plain(value, "stored:" + provider));
+        return envValue.map(s -> plain(s, "env:" + providerEnvVar(provider))).or(() -> file.resolveApiKey(provider)
+                .map(value -> plain(value, "stored:" + provider)));
     }
 
     private static RecordedCredential plain(String value, String source) {

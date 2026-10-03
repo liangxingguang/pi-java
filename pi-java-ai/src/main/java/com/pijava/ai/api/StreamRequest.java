@@ -13,7 +13,7 @@ import com.pijava.ai.thinking.ThinkingLevel;
  * A streaming chat request sent to an LLM provider.
  *
  * <p><b>形状</b>：{@code systemPrompt} / {@code messages} / {@code tools} 是 pi 的
- * {@link Context}（兼容输入），它们在**构造时**被 {@link ContextNormalizer} 折进
+ * {@link ModelInfo}（兼容输入），它们在**构造时**被 {@link ContextNormalizer} 折进
  * {@link TranscriptContext} —— 与 pi 的 {@code normalizeContext} 同一时点
  * （{@code ai/src/utils/transcript.ts:30}，在公开 stream 入口调用）。车道只看得见
  * {@link #transcript()}：{@code systemPrompt()} / {@code tools()} 访问器**不存在**，
@@ -54,7 +54,7 @@ public record StreamRequest(
     public StreamRequest {
         transcript = transcript == null ? new TranscriptContext(List.of()) : transcript;
         extra = Map.copyOf(extra);
-        if (reasoning == null) {
+        if (reasoning.isEmpty()) {
             reasoning = Optional.empty();
         }
     }

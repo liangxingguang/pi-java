@@ -35,48 +35,53 @@ final class OrphanToolResults {
         // pi :163-166 —— 被扣住的系统消息（等结果发完再 flush）。
         var heldSystemMessages = new ArrayList<Message>();
         for (var msg : transformed) {
-            if (msg instanceof Message.AssistantMessage assistant) {
-                // P8（:191-193）：先关上一轮的。
-                closePendingToolCalls(pendingToolCalls, existingToolResultIds,
-                    heldSystemMessages, result);
-                // P9（:201-203）：error/aborted 整条不进 result、不更新 pending。
-                // continue 发生在 close 之后 ⇒ error 消息前面的孤儿照样被合成，
-                // error 消息自己的 toolCall 不进 pending。
-                if ("error".equals(assistant.stopReason())
-                        || "aborted".equals(assistant.stopReason())) {
-                    continue;
+            switch (msg) {
+                case Message.AssistantMessage assistant -> {
+                    // P8（:191-193）：先关上一轮的。
+                    closePendingToolCalls(pendingToolCalls, existingToolResultIds,
+                            heldSystemMessages, result);
+                    // P9（:201-203）：error/aborted 整条不进 result、不更新 pending。
+                    // continue 发生在 close 之后 ⇒ error 消息前面的孤儿照样被合成，
+                    // error 消息自己的 toolCall 不进 pending。
+                    if ("error".equals(assistant.stopReason())
+                            || "aborted".equals(assistant.stopReason())) {
+                        continue;
+                    }
+                    var toolCalls = assistant.content().stream()
+                            .filter(ContentBlock.ToolUseContent.class::isInstance)
+                            .map(ContentBlock.ToolUseContent.class::cast)
+                            .toList();
+                    if (!toolCalls.isEmpty()) {
+                        // P10（:206-210）：非空才触碰 —— 重置（不是累积）；空则不触碰。
+                        pendingToolCalls = new ArrayList<>(toolCalls);
+                        existingToolResultIds = new HashSet<>();
+                    }
+                    result.add(assistant); // P11（:212）
                 }
-                var toolCalls = assistant.content().stream()
-                    .filter(ContentBlock.ToolUseContent.class::isInstance)
-                    .map(ContentBlock.ToolUseContent.class::cast)
-                    .toList();
-                if (!toolCalls.isEmpty()) {
-                    // P10（:206-210）：非空才触碰 —— 重置（不是累积）；空则不触碰。
-                    pendingToolCalls = new ArrayList<>(toolCalls);
-                    existingToolResultIds = new HashSet<>();
+                case Message.ToolResultMessage toolResult -> {
+                    // P12（:213-215）：真结果到场，先记账再压入。
+                    existingToolResultIds.add(toolResult.toolUseId());
+                    result.add(toolResult);
                 }
-                result.add(assistant); // P11（:212）
-            } else if (msg instanceof Message.ToolResultMessage toolResult) {
-                // P12（:213-215）：真结果到场，先记账再压入。
-                existingToolResultIds.add(toolResult.toolUseId());
-                result.add(toolResult);
-            } else if (msg instanceof Message.SystemMessage system) {
-                // P13（:216-219）：有未答调用 ⇒ 扣住；否则就地放行（前导系统消息恒走这一支
-                // —— 它前面不可能有 pending，故它**留在下标 0**，Anthropic 的切头依赖这点）。
-                if (pendingToolCalls.isEmpty()) {
-                    result.add(system);
-                } else {
-                    heldSystemMessages.add(system);
+                case Message.SystemMessage system -> {
+                    // P13（:216-219）：有未答调用 ⇒ 扣住；否则就地放行（前导系统消息恒走这一支
+                    // —— 它前面不可能有 pending，故它**留在下标 0**，Anthropic 的切头依赖这点）。
+                    if (pendingToolCalls.isEmpty()) {
+                        result.add(system);
+                    } else {
+                        heldSystemMessages.add(system);
+                    }
                 }
-            } else if (msg instanceof Message.UserMessage user) {
-                // P14（:222-225）：新 user 回合打断工具流 —— 先 close 再压入。
-                closePendingToolCalls(pendingToolCalls, existingToolResultIds,
-                    heldSystemMessages, result);
-                result.add(user);
-            } else {
-                // sealed 穷举兜底：四个变体都已显式处理，走到这里说明 Message 又加了变体
-                // （不写 default 是为了让这件事响亮，而不是被静默吞掉）。
-                throw new IllegalStateException("unreachable message role");
+                case Message.UserMessage user -> {
+                    // P14（:222-225）：新 user 回合打断工具流 —— 先 close 再压入。
+                    closePendingToolCalls(pendingToolCalls, existingToolResultIds,
+                            heldSystemMessages, result);
+                    result.add(user);
+                }
+                case null, default ->
+                    // sealed 穷举兜底：四个变体都已显式处理，走到这里说明 Message 又加了变体
+                    // （不写 default 是为了让这件事响亮，而不是被静默吞掉）。
+                        throw new IllegalStateException("unreachable message role");
             }
         }
         // P16（:232）：循环后再 close 一次 —— 转录以未答调用结尾时在这里合成。

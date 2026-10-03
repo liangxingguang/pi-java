@@ -21,7 +21,7 @@ public final class StrictSampling {
      * @param supportsStrictMode whether the lane/model supports strict tools
      */
     public static Boolean resolveStrict(ToolDefinition tool, boolean supportsStrictMode) {
-        if (!(tool.constrainedSampling() instanceof JsonSchemaSampling config)) {
+        if (!(tool.constrainedSampling() instanceof JsonSchemaSampling(StrictMode strict))) {
             return null;
         }
         if (supportsStrictMode) {
@@ -29,7 +29,7 @@ public final class StrictSampling {
                 StrictJsonSchema.convert(tool.inputSchema());
                 return Boolean.TRUE;
             } catch (UnsupportedStrictJsonSchemaException error) {
-                if (config.strict() != StrictMode.REQUIRE) {
+                if (strict != StrictMode.REQUIRE) {
                     return null;
                 }
                 throw new IllegalStateException(
@@ -37,7 +37,7 @@ public final class StrictSampling {
                     + error.getMessage() + ".");
             }
         }
-        if (config.strict() == StrictMode.REQUIRE) {
+        if (strict == StrictMode.REQUIRE) {
             throw new IllegalStateException(
                 "Tool \"" + tool.name() + "\" requires JSON-schema constrained sampling, "
                 + "but strict tools are unsupported.");

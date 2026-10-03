@@ -35,7 +35,7 @@
         <version.google-genai>1.72.0</version.google-genai>
 
         <version.junit>5.12.2</version.junit>
-        <version.assertj>3.27.4</version.assertj>
+        <version.assertj>3.27.7</version.assertj>
         <version.mockito>5.17.1</version.mockito>
 
         <version.opentelemetry>1.63.0</version.opentelemetry>
@@ -284,7 +284,7 @@
             <dependency>
                 <groupId>ch.qos.logback</groupId>
                 <artifactId>logback-classic</artifactId>
-                <version>1.5.16</version>
+                <version>1.6.3</version>
             </dependency>
             <dependency>
                 <groupId>io.swagger.core.v3</groupId>

@@ -1,5 +1,6 @@
 package com.pijava.ai.auth;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.Optional;
 
@@ -47,9 +48,7 @@ public final class StoredOAuthCredentials {
             }
             try {
                 return refresher.refresh(provider, current);
-            } catch (RuntimeException e) {
-                throw new OAuthRefreshException(provider, e);
-            } catch (java.io.IOException e) {
+            } catch (RuntimeException | IOException e) {
                 throw new OAuthRefreshException(provider, e);
             }
         });

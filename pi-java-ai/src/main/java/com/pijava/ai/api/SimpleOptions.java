@@ -101,7 +101,7 @@ public final class SimpleOptions {
             return Math.max(MIN_MAX_TOKENS, maxTokens);
         }
         var available = contextWindow - Estimate.estimateContextTokens(transcript).tokens() - CONTEXT_SAFETY_TOKENS;
-        return (int) Math.floor(Math.min(maxTokens, Math.max(MIN_MAX_TOKENS, available)));
+        return (int) Math.floor(Math.clamp(available, MIN_MAX_TOKENS, maxTokens));
     }
 
     /**
@@ -198,8 +198,8 @@ public final class SimpleOptions {
             return Optional.empty();
         }
         var clamped = ModelThinkingLevels.clamp(model, ModelThinkingLevel.of(reasoning.get()));
-        return clamped instanceof ModelThinkingLevel.Enabled enabled
-            ? Optional.of(enabled.level()) : Optional.empty();
+        return clamped instanceof ModelThinkingLevel.Enabled(ThinkingLevel level)
+            ? Optional.of(level) : Optional.empty();
     }
 
     /**

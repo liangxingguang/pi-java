@@ -1,27 +1,26 @@
 package com.pijava.ai.cli;
 
 
-import java.util.List;
-
-import com.pijava.ai.auth.EnvApiKeyResolver;
-import com.pijava.ai.auth.FileCredentialStore;
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.EmbeddingApi;
 import com.pijava.ai.api.EmbeddingRequest;
 import com.pijava.ai.api.ImageApi;
 import com.pijava.ai.api.ImageRequest;
 import com.pijava.ai.api.ImageStopReason;
+import com.pijava.ai.auth.EnvApiKeyResolver;
+import com.pijava.ai.auth.FileCredentialStore;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.provider.Provider;
 import com.pijava.ai.provider.ProviderRegistry;
 import com.pijava.ai.provider.builtin.ProviderCatalog;
-
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
+
+import java.util.List;
 
 /**
  * pi-ai CLI — standalone command-line tool for model listing, auth, and ping.
@@ -163,7 +162,7 @@ public final class AiCli implements Runnable {
                 var models = prov.builtinModels().listModels();
                 var testModel = model != null
                         ? model
-                        : models.isEmpty() ? "unknown" : models.get(0).id().modelName();
+                        : models.isEmpty() ? "unknown" : models.getFirst().id().modelName();
 
                 var request = com.pijava.ai.api.StreamRequest.of(
                         com.pijava.ai.model.ModelId.of(provider, testModel),
@@ -212,9 +211,9 @@ public final class AiCli implements Runnable {
                     return;
                 }
                 for (var block : result.output()) {
-                    if (block instanceof ContentBlock.ImageContent img) {
-                        System.out.println("image: " + img.mediaType()
-                            + " (base64 " + img.data().length() + " chars)");
+                    if (block instanceof ContentBlock.ImageContent(String mediaType, String data)) {
+                        System.out.println("image: " + mediaType
+                            + " (base64 " + data.length() + " chars)");
                     } else if (block instanceof ContentBlock.TextContent t && !t.text().isBlank()) {
                         System.out.println("text: " + t.text());
                     }
@@ -257,7 +256,7 @@ public final class AiCli implements Runnable {
                 var result = api.embed(new EmbeddingRequest(
                         ModelId.of(provider, model), List.of(text)), options);
                 int dim = result.embeddings().isEmpty()
-                    ? 0 : result.embeddings().get(0).length;
+                    ? 0 : result.embeddings().getFirst().length;
                 System.out.println("Embeddings: " + result.embeddings().size()
                     + " x dim " + dim + " (inputTokens=" + result.inputTokens() + ")");
             } catch (Exception e) {
