@@ -10,6 +10,14 @@ import java.util.UUID;
  * expose a type-7 factory, so this implements the standard layout: 48-bit Unix
  * timestamp with millisecond precision, version/variant bits, then 74 bits of
  * randomness.</p>
+ *
+ * <p>⚠️ <b>2026-10-03 修过一处真 bug</b>：旧实现把随机字节按
+ * {@code (long) rand[i] << k} 拼进去，而 Java 的 **byte → long 会符号扩展**
+ * （{@code 0xDD} → {@code 0xFFFF_FFFF_FFFF_FFDD}）⇒ 左移后把**高位的 48 位时间戳整段
+ * 涂成 1**、变体位也涂成了 3，生成出来的 id 一律长成 {@code ffffffff-ffff-…}
+ * （用户报障「会话名为什么是 fffffff」）。**别再回退成字节拼接**：位移前一律
+ * {@code & 0xFF}，或者直接用 {@code long} 随机数 + 掩码（现在这样）。
+ * 回归见 {@code UuidV7Test}。</p>
  */
 public final class UuidV7 implements IdGenerator {
 
@@ -23,19 +31,12 @@ public final class UuidV7 implements IdGenerator {
     /** Generate a new UUID v7. */
     public static UUID uuid() {
         long millis = System.currentTimeMillis();
-        long hi = (millis & 0x0000_FFFF_FFFF_FFFFL) << 16;
-        byte[] rand = new byte[8];
-        RANDOM.nextBytes(rand);
-        long midRand = ((long) rand[0] << 40) | ((long) rand[1] << 32)
-            | ((long) rand[2] << 24) | ((long) rand[3] << 16)
-            | ((long) rand[4] << 8) | ((long) rand[5] & 0xFF);
-        long lo = ((long) rand[6] << 56) | ((long) rand[7] << 48);
-        RANDOM.nextBytes(rand);
-        lo |= ((long) rand[0] & 0xFF) << 40 | ((long) rand[1] & 0xFF) << 32
-            | ((long) rand[2] & 0xFF) << 24 | ((long) rand[3] & 0xFF) << 16
-            | ((long) rand[4] & 0xFF) << 8 | ((long) rand[5] & 0xFF);
-        long msb = hi | midRand | 0x0000_0000_0000_7000L; // version 7
-        long lsb = lo | 0x8000_0000_0000_0000L;           // variant 10xx
+        long randA = RANDOM.nextLong();
+        long randB = RANDOM.nextLong();
+        // 48 位毫秒时间戳 | version 7 | 12 位 rand_a
+        long msb = ((millis & 0xFFFF_FFFF_FFFFL) << 16) | 0x7000L | (randA & 0x0FFFL);
+        // variant 10 | 62 位 rand_b
+        long lsb = (randB & 0x3FFF_FFFF_FFFF_FFFFL) | 0x8000_0000_0000_0000L;
         return new UUID(msb, lsb);
     }
 
