@@ -49,22 +49,25 @@ public final class FileModelsStore implements ModelsStore {
     }
 
     /**
-     * Default file: {@code $PI_JAVA_CODING_AGENT_DIR/models-store.json} or
-     * {@code ~/.pi-java/agent/models-store.json} —— 与
-     * {@link com.pijava.ai.provider.ModelsJsonConfig#defaultPath()} 同一 agent
-     * 目录约定（pi 把 models-store 也放在 agent 目录）。
+     * Default agent directory: {@code $PI_JAVA_CODING_AGENT_DIR} or
+     * {@code ~/.pi-java/agent} —— 与
+     * {@link com.pijava.ai.provider.ModelsJsonConfig#defaultPath()} 同一约定。
      */
-    public static Path defaultFile() {
+    public static Path defaultDir() {
         var envDir = System.getenv("PI_JAVA_CODING_AGENT_DIR");
-        var agentDir = envDir != null && !envDir.isBlank()
+        return envDir != null && !envDir.isBlank()
             ? Path.of(envDir)
             : Path.of(System.getProperty("user.home"), ".pi-java", "agent");
-        return agentDir.resolve(FILE_NAME);
     }
 
-    /** Store at the default agent-directory location ({@link #defaultFile()}). */
+    /** Default file: {@code <agent dir>/models-store.json}（pi 也把它放在 agent 目录）。 */
+    public static Path defaultFile() {
+        return defaultDir().resolve(FILE_NAME);
+    }
+
+    /** Store at the default agent-directory location. */
     public static FileModelsStore defaultStore() {
-        return new FileModelsStore(defaultFile().getParent());
+        return new FileModelsStore(defaultDir());
     }
 
     @Override
@@ -119,8 +122,9 @@ public final class FileModelsStore implements ModelsStore {
 
     private void save(Map<String, StoredEntry> map) {
         try {
-            if (file.getParent() != null) {
-                Files.createDirectories(file.getParent());
+            var parent = file.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
             }
             JSON.writeValue(file.toFile(), map);
         } catch (IOException e) {
