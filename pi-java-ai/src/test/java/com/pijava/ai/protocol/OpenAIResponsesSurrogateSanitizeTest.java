@@ -162,8 +162,13 @@ class OpenAIResponsesSurrogateSanitizeTest {
     /**
      * <b>逐块</b>净化（pi {@code :283} 对每个文本块各净化一次后再推 output_text）。
      *
-     * <p>判别串跨块边界造：块1 以孤高收尾、块2 以孤低开头。逐块 ⇒ {@code "AB"}；
-     * 先拼接再净化 ⇒ 孤对**配对**成活 emoji ⇒ {@code "A🙈B"}。</p>
+     * <p>判别串跨块边界造：块1 以孤高收尾、块2 以孤低开头。逐块 ⇒ {@code "A"} 与
+     * {@code "B"} 各自成条；先拼接再净化 ⇒ 孤对**配对**成活 emoji ⇒ {@code "A🙈B"}。</p>
+     *
+     * <p>⚠️ 本夹具在 docs/71 G2 时更新过期望值：此前它断言的是**拼接后的一条**
+     * {@code "AB"} —— 那是本仓的形状（把所有文本块并进一条 output message），
+     * 而 pi {@code :267-287} **每个文本块推一条**。改成逐块一条后，「拼接形态」
+     * {@code "AB"} 反而成了要**反向禁止**的东西。</p>
      */
     @Test
     void assistantTextIsSanitizedPerBlockNotAcrossBlocks() throws Exception {
@@ -171,8 +176,10 @@ class OpenAIResponsesSurrogateSanitizeTest {
             assistant(new ContentBlock.TextContent("A" + HIGH),
                 new ContentBlock.TextContent(LOW + "B"))));
 
-        assertThat(payloads(params)).as("逐块净化 ⇒ 跨块边界不许成对").contains("AB");
-        assertThat(payloads(params)).as("拼接后再净化才会出现的形态").doesNotContain("A" + EMOJI + "B");
+        var payloads = payloads(params);
+        assertThat(payloads).as("逐块净化 ⇒ 两块各自成型").contains("A", "B");
+        assertThat(payloads).as("跨块成对（拼接后才会有）与拼接形态都不许出现")
+            .doesNotContain("A" + EMOJI + "B", "AB");
     }
 
     // ── 照缝（登记）与回归门 ──────────────────────────────────────────────

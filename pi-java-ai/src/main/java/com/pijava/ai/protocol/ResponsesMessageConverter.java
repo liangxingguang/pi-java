@@ -42,6 +42,7 @@ import com.pijava.ai.message.MessageTexts;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.thinking.ThinkingLevel;
 import com.pijava.ai.utils.SanitizeUnicode;
+import com.pijava.ai.utils.ShortHash;
 
 /**
  * OpenAI Responses 协议的消息/工具转换与请求构建。
@@ -333,23 +334,27 @@ final class ResponsesMessageConverter {
      * registered as B22).</p>
      *
      * <p>pi derives that id from the text block's replay signature and only falls back to
-     * {@code msg_pi_${msgIndex}} when there is none ({@code :228-237}). pi-java's
-     * {@link ContentBlock.TextContent} carries no signature at all (registered as B23), so the
-     * fallback branch is the only reachable one — and pi's 64-character hash branch
-     * ({@code msg_${shortHash(msgId)}}) is unreachable for the same reason, hence not ported.</p>
+     * {@code msg_pi_${msgIndex}} when there is none ({@code :267-287}); an id longer than 64
+     * characters is replaced by {@code msg_${shortHash(id)}}. All three branches are live here
+     * since docs/71 G2 — {@link ContentBlock.TextContent#textSignature()} exists (Batch F added
+     * it for Google) and this lane now writes it back too.</p>
+     *
+     * <p>⚠️ 早先的注释说「{@code ContentBlock.TextContent} carries no signature at all
+     * （B23）」—— 那是 Batch F 之前的事实，已作废（见 docs/71 §2.2）。</p>
      */
     private static void addAssistantItems(List<ResponseInputItem> items,
                                           Message.AssistantMessage assistant,
                                           int msgIndex,
                                           ModelId<?> target, String apiName,
                                           Map<String, String> grammarProperties) {
-        var text = new StringBuilder();
+        var textMessages = new ArrayList<ResponseInputItem>();
         var toolCalls = new ArrayList<ResponseInputItem>();
         var reasoningItems = new ArrayList<ResponseReasoningItem>();
+        // pi :270 —— 只数**文本块**的序号（决定 `_${textBlockIndex}` 后缀）。
+        int textBlockIndex = 0;
         for (var block : assistant.content()) {
             if (block instanceof ContentBlock.TextContent tc) {
-                // pi :283 —— assistant 文本**逐块**净化（跨块边界的孤高+孤低在 pi 会被各自删除）。
-                text.append(SanitizeUnicode.surrogates(tc.text()));
+                textMessages.add(outputMessage(tc, msgIndex, textBlockIndex++));
             } else if (block instanceof ContentBlock.ThinkingContent th) {
                 // pi shared :261-266 —— thinkingSignature 里是整个 reasoning item，
                 // 按块序重放。解析失败的签名无法重放 ⇒ 跳过该块（设计 R 裁决）。
@@ -376,25 +381,52 @@ final class ResponsesMessageConverter {
                     dropItemId, grammarProperties));
             }
         }
-        // Reasoning items precede the output message — the turn's block order is
-        // reasoning then text/calls (responses output has at most one message).
+        // Reasoning items precede the output messages; tool calls follow them.
+        // ⚠️ 这与 pi 的**块序**（它在同一个循环里按块 push）有差：本仓按「reasoning ⇒
+        // 文本 ⇒ 工具调用」分组。分组形状见 docs/71 §12 的裁决与登记。
         for (var reasoning : reasoningItems) {
             items.add(ResponseInputItem.ofReasoning(reasoning));
         }
-        if (!text.isEmpty()) {
-            items.add(ResponseInputItem.ofResponseOutputMessage(
-                ResponseOutputMessage.builder()
-                    .id("msg_pi_" + msgIndex)
-                    .role(JsonValue.from("assistant"))
-                    .status(ResponseOutputMessage.Status.COMPLETED)
-                    .content(List.of(ResponseOutputMessage.Content.ofOutputText(
-                        ResponseOutputText.builder()
-                            .text(text.toString())
-                            .annotations(List.of())
-                            .build())))
-                    .build()));
-        }
+        items.addAll(textMessages);
         items.addAll(toolCalls);
+    }
+
+    /**
+     * pi {@code :267-287} —— 一个**文本块**一条 output message，id 走签名链。
+     *
+     * <p>id 次序：签名里的 id（新形 {@code {"v":1,…}} 或 legacy 裸串）⇒ 回退
+     * {@code msg_pi_${msgIndex}}（首块）/ {@code msg_pi_${msgIndex}_${i}}（后续块）；
+     * **超过 64 字符**时改 {@code msg_${shortHash(id)}} —— OpenAI 的硬上限（pi {@code :277}）。
+     * {@code phase} 有值时随 item 上线。</p>
+     */
+    private static ResponseInputItem outputMessage(ContentBlock.TextContent block,
+                                                   int msgIndex, int textBlockIndex) {
+        var parsed = TextSignatureV1.parse(block.textSignature());
+        var fallback = textBlockIndex == 0
+            ? "msg_pi_" + msgIndex
+            : "msg_pi_" + msgIndex + "_" + textBlockIndex;
+        var signatureId = parsed.map(TextSignatureV1.Parsed::id).orElse(null);
+        String msgId;
+        if (signatureId == null || signatureId.isEmpty()) {
+            msgId = fallback;
+        } else if (signatureId.length() > 64) {
+            msgId = "msg_" + ShortHash.of(signatureId);
+        } else {
+            msgId = signatureId;
+        }
+        var builder = ResponseOutputMessage.builder()
+            .id(msgId)
+            .role(JsonValue.from("assistant"))
+            .status(ResponseOutputMessage.Status.COMPLETED)
+            .content(List.of(ResponseOutputMessage.Content.ofOutputText(
+                ResponseOutputText.builder()
+                    // pi :283 —— 逐块净化（跨块边界的孤高+孤低在 pi 会被各自删除）。
+                    .text(SanitizeUnicode.surrogates(block.text()))
+                    .annotations(List.of())
+                    .build())));
+        parsed.map(TextSignatureV1.Parsed::phase)
+            .ifPresent(phase -> builder.phase(ResponseOutputMessage.Phase.of(phase)));
+        return ResponseInputItem.ofResponseOutputMessage(builder.build());
     }
 
     // ── Tools ──────────────────────────────────────────────────────────
