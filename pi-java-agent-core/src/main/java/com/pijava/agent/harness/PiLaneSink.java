@@ -431,10 +431,9 @@ final class PiLaneSink implements PiLoop.Sink {
 
     /** 建 entry 并挂上车道。entry 一旦产生就直接进 transcript，没有中间态。 */
     private Entry.Message append(LaneState lane, Message message) {
-        var entry = new Entry.Message(
-            UUID.randomUUID().toString(), 0,
-            lane.lastEntry() != null ? lane.lastEntry().id() : null, null, message, null);
-        lane.transcript.add(entry);
+        // 叶 id 由 appendEntry 在锁下给 —— 工具线程的钩子标记会与这里抢同一个叶。
+        var entry = lane.appendEntry((seq, parentId) -> new Entry.Message(
+            UUID.randomUUID().toString(), 0, parentId, null, message, null));
         // 运行中写入 ⇒ 记为 deferred（原 docs/22 D3）。用户 prompt 由
         // RunLifecycle.startRun() 在起手时写入，不走这里，语义不受影响。
         HarnessUtils.recordDeferredWrite(lane, entry);

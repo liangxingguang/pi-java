@@ -203,10 +203,9 @@ final class ContextAssembler {
                 || !current.provider().equals(upd.model().provider());
             ctx.turnConfigApplier().accept(upd.model(), null);
             if (changed) {
-                var e = new Entry.ModelChange(UUID.randomUUID().toString(), lane.nextSeq(),
-                    HarnessUtils.lastEntryId(lane), Instant.now(),
-                    upd.model().provider(), upd.model().modelName());
-                lane.transcript.add(e);
+                var e = lane.appendEntry((seq, parentId) -> new Entry.ModelChange(
+                    UUID.randomUUID().toString(), seq, parentId, Instant.now(),
+                    upd.model().provider(), upd.model().modelName()));
                 // Applied mid-run by a prepare_next_turn hook ⇒ deferred.
                 HarnessUtils.recordDeferredWrite(lane, e);
             }
@@ -222,9 +221,9 @@ final class ContextAssembler {
             }
             ctx.turnConfigApplier().accept(null, upd.thinkingLevel());
             if (changed) {
-                var e = new Entry.ThinkingLevelChange(UUID.randomUUID().toString(), lane.nextSeq(),
-                    HarnessUtils.lastEntryId(lane), Instant.now(), upd.thinkingLevel());
-                lane.transcript.add(e);
+                var e = lane.appendEntry((seq, parentId) -> new Entry.ThinkingLevelChange(
+                    UUID.randomUUID().toString(), seq, parentId, Instant.now(),
+                    upd.thinkingLevel()));
                 lane.recordedThinking = upd.thinkingLevel();
                 // Applied mid-run by a prepare_next_turn hook ⇒ deferred.
                 HarnessUtils.recordDeferredWrite(lane, e);

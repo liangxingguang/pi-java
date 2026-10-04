@@ -81,9 +81,9 @@ final class RunLifecycle {
             new RunContext(laneName, lane.runId, promptList));
 
         if (promptLoadout != null) {
-            lane.transcript.add(messageEntry(lane, promptLoadout));
+            messageEntry(lane, promptLoadout);
         }
-        lane.transcript.add(messageEntry(lane, userMessage));
+        messageEntry(lane, userMessage);
         recordConfigChanged(laneName);
 
         // pi alignment: the operation id IS the runId (state.openOperationsByLane pairs
@@ -121,9 +121,8 @@ final class RunLifecycle {
         if (label == null) {
             return;                       // 默认（off）不写 entry，与 pi 一致
         }
-        lane.transcript.add(new Entry.ThinkingLevelChange(
-            UUID.randomUUID().toString(), lane.nextSeq(), HarnessUtils.lastEntryId(lane),
-            null, label));
+        lane.appendEntry((seq, parentId) -> new Entry.ThinkingLevelChange(
+            UUID.randomUUID().toString(), seq, parentId, null, label));
     }
 
     /**
@@ -134,8 +133,8 @@ final class RunLifecycle {
      */
     void recordModelChange(String laneName, com.pijava.ai.model.ModelId<?> model) {
         var lane = ctx.requireLane(laneName);
-        lane.transcript.add(new Entry.ModelChange(
-            UUID.randomUUID().toString(), lane.nextSeq(), HarnessUtils.lastEntryId(lane),
+        lane.appendEntry((seq, parentId) -> new Entry.ModelChange(
+            UUID.randomUUID().toString(), seq, parentId,
             java.time.Instant.now(), model.provider(), model.modelName()));
     }
 
@@ -185,8 +184,8 @@ final class RunLifecycle {
     }
 
     private static Entry.Message messageEntry(LaneState lane, Message message) {
-        return new Entry.Message(UUID.randomUUID().toString(), lane.nextSeq(),
-            HarnessUtils.lastEntryId(lane), null, message, null);
+        return lane.appendEntry((seq, parentId) -> new Entry.Message(
+            UUID.randomUUID().toString(), seq, parentId, null, message, null));
     }
 
     // ═══════════════════════════════════════════════════════════

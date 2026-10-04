@@ -283,6 +283,45 @@ public final class LaneState {
         return transcript.isEmpty() ? null : transcript.get(transcript.size() - 1);
     }
 
+    /**
+     * 追加一条 entry 的身份来源。**序号与叶 id 都由 {@link #appendEntry} 在锁下提供** ——
+     * 工厂外先读那两个值，正是竞态进来的地方。
+     */
+    @FunctionalInterface
+    public interface EntryFactory<E extends Entry> {
+        /**
+         * @param seq      本车道当前的条目序号（{@code transcript.size()}）
+         * @param parentId 当前叶的 id；空车道为 {@code null}
+         */
+        E create(long seq, String parentId);
+    }
+
+    /**
+     * 追加一条 entry —— **取序号、读叶、入 {@link #transcript} 三段在同一把锁下**。
+     *
+     * <p>pi 的 {@code _appendEntry}（{@code session-manager.ts:1191-1196}）把
+     * {@code byId.set} / {@code leafId = entry.id} / 落盘收在一个同步的调用里，
+     * JS 单线程下没有竞态可言。本仓的等价物**必须自己保证**这一点：钩子失败的标记
+     * 写自工具线程（{@code PiToolRunner} 的 worker → {@code HookSystem.recordHookError}），
+     * 而宿主线程同时在追加消息 entry —— {@link ArrayList} 在两个写者下会结构损坏，
+     * 更隐蔽的是两边会读到**同一个叶**而生成两条同父的 entry。</p>
+     *
+     * <p>⚠️ 锁序恒为「{@link PiLaneSink#emit} 的 emitLock → 本监视器」：宿主线程这样进来，
+     * 工具线程只进本监视器、且出锁之后才抛异常（{@code HookSystem} 是
+     * {@code recordHookError(...); throw e;}），不存在反向获取，故不会死锁。</p>
+     */
+    public synchronized <E extends Entry> E appendEntry(EntryFactory<E> factory) {
+        var entry = factory.create(transcript.size(), lastEntryId());
+        transcript.add(entry);
+        return entry;
+    }
+
+    /** 当前叶的 id；空车道为 {@code null}（pi 的 {@code leafId}）。 */
+    private String lastEntryId() {
+        var last = lastEntry();
+        return last == null ? null : last.id();
+    }
+
     // ═══════════════════════════════════════════════════════════
     // NewestOwn — summary of the latest own entry
     // ═══════════════════════════════════════════════════════════
