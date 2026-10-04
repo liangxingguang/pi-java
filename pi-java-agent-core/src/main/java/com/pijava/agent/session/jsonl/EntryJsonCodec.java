@@ -72,8 +72,44 @@ final class EntryJsonCodec {
                 JsonlCodec.optionalString(node, "toolCallId"),
                 JsonlCodec.optionalInteger(node, "attempt"),
                 JsonlCodec.readStopReason(node));
+            // pi 的 ContextEditEntry（session-manager.ts:175-180）。
+            // targetId 必填；replacement 键必填、显式 null ⇒ 剔除语义。
+            case "context_edit" -> new Entry.ContextEdit(id, seq, parentId, timestamp,
+                JsonlCodec.requireString(node, "targetId"),
+                decodeContextEditReplacement(node.get("replacement")));
             default -> throw JsonlCodec.DecodeError.schema("has unknown entry type " + type);
         };
+    }
+
+    /**
+     * pi {@code replacement}：键必填，{@code null} ⇒ 剔除；对象 ⇒
+     * {@code {content: 裸串|块数组}}。键缺失与显式 null 在此合并为剔除
+     * （pi 对缺键会在投影时崩；读入点统一按剔除，比 pi 略宽 —— docs/13 §4.2）。
+     */
+    private static Entry.ContextEdit.Replacement decodeContextEditReplacement(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (!node.isObject()) {
+            throw JsonlCodec.DecodeError.schema("has invalid context edit replacement");
+        }
+        JsonNode content = node.get("content");
+        if (content == null) {
+            throw JsonlCodec.DecodeError.schema("has invalid context edit replacement");
+        }
+        if (content.isTextual()) {
+            return new Entry.ContextEdit.Replacement(
+                new CustomMessageContent.Text(content.textValue()));
+        }
+        if (content.isArray()) {
+            List<ContentBlock> blocks = new ArrayList<>(content.size());
+            for (JsonNode item : content) {
+                blocks.add(MessageJsonCodec.decodeBlock(item));
+            }
+            return new Entry.ContextEdit.Replacement(
+                new CustomMessageContent.Blocks(blocks));
+        }
+        throw JsonlCodec.DecodeError.schema("has invalid context edit content");
     }
 
     /** pi {@code CustomMessageEntry.content}: bare string or content-block array. */

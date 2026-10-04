@@ -59,6 +59,8 @@ public sealed interface ChatMessage {
                     + customMessage.content().plainText(), MetaKind.CUSTOM)
                 : null;
             case Entry.Usage usage -> cacheWarmNotice(usage);
+            // 默认视图隐藏（pi tree-selector.ts:360-362 把 context_edit 列为 settings entry）。
+            case Entry.ContextEdit ignored -> null;
         };
     }
 

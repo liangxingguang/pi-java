@@ -20,7 +20,8 @@ public final class JsonlCodec {
 
     private static final List<String> ENTRY_TYPES = List.of(
         "message", "model_change", "thinking_level_change", "active_tools_change",
-        "compaction", "branch_summary", "custom", "custom_message", "usage");
+        "compaction", "branch_summary", "custom", "custom_message", "usage",
+        "context_edit");
 
     /**
      * 本仓**旧行**的 {@code kind} 取值（{@code kind:"entry"/"record"/"lane"/"fact"}）。

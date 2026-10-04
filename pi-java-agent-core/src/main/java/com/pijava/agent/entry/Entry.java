@@ -39,7 +39,8 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
     @JsonSubTypes.Type(value = Entry.BranchSummary.class, name = "branch_summary"),
     @JsonSubTypes.Type(value = Entry.Custom.class, name = "custom"),
     @JsonSubTypes.Type(value = Entry.CustomMessage.class, name = "custom_message"),
-    @JsonSubTypes.Type(value = Entry.Usage.class, name = "usage")
+    @JsonSubTypes.Type(value = Entry.Usage.class, name = "usage"),
+    @JsonSubTypes.Type(value = Entry.ContextEdit.class, name = "context_edit")
 })
 public sealed interface Entry {
 
@@ -66,6 +67,7 @@ public sealed interface Entry {
             case Custom c -> "custom";
             case CustomMessage cm -> "custom_message";
             case Usage u -> "usage";
+            case ContextEdit c -> "context_edit";
         };
     }
 
@@ -86,6 +88,8 @@ public sealed interface Entry {
             case Usage e -> new Usage(e.id(), seq, parentId, timestamp, e.kind(), e.provider(),
                 e.model(), e.usage(), e.note(), e.runId(), e.entryId(), e.toolCallId(),
                 e.attempt(), e.stopReason());
+            case ContextEdit e -> new ContextEdit(e.id(), seq, parentId, timestamp,
+                e.targetId(), e.replacement());
         };
     }
 
@@ -236,5 +240,40 @@ public sealed interface Entry {
         public CustomMessage {
             details = details == null ? null : Map.copyOf(details);
         }
+    }
+
+    /**
+     * 追加式上下文编辑（pi {@code ContextEditEntry}，
+     * {@code session-manager.ts:175-180}）。
+     *
+     * <pre>
+     * :175  /** Append-only change to one earlier entry's contribution to model context. &#42;/
+     * :176  export interface ContextEditEntry extends SessionEntryBase {
+     * :177      type: "context_edit";
+     * :178      targetId: string;
+     * :179      /** Null omits the target from model context. A value replaces only its content. &#42;/
+     * :180      replacement: { content: ContextEditableContent } | null;
+     *        }
+     * </pre>
+     *
+     * <p>{@link #replacement} 为 {@code null} ⇒ 目标从模型上下文剔除；非 null ⇒
+     * 只替换 content、消息元数据（usage/timestamp 等）保留。**{@code replacement}
+     * 键必填、显式 null 也落键**（pi 类型无 {@code ?}）—— 写侧强制见
+     * {@link com.pijava.agent.session.jsonl.PiV3Wire#encodeEntryLine}。</p>
+     *
+     * <p>{@link Replacement#content} 复用 {@link CustomMessageContent}：与
+     * {@code CustomMessageEntry.content} 同形（裸串或 text/image 块数组）。</p>
+     */
+    record ContextEdit(
+        String id,
+        long seq,
+        String parentId,
+        Instant timestamp,
+        String targetId,
+        Replacement replacement
+    ) implements Entry {
+
+        /** pi 的 {@code { content: string | ContentBlock[] }}。 */
+        public record Replacement(CustomMessageContent content) {}
     }
 }
