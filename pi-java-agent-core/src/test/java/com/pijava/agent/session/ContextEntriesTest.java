@@ -292,4 +292,122 @@ class ContextEntriesTest {
 
         assertThat(messages).containsExactly(change);
     }
+
+    // ── D3: context_edit 投影（docs/13 §4.3；pi projectContextEntry）────────────
+
+    private static Entry.ContextEdit omission(String id, String targetId) {
+        return new Entry.ContextEdit(id, 0, null, Instant.EPOCH, targetId, null);
+    }
+
+    private static Entry.ContextEdit replacement(String id, String targetId,
+                                                  com.pijava.agent.entry.CustomMessageContent content) {
+        return new Entry.ContextEdit(id, 0, null, Instant.EPOCH, targetId,
+            new Entry.ContextEdit.Replacement(content));
+    }
+
+    @Test
+    void omitsTheTargetFromProjectedMessages() {
+        var userTarget = message("u", null, "user", "user text");
+        var assistantTarget = message("a", "u", "assistant", "assistant text");
+        var toolTarget = message("t", "a", "tool", "tool text");
+        var path = List.<Entry>of(userTarget, assistantTarget, toolTarget,
+            omission("e1", "u"), omission("e2", "a"), omission("e3", "t"));
+
+        assertThat(ContextEntries.toMessages(path))
+            .as("omit 编辑须把 user/assistant/tool 目标全部移出投影；edit 自身不产消息")
+            .isEmpty();
+    }
+
+    @Test
+    void replacesOnlyContentAndKeepsMetadata() {
+        var usage = new com.pijava.ai.Usage(10, 1, 0, 0, null, null, 11,
+            com.pijava.ai.Usage.Cost.zero());
+        var timestamp = Instant.ofEpochMilli(42);
+        var assistant = new Message.AssistantMessage(
+            List.of(new ContentBlock.TextContent("original")), "stop", null,
+            "faux", "faux", "faux", usage, timestamp, null, null);
+        var path = List.<Entry>of(
+            new Entry.Message("a", 0, null, timestamp, assistant, null),
+            replacement("e1", "a", com.pijava.agent.entry.CustomMessageContent.of(
+                List.of(new ContentBlock.TextContent("replaced")))));
+
+        var msgs = ContextEntries.toMessages(path);
+        assertThat(msgs).hasSize(1);
+        assertThat(msgs.get(0)).isInstanceOf(Message.AssistantMessage.class);
+        var projected = (Message.AssistantMessage) msgs.get(0);
+        assertThat(((ContentBlock.TextContent) projected.content().get(0)).text())
+            .isEqualTo("replaced");
+        assertThat(projected.usage())
+            .as("只换 content：usage 元数据保留（pi projectContextEntry 只覆盖 content）")
+            .isSameAs(usage);
+        assertThat(projected.timestamp()).isSameAs(timestamp);
+        assertThat(projected.stopReason()).isEqualTo("stop");
+    }
+
+    @Test
+    void letsTheLatestEditWin() {
+        var target = message("a", null, "assistant", "original");
+        var path = List.<Entry>of(target,
+            replacement("e1", "a", com.pijava.agent.entry.CustomMessageContent.of("first")),
+            omission("e2", "a"),
+            replacement("e3", "a", com.pijava.agent.entry.CustomMessageContent.of("restored")));
+
+        var msgs = ContextEntries.toMessages(path);
+        assertThat(msgs).hasSize(1);
+        assertThat(((ContentBlock.TextContent) ((Message.AssistantMessage) msgs.get(0))
+            .content().get(0)).text())
+            .as("同目标多次编辑：Map.set ⇒ 后者胜（pi buildSessionProjection :551-554）")
+            .isEqualTo("restored");
+    }
+
+    @Test
+    void normalizesImportedStringContentForAssistantAndTool() {
+        var assistantTarget = message("a", null, "assistant", "original");
+        var toolTarget = message("t", "a", "tool", "original result");
+        var path = List.<Entry>of(assistantTarget, toolTarget,
+            replacement("e1", "a", com.pijava.agent.entry.CustomMessageContent.of(
+                "assistant replacement")),
+            replacement("e2", "t", com.pijava.agent.entry.CustomMessageContent.of(
+                "result replacement")));
+
+        var msgs = ContextEntries.toMessages(path);
+        assertThat(msgs).hasSize(2);
+        assertThat(msgs.get(0))
+            .as("assistant content 不接受裸串 ⇒ 归一成 text 块数组（pi :533-536 导入兜底）")
+            .isEqualTo(new Message.AssistantMessage(
+                List.of(new ContentBlock.TextContent("assistant replacement"))));
+        assertThat(msgs.get(1)).isEqualTo(new Message.ToolResultMessage(
+            "call-1", "bash",
+            List.of(new ContentBlock.TextContent("result replacement")), false));
+    }
+
+    @Test
+    void ignoresAnEditWhoseTargetIsNotProjected() {
+        var path = List.<Entry>of(
+            message("a", null, "user", "q"),
+            omission("e1", "no-such-target"));
+
+        var msgs = ContextEntries.toMessages(path);
+        assertThat(msgs)
+            .as("孤儿 edit：目标不在投影里 ⇒ 静默忽略，不影响其它消息")
+            .hasSize(1);
+        assertThat(msgs.get(0).role()).isEqualTo("user");
+    }
+
+    @Test
+    void appliesAPostCompactionEditToARetainedEntry() {
+        var summarized = message("s", null, "user", "summarized");
+        var retained = message("r", "s", "user", "original retained");
+        var comp = compaction("c", "r", "summary", "r");
+        var edit = replacement("e1", "r",
+            com.pijava.agent.entry.CustomMessageContent.of("edited retained"));
+        var path = List.<Entry>of(summarized, retained, comp, edit);
+
+        var msgs = ContextEntries.toMessages(path);
+        assertThat(msgs).hasSize(2);
+        assertThat(textOf(msgs.get(0))).contains("summary");
+        assertThat(textOf(msgs.get(1)))
+            .as("压缩后 edit 命中保留条目（pi session-context-edit 测试同名场景）")
+            .isEqualTo("edited retained");
+    }
 }

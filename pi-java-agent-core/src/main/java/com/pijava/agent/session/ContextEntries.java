@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.pijava.agent.entry.CustomMessageContent;
 import com.pijava.agent.entry.Entry;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -157,14 +158,58 @@ public final class ContextEntries {
      * 因此它天然落在上面那一支里，本方法无需为它单开分支。</p>
      */
     public static List<Message> toMessages(List<Entry> leafPath) {
+        List<Entry> context = contextEntries(leafPath);
+        // pi buildSessionProjection（session-manager.ts:551-554）：edit 从**压缩裁剪后**
+        // 的条目收集，同目标后者胜。edit 自身不产消息。
+        Map<String, Entry.ContextEdit> edits = new LinkedHashMap<>();
+        for (var e : context) {
+            if (e instanceof Entry.ContextEdit edit) {
+                edits.put(edit.targetId(), edit);
+            }
+        }
         List<Message> messages = new ArrayList<>();
-        for (var e : contextEntries(leafPath)) {
+        for (var e : context) {
             Message projected = project(e);
-            if (projected != null) {
-                messages.add(projected);
+            if (projected == null) {
+                continue;
+            }
+            // 孤儿 edit（目标不在投影里）自然不被取用。
+            Message effective = edits.get(e.id()) == null
+                ? projected : applyEdit(projected, edits.get(e.id()));
+            if (effective != null) {
+                messages.add(effective);
             }
         }
         return messages;
+    }
+
+    /**
+     * pi {@code projectContextEntry}（session-manager.ts:519-542）：replacement
+     * 为 null ⇒ 剔除目标；非 null ⇒ 只换 content，消息元数据（usage/timestamp/api…）
+     * 保留。edit 白名单仅 user/assistant/toolResult 消息与 custom_message
+     * （appendContextEdit 的 editable 判定）；custom_message 在投影时已是
+     * {@link Message.UserMessage}，走第一支。裸串 content 经
+     * {@link CustomMessageContent#toBlocks()} 归一成 text 块（导入形兜底，:533-536）。
+     */
+    private static Message applyEdit(Message message, Entry.ContextEdit edit) {
+        if (edit.replacement() == null) {
+            return null;
+        }
+        List<ContentBlock> blocks = edit.replacement().content().toBlocks();
+        if (message instanceof Message.UserMessage user) {
+            return new Message.UserMessage(blocks, user.timestamp());
+        }
+        if (message instanceof Message.AssistantMessage assistant) {
+            return new Message.AssistantMessage(blocks, assistant.stopReason(), assistant.deferred(),
+                assistant.api(), assistant.provider(), assistant.model(), assistant.usage(),
+                assistant.timestamp(), assistant.errorMessage(), assistant.rawStopReason());
+        }
+        if (message instanceof Message.ToolResultMessage tool) {
+            return new Message.ToolResultMessage(tool.toolUseId(), tool.toolName(), blocks,
+                tool.details(), tool.usage(), tool.addedToolNames(), tool.isError(),
+                tool.timestamp());
+        }
+        return message;
     }
 
     /** Per-entry projection (pi {@code sessionEntryToContextMessages}); {@code null} = no message. */
