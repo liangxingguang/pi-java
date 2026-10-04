@@ -314,8 +314,8 @@ class PiLaneEngineTest {
         // 早已能读写全字段 —— 缺的一直只是发射端喂的东西）。committed(...) 是存储层
         // 落账时的重编号原语（JsonlSessionStorage 提交的就是它），seq 须从 1 起。
         var state = new SessionState();
-        state.applyMutation(new SessionMutation.Lane(1, record.lane(), null));
-        state.applyMutation(new SessionMutation.Record(
+        state.applyMutation(new SessionMutation.Lane(1, null, java.time.Instant.EPOCH, record.lane(), null));
+        state.applyMutation(new SessionMutation.Record(null,
             record.committed(2, java.time.Instant.now())));
         var stats = state.getStats();
         assertThat(stats.costTotal()).isEqualTo(0.51);

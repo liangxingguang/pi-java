@@ -149,7 +149,8 @@ public final class JsonlSessionStorage implements SessionStorage<JsonlSessionMet
         synchronized (writeLock) {
             state.validateNewLane(lane);
             state.validateTarget(at);
-            var mutation = new SessionMutation.Lane(state.nextSequence(), lane, at);
+            var mutation = new SessionMutation.Lane(state.nextSequence(),
+                state.lastEntryId(), Instant.now(), lane, at);
             appendMutation(mutation);
             applyMutation(mutation);
         }
@@ -160,7 +161,8 @@ public final class JsonlSessionStorage implements SessionStorage<JsonlSessionMet
         synchronized (writeLock) {
             state.requireLane(lane);
             state.validateTarget(to);
-            var mutation = new SessionMutation.Lane(state.nextSequence(), lane, to);
+            var mutation = new SessionMutation.Lane(state.nextSequence(),
+                state.lastEntryId(), Instant.now(), lane, to);
             appendMutation(mutation);
             applyMutation(mutation);
         }
@@ -200,7 +202,7 @@ public final class JsonlSessionStorage implements SessionStorage<JsonlSessionMet
             T committed = (T) record.record().committed(state.nextSequence(),
                 java.time.Instant.ofEpochMilli(System.currentTimeMillis()));
             com.pijava.agent.session.SessionJson.assertSerializable(committed);
-            var mutation = new SessionMutation.Record(committed);
+            var mutation = new SessionMutation.Record(state.lastEntryId(), committed);
             appendMutation(mutation);
             applyMutation(mutation);
             return committed;
@@ -245,7 +247,8 @@ public final class JsonlSessionStorage implements SessionStorage<JsonlSessionMet
     @Override
     public void setName(String name) {
         synchronized (writeLock) {
-            var mutation = new SessionMutation.FactName(state.nextSequence(), name);
+            var mutation = new SessionMutation.FactName(state.nextSequence(),
+                state.lastEntryId(), Instant.now(), name);
             appendMutation(mutation);
             applyMutation(mutation);
         }
@@ -260,7 +263,8 @@ public final class JsonlSessionStorage implements SessionStorage<JsonlSessionMet
     public void setLabel(String id, String label) {
         synchronized (writeLock) {
             state.validateTarget(id);
-            var mutation = new SessionMutation.FactLabel(state.nextSequence(), id, label);
+            var mutation = new SessionMutation.FactLabel(state.nextSequence(),
+                state.lastEntryId(), Instant.now(), id, label);
             appendMutation(mutation);
             applyMutation(mutation);
         }
@@ -311,10 +315,13 @@ public final class JsonlSessionStorage implements SessionStorage<JsonlSessionMet
     static SessionMutation mutationFromLogItem(LogItem item) {
         return switch (item) {
             case LogItem.EntryItem e -> new SessionMutation.Entry(null, e.entry());
-            case LogItem.RecordItem r -> new SessionMutation.Record(r.record());
-            case LogItem.LaneItem l -> new SessionMutation.Lane(l.seq(), l.lane(), l.leafId());
-            case LogItem.NameItem n -> new SessionMutation.FactName(n.seq(), n.name());
-            case LogItem.LabelItem l -> new SessionMutation.FactLabel(l.seq(), l.targetId(), l.label());
+            case LogItem.RecordItem r -> new SessionMutation.Record(r.parentId(), r.record());
+            case LogItem.LaneItem l -> new SessionMutation.Lane(l.seq(), l.parentId(),
+                l.timestamp(), l.lane(), l.leafId());
+            case LogItem.NameItem n -> new SessionMutation.FactName(n.seq(), n.parentId(),
+                n.timestamp(), n.name());
+            case LogItem.LabelItem l -> new SessionMutation.FactLabel(l.seq(), l.parentId(),
+                l.timestamp(), l.targetId(), l.label());
         };
     }
 

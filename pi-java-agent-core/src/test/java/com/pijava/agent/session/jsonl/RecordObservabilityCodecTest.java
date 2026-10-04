@@ -27,7 +27,8 @@ class RecordObservabilityCodecTest {
 
     private SessionMutation.Record encodeThenParse(SessionMutation.Record mutation) {
         String line = JsonlCodec.encodeMutation(mutation);
-        var result = JsonlCodec.parseMutation(line);
+        // pi 形状的行不带 seq ⇒ 单行解析把该记录的 seq 当行号喂回去（docs/12）。
+        var result = JsonlCodec.parseMutation(line, mutation.seq());
         assertThat(result.ok()).as("parse should succeed: %s", result.error()).isTrue();
         return (SessionMutation.Record) result.value();
     }
@@ -105,7 +106,7 @@ class RecordObservabilityCodecTest {
     void toolFinishedRoundtrips() {
         var rec = new LaneRecord.ToolFinished("rec-7", 12L, "main", Instant.now(),
             "run-1", "call-1", "bash", true, false, "entry-9", 456L);
-        var parsed = encodeThenParse(new SessionMutation.Record(rec)).record();
+        var parsed = encodeThenParse(new SessionMutation.Record(null, rec)).record();
 
         assertThat(parsed).isInstanceOf(LaneRecord.ToolFinished.class);
         var finished = (LaneRecord.ToolFinished) parsed;
@@ -126,7 +127,7 @@ class RecordObservabilityCodecTest {
         var rec = new LaneRecord.StepAttempt("rec-8", 13L, "main", Instant.now(),
             "run-1", StepKind.ASSISTANT, 1, "entry-10", null,
             "anthropic/claude-sonnet-4-6", 14, 7, "budget=8000", 2314L);
-        var parsed = encodeThenParse(new SessionMutation.Record(rec)).record();
+        var parsed = encodeThenParse(new SessionMutation.Record(null, rec)).record();
 
         var attempt = (LaneRecord.StepAttempt) parsed;
         assertThat(attempt.model()).isEqualTo("anthropic/claude-sonnet-4-6");
@@ -159,7 +160,7 @@ class RecordObservabilityCodecTest {
     void operationFinishedWithDurationRoundtrips() {
         var rec = new LaneRecord.OperationFinished("rec-10", 15L, "main", Instant.now(),
             "run-1", OperationOutcome.COMPLETED, null, 5234L);
-        var parsed = encodeThenParse(new SessionMutation.Record(rec)).record();
+        var parsed = encodeThenParse(new SessionMutation.Record(null, rec)).record();
 
         var finished = (LaneRecord.OperationFinished) parsed;
         assertThat(finished.outcome()).isEqualTo(OperationOutcome.COMPLETED);
@@ -184,7 +185,7 @@ class RecordObservabilityCodecTest {
         var rec = new LaneRecord.StepAttempt("rec-12", 17L, "main", Instant.now(),
             "run-1", StepKind.ASSISTANT, 0, "entry-9", null,
             null, null, null, null, null);
-        String line = JsonlCodec.encodeMutation(new SessionMutation.Record(rec));
+        String line = JsonlCodec.encodeMutation(new SessionMutation.Record(null, rec));
 
         assertThat(line).doesNotContain("\"model\"");
         assertThat(line).doesNotContain("\"messageCount\"");

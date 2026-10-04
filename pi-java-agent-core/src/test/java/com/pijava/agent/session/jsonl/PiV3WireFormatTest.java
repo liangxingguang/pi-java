@@ -122,6 +122,82 @@ class PiV3WireFormatTest {
             .hasSize(1);
     }
 
+    // ── 合成行也必须是 pi 的条目（docs/12 §6 D2）────────────────────
+
+    @Test
+    void nameAndLabelBecomeNativePiEntries() throws Exception {
+        Path dir = Files.createTempDirectory("pi-v3-facts");
+        var repo = JsonlSessionRepository.over(dir);
+        var session = repo.create(new JsonlSessionCreateOptions(null, "work", null, null));
+        session.appendEntry(message("m1", "hello"), "main");
+        session.setName("my session");
+        session.setLabel("m1", "keep");
+        session.storage().drain();
+
+        var rows = lines(repo.list(JsonlSessionListOptions.all()).getFirst().path());
+        JsonNode info = rows.stream().filter(n -> "session_info".equals(n.path("type").asText()))
+            .findFirst().orElseThrow();
+        JsonNode label = rows.stream().filter(n -> "label".equals(n.path("type").asText()))
+            .findFirst().orElseThrow();
+
+        assertThat(info.path("name").asText()).as("会话名用 pi 的原生 session_info").isEqualTo("my session");
+        assertThat(label.path("targetId").asText()).isEqualTo("m1");
+        assertThat(label.path("label").asText()).isEqualTo("keep");
+    }
+
+    @Test
+    void everyRowIsAPiFileEntryAndChains() throws Exception {
+        Path dir = Files.createTempDirectory("pi-v3-chain");
+        var repo = JsonlSessionRepository.over(dir);
+        var session = repo.create(new JsonlSessionCreateOptions(null, "work", null, null));
+        session.appendEntry(message("m1", "one"), "main");
+        session.appendEntry(message("m2", "two"), "main");
+        session.setName("named");
+        session.setLabel("m1", "L");
+        session.storage().drain();
+
+        var rows = lines(repo.list(JsonlSessionListOptions.all()).getFirst().path());
+
+        // ① 每一行都是 pi 能认的 FileEntry —— 头用 type:"session"、其余行都有 type 与 id，
+        //    且**没有任何一行**带旧形状的 kind（pi 会把 {kind:...} 当成 type:undefined 的条目）。
+        assertThat(rows).allSatisfy(row -> assertThat(row.has("kind"))
+            .as("旧形状的 kind 键一行都不许剩：%s", row).isFalse());
+        assertThat(rows.getFirst().path("type").asText()).isEqualTo("session");
+        assertThat(rows).allSatisfy(row -> assertThat(row.path("id").isTextual()).isTrue());
+
+        // ② pi 的 SessionEntryBase 要求 parentId **键存在**（根条目为 null）。
+        assertThat(rows.subList(1, rows.size()))
+            .allSatisfy(row -> assertThat(row.has("parentId"))
+                .as("每行都要有 parentId 键：%s", row).isTrue());
+
+        // ③ 合成行（session_info / label）**必须链到已有条目**，否则 pi 的 getBranch()
+        //    从叶回溯看不到消息 —— 这是 D2 里「合成行要链进树」那条的钉子。
+        var synthetic = rows.stream()
+            .filter(row -> java.util.Set.of("session_info", "label", "custom")
+                .contains(row.path("type").asText()))
+            .toList();
+        assertThat(synthetic).isNotEmpty();
+        assertThat(synthetic).allSatisfy(row -> assertThat(row.path("parentId").isTextual())
+            .as("合成行的 parentId 不许为 null：%s", row).isTrue());
+    }
+
+    @Test
+    void syntheticRowsSurviveAReload() throws Exception {
+        Path dir = Files.createTempDirectory("pi-v3-synth-reload");
+        var repo = JsonlSessionRepository.over(dir);
+        var session = repo.create(new JsonlSessionCreateOptions(null, "work", null, null));
+        session.appendEntry(message("m1", "hello"), "main");
+        session.setName("kept name");
+        session.setLabel("m1", "kept label");
+        session.storage().drain();
+        Path file = repo.list(JsonlSessionListOptions.all()).getFirst().path();
+
+        // 从**旧形状的线**再读一遍 —— 迁移与解析都要能拿回 name/label。
+        var reloaded = JsonlSessionStorage.load(FS, file);
+        assertThat(reloaded.getName()).isEqualTo("kept name");
+        assertThat(reloaded.getLabel("m1")).isEqualTo("kept label");
+    }
+
     // ── 往返 ────────────────────────────────────────────────────────
 
     @Test

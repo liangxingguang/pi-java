@@ -1,5 +1,6 @@
 package com.pijava.agent.session.memory;
 
+import java.time.Instant;
 import java.util.List;
 
 import com.pijava.agent.entry.Entry;
@@ -62,7 +63,8 @@ public final class MemorySessionStorage implements SessionStorage<MemorySessionM
         synchronized (lock) {
             state.validateNewLane(lane);
             state.validateTarget(at);
-            state.applyMutation(new SessionMutation.Lane(state.nextSequence(), lane, at));
+            state.applyMutation(new SessionMutation.Lane(state.nextSequence(),
+                state.lastEntryId(), Instant.now(), lane, at));
         }
     }
 
@@ -71,7 +73,8 @@ public final class MemorySessionStorage implements SessionStorage<MemorySessionM
         synchronized (lock) {
             state.requireLane(lane);
             state.validateTarget(to);
-            state.applyMutation(new SessionMutation.Lane(state.nextSequence(), lane, to));
+            state.applyMutation(new SessionMutation.Lane(state.nextSequence(),
+                state.lastEntryId(), Instant.now(), lane, to));
         }
     }
 
@@ -106,7 +109,7 @@ public final class MemorySessionStorage implements SessionStorage<MemorySessionM
             T committed = (T) record.record().committed(state.nextSequence(),
                 java.time.Instant.ofEpochMilli(System.currentTimeMillis()));
             SessionJson.assertSerializable(committed);
-            state.applyMutation(new SessionMutation.Record(committed));
+            state.applyMutation(new SessionMutation.Record(state.lastEntryId(), committed));
             return committed;
         }
     }
@@ -149,7 +152,8 @@ public final class MemorySessionStorage implements SessionStorage<MemorySessionM
     @Override
     public void setName(String name) {
         synchronized (lock) {
-            state.applyMutation(new SessionMutation.FactName(state.nextSequence(), name));
+            state.applyMutation(new SessionMutation.FactName(state.nextSequence(),
+                state.lastEntryId(), Instant.now(), name));
         }
     }
 
@@ -162,7 +166,8 @@ public final class MemorySessionStorage implements SessionStorage<MemorySessionM
     public void setLabel(String id, String label) {
         synchronized (lock) {
             state.validateTarget(id);
-            state.applyMutation(new SessionMutation.FactLabel(state.nextSequence(), id, label));
+            state.applyMutation(new SessionMutation.FactLabel(state.nextSequence(),
+                state.lastEntryId(), Instant.now(), id, label));
         }
     }
 

@@ -1,5 +1,6 @@
 package com.pijava.agent.session;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -52,6 +53,17 @@ public final class SessionState {
         return lanes.entrySet().stream()
             .map(e -> new LanePointer(e.getKey(), e.getValue()))
             .toList();
+    }
+
+    /**
+     * 最近追加的条目 id（空会话返回 {@code null}）。
+     *
+     * <p>pi 的**每一行**都要 {@code parentId}（{@code session-manager.ts:57-63}）——
+     * 本仓的合成行（lane/fact/record）是 pi 没有的概念，编码成 pi 的条目时得链进树里，
+     * 否则 pi 的 {@code getBranch()} 从叶回溯就看不到消息（{@code docs/12 §6 D2}）。</p>
+     */
+    public String lastEntryId() {
+        return entries.isEmpty() ? null : entries.get(entries.size() - 1).id();
     }
 
     /** The lane's leaf, throwing {@code invalid_lane} when the lane is missing. */
@@ -109,10 +121,10 @@ public final class SessionState {
     /** Find entries matching a query. */
     public List<Entry> findEntries(EntryQuery query) {
         var q = query == null ? EntryQuery.all() : query;
-        assertValidLimit(q.limit());
-        assertValidCursor(q.cursor());
+        SessionQuerySupport.assertValidLimit(q.limit());
+        SessionQuerySupport.assertValidCursor(q.cursor());
         List<Entry> results = new ArrayList<>();
-        for (var entry : ordered(entries, q.order())) {
+        for (var entry : SessionQuerySupport.ordered(entries, q.order())) {
             if (!matchesEntryQuery(entry, q)) {
                 continue;
             }
@@ -128,8 +140,8 @@ public final class SessionState {
     public List<Entry> findEntriesOnBranch(EntryQuery query, BranchBounds bounds, String start) {
         var q = query == null ? EntryQuery.all() : query;
         var b = bounds == null ? BranchBounds.none() : bounds;
-        assertValidLimit(q.limit());
-        assertValidCursor(q.cursor());
+        SessionQuerySupport.assertValidLimit(q.limit());
+        SessionQuerySupport.assertValidCursor(q.cursor());
         List<Entry> results = new ArrayList<>();
         if (q.order() == EntryOrder.OLDEST_FIRST) {
             var path = walkToRoot(start, null);
@@ -160,10 +172,10 @@ public final class SessionState {
     /** Find lane records matching a query. */
     public List<LaneRecord> findRecords(RecordQuery query) {
         var q = query == null ? RecordQuery.all() : query;
-        assertValidLimit(q.limit());
-        assertValidCursor(q.afterSeq());
+        SessionQuerySupport.assertValidLimit(q.limit());
+        SessionQuerySupport.assertValidCursor(q.afterSeq());
         List<LaneRecord> results = new ArrayList<>();
-        for (var record : ordered(records, q.order())) {
+        for (var record : SessionQuerySupport.ordered(records, q.order())) {
             if (!matchesRecordQuery(record, q)) {
                 continue;
             }
@@ -190,8 +202,8 @@ public final class SessionState {
     /** The session log, filtered by {@code afterSeq} and capped by {@code limit}. */
     public List<LogItem> getLog(LogOptions options) {
         var o = options == null ? LogOptions.none() : options;
-        assertValidLimit(o.limit());
-        assertValidCursor(o.afterSeq());
+        SessionQuerySupport.assertValidLimit(o.limit());
+        SessionQuerySupport.assertValidCursor(o.afterSeq());
         List<LogItem> results = new ArrayList<>();
         for (var item : log) {
             if (o.afterSeq() != null && item.seq() <= o.afterSeq()) {
@@ -255,18 +267,26 @@ public final class SessionState {
         long sequence = 1;
         for (var sourceEntry : copiedEntries) {
             Entry copied = sourceEntry.committed(sequence++, sourceEntry.parentId(), sourceEntry.timestamp());
+            // Fork 只拷贝条目（record 不拷），所以每条都链在上一条之后；lane 由下方的 Lane 行给。
             mutations.add(new SessionMutation.Entry(null, copied));
         }
+        // pi 的合成行要链进树里（docs/12 §6 D2）：父级＝拷贝进来的最后一条，时间戳跟着它
+        // （保留原会话的时间感，且**确定性** —— 编码不该引入 now()）。
+        String tipId = copiedEntries.isEmpty() ? null : copiedEntries.get(copiedEntries.size() - 1).id();
+        Instant tipTime = copiedEntries.isEmpty()
+            ? Instant.EPOCH : copiedEntries.get(copiedEntries.size() - 1).timestamp();
         for (var pointer : forkLanes) {
-            mutations.add(new SessionMutation.Lane(sequence++, pointer.lane(), pointer.leafId()));
+            mutations.add(new SessionMutation.Lane(sequence++, tipId, tipTime,
+                pointer.lane(), pointer.leafId()));
         }
         if (name != null) {
-            mutations.add(new SessionMutation.FactName(sequence++, name));
+            mutations.add(new SessionMutation.FactName(sequence++, tipId, tipTime, name));
         }
         for (var entry : copiedEntries) {
             String label = labels.get(entry.id());
             if (label != null) {
-                mutations.add(new SessionMutation.FactLabel(sequence++, entry.id(), label));
+                mutations.add(new SessionMutation.FactLabel(sequence++, tipId, tipTime,
+                    entry.id(), label));
             }
         }
         return mutations;
@@ -324,7 +344,7 @@ public final class SessionState {
                 open.remove(finished.runId());
             }
         }
-        log.add(new LogItem.RecordItem(seq, record));
+        log.add(new LogItem.RecordItem(seq, m.parentId(), record));
         if (record instanceof LaneRecord.UsageRecord usage) {
             cachedTokens += usage.usage().cacheRead();
             uncachedTokens += usage.usage().input() + usage.usage().cacheWrite();
@@ -339,13 +359,13 @@ public final class SessionState {
         }
         sequence = seq;
         lanes.put(m.lane(), m.leafId());
-        log.add(new LogItem.LaneItem(seq, m.lane(), m.leafId()));
+        log.add(new LogItem.LaneItem(seq, m.parentId(), m.timestamp(), m.lane(), m.leafId()));
     }
 
     private void applyFactName(SessionMutation.FactName m, long seq) {
         sequence = seq;
         name = m.name();
-        log.add(new LogItem.NameItem(seq, m.name()));
+        log.add(new LogItem.NameItem(seq, m.parentId(), m.timestamp(), m.name()));
     }
 
     private void applyFactLabel(SessionMutation.FactLabel m, long seq) {
@@ -358,7 +378,7 @@ public final class SessionState {
         } else {
             labels.put(m.targetId(), m.label());
         }
-        log.add(new LogItem.LabelItem(seq, m.targetId(), m.label()));
+        log.add(new LogItem.LabelItem(seq, m.parentId(), m.timestamp(), m.targetId(), m.label()));
     }
 
     // ── Internals ──────────────────────────────────────────
@@ -396,19 +416,11 @@ public final class SessionState {
     private boolean matchesEntryQuery(Entry entry, EntryQuery query) {
         return (query.type() == null || query.type().equals(entry.type()))
             && (query.customType() == null
-                || query.customType().equals(customTypeOf(entry)))
+                || query.customType().equals(SessionQuerySupport.customTypeOf(entry)))
             && (query.cursor() == null
                 || (query.order() == EntryOrder.OLDEST_FIRST
                     ? entry.seq() > query.cursor().afterSeq()
                     : entry.seq() < query.cursor().afterSeq()));
-    }
-
-    private static String customTypeOf(Entry entry) {
-        return switch (entry) {
-            case Entry.Custom c -> c.customType();
-            case Entry.CustomMessage cm -> cm.customType();
-            default -> null;
-        };
     }
 
     private boolean matchesRecordQuery(LaneRecord record, RecordQuery query) {
@@ -444,45 +456,8 @@ public final class SessionState {
             && (query.operationKind() == null
                 || (record instanceof LaneRecord.OperationStarted started
                     && started.intent() != null
-                    && kindValue(started.intent()).equals(query.operationKind().value())))
+                    && SessionQuerySupport.kindValue(started.intent()).equals(query.operationKind().value())))
             && (query.afterSeq() == null || record.seq() > query.afterSeq());
-    }
-
-    private static String kindValue(LaneRecord.OperationStarted.Intent intent) {
-        return switch (intent) {
-            case LaneRecord.OperationStarted.Run r -> "run";
-            case LaneRecord.OperationStarted.Compaction c -> "compaction";
-            case LaneRecord.OperationStarted.Navigation n -> "navigation";
-        };
-    }
-
-    private static <T> Iterable<T> ordered(List<T> items, EntryOrder order) {
-        if (order == EntryOrder.OLDEST_FIRST) {
-            return items;
-        }
-        List<T> reversed = new ArrayList<>(items);
-        java.util.Collections.reverse(reversed);
-        return reversed;
-    }
-
-    private static void assertValidLimit(Integer limit) {
-        if (limit != null && limit <= 0) {
-            throw new SessionError(SessionErrorCode.INVALID_QUERY, "limit must be a positive integer");
-        }
-    }
-
-    private static void assertValidCursor(EntryCursor cursor) {
-        if (cursor != null && cursor.afterSeq() < 0) {
-            throw new SessionError(SessionErrorCode.INVALID_QUERY,
-                "cursor sequence must be a non-negative integer");
-        }
-    }
-
-    private static void assertValidCursor(Long afterSeq) {
-        if (afterSeq != null && afterSeq < 0) {
-            throw new SessionError(SessionErrorCode.INVALID_QUERY,
-                "cursor sequence must be a non-negative integer");
-        }
     }
 
     private static void invalidMutation(String message) {

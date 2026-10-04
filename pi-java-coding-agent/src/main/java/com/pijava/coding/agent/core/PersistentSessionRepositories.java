@@ -371,13 +371,14 @@ final class PersistentSessionRepositories {
             case com.pijava.agent.session.LogItem.EntryItem e ->
                 new SessionMutation.Entry(null, e.entry());
             case com.pijava.agent.session.LogItem.RecordItem r ->
-                new SessionMutation.Record(r.record());
+                new SessionMutation.Record(r.parentId(), r.record());
             case com.pijava.agent.session.LogItem.LaneItem l ->
-                new SessionMutation.Lane(l.seq(), l.lane(), l.leafId());
+                new SessionMutation.Lane(l.seq(), l.parentId(), l.timestamp(), l.lane(), l.leafId());
             case com.pijava.agent.session.LogItem.NameItem n ->
-                new SessionMutation.FactName(n.seq(), n.name());
+                new SessionMutation.FactName(n.seq(), n.parentId(), n.timestamp(), n.name());
             case com.pijava.agent.session.LogItem.LabelItem l ->
-                new SessionMutation.FactLabel(l.seq(), l.targetId(), l.label());
+                new SessionMutation.FactLabel(l.seq(), l.parentId(), l.timestamp(),
+                    l.targetId(), l.label());
         };
     }
 

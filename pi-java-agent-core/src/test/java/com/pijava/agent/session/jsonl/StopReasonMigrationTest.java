@@ -82,10 +82,11 @@ class StopReasonMigrationTest {
         var record = new LaneRecord.UsageRecord("r-legacy", 2L, "main",
             Instant.ofEpochMilli(1L), usage, UsageCause.ASSISTANT,
             "run-1", "e-legacy", null, 0, "toolUse");
-        var line = downgraded(JsonlCodec.encodeMutation(new SessionMutation.Record(record))
+        var line = downgraded(JsonlCodec.encodeMutation(new SessionMutation.Record(null, record))
             .replace(CURRENT, LEGACY));
 
-        var result = JsonlCodec.parseMutation(line);
+        // 记录行的 seq 是 2（见上面 record 的构造）⇒ 单行解析按行号喂回（docs/12）。
+        var result = JsonlCodec.parseMutation(line, 2L);
         assertThat(result.ok()).as("parse should succeed: %s", result.error()).isTrue();
         var parsed = (LaneRecord.UsageRecord) ((SessionMutation.Record) result.value()).record();
         assertThat(parsed.stopReason()).isEqualTo("toolUse");

@@ -140,37 +140,10 @@ public final class JsonlCodec {
         var node = mapper.createObjectNode();
         switch (mutation) {
             case SessionMutation.Entry m -> PiV3Wire.encodeEntryLine(node, m);
-            case SessionMutation.Record m -> {
-                node.put("kind", "record");
-                node.setAll((ObjectNode) mapper.valueToTree(m.record()));
-            }
-            case SessionMutation.Lane m -> {
-                node.put("kind", "lane");
-                node.put("seq", m.seq());
-                node.put("lane", m.lane());
-                if (m.leafId() != null) {
-                    node.put("leafId", m.leafId());
-                } else {
-                    node.putNull("leafId");
-                }
-            }
-            case SessionMutation.FactName m -> {
-                node.put("kind", "fact");
-                node.put("seq", m.seq());
-                node.put("fact", "name");
-                if (m.name() != null) {
-                    node.put("name", m.name());
-                }
-            }
-            case SessionMutation.FactLabel m -> {
-                node.put("kind", "fact");
-                node.put("seq", m.seq());
-                node.put("fact", "label");
-                node.put("targetId", m.targetId());
-                if (m.label() != null) {
-                    node.put("label", m.label());
-                }
-            }
+            case SessionMutation.Record m -> PiV3Wire.encodeRecordLine(node, m);
+            case SessionMutation.Lane m -> PiV3Wire.encodeLaneLine(node, m);
+            case SessionMutation.FactName m -> PiV3Wire.encodeSessionInfoLine(node, m);
+            case SessionMutation.FactLabel m -> PiV3Wire.encodeLabelLine(node, m);
         }
         try {
             return mapper.writeValueAsString(node) + "\n";
@@ -204,8 +177,7 @@ public final class JsonlCodec {
                 if (assignedSeq < 1) {
                     throw DecodeError.schema("pi-shaped line needs an assigned seq");
                 }
-                return ParseResult.ok(parseEntryMutation(node, assignedSeq,
-                    PiV3Wire.parseTimestamp(node, "timestamp")));
+                return ParseResult.ok(PiV3Wire.parseFlatLine(node, assignedSeq));
             }
             long seq = requireLong(node, "seq");
             if (seq <= 0) {
@@ -228,6 +200,11 @@ public final class JsonlCodec {
 
     private static SessionMutation parseEntryMutation(JsonNode node, long seq) {
         return parseEntryMutation(node, seq, instant(node, "timestamp"));
+    }
+
+    /** 读一行 **pi 形状**的 entry（判别键 {@code type}）。供 {@link PiV3Wire#parseFlatLine} 的分派复用。 */
+    static SessionMutation parsePiEntry(JsonNode node, long seq) {
+        return parseEntryMutation(node, seq, PiV3Wire.parseTimestamp(node, "timestamp"));
     }
 
     /**
@@ -273,25 +250,30 @@ public final class JsonlCodec {
         }
         Instant timestamp = instant(node, "timestamp");
         LaneRecord record = RecordJsonCodec.decode(node, id, seq, lane, timestamp);
-        return new SessionMutation.Record(record);
+        // 旧行没有 parentId（docs/12 §6 D2 才补的）。
+        return new SessionMutation.Record(null, record);
     }
 
+    /**
+     * 读**旧形状**的 lane 行（{@code kind:"lane"}）。
+     *
+     * <p>⚠️ 旧行里**没有** {@code parentId}／{@code timestamp} —— 那两个字段是本包为 pi 的线形状
+     * 才补的（{@code docs/12 §6 D2}）。历史文件里没有就是没有：父级给 {@code null}、
+     * 时间戳给 {@link Instant#EPOCH}，由惰性迁移重写成 pi 形状。</p>
+     */
     private static SessionMutation parseLaneMutation(JsonNode node, long seq) {
-        return new SessionMutation.Lane(seq, requireString(node, "lane"),
-            nullableString(node, "leafId"));
+        return new SessionMutation.Lane(seq, null, Instant.EPOCH,
+            requireString(node, "lane"), nullableString(node, "leafId"));
     }
 
+    /** 读**旧形状**的 fact 行（{@code kind:"fact"}）。身份字段的缺省处理同 {@link #parseLaneMutation}。 */
     private static SessionMutation parseFactMutation(JsonNode node, long seq) {
         String fact = requireString(node, "fact");
         return switch (fact) {
-            case "name" -> {
-                String name = optionalString(node, "name");
-                yield new SessionMutation.FactName(seq, name);
-            }
-            case "label" -> {
-                String label = optionalString(node, "label");
-                yield new SessionMutation.FactLabel(seq, requireString(node, "targetId"), label);
-            }
+            case "name" -> new SessionMutation.FactName(seq, null, Instant.EPOCH,
+                optionalString(node, "name"));
+            case "label" -> new SessionMutation.FactLabel(seq, null, Instant.EPOCH,
+                requireString(node, "targetId"), optionalString(node, "label"));
             default -> throw DecodeError.schema("has unknown fact type");
         };
     }
