@@ -198,6 +198,34 @@ class PiV3WireFormatTest {
         assertThat(reloaded.getLabel("m1")).isEqualTo("kept label");
     }
 
+    // ── 旧文件（本仓自己的 v4 形状）的惰性迁移 ──────────────────────
+
+    @Test
+    void legacyFileIsMigratedToFullyPiShapedRows() throws Exception {
+        Path dir = Files.createTempDirectory("pi-v3-migrate");
+        Path file = dir.resolve("legacy.jsonl");
+        Files.writeString(file,
+            "{\"kind\":\"header\",\"version\":4,\"id\":\"s-1\",\"createdAt\":1720000000000,\"cwd\":\"work\"}\n"
+            + "{\"kind\":\"entry\",\"lane\":\"main\",\"type\":\"message\",\"id\":\"m1\",\"seq\":1,"
+            + "\"parentId\":null,\"timestamp\":1720000001000,"
+            + "\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}}\n"
+            + "{\"kind\":\"fact\",\"seq\":2,\"fact\":\"name\",\"name\":\"legacy name\"}\n");
+
+        var storage = JsonlSessionStorage.load(FS, file);
+        assertThat(storage.getName()).as("迁移后数据不许丢").isEqualTo("legacy name");
+
+        var rows = lines(file);
+        assertThat(rows.getFirst().path("type").asText()).isEqualTo("session");
+        assertThat(rows).allSatisfy(row -> assertThat(row.has("kind"))
+            .as("迁移后不许剩任何旧形状的 kind：%s", row).isFalse());
+
+        JsonNode info = rows.stream().filter(n -> "session_info".equals(n.path("type").asText()))
+            .findFirst().orElseThrow();
+        assertThat(info.path("parentId").asText())
+            .as("旧行没有 parentId，迁移必须补成「挂到最近的条目」—— 否则 pi 仍看不到消息")
+            .isEqualTo("m1");
+    }
+
     // ── 往返 ────────────────────────────────────────────────────────
 
     @Test

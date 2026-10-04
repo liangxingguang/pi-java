@@ -305,11 +305,33 @@ public final class JsonlSessionStorage implements SessionStorage<JsonlSessionMet
             metadata.metadata());
         String tempPath = path + ".tmp";
         StringBuilder content = new StringBuilder(JsonlCodec.encodeHeader(header));
+        // 旧行里**没有** parentId／timestamp（docs/12 §6 D2 才补的）。迁移时按「挂到最近的条目上」
+        // 补齐 —— 否则 pi 从叶回溯仍看不到消息，迁移只换了头等于白换。
+        String lastEntryId = null;
         for (var item : state.getLog(LogOptions.none())) {
-            content.append(JsonlCodec.encodeMutation(mutationFromLogItem(item)));
+            var mutation = mutationFromLogItem(item);
+            if (mutation instanceof SessionMutation.Entry e) {
+                lastEntryId = e.entry().id();
+            }
+            content.append(JsonlCodec.encodeMutation(withParentIfMissing(mutation, lastEntryId)));
         }
         fs.writeFile(Path.of(tempPath), content.toString());
         fs.renameFile(Path.of(tempPath), path);
+    }
+
+    /** 只补**缺**的 parentId（旧行读出来是 {@code null}）；已有的一律不动。 */
+    private static SessionMutation withParentIfMissing(SessionMutation mutation, String parentId) {
+        return switch (mutation) {
+            case SessionMutation.Record r when r.parentId() == null ->
+                new SessionMutation.Record(parentId, r.record());
+            case SessionMutation.Lane l when l.parentId() == null ->
+                new SessionMutation.Lane(l.seq(), parentId, l.timestamp(), l.lane(), l.leafId());
+            case SessionMutation.FactName n when n.parentId() == null ->
+                new SessionMutation.FactName(n.seq(), parentId, n.timestamp(), n.name());
+            case SessionMutation.FactLabel l when l.parentId() == null ->
+                new SessionMutation.FactLabel(l.seq(), parentId, l.timestamp(), l.targetId(), l.label());
+            default -> mutation;
+        };
     }
 
     static SessionMutation mutationFromLogItem(LogItem item) {
