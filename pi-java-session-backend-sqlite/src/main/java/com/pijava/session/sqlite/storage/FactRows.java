@@ -10,10 +10,12 @@ public final class FactRows {
 
     private FactRows() {}
 
-    /** A fact row. */
+    /** A fact row. {@code parentId}/{@code timestamp} 见 {@code docs/12 §6 D2}（pi 的行形状需要）。 */
     public record FactRow(
         String sessionId,
         long seq,
+        String parentId,
+        String timestamp,
         String kind,
         String key,
         String value
@@ -21,16 +23,18 @@ public final class FactRows {
 
     /** Append a new fact row. */
     public static void appendFact(SqliteDatabase db, String sessionId, long seq,
+                                  String parentId, String timestamp,
                                   String kind, String key, String value) {
-        db.run("INSERT INTO facts (session_id, seq, kind, key, value) VALUES (?, ?, ?, ?, ?)",
-            sessionId, seq, kind, key, value);
+        db.run("INSERT INTO facts (session_id, seq, parent_id, timestamp, kind, key, value)"
+                + " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            sessionId, seq, parentId, timestamp, kind, key, value);
     }
 
     /** Read the most recent fact for the given kind/key, if any. */
     public static Optional<FactRow> readLatestFact(SqliteDatabase db, String sessionId,
                                                    String kind, String key) {
         return db.get("""
-            SELECT session_id, seq, kind, key, value
+            SELECT session_id, seq, parent_id, timestamp, kind, key, value
             FROM facts INDEXED BY idx_facts_session_kind_key_seq
             WHERE session_id = ? AND kind = ? AND key IS ?
             ORDER BY seq DESC
@@ -60,7 +64,8 @@ public final class FactRows {
     /** Read fact rows, optionally after a sequence and limited in count. */
     public static List<FactRow> readFactRows(SqliteDatabase db, String sessionId,
                                              Long afterSeq, Integer limit) {
-        var sql = new StringBuilder("SELECT session_id, seq, kind, key, value FROM facts WHERE session_id = ?");
+        var sql = new StringBuilder(
+            "SELECT session_id, seq, parent_id, timestamp, kind, key, value FROM facts WHERE session_id = ?");
         var params = new java.util.ArrayList<Object>();
         params.add(sessionId);
         if (afterSeq != null) {
@@ -84,6 +89,8 @@ public final class FactRows {
         return new FactRow(
             rs.getString("session_id"),
             rs.getLong("seq"),
+            rs.getString("parent_id"),
+            rs.getString("timestamp"),
             rs.getString("kind"),
             rs.getString("key"),
             rs.getString("value"));

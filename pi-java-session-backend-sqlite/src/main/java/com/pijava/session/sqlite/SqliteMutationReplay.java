@@ -24,22 +24,26 @@ final class SqliteMutationReplay {
     static void replay(SqliteDatabase db, SqliteSessionMetadata metadata, SessionMutation mutation) {
         switch (mutation) {
             case SessionMutation.Entry e -> replayEntry(db, metadata, e);
-            case SessionMutation.Record r -> replayRecord(db, metadata, r.record());
+            case SessionMutation.Record r -> replayRecord(db, metadata, r.parentId(), r.record());
             case SessionMutation.Lane l -> {
                 if (LaneRows.readLane(db, metadata.id(), l.lane()).isPresent()) {
-                    LaneRows.moveLane(db, metadata.id(), l.seq(), l.lane(), l.leafId());
+                    LaneRows.moveLane(db, metadata.id(), l.seq(), l.parentId(),
+                        SqliteCodecs.timestampToText(l.timestamp()), l.lane(), l.leafId());
                 } else {
-                    LaneRows.createLane(db, metadata.id(), l.seq(), l.lane(), l.leafId());
+                    LaneRows.createLane(db, metadata.id(), l.seq(), l.parentId(),
+                        SqliteCodecs.timestampToText(l.timestamp()), l.lane(), l.leafId());
                 }
                 advanceSequenceTo(db, metadata, l.seq());
             }
             case SessionMutation.FactName n -> {
-                FactRows.appendFact(db, metadata.id(), n.seq(), "name", null,
+                FactRows.appendFact(db, metadata.id(), n.seq(), n.parentId(),
+                    SqliteCodecs.timestampToText(n.timestamp()), "name", null,
                     n.name() == null ? null : SqliteCodecs.jsonString(n.name()));
                 advanceSequenceTo(db, metadata, n.seq());
             }
             case SessionMutation.FactLabel l -> {
-                FactRows.appendFact(db, metadata.id(), l.seq(), "label", l.targetId(),
+                FactRows.appendFact(db, metadata.id(), l.seq(), l.parentId(),
+                    SqliteCodecs.timestampToText(l.timestamp()), "label", l.targetId(),
                     l.label() == null ? null : SqliteCodecs.jsonString(l.label()));
                 advanceSequenceTo(db, metadata, l.seq());
             }
@@ -67,7 +71,7 @@ final class SqliteMutationReplay {
     }
 
     private static void replayRecord(SqliteDatabase db, SqliteSessionMetadata metadata,
-                                     LaneRecord record) {
+                                     String parentId, LaneRecord record) {
         if (LaneRows.readLane(db, metadata.id(), record.lane()).isEmpty()) {
             throw new SessionError(SessionErrorCode.INVALID_LANE,
                 "Lane not found: " + record.lane());
@@ -76,7 +80,7 @@ final class SqliteMutationReplay {
             LaneRows.startLaneOperation(db, metadata.id(), record.lane(), record.id());
         }
         RecordRows.appendRecordRow(db, metadata.id(), new RecordRows.NewRecordRow(
-            record.seq(), record.id(), record.lane(), SqliteCodecs.recordRunId(record),
+            record.seq(), parentId, record.id(), record.lane(), SqliteCodecs.recordRunId(record),
             record.type(), SqliteCodecs.recordOpKind(record),
             SqliteCodecs.timestampToText(record.timestamp()), SqliteCodecs.recordPayload(record)));
         if (record instanceof LaneRecord.OperationFinished finished) {

@@ -231,6 +231,9 @@ public final class SqliteSessionRepository implements
                     StatsRows.createStats(db, id, messageCount);
 
                     long nextSeq = 1;
+                    // 合成行要链进 pi 的树里（docs/12 §6 D2）：父级＝拷贝进来的最后一条。
+                    String tipId = entries.isEmpty() ? null : entries.getLast().id();
+                    String tipTs = entries.isEmpty() ? createdAt : entries.getLast().timestamp();
                     for (var entry : entries) {
                         EntryRows.insertEntryRow(db, id, new EntryRows.NewEntryRow(
                             nextSeq++, entry.id(), entry.parentId(), entry.type(),
@@ -239,18 +242,20 @@ public final class SqliteSessionRepository implements
 
                     if (options instanceof ForkOptions.Tree) {
                         for (var lane : lanes) {
-                            LaneRows.createLane(db, id, nextSeq++, lane.lane(), lane.leafId());
+                            LaneRows.createLane(db, id, nextSeq++, tipId, tipTs,
+                                lane.lane(), lane.leafId());
                         }
                     } else {
                         LaneRows.createInitialLane(db, id, "main", forkTarget);
                     }
 
                     if (latestName.isPresent() && latestName.get().value() != null) {
-                        FactRows.appendFact(db, id, nextSeq++, "name", null,
+                        FactRows.appendFact(db, id, nextSeq++, tipId, tipTs, "name", null,
                             latestName.get().value());
                     }
                     for (var label : labelsToCopy) {
-                        FactRows.appendFact(db, id, nextSeq++, "label", label[0], label[1]);
+                        FactRows.appendFact(db, id, nextSeq++, tipId, tipTs, "label",
+                            label[0], label[1]);
                     }
 
                     SequenceRows.setNextSequence(db, id, nextSeq);

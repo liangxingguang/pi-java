@@ -22,6 +22,7 @@ public final class RecordRows {
     public record RecordRow(
         String sessionId,
         long seq,
+        String parentId,
         String id,
         String lane,
         String runId,
@@ -35,10 +36,10 @@ public final class RecordRows {
     public static void appendRecordRow(SqliteDatabase db, String sessionId, NewRecordRow record) {
         db.run("""
             INSERT INTO records
-                (session_id, seq, id, lane, run_id, type, op_kind, timestamp, payload)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, sessionId, record.seq(), record.id(), record.lane(), record.runId(),
-            record.type(), record.opKind(), record.timestamp(), record.payload());
+                (session_id, seq, parent_id, id, lane, run_id, type, op_kind, timestamp, payload)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, sessionId, record.seq(), record.parentId(), record.id(), record.lane(),
+            record.runId(), record.type(), record.opKind(), record.timestamp(), record.payload());
     }
 
     /** Whether a record with the given ID exists in the session. */
@@ -125,6 +126,7 @@ public final class RecordRows {
     /** Insert-parameter carrier. */
     public record NewRecordRow(
         long seq,
+        String parentId,
         String id,
         String lane,
         String runId,
@@ -135,7 +137,7 @@ public final class RecordRows {
     ) {}
 
     private static final String RECORD_SELECT = """
-        SELECT session_id, seq, id, lane, run_id, type, op_kind, timestamp, payload
+        SELECT session_id, seq, parent_id, id, lane, run_id, type, op_kind, timestamp, payload
         FROM records
         """;
 
@@ -143,6 +145,7 @@ public final class RecordRows {
         return new RecordRow(
             rs.getString("session_id"),
             rs.getLong("seq"),
+            rs.getString("parent_id"),
             rs.getString("id"),
             rs.getString("lane"),
             rs.getString("run_id"),

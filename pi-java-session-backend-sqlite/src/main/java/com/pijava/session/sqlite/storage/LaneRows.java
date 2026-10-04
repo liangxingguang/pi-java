@@ -24,6 +24,8 @@ public final class LaneRows {
     public record LaneMoveRow(
         String sessionId,
         long seq,
+        String parentId,
+        String timestamp,
         String lane,
         String leafId
     ) {}
@@ -97,21 +99,21 @@ public final class LaneRows {
 
     /** Create a lane and log its initial move. */
     public static void createLane(SqliteDatabase db, String sessionId, long seq,
-                                  String lane, String leafId) {
+                                  String parentId, String timestamp, String lane, String leafId) {
         db.run("INSERT INTO lanes (session_id, lane, leaf_id, open_operation_id) VALUES (?, ?, ?, NULL)",
             sessionId, lane, leafId);
-        appendLaneMove(db, sessionId, seq, lane, leafId);
+        appendLaneMove(db, sessionId, seq, parentId, timestamp, lane, leafId);
     }
 
     /** Move the lane to a new leaf and log the lane move. */
     public static void moveLane(SqliteDatabase db, String sessionId, long seq,
-                                String lane, String leafId) {
+                                String parentId, String timestamp, String lane, String leafId) {
         int changes = db.run("UPDATE lanes SET leaf_id = ? WHERE session_id = ? AND lane = ?",
             leafId, sessionId, lane);
         if (changes != 1) {
             throw new SessionError(SessionErrorCode.INVALID_LANE, "Lane not found: " + lane);
         }
-        appendLaneMove(db, sessionId, seq, lane, leafId);
+        appendLaneMove(db, sessionId, seq, parentId, timestamp, lane, leafId);
     }
 
     /** Point the lane at a new leaf without logging a lane move. */
@@ -150,7 +152,7 @@ public final class LaneRows {
     public static List<LaneMoveRow> readLaneMoveRows(SqliteDatabase db, String sessionId,
                                                      Long afterSeq, Integer limit) {
         var sql = new StringBuilder(
-            "SELECT session_id, seq, lane, leaf_id FROM lane_moves WHERE session_id = ?");
+            "SELECT session_id, seq, parent_id, timestamp, lane, leaf_id FROM lane_moves WHERE session_id = ?");
         var params = new java.util.ArrayList<Object>();
         params.add(sessionId);
         if (afterSeq != null) {
@@ -164,6 +166,7 @@ public final class LaneRows {
         }
         return db.all(sql.toString(), rs -> new LaneMoveRow(
             rs.getString("session_id"), rs.getLong("seq"),
+            rs.getString("parent_id"), rs.getString("timestamp"),
             rs.getString("lane"), rs.getString("leaf_id")), params.toArray());
     }
 
@@ -174,8 +177,10 @@ public final class LaneRows {
     }
 
     private static void appendLaneMove(SqliteDatabase db, String sessionId, long seq,
+                                       String parentId, String timestamp,
                                        String lane, String leafId) {
-        db.run("INSERT INTO lane_moves (session_id, seq, lane, leaf_id) VALUES (?, ?, ?, ?)",
-            sessionId, seq, lane, leafId);
+        db.run("INSERT INTO lane_moves (session_id, seq, parent_id, timestamp, lane, leaf_id)"
+                + " VALUES (?, ?, ?, ?, ?, ?)",
+            sessionId, seq, parentId, timestamp, lane, leafId);
     }
 }

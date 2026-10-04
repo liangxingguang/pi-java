@@ -180,8 +180,10 @@ public final class SqliteSessionStorage implements SessionStorage<SqliteSessionM
 
         var logRows = new java.util.ArrayList<LogItem>();
         entryRows.forEach(row -> logRows.add(new LogItem.EntryItem(row.seq(), EntryRows.decodeEntry(row))));
-        recordRows.forEach(row -> logRows.add(new LogItem.RecordItem(row.seq(), RecordRows.decodeRecord(row))));
-        laneRows.forEach(row -> logRows.add(new LogItem.LaneItem(row.seq(), row.lane(), row.leafId())));
+        recordRows.forEach(row -> logRows.add(new LogItem.RecordItem(row.seq(), row.parentId(),
+            RecordRows.decodeRecord(row))));
+        laneRows.forEach(row -> logRows.add(new LogItem.LaneItem(row.seq(), row.parentId(),
+            textToInstant(row.timestamp()), row.lane(), row.leafId())));
         factRows.forEach(row -> logRows.add(factItem(row)));
         logRows.sort(java.util.Comparator.comparingLong(LogItem::seq));
         if (limit != null && logRows.size() > limit) {
@@ -191,11 +193,25 @@ public final class SqliteSessionStorage implements SessionStorage<SqliteSessionM
     }
 
     private static LogItem factItem(FactRows.FactRow row) {
+        Instant ts = textToInstant(row.timestamp());
         if ("name".equals(row.kind())) {
-            return new LogItem.NameItem(row.seq(), parseFactValue(row.value()));
+            return new LogItem.NameItem(row.seq(), row.parentId(), ts, parseFactValue(row.value()));
         }
-        return new LogItem.LabelItem(row.seq(), row.key() == null ? "" : row.key(),
-            parseFactValue(row.value()));
+        return new LogItem.LabelItem(row.seq(), row.parentId(), ts,
+            row.key() == null ? "" : row.key(), parseFactValue(row.value()));
+    }
+
+    /**
+     * 某个 lane 的当前叶 —— 合成行要链进 pi 的树里（{@code docs/12 §6 D2}）。
+     * 没有就返回 {@code null}（空会话）。
+     */
+    private String laneHead(String lane) {
+        return LaneRows.readLaneHead(db, metadata.id(), lane);
+    }
+
+    /** 001 之前的行没有 timestamp 列 ⇒ 按 epoch 读（docs/12 §6 D2）。 */
+    private static Instant textToInstant(String text) {
+        return text == null ? Instant.EPOCH : Instant.parse(text);
     }
 
     private static String parseFactValue(String value) {
@@ -240,7 +256,8 @@ public final class SqliteSessionStorage implements SessionStorage<SqliteSessionM
                 throw new SessionError(SessionErrorCode.NOT_FOUND, "Entry not found: " + at);
             }
             long seq = SequenceRows.getNextSequence(db, metadata.id());
-            LaneRows.createLane(db, metadata.id(), seq, lane, at);
+            LaneRows.createLane(db, metadata.id(), seq, laneHead("main"),
+                SqliteCodecs.timestampToText(Instant.now()), lane, at);
             SequenceRows.advanceSequence(db, metadata.id(), seq);
         });
     }
@@ -255,7 +272,8 @@ public final class SqliteSessionStorage implements SessionStorage<SqliteSessionM
                 throw new SessionError(SessionErrorCode.NOT_FOUND, "Entry not found: " + to);
             }
             long seq = SequenceRows.getNextSequence(db, metadata.id());
-            LaneRows.moveLane(db, metadata.id(), seq, lane, to);
+            LaneRows.moveLane(db, metadata.id(), seq, laneHead("main"),
+                SqliteCodecs.timestampToText(Instant.now()), lane, to);
             SequenceRows.advanceSequence(db, metadata.id(), seq);
         });
     }
@@ -301,7 +319,8 @@ public final class SqliteSessionStorage implements SessionStorage<SqliteSessionM
             // One timestamp source so the returned record equals the decoded row.
             Instant now = Instant.ofEpochMilli(System.currentTimeMillis());
             RecordRows.appendRecordRow(db, metadata.id(), new RecordRows.NewRecordRow(
-                seq, provisioned.id(), provisioned.lane(), SqliteCodecs.recordRunId(provisioned),
+                seq, laneHead(provisioned.lane()), provisioned.id(), provisioned.lane(),
+                SqliteCodecs.recordRunId(provisioned),
                 provisioned.type(), SqliteCodecs.recordOpKind(provisioned),
                 SqliteCodecs.timestampToText(now), SqliteCodecs.recordPayload(provisioned)));
             if (provisioned instanceof LaneRecord.OperationFinished finished) {
@@ -334,7 +353,8 @@ public final class SqliteSessionStorage implements SessionStorage<SqliteSessionM
     public void setName(String name) {
         enqueueWriteAction(() -> {
             long seq = SequenceRows.getNextSequence(db, metadata.id());
-            FactRows.appendFact(db, metadata.id(), seq, "name", null,
+            FactRows.appendFact(db, metadata.id(), seq, laneHead("main"),
+                SqliteCodecs.timestampToText(Instant.now()), "name", null,
                 name == null ? null : SqliteCodecs.jsonString(name));
             SequenceRows.advanceSequence(db, metadata.id(), seq);
         });
@@ -347,7 +367,8 @@ public final class SqliteSessionStorage implements SessionStorage<SqliteSessionM
                 throw new SessionError(SessionErrorCode.NOT_FOUND, "Entry not found: " + id);
             }
             long seq = SequenceRows.getNextSequence(db, metadata.id());
-            FactRows.appendFact(db, metadata.id(), seq, "label", id,
+            FactRows.appendFact(db, metadata.id(), seq, laneHead("main"),
+                SqliteCodecs.timestampToText(Instant.now()), "label", id,
                 label == null ? null : SqliteCodecs.jsonString(label));
             SequenceRows.advanceSequence(db, metadata.id(), seq);
         });
