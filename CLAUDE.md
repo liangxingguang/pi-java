@@ -45,6 +45,9 @@ commands: `mvn clean verify`, `mvn test -pl <module>`, `mvn checkstyle:check`, `
 | `docs/06-module-alignment-map.md` | 模块对齐地图（量化）；明细在 `docs/map/` |
 | `docs/07-gap-inventory.md` | 模块缺口清单与补全计划 |
 | `docs/08-ai-next-work-items-design.md` | `pi-java-ai` 下一步待做清单与设计入口 |
+| `docs/09-request-side-thinking-cache-eager-tools-design.md` | 包 09：思考级别 clamp · Responses 缓存门 · Anthropic 工具流式（✅ 已闭环） |
+| `docs/10-google-mistral-thinking-design.md` | 包 10：Google / Mistral 车道的思考配置（✅ 已闭环） |
+| `docs/11-pi-reanchor-ruling.md` | pi 换锚裁决（`3390bd936` → `200387122`）；锚点事实在 `docs/map/ANCHOR.md` |
 
 ## 编码规范
 

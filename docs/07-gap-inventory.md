@@ -1,10 +1,13 @@
-# 41 - 模块缺口清单与补全计划
+# 07 - 模块缺口清单与补全计划
 
 > **这份文件回答什么**：**哪些功能缺失、哪些需要完善、按什么顺序补、每包的交付物是什么。**
 > **不回答什么**：**不打分**。加权完成度、权重口径、范围裁决的账在 `docs/06`；逐条 `file:line` 证据在 `docs/map/01..06`。
 > 本文件是**可执行的工作清单**，从上面两处抽出来、按模块重排。
 
-**基准**：pi @ `3390bd936`（2026-09-20，锚点见 `docs/map/ANCHOR.md`）· pi-java @ `34849a2`（2026-09-20）
+**基准**：pi @ **`200387122`**（2026-10-04，锚点见 `docs/map/ANCHOR.md`）· pi-java @ **`351d199`**（2026-10-04）
+> ⚠️ **2026-10-04 换锚**：上一版基准是 pi `3390bd936` / pi-java `34849a2`（2026-09-20）。pi 前进 251 提交，
+> 其中 `7fd478a2e` 删了 105,456 行 ⇒ **本文件的「补全包清单」已按 R5 重排**（见 §7.2），
+> 裁决在 [`docs/11-pi-reanchor-ruling.md`](11-pi-reanchor-ruling.md)，量化在 `docs/06`。
 
 **范围**：已剔除**裁决 R5**（2026-09-21「只做 pi 主流发布版可达的功能」）判定的非目标 ——
 `chord` · `pico3` · `micro` · `packages/durable` · 多进程子系统 · `protocol`/`client`/`server` 三模块 ·
@@ -15,9 +18,9 @@ pi `harness/` 里 `AgentHarness` 独有物（具名钩子 / `HarnessEvent` / `ru
 `harness/compaction`、`harness/messages`、`harness/session`、`harness/tools` 在主流 `coding-agent/src/core/*` 有**独立副本** ⇒ **仍算主流**，锚点应改指 `core/*`。
 实证：`AgentHarness` 在 `coding-agent/src/{core,modes}` ＋ `main.ts` ＋ `cli.ts` **零消费者**；主流唯一的值导入是 `core/sdk.ts` 的 `Agent` ＋ `setDefaultStreamFn`（都在**顶层** `agent.ts`/`stream-fn.ts`）。
 
-> ⚠️ **2026-09-21：R5 在 `docs/06` 的落地已被用户指示回退** ⇒ `docs/06` 现在仍是 2026-09-20 口径
-> （**F7/F9 写「要做」**、总表仍含 `chord` 行、头条仍 44.31%），**与 R5 相悖**。本文件的排除面**以 R5 为准**，
-> 不依赖 `docs/06`。R5 若要重新落进 `docs/06`/`docs/05`/`docs/map`，见 §7.4。
+> ✅ **2026-10-04：R5 已随换锚落进 `docs/06`/`docs/05`/`docs/map`** —— 上一版这段警示（「R5 落地被回退 ⇒
+> `docs/06` 头条仍 44.31%、表里仍含 `chord` 行，与 R5 相悖」）**已不成立**：`docs/06` 全表重算，
+> `chord`/多进程/`durable` 一律标 **R5 不可达、权重 0**。**本文件的排除面与 `docs/06` 现已一致。**
 
 ---
 
@@ -662,7 +665,9 @@ JSONL `nextSeq` 高水位字段 ·
 | **H3** | `coding-agent` | **上下文文件发现**（`AGENTS.md`/`CLAUDE.md` ＋ `--no-context-files` 联动） | **每次会话都走**，现在**静默失效**；同时救活一个死 flag |
 | **H4** | `coding-agent` | **扩展钩子桥接**（暴露 `hookSystem()`） | 8 个引擎钩子**已经在 `HookSystem` 里** ⇒ 这是**接线不是新建**，最省的一包 |
 | ~~**H5**~~ | `ai` ＋ `agent-core` | ✅ **已闭环**（2026-09-23，八提交 `2d229c9`..`b75450f`，设计/记录 `原 docs/46`）—— 范围**比原估的大**：实测 java 的 `ThinkingLevelMap` 形状本身是 Phase 2a 的**发明**（pi 一直是 `Partial<Record<ModelThinkingLevel, string\|null>>`，`80f06d363` 起从未变过）⇒ 先重塑形状（删发明类型 `ThinkingConfig`、`ThinkingLevel` 补 `Max`），再做 `supported`/`clamp`、预算纯函数、`mapLevelToEffort`、Anthropic **三分支**（adaptive／enabled／disabled）、温度抑制 ＋ interleaved beta、数据面（models.json 开键 ＋ 目录 DTO 补字段）、入口三件。ai 671⇒**740** | 原估「改一行 ＋ 生产侧构造」**不成立**：形状不对，光接线接不上 |
-| **H6** | `session` | **JSONL v4 双向不可读**（B60/B61 同包） | **性价比最高**（每点 0.39pp）；**硬故障**：换机/换工具会话读不出来 |
+| **H6** | `session`＋`agent-core` | **JSONL 线格式分叉（本仓 v4 vs pi 主流 v3）**（B60/B61 同包，条目已按新锚改写） | **硬故障**：换机 / 换工具后会话读不出来。⚠️ 2026-10-04 重算：**单点最大拖累**（Σ权重 8，占该范围 9.2%），修好 **39.1% → 48.3%（+9.2pp）** |
+| **H6′** 🆕 | `agent-core` | **输出截断字节预算对齐**（B158：本仓 100KB vs pi 主流 50KB，**模型可见文案不同**） | 改一个常量；但它出现在**每次工具输出的提示文本**里 |
+| **H7** 🆕 | `coding-agent` | **MCP 客户端**（B160）—— 换锚新大陆里最大的一块 | pi 主流 **`builtin: true`** ⇒ 每次会话加载；`packages/mcp` 3,167 行 |
 
 **第二梯队 —— 接线与死功能（投入小、可见性高）**
 
@@ -682,13 +687,15 @@ JSONL `nextSeq` 高水位字段 ·
 
 | 包 | 模块 | 规模 |
 |---|---|---|
-| **D1** | `coding-agent` | **扩展事件面 37 → 0**（pi 侧 D 域单独把模块拉低 13.7pp） |
+| **D1** | `coding-agent` | **扩展事件面 41 → 0**（pi 侧 D 域单独把模块拉低 **14.3pp**；2026-10-04 起事件数 37 → 41） |
 | **D2** | `coding-agent` | **包生态层**（npm/git 源 ＋ 版本/range/pinning ＋ `settings.packages` 持久化） |
-| **D3** | `session` | **SQLite schema 4-kind 重写**（G′；跟 pi 的 `Write` 模型） |
-| **D4** | `agent-core` | **branch summary ＋ 会话树导航**（B1 整族） |
-| **D5** | `tui` | **渲染面**（Markdown/高亮/主题 token/逐工具渲染器） |
+| ~~**D3**~~ | ~~`session`~~ | ~~SQLite schema 4-kind 重写~~ ⇒ **已作废**：参照物 `packages/session-backends` 被 pi **整包删除**（R1′），且实测旧锚点即零消费者（`docs/06 §1.4-1`）。取代它的是 **D3′ JSONL v3 线格式对齐**（B60/B61） |
+| **D4** | `agent-core` | **branch summary ＋ 会话树导航**（B1 整族）＋ **Entry union 11 类**（B61） |
+| **D5** | `tui` | **渲染面**（Markdown/高亮/主题 token/逐工具渲染器）＋ **色彩系统**（B163：pi 3,176 行 vs 本仓 74 行） |
+| **D6** 🆕 | `coding-agent` | **MCP ＋ codemode ＋ tool-search ＋ virtual-models ＋ nested-tool-calls** —— 换锚带来的新大陆，**10,994 行 pi 主流代码、本仓全 0**（B160–B162，`docs/06 §5.3`） |
 
 **已取消**（R5）：~~`chord` 地基~~ · ~~RPC 三模块重建~~ · ~~多进程子系统~~ · ~~harness/durable drive~~
+　（2026-10-04 复核：`durable` 现 **17,716 行**，但 import 者**全在 `coding-agent/src/experimental/**`** ⇒ 仍不可达）
 
 ### 7.3 每个包怎么走（设计方案的形式）
 
@@ -711,8 +718,9 @@ JSONL `nextSeq` 高水位字段 ·
 ### 7.4 本清单**未覆盖**
 
 - 未改任何生产代码、未动 `docs/05` 台账、未重算 `docs/06` 总表的分母。
-- ⚠️ **R5 在 `docs/06`/`docs/05`/`docs/map` 的落地未做**（`docs/06` 的那份半成品已按用户指示**回退**）⇒
-  那三处仍是 2026-09-20 口径，**与 R5 相悖**。要重新落地，按「细分口径」推：`docs/06`（总表重算、§1.3/§3.1/§3.4/§5.1/§6/§7/§8/§10）＋
-  `docs/05`（F7/F9 翻「不做」、B62 结案、C12 注明终局）＋ `docs/map/01`·`03`·`06` 的注。
+- ✅ **R5 在 `docs/06`/`docs/05`/`docs/map` 的落地已完成（2026-10-04，随换锚一并做）**：
+  `docs/06` 全表重算（**44.31% → 52.59%**，分母 1,423 → 1,273）＋ §5.1 作废面 ＋ §5.2 不可达面；
+  `docs/05` 的 **B59/B60/B61/B62 四行改写**、新增 **B158–B165**；六份 `docs/map/*` 全部对新锚重测。
+  ⚠️ **`docs/06` 的「旧值」列仍标 2026-09-20 口径**，与新值**不可直接相减**（分母变了），逐模块对照见 `docs/06 §1`。
 - 各模块报告的**行号漂移**（agent-core 2 处锚点、tui 8 条、session 4 条、telemetry 3 处、coding-agent 8 条、ai 4 条）**已就地登记在各自 §x.7**，未回改 `docs/map/*`。
 - **R5 的 harness 细分口径**已按裁决执行（只踢 harness 独有）；`docs/map/03` 里引 harness 副本的单元（`compaction`/`messages`/`session`/`tools`）**锚点应改指主流副本**，**未改**，登记在 `docs/map/03`。
