@@ -1,7 +1,8 @@
 # 12 — JSONL 会话线格式对齐（本仓 v4 ↔ pi v3 双向可读）
 
 **状态：已裁决（D1–D6 全按建议）并**实施中** —— 步 1–3 已落（`5298c8f` / `b4b93cc` / `211f5f1` ＋ 迁移收尾），
-实施记录与四处偏离见 §10；**剩余 D6（`usage` 提为一等条目）与 D3（`context_edit`）见 §10.4**。
+实施记录与四处偏离见 §10；**D6（`usage` 提为一等条目）已落地，见 §11**（读侧 ＋ 写侧都提，含一条被实测推翻的前提）；
+**剩余 D3（`context_edit`）见 §10.4**。
 
 | | |
 |---|---|
@@ -349,7 +350,82 @@ pi 不会为本仓改；且 pi 的 `version:3` 是它的**当前版本**，pi �
 
 | # | 缺口 | 说明 |
 |---|---|---|
-| 1 | **D6 未落** —— `usage` 仍未提为一等条目 | 本仓把 usage 放在 `record` 族，落线成 `custom`；pi 是**一等 `usage` 条目**。读 pi 文件里的 `usage` 行**会报 `unknown entry type`** |
+| 1 | ~~**D6 未落**~~ ⇒ **已落地（§11，2026-10-04）** | 读侧 ＋ 写侧都提为一等 `entry`。⚠️ 实测口径更正：报的是 **`has invalid seq`**（pi `UsageEntry` 自带的 `kind` 键先撞上本仓旧行的判别键），不是 `unknown entry type` |
 | 2 | **D3 延后** —— `context_edit` | pi 本轮新增的条目型，本仓无对应 ⇒ 读到时同样报错 |
 | 3 | **D2 的「原生」只对 fact 成立** | lane/record 落成 `custom`（设计如此），但 `lane` 又是 entry 上的扩展键 —— 两处并存 |
 | 4 | 未做**真端点/真 pi 互读**的端到端验证 | 夹具复刻的是 pi 的解析语义（`parseSessionEntries` 的宽容 + `_buildIndex` 的叶语义），**没有跑过真的 pi** |
+
+---
+
+## 11 D6 实施记录（2026-10-04）—— `usage` 提为一等 entry
+
+> 结论：**读侧与写侧都按 D6 字面做了**（用户裁决），但 D6 的**理由**被实测推翻；
+> 过程中还挖出一个设计稿没预见的键冲突，与一个跨线程写入点。
+
+### 11.1 设计稿的前提被实测推翻（裁决仍按字面走）
+
+| 设计稿说 | 实测 | 处置 |
+|---|---|---|
+| `usage` 在 pi 是一等 entry、在本仓是 `record` ⇒ **提** | **两个 `usage` 不是同一个东西。** pi 的 `UsageEntry`（`session-manager.ts:80-89`）＝**缓存预热计量**（`kind:"cache_warm"`），而 `appendUsage` 全仓**只有 `cache-warmer.ts:342` 一个调用者**。本仓的 `LaneRecord.UsageRecord` 是**每次 LLM 调用的记账**（`cause/runId/entryId/toolCallId/attempt/stopReason`，**没有** provider/model）。且本仓**没移植 CacheWarmer**（`ModelJsonMerge.java:157` 明写） | 摆证据后**问用户** ⇒ 裁决「按 D6 字面全做」（写侧也提）。审计字段搭扩展键 |
+
+### 11.2 读侧：坏得比设计稿预言的更早一步（`kind` 键冲突）
+
+pi 的 `UsageEntry` 自带一个 **`kind`** 字段（`:82-83`，「任意用量类别」，如 `"cache_warm"`），
+撞上本仓旧行的判别键 `kind`：
+
+```java
+// JsonlCodec.parseMutation —— 改前
+if (!node.has("kind")) { …pi 的形状… }   // 有 kind 就当旧行
+long seq = requireLong(node, "seq");     // ⇒ 报 "has invalid seq"
+```
+
+于是报的是 `has invalid seq`，**不是**「认不出这个条目类型」—— 排查方向整个被带偏。
+
+**为什么后果是硬的**：`JsonlSessionStorage.load:84` 对 schema 错**零容忍**（只有语法错才当撕裂尾）
+⇒ 但凡做过缓存预热的 pi 会话，在本仓**整个打不开**。
+
+判别器改用白名单 `{entry,record,lane,fact}`；有 `kind`、不认、又不是 pi 行形状的仍报原错误。
+`kind` **保持自由串**，不收窄成 `UsageCause`：pi 的取值由调用方给，收窄后读到 `"cache_warm"` 就抛。
+
+### 11.3 写侧：usage entry 进了车道的线性链 ⇒ 追加点必须受锁
+
+pi 的 `_appendEntry`（`:1191-1196`）对**每一条** entry 都 `leafId = entry.id` —— usage 一样推进叶。
+本仓的 usage 原本走 `lane.records`（旁路审计，**不**参与叶链），一提为 entry 就进了链。
+而钩子失败的标记**写自工具线程**（`PiToolRunner` worker → `HookSystem.recordHookError`），
+宿主线程同时在追加消息 entry：普通 `ArrayList` 会结构损坏；更隐蔽的是两边读到**同一个叶**、
+生成两条同父的 entry —— 树长出分支而没人报错。
+
+⇒ 新增 `LaneState.appendEntry(EntryFactory)` / `appendDeferredEntry(…)`，把
+「取序号、读叶、入 transcript」收进**车道自己的监视器**，六处追加点全部改道
+（`PiLaneSink.append`、`RunLifecycle` ×3、`ContextAssembler` ×2）。锁序恒为
+`emitLock → 车道监视器`（宿主线程这样进；工具线程只进后者，且**出锁之后**才抛异常），无反向获取。
+
+⚠️ SpotBugs 因此把 `LaneState` 归入「共享对象」，暴露出 `compactionInFlight` 的 `++/--`
+非原子（`AT_NONATOMIC_OPERATIONS_ON_SHARED_VARIABLE` ×2）—— `isCompacting()` 由 RPC
+`get_state` 与 TUI 快照跨线程读，**是真问题不是误报**，三个方法一并改 `synchronized`。
+
+### 11.4 实施期裁决
+
+| # | 事项 | 裁决 | 依据 |
+|---|---|---|---|
+| 1 | 钩子失败标记怎么安置 | **也落成 `usage` 行**（`kind:"hook"`、provider/model 空串、零用量） | 用户裁决。⚠️ **它不是 pi 的行为**：新锚点上 `HookError`/`hookError` **零命中**，`appendUsage` 唯一调用者是缓存预热 —— `HookSystem` 旧注释里的 pi 引用出自旧锚、已失效（注释已更正） |
+| 2 | 旧文件里的 usage 行 | 装载时**转换**成 `Entry.Usage`，且**不带 lane** | 记录族本来不推进叶；硬按 entry 的 `does not chain to the lane leaf` 校验会把整份旧文件读崩。两个来源：`kind:"record"` 旧行、`custom` ＋ `pi-java.record.usage` |
+| 3 | `provider`/`model`/`note` 读时必填吗 | **可选** | 旧行没有它们；pi 自己的 `parseSessionEntries` 也只做 `JSON.parse`（`:353-368`） |
+| 4 | 会话账去哪 | 从 `SessionState.applyRecord` 搬到 `applyEntry`；SQLite 的 usage 统计搬 entry 路径 | 跟随类型迁移 |
+| 5 | TUI 渲染判据 | **只在 `kind == "cache_warm"` 时渲染气泡** | pi 的 `interactive-mode.ts:3401`/`:4030` 正是这个判据，`tree-selector.ts:341` 对 usage 一律排除。本仓自产 `assistant`/`hook` ⇒ 返回 null（每轮一个用量气泡会比 pi 吵） |
+
+### 11.5 证据
+
+| 步 | 夹具 | 变异探针 |
+|---|---|---|
+| 读侧 | `PiV3UsageEntryTest` 2 条**先红**（`has invalid seq`） | **M1**（判别器白名单失效）⇒ **恰 2 红**，报的正是 `has invalid seq`；**M2**（`ENTRY_TYPES` 去掉 `usage`）⇒ **恰 2 红**，报 `unknown entry type usage` |
+| 写侧 | `writesUsageAsANativePiRow`（**写在实现之后 ⇒ 无红灯可看**） | **M4**（`@JsonSubTypes` 的 name 改成 `custom`）⇒ **恰 1 红**（只有写侧那条），读侧两条仍绿 |
+| 并发 | `LaneRecordsConcurrencyTest`：钩子标记改判 **entry**（`kind:"hook"`）＋ 同批写入在 COW 记录表上的 `write_deferred` 痕迹双钉 | — |
+
+### 11.6 仍未做 / 新登记
+
+- **D3（`context_edit`）仍未做** —— 读 pi 写的 `context_edit` 行**仍报 `unknown entry type`**。
+- **真 pi 互读的端到端验证仍未做**（沿用 §10.4-4）。
+- **新登记 B167**：`Entry.type()` 与 `@JsonSubTypes` 的 `name` 是**同一判别值的两份拷贝**，
+  线上生效的是后者 —— M4 探针起初打错对象（改 `type()` 零红）才发现。
+- **新登记 B168**：usage 移出记录族后，**按 `runId` 过滤的记录查询**不再能命中 usage（查询面变化）。
