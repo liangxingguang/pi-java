@@ -101,7 +101,8 @@ class WriteDeferredEmissionTest {
         h.prompt("hello");
 
         var deferred = ofType(h, "default", LaneRecord.WriteDeferred.class);
-        assertThat(deferred).hasSize(1);
+        // 两条：助手回复 ＋ 它的 usage entry（D6 起 usage 是一等 entry，随消息一起延迟写）。
+        assertThat(deferred).hasSize(2);
         var userId = h.snapshot("default").transcript().get(0).id();
         assertThat(deferred.stream()
             .map(r -> ((LaneRecord.WriteDeferred) r).target().entry().id()))
@@ -114,8 +115,9 @@ class WriteDeferredEmissionTest {
         h.prompt("hello");
 
         var deferred = ofType(h, "default", LaneRecord.WriteDeferred.class);
-        assertThat(deferred).hasSize(1);
-        assertThat(((LaneRecord.WriteDeferred) deferred.get(0)).runId()).isNotEmpty();
+        assertThat(deferred).hasSize(2);
+        assertThat(deferred.stream().map(r -> ((LaneRecord.WriteDeferred) r).runId()))
+            .allSatisfy(runId -> assertThat(runId).isNotEmpty());
     }
 
     @Test

@@ -244,10 +244,12 @@ class EngineFailureSettlementTest {
                 assertThat(a.errorMessage()).isEqualTo("boom");
             });
 
-        var last = transcript.get(transcript.size() - 1);
-        assertThat(last).isInstanceOf(Entry.Message.class);
-        assertThat(((Entry.Message) last).message())
-            .isEqualTo(assistants.get(1));
+        // ⚠️ 取**最后一条 message**：D6 起助手消息后面还会跟一条 usage entry。
+        var lastMessage = transcript.stream()
+            .filter(Entry.Message.class::isInstance)
+            .map(Entry.Message.class::cast)
+            .reduce((a, b) -> b).orElseThrow();
+        assertThat(lastMessage.message()).isEqualTo(assistants.get(1));
 
         var finished = h.snapshot(h.laneName()).records().stream()
             .filter(LaneRecord.OperationFinished.class::isInstance)

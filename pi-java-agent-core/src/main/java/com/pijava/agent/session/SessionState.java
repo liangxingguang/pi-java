@@ -322,6 +322,15 @@ public final class SessionState {
         if (entry.type().equals("message")) {
             messageCount++;
         }
+        // D6：usage 是一等 entry（pi 的 UsageEntry）。会话账原本读的是
+        // LaneRecord.UsageRecord，随 usage 提为 entry 一起搬到这条路径。
+        if (entry instanceof Entry.Usage usageEntry && usageEntry.usage() != null) {
+            var u = usageEntry.usage();
+            cachedTokens += u.cacheRead();
+            uncachedTokens += u.input() + u.cacheWrite();
+            totalTokens += u.totalTokens();
+            costTotal += u.cost().total();
+        }
     }
 
     private void applyRecord(SessionMutation.Record m, long seq) {
@@ -345,12 +354,6 @@ public final class SessionState {
             }
         }
         log.add(new LogItem.RecordItem(seq, m.parentId(), record));
-        if (record instanceof LaneRecord.UsageRecord usage) {
-            cachedTokens += usage.usage().cacheRead();
-            uncachedTokens += usage.usage().input() + usage.usage().cacheWrite();
-            totalTokens += usage.usage().totalTokens();
-            costTotal += usage.usage().cost().total();
-        }
     }
 
     private void applyLane(SessionMutation.Lane m, long seq) {
@@ -445,8 +448,6 @@ public final class SessionState {
             runIdMatches = cancelled.runId() != null && query.runId().equals(cancelled.runId());
         } else if (record instanceof LaneRecord.WriteDeferred deferred) {
             runIdMatches = query.runId().equals(deferred.runId());
-        } else if (record instanceof LaneRecord.UsageRecord usage) {
-            runIdMatches = usage.runId() != null && query.runId().equals(usage.runId());
         } else {
             runIdMatches = false;
         }

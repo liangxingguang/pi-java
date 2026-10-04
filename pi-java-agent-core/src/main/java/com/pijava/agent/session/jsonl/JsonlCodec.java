@@ -34,7 +34,7 @@ public final class JsonlCodec {
     private static final List<String> RECORD_TYPES = List.of(
         "operation_started", "abort_requested", "operation_finished", "step_attempt",
         "tool_started", "tool_finished", "queue_enqueued", "queue_cancelled",
-        "queue_consumed", "write_deferred", "usage");
+        "queue_consumed", "write_deferred");
 
     private static final List<String> OPERATION_KINDS = List.of("run", "compaction", "navigation");
 
@@ -259,10 +259,41 @@ public final class JsonlCodec {
             : new SessionMutation.Entry(lane, entry);
     }
 
+    /**
+     * 读**旧的** usage 记录行 ⇒ 转成一等 entry（D6 之后记录族里不再有这一型）。
+     *
+     * <p>两个来源共用它：{@code kind:"record"} 的旧行，以及已迁移文件里的
+     * {@code custom} ＋ {@code pi-java.record.usage} 行。</p>
+     *
+     * <p>{@code parentId} 取调用方给的那个（旧行没有就是 {@code null}）。</p>
+     */
+    static Entry.Usage legacyUsageEntry(JsonNode node, String id, String parentId,
+                                        Instant timestamp) {
+        return new Entry.Usage(id, 0, parentId, timestamp,
+            optionalString(node, "cause"),
+            optionalString(node, "provider"),
+            optionalString(node, "model"),
+            EntryJsonCodec.decodeUsage(node.get("usage")),
+            optionalString(node, "note"),
+            optionalString(node, "runId"),
+            optionalString(node, "entryId"),
+            optionalString(node, "toolCallId"),
+            optionalInteger(node, "attempt"),
+            readStopReason(node));
+    }
+
     private static SessionMutation parseRecordMutation(JsonNode node, long seq) {
         String id = requireString(node, "id");
         String lane = requireString(node, "lane");
         String type = requireString(node, "type");
+        if ("usage".equals(type)) {
+            // D6：usage 已提为一等 entry，旧文件里的这一型在**装载时**转换。
+            // 车道传 null：记录族本来不参与车道的叶链（记录不推进叶），硬按 entry 的
+            // 「does not chain to the lane leaf」校验会把整份旧文件读崩。
+            requireString(node, "cause");
+            return new SessionMutation.Entry(null, legacyUsageEntry(node, id,
+                nullableString(node, "parentId"), instant(node, "timestamp")));
+        }
         if (!RECORD_TYPES.contains(type)) {
             throw DecodeError.schema("has unknown record type " + type);
         }

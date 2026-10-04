@@ -10,8 +10,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.pijava.agent.entry.Entry;
 import com.pijava.agent.record.LaneRecord;
-import com.pijava.agent.record.UsageCause;
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ExecutionMode;
 import com.pijava.agent.tool.ToolContext;
@@ -118,19 +118,36 @@ class LaneRecordsConcurrencyTest {
         assertThat(readerFailure.get())
             .as("宿主快照不许因并发写而抛")
             .isNull();
-        assertThat(hookErrorRecords(harness))
-            .as("八条 worker 线程的 after_tool 错误记录，一条都不许丢")
+        assertThat(hookErrorEntries(harness))
+            .as("八条 worker 线程的 after_tool 错误标记（usage entry，kind=hook），一条都不许丢")
             .isEqualTo(TOOLS);
+        assertThat(deferredRecords(harness))
+            .as("同一批写入在记录表（COW）上的痕迹也要在 —— 上面那个读者线程读的正是它")
+            .isGreaterThanOrEqualTo(TOOLS);
         assertThat(snapshots.get()).as("读者确实在写者窗口里读过").isPositive();
     }
 
     // ── 夹具 ───────────────────────────────────────────────────────
 
-    /** 记录表里 {@code UsageCause.HOOK} 的条数（{@code HookSystem.recordHookError} 的形状）。 */
-    private static long hookErrorRecords(AgentHarness harness) {
+    /**
+     * 钩子失败标记的条数 —— D6 起它是**一条 usage entry**（{@code kind:"hook"}），
+     * 不再是记录。
+     *
+     * <p>它由 {@code HookSystem.recordHookError} 在**工具线程**上追加，而 usage 提为一等
+     * entry 之后它要推进车道叶 ⇒ 与宿主线程抢同一个叶。追加必须走
+     * {@code LaneState.appendEntry} 的车道监视器，这条断言就是「工具线程的写入没丢」
+     * 的钉子。</p>
+     */
+    private static long hookErrorEntries(AgentHarness harness) {
+        return harness.snapshot("default").transcript().stream()
+            .filter(e -> e instanceof Entry.Usage usage && "hook".equals(usage.kind()))
+            .count();
+    }
+
+    /** 同一次写入在**记录表**（COW）上留下的痕迹：每次延迟写一条 {@code write_deferred}。 */
+    private static long deferredRecords(AgentHarness harness) {
         return harness.snapshot("default").records().stream()
-            .filter(r -> r instanceof LaneRecord.UsageRecord usage
-                && usage.cause() == UsageCause.HOOK)
+            .filter(LaneRecord.WriteDeferred.class::isInstance)
             .count();
     }
 

@@ -74,16 +74,6 @@ class LaneRecordTest {
     }
 
     @Test
-    void usageRecordAccumulatesUsage() {
-        var usage = new Usage(100, 50, 10, 5, null, null, 165,
-            new Usage.Cost(0.1, 0.2, 0.01, 0.02, 0.33));
-        var rec = new LaneRecord.UsageRecord("rec-1", 1L, "main", Instant.now(),
-            usage, UsageCause.ASSISTANT, "run-1", "entry-9", null, 0, "stop");
-        assertThat(rec.usage()).isEqualTo(usage);
-        assertThat(rec.cause()).isEqualTo(UsageCause.ASSISTANT);
-    }
-
-    @Test
     void toolFinishedCarriesOutcomeAndDuration() {
         var rec = new LaneRecord.ToolFinished("rec-1", 1L, "main", Instant.now(),
             "run-1", "call-1", "bash", false, false, "entry-9", 123L);

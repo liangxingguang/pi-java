@@ -79,10 +79,15 @@ public final class ConformanceSupport {
         return new NewRecord<>(new LaneRecord.QueueCancelled(id, 0, lane, null, null, entryId));
     }
 
-    public static NewRecord<LaneRecord.UsageRecord> usage(String id, String lane, String runId,
-                                                          double input, double output) {
-        return new NewRecord<>(new LaneRecord.UsageRecord(id, 0, lane, null,
-            Usage.of(input, output), UsageCause.ASSISTANT, runId, "entry-1", null, 0, "stop"));
+    /**
+     * 一条 usage entry（D6 起 usage 是一等 entry，pi 的 {@code UsageEntry} 形状）。
+     * 审计字段搭扩展键：{@code runId}/{@code entryId}/{@code attempt}/{@code stopReason}。
+     */
+    public static ProvisionedEntry<Entry.Usage> usage(String id, String lane, String runId,
+                                                      double input, double output) {
+        return new ProvisionedEntry<>(new Entry.Usage(id, 0, null, null,
+            UsageCause.ASSISTANT.value(), "faux", "faux-model",
+            Usage.of(input, output), null, runId, "entry-1", null, 0, "stop"));
     }
 
     public static NewRecord<LaneRecord.StepAttempt> stepAttempt(String id, String lane,

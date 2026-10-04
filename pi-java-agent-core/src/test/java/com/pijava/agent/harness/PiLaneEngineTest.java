@@ -168,6 +168,14 @@ class PiLaneEngineTest {
         return h.snapshot(AgentHarness.DEFAULT_LANE).records();
     }
 
+    /** 车道里的 usage entry —— D6 起 usage 是一等 entry（pi 的 UsageEntry）。 */
+    private static List<Entry.Usage> usageEntries(AgentHarness h) {
+        return h.snapshot(AgentHarness.DEFAULT_LANE).transcript().stream()
+            .filter(Entry.Usage.class::isInstance)
+            .map(Entry.Usage.class::cast)
+            .toList();
+    }
+
     /** Ids of every {@code OperationStarted}, in emission order. */
     private static List<String> startedIds(List<LaneRecord> records) {
         return records.stream().filter(LaneRecord.OperationStarted.class::isInstance)
@@ -262,11 +270,12 @@ class PiLaneEngineTest {
 
         var records = recordsOf(h);
         assertThat(records.stream().filter(LaneRecord.StepAttempt.class::isInstance)).hasSize(1);
-        var usage = records.stream().filter(LaneRecord.UsageRecord.class::isInstance)
-            .map(r -> (LaneRecord.UsageRecord) r).toList();
+        // D6：usage 是**一等 entry**（pi 的 UsageEntry），不再落记录族。
+        var usage = usageEntries(h);
         assertThat(usage).hasSize(1);
-        // A3（包 H1 步 6）起记录读的是**终局消息的 usage**（fromPartial 投影自 partial
+        // A3（包 H1 步 6）起读的是**终局消息的 usage**（fromPartial 投影自 partial
         // 携带的 UsageInfo），不再是 sink 的旁路累加器 —— 两分量形状下数值相同。
+        assertThat(usage.get(0).kind()).isEqualTo("assistant");
         assertThat(usage.get(0).usage().input()).isEqualTo(11);
         assertThat(usage.get(0).usage().output()).isEqualTo(7);
         assertThat(usage.get(0).stopReason()).isEqualTo("stop");
@@ -296,10 +305,7 @@ class PiLaneEngineTest {
 
         h.prompt(AgentHarness.DEFAULT_LANE, "hi", List.of(), new Recorder());
 
-        var record = recordsOf(h).stream()
-            .filter(LaneRecord.UsageRecord.class::isInstance)
-            .map(r -> (LaneRecord.UsageRecord) r)
-            .findFirst().orElseThrow();
+        var record = usageEntries(h).stream().findFirst().orElseThrow();
         var u = record.usage();
         assertThat(u.input()).isEqualTo(100);
         assertThat(u.output()).isEqualTo(20);
@@ -310,13 +316,13 @@ class PiLaneEngineTest {
         assertThat(u.totalTokens()).isEqualTo(170);
         assertThat(u.cost().total()).isEqualTo(0.51);
 
-        // 会话账投影：SessionState.applyRecord 从这条记录累加四个量（J14 的存储层
+        // 会话账投影：SessionState.applyEntry 从这条 usage entry 累加四个量（J14 的存储层
         // 早已能读写全字段 —— 缺的一直只是发射端喂的东西）。committed(...) 是存储层
         // 落账时的重编号原语（JsonlSessionStorage 提交的就是它），seq 须从 1 起。
         var state = new SessionState();
-        state.applyMutation(new SessionMutation.Lane(1, null, java.time.Instant.EPOCH, record.lane(), null));
-        state.applyMutation(new SessionMutation.Record(null,
-            record.committed(2, java.time.Instant.now())));
+        state.applyMutation(new SessionMutation.Lane(1, null, java.time.Instant.EPOCH, "main", null));
+        state.applyMutation(new SessionMutation.Entry("main",
+            record.committed(2, null, java.time.Instant.now())));
         var stats = state.getStats();
         assertThat(stats.costTotal()).isEqualTo(0.51);
         assertThat(stats.cachedTokens()).isEqualTo(40);

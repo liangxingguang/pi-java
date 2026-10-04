@@ -58,7 +58,25 @@ public sealed interface ChatMessage {
                 ? new System("[" + customMessage.customType() + "] "
                     + customMessage.content().plainText(), MetaKind.CUSTOM)
                 : null;
+            case Entry.Usage usage -> cacheWarmNotice(usage);
         };
+    }
+
+    /**
+     * usage 条目的渲染判据**只有 {@code kind:"cache_warm"}**。
+     *
+     * <p>pi 的交互模式正是这么做的：{@code interactive-mode.ts:3401} 与 {@code :4030} 都写成
+     * {@code entry.type === "usage" && entry.kind === "cache_warm"}，而
+     * {@code tree-selector.ts:341} 对 usage 条目**一律**返回 false。本仓自己产的 kind 是
+     * {@code "assistant"}/{@code "hook"} ⇒ 在这里返回 {@code null}，与 pi 对这两类的行为一致
+     * （每轮渲染一个用量气泡会比 pi 吵得多）；从 pi 文件读进来的 {@code cache_warm} 通知照渲染。</p>
+     */
+    private static ChatMessage cacheWarmNotice(Entry.Usage usage) {
+        if (!"cache_warm".equals(usage.kind()) || usage.usage() == null) {
+            return null;
+        }
+        return new System("Cache warming: " + (long) usage.usage().totalTokens() + " tokens",
+            MetaKind.GENERIC);
     }
 
     private static ChatMessage fromMessage(Entry.Message message) {

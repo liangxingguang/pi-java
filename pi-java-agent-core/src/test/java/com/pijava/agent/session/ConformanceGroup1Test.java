@@ -9,7 +9,6 @@ import static com.pijava.agent.session.ConformanceSupport.stepAttempt;
 import static com.pijava.agent.session.ConformanceSupport.textOf;
 import static com.pijava.agent.session.ConformanceSupport.toolResult;
 import static com.pijava.agent.session.ConformanceSupport.toolStarted;
-import static com.pijava.agent.session.ConformanceSupport.usage;
 import static com.pijava.agent.session.ConformanceSupport.userMessage;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

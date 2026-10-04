@@ -113,6 +113,79 @@ class PiV3UsageEntryTest {
             .contains("u1");
     }
 
+    /**
+     * **写侧**：本仓的用量必须落成 pi 的原生 {@code usage} 行，而不是
+     * {@code {"type":"custom","customType":"pi-java.record.usage",…}} 审计行。
+     */
+    @Test
+    void writesUsageAsANativePiRow() throws Exception {
+        Path dir = Files.createTempDirectory("pi-v3-usage-write");
+        var repo = JsonlSessionRepository.over(dir);
+        var session = repo.create(new JsonlSessionCreateOptions(null, "work", null, null));
+        session.appendEntry(new com.pijava.agent.entry.ProvisionedEntry<>(new Entry.Usage(
+            "u1", 0, null, null, "assistant", "anthropic", "claude-sonnet-5-5",
+            new com.pijava.ai.Usage(100, 20, 40, 10, 6.0, 8.0, 170,
+                new com.pijava.ai.Usage.Cost(0.30, 0.15, 0.02, 0.04, 0.51)),
+            null, "run-1", "e-1", null, 0, "stop")), "main");
+        session.storage().drain();
+        Path file = repo.list(JsonlSessionListOptions.all()).getFirst().path();
+
+        var row = lines(file).stream()
+            .filter(n -> "u1".equals(n.path("id").asText(null)))
+            .findFirst().orElseThrow();
+
+        assertThat(row.path("type").asText()).isEqualTo("usage");
+        assertThat(row.has("customType"))
+            .as("不再落 custom 审计行 —— 那正是 D6 要改掉的东西").isFalse();
+        assertThat(row.path("kind").asText()).isEqualTo("assistant");
+        assertThat(row.path("provider").asText()).isEqualTo("anthropic");
+        assertThat(row.path("model").asText()).isEqualTo("claude-sonnet-5-5");
+        assertThat(row.path("usage").path("totalTokens").asDouble()).isEqualTo(170);
+        assertThat(row.path("usage").path("cacheRead").asDouble()).isEqualTo(40);
+        assertThat(row.path("usage").path("cost").path("total").asDouble()).isEqualTo(0.51);
+        assertThat(row.has("seq")).as("pi 的 SessionEntryBase 没有 seq（:57-63）").isFalse();
+        assertThat(row.path("timestamp").isTextual()).as("时间戳必须是 ISO 串").isTrue();
+
+        // 本仓的审计字段搭扩展键 —— pi 的 parseSessionEntries 只做 JSON.parse，未知键照读不误。
+        assertThat(row.path("runId").asText()).isEqualTo("run-1");
+        assertThat(row.path("entryId").asText()).isEqualTo("e-1");
+        assertThat(row.path("attempt").asInt()).isZero();
+        assertThat(row.path("stopReason").asText()).isEqualTo("stop");
+
+        // 读回来逐字段相等（键序无关：按键取值）。
+        var reloaded = JsonlSessionStorage.load(FS, file);
+        var usage = reloaded.getLog(LogOptions.none()).stream()
+            .filter(item -> item instanceof LogItem.EntryItem e
+                && e.entry() instanceof Entry.Usage)
+            .map(item -> (Entry.Usage) ((LogItem.EntryItem) item).entry())
+            .findFirst().orElseThrow();
+        assertThat(usage.kind()).isEqualTo("assistant");
+        assertThat(usage.provider()).isEqualTo("anthropic");
+        assertThat(usage.model()).isEqualTo("claude-sonnet-5-5");
+        assertThat(usage.usage().totalTokens()).isEqualTo(170);
+        assertThat(usage.usage().cacheWrite1h()).isEqualTo(6.0);
+        assertThat(usage.usage().reasoning()).isEqualTo(8.0);
+        assertThat(usage.runId()).isEqualTo("run-1");
+        assertThat(usage.entryId()).isEqualTo("e-1");
+        assertThat(usage.stopReason()).isEqualTo("stop");
+    }
+
+    /** 读一个会话文件的所有行（跳过空行）。 */
+    private static java.util.List<com.fasterxml.jackson.databind.JsonNode> lines(Path file)
+            throws Exception {
+        var mapper = com.pijava.agent.session.SessionJson.mapper();
+        return Files.readAllLines(file).stream()
+            .filter(l -> !l.isBlank())
+            .map(l -> {
+                try {
+                    return mapper.readTree(l);
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            })
+            .toList();
+    }
+
     private static String entryId(LogItem item) {
         return item instanceof LogItem.EntryItem e ? e.entry().id() : null;
     }

@@ -298,6 +298,11 @@ public final class SqliteSessionStorage implements SessionStorage<SqliteSessionM
             if (committed.type().equals("message")) {
                 StatsRows.incrementMessageCount(db, metadata.id());
             }
+            // D6：usage 是一等 entry —— 会话账随它走 entry 路径。
+            if (committed instanceof com.pijava.agent.entry.Entry.Usage usageEntry
+                    && usageEntry.usage() != null) {
+                StatsRows.addUsageToStats(db, metadata.id(), usageEntry.usage());
+            }
             SequenceRows.advanceSequence(db, metadata.id(), seq);
             return committed;
         });
@@ -325,9 +330,6 @@ public final class SqliteSessionStorage implements SessionStorage<SqliteSessionM
                 SqliteCodecs.timestampToText(now), SqliteCodecs.recordPayload(provisioned)));
             if (provisioned instanceof LaneRecord.OperationFinished finished) {
                 LaneRows.finishLaneOperation(db, metadata.id(), provisioned.lane(), finished.runId());
-            }
-            if (provisioned instanceof LaneRecord.UsageRecord usage) {
-                StatsRows.addUsageToStats(db, metadata.id(), usage.usage());
             }
             SequenceRows.advanceSequence(db, metadata.id(), seq);
             // committed() preserves the runtime subtype of the provisioned record.

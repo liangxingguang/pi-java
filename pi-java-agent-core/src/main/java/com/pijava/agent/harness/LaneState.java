@@ -169,18 +169,26 @@ public final class LaneState {
      */
     private int compactionInFlight;
 
-    /** 进入压缩窗口（pi {@code this._compactionAbortController = new AbortController()}）。 */
-    void enterCompaction() {
+    /**
+     * 进入压缩窗口（pi {@code this._compactionAbortController = new AbortController()}）。
+     *
+     * <p>⚠️ 三个方法都是 {@code synchronized}：{@code compactionInFlight} 是**跨线程读**的
+     * （RPC 的 {@code get_state} 与 TUI 快照通过 {@link #isCompacting()} 读它，而压缩在宿主
+     * 线程上跑），{@code ++}/{@code --} 不是原子操作。此前没报是因为 SpotBugs 只对
+     * 「被当成共享对象」的类开这个检查 —— 包 12 给本类加了 {@code appendEntry} 之后
+     * 它才进那个类别。用同一个监视器（车道自己）即可，锁序不变。</p>
+     */
+    synchronized void enterCompaction() {
         compactionInFlight++;
     }
 
     /** 离开压缩窗口 —— 与 {@link #enterCompaction()} 成对，恒在 {@code finally} 里。 */
-    void exitCompaction() {
+    synchronized void exitCompaction() {
         compactionInFlight--;
     }
 
     /** 是否有压缩在飞（pi {@code isCompacting} 的三控制器析取，collapsed 成一个窗口）。 */
-    boolean isCompacting() {
+    synchronized boolean isCompacting() {
         return compactionInFlight > 0;
     }
 
@@ -320,6 +328,21 @@ public final class LaneState {
     private String lastEntryId() {
         var last = lastEntry();
         return last == null ? null : last.id();
+    }
+
+    /**
+     * 运行中追加一条 entry：进 {@link #transcript} ＋ 记为 deferred 写
+     * （{@link HarnessUtils#recordDeferredWrite}，原 docs/22 D3）。
+     *
+     * <p>公开，是因为 writer 之一在**另一个包**：{@code HookSystem.recordHookError}
+     * 住在 {@code com.pijava.agent.hook}，它拿不到包内的 {@code HarnessUtils}，
+     * 而 {@link #transcript} 本身是包内可见 —— 这把「追加 ＋ 标记」收成一个入口，
+     * 调用方无从绕过锁去自己拼。</p>
+     */
+    public <E extends Entry> E appendDeferredEntry(EntryFactory<E> factory) {
+        var entry = appendEntry(factory);
+        HarnessUtils.recordDeferredWrite(this, entry);
+        return entry;
     }
 
     // ═══════════════════════════════════════════════════════════

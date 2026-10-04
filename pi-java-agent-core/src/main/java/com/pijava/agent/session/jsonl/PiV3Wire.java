@@ -248,6 +248,13 @@ public final class PiV3Wire {
         }
         if (customType.startsWith(EXT_RECORD)) {
             var data = node.path("data");
+            if ("usage".equals(JsonlCodec.requireString(data, "type"))) {
+                // D6：旧文件把 usage 落在 record 族（→ custom），现在它是一等 entry。
+                // 同上：不带 lane，免得撞车道的叶链校验。
+                return new SessionMutation.Entry(null, JsonlCodec.legacyUsageEntry(data,
+                    JsonlCodec.requireString(data, "id"), parentId(node),
+                    parseTimestamp(node, "timestamp")));
+            }
             var record = RecordJsonCodec.decode(data,
                 JsonlCodec.requireString(data, "id"), JsonlCodec.requireLong(data, "seq"),
                 JsonlCodec.requireString(data, "lane"), JsonlCodec.instant(data, "timestamp"));

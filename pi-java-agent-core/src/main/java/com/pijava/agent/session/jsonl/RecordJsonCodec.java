@@ -74,15 +74,6 @@ final class RecordJsonCodec {
             case "write_deferred" -> new LaneRecord.WriteDeferred(id, seq, lane, timestamp,
                 JsonlCodec.requireString(node, "runId"),
                 decodeTarget(node.get("target")));
-            case "usage" -> new LaneRecord.UsageRecord(id, seq, lane, timestamp,
-                EntryJsonCodec.decodeUsage(node.get("usage")),
-                UsageCause.fromValue(JsonlCodec.requireString(node, "cause")),
-                JsonlCodec.optionalString(node, "runId"),
-                JsonlCodec.optionalString(node, "entryId"),
-                JsonlCodec.optionalString(node, "toolCallId"),
-                node.has("attempt") && node.get("attempt").isIntegralNumber()
-                    ? node.get("attempt").intValue() : null,
-                JsonlCodec.readStopReason(node));
             default -> throw JsonlCodec.DecodeError.schema("has unknown record type " + type);
         };
     }

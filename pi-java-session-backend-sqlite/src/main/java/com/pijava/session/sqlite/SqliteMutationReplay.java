@@ -67,6 +67,11 @@ final class SqliteMutationReplay {
         if (entry.type().equals("message")) {
             StatsRows.incrementMessageCount(db, metadata.id());
         }
+        // D6：usage 是一等 entry，会话账随它走 entry 路径（原先读 LaneRecord.UsageRecord）。
+        if (entry instanceof com.pijava.agent.entry.Entry.Usage usageEntry
+                && usageEntry.usage() != null) {
+            StatsRows.addUsageToStats(db, metadata.id(), usageEntry.usage());
+        }
         advanceSequenceTo(db, metadata, entry.seq());
     }
 
@@ -85,9 +90,6 @@ final class SqliteMutationReplay {
             SqliteCodecs.timestampToText(record.timestamp()), SqliteCodecs.recordPayload(record)));
         if (record instanceof LaneRecord.OperationFinished finished) {
             LaneRows.finishLaneOperation(db, metadata.id(), record.lane(), finished.runId());
-        }
-        if (record instanceof LaneRecord.UsageRecord usage) {
-            StatsRows.addUsageToStats(db, metadata.id(), usage.usage());
         }
         advanceSequenceTo(db, metadata, record.seq());
     }

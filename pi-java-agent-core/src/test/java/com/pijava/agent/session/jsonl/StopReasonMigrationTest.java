@@ -75,21 +75,32 @@ class StopReasonMigrationTest {
             .isEqualTo("toolUse");
     }
 
+    /**
+     * 旧文件里的 usage 是**记录族**的一行（D6 之后 usage 已提为一等 entry）——
+     * 装载时必须转换，且 {@code stopReason} 一样要归一。
+     *
+     * <p>夹具是手写的旧行字节：{@code kind:"record"} ＋ {@code type:"usage"} ＋
+     * 旧字面量的 {@code stopReason}。走编码器造不出这个形状（现在的编码器只会写 entry）。</p>
+     */
     @Test
-    void legacyUsageRecordStopReasonIsMigratedOnRead() {
-        var usage = new Usage(1, 1, 0, 0, null, null, 2,
-            new Usage.Cost(0, 0, 0, 0, 0));
-        var record = new LaneRecord.UsageRecord("r-legacy", 2L, "main",
-            Instant.ofEpochMilli(1L), usage, UsageCause.ASSISTANT,
-            "run-1", "e-legacy", null, 0, "toolUse");
-        var line = downgraded(JsonlCodec.encodeMutation(new SessionMutation.Record(null, record))
-            .replace(CURRENT, LEGACY));
+    void legacyUsageRecordIsConvertedToAnEntryAndItsStopReasonIsMigrated() {
+        String line = "{\"kind\":\"record\",\"seq\":2,\"id\":\"r-legacy\",\"lane\":\"main\","
+            + "\"timestamp\":1,\"type\":\"usage\",\"cause\":\"assistant\","
+            + "\"usage\":{\"input\":1,\"output\":1,\"cacheRead\":0,\"cacheWrite\":0,"
+            + "\"totalTokens\":2,\"cost\":{\"input\":0,\"output\":0,\"cacheRead\":0,"
+            + "\"cacheWrite\":0,\"total\":0}},"
+            + "\"runId\":\"run-1\",\"entryId\":\"e-legacy\",\"attempt\":0,"
+            + "\"stopReason\":\"tool_use\"}";
 
-        // 记录行的 seq 是 2（见上面 record 的构造）⇒ 单行解析按行号喂回（docs/12）。
         var result = JsonlCodec.parseMutation(line, 2L);
         assertThat(result.ok()).as("parse should succeed: %s", result.error()).isTrue();
-        var parsed = (LaneRecord.UsageRecord) ((SessionMutation.Record) result.value()).record();
-        assertThat(parsed.stopReason()).isEqualTo("toolUse");
+        var parsed = (Entry.Usage) ((SessionMutation.Entry) result.value()).entry();
+        assertThat(parsed.id()).isEqualTo("r-legacy");
+        assertThat(parsed.kind()).as("记录族的 cause 变成 pi 的 kind").isEqualTo("assistant");
+        assertThat(parsed.usage().input()).isEqualTo(1);
+        assertThat(parsed.stopReason())
+            .as("旧字面量必须被垫片归一（B109），哪怕是走转换路径进来的")
+            .isEqualTo("toolUse");
     }
 
     /**

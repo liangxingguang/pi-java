@@ -94,8 +94,9 @@ public abstract class ConformanceGroup2Test {
             session.setName("beta");
             session.setLabel("m1", "start");
             session.setLabel("m1", "middle");
-            session.appendRecord(usage("u1", "main", "run-1", 100, 50));
-            session.appendRecord(usage("u2", "main", "run-1", 10, 5));
+            // D6：usage 是一等 entry ⇒ 走 appendEntry 而不是 appendRecord。
+            session.appendEntry(usage("u1", "main", "run-1", 100, 50), "main");
+            session.appendEntry(usage("u2", "main", "run-1", 10, 5), "main");
 
             assertThat(session.getName()).isEqualTo("beta");
             assertThat(session.getLabel("m1")).isEqualTo("middle");

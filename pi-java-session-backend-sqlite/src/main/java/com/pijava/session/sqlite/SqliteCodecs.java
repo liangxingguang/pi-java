@@ -56,7 +56,6 @@ final class SqliteCodecs {
             case LaneRecord.QueueCancelled r -> r.runId();
             case LaneRecord.QueueConsumed r -> r.runId();
             case LaneRecord.WriteDeferred r -> r.runId();
-            case LaneRecord.UsageRecord r -> r.runId();
             default -> null;
         };
     }

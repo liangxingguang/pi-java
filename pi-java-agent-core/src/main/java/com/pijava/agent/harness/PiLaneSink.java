@@ -432,12 +432,10 @@ final class PiLaneSink implements PiLoop.Sink {
     /** 建 entry 并挂上车道。entry 一旦产生就直接进 transcript，没有中间态。 */
     private Entry.Message append(LaneState lane, Message message) {
         // 叶 id 由 appendEntry 在锁下给 —— 工具线程的钩子标记会与这里抢同一个叶。
-        var entry = lane.appendEntry((seq, parentId) -> new Entry.Message(
-            UUID.randomUUID().toString(), 0, parentId, null, message, null));
         // 运行中写入 ⇒ 记为 deferred（原 docs/22 D3）。用户 prompt 由
         // RunLifecycle.startRun() 在起手时写入，不走这里，语义不受影响。
-        HarnessUtils.recordDeferredWrite(lane, entry);
-        return entry;
+        return lane.appendDeferredEntry((seq, parentId) -> new Entry.Message(
+            UUID.randomUUID().toString(), 0, parentId, null, message, null));
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -461,10 +459,18 @@ final class PiLaneSink implements PiLoop.Sink {
         // B41 兜零值 ⇒ 恒非 null。旧代码这里的 Usage.of(i, o) 把
         // cacheRead/cacheWrite/cacheWrite1h/reasoning/cost 整段丢掉 ⇒
         // 会话账（SessionState.applyRecord 读的正是这条记录）四分量与 costTotal 恒 0。
-        lane.records.add(new LaneRecord.UsageRecord(
-            UUID.randomUUID().toString(), 0, laneName, null,
-            assistant.usage(), UsageCause.ASSISTANT, lane.runId,
-            entry.id(), null, attempt, assistant.stopReason()));
+        // D6（docs/12 §6）：usage 落成 pi 的**原生 usage 条目**，不再落成 custom 审计行。
+        // pi 的 UsageEntry（session-manager.ts:80-89）＝ 自由类别串 ＋ provider/model ＋
+        // Usage 载荷；本仓的审计字段（runId/entryId/attempt/stopReason）搭同一条行的扩展键
+        // —— pi 的 parseSessionEntries 只做 JSON.parse（:353-368），未知键照读不误。
+        // ⚠️ 它现在是**一条 entry**：按 pi 的 _appendEntry 语义（:1191-1196）它推进车道叶，
+        // 后续 entry 的 parentId 落在它身上。
+        var model = ctx.model().get();
+        lane.appendDeferredEntry((seq, parentId) -> new Entry.Usage(
+            UUID.randomUUID().toString(), seq, parentId, Instant.now(),
+            UsageCause.ASSISTANT.value(), model.provider(), model.modelName(),
+            assistant.usage(), null,
+            lane.runId, entry.id(), null, attempt, assistant.stopReason()));
         ctx.addTokens(inputTokens + outputTokens);
     }
 

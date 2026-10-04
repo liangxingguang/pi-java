@@ -117,9 +117,14 @@ class PostRunOverflowDriveTest {
         assertThat(obs.ends).containsExactly("overflow|false|true");
         // 日志里压过了，且恢复轮的助手消息落了盘。
         assertThat(outcome.transcript()).anyMatch(Entry.Compaction.class::isInstance);
-        var last = outcome.transcript().get(outcome.transcript().size() - 1);
-        assertThat(((Entry.Message) last).message()).isInstanceOf(Message.AssistantMessage.class);
-        var assistant = (Message.AssistantMessage) ((Entry.Message) last).message();
+        // ⚠️ 取**最后一条 message**，不是 transcript 的末条：D6 起助手消息之后还会跟一条
+        // usage entry（pi 的 UsageEntry），它同样推进车道叶。
+        var lastMessage = outcome.transcript().stream()
+            .filter(Entry.Message.class::isInstance)
+            .map(Entry.Message.class::cast)
+            .reduce((a, b) -> b).orElseThrow();
+        assertThat(lastMessage.message()).isInstanceOf(Message.AssistantMessage.class);
+        var assistant = (Message.AssistantMessage) lastMessage.message();
         assertThat(assistant.content().toString()).contains("recovered");
         // 成功收尾（stop）⇒ 闩复位（pi :694-696）：下一次 prompt 单 pass 跑完，
         // 不借上一轮的溢出预算、也不多烧一次请求。

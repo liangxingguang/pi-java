@@ -326,14 +326,27 @@ public final class HookSystem {
         }
     }
 
+    /**
+     * 钩子失败非致命：失败本身照旧 {@code throw} 冒泡（调用点记完就抛），这里只补审计。
+     *
+     * <p>⚠️ <b>它不是 pi 的行为</b>。旧注释写「pi records them via usage records with
+     * cause "hook"」，但换锚后 pi 侧 {@code HookError}/{@code hookError} **零命中**，
+     * 且 {@code appendUsage} 全仓只有一个调用者（缓存预热的 {@code cache-warmer.ts:342}）
+     * —— 那条引用出自旧锚，已失效。本仓保留这个标记，并让它穿上 pi 的行形状
+     * （{@link com.pijava.agent.entry.Entry.Usage}，{@code kind:"hook"}、
+     * provider/model 空串、零用量）。</p>
+     *
+     * <p>⚠️ 它是**一条 entry**，所以会推进车道叶 —— 而这里跑在**工具线程**上
+     * （{@code PiToolRunner} 的 worker）。追加必须走
+     * {@link com.pijava.agent.harness.LaneState#appendDeferredEntry}：
+     * 与宿主线程共享车道监视器，否则两边会读到同一个叶、生成两条同父的 entry。</p>
+     */
     private void recordHookError(String laneName, String hookName, Exception e) {
-        // Hook failures are non-fatal. pi records them via usage records with
-        // cause "hook"; the harness does not produce usage for hooks yet, so a
-        // zero-usage record marks the event (Phase 4 §3.2).
         if (lane.laneName().equals(laneName)) {
-            lane.records.add(new LaneRecord.UsageRecord(
-                java.util.UUID.randomUUID().toString(), 0, laneName, null,
-                com.pijava.ai.Usage.of(0, 0), UsageCause.HOOK,
+            lane.appendDeferredEntry((seq, parentId) -> new com.pijava.agent.entry.Entry.Usage(
+                java.util.UUID.randomUUID().toString(), seq, parentId, java.time.Instant.now(),
+                UsageCause.HOOK.value(), "", "",
+                com.pijava.ai.Usage.of(0, 0), null,
                 "", null, null, null, null));
         }
     }
