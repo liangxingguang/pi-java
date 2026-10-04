@@ -1,6 +1,7 @@
 # 12 — JSONL 会话线格式对齐（本仓 v4 ↔ pi v3 双向可读）
 
-**状态：设计稿 —— 待用户审核；审核通过前不写代码**
+**状态：已裁决（D1–D6 全按建议）并**实施中** —— 步 1–3 已落（`5298c8f` / `b4b93cc` / `211f5f1` ＋ 迁移收尾），
+实施记录与四处偏离见 §10；**剩余 D6（`usage` 提为一等条目）与 D3（`context_edit`）见 §10.4**。
 
 | | |
 |---|---|
@@ -307,3 +308,48 @@ pi 不会为本仓改；且 pi 的 `version:3` 是它的**当前版本**，pi �
   若 D2′（不落线）成立，这个风险消失，代价是 pi 侧看不到本仓的审计线 —— **这正是 D2 要裁的点。**
 - ⚠️ **风险**：本包是**跨 3 个模块**的改动（`agent-core` 的 codec/storage ＋ `coding-agent` 的仓储 ＋ `ai` 的
   `Message` 时间戳）。落地时**串行**跑，避免共享 `target` 假绿。
+
+---
+
+## 10 实施记录（2026-10-04）
+
+### 10.1 提交
+
+| commit | 内容 |
+|---|---|
+| `5298c8f` | **步 1**：头 ＋ 条目落成 pi 的形状（`PiV3Wire` 新文件） |
+| `b4b93cc` | **步 2**：合成行（lane/fact/record）落成 pi 条目 ＋ 补身份 |
+| `211f5f1` | **步 2b**：SQLite 加列（`002_pi_identity.sql`） |
+| — | **步 3**：迁移补齐旧行缺失的 parentId ＋ 互操作夹具 |
+
+### 10.2 ★ 实施中偏离设计稿的四处（**设计稿的估算偏低**）
+
+| # | 设计稿说 | 实测 | 处置 |
+|---|---|---|---|
+| 1 | D2：`fact` → 原生 `label`/`session_info`，`lane`/`record` → `custom` | **对，但没说身份从哪来**。pi 的每一行都是 `SessionEntryBase`（`parentId`/`timestamp` 必填），而 `Lane`/`FactName`/`FactLabel` **一个身份字段都没有**；`Record` 也没有 `parentId` | 四个 mutation ＋ 四个 LogItem 补 `(parentId, timestamp)`，在**创建 mutation 时**取好（编码必须是纯函数）。SQLite 三张表加列 |
+| 2 | D2 隐含「合成行不必链进树」 | **必须链**。pi 的 `_buildIndex` 把每一行都当叶、`getBranch()` 从叶沿 `parentId` 回溯 ⇒ 不链的话 pi 打开本仓会话**看不到任何消息** | `parentId` ＝ 创建时的最近条目（`SessionState.lastEntryId()`）；迁移时按「挂到最近的条目」补齐旧行 |
+| 3 | D2 之外：`lane` 键去留未提 | **必须留在 entry 行上**。去掉它 `SessionState.applyEntry` 就不更新 lane 叶指针 ⇒ 默认 fork 目标解析为空、非消息叶的校验被整个跳过（实测打红两条 fork 一致性用例） | 保留为「**pi 忽略的扩展键**」（`parseSessionEntries` 只做 `JSON.parse`，未知键照读不误）。⇒ **这一步的产出不是「零扩展」的纯 pi 形状**，但 pi 读得懂 |
+| 4 | 未提 | `SessionState` 因本包破 **500 行**（512） | 抽出 5 个**纯函数**查询辅助到 `SessionQuerySupport`（判据换算／排序／游标校验），`SessionState` 回到 467 |
+
+### 10.3 证据
+
+| 步 | 先红 | 变异探针 |
+|---|---|---|
+| 1 | `PiV3WireFormatTest` **3/4 红**（第 4 条喂手写 pi 文件、不经编码器 —— 设计上应绿） | **M1**（回退头判别键）⇒ 同 3/4 红；**M2**（保留 `seq`）⇒ **恰 1 红** |
+| 2 | 新增 3 条合成行夹具先红 | **M3**（丢掉 name 行的 parent）⇒ **恰 1 红**（链断言） |
+| 3 | 迁移夹具先红 | **M4**（迁移不补 parent）⇒ **恰 1 红** |
+
+模块回归：telemetry 31 / ai 1377 / agent-core **546** / sqlite 35 / coding-agent 319 全绿；checkstyle 0；`JsonlCodec` 480、`SessionState` 467、`PiV3Wire` ~240 行。
+
+⚠️ **两次栽在同一个坑**：① `-pl <module>` **不带 `-am`** 会吃 `~/.m2` 旧构件 ⇒ 报 4 个 `NoSuchMethod` 假错；
+② **增量编译**让测试类停在旧签名 ⇒ 报 `NoSuchMethod ... SessionMutation$Record.<init>` 假错。
+**本包全部回归都用 `clean test` ＋ `-am`。**
+
+### 10.4 本包**未**做完的（如实登记）
+
+| # | 缺口 | 说明 |
+|---|---|---|
+| 1 | **D6 未落** —— `usage` 仍未提为一等条目 | 本仓把 usage 放在 `record` 族，落线成 `custom`；pi 是**一等 `usage` 条目**。读 pi 文件里的 `usage` 行**会报 `unknown entry type`** |
+| 2 | **D3 延后** —— `context_edit` | pi 本轮新增的条目型，本仓无对应 ⇒ 读到时同样报错 |
+| 3 | **D2 的「原生」只对 fact 成立** | lane/record 落成 `custom`（设计如此），但 `lane` 又是 entry 上的扩展键 —— 两处并存 |
+| 4 | 未做**真端点/真 pi 互读**的端到端验证 | 夹具复刻的是 pi 的解析语义（`parseSessionEntries` 的宽容 + `_buildIndex` 的叶语义），**没有跑过真的 pi** |
