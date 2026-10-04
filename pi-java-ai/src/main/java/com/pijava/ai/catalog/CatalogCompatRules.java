@@ -77,7 +77,10 @@ public final class CatalogCompatRules {
             c.chatTemplateArgs(), c.supportsReasoningEffort(), c.cacheControlFormat(),
             c.openRouterRouting(), c.sendSessionAffinityHeaders(),
             c.sessionAffinityFormat(), supportsStrictTools,
-            c.supportsOpenAIGrammarTools());
+            c.supportsOpenAIGrammarTools(),
+            // 包 09：逐组件重建的地方**必须**带上新字段，否则会静默丢成缺省
+            // （旧 29 参调用点现在落到便捷构造上）。
+            c.supportsEagerToolInputStreaming(), c.supportsExplicitPromptCacheMode());
     }
 
     /**
@@ -166,7 +169,8 @@ public final class CatalogCompatRules {
             c.chatTemplateArgs(), c.supportsReasoningEffort(), c.cacheControlFormat(),
             c.openRouterRouting(), c.sendSessionAffinityHeaders(),
             c.sessionAffinityFormat(), c.supportsStrictTools(),
-            supportsOpenAIGrammarTools);
+            supportsOpenAIGrammarTools,
+            c.supportsEagerToolInputStreaming(), c.supportsExplicitPromptCacheMode());
     }
 
     /** pi {@code generate-models.ts:834} 谓词：{@code /^gpt-(\d+)/} 组 ≥5。 */

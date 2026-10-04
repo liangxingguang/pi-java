@@ -221,7 +221,19 @@ public final class ModelsJsonSchema {
         /** 原 docs/66（pi {@code types.ts:826}）：Anthropic 车道是否接受 strict tool；缺省 {@code false}。 */
         @JsonProperty("supportsStrictTools") Boolean supportsStrictTools,
         /** 原 docs/69（pi {@code types.ts}: grammar 能力位）：是否支持 OpenAI custom tool 文法；缺省 ⇒ 门关。 */
-        @JsonProperty("supportsOpenAIGrammarTools") Boolean supportsOpenAIGrammarTools
+        @JsonProperty("supportsOpenAIGrammarTools") Boolean supportsOpenAIGrammarTools,
+        /**
+         * 包 09（pi {@code types.ts:780-783}）：Anthropic 车道是否为每个工具声明
+         * {@code eager_input_streaming}；缺省 {@code true}。置 {@code false} ⇒ 不发该字段，
+         * 改挂 {@code fine-grained-tool-streaming-2025-05-14} beta 头。
+         */
+        @JsonProperty("supportsEagerToolInputStreaming") Boolean supportsEagerToolInputStreaming,
+        /**
+         * 包 09（pi {@code types.ts}、{@code openai-responses.ts:78}）：Responses 车道是否走
+         * **显式** prompt cache（发 {@code prompt_cache_options}、不发 {@code prompt_cache_retention}）；
+         * 缺省 {@code false}。
+         */
+        @JsonProperty("supportsExplicitPromptCacheMode") Boolean supportsExplicitPromptCacheMode
     ) {}
 
     /**

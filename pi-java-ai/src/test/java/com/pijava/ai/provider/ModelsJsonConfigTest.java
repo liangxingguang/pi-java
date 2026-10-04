@@ -479,6 +479,39 @@ class ModelsJsonConfigTest {
     }
 
     /**
+     * 包 09：两个新兼容位的 JSON 通道 —— {@code supportsEagerToolInputStreaming}（B90，
+     * pi 缺省 {@code true}）与 {@code supportsExplicitPromptCacheMode}（B104，pi 缺省
+     * {@code false}）。两位都是 {@code Boolean} ⇒ **保持三态**（缺席留 {@code null}，
+     * 由车道构造期补缺省）。
+     */
+    @Test
+    void readsTheTwoPackageNineGatesFromCompatBlock() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "anthropic-messages",
+              "models": [
+                {"id": "written", "compat": {
+                  "supportsEagerToolInputStreaming": false,
+                  "supportsExplicitPromptCacheMode": true
+                }},
+                {"id": "absent"}
+              ]
+            }}}
+            """);
+
+        var written = config.catalog().find(ModelId.of("relay", "written")).orElseThrow();
+        assertThat(written.compat().supportsEagerToolInputStreaming()).isFalse();
+        assertThat(written.compat().supportsExplicitPromptCacheMode()).isTrue();
+
+        var absent = config.catalog().find(ModelId.of("relay", "absent")).orElseThrow();
+        assertThat(absent.compat().supportsEagerToolInputStreaming())
+            .as("缺席 ≙ pi undefined ≙ 车道缺省 true").isNull();
+        assertThat(absent.compat().supportsExplicitPromptCacheMode())
+            .as("缺席 ≙ pi undefined ≙ 车道缺省 false").isNull();
+    }
+
+    /**
      * 包 A-02（原 docs/59 §4.11）：{@code cacheControlFormat} 单值闭集——命中映射到
      * {@link com.pijava.ai.catalog.CacheControlFormat#ANTHROPIC}，缺席留 {@code null}
      * （⇒ 请求期探测）。未知取值另有响亮抛错用例。

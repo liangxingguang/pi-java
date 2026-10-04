@@ -111,7 +111,10 @@ final class ModelsJsonCompat {
             SessionAffinityFormat.parse(def.sessionAffinityFormat())
                 .orElse(null),
             def.supportsStrictTools() != null && def.supportsStrictTools(),
-            def.supportsOpenAIGrammarTools());
+            def.supportsOpenAIGrammarTools(),
+            // 包 09：两个可空新键原样透传（缺省由车道构造期补：true / false）。
+            def.supportsEagerToolInputStreaming(),
+            def.supportsExplicitPromptCacheMode());
     }
 
     /**
@@ -194,7 +197,14 @@ final class ModelsJsonCompat {
                 ? raw.supportsStrictTools() : base.supportsStrictTools(),
             raw.supportsOpenAIGrammarTools() != null
                 ? raw.supportsOpenAIGrammarTools()
-                : base.supportsOpenAIGrammarTools());
+                : base.supportsOpenAIGrammarTools(),
+            // 包 09：raw 缺席 ⇒ 保留 base（mergeCompat 的逐字段覆盖语义）。
+            raw.supportsEagerToolInputStreaming() != null
+                ? raw.supportsEagerToolInputStreaming()
+                : base.supportsEagerToolInputStreaming(),
+            raw.supportsExplicitPromptCacheMode() != null
+                ? raw.supportsExplicitPromptCacheMode()
+                : base.supportsExplicitPromptCacheMode());
     }
 
     /** base ChatTemplateKwargValue map 上叠加 raw JSON 层（raw 键经 kwargValueOf 转换）。 */
@@ -284,7 +294,14 @@ final class ModelsJsonCompat {
                 ? override.supportsStrictTools() : base.supportsStrictTools(),
             override.supportsOpenAIGrammarTools() != null
                 ? override.supportsOpenAIGrammarTools()
-                : base.supportsOpenAIGrammarTools());
+                : base.supportsOpenAIGrammarTools(),
+            // 包 09：raw 层同样逐字段覆盖（标量语义）。
+            override.supportsEagerToolInputStreaming() != null
+                ? override.supportsEagerToolInputStreaming()
+                : base.supportsEagerToolInputStreaming(),
+            override.supportsExplicitPromptCacheMode() != null
+                ? override.supportsExplicitPromptCacheMode()
+                : base.supportsExplicitPromptCacheMode());
     }
 
     /** 两个 raw JSON map 的键级合并（{@code override} 同键覆盖）；皆 null ⇒ null。 */

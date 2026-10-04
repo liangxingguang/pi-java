@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import com.openai.core.JsonMissing;
@@ -42,6 +43,9 @@ import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.message.MessageTexts;
 import com.pijava.ai.model.ModelId;
+import com.pijava.ai.api.SimpleOptions;
+import com.pijava.ai.model.ModelCapability;
+import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.ai.thinking.ThinkingLevel;
 import com.pijava.ai.utils.SanitizeUnicode;
 import com.pijava.ai.utils.ShortHash;
@@ -148,20 +152,41 @@ final class ResponsesMessageConverter {
             builder.serviceTier(ResponseCreateParams.ServiceTier.of(ropts.serviceTier()));
         }
 
-        String effort = effortString(ropts.reasoningEffort());
-        if (effort != null || ropts.reasoningSummary() != null) {
-            var rb = Reasoning.builder();
-            if (effort != null) {
-                rb.effort(ReasoningEffort.of(effort));
+        // 包 09（B142）：pi `openai-responses.ts:343-362` 的整块。级别取 `:230` 的
+        // streamSimple 包装 —— 先夹取（未翻译的 SimpleStreamOptions.reasoning）；
+        // `extra["reasoningEffort"]` 是 pi `stream()` 直调语义的**显式覆盖通道**
+        // （生产路径不经它，见 ResponsesOptions 的 javadoc）。
+        var reasoningSupported = request.model().capabilities()
+            .contains(ModelCapability.THINKING);
+        var level = ropts.reasoningEffort() != null
+            ? Optional.of(ropts.reasoningEffort())
+            : SimpleOptions.clampedReasoningEffort(request.model(), request.reasoning());
+        if (reasoningSupported) {
+            if (level.isPresent() || ropts.reasoningSummary() != null) {
+                // pi `:346-347`：目录映射值优先，缺席回落级别自身的字面量（**不塌缩**）。
+                var mapped = request.model().thinkingLevelMap()
+                    .mapped(ModelThinkingLevel.of(level.orElse(new ThinkingLevel.Medium())));
+                var fallbackLiteral = level.map(ResponsesMessageConverter::wireLiteral)
+                    .orElse("medium");                       // pi `:348` 的 `: "medium"`
+                var rb = Reasoning.builder()
+                    .effort(ReasoningEffort.of(mapped.orElse(fallbackLiteral)))
+                    .summary(Reasoning.Summary.of(
+                        ropts.reasoningSummary() != null ? ropts.reasoningSummary() : "auto"));
+                builder.reasoning(rb.build());
+                // pi openai-responses.ts:352 —— 仅此分支请求加密推理内容（xAI :359 排除）。
+                builder.include(List.of(ResponseIncludable.REASONING_ENCRYPTED_CONTENT));
+            } else if (!"github-copilot".equals(request.model().id().provider())
+                    && !request.model().thinkingLevelMap()
+                        .explicitlyUnsupported(ModelThinkingLevel.off())) {
+                // pi `:355-359` 的 off 支：`thinkingLevelMap?.off ?? "none"`。
+                var offEffort = request.model().thinkingLevelMap()
+                    .mapped(ModelThinkingLevel.off()).orElse("none");
+                builder.reasoning(Reasoning.builder()
+                    .effort(ReasoningEffort.of(offEffort)).build());
             }
-            rb.summary(Reasoning.Summary.of(
-                ropts.reasoningSummary() != null ? ropts.reasoningSummary() : "auto"));
-            builder.reasoning(rb.build());
-            // pi openai-responses.ts:352 —— 仅此分支请求加密推理内容（xAI :359 排除）。
-            builder.include(List.of(ResponseIncludable.REASONING_ENCRYPTED_CONTENT));
         }
 
-        applyCacheRetention(builder, ropts);
+        applyCacheRetention(builder, ropts, compat);
         // 包 A-10：模型级采样参数（pi `openai-responses.ts:362-365`，**body 的最后一个变更**）。
         SamplingParamsWriter.applyToResponses(builder, request.model());
         // 包 B103：会话亲和头（pi openai-responses.ts:258-267）。
@@ -489,7 +514,13 @@ final class ResponsesMessageConverter {
 
     // ── Options ────────────────────────────────────────────────────────
 
-    private static String effortString(ThinkingLevel level) {
+    /**
+     * 级别 → 线格字面量，**一一对应**。pi 的 {@code reasoningEffort} 类型是
+     * {@code "minimal"|"low"|"medium"|"high"|"xhigh"|"max"}（{@code openai-responses.ts:104}），
+     * 逐字发。包 09（B142）：此前 {@code xhigh}/{@code max} 被塌成 {@code "high"}
+     * （包 H5 的权宜）—— 支持 xhigh 的模型上发的是**错值**，现按 pi 去掉。
+     */
+    private static String wireLiteral(ThinkingLevel level) {
         if (level == null) {
             return null;
         }
@@ -497,30 +528,51 @@ final class ResponsesMessageConverter {
             case ThinkingLevel.Minimal() -> "minimal";
             case ThinkingLevel.Low() -> "low";
             case ThinkingLevel.Medium() -> "medium";
-            // ⚠️ 包H5：pi 的 responses 车道走 `clampThinkingLevel` ＋ `thinkingLevelMap`，
-            // 不硬编码；这条平行路径**不在本包范围**（原 docs/46 §9），此处只为让新增的
-            // `Max` 有分支 —— 行为与改动前的 `XHigh` 一致（都落到 "high"）。
-            case ThinkingLevel.High(), ThinkingLevel.XHigh(), ThinkingLevel.Max() -> "high";
+            case ThinkingLevel.High() -> "high";
+            case ThinkingLevel.XHigh() -> "xhigh";
+            case ThinkingLevel.Max() -> "max";
         };
     }
 
+    /**
+     * pi {@code openai-responses.ts:315-317} 的三个键 ＋ {@code :83-99} 的两个工厂。
+     *
+     * <pre>{@code
+     * prompt_cache_key:       cacheRetention === "none" ? undefined : clampOpenAIPromptCacheKey(sessionId),
+     * prompt_cache_retention: long && supportsLongCacheRetention && !supportsExplicitPromptCacheMode ? "24h" : undefined,
+     * prompt_cache_options:   !supportsExplicitPromptCacheMode ? undefined
+     *                         : none  ? { mode: "explicit" }
+     *                         : long && supportsLongCacheRetention ? { ttl: "30m" }
+     *                         : undefined,
+     * }</pre>
+     *
+     * <p>包 09（B104）：此前只有 {@code prompt_cache_key} 与**无条件**的 {@code 24h}，
+     * 且 {@code prompt_cache_options} 整个键从不出现。</p>
+     */
     private static void applyCacheRetention(ResponseCreateParams.Builder builder,
-                                            ResponsesOptions ropts) {
-        switch (ropts.cacheRetention()) {
-            case NONE -> {
-                // prompt_cache_key/retention omitted — no implicit prompt caching.
+                                            ResponsesOptions ropts, ModelCompat compat) {
+        var retention = ropts.cacheRetention();
+        // pi :73 的 `?? true`：只有显式 false 才关掉 long 那一支。
+        var longOk = !Boolean.FALSE.equals(compat == null ? null : compat.supportsLongCacheRetention());
+        // pi :78 的 `?? false`：只有显式 true 才走显式模式。
+        var explicit = Boolean.TRUE.equals(compat == null ? null : compat.supportsExplicitPromptCacheMode());
+
+        if (retention != ResponsesOptions.CacheRetention.NONE && ropts.sessionId() != null) {
+            builder.promptCacheKey(clampCacheKey(ropts.sessionId()));
+        }
+        if (retention == ResponsesOptions.CacheRetention.LONG && longOk && !explicit) {
+            builder.promptCacheRetention(ResponseCreateParams.PromptCacheRetention.of("24h"));
+        }
+        if (explicit) {
+            var options = ResponseCreateParams.PromptCacheOptions.builder();
+            if (retention == ResponsesOptions.CacheRetention.NONE) {
+                options.mode(ResponseCreateParams.PromptCacheOptions.Mode.EXPLICIT);
+                builder.promptCacheOptions(options.build());
+            } else if (retention == ResponsesOptions.CacheRetention.LONG && longOk) {
+                options.ttl(ResponseCreateParams.PromptCacheOptions.Ttl._30M);
+                builder.promptCacheOptions(options.build());
             }
-            case LONG -> {
-                if (ropts.sessionId() != null) {
-                    builder.promptCacheKey(clampCacheKey(ropts.sessionId()));
-                }
-                builder.promptCacheRetention(ResponseCreateParams.PromptCacheRetention.of("24h"));
-            }
-            case SHORT -> {
-                if (ropts.sessionId() != null) {
-                    builder.promptCacheKey(clampCacheKey(ropts.sessionId()));
-                }
-            }
+            // SHORT ⇒ 两条支都不命中 ⇒ pi 返回 undefined ⇒ 整个键缺席。
         }
     }
 

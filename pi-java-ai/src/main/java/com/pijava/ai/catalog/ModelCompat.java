@@ -281,6 +281,19 @@ import java.util.Map;
  *        {@code anthropic-messages.ts:216}）：Anthropic 车道是否接受 strict tool。
  *        缺席 ≡ {@code false}（二态）；生成目录对全部 anthropic-messages 模型无条件
  *        写 true（{@code generate-models.ts:826-828}）。
+ * @param supportsEagerToolInputStreaming pi {@code compat.supportsEagerToolInputStreaming}
+ *        （包 09，{@code anthropic-messages.ts:209}/{@code types.ts:780-783}）：Anthropic 车道
+ *        是否为每个工具声明 {@code eager_input_streaming: true}。{@code null} ≙ 车道缺省
+ *        <b>{@code true}</b>；{@code false} ⇒ 不发该字段，改挂
+ *        {@code fine-grained-tool-streaming-2025-05-14} beta 头。生成目录只对
+ *        {@code github-copilot} 三条与 {@code fireworks} 全部模型写 false —— 本仓都不携带
+ *        ⇒ **内置目录不标注**，只有 {@code models.json} 能设。
+ * @param supportsExplicitPromptCacheMode pi {@code compat.supportsExplicitPromptCacheMode}
+ *        （包 09，{@code openai-responses.ts:78}）：Responses 车道是否走**显式** prompt cache
+ *        （发 {@code prompt_cache_options} 而不发 {@code prompt_cache_retention}）。
+ *        {@code null} ≙ 车道缺省 <b>{@code false}</b>；生成目录只对
+ *        {@code provider==="openai" && api==="openai-responses" && cost.cacheWrite > 0} 写 true
+ *        （{@code generate-models.ts:926-932}，GPT-5.6 家族）。
  */
 public record ModelCompat(boolean allowEmptySignature,
                           Boolean requiresReasoningContentOnAssistantMessages,
@@ -310,7 +323,9 @@ public record ModelCompat(boolean allowEmptySignature,
                           Boolean sendSessionAffinityHeaders,
                           SessionAffinityFormat sessionAffinityFormat,
                           boolean supportsStrictTools,
-                          Boolean supportsOpenAIGrammarTools) {
+                          Boolean supportsOpenAIGrammarTools,
+                          Boolean supportsEagerToolInputStreaming,
+                          Boolean supportsExplicitPromptCacheMode) {
 
     /** Compact constructor（包 A-09）：两个模板 map 的 {@code null} 归一成空表（pi 的
      *  {@code ?? {}}，{@code getCompat:1714-1715}）⇒ 二态、读点免判空；防御性复制
@@ -329,6 +344,54 @@ public record ModelCompat(boolean allowEmptySignature,
             ? null
             : java.util.Collections.unmodifiableMap(
                 new java.util.LinkedHashMap<>(openRouterRouting));
+    }
+
+    /**
+     * 二十九参便捷构造（包 09 加 {@code supportsEagerToolInputStreaming} /
+     * {@code supportsExplicitPromptCacheMode} 之前的**规范**构造）：两个新组件缺席
+     * （{@code null} ≙ 车道缺省 —— 前者 {@code true}、后者 {@code false}）。旧规范形态
+     * 降级为便捷构造 ⇒ 存量构造点**零改签**（与各包同一手法）。
+     */
+    public ModelCompat(boolean allowEmptySignature,
+                       Boolean requiresReasoningContentOnAssistantMessages,
+                       boolean supportsFinishReason,
+                       boolean forceAdaptiveThinking,
+                       Boolean supportsMidConvoSystemMessages,
+                       Boolean supportsMidConvoToolAdditions,
+                       Boolean supportsMidConvoToolChanges,
+                       Boolean supportsAdditionalTools,
+                       Boolean supportsToolSearch,
+                       boolean supportsTemperature,
+                       MaxTokensField maxTokensField,
+                       Boolean supportsStore,
+                       Boolean supportsDeveloperRole,
+                       Boolean supportsStrictMode,
+                       Boolean supportsLongCacheRetention,
+                       Boolean supportsCacheControlOnTools,
+                       ThinkingTokenBudgetField thinkingTokenBudgetField,
+                       Boolean supportsThinkingTokenBudget,
+                       Boolean supportsMaxOutputTokens,
+                       ThinkingFormat thinkingFormat,
+                       Map<String, ChatTemplateKwargValue> chatTemplateKwargs,
+                       Map<String, ChatTemplateKwargValue> chatTemplateArgs,
+                       Boolean supportsReasoningEffort,
+                       CacheControlFormat cacheControlFormat,
+                       Map<String, Object> openRouterRouting,
+                       Boolean sendSessionAffinityHeaders,
+                       SessionAffinityFormat sessionAffinityFormat,
+                       boolean supportsStrictTools,
+                       Boolean supportsOpenAIGrammarTools) {
+        this(allowEmptySignature, requiresReasoningContentOnAssistantMessages,
+             supportsFinishReason, forceAdaptiveThinking, supportsMidConvoSystemMessages,
+             supportsMidConvoToolAdditions, supportsMidConvoToolChanges,
+             supportsAdditionalTools, supportsToolSearch, supportsTemperature,
+             maxTokensField, supportsStore, supportsDeveloperRole, supportsStrictMode,
+             supportsLongCacheRetention, supportsCacheControlOnTools,
+             thinkingTokenBudgetField, supportsThinkingTokenBudget, supportsMaxOutputTokens,
+             thinkingFormat, chatTemplateKwargs, chatTemplateArgs, supportsReasoningEffort,
+             cacheControlFormat, openRouterRouting, sendSessionAffinityHeaders,
+             sessionAffinityFormat, supportsStrictTools, supportsOpenAIGrammarTools,
+             null, null);
     }
 
     /**

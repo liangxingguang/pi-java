@@ -94,7 +94,10 @@ class ResponsesReasoningIncludeWireTest {
 
     private static ModelInfo model() {
         var id = ModelId.of("openai", "gpt-5");
-        return new ModelInfo(id, "gpt-5", Set.of(ModelCapability.TEXT),
+        // 包 09（B142）：reasoning 块现在有 `model.reasoning` 门（pi :343）—— gpt-5 是
+        // reasoning 模型，夹具此前漏声明 THINKING。
+        return new ModelInfo(id, "gpt-5",
+            Set.of(ModelCapability.TEXT, ModelCapability.THINKING),
             200_000, 16_384, false, PricingInfo.UNKNOWN,
             ThinkingLevelMap.empty(), Map.of(), Map.of());
     }

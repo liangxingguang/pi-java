@@ -192,7 +192,9 @@ public final class CompatResolver {
             // openRouterRouting 只透传（pi 探测面 :1657 的 {} 无读者，原 docs/59 §4.8/R6）。
             c.cacheControlFormat() != null ? c.cacheControlFormat() : detectedCacheControlFormat,
             c.openRouterRouting(),
-            null, null, false, supportsOpenAIGrammarTools);
+            null, null, false, supportsOpenAIGrammarTools,
+            // 包 09：逐组件重建必须带上新字段（否则静默丢成缺省）。
+            c.supportsEagerToolInputStreaming(), c.supportsExplicitPromptCacheMode());
     }
 
     /**
@@ -227,7 +229,9 @@ public final class CompatResolver {
             partial.chatTemplateArgs(), partial.supportsReasoningEffort(),
             partial.cacheControlFormat(), partial.openRouterRouting(),
             partial.sendSessionAffinityHeaders(), partial.sessionAffinityFormat(),
-            base(model).supportsStrictTools(), null);
+            base(model).supportsStrictTools(), null,
+            // 包 09：同上 —— 两个新字段原样透传（本车道不定义它们）。
+            partial.supportsEagerToolInputStreaming(), partial.supportsExplicitPromptCacheMode());
     }
 
     /**
@@ -388,7 +392,11 @@ public final class CompatResolver {
             c.cacheControlFormat(),
             c.openRouterRouting(),
             // affinity 两字段与 strictTools 在 resolved 这一层保持既有缺省（null/null/false）。
-            null, null, false, supportsOpenAIGrammarTools);
+            null, null, false, supportsOpenAIGrammarTools,
+            // 包 09：两个新字段**无探测面**（pi 只在生成目录与 models.json 里标注）
+            // ⇒ 原样透传模型上的值，缺省由读点补（true / false）。
+            c.supportsEagerToolInputStreaming(),
+            c.supportsExplicitPromptCacheMode());
     }
 
     private static Boolean pick(Boolean explicit, Boolean detected) {

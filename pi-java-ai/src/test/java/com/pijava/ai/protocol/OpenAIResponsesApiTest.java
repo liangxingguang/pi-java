@@ -19,10 +19,14 @@ import com.sun.net.httpserver.HttpServer;
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.CompatResolver;
+import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
+import com.pijava.ai.model.PricingInfo;
 import com.pijava.ai.stream.StreamEvent;
+import com.pijava.ai.thinking.ThinkingLevelMap;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -336,8 +340,14 @@ class OpenAIResponsesApiTest {
 
     @Test
     void buildParamsSetsReasoningEffortFromExtra() throws Exception {
+        // 包 09（B142）：reasoning 块现在有 `model.reasoning` 门（pi :343）⇒ 夹具必须是
+        // **reasoning 模型**，否则整块不发（`ModelInfo.minimal` 不带 THINKING）。
+        var reasoningModel = new ModelInfo(ModelId.of("openai", "gpt-5"), "gpt-5",
+            java.util.Set.of(ModelCapability.TEXT, ModelCapability.THINKING),
+            200_000, 16_384, false, PricingInfo.UNKNOWN, ThinkingLevelMap.empty(),
+            java.util.Map.of(), java.util.Map.of(), com.pijava.ai.catalog.ModelCompat.NONE);
         var request = new StreamRequest(
-            ModelId.of("openai", "gpt-4o"),
+            reasoningModel,
             null,
             List.of(new Message.UserMessage(
                 List.of(new ContentBlock.TextContent("hi")))),

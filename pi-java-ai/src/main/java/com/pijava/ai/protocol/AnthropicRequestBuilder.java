@@ -45,6 +45,13 @@ final class AnthropicRequestBuilder {
             "mid-conversation-tool-changes-2026-07-01";
 
     /**
+     * 包 09（B90）：pi {@code anthropic-messages.ts:181} —— 不支持
+     * {@code eager_input_streaming} 的端点改挂的 beta 头。
+     */
+    private static final String FINE_GRAINED_TOOL_STREAMING_BETA =
+            "fine-grained-tool-streaming-2025-05-14";
+
+    /**
      * pi {@code anthropic-messages.ts:195-200} 的 {@code DEFERRED_TOOL_PLACEHOLDER}。
      *
      * <p>只要请求里**任何**工具有 {@code defer_loading}，Anthropic 就会加隐藏的提示脚手架；
@@ -68,6 +75,10 @@ final class AnthropicRequestBuilder {
         // pi `:1114`：工具那一处多一道门。⚠️ 这道门**只**管工具（`system` 与消息照挂）。
         var toolCacheControl = Boolean.TRUE.equals(compat.supportsCacheControlOnTools())
             ? cacheControl : null;
+        // 包 09（B90）：pi `:209` 的缺省是 **true** —— 只有显式 false 才走
+        // 「不发 `eager_input_streaming` ＋ 改挂细粒度 beta 头」那一支。
+        var eagerToolInputStreaming =
+            !Boolean.FALSE.equals(compat.supportsEagerToolInputStreaming());
         var transcript = Transcripts.resolveTranscript(request.transcript(), compat);
         var messages = TransformMessages.apply(
                 transcript.messages(), request.modelId(), "anthropic-messages", request.model(),
@@ -141,13 +152,18 @@ final class AnthropicRequestBuilder {
         if (nativeToolChanges) {
             betas.add(MID_CONVERSATION_TOOL_CHANGES_BETA);
         }
+        // 包 09（B90）：pi `:1450-1454` 的两个合取项 —— 工具表非空 **且** 端点不支持 eager。
+        if (!eagerToolInputStreaming
+                && !Transcripts.getCurrentTools(transcript.messages()).isEmpty()) {
+            betas.add(FINE_GRAINED_TOOL_STREAMING_BETA);
+        }
         if (!betas.isEmpty()) {
             builder.putAdditionalBodyProperty("betas", JsonValue.from(betas));
         }
 
         addMessages(builder, conversation, allowEmptySignature, nativeToolChanges, cacheControl);
         addTools(builder, transcript, initialTools, nativeToolChanges, toolCacheControl,
-            compat.supportsStrictTools());
+            compat.supportsStrictTools(), eagerToolInputStreaming);
 
         // pi :1104-1110 —— temperature 是**四重合取**：{@code temperature !== undefined} ＋
         // {@code !thinkingEnabled} ＋ {@code supportsMidConvoEffort !== true} ＋
@@ -178,20 +194,23 @@ final class AnthropicRequestBuilder {
                                  com.pijava.ai.api.TranscriptContext transcript,
                                  List<ToolDefinition> initialTools, boolean nativeToolChanges,
                                  CacheControlEphemeral toolCacheControl,
-                                 boolean supportsStrictTools) {
+                                 boolean supportsStrictTools,
+                                 boolean eagerToolInputStreaming) {
         if (!nativeToolChanges) {
             var tools = Transcripts.getCurrentTools(transcript.messages());
             for (int i = 0; i < tools.size(); i++) {
                 builder.addTool(ToolUnion.ofTool(
                     toAnthropicTool(tools.get(i), false,
-                        atLast(i, tools.size(), toolCacheControl), supportsStrictTools)));
+                        atLast(i, tools.size(), toolCacheControl), supportsStrictTools,
+                        eagerToolInputStreaming)));
             }
             return;
         }
         for (int i = 0; i < initialTools.size(); i++) {
             builder.addTool(ToolUnion.ofTool(
                 toAnthropicTool(initialTools.get(i), false,
-                    atLast(i, initialTools.size(), toolCacheControl), supportsStrictTools)));
+                    atLast(i, initialTools.size(), toolCacheControl), supportsStrictTools,
+                    eagerToolInputStreaming)));
         }
         builder.addTool(ToolUnion.ofTool(deferredToolPlaceholder()));
         var initialNames = new HashSet<String>();
@@ -202,7 +221,8 @@ final class AnthropicRequestBuilder {
             if (initialNames.contains(td.name())) {
                 continue;
             }
-            builder.addTool(ToolUnion.ofTool(toAnthropicTool(td, true, null, supportsStrictTools)));
+            builder.addTool(ToolUnion.ofTool(
+                toAnthropicTool(td, true, null, supportsStrictTools, eagerToolInputStreaming)));
         }
     }
 
@@ -219,7 +239,8 @@ final class AnthropicRequestBuilder {
      */
     private static Tool toAnthropicTool(ToolDefinition td, boolean deferLoading,
                                         CacheControlEphemeral cacheControl,
-                                        boolean supportsStrictTools) {
+                                        boolean supportsStrictTools,
+                                        boolean eagerToolInputStreaming) {
         var strict = Boolean.TRUE.equals(
             StrictSampling.resolveStrict(td, supportsStrictTools));
         var schema = strict
@@ -235,6 +256,11 @@ final class AnthropicRequestBuilder {
         }
         if (deferLoading) {
             toolBuilder.deferLoading(true);
+        }
+        // 包 09（B90）：pi `:1486` 的 `...(cond ? {eager_input_streaming: true} : {})` ——
+        // **缺席**而非 false（SDK 的 setter 只在 true 时调）。
+        if (eagerToolInputStreaming) {
+            toolBuilder.eagerInputStreaming(true);
         }
         if (cacheControl != null) {
             toolBuilder.cacheControl(cacheControl);
