@@ -7,6 +7,8 @@ import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pijava.coding.agent.cli.Args;
@@ -34,6 +36,13 @@ import org.slf4j.LoggerFactory;
  *
  * <p>前端 {@code getWsUrl()} 先取 {@code /api/config} 得 {@code wsPort} 再连 WS
  * （静态与 WS 不同端口，避免引入重 HTTP/WS 合并服务器依赖）。</p>
+ *
+ * <p><b>{@link #start} 的契约：返回即已可连。</b>Java-WebSocket 1.5.3 的
+ * {@code WebSocketServer.start()} 只起 selector 线程就返回（字节码 40–51），真正的
+ * {@code doBind()} 在那个线程里跑，且绑定失败走 {@code run()} 的 catch →
+ * {@code handleFatal} **只回调 {@code onError}、不冒泡**。不设闩的话 {@code start()}
+ * 会返回一个「看着健康、实际还没有监听器」的句柄 —— 实测第 4/20 次就会连接被拒
+ * （{@code PiWebServerStartupTest}）。</p>
  */
 public final class PiWebServer {
 
@@ -42,6 +51,9 @@ public final class PiWebServer {
 
     /** 默认监听端口。 */
     public static final int DEFAULT_PORT = 8787;
+
+    /** 等 WS selector 线程完成绑定的上限；超时即视为启动失败。 */
+    private static final int WS_START_TIMEOUT_SECONDS = 10;
 
     private PiWebServer() {}
 
@@ -111,6 +123,11 @@ public final class PiWebServer {
             LOG.info("pi-java web UI gateway auth enabled (token: {})", GatewayToken.DEFAULT_FILE);
         }
 
+        // 绑定成功由 onStart 报信（Java-WebSocket 在 bind+register 之后才调它）；
+        // 启动期的致命错误（端口被占等）只走 onError，用它提前唤醒等待者。
+        var wsReady = new CountDownLatch(1);
+        var startupFailure = new AtomicReference<Throwable>();
+
         var ws = new WebSocketServer(new InetSocketAddress(wsPort)) {
             @Override
             public void onOpen(WebSocket conn, ClientHandshake handshake) {
@@ -162,16 +179,49 @@ public final class PiWebServer {
 
             @Override
             public void onError(WebSocket conn, Exception ex) {
+                // 启动期（onStart 尚未发生）的错误＝绑定失败，只有这一条路能通知到 start()。
+                if (wsReady.getCount() > 0 && startupFailure.compareAndSet(null, ex)) {
+                    wsReady.countDown();
+                }
                 LOG.warn("web socket error: {}", ex.getMessage());
             }
 
             @Override
             public void onStart() {
                 LOG.info("pi-java web UI websocket listening at ws://localhost:{}/api/ws", wsPort);
+                wsReady.countDown();
             }
         };
         ws.start();
+        boolean started;
+        try {
+            started = wsReady.await(WS_START_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("interrupted while waiting for the web socket listener", e);
+        }
+        if (!started || startupFailure.get() != null) {
+            stopQuietly(ws);
+            http.stop(0);
+            Throwable cause = startupFailure.get();
+            throw new IOException("web socket listener failed to start on port " + wsPort
+                + (cause == null ? "" : ": " + cause.getMessage()), cause);
+        }
         return new ServerHandle(ws, http);
+    }
+
+    /**
+     * 启动失败路径上的收尾：selector 线程可能压根没跑到绑定，{@code stop()} 会抛
+     * {@link IllegalStateException} —— 没有可停的东西，忽略即可。
+     */
+    private static void stopQuietly(WebSocketServer ws) {
+        try {
+            ws.stop(0);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (RuntimeException e) {
+            LOG.debug("web socket server was never started", e);
+        }
     }
 
     // ── HTTP 静态托管 ────────────────────────────────────────────────────
