@@ -13,6 +13,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.pijava.ai.api.ApiOptions;
+import com.pijava.ai.api.SimpleOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.TranscriptContext;
 import com.pijava.ai.api.Transcripts;
@@ -24,6 +25,7 @@ import com.pijava.ai.http.PiHttpClient;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.message.MessageTexts;
+import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
 import com.pijava.ai.stream.ToolCallBuilder;
@@ -299,6 +301,18 @@ public final class MistralConversationsApi extends AbstractChatApi {
         }
         if (request.temperature() >= 0) {
             body.put("temperature", request.temperature());
+        }
+
+        // 包 B155：pi `mistral-conversations.ts:200-208` 的 streamSimple → `:525-526` 的写点。
+        // 两处都是**真值判断** ⇒ 空串/缺席不发；两个 helper 互斥。
+        var clamped = SimpleOptions.clampedReasoningEffort(request.model(), request.reasoning());
+        var shouldUseReasoning = request.model().capabilities().contains(ModelCapability.THINKING)
+            && clamped.isPresent();
+        if (shouldUseReasoning && MistralThinking.usesPromptModeReasoning(request.model())) {
+            body.put("promptMode", "reasoning");
+        }
+        if (shouldUseReasoning && MistralThinking.usesReasoningEffort(request.model())) {
+            body.put("reasoningEffort", MistralThinking.effort(request.model(), clamped.get()));
         }
 
         return MAPPER.writeValueAsString(body);

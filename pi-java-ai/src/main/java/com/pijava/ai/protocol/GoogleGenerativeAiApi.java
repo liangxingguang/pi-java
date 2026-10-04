@@ -15,7 +15,10 @@ import com.google.genai.types.GenerateContentResponse;
 import com.google.genai.types.HttpOptions;
 import com.google.genai.types.HttpRetryOptions;
 import com.google.genai.types.Part;
+import com.google.genai.types.ThinkingConfig;
 import com.google.genai.types.Tool;
+import com.pijava.ai.api.SimpleOptions;
+import com.pijava.ai.model.ModelCapability;
 
 import com.pijava.ai.Usage;
 import com.pijava.ai.api.ApiOptions;
@@ -364,6 +367,28 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
                                 com.google.genai.types.FunctionCallingConfigMode.Known.VALIDATED))
                             .build())
                     .build());
+            }
+        }
+
+        // 包 B155（B155）：pi `google-generative-ai.ts:317-346` 的 streamSimple 分支 →
+        // `:401-409` 的写点。⚠️ 关思考支与开思考支**不是两个判据**：pi `:317` 在
+        // `!options?.reasoning` 时、`:322-325` 在夹成 off 时**都**发 `{enabled:false}`
+        // —— 而 `clampedReasoningEffort` 对这两种情形都返回空 ⇒ 一个 else 就够。
+        if (request.model().capabilities().contains(ModelCapability.THINKING)) {
+            var clamped = SimpleOptions.clampedReasoningEffort(
+                request.model(), request.reasoning());
+            if (clamped.isPresent()) {
+                var level = GoogleThinking.resolve(request.model(), clamped.get());
+                var tc = ThinkingConfig.builder().includeThoughts(true);   // pi :403
+                if (GoogleThinking.usesThinkingLevel(request.model())) {
+                    tc.thinkingLevel(level.apiName());
+                } else {
+                    tc.thinkingBudget(GoogleThinking.budget(request.model(), level));
+                }
+                builder.thinkingConfig(tc.build());
+            } else {
+                GoogleThinking.disabledConfig(request.model())
+                    .ifPresent(builder::thinkingConfig);
             }
         }
 
