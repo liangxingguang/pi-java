@@ -34,7 +34,8 @@ class RecordObservabilityCodecTest {
 
     private Entry encodeThenParseEntry(Entry entry) {
         String line = JsonlCodec.encodeMutation(new SessionMutation.Entry(null, entry));
-        var result = JsonlCodec.parseMutation(line);
+        // pi 的行不带 seq ⇒ 单行解析直接把该条目的 seq 当行号喂回去（docs/12）。
+        var result = JsonlCodec.parseMutation(line, entry.seq());
         assertThat(result.ok()).as("parse should succeed: %s", result.error()).isTrue();
         return ((SessionMutation.Entry) result.value()).entry();
     }

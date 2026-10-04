@@ -66,7 +66,7 @@ public final class JsonlSessionStorage implements SessionStorage<JsonlSessionMet
 
         for (int index = 1; index < physicalLines.length; index++) {
             String line = physicalLines[index];
-            var mutationResult = JsonlCodec.parseMutation(line);
+            var mutationResult = JsonlCodec.parseMutation(line, index);
             if (!mutationResult.ok()) {
                 boolean isTornTail = index == physicalLines.length - 1
                     && "syntax".equals(mutationResult.error().kind());
@@ -96,8 +96,8 @@ public final class JsonlSessionStorage implements SessionStorage<JsonlSessionMet
         if (!content.endsWith("\n")) {
             fs.appendFile(path, "\n");
         }
-        if (storage.metadata.sourceFormat() == 3) {
-            storage.migrateV3ToV4(path);
+        if (storage.metadata.legacyFormat()) {
+            storage.migrateLegacyToPiV3(path);
         }
         return storage;
     }
@@ -287,11 +287,16 @@ public final class JsonlSessionStorage implements SessionStorage<JsonlSessionMet
         state.applyMutation(mutation);
     }
 
-    private void migrateV3ToV4(Path path) {
-        // Lazy migration: rewrite the header as v4, preserving the legacy
-        // parent path marker; mutation lines are already v4-shaped.
-        var header = new JsonlV4Header("header", 4, metadata.id(),
-            metadata.createdAt().toEpochMilli(), metadata.cwd(),
+    /**
+     * 惰性迁移：把本仓**旧头**（{@code kind:"header"}）重写成 **pi v3 线**（{@code type:"session"}）。
+     *
+     * <p>只需重写头 —— {@link JsonlCodec#encodeMutation} 现在按 pi 的形状出线
+     * （{@code docs/12 §6 D4}）。旧行里那些 pi 无对应的族（record/lane/fact）由包 12 的后续步
+     * 收编，此处照原样重写。</p>
+     */
+    private void migrateLegacyToPiV3(Path path) {
+        var header = new JsonlV4Header(PiV3Wire.SESSION_KIND, PiV3Wire.SESSION_VERSION,
+            metadata.id(), metadata.createdAt().toEpochMilli(), metadata.cwd(),
             metadata.parentSessionId(), metadata.legacyParentSessionPath(),
             metadata.metadata());
         String tempPath = path + ".tmp";
@@ -321,7 +326,8 @@ public final class JsonlSessionStorage implements SessionStorage<JsonlSessionMet
             header.cwd(),
             path,
             modifiedAtMs,
-            header.version() == 4 ? 4 : 3,
+            // 判别键（不是 version）—— 本仓旧文件也写 version:3（docs/12 §6 D1）。
+            !PiV3Wire.SESSION_KIND.equals(header.kind()),
             header.legacyParentSessionPath(),
             header.metadata());
     }

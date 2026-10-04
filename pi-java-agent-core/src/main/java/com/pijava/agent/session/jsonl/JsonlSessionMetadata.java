@@ -15,8 +15,11 @@ import com.pijava.agent.session.SessionMetadata;
  * @param cwd                      the session working directory
  * @param path                     the JSONL file path
  * @param modifiedAtMs             file modification time (epoch ms)
- * @param sourceFormat             {@code 3} for legacy files, {@code 4} current
- * @param legacyParentSessionPath  v3 parent path when it cannot resolve to an id
+ * @param legacyFormat             {@code true} when the file carries this repo's **old** header
+ *                                 ({@code kind:"header"}, version 3 or 4) and therefore needs
+ *                                 migrating to pi's v3 wire; {@code false} for the current
+ *                                 pi v3 wire ({@code type:"session"}, {@code docs/12})
+ * @param legacyParentSessionPath  parent path when it cannot resolve to an id
  * @param metadata                 application metadata, may be null
  */
 public record JsonlSessionMetadata(
@@ -26,7 +29,7 @@ public record JsonlSessionMetadata(
     String cwd,
     Path path,
     long modifiedAtMs,
-    int sourceFormat,
+    boolean legacyFormat,
     String legacyParentSessionPath,
     Map<String, Object> metadata
 ) implements SessionMetadata {

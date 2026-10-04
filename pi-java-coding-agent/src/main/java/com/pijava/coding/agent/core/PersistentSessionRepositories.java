@@ -322,7 +322,8 @@ final class PersistentSessionRepositories {
                 "Import file has an invalid header");
         }
         for (int i = 1; i < lines.size(); i++) {
-            var parsed = JsonlCodec.parseMutation(lines.get(i));
+            // pi 的行不带 seq（没有 kind 判别）⇒ 行号就是它的 seq（docs/12）。
+            var parsed = JsonlCodec.parseMutation(lines.get(i), i);
             if (!parsed.ok()) {
                 throw new SessionError(SessionErrorCode.INVALID_PAYLOAD,
                     "Import file line " + (i + 1) + ": " + parsed.error().getMessage());

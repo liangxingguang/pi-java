@@ -51,7 +51,8 @@ class StopReasonMigrationTest {
     }
 
     private static Entry parseEntry(String line) {
-        var result = JsonlCodec.parseMutation(line);
+        // 本夹具造的都是**文件的第 1 条** mutation ⇒ 行号 1（pi 的行没有 seq，见 docs/12）。
+        var result = JsonlCodec.parseMutation(line, 1L);
         assertThat(result.ok()).as("parse should succeed: %s", result.error()).isTrue();
         return ((SessionMutation.Entry) result.value()).entry();
     }

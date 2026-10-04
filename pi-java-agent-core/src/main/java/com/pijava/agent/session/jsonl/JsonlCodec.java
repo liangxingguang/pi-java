@@ -79,58 +79,57 @@ public final class JsonlCodec {
 
     // ── Header ──────────────────────────────────────────────
 
-    /** Encode a header line (with trailing newline). */
+    /** 本仓旧头的判别值（{@code kind:"header"}）—— 需迁移到 pi v3 线（{@code docs/12}）。 */
+    public static final String LEGACY_HEADER_KIND = "header";
+
+    /** Encode a header line (with trailing newline) in **pi's v3 wire shape**. */
     public static String encodeHeader(JsonlV4Header header) {
-        var node = SessionJson.mapper().createObjectNode();
-        node.put("kind", "header");
-        node.put("version", header.version());
-        node.put("id", header.id());
-        node.put("createdAt", header.createdAtMs());
-        node.put("cwd", header.cwd());
-        if (header.parentSessionId() != null) {
-            node.put("parentSessionId", header.parentSessionId());
-        }
-        if (header.legacyParentSessionPath() != null) {
-            node.put("legacyParentSessionPath", header.legacyParentSessionPath());
-        }
-        if (header.metadata() != null) {
-            node.set("metadata", SessionJson.mapper().valueToTree(header.metadata()));
-        }
-        try {
-            return SessionJson.mapper().writeValueAsString(node) + "\n";
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            throw new IllegalStateException("Failed to encode header", e);
-        }
+        return PiV3Wire.encodeHeader(header);
     }
 
-    /** Parse a header line. */
+    /**
+     * Parse a header line —— **两种判别键**：
+     * <ul>
+     *   <li>{@code type:"session"} ⇒ pi v3 线（当前格式），转 {@link PiV3Wire#parseHeader}；</li>
+     *   <li>{@code kind:"header"} ⇒ 本仓旧头，由 {@link #parseLegacyHeader} 读。</li>
+     * </ul>
+     *
+     * <p>⚠️ <b>不能用 {@code version} 区分</b>：本仓旧文件也写 {@code version:3}
+     * （见 {@code JsonlSessionMetadata} 的格式判别），数字同、所指不同 ⇒ 只能靠键名。
+     * 这也正是 {@link PiV3Wire#SESSION_KIND} 被复用为内部判别键的原因。</p>
+     */
     public static ParseResult<JsonlV4Header> parseHeader(String line) {
         try {
             var node = parseObject(line);
-            if (!"header".equals(stringValue(node, "kind"))) {
-                return ParseResult.err(DecodeError.schema("is not a header"));
-            }
-            int version = requireInt(node, "version");
-            if (version != 3 && version != 4) {
-                return ParseResult.err(DecodeError.schema("has unsupported session version"));
-            }
-            String parentSessionId = optionalString(node, "parentSessionId");
-            String legacyParentSessionPath = optionalString(node, "legacyParentSessionPath");
-            if (parentSessionId != null && legacyParentSessionPath != null) {
-                return ParseResult.err(DecodeError.schema(
-                    "has both parentSessionId and legacyParentSessionPath"));
-            }
-            Map<String, Object> metadata = optionalObject(node, "metadata");
-            var header = new JsonlV4Header(
-                "header", version, requireString(node, "id"),
-                requireLong(node, "createdAt"), requireString(node, "cwd"),
-                parentSessionId, legacyParentSessionPath, metadata);
-            return ParseResult.ok(header);
+            return node.has("type") ? PiV3Wire.parseHeader(node) : parseLegacyHeader(node);
         } catch (DecodeError e) {
             return ParseResult.err(e);
         } catch (Exception e) {
             return ParseResult.err(DecodeError.syntax("is not valid JSON", e));
         }
+    }
+
+    /** 读本仓旧头（{@code kind:"header"}，{@code version} 3 或 4）。 */
+    private static ParseResult<JsonlV4Header> parseLegacyHeader(JsonNode node) {
+        if (!LEGACY_HEADER_KIND.equals(stringValue(node, "kind"))) {
+            return ParseResult.err(DecodeError.schema("is not a header"));
+        }
+        int version = requireInt(node, "version");
+        if (version != 3 && version != 4) {
+            return ParseResult.err(DecodeError.schema("has unsupported session version"));
+        }
+        String parentSessionId = optionalString(node, "parentSessionId");
+        String legacyParentSessionPath = optionalString(node, "legacyParentSessionPath");
+        if (parentSessionId != null && legacyParentSessionPath != null) {
+            return ParseResult.err(DecodeError.schema(
+                "has both parentSessionId and legacyParentSessionPath"));
+        }
+        Map<String, Object> metadata = optionalObject(node, "metadata");
+        var header = new JsonlV4Header(
+            LEGACY_HEADER_KIND, version, requireString(node, "id"),
+            requireLong(node, "createdAt"), requireString(node, "cwd"),
+            parentSessionId, legacyParentSessionPath, metadata);
+        return ParseResult.ok(header);
     }
 
     // ── Mutations ───────────────────────────────────────────
@@ -140,18 +139,7 @@ public final class JsonlCodec {
         var mapper = SessionJson.mapper();
         var node = mapper.createObjectNode();
         switch (mutation) {
-            case SessionMutation.Entry m -> {
-                node.put("kind", "entry");
-                if (m.lane() != null) {
-                    node.put("lane", m.lane());
-                }
-                node.setAll((ObjectNode) mapper.valueToTree(m.entry()));
-                // pi's codec requires the parentId key (null for root entries);
-                // NON_NULL would otherwise omit it, breaking byte-level compat.
-                if (!node.has("parentId")) {
-                    node.putNull("parentId");
-                }
-            }
+            case SessionMutation.Entry m -> PiV3Wire.encodeEntryLine(node, m);
             case SessionMutation.Record m -> {
                 node.put("kind", "record");
                 node.setAll((ObjectNode) mapper.valueToTree(m.record()));
@@ -191,10 +179,34 @@ public final class JsonlCodec {
         }
     }
 
-    /** Parse a mutation line. */
+    /**
+     * Parse a legacy mutation line（{@code kind} 判别）。pi 形状的行需要
+     * {@link #parseMutation(String, long)} —— 它有 {@code seq} 以外的身份来源（行号）。
+     */
     public static ParseResult<SessionMutation> parseMutation(String line) {
+        return parseMutation(line, -1);
+    }
+
+    /**
+     * Parse a mutation line —— **两种形状**（{@code docs/12}）：
+     * <ul>
+     *   <li>**无 {@code kind}** ⇒ pi 的行形状（判别键 {@code type}）。pi 的 {@code SessionEntryBase}
+     *       没有 {@code seq}（{@code session-manager.ts:57-63}）⇒ 由调用方给**行号**
+     *       （{@code assignedSeq}）；本仓的 {@code SessionState} 拿 seq 做「严格连续」校验，
+     *       而文件里行的次序本身就是那个校验。</li>
+     *   <li>**有 {@code kind}** ⇒ 本仓旧行（entry/record/lane/fact），{@code seq} 从行内读。</li>
+     * </ul>
+     */
+    public static ParseResult<SessionMutation> parseMutation(String line, long assignedSeq) {
         try {
             var node = parseObject(line);
+            if (!node.has("kind")) {
+                if (assignedSeq < 1) {
+                    throw DecodeError.schema("pi-shaped line needs an assigned seq");
+                }
+                return ParseResult.ok(parseEntryMutation(node, assignedSeq,
+                    PiV3Wire.parseTimestamp(node, "timestamp")));
+            }
             long seq = requireLong(node, "seq");
             if (seq <= 0) {
                 throw DecodeError.schema("has invalid seq");
@@ -215,6 +227,14 @@ public final class JsonlCodec {
     }
 
     private static SessionMutation parseEntryMutation(JsonNode node, long seq) {
+        return parseEntryMutation(node, seq, instant(node, "timestamp"));
+    }
+
+    /**
+     * 读一条 entry。{@code timestamp} 由调用方给 —— 两种线形状的**时间戳型不同**：
+     * 旧行是 epoch 毫秒、pi 的行是 ISO 串（{@code PiV3Wire.parseTimestamp}）。
+     */
+    private static SessionMutation parseEntryMutation(JsonNode node, long seq, Instant timestamp) {
         String lane = node.has("lane") ? requireString(node, "lane") : null;
         String id = requireString(node, "id");
         String type = requireString(node, "type");
@@ -225,7 +245,6 @@ public final class JsonlCodec {
             requireString(node, "customType");
         }
         String parentId = nullableString(node, "parentId");
-        Instant timestamp = instant(node, "timestamp");
         Entry entry = EntryJsonCodec.decode(node, id, seq, parentId, timestamp);
         return lane == null
             ? new SessionMutation.Entry(null, entry)

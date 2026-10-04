@@ -77,7 +77,8 @@ class SessionImportExportTest {
             var lines = Files.readAllLines(exported);
             assertThat(JsonlCodec.parseHeader(lines.getFirst()).ok()).isTrue();
             for (int i = 1; i < lines.size(); i++) {
-                assertThat(JsonlCodec.parseMutation(lines.get(i)).ok())
+                // pi 形状的行不带 seq ⇒ 行号即 seq（docs/12）。
+                assertThat(JsonlCodec.parseMutation(lines.get(i), i).ok())
                     .as("line %d parses", i + 1).isTrue();
             }
 

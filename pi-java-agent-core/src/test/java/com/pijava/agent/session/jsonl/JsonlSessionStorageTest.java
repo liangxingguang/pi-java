@@ -122,7 +122,7 @@ class JsonlSessionStorageTest {
     }
 
     @Test
-    void v3FileIsMarkedSourceFormat3() throws Exception {
+    void legacyHeaderIsMarkedAndMigratedToPiV3() throws Exception {
         Path dir = Files.createTempDirectory("pi-jsonl-v3");
         var repo = JsonlSessionRepository.over(dir);
         var session = repo.create(new JsonlSessionCreateOptions(null, "cwd", null, null));
@@ -138,7 +138,7 @@ class JsonlSessionStorageTest {
         Files.writeString(file, v3Header + "\n" + body);
 
         var storage = JsonlSessionStorage.load(FS, file);
-        assertThat(storage.getMetadata().sourceFormat()).isEqualTo(3);
+        assertThat(storage.getMetadata().legacyFormat()).isTrue();
         assertThat(storage.getMetadata().legacyParentSessionPath())
             .isEqualTo("/old/session.jsonl");
     }
@@ -169,7 +169,7 @@ class JsonlSessionStorageTest {
     }
 
     @Test
-    void importJsonlCopiesFileAndMarksV3() throws Exception {
+    void importJsonlCopiesLegacyFileAndMigratesIt() throws Exception {
         Path dir = Files.createTempDirectory("pi-jsonl-import");
         var repo = JsonlSessionRepository.over(dir);
         // Build a v3 file with a legacy parent path.
@@ -184,7 +184,7 @@ class JsonlSessionStorageTest {
         Session<?> imported = repo.importJsonl(source, "cwd");
         var metadata = (JsonlSessionMetadata) imported.getMetadata();
         assertThat(metadata.id()).isEqualTo("imp-1");
-        assertThat(metadata.sourceFormat()).isEqualTo(3);
+        assertThat(metadata.legacyFormat()).isTrue();
         assertThat(metadata.legacyParentSessionPath()).isEqualTo("/old/s.jsonl");
         assertThat(imported.findEntries(com.pijava.agent.session.EntryQuery.all()))
             .extracting(Entry::id).containsExactly("m1");
