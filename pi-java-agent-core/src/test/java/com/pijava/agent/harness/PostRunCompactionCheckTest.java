@@ -207,18 +207,54 @@ class PostRunCompactionCheckTest {
     // ═══════════════════════════════════════════════════════════
 
     @Test
-    void overflowErrorLatchesDropsCopyTailAndRetries() {
+    void overflowErrorLatchesPersistsOmissionEditsAndRetries() {
         var lane = overflowLane();
         var r = rig(lane, SETTINGS, MODEL);
-        boolean again = r.check().checkAfterRun("default", lane, overflowError());
+        // 生产形状：post-run 收到的是 transcript 中同一实例（PiLaneSink.append 与
+        // lastAssistant 同源）—— 这样身份定位才能命中、edit 才会落。
+        var failed = (Message.AssistantMessage)
+            ((Entry.Message) lane.transcript.get(1)).message();
+        boolean again = r.check().checkAfterRun("default", lane, failed);
 
         assertThat(again).isTrue();                       // willRetry ⇒ 驱动 continue
         assertThat(lane.overflowRecoveryAttempted).isTrue(); // R2 置闩
-        assertThat(lane.messages)
-            .noneMatch(m -> m instanceof Message.AssistantMessage); // 副本摘掉 error 助手（:2214-2218）
         assertThat(compacted(lane)).isTrue();             // 日志已压
         assertThat(r.obs().starts).containsExactly("overflow");
         assertThat(r.obs().ends).containsExactly("overflow|result|false|true|null");
+    }
+
+    @Test
+    void overflowRecoveryAppendsANativeOmissionEditBeforeCompaction() {
+        // pi _omitRecoveryAttempt：edit 在压缩**之前**落、指向失败助手；
+        // _refreshFinalizedContext 让副本按剔除后的投影重建。
+        var lane = overflowLane();
+        var failed = (Message.AssistantMessage)
+            ((Entry.Message) lane.transcript.get(1)).message();
+        RecoveryOmissions.persist(lane, failed);
+
+        var edits = lane.transcript.stream()
+            .filter(Entry.ContextEdit.class::isInstance)
+            .map(Entry.ContextEdit.class::cast)
+            .toList();
+        assertThat(edits).hasSize(1);
+        assertThat(edits.get(0).targetId())
+            .as("edit 指向失败助手条目").isEqualTo("e2");
+        assertThat(edits.get(0).replacement())
+            .as("replacement:null ⇒ 剔除").isNull();
+        assertThat(lane.messages)
+            .as("重建后 error 助手不进副本（投影过滤＋edit 双保险）")
+            .noneMatch(Message.AssistantMessage.class::isInstance);
+    }
+
+    @Test
+    void overflowRecoverySkipsAnAssistantThatIsNotInTranscriptOrCopy() {
+        // 夹具旧形状：传入一个全新实例（既不在 transcript 也不在工作副本）
+        // ⇒ pi 的定位返回 undefined、无可省略物 ⇒ 静默跳过，不抛。
+        var lane = overflowLane();
+        RecoveryOmissions.persist(lane, overflowError());
+
+        assertThat(lane.transcript)
+            .as("无 edit 落盘").noneMatch(Entry.ContextEdit.class::isInstance);
     }
 
     @Test

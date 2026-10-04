@@ -5,8 +5,10 @@ import java.nio.file.Path;
 
 import com.pijava.agent.entry.CustomMessageContent;
 import com.pijava.agent.entry.Entry;
+import com.pijava.agent.entry.ProvisionedEntry;
 import com.pijava.agent.session.LogItem;
 import com.pijava.agent.session.LogOptions;
+import com.pijava.agent.session.SessionJson;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -115,6 +117,63 @@ class PiV3ContextEditEntryTest {
         assertThat(((CustomMessageContent.Text) edit.replacement().content()).text())
             .as("裸串 content 必须原样过桥（归一留给投影层）")
             .isEqualTo("imported replacement");
+    }
+
+    /**
+     * **写侧**：溢出恢复省略必须落成 pi 的原生 {@code context_edit} 行，
+     * {@code replacement} 键在且为 null（pi 类型该键必填 —— NON_NULL 会吞 null，
+     * 由 PiV3Wire 强制补键）。
+     */
+    @Test
+    void writesOmissionAsANativePiRow() throws Exception {
+        Path dir = Files.createTempDirectory("pi-v3-context-edit-write");
+        var repo = JsonlSessionRepository.over(dir);
+        var session = repo.create(new JsonlSessionCreateOptions(null, "work", null, null));
+        session.appendEntry(new ProvisionedEntry<>(new Entry.ContextEdit(
+            "e1", 0, null, null, "m2", null)), "main");
+        session.storage().drain();
+        Path file = repo.list(JsonlSessionListOptions.all()).getFirst().path();
+
+        var row = lines(file).stream()
+            .filter(n -> "e1".equals(n.path("id").asText(null)))
+            .findFirst().orElseThrow();
+
+        assertThat(row.path("type").asText()).isEqualTo("context_edit");
+        assertThat(row.path("targetId").asText()).isEqualTo("m2");
+        assertThat(row.has("replacement"))
+            .as("replacement 键必填，显式 null 也落键（M3 钉这一条）").isTrue();
+        assertThat(row.path("replacement").isNull()).isTrue();
+        assertThat(row.has("customType"))
+            .as("不落 custom 审计行").isFalse();
+        assertThat(row.has("seq")).as("pi 的 SessionEntryBase 没有 seq").isFalse();
+        assertThat(row.path("timestamp").isTextual()).as("时间戳必须是 ISO 串").isTrue();
+        assertThat(row.path("lane").asText())
+            .as("lane 是本仓扩展键（pi JSON.parse 容忍未知键）").isEqualTo("main");
+
+        // 读回来逐字段相等。
+        var reloaded = JsonlSessionStorage.load(FS, file);
+        var edit = (Entry.ContextEdit) reloaded.getLog(LogOptions.none()).stream()
+            .filter(item -> "e1".equals(entryId(item)))
+            .map(item -> ((LogItem.EntryItem) item).entry())
+            .findFirst().orElseThrow();
+        assertThat(edit.targetId()).isEqualTo("m2");
+        assertThat(edit.replacement()).isNull();
+    }
+
+    /** 读一个会话文件的所有行（跳过空行）。 */
+    private static java.util.List<com.fasterxml.jackson.databind.JsonNode> lines(Path file)
+            throws Exception {
+        var mapper = SessionJson.mapper();
+        return Files.readAllLines(file).stream()
+            .filter(l -> !l.isBlank())
+            .map(l -> {
+                try {
+                    return mapper.readTree(l);
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            })
+            .toList();
     }
 
     private static String entryId(LogItem item) {

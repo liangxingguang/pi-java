@@ -8,6 +8,7 @@ import java.time.format.DateTimeParseException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.pijava.agent.entry.Entry;
 import com.pijava.agent.session.SessionJson;
 import com.pijava.agent.session.SessionMutation;
 
@@ -149,6 +150,10 @@ public final class PiV3Wire {
         // pi 的 parentId 必填（可为 null）；NON_NULL 会把 null 吞掉。
         if (!target.has("parentId")) {
             target.putNull("parentId");
+        }
+        // pi 的 replacement 键必填、值可为显式 null（session-manager.ts:179 无 ?）。
+        if (m.entry() instanceof Entry.ContextEdit && !target.has("replacement")) {
+            target.putNull("replacement");
         }
     }
 

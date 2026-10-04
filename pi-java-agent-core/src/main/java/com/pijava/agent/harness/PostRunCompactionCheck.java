@@ -31,8 +31,9 @@ import com.pijava.ai.utils.ContextOverflow;
  * 窗口 :2161；G3 sameModel 只罩 C1/C2（换模型后的旧溢出错误不该压新模型）；
  * G4 全局陈旧界（消息早于最新压缩边界 ⇒ false，防压缩后第一条 prompt 被旧用量
  * 再触发一次）；C1/C2 溢出判定；R0 {@code willRetry = stopReason !== "stop"}；
- * R1 闩已立 ⇒ 只发 end{overflow, errorMessage=固定文案} 不再压；R2 置闩、摘副本尾
- * 的助手消息（日志不动）再压且重试；都没命中走 T1/T2 阈值路。</p>
+ * R1 闩已立 ⇒ 只发 end{overflow, errorMessage=固定文案} 不再压；R2 置闩，失败助手
+ * ＋其工具结果以**持久 context_edit 行**剔除（日志原文保留）再压且重试
+ * （D3，{@code docs/13}）；都没命中走 T1/T2 阈值路。</p>
  *
  * <p><b>T1 的读数</b>（{@code :2226-2256}）：有 usage 直读
  * {@code calculateContextTokens}；error 收尾或折算值为 0 ⇒ 退回
@@ -169,14 +170,10 @@ final class PostRunCompactionCheck {
                     contextOverflow ? OVERFLOW_RETRY_FAILED : TRUNCATED_RETRY_FAILED);
                 return false;
             }
-            // R2：置闩、把失败的助手消息从**副本**摘掉（日志留着，:2214-2223），
-            // 再 compact-and-retry。
+            // R2：置闩，失败助手＋其工具结果以**持久 edit 行**剔除（pi :2214-2223
+            // 的 _omitRecoveryAttempt），再 compact-and-retry；日志原文保留。
             lane.overflowRecoveryAttempted = true;
-            var messages = lane.messages;
-            if (!messages.isEmpty()
-                    && messages.get(messages.size() - 1) instanceof Message.AssistantMessage) {
-                messages.remove(messages.size() - 1);
-            }
+            RecoveryOmissions.persist(lane, message);
             return compactions.runAutoCompaction(laneName, lane, "overflow", willRetry).shouldContinue();
         }
         // T1：阈值读数（:2230-2256）。
