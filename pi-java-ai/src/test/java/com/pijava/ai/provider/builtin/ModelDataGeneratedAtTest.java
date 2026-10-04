@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * docs/70 R5/§4.7：静态模型表的生成时间戳必须存在且**不在未来** ——
+ * 原 docs/70 R5/§4.7：静态模型表的生成时间戳必须存在且**不在未来** ——
  * 远程目录守卫（{@code RemoteCatalogProvider.remoteModels}）会丢弃
  * Last-Modified 不晚于它的远端条目，一个未来的值会让远程覆盖永远不生效。
  */

@@ -6,12 +6,12 @@ import java.util.Map;
  * pi 的**生成期**目录 compat 规则（{@code scripts/generate-models.ts}）里，与内置目录
  * **代码推导**相关的那几条 —— 逐字照抄谓词，而不是把生成出来的 JSON 值硬编进目录。
  *
- * <p><b>为什么要照抄谓词</b>（包 A7 的裁决 {@code docs/53 §9 R3}）：pi 的目录数据
+ * <p><b>为什么要照抄谓词</b>（包 A7 的裁决 {@code 原 docs/53 §9 R3}）：pi 的目录数据
  * （{@code src/providers/data/*.json}）**不在仓库里**（gitignore，由生成器从 models.dev 抓取后
  * 算出），但它的 compat 里有相当一部分**不是远端数据、而是代码**：下面这四条全是
  * {@code (provider, modelId)} 的纯字符串函数。照抄谓词 ⇒ models.dev 漂移时 java 的行为
  * **只随 pi 的代码变**，与 pi 的变更点一一对应；硬编值则会静默陈旧（{@code deepseek-v4-flash}
- * 那次改名就是教训，{@code docs/53 §3 F5}）。</p>
+ * 那次改名就是教训，{@code 原 docs/53 §3 F5}）。</p>
  *
  * <p>⚠️ <b>大小写与匹配方式必须逐个照抄</b>，pi 三处谓词并不统一：
  * {@code supportsAnthropicMidConvoSystemMessages} 用**正则**且**不**小写化；
@@ -22,7 +22,7 @@ import java.util.Map;
  *
  * <p>⚠️ 本类只承载 java 真正**携带**的标志（{@link ModelCompat} 的组件）；pi 生成器给这些模型
  * 写的其余键（{@code supportsStrictTools}、{@code allowedFallbackModels}…）按
- * {@code docs/53 §4.4} 的归属表留给各自的包。</p>
+ * {@code 原 docs/53 §4.4} 的归属表留给各自的包。</p>
  */
 public final class CatalogCompatRules {
 
@@ -57,7 +57,7 @@ public final class CatalogCompatRules {
             null,
             !isTemperatureUnsupportedModel(id),
             null, null, null, null);
-        // docs/66：pi generate-models.ts:826-828 对全部 anthropic-messages 模型无条件
+        // 原 docs/66：pi generate-models.ts:826-828 对全部 anthropic-messages 模型无条件
         // merge supportsStrictTools:true（与 id 无关）。
         return withStrictTools(partial, "anthropic".equals(provider));
     }
@@ -91,18 +91,18 @@ public final class CatalogCompatRules {
      * （{@code test/providers.test.ts} 的 {@code supported}/{@code unsupported} 两份列表，
      * 锚点 26/26 绿）。</p>
      *
-     * <p>{@code thinkingFormat} 的两类来源（{@code docs/58 §2.5(b)}）：<b>探测给不出的</b>
+     * <p>{@code thinkingFormat} 的两类来源（{@code 原 docs/58 §2.5(b)}）：<b>探测给不出的</b>
      * （moonshotai／xiaomi／qwen-token-plan —— 探测会把它们误判成 {@code openai}）是
      * **必要标注**；探测已给同值的（zai／deepseek／ant-ling）是**冗余照抄** —— pi 的目录
      * 照写 ⇒ 这里也照写。⚠️ together／baseten／opencode／fireworks 的常量 java 不携带
-     * 那些 provider ⇒ 只落代码路径、不落目录（{@code docs/58 §9} 登记）。</p>
+     * 那些 provider ⇒ 只落代码路径、不落目录（{@code 原 docs/58 §9} 登记）。</p>
      *
      * <p>其余端点属性（{@code maxTokensField}／{@code supportsStore}／
      * {@code supportsDeveloperRole}／{@code requiresReasoningContentOnAssistantMessages}）
      * **不在这里标注**：它们在 pi 的目录里是**探测的差量**，而
      * {@link CompatResolver#forCompletions} 在请求期会算出同一个值。⚠️ 已知例外：pi 的
      * {@code xiaomiCompat} 写了 {@code requiresReasoningContentOnAssistantMessages: true}
-     * 而探测给不出 —— 属 A-09 之前的既有缺口，登记不改（{@code docs/32 B129}）。</p>
+     * 而探测给不出 —— 属 A-09 之前的既有缺口，登记不改（{@code docs/05 B129}）。</p>
      */
     public static ModelCompat completions(String provider, String modelId) {
         var isNativeDeepSeekPro =
@@ -114,7 +114,7 @@ public final class CatalogCompatRules {
         // ⚠️ zai 的 supportsReasoningEffort 在 pi 是**数据驱动**的（generate-models.ts:1396
         //    `thinkingLevelMap !== undefined`）—— java 的内置条目今天没有级别表 ⇒ 不标
         //    （null），由探测（isZai ⇒ false）兜底 ⇒ 与 pi 的有效值 false 等价；若日后
-        //    补上级别表，判据应改成 `!thinkingLevelMap.isEmpty()`（docs/58 §9 登记）。
+        //    补上级别表，判据应改成 `!thinkingLevelMap.isEmpty()`（原 docs/58 §9 登记）。
         //    qwen-token-plan 的 true 是 pi 的明文常量（generate-models.ts:2537，冗余照抄）。
         var supportsEffort = "qwen-token-plan-cn".equals(provider) ? Boolean.TRUE : null;
         return new ModelCompat(
@@ -137,7 +137,7 @@ public final class CatalogCompatRules {
      * 无条件写 {@code supportsStrictMode:true}。api（responses）门由调用方承担；
      * 非 openai provider 返回 {@link ModelCompat#NONE}。
      *
-     * <p>docs/69（pi {@code applyOpenAIGrammarToolCompatMetadata:831-854}）：gpt-5+
+     * <p>原 docs/69（pi {@code applyOpenAIGrammarToolCompatMetadata:831-854}）：gpt-5+
      * （{@code /^gpt-(\d+)/} 组 ≥5）再置 {@code supportsOpenAIGrammarTools:true}。</p>
      */
     public static ModelCompat openaiResponses(String provider, String modelId) {
@@ -178,7 +178,7 @@ public final class CatalogCompatRules {
 
     /**
      * pi {@code generate-models.ts} 的 per-provider {@code thinkingFormat} 常量表 ——
-     * 只列 java **携带**的 provider（{@code docs/58 §2.5(b)}）。
+     * 只列 java **携带**的 provider（{@code 原 docs/58 §2.5(b)}）。
      */
     private static ThinkingFormat thinkingFormatOf(String provider) {
         if (provider == null) {
@@ -194,7 +194,7 @@ public final class CatalogCompatRules {
             // 包 A-02：pi 生成器给 openrouter 的**全部** completions 条目写
             // thinkingFormat:"openrouter"（生成数据实测；探测给同值 ⇒ 冗余照抄，
             // 与 zai/deepseek/ant-ling 同口径）。A-09 时 java 不携带该 provider，
-            // 常量表没有这一臂（docs/58 §9 的「不携带 provider 常量」登记，B132 家族）。
+            // 常量表没有这一臂（原 docs/58 §9 的「不携带 provider 常量」登记，B132 家族）。
             case "openrouter" -> ThinkingFormat.OPENROUTER;
             default -> null;
         };

@@ -103,7 +103,7 @@
                              2026-10-03：web 测试把真会话写脏（每跑一次朝真实会话文件追加一条
                              fact），settings 也被重写；trace 同理 —— 迄今累计 1368 个 trace 全是
                              测试产物。本仓既有手法是逐测试换 user.home，但 logback 的路径在
-                             类初始化时就定死、换不掉 ⇒ 这里给出**构建级**的出口（见 docs/32 B150）。 -->
+                             类初始化时就定死、换不掉 ⇒ 这里给出**构建级**的出口（见 docs/05 B150）。 -->
                         <systemPropertyVariables>
                             <pi-java.traces.dir>${project.build.directory}/test-artifacts/traces</pi-java.traces.dir>
                             <PI_JAVA_LOG_DIR>${project.build.directory}/test-artifacts/logs</PI_JAVA_LOG_DIR>

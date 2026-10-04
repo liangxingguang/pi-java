@@ -23,7 +23,7 @@ import com.pijava.ai.utils.SanitizeUnicode;
  * <p><b>纯函数、零状态</b>：只依赖入参，不碰 client/流/鉴权 —— 那些留在车道类里。
  * 抽出的边界就是「一个块变成什么线格」，与 pi 的 {@code convertMessages} 内层一致。</p>
  *
- * <p>⚠️ 这里的每一处**刻意不对称**都有 pi 行号背书（{@code docs/44 D3}），改动前先读注释：
+ * <p>⚠️ 这里的每一处**刻意不对称**都有 pi 行号背书（{@code 原 docs/44 D3}），改动前先读注释：
  * user 分支过滤空文本块、toolResult 分支不滤且补占位块、assistant 分支忽略图片。</p>
  *
  * @see AnthropicMessagesApi
@@ -72,7 +72,7 @@ final class AnthropicMessageConverter {
             //    压根没有 image 分支（`:1307-1369` 的 if text / else if thinking /
             //    else if toolCall，无 else）⇒ 靠 `allowImages` 挡掉，照抄。
             //  - UrlImageContent：java 扩展（pi 无此类型）。SDK 虽有 UrlImageSource，
-            //    但 pi 的 TS 类型里没有 URL 图片来源 ⇒ 用它＝发明行为（docs/44 D4 选项 A）。
+            //    但 pi 的 TS 类型里没有 URL 图片来源 ⇒ 用它＝发明行为（原 docs/44 D4 选项 A）。
             //  - DiffContent：显示专用（ContentBlock.DiffContent 的 javadoc）。
         }
         return result;
@@ -86,7 +86,7 @@ final class AnthropicMessageConverter {
      * <p>⚠️ {@code media_type} 是**照抄**，不做白名单：pi 的联合类型只写
      * jpeg/png/gif/webp，但那是 TS 的 {@code as} 断言（运行时不校验），而
      * {@code PathUtils.detectImageMimeType} 会返回 {@code image/bmp} ⇒ pi 也会把 bmp 发出去。
-     * 照缝（{@code docs/44 J14}）；真被 provider 拒的话，两侧一起拒。</p>
+     * 照缝（{@code 原 docs/44 J14}）；真被 provider 拒的话，两侧一起拒。</p>
      */
     private static ImageBlockParam toImageBlock(ContentBlock.ImageContent img) {
         return ImageBlockParam.builder()
@@ -174,14 +174,14 @@ final class AnthropicMessageConverter {
      * 映射后**没有文本块**（判的是块类型，不是非空）⇒ 头部插 "(see attached image)"  // :166-172
      * </pre>
      *
-     * <p>⚠️ 三处与 user 分支（{@link #toBlockParams}）**刻意不同**，别顺手统一（{@code docs/44 D3}）：
+     * <p>⚠️ 三处与 user 分支（{@link #toBlockParams}）**刻意不同**，别顺手统一（{@code 原 docs/44 D3}）：
      * ① 空文本块**不**过滤；② 无文本时**补**占位块；③ 多文本块**合并**成一个。</p>
      *
      * <p>⚠️ 顺带的行为变更（包 H2 步2）：旧实现 {@code toTextBlocks} 是「一块一文本块」，
      * 本方法改成 join 成一个 —— 与 pi 对齐（真实工具都只产一个文本块，线上不可观察）。</p>
      *
-     * <p>⚠️ 净化位置也跟着 pi 从「逐块」挪到「拼完」（{@code docs/43 §9-2} 记的两种口径之别）；
-     * 不过 {@code "\n"} 永不是代理 ⇒ 在**这条**路径上两种顺序结果恒等（{@code docs/44 §9}）。</p>
+     * <p>⚠️ 净化位置也跟着 pi 从「逐块」挪到「拼完」（{@code 原 docs/43 §9-2} 记的两种口径之别）；
+     * 不过 {@code "\n"} 永不是代理 ⇒ 在**这条**路径上两种顺序结果恒等（{@code 原 docs/44 §9}）。</p>
      */
     private static List<ToolResultBlockParam.Content.Block> convertContentBlocks(
             List<ContentBlock> blocks) {

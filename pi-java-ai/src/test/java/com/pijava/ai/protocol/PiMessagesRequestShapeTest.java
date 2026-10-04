@@ -20,7 +20,7 @@ import com.pijava.ai.model.ModelId;
 import org.junit.jupiter.api.Test;
 
 /**
- * <b>包 A2 的 R2</b>（{@code docs/49 §4.2 F2}）：pi-messages 的 POST body 形状。
+ * <b>包 A2 的 R2</b>（{@code 原 docs/49 §4.2 F2}）：pi-messages 的 POST body 形状。
  *
  * <p>pi 自 {@code 9e05370b2}（2026-09-16）起发 {@code {model, context, options}}，其中
  * {@code context} **就是** TranscriptContext（只有 {@code messages}，系统消息在数组里，
@@ -112,7 +112,7 @@ class PiMessagesRequestShapeTest {
      * （{@code pi-messages.ts:431-443} 直接 {@code {...options, reasoning, toolChoice, debug}}）
      * ⇒ 它的 {@code maxTokens} 恒为 {@code undefined}（缺席）。而 java 的
      * {@code AbstractChatApi} 是**所有**车道的漏斗，默认会填上解析值 —— 故
-     * {@code PiMessagesApi} 必须显式豁免（{@code docs/57 §6 R2}）。
+     * {@code PiMessagesApi} 必须显式豁免（{@code 原 docs/57 §6 R2}）。
      * 没有这条豁免，本车道会**凭空多发**一个字段。</p>
      *
      * <p>夹具刻意用 {@code ModelInfo.minimal}（目录未命中）：不豁免时漏斗会填

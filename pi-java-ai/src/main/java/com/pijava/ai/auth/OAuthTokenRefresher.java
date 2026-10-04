@@ -3,7 +3,7 @@ package com.pijava.ai.auth;
 import java.io.IOException;
 
 /**
- * 用 refresh token 换发新凭证（包 B1 Step 1 下沉，{@code docs/63}）。
+ * 用 refresh token 换发新凭证（包 B1 Step 1 下沉，{@code 原 docs/63}）。
  *
  * <p>pi 侧这是 provider 的 {@code oauth.refresh(credential)}（{@code auth/helpers.ts}
  * lazyOAuth 暴露）。java 把原本只在 {@code AuthCommand} 里的 PKCE/device 分派下沉到

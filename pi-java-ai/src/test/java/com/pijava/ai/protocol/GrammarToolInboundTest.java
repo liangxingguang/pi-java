@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * docs/69：openai-completions 车道入站 custom tool_call 流式重组
+ * 原 docs/69：openai-completions 车道入站 custom tool_call 流式重组
  * （pi {@code openai-completions.ts:494-551/646-654}）与
  * {@link GrammarInputBuffer} 状态机单测。
  */

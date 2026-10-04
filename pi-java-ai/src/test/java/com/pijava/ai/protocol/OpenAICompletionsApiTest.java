@@ -34,7 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * {@code openai-completions} 车道：请求侧构造 + <b>B20 的 stop reason 映射与严格收尾</b>。
  *
- * <p>B20 夹具（{@code docs/31 §8.35.14} 第八节）此前**一条都没有**：本类原来只有一个
+ * <p>B20 夹具（{@code 原 docs/31 §8.35.14} 第八节）此前**一条都没有**：本类原来只有一个
  * {@code buildParams} 用例，所以「收尾固定发 {@code toolCall.started() ? "tool_use" :
  * "stop"}」这一处从 Phase 2 起就没人碰过 —— 车道**完全不读** {@code choice.finish_reason}。</p>
  *

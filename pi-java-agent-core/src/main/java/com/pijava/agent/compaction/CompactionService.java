@@ -51,7 +51,7 @@ public final class CompactionService {
             .toList();
         SummaryGenerator.SummaryResult summaryResult = summaryGenerator
             .summarize(discardedMessages, null, null, settings.reserveTokens(), reason);
-        // 文件清单（B2，docs/31 §8.30）：pi 在摘要文本尾部追加两块，并把同一份清单
+        // 文件清单（B2，原 docs/31 §8.30）：pi 在摘要文本尾部追加两块，并把同一份清单
         // 落进 details（compaction.ts:951-962 / :812-813）。**两键恒在、数组可为空** ——
         // 空清单写空数组，不是 null、也不是缺键。
         CompactionFiles.Lists lists = CompactionFiles.collect(discardedMessages, transcript);

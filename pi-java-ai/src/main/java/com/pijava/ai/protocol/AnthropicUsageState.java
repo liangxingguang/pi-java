@@ -6,7 +6,7 @@ import com.pijava.ai.model.CostCalculator;
 
 /**
  * Anthropic 车道的 per-stream usage 累加器 —— pi 把 {@code output.usage} 就地 mutate
- * 的语义（包 H1 步 3，{@code docs/42 §2.1 P4–P7}）。
+ * 的语义（包 H1 步 3，{@code 原 docs/42 §2.1 P4–P7}）。
  *
  * <p>pi 在 {@code anthropic-messages.ts} 里两段写法<b>刻意不对称</b>，本类逐条照抄：</p>
  *

@@ -32,7 +32,7 @@ import com.pijava.ai.stream.StreamPartialBuilder;
  * <p>Phase 2a: emits the full 13-event protocol with {@code partial} snapshots
  * via {@link StreamPartialBuilder}.</p>
  *
- * <h3>B20：stop reason 从线格读、收尾按 pi 严格判定（docs/31 §8.35.14）</h3>
+ * <h3>B20：stop reason 从线格读、收尾按 pi 严格判定（原 docs/31 §8.35.14）</h3>
  *
  * <p>修复前本车道**完全不读** {@code choice.finish_reason}，收尾固定发
  * {@code toolCall.started() ? "tool_use" : "stop"}。后果有两个：被 {@code length}
@@ -113,7 +113,7 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         // A-14（G1）：SDK 内置重试关到 0，重试独占 ProviderRetry（pi requestOptions.maxRetries:0）。
         var clientBuilder = OpenAIOkHttpClient.builder()
                 .apiKey(apiKey).baseUrl(baseUrl).maxRetries(0);
-        // D-P1：models.json 合并来的 default headers（docs/65）。
+        // D-P1：models.json 合并来的 default headers（原 docs/65）。
         putExtraHeaders(options, clientBuilder::putHeader);
         this.client = clientBuilder.build();
         this.providerRetry = ProviderRetry.optionsOf(options);
@@ -179,7 +179,7 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         // pi streamedReasoningDetails (:328): validated detail entries accumulated
         // across chunks, serialized once onto the thinking block at finalization.
         List<JsonNode> streamedDetails = null;
-        // docs/69（pi :338-341）：grammar 能力表请求起点一次算出，custom chunks 重组读它。
+        // 原 docs/69（pi :338-341）：grammar 能力表请求起点一次算出，custom chunks 重组读它。
         var startCompat = CompatResolver.forCompletions(request.model(), baseUrl);
         var grammarProperties = GrammarInputProperties.create(
             Transcripts.getDeclaredTools(
@@ -403,7 +403,7 @@ public class OpenAICompletionsApi extends AbstractChatApi {
      *
      * <p>与 Anthropic 车道的关键差别：**未知取值不抛**，而是落 {@code "error"} +
      * {@code Provider finish_reason: X}。{@code toolUse} 与 pi 同字面量（B109 起，
-     * 边界翻译已删 —— 见 {@code docs/56}）。</p>
+     * 边界翻译已删 —— 见 {@code 原 docs/56}）。</p>
      *
      * @param reason 线格原值（保证非空，见 {@link #rawFinishReason}）
      * @return 映射后的 pi-java stop reason + 可选错误文案

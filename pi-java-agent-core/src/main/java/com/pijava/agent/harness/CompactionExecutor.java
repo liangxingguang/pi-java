@@ -25,9 +25,9 @@ import org.slf4j.LoggerFactory;
  * and the {@link Entry.Compaction} marker entry with the retained tail.
  *
  * <p>Extracted from the former step-chain executor in the agent-loop L1 cleanup
- * (docs/20 §8) to keep files under the 500-line limit.</p>
+ * (原 docs/20 §8) to keep files under the 500-line limit.</p>
  *
- * <p><b>3c 的分层</b>（{@code docs/31 §8.21}）：pi 的自动压缩只有一个函数
+ * <p><b>3c 的分层</b>（{@code 原 docs/31 §8.21}）：pi 的自动压缩只有一个函数
  * {@code _runAutoCompaction}（{@code agent-session.ts:2270-2445}），守卫、事件、
  * 落库、重建、二次删尾、异常兜底全在其中；轮内阈值门（{@code :550}）与运行后的
  * {@code _checkCompaction}（{@code :2255}）都汇入它。这里同形：
@@ -132,7 +132,7 @@ final class CompactionExecutor {
      * 轮内阈值门（pi {@code _compactBeforeNextAssistantResponse}，
      * {@code agent-session.ts:538-555}）。
      *
-     * <p><b>门形状（3b，docs/31 §8.20）</b>逐条对齐：无模型 ⇒ 跳过；当前模型的
+     * <p><b>门形状（3b，原 docs/31 §8.20）</b>逐条对齐：无模型 ⇒ 跳过；当前模型的
      * {@code contextWindow <= 0} ⇒ 跳过；{@code !shouldCompact(
      * estimateContextTokens(context.messages).tokens, model.contextWindow,
      * settings)} ⇒ 跳过。通过后 pi 交 {@code _runAutoCompaction("threshold",
@@ -179,7 +179,7 @@ final class CompactionExecutor {
      * aborted:false, willRetry:false, errorMessage}}，文案前缀按 reason 分流
      * （overflow ⇒ "Context overflow recovery failed: "，否则 "Auto-compaction
      * failed: "），返回 false。{@code _emitSessionCompactFailed}（扩展层伴生事件）
-     * 不在 3c 面（docs/31 §8.21.5 登记）。</p>
+     * 不在 3c 面（原 docs/31 §8.21.5 登记）。</p>
      */
     AutoCompactionOutcome runAutoCompaction(String laneName, LaneState lane,
                                             String reason, boolean willRetry) {
@@ -327,7 +327,7 @@ final class CompactionExecutor {
     }
 
     /**
-     * Record the compaction in the lane's record log (docs/21 D5).
+     * Record the compaction in the lane's record log (原 docs/21 D5).
      *
      * <p>A mid-run compaction is just another step of the running operation,
      * so it only appends a {@code StepAttempt(COMPACTION)}. Storage rejects a
@@ -357,7 +357,7 @@ final class CompactionExecutor {
                                                            String resultEntryId, long durationMs) {
         // Attempts are numbered per (run, step) series and must be consecutive.
         // Nothing enforces that any more (the record-log fold was retired,
-        // docs/30); the run summary reads these numbers, so a gap would still
+        // 原 docs/30); the run summary reads these numbers, so a gap would still
         // misreport the step count.
         int attempt = 0;
         for (var record : lane.records) {
@@ -379,7 +379,7 @@ final class CompactionExecutor {
     /**
      * 压缩体：跑摘要生成器 + 装配新的转录列表。
      *
-     * <p><b>摘要请求的宿主跨度</b>（{@code docs/31 §8.29}）：摘要是一次**真正的
+     * <p><b>摘要请求的宿主跨度</b>（{@code 原 docs/31 §8.29}）：摘要是一次**真正的
      * LLM 调用**，但它的 payload 行（{@code llm.payload.request/response}，由
      * {@code PayloadRecordingStreamFn} 发出）此前**没有归属** —— 压缩路径从不
      * {@code pushCurrent}，行上既无 {@code traceId} 也无 {@code spanId}。这里补

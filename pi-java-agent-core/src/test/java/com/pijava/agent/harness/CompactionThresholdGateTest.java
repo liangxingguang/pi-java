@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * package 3b 的阈值门判据（pi {@code _compactBeforeNextAssistantResponse}，
  * {@code agent-session.ts:542-557} + {@code _runAutoCompaction} 内
- * {@code prepareCompaction} 的 :638 守卫；{@code docs/31 §8.20}）。
+ * {@code prepareCompaction} 的 :638 守卫；{@code 原 docs/31 §8.20}）。
  *
  * <p>直接搭 {@link CompactionExecutor}（同包可见），把门的每一条形状各钉一
  * 颗哨兵：设置缺席、**当前模型缺席**、**窗口 ≤ 0**、估算不过线、

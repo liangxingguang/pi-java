@@ -17,7 +17,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
 /**
- * 录制**最后一次请求体**的桩服务器（package A0，{@code docs/43}）：根上下文接所有路径，
+ * 录制**最后一次请求体**的桩服务器（package A0，{@code 原 docs/43}）：根上下文接所有路径，
  * 一律回 400 让车道尽快收场 —— 请求体已经录到了，流怎么结束与断言无关。
  *
  * <p>与 {@code LaneTransformMessagesWiringTest} 内嵌的私有实现同形；抽出来是因为
@@ -67,7 +67,7 @@ final class RecordingHttpServer implements AutoCloseable {
             in.transferTo(out);
             // ⚠️ 解码口径：孤对代理若被序列化器写成 JSON 转义（\uD83D），此处看到的是
             // 6 个 ASCII 字符；若写成裸代理字节，UTF-8 解码会得到 U+FFFD。两种形态
-            // 断言都要拒（见 docs/43 §10 的实测记录）。
+            // 断言都要拒（见 原 docs/43 §10 的实测记录）。
             body.set(out.toString(StandardCharsets.UTF_8));
         }
         requestCount.incrementAndGet();

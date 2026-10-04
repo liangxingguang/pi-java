@@ -4,7 +4,7 @@ import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 
 /**
- * 按**字符边界**增量解码 UTF-8 字节流（包⑧，{@code docs/35}）。
+ * 按**字符边界**增量解码 UTF-8 字节流（包⑧，{@code 原 docs/35}）。
  *
  * <p>为什么需要它：shell 的读循环按固定大小的缓冲切字节（{@code DefaultShellExecutor}
  * 是 8 KiB），切点会落在任意字节上 —— 一个汉字（3 字节）、一个 emoji（4 字节）随时

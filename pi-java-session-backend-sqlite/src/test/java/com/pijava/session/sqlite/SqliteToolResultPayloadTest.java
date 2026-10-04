@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * A7 的 SQLite 路（docs/23c §5 四路之一）：工具结果消息的
+ * A7 的 SQLite 路（原 docs/23c §5 四路之一）：工具结果消息的
  * {@code details}/{@code usage}/{@code addedToolNames} 经行编码落库再读回必须原样
  * 保真 —— 载荷节点与 JSONL 路共用 {@code SessionJson.messageNode}（写）与
  * {@code JsonlCodec.decodeEntryPayload}（读），这里钉的是 SQLite 入口的端到端。

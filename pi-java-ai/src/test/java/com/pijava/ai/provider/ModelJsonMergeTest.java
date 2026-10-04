@@ -19,7 +19,7 @@ import com.pijava.ai.provider.ModelsJsonSchema.ProviderDef;
 import com.pijava.ai.thinking.ThinkingLevelMap;
 
 /**
- * D-P1（{@code docs/65}）：models.json 配置对内置 provider 的分层合并哨兵
+ * D-P1（{@code 原 docs/65}）：models.json 配置对内置 provider 的分层合并哨兵
  * （pi {@code provider-composer.ts:184-221}）。
  */
 class ModelJsonMergeTest {

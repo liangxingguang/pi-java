@@ -29,13 +29,13 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包 A-02（B105，docs/59 §4.9）端到端的钉子：anthropic 形状的 {@code cache_control}
+ * 包 A-02（B105，原 docs/59 §4.9）端到端的钉子：anthropic 形状的 {@code cache_control}
  * 真的落到了 completions 车道的**出站体**上（pi {@code openai-completions.ts:858-859}
  * ＋ {@code :1069-1180}）。
  *
  * <p>观测面与 {@code AnthropicCacheControlWireTest}（A-01）同一手法：真字节
  * （{@link RecordingHttpServer}），断言按键取值、不逐字节（SDK 键序与 pi 不同，
- * {@code docs/54 §4.7}）。模型用**内置目录**的 {@code anthropic/claude-fable-5:batch}
+ * {@code 原 docs/54 §4.7}）。模型用**内置目录**的 {@code anthropic/claude-fable-5:batch}
  * —— {@code cacheControlFormat} 走请求期探测（{@code detectCompat:1632}），不手搓 compat。</p>
  *
  * <p>三断点（pi {@code applyAnthropicCacheControl:1081-1089} 的次序）：第一条

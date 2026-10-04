@@ -59,7 +59,7 @@ public record PricingInfo(
      * The pre-H1 shape: cache rates unknown, no tiers.
      *
      * <p>Kept so that the ~40 existing call sites compile unchanged
-     * ({@code docs/42 §8.0} 裁决 A).</p>
+     * ({@code 原 docs/42 §8.0} 裁决 A).</p>
      *
      * @param inputPrice  price per 1M input tokens, or -1 if unknown
      * @param outputPrice price per 1M output tokens, or -1 if unknown

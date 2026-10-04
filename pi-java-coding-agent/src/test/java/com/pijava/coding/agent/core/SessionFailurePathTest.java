@@ -31,7 +31,7 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * B5 第 1 步（{@code docs/31 §8.36.4}）的宿主侧守卫：{@code SessionRunner.drive} 的两处
+ * B5 第 1 步（{@code 原 docs/31 §8.36.4}）的宿主侧守卫：{@code SessionRunner.drive} 的两处
  * {@code catch} 必须是 {@code Throwable}（pi 的 {@code catch} 无类型，{@code agent.ts:500}），
  * 且两个 future 的落定要由 {@code finally} 兜底 —— 否则 {@code SessionResult.status()/entries()}
  * 是 {@code join} ⇒ 打印模式永久挂起。
@@ -115,7 +115,7 @@ class SessionFailurePathTest {
     }
 
     // ═══════════════════════════════════════════════════════════
-    // C 批次（docs/55 §5 F4）：宿主状态保留车道的 reason
+    // C 批次（原 docs/55 §5 F4）：宿主状态保留车道的 reason
     // ═══════════════════════════════════════════════════════════
 
     /**
@@ -126,7 +126,7 @@ class SessionFailurePathTest {
      * {@code PiLoopRunner}（保留 reason）与 {@code RunFailure} 也一直保留它
      * ⇒ 同仓两套口径。</p>
      *
-     * <p>⚠️ <b>这条夹具钉的是端到端契约，不是那个改动的判别器</b>（{@code docs/55 §12}）：
+     * <p>⚠️ <b>这条夹具钉的是端到端契约，不是那个改动的判别器</b>（{@code 原 docs/55 §12}）：
      * 实测变异探针 M4（把 {@code err.reason()} 改回塌成 {@code "error"}）**零红** ——
      * 下面的读尾（{@code SessionRunner:132-136}，B5 第 2 步）在尾条是
      * {@code error}/{@code aborted} 的助手消息时用 {@code tail.stopReason()} 覆盖了
@@ -156,7 +156,7 @@ class SessionFailurePathTest {
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * A1/A2/A3（{@code docs/31 §8.36.6}）：引擎把工具抛出的 {@code Error} 收成失败助手消息后，
+     * A1/A2/A3（{@code 原 docs/31 §8.36.6}）：引擎把工具抛出的 {@code Error} 收成失败助手消息后，
      * <b>流上不会再有终局信号</b> ⇒ 宿主只能照 pi {@code modes/print-mode.ts:139-155}
      * 在 {@code prompt()} 返回后读尾 assistant（{@code SessionRunner} 的 {@code tailAssistant} 判定）。
      * 没有这一步，崩溃的 run 会被记成 {@code (0, completed)}。
@@ -236,7 +236,7 @@ class SessionFailurePathTest {
      *
      * <p>抛出点有两处、都在**引擎之内**：pass 收尾时 {@code passEvents} 投递的
      * {@code AgentEnd}，以及引擎 catch 体里 {@code RunFailure.settle} 之后投递的那一条
-     * —— 第二条正是「catch 体自己抛」的形状（{@code docs/31 §8.36.5} 下游表末行）。
+     * —— 第二条正是「catch 体自己抛」的形状（{@code 原 docs/31 §8.36.5} 下游表末行）。
      * 于是 {@code Error} 穿过 {@code harness.prompt} 落到宿主的 {@code :114}。</p>
      *
      * <p><b>B5 才是 P1 的判别器</b>：{@code :105} 若回退成 {@code catch (Exception)}，

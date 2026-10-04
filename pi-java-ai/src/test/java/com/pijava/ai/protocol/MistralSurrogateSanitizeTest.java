@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包 A0 步4（{@code docs/43 D4}）：Mistral 车道的**请求面**孤对代理净化落点 ——
+ * 包 A0 步4（{@code 原 docs/43 D4}）：Mistral 车道的**请求面**孤对代理净化落点 ——
  * pi {@code mistral-conversations.ts} 的 9 处调用里，6 处请求面在 pi-java 收敛为
  * <b>4 个文本落线点</b>（另 3 处在**响应面**，属步5）。
  *

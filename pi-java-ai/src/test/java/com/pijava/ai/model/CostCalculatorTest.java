@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.within;
 
 /**
  * pi {@code packages/ai/src/models.ts:900-920} {@code calculateCost} 的逐条移植哨兵
- * （包 H1 步 1，{@code docs/42 §8.3 T1}）。
+ * （包 H1 步 1，{@code 原 docs/42 §8.3 T1}）。
  *
  * <p>覆盖四件事：① 四费率 × 四分量的基本换算；② <b>1h 缓存按 2× 输入价</b>；
  * ③ {@code tiers} 的四个边界（{@code ==} 不命中 / {@code >} 命中 / 取最高档 / 整单适用）；

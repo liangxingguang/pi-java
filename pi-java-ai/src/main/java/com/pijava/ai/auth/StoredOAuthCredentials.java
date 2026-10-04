@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.util.Optional;
 
 /**
- * 解析「stored OAuth → 有效凭证」（包 B1，{@code docs/63}）—— 请求路径与 auth 命令共用。
+ * 解析「stored OAuth → 有效凭证」（包 B1，{@code 原 docs/63}）—— 请求路径与 auth 命令共用。
  *
  * <p>对齐 pi {@code auth/resolve.ts:127-179} {@code resolveStoredOAuth}：</p>
  * <ul>

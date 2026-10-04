@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 内存态分支：新会话持**自己的** harness，日志从父会话播种（{@code docs/31 §4.3}）。
+ * 内存态分支：新会话持**自己的** harness，日志从父会话播种（{@code 原 docs/31 §4.3}）。
  *
  * <p>删除运行时多车道容器之前，这里靠「共享父 harness + 新建一条**空** lane」实现，
  * 分支会话拿不到任何历史（{@code LaneConfig.parentLeafId} 只写不读）。现在分支是会话层的

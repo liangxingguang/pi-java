@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包⑦（docs/34）：工具执行生命周期事件要**出口到会话层**。
+ * 包⑦（原 docs/34）：工具执行生命周期事件要**出口到会话层**。
  *
  * <p>三条事件在 `PiLoop.Event` 里早已存在且与 pi 逐字段同形（`PiLoop.java:66-76`），
  * 但 `SessionRunner.passEvents` 只认 `MessageEnd`/`AgentStart` ⇒ 它们在会话层被丢弃，
@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * （`interactive-mode.ts:3324-3365`）。</p>
  *
  * <p>⚠️ **`update` 不在这里钉**：pi-java 的内置工具**没有一条**调 `onUpdate`
- * （docs/34 §4-F，登记 B46）⇒ 会话级的 update 在生产上结构性不可达，
+ * （原 docs/34 §4-F，登记 B46）⇒ 会话级的 update 在生产上结构性不可达，
  * 这个面只能被测试桩行使。此处只钉生产可达的 start/end。</p>
  */
 class AgentSessionToolExecutionEventTest {

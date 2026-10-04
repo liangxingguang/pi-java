@@ -22,7 +22,10 @@ telemetry ← ai ← agent ← coding-agent
 - **docs/02-architecture-design.md** — module structure, layer dependencies, core interfaces
 - **docs/03-detailed-design.md** — class-level design: Entry/LaneRecord, AgentHarness, SessionStorage/Repository, SQLite schema, JSONL v4 format, TamboUI components, slash commands, CLI parameters
 - **docs/04-implementation-plan.md** — Phase 0–6, 13–17 week MVP, risk matrix
-- **docs/11-phase6-ecosystem-design.md** — Phase 6 detailed blueprint (current phase)
+- **docs/05-open-items-register.md** — open items register (the "what is still not aligned" ledger)
+- **docs/06-module-alignment-map.md** — per-module alignment map (detail under `docs/map/`)
+- **docs/07-gap-inventory.md** — module gap inventory and completion plan
+- **docs/08-ai-next-work-items-design.md** — pi-java-ai next-work list
 
 ## Development Workflow
 

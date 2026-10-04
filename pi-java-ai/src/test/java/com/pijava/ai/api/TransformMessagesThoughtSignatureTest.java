@@ -13,7 +13,7 @@ import com.pijava.ai.model.ModelId;
 import org.junit.jupiter.api.Test;
 
 /**
- * <b>Batch F 步 8</b>（{@code docs/67}）：跨模型重放时剥离
+ * <b>Batch F 步 8</b>（{@code 原 docs/67}）：跨模型重放时剥离
  * {@code thoughtSignature}（pi {@code transform-messages.ts:131-136}）—— 别的模型
  * 产生的签名对当前模型不可解密，不能发出去；剥离与 id 归一可叠加。
  */

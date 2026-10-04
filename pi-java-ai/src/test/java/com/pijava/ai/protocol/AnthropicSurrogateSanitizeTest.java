@@ -32,7 +32,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包 A0 步2（{@code docs/43 D4}）：Anthropic 车道的孤对代理净化落点 ——
+ * 包 A0 步2（{@code 原 docs/43 D4}）：Anthropic 车道的孤对代理净化落点 ——
  * pi {@code anthropic-messages.ts} 的 11 处调用在 pi-java 收敛为 <b>6 个字符串落线点</b>。
  *
  * <table>
@@ -54,7 +54,7 @@ class AnthropicSurrogateSanitizeTest {
     private static final char HIGH = (char) 0xD83D;
     private static final char LOW = (char) 0xDE48;
     private static final String EMOJI = "🙈";
-    /** 含孤高代理的脏串 ⇒ pi 删掉孤高（{@code docs/43 P1}）。 */
+    /** 含孤高代理的脏串 ⇒ pi 删掉孤高（{@code 原 docs/43 P1}）。 */
     private static final String DIRTY = "Text " + HIGH + " here";
     /** {@link #DIRTY} 的净化结果：孤高被删 ⇒ 留下双空格（pi JSDoc 示例）。 */
     private static final String CLEAN = "Text  here";
@@ -224,7 +224,7 @@ class AnthropicSurrogateSanitizeTest {
      * 且不能有孤对代理的任何形态（JSON 转义 {@code \uD83D} ／ UTF-8 解码出的
      * {@code U+FFFD}）。
      *
-     * <p>这条同时是 {@code docs/43 D3}「待实证」项的取证：见 §10 实测记录。</p>
+     * <p>这条同时是 {@code 原 docs/43 D3}「待实证」项的取证：见 §10 实测记录。</p>
      */
     @Test
     void capturedRequestBodyHasNoLoneSurrogate() throws Exception {

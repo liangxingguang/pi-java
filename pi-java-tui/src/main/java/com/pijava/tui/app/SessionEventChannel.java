@@ -10,7 +10,7 @@ import com.pijava.tui.util.TuiEventDispatcher;
  * 会话事件 → 渲染线程的订阅通道 —— pi
  * {@code InteractiveMode.subscribeToAgent}（{@code interactive-mode.ts:3159-3163}）的对应物。
  *
- * <p>这是 docs/31 §8.38 的<b>唯一</b>结构性改动：pi-java 的 TUI 此前对会话事件零订阅
+ * <p>这是 原 docs/31 §8.38 的<b>唯一</b>结构性改动：pi-java 的 TUI 此前对会话事件零订阅
  * （三条取数通路 —— 观察者回调 / 快照订阅 / transcript 快照 —— 没有一条经过它）。
  * 事件在生产线程到达，经 {@link TuiEventDispatcher} 转投渲染线程后才交给
  * {@code sink}，与 {@code onEntry}/{@code onStreamEvent} 同纪律：窗口部件只在渲染线程被改。</p>

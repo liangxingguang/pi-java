@@ -66,7 +66,7 @@ public final class ChatApiConformanceSuite implements EvalSuite {
     }
 
     /**
-     * 停因只认 pi 的字面量 {@code "toolUse"}（B109，docs/56 §6 R5）。
+     * 停因只认 pi 的字面量 {@code "toolUse"}（B109，原 docs/56 §6 R5）。
      *
      * <p>改前这里是「两个都认」（{@code !"tool_use".equals(…) && !"toolUse".equals(…)}），
      * 对词表对齐**零判别力**。收紧后它对这条字面量有牙。</p>
@@ -74,7 +74,7 @@ public final class ChatApiConformanceSuite implements EvalSuite {
      * <p>⚠️ **但要如实说明牙咬在哪里**：本条路的停因来自 {@code ConformanceFixtures}
      * （手搓的事件列表，见 `ChatApiConformanceTest`），**不是**七条生产者车道里的任何一条。
      * 变异探针实测：把 {@code FauxProvider} 的工厂改回旧字面量，本条**不红**
-     * （`docs/56 §12.9`）—— 它守的是夹具自己的字面量，守生产者的是 `ai` 模块的适配器夹具。</p>
+     * （`原 docs/56 §12.9`）—— 它守的是夹具自己的字面量，守生产者的是 `ai` 模块的适配器夹具。</p>
      */
     private static void c3(EvalContext ctx) {
         var events = collect(ctx.chatApi(), ping());

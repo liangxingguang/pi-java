@@ -230,7 +230,7 @@ class ModelsJsonConfigTest {
     }
 
     /**
-     * docs/69：{@code supportsOpenAIGrammarTools} 从 models.json 读进 {@code compat}，
+     * 原 docs/69：{@code supportsOpenAIGrammarTools} 从 models.json 读进 {@code compat}，
      * 原样保留三态（缺省 ⇒ null ⇒ 门关）。
      */
     @Test
@@ -284,7 +284,7 @@ class ModelsJsonConfigTest {
      *
      * <p>⚠️ 这是与 pi 的一处**刻意不同**：pi 的五个 compat 接口共 52 个字段（{@code types.ts:674}
      * 起），而 {@link com.pijava.ai.catalog.ModelCompat} 只携带本仓真正消费的十八个
-     * —— 其余按 {@code docs/53 §4.4} 的归属表留给各自的包。忽略未知键使「pi 新加的 compat
+     * —— 其余按 {@code 原 docs/53 §4.4} 的归属表留给各自的包。忽略未知键使「pi 新加的 compat
      * 标志」不会把文件打崩 —— 代价是新标志会**静默失效**，故此处显式钉住该行为，
      * 免得日后误以为是解析 bug。</p>
      *
@@ -395,8 +395,8 @@ class ModelsJsonConfigTest {
      * {@code supportsStore}／{@code supportsDeveloperRole}／{@code supportsStrictMode}
      * 的缺席都要能区分「用户没写」（{@code null} ⇒ 目录值与探测值活下来）与
      * 「用户写了 false」（压掉它们）。今天的 {@code models[]} 路径上两者行为相同
-     * （整条替换，{@code docs/53 §3 F7} 的 path C），但 A-16 补上逐字段合并时立刻需要
-     * （{@code docs/53 §9 R6}）。</p>
+     * （整条替换，{@code 原 docs/53 §3 F7} 的 path C），但 A-16 补上逐字段合并时立刻需要
+     * （{@code 原 docs/53 §9 R6}）。</p>
      */
     @Test
     void readsTheEightThreeStateCompatKeysFromCompatBlock() {
@@ -479,7 +479,7 @@ class ModelsJsonConfigTest {
     }
 
     /**
-     * 包 A-02（docs/59 §4.11）：{@code cacheControlFormat} 单值闭集——命中映射到
+     * 包 A-02（原 docs/59 §4.11）：{@code cacheControlFormat} 单值闭集——命中映射到
      * {@link com.pijava.ai.catalog.CacheControlFormat#ANTHROPIC}，缺席留 {@code null}
      * （⇒ 请求期探测）。未知取值另有响亮抛错用例。
      */
@@ -523,7 +523,7 @@ class ModelsJsonConfigTest {
     }
 
     /**
-     * 包 A-02（docs/59 §4.11/R6）：{@code openRouterRouting} 纯透传——内部键不校验、
+     * 包 A-02（原 docs/59 §4.11/R6）：{@code openRouterRouting} 纯透传——内部键不校验、
      * 值可空（{@code sort.partition:null} 必须活下来），缺席保持 {@code null}（不归一空表）。
      */
     @Test
@@ -618,7 +618,7 @@ class ModelsJsonConfigTest {
      *
      * <p>⚠️ 负向断言钉住**消息里的字段名与取值**：只断言 {@code isInstanceOf} 的话，
      * 缺陷态（把未知取值吞成 {@code null}）抛的也是别的异常/不抛，测不出差别
-     * （{@code docs/50 §12.2-3} 的教训）。</p>
+     * （{@code 原 docs/50 §12.2-3} 的教训）。</p>
      */
     @Test
     void anUnknownMaxTokensFieldIsALoudError() {
@@ -781,7 +781,7 @@ class ModelsJsonConfigTest {
      * 从 models.json 读进 {@code compat}。
      *
      * <p>⚠️ 三个形状（{@code chat-template}/{@code qwen-chat-template}/{@code string-thinking}）
-     * 在 pi 的生成数据里**没有任何生产者**（{@code docs/58 §2.5(c)}）⇒ models.json 是它们
+     * 在 pi 的生成数据里**没有任何生产者**（{@code 原 docs/58 §2.5(c)}）⇒ models.json 是它们
      * 的唯一入口，本条是那个入口的钉子。</p>
      */
     @Test
@@ -901,7 +901,7 @@ class ModelsJsonConfigTest {
             """);
 
         var catalog = config.catalog();
-        // D-P1（docs/65）：三源 model.api ?? provider.api —— plain 继承 provider 级。
+        // D-P1（原 docs/65）：三源 model.api ?? provider.api —— plain 继承 provider 级。
         assertThat(catalog.find(ModelId.of("relay", "plain")).orElseThrow().api())
             .isEqualTo("openai-completions");
         assertThat(catalog.find(ModelId.of("relay", "anthropic/claude-x")).orElseThrow().api())

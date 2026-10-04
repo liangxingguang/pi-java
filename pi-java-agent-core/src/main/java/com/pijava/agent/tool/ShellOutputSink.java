@@ -2,7 +2,7 @@ package com.pijava.agent.tool;
 
 /**
  * 执行中收到输出增量的汇 —— pi 的 {@code AgentToolUpdateCallback} 在 shell 层的
- * 对应物（包⑧，{@code docs/35}）。
+ * 对应物（包⑧，{@code 原 docs/35}）。
  *
  * <p>pi 的 {@code bash} 靠它把「跑到**目前**为止的输出」推给宿主
  * （{@code bash.ts:265}/{@code :297}）。⚠️ 注意分层：本接口传的是**增量**

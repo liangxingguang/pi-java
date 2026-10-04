@@ -8,12 +8,12 @@ package com.pijava.tui.component;
  * {@code clearStatusIndicator(kind)} 的第一句是守卫：
  * {@code if (kind && activeStatusIndicator?.kind !== kind) return;} ——
  * 清 {@code retry} 不会误清并发中的 {@code compaction}。
- * 这是 {@code ChatScreen.clearIndicator(Kind)} 照抄的语义（docs/31 §8.38.1-(2)）。</p>
+ * 这是 {@code ChatScreen.clearIndicator(Kind)} 照抄的语义（原 docs/31 §8.38.1-(2)）。</p>
  *
  * <p>倒计时<b>不靠定时器</b>：pi 用 {@code CountdownTimer} 每秒 {@code requestRender}，
  * 而 pi-java 的 fullscreen 每 33 ms 整帧重绘
  * （{@code TamboUIAdapter.createRunner().tickRate(33ms)}）⇒ 按帧从截止时刻重算即等价；
- * inline（按需重绘）另配 1 Hz 唤醒（{@code util.CountdownWake}）。见 docs/31 §8.38.4。</p>
+ * inline（按需重绘）另配 1 Hz 唤醒（{@code util.CountdownWake}）。见 原 docs/31 §8.38.4。</p>
  */
 public sealed interface StatusIndicator {
 
@@ -107,7 +107,7 @@ public sealed interface StatusIndicator {
      * <p>⚠️ 今天<b>不可达</b>：branch summary 在 pi-java 无实现（台账 B1），
      * {@code summarization_retry_attempt_start} 的 source 恒为 {@code "compaction"}。
      * 照写是为了 B1 落地后自动生效 —— <b>不得</b>为它造一个假的可达性
-     * （docs/31 §8.38.7-D）。</p>
+     * （原 docs/31 §8.38.7-D）。</p>
      */
     record BranchSummary(String interruptHint) implements StatusIndicator {
 

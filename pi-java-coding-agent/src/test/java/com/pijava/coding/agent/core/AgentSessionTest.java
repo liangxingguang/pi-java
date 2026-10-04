@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class AgentSessionTest {
 
     /**
-     * 夹具会话落盘到临时目录（docs/39 裁决 B）。
+     * 夹具会话落盘到临时目录（原 docs/39 裁决 B）。
      *
      * <p>不带 {@code --session-dir} 的用例会走持久路径，在开发者**真实 home** 的
      * {@code --<模块目录>--} 下每次跑测试留一个会话文件 —— A12 自放大回路的输入端。</p>

@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包B14 步4（docs/47 §4.4 + §5-步4）：{@link OrphanToolResults} 的第二遍 ——
+ * 包B14 步4（原 docs/47 §4.4 + §5-步4）：{@link OrphanToolResults} 的第二遍 ——
  * P7–P16 孤儿 toolCall 合成 toolResult ＋ error/aborted 助手整条跳过（pi
  * {@code transform-messages.ts:158-232}）。
  *

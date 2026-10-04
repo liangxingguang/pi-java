@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 流中途 abort 的终态（docs/23 §4.4 的待确认项 A8）。
+ * 流中途 abort 的终态（原 docs/23 §4.4 的待确认项 A8）。
  *
  * <p>场景：provider 已经吐出部分内容（partial 的 {@code stopReason} 仍为 {@code null}，
  * 这是真实的中途快照），此时驱动循环在下一轮迭代开头检测到 abort 信号并
@@ -37,7 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * </ul>
  *
  * <p>本测试断言的是**应对齐 pi 的行为**：abort 必须记成 {@code aborted}。
- * 若它失败，即证明 A8 成立（docs/23 §4.4 已给出修法：break 后补
+ * 若它失败，即证明 A8 成立（原 docs/23 §4.4 已给出修法：break 后补
  * {@code lane.partial = lane.partial.withStopReason("aborted")}）。</p>
  */
 class MidStreamAbortTest {
@@ -88,7 +88,7 @@ class MidStreamAbortTest {
         assertThat(operationOutcome(h)).isEqualTo(OperationOutcome.ABORTED);
         // 最新助手消息的 stopReason 必须是 aborted（否则会投影进后续请求）。
         assertThat(h.lastAssistantMessage().stopReason()).isEqualTo("aborted");
-        // 落库的助手 entry 同样（entry 是 stopReason 的唯一真相，docs/22 D1）。
+        // 落库的助手 entry 同样（entry 是 stopReason 的唯一真相，原 docs/22 D1）。
         assertThat(lastAssistantEntryStopReason(h)).isEqualTo("aborted");
     }
 

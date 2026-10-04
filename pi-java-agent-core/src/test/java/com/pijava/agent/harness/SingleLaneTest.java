@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 一个 harness 恰好一条车道（{@code docs/31 §4.3}）。
+ * 一个 harness 恰好一条车道（{@code 原 docs/31 §4.3}）。
  *
  * <p>运行时多车道容器（{@code LaneRegistry} / {@code LaneHandle} / {@code LaneConfig} /
  * {@code createLane} / {@code lanes()} / {@code moveLane}）已删除：pi 的对齐目标

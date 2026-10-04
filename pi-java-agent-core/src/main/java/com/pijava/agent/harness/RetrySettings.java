@@ -3,7 +3,7 @@ package com.pijava.agent.harness;
 /**
  * 自动重试的运行时设置 —— pi {@code settingsManager.getRetrySettings()}
  * （{@code settings-manager.ts:927-933}）返回形状的 harness 方言
- * （package 3d，{@code docs/31 §8.22}）。两环共用：post-run ① 的预算/退避与
+ * （package 3d，{@code 原 docs/31 §8.22}）。两环共用：post-run ① 的预算/退避与
  * 摘要重试（{@code completeSummarization} 的 {@code retryAssistantCall}）读
  * <b>同一份</b>设置（pi 注释原文：Uses the same {@code settings.retry} budget）。
  *

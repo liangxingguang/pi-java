@@ -98,7 +98,7 @@ public final class DefaultProviders {
         }
     }
 
-    /** D-P1：用显式加载的 models.json 注册（夹具用同一代码路径，docs/65 §3 Step 4）。 */
+    /** D-P1：用显式加载的 models.json 注册（夹具用同一代码路径，原 docs/65 §3 Step 4）。 */
     static void registerModelsJsonProviders(ProviderRegistry registry,
                                             com.pijava.ai.provider.ModelsJsonConfig config) {
         for (String id : config.providerIds()) {
@@ -143,9 +143,9 @@ public final class DefaultProviders {
      * 会话级的 {@code defaultProvider} 自此只决定**起手模型**（
      * {@code AgentSession} 的 {@code models.resolve}）与**未注册 provider 的回退**
      * （见下），不再决定每个请求的适配器 —— 此前它把适配器闭包死，导致切到别的
-     * provider 的模型仍用旧适配器发请求（生产事故见 {@code docs/31 §8.31}）。</p>
+     * provider 的模型仍用旧适配器发请求（生产事故见 {@code 原 docs/31 §8.31}）。</p>
      *
-     * <p>回退（裁决 ①，{@code docs/31 §8.31.7}）：模型的 provider 不在注册表里时
+     * <p>回退（裁决 ①，{@code 原 docs/31 §8.31.7}）：模型的 provider 不在注册表里时
      * （目录里的自定义 id、或未实现协议的 provider），回退到会话 provider 并往
      * stderr 留一行警告 —— 不新增硬失败。baseUrl/apiKey 的解析链原样保留（CLI
      * {@code --base-url} &gt; settings 默认 &gt; 凭据存储），只是按模型 provider 取名。</p>
@@ -222,7 +222,7 @@ public final class DefaultProviders {
     }
 
     /**
-     * 包 A-02（docs/59 §4.6）：{@link ModelInfo#api()} → {@code extra["protocol"]} ——
+     * 包 A-02（原 docs/59 §4.6）：{@link ModelInfo#api()} → {@code extra["protocol"]} ——
      * pi {@code compat.ts:262} 的 {@code resolveApiProvider(model.api)} 在本仓的落点
      * （{@code ConfigurableProvider.resolveProtocol} 是读点，会按 provider 的
      * supportedProtocols 校验，不支持则响亮抛）。
@@ -252,7 +252,7 @@ public final class DefaultProviders {
         // 系统提示与工具定义都来自 Context（pi 的 Context）；它们不再走消息列表或 options。
         //
         // 模型**元数据**（而非只有 id）必须随请求走：pi 的请求构建器拿到整个 Model<TApi>，
-        // 从上面读 compat / input / thinkingLevelMap（docs/31 §8.34.4 决策 5）。此前只投
+        // 从上面读 compat / input / thinkingLevelMap（原 docs/31 §8.34.4 决策 5）。此前只投
         // ModelId ⇒ 目录里的 per-model 开关到不了适配器。目录里查不到时退化为
         // ModelInfo.minimal（compat 缺席 ≡ pi 的 `?? false`，安全方向）。
         //
@@ -267,9 +267,9 @@ public final class DefaultProviders {
                 .filter(candidate -> candidate.id().equals(model))
                 .findFirst()
                 .orElseGet(() -> ModelInfo.minimal(model));
-        // D-P1（docs/65）：per-model baseUrl/headers（三源合并的产物）在请求面生效。
+        // D-P1（原 docs/65）：per-model baseUrl/headers（三源合并的产物）在请求面生效。
         var effectiveOptions = withPerModelOverrides(apiOptions, modelInfo);
-        // 包 A-02（docs/59 §4.6）：车道跟着 modelInfo.api 走（pi compat.ts:262）。
+        // 包 A-02（原 docs/59 §4.6）：车道跟着 modelInfo.api 走（pi compat.ts:262）。
         // ⚠️ 必须**先**查 modelInfo 再 createApi —— 派发键在 modelInfo 上，此前 createApi
         // 用的是不含 protocol 的 apiOptions，多协议 provider（openrouter）恒走默认车道。
         var api = provider.createApi(ChatApi.class, withModelProtocol(effectiveOptions, modelInfo));
@@ -291,7 +291,7 @@ public final class DefaultProviders {
      * 解析 {@link ApiOptions}：baseUrl/apiKey 的优先序为 CLI 旗标 &gt; settings 默认
      * &gt; 凭证解析器（{@code null} = 无）。
      *
-     * <p>包 A0 步7（{@code docs/43 D5/D6}）：凭证解析器返回的不再是裸字符串而是
+     * <p>包 A0 步7（{@code 原 docs/43 D5/D6}）：凭证解析器返回的不再是裸字符串而是
      * {@link RecordedCredential} —— 形态（{@code API_KEY} ／ {@code BEARER} ／ {@code OAUTH}）
      * 随值一起装进 {@link ApiOptions}，车道才可能把它放对头。CLI/settings 直给的 key
      * 恒为 {@code API_KEY}（那两层没有「token」这个概念）。</p>
@@ -305,7 +305,7 @@ public final class DefaultProviders {
      * 四参形态 ＋ 逐请求的 extra（包 A-01 起）。四参重载保持原签名，使既有调用点零改签。
      *
      * <p>⚠️ {@code extra} 是**与 {@code StreamRequest.extra} 不同的**那条通道：后者在本仓的
-     * 生产路径上恒为空（{@code docs/54 §3 F1} 的登记 B107）。</p>
+     * 生产路径上恒为空（{@code 原 docs/54 §3 F1} 的登记 B107）。</p>
      */
     static ApiOptions apiOptions(Args args, String providerName, Settings settings,
                                  Function<String, Optional<RecordedCredential>> credentialResolver,

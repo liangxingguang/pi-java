@@ -26,7 +26,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * <b>Batch F 步 6</b>（{@code docs/67}）：Completions {@code reasoning_details}
+ * <b>Batch F 步 6</b>（{@code 原 docs/67}）：Completions {@code reasoning_details}
  * 的**采集** —— pi 从 delta 的 reasoning_details 数组逐项校验合并，
  * 收尾把逻辑条目数组 JSON 落进 thinkingSignature
  * （{@code openai-completions.ts:664-675}，stamp :440）。

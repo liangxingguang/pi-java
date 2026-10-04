@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 包 A7c 的端到端钉子：内置目录的 compat ＋ 请求期探测真的落到了 completions 的线上体
- * （{@code docs/53 §3 F3} 的 D3，以及 R5 的两个字段）。
+ * （{@code 原 docs/53 §3 F3} 的 D3，以及 R5 的两个字段）。
  *
  * <p>每一条都是「旧代码必红」：包 A7 之前 {@code OpenAICompletionsMessageConverter} 恒发
  * {@code max_completion_tokens}、从不发 {@code store}、指令消息恒 {@code system} 角色。</p>

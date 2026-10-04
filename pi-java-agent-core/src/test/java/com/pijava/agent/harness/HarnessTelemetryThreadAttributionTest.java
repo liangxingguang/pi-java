@@ -34,7 +34,7 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 遥测的「当前跨度」在真实 harness 运行里的线程归属（{@code docs/31 §8.25.6} ①-b 与 ③）。
+ * 遥测的「当前跨度」在真实 harness 运行里的线程归属（{@code 原 docs/31 §8.25.6} ①-b 与 ③）。
  *
  * <p>这两条是 A1（`currentStack` → `ThreadLocal`）的证据面：①-b 实测默认路径的三处
  * （`pushCurrent` / `recordEvent` / `popCurrent`）确实同线程 —— 它是**特征化**断言，
@@ -172,7 +172,7 @@ class HarnessTelemetryThreadAttributionTest {
 
     /**
      * 剧本流。`armed` 打开时，**harness 自己的**请求在流内闩住（放行点必须在观察端，
-     * {@code docs/31 §8.23.7}）；摘要请求永不闩 —— 它由测试线程发起，闩住就自锁。
+     * {@code 原 docs/31 §8.23.7}）；摘要请求永不闩 —— 它由测试线程发起，闩住就自锁。
      */
     private static StreamFn scripted(AtomicBoolean armed, CountDownLatch entered,
                                      CountDownLatch release) {
@@ -256,7 +256,7 @@ class HarnessTelemetryThreadAttributionTest {
     /**
      * ①-b：默认路径上三处同线程。**它是特征化断言，不是 A1 的回归哨兵** ——
      * 共享栈在单线程下同样给出正确归属。它钉的是「默认路径同线程**是调用形状的产物**」
-     * 这句判断（{@code docs/18 §7.3}）：哪天有人把 push 或记录点挪到别的线程上，
+     * 这句判断（{@code 原 docs/18 §7.3}）：哪天有人把 push 或记录点挪到别的线程上，
      * 这条会先响。
      */
     @Test
@@ -293,7 +293,7 @@ class HarnessTelemetryThreadAttributionTest {
      * ③：面③-1 的可达性 —— **运行中手动 `/compact`**（生产形状：prompt 在另一条线程上，
      * 手动压缩从宿主线程进来；{@code RunLifecycle.compact:237-239} 没有 `isRunning` 门）。
      *
-     * <p>预测（{@code docs/31 §8.25.6} ③）：A1 生效 ⇒ 摘要那次请求的 payload 行不带
+     * <p>预测（{@code 原 docs/31 §8.25.6} ③）：A1 生效 ⇒ 摘要那次请求的 payload 行不带
      * 那条在飞请求的 {@code spanId}；还原成共享栈 ⇒ 同一行会带上它。后者就是「静默错配」
      * 在生产路径上的样子。当时 A1 下这条行的形状是「没有 {@code traceId}」，
      * **§8.29 之后改为「归于压缩自己的 {@code compaction.summary} 跨度」** —— 不变量

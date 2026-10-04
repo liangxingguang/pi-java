@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 包⑥（docs/33）：{@code message_update} 的线格式补两样东西 —— 恒写的顶层
+ * 包⑥（原 docs/33）：{@code message_update} 的线格式补两样东西 —— 恒写的顶层
  * {@code usage}，以及 {@code toolcall_start} 上的 {@code id}/{@code toolName}。
  *
  * <p>出处：pi {@code modes/json-event.ts:56-66}（恒写 {@code usage}）、
@@ -29,7 +29,7 @@ class JsonEventMapperMessageUpdateTest {
 
     private static StreamEvent.ToolCallStart toolCallStartViaBuilder(String id, String name) {
         // ⚠️ 走 StreamPartialBuilder 造帧：两个桩（FauxProvider 的旧形状 /
-        // ScriptedStreams 的空内容快照）都不是 pi 的读法（docs/33 §4-F）。
+        // ScriptedStreams 的空内容快照）都不是 pi 的读法（原 docs/33 §4-F）。
         var builder = new StreamPartialBuilder();
         builder.emitStart();
         return builder.emitToolCallStart(id, name);
@@ -168,7 +168,7 @@ class JsonEventMapperMessageUpdateTest {
     }
 
     // ═══════════════════════════════════════════════════════════
-    // C 批次（docs/55 §6.3-13，裁决 R5-(a)）：终局变体的扁平投影
+    // C 批次（原 docs/55 §6.3-13，裁决 R5-(a)）：终局变体的扁平投影
     // ═══════════════════════════════════════════════════════════
     //
     // pi 的 RPC 线根本不发终局帧（modes/json-event.ts:33-39），但 proxy 协议

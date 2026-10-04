@@ -18,7 +18,7 @@ import com.pijava.ai.stream.StreamPartialBuilder;
  * tool call unstarted: the run then "completed" with only the preamble text
  * and the tool was never executed.</p>
  *
- * <p>docs/69：custom（grammar）chunks 走 {@link GrammarInputBuffer}：首帧
+ * <p>原 docs/69：custom（grammar）chunks 走 {@link GrammarInputBuffer}：首帧
  * custom-only（无 function）时建缓冲，属性取 grammar 表、未知名回落 {@code "input"}，
  * 收尾先关闭再 end。</p>
  *

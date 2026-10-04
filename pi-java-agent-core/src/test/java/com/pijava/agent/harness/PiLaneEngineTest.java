@@ -34,7 +34,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * {@link PiLaneEngine} 的端到端行为（{@code docs/28 §5} 第 2 步的验证）。
+ * {@link PiLaneEngine} 的端到端行为（{@code 原 docs/28 §5} 第 2 步的验证）。
  *
  * <p>这个测试是**切换驱动前**唯一的证据来源：它把 {@link PiLoop} 接在真实的
  * {@link AgentHarness} 上跑完整一轮，断言车道侧的结果（transcript、记录日志、相位）
@@ -137,7 +137,7 @@ class PiLaneEngineTest {
 
     /** 收集 PiLoop 事件的帧标签。 */
     private static final class Recorder implements PiLoop.Sink {
-        // COW：工具帧由 worker 线程发（docs/31 §8.27.7），普通 ArrayList 会丢帧。
+        // COW：工具帧由 worker 线程发（原 docs/31 §8.27.7），普通 ArrayList 会丢帧。
         private final List<String> frames = new CopyOnWriteArrayList<>();
 
         @Override public void emit(PiLoop.Event event) {
@@ -181,7 +181,7 @@ class PiLaneEngineTest {
      * without gaps.
      *
      * <p>These are the invariants {@code RecordLogValidator} used to check when
-     * it folded the log on resume. The fold is retired ({@code docs/30}), so
+     * it folded the log on resume. The fold is retired ({@code 原 docs/30}), so
      * nothing enforces them any more — but the log is still what run summary
      * and the audit trail read, and <b>the new loop had no coverage for any of
      * them</b>: the old {@code LaneStateFoldTest} sentinels all produced their
@@ -273,7 +273,7 @@ class PiLaneEngineTest {
     }
 
     /**
-     * T10（docs/42 §8.3）：桩流喂非零全量分解 ⇒ 走完 {@code PiLaneSink} 后
+     * T10（原 docs/42 §8.3）：桩流喂非零全量分解 ⇒ 走完 {@code PiLaneSink} 后
      * {@code UsageRecord.usage()} 四分量与 cost 都非零，且会话账
      * （{@code SessionState.getStats()}，读的就是这条记录）跟着动起来。
      *

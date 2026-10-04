@@ -1,7 +1,7 @@
 package com.pijava.ai.catalog;
 
 /**
- * pi {@code RefreshModelsContext.publish} 的 Java 端口（docs/70 §4.1）。
+ * pi {@code RefreshModelsContext.publish} 的 Java 端口（原 docs/70 §4.1）。
  *
  * <p>返回「本次发布是否被接受」—— 实现方按 {@code providerId} 的世代号检查：
  * 过期刷新（refresh 期间又发起了新的 refresh）的发布被拒，{@code update}

@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包 H2（{@code docs/44}）步 1：{@link TransformMessages} 的**图片降级闸**
+ * 包 H2（{@code 原 docs/44}）步 1：{@link TransformMessages} 的**图片降级闸**
  * —— pi {@code transform-messages.ts:12-57}。
  *
  * <p>pi 的闸在**共享预通道**里，且**早于**逐条变换与车道映射跑（{@code :73-74}）。
@@ -49,7 +49,7 @@ class TransformMessagesImageDowngradeTest {
     private static final ModelInfo NON_VISION = model(Set.of(
             ModelCapability.TEXT, ModelCapability.TOOL_USE));
 
-    /** 目录未命中（capabilities 为空）—— 未知态，见 {@code docs/44 D2}。 */
+    /** 目录未命中（capabilities 为空）—— 未知态，见 {@code 原 docs/44 D2}。 */
     private static final ModelInfo UNKNOWN = ModelInfo.minimal(TARGET);
 
     private static ModelInfo model(Set<ModelCapability> caps) {
@@ -130,7 +130,7 @@ class TransformMessagesImageDowngradeTest {
     }
 
     /**
-     * <b>红</b> {@code docs/44 D4} 的 java 扩展：{@link ContentBlock.UrlImageContent} 在 pi 里
+     * <b>红</b> {@code 原 docs/44 D4} 的 java 扩展：{@link ContentBlock.UrlImageContent} 在 pi 里
      * 没有对应类型，但对非视觉模型同样不可用 ⇒ 与 {@code ImageContent} 同等降级。
      */
     @Test
@@ -167,7 +167,7 @@ class TransformMessagesImageDowngradeTest {
     }
 
     /**
-     * <b>回归门</b> {@code docs/44 D2} 的刻意偏离：目录未命中（capabilities 为空）时
+     * <b>回归门</b> {@code 原 docs/44 D2} 的刻意偏离：目录未命中（capabilities 为空）时
      * **按支持处理** —— 图片照留，宁可让 provider 响亮报错，也不静默丢用户读的图。
      */
     @Test
@@ -216,7 +216,7 @@ class TransformMessagesImageDowngradeTest {
             assertThat(tool.details()).isEqualTo("details-payload");
             assertThat(tool.isError()).isTrue();
             assertThat(tool.toolName()).isEqualTo("read");
-            // docs/71 G1：改内容的复制路径必须**八字段全带**（时间戳不许被丢）。
+            // 原 docs/71 G1：改内容的复制路径必须**八字段全带**（时间戳不许被丢）。
             assertThat(tool.timestamp()).isEqualTo(timestamp);
         });
     }

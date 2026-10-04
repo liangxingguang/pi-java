@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * C 批次（{@code docs/55}）：{@link AbstractChatApi} 两条出口的终局落定。
+ * C 批次（{@code 原 docs/55}）：{@link AbstractChatApi} 两条出口的终局落定。
  *
  * <ul>
  *   <li><b>缺终局 ⇒ 错误</b>：{@code onComplete} 安全网此前推一个

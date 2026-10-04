@@ -26,7 +26,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * docs/69：openai-completions 车道的 grammar custom tool 出站声明、构建期错误
+ * 原 docs/69：openai-completions 车道的 grammar custom tool 出站声明、构建期错误
  * 与历史回放（pi {@code openai-completions.ts:1472-1506/1351-1363}）。
  * 观测面为真出站体（RecordingHttpServer）。
  */

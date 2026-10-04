@@ -12,7 +12,7 @@ import com.pijava.ai.message.Message;
  * pi {@code transform-messages.ts:158-232} 的第二遍：重建消息序列，
  * 为孤儿 toolCall 压入合成结果，error/aborted 助手整条跳过。
  *
- * <p><b>包 A2 的 R5</b>（{@code docs/49 §5.5}）：系统消息对工具调用记账**透明** ——
+ * <p><b>包 A2 的 R5</b>（{@code 原 docs/49 §5.5}）：系统消息对工具调用记账**透明** ——
  * 一条落在 toolCall 与其结果之间的系统消息被**扣住**，等（含合成的）结果发完再发；
  * 没有未答调用时就地放行。pi 的原话见 {@code transform-messages.ts:163-166}。</p>
  *

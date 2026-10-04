@@ -9,12 +9,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.List;
 
 /**
- * Tests for {@link CatalogCompatRules} — pi 生成期目录规则的 Java 抄本（包 A7b，{@code docs/53}）。
+ * Tests for {@link CatalogCompatRules} — pi 生成期目录规则的 Java 抄本（包 A7b，{@code 原 docs/53}）。
  *
  * <p>这里的用例大多是**辨伪**用的：pi 的三条谓词在匹配方式上并不统一（正则 vs
  * {@code includes}、是否小写化），本类逐条照抄 ⇒ 夹具必须能抓住「顺手统一写法」这个变异。
- * 期望值同时经 §{@code docs/53 §7.1} 的 oracle（跑生成器 ＋ {@code getBuiltinModel}）与
- * {@code docs/53 §7.1b}（pi 自己的 {@code providers.test.ts}）核对过。</p>
+ * 期望值同时经 §{@code 原 docs/53 §7.1} 的 oracle（跑生成器 ＋ {@code getBuiltinModel}）与
+ * {@code 原 docs/53 §7.1b}（pi 自己的 {@code providers.test.ts}）核对过。</p>
  */
 class CatalogCompatRulesTest {
 
@@ -54,7 +54,7 @@ class CatalogCompatRulesTest {
 
     @Test
     void anthropicModelsCarryStrictTools() {
-        // docs/66：pi generate-models.ts:826-828 对全部 anthropic-messages 模型无条件
+        // 原 docs/66：pi generate-models.ts:826-828 对全部 anthropic-messages 模型无条件
         // supportsStrictTools:true（与 id 无关）；其余字段对 haiku 仍为 NONE。
         var haiku = CatalogCompatRules.anthropic("anthropic", "claude-haiku-4-5-20251001");
         assertThat(haiku.supportsStrictTools()).isTrue();
@@ -136,8 +136,8 @@ class CatalogCompatRulesTest {
     @Test
     void kimiK3IsNotCoveredHere() {
         // pi 对 Kimi K3 会给 supportsMidConvoToolAdditions —— 那是 moonshot/fireworks/opencode
-        // 的规则，本仓的内置目录里没有这些模型 ⇒ 本抄本**不实现**它（docs/53 §4.4）。
-        // 包 A-09：moonshotai 的 provider 级常量给的是 thinkingFormat（docs/58 §2.5(b)），
+        // 的规则，本仓的内置目录里没有这些模型 ⇒ 本抄本**不实现**它（原 docs/53 §4.4）。
+        // 包 A-09：moonshotai 的 provider 级常量给的是 thinkingFormat（原 docs/58 §2.5(b)），
         // 与那个标志无关。
         assertThat(CatalogCompatRules.completions("moonshotai", "kimi-k3")
             .supportsMidConvoToolAdditions()).isNull();
@@ -145,7 +145,7 @@ class CatalogCompatRulesTest {
             .thinkingFormat()).isEqualTo(ThinkingFormat.DEEPSEEK);
     }
 
-    // ── docs/69：grammar 能力位（generate-models.ts:831-854）────
+    // ── 原 docs/69：grammar 能力位（generate-models.ts:831-854）────
 
     @Test
     void gpt5AndLaterGetGrammarToolsOnOpenaiResponses() {
@@ -218,7 +218,7 @@ class CatalogCompatRulesTest {
             .allMatch(m -> m.compat().equals(ModelCompat.NONE));
         assertThat(BuiltinCatalog.mistralModels().listModels())
             .allMatch(m -> m.compat().equals(ModelCompat.NONE));
-        // docs/66：openai chat 模型标 supportsStrictMode:true；embedding 仍为 NONE。
+        // 原 docs/66：openai chat 模型标 supportsStrictMode:true；embedding 仍为 NONE。
         var openai = BuiltinCatalog.openaiModels().listModels();
         assertThat(openai).filteredOn(m -> m.compat().equals(ModelCompat.NONE))
             .extracting(m -> m.id().modelName())
@@ -252,7 +252,7 @@ class CatalogCompatRulesTest {
         assertThat(compat.thinkingFormat()).isEqualTo(ThinkingFormat.DEEPSEEK);
     }
 
-    // ── 包 A-09：per-provider 的 thinkingFormat 目录常量（docs/58 §2.5(b)）──
+    // ── 包 A-09：per-provider 的 thinkingFormat 目录常量（原 docs/58 §2.5(b)）──
 
     @Test
     void theCatalogueAnnotatesTheFormatsDetectionCannotGive() {
@@ -275,7 +275,7 @@ class CatalogCompatRulesTest {
 
     @Test
     void theCatalogueMirrorsPisRedundantFormatConstants() {
-        // 这四条探测已给同值（冗余），但 pi 的目录照写 ⇒ 照抄（docs/58 §2.5(b)）。
+        // 这四条探测已给同值（冗余），但 pi 的目录照写 ⇒ 照抄（原 docs/58 §2.5(b)）。
         assertThat(CatalogCompatRules.completions("zai", "glm-5.2").thinkingFormat())
             .isEqualTo(ThinkingFormat.ZAI);
         assertThat(CatalogCompatRules.completions("zai-coding-cn", "glm-5.2").thinkingFormat())
@@ -287,7 +287,7 @@ class CatalogCompatRulesTest {
         // ⚠️ zai 的 supportsReasoningEffort 在 pi 是**数据驱动**的
         // （generate-models.ts:1396：`thinkingLevelMap !== undefined`）—— java 的内置
         // 条目今天没有级别表 ⇒ 不标（null），由探测（isZai ⇒ false）兜底 ⇒ 与 pi 的
-        // 有效值 false 等价（数据漂移登记见 docs/58 §9）。
+        // 有效值 false 等价（数据漂移登记见 原 docs/58 §9）。
         assertThat(CatalogCompatRules.completions("zai", "glm-5.2").supportsReasoningEffort())
             .isNull();
         // 常量表之外的 provider 仍是 NONE（minimax 是 anthropic 车道、ollama 探测给 openai）。
@@ -319,7 +319,7 @@ class CatalogCompatRulesTest {
     }
 
     /**
-     * 包 A-02（docs/59 §4.3/G8）：pi 生成器给 openrouter 的**全部** completions 条目写
+     * 包 A-02（原 docs/59 §4.3/G8）：pi 生成器给 openrouter 的**全部** completions 条目写
      * {@code thinkingFormat:"openrouter"}（生成数据实测；与探测同值 ⇒ 冗余照抄，
      * 与 zai/deepseek/ant-ling 同口径）。改前 java 不携带 openrouter chat provider，
      * 常量表没有这一臂 ⇒ 本用例红。

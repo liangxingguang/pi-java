@@ -71,7 +71,7 @@ public final class AzureOpenAIResponsesApi extends AbstractChatApi {
         // pi azure-openai-responses.ts:296 / :319：`supportsStrictMode: model.compat?.supportsStrictMode ?? true`
         // —— 与 openai-responses 车道（`?? false`）**缺省相反**，是 pi 的事实，别改成一致。
         var compat = CompatResolver.forResponses(request.model(), true);
-        // docs/69（pi azure :108-111）：grammar 能力表请求起点一次算出。
+        // 原 docs/69（pi azure :108-111）：grammar 能力表请求起点一次算出。
         var grammarProperties = GrammarInputProperties.create(
             com.pijava.ai.api.Transcripts.getDeclaredTools(
                 com.pijava.ai.api.Transcripts.resolveTranscript(

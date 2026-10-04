@@ -18,7 +18,7 @@ import com.pijava.ai.model.ModelId;
 import org.junit.jupiter.api.Test;
 
 /**
- * <b>docs/32 B152 的回放侧去重</b>：修复**之前**落盘的转录里已经带着重复的 tool call
+ * <b>docs/05 B152 的回放侧去重</b>：修复**之前**落盘的转录里已经带着重复的 tool call
  * （同 {@code call_id}），只靠流解析的去重救不回来 —— 那种会话会**永远** 400。
  *
  * <p>判据与流侧一致：同 {@code call_id} 只认第一条（合法调用会有**不同**的 call_id）。

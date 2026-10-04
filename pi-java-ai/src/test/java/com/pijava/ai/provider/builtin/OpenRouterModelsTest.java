@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包 A-02（docs/59 §4.3）：OpenRouter 内置目录 —— 数据转录、谓词 compat、api 派发标记。
+ * 包 A-02（原 docs/59 §4.3）：OpenRouter 内置目录 —— 数据转录、谓词 compat、api 派发标记。
  */
 class OpenRouterModelsTest {
 
@@ -45,7 +45,7 @@ class OpenRouterModelsTest {
     @Test
     void completionsSubsetRidesTheDefaultLane() {
         // api 缺席 ≙ provider 默认协议（openai-completions）——与 pi 数据的
-        // "api":"openai-completions" 行为等价（docs/59 §4.3）。
+        // "api":"openai-completions" 行为等价（原 docs/59 §4.3）。
         assertThat(OpenRouterModels.completionsLane())
             .allSatisfy(m -> assertThat(m.api()).isNull());
         // B105 的内置消费者族（cacheControlFormat 探测 :1632 命中 anthropic/ 前缀）。
@@ -58,7 +58,7 @@ class OpenRouterModelsTest {
     @Test
     void anthropicCompatComesFromThePredicatesNotHardcodedValues() {
         // CatalogCompatRules.anthropic("openrouter", id) 的三谓词逐条对上 pi 生成数据
-        // （docs/59 §3 的复用证据）。
+        // （原 docs/59 §3 的复用证据）。
         var fable5 = model("anthropic/claude-fable-5");
         assertThat(fable5.compat().forceAdaptiveThinking()).isTrue();
         assertThat(fable5.compat().supportsTemperature()).isTrue();
@@ -126,7 +126,7 @@ class OpenRouterModelsTest {
 
     @Test
     void batchIdsKeepTheirColonSuffixVerbatim() {
-        // resolver 的精确匹配（docs/59 §4.7）靠目录里逐字的 ":batch" id。
+        // resolver 的精确匹配（原 docs/59 §4.7）靠目录里逐字的 ":batch" id。
         assertThat(model("anthropic/claude-fable-5:batch").displayName())
             .isEqualTo("Anthropic: Claude Fable 5 (batch)");
     }

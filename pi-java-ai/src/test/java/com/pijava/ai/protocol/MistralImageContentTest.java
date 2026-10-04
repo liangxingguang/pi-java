@@ -21,10 +21,10 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包 H2（{@code docs/44}）步 4：Mistral 车道的图片落点 ——
+ * 包 H2（{@code 原 docs/44}）步 4：Mistral 车道的图片落点 ——
  * pi {@code mistral-conversations.ts:792-815}（user）与 {@code :851-897}（toolResult ＋ {@code buildToolResultText}）。
  *
- * <p>本车道的 toolResult 是**整块照抄**（{@code docs/44} 待裁决 ③ 采纳）：pi 那是一个函数
+ * <p>本车道的 toolResult 是**整块照抄**（{@code 原 docs/44} 待裁决 ③ 采纳）：pi 那是一个函数
  * （{@code buildToolResultText}），拆一半等于自己发明第三种文案。于是本步顺带带来三处
  * **非图片**的行为变更，逐条有用例：</p>
  * <ul>
@@ -108,7 +108,7 @@ class MistralImageContentTest {
                 .containsExactly("user_text:look at this", "user_image:" + DATA_URL);
     }
 
-    /** <b>红</b> {@code docs/44 D4 选项 A}：URL 图片按线格本名下发。 */
+    /** <b>红</b> {@code 原 docs/44 D4 选项 A}：URL 图片按线格本名下发。 */
     @Test
     void urlImagesBecomeImageUrlChunks() throws Exception {
         assertThat(render(VISION, user(new ContentBlock.UrlImageContent("https://example.test/a.png"))))
@@ -182,7 +182,7 @@ class MistralImageContentTest {
      * <b>红</b> 非视觉模型：共享闸把图片换成占位文本块 ⇒ tool 正文是那句占位文案，
      * **没有**图片块。⚠️ 车道侧那个 {@code supportsImages} 门与
      * {@code "[tool image omitted: …]"} 后缀因此在两侧都不可达（同 completions 车道，
-     * {@code docs/44 §9}）。
+     * {@code 原 docs/44 §9}）。
      */
     @Test
     void nonVisionToolResultGetsTheDowngradedText() throws Exception {
@@ -204,7 +204,7 @@ class MistralImageContentTest {
 
     // ----------------------------------------------------------- 回归门（今天就绿）
 
-    /** <b>回归门</b> 无图片的 user 消息仍是**串形态**（pi-java 的既有形状，见 {@code docs/44 §6}）。 */
+    /** <b>回归门</b> 无图片的 user 消息仍是**串形态**（pi-java 的既有形状，见 {@code 原 docs/44 §6}）。 */
     @Test
     void textOnlyUserStaysAString() throws Exception {
         assertThat(render(VISION, user(new ContentBlock.TextContent("hi"))))

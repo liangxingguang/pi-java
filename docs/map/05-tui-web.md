@@ -223,7 +223,7 @@
 
 | 能力 | 说明 |
 |---|---|
-| **本地 Web UI 整体**（`pi-java-web`，1865 Java + 1654 TS + 675 CSS） | pi 仓库无 web 包（`packages/` 11 个包无 web；`find . -name "*web-ui*"` 零命中）。基线取自**仓库外**的第三方项目 `Zetaphor/pi-webui`（见 `docs/15-phase7-webui-design.md:21-33`），前端复用外部 npm 包 `@mariozechner/pi-web-ui` 的 `<message-list>` / `<streaming-message-container>` / `<message-editor>` / `<theme-toggle>` 自定义元素（`frontend/package.json:9-16`、`client/main.ts:809-870`） |
+| **本地 Web UI 整体**（`pi-java-web`，1865 Java + 1654 TS + 675 CSS） | pi 仓库无 web 包（`packages/` 11 个包无 web；`find . -name "*web-ui*"` 零命中）。基线取自**仓库外**的第三方项目 `Zetaphor/pi-webui`（见 `原 docs/15-phase7-webui-design.md:21-33`），前端复用外部 npm 包 `@mariozechner/pi-web-ui` 的 `<message-list>` / `<streaming-message-container>` / `<message-editor>` / `<theme-toggle>` 自定义元素（`frontend/package.json:9-16`、`client/main.ts:809-870`） |
 | WebSocket 网关 + 网关令牌鉴权 | `PiWebServer.java:1`（275 行）、`GatewayToken.java:1`（91 行）、`PiWebServerAuthTest` |
 | 前端面板：会话侧栏（新建/切换/重命名/克隆/导出） | `client/main.ts:554-658 renderSidebar`、`:448-482` |
 | 前端面板：代码调试（文件浏览器 / git status·diff·history / 终端 / skills 四 tab） | `client/panels/debug.ts:1`（321 行）+ `FileBrowserService.java`（87）、`GitService.java`（154） |
@@ -270,12 +270,12 @@
 
 | 条目 | 台账说什么 | 实际 | 证据 |
 |---|---|---|---|
-| **H-9.2-⑦** | 「Anthropic 路径的**思考内容仍按 TextContent 处理**」（`docs/08b:628`） | **已过期** —— 包①（`docs/31 §8.33`）后 Anthropic 车道已发 `ThinkingStart`/`ThinkingContent` | `pi-java-ai/.../protocol/AnthropicMessagesApi.java:207`、`:226` 两处 `emitThinkingStart(...)`；`ContentBlock.ThinkingContent` 已带 `signature`/`redacted`（`MessageBubble.java:90-92` 的 `case ContentBlock.ThinkingContent(var text, _, _)`） |
-| **H-9.2-⑧** | 「webui 未决字段**待 Stage A 实机钉死**」（`docs/15:150`），指 `message_end` 的 timestamp 去重 | **已定但结论与设计稿相反** —— Stage A-D 全部完成（`docs/15:199-218`），落地的是**不给消息带 timestamp**（有意偏离），前端直贴不判重 | `WebWireJson.java:64-66` 注释原文「timestamp 不带上：维持既有『wire 无消息 timestamp』的有意偏离（client/main.ts:261/286 直贴不判重）」；`client/main.ts:315-340` 的 `message_end` 分支无判重 |
+| **H-9.2-⑦** | 「Anthropic 路径的**思考内容仍按 TextContent 处理**」（`原 docs/08b:628`） | **已过期** —— 包①（`原 docs/31 §8.33`）后 Anthropic 车道已发 `ThinkingStart`/`ThinkingContent` | `pi-java-ai/.../protocol/AnthropicMessagesApi.java:207`、`:226` 两处 `emitThinkingStart(...)`；`ContentBlock.ThinkingContent` 已带 `signature`/`redacted`（`MessageBubble.java:90-92` 的 `case ContentBlock.ThinkingContent(var text, _, _)`） |
+| **H-9.2-⑧** | 「webui 未决字段**待 Stage A 实机钉死**」（`原 docs/15:150`），指 `message_end` 的 timestamp 去重 | **已定但结论与设计稿相反** —— Stage A-D 全部完成（`原 docs/15:199-218`），落地的是**不给消息带 timestamp**（有意偏离），前端直贴不判重 | `WebWireJson.java:64-66` 注释原文「timestamp 不带上：维持既有『wire 无消息 timestamp』的有意偏离（client/main.ts:261/286 直贴不判重）」；`client/main.ts:315-340` 的 `message_end` 分支无判重 |
 | **H-9.2-⑨** | 「web 端 `queue_update` / `compaction_*` / `auto_retry_*` **暂不推前端**」（`AgentEventTranslator.java:57`） | **仍成立**（行号已漂移到 `:63-65`，措辞与行为都对） | `AgentEventTranslator.java:63-65` `default -> { // queue_update / compaction_* / auto_retry_* 等暂不推前端 }` |
 | **H-9.2-⑩** | 「`keybindings.json` 用户覆盖 → Phase 6」（`KeybindingsManager.java:14`） | **仍成立** | `KeybindingsManager.java:14` 同句原文；`bindings` 表只有 11 项硬编码默认（`:57-68`），无文件读取 |
-| **H-9.2-②** | 「`app.message.followUp`（Alt+Enter 排队）与 Alt+Enter=换行 **键位占用**」（`docs/08b:506`） | **仍成立，且比台账记的更严重** —— pi 在 **Windows 上 followUp 是 `ctrl+q`**，`alt+enter` 归换行 | pi `core/keybindings.ts:134-137`（`windowsKeybindings ? "ctrl+q" : "alt+enter"`）；java `KeybindingsManager.java:67` 把 `alt+enter` 绑给 `FOLLOW_UP`，`PiTuiApp.java:307` 的 `isNewlineEnter` 走 `shift+enter` |
-| **H-9.2-③** | 「`StreamPartialBuilder`/`ToolCallAccumulator` 仍为**单工具调用模型**，需多槽位」（`docs/08b:525`） | **仍成立**（本次未核生产可达性，仅确认字段仍是单槽） | `StreamPartialBuilder.java:281-285`：`toolCallId`/`toolCallName`/`toolBlockIndex`/`toolArgBuf` 各一个；`emitToolCallDelta:293` 只在 `toolBlockIndex < 0` 时新建块。⚠️ 属 `pi-java-ai` 面，本次未展开 |
+| **H-9.2-②** | 「`app.message.followUp`（Alt+Enter 排队）与 Alt+Enter=换行 **键位占用**」（`原 docs/08b:506`） | **仍成立，且比台账记的更严重** —— pi 在 **Windows 上 followUp 是 `ctrl+q`**，`alt+enter` 归换行 | pi `core/keybindings.ts:134-137`（`windowsKeybindings ? "ctrl+q" : "alt+enter"`）；java `KeybindingsManager.java:67` 把 `alt+enter` 绑给 `FOLLOW_UP`，`PiTuiApp.java:307` 的 `isNewlineEnter` 走 `shift+enter` |
+| **H-9.2-③** | 「`StreamPartialBuilder`/`ToolCallAccumulator` 仍为**单工具调用模型**，需多槽位」（`原 docs/08b:525`） | **仍成立**（本次未核生产可达性，仅确认字段仍是单槽） | `StreamPartialBuilder.java:281-285`：`toolCallId`/`toolCallName`/`toolBlockIndex`/`toolArgBuf` 各一个；`emitToolCallDelta:293` 只在 `toolBlockIndex < 0` 时新建块。⚠️ 属 `pi-java-ai` 面，本次未展开 |
 | **E5** | 「`EventParser.java` **515** 行 —— 已登记例外（TamboUI same-package 覆写）」 | **行数正确**，且例外理由成立（只覆写 `parseControlChar` 一处） | `EventParser.java` 实测 515 行；类注释 `:20-29` 明写「only `parseControlChar(int, Bindings)` below differs from upstream 0.4.0」 |
 | **B45** | 「`pi-java-tui` 的 `spotbugs:check` 4 条 finding」 | **已修**（结案无误） | `ChatScreen.java:57,60` 已加 `volatile`、`:64-65` 已换 `AtomicInteger`、`:167` 一次读；与台账 G 类记载一致 |
 | **B37 / B3 / A12 / B40-B44** | 均已结案 | **核实无误**，代码与台账一致 | `ChatScreen.java:136-143`（错误只进聊天区，无 `lastError` 字段）、`:262-295`（会话事件面）、`WebWireJson.java:75`、`AgentEventTranslator.java:157-186` |
@@ -452,10 +452,10 @@
 
 ### E. 需要别的地图/台账跟进的连带项（不在本图范围，仅登记）
 
-- `docs/32` 的 **B55** 措辞要更新：pi 的 `onProgress` 现在带 `partialSessions` + `AbortSignal`（不只是「有进度回调」）。
+- `docs/05` 的 **B55** 措辞要更新：pi 的 `onProgress` 现在带 `partialSessions` + `AbortSignal`（不只是「有进度回调」）。
 - pi 新增包 **`durable`**（757 行，`080160162 feat(durable): move Pico into dedicated package`）—— 非 UI 面，本图不覆盖。
 - pi 新增 `experimental/micro/`（本图已作 **S31** 纳入）与 `utils/zip.ts`、`utils/wsl.ts`。
-- `docs/40` 的规模表需按本轮新 LOC 更新（本图「规模」节已更新）。
+- `docs/06` 的规模表需按本轮新 LOC 更新（本图「规模」节已更新）。
 
 ---
 
@@ -464,7 +464,7 @@
 **权重规则**（已定，未自创）：权重 = **用户可观察影响 × 频率**，只看「如果用户用这个模块，这个单元有多重要」，**不掺排期优先级**。
 `3` = 每轮对话都走／默认路径；`2` = 每次会话走／常用命令；`1` = 低频／边缘／纯内部；`0` = 非目标（排除出分母）。
 **完成系数**：对齐 = 1.0 ／ 存疑 = 0.5 ／ 缺失 = 0。
-⚠️ 「TUI 优先级最低」是**排期**裁决，不是权重 —— `R1 Markdown 渲染` 按判据仍是 **3**（TUI 的每条消息都走）。排期见 `docs/40`。
+⚠️ 「TUI 优先级最低」是**排期**裁决，不是权重 —— `R1 Markdown 渲染` 按判据仍是 **3**（TUI 的每条消息都走）。排期见 `docs/06`。
 
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|

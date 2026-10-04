@@ -44,7 +44,7 @@ class AnthropicMessagesApiBuildParamsTest {
      *
      * <p>⚠️ 这不是「为迁就新规则而补的字段」：pi 的 {@code AssistantMessage} 里
      * {@code provider}/{@code api}/{@code model} 是 <b>required</b> ——「无身份的助手消息」
-     * 在 pi 里根本不存在。包②（docs/31 §8.34）之前，本文件用
+     * 在 pi 里根本不存在。包②（原 docs/31 §8.34）之前，本文件用
      * {@code AssistantMessage(content)} 兼容构造器造出了那个 pi 造不出的状态，旧适配器
      * 不看身份所以恒绿；而新规则是**条件**规则（同模型才重放签名），夹具就必须给出条件。</p>
      *

@@ -88,7 +88,7 @@ final class GoogleMessageConverter {
                     contents.add(Content.builder().role("model").parts(parts).build());
                 }
                 case Message.ToolResultMessage tool -> addToolResult(contents, tool, modelId, model);
-                // Mechanical guard (docs/48 §A1): Gemini carries the prompt as
+                // Mechanical guard (docs/08 §A1): Gemini carries the prompt as
                 // `systemInstruction`, so a system message never reaches this conversion.
                 // An explicit case (rather than `default`) keeps a future fifth variant a
                 // compile error instead of silently reusing this message.
@@ -208,7 +208,7 @@ final class GoogleMessageConverter {
      * （{@code TransformMessages.downgradeUnsupportedImages}，**同一个** {@code ModelInfo}、
      * **同一个**判据）恒同真同假 ⇒ 它<b>不可达</b>，变异探针**必然零红</b>。
      * ⚠️ 那不是「夹具没牙」，是这一行**没有出参**（包 H2 已在 completions／responses
-     * 两处实测过同一形态，{@code docs/44 §10-3}）—— 照抄保留是为了与 pi 同形。</p>
+     * 两处实测过同一形态，{@code 原 docs/44 §10-3}）—— 照抄保留是为了与 pi 同形。</p>
      */
     private static void addToolResult(List<Content> contents, Message.ToolResultMessage msg,
                                       ModelId<?> modelId, ModelInfo model) {
@@ -236,7 +236,7 @@ final class GoogleMessageConverter {
         if (hasImages && multimodal) {                                  // pi :315
             // ⚠️ 内嵌用的是 FunctionResponsePart（SDK 里与 Part 是**两个类型**），
             // 而独立回合用的是 Part —— pi 的单一 Part 在 Java SDK 上分叉成两支，
-            // 故这里不能像 pi 那样复用同一个 imageParts 列表（docs/45 §9 的登记）。
+            // 故这里不能像 pi 那样复用同一个 imageParts 列表（原 docs/45 §9 的登记）。
             fnResponse.parts(images.stream()
                     .map(GoogleMessageConverter::functionResponseImagePart).toList());
         }
@@ -323,7 +323,7 @@ final class GoogleMessageConverter {
     /**
      * 工具结果里的图片块判据（pi 只认 {@code type === "image"}）。
      *
-     * <p>⚠️ java 扩展的 {@link ContentBlock.UrlImageContent} **不算**（{@code docs/45 §8}）：
+     * <p>⚠️ java 扩展的 {@link ContentBlock.UrlImageContent} **不算**（{@code 原 docs/45 §8}）：
      * pi 无此类型，把它算进来会让 {@code hasImages} 在 pi 里没有对应物。</p>
      */
     private static boolean isImageBlock(ContentBlock block) {
@@ -388,7 +388,7 @@ final class GoogleMessageConverter {
      * 工具定义 → {@code FunctionDeclaration[]}。
      *
      * @param supportsStrictMode pi {@code supportsGoogleStrictToolSampling}（id 谓词）：
-     *        true 且工具解析为 strict（docs/66）⇒ parametersJsonSchema 走 strict 转换
+     *        true 且工具解析为 strict（原 docs/66）⇒ parametersJsonSchema 走 strict 转换
      *        （pi {@code google-shared.ts:388-397}）
      */
     static List<FunctionDeclaration> functions(List<ToolDefinition> tools,

@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * CompactionService LLM 摘要（P6 对齐）+ 环 B 重试链（3d，{@code docs/31 §8.22}）。
+ * CompactionService LLM 摘要（P6 对齐）+ 环 B 重试链（3d，{@code 原 docs/31 §8.22}）。
  *
  * <p>3d 起钉的是 pi 的语义：{@code generateSummaryWithUsage} 对 error/length
  * <b>抛</b>（{@code getSummarizationFailure} 文案），空文本在 stop 收尾下<b>合法</b>

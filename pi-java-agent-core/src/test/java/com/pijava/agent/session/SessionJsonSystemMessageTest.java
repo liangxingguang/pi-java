@@ -18,7 +18,7 @@ import com.pijava.ai.message.Message;
 import org.junit.jupiter.api.Test;
 
 /**
- * A1（{@code docs/48} §A1）：{@code SessionJson.messageNode} 的第四种消息分支。
+ * A1（{@code docs/08} §A1）：{@code SessionJson.messageNode} 的第四种消息分支。
  *
  * <p>系统消息按 pi 的 {@code SystemMessage} 形状落库（{@code ai/src/types.ts:491-509}）：
  * {@code role}/{@code content} 走通用规则，另加 {@code timestamp}（epoch ms）与三个
@@ -75,7 +75,7 @@ class SessionJsonSystemMessageTest {
     }
 
     /**
-     * 包 B87b（{@code docs/50 §4.3}）：{@code toolsAdded} 的**线格形状**是 pi 的 ai 层
+     * 包 B87b（{@code 原 docs/50 §4.3}）：{@code toolsAdded} 的**线格形状**是 pi 的 ai 层
      * {@code Tool} —— 三个键 {@code {name, description, parameters}}（{@code types.ts:600-605}），
      * 不是 {@code ToolDefinition} 全形（7 组件、schema 键名 {@code inputSchema}）。
      *

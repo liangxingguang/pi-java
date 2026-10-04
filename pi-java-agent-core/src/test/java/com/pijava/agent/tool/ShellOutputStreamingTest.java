@@ -12,7 +12,7 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包⑧（docs/35）：bash 的**流式部分结果** —— shell 层的输出汇。
+ * 包⑧（原 docs/35）：bash 的**流式部分结果** —— shell 层的输出汇。
  *
  * <p>pi 侧只有 {@code bash} 一家真的流式（{@code bash.ts:265}/{@code :297}），
  * 其余六个内置工具声明为 {@code _onUpdate?}（**下划线＝故意未使用**）且全文再无

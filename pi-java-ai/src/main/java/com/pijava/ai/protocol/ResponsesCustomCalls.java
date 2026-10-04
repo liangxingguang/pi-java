@@ -7,7 +7,7 @@ import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
 
 /**
- * docs/69：responses 入站 custom_tool_call 的逐槽状态与事件处理
+ * 原 docs/69：responses 入站 custom_tool_call 的逐槽状态与事件处理
  * （pi {@code openai-responses-shared.ts:410-423/504-527/670-680/726-740}），
  * 从 {@link ResponsesStreamProcessor} 抽出以保持车道文件不超限。
  */

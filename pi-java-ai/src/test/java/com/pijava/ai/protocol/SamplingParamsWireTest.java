@@ -32,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * the named request fields}。⚠️ **那句话说出的语义是「同名键压过具名字段」，不是「排在最后」**
  * ⇒ 本文件钉的是**覆盖**与**在场**两件事，不钉键序（A-01 的教训：跨实现断言键序是自找的）。</p>
  *
- * <p>{@code ModelInfo.samplingParams} 在包 A7 就有了字段、但**零消费者**（{@code docs/53 §4.4}
+ * <p>{@code ModelInfo.samplingParams} 在包 A7 就有了字段、但**零消费者**（{@code 原 docs/53 §4.4}
  * 列在「零消费者》那张清单里）⇒ 本包第一次给它装上消费者。per-request 那一半
  * （pi 的 {@code options.samplingParams}）在 java **没有生产者** ⇒ 登记 B125。</p>
  */

@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 判定」这个状态**换了取值**。宿主侧 {@code PiLoopRunner:237} 是拿每个 update 的 partial
  * 重建终局消息的 —— 所以一处按 {@code != null} 写的收尾检查会**恒真**，把
  * {@code "pending"} 当成「已落定」放行；而 {@code ContextEntries.NON_PROJECTED_STOP_REASONS}
- * 不含 {@code "pending"} ⇒ 被打断的响应会被投影进后续请求的上下文（docs/31 §8.35.15 八-8.3，
+ * 不含 {@code "pending"} ⇒ 被打断的响应会被投影进后续请求的上下文（原 docs/31 §8.35.15 八-8.3，
  * 即 {@code MidStreamAbortTest} 记的 A8 缺陷的复活形态）。</p>
  *
  * <p><b>本夹具与 {@code MidStreamAbortTest} 的差别</b>：那条走「拉取**途中**中止」

@@ -16,7 +16,7 @@ import com.pijava.ai.message.Message;
 import org.junit.jupiter.api.Test;
 
 /**
- * <b>包 B87a</b>（{@code docs/50 §4.2}）：系统消息的**回读**。
+ * <b>包 B87a</b>（{@code 原 docs/50 §4.2}）：系统消息的**回读**。
  *
  * <p>B87① 的症状是一对不对称：{@code SessionJson.messageNode} 写得出的系统消息，
  * {@code MessageJsonCodec.decode} 读不回来 —— {@code role: "system"} 落进
@@ -27,8 +27,8 @@ import org.junit.jupiter.api.Test;
  * <p>形状的对错由**写侧**钉住（{@code SessionJsonSystemMessageTest} 已断言 pi 的
  * 键集），本类钉的是**读回来的值**：字段不丢、sections 保序、两种 {@code toolsAdded}
  * 形状都认（pi 三键 ＋ A1 的七键旧形）。pi 的「{@code null} ＝ 删除具名段」在包 A4a 之前
- * 没有载体 ⇒ 当时是**响亮**（{@code docs/50 §9 R1}）；A4a 给了它载体
- * （{@code docs/52 §4.1}）⇒ 现在**收下**并断言往返，其余非文本非 null 的值仍然**响亮**。</p>
+ * 没有载体 ⇒ 当时是**响亮**（{@code 原 docs/50 §9 R1}）；A4a 给了它载体
+ * （{@code 原 docs/52 §4.1}）⇒ 现在**收下**并断言往返，其余非文本非 null 的值仍然**响亮**。</p>
  */
 class MessageJsonCodecSystemReadbackTest {
 
@@ -65,7 +65,7 @@ class MessageJsonCodecSystemReadbackTest {
         assertThat(back.toolsRemoved()).extracting(ToolReference::name).containsExactly("write");
     }
 
-    /** docs/66：constrainedSampling 写读 round-trip。 */
+    /** 原 docs/66：constrainedSampling 写读 round-trip。 */
     @Test
     void roundTripsConstrainedSampling() {
         var strictTool = new ToolDefinition("read", "Read files",
@@ -84,7 +84,7 @@ class MessageJsonCodecSystemReadbackTest {
             .isEqualTo(new com.pijava.ai.api.JsonSchemaSampling(com.pijava.ai.api.StrictMode.PREFER));
     }
 
-    /** docs/69：grammar constrainedSampling 写读 round-trip（variants 两键）。 */
+    /** 原 docs/69：grammar constrainedSampling 写读 round-trip（variants 两键）。 */
     @Test
     void roundTripsGrammarSampling() {
         var variants = new java.util.LinkedHashMap<String, String>();
@@ -183,7 +183,7 @@ class MessageJsonCodecSystemReadbackTest {
 
         assertThat(back.toolsAdded()).hasSize(1);
         assertThat(back.toolsAdded().get(0).inputSchema()).containsEntry("type", "object");
-        // pi 的 toolsAdded 是 ai 层 Tool，不带 A1 的四个元数据键（docs/50 §10 L-F）：
+        // pi 的 toolsAdded 是 ai 层 Tool，不带 A1 的四个元数据键（原 docs/50 §10 L-F）：
         // label 回落到 name、guidelines 为空、renderShell 回到缺省。
         assertThat(back.toolsAdded().get(0).label()).isEqualTo("read");
         assertThat(back.toolsAdded().get(0).promptGuidelines()).isEmpty();
@@ -209,9 +209,9 @@ class MessageJsonCodecSystemReadbackTest {
     /**
      * pi 用 {@code null} 表达「删掉具名段」（{@code types.ts:501}）。
      *
-     * <p>⚠️ <b>本条包之前这里断言的是抛错</b>（B87a 的 {@code docs/50 §9 R1}）：当时删除态
+     * <p>⚠️ <b>本条包之前这里断言的是抛错</b>（B87a 的 {@code 原 docs/50 §9 R1}）：当时删除态
      * 在 Java 的形状里没有载体，静默丢键会**静默改变 prompt**。A4a 给了它载体
-     * （{@code Map<String,String>} 允许 null 值，{@code docs/52 §4.1}）⇒ 现在读回来是
+     * （{@code Map<String,String>} 允许 null 值，{@code 原 docs/52 §4.1}）⇒ 现在读回来是
      * 「值在场且为 null」，与 pi 同义。</p>
      */
     @Test
@@ -265,7 +265,7 @@ class MessageJsonCodecSystemReadbackTest {
      * <p>⚠️ 每条都断言**消息里点名了出问题的字段** —— 只断言
      * {@code isInstanceOf(DecodeError.class)} 的话，这些用例在缺陷态**恒真**
      * （修复前抛的也是 DecodeError，只是文案是 {@code has unknown message role}），
-     * 那就是一组没牙的断言（{@code docs/45 §10} 的 B84 同型教训）。</p>
+     * 那就是一组没牙的断言（{@code 原 docs/45 §10} 的 B84 同型教训）。</p>
      */
     @Test
     void rejectsMalformedSystemFields() throws Exception {

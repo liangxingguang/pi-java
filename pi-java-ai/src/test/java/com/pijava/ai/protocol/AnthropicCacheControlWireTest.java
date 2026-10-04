@@ -31,11 +31,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * 包 A-01 端到端的钉子：缓存断点真的落到了 Anthropic 的**出站体**上。
  *
- * <p><b>oracle 是跑出来的，不是读出来的</b>：逐条对应 {@code docs/54 §7.1} 的 pi 探针
+ * <p><b>oracle 是跑出来的，不是读出来的</b>：逐条对应 {@code 原 docs/54 §7.1} 的 pi 探针
  * P1–P18 —— 那份用 {@code streamSimple} ＋ {@code onPayload} 抓真实的请求体。本夹具的
  * 每条注释标出 P 编号，方便与 pi 的逐字输出对照。</p>
  *
- * <p>⚠️ <b>断言一律按键取值，不逐字节比对</b>（{@code docs/54 §4.7}）：SDK 的类型化路径
+ * <p>⚠️ <b>断言一律按键取值，不逐字节比对</b>（{@code 原 docs/54 §4.7}）：SDK 的类型化路径
  * 序列化键序与 pi 不同（{@code {text,type,…}} vs {@code {type,text,…}}），JSON 对象键序
  * 无语义。唯一的例外是原始 JSON 直通路径（{@code tool_addition}），它**与 pi 逐字节相同**
  * —— 但本夹具仍只按键取值，逐字节那条由 {@code SdkJsonEscapeHatchTest} 承担。</p>
@@ -317,7 +317,7 @@ class AnthropicCacheControlWireTest {
     void theBreakpointLandsOnTheToolAdditionAfterThePendingSystemFlush() throws Exception {
         // P10/P11：pi 的断点判定发生在 `flushPendingSystemMessages()` **之后** ⇒ 转录末尾
         // 刷出的 held 系统消息成为「最后一条」，断点落在它的末块（`tool_addition`）上。
-        // ⚠️ 这是 `docs/51 §4.4 ⑥` 那个落点，也是「判定顺序」的唯一可观察后果。
+        // ⚠️ 这是 `原 docs/51 §4.4 ⑥` 那个落点，也是「判定顺序」的唯一可观察后果。
         var native_ = new ModelCompat(false, null, true, false, Boolean.TRUE, null,
             Boolean.TRUE, null, null, true, MaxTokensField.MAX_TOKENS, null, null, null);
         var base = tool("base_tool");
@@ -347,7 +347,7 @@ class AnthropicCacheControlWireTest {
 
     @Test
     void aBuiltInAnthropicModelGetsBreakpointsByDefault() throws Exception {
-        // A7c 的教训（docs/53 §4.5）：手搓 compat 会把「解析层有没有真的填」遮住。
+        // A7c 的教训（原 docs/53 §4.5）：手搓 compat 会把「解析层有没有真的填」遮住。
         // 用真模型走一遍，钉住整条链：目录 → ModelInfo → resolver → 三处落点。
         //
         // ⚠️ 内置 opus-4-8 带着两个 mid-convo 标志（A7b 的目录标注）⇒ 前导系统消息里有
@@ -382,7 +382,7 @@ class AnthropicCacheControlWireTest {
     void anUnknownRetentionStringFallsBackInsteadOfSilentlyDisablingCaching() throws Exception {
         // ⚠️ 反面钉子：合法集合外的串（"1h"）当作**缺席**，于是 default short 生效 ——
         // 断点仍发（不是消失）、且没有 ttl。若 parse 塌成 SHORT，这一条同样绿，
-        // 但那时 PI_CACHE_RETENTION 会被静默屏蔽（docs/54 §4.2）—— 那种差别只有
+        // 但那时 PI_CACHE_RETENTION 会被静默屏蔽（原 docs/54 §4.2）—— 那种差别只有
         // CacheRetentionTest 的环境变量用例能看见，两份夹具各管一半。
         // ⚠️ 大小写**不**算非法：选项侧的 parse 是小写化的（java 的配置面方言，
         // pi 的 TS 类型让这种输入不可能出现）—— 见 parseIsCaseInsensitiveForTheOptionSideOnly。

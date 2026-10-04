@@ -26,7 +26,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * <b>docs/32 B152 的兜底</b>：端点把**同一个** function_call item 发两次时，只保留一条。
+ * <b>docs/05 B152 的兜底</b>：端点把**同一个** function_call item 发两次时，只保留一条。
  *
  * <p>复现自真实端点：失败转录里两个 {@code tool_use} 的 {@code call_id}、{@code item.id}
  * 与参数**逐字相同**（{@code fc_} 是端点分配的 ⇒ 同一个 item 被发了两遍）。pi 会照单全收

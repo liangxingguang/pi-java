@@ -22,7 +22,7 @@ import org.slf4j.LoggerFactory;
  * Drives one harness run on a virtual thread and persists the produced
  * transcript/records into the session (Phase 4 §13.1).
  *
- * <p><b>3d（docs/31 §8.22）后本类不再有重试环</b>：auto-retry 的 ①（预算、退避、
+ * <p><b>3d（原 docs/31 §8.22）后本类不再有重试环</b>：auto-retry 的 ①（预算、退避、
  * 摘尾、取消）与会话级 {@code retryAttempt} 全部住进 agent-core 引擎
  * （{@code PostRunRetry}，pi {@code _handlePostAgentRun} 的 ①→②→③ 全序）。
  * 宿主层只驱动一次，剩下三件事：</p>
@@ -68,13 +68,13 @@ final class SessionRunner {
                 stopReason.set(done.reason());
             }
             if (event instanceof StreamEvent.StreamError err) {
-                // C 批次（docs/55 §5 F4）：采信车道给的 reason，不再一律塌成 "error"。
+                // C 批次（原 docs/55 §5 F4）：采信车道给的 reason，不再一律塌成 "error"。
                 // pi 的两者语义不同（打印模式两者都退 1，但消息与状态保留 aborted，
                 // print-mode.ts:139-155 / agent.ts:526-542）；本仓的 PiLoopRunner 与
                 // RunFailure 也一直保留它 ⇒ 此前是同仓两套口径。
                 // ⚠️ 本改动**今天不可观察**：下面的读尾（B5 第 2 步）在尾条是
                 // error/aborted 的助手消息时会用 tail.stopReason() 覆盖这个值，
-                // 而流错误必然产生这样一条尾条 ⇒ 变异探针 M4 零红（docs/55 §12）。
+                // 而流错误必然产生这样一条尾条 ⇒ 变异探针 M4 零红（原 docs/55 §12）。
                 stopReason.set(StreamEvent.isSettled(err.reason()) ? err.reason() : "error");
             }
             if (event instanceof StreamEvent.UsageInfo usage) {
@@ -94,16 +94,16 @@ final class SessionRunner {
             }
         })) {
             // 3d：驱动只有这一次 —— pi 的 ①重试→②压缩→③队列全序在引擎 post-run
-            // 里跑（docs/31 §8.22），宿主层的 do-while 与 dropTrailingErrorAssistant
+            // 里跑（原 docs/31 §8.22），宿主层的 do-while 与 dropTrailingErrorAssistant
             // 一并撤销（重试的摘尾只动副本，住在 PostRunRetry）。
-            // 驱动只有 PiLoop 一条（docs/31 §6）：harness.prompt 就是 pi 的
+            // 驱动只有 PiLoop 一条（原 docs/31 §6）：harness.prompt 就是 pi 的
             // Agent.prompt —— 起手与收口都在其中，调用方只提供会话层的事件接收器。
             List<Entry> transcript = List.of();
             try {
                 var outcome = owner.harness()
                     .prompt(laneName, prompt, List.of(), passEvents(owner, laneName));
                 // 用户 prompt 的 entry 由引擎起手写入，此处补一次落盘
-                // （docs/27 §2.1：pi 的 `_appendEntry` → `_persist` 逐条写）。
+                // （原 docs/27 §2.1：pi 的 `_appendEntry` → `_persist` 逐条写）。
                 flush(owner, laneName);
                 // 收集本次驱动实际跑过的全部 pass 的 run id（①续跑不换
                 // session 运行身份、每 pass 各 roll 一个 —— passRunIds 记账），
@@ -113,7 +113,7 @@ final class SessionRunner {
             } catch (Throwable t) {
                 // 兜底保留：引擎内部失败面（操作没跑到收尾）。重试判定的
                 // 那条路已归引擎 —— 这里只可能剩非重试类异常。
-                // B5 第 1 步（docs/31 §8.36.4）：`Exception` → `Throwable` —— pi 的
+                // B5 第 1 步（原 docs/31 §8.36.4）：`Exception` → `Throwable` —— pi 的
                 // catch 无类型（`agent.ts:500`），Java 的 Exception/Error 分裂是方言，
                 // 不是 pi 的形状。只接 Exception 会让 Error 直穿：两个 future 永不完成，
                 // SessionResult.status()/entries() 是 join ⇒ 打印模式永久挂起。
@@ -128,7 +128,7 @@ final class SessionRunner {
                 }
             }
 
-            // B5 第 2 步（docs/31 §8.36.5）：pi `modes/print-mode.ts:139-155` —— 跑完之后
+            // B5 第 2 步（原 docs/31 §8.36.5）：pi `modes/print-mode.ts:139-155` —— 跑完之后
             // 读**转录尾条**定终局，而不是看流信号。引擎把 pass 内的抛出收成一条失败助手
             // 消息后，流上不会再有任何终局信号（那次 pass 的 StreamDone 早在工具批次之前
             // 就发过了）⇒ 只看流信号会把崩溃的 run 记成 (0, completed)。
@@ -166,7 +166,7 @@ final class SessionRunner {
                 }
             }
             flush(owner, laneName);
-            // 包⑨（docs/36，B42）：pi 的 turn_end 两个字段都必填
+            // 包⑨（原 docs/36，B42）：pi 的 turn_end 两个字段都必填
             // （types.ts:438）⇒ 终局助手消息 ＋ 本次驱动的工具结果。
             owner.emitSessionEvent(new AgentSessionEvent.AgentSettled(
                 tailAssistant(transcript), driveToolResults));
@@ -183,7 +183,7 @@ final class SessionRunner {
             statusFuture.complete(new RunStatus(
                 exitCode(stopReason.get()), stopReason.get()));
         } catch (Throwable t) {
-            // B5 第 1 步（docs/31 §8.36.4）：同 `:105` 那处，`Exception` → `Throwable`。
+            // B5 第 1 步（原 docs/31 §8.36.4）：同 `:105` 那处，`Exception` → `Throwable`。
             LOG.error("[session] drive failed; emitting empty AgentEnd (run=" + laneName + ")", t);
             var error = StreamEvent.StreamError.settle(
                 "error", t, AssistantMessage.empty());
@@ -200,7 +200,7 @@ final class SessionRunner {
             if (streamObserver == null) {
                 queue.add(Optional.empty());
             }
-            // B5 第 1 步的「活性」那一半（docs/31 §8.36.4 ①-b）：照抄引擎侧
+            // B5 第 1 步的「活性」那一半（原 docs/31 §8.36.4 ①-b）：照抄引擎侧
             // PiLaneEngine.drive 的同一条纪律 —— 无论从哪条路离开（含 catch 体
             // 自己再抛、含 Error 直穿 try-with-resources），两个 future 都必须落定。
             // 否则 SessionResult.status()/entries() 是 join ⇒ 打印模式只能 Ctrl-C。
@@ -220,10 +220,10 @@ final class SessionRunner {
         var echoed = new AtomicBoolean();
         return event -> {
             if (event instanceof PiLoop.Event.MessageEnd) {
-                // docs/27 §2.1：每条 entry 产生后即写（崩溃窗口 = 一条 entry）。
+                // 原 docs/27 §2.1：每条 entry 产生后即写（崩溃窗口 = 一条 entry）。
                 flush(owner, laneName);
             }
-            // 包⑦（docs/34）：工具执行生命周期事件出口。pi 的 AgentSessionEvent
+            // 包⑦（原 docs/34）：工具执行生命周期事件出口。pi 的 AgentSessionEvent
             // **复用** agent 联合（agent-session.ts:143-145）⇒ 这三条本就在会话事件
             // 流上，RPC 线逐字节透传（json-event.ts:48-51）、pi 的 TUI 逐字段读它
             // （interactive-mode.ts:3324-3365）。此前它们在这里被静默丢弃。
@@ -306,7 +306,7 @@ final class SessionRunner {
     }
 
     /**
-     * 把尚未落盘的 entry / record 写入持久会话（docs/27 §2.1）。
+     * 把尚未落盘的 entry / record 写入持久会话（原 docs/27 §2.1）。
      *
      * <p>落盘时机与 pi 产品的 {@code session-manager._persist} 对齐：**每条 entry
      * 产生后即写**，而不是攒到 run 结束。pi 的崩溃窗口因此是"一条 entry"，而此前

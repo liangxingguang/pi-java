@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * End-to-end integration: two harnesses（会话分支的两个宿主）+ hook + compaction.
  *
  * <p>此前这里跑的是「一个 harness 两条车道」；多车道运行时容器删除后
- * （{@code docs/31 §4.3}），两条并行上下文就是**两个 harness**——父会话一个、
+ * （{@code 原 docs/31 §4.3}），两条并行上下文就是**两个 harness**——父会话一个、
  * 分支会话一个（{@link AgentHarness#fork()}）。</p>
  */
 class AgentHarnessIntegrationTest {

@@ -48,7 +48,7 @@ class ModelInfoTest {
         assertThat(model.samplingParams()).isEmpty();
     }
 
-    // ------------------------------------------------ 包 H2（docs/44 D2）：能力位读取
+    // ------------------------------------------------ 包 H2（原 docs/44 D2）：能力位读取
 
     /** 目录/models.json 声明了图片输入 ⇒ 真。 */
     @Test
@@ -73,7 +73,7 @@ class ModelInfoTest {
     }
 
     /**
-     * ⚠️ {@code docs/44 D2} 的刻意偏离：目录未命中（{@code capabilities} 为空）⇒
+     * ⚠️ {@code 原 docs/44 D2} 的刻意偏离：目录未命中（{@code capabilities} 为空）⇒
      * **未知按支持**处理。反方向会把「用户读的图被静默换成占位文本」这个正在修的 bug
      * 在目录未命中时原样重演。pi 没有这个状态（它的 {@code getModel} 查不到就抛）。
      */
@@ -83,7 +83,7 @@ class ModelInfoTest {
             .isTrue();
     }
 
-    // ------------------------------------------------ 包 A-02（docs/59 §4.1）：per-model api
+    // ------------------------------------------------ 包 A-02（原 docs/59 §4.1）：per-model api
 
     /** 全部存量便捷构造（7/8/10/11 参）与 minimal ⇒ api 缺席 ≙ provider 默认协议。 */
     @Test
@@ -114,7 +114,7 @@ class ModelInfoTest {
         assertThat(model.api()).isNull();
     }
 
-    /** 显式 api 原样携带（派发点在宿主，docs/59 §4.6）。 */
+    /** 显式 api 原样携带（派发点在宿主，原 docs/59 §4.6）。 */
     @Test
     void explicitApiIsCarried() {
         var model = new ModelInfo(

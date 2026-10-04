@@ -32,7 +32,7 @@ import static org.assertj.core.api.Assertions.within;
 
 /**
  * Google 车道的 usage 归一 —— pi {@code google-generative-ai.ts:231-250} 的逐条移植
- * （包 H1 步 5，{@code docs/42 §2.1 P12/P13}，测试计划 T8）。
+ * （包 H1 步 5，{@code 原 docs/42 §2.1 P12/P13}，测试计划 T8）。
  *
  * <p>三条容易做错的：</p>
  * <ul>
@@ -88,7 +88,7 @@ class GoogleGenerativeAiApiUsageTest {
     void negativeInputIsNotClampedAwayAsPiDoes() throws Exception {
         // cached（400）> prompt（100）⇒ 100 − 400 = −300。
         // pi 的减法**没有** Math.max(0, …)（google-generative-ai.ts:233-244，与 OpenAI 两条
-        // 车道相反）。docs/42 裁决 D：判据是「行为和 pi 一样」，pi 没有钳位就是没有。
+        // 车道相反）。原 docs/42 裁决 D：判据是「行为和 pi 一样」，pi 没有钳位就是没有。
         // 若有人觉得「负 input 是 bug」而补上钳位 —— 这条会红，且必须回头重开裁决 D。
         var usage = lastUsage(collect(usageFrame(100, 400, 5, 0, 405)));
 

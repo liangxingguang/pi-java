@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.within;
 /**
  * Anthropic 车道的 usage 四分量与计价 —— pi {@code anthropic-messages.ts:602-625}
  * （{@code message_start}）与 {@code :752-787}（{@code message_delta}）的逐条移植
- * （包 H1 步 3，{@code docs/42 §8.3} T2/T3/T4）。
+ * （包 H1 步 3，{@code 原 docs/42 §8.3} T2/T3/T4）。
  *
  * <p>本包最易做错的就是这两段，所以每条钉子都对着 pi 的一句注释：</p>
  * <ul>

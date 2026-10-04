@@ -33,8 +33,8 @@ import com.pijava.ai.thinking.ThinkingLevel;
  * @param sessionId    pi {@code SimpleStreamOptions.sessionId}（包 B103）：会话亲和头/
  *                     {@code prompt_cache_key} 的来源。空 ≙ pi 的 {@code undefined}。
  *                     ⚠️ 压缩/摘要路径保持<b>空</b>（pi 在该路径显式传 routing id、
- *                     不是主会话 id；{@code docs/61 §1.5}）。{@code env} 仍不带
- *                     （{@code docs/54 §3 F2}）。
+ *                     不是主会话 id；{@code 原 docs/61 §1.5}）。{@code env} 仍不带
+ *                     （{@code 原 docs/54 §3 F2}）。
  */
 public record StreamOptions(
     OptionalInt maxTokens,

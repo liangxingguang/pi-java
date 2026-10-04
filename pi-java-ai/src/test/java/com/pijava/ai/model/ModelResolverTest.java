@@ -73,7 +73,7 @@ class ModelResolverTest {
     }
 
     /**
-     * 包 A-02（docs/59 §4.7）：pi {@code parseModelPattern:209-216} —— **精确匹配先行**。
+     * 包 A-02（原 docs/59 §4.7）：pi {@code parseModelPattern:209-216} —— **精确匹配先行**。
      * OpenRouter 的 {@code :batch}/{@code :exacto} 一族 id 自带冒号；改前冒号切分先行，
      * 会把 batch id 静默解析成非 batch 模型（另一条车道、另一个价）。
      */

@@ -14,7 +14,7 @@ import com.pijava.ai.protocol.OpenAICompletionsApi;
 import com.pijava.ai.protocol.OpenAIResponsesApi;
 
 /**
- * D3（{@code docs/62}）：官方 OpenAI provider 默认 Responses（pi 写死，
+ * D3（{@code 原 docs/62}）：官方 OpenAI provider 默认 Responses（pi 写死，
  * {@code providers/openai.ts:6-14}），显式 {@code extra.protocol} 可压住默认。
  */
 class OpenAIProviderProtocolTest {

@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * A-20（docs/68）第 1 步：pi-messages 车道<b>不重试</b>。
+ * A-20（原 docs/68）第 1 步：pi-messages 车道<b>不重试</b>。
  *
  * <p>pi 的 pi-messages 低层 {@code stream} 是单次 {@code fetch}，失败直接推
  * error 帧（{@code pi-messages.ts:393-423}）；因此服务器首次返回 500 时，

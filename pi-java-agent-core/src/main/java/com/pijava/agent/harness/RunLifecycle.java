@@ -18,7 +18,7 @@ import com.pijava.ai.thinking.ModelThinkingLevel;
  *
  * <p>本类由旧的步进链执行器收窄而来：步进链（{@code peekAction} / {@code executeAction} /
  * {@code computeNextAction}）连同它服务的 {@code Action} 联合类型已删除，推进职责全归
- * {@link PiLoop}（{@code docs/31 §3.2}、{@code §6}）。留下的三件事都与驱动循环无关，
+ * {@link PiLoop}（{@code 原 docs/31 §3.2}、{@code §6}）。留下的三件事都与驱动循环无关，
  * 重新实现只会引入漂移：</p>
  *
  * <ul>
@@ -46,7 +46,7 @@ final class RunLifecycle {
     /**
      * 用一个新 prompt 起一次运行（pi {@code Agent.prompt} 的前半），不带起手段补丁。
      *
-     * <p>⚠️ 用户 entry 在 {@code startRun} 里**先行**落盘（{@code docs/31 §4.2}），起手可能存在
+     * <p>⚠️ 用户 entry 在 {@code startRun} 里**先行**落盘（{@code 原 docs/31 §4.2}），起手可能存在
      * 的段补丁 entry 则由同一个方法写在它**之前** —— 与 pi 的
      * {@code messages.unshift(updateMessage)} 同序。</p>
      *
@@ -61,7 +61,7 @@ final class RunLifecycle {
      *
      * <p>pi 的 {@code prompt()} 把补丁 {@code unshift} 进待发列表，补丁与用户消息**都**经
      * {@code message_end} 落盘 ⇒ 日志序是 {@code [system(补丁), user]}。java 的这两条都由本方法
-     * **先行**写入（用户 entry 先写是 {@code docs/31 §4.2} 的既定设计；两者都走「起手直接 append」
+     * **先行**写入（用户 entry 先写是 {@code 原 docs/31 §4.2} 的既定设计；两者都走「起手直接 append」
      * 这条路，故都不算 {@code WriteDeferred}，见 {@link PiLaneSink#append}），于是补丁排在前。
      * 循环仍会为这两条发 {@code message_start/end}：用户消息按对象引用抑制，补丁则按
      * **时间戳**抑制 —— 它在 {@code declareToolChanges} 里会被复制一次（工具字段写回），
@@ -143,7 +143,7 @@ final class RunLifecycle {
      * 续跑 pass 的起手（pi {@code Agent.continue} 的后半 + {@code runAgentLoopContinue}
      * 的对应物）。3c 起守卫不在这里：pi 的判据（副本尾部的角色、steering/followUp
      * 排空）住在 {@code agent.ts:362-388} 的前奏里，已随 package 3c 移交给
-     * {@link PiLaneEngine#continuePrompts}（{@code docs/31 §8.21}）—— 本方法只管装配。
+     * {@link PiLaneEngine#continuePrompts}（{@code 原 docs/31 §8.21}）—— 本方法只管装配。
      *
      * <p>prompt 模式（排空了队列的 continue ≙ pi 的
      * {@code runPromptMessages(queued)}）与非 prompt 模式（pi 的
@@ -276,10 +276,10 @@ final class RunLifecycle {
         }
         lane.transcript.addAll(entries);
         // 恢复出让「上次记过什么」与既有日志一致，否则恢复后的首次运行会把一条已经在
-        // 日志里的 ThinkingLevelChange 再写一遍（docs/31 §4.1）。
+        // 日志里的 ThinkingLevelChange 再写一遍（原 docs/31 §4.1）。
         lane.recordedThinking = lastRecordedThinking(lane);
         // 工作副本从播种的日志重建 —— resume 是「首次填充」那一类重建点
-        // （pi sdk.ts:376 的启动恢复正是 5 个 sync 点之一，docs/31 §4.2）。
+        // （pi sdk.ts:376 的启动恢复正是 5 个 sync 点之一，原 docs/31 §4.2）。
         HarnessUtils.rebuildLaneMessages(lane);
     }
 
@@ -294,12 +294,12 @@ final class RunLifecycle {
     }
 
     /**
-     * Load a lane's persisted record log on resume (docs/30 §4.1).
+     * Load a lane's persisted record log on resume (原 docs/30 §4.1).
      *
      * <p>State is <b>replaced, never merged</b> — this is a resume, so the lane
      * is empty. Only the log itself is loaded: orchestration state is no longer
      * reconstructed from it. The record log is a pure audit side channel
-     * (docs/28 option C), and pi forbids inferring state from it
+     * (原 docs/28 option C), and pi forbids inferring state from it
      * ({@code harness.md:1317} invariant 5: <i>"no value history exists to
      * fold"</i>), so nothing here derives run id or queues out of records.</p>
      *
@@ -310,7 +310,7 @@ final class RunLifecycle {
      *
      * <p>Queues start <b>empty</b>: pi keeps them in-process, so a crash loses
      * them. Rebuilding them from the log would re-inject a half-finished prompt
-     * into an unrelated later run (docs/30 §4.3). {@code newestOwn} likewise
+     * into an unrelated later run (原 docs/30 §4.3). {@code newestOwn} likewise
      * starts {@code null} — it is derived from the run's own output
      * ({@code PiLaneSink.onMessageEnd}) long before any outcome is determined,
      * and {@link HarnessUtils#determineOutcome} is only ever called after that.</p>
@@ -334,5 +334,5 @@ final class RunLifecycle {
 
     // 3d：dropTrailingErrorAssistant 已删除 —— pi 的 _prepareRetry 只摘**工作副本**尾
     // （日志保留失败消息，用户历史可见），该动作住在 PostRunRetry 原位；
-    // 「摘日志尾 + 重建副本」是与 pi 相悖的旧方言（docs/31 §8.22 裁决①）。
+    // 「摘日志尾 + 重建副本」是与 pi 相悖的旧方言（原 docs/31 §8.22 裁决①）。
 }

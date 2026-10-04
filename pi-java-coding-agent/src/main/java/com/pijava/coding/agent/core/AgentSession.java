@@ -98,7 +98,7 @@ public final class AgentSession implements AutoCloseable {
     private ExtensionUI extensionUI = ExtensionUI.noop();
     // resources_discover：扩展贡献的主题候选（启动时选第一个可用）。
     private List<Path> themePaths = List.of();
-    // 3d（docs/31 §8.22）：pi 的重试中止是「仅退避睡眠存活」的
+    // 3d（原 docs/31 §8.22）：pi 的重试中止是「仅退避睡眠存活」的
     // _retryAbortController（agent-session.ts:2948 建、:2963 finally 弃）——
     // 会话侧等价的窗口模拟：onAutoRetryStart 开窗（先清残留计数，≙ 新 controller）、
     // onAutoRetryEnd 关窗；abortRetry() 只在窗口内置旗（窗口外是 no-op，与 pi 一致，
@@ -277,7 +277,7 @@ public final class AgentSession implements AutoCloseable {
         var telemetry = PayloadRecordingStreamFn.exporter(args.sessionId(), args.tracePayloads());
         var recordingStreamFn = new PayloadRecordingStreamFn(streamFn, telemetry);
         var model = models.resolve(modelPattern, providerName);
-        // 3c（docs/31 §8.21，裁决③）：宿主层的自动压缩事件走轻量 observer，不占
+        // 3c（原 docs/31 §8.21，裁决③）：宿主层的自动压缩事件走轻量 observer，不占
         // HookSystem。harness 先于会话构造 ⇒ 用引用晚绑定：observer 在压缩真正
         // 发生时（必晚于 create() 返回）才读得到会话。pi 的 compaction_start/end
         // 就发在会话层，这里经 emitSessionEvent 进同一条会话事件流。
@@ -302,7 +302,7 @@ public final class AgentSession implements AutoCloseable {
                 }
             }
         };
-        // 3d（docs/31 §8.22）：两环的运行时设置与事件。设置 = 每决策现读
+        // 3d（原 docs/31 §8.22）：两环的运行时设置与事件。设置 = 每决策现读
         // settings.accessors().getRetrySettings()（pi 的 getRetrySettings() 不缓存）；
         // 中止旗与事件仍经 sessionRef 晚绑定（harness 先于会话构造）。
         // 环 A 的 auto_retry_* 由引擎 ①（PostRunRetry）发，环 B 的
@@ -366,11 +366,11 @@ public final class AgentSession implements AutoCloseable {
         var harness = AgentHarness.create(HarnessConfig.builder()
             .streamFn(recordingStreamFn)
             .model(model)
-            // 3b（docs/31 §8.20）：阈值压缩的门读**当前模型**的上下文窗口
+            // 3b（原 docs/31 §8.20）：阈值压缩的门读**当前模型**的上下文窗口
             // （pi model.contextWindow，agent-session.ts:548）；目录字段
             // maxInputTokens 的释义即窗口大小。setModel 后随之动态变。
             .contextWindow(models::contextWindow)
-            // 3c（docs/31 §8.21，裁决④）：isRecoverableLength 的操作数 =
+            // 3c（原 docs/31 §8.21，裁决④）：isRecoverableLength 的操作数 =
             // pi model.maxTokens = 目录 maxOutputTokens；未编目 ⇒ 0 ⇒ 判据恒 false。
             .maxOutputTokens(models::maxOutputTokens)
             // 3d 环 B：摘要调用包在 retryAssistantCall 同形环里 —— 与环 A
@@ -390,7 +390,7 @@ public final class AgentSession implements AutoCloseable {
             .skills(SessionSetup.discoverSkills(args))
             .telemetry(telemetry)
             .compactionObserver(compactionObserver)
-            // 3d 环 A/B 三件套（docs/31 §8.22.3）：settings 晚读口（每次 run 现取，
+            // 3d 环 A/B 三件套（原 docs/31 §8.22.3）：settings 晚读口（每次 run 现取，
             // 覆盖 setAutoRetryEnabled 之后的路径）、中止观察口（退避睡眠窗口）、
             // 事件观察器（auto_retry_* / summarization_retry_* 映射到会话事件面）。
             // 缺了这三行不会编译报错 —— 槽位有静默默认值，但设置与事件全断。
@@ -475,7 +475,7 @@ public final class AgentSession implements AutoCloseable {
      *
      * <p>⚠️ pi 还会在这里把级别<b>夹到模型可用集</b>（{@code clampThinkingLevel}）并落
      * transcript。夹取在 pi-java 由车道侧的 {@code AnthropicThinking.resolve} 按模型能力
-     * 处理（{@code docs/46 §3-D2} 的范围裁决）；transcript 落盘属另一条线，本包不做。</p>
+     * 处理（{@code 原 docs/46 §3-D2} 的范围裁决）；transcript 落盘属另一条线，本包不做。</p>
      */
     public ModelThinkingLevel setThinkingLevel(ModelThinkingLevel level) {
         var previous = harness.getThinkingLevel();
@@ -524,7 +524,7 @@ public final class AgentSession implements AutoCloseable {
      *
      * <p>pi 的类型是 {@code string | undefined} —— 非文件后端（sqlite / in-memory /
      * {@code --no-session}）取不到路径，回 {@code null} ≙ undefined，
-     * 线格式上**省略该键**（{@code docs/31 §8.37.4}）。</p>
+     * 线格式上**省略该键**（{@code 原 docs/31 §8.37.4}）。</p>
      */
     public String sessionFile() {
         var metadata = session == null ? null : session.getMetadata();
@@ -555,7 +555,7 @@ public final class AgentSession implements AutoCloseable {
     }
 
     /**
-     * 会话车道的名字 —— 恒为 {@link AgentHarness#DEFAULT_LANE}（{@code docs/31 §4.3}）。
+     * 会话车道的名字 —— 恒为 {@link AgentHarness#DEFAULT_LANE}（{@code 原 docs/31 §4.3}）。
      *
      * <p>会话不再有「当前车道」这个可变字段：运行时多车道容器已删除，分支是**新会话**
      * （每个会话持有自己的 harness）。名字由 harness 给出。</p>
@@ -843,7 +843,7 @@ public final class AgentSession implements AutoCloseable {
             return copy;
         }
         // 内存态：没有独立会话文件可 fork，于是**给它一个自己的 harness**再从本会话日志播种
-        // —— 这正是「分支归会话层」的落点（docs/31 §4.3）。此前这里靠共享父 harness + 新建
+        // —— 这正是「分支归会话层」的落点（原 docs/31 §4.3）。此前这里靠共享父 harness + 新建
         // lane 假装隔离，而那条新 lane 是**空的**：分支会话拿不到任何历史。
         return forkInMemory(branchName, entries());
     }
@@ -895,7 +895,7 @@ public final class AgentSession implements AutoCloseable {
      * 内存态分支：新会话持**自己的** harness，日志从父会话播种。
      *
      * <p>播种走 {@code seedTranscript}，它同时把 entry 日志与消息工作副本一起立起来
-     * （{@code docs/31 §4.2} 的重建点）。</p>
+     * （{@code 原 docs/31 §4.2} 的重建点）。</p>
      */
     private AgentSession forkInMemory(String branchName, List<Entry> seedEntries) {
         var forkedHarness = harness.fork();

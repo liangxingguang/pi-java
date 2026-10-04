@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code prepareNextTurn} / {@code shouldStopAfterTurn} 的调用**时机与上下文通道**，
  * 逐条对齐 pi {@code packages/agent/src/agent-loop.ts} @ {@code v0.85.1}。
  *
- * <p>这个类是 {@code docs/31 §8.3-6} 的落地验证。四处此前不一致的地方：</p>
+ * <p>这个类是 {@code 原 docs/31 §8.3-6} 的落地验证。四处此前不一致的地方：</p>
  *
  * <ol>
  *   <li>{@code AgentLoopTurnUpdate} 的 {@code context} 字段缺失 —— 压缩的落地通道
@@ -149,7 +149,7 @@ class PiLoopTurnHooksTest {
 
     /** 把事件压成帧标签，便于断言「这个事件出现在哪个位置」。 */
     private static final class Recorder implements PiLoop.Sink {
-        // COW：工具帧由 worker 线程发（docs/31 §8.27.7），普通 ArrayList 会丢帧。
+        // COW：工具帧由 worker 线程发（原 docs/31 §8.27.7），普通 ArrayList 会丢帧。
         private final List<String> frames = new CopyOnWriteArrayList<>();
 
         @Override

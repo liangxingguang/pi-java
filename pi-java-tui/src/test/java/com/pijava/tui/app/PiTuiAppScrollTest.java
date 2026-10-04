@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PiTuiAppScrollTest {
 
     /**
-     * 夹具会话落盘到临时目录（docs/39 裁决 B）：空 args 会写到开发者真实 home。
+     * 夹具会话落盘到临时目录（原 docs/39 裁决 B）：空 args 会写到开发者真实 home。
      *
      * <p>这里是 {@code static} —— 会话由静态助手 {@link #start} 建，静态
      * {@code @TempDir} 是 JUnit 5 支持的每类一份临时目录。</p>

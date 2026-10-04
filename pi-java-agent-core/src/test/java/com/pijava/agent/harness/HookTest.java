@@ -104,7 +104,7 @@ class HookTest {
 
     @Test
     void shouldStopAfterTurnEndsRunButPostRunContinueDrainsFollowUp() {
-        // pi 真值（3c，docs/31 §8.21）：shouldStopAfterTurn 让内层循环在 followUp
+        // pi 真值（3c，原 docs/31 §8.21）：shouldStopAfterTurn 让内层循环在 followUp
         // 排空**之前**就 agent_end 返回（agent-loop.ts:252-255，:261 的排空被跳过）⇒
         // 运行内确实只烧了一次请求、队列确实没被运行内排空。但 _handlePostAgentRun
         // ③ 看到队列有货（agent-session.ts:1143）⇒ agent.continue()：副本以助手消息

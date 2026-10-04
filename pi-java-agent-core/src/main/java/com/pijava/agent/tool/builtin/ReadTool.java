@@ -59,7 +59,7 @@ public final class ReadTool {
             }
             @Override public ExecutionMode executionMode() { return new ExecutionMode.Parallel(); }
 
-            // docs/66：pi 的 read 默认 strict-prefer（CHANGELOG）。
+            // 原 docs/66：pi 的 read 默认 strict-prefer（CHANGELOG）。
             @Override public JsonSchemaSampling constrainedSampling() {
                 return new JsonSchemaSampling(StrictMode.PREFER);
             }

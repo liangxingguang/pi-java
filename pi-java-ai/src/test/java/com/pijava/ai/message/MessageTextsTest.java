@@ -16,8 +16,8 @@ import org.junit.jupiter.api.Test;
  * <p>⚠️ 本条包之前本类是**被删改过的**：pi 的更新消息带 {@code sections: { b: null }}，
  * 而 java 的 {@code Map<String,String>} 表达不了「值在场且为 null」，故当时去掉了那一项，
  * 连带 pi 期望串里的 {@code 'Removed system prompt section "b".'} 也不存在
- * （{@code docs/49 §9 R3①}、登记 L3）。包 A4a 给了删除态载体 ⇒ 本类恢复成 pi 的**逐字**
- * 移植（{@code docs/52 §4.1}）。</p>
+ * （{@code 原 docs/49 §9 R3①}、登记 L3）。包 A4a 给了删除态载体 ⇒ 本类恢复成 pi 的**逐字**
+ * 移植（{@code 原 docs/52 §4.1}）。</p>
  */
 class MessageTextsTest {
 

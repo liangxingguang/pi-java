@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Resume behavior after the record-log fold was retired (docs/30).
+ * Resume behavior after the record-log fold was retired (原 docs/30).
  *
  * <p>The log is loaded but no longer folded into orchestration state, so the
  * lane comes back idle with empty queues; the transcript seed stays responsible
@@ -42,7 +42,7 @@ class SessionResumeFoldTest {
     /**
      * The cwd the seeded session is created under.
      *
-     * <p>⚠️ **docs/39**：必须与 resume 路径查找的 cwd 相同。会话按项目目录存放
+     * <p>⚠️ **原 docs/39**：必须与 resume 路径查找的 cwd 相同。会话按项目目录存放
      * （pi {@code getDefaultSessionDir(cwd)}），而 {@code resolvePersistentWeb}
      * 读的就是 {@code user.dir}；夹具原先写死字面量 {@code "cwd"}，只有在
      * 「跨全部项目取最新」那种越界扫描下才碰巧能被找到。</p>
@@ -109,7 +109,7 @@ class SessionResumeFoldTest {
     }
 
     /**
-     * Queues are <b>not</b> rebuilt from the record log (docs/30 §4.3).
+     * Queues are <b>not</b> rebuilt from the record log (原 docs/30 §4.3).
      *
      * <p>This test used to assert the opposite — that an enqueue which was never
      * consumed or cancelled came back as pending. That behavior is now
@@ -147,9 +147,9 @@ class SessionResumeFoldTest {
 
     /**
      * A session persisted mid-run keeps an open operation. Resuming must settle
-     * it at the resume boundary (docs/30 §4.2) so the lane comes back idle and a
+     * it at the resume boundary (原 docs/30 §4.2) so the lane comes back idle and a
      * new run may open its own operation — storage rejects a second open
-     * operation on the same lane (docs/21 F6).
+     * operation on the same lane (原 docs/21 F6).
      *
      * <p>Until this settlement existed, a crashed session resumed to the
      * checkpoint phase and relied on the drive loop's {@code TryFinishRun} to

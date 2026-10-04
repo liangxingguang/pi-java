@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * 包 A-10：{@link Estimate} —— pi {@code ai/src/utils/estimate.ts} 的逐条移植。
  *
- * <p>本类的消费方是 {@code clampMaxTokensToContext}（{@code docs/57 §1.1}），
+ * <p>本类的消费方是 {@code clampMaxTokensToContext}（{@code 原 docs/57 §1.1}），
  * 所以这里的每条断言都在给「{@code max_tokens} 夹到哪里」定值。</p>
  *
  * <p>⚠️ 三条最容易被写错的：① {@code totalTokens} 用的是 {@code ||} 语义（**0 要落到求和**）；
@@ -220,7 +220,7 @@ class EstimateTest {
         assertThat(estimate.tokens()).isEqualTo(1);
     }
 
-    // ── docs/71 G1：user/toolResult 的时间戳也推进前缀守卫 ──────────────
+    // ── 原 docs/71 G1：user/toolResult 的时间戳也推进前缀守卫 ──────────────
 
     /**
      * pi {@code estimate.ts:91} 的推进对**每一条**消息生效（它的四个变体都有 timestamp）。

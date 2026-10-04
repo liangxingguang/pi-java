@@ -24,7 +24,7 @@ final class HarnessUtils {
     /**
      * The harness's lane, provided the caller named it correctly.
      *
-     * <p>一个 harness 只有一条车道（{@code docs/31 §4.3}），所以这里退化成一次名字核对
+     * <p>一个 harness 只有一条车道（{@code 原 docs/31 §4.3}），所以这里退化成一次名字核对
      * —— 保留它是因为「该调用属于哪条车道」仍是各处 API 的形状，而名字对不上意味着调用方
      * 拿着别的会话的车道名（或早已删除的旧分支名），那必须炸而不是静默返回本车道。</p>
      */
@@ -48,7 +48,7 @@ final class HarnessUtils {
      * <p>Called only where the log is <b>wholly replaced or first filled</b> —
      * resume seeding, compaction, lane move, reset. Day-to-day appends go
      * through {@link PiLaneSink}'s event path and never come here
-     * ({@code docs/31 §4.2}).</p>
+     * ({@code 原 docs/31 §4.2}).</p>
      *
      * <p>Compute-then-clear: {@code pathToLeaf} reads the log and cannot see
      * the working copy, but "swap the whole thing or leave it untouched" beats
@@ -68,7 +68,7 @@ final class HarnessUtils {
         if (images != null) {
             images.forEach(img -> content.add(img.toContentBlock()));
         }
-        // pi agent.ts:422 —— 用户消息在构造点盖时间戳（docs/71 G1）。
+        // pi agent.ts:422 —— 用户消息在构造点盖时间戳（原 docs/71 G1）。
         return new Message.UserMessage(content, java.time.Instant.now());
     }
 
@@ -78,7 +78,7 @@ final class HarnessUtils {
      *
      * <p>The id is the item's queue sequence number, not a real transcript
      * entry id: a drain merges every item into one entry, so an item never
-     * maps 1:1 onto a transcript entry (docs/21 R6). It only needs to be
+     * maps 1:1 onto a transcript entry (原 docs/21 R6). It only needs to be
      * stable so a cancel/consume record can reference the same item.</p>
      */
     static ProvisionedEntry<?> provisionedQueueTarget(LaneInfo.QueuedItem item) {
@@ -100,7 +100,7 @@ final class HarnessUtils {
     }
 
     /**
-     * Record an in-flight write as deferred (docs/22 D3).
+     * Record an in-flight write as deferred (原 docs/22 D3).
      *
      * <p>pi's rule is "a lane-view entry write during a run becomes a durable
      * deferred write; while idle it appends" (docs/harness-v2.md:1894). The

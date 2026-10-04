@@ -27,7 +27,7 @@ import com.pijava.ai.stream.StreamPartialBuilder;
  * Responses SSE 事件映射为 {@link StreamPartialBuilder} 事件序列。供
  * {@code OpenAIResponsesApi} 与 {@code AzureOpenAIResponsesApi} 共享。</p>
  *
- * <h3>B20：收尾语义更正 α/β/γ/δ/ε（docs/31 §8.35.14）</h3>
+ * <h3>B20：收尾语义更正 α/β/γ/δ/ε（原 docs/31 §8.35.14）</h3>
  *
  * <p>本车道曾是 §8.35.2 里**唯一**被判为「已对齐」的一条，逐行复核后查出五处差距。
  * 关键在**终局事件的性质**：pi 的收尾（{@code openai-responses.ts:181-192} + shared
@@ -235,7 +235,7 @@ final class ResponsesStreamProcessor {
 
     /**
      * 终局 usage 归一 —— pi {@code openai-responses-shared.ts:559-582}（{@code finalizeResponse}
-     * 的 usage 段）的逐条移植（包 H1 步 5，{@code docs/42 §2.1 P11}）。
+     * 的 usage 段）的逐条移植（包 H1 步 5，{@code 原 docs/42 §2.1 P11}）。
      *
      * <ul>
      *   <li><b>减法</b>（{@code :571}）：OpenAI 把 cached 与 cache-write <b>都含在</b>

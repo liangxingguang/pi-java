@@ -22,7 +22,7 @@ import com.pijava.agent.tool.ToolResult;
  * （{@code :754-757}）——所以这两个先记录、再**向上重抛**，由 {@code PiToolRunner}
  * 的 catch 完成转换；其余钩子族维持「非致命」。</p>
  *
- * <p>车道名仍是登记键（一个 harness 只有一条车道，{@code docs/31 §4.3}）——
+ * <p>车道名仍是登记键（一个 harness 只有一条车道，{@code 原 docs/31 §4.3}）——
  * 扩展注册时给出会话的车道名，触发时按同一名字取回。</p>
  */
 public final class HookSystem {

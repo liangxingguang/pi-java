@@ -346,7 +346,7 @@ public final class RpcDispatcher {
         var model = harness.getModel();
         var compaction = harness.getCompactionSettings();
         String modelId = model == null ? "" : model.provider() + "/" + model.modelName();
-        // 逐字段取自会话，与 pi rpc-mode.ts:450-465 的取值表一一对应（包④，docs/31 §8.37）。
+        // 逐字段取自会话，与 pi rpc-mode.ts:450-465 的取值表一一对应（包④，原 docs/31 §8.37）。
         // 此前 isCompacting / sessionFile / sessionId / pendingMessageCount 是写死的
         // false / null / null / 0。
         return new RpcSessionState(

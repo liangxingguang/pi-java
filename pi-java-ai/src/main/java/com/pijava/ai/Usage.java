@@ -66,7 +66,7 @@ public record Usage(
      *
      * <p>pi's {@code calculateCost} mutates {@code usage.cost} in place; this record is
      * immutable, so the calculator returns a fresh {@link Cost} and the caller attaches
-     * it here ({@code docs/42 §8.2}).</p>
+     * it here ({@code 原 docs/42 §8.2}).</p>
      *
      * @param cost the new cost breakdown
      * @return a copy carrying {@code cost} and every token field unchanged

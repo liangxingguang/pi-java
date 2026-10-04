@@ -44,7 +44,7 @@ class JsonEventMapperTest {
     }
 
     /**
-     * 包⑨（docs/36，B42）更新：`agent_settled`（≙ pi 的 `turn_end`）不再只有类型 ——
+     * 包⑨（原 docs/36，B42）更新：`agent_settled`（≙ pi 的 `turn_end`）不再只有类型 ——
      * pi 的 {@code turn_end} 是 {@code { message, toolResults }}，两个字段都必填
      * （{@code agent/src/types.ts:438}）。
      */
@@ -74,8 +74,8 @@ class JsonEventMapperTest {
         // ⚠️ 这里**不**断 `role` —— `Message.role()` 是接口方法、不是 record 组件，
         // Jackson 不把它序列化（web 线的 `WebWireJson:28` 正因如此手工 put("role")）。
         // RPC 线的消息因此没有 role 判别值 —— **既有形状**，本包不改，
-        // 已作为待核项登记（docs/36 §10）。
-        // ⚠️ 包⑩（docs/37）**已修**这两条**既有**的 RPC 线偏差（此处随之更新）：
+        // 已作为待核项登记（原 docs/36 §10）。
+        // ⚠️ 包⑩（原 docs/37）**已修**这两条**既有**的 RPC 线偏差（此处随之更新）：
         //  ① 消息现在带 `role` 判别值（线级投影补上）。
         //  ② 工具结果的键名已从 record 组件名 `toolUseId` 改为 pi 的 **`toolCallId`**。
         assertThat(node.get("message").get("role").asText()).isEqualTo("assistant");
@@ -166,7 +166,7 @@ class JsonEventMapperTest {
         assertThat(end.get("reason").asText()).isEqualTo("overflow");
     }
 
-    // ── 包④ B 组：可空键按 pi 的 `?` 省略（docs/31 §8.37.4）──
+    // ── 包④ B 组：可空键按 pi 的 `?` 省略（原 docs/31 §8.37.4）──
     //
     // 每条都配一条**反向断言**（有值时必须在）——否则「一律删键」这种改坏法
     // 也能让夹具变绿。pi 的取值处：json-event.ts:48-51 原样透传 ⇒ 省略与否

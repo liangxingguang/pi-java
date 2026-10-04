@@ -32,7 +32,7 @@ import com.pijava.ai.stream.StreamPartialBuilder;
  * <p>Phase 6: added {@code (ApiOptions, String apiKeyEnvVar)} constructor and
  * {@code baseUrl} override support for Anthropic-compatible providers (MiniMax etc.).</p>
  *
- * <p><b>B20</b>（{@code docs/31 §8.35.14}）：{@code message_delta.stop_reason} 经
+ * <p><b>B20</b>（{@code 原 docs/31 §8.35.14}）：{@code message_delta.stop_reason} 经
  * {@code mapStopReason} 映射（pi {@code anthropic-messages.ts:1464-1493} 逐字移植），
  * 收尾按 pi 的判序走 {@code pending → error → done} 三分支（{@code :779-804}）。
  * 修复前车道**不看** wire 上的 stop reason，一律发 {@code "end_turn"} ⇒ 「被 max_tokens
@@ -70,7 +70,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
      * @param apiKeyEnvVar the environment variable holding the API key
      */
     public AnthropicMessagesApi(ApiOptions options, String apiKeyEnvVar) {
-        // 包 A0 步7（docs/43 D5/D7）：按**凭证种类**分派，对应 pi
+        // 包 A0 步7（原 docs/43 D5/D7）：按**凭证种类**分派，对应 pi
         // api/anthropic-messages.ts:906-989 的三分支（github-copilot / OAuth / 默认）。
         var auth = resolveAuth(options, apiKeyEnvVar);
         // pi :906-908 的判据是**值**（`apiKey.includes("sk-ant-oat")`）——CLI 直给／文件凭证
@@ -96,7 +96,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         }
         // A-14（G1）：SDK 内置重试关到 0，初始请求由 ProviderRetry 独占。
         builder.maxRetries(0);
-        // D-P1：models.json 合并来的 default headers（docs/65）。
+        // D-P1：models.json 合并来的 default headers（原 docs/65）。
         putExtraHeaders(options, builder::putHeader);
         this.client = builder.build();
         this.providerRetry = ProviderRetry.optionsOf(options);
@@ -143,7 +143,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
      *
      * <p>在**构造期**读一次 —— 车道是每请求新建的（{@code DefaultProviders.streamBlocking}
      * 里的 {@code provider.createApi(...)}），所以这个时点与 pi 的「每次 stream 调用读一次」
-     * 等价（{@code docs/54 §3 F1}）。取值经 {@code ApiOptions.extra} 的字符串键过桥，
+     * 等价（{@code 原 docs/54 §3 F1}）。取值经 {@code ApiOptions.extra} 的字符串键过桥，
      * 与 {@code ResponsesOptions}/{@code AzureOptions} 同形。</p>
      */
     private final Optional<CacheRetention> cacheRetention;
@@ -284,7 +284,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                     return builder.emitToolCallStart(pendingToolId[0], pendingToolName[0]);
                 }
                 if (block.isRedactedThinking()) {
-                    // B7（docs/31 §8.33）：pi 把 redacted 映射成 thinking 块 ——
+                    // B7（原 docs/31 §8.33）：pi 把 redacted 映射成 thinking 块 ——
                     // 文本固定 "[Reasoning redacted]"、thinkingSignature = data、redacted: true
                     // （anthropic-messages.ts:638-647），且同样「先入 content、后 push 事件」。
                     // 落到 text 分支会留下一个空 TextContent，那个空块会被原样发给 Anthropic。
@@ -298,7 +298,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                             true);
                 }
                 if (block.isThinking()) {
-                    // 签名必须**容忍缺失**（P2，docs/31 §8.31）：Anthropic 的 thinking 块其
+                    // 签名必须**容忍缺失**（P2，原 docs/31 §8.31）：Anthropic 的 thinking 块其
                     // signature 由后续 signature_delta 补，relay/兼容端点为非 Anthropic 模型
                     // 合成思考时更可能整个流都不给。SDK 的严格访问器 signature() 会抛
                     // AnthropicInvalidDataException("`signature` is not set") 打死整轮 run；
@@ -334,7 +334,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                     return builder.emitThinkingDelta(delta.asThinking().thinking());
                 }
                 if (delta.isSignature()) {
-                    // 同上的容忍规则（P2，docs/31 §8.31）：缺字段 ⇒ 空串，不抛。
+                    // 同上的容忍规则（P2，原 docs/31 §8.31）：缺字段 ⇒ 空串，不抛。
                     // pi 的 `block.thinkingSignature += event.delta.signature`（anthropic-messages.ts:705）
                     // 在 JS 里会把 undefined 拼成字面量 "undefined" —— 那是 pi 的事故
                     // （TS 类型谎报 required），这里**故意不复制**；真 Anthropic 的
@@ -403,7 +403,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
      * （{@code {stopReason, errorMessage?}}）—— 同形，只是 Java 需要显式类型。</p>
      *
      * <p>（原第二条偏差「pi 返回 {@code "toolUse"} 而 pi-java 落 {@code "tool_use"}」已随
-     * B109 消失：归一化词表现在与 pi 同字面量，见 {@code docs/56}。注意区分三个同名字面量
+     * B109 消失：归一化词表现在与 pi 同字面量，见 {@code 原 docs/56}。注意区分三个同名字面量
      * —— 上面 {@code case} 的标号是**线格原值**，一直写作 {@code "tool_use"}，本包不动它。）</p>
      *
      * <p>未知取值**抛** {@code IllegalStateException}，与 pi 的 {@code default: throw} 一致；

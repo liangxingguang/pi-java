@@ -83,7 +83,7 @@ final class MessageJsonCodec {
      * 副本；读侧不保序的话 round-trip 会静默重排 prompt 的段落。
      * {@link Message.SystemMessage} 的紧凑构造器会再拷一次，同样保序。</p>
      *
-     * <p>JSON {@code null} 直接收下（包 A4 的形状裁决，{@code docs/52 §4.1}）——
+     * <p>JSON {@code null} 直接收下（包 A4 的形状裁决，{@code 原 docs/52 §4.1}）——
      * B87a 当时对它抛错是因为删除态还没有载体，那个载体现在有了。
      * 其余非文本类型（数字／对象／数组）仍然抛：把它们读成删除或读成空串都会**静默改 prompt**。</p>
      */
@@ -119,7 +119,7 @@ final class MessageJsonCodec {
      *
      * <p>A1 的四个元数据键（{@code label}/{@code promptSnippet}/{@code promptGuidelines}/
      * {@code renderShell}）**不回读** —— pi 的 {@code toolsAdded} 是 ai 层 {@code Tool}，
-     * 本就不带它们（{@code docs/50 §10 L-F}）；三参便捷构造器给出与 pi 同义的缺省。</p>
+     * 本就不带它们（{@code 原 docs/50 §10 L-F}）；三参便捷构造器给出与 pi 同义的缺省。</p>
      */
     private static List<ToolDefinition> decodeToolsAdded(JsonNode node) {
         if (node == null || node.isNull()) {
@@ -150,7 +150,7 @@ final class MessageJsonCodec {
 
     /**
      * pi 的 {@code constrainedSampling} 节点：{@code {type:"json_schema",strict}} 或
-     * {@code {type:"grammar",variants:{openai_lark?,openai_regex?}}}（docs/66/69）；
+     * {@code {type:"grammar",variants:{openai_lark?,openai_regex?}}}（原 docs/66/69）；
      * 缺席/null ⇒ null（不约束）。未知 type/strict 取值、grammar 变体非串 ⇒ 响亮抛 schema 错。
      */
     private static com.pijava.ai.api.ConstrainedSampling decodeConstrainedSampling(JsonNode node) {
@@ -275,7 +275,7 @@ final class MessageJsonCodec {
      * <p>pi names the field {@code thinking} ({@code types.ts:358}) and persists
      * entries verbatim ({@code session-manager.ts:1030-1056}), so {@code thinking}
      * is the shape that matches pi byte-for-byte. pi-java wrote {@code text} until
-     * this change (docs/31 §8.33 P6) — sessions already on disk in
+     * this change (原 docs/31 §8.33 P6) — sessions already on disk in
      * {@code ~/.pi-java} still carry it, so both must be accepted.</p>
      */
     private static String thinkingText(JsonNode node) {

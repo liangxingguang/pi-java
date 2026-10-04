@@ -34,7 +34,7 @@ import com.pijava.ai.catalog.ModelInfo;
  * （completions 是 {@code max_tokens}/{@code max_completion_tokens}，responses 是
  * {@code max_output_tokens}）。抽成本类之后，「不许写成两份」这条规则只有**本文件**一处
  * 要守 —— 但两个 builder 类型不同 ⇒ 路由代码仍是两段（M6 实测：只变异
- * {@code applyToCompletions} ⇒ 恰 1 红；两段同时变异 ⇒ 恰 2 红，{@code docs/57 §8.2}）。</p>
+ * {@code applyToCompletions} ⇒ 恰 1 红；两段同时变异 ⇒ 恰 2 红，{@code 原 docs/57 §8.2}）。</p>
  *
  * <p>数据来源只有**模型级**那一半：pi 的 per-request 半（{@code options.samplingParams}）
  * 在 java 没有生产者（{@code StreamRequest.extra} 生产恒空）⇒ 登记 B125。</p>
@@ -56,9 +56,9 @@ final class SamplingParamsWriter {
             if (extra.remove("max_completion_tokens") instanceof Number maxTokens) {
                 builder.maxCompletionTokens(maxTokens.intValue());
             }
-            // 包 A-09（R5，docs/58 §4.8）：形态链条（ThinkingFormatWriter）用类型化
+            // 包 A-09（R5，原 docs/58 §4.8）：形态链条（ThinkingFormatWriter）用类型化
             // setter 写 reasoning_effort ⇒ 同名采样键必须走同一个 setter 覆盖，
-            // 否则非类型化通道会把它写成**两份**（docs/57 §10 的实测病理）。
+            // 否则非类型化通道会把它写成**两份**（原 docs/57 §10 的实测病理）。
             if (extra.remove("reasoning_effort") instanceof String effort) {
                 builder.reasoningEffort(ReasoningEffort.of(effort));
             }

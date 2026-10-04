@@ -15,13 +15,13 @@ package com.pijava.telemetry;
  * an oversight: {@code addEvent} would mean something different here, because
  * event data lands as whole-payload rows via
  * {@link TelemetryContext#recordEvent} rather than as small attributes hung off
- * a span ({@code docs/31 §8.25.3}), and status is derived automatically — the
+ * a span ({@code 原 docs/31 §8.25.3}), and status is derived automatically — the
  * vocabulary is {@code ok}/{@code error}, with an aborted run expressed through
- * the {@code outcome} attribute exactly as in pi's schema ({@code docs/31 §8.28}).</p>
+ * the {@code outcome} attribute exactly as in pi's schema ({@code 原 docs/31 §8.28}).</p>
  *
  * <p>A child span opened from an already-settled span is <em>inert</em>: pi's
  * adapter contract ignores calls made after settlement, including child
- * creation ({@code docs/31 §8.28.4}).</p>
+ * creation ({@code 原 docs/31 §8.28.4}).</p>
  */
 public interface TelemetrySpan extends TelemetryContext, AutoCloseable {
 

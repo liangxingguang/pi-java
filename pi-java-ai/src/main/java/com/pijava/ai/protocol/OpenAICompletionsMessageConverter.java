@@ -46,7 +46,7 @@ import com.pijava.ai.utils.SanitizeUnicode;
  * <p><b>纯函数、零状态</b>：只依赖入参，不碰 client/流 —— 那些留在车道类里。
  * 入口是 {@link #buildParams}（车道与若干夹具都从它观测出参）。</p>
  *
- * <p>⚠️ 本车道的两处**刻意不对称**都有 pi 行号背书（{@code docs/44 D3}）：user 有图分支
+ * <p>⚠️ 本车道的两处**刻意不对称**都有 pi 行号背书（{@code 原 docs/44 D3}）：user 有图分支
  * **不过滤**空文本块；toolResult 的图片**移出** tool 消息、补一条合成 user 消息且**连续合并**。</p>
  *
  * @see OpenAICompletionsApi
@@ -94,7 +94,7 @@ final class OpenAICompletionsMessageConverter {
                                                   String rawSessionId) {
         // 包 A7：车道的 compat 在这里**解析一次**（pi `getCompat(model)` 的落点，
         // `openai-completions.ts:1685`），下面的读点全部改读它 —— 探测用的是车道传进来的
-        // **有效** baseUrl（与 pi 的 `model.baseUrl` 有一处刻意的形状偏差，docs/53 §9 R2）。
+        // **有效** baseUrl（与 pi 的 `model.baseUrl` 有一处刻意的形状偏差，原 docs/53 §9 R2）。
         var compat = CompatResolver.forCompletions(request.model(), baseUrl);
         // pi :1225 —— 指令消息的角色。非推理模型即使端点支持 developer 也一律 system。
         var instructionRoleIsDeveloper = request.model() != null
@@ -108,7 +108,7 @@ final class OpenAICompletionsMessageConverter {
         var wire = new ArrayList<ChatCompletionMessageParam>();
 
         var transcript = Transcripts.resolveTranscript(request.transcript(), compat);
-        // docs/69（pi :338-341）：grammar 能力表请求起点一次算出，出站与回放共读。
+        // 原 docs/69（pi :338-341）：grammar 能力表请求起点一次算出，出站与回放共读。
         boolean grammarGate = Boolean.TRUE.equals(compat.supportsOpenAIGrammarTools());
         var grammarProperties = GrammarInputProperties.create(
             Transcripts.getDeclaredTools(transcript.messages()), grammarGate);
@@ -131,7 +131,7 @@ final class OpenAICompletionsMessageConverter {
                 request.model(), CompletionsToolCallIds.create());
         // 包 A3（R7）：`requireOnlyLeadingSystemMessage` 已删 —— 中途系统消息现在有落线支（见下）。
 
-        // 包 A3（docs/51 §4.4）：**两个标志都要**（pi :1223 的同式 —— 后者注释明写
+        // 包 A3（原 docs/51 §4.4）：**两个标志都要**（pi :1223 的同式 —— 后者注释明写
         // *Requires* 前者），且判据是 `=== true` ⇒ 缺席与 false 同义。
         var transcriptTools = Transcripts.resolveTranscriptTools(transcript.messages(),
             Boolean.TRUE.equals(compat.supportsMidConvoSystemMessages())
@@ -185,7 +185,7 @@ final class OpenAICompletionsMessageConverter {
                     // ⚠️ 这道门在 pi 与 pi-java **两侧都不可观察**：共享闸（TransformMessages）
                     // 已按同一个 model 把非视觉模型的图片换成了文本块 ⇒ 这里永远收不到图片。
                     // 照抄保留（pi 也保留），但**没有任何夹具能钉住它** —— 不是夹具没牙，
-                    // 是这一行没有出参（docs/44 §9 的变异探针 4 实测：去掉它零红）。
+                    // 是这一行没有出参（原 docs/44 §9 的变异探针 4 实测：去掉它零红）。
                     if (request.model().supportsImageInput()) {
                         CompletionImageWire.collectImageParts(tool.content(), imageParts);
                     }
@@ -262,7 +262,7 @@ final class OpenAICompletionsMessageConverter {
         // ⚠️ 读 **raw model.compat**（不是 resolved）—— pi 的读点写的就是
         // `model.compat?.openRouterRouting`；探测/合并面（:1657/:1704）的 `{}` **无读者**
         // ⇒ 这里同样只认显式值：null 不发键、空表发 `provider:{}`（JS 真值语义，
-        // 二者线格可区分；docs/59 R6，ModelCompat 的 compact 构造器为此不归一）。
+        // 二者线格可区分；原 docs/59 R6，ModelCompat 的 compact 构造器为此不归一）。
         // ⚠️ 经树（A-09 R11）：SDK mapper 的 NON_NULL inclusion 会静默丢 null 键 ——
         // routing 的值可空（sort.partition，types.ts:884）；本类的 JSON 是无 inclusion
         // 的普通 mapper（与 ThinkingFormatWriter.PLAIN_JSON 同物，就地复用不跨类借）。
@@ -320,7 +320,7 @@ final class OpenAICompletionsMessageConverter {
                 .content(text).build());
     }
 
-    // Kimi 工具系统消息已抽到 CompletionToolWire.kimiSystemMessage（docs/66，步骤 7）。
+    // Kimi 工具系统消息已抽到 CompletionToolWire.kimiSystemMessage（原 docs/66，步骤 7）。
 
     /**
      * Serializes an assistant message including its tool calls and its reasoning.
@@ -403,7 +403,7 @@ final class OpenAICompletionsMessageConverter {
         // 即使挂在 deepseek 上也不补，否则等于给普通对话凭空塞一个推理字段。
         // ⚠️ 包 A7：第一个合取项现在来自**解析后**的 compat（探测已收进 CompatResolver，
         // 那段内联的 deepseek 判据随之删除）。
-        // Structured details (pi :1373-1375). 经树（docs/58 R11）：普通 mapper
+        // Structured details (pi :1373-1375). 经树（原 docs/58 R11）：普通 mapper
         // 转树后 JsonValue.from，避免 NON_NULL 静默丢键。
         if (preservedDetails != null) {
             ab.putAdditionalProperty("reasoning_details",
@@ -431,17 +431,17 @@ final class OpenAICompletionsMessageConverter {
         return sb.toString();
     }
 
-    // ── 图片（包 H2，docs/44 步3）──────────────────────────────────────
+    // ── 图片（包 H2，原 docs/44 步3）──────────────────────────────────────
 
     /**
      * user 消息落线 —— pi {@code openai-completions.ts:1255-1277}。
      *
-     * <p>无图片 ⇒ **串形态**（pi-java 的既有形状，见 {@code docs/44 §6} 的登记：pi 的串分支
+     * <p>无图片 ⇒ **串形态**（pi-java 的既有形状，见 {@code 原 docs/44 §6} 的登记：pi 的串分支
      * 在 pi-java 结构上不可达 —— {@code UserMessage.content} 恒为列表）；有图片 ⇒ **数组形态**
      * {@code [{type:"text"},{type:"image_url",image_url:{url:"data:<mime>;base64,<data>"}}]}。</p>
      *
      * <p>⚠️ 有图分支**不过滤**空文本块（pi {@code :1267} 只判 {@code content.length === 0}）
-     * —— 与 Anthropic 的 user 分支（过滤）**刻意不同**，别顺手统一（{@code docs/44 D3}）。</p>
+     * —— 与 Anthropic 的 user 分支（过滤）**刻意不同**，别顺手统一（{@code 原 docs/44 D3}）。</p>
      */
     private static void addUserMessage(List<ChatCompletionMessageParam> wire,
                                        Message.UserMessage user) {
@@ -465,7 +465,7 @@ final class OpenAICompletionsMessageConverter {
                 parts.add(CompletionImageWire.imagePart(
                     "data:" + img.mediaType() + ";base64," + img.data()));
             } else if (block instanceof ContentBlock.UrlImageContent url) {
-                // java 扩展（pi 无此类型）：image_url 本来就收 URL ⇒ 按线格本名下发（docs/44 D4）。
+                // java 扩展（pi 无此类型）：image_url 本来就收 URL ⇒ 按线格本名下发（原 docs/44 D4）。
                 parts.add(CompletionImageWire.imagePart(url.url()));
             }
         }
@@ -492,5 +492,5 @@ final class OpenAICompletionsMessageConverter {
                 ? "(see attached image)" : "(no tool output)";
     }
 
-    // 图片内容 helper 已抽到 CompletionImageWire（docs/66，步骤 7）。
+    // 图片内容 helper 已抽到 CompletionImageWire（原 docs/66，步骤 7）。
 }

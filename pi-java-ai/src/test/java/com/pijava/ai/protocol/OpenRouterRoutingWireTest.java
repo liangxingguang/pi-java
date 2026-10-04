@@ -27,12 +27,12 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包 A-02（docs/59 §4.10 与 B133 收口）：OpenRouter 路由偏好落线（pi
+ * 包 A-02（原 docs/59 §4.10 与 B133 收口）：OpenRouter 路由偏好落线（pi
  * {@code openai-completions.ts:980-982}）＋ openrouter 思考形状自**内置目录**生产可达。
  *
  * <p>观测面＝真出站体（{@link RecordingHttpServer}，A-01/A-09 同款）。⚠️ 断言按键取值。</p>
  *
- * <p>三态钉子（docs/59 R6）：缺席**不发键**、空表发 {@code provider:{}}、有值原样
+ * <p>三态钉子（原 docs/59 R6）：缺席**不发键**、空表发 {@code provider:{}}、有值原样
  * （含嵌套 null 存活——A-09 R11 的经树通路在此复验）。</p>
  */
 class OpenRouterRoutingWireTest {

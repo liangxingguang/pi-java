@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包 A0 步8（{@code docs/43 D7}）：OAuth 形态的**身份头**与 {@code sk-ant-oat} 识别 ——
+ * 包 A0 步8（{@code 原 docs/43 D7}）：OAuth 形态的**身份头**与 {@code sk-ant-oat} 识别 ——
  * pi {@code api/anthropic-messages.ts:906-908} ＋ {@code :946-972}。
  *
  * <pre>
@@ -37,7 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>⚠️ pi 另外两枚头（{@code accept}、{@code anthropic-dangerous-direct-browser-access}）
  * 是**浏览器场景**的产物（pi 恒传 {@code dangerouslyAllowBrowser: true}），java 无该场景
- * ⇒ 不移植，登记在 {@code docs/43 §6}。</p>
+ * ⇒ 不移植，登记在 {@code 原 docs/43 §6}。</p>
  *
  * <p>⚠️ pi 的 OAuth 分支还**改系统提示**（{@code :1078-1090} 前置 "You are Claude Code…"）
  * 与工具名（{@code toClaudeCodeName}）—— 那两个面不在 D7 范围，登记。</p>

@@ -53,7 +53,7 @@ final class AgentEventTranslator {
                 out.add(turnEnd(ignored));
             }
             case AgentSessionEvent.BashExecutionUpdate b -> out.add(bashOutput(b));
-            // 包⑦（docs/34）：工具执行生命周期事件的**真源**。此前 web 的
+            // 包⑦（原 docs/34）：工具执行生命周期事件的**真源**。此前 web 的
             // tool_execution_* 由 StreamEvent.ToolCall* 伪造 —— 那是「模型把调用
             // 吐完」的时刻，不是工具执行的生命周期（工具跑 30 秒，前端此前在这
             // 30 秒里收不到任何东西）。载荷按裁决 A 照 pi 的透传带上。
@@ -81,7 +81,7 @@ final class AgentEventTranslator {
             // 上只 renderApp()、不读载荷，它手上最后一条 message_update 此前是工具
             // 调用**之前**那条 ⇒ 工具卡要等 agent_end 整表替换才出现。
             //
-            // 包⑦（docs/34）**换源**：这里**不再**伪造 tool_execution_*（那三条改由
+            // 包⑦（原 docs/34）**换源**：这里**不再**伪造 tool_execution_*（那三条改由
             // 真正的工具执行事件驱动，见下面 AgentSessionEvent.ToolExecution* 的三支）。
             case StreamEvent.ToolCallStart s -> out.add(messageUpdate(s.partial()));
             case StreamEvent.ToolCallDelta s -> out.add(messageUpdate(s.partial()));
@@ -135,7 +135,7 @@ final class AgentEventTranslator {
     }
 
     /**
-     * {@code turn_end} 帧（包⑨，docs/36，B42）。
+     * {@code turn_end} 帧（包⑨，原 docs/36，B42）。
      *
      * <p>pi 的 {@code turn_end} 是 {@code { message, toolResults }}，两个字段都必填
      * （{@code agent/src/types.ts:438}）。前端按 {@code toolCallId} 去重后把
@@ -158,7 +158,7 @@ final class AgentEventTranslator {
         return new WebServerMessage.AgentEvent(node);
     }
 
-    // ── 工具执行生命周期（包⑦，docs/34）────────────────────────────────
+    // ── 工具执行生命周期（包⑦，原 docs/34）────────────────────────────────
     private WebServerMessage toolExecutionStart(AgentSessionEvent.ToolExecutionStart s) {
         var node = typeNode("tool_execution_start");
         node.put("toolCallId", s.toolCallId());
@@ -207,7 +207,7 @@ final class AgentEventTranslator {
     }
 
     /**
-     * C 批次（{@code docs/55 §6.3-14}）：文本正源是**消息**（{@code partial.errorMessage()}，
+     * C 批次（{@code 原 docs/55 §6.3-14}）：文本正源是**消息**（{@code partial.errorMessage()}，
      * 由生产者落定），{@code Throwable} 仅兜底；两者皆无时才退回 reason 文案。
      */
     private static String errorText(StreamEvent.StreamError err) {

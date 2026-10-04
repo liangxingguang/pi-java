@@ -4,7 +4,7 @@ import com.pijava.ai.Usage;
 
 /**
  * Cost calculation — a line-by-line port of pi's {@code calculateCost}
- * ({@code ai/src/models.ts:900-920}; package H1, {@code docs/42 §2.1 P16}).
+ * ({@code ai/src/models.ts:900-920}; package H1, {@code 原 docs/42 §2.1 P16}).
  *
  * <p>Four things the port deliberately copies, because the criterion is
  * "behaves like pi", not "behaves sensibly":</p>

@@ -17,7 +17,7 @@ import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
 
 /**
- * D3（{@code docs/62}）：Responses 接收流把工具调用 id 存为复合
+ * D3（{@code 原 docs/62}）：Responses 接收流把工具调用 id 存为复合
  * {@code call_id|item.id}（pi {@code openai-responses-shared.ts:485-489}）。
  */
 class ResponsesCompositeItemIdWireTest {

@@ -139,7 +139,7 @@ final class PiLoopTools {
      * 再逐个执行收尾，被拒绝调用的 end 排错了位置 —— L5 的 S4 只能靠
      * {@code PARALLEL_TOOL_END_ORDER} 放宽规则勉强对上，本方法按 pi 重排后该规则已删。</p>
      *
-     * <p><b>两套顺序不同源</b>（package B，{@code docs/31 §8.23}）：延迟任务现以
+     * <p><b>两套顺序不同源</b>（package B，{@code 原 docs/31 §8.23}）：延迟任务现以
      * <b>虚拟线程真并发</b>执行（pi 的 {@code Promise.all}），end 帧因此是**完成序**，
      * 而结果消息与 {@code terminate} 仍按**源序**（收束段按 entries 顺序取结果）。
      * 宿主侧唯一的串行化点是 {@link PiLaneSink#emit} —— 工具的 update 回调会在

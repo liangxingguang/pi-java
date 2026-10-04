@@ -49,7 +49,7 @@ class AgentEventTranslatorTest {
             .isEqualTo("hello");
     }
 
-    // ⚠️ 包⑦（docs/34）**删除**了 `toolCallEventsEmitToolExecution`：它钉的是
+    // ⚠️ 包⑦（原 docs/34）**删除**了 `toolCallEventsEmitToolExecution`：它钉的是
     // 「StreamEvent.ToolCall* → tool_execution_*」这条**已被裁决删掉**的伪造路径。
     // 换源后的正反两面（真正的工具执行事件 → tool_execution_*；流式增量**不再**
     // 伪造）由 AgentEventTranslatorToolExecutionTest 覆盖。
@@ -91,7 +91,7 @@ class AgentEventTranslatorTest {
     }
 
     /**
-     * 包⑨（docs/36，B42）：pi 的 {@code turn_end} 是 {@code {message, toolResults}}，
+     * 包⑨（原 docs/36，B42）：pi 的 {@code turn_end} 是 {@code {message, toolResults}}，
      * 两个字段都必填（{@code agent/types.ts:438}）。前端按 {@code toolCallId} 去重后
      * 把 {@code toolResults} 追加进消息列表（{@code client/main.ts:325-337}）。
      */

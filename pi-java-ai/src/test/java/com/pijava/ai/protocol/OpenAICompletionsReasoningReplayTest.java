@@ -34,7 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * B19 发侧：{@code openai-completions} 车道**回放** reasoning
- * （docs/31 §8.35.1-（2），pi {@code openai-completions.ts:1310-1318} / {@code :1356-1362}）。
+ * （原 docs/31 §8.35.1-（2），pi {@code openai-completions.ts:1310-1318} / {@code :1356-1362}）。
  *
  * <p>pi 有**两条独立规则**，现役实现把 (i) 顶替掉了、只留 (ii) 的近似：</p>
  * <ol>

@@ -11,7 +11,7 @@ import java.util.Set;
  *
  * <p>pi {@code openai-responses-shared.ts:155-176} ＋ {@code openai-responses.ts:31}。</p>
  *
- * <p>D3（{@code docs/62}）起接收侧构造复合 id（{@code call_id|item.id}）⇒
+ * <p>D3（{@code 原 docs/62}）起接收侧构造复合 id（{@code call_id|item.id}）⇒
  * 竖线分支<b>生产可达</b>（P33 已结案）。</p>
  */
 public final class ResponsesToolCallIds {

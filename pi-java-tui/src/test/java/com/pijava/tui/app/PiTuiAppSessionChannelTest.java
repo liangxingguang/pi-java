@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 接线存在性：两种附着点都要把会话事件通道真的接到<b>本会话</b>上
- * （docs/31 §8.38.4 第 1 步）。
+ * （原 docs/31 §8.38.4 第 1 步）。
  *
  * <p>⚠️ 本用例只证明「接上了」。「事件真的从 harness 发出来并上屏」需要一个
  * 真的 run（要 provider），此处的通道行为由 {@link SessionEventChannelTest} 以
@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class PiTuiAppSessionChannelTest {
 
-    /** 夹具会话落盘到临时目录（docs/39 裁决 B）：空 args 会写到开发者真实 home。 */
+    /** 夹具会话落盘到临时目录（原 docs/39 裁决 B）：空 args 会写到开发者真实 home。 */
     @TempDir
     Path sessionDir;
 

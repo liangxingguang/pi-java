@@ -14,7 +14,7 @@ import com.anthropic.models.messages.MessageParam;
  * <p>背景：pi 的 TS 侧靠**结构类型**把任意键塞进 SDK 的请求对象
  * （{@code openai-completions.ts:1244} 甚至明写 {@code as unknown as ChatCompletionMessageParam}），
  * 而 Java 侧的类型化参数不容忍未知键。本包一度据此判定 Anthropic 与 Completions 的
- * 原生渲染「不可实施」（{@code docs/51 §3 F13} 的初版），**那是错的** ——
+ * 原生渲染「不可实施」（{@code 原 docs/51 §3 F13} 的初版），**那是错的** ——
  * 实测两条 SDK 都留着「未知变体」的直通：反序列化时把认不出的 {@code type} 收进
  * {@code _unknown}/{@code _json}/{@code additionalProperties}，序列化时**原样写出**。</p>
  *
@@ -23,7 +23,7 @@ import com.anthropic.models.messages.MessageParam;
  * 只断言「不抛异常」在缺陷态也会绿。</p>
  *
  * <p>⚠️ 这条通路是**非 beta 参数承载 beta 形状**，依赖 SDK 的未知变体直通（不是文档化的
- * 公开承诺）⇒ 升级 SDK 时必须重跑本类。{@code docs/51 §12.4} 记了它。</p>
+ * 公开承诺）⇒ 升级 SDK 时必须重跑本类。{@code 原 docs/51 §12.4} 记了它。</p>
  */
 class SdkJsonEscapeHatchTest {
 
@@ -114,7 +114,7 @@ class SdkJsonEscapeHatchTest {
         map.put("nul", null);
 
         // ⚠️ 观测面是 JsonValue 本身，不是 CreateParams —— `writeValueAsString(params)`
-        // 得 `{}`（SDK 把请求包在 body 里，docs/54 §12 的 A-01 教训）。
+        // 得 `{}`（SDK 把请求包在 body 里，原 docs/54 §12 的 A-01 教训）。
         var fromMap = mapper.writeValueAsString(com.openai.core.JsonValue.from(map));
         assertThat(fromMap).contains("\"keep\":\"x\"");
         assertThat(fromMap).as("JsonValue.from(map) 丢 null 值 ⇒ 不能直接喂 map")

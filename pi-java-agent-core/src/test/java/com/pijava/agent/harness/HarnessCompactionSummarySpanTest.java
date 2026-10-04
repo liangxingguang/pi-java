@@ -27,7 +27,7 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 摘要请求有自己的跨度（{@code docs/31 §8.25.5-8} 的结案面）。
+ * 摘要请求有自己的跨度（{@code 原 docs/31 §8.25.5-8} 的结案面）。
  *
  * <p>压缩走的是**同一个** {@code streamFn}，于是摘要请求的负载行
  * （{@code llm.payload.request/response}）由 {@code PayloadRecordingStreamFn} 照样发出 ——

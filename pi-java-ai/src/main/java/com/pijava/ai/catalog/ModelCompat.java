@@ -10,19 +10,19 @@ import java.util.Map;
  * {@code :778} 的 {@code AnthropicMessagesCompat} 13、{@code :843} 的 {@code BedrockCompat} 1、
  * {@code :849} 的 {@code MistralConversationsCompat} 1 —— 共 52）。本仓把五者**合一**成一个
  * 类型（依据：除 {@code supportsMidConvoSystemMessages} 外每个字段只被一条车道读，而那一个在
- * 四条车道上缺省同为 {@code false}；逐字段核对见 {@code docs/53 §2 P8}），并只携带 pi-java
- * 真正**消费**的字段 —— 其余四十余个按 {@code docs/53 §4.4} 的归属表留给各自的包，**不投机加**。
+ * 四条车道上缺省同为 {@code false}；逐字段核对见 {@code 原 docs/53 §2 P8}），并只携带 pi-java
+ * 真正**消费**的字段 —— 其余四十余个按 {@code 原 docs/53 §4.4} 的归属表留给各自的包，**不投机加**。
  * 字段是具名 record 组件而不是 {@code Map}：pi 的 compat 是 typed interface，用 Map 会把类型错误
- * 推到读点。{@code docs/31 §8.34.4} 决策 2。</p>
+ * 推到读点。{@code 原 docs/31 §8.34.4} 决策 2。</p>
  *
  * <p>⚠️ <b>本记录有两个生命周期，读点必须拿「解析后」的那一份</b>：目录标注与 models.json 给出的
  * 是<b>部分</b> compat（「用户/目录写了什么」），而 pi 的车道读的是
  * {@code explicit ?? detected ?? 字面量缺省} 之后的<b>全确定</b>形状。合一那一步是
  * {@link CompatResolver}（pi 的 {@code detectCompat}/{@code getCompat}/{@code getAnthropicCompat}）。
  * 直接读 {@code model.compat()} 只对「探测的默认值恰好等于字面量缺省」的字段安全 —— 这是
- * {@code docs/53 §8} 第 1 条验收 grep 要钉的事。</p>
+ * {@code 原 docs/53 §8} 第 1 条验收 grep 要钉的事。</p>
  *
- * <p>docs/69 J8：pi 的 {@code JsonObject}（types.ts:421-460）是纯编译期类型机器、无运行时
+ * <p>原 docs/69 J8：pi 的 {@code JsonObject}（types.ts:421-460）是纯编译期类型机器、无运行时
  * 读点；Java 的 {@code Map<String,Object>}＋Jackson 即等价静态约束 ⇒ 零代码，在此结案。</p>
  * <p>⚠️ <b>各标志的「缺席」语义各不相同</b> —— 这是本记录最容易读错的地方，逐个写清：</p>
  *
@@ -76,7 +76,7 @@ import java.util.Map;
  *           azure {@code ?? true}（{@code azure-openai-responses.ts:296}）⇒「缺席」不是单个
  *           值而**取决于车道**，故缺省由 {@link CompatResolver#forResponses} 的形参给</td></tr>
  *   <tr><td>{@code supportsOpenAIGrammarTools}</td><td>{@link Boolean}</td><td>{@code false}</td>
- *       <td>docs/69：读点 {@code === true}，生成目录 gpt-5+ 开启（generate-models.ts:831-854），null≙false</td></tr>
+ *       <td>原 docs/69：读点 {@code === true}，生成目录 gpt-5+ 开启（generate-models.ts:831-854），null≙false</td></tr>
  * </table>
  *
  * @param allowEmptySignature pi {@code compat.allowEmptySignature}. When {@code true}, a thinking
@@ -85,7 +85,7 @@ import java.util.Map;
  *        Anthropic-compatible providers emit and accept empty signatures. Absent ≡ {@code false}
  *        (pi normalizes with {@code ?? false}, {@code anthropic-messages.ts:215}), so this is a
  *        **two-state** flag, not tri-state: {@code undefined} and {@code false} are
- *        indistinguishable in behavior (docs/31 §8.34.4 决策 3).
+ *        indistinguishable in behavior (原 docs/31 §8.34.4 决策 3).
  * @param requiresReasoningContentOnAssistantMessages pi
  *        {@code compat.requiresReasoningContentOnAssistantMessages}
  *        ({@code openai-completions.ts:1356-1362}): when set, every assistant history message
@@ -123,18 +123,18 @@ import java.util.Map;
  *        <p>⚠️ 它的值来自 pi 的<b>生成目录数据</b>（{@code generate-models.ts:1043} 的
  *        {@code isAnthropicAdaptiveThinkingModel}）—— 那是**代码推导**的
  *        （{@code generate-models.ts:585} 的纯字符串谓词，`fable-5`/`mythos-5`/`opus-4-6`…），
- *        故包 A7 按同一份谓词把它标到内置目录上（{@code docs/53 §4.2}）。</p>
+ *        故包 A7 按同一份谓词把它标到内置目录上（{@code 原 docs/53 §4.2}）。</p>
  * @param supportsMidConvoSystemMessages pi {@code compat.supportsMidConvoSystemMessages}
  *        ({@code types.ts:731-732}): when {@code true}, the transcript keeps system messages that
  *        arrive **mid-conversation** instead of folding them into the leading one, and each lane
  *        renders them in place (Anthropic text blocks / completions+mistral instruction messages /
  *        Responses input items). Read by {@link com.pijava.ai.api.Transcripts#resolveTranscript}
- *        ({@code docs/49 §5.4}）。
+ *        ({@code 原 docs/49 §5.4}）。
  *
  *        <p>⚠️ **三态**：pi 的读取点写 {@code model.compat?.supportsMidConvoSystemMessages}
  *        （{@code anthropic-messages.ts:517} 等），{@code undefined} 走折叠支；但该字段的探测
  *        默认值来自**生成的模型目录**（「会对有能力的模型开启它」）⇒ 缺席 ≠ 显式 {@code false}。
- *        包 A2 只加字段与消费点；生产者由包 A7 补上（{@code docs/53 §4.2}）。</p>
+ *        包 A2 只加字段与消费点；生产者由包 A7 补上（{@code 原 docs/53 §4.2}）。</p>
  * @param supportsMidConvoToolAdditions pi {@code compat.supportsMidConvoToolAdditions}
  *        ({@code types.ts:733-734}, completions lane only): whether a mid-conversation system
  *        message may carry its own {@code tools} — rendered as a Kimi-shaped
@@ -147,7 +147,7 @@ import java.util.Map;
  *        mid-conversation {@code tool_addition}/{@code tool_removal} content blocks.
  *        读点是**真值判断**（{@code anthropic-messages.ts:1052}），且与
  *        {@code supportsMidConvoSystemMessages} 相与，还与两个结构性条件（初始工具非空、
- *        无工具重定义）一起构成 {@code nativeToolChanges} 的**四条件门**（{@code docs/51 §2 P8}）。
+ *        无工具重定义）一起构成 {@code nativeToolChanges} 的**四条件门**（{@code 原 docs/51 §2 P8}）。
  *        缺席 ≡ {@code false} ⇒ **二态**。
  * @param supportsAdditionalTools pi {@code compat.supportsAdditionalTools}
  *        ({@code types.ts:768}, Responses lanes): whether the model supports
@@ -175,7 +175,7 @@ import java.util.Map;
  *        <p>⚠️ 它的读点是**四重合取**（{@code temperature !== undefined} ＋ 未开思考 ＋
  *        {@code supportsMidConvoEffort !== true} ＋ 本标志），只有**最后一个**由本组件管 ——
  *        前三项在 {@link com.pijava.ai.protocol.AnthropicRequestBuilder} 的读点里。（本仓没有
- *        {@code supportsMidConvoEffort}，见 {@code docs/53 §10 B99}。）</p>
+ *        {@code supportsMidConvoEffort}，见 {@code 原 docs/53 §10 B99}。）</p>
  *
  *        <p>⚠️ 与 {@code supportsFinishReason} 同形：探测值是常量 {@code true}
  *        （{@code getAnthropicCompat:214} 的 {@code ?? true}，而 {@code isOpenRouter} 只影响
@@ -241,7 +241,7 @@ import java.util.Map;
  *        那份副本**没有这道门**（`if (options?.maxTokens)` 光秃秃）。⇒ 两条车道今天共用
  *        {@link com.pijava.ai.protocol.ResponsesMessageConverter}，那条区别由**车道名**分支实现，
  *        而**不是**由本组件的取值 —— 在 azure 车道上它根本不被读（显式写 {@code false} 也无效，
- *        与 pi 一致）。⇒ 车道名分支是这条约束的唯一实现处，见 {@code docs/57 §11}。</p>
+ *        与 pi 一致）。⇒ 车道名分支是这条约束的唯一实现处，见 {@code 原 docs/57 §11}。</p>
  * @param thinkingFormat pi {@code compat.thinkingFormat}（包 A-09，
  *        {@code openai-completions.ts:873-970}，completions 车道独有）：思考开关的十一种
  *        线格形状。{@code null} ≙「按端点探测」（六段三元链，回落 {@code openai}，
@@ -262,7 +262,7 @@ import java.util.Map;
  * @param openRouterRouting pi {@code compat.openRouterRouting}（包 A-02，
  *        {@code openai-completions.ts:980-982}，{@code types.ts:860} 的
  *        {@code OpenRouterRouting}）：原样发成请求体的 {@code provider} 键。⚠️ **三态且
- *        {@code null} 不归一成空表**（docs/59 R6）—— pi 的读点是 raw {@code model.compat}
+ *        {@code null} 不归一成空表**（原 docs/59 R6）—— pi 的读点是 raw {@code model.compat}
  *        的真值判断，缺席（{@code null}）不发这个键、空表（{@code {}} 为真值）发
  *        {@code provider:{}}，二者**线格可区分**。⚠️ 读点在 pi 是 **raw compat**、不是
  *        resolved（{@code :981} 写 {@code model.compat?.openRouterRouting}）；本仓照抄这条
@@ -277,7 +277,7 @@ import java.util.Map;
  * @param sessionAffinityFormat pi {@code compat.sessionAffinityFormat}（包 B103）：亲和头形状
  *        （{@code openai}/{@code openai-nosession}/{@code openrouter}）。{@code null} ≙
  *        车道探测（openrouter 端点 openrouter，否则 openai；anthropic 未设 ⇒ x-session-affinity）。
- * @param supportsStrictTools pi {@code compat.supportsStrictTools}（docs/66，
+ * @param supportsStrictTools pi {@code compat.supportsStrictTools}（原 docs/66，
  *        {@code anthropic-messages.ts:216}）：Anthropic 车道是否接受 strict tool。
  *        缺席 ≡ {@code false}（二态）；生成目录对全部 anthropic-messages 模型无条件
  *        写 true（{@code generate-models.ts:826-828}）。
@@ -317,7 +317,7 @@ public record ModelCompat(boolean allowEmptySignature,
      *  与本仓其它 record 一致。
      *
      *  <p>⚠️ {@code openRouterRouting}（包 A-02）**不归一**：缺席与空表线格可区分
-     *  （docs/59 R6）。复制用 {@code LinkedHashMap} 而非 {@code Map.copyOf} —— routing 的
+     *  （原 docs/59 R6）。复制用 {@code LinkedHashMap} 而非 {@code Map.copyOf} —— routing 的
      *  值可空（如 {@code sort.partition: null}，{@code types.ts:884}），而 {@code Map.copyOf}
      *  拒绝 {@code null} 值。</p> */
     public ModelCompat {
@@ -373,7 +373,7 @@ public record ModelCompat(boolean allowEmptySignature,
     }
 
     /**
-     * 二十七参便捷构造（docs/66 加 {@code supportsStrictTools} 之前的**规范**构造）：
+     * 二十七参便捷构造（原 docs/66 加 {@code supportsStrictTools} 之前的**规范**构造）：
      * 新组件缺席（{@code false} ≙ pi 的 {@code ?? false}）。旧规范形态降级为便捷构造 ⇒
      * 既有 27 参构造点零改签。
      */

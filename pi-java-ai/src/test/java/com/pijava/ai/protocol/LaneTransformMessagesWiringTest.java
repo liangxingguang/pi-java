@@ -32,7 +32,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * <b>B10 的**接线**夹具</b>（docs/31 §8.35.4 / §8.35.5-1）—— 每一条**车道**上都必须跑
+ * <b>B10 的**接线**夹具</b>（原 docs/31 §8.35.4 / §8.35.5-1）—— 每一条**车道**上都必须跑
  * 共享预通道 {@link com.pijava.ai.api.TransformMessages}。
  *
  * <p>与 {@code TransformMessagesTest} 的**分工必须说清**：那一类只证明**闸本身**的行为
@@ -150,7 +150,7 @@ class LaneTransformMessagesWiringTest {
     @Test
     void openAiResponsesReplaySplitsCallIdAndDropsCrossModelItemId() throws Exception {
         var body = captureResponsesBody("openai-responses", false, ModelId.of("openai", "gpt-4o"));
-        // D3（docs/62）：call_id 只带 call_id 段；跨模型历史的 fc_ item id 省略。
+        // D3（原 docs/62）：call_id 只带 call_id 段；跨模型历史的 fc_ item id 省略。
         assertThat(body).contains("\"call_id\":\"call_123\"");
         assertThat(body).doesNotContain("\"id\":\"fc_abc\"");
     }

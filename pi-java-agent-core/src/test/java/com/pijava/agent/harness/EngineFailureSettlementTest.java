@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * B5 第 2 步（{@code docs/31 §8.36.5}）的**引擎侧**守卫：一个 pass 的驱动**抛出**时，
+ * B5 第 2 步（{@code 原 docs/31 §8.36.5}）的**引擎侧**守卫：一个 pass 的驱动**抛出**时，
  * 引擎照 pi {@code Agent.handleRunFailure}（{@code agent.ts:506-525}）把异常压成
  * 一条失败助手消息，并照常走 {@code message_start → message_end → turn_end → agent_end}。
  *

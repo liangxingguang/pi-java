@@ -12,7 +12,7 @@ import com.pijava.ai.provider.ProviderConfig;
 import java.util.Set;
 
 /**
- * OpenRouter chat provider（包 A-02，docs/59 §4.4）—— 镜像 pi
+ * OpenRouter chat provider（包 A-02，原 docs/59 §4.4）—— 镜像 pi
  * {@code providers/openrouter.ts}：一个 provider、两条车道
  * （{@code anthropic-messages} ＋ {@code openai-completions}），派发键是模型自带的
  * {@code api}（pi {@code compat.ts:262}；java 的落点是 {@code extra["protocol"]}，

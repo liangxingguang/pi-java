@@ -239,7 +239,7 @@ class JsonlFileTelemetryTest {
     }
 
     /**
-     * 跨线程归属（{@code docs/31 §8.25.6} ①-a）：A 线程绑定的跨度对 B 线程不可见。
+     * 跨线程归属（{@code 原 docs/31 §8.25.6} ①-a）：A 线程绑定的跨度对 B 线程不可见。
      *
      * <p>夹具是确定性的 —— A 推入后在 finally 里才弹出，B 在 join 之前运行，因此
      * 共享栈的旧实现必然让 B 读到 A 的跨度（RE-1 的牙）。</p>
@@ -287,7 +287,7 @@ class JsonlFileTelemetryTest {
     }
 
     /**
-     * A2 的针（{@code docs/31 §8.25.6} ④）：{@code startSpan} 回调返回后解绑 ——
+     * A2 的针（{@code 原 docs/31 §8.25.6} ④）：{@code startSpan} 回调返回后解绑 ——
      * 此前它只 push 不 pop，栈无界增长，且此后的事件行会绑到**已结束**的跨度上。
      */
     @Test
@@ -308,7 +308,7 @@ class JsonlFileTelemetryTest {
      * 内层 span 返回不会把外层的绑定一起弹掉。
      *
      * <p>⚠️ 两层都必须从 {@link JsonlFileTelemetry#startSpan} 进：{@code JsonlSpan.startSpan}
-     * 根本不碰当前栈（登记为 {@code docs/31 §8.25.5-9}），从 span 对象进就测不到这个守卫。</p>
+     * 根本不碰当前栈（登记为 {@code 原 docs/31 §8.25.5-9}），从 span 对象进就测不到这个守卫。</p>
      */
     @Test
     void innerSpanUnbindingLeavesOuterSpanBound() throws IOException {
@@ -331,7 +331,7 @@ class JsonlFileTelemetryTest {
 
     /**
      * pi 的 adapter 契约「makes calls after settlement inert」的子跨度那一半
-     * （{@code docs/31 §8.28.4} 第 6 条）：父已结算后开子跨度，回调照跑一次、
+     * （{@code 原 docs/31 §8.28.4} 第 6 条）：父已结算后开子跨度，回调照跑一次、
      * 返回值与异常原样穿透，但**什么都不记** —— pi 是把它降级成 noop 上下文
      * （{@code packages/telemetry/src/memory.ts:126}），而不是记在已结算的父下面。
      */

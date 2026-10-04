@@ -97,7 +97,7 @@ final class AnthropicThinking {
      * thinkingEnabled === false && map.off !== null → {type:"disabled"}
      * }</pre>
      *
-     * <p>⚠️ <b>{@code supportsMidConvoEffort} 那条分支不在内</b>（{@code docs/46 §3-D3}）：
+     * <p>⚠️ <b>{@code supportsMidConvoEffort} 那条分支不在内</b>（{@code 原 docs/46 §3-D3}）：
      * 它要写 {@code thinking.block_binding}，而 {@code anthropic-java-core:2.52.0} 里
      * <b>没有任何 {@code BlockBinding} 类型</b>（实测 javap ＋ unzip 零命中）。</p>
      *
@@ -128,7 +128,7 @@ final class AnthropicThinking {
         }
         var level = reasoning.get();
         // ⚠️ `compat` 必须是**解析后**的（CompatResolver）—— 目录标注只给「覆盖」那一源，
-        // 而 pi 的判据读的是「目录已烘进去」的值（docs/53 §4.1）。
+        // 而 pi 的判据读的是「目录已烘进去」的值（原 docs/53 §4.1）。
         if (compat != null && compat.forceAdaptiveThinking()) {
             return new Resolved(Optional.of(adaptiveParam()),
                 Optional.of(outputConfig(model, level)), OptionalInt.empty());

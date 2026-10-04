@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Agent-loop L1 regression tests (docs/20 §3):
+ * Agent-loop L1 regression tests (原 docs/20 §3):
  * ③ length-stop truncation protection — truncated tool calls are failed back
  *    into the transcript and never executed;
  * ④ runtime schema validation — malformed arguments become error results fed

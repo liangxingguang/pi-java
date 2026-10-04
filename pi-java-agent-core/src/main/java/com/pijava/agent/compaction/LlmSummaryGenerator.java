@@ -26,7 +26,7 @@ import com.pijava.ai.utils.RetryableError;
  * LLM 驱动摘要生成器（对齐 pi {@code compaction.ts} 的
  * {@code SUMMARIZATION_SYSTEM_PROMPT} + {@code serializeConversation}）。
  *
- * <p><b>3d 的两环之一</b>（{@code docs/31 §8.22}）：每次摘要调用包在
+ * <p><b>3d 的两环之一</b>（{@code 原 docs/31 §8.22}）：每次摘要调用包在
  * pi {@code completeSummarization}（{@code compaction.ts:579-599}）同形的
  * {@code retryAssistantCall} 环里（{@code ai/utils/retry.ts:174-224} 的逐条移植），
  * 用<b>同一份</b> {@code settings.retry} 预算（pi 注释原文）。瞬断的摘要流不再
@@ -217,7 +217,7 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
      * 异常文本；流被截断没有终局 ⇒ 中止方言，与 PiLoopRunner 的 cutShort 同形）。
      */
     private Message.AssistantMessage produceOnce(List<Message> compressed, String previousSummary) {
-        // docs/71 G1：摘要请求的用户消息在构造点盖时间戳（pi compaction.ts:582 的 Date.now()）。
+        // 原 docs/71 G1：摘要请求的用户消息在构造点盖时间戳（pi compaction.ts:582 的 Date.now()）。
         var user = new Message.UserMessage(
             List.of(new ContentBlock.TextContent(buildPrompt(compressed, previousSummary))),
             java.time.Instant.now());
@@ -225,7 +225,7 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
         // （`coding-agent/src/core/compaction/compaction.ts:600-605` 的
         // `cacheRetention: "none"`）：一次性的摘要与主会话前缀不同，给它写缓存条目
         // 既无收益、又会与主会话的缓存竞争。⚠️ pi 同一处还发 `sessionId: … ?? uuidv7()`
-        // （routing id），那属于会话亲和线、本包不做（docs/54 §1.2 的 B103）。
+        // （routing id），那属于会话亲和线、本包不做（原 docs/54 §1.2 的 B103）。
         var options = new StreamOptions(
             OptionalInt.empty(), OptionalDouble.empty(), Optional.empty(),
             Optional.of(CacheRetention.NONE));
@@ -271,7 +271,7 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
      * 无终局的成功）⇒ 用收集到的 text + toolCall 块按 reason 合成（空文本合法，
      * 不塞占位块）。
      *
-     * <p>C 批次（{@code docs/55}）：{@code errorMessage} 参数现为**兜底** —— 文本
+     * <p>C 批次（{@code 原 docs/55}）：{@code errorMessage} 参数现为**兜底** —— 文本
      * 的正源是消息上的 {@code partial.errorMessage()}（生产者落定，见
      * {@code StreamError.settle}），只在消息上没有时才用这里传进来的值。</p>
      */
@@ -280,7 +280,7 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
             StringBuilder text, List<ContentBlock> toolCalls, Usage usage, String errorMessage) {
         if (partial != null && partial.stopReason() != null) {
             var projected = Message.AssistantMessage.fromPartial(partial);
-            // ⚠️ 包⑨（docs/36 B41）：判据从 `projected.usage() == null` 挪到
+            // ⚠️ 包⑨（原 docs/36 B41）：判据从 `projected.usage() == null` 挪到
             // **`partial.usage() == null`**。原来那个 null 是「流里没报用量」的信号，
             // 而 B41 让 `usageOf` 恒兜零（pi 的 AssistantMessage.usage 必填）⇒ 投影上
             // 的 null 消失了、信号被消灭 ⇒ 摘要跨度的 token 计数会静默归零

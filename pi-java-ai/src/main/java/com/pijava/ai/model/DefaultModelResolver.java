@@ -51,7 +51,7 @@ public final class DefaultModelResolver implements ModelResolver {
      * 某模型的<b>上下文窗口</b>（pi {@code Model.contextWindow}；目录侧字段是
      * {@code ModelInfo.maxInputTokens}，其 javadoc 释义即 "maximum context
      * window size in tokens"）。自动压缩的阈值门按<b>当前</b>模型查询此值
-     * （package 3b，docs/31 §8.20）—— 目录里没有这个模型（自定义 id）⇒ 返回
+     * （package 3b，原 docs/31 §8.20）—— 目录里没有这个模型（自定义 id）⇒ 返回
      * 0，触发侧的 {@code contextWindow <= 0} 守卫会跳过自动压缩，与 pi 的
      * 守卫语义一致。
      */
@@ -69,7 +69,7 @@ public final class DefaultModelResolver implements ModelResolver {
     /**
      * 某模型的<b>输出上限</b>（pi {@code Model.maxTokens}，overflow-recovery 的
      * {@code isRecoverableLength} 操作数 —— 「钳制前的原始意图上限」，
-     * {@code overflow.ts:171}；package 3c，docs/31 §8.21）。目录侧字段是
+     * {@code overflow.ts:171}；package 3c，原 docs/31 §8.21）。目录侧字段是
      * {@code ModelInfo.maxOutputTokens}；目录里没有这个模型 ⇒ 返回 0，
      * {@code desiredMaxOutput > 0} 判据随之恒 false ⇒ length 收尾不做
      * compact-and-retry，与裁决④一致。

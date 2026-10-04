@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * package 3c 的 post-run 压缩判定哨兵（pi {@code _handlePostAgentRun} ②③ +
  * {@code _checkCompaction}，{@code agent-session.ts:1116-1144, 2154-2258}；
- * {@code docs/31 §8.21}）。一条守卫一颗钉：G0 设置、G1 aborted、G3 sameModel、
+ * {@code 原 docs/31 §8.21}）。一条守卫一颗钉：G0 设置、G1 aborted、G3 sameModel、
  * G4 陈旧边界、C1/C2 溢出与可恢复截断、R0/R1/R2 闩与删尾、T1 的锚点校验、
  * T2 阈值，以及 ③ 的「队列有货也续跑」。事件形状（R1 只发 end、end 的
  * willRetry/errorMessage 文案）一并钉在 recorder 上。

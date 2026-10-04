@@ -56,11 +56,11 @@ public final class Settings {
     public String sessionDir;
     public String sessionBackend;
     public String httpProxy;
-    /** 远程模型目录的根 URL（docs/70 R7）；null/空 ⇒ {@code https://pi.dev}。 */
+    /** 远程模型目录的根 URL（原 docs/70 R7）；null/空 ⇒ {@code https://pi.dev}。 */
     public String catalogBaseUrl;
     public String tuiMode;
     public Tui tui;
-    /** 自动重试设置（3d，docs/31 §8.22；对齐 pi {@code RetrySettings}）。 */
+    /** 自动重试设置（3d，原 docs/31 §8.22；对齐 pi {@code RetrySettings}）。 */
     public Retry retry;
 
     /** Unknown fields passthrough (aligned with pi's extensible settings). */
@@ -96,7 +96,7 @@ public final class Settings {
 
     /**
      * Retry settings (JSON boundary representation) — 对齐 pi
-     * {@code RetrySettings}（settings-manager.ts:41-47，3d/docs/31 §8.22）。
+     * {@code RetrySettings}（settings-manager.ts:41-47，3d/原 docs/31 §8.22）。
      * 全字段可选（≙ pi 的 {@code ?}），缺省值在消费点（{@code SettingsAccessors
      * #getRetrySettings}）按 pi 的 {@code ??} 链兜底。两环共用同一份预算：
      * post-run ① 与摘要重试。

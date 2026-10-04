@@ -107,7 +107,7 @@ class TransformMessagesCopilotAnthropicOracleTest {
 
     /**
      * Pi's second oracle supplies a {@code thoughtSignature} on a tool call
-     * and expects it removed during migration (Batch F, docs/67): the source
+     * and expects it removed during migration (Batch F, 原 docs/67): the source
      * is a different model on the same provider, so the signature is stripped
      * while id/name are kept.
      */

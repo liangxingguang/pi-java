@@ -11,7 +11,7 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包 A0 步7（{@code docs/43 D5/D6}）：Anthropic 凭证链的**种类**与次序 ——
+ * 包 A0 步7（{@code 原 docs/43 D5/D6}）：Anthropic 凭证链的**种类**与次序 ——
  * pi {@code providers/anthropic.ts:18-39} 的三种形态 ＋ java 既有的 profile 扩展层。
  *
  * <p>最终次序（从高到低，D6）：</p>
@@ -154,7 +154,7 @@ class CredentialChainTest {
         assertThat(resolve("anthropic")).isEmpty();
     }
 
-    // ── 包 B1：stored OAuth 通道（docs/63） ──────────────────────────────
+    // ── 包 B1：stored OAuth 通道（原 docs/63） ──────────────────────────────
 
     @Test
     void storedAnthropicOauthYieldsApiKeyNotBearer() {

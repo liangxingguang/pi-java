@@ -197,7 +197,7 @@ class HarnessToolExecutionSpansTest {
 
     /**
      * 顺序路径的**多调用**批次：`batchSize` 是本批的调用**总数**，不是前缀数
-     * （{@code docs/31 §8.26.5-11}）。
+     * （{@code 原 docs/31 §8.26.5-11}）。
      *
      * <p>上面的单调用用例两种读法同值（{@code batchSize == 1}），测不出这个缺陷；
      * 双调用的顺序批才把它们分开 —— 旧实现读的是「结果消息落定时已 start 过的个数」，

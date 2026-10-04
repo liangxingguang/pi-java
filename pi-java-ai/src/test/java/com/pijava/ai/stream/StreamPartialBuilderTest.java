@@ -58,7 +58,7 @@ class StreamPartialBuilderTest {
 
     @Test
     void emitUsageWithFullBreakdownCarriesEveryComponentToBothChannels() {
-        // 包 H1 步 2（docs/42 §8.3）：`emitUsage(Usage)` 是加宽后的入口。
+        // 包 H1 步 2（原 docs/42 §8.3）：`emitUsage(Usage)` 是加宽后的入口。
         // 两条通道都要拿到全量分解：事件自身的 `usage()` 与 partial 上的 `usage()`。
         var builder = new StreamPartialBuilder();
         builder.emitStart();

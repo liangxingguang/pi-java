@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包B14 步3（docs/47 §4.3 + §5-步3）：{@link TransformMessages} 的第 5 形参
+ * 包B14 步3（原 docs/47 §4.3 + §5-步3）：{@link TransformMessages} 的第 5 形参
  * {@link ToolCallIdNormalizer} ＋ 第一遍的两条 id 归一变换 —— P5（pi
  * {@code transform-messages.ts:136-142}，助手 toolCall 块换 id 并记映射）与
  * P2（{@code :84-90}，toolResult 按映射换 {@code toolCallId}）。

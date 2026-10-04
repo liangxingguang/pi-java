@@ -7,7 +7,7 @@ import java.util.Map;
  * provider 以 OpenAI custom tool 的 lark/regex 文法约束工具调用。
  *
  * <p>本形状只承载配置；能力门为 false 时静默回落 function tool、门开但无可用变体时
- * 才硬错 —— 解析见 {@code GrammarInputProperties}（docs/69）。</p>
+ * 才硬错 —— 解析见 {@code GrammarInputProperties}（原 docs/69）。</p>
  *
  * @param variants pi {@code GrammarVariants}：键 {@code openai_lark}/{@code openai_regex}，
  *                 值为文法定义。空表不抛：抛错只发生在 resolve 且能力门打开时（照 pi）

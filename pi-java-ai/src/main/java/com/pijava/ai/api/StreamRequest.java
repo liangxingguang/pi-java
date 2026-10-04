@@ -23,13 +23,13 @@ import com.pijava.ai.thinking.ThinkingLevel;
  * <p>⚠️ 与 pi 的形状差异：pi 在**公开入口**做一次归一、provider 收到的是
  * {@code TranscriptContext}；java 的 {@code StreamApi.stream(StreamRequest, ApiOptions)}
  * 一身两角（公开入口 ＋ 车道钩子），故把归一收口在**本记录的兼容构造器**里
- * （{@code docs/49 §5.1}）。</p>
+ * （{@code 原 docs/49 §5.1}）。</p>
  *
  * <p>Carries the target model's **full** {@link ModelInfo}, not just its {@link ModelId} —
  * pi's request builders receive the whole {@code Model<TApi>} and read things off it
  * ({@code compat}, {@code input}, {@code thinkingLevelMap}); a request that carried only the
  * id could not replay thinking blocks correctly, because the per-model flags were unavailable
- * (docs/31 §8.34.4 决策 5).</p>
+ * (原 docs/31 §8.34.4 决策 5).</p>
  *
  * @param model        the target model, with its metadata
  * @param transcript   the normalized ordered transcript —— 系统提示与工具声明都在它的

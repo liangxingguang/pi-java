@@ -54,7 +54,7 @@ public interface AgentTool<TParams, TDetails> {
     ExecutionMode executionMode();
 
     /**
-     * docs/66：pi {@code Tool.constrainedSampling}：可选 provider 侧约束采样；
+     * 原 docs/66：pi {@code Tool.constrainedSampling}：可选 provider 侧约束采样；
      * {@code null} ≙ 缺席（扩展显式 {@code false} 同形）。
      */
     default com.pijava.ai.api.ConstrainedSampling constrainedSampling() {

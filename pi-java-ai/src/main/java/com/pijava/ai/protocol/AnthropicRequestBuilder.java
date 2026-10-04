@@ -152,7 +152,7 @@ final class AnthropicRequestBuilder {
         // pi :1104-1110 —— temperature 是**四重合取**：{@code temperature !== undefined} ＋
         // {@code !thinkingEnabled} ＋ {@code supportsMidConvoEffort !== true} ＋
         // {@code compat.supportsTemperature}。本仓缺第三项（`supportsMidConvoEffort` 的主体行为
-        // `block_binding` 在钉住的 SDK 上写不出来，docs/53 §10 B99），前两项就是下面的两个条件。
+        // `block_binding` 在钉住的 SDK 上写不出来，原 docs/53 §10 B99），前两项就是下面的两个条件。
         if (request.temperature() >= 0 && request.reasoning().isEmpty()
                 && compat.supportsTemperature()) {
             builder.temperature(request.temperature());
@@ -168,7 +168,7 @@ final class AnthropicRequestBuilder {
      * 被删的工具**仍然声明**，由 {@code tool_removal} 撤回。于是这段缓存前缀跨工具变更完整。</p>
      *
      * <p>⚠️ 本仓暂无 {@code cache_control}（A-01），故 pi 的 {@code toolCacheControl}
-     * 与「缓存断点允许落在 tool_addition/tool_removal 上」两条无从落（{@code docs/51 §4.4 ⑥}）。</p>
+     * 与「缓存断点允许落在 tool_addition/tool_removal 上」两条无从落（{@code 原 docs/51 §4.4 ⑥}）。</p>
      * <p>包 A-01：断点挂在本支**最后一个工具**上（pi {@code :1489} 的
      * {@code index === tools.length - 1}）。⚠️ 原生支挂的是 <b>{@code initialTools} 的末项</b>
      * —— 迟到工具与占位符**都不挂**（pi 对它们另调一次不带 {@code cacheControl} 的
@@ -214,7 +214,7 @@ final class AnthropicRequestBuilder {
     /**
      * 工具定义 → Anthropic 的 {@code Tool}；{@code deferLoading} ＝ pi 的
      * {@code defer_loading: true}；{@code cacheControl} 非空时挂断点；
-     * {@code supportsStrictTools} 且工具解析为 strict（docs/66）⇒ inputSchema 走
+     * {@code supportsStrictTools} 且工具解析为 strict（原 docs/66）⇒ inputSchema 走
      * strict 转换 ＋ {@code strict:true}（pi {@code anthropic-messages.ts:1467-1488}）。
      */
     private static Tool toAnthropicTool(ToolDefinition td, boolean deferLoading,
@@ -383,12 +383,12 @@ final class AnthropicRequestBuilder {
      *
      * <p>白名单是 {@code text | image | tool_result | tool_addition | tool_removal}。
      * 前三个走 SDK 的 {@code toBuilder()} 重建；后两个是 beta 形状的块，java 侧经**原始 JSON
-     * 直通**承载（{@code docs/51 §12.4}），故取 {@code _json()} 加键后回读 ——
+     * 直通**承载（{@code 原 docs/51 §12.4}），故取 {@code _json()} 加键后回读 ——
      * 这条路径产出的键序与 pi **逐字节相同**（探针 J9）。</p>
      *
      * <p>⚠️ 返回 {@code null} 表示**这个块不在白名单里**（pi 的 {@code else} ⇒ 静默不挂）。
      * 按可达输入算这个分支取不到（user 消息的块只能是 text/image/tool_result，system 消息的
-     * 只能是 text/tool_removal/tool_addition，五种全在名单内，见 {@code docs/54 §4.6}）——
+     * 只能是 text/tool_removal/tool_addition，五种全在名单内，见 {@code 原 docs/54 §4.6}）——
      * <b>照抄保留，且这不是夹具没牙</b>：白名单本身就是 pi 的行为，删掉它会在 pi 未来新增
      * 块类型时静默改变行为。</p>
      */
@@ -450,7 +450,7 @@ final class AnthropicRequestBuilder {
      * <p>⚠️ 这两个块**只存在于** {@code com.anthropic.models.beta.messages.*} —— 非 beta 的
      * {@link ContentBlockParam} 没有对应变体。这里用 SDK 的**未知变体直通**（原始 JSON 反序列化，
      * 序列化时原样写出）把 beta 形状装进非 beta 参数，绕开整条车道的类型族迁移。
-     * 通路与逐字节往返证据见 {@code SdkJsonEscapeHatchTest}（{@code docs/51 §12.4}）。</p>
+     * 通路与逐字节往返证据见 {@code SdkJsonEscapeHatchTest}（{@code 原 docs/51 §12.4}）。</p>
      */
     private static ContentBlockParam toolReferenceBlock(String type, String toolName) {
         var tool = new LinkedHashMap<String, Object>();

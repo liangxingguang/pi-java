@@ -11,14 +11,14 @@ import com.openai.models.chat.completions.ChatCompletionUserMessageParam;
 import com.pijava.ai.message.ContentBlock;
 
 /**
- * docs/66：openai-completions 车道的**图片内容**出站 helper（从
+ * 原 docs/66：openai-completions 车道的**图片内容**出站 helper（从
  * {@code OpenAICompletionsMessageConverter} 抽出，拆分步骤 7）。
  */
 final class CompletionImageWire {
 
     private CompletionImageWire() {}
 
-    /** pi 的图片判据是 {@code type === "image"}；java 的 URL 图片同等对待（docs/44 D4）。 */
+    /** pi 的图片判据是 {@code type === "image"}；java 的 URL 图片同等对待（原 docs/44 D4）。 */
     static boolean isImageBlock(ContentBlock block) {
         return block instanceof ContentBlock.ImageContent
                 || block instanceof ContentBlock.UrlImageContent;

@@ -28,7 +28,7 @@ import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ThinkingLevelMap;
 
 /**
- * <b>包 A3c</b>：OpenAI Completions 车道的**工具增删原生渲染**（{@code docs/51 §4.4}）。
+ * <b>包 A3c</b>：OpenAI Completions 车道的**工具增删原生渲染**（{@code 原 docs/51 §4.4}）。
  *
  * <p>骨架镜像 pi 自己的 oracle {@code packages/ai/test/transcript-tool-changes.test.ts:286-337}
  * 的三条用例。观测面是**真出站请求体**（{@link RecordingHttpServer}）。</p>
@@ -40,7 +40,7 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
  * {@code SdkJsonEscapeHatchTest}。</p>
  *
  * <p>⚠️ 与 pi 夹具的一处差异：{@code sections} 的 {@code null} 删除语义
- * （{@code docs/49 §9 R3①}）表达不了，夹具只用 content ＋ 一个非空 section。</p>
+ * （{@code 原 docs/49 §9 R3①}）表达不了，夹具只用 content ＋ 一个非空 section。</p>
  */
 class CompletionsToolChangesWireTest {
 

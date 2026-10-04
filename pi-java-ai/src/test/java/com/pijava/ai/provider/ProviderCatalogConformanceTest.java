@@ -117,7 +117,7 @@ class ProviderCatalogConformanceTest {
     @Test
     void openaiProviderDefaultsToResponsesAndHonorsProtocolOverride() {
         var provider = provider("openai");
-        // D3（docs/62）：默认 Responses（pi 写死）。
+        // D3（原 docs/62）：默认 Responses（pi 写死）。
         assertThat(provider.createApi(ChatApi.class, keyedOptions()))
             .isInstanceOf(OpenAIResponsesApi.class);
         var completionsOptions = new ApiOptions("", "sk-test",

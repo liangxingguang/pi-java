@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 压缩产物的文件清单（B2，{@code docs/31 §8.30}）。
+ * 压缩产物的文件清单（B2，{@code 原 docs/31 §8.30}）。
  *
  * <p>钉的是 pi 的两样产物：摘要**文本**尾部的 {@code <read-files>}/{@code <modified-files>}
  * 两块，与落库 {@code Entry.Compaction.details} 的两个键（{@code utils.ts:62-72} 与

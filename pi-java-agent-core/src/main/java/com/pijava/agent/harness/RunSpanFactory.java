@@ -12,7 +12,7 @@ import org.slf4j.LoggerFactory;
  * Telemetry-span helpers for the run lifecycle ({@code harness.run} span).
  *
  * <p>Extracted from the former step-chain executor in the agent-loop L1 cleanup
- * to keep files under the 500-line limit (docs/20 §8). Opens/closes the per-run span,
+ * to keep files under the 500-line limit (原 docs/20 §8). Opens/closes the per-run span,
  * logs the run start/end lines, and formats model/thinking labels shared by
  * records and attributes.</p>
  */

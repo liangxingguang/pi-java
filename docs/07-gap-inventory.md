@@ -1,7 +1,7 @@
 # 41 - 模块缺口清单与补全计划
 
 > **这份文件回答什么**：**哪些功能缺失、哪些需要完善、按什么顺序补、每包的交付物是什么。**
-> **不回答什么**：**不打分**。加权完成度、权重口径、范围裁决的账在 `docs/40`；逐条 `file:line` 证据在 `docs/map/01..06`。
+> **不回答什么**：**不打分**。加权完成度、权重口径、范围裁决的账在 `docs/06`；逐条 `file:line` 证据在 `docs/map/01..06`。
 > 本文件是**可执行的工作清单**，从上面两处抽出来、按模块重排。
 
 **基准**：pi @ `3390bd936`（2026-09-20，锚点见 `docs/map/ANCHOR.md`）· pi-java @ `34849a2`（2026-09-20）
@@ -15,9 +15,9 @@ pi `harness/` 里 `AgentHarness` 独有物（具名钩子 / `HarnessEvent` / `ru
 `harness/compaction`、`harness/messages`、`harness/session`、`harness/tools` 在主流 `coding-agent/src/core/*` 有**独立副本** ⇒ **仍算主流**，锚点应改指 `core/*`。
 实证：`AgentHarness` 在 `coding-agent/src/{core,modes}` ＋ `main.ts` ＋ `cli.ts` **零消费者**；主流唯一的值导入是 `core/sdk.ts` 的 `Agent` ＋ `setDefaultStreamFn`（都在**顶层** `agent.ts`/`stream-fn.ts`）。
 
-> ⚠️ **2026-09-21：R5 在 `docs/40` 的落地已被用户指示回退** ⇒ `docs/40` 现在仍是 2026-09-20 口径
+> ⚠️ **2026-09-21：R5 在 `docs/06` 的落地已被用户指示回退** ⇒ `docs/06` 现在仍是 2026-09-20 口径
 > （**F7/F9 写「要做」**、总表仍含 `chord` 行、头条仍 44.31%），**与 R5 相悖**。本文件的排除面**以 R5 为准**，
-> 不依赖 `docs/40`。R5 若要重新落进 `docs/40`/`docs/32`/`docs/map`，见 §7.4。
+> 不依赖 `docs/06`。R5 若要重新落进 `docs/06`/`docs/05`/`docs/map`，见 §7.4。
 
 ---
 
@@ -28,9 +28,9 @@ pi `harness/` 里 `AgentHarness` 独有物（具名钩子 / `HarnessEvent` / `ru
 | **缺失** | pi 有、pi-java 完全没有 ⇒ 要做**新东西** |
 | **需完善** | 两侧都有，但**行为/形状不同** ⇒ 要做**改造**，不是新建 |
 | **死功能** | 代码在，但生产路径上不工作 ⇒ 要做**接线**，通常是改一行 |
-| **权重** | 3 = 每轮对话都走 / 2 = 每次会话走 / 1 = 低频边缘（口径见 `docs/40 §0.3`） |
+| **权重** | 3 = 每轮对话都走 / 2 = 每次会话走 / 1 = 低频边缘（口径见 `docs/06 §0.3`） |
 
-**排期原则**（`docs/40 §9`）：**先修权重 3 的缺失**，它们决定「用户今天会不会撞到」；
+**排期原则**（`docs/06 §9`）：**先修权重 3 的缺失**，它们决定「用户今天会不会撞到」；
 权重 1 的长尾排后面。**死功能优先** —— 投入最小、可见性最高。
 
 ---
@@ -40,44 +40,44 @@ pi `harness/` 里 `AgentHarness` 独有物（具名钩子 / `HarnessEvent` / `ru
 **面貌**：缺失 47 条（已剔除 R5 的 24 个长尾 provider 端点）。**杠杆极集中** —— 权重 3 的未对齐共 10 条
 （8 缺失 + 2 存疑），占全模块权重的 **43.7%**。
 
-> ⚠️ **2026-09-22 更新**：上段数字是 **H1 之前**的快照。**H1（usage 域）已闭环**（`docs/42 §10`）⇒
+> ⚠️ **2026-09-22 更新**：上段数字是 **H1 之前**的快照。**H1（usage 域）已闭环**（`原 docs/42 §10`）⇒
 > 划掉 8 条缺失（§1.1 三条权重 3 ＋ §1.2 五条权重 2）、§1.4 两条、§1.5 三条死功能救活 ＋ 新增一条
-> `UsageInfo.from` 死码登记。权重与完成度**待下一次 `docs/40` 重算**，这里不发明新数。
-> （✅ 2026-10-02：该登记已随 A-20 删除结案，`docs/68`，`d5a3582`。）
+> `UsageInfo.from` 死码登记。权重与完成度**待下一次 `docs/06` 重算**，这里不发明新数。
+> （✅ 2026-10-02：该登记已随 A-20 删除结案，`原 docs/68`，`d5a3582`。）
 
 ### 1.1 缺失（权重 3 —— 全是大件，最高优先级）
 
 | 功能 | 权重 | 用户可观察后果 | 台账号 |
 |---|---:|---|---|
-| ~~`usage.cacheRead` 生产者~~ | 3 | ✅ **H1 已闭环**（步 2–5，`docs/42 §10`；台账 B56）。原后果：开 prompt caching 时上下文占用被**低估** ⇒ 压缩时机晚于 pi（下游 `ContextOverflow`/`ContextUsageEstimator` **已在读**这个数） | B56 |
-| ~~`usage.cacheWrite` / `cacheWrite1h` 生产者~~ | 3 | ✅ **H1 已闭环**（步 3–5；`cacheWrite1h` 只有 Anthropic 报、真 key 端到端预登记于 `docs/42 §8.5-3`）。原后果：`uncachedTokens` 把 cacheWrite 算进未缓存量 | B56 |
+| ~~`usage.cacheRead` 生产者~~ | 3 | ✅ **H1 已闭环**（步 2–5，`原 docs/42 §10`；台账 B56）。原后果：开 prompt caching 时上下文占用被**低估** ⇒ 压缩时机晚于 pi（下游 `ContextOverflow`/`ContextUsageEstimator` **已在读**这个数） | B56 |
+| ~~`usage.cacheWrite` / `cacheWrite1h` 生产者~~ | 3 | ✅ **H1 已闭环**（步 3–5；`cacheWrite1h` 只有 Anthropic 报、真 key 端到端预登记于 `原 docs/42 §8.5-3`）。原后果：`uncachedTokens` 把 cacheWrite 算进未缓存量 | B56 |
 | ~~`usage.cost` 计算（`calculateCost`）~~ | 3 | ✅ **H1 已闭环**（步 1 P16 逐条 ＋ 各车道挂价；台账 B57）。原后果：**成本恒显示 0**（含 1h 缓存 2× 输入价、阶梯价 `tiers`） | B57 |
-| ~~`transformMessages` 其余 4/5 条变换~~ | 3 | ✅ **图片切片已随 H2 落地**（`docs/44` 步1：`downgradeUnsupportedImages` ＋ `replaceImagesWithPlaceholder`，逐行照抄 `transform-messages.ts:12-57`）。**B14 已落地**（主功能 `bb08034`/`9141c34`/`b2a8da5`/`c0587e9`/`d88aa7c`；最终接线/夹具修复 `89cce36`、oracle 收口 `c6bce1c`）：跨模型 toolCall id 归一（③）与孤儿 toolCall 合成 toolResult（④）均已实现；六车道接线与 pi oracle 夹具已回归。② `thoughtSignature` 剥离仍拆为 B14b/R1；R2 timestamp、R5 SystemMessage/heldSystemMessages、R3/R4 等按现有登记保留。原后果：跨模型切换时孤儿 toolCall ⇒ provider 400 | B14 |
-| ~~Anthropic `cache_control` 标记~~ | 3 | ✅ **A-01 已闭环**（`docs/54 §12`，2026-09-27，`8356ff8`/`c7ee45b`）：三处落点（顶层 `system` 块／工具表末项／消息表末条末块）＋ `cacheRetention` 选项通道（`StreamOptions` → `ApiOptions.extra` → 车道）＋ 压缩摘要路径的 `none` 生产者；两个 compat 门（`supportsLongCacheRetention`/`supportsCacheControlOnTools`）随本包进 `ModelCompat`（14⇒16 组件）。**顺带结案 B89**（顶层 `system` 无条件改块数组 —— pi 在 `cacheRetention:"none"` 时也是块）。原后果：Anthropic 车道**永不提示缓存** ⇒ 每轮全价、延迟更高 | — |
-| ~~`openrouter` chat 面~~ | 3 | ✅ **A-02 已闭环**（`docs/59 §12`，2026-09-29，`4f210e8`→`43926c0`）：双车道 provider（anthropic 14 条全量＋completions 精选）＋ per-model `api` 派发通道（`ModelInfo.api` → `extra["protocol"]`，pi `compat.ts:262` 的落点）＋ `:batch` id 的 resolver 精确匹配；顺带吸收 **B105**（completions 的 anthropic 形 `cache_control` 三断点＋`prompt_cache_retention`）与 **B133**（openrouter 思考形状生产可达）、落 `openRouterRouting`、修 **B138**（provider 层丢 `authKind`）。原后果：主流 7 家之一整条不可用（只有 images 面） | B134–B137 |
-| `SystemMessage`（transcript 系统消息模型） | 3 | 🟡 **A1 已落数据形状**（`docs/48 §10`，2026-09-25，`f94d221..dc5ba44`）：`Message.SystemMessage` 第四变体 ＋ `ToolReference` ＋ `ContextEntries` 投影 ＋ `SessionJson` 落线。**A2 已落消费迁移**（`docs/49 §12`，2026-09-26，`7647097`/`3576bc3`/`01cb866`）：六条车道（含 PiMessages）的系统提示与工具来源改成 transcript、`OrphanToolResults` 落 held 系统消息（R5）、`sections` 保序、PiMessages 线形状对齐。**包 B87/B88 已结案**（`docs/50 §12`，2026-09-26，`47e7f57`/`9f86e8c`/`6275f13`）：**回读**已落（`MessageJsonCodec` 的 `case "system"` ＋ 三个解码助手，sections 保序、值为 `null` ⇒ 响亮出错）、`toolsAdded` 线格**收敛**到 pi 的三键形状（两处写者共用 `Transcripts.toToolDeclaration`）。**✅ 已闭环**（**A3**`docs/51 §12`：工具增删的生产与四条车道原生渲染；**A4**`docs/52 §12`：prompt sections 的构建/替换/差分 ＋ 生产接线）。**仍未做**：~~四条车道的原生渲染在 **A7**（compat 目录接线）前只有测试可达（`docs/51 §3 F5/F6`）~~ ✅ **A-07 已闭环**（`docs/53 §12`，2026-09-27）⇒ F5/F6 结案、四条车道的原生渲染与 sections 段补丁**生产可达**；剩下 TUI/web 的系统消息渲染（B87④，⚠️ 现已**生产可见**）。原后果：会话中途改系统提示/工具集**无法表达** | B87 |
-| `normalizeContext` / `TranscriptContext` | 3 | ✅ **已闭环**（A1 落形状 `docs/48 §10`；**A2 落消费** `docs/49 §12`，2026-09-26，`7647097`/`3576bc3`）：`StreamRequest` 的三个 legacy 组件换成 `TranscriptContext`、五条车道不再读 `request.systemPrompt()`/`.tools()`（`grep` 零命中）、`Transcripts`/`MessageTexts` 两组重放 helper 移植并逐条对齐 pi 的 oracle（`system-message-replay.test.ts` 9/9 移植进 Java 夹具） | B87 |
+| ~~`transformMessages` 其余 4/5 条变换~~ | 3 | ✅ **图片切片已随 H2 落地**（`原 docs/44` 步1：`downgradeUnsupportedImages` ＋ `replaceImagesWithPlaceholder`，逐行照抄 `transform-messages.ts:12-57`）。**B14 已落地**（主功能 `bb08034`/`9141c34`/`b2a8da5`/`c0587e9`/`d88aa7c`；最终接线/夹具修复 `89cce36`、oracle 收口 `c6bce1c`）：跨模型 toolCall id 归一（③）与孤儿 toolCall 合成 toolResult（④）均已实现；六车道接线与 pi oracle 夹具已回归。② `thoughtSignature` 剥离仍拆为 B14b/R1；R2 timestamp、R5 SystemMessage/heldSystemMessages、R3/R4 等按现有登记保留。原后果：跨模型切换时孤儿 toolCall ⇒ provider 400 | B14 |
+| ~~Anthropic `cache_control` 标记~~ | 3 | ✅ **A-01 已闭环**（`原 docs/54 §12`，2026-09-27，`8356ff8`/`c7ee45b`）：三处落点（顶层 `system` 块／工具表末项／消息表末条末块）＋ `cacheRetention` 选项通道（`StreamOptions` → `ApiOptions.extra` → 车道）＋ 压缩摘要路径的 `none` 生产者；两个 compat 门（`supportsLongCacheRetention`/`supportsCacheControlOnTools`）随本包进 `ModelCompat`（14⇒16 组件）。**顺带结案 B89**（顶层 `system` 无条件改块数组 —— pi 在 `cacheRetention:"none"` 时也是块）。原后果：Anthropic 车道**永不提示缓存** ⇒ 每轮全价、延迟更高 | — |
+| ~~`openrouter` chat 面~~ | 3 | ✅ **A-02 已闭环**（`原 docs/59 §12`，2026-09-29，`4f210e8`→`43926c0`）：双车道 provider（anthropic 14 条全量＋completions 精选）＋ per-model `api` 派发通道（`ModelInfo.api` → `extra["protocol"]`，pi `compat.ts:262` 的落点）＋ `:batch` id 的 resolver 精确匹配；顺带吸收 **B105**（completions 的 anthropic 形 `cache_control` 三断点＋`prompt_cache_retention`）与 **B133**（openrouter 思考形状生产可达）、落 `openRouterRouting`、修 **B138**（provider 层丢 `authKind`）。原后果：主流 7 家之一整条不可用（只有 images 面） | B134–B137 |
+| `SystemMessage`（transcript 系统消息模型） | 3 | 🟡 **A1 已落数据形状**（`docs/08 §10`，2026-09-25，`f94d221..dc5ba44`）：`Message.SystemMessage` 第四变体 ＋ `ToolReference` ＋ `ContextEntries` 投影 ＋ `SessionJson` 落线。**A2 已落消费迁移**（`原 docs/49 §12`，2026-09-26，`7647097`/`3576bc3`/`01cb866`）：六条车道（含 PiMessages）的系统提示与工具来源改成 transcript、`OrphanToolResults` 落 held 系统消息（R5）、`sections` 保序、PiMessages 线形状对齐。**包 B87/B88 已结案**（`原 docs/50 §12`，2026-09-26，`47e7f57`/`9f86e8c`/`6275f13`）：**回读**已落（`MessageJsonCodec` 的 `case "system"` ＋ 三个解码助手，sections 保序、值为 `null` ⇒ 响亮出错）、`toolsAdded` 线格**收敛**到 pi 的三键形状（两处写者共用 `Transcripts.toToolDeclaration`）。**✅ 已闭环**（**A3**`原 docs/51 §12`：工具增删的生产与四条车道原生渲染；**A4**`原 docs/52 §12`：prompt sections 的构建/替换/差分 ＋ 生产接线）。**仍未做**：~~四条车道的原生渲染在 **A7**（compat 目录接线）前只有测试可达（`原 docs/51 §3 F5/F6`）~~ ✅ **A-07 已闭环**（`原 docs/53 §12`，2026-09-27）⇒ F5/F6 结案、四条车道的原生渲染与 sections 段补丁**生产可达**；剩下 TUI/web 的系统消息渲染（B87④，⚠️ 现已**生产可见**）。原后果：会话中途改系统提示/工具集**无法表达** | B87 |
+| `normalizeContext` / `TranscriptContext` | 3 | ✅ **已闭环**（A1 落形状 `docs/08 §10`；**A2 落消费** `原 docs/49 §12`，2026-09-26，`7647097`/`3576bc3`）：`StreamRequest` 的三个 legacy 组件换成 `TranscriptContext`、五条车道不再读 `request.systemPrompt()`/`.tools()`（`grep` 零命中）、`Transcripts`/`MessageTexts` 两组重放 helper 移植并逐条对齐 pi 的 oracle（`system-message-replay.test.ts` 9/9 移植进 Java 夹具） | B87 |
 
 ### 1.2 缺失（权重 2）
 
 | 功能 | 权重 | 后果 |
 |---|---:|---|
 | `xai` provider 端点 | 2 | 主流 7 家之一不可用 |
-| ~~**`ImageContent` 收发**（anthropic ＋ openai-completions ＋ mistral 三条车道 **＋ toolResult 路径**）~~ | 2 | ✅ **H2 已闭环**（`docs/44`，七提交 `af5139e..9bbcd48`）—— 共享闸（非视觉降级）＋ 四车道九个落线点（Anthropic 2 ／ completions 2 ／ Mistral 2 ／ responses 1 ＋ 闸 1）。⚠️ **Google 不在内**：实测其工具结果**整条路径**不存在（不是缺图片），已拆出去另立一包（`docs/32` B84）—— ✅ **B84 已闭环**（`docs/45`，2026-09-23）。原后果：**ReadTool 读图模型完全看不到图**（比台账写的更严重） | B17 |
+| ~~**`ImageContent` 收发**（anthropic ＋ openai-completions ＋ mistral 三条车道 **＋ toolResult 路径**）~~ | 2 | ✅ **H2 已闭环**（`原 docs/44`，七提交 `af5139e..9bbcd48`）—— 共享闸（非视觉降级）＋ 四车道九个落线点（Anthropic 2 ／ completions 2 ／ Mistral 2 ／ responses 1 ＋ 闸 1）。⚠️ **Google 不在内**：实测其工具结果**整条路径**不存在（不是缺图片），已拆出去另立一包（`docs/05` B84）—— ✅ **B84 已闭环**（`原 docs/45`，2026-09-23）。原后果：**ReadTool 读图模型完全看不到图**（比台账写的更严重） | B17 |
 | 孤儿 toolCall 合成 `toolResult` | 2 | 中断/切换模型后历史缺 tool_result ⇒ provider 400 |
 | ~~`Model.cost`（含 `cacheRead`/`cacheWrite`/`tiers`）~~ | 2 | ✅ **H1 已闭环**（步 1 `PricingInfo` 五组件 ＋ 步 6 models.json `cost` 扩键/半价→UNKNOWN/tier 拒载）。⚠️ 残留＝**数据面**：内置目录的 cache 价未编（裁决 B：−1 表「未知」，不编假价） |
-| ~~**`Model.compat` 缺 49/52 个字段**~~ | 2 | ✅ **A-07 已闭环**（`docs/53 §12`，2026-09-27，`9eee9f8`/`22bde33`/`3770fd3`/`3d7898e`）：本仓携带的**十四个**组件全部有了生产者（解析层 `CompatResolver` 三源合一 ＋ 生成期谓词的目录标注 ＋ models.json 扩到 14 键），其中**今天就可观察**的三处差异已修（`forceAdaptiveThinking` 对 sonnet-4-6/fable-5/opus-4-8 的 adaptive 思考、`supportsTemperature` 对 opus-4-8 的温度抑制、`maxTokensField` 对 deepseek 的 `max_tokens`）。**仍未做**：pi 其余约四十个字段按 `docs/53 §4.4` 的**归属表**分给各自的包（`cache_control`→A-01 ✅ **已闭环**、`thinkingFormat`→A-09、`simple-options`→A-10、`retry`→A-14、`openRouterRouting`→A-02、`eager_input_streaming`→B90；零消费者的列成 **B98**）。⚠️ A-01 另补了**两个当时还没进 java 的字段**（`supportsLongCacheRetention`/`supportsCacheControlOnTools`）—— 归属表只记了「消费」、没记「字段本身还没有」，见 `docs/54 §12.2` | — |
+| ~~**`Model.compat` 缺 49/52 个字段**~~ | 2 | ✅ **A-07 已闭环**（`原 docs/53 §12`，2026-09-27，`9eee9f8`/`22bde33`/`3770fd3`/`3d7898e`）：本仓携带的**十四个**组件全部有了生产者（解析层 `CompatResolver` 三源合一 ＋ 生成期谓词的目录标注 ＋ models.json 扩到 14 键），其中**今天就可观察**的三处差异已修（`forceAdaptiveThinking` 对 sonnet-4-6/fable-5/opus-4-8 的 adaptive 思考、`supportsTemperature` 对 opus-4-8 的温度抑制、`maxTokensField` 对 deepseek 的 `max_tokens`）。**仍未做**：pi 其余约四十个字段按 `原 docs/53 §4.4` 的**归属表**分给各自的包（`cache_control`→A-01 ✅ **已闭环**、`thinkingFormat`→A-09、`simple-options`→A-10、`retry`→A-14、`openRouterRouting`→A-02、`eager_input_streaming`→B90；零消费者的列成 **B98**）。⚠️ A-01 另补了**两个当时还没进 java 的字段**（`supportsLongCacheRetention`/`supportsCacheControlOnTools`）—— 归属表只记了「消费」、没记「字段本身还没有」，见 `原 docs/54 §12.2` | — |
 | 内置模型目录数据规模（35 条手写 vs pi 41 provider 生成） | 2 | 大量模型查不到 ⇒ 退化为 `ModelInfo.minimal` |
-| ~~**`ANTHROPIC_AUTH_TOKEN`（`Authorization: Bearer`）**~~ | 2 | ✅ **A0 步7/8 已闭环**（`ApiOptions.authKind` ＋ `Credentials` 带 kind ＋ 车道按 kind 分派；Bearer ／ OAuth（含两枚身份头）／ x-api-key 三分派，值里含 `sk-ant-oat` 也认）。✅ **OAuth 流已接进请求路径**（2026-10-01 B1，`docs/63`/`4a869c9`：stored 订阅 token 走 x-api-key、5 分钟临期锁内单次刷新）。⚠️ 仍残留：pi OAuth 分支的系统提示前缀/工具名两个面未移植（`docs/43 §6-10`，台账 B81/A-15） |
+| ~~**`ANTHROPIC_AUTH_TOKEN`（`Authorization: Bearer`）**~~ | 2 | ✅ **A0 步7/8 已闭环**（`ApiOptions.authKind` ＋ `Credentials` 带 kind ＋ 车道按 kind 分派；Bearer ／ OAuth（含两枚身份头）／ x-api-key 三分派，值里含 `sk-ant-oat` 也认）。✅ **OAuth 流已接进请求路径**（2026-10-01 B1，`原 docs/63`/`4a869c9`：stored 订阅 token 走 x-api-key、5 分钟临期锁内单次刷新）。⚠️ 仍残留：pi OAuth 分支的系统提示前缀/工具名两个面未移植（`原 docs/43 §6-10`，台账 B81/A-15） |
 | ~~provider 凭证优先级链（stored → authToken → oauthToken → apiKey）~~ | 2 | ✅ **A0 步7 已闭环**（`Credentials.resolveCredential`：profile env → profile file → **stored OAuth**（anthropic ⇒ API_KEY/x-api-key，余 ⇒ BEARER；B1）→ `ANTHROPIC_AUTH_TOKEN`(BEARER) → `ANTHROPIC_OAUTH_TOKEN`(OAUTH) → 默认 env → 默认 file；两个 token 仅 Anthropic、profile 层不出 `_AUTH_TOKEN_<PROFILE>` 变体）。原后果：多凭证来源时行为与 pi 不一致 |
 | ~~`usage.reasoning` 生产者~~ | 2 | ✅ **H1 已闭环**（步 3 `output_tokens_details.thinking_tokens`／步 4 `completion_tokens_details.reasoning_tokens`／步 5 Responses·Google；Mistral 恒 null＝pi 同）。原后果：推理 token 用量不可见 |
 | ~~`choice.usage` 回退（Moonshot 型 relay）~~ | 2 | ✅ **H1 步 4 已闭环**（位置照 pi 在 delta 处理之前；台账 B24）。原后果：只在 `choice.usage` 报量的 relay **用量全为 0** |
 | ~~`parseChunkUsage` 归一（`prompt_tokens_details.cached_tokens` 等三路 + 减法语义）~~ | 2 | ✅ **H1 步 4 已闭环**（三路 `??` 链＋`Math.max` 减法；台账 B24）。原后果：即使 relay 报了缓存量也读不到 |
 | ~~**`message_start` 首帧 usage 保留 ＋ `message_delta` 逐字段覆盖**~~ | 2 | ✅ **H1 步 3 已闭环**（`AnthropicUsageState`，T2/T3/T4 钉）。原后果：早断流时 **input token 被清零** |
-| ~~请求侧 `compat.thinkingFormat`（10 种 thinking 开关形状）~~ | 2 | ✅ **A-09 已闭环**（`docs/58 §12`，2026-09-29，`2f8acb9`→`14a165e`）：是**十一种**形状（原台账写十种，漏了缺省的 `openai` 支）——十一臂全落 ＋ `$var` 解析 ＋ 探测（`isGrok` 等）与目录标注（moonshotai*/xiaomi*/qwen-token-plan* 的 `thinkingFormat` 此前被 `ModelData` 恒 `NONE` 丢掉）＋ models.json 四键。改前本车道**一个思考字段都不发**（连 `reasoning_effort` 都没有生产者）。⚠️ R4「两派 null 语义」被实测证伪为**语义等价**（夹取先行）；R11 的坑实在 SDK 层（`JsonValue.from` 丢 null ⇒ `put` 经树）。遗留 **B129–B133** |
-| ~~`simple-options`（`clampMaxTokensToContext` / thinking budget）~~ | 2 | ✅ **A-10 已闭环**（`docs/57 §12`，2026-09-28，`7fc23d2`→`8d04fe1`）：`maxTokens` 补上生产者（缺席 ⇒ 模型上限）＋ 夹到 `窗口 − 估算 − 4096`，落点在唯一漏斗 `AbstractChatApi.stream`；三条 OpenAI 车道另得模型级 `samplingParams` 与顶层思考预算字段。⚠️ **本行的措辞低估了原缺口**：真实情况是 `maxTokens` **在生产上没有任何生产者**（三处 `StreamOptions` 构造点全传 `OptionalInt.empty()`）⇒ Anthropic 发**自家发明的 `4096`**、其余五条车道**一个上限都不发**（台账 **B122**）。原后果行「不按 contextWindow 夹取 ⇒ 可能被 provider 拒绝」只描述了其中一半 |
+| ~~请求侧 `compat.thinkingFormat`（10 种 thinking 开关形状）~~ | 2 | ✅ **A-09 已闭环**（`原 docs/58 §12`，2026-09-29，`2f8acb9`→`14a165e`）：是**十一种**形状（原台账写十种，漏了缺省的 `openai` 支）——十一臂全落 ＋ `$var` 解析 ＋ 探测（`isGrok` 等）与目录标注（moonshotai*/xiaomi*/qwen-token-plan* 的 `thinkingFormat` 此前被 `ModelData` 恒 `NONE` 丢掉）＋ models.json 四键。改前本车道**一个思考字段都不发**（连 `reasoning_effort` 都没有生产者）。⚠️ R4「两派 null 语义」被实测证伪为**语义等价**（夹取先行）；R11 的坑实在 SDK 层（`JsonValue.from` 丢 null ⇒ `put` 经树）。遗留 **B129–B133** |
+| ~~`simple-options`（`clampMaxTokensToContext` / thinking budget）~~ | 2 | ✅ **A-10 已闭环**（`原 docs/57 §12`，2026-09-28，`7fc23d2`→`8d04fe1`）：`maxTokens` 补上生产者（缺席 ⇒ 模型上限）＋ 夹到 `窗口 − 估算 − 4096`，落点在唯一漏斗 `AbstractChatApi.stream`；三条 OpenAI 车道另得模型级 `samplingParams` 与顶层思考预算字段。⚠️ **本行的措辞低估了原缺口**：真实情况是 `maxTokens` **在生产上没有任何生产者**（三处 `StreamOptions` 构造点全传 `OptionalInt.empty()`）⇒ Anthropic 发**自家发明的 `4096`**、其余五条车道**一个上限都不发**（台账 **B122**）。原后果行「不按 contextWindow 夹取 ⇒ 可能被 provider 拒绝」只描述了其中一半 |
 | 工具状态增量（`toolsAdded`/`toolsRemoved` ＋ 线格 `tool_addition`/`tool_removal`） | 2 | 中途增删工具无法表达（**取代已作废的 C11**） |
-| ~~提示词分段 `sections` ＋ 渲染~~ | 2 | ✅ **A4 已闭环**（`docs/52 §12`，2026-09-26，`92a4b99`/`fc1404e`/`032de6d`/`40bb3ea`/`e7c68cc`）：pi 的结构化系统提示三件事全落 —— 构建（`SystemPrompts` 移植，含 `buildRules`/段名校验/`preamble` 不包标签）、替换（`sections` 的 `null` ＝ 删除，含落线/读回/渲染/重放）、差分（`diffSystemPromptSections` ＋ `_preparePromptAndToolLoadout` 生产者，起手与每轮两个调用点）。原后果：无法按名替换单段提示词。遗留：**B94**（内置工具无 `promptSnippet`）/**B95**（`docs` 段无生产者）/**B96**（录制格式） |
+| ~~提示词分段 `sections` ＋ 渲染~~ | 2 | ✅ **A4 已闭环**（`原 docs/52 §12`，2026-09-26，`92a4b99`/`fc1404e`/`032de6d`/`40bb3ea`/`e7c68cc`）：pi 的结构化系统提示三件事全落 —— 构建（`SystemPrompts` 移植，含 `buildRules`/段名校验/`preamble` 不包标签）、替换（`sections` 的 `null` ＝ 删除，含落线/读回/渲染/重放）、差分（`diffSystemPromptSections` ＋ `_preparePromptAndToolLoadout` 生产者，起手与每轮两个调用点）。原后果：无法按名替换单段提示词。遗留：**B94**（内置工具无 `promptSnippet`）/**B95**（`docs` 段无生产者）/**B96**（录制格式） |
 | `ContextOverflow` 的两条新行为（z.ai 放宽正则 ＋ Cerebras 改按 provider 门控） | 2 | z.ai 的 `Prompt too long` 匹配不上 ⇒ 不触发溢出恢复；Cerebras 模式对**任意** provider 都命中 ⇒ **误判溢出** |
 | ~~`RetryableError` 的两个新模式（`"currently experiencing high demand"` / `"520"`）~~ | 2 | ✅ **A0 步6 已闭环**（按 pi 逐字顺序插入，子串匹配语义照抄）。原后果：高需求错误与 HTTP 520 **不重试，直接失败** |
 
@@ -88,12 +88,12 @@ pi `harness/` 里 `AgentHarness` 独有物（具名钩子 / `HarnessEvent` / `ru
 图片降级为占位文本 · `Model.input` 能力位 · `ThinkingLevel` 词表含 `"max"` · `ImagesModel` 注册表 ·
 `AssistantMessage.responseModel`/`responseId`/`providerThinkingLevel`/`diagnostics`/`endTurn` · `Model.promptCache` ·
 `MistralConversationsCompat` · ~~`ANTHROPIC_OAUTH_TOKEN`~~ · ~~**`sanitizeSurrogates`（pi 57 处调用，java 零）**~~ ·
-~~constrained sampling（docs/66）~~ / ~~grammar custom tool（docs/69）~~ · `transport` 选择 ·
-`session-resources` 清理注册表 · ~~`JsonObject`（docs/69 J8：编译期约束等价）~~
+~~constrained sampling（原 docs/66）~~ / ~~grammar custom tool（原 docs/69）~~ · `transport` 选择 ·
+`session-resources` 清理注册表 · ~~`JsonObject`（原 docs/69 J8：编译期约束等价）~~
 
 > ~~**`sanitizeSurrogates` 单独点名**：孤对代理字符原样出站 ⇒ **provider 400**。权重虽 1，但它是**硬故障**。~~
 > ✅ **A0 步1–5 已闭环**（`SanitizeUnicode` ＋ 24 个落线点：Anthropic 6 ／ completions 4 ／ responses 5 ／
-> Google 3 ／ openrouter-images 1 ／ Mistral 请求 4 ＋ 响应 1）。差额见 `docs/43 §9-1`：~~grammar 2 处随 docs/69 闭环~~、
+> Google 3 ／ openrouter-images 1 ／ Mistral 请求 4 ＋ 响应 1）。差额见 `原 docs/43 §9-1`：~~grammar 2 处随 原 docs/69 闭环~~、
 > 4 处「面不存在」（Google thinking ／ Mistral 数组形态 content）、3 处**照缝**（pi 自己也不净化的路径）。
 > ✅ `ANTHROPIC_OAUTH_TOKEN` 随 A0 步7/8 闭环（Bearer ＋ 身份头形态）。
 
@@ -102,11 +102,11 @@ pi `harness/` 里 `AgentHarness` 独有物（具名钩子 / `HarnessEvent` / `ru
 | 功能 | 权重 | 差异 |
 |---|---:|---|
 | **`openai` provider 默认 wire** | 3 | pi 绑 **`openai-responses`** / java 绑 **`openai-completions`** ⇒ 同一 key 走**完全不同的协议族** |
-| ~~**`done` 事件载荷**~~ | 3 | ✅ **C 批次已闭环**（`docs/55 §12`，2026-09-27，`3684a82`/`b8d7e48`/`882fcaa`）：`done.partial` **就是** pi 的 `done.message` —— 终局载荷＝**落定后的累加器**（`stopReason` 非占位值、`usage` 非 null、内容是整条流的累积块）。落定从宿主补丁（已删的 `PiLoopRunner.withErrorShape`）移回**生产者**：单工厂 `StreamDone.settle`/`StreamError.settle` ＋ 三落点（车道出口 `StreamPartialBuilder.emitError`、出口缝 `AbstractChatApi`、旁路生产者三条），下游一律读消息、禁止再从 `Throwable` 重建（`err.error()` 读点 6⇒1）。原后果：java 的 `done` 只带 `usage`＋`partial`、三个访问器语义未定义 | B114 |
+| ~~**`done` 事件载荷**~~ | 3 | ✅ **C 批次已闭环**（`原 docs/55 §12`，2026-09-27，`3684a82`/`b8d7e48`/`882fcaa`）：`done.partial` **就是** pi 的 `done.message` —— 终局载荷＝**落定后的累加器**（`stopReason` 非占位值、`usage` 非 null、内容是整条流的累积块）。落定从宿主补丁（已删的 `PiLoopRunner.withErrorShape`）移回**生产者**：单工厂 `StreamDone.settle`/`StreamError.settle` ＋ 三落点（车道出口 `StreamPartialBuilder.emitError`、出口缝 `AbstractChatApi`、旁路生产者三条），下游一律读消息、禁止再从 `Throwable` 重建（`err.error()` 读点 6⇒1）。原后果：java 的 `done` 只带 `usage`＋`partial`、三个访问器语义未定义 | B114 |
 | ~~`error` 事件载荷~~ | 2 | ✅ **C 批次已闭环**（同上，同包）：`error.partial` **就是** pi 的 `error.error` —— 除 `done` 那三样外，错误路另有非空 `errorMessage`，且 **`content` 保留流到故障点为止的块**（pi 实测：中止时是已流出的那段文本）。顺带修两条真缺陷：**缺终局被报成成功**（`onComplete` 安全网曾推 `StreamDone("stop")`，pi 判 error）与**非流式 `send()` 吞错**（曾返回空消息）。原后果：网络中断后界面上「模型刚说的话」整段消失、错误文本只存在于 JVM 异常里 | B114 |
-| ~~**归一化停因词表**（`"tool_use"` vs pi 的 `"toolUse"`）~~ | 2 | ✅ **B109 已闭环**（`docs/56 §12`，2026-09-27）：归一化停因改为 pi 的 `"toolUse"`，每条走工具的车道都受影响 ⇒ 对外（终局帧／RPC 转录／web wire／遥测 span 属性）的 `stopReason` 从本包起与 pi 同字面量（宿主线终局帧顺带关掉 C 批次的一处残余）。⚠️ **三个同名字面量只动一个**：**内容块判别字面量**（=B48，`SessionJson` 无 deserializer ⇒ 注解不能改）与**线格原值／`rawStopReason`**（=B20）**逐字不动**，且被当作对照组。**安全依据**：主源码按停因字面量分支处**零处**比 `tool_use`（逐处核过）⇒ 行为面零风险。**真迁移**：`~/.pi-java` 下 3353 个会话文件带旧值 ⇒ 两条读路径经 `JsonlCodec.readStopReason` 垫片归一 | B118 · B119 · B120 · B121 |
-| ~~`provider-retry`~~ | ~~2~~ | **已结案（A-14，2026-09-30，`docs/60 §12`）**：ProviderRetry 移植 pi 判据/延迟/cap，七车道 maxRetries(0)＋wrap，Mistral 补三头 |
-| ~~`usage.totalTokens` 合成口径~~ | 2 | ✅ **H1 已对齐**——不是统一成一个公式，而是**逐车道照 pi**：Responses/Google 直取 provider 值（P11/P12）、completions 自算四分量和（P9）、Mistral 优先 provider `||` 自算（P14）、Anthropic 四分量求和。L5 由 S15 差分钉住（`docs/42 §10.1`） |
+| ~~**归一化停因词表**（`"tool_use"` vs pi 的 `"toolUse"`）~~ | 2 | ✅ **B109 已闭环**（`原 docs/56 §12`，2026-09-27）：归一化停因改为 pi 的 `"toolUse"`，每条走工具的车道都受影响 ⇒ 对外（终局帧／RPC 转录／web wire／遥测 span 属性）的 `stopReason` 从本包起与 pi 同字面量（宿主线终局帧顺带关掉 C 批次的一处残余）。⚠️ **三个同名字面量只动一个**：**内容块判别字面量**（=B48，`SessionJson` 无 deserializer ⇒ 注解不能改）与**线格原值／`rawStopReason`**（=B20）**逐字不动**，且被当作对照组。**安全依据**：主源码按停因字面量分支处**零处**比 `tool_use`（逐处核过）⇒ 行为面零风险。**真迁移**：`~/.pi-java` 下 3353 个会话文件带旧值 ⇒ 两条读路径经 `JsonlCodec.readStopReason` 垫片归一 | B118 · B119 · B120 · B121 |
+| ~~`provider-retry`~~ | ~~2~~ | **已结案（A-14，2026-09-30，`原 docs/60 §12`）**：ProviderRetry 移植 pi 判据/延迟/cap，七车道 maxRetries(0)＋wrap，Mistral 补三头 |
+| ~~`usage.totalTokens` 合成口径~~ | 2 | ✅ **H1 已对齐**——不是统一成一个公式，而是**逐车道照 pi**：Responses/Google 直取 provider 值（P11/P12）、completions 自算四分量和（P9）、Mistral 优先 provider `||` 自算（P14）、Anthropic 四分量求和。L5 由 S15 差分钉住（`原 docs/42 §10.1`） |
 | ~~`usage.totalTokens` 之外的 usage 形状~~ | 2 | ✅ **H1 已闭环**：`UsageInfo.usage()` 生产非 null（步 2）、`UsageRecord` 传全量（步 6 A3）、`usageOf` 两侧键序/可选键由 S15 逐字节钉（步 7） |
 | `Model.reasoning` → `ModelCapability.THINKING` | 2 | 形状不同（pi 是模型元数据布尔 / java 是能力集成员） |
 | `models.json` 自定义 provider 形状 | 2 | — |
@@ -117,12 +117,12 @@ pi `harness/` 里 `AgentHarness` 独有物（具名钩子 / `HarnessEvent` / `ru
 |---|---|
 | ~~`Usage` 的 `cacheRead`/`cacheWrite`/`cacheWrite1h`/`reasoning` **四分量零生产者**~~ | ✅ **H1 步 2–5 已救活**（B56）。原状态：`emitUsage` 只收 input/output ⇒ 生产恒 0/null |
 | ~~`Usage.Cost` 恒零~~ | ✅ **H1 步 1＋各车道挂价已救活**（B57）。原状态：成本累加恒 0 |
-| ~~`StreamEvent.UsageInfo.from(...)` 零调用者~~ | ✅ **A-20 已删**（`docs/68 §12`，`d5a3582`，2026-10-02）：纯透传别名、pi 无对应物（pi 无 usage 事件） |
-| ~~**`ThinkingLevelMap` 非空实例生产不可构造**~~ | ✅ **包H5 已救活**（`docs/46`，2026-09-23）—— 且**不止是接线**：形状也重塑了。原状态：生产构造点全部 `empty()` ⇒ `forLevel` 恒 `OFF` ⇒ 请求里**永无 `thinking.budgetTokens`**。⚠️ **新残留**：`ModelThinkingLevels.supported/clamp` 零生产调用者（`docs/46 §7 B15-残留-9`） |
-| ~~**`RetryPolicy` 六预设零调用者（J5）**~~ | ✅ **A-20 已删**（`docs/68 §12`，`350f252`，2026-10-02）：defaultPolicy＋五命名预设全删，pi 无对应物；Mistral 按 ApiOptions 显式构造 |
-| ~~`StreamSimple`~~ | ✅ **A-20 已删**（`docs/68`，`de0ce06`）：pi 侧 streamSimple 是主流默认入口（sdk.ts:39），Java 对应物＝`AbstractChatApi`，本仓这个零调用类是死码 |
-| `DeferredHandle` | 零生产者（两侧同状）——A-20 裁决**留形状不接线**（`docs/68` J8，B111 维持） |
-| `ToolResultMessage.usage` / `details` | A-20 裁决（`docs/68` J9/J10）：**details 有生产者**（edit/bash/read 内置工具）；**usage 主流两侧同无**，留形状不接线 |
+| ~~`StreamEvent.UsageInfo.from(...)` 零调用者~~ | ✅ **A-20 已删**（`原 docs/68 §12`，`d5a3582`，2026-10-02）：纯透传别名、pi 无对应物（pi 无 usage 事件） |
+| ~~**`ThinkingLevelMap` 非空实例生产不可构造**~~ | ✅ **包H5 已救活**（`原 docs/46`，2026-09-23）—— 且**不止是接线**：形状也重塑了。原状态：生产构造点全部 `empty()` ⇒ `forLevel` 恒 `OFF` ⇒ 请求里**永无 `thinking.budgetTokens`**。⚠️ **新残留**：`ModelThinkingLevels.supported/clamp` 零生产调用者（`原 docs/46 §7 B15-残留-9`） |
+| ~~**`RetryPolicy` 六预设零调用者（J5）**~~ | ✅ **A-20 已删**（`原 docs/68 §12`，`350f252`，2026-10-02）：defaultPolicy＋五命名预设全删，pi 无对应物；Mistral 按 ApiOptions 显式构造 |
+| ~~`StreamSimple`~~ | ✅ **A-20 已删**（`原 docs/68`，`de0ce06`）：pi 侧 streamSimple 是主流默认入口（sdk.ts:39），Java 对应物＝`AbstractChatApi`，本仓这个零调用类是死码 |
+| `DeferredHandle` | 零生产者（两侧同状）——A-20 裁决**留形状不接线**（`原 docs/68` J8，B111 维持） |
+| `ToolResultMessage.usage` / `details` | A-20 裁决（`原 docs/68` J9/J10）：**details 有生产者**（edit/bash/read 内置工具）；**usage 主流两侧同无**，留形状不接线 |
 | ~~`StreamEvent.UsageInfo` 的 `usage` 分量~~ | ✅ **H1 步 2 已救活**（J1/J2/J4）。原状态：恒 null |
 
 ### 1.6 修法建议（报告已复核边际）
@@ -137,7 +137,7 @@ pi `harness/` 里 `AgentHarness` 独有物（具名钩子 / `HarnessEvent` / `ru
 
 - **B15 与 B8 共用同一载体**（`StreamRequest` 已带整个 `ModelInfo`）⇒ 两者应合成**一次投送修复**。
 - ~~**B17（图片）须先出设计包再改** —— `AnthropicMessagesApi.java:526-529` 源码注释已写明「行为变更须先过设计」。~~
-  ✅ **H2 已闭环**（`docs/44`，2026-09-22）：先出设计（`af5139e`）再实施，七提交 `af5139e..9bbcd48`。
+  ✅ **H2 已闭环**（`原 docs/44`，2026-09-22）：先出设计（`af5139e`）再实施，七提交 `af5139e..9bbcd48`。
   那条注释已随实现删除。⚠️ **Google 车道被实测证伪**（工具结果整条路径不存在）⇒ 拆出去另立一包。
 
 ### 1.7 抽取时撞出的偏差（须登记）
@@ -147,7 +147,7 @@ pi `harness/` 里 `AgentHarness` 独有物（具名钩子 / `HarnessEvent` / `ru
 3. **报告漏收的两条 OpenAI 缓存缺口**：`api/openai-prompt-cache.ts`（`prompt_cache_key` / `prompt_cache_retention="24h"`）java 零命中；`cacheRetention` 只接进 `openai-responses` 一条车道。
 4. **行号小漂移**：`ModelCapability` 的 `IMAGE_INPUT` 在 `:16`、`THINKING` 在 `:19`；`ModelInfo` 在 `catalog/` 而非 `model/`；`Protocol` 在 `provider/` 而非 `protocol/`。
 
-**包 A0 逐行实读时新撞出的（`docs/43 §6` 详述）**：
+**包 A0 逐行实读时新撞出的（`原 docs/43 §6` 详述）**：
 
 5. **§1.3 的「`sanitizeSurrogates`（pi 57 处）」计数偏高**：逐行实读全仓是 **46 处 / 9 文件**
    （anthropic 11 · mistral 9 · completions 7 · responses 7 · google-shared 6 · bedrock 3 ·
@@ -494,7 +494,7 @@ JSONL `nextSeq` 高水位字段 ·
 
 ### 4.6 抽取时撞出的偏差（须登记）
 
-1. **报告引用错误**：报告写「台账 `docs/32:443`『evals 完整测试矩阵』仍是 OPEN」—— 实际该条目在 **`docs/32:573`**，且位于 **§8 G 类「已结案（别重开）」** ⇒ **不是 OPEN**。
+1. **报告引用错误**：报告写「台账 `docs/05:443`『evals 完整测试矩阵』仍是 OPEN」—— 实际该条目在 **`docs/05:573`**，且位于 **§8 G 类「已结案（别重开）」** ⇒ **不是 OPEN**。
 2. **`E6` 部分已解决**：`SqliteSessionStorage` 实测 463 行（已拆出 `storage/` 子包 10 文件）⇒ **E6 应改为「仅 `AgentHarness`」或与 E4 合并**。
 3. **`E7` 条数少算**：实际是**三处**（JSONL/Memory/**SQLite**）。
 4. **取证纪律**：pi 工作树**中途从 `3390bd936` 翻回 `71dca871b`**（`git rev-parse HEAD` 实测旧提交、`git status` 干净）⇒ **直接读工作树会静默拿到旧状态**，后续复测一律走 `git show 3390bd936:<path>`。
@@ -637,7 +637,7 @@ JSONL `nextSeq` 高水位字段 ·
 
 ### 7.1 三条排期原则
 
-1. **先修权重 3 的缺失** —— 它们决定「用户今天会不会撞到」（`docs/40 §2` 就是这份队列）。
+1. **先修权重 3 的缺失** —— 它们决定「用户今天会不会撞到」（`docs/06 §2` 就是这份队列）。
 2. **死功能与接线优先** —— 投入最小、可见性最高（改一行 vs 写一个新子系统）。
 3. **硬故障插队** —— 权重低但用户直接撞上的（会话读不出来、`-r` 崩溃、flag 静默无效）不等排期。
 
@@ -645,9 +645,9 @@ JSONL `nextSeq` 高水位字段 ·
 
 > ⚠️ **2026-09-22 用户改判：ai 模块整体先行** —— 下面的 H1→H6→I1–I3→C1→D1–D5 次序**已被取代**。
 > H1 之后不走 H2，而是先把 `pi-java-ai` 的剩余缺口清完（代号 **A0**…），H2–H6 与后续梯队**顺延**。
-> A0（硬故障与凭证小件）**已闭环**：见 `docs/43`（设计 ＋ §8 提交清单 ＋ §9 实测校正 ＋ §10 逐步记录）。
-> H2（图片内容）**已闭环**：见 `docs/44`；其顺带证伪的 Google 工具结果路径**另立 B84 并已闭环**：
-> 见 `docs/45`（设计 ＋ §9 裁决与执行 ＋ §10 实测校正 ＋ §11 逐步台账）。
+> A0（硬故障与凭证小件）**已闭环**：见 `原 docs/43`（设计 ＋ §8 提交清单 ＋ §9 实测校正 ＋ §10 逐步记录）。
+> H2（图片内容）**已闭环**：见 `原 docs/44`；其顺带证伪的 Google 工具结果路径**另立 B84 并已闭环**：
+> 见 `原 docs/45`（设计 ＋ §9 裁决与执行 ＋ §10 实测校正 ＋ §11 逐步台账）。
 > ⚠️ **B84 是 `ai` 模块里最后一件「硬故障」**（Gemini 多轮工具调用此前整条是坏的）——
 > `§1` 里余下的 `ai` 缺口（1.1–1.6）均非硬故障，可按 §7.2 的梯队继续。
 
@@ -655,13 +655,13 @@ JSONL `nextSeq` 高水位字段 ·
 
 | 包 | 模块 | 内容 | 为什么排这 |
 |---|---|---|---|
-| ~~**H1**~~ | `ai` | ✅ **已闭环**（2026-09-22，七提交 `5b703a9..7c3db0d`，实施记录 `docs/42 §10`；范围比原两条宽——四分量生产者＋`calculateCost`＋全车道归一＋下游接线＋L5 S15 差分） | 原 **+5.50pp**，占四条 P0 的 **76%** |
-| ~~**A0**~~ | `ai` | ✅ **已闭环**（2026-09-22，九提交 `34ca389..5f3833d`，设计/记录 `docs/43`）——`sanitizeSurrogates` 24 个落线点 ＋ `RetryableError` 两模式 ＋ Anthropic Bearer/OAuth 凭证链（`AuthKind`） | 三件事都是「今天会撞到且有硬后果」：provider 400 ／ 不重试直接失败 ／ Bearer 型网关连不上 |
-| ~~**H2**~~ | `ai` | ✅ **已闭环**（2026-09-22，七提交 `af5139e..9bbcd48`，设计/记录 `docs/44`）—— 图片四车道（Anthropic ／ completions ／ Mistral ／ responses）＋ 共享非视觉降级闸 ＋ 拆两条超限车道。⚠️ **Google 拆出去另立一包**（实测其工具结果整条路径不存在，`docs/32` B84） | 原：`ReadTool` 读图模型**完全看不到图**（静默） |
-| ~~**B84**~~ | `ai` | ✅ **已闭环**（2026-09-23，六提交 `efedec4`(设计) `a22ccca` `f77dfb4` `2b46773` `b1bf735` `4890057` ＋ 台账，设计/记录 `docs/45`）—— Google 车道**三分支重写** ＋ 工具结果整块移植（`functionResponse` 全形／合并进同一 user 回合／gemini<3 独立图片回合／gemini3+ 内嵌 `parts`／`id` 门）＋ **`google-genai` 1.15.0⇒1.72.0**（1.15.0 写不出内嵌 `parts`）＋ 空白助手文本块跳过 ＋ 拆 `GoogleMessageConverter`。ai 643⇒**671** | **硬故障**：Gemini 的多轮工具调用此前是坏的（工具结果落成 model 轮纯文本，模型看不到对应关系） |
+| ~~**H1**~~ | `ai` | ✅ **已闭环**（2026-09-22，七提交 `5b703a9..7c3db0d`，实施记录 `原 docs/42 §10`；范围比原两条宽——四分量生产者＋`calculateCost`＋全车道归一＋下游接线＋L5 S15 差分） | 原 **+5.50pp**，占四条 P0 的 **76%** |
+| ~~**A0**~~ | `ai` | ✅ **已闭环**（2026-09-22，九提交 `34ca389..5f3833d`，设计/记录 `原 docs/43`）——`sanitizeSurrogates` 24 个落线点 ＋ `RetryableError` 两模式 ＋ Anthropic Bearer/OAuth 凭证链（`AuthKind`） | 三件事都是「今天会撞到且有硬后果」：provider 400 ／ 不重试直接失败 ／ Bearer 型网关连不上 |
+| ~~**H2**~~ | `ai` | ✅ **已闭环**（2026-09-22，七提交 `af5139e..9bbcd48`，设计/记录 `原 docs/44`）—— 图片四车道（Anthropic ／ completions ／ Mistral ／ responses）＋ 共享非视觉降级闸 ＋ 拆两条超限车道。⚠️ **Google 拆出去另立一包**（实测其工具结果整条路径不存在，`docs/05` B84） | 原：`ReadTool` 读图模型**完全看不到图**（静默） |
+| ~~**B84**~~ | `ai` | ✅ **已闭环**（2026-09-23，六提交 `efedec4`(设计) `a22ccca` `f77dfb4` `2b46773` `b1bf735` `4890057` ＋ 台账，设计/记录 `原 docs/45`）—— Google 车道**三分支重写** ＋ 工具结果整块移植（`functionResponse` 全形／合并进同一 user 回合／gemini<3 独立图片回合／gemini3+ 内嵌 `parts`／`id` 门）＋ **`google-genai` 1.15.0⇒1.72.0**（1.15.0 写不出内嵌 `parts`）＋ 空白助手文本块跳过 ＋ 拆 `GoogleMessageConverter`。ai 643⇒**671** | **硬故障**：Gemini 的多轮工具调用此前是坏的（工具结果落成 model 轮纯文本，模型看不到对应关系） |
 | **H3** | `coding-agent` | **上下文文件发现**（`AGENTS.md`/`CLAUDE.md` ＋ `--no-context-files` 联动） | **每次会话都走**，现在**静默失效**；同时救活一个死 flag |
 | **H4** | `coding-agent` | **扩展钩子桥接**（暴露 `hookSystem()`） | 8 个引擎钩子**已经在 `HookSystem` 里** ⇒ 这是**接线不是新建**，最省的一包 |
-| ~~**H5**~~ | `ai` ＋ `agent-core` | ✅ **已闭环**（2026-09-23，八提交 `2d229c9`..`b75450f`，设计/记录 `docs/46`）—— 范围**比原估的大**：实测 java 的 `ThinkingLevelMap` 形状本身是 Phase 2a 的**发明**（pi 一直是 `Partial<Record<ModelThinkingLevel, string\|null>>`，`80f06d363` 起从未变过）⇒ 先重塑形状（删发明类型 `ThinkingConfig`、`ThinkingLevel` 补 `Max`），再做 `supported`/`clamp`、预算纯函数、`mapLevelToEffort`、Anthropic **三分支**（adaptive／enabled／disabled）、温度抑制 ＋ interleaved beta、数据面（models.json 开键 ＋ 目录 DTO 补字段）、入口三件。ai 671⇒**740** | 原估「改一行 ＋ 生产侧构造」**不成立**：形状不对，光接线接不上 |
+| ~~**H5**~~ | `ai` ＋ `agent-core` | ✅ **已闭环**（2026-09-23，八提交 `2d229c9`..`b75450f`，设计/记录 `原 docs/46`）—— 范围**比原估的大**：实测 java 的 `ThinkingLevelMap` 形状本身是 Phase 2a 的**发明**（pi 一直是 `Partial<Record<ModelThinkingLevel, string\|null>>`，`80f06d363` 起从未变过）⇒ 先重塑形状（删发明类型 `ThinkingConfig`、`ThinkingLevel` 补 `Max`），再做 `supported`/`clamp`、预算纯函数、`mapLevelToEffort`、Anthropic **三分支**（adaptive／enabled／disabled）、温度抑制 ＋ interleaved beta、数据面（models.json 开键 ＋ 目录 DTO 补字段）、入口三件。ai 671⇒**740** | 原估「改一行 ＋ 生产侧构造」**不成立**：形状不对，光接线接不上 |
 | **H6** | `session` | **JSONL v4 双向不可读**（B60/B61 同包） | **性价比最高**（每点 0.39pp）；**硬故障**：换机/换工具会话读不出来 |
 
 **第二梯队 —— 接线与死功能（投入小、可见性高）**
@@ -692,7 +692,7 @@ JSONL `nextSeq` 高水位字段 ·
 
 ### 7.3 每个包怎么走（设计方案的形式）
 
-**不是一份大设计，是每个包一份设计文档**，形状照 `docs/33`–`docs/39`（即 `docs/31 §8.x` 的「设计」小节）。
+**不是一份大设计，是每个包一份设计文档**，形状照 `原 docs/33`–`原 docs/39`（即 `原 docs/31 §8.x` 的「设计」小节）。
 内容要求按 `docs/00 §3 步骤 2`：
 
 1. 包结构 ＋ 类图
@@ -704,15 +704,15 @@ JSONL `nextSeq` 高水位字段 ·
 **流程**（你定的「设计文档先行」）：**设计文档 → 你审核 → 才许写代码 → 实施记录续在 §8.x**。
 
 > ⚠️ **两条本清单暴露的夹具教训**（写设计时就要防）：
-> ① **夹具写在实现之后 ⇒ 没有红灯可看**，只能靠变异探针，而**变异点由人挑**（`docs/31 §8.34.11`）；
+> ① **夹具写在实现之后 ⇒ 没有红灯可看**，只能靠变异探针，而**变异点由人挑**（`原 docs/31 §8.34.11`）；
 > ② **夹具「第一版没牙」** 反复出现 —— 内层解绑用例从 span 对象进、`ArrayList` 收 worker 线程的帧、`activeTools` 为空不显式给 `Sequential`……
 > ⇒ **判据：先问「这个夹具在什么情况下会红」，答不上来就是没牙。**
 
 ### 7.4 本清单**未覆盖**
 
-- 未改任何生产代码、未动 `docs/32` 台账、未重算 `docs/40` 总表的分母。
-- ⚠️ **R5 在 `docs/40`/`docs/32`/`docs/map` 的落地未做**（`docs/40` 的那份半成品已按用户指示**回退**）⇒
-  那三处仍是 2026-09-20 口径，**与 R5 相悖**。要重新落地，按「细分口径」推：`docs/40`（总表重算、§1.3/§3.1/§3.4/§5.1/§6/§7/§8/§10）＋
-  `docs/32`（F7/F9 翻「不做」、B62 结案、C12 注明终局）＋ `docs/map/01`·`03`·`06` 的注。
+- 未改任何生产代码、未动 `docs/05` 台账、未重算 `docs/06` 总表的分母。
+- ⚠️ **R5 在 `docs/06`/`docs/05`/`docs/map` 的落地未做**（`docs/06` 的那份半成品已按用户指示**回退**）⇒
+  那三处仍是 2026-09-20 口径，**与 R5 相悖**。要重新落地，按「细分口径」推：`docs/06`（总表重算、§1.3/§3.1/§3.4/§5.1/§6/§7/§8/§10）＋
+  `docs/05`（F7/F9 翻「不做」、B62 结案、C12 注明终局）＋ `docs/map/01`·`03`·`06` 的注。
 - 各模块报告的**行号漂移**（agent-core 2 处锚点、tui 8 条、session 4 条、telemetry 3 处、coding-agent 8 条、ai 4 条）**已就地登记在各自 §x.7**，未回改 `docs/map/*`。
 - **R5 的 harness 细分口径**已按裁决执行（只踢 harness 独有）；`docs/map/03` 里引 harness 副本的单元（`compaction`/`messages`/`session`/`tools`）**锚点应改指主流副本**，**未改**，登记在 `docs/map/03`。

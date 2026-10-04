@@ -98,7 +98,7 @@ public final class PrintMode {
             case StreamEvent.UsageInfo ignored -> { }
             case StreamEvent.StreamDone ignored -> { }
             case StreamEvent.StreamError err -> {
-                // C 批次（docs/55 §6.3-14）：文本正源是消息（生产者落定），
+                // C 批次（原 docs/55 §6.3-14）：文本正源是消息（生产者落定），
                 // Throwable 只是兜底 —— 见 StreamEvent.StreamError.textOf。
                 var text = StreamEvent.StreamError.textOf(err);
                 System.err.println("error: " + err.reason() + (text != null ? ": " + text : ""));

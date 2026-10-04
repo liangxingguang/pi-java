@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包⑨（docs/36，B42）：`turn_end` 的载荷。
+ * 包⑨（原 docs/36，B42）：`turn_end` 的载荷。
  *
  * <p>pi 的 {@code turn_end} 是 {@code { message: AgentMessage; toolResults:
  * ToolResultMessage[] }}，**两个字段都必填、一个 `?` 都没有**
@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code AgentSettled} 是<b>每次驱动</b>一条。若照字面取「最后一回合的工具结果」，
  * 那个字段在常见形状下<b>反而恒空</b>（最后那回合通常是纯文本收尾、没有工具调用）
  * ⇒ 本包按<b>本次驱动</b>填，让该字段真的能承载前端要的结果。
- * 颗粒度差异本身另登记（见 docs/36 §10）。</p>
+ * 颗粒度差异本身另登记（见 原 docs/36 §10）。</p>
  */
 class AgentSettledPayloadTest {
 

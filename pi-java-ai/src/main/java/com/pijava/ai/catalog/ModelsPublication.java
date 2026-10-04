@@ -3,7 +3,7 @@ package com.pijava.ai.catalog;
 import java.util.Optional;
 
 /**
- * 一次目录发布（pi {@code ModelsPublication}，docs/70 §1.2/§4.1）。
+ * 一次目录发布（pi {@code ModelsPublication}，原 docs/70 §1.2/§4.1）。
  *
  * <p>pi 的 {@code persist} 是三态：{@code undefined} = 存储不动、
  * {@code null} = 删除、{@code entry} = 写入。Java 用
@@ -48,7 +48,7 @@ public record ModelsPublication(
      *
      * <p>⚠️ 本仓今天没有生产者：{@code RemoteCatalogProvider} 的四条分支都只写
      * 不删。保留它是 ported 协议完整性（{@code CatalogRefreshCoordinator} 有对应
-     * 分支），证据见 docs/70 §1.4。</p>
+     * 分支），证据见 原 docs/70 §1.4。</p>
      */
     public static ModelsPublication remove() {
         return new ModelsPublication(Optional.empty(), true, () -> { });

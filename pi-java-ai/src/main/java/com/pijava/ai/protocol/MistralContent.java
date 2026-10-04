@@ -6,7 +6,7 @@ import java.util.Map;
 import com.pijava.ai.message.ContentBlock;
 
 /**
- * docs/66：mistral-conversations 车道的**内容块**出站 helper（从
+ * 原 docs/66：mistral-conversations 车道的**内容块**出站 helper（从
  * {@code MistralConversationsApi} 抽出，拆分步骤 7）。
  *
  * <p>一个内容块在线上是 {@code {type, …}}：text ⇒ {@code {type:"text", text}}；
@@ -17,7 +17,7 @@ final class MistralContent {
 
     private MistralContent() {}
 
-    /** pi 的图片判据是 {@code type === "image"}；java 的 URL 图片同等对待（docs/44 D4）。 */
+    /** pi 的图片判据是 {@code type === "image"}；java 的 URL 图片同等对待（原 docs/44 D4）。 */
     static boolean isImageBlock(ContentBlock block) {
         return block instanceof ContentBlock.ImageContent
                 || block instanceof ContentBlock.UrlImageContent;

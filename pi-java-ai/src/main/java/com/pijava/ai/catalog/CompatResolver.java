@@ -11,7 +11,7 @@ import java.util.Optional;
  * mistral 的直读（{@code api/mistral-conversations.ts:130}）。
  *
  * <p><b>为什么能合一</b>：pi 有五个接口是因为各车道的<b>字段集</b>不同；java 把五者并成了
- * {@link ModelCompat} 一个类型（{@code docs/53 §2 P8}），而逐字段核对的结果是
+ * {@link ModelCompat} 一个类型（{@code 原 docs/53 §2 P8}），而逐字段核对的结果是
  * <b>除 {@code supportsMidConvoSystemMessages} 外每个字段只被一条车道读</b>，
  * 而那一个在四条车道上的缺省<b>同为 {@code false}</b> ⇒ 合一安全。</p>
  *
@@ -23,9 +23,9 @@ import java.util.Optional;
  * 而 {@link ModelInfo} <b>不带</b> baseUrl（provider 在 {@link com.pijava.ai.model.ModelId} 上）
  * ⇒ baseUrl 只能由车道给。⚠️ 由此产生一处**刻意的形状偏差**：pi 的探测只认
  * {@code model.baseUrl}、<b>不</b>吃请求期覆盖，而本仓的 {@code baseUrl} 是
- * {@code ApiOptions.baseUrl()} 覆盖后的<b>有效值</b>（{@code docs/53 §9 R2}）。对内置模型
+ * {@code ApiOptions.baseUrl()} 覆盖后的<b>有效值</b>（{@code 原 docs/53 §9 R2}）。对内置模型
  * 两者同值、不可观察；只有「models.json 的 baseUrl」与「请求期 --base-url」并存时才可见
- * （登记为 {@code docs/32 B100}）。</p>
+ * （登记为 {@code docs/05 B100}）。</p>
  *
  * <p>⚠️ <b>没有 {@code bedrock} / {@code google} / {@code pi-messages} 的方法</b>：
  * pi 的 {@code BedrockCompat} 只有一个 java 不携带的字段，google 与 pi-messages 连 compat
@@ -43,7 +43,7 @@ public final class CompatResolver {
      *
      * <p>本车道是 pi 唯一有真探测的一条（十四个 provider/baseUrl 谓词）。java 携带的四个
      * 被探测字段全部落在这里；其余（如 {@code thinkingFormat}/{@code supportsReasoningEffort}）
-     * 归 A-09 等包（{@code docs/53 §4.4}）。</p>
+     * 归 A-09 等包（{@code 原 docs/53 §4.4}）。</p>
      *
      * @param model   目标模型，{@code null} 表示「无模型上下文」（本仓的
      *                {@code StreamRequest.model} 允许为空）—— 此时探测仍按 baseUrl 走，
@@ -92,7 +92,7 @@ public final class CompatResolver {
             && (modelName.startsWith("anthropic/") || modelName.startsWith("openai/"));
 
         // 包 A-09：思考开关的两个探测值（pi :1629/:1637-1638/:1646-1656）。
-        // ⚠️ **不许把目录值塞进探测**（docs/58 §4.4 R7）：moonshotai／xiaomi／qwen-token-plan*
+        // ⚠️ **不许把目录值塞进探测**（原 docs/58 §4.4 R7）：moonshotai／xiaomi／qwen-token-plan*
         // 的 pi 值是**目录覆盖**（generate-models.ts 的 per-provider 常量），不是探测 ——
         // 混进探测会让「models.json 用户显式写 thinkingFormat:"openai"」被吞掉。
         var isGrok = provider.equals("xai") || url.contains("api.x.ai");   // pi :1629
@@ -140,7 +140,7 @@ public final class CompatResolver {
             // （pi `openai-responses.ts:79`；azure 那份副本连读点都没有）⇒ 本车道不定义它
             // ⇒ 原样透传模型的显式取值（本车道的任何读点都不会碰它）。
             null,
-            // docs/69：grammar 能力位显式-only（目录标注/models.json），无探测。
+            // 原 docs/69：grammar 能力位显式-only（目录标注/models.json），无探测。
             compat.supportsOpenAIGrammarTools()), detectedFormat, detectedEffort,
             detectedCacheControlFormat, compat.supportsOpenAIGrammarTools());
     }
@@ -150,7 +150,7 @@ public final class CompatResolver {
      * {@code thinkingFormat}/{@code chatTemplateKwargs}/{@code chatTemplateArgs}/
      * {@code supportsReasoningEffort} 那四行）。
      *
-     * <p><b>为什么不扩 {@link #resolved}</b>（{@code docs/58 §4.4} R8）：它已经 16 个位置
+     * <p><b>为什么不扩 {@link #resolved}</b>（{@code 原 docs/58 §4.4} R8）：它已经 16 个位置
      * 形参，塞 4 个会变 20 个且 anthropic／responses／mistral 三条**不读这些字段**的车道
      * 跟着改签。四个新字段只被 completions 读（pi 的形态链条全在
      * {@code openai-completions.ts}）⇒ 单独一个私有方法，其余三条车道**零改动**
@@ -189,7 +189,7 @@ public final class CompatResolver {
             c.chatTemplateArgs(),
             pick(c.supportsReasoningEffort(), detectedSupportsReasoningEffort),
             // 包 A-02：cacheControlFormat 是 explicit ?? detected（与 thinkingFormat 同形）；
-            // openRouterRouting 只透传（pi 探测面 :1657 的 {} 无读者，docs/59 §4.8/R6）。
+            // openRouterRouting 只透传（pi 探测面 :1657 的 {} 无读者，原 docs/59 §4.8/R6）。
             c.cacheControlFormat() != null ? c.cacheControlFormat() : detectedCacheControlFormat,
             c.openRouterRouting(),
             null, null, false, supportsOpenAIGrammarTools);
@@ -235,7 +235,7 @@ public final class CompatResolver {
      * pi {@code openai-responses.ts:68-81}。
      *
      * <p>⚠️ {@code supportsStrictMode} 的缺省<b>随车道相反</b>（responses {@code false}、
-     * azure {@code true}，{@code docs/50 §12} 的 B88 记录）⇒ 由 {@code strictModeDefault}
+     * azure {@code true}，{@code 原 docs/50 §12} 的 B88 记录）⇒ 由 {@code strictModeDefault}
      * 形参给，而不是写死在这里。</p>
      */
     public static ModelCompat forResponses(ModelInfo model, boolean strictModeDefault) {
@@ -247,7 +247,7 @@ public final class CompatResolver {
             // ⚠️ azure 车道共用本方法 ⇒ 它拿到的也是这一份，但**它不读这个组件**
             // （pi 的 azure 副本连门都没有）⇒ 该值在 azure 上不可观察。
             Boolean.TRUE,
-            // docs/69：grammar 能力位显式-only（无探测），两 responses 车道读同一份。
+            // 原 docs/69：grammar 能力位显式-only（无探测），两 responses 车道读同一份。
             base(model).supportsOpenAIGrammarTools());
     }
 
@@ -333,7 +333,7 @@ public final class CompatResolver {
      *
      * @param detected 本车道的探测值；{@code null} 表示<b>本车道不定义这个字段</b>
      *                 （pi 的相应接口里没有它）⇒ 原样透传模型的覆盖
-     * @param supportsOpenAIGrammarTools docs/69：grammar 能力位只来自显式 compat（无探测），
+     * @param supportsOpenAIGrammarTools 原 docs/69：grammar 能力位只来自显式 compat（无探测），
      *                 null 表示门关
      */
     private static ModelCompat resolved(ModelCompat c,
@@ -382,7 +382,7 @@ public final class CompatResolver {
             c.chatTemplateArgs(),
             c.supportsReasoningEffort(),
             // 包 A-02：两个新组件同样原样透传（cacheControlFormat 的「explicit ?? detected」
-            // 合一在 withCompletions；openRouterRouting 无探测面）。docs/69：grammar 能力位
+            // 合一在 withCompletions；openRouterRouting 无探测面）。原 docs/69：grammar 能力位
             // 无探测、显式-only。⚠️ 这里必须走 canonical 29 参构造——退便捷构造会把
             // cacheControlFormat/openRouterRouting/grammar 三个显式值丢成缺省。
             c.cacheControlFormat(),

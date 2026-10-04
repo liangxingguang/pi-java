@@ -25,11 +25,11 @@ import com.pijava.ai.message.MessageTexts;
  * **按名补丁**下发（值 {@code null} ＝ 删掉该段），重放见
  * {@code com.pijava.ai.api.Transcripts#getCurrentSystemMessage}。</p>
  *
- * <p><b>本类与 pi 的差异</b>（{@code docs/52 §9 R2}）：pi 的默认正文里 {@code docs} 段是一份
+ * <p><b>本类与 pi 的差异</b>（{@code 原 docs/52 §9 R2}）：pi 的默认正文里 {@code docs} 段是一份
  * 指向 <b>pi 仓库</b>文件的索引（{@code docs/extensions.md}、{@code docs/tui.md}…），
  * 那批文件在 pi-java 里不存在，逐字照抄会主动误导模型。故<b>结构与段名逐字对齐，文本按
  * pi-java 的实际内容</b>：{@code preamble} 用 pi-java 的定位句，{@code docs} 段指向 pi-java
- * 真实存在的文档（且**没有 {@code examples/}**，{@code docs/52 §3 F12}）。</p>
+ * 真实存在的文档（且**没有 {@code examples/}**，{@code 原 docs/52 §3 F12}）。</p>
  */
 public final class SystemPrompts {
 
@@ -45,7 +45,7 @@ public final class SystemPrompts {
      * pi-java 的默认定位句 —— pi 的 {@code preamble} 默认正文（{@code :144}）的对应物。
      *
      * <p>⚠️ pi 的默认 preamble 是那段 pi 专属的自我介绍；pi-java 的正文放在这里
-     * （{@code docs/52 §9 R2-B}）。它只是**定位句**：pi-java 原有的表达风格条目改由
+     * （{@code 原 docs/52 §9 R2-B}）。它只是**定位句**：pi-java 原有的表达风格条目改由
      * {@code promptGuidelines} 承载，渲染进 {@code rules} 段 —— 那正是 pi 为这类条目准备的
      * 通道（{@code BuildSystemPromptOptions.promptGuidelines}）。</p>
      */
@@ -113,7 +113,7 @@ public final class SystemPrompts {
      *
      * <p>走 {@link MessageTexts#getSystemMessageText} 而不是自己拼：pi 用的就是
      * {@code getSystemMessageText({role:"system", ...state, timestamp: 0})}，
-     * 于是「模型看到的提示」与「重放出来的提示」是同一条代码路径（{@code docs/51 §12} 的
+     * 于是「模型看到的提示」与「重放出来的提示」是同一条代码路径（{@code 原 docs/51 §12} 的
      * F11 更正：pi 生产路径上提示**只**经这一条路径产生）。</p>
      */
     public static String build(SystemPromptOptions options) {
@@ -236,7 +236,7 @@ public final class SystemPrompts {
     /**
      * pi 的 {@code docs} 段（{@code :157-168}）。
      *
-     * <p>⚠️ 文本按 pi-java 的实际改写（{@code docs/52 §9 R2-B}）：pi 的正文逐条点名
+     * <p>⚠️ 文本按 pi-java 的实际改写（{@code 原 docs/52 §9 R2-B}）：pi 的正文逐条点名
      * {@code docs/extensions.md}、{@code docs/themes.md} 等**pi 仓库的文件**，pi-java 没有它们；
      * pi-java 的 {@code docs/} 是编号设计文档。{@code documentation} 为 {@code null}
      * （没找到 pi-java 发行根）⇒ 整段不产出。</p>

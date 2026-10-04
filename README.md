@@ -50,7 +50,7 @@ run.cmd -p "hello"      :: print mode
 ./mvnw -Pnative package   # produces pi-java-dist/target/pi-java(.exe)
 ```
 
-Native builds are gated behind the `native` profile. Windows native linking requires Visual Studio 2022 Build Tools (or CI, which pre-installs them). See [`docs/10-phase5-native-design.md`](docs/10-phase5-native-design.md).
+Native builds are gated behind the `native` profile. Windows native linking requires Visual Studio 2022 Build Tools (or CI, which pre-installs them). See [`原 docs/10-phase5-native-design.md`](原 docs/10-phase5-native-design.md).
 
 ## Modules
 

@@ -26,7 +26,7 @@ import com.pijava.ai.provider.ProviderRegistry;
 import com.pijava.coding.agent.cli.ArgsParser;
 
 /**
- * D-P1（{@code docs/65}）：命中内置 provider 的 models.json 覆盖在真 HTTP 线上
+ * D-P1（{@code 原 docs/65}）：命中内置 provider 的 models.json 覆盖在真 HTTP 线上
  * 生效 —— provider 级 baseUrl、per-model baseUrl（B136）与 client-builder
  * default headers（R2）的端到端证据。
  */

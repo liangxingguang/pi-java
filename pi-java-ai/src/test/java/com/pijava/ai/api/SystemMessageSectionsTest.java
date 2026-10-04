@@ -21,7 +21,7 @@ import com.pijava.ai.message.MessageTexts;
  * {@code :44-53} 的重放期望、{@code :86-98} 的两个渲染期望。本条包之前，Java 的
  * {@code Map<String,String>} 没有「值在场但为 null」这个状态，因此
  * {@code system-message-replay.test.ts} 的这两组断言在本仓是**被删改过的**
- * （{@code docs/49 §9 R3①}、登记 L3）；本类把它们补回来。</p>
+ * （{@code 原 docs/49 §9 R3①}、登记 L3）；本类把它们补回来。</p>
  */
 class SystemMessageSectionsTest {
 

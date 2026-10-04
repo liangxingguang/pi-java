@@ -12,7 +12,7 @@ import com.fasterxml.jackson.annotation.JsonValue;
  * <p>会话亲和头的线格形状，挂在 {@code compat.sessionAffinityFormat} 上（包 B103）。
  * 纯常量闭集 ⇒ 用 {@code enum}（见项目编码规范）。</p>
  *
- * <p>各车道按此值产出的头（详见 {@code docs/61 §1.3}）：</p>
+ * <p>各车道按此值产出的头（详见 {@code 原 docs/61 §1.3}）：</p>
  * <ul>
  *   <li>{@link #OPENROUTER}：{@code x-session-id}（三车道一致）。</li>
  *   <li>{@link #OPENAI}：completions 发 {@code session_id}＋{@code x-client-request-id}

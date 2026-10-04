@@ -83,13 +83,13 @@ public final class SessionJson {
                 }
             }
             node.put("isError", tool.isError());
-            // docs/71 G1：工具结果消息同样带时间戳（pi types.ts:549 必填）；缺席规则同 A7。
+            // 原 docs/71 G1：工具结果消息同样带时间戳（pi types.ts:549 必填）；缺席规则同 A7。
             if (tool.timestamp() != null) {
                 node.put("timestamp", tool.timestamp().toEpochMilli());
             }
         }
         if (message instanceof Message.UserMessage user) {
-            // docs/71 G1：用户消息的时间戳（pi types.ts:512 必填）。
+            // 原 docs/71 G1：用户消息的时间戳（pi types.ts:512 必填）。
             if (user.timestamp() != null) {
                 node.put("timestamp", user.timestamp().toEpochMilli());
             }
@@ -101,7 +101,7 @@ public final class SessionJson {
             if (assistant.deferred() != null) {
                 node.set("deferred", MAPPER.valueToTree(assistant.deferred()));
             }
-            // 3a（docs/31 §8.19）：provider 身份 + 计量随消息落库。pi 的
+            // 3a（原 docs/31 §8.19）：provider 身份 + 计量随消息落库。pi 的
             // AssistantMessage 上这些是必有字段（types.ts:427-449），pi-java 生产
             // 路径全部填充；解码旧文件或合成消息时可能缺 ⇒ null ⇒ 键省略
             // （同 §8.18 的 A7 规则：Jackson 会写 null，必须主动省略）。
@@ -132,7 +132,7 @@ public final class SessionJson {
             }
         }
         if (message instanceof Message.SystemMessage system) {
-            // A1（docs/48 §A1）：系统消息的 pi 形状（ai/src/types.ts:491-509）。role/content
+            // A1（docs/08 §A1）：系统消息的 pi 形状（ai/src/types.ts:491-509）。role/content
             // 已由上面的通用规则写好，这里只补系统消息特有的四项。三个可选字段的缺席规则
             // 同 §8.18 的 A7：pi 写的是 `...(x ? {x} : {})`，空 Map/List 在线上没有对应键，
             // 而 Jackson 会把它们照样写出来 ⇒ 必须主动省略。
@@ -145,7 +145,7 @@ public final class SessionJson {
                 // ⚠️ 不能走 valueToTree：本 mapper 带 NON_NULL 包含策略，它会把**值为 null 的
                 // 段条目整个丢掉** ⇒ 「删掉 obsolete 段」静默变成「没提过 obsolete」，而两者的
                 // 重放结果不同（pi types.ts:501 的 `null` 是删除，缺席是「不改」）。
-                // ObjectNode.put 不经过包含策略，null 值写成 JSON null（包 A4a，docs/52 §4.1）。
+                // ObjectNode.put 不经过包含策略，null 值写成 JSON null（包 A4a，原 docs/52 §4.1）。
                 var sectionsNode = MAPPER.createObjectNode();
                 for (var entry : system.sections().entrySet()) {
                     if (entry.getValue() == null) {
@@ -186,7 +186,7 @@ public final class SessionJson {
                 // Key names follow pi (types.ts:357-365): the reasoning text field is
                 // `thinking`, not `text` — pi persists entries verbatim via
                 // JSON.stringify (session-manager.ts:1030-1056), so `thinking` is what
-                // byte-for-byte means here (docs/31 §8.33 P6). The reader accepts the
+                // byte-for-byte means here (原 docs/31 §8.33 P6). The reader accepts the
                 // legacy `text` key so existing ~/.pi-java sessions keep loading.
                 node.put("type", "thinking");
                 node.put("thinking", t.text());

@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包 A0 步4（{@code docs/43 D4}）：openrouter-images 车道的孤对代理净化落点 ——
+ * 包 A0 步4（{@code 原 docs/43 D4}）：openrouter-images 车道的孤对代理净化落点 ——
  * pi {@code openrouter-images.ts:141} 的 1 处。
  *
  * <p>pi 在这条车道只有一处：{@code text: sanitizeSurrogates(item.text)}（user content

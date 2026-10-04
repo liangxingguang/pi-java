@@ -18,9 +18,9 @@ import com.pijava.ai.message.Message;
  *
  * <p>⚠️ 本条包之前本夹具的输入是**被删改过的**：pi 的第 5 条系统消息用
  * {@code sections: { b: null }} 表达「删掉 {@code b} 段」，而 java 的
- * {@code Map<String,String>} 表达不了 ⇒ 当时把那一项去掉了（{@code docs/49 §9 R3①}、
+ * {@code Map<String,String>} 表达不了 ⇒ 当时把那一项去掉了（{@code 原 docs/49 §9 R3①}、
  * 登记 L3）。包 A4a 给了删除态载体 ⇒ 本夹具恢复成 pi 的**逐字**输入
- * （{@code docs/52 §4.1}）。</p>
+ * （{@code 原 docs/52 §4.1}）。</p>
  */
 class TranscriptsTest {
 

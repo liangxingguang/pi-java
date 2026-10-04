@@ -96,7 +96,7 @@ public abstract class AbstractChatApi implements ChatApi {
     }
 
     /**
-     * 本车道是否参与请求侧选项解析（{@code docs/57 §6 R2}）。
+     * 本车道是否参与请求侧选项解析（{@code 原 docs/57 §6 R2}）。
      *
      * <p>默认 {@code true}：pi 的 8 条 `streamSimple` 里有 8 条过 `buildBaseOptions`
      * ⇒「默认跟着通用路径」这一侧是安全的。**两条必须覆写为 `false`**：</p>
@@ -136,7 +136,7 @@ public abstract class AbstractChatApi implements ChatApi {
                 // (`agent/src/proxy.ts:236-247`: "Connection closed … before the
                 // response completed"). Reporting a `done("stop")` here made a
                 // dropped terminal look like an empty-but-successful turn
-                // (`docs/55 §5 F3`).
+                // (`原 docs/55 §5 F3`).
                 queue.offer(StreamEvent.StreamError.settle("error",
                     new IllegalStateException("stream completed without a terminal event"),
                     identityBase(request, netTimestamp)));
@@ -156,7 +156,7 @@ public abstract class AbstractChatApi implements ChatApi {
      *
      * <p>此前遇 {@code StreamError} 只 {@code break}，然后返回一条空内容、无
      * {@code stopReason}、无 {@code errorMessage} 的基底消息 —— 错误静默消失
-     * （{@code docs/55 §5 F5}）。{@link com.pijava.ai.http.PiHttpException} 只留给
+     * （{@code 原 docs/55 §5 F5}）。{@link com.pijava.ai.http.PiHttpException} 只留给
      * **本仓管道自身**的故障（车道内的错误已全部落进流，见登记 B113）。</p>
      */
     @Override
@@ -242,7 +242,7 @@ public abstract class AbstractChatApi implements ChatApi {
      * （{@code ai/src/types.ts:439}），且 pi <b>没有任何一条路径</b>会产出没 usage 的
      * 助手消息 —— 11 个 provider 适配器、{@code lazy.ts}、中止/错误路
      * （{@code agent.ts:511-527} 的 {@code EMPTY_USAGE}、{@code recovery.ts:28-40}
-     * 的 {@code ZERO_USAGE}）全都显式给零值（包⑨ B41 逐条核过，{@code docs/36}）；
+     * 的 {@code ZERO_USAGE}）全都显式给零值（包⑨ B41 逐条核过，{@code 原 docs/36}）；
      * pi 的 faux 更是每条消息都经 {@code cloneMessage} 写
      * {@code usage: cloned.usage ?? DEFAULT_USAGE}（{@code providers/faux.ts:289}）。</p>
      *
@@ -310,7 +310,7 @@ public abstract class AbstractChatApi implements ChatApi {
     }
 
     /**
-     * 解析凭证的**值 ＋ 形态**（包 A0 步7，{@code docs/43 D5}）。
+     * 解析凭证的**值 ＋ 形态**（包 A0 步7，{@code 原 docs/43 D5}）。
      *
      * <p>形态只可能来自 {@code options}（由凭证解析层 {@code auth.Credentials} 定下）；
      * 从**环境变量**回落来的值一律是 {@link AuthKind#API_KEY} —— 那条回落路径读的是

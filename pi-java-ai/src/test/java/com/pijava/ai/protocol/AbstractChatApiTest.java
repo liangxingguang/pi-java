@@ -74,7 +74,7 @@ class AbstractChatApiTest {
     }
 
     /**
-     * 3a（docs/31 §8.19）：裸 partial 在事件出口挂上 provider 身份三元组 + 时间戳，
+     * 3a（原 docs/31 §8.19）：裸 partial 在事件出口挂上 provider 身份三元组 + 时间戳，
      * 内容索引不动 —— pi 的 provider 在构造消息时就写死这些字段，harness 的
      * 压缩估算与溢出守卫全从它们读起。
      */

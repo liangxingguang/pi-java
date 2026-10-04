@@ -36,7 +36,7 @@ class JsonlSessionStorageTest {
     }
 
     // ══════════════════════════════════════════════════════════════════
-    // 包①（docs/31 §8.33）：thinking 的 signature/redacted 必须落盘且回读
+    // 包①（原 docs/31 §8.33）：thinking 的 signature/redacted 必须落盘且回读
     // ══════════════════════════════════════════════════════════════════
 
     /**
@@ -215,7 +215,7 @@ class JsonlSessionStorageTest {
 
     @Test
     void toolResultPayloadRoundTripsThroughJsonl() throws Exception {
-        // A7 的 L3 判据（docs/23c §5）：details/usage/addedToolNames 落库再读回，
+        // A7 的 L3 判据（原 docs/23c §5）：details/usage/addedToolNames 落库再读回，
         // 键集合与值原样保留；无载荷消息则保持「键缺席」，不生出 null 噪声。
         Path dir = Files.createTempDirectory("pi-jsonl-a7");
         var repo = JsonlSessionRepository.over(dir);
@@ -258,7 +258,7 @@ class JsonlSessionStorageTest {
 
     @Test
     void assistantPayloadRoundTripsThroughJsonl() throws Exception {
-        // 3a 的 L3 判据（docs/31 §8.19）：身份三元组 + usage + timestamp + errorMessage
+        // 3a 的 L3 判据（原 docs/31 §8.19）：身份三元组 + usage + timestamp + errorMessage
         // 落库再读回逐字段相等；旧形状消息（兼容构造器）保持「键缺席」，不生出 null 噪声。
         Path dir = Files.createTempDirectory("pi-jsonl-3a");
         var repo = JsonlSessionRepository.over(dir);

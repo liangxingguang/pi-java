@@ -38,14 +38,14 @@ import com.pijava.ai.message.MessageTexts;
  * <p>java 的 {@code com.pijava.agent.context.ContextUsageEstimator}（agent-core，包 3b）是
  * <b>②</b> 的忠实移植 —— 那份服务压缩触发，反向扫描正是它不需要逐条时间戳的原因。
  * 另一处自造启发式 {@code com.pijava.agent.context.ContextEstimator}
- * （3.5 字符/token，与 pi 无对应物）已随 A-20（docs/68）删除。
+ * （3.5 字符/token，与 pi 无对应物）已随 A-20（原 docs/68）删除。
  * 本类补的是 <b>①</b>。</p>
  *
  * <p>⚠️ <b>不能把三者统一</b>：{@code pi-java-ai} 依赖不到 {@code pi-java-agent-core}
  * （两侧 pom 已核），而夹取发生在车道内；且语义差异是 pi 自己的（守卫之于压缩摘要插入、
  * {@code system} 角色之于工具声明），选哪一份就等于放弃另一份的对齐。</p>
  *
- * <h2>与 pi 的两处形状差异（如实登记，见 {@code docs/57 §10}）</h2>
+ * <h2>与 pi 的两处形状差异（如实登记，见 {@code 原 docs/57 §10}）</h2>
  *
  * <ol>
  *   <li><b>逐条时间戳</b>：pi 的每条 {@code Message} 都带 {@code timestamp}（必填），
@@ -241,7 +241,7 @@ public final class Estimate {
     private record UsageAnchor(Usage usage, int index) {}
 
     /**
-     * 四个变体的时间戳（docs/71 G1 之前只有 system/assistant 有字段）。
+     * 四个变体的时间戳（原 docs/71 G1 之前只有 system/assistant 有字段）。
      *
      * <p>兼容构造器造出的消息仍可能是 {@code null}（旧数据解码）—— pi 的推进对每条
      * 消息都做（{@code estimate.ts:91}），Java 对 null 跳过（见类 javadoc）。</p>

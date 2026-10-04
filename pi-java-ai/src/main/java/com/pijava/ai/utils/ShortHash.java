@@ -2,13 +2,13 @@ package com.pijava.ai.utils;
 
 /**
  * 快速确定性哈希，用于缩短长字符串 —— pi {@code packages/ai/src/utils/hash.ts:2-13}
- * 的逐字移植（包 B14 步 1，{@code docs/47}）。
+ * 的逐字移植（包 B14 步 1，{@code 原 docs/47}）。
  *
  * <p>出参必须与 pi <b>逐字节相同</b>：Completions（40 字符截断）与 Responses
  * （{@code fc_} 前缀）把它拼进线上 id，差一个字符就是另一个 id。等价性由
  * {@code ShortHashTest} 用 pi 实现经 node 生成的 12 条 oracle 值钉死。</p>
  *
- * <p><b>JS → Java 三处陷阱</b>（docs/47 §4.2）：</p>
+ * <p><b>JS → Java 三处陷阱</b>（原 docs/47 §4.2）：</p>
  * <ul>
  * <li>{@code Math.imul(a, b)} ≡ Java {@code int} 乘法（两者都 32 位回绕）—— 直接
  * {@code *}。</li>

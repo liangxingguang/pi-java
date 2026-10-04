@@ -23,11 +23,11 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 台账 A12（docs/39）：{@code latest(cwd)} 只扫**当前项目**的会话目录。
+ * 台账 A12（原 docs/39）：{@code latest(cwd)} 只扫**当前项目**的会话目录。
  *
  * <p>夹具钉的是「打开了几下文件」这个**确定性计数**，不是计时 —— 生产里这一步
  * 就是根因：全量扫描每个项目目录、每个 {@code .jsonl} 打开一次读首行，成本随
- * 全部会话文件数线性增长（docs/39 §2/§3）。</p>
+ * 全部会话文件数线性增长（原 docs/39 §2/§3）。</p>
  *
  * <p>「本项目较旧、别的项目较新」是这个夹具的关键：全量取最新会**恢复别人的
  * 会话**，这既慢又是行为偏差（pi 的 {@code continueRecent} 只看一个项目目录）。</p>

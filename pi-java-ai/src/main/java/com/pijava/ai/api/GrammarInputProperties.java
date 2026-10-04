@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * docs/69：pi {@code constrained-sampling.ts:189-277} 的 grammar 解析 ——
+ * 原 docs/69：pi {@code constrained-sampling.ts:189-277} 的 grammar 解析 ——
  * 请求起点一次算出 {@code toolName → inputProperty} 表（pi
  * {@code createGrammarToolInputProperties}），两车道的出站声明与历史回放都读它。
  *

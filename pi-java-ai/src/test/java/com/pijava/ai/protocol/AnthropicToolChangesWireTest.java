@@ -29,7 +29,7 @@ import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ThinkingLevelMap;
 
 /**
- * <b>包 A3c</b>：Anthropic 车道的**工具增删原生渲染**（{@code docs/51 §4.4}）。
+ * <b>包 A3c</b>：Anthropic 车道的**工具增删原生渲染**（{@code 原 docs/51 §4.4}）。
  *
  * <p>骨架镜像 pi 自己的 oracle {@code packages/ai/test/transcript-tool-changes.test.ts:73-186}
  * 的四条用例。观测面是**真出站请求体**（{@link RecordingHttpServer}）。</p>
@@ -42,17 +42,17 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
  * <p>⚠️ <b>与 pi 夹具的三处有意差异</b>：</p>
  *
  * <ul>
- *   <li>~~<b>顶层 {@code system} 是字符串而不是块数组</b>（{@code docs/32} **B89**）
+ *   <li>~~<b>顶层 {@code system} 是字符串而不是块数组</b>（{@code docs/05} **B89**）
  *       —— ✅ 已随包 A-01 结案~~：{@code system} 现为 {@code [{type:"text",…}]} 块数组
  *       （pi {@code :1077-1097}），块上带缓存断点。⚠️ 本文件那两处
  *       {@code body.path("system")} 断言正是 B89 的**先红**（旧字符串形状下
  *       {@code ArrayNode} 不存在，{@code path(…).asText()} 返回 {@code ""}）。</li>
  *   <li>~~<b>没有 {@code cache_control}</b>（A-01）~~：✅ 已随包 A-01 落地 ——
  *       pi 的 oracle 断言第一个工具带 {@code cache_control:{type:"ephemeral"}}、且断点可落在
- *       {@code tool_addition}/{@code tool_removal} 上（{@code docs/51 §4.4 ⑥} 的那个落点）。
+ *       {@code tool_addition}/{@code tool_removal} 上（{@code 原 docs/51 §4.4 ⑥} 的那个落点）。
  *       本夹具仍只断言 {@code defer_loading} 的有无 —— 断点的断言在
  *       {@code AnthropicCacheControlWireTest}。</li>
- *   <li><b>{@code sections} 的 {@code null} 删除语义</b>（{@code docs/49 §9 R3①}）：
+ *   <li><b>{@code sections} 的 {@code null} 删除语义</b>（{@code 原 docs/49 §9 R3①}）：
  *       夹具只用 content ＋ 一个非空 section。</li>
  * </ul>
  */

@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * docs/70 §4.1：{@link Provider} 的动态协议 default —— 静态 provider 的
+ * 原 docs/70 §4.1：{@link Provider} 的动态协议 default —— 静态 provider 的
  * {@code getModels()} 就是 {@code builtinModels().listModels()}，且
  * {@code refreshModels()} 是**结构上的 no-op**（不 publish、不抛）。
  *

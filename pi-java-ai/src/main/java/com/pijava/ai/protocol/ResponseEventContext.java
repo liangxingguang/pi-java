@@ -8,7 +8,7 @@ import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
 
 /**
- * docs/69：responses 流处理的共享上下文 —— 收敛处理器里逐方法传递的 builder、
+ * 原 docs/69：responses 流处理的共享上下文 —— 收敛处理器里逐方法传递的 builder、
  * publisher、槽位表与 grammar 表（消除长参数列表，保持
  * {@code ResponsesStreamProcessor} 不超原行数）。
  */

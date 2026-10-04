@@ -1,7 +1,7 @@
 package com.pijava.ai.auth;
 
 /**
- * 请求路径上 stored OAuth 刷新失败（包 B1，{@code docs/63}）。
+ * 请求路径上 stored OAuth 刷新失败（包 B1，{@code 原 docs/63}）。
  *
  * <p>pi 的 {@code resolveStoredOAuth}（{@code auth/resolve.ts:127-179}）在临期刷新失败时
  * <b>不静默回落</b> ambient env（stored credential 拥有 provider），而是让请求以错误收场。

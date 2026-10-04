@@ -2,7 +2,7 @@ package com.pijava.ai.utils;
 
 /**
  * 孤对代理字符净化 —— pi {@code packages/ai/src/utils/sanitize-unicode.ts} 的移植
- * （package A0，{@code docs/43}）。
+ * （package A0，{@code 原 docs/43}）。
  *
  * <p>pi 的 JSDoc 逐字写明动机：孤对代理（{@code 0xD800-0xDBFF} 无配对低代理，
  * 或反之）<em>"cause JSON serialization errors in many API providers"</em>。

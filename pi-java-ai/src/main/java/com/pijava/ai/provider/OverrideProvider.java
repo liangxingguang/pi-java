@@ -7,7 +7,7 @@ import com.pijava.ai.api.ProviderApi;
 import com.pijava.ai.catalog.ModelCatalog;
 
 /**
- * D-P1（{@code docs/65}）：包装一个内置 provider，仅用 models.json
+ * D-P1（{@code 原 docs/65}）：包装一个内置 provider，仅用 models.json
  * 合并后的 catalog 替换其模型目录，其余全部委托（R4：不改内置 provider 单例）。
  */
 public final class OverrideProvider implements Provider {

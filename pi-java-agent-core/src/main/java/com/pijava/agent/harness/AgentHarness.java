@@ -21,14 +21,14 @@ import com.pijava.telemetry.TelemetryContext;
 /**
  * Central agent runtime — prompt → LLM → tool → repeat loop.
  *
- * <p><b>驱动只有一个</b>：{@link PiLoop}（{@code docs/31 §6}）。原先并存的
+ * <p><b>驱动只有一个</b>：{@link PiLoop}（{@code 原 docs/31 §6}）。原先并存的
  * {@code peekAction} / {@code executeAction} 步进链连同 {@code Action}、{@code RunPhase}、
  * {@code DriveMode} 已删除 —— 它们在生产路径上零调用者，只被测试使用，而推进职责本就归
  * 驱动循环。宿主剩下的职责是 pi {@code agent.ts} 的那几件：起手、收口、abort、reset、
  * 快照与订阅。</p>
  *
  * <p>{@link #prompt} / {@link #continueRun} 是**阻塞**的：pi 的 {@code prompt()} 返回
- * Promise，Java 侧由调用线程直接跑到收口（{@code docs/31 §8.5} 的口径 —— 对齐的是
+ * Promise，Java 侧由调用线程直接跑到收口（{@code 原 docs/31 §8.5} 的口径 —— 对齐的是
  * 「可观察效果的顺序」，不是 async 机器）。</p>
  */
 public class AgentHarness implements AutoCloseable {
@@ -50,7 +50,7 @@ public class AgentHarness implements AutoCloseable {
     private final HarnessConfig config;
 
     /**
-     * 本 harness **唯一**的车道（pi {@code AgentState}，{@code docs/31 §4.3}）。
+     * 本 harness **唯一**的车道（pi {@code AgentState}，{@code 原 docs/31 §4.3}）。
      *
      * <p>运行时多车道容器（{@code LaneRegistry} / {@code LaneHandle} / {@code LaneConfig}）
      * 已删除：pi 的对齐目标 {@code agent.ts} 是单状态的，而「多分支」归会话层 —— 每个
@@ -143,7 +143,7 @@ public class AgentHarness implements AutoCloseable {
     }
 
     /**
-     * 同配置的**全新** harness —— 会话层建分支时给新会话一个独立宿主（{@code docs/31 §4.3}）。
+     * 同配置的**全新** harness —— 会话层建分支时给新会话一个独立宿主（{@code 原 docs/31 §4.3}）。
      *
      * <p>车道是**空的**：pi 的 fork 复制 entry 是会话层的事（{@code harness/session/fork.ts}），
      * 这里只负责「一个新的、同配置的 Agent 状态」，内容由调用方 {@link #seedTranscript} 播种。
@@ -163,7 +163,7 @@ public class AgentHarness implements AutoCloseable {
         return eventBus.subscribeStream(listener);
     }
 
-    /** The lane's name — 一个 harness 只有一条，恒为 {@link #DEFAULT_LANE}（{@code docs/31 §4.3}）。 */
+    /** The lane's name — 一个 harness 只有一条，恒为 {@link #DEFAULT_LANE}（{@code 原 docs/31 §4.3}）。 */
     public String laneName() {
         return lane.laneName;
     }
@@ -344,7 +344,7 @@ public class AgentHarness implements AutoCloseable {
         runLifecycle.seedTranscript(laneName, entries);
     }
 
-    /** Load a lane's persisted record log on resume; the lane comes back idle (docs/30 §4.1). */
+    /** Load a lane's persisted record log on resume; the lane comes back idle (原 docs/30 §4.1). */
     public void restoreRecords(String laneName, List<LaneRecord> records) {
         if (closed) throw new HarnessClosedException();
         runLifecycle.restoreRecords(laneName, records);
@@ -352,7 +352,7 @@ public class AgentHarness implements AutoCloseable {
 
     /**
      * 装饰 {@code agent_end.willRetry} 的公开入口（pi {@code _willRetryAfterAgentEnd}，
-     * {@code agent-session.ts:721-733}；3d，{@code docs/31 §8.22}）。宿主的用法与 pi
+     * {@code agent-session.ts:721-733}；3d，{@code 原 docs/31 §8.22}）。宿主的用法与 pi
      * 一致：收到一次 {@code agent_end}，倒扫<b>它自带的 messages</b> 找最后一条助手
      * 消息，再调本法。真实的摘尾/重跑发生在引擎的 post-run ①（{@code checkAfterRun}），
      * 本法只答「会不会重试」，与 ① 各算各的、互不共享缓存。
@@ -383,7 +383,7 @@ public class AgentHarness implements AutoCloseable {
 
     /**
      * Whether a compaction is in flight on this lane（pi {@code AgentSession.isCompacting}，
-     * {@code agent-session.ts:983-990}；包④，{@code docs/31 §8.37}）。
+     * {@code agent-session.ts:983-990}；包④，{@code 原 docs/31 §8.37}）。
      *
      * <p>pi 的三控制器析取在 pi-java 收敛成一个窗口 —— 由
      * {@code CompactionExecutor} 的两个入口置/清（{@link LaneState#isCompacting()}）。

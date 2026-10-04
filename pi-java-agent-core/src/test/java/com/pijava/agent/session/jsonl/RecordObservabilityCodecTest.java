@@ -80,7 +80,7 @@ class RecordObservabilityCodecTest {
     }
 
     /**
-     * The deferred-handle persistence chain (docs/22 D2): no producer exists in
+     * The deferred-handle persistence chain (原 docs/22 D2): no producer exists in
      * production, so the encode and non-null decode branches would otherwise
      * never run. Constructing a handle directly and round-tripping it pins both.
      */

@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * docs/70 §4.6／§7.1-12：装配层给内置 provider 包上远程目录（图片 provider 除外），
+ * 原 docs/70 §4.6／§7.1-12：装配层给内置 provider 包上远程目录（图片 provider 除外），
  * 且尚未刷新时 {@code getModels()} 与静态目录一致。
  */
 class DefaultProvidersRemoteCatalogTest {

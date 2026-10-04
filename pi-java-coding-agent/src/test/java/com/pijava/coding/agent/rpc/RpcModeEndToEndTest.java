@@ -61,7 +61,7 @@ class RpcModeEndToEndTest {
         stdinOut.write("{\"id\":\"2\",\"type\":\"get_state\"}\n"
             .getBytes(StandardCharsets.UTF_8));
         awaitOutput(stdout, "\"command\":\"get_state\"");
-        // 包⑪（docs/38）：命令线上的**真产出**回归面 —— get_entries 会把会话条目
+        // 包⑪（原 docs/38）：命令线上的**真产出**回归面 —— get_entries 会把会话条目
         // （含身份缝挂上的 `Instant timestamp`）序列化回客户端。此前 faux 的消息没有
         // timestamp ⇒ 这条路径**从未被夹具行使过**（台账 B52 就是这么藏住的）。
         stdinOut.write("{\"id\":\"3\",\"type\":\"get_entries\"}\n"
@@ -86,7 +86,7 @@ class RpcModeEndToEndTest {
         assertThat(output).contains("\"type\":\"agent_settled\"");
         assertThat(output).contains("\"command\":\"get_state\"");
 
-        // 包⑪ ⑤（docs/38 §8.3）：faux 驱动的 RPC 线上，命令响应也带 timestamp 且**不再抛**
+        // 包⑪ ⑤（原 docs/38 §8.3）：faux 驱动的 RPC 线上，命令响应也带 timestamp 且**不再抛**
         //（台账 B52：命令线/导出线此前是**裸** ObjectMapper ⇒ 带 Instant 的消息直接抛）。
         var entriesLine = output.lines()
             .filter(l -> l.contains("\"command\":\"get_entries\""))

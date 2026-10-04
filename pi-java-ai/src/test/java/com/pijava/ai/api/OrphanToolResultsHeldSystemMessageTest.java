@@ -14,9 +14,9 @@ import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
 
 /**
- * 包 A2 / R5（{@code docs/49 §5.5}）：系统消息对工具调用记账**透明**。
+ * 包 A2 / R5（{@code 原 docs/49 §5.5}）：系统消息对工具调用记账**透明**。
  *
- * <p>期望值来自 pi 的**实测探针**（{@code docs/49 §7.6} 的 PR-1/PR-2，pi {@code 3390bd936}）：
+ * <p>期望值来自 pi 的**实测探针**（{@code 原 docs/49 §7.6} 的 PR-1/PR-2，pi {@code 3390bd936}）：
  * 落在 toolCall 与其结果之间的系统消息被扣住、等结果（含合成结果）发完再发。</p>
  *
  * <p>⚠️ 这一条在包 A2 之前是 {@code IllegalStateException: unreachable message role} ——

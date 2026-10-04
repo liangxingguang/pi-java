@@ -37,7 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>Phase 6: {@code defaultProviders()} loads 16 built-ins and runs
  * ServiceLoader discovery.</p>
  *
- * <p>P1（docs/31 §8.31）：{@code defaultProvider} 自此只决定**起手模型**与
+ * <p>P1（原 docs/31 §8.31）：{@code defaultProvider} 自此只决定**起手模型**与
  * **未注册 provider 的回退**，不再决定每个请求的适配器 —— 适配器跟
  * {@code model.provider()} 走。</p>
  */
@@ -153,7 +153,7 @@ class DefaultProvidersTest {
                 .containsEntry("maxRetryDelayMs", 60_000L);
     }
 
-    // ── P1（docs/31 §8.31）：适配器跟着**模型**走 ─────────────────────────
+    // ── P1（原 docs/31 §8.31）：适配器跟着**模型**走 ─────────────────────────
 
     /**
      * RE-P1：模型的 provider 决定适配器，而不是会话的
@@ -200,7 +200,7 @@ class DefaultProvidersTest {
         assertThat(calls).containsExactly("alpha");
     }
 
-    // ── 决策 5（docs/31 §8.34.4）：请求带整个 ModelInfo，不是只有 id ───────
+    // ── 决策 5（原 docs/31 §8.34.4）：请求带整个 ModelInfo，不是只有 id ───────
 
     /**
      * <b>RE-决策 5</b>：适配器收到的是**目录里的整个 {@link ModelInfo}**。
@@ -208,7 +208,7 @@ class DefaultProvidersTest {
      * <p>要证的正是这条**通道**本身。包② 开工前 {@code streamBlocking} 只投
      * {@link ModelId}（走 7 参便捷构造器 ⇒ {@code ModelInfo.minimal}），于是 models.json
      * 里的 per-model 标志到不了适配器 —— {@code compat.allowEmptySignature} 与
-     * extended thinking 两条都因此不可达（docs/32 B15）。</p>
+     * extended thinking 两条都因此不可达（docs/05 B15）。</p>
      *
      * <p>⚠️ 与 {@code AnthropicThinkingReplayTest} 的 B8-1 **分工必须说清**：B8-1 自己造
      * {@code StreamRequest}，所以它只证明「落线读了 compat」；把本方法所在的投送链改回只投
@@ -322,7 +322,7 @@ class DefaultProvidersTest {
         }
     }
 
-    // ── 包 A-02（docs/59 §4.6）：车道跟着**模型的 api** 走 ─────────────────
+    // ── 包 A-02（原 docs/59 §4.6）：车道跟着**模型的 api** 走 ─────────────────
 
     /**
      * <b>RE-派发</b>：目录里的 {@link ModelInfo#api()} 必须变成 {@code extra["protocol"]}
@@ -398,7 +398,7 @@ class DefaultProvidersTest {
      *
      * <p>这条通道的**两端**各有夹具：本文件钉宿主侧的这一环（{@code StreamOptions} →
      * {@code extra}），{@code AnthropicCacheControlWireTest} 钉车道侧的读取与落线。
-     * 少了任一端，「压缩摘要的 none 到不了车道」都不算被守住（{@code docs/53 §12.7} 的
+     * 少了任一端，「压缩摘要的 none 到不了车道」都不算被守住（{@code 原 docs/53 §12.7} 的
      * 「通道没夹具」是零红成因之一）。</p>
      */
     @Test
@@ -414,7 +414,7 @@ class DefaultProvidersTest {
     @Test
     void cacheExtraIsEmptyWhenNoRetentionWasRequested() {
         // ⚠️ 缺席必须**空着**：车道据此回落到 PI_CACHE_RETENTION 与 "short"。
-        // 在这里塞一个默认值会把环境变量静默屏蔽（docs/54 §4.4）。
+        // 在这里塞一个默认值会把环境变量静默屏蔽（原 docs/54 §4.4）。
         assertThat(DefaultProviders.cacheExtra(StreamOptions.defaults())).isEmpty();
     }
 

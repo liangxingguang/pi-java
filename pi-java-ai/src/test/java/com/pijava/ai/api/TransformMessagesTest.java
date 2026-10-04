@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包②（docs/31 §8.34）：{@link TransformMessages} —— **闸**这一层。
+ * 包②（原 docs/31 §8.34）：{@link TransformMessages} —— **闸**这一层。
  *
  * <p>与 {@code AnthropicThinkingReplayTest}（钉**落线**）分工：pi 的规则是两层的 ——
  * 闸决定块活不活（`transform-messages.ts:99-116`）、落线决定线格长什么样

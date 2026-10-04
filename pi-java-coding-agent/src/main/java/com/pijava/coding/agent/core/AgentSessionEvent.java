@@ -30,7 +30,7 @@ public sealed interface AgentSessionEvent {
     /**
      * Agent 一次 run 结束（转录完成）。
      *
-     * <p>包⑨（docs/36，B42）：pi 的 {@code turn_end} 是
+     * <p>包⑨（原 docs/36，B42）：pi 的 {@code turn_end} 是
      * {@code { message: AgentMessage; toolResults: ToolResultMessage[] }}，
      * <b>两个字段都必填、一个 {@code ?} 都没有</b>（{@code agent/src/types.ts:438}），
      * 且<b>原样上 RPC/JSON 线</b>（{@code json-event.ts:48-51}）。</p>
@@ -111,7 +111,7 @@ public sealed interface AgentSessionEvent {
     record BashExecutionUpdate(String id, String delta) implements AgentSessionEvent {}
 
     // ═══════════════════════════════════════════════════════════
-    // 工具执行生命周期（包⑦，docs/34）
+    // 工具执行生命周期（包⑦，原 docs/34）
     // ═══════════════════════════════════════════════════════════
     //
     // pi 的这三条是 AgentEvent 联合的成员（agent/src/types.ts:443-446），会话层
@@ -121,7 +121,7 @@ public sealed interface AgentSessionEvent {
     // ⚠️ **每个字段都必填，pi 侧一个 `?` 都没有**（对照 package ④ 那套「按 `?` 省略
     // 可空键」的纪律 —— 这里**一个键都不许省**，别照抄邻行）。
     //
-    // 时刻语义（pi 已核，docs/34 §2.1 P3/P4）：
+    // 时刻语义（pi 已核，原 docs/34 §2.1 P3/P4）：
     //   start 在**校验与 beforeToolCall 钩子之前**、工具即将执行时发；
     //   end   在**执行并定稿（含 afterToolCall）之后**发，带完整 result 与另立的 isError。
 

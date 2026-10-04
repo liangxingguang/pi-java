@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Tests for {@link CompatResolver} — pi 的五份 per-api compat 解析函数在 java 上的合一实现
- * （包 A7a，{@code docs/53}）。
+ * （包 A7a，{@code 原 docs/53}）。
  *
  * <p>逐条期望值来自 pi 的源码（{@code detectCompat:1583-1679}、
  * {@code getCompat:1685-1721}、{@code getAnthropicCompat:206-219}、
@@ -98,7 +98,7 @@ class CompatResolverTest {
 
     @Test
     void explicitCompatWinsOverTheDetection() {
-        // pi getCompat 的 `explicit ?? detected`（docs/53 §2 P3）。
+        // pi getCompat 的 `explicit ?? detected`（原 docs/53 §2 P3）。
         var explicit = new ModelCompat(false, false, true, false, null, null, null, null, null,
             true, MaxTokensField.MAX_COMPLETION_TOKENS, true, true, null);
         var compat = CompatResolver.forCompletions(
@@ -147,7 +147,7 @@ class CompatResolverTest {
 
     @Test
     void anthropicKeepsTheCatalogueFlags() {
-        // 内置目录标的那两个（claude-fable-5 / claude-opus-4-8，docs/53 §4.2）。
+        // 内置目录标的那两个（claude-fable-5 / claude-opus-4-8，原 docs/53 §4.2）。
         var catalogue = new ModelCompat(false, null, true, true, true, null, true, null, null);
         var compat = CompatResolver.forAnthropic(
             model("anthropic", "claude-fable-5", catalogue));
@@ -378,13 +378,13 @@ class CompatResolverTest {
         assertThat(ThinkingFormat.parse("nonsense")).isEmpty();
     }
 
-    // ── 包 A-02（docs/59 §4.8）：completions 缓存面的两个探测值 ─────────
+    // ── 包 A-02（原 docs/59 §4.8）：completions 缓存面的两个探测值 ─────────
 
     @Test
     void completionsDetectsLongCacheRetentionForMostEndpoints() {
         // pi detectCompat:1671-1677 —— 五谓词否定合取（together/cloudflare 两站/
         // nvidia/ant-ling 不支持 1h/24h 档）。改前本车道对这一位**恒透传 null**
-        // （docs/59 G4）⇒ 长缓存的 completions 面（ttl 与 prompt_cache_retention）
+        // （原 docs/59 G4）⇒ 长缓存的 completions 面（ttl 与 prompt_cache_retention）
         // 全部够不着。
         assertThat(CompatResolver.forCompletions(
             model("openrouter", "openai/gpt-5.1"), "https://openrouter.ai/api/v1")
@@ -439,7 +439,7 @@ class CompatResolverTest {
     @Test
     void openRouterRoutingIsNeverDetectedAndSurvivesThreeState() {
         // pi :1657 的探测面 `openRouterRouting: {}` **无读者**（:981 读 raw compat）⇒
-        // java 探测恒 null；显式表原样透传（null 与空表线格可区分，docs/59 R6）。
+        // java 探测恒 null；显式表原样透传（null 与空表线格可区分，原 docs/59 R6）。
         assertThat(CompatResolver.forCompletions(
             model("openrouter", "openai/gpt-5.1"), "https://openrouter.ai/api/v1")
             .openRouterRouting()).isNull();

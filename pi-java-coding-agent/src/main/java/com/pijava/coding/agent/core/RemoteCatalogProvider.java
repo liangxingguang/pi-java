@@ -33,7 +33,7 @@ import com.pijava.ai.provider.Provider;
 
 /**
  * pi.dev 远程目录覆盖包装（pi {@code core/remote-catalog-provider.ts} 的
- * {@code withRemoteCatalog}，docs/70 §1.3）。
+ * {@code withRemoteCatalog}，原 docs/70 §1.3）。
  *
  * <p>{@link #getModels()} = 静态目录 ∪ 动态 overlay（同 id 覆盖、新 id 追加）；
  * {@link #refreshModels(RefreshModelsContext)} 按 pi 的全分支刷新：离线恢复 ⇒
@@ -41,9 +41,9 @@ import com.pijava.ai.provider.Provider;
  *
  * <p>与 pi 的三处刻意差异：
  * <ul>
- *   <li>{@code AbortSignal} 不移植（docs/70 R2）：不支持中途取消，4s attempt
+ *   <li>{@code AbortSignal} 不移植（原 docs/70 R2）：不支持中途取消，4s attempt
  *       timeout 封顶；</li>
- *   <li>{@code fetchWithRetry} 不移植（docs/70 R3）：单次 JDK HttpClient 请求，
+ *   <li>{@code fetchWithRetry} 不移植（原 docs/70 R3）：单次 JDK HttpClient 请求，
  *       不发重试；</li>
  *   <li>User-Agent 用本仓既有约定 {@code pi-java/dev}（{@code PiHttpClient} 等三处
  *       同值），不另造 pi 的 {@code pi/<version> (…)} 形状 —— 本仓没有版本源。</li>

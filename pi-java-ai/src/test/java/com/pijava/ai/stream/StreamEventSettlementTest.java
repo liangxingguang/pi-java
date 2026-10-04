@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * C 批次（{@code docs/55}）：终局载荷的**落定**契约。
+ * C 批次（{@code 原 docs/55}）：终局载荷的**落定**契约。
  *
  * <p>{@code done.partial} / {@code err.partial} 就是 pi 的 {@code done.message} /
  * {@code error.error}（{@code ai/src/types.ts:652-668}），且**必定已落定**：
@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 流到故障点为止的内容原样保留 —— pi 在车道里就地写这三样
  * （{@code anthropic-messages.ts:817-826}），本仓由 {@code settle} 这一个工厂写。</p>
  *
- * <p>⚠️ 本类**不**从 {@code FauxProvider} 的桩推契约（{@code docs/55 §3.1-1}：faux 的
+ * <p>⚠️ 本类**不**从 {@code FauxProvider} 的桩推契约（{@code 原 docs/55 §3.1-1}：faux 的
  * 中间帧推副本、终局推排队对象，与真车道不同形）；夹具一律走
  * {@link StreamPartialBuilder}（生产车道的唯一出口）。</p>
  */

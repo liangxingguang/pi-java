@@ -33,7 +33,7 @@ import com.pijava.ai.stream.StreamEvent;
  *                     "length", "error", "aborted"), or null if still streaming.
  *                     ⚠️ **没有 "end_turn"** —— 那是 Anthropic 线格上的取值，pi 在
  *                     {@code mapStopReason}（{@code anthropic-messages.ts:1467}）里就翻成了
- *                     {@code "stop"}，故它从不进消息（docs/31 §8.35.14 裁决 D2／提交 ③）。
+ *                     {@code "stop"}，故它从不进消息（原 docs/31 §8.35.14 裁决 D2／提交 ③）。
  * @param api          provider protocol discriminator (pi {@code Model.api}),
  *                     or null when the producer does not know it
  * @param provider     provider name (pi {@code AssistantMessage.provider}), or null

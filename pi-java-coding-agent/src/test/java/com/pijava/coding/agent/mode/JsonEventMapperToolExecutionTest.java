@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包⑦（docs/34）：工具的**执行生命周期**事件上线 —— 此前落到
+ * 包⑦（原 docs/34）：工具的**执行生命周期**事件上线 —— 此前落到
  * {@code default -> "unsupported_event"}。
  *
  * <p>pi 对非 {@code message_update} 事件是**原样透传**（{@code json-event.ts:48-51}
@@ -93,7 +93,7 @@ class JsonEventMapperToolExecutionTest {
     // pi 的 AgentToolResult 是 {content, details, usage?, addedToolNames?, terminate?}
     // （types.ts:362-376，后三个带 `?`）⇒ 缺席即省略。Java 的 ToolResult 是
     // record，terminate 是原始 boolean、addedToolNames 恒 []，照默认序列化会多出
-    // 三个 pi 没有的键（docs/34 §5-N2）。
+    // 三个 pi 没有的键（原 docs/34 §5-N2）。
 
     @Test
     void resultProjectionOmitsAbsentOptionalFields() {

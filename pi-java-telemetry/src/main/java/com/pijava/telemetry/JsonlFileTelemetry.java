@@ -73,7 +73,7 @@ public final class JsonlFileTelemetry implements TelemetryContext {
      * <p>Nothing calls {@link ThreadLocal#remove()}: a thread that pushed and
      * popped leaves an empty deque behind, which costs nothing and dies with the
      * thread (production runs each prompt on a fresh virtual thread — see
-     * {@code docs/31 §8.25}).</p>
+     * {@code 原 docs/31 §8.25}).</p>
      */
     private final ThreadLocal<Deque<JsonlSpan>> currentStack =
         ThreadLocal.withInitial(ArrayDeque::new);
@@ -343,7 +343,7 @@ public final class JsonlFileTelemetry implements TelemetryContext {
                 // ("makes calls after settlement inert") runs the callback and
                 // preserves its result or rejection, but records nothing —
                 // packages/telemetry/src/memory.ts:126 downgrades to the no-op
-                // context.  docs/31 §8.28.4.
+                // context.  原 docs/31 §8.28.4.
                 return NoopTelemetryContext.INSTANCE.startSpan(options, body);
             }
             var child = new JsonlSpan(nextSpanId(), options, this);

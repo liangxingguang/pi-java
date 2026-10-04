@@ -23,7 +23,7 @@ import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.utils.SanitizeUnicode;
 
 /**
- * docs/66/69：openai-completions 车道的出站工具声明与历史回放 tool_calls 构建
+ * 原 docs/66/69：openai-completions 车道的出站工具声明与历史回放 tool_calls 构建
  * （pi {@code openai-completions.ts:1472-1506/1351-1363}）。从
  * {@code OpenAICompletionsMessageConverter} 抽出（拆分步骤 7）。
  *

@@ -98,7 +98,7 @@ public final class BuiltinCatalog implements ModelCatalog {
      * <p>⚠️ {@code deepseek-v4-flash} **不是** pi 的 id：pi 于 2026-09-10（`12f59336a`）把它改名成
      * {@code deepseek-flash}（commit message：*Replace retired Flash aliases with the canonical
      * deepseek-flash model*），而那条规则是**逐 id 写死**的 ⇒ flash 无论哪个名字都拿不到该标志。
-     * 本仓的 id 漂移登记为 {@code docs/32 B97}（归 A-08），本包**不**改 id。</p>
+     * 本仓的 id 漂移登记为 {@code docs/05 B97}（归 A-08），本包**不**改 id。</p>
      */
     public static ModelCatalog deepseekModels() {
         return new BuiltinCatalog(List.of(
@@ -173,7 +173,7 @@ public final class BuiltinCatalog implements ModelCatalog {
     }
 
     /**
-     * openai chat 车道的内置条目：docs/66 标 {@code supportsStrictMode}
+     * openai chat 车道的内置条目：原 docs/66 标 {@code supportsStrictMode}
      * （{@link CatalogCompatRules#openaiResponses}）。
      */
     private static ModelInfo openaiChatModel(String name, String display, int maxInput,

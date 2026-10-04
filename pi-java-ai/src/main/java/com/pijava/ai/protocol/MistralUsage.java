@@ -9,7 +9,7 @@ import com.pijava.ai.model.CostCalculator;
 /**
  * Mistral 车道的 usage 归一 —— pi {@code mistral-conversations.ts:536-555}
  * （{@code getMistralCachedPromptTokens}）与 {@code :596-611} 的逐条移植
- * （包 H1 步 5，{@code docs/42 §2.1 P14/P15}）。
+ * （包 H1 步 5，{@code 原 docs/42 §2.1 P14/P15}）。
  *
  * <p>四条语义必须逐字照抄，否则会得到与 pi <b>不同的数</b>：</p>
  *

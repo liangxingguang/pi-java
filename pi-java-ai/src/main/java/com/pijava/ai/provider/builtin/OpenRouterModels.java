@@ -19,7 +19,7 @@ import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.ai.thinking.ThinkingLevelMap;
 
 /**
- * OpenRouter chat 目录（包 A-02，docs/59 §4.3）—— 转录自 pi 的生成数据
+ * OpenRouter chat 目录（包 A-02，原 docs/59 §4.3）—— 转录自 pi 的生成数据
  * {@code providers/data/openrouter.json}（2026-09-29 快照）。
  *
  * <p><b>anthropic 车道 14 条全量</b>：不是数据洁癖 —— 未入目录的
@@ -32,7 +32,7 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
  * （developer 角色、思考级别表三态、非 reasoning 对照各有样本）。其余 368 条走
  * {@code ModelInfo.minimal} 退化 —— 探测面（thinkingFormat/developer-role/maxTokensField）
  * 是 provider＋id 前缀的纯函数，行为不残缺；缺的只是价目/窗口元数据，属既有
- * 「内置目录数据规模」缺口行（docs/41:69），不在本包扩。</p>
+ * 「内置目录数据规模」缺口行（docs/07:69），不在本包扩。</p>
  *
  * <p><b>compat 不硬编</b>：anthropic 车道经 {@link CatalogCompatRules#anthropic} 的三个
  * 谓词算 —— 设计期对 14 条逐条核过，与 pi 生成数据一致（fable-5→adaptive、

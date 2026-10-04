@@ -25,7 +25,7 @@ import com.pijava.telemetry.TelemetryContext;
  *
  * <p>Phase 2c: added compactionSettings. Phase 3: added steeringMode, followUpMode,
  * toolExecution. {@code driveMode} was removed with the step chain — the harness
- * has exactly one driver now ({@code docs/31 §6}).</p>
+ * has exactly one driver now ({@code 原 docs/31 §6}).</p>
  *
  * @param streamFn           LLM streaming call function
  * @param model              current model identifier
@@ -34,7 +34,7 @@ import com.pijava.telemetry.TelemetryContext;
  * @param activeTools        active tool set (Phase 2b: AgentTool instances)
  * @param maxInputTokens     maximum input tokens for overflow detection
  * @param contextWindow      pi {@code model.contextWindow} 的操作数来源（3b，
- *                           {@code docs/31 §8.20}）：按<b>当前</b>模型查其上下文
+ *                           {@code 原 docs/31 §8.20}）：按<b>当前</b>模型查其上下文
  *                           窗口大小（阈值压缩读的正是这个值，模型切换后随之变）。
  *                           默认 {@code ignored -> maxInputTokens}（静态回退，
  *                           与 3b 之前的行为一致）；宿主装配时传目录查询
@@ -42,7 +42,7 @@ import com.pijava.telemetry.TelemetryContext;
  *                           即上下文窗口）。返回 0/负值 ⇒ pi 的
  *                           {@code contextWindow <= 0} 守卫跳过自动压缩。
  * @param maxOutputTokens    pi {@code Model.maxTokens} 的操作数来源（3c，
- *                           {@code docs/31 §8.21}）：按<b>当前</b>模型查其输出上限，
+ *                           {@code 原 docs/31 §8.21}）：按<b>当前</b>模型查其输出上限，
  *                           {@code isRecoverableLength} 的「钳制前意图上限」判据读它。
  *                           默认 {@code ignored -> 0} —— 解析不到 ⇒ 0 ⇒ 判据恒
  *                           false（裁决④：length 收尾不做 compact-and-retry）。
@@ -61,7 +61,7 @@ import com.pijava.telemetry.TelemetryContext;
  * @param summaryGenerator   generates the compaction summary (default: truncating)
  * @param compactionObserver pi {@code compaction_start}/{@code compaction_end} 会话
  *                           事件的宿主观察口（3c）；默认 {@code NOOP}
- * @param retrySettings      自动重试设置的晚读口（3d，{@code docs/31 §8.22}）：
+ * @param retrySettings      自动重试设置的晚读口（3d，{@code 原 docs/31 §8.22}）：
  *                           两环（post-run ① 与摘要重试）每次判定都重读，宿主
  *                           setter 即时生效（pi {@code getRetrySettings()}）。
  *                           默认 {@code RetrySettings::defaults}（pi 的 ?? 链）

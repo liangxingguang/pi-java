@@ -13,7 +13,7 @@ import com.pijava.ai.message.Message;
 import org.junit.jupiter.api.Test;
 
 /**
- * <b>docs/71 G1</b>：消息级 {@code timestamp} 的落线与回读。
+ * <b>原 docs/71 G1</b>：消息级 {@code timestamp} 的落线与回读。
  *
  * <p>pi 的四个消息变体 {@code timestamp} 皆**必填**（{@code types.ts:506/512/536/549}）；
  * 本仓此前只有 {@code SystemMessage}/{@code AssistantMessage} 有，user/toolResult

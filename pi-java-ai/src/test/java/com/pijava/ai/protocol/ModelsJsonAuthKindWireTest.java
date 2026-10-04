@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包 A-02（docs/59 §4.5，登记 B138）：models.json provider 的两处 ApiOptions 重建
+ * 包 A-02（原 docs/59 §4.5，登记 B138）：models.json provider 的两处 ApiOptions 重建
  * （{@code createApi} 的 baseUrl pin 与 {@code withInlineKey}）必须保真 authKind。
  *
  * <p>观测面＝**真出站请求头**（{@link RecordingHttpServer}，与 {@code AnthropicAuthKindTest}

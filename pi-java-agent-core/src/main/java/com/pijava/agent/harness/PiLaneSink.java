@@ -29,7 +29,7 @@ import com.pijava.telemetry.TelemetrySpan;
  * {@code lane.partial} 与 {@code lane.newestOwn}。
  *
  * <p><b>为什么在 agent-core 而不是 coding-agent</b>：这些操作全部落在
- * {@link LaneState} 上，而它是包内可见的。<b>这是 {@code docs/28 §5.1} 的一处更正</b>
+ * {@link LaneState} 上，而它是包内可见的。<b>这是 {@code 原 docs/28 §5.1} 的一处更正</b>
  * —— 原文假定桥接器只做事件转发，实测发现 {@code ContextAssembler}、
  * {@code CompactionExecutor} 与记录日志的九处发射点都绑定车道，桥接器必须与车道同侧。</p>
  *
@@ -40,7 +40,7 @@ import com.pijava.telemetry.TelemetrySpan;
  * <p><b>与旧路径的对应</b>：旧路径把「创建 entry」分散在
  * {@code AssistantStreamExecutor:184-198}（助手）、{@code ToolExecutionPipeline}
  * （工具结果）与 {@code ActionExecutor.injectUserMessages}（steer）三处；本类按 pi 的
- * 结构统一到 {@code message_end} 一个点上 —— 这正是 {@code docs/28} 选项 C 所要求的
+ * 结构统一到 {@code message_end} 一个点上 —— 这正是 {@code 原 docs/28} 选项 C 所要求的
  * 「等价性由结构保证」。</p>
  */
 final class PiLaneSink implements PiLoop.Sink {
@@ -64,7 +64,7 @@ final class PiLaneSink implements PiLoop.Sink {
     /** 起手已落盘的段补丁的时间戳（一次性抑制；见 suppressSystemMessageAt）。 */
     private Instant suppressedSystemTimestamp;
 
-    /** 事件串行化的监视器（{@code docs/31 §8.23}）—— 见 {@link #emit}。 */
+    /** 事件串行化的监视器（{@code 原 docs/31 §8.23}）—— 见 {@link #emit}。 */
     private final Object emitLock = new Object();
 
     /**
@@ -110,7 +110,7 @@ final class PiLaneSink implements PiLoop.Sink {
      * <p>总数在那条助手消息落定时就已知（它携带全部 tool_use 块），而帧序保证
      * {@code message_end(assistant)} **先于**该批任何 {@code tool_execution_start}
      * （{@code agent-loop.ts}；{@code PiLoopTest} 逐帧钉住）⇒ 写入时它必已就位。
-     * 详见 {@code docs/31 §8.26.5-11}。</p>
+     * 详见 {@code 原 docs/31 §8.26.5-11}。</p>
      */
     private int batchCallCount;
 
@@ -323,7 +323,7 @@ final class PiLaneSink implements PiLoop.Sink {
 
     @Override
     public void emit(PiLoop.Event event) {
-        // 事件通往宿主的**唯一漏斗**。package B（docs/31 §8.23）起它全程串行化：工具批次
+        // 事件通往宿主的**唯一漏斗**。package B（原 docs/31 §8.23）起它全程串行化：工具批次
         // 真并发后，工具的 update 回调在**各自的工具线程**上直呼这里，而宿主消费者
         // （会话事件、TUI/RPC/web、记录发射）此前都按单线程写。加锁即把它们还原成 pi 的
         // 运行时语义 —— pi 是 JS 单线程 + 逐个 await emit，并发只存在于工具体；
@@ -360,7 +360,7 @@ final class PiLaneSink implements PiLoop.Sink {
         // 工作副本按 pi 的 processEvents 追加（agent.ts:554-557：message_end ⇒
         // state.messages.push）。**先于** alreadyPresent 的抑制 —— 起手的用户 prompt 因
         // 「日志里已有」不重复落盘，但照样要进副本，pi 的用户消息也是经 message_end 进
-        // state.messages 的（docs/31 §4.2）。
+        // state.messages 的（原 docs/31 §4.2）。
         lane.messages.add(message);
         if (alreadyPresent.contains(message)) {
             return;
@@ -391,7 +391,7 @@ final class PiLaneSink implements PiLoop.Sink {
                 }
                 // 非 error 收尾 ⇒ 重试链成功终止：发 auto_retry_end{success:true,
                 // attempt} 并清零计数（pi {@code agent-session.ts:698-706}；
-                // package 3d，{@code docs/31 §8.22}）。判据只排除 error ——
+                // package 3d，{@code 原 docs/31 §8.22}）。判据只排除 error ——
                 // **length 也复位**（pi 原文是 `stopReason !== "error"`）。
                 if (!"error".equals(stopReason) && lane.retryAttempt > 0) {
                     int attempt = lane.retryAttempt;
@@ -402,7 +402,7 @@ final class PiLaneSink implements PiLoop.Sink {
                 // lane.partial 必须跟着走：determineOutcome 与 lastAssistantMessage 都读它，
                 // 不同步的话 abort 会被记成 completed。errorMessage 同路同步
                 // （文本如今由**生产者**落定 —— StreamPartialBuilder.emitError /
-                // StreamError.settle，C 批次 docs/55 §6.3 —— 宿主 E2E 与
+                // StreamError.settle，C 批次 原 docs/55 §6.3 —— 宿主 E2E 与
                 // 重试白名单分类器读的都是这条消息）。
                 if (lane.partial != null) {
                     lane.partial = lane.partial
@@ -435,14 +435,14 @@ final class PiLaneSink implements PiLoop.Sink {
             UUID.randomUUID().toString(), 0,
             lane.lastEntry() != null ? lane.lastEntry().id() : null, null, message, null);
         lane.transcript.add(entry);
-        // 运行中写入 ⇒ 记为 deferred（docs/22 D3）。用户 prompt 由
+        // 运行中写入 ⇒ 记为 deferred（原 docs/22 D3）。用户 prompt 由
         // RunLifecycle.startRun() 在起手时写入，不走这里，语义不受影响。
         HarnessUtils.recordDeferredWrite(lane, entry);
         return entry;
     }
 
     // ═══════════════════════════════════════════════════════════
-    // 记录日志（旁路审计，docs/28 选项 C）
+    // 记录日志（旁路审计，原 docs/28 选项 C）
     // ═══════════════════════════════════════════════════════════
 
     /** 助手步的 {@code StepAttempt} + {@code UsageRecord}。 */
@@ -454,9 +454,9 @@ final class PiLaneSink implements PiLoop.Sink {
             StepKind.ASSISTANT, attempt, entry.id(), null,
             RunSpanFactory.modelLabel(ctx.model().get()), assembledMessageCount,
             toolCount(), RunSpanFactory.thinkingLabel(ctx.thinkingLevel().get()), durationMs));
-        // 无条件发射（docs/21）：零 token 的一轮（error / abort）恰恰是折叠需要 stopReason
+        // 无条件发射（原 docs/21）：零 token 的一轮（error / abort）恰恰是折叠需要 stopReason
         // 的那种情形，按 tokens>0 设门槛会把它丢掉。
-        // A3（docs/42 步 6）：记录带的是**终局消息的全量 usage** —— pi 的
+        // A3（原 docs/42 步 6）：记录带的是**终局消息的全量 usage** —— pi 的
         // session-manager.ts:1152 起就整只传 Usage 对象（appendUsage(usage: Usage)）。
         // 终局消息的 usage 由 fromPartial 从 partial 携带的 UsageInfo 投影（3a），
         // B41 兜零值 ⇒ 恒非 null。旧代码这里的 Usage.of(i, o) 把
@@ -479,7 +479,7 @@ final class PiLaneSink implements PiLoop.Sink {
      * <p><b>已知缺口</b>：{@code effectiveArgs} 记空表 —— 参数已由
      * {@link PiToolRunner} 交给注册表，此处不再持有副本。
      * {@code RunSummaryAggregator} 只读 {@code isError}/{@code runId}，不受影响
-     * （docs/28 §5.1 已记录该降级）。</p>
+     * （原 docs/28 §5.1 已记录该降级）。</p>
      */
     private void emitToolRecords(LaneState lane, Entry.Message entry,
                                  Message.ToolResultMessage result) {
@@ -509,7 +509,7 @@ final class PiLaneSink implements PiLoop.Sink {
      * <p>{@code batchSize} 取 {@link #batchCallCount} —— 助手消息落定时定下的**本批总数**
      * （见该字段的 javadoc），<b>不读</b> {@link #batchCallIds}{@code .size()}：那个列表在准备相
      * 逐调用增长，而这里的读取时刻由**结果消息**驱动，顺序路径（逐调用成组）读数时会少算
-     * （{@code docs/31 §8.26.5-11}，pi 自己的录制 {@code S10.pi.jsonl:11-18} 即该形状）。
+     * （{@code 原 docs/31 §8.26.5-11}，pi 自己的录制 {@code S10.pi.jsonl:11-18} 即该形状）。
      * 并行路径的相位③（结果在整批 join 之后按源序回补）因此不再是这个属性成立的前提，
      * 只是与它一致的一个来源。</p>
      *
@@ -536,11 +536,11 @@ final class PiLaneSink implements PiLoop.Sink {
     /**
      * 本次请求带的工具数 —— **生效子集**，不是注册表规模。
      *
-     * <p>包 A3 的 R6（{@code docs/51 §9}）：设计稿要求「实测后定，不许凭直觉选」。
+     * <p>包 A3 的 R6（{@code 原 docs/51 §9}）：设计稿要求「实测后定，不许凭直觉选」。
      * 实测的结论是 <b>pi 侧没有这个属性</b> —— {@code git grep toolCount} 在 pi 的
      * {@code packages/} 下零命中（只有 tui 的一个同名局部量），pi 的 {@code llm.request}
      * 跨度里既没有 {@code toolCount} 也没有 {@code messageCount}。⇒ 本字段是 **pi-java 的
-     * 扩展**（{@code docs/31 §8.28} 的口径：adapter 比 pi 多，不是缺口），没有可对齐的 pi 真值
+     * 扩展**（{@code 原 docs/31 §8.28} 的口径：adapter 比 pi 多，不是缺口），没有可对齐的 pi 真值
      * ⇒ 定义由我们负责，正确答案是「这次请求带了多少工具」。
      *
      * <p>⚠️ 于是这里从 {@code all().size()} 改成生效子集：注册表里有 20 个工具、本次只装载 5 个时，

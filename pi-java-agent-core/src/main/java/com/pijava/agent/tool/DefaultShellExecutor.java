@@ -77,7 +77,7 @@ public class DefaultShellExecutor implements ShellExecutor {
 
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             var future = executor.submit(() -> {
-                // 包⑧（docs/35）：按**字符边界**增量解码后再报给汇 —— 8 KiB 的切点会
+                // 包⑧（原 docs/35）：按**字符边界**增量解码后再报给汇 —— 8 KiB 的切点会
                 // 落在任意字节上，直接 new String(buf,0,n) 会把汉字/emoji 劈成替换符。
                 var sink = options.outputSink();
                 var chunkStream = sink == null ? null : new Utf8ChunkStream();

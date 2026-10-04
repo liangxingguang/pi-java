@@ -20,13 +20,13 @@ import com.pijava.ai.stream.StreamEvent;
  *       内容。因此助手 {@code message_start} 发的是空消息，上下文直到流结束才被填满。</li>
  *   <li>文本块的 {@code chunks} 决定 delta：**首个分块不发 delta**，其后每块发一条
  *       {@code text_delta}。缺省（无 {@code chunks}）表示整段一次成型、零 delta。</li>
- *   <li>3a（docs/31 §8.19）：每个快照携带与 pi 侧 {@code createAssistantMessage}
+ *   <li>3a（原 docs/31 §8.19）：每个快照携带与 pi 侧 {@code createAssistantMessage}
  *       （run.test.ts）逐字对应的身份与计量 —— {@code api="openai-responses"}、
  *       {@code provider="openai"}、{@code model="mock"}（**恒定**，脚本换模型只影响
  *       请求、不改消息上的 model 字段）、{@code timestamp=now}
  *       （不进帧，两侧都不可复现）。真实 adapter 走
  *       {@code AbstractChatApi} 出口挂载，桩这里直接挂。</li>
- *   <li>步 7（docs/42 裁决 C）：{@code usage} 来自剧本 —— 写了就挂到**终局消息**，
+ *   <li>步 7（原 docs/42 裁决 C）：{@code usage} 来自剧本 —— 写了就挂到**终局消息**，
  *       没写两侧同零（A1 的旧状态）。空白快照（每次 delta 的 partial）恒零：
  *       pi 侧的 mock 同样只在 {@code final} 上挂（run.test.ts），且 partial 上的
  *       usage 不进 message_update 帧（两侧 Normalizer 都只渲染 evt+detail），

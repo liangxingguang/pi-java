@@ -72,7 +72,7 @@ final class ResponsesMessageConverter {
      * {@code supportsMaxOutputTokens: false} 也无效，与 pi 一致）。
      *
      * <p>⚠️ 这个串必须与 {@code OpenAIResponsesApi.apiName()} 逐字一致（那里就是本键的命名处）。
-     * 若将来两条车道拆成两个转换器，这道门要跟着走 —— {@code docs/57 §11} 与探针 M5
+     * 若将来两条车道拆成两个转换器，这道门要跟着走 —— {@code 原 docs/57 §11} 与探针 M5
      * 是这条约束的登记处。</p>
      */
     private static final String MAX_OUTPUT_TOKENS_GATED_LANE = "openai-responses";
@@ -103,7 +103,7 @@ final class ResponsesMessageConverter {
     }
 
     /**
-     * docs/69 + 包 B103：grammar 能力表（custom tool 出站/回放）与逐请求会话亲和头。
+     * 原 docs/69 + 包 B103：grammar 能力表（custom tool 出站/回放）与逐请求会话亲和头。
      */
     static ResponseCreateParams buildParams(StreamRequest request, ResponsesOptions ropts,
                                             String modelName, String apiName,
@@ -113,7 +113,7 @@ final class ResponsesMessageConverter {
         // pi openai-responses.ts:119 / azure-openai-responses.ts:77 —— 车道入口先
         // resolveTranscript，之后再构建请求。
         var transcript = Transcripts.resolveTranscript(request.transcript(), compat);
-        // 包 A3（docs/51 §4.4）：Responses 的**两个独立锚定机制**（命中其一即可）——
+        // 包 A3（原 docs/51 §4.4）：Responses 的**两个独立锚定机制**（命中其一即可）——
         // `additional_tools` 优先，缺席时退回合成的 tool_search 对（pi :180、:185-208）。
         boolean supportsAdditionalTools = Boolean.TRUE.equals(compat.supportsAdditionalTools());
         boolean supportsToolSearch = Boolean.TRUE.equals(compat.supportsToolSearch());
@@ -192,7 +192,7 @@ final class ResponsesMessageConverter {
                                                            boolean supportsStrictMode,
                                                            Map<String, String> grammarProperties) {
         var items = new ArrayList<ResponseInputItem>();
-        // docs/32 B152：**回放侧**的同一次去重 —— 修复之前落盘的转录里已经带着重复的
+        // docs/05 B152：**回放侧**的同一次去重 —— 修复之前落盘的转录里已经带着重复的
         // tool call（同 `call_id`），只靠流解析的去重救不回来 ⇒ 那种会话会**永远** 400。
         // 判据同流侧：同 `call_id` 只认第一条（合法调用会拿到不同 call_id）。被丢掉的调用
         // 对应的 `function_call_output` 也要一起丢，否则输出引用了输入里不存在的 call_id。
@@ -244,7 +244,7 @@ final class ResponsesMessageConverter {
                 addAssistantItems(items, assistant, msgIndex, request.modelId(), apiName,
                     grammarProperties, emittedCalls);
             } else if (msg instanceof Message.ToolResultMessage tool) {
-                // docs/69（pi shared:335-347）：grammar 工具的结果落 custom_tool_call_output。
+                // 原 docs/69（pi shared:335-347）：grammar 工具的结果落 custom_tool_call_output。
                 var callId = ResponsesToolCallIds.callIdOf(tool.toolUseId());
                 // B152：同 call_id 的第二条结果一并丢掉（配对去重，见上面的两个 set）。
                 if (emittedOutputs.add(callId)) {
@@ -273,12 +273,12 @@ final class ResponsesMessageConverter {
      * 否则返回**块数组**：hasText 时先推 input_text，再逐个推 input_image(detail:"auto")  // :95-107
      * </pre>
      *
-     * <p>⚠️ 两处与 Anthropic 的 toolResult **刻意不同**（{@code docs/44 D3}）：
+     * <p>⚠️ 两处与 Anthropic 的 toolResult **刻意不同**（{@code 原 docs/44 D3}）：
      * ① {@code hasText} 为假时**不**推文本项（Anthropic 会补 {@code "(see attached image)"} 块）；
      * ② 净化发生在**join 之后**（{@code :86-88} 先 join("\n") 再净化）。</p>
      *
      * <p>⚠️ 能力门与 {@code "(see attached image)"} 分支在 pi 与 java **两侧都不可达** ——
-     * 共享闸已按同一个 model 把非视觉模型的图片换成了文本块（{@code docs/44 §9}）。照抄保留。</p>
+     * 共享闸已按同一个 model 把非视觉模型的图片换成了文本块（{@code 原 docs/44 §9}）。照抄保留。</p>
      */
     private static ResponseInputItem.FunctionCallOutput.Output convertToolResultOutput(
             ModelInfo model, List<ContentBlock> content) {
@@ -318,7 +318,7 @@ final class ResponsesMessageConverter {
 
     /**
      * pi 的图片判据是 {@code type === "image"}；java 的 URL 图片同等对待并**原样**下发
-     * （{@code docs/44 D4 选项 A}；{@code toUserItem} 里早就是这个口径）。
+     * （{@code 原 docs/44 D4 选项 A}；{@code toUserItem} 里早就是这个口径）。
      */
     private static boolean isImageBlock(ContentBlock block) {
         return block instanceof ContentBlock.ImageContent
@@ -333,7 +333,7 @@ final class ResponsesMessageConverter {
         return "data:" + img.mediaType() + ";base64," + img.data();
     }
 
-    // 输入项（inputMessage/toUserItem）已抽到 ResponseInputWire（docs/66，步骤 7）。
+    // 输入项（inputMessage/toUserItem）已抽到 ResponseInputWire（原 docs/66，步骤 7）。
 
     /**
      * Append pi's replay items for one assistant message.
@@ -348,11 +348,11 @@ final class ResponsesMessageConverter {
      * <p>pi derives that id from the text block's replay signature and only falls back to
      * {@code msg_pi_${msgIndex}} when there is none ({@code :267-287}); an id longer than 64
      * characters is replaced by {@code msg_${shortHash(id)}}. All three branches are live here
-     * since docs/71 G2 — {@link ContentBlock.TextContent#textSignature()} exists (Batch F added
+     * since 原 docs/71 G2 — {@link ContentBlock.TextContent#textSignature()} exists (Batch F added
      * it for Google) and this lane now writes it back too.</p>
      *
      * <p>⚠️ 早先的注释说「{@code ContentBlock.TextContent} carries no signature at all
-     * （B23）」—— 那是 Batch F 之前的事实，已作废（见 docs/71 §2.2）。</p>
+     * （B23）」—— 那是 Batch F 之前的事实，已作废（见 原 docs/71 §2.2）。</p>
      */
     private static void addAssistantItems(List<ResponseInputItem> items,
                                           Message.AssistantMessage assistant,
@@ -400,7 +400,7 @@ final class ResponsesMessageConverter {
         }
         // Reasoning items precede the output messages; tool calls follow them.
         // ⚠️ 这与 pi 的**块序**（它在同一个循环里按块 push）有差：本仓按「reasoning ⇒
-        // 文本 ⇒ 工具调用」分组。分组形状见 docs/71 §12 的裁决与登记。
+        // 文本 ⇒ 工具调用」分组。分组形状见 原 docs/71 §12 的裁决与登记。
         for (var reasoning : reasoningItems) {
             items.add(ResponseInputItem.ofReasoning(reasoning));
         }
@@ -463,12 +463,12 @@ final class ResponsesMessageConverter {
      * 「will cause a JSON field to be omitted from the serialized JSON entirely」
      * （{@code Values.kt:433-445}）。这不是绕过校验的技巧。B88 之前这里**根本不设**它，
      * 于是请求在**构建期**就抛 {@code IllegalStateException}，桩服务器零请求
-     * （{@code docs/50 §7.1} 实测）。</p>
+     * （{@code 原 docs/50 §7.1} 实测）。</p>
      *
-     * <p>java 没有 {@code constrainedSampling}（{@code docs/50 §3 F6}），故 pi 的
+     * <p>java 没有 {@code constrainedSampling}（{@code 原 docs/50 §3 F6}），故 pi 的
      * {@code constrainedStrict ?? false} 退化为恒 {@code false}；{@code prefer}
      * （发 {@code true} ＋ 收紧 schema）与 {@code require}（不支持则抛）两支登记为
-     * {@code docs/50 §10 L-A}，不在此处造投机骨架。</p>
+     * {@code 原 docs/50 §10 L-A}，不在此处造投机骨架。</p>
      */
     private static Map<String, JsonValue> toJsonValues(Map<String, Object> schema) {
         var out = new LinkedHashMap<String, JsonValue>();
@@ -498,7 +498,7 @@ final class ResponsesMessageConverter {
             case ThinkingLevel.Low() -> "low";
             case ThinkingLevel.Medium() -> "medium";
             // ⚠️ 包H5：pi 的 responses 车道走 `clampThinkingLevel` ＋ `thinkingLevelMap`，
-            // 不硬编码；这条平行路径**不在本包范围**（docs/46 §9），此处只为让新增的
+            // 不硬编码；这条平行路径**不在本包范围**（原 docs/46 §9），此处只为让新增的
             // `Max` 有分支 —— 行为与改动前的 `XHigh` 一致（都落到 "high"）。
             case ThinkingLevel.High(), ThinkingLevel.XHigh(), ThinkingLevel.Max() -> "high";
         };

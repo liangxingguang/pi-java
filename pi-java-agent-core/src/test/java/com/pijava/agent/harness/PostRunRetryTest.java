@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 环 A（post-run ①）的守卫哨兵 —— pi {@code _isRetryableError}/{@code _prepareRetry}/
  * {@code _willRetryAfterAgentEnd}（{@code agent-session.ts:2876-2880, 2917-2965,
  * 721-733}）与 {@code _handlePostAgentRun} 全序（{@code :1116-1144}）的移植钉
- * （package 3d，{@code docs/31 §8.22}）。
+ * （package 3d，{@code 原 docs/31 §8.22}）。
  *
  * <p>退避延迟一律 base 1ms ⇒ 测试不等真延迟；中止路用恒 true 的谓词即时掐。</p>
  */

@@ -15,7 +15,7 @@ import java.util.Map;
  * @param promptGuidelines guideline bullets appended to the system prompt when this tool is active
  * @param renderShell     whether the UI renders the standard shell or the tool renders itself
  *                        (pi {@code renderShell: "default"|"self"}; default {@code "default"})
- * @param constrainedSampling pi {@code Tool.constrainedSampling}（docs/66）：可选 provider 侧
+ * @param constrainedSampling pi {@code Tool.constrainedSampling}（原 docs/66）：可选 provider 侧
  *                        约束采样；{@code null} ≙ 缺席（扩展显式 {@code false} 同形）
  */
 public record ToolDefinition(

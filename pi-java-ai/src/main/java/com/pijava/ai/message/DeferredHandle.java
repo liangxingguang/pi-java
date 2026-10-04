@@ -10,11 +10,11 @@ import java.util.Map;
  * message when the request continues in the background. Carrying it lets the
  * final message be reconstructed later from {@code data}.</p>
  *
- * <p><b>No producer in pi-java</b> (docs/22 D2): no provider implements
+ * <p><b>No producer in pi-java</b> (原 docs/22 D2): no provider implements
  * deferral, so nothing constructs one outside tests. pi is in the same state —
  * its type exists but only the faux test provider returns one.</p>
  *
- * <p>A-20（docs/68 J8，2026-10-02）：两侧同无真实生产者 ⇒ <b>留形状不接线</b>，
+ * <p>A-20（原 docs/68 J8，2026-10-02）：两侧同无真实生产者 ⇒ <b>留形状不接线</b>，
  * B111 维持；未来出现真实 provider 生产者须先立设计包。</p>
  *
  * @param provider    provider name (e.g. {@code "anthropic"})

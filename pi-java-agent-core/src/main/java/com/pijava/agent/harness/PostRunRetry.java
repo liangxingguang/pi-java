@@ -8,7 +8,7 @@ import com.pijava.ai.utils.RetryBackoff;
 /**
  * post-run ① 的自动重试环 —— pi {@code _isRetryableError} + {@code _prepareRetry}
  * + {@code _willRetryAfterAgentEnd}（{@code agent-session.ts:2876-2880, 2917-2965,
- * 721-733}）的逐条移植（package 3d，{@code docs/31 §8.22}，裁决①：环住 agent-core
+ * 721-733}）的逐条移植（package 3d，{@code 原 docs/31 §8.22}，裁决①：环住 agent-core
  * 引擎，SessionRunner 的外层 do-while 撤销）。
  *
  * <p><b>为什么必须在引擎里</b>：pi 的 {@code _handlePostAgentRun} 顺序是

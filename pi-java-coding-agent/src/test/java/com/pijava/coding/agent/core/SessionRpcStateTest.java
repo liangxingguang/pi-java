@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包④：{@code get_state} 三个新字段的取值来源（{@code docs/31 §8.37}）。
+ * 包④：{@code get_state} 三个新字段的取值来源（{@code 原 docs/31 §8.37}）。
  *
  * <p>线格式那一侧由 {@code RpcDispatcherTest} 钉；这里钉宿主读取口本身 ——
  * 特别是 {@link AgentSession#sessionFile()} 的**两条路**：pi 的类型是

@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包 H2（{@code docs/44}）步 5：OpenAI-responses 车道的**工具结果**图片落点 ——
+ * 包 H2（{@code 原 docs/44}）步 5：OpenAI-responses 车道的**工具结果**图片落点 ——
  * pi {@code openai-responses-shared.ts:78-110} 的 {@code convertToolResultOutput}。
  *
  * <p>本车道的 user 图片路径**早就通了**（{@code toUserItem}，包② 落的），本步只补工具结果那半边：
@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p><b>实测：`Tests run: 10, Failures: 5`</b>（本步实现前）—— 5 条行为红灯、5 条回归门。
  * ⚠️ 其中 {@code nonVisionToolResultStaysAString} 的红来自 **join 分隔符**（旧实现无分隔符拼接），
- * 不是能力门 —— 能力门与 {@code "(see attached image)"} 分支在两侧都不可达（{@code docs/44 §9}）。</p>
+ * 不是能力门 —— 能力门与 {@code "(see attached image)"} 分支在两侧都不可达（{@code 原 docs/44 §9}）。</p>
  */
 class OpenAIResponsesImageContentTest {
 
@@ -121,7 +121,7 @@ class OpenAIResponsesImageContentTest {
     }
 
     /**
-     * <b>红</b> {@code docs/44 D4 选项 A}：{@link ContentBlock.UrlImageContent}（java 扩展）
+     * <b>红</b> {@code 原 docs/44 D4 选项 A}：{@link ContentBlock.UrlImageContent}（java 扩展）
      * 同样进块数组，URL 原样下发。
      */
     @Test
@@ -148,7 +148,7 @@ class OpenAIResponsesImageContentTest {
     /**
      * <b>回归门</b> 非视觉模型：共享闸把图片换成文本块 ⇒ 走字符串分支，
      * 正文是那句占位文案（车道侧的能力门与 {@code "(see attached image)"} 分支因此不可达，
-     * {@code docs/44 §9}）。
+     * {@code 原 docs/44 §9}）。
      */
     @Test
     void nonVisionToolResultStaysAString() throws Exception {

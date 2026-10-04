@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包①（docs/31 §8.33.7 证伪点 1）：{@code ThinkingContent} 从两个组件长到三个，
+ * 包①（原 docs/31 §8.33.7 证伪点 1）：{@code ThinkingContent} 从两个组件长到三个，
  * 新增的 {@code redacted} 是**原生 boolean**，靠 Jackson 的布尔缺省值容忍旧 JSON。
  *
  * <p><b>为什么值得单独立夹具</b>：生产链路里**没有**任何一处用 Jackson 读

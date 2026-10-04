@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 包⑤（TUI 重试面）的定点用例：会话事件 → 指示器槽 / 聊天区。
  *
  * <p>⚠️ L5 差分<b>结构上</b>覆盖不到这里的任何一条 —— 一切宿主渲染（状态栏文本、
- * 聊天区追加）都在差分边界之外（docs/31 §8.32.5 第 3 条）⇒ L5 全绿不构成
+ * 聊天区追加）都在差分边界之外（原 docs/31 §8.32.5 第 3 条）⇒ L5 全绿不构成
  * 本文件任何一条断言成立的证据，每条都得在这里钉死。</p>
  *
  * <p>文本断言<b>逐字符</b>对齐 pi 的格式串（{@code components/status-indicator.ts}
@@ -167,7 +167,7 @@ class ChatScreenSessionEventTest {
     @Test
     void summarizationRetryAttemptStartBranchesToTheBranchSummaryIndicator() {
         // ⚠️ 今天不可达：branch summary 在 pi-java 无实现（台账 B1），source 恒为
-        // "compaction"。这里只钉文本，不假装这条路可达（docs/31 §8.38.7-D）。
+        // "compaction"。这里只钉文本，不假装这条路可达（原 docs/31 §8.38.7-D）。
         var screen = new ChatScreen();
         screen.onSessionEvent(new AgentSessionEvent.SummarizationRetryAttemptStart(
             "branchSummary", null));

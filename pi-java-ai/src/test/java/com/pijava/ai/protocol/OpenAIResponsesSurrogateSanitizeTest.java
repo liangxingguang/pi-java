@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包 A0 步3（{@code docs/43 D4}）：OpenAI-responses 车道的孤对代理净化落点 ——
+ * 包 A0 步3（{@code 原 docs/43 D4}）：OpenAI-responses 车道的孤对代理净化落点 ——
  * pi {@code openai-responses-shared.ts} 的 7 处调用在 pi-java 收敛为 <b>5 个文本落线点</b>。
  *
  * <table>
@@ -165,7 +165,7 @@ class OpenAIResponsesSurrogateSanitizeTest {
      * <p>判别串跨块边界造：块1 以孤高收尾、块2 以孤低开头。逐块 ⇒ {@code "A"} 与
      * {@code "B"} 各自成条；先拼接再净化 ⇒ 孤对**配对**成活 emoji ⇒ {@code "A🙈B"}。</p>
      *
-     * <p>⚠️ 本夹具在 docs/71 G2 时更新过期望值：此前它断言的是**拼接后的一条**
+     * <p>⚠️ 本夹具在 原 docs/71 G2 时更新过期望值：此前它断言的是**拼接后的一条**
      * {@code "AB"} —— 那是本仓的形状（把所有文本块并进一条 output message），
      * 而 pi {@code :267-287} **每个文本块推一条**。改成逐块一条后，「拼接形态」
      * {@code "AB"} 反而成了要**反向禁止**的东西。</p>
@@ -188,9 +188,9 @@ class OpenAIResponsesSurrogateSanitizeTest {
      * <b>照缝登记</b>（P5 家族）：tool 入参**不净化** —— pi {@code :322}
      * {@code arguments: JSON.stringify(toolCall.arguments)}；java {@code toArgumentsJson} 同形
      * （{@code openai-completions.ts:1366} 是同一族的另一处）。本条件钉住这个缝不被顺手补掉：
-     * 补了才是行为偏离（{@code docs/43 D1}）。</p>
+     * 补了才是行为偏离（{@code 原 docs/43 D1}）。</p>
      *
-     * <p>⚠️ 实测口径（{@code docs/43 §10}）：{@code toArgumentsJson} 走的是 Jackson 的
+     * <p>⚠️ 实测口径（{@code 原 docs/43 §10}）：{@code toArgumentsJson} 走的是 Jackson 的
      * <b>char 型</b>生成器（{@code writeValueAsString}），孤高代理在其中**原样留在字符串里**
      * （不像 SDK 的 UTF-8 字节生成器会写成反斜杠-u 转义）⇒ 断言用 code-unit 探测。</p>
      */

@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * {@link PiToolRunner} 的错误路径与成功路径（{@code docs/28 §5} 第 2 步的前置件，
+ * {@link PiToolRunner} 的错误路径与成功路径（{@code 原 docs/28 §5} 第 2 步的前置件，
  * 两相拆分后按 {@code prepare} / {@code execute} 重新归位）。
  *
  * <p>对应 pi {@code prepareToolCall} 的分支：denied（钩子拒绝）、unavailable（未找到）、
@@ -354,7 +354,7 @@ class PiToolRunnerTest {
             .isEqualTo(List.of("mcp:late")).isEqualTo(outcome.result().addedToolNames());
         assertThat(outcome.message().content()).isEqualTo(outcome.result().content());
         assertThat(outcome.message().isError()).isFalse();
-        // docs/71 G1：工具结果消息在**执行路径**上也被盖上时间戳（pi types.ts:549 必填）。
+        // 原 docs/71 G1：工具结果消息在**执行路径**上也被盖上时间戳（pi types.ts:549 必填）。
         assertThat(outcome.message().timestamp()).isNotNull();
     }
 

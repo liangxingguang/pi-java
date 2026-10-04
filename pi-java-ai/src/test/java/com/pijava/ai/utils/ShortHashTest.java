@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * pi {@code packages/ai/src/utils/hash.ts} 的移植哨兵（包 B14 步 1，
- * {@code docs/47}）。
+ * {@code 原 docs/47}）。
  *
  * <p>oracle 值全部用 pi 的 TS 实现经 node 逐字节生成后钉死——本测试不验
  * 「哈希好不好」，只验「与 pi 逐字节相同」：Completions（40 字符截断）与

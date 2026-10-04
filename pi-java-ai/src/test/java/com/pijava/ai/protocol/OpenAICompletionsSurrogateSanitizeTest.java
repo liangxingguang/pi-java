@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包 A0 步3（{@code docs/43 D4}）：OpenAI-completions 车道的孤对代理净化落点 ——
+ * 包 A0 步3（{@code 原 docs/43 D4}）：OpenAI-completions 车道的孤对代理净化落点 ——
  * pi {@code openai-completions.ts} 的 7 处调用在 pi-java 收敛为 <b>4 个文本落线点</b>。
  *
  * <table>
@@ -161,7 +161,7 @@ class OpenAICompletionsSurrogateSanitizeTest {
      * {@code :1339} 就是 {@code assistantMsg[signature] = nonEmptyThinkingBlocks.map(b =>
      * b.thinking).join("\n")}，没有 {@code sanitizeSurrogates}；java 的 {@code :544} 是
      * 同一路径（同一模型 + 已知线格名 + 非空 thinking）。本条件**钉住这个缝不被顺手补掉**：
-     * 补了才是行为偏离（中央净化会多净化 pi 不净化的东西，{@code docs/43 D1}）。</p>
+     * 补了才是行为偏离（中央净化会多净化 pi 不净化的东西，{@code 原 docs/43 D1}）。</p>
      *
      * <p>断言读的是**出参对象**（{@code JsonValue.convert(String.class)} 不做 JSON 往返）
      * ⇒ 与序列化器无关，只看这条路径有没有净化。</p>

@@ -178,7 +178,7 @@ public sealed interface LaneRecord {
      *
      * <p>The assistant stop reason ({@code completed} / {@code toolUse} /
      * {@code length} / {@code error} / {@code aborted}) lives on the
-     * {@code resultEntryId} message entry, not here (docs/22 D1): the entry is
+     * {@code resultEntryId} message entry, not here (原 docs/22 D1): the entry is
      * the single source of truth, so a resumed fold and the live lane cannot
      * disagree.</p>
      */
@@ -295,7 +295,7 @@ public sealed interface LaneRecord {
      *
      * <p>{@code stopReason} is <b>audit data for this usage event, not a
      * derivation input</b> — deliberately kept even though no code reads it.
-     * It is not the parallel-copy that docs/22 D1 removed from
+     * It is not the parallel-copy that 原 docs/22 D1 removed from
      * {@code StepAttempt}: that one duplicated a value the fold derives from
      * (so the two could drift), whereas nothing derives from this. The
      * assistant entry is the single source of truth for a turn's reason;

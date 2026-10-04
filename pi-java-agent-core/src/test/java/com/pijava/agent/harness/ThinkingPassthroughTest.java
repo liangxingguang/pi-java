@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>⚠️ <b>本类取代了 {@code ThinkingTranslationTest}</b>，而且把它的断言<b>反过来</b>了。
  * 旧类钉的是「harness 用 {@code thinkingLevelMap} 把级别翻译成 {@code ThinkingConfig}」
  * —— 那正是包H5 要<b>拆掉</b>的行为：翻译需要 {@code model.compat} 与
- * {@code model.thinkingLevelMap}，而引擎层只有 {@code ModelId}（{@code docs/31 §8.34.4 决策 5}
+ * {@code model.thinkingLevelMap}，而引擎层只有 {@code ModelId}（{@code 原 docs/31 §8.34.4 决策 5}
  * 实测的断链）。pi 的分层是：{@code SimpleStreamOptions.reasoning} 是<b>未翻译的级别</b>
  * （{@code types.ts:328}），翻译在<b>车道内</b>做（{@code anthropic-messages.ts:858-904}）。</p>
  *

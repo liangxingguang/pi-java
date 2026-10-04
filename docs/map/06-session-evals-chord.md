@@ -223,7 +223,7 @@ pi-java 权威 DDL：`pi-java-session-backend-sqlite/src/main/resources/sql/001_
 ＋ 运行时动态创建 2 张：`migrations`（`Migrations.java:39-44`）、`session_search_fts`（`SqliteSessionSearch.java:114-120`，FTS5 虚拟表）
 ⇒ **pi-java 实际 13 张**。
 
-**同名表只有 3 个**：`sessions` / `entries` / `branch_entries`。**核实：`docs/32` 全文零处提到 schema 分叉（grep `schema`/`branch_meta`/`scalar_values`/`usage_ledger`/`list_values` 只命中 B8 的无关行）⇒ 本条差距「未登记」。**
+**同名表只有 3 个**：`sessions` / `entries` / `branch_entries`。**核实：`docs/05` 全文零处提到 schema 分叉（grep `schema`/`branch_meta`/`scalar_values`/`usage_ledger`/`list_values` 只命中 B8 的无关行）⇒ 本条差距「未登记」。**
 
 | # | 权重 | 表名 | pi 有 | java 有 | 列差异 | 判定 | 证据 |
 |---|---|---|---|---|---|---|---|
@@ -290,7 +290,7 @@ pi-java 侧：`pi-java-evals`（**自研框架** `EvalSuite`/`EvalCase`/`EvalRun
 **权重**：**Σ = 43**（旧 36 + 新增 3 行 7 点；无权重 0 行 ⇒ 计入分母 20 行）。
 **净结论（重测后）**：pi 的评测**架构换了、能力净增** —— 删掉的是 `vitest-evals/` 包装层（887 行）与旧 eval 文件，新增的是自研 `harness`/`report`/`cli`/`docker`/`plan` 与 3 项能力（Docker 执行、变体计划、TUI 审计）。
 **pi-java 一个都没有对应物**（20 行里 12 缺失 + 4 存疑），本包零改动。
-台账 `docs/32:443`「evals 完整测试矩阵」= 唯一相关条目，仍是 OPEN。
+台账 `docs/05:443`「evals 完整测试矩阵」= 唯一相关条目，仍是 OPEN。
 
 ---
 
@@ -299,7 +299,7 @@ pi-java 侧：`pi-java-evals`（**自研框架** `EvalSuite`/`EvalCase`/`EvalRun
 **pi-java 有无对应物：零。** 证据：
 - `grep -rli "facet|replicated state|chord|bundle-loader|manifest" --include=*.java .` ⇒ 只命中 `ExtensionManifest.java` 等**扩展包管理**（语义无关，见下）与 `.agents/tamboui-demos/`（第三方演示代码）。
 - `grep -rln "Plugin|plugin" --include=*.java pi-java-agent-core/src/main pi-java-coding-agent/src/main` ⇒ **零命中**。
-- `grep -rn "chord|Chord" docs/*.md` ⇒ **零命中**（`docs/32` 也没有）⇒ **未登记**。
+- `grep -rn "chord|Chord" docs/*.md` ⇒ **零命中**（`docs/05` 也没有）⇒ **未登记**。
 
 **pi 侧 LOC（重测后）**：`packages/chord/src` **6503**（旧 5822，**+681**，全部在 `delta/index.ts`），`test/` **4376**（旧 3553，**+823**：新增 `delta-clone.test.ts` 76、`delta-retention.test.ts` 31、`delta-retention.worker.ts` 223、`delta-traversal.bench.ts` 187、`delta.test.ts` +308），合计 **10879**。
 **chord 不是 pi 的内部包**：`README.md:3-6` 明说「developed as a standalone package in the Pi monorepo, but it is **not a Pi package**: it does not depend on any other Pi workspace package」。
@@ -547,25 +547,25 @@ pi `scripts/` 共 **40 个文件 / 8325 行**（旧 40 / 8314，**+11**；**文�
 
 | 条目 | 台账说什么 | 实际 | 证据 |
 |---|---|---|---|
-| **A17 的测试归属** | 「`SqliteConformanceGroup1Test.concurrentLaneWritesSerializeWithDistinctSequences`」（`docs/32:189`），并给「第 147 行」 | **行号准确**（`createLane("right", null)` 确在 147 行）；但**方法本体不在 sqlite 模块** —— 它在 `pi-java-agent-core/src/test/java/com/pijava/agent/session/ConformanceGroup1Test.java:143`（抽象一致性套件），`pi-java-session-backend-sqlite/.../SqliteConformanceGroup1Test.java` **只有 11 行**、是绑定 SQLite 后端的子类。⇒ 登记无误，**归属可更精确**（复现时要在 agent-core 找方法体） | `ConformanceGroup1Test.java:143`；`SqliteConformanceGroup1Test.java:1-11` |
+| **A17 的测试归属** | 「`SqliteConformanceGroup1Test.concurrentLaneWritesSerializeWithDistinctSequences`」（`docs/05:189`），并给「第 147 行」 | **行号准确**（`createLane("right", null)` 确在 147 行）；但**方法本体不在 sqlite 模块** —— 它在 `pi-java-agent-core/src/test/java/com/pijava/agent/session/ConformanceGroup1Test.java:143`（抽象一致性套件），`pi-java-session-backend-sqlite/.../SqliteConformanceGroup1Test.java` **只有 11 行**、是绑定 SQLite 后端的子类。⇒ 登记无误，**归属可更精确**（复现时要在 agent-core 找方法体） | `ConformanceGroup1Test.java:143`；`SqliteConformanceGroup1Test.java:1-11` |
 | **A17 的其余断言** | 「不是 A12」「与包⑫ 无因果」「该模块不依赖 coding-agent」「reactor 里先于 coding-agent」 | **全部成立**。`pi-java-session-backend-sqlite/pom.xml` 依赖只有 `pi-java-agent-core`/`sqlite-jdbc`/`slf4j-api`/`spotbugs-annotations`/`junit`/`assertj` | `pi-java-session-backend-sqlite/pom.xml:22-51` |
 | **A17 的「待取证」** | 「1990 s 这个量级对应哪个超时（`busy_timeout`？租约 TTL？）」 | **本次补一条线索**：`SqliteSessionRepository.DEFAULT_TTL_MS = 30_000`（30 s）、心跳 10 s、`PRAGMA busy_timeout=5000`（5 s）。**三者都不等于 1990 s** ⇒ 1990 s 更可能是 **maven-surefire 的 fork 等待/整个 fork 超时**，不是 SQLite 层超时。仍**未定位**，不修 | `SqliteSessionRepository.java:37`（`DEFAULT_TTL_MS=30_000`）、`:316`（`busy_timeout=5000`）、`SqliteSessionSearch.java:98` |
-| **E6「拆分超限文件（`SqliteSessionStorage`、`AgentHarness`）」** | 记为未结（`docs/32:297`） | **`SqliteSessionStorage` 部分已解决**：`docs/09b:117` 记的是当时的超限，`docs/09b §5`（2026-08-16）已「压缩至 498 行」，**现为 463 行**（已拆出 `storage/` 子包 10 个文件）。只剩 `AgentHarness`（502 行，= E4）。⇒ E6 应改为「仅 `AgentHarness`」或与 E4 合并 | `SqliteSessionStorage.java` 463 行；`docs/09b-phase4-persistence-review.md:117` 与 §5 |
-| **E7「`appendEntry`/`appendRecord` 在 JSONL/Memory 两处重复」** | 记为判断项，保留（`docs/32:298`） | **条数少算**：实际是**三处**（JSONL/Memory/**SQLite**） | `JsonlSessionStorage.java:170/187`、`MemorySessionStorage.java:79/94`、`SqliteSessionStorage.java:264/289` |
-| **H §9.3「`/import` 与 `/export`（JSONL）是占位符，未实现」**（`docs/32:412`） | 扫描标 CLOSED，台账判「应为 OPEN」 | **台账这一格错了 —— 应为 CLOSED**。`/export`（HTML/JSONL 双路）与 `/import` **已接线**：`MiscCommands.java:38`（`registry.register(simple("export", "Export session as HTML or JSONL", …))`）、`:61`（`simple("import", "Import session from JSONL", …)`） | `MiscCommands.java:38/61` |
-| **H §9.3「根 entry 的 `parentId` 被省略而非输出 `"parentId":null`」**（`docs/32:415`） | 记为 OPEN | **已修（陈旧）**：`JsonlCodec.java:149-152` 显式 `node.putNull("parentId")`，注释直引 pi 的 `requireNullableId`。`docs/09b §5` 亦记「已修」 | `JsonlCodec.java:149-152` |
-| **H §9.3「多进程读并发压测」**（`docs/32:417`） | 记为缺口 | **仍成立**：全仓无 `多进程`/`multiProcess`/`concurrentRead` 测试 | `grep -rln "多进程\|multiProcess\|concurrentRead" --include=*.java .` 零命中 |
-| **H §9.3「JSONL 扫描式搜索后端（按需）」**（`docs/32:416`） | 记为缺口 | **口径需更正**：pi **没有任何搜索实现**（`packages/agent/src/search/index.ts:20` 只有接口，唯一引用是类型断言）。⇒ 这不是「pi 有 java 无」，而是 **pi-java 自研了 FTS5 搜索、还想再补一个 JSONL 扫描后端**。**属 java 侧自设目标，非 pi 对齐缺口** | `packages/agent/src/search/index.ts:20-27`；`test/harness/types.test.ts:384` |
-| **⚠️ 新发现（未登记）：SQLite schema 分叉** | `docs/32` **零处**提到 | pi 7 张表 / java 11(+2) 张、**同名只有 3 个**、pi 的 `scalar_values`/`list_values`/`usage_ledger`/`branch_meta` 全缺、java 多出 9 张专用表 | 见上「SQLite schema 逐表对齐」；`grep -n "schema\|branch_meta\|scalar_values\|usage_ledger\|list_values" docs/32-open-items-register.md` 只命中 B8 无关行 |
-| **⚠️ 新发现（未登记）：JSONL v4 头部双向不可读** | `docs/32` 零处 | pi 写 `{v:4, storageVersion:1, …}` 且 `codec.ts:35-46` 强校验 `v===4 && storageVersion>=1`；java 写 `{version:4, …}` 无 `storageVersion` ⇒ **pi 读不了 java 文件，java 读不了 pi 文件**。事务行 kind 交集只有 `entry` | pi `jsonl/types.ts:4-5`、`codec.ts:35-46`、`commit.ts:3-29`；java `JsonlV4Header.java:24-31`、`JsonlCodec.java:85-88/139-183` |
-| **⚠️ 新发现（未登记）：9 处 javadoc 引用不存在的 pi 文件** | `docs/32` 零处 | `pi-java-session-backend-sqlite` 主源码 17 处「aligned with pi `X`」里，**9 处 X 不存在**：`branch-cache.ts`（`BranchCache.java:12`）、`branch-tips.ts`（`BranchTipRows.java:8`）、`storage/facts.ts`（`FactRows.java:8`）、`storage/lanes.ts`（`LaneRows.java:10`）、`storage/records.ts`（`RecordRows.java:16`）、`storage/sessions.ts`（`SessionRows.java:13`，pi 实为 `session/session-row.ts`）、`writer-leases.ts`/`storage/writer-leases.ts`（`WriterLeaseRows.java:8`、`WriterLease.java:8`）、`search-backend.ts`（`SqliteSessionSearch.java:13`）。**`WriterLease.java:8` 最严重**：pi 明文删掉了 writer_lease（`repo.test.ts:368-376`） | `find D:/workplaceForai/pi -iname "<name>"` 逐个验证，全部 ABSENT |
-| **⚠️ 新发现（未登记）：chord 整块零对应、零文档** | `docs/32` 零处；`grep -rn "chord\|Chord" docs/*.md` 零命中 | pi 侧 **10879** 行（src 6503 + test 4376，**重测后**；旧 9375），是 **7 个** pi 包的真依赖 | 见「整块缺失：chord」 |
-| **⚠️ 新发现（未登记）：pi 新增三块（`durable` / `pico3` / `micro`）零对应、零文档** | `docs/32` 零处；`grep -rli "pico\|durable" --include=*.java .` 零命中 | **重测新增**：`packages/durable`（757 src + 3114 行规范）、`packages/agent/src/harness/pico3`（7994 src）、`packages/coding-agent/src/experimental/micro`（1524）＝ **10275 行，全部无对应物**。pi 包数 **11 → 12** | 见「整块缺失：pi 111 提交新增的三块」 |
+| **E6「拆分超限文件（`SqliteSessionStorage`、`AgentHarness`）」** | 记为未结（`docs/05:297`） | **`SqliteSessionStorage` 部分已解决**：`原 docs/09b:117` 记的是当时的超限，`原 docs/09b §5`（2026-08-16）已「压缩至 498 行」，**现为 463 行**（已拆出 `storage/` 子包 10 个文件）。只剩 `AgentHarness`（502 行，= E4）。⇒ E6 应改为「仅 `AgentHarness`」或与 E4 合并 | `SqliteSessionStorage.java` 463 行；`原 docs/09b-phase4-persistence-review.md:117` 与 §5 |
+| **E7「`appendEntry`/`appendRecord` 在 JSONL/Memory 两处重复」** | 记为判断项，保留（`docs/05:298`） | **条数少算**：实际是**三处**（JSONL/Memory/**SQLite**） | `JsonlSessionStorage.java:170/187`、`MemorySessionStorage.java:79/94`、`SqliteSessionStorage.java:264/289` |
+| **H §9.3「`/import` 与 `/export`（JSONL）是占位符，未实现」**（`docs/05:412`） | 扫描标 CLOSED，台账判「应为 OPEN」 | **台账这一格错了 —— 应为 CLOSED**。`/export`（HTML/JSONL 双路）与 `/import` **已接线**：`MiscCommands.java:38`（`registry.register(simple("export", "Export session as HTML or JSONL", …))`）、`:61`（`simple("import", "Import session from JSONL", …)`） | `MiscCommands.java:38/61` |
+| **H §9.3「根 entry 的 `parentId` 被省略而非输出 `"parentId":null`」**（`docs/05:415`） | 记为 OPEN | **已修（陈旧）**：`JsonlCodec.java:149-152` 显式 `node.putNull("parentId")`，注释直引 pi 的 `requireNullableId`。`原 docs/09b §5` 亦记「已修」 | `JsonlCodec.java:149-152` |
+| **H §9.3「多进程读并发压测」**（`docs/05:417`） | 记为缺口 | **仍成立**：全仓无 `多进程`/`multiProcess`/`concurrentRead` 测试 | `grep -rln "多进程\|multiProcess\|concurrentRead" --include=*.java .` 零命中 |
+| **H §9.3「JSONL 扫描式搜索后端（按需）」**（`docs/05:416`） | 记为缺口 | **口径需更正**：pi **没有任何搜索实现**（`packages/agent/src/search/index.ts:20` 只有接口，唯一引用是类型断言）。⇒ 这不是「pi 有 java 无」，而是 **pi-java 自研了 FTS5 搜索、还想再补一个 JSONL 扫描后端**。**属 java 侧自设目标，非 pi 对齐缺口** | `packages/agent/src/search/index.ts:20-27`；`test/harness/types.test.ts:384` |
+| **⚠️ 新发现（未登记）：SQLite schema 分叉** | `docs/05` **零处**提到 | pi 7 张表 / java 11(+2) 张、**同名只有 3 个**、pi 的 `scalar_values`/`list_values`/`usage_ledger`/`branch_meta` 全缺、java 多出 9 张专用表 | 见上「SQLite schema 逐表对齐」；`grep -n "schema\|branch_meta\|scalar_values\|usage_ledger\|list_values" docs/05-open-items-register.md` 只命中 B8 无关行 |
+| **⚠️ 新发现（未登记）：JSONL v4 头部双向不可读** | `docs/05` 零处 | pi 写 `{v:4, storageVersion:1, …}` 且 `codec.ts:35-46` 强校验 `v===4 && storageVersion>=1`；java 写 `{version:4, …}` 无 `storageVersion` ⇒ **pi 读不了 java 文件，java 读不了 pi 文件**。事务行 kind 交集只有 `entry` | pi `jsonl/types.ts:4-5`、`codec.ts:35-46`、`commit.ts:3-29`；java `JsonlV4Header.java:24-31`、`JsonlCodec.java:85-88/139-183` |
+| **⚠️ 新发现（未登记）：9 处 javadoc 引用不存在的 pi 文件** | `docs/05` 零处 | `pi-java-session-backend-sqlite` 主源码 17 处「aligned with pi `X`」里，**9 处 X 不存在**：`branch-cache.ts`（`BranchCache.java:12`）、`branch-tips.ts`（`BranchTipRows.java:8`）、`storage/facts.ts`（`FactRows.java:8`）、`storage/lanes.ts`（`LaneRows.java:10`）、`storage/records.ts`（`RecordRows.java:16`）、`storage/sessions.ts`（`SessionRows.java:13`，pi 实为 `session/session-row.ts`）、`writer-leases.ts`/`storage/writer-leases.ts`（`WriterLeaseRows.java:8`、`WriterLease.java:8`）、`search-backend.ts`（`SqliteSessionSearch.java:13`）。**`WriterLease.java:8` 最严重**：pi 明文删掉了 writer_lease（`repo.test.ts:368-376`） | `find D:/workplaceForai/pi -iname "<name>"` 逐个验证，全部 ABSENT |
+| **⚠️ 新发现（未登记）：chord 整块零对应、零文档** | `docs/05` 零处；`grep -rn "chord\|Chord" docs/*.md` 零命中 | pi 侧 **10879** 行（src 6503 + test 4376，**重测后**；旧 9375），是 **7 个** pi 包的真依赖 | 见「整块缺失：chord」 |
+| **⚠️ 新发现（未登记）：pi 新增三块（`durable` / `pico3` / `micro`）零对应、零文档** | `docs/05` 零处；`grep -rli "pico\|durable" --include=*.java .` 零命中 | **重测新增**：`packages/durable`（757 src + 3114 行规范）、`packages/agent/src/harness/pico3`（7994 src）、`packages/coding-agent/src/experimental/micro`（1524）＝ **10275 行，全部无对应物**。pi 包数 **11 → 12** | 见「整块缺失：pi 111 提交新增的三块」 |
 | **⚠️ 取证坑：pi 工作树中途回退（未登记）** | — | 重测期间 `D:/workplaceForai/pi` 的工作树**从 `3390bd936` 翻回 `71dca871b`**（`git rev-parse HEAD` 实测旧提交、`git status` 干净）⇒ 直接读工作树会**静默拿到旧状态**。本文件全部新状态读数改用 **`git show 3390bd936:<path>`**。建议后续复测一律走 `git show`，别信工作树 | `git rev-parse HEAD` 两次读数不一致 |
-| **⚠️ 新发现（未登记）：防漂移脚本整块零对应** | `docs/32` 零处 | pi `scripts/` 40 文件 / **8325** 行（重测后；旧 8314，文件清单未变），其中 8 个真漂移门；pi-java 无 `scripts/`/`tools/`/ArchUnit | 见「整块缺失：防漂移脚本」 |
+| **⚠️ 新发现（未登记）：防漂移脚本整块零对应** | `docs/05` 零处 | pi `scripts/` 40 文件 / **8325** 行（重测后；旧 8314，文件清单未变），其中 8 个真漂移门；pi-java 无 `scripts/`/`tools/`/ArchUnit | 见「整块缺失：防漂移脚本」 |
 | **⚠️ 更正：`/share` 不是 chord 能力** | 任务线索把 `/share` 列在 chord 名下 | **不成立**：pi 的 `/share`（`slash-commands.ts:27` → `interactive-mode.ts:3002-3003` → `session-share.ts:45-46`）**零 chord import**；chord 侧的 `SlashCommands` 服务只注册 `reload`/`model`/`thinking`/`compact`（`services/slash-commands-provider.ts:104/123/173/206`）。⇒ `/share` 该挂 **coding-agent 的 slash 命令面**，不是 chord 面 | `session-share.ts:1-13`（import 列表无 chord）；`slash-commands-provider.ts:104/123/173/206` |
 | **⚠️ 更正：pi 的 `experimental/mini/` 不用 chord** | 若把 `experimental/` 整块算作 chord 消费面会多算 | `mini/`（13 文件）**自带 RPC + stdio**：`mini/worker/run.ts:1-7` docblock 自述「speaks JSON over its **stdio pipes**」，`mini/shared/protocol.ts:56` 自带 `defineService` shim。⇒ 它是**平行实验**，与 chord 无关 | `mini/worker/run.ts:1-7`；`mini/shared/protocol.ts:56` |
-| **⚠️ 环境风险（未登记）：pi 的跨进程传输在 Windows 直接抛** | `docs/32` 零处 | `client/src/unix.ts:35` Windows 抛错；`process.ts:55-70` spawn 带 `windowsHide:true`。pi-java 的开发环境是 Windows 11 ⇒ **该子系统在 Windows 上本就不可用**，做对齐时要考虑可移植性 | `client/src/unix.ts:34-35`；`process.ts:55-70` |
+| **⚠️ 环境风险（未登记）：pi 的跨进程传输在 Windows 直接抛** | `docs/05` 零处 | `client/src/unix.ts:35` Windows 抛错；`process.ts:55-70` spawn 带 `windowsHide:true`。pi-java 的开发环境是 Windows 11 ⇒ **该子系统在 Windows 上本就不可用**，做对齐时要考虑可移植性 | `client/src/unix.ts:34-35`；`process.ts:55-70` |
 
 ---
 

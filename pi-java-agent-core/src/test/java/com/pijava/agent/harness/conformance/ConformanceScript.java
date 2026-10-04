@@ -14,7 +14,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /**
  * L5 差分剧本（{@code conformance/scripts/S*.json}）的 Java 侧模型。
  *
- * <p>剧本是 pi 侧与 pi-java 侧**共用的唯一输入**（{@code docs/23c §2.2}）：两侧各自把它
+ * <p>剧本是 pi 侧与 pi-java 侧**共用的唯一输入**（{@code 原 docs/23c §2.2}）：两侧各自把它
  * 翻译成自己的流事件序列与配置，再比对产出的帧序列。剧本里出现而 pi 侧运行时不存在的
  * 概念（例如分块规则）会被显式写出来，避免两侧各自发明启发式而漂移。</p>
  *
@@ -78,12 +78,12 @@ record ConformanceScript(
      *                      两侧都把它翻成 {@code tool_execution_update} 帧 ——
      *                      这是 L5 观察「工具流式更新是否发射」的唯一通道
      * @param delayMs       该工具的**声明延迟**（毫秒）；缺省 0。两侧都先睡够再流 updates、
-     *                      再返回结果。见 {@code docs/31 §8.23.7}：并行批次的 end 是
+     *                      再返回结果。见 {@code 原 docs/31 §8.23.7}：并行批次的 end 是
      *                      <b>完成序</b>，而等延迟的两个调用谁先完成在两侧都不可约 ——
      *                      把延迟写进剧本，完成序才是**声明出来的**、可比对的证据，
      *                      而不是「恰好在我的运行时里同序」的偶然
      * @param updateEveryMs 相邻两条 update 之间睡这么久（毫秒）；缺省 0 = 背靠背。
-     *                      首条 update 之前仍先睡 {@code delayMs}。见 {@code docs/31 §8.24}：
+     *                      首条 update 之前仍先睡 {@code delayMs}。见 {@code 原 docs/31 §8.24}：
      *                      背靠背发 update 时**任何别的帧都插不进来**（两侧的桩都是同步
      *                      循环），于是「update 与并发批次的交错」结构上跑不到 ——
      *                      本字段把交错变成声明出来的事实，S14 用它
@@ -122,7 +122,7 @@ record ConformanceScript(
                     UsageScript usage) {}
 
     /**
-     * 剧本声明的整只 usage（S15；{@code docs/42} 步 7 / 裁决 C 的产物）。
+     * 剧本声明的整只 usage（S15；{@code 原 docs/42} 步 7 / 裁决 C 的产物）。
      *
      * <p>形状 = pi {@code types.ts} 的 {@code Usage}：四必填计数 + 两个可选键
      * （{@code cacheWrite1h}/{@code reasoning}）+ {@code totalTokens} + 五字段

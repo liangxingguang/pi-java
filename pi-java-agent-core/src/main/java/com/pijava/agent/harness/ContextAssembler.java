@@ -20,7 +20,7 @@ import com.pijava.ai.thinking.ModelThinkingLevel;
 /**
  * 车道上下文的**投影**：系统提示、工作副本重建、配置变更落盘、{@code transform_context}。
  *
- * <p>本类由旧的装配器收窄而来（{@code docs/31 §4.2}）。它此前在**每次请求**上做三件事
+ * <p>本类由旧的装配器收窄而来（{@code 原 docs/31 §4.2}）。它此前在**每次请求**上做三件事
  * ——建系统提示、从 entry 日志重走 {@code pathToLeaf} 重建消息、fire
  * {@code transform_context}。对齐 pi 后只剩最后一件留在请求路径上：</p>
  *
@@ -71,7 +71,7 @@ final class ContextAssembler {
      * pi 的 8 个内置工具都声明了片段，pi-java 的工具一个都没声明 ⇒ 照 pi 的稀疏规则会得到
      * {@code (none)}，把工具清单整段抹掉。故此处保留 pi-java 既有的回落，并把
      * 「pi-java 的工具没有 promptSnippet/promptGuidelines」登记为缺口
-     * （{@code docs/52 §12}）。</p>
+     * （{@code 原 docs/52 §12}）。</p>
      */
     SystemPromptOptions promptOptions(LaneState lane) {
         var tools = activeToolsInRegistryOrder();
@@ -115,7 +115,7 @@ final class ContextAssembler {
      * 渲染出的整份提示文本 —— **派生值**，不进任何行为判据。
      *
      * <p>两个用途：{@code Context.systemPrompt}（pi 生产路径上那个字段是死的，见
-     * {@code docs/52 §2 P12}；java 保留它是为了让请求录制／诊断看得见模型实际收到的提示）与
+     * {@code 原 docs/52 §2 P12}；java 保留它是为了让请求录制／诊断看得见模型实际收到的提示）与
      * {@link PiLaneSink} 的记账。pi 的等价物是
      * {@code getSystemMessageText(state)}（{@code system-prompt.ts:196}）。</p>
      */

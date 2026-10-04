@@ -52,7 +52,7 @@ public final class OpenAIResponsesApi extends AbstractChatApi {
         // A-14（G1）：SDK 内置重试关到 0，初始请求由 ProviderRetry 独占。
         var clientBuilder = OpenAIOkHttpClient.builder()
             .apiKey(apiKey).baseUrl(baseUrl).maxRetries(0);
-        // D-P1：models.json 合并来的 default headers（docs/65）。
+        // D-P1：models.json 合并来的 default headers（原 docs/65）。
         putExtraHeaders(options, clientBuilder::putHeader);
         this.client = clientBuilder.build();
         this.providerRetry = ProviderRetry.optionsOf(options);
@@ -68,9 +68,9 @@ public final class OpenAIResponsesApi extends AbstractChatApi {
                                   SubmissionPublisher<StreamEvent> publisher) {
         // pi openai-responses.ts:74：`supportsStrictMode: model.compat?.supportsStrictMode ?? false`
         // —— 本车道的缺省是**不发** strict 键（azure 侧相反，见该车道）。
-        // 包 A7：缺省由**这里**喂进解析器，转换器只消费（docs/53 §4.1）。
+        // 包 A7：缺省由**这里**喂进解析器，转换器只消费（原 docs/53 §4.1）。
         var compat = CompatResolver.forResponses(request.model(), false);
-        // docs/69（pi openai-responses.ts:147-150）：grammar 能力表请求起点一次算出。
+        // 原 docs/69（pi openai-responses.ts:147-150）：grammar 能力表请求起点一次算出。
         var grammarProperties = GrammarInputProperties.create(
             com.pijava.ai.api.Transcripts.getDeclaredTools(
                 com.pijava.ai.api.Transcripts.resolveTranscript(

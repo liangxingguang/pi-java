@@ -62,7 +62,7 @@ class AgentHarnessTest {
                 .toolExecution(ToolExecution.defaultMode())
                 .streamListener(event -> { })
                 // 本类钉的是轮次语义。3d 环 A 默认开启，且错误文本如今会落进终局消息
-                // （C 批次起由**生产者**落定，见 docs/55）—— 白名单错误（如
+                // （C 批次起由**生产者**落定，见 原 docs/55）—— 白名单错误（如
                 // "connection refused"）会退避续跑，不是本类要钉的东西，统一关掉；
                 // 环 A 自己的行为由 PostRunRetryTest 与宿主 E2E 钉。
                 .retrySettings(() -> new RetrySettings(false, 3, 2_000, 60_000L))
@@ -333,7 +333,7 @@ class AgentHarnessTest {
     // pi 把错误带在消息上（stopReason + errorMessage），循环层只是
     // `await response.result()`（agent-loop.ts:399-412）。
     //
-    // ⚠️ C 批次（docs/55 §6.3-10）起，**落定归生产者**：这三条夹具因此改走
+    // ⚠️ C 批次（原 docs/55 §6.3-10）起，**落定归生产者**：这三条夹具因此改走
     // `StreamError.settle`（＝真实车道的出口），不再手搓一条裸 record。此前它们
     // 之所以能用手搓的裸 record 过关，是因为循环层有一个 `withErrorShape` 补丁
     // 替 provider 补形状 —— 那正是本包删掉的东西。夹具现在钉的是**新契约**：

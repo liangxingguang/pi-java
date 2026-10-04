@@ -32,7 +32,7 @@ import static org.assertj.core.api.Assertions.within;
 
 /**
  * OpenAI-responses 车道的 usage 归一 —— pi {@code openai-responses-shared.ts:559-582}
- * {@code finalizeResponse} 的逐条移植（包 H1 步 5，{@code docs/42 §2.1 P11}）。
+ * {@code finalizeResponse} 的逐条移植（包 H1 步 5，{@code 原 docs/42 §2.1 P11}）。
  *
  * <p>三条容易做错的：</p>
  * <ul>

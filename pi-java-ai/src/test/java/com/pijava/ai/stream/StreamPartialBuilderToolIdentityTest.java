@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包⑥（docs/33）：工具调用在**流式起点**就带身份。
+ * 包⑥（原 docs/33）：工具调用在**流式起点**就带身份。
  *
  * <p>pi 五条车道都在发出 {@code toolcall_start} 之前**先把块建好塞进 content**
  * （{@code anthropic-messages.ts:648-660}、{@code openai-completions.ts:497-536}、

@@ -12,7 +12,7 @@ import com.pijava.ai.utils.ContextOverflow;
  * 运行收口后的收尾判定 —— pi {@code _handlePostAgentRun}（①②③ 全序，① 委托
  * {@link PostRunRetry}）与 {@code _checkCompaction}（{@code agent-session.ts:
  * 1116-1144, 2154-2258}）的逐条移植（package 3c 落 ②③，3d 补 ① 与终局失败，
- * {@code docs/31 §8.21/§8.22}）。
+ * {@code 原 docs/31 §8.21/§8.22}）。
  *
  * <p><b>输入消息的来源</b>与 pi 一致：post-run 读事件跟踪的
  * {@link PiLaneSink#lastAssistant()}（pi {@code _lastAssistantMessage}，读后即清，
@@ -104,7 +104,7 @@ final class PostRunCompactionCheck {
     /**
      * pi {@code _willRetryAfterAgentEnd}（{@code :721-733}）的引擎侧入口 ——
      * 委托 {@link PostRunRetry#retryWouldFollow}。宿主用它装饰
-     * {@code agent_end.willRetry}（3d，{@code docs/31 §8.22} 裁决①：环在引擎，
+     * {@code agent_end.willRetry}（3d，{@code 原 docs/31 §8.22} 裁决①：环在引擎，
      * 装饰数据也出自引擎），与 ① 各算各的。
      */
     boolean retryWouldFollow(LaneState lane, Message.AssistantMessage lastAssistant) {

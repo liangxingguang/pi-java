@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * docs/70 §1.3／§9 step 3+4：{@code RemoteCatalogProvider} 的全分支 ——
+ * 原 docs/70 §1.3／§9 step 3+4：{@code RemoteCatalogProvider} 的全分支 ——
  * 条件 GET、三形态解析、generatedAt 守卫、TTL、304／404／501／transient／200。
  */
 class RemoteCatalogProviderTest {
@@ -397,7 +397,7 @@ class RemoteCatalogProviderTest {
                 assertThat(port.entry.etag()).isNull();
                 assertThat(port.entry.models()).hasSize(1);
                 // pi 的 404 分支只 publish(persist)，**不带 update** ⇒ 本次调用内
-                // dynamic 仍是离线相恢复的那份（判定见 docs/70 §1.3 的守卫注）
+                // dynamic 仍是离线相恢复的那份（判定见 原 docs/70 §1.3 的守卫注）
                 assertThat(provider.getModels()).extracting(m -> m.id().modelName())
                     .containsExactly("static-model", "cached-model");
 

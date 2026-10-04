@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Phase 21 step 2: every queue lifecycle transition emits its record
- * (docs/21 §3.2, D10). Covers the three enqueue queues, explicit
+ * (原 docs/21 §3.2, D10). Covers the three enqueue queues, explicit
  * cancellation, drain consumption, and the mid-run steer injection path that
  * bypasses {@code ConsumeQueueItem}.
  */
@@ -201,7 +201,7 @@ class QueueRecordEmissionTest {
         h.followUp("default", "two");
         h.prompt("run two");
 
-        // Append-only log (docs/21 D6): both runs' queue lifecycle stays visible.
+        // Append-only log (原 docs/21 D6): both runs' queue lifecycle stays visible.
         assertThat(ofType(h, "default", LaneRecord.QueueEnqueued.class)).hasSize(2);
         assertThat(ofType(h, "default", LaneRecord.QueueConsumed.class)).hasSize(2);
     }

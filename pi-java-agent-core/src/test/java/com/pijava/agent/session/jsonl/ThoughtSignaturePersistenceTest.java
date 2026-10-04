@@ -12,7 +12,7 @@ import com.pijava.ai.message.ContentBlock;
 import org.junit.jupiter.api.Test;
 
 /**
- * <b>Batch F 步 1</b>（{@code docs/67}）：第三、第四个块级签名字段的落线与回读 ——
+ * <b>Batch F 步 1</b>（{@code 原 docs/67}）：第三、第四个块级签名字段的落线与回读 ——
  * {@code TextContent.textSignature}（Google 文本 part 的 thoughtSignature）
  * 与 {@code ToolUseContent.thoughtSignature}（Google functionCall／completions
  * legacy 路径）。

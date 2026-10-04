@@ -52,7 +52,7 @@ final class SessionPersistence {
                 records++;
             }
         }
-        // 每步 action 后都会被调用（docs/27 §2.1 的逐条落盘），只在确有写入时记
+        // 每步 action 后都会被调用（原 docs/27 §2.1 的逐条落盘），只在确有写入时记
         // INFO —— 否则一个长 run 会为每次空 flush 刷一行日志。
         if (appended > 0 || records > 0) {
             LOG.info("[session] persistPending: transcript={} appended={} records={} persistedIds={}",
@@ -65,7 +65,7 @@ final class SessionPersistence {
      * rebuild the lane's orchestration state from its record log, then seed the
      * compaction-aware harness transcript.
      *
-     * <p>The last two are deliberately separate (docs/21 D9): the record fold
+     * <p>The last two are deliberately separate (原 docs/21 D9): the record fold
      * owns orchestration state (phase / run id / queues / newest own entry),
      * while the transcript seed owns the display context.</p>
      */
@@ -90,7 +90,7 @@ final class SessionPersistence {
     }
 
     /**
-     * Close an operation a crash left open on the lane (docs/30 §4.2).
+     * Close an operation a crash left open on the lane (原 docs/30 §4.2).
      *
      * <p>A process killed mid-run leaves an {@code OperationStarted} with no
      * matching {@code OperationFinished}. The record fold restores such a lane
@@ -109,7 +109,7 @@ final class SessionPersistence {
      * a failure. {@code HarnessUtils.determineOutcome} keeps {@code "aborted"}
      * distinct for exactly this reason, so a crashed run does not mark the lane
      * faulted. The operation is never resumed mid-flight — pi's durable restart
-     * point is replaced wholesale, not folded back (docs/30 §1).</p>
+     * point is replaced wholesale, not folded back (原 docs/30 §1).</p>
      */
     private static void settleOpenOperation(Session<?> opened, String lane) {
         var open = opened.findOpenOperations(lane, 1);
@@ -125,11 +125,11 @@ final class SessionPersistence {
     }
 
     /**
-     * Load the lane's persisted record log on resume (docs/30 §4.1).
+     * Load the lane's persisted record log on resume (原 docs/30 §4.1).
      *
      * <p>The slice is lane-scoped and taken whole: the log is a pure audit side
      * channel, so no entry slicing is needed to reconstruct state from it
-     * (docs/30 §4.2 removed the fold that needed the slices).</p>
+     * (原 docs/30 §4.2 removed the fold that needed the slices).</p>
      */
     private static void restoreFromRecordLog(AgentSession owner, Session<?> opened, String lane) {
         List<LaneRecord> records = opened.findRecords(new RecordQuery(
@@ -149,7 +149,7 @@ final class SessionPersistence {
     static AgentSession resolvePersistentWeb(AgentSession session, Args args) {
         var handle = session.persistentRepository();
         var cwd = System.getProperty("user.dir");
-        // Scoped to this project's directory (docs/39 §6.1) —— 全项目扫描是 A12
+        // Scoped to this project's directory (原 docs/39 §6.1) —— 全项目扫描是 A12
         // 的根因：`ready` 压在它后面，成本随全部会话文件数线性增长。
         var latest = handle.latest(cwd);
         return latest.map(meta -> {

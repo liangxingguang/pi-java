@@ -11,7 +11,7 @@ import com.pijava.ai.message.Message;
  *
  * <p>pi 把这两个类型分开，是因为它有 {@code AgentMessage} / {@code Message} 两套消息模型
  * （多出的 {@code bashExecution} / {@code branchSummary} / {@code compactionSummary} 三个角色）。
- * 那三个角色来自 pi 的 {@code harness/} 层 —— **不在对齐范围内**（{@code docs/31 §1.2}），
+ * 那三个角色来自 pi 的 {@code harness/} 层 —— **不在对齐范围内**（{@code 原 docs/31 §1.2}），
  * 且 {@code CustomAgentMessages} 默认为空。因此 pi-java 只有一套消息模型，两个类型合并为本记录。</p>
  *
  * <p><b>三个字段逐字对齐 pi</b>：{@code systemPrompt} / {@code messages} / {@code tools}。

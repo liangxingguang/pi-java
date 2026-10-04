@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * pi {@code packages/ai/src/utils/overflow.ts} 的移植哨兵（package 3c，
- * {@code docs/31 §8.21}）。老 {@code OverflowDetector}（agent-core）的测试随
+ * {@code 原 docs/31 §8.21}）。老 {@code OverflowDetector}（agent-core）的测试随
  * 实现一并删除 —— 它的期望值本身就与 pi 不符（见下 case 3 的注释）；这里以
  * pi 真值为准则重钉三情形与排除项。
  */
@@ -69,7 +69,7 @@ class ContextOverflowTest {
         "context_length_exceeded",
         "too many tokens to process",
         "token limit exceeded",
-        // B2（docs/64）：z.ai 的无 is 形态 —— pi 首正则 /prompt (?:is )?too long/。
+        // B2（原 docs/64）：z.ai 的无 is 形态 —— pi 首正则 /prompt (?:is )?too long/。
         "Prompt too long",
         "400: {\"code\":\"1261\",\"message\":\"Prompt too long\"}",
     })

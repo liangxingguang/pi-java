@@ -36,10 +36,10 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * B20 跨层回归门（{@code docs/31 §8.35.14} 第八节末行）：**线格 ⇒ 消息 ⇒ {@code PiLoopRunner} 的
+ * B20 跨层回归门（{@code 原 docs/31 §8.35.14} 第八节末行）：**线格 ⇒ 消息 ⇒ {@code PiLoopRunner} 的
  * {@code length} 门**。
  *
- * <p>缺口是「夹具在宿主层，缺口在协议层」（{@code docs/31:4696}）：{@link AgentLoopL1Test} 的 ③
+ * <p>缺口是「夹具在宿主层，缺口在协议层」（{@code 原 docs/31:4696}）：{@link AgentLoopL1Test} 的 ③
  * 用例用 {@code scriptedStreamFn} **伪造**一条 {@code stopReason == "length"} 的助手消息，
  * 于是它只能证明「门**给定**截断消息会关」，证不了「**某条真实车道**会从线格上产出这样一条消息」。
  * 本类补上那一段：本地 {@link HttpServer} 喂**真实** completions 线格

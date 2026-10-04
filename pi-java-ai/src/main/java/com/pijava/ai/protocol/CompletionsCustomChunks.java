@@ -6,7 +6,7 @@ import com.openai.core.JsonField;
 import com.openai.core.ObjectMappers;
 
 /**
- * docs/69：从 completions 入站 chunk 的 SDK {@code ToolCall} 原始附加属性里
+ * 原 docs/69：从 completions 入站 chunk 的 SDK {@code ToolCall} 原始附加属性里
  * 取出 {@code custom} 对象（pi wire 形状：
  * {@code {index?,id?,type:"custom",custom:{name?,input?}}}）。
  *

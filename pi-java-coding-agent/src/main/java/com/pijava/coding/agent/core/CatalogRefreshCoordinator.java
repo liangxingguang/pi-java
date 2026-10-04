@@ -8,7 +8,7 @@ import com.pijava.ai.catalog.ModelsStore;
 
 /**
  * 目录刷新的世代协调器（pi {@code ModelRuntime.beginProviderRefresh} ＋
- * {@code publishProviderModels}，docs/70 §1.4/§4.5）。
+ * {@code publishProviderModels}，原 docs/70 §1.4/§4.5）。
  *
  * <p>每次刷新相开始前 {@link #begin(String)} 拿一个世代号；该相的 publish 请求
  * 带上它。**持久化先落，世代检查后判**（pi 的次序）：过期刷新的写入仍然落盘，

@@ -8,7 +8,7 @@ import com.pijava.ai.api.AuthKind;
 
 /**
  * 组合凭证解析：按激活 profile 优先，回落 stored OAuth，再回落默认凭证（P6-18）与
- * Anthropic 的两个 token 变量（包 A0 步7，{@code docs/43 D6}；包 B1，{@code docs/63}）。
+ * Anthropic 的两个 token 变量（包 A0 步7，{@code 原 docs/43 D6}；包 B1，{@code 原 docs/63}）。
  *
  * <p>解析顺序（从高到低）：</p>
  * <ol>

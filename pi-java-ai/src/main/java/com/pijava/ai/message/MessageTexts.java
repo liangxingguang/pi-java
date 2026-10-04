@@ -7,7 +7,7 @@ import java.util.stream.Collectors;
 /**
  * pi {@code packages/ai/src/utils/text.ts} 的移植：内容取文本、系统消息渲染。
  *
- * <p>与包 A2 的关系见 {@code docs/49 §5.3}：五条 provider 车道从「transcript 的前导系统消息」
+ * <p>与包 A2 的关系见 {@code 原 docs/49 §5.3}：五条 provider 车道从「transcript 的前导系统消息」
  * 取提示文本时，走的就是这两个渲染函数。</p>
  */
 public final class MessageTexts {

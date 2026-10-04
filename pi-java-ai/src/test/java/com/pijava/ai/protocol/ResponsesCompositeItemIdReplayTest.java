@@ -23,7 +23,7 @@ import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 
 /**
- * D3（{@code docs/62}）：Responses 出站重放拆分复合 id —— function_call_output
+ * D3（{@code 原 docs/62}）：Responses 出站重放拆分复合 id —— function_call_output
  * 只用 call_id（pi shared :331-346）、function_call 恢复真实 item.id
  * （:288-293），跨模型/非 fc_ 时丢 id（:289-303）。
  */

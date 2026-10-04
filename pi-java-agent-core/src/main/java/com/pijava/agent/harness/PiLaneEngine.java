@@ -19,9 +19,9 @@ import com.pijava.ai.message.Message;
 import com.pijava.ai.thinking.ModelThinkingLevel;
 
 /**
- * 用 {@link PiLoop} 驱动一次车道运行的引擎（{@code docs/28 §5} 第 2 步）。
+ * 用 {@link PiLoop} 驱动一次车道运行的引擎（{@code 原 docs/28 §5} 第 2 步）。
  *
- * <p><b>为什么不是 {@code coding-agent} 里的桥接器</b>：{@code docs/28 §5.1} 假定
+ * <p><b>为什么不是 {@code coding-agent} 里的桥接器</b>：{@code 原 docs/28 §5.1} 假定
  * 「桥接器 = 事件转发 + {@code appendEntry}」。实测不成立 —— 车道起手、上下文装配、
  * 自动压缩、记录日志都绑定 {@link LaneState}（包内可见），会话层拿不到。因此引擎留在这里，
  * 会话层只经由 {@link PiLoop.Sink} 收事件。</p>
@@ -37,7 +37,7 @@ import com.pijava.ai.thinking.ModelThinkingLevel;
  * {@link ContextAssembler}，自动压缩经 {@link CompactionExecutor}。</p>
  *
  * <p><b>与 pi 的有意差异（2b-1）</b>：{@code nextRun} 队列不在这里消费 ——
- * 它是「再起一次运行」，由会话层的驱动循环决定，见 {@code docs/28 §5.1}。</p>
+ * 它是「再起一次运行」，由会话层的驱动循环决定，见 {@code 原 docs/28 §5.1}。</p>
  */
 public final class PiLaneEngine {
 
@@ -157,7 +157,7 @@ public final class PiLaneEngine {
 
     /**
      * pi {@code _willRetryAfterAgentEnd}（{@code agent-session.ts:721-733}）的公开
-     * 入口（3d，{@code docs/31 §8.22}）：宿主在转发 {@code agent_end} 前调用，用它
+     * 入口（3d，{@code 原 docs/31 §8.22}）：宿主在转发 {@code agent_end} 前调用，用它
      * 装饰 {@code willRetry} 字段。「倒扫本次 agent_end 的 messages 找最后一条助手
      * 消息」是调用方的事（pi 扫的就是 event.messages）。计数读车道的会话级
      * {@code retryAttempt}（① 与装饰各算各的，与 pi 一致）。
@@ -238,7 +238,7 @@ public final class PiLaneEngine {
      * 一个 pass 的**起手物**（pi 的「一个 {@code _runAgentPrompt} 调用」的静态部分）。
      *
      * <p>拆出来只为让 {@link #drive} 手里有 sink —— pass 抛出时要靠它把合成消息发进
-     * 事件链（{@link RunFailure}，{@code docs/31 §8.36.5}），而 sink 原本是
+     * 事件链（{@link RunFailure}，{@code 原 docs/31 §8.36.5}），而 sink 原本是
      * {@code runPass} 的局部变量。</p>
      */
     private record Pass(PiLaneSink sink, PiLoop.Config config, Context runContext,
@@ -267,7 +267,7 @@ public final class PiLaneEngine {
         // transformContext 只改消息，够不着这两样（pi 的钩子签名是 (messages) => messages）。
         // ⚠️ 这里的 `systemPrompt` 是**派生值**（渲染当前段表），不进任何行为判据 ——
         // pi 生产路径上 `Context.systemPrompt` 是死字段（`createContextSnapshot` 只交
-        // messages+tools，`docs/52 §2 P12`），java 保留它是为了让请求录制与诊断看得见模型
+        // messages+tools，`原 docs/52 §2 P12`），java 保留它是为了让请求录制与诊断看得见模型
         // 实际收到的提示。模型**看到**的提示走转录（段表 + 工具的合并声明）。
         var systemPrompt = assembler.renderPrompt(lane);
         var tools = activeTools(lane);
@@ -375,7 +375,7 @@ public final class PiLaneEngine {
      * pi {@code AgentLoopConfig.transformContext}：转成 provider 消息之前的最后一处改写。
      *
      * <p>此前这里 {@code assemble} 做三件事 ——应用暂存的配置变更、阈值自动压缩、从 entry
-     * 日志重走 {@code pathToLeaf} 重建整份消息列表（{@code docs/31 §4.2}）。三件都已搬走：
+     * 日志重走 {@code pathToLeaf} 重建整份消息列表（{@code 原 docs/31 §4.2}）。三件都已搬走：
      * 配置变更归 {@link #prepareNextTurn}（钩子返回点），压缩归 pi 的两处触发点，消息改由
      * 车道的工作副本承载。留在请求路径上的只有 {@code transform_context} 钩子，以及
      * 钩子看不到的两项**执行步开销**（{@code before_request} 与 {@code llm.request} 跨度）
@@ -391,7 +391,7 @@ public final class PiLaneEngine {
     /**
      * pi {@code prepareNextTurn}（{@code agent-loop.ts:176-183}）。
      *
-     * <p>钩子返回的配置变更**就地**落盘（{@code docs/31 §4.1}：字段赋值 + entry 同处），
+     * <p>钩子返回的配置变更**就地**落盘（{@code 原 docs/31 §4.1}：字段赋值 + entry 同处），
      * 与 pi 的 {@code prepareNextTurnWithContext} 自己 {@code appendModelChange} 同形；
      * 交给循环的只是 {@code {model, reasoning}}。</p>
      *
@@ -449,7 +449,7 @@ public final class PiLaneEngine {
      * steer 队列 → 下一轮前的注入消息。
      *
      * <p>消费点即发射点：旧路径在 {@code executeConsumeQueueItem} 与
-     * {@code injectUserMessages} 两处发 {@code QueueConsumed}（docs/21 D10），
+     * {@code injectUserMessages} 两处发 {@code QueueConsumed}（原 docs/21 D10），
      * 这里归一为「谁 drain 谁发射」。消息本身由 PiLoop 发
      * {@code message_start}/{@code message_end}，再由 {@link PiLaneSink} 落成 entry。</p>
      */

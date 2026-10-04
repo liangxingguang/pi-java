@@ -192,7 +192,7 @@ public final class StreamPartialBuilder {
      * **权威内容**替换当前文本块的累计文本（流式 delta 只是草稿）。块下标未定
      * （还没有 text 块）时只改缓冲。
      *
-     * <p>⚠️ 调用方负责「空内容不覆盖」的判定（docs/71 R4 的刻意偏差）。</p>
+     * <p>⚠️ 调用方负责「空内容不覆盖」的判定（原 docs/71 R4 的刻意偏差）。</p>
      */
     public void replaceText(String text) {
         textBuf.setLength(0);
@@ -459,7 +459,7 @@ public final class StreamPartialBuilder {
     /**
      * Emit usage info carrying the provider's full breakdown (cache/cost/reasoning).
      *
-     * <p>包 H1 步 2（{@code docs/42 §8.2}）：这是加宽后的入口。此前 {@code emitUsage}
+     * <p>包 H1 步 2（{@code 原 docs/42 §8.2}）：这是加宽后的入口。此前 {@code emitUsage}
      * 只收两个 {@code long}，cache/cost/reasoning 全无入口 ⇒ 四分量在生产上恒为 0。
      * 现在全量分解同时进入两条通道：事件自身的 {@code usage()} 与 partial 上的
      * {@code usage()}（后者是 {@code JsonEventMapper} 写线格式时读的那个）。</p>
@@ -516,10 +516,10 @@ public final class StreamPartialBuilder {
      * {@code output.errorMessage = error.message}，最后
      * {@code push({type:"error", reason, error: output})}
      * （{@code anthropic-messages.ts:817-826}）。此前本方法只写 {@code stopReason}
-     * ⇒ 错误文本只能由下游各自从 {@code Throwable} 反推（{@code docs/55 §5 F1/F2}）。</p>
+     * ⇒ 错误文本只能由下游各自从 {@code Throwable} 反推（{@code 原 docs/55 §5 F1/F2}）。</p>
      *
      * <p>内容（{@link #snapshot()} 的 blocks）本来就保留 —— 那是 pi 的实测行为
-     * （{@code docs/55 §3.1} P4：中止时 {@code error.content} 是流到中止点的文本）。</p>
+     * （{@code 原 docs/55 §3.1} P4：中止时 {@code error.content} 是流到中止点的文本）。</p>
      */
     public StreamEvent.StreamError emitError(String reason, Throwable error) {
         var settled = StreamEvent.StreamError.settle(reason, error, snapshot());

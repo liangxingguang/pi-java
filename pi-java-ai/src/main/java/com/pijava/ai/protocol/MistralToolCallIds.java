@@ -50,7 +50,7 @@ public final class MistralToolCallIds {
     /**
      * pi {@code mistral-conversations.ts:246-260} 的 {@code deriveMistralToolCallId}。
      *
-     * <p>⚠️ 三处易走样（docs/47 §5）：① {@code normalized.length() === 9} 是**精确等于**；
+     * <p>⚠️ 三处易走样（原 docs/47 §5）：① {@code normalized.length() === 9} 是**精确等于**；
      * ② {@code seedBase = normalized || id} ＝ normalized **空串**时回落原 id（JS 假值回落）；
      * ③ shortHash 输出恒字母数字 ⇒ replace 恒等但**照抄**；slice(0,9) 对短串恒等。</p>
      */

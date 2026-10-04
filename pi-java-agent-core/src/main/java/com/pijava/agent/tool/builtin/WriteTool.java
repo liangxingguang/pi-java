@@ -54,7 +54,7 @@ public final class WriteTool {
             }
             @Override public ExecutionMode executionMode() { return new ExecutionMode.Sequential(); }
 
-            // docs/66：pi 的 write 默认 strict-prefer。
+            // 原 docs/66：pi 的 write 默认 strict-prefer。
             @Override public JsonSchemaSampling constrainedSampling() {
                 return new JsonSchemaSampling(StrictMode.PREFER);
             }

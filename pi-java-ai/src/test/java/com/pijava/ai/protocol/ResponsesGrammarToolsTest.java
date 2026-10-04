@@ -33,7 +33,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * docs/69：openai-responses 车道的 grammar custom tool 出站声明、历史回放
+ * 原 docs/69：openai-responses 车道的 grammar custom tool 出站声明、历史回放
  * （custom_tool_call/custom_tool_call_output）与入站重组
  * （pi {@code openai-responses-shared.ts:306-316/359-378/504-527/670-680/726-740}）。
  */

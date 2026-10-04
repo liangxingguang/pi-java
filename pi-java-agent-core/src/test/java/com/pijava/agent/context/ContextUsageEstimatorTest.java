@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * package 3b 的估算器判据（pi {@code compaction.ts:164-310} 逐条，
- * {@code docs/31 §8.20}）：用量优先、无效用量跳过、{@code ceil(chars/4)}、
+ * {@code 原 docs/31 §8.20}）：用量优先、无效用量跳过、{@code ceil(chars/4)}、
  * 图像常数、toolCall 的 JSON 长度、{@code safeJsonStringify} 的两级回退、
  * {@code shouldCompact} 的门。
  */

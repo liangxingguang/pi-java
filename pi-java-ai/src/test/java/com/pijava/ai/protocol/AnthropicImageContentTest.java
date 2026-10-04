@@ -24,10 +24,10 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包 H2（{@code docs/44}）步 2：Anthropic 车道的图片落点 ——
+ * 包 H2（{@code 原 docs/44}）步 2：Anthropic 车道的图片落点 ——
  * pi {@code anthropic-messages.ts:128-174}（{@code convertContentBlocks}）与 {@code :1243-1269}（user 分支）。
  *
- * <p>本车道有三处**独有的不对称**（{@code docs/44 D3}），逐条钉住：</p>
+ * <p>本车道有三处**独有的不对称**（{@code 原 docs/44 D3}），逐条钉住：</p>
  * <table>
  *   <caption>三处不对称</caption>
  *   <tr><th>#</th><th>user 分支</th><th>toolResult 分支（{@code convertContentBlocks}）</th></tr>
@@ -38,7 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>观测面＝反射 {@code buildParams} 后的 {@link MessageCreateParams}（先例：
  * {@code AnthropicSurrogateSanitizeTest}）＋ 一条走 {@link RecordingHttpServer} 的**上线**断言
- * （结构对了不等于序列化对了 —— 见 {@code docs/43 §9-6} 的教训）。</p>
+ * （结构对了不等于序列化对了 —— 见 {@code 原 docs/43 §9-6} 的教训）。</p>
  *
  * <p><b>实测：`Tests run: 14, Failures: 7, Errors: 3`</b>（本步实现前）—— 10 条行为红灯、4 条回归门
  * （{@code urlImagesAreStillDropped} ／ {@code assistantImagesAreIgnored} 今天就是绿的：
@@ -177,7 +177,7 @@ class AnthropicImageContentTest {
 
     /**
      * <b>红</b> pi {@code :142-144}：**无图片**时各文本块 {@code join("\n")} 成**一个**块
-     * —— 这是相对 pi-java 旧行为（一块一文本块）的行为变更，见 {@code docs/44 D3} 的「顺带」。
+     * —— 这是相对 pi-java 旧行为（一块一文本块）的行为变更，见 {@code 原 docs/44 D3} 的「顺带」。
      */
     @Test
     void toolResultTextBlocksAreJoinedIntoOne() throws Exception {
@@ -191,7 +191,7 @@ class AnthropicImageContentTest {
      *
      * <p>⚠️ 这条钉的是**分隔符**，不是「净化先后」：因为 {@code "\n"} 永不是代理，
      * join 只会**拆散**相邻关系、不会**制造**它 ⇒ 在 toolResult 这条路径上「逐块净化后拼」
-     * 与「拼完再净化」**结果恒等**（`docs/43 §9-2` 记的那个跨块边界例只在**无分隔符**的
+     * 与「拼完再净化」**结果恒等**（`原 docs/43 §9-2` 记的那个跨块边界例只在**无分隔符**的
      * 拼接上才分叉，例如各车道的 assistant 文本块）。真正的牙在这里：
      * 把 {@code joining("\n")} 改成 {@code joining("")} ⇒ 本用例必须红。</p>
      */
@@ -230,7 +230,7 @@ class AnthropicImageContentTest {
     }
 
     /**
-     * <b>红</b> {@code docs/44 D4 选项 A}：{@link ContentBlock.UrlImageContent} 在 Anthropic 车道
+     * <b>红</b> {@code 原 docs/44 D4 选项 A}：{@link ContentBlock.UrlImageContent} 在 Anthropic 车道
      * **仍丢弃**（pi 的 TS 类型里没有 URL 图片来源 ⇒ 照抄；SDK 虽有 {@code UrlImageSource}，
      * 但用它＝发明行为）。
      */
@@ -242,7 +242,7 @@ class AnthropicImageContentTest {
     }
 
     /**
-     * <b>红</b> 风险探针（{@code docs/44 J14}）：{@code PathUtils.detectImageMimeType} 会返回
+     * <b>红</b> 风险探针（{@code 原 docs/44 J14}）：{@code PathUtils.detectImageMimeType} 会返回
      * {@code image/bmp}，而 pi 的 Anthropic {@code media_type} 联合类型**不含 bmp**
      * （pi 那边是 TS 的 {@code as} 断言、运行时不校验）。java 的 SDK 是有类型的 ⇒
      * 断言 {@code MediaType.of("image/bmp")} **不抛**且原样上线（照缝）。

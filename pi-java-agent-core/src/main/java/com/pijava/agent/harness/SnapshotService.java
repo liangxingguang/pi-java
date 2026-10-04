@@ -87,7 +87,7 @@ final class SnapshotService {
     }
 
     private SessionSnapshot buildSessionSnapshot() {
-        // 一个 harness 恰好一条车道（docs/31 §4.3），会话快照的车道列表因此恒为单元素 ——
+        // 一个 harness 恰好一条车道（原 docs/31 §4.3），会话快照的车道列表因此恒为单元素 ——
         // 形状保留，因为会话层的分支是**会话**而不是车道（存储层 lane 才是分支模型）。
         var laneInfos = List.of(new LaneInfo(lane.laneName,
             lane.lastEntry() != null ? lane.lastEntry().id() : null,

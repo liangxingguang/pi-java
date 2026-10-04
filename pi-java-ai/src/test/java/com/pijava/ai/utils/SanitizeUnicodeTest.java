@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * pi {@code packages/ai/src/utils/sanitize-unicode.ts} 的移植哨兵（package A0，
- * {@code docs/43}）。
+ * {@code 原 docs/43}）。
  *
  * <p><b>等价性证明方式（D3）</b>：实现是手写 code-unit 循环（孤对代理没有码点，
  * {@code codePointAt} 不适用），语义正确性靠<b>把 pi 的正则原样搬进测试作

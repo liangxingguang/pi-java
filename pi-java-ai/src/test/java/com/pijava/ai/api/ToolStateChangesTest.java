@@ -13,7 +13,7 @@ import com.pijava.ai.message.Message;
 
 /**
  * pi {@code packages/ai/test/system-message-replay.test.ts:110-145} 里那**三条**纯函数用例的移植
- * （包 A2 只移植了文件里重放那一半 —— 这三条要的函数当时还不存在，{@code docs/51 §3 F1}）。
+ * （包 A2 只移植了文件里重放那一半 —— 这三条要的函数当时还不存在，{@code 原 docs/51 §3 F1}）。
  *
  * <p>⚠️ 与 pi 夹具的两处**有意差异**，都是 java 没有对应形状的地方：</p>
  *
@@ -24,12 +24,12 @@ import com.pijava.ai.message.Message;
  *       {@code promptGuidelines}/{@code renderShell} 四个**展示与提示词**元数据 ⇒ 本夹具
  *       改拿它们证明同一件事（{@code toToolDeclaration} 剥掉的是它们）；</li>
  *   <li>pi 第 114 行用 {@code constrainedSampling: false} 证明「第四键参与比较」；
- *       java 没有该字段（{@code docs/50 §10 L-A}）⇒ 该断言**缺席**，登记在 L-A。</li>
+ *       java 没有该字段（{@code 原 docs/50 §10 L-A}）⇒ 该断言**缺席**，登记在 L-A。</li>
  * </ul>
  *
  * <p>另外补了 {@code getDeclaredTools} 与 {@code resolveTranscriptTools} 的直测 —— pi 在那份
  * 夹具里没直测它们，但 {@code transcript-tool-changes.test.ts} 的线格用例把它们当中间量用，
- * 本包的车道（A3c）直接依赖这两个函数的语义（{@code docs/51 §2 P3}）。</p>
+ * 本包的车道（A3c）直接依赖这两个函数的语义（{@code 原 docs/51 §2 P3}）。</p>
  */
 class ToolStateChangesTest {
 
@@ -182,7 +182,7 @@ class ToolStateChangesTest {
     // ── resolveTranscriptTools（pi :220-234）──────────────────────────
 
     /**
-     * 车道不支持就地锚定（= 今天**所有**车道，{@code docs/51 §3 F5}）⇒ 出参是完整的当前工具表，
+     * 车道不支持就地锚定（= 今天**所有**车道，{@code 原 docs/51 §3 F5}）⇒ 出参是完整的当前工具表，
      * {@code anchorsAdditions} 为假。
      */
     @Test
@@ -197,7 +197,7 @@ class ToolStateChangesTest {
     /**
      * ⚠️ 本用例是 {@code resolveTranscriptTools} 的**靶心**：锚定支下请求级字段
      * **只有前导消息声明的那一份**，后续增量**不在**里面（它们靠车道的就地锚定发出去，
-     * {@code docs/51 §2 P3} 的警告）。把它写成 {@code requestTools == getCurrentTools(messages)}
+     * {@code 原 docs/51 §2 P3} 的警告）。把它写成 {@code requestTools == getCurrentTools(messages)}
      * 的夹具会漏掉这个差异。
      */
     @Test

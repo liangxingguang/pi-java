@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 /**
- * 包⑩（docs/37）：RPC 线的消息形状。
+ * 包⑩（原 docs/37）：RPC 线的消息形状。
  *
  * <p><b>头条是「会抛」，不是「少字段」</b>：{@code JsonEventMapper} 用**裸**
  * {@code ObjectMapper} ＋ 两个 mixin、**未注册 jsr310**，而

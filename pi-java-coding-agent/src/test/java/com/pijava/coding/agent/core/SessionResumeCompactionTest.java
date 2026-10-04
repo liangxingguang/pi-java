@@ -24,7 +24,7 @@ class SessionResumeCompactionTest {
     /**
      * The cwd the seeded session is created under — must match what
      * {@code resolvePersistentWeb} looks in ({@code user.dir}), because sessions
-     * are stored per project directory (docs/39 §6.1).
+     * are stored per project directory (原 docs/39 §6.1).
      */
     private static final String CWD = System.getProperty("user.dir");
 

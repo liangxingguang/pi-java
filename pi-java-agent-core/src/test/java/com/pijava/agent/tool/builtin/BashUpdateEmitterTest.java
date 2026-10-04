@@ -12,10 +12,10 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包⑧（docs/35）：bash 的部分结果发射器 —— 对齐 pi {@code bash.ts:255-314}。
+ * 包⑧（原 docs/35）：bash 的部分结果发射器 —— 对齐 pi {@code bash.ts:255-314}。
  *
  * <p>⚠️ **节流用可注入的时钟 + 调度器驱动，不做「等 100 ms 再看」的断言** ——
- * 本仓口径认定「靠等延迟定序」的断言是运气断言（{@code docs/31 §8.23.8 ⑥}）。
+ * 本仓口径认定「靠等延迟定序」的断言是运气断言（{@code 原 docs/31 §8.23.8 ⑥}）。
  * 这里把 pi 的三个位（{@code updateDirty} / {@code lastUpdateAt} / {@code updateTimer}）
  * 逐一对上，并用假时钟与假调度器把每条边都钉死。</p>
  */

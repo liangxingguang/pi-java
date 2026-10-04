@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 而 builder 的兜底写成了 {@code 4096L}。pi 在同一路径上发的是
  * {@code clamp(model.maxTokens)}（{@code simple-options.ts:34} ＋
  * {@code anthropic-messages.ts:866}）。⇒ 每一条用例在本包实现前都红（红集见
- * {@code docs/57 §12}）。</p>
+ * {@code 原 docs/57 §12}）。</p>
  *
  * <p>观测面是**真出站体**（{@link RecordingHttpServer}）：不能用
  * 「反射调 {@code buildParams} ＋ 序列化 SDK 对象」那条路（SDK 把请求包在 {@code body}
@@ -108,16 +108,16 @@ class AnthropicMaxTokensWireTest {
      * <p>为什么这条必须有：{@code AnthropicMessagesApiBuildParamsTest} 与
      * {@code AnthropicSurrogateSanitizeTest} 走的就是「{@code ModelId} 版构造器（⇒
      * {@code minimal}）＋ 反射直调 {@code buildParams}」，而它们**都不断言
-     * {@code max_tokens}** ⇒ 兜底写对写错它们都绿（{@code docs/57 §4.3} 的「夹具没牙」）。
+     * {@code max_tokens}** ⇒ 兜底写对写错它们都绿（{@code 原 docs/57 §4.3} 的「夹具没牙」）。
      * 本条把那一格钉住。</p>
      *
      * <p>⚠️ 它的**牙不来自先红**：修复前的字面量恰好也是 4096 ⇒ 本用例在旧代码上
      * <b>也是绿的</b>。判别力由变异探针 M7 提供（把常量改成 4097 ⇒ 本用例红），
-     * 如实记在 {@code docs/57 §12}。</p>
+     * 如实记在 {@code 原 docs/57 §12}。</p>
      *
      * <p>⚠️ 这里断言的是**字面量**而不是 {@code SimpleOptions.NO_MODEL_CAP_FALLBACK}：
      * 与常量比较会让本用例对「常量被改成多少」完全不敏感（M7 实测：改成 4097 时只有
-     * 单测那条红）。兜底值是**登记在案的刻意偏差**（{@code docs/57 §6 R4}），
+     * 单测那条红）。兜底值是**登记在案的刻意偏差**（{@code 原 docs/57 §6 R4}），
      * 它若漂移，两侧都该叫 —— 重写一遍 4096 是**故意的**。</p>
      */
     @Test

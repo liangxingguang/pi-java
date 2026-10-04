@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.within;
 /**
  * Mistral 车道的 usage 归一 —— pi {@code mistral-conversations.ts:536-555}
  * （{@code getMistralCachedPromptTokens}）与 {@code :596-611} 的逐条移植
- * （包 H1 步 5，{@code docs/42 §2.1 P14/P15}，测试计划 T9）。
+ * （包 H1 步 5，{@code 原 docs/42 §2.1 P14/P15}，测试计划 T9）。
  *
  * <p>容易做错的：</p>
  * <ul>

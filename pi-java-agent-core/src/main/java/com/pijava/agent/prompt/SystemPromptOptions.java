@@ -22,7 +22,7 @@ import com.pijava.agent.skill.Skill;
  *
  * <p>⚠️ <b>{@code forceSystemPrompt} 不在本类型里</b>：那个分支要 {@code before_agent_start}
  * 扩展钩子把整份文本塞进 {@code content}（{@code system-prompt.ts:186-194}），而 Java 没有
- * 扩展系统，该写入面不可达（{@code docs/52 §1.2}、登记 L-I）。</p>
+ * 扩展系统，该写入面不可达（{@code 原 docs/52 §1.2}、登记 L-I）。</p>
  *
  * @param customPrompt       替换默认 preamble 的自定义提示；{@code null}／空串 ＝ 用默认
  * @param selectedTools      参与提示的工具名（决定 {@code tools} 与 {@code rules} 两段）
@@ -66,7 +66,7 @@ public record SystemPromptOptions(
      * {@code docs} 段的三个路径来源 —— pi {@code getReadmePath()}/{@code getDocsPath()}/
      * {@code getExamplesPath()}（{@code config.ts:440-452}）的对应物。
      *
-     * <p>⚠️ pi-java **没有 {@code examples/} 目录**（{@code docs/52 §3 F12}）⇒ {@code examples}
+     * <p>⚠️ pi-java **没有 {@code examples/} 目录**（{@code 原 docs/52 §3 F12}）⇒ {@code examples}
      * 通常为 {@code null}，那一条就不渲染。整个 {@code DocumentationPaths} 为 {@code null}
      * 时 {@code docs} 段不产出（找不到 pi-java 发行根时就是这样）。</p>
      */

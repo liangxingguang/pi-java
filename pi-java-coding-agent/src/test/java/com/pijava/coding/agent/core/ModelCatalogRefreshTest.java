@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * docs/70 §1.5／§7.1-9/13：两阶段编排（先全部离线恢复、再全部联网）、
+ * 原 docs/70 §1.5／§7.1-9/13：两阶段编排（先全部离线恢复、再全部联网）、
  * 逐 provider 的错误记账、以及 {@code --offline}／{@code PI_OFFLINE} 的判定。
  */
 class ModelCatalogRefreshTest {

@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 帧序列比对（{@code docs/23c §2.4}）：**严格**逐行比较，当前没有任何放宽条款。
+ * 帧序列比对（{@code 原 docs/23c §2.4}）：**严格**逐行比较，当前没有任何放宽条款。
  *
  * <p>历史上只存在过一条放宽规则 {@code PARALLEL_TOOL_END_ORDER}（P1）：pi 的并行分支在
  * 准备循环内就给准备相失败的调用收尾（{@code agent-loop.ts:506-517}），已准备好的调用

@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>四条语义各一组：<b>回落</b>（缺席 ⇒ 模型上限）、<b>夹取</b>（上下文窗口 − 已占 − 4096）、
  * <b>未知窗口不夹</b>（{@code contextWindow <= 0} 是哨兵）、<b>目录未命中的兜底</b>
- * （{@code docs/57 §6 R4}，**刻意偏差**）。</p>
+ * （{@code 原 docs/57 §6 R4}，**刻意偏差**）。</p>
  *
  * <p>⚠️ 本文件钉的是**值**；「这些值真的落到线格上了」由
  * {@code AnthropicMaxTokensWireTest} 与 {@code CompletionsMaxTokensWireTest} 钉。</p>
@@ -43,7 +43,7 @@ class SimpleOptionsTest {
     }
 
     /**
-     * ★ 目录未命中（{@code ModelInfo.minimal}，0/0）⇒ 兜底常量（{@code docs/57 §6 R4}）。
+     * ★ 目录未命中（{@code ModelInfo.minimal}，0/0）⇒ 兜底常量（{@code 原 docs/57 §6 R4}）。
      *
      * <p>⚠️ 这条钉的**不是** pi 的行为：pi 的公式在这一格上会算出 {@code 1}
      * （{@code contextWindow <= 0} ⇒ {@code max(1, maxTokens)} 而 {@code maxTokens == 0}），

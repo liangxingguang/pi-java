@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包⑨（docs/36，B41）：**终局助手消息的 `usage` 必填且永不为空**。
+ * 包⑨（原 docs/36，B41）：**终局助手消息的 `usage` 必填且永不为空**。
  *
  * <p>pi 的 {@code AssistantMessage.usage: Usage} 是**必填**（{@code ai/src/types.ts:439}），
  * 而且 pi **没有任何一条路径**会产出没 usage 的助手消息 —— 11 个 provider 适配器、

@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * docs/70 §1.4／§7.1-8：世代发布 —— **持久化先落、世代检查后判**。
+ * 原 docs/70 §1.4／§7.1-8：世代发布 —— **持久化先落、世代检查后判**。
  * 过期刷新的写入仍然落盘，但 {@code update} 不跑、返回 false。
  */
 class CatalogRefreshCoordinatorTest {

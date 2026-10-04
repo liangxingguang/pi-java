@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * {@code google-generative-ai} 车道的 <b>B20 stop reason 映射与严格收尾</b>
- * （{@code docs/31 §8.35.14}）。
+ * （{@code 原 docs/31 §8.35.14}）。
  *
  * <p>本类此前**不存在**：车道从 Phase 2 起就没被任何夹具覆盖，于是两处偏差一直没人看见 ——
  * 读的是 {@code response} 级访问器（它对缺席**造**一个 {@code FINISH_REASON_UNSPECIFIED}，

@@ -9,7 +9,7 @@ import com.pijava.ai.api.StrictSampling;
 import com.pijava.ai.api.ToolDefinition;
 
 /**
- * docs/66：mistral-conversations 车道的 function-tool 出站构建
+ * 原 docs/66：mistral-conversations 车道的 function-tool 出站构建
  * （pi {@code mistral-conversations.ts:752-765}）。从
  * {@code MistralConversationsApi} 抽出（拆分步骤 7）。
  *

@@ -234,7 +234,7 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
      *
      * <p>指示器优先于快照：pi 把重试/压缩的进度放在同一个状态槽里
      * （{@code showStatusIndicator}），状态栏的形状承载不了它（{@code SessionSnapshot}
-     * 没有重试状态位，docs/31 §8.38.2-(2)）。</p>
+     * 没有重试状态位，原 docs/31 §8.38.2-(2)）。</p>
      */
     public Element statusBar() {
         var active = indicator;

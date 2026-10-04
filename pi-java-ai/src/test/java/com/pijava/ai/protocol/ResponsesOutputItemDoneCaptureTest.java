@@ -26,7 +26,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * <b>docs/71 G3/G4</b>：Responses {@code response.output_item.done} 的收尾合并 —— 逐行照 pi
+ * <b>原 docs/71 G3/G4</b>：Responses {@code response.output_item.done} 的收尾合并 —— 逐行照 pi
  * {@code openai-responses-shared.ts:699-708}（文本 ＋ refusal 的权威内容）与
  * {@code :442-446}（{@code phase === "final_answer"} ⇒ {@code stopReason = "stop"}）。
  *
@@ -131,7 +131,7 @@ class ResponsesOutputItemDoneCaptureTest {
 
     /**
      * R4 的刻意偏差：收尾 content **为空** ⇒ 不覆盖（否则会把已流出的文本清空）。
-     * pi 是无条件覆盖 —— 这一支登记为偏差（docs/71 §4.2）。
+     * pi 是无条件覆盖 —— 这一支登记为偏差（原 docs/71 §4.2）。
      */
     @Test
     void emptyDoneContentKeepsTheAccumulatedText() throws Exception {

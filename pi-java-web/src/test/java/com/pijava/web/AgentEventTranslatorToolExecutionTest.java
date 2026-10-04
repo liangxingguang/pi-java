@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包⑦（docs/34）：web 面的 {@code tool_execution_*} **换源**。
+ * 包⑦（原 docs/34）：web 面的 {@code tool_execution_*} **换源**。
  *
  * <p>此前它们由 {@code StreamEvent.ToolCallStart/Delta/End} 伪造 ——
  * 那是「模型把这次调用**吐完**了」的时刻（pi 的 {@code toolcall_*} 增量，

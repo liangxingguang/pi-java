@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 车道消息**工作副本**与两处压缩触发点（{@code docs/31 §4.2}）。
+ * 车道消息**工作副本**与两处压缩触发点（{@code 原 docs/31 §4.2}）。
  *
  * <p>对齐 pi 的两层真源：entry 日志是持久真源，{@code AgentState.messages} 是工作副本，
  * 循环请求用的就是它，只在日志变更时重建（{@code agent-session.ts:2357-2359} 的
@@ -223,7 +223,7 @@ class LaneMessagesTest {
         assertThat(first).contains("kept tail", "next");
     }
 
-    // ── 3b：用量优先的估算 + 动态 contextWindow 操作数（docs/31 §8.20） ──
+    // ── 3b：用量优先的估算 + 动态 contextWindow 操作数（原 docs/31 §8.20） ──
 
     /** builder 装配的车道：窗口经 resolver 按**当前模型**解析。 */
     private AgentHarness harnessWithWindow(StreamFn streamFn, ModelId<?> model,
@@ -289,7 +289,7 @@ class LaneMessagesTest {
     }
 
     /**
-     * 窗口 ≤ 0（自定义模型不在目录）时 pi 的两道门**不对称**（3c，docs/31 §8.21）：
+     * 窗口 ≤ 0（自定义模型不在目录）时 pi 的两道门**不对称**（3c，原 docs/31 §8.21）：
      * 轮内门 {@code _compactBeforeNextAssistantResponse}（agent-session.ts:543）有
      * {@code contextWindow <= 0} 守卫 ⇒ 静默；{@code _checkCompaction} 的 T 路
      * （:2230-2256）没有这道守卫，且 {@code shouldCompact = tokens > window - reserve}

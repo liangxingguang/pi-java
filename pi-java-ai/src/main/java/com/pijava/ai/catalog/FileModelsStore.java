@@ -21,7 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * 一文件」实现（旧实现无生产调用者）。
  *
  * <p>持久化统一走 pi wire（{@link RemoteModelWire}）；时间戳存 epoch milli。
- * coding-agent 单进程，方法 synchronized 即足够（docs/70 R6）。读面对
+ * coding-agent 单进程，方法 synchronized 即足够（原 docs/70 R6）。读面对
  * 缺失/损坏文件一律返回 empty（与旧实现一致），写失败抛出。</p>
  */
 public final class FileModelsStore implements ModelsStore {

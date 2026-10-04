@@ -19,12 +19,12 @@ import com.pijava.agent.skill.Skill;
  * <p>oracle 的三条（pi 实测 8/8 绿，其中纯函数两条 ＋ {@code buildSystemPromptState} 一条）：
  * {@code diffs sections into a patch}、{@code keeps the preamble untagged and replaces it like
  * any section}。⚠️ pi 那条 {@code buildSystemPromptState({forceSystemPrompt})} 的断言
- * <b>没有移植</b>：那个分支要扩展系统，java 侧不可达（{@code docs/52 §1.2}、登记 L-I），
+ * <b>没有移植</b>：那个分支要扩展系统，java 侧不可达（{@code 原 docs/52 §1.2}、登记 L-I），
  * 而没有它之后 {@code state()} 的断言会退化成同义反复 —— 本仓在包 A1 的复核里已删过一条同型
- * 断言（{@code docs/48 §10.1}）。</p>
+ * 断言（{@code docs/08 §10.1}）。</p>
  *
  * <p>⚠️ 夹具一律**不给** {@code documentation}：pi 的 {@code docs} 段总是产出（它的三个路径恒定
- * 成立于 pi 仓库），而 java 侧没有靶子时不产出（{@code docs/52 §3 F12}）—— 只要两侧一致地
+ * 成立于 pi 仓库），而 java 侧没有靶子时不产出（{@code 原 docs/52 §3 F12}）—— 只要两侧一致地
  * 缺席/在场，{@code diff} 的期望值与 pi 逐字相同。</p>
  */
 class SystemPromptsTest {

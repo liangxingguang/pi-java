@@ -38,7 +38,7 @@ public interface Provider {
     ModelCatalog builtinModels();
 
     /**
-     * 当前生效的目录（pi {@code Provider.getModels}，docs/70 §1.2）：静态
+     * 当前生效的目录（pi {@code Provider.getModels}，原 docs/70 §1.2）：静态
      * provider 恒等于 {@link #builtinModels()}；动态 provider（远程目录包装）
      * 覆写它返回「静态 ∪ 动态 overlay」。
      *
@@ -50,7 +50,7 @@ public interface Provider {
     }
 
     /**
-     * 刷新动态目录（pi {@code Provider.refreshModels}，docs/70 §1.2）。
+     * 刷新动态目录（pi {@code Provider.refreshModels}，原 docs/70 §1.2）。
      *
      * <p>默认是**结构上的 no-op**：静态 provider 没有可刷新的东西。动态 provider
      * 覆写它，按 {@link RefreshModelsContext} 的分支（离线恢复 / TTL / 条件 GET /

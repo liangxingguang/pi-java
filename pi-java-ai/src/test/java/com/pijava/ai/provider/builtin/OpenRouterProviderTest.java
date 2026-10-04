@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包 A-02（docs/59 §4.4）：OpenRouter chat provider 的双协议路由与 per-protocol
+ * 包 A-02（原 docs/59 §4.4）：OpenRouter chat provider 的双协议路由与 per-protocol
  * baseUrl pin（pi 是 per-model baseUrl，java 落 per-protocol——对内置目录等价）。
  */
 class OpenRouterProviderTest {

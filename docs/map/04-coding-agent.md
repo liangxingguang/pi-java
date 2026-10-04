@@ -149,7 +149,7 @@ pi 另有 **`/skill:name` 命令族**（`enableSkillCommands` 默认 true，`int
 pi 的扩展事件面 = `ExtensionAPI.on()` 的 **37 个重载**（`core/extensions/types.ts:1266-1326`，旧基准 36 个；`ExtensionEvent` 联合在 `:1086-1113` → 现 **`:1092`**，本轮 **+`cache_warming_decision`**）。
 ⚠️ **本轮另一个实质变化**：`on()` 的返回类型由 **`void` → `() => void`**（`types.ts:1266-1326` 全部 37 条），实现见 `core/extensions/loader.ts:256-270`（返回一个把 handler 从 `extension.handlers` 摘除的闭包）⇒ **pi 扩展现在可以在运行时退订事件**；pi-java 无此能力（见 E5-28）。
 pi-java 的**扩展 SPI** = `PiExtension.java:11-31`，只有 **2 个钩子**：`register(ExtensionContext)` 与 `sessionStartResources()`。
-pi-java 的**引擎钩子** = `pi-java-agent-core/.../agent/hook/HookSystem.java`，**13 个**（`onBeforeRun:41`、`onBeforeResume:46`、`onTransformContext:51`、`onBeforeRequest:56`、`onBeforePayload:61`、`onAfterResponse:66`、`onBeforeTool:71`、`onAfterTool:76`、`onBeforeCompaction:81`、`onBeforeNavigation:86`、`onBeforeRunEnd:91`、`onShouldStopAfterTurn:96`、`onPrepareNextTurn:101`），**但 `ExtensionContext` 不暴露 `hookSystem()`**（`extension/ExtensionContext.java:17-65`，`docs/24 §2` 已记）⇒ **扩展拿不到**。
+pi-java 的**引擎钩子** = `pi-java-agent-core/.../agent/hook/HookSystem.java`，**13 个**（`onBeforeRun:41`、`onBeforeResume:46`、`onTransformContext:51`、`onBeforeRequest:56`、`onBeforePayload:61`、`onAfterResponse:66`、`onBeforeTool:71`、`onAfterTool:76`、`onBeforeCompaction:81`、`onBeforeNavigation:86`、`onBeforeRunEnd:91`、`onShouldStopAfterTurn:96`、`onPrepareNextTurn:101`），**但 `ExtensionContext` 不暴露 `hookSystem()`**（`extension/ExtensionContext.java:17-65`，`原 docs/24 §2` 已记）⇒ **扩展拿不到**。
 
 判定口径：本表按「**扩展能否订阅该事件**」判；引擎侧有同形钩子的记 **存疑** 并在证据列写明「引擎钩子 X（未桥接）」。
 
@@ -448,7 +448,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1261-1531`，旧 `:1253-1510
 
 ## 台账纠错
 
-逐条核对了 `docs/32-open-items-register.md` 中属于本模块的条目。
+逐条核对了 `docs/05-open-items-register.md` 中属于本模块的条目。
 
 | 条目 | 台账说什么 | 实际 | 证据 |
 |---|---|---|---|
@@ -461,7 +461,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1261-1531`，旧 `:1253-1510
 | **B32** | 「`get_state.sessionName` 恒有值（默认 `"session"`），pi 是可选」 | ✅ **属实**。`SessionPersistence.java:246-252` `sessionNameOf` 兜底 `"session"`；`AgentSession.java:416` 同样兜底 | `SessionPersistence.java:246-252` |
 | **F3** | 「`_emitSessionCompactFailed`（扩展层事件）」 | ✅ **属实**（本模块无该事件的任何投影面）。⚠️ 补充：pi 侧该发射**旧基准就已存在**，本轮 `de2de549b` 改的是它的 **`aborted` 判定来源**（字符串匹配 → 信号权威，`agent-session.ts:2223`）⇒ F3 的缺口在 pi-java 侧**不变**，但「pi 侧形状」的基准要按信号版对齐 | `AgentSessionEvent.java:79` `CompactionEnd` 有 `aborted`/`errorMessage` 字段，但无独立 `compact_failed` 事件、更无扩展面 |
 | **F6** | 「`ModelsJsonProvider` 钉死 baseUrl ⇒ CLI `--base-url` 对它失效」 | ⚠️ **本模块范围外**（实现在 `pi-java-ai`），但**症状可在本模块观察到**：`Args.baseUrl`（`Args.java:20`）在 coding-agent 侧有解析、`ArgsParser.java:36` 有 flag，`Main.java` 不消费 —— 由 `DefaultProviders.java` 转交 ai 层 | `Args.java:20`；`ArgsParser.java:36` |
-| **A4** | 「运行中手动 `/compact` 有没有门 —— 先取证 pi」 | ✅ **本轮取证完毕（`de2de549b`「close compaction cancellation races」，改 `agent-session.ts` 156 行）**。pi 的语义**不是「门」而是「abort-first」**：`compact()`（`agent-session.ts:2089`）第一句就是 **`await this.abort()`**（`:2090`，**旧基准 `:1968` 已有**），随后自建 `_compactionAbortController`（`:2091`）；`abortCompaction()`（`:2250`）同时 abort 手动与自动两个 controller。**本轮新增的取消语义**：① abort 信号**打进鉴权取件**（`_getSummarizationRequestAuth(model, signal)`，`:2099`，旧版不带 signal ⇒ 取消后仍可能挂在鉴权上）；② `session_before_compact` 事件**新增 `signal` 字段**（`:2130`）；③ `aborted` 的判定由**字符串匹配**（`message === "Compaction cancelled" \|\| error.name === "AbortError"`）改为**信号权威**（`signal.aborted \|\| cancelledByExtension`，`:2223`）—— 这才是那条 race 的实质；④ `_clearManualCompactionState()` 在 `compaction_end` **之前**调用（`:2214`，注释「compaction_end listeners may submit queued prompts, so expose idle state before notifying them」）。<br>**pi-java 真缺什么**：`MiscCommands.java:124` → `AgentSession.compact:641` → `harness.compact(laneName, settings)` —— **既无 abort-first、也无 `abortCompaction`、更无取消语义**（无法中止进行中的压缩，也不先中止在飞的 run） | pi `agent-session.ts:2089-2091/2099/2130/2214/2223/2250-2253`；java `MiscCommands.java:124-131`、`AgentSession.java:641-643`、与 `docs/31 §8.25.5-6` 一致（`RunLifecycle.compact:237-239` 无门） |
+| **A4** | 「运行中手动 `/compact` 有没有门 —— 先取证 pi」 | ✅ **本轮取证完毕（`de2de549b`「close compaction cancellation races」，改 `agent-session.ts` 156 行）**。pi 的语义**不是「门」而是「abort-first」**：`compact()`（`agent-session.ts:2089`）第一句就是 **`await this.abort()`**（`:2090`，**旧基准 `:1968` 已有**），随后自建 `_compactionAbortController`（`:2091`）；`abortCompaction()`（`:2250`）同时 abort 手动与自动两个 controller。**本轮新增的取消语义**：① abort 信号**打进鉴权取件**（`_getSummarizationRequestAuth(model, signal)`，`:2099`，旧版不带 signal ⇒ 取消后仍可能挂在鉴权上）；② `session_before_compact` 事件**新增 `signal` 字段**（`:2130`）；③ `aborted` 的判定由**字符串匹配**（`message === "Compaction cancelled" \|\| error.name === "AbortError"`）改为**信号权威**（`signal.aborted \|\| cancelledByExtension`，`:2223`）—— 这才是那条 race 的实质；④ `_clearManualCompactionState()` 在 `compaction_end` **之前**调用（`:2214`，注释「compaction_end listeners may submit queued prompts, so expose idle state before notifying them」）。<br>**pi-java 真缺什么**：`MiscCommands.java:124` → `AgentSession.compact:641` → `harness.compact(laneName, settings)` —— **既无 abort-first、也无 `abortCompaction`、更无取消语义**（无法中止进行中的压缩，也不先中止在飞的 run） | pi `agent-session.ts:2089-2091/2099/2130/2214/2223/2250-2253`；java `MiscCommands.java:124-131`、`AgentSession.java:641-643`、与 `原 docs/31 §8.25.5-6` 一致（`RunLifecycle.compact:237-239` 无门） |
 | **A5** | 「并发 prompt 有没有门」 | ⚠️ **本模块侧**：`SessionCommands`/`PrintMode` 无会话级串行保证；与台账一致 | `SessionCommands.java`、`modes/PrintMode.java` |
 | **A9** | 「per-model 压缩设置（pi `getCompactionSettings(model)`）」 | ✅ **属实**。java `Settings.Compaction`（`Settings.java:121-125`）只有 3 键、**无 `modelOverrides`**；`SettingsAccessors` 无模型参数 | `Settings.java:121-125`；pi `settings-manager.ts:13-17/27` |
 | **B46** | 「pi-java 的 `BashTool` 从不调 `onUpdate` ⇒ `tool_execution_update` 在生产上永不发射」 | ⚠️ **需修正范围**：`tool_execution_update` 在**会话层**有出口（`AgentSessionEvent.ToolExecutionUpdate:121` + `JsonEventMapper`），B46 说的是**工具层不产**该事件 —— 两侧都成立，但「永不发射」应限定为「**该事件无生产数据源**」而非「无投影面」 | `AgentSessionEvent.java:121`；`BashTool`（`pi-java-agent-core/.../tools/`）无 `onUpdate` 调用 |
@@ -548,7 +548,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1261-1531`，旧 `:1253-1510
 
 **扩展系统单独口径**（D + D′ + E5）：37 事件 = 1 对齐；UI 注入 9 面 = 0 对齐；扩展 API 28 项 = 4 对齐 ⇒ 扩展系统 **74 个单元中 5 个对齐 = 6.8%**。
 
-**java 独有（不计入分母）**：`--base-url`、`--port`、`--debug`、`--trace-payloads`（CLI）；`/help`、`/create-skill`（slash）；`auth oauth-login`、`auth profile set|unset|list|set-key`（子命令）；`ExtensionContext.settings()`（pi 扩展 API 无设置读写，`docs/24 §2` 已记）。
+**java 独有（不计入分母）**：`--base-url`、`--port`、`--debug`、`--trace-payloads`（CLI）；`/help`、`/create-skill`（slash）；`auth oauth-login`、`auth profile set|unset|list|set-key`（子命令）；`ExtensionContext.settings()`（pi 扩展 API 无设置读写，`原 docs/24 §2` 已记）。
 
 **最大三处差距**：① 扩展事件面 37→0（可订阅，且本轮 pi 又加了退订与 `cache_warming_decision`）；② 包管理器 4,236→496 行且**零对齐单元**；③ 上下文文件发现 + JSON 主题系统 + 可执行验收规格（15,809 行）**整块不存在**。
 **本轮新增差距**：④ pi 前进 111 提交带来 **7 个新子系统（2,867 行）**，pi-java 全部为 0 —— 缓存预热、`/bug` 上报、崩溃日志、系统提示词分节、`experimental/micro`。

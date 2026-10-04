@@ -293,7 +293,7 @@ public sealed interface StreamEvent {
     record StreamDone(String reason, UsageInfo usage, AssistantMessage partial) implements StreamEvent {
 
         /**
-         * 用一条已落定的消息造终局（旁路生产者的唯一入口，见 {@code docs/55 §6.2}）。
+         * 用一条已落定的消息造终局（旁路生产者的唯一入口，见 {@code 原 docs/55 §6.2}）。
          *
          * <p>只做「在已有消息上补缺」：不新建消息、不重组内容 ⇒ 无论谁先落定，
          * 结果同值。落定值取 {@code partial.stopReason()}（已落定时）或 {@code reason}
@@ -315,7 +315,7 @@ public sealed interface StreamEvent {
      * <p>{@link #partial()} <b>就是</b> pi 的 {@code error.error}
      * （{@code ai/src/types.ts:652-668}）：除了 {@code done} 那三样，错误路还保证
      * {@code errorMessage} 有文本（来自 {@code Throwable}），而 {@code content}
-     * **保留流到故障点为止的块** —— pi 的实测行为（{@code docs/55 §3.1} P3/P4）。</p>
+     * **保留流到故障点为止的块** —— pi 的实测行为（{@code 原 docs/55 §3.1} P3/P4）。</p>
      *
      * <p>{@link #error()} 这个 {@code Throwable} 组件在 pi **没有对应物**（pi 的错误
      * 文本就在消息上）⇒ 它只留给日志与 Java 侧栈；<b>下游不许再从它反推文本</b>，
@@ -329,7 +329,7 @@ public sealed interface StreamEvent {
             implements StreamEvent {
 
         /**
-         * 用一条已落定的消息造终局（旁路生产者的唯一入口，见 {@code docs/55 §6.2}）。
+         * 用一条已落定的消息造终局（旁路生产者的唯一入口，见 {@code 原 docs/55 §6.2}）。
          *
          * <p>补两样：{@code stopReason}（缺省 {@code "error"}）与 {@code errorMessage}
          * （取 {@code cause} 的文本；消息上已有文本则不动）。内容与身份原样保留。</p>
@@ -353,7 +353,7 @@ public sealed interface StreamEvent {
          * {@code Throwable} 仅兜底（未经 {@link #settle} 的裸事件、旧夹具、conformance 桩）。
          *
          * <p>这是全仓读错误文本的唯一入口 ⇒ 「谁有能力说这条流错在哪」从 6 处降到 1 处
-         * （{@code docs/55 §7 R3}）。两侧皆空时返回 null，由调用方决定兜底文案。</p>
+         * （{@code 原 docs/55 §7 R3}）。两侧皆空时返回 null，由调用方决定兜底文案。</p>
          */
         public static String textOf(StreamError event) {
             if (event == null) {

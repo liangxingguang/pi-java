@@ -26,7 +26,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * P2（{@code docs/31 §8.31}）：thinking 块的 {@code signature} **缺失**不得打死
+ * P2（{@code 原 docs/31 §8.31}）：thinking 块的 {@code signature} **缺失**不得打死
  * 整轮 run。
  *
  * <p>生产事故（2026-09-17 22:14 web UI）的逐字报文：
@@ -56,7 +56,7 @@ class AnthropicMessagesApiThinkingSignatureTest {
             return Class.forName("com.pijava.ai.protocol.AnthropicMessagesApi$StopState");
         } catch (ClassNotFoundException e) {
             throw new IllegalStateException(
-                "StopState 改名/消失了，夹具需同步（docs/31 §8.35.14）", e);
+                "StopState 改名/消失了，夹具需同步（原 docs/31 §8.35.14）", e);
         }
     }
 
@@ -69,7 +69,7 @@ class AnthropicMessagesApiThinkingSignatureTest {
             method.setAccessible(true);
             return method;
         } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("mapEvent 的签名变了，夹具需同步（docs/31 §8.31）", e);
+            throw new IllegalStateException("mapEvent 的签名变了，夹具需同步（原 docs/31 §8.31）", e);
         }
     }
 
@@ -85,7 +85,7 @@ class AnthropicMessagesApiThinkingSignatureTest {
         // B20 把 `toolCallSeen` 换成了 stop reason 状态（pi 只看 message_delta.stop_reason）；
         // 本夹具不喂 message_delta，故只需一个空实例。
         private final Object stopState;
-        // 包 H1 步 3 起 mapEvent 多收一个 usage 累加器（docs/42）；本夹具不喂 usage，
+        // 包 H1 步 3 起 mapEvent 多收一个 usage 累加器（原 docs/42）；本夹具不喂 usage，
         // 传一个无模型的实例即可（model == null ⇒ 不计价）。
         private final AnthropicUsageState usageState = new AnthropicUsageState(null);
 
@@ -216,7 +216,7 @@ class AnthropicMessagesApiThinkingSignatureTest {
     }
 
     // ══════════════════════════════════════════════════════════════════
-    // 包①（docs/31 §8.33）：初始文本/签名 + redacted_thinking
+    // 包①（原 docs/31 §8.33）：初始文本/签名 + redacted_thinking
     // ══════════════════════════════════════════════════════════════════
 
     /**
@@ -292,7 +292,7 @@ class AnthropicMessagesApiThinkingSignatureTest {
         var routed = ObjectMappers.jsonMapper()
             .readValue(json, com.anthropic.models.messages.ContentBlock.class);
         assertThat(routed.isRedactedThinking())
-            .as("SDK 必须把 redacted_thinking 路由到该变体，否则 B7 的修法作废（docs/31 §8.33.7-2）")
+            .as("SDK 必须把 redacted_thinking 路由到该变体，否则 B7 的修法作废（原 docs/31 §8.33.7-2）")
             .isTrue();
         assertThat(routed.redactedThinking().orElseThrow()._data().asString())
             .contains("opaque");

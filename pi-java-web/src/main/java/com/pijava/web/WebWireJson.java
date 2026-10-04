@@ -53,7 +53,7 @@ final class WebWireJson {
             node.put("isError", tool.isError());
         }
         if (m instanceof Message.AssistantMessage assistant) {
-            // 3a（docs/31 §8.19）：assistant 的身份 + 计量随消息上 wire（pi 的消息本就
+            // 3a（原 docs/31 §8.19）：assistant 的身份 + 计量随消息上 wire（pi 的消息本就
             // 全形状；前端不认识这些键，零行为影响 —— 同步纯为形状对齐）。
             // timestamp 不带上：维持既有「wire 无消息 timestamp」的有意偏离
             // （client/main.ts:261/286 直贴不判重）。省略规则同 toolResult 支。

@@ -32,7 +32,7 @@ final class HarnessEventBus {
      * Broadcast a raw {@link StreamEvent} to every subscriber.
      *
      * <p>同步派发，且**隔离抛异常的监听者** —— 一个坏监听者不能把整轮运行带崩。
-     * （pi 会 {@code await} 异步监听者，{@code docs/31 §8.5} 已裁决 pi-java 有意偏离：
+     * （pi 会 {@code await} 异步监听者，{@code 原 docs/31 §8.5} 已裁决 pi-java 有意偏离：
      * sink 链保持同步，扩展不许在监听者里阻塞。）</p>
      */
     void broadcastStream(StreamEvent event) {

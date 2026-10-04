@@ -30,9 +30,9 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
  *                          {@code api} 会写它。⚠️ 存**字符串**而不是
  *                          {@link com.pijava.ai.provider.Protocol}：pi 的 {@code Api} 就是字符串
  *                          联合，且 {@code catalog} 包不依赖 {@code provider} 包（免包环，
- *                          {@code CacheRetention} 的同一裁决，{@code docs/54 §9 R2}）
+ *                          {@code CacheRetention} 的同一裁决，{@code 原 docs/54 §9 R2}）
  * @param baseUrl           pi {@code Model.baseUrl}：该模型请求实际打到的端点（D-P1，
- *                          {@code docs/65}）。{@code null} ≙ 沿用车道/provider 默认；
+ *                          {@code 原 docs/65}）。{@code null} ≙ 沿用车道/provider 默认；
  *                          三源 {@code model.baseUrl ?? provider.baseUrl ?? 内置}（B136 结案）
  */
 public record ModelInfo(
@@ -184,7 +184,7 @@ public record ModelInfo(
      *   <li>未知按**支持** ⇒ 真不支持时由 provider **报错**（响亮、可诊断）。</li>
      * </ul>
      * <p>pi 没有这个三态：它的 {@code getModel} 查不到就抛，请求根本发不出去 ⇒ 本方法的选择
-     * 是 pi-java 独有状态下的**唯一**判断点，方向取「响亮优于静默」（{@code docs/44 D2}）。</p>
+     * 是 pi-java 独有状态下的**唯一**判断点，方向取「响亮优于静默」（{@code 原 docs/44 D2}）。</p>
      *
      * @return {@code true} 当能力位里**有** {@link ModelCapability#IMAGE_INPUT}，或能力位**为空**（未知）
      */
@@ -195,7 +195,7 @@ public record ModelInfo(
     /**
      * The least a {@link ModelInfo} can be: identity only, everything else empty.
      *
-     * <p>Used when a request names a model the catalog does not know (docs/31 §8.34.4 决策 5) —
+     * <p>Used when a request names a model the catalog does not know (原 docs/31 §8.34.4 决策 5) —
      * today any {@link ModelId} is accepted, and that tolerance is preserved by synthesizing
      * rather than failing.</p>
      *
@@ -204,7 +204,7 @@ public record ModelInfo(
      * *downgrade* content (pi's unsupported-image placeholder, {@code transform-messages.ts:35-57})
      * must therefore keep "unknown" and "unsupported" apart, or it will mangle requests for
      * catalog misses. {@link #supportsImageInput()} is that consumer-facing judgement
-     * (unknown ⇒ supported; {@code docs/44 D2}).</p>
+     * (unknown ⇒ supported; {@code 原 docs/44 D2}).</p>
      */
     public static ModelInfo minimal(ModelId<?> id) {
         return new ModelInfo(id, id.modelName(), Set.of(), 0, 0, false,

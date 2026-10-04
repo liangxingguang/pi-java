@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包 A0 步7（{@code docs/43 D5/D7}）：Anthropic 车道按**凭证种类**分派 ——
+ * 包 A0 步7（{@code 原 docs/43 D5/D7}）：Anthropic 车道按**凭证种类**分派 ——
  * pi {@code api/anthropic-messages.ts:906-989} 的三分派在 pi-java 的对应物。
  *
  * <table>

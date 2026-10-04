@@ -42,7 +42,7 @@ public final class TreeSelectorScreen implements ScreenOverlay {
 
     @Override
     public void apply(AgentSession session, Consumer<AgentSession> switcher) {
-        // 选中一行 = 从该分支点**分支**出去 —— 分支是会话层的事（docs/31 §4.3）：
+        // 选中一行 = 从该分支点**分支**出去 —— 分支是会话层的事（原 docs/31 §4.3）：
         // 新会话持自己的 harness，日志在 entry 前截断后播种。
         //
         // 此前这里是 createLane(选中的名字)，而列表本来就来自现存分支的名字 ——

@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包 A0 步5（{@code docs/43 D4}）：Mistral 车道的**响应路径**净化 —— pi 的三个响应侧
+ * 包 A0 步5（{@code 原 docs/43 D4}）：Mistral 车道的**响应路径**净化 —— pi 的三个响应侧
  * 调用点里，pi-java 只有<b>一个</b>面存在。
  *
  * <table>
@@ -37,7 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * </table>
  *
  * <p>⚠️ 另两个面**不是「漏了净化」而是整个形态没解析**（{@code delta.content} 只按
- * {@code String} 读）—— 属本车道的既有形态缺口，登记在 {@code docs/43 §6}，不在本包范围。</p>
+ * {@code String} 读）—— 属本车道的既有形态缺口，登记在 {@code 原 docs/43 §6}，不在本包范围。</p>
  *
  * <p>夹具形态与 {@code MistralConversationsApiTest} 同（本地 server 喂 SSE）：让 provider
  * 回一条含孤对代理的 delta，断言**事件里的文本已被净化**。JSON 里的 {@code \uD83D} 转义

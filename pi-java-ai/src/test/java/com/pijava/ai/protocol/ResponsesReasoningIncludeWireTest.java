@@ -25,7 +25,7 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
 import org.junit.jupiter.api.Test;
 
 /**
- * <b>Batch F 步 5</b>（{@code docs/67}）：Responses 请求的 {@code include} 门与
+ * <b>Batch F 步 5</b>（{@code 原 docs/67}）：Responses 请求的 {@code include} 门与
  * reasoning 历史项的重放。
  *
  * <p>pi 在 reasoningEffort/reasoningSummary 分支发

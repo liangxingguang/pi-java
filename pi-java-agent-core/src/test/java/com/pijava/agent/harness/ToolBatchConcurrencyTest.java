@@ -34,7 +34,7 @@ import org.junit.jupiter.api.TestInfo;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 工具批次的**真并发**（package B，{@code docs/31 §8.23}）：pi 的
+ * 工具批次的**真并发**（package B，{@code 原 docs/31 §8.23}）：pi 的
  * {@code executeToolCallsParallel} 用 {@code Promise.all}（{@code agent-loop.ts:547}）把整批
  * 执行票同时开跑。本类钉住移植后仍成立的三件事 ——
  *
@@ -258,7 +258,7 @@ class ToolBatchConcurrencyTest {
 
     /**
      * 后声明者先完成 ⇒ 它的 end 先发，而结果消息仍是**源序**。两套顺序不同源
-     * （{@code docs/31 §8.23.1}）是包 B 的核心事实：L5 的 S13 把它做成了端到端证据，
+     * （{@code 原 docs/31 §8.23.1}）是包 B 的核心事实：L5 的 S13 把它做成了端到端证据，
      * 这里用闩锁做结构级的确定性复现（不靠睡眠）。
      *
      * <p>「后者先完成」由**观察端放行**保证：{@code faster} 的 end 一旦被记下就放行闩锁，
@@ -363,7 +363,7 @@ class ToolBatchConcurrencyTest {
      * <p>pi 的 {@code emit} 是 async、由单线程事件循环逐个 await；Java 侧没有那个循环，
      * 于是「工具线程直呼事件链」这条新通路必须由 {@link PiLaneSink#emit} 收口。
      * 八个调用（各自与同伴会合后）同时各流二十条更新，宿主侧计数器一旦看到两条重叠即为红
-     * —— 这是**去掉那把锁就会亮**的判据（见 {@code docs/31 §8.23.6} 的 RE-2）。</p>
+     * —— 这是**去掉那把锁就会亮**的判据（见 {@code 原 docs/31 §8.23.6} 的 RE-2）。</p>
      */
     @Test
     void harnessSerializesConcurrentToolEventsForTheHost() {

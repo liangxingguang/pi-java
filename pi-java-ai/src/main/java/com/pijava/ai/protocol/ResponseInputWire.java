@@ -13,7 +13,7 @@ import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.utils.SanitizeUnicode;
 
 /**
- * docs/66：openai-responses 车道的**用户/指令输入项**构建（从
+ * 原 docs/66：openai-responses 车道的**用户/指令输入项**构建（从
  * {@code ResponsesMessageConverter} 抽出，拆分步骤 7）。
  */
 final class ResponseInputWire {

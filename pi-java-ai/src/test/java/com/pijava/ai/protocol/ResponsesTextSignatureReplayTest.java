@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * <b>docs/71 G2</b>：Responses 请求侧的回执 id 链 —— 逐行照 pi
+ * <b>原 docs/71 G2</b>：Responses 请求侧的回执 id 链 —— 逐行照 pi
  * {@code openai-responses-shared.ts:267-287}。
  *
  * <p>pi 的规则：每个**文本块**推一条 {@code message} item；id 依次取

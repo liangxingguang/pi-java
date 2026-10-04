@@ -18,7 +18,7 @@ import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.ai.thinking.ThinkingLevelMap;
 
 /**
- * D-P1（{@code docs/65}）：把 models.json 中命中内置 provider 的配置<b>合并</b>进
+ * D-P1（{@code 原 docs/65}）：把 models.json 中命中内置 provider 的配置<b>合并</b>进
  * 内置模型目录 —— pi {@code coding-agent/src/core/provider-composer.ts:184-221} 的
  * {@code applyModelsJson} ＋ {@code applyModelOverride}。
  *

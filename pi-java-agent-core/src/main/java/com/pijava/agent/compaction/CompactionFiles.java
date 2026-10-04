@@ -14,7 +14,7 @@ import com.pijava.ai.message.Message;
 
 /**
  * 压缩产物的文件清单（pi {@code harness/compaction/utils.ts:24-72} +
- * {@code compaction.ts:46-76}，B2，见 {@code docs/31 §8.30}）。
+ * {@code compaction.ts:46-76}，B2，见 {@code 原 docs/31 §8.30}）。
  *
  * <p>两样产物同源：摘要**文本**尾部的 {@code <read-files>}/{@code <modified-files>}
  * 两块，与落库 {@code Entry.Compaction.details} 的两个键。pi 从不为此问模型 ——

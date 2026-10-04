@@ -31,7 +31,7 @@ commands: `mvn clean verify`, `mvn test -pl <module>`, `mvn checkstyle:check`, `
 
 所有代码由 AI 写，人只审核。每个 Phase 按 8 步推进。详见 `docs/00-ai-driven-development-process.md`。
 
-每个阶段第一项任务是编写 `docs/XX-phaseN-xxx-design.md`（从 `03-detailed-design.md` 对应章节扩展）。阶段设计文档是实施蓝图，后续整理为开发教程。
+当前主线是**按「对齐包」推进**，不再按 Phase：每个包先写 `docs/NN-xxx-design.md`（从 `docs/03-detailed-design.md` 对应章节扩展，带 pi 的 `file:line` 与逐字代码），用户审核通过后才许写代码；闭环时回填该包文首 banner ＋ `docs/05` 台账 ＋ `docs/08` 的任务表。
 
 ## 设计文档
 
@@ -41,6 +41,10 @@ commands: `mvn clean verify`, `mvn test -pl <module>`, `mvn checkstyle:check`, `
 | `docs/02-architecture-design.md` | 11 模块结构、分层依赖、核心接口 |
 | `docs/03-detailed-design.md` | 类级设计：Entry/LaneRecord、AgentHarness、SessionStorage/Repository、SQLite schema、JSONL v4 格式、TamboUI 业务组件、23 slash 命令、~40 CLI 参数 |
 | `docs/04-implementation-plan.md` | Phase 0–6、13–17 周 MVP、风险矩阵 |
+| `docs/05-open-items-register.md` | 未结项台账（「还剩什么没对齐」的唯一权威） |
+| `docs/06-module-alignment-map.md` | 模块对齐地图（量化）；明细在 `docs/map/` |
+| `docs/07-gap-inventory.md` | 模块缺口清单与补全计划 |
+| `docs/08-ai-next-work-items-design.md` | `pi-java-ai` 下一步待做清单与设计入口 |
 
 ## 编码规范
 
@@ -64,7 +68,7 @@ commands: `mvn clean verify`, `mvn test -pl <module>`, `mvn checkstyle:check`, `
 D:\workplaceForai\pi
 
 ## pi ↔ pi-java 对照表
-- [模块对齐地图（量化）](docs/40-module-alignment-map.md) — 逐模块加权完成度 + 缺口 + 计划；明细在 `docs/map/`
+- [模块对齐地图（量化）](docs/06-module-alignment-map.md) — 逐模块加权完成度 + 缺口 + 计划；明细在 `docs/map/`
   （⚠️ 2026-09-20：原 `docs/phase1-pi-code-mapping.md` 已删 —— 它映射到 pi **已删除**的目录结构、
     其「~92% 完成度」出自被此后 49% 的提交超越的旧文档，且与本项目判据（行为）不可通约）
 

@@ -11,7 +11,7 @@ public record ShellOptions(
     OptionalLong timeoutSeconds,
     AbortSignal signal,
     /**
-     * 执行中接收输出增量的汇（包⑧，{@code docs/35}）；{@code null} ＝ 不订阅
+     * 执行中接收输出增量的汇（包⑧，{@code 原 docs/35}）；{@code null} ＝ 不订阅
      * （行为与加这个组件之前逐字相同）。
      *
      * <p>⚠️ 放在这里而不是给 {@code ShellExecutor.execute} 加参数：实现者只有

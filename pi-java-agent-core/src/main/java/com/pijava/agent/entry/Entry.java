@@ -20,7 +20,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
  * <p>Optional pi fields ({@code terminate}/{@code details}/{@code usage}/
  * {@code data}) are omitted from JSON when {@code null}.</p>
  *
- * <p>⚠️ <b>没有 {@code active_tools_change} 这个变体</b>（包 A3 的裁决 R2，{@code docs/51 §9}）。
+ * <p>⚠️ <b>没有 {@code active_tools_change} 这个变体</b>（包 A3 的裁决 R2，{@code 原 docs/51 §9}）。
  * pi 主线**从不发射**它 —— {@code git grep active_tools_change} 在 {@code packages/agent/src} ＋
  * {@code packages/coding-agent/src}（排除 {@code harness/}）零命中，它只活在
  * {@code harness/session/jsonl/legacy-v3.ts}（v3 会话导入器）里，而 {@code docs/harness.md:1455}

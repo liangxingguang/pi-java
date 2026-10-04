@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 包 A-01 步 A1a 的夹具：{@link CompatResolver#anthropicCacheControl} 与
  * {@link CacheRetention#parse}。
  *
- * <p><b>oracle</b>：{@code docs/54 §7.1} 的 pi 探针 P1–P6/P18 —— 那是<b>跑</b>
+ * <p><b>oracle</b>：{@code 原 docs/54 §7.1} 的 pi 探针 P1–P6/P18 —— 那是<b>跑</b>
  * {@code streamSimple} ＋ {@code onPayload} 抓到的真实出站体，不是读源码推的。每条用例的
  * 注释标出对应的 P 编号。</p>
  *
@@ -142,7 +142,7 @@ class AnthropicCacheControlTest {
 
     @Test
     void aNullModelStillResolvesTheDefault() {
-        // StreamRequest.model 允许为空（docs/53 §4.1 的 base(...) 容忍 null）。
+        // StreamRequest.model 允许为空（原 docs/53 §4.1 的 base(...) 容忍 null）。
         assertThat(CompatResolver.anthropicCacheControl(
             null, Optional.empty(), null).orElseThrow().oneHourTtl()).isFalse();
     }
@@ -152,7 +152,7 @@ class AnthropicCacheControlTest {
     @Test
     void builtInAnthropicModelsResolveBothCacheGatesToTrue() {
         // 包 A-01 的 forAnthropic 补了两个 `?? true`。用**真**模型钉，避免手搓 compat
-        // 把「解析层到底有没有填」这件事遮住（A7c 的教训，docs/53 §4.5）。
+        // 把「解析层到底有没有填」这件事遮住（A7c 的教训，原 docs/53 §4.5）。
         for (var id : new String[] {"claude-opus-4-8", "claude-sonnet-4-6",
                                     "claude-haiku-4-5-20251001"}) {
             var compat = CompatResolver.forAnthropic(builtIn(id));

@@ -21,7 +21,7 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包⑧（docs/35）：**真实** {@code BashTool} 跑一条命令时，部分结果确实流出去了。
+ * 包⑧（原 docs/35）：**真实** {@code BashTool} 跑一条命令时，部分结果确实流出去了。
  *
  * <p>这是 B46 的**决定性**夹具。发射器单测（{@code BashUpdateEmitterTest}）只证明
  * 「给它喂增量它会照 pi 的语义发」；本条证明「生产路径**真的**会喂它」——

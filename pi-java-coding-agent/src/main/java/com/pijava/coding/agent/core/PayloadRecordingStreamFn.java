@@ -197,7 +197,7 @@ final class PayloadRecordingStreamFn implements StreamFn {
                 ? terminal.partial().stopReason() : terminal instanceof StreamEvent.StreamError se
                     ? "error" : null);
             if (terminal instanceof StreamEvent.StreamError se) {
-                // C 批次（docs/55 §6.3-14）：与另外三处读点同规 —— 文本正源是消息
+                // C 批次（原 docs/55 §6.3-14）：与另外三处读点同规 —— 文本正源是消息
                 // （生产者落定），Throwable 只兜底（未经 settle 的裸事件）。
                 payload.put("error", StreamEvent.StreamError.textOf(se));
             }

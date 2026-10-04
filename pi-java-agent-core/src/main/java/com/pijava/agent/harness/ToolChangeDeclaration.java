@@ -40,7 +40,7 @@ import com.pijava.agent.tool.ToolRegistry;
  * 否则每一次比较的基准都是空表、每次都会宣告全部工具。pi 靠
  * {@code createMutableAgentState}（{@code agent.ts:84-85}）在会话起点把「系统提示 ＋ 工具」
  * 折成一条前导系统消息来解决；java 的同一件事在
- * {@link PiLaneEngine} 起手时做（{@code docs/51 §12} 的 F11）。</p>
+ * {@link PiLaneEngine} 起手时做（{@code 原 docs/51 §12} 的 F11）。</p>
  */
 final class ToolChangeDeclaration {
 

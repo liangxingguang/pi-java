@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p><b>夹具骨架镜像 pi 自己的测试</b>（{@code packages/ai/test/max-thinking.test.ts}）
  * —— 同一份输入、两套期望，是<b>跨实现 oracle</b>，比自造夹具强一档
- * （包B84 撞出的口径，{@code docs/45 §10}）。三个用例逐个对应 pi 的三条：</p>
+ * （包B84 撞出的口径，{@code 原 docs/45 §10}）。三个用例逐个对应 pi 的三条：</p>
  *
  * <ol>
  *   <li>pi「is opt-in for ordinary reasoning models」—— 普通 reasoning 模型

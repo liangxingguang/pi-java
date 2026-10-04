@@ -200,7 +200,7 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
         // pi :791：content ?? [] —— 无类型工具可能返回无内容的结果，null 不进历史
         var content = result.content() != null ? result.content() : List.<ContentBlock>of();
         // pi :792-794：details/usage/addedToolNames 原样转发到消息上（A7 的闭环点）
-        // docs/71 G1：工具结果消息在构造点盖时间戳（pi harness/execution/tools.ts:203
+        // 原 docs/71 G1：工具结果消息在构造点盖时间戳（pi harness/execution/tools.ts:203
         // 的 Date.now()；createToolResultMessage 一条路 :784-797）。
         return new PiLoop.ToolOutcome(
             new Message.ToolResultMessage(call.toolCallId(), call.toolName(), content,

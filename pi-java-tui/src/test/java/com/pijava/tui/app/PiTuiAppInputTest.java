@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PiTuiAppInputTest {
 
     /**
-     * 夹具会话的落盘目录（docs/39 裁决 B）。
+     * 夹具会话的落盘目录（原 docs/39 裁决 B）。
      *
      * <p>空 args ⇒ 既无 {@code --session-dir} 也无 {@code --no-session} ⇒ 走持久
      * 路径，在开发者**真实 home** 的 {@code --<模块目录>--} 下每次跑测试留一个会话

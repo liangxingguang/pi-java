@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 
 /**
- * <b>docs/71 G2</b>：{@code TextSignatureV1} 的编解码 —— 逐行照 pi
+ * <b>原 docs/71 G2</b>：{@code TextSignatureV1} 的编解码 —— 逐行照 pi
  * {@code openai-responses-shared.ts:52-76}（{@code encodeTextSignatureV1} /
  * {@code parseTextSignature}）。
  */

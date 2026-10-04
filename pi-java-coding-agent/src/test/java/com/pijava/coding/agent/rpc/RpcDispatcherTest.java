@@ -178,7 +178,7 @@ class RpcDispatcherTest {
             .contains("\"success\":true")
             .contains("\"model\":\"faux-state/hello\"");
 
-        // 包④（docs/31 §8.37）：state 载荷的四个字段此前写死 false/null/null/0，
+        // 包④（原 docs/31 §8.37）：state 载荷的四个字段此前写死 false/null/null/0，
         // 现在逐字段取自会话。这里钉住静态会话下的取值 —— 真值侧
         // （压缩进行中 / 有排队 / 有落盘路径）各自在下面或 agent-core 侧钉。
         var payload = payloadOf(output, "2");
@@ -310,7 +310,7 @@ class RpcDispatcherTest {
         var partial = AssistantMessage.empty().withStopReason("error");
         var errorSeq = List.<StreamEvent>of(
             new StreamEvent.Start(AssistantMessage.empty()),
-            // C 批次（docs/55 §6.3-10）：生产者落定 ⇒ "overloaded" 在消息上，
+            // C 批次（原 docs/55 §6.3-10）：生产者落定 ⇒ "overloaded" 在消息上，
             // 分类器读得到（此前靠 withErrorShape 补，已删）。
             StreamEvent.StreamError.settle(
                 "error", new RuntimeException("overloaded"), partial));

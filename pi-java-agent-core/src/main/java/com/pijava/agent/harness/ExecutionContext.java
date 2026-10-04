@@ -105,7 +105,7 @@ record ExecutionContext(
 
     /**
      * pi {@code model.maxTokens} —— 溢出恢复的 {@code isRecoverableLength} 操作数
-     * （3c，{@code docs/31 §8.21}；{@code agent-session.ts:2184}）。按当前模型解析；
+     * （3c，{@code 原 docs/31 §8.21}；{@code agent-session.ts:2184}）。按当前模型解析；
      * 解析不到 ⇒ 0 ⇒ 判据恒 false（裁决④）。
      */
     int maxOutputTokens(ModelId<?> model) {

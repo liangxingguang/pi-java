@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包 A-02（docs/59 §4.5，登记 B138）：{@code effectiveOptions} 的 baseUrl 回落
+ * 包 A-02（原 docs/59 §4.5，登记 B138）：{@code effectiveOptions} 的 baseUrl 回落
  * **必须保真 authKind**。
  *
  * <p>改前这里用五参 {@code ApiOptions} 构造重建 ⇒ compact 构造器把 kind 归一成

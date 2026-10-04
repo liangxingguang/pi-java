@@ -23,7 +23,7 @@ public final class ModelData {
 
     /**
      * 静态模型表的快照时间（对齐 pi {@code modelDataManifest.generatedAt}，
-     * docs/70 R5/§4.7）：所有内置 provider 的目录共用这一个时间戳。
+     * 原 docs/70 R5/§4.7）：所有内置 provider 的目录共用这一个时间戳。
      *
      * <p>语义是「这批数据对应的 pi 生成数据是哪天的」，不是「代码什么时候写的」——
      * 远程目录的守卫（{@code RemoteCatalogProvider.remoteModels}）会**丢弃
@@ -151,7 +151,7 @@ public final class ModelData {
             : new PricingInfo(in, out);
         // 包 A-09：内置条目携带目录 compat（与 BuiltinCatalog.deepseekModel 的先例同形）
         // —— 此前恒给 ModelCompat.NONE，moonshotai／xiaomi／qwen-token-plan 的
-        // thinkingFormat 目录值（探测给不出）就此丢失（docs/58 §3 缺口 7）。
+        // thinkingFormat 目录值（探测给不出）就此丢失（原 docs/58 §3 缺口 7）。
         return new ModelInfo(
             ModelId.of(provider, name), display, caps, maxIn, maxOut, false, pricing,
             ThinkingLevelMap.empty(), Map.of(), Map.of(),

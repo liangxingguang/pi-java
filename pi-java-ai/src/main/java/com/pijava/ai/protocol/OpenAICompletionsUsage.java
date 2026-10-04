@@ -12,7 +12,7 @@ import com.pijava.ai.model.CostCalculator;
 
 /**
  * OpenAI-completions 车道的 usage 归一 —— pi {@code openai-completions.ts:1509-1550}
- * {@code parseChunkUsage} 的逐条移植（包 H1 步 4，{@code docs/42 §2.1 P8–P10}）。
+ * {@code parseChunkUsage} 的逐条移植（包 H1 步 4，{@code 原 docs/42 §2.1 P8–P10}）。
  *
  * <p>三条语义必须逐字照抄，否则会得到与 pi <b>不同的数</b>：</p>
  *

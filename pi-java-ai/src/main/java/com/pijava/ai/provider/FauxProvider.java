@@ -108,9 +108,9 @@ public final class FauxProvider implements Provider {
      * Convenience: create a FauxProvider that returns an error.
      * Produces: Start → StreamError.
      *
-     * <p>C 批次（{@code docs/55}）：三条终局都经 {@code settle} 工厂落定。
+     * <p>C 批次（{@code 原 docs/55}）：三条终局都经 {@code settle} 工厂落定。
      * ⚠️ 这条尤其要紧 —— {@code FauxChatApi} 沿用的是生产那条身份挂载缝，
-     * 但**出口缝只补身份与计量、不造文本**（{@code docs/55 §11-2}）⇒ 桩若不落定，
+     * 但**出口缝只补身份与计量、不造文本**（{@code 原 docs/55 §11-2}）⇒ 桩若不落定，
      * 一切经 faux 驱动的夹具就仍在旧形状上跑（错误文本只在 {@code Throwable} 上）。</p>
      */
     public static FauxProvider error(String message) {
@@ -149,7 +149,7 @@ public final class FauxProvider implements Provider {
     // ── FauxChatApi ───────────────────────────────────────────
 
     /**
-     * 夹具的 {@code ChatApi} —— 包⑪（docs/38，台账 A16）**改为继承
+     * 夹具的 {@code ChatApi} —— 包⑪（原 docs/38，台账 A16）**改为继承
      * {@link AbstractChatApi}**，即走**生产同一条**身份挂载缝。
      *
      * <p>此前它直接实现 {@code ChatApi}、**绕过**了那个唯一的挂载点 ⇒ 一切经 faux
@@ -177,7 +177,7 @@ public final class FauxProvider implements Provider {
         }
 
         /**
-         * 测试替身**不参与**请求侧选项解析（包 A-10，{@code docs/57 §6 R2}）。
+         * 测试替身**不参与**请求侧选项解析（包 A-10，{@code 原 docs/57 §6 R2}）。
          *
          * <p>pi 的 faux 也不过 {@code buildBaseOptions}；更重要的是，本替身存在的意义是
          * 重放**给定的**事件序列 —— 让它的请求被悄悄改写会让「夹具输入 = 断言前提」

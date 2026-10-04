@@ -84,7 +84,7 @@ class PiMessagesApiTest {
     }
 
     /**
-     * Batch F 步 8（docs/67）：toolcall_end 的 toolCall.thoughtSignature 必须
+     * Batch F 步 8（原 docs/67）：toolcall_end 的 toolCall.thoughtSignature 必须
      * 透传进终态 partial —— 签名随工具块落盘，下一轮跨上下文重放才带得出。
      */
     @Test
@@ -112,7 +112,7 @@ class PiMessagesApiTest {
     }
 
     /**
-     * <b>P4</b>（docs/31 §8.33）：pi-messages 车道的 {@code thinking_end} **带**
+     * <b>P4</b>（原 docs/31 §8.33）：pi-messages 车道的 {@code thinking_end} **带**
      * {@code contentSignature}/{@code redacted}（wire 形状见 {@code pi-messages.ts:60-64}，
      * pi 在 {@code :236-240} 把两者装配回块）。这四个字段在
      * {@link PiMessagesEvent.ThinkingEnd} 早已声明，但适配器此前只调无参

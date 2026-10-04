@@ -25,7 +25,7 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
 import org.junit.jupiter.api.Test;
 
 /**
- * <b>Batch F 步 7</b>（{@code docs/67}）：Completions {@code reasoning_details}
+ * <b>Batch F 步 7</b>（{@code 原 docs/67}）：Completions {@code reasoning_details}
  * 的**重放** —— pi 从 thinking 块签名解析结构化 details、从 toolCall.thoughtSignature
  * 解析 legacy 加密项，挂到助手消息的 reasoning_details；有 details 时不发裸
  * reasoning 字段（互斥）。{@code openai-completions.ts:1301-1307/:1329-1339/:1373-1375}。

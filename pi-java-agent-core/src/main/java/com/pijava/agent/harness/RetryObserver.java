@@ -2,7 +2,7 @@ package com.pijava.agent.harness;
 
 /**
  * 自动重试事件的宿主观察口 —— 与 {@code CompactionObserver}（3c）并列的轻量槽
- * （package 3d，{@code docs/31 §8.22}，裁决③：不占 {@code HookSystem}）。
+ * （package 3d，{@code 原 docs/31 §8.22}，裁决③：不占 {@code HookSystem}）。
  * 覆盖 pi 两环的全部会话事件：
  *
  * <ul>
@@ -42,7 +42,7 @@ public interface RetryObserver {
     /**
      * pi {@code summarization_retry_attempt_start} —— {@code source} 为
      * {@code "compaction"}（携带 {@code reason}）或 {@code "branchSummary"}
-     * （3d 无 branch-summary 实现，槽位照形状保留，docs/31 §8.22.5-2）。
+     * （3d 无 branch-summary 实现，槽位照形状保留，原 docs/31 §8.22.5-2）。
      */
     default void onSummarizationRetryAttemptStart(String source, String reason) { }
 

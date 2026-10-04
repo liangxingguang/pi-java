@@ -17,13 +17,13 @@ import com.pijava.ai.provider.ProviderRegistry;
 import com.pijava.coding.agent.cli.Args;
 
 /**
- * 目录刷新的两阶段编排（pi {@code ModelRuntime.refresh}，docs/70 §1.5/§4.6）。
+ * 目录刷新的两阶段编排（pi {@code ModelRuntime.refresh}，原 docs/70 §1.5/§4.6）。
  *
  * <p>**先全部离线恢复（{@code allowNetwork=false}），再（允许联网时）全部联网** ——
  * 保证无网/慢网时缓存 overlay 立即可用。每个 provider 一个虚拟线程；单个 provider
  * 的失败记录进结果而不打断其他 provider（pi 用 {@code Promise.all}，但
  * {@code refreshModels} 的错误在 pi 里也会 reject 整批 —— 本仓选择逐 provider 记账，
- * 判定见 docs/70 §12）。</p>
+ * 判定见 原 docs/70 §12）。</p>
  */
 public final class ModelCatalogRefresh {
 

@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * 包B84 步1：<b>SDK 能力探针</b> —— {@code FunctionResponse.parts} 能不能表达。
  *
- * <p>本类**没有先红**（依赖升级不是行为改动，见 {@code docs/45 §4} 步1）；它的价值在于
+ * <p>本类**没有先红**（依赖升级不是行为改动，见 {@code 原 docs/45 §4} 步1）；它的价值在于
  * <b>编译即证明</b>：{@code google-genai 1.15.0} 的 {@code FunctionResponse} 只有
  * {@code willContinue}/{@code scheduling}/{@code id}/{@code name}/{@code response}
  * 五个字段（{@code javap} 实测），{@code FunctionResponsePart} 整个类型不存在 ⇒

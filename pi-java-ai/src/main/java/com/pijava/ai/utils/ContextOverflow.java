@@ -7,7 +7,7 @@ import com.pijava.ai.message.Message;
 
 /**
  * 上下文溢出判定 —— pi {@code packages/ai/src/utils/overflow.ts} 的逐条移植
- * （package 3c，{@code docs/31 §8.21}）。与 pi 同层（ai 工具层）：溢出是
+ * （package 3c，{@code 原 docs/31 §8.21}）。与 pi 同层（ai 工具层）：溢出是
  * <b>provider 响应形状</b>的知识，不是循环策略 —— harness 的自动压缩
  * （{@code _checkCompaction}）与宿主的自动重试排除（{@code _isRetryableError} 首行）
  * 都调这一个谓词。

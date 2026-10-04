@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 包④：压缩的「在飞窗口」（pi {@code AgentSession.isCompacting}，
- * {@code agent-session.ts:983-990}；{@code docs/31 §8.37}）。
+ * {@code agent-session.ts:983-990}；{@code 原 docs/31 §8.37}）。
  *
  * <p><b>置位点两个入口不同</b>，这是本文件要钉的核心 —— pi 原文：
  * 手动 {@code compact()} 先建控制器<b>再</b>发事件（{@code :1969} 在 {@code :1970} 之前），

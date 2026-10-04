@@ -15,7 +15,7 @@ import com.pijava.ai.provider.ModelsJsonSchema.ModelDef;
 
 /**
  * models.json 的 compat 层：raw {@code CompatDef} 的解析与合并（D-P1 从
- * {@code ModelsJsonConfig} 拆出，{@code docs/65 §3 Step 5}）。
+ * {@code ModelsJsonConfig} 拆出，{@code 原 docs/65 §3 Step 5}）。
  *
  * <p>对应 pi {@code provider-composer.ts} 的 {@code mergeCompat}（:86-106）：
  * raw 字段先两层合并（provider 级为 base、model 级覆盖），再一次性归一为
@@ -30,7 +30,7 @@ final class ModelsJsonCompat {
      *
      * <p>{@code allowEmptySignature} is normalized — an absent block, or an absent key inside it,
      * both mean {@code false} (pi {@code anthropic-messages.ts:215} normalizes with
-     * {@code ?? false}), so there is no third state to preserve (docs/31 §8.34.4 决策 3).
+     * {@code ?? false}), so there is no third state to preserve (原 docs/31 §8.34.4 决策 3).
      * {@code supportsTemperature} is normalized with the **opposite** default ({@code true},
      * exactly like {@code supportsFinishReason}): its detected value is the constant
      * {@code true}, so only an explicit {@code false} suppresses the field.</p>
@@ -48,8 +48,8 @@ final class ModelsJsonCompat {
      * {@code supportsStrictMode}。理由是「用户没写」与「用户写了缺省值」必须可区分 ——
      * 前者要**让目录值与探测值活下来**，后者要**压掉**它们。今天在
      * {@code models[]} 里重定义一个内置模型时两者行为相同（整条替换、
-     * {@code docs/53 §3 F7} 的 path C），但逐字段合并补上时立刻需要
-     * （{@code docs/53 §9 R6}）。</p>
+     * {@code 原 docs/53 §3 F7} 的 path C），但逐字段合并补上时立刻需要
+     * （{@code 原 docs/53 §9 R6}）。</p>
      *
      * <p>⚠️ {@code supportsFinishReason} 的归一方向与 {@code allowEmptySignature} **相反**
      * —— 不是疏忽：pi 对该标志的探测值是常量 {@code true}（{@code detectCompat:1640}，
@@ -103,7 +103,7 @@ final class ModelsJsonCompat {
                 def.chatTemplateArgs()),
             def.supportsReasoningEffort(),
             // 包 A-02：cacheControlFormat 闭集响亮抛（与 maxTokensField 同口径）；
-            // openRouterRouting 纯透传（null 保持 null，不归一——docs/59 R6）。
+            // openRouterRouting 纯透传（null 保持 null，不归一——原 docs/59 R6）。
             cacheControlFormatOf(providerId, model.id(), def.cacheControlFormat()),
             def.openRouterRouting(),
             // 包 B103：两个亲和字段原样透传可空值（缺省由车道构造期按 openrouter 探测补）。
@@ -364,7 +364,7 @@ final class ModelsJsonCompat {
      *
      * <p>⚠️ {@code Literal(null)} 是**合法值**（「写这个键，值是 null」，pi
      * {@code resolveChatTemplateKwargValue:1050} 的早返回）—— 别把 JSON null 当缺席吞掉
-     * （{@code docs/58} R11）。</p>
+     * （{@code 原 docs/58} R11）。</p>
      */
     private static ChatTemplateKwargValue kwargValueOf(String providerId, String modelId,
                                                        String keyName, String key, Object raw) {
@@ -420,7 +420,7 @@ final class ModelsJsonCompat {
 
     /**
      * models.json 的 {@code maxTokensField} 串 ⇒ {@link MaxTokensField}
-     * （{@code docs/53 §4.3}）。
+     * （{@code 原 docs/53 §4.3}）。
      *
      * <p>⚠️ 未知取值**响亮抛错**，而不是像同文件其它未知键那样被忽略：它是二值闭集，
      * 写错一个字母会让线格上的**字段名**静默换掉（{@code max_completion_tokens} ↔

@@ -23,7 +23,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 落盘时机对齐 pi 产品（docs/27 §2.1）。
+ * 落盘时机对齐 pi 产品（原 docs/27 §2.1）。
  *
  * <p>pi 的 {@code session-manager._appendEntry → _persist} 在**每条 entry 产生后**
  * 立即 {@code appendFileSync}，所以崩溃窗口是"一条 entry"。pi-java 此前只在
@@ -80,7 +80,7 @@ class SessionFlushTimingTest {
 
         assertThat(persistedAtFirstStreamEvent.get())
             .as("助手流开始前，用户 prompt 的 entry 必须已经落盘"
-                + "（docs/27 §2.1：pi 逐条写，崩溃窗口为一条 entry）")
+                + "（原 docs/27 §2.1：pi 逐条写，崩溃窗口为一条 entry）")
             .isGreaterThanOrEqualTo(1);
     }
 

@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * pi {@code packages/ai/src/utils/retry.ts} 白名单判据的移植哨兵（package 3d，
- * {@code docs/31 §8.22}）。表驱动按 retry.ts 的注释分组取样：每组至少一条命中、
+ * {@code 原 docs/31 §8.22}）。表驱动按 retry.ts 的注释分组取样：每组至少一条命中、
  * 配额排除表逐条、以及「默认不重试」的三个入口（非 error / null / 空串）。
  */
 class RetryableErrorTest {
@@ -30,7 +30,7 @@ class RetryableErrorTest {
     @ValueSource(strings = {
         "The model is currently overloaded",
         // pi 白名单里紧跟 "overloaded" 的那条（retry.ts:29）—— 移植时曾整条漏掉
-        // （docs/43 包A0 步6）：高需求文案不重试、直接失败。
+        // （原 docs/43 包A0 步6）：高需求文案不重试、直接失败。
         "The model is currently experiencing high demand, please try again later",
         "Rate limit reached for gpt-5",
         "Too many requests",

@@ -65,7 +65,7 @@ final class QueueManager {
 
     /**
      * Append an item to the selected queue and emit its {@code QueueEnqueued}
-     * record (docs/21 D2 — the record log is the audit source, so every
+     * record (原 docs/21 D2 — the record log is the audit source, so every
      * enqueue must be recorded).
      */
     private String enqueue(String laneName, String prompt, List<PromptImage> images,
@@ -87,7 +87,7 @@ final class QueueManager {
      * <p>{@code lane.runId} survives a finished run, so tagging an idle
      * enqueue with it would place the record after that operation's finish.
      * Nothing validates that any more (the record-log fold was retired,
-     * docs/30), but the log is still an audit trail worth keeping honest.</p>
+     * 原 docs/30), but the log is still an audit trail worth keeping honest.</p>
      */
     private static String currentRunId(LaneState lane) {
         return lane.isRunning() ? lane.runId : null;

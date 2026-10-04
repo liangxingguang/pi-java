@@ -2,7 +2,7 @@
 
 > 基准：pi `D:\workplaceForai\pi` @ **`3390bd936`**（2026-09-20，前一次测于 `71dca871b`，**111 个提交**）；
 > pi-java `D:\workplaceForai\pi-java` @ `34849a2`（未动）。
-> 台账 = `docs/32-open-items-register.md`。所有 `file:line` 均为**新 HEAD 实读**。
+> 台账 = `docs/05-open-items-register.md`。所有 `file:line` 均为**新 HEAD 实读**。
 >
 > ⚠️ **测后披露**：测量期间 pi 的工作树被外部 checkout 回 `71dca871b`（`git reflog`: `checkout: moving from main to 71dca871b`）。
 > 新 HEAD 的数据与行号全部经 `git show 3390bd936:<path>` 读取，**未改动工作树**。

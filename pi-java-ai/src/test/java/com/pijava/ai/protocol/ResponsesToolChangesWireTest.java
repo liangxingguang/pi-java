@@ -27,10 +27,10 @@ import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ThinkingLevelMap;
 
 /**
- * <b>包 A3c</b>：Responses 车道的**工具增删原生渲染**（{@code docs/51 §4.4}）。
+ * <b>包 A3c</b>：Responses 车道的**工具增删原生渲染**（{@code 原 docs/51 §4.4}）。
  *
  * <p>骨架镜像 pi 自己的 oracle {@code packages/ai/test/transcript-tool-changes.test.ts:190-255}
- * 的四条用例（{@code docs/45 §10} 那条「夹具骨架优先镜像 pi 自己的测试」）——
+ * 的四条用例（{@code 原 docs/45 §10} 那条「夹具骨架优先镜像 pi 自己的测试」）——
  * 同一份输入、逐条对照期望。观测面是**真出站请求体**（{@link RecordingHttpServer}），
  * 与 {@code ResponsesToolsStrictWireTest}／{@code LaneTransformMessagesSourceTest} 同一装置。</p>
  *
@@ -41,12 +41,12 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
  *       {@code model.reasoning &amp;&amp; compat?.supportsDeveloperRole !== false ? "developer" : "system"}
  *       （{@code openai-responses-shared.ts:213}），oracle 的模型 {@code reasoning:true}
  *       ⇒ 它断言 {@code developer}。java 侧恒发 {@code system}（{@code supportsDeveloperRole}
- *       尚未接进 {@code ModelCompat}，登记 {@code docs/41 A-07} / {@code docs/51 §10 L-E}）
+ *       尚未接进 {@code ModelCompat}，登记 {@code docs/07 A-07} / {@code 原 docs/51 §10 L-E}）
  *       ⇒ 本夹具用 {@code reasoning:false} 的模型，使两侧在这一点上**本来就同形**，
  *       于是「role 差异」不会混进对锚定结构的断言。注意 {@code additional_tools} 项自己的
  *       {@code role:"developer"} 是 pi **写死的**（{@code :188}），java 照抄。</li>
  *   <li><b>sections</b>：pi 的 {@code context} 带 {@code sections}（含 {@code docs: null} 的删除），
- *       java 的 {@code Map<String,String>} 表达不了「值在场但为 null」（{@code docs/49 §9 R3①}）
+ *       java 的 {@code Map<String,String>} 表达不了「值在场但为 null」（{@code 原 docs/49 §9 R3①}）
  *       ⇒ 本夹具只用 {@code content}＋工具字段，文本项对照的是 {@code renderSystemMessageUpdate}
  *       里**能表达的那一支**。</li>
  * </ul>

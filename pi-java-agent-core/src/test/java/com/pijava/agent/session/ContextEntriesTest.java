@@ -252,7 +252,7 @@ class ContextEntriesTest {
         assertThat(ContextEntries.toMessages(List.<Entry>of(assistant))).hasSize(1);
     }
 
-    // ── A1: 系统消息载荷（docs/48 §A1）─────────────────────────────────────
+    // ── A1: 系统消息载荷（docs/08 §A1）─────────────────────────────────────
 
     /**
      * 系统消息是第四种 {@code Message} 变体，仍然以 {@code Entry.Message} 载荷的形式
@@ -277,7 +277,7 @@ class ContextEntriesTest {
     }
 
     /**
-     * 工具增删**不是** entry（包 A3 的裁决 R2，{@code docs/51 §9}）：{@code Entry.ActiveToolsChange}
+     * 工具增删**不是** entry（包 A3 的裁决 R2，{@code 原 docs/51 §9}）：{@code Entry.ActiveToolsChange}
      * 已删，这条线走的是系统消息的 {@code toolsAdded}/{@code toolsRemoved} ⇒ 由
      * {@code Message.SystemMessage} 那一支承载（见 {@code toolsAdded} 相关用例）。
      */

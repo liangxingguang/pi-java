@@ -13,7 +13,7 @@ import org.junit.jupiter.api.TestFactory;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * L5 差分：把同一份剧本分别喂给 pi 与 pi-java，逐帧比对（{@code docs/23c §2}）。
+ * L5 差分：把同一份剧本分别喂给 pi 与 pi-java，逐帧比对（{@code 原 docs/23c §2}）。
  *
  * <p>剧本 {@code conformance/scripts/S*.json} 两侧共用；pi 的真相由
  * {@code conformance/pi/run.test.ts} 在 pi 检出（tag {@code v0.85.1}）里生成，落在
@@ -28,11 +28,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   npx vitest --run --config vitest.conformance.config.ts test/conformance/run.test.ts
  * </pre>
  *
- * <p>比对口径见 {@code docs/23c §2.3}（归一化）与 {@code §2.4}（P0/P1/P2 归档）：
+ * <p>比对口径见 {@code 原 docs/23c §2.3}（归一化）与 {@code §2.4}（P0/P1/P2 归档）：
  * 全部剧本**严格**逐帧比较 —— 曾有的唯一放宽规则（S4 的
  * {@code PARALLEL_TOOL_END_ORDER}）已随 {@code ToolRunner} 的两相拆分删除。</p>
  *
- * <p><b>剧本里的延迟是声明出来的</b>（{@code docs/31 §8.23.7}）：并行批次的
+ * <p><b>剧本里的延迟是声明出来的</b>（{@code 原 docs/31 §8.23.7}）：并行批次的
  * {@code tool_execution_end} 按**完成序**发射，两个等延迟的调用谁先完成在两侧都不可约
  * （pi 侧是 JS 微任务队列的副产品，Java 侧是真线程竞速）。所以凡是同一批里有多个调用
  * 会同跑的剧本，都要用 {@code delayMs} 把完成序写死 —— 否则差分测的是运行时运气，

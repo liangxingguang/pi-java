@@ -93,7 +93,7 @@ class OpenAICompletionsApiRequestTest {
     void deepseekThinkingContentIsRoundTripped() {
         // ⚠️ 助手消息必须带**身份**（api/provider/model）：共享预通道
         // TransformMessages 按「同模型否」决定 thinking 块留还是降级为文本，
-        // 不带身份的消息会被判成**跨模型**（docs/31 §8.35.5 的接线）。
+        // 不带身份的消息会被判成**跨模型**（原 docs/31 §8.35.5 的接线）。
         //
         // ⚠️ 决定发回哪个字段的是 **签名**（收侧抄下来的线格字段名，pi
         // openai-completions.ts:1310-1318），不是 provider —— B19 之前这里靠

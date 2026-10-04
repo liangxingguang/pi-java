@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包②（docs/31 §8.34）：thinking / text 的**请求侧重放规则** —— 线格这一层。
+ * 包②（原 docs/31 §8.34）：thinking / text 的**请求侧重放规则** —— 线格这一层。
  *
  * <p>pi 的规则分两层：闸（`transform-messages.ts:99-116`，决定块活不活）
  * 与落线（`anthropic-messages.ts:1281-1321`，决定线格长什么样）。

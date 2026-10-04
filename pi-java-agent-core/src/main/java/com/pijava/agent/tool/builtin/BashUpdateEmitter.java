@@ -11,7 +11,7 @@ import com.pijava.ai.message.ContentBlock;
 
 /**
  * 把 shell 的增量输出**节流**成 pi 的 {@code tool_execution_update} 载荷
- * （包⑧，{@code docs/35}）。逐位对齐 pi {@code bash.ts:255-314} 的三个状态：
+ * （包⑧，{@code 原 docs/35}）。逐位对齐 pi {@code bash.ts:255-314} 的三个状态：
  * {@code updateDirty} / {@code lastUpdateAt} / {@code updateTimer}。
  *
  * <h3>三条语义（都照 pi）</h3>
@@ -29,10 +29,10 @@ import com.pijava.ai.message.ContentBlock;
  *
  * <p>快照的截断口径用 <b>pi 的值</b>（2000 行 / 51200 字节，{@code truncate.ts:11-12}），
  * 而不是 pi-java 的 {@code TruncationUtils.DEFAULT_MAX_BYTES}（100_000）—— 因为这是
- * <b>载荷快照</b>的口径；终局截断仍走 pi-java 现值（{@code docs/35 §6-2}）。</p>
+ * <b>载荷快照</b>的口径；终局截断仍走 pi-java 现值（{@code 原 docs/35 §6-2}）。</p>
  *
  * <p>时钟与调度器<b>可注入</b>：节流语义靠「等 100 ms 再看」是运气断言，夹具用假时钟
- * 与假调度器把每条边钉死（{@code docs/31 §8.23.8 ⑥} 的口径）。</p>
+ * 与假调度器把每条边钉死（{@code 原 docs/31 §8.23.8 ⑥} 的口径）。</p>
  */
 final class BashUpdateEmitter implements ShellOutputSink {
 
@@ -59,7 +59,7 @@ final class BashUpdateEmitter implements ShellOutputSink {
      * <p>⚠️ 这把线程会调进 {@code onUpdate} ⇒ 最终进 {@code PiLaneSink.emit} 的
      * {@code synchronized}。与工具线程**只是互斥、不会死锁**：工具线程在
      * {@code future.get()} 上等子进程时不持有那把锁，谁都不在持锁时等对方
-     * （{@code docs/35 §8.0 裁决 B} 的 ⚠️）。</p>
+     * （{@code 原 docs/35 §8.0 裁决 B} 的 ⚠️）。</p>
      */
     static Scheduler defaultScheduler() {
         return (task, delayMs) -> {

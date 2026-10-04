@@ -32,7 +32,7 @@ import static org.assertj.core.api.Assertions.within;
 
 /**
  * OpenAI-completions 车道的 usage 归一 —— pi {@code openai-completions.ts:1509-1550}
- * {@code parseChunkUsage} 的逐条移植（包 H1 步 4，{@code docs/42 §8.3} T5/T6/T7）。
+ * {@code parseChunkUsage} 的逐条移植（包 H1 步 4，{@code 原 docs/42 §8.3} T5/T6/T7）。
  *
  * <p>三条容易做错的：</p>
  * <ul>

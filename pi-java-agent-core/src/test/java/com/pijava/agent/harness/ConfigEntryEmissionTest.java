@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 配置 entry 由**设置点**写入（{@code docs/31 §4.1}）。
+ * 配置 entry 由**设置点**写入（{@code 原 docs/31 §4.1}）。
  *
  * <p>pi 的形状是「字段赋值与 entry 追加同处、不走事件」
  * （{@code agent-session.ts:1687} 的 {@code setModel}、{@code :1813-1829} 的

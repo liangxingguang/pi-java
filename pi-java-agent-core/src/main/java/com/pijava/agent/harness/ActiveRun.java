@@ -5,7 +5,7 @@ import java.util.concurrent.CompletableFuture;
 import com.pijava.ai.AbortSignal;
 
 /**
- * pi {@code AgentState.activeRun} 的 Java 版 —— **存在即为正在运行**（{@code docs/31 §3.2}）。
+ * pi {@code AgentState.activeRun} 的 Java 版 —— **存在即为正在运行**（{@code 原 docs/31 §3.2}）。
  *
  * <p>它取代了原先的三态枚举 {@code RunPhase.Idle/Assistant/Checkpoint}：pi 没有相位字段，
  * 「是否在跑」由 {@code this.activeRun !== undefined} 表达（{@code agent.ts}），本类型照抄这个形状。

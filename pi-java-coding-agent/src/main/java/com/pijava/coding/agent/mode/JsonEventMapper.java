@@ -20,12 +20,12 @@ import com.pijava.coding.agent.core.WireJson;
  * 去掉累积快照 {@code partial}（每个 {@code StreamEvent} 变体都带），只留增量 ——
  * 否则每个 delta 都会重复整条消息。其余事件按字段原样透传。</p>
  *
- * <p><b>终局变体例外</b>（C 批次，{@code docs/55}）：{@code done}／{@code error}
+ * <p><b>终局变体例外</b>（C 批次，{@code 原 docs/55}）：{@code done}／{@code error}
  * **不**用 {@code valueToTree} 透传整个 record —— 那会把 {@code StreamError} 的
  * {@code Throwable} 连 {@code stackTrace} 一起落线。它们走
  * {@link #terminalWireNode} 的显式扁平投影（pi **proxy 协议**的形状）。</p>
  *
- * <p><b>可空键的纪律（{@code docs/31 §8.37.4}）</b>：pi 对非 {@code message_update}
+ * <p><b>可空键的纪律（{@code 原 docs/31 §8.37.4}）</b>：pi 对非 {@code message_update}
  * 事件是<b>原样透传</b>（{@code json-event.ts:48-51}），所以线上「有没有这个键」
  * 完全由 {@code JSON.stringify} 决定 —— <b>{@code undefined} 被省略，{@code null} 被保留</b>。
  * 于是 Java 的 {@code null} 该不该写，取决于 pi 那个字段的类型<b>有没有 {@code ?}</b>：
@@ -38,10 +38,10 @@ public final class JsonEventMapper {
     private static final ObjectMapper MAPPER = new ObjectMapper()
         .addMixIn(StreamEvent.class, StreamEventMixin.class)
         .addMixIn(Message.class, MessageMixin.class)
-        // 包⑩（docs/37）**止血**：此前这里是**裸** ObjectMapper ⇒ 带 `Instant` 的消息
+        // 包⑩（原 docs/37）**止血**：此前这里是**裸** ObjectMapper ⇒ 带 `Instant` 的消息
         // 直接抛 `Java 8 date/time type Instant not supported`，而 `AbstractChatApi`
         // 给每条消息都挂了 `Instant.now()` ⇒ 生产上 RPC 客户端**收不到 agent_end**
-        // （`SessionEventHub` 逐个 listener catch 掉该帧，见 docs/33 §5-N1）。
+        // （`SessionEventHub` 逐个 listener catch 掉该帧，见 原 docs/33 §5-N1）。
         // 包⑪ 把同一手法提成 `WireJson`（同一成因还咬了命令线，台账 B52）。
         .registerModule(WireJson.instantAsEpochMillis());
 
@@ -77,12 +77,12 @@ public final class JsonEventMapper {
                 }
             }
             case AgentSessionEvent.AgentSettled s -> {
-                // 包⑨（docs/36，B42）：pi 的 turn_end 是
+                // 包⑨（原 docs/36，B42）：pi 的 turn_end 是
                 // { message, toolResults }，**两个字段都必填**（types.ts:438），
                 // 且原样上 RPC/JSON 线（json-event.ts:48-51）。
                 node.put("type", "agent_settled");
                 // ⚠️ message 在错误/中止路为 null（pi 那条路给合成的失败消息，Java 侧
-                // 没有可给）⇒ 省略；这是**残余偏差**，已登记（docs/36 §10）。
+                // 没有可给）⇒ 省略；这是**残余偏差**，已登记（原 docs/36 §10）。
                 if (s.message() != null) {
                     node.set("message", messageNode(s.message()));
                 }
@@ -177,7 +177,7 @@ public final class JsonEventMapper {
                 }
                 node.put("delta", b.delta());
             }
-            // ── 工具执行生命周期（包⑦，docs/34）──────────────────────────────
+            // ── 工具执行生命周期（包⑦，原 docs/34）──────────────────────────────
             // pi 对非 message_update 事件**原样透传**（json-event.ts:48-51 的
             // `return event;`）⇒ 这三条的载荷在 pi 的线上逐字节可见。三条变体的
             // 字段**全部必填、pi 侧一个 `?` 都没有**（types.ts:443-446）⇒ 一个键
@@ -209,7 +209,7 @@ public final class JsonEventMapper {
     }
 
     /**
-     * 一条消息的线格式（包⑩，{@code docs/37}）。
+     * 一条消息的线格式（包⑩，{@code 原 docs/37}）。
      *
      * <p>pi 的线上形状就是 {@code JSON.stringify(message)}，而消息对象**自带**
      * {@code role} 与 {@code timestamp}（{@code ai/src/types.ts:417-470} 三个
@@ -312,7 +312,7 @@ public final class JsonEventMapper {
      * <p>pi 恒写且**永不为 undefined** —— 流起点就被初始化成零值对象
      * （{@code anthropic-messages.ts:518-525}、{@code openai-completions.ts:325-332}）
      * ⇒ 缺 {@code UsageInfo} 时兜零，**不省键**。注意这与 B41（终局 assistant
-     * 消息的 usage 可空、缺则整键消失）是两条不同的口径，见 {@code docs/33 §8.0} 裁决 C。</p>
+     * 消息的 usage 可空、缺则整键消失）是两条不同的口径，见 {@code 原 docs/33 §8.0} 裁决 C。</p>
      *
      * <p>终局事件多一个取处：{@code StreamDone.usage}（事件级计量副本，
      * {@code partial.usage()} 才是权威）。</p>
@@ -327,7 +327,7 @@ public final class JsonEventMapper {
     }
 
     /**
-     * 终局变体的线格式投影（C 批次，{@code docs/55 §6.3-13}；裁决 R5-(a)）。
+     * 终局变体的线格式投影（C 批次，{@code 原 docs/55 §6.3-13}；裁决 R5-(a)）。
      *
      * <p>pi 的 **RPC/JSON 线根本不发终局帧**（{@code modes/json-event.ts:33-39}
      * 只在非终局增量上产生 {@code message_update}），但**proxy 协议** —— 同一契约的
@@ -339,7 +339,7 @@ public final class JsonEventMapper {
      *
      * <p>⚠️ 此前这里是 {@code valueToTree(event)}：record 的 {@code error} 组件是一个
      * {@code Throwable}，Jackson 会把 {@code cause}/{@code stackTrace}/{@code message}
-     * 一并序列化 ⇒ **JVM 栈帧上对外协议**（{@code docs/55 §5 F6}）。</p>
+     * 一并序列化 ⇒ **JVM 栈帧上对外协议**（{@code 原 docs/55 §5 F6}）。</p>
      *
      * <p>可空键按 pi 的 {@code ?} 省略（本文件顶部的纪律）：
      * {@code errorMessage?} 缺则**不写**，{@code usage} 是必填（恒写零值对象）。
@@ -379,7 +379,7 @@ public final class JsonEventMapper {
      * addedToolNames?, terminate?}}（{@code agent/src/types.ts:362-376}）—— <b>后三个
      * 带 {@code ?}</b> ⇒ 缺席即省略。pi-java 的 {@link ToolResult} 是 record，
      * {@code terminate} 是原始 {@code boolean}、{@code addedToolNames} 恒 {@code []}，
-     * 且全类零 Jackson 注解、全仓零序列化点（{@code docs/34 §5-N2}）⇒ <b>拿默认
+     * 且全类零 Jackson 注解、全仓零序列化点（{@code 原 docs/34 §5-N2}）⇒ <b>拿默认
      * Jackson 直接落线会多出三个 pi 没有的键</b>（{@code terminate:false}、
      * {@code addedToolNames:[]}、{@code details:null}），会误导 RPC 客户端。
      * 故在此显式投影，<b>不动 {@code ToolResult} 本体</b>（那是 agent-core 的公共
@@ -422,13 +422,13 @@ public final class JsonEventMapper {
      * 的不变量断言，不是可降级的容错点。可空链 {@code toolCall?.type} 意味着
      * **越界也算错位**，故这里把下界与上界一并判掉。</p>
      *
-     * <p>抛出的后果已核（docs/33 §5-N1）：{@code SessionEventHub} 逐个 listener
+     * <p>抛出的后果已核（原 docs/33 §5-N1）：{@code SessionEventHub} 逐个 listener
      * {@code catch (RuntimeException)} ⇒ 丢该客户端的这一帧 ＋ 一条 warning，
      * 连接与其它监听器不受影响。</p>
      */
     private static ObjectNode assistantMessageEvent(StreamEvent event) {
         // 终局变体走**显式投影**（见 terminalWireNode）——不 valueToTree 整个 record，
-        // 否则 Throwable 的 stackTrace 会落线（docs/55 §5 F6）。
+        // 否则 Throwable 的 stackTrace 会落线（原 docs/55 §5 F6）。
         var terminal = terminalWireNode(event);
         if (terminal != null) {
             return terminal;

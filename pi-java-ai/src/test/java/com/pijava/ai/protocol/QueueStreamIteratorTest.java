@@ -44,7 +44,7 @@ class QueueStreamIteratorTest {
     }
 
     /**
-     * C 批次（{@code docs/55}）：这条合成错误**没有累加器**（pi 的对等物是
+     * C 批次（{@code 原 docs/55}）：这条合成错误**没有累加器**（pi 的对等物是
      * {@code lazy.ts} 的合成错误消息），所以内容仍为空 —— 但落定那一半必须有：
      * {@code reason} 与消息上的 {@code stopReason} 同值，且文本非空，否则下游
      * （打印模式、重试分类器、宿主状态）只能回头读 {@code Throwable}。

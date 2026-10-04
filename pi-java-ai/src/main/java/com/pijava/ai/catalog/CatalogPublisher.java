@@ -21,7 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *
  * <p>⚠️ 运行时的远程目录机制**不走这里** —— 它由 coding-agent 的
  * {@code RemoteCatalogProvider} ＋ pi wire（{@code RemoteModelWire}）承担
- * （docs/70）。本类是独立的自建目录工具链，挂在 {@code pi-ai catalog}
+ * （原 docs/70）。本类是独立的自建目录工具链，挂在 {@code pi-ai catalog}
  * 子命令上（{@code validate}/{@code merge}/{@code publish}）。</p>
  */
 public final class CatalogPublisher {

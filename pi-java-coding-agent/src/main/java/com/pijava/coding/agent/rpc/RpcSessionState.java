@@ -9,7 +9,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * （{@code "off"}|minimal|low|medium|high|xhigh|max），队列模式为
  * {@code "all"|"one-at-a-time"}。</p>
  *
- * <p><b>{@code NON_NULL} 是契约的一部分，不是省事</b>（{@code docs/31 §8.37}）：
+ * <p><b>{@code NON_NULL} 是契约的一部分，不是省事</b>（{@code 原 docs/31 §8.37}）：
  * pi 的 {@code sessionFile?: string} / {@code sessionName?: string}
  * （{@code rpc-types.ts:103/:105}）是可选的，{@code JSON.stringify} 对
  * {@code undefined} <b>省略键</b>。故 {@code sessionFile} 在非文件后端

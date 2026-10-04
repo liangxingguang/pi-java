@@ -19,15 +19,15 @@ import com.pijava.telemetry.TelemetrySpan;
 
 /**
  * Internal per-lane state for {@link AgentHarness} — pi {@code AgentState} 的 Java 版
- * （{@code docs/31 §3.1}）。
+ * （{@code 原 docs/31 §3.1}）。
  *
  * <p>Only AgentHarness and its collaborators create and mutate this.</p>
  *
- * <p><b>运行态由 {@link #activeRun} 表达</b>（{@code docs/31 §3.2}）：非空即为正在运行。
+ * <p><b>运行态由 {@link #activeRun} 表达</b>（{@code 原 docs/31 §3.2}）：非空即为正在运行。
  * 原先的 {@code RunPhase} 枚举与「先记账后落盘」的 {@code pendingWrites} 队列都已删除
  * —— entry 一旦产生就直接进 {@link #transcript}，没有中间态。</p>
  *
- * <p><b>一个 harness 恰好一条车道</b>（{@code docs/31 §4.3}）。运行时多车道容器
+ * <p><b>一个 harness 恰好一条车道</b>（{@code 原 docs/31 §4.3}）。运行时多车道容器
  * （{@code LaneRegistry} / {@code LaneHandle} / {@code LaneConfig}）已删除，每个
  * {@code AgentSession} 持有自己的 harness —— pi 的 {@code AgentState} 也是单状态的，
  * 「多分支」归会话层（存储层 lane 保留，那正是 pi 的分支模型）。于是
@@ -39,7 +39,7 @@ public final class LaneState {
     String laneName = "default";
 
     /**
-     * 车道名 —— 恒为 {@link AgentHarness#DEFAULT_LANE}（{@code docs/31 §4.3}）。
+     * 车道名 —— 恒为 {@link AgentHarness#DEFAULT_LANE}（{@code 原 docs/31 §4.3}）。
      *
      * <p>公开访问器：{@code HookSystem} 在 {@code com.pijava.agent.hook} 包，
      * 需要它来辨认「这条 hook 错误属于本车道吗」。</p>
@@ -53,7 +53,7 @@ public final class LaneState {
 
     /**
      * 工作副本 —— 送给 provider 的那份消息列表（pi {@code AgentState.messages}，
-     * {@code docs/31 §4.2}）。
+     * {@code 原 docs/31 §4.2}）。
      *
      * <p><b>两者分工</b>：{@link #transcript} 是持久真源，工作副本是它的投影。副本由
      * **事件**维护（{@link PiLaneSink} 在 {@code message_end} 上追加，对齐 pi
@@ -79,7 +79,7 @@ public final class LaneState {
     /**
      * Internal operation records for debugging and audit.
      *
-     * <p><b>并发容器（COW），不是 {@link ArrayList}</b> —— {@code docs/31 §8.27}。
+     * <p><b>并发容器（COW），不是 {@link ArrayList}</b> —— {@code 原 docs/31 §8.27}。
      * package B（{@code §8.23}）让工具调用真并发之后，这张表多了一个**工具线程**写者：
      * {@code PiToolRunner.execute} 在 worker 线程上跑 {@code after_tool} 钩子，钩子抛异常时
      * {@code HookSystem.recordHookError} 直接 {@code add} 一条 {@code UsageCause.HOOK} 记录
@@ -89,7 +89,7 @@ public final class LaneState {
      * {@code ConcurrentModificationException}。</p>
      *
      * <p><b>为什么是换容器而不是「让 worker 侧改走 {@code PiLaneSink.emit} 那条唯一漏斗」</b>：
-     * 本表是**只追加的旁路审计**（{@code docs/28} 选项 C 已把它降级，恢复不再读它），
+     * 本表是**只追加的旁路审计**（{@code 原 docs/28} 选项 C 已把它降级，恢复不再读它），
      * 读多写少、且每条 entry 落定时已经被整体复制一次（{@code SnapshotService:81}），
      * COW 的复制代价与既有量级同阶。换容器一处即覆盖**全部**跨线程写点（含宿主线程的
      * abort 记录与运行中的压缩记录），而漏斗那条路要把「钩子错误」塞进
@@ -98,12 +98,12 @@ public final class LaneState {
      *
      * <p>⚠️ 本表**不是**车道状态里唯一的跨线程访问点，本处只修「会被结构破坏」的那一个：
      * {@code transcript}/{@code messages}/{@code partial} 等字段的**可见性**与其在运行中
-     * 被整体替换（压缩）的问题不属于本改动的范围，见 {@code docs/31 §8.27.4}。</p>
+     * 被整体替换（压缩）的问题不属于本改动的范围，见 {@code 原 docs/31 §8.27.4}。</p>
      */
     public final List<LaneRecord> records = new CopyOnWriteArrayList<>();
 
     /**
-     * 当前运行；{@code null} 表示车道空闲（{@code docs/31 §3.2}）。
+     * 当前运行；{@code null} 表示车道空闲（{@code 原 docs/31 §3.2}）。
      *
      * <p>它是唯一的「是否在跑」判据 —— 取代了 {@code RunPhase} 三态枚举。</p>
      */
@@ -120,13 +120,13 @@ public final class LaneState {
      *
      * <p>pi 只在等级**真的变了**时才追加 entry（{@code agent-session.ts:1813-1829} 的
      * {@code isChanging} 守卫），所以需要一个「上次记的是什么」的判据，否则每次运行都会
-     * 重复追加一条（{@code docs/31 §4.1}）。</p>
+     * 重复追加一条（{@code 原 docs/31 §4.1}）。</p>
      */
     String recordedThinking;
 
     /**
      * 溢出恢复一次性闩锁（pi {@code _overflowRecoveryAttempted}，
-     * {@code agent-session.ts:2194-2218}；package 3c，{@code docs/31 §8.21}）。
+     * {@code agent-session.ts:2194-2218}；package 3c，{@code 原 docs/31 §8.21}）。
      *
      * <p>溢出/截断的恢复预算是<b>一次</b>：第一次命中设闩并 compact-and-retry，
      * 闩已立 ⇒ 宣告失败（固定文案的 compaction_end）不再压。重置点与 pi 一致、
@@ -138,7 +138,7 @@ public final class LaneState {
 
     /**
      * 自动重试的当前尝试计数（pi {@code _retryAttempt}，
-     * {@code agent-session.ts:339}；package 3d，{@code docs/31 §8.22}）。
+     * {@code agent-session.ts:339}；package 3d，{@code 原 docs/31 §8.22}）。
      *
      * <p><b>会话级</b>：跨 run 存活、运行边界<b>不</b>复位（pi 只在三处动它 ——
      * ①助手 {@code message_end} 且 stopReason ≠ error ⇒ 发成功事件后清零
@@ -151,7 +151,7 @@ public final class LaneState {
 
     /**
      * 在飞压缩计数（pi {@code AgentSession.isCompacting}，
-     * {@code agent-session.ts:983-990}；包④，{@code docs/31 §8.37}）。
+     * {@code agent-session.ts:983-990}；包④，{@code 原 docs/31 §8.37}）。
      *
      * <p>pi 读的是<b>三个专用中止控制器</b>（{@code _autoCompactionAbortController}、
      * {@code _compactionAbortController}、{@code _branchSummaryAbortController}）
@@ -189,7 +189,7 @@ public final class LaneState {
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * 下一次运行使用的配置（{@code docs/31 §4.1} 表格里仍挂在「harness」那一行）。
+     * 下一次运行使用的配置（{@code 原 docs/31 §4.1} 表格里仍挂在「harness」那一行）。
      *
      * <p>它们此前住在 {@code HarnessState} —— 一个「一个 harness 有多条车道」时代的
      * 独立可变配置对象。容器删除后每个 harness 只有一条车道，而 pi 的

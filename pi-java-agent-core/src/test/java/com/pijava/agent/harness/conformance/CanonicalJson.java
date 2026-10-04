@@ -10,7 +10,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * pi 侧 {@code canonical()} 的等价实现（{@code docs/23c §2.3}）：对象键递归按字典序排列、
+ * pi 侧 {@code canonical()} 的等价实现（{@code 原 docs/23c §2.3}）：对象键递归按字典序排列、
  * 数组保持原序。
  *
  * <p>键序不承载语义，若任其参与比较，两侧的 Map 实现差异会伪装成帧差异。因此归一化阶段

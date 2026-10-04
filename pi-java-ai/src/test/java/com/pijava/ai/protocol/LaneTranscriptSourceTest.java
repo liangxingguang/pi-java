@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * <b>包 A2 的接线夹具</b>（{@code docs/49 §7.1}）：系统提示与工具声明的**来源**必须是
+ * <b>包 A2 的接线夹具</b>（{@code 原 docs/49 §7.1}）：系统提示与工具声明的**来源**必须是
  * transcript 的系统消息，而不是 {@code StreamRequest} 上那对已删掉的 legacy 字段。
  *
  * <p>观测面是**真出站请求体**（{@link RecordingHttpServer}）—— 与
@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>每条的三个断言成组，缺一不可：①提示文本进了**本车道的系统槽位**；
  * ②工具表来自系统消息的 {@code toolsAdded}（重放）；③系统消息**不再**作为会话项出现
- * （曾静默落成 assistant 文本 / 被吞掉 / 抛异常，见 {@code docs/49 §4.1}）。</p>
+ * （曾静默落成 assistant 文本 / 被吞掉 / 抛异常，见 {@code 原 docs/49 §4.1}）。</p>
  */
 class LaneTranscriptSourceTest {
 
@@ -140,7 +140,7 @@ class LaneTranscriptSourceTest {
      * pi 的 {@code resolveTranscript(context, undefined)} 走**折叠**支
      * （{@code transcript.ts:113-120}）—— 中途系统消息的文本并入头、消息本身消失。
      *
-     * <p>期望值取自 pi 的实测探针 PR-4（{@code docs/49 §7.6}）：{@code system} 块的正文为
+     * <p>期望值取自 pi 的实测探针 PR-4（{@code 原 docs/49 §7.6}）：{@code system} 块的正文为
      * {@code "head\n\nmid"}，会话数组只剩两条 user。</p>
      */
     @Test

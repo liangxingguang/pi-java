@@ -8,7 +8,7 @@ import com.pijava.ai.message.Message;
 /**
  * 瞬断错误白名单判据 —— pi {@code packages/ai/src/utils/retry.ts} 的
  * {@code isRetryableAssistantError}（:235-240）与两张拼接正则表（:7-24、:26-90）
- * 的逐条移植（package 3d，{@code docs/31 §8.22}）。与 {@link ContextOverflow}
+ * 的逐条移植（package 3d，{@code 原 docs/31 §8.22}）。与 {@link ContextOverflow}
  * 同层同文件位：哪些错误文本是「值得再试一次」的瞬断，是 **provider 响应形状**
  * 的知识，不是循环策略。
  *

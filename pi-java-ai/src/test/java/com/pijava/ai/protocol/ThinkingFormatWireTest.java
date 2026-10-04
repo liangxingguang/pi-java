@@ -31,12 +31,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 包 A-09：思考开关的十一种线格形状（pi {@code openai-completions.ts:873-970}）。
  *
  * <p>本包之前 completions 车道**一个思考字段都不发** —— 连缺省的 {@code openai} 形状
- * （{@code reasoning_effort}）都没有生产者（{@code docs/58} 篇首）。验收口径来自 pi 的
- * 行为夹具（{@code docs/58 §2.6}）：pi 的 {@code capture()} 用 {@code onPayload} 抓请求体，
+ * （{@code reasoning_effort}）都没有生产者（{@code 原 docs/58} 篇首）。验收口径来自 pi 的
+ * 行为夹具（{@code 原 docs/58 §2.6}）：pi 的 {@code capture()} 用 {@code onPayload} 抓请求体，
  * java 的对应物是 {@link RecordingHttpServer}。</p>
  *
  * <p>⚠️ 断言一律**按键取值**、不钉键序：SDK 的类型化路径 JSON 键序与 pi 不同
- * （{@code docs/56 §12} 的教训）。「同名键只许出现一次」用 {@link #occurrences} 钉。</p>
+ * （{@code 原 docs/56 §12} 的教训）。「同名键只许出现一次」用 {@link #occurrences} 钉。</p>
  *
  * <p>探测背景：夹具的 baseUrl 是 localhost、provider 是 {@code test} ⇒ 探测给
  * {@code thinkingFormat=openai}、{@code supportsReasoningEffort=true}
@@ -72,7 +72,7 @@ class ThinkingFormatWireTest {
     }
 
     /**
-     * ★ 设计期预测被实测推翻的一格（{@code docs/58 §2.4} R4 的前提修正）：
+     * ★ 设计期预测被实测推翻的一格（{@code 原 docs/58 §2.4} R4 的前提修正）：
      * 显式 {@code map{medium:null}} **不会**让线上出现「null 回落级别名」——
      * 夹取先把显式 null 的级别踢出可用集（pi {@code getSupportedThinkingLevels} 的
      * {@code mapped === null ⇒ false}），medium 被向上夹到 high ⇒ 发的是 {@code "high"}。
@@ -91,7 +91,7 @@ class ThinkingFormatWireTest {
         assertThat(body.path("reasoning_effort").asText()).isEqualTo("high");
     }
 
-    /** A-10 的归属前移回执（{@code docs/57 §12.3}）：线上的是**夹取后**的级别。 */
+    /** A-10 的归属前移回执（{@code 原 docs/57 §12.3}）：线上的是**夹取后**的级别。 */
     @Test
     void theLevelIsClampedBeforeItReachesTheWire() throws Exception {
         // 空表 ⇒ xhigh/max 是 opt-in 级、不在可用集 ⇒ 向下夹到 high（pi :741-742）。
@@ -153,10 +153,10 @@ class ThinkingFormatWireTest {
     }
 
     /**
-     * ★ R5（{@code docs/58 §4.8}）：{@code samplingParams.reasoning_effort} 与链条写的
+     * ★ R5（{@code 原 docs/58 §4.8}）：{@code samplingParams.reasoning_effort} 与链条写的
      * 同名键**覆盖而不并列** —— pi 的 {@code Object.assign} 是最后赢（:996-999 的注释
      * {@code Last so custom keys override the named request fields}），而 SDK 的非类型化
-     * 通道会把两份都写出去（{@code docs/57 §10} 的实测病理）。
+     * 通道会把两份都写出去（{@code 原 docs/57 §10} 的实测病理）。
      */
     @Test
     void samplingParamsOverrideTheChainsEffortWithoutDuplicating() throws Exception {
@@ -353,7 +353,7 @@ class ThinkingFormatWireTest {
         assertThat(explicitNull.has("reasoning")).isFalse();
     }
 
-    /** 无级别 ⇒ 臂不点火（空表下与 pi 的链条等价；off 字符串的穿透角见 docs/32 B131）。 */
+    /** 无级别 ⇒ 臂不点火（空表下与 pi 的链条等价；off 字符串的穿透角见 docs/05 B131）。 */
     @Test
     void antLingWithoutALevelWritesNothing() throws Exception {
         var body = body(model(compat(ThinkingFormat.ANT_LING, null, Map.of(), Map.of()),

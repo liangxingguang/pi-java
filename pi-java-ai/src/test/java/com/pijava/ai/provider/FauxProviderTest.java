@@ -93,7 +93,7 @@ class FauxProviderTest {
         assertThat(events.get(1)).isInstanceOf(StreamEvent.StreamError.class);
         var error = (StreamEvent.StreamError) events.get(1);
         assertThat(error.error().getMessage()).isEqualTo("Connection refused");
-        // C 批次（docs/55 §11-2）：faux 这条路**绕不过**落定 —— 文本必须在消息上，
+        // C 批次（原 docs/55 §11-2）：faux 这条路**绕不过**落定 —— 文本必须在消息上，
         // 否则一切经 faux 驱动的夹具就仍在旧形状（文本只在 Throwable 上）上跑。
         assertThat(error.reason()).isEqualTo("error");
         assertThat(error.partial().stopReason()).isEqualTo("error");

@@ -18,12 +18,12 @@ import com.pijava.ai.model.ModelId;
 import com.pijava.ai.utils.ContextOverflow;
 
 /**
- * B2（{@code docs/64}）：z.ai 400「Prompt too long」在真 HTTP 线上被终局消息
+ * B2（{@code 原 docs/64}）：z.ai 400「Prompt too long」在真 HTTP 线上被终局消息
  * 判为上下文溢出 —— 钉生产可达（旧首正则写死 {@code "is"} ⇒ 漏检）。
  */
 class ZaiContextOverflowWireTest {
 
-    /** z.ai 超限体：无 error 外层、无 is（docs/64 §2.4）。 */
+    /** z.ai 超限体：无 error 外层、无 is（原 docs/64 §2.4）。 */
     private static final String ZAI_OVERFLOW =
             "{\"code\":\"1261\",\"message\":\"Prompt too long\"}";
 

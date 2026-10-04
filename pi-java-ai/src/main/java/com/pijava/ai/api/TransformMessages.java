@@ -18,14 +18,14 @@ import com.pijava.ai.model.ModelId;
  * `openai-completions.ts:1212`、`openai-responses-shared.ts:172`、`google-shared.ts:138`、
  * `mistral-conversations.ts:139`、`bedrock-converse-stream.ts:935`）—— 所以它**不属于任何一条车道**：
  * 它先决定哪些块能活到重放，再由各适配器决定活下来的块长成什么线格
- * （docs/31 §8.34.4 决策 1）。pi-java 此前没有对应物，重放规则住在
+ * （原 docs/31 §8.34.4 决策 1）。pi-java 此前没有对应物，重放规则住在
  * {@code AnthropicMessagesApi} 里 —— 位置就不对：以后每接一条车道都要再抄一遍。</p>
  *
- * <p><b>已落地的变换</b>：thinking 五分支（`transform-messages.ts:99-116`，包② docs/31 §8.34）、
- * 图片降级（`:12-57`，包 H2 docs/44）、跨模型归一 toolCall id（`:136-142`，包B14 步3 ——
+ * <p><b>已落地的变换</b>：thinking 五分支（`transform-messages.ts:99-116`，包② 原 docs/31 §8.34）、
+ * 图片降级（`:12-57`，包 H2 原 docs/44）、跨模型归一 toolCall id（`:136-142`，包B14 步3 ——
  * 含 toolResult 侧的 id 换名 `:84-90`）。孤儿 toolCall 合成 toolResult（`:158-232`）由
  * 同包内的 {@code OrphanToolResults} 承担。{@code thoughtSignature} 剥离
- * （`:131-134`）随 Batch F 落地（docs/67）：{@code ToolUseContent} 已有该字段，
+ * （`:131-134`）随 Batch F 落地（原 docs/67）：{@code ToolUseContent} 已有该字段，
  * 跨模型重放剥离、与 id 归一叠加。</p>
  *
  * <p>pi 的第一、二遍共用一个 {@code transformMessages} 函数；java 侧按 D7 拆分：
@@ -111,7 +111,7 @@ public final class TransformMessages {
      * <p>判据是 {@link ModelInfo#supportsImageInput()}（＝ pi 的 {@code model.input.includes("image")}），
      * 不是「capabilities 里有没有 IMAGE_INPUT」—— 两者在「目录未命中」时**故意**不同，理由写在该方法上。</p>
      *
-     * <p>⚠️ 与 pi 的**一处刻意偏差**（{@code docs/44 D4}）：java 的 {@link ContentBlock.UrlImageContent}
+     * <p>⚠️ 与 pi 的**一处刻意偏差**（{@code 原 docs/44 D4}）：java 的 {@link ContentBlock.UrlImageContent}
      * 是 java 扩展（pi 无此类型），此处**与 ImageContent 同等对待** —— 它对非视觉模型同样不可用。
      * pi 只认 {@code type === "image"}，照抄反而会让 URL 图片绕过闸。</p>
      *

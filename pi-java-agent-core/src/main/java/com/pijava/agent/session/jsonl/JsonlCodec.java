@@ -373,7 +373,7 @@ public final class JsonlCodec {
     private static final String TOOL_USE_STOP_REASON = "toolUse";
 
     /**
-     * 读归一化停因，顺带把旧值迁移过来（B109，{@code docs/56 §6 R2/R3}）。
+     * 读归一化停因，顺带把旧值迁移过来（B109，{@code 原 docs/56 §6 R2/R3}）。
      *
      * <p>2026-09-27 之前落盘的会话文件里归一化停因写作 {@code "tool_use"}，此后与 pi 同词表
      * 写作 {@code "toolUse"}。两条读路径（助手消息、usage 审计记录）都走这里，

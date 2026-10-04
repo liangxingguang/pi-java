@@ -11,7 +11,7 @@
 > **本节 2026-09-13 按代码重写。** 原稿是一份**规划**的包结构，与实际不符：
 > 流事件是**一个** `StreamEvent.java` 里的 sealed 变体（原稿列了 8 个独立文件）；
 > `ModelInfo` 在 `catalog/` 不在 `model/`；`SystemMessage.java` 已随
-> `docs/31 §8.6` 删除（系统提示改由 harness 的 `Context` 承载）；`KeychainStore`
+> `原 docs/31 §8.6` 删除（系统提示改由 harness 的 `Context` 承载）；`KeychainStore`
 > 从未实现；`ImageApi` / `EmbeddingApi` / OpenAI Responses / Pi Messages 等
 > 后来落地的适配器原稿里没有。
 
@@ -98,7 +98,7 @@ public interface Provider {
 }
 
 // 流式请求
-// ⚠️ 包 A2（docs/49）改签：`systemPrompt`/`messages`/`tools` 三个组件合并为
+// ⚠️ 包 A2（原 docs/49）改签：`systemPrompt`/`messages`/`tools` 三个组件合并为
 // `TranscriptContext transcript` —— 系统提示与工具声明都在它的系统消息里
 // （pi 的 `normalizeContext` / `TranscriptContext`）。`systemPrompt`/`messages`/`tools`
 // 的**兼容构造器**保留（内部调 `ContextNormalizer.normalize`），既有调用点零改动。
@@ -158,7 +158,7 @@ TextDelta(text)              ←  {"type":"content_block_delta","delta":{"text_d
 StreamDone(usage)            ←  {"type":"message_delta","delta":{"stop_reason":"end_turn"},...}
 ```
 
-> **`Message.SystemMessage` 已删除（`docs/31 §8.6`）**：pi 的 `Message` 只有
+> **`Message.SystemMessage` 已删除（`原 docs/31 §8.6`）**：pi 的 `Message` 只有
 > user / assistant / toolResult 三个角色，系统提示是 `Context.systemPrompt`，
 > **六个 provider 适配层读的都是它、从不扫描消息列表**。原稿把系统提示画成一条
 > `{"role":"system"}` 消息，那是删除之前的形态。
@@ -172,7 +172,7 @@ StreamDone(usage)            ←  {"type":"message_delta","delta":{"stop_reason"
 > **本节 2026-09-13 重写。** 原稿描述的是 pi **harness 层**的 phase 枚举
 > （`idle` / `turn` / `compaction` / `branch_summary` / `retry`），那不是对齐目标
 > `agent.ts` 的形状，对应的 `RunPhase` 枚举也已在 `03d8669` 删除。
-> 完整决策见 `docs/31 §3.2` / `§8.8`。
+> 完整决策见 `原 docs/31 §3.2` / `§8.8`。
 
 pi 的 `Agent`（`agent.ts`）用**对象存在与否**表示「正在跑」：
 
@@ -194,7 +194,7 @@ Java 侧同形 —— `LaneState.activeRun`，`null` 即空闲：
 
 | 原「阶段」 | 实际归属 |
 |---|---|
-| `compaction` | 运行内部的两个触发点 —— 阈值在 `prepareNextTurn`（pi `_compactBeforeNextAssistantResponse`），溢出在 `agent_end` 之后（pi `_handlePostAgentRun`）。**运行态不因此改变**（`docs/31 §4.2`） |
+| `compaction` | 运行内部的两个触发点 —— 阈值在 `prepareNextTurn`（pi `_compactBeforeNextAssistantResponse`），溢出在 `agent_end` 之后（pi `_handlePostAgentRun`）。**运行态不因此改变**（`原 docs/31 §4.2`） |
 | `retry` | 会话层（`SessionRunner` 的自动重试走 `continueRun` + `dropTrailingErrorAssistant`） |
 | `branch_summary` | 会话层 —— 分支是**新会话**（`AgentSession.forkFromEntry`），不是车道 |
 
@@ -225,13 +225,13 @@ sequenceDiagram
 ```
 
 `should_stop_after_turn` 在 `prepare_next_turn` **之前**：pi 的 `shouldStopAfterTurn` 一真，
-`prepareNextTurn` 就不再被调用（`docs/31 §8.4`，实施时读源码发现的两处顺序修正之一）。
+`prepareNextTurn` 就不再被调用（`原 docs/31 §8.4`，实施时读源码发现的两处顺序修正之一）。
 
 `drive` 用 `try/finally` 保证**驱动抛异常时同样收口**（按 `"error"` 结算），否则
 `activeRun` 会永远挂着，车道再也起不了新运行、`waitForIdle` 永远等下去。
 
 `prompt` / `continueRun` 是**阻塞**的：pi 的 `prompt()` 返回 Promise，Java 侧由调用线程
-直接跑到收口 —— 对齐的是「可观察效果的顺序」，不是 async 机器（`docs/31 §8.5`）。
+直接跑到收口 —— 对齐的是「可观察效果的顺序」，不是 async 机器（`原 docs/31 §8.5`）。
 
 ### 2.2 AgentHarness 核心类
 
@@ -241,7 +241,7 @@ sequenceDiagram
 
 `AgentHarness` 是 pi `Agent` 的 Java 版宿主：**一个 harness 恰好一条车道**
 （`LaneState`，即 pi 的 `AgentState`），分支是**新会话**而不是新车道
-（`docs/31 §4.3` / `§8.12`）。
+（`原 docs/31 §4.3` / `§8.12`）。
 
 #### 构造配置 —— `HarnessConfig`（record，19 个字段）
 
@@ -320,7 +320,7 @@ public class AgentHarness implements AutoCloseable {
 }
 ```
 
-**`setModel` / `setThinkingLevel` 会顺带写 entry**（`docs/31 §4.1`）：字段赋值是唯一真源，
+**`setModel` / `setThinkingLevel` 会顺带写 entry**（`原 docs/31 §4.1`）：字段赋值是唯一真源，
 entry 是它的审计副本 —— 模型**无条件**写（pi `agent-session.ts:1687`），思考等级**变了才**写
 （`:1813-1829` 的 `isChanging` 守卫，且默认等级 `off` 不入日志）。
 
@@ -356,7 +356,7 @@ public final class LaneState {
 }
 ```
 
-**两层真源的分工**（`docs/31 §4.2`）：`transcript` 是持久真源，`messages` 是它的投影。
+**两层真源的分工**（`原 docs/31 §4.2`）：`transcript` 是持久真源，`messages` 是它的投影。
 工作副本由**事件**维护（`PiLaneSink` 在 `message_end` 上追加，对齐 pi `agent.ts:554-557`），
 只在日志被**整体替换**时重建 —— resume 播种、压缩、reset。此前每次请求都从 entry 日志
 重走一遍 `pathToLeaf`，那是本字段存在的理由。
@@ -396,7 +396,7 @@ public sealed interface Entry {
 
 | 变体 | 关键字段 | 语义 |
 |---|---|---|
-| `Message` | `message`（`UserMessage`/`AssistantMessage`/`ToolResultMessage`）、`terminate` | 对话消息。**角色只在消息对象里** —— 系统提示不是 entry，它挂在 `Context.systemPrompt` 上（`docs/31 §8.6`） |
+| `Message` | `message`（`UserMessage`/`AssistantMessage`/`ToolResultMessage`）、`terminate` | 对话消息。**角色只在消息对象里** —— 系统提示不是 entry，它挂在 `Context.systemPrompt` 上（`原 docs/31 §8.6`） |
 | `ModelChange` | `provider`、`modelId` | 模型切换（配置） |
 | `ThinkingLevelChange` | `thinkingLevel`（`"off"`…`"xhigh"`） | 思考等级切换（配置） |
 | `ActiveToolsChange` | `activeToolNames` | 活跃工具集切换（配置） |
@@ -406,8 +406,8 @@ public sealed interface Entry {
 | `CustomMessage` | `customType`、`content`、`display`、`details` | 扩展注入的消息：`content` 进 LLM 上下文，`display` 只管 TUI 渲染 |
 
 > **曾经有过 `isConfiguration()`**：`ModelChange` / `ThinkingLevelChange` /
-> `ActiveToolsChange` 覆写为 `true`，随 record-log 折叠链一起引入（`docs/21` F3）。
-> 折叠链退休后（`docs/30`）它零读者，**已于 2026-09-13 删除** —— 留着一个只为已删除机制
+> `ActiveToolsChange` 覆写为 `true`，随 record-log 折叠链一起引入（`原 docs/21` F3）。
+> 折叠链退休后（`原 docs/30`）它零读者，**已于 2026-09-13 删除** —— 留着一个只为已删除机制
 > 存在的判据，只会让下一个读者以为它还有语义。
 
 #### LaneRecord 的 11 个变体
@@ -425,17 +425,17 @@ public sealed interface LaneRecord {
 | `OperationStarted` | `sourceLeafId`、`intent` | 操作开始。`intent` 是 sealed：`Run`（`originalPrompt` / `initialMessages` / `systemPromptOverride` / `resumeData`）、`Compaction`（`customInstructions` / `resultEntryId`）、`Navigation`（`targetId` / `summarize` / `label` / `summaryEntryId`） |
 | `AbortRequested` | `runId` | 中止请求 |
 | `OperationFinished` | `runId`、`outcome`、`error`、`durationMs` | 操作结束。`outcome` ∈ `COMPLETED`/`ABORTED`/`FAILED`/`DECLINED` |
-| `StepAttempt` | `step`（`StepKind`）、`attempt`、`resultEntryId`、`compactionReason`、`model`、`messageCount`、`toolCount`、`thinking`、`durationMs` | 一次 LLM 调用尝试。**stopReason 不在这里** —— 它在 `resultEntryId` 指向的消息 entry 上，entry 是唯一真源（`docs/22` D1） |
+| `StepAttempt` | `step`（`StepKind`）、`attempt`、`resultEntryId`、`compactionReason`、`model`、`messageCount`、`toolCount`、`thinking`、`durationMs` | 一次 LLM 调用尝试。**stopReason 不在这里** —— 它在 `resultEntryId` 指向的消息 entry 上，entry 是唯一真源（`原 docs/22` D1） |
 | `ToolStarted` | `assistantEntryId`、`toolIndex`、`toolCallId`、`toolName`、`effectiveArgs`、`resultEntryId`、`replay` | 工具开始执行 |
 | `ToolFinished` | `toolCallId`、`toolName`、`isError`、`terminate`、`resultEntryId`、`durationMs` | 工具执行结束（可观测性：结局 + 延迟） |
 | `QueueEnqueued` | `queue`（`QueueKind`）、`runId`、`target` | 入队 |
 | `QueueConsumed` | `queue`、`runId`、`targets` | 一批排空被消费。pi-java 特有：pi 从 entry 是否出现推断消费，而 pi-java 把整次排空合成一条用户消息，故需要显式标记 |
 | `QueueCancelled` | `runId`、`entryId` | 队列项被取消 |
-| `WriteDeferred` | `runId`、`target` | 运行中写入被标记为 deferred（`docs/22` D3） |
+| `WriteDeferred` | `runId`、`target` | 运行中写入被标记为 deferred（`原 docs/22` D3） |
 | `UsageRecord` | `usage`、`cause`（`UsageCause`）、`runId`、`entryId`、`toolCallId`、`attempt`、`stopReason` | token 用量。`stopReason` 是**审计数据不是推导输入**：没有任何代码从它派生（与 `StepAttempt` 上被移除的那份平行副本不同） |
 
 > **记录日志是旁路审计，不参与状态推导。** 折叠链（`LaneStateFolder` /
-> `RecordLogValidator`）已退休，`docs/30` 明文禁止从记录反推状态；恢复时记录被原样载入，
+> `RecordLogValidator`）已退休，`原 docs/30` 明文禁止从记录反推状态；恢复时记录被原样载入，
 > 车道回到**空闲**，队列**为空**（队列是进程内的，崩溃即丢）。
 > 恢复的上下文由 `seedTranscript` 负责 —— 它是「用日志重建工作副本」的那条路径。
 
@@ -461,7 +461,7 @@ public interface SessionStorage<TMetadata extends SessionMetadata> {
     // ── 元数据 ──────────────────────────────────────────
     TMetadata getMetadata();
 
-    // ── 车道管理（存储层的分支模型，docs/31 §8.10）────────
+    // ── 车道管理（存储层的分支模型，原 docs/31 §8.10）────────
     List<LanePointer> getLanes();                      // record LanePointer(lane, leafId)
     void createLane(String lane, String at);
     void moveLane(String lane, String to);
@@ -578,7 +578,7 @@ public record BranchBounds(String start, String stopAtType, String stopAtId) { �
 `EntryQuery` / `RecordQuery` 是查询条件记录（各带 `all()` / `last(n)` 等便捷构造），
 字段较细，以源码为准。
 
-**身份归属**（`docs/31 §8.14`）：`appendEntry` 是**身份的唯一权威** —— 它调
+**身份归属**（`原 docs/31 §8.14`）：`appendEntry` 是**身份的唯一权威** —— 它调
 `entry.committed(state.nextSequence(), 车道的 tip, now)` 重赋 `seq` / `parentId` / `timestamp`
 （id 保留并校验未占用）。调用方传进去的 `ProvisionedEntry` 里的这些值是**占位**。
 ```
@@ -1030,7 +1030,7 @@ public interface SessionSnapshot {
 > **本节 2026-09-13 按代码重写。** 原稿把 `AgentHarness` 放进了 `SessionServices`，
 > 还写了 `resume(String, SessionServices)` 与 `branch(String)` —— 都不存在。
 > `SessionServices` 是**共享的依赖容器**（多个会话可以共用一个），harness 是**每个会话
-> 自己的**（`docs/31 §4.3`），两者刻意分开。
+> 自己的**（`原 docs/31 §4.3`），两者刻意分开。
 
 ```java
 public final class AgentSession implements AutoCloseable {
@@ -1418,7 +1418,7 @@ public class CommandRegistry {
 > （`run`/`compaction`/`navigation`，非字符串）；lane 只有 `{seq,lane,leafId}`
 > （没有 `action:create`/`action:move`）；fact 是 `{fact:"name"|"label", name|label, targetId}`
 > （非 `{fact:"session.name", value}`）。
-> 内容块键名另见 `docs/31 §8.33`：thinking 块的文本字段是 `thinking`（不是 `text`）。
+> 内容块键名另见 `原 docs/31 §8.33`：thinking 块的文本字段是 `thinking`（不是 `text`）。
 
 ### 5.3 分支语义
 

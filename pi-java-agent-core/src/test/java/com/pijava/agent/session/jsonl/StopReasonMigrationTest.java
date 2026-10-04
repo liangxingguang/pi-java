@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 旧转录的停因词表迁移（B109，{@code docs/56 §6 R2/R3}）。
+ * 旧转录的停因词表迁移（B109，{@code 原 docs/56 §6 R2/R3}）。
  *
  * <p>B109 之前归一化停因写作 {@code "tool_use"}，此后与 pi 同字面量写作 {@code "toolUse"}；
  * 而 {@code ~/.pi-java} 下有数千个旧会话文件，助手消息与 usage 审计记录两条路径都带着旧值。

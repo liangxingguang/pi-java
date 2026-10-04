@@ -230,7 +230,7 @@ final class PiLoopRunner {
         //   · 已中止时进场 ⇒ 归工具阶段管（pi 的 prepareToolCall 逐调用回 immediate 错误，
         //     agent-loop.ts:655-661）；provider 若照样吐帧，那些帧就该被消费，
         //     否则工具阶段的「每个调用都补一个 end」根本没有调用可补。
-        //   · 拉取**途中**才中止 ⇒ 循环层自己兜底，不再消费后续事件（docs/23 §4.4 的 A8）。
+        //   · 拉取**途中**才中止 ⇒ 循环层自己兜底，不再消费后续事件（原 docs/23 §4.4 的 A8）。
         // pi 把 signal 交给 streamFunction、由 provider 自己收尾（:307-311）；pi-java 的
         // StreamIterator 是同步拉取，不能假定 provider 照做，所以补上第二条。
         boolean abortedAtEntry = signal != null && signal.isAborted();
@@ -265,7 +265,7 @@ final class PiLoopRunner {
                     finalMessage = fromPartial(done.partial());
                     break;
                 } else if (event instanceof StreamEvent.StreamError err) {
-                    // C 批次（docs/55 §6.3-10）：**拿到什么就是什么** —— pi 没有
+                    // C 批次（原 docs/55 §6.3-10）：**拿到什么就是什么** —— pi 没有
                     // 「替 provider 补形状」这一步（agent-loop.ts:399-412 只是
                     // `await response.result()`）。生产者已在车道侧落定
                     // （StreamPartialBuilder.emitError / StreamError.settle），

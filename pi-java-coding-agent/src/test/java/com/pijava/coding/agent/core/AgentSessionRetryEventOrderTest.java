@@ -22,7 +22,7 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 3d（docs/31 §8.22.3 测试⑤）：环 A 迁进引擎后的会话事件全序钉。
+ * 3d（原 docs/31 §8.22.3 测试⑤）：环 A 迁进引擎后的会话事件全序钉。
  *
  * <p>faux 脚本 [error("overloaded"), text("recovered")]，期望（pi
  * {@code agent-session.ts:655-735, 2917-2965}）：</p>
@@ -39,7 +39,7 @@ class AgentSessionRetryEventOrderTest {
 
     private static List<StreamEvent> errorSeq() {
         var partial = AssistantMessage.empty().withStopReason("error");
-        // C 批次（docs/55 §6.3-10）：走**生产者**的落定入口，不手搓裸 record ——
+        // C 批次（原 docs/55 §6.3-10）：走**生产者**的落定入口，不手搓裸 record ——
         // 重试白名单分类器要的 "overloaded" 文本现在从消息上读
         // （此前靠 PiLoopRunner.withErrorShape 补，那个补丁已删）。
         return List.of(

@@ -4,7 +4,7 @@ package com.pijava.agent.compaction;
  * 压缩事件的宿主观察口 —— pi {@code AgentSession._emit} 的
  * {@code compaction_start} / {@code compaction_end} 两个会话事件
  * （{@code agent-session.ts:157-170, 1970, 2085, 2098, 2199, 2290-2440}；
- * package 3c，{@code docs/31 §8.21}）。
+ * package 3c，{@code 原 docs/31 §8.21}）。
  *
  * <p><b>为什么是 observer 而不是 {@code HookSystem}</b>（裁决③）：钩子是用户的
  * 改写/否决面（{@code session_before_compact} 对应物），而 start/end 是**通知**，

@@ -31,9 +31,9 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * {@code lane.records} 的**跨线程**访问（{@code docs/31 §8.27}）。
+ * {@code lane.records} 的**跨线程**访问（{@code 原 docs/31 §8.27}）。
  *
- * <p>包 B（{@code docs/31 §8.23}）让工具调用真并发之后，这张审计表多了一个**工具线程**写者：
+ * <p>包 B（{@code 原 docs/31 §8.23}）让工具调用真并发之后，这张审计表多了一个**工具线程**写者：
  * {@code PiToolRunner.execute} 在 worker 线程上跑 {@code after_tool} 钩子，钩子抛异常时
  * {@code HookSystem.recordHookError} 直接往表里 {@code add}
  * （{@code PiToolRunner:172} → {@code HookSystem:200} → {@code :334}）；宿主线程同时在**读**它

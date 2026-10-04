@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * docs/66：五条车道把 strict-prefer 工具的参数转换为 strict schema 并下发各自的
+ * 原 docs/66：五条车道把 strict-prefer 工具的参数转换为 strict schema 并下发各自的
  * strict 标志（pi {@code constrained-sampling.ts} 五车道落点）。观测面为真出站体。
  */
 class ConstrainedSamplingWireTest {

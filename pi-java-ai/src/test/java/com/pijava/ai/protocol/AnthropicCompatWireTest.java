@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>与 {@code AnthropicThinkingWireTest}／{@code AnthropicMessagesApiBuildParamsTest} 的分工：
  * 那两份用手搓的 {@code ModelInfo}（显式 compat）钉**分支**，本份用
  * {@link BuiltinCatalog#anthropicModels()} 的**真**模型钉**可达性** —— 包 A7 之前
- * 内置目录全是 {@code ModelCompat.NONE}，故这几条在旧代码上必红（{@code docs/53 §3 F3}
+ * 内置目录全是 {@code ModelCompat.NONE}，故这几条在旧代码上必红（{@code 原 docs/53 §3 F3}
  * 的 D1/D2/D4）。</p>
  */
 class AnthropicCompatWireTest {
@@ -72,7 +72,7 @@ class AnthropicCompatWireTest {
 
     @Test
     void haiku45StaysOnTheBudgetShape() throws Exception {
-        // 配对用例（docs/44 的「缺席断言必须与在场断言成对」）：同一构造下 haiku 不是 adaptive。
+        // 配对用例（原 docs/44 的「缺席断言必须与在场断言成对」）：同一构造下 haiku 不是 adaptive。
         var params = buildParams(request(builtIn("claude-haiku-4-5-20251001"),
             Optional.of(new ThinkingLevel.High()), -1));
 
@@ -127,12 +127,12 @@ class AnthropicCompatWireTest {
      * <p>⚠️ 那条更新**不能放下标 0**：{@code ContextNormalizer} 见到首条已是系统消息就认为
      * 「调用方自己造好了转录」⇒ 会**跳过** {@code systemPrompt}，于是前导消息变成那条更新
      * 本身、<em>中途</em>的形状根本没被构造出来（第一版夹具就是这样空过的）。
-     * 位置与 {@code docs/51 §12.4.2} 的 A5 教训同源：要钉「就地发」就得给出**它之前还有东西**
+     * 位置与 {@code 原 docs/51 §12.4.2} 的 A5 教训同源：要钉「就地发」就得给出**它之前还有东西**
      * 的转录。</p>
      */
     private static StreamRequest requestWithUpdate(ModelInfo model) {
         // ⚠️ 不能用 `Map.of("tools", null)` —— 它在 null **值**上直接 NPE（Map.of 的已知限制），
-        // 而 pi 的段删除语义正是「值 null」（docs/52 §12.3）。
+        // 而 pi 的段删除语义正是「值 null」（原 docs/52 §12.3）。
         var sections = new LinkedHashMap<String, String>();
         sections.put("tools", null);
         var update = new Message.SystemMessage("", Instant.EPOCH, sections, List.of(), List.of());

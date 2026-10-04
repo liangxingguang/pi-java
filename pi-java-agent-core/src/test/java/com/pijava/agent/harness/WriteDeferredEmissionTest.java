@@ -24,8 +24,8 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * docs/22 step 5: every in-flight entry write emits its {@code write_deferred}
- * record (docs/22 D3). A lane-view entry write while a run is in flight is
+ * 原 docs/22 step 5: every in-flight entry write emits its {@code write_deferred}
+ * record (原 docs/22 D3). A lane-view entry write while a run is in flight is
  * deferred; while the lane is idle it is a direct append, so the prompt that
  * starts a run is not recorded as deferred.
  */

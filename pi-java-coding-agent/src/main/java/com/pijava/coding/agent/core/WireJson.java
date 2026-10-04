@@ -20,8 +20,8 @@ import com.fasterxml.jackson.databind.module.SimpleModule;
  * （事件线由 {@code SessionEventHub} 逐 listener catch 掉）。</p>
  *
  * <p>这同一个成因已经咬过两次、咬在两个线面上：包⑩ 的**事件线**
- * （{@code JsonEventMapper}，{@code docs/37}）与包⑪ 的**命令线／导出线**
- * （{@code JsonlWriter}／{@code RpcDispatcher}，台账 B52，{@code docs/38}）。
+ * （{@code JsonEventMapper}，{@code 原 docs/37}）与包⑪ 的**命令线／导出线**
+ * （{@code JsonlWriter}／{@code RpcDispatcher}，台账 B52，{@code 原 docs/38}）。
  * 两处的补法相同：注册本模块。<b>以后新加一个会序列化消息的出口，先问一句：
  * 那个 mapper 注册了吗？</b></p>
  *

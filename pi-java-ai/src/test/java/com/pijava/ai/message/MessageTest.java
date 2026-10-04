@@ -196,7 +196,7 @@ class MessageTest {
      * <p>pi 的 {@code AssistantMessage.usage: Usage} 必填且**永不为空**
      * （{@code ai/src/types.ts:439}；pi 的 11 个适配器 + lazy + faux + 中止/错误路
      * 全都显式给零值，落盘条目也带）⇒ 这里返回 null 会让键从两条线上整段消失。
-     * 见 {@code docs/36}（B41）。⚠️ **工具结果**的 usage 仍可为空 —— 那是 pi 的可选字段。</p>
+     * 见 {@code 原 docs/36}（B41）。⚠️ **工具结果**的 usage 仍可为空 —— 那是 pi 的可选字段。</p>
      */
     @Test
     void fromPartialWithoutUsageInfoSynthesizesZeroUsage() {
@@ -253,7 +253,7 @@ class MessageTest {
      *
      * <p>pi 按 {@code Object.entries}/`values` 的插入顺序渲染 section 文本
      * （{@code utils/text.ts:17}/{@code :30}）；{@code Map.copyOf} 的迭代顺序**未定义**
-     * ⇒ 这条断言在旧实现上可能偶然成立（见 {@code docs/49 §7.4-3} 的如实登记），
+     * ⇒ 这条断言在旧实现上可能偶然成立（见 {@code 原 docs/49 §7.4-3} 的如实登记），
      * 故它守的是「我们选定的语义」，不是一条必定会红的探针。</p>
      */
     @Test

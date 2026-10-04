@@ -9,7 +9,7 @@ import com.pijava.ai.model.ModelId;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * docs/70：pi.dev Model wire DTO 的解析与映射（宽松忽略未知字段、
+ * 原 docs/70：pi.dev Model wire DTO 的解析与映射（宽松忽略未知字段、
  * 模态/推理能力、thinkingLevelMap 三态）。
  */
 class RemoteModelWireTest {

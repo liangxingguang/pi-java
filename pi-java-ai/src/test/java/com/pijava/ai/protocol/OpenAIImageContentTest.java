@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包 H2（{@code docs/44}）步 3：OpenAI-completions 车道的图片落点 ——
+ * 包 H2（{@code 原 docs/44}）步 3：OpenAI-completions 车道的图片落点 ——
  * pi {@code openai-completions.ts:1255-1277}（user）与 {@code :1396-1459}（toolResult）。
  *
  * <p>本车道的两处形状特点（与 Anthropic 车道的三处不对称**不同**）：</p>
@@ -200,7 +200,7 @@ class OpenAIImageContentTest {
     }
 
     /**
-     * <b>红</b> {@code docs/44 D4 选项 A}：{@link ContentBlock.UrlImageContent}（java 扩展）
+     * <b>红</b> {@code 原 docs/44 D4 选项 A}：{@link ContentBlock.UrlImageContent}（java 扩展）
      * 在本车道按**线格本名**下发 —— {@code image_url} 本来就收 URL。
      */
     @Test
@@ -224,7 +224,7 @@ class OpenAIImageContentTest {
 
     /**
      * <b>回归门</b> 无图片的 user 消息仍是**串形态**（pi-java 的既有形状；pi 的串分支
-     * 在 pi-java 结构上不可达，见 {@code docs/44 §6} 的登记）。
+     * 在 pi-java 结构上不可达，见 {@code 原 docs/44 §6} 的登记）。
      */
     @Test
     void textOnlyUserStaysAString() {

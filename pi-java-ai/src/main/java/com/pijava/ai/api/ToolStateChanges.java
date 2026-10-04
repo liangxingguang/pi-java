@@ -14,7 +14,7 @@ import java.util.List;
  *       {@code tool_removal} 块按名引用，不需要定义。</li>
  * </ul>
  *
- * <p>两条纪律（{@code docs/51 §2 P4}）：</p>
+ * <p>两条纪律（{@code 原 docs/51 §2 P4}）：</p>
  *
  * <ol>
  *   <li><b>定义改变 ＝ 先删后加</b> —— 同名工具会**同时**出现在两侧

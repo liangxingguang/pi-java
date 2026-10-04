@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       {@code id}，pi 只在 {@link GoogleMessageConverter#requiresToolCallId} 为真时发。
  *       ⚠️ 这一条超出 B84 字面的「工具结果路径」（assistant 侧），但它是**同一个谓词的
  *       同一道门**：只关门的一侧会造出 pi 里不存在的状态（functionCall 有 id、
- *       functionResponse 没有）⇒ 一并做（{@code docs/45 D3}）。</li>
+ *       functionResponse 没有）⇒ 一并做（{@code 原 docs/45 D3}）。</li>
  * </ol>
  */
 class GoogleAssistantReplayTest {
@@ -60,7 +60,7 @@ class GoogleAssistantReplayTest {
      *
      * <p>pi 的判据是 {@code (!block.text || block.text.trim() === "") && !thoughtSignature}
      * —— 「除非带签名」那半句在 java **恒为假**（{@code TextContent} 没有签名字段，
-     * {@code docs/45 D8}）⇒ 实现是「空白就跳」。</p>
+     * {@code 原 docs/45 D8}）⇒ 实现是「空白就跳」。</p>
      */
     @Test
     void blankAssistantTextBlocksAreSkipped() throws Exception {

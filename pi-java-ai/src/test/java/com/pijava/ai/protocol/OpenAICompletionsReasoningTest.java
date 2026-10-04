@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * B19 收侧：{@code openai-completions} 车道**读取**响应侧 reasoning
- * （docs/31 §8.35.1，pi {@code openai-completions.ts:597-620}）。
+ * （原 docs/31 §8.35.1，pi {@code openai-completions.ts:597-620}）。
  *
  * <p>行车事故的根因：该车道只读 {@code delta.content()}，relay 送回的推理文本
  * 整段丢弃 ⇒ 「1014 output token 换回一条空消息、且 {@code stopReason=stop}」。

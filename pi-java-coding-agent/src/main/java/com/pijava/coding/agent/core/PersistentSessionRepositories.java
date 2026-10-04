@@ -44,7 +44,7 @@ final class PersistentSessionRepositories {
 
     /**
      * JSONL handle over an injected file system — the seam a fixture needs to
-     * <em>count</em> how many session files a scan opens (docs/39 §6.2), the
+     * <em>count</em> how many session files a scan opens (原 docs/39 §6.2), the
      * deterministic stand-in for the timing question A12 was about.
      */
     static RepositoryHandle jsonl(Path sessionsRoot, JsonlSessionRepoFileSystem fs) {
@@ -260,7 +260,7 @@ final class PersistentSessionRepositories {
          * ({@code session-manager.ts:1589}, {@code :483}, {@code :636}). Scanning
          * <em>every</em> project instead made {@code -c} and the web {@code ready}
          * frame cost O(all session files) — measured 1082 ms for 2125 files vs
-         * 5 ms for an empty root (docs/39 §3), and it could resume a session
+         * 5 ms for an empty root (原 docs/39 §3), and it could resume a session
          * belonging to a different project.</p>
          *
          * <p>A {@code null} {@code cwd} means "no project scope": every directory

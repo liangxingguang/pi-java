@@ -26,7 +26,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * <b>Batch F 步 4</b>（{@code docs/67}）：Responses reasoning 块的**采集**与
+ * <b>Batch F 步 4</b>（{@code 原 docs/67}）：Responses reasoning 块的**采集**与
  * **Azure 回填**。
  *
  * <p>pi 在 {@code response.output_item.done} 把整个 reasoning item

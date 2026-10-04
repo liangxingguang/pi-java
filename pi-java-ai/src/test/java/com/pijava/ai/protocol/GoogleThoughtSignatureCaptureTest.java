@@ -26,7 +26,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * <b>Batch F 步 2</b>（{@code docs/67}）：Google thoughtSignature 的**采集** ——
+ * <b>Batch F 步 2</b>（{@code 原 docs/67}）：Google thoughtSignature 的**采集** ——
  * 签名可附着在任意 part 上（text／thought:true 的 thinking／functionCall），
  * pi 逐字落盘（{@code JSON.stringify}），故终态消息块上必须带得出。
  *

@@ -14,7 +14,7 @@ import com.pijava.ai.thinking.ThinkingLevel;
  * —— 放进 {@code thinking} 会与 {@code ModelInfo → ThinkingLevelMap} 形成包级环。</p>
  *
  * <p><b>方言映射</b>：pi 的 {@code model.reasoning} 在 pi-java 上是
- * {@link ModelCapability#THINKING}（{@code docs/41 §1.4} 登记的形状差异 ——
+ * {@link ModelCapability#THINKING}（{@code docs/07 §1.4} 登记的形状差异 ——
  * pi 是模型元数据布尔，java 是能力集成员）。</p>
  */
 public final class ModelThinkingLevels {

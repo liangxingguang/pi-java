@@ -25,7 +25,7 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包H5 步8：<b>用户入口三件</b>（{@code docs/46 §3-D6}）。
+ * 包H5 步8：<b>用户入口三件</b>（{@code 原 docs/46 §3-D6}）。
  *
  * <ol>
  *   <li>{@code settings.defaultThinkingLevel} 要真的进请求路径
@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * </ol>
  *
  * <p>⚠️ 第二档（per-model {@code settings.getModelThinkingLevel(provider,id)}）java 没有对应
- * 设置键 ⇒ <b>登记不做</b>（{@code docs/46 §7 B15-残留-5}）。</p>
+ * 设置键 ⇒ <b>登记不做</b>（{@code 原 docs/46 §7 B15-残留-5}）。</p>
  */
 class ThinkingLevelEntryTest {
 

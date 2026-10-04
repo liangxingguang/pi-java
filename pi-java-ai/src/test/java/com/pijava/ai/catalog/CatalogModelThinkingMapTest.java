@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 包H5 步7：目录 wire DTO 的 {@code thinkingLevelMap} 往返
- * （{@code docs/46 §3-D5-2}）。
+ * （{@code 原 docs/46 §3-D5-2}）。
  *
  * <p>改动前 {@code CatalogModel} 在<b>两个方向都丢弃</b>这张表 ⇒ 远程目录与
  * {@code FileModelsStore} <b>结构上装不了</b>它 —— 光开 models.json 的键只覆盖了本地文件那一条路。</p>

@@ -31,7 +31,7 @@ public sealed interface Message
     /**
      * A message from the end user.
      *
-     * <p>docs/71 G1：{@code timestamp} 对齐 pi {@code UserMessage.timestamp}
+     * <p>原 docs/71 G1：{@code timestamp} 对齐 pi {@code UserMessage.timestamp}
      * （{@code types.ts:512}，pi 侧**必填**；Java 由兼容构造器放宽为可空 —— 本仓
      * 既有会话文件没有这个键）。</p>
      */
@@ -85,7 +85,7 @@ public sealed interface Message
          * <p>pi 渲染 sections 的顺序是 {@code Object.entries}/{@code Object.values} 的
          * <b>插入顺序</b>（{@code utils/text.ts:17}、{@code :30}、{@code utils/transcript.ts:80}），
          * 而 {@code Map.copyOf} 的迭代顺序**未定义** ⇒ 用它会让「多个 section 的渲染文本」
-         * 与 pi 不一致（包 A2 的 F3，{@code docs/49 §4.2}）。</p>
+         * 与 pi 不一致（包 A2 的 F3，{@code 原 docs/49 §4.2}）。</p>
          *
          * <p>值可以为 {@code null}：pi 用 {@code null} 表示**删除**具名段
          * （{@code types.ts:501}、{@code utils/transcript.ts:81-83}）。⚠️ 因此这张表
@@ -135,11 +135,11 @@ public sealed interface Message
      * {@code toolUse} / {@code length} / {@code error} / {@code aborted} /
      * {@code deferred}), or {@code null} for messages that never came from a
      * completed stream. It is the single source of truth for the reason
-     * (docs/22 D1) — readers must not keep a parallel copy.
+     * (原 docs/22 D1) — readers must not keep a parallel copy.
      * {@code deferred} is the provider handle carried only when
      * {@code stopReason} is {@code "deferred"}.</p>
      *
-     * <p><b>provider 身份三元组 + 计量</b>（对齐 package 3a，docs/31 §8.19）：pi 的
+     * <p><b>provider 身份三元组 + 计量</b>（对齐 package 3a，原 docs/31 §8.19）：pi 的
      * 每个 provider 在构造消息时就写死 {@code api}/{@code provider}/{@code model}
      * （协议判别字面量 + {@code ModelId}），并把响应的 {@code usage} 和
      * {@code timestamp} 一起落在消息上；harness 的自动压缩估算
@@ -148,7 +148,7 @@ public sealed interface Message
      * 溢出恢复行为就和 pi 不一样。生产路径由 {@code AbstractChatApi} 在事件出口挂载、
      * 经 {@link #fromPartial} 转入终局消息。</p>
      *
-     * <p>{@code rawStopReason}（⑨，docs/31 §8.35.14 裁决 D5）是线格上的**原值**：
+     * <p>{@code rawStopReason}（⑨，原 docs/31 §8.35.14 裁决 D5）是线格上的**原值**：
      * 五条车道都在观测到它的时候就地写下（Anthropic {@code :744}、Google {@code :217}、
      * Mistral {@code :614}、completions {@code :572}、Responses {@code shared:588}／
      * {@code :747}），Google 还拿它当收尾文案的**唯一来源**（{@code :272-273}）。
@@ -157,7 +157,7 @@ public sealed interface Message
      * 后者是 pi 的 {@code StopReason}。pi 的消息整体 stringify 落盘 ⇒ 它同样是转录里的键。</p>
      *
      * <p>⚠️ <b>以下五个 pi 字段不移植，但**每个的理由各不相同**</b>（2026-10-03 复核，
-     * {@code docs/71 §1.4}）—— 旧注释把它们笼统写成「对齐面没有任何消费者」，
+     * {@code 原 docs/71 §1.4}）—— 旧注释把它们笼统写成「对齐面没有任何消费者」，
      * 那个措辞只对其中两个成立：</p>
      * <ul>
      * <li>{@code responseId}（{@code types.ts:522}）、{@code endTurn}
@@ -170,7 +170,7 @@ public sealed interface Message
      *     UI 计数 {@code interactive-mode.ts:3917}）—— 但那些模块**本仓一个都没有**
      *     （{@code RunSummaryAggregator} 是按 run 汇总，不按 {@code provider/responseModel}
      *     分组）⇒ 移植会变成「只有生产者没有消费者」。**等那些模块移植时一并做**
-     *     （{@code docs/32} 已登记）。</li>
+     *     （{@code docs/05} 已登记）。</li>
      * <li>{@code providerThinkingLevel}（{@code :523-524}）：唯一消费者在
      *     {@code packages/ai} 自己的 Anthropic 车道（{@code anthropic-messages.ts:1370-1376}
      *     读它做**中途 effort 绑定**）—— 那层 pi-java 也要实现，但该行为被
@@ -240,7 +240,7 @@ public sealed interface Message
          * 完整 {@link com.pijava.ai.Usage}：有全量分解用全量（含 cache/cost），只有
          * input/output 计数的合成（cache 0、cost 零）。
          *
-         * <p><b>无 UsageInfo ⇒ 兜零值对象，不返回 null</b>（包⑨ B41，{@code docs/36}）。
+         * <p><b>无 UsageInfo ⇒ 兜零值对象，不返回 null</b>（包⑨ B41，{@code 原 docs/36}）。
          * pi 的 {@code AssistantMessage.usage: Usage} 是<b>必填</b>
          * （{@code ai/src/types.ts:439}），而且 pi <b>没有任何一条路径</b>会产出没 usage
          * 的助手消息 —— 11 个 provider 适配器、{@code lazy.ts} 的装配失败、{@code faux}、
@@ -253,7 +253,7 @@ public sealed interface Message
          * <p>⚠️ <b>只管助手消息</b>：pi 的 {@code ToolResultMessage.usage} 是<b>可选</b>的
          * （{@code types.ts:459}），工具没报用量时线上确实没有该键
          * （{@code createErrorToolResult} 根本不带）⇒ 工具结果那边<b>保持 null ⇒ 省略</b>，
-         * 兜零是引入偏差（{@code docs/36 §3-R4}）。</p>
+         * 兜零是引入偏差（{@code 原 docs/36 §3-R4}）。</p>
          */
         private static com.pijava.ai.Usage usageOf(
                 com.pijava.ai.stream.StreamEvent.UsageInfo info) {
@@ -304,7 +304,7 @@ public sealed interface Message
      * <p><b>provider 投影不读这三项</b> —— pi 的各协议适配器只从 {@code content}
      * 构造工具结果块（{@code details} 是给 UI/日志的结构化载荷，不进模型上下文）。</p>
      *
-     * <p>A-20（docs/68 J9/J10，2026-10-02）：{@code details} <b>主流有生产者</b>
+     * <p>A-20（原 docs/68 J9/J10，2026-10-02）：{@code details} <b>主流有生产者</b>
      * （edit 每次成功必放、bash/read 截断时放）；{@code usage} 两侧主流同无生产者，
      * 留形状不接线。</p>
      *
@@ -328,7 +328,7 @@ public sealed interface Message
          * (pi 的对象字面量里这些字段本就可选)。生产路径一律走全参构造，从结果对象
          * 转发 —— 见 {@code PiToolRunner.toOutcome}。
          *
-         * <p>docs/71 G1：时间戳同理 —— 本构造器给 {@code null}（旧数据/夹具），
+         * <p>原 docs/71 G1：时间戳同理 —— 本构造器给 {@code null}（旧数据/夹具），
          * <b>生产构造点必须用全参构造给值</b>。</p>
          */
         public ToolResultMessage(String toolUseId, String toolName,

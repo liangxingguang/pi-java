@@ -1,7 +1,7 @@
 package com.pijava.ai.api;
 
 /**
- * 凭证的**形态**（包 A0，{@code docs/43 D5}）—— pi 的三种凭证形态在 java 的载体。
+ * 凭证的**形态**（包 A0，{@code 原 docs/43 D5}）—— pi 的三种凭证形态在 java 的载体。
  *
  * <p>pi 的凭证不是一个裸字符串而是一个带形态的值：</p>
  * <ul>

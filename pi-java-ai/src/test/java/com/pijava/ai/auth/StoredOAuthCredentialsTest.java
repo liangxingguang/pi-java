@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 包 B1（{@code docs/63}）：{@link StoredOAuthCredentials} —— 5 分钟临期主动刷新、
+ * 包 B1（{@code 原 docs/63}）：{@link StoredOAuthCredentials} —— 5 分钟临期主动刷新、
  * 锁内 double-checked 单次刷新、失败不静默回落。
  */
 class StoredOAuthCredentialsTest {

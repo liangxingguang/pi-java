@@ -11,7 +11,7 @@ import com.pijava.ai.message.Message;
  * drives this via its stream function; {@link #truncating()} provides a
  * deterministic placeholder until Phase 6 wires the real summarization flow.
  *
- * <p><b>3d 的失败语义</b>（{@code docs/31 §8.22}）：pi 的
+ * <p><b>3d 的失败语义</b>（{@code 原 docs/31 §8.22}）：pi 的
  * {@code generateSummaryWithUsage} 对 error/length 收尾的摘要响应<b>抛错</b>
  * （{@code getSummarizationFailure}，{@code compaction.ts:545-553}）并附
  * toolCall 守卫（{@code :719-721}）；pi-java 的 {@link LlmSummaryGenerator}

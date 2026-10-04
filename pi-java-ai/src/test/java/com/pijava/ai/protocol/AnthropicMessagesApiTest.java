@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * Anthropic 车道：Phase 6 的构造器行为 + <b>B20 的 stop reason 映射与收尾</b>。
  *
- * <p>B20 夹具（{@code docs/31 §8.35.14} 第八节）此前**一条都没有**：本类原来只有两个构造器
+ * <p>B20 夹具（{@code 原 docs/31 §8.35.14} 第八节）此前**一条都没有**：本类原来只有两个构造器
  * 用例，所以「{@code :94} 无条件 {@code emitDone("end_turn")}」这一处从 Phase 2 起就没人
  * 碰过。pi 的收尾是**四段判**（{@code anthropic-messages.ts:779-804}）：abort → pending →
  * error/aborted → done；pi-java 只有最后一段，且取值是**车道自己编的**。</p>
@@ -67,7 +67,7 @@ class AnthropicMessagesApiTest {
     }
 
     // ══════════════════════════════════════════════════════════════════
-    // B20：stop reason 映射与收尾（docs/31 §8.35.14 第二/三节）
+    // B20：stop reason 映射与收尾（原 docs/31 §8.35.14 第二/三节）
     // ══════════════════════════════════════════════════════════════════
 
     /**
@@ -108,7 +108,7 @@ class AnthropicMessagesApiTest {
      * <p>⚠️ **这条是补上的一处覆盖缺口**：B109 实施期的变异探针 M1 实测 —— 把本车道的映射
      * 改回旧字面量 {@code "tool_use"}，整个 `ai` 模块**零红**（995 全绿）。即**主车道**
      * （Anthropic）的归一化停因此前**没有任何夹具**。本条补上，并用 M1 复测证明它有牙
-     * （{@code docs/56 §12.9}）。</p>
+     * （{@code 原 docs/56 §12.9}）。</p>
      *
      * <p>本断言刻意把三件同名字面量分开：线格 {@code stop_reason} 是 {@code "tool_use"}
      * （**不变量**，见下面的 {@code rawStopReason} 断言）、归一化停因是 {@code "toolUse"}。</p>

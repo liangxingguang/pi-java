@@ -7,7 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * docs/66：{@link ConstrainedSampling} 的 JSON 线格与 pi 逐字
+ * 原 docs/66：{@link ConstrainedSampling} 的 JSON 线格与 pi 逐字
  * （{@code types.ts:590-594}）。
  */
 class ConstrainedSamplingJsonTest {

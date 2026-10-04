@@ -79,7 +79,7 @@ public final class ModelsJsonSchema {
      *
      * <p>Listed explicitly so the key is a **known** one: while these records ignore unknown
      * properties, an unlisted {@code compat} would be swallowed silently and the flag would
-     * appear to do nothing (docs/31 §8.34.2-6, 决策 2). Unknown properties *inside* {@code compat}
+     * appear to do nothing (原 docs/31 §8.34.2-6, 决策 2). Unknown properties *inside* {@code compat}
      * are still ignored — that is deliberate: it lets a pi models.json round-trip, and it is
      * safer than turning {@code ignoreUnknown} off globally (which would make any typo in a
      * user's models.json a hard error).</p>
@@ -177,7 +177,7 @@ public final class ModelsJsonSchema {
          * 包 A-10 第 6 步（pi {@code types.ts:773-774}，{@code OpenAIResponsesCompat}）：
          * 端点是否接受 {@code max_output_tokens}；缺省 {@code true}。只有
          * {@code openai-responses} 车道读它 —— {@code azure-openai-responses} 的副本
-         * **没有这道门**，故在本仓写 {@code false} 对 azure 无效（{@code docs/57 §6 R8} 的
+         * **没有这道门**，故在本仓写 {@code false} 对 azure 无效（{@code 原 docs/57 §6 R8} 的
          * 第 6 步说明与 {@code ResponsesMessageConverter} 的车道名分支）。
          */
         @JsonProperty("supportsMaxOutputTokens") Boolean supportsMaxOutputTokens,
@@ -204,7 +204,7 @@ public final class ModelsJsonSchema {
          * {@code OpenRouterRouting}）：原样发成请求体 {@code provider} 键的路由偏好表。
          * ⚠️ **纯透传**（不校验内部键）—— pi 的 TypeBox 对象同样不拒未知键，且值可空
          * （{@code sort.partition: null}）⇒ 用宽松的 {@code Map<String,Object>}，缺席保持
-         * {@code null}（不归一成空表，docs/59 R6）。
+         * {@code null}（不归一成空表，原 docs/59 R6）。
          */
         @JsonProperty("openRouterRouting") Map<String, Object> openRouterRouting,
         /**
@@ -218,9 +218,9 @@ public final class ModelsJsonSchema {
          * {@link com.pijava.ai.catalog.SessionAffinityFormat#parse} 落成缺席（车道探测）。
          */
         @JsonProperty("sessionAffinityFormat") String sessionAffinityFormat,
-        /** docs/66（pi {@code types.ts:826}）：Anthropic 车道是否接受 strict tool；缺省 {@code false}。 */
+        /** 原 docs/66（pi {@code types.ts:826}）：Anthropic 车道是否接受 strict tool；缺省 {@code false}。 */
         @JsonProperty("supportsStrictTools") Boolean supportsStrictTools,
-        /** docs/69（pi {@code types.ts}: grammar 能力位）：是否支持 OpenAI custom tool 文法；缺省 ⇒ 门关。 */
+        /** 原 docs/69（pi {@code types.ts}: grammar 能力位）：是否支持 OpenAI custom tool 文法；缺省 ⇒ 门关。 */
         @JsonProperty("supportsOpenAIGrammarTools") Boolean supportsOpenAIGrammarTools
     ) {}
 
@@ -228,7 +228,7 @@ public final class ModelsJsonSchema {
      * Per-million-token pricing (pi {@code ModelCostSchema},
      * {@code model-config.ts:125-139}: four rates + optional {@code tiers}).
      *
-     * <p>包 H1 步 6（J10，{@code docs/42}）：此前只声明两键，而本记录是
+     * <p>包 H1 步 6（J10，{@code 原 docs/42}）：此前只声明两键，而本记录是
      * {@code ignoreUnknown=true} ⇒ 用户在 models.json 里写的
      * {@code cacheRead}/{@code cacheWrite}/{@code tiers} 被<b>静默吞掉</b>。
      * 字段类型保持宽松的 {@code Double}（pi 的 zod 对存在的 cost 强制四费率齐全）——

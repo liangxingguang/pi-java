@@ -23,7 +23,7 @@ import java.util.function.Function;
  * a {@code Promise}, and a span here is {@link AutoCloseable} where pi's has no
  * {@code end()} because {@code startSpan} owns settlement.  pi's
  * {@code addEvent}/{@code setStatus} are deliberately not ported — see
- * {@link TelemetrySpan}.  Evidence and adjudication: {@code docs/31 §8.28}.</p>
+ * {@link TelemetrySpan}.  Evidence and adjudication: {@code 原 docs/31 §8.28}.</p>
  */
 @FunctionalInterface
 public interface TelemetryContext {

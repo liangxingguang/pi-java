@@ -34,7 +34,7 @@ import com.pijava.ai.catalog.ModelCompat;
  * <ol>
  *   <li>工具断点**没有** {@code supportsCacheControlOnTools} 门 —— 那道门在
  *       {@code anthropic-messages.ts:1114}，completions 侧的
- *       {@code addCacheControlToLastTool:1118-1129} 是裸挂（docs/59 §4.9）。</li>
+ *       {@code addCacheControlToLastTool:1118-1129} 是裸挂（原 docs/59 §4.9）。</li>
  *   <li>断点形状只有 {@code {type:"ephemeral",ttl?}} 一种（{@code :1069-1079}），
  *       落点是文本分片（串 content 先改写成单分片数组），不是 anthropic 的任意块类型。</li>
  * </ol>

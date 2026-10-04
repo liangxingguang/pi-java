@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * pi 对齐（agent-session.ts _prepareRetry）：重试前移除尾部 error assistant、
  * 保留既有上下文，用 continue 续跑——不重新注入 user prompt。
  *
- * <p>3d 起重试环住在引擎（docs/31 §8.22）：错误消息必须命中 pi 的白名单分类器
+ * <p>3d 起重试环住在引擎（原 docs/31 §8.22）：错误消息必须命中 pi 的白名单分类器
  * 才会重试（"boom" 不再可重试，换成 {@code "overloaded"}）；auto-retry 默认开
  * （pi {@code retry.enabled ?? true}），不再需要显式 setAutoRetryEnabled ——
  * 那如今是会落盘的设置写入。</p>
@@ -33,7 +33,7 @@ class SessionRunnerRetryContextTest {
 
     private static List<StreamEvent> errorSeq() {
         var partial = AssistantMessage.empty().withStopReason("error");
-        // C 批次（docs/55 §6.3-10）：走**生产者**的落定入口 —— 白名单分类器要的
+        // C 批次（原 docs/55 §6.3-10）：走**生产者**的落定入口 —— 白名单分类器要的
         // "overloaded" 文本现在从消息上读（此前靠 withErrorShape 补，已删）。
         return List.of(
             new StreamEvent.Start(AssistantMessage.empty()),

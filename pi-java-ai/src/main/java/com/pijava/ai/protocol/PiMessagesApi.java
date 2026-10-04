@@ -37,7 +37,7 @@ public final class PiMessagesApi extends AbstractChatApi {
     }
 
     /**
-     * ⚠️ 本车道**不参与**请求侧选项解析（{@code docs/57 §6 R2}）。
+     * ⚠️ 本车道**不参与**请求侧选项解析（{@code 原 docs/57 §6 R2}）。
      *
      * <p>pi 的 pi-messages 车道**不过** {@code buildBaseOptions}
      * （{@code pi-messages.ts:431-443} 直接 {@code {...options, reasoning, toolChoice, debug}}）
@@ -107,7 +107,7 @@ public final class PiMessagesApi extends AbstractChatApi {
                     case PiMessagesEvent.ThinkingDelta d ->
                         publisher.submit(builder.emitThinkingDelta(d.delta()));
                     case PiMessagesEvent.ThinkingEnd thinkingEnd -> {
-                        // P4（docs/31 §8.33）：pi 在 thinking_end 上把 contentSignature/redacted
+                        // P4（原 docs/31 §8.33）：pi 在 thinking_end 上把 contentSignature/redacted
                         // 装配回块 —— `Object.assign(entry, {thinkingSignature: event.contentSignature,
                         // redacted: event.redacted})`（pi-messages.ts:236-240，事件形状见 :60-64）。
                         // 这四个字段在 PiMessagesEvent:43 早已声明，此前**从未被填过** ⇒
@@ -132,7 +132,7 @@ public final class PiMessagesApi extends AbstractChatApi {
                         var tc = e.toolCall();
                         feedToolCallTail(builder, publisher, toolJson,
                             e.contentIndex(), tc);
-                        // Batch F（docs/67）：toolCall.thoughtSignature 随块透传。
+                        // Batch F（原 docs/67）：toolCall.thoughtSignature 随块透传。
                         publisher.submit(
                             builder.emitToolCallEnd(tc.id(), tc.name(), tc.thoughtSignature()));
                         toolJson.remove(e.contentIndex());
@@ -185,7 +185,7 @@ public final class PiMessagesApi extends AbstractChatApi {
             // `context` **就是** TranscriptContext：只有 `messages`，系统提示与工具声明都在
             // 消息数组里（`9e05370b2` 起形参从 `Context` 改成 `TranscriptContext`）。
             // ⚠️ 旧实现发的是 `{systemPrompt?, messages, tools?}`（＝重构**前**的 `Context`）
-            // —— 包 A2 的 R2 把它对齐（docs/49 §4.2 F2）。本车道不折叠、不切头：对端自己读
+            // —— 包 A2 的 R2 把它对齐（原 docs/49 §4.2 F2）。本车道不折叠、不切头：对端自己读
             // 数组里的系统消息。
             var context = JSON.createObjectNode();
             var messages = context.putArray("messages");
@@ -261,7 +261,7 @@ public final class PiMessagesApi extends AbstractChatApi {
      *
      * <p>投影本身在 {@link Transcripts#toToolDeclaration} —— 包 B87② 之前这里是**第一个**
      * 按 pi 形状写它的地方，而 {@code SessionJson} 的系统消息落线仍写
-     * {@link ToolDefinition} 全形（{@code docs/32} B87② 登记的形状未定问题）。两处现在
+     * {@link ToolDefinition} 全形（{@code docs/05} B87② 登记的形状未定问题）。两处现在
      * 共用同一份投影，线上字节因此一致。</p>
      */
     private static ArrayNode toolDeclarations(List<ToolDefinition> tools) {

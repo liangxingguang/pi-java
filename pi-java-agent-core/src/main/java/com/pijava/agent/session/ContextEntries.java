@@ -149,11 +149,11 @@ public final class ContextEntries {
      * prefix/suffix, custom_message entries become user messages carrying
      * their content, other entry types produce nothing.
      *
-     * <p>A1（{@code docs/48} §A1）：系统消息（{@link Message.SystemMessage}）走
+     * <p>A1（{@code docs/08} §A1）：系统消息（{@link Message.SystemMessage}）走
      * 「message entries pass through」这一支 —— 它仍然是 {@code Entry.Message} 的载荷，
      * A1 <b>不</b>新增 {@code Entry.SystemMessage} 子类型。工具增删也**不是** entry：
      * 包 A3 的裁决 R2 删掉了 {@code Entry.ActiveToolsChange}（pi 主线从不发射它，
-     * {@code docs/51 §9}）—— 这条线走的是系统消息的 {@code toolsAdded}/{@code toolsRemoved}，
+     * {@code 原 docs/51 §9}）—— 这条线走的是系统消息的 {@code toolsAdded}/{@code toolsRemoved}，
      * 因此它天然落在上面那一支里，本方法无需为它单开分支。</p>
      */
     public static List<Message> toMessages(List<Entry> leafPath) {
@@ -202,7 +202,7 @@ public final class ContextEntries {
     }
 
     /**
-     * docs/71 G1：合成的 user 消息取**entry 自己的**时间戳 —— pi
+     * 原 docs/71 G1：合成的 user 消息取**entry 自己的**时间戳 —— pi
      * {@code messages.ts:141-160} 的 {@code timestamp: m.timestamp}（不是 {@code Date.now()}：
      * 这些是从**已落盘**的 entry 投影出来的，它们在写入时就有时刻）。
      */

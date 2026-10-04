@@ -16,7 +16,7 @@ import java.util.List;
  *                         为假时是 {@link Transcripts#getCurrentTools} 的完整当前集
  * @param anchorsAdditions 后续系统消息是否把各自的 {@code toolsAdded} 作为**就地增量**发出去。
  *                         ⚠️ 为真时 {@code requestTools} **不含**那些增量 —— 它们只在车道侧出现
- *                         （{@code docs/51 §2 P3} 的警告）
+ *                         （{@code 原 docs/51 §2 P3} 的警告）
  */
 public record TranscriptTools(List<ToolDefinition> requestTools, boolean anchorsAdditions) {
 

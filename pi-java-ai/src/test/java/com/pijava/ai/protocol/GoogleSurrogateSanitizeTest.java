@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包 A0 步4（{@code docs/43 D4}）：Google 车道的孤对代理净化落点 ——
+ * 包 A0 步4（{@code 原 docs/43 D4}）：Google 车道的孤对代理净化落点 ——
  * pi {@code google-shared.ts}（6）＋ {@code google-generative-ai.ts}（1）的 7 处调用
  * 在 pi-java 收敛为 <b>4 个文本落线点</b>。
  *
@@ -140,7 +140,7 @@ class GoogleSurrogateSanitizeTest {
     // ── 登记面与回归门 ────────────────────────────────────────────────────
 
     /**
-     * Batch F 起（docs/67）：同模型 thinking 以 {@code thought:true} part 上线，
+     * Batch F 起（原 docs/67）：同模型 thinking 以 {@code thought:true} part 上线，
      * 文本经 {@code SanitizeUnicode.surrogates} 净化（pi {@code shared:245-255}）；
      * 跨模型 thinking 仍在 transform 闸降级为文本。
      */
@@ -162,7 +162,7 @@ class GoogleSurrogateSanitizeTest {
      * {@code GoogleMessageConverter.blockParts} 同样原样放。钉住这个缝不被顺手补掉。
      *
      * <p>观测面取**出参**（反射包私有 {@code blockParts}）而不是线格：{@code com.google.genai}
-     * 的序列化器把孤高代理写成 {@code ?}（{@code docs/43 §10} 实测），在线格上「未净化」
+     * 的序列化器把孤高代理写成 {@code ?}（{@code 原 docs/43 §10} 实测），在线格上「未净化」
      * 与「净化」只差一个空格，判别力弱且依赖第三方编码器行为。</p>
      *
      * <p>⚠️ 包 B84 步2 把这个方法从 {@code GoogleGenerativeAiApi} 搬到了

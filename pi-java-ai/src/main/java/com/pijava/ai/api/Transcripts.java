@@ -17,12 +17,12 @@ import com.pijava.ai.message.MessageTexts;
 /**
  * pi {@code packages/ai/src/utils/transcript.ts} 的重放一半。
  *
- * <p>包 A2（{@code docs/49}）落的是 provider <b>消费</b>侧需要的六个函数：车道不再各自读
+ * <p>包 A2（{@code 原 docs/49}）落的是 provider <b>消费</b>侧需要的六个函数：车道不再各自读
  * {@code request.systemPrompt()} / {@code request.tools()}，而是从这里取「前导系统消息的
  * 文本」与「重放后的工具表」。归一那一半（{@code normalizeContext}）在
  * {@link ContextNormalizer}。</p>
  *
- * <p>包 A3（{@code docs/51}）补上<b>工具增删状态线</b>的另一半 ——
+ * <p>包 A3（{@code 原 docs/51}）补上<b>工具增删状态线</b>的另一半 ——
  * {@link #getDeclaredTools} / {@link #declarationsEqual} / {@link #getToolStateChanges} /
  * {@link #hasToolRedefinitions} / {@link #hasNonAdditiveToolChanges} /
  * {@link #resolveTranscriptTools}，外加两个结果类型 {@link ToolStateChanges} 与
@@ -59,7 +59,7 @@ public final class Transcripts {
      * 的线格 —— 包 B87② 之前这两处各写各的（一个是 {@code ToolDefinition} 全形、
      * 一个是手写三键），线上形状因此不一致。</p>
      *
-     * <p>docs/66：携带 {@code constrainedSampling}（pi 同名字段，缺席则不投影）。</p>
+     * <p>原 docs/66：携带 {@code constrainedSampling}（pi 同名字段，缺席则不投影）。</p>
      */
     public static ToolDeclaration toToolDeclaration(ToolDefinition tool) {
         return new ToolDeclaration(tool.name(), tool.description(), tool.inputSchema(),
@@ -203,7 +203,7 @@ public final class Transcripts {
      * {@code types.ts:731}）：{@code null}（没写）与 {@code false} 同义。
      * ⚠️ <b>形参是**解析后**的 compat</b>（{@link com.pijava.ai.catalog.CompatResolver}）——
      * pi 那条判据读的也是 {@code model.compat?}，但那是**生成目录已烘进去**的值；
-     * 本仓的目录标注只是「覆盖」那一源，探测与缺省归解析层（{@code docs/53 §4.1}）。
+     * 本仓的目录标注只是「覆盖」那一源，探测与缺省归解析层（{@code 原 docs/53 §4.1}）。
      * 传未解析的 {@code model.compat()} 会在内置模型上得到「恒折叠」的错结果。</p>
      */
     public static TranscriptContext resolveTranscript(TranscriptContext context, ModelCompat compat) {
@@ -212,7 +212,7 @@ public final class Transcripts {
         return supports ? context : collapseSystemMessages(context);
     }
 
-    // ── 工具增删状态线（包 A3，docs/51）─────────────────────────────────
+    // ── 工具增删状态线（包 A3，原 docs/51）─────────────────────────────────
 
     /**
      * pi {@code transcript.ts:169-177} —— 这段历史里**出现过的所有定义**，按首次声明序，
@@ -243,7 +243,7 @@ public final class Transcripts {
      * 序列化而不是深比较：投影会丢掉 typebox 的 symbol 键与 {@code undefined} 字段，
      * 并且让两侧键序一致 ⇒ 精确、且不引深比较依赖。</p>
      *
-     * <p>⚠️ <b>已知与 pi 的一处不可对齐</b>（{@code docs/51 §3 F7}、§9 R4）：pi 的
+     * <p>⚠️ <b>已知与 pi 的一处不可对齐</b>（{@code 原 docs/51 §3 F7}、§9 R4）：pi 的
      * {@code JSON.stringify} 对 {@code parameters} 的**嵌套键序**敏感，而 java 的
      * {@code ToolDefinition.inputSchema}/{@code ToolDeclaration.parameters} 经
      * {@code Map.copyOf} 之后插入序**已经丢了**（迭代序由哈希与每 JVM 的盐决定）
@@ -258,7 +258,7 @@ public final class Transcripts {
     /**
      * pi {@code transcript.ts:151-167} —— 两次完整状态的差分。
      *
-     * <p>「定义变了」在两侧各记一次：当前侧算**加**、此前侧算**删**（{@code docs/51 §2 P4}）。
+     * <p>「定义变了」在两侧各记一次：当前侧算**加**、此前侧算**删**（{@code 原 docs/51 §2 P4}）。
      * 两侧的顺序分别跟 {@code current} / {@code previous}。</p>
      */
     public static ToolStateChanges getToolStateChanges(List<ToolDefinition> previous,
@@ -292,7 +292,7 @@ public final class Transcripts {
      * pi {@code transcript.ts:179-194} —— 同名的工具被声明了两次**且定义不同**。
      *
      * <p>按名引用工具的车道（Anthropic 的 {@code tool_addition}/{@code tool_removal} 块）
-     * 表达不了这件事 ⇒ 那是它们的<b>回退判据之一</b>（{@code docs/51 §2 P8}）。</p>
+     * 表达不了这件事 ⇒ 那是它们的<b>回退判据之一</b>（{@code 原 docs/51 §2 P8}）。</p>
      */
     public static boolean hasToolRedefinitions(List<Message> messages) {
         var declared = new LinkedHashMap<String, ToolDefinition>();
@@ -342,7 +342,7 @@ public final class Transcripts {
      * —— 车道侧还要再与「支持中途系统消息」相与（pi 在三条车道各写一次那个式子）。</p>
      *
      * <p>⚠️ {@code anchorsAdditions} 为真时 {@code requestTools} **只是前导消息声明的那一份**，
-     * 后续增量不在请求级字段里 —— 它们靠车道的就地锚定发出去（{@code docs/51 §2 P3}）。</p>
+     * 后续增量不在请求级字段里 —— 它们靠车道的就地锚定发出去（{@code 原 docs/51 §2 P3}）。</p>
      */
     public static TranscriptTools resolveTranscriptTools(List<Message> messages,
                                                          boolean supportsToolAdditions) {

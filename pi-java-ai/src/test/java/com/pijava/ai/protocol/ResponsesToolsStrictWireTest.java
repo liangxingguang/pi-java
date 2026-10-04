@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * <b>包 B87/B88</b>（{@code docs/50 §6.1}）：Responses 车道的**工具声明**必须发得出请求，
+ * <b>包 B87/B88</b>（{@code 原 docs/50 §6.1}）：Responses 车道的**工具声明**必须发得出请求，
  * 且 {@code strict} 的有无按各车道在 pi 里的 compat 缺省走。
  *
  * <p>背景（B88 是既有硬故障）：{@code ResponsesMessageConverter} 从不设 {@code strict}，
@@ -89,7 +89,7 @@ class ResponsesToolsStrictWireTest {
             assertThat(server.body()).as("B88：请求必须真的发出去").isNotEmpty();
             assertThat(tool.path("strict").isBoolean()).as("azure 侧 strict 在场").isTrue();
             assertThat(tool.path("strict").asBoolean())
-                .as("java 没有 constrainedSampling ⇒ 恒为 false（docs/50 §3 F6）").isFalse();
+                .as("java 没有 constrainedSampling ⇒ 恒为 false（原 docs/50 §3 F6）").isFalse();
             assertThat(tool.path("name").asText()).isEqualTo("lookup");
         }
     }

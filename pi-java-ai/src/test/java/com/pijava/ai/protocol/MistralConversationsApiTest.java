@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * {@code mistral-conversations} 车道的 <b>B20 stop reason 映射与严格收尾</b>
- * （{@code docs/31 §8.35.14}）。
+ * （{@code 原 docs/31 §8.35.14}）。
  *
  * <p>本类此前**不存在**：车道从 Phase 2 起就没被任何夹具覆盖。三处偏差一直没被看见 ——
  * 取值在 {@code processSseData} 里读，却排在那道 {@code if (delta == null) return} 之后

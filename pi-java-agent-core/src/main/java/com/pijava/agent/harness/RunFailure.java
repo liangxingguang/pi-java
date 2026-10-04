@@ -12,7 +12,7 @@ import com.pijava.ai.message.Message;
  * 一个 pass 的驱动**抛出**时，把异常收成一条**失败助手消息**，再照常走事件链
  * （{@code message_start} → {@code message_end} → {@code turn_end} → {@code agent_end}）。
  *
- * <p><b>为什么在引擎、为什么在 {@code while} 之内</b>（{@code docs/31 §8.36.5}）：
+ * <p><b>为什么在引擎、为什么在 {@code while} 之内</b>（{@code 原 docs/31 §8.36.5}）：
  * pi 把它放在 {@code Agent}（= 本包），且 {@code runWithLifecycle} 包的是
  * {@code _runAgentPrompt}（**一个 pass**）而不是整个 {@code prompt()} 循环。更决定性的是
  * {@code _handlePostAgentRun:1116-1123} 读的 {@code _lastAssistantMessage} 由
@@ -30,7 +30,7 @@ import com.pijava.ai.message.Message;
  * <ul>
  *   <li><b>identity 三元组的来源</b>：pi 取 {@code this._state.model.api/provider/id}
  *       —— pi 的 {@code Model} 把 api 当<b>数据</b>。pi-java 的 model→api 绑定是
- *       {@code StreamFn} 在路由时**导出**的（{@code docs/31 §8.31}），车道配置里只有
+ *       {@code StreamFn} 在路由时**导出**的（{@code 原 docs/31 §8.31}），车道配置里只有
  *       {@code (provider, modelName)}。⇒ 这里优先取 {@code lane.partial} 的三元组
  *       （它由 {@code AbstractChatApi} 在 api 边界挂上，正是「本车道的模型」的权威来源），
  *       取不到再退回 {@code lane.model}（此时 api 为 {@code null}）。
@@ -52,7 +52,7 @@ final class RunFailure {
      * （会话监听者）时会再抛一次 —— 此时本方法从 catch 体里冒出去、合成消息落不了盘，
      * 与 pi 同形（{@code handleRunFailure} 里 {@code await this.processEvents} 再抛就没人接了）。
      * 引擎的 {@code finally} 仍会收口车道；宿主侧的两处 {@code catch (Throwable)} 是这一层的兜底
-     * （{@code docs/31 §8.36.4}）。</p>
+     * （{@code 原 docs/31 §8.36.4}）。</p>
      */
     static void settle(LaneState lane, PiLaneSink sink, Throwable thrown) {
         var failure = synthesize(lane, thrown);

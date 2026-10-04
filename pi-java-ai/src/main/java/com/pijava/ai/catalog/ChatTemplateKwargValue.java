@@ -21,7 +21,7 @@ import com.fasterxml.jackson.annotation.JsonValue;
  *
  * <p>⚠️ <b>{@code Literal(null)} 是合法值、语义是「写这个键，值是 null」</b> ——
  * pi 的 {@code :1050} 早返回让字面量 {@code null} 原样上线（{@code "key": null}），
- * 它**不是**「这个键不写」。两态之别由消费侧守住（{@code docs/58 §2.3}/R11）。</p>
+ * 它**不是**「这个键不写」。两态之别由消费侧守住（{@code 原 docs/58 §2.3}/R11）。</p>
  */
 public sealed interface ChatTemplateKwargValue {
 

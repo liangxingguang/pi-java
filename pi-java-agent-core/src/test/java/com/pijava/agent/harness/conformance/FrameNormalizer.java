@@ -14,7 +14,7 @@ import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
 
 /**
- * {@link PiLoop.Event} → 一行归一化 JSON（{@code docs/23c §2.3}），与 pi 侧
+ * {@link PiLoop.Event} → 一行归一化 JSON（{@code 原 docs/23c §2.3}），与 pi 侧
  * {@code conformance/pi/run.test.ts} 的 {@code Normalizer} 逐条对应。
  *
  * <p><b>抹平的事</b>：{@code toolCallId} 按首次出现次序改名 {@code tc1,tc2,…}；
@@ -26,11 +26,11 @@ import com.pijava.ai.stream.StreamEvent;
  * 流式更新干脆缺席）因此在差分里完全隐身。丢字段的豁免必须**两侧同时**做，否则
  * 「比对通过」只是「没在看」。</p>
  *
- * <p><b>停因不再需要归一</b>（B109，{@code docs/56}）：改前 pi 用 {@code toolUse}、
+ * <p><b>停因不再需要归一</b>（B109，{@code 原 docs/56}）：改前 pi 用 {@code toolUse}、
  * pi-java 用 {@code tool_use}，归一化时映射回 pi 的写法；两侧词表对齐后
  * {@code stopReasonOf} 成为恒等，已删。⚠️ 这一删除**不会**让本差分抓得到真生产者的
  * 词表回归 —— L5 的停因由 {@link ScriptedStreams} 合成，七条真生产者不在本路径上
- * （{@code docs/56 §8.1}）。</p>
+ * （{@code 原 docs/56 §8.1}）。</p>
  */
 final class FrameNormalizer {
 
@@ -157,7 +157,7 @@ final class FrameNormalizer {
         return switch (message) {
             case Message.UserMessage user ->
                 CanonicalJson.obj("role", "user", "content", textOf(user.content()));
-            // 3a（docs/31 §8.19）：assistant 一支补齐 provider 身份 + 计量 ——
+            // 3a（原 docs/31 §8.19）：assistant 一支补齐 provider 身份 + 计量 ——
             // pi 的 estimateContextTokens/_checkCompaction 从这些字段读起，帧里
             // 隐身等于行为失明。timestamp **不进帧**：pi 侧是 Date.now()，两侧都
             // 不可复现（同 toolCallId 的豁免逻辑）。deferred 不进帧：handle id
@@ -201,7 +201,7 @@ final class FrameNormalizer {
                 out.put("isError", result.isError());
                 yield out;
             }
-            // A1（docs/48）新增的第四种消息；包 A3（docs/51 §12）之后它**有真实生产者**：
+            // A1（docs/08）新增的第四种消息；包 A3（原 docs/51 §12）之后它**有真实生产者**：
             // `PiLoop.run` 起手宣告一次工具装载（pi 的 `declareToolChanges`，
             // agent-loop.ts:109），内层迭代也会在工作集与可执行集不一致时补一条。
             // 形状照 pi 的 SystemMessage 线格（ai/src/types.ts:491-509），与 pi 侧 runner 的

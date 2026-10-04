@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * {@link PiLoop} 与 pi 的事件序列逐帧对齐（{@code docs/28 §5} 第 1 步的验证）。
+ * {@link PiLoop} 与 pi 的事件序列逐帧对齐（{@code 原 docs/28 §5} 第 1 步的验证）。
  *
  * <p>期望值全部取自 pi {@code packages/agent/src/agent-loop.ts} @ {@code v0.85.1} 的实读，
  * **不是**从 pi-java 现有实现反推的：</p>
@@ -109,7 +109,7 @@ class PiLoopTest {
     private static final class Recorder implements PiLoop.Sink {
         // COW，不是 ArrayList：工具帧由 **worker 线程**发出（并行任务体，见 PiLoopTools
         // 的 executeParallel），而引擎线程也在往同一张表里记帧。普通 ArrayList 会丢帧 ——
-        // 300 轮实测坏 5 轮，这正是曾经那次 PiLoopTest:338 flake 的根因（docs/31 §8.27.7）。
+        // 300 轮实测坏 5 轮，这正是曾经那次 PiLoopTest:338 flake 的根因（原 docs/31 §8.27.7）。
         private final List<String> frames = new CopyOnWriteArrayList<>();
 
         @Override
@@ -131,7 +131,7 @@ class PiLoopTest {
 
     /** 记录工具调用次数，返回固定成功结果。 */
     private static final class StubTools implements PiLoop.ToolRunner {
-        // 同样的理由：execute 跑在 worker 线程上（docs/31 §8.27.7）。
+        // 同样的理由：execute 跑在 worker 线程上（原 docs/31 §8.27.7）。
         private final List<String> invoked = new CopyOnWriteArrayList<>();
 
         @Override
@@ -309,14 +309,14 @@ class PiLoopTest {
         // end（:519-541）。当且仅当**没有调用在准备相当场失败、也没有中止**时，start 循环
         // 先于任何 closure 跑完，「所有 start 早于任何 end」成立 —— 这是本桩（StubTools 恒
         // 给执行票）的形状，不是 pi 的结构保证：一个 immediate 调用的 end 会插进批次
-        // 后续的 start 之前（S4 剧本正是如此，见 docs/29 §4）。
+        // 后续的 start 之前（S4 剧本正是如此，见 原 docs/29 §4）。
         //
-        // 断言到此为止：**end 的相对次序不是不变量**。package B（docs/31 §8.23）起延迟任务
+        // 断言到此为止：**end 的相对次序不是不变量**。package B（原 docs/31 §8.23）起延迟任务
         // 真并发，三个等延迟的桩谁先抢到串行化锁是任意的；pi 那边的「源序」是 JS 微任务队列
         // 的副产品（工具体在源序里同步进入），不是语义承诺。这里只钉住「本桩形状下 start
         // 全在前、且每个调用恰好一 start 一 end」。
         //
-        // ⚠️ 本断言成立靠**两条**，缺一不可（docs/31 §8.27.7）：
+        // ⚠️ 本断言成立靠**两条**，缺一不可（原 docs/31 §8.27.7）：
         //   ① 结构：`PiLoopTools.executeParallel:190-194` 是**准备循环跑完才 submit**
         //      （Java 侧的执行票只是 thunk）⇒ 全 start 天然早于任何 end；
         //   ② 桩的线程安全：帧由 worker 线程发出，收帧的表必须是并发容器。
@@ -360,7 +360,7 @@ class PiLoopTest {
         // 发 start、在其执行票闭包里收尾 end（"Operation aborted"，:521-524 的中止检查），
         // 随后 break（:542-544）—— 后续调用**一帧都没有**，结果消息也只补发一条。
         // 本测试旧断言（「每个已 start 的调用都收到 end」）钉住的是 pi-java 自创形状，
-        // 随端口两相拆分一并改为 pi 的真实形状；docs/29 §4 同步修正。
+        // 随端口两相拆分一并改为 pi 的真实形状；原 docs/29 §4 同步修正。
         var signal = AbortSignal.create();
         signal.abort();
         var rec = new Recorder();

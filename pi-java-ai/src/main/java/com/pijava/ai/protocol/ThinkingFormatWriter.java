@@ -25,9 +25,9 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
  * 十二臂 {@code else if} 链条。
  *
  * <p>{@code OpenAICompletionsMessageConverter} 已超 500 行 ⇒ 照 {@code SamplingParamsWriter}
- * 的先例开新文件，converter 只留一行调用（{@code docs/58 §4.5}）。</p>
+ * 的先例开新文件，converter 只留一行调用（{@code 原 docs/58 §4.5}）。</p>
  *
- * <h2>从链条形状读出来、必须照抄的三条事实（{@code docs/58 §2.2}）</h2>
+ * <h2>从链条形状读出来、必须照抄的三条事实（{@code 原 docs/58 §2.2}）</h2>
  * <ol>
  *   <li>十二个臂**每一个**都带 {@code model.reasoning} ⇒ 非推理模型整条链恒不写
  *       （{@link #apply} 的前置门）。</li>
@@ -38,10 +38,10 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
  *       都在前面被吃掉）。⚠️ 唯一例外是手搓 models.json 把 {@code ant-ling} 与
  *       {@code supportsReasoningEffort:true} 写在一起且无级别时，pi 的链条会**穿透**到
  *       {@code :965} —— pi 的生成数据不可达（{@code antLingCompat} 明文写 false，
- *       探测同值），switch 形状不复制该穿透（{@code docs/32 B131} 登记）。</li>
+ *       探测同值），switch 形状不复制该穿透（{@code docs/05 B131} 登记）。</li>
  * </ol>
  *
- * <p>⚠️ 两派 null 语义（R4，{@code docs/58 §2.4}）：{@code map?.[k] ?? k}（qwen／deepseek／
+ * <p>⚠️ 两派 null 语义（R4，{@code 原 docs/58 §2.4}）：{@code map?.[k] ?? k}（qwen／deepseek／
  * openrouter／together／string-thinking）与 {@code map?.[k] === undefined ? k : map[k]}
  * ＋{@code typeof === "string"}（zai／baseten）在「值是显式 null」时**结果相反**
  * （前者发级别名、后者不写）⇒ 分成 {@link #orLevel} 与 {@link #strictEffort} 两个助手，
@@ -49,7 +49,7 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
  * 生产路径**语义等价**（R4 探针零红，见 {@link #strictEffort} 的 javadoc）。</p>
  *
  * <p>级别是**夹取后**的（A-10 的归属前移，{@link SimpleOptions#clampedReasoningEffort}
- * ≙ pi {@code :741-742}）—— 本类不再夹一次（{@code docs/57 §12.3}）。</p>
+ * ≙ pi {@code :741-742}）—— 本类不再夹一次（{@code 原 docs/57 §12.3}）。</p>
  *
  * @see com.pijava.ai.catalog.ThinkingFormat
  */
@@ -123,7 +123,7 @@ final class ThinkingFormatWriter {
                 }
             }
             case ANT_LING ->
-                // ⚠️ 唯一**不回落级别名**的形状（docs/58 §2.4 第三行）：pi :942-944
+                // ⚠️ 唯一**不回落级别名**的形状（原 docs/58 §2.4 第三行）：pi :942-944
                 // 只认 map[level] 的字符串值 —— 键缺席／显式 null 都不写，且本臂
                 // 从不写 reasoning_effort、也不读 supportsReasoningEffort。
                 level.map(ModelThinkingLevel::of).flatMap(map::mapped)
@@ -243,7 +243,7 @@ final class ThinkingFormatWriter {
     }
 
     /**
-     * {@code map?.[k] ?? k} 派（{@code docs/58 §2.4} 第一行）：键缺席与显式 null
+     * {@code map?.[k] ?? k} 派（{@code 原 docs/58 §2.4} 第一行）：键缺席与显式 null
      * **同样**回落级别名。
      */
     private static Optional<String> orLevel(ThinkingLevelMap map, ThinkingLevel level) {
@@ -252,12 +252,12 @@ final class ThinkingFormatWriter {
 
     /**
      * {@code map?.[k] === undefined ? k : map[k]} 派 ＋ {@code typeof === "string"}
-     * （{@code docs/58 §2.4} 第二行，zai／baseten）：键缺席回落级别名，**显式 null 不写**。
+     * （{@code 原 docs/58 §2.4} 第二行，zai／baseten）：键缺席回落级别名，**显式 null 不写**。
      *
      * <p>⚠️ 与 {@link #orLevel} 的分歧只在「显式 null」一格，而夹取会把显式 null 的级别
      * 踢出可用集（{@code getSupportedThinkingLevels} 的 {@code mapped === null ⇒ false}）
      * ⇒ 在夹取后的级别上两个助手**语义等价**、R4 反向探针零红（变异体语义等价，
-     * {@code docs/58 §12} 记录）。照抄 pi 的两个表达式是**文本保真**，不是行为分歧。</p>
+     * {@code 原 docs/58 §12} 记录）。照抄 pi 的两个表达式是**文本保真**，不是行为分歧。</p>
      */
     private static Optional<String> strictEffort(ThinkingLevelMap map, ThinkingLevel level) {
         if (!map.hasEntry(ModelThinkingLevel.of(level))) {

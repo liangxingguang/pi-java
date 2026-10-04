@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包⑥（docs/33 B40）：web 面上的工具调用可见性。
+ * 包⑥（原 docs/33 B40）：web 面上的工具调用可见性。
  *
  * <p>缺口是**推送时机**，不是载荷字段：前端在 {@code tool_execution_*} 上只调
  * {@code renderApp()}、完全不读载荷（{@code client/main.ts:316-320}），而它手上
@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 会渲染 {@code chunk.type === "toolCall"}，工具名回落到块里的 {@code name}）。</p>
  *
  * <p>故本包在三个工具增量上**增加**一条 {@code message_update}（携带累积
- * {@code partial}）。⚠️ <b>包⑦（docs/34）换源后更新</b>：那三条 {@code tool_execution_*}
+ * {@code partial}）。⚠️ <b>包⑦（原 docs/34）换源后更新</b>：那三条 {@code tool_execution_*}
  * 已改由**真正的工具执行事件**驱动（{@link AgentEventTranslatorToolExecutionTest}），
  * 流式增量上**只剩** {@code message_update} —— 本夹具随之从
  * {@code containsExactly("tool_execution_start", "message_update")} 收成单条。</p>

@@ -184,7 +184,7 @@ public final class ModelsJsonConfig {
 
     /**
      * Convert one models.json model to {@link ModelInfo}. Package-visible for
-     * {@link ModelJsonMerge} (D-P1, {@code docs/65}).
+     * {@link ModelJsonMerge} (D-P1, {@code 原 docs/65}).
      *
      * <p>D-P1：per-model {@code baseUrl} 三源（{@code model.baseUrl ?? def.baseUrl ??
      * null}）投影到 {@link ModelInfo#baseUrl()}（B136 结案）。</p>
@@ -226,7 +226,7 @@ public final class ModelsJsonConfig {
             // definition.compat)（D-P1 接线见 ModelJsonMerge）。
             ModelsJsonCompat.compatOf(providerId, model, model.compat(), def.compat()),
             // 包 A-02（pi provider-composer.ts:142 的 `definition.api ?? providerConfig.api`）：
-            // per-model api 缺席 ⇒ null ≙ provider 级协议（派发点在宿主，docs/59 §4.6）。
+            // per-model api 缺席 ⇒ null ≙ provider 级协议（派发点在宿主，原 docs/59 §4.6）。
             // 三源（pi provider-composer.ts:142）：model.api ?? provider.api ??
             // null（null ⇒ 合并器可再继承被替换模型的 api，R1）。
             modelApiOf(providerId, model.id(),
@@ -278,7 +278,7 @@ public final class ModelsJsonConfig {
 
     /**
      * models.json 的 {@code cost} → {@link PricingInfo}（包 H1 步 6，
-     * {@code docs/42} 的 J10/J11 ＋ 裁决 B/F）。三个分支对应 pi 的三种语义：
+     * {@code 原 docs/42} 的 J10/J11 ＋ 裁决 B/F）。三个分支对应 pi 的三种语义：
      *
      * <ul>
      *   <li><b>cost 整块缺席</b> ⇒ 四费率全 0（<b>免费</b>）—— 照抄 pi

@@ -26,7 +26,7 @@ import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 
 /**
- * docs/66/69：openai-responses 车道的出站工具声明（pi
+ * 原 docs/66/69：openai-responses 车道的出站工具声明（pi
  * {@code openai-responses-shared.ts:359-396}）。
  *
  * <p>每工具先看 grammar（门开 ⇒ OpenAI custom tool、扁平 format），否则

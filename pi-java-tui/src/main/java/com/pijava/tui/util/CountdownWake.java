@@ -10,7 +10,7 @@ import java.util.function.BooleanSupplier;
  * inline（raw-scrollback）模式的倒计时唤醒源 —— pi {@code CountdownTimer} 每秒
  * {@code requestRender}（{@code components/countdown-timer.ts:14-31}）的等价物。
  *
- * <p>两种模式的节奏本来就不同（docs/31 §8.38.4 裁决点 B）：fullscreen 由
+ * <p>两种模式的节奏本来就不同（原 docs/31 §8.38.4 裁决点 B）：fullscreen 由
  * {@code ToolkitRunner.tickRate(33ms)} 持续整帧重绘，倒计时按帧从截止时刻重算即可、
  * <b>不需要</b>定时器；inline 只在 {@code dirty} 时渲染
  * （{@link InlineTuiShell#markDirty()}）⇒ 必须有东西每秒把它弄脏。</p>

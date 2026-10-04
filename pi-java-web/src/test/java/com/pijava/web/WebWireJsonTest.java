@@ -57,7 +57,7 @@ class WebWireJsonTest {
 
     @Test
     void toolResultCarriesStructuredPayloadOnTheWire() {
-        // A7 第三路（docs/23c §5「Web WS：帧上 details 非 null」）：载荷键原样上帧，
+        // A7 第三路（原 docs/23c §5「Web WS：帧上 details 非 null」）：载荷键原样上帧，
         // 且 pi 的省略规则同守 —— undefined/null/空 ⇒ 键缺席，不给前端送 null 噪声。
         var m = new Message.ToolResultMessage("call-1", "rich",
             List.of(new ContentBlock.TextContent("ok")), Map.of("kind", "card"),
@@ -76,7 +76,7 @@ class WebWireJsonTest {
 
     @Test
     void assistantCarriesIdentityAndMetricsButNoTimestamp() {
-        // 3a（docs/31 §8.19）：身份三元组 + usage + stopReason/errorMessage 上 wire；
+        // 3a（原 docs/31 §8.19）：身份三元组 + usage + stopReason/errorMessage 上 wire；
         // timestamp 缺席是**维持既有有意偏离**（wire 无消息 timestamp，
         // client/main.ts:261/286 直贴不判重），不是遗漏 —— 这条断言就是那条偏离的哨兵。
         var usage = new com.pijava.ai.Usage(10, 5, 1, 2, null, null, 18,

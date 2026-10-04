@@ -30,7 +30,7 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
  *
  * <p>对标物是 pi 的 {@code agentLoop}，因此这里**直连** {@link PiLoop}，不经过
  * {@code PiLaneEngine}：后者带车道、记录日志与持久化，属于 pi 的 harness 层，
- * 不在 L5 差分的研究范围内（{@code docs/28 §5}）。</p>
+ * 不在 L5 差分的研究范围内（{@code 原 docs/28 §5}）。</p>
  */
 final class ConformanceRunner {
 
@@ -169,7 +169,7 @@ final class ConformanceRunner {
                 ConformanceScript.Response response, Context context, ModelId<?> model) {
             // `n` 数的是 **provider 看到的**消息（pi 的 `convertToLlm`/`identityConverter`
             // 把系统消息滤掉 —— 那是提示状态，不是对话）。两侧必须同规，否则一条声明消息
-            // 就让 `n` 差 1，把措辞差异伪装成行为差异（docs/51 §12 F12）。
+            // 就让 `n` 差 1，把措辞差异伪装成行为差异（原 docs/51 §12 F12）。
             //
             // 系统提示**不进 echo**：pi 的 `streamFn` 收到的是
             // `normalizeContext({messages})`（agent-loop.ts:357），其 `systemPrompt` 在剧本里
@@ -260,7 +260,7 @@ final class ConformanceRunner {
                                                            ToolResult<?> result,
                                                            boolean isError) {
             // timestamp 传 null：L5 比对的是帧序，pi 侧录制里没有可复现的时间戳，
-            // 桩给 null ⇒ 键缺席 ⇒ 帧形状不变（docs/71 G1 只要求**生产者**有值）。
+            // 桩给 null ⇒ 键缺席 ⇒ 帧形状不变（原 docs/71 G1 只要求**生产者**有值）。
             return new Message.ToolResultMessage(call.toolCallId(), call.toolName(),
                 result.content(), result.details(), result.usage(),
                 result.addedToolNames(), isError, null);
@@ -271,7 +271,7 @@ final class ConformanceRunner {
          * 执行成功的调用结果消息标记恒为 {@code false}。结果的 {@code details} 与 pi 侧
          * 桩同形：{@code script.details ?? {}}（{@code run.test.ts:319}）。
          *
-         * <p>{@code delayMs > 0} 时**先睡够再流 updates、再返回**（{@code docs/31 §8.23.7}）：
+         * <p>{@code delayMs > 0} 时**先睡够再流 updates、再返回**（{@code 原 docs/31 §8.23.7}）：
          * 并行批次的 end 是完成序，两个等延迟的调用谁先完成在两侧都不可约。把延迟写进剧本，
          * 完成序才是声明出来的、两侧可比对的证据。睡眠在工具自己的线程上 —— 串行路径同样经过
          * 这里，但那些剧本的 {@code delayMs} 都是 0。</p>
@@ -280,7 +280,7 @@ final class ConformanceRunner {
          * {@code tool_execution_update}，载荷用原始调用参数 —— 这正是 pi
          * {@code executePreparedToolCall} 里工具回调的效果（{@code :690-704}）。</p>
          *
-         * <p>{@code updateEveryMs > 0} 时相邻两条 update 之间让出这么久（{@code docs/31 §8.24}）：
+         * <p>{@code updateEveryMs > 0} 时相邻两条 update 之间让出这么久（{@code 原 docs/31 §8.24}）：
          * 背靠背发 update 时两侧的桩都在同步循环里，**任何别的帧都插不进来**，于是
          * 「一个工具的 update 与并发批次里别的帧交错」在剧本里结构上跑不到。S14 用它
          * 把交错变成声明出来的事实。</p>
@@ -291,7 +291,7 @@ final class ConformanceRunner {
                                                    PiLoop.Sink emit) {
             sleepQuietly(delayMs);
             for (int i = 1; i <= updates; i++) {
-                // 首条 update 紧跟 delayMs；其后每条之间睡 updateEveryMs（docs/31 §8.24）。
+                // 首条 update 紧跟 delayMs；其后每条之间睡 updateEveryMs（原 docs/31 §8.24）。
                 // 它存在的唯一理由：背靠背发 update 时**别的帧插不进来**，交错结构上跑不到。
                 if (i > 1) {
                     sleepQuietly(updateEveryMs);

@@ -12,7 +12,7 @@ import com.pijava.ai.message.Message;
  * 上下文令牌估算 —— pi {@code harness/compaction/compaction.ts} 的
  * {@code calculateContextTokens} / {@code estimateContextTokens} /
  * {@code estimateTokens} / {@code shouldCompact} 的逐条移植（package 3b，
- * {@code docs/31 §8.20}）。
+ * {@code 原 docs/31 §8.20}）。
  *
  * <p>pi 的估算<b>优先信 provider 用量</b>：从消息列表尾部找最后一条「有效
  * assistant 用量」（role assistant、usage 在、stopReason 不是 aborted/error、

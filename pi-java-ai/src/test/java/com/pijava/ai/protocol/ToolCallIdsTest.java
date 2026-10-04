@@ -11,7 +11,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包 B14 步2（docs/47 §5）：五车道 toolCall id 归一器，一组文件钉五个。
+ * 包 B14 步2（原 docs/47 §5）：五车道 toolCall id 归一器，一组文件钉五个。
  *
  * <p>先写桩跑红，再写真实现跑绿（TDD）。所有期望值都从 pi 语义**现场推导**
  * （{@code ShortHash.of(...)} 现算），不硬编码 pi 之外的魔数。</p>

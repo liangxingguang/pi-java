@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包⑪（docs/38，台账 A16）：**夹具与生产同路** —— faux 的消息也要带身份。
+ * 包⑪（原 docs/38，台账 A16）：**夹具与生产同路** —— faux 的消息也要带身份。
  *
  * <p><b>关键取证</b>：pi 的 faux <b>挂身份比 pi-java 还真</b> ——
  * {@code cloneMessage(message, api, provider, modelId)} 写

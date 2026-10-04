@@ -12,7 +12,7 @@ import com.pijava.ai.api.ToolDefinition;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * docs/66：内置 read/bash/edit/write 默认 strict-prefer（pi
+ * 原 docs/66：内置 read/bash/edit/write 默认 strict-prefer（pi
  * {@code builtin-tool-strict-mode.test.ts} 的断言）；其余工具不携带。
  */
 class BuiltinToolStrictSamplingTest {

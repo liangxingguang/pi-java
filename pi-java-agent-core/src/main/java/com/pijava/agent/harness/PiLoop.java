@@ -18,7 +18,7 @@ import com.pijava.agent.tool.ToolResult;
 /**
  * pi 双循环的 1:1 移植（{@code packages/agent/src/agent-loop.ts} @ pi {@code v0.85.1}，803 行）。
  *
- * <p><b>为什么有这个类</b>：{@code docs/28} 判定 pi-java 自建的显式状态机
+ * <p><b>为什么有这个类</b>：{@code 原 docs/28} 判定 pi-java 自建的显式状态机
  * （{@code Action} / {@code RunPhase} / {@code peekAction} / {@code executeAction} /
  * record-log fold）在 pi 的产品层没有对应物，且它的三个真源产出了三个真实缺陷。
  * 本类按「等价性由结构保证」的原则一对一译出 pi 的循环，用 Java 的普通同步调用
@@ -200,7 +200,7 @@ public final class PiLoop {
      * 它存在的意义是给 {@code declareToolChanges} 一个**可合并的锚点**：工具增删会写回
      * 这条消息（而不是另起一条），因此模型看到的是一条同时带 sections 与 toolsAdded 的更新
      * （{@code agent-session.ts:603-611} 的 {@code _preparePromptAndToolLoadout} 正是生产者）。
-     * 没有这条通道，「合并」那一支在 Java 上结构性不可达（{@code docs/51 §3 F9}）。</p>
+     * 没有这条通道，「合并」那一支在 Java 上结构性不可达（{@code 原 docs/51 §3 F9}）。</p>
      *
      * <p>⚠️ {@code null} 与**空列表**不同：前者＝不改（pi 的 {@code undefined}，
      * 交给 {@code previousSnapshot?.messages}），后者＝「这一轮没有 prepared 消息」——

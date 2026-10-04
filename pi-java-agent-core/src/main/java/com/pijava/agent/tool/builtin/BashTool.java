@@ -77,7 +77,7 @@ public final class BashTool {
             }
             @Override public ExecutionMode executionMode() { return new ExecutionMode.Sequential(); }
 
-            // docs/66：pi 的 bash 默认 strict-prefer。
+            // 原 docs/66：pi 的 bash 默认 strict-prefer。
             @Override public JsonSchemaSampling constrainedSampling() {
                 return new JsonSchemaSampling(StrictMode.PREFER);
             }
@@ -114,7 +114,7 @@ public final class BashTool {
                         "Timeout exceeds maximum of " + MAX_TIMEOUT_SECONDS + " seconds");
                 }
 
-                // 包⑧（docs/35）：流式部分结果。pi 侧只有 bash 一家真的流式
+                // 包⑧（原 docs/35）：流式部分结果。pi 侧只有 bash 一家真的流式
                 // （bash.ts:265/:297），其余六个内置工具声明为 `_onUpdate?`（故意未使用）。
                 // onUpdate 为 null 时不建发射器 —— 与 pi 的 `if (onUpdate)` 同。
                 BashUpdateEmitter emitter = onUpdate == null ? null

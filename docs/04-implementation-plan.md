@@ -14,7 +14,7 @@
 | Phase 1 | LLM API | 统一 LLM 调用层 | 3–4 周 | `pi-java-ai` 可用 + `06-phase1-ai-design.md` |
 | Phase 2a | Agent 循环最小版 | 12 事件 + ThinkingLevel + Entry + 基础循环 + 上下文管理 | 2 周 | 可跑 `pi-java -p "hello"` + `07-phase2a-agent-loop-design.md` |
 | Phase 2b | 工具系统 | Tool 接口 + 8 个内置工具 + 测试 | 2 周 | Agent 可调用 bash/read/write + `07b-phase2b-tools-design.md` |
-| Phase 2c | 高级编排 | ~~多车道、手动驱动~~、Hook、压缩、Skills | 2 周 | Hook/压缩/Skills 已交付；**多车道与手动驱动已作废**（`docs/31 §1.2`）。设计文档 `07c` 已删除 |
+| Phase 2c | 高级编排 | ~~多车道、手动驱动~~、Hook、压缩、Skills | 2 周 | Hook/压缩/Skills 已交付；**多车道与手动驱动已作废**（`原 docs/31 §1.2`）。设计文档 `07c` 已删除 |
 | Phase 3 | CLI + TUI | 交互式终端 | 2–3 周 | `pi-java` 命令行可用 + `08-phase3-cli-tui-design.md` |
 | Phase 4 | 持久化与恢复 | 会话存储、压缩 | 3–4 周 | 完整会话生命周期 + `09-phase4-persistence-design.md` |
 | Phase 5 | 原生分发（**已放弃**） | ~~GraalVM Native Image~~ | — | JVM fat jar 分发 + `10-phase5-native-design.md`（记录放弃结论） |
@@ -144,10 +144,10 @@ Agent 可以调用 bash/read/write 等工具完成编码任务。
 
 ### 目标
 ~~对齐 pi AgentHarness 全部能力~~：Hook、压缩、Skills。**多车道与手动驱动已于 2026-09-13 作废**
-（`docs/31 §1.2`：车道出自 pi 被排除的 `harness/` 层，实测生产调用 0 个；手动驱动无生产消费者）。
+（`原 docs/31 §1.2`：车道出自 pi 被排除的 `harness/` 层，实测生产调用 0 个；手动驱动无生产消费者）。
 
 > ⚠️ **本节记录的是该阶段当时的计划**，其中多车道与手动驱动两项**已作废**，其余仍有效。
-> 阶段设计文档 `07c-phase2c-orchestration-design.md` **已删除**（`docs/27 §6`）。
+> 阶段设计文档 `07c-phase2c-orchestration-design.md` **已删除**（`原 docs/27 §6`）。
 
 ### 任务分解
 

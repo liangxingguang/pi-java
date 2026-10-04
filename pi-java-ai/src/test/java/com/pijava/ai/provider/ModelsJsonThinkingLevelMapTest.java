@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>⚠️ <b>改动前这个键会被静默吞掉</b> —— {@code ModelDef} 没列它，而记录是
  * {@code ignoreUnknown = true} ⇒ 用户写了也没用（与 B8 的 {@code compat} 同病，
- * {@code docs/31 §8.34.2-6}）。</p>
+ * {@code 原 docs/31 §8.34.2-6}）。</p>
  *
  * <p>⚠️ <b>三态必须活下来</b>：pi 的 {@code ThinkingLevelMap} 值是 {@code string | null}，
  * 而「键缺席」与「键在场但值是 null」<b>语义不同</b>（前者用 provider 默认，后者是显式

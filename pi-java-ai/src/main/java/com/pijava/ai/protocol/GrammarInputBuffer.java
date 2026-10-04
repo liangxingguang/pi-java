@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * docs/69：pi {@code GrammarToolInputJsonBuffer} ＋
+ * 原 docs/69：pi {@code GrammarToolInputJsonBuffer} ＋
  * {@code appendGrammarToolInputJsonDelta}（{@code constrained-sampling.ts:139-187}）
  * 的状态机：把逐帧到达的**原始输入串**增量翻译成重组 JSON 片段
  * （{@code {"property":"..."} 前缀流）。

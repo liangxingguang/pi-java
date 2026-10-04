@@ -37,7 +37,7 @@ import com.pijava.ai.utils.SanitizeUnicode;
  * Google returns complete function-call arguments in a single response
  * (no delta aggregation needed).</p>
  *
- * <h3>B20：stop reason 从线格读、收尾按 pi 严格判定（docs/31 §8.35.14）</h3>
+ * <h3>B20：stop reason 从线格读、收尾按 pi 严格判定（原 docs/31 §8.35.14）</h3>
  *
  * <p>pi 的收尾（{@code google-generative-ai.ts:264-278}）是四段判：abort →
  * {@code pending} → {@code error} → done。本车道此前**一段都没有**，而且读点本身是错的：
@@ -90,7 +90,7 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
         // A-14（G1）：genai 1.72 的 RetryInterceptor 默认 2 attempts、上层不可见；
         // attempts(1)（总尝试数＝1）关掉内置重试，初始请求由 ProviderRetry 独占。
         var httpRetryOptions = HttpRetryOptions.builder().attempts(1).build();
-        // D-P1：models.json 合并来的 default headers（docs/65）。
+        // D-P1：models.json 合并来的 default headers（原 docs/65）。
         var extraHeaders = new LinkedHashMap<String, String>();
         putExtraHeaders(options, extraHeaders::put);
         var httpOptionsBuilder = HttpOptions.builder()
@@ -164,13 +164,13 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
                     }
 
                     // Usage metadata —— pi google-generative-ai.ts:231-250 的逐条移植
-                    // （包 H1 步 5，docs/42 §2.1 P12/P13）。
+                    // （包 H1 步 5，原 docs/42 §2.1 P12/P13）。
                     if (response.usageMetadata().isPresent()) {
                         var usage = response.usageMetadata().get();
                         long cached = usage.cachedContentTokenCount().orElse(0);
                         // ⚠️ pi 的减法**没有** Math.max(0, …) 钳位（:233-234；vertex 同），
                         // 与 OpenAI 两条车道相反 ⇒ 越界 cached 产出负 input 是 pi 行为。
-                        // docs/42 裁决 D「照抄」，夹具 negativeInputIsNotClampedAwayAsPiDoes
+                        // 原 docs/42 裁决 D「照抄」，夹具 negativeInputIsNotClampedAwayAsPiDoes
                         // 钉着；补钳位会红那条，且须重开裁决 D。
                         long input = usage.promptTokenCount().orElse(0) - cached;
                         long thoughts = usage.thoughtsTokenCount().orElse(0);

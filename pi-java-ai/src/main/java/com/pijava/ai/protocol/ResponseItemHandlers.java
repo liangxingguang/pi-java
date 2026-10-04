@@ -40,10 +40,10 @@ final class ResponseItemHandlers {
             ctx.publisher.submit(ctx.builder.emitTextStart());
         } else if (item.functionCall().isPresent()) {
             var fc = item.functionCall().get();
-            // D3（docs/62）：id 复合 `call_id|item.id`（pi shared :485-489）。
+            // D3（原 docs/62）：id 复合 `call_id|item.id`（pi shared :485-489）。
             var compositeId = ResponsesStreamProcessor.compositeId(
                 fc.callId(), fc.id().orElse(""));
-            // docs/32 B152：端点偶发把**同一个 item** 投两次（`call_id`/`item.id`/参数逐字
+            // docs/05 B152：端点偶发把**同一个 item** 投两次（`call_id`/`item.id`/参数逐字
             // 相同，而 `fc_` 是端点分配的 ⇒ 同一个 item）。pi 照单全收，回放时于是发出两条
             // 同 `call_id` 的 function_call，被中转（TeamoRouter→DeepSeek）以 400 拒
             // （二分实证：只把重复那个的 id 改成唯一即恢复）。判据是复合 id 逐字相等 ——
@@ -58,7 +58,7 @@ final class ResponseItemHandlers {
             // 包⑥：起点即带身份。
             ctx.publisher.submit(ctx.builder.emitToolCallStart(compositeId, fc.name()));
         } else if (item.customToolCall().isPresent()) {
-            // docs/69（pi shared :504-527）。
+            // 原 docs/69（pi shared :504-527）。
             ctx.slotTypes.put(outputIndex, ResponsesCustomCalls.CUSTOM);
             var custom = item.customToolCall().get();
             var state = ResponsesCustomCalls.state(
@@ -102,7 +102,7 @@ final class ResponseItemHandlers {
         return accumulated == null || accumulated.isEmpty() ? "{}" : accumulated;
     }
 
-    /** 本轮的 function_call 槽里是否已有同一个复合 id（docs/32 B152 的去重判据）。 */
+    /** 本轮的 function_call 槽里是否已有同一个复合 id（docs/05 B152 的去重判据）。 */
     private static boolean alreadySeen(ResponseEventContext ctx, String compositeId) {
         for (var state : ctx.toolCalls.values()) {
             if (state.callId.equals(compositeId)) {
@@ -124,7 +124,7 @@ final class ResponseItemHandlers {
                 && ResponsesStreamProcessor.isSlot(
                     ctx.slotTypes, outputIndex, ResponsesStreamProcessor.TEXT)) {
             var message = item.message().get();
-            // docs/71 G3：收尾的 content 是**权威值**（pi :700）—— output_text 取 text、
+            // 原 docs/71 G3：收尾的 content 是**权威值**（pi :700）—— output_text 取 text、
             // 其余（refusal）取 refusal。流式 delta 只是草稿，可能比它短甚至为空。
             var text = joinedText(message.content());
             // R4 的刻意偏差：pi 无条件覆盖；本仓 content 为空时**不动**已流出的文本，
@@ -134,7 +134,7 @@ final class ResponseItemHandlers {
             }
             var phase = message.phase().map(value -> value.asString()).orElse(null);
             ctx.builder.retainTextSignature(TextSignatureV1.encode(message.id(), phase));
-            // docs/71 G4：phase=final_answer ⇒ 就地落 stop（pi :442-446，按字符串比较）。
+            // 原 docs/71 G4：phase=final_answer ⇒ 就地落 stop（pi :442-446，按字符串比较）。
             if ("final_answer".equals(phase)) {
                 ctx.builder.forceStopReason("stop");
             }

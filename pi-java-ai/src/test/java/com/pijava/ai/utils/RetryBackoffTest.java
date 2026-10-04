@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * pi {@code retryDelayMs}（retry.ts:111-115）的移植哨兵（package 3d，
- * {@code docs/31 §8.22}）：2 的幂阶梯、{@code Number.isSafeInteger} 护栏、
+ * {@code 原 docs/31 §8.22}）：2 的幂阶梯、{@code Number.isSafeInteger} 护栏、
  * 60 秒默认封顶与自定义封顶。
  */
 class RetryBackoffTest {

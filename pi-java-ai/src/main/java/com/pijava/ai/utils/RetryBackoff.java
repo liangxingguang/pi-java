@@ -3,7 +3,7 @@ package com.pijava.ai.utils;
 /**
  * 指数退避的延迟函数 —— pi {@code retryDelayMs(policy, attempt)}
  * （{@code packages/ai/src/utils/retry.ts:111-115}）的逐条移植
- * （package 3d，{@code docs/31 §8.22}）。两环共用（post-run ① 与摘要重试），
+ * （package 3d，{@code 原 docs/31 §8.22}）。两环共用（post-run ① 与摘要重试），
  * 所以住在 ai 工具层、与 {@link RetryableError} 同包同文件位。
  *
  * <p><b>形状</b>：{@code base * 2^max(0, attempt-1)}，attempt 为 1 起的重试序号；

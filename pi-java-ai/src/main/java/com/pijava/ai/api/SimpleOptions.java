@@ -34,11 +34,11 @@ import com.pijava.ai.utils.Estimate;
  *   <tr><td>{@code :27-30 samplingParams}（model ⨁ options 合并）</td>
  *       <td>{@link #samplingParamsOf}</td>
  *       <td>per-request 那一半在 java **没有生产者**（{@code StreamRequest.extra} 生产恒空）
- *           ⇒ 只落模型级，另一半登记（{@code docs/57 §6 R5}）</td></tr>
+ *           ⇒ 只落模型级，另一半登记（{@code 原 docs/57 §6 R5}）</td></tr>
  *   <tr><td>{@code :32 temperature} 直通</td><td>不动</td>
  *       <td>{@code StreamRequest.temperature} 的读点两侧已一致</td></tr>
  *   <tr><td>{@code fetch}/{@code onPayload}/{@code transport}/{@code metadata}/{@code env} …</td>
- *       <td>不移植</td><td><b>子系统缺席</b>，不是偏差：java 没有可注入点（{@code docs/57 §3.2}）</td></tr>
+ *       <td>不移植</td><td><b>子系统缺席</b>，不是偏差：java 没有可注入点（{@code 原 docs/57 §3.2}）</td></tr>
  * </table>
  *
  * <h2>★ 落点：为什么解析发生在 {@code AbstractChatApi}</h2>
@@ -48,7 +48,7 @@ import com.pijava.ai.utils.Estimate;
  * {@code harness/runtime/drive/generation.ts:216}）。⇒ 在那里把 request 换成解析后的副本，
  * 8 条车道**零改签**地拿到解析值。</p>
  *
- * <p>⚠️ 两条车道**必须豁免**（{@code docs/57 §6 R2}）：{@code PiMessagesApi}
+ * <p>⚠️ 两条车道**必须豁免**（{@code 原 docs/57 §6 R2}）：{@code PiMessagesApi}
  * （pi 的 pi-messages 车道不过 {@code buildBaseOptions}，它的 envelope 里 {@code maxTokens}
  * 恒缺席）与 {@code FauxProvider}（测试替身）。不豁免前者会**凭空多发**一个字段。</p>
  */
@@ -63,7 +63,7 @@ public final class SimpleOptions {
     public static final int MIN_MAX_TOKENS = 1;
 
     /**
-     * ★ 模型**没有声明**输出上限时的兜底（{@code docs/57 §6 R4}）。
+     * ★ 模型**没有声明**输出上限时的兜底（{@code 原 docs/57 §6 R4}）。
      *
      * <p>⚠️ <b>这不是 pi 的行为，是一条刻意偏差。</b>pi 的 {@code Model.maxTokens} 必填无默认
      * （{@code types.ts:976}），它的数据面里不存在「0」这一格 ⇒ 没有可对齐的行为。
@@ -184,10 +184,10 @@ public final class SimpleOptions {
      * const reasoningEffort = clampedReasoning === "off" ? undefined : clampedReasoning;
      * }</pre>
      *
-     * <p>⚠️ <b>接线这一处原本记在 A-09 名下</b>（{@code docs/57 §1.2}），本包提前落地：
+     * <p>⚠️ <b>接线这一处原本记在 A-09 名下</b>（{@code 原 docs/57 §1.2}），本包提前落地：
      * 顶层预算字段的**取值**要以夹取后的级别为准（{@code budgetForLevel} 只认模型支持的
      * 级别），不夹就会在这个字段上算出与 pi 不同的预算。A-09 届时直接复用本方法，
-     * 不要再接一次（{@code docs/57 §12} 记为「归属前移」）。</p>
+     * 不要再接一次（{@code 原 docs/57 §12} 记为「归属前移」）。</p>
      *
      * <p>返回空 ≙ pi 的 {@code "off"} 或 {@code undefined}（java 的 {@link ThinkingLevel}
      * 没有 {@code off} 这一档，它是{@link com.pijava.ai.thinking.ModelThinkingLevel} 的成员）。</p>
@@ -218,7 +218,7 @@ public final class SimpleOptions {
      *                它与 pi 的 {@code params.max_tokens ?? params.max_completion_tokens
      *                ?? model.maxTokens} 同值（生产路径上漏斗已把请求上限解析成夹取值，
      *                故两侧的天花板同为**夹取后**的上限）。
-     * @param budgets 自定义预算表；java 今天没有选项通道（{@code docs/57 §6 R7} 登记）
+     * @param budgets 自定义预算表；java 今天没有选项通道（{@code 原 docs/57 §6 R7} 登记）
      *                ⇒ 调用方传 {@link ThinkingBudgets#DEFAULT}，与 pi 的
      *                {@code options.thinkingBudgets === undefined} 等价。
      */

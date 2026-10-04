@@ -36,7 +36,7 @@ import com.pijava.ai.utils.SanitizeUnicode;
  * via {@link StreamPartialBuilder}. Mistral has no official Java SDK; uses
  * {@link PiHttpClient} for JSON requests and SSE parsing.</p>
  *
- * <h3>B20：stop reason 从线格读、收尾按 pi 严格判定（docs/31 §8.35.14）</h3>
+ * <h3>B20：stop reason 从线格读、收尾按 pi 严格判定（原 docs/31 §8.35.14）</h3>
  *
  * <p>pi 的收尾（{@code mistral-conversations.ts:150-161}）是四段判：abort →
  * {@code pending} → {@code error} → done。本车道此前**一段都没有**，而且读点位置也是错的：
@@ -285,7 +285,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
         body.put("model", request.modelId().modelName());
         body.put("stream", true);
         // 包 A7：mistral 车道在 pi 里**没有** getCompat（直接读 partial，`mistral-conversations.ts:130`）
-        // ⇒ 这里补成显式解析，形状与另外三条车道一致（docs/53 §4.1）。
+        // ⇒ 这里补成显式解析，形状与另外三条车道一致（原 docs/53 §4.1）。
         var transcript = Transcripts.resolveTranscript(request.transcript(),
             CompatResolver.forMistral(request.model()));
         body.put("messages", toMistralMessages(transcript, request));
@@ -309,7 +309,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
         var messages = new ArrayList<Map<String, Object>>();
         // 系统提示来自**前导系统消息**（pi mistral-conversations.ts:787-789 的 `index === 0`
         // 支 → getSystemMessageText），Mistral 用一条 role=system 的消息承载它。
-        // 折叠后头必在下标 0；原生中途系统消息路径归 A3/A7（docs/49 L-D）。
+        // 折叠后头必在下标 0；原生中途系统消息路径归 A3/A7（原 docs/49 L-D）。
         var initialSystemMessage = Transcripts.getInitialSystemMessage(transcript.messages());
         if (initialSystemMessage != null) {
             var systemText = MessageTexts.getSystemMessageText(initialSystemMessage);
@@ -352,11 +352,11 @@ public final class MistralConversationsApi extends AbstractChatApi {
                     // provider 投影只读 toolUseId + content（pi 的适配器同样不读它们）
                     m.put("role", "tool");
                     m.put("tool_call_id", t.toolUseId());
-                    // pi :870 —— name 恒带（java 旧实现不发；docs/44 待裁决③ 整块照抄的顺带项）。
+                    // pi :870 —— name 恒带（java 旧实现不发；原 docs/44 待裁决③ 整块照抄的顺带项）。
                     m.put("name", t.toolName());
                     m.put("content", toolContent(t, supportsImages));
                 }
-                // 包 A3（docs/51 §4.4）：中途系统消息落成**第二条** role=system 消息 ——
+                // 包 A3（原 docs/51 §4.4）：中途系统消息落成**第二条** role=system 消息 ——
                 // pi mistral-conversations.ts:787-790 对 `index === 0` 走
                 // getSystemMessageText、其余走 renderSystemMessageUpdate，两者都 `continue`
                 // 到同一条 role=system 落线。Mistral **没有**工具锚定机制
@@ -381,11 +381,11 @@ public final class MistralConversationsApi extends AbstractChatApi {
         return messages;
     }
 
-    // ── 图片（包 H2，docs/44 步4）──────────────────────────────────────
+    // ── 图片（包 H2，原 docs/44 步4）──────────────────────────────────────
 
     /**
      * user 消息落线 —— pi {@code mistral-conversations.ts:792-815}。无图片 ⇒ **串形态**（pi-java 的
-     * 既有形状；pi 的串分支在 pi-java 结构上不可达，见 {@code docs/44 §6}）；有图片 ⇒ 块数组。
+     * 既有形状；pi 的串分支在 pi-java 结构上不可达，见 {@code 原 docs/44 §6}）；有图片 ⇒ 块数组。
      *
      * @return 该落的消息；{@code null} ＝ pi 的 {@code :814 continue}（整条消息不落线）
      */
@@ -407,7 +407,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
                 chunks.add(MistralContent.imageChunk(
                     "data:" + img.mediaType() + ";base64," + img.data()));
             } else if (block instanceof ContentBlock.UrlImageContent url) {
-                // java 扩展（pi 无此类型）：线格本名就是 image_url ⇒ 按它下发（docs/44 D4）。
+                // java 扩展（pi 无此类型）：线格本名就是 image_url ⇒ 按它下发（原 docs/44 D4）。
                 chunks.add(MistralContent.imageChunk(url.url()));
             }
         }
@@ -419,7 +419,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
         }
         if (hadImages && !supportsImages) {
             // pi :809-811 —— ⚠️ 共享闸已先把图片换成文本块 ⇒ 此分支在两侧都不可达
-            // （同 completions 车道的收集门，docs/44 §9）。照抄保留。
+            // （同 completions 车道的收集门，原 docs/44 §9）。照抄保留。
             var m = new LinkedHashMap<String, Object>();
             m.put("role", "user");
             m.put("content", "(image omitted: model does not support images)");
@@ -456,7 +456,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
         return chunks;
     }
 
-    // 内容块 helper 已抽到 MistralContent（docs/66，步骤 7）。
+    // 内容块 helper 已抽到 MistralContent（原 docs/66，步骤 7）。
 
     private List<Map<String, Object>> toMistralTools(List<ToolDefinition> definitions) {
         return MistralTools.toTools(definitions);

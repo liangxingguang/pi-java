@@ -19,7 +19,7 @@ import java.util.Map;
  * @param name        tool identifier
  * @param description human-readable description（pi 侧可缺省，java 允许 {@code null}）
  * @param parameters  JSON Schema，线格上的键名是 {@code parameters}
- * @param constrainedSampling pi {@code Tool.constrainedSampling}（docs/66）；{@code null}
+ * @param constrainedSampling pi {@code Tool.constrainedSampling}（原 docs/66）；{@code null}
  *                    时 SessionJson 的 NON_NULL 使该键不出场，与 pi 缺席同形
  */
 public record ToolDeclaration(String name, String description, Map<String, Object> parameters,

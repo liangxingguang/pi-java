@@ -42,7 +42,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * </ol>
  *
  * <p>{@code display} 恒 {@code "summarized"} —— pi 的默认（{@code :1167}）；pi-java 没有
- * 用户面能改它（{@code docs/46 §9} 登记）。</p>
+ * 用户面能改它（{@code 原 docs/46 §9} 登记）。</p>
  */
 class AnthropicThinkingWireTest {
 

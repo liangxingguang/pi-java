@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * docs/66：{@link StrictSampling} —— pi {@code resolveJsonSchemaStrictSampling}
+ * 原 docs/66：{@link StrictSampling} —— pi {@code resolveJsonSchemaStrictSampling}
  * （{@code constrained-sampling.ts:208-228}）。
  */
 class StrictSamplingTest {
