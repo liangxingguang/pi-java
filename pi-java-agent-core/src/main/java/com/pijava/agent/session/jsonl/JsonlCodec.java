@@ -20,7 +20,16 @@ public final class JsonlCodec {
 
     private static final List<String> ENTRY_TYPES = List.of(
         "message", "model_change", "thinking_level_change", "active_tools_change",
-        "compaction", "branch_summary", "custom", "custom_message");
+        "compaction", "branch_summary", "custom", "custom_message", "usage");
+
+    /**
+     * 本仓**旧行**的 {@code kind} 取值（{@code kind:"entry"/"record"/"lane"/"fact"}）。
+     *
+     * <p>判别旧行**只能**用这个白名单，不能只看 {@code kind} 键在不在 —— 见
+     * {@link #legacyMutationKind(JsonNode)}。</p>
+     */
+    private static final List<String> LEGACY_MUTATION_KINDS =
+        List.of("entry", "record", "lane", "fact");
 
     private static final List<String> RECORD_TYPES = List.of(
         "operation_started", "abort_requested", "operation_finished", "step_attempt",
@@ -163,17 +172,22 @@ public final class JsonlCodec {
     /**
      * Parse a mutation line —— **两种形状**（{@code docs/12}）：
      * <ul>
-     *   <li>**无 {@code kind}** ⇒ pi 的行形状（判别键 {@code type}）。pi 的 {@code SessionEntryBase}
-     *       没有 {@code seq}（{@code session-manager.ts:57-63}）⇒ 由调用方给**行号**
-     *       （{@code assignedSeq}）；本仓的 {@code SessionState} 拿 seq 做「严格连续」校验，
-     *       而文件里行的次序本身就是那个校验。</li>
-     *   <li>**有 {@code kind}** ⇒ 本仓旧行（entry/record/lane/fact），{@code seq} 从行内读。</li>
+     *   <li>**{@code kind} 不是旧行的四个取值之一** ⇒ pi 的行形状（判别键 {@code type}）。
+     *       pi 的 {@code SessionEntryBase} 没有 {@code seq}（{@code session-manager.ts:57-63}）
+     *       ⇒ 由调用方给**行号**（{@code assignedSeq}）；本仓的 {@code SessionState} 拿 seq 做
+     *       「严格连续」校验，而文件里行的次序本身就是那个校验。</li>
+     *   <li>**{@code kind} 是 entry/record/lane/fact** ⇒ 本仓旧行，{@code seq} 从行内读。</li>
      * </ul>
      */
     public static ParseResult<SessionMutation> parseMutation(String line, long assignedSeq) {
         try {
             var node = parseObject(line);
-            if (!node.has("kind")) {
+            String legacyKind = legacyMutationKind(node);
+            if (legacyKind == null) {
+                if (node.has("kind") && !node.has("type")) {
+                    // 有 kind、不认、又不是 pi 的行形状 ⇒ 还是旧的畸形行，保持原错误。
+                    throw DecodeError.schema("has unknown mutation kind");
+                }
                 if (assignedSeq < 1) {
                     throw DecodeError.schema("pi-shaped line needs an assigned seq");
                 }
@@ -183,8 +197,7 @@ public final class JsonlCodec {
             if (seq <= 0) {
                 throw DecodeError.schema("has invalid seq");
             }
-            String kind = requireString(node, "kind");
-            return switch (kind) {
+            return switch (legacyKind) {
                 case "entry" -> ParseResult.ok(parseEntryMutation(node, seq));
                 case "record" -> ParseResult.ok(parseRecordMutation(node, seq));
                 case "lane" -> ParseResult.ok(parseLaneMutation(node, seq));
@@ -196,6 +209,24 @@ public final class JsonlCodec {
         } catch (Exception e) {
             return ParseResult.err(DecodeError.syntax("is not valid JSON", e));
         }
+    }
+
+    /**
+     * 旧行形状的判别值；不是旧行则 {@code null}。
+     *
+     * <p>⚠️ <b>判别旧行不能只看 {@code kind} 键在不在</b>：pi 的 {@code UsageEntry}
+     * 自己就有一个 {@code kind} 字段（{@code session-manager.ts:82-83}，「任意用量类别」，
+     * 如 {@code "cache_warm"}）。只看键存不存在的话，pi 写的
+     * {@code {"type":"usage",…,"kind":"cache_warm",…}} 会掉进旧行分支，
+     * 报的是 {@code has invalid seq} 而不是「认不出这个条目类型」—— 排查方向整个被带偏。</p>
+     */
+    private static String legacyMutationKind(JsonNode node) {
+        JsonNode kind = node.get("kind");
+        if (kind == null || !kind.isTextual()) {
+            return null;
+        }
+        String value = kind.textValue();
+        return LEGACY_MUTATION_KINDS.contains(value) ? value : null;
     }
 
     private static SessionMutation parseEntryMutation(JsonNode node, long seq) {

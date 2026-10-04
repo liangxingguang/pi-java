@@ -59,6 +59,19 @@ final class EntryJsonCodec {
                 decodeContent(node.get("content")),
                 node.has("display") && node.get("display").asBoolean(false),
                 JsonlCodec.optionalObject(node, "details"));
+            // pi 的 UsageEntry（session-manager.ts:80-89）。前九个键是 pi 的，
+            // 后五个是本仓的审计扩展键 —— 两个方向都读，pi 的键**必填**。
+            case "usage" -> new Entry.Usage(id, seq, parentId, timestamp,
+                JsonlCodec.requireString(node, "kind"),
+                JsonlCodec.requireString(node, "provider"),
+                JsonlCodec.requireString(node, "model"),
+                decodeUsage(node.get("usage")),
+                JsonlCodec.optionalString(node, "note"),
+                JsonlCodec.optionalString(node, "runId"),
+                JsonlCodec.optionalString(node, "entryId"),
+                JsonlCodec.optionalString(node, "toolCallId"),
+                JsonlCodec.optionalInteger(node, "attempt"),
+                JsonlCodec.readStopReason(node));
             default -> throw JsonlCodec.DecodeError.schema("has unknown entry type " + type);
         };
     }

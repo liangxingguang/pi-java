@@ -38,7 +38,8 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
     @JsonSubTypes.Type(value = Entry.Compaction.class, name = "compaction"),
     @JsonSubTypes.Type(value = Entry.BranchSummary.class, name = "branch_summary"),
     @JsonSubTypes.Type(value = Entry.Custom.class, name = "custom"),
-    @JsonSubTypes.Type(value = Entry.CustomMessage.class, name = "custom_message")
+    @JsonSubTypes.Type(value = Entry.CustomMessage.class, name = "custom_message"),
+    @JsonSubTypes.Type(value = Entry.Usage.class, name = "usage")
 })
 public sealed interface Entry {
 
@@ -64,6 +65,7 @@ public sealed interface Entry {
             case BranchSummary bs -> "branch_summary";
             case Custom c -> "custom";
             case CustomMessage cm -> "custom_message";
+            case Usage u -> "usage";
         };
     }
 
@@ -81,6 +83,9 @@ public sealed interface Entry {
             case Custom e -> new Custom(e.id(), seq, parentId, timestamp, e.customType(), e.data());
             case CustomMessage e -> new CustomMessage(e.id(), seq, parentId, timestamp,
                 e.customType(), e.content(), e.display(), e.details());
+            case Usage e -> new Usage(e.id(), seq, parentId, timestamp, e.kind(), e.provider(),
+                e.model(), e.usage(), e.note(), e.runId(), e.entryId(), e.toolCallId(),
+                e.attempt(), e.stopReason());
         };
     }
 
@@ -151,6 +156,49 @@ public sealed interface Entry {
         String summary,
         Map<String, Object> details,
         com.pijava.ai.Usage usage
+    ) implements Entry {}
+
+    /**
+     * 模型记账（pi {@code UsageEntry}，{@code session-manager.ts:80-89}）。
+     *
+     * <pre>
+     * :80  export interface UsageEntry extends SessionEntryBase {
+     * :81      type: "usage";
+     * :82      /** Arbitrary usage category, such as "cache_warm". &#42;/
+     * :83      kind: string;
+     * :84      provider: string;
+     * :85      model: string;
+     * :86      usage: Usage;
+     * :87      /** Optional human-readable qualifier for usage notices. &#42;/
+     * :88      note?: string;
+     *      }
+     * </pre>
+     *
+     * <p>前九个分量是 pi 的键，**逐字对应**；{@code runId}/{@code entryId}/{@code toolCallId}/
+     * {@code attempt}/{@code stopReason} 是本仓的审计扩展键 —— pi 的
+     * {@code parseSessionEntries} 只做 {@code JSON.parse}（{@code session-manager.ts:353-368}），
+     * 未知键照读不误（{@code lane} 用的是同一条豁免）。</p>
+     *
+     * <p>⚠️ <b>{@code kind} 必须是自由串，不能收窄成 {@link com.pijava.agent.record.UsageCause}</b>：
+     * pi 的取值由调用方给（唯一的 pi 生产者是缓存预热的 {@code cache-warmer.ts:342}，
+     * 发的是 {@code "cache_warm"}），本仓的取值来自 {@code UsageCause}（{@code "assistant"} 等）。
+     * 收窄成枚举会让本仓读不了 pi 写的行。</p>
+     */
+    record Usage(
+        String id,
+        long seq,
+        String parentId,
+        Instant timestamp,
+        String kind,
+        String provider,
+        String model,
+        com.pijava.ai.Usage usage,
+        String note,
+        String runId,
+        String entryId,
+        String toolCallId,
+        Integer attempt,
+        String stopReason
     ) implements Entry {}
 
     /** A custom extension event. */
