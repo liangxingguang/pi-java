@@ -48,6 +48,12 @@ commands: `mvn clean verify`, `mvn test -pl <module>`, `mvn checkstyle:check`, `
 | `docs/09-request-side-thinking-cache-eager-tools-design.md` | 包 09：思考级别 clamp · Responses 缓存门 · Anthropic 工具流式（✅ 已闭环） |
 | `docs/10-google-mistral-thinking-design.md` | 包 10：Google / Mistral 车道的思考配置（✅ 已闭环） |
 | `docs/11-pi-reanchor-ruling.md` | pi 换锚裁决（`3390bd936` → `200387122`）；锚点事实在 `docs/map/ANCHOR.md` |
+| `docs/12-jsonl-wire-format-alignment-design.md` | 包 12：JSONL 线格式对齐（✅ 已闭环） |
+| `docs/13-context-edit-alignment-design.md` | 包 13：context_edit 对齐（✅ 已闭环） |
+| `docs/14-pi-native-message-spellings-design.md` | 包 14：pi 原生消息拼写/双向互读（✅ 已闭环） |
+| `docs/15-entry-discriminant-single-source-design.md` | 包 15：Entry 判别常量单一事实源（✅ 已闭环） |
+| `docs/16-runid-usage-query-ruling-design.md` | 包 16：runId/usage 查询裁决（✅ 已闭环） |
+| `docs/17-compaction-cutpoint-projection-design.md` | 包 17：压缩切点改读 context_edit 后投影（✅ 已闭环） |
 
 ## 编码规范
 
