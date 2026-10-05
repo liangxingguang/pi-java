@@ -1,6 +1,7 @@
 # 包 14：pi 原生消息/块拼写对齐设计（真互读收口）
 
-> **状态：设计稿已落地，待用户审核 —— 尚未写代码。**
+> **状态：✅ 已闭环（2026-10-05）—— 双向互读均经真跑验证，全 reactor 14/14。**
+> **B60/B61 销号。** 实施与证据见 §7。
 > 由**真实 pi 端到端互读验证**逼出（包 12/13 的夹具只仿写了 pi 的解析语义，一直缺这一步）。
 > 真实 pi 会话原文已存为测试资源：
 > `pi-java-agent-core/src/test/resources/interop/real-pi-session.jsonl`。
@@ -268,12 +269,45 @@ private static void remapMessages(JsonNode node) { … }
 
 显式路径 `git add`；commit 末尾 `Co-Authored-By: Claude Code <noreply@anthropic.com>`。
 
-## 7. 验收与闭环记录（实施后回填）
+## 7. 验收与闭环记录
 
-- [ ] 真实 pi 会话原文装载＋投影全绿（`RealPiInteropTest` 2/2）；
-- [ ] 写侧产物经 M1 钉为 pi 拼写；**补一次反向实跑**（本仓写会话 → pi CLI 读取/继续），
-  验证工具结果不再被静默丢弃 —— 这是双向互读的最后一锤；
-- [ ] 全 reactor 14/14；
-- [ ] docs/05：**B60/B61 销号**（真互读已双向完成）。
+### 7.1 双向互读证据（均为真跑，非夹具推断）
 
-（实施期裁决、红绿证据、提交哈希待回填。）
+| 方向 | 证据 | 结果 |
+|---|---|---|
+| **pi 写 → pi-java 读** | `RealPiInteropTest`（真 pi CLI @200387122 写的 8 行会话原文） | 装载 7 条目全在；投影角色 `system,user,assistant,tool,assistant`，2/2 绿 |
+| **pi-java 写 → pi 读** | 生产仓储代码写含工具结果的会话 → **真 pi CLI `--session … "what did the note say"`** | pi 成功装载、续跑并打印答复；桩实测 pi 发出的角色序列 **`system,assistant,tool,user`** —— 工具结果在（旧方言下会被静默丢成 `system,assistant,user`），助手 `toolCall` 块被正确解析；pi 把新一轮 4 行追加回文件（3→7 行，追加兼容也通过） |
+
+### 7.2 红绿与变异
+
+- 红色先行：`RealPiInteropTest` 先以 RED 提交（`bd5f2b6`），首错 line4 `has invalid content`；
+  读别名 3 用例先红（占位条目时间戳不合规，改 ISO 后绿）；
+- **M1**：`SessionWireShape` 三处映射失效 ⇒ 写形状用例恰 1 红；
+- **M2**：`firstText` 去掉 legacy 键 ⇒ 旧夹具 `MessageTimestampRoundTripTest` 恰 1 红；
+- 全 reactor `mvn -o clean verify` **BUILD SUCCESS 14/14**（checkstyle/spotbugs 含；
+  本机负载下 TUI 26 min）。
+
+### 7.3 实施期裁决
+
+| # | 事项 |
+|---|---|
+| 1 | 写转换只做**三处**拼写：pi 消息块仅 4 类，`tool_result`/`image_url`/`diff` 是本仓扩展、pi 侧无消费，保持原样 |
+| 2 | 曾顺带给 `requireString` 加空串拒绝 ⇒ 超出范围、撤回（空串是合法值，如系统 content `""`） |
+| 3 | pi 续跑要求**会话原 cwd 存在**（安全校验，缺失即拒绝续跑）⇒ 取证时临时建出、验完删除 |
+| 4 | 反向夹具首版漏写用户消息 ⇒ 桩角色序列无 user；不影响结论（钉的是工具结果不被丢），记录于此 |
+
+### 7.4 提交
+
+```
+bd5f2b6 test(agent-core): pin the real-pi session interop gap   (RED)
+bb2cd41 feat(agent-core): accept pi-native message and tool-call spellings
+060667f feat(agent-core): write sessions with pi-native message spellings
+```
+
+### 7.5 台账
+
+- **B60/B61 销号**：真互读双向完成（B60 的「头部/事务行互不可读」与 B61 的「Entry 面代差」
+  均不再成立）；
+- 仍登记未修：**B167**（判别值两份拷贝）、**B168**（runId 记录查询不命中 usage）、
+  **B169**（切点按原始字符不按投影）、**B170**（定位缺投影下标兜底）—— 均为窄面残余项，
+  不阻塞互读。
