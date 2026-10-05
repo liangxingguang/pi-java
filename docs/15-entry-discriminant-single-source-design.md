@@ -136,7 +136,7 @@ default String type() {
 ### 7.3 提交
 
 ```
-<待最终提交后回填哈希>
+d72737c refactor(agent-core): make entry discriminants a single source
 ```
 
 ### 7.4 台账
