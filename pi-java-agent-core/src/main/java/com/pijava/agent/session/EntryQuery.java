@@ -1,8 +1,13 @@
 package com.pijava.agent.session;
 
 /**
- * Query parameters for finding entries (aligned with pi {@code EntryQuery}).
- * A {@code null} {@code limit} means unlimited, matching pi's optional field.
+ * Query parameters for finding entries.
+ * A {@code null} {@code limit} means unlimited.
+ *
+ * <p>Named by analogy with pi's query types; the only same-named type at pi
+ * anchor {@code 200387122} lives in {@code packages/durable}
+ * ({@code conversationId/minEntryId/maxEntryId}, {@code durable/src/types.ts})
+ * and is unrelated to this shape (B168, {@code docs/16}).
  *
  * @param type       entry discriminant, {@code null} = all types
  * @param customType only valid when {@code type == "custom"}

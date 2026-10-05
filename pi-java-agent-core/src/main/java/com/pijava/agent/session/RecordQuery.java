@@ -1,8 +1,13 @@
 package com.pijava.agent.session;
 
 /**
- * Query parameters for finding lane records (aligned with pi
- * {@code RecordQuery}). {@code null} fields are unfiltered.
+ * Query parameters for finding lane records. {@code null} fields are unfiltered.
+ *
+ * <p>The lane-record family is this repo's own side-channel audit layer: pi
+ * removed its record/query layer before anchor {@code 200387122} — at the pin
+ * {@code RecordQuery} survives only in {@code packages/agent/CHANGELOG.md} and
+ * the record family is absent from pi's source — so this type has no pi
+ * counterpart to align with (B168, {@code docs/16}).
  *
  * @param lane          exact lane, {@code null} = all lanes
  * @param type          exact record discriminant, {@code null} = all types
