@@ -81,6 +81,32 @@ class SqliteLeaseAndSearchTest {
         repo.close();
     }
 
+    /**
+     * B168（{@code docs/16}）：SQLite 的 type 过滤在 SQL 层（{@code EntryRows}
+     * {@code readEntryRows} 的 {@code type = ?}），pi 的「按 type 扫描 usage」读法
+     * 在此也要成立，且行上的 runId 审计键随 payload 读回。
+     */
+    @Test
+    void typeScanFindsUsageRowsWithRunId() throws Exception {
+        Path db = Files.createTempDirectory("pi-sqlite-usage").resolve("s.db");
+        var repo = SqliteSessionRepository.open(db);
+        var session = repo.create(new SqliteSessionCreateOptions(null, "cwd", null, null));
+        session.appendEntry(message("m1", "hello"), "main");
+        session.appendEntry(new ProvisionedEntry<>(new Entry.Usage(
+            "u1", 0, null, null, "assistant", "faux", "faux-model",
+            com.pijava.ai.Usage.of(5, 2), null, "run-1", "m1", null, 0, "stop")), "main");
+
+        var usages = session.findEntries(
+            new EntryQuery(Entry.TYPE_USAGE, null, EntryOrder.OLDEST_FIRST, null, null));
+        assertThat(usages).hasSize(1);
+        assertThat(((Entry.Usage) usages.getFirst()).runId()).isEqualTo("run-1");
+
+        var messages = session.findEntries(
+            new EntryQuery(Entry.TYPE_MESSAGE, null, EntryOrder.OLDEST_FIRST, null, null));
+        assertThat(messages).as("type 过滤不许把 message 行混进 usage 结果").hasSize(1);
+        repo.close();
+    }
+
     @Test
     void branchCacheRebuildAfterFork() throws Exception {
         Path db = Files.createTempDirectory("pi-sqlite-branch").resolve("s.db");
