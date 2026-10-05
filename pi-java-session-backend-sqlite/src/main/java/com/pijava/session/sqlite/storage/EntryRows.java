@@ -31,7 +31,7 @@ public final class EntryRows {
     /** Strip the identity fields from an entry, producing the payload JSON. */
     public static String entryPayload(Entry entry) {
         try {
-            JsonNode node = SessionJson.mapper().valueToTree(entry);
+            JsonNode node = com.pijava.agent.session.jsonl.SessionWireShape.toPiTree(entry);
             var object = (com.fasterxml.jackson.databind.node.ObjectNode) node;
             object.remove("id");
             object.remove("seq");

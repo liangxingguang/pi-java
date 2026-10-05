@@ -137,7 +137,7 @@ public final class PiV3Wire {
      * 落线后由**行号**重建。</p>
      */
     static void encodeEntryLine(ObjectNode target, SessionMutation.Entry m) {
-        target.setAll((ObjectNode) SessionJson.mapper().valueToTree(m.entry()));
+        target.setAll(SessionWireShape.toPiTree(m.entry()));
         target.remove("seq");
         if (m.lane() != null) {
             target.put("lane", m.lane());
