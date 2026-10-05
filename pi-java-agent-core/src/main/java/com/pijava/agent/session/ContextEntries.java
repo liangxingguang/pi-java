@@ -157,30 +157,67 @@ public final class ContextEntries {
      * {@code 原 docs/51 §9}）—— 这条线走的是系统消息的 {@code toolsAdded}/{@code toolsRemoved}，
      * 因此它天然落在上面那一支里，本方法无需为它单开分支。</p>
      */
-    public static List<Message> toMessages(List<Entry> leafPath) {
-        List<Entry> context = contextEntries(leafPath);
-        // pi buildSessionProjection（session-manager.ts:551-554）：edit 从**压缩裁剪后**
-        // 的条目收集，同目标后者胜。edit 自身不产消息。
+    /**
+     * 一个源条目投影出的模型可见消息（pi {@code ProjectedSessionEntry}，
+     * {@code session-manager.ts:209-213}）。
+     *
+     * @param source   原始 append-only 条目
+     * @param messages 投影后的模型可见消息；state-only 条目与被 omission 的条目为空
+     */
+    public record ProjectedEntry(Entry source, List<Message> messages) {
+
+        /** Defensively copies {@code messages}. */
+        public ProjectedEntry {
+            messages = List.copyOf(messages);
+        }
+    }
+
+    /** pi {@code buildSessionProjection(entries).entries}（{@code session-manager.ts:543-575}）。 */
+    public static List<ProjectedEntry> projectEntries(List<Entry> entries) {
+        return projectEntries(entries, null);
+    }
+
+    /**
+     * 沿叶子路径构建「源条目 × 投影消息」：先压缩裁剪（{@link #contextEntries}），
+     * 再从裁剪后的条目收集 edit（同目标后者胜，pi {@code session-manager.ts:551-554}），
+     * 逐条投影并应用 edit。edit 自身不产消息；孤儿 edit（目标不在投影里）不被取用。
+     */
+    public static List<ProjectedEntry> projectEntries(List<Entry> entries, String leafId) {
+        List<Entry> context = contextEntries(pathToLeaf(entries, leafId));
         Map<String, Entry.ContextEdit> edits = new LinkedHashMap<>();
         for (var e : context) {
             if (e instanceof Entry.ContextEdit edit) {
                 edits.put(edit.targetId(), edit);
             }
         }
-        List<Message> messages = new ArrayList<>();
-        for (var e : context) {
-            Message projected = project(e);
-            if (projected == null) {
-                continue;
+        List<ProjectedEntry> projected = new ArrayList<>();
+        for (int index = 0; index < context.size(); index++) {
+            Entry e = context.get(index);
+            List<Message> messages;
+            if (e instanceof Entry.Compaction && index > 0) {
+                // contextEntries 可能在最新 compaction 的保留段内留着旧 compaction
+                // 标记；pi 规定只有（下标 0 的）最新 compaction 贡献摘要消息。
+                messages = List.of();
+            } else {
+                Message projectedMessage = project(e);
+                messages = projectedMessage == null ? List.of() : List.of(projectedMessage);
             }
-            // 孤儿 edit（目标不在投影里）自然不被取用。
-            Message effective = edits.get(e.id()) == null
-                ? projected : applyEdit(projected, edits.get(e.id()));
-            if (effective != null) {
-                messages.add(effective);
+            Entry.ContextEdit edit = edits.get(e.id());
+            if (edit != null) {
+                Message base = messages.isEmpty() ? null : messages.getFirst();
+                Message effective = base == null ? null : applyEdit(base, edit);
+                messages = effective == null ? List.of() : List.of(effective);
             }
+            projected.add(new ProjectedEntry(e, messages));
         }
-        return messages;
+        return projected;
+    }
+
+    /** 投影的扁平视图（pi {@code buildSessionProjection().messages}）。 */
+    public static List<Message> toMessages(List<Entry> leafPath) {
+        return projectEntries(leafPath).stream()
+            .flatMap(entry -> entry.messages().stream())
+            .toList();
     }
 
     /**

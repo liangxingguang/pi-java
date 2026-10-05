@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PostRunOverflowDriveTest {
 
     private static final ModelId<?> MODEL = ModelId.of("faux", "e2e-model");
-    private static final CompactionSettings SETTINGS = new CompactionSettings(true, 10, 20_000);
+    private static final CompactionSettings SETTINGS = new CompactionSettings(true, 10, 1);
 
     /** 第 N 次请求吃第 N 个剧本（越界即失败 —— 顺带钉住「不多跑一轮」）。 */
     private static StreamFn scripted(List<List<StreamEvent>> scripts) {
@@ -106,6 +106,15 @@ class PostRunOverflowDriveTest {
         var harness = harness(
             scripted(List.of(errorOverflowTurn(), textTurn("recovered"), textTurn("second"))),
             obs);
+
+        // 先种两个旧轮：被省略的失败助手之前得有真历史，prepare 才成立。
+        List<Entry> seeded = List.of(
+            new Entry.Message("s1", 0, null, Instant.EPOCH,
+                new Message.UserMessage(List.of(new ContentBlock.TextContent("first"))), false),
+            new Entry.Message("s2", 0, "s1", Instant.EPOCH,
+                new Message.AssistantMessage(List.of(
+                    new ContentBlock.TextContent("older reply"))), false));
+        harness.seedTranscript(AgentHarness.DEFAULT_LANE, seeded);
 
         var outcome = harness.prompt("hi");
 

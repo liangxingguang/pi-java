@@ -333,7 +333,7 @@ class HarnessTelemetryThreadAttributionTest {
 
             // 宿主线程发起手动压缩 —— 摘要生成器走同一份 recordingStreamFn，
             // 于是 recordEvent 发生在**另一条线程**上
-            h.compact(CompactionSettings.defaults());
+            h.compact(new CompactionSettings(true, 16_384, 1));
         } finally {
             release.countDown();
         }

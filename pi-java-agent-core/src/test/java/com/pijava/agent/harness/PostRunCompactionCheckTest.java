@@ -32,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PostRunCompactionCheckTest {
 
     private static final ModelId<?> MODEL = ModelId.of("faux", "gate-model");
-    private static final CompactionSettings SETTINGS = new CompactionSettings(true, 10, 20_000);
+    private static final CompactionSettings SETTINGS = new CompactionSettings(true, 10, 1);
     private static final String OVERFLOW_TEXT =
         "Context overflow recovery failed after one compact-and-retry attempt. "
             + "Try reducing context or switching to a larger-context model.";
@@ -76,8 +76,8 @@ class PostRunCompactionCheckTest {
     private static final ToIntFunction<ModelId<?>> WINDOW_200 = id -> 200;
     private static final ToIntFunction<ModelId<?>> MAX_OUT_8192 = id -> 8_192;
 
-    private static Entry messageEntry(String id, Message message) {
-        return new Entry.Message(id, 0, null, Instant.ofEpochMilli(1), message, false);
+    private static Entry messageEntry(String id, String parentId, Message message) {
+        return new Entry.Message(id, 0, parentId, Instant.ofEpochMilli(1), message, false);
     }
 
     private static Entry.Compaction marker(String id, long timestampMs) {
@@ -102,15 +102,31 @@ class PostRunCompactionCheckTest {
         return assistant("error", "faux", "gate-model", null, 1L, "prompt is too long: 210000 tokens");
     }
 
-    /** [user, 溢出 error 助手] 的车道：C1 命中、可压。 */
+    /**
+     * 前面两个旧轮 + [user hello, 溢出 error 助手]：C1 命中时被省略的助手之前有
+     * 真可摘要的历史，prepare 才成立（pi 切点不会落在唯一的可摘要消息之前）。
+     */
     private static LaneState overflowLane() {
         var lane = new LaneState();
+        var first = new Message.UserMessage(List.of(new ContentBlock.TextContent("first")));
+        var older = new Message.AssistantMessage(List.of(
+            new ContentBlock.TextContent("older reply")));
         var user = new Message.UserMessage(List.of(new ContentBlock.TextContent("hello")));
-        lane.transcript.add(messageEntry("e1", user));
+        var error = overflowError();
+        lane.transcript.add(messageEntry("e1", null, first));
+        lane.transcript.add(messageEntry("e2", "e1", older));
+        lane.transcript.add(messageEntry("e3", "e2", user));
+        lane.transcript.add(message("e4", "e3", error));
+        lane.messages.add(first);
+        lane.messages.add(older);
         lane.messages.add(user);
-        lane.transcript.add(messageEntry("e2", overflowError()));
-        lane.messages.add(overflowError());
+        lane.messages.add(error);
         return lane;
+    }
+
+    /** 带固定 id/parent 的消息条目（时间戳沿用消息自带）。 */
+    private static Entry message(String id, String parentId, Message message) {
+        return new Entry.Message(id, 0, parentId, Instant.ofEpochMilli(1), message, false);
     }
 
     private record Rig(LaneState lane, PostRunCompactionCheck check, Recorder obs) {}
@@ -143,11 +159,14 @@ class PostRunCompactionCheckTest {
         // （skipAbortedCheck=false，:1258-1263「catches aborted responses」）——
         // 那一轮把上下文喂大了，阈值路 T2 照跑。
         var lane = new LaneState();
+        var first = new Message.UserMessage(List.of(new ContentBlock.TextContent("first")));
         var big = new Message.UserMessage(List.of(
             new ContentBlock.TextContent("x".repeat(4_000))));
         var aborted = assistant("aborted", "faux", "gate-model", null, 1L, null);
-        lane.transcript.add(messageEntry("e1", big));
-        lane.transcript.add(messageEntry("e2", aborted));
+        lane.transcript.add(messageEntry("e1", null, first));
+        lane.transcript.add(messageEntry("e2", "e1", big));
+        lane.transcript.add(message("e3", "e2", aborted));
+        lane.messages.add(first);
         lane.messages.add(big);
         lane.messages.add(aborted);
         var r = rig(lane, SETTINGS, MODEL);
@@ -172,9 +191,9 @@ class PostRunCompactionCheckTest {
         var other = assistant("error", "other", "gate-model", null, 1L, "prompt is too long");
         var lane = new LaneState();
         var user = new Message.UserMessage(List.of(new ContentBlock.TextContent("hello")));
-        lane.transcript.add(messageEntry("e1", user));
+        lane.transcript.add(messageEntry("e1", null, user));
         lane.messages.add(user);
-        lane.transcript.add(messageEntry("e2", other));
+        lane.transcript.add(messageEntry("e2", "e1", other));
         lane.messages.add(other);
         var obs = new Recorder();
         var ctx = ctx(lane, SETTINGS, MODEL, id -> 1_000_000, MAX_OUT_8192, obs);
@@ -189,10 +208,11 @@ class PostRunCompactionCheckTest {
     void messageAtOrBeforeCompactionBoundarySkips() {
         // G4：早于（或等于）最新压缩边界的消息不再触发（:2172-2178）。
         var lane = new LaneState();
-        lane.transcript.add(messageEntry("e1",
+        lane.transcript.add(messageEntry("e1", null,
             new Message.UserMessage(List.of(new ContentBlock.TextContent("hello")))));
-        lane.transcript.add(marker("c1", 5_000));
-        lane.transcript.add(messageEntry("e2", assistant("error", "faux", "gate-model",
+        lane.transcript.add(new Entry.Compaction("c1", 0, "e1",
+            Instant.ofEpochMilli(5_000), "old summary", "e1", List.of(), 10, null, null));
+        lane.transcript.add(messageEntry("e2", "c1", assistant("error", "faux", "gate-model",
             null, 5_000L, "prompt is too long")));
         var r = rig(lane, SETTINGS, MODEL);
         var stale = assistant("error", "faux", "gate-model", null, 5_000L, "prompt is too long");
@@ -213,7 +233,7 @@ class PostRunCompactionCheckTest {
         // 生产形状：post-run 收到的是 transcript 中同一实例（PiLaneSink.append 与
         // lastAssistant 同源）—— 这样身份定位才能命中、edit 才会落。
         var failed = (Message.AssistantMessage)
-            ((Entry.Message) lane.transcript.get(1)).message();
+            ((Entry.Message) lane.transcript.get(3)).message();
         boolean again = r.check().checkAfterRun("default", lane, failed);
 
         assertThat(again).isTrue();                       // willRetry ⇒ 驱动 continue
@@ -229,7 +249,7 @@ class PostRunCompactionCheckTest {
         // _refreshFinalizedContext 让副本按剔除后的投影重建。
         var lane = overflowLane();
         var failed = (Message.AssistantMessage)
-            ((Entry.Message) lane.transcript.get(1)).message();
+            ((Entry.Message) lane.transcript.get(3)).message();
         RecoveryOmissions.persist(lane, failed);
 
         var edits = lane.transcript.stream()
@@ -238,12 +258,13 @@ class PostRunCompactionCheckTest {
             .toList();
         assertThat(edits).hasSize(1);
         assertThat(edits.get(0).targetId())
-            .as("edit 指向失败助手条目").isEqualTo("e2");
+            .as("edit 指向失败助手条目").isEqualTo("e4");
         assertThat(edits.get(0).replacement())
             .as("replacement:null ⇒ 剔除").isNull();
         assertThat(lane.messages)
-            .as("重建后 error 助手不进副本（投影过滤＋edit 双保险）")
-            .noneMatch(Message.AssistantMessage.class::isInstance);
+            .as("重建后溢出 error 助手不进副本（投影过滤＋edit 双保险）")
+            .noneMatch(m -> m instanceof Message.AssistantMessage errorAssistant
+                && "prompt is too long: 210000 tokens".equals(errorAssistant.errorMessage()));
     }
 
     @Test
@@ -276,10 +297,17 @@ class PostRunCompactionCheckTest {
         // 已完成的响应；闩不置（预算没花）。
         var stop = assistant("stop", "faux", "gate-model", usage(210_000, 5, 0), 1L, null);
         var lane = new LaneState();
+        var first = new Message.UserMessage(List.of(new ContentBlock.TextContent("first")));
+        var older = new Message.AssistantMessage(List.of(
+            new ContentBlock.TextContent("older reply")));
         var user = new Message.UserMessage(List.of(new ContentBlock.TextContent("hello")));
-        lane.transcript.add(messageEntry("e1", user));
+        lane.transcript.add(messageEntry("e1", null, first));
+        lane.transcript.add(messageEntry("e2", "e1", older));
+        lane.transcript.add(messageEntry("e3", "e2", user));
+        lane.transcript.add(message("e4", "e3", stop));
+        lane.messages.add(first);
+        lane.messages.add(older);
         lane.messages.add(user);
-        lane.transcript.add(messageEntry("e2", stop));
         lane.messages.add(stop);
         var r = rig(lane, SETTINGS, MODEL);
         assertThat(r.check().checkAfterRun("default", lane, stop)).isFalse(); // 无队列
@@ -295,10 +323,17 @@ class PostRunCompactionCheckTest {
         // C2（:2184）：length + output 低于钳制前上限 ⇒ 一次有界恢复。
         var truncated = assistant("length", "faux", "gate-model", usage(10_000, 500, 0), 1L, null);
         var lane = new LaneState();
+        var first = new Message.UserMessage(List.of(new ContentBlock.TextContent("first")));
+        var older = new Message.AssistantMessage(List.of(
+            new ContentBlock.TextContent("older reply")));
         var user = new Message.UserMessage(List.of(new ContentBlock.TextContent("hello")));
-        lane.transcript.add(messageEntry("e1", user));
+        lane.transcript.add(messageEntry("e1", null, first));
+        lane.transcript.add(messageEntry("e2", "e1", older));
+ lane.transcript.add(messageEntry("e3", "e2", user));
+        lane.transcript.add(message("e4", "e3", truncated));
+        lane.messages.add(first);
+        lane.messages.add(older);
         lane.messages.add(user);
-        lane.transcript.add(messageEntry("e2", truncated));
         lane.messages.add(truncated);
         var r = rig(lane, SETTINGS, MODEL);
         assertThat(r.check().checkAfterRun("default", lane, truncated)).isTrue();
@@ -310,9 +345,9 @@ class PostRunCompactionCheckTest {
     void latchedTruncationAnnouncesItsOwnText() {
         var truncated = assistant("length", "faux", "gate-model", usage(10_000, 500, 0), 1L, null);
         var lane = new LaneState();
-        lane.transcript.add(messageEntry("e1",
+        lane.transcript.add(messageEntry("e1", null,
             new Message.UserMessage(List.of(new ContentBlock.TextContent("hello")))));
-        lane.transcript.add(messageEntry("e2", truncated));
+        lane.transcript.add(messageEntry("e2", "e1", truncated));
         lane.overflowRecoveryAttempted = true;
         var r = rig(lane, SETTINGS, MODEL);
         assertThat(r.check().checkAfterRun("default", lane, truncated)).isFalse();
@@ -323,15 +358,28 @@ class PostRunCompactionCheckTest {
     // T1/T2 —— 阈值读数、锚点校验与载荷
     // ═══════════════════════════════════════════════════════════
 
-    /** [marker(5000), 带用量的好助手(锚点时间戳), error「boom」(6000)] 的车道。 */
+    /**
+     * [marker(5000), 旧 user+assistant 两轮, 带用量的好助手(锚点时间戳),
+     * error「boom」(6000)]：T2 起火时切点之前有真历史。
+     */
     private static LaneState anchoredLane(long usageMsgTimestampMs) {
         var lane = new LaneState();
+        var p1 = new Message.UserMessage(List.of(new ContentBlock.TextContent("p1")));
+        var middle = new Message.AssistantMessage(List.of(
+            new ContentBlock.TextContent("working on it")));
+        var p2 = new Message.UserMessage(List.of(new ContentBlock.TextContent("p2")));
         var anchored = assistant("stop", "faux", "gate-model", usage(500, 0, 0),
             usageMsgTimestampMs, null);
         var err = assistant("error", "faux", "gate-model", null, 6_000L, "boom");
         lane.transcript.add(marker("c1", 5_000));
-        lane.transcript.add(messageEntry("e2", anchored));
-        lane.transcript.add(messageEntry("e3", err));
+        lane.transcript.add(messageEntry("e1", "c1", p1));
+        lane.transcript.add(messageEntry("e2", "e1", middle));
+        lane.transcript.add(messageEntry("e3", "e2", p2));
+        lane.transcript.add(message("e4", "e3", anchored));
+        lane.transcript.add(message("e5", "e4", err));
+        lane.messages.add(p1);
+        lane.messages.add(middle);
+        lane.messages.add(p2);
         lane.messages.add(anchored);
         lane.messages.add(err);
         return lane;
@@ -378,9 +426,9 @@ class PostRunCompactionCheckTest {
         // pi :1143：压缩判定没发火，但队列有货 ⇒ post-run 仍要 continue。
         var lane = new LaneState();
         var ok = assistant("stop", "faux", "gate-model", usage(5, 0, 0), 1L, null);
-        lane.transcript.add(messageEntry("e1",
+        lane.transcript.add(messageEntry("e1", null,
             new Message.UserMessage(List.of(new ContentBlock.TextContent("hello")))));
-        lane.transcript.add(messageEntry("e2", ok));
+        lane.transcript.add(messageEntry("e2", "e1", ok));
         lane.messages.add(ok);
         lane.steerQueue.add(new LaneInfo.QueuedItem("next", 0));
         var r = rig(lane, SETTINGS, MODEL);

@@ -31,10 +31,11 @@ class ContextEntriesTest {
     }
 
     /** Assistant message entry carrying an explicit stop reason (D4 provenance). */
-    private static Entry.Message assistantEntry(String id, String text, String stopReason) {
+    private static Entry.Message assistantEntry(String id, String parentId, String text,
+                                               String stopReason) {
         var msg = new Message.AssistantMessage(List.of(new ContentBlock.TextContent(text)),
             stopReason, null);
-        return new Entry.Message(id, 0, null, Instant.EPOCH, msg, null);
+        return new Entry.Message(id, 0, parentId, Instant.EPOCH, msg, null);
     }
 
     private static Entry.Compaction compaction(String id, String parentId, String summary, String firstKeptId) {
@@ -92,7 +93,7 @@ class ContextEntriesTest {
     @Test
     void latestOfTwoCompactionsWins() {
         var c1 = compaction("c1", "a", "old", "a");
-        var c2 = compaction("c2", "c1", "new", "c1");
+        var c2 = compaction("c2", "b", "new", "c1");
         var path = List.<Entry>of(
             message("a", null, "user", "q"),
             c1,
@@ -102,12 +103,15 @@ class ContextEntriesTest {
         var ctx = ContextEntries.contextEntries(path);
         // c2 is authoritative; its firstKept is c1 → pre-portion = [c1, b], then post = [d]
         assertThat(ctx).containsExactly(c2, c1, path.get(2), path.get(4));
-        // canonical call form: toMessages on the raw leaf path (splice once)
+        // toMessages on the raw leaf path (splice once)
         var msgs = ContextEntries.toMessages(path);
         assertThat(textOf(msgs.get(0))).contains("new");
-        // msgs: [c2-summary, c1-summary, b, d] — c1 appears as a second summary message
-        assertThat(textOf(msgs.get(1))).contains("old");
-        assertThat(msgs.get(2).role()).isEqualTo("assistant");
+        // pi 锚点：index>0 的 compaction（c1）投影为空 —— raw 保留、不产消息，
+        // 所以投影是 [c2-summary, b assistant, d user]（旧「c1 出第二条摘要」
+        // 的断言是本仓发明，已撤）。
+        assertThat(msgs).hasSize(3);
+        assertThat(msgs.get(1).role()).isEqualTo("assistant");
+        assertThat(msgs.get(2).role()).isEqualTo("user");
     }
 
     @Test
@@ -221,7 +225,7 @@ class ContextEntriesTest {
     @Test
     void deferredErrorAndAbortedAssistantMessagesProjectToNothing() {
         for (String stopReason : List.of("deferred", "error", "aborted")) {
-            var assistant = assistantEntry("a-" + stopReason, "partial text", stopReason);
+            var assistant = assistantEntry("a-" + stopReason, "u-1", "partial text", stopReason);
             var messages = ContextEntries.toMessages(List.<Entry>of(
                 message("u-1", null, "user", "hello"), assistant));
 
@@ -235,7 +239,7 @@ class ContextEntriesTest {
     @Test
     void completedToolUseAndLengthMessagesStillProject() {
         for (String stopReason : List.of("stop", "toolUse", "length")) {
-            var assistant = assistantEntry("a-" + stopReason, "answer", stopReason);
+            var assistant = assistantEntry("a-" + stopReason, null, "answer", stopReason);
 
             assertThat(ContextEntries.toMessages(List.<Entry>of(assistant)))
                 .as("stopReason=%s 不属于被投影掉的集合", stopReason)
@@ -265,7 +269,7 @@ class ContextEntriesTest {
         var system = new Message.SystemMessage(
             "changed", Instant.ofEpochMilli(7), java.util.Map.of(), List.of(), List.of());
         var before = message("u-1", null, "user", "before");
-        var after = message("u-2", "u-1", "user", "after");
+        var after = message("u-2", "s-1", "user", "after");
         var systemEntry = new Entry.Message("s-1", 0, "u-1", Instant.ofEpochMilli(7), system, null);
 
         var messages = ContextEntries.toMessages(List.<Entry>of(before, systemEntry, after));
@@ -295,13 +299,13 @@ class ContextEntriesTest {
 
     // ── D3: context_edit 投影（docs/13 §4.3；pi projectContextEntry）────────────
 
-    private static Entry.ContextEdit omission(String id, String targetId) {
-        return new Entry.ContextEdit(id, 0, null, Instant.EPOCH, targetId, null);
+    private static Entry.ContextEdit omission(String id, String parentId, String targetId) {
+        return new Entry.ContextEdit(id, 0, parentId, Instant.EPOCH, targetId, null);
     }
 
-    private static Entry.ContextEdit replacement(String id, String targetId,
+    private static Entry.ContextEdit replacement(String id, String parentId, String targetId,
                                                   com.pijava.agent.entry.CustomMessageContent content) {
-        return new Entry.ContextEdit(id, 0, null, Instant.EPOCH, targetId,
+        return new Entry.ContextEdit(id, 0, parentId, Instant.EPOCH, targetId,
             new Entry.ContextEdit.Replacement(content));
     }
 
@@ -311,7 +315,9 @@ class ContextEntriesTest {
         var assistantTarget = message("a", "u", "assistant", "assistant text");
         var toolTarget = message("t", "a", "tool", "tool text");
         var path = List.<Entry>of(userTarget, assistantTarget, toolTarget,
-            omission("e1", "u"), omission("e2", "a"), omission("e3", "t"));
+            omission("e1", "t", "u"),
+            omission("e2", "e1", "a"),
+            omission("e3", "e2", "t"));
 
         assertThat(ContextEntries.toMessages(path))
             .as("omit 编辑须把 user/assistant/tool 目标全部移出投影；edit 自身不产消息")
@@ -328,7 +334,7 @@ class ContextEntriesTest {
             "faux", "faux", "faux", usage, timestamp, null, null);
         var path = List.<Entry>of(
             new Entry.Message("a", 0, null, timestamp, assistant, null),
-            replacement("e1", "a", com.pijava.agent.entry.CustomMessageContent.of(
+            replacement("e1", "a", "a", com.pijava.agent.entry.CustomMessageContent.of(
                 List.of(new ContentBlock.TextContent("replaced")))));
 
         var msgs = ContextEntries.toMessages(path);
@@ -348,9 +354,9 @@ class ContextEntriesTest {
     void letsTheLatestEditWin() {
         var target = message("a", null, "assistant", "original");
         var path = List.<Entry>of(target,
-            replacement("e1", "a", com.pijava.agent.entry.CustomMessageContent.of("first")),
-            omission("e2", "a"),
-            replacement("e3", "a", com.pijava.agent.entry.CustomMessageContent.of("restored")));
+            replacement("e1", "a", "a", com.pijava.agent.entry.CustomMessageContent.of("first")),
+            omission("e2", "e1", "a"),
+            replacement("e3", "e2", "a", com.pijava.agent.entry.CustomMessageContent.of("restored")));
 
         var msgs = ContextEntries.toMessages(path);
         assertThat(msgs).hasSize(1);
@@ -365,9 +371,9 @@ class ContextEntriesTest {
         var assistantTarget = message("a", null, "assistant", "original");
         var toolTarget = message("t", "a", "tool", "original result");
         var path = List.<Entry>of(assistantTarget, toolTarget,
-            replacement("e1", "a", com.pijava.agent.entry.CustomMessageContent.of(
+            replacement("e1", "t", "a", com.pijava.agent.entry.CustomMessageContent.of(
                 "assistant replacement")),
-            replacement("e2", "t", com.pijava.agent.entry.CustomMessageContent.of(
+            replacement("e2", "e1", "t", com.pijava.agent.entry.CustomMessageContent.of(
                 "result replacement")));
 
         var msgs = ContextEntries.toMessages(path);
@@ -385,7 +391,7 @@ class ContextEntriesTest {
     void ignoresAnEditWhoseTargetIsNotProjected() {
         var path = List.<Entry>of(
             message("a", null, "user", "q"),
-            omission("e1", "no-such-target"));
+            omission("e1", "a", "no-such-target"));
 
         var msgs = ContextEntries.toMessages(path);
         assertThat(msgs)
@@ -399,7 +405,7 @@ class ContextEntriesTest {
         var summarized = message("s", null, "user", "summarized");
         var retained = message("r", "s", "user", "original retained");
         var comp = compaction("c", "r", "summary", "r");
-        var edit = replacement("e1", "r",
+        var edit = replacement("e1", "c", "r",
             com.pijava.agent.entry.CustomMessageContent.of("edited retained"));
         var path = List.<Entry>of(summarized, retained, comp, edit);
 

@@ -67,7 +67,7 @@ class AgentHarnessIntegrationTest {
         // Compaction on the parent after more turns
         h.prompt("one more turn", List.of());
         var before = h.snapshot("default").transcript().size();
-        h.compact(new CompactionSettings(true, 16384, 20000));
+        h.compact(new CompactionSettings(true, 16384, 1));
         var after = h.snapshot("default").transcript().size();
         assertThat(after).isLessThanOrEqualTo(before);
     }

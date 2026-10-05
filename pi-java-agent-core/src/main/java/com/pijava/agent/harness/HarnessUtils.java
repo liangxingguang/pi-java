@@ -55,8 +55,9 @@ final class HarnessUtils {
      * "clear first, then maybe throw".</p>
      */
     static void rebuildLaneMessages(LaneState lane) {
-        var rebuilt = new ArrayList<>(ContextEntries.toMessages(
-            ContextEntries.pathToLeaf(lane.transcript, lastEntryId(lane))));
+        var rebuilt = new ArrayList<Message>();
+        ContextEntries.projectEntries(lane.transcript, lastEntryId(lane))
+            .forEach(entry -> rebuilt.addAll(entry.messages()));
         lane.messages.clear();
         lane.messages.addAll(rebuilt);
     }

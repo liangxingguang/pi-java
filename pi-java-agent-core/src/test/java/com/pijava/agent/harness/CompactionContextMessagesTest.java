@@ -57,7 +57,8 @@ class CompactionContextMessagesTest {
         var user2 = new com.pijava.agent.entry.Entry.Message("u2", 0, "u1", null,
             new Message.UserMessage(List.of(new ContentBlock.TextContent("q2"))), null);
         harness.seedTranscript(lane, List.of(user1, user2));
-        harness.compact(lane, com.pijava.agent.compaction.CompactionSettings.defaults());
+        harness.compact(lane, new com.pijava.agent.compaction.CompactionSettings(
+            true, 16_384, 1));
 
         var built = buildContext(harness, lane);
         // First non-system message carries the pi-exact summary prefix

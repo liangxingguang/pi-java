@@ -155,7 +155,7 @@ class LaneMessagesTest {
         registry.register(echoTool());
         // 窗口 200、留 10 ⇒ 阈值 190 tokens；4000 字符的 prompt 远超它。
         var h = harness(scripted(List.of(toolTurn("c1", "echo"), textTurn("done"))),
-            registry, new CompactionSettings(true, 10, 10), 200);
+            registry, new CompactionSettings(true, 10, 1), 200);
 
         h.prompt(longPrompt());
 
@@ -181,7 +181,7 @@ class LaneMessagesTest {
     @Test
     void overflowCompactionRunsAfterTheRunNotMidTurn() {
         var h = harness(scripted(List.of(overflowingTurn("done"))),
-            null, new CompactionSettings(true, 10, 10), 200);
+            null, new CompactionSettings(true, 10, 1), 200);
 
         h.prompt("hello");
 
@@ -204,7 +204,7 @@ class LaneMessagesTest {
     @Test
     void seedingAResumedLogRebuildsTheWorkingCopyFromIt() {
         var h = harness(scripted(List.of(textTurn("done"))), null,
-            new CompactionSettings(true, 10, 10), 200);
+            new CompactionSettings(true, 10, 1), 200);
 
         var kept = new Message.UserMessage(
             List.of(new ContentBlock.TextContent("kept tail")));
@@ -274,7 +274,7 @@ class LaneMessagesTest {
         registry.register(echoTool());
         var h = harnessWithWindow(
             scripted(List.of(usageToolTurn(500), textTurn("b"))),
-            MODEL, new CompactionSettings(true, 10, 10), registry, id -> 200);
+            MODEL, new CompactionSettings(true, 10, 1), registry, id -> 200);
 
         h.prompt("go");
 
@@ -302,7 +302,7 @@ class LaneMessagesTest {
         registry.register(echoTool());
         var h = harnessWithWindow(
             scripted(List.of(usageToolTurn(500), textTurn("b"))),
-            MODEL, new CompactionSettings(true, 10, 10), registry, id -> 0);
+            MODEL, new CompactionSettings(true, 10, 1), registry, id -> 0);
 
         h.prompt("go");
 
@@ -326,7 +326,7 @@ class LaneMessagesTest {
         smallRegistry.register(echoTool());
         var small = harnessWithWindow(
             scripted(List.of(usageToolTurn(500), textTurn("b"))),
-            ModelId.of("faux", "small"), new CompactionSettings(true, 10, 10),
+            ModelId.of("faux", "small"), new CompactionSettings(true, 10, 1),
             smallRegistry, perModel);
         small.prompt("go");
         assertThat(hasCompactionEntry(small)).isTrue();
@@ -335,7 +335,7 @@ class LaneMessagesTest {
         bigRegistry.register(echoTool());
         var big = harnessWithWindow(
             scripted(List.of(usageToolTurn(500), textTurn("b"))),
-            ModelId.of("faux", "big"), new CompactionSettings(true, 10, 10),
+            ModelId.of("faux", "big"), new CompactionSettings(true, 10, 1),
             bigRegistry, perModel);
         big.prompt("go");
         assertThat(hasCompactionEntry(big))

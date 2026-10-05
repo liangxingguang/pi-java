@@ -167,7 +167,7 @@ class HarnessCompactionSummarySpanTest {
 
         // 先跑一轮：转录里得有东西可压，压缩才会调到摘要生成器
         h.prompt("hello");
-        h.compact(CompactionSettings.defaults());
+        h.compact(new CompactionSettings(true, 16_384, 1));
 
         var lines = readLines(tracesDir);
         var summarySpan = spanStart(lines, "compaction.summary");
@@ -219,7 +219,7 @@ class HarnessCompactionSummarySpanTest {
         var h = harness(streamFn, recorder);
 
         h.prompt("hello");
-        h.compact(CompactionSettings.defaults());
+        h.compact(new CompactionSettings(true, 16_384, 1));
 
         var lines = readLines(tracesDir);
         var llmSpan = spanStart(lines, "llm.request");

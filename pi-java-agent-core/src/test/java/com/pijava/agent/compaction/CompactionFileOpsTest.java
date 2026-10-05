@@ -60,13 +60,28 @@ class CompactionFileOpsTest {
             new SummaryGenerator.SummaryResult(text, null);
     }
 
-    /** 压缩一段 `[assistant 的工具调用] + [收尾消息]` 的转录。 */
+    /** 压缩一段 `[assistant 的工具调用] + [收尾消息]` 的转录（沿 parentId 链）。 */
     private static CompactionResult compact(SummaryGenerator generator, Message... messages) {
+        return CompactionService.compact(chained(messages), KEEP_LAST, generator, 100L);
+    }
+
+    /** 消息按序串成 parentId 链（投影沿叶子路径构建，root 列表只会看见最后一条）。 */
+    private static List<Entry> chained(Message... messages) {
         List<Entry> transcript = new ArrayList<>();
+        String parent = null;
         for (Message message : messages) {
-            transcript.add(entry(message));
+            String id = UUID.randomUUID().toString();
+            transcript.add(new Entry.Message(id, 0, parent, Instant.now(), message, false));
+            parent = id;
         }
-        return CompactionService.compact(transcript, KEEP_LAST, generator, 100L);
+        return transcript;
+    }
+
+    /** 在 parent 之后追加一条消息条目，返回它的 id。 */
+    private static String append(List<Entry> transcript, String parent, Message message) {
+        String id = UUID.randomUUID().toString();
+        transcript.add(new Entry.Message(id, 0, parent, Instant.now(), message, false));
+        return id;
     }
 
     private static List<String> strings(Object value) {
@@ -169,21 +184,28 @@ class CompactionFileOpsTest {
     @Test
     void fileOpsCarryOverAcrossSuccessiveCompactions() {
         // 第一次压缩：a.ts 被读。
-        List<Entry> first = List.of(
-            entry(user("first")),
-            entry(assistantCalling(call("read", "a.ts"))),
-            entry(user("second")),
-            entry(assistantText("ok")));
+        List<Entry> first = chained(
+            user("first"),
+            assistantCalling(call("read", "a.ts")),
+            user("second"),
+            assistantText("ok"));
         var firstResult = CompactionService.compact(first, KEEP_LAST, fixed("FIRST"), 100L);
         assertThat(strings(firstResult.details().get("readFiles"))).containsExactly("a.ts");
 
         // 第二次压缩的转录：上一份 compaction marker 打头（CompactionExecutor:423 的位置），
-        // 丢弃段里**没有**任何 read —— 清单只能来自回灌。
+        // 丢弃段里**没有**任何 read —— 清单只能来自回灌。其后条目沿链挂在 marker 之后。
         var marker = new Entry.Compaction(UUID.randomUUID().toString(), 0, null, Instant.now(),
             firstResult.summary(), firstResult.firstKeptEntryId(), List.of(),
             (int) firstResult.tokensBefore(), firstResult.details(), null);
-        List<Entry> second = List.of(
-            marker, first.get(3), entry(user("third")), entry(assistantText("done")));
+        // 保留段首条目必须沿用原始 id（marker.firstKeptEntryId 指向它），只重挂 parent。
+        var kept = (Entry.Message) first.get(3);
+        var relinked = new Entry.Message(kept.id(), 0, marker.id(),
+            kept.timestamp(), kept.message(), kept.terminate());
+        List<Entry> second = new ArrayList<>();
+        second.add(marker);
+        second.add(relinked);
+        String userThird = append(second, kept.id(), user("third"));
+        append(second, userThird, assistantText("done"));
 
         var secondResult = CompactionService.compact(second, KEEP_LAST, fixed("SECOND"), 100L);
         assertThat(strings(secondResult.details().get("readFiles")))
@@ -199,8 +221,11 @@ class CompactionFileOpsTest {
         var marker = new Entry.Compaction(UUID.randomUUID().toString(), 0, null, Instant.now(),
             "previous", "someone", List.of(), 0,
             Map.of("readFiles", "not-a-list", "modifiedFiles", List.of(1, "b.ts")), null);
-        List<Entry> transcript = List.of(
-            marker, entry(user("first")), entry(assistantText("ok")), entry(user("second")));
+        List<Entry> transcript = new ArrayList<>();
+        transcript.add(marker);
+        String p1 = append(transcript, marker.id(), user("first"));
+        String p2 = append(transcript, p1, assistantText("ok"));
+        append(transcript, p2, user("second"));
 
         var result = CompactionService.compact(transcript, KEEP_LAST, fixed("X"), 100L);
         assertThat(strings(result.details().get("readFiles"))).isEmpty();

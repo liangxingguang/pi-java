@@ -196,6 +196,12 @@ final class CompactionExecutor {
                 || lane.transcript.getLast() instanceof Entry.Compaction) {
             return AutoCompactionOutcome.SKIPPED;
         }
+        // B169：pi 在发 start **之前**调 prepareCompaction；undefined（投影里没有
+        // 合法切点/可摘要消息）⇒ 静默 false，不发事件。
+        if (com.pijava.agent.compaction.CompactionService
+                .prepare(lane.transcript, settings) == null) {
+            return AutoCompactionOutcome.SKIPPED;
+        }
         ctx.compactionObserver().onStart(reason);
         // pi :2290 发 compaction_start、:2291 才建控制器 —— 上面的三条前置守卫
         // （无模型 / 无设置 / prepareCompaction 空返回）都已 return，与 pi 的

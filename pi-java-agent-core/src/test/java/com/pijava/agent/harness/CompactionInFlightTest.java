@@ -39,7 +39,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class CompactionInFlightTest {
 
     private static final ModelId<?> MODEL = ModelId.of("faux", "inflight-model");
-    private static final CompactionSettings SETTINGS = new CompactionSettings(true, 10, 20_000);
+    private static final CompactionSettings SETTINGS = new CompactionSettings(true, 10, 1);
 
     /** 在压缩窗口内采样 {@code isCompacting} 的观察者。 */
     private static final class Sampling implements CompactionObserver {
@@ -78,20 +78,21 @@ class CompactionInFlightTest {
             .build());
     }
 
-    private static Entry messageEntry(String id, boolean user, String text) {
+    private static Entry messageEntry(String id, String parentId, boolean user,
+                                      String text) {
         Message message = user
             ? new Message.UserMessage(List.of(new ContentBlock.TextContent(text)))
             : new Message.AssistantMessage(List.of(new ContentBlock.TextContent(text)));
-        return new Entry.Message(id, 0, null, Instant.ofEpochMilli(1), message, false);
+        return new Entry.Message(id, 0, parentId, Instant.ofEpochMilli(1), message, false);
     }
 
-    /** 四条消息的车道 —— 可压缩（pi 的 prepareCompaction 只拒空路径与末条 compaction 标记）。 */
+    /** 四条消息沿 parentId 链 —— keep=1 ⇒ cut 落在最后一条，前面进摘要。 */
     private static List<Entry> populatedEntries() {
         return List.of(
-            messageEntry("e1", true, "first"),
-            messageEntry("e2", false, "second"),
-            messageEntry("e3", true, "third"),
-            messageEntry("e4", false, "fourth"));
+            messageEntry("e1", null, true, "first"),
+            messageEntry("e2", "e1", false, "second"),
+            messageEntry("e3", "e2", true, "third"),
+            messageEntry("e4", "e3", false, "fourth"));
     }
 
     @Test

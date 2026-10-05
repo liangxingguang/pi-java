@@ -209,22 +209,26 @@ class CompactionServiceTest {
     @Test
     void compactWithLlmSummaryProducesSummary() {
         var generator = new LlmSummaryGenerator(llm("## Goal\nx"), () -> MODEL);
+        // 沿 parentId 链；keep=1 ⇒ cut 落在 assistant，user「first」进摘要
+        // （投影总长小于 keep 时 pi 判为不可压，不会硬走兜底切点）。
         var entries = List.of(
-            entry(new Message.UserMessage(List.of(new ContentBlock.TextContent("first")))),
-            entry(new Message.AssistantMessage(List.of(new ContentBlock.TextContent("ok")))));
+            entry("e1", null,
+                new Message.UserMessage(List.of(new ContentBlock.TextContent("first")))),
+            entry("e2", "e1",
+                new Message.AssistantMessage(List.of(new ContentBlock.TextContent("ok")))));
         // tokensBefore 由调用方传入（pi preparation 形状，3b）：本函数不再
         // 自己估 —— 单测直接钉「原样携带」。
         var result = CompactionService.compact(entries,
-            new CompactionSettings(true, 16_384, 200), generator, 42L);
+            new CompactionSettings(true, 16_384, 1), generator, 42L);
         assertThat(result.summary()).isEqualTo("## Goal\nx");
         assertThat(result.firstKeptEntryId()).isNotNull();
         assertThat(result.tokensBefore()).isEqualTo(42);
     }
 
-    private static com.pijava.agent.entry.Entry entry(Message message) {
+    private static com.pijava.agent.entry.Entry entry(String id, String parentId,
+                                                      Message message) {
         return new com.pijava.agent.entry.Entry.Message(
-            java.util.UUID.randomUUID().toString(), 0, null,
-            java.time.Instant.now(), message, false);
+            id, 0, parentId, java.time.Instant.now(), message, false);
     }
 
     // ── 包 A-01：摘要请求主动关缓存 ──────────────────────────────

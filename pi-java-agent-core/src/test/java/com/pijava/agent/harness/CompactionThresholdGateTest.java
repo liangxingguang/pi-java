@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CompactionThresholdGateTest {
 
     private static final ModelId<?> MODEL = ModelId.of("faux", "gate-model");
-    private static final CompactionSettings SETTINGS = new CompactionSettings(true, 10, 20_000);
+    private static final CompactionSettings SETTINGS = new CompactionSettings(true, 10, 1);
 
     /** 只填门与 applyCompaction 实际会读的槽位，其余置 null。 */
     private static ExecutionContext ctx(LaneState lane, CompactionSettings settings,
@@ -46,8 +46,8 @@ class CompactionThresholdGateTest {
             null, null, null, null, null);
     }
 
-    private static Entry messageEntry(String id, Message message) {
-        return new Entry.Message(id, 0, null, Instant.ofEpochMilli(1), message, false);
+    private static Entry messageEntry(String id, String parentId, Message message) {
+        return new Entry.Message(id, 0, parentId, Instant.ofEpochMilli(1), message, false);
     }
 
     private static Message.AssistantMessage withUsage(int totalTokens) {
@@ -63,11 +63,17 @@ class CompactionThresholdGateTest {
             "old summary", "e1", List.of(), 10, null, null);
     }
 
-    /** 一条「巨大用量」的车道：字符估算不过线，用量估算远超（阈值 = 200-10）。 */
+    /**
+     * 旧 user + 一条「巨大用量」助手：字符估算不过线，用量估算远超（阈值 =
+     * 200-10）；切点要落在用量助手身上、旧 user 进摘要，prepare 才成立。
+     */
     private static LaneState usageHotLane() {
         var lane = new LaneState();
+        var first = new Message.UserMessage(List.of(new ContentBlock.TextContent("first")));
         var msg = withUsage(500);
-        lane.transcript.add(messageEntry("e1", msg));
+        lane.transcript.add(messageEntry("e0", null, first));
+        lane.transcript.add(messageEntry("e1", "e0", msg));
+        lane.messages.add(first);
         lane.messages.add(msg);
         return lane;
     }
@@ -138,14 +144,18 @@ class CompactionThresholdGateTest {
     void charBackedEstimateFiresWithNoUsageAnywhere() {
         // 无 usage（旧世界/纯字符路）：4000 字符 ⇒ ceil(4000/4)=1000 > 190。
         var lane = new LaneState();
+        var first = new Message.UserMessage(List.of(new ContentBlock.TextContent("first")));
         var msg = new Message.UserMessage(List.of(
             new ContentBlock.TextContent("x".repeat(4_000))));
-        lane.transcript.add(messageEntry("e1", msg));
+        lane.transcript.add(messageEntry("e0", null, first));
+        lane.transcript.add(messageEntry("e1", "e0", msg));
+        lane.messages.add(first);
         lane.messages.add(msg);
         var executor = new CompactionExecutor(ctx(lane, SETTINGS, MODEL, id -> 200));
         assertThat(executor.checkThreshold("default", lane)).isTrue();
         assertThat(((Entry.Compaction) lane.transcript.getFirst()).tokensBefore())
-            .isEqualTo(1_000);
+            // 旧 user「first」2 tokens + 4000 字符 1000 ⇒ 1002。
+            .isEqualTo(1_002);
     }
 
     @Test

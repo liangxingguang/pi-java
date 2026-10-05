@@ -53,38 +53,49 @@ class CompactionTest {
 
     @Test
     void compactReducesTranscriptToRetentionRatio() {
-        var transcript = List.of(
+        // 沿 parentId 链；keep=1 ⇒ cut 落在最后一条 assistant，前三条进摘要。
+        var transcript = chained(
                 message("user", "first"),
                 message("assistant", "second"),
                 message("user", "third"),
                 message("assistant", "fourth"));
-        var settings = new CompactionSettings(true, 16384, 20);
+        var settings = new CompactionSettings(true, 16384, 1);
         var result = CompactionService.compact(transcript, settings,
             com.pijava.agent.compaction.SummaryGenerator.truncating(), 42L);
 
         assertThat(result.summary()).isNotBlank();
-        // Small transcript: the fallback cut keeps only the last message.
-        // 新估算（pi 的 ceil(chars/4)，:278）四条累加 2+2+2+2=8 < 20 ⇒
-        // 仍走兜底切点；keep=8 在 3b 后会在第 0 条就达阈（ceil 更大），
-        // 那是 findCutPoint 的正常路，不是兜底路。
         assertThat(result.firstKeptEntryId()).isEqualTo(transcript.get(3).id());
         assertThat(result.tokensBefore()).isEqualTo(42);
     }
 
     @Test
-    void compactThrowsOnlyOnEmptyTranscript_pi638() {
-        // pi 的 prepareCompaction 只在**空路径**时不可压缩（compaction.ts:638）；
-        // 单条消息**可压** —— 切点落在它自己身上（findCutPoint :389 的
-        // cutPoints[0]）。旧实现把 size<=1 全判为不可压，是发明，3b 撤下。
+    void compactThrowsWhenNothingSummarizable_piAnchor() {
+        // pi 锚点 200387122 的 prepareCompaction：空路径 ⇒ undefined；单条小消息
+        // 切点只能落在它自己身上、其前没有可摘要消息 ⇒ 同样 undefined
+        // （旧「单条可压」的判断来自更早的分析，在现锚点不成立）。
         var single = List.of(message("user", "only"));
-        var result = CompactionService.compact(single, CompactionSettings.defaults(),
-            com.pijava.agent.compaction.SummaryGenerator.truncating(), 7L);
-        assertThat(result.firstKeptEntryId()).isEqualTo(single.get(0).id());
-        assertThat(result.tokensBefore()).isEqualTo(7);
+        assertThatThrownBy(() -> CompactionService.compact(single,
+            CompactionSettings.defaults(),
+            com.pijava.agent.compaction.SummaryGenerator.truncating(), 7L))
+                .isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> CompactionService.compact(
                 List.of(), CompactionSettings.defaults(),
                 com.pijava.agent.compaction.SummaryGenerator.truncating(), 7L))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    /** 消息按序串 parentId 链。 */
+    private static List<Entry> chained(Entry... entries) {
+        List<Entry> out = new java.util.ArrayList<>();
+        String parent = null;
+        for (Entry entry : entries) {
+            var source = (Entry.Message) entry;
+            var copy = new Entry.Message(source.id(), 0, parent,
+                source.timestamp(), source.message(), source.terminate());
+            out.add(copy);
+            parent = source.id();
+        }
+        return List.copyOf(out);
     }
 
     // ── Harness compaction tests ──────────────────────────────
@@ -103,7 +114,7 @@ class CompactionTest {
         int before = h.snapshot("default").transcript().size();
         assertThat(before).isGreaterThan(1);
 
-        h.compact(new CompactionSettings(true, 16384, 20000));
+        h.compact(new CompactionSettings(true, 16384, 1));
         int after = h.snapshot("default").transcript().size();
         assertThat(after).isLessThanOrEqualTo(before);
     }
