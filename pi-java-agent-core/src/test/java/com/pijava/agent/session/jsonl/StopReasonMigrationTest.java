@@ -98,6 +98,10 @@ class StopReasonMigrationTest {
         assertThat(parsed.id()).isEqualTo("r-legacy");
         assertThat(parsed.kind()).as("记录族的 cause 变成 pi 的 kind").isEqualTo("assistant");
         assertThat(parsed.usage().input()).isEqualTo(1);
+        // B168（docs/16）：旧记录行进转换路径时 runId 也要保住 ——
+        // legacyUsageEntry 逐字段过桥，resume 后仍能按 run 关联到这次旧记账。
+        assertThat(parsed.runId()).isEqualTo("run-1");
+        assertThat(parsed.entryId()).isEqualTo("e-legacy");
         assertThat(parsed.stopReason())
             .as("旧字面量必须被垫片归一（B109），哪怕是走转换路径进来的")
             .isEqualTo("toolUse");
