@@ -124,8 +124,12 @@ final class CompactionExecutor {
      * {@code prepareCompaction}（{@code :667}）。
      */
     long contextTokens(LaneState lane) {
+        // B169：tokensBefore 也从投影读（pi estimateProjectedContextTokens，
+        // compaction.ts:226-262）——edit 晚于用量锚点时纯字符重算。
+        var projected = com.pijava.agent.session.ContextEntries
+            .projectEntries(lane.transcript);
         return (long) com.pijava.agent.context.ContextUsageEstimator
-            .estimateContextTokens(List.copyOf(lane.messages)).tokens();
+            .estimateProjectedContextTokens(projected, lane.transcript).tokens();
     }
 
     /**

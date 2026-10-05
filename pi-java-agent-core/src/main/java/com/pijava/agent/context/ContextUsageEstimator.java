@@ -3,6 +3,8 @@ package com.pijava.agent.context;
 import java.util.List;
 
 import com.pijava.agent.compaction.CompactionSettings;
+import com.pijava.agent.entry.Entry;
+import com.pijava.agent.session.ContextEntries;
 import com.pijava.agent.session.SessionJson;
 import com.pijava.ai.Usage;
 import com.pijava.ai.message.ContentBlock;
@@ -121,6 +123,64 @@ public final class ContextUsageEstimator {
         }
         return new Estimate(usageTokens + trailingTokens, usageTokens,
             trailingTokens, usageIndex);
+    }
+
+    /**
+     * pi {@code estimateProjectedContextTokens}（{@code compaction.ts:226-262}）：
+     * 投影用量锚点早于后来的 context_edit/compaction 时，那个用量可能已失真 —— 不信
+     * 用量，按投影消息纯字符重算（当前 system 消息 + 全部非 system 消息）。用量条目
+     * 在失效条目之后才信任。
+     */
+    public static Estimate estimateProjectedContextTokens(
+            List<ContextEntries.ProjectedEntry> projected, List<Entry> branchEntries) {
+        List<Message> flat = projected.stream()
+            .flatMap(entry -> entry.messages().stream())
+            .toList();
+        Estimate estimate = estimateContextTokens(flat);
+        if (estimate.lastUsageIndex() != null) {
+            String usageEntryId = null;
+            int projectedMessageIndex = 0;
+            for (var entry : projected) {
+                int nextMessageIndex = projectedMessageIndex + entry.messages().size();
+                if (estimate.lastUsageIndex() < nextMessageIndex) {
+                    usageEntryId = entry.source().id();
+                    break;
+                }
+                projectedMessageIndex = nextMessageIndex;
+            }
+            int usageEntryIndex = -1;
+            for (int i = 0; i < branchEntries.size(); i++) {
+                if (branchEntries.get(i).id().equals(usageEntryId)) {
+                    usageEntryIndex = i;
+                    break;
+                }
+            }
+            int latestInvalidatingEntryIndex = -1;
+            for (int i = branchEntries.size() - 1; i >= 0; i--) {
+                Entry entry = branchEntries.get(i);
+                if (entry instanceof Entry.ContextEdit || entry instanceof Entry.Compaction) {
+                    latestInvalidatingEntryIndex = i;
+                    break;
+                }
+            }
+            if (usageEntryIndex > latestInvalidatingEntryIndex) {
+                return estimate;
+            }
+        }
+
+        Message currentSystem = null;
+        for (Message message : flat) {
+            if (message instanceof Message.SystemMessage system) {
+                currentSystem = system;
+            }
+        }
+        double tokens = currentSystem == null ? 0 : estimateTokens(currentSystem);
+        for (Message message : flat) {
+            if (!(message instanceof Message.SystemMessage)) {
+                tokens += estimateTokens(message);
+            }
+        }
+        return new Estimate(tokens, 0, tokens, null);
     }
 
     /**
