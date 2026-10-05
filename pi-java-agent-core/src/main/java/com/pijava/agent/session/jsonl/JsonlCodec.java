@@ -19,9 +19,11 @@ import com.pijava.agent.session.SessionMutation;
 public final class JsonlCodec {
 
     private static final List<String> ENTRY_TYPES = List.of(
-        "message", "model_change", "thinking_level_change", "active_tools_change",
-        "compaction", "branch_summary", "custom", "custom_message", "usage",
-        "context_edit");
+        Entry.TYPE_MESSAGE, Entry.TYPE_MODEL_CHANGE, Entry.TYPE_THINKING_LEVEL_CHANGE,
+        // 仅 legacy 接收：无对应 Entry 变体（active_tools_change 已删，docs/15 实施期记）。
+        "active_tools_change",
+        Entry.TYPE_COMPACTION, Entry.TYPE_BRANCH_SUMMARY, Entry.TYPE_CUSTOM,
+        Entry.TYPE_CUSTOM_MESSAGE, Entry.TYPE_USAGE, Entry.TYPE_CONTEXT_EDIT);
 
     /**
      * 本仓**旧行**的 {@code kind} 取值（{@code kind:"entry"/"record"/"lane"/"fact"}）。

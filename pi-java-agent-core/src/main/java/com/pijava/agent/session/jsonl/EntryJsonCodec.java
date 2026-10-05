@@ -28,40 +28,40 @@ final class EntryJsonCodec {
                         String typeOverride) {
         String type = typeOverride != null ? typeOverride : JsonlCodec.requireString(node, "type");
         return switch (type) {
-            case "message" -> {
+            case Entry.TYPE_MESSAGE -> {
                 Message message = MessageJsonCodec.decode(node.get("message"));
                 Boolean terminate = node.has("terminate") && node.get("terminate").asBoolean(false)
                     ? Boolean.TRUE : null;
                 yield new Entry.Message(id, seq, parentId, timestamp, message, terminate);
             }
-            case "model_change" -> new Entry.ModelChange(id, seq, parentId, timestamp,
+            case Entry.TYPE_MODEL_CHANGE -> new Entry.ModelChange(id, seq, parentId, timestamp,
                 JsonlCodec.requireString(node, "provider"),
                 JsonlCodec.requireString(node, "modelId"));
-            case "thinking_level_change" -> new Entry.ThinkingLevelChange(id, seq, parentId, timestamp,
+            case Entry.TYPE_THINKING_LEVEL_CHANGE -> new Entry.ThinkingLevelChange(id, seq, parentId, timestamp,
                 JsonlCodec.requireString(node, "thinkingLevel"));
-            case "compaction" -> new Entry.Compaction(id, seq, parentId, timestamp,
+            case Entry.TYPE_COMPACTION -> new Entry.Compaction(id, seq, parentId, timestamp,
                 JsonlCodec.requireString(node, "summary"),
                 JsonlCodec.optionalString(node, "firstKeptEntryId"),
                 MessageJsonCodec.decodeList(node.get("retainedTail")),
                 JsonlCodec.requireInt(node, "tokensBefore"),
                 JsonlCodec.optionalObject(node, "details"),
                 decodeUsage(node.get("usage")));
-            case "branch_summary" -> new Entry.BranchSummary(id, seq, parentId, timestamp,
+            case Entry.TYPE_BRANCH_SUMMARY -> new Entry.BranchSummary(id, seq, parentId, timestamp,
                 JsonlCodec.requireString(node, "fromId"),
                 JsonlCodec.requireString(node, "summary"),
                 JsonlCodec.optionalObject(node, "details"),
                 decodeUsage(node.get("usage")));
-            case "custom" -> new Entry.Custom(id, seq, parentId, timestamp,
+            case Entry.TYPE_CUSTOM -> new Entry.Custom(id, seq, parentId, timestamp,
                 JsonlCodec.requireString(node, "customType"),
                 JsonlCodec.optionalObject(node, "data"));
-            case "custom_message" -> new Entry.CustomMessage(id, seq, parentId, timestamp,
+            case Entry.TYPE_CUSTOM_MESSAGE -> new Entry.CustomMessage(id, seq, parentId, timestamp,
                 JsonlCodec.requireString(node, "customType"),
                 decodeContent(node.get("content")),
                 node.has("display") && node.get("display").asBoolean(false),
                 JsonlCodec.optionalObject(node, "details"));
             // pi 的 UsageEntry（session-manager.ts:80-89）。前九个键是 pi 的，
             // 后五个是本仓的审计扩展键 —— 两个方向都读，pi 的键**必填**。
-            case "usage" -> new Entry.Usage(id, seq, parentId, timestamp,
+            case Entry.TYPE_USAGE -> new Entry.Usage(id, seq, parentId, timestamp,
                 JsonlCodec.requireString(node, "kind"),
                 JsonlCodec.requireString(node, "provider"),
                 JsonlCodec.requireString(node, "model"),
@@ -74,7 +74,7 @@ final class EntryJsonCodec {
                 JsonlCodec.readStopReason(node));
             // pi 的 ContextEditEntry（session-manager.ts:175-180）。
             // targetId 必填；replacement 键必填、显式 null ⇒ 剔除语义。
-            case "context_edit" -> new Entry.ContextEdit(id, seq, parentId, timestamp,
+            case Entry.TYPE_CONTEXT_EDIT -> new Entry.ContextEdit(id, seq, parentId, timestamp,
                 JsonlCodec.requireString(node, "targetId"),
                 decodeContextEditReplacement(node.get("replacement")));
             default -> throw JsonlCodec.DecodeError.schema("has unknown entry type " + type);

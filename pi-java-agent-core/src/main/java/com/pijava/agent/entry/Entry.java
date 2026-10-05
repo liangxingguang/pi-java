@@ -32,17 +32,33 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
 @JsonSubTypes({
-    @JsonSubTypes.Type(value = Entry.Message.class, name = "message"),
-    @JsonSubTypes.Type(value = Entry.ModelChange.class, name = "model_change"),
-    @JsonSubTypes.Type(value = Entry.ThinkingLevelChange.class, name = "thinking_level_change"),
-    @JsonSubTypes.Type(value = Entry.Compaction.class, name = "compaction"),
-    @JsonSubTypes.Type(value = Entry.BranchSummary.class, name = "branch_summary"),
-    @JsonSubTypes.Type(value = Entry.Custom.class, name = "custom"),
-    @JsonSubTypes.Type(value = Entry.CustomMessage.class, name = "custom_message"),
-    @JsonSubTypes.Type(value = Entry.Usage.class, name = "usage"),
-    @JsonSubTypes.Type(value = Entry.ContextEdit.class, name = "context_edit")
+    @JsonSubTypes.Type(value = Entry.Message.class, name = Entry.TYPE_MESSAGE),
+    @JsonSubTypes.Type(value = Entry.ModelChange.class, name = Entry.TYPE_MODEL_CHANGE),
+    @JsonSubTypes.Type(value = Entry.ThinkingLevelChange.class,
+        name = Entry.TYPE_THINKING_LEVEL_CHANGE),
+    @JsonSubTypes.Type(value = Entry.Compaction.class, name = Entry.TYPE_COMPACTION),
+    @JsonSubTypes.Type(value = Entry.BranchSummary.class, name = Entry.TYPE_BRANCH_SUMMARY),
+    @JsonSubTypes.Type(value = Entry.Custom.class, name = Entry.TYPE_CUSTOM),
+    @JsonSubTypes.Type(value = Entry.CustomMessage.class, name = Entry.TYPE_CUSTOM_MESSAGE),
+    @JsonSubTypes.Type(value = Entry.Usage.class, name = Entry.TYPE_USAGE),
+    @JsonSubTypes.Type(value = Entry.ContextEdit.class, name = Entry.TYPE_CONTEXT_EDIT)
 })
 public sealed interface Entry {
+
+    // ═══════════════════════════════════════════════════════════
+    // wire 判别字面量 —— 唯一事实源（B167，docs/15）：
+    // 下面 @JsonSubTypes 的 name 与 type() switch 都引用同一常量，
+    // 故每个字面量全文只出现一次，改 wire 名只改这一处。
+    // ═══════════════════════════════════════════════════════════
+    String TYPE_MESSAGE = "message";
+    String TYPE_MODEL_CHANGE = "model_change";
+    String TYPE_THINKING_LEVEL_CHANGE = "thinking_level_change";
+    String TYPE_COMPACTION = "compaction";
+    String TYPE_BRANCH_SUMMARY = "branch_summary";
+    String TYPE_CUSTOM = "custom";
+    String TYPE_CUSTOM_MESSAGE = "custom_message";
+    String TYPE_USAGE = "usage";
+    String TYPE_CONTEXT_EDIT = "context_edit";
 
     /** Unique entry identifier. */
     String id();
@@ -59,15 +75,15 @@ public sealed interface Entry {
     /** The type discriminant (matches the JSON {@code type} property). */
     default String type() {
         return switch (this) {
-            case Message m -> "message";
-            case ModelChange mc -> "model_change";
-            case ThinkingLevelChange tlc -> "thinking_level_change";
-            case Compaction c -> "compaction";
-            case BranchSummary bs -> "branch_summary";
-            case Custom c -> "custom";
-            case CustomMessage cm -> "custom_message";
-            case Usage u -> "usage";
-            case ContextEdit c -> "context_edit";
+            case Message m -> TYPE_MESSAGE;
+            case ModelChange mc -> TYPE_MODEL_CHANGE;
+            case ThinkingLevelChange tlc -> TYPE_THINKING_LEVEL_CHANGE;
+            case Compaction c -> TYPE_COMPACTION;
+            case BranchSummary bs -> TYPE_BRANCH_SUMMARY;
+            case Custom c -> TYPE_CUSTOM;
+            case CustomMessage cm -> TYPE_CUSTOM_MESSAGE;
+            case Usage u -> TYPE_USAGE;
+            case ContextEdit c -> TYPE_CONTEXT_EDIT;
         };
     }
 
