@@ -393,6 +393,20 @@ public final class JsonlCodec {
         return value.textValue();
     }
 
+    /**
+     * Read the first present textual key (pi and local legacy spellings of one field).
+     * Throws when none of the keys carries a text value.
+     */
+    public static String firstText(JsonNode node, String... keys) {
+        for (String key : keys) {
+            JsonNode value = node.get(key);
+            if (value != null && value.isTextual()) {
+                return value.textValue();
+            }
+        }
+        throw DecodeError.schema("missing one of " + String.join("/", keys));
+    }
+
     /** Read a required integral field as a {@code long}. */
     public static long requireLong(JsonNode node, String field) {
         JsonNode value = node.get(field);

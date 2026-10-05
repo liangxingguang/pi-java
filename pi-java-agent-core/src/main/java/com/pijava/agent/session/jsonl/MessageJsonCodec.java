@@ -54,8 +54,9 @@ final class MessageJsonCodec {
                 decodeTimestamp(node.get("timestamp")),
                 JsonlCodec.optionalString(node, "errorMessage"),
                 JsonlCodec.optionalString(node, "rawStopReason"));
-            case "tool" -> new Message.ToolResultMessage(
-                JsonlCodec.requireString(node, "toolUseId"),
+            // pi 主流 role "toolResult"；2026-10-05 之前本仓写 "tool"（legacy，保留可读）。
+            case "toolResult", "tool" -> new Message.ToolResultMessage(
+                JsonlCodec.firstText(node, "toolCallId", "toolUseId"),
                 JsonlCodec.requireString(node, "toolName"),
                 content,
                 JsonlCodec.optionalAny(node, "details"),
@@ -291,7 +292,15 @@ final class MessageJsonCodec {
     }
 
     static List<ContentBlock> decodeBlocks(JsonNode node) {
-        if (node == null || !node.isArray()) {
+        if (node == null) {
+            throw JsonlCodec.DecodeError.schema("has invalid content");
+        }
+        // pi 的 system/user content 可为裸串（types.ts:527/:544）⇒ 包成单个 text 块。
+        // assistant/toolResult 的裸串在 pi 数据里不可达，同样按 text 块处理是安全的宽容。
+        if (node.isTextual()) {
+            return List.of(new ContentBlock.TextContent(node.textValue()));
+        }
+        if (!node.isArray()) {
             throw JsonlCodec.DecodeError.schema("has invalid content");
         }
         var blocks = new ArrayList<ContentBlock>(node.size());
@@ -319,7 +328,8 @@ final class MessageJsonCodec {
                 JsonlCodec.requireString(node, "data"));
             case "image_url" -> new ContentBlock.UrlImageContent(
                 JsonlCodec.requireString(node, "url"));
-            case "tool_use" -> new ContentBlock.ToolUseContent(
+            // pi 主流 "toolCall"；本仓 legacy "tool_use"（2026-10-05 前写入），两拼写并读。
+            case "toolCall", "tool_use" -> new ContentBlock.ToolUseContent(
                 JsonlCodec.requireString(node, "id"),
                 JsonlCodec.requireString(node, "name"),
                 JsonlCodec.optionalObject(node, "arguments"),
