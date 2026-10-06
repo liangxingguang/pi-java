@@ -86,6 +86,23 @@ public final class DefaultModelResolver implements ModelResolver {
     }
 
     /**
+     * 模型是否支持推理/思考（pi {@code Model.reasoning}，{@code types.ts:1120}；
+     * Java 事实源是 {@link ModelInfo#capabilities()} 的
+     * {@link ModelCapability#THINKING}，与 {@code ModelThinkingLevels} 同门）。
+     * 未编目（自定义 id）⇒ {@code false}。
+     */
+    public boolean supportsThinking(ModelId<?> id) {
+        if (id == null) {
+            return false;
+        }
+        return catalog.listModels().stream()
+            .filter(info -> id.equals(info.id()))
+            .findFirst()
+            .map(info -> info.capabilities().contains(ModelCapability.THINKING))
+            .orElse(false);
+    }
+
+    /**
      * Resolve a CLI model pattern to a concrete model.
      *
      * <p>Phase 3: supports {@code "provider/model"}, bare {@code "model"}, and

@@ -363,6 +363,10 @@ public final class AgentSession implements AutoCloseable {
                 }
             }
         };
+        // B173（docs/22）：摘要请求要读会话当前思考级别，而 harness 在 generator
+        // 构造之后才诞生 —— 按 sessionRef/compactionObserver 同款引用晚绑定；
+        // supplier 只在摘要请求时（必晚于 create 返回）才读。
+        var harnessRef = new java.util.concurrent.atomic.AtomicReference<AgentHarness>();
         var harness = AgentHarness.create(HarnessConfig.builder()
             .streamFn(recordingStreamFn)
             .model(model)
@@ -380,7 +384,9 @@ public final class AgentSession implements AutoCloseable {
                 // 摘要的输出上限被当前模型的 maxOutputTokens 封顶（cap 在调用点
                 // 读当前 model，故经零参 lambda 传入，不直传一参方法引用）。
                 retrySettings, retryAborted, retryObserver,
-                () -> models.maxOutputTokens(model)))
+                () -> models.maxOutputTokens(model),
+                () -> harnessRef.get().getThinkingLevel(),
+                models::supportsThinking))
             .thinkingLevel(SessionSetup.thinkingLevelFor(args, settings.effective().defaultThinkingLevel))
             .systemPrompt(SessionSetup.customPromptFor(args))
             .promptGuidelines(SessionSetup.DEFAULT_PROMPT_GUIDELINES)
@@ -402,6 +408,7 @@ public final class AgentSession implements AutoCloseable {
             .retryAborted(retryAborted)
             .retryObserver(retryObserver)
             .build());
+        harnessRef.set(harness);
         var agentSession = new AgentSession(
             harness, services, args,
             args.name() != null ? args.name() : "session");

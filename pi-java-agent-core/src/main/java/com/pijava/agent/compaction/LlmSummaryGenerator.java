@@ -7,6 +7,7 @@ import java.util.OptionalDouble;
 import java.util.OptionalInt;
 import java.util.function.BooleanSupplier;
 import java.util.function.IntSupplier;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import com.pijava.agent.harness.Context;
@@ -20,6 +21,8 @@ import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
+import com.pijava.ai.thinking.ModelThinkingLevel;
+import com.pijava.ai.thinking.ThinkingLevel;
 import com.pijava.ai.utils.RetryBackoff;
 import com.pijava.ai.utils.RetryableError;
 
@@ -56,6 +59,10 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
     private final BooleanSupplier retryAborted;
     private final RetryObserver retryObserver;
     private final IntSupplier modelMaxOutputTokens;
+    /** 会话当前思考级别（每次 request 现读，pi {@code this.thinkingLevel}）。 */
+    private final Supplier<ModelThinkingLevel> currentThinking;
+    /** pi {@code model.reasoning} 的事实口（{@code DefaultModelResolver#supportsThinking}）。 */
+    private final Predicate<ModelId<?>> reasoningSupported;
 
     /** 兼容构造（无重试装配）：默认设置、永不中止、NOOP 观察口、无模型上限。 */
     public LlmSummaryGenerator(StreamFn streamFn, Supplier<ModelId<?>> model) {
@@ -86,12 +93,30 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
                                BooleanSupplier retryAborted,
                                RetryObserver retryObserver,
                                IntSupplier modelMaxOutputTokens) {
+        // 默认口＝恒 off、不支持：reasoning 门恒空，保留旧调用点的行为。
+        this(streamFn, model, retrySettings, retryAborted, retryObserver, modelMaxOutputTokens,
+            ModelThinkingLevel::off, id -> false);
+    }
+
+    /**
+     * @param currentThinking   会话当前思考级别的晚读口（pi {@code this.thinkingLevel}）
+     * @param reasoningSupported pi {@code model.reasoning} 事实口（B173，{@code docs/22}）
+     */
+    public LlmSummaryGenerator(StreamFn streamFn, Supplier<ModelId<?>> model,
+                               Supplier<RetrySettings> retrySettings,
+                               BooleanSupplier retryAborted,
+                               RetryObserver retryObserver,
+                               IntSupplier modelMaxOutputTokens,
+                               Supplier<ModelThinkingLevel> currentThinking,
+                               Predicate<ModelId<?>> reasoningSupported) {
         this.streamFn = streamFn;
         this.model = model;
         this.retrySettings = retrySettings;
         this.retryAborted = retryAborted;
         this.retryObserver = retryObserver;
         this.modelMaxOutputTokens = modelMaxOutputTokens;
+        this.currentThinking = currentThinking;
+        this.reasoningSupported = reasoningSupported;
     }
 
     @Override
@@ -274,6 +299,21 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
     }
 
     /**
+     * pi {@code createSummarizationOptions}（{@code compaction.ts:606-608}）：模型
+     * 支持 reasoning、级别有值且非 {@code off} 时透传级别。Off/Enabled 转换与主
+     * 循环 {@code PiLoopRunner#reasoningOf} 同形；每次请求现读。
+     */
+    private Optional<ThinkingLevel> reasoningOption() {
+        if (!reasoningSupported.test(model.get())) {
+            return Optional.empty();
+        }
+        return switch (currentThinking.get()) {
+            case ModelThinkingLevel.Off o -> Optional.empty();
+            case ModelThinkingLevel.Enabled e -> Optional.of(e.level());
+        };
+    }
+
+    /**
      * 一次摘要调用，返回**真** {@code Message.AssistantMessage}（3a 的形状）：
      * 终局事件带 partial ⇒ 全字段投影；脚本化流没有 partial ⇒ 由收集到的
      * TextDelta/ToolCallEnd/UsageInfo 合成，stopReason 取终局 reason
@@ -291,7 +331,7 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
         // 既无收益、又会与主会话的缓存竞争。⚠️ pi 同一处还发 `sessionId: … ?? uuidv7()`
         // （routing id），那属于会话亲和线、本包不做（原 docs/54 §1.2 的 B103）。
         var options = new StreamOptions(
-            maxTokens, OptionalDouble.empty(), Optional.empty(),
+            maxTokens, OptionalDouble.empty(), reasoningOption(),
             Optional.of(CacheRetention.NONE));
         var toolCalls = new ArrayList<ContentBlock>();
         StringBuilder text = new StringBuilder();
