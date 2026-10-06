@@ -89,8 +89,10 @@ final class ContextAssembler {
         var customPrompt = ctx.systemPrompt().get();
         var promptGuidelines = ctx.promptGuidelines().get();
         var appendSystemPrompt = ctx.appendSystemPrompt().get();
+        var contextFiles = ctx.contextFiles().get();
         if (!isPresent(customPrompt) && tools.isEmpty() && promptGuidelines.isEmpty()
-                && skills.isEmpty() && !isPresent(appendSystemPrompt)) {
+                && skills.isEmpty() && !isPresent(appendSystemPrompt)
+                && contextFiles.isEmpty()) {
             // ⚠️ 什么都没配 ⇒ **没有提示**，而不是「默认提示」。这是 pi
             // `createInitialSystemMessage`（`utils/transcript.ts:12-22`）的空判据在 harness 层的
             // 对应物：pi 的 `createMutableAgentState` 见「提示与工具都空」就**不建**前导消息
@@ -107,6 +109,7 @@ final class ContextAssembler {
             .promptGuidelines(promptGuidelines)
             .appendSystemPrompt(appendSystemPrompt)
             .skills(skills)
+            .contextFiles(contextFiles)
             .cwd(System.getProperty("user.dir", ""))
             .build();
     }

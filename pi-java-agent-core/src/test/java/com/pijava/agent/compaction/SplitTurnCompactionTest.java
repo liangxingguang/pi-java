@@ -213,7 +213,7 @@ class SplitTurnCompactionTest {
 
         Builder user(String id, String text) {
             entries.add(new Entry.Message(id, 0, lastId, Instant.EPOCH,
-                new Message.UserMessage(List.of(new ContentBlock.TextContent(text)), Instant.EPOCH),
+                new Message.UserMessage(List.of(new ContentBlock.TextContent(text))),
                 false));
             lastId = id;
             return this;

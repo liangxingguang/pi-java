@@ -61,7 +61,8 @@ record ExecutionContext(
     BooleanSupplier retryAborted,
     RetryObserver retryObserver,
     Supplier<List<String>> promptGuidelines,
-    Supplier<String> appendSystemPrompt
+    Supplier<String> appendSystemPrompt,
+    Supplier<List<com.pijava.agent.prompt.SystemPromptOptions.ContextFile>> contextFiles
 ) {
     ExecutionContext {
         // 与 HarnessConfig 的规范默认同置：直接构造 ExecutionContext 的装配（测试、
@@ -87,6 +88,9 @@ record ExecutionContext(
         }
         if (appendSystemPrompt == null) {
             appendSystemPrompt = () -> "";
+        }
+        if (contextFiles == null) {
+            contextFiles = List::of;
         }
     }
 

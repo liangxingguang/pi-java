@@ -73,6 +73,9 @@ import com.pijava.telemetry.TelemetryContext;
  *                           pi {@code BuildSystemPromptOptions.promptGuidelines}
  * @param appendSystemPrompt 追加提示（包 A4b）—— pi 的 {@code appendSystemPrompt}，
  *                           渲染成系统提示的 {@code addendum} 段；空串 ＝ 不产出该段
+ * @param contextFiles       pi {@code contextFiles}（包 24，B64）：AGENTS.md/CLAUDE.md
+ *                           发现结果，进 {@code project_context} 段；晚读口，
+ *                           默认空列表
  */
 public record HarnessConfig(
     StreamFn streamFn,
@@ -100,7 +103,8 @@ public record HarnessConfig(
     BooleanSupplier retryAborted,
     RetryObserver retryObserver,
     List<String> promptGuidelines,
-    String appendSystemPrompt
+    String appendSystemPrompt,
+    Supplier<List<com.pijava.agent.prompt.SystemPromptOptions.ContextFile>> contextFiles
 ) {
     /** Canonical constructor applying default values and defensive copies. */
     public HarnessConfig {
@@ -142,7 +146,7 @@ public record HarnessConfig(
              null, null, toolRegistry, toolContext, commandPrefix, compactionSettings,
              skills, telemetry, thinkingLevelMap, steeringMode,
              followUpMode, toolExecution, streamListener, SummaryGenerator.truncating(),
-             null, null, null, null, List.of(), "");
+             null, null, null, null, List.of(), "", null);
     }
 
     public static final class Builder {
@@ -172,6 +176,7 @@ public record HarnessConfig(
         private RetryObserver retryObserver;
         private List<String> promptGuidelines = List.of();
         private String appendSystemPrompt = "";
+        private Supplier<List<com.pijava.agent.prompt.SystemPromptOptions.ContextFile>> contextFiles;
 
         public Builder streamFn(StreamFn fn) { this.streamFn = fn; return this; }
         public Builder model(ModelId<?> m) { this.model = m; return this; }
@@ -243,6 +248,12 @@ public record HarnessConfig(
             this.appendSystemPrompt = text == null ? "" : text; return this;
         }
 
+        /** pi {@code contextFiles} 晚读口（包 24，B64；默认空）。 */
+        public Builder contextFiles(
+            Supplier<List<com.pijava.agent.prompt.SystemPromptOptions.ContextFile>> value) {
+            this.contextFiles = value; return this;
+        }
+
         /** Build the {@link HarnessConfig}, validating required fields. */
         public HarnessConfig build() {
             if (streamFn == null) throw new IllegalStateException("streamFn is required");
@@ -256,7 +267,7 @@ public record HarnessConfig(
                                      steeringMode, followUpMode, toolExecution,
                                      streamListener, summaryGenerator, compactionObserver,
                                      retrySettings, retryAborted, retryObserver,
-                                     promptGuidelines, appendSystemPrompt);
+                                     promptGuidelines, appendSystemPrompt, contextFiles);
         }
     }
 }

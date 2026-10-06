@@ -24,7 +24,7 @@ class EntryDiscriminantSourceTest {
 
     static List<Entry> variants() {
         var block = new ContentBlock.TextContent("x");
-        var user = new Message.UserMessage(List.of(block), Instant.EPOCH);
+        var user = new Message.UserMessage(List.of(block));
         var assistant = new Message.AssistantMessage(List.of(block));
         var tool = new Message.ToolResultMessage("c1", "read", List.of(block), false);
         return List.of(

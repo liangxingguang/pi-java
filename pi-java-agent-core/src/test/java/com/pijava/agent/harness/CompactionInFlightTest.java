@@ -148,7 +148,7 @@ class CompactionInFlightTest {
             new HookSystem(lane), lane, () -> settings, null,
             tokenCounter, snapshotService(lane, tokenCounter), null, null, null,
             SummaryGenerator.truncating(), null, NoopTelemetryContext.INSTANCE, observer,
-            null, null, null, null, null);
+            null, null, null, null, null, null);
     }
 
     /** 真快照服务 —— 手动路会调 {@code publishState}，留着空白槽会 NPE。 */

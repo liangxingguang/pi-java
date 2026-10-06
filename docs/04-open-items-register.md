@@ -117,7 +117,6 @@
 | # | 条目 | 现状与出处 |
 |---|---|---|
 | B1 | **branch summary 无实现** | pi branch-summarization；重试路只保留了 source:"branchSummary" 形状 |
-| B64 | **上下文文件发现整块缺失**（每轮 prompt 都受影响） | pi 按 5 个候选名（AGENTS.md/CLAUDE.md…）向上遍历注入系统提示；`-nc` 旗 Java 零消费者 |
 | B79 | `/bug` 故障上报 ＋ 崩溃记录 | pi slash 命令：同意提示 → 摘要 → 上报 |
 | B160 | **MCP 整块零对应** | pi `packages/mcp`（客户端/transports/…，主流内置功能） |
 | B161 | **codemode 整块零对应** | quickjs-wasi 沙箱代码执行 |

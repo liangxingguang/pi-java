@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 
+import com.pijava.ai.message.ContentBlock;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -19,6 +20,7 @@ class HarnessUtilsUserTimestampTest {
         var message = HarnessUtils.buildUserMessage("hi", List.of());
 
         assertThat(message.timestamp()).isNotNull();
-        assertThat(message.content()).hasSize(1);
+        assertThat(message.content()).hasSize(1)
+            .first().isInstanceOf(ContentBlock.TextContent.class);
     }
 }

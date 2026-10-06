@@ -205,7 +205,7 @@ class CompactionProjectionTest {
             entries.add(new Entry.Message(id, 0, lastId, Instant.EPOCH,
                 new Message.ToolResultMessage(
                     "call-1", "read", List.of(new ContentBlock.TextContent("result")),
-                    null, null, List.of(), false, Instant.EPOCH),
+                    false),
                 false));
             lastId = id;
             return this;
