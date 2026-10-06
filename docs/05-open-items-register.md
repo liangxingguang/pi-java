@@ -107,6 +107,9 @@
 > 逐字移植 `findProjectedCutPoint` 的闭后缀推进与相邻元数据回吸（回吸判据读投影消息）、
 > `estimateProjectedContextTokens` 的 edit 失效重算。五颗变异探针各恰 1 红；全 reactor
 > `mvn -o clean verify` 14/14 SUCCESS ⇒ 未结 −1。
+> **2026-10-06（包 18/19 开工）**：**补登 B171／B172** —— 两项在 `docs/17 §6` 已述及但
+> 台账行漏登（§7「已登记」系误记，勘此）⇒ 表内行 +2。设计稿 `docs/18`（split-turn
+> 二次摘要）/ `docs/19`（环 A 持久 omission edit，低）待用户审核，未写生产代码。
 >
 > ⚠️ **本节汇总的两列与自述口径对不上（非本次引入）**：按 `§1.0` 的命令实测（本次编辑前的 HEAD），
 > 全文 `^| B[0-9]* |` **152 行 / 含结案标记 41 行**，而 §3 段内只有 **89 行** —— B150+ 各批次是追加在**文末附录区**、
@@ -837,3 +840,5 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | B168 | ✅ **已销号（包 16，2026-10-05，R-A 经核实无缺口，`docs/16`）** —— 原问题：usage 提为一等 entry 后按 `runId` 过滤的记录查询不再命中它。**核实结论**：pi 锚点 `200387122` 生产代码无 `runId`（仅 evals 有）、无此查询，pi 消费 usage 的形状是按 `type==="usage"` 扫描 entry 流。本仓该读法可用：type 扫描返回 usage 行、runId 在行上（生产者 `PiLaneSink`，读回 `EntryJsonCodec`），三后端 characterization 测试 ＋ M1 探针（runId 置 null ⇒ 恰 1 红）钉死。R-B（给 `EntryQuery` 加 runId 过滤，清单在 `docs/16 §4`）留待真实消费者出现时再做。**本行关闭** |
 | B169 | ✅ **已销号（包 17，2026-10-06，R-A，`docs/17`）** —— 原问题：压缩切点按**原始 transcript** 字符累加，不按 edit 后的投影（pi 按投影）。**修法**：`ContextEntries.projectEntries` 输出「源条目 × 投影消息」分组（`ProjectedEntry`，`toMessages` 改为其扁平视图）；`CompactionService.prepare/compact` 的切点、摘要输入、文件清单全部读投影，逐字移植 `findProjectedCutPoint` 的闭后缀推进（recovery omission）与相邻元数据回吸（判据读投影消息非本征可见性）；`estimateProjectedContextTokens` 在 edit/compaction 晚于用量锚点时纯字符重算，`CompactionExecutor.contextTokens` 改读它。无合法切点/摘要为空 ⇒ prepare 返回 null（自动静默、手动抛 ISE）。6+2 新测试、五颗变异探针各恰 1 红；全 reactor verify 14/14 SUCCESS。**本行关闭** |
 | B170 | 溢出省略的目标定位只有**身份扫描**，没移植 pi 的投影下标兜底 | `docs/13 §4.5`（**未登记**） | pi `_findPersistedMessageEntryId` 第三档：消息在 `state.messages` 中的下标 ⇒ 经投影反查源条目 id；`RecoveryOmissions.identityEntryId` 只做 transcript 身份匹配。生产安全：`PiLaneSink.append` 与 `lastAssistant()` 同一实例（已核）。若该接线改成投影副本，解析不到 ⇒ 抛 `Cannot persist recovery omission …`（硬失败、不静默）。**未修** |
+| B171 | split-turn：切点落在一轮内部时 pi 用 `TURN_PREFIX_SUMMARIZATION_PROMPT` 发**第二次**摘要调用并按固定格式合并 | `docs/17 §6`（**台账行 2026-10-06 补登**；docs/17 §7 原称「已登记」系误记） | 设计 `docs/18`（🕓 待用户审核）：切点加 turnStart 判定，历史截到本轮 user 前，turn-prefix 单独摘要，合并字面量 `\n\n---\n\n**Turn Context (split turn):**\n\n`；输出上限 0.5×reserve（默认 8192）；顺带接通 `previousSummary`（B2 同族项）。**未修** |
+| B172（低） | `PostRunRetry.prepareRetry` 只摘工作副本尾，没落 pi 的持久 omission edit | `docs/17 §6`（**台账行 2026-10-06 补登**） | 设计 `docs/19`（🕓 待用户审核）：环 A 退避前对失败助手追加 `replacement:null` 的 context_edit 并重建副本（约 3 行生产改动，复用 `RecoveryOmissions` 零件）。两侧 error 助手本就分别被停因过滤/请求门过滤，resume 与互读不可观察，仅持久状态形状不同。**未修** |

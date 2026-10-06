@@ -295,7 +295,9 @@ static boolean intrinsicallyVisible(Entry e) {
   `transform-messages.ts:197-203` 做）：无 omission edit 时两侧投影形状不同，
   本 §8 已登记，不重开；后缀/回吸判定均按 pi 口径走。
 - B171（split-turn 二次摘要）、B172（PostRunRetry 持久 omission edit）
-  已登记，本包不做；B170 独立项不动。
+  已在 §6 述及、本包不做；B170 独立项不动。
+  （勘误 2026-10-06：原文此处写「已登记」，但台账行当时漏登；B171/B172 已
+  随包 18/19 开工补入 `docs/05`。）
 
 ### 提交
 
