@@ -125,6 +125,11 @@
 > `SummaryPrompts`。5 颗探针实测 **2/2/1/1/1 红**（M1/M2 预案各高估 1 颗：用例 ③ 是
 > endsWith 看不见标签、用例 ② 不查 maxTokens，如实记）；新登 **B173/B174**（+2）；
 > 全 reactor `mvn -o clean verify` 14/14 SUCCESS。B2 同族四处至此全清。
+> **2026-10-06（包 22 收口）**：**B173 销号（R-A，`docs/22 §8`）** —— 摘要请求
+> 经 pi `:606-608` 同形门透传会话当前思考级别（模型支持＝capabilities THINKING、
+> 非 off、request 时现读），历史/turn-prefix 两路一处补齐；接线走 harnessRef 晚绑定。
+> 3 颗探针实测 3/1/1 红（M3 为 CCE error；M1/M2/M3 与预案一致）；全 reactor
+> `mvn -o clean verify` 14/14 SUCCESS ⇒ 未结 −1。
 >
 > ⚠️ **本节汇总的两列与自述口径对不上（非本次引入）**：按 `§1.0` 的命令实测（本次编辑前的 HEAD），
 > 全文 `^| B[0-9]* |` **152 行 / 含结案标记 41 行**，而 §3 段内只有 **89 行** —— B150+ 各批次是追加在**文末附录区**、
@@ -857,5 +862,5 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | B170 ✅ | ~~溢出省略的目标定位只有**身份扫描**，没移植 pi 的投影下标兜底~~ | `docs/13 §4.5`（**未登记**） | **已修（2026-10-06，`docs/20 §8`，commits `392a102`/`4e0e326`）**：身份扫描落空时，按目标在工作副本中的**身份下标**经 `ContextEntries.projectEntries` 投影反查源条目 id（`lane.messages` 与投影扁平视图同源）；投影副本不再被守卫误判硬失败。第一档 WeakMap 缓存裁决不移植（值全部由后两档同源推出，WeakHashMap 对值相等 record 不安全）。探针 M1/M2/M3 实测 3/1/3 红，与预案一致 |
 | B171 ✅ | split-turn：切点落在一轮内部时 pi 用 `TURN_PREFIX_SUMMARIZATION_PROMPT` 发**第二次**摘要调用并按固定格式合并 | `docs/17 §6`（**台账行 2026-10-06 补登**；docs/17 §7 原称「已登记」系误记） | **已修（2026-10-06，`docs/18 §8`，commits `73f13d1`/`2d94954`/`44aca0c`）**：切点加 turnStart 判定，历史截到本轮 user 前，turn-prefix 单独摘要，合并字面量 `\n\n---\n\n**Turn Context (split turn):**\n\n`；输出上限 0.5×reserve（默认 8192，模型 cap 封顶）；顺带接通 `previousSummary`（B2 同族项）。探针 5 颗均有牙 |
 | B172（低）✅ | `PostRunRetry.prepareRetry` 只摘工作副本尾，没落 pi 的持久 omission edit | `docs/17 §6`（**台账行 2026-10-06 补登**） | **已修（2026-10-06，`docs/19 §7`，commits `7b45a9e`/`599b57e`）**：环 A 退避前对失败助手追加 `replacement:null` 的 context_edit 并重建副本（复用 `RecoveryOmissions` 零件，带投影守卫）。探针 2 颗均有牙；两侧 error 助手本就分别被停因过滤/请求门过滤，resume 与互读不可观察，仅持久状态形状对齐 |
-| B173 | 摘要请求未透传 `thinkingLevel`（历史/turn-prefix 两路同缺） | `docs/21 §6`（**包 21 登记**） | pi `compaction.ts:606-608`：`model.reasoning` 且 level 非 off 时 `options.reasoning = thinkingLevel`。需新增会话级 `Supplier<ThinkingLevel>`（会话内可经 setThinkingLevel 改变）并核 Java 侧 model.reasoning 事实源 ⇒ 独立包 |
+| B173 ✅ | ~~摘要请求未透传 `thinkingLevel`（历史/turn-prefix 两路同缺）~~ | `docs/21 §6`、`docs/22` | **已修（2026-10-06，`docs/22 §8`，commit `699a9bb`）**：模型支持（`DefaultModelResolver#supportsThinking`，事实源 capabilities 的 THINKING）且级别非 off 时透传会话当前级别，每次请求现读；历史/turn-prefix 两路共用同一道门。探针 M1/M2/M3 实测 **3/1/1 红**（M3＝CCE error） |
 | B174 | `customInstructions` **无生产者**：`CompactionService.compact` 硬编码 null | `docs/21 §6`（**包 21 登记**） | pi 手工 `compact(customInstructions)` 经 RPC compact action options 可达（`agent-session.ts:3410`）；本包只保证参数被 prompt 正确消费，RPC/命令面接线另立 |

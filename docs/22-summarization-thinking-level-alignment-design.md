@@ -1,6 +1,6 @@
 # 包 22：摘要请求透传会话思考级别（B173 销号）
 
-> **状态：🔍 待审核（2026-10-06）—— 设计稿，未写生产代码。**
+> **状态：✅ 已闭环（2026-10-06，R-A）—— B173 销号。commits `b778de5` / `699a9bb`。**
 
 ## 1. 问题
 
@@ -185,6 +185,33 @@ RED 预期：旧代码下 ①②⑤ 红（reasoning 恒空），③④ 本就绿
 - docs/22 banner/§8 回填；docs/05：B173 行关闭（未结 −1）；CLAUDE.md 文档表
   加 docs/22；memory 更新；全 reactor 验证后汇报。
 
-## 8. 闭环记录
+## 8. 闭环记录（2026-10-06）
 
-（闭环时回填。）
+**裁决：R-A 照 pi `createSummarizationOptions` 的门补齐 reasoning，B173 销号。**
+
+RED 形态：新 8-arg 构造器在实现前不存在，夹具先以**编译失败**（javac 找不到构造器
+符号）落地，提交后再写生产代码——无法先看到运行期红灯，牙口主要由变异探针承担
+（教训形态 (6) 的变体）。生产落地后 5/5 绿。
+
+探针实测（3 颗全部与预案一致）：
+
+- **M1 = 3 红**：门恒空（reasoningOption 直返 empty），①②⑤；
+- **M2 = 1 红**：删模型支持门（不看 predicate），恰 ③；
+- **M3 = 1 红（error）**：删 Off 分支、强转 `(Enabled)`，④ 抛 ClassCastException。
+
+实施插曲：第一次做 M3 时漏还原 M2，变异体实为 M2+M3 合并（实测 2 红、③④）；
+发现后恢复原码、只在保留 predicate 门的前提下强转，复测恰 ④ 一颗 CCE error。
+教训沿用：**每次探针必须从已还原的原码单独施加，探针之间互不叠加**。
+
+### 证据
+
+- 新增 `LlmSummaryReasoningOptionTest` 5 条（历史路正向／turn-prefix 正向／模型不
+  支持／off／request 时现读）；compaction 存量套件连带 47/47 绿；
+- 全 reactor `mvn -o clean verify` **14/14 SUCCESS**（2026-10-06）。
+
+### 提交
+
+- `b778de5` test(agent-core): pin thinking-level passthrough on summarization requests (B173)
+- `699a9bb` feat(agent-core): pass the session thinking level to summarization requests (B173)
+
+同域仅剩 B174（customInstructions 无生产者，RPC compact action options 接线另立）。
