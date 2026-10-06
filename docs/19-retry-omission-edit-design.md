@@ -1,6 +1,6 @@
 # 包 19：环 A 重试前持久 omission edit（B172）
 
-> **状态：🕓 待用户审核（2026-10-06）—— 未写任何生产代码。**
+> **状态：✅ 已闭环（2026-10-06，R-A）—— B172 销号。commits `7b45a9e` / `599b57e`。**
 
 ## 1. 问题
 
@@ -108,4 +108,25 @@ RecoveryOmissions.persistRetryOmission(lane, message);
 - 不补 entry_appended 事件发射（溢出路径现有形状也未单显，跟随既有方言）；
 - 不动 B170（投影下标兜底）。
 
-## 7. 闭环记录（待回填）
+## 7. 闭环记录（2026-10-06）
+
+**裁决：R-A 镜像 pi，B172 销号。**
+
+探针实测（红数与预案不一致，行为面无偏差）：
+
+- M1 只删 `appendOmission`（守卫/重建保留）⇒ 恰 **1 红**（retryOmissionIsPersistedAsAContextEdit）；
+- M2 跳过 rebuild ⇒ **3 红**（prepareEmitsStart…／unknownTarget…／abortDuringBackoff…
+  的工作副本断言；预案只写 1 红）。
+
+### 证据
+
+- 新用例 3 条：`retryOmissionIsPersistedAsAContextEdit`／
+  `projectedAssistantWithoutSourceEntryThrows`／`assistantInNeitherPlaceAppendsNoEdit`；
+  存量 3 个夹具补 transcript 条目（error 助手现在必须能解析源条目），
+  `onlyAssistantTailIsDropped` 改为 `unknownTargetIsSilentlySkipped`。
+- agent-core 595 ⇒ **598 tests**；全 reactor `mvn -o clean verify` **14/14 SUCCESS**（2026-10-06）。
+
+### 提交
+
+- `7b45a9e` test(agent-core): pin the durable retry omission edit (B172)
+- `599b57e` feat(agent-core): persist the omission edit before auto-retry continues (B172)

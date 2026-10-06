@@ -1,6 +1,6 @@
 # 包 18：split-turn 的 turn-prefix 二次摘要（B171）
 
-> **状态：🕓 待用户审核（2026-10-06）—— 未写任何生产代码。**
+> **状态：✅ 已闭环（2026-10-06，R-A）—— B171 销号。commits `73f13d1` / `2d94954` / `44aca0c`。**
 
 ## 1. 问题
 
@@ -215,4 +215,30 @@ maxOutputTokens 封顶；② 与历史摘要同 system prompt、同 `completeSum
 - 不补 `customInstructions` 通道（pi compact 参数，Java 无调用点）；
 - 不动 B170（投影下标兜底定位）、B172（环 A 持久 omission edit，`docs/19`）。
 
-## 8. 闭环记录（待回填）
+## 8. 闭环记录（2026-10-06）
+
+**裁决：R-A 全量落地，B171 销号。**
+
+实施与设计稿的偏差（实测修正，行为面无偏差）：
+
+1. **探针红数与预案不一致**：
+   - M1 合并字面量改名 ⇒ 实际 **2 红**（①③：③ 的断言同样钉了该字面量；预案只写 ①）；
+   - M2 恒不 split ⇒ 实际 **4 红**（①②③⑤：⑤ 的 prefix 失败因调用被跳过、不再抛出；预案写 ①②③）；
+   - M3/M4/M5 各恰 1 红，与预案一致。
+2. **coding-agent 接线形状**：`models::maxOutputTokens` 是一参方法引用（匹配
+   `ToIntFunction`），构造器要零参 `IntSupplier` ⇒ 改 `() -> models.maxOutputTokens(model)`
+   （commit `44aca0c`）。
+
+### 证据
+
+- 新测试：`SplitTurnCompactionTest`（6 条）、`LlmTurnPrefixRequestTest`（3 条）；
+  存量 3 个夹具按 split 新形状更新（`CompactionServiceTest`／`CompactionFileOpsTest`／
+  `HarnessCompactionSummarySpanTest`），`CompactionProjectionTest` 的 CapturingGenerator 补方法。
+- agent-core 586 ⇒ **598 tests**（含包 19 的 3 条）；全 reactor `mvn -o clean verify`
+  **14/14 SUCCESS**（2026-10-06）。
+
+### 提交
+
+- `73f13d1` test(agent-core): pin the split-turn compaction contract (B171)
+- `2d94954` feat(agent-core): summarize the turn prefix with the second checkpoint prompt (B171)
+- `44aca0c` feat(coding-agent): resolve the model cap for the turn-prefix summary (B171)
