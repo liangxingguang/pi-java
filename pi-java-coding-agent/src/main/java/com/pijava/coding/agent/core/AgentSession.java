@@ -33,6 +33,7 @@ import com.pijava.agent.session.Session;
 import com.pijava.agent.session.SessionMetadata;
 import com.pijava.agent.session.EntryQuery;
 import com.pijava.agent.session.EntryOrder;
+import com.pijava.agent.prompt.ContextFileDiscovery;
 import com.pijava.agent.session.jsonl.JsonlSessionMetadata;
 
 import com.pijava.agent.session.SessionRepository;
@@ -407,6 +408,13 @@ public final class AgentSession implements AutoCloseable {
             .retrySettings(retrySettings)
             .retryAborted(retryAborted)
             .retryObserver(retryObserver)
+            // B64（docs/24）：AGENTS.md/CLAUDE.md 发现；-nc 关闭。
+            // 晚读口：每次 run 重新遍历（与 pi 同），不缓存。
+            .contextFiles(() -> args.noContextFiles()
+                ? List.of()
+                : ContextFileDiscovery.discover(
+                    Path.of(System.getProperty("user.dir")),
+                    FileSettingsStorage.defaultAgentDir()))
             .build());
         harnessRef.set(harness);
         var agentSession = new AgentSession(
