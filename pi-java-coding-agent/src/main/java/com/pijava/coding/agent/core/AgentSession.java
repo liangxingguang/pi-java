@@ -376,7 +376,11 @@ public final class AgentSession implements AutoCloseable {
             // 3d 环 B：摘要调用包在 retryAssistantCall 同形环里 —— 与环 A
             // 同一份 retry 预算、同一个中止旗观察口、同一个 observer（§8.22.3）。
             .summaryGenerator(new LlmSummaryGenerator(recordingStreamFn, () -> model,
-                retrySettings, retryAborted, retryObserver))
+                // B171（docs/18）：pi model.maxTokens 从目录取值 —— turn-prefix
+                // 摘要的输出上限被当前模型的 maxOutputTokens 封顶（cap 在调用点
+                // 读当前 model，故经零参 lambda 传入，不直传一参方法引用）。
+                retrySettings, retryAborted, retryObserver,
+                () -> models.maxOutputTokens(model)))
             .thinkingLevel(SessionSetup.thinkingLevelFor(args, settings.effective().defaultThinkingLevel))
             .systemPrompt(SessionSetup.customPromptFor(args))
             .promptGuidelines(SessionSetup.DEFAULT_PROMPT_GUIDELINES)
