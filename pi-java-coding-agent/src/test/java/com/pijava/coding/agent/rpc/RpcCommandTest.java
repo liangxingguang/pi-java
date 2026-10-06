@@ -36,7 +36,7 @@ class RpcCommandTest {
             new RpcCommand.SetThinkingLevel("4", "medium"),
             new RpcCommand.CycleThinkingLevel("5"),
             new RpcCommand.GetAvailableThinkingLevels("6"),
-            new RpcCommand.Compact("7"),
+            new RpcCommand.Compact("7", null),
             new RpcCommand.SetAutoCompaction("8", true),
             new RpcCommand.GetSessionStats("9"),
             new RpcCommand.SetSessionName("10", "name"),

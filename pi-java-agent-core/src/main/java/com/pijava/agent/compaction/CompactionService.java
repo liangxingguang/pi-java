@@ -128,11 +128,15 @@ public final class CompactionService {
      * @param tokensBefore    压缩前的上下文估算（pi {@code preparation.tokensBefore}）
      * @param reason          触发原因（"manual"/"threshold"/"overflow"），透传给摘要
      *                        生成器做环 B 事件装饰（3d）；可为 null
+     * @param customInstructions pi {@code compact(customInstructions)}：追加到历史摘要
+     *                        prompt 的聚焦指令（B174，{@code docs/23}）；turn-prefix
+     *                        调用不接；自动压缩路恒 null；可为 null
      */
     public static CompactionResult compact(List<Entry> transcript,
                                            CompactionSettings settings,
                                            SummaryGenerator summaryGenerator,
-                                           long tokensBefore, String reason) {
+                                           long tokensBefore, String reason,
+                                           String customInstructions) {
         Plan plan = prepare(transcript, settings);
         if (plan == null) {
             throw new IllegalStateException("Nothing to compact: transcript too small");
@@ -148,7 +152,7 @@ public final class CompactionService {
             Usage historyUsage = null;
             if (!plan.toSummarize().isEmpty()) {
                 var historyResult = summaryGenerator.summarize(
-                    plan.toSummarize(), plan.previousSummary(), null,
+                    plan.toSummarize(), plan.previousSummary(), customInstructions,
                     settings.reserveTokens(), reason);
                 historyText = historyResult.text();
                 historyUsage = historyResult.usage();
@@ -163,7 +167,7 @@ public final class CompactionService {
                 : prefixResult.usage();
         } else {
             var result = summaryGenerator.summarize(
-                plan.toSummarize(), plan.previousSummary(), null,
+                plan.toSummarize(), plan.previousSummary(), customInstructions,
                 settings.reserveTokens(), reason);
             summary = result.text();
             usage = result.usage();
@@ -180,12 +184,20 @@ public final class CompactionService {
             usage, lists.details());
     }
 
-    /** 无触发原因的旧式调用（测试）：{@code reason = null}。 */
+    /** 旧式调用（测试）：{@code reason = customInstructions = null}。 */
     public static CompactionResult compact(List<Entry> transcript,
                                            CompactionSettings settings,
                                            SummaryGenerator summaryGenerator,
                                            long tokensBefore) {
-        return compact(transcript, settings, summaryGenerator, tokensBefore, null);
+        return compact(transcript, settings, summaryGenerator, tokensBefore, null, null);
+    }
+
+    /** 无 customInstructions 的旧式调用（测试）。 */
+    public static CompactionResult compact(List<Entry> transcript,
+                                           CompactionSettings settings,
+                                           SummaryGenerator summaryGenerator,
+                                           long tokensBefore, String reason) {
+        return compact(transcript, settings, summaryGenerator, tokensBefore, reason, null);
     }
 
     /**

@@ -255,9 +255,22 @@ final class RunLifecycle {
         }
     }
 
-    /** Compact the specified lane's transcript (delegated to {@link CompactionExecutor}). */
-    void compact(String laneName, CompactionSettings settings) {
-        new CompactionExecutor(ctx).compact(laneName, settings);
+    /**
+     * Compact the specified lane's transcript (delegated to {@link CompactionExecutor}).
+     * 旧式调用（测试）：无 customInstructions。
+     */
+    com.pijava.agent.compaction.CompactionResult compact(
+            String laneName, CompactionSettings settings) {
+        return compact(laneName, settings, null);
+    }
+
+    /**
+     * 带 customInstructions 的压缩（B174，{@code docs/23}；pi
+     * {@code AgentSession.compact(customInstructions)}）。
+     */
+    com.pijava.agent.compaction.CompactionResult compact(
+            String laneName, CompactionSettings settings, String customInstructions) {
+        return new CompactionExecutor(ctx).compact(laneName, settings, customInstructions);
     }
 
     // ═══════════════════════════════════════════════════════════

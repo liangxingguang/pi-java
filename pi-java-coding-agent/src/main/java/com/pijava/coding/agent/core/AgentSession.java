@@ -659,9 +659,18 @@ public final class AgentSession implements AutoCloseable {
         return harness.followUp(laneName(), prompt);
     }
 
-    /** Trigger a manual context compaction ({@code /compact}). */
-    public void compact(CompactionSettings settings) {
-        harness.compact(laneName(), settings);
+    /** Trigger a manual context compaction without customInstructions ({@code /compact}). */
+    public com.pijava.agent.compaction.CompactionResult compact(CompactionSettings settings) {
+        return compact(settings, null);
+    }
+
+    /**
+     * Trigger a manual context compaction with customInstructions (B174,
+     * {@code docs/23}；pi {@code AgentSession.compact(customInstructions)}).
+     */
+    public com.pijava.agent.compaction.CompactionResult compact(
+            CompactionSettings settings, String customInstructions) {
+        return harness.compact(laneName(), settings, customInstructions);
     }
 
     /** Queue a steering message (injected into the current run's next round). */

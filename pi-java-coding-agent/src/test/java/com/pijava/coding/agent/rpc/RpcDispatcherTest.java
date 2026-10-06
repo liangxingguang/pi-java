@@ -337,9 +337,11 @@ class RpcDispatcherTest {
         var out = new ByteArrayOutputStream();
         var dispatcher = new RpcDispatcher(ctx.session(), new JsonlWriter(out), ctx.args());
 
-        // 先填充 transcript（空会话不可压缩）
-        dispatcher.handleLine("{\"id\":\"p\",\"type\":\"prompt\",\"message\":\"hi\"}");
-        awaitSettled(out);
+        // 三轮（第三轮 100k chars ⇒ 切点 split、历史非空；见
+        // CompactSlashCommandTest 的同形状夹具）。
+        runPrompt(dispatcher, out, "p1", "hi");
+        runPrompt(dispatcher, out, "p2", "hello");
+        runPrompt(dispatcher, out, "p3", "x".repeat(100_000));
 
         out.reset();
         dispatcher.handleLine(
@@ -347,7 +349,9 @@ class RpcDispatcherTest {
 
         var payload = payloadOf(out.toString(StandardCharsets.UTF_8), "1");
         var fieldNames = ((com.fasterxml.jackson.databind.node.ObjectNode) payload).fieldNames();
-        assertThat(org.assertj.core.util.IterableUtil.toList(fieldNames))
+        var names = new java.util.ArrayList<String>();
+        fieldNames.forEachRemaining(names::add);
+        assertThat(names)
             .as("pi compaction.ts:926-931：恰好 5 个键，estimatedTokensAfter 不上线")
             .containsExactlyInAnyOrder(
                 "summary", "firstKeptEntryId", "tokensBefore", "usage", "details");
@@ -360,8 +364,9 @@ class RpcDispatcherTest {
         var out = new ByteArrayOutputStream();
         var dispatcher = new RpcDispatcher(ctx.session(), new JsonlWriter(out), ctx.args());
 
-        dispatcher.handleLine("{\"id\":\"p\",\"type\":\"prompt\",\"message\":\"hi\"}");
-        awaitSettled(out);
+        runPrompt(dispatcher, out, "p1", "hi");
+        runPrompt(dispatcher, out, "p2", "hello");
+        runPrompt(dispatcher, out, "p3", "x".repeat(100_000));
 
         out.reset();
         dispatcher.handleLine("{\"id\":\"1\",\"type\":\"compact\"}");
@@ -370,6 +375,15 @@ class RpcDispatcherTest {
         assertThat(output).contains("\"command\":\"compact\",\"success\":true");
         // pi rpc-mode.ts:535：compact 响应带压缩结果载荷
         assertThat(payloadOf(output, "1").get("summary")).isNotNull();
+    }
+
+    /** Send one prompt and wait for its settled event. */
+    private static void runPrompt(RpcDispatcher dispatcher, ByteArrayOutputStream out,
+                                  String id, String text) throws Exception {
+        out.reset();
+        dispatcher.handleLine("{\"id\":\"" + id + "\",\"type\":\"prompt\","
+            + "\"message\":\"" + text + "\"}");
+        awaitSettled(out);
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────

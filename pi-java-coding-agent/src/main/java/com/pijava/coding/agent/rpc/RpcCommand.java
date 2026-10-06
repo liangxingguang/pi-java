@@ -137,7 +137,7 @@ public sealed interface RpcCommand {
     }
 
     @JsonTypeName("compact")
-    record Compact(String id) implements RpcCommand {
+    record Compact(String id, String customInstructions) implements RpcCommand {
         @Override public String type() { return "compact"; }
     }
 

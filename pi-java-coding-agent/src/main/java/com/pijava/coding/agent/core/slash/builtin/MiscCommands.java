@@ -121,10 +121,13 @@ public final class MiscCommands {
             (args, ctx) -> CHANGELOG));
         registry.register(simple("hotkeys", "Show all keyboard shortcuts", "",
             (args, ctx) -> hotkeys(ctx)));
-        registry.register(simple("compact", "Compact context manually", "",
+        registry.register(simple("compact", "Compact context manually", "<text>",
             (args, ctx) -> {
                 try {
-                    ctx.session().compact(CompactionSettings.defaults());
+                    // B174（docs/23，pi interactive-mode.ts:3264）：trailing 文本
+                    // trim 后作为 customInstructions；无/空白 ⇒ null。
+                    String custom = args.isBlank() ? null : args.trim();
+                    ctx.session().compact(CompactionSettings.defaults(), custom);
                     return "Compacted.";
                 } catch (Exception e) {
                     return "Compaction failed: " + e.getMessage();

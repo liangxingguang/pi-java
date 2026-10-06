@@ -84,8 +84,13 @@ class CompactSlashCommandTest {
         }
     }
 
-    /** 构造带两轮历史的会话（默认 keep=20000：第二轮 user 足够大 ⇒ 切点前有历史可摘要）。 */
-    private AgentSession sessionWithTwoTurns(CaptureProvider capture) throws Exception {
+    /**
+     * 构造三轮会话：turn1 "first"、turn2 "second"、turn3 100k chars。
+     * 尾部累加在第三轮 user（25k tokens）处达 keep 门；回吸跨过 Usage 条目
+     * （投影 0 消息，pi compaction.ts:858-862 同形）⇒ 切点判为 split，
+     * turnStart＝turn2 user，历史＝turn1 的 user/assistant，历史摘要非空。
+     */
+    private AgentSession sessionWithThreeTurns(CaptureProvider capture) throws Exception {
         var args = com.pijava.coding.agent.cli.ArgsParser.parse(
             new String[] {"--provider", "capture", "--model", "hello", "--no-session"});
         var providers = ProviderRegistry.create();
@@ -100,8 +105,7 @@ class CompactSlashCommandTest {
                 new ToolContext(tmp.toString(), Map.of(),
                     new DefaultShellExecutor(), new DefaultFileSystem()));
             session.processPrompt("first").statusFuture().get(10, TimeUnit.SECONDS);
-            // ~25k tokens ⇒ 尾部累加在第二轮 user 处达到 keep 门，切点落在它身上，
-            // 第一轮 user/assistant 进历史摘要。
+            session.processPrompt("second").statusFuture().get(10, TimeUnit.SECONDS);
             session.processPrompt("x".repeat(100_000)).statusFuture().get(10, TimeUnit.SECONDS);
             return session;
         } finally {
@@ -112,7 +116,7 @@ class CompactSlashCommandTest {
     @Test
     void trailingTextIsTrimmedAndPassedAsCustomInstructions() throws Exception {
         var capture = new CaptureProvider();
-        var session = sessionWithTwoTurns(capture);
+        var session = sessionWithThreeTurns(capture);
 
         var result = CommandRegistry.withBuiltins()
             .dispatch("/compact Focus on tests", SlashContext.of(session))
@@ -120,14 +124,15 @@ class CompactSlashCommandTest {
 
         assertThat(result).isEqualTo("Compacted.");
         assertThat(capture.userTexts)
-            .as("pi interactive-mode.ts:3264：trailing 文本进入摘要 prompt")
-            .anyMatch(text -> text.endsWith("\n\nAdditional focus: Focus on tests"));
+            .as("pi interactive-mode.ts:3264：trailing 文本进入历史摘要 prompt")
+            .anyMatch(text -> text.startsWith("<conversation>")
+                && text.endsWith("\n\nAdditional focus: Focus on tests"));
     }
 
     @Test
     void noTrailingTextPassesNull() throws Exception {
         var capture = new CaptureProvider();
-        var session = sessionWithTwoTurns(capture);
+        var session = sessionWithThreeTurns(capture);
 
         var result = CommandRegistry.withBuiltins()
             .dispatch("/compact", SlashContext.of(session))
@@ -142,7 +147,7 @@ class CompactSlashCommandTest {
     @Test
     void whitespaceTrailingTextPassesNull() throws Exception {
         var capture = new CaptureProvider();
-        var session = sessionWithTwoTurns(capture);
+        var session = sessionWithThreeTurns(capture);
 
         var result = CommandRegistry.withBuiltins()
             .dispatch("/compact    ", SlashContext.of(session))

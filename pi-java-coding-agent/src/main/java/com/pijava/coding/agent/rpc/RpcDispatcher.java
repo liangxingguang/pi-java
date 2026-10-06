@@ -163,8 +163,10 @@ public final class RpcDispatcher {
                     out.write(RpcResponse.ok(g.id(), "get_available_thinking_levels",
                         availableThinkingLevels()));
                 case RpcCommand.Compact c -> {
-                    session.compact(CompactionSettings.defaults());
-                    out.write(RpcResponse.ok(c.id(), "compact"));
+                    var result = session.compact(
+                        CompactionSettings.defaults(), c.customInstructions());
+                    out.write(RpcResponse.ok(c.id(), "compact",
+                        CompactResultWire.of(result)));
                 }
                 case RpcCommand.SetAutoCompaction a -> {
                     setAutoCompaction(a.enabled());

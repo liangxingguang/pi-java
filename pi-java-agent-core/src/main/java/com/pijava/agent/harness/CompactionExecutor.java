@@ -77,7 +77,8 @@ final class CompactionExecutor {
      * result:undefined, aborted:false, errorMessage:"Compaction failed: …"}}
      * 后原样再抛（{@code :2092-2104}）。</p>
      */
-    void compact(String laneName, CompactionSettings settings) {
+    CompactionResult compact(String laneName, CompactionSettings settings,
+                             String customInstructions) {
         var lane = ctx.requireLane(laneName);
         // pi :1969 —— 手动路在 compaction_start **之前**建控制器（自动路的 :2291 相反）。
         // 守卫（"Already compacted"）、压缩体、中止三条抛出路径都在窗口内；
@@ -94,7 +95,7 @@ final class CompactionExecutor {
                     throw new NothingToCompactException(laneName);
                 }
                 run = applyCompaction(laneName, lane, settings,
-                    (int) contextTokens(lane), "manual", false);
+                    (int) contextTokens(lane), "manual", false, customInstructions);
             } catch (RuntimeException e) {
                 // pi 的 catch（:2092-2104）：end{manual, aborted: 取消类, errorMessage:
                 // 非取消类才有 "Compaction failed: " 前缀} 后再抛。取消分支的 end 已由
@@ -111,6 +112,7 @@ final class CompactionExecutor {
                 throw new IllegalStateException("Compaction cancelled");
             }
             ctx.publishState(laneName);
+            return run.result();
         } finally {
             lane.exitCompaction();
         }
@@ -212,8 +214,9 @@ final class CompactionExecutor {
         // :2276/:2286 一样**不进**窗口。清位在 finally（pi :2450）。
         lane.enterCompaction();
         try {
+            // 自动压缩在 pi 恒无 customInstructions（agent-session.ts:3082）。
             var run = applyCompaction(laneName, lane, settings,
-                (int) contextTokens(lane), reason, willRetry);
+                (int) contextTokens(lane), reason, willRetry, null);
             if (run.aborted()) {
                 // pi :2362-2377：end{aborted:true, willRetry:false} 已在体内发，
                 // 转录未替换。
@@ -255,7 +258,8 @@ final class CompactionExecutor {
      */
     CompactionRun applyCompaction(String laneName, LaneState lane,
                                   CompactionSettings settings, int estimatedTokens,
-                                  String reason, boolean willRetry) {
+                                  String reason, boolean willRetry,
+                                  String customInstructions) {
         ctx.telemetry().incrementCounter("compactions", 1);
         int entriesBefore = lane.transcript.size();
         long start = System.nanoTime();
@@ -273,7 +277,8 @@ final class CompactionExecutor {
             if (plan != null && !plan.keepEntries().isEmpty()) {
                 compacted = plan.keepEntries();
             } else {
-                var built = compactTranscript(lane, settings, reason, span);
+                var built = compactTranscript(lane, settings, reason, span,
+                    customInstructions);
                 compacted = built.kept();
                 result = built.result();
             }
@@ -405,7 +410,7 @@ final class CompactionExecutor {
      * 跨度描述的是「摘要这一步」，不是「一定发生了一次请求」。</p>
      */
     private Built compactTranscript(LaneState lane, CompactionSettings settings, String reason,
-                                    TelemetrySpan parent) {
+                                    TelemetrySpan parent, String customInstructions) {
         var summarySpan = parent.openSpan(new SpanOptions("compaction.summary",
             java.util.Map.of("reason", reason)));
         CompactionResult result;
@@ -416,7 +421,7 @@ final class CompactionExecutor {
             // Entry.Compaction.tokensBefore 因此是「用量优先」值，与触发判据同源。
             // reason 透传给摘要生成器（3d 环 B 的 attempt_start 事件装饰）。
             result = CompactionService.compact(lane.transcript, settings,
-                ctx.summaryGenerator(), contextTokens(lane), reason);
+                ctx.summaryGenerator(), contextTokens(lane), reason, customInstructions);
             summarySpan.addAttribute("summaryChars", result.summary().length());
             var usage = result.usage();
             if (usage != null) {

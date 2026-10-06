@@ -371,14 +371,24 @@ public class AgentHarness implements AutoCloseable {
     // ═══════════════════════════════════════════════════════════
 
     /** Run a compaction on the default lane. */
-    public void compact(CompactionSettings settings) {
-        compact(DEFAULT_LANE, settings);
+    public com.pijava.agent.compaction.CompactionResult compact(CompactionSettings settings) {
+        return compact(DEFAULT_LANE, settings);
     }
 
-    /** Run a compaction on the specified lane. */
-    public void compact(String laneName, CompactionSettings settings) {
+    /** Run a compaction on the specified lane（旧式调用，无 customInstructions）。 */
+    public com.pijava.agent.compaction.CompactionResult compact(
+            String laneName, CompactionSettings settings) {
+        return compact(laneName, settings, null);
+    }
+
+    /**
+     * Run a compaction on the specified lane with customInstructions (B174,
+     * {@code docs/23}；pi {@code AgentSession.compact(customInstructions)}).
+     */
+    public com.pijava.agent.compaction.CompactionResult compact(
+            String laneName, CompactionSettings settings, String customInstructions) {
         if (closed) throw new HarnessClosedException();
-        runLifecycle.compact(laneName, settings);
+        return runLifecycle.compact(laneName, settings, customInstructions);
     }
 
     /**
