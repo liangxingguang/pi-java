@@ -130,6 +130,12 @@
 > 非 off、request 时现读），历史/turn-prefix 两路一处补齐；接线走 harnessRef 晚绑定。
 > 3 颗探针实测 3/1/1 红（M3 为 CCE error；M1/M2/M3 与预案一致）；全 reactor
 > `mvn -o clean verify` 14/14 SUCCESS ⇒ 未结 −1。
+> **2026-10-06（包 23 收口）**：**B174 销号（R-A，`docs/23 §8`）** ——
+> customInstructions 经历史摘要路透传（普通＋split 历史），RPC compact 命令携带并
+> 返回 pi 5 键载荷（CompactResultWire，estimatedTokensAfter 不上线），slash
+> `/compact <text>` 接 trailing（trim）；自动路继续恒 null（pi :3082）。4 颗探针
+> 实测 **4/1/1/1 红**（M1 预案 5 高估 1：split 负向用例与两条 slash 负向用例本就绿）；
+> 全 reactor `mvn -o clean verify` 14/14 SUCCESS ⇒ 未结 −1。
 >
 > ⚠️ **本节汇总的两列与自述口径对不上（非本次引入）**：按 `§1.0` 的命令实测（本次编辑前的 HEAD），
 > 全文 `^| B[0-9]* |` **152 行 / 含结案标记 41 行**，而 §3 段内只有 **89 行** —— B150+ 各批次是追加在**文末附录区**、
@@ -863,4 +869,4 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | B171 ✅ | split-turn：切点落在一轮内部时 pi 用 `TURN_PREFIX_SUMMARIZATION_PROMPT` 发**第二次**摘要调用并按固定格式合并 | `docs/17 §6`（**台账行 2026-10-06 补登**；docs/17 §7 原称「已登记」系误记） | **已修（2026-10-06，`docs/18 §8`，commits `73f13d1`/`2d94954`/`44aca0c`）**：切点加 turnStart 判定，历史截到本轮 user 前，turn-prefix 单独摘要，合并字面量 `\n\n---\n\n**Turn Context (split turn):**\n\n`；输出上限 0.5×reserve（默认 8192，模型 cap 封顶）；顺带接通 `previousSummary`（B2 同族项）。探针 5 颗均有牙 |
 | B172（低）✅ | `PostRunRetry.prepareRetry` 只摘工作副本尾，没落 pi 的持久 omission edit | `docs/17 §6`（**台账行 2026-10-06 补登**） | **已修（2026-10-06，`docs/19 §7`，commits `7b45a9e`/`599b57e`）**：环 A 退避前对失败助手追加 `replacement:null` 的 context_edit 并重建副本（复用 `RecoveryOmissions` 零件，带投影守卫）。探针 2 颗均有牙；两侧 error 助手本就分别被停因过滤/请求门过滤，resume 与互读不可观察，仅持久状态形状对齐 |
 | B173 ✅ | ~~摘要请求未透传 `thinkingLevel`（历史/turn-prefix 两路同缺）~~ | `docs/21 §6`、`docs/22` | **已修（2026-10-06，`docs/22 §8`，commit `699a9bb`）**：模型支持（`DefaultModelResolver#supportsThinking`，事实源 capabilities 的 THINKING）且级别非 off 时透传会话当前级别，每次请求现读；历史/turn-prefix 两路共用同一道门。探针 M1/M2/M3 实测 **3/1/1 红**（M3＝CCE error） |
-| B174 | `customInstructions` **无生产者**：`CompactionService.compact` 硬编码 null | `docs/21 §6`（**包 21 登记**） | pi 手工 `compact(customInstructions)` 经 RPC compact action options 可达（`agent-session.ts:3410`）；本包只保证参数被 prompt 正确消费，RPC/命令面接线另立 |
+| B174 ✅ | ~~`customInstructions` **无生产者**：`CompactionService.compact` 硬编码 null~~ | `docs/21 §6`、`docs/23` | **已修（2026-10-06，`docs/23 §8`，commit `f62ed75`）**：历史摘要路（普通＋split 历史）透传 customInstructions；RPC `compact` 命令携带该字段并返回 pi 5 键结果载荷（`CompactResultWire`，estimatedTokensAfter 不上线），slash `/compact <text>` trim trailing。探针 M1–M4 实测 **4/1/1/1 红**（M1 预案 5 高估） |

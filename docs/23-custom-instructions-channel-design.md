@@ -1,6 +1,6 @@
 # 包 23：压缩 customInstructions 通道接线（B174 销号）
 
-> **状态：🔍 待审核（2026-10-06）—— 设计稿，未写生产代码。**
+> **状态：✅ 已闭环（2026-10-06，R-A）—— B174 销号。commits `f62ed75` / `2d7f8ca`。**
 
 ## 1. 问题
 
@@ -188,6 +188,41 @@ record CompactResultWire(
 - docs/23 banner/§8 回填；docs/05：B174 行关闭（未结 −1）；CLAUDE.md 文档表
   加 docs/23；memory 更新；全 reactor 验证后汇报。
 
-## 8. 闭环记录
+## 8. 闭环记录（2026-10-06）
 
-（闭环时回填。）
+**裁决：R-A 全链接通 customInstructions，B174 销号。**
+
+RED 形态：夹具先以**编译失败/行为缺失**落地 —— agent-core 新签名不存在（编译红），
+slash/RPC 通道先红于行为断言；生产落地后全绿。
+
+探针实测（4 颗；M1 与预案不符，如实记）：
+
+- **M1 = 4 红**（预案 5）：CompactionService 两处 summarize 改回 null ⇒
+  CompactionCustomInstructionsTest 2 ＋ RPC focus 断言 1 ＋ slash focus 断言 1；
+  split 负向断言与两条 slash 负向断言本就绿，预案高估 1；
+- **M2 = 1 红**：dispatcher 丢弃 `c.customInstructions()`，恰 RPC focus 用例；
+- **M3 = 1 红**：slash 忽略 args，恰 trailing 用例；
+- **M4 = 1 红**：wire 直传内部 CompactionResult（多 estimatedTokensAfter 键），
+  恰 5 键用例。
+
+实施插曲两处：① 调试 slash 夹具时发现三轮才足够（Usage 条目回吸让两轮 transcript
+的 split 历史为空 —— pi `compaction.ts:858-862` 同形，已核实是夹具问题非移植
+问题）；② RPC focus 断言最初没有观测点，抽出共享测试零件
+`RecordingChatProvider`（`support` 包，slash/RPC 共用）。
+
+教训沿用：**预案红数按每条断言实际读到的字段与正负向计数**；以及新通道要有
+真观测点，不能只断言响应外壳。
+
+### 证据
+
+- 新增 `CompactionCustomInstructionsTest` 2 条、`CompactSlashCommandTest` 3 条，
+  RPC compact 夹具 2 条（含 focus prompt 与 5 键载荷）；
+- compaction 存量套件与全模块测试连带绿；
+- 全 reactor `mvn -o clean verify` **14/14 SUCCESS**（2026-10-06）。
+
+### 提交
+
+- `f62ed75` feat(agent-core): wire customInstructions through RPC and slash compaction (B174)
+- `2d7f8ca` test(coding-agent): share recording provider for compaction focus fixtures
+
+压缩/省略域 B2 家族（包 13–23）至此全部销号。
