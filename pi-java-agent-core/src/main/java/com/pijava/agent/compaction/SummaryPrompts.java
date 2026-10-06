@@ -1,0 +1,120 @@
+package com.pijava.agent.compaction;
+
+/**
+ * 摘要请求的逐字 prompt 文本（B2 同族收尾，{@code docs/21}）。集中存放使
+ * {@link LlmSummaryGenerator} 只保留调用/重试机制。文本逐字取自 pi 锚点
+ * {@code 200387122}，{@code \} 续行仅用于 Java 行宽，产出字节无折行。
+ */
+final class SummaryPrompts {
+
+    /** pi {@code SUMMARIZATION_SYSTEM_PROMPT}（{@code compaction/utils.ts:161-163}）。 */
+    static final String SYSTEM = """
+        You are a context summarization assistant. Your task is to read a conversation \
+        between a user and an AI assistant, then produce a structured summary following \
+        the exact format specified.
+
+        Do NOT continue the conversation. Do NOT respond to any questions in the \
+        conversation. ONLY output the structured summary.""";
+
+    /** pi {@code SUMMARIZATION_PROMPT}（{@code compaction.ts:507-538}）：无旧摘要时。 */
+    static final String SUMMARIZATION = """
+        The messages above are a conversation to summarize. Create a structured context \
+        checkpoint summary that another LLM will use to continue the work.
+
+        Use this EXACT format:
+
+        ## Goal
+        [What is the user trying to accomplish? Can be multiple items if the session covers different tasks.]
+
+        ## Constraints & Preferences
+        - [Any constraints, preferences, or requirements mentioned by user]
+        - [Or "(none)" if none were mentioned]
+
+        ## Progress
+        ### Done
+        - [x] [Completed tasks/changes]
+
+        ### In Progress
+        - [ ] [Current work]
+
+        ### Blocked
+        - [Issues preventing progress, if any]
+
+        ## Key Decisions
+        - **[Decision]**: [Brief rationale]
+
+        ## Next Steps
+        1. [Ordered list of what should happen next]
+
+        ## Critical Context
+        - [Any data, examples, or references needed to continue]
+        - [Or "(none)" if not applicable]
+
+        Keep each section concise. Preserve exact file paths, function names, and error \
+        messages.""";
+
+    /** pi {@code UPDATE_SUMMARIZATION_INSTRUCTIONS}（{@code compaction.ts:540-575}）。 */
+    private static final String UPDATE_INSTRUCTIONS = """
+        Update the existing structured summary with new information. RULES:
+        - PRESERVE all existing information from the previous summary
+        - ADD new progress, decisions, and context from the new messages
+        - UPDATE the Progress section: move items from "In Progress" to "Done" when completed
+        - UPDATE "Next Steps" based on what was accomplished
+        - PRESERVE exact file paths, function names, and error messages
+        - If something is no longer relevant, you may remove it
+
+        Use this EXACT format:
+
+        ## Goal
+        [Preserve existing goals, add new ones if the task expanded]
+
+        ## Constraints & Preferences
+        - [Preserve existing, add new ones discovered]
+
+        ## Progress
+        ### Done
+        - [x] [Include previously done items AND newly completed items]
+
+        ### In Progress
+        - [ ] [Current work - update based on progress]
+
+        ### Blocked
+        - [Current blockers - remove if resolved]
+
+        ## Key Decisions
+        - **[Decision]**: [Brief rationale] (preserve all previous, add new)
+
+        ## Next Steps
+        1. [Update based on current state]
+
+        ## Critical Context
+        - [Preserve important context, add new if needed]
+
+        Keep each section concise. Preserve exact file paths, function names, and error \
+        messages.""";
+
+    /** pi {@code UPDATE_SUMMARIZATION_PROMPT}（{@code compaction.ts:577-579}）：有旧摘要时。 */
+    static final String UPDATE_SUMMARIZATION =
+        "The messages above are NEW conversation messages to incorporate into the existing "
+        + "summary provided in <previous-summary> tags.\n\n" + UPDATE_INSTRUCTIONS;
+
+    /** pi {@code TURN_PREFIX_SUMMARIZATION_PROMPT}（{@code compaction.ts:942-956}）。 */
+    static final String TURN_PREFIX = """
+        The messages above are earlier context from an ongoing conversation. Later messages are stored separately and do not need to be reconstructed.
+
+        Create a concise checkpoint of the user's request and the progress shown above. This checkpoint will be placed before the later messages so the conversation can continue with the necessary context.
+
+        ## Original Request
+        [What did the user ask for?]
+
+        ## Progress So Far
+        - [Key decisions and work completed in these messages]
+
+        ## Context Needed to Continue
+        - [Information from these messages needed to understand the later work]
+
+        Only summarize information explicitly present above. Do not infer or recreate later messages.\
+        """;
+
+    private SummaryPrompts() {}
+}

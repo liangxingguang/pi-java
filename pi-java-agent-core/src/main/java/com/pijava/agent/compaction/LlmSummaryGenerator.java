@@ -25,7 +25,8 @@ import com.pijava.ai.utils.RetryableError;
 
 /**
  * LLM 驱动摘要生成器（对齐 pi {@code compaction.ts} 的
- * {@code SUMMARIZATION_SYSTEM_PROMPT} + {@code serializeConversation}）。
+ * {@code generateSummaryWithUsage}/{@code generateTurnPrefixSummary}；prompt 文本
+ * 集中在 {@link SummaryPrompts}，会话序列化在 {@link ConversationSerializer}）。
  *
  * <p><b>3d 的两环之一</b>（{@code 原 docs/31 §8.22}）：每次摘要调用包在
  * pi {@code completeSummarization}（{@code compaction.ts:579-599}）同形的
@@ -48,33 +49,6 @@ import com.pijava.ai.utils.RetryableError;
  * （pi :210-221 的 normalize，调用方不必区分中止发生的时点）。</p>
  */
 public final class LlmSummaryGenerator implements SummaryGenerator {
-
-    /** 对齐 pi {@code SUMMARIZATION_SYSTEM_PROMPT}。 */
-    private static final String SYSTEM_PROMPT =
-        "You are a context summarization assistant. Read a conversation between a user "
-        + "and an AI assistant, then produce a structured summary following the exact "
-        + "format. Do NOT continue the conversation. Do NOT respond to any questions "
-        + "in the conversation. ONLY output the structured summary.";
-
-    /**
-     * pi {@code TURN_PREFIX_SUMMARIZATION_PROMPT}（{@code compaction.ts:942-956}）逐字。
-     */
-    private static final String TURN_PREFIX_SUMMARIZATION_PROMPT = """
-        The messages above are earlier context from an ongoing conversation. Later messages are stored separately and do not need to be reconstructed.
-
-        Create a concise checkpoint of the user's request and the progress shown above. This checkpoint will be placed before the later messages so the conversation can continue with the necessary context.
-
-        ## Original Request
-        [What did the user ask for?]
-
-        ## Progress So Far
-        - [Key decisions and work completed in these messages]
-
-        ## Context Needed to Continue
-        - [Information from these messages needed to understand the later work]
-
-        Only summarize information explicitly present above. Do not infer or recreate later messages.\
-        """;
 
     private final StreamFn streamFn;
     private final Supplier<ModelId<?>> model;
@@ -123,7 +97,8 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
     @Override
     public SummaryResult summarize(List<Message> compressed, String previousSummary,
                                    String customInstructions, int reserveTokens, String reason) {
-        var response = callWithRetries(() -> produceOnce(compressed, previousSummary), reason);
+        var response = callWithRetries(() -> produceOnce(compressed, previousSummary,
+            customInstructions, reserveTokens), reason);
         // pi generateSummaryWithUsage 的后半（:715-725）：failure 文案 → toolCall 守卫 → 文本。
         var failure = getSummarizationFailure(response, "Summarization");
         if (failure != null) {
@@ -144,7 +119,7 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
         // （模型 cap 封顶）+ # Conversation/# Instructions 包装的逐字 prompt。
         int maxTokens = turnPrefixMaxTokens(reserveTokens);
         String promptText = "# Conversation\n" + ConversationSerializer.serialize(messages)
-            + "\n\n# Instructions\n" + TURN_PREFIX_SUMMARIZATION_PROMPT;
+            + "\n\n# Instructions\n" + SummaryPrompts.TURN_PREFIX;
         var response = callWithRetries(() -> produceOnce(promptText, maxTokens), reason);
         var failure = getSummarizationFailure(response, "Turn prefix summarization");
         if (failure != null) {
@@ -276,9 +251,21 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
     // produce —— pi 的 produce = (await streamFn(...)).result()
     // ═══════════════════════════════════════════════════════════
 
-    /** 历史摘要路：buildPrompt 构造结构化 prompt，不发 maxTokens（沿用模型默认）。 */
-    private Message.AssistantMessage produceOnce(List<Message> compressed, String previousSummary) {
-        return request(buildPrompt(compressed, previousSummary), OptionalInt.empty());
+    /**
+     * 历史摘要路：标签包裹的逐字 prompt，maxTokens = {@code min(0.8×reserve, 模型 cap)}
+     * （pi {@code compaction.ts:712-715}）。
+     */
+    private Message.AssistantMessage produceOnce(List<Message> compressed, String previousSummary,
+                                                 String customInstructions, int reserveTokens) {
+        return request(buildPrompt(compressed, previousSummary, customInstructions),
+            OptionalInt.of(historyMaxTokens(reserveTokens)));
+    }
+
+    /** pi {@code compaction.ts:712-715}：{@code min(floor(0.8*reserveTokens), cap > 0 ? cap : ∞)}。 */
+    private int historyMaxTokens(int reserveTokens) {
+        int eightyReserve = (int) Math.floor(0.8 * reserveTokens);
+        int cap = modelMaxOutputTokens.getAsInt();
+        return cap > 0 ? Math.min(eightyReserve, cap) : eightyReserve;
     }
 
     /** turn-prefix 路：prompt 已按 prefix 形状构造，maxTokens 带 0.5×reserve 上限。 */
@@ -310,7 +297,7 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
         StringBuilder text = new StringBuilder();
         Usage[] usage = {null};
         var iter = streamFn.stream(model.get(),
-            new Context(SYSTEM_PROMPT, List.of(user), List.of()), options);
+            new Context(SummaryPrompts.SYSTEM, List.of(user), List.of()), options);
         Message.AssistantMessage result;
         try {
             result = null;
@@ -390,34 +377,25 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
             ui.inputTokens() + ui.outputTokens(), Usage.Cost.zero());
     }
 
-    /** 结构化摘要 prompt（对齐 pi：Goal / Constraints / Progress / Current State）。 */
-    private static String buildPrompt(List<Message> compressed, String previousSummary) {
-        var sb = new StringBuilder();
-        if (previousSummary != null && !previousSummary.isBlank()) {
-            sb.append("Previous summary:\n").append(previousSummary).append("\n\n");
+    /**
+     * pi {@code compaction.ts:717-733}：会话经 {@code <conversation>} 标签包裹，
+     * 有旧摘要时插 {@code <previous-summary>} 标签并切换 UPDATE 指令；
+     * {@code customInstructions} 非空则追 {@code Additional focus} 后缀。
+     */
+    private static String buildPrompt(List<Message> compressed, String previousSummary,
+                                      String customInstructions) {
+        String conversationText = ConversationSerializer.serialize(compressed);
+        var sb = new StringBuilder()
+            .append("<conversation>\n").append(conversationText).append("\n</conversation>\n\n");
+        // pi 真值判定：空串即假（不用 isBlank —— JS 空白串为真）。
+        boolean updating = previousSummary != null && !previousSummary.isEmpty();
+        if (updating) {
+            sb.append("<previous-summary>\n").append(previousSummary)
+                .append("\n</previous-summary>\n\n");
         }
-        sb.append("Create a structured context checkpoint summary that another LLM will "
-            + "use to continue the work. Use this EXACT format:\n\n"
-            + "## Goal\n[What is the user trying to accomplish?]\n\n"
-            + "## Constraints & Preferences\n- [Any constraints, or \"(none)\"]\n\n"
-            + "## Progress\n- [Key steps taken, or \"(none)\"]\n\n"
-            + "## Current State\n- [Files/tools/tasks in progress]\n\n"
-            + "Conversation:\n");
-        for (var msg : compressed) {
-            sb.append("user".equals(msg.role()) ? "[User]: " : "[Assistant]: ");
-            sb.append(textOf(msg)).append('\n');
-        }
-        return sb.toString();
-    }
-
-    private static String textOf(Message msg) {
-        var sb = new StringBuilder();
-        for (var block : msg.content()) {
-            if (block instanceof ContentBlock.TextContent t) {
-                sb.append(t.text());
-            } else if (block instanceof ContentBlock.ThinkingContent t) {
-                sb.append("[thinking] ").append(t.text());
-            }
+        sb.append(updating ? SummaryPrompts.UPDATE_SUMMARIZATION : SummaryPrompts.SUMMARIZATION);
+        if (customInstructions != null && !customInstructions.isEmpty()) {
+            sb.append("\n\nAdditional focus: ").append(customInstructions);
         }
         return sb.toString();
     }
