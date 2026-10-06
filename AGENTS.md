@@ -20,17 +20,10 @@ telemetry ← ai ← agent ← coding-agent
 - **CLAUDE.md** — commands, coding conventions, SDK entry points
 - **docs/01-requirements-analysis.md** — 35 functional + 10 non-functional requirements
 - **docs/02-architecture-design.md** — module structure, layer dependencies, core interfaces
-- **docs/03-detailed-design.md** — class-level design: Entry/LaneRecord, AgentHarness, SessionStorage/Repository, SQLite schema, JSONL v4 format, TamboUI components, slash commands, CLI parameters
-- **docs/04-implementation-plan.md** — Phase 0–6, 13–17 week MVP, risk matrix
-- **docs/05-open-items-register.md** — open items register (the "what is still not aligned" ledger)
-- **docs/06-module-alignment-map.md** — per-module alignment map (detail under `docs/map/`)
-- **docs/07-gap-inventory.md** — module gap inventory and completion plan
-- **docs/08-ai-next-work-items-design.md** — pi-java-ai next-work list
+- **docs/03-detailed-design.md** — class-level design: Entry/LaneRecord, AgentHarness, SessionStorage/Repository, SQLite schema, JSONL format, TamboUI components, slash commands, CLI parameters
+- **docs/04-open-items-register.md** — open items register (the "what is still not aligned" ledger)
+- **docs/05-module-alignment-map.md** — per-module alignment map (detail under `docs/map/`)
 
 ## Development Workflow
 
-All code is written by AI, reviewed by humans. Each phase follows the 8-step process described in `docs/00-ai-driven-development-process.md`.
-
-## Current Phase
-
-Phase 6 — Ecosystem: provider expansion, evals, RPC, remote sessions, extensions, publishing.
+All code is written by AI, reviewed by humans per the 8-step process in `docs/00-ai-driven-development-process.md`. Current work proceeds as alignment packages tracked in `docs/04`; closed package docs were pruned (history in git).

@@ -20,9 +20,9 @@ pi-java follows an AI-driven development process where all code is written by AI
 5. Do not push to `main` directly — always use a feature branch
 6. Do not force push
 
-## Phase Design Docs
+## Design Docs
 
-Each phase begins with a design document (`docs/XX-phaseN-xxx-design.md`) extracted and expanded from the corresponding section of `03-detailed-design.md`. The design doc serves as both an implementation blueprint and (later) a development tutorial.
+Each alignment package begins with a design draft expanded from the corresponding section of `docs/03-detailed-design.md`, reviewed before code. Open items are tracked in `docs/04-open-items-register.md`; closed package docs are pruned and remain in git history.
 
 ## Before Submitting
 
