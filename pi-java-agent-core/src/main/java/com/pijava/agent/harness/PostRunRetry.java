@@ -55,8 +55,9 @@ final class PostRunRetry {
      * pi {@code _prepareRetry(message)}（:2917-2965），返回「调用方应 continue」。
      * 守卫顺序照 pi：enabled 复查 ⇒ 计数 ++ ⇒ **超预算则回退计数并 false**
      * （保留完成计数给终局失败事件，:1127-1134）⇒ 算延迟 ⇒ 发
-     * {@code auto_retry_start} ⇒ <b>只摘工作副本尾部</b>的助手消息（日志保留，
-     * :2937-2941，用户历史里看得见那次失败）⇒ 可中止退避（取消 ⇒
+     * {@code auto_retry_start} ⇒ <b>持久追加 {@code replacement:null} 的
+     * context_edit</b>（B172，:2937-2941，原始日志保留、用户历史里看得见那次
+     * 失败）并重建工作副本 ⇒ 可中止退避（取消 ⇒
      * {@code auto_retry_end{false,…,"Retry cancelled"}} + 清零 + false）。
      */
     boolean prepareRetry(LaneState lane, Message.AssistantMessage message) {
@@ -74,12 +75,9 @@ final class PostRunRetry {
             settings.maxAgentDelayMs(), lane.retryAttempt);
         ctx.retryObserver().onAutoRetryStart(lane.retryAttempt, settings.maxRetries(),
             delayMs, piOrFallback(message.errorMessage()));
-        // Remove error message from agent state (keep in session for history).
-        var messages = lane.messages;
-        if (!messages.isEmpty()
-                && messages.get(messages.size() - 1) instanceof Message.AssistantMessage) {
-            messages.remove(messages.size() - 1);
-        }
+        // B172（docs/19）：pi _prepareRetry 不手工摘尾，而是持久追加一条
+        // replacement=null 的 context_edit（只省略助手），再刷新工作副本。
+        RecoveryOmissions.persistRetryOmission(lane, message);
         if (sleepInterruptible(delayMs)) {
             int attempt = lane.retryAttempt;
             lane.retryAttempt = 0;

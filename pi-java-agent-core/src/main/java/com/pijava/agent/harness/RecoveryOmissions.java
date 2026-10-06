@@ -50,6 +50,26 @@ final class RecoveryOmissions {
     }
 
     /**
+     * Persist the omission of only the failed assistant for the auto-retry path
+     * (B172, {@code docs/19}；pi {@code _prepareRetry → _omitRecoveryAttempt(message)}，
+     * {@code agent-session.ts:3738})：环 A 不传 toolResults，守卫/定位规则同
+     * {@link #persist}，随后刷新工作副本。
+     */
+    static void persistRetryOmission(LaneState lane, Message.AssistantMessage failed) {
+        String assistantId = identityEntryId(lane, failed);
+        if (assistantId == null && inWorkingCopy(lane, failed)) {
+            // pi :1216-1218：投影中的消息没有源条目 ⇒ 无法安全持久省略。
+            throw new IllegalStateException(
+                "Cannot persist recovery omission because a projected message has no source entry");
+        }
+        if (assistantId != null) {
+            appendOmission(lane, assistantId);
+        }
+        // pi _refreshFinalizedContext（:1224）：退避前让后续读取看到剔除后的投影。
+        HarnessUtils.rebuildLaneMessages(lane);
+    }
+
+    /**
      * Whether the target is the <b>same instance</b> in the working copy.
      * Must use reference identity, not {@link java.util.List#contains}: the
      * messages are records with value equality, but pi's JS
