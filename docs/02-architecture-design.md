@@ -86,20 +86,21 @@ telemetry ← ai ← agent ← coding-agent
 ## 2. Maven 模块结构
 
 ```
-pi-java/  （共 11 个模块）
+pi-java/  （13 个 Maven 子模块 + 根 POM；reactor 共 14 个）
 ├── pom.xml                          ← 根 POM（dependencyManagement + pluginManagement）
 ├── pi-java-bom/                     ← Bill of Materials（统一版本管理）
-├── pi-java-telemetry/               ← 遥测接口 + noop/otel 适配器（= pi packages/telemetry）
-├── pi-java-ai/                      ← LLM API + Provider 注册（= pi packages/ai）
-├── pi-java-agent-core/              ← Agent 运行时核心（= pi packages/agent）
-├── pi-java-session-backend-sqlite/  ← SQLite 会话存储（= pi packages/session-backends/sqlite-node）
-├── pi-java-tui/                     ← 终端 UI 库（= pi packages/tui）
-├── pi-java-protocol/                ← CBOR 协议 + 帧格式（= pi packages/protocol）
-├── pi-java-client/                  ← 远程会话客户端（= pi packages/client）
-├── pi-java-server/                  ← 远程会话服务端（= pi packages/server）
-├── pi-java-coding-agent/            ← CLI 入口 + AgentSession（= pi packages/coding-agent）
-├── pi-java-evals/                   ← 评估框架（= pi packages/evals）
-└── docs/                            ← 项目文档
+├── pi-java-telemetry/               ← 遥测接口 + noop/otel 适配器（≈ pi packages/telemetry）
+├── pi-java-ai/                      ← LLM API + Provider 注册（≈ pi packages/ai）
+├── pi-java-agent-core/              ← Agent 运行时核心（≈ pi packages/agent）
+├── pi-java-session-backend-sqlite/  ← 可选 SQLite 后端（本仓独立 schema；pi 参照后端已删）
+├── pi-java-tui/                     ← 终端 UI（≈ pi packages/tui）
+├── pi-java-protocol/                ← 协议模块
+├── pi-java-client/                  ← 远程会话客户端（≈ pi packages/client）
+├── pi-java-server/                  ← 远程会话服务端（≈ pi packages/server）
+├── pi-java-coding-agent/            ← CLI 入口 + AgentSession（≈ pi packages/coding-agent）
+├── pi-java-web/                     ← Web UI + HTTP/WS 服务（本仓独有；pi 无 web）
+├── pi-java-evals/                   ← 评估框架（≈ pi packages/evals）
+└── pi-java-dist/                    ← 分发包（fat jar）
 ```
 
 | 模块 | groupId:artifactId | pi 对应 | 说明 |
@@ -107,13 +108,15 @@ pi-java/  （共 11 个模块）
 | telemetry | `com.pijava:pi-java-telemetry` | `packages/telemetry` | 遥测合约 |
 | ai | `com.pijava:pi-java-ai` | `packages/ai` | LLM API |
 | agent-core | `com.pijava:pi-java-agent-core` | `packages/agent` | Agent 运行时 |
-| sqlite-backend | `com.pijava:pi-java-session-backend-sqlite` | `packages/session-backends/sqlite-node` | SQLite 会话存储 |
+| sqlite-backend | `com.pijava:pi-java-session-backend-sqlite` | —（pi 后端已删） | 可选 SQLite 后端 |
 | tui | `com.pijava:pi-java-tui` | `packages/tui` | 终端 UI |
-| protocol | `com.pijava:pi-java-protocol` | `packages/protocol` | CBOR 协议 |
+| protocol | `com.pijava:pi-java-protocol` | — | 协议模块 |
 | client | `com.pijava:pi-java-client` | `packages/client` | 远程会话客户端 |
 | server | `com.pijava:pi-java-server` | `packages/server` | 远程会话服务端 |
 | coding-agent | `com.pijava:pi-java-coding-agent` | `packages/coding-agent` | CLI 入口 |
+| web | `com.pijava:pi-java-web` | —（pi 无） | Web UI |
 | evals | `com.pijava:pi-java-evals` | `packages/evals` | 评估框架 |
+| dist | `com.pijava:pi-java-dist` | — | fat jar 打包 |
 
 ---
 
@@ -128,14 +131,14 @@ pi-java/  （共 11 个模块）
 | JSON | Jackson (`jackson-core`, `jackson-databind`) | 流式解析 + CBOR 模块 |
 | YAML | SnakeYAML (仅 CLI 设置文件) | 最小化使用 |
 | JSON Schema | `com.networknt:json-schema-validator` | 工具参数校验 |
-| 会话存储 | SQLite + JSONL v4 双轨 | 1:1 对齐 pi：SQLite 主存储（12 表 + FTS5 搜索 + 写租约 + 分支缓存），JSONL v4 兼容导入/导出 |
+| 会话存储 | JSONL（默认）＋ SQLite（可选） | JSONL 用 pi 主流 v3 格式；SQLite 是本仓独立 schema（11 表＋惰性 FTS5） |
 | 终端 UI | [TamboUI](https://tamboui.dev/) 0.3.x | 源自 Ratatui（Claude CLI 同源），内置差量渲染、Widget 库、CSS 主题、GraalVM 支持 |
 | 终端后端 | TamboUI Panama Backend | 基于 JDK FFM，与 JDK 25 Foreign Function API 目标一致 |
 | 键盘/输入 | TamboUI JLine3 Backend | 复用 JLine3 的终端输入处理 |
 | 日志 | `java.lang.System.Logger` + `java.util.logging` | 零外部依赖，桥接到 SLF4J 可选 |
-| 原生编译 | GraalVM for JDK 25 | 独立二进制分发 |
-| SQLite | xerial/sqlite-jdbc | 会话元数据索引、全文搜索、事务安全 |
-| CLI 参数 | picocli | 类型安全、自动补全、多级子命令 |
+| 分发形态 | fat jar（pi-java-dist） | Native Image 已放弃 |
+| SQLite | xerial/sqlite-jdbc | 可选后端：全文搜索、事务安全 |
+| CLI 参数 | 自研 ArgsParser（注解驱动） | 类型安全的参数解析 |
 | 测试 | JUnit 5 + AssertJ | 主流组合 |
 
 ---
@@ -146,16 +149,15 @@ pi-java/  （共 11 个模块）
 
 ```java
 // 统一的模型标识，编译期安全
-public record ModelId<T extends Provider>(
-    String id,
-    Class<T> provider
+public record ModelId<P>(
+    String provider,
+    String modelName
 ) {}
 
-// ProviderApi — 标记接口：Provider 对外暴露的一种 API 能力
-// Phase 1 仅 ChatApi 一种能力；Phase 6 可能扩展 ImageApi、EmbeddingApi 等
-public sealed interface ProviderApi permits ChatApi {}
+// ProviderApi — 标记接口：Provider 对外暴露的 API 能力
+public sealed interface ProviderApi permits ChatApi, ImageApi, EmbeddingApi {}
 
-// ChatApi = StreamApi + SimpleApi，是 Phase 1 的唯一 ProviderApi 能力
+// ChatApi = StreamApi + SimpleApi
 public interface ChatApi extends StreamApi, SimpleApi {}
 
 // 核心流式调用接口
@@ -241,33 +243,21 @@ public interface Tool {
     ExecutionMode executionMode();
 }
 
-// Entry 类型（持久化的事件，对用户可见）
+// Entry 类型（持久化事件，对用户可见）—— 9 个变体
 public sealed interface Entry permits
-    Message, ModelChange, ThinkingLevelChange,
-    ActiveToolsChange, Compaction, BranchSummary, Custom
+    Message, ModelChange, ThinkingLevelChange, Compaction, BranchSummary,
+    Usage, ContextEdit, Custom, CustomMessage
 { String id(); long seq(); String parentId(); Instant timestamp(); }
 
-// LaneRecord 类型（车道级别的内部记录）
+// LaneRecord（车道级内部审计记录）—— 10 个变体
 public sealed interface LaneRecord permits
     OperationStarted, AbortRequested, OperationFinished,
-    StepAttempt, ToolStarted, QueueEnqueued, QueueCancelled,
-    QueueConsumed, WriteDeferred, UsageRecord
+    StepAttempt, ToolStarted, ToolFinished, QueueEnqueued, QueueCancelled,
+    QueueConsumed, WriteDeferred
 { long seq(); Instant timestamp(); }
 
-// LaneState 可派生：fold(records, ownEntries, configurationEntries) → FoldedState（Phase 21，对齐 pi harness/reducer.ts）
-public record FoldedState(
-    String lane,
-    RunPhase phase,                 // IDLE | ASSISTANT | CHECKPOINT（fold 归一化）
-    String runId,                   // 当前 open operation 的 id；空闲为 null
-    int stepIndex,
-    LaneState.NewestOwn newestOwn,  // 最近 own entry 摘要（含 stopReason）
-    boolean faulted,                // 最近一次 operation 以 error 结束
-    boolean aborted,                // 最近一次 operation 被 abort
-    EffectiveConfiguration effectiveConfiguration,  // 从配置 Entry 派生
-    List<LaneInfo.QueuedItem> pendingSteer,
-    List<LaneInfo.QueuedItem> pendingFollowUp,
-    List<LaneInfo.QueuedItem> pendingNextRun
-) {}
+// 状态不做 fold/reducer：LaneState 直接逐条 apply entry 增量维护
+// （早期的 FoldedState/折叠链已退休 —— 记录是旁路审计，不参与状态推导）。
 ```
 
 ### 4.3 TUI 层（`pi-java-tui`）
@@ -277,7 +267,8 @@ public record FoldedState(
 - **主题定制**：为 AI 编码代理场景定义 TCSS 主题（聊天气泡、工具调用卡片、diff 视图等）
 - **复合 Widget**：封装 `ChatPanel`、`ToolCallCard`、`DiffView`、`StatusBar` 等业务组件
 - **编辑器集成**：基于 TamboUI Widget 构建多行编辑器组件
-- **Markdown 渲染桥接**：将 Markdown AST 转换为 TamboUI 的 `Text`/`Paragraph`/`Block` 组合
+- **Markdown 渲染（未接线）**：`MarkdownRenderer`/`SyntaxHighlighter` 类存在但
+  助手消息当前走纯文本渲染；「接线还是删声明」见台账 B65，不要当成已生效的职责
 
 ```java
 // pi-java-tui 的核心职责：主题 + 业务组件，非底层引擎
@@ -364,19 +355,17 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    subgraph Session["会话存储（双轨）"]
+    subgraph Session["会话存储（二选一后端）"]
         direction TB
-        SQLITE_DB["sessions.db<br/>SQLite 12 表<br/>主存储 + FTS5 搜索"]
-        V4_DIR["sessions/&lt;encoded-cwd&gt;/<br/>&lt;ts&gt;_&lt;id&gt;.jsonl<br/>JSONL v4 兼容格式"]
+        JSONL_DIR["sessions/&lt;encoded-cwd&gt;/<br/>&lt;ts&gt;_&lt;id&gt;.jsonl<br/>默认后端 · pi v3 格式"]
+        SQLITE_DB["sessions.db<br/>可选后端 · 本仓独立 schema（11 表＋FTS5）"]
     end
 
-    subgraph Format["JSONL v4 mutation 格式"]
+    subgraph Format["pi v3 行格式"]
         direction TB
-        HDR["{kind:header, version:4, id:..., cwd:..., parent_session:...}"]
-        ENT["{kind:entry, lane:main, id:..., type:message, parent_id:..., payload:{...}}"]
-        REC["{kind:record, lane:main, id:..., run_id:..., type:operation_started, intent:{...}}"]
-        LAN["{kind:lane, seq:1, lane:main, leaf_id:...}"]
-        FAC["{kind:fact, seq:1, fact:name, value:...}"]
+        HDR["{type:'session', version:3, id:..., timestamp:ISO, cwd:..., parentSession:...}"]
+        ROW["{type:'message', id:..., parentId:..., timestamp:ISO, role:..., content:[...]}"]
+        CUSTOM["{type:'custom', customType:'pi-java.lane' 等, data:{...}}"]
     end
 
     Session --> Format

@@ -224,7 +224,8 @@ RPC 命令集与事件线格式（存疑）· `compaction` 设置 · **`examples
 
 **最大簇 = 「目录规模」**（本仓内置目录 vs pi 的 42 provider）**与「分类器基础设施」**（#9948 统一 image/classifier）。
 
-**计划**：① 目录规模（低风险高收益）② `ContextOverflow`/`RetryableError` 本轮新增的匹配模式
+**计划（2026-10-04 快照；执行情况见 docs/04）**：目录规模、
+`ContextOverflow`/`RetryableError` 新增匹配模式等 —— 后续按台账条目落地
 ③ Anthropic **`inline-tools-2026-09-15`**（pi 已把中段工具从 `tool_reference+defer_loading` 换成工具定义内联，
 可表达同名重定义）④ 分类器面（`typesafe` 仍权 0）
 
@@ -244,7 +245,8 @@ harness 专有钩子 · 存储套件 · 搜索类型。
 
 **新增/翻案为存疑 3 条**：`finishTurn`（语义变了）· 输出截断（字节预算差）· Entry union（缺口扩大）。
 
-**计划**：① **JSONL v4→v3 线格式**（与 §3.5 同根因，一起做）② Entry union 11 类 ③ `finishTurn` 语义
+**计划（快照）**：JSONL v3 线格式、Entry union 11 类、`finishTurn` 语义
+—— 已在包 12–23 落地，剩余项见 docs/04（如 B159）
 ④ 截断字节预算对齐 ⑤ 事件/载荷形状那一簇
 
 ### 3.3 `pi-java-coding-agent` — **40.8%**｜P0
@@ -275,7 +277,7 @@ harness 专有钩子 · 存储套件 · 搜索类型。
 **G 域（6 块新子系统）＝ 本轮换锚带来的新大陆**：MCP（Σw 9）· codemode（4）· tool-search（2）·
 virtual-models（2）· nested-tool-calls（1）＋ 分散 13 —— **共 10,994 行 pi 主流代码，pi-java 全 0**。
 
-**计划**：① **上下文文件发现**（投入小、每次会话都受影响，且救活一个死 flag）② 扩展钩子桥接
+**计划（快照）**：上下文文件发现（B64，未做）、扩展钩子桥接；现状见 docs/04
 ③ settings 键批量补 ④ **MCP**（新大陆里最大的一块）⑤ 包管理器（单独设计包）
 
 ### 3.4 `pi-java-session` ＋ `pi-java-evals` — **39.1%**｜P1
@@ -295,7 +297,8 @@ virtual-models（2）· nested-tool-calls（1）＋ 分散 13 —— **共 10,99
 ⚠️ **`pi-java-session-backend-sqlite` 模块**：参照物（pi `session-backends`）**已整包删除**（R1），
 本包只标注、**不主张删除模块** —— 删模块是独立裁决（涉及 35 个测试与整条存储链）。
 
-**计划**：① JSONL v3 双向可读 ② `context_edit` ③ B55（list 进度/部分结果/中止/并发，**权重只有 1，
+**计划（快照）**：JSONL v3 双向可读、`context_edit` 已落地；B55
+（list 进度/部分结果/中止/并发，**权重只有 1，
 但决定大目录扫描时选择器能否边扫边显示**）
 
 ### 3.5 `pi-java-tui` — **44.8%**｜**P3（优先级最低）**
@@ -316,7 +319,7 @@ virtual-models（2）· nested-tool-calls（1）＋ 分散 13 —— **共 10,99
 `colors.ts` 367 ＋ `oklab.ts` 233 …），pi-java **74 行**（2 个 `.tcss`）。本轮 pi 新增 OKLab/OKHSL 色值系统与
 由终端调色板派生的 system 主题 —— **不是补上旧缺口，是又加了两条缺失单元**。
 
-**计划**：按裁决 R3 排最后。**但 §4 那两条死码要先决定：接线还是删声明。**
+**计划（快照）**：TUI 按 R3 排最后；死码「接线还是删声明」见 docs/04（B65/B66）。
 
 ### 3.6 `pi-java-telemetry` — **50.0%**｜P2
 
@@ -326,7 +329,7 @@ virtual-models（2）· nested-tool-calls（1）＋ 分散 13 —— **共 10,99
 `AttributeValue` 类型闭集放宽 · `setAttributes` 整包合并 vs 单键）
 **缺失 5 条全在权重 1–2**（`addEvent` · `setStatus` · 内存实现 · **adapter 一致性套件**（pi 的 9 用例）· 类型化 schema）
 
-**计划**：P2。adapter 一致性套件值得补 —— 它会把形状差异变成红灯。
+**计划（快照）**：adapter 一致性套件（未做，可把形状差异变成红灯）。
 
 ### 3.7 `protocol` / `client` / `server` — **排除出分母**（R1）
 
@@ -457,28 +460,20 @@ CLI 零 `--serve`/`--connect`）。详见 `docs/map/01` §0.2/§0.3。
 
 ---
 
-## 9 后续计划
+## 9 计划项的处置
 
-> ⚠️ **2026-10-04 重写**：本轮换锚把「`chord`/`multi-process`/`durable`」全部判为 R5 不可达 ⇒
-> 旧的 D–G 阶段（chord 地基 / RPC 三模块重建 / 多进程 / SQLite 重写）**整块作废**，见 §5.2。
-
-| 阶段 | 内容 | 依据 |
-|---|---|---|
-| **A. pi-java-ai 收尾** | 目录规模 · `ContextOverflow`/`RetryableError` 新模式 · 中段工具内联 · 分类器 | §3.1，**80.84% → 100% 的 +19.16pp 都在这里** |
-| **B. 硬故障** | **JSONL v3 双向可读**（用户可见）· 输出截断字节预算 · `finishTurn` 语义 | §8-1/-2/-4 |
-| **C. coding-agent 的高权欠账** | **上下文文件发现**（P0，投入小）· 扩展钩子桥接 · settings 键批量补 | §3.3 |
-| **D. 新大陆** | **MCP**（最大）· codemode · tool-search · virtual-models | §5.3，10,994 行 |
-| **E. 大件** | 扩展事件面 41 · 包管理器 · `examples/` 可执行验收规格 | §3.3 |
-| **F. P3** | TUI。**但 §4-2/-3/-4 三条死码先决定：接线还是删声明** | §3.5 |
-
-### 9.1 验证面（与 A–F 并行）
-
-**L5 差分 14/14 绿**是硬证据，但是**窄而深的切片**：provider 是脚本化的（**五条真实车道一条都不测**）、
-`ConformanceRunner` **直连 `PiLoop` 绕过 `PiLaneEngine`**、剧本里 **0 个 thinking 块**。
-⇒ ① 把可脚本化的位置下移到 **wire 层**（让五条车道进差分）② **把文档里的变异探针变成能自动跑的测试**。
-
-⚠️ **地图本身也需要机制化**：本轮 251 个 pi 提交 + 253 个 pi-java 提交就让六份地图双双过期。
-`check-drift.sh` 只覆盖 pi 一侧，且比的是**本地工作树 HEAD**（换锚窗口内会倒着报）。
+> 本节是 2026-10-04 快照时的后续计划。其中 A–C 的绝大部分已在**包 12–23**
+> 执行完毕（JSONL v3 双向可读、context_edit、压缩切点投影、split-turn、
+> 摘要 prompt、思考级别透传、customInstructions 通道等），对应台账行 B155–B174
+> 均已销号（见 docs/04）。D/E/F 中未做的项（MCP、codemode、tool-search、
+> 扩展事件面、TUI 接线等）已迁入 docs/04 台账继续追踪。
+>
+> 换锚时旧的 chord/多进程/SQLite 重写阶段计划**整块作废**（R5 不可达，见 §5.2）。
+>
+> **验证面现状**：L5 差分仍是窄而深的切片（脚本化 provider、直连 PiLoop、
+> 无 thinking 剧本）；真实车道的覆盖主要由各包变异探针承担。
+> **地图的维护性**：pi/pi-java 两侧行号都会随提交漂移，`check-drift.sh`
+> 只覆盖 pi 一侧；本文件数字是快照，不作活状态使用。
 
 ---
 

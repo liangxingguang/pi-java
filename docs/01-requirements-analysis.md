@@ -108,15 +108,22 @@ pi-java 的目标是使用 **JDK 25** 以 **Pure Java**（尽可能减少外部�
 
 ## 5. 不做的事（Non-Goals）
 
-1. **不追求与 pi 的线路级兼容** — 协议层面（CBOR 帧格式、RPC 消息词汇）无需对齐；JSONL v4 mutation 格式与 pi 保持一致；coding-agent 的 JSONL v3 格式作为导入/导出兼容；SQLite 后端 Schema 与 pi 对齐
-2. **分阶段实现 provider** — Phase 1 完成 5 个核心 provider（Anthropic, OpenAI, Google, DeepSeek, Mistral），Phase 6 补齐全部 40 个，Provider SPI 架构从 Day 1 就支持全量扩展
-3. **不复制 Bun 二进制编译** — 改用 GraalVM Native Image 作为唯一的原生分发方式
-4. **不做浏览器端** — 纯终端 + RPC，无 Web UI
-5. **不做 Slack/Chat 集成** — 那是独立项目 `pi-chat` 的范围，不在本项目中
+> 下列为立项时的 Non-Goals；其中 3、4 已被后续决策推翻，按现状更正。
+
+1. **不追求与 pi 的线路级兼容** — RPC 消息词汇不强求字节级对齐；**会话 JSONL 格式
+   与 pi 主流 v3 双向互读**（早期自造格式惰性迁移）；SQLite 后端是**本仓独立
+   设计**（pi 的参照后端已删除，不与其 schema 对齐）
+2. **Provider SPI 从 Day 1 支持全量扩展** — 核心 provider 先行、其余按需注册
+3. **不复制 Bun 二进制编译** — 分发方式后定为 **fat jar**；GraalVM Native Image
+   已放弃（不作为发布目标）
+4. （**已废止**）「不做浏览器端」—— 实际已交付 `pi-java-web`（web UI）
+5. **不做 Slack/Chat 集成** — 独立项目范围，不在本项目
 
 ---
 
-## 6. 关键设计决策（待确认）
+## 6. 关键设计决策
+
+> 立项时的决策记录；存储与原生两项已被换锚/分发裁决更新。
 
 | 决策项 | 选项 | 推荐 |
 |--------|------|------|
@@ -124,7 +131,7 @@ pi-java 的目标是使用 **JDK 25** 以 **Pure Java**（尽可能减少外部�
 | HTTP 客户端 | `java.net.http.HttpClient` / OkHttp | **HttpClient** — JDK 内置，虚拟线程友好 |
 | JSON 处理 | Jackson / Gson / javax.json | **Jackson** — CBOR 模块复用，流式解析成熟 |
 | TUI 库 | TamboUI | **TamboUI** — 源自 Ratatui（Claude CLI 同源），内置差量渲染、Widget 库、CSS 主题、GraalVM 支持 |
-| 会话存储 | SQLite + JSONL v4 双轨 | **SQLite + JSONL v4 双轨（1:1 对齐 pi）** — SQLite 为主存储（FTS5 搜索、写租约）、JSONL v4 为 mutation 日志和崩溃恢复 |
+| 会话存储 | JSONL（默认，pi v3 格式）/ SQLite（可选后端，本仓独立 schema） | **JSONL 为主、SQLite 可选**；二者均为持久后端，按配置选择 |
 | 评估框架 | JUnit 5 + vitest-evals 等价物 / 自研 | **自研 conformance harness** — 端到端 agent 行为验证 + provider 兼容性测试，对齐 pi evals |
-| 原生编译 | GraalVM Native Image / jpackage | **GraalVM Native Image** — 单一二进制，启动快 |
+| 分发形态 | fat jar / Native Image | **fat jar**（Native Image 已放弃） |
 | JSON Schema 校验 | networknt/json-schema-validator / 自研 | **networknt** — 成熟，与 Jackson 集成好 |

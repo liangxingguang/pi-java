@@ -20,7 +20,7 @@ com.pijava.ai/
 ├── api/                    ← 公开 API（能力接口 + 请求/响应记录）
 │   ├── ProviderApi.java      ← 标记接口（sealed）
 │   ├── ChatApi.java  StreamApi.java  SimpleApi.java
-│   ├── ImageApi.java  EmbeddingApi.java            ← Phase 6 落地
+│   ├── ImageApi.java  EmbeddingApi.java            ← 已落地（图片/嵌入能力）
 │   ├── StreamIterator.java                         ← 虚拟线程友好的同步迭代器
 │   └── StreamRequest.java  ApiOptions.java  ToolDefinition.java
 ├── protocol/               ← 协议适配器（一个协议一个适配器，供应商复用）
@@ -54,7 +54,7 @@ com.pijava.ai/
 │   ├── FauxProvider.java    ← 可编程假 Provider（测试与 L5 用）
 │   └── builtin/
 ├── catalog/                ← 模型目录
-│   ├── ModelCatalog.java  BuiltinCatalog.java  RemoteCatalog.java
+│   ├── ModelCatalog.java  BuiltinCatalog.java
 │   ├── ModelInfo.java  CatalogModel.java  ModelsStore.java
 │   └── FileModelsStore.java  CatalogPublisher.java  …
 ├── auth/                   ← 认证
@@ -73,10 +73,9 @@ com.pijava.ai/
 ### 1.2 核心接口设计
 
 ```java
-// ProviderApi — 标记接口：Provider 对外暴露的一种 API 能力
-public sealed interface ProviderApi permits ChatApi {
-    // Phase 1 仅 ChatApi 一种能力；
-    // Phase 6 可能扩展 ImageApi、EmbeddingApi 等
+// ProviderApi — 标记接口：Provider 对外暴露的 API 能力
+public sealed interface ProviderApi
+    permits ChatApi, ImageApi, EmbeddingApi {
 }
 
 // Provider SPI — 扩展点
@@ -107,7 +106,8 @@ public record StreamRequest(
     TranscriptContext transcript,   // 归一后的有序转录
     int maxTokens,                  // -1 表示使用默认值
     double temperature,             // -1 表示使用默认值
-    Map<String, Object> extra       // provider 特定参数
+    Map<String, Object> extra,      // provider 特定参数
+    Optional<ThinkingLevel> reasoning  // 未翻译的思考级别；空 ≙ 不开思考
 ) {
     public StreamRequest {
         transcript = transcript == null ? new TranscriptContext(List.of()) : transcript;
@@ -155,7 +155,7 @@ Message.ToolResultMessage    →  {"role":"user","content":[{"type":"tool_result
 ToolDefinition               →  {"name":"..","description":"..","input_schema":{...}}
 ToolCallStart(id,name)       ←  {"type":"content_block_start","content_block":{"type":"tool_use",...}}
 TextDelta(text)              ←  {"type":"content_block_delta","delta":{"text_delta","text":"..."}}
-StreamDone(usage)            ←  {"type":"message_delta","delta":{"stop_reason":"end_turn"},...}
+StreamDone(usage)            ←  {"type":"message_delta","delta":{"stop_reason":"stop"},...}
 ```
 
 > **`Message.SystemMessage` 已删除（`原 docs/31 §8.6`）**：pi 的 `Message` 只有
@@ -282,7 +282,9 @@ public class AgentHarness implements AutoCloseable {
 
     // ── 空闲操作 ────────────────────────────────────────────
     public void reset();                       // 另有 reset(String laneName)
-    public void compact(CompactionSettings settings);
+    /** 手动压缩（带不带 customInstructions 两载），返回压缩结果。 */
+    CompactionResult compact(CompactionSettings settings);
+    CompactionResult compact(CompactionSettings settings, String customInstructions);
     public void seedTranscript(String laneName, List<Entry> entries);   // resume 播种
     public void restoreRecords(String laneName, List<LaneRecord> records);
     public void dropTrailingErrorAssistant(String laneName);            // 重试前清残缺助手消息
@@ -385,32 +387,31 @@ public sealed interface Entry {
     String parentId();          // 根为 null
     Instant timestamp();
     String type();              // 判别字面量（@JsonTypeInfo 用）
-    boolean isConfiguration();  // 默认 false
     Entry committed(long seq, String parentId, Instant timestamp);  // 存储分配身份后重建
 }
 ```
 
 `seq` 是全仓**共享**的单调序号（entry / record / lane / fact 同一个空间）。
 
-#### Entry 的 8 个变体
+#### Entry 的 9 个变体
 
 | 变体 | 关键字段 | 语义 |
 |---|---|---|
-| `Message` | `message`（`UserMessage`/`AssistantMessage`/`ToolResultMessage`）、`terminate` | 对话消息。**角色只在消息对象里** —— 系统提示不是 entry，它挂在 `Context.systemPrompt` 上（`原 docs/31 §8.6`） |
+| `Message` | `message`（`UserMessage`/`AssistantMessage`/`ToolResultMessage`）、`terminate` | 对话消息。**角色只在消息对象里** —— 系统提示不是 entry，它挂在 `Context.systemPrompt` 上 |
 | `ModelChange` | `provider`、`modelId` | 模型切换（配置） |
 | `ThinkingLevelChange` | `thinkingLevel`（`"off"`…`"xhigh"`） | 思考等级切换（配置） |
-| `ActiveToolsChange` | `activeToolNames` | 活跃工具集切换（配置） |
-| `Compaction` | `summary`、`firstKeptEntryId`、`retainedTail`、`tokensBefore`、`details`、`usage` | 压缩标记。**摘要前缀是逐字节固定的文本**，`firstKeptEntryId` 是平铺字段 |
+| `Compaction` | `summary`、`firstKeptEntryId`、`retainedTail`、`tokensBefore`、`details`、`usage` | 压缩标记。`firstKeptEntryId` 是平铺字段 |
 | `BranchSummary` | `fromId`、`summary`、`details`、`usage` | 分支摘要 |
+| `Usage` | `kind`、`provider`、`model`、`usage`，＋本仓审计扩展（`runId`/`entryId`/…） | 模型记账（包 12 D6 起为**一等 entry**；pi 的 9 个键逐字对应） |
+| `ContextEdit` | `targetId`、`replacement`（可显式 null） | 追加式上下文编辑（包 13） |
 | `Custom` | `customType`、`data` | 扩展事件（不进 LLM 上下文） |
 | `CustomMessage` | `customType`、`content`、`display`、`details` | 扩展注入的消息：`content` 进 LLM 上下文，`display` 只管 TUI 渲染 |
 
-> **曾经有过 `isConfiguration()`**：`ModelChange` / `ThinkingLevelChange` /
-> `ActiveToolsChange` 覆写为 `true`，随 record-log 折叠链一起引入（`原 docs/21` F3）。
-> 折叠链退休后（`原 docs/30`）它零读者，**已于 2026-09-13 删除** —— 留着一个只为已删除机制
-> 存在的判据，只会让下一个读者以为它还有语义。
+> **没有 `ActiveToolsChange` 变体**：pi 主线从不发射它（只存在于 legacy v3 导入器），
+> 工具增删状态线在 pi 是**系统消息**（toolsAdded/toolsRemoved），不是 entry；
+> 本仓只读形状已于包 A3 删除。曾经的 `isConfiguration()` 也随之于 2026-09-13 删除。
 
-#### LaneRecord 的 11 个变体
+#### LaneRecord 的 10 个变体
 
 ```java
 public sealed interface LaneRecord {
@@ -431,10 +432,10 @@ public sealed interface LaneRecord {
 | `QueueEnqueued` | `queue`（`QueueKind`）、`runId`、`target` | 入队 |
 | `QueueConsumed` | `queue`、`runId`、`targets` | 一批排空被消费。pi-java 特有：pi 从 entry 是否出现推断消费，而 pi-java 把整次排空合成一条用户消息，故需要显式标记 |
 | `QueueCancelled` | `runId`、`entryId` | 队列项被取消 |
-| `WriteDeferred` | `runId`、`target` | 运行中写入被标记为 deferred（`原 docs/22` D3） |
-| `UsageRecord` | `usage`、`cause`（`UsageCause`）、`runId`、`entryId`、`toolCallId`、`attempt`、`stopReason` | token 用量。`stopReason` 是**审计数据不是推导输入**：没有任何代码从它派生（与 `StepAttempt` 上被移除的那份平行副本不同） |
+| `WriteDeferred` | `runId`、`target` | 运行中写入被标记为 deferred |
 
-> **记录日志是旁路审计，不参与状态推导。** 折叠链（`LaneStateFolder` /
+> token 用量记账已在包 12（D6）改为一等 **`Entry.Usage`**，LaneRecord 不再有
+> UsageRecord 变体。**记录日志是旁路审计，不参与状态推导。** 折叠链（`LaneStateFolder` /
 > `RecordLogValidator`）已退休，`原 docs/30` 明文禁止从记录反推状态；恢复时记录被原样载入，
 > 车道回到**空闲**，队列**为空**（队列是进程内的，崩溃即丢）。
 > 恢复的上下文由 `seedTranscript` 负责 —— 它是「用日志重建工作副本」的那条路径。
@@ -726,302 +727,82 @@ final class FileMutationQueue {
 内置工具在 `com.pijava.agent.tool.builtin`：`BashTool` / `ReadTool` / `WriteTool` /
 `EditTool` / `GlobTool` / `GrepTool` / `LsTool`（另有 `EditDiff` / `LineDiff` 供 diff 渲染，
 `FileMutationQueue` 供串行化）。每个工具**自带参数校验**，没有集中的 options record
-—— 需要开关时由 `ToolSetFactory` 的构造参数与 `HarnessConfig.activeTools` 决定。
+—— 需要开关时由 `ToolSetFactory` 的构造参数决定启用集。
+
+---
+
 ## 3. `pi-java-tui` 模块详细设计
 
-> **核心决策**：`pi-java-tui` 不重新发明终端渲染引擎。它直接构建在 [TamboUI](https://tamboui.dev/) 之上——TamboUI 提供差量渲染、Widget 树、CSS 样式、焦点管理和键盘处理，`pi-java-tui` 负责 AI 编码代理场景的业务组件和主题定制。
+> **核心决策**：不自造终端渲染引擎，构建在 TamboUI 之上 —— ToolkitRunner
+> 渲染循环、Element 组件树（Column 等）、StyleEngine 样式、终端事件
+> （KeyEvent/MouseEvent/…）均由 TamboUI 提供；`pi-java-tui` 只写业务组件、
+> 事件接线与主题。终端后端（panama/jline）经 `util` 的 NoMode2027 shim 选择。
 
-### 3.1 为什么选择 TamboUI
-
-| 原因 | 说明 |
-|------|------|
-| **源自 Ratatui** | TamboUI 的设计直接继承自 Rust 的 Ratatui——Claude CLI 使用的 TUI 库，在 AI 编码代理场景已得到验证 |
-| **三层 API** | Immediate Mode → TuiRunner → Toolkit DSL，按需选择抽象层级 |
-| **Panama/FFM 后端** | 与 JDK 25 Foreign Function API 目标一致，零 JNI 开销 |
-| **GraalVM 原生支持** | 官方支持编译到 ~10MB 原生二进制，与我们的分发方案一致 |
-| **MIT 许可证** | 与 pi-java 一致 |
-
-### 3.2 模块结构
+### 3.1 包结构（以代码为准）
 
 ```
 com.pijava.tui/
-├── theme/                     ← TCSS 主题
-│   ├── pi-dark.tcss           ← 默认暗色主题
-│   ├── pi-light.tcss          ← 亮色主题
-│   └── PiTheme.java           ← 主题管理器（加载/切换）
-├── component/                 ← 业务组件（基于 TamboUI Toolkit DSL）
-│   ├── ChatPanel.java         ← 聊天气泡列表
-│   ├── MessageBubble.java     ← 单条消息（user / assistant / tool）
-│   ├── ToolCallCard.java      ← 工具调用卡片（名称 + 参数 + 状态）
-│   ├── DiffView.java          ← Diff 渲染组件
-│   ├── StatusBar.java         ← 底部状态栏（模型、tokens、会话名）
-│   ├── SessionBrowser.java    ← 会话选择器
-│   ├── MarkdownRenderer.java  ← Markdown → TamboUI Widget 转换
-│   └── EditorComponent.java   ← 多行输入编辑器（委托 TamboUI）
-├── screen/                    ← 屏幕定义
-│   ├── ChatScreen.java        ← 主聊天界面
-│   ├── SessionListScreen.java ← 会话列表
-│   └── SettingsScreen.java    ← 设置页
-├── app/                       ← 应用壳
-│   └── PiTuiApp.java          ← 主 TuiRunner 入口，全局事件循环
+├── app/                      ← 应用壳
+│   ├── PiTuiApp.java         ← 渲染循环：每帧排空跨线程事件、全局快捷键、
+│   │                            驱动 InteractiveMode、模态 overlay、滚动
+│   ├── PiTuiEntryPoint.java  ← main 入口装配
+│   ├── PiTuiLauncher.java    ← 启动/会话切换装配
+│   └── SessionEventChannel.java  ← 会话事件订阅通道
+├── screen/                   ← 屏幕与模态
+│   ├── ChatScreen.java       ← 主屏幕（见 3.2）
+│   ├── ModelSelectorScreen.java
+│   ├── SessionListScreen.java
+│   ├── TreeSelectorScreen.java
+│   ├── SettingsScreen.java
+│   ├── ScreenOverlay.java    ← overlay 基类
+│   └── WelcomeOverlay.java
+├── component/                ← 业务组件
+│   ├── ChatPanel.java  ChatViewportElement.java  RenderRow.java
+│   ├── MessageBubble.java  ChatMessage.java  MetaKind.java
+│   ├── EditorComponent.java  EditorWordNav.java
+│   ├── LogicalLine.java  KillRing.java
+│   ├── SlashCompleter.java  SelectList.java  KeybindingHints.java
+│   ├── StatusBar.java  StatusIndicator.java
+│   ├── ToolCallCard.java  DiffView.java
+│   ├── FuzzyMatcher.java
+│   ├── MarkdownRenderer.java  SyntaxHighlighter.java  ← 未接线（B65）
+│   └── …
 └── util/
-    └── TamboUIAdapter.java    ← TamboUI 版本适配工具
+    ├── TuiEventDispatcher.java  ← 跨线程事件 → 渲染线程
+    ├── TamboUIAdapter.java      ← TamboUI API 隔离层
+    ├── TextLayout.java
+    ├── ScrollbackTranscript.java  ScrollConfig.java
+    ├── ScrollInputNormalizer.java  ScrollUpdate.java
+    ├── InlineRenderContext.java  InlineTuiShell.java  CountdownWake.java
+    ├── EditorElement.java
+    ├── NoMode2027Backend.java  NoMode2027JLineBackend.java  ← 后端 shim
+    └── …
 ```
 
-### 3.3 核心业务组件设计
+另在 `src/main/java/dev/tamboui/tui/event/EventParser.java` 等位置有少量
+**包内覆写**（TamboUI same-package 覆写点，属例外登记）。
+主题资源：`resources/themes/pi-dark.tcss`、`pi-light.tcss`（StyleEngine 加载）。
 
-```java
-// ─── 聊天气泡 ─────────────────────────────────────────
-public class MessageBubble {
-    /** 将内部 Message 转换为 TamboUI Widget 树 */
-    public static Widget of(ChatMessage msg) {
-        return switch (msg) {
-            case ChatMessage.User(var text) -> panel(
-                markupText(text)
-            ).cyan().rounded();
+### 3.2 ChatScreen
 
-            case ChatMessage.Assistant(var blocks) -> column(
-                blocks.stream().map(MessageBubble::renderBlock).toList()
-            );
+主聊天屏幕：转录视口（流式草稿也在视口内）＋ 编辑器 ＋ 状态栏。
 
-            case ChatMessage.ToolCall(var call) -> panel(
-                column(
-                    text("🔧 " + call.name()).bold(),
-                    text(truncate(call.arguments(), 200)).dim()
-                )
-            ).yellow().rounded();
+- 直接实现 coding-agent 的 **`StreamObserver` / `EntryObserver`**（没有额外的
+  MessageObserver 间接层）；所有变动经 `TuiEventDispatcher` 汇集到**渲染线程**
+- 持有唯一一个 **`StatusIndicator`** 指示器槽（pi activeStatusIndicator）：
+  压缩/重试时显示、结束即清；倒计时唤醒来自独立线程（volatile 承载）
+- assistantDraft/thinkingDraft 累积流式草稿；提交时乐观显示的 user 文本在
+  转录条目落定后做去重匹配，不重复渲染
+- 状态栏数据来自 agent-core 的 **`SessionSnapshot`**（name/model/统计等）
 
-            case ChatMessage.ToolResult(var result) -> panel(
-                markupText(truncate(result.output(), 500))
-            ).green().rounded();
+### 3.3 边界与已知问题
 
-            case ChatMessage.Error(var err) -> panel(
-                markupText("[red]" + err.message() + "[/]")
-            ).red().rounded();
-        };
-    }
-}
-
-// ─── 主聊天面板 ──────────────────────────────────────
-public class ChatPanel {
-    private final ScrollView scrollView;
-    private final List<Widget> messages = new ArrayList<>();
-
-    public Widget render() {
-        return scrollView(
-            column(messages)
-        ).fill();
-    }
-
-    public void append(ChatMessage msg) {
-        messages.add(MessageBubble.of(msg));
-    }
-}
-
-// ─── 编辑器组件（委托 TamboUI TextArea）───────────────
-public class EditorComponent {
-    private final TamboInputWidget inputWidget;   // TamboUI 原生输入组件
-
-    public EditorComponent() {
-        this.inputWidget = TamboUI.createTextArea(
-            TextAreaConfig.builder()
-                .multiLine(true)
-                .placeholder("Type your message...")
-                .maxHeight(10)
-                .build()
-        );
-    }
-
-    /** 渲染：直接委托给 TamboUI 的输入组件 */
-    public Widget render() {
-        return panel(
-            inputWidget.render()
-        ).borderColor(Color.CYAN);
-    }
-
-    /** 注册提交回调 */
-    public void onSubmit(Consumer<String> handler) {
-        inputWidget.onSubmit(handler);
-    }
-
-    /** 获取当前文本 */
-    public String getText() {
-        return inputWidget.getText();
-    }
-
-    /** 清空输入 */
-    public void clear() {
-        inputWidget.clear();
-    }
-}
-
-// ─── StatusBar（使用 SessionSnapshot 接口）────────────
-public class StatusBar {
-    public Widget render(SessionSnapshot snapshot) {
-        return row(
-            text(" " + snapshot.name()).dim(),
-            spacer().fill(),                      // ← TamboUI Flex 填充
-            text("⚡ " + snapshot.totalTokens() + " tokens").dim(),
-            text(" | "),
-            text(snapshot.model()).dim()          // ← 从 SessionSnapshot 取值
-        ).length(1);  // 固定高度 1 行
-    }
-}
-```
-
-### 3.4 主题系统
-
-```css
-/* resources/themes/pi-dark.tcss — 默认暗色主题 */
-
-Screen {
-    background: #1a1b26;    /* Tokyo Night 色板 */
-}
-
-ChatPanel {
-    padding: 1 2;
-}
-
-MessageBubble.user {
-    border-color: #7aa2f7;   /* 蓝色边框 */
-    background: #24283b;
-}
-
-MessageBubble.assistant {
-    border-color: #9ece6a;   /* 绿色边框 */
-    background: #1f2335;
-}
-
-ToolCallCard {
-    border-color: #e0af68;   /* 黄色边框 */
-}
-
-StatusBar {
-    background: #16161e;
-    foreground: #565f89;
-}
-
-EditorComponent {
-    border-color: #7dcfff;
-    background: #1f2335;
-}
-```
-
-```java
-// 运行时主题切换
-public class PiTheme {
-    private static final String DARK  = "themes/pi-dark.tcss";
-    private static final String LIGHT = "themes/pi-light.tcss";
-
-    public static void applyDark(TuiRunner runner) {
-        runner.loadCss(PiTheme.class.getClassLoader().getResource(DARK));
-    }
-
-    public static void applyLight(TuiRunner runner) {
-        runner.loadCss(PiTheme.class.getClassLoader().getResource(LIGHT));
-    }
-}
-```
-
-### 3.5 应用壳 — TuiRunner 入口
-
-> **设计要点**：`PiTuiApp` 不直接依赖 `AgentSession`（消除循环依赖）。`ChatScreen` 通过 `MessageObserver` 回调接口接收消息，由 coding-agent 模块注入。
-
-```java
-// ─── 消息观察者接口（解耦 TUI 和 coding-agent）─────────
-@FunctionalInterface
-public interface MessageObserver {
-    void onMessage(ChatMessage message);
-}
-
-// ─── ChatScreen — 接收消息的回调接口 ──────────────────
-public class ChatScreen {
-    private final ChatPanel chatPanel;
-    private final EditorComponent editor;
-    private final List<MessageObserver> observers = new ArrayList<>();
-
-    /** 注册消息观察者（由 coding-agent 注入） */
-    public void addMessageObserver(MessageObserver observer) {
-        observers.add(observer);
-    }
-
-    /** 收到新消息时回调所有观察者 */
-    public void receiveMessage(ChatMessage message) {
-        chatPanel.append(message);
-    }
-
-    public Widget render() {
-        return column(
-            chatPanel.render().fill(),
-            editor.render()
-        );
-    }
-
-    public void onKeyEvent(KeyEvent event) {
-        // 委托给当前焦点组件
-    }
-}
-
-// ─── PiTuiApp — 不持有 AgentSession ───────────────────
-public class PiTuiApp implements TuiApp {
-    private final ChatScreen chatScreen;
-    private boolean running = true;
-
-    public PiTuiApp(ChatScreen chatScreen) {
-        this.chatScreen = chatScreen;
-    }
-
-    @Override
-    public Widget root() {
-        // 组合：主聊天区 + 底部状态栏
-        return column(
-            chatScreen.render().fill(),
-            StatusBar.render(chatScreen.currentSnapshot())
-        );
-    }
-
-    @Override
-    public void onKeyEvent(KeyEvent event) {
-        // 全局快捷键
-        if (event.matches(KeyCode.ESC)) {
-            running = false;
-            return;
-        }
-        if (event.matches('s', Modifier.CTRL)) {
-            chatScreen.toggleSessionBrowser();
-            return;
-        }
-        // 委托给当前焦点组件
-        chatScreen.onKeyEvent(event);
-    }
-
-    @Override
-    public boolean isRunning() {
-        return running;
-    }
-}
-
-// ─── SessionSnapshot — TUI 层读取的状态快照 ───────────
-public interface SessionSnapshot {
-    String name();
-    String model();
-    String phase();
-    long totalTokens();
-    int turnCount();
-    List<String> activeTools();
-}
-```
-
-### 3.6 TamboUI 版本锁定策略
-
-当前 TamboUI 版本为 **0.3.0**（实验阶段），API 可能变动。应对措施：
-
-- 使用 Maven `dependencyManagement` 锁定精确版本
-- `TamboUIAdapter` 工具类封装直接依赖的 TamboUI API，作为隔离层
-- CI 中加入 TamboUI 版本升级的专项测试
-- 关注 [tamboui.dev](https://tamboui.dev/) 的版本发布和迁移指南
-
----
+- **Markdown 渲染未接线**：`MarkdownRenderer`/`SyntaxHighlighter` 是死代码，
+  助手消息走 `MessageBubble`＋`TextLayout` 纯文本；「接线还是删声明」＝台账 B65
+- TUI 其它已知缺口（压缩后不重建聊天区 B38、压缩窗口 Esc 换绑 B39、
+  tool_execution_update 不发射 B46、fuzzy 语义 B78 等）见 docs/04
+- TamboUI 版本由 BOM/dependencyManagement 锁定，升级走 `TamboUIAdapter`
+  隔离面与专项验证
 
 ## 4. `pi-java-coding-agent` 模块详细设计
 
@@ -1057,7 +838,9 @@ public final class AgentSession implements AutoCloseable {
     public void abort();
     public String steer(String prompt);        // 注入当前运行的下一轮
     public String followUp(String prompt);     // 当前运行结束后处理
-    public void compact(CompactionSettings settings);
+    /** 手动压缩；无 custom ⇒ 便捷重载。返回压缩结果。 */
+    public CompactionResult compact(CompactionSettings settings);
+    public CompactionResult compact(CompactionSettings settings, String customInstructions);
     public String lastAssistantText();         // /copy
 
     // ── 自动重试（RPC 末批命令）──────────────────────────────
@@ -1121,7 +904,7 @@ public record SessionServices(
 
 ### 4.2 CLI 入口
 
-对齐 pi 的约 40 个参数 + 7 个子命令：
+对齐 pi 的约 40 个参数及多个子命令（以 ArgsParser 为准）：
 
 ```java
 public final class Main {
@@ -1282,33 +1065,35 @@ public record Args(
 
 ### 4.3 内置 Slash 命令
 
-pi 提供 23 个内置斜杠命令，在交互式会话中输入 `/` 触发：
+`CommandRegistry.withBuiltins()` 注册 **24 个**内置斜杠命令（以代码为准；下表与
+SlashCommandTest 一致）：
 
-| # | 命令 | 功能 |
-|---|------|------|
-| 1 | `/add-dir` | 将目录添加到工作区上下文 |
-| 2 | `/agents` | 管理子代理（创建、查看、终止） |
-| 3 | `/clear` | 清除当前会话历史 |
-| 4 | `/compact` | 手动触发上下文压缩 |
-| 5 | `/config` | 查看或修改配置项 |
-| 6 | `/context` | 显示当前上下文窗口使用量 |
-| 7 | `/cost` | 显示当前会话的 token 费用统计 |
-| 8 | `/doctor` | 诊断环境问题（网络、权限、依赖） |
-| 9 | `/export` | 导出当前会话到文件 |
-| 10 | `/fork` | 从当前点分叉一个子会话 |
-| 11 | `/help` | 显示所有可用命令的帮助 |
-| 12 | `/ide` | 在外部 IDE 中打开当前文件或项目 |
-| 13 | `/init` | 初始化项目的 CLAUDE.md / AGENTS.md |
-| 14 | `/memory` | 管理持久记忆（写入、查看、删除） |
-| 15 | `/model` | 切换当前模型 |
-| 16 | `/namespace` | 管理命名空间（切换、创建） |
-| 17 | `/plan` | 创建或执行计划 |
-| 18 | `/review` | 请求对当前变更的代码审查 |
-| 19 | `/session` | 会话管理（重命名、切换、查看） |
-| 20 | `/skills` | 列出和管理已注册 skills |
-| 21 | `/status` | 显示当前代理状态 |
-| 22 | `/theme` | 切换 TUI 主题 |
-| 23 | `/tools` | 管理激活的工具集 |
+| 命令 | 功能 | 参数提示 |
+|------|------|------|
+| `/help` | 显示命令与快捷键 | |
+| `/settings` | 打开设置 | |
+| `/model` | 选择模型 | |
+| `/scoped-models` | 启用/停用 Ctrl+P 循环模型 | `always\|never\|ask` |
+| `/export` | 导出为 HTML 或 JSONL | `<path>` |
+| `/import` | 从 JSONL 导入会话 | `<file>` |
+| `/share` | 作为 GitHub gist 分享 | |
+| `/copy` | 复制最后一条助手消息 | |
+| `/name` | 设置会话显示名 | `<name>` |
+| `/session` | 显示会话信息与统计 | |
+| `/changelog` | 显示 changelog | |
+| `/hotkeys` | 显示全部键盘快捷键 | |
+| `/fork` | 从历史 user 消息分叉 | |
+| `/clone` | 在当前位置克隆会话 | |
+| `/tree` | 浏览会话树 | |
+| `/trust` | 保存项目信任决定 | |
+| `/login` | 配置 provider 凭证 | `<provider>` |
+| `/logout` | 移除 provider 凭证 | `<provider>` |
+| `/new` | 开始新会话 | |
+| `/compact` | 手动压缩上下文 | `<text>`（customInstructions） |
+| `/resume` | 恢复另一个会话 | `[session-id]` |
+| `/reload` | 重载设置与键位 | |
+| `/quit` | 退出 | |
+| `/create-skill` | 让 AI 生成技能（SKILL.md） | |
 
 命令实现基于 `CommandRegistry` 注册模式：
 
@@ -1316,443 +1101,143 @@ pi 提供 23 个内置斜杠命令，在交互式会话中输入 `/` 触发：
 public interface SlashCommand {
     String name();
     String description();
-    String usage();                         // 用法提示
+    String argumentHint();
 
-    /** 执行命令，返回执行结果文本 */
+    /** 执行命令，返回结果文本 */
     CompletionStage<String> execute(String args, SlashContext context);
 }
 
-public class CommandRegistry {
-    private final Map<String, SlashCommand> commands = new ConcurrentHashMap<>();
+public final class CommandRegistry {
+    private final ConcurrentMap<String, SlashCommand> commands = new ConcurrentHashMap<>();
 
     public void register(SlashCommand cmd) {
         commands.put(cmd.name(), cmd);
     }
 
-    public void unregister(String name) {
-        commands.remove(name);
-    }
-
-    /** 匹配并执行命令。返回 null 表示未匹配到命令。 */
+    /** 匹配并执行。非 "/" 开头或未注册 ⇒ null（调用方按普通 prompt 处理）。 */
     public CompletionStage<String> dispatch(String input, SlashContext context) {
-        if (!input.startsWith("/")) return null;
+        if (input == null || !input.startsWith("/")) return null;
         var parts = input.substring(1).split("\\s+", 2);
         var cmd = commands.get(parts[0]);
-        if (cmd == null) return null;
-        var args = parts.length > 1 ? parts[1] : "";
-        return cmd.execute(args, context);
+        if (cmd == null) {
+            return CompletableFuture.completedFuture(
+                "Unknown command: /" + parts[0]);
+        }
+        return cmd.execute(parts.length > 1 ? parts[1] : "", context);
     }
 
-    public Set<String> registeredNames() {
-        return Collections.unmodifiableSet(commands.keySet());
-    }
+    public static CommandRegistry withBuiltins() { /* 注册上述 24 个 */ }
 }
 ```
 
 ---
 
-## 5. JSONL v4 存储格式
+## 5. JSONL 会话存储格式（pi v3）
 
-> 对齐 pi 的 harness 层 v4 JSONL 格式。不使用 `index.json` 或 `.lock` 文件；写安全通过内存 tail-promise 串行化保证。
+> 磁盘格式对齐 **pi 主流会话格式 v3**（pi `session-manager.ts:41` CURRENT_SESSION_VERSION=3）。
+> 本仓早期自造的 `{kind:"header",version:4}` 格式在读入时**惰性迁移**为 v3；
+> 不使用 `index.json` 或 `.lock` 文件。编解码代码：`JsonlCodec`/`PiV3Wire`/`SessionJson`。
 
 ### 5.1 文件布局
 
 ```
 ~/.pi-java/agent/sessions/
-└── <encoded-cwd>/                       ← cwd 的 URL-safe Base64 编码
-    └── <timestamp>_<id>.jsonl           ← 创建时间 + UUID v7
+└── <encoded-cwd>/                       ← cwd 的编码目录名
+    └── <timestamp>_<id>.jsonl           ← 创建时间戳 + id
 ```
 
-- 目录按 `cwd` 分组，方便按项目查找会话
-- 文件名包含时间戳前缀，`ls` 即可按时间排序
-- 无 `index.json`——会话信息通过扫描 JSONL header 行构建
+- 目录按 `cwd` 分组，按项目查找只需扫一个目录
+- 文件名带时间戳前缀，`ls` 即按时间排序
+- 无 `index.json` —— 会话信息通过扫描首行 header 构建
 
 ### 5.2 行格式
 
-每行是一个独立的 JSON 对象，以 `\n` 结尾。四种 `kind`：
-
-**Header（文件首行，有且仅有一行）**：
+每行一个独立 JSON 对象、以 `\n` 结尾。文件首行是 header（有且仅有一行）：
 
 ```json
-{"kind":"header","version":4,"id":"01J5X...","timestamp":"2026-08-10T10:00:00Z","cwd":"/home/user/project","parent_session":null}
+{"type":"session","version":3,"id":"01J5X...","timestamp":"2026-10-04T10:00:00.000Z","cwd":"/home/user","parentSession":"01J5W..."}
 ```
 
-**Entry mutation（用户可见事件）**：
+- 六个键：`type`（判别值 `"session"`）、`version`、`id`、`timestamp`（ISO-8601，
+  三位毫秒，等价 JS `new Date().toISOString()`）、`cwd`、`parentSession`（可缺）
+- pi 靠 `type === "session"` 找头；缺头时 pi 静默新建空会话，故本仓写头必带此键
 
-```json
-{"kind":"entry","lane":"main","id":"01J5Y...","type":"message","parent_id":"01J5X...","payload":{"role":"user","blocks":[{"type":"text","text":"fix the login bug"}]}}
-{"kind":"entry","lane":"main","id":"01J5Z...","type":"model_change","parent_id":"01J5Y...","payload":{"provider":"anthropic","model_id":"claude-sonnet-4-20250514"}}
-{"kind":"entry","lane":"main","id":"01J6A...","type":"compaction","parent_id":"01J5Z...","payload":{"reason":"overflow","entries_before":120,"entries_after":45}}
-{"kind":"entry","lane":"main","id":"01J6B...","type":"branch_summary","parent_id":"01J6A...","payload":{"summary":"Implemented login fix: updated auth middleware..."}}
-```
+其后每行是一条**扁平行**（pi 的 `SessionEntryBase`：`type`/`id`/`parentId`/`timestamp`
+＋变体载荷；无 `seq`、无包装层）。pi 的条目型（本仓均可读写）：
 
-**Record mutation（车道内部记录）**：
+| type | 载荷要点 |
+|---|---|
+| `message` | `role` ＋ `content`（块数组） |
+| `thinking_level_change` | `level`（可空） |
+| `model_change` | `provider`/`modelId`（等） |
+| `usage` | 9 个 usage 键 |
+| `compaction` | `summary`、`firstKeptEntryId`、`tokensBefore`、`usage`、`details` |
+| `branch_summary` | 分支摘要文本 |
+| `context_edit` | `targetId` ＋ `replacement`（可显式 null） |
+| `custom_message`/`custom` | 扩展私有内容/状态，不进 LLM 上下文 |
+| `session_info`/`label` | 会话名/条目标签 |
 
-```json
-{"kind":"record","lane":"main","id":"01J6C...","run_id":"run-001","type":"operation_started","intent":"fix login bug"}
-{"kind":"record","lane":"main","id":"01J6D...","run_id":"run-001","type":"step_attempt","step_index":1,"input_tokens":4500,"output_tokens":230}
-{"kind":"record","lane":"main","id":"01J6E...","run_id":"run-001","type":"tool_started","tool_call_id":"toolu_01...","tool_name":"read","arguments":{"path":"/src/auth.ts"}}
-{"kind":"record","lane":"main","id":"01J6F...","run_id":"run-001","type":"queue_enqueued","queue_type":"steer","content":"Check the error logs"}
-```
-
-**Lane mutation（车道元数据）**：
-
-```json
-{"kind":"lane","seq":1,"lane":"main","leaf_id":"01J5Y..."}
-{"kind":"lane","action":"create","lane":"review","at":"01J5Z..."}
-{"kind":"lane","action":"move","lane":"review","to":"01J6A..."}
-```
-
-**Fact mutation（持久化键值对）**：
-
-```json
-{"kind":"fact","seq":1,"fact":"session.name","value":"fix-login-bug"}
-{"kind":"fact","seq":2,"fact":"model.default","value":"claude-sonnet-4-20250514"}
-```
-
-> ⚠️ **上面这段是 Phase 1 的早期草图，已与实现脱节**（2026-09-18 逐条核对）。实际编解码以
-> `JsonlCodec` / `EntryJsonCodec` / `SessionJson` 为准，差异如下：
-> header 用 `createdAt`（非 `timestamp`）与 `parentSessionId`（非 `parent_session`）；
-> entry 用 `parentId` / `timestamp` / `message`（非 `parent_id` / `payload:{role,blocks}`），
-> 消息内容是**扁平**的块数组 `content`；record 的 `intent` 是**对象**且必带 `kind`
-> （`run`/`compaction`/`navigation`，非字符串）；lane 只有 `{seq,lane,leafId}`
-> （没有 `action:create`/`action:move`）；fact 是 `{fact:"name"|"label", name|label, targetId}`
-> （非 `{fact:"session.name", value}`）。
-> 内容块键名另见 `原 docs/31 §8.33`：thinking 块的文本字段是 `thinking`（不是 `text`）。
+**本仓多 lane 模型的扩展承载**（pi 侧未知键照读）：`lane` 字段作为「pi 忽略的扩展键」
+保留在消息行上（SessionState 靠它更新车道叶指针）；本仓内部的 lane/审计记录经
+`custom` 行承载（`customType: "pi-java.lane"` ／ `"pi-java.record.<type>"`），
+不进 pi 的 LLM 上下文。行内**无 seq**——顺序由行号重建。
 
 ### 5.3 分支语义
 
-分支通过 `SessionRepository.fork()` 创建，不是简单的文件复制：
-
-1. 创建新 JSONL 文件，header 中设置 `"parent_session": "<source-id>"`
-2. 新文件从空开始，但存储层维护 `BranchBounds` 以支持 `findEntriesOnBranch()` 跨文件查询父会话
-3. SQLite 后端通过 `branch_cache` 表加速分支边界查找
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant Repo as SessionRepository
-    participant Storage as JsonlSessionStorage
-
-    User->>Repo: fork(source, ForkOptions("01J6A...", "try-fix"))
-    Repo->>Storage: 记录分支点（source, at=01J6A...）
-    Repo->>Storage: 创建新 JSONL，parent_session = source.id
-    Repo-->>User: 返回新 Session 句柄
-```
+分支通过 `SessionRepository` 的 fork/clone 创建：新会话是**独立文件**，header 上以
+`parentSession` 指向来源 id；会话本身只含新分支写入的行，跨会话查询由仓库层完成。
 
 ### 5.4 并发安全
 
-- **JSONL 写入**：通过内存 tail-promise 串行化——每个 JSONL 文件在内存中维护一个写入 Promise 链，保证追加有序
-- **JSONL 读取**：无需加锁（追加写不影响已写入的行；崩溃只会导致最后一行不完整，读取时截断最后一行）
-- **无文件锁**：pi 不使用 `.lock` 文件；写串行化由应用层保证，不是文件系统锁
-- **崩溃恢复**：读取 JSONL 时，解析到最后一行不完整 JSON 则忽略该行（视为未提交）
+- **写入串行化**：每个文件在内存中维护写入链（append 顺序确定），不是文件系统锁
+- **读取无锁**：追加写不影响已写入的行
+- **崩溃恢复**：末行不完整/不可解析则忽略（视为未提交）
 
 ---
 
 ## 6. SQLite 后端
 
-> 对齐 pi 的 `packages/session-backends/sqlite-node`。SQLite 后端提供富查询、全文搜索和更强的并发控制。
+> **状态说明**：pi 的参照后端（`packages/session-backends`）已于 2026-10 整包删除，
+> 且从未进入 `bin pi`。本模块是**本仓独立设计**、与 pi schema 不对齐（换锚裁决，
+> 见 docs/04 §4）；作为可选持久后端保留，模块存废另行裁决。
+> DDL 唯一事实源：`pi-java-session-backend-sqlite/src/main/resources/sql/`
+> （`001_initial.sql`、`002_pi_identity.sql`）；下表只做清单，不复制 SQL。
 
-### 6.1 表结构（共 12 张表，对齐 pi 的 001_initial.sql）
+### 6.1 表结构（11 张表 + 1 张惰性 FTS5 虚表）
 
-```sql
--- ═══════════════════════════════════════════════════════
--- schema_version — 数据库版本追踪
--- ═══════════════════════════════════════════════════════
-CREATE TABLE schema_version (
-    version     INTEGER PRIMARY KEY,
-    applied_at  TEXT NOT NULL DEFAULT (datetime('now'))
-);
+`001_initial.sql`：
 
--- ═══════════════════════════════════════════════════════
--- sessions — 会话元数据
--- ═══════════════════════════════════════════════════════
-CREATE TABLE sessions (
-    id              TEXT PRIMARY KEY,
-    created_at      TEXT NOT NULL,
-    updated_at      TEXT NOT NULL,
-    cwd             TEXT NOT NULL,
-    parent_session  TEXT REFERENCES sessions(id),
-    name            TEXT,
-    entry_count     INTEGER NOT NULL DEFAULT 0,
-    token_count     INTEGER NOT NULL DEFAULT 0,
-    last_entry_id   TEXT
-);
-CREATE INDEX idx_sessions_cwd ON sessions(cwd);
-CREATE INDEX idx_sessions_parent ON sessions(parent_session);
+| 表 | 用途 |
+|---|---|
+| `sessions` | 会话行（id/created_at/cwd/parent_session_id/metadata），WITHOUT ROWID |
+| `entries` | 条目载荷（按 session 分区、seq 排序），id 与 seq 各一键 |
+| `session_sequences` | 每会话 next_seq |
+| `session_stats` | 会话统计 |
+| `branch_entries` | 分支包含的条目（按 branch/entry） |
+| `branch_tips` | 分支叶指针 |
+| `lanes` | 车道元数据 |
+| `lane_moves` | 车道叶移动记录 |
+| `records` | 车道审计记录（operation/step 等） |
+| `facts` | name/label 等持久事实 |
+| `writer_leases` | 单写入者租约（见 6.2） |
 
--- ═══════════════════════════════════════════════════════
--- entries — 持久化事件（Entry）
--- ═══════════════════════════════════════════════════════
-CREATE TABLE entries (
-    id          TEXT PRIMARY KEY,
-    session_id  TEXT NOT NULL REFERENCES sessions(id),
-    lane        TEXT NOT NULL DEFAULT 'main',
-    seq         INTEGER NOT NULL,
-    parent_id   TEXT,
-    type        TEXT NOT NULL,       -- "message" | "model_change" | ...
-    timestamp   TEXT NOT NULL,
-    payload     TEXT NOT NULL        -- JSON blob
-);
-CREATE INDEX idx_entries_session ON entries(session_id, seq);
-CREATE INDEX idx_entries_lane ON entries(lane, seq);
-CREATE INDEX idx_entries_type ON entries(session_id, type);
+`002_pi_identity.sql`：给 `records`/`lane_moves`/`facts` 补 `parent_id`/`timestamp`
+列（pi 条目基线必填；历史行 NULL，读侧兼容）。
 
--- ═══════════════════════════════════════════════════════
--- lane_records — 车道内部记录（LaneRecord）
--- ═══════════════════════════════════════════════════════
-CREATE TABLE lane_records (
-    id          TEXT PRIMARY KEY,
-    session_id  TEXT NOT NULL REFERENCES sessions(id),
-    lane        TEXT NOT NULL DEFAULT 'main',
-    seq         INTEGER NOT NULL,
-    type        TEXT NOT NULL,       -- "operation_started" | "tool_started" | ...
-    timestamp   TEXT NOT NULL,
-    payload     TEXT NOT NULL        -- JSON blob
-);
-CREATE INDEX idx_records_session ON lane_records(session_id, seq);
-CREATE INDEX idx_records_lane ON lane_records(lane, seq);
+### 6.2 Writer Leases 写租约
 
--- ═══════════════════════════════════════════════════════
--- lanes — 车道定义
--- ═══════════════════════════════════════════════════════
-CREATE TABLE lanes (
-    session_id  TEXT NOT NULL REFERENCES sessions(id),
-    name        TEXT NOT NULL,
-    leaf_id     TEXT,
-    created_at  TEXT NOT NULL,
-    PRIMARY KEY (session_id, name)
-);
-
--- ═══════════════════════════════════════════════════════
--- facts — 持久化键值对
--- ═══════════════════════════════════════════════════════
-CREATE TABLE facts (
-    session_id  TEXT NOT NULL REFERENCES sessions(id),
-    seq         INTEGER NOT NULL,
-    fact        TEXT NOT NULL,
-    value       TEXT NOT NULL,
-    PRIMARY KEY (session_id, fact)
-);
-
--- ═══════════════════════════════════════════════════════
--- checkpoints — 快照检查点
--- ═══════════════════════════════════════════════════════
-CREATE TABLE checkpoints (
-    id          TEXT PRIMARY KEY,
-    session_id  TEXT NOT NULL REFERENCES sessions(id),
-    entry_id    TEXT NOT NULL,        -- 检查点对应的 entry id
-    created_at  TEXT NOT NULL,
-    data       TEXT NOT NULL         -- 序列化状态 JSON
-);
-CREATE INDEX idx_checkpoints_session ON checkpoints(session_id, created_at);
-
--- ═══════════════════════════════════════════════════════
--- writer_leases — 写租约（并发控制）
--- ═══════════════════════════════════════════════════════
-CREATE TABLE writer_leases (
-    session_id  TEXT PRIMARY KEY REFERENCES sessions(id),
-    writer_id   TEXT NOT NULL,        -- 写入者唯一标识（host + pid）
-    acquired_at TEXT NOT NULL,
-    expires_at  TEXT NOT NULL,        -- acquired_at + TTL（30s）
-    heartbeat_at TEXT NOT NULL        -- 最后心跳时间
-);
-
--- ═══════════════════════════════════════════════════════
--- branch_cache — 分支边界缓存
--- ═══════════════════════════════════════════════════════
-CREATE TABLE branch_cache (
-    session_id      TEXT NOT NULL REFERENCES sessions(id),
-    branch_point    TEXT NOT NULL,    -- 分支点的 entry id
-    parent_session  TEXT NOT NULL REFERENCES sessions(id),
-    PRIMARY KEY (session_id)
-);
-
--- ═══════════════════════════════════════════════════════
--- tools_cache — 工具元数据缓存
--- ═══════════════════════════════════════════════════════
-CREATE TABLE tools_cache (
-    name            TEXT PRIMARY KEY,
-    description     TEXT NOT NULL,
-    parameters      TEXT NOT NULL,    -- JSON Schema
-    prompt_snippet  TEXT,
-    updated_at      TEXT NOT NULL
-);
-
--- ═══════════════════════════════════════════════════════
--- models_cache — 模型目录缓存
--- ═══════════════════════════════════════════════════════
-CREATE TABLE models_cache (
-    provider    TEXT NOT NULL,
-    model_id    TEXT NOT NULL,
-    display_name TEXT,
-    capabilities TEXT,               -- JSON array
-    pricing     TEXT,                -- JSON
-    updated_at  TEXT NOT NULL,
-    PRIMARY KEY (provider, model_id)
-);
-
--- ═══════════════════════════════════════════════════════
--- settings — 持久化设置
--- ═══════════════════════════════════════════════════════
-CREATE TABLE settings (
-    key         TEXT PRIMARY KEY,
-    value       TEXT NOT NULL,
-    updated_at  TEXT NOT NULL
-);
-```
-
-### 6.2 Writer Leases 写租约设计
-
-SQLite 后端支持多进程并发读、单写入者写入。写入控制通过 `writer_leases` 表实现：
-
-| 参数 | 值 | 说明 |
-|------|----|------|
-| TTL | 30s | 租约有效期 |
-| 心跳间隔 | 10s | 写入者定期续约 |
-| 租约超时处理 | 抢占 | 其他写入者可抢占过期租约 |
-
-```java
-// 获取写租约
-public boolean acquireWriterLease(String sessionId, String writerId) {
-    var now = Instant.now();
-    return db.execute("""
-        INSERT INTO writer_leases (session_id, writer_id, acquired_at, expires_at, heartbeat_at)
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(session_id) DO UPDATE SET
-            writer_id = excluded.writer_id,
-            acquired_at = excluded.acquired_at,
-            expires_at = excluded.expires_at,
-            heartbeat_at = excluded.heartbeat_at
-        WHERE writer_leases.expires_at < ?
-        """, sessionId, writerId, now, now.plusSeconds(30), now, now);
-}
-
-// 心跳续约
-public void heartbeat(String sessionId, String writerId) {
-    db.execute("""
-        UPDATE writer_leases
-        SET heartbeat_at = ?, expires_at = ?
-        WHERE session_id = ? AND writer_id = ?
-        """, Instant.now(), Instant.now().plusSeconds(30), sessionId, writerId);
-}
-
-// 释放租约
-public void releaseWriterLease(String sessionId, String writerId) {
-    db.execute("""
-        DELETE FROM writer_leases
-        WHERE session_id = ? AND writer_id = ?
-        """, sessionId, writerId);
-}
-```
+多读者、单写入者。`writer_leases (session_id PK, owner_id, fence, expires_at_ms)`：
+持有者靠 fence 序数防过期写入、按 `expires_at_ms` 判定抢占；过期租约可被其他
+写入者夺取。机制代码在 sqlite 包（`WriterLeaseRows` 等），参数以代码为准。
 
 ### 6.3 FTS5 全文搜索
 
-使用 SQLite FTS5 扩展对消息内容建立全文索引。
+`SqliteSessionSearch` 在首次搜索时**惰性建**虚表 `session_search_fts USING fts5(...)`
+（`001` 里没有它；无触发器，索引由搜索组件维护）。pi 没有任何搜索实现，
+此为本仓独有功能。
 
-```sql
--- FTS5 虚拟表
-CREATE VIRTUAL TABLE entries_fts USING fts5(
-    id UNINDEXED,
-    session_id UNINDEXED,
-    entry_id,
-    text_content,
-    content='entries',
-    content_rowid='rowid'
-);
+### 6.4 分支数据
 
--- 触发器：插入 entry 时自动更新 FTS
-CREATE TRIGGER entries_fts_insert AFTER INSERT ON entries
-WHEN NEW.type = 'message'
-BEGIN
-    INSERT INTO entries_fts (entry_id, text_content)
-    VALUES (NEW.id, json_extract(NEW.payload, '$.blocks[*].text'));
-END;
+分支的条目归属与叶指针分别由 `branch_entries`/`branch_tips` 承载（**没有**
+branch_cache 表）；跨分支查询读这两张表，不遍历父会话链。
 
-CREATE TRIGGER entries_fts_delete AFTER DELETE ON entries
-BEGIN
-    INSERT INTO entries_fts(entries_fts, entry_id, text_content)
-    VALUES ('delete', OLD.id, NULL);
-END;
-```
-
-查询接口：
-
-```java
-/** 跨会话全文搜索 */
-public List<FtsResult> search(String query, FtsOptions options) {
-    return db.query("""
-        SELECT e.session_id, e.id, e.timestamp, e.type,
-               snippet(entries_fts, 2, '<b>', '</b>', '...', 40) AS snippet
-        FROM entries_fts f
-        JOIN entries e ON e.id = f.entry_id
-        WHERE entries_fts MATCH ?
-        ORDER BY rank
-        LIMIT ?
-        """, query, options.limit());
-}
-
-public record FtsResult(
-    String sessionId, String entryId, Instant timestamp,
-    String type, String snippet
-) {}
-
-public record FtsOptions(int limit, String sessionId) {
-    public static FtsOptions defaults() { return new FtsOptions(50, null); }
-}
-```
-
-### 6.4 分支缓存
-
-`branch_cache` 表存储分支点映射，避免在 `findEntriesOnBranch()` 时递归遍历 JSONL 父链。
-
-```java
-/** 计算并缓存从分支点到父会话可见条目的范围 */
-public BranchBounds getBranchBounds(String sessionId) {
-    return db.query("""
-        SELECT b.branch_point, e.seq
-        FROM branch_cache b
-        JOIN entries e ON e.id = b.branch_point
-        WHERE b.session_id = ?
-        """, sessionId).map(row ->
-            new BranchBounds(
-                row.getString("branch_point"),
-                row.getLong("seq")
-            )
-        ).findFirst().orElse(null);
-}
-```
-
----
-
-## 7. 错误码体系
-
-```java
-public enum ErrorCode {
-    // 网络 (1xx)
-    NETWORK_TIMEOUT(101),
-    NETWORK_DNS_FAILURE(102),
-    NETWORK_CONNECTION_REFUSED(103),
-
-    // 认证 (2xx)
-    AUTH_MISSING_KEY(201),
-    AUTH_INVALID_KEY(202),
-    AUTH_OAUTH_EXPIRED(203),
-
-    // 模型 (3xx)
-    MODEL_NOT_FOUND(301),
-    MODEL_RATE_LIMITED(302),
-    MODEL_CONTEXT_TOO_LONG(303),
-    MODEL_CONTENT_FILTERED(304),
-
-    // 工具 (4xx)
-    TOOL_TIMEOUT(401),
-    TOOL_PERMISSION_DENIED(402),
-    TOOL_INVALID_ARGUMENTS(403),
-
-    // 会话 (5xx)
-    SESSION_NOT_FOUND(501),
-    SESSION_CORRUPTED(502),
-    SESSION_READ_ONLY(503);
-}
-```
