@@ -220,8 +220,11 @@ class CompactionServiceTest {
         // 自己估 —— 单测直接钉「原样携带」。
         var result = CompactionService.compact(entries,
             new CompactionSettings(true, 16_384, 1), generator, 42L);
-        assertThat(result.summary()).isEqualTo("## Goal\nx");
-        assertThat(result.firstKeptEntryId()).isNotNull();
+        // B171（docs/18）：切点是唯一的助手、其前有 user ⇒ split turn，历史为空
+        // 只发 turn-prefix 调用，pi 同样以 "No prior history." 前缀逐字合并。
+        assertThat(result.summary())
+            .isEqualTo("No prior history.\n\n---\n\n**Turn Context (split turn):**\n\n## Goal\nx");
+        assertThat(result.firstKeptEntryId()).isEqualTo("e2");
         assertThat(result.tokensBefore()).isEqualTo(42);
     }
 

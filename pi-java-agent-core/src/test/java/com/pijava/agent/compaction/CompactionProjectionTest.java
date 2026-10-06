@@ -32,6 +32,13 @@ class CompactionProjectionTest {
             seen.addAll(compressed);
             return new SummaryResult("summary", null);
         }
+
+        @Override
+        public SummaryResult summarizeTurnPrefix(List<Message> messages, int reserveTokens,
+                                                 String reason) {
+            seen.addAll(messages);
+            return new SummaryResult("prefix", null);
+        }
     }
 
     @Test

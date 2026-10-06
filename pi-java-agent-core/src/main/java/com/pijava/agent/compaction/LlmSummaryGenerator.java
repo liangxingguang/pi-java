@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
 import java.util.function.BooleanSupplier;
+import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
 import com.pijava.agent.harness.Context;
@@ -55,13 +56,34 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
         + "format. Do NOT continue the conversation. Do NOT respond to any questions "
         + "in the conversation. ONLY output the structured summary.";
 
+    /**
+     * pi {@code TURN_PREFIX_SUMMARIZATION_PROMPT}（{@code compaction.ts:942-956}）逐字。
+     */
+    private static final String TURN_PREFIX_SUMMARIZATION_PROMPT = """
+        The messages above are earlier context from an ongoing conversation. Later messages are stored separately and do not need to be reconstructed.
+
+        Create a concise checkpoint of the user's request and the progress shown above. This checkpoint will be placed before the later messages so the conversation can continue with the necessary context.
+
+        ## Original Request
+        [What did the user ask for?]
+
+        ## Progress So Far
+        - [Key decisions and work completed in these messages]
+
+        ## Context Needed to Continue
+        - [Information from these messages needed to understand the later work]
+
+        Only summarize information explicitly present above. Do not infer or recreate later messages.\
+        """;
+
     private final StreamFn streamFn;
     private final Supplier<ModelId<?>> model;
     private final Supplier<RetrySettings> retrySettings;
     private final BooleanSupplier retryAborted;
     private final RetryObserver retryObserver;
+    private final IntSupplier modelMaxOutputTokens;
 
-    /** 兼容构造（无重试装配）：默认设置、永不中止、NOOP 观察口。 */
+    /** 兼容构造（无重试装配）：默认设置、永不中止、NOOP 观察口、无模型上限。 */
     public LlmSummaryGenerator(StreamFn streamFn, Supplier<ModelId<?>> model) {
         this(streamFn, model, RetrySettings::defaults, () -> false, RetryObserver.NOOP);
     }
@@ -77,19 +99,33 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
                                Supplier<RetrySettings> retrySettings,
                                BooleanSupplier retryAborted,
                                RetryObserver retryObserver) {
+        this(streamFn, model, retrySettings, retryAborted, retryObserver, () -> 0);
+    }
+
+    /**
+     * @param modelMaxOutputTokens pi {@code model.maxTokens} 来源（目录
+     *                             {@code maxOutputTokens}）；{@code 0}（未编目）⇒
+     *                             不封顶，即 pi {@code > 0} 守卫的假分支形状
+     */
+    public LlmSummaryGenerator(StreamFn streamFn, Supplier<ModelId<?>> model,
+                               Supplier<RetrySettings> retrySettings,
+                               BooleanSupplier retryAborted,
+                               RetryObserver retryObserver,
+                               IntSupplier modelMaxOutputTokens) {
         this.streamFn = streamFn;
         this.model = model;
         this.retrySettings = retrySettings;
         this.retryAborted = retryAborted;
         this.retryObserver = retryObserver;
+        this.modelMaxOutputTokens = modelMaxOutputTokens;
     }
 
     @Override
     public SummaryResult summarize(List<Message> compressed, String previousSummary,
                                    String customInstructions, int reserveTokens, String reason) {
-        var response = retryAssistantCall(compressed, previousSummary, reason);
+        var response = callWithRetries(() -> produceOnce(compressed, previousSummary), reason);
         // pi generateSummaryWithUsage 的后半（:715-725）：failure 文案 → toolCall 守卫 → 文本。
-        var failure = getSummarizationFailure(response);
+        var failure = getSummarizationFailure(response, "Summarization");
         if (failure != null) {
             throw new IllegalStateException(failure);
         }
@@ -101,20 +137,51 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
         return new SummaryResult(contentText(response.content()), response.usage());
     }
 
+    @Override
+    public SummaryResult summarizeTurnPrefix(List<Message> messages, int reserveTokens,
+                                             String reason) {
+        // pi generateTurnPrefixSummary（compaction.ts:1076-1120）：0.5×reserve 上限
+        // （模型 cap 封顶）+ # Conversation/# Instructions 包装的逐字 prompt。
+        int maxTokens = turnPrefixMaxTokens(reserveTokens);
+        String promptText = "# Conversation\n" + ConversationSerializer.serialize(messages)
+            + "\n\n# Instructions\n" + TURN_PREFIX_SUMMARIZATION_PROMPT;
+        var response = callWithRetries(() -> produceOnce(promptText, maxTokens), reason);
+        var failure = getSummarizationFailure(response, "Turn prefix summarization");
+        if (failure != null) {
+            throw new IllegalStateException(failure);
+        }
+        for (var block : response.content()) {
+            if (block instanceof ContentBlock.ToolUseContent) {
+                throw new IllegalStateException("Turn prefix summarization attempted to call a tool");
+            }
+        }
+        return new SummaryResult(contentText(response.content()), response.usage());
+    }
+
+    /**
+     * pi {@code compaction.ts:1083-1087}：{@code min(floor(0.5*reserveTokens),
+     * model.maxTokens > 0 ? model.maxTokens : Infinity)}。
+     */
+    private int turnPrefixMaxTokens(int reserveTokens) {
+        int halfReserve = (int) Math.floor(0.5 * reserveTokens);
+        int modelCap = modelMaxOutputTokens.getAsInt();
+        return modelCap > 0 ? Math.min(halfReserve, modelCap) : halfReserve;
+    }
+
     // ═══════════════════════════════════════════════════════════
-    // retryAssistantCall 同形环（retry.ts:174-224）
+    // retryAssistantCall 同形环（retry.ts:174-224）——历史与 turn-prefix 两路共用
     // ═══════════════════════════════════════════════════════════
 
     /** pi {@code maxAttempts = policy?.enabled ? policy.maxRetries : 0}。 */
-    private Message.AssistantMessage retryAssistantCall(List<Message> compressed,
-                                                        String previousSummary, String reason) {
+    private Message.AssistantMessage callWithRetries(
+            Supplier<Message.AssistantMessage> produce, String reason) {
         var policy = retrySettings.get();
         int maxAttempts = policy.enabled() ? policy.maxRetries() : 0;
         int attempt = 0;
         // pi 以 lastRetry 是否有值决定终局要不要发 finished。
         boolean scheduled = false;
         for (;;) {
-            var response = produceOnce(compressed, previousSummary);
+            var response = produce.get();
 
             // Abort: terminal but not successful. Never retry an aborted message.
             if ("aborted".equals(response.stopReason())) {
@@ -153,13 +220,13 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
         }
     }
 
-    /** pi {@code getSummarizationFailure(response, "Summarization")}（:545-553）。 */
-    private static String getSummarizationFailure(Message.AssistantMessage response) {
+    /** pi {@code getSummarizationFailure(response, label)}（compaction.ts:580-588）。 */
+    private static String getSummarizationFailure(Message.AssistantMessage response, String label) {
         if ("error".equals(response.stopReason())) {
-            return "Summarization failed: " + messageOrFallback(response.errorMessage());
+            return label + " failed: " + messageOrFallback(response.errorMessage());
         }
         if ("length".equals(response.stopReason())) {
-            return "Summarization failed: generation hit the token cap and the summary is incomplete";
+            return label + " failed: generation hit the token cap and the summary is incomplete";
         }
         return null;
     }
@@ -209,6 +276,16 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
     // produce —— pi 的 produce = (await streamFn(...)).result()
     // ═══════════════════════════════════════════════════════════
 
+    /** 历史摘要路：buildPrompt 构造结构化 prompt，不发 maxTokens（沿用模型默认）。 */
+    private Message.AssistantMessage produceOnce(List<Message> compressed, String previousSummary) {
+        return request(buildPrompt(compressed, previousSummary), OptionalInt.empty());
+    }
+
+    /** turn-prefix 路：prompt 已按 prefix 形状构造，maxTokens 带 0.5×reserve 上限。 */
+    private Message.AssistantMessage produceOnce(String promptText, int maxTokens) {
+        return request(promptText, OptionalInt.of(maxTokens));
+    }
+
     /**
      * 一次摘要调用，返回**真** {@code Message.AssistantMessage}（3a 的形状）：
      * 终局事件带 partial ⇒ 全字段投影；脚本化流没有 partial ⇒ 由收集到的
@@ -216,18 +293,18 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
      * （StreamError ⇒ {@code err.reason()} 即 error/aborted，errorMessage 取
      * 异常文本；流被截断没有终局 ⇒ 中止方言，与 PiLoopRunner 的 cutShort 同形）。
      */
-    private Message.AssistantMessage produceOnce(List<Message> compressed, String previousSummary) {
+    private Message.AssistantMessage request(String promptText, OptionalInt maxTokens) {
         // 原 docs/71 G1：摘要请求的用户消息在构造点盖时间戳（pi compaction.ts:582 的 Date.now()）。
         var user = new Message.UserMessage(
-            List.of(new ContentBlock.TextContent(buildPrompt(compressed, previousSummary))),
+            List.of(new ContentBlock.TextContent(promptText)),
             java.time.Instant.now());
         // 包 A-01：摘要请求主动关缓存 —— pi 的 `completeSummarization` 逐字照抄
-        // （`coding-agent/src/core/compaction/compaction.ts:600-605` 的
+        // （`coding-agent/src/core/compaction/compaction.ts:614-618` 的
         // `cacheRetention: "none"`）：一次性的摘要与主会话前缀不同，给它写缓存条目
         // 既无收益、又会与主会话的缓存竞争。⚠️ pi 同一处还发 `sessionId: … ?? uuidv7()`
         // （routing id），那属于会话亲和线、本包不做（原 docs/54 §1.2 的 B103）。
         var options = new StreamOptions(
-            OptionalInt.empty(), OptionalDouble.empty(), Optional.empty(),
+            maxTokens, OptionalDouble.empty(), Optional.empty(),
             Optional.of(CacheRetention.NONE));
         var toolCalls = new ArrayList<ContentBlock>();
         StringBuilder text = new StringBuilder();

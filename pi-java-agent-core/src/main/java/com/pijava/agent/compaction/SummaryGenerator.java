@@ -19,7 +19,6 @@ import com.pijava.ai.message.Message;
  * 会话事件。<b>不存在</b>「失败/空输出 ⇒ 截断兜底」这条 pi 没有的路。空文本
  * 在 stop 收尾下是合法产物（pi 原文返回 {@code contentText}，可以为空串）。</p>
  */
-@FunctionalInterface
 public interface SummaryGenerator {
 
     /**
@@ -31,6 +30,14 @@ public interface SummaryGenerator {
      */
     SummaryResult summarize(List<Message> compressed, String previousSummary,
                             String customInstructions, int reserveTokens, String reason);
+
+    /**
+     * Summarize the turn prefix of a split turn (B171, {@code docs/18}；pi
+     * {@code generateTurnPrefixSummary})：用 {@code TURN_PREFIX_SUMMARIZATION_PROMPT}
+     * 对本轮 user→切点之间的消息做第二次摘要调用，输出上限取
+     * {@code floor(0.5*reserveTokens)}（再被模型 maxOutputTokens 封顶）。
+     */
+    SummaryResult summarizeTurnPrefix(List<Message> messages, int reserveTokens, String reason);
 
     /** 无原因的旧式调用（测试/非环 B 路）：{@code reason = null}。 */
     default SummaryResult summarize(List<Message> compressed, String previousSummary,
@@ -46,11 +53,23 @@ public interface SummaryGenerator {
      * LLM; used by the harness until the summarization prompt flow lands.
      */
     static SummaryGenerator truncating() {
-        return (compressed, previousSummary, customInstructions, reserveTokens, reason) -> {
-            String text = previousSummary != null && !previousSummary.isBlank()
-                ? previousSummary
-                : "Compacted " + compressed.size() + " earlier message(s).";
-            return new SummaryResult(text, null);
+        return new SummaryGenerator() {
+            @Override
+            public SummaryResult summarize(List<Message> compressed, String previousSummary,
+                                           String customInstructions, int reserveTokens,
+                                           String reason) {
+                String text = previousSummary != null && !previousSummary.isBlank()
+                    ? previousSummary
+                    : "Compacted " + compressed.size() + " earlier message(s).";
+                return new SummaryResult(text, null);
+            }
+
+            @Override
+            public SummaryResult summarizeTurnPrefix(List<Message> messages, int reserveTokens,
+                                                     String reason) {
+                return new SummaryResult(
+                    "Turn prefix checkpoint of " + messages.size() + " message(s).", null);
+            }
         };
     }
 }

@@ -56,8 +56,20 @@ class CompactionFileOpsTest {
 
     /** 摘要文本原样返回，便于把注意力放在尾部块上。 */
     private static SummaryGenerator fixed(String text) {
-        return (compressed, previousSummary, customInstructions, reserveTokens, reason) ->
-            new SummaryGenerator.SummaryResult(text, null);
+        return new SummaryGenerator() {
+            @Override
+            public SummaryResult summarize(List<Message> compressed, String previousSummary,
+                                           String customInstructions, int reserveTokens,
+                                           String reason) {
+                return new SummaryResult(text, null);
+            }
+
+            @Override
+            public SummaryResult summarizeTurnPrefix(List<Message> messages, int reserveTokens,
+                                                     String reason) {
+                return new SummaryResult(text, null);
+            }
+        };
     }
 
     /** 压缩一段 `[assistant 的工具调用] + [收尾消息]` 的转录（沿 parentId 链）。 */
@@ -211,8 +223,12 @@ class CompactionFileOpsTest {
         assertThat(strings(secondResult.details().get("readFiles")))
             .as("a.ts 只出现在上一份 compaction 的 details 里，必须经回灌留下")
             .containsExactly("a.ts");
+        // B171（docs/18）：切点是末条助手「done」、其前有 user third ⇒ split：
+        // 历史 [assistant ok] 与 prefix [user third] 两路都返回 SECOND，逐字合并，
+        // 回灌的 read 块仍追加在整份摘要尾部。
         assertThat(secondResult.summary())
-            .isEqualTo("SECOND\n\n<read-files>\na.ts\n</read-files>");
+            .isEqualTo("SECOND\n\n---\n\n**Turn Context (split turn):**\n\nSECOND"
+                + "\n\n<read-files>\na.ts\n</read-files>");
     }
 
     @Test

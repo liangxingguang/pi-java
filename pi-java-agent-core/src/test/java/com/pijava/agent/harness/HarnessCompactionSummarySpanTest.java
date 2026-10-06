@@ -203,7 +203,12 @@ class HarnessCompactionSummarySpanTest {
 
         // 收尾属性：摘要长度 + 这次调用的用量（修复前 trace 里看不到摘要花掉的 token）
         var attrs = spanEnd(lines, summarySpan.path("spanId").asText()).path("attrs");
-        assertThat(attrs.path("summaryChars").asInt()).isEqualTo(SUMMARY_TEXT.length());
+        // B171（docs/18）：一轮 [user,assistant] 压缩时切点在助手 ⇒ split turn，
+        // 历史为空、只发 prefix 调用；落库摘要是 "No prior history." 合并 prefix
+        // 文本（pi compaction.ts:996-1026），长度按整份合并摘要算。
+        String persistedSummary =
+            "No prior history.\n\n---\n\n**Turn Context (split turn):**\n\n" + SUMMARY_TEXT;
+        assertThat(attrs.path("summaryChars").asInt()).isEqualTo(persistedSummary.length());
         assertThat(attrs.path("inputTokens").asDouble()).isEqualTo((double) SUMMARY_INPUT_TOKENS);
         assertThat(attrs.path("outputTokens").asDouble()).isEqualTo((double) SUMMARY_OUTPUT_TOKENS);
     }

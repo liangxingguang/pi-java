@@ -10,6 +10,9 @@ import com.pijava.agent.entry.Entry;
 import com.pijava.ai.Usage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+// 外层测试类直接构造 SummaryResult（它是 SummaryGenerator 的嵌套类型，
+// 仅在实现类内部可经简单名访问）。
+import com.pijava.agent.compaction.SummaryGenerator.SummaryResult;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -181,8 +184,8 @@ class SplitTurnCompactionTest {
 
         assertThat(result.summary())
             .endsWith("\n\n<read-files>\n/a.txt\n</read-files>");
-        assertThat((List<?>) result.details().get("readFiles"))
-            .containsExactly("/a.txt");
+        assertThat(result.details())
+            .containsEntry("readFiles", List.of("/a.txt"));
     }
 
     // ── fixtures ───────────────────────────────────────────────
