@@ -8,6 +8,7 @@ import com.pijava.agent.compaction.CompactionObserver;
 import com.pijava.agent.compaction.CompactionResult;
 import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.compaction.SummaryGenerator;
+import com.pijava.agent.entry.Entry;
 import com.pijava.agent.hook.HookSystem;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -17,6 +18,7 @@ import com.pijava.telemetry.NoopTelemetryContext;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 环 A（post-run ①）的守卫哨兵 —— pi {@code _isRetryableError}/{@code _prepareRetry}/
@@ -93,11 +95,25 @@ class PostRunRetryTest {
         return new Message.UserMessage(List.of(new ContentBlock.TextContent(text)));
     }
 
-    /** [user, 尾助手] 的车道（副本与日志同尾 —— 摘尾判据看副本尾）。 */
+    /** [user, 尾助手] 只进工作副本的车道（用于不走到持久省略的守卫路径）。 */
     private static LaneState laneWith(Message.AssistantMessage tail) {
         var lane = new LaneState();
         lane.messages.add(user("hello"));
         lane.messages.add(tail);
+        return lane;
+    }
+
+    /**
+     * [user, 尾助手] 同时进工作副本与 transcript 的车道（B172：重试省略按对象
+     * 身份从 transcript 解析目标条目，沿 parentId 链）。
+     */
+    private static LaneState persistedLaneWith(Message.AssistantMessage tail) {
+        var lane = laneWith(tail);
+        var now = java.time.Instant.now();
+        lane.transcript.add(new Entry.Message(
+            "e-user", 0, null, now, user("hello"), null));
+        lane.transcript.add(new Entry.Message(
+            "e-asst", 1, "e-user", now, tail, null));
         return lane;
     }
 
@@ -155,14 +171,14 @@ class PostRunRetryTest {
     @Test
     void prepareEmitsStartDropsCopyAndReturnsTrue() {
         var msg = error("overloaded");
-        var lane = laneWith(msg);
+        var lane = persistedLaneWith(msg);
         var lines = new RetryLines();
         var retry = new PostRunRetry(ctx(lane, FAST, () -> false, lines));
         assertThat(retry.prepareRetry(lane, msg)).isTrue();
         assertThat(lane.retryAttempt).isEqualTo(1);
         assertThat(lines.lines).containsExactly("start|1|3|overloaded");
-        // 只摘副本尾的助手消息；pi :2937-2941 的「keep in session for history」——
-        // transcript 在本单测里本就空，副本从 [user, assistant] 缩成 [user]。
+        // B172：不再手工摘尾 —— 持久 omission edit 落盘后按 transcript 重建副本，
+        // error 助手投影为空，副本从 [user, assistant] 变成 [user]。
         assertThat(lane.messages).hasSize(1);
         assertThat(lane.messages.get(0)).isInstanceOf(Message.UserMessage.class);
     }
@@ -170,7 +186,7 @@ class PostRunRetryTest {
     @Test
     void emptyErrorMessageBecomesUnknownError() {
         var msg = error("");
-        var lane = laneWith(msg);
+        var lane = persistedLaneWith(msg);
         var lines = new RetryLines();
         var retry = new PostRunRetry(ctx(lane, FAST, () -> false, lines));
         assertThat(retry.prepareRetry(lane, msg)).isTrue();
@@ -178,29 +194,76 @@ class PostRunRetryTest {
     }
 
     @Test
-    void onlyAssistantTailIsDropped() {
-        // pi 的 drop 判据是尾条 role === "assistant"；副本停在用户消息上时不动。
+    void unknownTargetIsSilentlySkipped() {
+        // 传入的失败助手既不在 transcript 也不在工作副本（pi :1219 if (!targetId)
+        // continue）⇒ 不追加 edit；随后仍照 pi _refreshFinalizedContext 重建，
+        // transcript 空 ⇒ 副本清空。
         var lane = new LaneState();
         lane.messages.add(user("hello"));
         var lines = new RetryLines();
         var retry = new PostRunRetry(ctx(lane, FAST, () -> false, lines));
         assertThat(retry.prepareRetry(lane, error("overloaded"))).isTrue();
-        assertThat(lane.messages).hasSize(1);
+        assertThat(lane.transcript).isEmpty();
+        assertThat(lane.messages).isEmpty();
     }
 
     @Test
     void abortDuringBackoffEmitsCancelledEndAndZeros() {
         var msg = error("overloaded");
-        var lane = laneWith(msg);
+        var lane = persistedLaneWith(msg);
         var lines = new RetryLines();
         var retry = new PostRunRetry(ctx(lane, FAST, () -> true, lines));
         assertThat(retry.prepareRetry(lane, msg)).isFalse();
         assertThat(lane.retryAttempt).isZero(); // pi :2951 的清零
-        // 摘尾已发生（drop 在睡眠之前，pi :2937-2945 顺序）—— 取消不回滚副本。
+        // 持久省略与重建在睡眠之前（pi :2937-2945 顺序）—— 取消不回滚。
         assertThat(lane.messages).hasSize(1);
         assertThat(lines.lines).containsExactly(
             "start|1|3|overloaded",
             "end|false|1|Retry cancelled");
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // B172（docs/19）：重试前的持久 omission edit
+    // ═══════════════════════════════════════════════════════════
+
+    @Test
+    void retryOmissionIsPersistedAsAContextEdit() {
+        // pi _prepareRetry → _omitRecoveryAttempt(message)：transcript 尾必须是
+        // 目标为失败助手条目、replacement=null 的 context_edit。
+        var msg = error("overloaded");
+        var lane = persistedLaneWith(msg);
+        var retry = new PostRunRetry(ctx(lane, FAST, () -> false, RetryObserver.NOOP));
+        assertThat(retry.prepareRetry(lane, msg)).isTrue();
+
+        assertThat(lane.transcript).hasSize(3);
+        var edit = lane.transcript.get(2);
+        assertThat(edit).isInstanceOf(Entry.ContextEdit.class);
+        var contextEdit = (Entry.ContextEdit) edit;
+        assertThat(contextEdit.targetId()).isEqualTo("e-asst");
+        assertThat(contextEdit.replacement()).isNull();
+    }
+
+    @Test
+    void projectedAssistantWithoutSourceEntryThrows() {
+        // pi :1216-1218：失败助手在工作副本里、transcript 无源条目 ⇒ 固定错误，
+        // 不允许静默摘尾了事。
+        var msg = error("overloaded");
+        var lane = laneWith(msg);
+        var retry = new PostRunRetry(ctx(lane, FAST, () -> false, RetryObserver.NOOP));
+        assertThatThrownBy(() -> retry.prepareRetry(lane, msg))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("Cannot persist recovery omission because a projected message has no source entry");
+    }
+
+    @Test
+    void assistantInNeitherPlaceAppendsNoEdit() {
+        // 失败助手两处皆无 ⇒ 无 edit、prepareRetry 仍返回 true（与 unknownTarget
+        // 同一跳过分支，这里钉「不产生 edit」）。
+        var lane = new LaneState();
+        lane.messages.add(user("hello"));
+        var retry = new PostRunRetry(ctx(lane, FAST, () -> false, RetryObserver.NOOP));
+        assertThat(retry.prepareRetry(lane, error("overloaded"))).isTrue();
+        assertThat(lane.transcript).isEmpty();
     }
 
     // ═══════════════════════════════════════════════════════════
