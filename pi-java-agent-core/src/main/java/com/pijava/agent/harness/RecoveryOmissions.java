@@ -8,6 +8,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import com.pijava.agent.entry.Entry;
+import com.pijava.agent.session.ContextEntries;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 
@@ -24,8 +25,10 @@ import com.pijava.ai.message.Message;
  * edit 真正额外剔除的是<b>工具结果</b>（它们无 stopReason 过滤、照常投影）。</p>
  *
  * <p><b>定位规则对齐 {@code _findPersistedMessageEntryId}（:1185-1206）</b>：
- * 先按对象身份在 transcript 中匹配；目标在工作副本里却解析不到源条目 ⇒ 抛 pi 的
- * 固定错误；既不在 transcript 也不在工作副本 ⇒ 静默跳过（无可省略物）。</p>
+ * 先按对象身份在 transcript 中匹配；落空时，目标在工作副本中的身份下标经投影
+ * 反查源条目 id（B170，{@code docs/20}）；目标在副本里却仍解析不到 ⇒ 抛 pi 的
+ * 固定错误；既不在 transcript 也不在工作副本 ⇒ 静默跳过（无可省略物）。
+ * pi 第一档 WeakMap 缓存不移植：其值全部由后两档同源推出（{@code docs/20 §7}）。</p>
  */
 final class RecoveryOmissions {
 
@@ -33,7 +36,7 @@ final class RecoveryOmissions {
 
     /** Persist omission edits for the failed assistant and this turn's tool results, then rebuild the copy. */
     static void persist(LaneState lane, Message.AssistantMessage failed) {
-        String assistantId = identityEntryId(lane, failed);
+        String assistantId = resolveEntryId(lane, failed);
         if (assistantId == null && inWorkingCopy(lane, failed)) {
             // pi :1216-1218：投影中的消息没有源条目 ⇒ 无法安全持久省略。
             throw new IllegalStateException(
@@ -56,7 +59,7 @@ final class RecoveryOmissions {
      * {@link #persist}，随后刷新工作副本。
      */
     static void persistRetryOmission(LaneState lane, Message.AssistantMessage failed) {
-        String assistantId = identityEntryId(lane, failed);
+        String assistantId = resolveEntryId(lane, failed);
         if (assistantId == null && inWorkingCopy(lane, failed)) {
             // pi :1216-1218：投影中的消息没有源条目 ⇒ 无法安全持久省略。
             throw new IllegalStateException(
@@ -85,11 +88,51 @@ final class RecoveryOmissions {
         return false;
     }
 
+    /**
+     * pi {@code _findPersistedMessageEntryId}（agent-session.ts:1185-1206）：
+     * 先反向身份扫描，落空再走投影下标兜底。
+     */
+    private static String resolveEntryId(LaneState lane, Message target) {
+        String identity = identityEntryId(lane, target);
+        return identity != null ? identity : projectedEntryId(lane, target);
+    }
+
     /** Find an entry id whose message is the same object (pi :1190-1194 reverse identity scan). */
     private static String identityEntryId(LaneState lane, Message target) {
         for (int i = lane.transcript.size() - 1; i >= 0; i--) {
             if (lane.transcript.get(i) instanceof Entry.Message m && m.message() == target) {
                 return m.id();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 第三档（pi :1191-1205）：目标是工作副本中的实例时，按其身份下标经投影
+     * 反查贡献该位置的源条目 id。{@code lane.messages} 与投影扁平视图同源
+     * （{@link HarnessUtils#rebuildLaneMessages}）。
+     */
+    private static String projectedEntryId(LaneState lane, Message target) {
+        int messageIndex = -1;
+        for (int i = 0; i < lane.messages.size(); i++) {
+            // pi indexOf 是对象身份：消息是值相等的 record，不能用 List.indexOf。
+            if (lane.messages.get(i) == target) {
+                messageIndex = i;
+                break;
+            }
+        }
+        if (messageIndex < 0) {
+            return null;
+        }
+        List<ContextEntries.ProjectedEntry> projected =
+            ContextEntries.projectEntries(lane.transcript, HarnessUtils.lastEntryId(lane));
+        int projectedIndex = 0;
+        for (ContextEntries.ProjectedEntry entry : projected) {
+            for (int i = 0; i < entry.messages().size(); i++) {
+                if (projectedIndex == messageIndex) {
+                    return entry.source().id();
+                }
+                projectedIndex++;
             }
         }
         return null;
