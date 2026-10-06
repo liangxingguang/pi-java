@@ -113,6 +113,11 @@
 > split-turn 二次摘要＋逐字合并＋0.5×reserve（模型 cap 封顶）＋`previousSummary` 接通，环 A 持久
 > omission edit；7 颗探针均有牙（M1-18 实测 2 红、M2-18 4 红、M2-19 3 红，余各 1）；全 reactor
 > `mvn -o clean verify` 14/14 SUCCESS ⇒ 未结 −2。
+> **2026-10-06（包 20 收口）**：**B170 销号（R-A，`docs/20 §8`）** —— 省略目标
+> 定位补上 pi 的投影下标兜底（身份扫描落空时，按工作副本身份下标经
+> `ContextEntries.projectEntries` 反查源条目 id）；第一档 WeakMap 缓存裁决不移植
+> （值由后两档同源推出）。3 颗探针实测 3/1/3 红，与预案一致；全 reactor
+> `mvn -o clean verify` 14/14 SUCCESS ⇒ 未结 −1。
 >
 > ⚠️ **本节汇总的两列与自述口径对不上（非本次引入）**：按 `§1.0` 的命令实测（本次编辑前的 HEAD），
 > 全文 `^| B[0-9]* |` **152 行 / 含结案标记 41 行**，而 §3 段内只有 **89 行** —— B150+ 各批次是追加在**文末附录区**、
@@ -842,6 +847,6 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | B167 | ✅ **已销号（包 15，2026-10-05，`docs/15`）** —— 原问题：`Entry` 的 wire 判别字面量存在多份拷贝（序列化 `@JsonSubTypes.name`、Java `type()`，实施时还发现解码侧 `EntryJsonCodec`/`ENTRY_TYPES` 第三批）。**修法**：9 个判别常量做唯一事实源，三处全部引用常量；`active_tools_change` 无 Entry 变体保留字面量。M1 探针钉死一个常量同时改变落线与 Java/解码。wire 字节零变化。**本行关闭** |
 | B168 | ✅ **已销号（包 16，2026-10-05，R-A 经核实无缺口，`docs/16`）** —— 原问题：usage 提为一等 entry 后按 `runId` 过滤的记录查询不再命中它。**核实结论**：pi 锚点 `200387122` 生产代码无 `runId`（仅 evals 有）、无此查询，pi 消费 usage 的形状是按 `type==="usage"` 扫描 entry 流。本仓该读法可用：type 扫描返回 usage 行、runId 在行上（生产者 `PiLaneSink`，读回 `EntryJsonCodec`），三后端 characterization 测试 ＋ M1 探针（runId 置 null ⇒ 恰 1 红）钉死。R-B（给 `EntryQuery` 加 runId 过滤，清单在 `docs/16 §4`）留待真实消费者出现时再做。**本行关闭** |
 | B169 | ✅ **已销号（包 17，2026-10-06，R-A，`docs/17`）** —— 原问题：压缩切点按**原始 transcript** 字符累加，不按 edit 后的投影（pi 按投影）。**修法**：`ContextEntries.projectEntries` 输出「源条目 × 投影消息」分组（`ProjectedEntry`，`toMessages` 改为其扁平视图）；`CompactionService.prepare/compact` 的切点、摘要输入、文件清单全部读投影，逐字移植 `findProjectedCutPoint` 的闭后缀推进（recovery omission）与相邻元数据回吸（判据读投影消息非本征可见性）；`estimateProjectedContextTokens` 在 edit/compaction 晚于用量锚点时纯字符重算，`CompactionExecutor.contextTokens` 改读它。无合法切点/摘要为空 ⇒ prepare 返回 null（自动静默、手动抛 ISE）。6+2 新测试、五颗变异探针各恰 1 红；全 reactor verify 14/14 SUCCESS。**本行关闭** |
-| B170 | 溢出省略的目标定位只有**身份扫描**，没移植 pi 的投影下标兜底 | `docs/13 §4.5`（**未登记**） | pi `_findPersistedMessageEntryId` 第三档：消息在 `state.messages` 中的下标 ⇒ 经投影反查源条目 id；`RecoveryOmissions.identityEntryId` 只做 transcript 身份匹配。生产安全：`PiLaneSink.append` 与 `lastAssistant()` 同一实例（已核）。若该接线改成投影副本，解析不到 ⇒ 抛 `Cannot persist recovery omission …`（硬失败、不静默）。**未修** |
+| B170 ✅ | ~~溢出省略的目标定位只有**身份扫描**，没移植 pi 的投影下标兜底~~ | `docs/13 §4.5`（**未登记**） | **已修（2026-10-06，`docs/20 §8`，commits `392a102`/`4e0e326`）**：身份扫描落空时，按目标在工作副本中的**身份下标**经 `ContextEntries.projectEntries` 投影反查源条目 id（`lane.messages` 与投影扁平视图同源）；投影副本不再被守卫误判硬失败。第一档 WeakMap 缓存裁决不移植（值全部由后两档同源推出，WeakHashMap 对值相等 record 不安全）。探针 M1/M2/M3 实测 3/1/3 红，与预案一致 |
 | B171 ✅ | split-turn：切点落在一轮内部时 pi 用 `TURN_PREFIX_SUMMARIZATION_PROMPT` 发**第二次**摘要调用并按固定格式合并 | `docs/17 §6`（**台账行 2026-10-06 补登**；docs/17 §7 原称「已登记」系误记） | **已修（2026-10-06，`docs/18 §8`，commits `73f13d1`/`2d94954`/`44aca0c`）**：切点加 turnStart 判定，历史截到本轮 user 前，turn-prefix 单独摘要，合并字面量 `\n\n---\n\n**Turn Context (split turn):**\n\n`；输出上限 0.5×reserve（默认 8192，模型 cap 封顶）；顺带接通 `previousSummary`（B2 同族项）。探针 5 颗均有牙 |
 | B172（低）✅ | `PostRunRetry.prepareRetry` 只摘工作副本尾，没落 pi 的持久 omission edit | `docs/17 §6`（**台账行 2026-10-06 补登**） | **已修（2026-10-06，`docs/19 §7`，commits `7b45a9e`/`599b57e`）**：环 A 退避前对失败助手追加 `replacement:null` 的 context_edit 并重建副本（复用 `RecoveryOmissions` 零件，带投影守卫）。探针 2 颗均有牙；两侧 error 助手本就分别被停因过滤/请求门过滤，resume 与互读不可观察，仅持久状态形状对齐 |

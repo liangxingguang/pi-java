@@ -56,6 +56,7 @@ commands: `mvn clean verify`, `mvn test -pl <module>`, `mvn checkstyle:check`, `
 | `docs/17-compaction-cutpoint-projection-design.md` | 包 17：压缩切点改读 context_edit 后投影（✅ 已闭环） |
 | `docs/18-split-turn-summary-design.md` | 包 18：split-turn 的 turn-prefix 二次摘要（✅ 已闭环） |
 | `docs/19-retry-omission-edit-design.md` | 包 19：环 A 重试前持久 omission edit（✅ 已闭环） |
+| `docs/20-projected-index-entry-resolution-design.md` | 包 20：省略目标定位的投影下标兜底（✅ 已闭环） |
 
 ## 编码规范
 
