@@ -331,6 +331,47 @@ class RpcDispatcherTest {
             e instanceof AgentSessionEvent.AutoRetryEnd end && end.success());
     }
 
+    @Test
+    void compactReturnsThePiFiveKeyResultPayload() throws Exception {
+        var ctx = context("faux-compact", textStream("Hi there"));
+        var out = new ByteArrayOutputStream();
+        var dispatcher = new RpcDispatcher(ctx.session(), new JsonlWriter(out), ctx.args());
+
+        // 先填充 transcript（空会话不可压缩）
+        dispatcher.handleLine("{\"id\":\"p\",\"type\":\"prompt\",\"message\":\"hi\"}");
+        awaitSettled(out);
+
+        out.reset();
+        dispatcher.handleLine(
+            "{\"id\":\"1\",\"type\":\"compact\",\"customInstructions\":\"Focus on auth\"}");
+
+        var payload = payloadOf(out.toString(StandardCharsets.UTF_8), "1");
+        var fieldNames = ((com.fasterxml.jackson.databind.node.ObjectNode) payload).fieldNames();
+        assertThat(org.assertj.core.util.IterableUtil.toList(fieldNames))
+            .as("pi compaction.ts:926-931：恰好 5 个键，estimatedTokensAfter 不上线")
+            .containsExactlyInAnyOrder(
+                "summary", "firstKeptEntryId", "tokensBefore", "usage", "details");
+        assertThat(payload.get("firstKeptEntryId").asText()).isNotBlank();
+    }
+
+    @Test
+    void compactWithoutCustomInstructionsAlsoReturnsResult() throws Exception {
+        var ctx = context("faux-compact2", textStream("Hi there"));
+        var out = new ByteArrayOutputStream();
+        var dispatcher = new RpcDispatcher(ctx.session(), new JsonlWriter(out), ctx.args());
+
+        dispatcher.handleLine("{\"id\":\"p\",\"type\":\"prompt\",\"message\":\"hi\"}");
+        awaitSettled(out);
+
+        out.reset();
+        dispatcher.handleLine("{\"id\":\"1\",\"type\":\"compact\"}");
+
+        var output = out.toString(StandardCharsets.UTF_8);
+        assertThat(output).contains("\"command\":\"compact\",\"success\":true");
+        // pi rpc-mode.ts:535：compact 响应带压缩结果载荷
+        assertThat(payloadOf(output, "1").get("summary")).isNotNull();
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────
 
     /**
