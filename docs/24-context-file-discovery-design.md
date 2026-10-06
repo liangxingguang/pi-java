@@ -150,3 +150,8 @@ var files = noContext ? List.<ContextFile>of()
 **已知残留**：`AgentSession.assemble` 里 `-nc` 分支的 lambda 本身无 AgentSession
 级夹具（FauxProvider 看不见 system prompt），行为由 discovery/assembler 两层
 测试间接保证；worktree shadow 未移植（§3.3）。
+
+**补遗（2026-10-07，`75c9e0a`）**：`f304cb3` 提交时漏 stage 了
+`AgentSession.java` 的生产者接线——槽位与引擎都在但生产恒取默认空列表，
+用户可见行为实际未激活。`75c9e0a` 补上该装配点；coding-agent 324 测试、
+reactor 全绿。
