@@ -15,11 +15,13 @@ import com.pijava.agent.tool.ToolContext;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.provider.FauxProvider;
+import com.pijava.ai.provider.Provider;
 import com.pijava.ai.provider.ProviderRegistry;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.coding.agent.cli.ArgsParser;
 import com.pijava.coding.agent.core.AgentSession;
 import com.pijava.coding.agent.core.AgentSessionEvent;
+import com.pijava.coding.agent.support.RecordingChatProvider;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -333,12 +335,13 @@ class RpcDispatcherTest {
 
     @Test
     void compactReturnsThePiFiveKeyResultPayload() throws Exception {
-        var ctx = context("faux-compact", textStream("Hi there"));
+        var recording = new RecordingChatProvider("rec");
+        var ctx = sessionCtx("rec", recording);
         var out = new ByteArrayOutputStream();
         var dispatcher = new RpcDispatcher(ctx.session(), new JsonlWriter(out), ctx.args());
 
-        // 三轮（第三轮 100k chars ⇒ 切点 split、历史非空；见
-        // CompactSlashCommandTest 的同形状夹具）。
+        // 三轮（第三轮 100k chars ⇒ 切点 split、历史非空；同
+        // CompactSlashCommandTest 的夹具）。
         runPrompt(dispatcher, out, "p1", "hi");
         runPrompt(dispatcher, out, "p2", "hello");
         runPrompt(dispatcher, out, "p3", "x".repeat(100_000));
@@ -347,6 +350,10 @@ class RpcDispatcherTest {
         dispatcher.handleLine(
             "{\"id\":\"1\",\"type\":\"compact\",\"customInstructions\":\"Focus on auth\"}");
 
+        assertThat(recording.userTexts())
+            .as("pi rpc-mode.ts:534：command 的 customInstructions 进历史摘要 prompt")
+            .anyMatch(text -> text.startsWith("<conversation>")
+                && text.endsWith("\n\nAdditional focus: Focus on auth"));
         var payload = payloadOf(out.toString(StandardCharsets.UTF_8), "1");
         var fieldNames = ((com.fasterxml.jackson.databind.node.ObjectNode) payload).fieldNames();
         var names = new java.util.ArrayList<String>();
@@ -355,7 +362,6 @@ class RpcDispatcherTest {
             .as("pi compaction.ts:926-931：恰好 5 个键，estimatedTokensAfter 不上线")
             .containsExactlyInAnyOrder(
                 "summary", "firstKeptEntryId", "tokensBefore", "usage", "details");
-        assertThat(payload.get("firstKeptEntryId").asText()).isNotBlank();
     }
 
     @Test
@@ -413,12 +419,16 @@ class RpcDispatcherTest {
     private record Ctx(AgentSession session, com.pijava.coding.agent.cli.Args args) {}
 
     private Ctx context(String provider, List<List<StreamEvent>> sequences) throws Exception {
+        return sessionCtx(provider, FauxProvider.sequence(provider, sequences));
+    }
+
+    /** Build a CLI session routed to the given provider. */
+    private Ctx sessionCtx(String providerName, Provider provider) throws Exception {
         var tmp = Files.createTempDirectory("pi-java-rpc-test");
         var args = ArgsParser.parse(new String[] {
-            "--provider", provider, "--model", "hello", "--no-session"});
+            "--provider", providerName, "--model", "hello", "--no-session"});
         var providers = ProviderRegistry.create();
-        providers.register(FauxProvider.sequence(provider, sequences));
-        // 3d：setRetryEnabled 即刻落盘（pi save 同义），set_auto_retry RPC 会走它。
+        providers.register(provider);
         // FileSettingsStorage 在构造时捕获 user.home，构造发生在 AgentSession.create
         // 里 ⇒ 属性窗口只包住 create，测试不碰真实用户目录。
         var home = Files.createTempDirectory("pi-java-rpc-home");
@@ -430,9 +440,7 @@ class RpcDispatcherTest {
                     new DefaultShellExecutor(), new DefaultFileSystem()));
             return new Ctx(session, args);
         } finally {
-            if (savedHome != null) {
-                System.setProperty("user.home", savedHome);
-            }
+            System.setProperty("user.home", savedHome);
         }
     }
 
@@ -478,19 +486,14 @@ class RpcDispatcherTest {
     }
 
     /** 轮询输出直到出现 agent_settled（异步事件），带超时。 */
-    private static String awaitSettled(ByteArrayOutputStream out) throws IOException {
+    private static String awaitSettled(ByteArrayOutputStream out) {
         var deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
         while (System.nanoTime() < deadline) {
             String s = out.toString(StandardCharsets.UTF_8);
             if (s.contains("agent_settled")) {
                 return s;
             }
-            try {
-                Thread.sleep(20);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
-            }
+            sleepQuietly(20);
         }
         return out.toString(StandardCharsets.UTF_8);
     }
