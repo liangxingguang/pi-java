@@ -118,6 +118,13 @@
 > `ContextEntries.projectEntries` 反查源条目 id）；第一档 WeakMap 缓存裁决不移植
 > （值由后两档同源推出）。3 颗探针实测 3/1/3 红，与预案一致；全 reactor
 > `mvn -o clean verify` 14/14 SUCCESS ⇒ 未结 −1。
+> **2026-10-06（包 21 收口）**：**B2 同族收尾（R-A，`docs/21 §8`）** —— 历史摘要
+> system/主 prompt 逐字对齐（`<conversation>`/`<previous-summary>` 标签 ＋ 按旧摘要
+> 有无切换 SUMMARIZATION/UPDATE 两套指令），历史路补发 `min(0.8×reserve, 模型 cap)`
+> 的 maxTokens，`customInstructions` 接 `Additional focus` 后缀；prompt 文本抽到
+> `SummaryPrompts`。5 颗探针实测 **2/2/1/1/1 红**（M1/M2 预案各高估 1 颗：用例 ③ 是
+> endsWith 看不见标签、用例 ② 不查 maxTokens，如实记）；新登 **B173/B174**（+2）；
+> 全 reactor `mvn -o clean verify` 14/14 SUCCESS。B2 同族四处至此全清。
 >
 > ⚠️ **本节汇总的两列与自述口径对不上（非本次引入）**：按 `§1.0` 的命令实测（本次编辑前的 HEAD），
 > 全文 `^| B[0-9]* |` **152 行 / 含结案标记 41 行**，而 §3 段内只有 **89 行** —— B150+ 各批次是追加在**文末附录区**、
@@ -317,7 +324,7 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | # | 条目 | 出处 | 修法素描 |
 |---|---|---|---|
 | B1 | **branch summary 无实现**（pi `branch-summarization.ts:349-353`） | `原 docs/31:1550` | `source:"branchSummary"` 的重试路**形状**已保留，功能本体缺 ⇒ 另立包 |
-| B2 | compaction **`details` 生产者**恒 null | `原 docs/31:1324` | **已实施**（§8.30，`4380796`）⇒ 见 G 类；同族四处（摘要 prompt/`previousSummary`/请求参数/split turn）另立，§8.30.7 |
+| B2 ✅ | ~~compaction **`details` 生产者**恒 null~~；同族四处另立（摘要 prompt/`previousSummary`/请求参数/split turn） | `原 docs/31:1324`、§8.30.7 | **已修：details `4380796`；同族随包 17–21 全清** —— previousSummary/split turn＝B171、省略目标定位＝B170/B172、主 prompt 与历史路 maxTokens＝包 21（`docs/21 §8`，`fc749d5`）。同族残余 B173（摘要请求 thinkingLevel 透传）/B174（customInstructions 生产者）另立 |
 | B3 | TUI/RPC 对 **auto_retry / summarization_retry 的渲染**（倒计时、`isRetrying`、isIdle 含重试） | `原 docs/31:1552` | 并入「命令/界面面」清点。⚠️ **2026-09-19 取证更正**：这行的措辞是**登记时的猜测** —— pi 的 `isRetrying` **没有任何消费者**（`agent-session.ts:2977` 只声明，src 全仓零读点），`isIdle` 只在扩展上下文里用；pi 的 `RpcSessionState` 里也**没有**这两个字段。RPC 的真正缺口是 `get_state` 的**四个状态字段在 pi-java 被写死**（`buildState():336-354` 给 `false`/`null`/`null`/`0`）＋ `auto_retry_end` 多一个键（= **B12**）。**包④ 已实施 B3-块1（`原 docs/31 §8.37.9`）**：四个字段全部改真（`isCompacting` 由压缩窗口计数、`sessionFile` 由 JSONL 元数据、`sessionId`、`pendingMessageCount` = steer＋followUp）；`RpcSessionState` 补 `@JsonInclude(NON_NULL)`（`sessionFile` 可空是**契约**）。顺带发现 `get_state` **另三处**偏差 ⇒ **B31/B32/B33**（`model` 字符串 vs 对象、`sessionName` 恒有值、`messageCount` 取转录条数）。**包⑤ 已实施 B3-块2**（TUI 订阅通道 ＋ 指示器槽 ＋ 五个重试事件，`42d49ec`，见 §8.38.9）⇒ **B3 两条块全落，整行结案**，见 G 类 |
 | B4 | `addedToolNames` 的 **provider 层消费者** | `原 docs/31:1060` | **结案为不做**（机制归属原判是错的：`addedToolNames` 来自**扩展系统**，不是 MCP；pi 侧 `extensions/wrapper.ts:17-37` → `deferred-tools.ts:8-39`）⇒ 见 C 类 C11 |
 | B5 | 宿主层：`SessionRunner` 两处 `catch (Exception)` **不接 `Error`** ⇒ `statusFuture`/`entriesFuture` 永不完成、不发 `AgentEnd`/`AgentSettled`、宿主**永久挂起** | `原 docs/31:2685`（§8.26.5-12 的下游） | pi 的 `handleRunFailure` 把异常**压成文本**、合成 assistant 消息、promise **resolve** —— 另一处更大的差距，并入本包。**设计**（`原 docs/31 §8.36`，2026-09-19）：第 1 步＝活性收口（两处 `catch (Throwable)` ＋ `finally` 幂等兜底，对齐引擎侧 `PiLaneEngine.drive` 的既有纪律）；第 2 步＝`handleRunFailure` 落引擎侧（**2026-09-19 已裁：做，落引擎侧** ⇒ 落点定在 `PiLaneEngine.drive` 的 `while` **之内**，判据是 pi 的失败消息会进重试判定 `agent-session.ts:1123`），连带宿主读尾 assistant 定 `stopReason`（`print-mode.ts:139-155`）。附带登记 §8.36.7-**14**（`RunLifecycle.begin` 之后抛出 ⇒ `activeRun` 泄漏，今天无生产路径）与 **-15**（宿主层失败路的 `agent_end` 形状不一致：路 C 空数组、路 A 干脆不发）。**已实施**（§8.36.8 实施记录，2026-09-19，`16ca4d7` / `f16436b`；五条变异探针实测，其中 P2 的实测红集与设计稿不符 ⇒ 已就地更正 §8.36.6）⇒ 见 G 类 |
@@ -850,3 +857,5 @@ B 类是产品缺口、本来就不属于「对齐」；C/D/E 三类随时可做
 | B170 ✅ | ~~溢出省略的目标定位只有**身份扫描**，没移植 pi 的投影下标兜底~~ | `docs/13 §4.5`（**未登记**） | **已修（2026-10-06，`docs/20 §8`，commits `392a102`/`4e0e326`）**：身份扫描落空时，按目标在工作副本中的**身份下标**经 `ContextEntries.projectEntries` 投影反查源条目 id（`lane.messages` 与投影扁平视图同源）；投影副本不再被守卫误判硬失败。第一档 WeakMap 缓存裁决不移植（值全部由后两档同源推出，WeakHashMap 对值相等 record 不安全）。探针 M1/M2/M3 实测 3/1/3 红，与预案一致 |
 | B171 ✅ | split-turn：切点落在一轮内部时 pi 用 `TURN_PREFIX_SUMMARIZATION_PROMPT` 发**第二次**摘要调用并按固定格式合并 | `docs/17 §6`（**台账行 2026-10-06 补登**；docs/17 §7 原称「已登记」系误记） | **已修（2026-10-06，`docs/18 §8`，commits `73f13d1`/`2d94954`/`44aca0c`）**：切点加 turnStart 判定，历史截到本轮 user 前，turn-prefix 单独摘要，合并字面量 `\n\n---\n\n**Turn Context (split turn):**\n\n`；输出上限 0.5×reserve（默认 8192，模型 cap 封顶）；顺带接通 `previousSummary`（B2 同族项）。探针 5 颗均有牙 |
 | B172（低）✅ | `PostRunRetry.prepareRetry` 只摘工作副本尾，没落 pi 的持久 omission edit | `docs/17 §6`（**台账行 2026-10-06 补登**） | **已修（2026-10-06，`docs/19 §7`，commits `7b45a9e`/`599b57e`）**：环 A 退避前对失败助手追加 `replacement:null` 的 context_edit 并重建副本（复用 `RecoveryOmissions` 零件，带投影守卫）。探针 2 颗均有牙；两侧 error 助手本就分别被停因过滤/请求门过滤，resume 与互读不可观察，仅持久状态形状对齐 |
+| B173 | 摘要请求未透传 `thinkingLevel`（历史/turn-prefix 两路同缺） | `docs/21 §6`（**包 21 登记**） | pi `compaction.ts:606-608`：`model.reasoning` 且 level 非 off 时 `options.reasoning = thinkingLevel`。需新增会话级 `Supplier<ThinkingLevel>`（会话内可经 setThinkingLevel 改变）并核 Java 侧 model.reasoning 事实源 ⇒ 独立包 |
+| B174 | `customInstructions` **无生产者**：`CompactionService.compact` 硬编码 null | `docs/21 §6`（**包 21 登记**） | pi 手工 `compact(customInstructions)` 经 RPC compact action options 可达（`agent-session.ts:3410`）；本包只保证参数被 prompt 正确消费，RPC/命令面接线另立 |

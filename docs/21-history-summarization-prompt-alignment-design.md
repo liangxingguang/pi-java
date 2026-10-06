@@ -1,6 +1,6 @@
 # 包 21：历史摘要主 prompt 与请求参数对齐（B2 同族收尾）
 
-> **状态：🔍 待审核（2026-10-06）—— 设计稿，未写生产代码。**
+> **状态：✅ 已闭环（2026-10-06，R-A）—— B2 同族收尾。commits `7f37209` / `fc749d5`。**
 
 ## 1. 问题
 
@@ -323,6 +323,40 @@ RED 预期：旧代码下 4 条全红（prompt 文本不符＋maxTokens 缺席�
   （未结 +2；B2 本体早已闭环，本包是同族收尾，不产生 −1）；
 - CLAUDE.md 设计文档表加 docs/21 行；memory 更新；全 reactor 验证后汇报。
 
-## 8. 闭环记录
+## 8. 闭环记录（2026-10-06）
 
-（闭环时回填。）
+**裁决：R-A 照 pi 逐字替换历史摘要 prompt 与请求参数，B2 同族四处至此全清。**
+
+实施中一处与设计稿不同的结构调整：prompt 常量（system/两套主 prompt/turn-prefix）
+抽到新类 {@code SummaryPrompts}，否则 LlmSummaryGenerator 将超 500 行；生成器只留
+调用/重试机制，行为无差异。
+
+探针实测（5 颗，M1/M2 与预案不符，如实记）：
+
+- **M1 = 2 红**（预案 3）：去掉 `<conversation>` 标签包裹，①② 红；用例 ③ 是
+  `endsWith("…Additional focus…")` 后缀断言、看不见标签 ⇒ 仍绿；
+- **M2 = 2 红**（预案 3，1 failure＋1 error）：历史路 maxTokens 回 empty，
+  ① `orElseThrow()` 报错、④ `hasValue(4096)` 失败；用例 ② 只断言 prompt 文本、
+  从不读 maxTokens ⇒ 仍绿；
+- **M3 = 1 红**：不按 previousSummary 切换指令（恒 SUMMARIZATION），恰 ②；
+- **M4 = 1 红**：删 Additional focus 后缀，恰 ③；
+- **M5 = 1 红**：system prompt 退回旧方言，恰 ①。
+
+教训：预案红数须按**每条断言实际读到的字段**核对——同一用例里 prompt 文本断言与
+maxTokens 断言是两个独立观测面，不能按「用例涉及该特性」整体计数。
+
+### 证据
+
+- 新增 `LlmHistorySummaryRequestTest` 4 条，RED 阶段 4/4 失败（prompt 文本不符＋
+  maxTokens 缺席＋focus 被忽略），生产改动后 4/4 绿；
+- compaction 存量套件（CompactionService/LlmTurnPrefix/SplitTurn/FileOps/Projection/
+  RecoveryOmissionsResolution）连带 42/42 绿；
+- 全 reactor `mvn -o clean verify` **14/14 SUCCESS**（2026-10-06）。
+
+### 提交
+
+- `7f37209` test(agent-core): pin history summarization prompt and request shape (B2 family)
+- `fc749d5` feat(agent-core): align history summarization prompts and max tokens (B2 family)
+
+新登记 B173（摘要请求未透传 thinkingLevel）/B174（customInstructions 无生产者），
+均另立独立包。

@@ -57,6 +57,7 @@ commands: `mvn clean verify`, `mvn test -pl <module>`, `mvn checkstyle:check`, `
 | `docs/18-split-turn-summary-design.md` | 包 18：split-turn 的 turn-prefix 二次摘要（✅ 已闭环） |
 | `docs/19-retry-omission-edit-design.md` | 包 19：环 A 重试前持久 omission edit（✅ 已闭环） |
 | `docs/20-projected-index-entry-resolution-design.md` | 包 20：省略目标定位的投影下标兜底（✅ 已闭环） |
+| `docs/21-history-summarization-prompt-alignment-design.md` | 包 21：历史摘要主 prompt 与请求参数对齐（✅ 已闭环） |
 
 ## 编码规范
 
