@@ -167,10 +167,26 @@ public final class RpcDispatcher {
                     out.write(RpcResponse.ok(g.id(), "get_available_thinking_levels",
                         availableThinkingLevels()));
                 case RpcCommand.Compact c -> {
-                    var result = session.compact(
-                        CompactionSettings.defaults(), c.customInstructions());
-                    out.write(RpcResponse.ok(c.id(), "compact",
-                        CompactResultWire.of(result)));
+                    // B176（docs/27）：pi void handleInputLine(line)（rpc-mode.ts:809）
+                    // —— 压缩跑 worker 虚拟线程，读线程立即处理后续命令；响应压缩
+                    // 完成时写出。
+                    Thread.startVirtualThread(() -> {
+                        try {
+                            var result = session.compact(
+                                CompactionSettings.defaults(), c.customInstructions());
+                            out.write(RpcResponse.ok(c.id(), "compact",
+                                CompactResultWire.of(result)));
+                        } catch (RuntimeException e) {
+                            try {
+                                // pi 外层 catch（:789-797）：fail(id,"compact",message)。
+                                out.write(RpcResponse.fail(c.id(), "compact", e.getMessage()));
+                            } catch (IOException io) {
+                                throw new UncheckedIOException(io);
+                            }
+                        } catch (IOException e) {
+                            throw new UncheckedIOException(e);
+                        }
+                    });
                 }
                 case RpcCommand.SetAutoCompaction a -> {
                     setAutoCompaction(a.enabled());

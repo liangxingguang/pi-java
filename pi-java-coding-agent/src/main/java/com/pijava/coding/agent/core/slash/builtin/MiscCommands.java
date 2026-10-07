@@ -11,6 +11,7 @@ import com.pijava.coding.agent.core.slash.CommandRegistry;
 import com.pijava.coding.agent.export.HtmlExporter;
 import com.pijava.coding.agent.core.slash.SlashCommand;
 import com.pijava.coding.agent.core.slash.SlashContext;
+import static com.pijava.coding.agent.core.slash.builtin.CommandUtil.async;
 import static com.pijava.coding.agent.core.slash.builtin.CommandUtil.simple;
 
 /**
@@ -121,7 +122,9 @@ public final class MiscCommands {
             (args, ctx) -> CHANGELOG));
         registry.register(simple("hotkeys", "Show all keyboard shortcuts", "",
             (args, ctx) -> hotkeys(ctx)));
-        registry.register(simple("compact", "Compact context manually", "<text>",
+        // B176（docs/27）：压缩跑 worker 线程 —— pi handleCompactCommand 是
+        // async 函数，渲染/输入线程不被整次压缩阻塞。
+        registry.register(async("compact", "Compact context manually", "<text>",
             (args, ctx) -> {
                 try {
                     // B174（docs/23，pi interactive-mode.ts:3264）：trailing 文本

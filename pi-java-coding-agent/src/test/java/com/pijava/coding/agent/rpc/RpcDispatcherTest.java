@@ -350,11 +350,13 @@ class RpcDispatcherTest {
         dispatcher.handleLine(
             "{\"id\":\"1\",\"type\":\"compact\",\"customInstructions\":\"Focus on auth\"}");
 
+        // B176（docs/27）：compact 在 worker 线程跑，响应压缩完成时写出。
+        String output = awaitResponse(out, "1");
         assertThat(recording.userTexts())
             .as("pi rpc-mode.ts:534：command 的 customInstructions 进历史摘要 prompt")
             .anyMatch(text -> text.startsWith("<conversation>")
                 && text.endsWith("\n\nAdditional focus: Focus on auth"));
-        var payload = payloadOf(out.toString(StandardCharsets.UTF_8), "1");
+        var payload = payloadOf(output, "1");
         var fieldNames = ((com.fasterxml.jackson.databind.node.ObjectNode) payload).fieldNames();
         var names = new java.util.ArrayList<String>();
         fieldNames.forEachRemaining(names::add);
@@ -377,7 +379,7 @@ class RpcDispatcherTest {
         out.reset();
         dispatcher.handleLine("{\"id\":\"1\",\"type\":\"compact\"}");
 
-        var output = out.toString(StandardCharsets.UTF_8);
+        var output = awaitResponse(out, "1");
         assertThat(output).contains("\"command\":\"compact\",\"success\":true");
         // pi rpc-mode.ts:535：compact 响应带压缩结果载荷
         assertThat(payloadOf(output, "1").get("summary")).isNotNull();
@@ -486,6 +488,23 @@ class RpcDispatcherTest {
     }
 
     /** 轮询输出直到出现 agent_settled（异步事件），带超时。 */
+    /** Wait until a response with the given id has been written (B176 async compact). */
+    private static String awaitResponse(ByteArrayOutputStream out, String id) {
+        var deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+        while (System.nanoTime() < deadline) {
+            String s = out.toString(StandardCharsets.UTF_8);
+            for (String line : s.lines().toList()) {
+                if (!line.isBlank() && line.contains("\"type\":\"response\"")
+                        && line.contains("\"id\":\"" + id + "\"")) {
+                    return s;
+                }
+            }
+            sleepQuietly(10);
+        }
+        throw new AssertionError("timed out waiting for response id=" + id
+            + " in:\n" + out.toString(StandardCharsets.UTF_8));
+    }
+
     private static String awaitSettled(ByteArrayOutputStream out) {
         var deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
         while (System.nanoTime() < deadline) {
