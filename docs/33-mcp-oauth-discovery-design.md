@@ -1,9 +1,12 @@
 # 包 33：MCP 对齐（B160）——第 6 包：OAuth 元数据发现
 
-> **状态：📝 待审核（2026-10-07，R-A）。**
+> **状态：✅ 已审核，源码校正后实施（2026-10-07，R-A）。**
 > 总包路线见 `docs/28` §3；本文是第 6 包（pi `oauth/errors.ts` 55 行＋
 > `oauth/types.ts` 204 行＋`oauth/discovery.ts` 185 行，合计 444 行）详细设计。
-> 审核通过后才许写代码。
+>
+> **审核后校正（见 §11，2026-10-07）**：重读三个源文件全文，三处失实已改——
+> 解析器不强制 https、authorization_servers 可选、PR metadata 仅三具名字段；
+> 校正方向全部趋向更忠实，不扩大范围。M4 探针同步替换为「危险协议拒绝」。
 
 ## 1. 范围边界
 
@@ -59,43 +62,48 @@ record OAuthServerInfo(String authorizationServerUrl,
                        @Nullable OAuthProtectedResourceMetadata resourceMetadata) { }
 ```
 
-### 4.2 Protected resource metadata（:39-68）
+### 4.2 Protected resource metadata（对齐 TS interface types.ts:9-14）
+
+TS 侧具名字段只有三个，其余经 index signature 直通：
 
 ```java
 record OAuthProtectedResourceMetadata(
-        String resource,                  // 必选，https URL
-        List<String> authorizationServers,// 必选；每项 https URL
-        @Nullable String name,
-        @Nullable String clientRegistrationEndpoint,  // https
-        @Nullable List<String> scopesSupported,
-        @Nullable String codeChallengeMethodsSupported,   // string[]
-        @Nullable Map<String,Object> extension) { }       // snake_case 额外字段
+        String resource,                        // 必选，safeUrl
+        @Nullable List<String> authorizationServers, // 可选；每项 safeUrl
+        @Nullable List<String> scopesSupported,      // 可选，字符串数组
+        @Nullable Map<String,Object> extension) { }  // 其余未知键原样保留
 ```
 
-### 4.3 Authorization server metadata（:70-131）
+### 4.3 Authorization server metadata（对齐 TS interface types.ts:16-30）
 
-必选：`issuer`（https）；其余按 RFC 8414：
-`authorizationEndpoint`（:90）、`tokenEndpoint`（:95）、
-`jwksUri`、`registrationEndpoint`、`scopesSupported`、
-`responseTypesSupported`（:107 必选）、`grantTypesSupported`、
-`tokenEndpointAuthMethodsSupported`、`codeChallengeMethodsSupported`、
-其余可选项（:114-126）＋extension。
+必选：`issuer`、`authorization_endpoint`、`token_endpoint`（三者均 safeUrl）、
+`response_types_supported`（必选字符串数组）；可选：`registration_endpoint`
+（optionalUrl，`""` 视同缺省）、`scopes_supported`、`grant_types_supported`、
+`token_endpoint_auth_methods_supported`、`code_challenge_methods_supported`
+（均 optionalStrings）、`client_id_metadata_document_supported` 与
+`authorization_response_iss_parameter_supported`（严格 boolean；**非布尔值
+静默丢弃为缺省，不报错**，types.ts:167-174）；其余键入 extension。
 
 ## 5. 解析器（对齐 types.ts:134-202 的 compact 语义）
 
-Java 用 Jackson 先读 `Map<String,Object>`，手工校验后构造 record：
+Java 用 Jackson 先读 `Map<String,Object>`，手工校验后构造 record。
+**注意：pi 的解析器不强制 https**——`safeUrl`（types.ts:121-128）＝非空字符串
+→ URL.canParse → 拒绝 `javascript:`/`data:`/`vbscript:` 三种协议；http 可通过。
+https 门在包⑦ `flow.ts:108`（发送凭据前，loopback 放行）。
 
-- `parseProtectedResourceMetadata(Object raw)`：
-  - 非对象 ⇒ OAuthError("invalid protected resource metadata …")；
-  - `resource` 必须字符串且为 **https URL**（:143-149）；
-  - `authorization_servers` 必须存在且是数组，**逐项 https URL**（:150-160）；
-  - 未知键收入 extension（:161-164）。
-- `parseAuthorizationServerMetadata(raw)`：
-  - `issuer` 必选 https（:178-185）；
-  - `authorization_endpoint` 若有须 https（:186）；
-  - `response_types_supported` 必选数组（:173-176, RFC 必选项）；
-  - 提供的 `grant_types_supported` 等数组校验元素类型；
-  - compact 的「drop undefined」对 Jackson 自动满足；缺字段⇒null（record 组件对象类型）。
+- `parseProtectedResourceMetadata(Object raw)`（types.ts:134-144）：
+  - 非对象 ⇒ `Error("Invalid OAuth protected resource metadata")`；
+  - `resource` 走 safeUrl（必填，缺失/非串/不可解析/危险协议 ⇒ 错）；
+  - `authorization_servers`：**可选**；undefined/null ⇒ 缺省；`""` 或非数组、
+    含非字符串元素 ⇒ 错；存在则逐项走 safeUrl（:139-141）；
+  - `scopes_supported`：optionalStrings（不做 URL 校验）；
+  - 未知键收入 extension；compact 丢 undefined 在 Java 侧天然成立。
+- `parseAuthorizationServerMetadata(raw)`（types.ts:146-176）：
+  - `response_types_supported`：optionalStrings 后必须存在，否则
+    `Error("Invalid response_types_supported")`；
+  - `issuer`/`authorization_endpoint`/`token_endpoint` 均 safeUrl 必填；
+  - `registration_endpoint`：optionalUrl（absent 含 `""`，:105-108）；
+  - 四个字符串数组各自校验；两布尔字段非布尔 ⇒ 静默丢弃。
 
 ## 6. WWW-Authenticate（discovery.ts:39-65）
 
@@ -172,8 +180,8 @@ interface OAuthFetch {
 | # | 用例 |
 |---|---|
 | 1 | parseWwwAuthenticate：bearer/dpop、引号/裸值、空值缺省、非 bearer 空 challenge |
-| 2 | PR metadata 解析：合法；resource 非 https/authorization_servers 缺失或含非 https ⇒ 错 |
-| 3 | AS metadata 解析：issuer 必选 https；response_types_supported 必选；合法通过 |
+| 2 | PR metadata 解析：合法（含 authorization_servers 整体缺省）；resource 缺失/非串/`javascript:` 危险协议 ⇒ 错；authorization_servers 非数组或含不可解析 URL ⇒ 错 |
+| 3 | AS metadata 解析：issuer/authorization_endpoint/token_endpoint 必填可解析；response_types_supported 必选；两布尔非布尔静默丢弃；合法通过 |
 | 4 | build URLs：三候选顺序与 path 变体（根路径只 2 个） |
 | 5 | PR 发现：路径后缀→404⇒根路径回退成功；5xx 不回退直接抛 |
 | 6 | AS 发现：oauth 候选 miss⇒oid 命中；issuer 不等抛错（含 bare origin 末尾斜杠对齐）；全 miss⇒空 |
@@ -189,7 +197,7 @@ interface OAuthFetch {
 | M1 | PR miss 不回退根路径 | 用例 5 |
 | M2 | AS 发现跳过 issuer 校验（恒通过） | issuer 条款（oauth.test clause 5） |
 | M3 | URL 候选顺序 oauth/oidc 调换 | 用例 4/6 |
-| M4 | PR metadata 不校验 authorization_servers https | 用例 2 |
+| M4 | safeUrl 不拒绝 `javascript:`/`data:`/`vbscript:` 危险协议 | 用例 2 |
 | M5 | selectResource 不做路径前缀检查 | 用例 8 |
 | M6 | field 正则把空值（`=""`）当有效值 | 用例 1 |
 
@@ -198,3 +206,20 @@ interface OAuthFetch {
 ## 10. 台账影响
 
 - B160 不销号；B177 维持。闭环回填 docs/28 banner 与本文。
+
+## 11. 审核后源码校正（2026-10-07）
+
+设计稿审核通过后，重读 `errors.ts`/`types.ts`/`discovery.ts` 全文（初稿取证
+仅靠局部摘录），三处失实，实施前更正：
+
+| # | 初稿说法 | pi 源码事实 | 落点 |
+|---|---|---|---|
+| 1 | 解析器校验字段为 https URL | `safeUrl`（types.ts:121-128）只拒绝 `javascript:`/`data:`/`vbscript:`；https 门在 `flow.ts:108`（包⑦） | §4.2/§5 |
+| 2 | `authorization_servers` 必选 | optionalStrings，可整体缺省（types.ts:139） | §4.2/§5 |
+| 3 | PR metadata 具名 name/clientRegistrationEndpoint 等字段 | TS interface 仅 resource/authorization_servers/scopes_supported 三具名字段（types.ts:9-14） | §4.2 |
+
+附带修正：两布尔字段非布尔值静默丢弃（不报错）；M4 探针由「去 https 校验」
+（事实不存在该检查，会零红）替换为「不拒绝危险协议」。
+
+校正方向全部趋向更忠实，不扩大范围。教训同包⑤：**设计取证必须读源文件全文，
+局部摘录不足以支撑逐字对齐。**
