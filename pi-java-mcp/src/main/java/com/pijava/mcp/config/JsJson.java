@@ -15,7 +15,7 @@ import com.fasterxml.jackson.databind.node.TextNode;
  * containers are written here and the scalars come from {@link JsonNode#toString()},
  * which produces the same literal as JS (quotes and escapes included).</p>
  */
-final class JsJson {
+public final class JsJson {
 
     /** The indentation of the file: the first line that starts with whitespace ({@code config.ts:239}). */
     private static final Pattern INDENT = Pattern.compile("^([ \\t]+)\\S", Pattern.MULTILINE);
@@ -31,7 +31,7 @@ final class JsJson {
      *
      * @param text the file as read, or {@code null} when it does not exist yet
      */
-    static String detectIndent(@Nullable String text) {
+    public static String detectIndent(@Nullable String text) {
         if (text == null) {
             return "  ";
         }
@@ -49,7 +49,7 @@ final class JsJson {
      * @param node   the tree to write
      * @param indent one indentation level, never empty ({@link #detectIndent} guarantees it)
      */
-    static String stringify(JsonNode node, String indent) {
+    public static String stringify(JsonNode node, String indent) {
         var out = new StringBuilder();
         write(out, node, indent, 0);
         return out.toString();

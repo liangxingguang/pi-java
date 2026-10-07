@@ -152,8 +152,15 @@ final class OAuthEndpoints {
      * Scopes for a step-up authorization: the challenged scopes plus the ones
      * granted so far, since a challenge may list only the missing scopes
      * (SEP-2350). Null when the challenge named no scopes.
+     *
+     * <p>pi exports this from {@code @earendil-works/pi-mcp/oauth} and the
+     * coding-agent's sign-in orchestration uses it, so it is public here too.</p>
+     *
+     * @param granted scopes already granted
+     * @param challenged scopes the server asked for
+     * @return the merged scope string, or {@code null}
      */
-    static @Nullable String stepUpScope(@Nullable String granted, @Nullable String challenged) {
+    public static @Nullable String stepUpScope(@Nullable String granted, @Nullable String challenged) {
         if (challenged == null) {
             return null;
         }
