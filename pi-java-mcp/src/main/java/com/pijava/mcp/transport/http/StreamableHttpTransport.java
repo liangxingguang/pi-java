@@ -23,7 +23,7 @@ import com.pijava.mcp.transport.AbstractMcpTransport;
  * with JSON (possibly a batch array), an SSE stream, or an acknowledgement.
  * Sessions are tracked via the {@code Mcp-Session-Id} header.</p>
  */
-final class StreamableHttpTransport extends AbstractMcpTransport {
+public final class StreamableHttpTransport extends AbstractMcpTransport {
 
     private static final String ACCEPT = "application/json, text/event-stream";
     private static final int ERROR_BODY_BYTES = 8 * 1024;
@@ -42,7 +42,12 @@ final class StreamableHttpTransport extends AbstractMcpTransport {
     private boolean getStreamStarted;
 
     /** Create a transport. */
-    StreamableHttpTransport(StreamableHttpTransportOptions options) {
+    /**
+     * Create a transport over {@code options}.
+     *
+     * @param options endpoint, headers, fetch, and reconnect policy
+     */
+    public StreamableHttpTransport(StreamableHttpTransportOptions options) {
         this.options = options;
         this.fetch = options.fetch() == null ? new JdkMcpHttpFetch() : options.fetch();
         this.streams = new StreamableHttpStreams(this);

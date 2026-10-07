@@ -10,6 +10,7 @@ import org.jspecify.annotations.Nullable;
  *
  * @param command       executable
  * @param args          arguments
+ * @param cwd           working directory of the child; {@code null} inherits this process's
  * @param env           environment overrides
  * @param inheritEnv    whether the child inherits this process's environment
  * @param stderr        stderr routing
@@ -19,6 +20,7 @@ import org.jspecify.annotations.Nullable;
 public record StdioTransportOptions(
         String command,
         List<String> args,
+        @Nullable String cwd,
         @Nullable Map<String, String> env,
         boolean inheritEnv,
         Stderr stderr,
@@ -30,11 +32,11 @@ public record StdioTransportOptions(
 
     /** Minimal options. */
     public StdioTransportOptions(String command) {
-        this(command, List.of(), null, true, Stderr.PIPE, 0, 0);
+        this(command, List.of(), null, null, true, Stderr.PIPE, 0, 0);
     }
 
     /** Minimal options with arguments. */
     public StdioTransportOptions(String command, List<String> args) {
-        this(command, args, null, true, Stderr.PIPE, 0, 0);
+        this(command, args, null, null, true, Stderr.PIPE, 0, 0);
     }
 }

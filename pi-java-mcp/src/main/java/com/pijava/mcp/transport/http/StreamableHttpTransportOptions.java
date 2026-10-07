@@ -18,7 +18,7 @@ import com.pijava.mcp.AuthProvider;
  * @param authProvider  credential provider
  * @param reconnect     reconnection policy; defaults apply when {@code null}
  */
-record StreamableHttpTransportOptions(
+public record StreamableHttpTransportOptions(
         String url,
         @Nullable Map<String, String> headers,
         @Nullable McpHttpFetch fetch,

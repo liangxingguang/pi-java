@@ -26,6 +26,9 @@ final class StdioProcess {
         command.add(options.command());
         command.addAll(options.args());
         pb.command(command);
+        if (options.cwd() != null) {
+            pb.directory(new java.io.File(options.cwd()));
+        }
 
         var environment = pb.environment();
         if (!options.inheritEnv()) {

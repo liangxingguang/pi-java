@@ -58,7 +58,7 @@ class McpStdioTest {
         var options = new StdioTransportOptions(javaBin(), List.of(
                 "-cp", System.getProperty("java.class.path"),
                 StubbornFixtureServer.class.getName()),
-                null, true, StdioTransportOptions.Stderr.PIPE, 100, 0);
+                null, null, true, StdioTransportOptions.Stderr.PIPE, 100, 0);
         var transport = new StdioTransport(options);
         var client = new McpClient(new McpClientOptions("stdio-test", "1.0.0"));
         client.connect(transport);

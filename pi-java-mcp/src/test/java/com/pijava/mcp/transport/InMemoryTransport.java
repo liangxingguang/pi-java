@@ -13,13 +13,17 @@ import com.pijava.mcp.protocol.jsonrpc.McpConnectionClosedError;
  * {@code queueMicrotask} semantics: {@code send} never re-enters the peer's
  * listeners on the calling stack.</p>
  */
-final class InMemoryTransport extends AbstractMcpTransport {
+public final class InMemoryTransport extends AbstractMcpTransport {
+
+    /** Create an unconnected transport. */
+    public InMemoryTransport() {
+    }
 
     private @Nullable InMemoryTransport peer;
     private volatile boolean closed;
 
     /** Connect two transports as peers. */
-    void connect(InMemoryTransport other) {
+    public void connect(InMemoryTransport other) {
         if (peer != null || other.peer != null) {
             throw new IllegalStateException("transport already connected");
         }
