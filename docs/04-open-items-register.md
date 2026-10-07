@@ -51,7 +51,6 @@
 | B31 | `get_state.model` 发字符串，pi 发整个模型对象 | RpcDispatcher.buildState 发 `"provider/id"`；pi 字段是 `Model` |
 | B32 | `get_state.sessionName` 恒有值，pi 可选 | 默认 `"session"`，客户端分不出用户命名与默认名；pi 在首次 session_info 前缺键 |
 | B33 | `get_state.messageCount` 取转录条数，pi 取工作副本条数 | 压缩后必然分叉（transcript 含 compaction/model_change 等非消息条目） |
-| B34 | `queue_update` 无生产者 | 队列变化不通知任何宿主；pi 在排队处发射 |
 | B35 | `thinking_level_changed` 无生产者 | 改级别事件不发射；TUI 状态栏与 RPC 客户端都断在此 |
 | B36 | 无 `abortCompaction` | TUI 无法取消压缩（Java 借 lane.abortSignal，无 per-operation 取消句柄）；B39 的 Esc 换绑被它挡着 |
 | B49 | `turn_end` 颗粒度不同 | pi 每回合一条，Java 的 AgentSettled 每次驱动一条；真对齐要改事件时序 |
@@ -135,7 +134,7 @@
 | B66 | 6 个已声明键位未接线 | MODEL_CYCLE/THINKING_CYCLE/TOOLS_EXPAND 等 |
 | B78 | FuzzyMatcher 语义不同 | pi 子序列匹配 ＋ 分词；Java 不同 |
 | B145 | 启动/登录后定向目录刷新未接线 | 仅 RPC 模式有后台刷新，pi 另有三处 |
-| B175 | TUI 压缩窗口输入缓冲＋压缩结束自动重放 | pi `queueCompactionMessage`/`flushCompactionQueue`（interactive-mode.ts:4688-4760）；Java 现状：压缩中提交同步抛错，无客户端排队/重放，含扩展命令立即执行分支 |
+| B176 | 手动 `/compact` 阻塞 TUI 事件循环 | pi `handleCompactCommand` 是 fire-and-forget async（interactive-mode.ts:7008-7018），压缩中事件循环仍可输入；Java 的 slash 命令在渲染线程同步跑完整压缩 ⇒ 该路径下缓冲不可达（自动压缩/RPC 触发的压缩不受影响）；修法＝压缩挪 worker 线程、命令异步完成 |
 
 ---
 

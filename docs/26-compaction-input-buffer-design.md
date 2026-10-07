@@ -1,7 +1,7 @@
 # 包 26：压缩窗口输入缓冲与自动重放（B175）＋ queue_update 生产者（B34）
 
-> **状态：⏳ 设计待审核，未写生产代码。**
-> 承接台账 **B175**，并顺带销号高度耦合的 **B34**（同一实现面）。
+> **状态：✅ 已闭环（2026-10-07，R-A）。**
+> 台账 **B175、B34** 双销号；实施记录见 §7。
 
 ## 1. 问题
 
@@ -228,5 +228,40 @@ ChatScreen。RpcMode 事件映射忽略它（不上 RPC 线）。
 
 ## 6. 台账影响
 
-- **B175、B34 销号**（B 71 → 69）。
+- **B175、B34 销号**；另登 **B176**（手动 `/compact` 阻塞 TUI，见 §7）⇒ B 71 → 70。
 - docs/04 同步；闭环后 banner 与实施记录回填。
+
+## 7. 实施记录（2026-10-07）
+
+**落地（4 commits）**：
+
+| commit | 内容 |
+|---|---|
+| `1319ef9` | agent-core：onEnd 前先关窗口（4 发射点）＋队列文本读口；CompactionInFlightTest 翻改 |
+| `b8c6c61` | CompactionInputBuffer（willRetry flush、失败全量还原）＋ FlashStatus 方言事件 |
+| `05b1a79` | 接线：InteractiveMode 缓冲/订阅/Replayer、emitQueueUpdate 聚合、clearQueue、RPC clear_queue |
+| `2ceedded` | TUI：PendingQueueView pending 行＋showStatus；ChatScreen 498 行 |
+
+**测试（新增 13 条全绿）**：CompactionInFlightTest 翻改 3 处断言、QueueSchedulingTest
+＋1、CompactionInputBufferTest ×7、InteractiveModeCompactionBufferTest ×1、
+RpcConcurrentPromptRoutingTest ＋1、ChatScreenSessionEventTest ＋3。
+全 reactor `clean verify` **14/14 BUILD SUCCESS**（6:44）。
+
+**变异探针 5/5 红**：M1 反转 willRetry 分支＝2 红；M2 成功点不关窗＝E2E 红
+（flush prompt 撞压缩门，16.8s 超时）；M3 失败不还原缓冲＝2 红；M4 聚合漏缓冲＝
+E2E 红（1.7s，queue_update 断言）；M5 clearQueue 不发 update＝RPC 红。
+
+**实施中两处设计外发现**：
+
+1. **split-turn 要两次摘要调用**：夹具 keepRecent=1、cut 落在最后一条助手时
+   `CompactionService` 走 B171 split 分支——turnPrefix 范围 `[turnStart,cut)`
+   **包含本轮 user 消息**，`summarize` 与 `summarizeTurnPrefix` 各消费一次 provider
+   调用（首轮误诊为「沉默调用吃掉 turn2」，经 StackWalker 调用链定位）。夹具序列
+   据实改为 4 轮。
+2. **新登记 B176**：pi `handleCompactCommand` 是 fire-and-forget async
+   （interactive-mode.ts:7008-7018），压缩中 TUI 事件循环照常输入；Java 的
+   slash 命令在渲染线程同步跑完整压缩 ⇒ 缓冲在手动 `/compact` 路径不可达
+   （自动压缩/RPC compact 路径正常）。本包不修，修法＝压缩挪 worker 线程。
+
+**已知残留**：pending 区未在 inline（raw-scrollback）模式渲染；缓冲文本进
+`[dim]` markup 沿用 ToolCallCard 约定（文本含 `[` 可能影响渲染）。台账：A 4 条、B 70 条。
