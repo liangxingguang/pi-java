@@ -34,7 +34,6 @@
 
 | # | 条目 | 挡在什么上 |
 |---|---|---|
-| A5 | 并发 prompt 的**路由语义**（F4 已裁「对齐 pi」，未实施） | pi 运行中 prompt 必须显式带 `streamingBehavior`（steer/followUp），否则抛带指引的错误；压缩中禁 prompt。Java 只有 isRunning 抛错的门，缺这两条语义 |
 | A9 | **per-model 压缩设置** | pi `getCompactionSettings(model)` 按模型取设置；Java 的 settings supplier 无模型参数 |
 | A10 | **内置工具线程安全审计**（read/write/edit/bash/glob…） | pi 契约「工具必须可并发执行」；审计未开始 |
 | A14 | shell 集成夹具无牙：多字节字符在 8 KiB 边界被切断 | 需字节精确的假 shell（当前 `.cmd`/sh 脚本做不到）；`Utf8ChunkStream` 只有单元级覆盖 |
@@ -136,6 +135,7 @@
 | B66 | 6 个已声明键位未接线 | MODEL_CYCLE/THINKING_CYCLE/TOOLS_EXPAND 等 |
 | B78 | FuzzyMatcher 语义不同 | pi 子序列匹配 ＋ 分词；Java 不同 |
 | B145 | 启动/登录后定向目录刷新未接线 | 仅 RPC 模式有后台刷新，pi 另有三处 |
+| B175 | TUI 压缩窗口输入缓冲＋压缩结束自动重放 | pi `queueCompactionMessage`/`flushCompactionQueue`（interactive-mode.ts:4688-4760）；Java 现状：压缩中提交同步抛错，无客户端排队/重放，含扩展命令立即执行分支 |
 
 ---
 
