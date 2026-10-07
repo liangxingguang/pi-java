@@ -110,6 +110,16 @@ public sealed interface AgentSessionEvent {
 
     record BashExecutionUpdate(String id, String delta) implements AgentSessionEvent {}
 
+    /**
+     * 交互层状态文本（<b>方言，pi 无此事件</b>）。
+     *
+     * <p>B175（docs/26 §3.4）：pi 的 InteractiveMode 是 UI/会话混合对象，
+     * 缓冲时直接 {@code showStatus("Queued message for after compaction")}；
+     * Java 刻意分层（{@code InteractiveMode} 无 TUI 类型），状态文本必须经会话
+     * 事件面到 {@code ChatScreen}。RPC 映射<b>忽略</b>本事件、不上线。</p>
+     */
+    record FlashStatus(String message) implements AgentSessionEvent {}
+
     // ═══════════════════════════════════════════════════════════
     // 工具执行生命周期（包⑦，原 docs/34）
     // ═══════════════════════════════════════════════════════════
