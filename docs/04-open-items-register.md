@@ -119,6 +119,7 @@
 | B160 | **MCP 整块零对应** | pi `packages/mcp`（客户端/transports/…，主流内置功能） |
 | B161 | **codemode 整块零对应** | quickjs-wasi 沙箱代码执行 |
 | B162 | tool-search / virtual-models / nested-tool-calls 三块零对应 | deferred 工具发现；虚拟模型；嵌套工具调用 |
+| B177 | MCP 默认 `codemode` exposure 暂不可达 | B160 各包 wire/配置语义全保留，运行时激活路径依赖 B161 闭环（docs/28 §3 裁决） |
 | B163 | 主题/色彩系统差距 | pi 3,176 行（theme/system-theme/oklab…），Java 74 行 |
 | B164 | 分类器基础设施零对应 | image/classifier 统一模型设施 |
 
