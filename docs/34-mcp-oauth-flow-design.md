@@ -1,10 +1,10 @@
 # 包 34：MCP 对齐（B160）——第 7 包：OAuth 动态流程
 
-> **状态：📝 待审核（2026-10-07，R-A）。**
+> **状态：✅ 已闭环（2026-10-07，R-A，26c56d8a）。**
 > 总包路线见 `docs/28` §3；本文是第 7 包（pi `oauth/flow.ts` 449 行＋
 > `oauth/provider.ts` 168 行＋`oauth/callback.ts` 164 行＋`oauth/types.ts`
 > 剩余 76 行，合计 857 行）详细设计。**本包是 oauth 域最大一包。**
-> 审核通过后才许写代码。
+> 实施记录见 §12。
 
 ## 1. 范围边界
 
@@ -373,3 +373,57 @@ pi 用 `structuredClone` ⇒ Java 走 Jackson `convertValue` 往返）。
     是 Java 特有（pi 只有一个）——桥接点单一，是有意偏差。
   - **B179**：`OAuthClientInformationMixed` 联合类型塌成单 record（§3.1 论证）。
 - 闭环回填 docs/28 banner 与本文。
+
+## 12. 实施记录（2026-10-07，26c56d8a）
+
+**落地（1 feat＋1 docs）**，41 文件（22 主源新增／3 删除／4 改，14 测试）。
+
+| 组件 | 内容 |
+|---|---|
+| 地基 | `McpFetch`＋`JdkMcpFetch`（根包）；`AuthProvider` 上移根包＋`Context` 补 `fetch`/`token` |
+| 类型 | `OAuthTokens`/`OAuthClientMetadata`/`OAuthClientInformation`/`OAuthDiscoveryState`；`parseOAuthTokens`/`parseClientInformation` |
+| flow | `OAuthPkce`、`OAuthEndpoints`（6 分支认证选择/stepUpScope/withScope/startAuthorization）、`OAuthTokenRequests`、`OAuthFlow`（runFlow/authorizeMcp/iss 校验）、`OAuthProviders`（并发单飞） |
+| 回调 | `OAuthCallbackServer`（6 分支状态机）＋Page/Callback/Options |
+| provider | `McpOAuthProvider`＋`McpOAuthState`/`OAuthStateStore`/`MemoryOAuthStateStore` |
+
+**测试 115/115 绿**（原 80＋新 35：flow 5／providers 3／endpoints 9／callback 8／
+provider 8／端到端桥 2）；checkstyle 0；最长文件 494 行。
+
+**变异探针 8/8 红**（共 10 条命中）：
+
+| # | 变异 | 红 |
+|---|---|---|
+| M1 | iss 校验恒跳过 | 1 |
+| M2 | 刷新失败吞掉所有 OAuthError | 1 |
+| M3 | stepUpScope 丢 granted | 2 |
+| M4 | 去掉并发共享 | 1（见下） |
+| M5 | `own` 不比对 serverUrl | 1 |
+| M6 | 回调不校验 path | 1 |
+| M7 | tokenRequest 先查状态再看错误体 | 2 |
+| M8 | secureEndpoint 不拒 http | 1 |
+
+**两处设计外发现**：
+
+1. **M4 初版夹具没牙（且不稳）**：用 `CompletableFuture.runAsync` 起并发——
+   公共池会把第二个任务串行化到第一个完成之后，此时「token 已被替换」护栏
+   把它挡掉，于是「去掉共享」零红。改成显式虚拟线程后仍**时红时绿**：B 线程
+   若在 A 完成之后才进入 `onUnauthorized`，护栏同样掩盖。**根因：事后计数
+   无法区分「共享了」与「被护栏挡掉了」**。定案＝钉住**第二个线程是否进入了
+   令牌临界区**（第二个闩锁 + 400 ms 上界），变异 5/5 红、还原 5/5 绿。
+   教训（接续「并发夹具一律闩锁」）：**共享语义的断言必须钉在临界区入口，
+   不能钉在事后计数**。
+2. **`@Nullable` 不能加在外层类限定的嵌套类型前**：`@Nullable OAuthClientProvider.AddClientAuthentication`
+   编译失败，须写 `OAuthClientProvider.@Nullable AddClientAuthentication`
+   或 import 嵌套类型后用 `@Nullable AddClientAuthentication`（本包取后者）。
+
+**刻意偏差（登记）**：
+
+- **B178**：`McpFetch`（缓冲）与 transport 的 `McpHttpFetch`（流式）并存，
+  pi 只有一个；桥接点唯一（`StreamableHttpTransport.bufferedFetch`）。
+- **B179**：`OAuthClientInformationMixed` 联合类型塌成单 record（§3.1 论证：
+  流程只读 clientId/clientSecret/tokenEndpointAuthMethod）。
+- **B180**：`OAuthClientProvider` 各方法在 Java 侧同步（pi 为 `MaybePromise`）；
+  `saveClientInformation` 的「能否持久化」由 `canSaveClientInformation()` 谓词
+  表达（pi 靠方法存在性，用谓词才能保住「注册前先报错」的次序）。
+- 实施期修正：`withScope` 把空串按缺省（JS 真值语义，clause 1 的 `scope:""` 依赖它）；
+  `refreshAuthorization` 的传入 refresh_token 是**兜底不是覆盖**（除设计稿外已回源更正）。
