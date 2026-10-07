@@ -11,6 +11,7 @@ import com.pijava.tui.component.ChatMessage;
 import com.pijava.tui.component.ChatPanel;
 import com.pijava.tui.component.EditorComponent;
 import com.pijava.tui.component.MetaKind;
+import com.pijava.tui.component.PendingQueueView;
 import com.pijava.tui.component.SlashCompleter;
 import com.pijava.tui.component.StatusBar;
 import com.pijava.tui.component.StatusIndicator;
@@ -32,6 +33,7 @@ import java.util.function.Consumer;
 public final class ChatScreen implements EntryObserver, StreamObserver {
 
     private final ChatPanel chatPanel = new ChatPanel();
+    private final PendingQueueView pendingQueue = new PendingQueueView();
     private final EditorComponent editor = new EditorComponent();
     private SlashCompleter completer = new SlashCompleter(List.of());
     private SessionSnapshot snapshot;
@@ -81,7 +83,7 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
         if (entry instanceof Entry.Message message
                 && "user".equals(message.message().role())
                 && pendingUserText != null
-                && pendingUserText.equals(joinText(message.message().content()))) {
+                && pendingUserText.equals(ChatMessage.joinText(message.message().content()))) {
             pendingUserText = null;
             return;
         }
@@ -189,6 +191,10 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     public Column render() {
         var children = new ArrayList<Element>();
         children.add(chatPanel.render().fill());
+        Element pending = pendingQueue.render();
+        if (pending != null) {
+            children.add(pending);
+        }
         children.add(TamboUIAdapter.spacer(1));
         Element popup = completer.render();
         if (popup != null) {
@@ -287,25 +293,28 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
             case AgentSessionEvent.SummarizationRetryFinished ignored ->
                 clearIndicator(StatusIndicator.Kind.RETRY);
             case AgentSessionEvent.CompactionStart start ->
-                setIndicator(new StatusIndicator.Compaction(literalOf(start.reason()), interruptHint));
+                setIndicator(new StatusIndicator.Compaction(
+                    start.reason().name().toLowerCase(), interruptHint));
             case AgentSessionEvent.CompactionEnd ignored ->
                 clearIndicator(StatusIndicator.Kind.COMPACTION);
+            case AgentSessionEvent.QueueUpdate q ->
+                pendingQueue.update(q.steering(), q.followUp());
+            case AgentSessionEvent.FlashStatus status -> showStatus(status.message());
             default -> { }
         }
+    }
+
+    /**
+     * Append a dim status line to the chat area（B175，docs/26 §3.6；
+     * pi {@code showStatus}，interactive-mode.ts:3773-3790）。
+     */
+    private void showStatus(String message) {
+        chatPanel.append(new ChatMessage.System(message, MetaKind.GENERIC));
     }
 
     /** 置指示器（pi {@code showStatusIndicator}：单槽，旧的直接被替换）。 */
     private void setIndicator(StatusIndicator next) {
         indicator = next;
-    }
-
-    /** 枚举 → pi 的线格式字面量（{@code CompactionObserver} 的 {@code "manual"} 等）。 */
-    private static String literalOf(AgentSessionEvent.CompactionReason reason) {
-        return switch (reason) {
-            case MANUAL -> "manual";
-            case THRESHOLD -> "threshold";
-            case OVERFLOW -> "overflow";
-        };
     }
 
     /**
@@ -485,16 +494,6 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     /** The committed message count (test hook). */
     public int messageCount() {
         return chatPanel.size();
-    }
-
-    private static String joinText(List<ContentBlock> blocks) {
-        var builder = new StringBuilder();
-        for (var block : blocks) {
-            if (block instanceof ContentBlock.TextContent(String text1, _)) {
-                builder.append(text1);
-            }
-        }
-        return builder.toString();
     }
 
 }

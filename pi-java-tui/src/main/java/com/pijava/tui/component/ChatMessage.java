@@ -103,7 +103,8 @@ public sealed interface ChatMessage {
         return new ToolResult(blocks, false);
     }
 
-    private static String joinText(List<ContentBlock> blocks) {
+    /** Join the text of every TextContent block (shared by ChatScreen, formerly duplicated). */
+    public static String joinText(List<ContentBlock> blocks) {
         var builder = new StringBuilder();
         for (var block : blocks) {
             if (block instanceof ContentBlock.TextContent text) {

@@ -431,7 +431,8 @@ public final class PiTuiApp {
                 var text = chatScreen.inputText();
                 // A5：pi Alt+Enter —— 运行中才排 followUp；空闲等同普通 Enter
                 // （interactive-mode.ts:4418-4429）。
-                if (session.isRunning()) {
+                // B175（docs/26）：压缩中 ⇒ 缓冲为 followUp。
+                if (session.isCompacting() || session.isRunning()) {
                     mode.followUp(text);
                 } else {
                     submitPrompt(text);

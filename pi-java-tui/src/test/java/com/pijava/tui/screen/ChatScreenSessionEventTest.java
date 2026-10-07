@@ -1,11 +1,14 @@
 package com.pijava.tui.screen;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import com.pijava.agent.harness.SessionSnapshot;
 import com.pijava.coding.agent.core.AgentSessionEvent;
 import com.pijava.coding.agent.core.AgentSessionEvent.CompactionReason;
 import com.pijava.tui.component.ChatMessage;
+import com.pijava.tui.component.MetaKind;
+import com.pijava.tui.component.PendingQueueView;
 import com.pijava.tui.component.StatusIndicator;
 
 import dev.tamboui.buffer.Buffer;
@@ -210,6 +213,73 @@ class ChatScreenSessionEventTest {
 
         assertThat(renderRow(screen.statusBar(), 60)).contains("Retrying (1/3) in 5s...");
         assertThat(renderRow(screen.statusBar(), 60)).doesNotContain("demo");
+    }
+
+    @Test
+    void pendingQueueViewHoldsUpdateTextsAndRendersOnlyWhenNonEmpty() {
+        var view = new PendingQueueView();
+        assertThat(view.isEmpty()).isTrue();
+        assertThat(view.render()).isNull();
+
+        view.update(List.of("a", "b"), List.of("c"));
+        assertThat(view.steering()).containsExactly("a", "b");
+        assertThat(view.followUp()).containsExactly("c");
+        assertThat(view.isEmpty()).isFalse();
+    }
+
+    @Test
+    void queueUpdateRendersPendingRowsAndEmptyUpdateRemovesThem() throws Exception {
+        // B175（docs/26 §3.6）：pending 区在聊天区与编辑器之间。
+        var screen = new ChatScreen();
+        screen.onSessionEvent(new AgentSessionEvent.QueueUpdate(
+            List.of("turn here"), List.of("summarize later")));
+
+        var rows = renderText(screen.render(), 100, 40);
+        assertThat(rows).anyMatch(r -> r.contains("Steering: turn here"));
+        assertThat(rows).anyMatch(r -> r.contains("Follow-up: summarize later"));
+
+        screen.onSessionEvent(new AgentSessionEvent.QueueUpdate(List.of(), List.of()));
+        rows = renderText(screen.render(), 100, 40);
+        assertThat(rows)
+            .noneMatch(r -> r.contains("Steering") || r.contains("Follow-up"));
+    }
+
+    @Test
+    void flashStatusAppendsDimSystemBubble() {
+        var screen = new ChatScreen();
+        screen.onSessionEvent(new AgentSessionEvent.FlashStatus(
+            "Queued message for after compaction"));
+
+        assertThat(screen.lastMessage())
+            .isEqualTo(new ChatMessage.System(
+                "Queued message for after compaction", MetaKind.GENERIC));
+    }
+
+    /** Renders the tree into a buffer and returns its rows as plain text. */
+    private static List<String> renderText(Element element, int width, int height)
+            throws Exception {
+        var buffer = Buffer.empty(new Rect(0, 0, width, height));
+        var frame = Frame.forTesting(buffer);
+        var focus = new FocusManager();
+        markRenderThread(true);
+        try {
+            element.render(frame, new Rect(0, 0, width, height),
+                new DefaultRenderContext(focus, new EventRouter(focus, new ElementRegistry())));
+        } finally {
+            markRenderThread(false);
+        }
+        var rows = new ArrayList<String>();
+        for (int y = 0; y < height; y++) {
+            var row = new StringBuilder();
+            for (int x = 0; x < width; x++) {
+                var cell = buffer.get(x, y);
+                if (!cell.isContinuation()) {
+                    row.append(cell.symbol());
+                }
+            }
+            rows.add(row.toString().stripTrailing());
+        }
+        return rows;
     }
 
     /** Renders one row into a Buffer and returns it as plain text. */
