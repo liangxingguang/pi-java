@@ -18,4 +18,15 @@
         <Method name="resolveStrict"/>
         <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
     </Match>
+
+    <!-- B185：`optionalBoolean` 的返回是三态 —— TRUE/FALSE 是元数据的真值，
+         null 是「键缺席」（pi 的 `undefined`）。它**从不**用 null 当「假」，
+         所以 Boolean 在这里是判别值不是「可空的 boolean」；NP_BOOLEAN_RETURN_NULL
+         是误报（与 B144 同形）。方法带 @Nullable 但 SpotBugs 不认 jspecify，
+         故按本仓排除机制处理。 -->
+    <Match>
+        <Class name="com.pijava.mcp.oauth.OAuthMetadataParsers"/>
+        <Method name="optionalBoolean"/>
+        <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
+    </Match>
 </FindBugsFilter>
