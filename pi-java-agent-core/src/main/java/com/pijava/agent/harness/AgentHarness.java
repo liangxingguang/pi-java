@@ -404,6 +404,15 @@ public class AgentHarness implements AutoCloseable {
         return requireLane(laneName).isCompacting();
     }
 
+    /**
+     * Whether an agent run is active on this lane（A5，{@code docs/25}；
+     * pi {@code isStreaming}，{@code agent-session.ts:1430-1432}）。宿主并发
+     * prompt 路由门读它；与 {@link #isCompacting} 同形。
+     */
+    public boolean isRunning(String laneName) {
+        return requireLane(laneName).isRunning();
+    }
+
     // ═══════════════════════════════════════════════════════════
     // Skills
     // ═══════════════════════════════════════════════════════════
