@@ -1,9 +1,8 @@
 # 包 25：并发 prompt 路由语义（streamingBehavior：steer / followUp）（A5）
 
-> **状态：⏳ 设计待审核，未写生产代码。**
-> 承接台账 **A5**：F4 已裁「对齐 pi」，本包落地该裁决。
-> 目标：运行中 / 压缩中的 prompt 路由与 pi 行为一致——显式
-> `streamingBehavior` 才排队，错误文本逐字，RPC disposition 线语义一致。
+> **状态：✅ 已闭环（2026-10-07，R-A）。**
+> 承接台账 **A5**：F4 已裁「对齐 pi」，本包落地该裁决，A5 销号。
+> 实施记录见 §7。
 
 ## 1. 问题
 
@@ -250,3 +249,38 @@ catch（`WebDispatcher.java:115-118`）已把异常映射成
 - **A5 销号**（A 类 5 → 4）。
 - 新增 1 条 B（TUI 压缩窗口缓冲重放）。
 - docs/04 同步；闭环后本文件 banner 与实施记录回填。
+
+## 7. 实施记录（2026-10-07）
+
+**落地（6 commits）**：
+
+| commit | 内容 |
+|---|---|
+| `74c160a` | `AgentHarness.isRunning(lane)` 公开口 + 闩锁测试 |
+| `8edadea` | `StreamingBehavior` enum（core）＋ `PromptRouter` 门（含逐字消息常量） |
+| `85a8b00` | `LaneState.activeRun` 改 **volatile**（见下）；FauxProvider sequence+delay 工厂 |
+| `e0ddb8d` | processPrompt 路由：QUEUE_STEER/FOLLOW_UP 入队返回 queued |
+| `352c14d` | RPC：prompt 预检后写、`data.disposition`；steer/follow_up 带 disposition |
+| `9673b20` | InteractiveMode 提交门＋TUI（queued 不画分隔线、空闲 Alt+Enter 普通提交） |
+
+**测试（新增 13 条全绿）**：AgentHarnessIsRunningTest ×1、PromptRouterTest ×5、
+SessionResultQueuedTest ×2、RpcConcurrentPromptRoutingTest ×4、
+InteractiveModeRoutingTest ×1。全 reactor `clean verify` **14/14 BUILD SUCCESS**（6:33）。
+
+**变异探针 5/5 红**：M1 删 running 门＝5 红；M2 STEER verdict 翻 FOLLOW_UP＝1 红；
+M3 RPC 删 disposition data＝2 红；M4 isRunning 取反＝1 红；M5 queued status
+reason 改 started＝1 红。
+
+**实施中两处设计外发现**：
+
+1. **`activeRun` 可见性是真差距**：A5 门设计上被 RPC reader/TUI/web 线程跨线程
+   读取，普通字段不保证可见性（原 docs/31 §8.27.4 的残留成为可达），改 volatile。
+2. **PiLoop pass 起手即 drain steer**（`PiLoopRunner.java:54`）：并发路由夹具
+   若在 run 刚置位时就入队，steer 会被并进首次请求而非触发第二回合（首轮测试
+   因此假失败）。真实语义位置＝首轮 LLM 调用在飞之后；夹具改为等首个流事件再
+   排队。新教训形态：并发夹具的入队点必须按「pass 内 drain 时机」定位，不能只
+   看 `activeRun != null`。
+
+**已知残留**：InteractiveMode 压缩中提交（同步抛错分支）无会话级夹具
+（构造压缩窗口成本高），由 `PromptRouter` 单测与 RPC 路径间接覆盖；
+压缩窗口客户端缓冲/重放登记为 **B175**。台账现状：A 4 条、B 71 条。
