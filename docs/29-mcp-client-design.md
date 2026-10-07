@@ -1,8 +1,8 @@
 # 包 29：MCP 对齐（B160）——第 2 包：`McpClient`
 
-> **状态：📝 待审核（2026-10-07，R-A）。**
+> **状态：✅ 已闭环（2026-10-07，R-A）。**
 > 总包路线见 `docs/28` §3；本文是第 2 包（pi `packages/mcp/src/client.ts`，615 行）
-> 详细设计。审核通过后才许写代码。
+> 设计。实施记录见 §8。
 
 ## 1. 移植文件清单（`com.pijava.mcp`）
 
@@ -235,3 +235,27 @@ Resource/Template 缺 name 时补 uri/uriTemplate（:116-122）。
 ## 7. 台账影响
 
 - B160 不销号；B177 维持。闭环回填 docs/28 banner 与本文。
+
+## 8. 实施记录（2026-10-07）
+
+**落地（1 feat＋1 docs）**：
+
+| 内容 | 文件 |
+|---|---|
+| McpClient 状态机 | 拆 7 文件：`McpClient`（496 行）、`McpClientOptions`、`McpClientValidators`、`McpClientInbox`、`McpClientPages`、`McpClientRegistrations`、`McpClientShortcuts`、`McpClientSchedules` |
+| 地基 | `AbortSignal.onAbort`（返回注销句柄）；虚拟线程超时调度器 |
+
+**测试 27/27 绿**：`McpClientTest` ×12（client.test.ts 12 条款逐字翻译）＋包 1 的 15；
+checkstyle mcp 0。
+
+**变异探针 6/6 红**：M1 去版本支持报错 ⇒ 古服务器条款红；M2 去 progress 重排
+（超时同步缩到 150）⇒ McpTimeoutError；M3 initialize cancellable 改 true ⇒ 超时发
+cancelled 条款红；M4 去重复 cursor 检测＋脚本循环 cursor ⇒ exceeded 1000 pages；
+M5 去 content 缺省补空 ⇒ structured 条款红；M6 sed 剥离全部 21 个 client 锁＋
+500 并发 roots burst ⇒ 虚拟线程并发 NPE（default uncaught handler 捕获）。
+
+**两处设计外发现**：
+
+1. checkstyle 在 validate 阶段拦截时，模块测试根本不执行（surefire 报告是上轮
+   残留）——排错先看 validate 输出。
+2. 未跟踪新文件无 git 副本可 checkout；sed 探针变异前留好反向脚本。
