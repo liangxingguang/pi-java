@@ -116,10 +116,13 @@
 |---|---|---|
 | B1 | **branch summary 无实现** | pi branch-summarization；重试路只保留了 source:"branchSummary" 形状 |
 | B79 | `/bug` 故障上报 ＋ 崩溃记录 | pi slash 命令：同意提示 → 摘要 → 上报 |
-| B160 | **MCP 整块零对应** | pi `packages/mcp`（客户端/transports/…，主流内置功能） |
+| B218 | `McpServerRegistry` 与 `McpScope.EXTENSION` 闭环前**无生产者** | 包⑫a 落（`docs/39`），接线是 B221；`pi.registerMcpServer` 没有挂载点 |
+| B219 | `mcp_servers` 段的排序用 `String.compareTo` 代替 `localeCompare` | ASCII 名等价，非 ASCII 名排序有差（`docs/39` §3.2） |
+| B220 | `truncate` 的 `trimEnd()` ⇒ `stripTrailing()` | 后者不吃 ` `（窄角，`docs/39` §3.2） |
+| B221 | **MCP 扩展接线面整体顺延** | 六个 `on(...)` 事件（**1/6**，见 `docs/39` §2.4）、激活门暴露给扩展（机制在 `AgentHarness.getActiveTools:528` 但扩展拿不到）、`ctx.ui.custom`（**B214**）、`registerToolRenderer`（**B204**）、提示分节接线（`ContextAssembler.promptOptions:104-114` 从没调过 `.sections(...)`）—— **归属是 D 域与 E5，不是 MCP** |
 | B161 | **codemode 整块零对应** | quickjs-wasi 沙箱代码执行 |
 | B162 | tool-search / virtual-models / nested-tool-calls 三块零对应 | deferred 工具发现；虚拟模型；嵌套工具调用 |
-| B177 | MCP 默认 `codemode` exposure 暂不可达 | B160 各包 wire/配置语义全保留，运行时激活路径依赖 B161 闭环（docs/28 §3 裁决） |
+| B177 | MCP 默认 `codemode` exposure 暂不可达 | MCP 各包（包①–⑫a）的 wire/配置语义全保留，运行时激活路径依赖 B161 闭环（docs/28 §3 裁决） |
 | B181 | MCP 配置 record **不保留未知键** | pi `validateMcpServerConfig` 返回原对象副本（`mcp-servers.ts:263,275`）；Java record 丢之。下游只读具名键、写路径重读文件 ⇒ 行为等价（docs/35 §2.1） |
 | B182 | MCP 项目配置目录 `.pi-java` 硬编码 | pi 读 `package.json` 的 `piConfig.configDir`（`config.ts:542`）；pi-java 全树既有约定（`FileSettingsStorage:42` 先例，docs/35 §2.3） |
 | B183 | mcp.json 解析错误**文本**与 V8 不同 | 结构同（`<路径>: <消息>`）；空文件在 pi 是语法错、在 Java 报 `expected an object with an "mcpServers" object`（docs/35 §4.2） |
