@@ -2,6 +2,7 @@ package com.pijava.coding.agent.core;
 
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -644,10 +645,13 @@ public final class AgentSession implements AutoCloseable {
             config.streamingBehavior());
         if (verdict == PromptRouter.Verdict.QUEUE_STEER) {
             harness.steer(laneName(), prompt);
+            // B34（docs/26）：pi _queueSteer 排队后发 queue_update（:2193）。
+            emitQueueUpdate();
             return SessionResult.queued();
         }
         if (verdict == PromptRouter.Verdict.QUEUE_FOLLOW_UP) {
             harness.followUp(laneName(), prompt);
+            emitQueueUpdate();
             return SessionResult.queued();
         }
         if (config.systemPrompt() != null) {
@@ -691,7 +695,10 @@ public final class AgentSession implements AutoCloseable {
 
     /** Queue a follow-up message (processed when the current run finishes). */
     public String followUp(String prompt) {
-        return harness.followUp(laneName(), prompt);
+        var id = harness.followUp(laneName(), prompt);
+        // B34（docs/26）：pi followUp 入队后发 queue_update（agent-session.ts:2210）。
+        emitQueueUpdate();
+        return id;
     }
 
     /** Trigger a manual context compaction without customInstructions ({@code /compact}). */
@@ -710,7 +717,9 @@ public final class AgentSession implements AutoCloseable {
 
     /** Queue a steering message (injected into the current run's next round). */
     public String steer(String prompt) {
-        return harness.steer(laneName(), prompt);
+        var id = harness.steer(laneName(), prompt);
+        emitQueueUpdate();
+        return id;
     }
 
     /** The most recent assistant text (for {@code /copy}). */
@@ -756,6 +765,50 @@ public final class AgentSession implements AutoCloseable {
     /** 广播会话事件给所有监听器；单个监听器异常被隔离。 */
     void emitSessionEvent(AgentSessionEvent event) {
         eventHub.emit(event);
+    }
+
+    /**
+     * 交互层状态文本广播（B175，docs/26 §3.4）—— 发射
+     * {@link AgentSessionEvent.FlashStatus} 方言事件，RPC 侧忽略。
+     */
+    public void flashStatus(String message) {
+        emitSessionEvent(new AgentSessionEvent.FlashStatus(message));
+    }
+
+    /**
+     * 发射 queue_update：引擎队列文本聚合 {@code InteractiveMode} 的缓冲内容
+     * （B34/B175，docs/26 §3.3；pi {@code _emitQueueUpdate}，
+     * agent-session.ts:1017-1023）。
+     *
+     * @param bufferedSteering 缓冲中待 steer 的文本（压缩窗口内）；无则空列表
+     * @param bufferedFollowUp 缓冲中待 followUp 的文本；无则空列表
+     */
+    public void emitQueueUpdate(List<String> bufferedSteering,
+                                List<String> bufferedFollowUp) {
+        var steering = new ArrayList<String>(harness.queuedSteering(laneName()));
+        steering.addAll(bufferedSteering);
+        var followUp = new ArrayList<String>(harness.queuedFollowUp(laneName()));
+        followUp.addAll(bufferedFollowUp);
+        emitSessionEvent(new AgentSessionEvent.QueueUpdate(
+            List.copyOf(steering), List.copyOf(followUp)));
+    }
+
+    /** 引擎队列无缓冲聚合时的便捷口。 */
+    public void emitQueueUpdate() {
+        emitQueueUpdate(List.of(), List.of());
+    }
+
+    /**
+     * 清空两个引擎队列并返回被清掉的文本（B34，docs/26；pi {@code clearQueue}，
+     * agent-session.ts:2355-2364），随后发射 queue_update{空}。
+     */
+    public ClearedQueue clearQueue() {
+        var steering = harness.queuedSteering(laneName());
+        var followUp = harness.queuedFollowUp(laneName());
+        harness.cancelQueued(laneName(), "steer");
+        harness.cancelQueued(laneName(), "followUp");
+        emitSessionEvent(new AgentSessionEvent.QueueUpdate(List.of(), List.of()));
+        return new ClearedQueue(steering, followUp);
     }
 
     /** 注入扩展 UI 服务（RPC 模式用；覆盖 loadExtensions 时的 noop）。 */

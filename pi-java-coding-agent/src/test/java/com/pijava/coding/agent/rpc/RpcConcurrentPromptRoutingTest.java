@@ -170,6 +170,34 @@ class RpcConcurrentPromptRoutingTest {
     }
 
     @Test
+    void clearQueueReturnsAndClearsTheQueuedTexts() throws Exception {
+        // B34（docs/26）：pi clear_queue（rpc-prompt-response-semantics.test.ts:446-457）
+        try (var f = newFixture()) {
+            f.dispatch("{\"id\":\"st\",\"type\":\"steer\",\"message\":\"Change direction\"}");
+            f.response("st");
+            f.dispatch("{\"id\":\"fu\",\"type\":\"follow_up\",\"message\":\"Summarize later\"}");
+            f.response("fu");
+
+            f.dispatch("{\"id\":\"c\",\"type\":\"clear_queue\"}");
+            var response = f.response("c");
+
+            assertThat(response.get("success").asBoolean()).isTrue();
+            var data = response.get("data");
+            assertThat(data.get("steering"))
+                .map(JsonNode::asText)
+                .containsExactly("Change direction");
+            assertThat(data.get("followUp"))
+                .map(JsonNode::asText)
+                .containsExactly("Summarize later");
+
+            // clearQueue 还发射一条空 queue_update（pi :2361）。
+            f.await(l -> "queue_update".equals(l.path("type").asText())
+                && l.path("steering").isArray() && l.path("steering").isEmpty()
+                && l.path("followUp").isArray() && l.path("followUp").isEmpty());
+        }
+    }
+
+    @Test
     void steerAndFollowUpCommandsReportQueuedDisposition() throws Exception {
         try (var f = newFixture()) {
             f.dispatch("{\"id\":\"s\",\"type\":\"prompt\",\"message\":\"Start\"}");

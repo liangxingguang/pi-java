@@ -56,4 +56,13 @@ final class RpcPayloads {
         List<RpcSessionTreeNode> tree,
         String leafId
     ) {}
+
+    /**
+     * B34（docs/26）：{@code clear_queue} 响应 data —— pi
+     * {@code {steering: string[], followUp: string[]}}（被清文本）。
+     */
+    record ClearQueueData(
+        List<String> steering,
+        List<String> followUp
+    ) {}
 }

@@ -277,6 +277,13 @@ public final class RpcDispatcher {
                 case RpcCommand.GetTree t ->
                     out.write(RpcResponse.ok(t.id(), "get_tree",
                         new RpcPayloads.RpcTreeData(buildTree(), leafId())));
+                case RpcCommand.ClearQueue c -> {
+                    // B34（docs/26）：pi clear_queue —— data 即被清文本两数组。
+                    var cleared = session.clearQueue();
+                    out.write(RpcResponse.ok(c.id(), "clear_queue",
+                        new RpcPayloads.ClearQueueData(
+                            cleared.steering(), cleared.followUp())));
+                }
             }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -335,6 +342,10 @@ public final class RpcDispatcher {
     /** 事件 → 线格式写 stdout。 */
     private void emitEvent(AgentSessionEvent event) {
         try {
+            // B175（docs/26）：FlashStatus 是 TUI 方言事件，不上 RPC 线。
+            if (event instanceof AgentSessionEvent.FlashStatus) {
+                return;
+            }
             if (event instanceof AgentSessionEvent.AgentEnd
                     || event instanceof AgentSessionEvent.AgentSettled) {
                 streaming = false;

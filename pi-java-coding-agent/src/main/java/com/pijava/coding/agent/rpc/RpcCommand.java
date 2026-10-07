@@ -51,7 +51,8 @@ import com.pijava.coding.agent.core.StreamingBehavior;
     @JsonSubTypes.Type(value = RpcCommand.Clone.class),
     @JsonSubTypes.Type(value = RpcCommand.GetForkMessages.class),
     @JsonSubTypes.Type(value = RpcCommand.GetEntries.class),
-    @JsonSubTypes.Type(value = RpcCommand.GetTree.class)
+    @JsonSubTypes.Type(value = RpcCommand.GetTree.class),
+    @JsonSubTypes.Type(value = RpcCommand.ClearQueue.class)
 })
 public sealed interface RpcCommand {
 
@@ -228,5 +229,11 @@ public sealed interface RpcCommand {
     @JsonTypeName("get_tree")
     record GetTree(String id) implements RpcCommand {
         @Override public String type() { return "get_tree"; }
+    }
+
+    // B34（docs/26）：pi clear_queue —— 清空 steer/followUp 队列，data 返回被清文本。
+    @JsonTypeName("clear_queue")
+    record ClearQueue(String id) implements RpcCommand {
+        @Override public String type() { return "clear_queue"; }
     }
 }
