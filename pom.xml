@@ -17,6 +17,7 @@
         <module>pi-java-bom</module>
         <module>pi-java-telemetry</module>
         <module>pi-java-ai</module>
+        <module>pi-java-mcp</module>
         <module>pi-java-agent-core</module>
         <module>pi-java-session-backend-sqlite</module>
         <module>pi-java-tui</module>

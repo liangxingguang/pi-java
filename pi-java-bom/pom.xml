@@ -56,6 +56,11 @@
             </dependency>
             <dependency>
                 <groupId>com.pi-java</groupId>
+                <artifactId>pi-java-mcp</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.pi-java</groupId>
                 <artifactId>pi-java-agent-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
