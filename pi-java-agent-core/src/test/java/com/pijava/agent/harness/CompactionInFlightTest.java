@@ -108,7 +108,10 @@ class CompactionInFlightTest {
 
             // pi :1969 建控制器 → :1970 发 start ⇒ 观察者在 onStart 里已经看得见窗口。
             assertThat(observer.onStart).containsExactly(true);
-            assertThat(observer.onEnd).containsExactly(true);
+            // B175（docs/26）：pi 发 onEnd **之前**先清窗口
+            // （agent-session.ts:2828-2829，注释原文「listeners may submit queued
+            // prompts, so expose idle state before notifying them」）⇒ onEnd 采样 false。
+            assertThat(observer.onEnd).containsExactly(false);
             assertThat(harness.isCompacting(AgentHarness.DEFAULT_LANE)).isFalse();
             // 夹具不空转：压缩真的落了一条标记 entry。
             assertThat(harness.snapshot(AgentHarness.DEFAULT_LANE).transcript().get(0))
@@ -131,7 +134,8 @@ class CompactionInFlightTest {
 
             assertThat(harness.isCompacting(AgentHarness.DEFAULT_LANE)).isFalse();
             assertThat(observer.onStart).containsExactly(true);
-            assertThat(observer.onEnd).containsExactly(true);
+            // 同成功路：pi 在 onEnd 发射前已清窗口（agent-session.ts:2842 错误路亦然）。
+            assertThat(observer.onEnd).containsExactly(false);
         }
     }
 
@@ -178,7 +182,8 @@ class CompactionInFlightTest {
         // pi :2290 发 start → :2291 建控制器 ⇒ 观察者在 onStart 里**还**看不见窗口
         // （与手动路相反）。
         assertThat(observer.onStart).containsExactly(false);
-        assertThat(observer.onEnd).containsExactly(true);
+        // applyCompaction 在 onEnd 前先关窗（同 pi :2828-2829 顺序）⇒ false。
+        assertThat(observer.onEnd).containsExactly(false);
         assertThat(lane.isCompacting()).isFalse();
     }
 

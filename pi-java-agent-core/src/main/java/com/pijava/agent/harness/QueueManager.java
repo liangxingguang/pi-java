@@ -169,6 +169,30 @@ final class QueueManager {
         }
     }
 
+    /**
+     * Steer 队列的文本快照（B34，docs/26；pi {@code getSteeringMessages}，
+     * {@code agent-session.ts:2371-2373}），按队列序。
+     */
+    List<String> steeringTexts(String laneName) {
+        return texts(laneName, lane -> lane.steerQueue);
+    }
+
+    /** Follow-up 队列的文本快照（pi {@code getFollowUpMessages}，{@code :2376-2378}）。 */
+    List<String> followUpTexts(String laneName) {
+        return texts(laneName, lane -> lane.followUpQueue);
+    }
+
+    private List<String> texts(String laneName, QueueAccessor accessor) {
+        var lane = requireLane(laneName);
+        synchronized (lane) {
+            var result = new ArrayList<String>();
+            for (var item : accessor.queueOf(lane)) {
+                result.add(item.prompt());
+            }
+            return result;
+        }
+    }
+
     private LaneState requireLane(String laneName) {
         return HarnessUtils.requireLane(lane, laneName);
     }

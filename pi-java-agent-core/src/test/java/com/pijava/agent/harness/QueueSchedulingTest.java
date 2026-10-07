@@ -142,6 +142,26 @@ class QueueSchedulingTest {
     }
 
     @Test
+    void queuedSteeringAndFollowUpExposeTextsInQueueOrder() {
+        // B34（docs/26）：pi getSteeringMessages/getFollowUpMessages
+        // （agent-session.ts:2371-2378）—— 队列文本读口，按队列序。
+        var h = harness();
+        h.steer("default", "first steer");
+        h.steer("default", "second steer");
+        h.followUp("default", "later one");
+
+        assertThat(h.queuedSteering("default"))
+            .containsExactly("first steer", "second steer");
+        assertThat(h.queuedFollowUp("default"))
+            .containsExactly("later one");
+
+        h.cancelQueued("default", "steer");
+        assertThat(h.queuedSteering("default")).isEmpty();
+        assertThat(h.queuedFollowUp("default"))
+            .containsExactly("later one");
+    }
+
+    @Test
     void streamListenerReceivesEvents() throws Exception {
         var h = harness();
         var received = new java.util.ArrayList<StreamEvent>();

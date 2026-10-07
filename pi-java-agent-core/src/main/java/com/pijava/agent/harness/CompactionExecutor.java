@@ -101,6 +101,8 @@ final class CompactionExecutor {
                 // 非取消类才有 "Compaction failed: " 前缀} 后再抛。取消分支的 end 已由
                 // applyCompaction 的发中止检查承担（aborted:true），这里不重复发。
                 if (!"Compaction cancelled".equals(e.getMessage())) {
+                    // B175（docs/26）：pi agent-session.ts:2842 —— onEnd 前先清窗口。
+                    lane.closeCompactionWindow();
                     ctx.compactionObserver().onEnd("manual", null, false, false,
                         "Compaction failed: " + (e.getMessage() == null ? "compaction failed" : e.getMessage()));
                 }
@@ -232,6 +234,8 @@ final class CompactionExecutor {
             var formatted = "overflow".equals(reason)
                 ? "Context overflow recovery failed: " + message
                 : "Auto-compaction failed: " + message;
+            // B175（docs/26）：同手动路，onEnd 发射前先关窗口（pi :2828-2829 顺序）。
+            lane.closeCompactionWindow();
             ctx.compactionObserver().onEnd(reason, null, false, false, formatted);
             return AutoCompactionOutcome.SKIPPED;
         } finally {
@@ -284,6 +288,8 @@ final class CompactionExecutor {
             }
             var signal = lane.abortSignal();
             if (signal != null && signal.isAborted()) {
+                // B175（docs/26）：中止路同样先关窗再发 onEnd（pi :2828-2829 顺序）。
+                lane.closeCompactionWindow();
                 ctx.compactionObserver().onEnd(reason, null, true, false, null);
                 return new CompactionRun(null, true);
             }
@@ -315,6 +321,8 @@ final class CompactionExecutor {
                 (System.nanoTime() - start) / 1_000_000);
             // pi :2408 的 end 在重建与记录之后；plan 路径没有产物对象，result 发
             // null ≙ pi 的 undefined（自定义压缩内容本就没有 CompactionResult 的方言）。
+            // B175（docs/26）：end 之前先关窗口（pi :2828-2829）。
+            lane.closeCompactionWindow();
             ctx.compactionObserver().onEnd(reason, result, false, willRetry, null);
             return new CompactionRun(result, false);
         } finally {

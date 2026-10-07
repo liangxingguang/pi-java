@@ -413,6 +413,19 @@ public class AgentHarness implements AutoCloseable {
         return requireLane(laneName).isRunning();
     }
 
+    /**
+     * Pending steer-queue texts in queue order（B34，docs/26；
+     * pi {@code getSteeringMessages}，agent-session.ts:2371-2373）。
+     */
+    public List<String> queuedSteering(String laneName) {
+        return queueManager.steeringTexts(laneName);
+    }
+
+    /** Pending follow-up-queue texts（pi {@code getFollowUpMessages}，:2376-2378）。 */
+    public List<String> queuedFollowUp(String laneName) {
+        return queueManager.followUpTexts(laneName);
+    }
+
     // ═══════════════════════════════════════════════════════════
     // Skills
     // ═══════════════════════════════════════════════════════════

@@ -183,9 +183,28 @@ public final class LaneState {
         compactionInFlight++;
     }
 
-    /** 离开压缩窗口 —— 与 {@link #enterCompaction()} 成对，恒在 {@code finally} 里。 */
+    /**
+     * 关闭压缩窗口 —— 窗口在则置零并返回 true；已是关闭态则 no-op 返回 false。
+     *
+     * <p>B175（docs/26）：pi 发 {@code compaction_end} <b>之前</b>就清控制器
+     * （{@code agent-session.ts:2828-2829}，注释原文「compaction_end listeners may
+     * submit queued prompts, so expose idle state before notifying them」；错误路
+     * {@code :2842} 同序）⇒ 监听器 flush 里的 prompt 不会被自己的压缩门挡死。</p>
+     */
+    synchronized boolean closeCompactionWindow() {
+        if (compactionInFlight == 0) {
+            return false;
+        }
+        compactionInFlight = 0;
+        return true;
+    }
+
+    /**
+     * 离开压缩窗口 —— 与 {@link #enterCompaction()} 成对，恒在 {@code finally} 里。
+     * 语义即「确保窗口已关」：onEnd 发射前若已提前关窗，这里是 no-op（不会减成负数）。
+     */
     synchronized void exitCompaction() {
-        compactionInFlight--;
+        closeCompactionWindow();
     }
 
     /** 是否有压缩在飞（pi {@code isCompacting} 的三控制器析取，collapsed 成一个窗口）。 */
