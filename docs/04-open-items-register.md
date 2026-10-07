@@ -141,6 +141,14 @@
 | B199 | 包③ 的 stdio `cwd` 未移植（**已修**） | 包⑨ 补：`StdioTransportOptions` 加 `cwd` ＋ `ProcessBuilder.directory`；此前 `mcp.json` 的 `cwd` 字段是死的 |
 | B200 | 包⑧ 的 checkstyle 是「错误 0、警告 2」（**已修**） | 闭环记录称「checkstyle 0」未区分错误/警告；⇒ 闭环口径须写明各几个 |
 | B201 | 包⑤ 的 HTTP transport 无公开构造面（**已修**） | 包⑨ 补：`StreamableHttpTransport`/`…Options` 包私有且无工厂 ⇒ 包外无法构造；pi 从 `@earendil-works/pi-mcp` 公开导出 |
+| B202 | MCP 结果的 `structuredContent` 无消费者 | `ToolResult.structuredContent` 已落形状（包⑩）；消费者是 codemode（**B161**）与 `after_tool` 钩子改写（pi `types.ts:1439`），均未落 |
+| B203 | MCP 的 exposure/namespace/outputSchema/annotations 未接到 `AgentTool` | pi 的 `ToolDefinition` 有这四项；Java 的 `AgentTool` 没有，包⑩ 让 `McpToolDefinition` 承载；激活路径是第 ⑫ 包与 **B161/B162** |
+| B204 | MCP 工具与资源的 TUI 渲染器未移植 | pi `createMcpToolRenderers`（`tools.ts:301-339`）用 `Text`/`Container`/`VisualLinePreview`/`keyHint`；pi-java 的工具渲染另成一路（**B65/B47**） |
+| B205 | MCP 工具适配器在 **`pi-java-coding-agent`**，不在 `pi-java-mcp` | `AgentTool` 在 agent-core，`pi-java-mcp` 看不见它（`ai ← mcp`）⇒ 模块分道；`docs/28` §2 的模块图早画了 `coding-agent ← mcp`，pom 直到包⑩ 才接上那条依赖 |
+| B206 | `ToolResult.isError` 是新增的语义通道 | pi 的 `isError` 来自**结果对象**（`AgentToolResult.isError`），pi-java 此前只由「抛没抛」派生；`PiToolRunner` 改读结果字段，`after_tool` 钩子仍可改写 |
+| B207 | `McpToolExposure` 是 pi 的 `ToolExposure`，暂居 mcp 包 | 5 值 `direct/model-only/codemode/deferred/hidden`；pi-java 扩展系统没有这个类型，唯一生产者是 MCP 适配器 —— 待 E5 面成型时上移 |
+| B208 | `ContentBlock.ImageContent(mediaType, data)` 与 pi 的 `{data, mimeType}` **序相反** | mcp 侧 `LlmContent.Image(data, mimeType)` 又跟 pi 一致 ⇒ 同一条转换链上有两个相反的序；换序点唯一（`McpResultContent.toBlock`），夹具两侧钉住 |
+| B209 | `TruncationUtils.formatSize` 用默认 locale（**已修**） | `%.1f` 在德语区渲染 `1,5KB`，pi 的 `toFixed` 恒用 `.`；包⑩ 加 `Locale.ROOT` |
 | B163 | 主题/色彩系统差距 | pi 3,176 行（theme/system-theme/oklab…），Java 74 行 |
 | B164 | 分类器基础设施零对应 | image/classifier 统一模型设施 |
 
