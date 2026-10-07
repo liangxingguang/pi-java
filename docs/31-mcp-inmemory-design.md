@@ -1,8 +1,8 @@
 # 包 31：MCP 对齐（B160）——第 4 包：in-memory transport
 
-> **状态：📝 待审核（2026-10-07，R-A）。**
+> **状态：✅ 已闭环（2026-10-07，R-A）。**
 > 总包路线见 `docs/28` §3；本文是第 4 包（pi `transports/in-memory.ts`，51 行）
-> 详细设计。审核通过后才许写代码。
+> 设计。实施记录见 §8。
 
 ## 1. 落点裁决
 
@@ -94,3 +94,18 @@ final class InMemoryTransports {
 ## 7. 台账影响
 
 - B160 不销号；B177 维持。闭环回填 docs/28 banner 与本文。
+
+## 8. 实施记录（2026-10-07）
+
+**落地（1 feat＋1 docs）**：`InMemoryTransport`（test 源；虚拟线程异步投递、
+deepCopy 隔离）、`InMemoryTransports` pair 工厂。
+
+**测试 36/36 绿**：`InMemoryTransportTest` ×4（非重入时序/深拷贝隔离/关闭
+丢弃/双向独立）＋前 3 包 32；全依赖绿；checkstyle 0。
+
+**变异探针 3/3 红**：M1 内联同步投递；M2 去 deepCopy；M3 deliver 去 closed
+检查。
+
+**一处设计外发现**：**对端关闭后本端 send 不抛**（pi 同：send 只查自己的
+closed 标志），消息静默丢弃；只有自己 close 后 send 才抛
+McpConnectionClosedError。初版断言写反，修正。
