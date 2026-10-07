@@ -1,8 +1,9 @@
 # 包 33：MCP 对齐（B160）——第 6 包：OAuth 元数据发现
 
-> **状态：✅ 已审核，源码校正后实施（2026-10-07，R-A）。**
+> **状态：✅ 已闭环（2026-10-07，R-A，ed2779a8）。**
 > 总包路线见 `docs/28` §3；本文是第 6 包（pi `oauth/errors.ts` 55 行＋
 > `oauth/types.ts` 204 行＋`oauth/discovery.ts` 185 行，合计 444 行）详细设计。
+> 实施记录见 §12。
 >
 > **审核后校正（见 §11，2026-10-07）**：重读三个源文件全文，三处失实已改——
 > 解析器不强制 https、authorization_servers 可选、PR metadata 仅三具名字段；
@@ -223,3 +224,38 @@ interface OAuthFetch {
 
 校正方向全部趋向更忠实，不扩大范围。教训同包⑤：**设计取证必须读源文件全文，
 局部摘录不足以支撑逐字对齐。**
+
+## 12. 实施记录（2026-10-07，ed2779a8）
+
+**落地（1 feat＋1 docs）**，13 个主源＋4 个测试文件（含 ScriptedOAuthFetch），
+新包 `com.pijava.mcp.oauth`：
+
+| 组件 | 内容 |
+|---|---|
+| 异常 | OAuthError（code/errorUri）、OAuthIssuerMismatchError、OAuthInsecureEndpointError、OAuthRegistrationError、McpOAuthAuthorizationRequiredError |
+| record | OAuthChallenge（empty()）、OAuthServerInfo、OAuthProtectedResourceMetadata、AuthorizationServerMetadata |
+| 解析器 | OAuthMetadataParsers：safeUrl（拒危险协议、不强制 https）、optionalStrings/optionalUrl/optionalBoolean、未知键 extension（保留显式 null） |
+| 发现 | OAuthDiscovery：PR 三级路径＋回退、AS 候选 URL（oauth→oidc→路径 oidc）、issuer trim 校验、server info（网络错重抛、其余吞、显式 metadata 信任）、selectResource origin＋路径前缀 |
+| 接口 | OAuthFetch（Fetched: status/body/ok） |
+
+**测试**：新增 28（discovery 15 / parsers 8 / www-authenticate 5）；
+模块全量 **80/80 绿**（原 52＋28），checkstyle 0。
+顺带清理 http transport 两个既有 unused import。
+本包只新增模块内部代码、pi-java-ai 源码未变，故未重跑全 reactor。
+
+**变异探针 6/6 红**（共 9 条命中）：
+
+| # | 变异 | 红条数 |
+|---|---|---|
+| M1 | PR miss 不回退根路径 | 2（404/502 两条款） |
+| M2 | issuer 校验恒通过 | 1 |
+| M3 | oauth/oidc 候选顺序对调 | 3（URL×2＋请求序×1） |
+| M4 | safeUrl 不拒绝危险协议 | 1 |
+| M5 | selectResource 路径前缀不检查 | 1 |
+| M6 | 空 quoted 值当有效 | 1 |
+
+每个探针 grep 复核落地、还原后 grep 零残留＋clean 全量复跑绿。
+
+过程小记：OAuthDiscovery 首版误写入嵌套 `pi-java/pi-java/...` 路径，已当场
+移动至 pi-java-mcp 并删除误建目录；surefire `-Dtest` 的 `+` 分隔符再次确认
+无效（零测试且 BUILD SUCCESS），一律用逗号。
