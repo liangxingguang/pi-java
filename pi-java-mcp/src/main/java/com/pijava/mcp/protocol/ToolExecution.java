@@ -25,11 +25,13 @@ public record ToolExecution(@Nullable TaskSupport taskSupport) {
             this.wire = wire;
         }
 
+        /** Wire value. */
         @JsonValue
         public String wire() {
             return wire;
         }
 
+        /** Parse a wire value; unknown values yield {@code null}. */
         @JsonCreator
         public static @Nullable TaskSupport fromWire(String value) {
             for (var level : values()) {
