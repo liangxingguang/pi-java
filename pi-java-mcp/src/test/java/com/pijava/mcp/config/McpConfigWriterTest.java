@@ -92,6 +92,16 @@ class McpConfigWriterTest {
     }
 
     @Test
+    void updateAddsAnOverrideEntryToAFileWithoutMcpServers() throws Exception {
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, "{\"autoEnableCodemode\": true}");
+
+        McpConfig.update(file, "tools", new McpConfigPatch(false, null), true);
+        assertThat(tree(file)).isEqualTo(json("{\"autoEnableCodemode\":true,"
+                + "\"mcpServers\":{\"tools\":{\"enabled\":false}}}"));
+    }
+
+    @Test
     void updateDropsDefaultValuesOfFullEntries() throws Exception {
         Files.createDirectories(file.getParent());
         Files.writeString(file, "{\"mcpServers\":{\"tools\":{\"command\":\"x\",\"enabled\":false,"
