@@ -73,7 +73,10 @@ public final class FileAuthJsonBackend implements AuthJsonBackend {
             }
             try (var channel = FileChannel.open(path, StandardOpenOption.READ, StandardOpenOption.WRITE);
                  var fileLock = acquire(channel)) {
-                var outcome = edit.apply(Files.readString(path, StandardCharsets.UTF_8));
+                // Read through the locked channel. Windows refuses a read of a locked byte range
+                // from another handle, even inside this JVM, so Files.readString here would fail
+                // with a lock violation.
+                var outcome = edit.apply(readAll(channel));
                 if (outcome.next() != null) {
                     write(channel, outcome.next());
                 }
@@ -120,6 +123,18 @@ public final class FileAuthJsonBackend implements AuthJsonBackend {
                 throw new IOException("Interrupted while acquiring the auth storage lock", interrupted);
             }
         }
+    }
+
+    private static String readAll(FileChannel channel) throws IOException {
+        var size = channel.size();
+        var buffer = ByteBuffer.allocate((int) Math.min(size, Integer.MAX_VALUE));
+        channel.position(0);
+        while (buffer.hasRemaining()) {
+            if (channel.read(buffer) < 0) {
+                break;
+            }
+        }
+        return new String(buffer.array(), 0, buffer.position(), StandardCharsets.UTF_8);
     }
 
     private static void write(FileChannel channel, String content) throws IOException {

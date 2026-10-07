@@ -9,7 +9,7 @@ import java.util.Set;
 public final class SubcommandHandler {
 
     private static final Set<String> SUBCOMMANDS = Set.of(
-        "install", "remove", "uninstall", "update", "list", "config", "auth");
+        "install", "remove", "uninstall", "update", "list", "config", "auth", "mcp");
 
     private SubcommandHandler() {}
 
@@ -41,6 +41,10 @@ public final class SubcommandHandler {
             case "install", "remove", "uninstall", "update", "list" ->
                 PackageCommand.run(subCommand, subArgs);
             case "config" -> ConfigCommand.run(subArgs);
+            case "mcp" -> McpCommand.run(subArgs, McpCommand.Options.of(
+                java.nio.file.Path.of(System.getProperty("user.dir")),
+                com.pijava.coding.agent.core.FileSettingsStorage.defaultAgentDir(),
+                "pi-java", com.pijava.coding.agent.cli.Version.VERSION));
             default -> 2;
         };
     }

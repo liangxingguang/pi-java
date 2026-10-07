@@ -33,7 +33,25 @@ public final class SettingsManager {
      *                             or null (falls back to the configured default)
      */
     public static SettingsManager load(Boolean projectTrustOverride) {
-        var manager = new SettingsManager(new FileSettingsStorage());
+        return load(null, null, projectTrustOverride);
+    }
+
+    /**
+     * Load settings from a specific agent and project directory — for callers that act on a
+     * directory other than the process's own, such as the {@code mcp} subcommand.
+     *
+     * @param agentDir the global agent directory, or {@code null} for the default
+     * @param projectDir the project directory, or {@code null} for the working directory
+     * @param projectTrustOverride {@code --approve}/{@code --no-approve} value
+     *                             or null (falls back to the configured default)
+     * @return the loaded manager
+     */
+    public static SettingsManager load(java.nio.file.Path agentDir, java.nio.file.Path projectDir,
+                                       Boolean projectTrustOverride) {
+        var storage = agentDir == null || projectDir == null
+            ? new FileSettingsStorage()
+            : new FileSettingsStorage(agentDir, projectDir);
+        var manager = new SettingsManager(storage);
         manager.reload();
         manager.setProjectTrusted(
             resolveTrust(projectTrustOverride, manager.merged().defaultProjectTrust));

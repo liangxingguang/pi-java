@@ -133,6 +133,11 @@ public final class McpServerConnection implements McpToolCaller, McpResourceServ
         return challenge;
     }
 
+    /** Forget the last challenge, once the sign-in that used it has finished. */
+    public void clearChallenge() {
+        this.challenge = null;
+    }
+
     @Override
     public long timeoutMs() {
         var timeout = entry.config().timeout();
@@ -145,8 +150,13 @@ public final class McpServerConnection implements McpToolCaller, McpResourceServ
                 ? http.url() : null;
     }
 
-    /** The OAuth settings of this server, with the client secret resolved ({@code runtime.ts:232-248}). */
-    McpOAuthSettings oauthSettings() {
+    /**
+     * The OAuth settings of this server, with the client secret resolved
+     * ({@code runtime.ts:232-248}). pi exposes it, and the sign-in command uses it.
+     *
+     * @return the settings
+     */
+    public McpOAuthSettings oauthSettings() {
         var oauth = entry.config() instanceof McpServerConfig.Http http ? http.oauth() : null;
         if (oauth == null) {
             return McpOAuthSettings.none();

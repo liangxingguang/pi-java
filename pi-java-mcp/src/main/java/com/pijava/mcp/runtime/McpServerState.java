@@ -24,5 +24,15 @@ public enum McpServerState {
     FAILED,
 
     /** The connection was closed and will not be reopened. */
-    CLOSED
+    CLOSED;
+
+    /**
+     * The word pi prints and reports, such as {@code needs-auth}
+     * ({@code runtime.ts:56}).
+     *
+     * @return the lowercase, hyphenated name
+     */
+    public String wire() {
+        return name().toLowerCase(java.util.Locale.ROOT).replace('_', '-');
+    }
 }
