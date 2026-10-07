@@ -214,7 +214,10 @@ public final class McpConfig {
         state.servers.put(name, new McpServerEntry(name, config, path, scope, null));
     }
 
-    /** A project entry that overrides {@code enabled}, {@code exposure}, or {@code toolExposure} ({@code config.ts:108-121}). */
+    /**
+     * A project entry that overrides {@code enabled}, {@code exposure}, or {@code toolExposure}
+     * ({@code config.ts:108-121}).
+     */
     private static void applyOverride(Path path, String name, ObjectNode value, LoaderState state) {
         var base = state.servers.get(name);
         var extra = new ArrayList<String>();
@@ -250,7 +253,10 @@ public final class McpConfig {
         return !value.has("command") && !value.has("url") && !value.has("type");
     }
 
-    /** Read a configuration file, let {@code edit} change its {@code mcpServers}, and write it back ({@code config.ts:228-242}). */
+    /**
+     * Read a configuration file, let {@code edit} change its {@code mcpServers}, and write it back
+     * ({@code config.ts:228-242}).
+     */
     private static void editMcpServers(Path path, Edit edit) {
         String text = null;
         if (Files.exists(path)) {
