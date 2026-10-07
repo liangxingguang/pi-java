@@ -4,6 +4,8 @@ import java.util.Map;
 
 import org.jspecify.annotations.Nullable;
 
+import com.pijava.mcp.AuthProvider;
+
 /**
  * Options of a {@link StreamableHttpTransport}
  * (streamable-http.ts:114-123).

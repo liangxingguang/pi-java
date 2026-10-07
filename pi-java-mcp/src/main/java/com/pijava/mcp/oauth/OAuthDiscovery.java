@@ -10,6 +10,7 @@ import java.util.Map;
 
 import org.jspecify.annotations.Nullable;
 
+import com.pijava.mcp.McpFetch;
 import com.pijava.mcp.McpJson;
 import com.pijava.mcp.protocol.McpVersion;
 
@@ -44,11 +45,11 @@ public final class OAuthDiscovery {
         return pathname.endsWith("/") ? pathname.substring(0, pathname.length() - 1) : pathname;
     }
 
-    private static OAuthFetch.Fetched fetchMetadata(URI url, OAuthFetch fetch, String protocolVersion)
+    private static McpFetch.Fetched fetchMetadata(URI url, McpFetch fetch, String protocolVersion)
             throws IOException {
-        return fetch.fetch(url, Map.of(
+        return fetch.fetch(McpFetch.Request.get(url, Map.of(
                 "Accept", "application/json",
-                "MCP-Protocol-Version", protocolVersion));
+                "MCP-Protocol-Version", protocolVersion)));
     }
 
     private static String version(@Nullable String protocolVersion) {
@@ -64,7 +65,7 @@ public final class OAuthDiscovery {
             URI serverUrl,
             @Nullable URI resourceMetadataUrl,
             @Nullable String protocolVersion,
-            OAuthFetch fetch) throws IOException {
+            McpFetch fetch) throws IOException {
         var path = serverUrl.getPath() == null ? "" : serverUrl.getPath();
         var version = version(protocolVersion);
         var url = resourceMetadataUrl != null
@@ -105,7 +106,7 @@ public final class OAuthDiscovery {
     /** Discover an authorization server's metadata; null when no candidate hosts it. */
     public static @Nullable AuthorizationServerMetadata discoverAuthorizationServerMetadata(
             URI authorizationServerUrl,
-            OAuthFetch fetch,
+            McpFetch fetch,
             @Nullable String protocolVersion,
             boolean skipIssuerValidation) throws IOException {
         var version = version(protocolVersion);
@@ -133,7 +134,7 @@ public final class OAuthDiscovery {
 
     /** Discover the authorization server behind an MCP server. */
     public static OAuthServerInfo discoverOAuthServerInfo(
-            URI serverUrl, OAuthFetch fetch, Options options) throws IOException {
+            URI serverUrl, McpFetch fetch, Options options) throws IOException {
         @Nullable OAuthProtectedResourceMetadata resourceMetadata;
         try {
             resourceMetadata = discoverProtectedResourceMetadata(

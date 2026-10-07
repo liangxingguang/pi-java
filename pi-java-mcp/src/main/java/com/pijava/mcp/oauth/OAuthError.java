@@ -22,6 +22,11 @@ public class OAuthError extends RuntimeException {
         this(code, code, null);
     }
 
+    /** Create without an error URI. */
+    public OAuthError(String code, String message) {
+        this(code, message, null);
+    }
+
     /** The machine-readable error code. */
     public String code() {
         return code;

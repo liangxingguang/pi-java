@@ -11,6 +11,8 @@ import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.Nullable;
 
 import com.pijava.ai.AbortSignal;
+import com.pijava.mcp.AuthProvider;
+import com.pijava.mcp.McpFetch;
 import com.pijava.mcp.protocol.jsonrpc.McpConnectionClosedError;
 import com.pijava.mcp.transport.AbstractMcpTransport;
 
@@ -124,8 +126,8 @@ final class StreamableHttpTransport extends AbstractMcpTransport {
                                     byte @Nullable [] body) throws Exception {
         var auth = options.authProvider();
         for (var attempt = 0; ; attempt++) {
-            var headers = buildHeaders(baseHeaders);
-            var request = new McpHttpRequest(method, options.url(), headers, body);
+            var built = buildHeaders(baseHeaders);
+            var request = new McpHttpRequest(method, options.url(), built.headers(), body);
             var response = fetch.execute(request, abort);
             if (attempt > 0 || auth == null || !needsAuthorization(response)) {
                 return response;
@@ -133,12 +135,16 @@ final class StreamableHttpTransport extends AbstractMcpTransport {
             var challenge = response.headers().get("WWW-Authenticate");
             auth.onUnauthorized(new AuthProvider.Context(
                     response.status(), challenge == null ? "" : challenge,
-                    options.url(), null));
+                    options.url(), built.token(), bufferedFetch()));
             discard(response);
         }
     }
 
-    private Map<String, String> buildHeaders(Map<String, String> extra) throws Exception {
+    /** Headers actually sent, plus the token the provider supplied for them. */
+    private record Built(Map<String, String> headers, @Nullable String token) {
+    }
+
+    private Built buildHeaders(Map<String, String> extra) throws Exception {
         var headers = new LinkedHashMap<String, String>();
         if (options.headers() != null) {
             headers.putAll(options.headers());
@@ -151,10 +157,41 @@ final class StreamableHttpTransport extends AbstractMcpTransport {
             headers.put("MCP-Protocol-Version", protocolVersion);
         }
         var auth = options.authProvider();
-        if (auth != null && auth.token() != null) {
-            headers.put("Authorization", "Bearer " + auth.token());
+        if (auth == null) {
+            return new Built(headers, null);
         }
-        return headers;
+        var token = auth.token();
+        if (token != null) {
+            headers.put("Authorization", "Bearer " + token);
+        }
+        return new Built(headers, token);
+    }
+
+    /**
+     * The transport's streaming fetch adapted to the buffered {@link McpFetch}
+     * an {@link AuthProvider} receives (pi hands over its own fetch directly).
+     */
+    McpFetch bufferedFetch() {
+        return this::bufferedExecute;
+    }
+
+    private McpFetch.Fetched bufferedExecute(McpFetch.Request request) throws IOException {
+        McpHttpResponse response;
+        try {
+            response = fetch.execute(
+                    new McpHttpRequest(request.method(), request.url().toString(),
+                            request.headers(), request.body()),
+                    abort);
+        } catch (IOException error) {
+            throw error;
+        } catch (Exception error) {
+            throw new IOException(String.valueOf(error.getMessage()), error);
+        }
+        try {
+            return new McpFetch.Fetched(response.status(), response.body().readAllBytes());
+        } finally {
+            discard(response);
+        }
     }
 
     void checkResponsePublic(McpHttpResponse response) throws IOException {
@@ -230,7 +267,7 @@ final class StreamableHttpTransport extends AbstractMcpTransport {
         var deleteSignal = AbortSignal.create();
         var future = TIMEOUTS.schedule(deleteSignal::abort, 1, TimeUnit.SECONDS);
         try {
-            var headers = buildHeaders(Map.of());
+            var headers = buildHeaders(Map.of()).headers();
             var request = new McpHttpRequest("DELETE", options.url(), headers);
             fetch.execute(request, deleteSignal);
         } catch (Exception ignored) {

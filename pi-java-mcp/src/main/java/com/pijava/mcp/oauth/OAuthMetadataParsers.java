@@ -71,6 +71,68 @@ public final class OAuthMetadataParsers {
                 extension);
     }
 
+    /** Parse a token endpoint response (pi types.ts:178-191). */
+    public static OAuthTokens parseOAuthTokens(Object value) {
+        var input = object(value, "OAuth token response");
+        // Number(null) is 0, which would mark the token expired at once.
+        var expires = absent(input.get("expires_in"))
+                ? null : finiteNumber(input.get("expires_in"), "expires_in");
+        return new OAuthTokens(
+                requiredString(input.get("access_token"), "access_token"),
+                requiredString(input.get("token_type"), "token_type"),
+                expires,
+                optionalString(input.get("scope"), "scope"),
+                optionalString(input.get("refresh_token"), "refresh_token"),
+                optionalString(input.get("id_token"), "id_token"));
+    }
+
+    /** Parse a dynamic client registration response (pi types.ts:193-204). */
+    public static OAuthClientInformation parseClientInformation(Object value) {
+        var input = object(value, "OAuth client registration response");
+        var redirectUris = optionalStrings(input.get("redirect_uris"), "redirect_uris");
+        @Nullable Integer clientIdIssuedAt = number(input.get("client_id_issued_at"));
+        @Nullable Integer clientSecretExpiresAt = number(input.get("client_secret_expires_at"));
+        return new OAuthClientInformation(
+                requiredString(input.get("client_id"), "client_id"),
+                optionalString(input.get("client_secret"), "client_secret"),
+                clientIdIssuedAt,
+                clientSecretExpiresAt,
+                optionalString(input.get("token_endpoint_auth_method"), "token_endpoint_auth_method"),
+                redirectUris == null ? List.of() : redirectUris,
+                without(input, "client_id", "client_secret", "client_id_issued_at",
+                        "client_secret_expires_at", "token_endpoint_auth_method", "redirect_uris"));
+    }
+
+    private static String requiredString(@Nullable Object value, String name) {
+        if (!(value instanceof String text) || text.isEmpty()) {
+            throw new IllegalArgumentException("Invalid " + name);
+        }
+        return text;
+    }
+
+    private static @Nullable Integer number(@Nullable Object value) {
+        // Only a JSON number counts; anything else is treated as absent.
+        return value instanceof Number numeric ? numeric.intValue() : null;
+    }
+
+    private static @Nullable Integer finiteNumber(@Nullable Object value, String name) {
+        if (value instanceof Number numeric) {
+            var asDouble = numeric.doubleValue();
+            if (Double.isFinite(asDouble)) {
+                return (int) asDouble;
+            }
+            throw new IllegalArgumentException("Invalid " + name);
+        }
+        if (value instanceof String text) {
+            try {
+                return (int) Double.parseDouble(text);
+            } catch (NumberFormatException error) {
+                throw new IllegalArgumentException("Invalid " + name);
+            }
+        }
+        throw new IllegalArgumentException("Invalid " + name);
+    }
+
     private static Map<String, Object> object(Object value, String name) {
         if (!(value instanceof Map<?, ?> map)) {
             throw new IllegalArgumentException("Invalid " + name);
@@ -85,6 +147,10 @@ public final class OAuthMetadataParsers {
     /** Null or empty-string means a server had no value for the field. */
     private static boolean absent(@Nullable Object value) {
         return value == null || value.equals("");
+    }
+
+    private static @Nullable String optionalString(@Nullable Object value, String name) {
+        return absent(value) ? null : requiredString(value, name);
     }
 
     private static @Nullable List<String> optionalStrings(@Nullable Object value, String name) {

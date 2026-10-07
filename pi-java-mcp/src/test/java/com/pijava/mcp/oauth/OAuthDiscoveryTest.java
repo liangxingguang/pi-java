@@ -64,7 +64,7 @@ class OAuthDiscoveryTest {
 
     @Test
     void fallsBackFromSuffixedMissToRoot() throws Exception {
-        var fetch = new ScriptedOAuthFetch()
+        var fetch = new ScriptedMcpFetch()
                 .status(PR_SUFFIXED, 404)
                 .json(PR_ROOT, 200, prJson("https://api.example.com/mcp", null));
         var metadata = OAuthDiscovery.discoverProtectedResourceMetadata(
@@ -79,14 +79,14 @@ class OAuthDiscoveryTest {
 
     @Test
     void badGatewayAlsoMissesButServerErrorDoesNot() throws Exception {
-        var fallback = new ScriptedOAuthFetch()
+        var fallback = new ScriptedMcpFetch()
                 .status(PR_SUFFIXED, 502)
                 .json(PR_ROOT, 200, prJson("https://api.example.com/mcp", null));
         assertThat(OAuthDiscovery.discoverProtectedResourceMetadata(
                 URI.create(SERVER), null, null, fallback).resource())
                 .isEqualTo("https://api.example.com/mcp");
 
-        var noFallback = new ScriptedOAuthFetch().status(PR_SUFFIXED, 500);
+        var noFallback = new ScriptedMcpFetch().status(PR_SUFFIXED, 500);
         assertThatThrownBy(() -> OAuthDiscovery.discoverProtectedResourceMetadata(
                 URI.create(SERVER), null, null, noFallback))
                 .isInstanceOf(RuntimeException.class)
@@ -96,7 +96,7 @@ class OAuthDiscoveryTest {
     @Test
     void explicitResourceUrlHasNoFallback() throws Exception {
         var explicit = "https://cdn.example.com/pr.json";
-        var fetch = new ScriptedOAuthFetch().status(explicit, 404);
+        var fetch = new ScriptedMcpFetch().status(explicit, 404);
         assertThatThrownBy(() -> OAuthDiscovery.discoverProtectedResourceMetadata(
                 URI.create(SERVER), URI.create(explicit), null, fetch))
                 .hasMessage("HTTP 404 loading OAuth protected resource metadata");
@@ -107,7 +107,7 @@ class OAuthDiscoveryTest {
 
     @Test
     void oauthMissFallsThroughToOidcCandidate() throws Exception {
-        var fetch = new ScriptedOAuthFetch()
+        var fetch = new ScriptedMcpFetch()
                 .status(AS_OAUTH, 404)
                 .json(AS_OIDC, 200, asJson("https://as.example"));
         var metadata = OAuthDiscovery.discoverAuthorizationServerMetadata(
@@ -122,7 +122,7 @@ class OAuthDiscoveryTest {
 
     @Test
     void rejectsIssuerMismatchAndAcceptsTrailingSlashAlignment() throws Exception {
-        var mismatch = new ScriptedOAuthFetch()
+        var mismatch = new ScriptedMcpFetch()
                 .json(AS_OAUTH, 200, asJson("https://attacker.example"));
         assertThatThrownBy(() -> OAuthDiscovery.discoverAuthorizationServerMetadata(
                 URI.create("https://as.example"), mismatch, null, false))
@@ -134,7 +134,7 @@ class OAuthDiscoveryTest {
                 });
 
         // Bare-origin URL gains a trailing slash; compare without one on either side.
-        var aligned = new ScriptedOAuthFetch()
+        var aligned = new ScriptedMcpFetch()
                 .json("https://as.example/.well-known/oauth-authorization-server", 200,
                         asJson("https://as.example"));
         assertThat(OAuthDiscovery.discoverAuthorizationServerMetadata(
@@ -143,13 +143,13 @@ class OAuthDiscoveryTest {
 
     @Test
     void allCandidatesMissReturnsNullAndOtherErrorsThrow() throws Exception {
-        var allMiss = new ScriptedOAuthFetch()
+        var allMiss = new ScriptedMcpFetch()
                 .status(AS_OAUTH, 404)
                 .status(AS_OIDC, 403);
         assertThat(OAuthDiscovery.discoverAuthorizationServerMetadata(
                 URI.create("https://as.example"), allMiss, null, false)).isNull();
 
-        var broken = new ScriptedOAuthFetch().status(AS_OAUTH, 500);
+        var broken = new ScriptedMcpFetch().status(AS_OAUTH, 500);
         assertThatThrownBy(() -> OAuthDiscovery.discoverAuthorizationServerMetadata(
                 URI.create("https://as.example"), broken, null, false))
                 .isInstanceOf(RuntimeException.class)
@@ -158,7 +158,7 @@ class OAuthDiscoveryTest {
 
     @Test
     void skipIssuerValidationAcceptsMismatchedIssuer() throws Exception {
-        var fetch = new ScriptedOAuthFetch()
+        var fetch = new ScriptedMcpFetch()
                 .json(AS_OAUTH, 200, asJson("https://attacker.example"));
         assertThat(OAuthDiscovery.discoverAuthorizationServerMetadata(
                 URI.create("https://as.example"), fetch, null, true)).isNotNull();
@@ -168,7 +168,7 @@ class OAuthDiscoveryTest {
 
     @Test
     void serverInfoUsesFirstAuthorizationServerFromResourceMetadata() throws Exception {
-        var fetch = new ScriptedOAuthFetch()
+        var fetch = new ScriptedMcpFetch()
                 .json(PR_SUFFIXED, 200,
                         prJson("https://api.example.com/mcp", "[\"https://as.example\"]"))
                 .json(AS_OAUTH, 200, asJson("https://as.example"));
@@ -182,7 +182,7 @@ class OAuthDiscoveryTest {
     @Test
     void invalidResourceMetadataFallsBackToServerOrigin() throws Exception {
         var originOauth = "https://api.example.com/.well-known/oauth-authorization-server";
-        var fetch = new ScriptedOAuthFetch()
+        var fetch = new ScriptedMcpFetch()
                 .json(PR_SUFFIXED, 200,
                         prJson("https://api.example.com/mcp", "[\"not a url\"]"))
                 .json(originOauth, 200, asJson("https://api.example.com"));
@@ -195,7 +195,7 @@ class OAuthDiscoveryTest {
 
     @Test
     void networkFailureDuringProtectedResourceDiscoveryRethrows() throws Exception {
-        var fetch = new ScriptedOAuthFetch().networkFails(PR_SUFFIXED);
+        var fetch = new ScriptedMcpFetch().networkFails(PR_SUFFIXED);
         assertThatThrownBy(() -> OAuthDiscovery.discoverOAuthServerInfo(
                 URI.create(SERVER), fetch, new OAuthDiscovery.Options(null, null, false)))
                 .isInstanceOf(IOException.class);
@@ -204,7 +204,7 @@ class OAuthDiscoveryTest {
     @Test
     void configuredAuthorizationServerMetadataIsTrusted() throws Exception {
         var metadataUrl = "https://api.example.com/idp/metadata.json";
-        var fetch = new ScriptedOAuthFetch()
+        var fetch = new ScriptedMcpFetch()
                 .json(PR_SUFFIXED, 200,
                         prJson("https://api.example.com/mcp", "[\"https://api.example.com\"]"))
                 .json(metadataUrl, 200, asJson("https://idp.example"));
