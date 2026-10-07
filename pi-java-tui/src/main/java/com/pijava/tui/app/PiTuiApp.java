@@ -369,6 +369,10 @@ public final class PiTuiApp {
         chatScreen.resetRunTracking();
         long startNanos = System.nanoTime();
         var result = mode.submit(text);
+        // A5（docs/25）：运行中提交仅排队，没有 run 收尾 ⇒ 不画 run 分隔线。
+        if ("queued".equals(result.disposition())) {
+            return;
+        }
         result.statusFuture().thenAccept(status ->
             dispatcher.dispatch(() ->
                 chatScreen.finishRun(System.nanoTime() - startNanos)));
@@ -421,10 +425,18 @@ public final class PiTuiApp {
         switch (keyId) {
             case KeybindingsManager.INTERRUPT -> mode.abort();
             case KeybindingsManager.FOLLOW_UP -> {
-                if (!chatScreen.isInputEmpty()) {
-                    mode.followUp(chatScreen.inputText());
-                    chatScreen.clearInput();
+                if (chatScreen.isInputEmpty()) {
+                    break;
                 }
+                var text = chatScreen.inputText();
+                // A5：pi Alt+Enter —— 运行中才排 followUp；空闲等同普通 Enter
+                // （interactive-mode.ts:4418-4429）。
+                if (session.isRunning()) {
+                    mode.followUp(text);
+                } else {
+                    submitPrompt(text);
+                }
+                chatScreen.clearInput();
             }
             case KeybindingsManager.CLEAR -> chatScreen.clearInput();
             case KeybindingsManager.EXIT -> {

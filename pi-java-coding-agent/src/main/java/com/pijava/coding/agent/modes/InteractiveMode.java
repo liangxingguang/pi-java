@@ -5,6 +5,7 @@ import java.util.concurrent.CompletionStage;
 import com.pijava.coding.agent.core.AgentSession;
 import com.pijava.coding.agent.core.EntryObserver;
 import com.pijava.coding.agent.core.PromptConfig;
+import com.pijava.coding.agent.core.PromptRouter;
 import com.pijava.coding.agent.core.SessionResult;
 import com.pijava.coding.agent.core.StreamObserver;
 import com.pijava.coding.agent.core.slash.SlashContext;
@@ -39,12 +40,21 @@ public final class InteractiveMode {
     }
 
     /**
-     * Submit a prompt: drives the harness on a virtual thread and forwards
-     * events to the observers (typewriter rendering in the TUI).
-     * Exactly one virtual thread is started per run (the drive thread inside
-     * {@code AgentSession.processPrompt}).
+     * Submit a prompt.
+     *
+     * <p>A5（{@code docs/25}；pi {@code interactive-mode.ts:3318-3338}）：
+     * 压缩中提交 ⇒ 调用线程同步抛错（TUI 提示，不产生帧）；运行中提交 ⇒
+     * steer 排队，返回 queued，不起驱动线程；空闲 ⇒ 驱动 harness（每条 run
+     * 恰一条虚拟线程）。</p>
      */
     public SessionResult submit(String prompt) {
+        if (session.isCompacting()) {
+            throw new IllegalStateException(PromptRouter.COMPACTING_MESSAGE);
+        }
+        if (session.isRunning()) {
+            session.steer(prompt);
+            return SessionResult.queued();
+        }
         return session.processPrompt(
             prompt, PromptConfig.defaults(), streamObserver, entryObserver);
     }

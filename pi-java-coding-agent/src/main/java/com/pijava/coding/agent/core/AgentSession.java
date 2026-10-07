@@ -535,10 +535,19 @@ public final class AgentSession implements AutoCloseable {
      * 是否有压缩在飞（pi {@code AgentSession.isCompacting}，{@code agent-session.ts:983-990}）。
      *
      * <p>pi 读三个专用中止控制器；pi-java 的等价窗口由压缩的两个入口置/清，
-     * 见 {@link AgentHarness#isCompacting(String)}。RPC {@code get_state} 是唯一消费者。</p>
+     * 见 {@link AgentHarness#isCompacting(String)}。消费者：RPC {@code get_state}
+     * 与 {@code InteractiveMode} 的提交门（A5，{@code docs/25}）。</p>
      */
     public boolean isCompacting() {
         return harness.isCompacting(laneName());
+    }
+
+    /**
+     * 是否有 agent run 在飞（A5，{@code docs/25}；pi {@code isStreaming}，
+     * {@code agent-session.ts:1430-1432}）。{@code InteractiveMode} 提交门消费者。
+     */
+    public boolean isRunning() {
+        return harness.isRunning(laneName());
     }
 
     /**
