@@ -127,6 +127,20 @@
 | B185 | `OAuthMetadataParsers.optionalBoolean` 的 SpotBugs 排除 | TRUE/FALSE/null 三态（null＝键缺席），与 B144 同形的误报；jspecify `@Nullable` 不被 SpotBugs 识别（docs/35 §10 发现 2） |
 | B186 | **mcp 模块的 `verify` 在包 ⑥/⑦ 从未跑过** | `spotbugs:check` 绑在 `verify`；包 ⑥/⑦ 只跑 `test`＋`checkstyle` ⇒ 本包一跑即红两条（本包 NPE 已修 ＋ B185）。**包闭环验证口径须含 `verify`** |
 | B187 | 包④ `InMemoryTransportTest` 断言**抢跑**（已修） | 旧夹具断言「`send` 返回时监听器尚未跑」（`delivered.isEmpty()`），那是在跟虚拟线程**抢调度**（实测 7 跑 1 红）；产品契约（`send` 不在调用栈上重入）由 `startVirtualThread` 结构性保证 ⇒ 改成确定性断言「监听器线程 ≠ 发送线程」（反向变异：改内联投送恰 1 红）。**教训：凡「某时刻还没发生」的断言都是运气** |
+| B188 | MCP `!cmd` 的 `settings.shellPath` 层未接 | pi 两段式（先配置 shell、ENOENT 回落默认）；`CommandRunner` 可注入，第 12 包接线（docs/36 §2.4） |
+| B189 | MCP 客户端身份由调用方注入 | pi 取 `config.ts:540,543`；Java 的 `Version.VERSION` 在 coding-agent，模块内零字面量，第 12 包传（docs/36 §2.3） |
+| B190 | `isTransientError` 的判定范围宽于 pi | pi 判 `TypeError`（fetch 网络错）；Java 判 `IOException`，含 TLS/中断/重定向策略（docs/36 §5.1） |
+| B191 | `WebUrls` 的 WHATWG 归一化是自建 | `String(new URL(url))` 的主机小写/补尾斜杠/去默认端口；逐字节等价待真 pi 互读（docs/36 §6.2） |
+| B192 | cimd 模式不可达 | `CLIENT_METADATA_BASE_URL = https://pi.dev/oauth` 是 pi 的域名，pi-java 无托管文档 |
+| B193 | `mcp-auth.json` 的字节形态偏差 | `clientInformation.extension` 写成嵌套键；record 的 `null` ＝ JS `undefined` ⇒ 省略（两侧都按 JSON 解析，行为等价） |
+| B194 | OAuth 刷新的 15 s 超时靠外包一层 | `McpFetch.fetch(Request)` 无 signal 通道；未扩包⑥/⑦接口（docs/36 §6.4） |
+| B195 | MCP 运行时新类暂无生产消费者 | 同 B177 族：第 10–12 包接线（第 12 包为末） |
+| B196 | `connectOnce` 顺序拉取工具/资源 | pi 用 `Promise.all` 并发；差异仅时序 |
+| B197 | `URI.create` 接受相对引用而 `new URL` 抛 | `responseFromRedirectUrl` 已显式挡 scheme；其余 URL 入口未逐个复核 |
+| B198 | `OAuthPage` 的 CSS 折行 | 字节差仅 `<style>` 内空白，计算值相同（checkstyle 120 列） |
+| B199 | 包③ 的 stdio `cwd` 未移植（**已修**） | 包⑨ 补：`StdioTransportOptions` 加 `cwd` ＋ `ProcessBuilder.directory`；此前 `mcp.json` 的 `cwd` 字段是死的 |
+| B200 | 包⑧ 的 checkstyle 是「错误 0、警告 2」（**已修**） | 闭环记录称「checkstyle 0」未区分错误/警告；⇒ 闭环口径须写明各几个 |
+| B201 | 包⑤ 的 HTTP transport 无公开构造面（**已修**） | 包⑨ 补：`StreamableHttpTransport`/`…Options` 包私有且无工厂 ⇒ 包外无法构造；pi 从 `@earendil-works/pi-mcp` 公开导出 |
 | B163 | 主题/色彩系统差距 | pi 3,176 行（theme/system-theme/oklab…），Java 74 行 |
 | B164 | 分类器基础设施零对应 | image/classifier 统一模型设施 |
 
