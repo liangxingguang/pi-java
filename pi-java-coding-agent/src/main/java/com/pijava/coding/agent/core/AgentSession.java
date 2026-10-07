@@ -79,6 +79,9 @@ public final class AgentSession implements AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(AgentSession.class);
 
+    /** A5（docs/25）：并发 prompt 路由门，无状态。 */
+    private static final PromptRouter PROMPT_ROUTER = new PromptRouter();
+
     private final AgentHarness harness;
     private final SessionServices services;
     private String name;
@@ -623,6 +626,21 @@ public final class AgentSession implements AutoCloseable {
             PromptConfig config,
             StreamObserver streamObserver,
             EntryObserver entryObserver) {
+        // A5（docs/25）：路由门在任何副作用之前 —— 压缩中/运行中未指定
+        // streamingBehavior 的 prompt 在调用线程同步抛出（pi 同形状，
+        // agent-session.ts:1939-1979）；运行中显式 steer/followUp 仅排队。
+        var verdict = PROMPT_ROUTER.route(
+            harness.isCompacting(laneName()),
+            harness.isRunning(laneName()),
+            config.streamingBehavior());
+        if (verdict == PromptRouter.Verdict.QUEUE_STEER) {
+            harness.steer(laneName(), prompt);
+            return SessionResult.queued();
+        }
+        if (verdict == PromptRouter.Verdict.QUEUE_FOLLOW_UP) {
+            harness.followUp(laneName(), prompt);
+            return SessionResult.queued();
+        }
         if (config.systemPrompt() != null) {
             harness.setSystemPrompt(config.systemPrompt());
         }
@@ -646,7 +664,7 @@ public final class AgentSession implements AutoCloseable {
                 return Optional.<StreamEvent>empty();
             }
         }).takeWhile(Optional::isPresent).map(Optional::get);
-        return new SessionResult(stream, entriesFuture, statusFuture);
+        return new SessionResult(stream, entriesFuture, statusFuture, "started");
     }
 
     /** Convenience overload with default prompt config. */
