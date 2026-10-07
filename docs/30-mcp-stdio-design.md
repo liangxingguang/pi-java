@@ -1,8 +1,8 @@
 # 包 30：MCP 对齐（B160）——第 3 包：stdio transport
 
-> **状态：📝 待审核（2026-10-07，R-A）。**
+> **状态：✅ 已闭环（2026-10-07，R-A）。**
 > 总包路线见 `docs/28` §3；本文是第 3 包（pi `transports/transport.ts` 55 行＋
-> `transports/stdio.ts` 216 行）详细设计。审核通过后才许写代码。
+> `transports/stdio.ts` 216 行）设计。实施记录见 §10。
 
 ## 1. 文件清单（`pi-java-mcp`，包 `com.pijava.mcp.transport`）
 
@@ -221,3 +221,29 @@ pi 两条款用 Node fixture。Java 用 **JVM 子进程 fixture**（同模块 te
 ## 9. 台账影响
 
 - B160 不销号；B177 维持。闭环回填 docs/28 banner 与本文。
+
+## 10. 实施记录（2026-10-07）
+
+**落地（1 feat＋1 docs）**：
+
+| 内容 | 文件 |
+|---|---|
+| 监听基座/Options | `AbstractMcpTransport`、`StdioTransportOptions`（stderr 三路由 enum） |
+| 生命周期/进程/帧 | `StdioTransport`（196 行）、`StdioProcess`、`StdioLineFrames`、`StderrTail` |
+| JVM 子进程 fixture | `StdioFixtureServer`（echo）、`StubbornFixtureServer`（grandchild＋shutdown hook）、`IdleProcess` |
+
+**测试 32/32 绿**：`McpStdioTest` ×2、`StdioLineFramesTest` ×3（新增直接字节
+单测：CR 剥离/多字节 emoji 逐字节送达/超长与不完整帧）＋包①② 的 27；全依赖
+1377 绿；checkstyle mcp 0。
+
+**变异探针 5/5 红**：M1 去 CR 剥离；M2 去 maxMessageBytes；M3 terminateTree
+不枚举 descendants ⇒ grandchild 存活；M4 close 只关 stdin ⇒ stubborn 不退出；
+M5（临时 ExitCode fixture）非零退出不报错。
+
+**两处设计外发现**：
+
+1. **fixture 必须忽略无 id 的通知**：`notifications/initialized` 是通知不是请求，
+   当未知方法抛错会让 fixture 退 1——pi 的 stdio-server fixture 同样忽略通知。
+2. **stubborn fixture 必须先应答 initialize 再挂**（否则 client connect 超时）；
+   探针 M3 的正确落点是 `terminateTree`（唯一杀点），打在 killTree 会被上游
+   SIGTERM 已杀 grandchild 而掩盖——又一条「探针落点」教训。
