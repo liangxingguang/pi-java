@@ -6,8 +6,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.annotation.JsonTypeName;
-import com.fasterxml.jackson.annotation.JsonValue;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.coding.agent.core.StreamingBehavior;
 
 /**
  * RPC 命令 —— stdin 上的 type-tagged JSONL 命令（对齐 pi {@code rpc-types.ts}，
@@ -62,6 +62,7 @@ public sealed interface RpcCommand {
     @JsonProperty("type")
     String type();
 
+    // A5（docs/25）：streamingBehavior 复用 core enum（pi "steer"|"followUp"）。
     @JsonTypeName("prompt")
     record Prompt(String id, String message, List<ContentBlock.ImageContent> images,
                   StreamingBehavior streamingBehavior) implements RpcCommand {
@@ -227,16 +228,5 @@ public sealed interface RpcCommand {
     @JsonTypeName("get_tree")
     record GetTree(String id) implements RpcCommand {
         @Override public String type() { return "get_tree"; }
-    }
-
-    /** pi: streamingBehavior?: "steer" | "followUp" —— 纯常量闭集 → enum。 */
-    enum StreamingBehavior {
-        STEER, FOLLOW_UP;
-
-        /** pi: "steer" | "followUp"。 */
-        @JsonValue
-        public String wireName() {
-            return this == STEER ? "steer" : "followUp";
-        }
     }
 }

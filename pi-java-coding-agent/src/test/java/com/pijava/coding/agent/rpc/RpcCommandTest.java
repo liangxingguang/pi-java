@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.coding.agent.core.StreamingBehavior;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -22,7 +23,7 @@ class RpcCommandTest {
             new RpcCommand.Prompt("1", "hello", null, null),
             new RpcCommand.Prompt("1", "hello",
                 List.of(new ContentBlock.ImageContent("image/png", "AA==")),
-                RpcCommand.StreamingBehavior.STEER),
+                StreamingBehavior.STEER),
             new RpcCommand.Steer("2", "steer text", null),
             new RpcCommand.FollowUp("3", "more"),
             new RpcCommand.Abort("4"),

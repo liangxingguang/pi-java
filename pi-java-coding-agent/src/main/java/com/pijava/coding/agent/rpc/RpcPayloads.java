@@ -12,6 +12,12 @@ final class RpcPayloads {
 
     private RpcPayloads() {}
 
+    /**
+     * A5（docs/25）：{@code prompt}/{@code steer}/{@code follow_up} 响应 data
+     * —— pi {@code {disposition: "started" | "queued" | "handled"}}。
+     */
+    record DispositionData(String disposition) {}
+
     /** pi {@code BashResult}：stdout+stderr 合并输出与退出信息。 */
     record RpcBashResult(
         String output,

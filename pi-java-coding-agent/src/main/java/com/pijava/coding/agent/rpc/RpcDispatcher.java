@@ -115,12 +115,16 @@ public final class RpcDispatcher {
             switch (command) {
                 case RpcCommand.Prompt p -> handlePrompt(p);
                 case RpcCommand.Steer s -> {
-                    out.write(RpcResponse.ok(s.id(), "steer"));
+                    // A5：pi rpc-mode.ts:416-419，data.disposition（无扩展 input
+                    // 事件 ⇒ 恒 "queued"）。
                     session.steer(s.message());
+                    out.write(RpcResponse.ok(s.id(), "steer",
+                        new RpcPayloads.DispositionData("queued")));
                 }
                 case RpcCommand.FollowUp f -> {
-                    out.write(RpcResponse.ok(f.id(), "follow_up"));
                     session.followUp(f.message());
+                    out.write(RpcResponse.ok(f.id(), "follow_up",
+                        new RpcPayloads.DispositionData("queued")));
                 }
                 case RpcCommand.Abort a -> {
                     out.write(RpcResponse.ok(a.id(), "abort"));
@@ -287,11 +291,22 @@ public final class RpcDispatcher {
     // ── 命令实现 ─────────────────────────────────────────────────────────
 
     private void handlePrompt(RpcCommand.Prompt prompt) throws IOException {
-        out.write(RpcResponse.ok(prompt.id(), "prompt"));
         String text = prompt.message() == null ? "" : prompt.message();
-        // 异步命令：不阻塞等待结果，事件经订阅推送。
-        streaming = true;
-        session.processPrompt(text, PromptConfig.defaults());
+        // A5（docs/25）：pi rpc-mode.ts:398-412 —— 响应在预检之后写，
+        // data.disposition = started | queued；路由门拒绝 ⇒ 恰一条失败响应。
+        try {
+            var result = session.processPrompt(text,
+                PromptConfig.withStreamingBehavior(prompt.streamingBehavior()));
+            if ("started".equals(result.disposition())) {
+                // 异步 run：事件经订阅推送；AgentSettled 复位。
+                streaming = true;
+            }
+            out.write(RpcResponse.ok(prompt.id(), "prompt",
+                new RpcPayloads.DispositionData(result.disposition())));
+        } catch (IllegalStateException e) {
+            // 压缩中 / 运行中未指定 streamingBehavior（pi 在调用线程同步抛）。
+            out.write(RpcResponse.fail(prompt.id(), "prompt", e.getMessage()));
+        }
     }
 
     /** 扩展 UI 请求：写 extension_ui_request 到 stdout，阻塞等 extension_ui_response。 */
