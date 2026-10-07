@@ -2,6 +2,7 @@ package com.pijava.agent.tool;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Locale;
 
 /**
  * Output truncation for tools (bash, read).
@@ -17,11 +18,16 @@ public final class TruncationUtils {
 
     private TruncationUtils() {}
 
-    /** Format a byte size for display. */
+    /**
+     * Format a byte size for display.
+     *
+     * <p>pi's {@code toFixed(1)} always writes a dot, so the locale is pinned; the default
+     * locale would render {@code 1,5KB} in German.</p>
+     */
     public static String formatSize(long bytes) {
         if (bytes < 1024) return bytes + "B";
-        if (bytes < 1024 * 1024) return String.format("%.1fKB", bytes / 1024.0);
-        return String.format("%.1fMB", bytes / (1024.0 * 1024.0));
+        if (bytes < 1024 * 1024) return String.format(Locale.ROOT, "%.1fKB", bytes / 1024.0);
+        return String.format(Locale.ROOT, "%.1fMB", bytes / (1024.0 * 1024.0));
     }
 
     /**

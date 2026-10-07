@@ -21,6 +21,12 @@
             <groupId>com.pi-java</groupId>
             <artifactId>pi-java-agent-core</artifactId>
         </dependency>
+        <!-- MCP 扩展面：客户端/传输/OAuth/配置/运行时（docs/28 §2 的模块图）。
+             工具与资源的 AgentTool 适配必须落在这里——pi-java-mcp 看不见 agent-core。 -->
+        <dependency>
+            <groupId>com.pi-java</groupId>
+            <artifactId>pi-java-mcp</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
