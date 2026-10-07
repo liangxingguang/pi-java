@@ -107,7 +107,8 @@ public final class LaneState {
      *
      * <p>它是唯一的「是否在跑」判据 —— 取代了 {@code RunPhase} 三态枚举。</p>
      */
-    ActiveRun activeRun;
+    // A5（docs/25）：跨线程读取（RPC reader/TUI/web 在自己线程跑路由门）⇒ volatile。
+    volatile ActiveRun activeRun;
 
     /** Open {@code harness.run} telemetry span for the current run (observability). */
     TelemetrySpan runSpan;

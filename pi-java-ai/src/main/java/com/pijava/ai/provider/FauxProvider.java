@@ -57,6 +57,15 @@ public final class FauxProvider implements Provider {
         return new FauxProvider(name, responses, 0, true);
     }
 
+    /**
+     * Multi-response sequence with an inter-event delay — for tests that must
+     * keep a run's window open while submitting concurrent prompts (A5).
+     */
+    public static FauxProvider sequence(
+            String name, List<List<StreamEvent>> responses, long delayMs) {
+        return new FauxProvider(name, responses, delayMs, true);
+    }
+
     List<StreamEvent> nextResponse() {
         int index = Math.min(nextCall.getAndIncrement(), responses.size() - 1);
         return responses.get(index);
