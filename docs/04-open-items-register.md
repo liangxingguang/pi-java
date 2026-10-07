@@ -134,7 +134,6 @@
 | B66 | 6 个已声明键位未接线 | MODEL_CYCLE/THINKING_CYCLE/TOOLS_EXPAND 等 |
 | B78 | FuzzyMatcher 语义不同 | pi 子序列匹配 ＋ 分词；Java 不同 |
 | B145 | 启动/登录后定向目录刷新未接线 | 仅 RPC 模式有后台刷新，pi 另有三处 |
-| B176 | 手动 `/compact` 阻塞 TUI 事件循环 | pi `handleCompactCommand` 是 fire-and-forget async（interactive-mode.ts:7008-7018），压缩中事件循环仍可输入；Java 的 slash 命令在渲染线程同步跑完整压缩 ⇒ 该路径下缓冲不可达（自动压缩/RPC 触发的压缩不受影响）；修法＝压缩挪 worker 线程、命令异步完成 |
 
 ---
 

@@ -1,8 +1,8 @@
 # 包 27：手动 `/compact` 异步化——压缩挪 worker 线程（B176）
 
-> **状态：⏳ 设计待审核，未写生产代码。**
-> 承接台账 **B176**（包 26 实施中登记）。同一根因在 **TUI slash 命令**与 **RPC compact
-> 命令**两个面，本包一并修：命令处理线程在压缩期间必须继续处理输入。
+> **状态：✅ 已闭环（2026-10-07，R-A）。**
+> 台账 **B176** 销号；实施记录见 §7。同一根因在 **TUI slash 命令**与 **RPC compact
+> 命令**两个面，已一并修：命令处理线程在压缩期间继续处理输入。
 
 ## 1. 问题
 
@@ -189,3 +189,38 @@ case RpcCommand.Compact c -> {
 
 - **B176 销号**（B 70 → 69）。
 - docs/04 同步；闭环后 banner 与实施记录回填。
+
+## 7. 实施记录（2026-10-07）
+
+**落地（1 feat＋1 docs）**：
+
+| commit | 内容 |
+|---|---|
+| `7a866b1` | `CommandUtil.async`（worker 虚拟线程＋未完成 stage）、slash compact 换 async、RPC compact 改 worker（失败 fail 响应） |
+| docs | 台账与本文闭环 |
+
+**测试（新增 3 条全绿）**：`CompactSlashAsyncTest` ×2（dispatch 后 stage 未完成、
+压缩中缓冲 "later"、释放后 "Compacted." 且缓冲重放收口；失败 body 返回
+"Compaction failed:" 文本）、`RpcCompactAsyncTest` ×1（压缩中 get_state 响应
+先于 compact 响应；响应 data 五键）。新增支持件 `BlockingSummaryProvider`
+（摘要请求阻塞至 release，watchdog 2.5s 兜底）。既有 `RpcDispatcherTest` ×2
+改为等待异步响应。全 reactor `clean verify` **14/14 BUILD SUCCESS**。
+
+**变异探针 4/4 红**：M1 slash 改回 simple ⇒ dispatch 阻塞至 watchdog、stage
+已完成 ⇒ 红（7.5s）；M2 RPC 改回同步 ⇒ get_state 被堵 ⇒ 响应序红（8s）；
+M3 worker 漏 complete ⇒ stage.get 超时 ×2（20.7s）；M4 失败 catch 删除 ⇒
+异常完成 ⇒ 红。
+
+**实施中两处设计外发现**：
+
+1. **摘要分类的大小写陷阱**：历史摘要 prompt 是小写 `<conversation>`
+   （buildPrompt），只有 turn-prefix 是大写 `# Conversation`；按 "Conversation"
+   分类会静默把历史路当普通请求（摘要以 "ok" 假成功）。最终按两个精确标记
+   （`<conversation>` / `# Conversation`）分类。
+2. **同步变异必须有 watchdog**：simple 形状下 dispatch/handleLine 在测试线程
+   永久阻塞、普通断言不可达；2.5s 自动 release 的看门线程把挂起转成普通红，
+   健康路径下手动 release 提前、watchdog 是 no-op。另：TaskStop 会留下孤儿
+   surefire JVM 锁住 target 日志 ⇒ `clean` 失败（本次构建首跑即此，非代码问题，
+   `jps` 定位残留进程后恢复）。
+
+**台账：A 4 条、B 69 条。**
