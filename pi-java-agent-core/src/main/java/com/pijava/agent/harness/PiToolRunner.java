@@ -159,7 +159,10 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
                             call.toolName(), call.args(), partial));
                     }
                 }, toolContext);
-            isError = false;
+            // pi 的 isError 来自结果对象本身（`AgentToolResult.isError`，agent-session.ts:693），
+            // 不是「抛没抛」。MCP 工具的成功调用可以带回一个错误结果（服务器答了 isError），
+            // 那时内容要照带 —— 走抛出的话 harness 只会留一条消息。
+            isError = executed.isError();
         } catch (Exception e) {
             // pi :711-714：createErrorToolResult(error.message) —— 内容换掉、标记为错，继续收尾
             executed = PiLoopTools.createErrorToolResult(messageOf(e));
@@ -225,7 +228,10 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
         return toOutcome(call, result, true);
     }
 
-    /** 钩子拒绝时的理由：{@code BeforeToolResult} 把 reason 放在 arguments 里；兜底文案对齐 pi 的 {@code reason || "Tool execution was blocked"}（{@code :643}）。 */
+    /**
+     * 钩子拒绝时的理由：{@code BeforeToolResult} 把 reason 放在 arguments 里；
+     * 兜底文案对齐 pi 的 {@code reason || "Tool execution was blocked"}（{@code :643}）。
+     */
     private static String denyReason(BeforeToolResult decision) {
         Map<String, Object> arguments = decision.arguments();
         var reason = arguments == null ? null : arguments.get("reason");

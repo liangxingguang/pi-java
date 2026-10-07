@@ -152,6 +152,64 @@ public final class TruncationUtils {
         return new String(bytes, start, bytes.length - start, StandardCharsets.UTF_8);
     }
 
+    /**
+     * Keep the start and the end of {@code content}, half of {@code maxBytes} each, and replace
+     * the middle with a {@code …N chars truncated…} marker, like Codex does for tool output.
+     * Cuts only at character boundaries ({@code truncate.ts:288-314}).
+     *
+     * <p>MCP tool results use this at 20 KiB; the head/tail limits above are a separate budget and
+     * the two must not be folded together.</p>
+     *
+     * @param content the text to limit
+     * @param maxBytes the byte budget, UTF-8
+     * @return the limited text plus what was left out
+     */
+    public static MiddleTruncationResult truncateMiddle(String content, long maxBytes) {
+        var buf = content.getBytes(StandardCharsets.UTF_8);
+        int totalLines = splitLines(content).length;
+        if (buf.length <= maxBytes) {
+            return new MiddleTruncationResult(content, false, 0, buf.length, totalLines);
+        }
+        // Continuation bytes (10xxxxxx) are not character starts.
+        int headEnd = (int) (maxBytes / 2);
+        while (headEnd > 0 && !isBoundary(buf, headEnd)) {
+            headEnd--;
+        }
+        int tailStart = buf.length - (int) (maxBytes - maxBytes / 2);
+        while (tailStart < buf.length && !isBoundary(buf, tailStart)) {
+            tailStart++;
+        }
+        var head = new String(buf, 0, headEnd, StandardCharsets.UTF_8);
+        var tail = new String(buf, tailStart, buf.length - tailStart, StandardCharsets.UTF_8);
+        var removed = new String(buf, headEnd, tailStart - headEnd, StandardCharsets.UTF_8);
+        // pi counts code points (Array.from), not UTF-16 units.
+        var removedChars = removed.codePointCount(0, removed.length());
+        return new MiddleTruncationResult(
+            head + "…" + removedChars + " chars truncated…" + tail,
+            true, removedChars, buf.length, totalLines);
+    }
+
+    private static boolean isBoundary(byte[] buf, int index) {
+        return index >= buf.length || (buf[index] & 0xC0) != 0x80;
+    }
+
+    /**
+     * What {@link #truncateMiddle} produced ({@code truncate.ts:278-286}).
+     *
+     * @param content the start and end with the marker between them
+     * @param truncated whether anything was left out
+     * @param removedChars characters left out, counted as code points
+     * @param totalBytes bytes of the original, UTF-8
+     * @param totalLines lines of the original
+     */
+    public record MiddleTruncationResult(
+        String content,
+        boolean truncated,
+        int removedChars,
+        int totalBytes,
+        int totalLines
+    ) {}
+
     public record TruncationResult(
         String content,
         boolean truncated,

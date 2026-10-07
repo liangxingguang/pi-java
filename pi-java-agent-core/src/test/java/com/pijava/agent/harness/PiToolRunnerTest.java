@@ -318,6 +318,72 @@ class PiToolRunnerTest {
         assertThat(outcome.terminate()).as("批次门从结果对象派生").isTrue();
     }
 
+    /** 一个成功调用但结果本身是错的工具（MCP 的 {@code isError}：内容照带）。 */
+    private static AgentTool<String, Void> errorResultTool(String name) {
+        return new AgentTool<>() {
+            @Override public String name() { return name; }
+            @Override public String label() { return name; }
+            @Override public String description() { return "answers with an error"; }
+            @Override public Map<String, Object> inputSchema() { return Map.of(); }
+            @Override public ExecutionMode executionMode() { return new ExecutionMode.Sequential(); }
+            @Override public String prepareArguments(Map<String, Object> raw) { return "prepared"; }
+            @Override public ToolResult<Void> execute(String id, String params, AbortSignal signal,
+                    ToolUpdateCallback<Void> onUpdate, ToolContext ctx) {
+                return ToolResult.isError(List.of(
+                    new ContentBlock.TextContent("server said no"),
+                    new ContentBlock.TextContent("second block")), null);
+            }
+        };
+    }
+
+    /**
+     * pi 的 {@code isError} 来自**结果对象**（{@code AgentToolResult.isError}），不是「抛没抛」。
+     * 走抛出的话 {@code createErrorToolResult} 会把内容换成单条消息 —— MCP 服务器答的那些
+     * 内容块就丢了。
+     */
+    @Test
+    void aResultCanBeAnErrorWithoutThrowingAndKeepsItsContent() {
+        var runner = new PiToolRunner("default", registryWith(errorResultTool("mcp__s__t")),
+            null, CTX, null, null);
+
+        var outcome = runBoth(runner, call("mcp__s__t"));
+
+        assertThat(outcome.isError()).isTrue();
+        assertThat(outcome.result().content()).extracting(block ->
+            ((ContentBlock.TextContent) block).text())
+            .containsExactly("server said no", "second block");
+        assertThat(outcome.message().isError()).isTrue();
+    }
+
+    /** pi 的 {@code hookResult?.isError ?? isError}（agent-session.ts:693）：钩子能把错误翻回去。 */
+    @Test
+    void theAfterToolHookCanFlipAnErrorResultBack() {
+        var hooks = new HookSystem(new LaneState());
+        hooks.onAfterTool("default", ctx ->
+            new AfterToolPatch(null, null, null, null, Boolean.FALSE));
+        var runner = new PiToolRunner("default", registryWith(errorResultTool("mcp__s__t")),
+            hooks, CTX, null, null);
+
+        var outcome = runBoth(runner, call("mcp__s__t"));
+
+        assertThat(outcome.isError()).isFalse();
+        assertThat(outcome.message().isError()).isFalse();
+        // 内容仍然照带 —— 钩子只翻了标记。
+        assertThat(outcome.result().content()).hasSize(2);
+    }
+
+    /** 旧形状（5 参）继续编译，且默认不是错误结果、没有结构内容。 */
+    @Test
+    void theFiveArgumentShapeStaysSuccessful() {
+        var runner = new PiToolRunner("default", registryWith(terminateTool("echo")),
+            null, CTX, null, null);
+
+        var result = runBoth(runner, call("echo")).result();
+
+        assertThat(result.isError()).isFalse();
+        assertThat(result.structuredContent()).isNull();
+    }
+
     @Test
     void failedExecutionResultMatchesPiCreateErrorToolResultShape() {
         var runner = new PiToolRunner("default", registryWith(throwingTool("boom")),
