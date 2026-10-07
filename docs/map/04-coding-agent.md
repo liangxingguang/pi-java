@@ -27,7 +27,7 @@
 | ├ 资源发现 | `skills.ts` 509 + `prompt-templates.ts` 285 → **320** + `resource-loader.ts` 1,097 → **1,275** | 2,104 | 896 | 42.6% |
 | ├ RPC | `modes/rpc/*` | 1,785 → **1,797** | 1,251 | 69.6% |
 | ├ CLI/TUI 交互 | `modes/interactive/*` 21,218 → **21,626** + `cli/*` 1,921 → **1,942** + `utils/*` 3,680 → **3,698** | 27,266 | ~3,000 | ~11.0% |
-| ├ **主流新增子系统**（MCP / codemode / tool-search / virtual-models / nested-tool-calls） | `src/extensions/mcp` 4,093 + `src/extensions/codemode` 1,238 + `core/mcp-servers.ts` 319 + `core/virtual-models.ts` 238 + `core/nested-tool-calls.ts` 261 +（新包）`packages/mcp` 3,167 + `packages/codemode` 1,678 | **10,994** | 7,273 **ᵇ** | **66.2%** |
+| ├ **主流新增子系统**（MCP / codemode / tool-search / virtual-models / nested-tool-calls） | `src/extensions/mcp` 4,093 + `src/extensions/codemode` 1,238 + `core/mcp-servers.ts` 319 + `core/virtual-models.ts` 238 + `core/nested-tool-calls.ts` 261 +（新包）`packages/mcp` 3,167 + `packages/codemode` 1,678 | **10,994** | 10,700 **ᵇ** | **97.3%** |
 | └ **可执行验收规格 examples/** | `examples/`（105 个 `.ts`） | 15,809 → **16,033** | **0** | **0%** |
 | 测试 | `test/` | 59,519 → **72,460** | 6,844 | 9.4% |
 | **（作废，R1）** `experimental/{micro,mini}/` | 1,485 + （mini） | **0（删除）** | — | — |
@@ -36,7 +36,8 @@
 > pi 侧 `core` 29,802 → **34,953**；`modes` 23,669；`extensions` 7,154；`utils` 3,698；`cli` 1,942；`experimental` 9,950（**权 0**）；根 `.ts` 3,562。
 > **`interactive-mode.ts` 6,779 → 7,037**（+258）。
 > **扩展系统的 799 行在 `pi-java-agent-core/src/main/java/com/pijava/agent/hook/`**，不在本模块 —— 且**没有桥接到 `PiExtension`**（见 §扩展系统）。
-> **ᵇ 主流新增子系统的 7,273 行在 `pi-java-mcp/src/main/java/com/pijava/mcp/`**（新模块，MCP 面：协议/McpClient/传输/OAuth/配置，包①–⑧已闭环）；该行的 pi 分母还含 **codemode（2,916）＋ tool-search/virtual-models/nested（499）** 三段，java 侧仍为 0 ⇒ 66.2% 是**混合行**的比例，不是 MCP 面的完成度（MCP 面单独看：java 7,273 / pi 7,579 = 96.0%）。
+> **ᵇ 主流新增子系统的 10,700 行在 `pi-java-mcp/src/main/java/com/pijava/mcp/`**（新模块，MCP 面：协议/McpClient/传输/OAuth/配置/连接运行时，包①–⑨已闭环，142 文件）；该行的 pi 分母还含 **codemode（2,916）＋ tool-search/virtual-models/nested（499）** 三段，java 侧仍为 0 ⇒ 97.3% 是**混合行**的比例，不是 MCP 面的完成度（MCP 面单独看：java 10,700 / pi 7,579 = **141.2%**）。
+> ⚠️ 该比例**超过 100% 不代表「超额对齐」**——Java 的 record/javadoc/显式类型比 TS 冗长（包⑨ 单行 javadoc 与 `Objects.equals` 这类显式写法即是），LOC 比在这里只能作「大致铺满」的粗指标；判完成度一律看 §G 表的判定列。
 
 ---
 
@@ -439,25 +440,25 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1551-1877`）；java 面 = `
 
 ## G. 主流新增子系统（MCP / codemode / tool-search / virtual-models / nested-tool-calls）
 
-这些是旧基准**不存在**的 pi 侧子系统（新包＋新扩展），**均在 `bin pi` 主流路径上**（`src/extensions/index.ts` 把它们注册为 builtin 扩展，每会话加载）。pi-java 全部为 **缺失（权重 0 分）**。
+这些是旧基准**不存在**的 pi 侧子系统（新包＋新扩展），**均在 `bin pi` 主流路径上**（`src/extensions/index.ts` 把它们注册为 builtin 扩展，每会话加载）。**MCP 面（G-1..G-5）已有对应**（`pi-java-mcp`，包①–⑨）；**codemode / tool-search / virtual-models / nested（G-6..G-10）仍为零对应**。
 
 | # | 能力单元 | pi 侧证据 | 权重 | 判定 | 说明 |
 |---|---|---|---|---|---|
-| G-1 | MCP 客户端 + 协议（JSON-RPC、initialize、tools/resources/prompts、capabilities） | `packages/mcp/src/client.ts`、`protocol/*`（3,167 行）＋ `src/extensions/mcp/index.ts` | 2 | **缺失** | 每会话加载 builtin 扩展 |
-| G-2 | MCP 传输（stdio / streamable-http / in-memory） | `packages/mcp/src/transports/{stdio,streamable-http,in-memory,transport}.ts` | 2 | **缺失** | |
-| G-3 | MCP OAuth（discovery + RFC 9207 + client ID metadata + callback server） | `packages/mcp/src/oauth/*`（7 文件）＋ `src/extensions/mcp/oauth.ts`（532 行） | 1 | **缺失** | 低频/边缘 |
-| G-4 | `mcp.json` 配置 + `/mcp` 子命令 + 审批 UI | `src/extensions/mcp/config.ts` 242、`cli.ts` 614、`ui.ts` 252；`main.ts:614` | 2 | **存疑** | **配置面已落**（包⑧，`docs/35`，`362e2fb4`）：`pi-java-mcp/.../mcp/config/**` 11 文件 1,075 行（全局/项目加载、trust 门、override、增删改、`JSON.stringify` 落盘）＋ 29 测试；**`/mcp` 子命令与审批 UI 未落**（第 ⑪ 包） |
-| G-5 | MCP 工具暴露（`codemode`/`deferred`/`direct`/`hidden`）+ 工具/资源接入模型 | `src/core/mcp-servers.ts`、`src/extensions/mcp/tools.ts`、`resources.ts` | 2 | **缺失** | 配置后每轮走 |
+| G-1 | MCP 客户端 + 协议 + 连接运行时（JSON-RPC、initialize、tools/resources/prompts、capabilities、连接状态机） | `packages/mcp/src/client.ts`、`protocol/*`（3,167 行）＋ `src/extensions/mcp/{index,runtime,log}.ts` | 2 | **存疑** | **客户端/协议/运行时已落**（包①②⑨，`docs/29`/`36`）：`McpClient` 状态机＋协议 wire records＋`McpServerConnection`（lazy 重连/瞬态重试/session 重放/`mcp.log`）；**`extensions/mcp/index.ts`（1,225 行）未落**（第 ⑫ 包） |
+| G-2 | MCP 传输（stdio / streamable-http / in-memory） | `packages/mcp/src/transports/{stdio,streamable-http,in-memory,transport}.ts` | 2 | **对齐** | 三条传输全落（包③④⑤，`docs/30`/`31`/`32`）；`in-memory` 在 test 源，对齐 pi 的 `@earendil-works/pi-mcp/testing` 导出；⚠️ 包⑤ 的 HTTP transport 此前**包外不可构造**（B201，包⑨ 补为 public） |
+| G-3 | MCP OAuth（discovery + RFC 9207 + client ID metadata + callback server） | `packages/mcp/src/oauth/*`（7 文件）＋ `src/extensions/mcp/oauth.ts`（532 行） | 1 | **对齐** | 两半全落（包⑥⑦⑨，`docs/33`/`34`/`36`）：`.well-known` 发现＋PR 回退、`WWW-Authenticate`、RFC 9207 `iss`、PKCE、6 分支客户端认证、`mcp-auth.json` 凭据 store（name\|url 键＋legacy 接管＋刷新锁）、登录编排＋回调服务器＋粘贴回退；⚠️ cimd 的文档托管在 `pi.dev`（**B192**）—— 两侧均未实测，见说明 |
+| G-4 | `mcp.json` 配置 + `/mcp` 子命令 + 审批 UI | `src/extensions/mcp/config.ts` 242、`cli.ts` 614、`ui.ts` 252；`main.ts:614` | 2 | **存疑** | **配置面已落**（包⑧，`docs/35`，`362e2fb4`）：`pi-java-mcp/.../mcp/config/**` 11 文件（全局/项目加载、trust 门、override、增删改、`JSON.stringify` 落盘）＋ 29 测试；**`/mcp` 子命令与审批 UI 未落**（第 ⑪ 包） |
+| G-5 | MCP 工具暴露（`codemode`/`deferred`/`direct`/`hidden`）+ 工具/资源接入模型 | `src/core/mcp-servers.ts`、`src/extensions/mcp/tools.ts`、`resources.ts` | 2 | **存疑** | **exposure 语义已落**（包⑧，`docs/35`）：`McpExposure` ADT、per-tool exposure（精确 > 文件序首个模式 > 默认）、`mcp__<server>` 命名空间；**`tools.ts`/`resources.ts` 的 `AgentTool` 适配未落**（第 ⑩ 包）—— 包⑨ 只前移了两个窄接口与 `isMcpAppResource` |
 | G-6 | codemode 沙箱运行时（quickjs-wasi host/worker/protocol/prelude） | `packages/codemode/src/runtime/*`、`wasm.ts`（1,678 行）＋ `src/extensions/codemode/execute.ts`（630 行） | 2 | **缺失** | builtin 扩展 |
 | G-7 | codemode 工具（执行 JS、描述/inlineBudget、`mode: on\|only`、renderer） | `src/extensions/codemode/tool.ts`（404）、`renderer.ts`；`settings-manager.ts:95-108` | 2 | **缺失** | |
 | G-8 | `tool_search` 工具（BM25 排序 + 按需加载 deferred 工具） | `src/extensions/tool-search/{index,tool}.ts`（265 行） | 2 | **缺失** | builtin 扩展 |
 | G-9 | 虚拟模型（registry + route + 状态条目） | `core/virtual-models.ts`（238 行）＋ `ExtensionAPI.registerVirtualModel:1870` | 2 | **缺失** | 配置后走 |
 | G-10 | 嵌套工具调用（`ctx.executeTool()`、`nestedCalls`、大小上限） | `core/nested-tool-calls.ts`（261 行） | 1 | **缺失** | 内部支撑 |
 
-**G 汇总：对齐 0 / 缺失 9 / 存疑 1 / 合计 10 = 0%**；**Σ权重 18 / Σ(w×c) 1.0 / 加权 5.6%**（存疑 0.5×w2）
+**G 汇总：对齐 2 / 缺失 5 / 存疑 3 / 合计 10 = 20.0%**；**Σ权重 18 / Σ(w×c) 6.0 / 加权 33.3%**（存疑 0.5×w：G-1 1.0 ＋ G-4 1.0 ＋ G-5 1.0；对齐 G-2 2.0 ＋ G-3 1.0）
 
 > **模块归属**：MCP 面的 Java 代码在**新模块 `pi-java-mcp`**（`com.pijava.mcp.*`，
-> 主源 7,273 行），**不在本模块**（`pi-java-coding-agent`）内 —— 映射裁决见 `docs/28` §2。
+> 主源 **10,700 行**），**不在本模块**（`pi-java-coding-agent`）内 —— 映射裁决见 `docs/28` §2。
 > 部分落地的行按 **E7-3 同一惯例**记「存疑」（形状/一半存在），**不拆行**（拆行会改权重层归属，
 > 动到「权重 3 层 < 权重 1 层」那条读数）。每包闭环时回填对应行的判定与说明。
 > ⚠️ 其余「其它」新增面**已折叠进既有单元**，不另计：`defaultTools` 的 `+name/-name` → **E2-35**；`/reload` 激活新加入工具 → **E5-26**；RPC `prompt` disposition → **E7-6**；`/login` 提供 Radius 与 MCP 设置 → **C-18**；fullscreen 默认 → **E2-51**；`codemode` 设置键 → **E2-45**。
@@ -562,18 +563,18 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1551-1877`）；java 面 = `
 | ├ E5 扩展 API | 5 | 26 | 4 | 35 | 14.3% |
 | ├ E6 包管理器 | 0 | 11 | 5 | 16 | 0% |
 | └ E7 RPC 面 | 1 | 1 | 4 | 6 | 16.7% |
-| G. 主流新增子系统（MCP/codemode/…） | 0 | 9 | 1 | 10 | 0% |
+| G. 主流新增子系统（MCP/codemode/…） | 2 | 5 | 3 | 10 | 20.0% |
 | F. 整块缺失（子系统） | 0 | 7 | 0 | 7 | 0% |
-| **合计（模块，不含 E8）** | **87** | **136** | **68** | **291** | **29.9%** |
+| **合计（模块，不含 E8）** | **89** | **132** | **70** | **291** | **30.6%** |
 | E8. 新增子系统（**与 E3/C/G 重叠，不计入**） | 0 | 5 | 0 | 5 | 0% |
 
-**严格口径**（把「引擎钩子存在但未桥接」的 8 条也算缺失）：对齐 **87** / 缺失 **144** / 存疑 **60** / 合计 **291** = **29.9%**。
+**严格口径**（把「引擎钩子存在但未桥接」的 8 条也算缺失）：对齐 **89** / 缺失 **140** / 存疑 **62** / 合计 **291** = **30.6%**。
 
 **扩展系统单独口径**（D + D′ + E5）：41 事件 = 1 对齐；UI 注入 9 面 = 0 对齐；扩展 API 35 项 = 5 对齐 ⇒ **85 个单元中 6 个对齐 = 7.1%**。
 
 **java 独有（不计入分母）**：`--base-url`、`--port`、`--debug`、`--trace-payloads`（CLI）；`/help`、`/create-skill`（slash）；`auth oauth-login`、`auth profile…`（子命令）。
 
-**最大三处差距**：① **D 域扩展事件面 41→0（可订阅）**；② **E6 包管理器**且**零对齐单元**；③ **G 域 5 个新子系统（10,994 行）基本不存在**（MCP / codemode / tool-search / virtual-models / nested-tool-calls）—— 仅 MCP 面已落（包①–⑧，`pi-java-mcp` 7,273 行；G-4 因此记「存疑」）。
+**最大三处差距**：① **D 域扩展事件面 41→0（可订阅）**；② **E6 包管理器**且**零对齐单元**；③ **G 域 5 个新子系统（10,994 行）基本不存在**（MCP / codemode / tool-search / virtual-models / nested-tool-calls）—— MCP 面已落（包①–⑨，`pi-java-mcp` **10,700 行**主源＋5,904 测试），G-2/G-3 因此记**对齐**、G-1/G-4/G-5 记**存疑**；**codemode（2,916）＋ tool-search/virtual-models/nested（499）共约 3,415 行仍为 0**。
 **本轮新增差距**：④ `cache_warming` 设置＋`/bug`（保留）＋ `defaultTools +name/-name` ＋ RPC prompt disposition（已分别计入 E2/C/E7/G）。
 
 ---
@@ -597,16 +598,17 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1551-1877`）；java 面 = `
 | E5. 扩展 API 面 | 58 | 14.0 | 24.1% | 14.3% |
 | E6. 包管理器 | 31 | 5.0 | 16.1% | 0% |
 | E7. RPC 面 | 12 | 6.0 | 50.0% | 16.7% |
-| G. 主流新增子系统 | 18 | 1.0 | 5.6% | 0% |
+| G. 主流新增子系统 | 18 | 6.0 | 33.3% | 20.0% |
 | F. 整块缺失（子系统） | 16 | 0.0 | 0% | 0% |
-| **模块合计（不含 E8）** | **499** | **204.5** | **41.0%** | **29.9%** |
+| **模块合计（不含 E8）** | **499** | **209.5** | **42.0%** | **30.6%** |
 | E8. 新增子系统（与 E3/C/G 重叠，不计入） | 7 | 0.0 | 0% | 0% |
 
-**模块合计**：Σ权重 499 ／ Σ(w×c) 204.5 ／ **加权完成度 = 204.5/499 = 41.0%**（未加权 87/291 = 29.9%）
-> 旧基准对照：Σ权重 455 ／ Σ(w×c) 200.0 ／ 44.0% ⇒ **换锚后加权完成度 −3.0 pp**（分母 +44，分子 +4.5）。
-> 权重增量的构成：**6 块新主流面共 +31 权重**（MCP 9 / codemode 4 / tool-search 2 / virtual-models 2 / nested-tool-calls 1 / 其它分散 13）**全部落在缺失**，加上 4 个新扩展事件（+9 权重）、3 个新 settings 键（+4）、RPC disposition（+1）、`mcp` 子命令（+2）。
+**模块合计**：Σ权重 499 ／ Σ(w×c) 209.5 ／ **加权完成度 = 209.5/499 = 42.0%**（未加权 89/291 = 30.6%）
+> 旧基准对照：Σ权重 455 ／ Σ(w×c) 200.0 ／ 44.0% ⇒ **换锚后加权完成度 −2.0 pp**（分母 +44，分子 +9.5）。
+> ⚠️ 该 −2.0 pp 里，**−3.2 pp 是换锚本身**（新基准把 MCP/codemode/… 整块加进分母、当时全记缺失 ⇒ 40.8%），**+1.2 pp 是包⑧/⑨ 两轮**回填**（40.8% → 41.0% → 42.0%）——回填只改**判定**不改分母，读「pi 前进、pi-java 静止」那句话时要分开看。
+> 权重增量的构成（**换锚当刻**）：**6 块新主流面共 +31 权重**（MCP 9 / codemode 4 / tool-search 2 / virtual-models 2 / nested-tool-calls 1 / 其它分散 13）**当时全部记缺失**，加上 4 个新扩展事件（+9 权重）、3 个新 settings 键（+4）、RPC disposition（+1）、`mcp` 子命令（+2）。
 
-**去重口径**（F 域有 3 行与 E4/E6 重叠）：剔除 F 域 ⇒ Σ权重 **483** ／ Σ(w×c) **204.5** ／ **加权完成度 = 204.5/483 = 42.3%**（未加权 87/284 = 30.6%）。
+**去重口径**（F 域有 3 行与 E4/E6 重叠）：剔除 F 域 ⇒ Σ权重 **483** ／ Σ(w×c) **209.5** ／ **加权完成度 = 209.5/483 = 43.4%**（未加权 89/284 = 31.3%）。
 
 **扩展系统单独口径**（D + D′ + E5）：Σ权重 157 ／ Σ(w×c) 26.5 ／ **加权 16.9%**（未加权 6/85 = 7.1%）。
 
@@ -615,11 +617,12 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1551-1877`）；java 面 = `
 | 权重层 | 单元数 | Σ权重 | Σ(w×c) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|---:|
 | 权重 3（每轮 / 默认路径） | 24 | 72 | 28.5 | **39.6%** | 6/24 = 25.0% |
-| 权重 2（每次会话 / 常用） | 160 | 320 | 129.0 | 40.3% | 47/160 = 29.4% |
-| 权重 1（低频 / 边缘 / 内部） | 107 | 107 | 47.0 | 43.9% | 34/107 = 31.8% |
-| **合计** | **291** | **499** | **204.5** | **41.0%** | **87/291 = 29.9%** |
+| 权重 2（每次会话 / 常用） | 160 | 320 | 133.0 | 41.6% | 48/160 = 30.0% |
+| 权重 1（低频 / 边缘 / 内部） | 107 | 107 | 48.0 | 44.9% | 35/107 = 32.7% |
+| **合计** | **291** | **499** | **209.5** | **42.0%** | **89/291 = 30.6%** |
 
-> 读数：**权重 3 层的加权完成度（39.6%）仍低于权重 1 层（43.9%）** —— pi-java 在「每轮都走」的地方欠账最重。新加入的 **`context_with_system`（w3，缺失）** 把权重 3 层从 23 个单元扩到 24 个，权重层完成度从旧基准的 ~41% 微降到 39.6%。
+> 读数：**权重 3 层的加权完成度（39.6%）仍低于权重 1 层（44.9%）** —— pi-java 在「每轮都走」的地方欠账最重。新加入的 **`context_with_system`（w3，缺失）** 把权重 3 层从 23 个单元扩到 24 个，权重层完成度从旧基准的 ~41% 微降到 39.6%。
+> 包⑧/⑨ 两轮回填只动 **G 域**（w2 的 G-1/G-2/G-5、w1 的 G-3）：权重 2 层 40.3% → **41.6%**、权重 1 层 43.9% → **44.9%**，**权重 3 层不动** ⇒ 「权重 3 层最低」这条读数**更强**（39.6% vs 41.6% vs 44.9%，单调）。
 
 ### 权重 3 单元（24 个 —— 最该先修）
 
@@ -658,18 +661,18 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1551-1877`）；java 面 = `
 
 | 指标 | 数值 |
 |---|---|
-| 未加权完成度 | 29.9%（87/291） |
-| 加权完成度（含 F 域） | **41.0%**（204.5/499） |
-| 差 | **+11.1 pp** |
-| 加权完成度（去重，剔 F 域） | 42.3%（204.5/483）＝ +12.4 pp |
-| 旧基准同口径（对照） | 44.0%（200.0/455）⇒ **−3.0 pp** |
+| 未加权完成度 | 30.6%（89/291） |
+| 加权完成度（含 F 域） | **42.0%**（209.5/499） |
+| 差 | **+11.4 pp** |
+| 加权完成度（去重，剔 F 域） | 43.4%（209.5/483）＝ +12.8 pp |
+| 旧基准同口径（对照） | 44.0%（200.0/455）⇒ **−2.0 pp** |
 
-**差在哪**：加权把完成度**抬高** 11.1 pp，因为 pi-java 的对齐单元**密集落在高权重的默认路径上**，而缺失质量集中在低权重长尾。
-- **抬高项**：A 域（CLI）未加权 67.4% → 加权 77.4%；C 域 44.0% → 65.8%；E3 58.3% → 68.8%；E1/E2 也抬高。
-- **压低项**：E4（资源发现）42.9% → **35.7%**（唯一的高权单元 `上下文文件发现` w3 全缺）；D 域 2.4% → **13.9%**；**G 域未加权 0% → 加权 5.6%**（10 行里 9 行全缺、G-4 半信用）。
-- **本轮新增的权重全部落在缺失**：G 域 18 权重（+D 9 +E2 4 +B 2 +E7 1 +E5 8 等），所以**加权完成度只降不升** —— 这是「pi 前进、pi-java 静止」在加权口径下的直接读数。
+**差在哪**：加权把完成度**抬高** 11.4 pp，因为 pi-java 的对齐单元**密集落在高权重的默认路径上**，而缺失质量集中在低权重长尾。
+- **抬高项**：A 域（CLI）未加权 67.4% → 加权 77.4%；C 域 44.0% → 65.8%；E3 58.3% → 68.8%；E1/E2 也抬高；**G 域 20.0% → 33.3%**（G-2 w2＋G-3 w1 全对齐）。
+- **压低项**：E4（资源发现）42.9% → **35.7%**（唯一的高权单元 `上下文文件发现` w3 全缺）；D 域 2.4% → **13.9%**。
+- **换锚那一刻新增的权重全部落在缺失**：G 域 18 权重（+D 9 +E2 4 +B 2 +E7 1 +E5 8 等），当时**加权完成度只降不升** —— 那是「pi 前进、pi-java 静止」在加权口径下的直接读数。包⑧/⑨ 的回填是**同一基准下重记判定**，方向相反。
 
 - **两个点名项**：
-  - **扩展事件面**：D 域 Σ权重 **83** = 模块 499 的 **16.6%**，是全部 15 个域里**最大的一块**。Σ(w×c) 仅 11.5 ⇒ 若 D 域全对齐，模块 Σ(w×c) 204.5 → **276.0**、完成度 41.0% → **55.3%**，即**这一域单独把模块拉低 14.3 pp**。
+  - **扩展事件面**：D 域 Σ权重 **83** = 模块 499 的 **16.6%**，是全部 15 个域里**最大的一块**。Σ(w×c) 仅 11.5 ⇒ 若 D 域全对齐，模块 Σ(w×c) 209.5 → **281.0**、完成度 42.0% → **56.3%**，即**这一域单独把模块拉低 14.3 pp**。
   - **上下文文件发现整块缺失**：作为单个能力单元只占 Σ权重 6（E4-5 w3 + F 域子系统视图 w3）= 模块的 1.2%；**但它是每轮 prompt 都走的默认路径**，单元粒度封顶了权重上限 —— 同 `G` 域 5 个新子系统（10,994 行）一样，被「1 子系统 = 1 单元」压缩到 18 权重（真实行为面展开应在 40+）。
   - **口径修正建议**（沿用）：整块缺失的子系统应按「暴露的行为面个数」而非 1 计入分母。本表按用户给定规则计。
