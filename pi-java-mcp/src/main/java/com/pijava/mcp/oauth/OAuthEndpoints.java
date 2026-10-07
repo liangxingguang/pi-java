@@ -14,7 +14,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * Endpoint and authorization-request helpers (pi flow.ts:102-184, 277-290).
  */
-final class OAuthEndpoints {
+public final class OAuthEndpoints {
 
     /** Client authentication methods the flow knows how to apply. */
     static final List<String> AUTH_METHODS =
