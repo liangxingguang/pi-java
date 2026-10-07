@@ -520,7 +520,13 @@ pi 侧归属本包的夹具是 `test/mcp-extension.test.ts` 的 `describe("MCP c
    登记 **B185**。**教训：包闭环的验证口径要含 `verify`，不只是 `test`。**
 3. **设计预测的「预期红」条数普遍偏少**（M3/M5/M8）：夹具覆盖面比设计时以为的更广
    ⇒ 该列今后按「至少这些」写。
-4. **补了两条超出 pi 夹具的条款**（都是实施后才写的，故**逐条补探针**）：
+4. **收尾复跑抓到一条包④ 的既有抢跑夹具**（`InMemoryTransportTest`）：旧断言
+   「`send` 返回时监听器尚未跑」是在**跟虚拟线程抢调度**（实测 7 跑 1 红，1 红即
+   全局 144 红）。产品契约（`send` 不在调用栈上重入）由 `startVirtualThread`
+   结构性保证 ⇒ 夹具改为确定性断言「监听器线程 ≠ 发送线程」，8 跑 8 绿，
+   反向变异（改内联投送）恰 1 红。登记 **B187**。
+   **教训：凡「某时刻还没发生」的断言都是运气**（与并发夹具那批教训同族）。
+5. **补了两条超出 pi 夹具的条款**（都是实施后才写的，故**逐条补探针**）：
    ①带 `type` 的项目条目是**定义**不是 override（`config.ts:78` 判三键全缺）——
    pi 自己的夹具没覆盖 `type` 这一键，M1 若无此条款即零红；②`update(override)`
    打在**没有 `mcpServers` 键**的文件上（`withObject` 指针路径）—— M12 把它钉住。
@@ -538,5 +544,6 @@ pi 侧归属本包的夹具是 `test/mcp-extension.test.ts` 的 `describe("MCP c
   字面量偏差（`1.0` 保留小数、`pi mcp add` 的键序按 record 组件序）。
 - **B185**：`OAuthMetadataParsers.optionalBoolean` 的 SPOTBUGS 排除（发现 2）。
 - **B186**：mcp 模块的 `verify` 在包 ⑥/⑦ 从未跑过（发现 2 的通用化）。
+- **B187**：包④ `InMemoryTransportTest` 的抢跑断言（发现 4 已修）。
 
-以上 B181–B186 已登记 `docs/04`。
+以上 B181–B187 已登记 `docs/04`。

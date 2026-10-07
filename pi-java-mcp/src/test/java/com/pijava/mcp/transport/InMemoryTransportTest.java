@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 
@@ -19,17 +20,20 @@ class InMemoryTransportTest {
         var pair = InMemoryTransports.create();
         var received = new CountDownLatch(1);
         var delivered = new CopyOnWriteArrayList<Object>();
+        var listenerThread = new AtomicReference<Thread>();
         pair.server().onMessage(message -> {
+            listenerThread.set(Thread.currentThread());
             delivered.add(message);
             received.countDown();
         });
 
-        var ranInline = new boolean[1];
+        var senderThread = Thread.currentThread();
         pair.client().send(Map.of("key", "value"));
-        ranInline[0] = delivered.isEmpty() == false;
-        // send returned before the peer listener ran (microtask semantics).
-        assertThat(ranInline[0]).isFalse();
         assertThat(received.await(5, TimeUnit.SECONDS)).isTrue();
+        // send never re-enters the peer's listeners on the calling stack (microtask
+        // semantics). Pinning "not delivered yet" here would race the worker thread:
+        // the worker may finish before the sending thread runs its next bytecode.
+        assertThat(listenerThread.get()).isNotSameAs(senderThread);
         assertThat(delivered).containsExactly(Map.of("key", "value"));
     }
 
