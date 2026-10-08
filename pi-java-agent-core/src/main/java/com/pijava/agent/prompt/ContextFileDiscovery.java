@@ -9,6 +9,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 
+import org.jspecify.annotations.Nullable;
+
 import com.pijava.agent.prompt.SystemPromptOptions.ContextFile;
 
 /**
@@ -54,10 +56,16 @@ public final class ContextFileDiscovery {
         }
 
         var ancestors = new ArrayList<ContextFile>();
+        // A linked worktree nested inside the main worktree shares its repository scope, so the
+        // main root's file would be applied twice. It is skipped during the walk (pi
+        // findShadowedContextFile).
+        var shadowed = findShadowedContextFile(cwd);
         var current = cwd;
         while (true) {
             var file = loadFromDir(current).orElse(null);
-            if (file != null && seen.add(canonical(Path.of(file.path())))) {
+            var isShadowed = file != null && shadowed != null
+                    && canonical(Path.of(file.path())).equals(shadowed);
+            if (file != null && !isShadowed && seen.add(canonical(Path.of(file.path())))) {
                 // unshift: nearest dir goes to the end ⇒ farthest ancestor first
                 ancestors.add(0, file);
             }
@@ -105,5 +113,100 @@ public final class ContextFileDiscovery {
 
     static String stripBom(String text) {
         return !text.isEmpty() && text.charAt(0) == BOM ? text.substring(1) : text;
+    }
+
+    /** Where a directory sits in git (pi {@code findGitPaths}, footer-data-provider.ts:16-48). */
+    private record GitPaths(Path repoDir, Path commonGitDir, Path headPath) {
+    }
+
+    /**
+     * Walk up from {@code start} looking for {@code .git}. Reads only the filesystem — never
+     * spawns git. A linked worktree's {@code commondir} points back at the main working tree.
+     */
+    private static @Nullable GitPaths findGitPaths(Path start) {
+        var dir = start;
+        while (true) {
+            var dotGit = dir.resolve(".git");
+            if (Files.exists(dotGit)) {
+                try {
+                    if (Files.isRegularFile(dotGit)) {
+                        var content = Files.readString(dotGit, StandardCharsets.UTF_8).trim();
+                        if (content.startsWith("gitdir: ")) {
+                            var gitDir = dir.resolve(content.substring("gitdir: ".length()).trim())
+                                    .normalize();
+                            var headPath = gitDir.resolve("HEAD");
+                            if (!Files.exists(headPath)) {
+                                return null;
+                            }
+                            var commonDirFile = gitDir.resolve("commondir");
+                            Path commonGitDir;
+                            if (Files.exists(commonDirFile)) {
+                                // Path.resolve keeps an absolute target, which commondir often is.
+                                commonGitDir = gitDir.resolve(
+                                        Files.readString(commonDirFile, StandardCharsets.UTF_8).trim())
+                                        .normalize();
+                            } else {
+                                commonGitDir = gitDir;
+                            }
+                            return new GitPaths(dir, commonGitDir, headPath);
+                        }
+                    } else if (Files.isDirectory(dotGit)) {
+                        var headPath = dotGit.resolve("HEAD");
+                        if (!Files.exists(headPath)) {
+                            return null;
+                        }
+                        return new GitPaths(dir, dotGit, headPath);
+                    }
+                } catch (IOException error) {
+                    return null;
+                }
+            }
+            var parent = dir.getParent();
+            if (parent == null) {
+                return null;
+            }
+            dir = parent;
+        }
+    }
+
+    /**
+     * The main worktree's context file that a nested linked worktree shadows
+     * (pi {@code findShadowedContextFile}, resource-loader.ts:205-227).
+     *
+     * @return the canonical path to skip in the walk, or {@code null} when nothing is shadowed
+     */
+    private static @Nullable Path findShadowedContextFile(Path cwd) {
+        var gitPaths = findGitPaths(cwd);
+        if (gitPaths == null) {
+            return null;
+        }
+        var commonGitDir = canonical(gitPaths.commonGitDir());
+        var worktreeRoot = canonical(gitPaths.repoDir());
+        // pi: dirname(commonGitDir). commonGitDir is the ".git" entry itself, so its
+        // parent is the main worktree root — not the grandparent.
+        var mainRepoRoot = commonGitDir.getParent();
+        if (mainRepoRoot == null) {
+            return null;
+        }
+        // The worktree must be strictly inside the main worktree: equal (an ordinary repo)
+        // or unrelated (a sibling worktree) does not shadow. After resolving real paths,
+        // path-segment startsWith is pi's `startsWith(mainRepoRoot + sep)`.
+        if (!worktreeRoot.startsWith(mainRepoRoot) || worktreeRoot.equals(mainRepoRoot)) {
+            return null;
+        }
+        // The common dir must itself be a checked-out main worktree. This rejects a bare
+        // layout (no .git next to the common dir) and a submodule (no commondir pointing back).
+        if (!canonical(mainRepoRoot.resolve(".git")).equals(commonGitDir)) {
+            return null;
+        }
+        // The shadowed file is the main root's copy *of the worktree's own file*: the basename
+        // comes from the worktree, not from whatever candidate the main root happens to have.
+        // With AGENTS.override.md in the worktree and AGENTS.md in the main root, nothing is
+        // shadowed and both load.
+        var worktreeContext = loadFromDir(worktreeRoot).orElse(null);
+        if (worktreeContext == null) {
+            return null;
+        }
+        return mainRepoRoot.resolve(Path.of(worktreeContext.path()).getFileName());
     }
 }
