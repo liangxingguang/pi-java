@@ -37,6 +37,7 @@ public final class ContextOverflow {
     /** pi {@code OVERFLOW_PATTERNS}（overflow.ts:37-63），顺序与注释逐条对应。 */
     private static final List<Pattern> OVERFLOW_PATTERNS = List.of(
         Pattern.compile("prompt (?:is )?too long", Pattern.CASE_INSENSITIVE), // Anthropic and z.ai token overflow
+        Pattern.compile("prompt exceeds max length", Pattern.CASE_INSENSITIVE), // z.ai CN endpoint token overflow
         Pattern.compile("request_too_large", Pattern.CASE_INSENSITIVE), // Anthropic request byte-size overflow (HTTP 413)
         Pattern.compile("input is too long for requested model", Pattern.CASE_INSENSITIVE), // Amazon Bedrock
         Pattern.compile("exceeds the context window", Pattern.CASE_INSENSITIVE), // OpenAI (Completions & Responses API)

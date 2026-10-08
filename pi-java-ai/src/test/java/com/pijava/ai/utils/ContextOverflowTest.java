@@ -45,6 +45,8 @@ class ContextOverflowTest {
     @ParameterizedTest
     @ValueSource(strings = {
         "prompt is too long: 210000 tokens > 200000 maximum",
+        // z.ai CN 端点文案（overflow.ts:39）—— 缺它则 CN 端点溢出不被识别。
+        "Prompt exceeds max length",
         "request_too_large",
         "input is too long for requested model",
         "This message exceeds the context window for this model",

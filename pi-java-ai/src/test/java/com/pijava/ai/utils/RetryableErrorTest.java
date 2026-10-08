@@ -32,6 +32,8 @@ class RetryableErrorTest {
         // pi 白名单里紧跟 "overloaded" 的那条（retry.ts:29）—— 移植时曾整条漏掉
         // （原 docs/43 包A0 步6）：高需求文案不重试、直接失败。
         "The model is currently experiencing high demand, please try again later",
+        // pi 白名单里紧跟 high demand 的那条（retry.ts:34）。
+        "model is at capacity",
         "Rate limit reached for gpt-5",
         "Too many requests",
         "429 status code",
@@ -72,6 +74,9 @@ class RetryableErrorTest {
         "try your request again",
         "please retry your request",
         "ResourceExhausted. Failed, hit resource quota",
+        // ChatGPT 订阅路的中流失败（retry.ts:100-101）—— 无 HTTP 503 也要重试。
+        "subscription_sharing_usage_unavailable",
+        "subscription_sharing_user_unavailable",
         "OVERLOADED",
         "Socket HANG Up"
     })
@@ -93,8 +98,14 @@ class RetryableErrorTest {
         "out of budget",
         "quota exceeded",
         "billing required",
+        // ChatGPT 订阅路的配额墙（retry.ts:27）：同 subscription_sharing_ 家族，
+        // 但裁决与两条 _unavailable 相反 —— 见 sharingFamilySplitsBetweenTheTwoTables。
+        "subscription_sharing_usage_limit_exceeded",
         // 组合排除：既撞配额又撞白名单 ⇒ 配额赢
-        "quota exceeded (429)"
+        "quota exceeded (429)",
+        // ⚠️ 同族的配额墙单独不放电流（其文本不含任何白名单子串）⇒ 必须与白名单词
+        // 组合才能证明「它在排除表里」。缺此行则删掉排除表那条**零红**（M4 实测）。
+        "429 subscription_sharing_usage_limit_exceeded"
     })
     void quotaLimitsAreNeverRetryable(String errorMessage) {
         assertThat(RetryableError.isRetryableAssistantError(error(errorMessage))).isFalse();
@@ -124,5 +135,31 @@ class RetryableErrorTest {
             error("invalid api key provided"))).isFalse();
         assertThat(RetryableError.isRetryableAssistantError(
             error("model not found"))).isFalse();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // 同族相反裁决（retry.ts:27 vs :100-101）：同前缀、两张表
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * `subscription_sharing_usage_limit_exceeded`（配额墙，不重试）与
+     * `subscription_sharing_usage_unavailable`／`subscription_sharing_user_unavailable`
+     * （瞬断，重试）**前缀相同、裁决相反**。全塞进任一张表都会翻转其中一半 ⇒
+     * 单表实现必红。
+     */
+    @Test
+    void sharingFamilySplitsBetweenTheTwoTables() {
+        assertThat(RetryableError.isRetryableAssistantError(
+            error("subscription_sharing_usage_limit_exceeded")))
+            .as("同族的配额墙：必须判不重试")
+            .isFalse();
+        assertThat(RetryableError.isRetryableAssistantError(
+            error("subscription_sharing_usage_unavailable")))
+            .as("同族的瞬断：必须判重试")
+            .isTrue();
+        assertThat(RetryableError.isRetryableAssistantError(
+            error("subscription_sharing_user_unavailable")))
+            .as("同族的瞬断：必须判重试")
+            .isTrue();
     }
 }

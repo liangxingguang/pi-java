@@ -3,6 +3,9 @@
 > **状态：📝 盘点稿（2026-10-09）。** 不是设计稿 —— 只回答「pi-ai 层还剩什么没对齐」，
 > 逐包设计在各自文档里出。
 >
+> **进度**：§1.1 的 `ContextOverflow` / `RetryableError` 两条**已闭环**（`docs/43`，2026-10-09）⇒
+> w2 由 5 条降为 **3 条**（`xai` / 目录规模 / 中段工具内联）。
+>
 > **数据源**：`docs/map/02-ai.md`（基准 pi-java `351d199` / pi `200387122`，2026-10-04）
 > ＋ `docs/04-open-items-register.md` §3.2。
 > **本稿新增**：对 w2 五条做了**逐条取证**（读 pi `git show 200387122:<path>` 与 pi-java 当前工作树），
@@ -31,8 +34,8 @@
 |---|---|---|---|
 | ✅ `xai` provider 端点 | `providers/xai.ts`（`api: openAIResponsesApi()`、`baseUrl: https://api.x.ai/v1`）＋ `providers/xai.models.ts`（**14 模型**，由 `scripts/generate-models.ts` 生成） | **只有 OAuth**（`auth/OAuthProviders.java:30` device code）；**无 provider 类、无 wire** | 主流 7 家里唯一没上车的端点。⚠️ `CompatResolver.java:79/:98` 已有 `provider.equals("xai")`／`isGrok` 分支 ⇒ **compat 层认识 xai，但没有车道可用** |
 | ⤵ 内置目录规模 | 42 个 provider 由 `generate-models.ts` 生成 | `catalog/BuiltinCatalog.java` 手写 **24 个模型**；`B97` 另有 3 个 (provider,modelId) 与 pi 对不上 | 结构性差异：手写常量 vs 生成目录 |
-| ✅ `ContextOverflow` z.ai CN 模式 | `utils/overflow.ts:38-39`：`/prompt (?:is )?too long/i` ＋ **`/prompt exceeds max length/i`（CN endpoint）** | `utils/ContextOverflow.java` 26 条模式已逐条移植，**独缺第二条**（`prompt exceeds max length`） | **恰 1 条模式**。其余 z.ai 形状（`model_context_window_exceeded`、静默溢出）都已落 |
-| ✅ `RetryableError` 新模式 | `utils/retry.ts:26-90` 白名单 | `utils/RetryableError.java` 已落 40+ 条，**缺 3 条**：`model is at capacity`（:30）、`subscription_sharing_usage_unavailable`、`subscription_sharing_user_unavailable`（ChatGPT 登录路） | ⚠️ **地图记「两条」，实测为 3 条** —— 多出的 `model is at capacity` 是逐条 diff 才看见的 |
+| ⬜→✅ `ContextOverflow` z.ai CN 模式 | `utils/overflow.ts:38-39`：`/prompt (?:is )?too long/i` ＋ **`/prompt exceeds max length/i`（CN endpoint）** | `utils/ContextOverflow.java` 26 条模式已逐条移植，**独缺第二条**（`prompt exceeds max length`） | **恰 1 条模式**。其余 z.ai 形状（`model_context_window_exceeded`、静默溢出）都已落。**✅ 已闭环 2026-10-09**（`docs/43`，见 §12） |
+| ⬜→✅ `RetryableError` 新模式 | `utils/retry.ts:26-90` 白名单 | `utils/RetryableError.java` 已落 40+ 条，**缺 3 条**：`model is at capacity`（:30）、`subscription_sharing_usage_unavailable`、`subscription_sharing_user_unavailable`（ChatGPT 登录路） | ⚠️ **地图记「两条」，实测为 3 条** —— 多出的 `model is at capacity` 是逐条 diff 才看见的。**✅ 已闭环 2026-10-09**（含配额排除表同族那条，见 `docs/43` §12） |
 | ✅ Anthropic 中段工具内联（`B165`） | `api/anthropic-messages.ts:195` `INLINE_TOOLS_BETA = "inline-tools-2026-09-15"`；`:1346-1351` 发 `tool_addition`／`tool_removal`，工具**按值内联**在 `{type:"tool_definition", definition}` 里 | `protocol/AnthropicRequestBuilder.java` 有 `defer_loading`（:236）、`DEFERRED_TOOL_PLACEHOLDER`、`tool_reference`（:483） | **旧形状**：`tool_reference`（按名引用）表达不了 pi 的**同名重定义**（pi 注释 `:1137` 明写这是新形状的动机） |
 
 ### 1.2 w1 —— 广度（15 条，补完 **+6.60pp**）

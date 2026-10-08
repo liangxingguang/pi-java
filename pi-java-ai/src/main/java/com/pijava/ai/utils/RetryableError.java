@@ -51,7 +51,11 @@ public final class RetryableError {
             "insufficient_quota",
             "out of budget",
             "quota exceeded",
-            "billing"
+            "billing",
+
+            // Sign in with ChatGPT: the subscription's shared usage limit, which resets
+            // after hours rather than seconds.（retry.ts:27）
+            "subscription_sharing_usage_limit_exceeded"
         ));
 
     /**
@@ -63,6 +67,7 @@ public final class RetryableError {
             // Generic provider load, HTTP status, and server-side transient failures.
             "overloaded",
             "currently experiencing high demand", // retry.ts:29（紧跟 overloaded）
+            "model is at capacity", // retry.ts:34
             "rate.?limit",
             "too many requests",
             "429",
@@ -124,7 +129,12 @@ public final class RetryableError {
             "please retry your request",
 
             // gRPC based providers (e.g. NVIDIA NIM)
-            "ResourceExhausted"
+            "ResourceExhausted",
+
+            // Sign in with ChatGPT: usage or user data temporarily unavailable. Usage
+            // failures can arrive mid-stream without an HTTP 503 in the message.（retry.ts:100-101）
+            "subscription_sharing_usage_unavailable",
+            "subscription_sharing_user_unavailable"
         ));
 
     private static Pattern buildProviderErrorPattern(List<String> patterns) {

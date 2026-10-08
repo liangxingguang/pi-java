@@ -1,11 +1,15 @@
 # 43 ai 模式表补齐 —— `ContextOverflow` ＋ `RetryableError`
 
-> **状态：📝 待审核（2026-10-09）。**
+> **状态：✅ 已闭环（2026-10-09）。**
 > 承接 `docs/41 §6` 的推进次序 **②**（「ai 平凡档」）。
 > 本包是 `docs/41` 盘点里**成本最低**的一项：**纯字符串表补齐，无架构面**。
 >
 > **§9 是追加**：用户问「能否把 `docs/41 §1.2` 的 w1 那批并进本包」——
 > 逐条回测后**否决**（9 条里只 1 条可搭车，且实际是管道包不是补行）。**本包范围不变。**
+>
+> **闭环**：`ContextOverflow` +1 模式 · `RetryableError` +4 条（白名单 3 ＋ 配额排除表 1）。
+> 5 探针全命中（⚠️ M3 实测 3 红＞预测 1、**M4 首版零红 ⇒ 补组合夹具才有牙**，见 §5）。
+> ai 1389 · agent-core 652 · checkstyle 全绿。
 
 ---
 
@@ -219,19 +223,41 @@ sharingFamilySplitsBetweenTheTwoTables()
 
 ## 5. 变异探针计划（5 个，每个都必须**先确认落地**）
 
-| # | 变异 | 预期红 |
-|---|---|---|
-| M1 | 删掉 `prompt exceeds max length` | 1（`errorMessagesAreOverflow`） |
-| M2 | 删掉 `model is at capacity` | 1（`transientErrorsAreRetryable`） |
-| M3 | 删掉两条 `subscription_sharing_*_unavailable` | 1（同上） |
-| M4 | 删掉 `subscription_sharing_usage_limit_exceeded` | 1（`quotaLimitsAreNeverRetryable`） |
-| M5 | **把 `..._limit_exceeded` 从排除表挪进白名单** | 1（`sharingFamilySplitsBetweenTheTwoTables`）—— 钉 §3-① |
+| # | 变异 | 预期红 | **实测** |
+|---|---|---|---|
+| M1 | 删掉 `prompt exceeds max length` | 1（`errorMessagesAreOverflow`） | ✅ **1 红** |
+| M2 | 删掉 `model is at capacity` | 1（`transientErrorsAreRetryable`） | ✅ **1 红** |
+| M3 | 删掉两条 `subscription_sharing_*_unavailable` | 1（同上） | ✅ **3 红**（超出预测，见下） |
+| M4 | 删掉 `subscription_sharing_usage_limit_exceeded` | 1（`quotaLimitsAreNeverRetryable`） | ⚠️ **首版零红** ⇒ 补夹具后 **1 红**（见下） |
+| M5 | **把 `..._limit_exceeded` 从排除表挪进白名单** | 1（`sharingFamilySplitsBetweenTheTwoTables`） | ✅ **3 红**（`sharingFamilySplits` ＋配额表 2 条） |
 
 ⚠️ **M5 是本包唯一有语义分量的探针**：M1–M4 只是「删了就没」的平凡检查；
 M5 才是**两个表的分工**有没有被写错。若 M5 不红，说明「同族相反裁决」没被夹具钉住。
 
+### 5.1 两处实测偏离（都有价值）
+
+**M3 实测 3 红 ＞ 预测 1**：因为两条 `_unavailable` 各加了一行夹具（2 个参数化用例）＋
+`sharingFamilySplits` 里那两条断言同批变红（1 条）＝ 3。**不是假红**，是设计稿把夹具数预估少了
+（只算了「同一 `@MethodSource` 里的一个用例」）。**教训：参数化夹具的红按「参数条数 × 用例数」计，不按用例数计。**
+
+**M4 首版零红 —— 第六种成因：变异体语义等价。**
+删掉排除表里的 `subscription_sharing_usage_limit_exceeded`，**行为零变化**：该文本不含任何白名单
+子串（无 `exceeded request buffer limit`、无 `rate`+`limit`、无 HTTP 码）⇒ 它「不在排除表」与
+「两张表都不在」**产出同一个 `false`**。原夹具（`"subscription_sharing_usage_limit_exceeded"` 单条）
+**只证明它不在白名单，证不了它在排除表** —— 没牙。
+
+⇒ **修法**：加**组合**夹具 `"429 subscription_sharing_usage_limit_exceeded"`（仿已有先例
+`"quota exceeded (429)"`）—— 既撞白名单（`429`）又撞排除表 ⇒ 排除表必须在场才判 `false`。
+补后 **M4 复测恰 1 红**。
+
+> ⚠️ **这是「探针零红」的第六种成因**（前五种：变异没落地／夹具没牙／通道没夹具／变异体语义等价
+> 〔旧登记〕／**断言只覆盖了「不在 A」未覆盖「在 B」**）。与旧「变异体语义等价」的区别：那次是变异体
+> 与真语义等价，这次是**夹具的断言太弱**（单向排除，缺双向确认）。**凡「某串在某张表里」的断言，
+> 都必须配一条「该串 ＋ 白名单词」的组合用例，否则删掉它零红。**
+
 > **探针纪律**（本仓血泪，`docs/41`/`docs/42` 同款）：变异后必须 **① 确认编译通过**
 > （否则读到的是**上一次运行的旧 surefire 报告**）＋ **② grep 复核变异是否落地**。
+> 本轮 5 探针**每个都做了 grep 复核**（M5 还额外核了「排除表已不含它」）。
 
 ---
 
@@ -252,7 +278,28 @@ M5 才是**两个表的分工**有没有被写错。若 M5 不红，说明「同
 
 ## 7. 实施记录
 
-（待填：commit / 测试数 / 探针命中）
+**闭环 2026-10-09**（单 commit，`docs(43)` 设计稿与代码同批）。
+
+**主源码改动**（2 文件，+6 行）：
+
+| 文件 | 改动 | 落点 |
+|---|---|---|
+| `utils/ContextOverflow.java` | +1 模式 | `:40`（`prompt too long` 与 `request_too_large` 之间） |
+| `utils/RetryableError.java` | +4 条 | 白名单 `:70`（`model is at capacity`）· `:135-136`（两条 `_unavailable`）· 排除表 `:57`（`_limit_exceeded`） |
+
+**夹具改动**（2 文件，+41 行）：
+- `ContextOverflowTest.errorMessagesAreOverflow` ＋1 行（`"Prompt exceeds max length"`）。
+- `RetryableErrorTest.transientErrorsAreRetryable` ＋3 行 · `quotaLimitsAreNeverRetryable` ＋2 行
+  （含 ⚠️ **组合夹具** `"429 subscription_sharing_usage_limit_exceeded"`）· 新用例
+  `sharingFamilySplitsBetweenTheTwoTables`（3 断言）。
+
+**测试数**：
+- `ContextOverflowTest` 44→**46** · `RetryableErrorTest` 48→**63**（参数化展开后）。
+- 模块：**ai 1389** · **agent-core 652** · checkstyle 0 违例 · 全 reactor `BUILD SUCCESS`。
+
+**探针命中**：M1 1 红 · M2 1 红 · M3 **3 红**（超预测）· M4 **首版零红 ⇒ 补组合夹具后 1 红** · M5 **3 红**。见 §5.1。
+
+**未做**（本包范围外，已在 §9 分流）：`§1.2` 的 w1 那批，`91` 单开管道包、`90`/`93` 跨模块、`86` `CacheWarmer` 组件包、`94` SDK 面包、`33`/`92` shape-only、`37`/`87` 出局。
 
 ---
 
