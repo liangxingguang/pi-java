@@ -121,10 +121,10 @@
 
 | # | 条目 | 一句话 |
 |---|---|---|
-| `B21` | thinking 开关的 provider 形状面 | pi 按 provider 发 10 种形状；Java 只有 `thinking.budgetTokens` 一种 ⚠️**疑似过期**，见 §5 |
+| `B21` | ~~thinking 开关的 provider 形状面~~ | ✅ **已销号**（已过期）：多形状随 `A-09` 落，见 §5 |
 | `B121` | `AssistantMessage.stopReason()` 是 `String` 非闭集 | pi 是 `StopReason` 联合类型；Java 自由字符串，拼错无人察觉 |
 | `B124` | `maxTokens: 0` 与缺席之别被哨兵吞掉 | pi 用 `??`／`!== undefined` 区分；Java `int` ＋ `-1` 哨兵 |
-| `B128` | `thinkingBudgets` 无选项通道 | pi `SimpleStreamOptions.thinkingBudgets` ⚠️**疑似过期**，见 §5 |
+| `B128` | `thinkingBudgets` 无选项通道 | pi `types.ts:359` 真字段（`adjustMaxTokensForThinking` 消费）✅ **确认仍缺**，见 §5 |
 | `B158` | 输出截断字节预算差一倍 | Java `TruncationUtils.DEFAULT_MAX_BYTES = 100_000`（`TruncationUtils.java:17`），pi 主流 50KB ⇒ **模型可见文案不同** |
 | `B159` | `shouldStopAfterTurn` 更名 finishTurn 且语义变 | pi 从布尔改 `{action: continue/end}`，能强制多跑一轮 |
 | `B107` | 两条请求选项通道恒空 | `ApiOptions.java:43`／`StreamRequest.java:144` 都传 `Map.of()` |
@@ -132,19 +132,37 @@
 
 ---
 
-## 5. ⚠️ §3.2 过期抽查（本稿新增，**未完成**）
+## 5. ✅ §3.2 过期抽查（**2026-10-09 已逐条回测完毕**）
 
-抽查发现**至少两条疑似已过期**（台账仍记未做，但代码里已有）：
+四条疑似全部回测，结论如下（台账已按此回填，见 `docs/04`）：
 
-| # | 台账原文 | 实测 | 结论 |
+| # | 原台账原文 | 实测 | 裁决 |
 |---|---|---|---|
-| `B103` | 「Anthropic 会话亲和头族未落 …… 两个 java 都不携带 `sendSessionAffinityHeaders`/`sessionAffinityFormat`」 | `catalog/ModelCompat.java:277-279` **已有** `sessionAffinityFormat` 组件；`CatalogCompatRules.java:79/:171` 已传；`OAuthProviders.java` 有 xai device code | **需回测**：组件在，但「**是否真的发到头**」这一步台账与代码说的不是同一件事 |
-| `B98` | 「约 40 个零消费者 compat 字段（`supportsUsageInStreaming`／`requiresThinkingAsText`／…）」 | 全仓 grep 这两个字段名**零命中** | **疑似过期或改名**：要么字段已删、要么名字与台账不符 |
-| `B21` | 「Java 只有 `thinking.budgetTokens` 一种」 | `catalog/ThinkingFormat.java` **11 档枚举**（OPENAI/OPENROUTER/DEEPSEEK/TOGETHER/BASETEN/ZAI/QWEN/CHAT_TEMPLATE/QWEN_CHAT_TEMPLATE/STRING_THINKING/ANT_LING）；`protocol/ThinkingFormatWriter.java:84` **exhaustive switch、无 default（编译器守十一臂）**，生产调用点 `OpenAICompletionsMessageConverter.java:256` | **确已过期**：多形状已落（`A-09` 包），台账该条应销或改写。唯一残留是 `B131`（ant-ling else-if 穿透角，已单独在册） |
-| `B128` | 「`thinkingBudgets` 无选项通道」 | `api/SimpleOptions.java:213/:223` 已在用 `options.thinkingBudgets`；`protocol/GoogleThinking.java:118` 注释提到该支 | **疑似部分落地**：需确认选项通道是否真打通 |
+| `B21` | 「Java 只有 `thinking.budgetTokens` 一种」 | `catalog/ThinkingFormat.java` **11 档枚举**；`protocol/ThinkingFormatWriter.java:84` **exhaustive switch、无 default（编译器守十一臂）**，生产调用点 `OpenAICompletionsMessageConverter.java:256` | ✅ **确已过期** —— **已从台账移除**（多形状随 `A-09` 落，唯一残留 `B131` 已单独在册） |
+| `B98` | 「约 40 个零消费者 compat 字段」 | 逐字段对读 pi 三个 compat 接口（**40 字段**）vs `ModelCompat`（**32 组件**）⇒ 真缺口 **8 个**：`requiresToolResultName` · `requiresAssistantAfterToolResult` · `requiresThinkingAsText` · `supportsUsageInStreaming` · `zaiToolStream` · `vllmPriority` · `vercelGatewayRouting` · `allowedFallbackModels`（每个都有 pi 消费点） | ⚠️ **文字误记，缺口真实** —— 「40」是 **pi 的字段总数**，不是缺口数。**已改写该行** |
+| `B103` | 「Anthropic 会话亲和头族**未落**」 | 组件、探测器、模型目录全在；Java **只接了一条车道**（`OpenAIResponsesApi.java:82`），pi 是**三条**（`anthropic-messages.ts:1040`／`openai-completions.ts:777`／`openai-responses.ts`） | ⚠️ **半闭** —— 不是「未落」，是「**只落 1/3 条车道**」。**已改写该行** |
+| `B128` | 「`thinkingBudgets` 无选项通道」 | ✅ **确认仍缺**：全仓非注释命中**零**；`SimpleOptions.java:213/:223` 只在 **javadoc 引用** pi 的写法；pi `types.ts:359` 是**真字段**（`adjustMaxTokensForThinking` 消费，`anthropic-messages.ts:965`） | ✅ **保留**（真缺口，不是过期） |
 
-> **结论：§3.2 的 43 条必须逐条回测再动手** —— 至少 1 条（`B21`）确已过期、3 条疑似。
-> 直接照台账开工会做到已完成的活（对照 `docs/04` 维护规则第 3 条：结案应从台账移除该行）。
+> **回测结论**：4 条里 1 条确已过期（`B21`）、1 条文字误记但缺口真实（`B98`）、
+> 1 条半闭（`B103`）、1 条属实（`B128`）。**没有一条是「台账过时但缺口不真实」** ——
+> 但**两条的行文会把工作量算错**（`B98` 高估 5 倍、`B103` 高估为「整族未落」）。
+> 教训：**台账的行文与实际缺口要分开核** —— 行文错了不等于条目该销。
+
+### 5.1 ⚠️ B98 的 8 个字段：不是「零消费者」，是「Java 缺字段」
+
+旧行写「**零消费者** compat 字段」，读起来像「字段在、没人读」。实测相反：
+**这 8 个字段 Java 根本没有**，而 pi **有标注且有消费点**。即行为面真的少 8 处：
+
+| 字段 | pi 消费点 | 缺了会怎样 |
+|---|---|---|
+| `requiresToolResultName` | `openai-completions.ts:1429` | tool 结果消息不补 `name` ⇒ 部分后端拒 |
+| `requiresAssistantAfterToolResult` | `:1241,1295,1451` | tool 结果后不插 assistant 空消息 ⇒ 部分后端拒 |
+| `requiresThinkingAsText` | `:1323` | thinking 块不转 `<thinking>` 文本 ⇒ 该路后端收不到思考 |
+| `supportsUsageInStreaming` | `:834` | 恒发 `stream_options.include_usage`（Java `:230-231` 已恒发 `includeUsage(true)`）⇒ **对不支持的端点多发字段** |
+| `zaiToolStream` | `:857` | 不发顶层 `tool_stream` ⇒ z.ai 工具流无增量 |
+| `vllmPriority` | `:873` | 不发顶层 `priority` ⇒ vLLM 调度优先级不可控 |
+| `vercelGatewayRouting` | `:993` | 不发 routing ⇒ Vercel 网关路由不可控 |
+| `allowedFallbackModels` | `anthropic-messages.ts:212,674,1281` | 不退到允许的回退模型 |
 
 ---
 
@@ -170,7 +188,10 @@
 |---|---|
 | —— | 本稿**不新增**台账条目（盘点稿）。 |
 | `B165` | 已在册，本稿补 `inline-tools-2026-09-15` 的 pi 证据。 |
-| `B21`／`B98`／`B103`／`B128` | **待回测**：抽查到疑似过期，回测后按维护规则第 3 条销号或改写。 |
+| `B21` | ✅ **已销号**（2026-10-09 回测：确已过期，多形状随 `A-09` 落）。 |
+| `B98` | ⚠️ **已改写**：真缺口是 **8 个字段**（不是「约 40 个零消费者字段」）。 |
+| `B103` | ⚠️ **已改写**：半闭（只落 1/3 条车道，不是「整族未落」）。 |
+| `B128` | ✅ **保留**：回测确认真缺口。 |
 | `B148` | 与本稿 §1.2 的 `responseModel`/`diagnostics` 同一条。 |
 
 ---

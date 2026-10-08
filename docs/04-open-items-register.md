@@ -51,7 +51,6 @@
 | B31 | `get_state.model` 发字符串，pi 发整个模型对象 | RpcDispatcher.buildState 发 `"provider/id"`；pi 字段是 `Model` |
 | B32 | `get_state.sessionName` 恒有值，pi 可选 | 默认 `"session"`，客户端分不出用户命名与默认名；pi 在首次 session_info 前缺键 |
 | B33 | `get_state.messageCount` 取转录条数，pi 取工作副本条数 | 压缩后必然分叉（transcript 含 compaction/model_change 等非消息条目） |
-| B35 | `thinking_level_changed` 无生产者 | 改级别事件不发射；TUI 状态栏与 RPC 客户端都断在此 |
 | B36 | 无 `abortCompaction` | TUI 无法取消压缩（Java 借 lane.abortSignal，无 per-operation 取消句柄）；B39 的 Esc 换绑被它挡着 |
 | B49 | `turn_end` 颗粒度不同 | pi 每回合一条，Java 的 AgentSettled 每次驱动一条；真对齐要改事件时序 |
 | B53 | `find()` 缺 pi 的分级查找 | pi 三级阶梯（header-only → 项目内 → 跨项目）；Java 直接走跨项目全量扫描 |
@@ -61,12 +60,11 @@
 
 | # | 条目 | 现状与出处 |
 |---|---|---|
-| B21 | thinking 开关的 provider 形状面 | pi 按 provider 发 10 种 thinking 形状（zai/qwen/deepseek/openrouter/…）；Java 只有 thinking.budgetTokens 一种 |
 | B70 | `Agent.reset()` 是否保留基线 system 消息 | pi `agent.ts` 与 RunLifecycle.reset 行为存疑，未取证 |
 | B80 | Mistral 数组形态 `delta.content` 无解析路径 | pi 对数组 content 有三条分支；Java 不读 |
 | B81 | pi OAuth 分支两面未移植 | 系统提示前缀 ＋ 工具名映射（anthropic-messages isOAuthToken 分支） |
 | B87 | system 消息落线只写、不能回读 | 解码 `role:"system"` 报错；另有三处只写遗留 |
-| B103 | Anthropic 会话亲和头族未落 | `x-session-affinity` 等头（B140 同族：SDK streaming transport 不透传任意头） |
+| B103 | 会话亲和头**只落了 responses 一条车道** | pi 三条车道都发（`anthropic-messages.ts:1040`／`openai-completions.ts:777`／`openai-responses.ts`），Java 只有 `OpenAIResponsesApi.java:82` 接 `SessionAffinityHeaders`；组件与探测器已全在（`ModelCompat`／`CompatResolver`／`ModelsJsonCompat`）⇒ **缺的是两条车道的接线**（B140 同族：SDK streaming transport 不透传任意头） |
 | B107 | 两条请求选项通道恒空 | apiOptions 与 streamBlocking 的 extra 都传 Map.of() |
 | B110 | `providerThinkingLevel` 两侧均无 | pi 消息字段与 proxy 线字段 |
 | B113 | plumbing 异常包成 PiHttpException | pi 的等价物是流里一条错误消息（complete 不抛） |
@@ -106,7 +104,7 @@
 | B95 | `docs` 段无生产者（ContextAssembler 不传 DocumentationPaths） |
 | B96 | PayloadRecording 投影缺 sections/toolsAdded/toolsRemoved |
 | B97 | 3 个内置 (provider,modelId) 与 pi 目录不匹配 |
-| B98 | 约 40 个零消费者 compat 字段（supportsUsageInStreaming/requiresThinkingAsText/…） |
+| B98 | compat 面**缺 8 个字段**（pi 有标注且**有消费点**，Java 无字段） | 逐字段对读 pi 三个 compat 接口（40 字段）vs `ModelCompat`（32 组件）—— 缺：`requiresToolResultName`（`openai-completions.ts:1429`）· `requiresAssistantAfterToolResult`（`:1241,1295,1451`）· `requiresThinkingAsText`（`:1323`）· `supportsUsageInStreaming`（`:834`）· `zaiToolStream`（`:857`）· `vllmPriority`（`:873`）· `vercelGatewayRouting`（`:993`）· `allowedFallbackModels`（`anthropic-messages.ts:212,674,1281`）。⚠️ **旧行文字「约 40 个零消费者 compat 字段」是误记** —— 那 40 是 **pi 的字段总数**，不是缺口数；真缺口是上面 8 个 |
 | B99 | supportsMidConvoEffort 半可移植 |
 | B100 | compat 探测的 baseUrl 来源不同（pi 读模型对象，不接受请求期覆盖） |
 

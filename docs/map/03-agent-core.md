@@ -145,10 +145,10 @@ pi 侧证据**全部改指** `agent/src/*` 或 `coding-agent/src/core/*`。
 | 43 | ~~effect gate（`gate.admit`）~~ | A | **作废（R1）** | 0 | `git grep effect-gate 200387122 -- packages/*/src` **零命中** | 零命中 | —— |
 | 44 | ~~HarnessEvent 28 类~~ | E | **作废（R1）** | 0 | `lane_created`/`run_suspend`/`value_update` **零命中** | `HarnessEventBus.java` | A6 |
 | 45 | ~~`run_suspend` + `DeferredHandle` 挂起驱动~~ | L | **作废（R1）** | 0 | `run_suspend` 零命中 | 零生产者 | —— |
-| 46 | `AgentSessionEvent` 面（pi **24** 变体） | E | **存疑** | **3** | `core/agent-session.ts:191-231`（新增 `entry_appended`/`auto_retry_*`/`summarization_retry_*`） | `AgentSessionEvent.java`（**19** 变体） | B30/B34/B35 |
-| 47 | **`queue_update` 生产者** | E | **缺失** | **2** | `core/agent-session.ts:1019` | 只有定义+映射，零 emit | **B34** |
-| 48 | **`session_info_changed` 生产者** | E | **缺失** | **1** | `core/agent-session.ts:3895` | 同上 | **B30** |
-| 49 | **`thinking_level_changed` 生产者** | E | **缺失** | **2** | `core/agent-session.ts:2581` | 同上 | **B35** |
+| 46 | `AgentSessionEvent` 面（pi **24** 变体） | E | **存疑** | **3** | `core/agent-session.ts:191-231`（新增 `entry_appended`/`auto_retry_*`/`summarization_retry_*`） | `AgentSessionEvent.java`（**20** 变体） | B30 |
+| 47 | `queue_update` 生产者 | E | **对齐** | **2** | `core/agent-session.ts:1019` | ✅ `AgentSession.java:649/654/700/721` 四处发射（`05b1a798`，2026-10-07） | 已闭环 |
+| 48 | **`session_info_changed` 生产者** | E | **缺失** | **1** | `core/agent-session.ts:3895` | 只有定义（`AgentSessionEvent.java:73`）+ 映射（`JsonEventMapper.java:103`），**零 emit** | **B30** |
+| 49 | `thinking_level_changed` 生产者 | E | **对齐** | **2** | `core/agent-session.ts:2581` | ✅ `AgentSession.java:507` 已发射（`b75450f1`，2026-09-23 —— **早于本图基准**） | 已闭环 |
 | 50 | `bash_execution_update` 生产者 | E | **对齐** | **2** | `core/agent-session.ts:3813` | `AgentSessionEvent.BashExecutionUpdate` | —— |
 | 51 | `compaction_start`/`compaction_end` 事件 | E | **对齐** | **3** | `core/agent-session.ts:203-214,2720,2831` | `CompactionObserver.java` | —— |
 | 52 | `agent_end` 载荷 = **本 pass** `newMessages` | E | **存疑** | **3** | `agent/src/agent-loop.ts:254,290,320`；`core/agent-session.ts:1084,1112` | 引擎对（`PiLoopRunner.java`）；**会话层**发 `accumulatedMessages()` | **A8** |
@@ -164,7 +164,7 @@ pi 侧证据**全部改指** `agent/src/*` 或 `coding-agent/src/core/*`。
 | 62 | **`formatSkillInvocation`** | P | **缺失** | **2** | `core/skills.ts`（技能内含调用格式） | 无 | —— |
 | 63 | `loadSkills` / `loadSourcedSkills` | P | **存疑** | **2** | `core/skills.ts:409,168` | `SkillDiscovery`（在 coding-agent） | —— |
 | 64 | `loadPromptTemplates` 等四函数 | P | **存疑** | **2** | `core/prompt-templates.ts:222,304` | `PromptTemplates`（在 coding-agent） | —— |
-| 65 | **`sanitizeSurrogates`** | A | **缺失** | **1** | pi 多处 | 全仓零命中 | **B16** |
+| 65 | `sanitizeSurrogates` | A | **对齐** | **1** | pi `utils/sanitize-unicode.ts:21` | ✅ `pi-java-ai` 的 `utils/SanitizeUnicode.surrogates`（`AnthropicMessageConverter.java:55,135` 等生产调用）—— **跨模块**，本图原判「全仓零命中」只在 `agent-core` 内搜 | 已闭环 |
 | 66 | ~~`AdaptivePublisher`~~ | A | **作废（R1）** | 0 | `harness/utils/adaptive-publisher.ts` 已删 | 无 | —— |
 | 67 | ~~`applyShellOutputUpdate` / `ShellOutputView`~~ | A | **作废（R1）** | 0 | `harness/utils/output-capture.ts`/`shell-output.ts` 已删（主流量见 #28） | `ShellOutputSink.java` | —— |
 | 68 | **`streamProxy`** | A | **缺失** | **1** | `agent/src/proxy.ts:120`（**存活**） | 无 | —— |
@@ -261,12 +261,16 @@ pi 侧证据**全部改指** `agent/src/*` 或 `coding-agent/src/core/*`。
 | 表 | 对齐 | 缺失 | 存疑 | 合计 | 完成度 |
 |---|---:|---:|---:|---:|---:|
 | 内置工具 | 4 | 1 | 4 | 9 | **44.4%** |
-| 能力单元（除工具） | 32 | 15 | 38 | 85 | **37.6%** |
+| 能力单元（除工具） | 35 | 12 | 38 | 85 | **41.2%** |
 | 整块缺失（无独立计权项） | 0 | 0 | 0 | 0 | —— |
-| **合计** | **36** | **16** | **42** | **94** | **38.3%** |
+| **合计** | **39** | **13** | **42** | **94** | **41.5%** |
 
-**未加权完成度 = 36 / 94 = 38.3%**（旧 40 / 114 = 35.1%）
-（对齐＋存疑视为「有」：78/94 = **83.0%**）
+**未加权完成度 = 39 / 94 = 41.5%**（旧 40 / 114 = 35.1%）
+（对齐＋存疑视为「有」：81/94 = **86.2%**）
+
+> ⚠️ **2026-10-09 回填**（`docs/42 §5`）：#47 `queue_update`、#49 `thinking_level_changed`、
+> #65 `sanitizeSurrogates` 三条由**缺失**翻为**对齐**（前两条本图当时未测准，第三条是**跨模块漏搜**）。
+> 对齐 36 → 39、缺失 16 → 13。
 
 ---
 
@@ -275,11 +279,13 @@ pi 侧证据**全部改指** `agent/src/*` 或 `coding-agent/src/core/*`。
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|
 | 内置工具（9） | 21 | 15.0 | **71.4%** | 44.4% |
-| 能力单元（除工具，85） | 163 | 108.0 | **66.3%** | 37.6% |
-| **模块合计（94）** | **184** | **123.0** | **66.8%** | **38.3%** |
+| 能力单元（除工具，85） | 163 | 113.0 | **69.3%** | 41.2% |
+| **模块合计（94）** | **184** | **128.0** | **69.6%** | **41.5%** |
 
-**模块合计**：Σ权重 184 ／ Σ(w×c) 123.0 ／ **加权完成度 = 123.0/184 = 66.8%**（未加权 38.3%）。
+**模块合计**：Σ权重 184 ／ Σ(w×c) 128.0 ／ **加权完成度 = 128.0/184 = 69.6%**（未加权 41.5%）。
 （旧：Σw 214 / Σ(w×c) 133.5 = **62.4%**；未加权 35.1%。）
+> ⚠️ **2026-10-09 回填**（`docs/42 §5`）：三条翻案（#47/#49/#65）使 Σ(w×c) 123.0 → **128.0**
+> ⇒ 66.8% → **69.6%**；未加权 38.3% → **41.5%**。分母未动。
 
 > **换锚把加权完成度拉高 4.4 pp**，原因**不是 pi-java 变强**，而是重组：19 条作废单元 + 1 整块缺失里
 > 大量是权重 1/2 的「缺失」（pico3/durable/drive/effect-gate/搜索/存储套件），它们**移出分母**；
@@ -290,9 +296,9 @@ pi 侧证据**全部改指** `agent/src/*` 或 `coding-agent/src/core/*`。
 | 权重 | 条数 | Σ权重 | 对齐 | 存疑 | 缺失 | Σ(w×c) | 层完成度 |
 |---:|---:|---:|---:|---:|---:|---:|---:|
 | 3 | 21 | 63 | 11 | 10 | 0 | 48.0 | **76.2%** |
-| 2 | 36 | 72 | 19 | 12 | 5 | 50.0 | **69.4%** |
-| 1 | 28 | 28 | 2 | 16 | 10 | 10.0 | **35.7%** |
-| 合计 | 85 | 163 | 32 | 38 | 15 | 108.0 | 66.3% |
+| 2 | 36 | 72 | 21 | 12 | 3 | 54.0 | **75.0%** |
+| 1 | 28 | 28 | 3 | 16 | 9 | 11.0 | **39.3%** |
+| 合计 | 85 | 163 | 35 | 38 | 12 | 113.0 | 69.3% |
 
 ### 权重 3 的单元清单（21 条能力单元 + 5 条工具 = 26 条）
 
