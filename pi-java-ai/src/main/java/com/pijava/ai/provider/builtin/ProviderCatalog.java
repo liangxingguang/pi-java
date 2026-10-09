@@ -17,7 +17,8 @@ import com.pijava.ai.provider.Provider;
 /**
  * Built-in Provider catalog — the 5 Phase 1 providers, the 11
  * Phase 6 China-focused additions, the OpenRouter images provider,
- * plus the OpenRouter chat provider (包 A-02；18 total).
+ * the OpenRouter chat provider (包 A-02), plus the xai provider
+ * (包 44；19 total).
  */
 public final class ProviderCatalog {
 
@@ -44,6 +45,7 @@ public final class ProviderCatalog {
         providers.add(new OllamaProvider());
         providers.add(new OpenRouterProvider());
         providers.add(new OpenRouterImagesProvider());
+        providers.add(new XaiProvider());
         return List.copyOf(providers);
     }
 

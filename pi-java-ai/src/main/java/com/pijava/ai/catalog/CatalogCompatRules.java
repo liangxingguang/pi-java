@@ -181,6 +181,29 @@ public final class CatalogCompatRules {
     }
 
     /**
+     * openai-responses 车道的 xai 目录标注 —— pi {@code XAI_RESPONSES_COMPAT}
+     * （{@code generate-models.ts:472-474}）＋ 应用点 {@code :2053}：<b>全部</b> xai
+     * responses 模型**无条件**得 {@code supportsLongCacheRetention:false}（与 id 无关）。
+     * 非 xai provider 返回 {@link ModelCompat#NONE}。
+     *
+     * <p>动机：xAI 的 prompt cache 不走 OpenAI 的 {@code prompt_cache_retention:"24h"}
+     * 长缓存语义（{@code openai-responses.ts:101}）⇒ 该位为假后，responses 车道在
+     * {@code cacheRetention=="long"} 时**不发**那个键。java 侧读点
+     * （{@code ResponsesMessageConverter.applyCacheRetention} 的 {@code longOk}）
+     * 已就位 ⇒ 本规则一落，行为即刻对齐。</p>
+     */
+    public static ModelCompat xaiResponses(String provider) {
+        if (!"xai".equals(provider)) {
+            return ModelCompat.NONE;
+        }
+        // 23 参便捷构造，位置 15（supportsLongCacheRetention）显式 false；其余保持缺席
+        // （探测/车道缺省由 CompatResolver.forResponses 补 —— 那里这一位传的是 null）。
+        return new ModelCompat(false, null, true, false, null, null, null, null, null, true,
+            null, null, null, null, Boolean.FALSE, null, null, null, null, null,
+            Map.of(), Map.of(), null);
+    }
+
+    /**
      * pi {@code generate-models.ts} 的 per-provider {@code thinkingFormat} 常量表 ——
      * 只列 java **携带**的 provider（{@code 原 docs/58 §2.5(b)}）。
      */

@@ -3,8 +3,9 @@
 > **状态：📝 盘点稿（2026-10-09）。** 不是设计稿 —— 只回答「pi-ai 层还剩什么没对齐」，
 > 逐包设计在各自文档里出。
 >
-> **进度**：§1.1 的 `ContextOverflow` / `RetryableError` 两条**已闭环**（`docs/43`，2026-10-09）⇒
-> w2 由 5 条降为 **3 条**（`xai` / 目录规模 / 中段工具内联）。
+> **进度**：§1.1 的 `ContextOverflow` / `RetryableError` 两条**已闭环**（`docs/43`，2026-10-09）；
+> `xai` provider 端点**已闭环**（`docs/44`，2026-10-10）⇒ w2 由 5 条降为 **2 条**
+> （目录规模 / 中段工具内联）。
 >
 > **数据源**：`docs/map/02-ai.md`（基准 pi-java `351d199` / pi `200387122`，2026-10-04）
 > ＋ `docs/04-open-items-register.md` §3.2。
@@ -16,9 +17,9 @@
 
 ## 0. 一句话
 
-**加权 80.84%，全部 32 个权重 3 单元已对齐** —— 主流车道的请求 / 响应 / 计量全通。
-剩下的不是「能不能用」，而是**广度**：w2 五条 ＋ w1 十五条 ＋ 4 条 wire 适配器。
-计分母的真缺口 **25 个单位**，全补完 **+19.16pp**。
+**加权 83.48%，全部 32 个权重 3 单元已对齐** —— 主流车道的请求 / 响应 / 计量全通。
+剩下的不是「能不能用」，而是**广度**：w2 两条 ＋ w1 十五条 ＋ 4 条 wire 适配器。
+计分母的真缺口 **22 个单位**，全补完 **+16.52pp**。
 
 > ⚠️ 本稿的判定以 `docs/map/02-ai.md` 的基准为准；pi-java 侧此后仍在前进
 > （`ai` 模块最近一次改动 `224a1fb3`，2026-10-04），个别条目可能已过期 ——
@@ -26,13 +27,13 @@
 
 ---
 
-## 1. 计分母的缺口（25 个单位）
+## 1. 计分母的缺口（22 个单位）
 
-### 1.1 w2 —— 边际最大的一块（5 条，补完 **+4.40pp**）
+### 1.1 w2 —— 边际最大的一块（2 条，补完 **+1.76pp**）
 
 | 单元 | pi 侧证据 | pi-java 现状 | 差距 |
 |---|---|---|---|
-| ✅ `xai` provider 端点 | `providers/xai.ts`（`api: openAIResponsesApi()`、`baseUrl: https://api.x.ai/v1`）＋ `providers/xai.models.ts`（**14 模型**，由 `scripts/generate-models.ts` 生成） | **只有 OAuth**（`auth/OAuthProviders.java:30` device code）；**无 provider 类、无 wire** | 主流 7 家里唯一没上车的端点。⚠️ `CompatResolver.java:79/:98` 已有 `provider.equals("xai")`／`isGrok` 分支 ⇒ **compat 层认识 xai，但没有车道可用** |
+| ⬜→✅ `xai` provider 端点 | `providers/xai.ts`（`api: openAIResponsesApi()`、`baseUrl: https://api.x.ai/v1`）＋ `providers/data/xai.json`（**4 模型**，由 `scripts/generate-models.ts` 生成） | **只有 OAuth**（`auth/OAuthProviders.java:30` device code）；**无 provider 类、无 wire** | 主流 7 家里唯一没上车的端点。⚠️ `CompatResolver.java:79/:98` 已有 `provider.equals("xai")`／`isGrok` 分支 ⇒ **compat 层认识 xai，但没有车道可用**。**✅ 已闭环 2026-10-10**（`docs/44`，见 §12）。⚠️ 本行原写「14 模型」是**取证错**（那个 14 是 `xai.models.ts` 的**行数**），实测 `data/xai.json` 是 **4 条** |
 | ⤵ 内置目录规模 | 42 个 provider 由 `generate-models.ts` 生成 | `catalog/BuiltinCatalog.java` 手写 **24 个模型**；`B97` 另有 3 个 (provider,modelId) 与 pi 对不上 | 结构性差异：手写常量 vs 生成目录 |
 | ⬜→✅ `ContextOverflow` z.ai CN 模式 | `utils/overflow.ts:38-39`：`/prompt (?:is )?too long/i` ＋ **`/prompt exceeds max length/i`（CN endpoint）** | `utils/ContextOverflow.java` 26 条模式已逐条移植，**独缺第二条**（`prompt exceeds max length`） | **恰 1 条模式**。其余 z.ai 形状（`model_context_window_exceeded`、静默溢出）都已落。**✅ 已闭环 2026-10-09**（`docs/43`，见 §12） |
 | ⬜→✅ `RetryableError` 新模式 | `utils/retry.ts:26-90` 白名单 | `utils/RetryableError.java` 已落 40+ 条，**缺 3 条**：`model is at capacity`（:30）、`subscription_sharing_usage_unavailable`、`subscription_sharing_user_unavailable`（ChatGPT 登录路） | ⚠️ **地图记「两条」，实测为 3 条** —— 多出的 `model is at capacity` 是逐条 diff 才看见的。**✅ 已闭环 2026-10-09**（含配额排除表同族那条，见 `docs/43` §12） |
@@ -175,13 +176,13 @@
 
 | 序 | 内容 | 边际 | 理由 |
 |---|---|---|---|
-| **①** | `ContextOverflow` 补 1 条模式 ＋ `RetryableError` 补 3 条 | 计入 w2 簇 | **成本最低** —— 纯字符串表，都是逐条移植，无架构面；两条合一个包 |
-| **②** | `xai` provider 端点 | 计入 w2 簇 | 纯补车道：`openai-responses` wire **已存在**，只需 provider 类 ＋ 模型目录（可手写 14 条或接生成脚本）；OAuth 已落 |
+| **①** | `ContextOverflow` 补 1 条模式 ＋ `RetryableError` 补 3 条 | 计入 w2 簇 | **成本最低** —— 纯字符串表，都是逐条移植，无架构面；两条合一个包。**✅ 已闭环 2026-10-09**（`docs/43`） |
+| **②** | `xai` provider 端点 | 计入 w2 簇 | 纯补车道：`openai-responses` wire **已存在**，只需 provider 类 ＋ 模型目录（可手写 14 条或接生成脚本）；OAuth 已落。**✅ 已闭环 2026-10-10**（`docs/44`）—— 目录实测 **4 条**（非 14） |
 | **③** | `B165` Anthropic 中段工具内联 | 计入 w2 簇 | 依赖 `inline-tools-2026-09-15` 形状，改动集中在 `AnthropicRequestBuilder`；**与 ①② 无耦合** |
 | **④** | §3.2 逐条回测（先清过期账） | — | 不产码，但**解锁**后续：避免做到已完成的活；建议**在 ①②③ 之前或并行**做 |
 | —— | w1 十五条 / 4 条 wire | +6.60pp / 计分母 | 广度活，单条边际低，宜搭车不宜单开包 |
 
-**①② 可以合成一个「ai-utils + xai」小包**（模式表 + 车道），**③ 单独一包**（协议形状）。
+**①② 均已闭环**（① `docs/43`、② `docs/44`；两者各自独立成包），**③ 单独一包**（协议形状）。
 
 ---
 

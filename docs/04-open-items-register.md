@@ -118,6 +118,7 @@
 | B219 | `mcp_servers` 段的排序用 `String.compareTo` 代替 `localeCompare` | ASCII 名等价，非 ASCII 名排序有差（`docs/39` §3.2） |
 | B220 | `truncate` 的 `trimEnd()` ⇒ `stripTrailing()` | 后者不吃 ` `（窄角，`docs/39` §3.2） |
 | B221 | **MCP 扩展接线面整体顺延** | 六个 `on(...)` 事件（**1/6**，见 `docs/39` §2.4）、激活门暴露给扩展（机制在 `AgentHarness.getActiveTools:528` 但扩展拿不到）、`ctx.ui.custom`（**B214**）、`registerToolRenderer`（**B204**）、提示分节接线（`ContextAssembler.promptOptions:104-114` 从没调过 `.sections(...)`）—— **归属是 D 域与 E5，不是 MCP** |
+| B222 | **responses 车道恒发 `system`，pi 对推理模型发 `developer`** | pi `openai-responses-shared.ts:215` 的判据是 `model.reasoning && compat?.supportsDeveloperRole !== false ? "developer" : "system"`（前导指令消息的角色）。Java：`ModelCompat.supportsDeveloperRole` **有字段、有 models.json 生产者、有 completions 读点**（`OpenAICompletionsMessageConverter.java:102`），但 **responses 车道的读点不存在** —— `ResponsesMessageConverter` 落前导系统项时硬编 `EasyInputMessage.Role.SYSTEM`（`:238`）。影响面**不止 xai**：openai 自己的 responses 模型（gpt-5 系列，`reasoning:true`）pi 走 `developer`、java 走 `system` ⇒ 无线格等价性（`developer` 与 `system` 在 Responses API 是**两个不同的角色**）。`docs/44` §8 登记（xai 的 compat 不设该位 ⇒ 本包无差），独立缺口 |
 | B161 | **codemode 整块零对应** | quickjs-wasi 沙箱代码执行 |
 | B162 | tool-search / virtual-models / nested-tool-calls 三块零对应 | deferred 工具发现；虚拟模型；嵌套工具调用 |
 | B177 | MCP 默认 `codemode` exposure 暂不可达 | MCP 各包（包①–⑫a）的 wire/配置语义全保留，运行时激活路径依赖 B161 闭环（docs/28 §3 裁决） |
