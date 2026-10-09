@@ -145,9 +145,13 @@ import java.util.Map;
  * @param supportsMidConvoToolChanges pi {@code compat.supportsMidConvoToolChanges}
  *        ({@code types.ts:832-833}, Anthropic lane only): whether the model accepts
  *        mid-conversation {@code tool_addition}/{@code tool_removal} content blocks.
- *        读点是**真值判断**（{@code anthropic-messages.ts:1052}），且与
- *        {@code supportsMidConvoSystemMessages} 相与，还与两个结构性条件（初始工具非空、
- *        无工具重定义）一起构成 {@code nativeToolChanges} 的**四条件门**（{@code 原 docs/51 §2 P8}）。
+ *        ⚠️ 形状在 {@code b271b0a52} 换过：{@code tool_addition} 现为**定义内联**
+ *        （{@code {type:"tool_definition", definition}}，beta {@code inline-tools-2026-09-15}），
+ *        不再是按名引用的 {@code tool_reference}。
+ *        读点是**真值判断**（{@code anthropic-messages.ts:1141}），且与
+ *        {@code supportsMidConvoSystemMessages}、初始工具非空一起构成 {@code nativeToolChanges}
+ *        的**三条件门**（⚠️ {@code b271b0a52} 前是四条，重定义那一项已删 ——
+ *        定义内联形状本身能表达同名重定义）。
  *        缺席 ≡ {@code false} ⇒ **二态**。
  * @param supportsAdditionalTools pi {@code compat.supportsAdditionalTools}
  *        ({@code types.ts:768}, Responses lanes): whether the model supports

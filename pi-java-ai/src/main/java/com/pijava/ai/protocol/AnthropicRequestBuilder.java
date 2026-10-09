@@ -2,9 +2,7 @@ package com.pijava.ai.protocol;
 
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import com.anthropic.core.JsonValue;
@@ -14,15 +12,11 @@ import com.anthropic.models.messages.ContentBlockParam;
 import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.MessageParam;
 import com.anthropic.models.messages.TextBlockParam;
-import com.anthropic.models.messages.Tool;
-import com.anthropic.models.messages.ToolUnion;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import com.pijava.ai.api.SimpleOptions;
-import com.pijava.ai.api.StrictJsonSchema;
-import com.pijava.ai.api.StrictSampling;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.api.TransformMessages;
@@ -40,9 +34,14 @@ final class AnthropicRequestBuilder {
     private static final String INTERLEAVED_THINKING_BETA =
             "interleaved-thinking-2025-05-14";
 
-    /** pi {@code anthropic-messages.ts:186} —— 原生工具增删的 beta 头。 */
-    private static final String MID_CONVERSATION_TOOL_CHANGES_BETA =
-            "mid-conversation-tool-changes-2026-07-01";
+    /**
+     * pi {@code anthropic-messages.ts:195} —— 原生工具增删的 beta 头（**定义内联形状**）。
+     *
+     * <p>{@code b271b0a52} 把旧值 {@code mid-conversation-tool-changes-2026-07-01} 换成了它：
+     * 后续工具不再按名引用（{@code tool_reference}），而是在 {@code tool_addition} 块里
+     * **按值内联**（{@code tool_definition}），于是**同名重定义**也能表达。</p>
+     */
+    private static final String INLINE_TOOLS_BETA = "inline-tools-2026-09-15";
 
     /**
      * 包 09（B90）：pi {@code anthropic-messages.ts:181} —— 不支持
@@ -50,16 +49,6 @@ final class AnthropicRequestBuilder {
      */
     private static final String FINE_GRAINED_TOOL_STREAMING_BETA =
             "fine-grained-tool-streaming-2025-05-14";
-
-    /**
-     * pi {@code anthropic-messages.ts:195-200} 的 {@code DEFERRED_TOOL_PLACEHOLDER}。
-     *
-     * <p>只要请求里**任何**工具有 {@code defer_loading}，Anthropic 就会加隐藏的提示脚手架；
-     * 从第一个请求起就声明这个占位符能把那段脚手架留在缓存前缀里，于是第一个真正的
-     * 迟到工具不会击穿缓存（pi 注释：实测不这么做会**全量 miss**）。
-     * 它永不被激活，模型也看不见。</p>
-     */
-    private static final String DEFERRED_TOOL_PLACEHOLDER_NAME = "__pi_deferred_placeholder__";
 
     private AnthropicRequestBuilder() {
     }
@@ -134,13 +123,14 @@ final class AnthropicRequestBuilder {
 
         var initialTools = initialSystemMessage == null
                 ? List.<ToolDefinition>of() : initialSystemMessage.toolsAdded();
-        // pi :1050-1055 的**四条件门**。四条都不能少：块只按名引用（表达不了重定义）、
-        // Anthropic 拒绝「全部 deferred」的工具表（必须有活跃工具做锚）、
-        // 以及那两个 compat 标志（后者注释明写 *Requires* 前者）。
+        // pi :1136-1141 的三条件门（⚠️ `b271b0a52` 前是**四条**，`!hasToolRedefinitions`
+        // 已删）：
+        // ① 模型接受中途系统消息；② 模型接受原生工具增删块；③ 至少一个初始活跃工具
+        //（Anthropic 拒绝「全部 deferred」的工具表 ⇒ 必须有活跃工具给占位符做锚）。
+        // **重定义不再是回退判据** —— 定义内联形状本身能表达它（那是这次换形状的动机）。
         boolean nativeToolChanges = Boolean.TRUE.equals(compat.supportsMidConvoSystemMessages())
                 && Boolean.TRUE.equals(compat.supportsMidConvoToolChanges())
-                && !initialTools.isEmpty()
-                && !Transcripts.hasToolRedefinitions(transcript.messages());
+                && !initialTools.isEmpty();
 
         var betas = new ArrayList<String>();
         if (request.model() != null
@@ -150,7 +140,7 @@ final class AnthropicRequestBuilder {
             betas.add(INTERLEAVED_THINKING_BETA);
         }
         if (nativeToolChanges) {
-            betas.add(MID_CONVERSATION_TOOL_CHANGES_BETA);
+            betas.add(INLINE_TOOLS_BETA);
         }
         // 包 09（B90）：pi `:1450-1454` 的两个合取项 —— 工具表非空 **且** 端点不支持 eager。
         if (!eagerToolInputStreaming
@@ -161,9 +151,10 @@ final class AnthropicRequestBuilder {
             builder.putAdditionalBodyProperty("betas", JsonValue.from(betas));
         }
 
-        addMessages(builder, conversation, allowEmptySignature, nativeToolChanges, cacheControl);
-        addTools(builder, transcript, initialTools, nativeToolChanges, toolCacheControl,
+        addMessages(builder, conversation, allowEmptySignature, nativeToolChanges, cacheControl,
             compat.supportsStrictTools(), eagerToolInputStreaming);
+        AnthropicToolWire.addTools(builder, transcript, initialTools, nativeToolChanges,
+            toolCacheControl, compat.supportsStrictTools(), eagerToolInputStreaming);
 
         // pi :1104-1110 —— temperature 是**四重合取**：{@code temperature !== undefined} ＋
         // {@code !thinkingEnabled} ＋ {@code supportsMidConvoEffort !== true} ＋
@@ -177,123 +168,20 @@ final class AnthropicRequestBuilder {
     }
 
     /**
-     * 工具表（pi {@code :1114-1148} 的两支）。
-     *
-     * <p>原生支的形状是 pi 注释写死的那句「请求级列表**只增不减**」：初始工具保持活跃、
-     * 缓存断点挂最后一个上；此后每个声明都是 deferred，只靠 {@code tool_addition} 块浮出；
-     * 被删的工具**仍然声明**，由 {@code tool_removal} 撤回。于是这段缓存前缀跨工具变更完整。</p>
-     *
-     * <p>⚠️ 本仓暂无 {@code cache_control}（A-01），故 pi 的 {@code toolCacheControl}
-     * 与「缓存断点允许落在 tool_addition/tool_removal 上」两条无从落（{@code 原 docs/51 §4.4 ⑥}）。</p>
-     * <p>包 A-01：断点挂在本支**最后一个工具**上（pi {@code :1489} 的
-     * {@code index === tools.length - 1}）。⚠️ 原生支挂的是 <b>{@code initialTools} 的末项</b>
-     * —— 迟到工具与占位符**都不挂**（pi 对它们另调一次不带 {@code cacheControl} 的
-     * {@code convertTools}），这样缓存前缀跨工具变更完整（探针 P7/P10 实测）。</p>
-     */
-    private static void addTools(MessageCreateParams.Builder builder,
-                                 com.pijava.ai.api.TranscriptContext transcript,
-                                 List<ToolDefinition> initialTools, boolean nativeToolChanges,
-                                 CacheControlEphemeral toolCacheControl,
-                                 boolean supportsStrictTools,
-                                 boolean eagerToolInputStreaming) {
-        if (!nativeToolChanges) {
-            var tools = Transcripts.getCurrentTools(transcript.messages());
-            for (int i = 0; i < tools.size(); i++) {
-                builder.addTool(ToolUnion.ofTool(
-                    toAnthropicTool(tools.get(i), false,
-                        atLast(i, tools.size(), toolCacheControl), supportsStrictTools,
-                        eagerToolInputStreaming)));
-            }
-            return;
-        }
-        for (int i = 0; i < initialTools.size(); i++) {
-            builder.addTool(ToolUnion.ofTool(
-                toAnthropicTool(initialTools.get(i), false,
-                    atLast(i, initialTools.size(), toolCacheControl), supportsStrictTools,
-                    eagerToolInputStreaming)));
-        }
-        builder.addTool(ToolUnion.ofTool(deferredToolPlaceholder()));
-        var initialNames = new HashSet<String>();
-        for (var td : initialTools) {
-            initialNames.add(td.name());
-        }
-        for (var td : Transcripts.getDeclaredTools(transcript.messages())) {
-            if (initialNames.contains(td.name())) {
-                continue;
-            }
-            builder.addTool(ToolUnion.ofTool(
-                toAnthropicTool(td, true, null, supportsStrictTools, eagerToolInputStreaming)));
-        }
-    }
-
-    /** pi {@code :1489}：只有末项拿断点。 */
-    private static CacheControlEphemeral atLast(int index, int size, CacheControlEphemeral cc) {
-        return index == size - 1 ? cc : null;
-    }
-
-    /**
-     * 工具定义 → Anthropic 的 {@code Tool}；{@code deferLoading} ＝ pi 的
-     * {@code defer_loading: true}；{@code cacheControl} 非空时挂断点；
-     * {@code supportsStrictTools} 且工具解析为 strict（原 docs/66）⇒ inputSchema 走
-     * strict 转换 ＋ {@code strict:true}（pi {@code anthropic-messages.ts:1467-1488}）。
-     */
-    private static Tool toAnthropicTool(ToolDefinition td, boolean deferLoading,
-                                        CacheControlEphemeral cacheControl,
-                                        boolean supportsStrictTools,
-                                        boolean eagerToolInputStreaming) {
-        var strict = Boolean.TRUE.equals(
-            StrictSampling.resolveStrict(td, supportsStrictTools));
-        var schema = strict
-            ? StrictJsonSchema.convert(td.inputSchema()) : td.inputSchema();
-        var inputSchema = Tool.InputSchema.builder()
-                .putAllAdditionalProperties(AnthropicMessageConverter.toJsonValues(schema))
-                .build();
-        var toolBuilder = Tool.builder()
-                .name(td.name())
-                .inputSchema(inputSchema);
-        if (td.description() != null && !td.description().isBlank()) {
-            toolBuilder.description(td.description());
-        }
-        if (deferLoading) {
-            toolBuilder.deferLoading(true);
-        }
-        // 包 09（B90）：pi `:1486` 的 `...(cond ? {eager_input_streaming: true} : {})` ——
-        // **缺席**而非 false（SDK 的 setter 只在 true 时调）。
-        if (eagerToolInputStreaming) {
-            toolBuilder.eagerInputStreaming(true);
-        }
-        if (cacheControl != null) {
-            toolBuilder.cacheControl(cacheControl);
-        }
-        if (strict) {
-            toolBuilder.strict(true);
-        }
-        return toolBuilder.build();
-    }
-
-    /** pi 的 {@code DEFERRED_TOOL_PLACEHOLDER} 的三个 schema 键，**保序**（type/properties/required）。 */
-    private static Tool deferredToolPlaceholder() {
-        var schema = new LinkedHashMap<String, JsonValue>();
-        schema.put("type", JsonValue.from("object"));
-        schema.put("properties", JsonValue.from(Map.of()));
-        schema.put("required", JsonValue.from(List.of()));
-        return Tool.builder()
-                .name(DEFERRED_TOOL_PLACEHOLDER_NAME)
-                .description("Reserved placeholder. Never available. Never call this.")
-                .inputSchema(Tool.InputSchema.builder().putAllAdditionalProperties(schema).build())
-                .deferLoading(true)
-                .build();
-    }
-
-    /**
      * 消息侧（pi {@code convertMessages}，{@code :1225-1397}）。
      *
      * <p>三条纪律：① 中途系统消息**不就地发**，攒进 {@code pendingSystemMessages}，在
      * <b>下一条 assistant 消息之前</b>（{@code :1309-1310}）或转录末尾（{@code :1397}）刷出 ——
      * Anthropic 要求 {@code tool_result} 紧跟 {@code tool_use}，夹一条系统消息会被拒，
      * 于是「转录里排在 user 消息前的更新，线上落到它之后」；② 系统消息的块序是
-     * {@code [text?, …tool_removal, …tool_addition]}（{@code :1250-1270}）；
-     * ③ 连续 toolResult 归并成一条 user 消息（z.ai 端点需要）。</p>
+     * {@code [text?, …tool_removal, …tool_addition]}（{@code :1250-1270}）；但现在
+     * {@code tool_addition} 按值内联（{@code :1339-1351}），且「同名新定义取代旧定义」
+     * ⇒ 同名时**不发** {@code tool_removal}；③ 连续 toolResult 归并成一条 user 消息
+     * （z.ai 端点需要）。</p>
+     *
+     * <p>⚠️ {@code supportsStrictTools}／{@code eagerToolInputStreaming} 这两个形参是给
+     * <b>内联定义</b>用的：它必须与顶层表走**同一套**变换（pi 两侧调的是同一个
+     * {@code convertTools}），否则同一份工具定义在两处的形状会分叉。</p>
      *
      * <p>包 A-01：断点要挂在**组装完成后最后一条消息的末块**上（pi {@code :1398-1424}），
      * 所以这里先攒 {@link Row}、末尾才 wrap 成 {@code MessageParam} —— pi 也是先建
@@ -303,7 +191,8 @@ final class AnthropicRequestBuilder {
      */
     private static void addMessages(MessageCreateParams.Builder builder, List<Message> conversation,
                                     boolean allowEmptySignature, boolean nativeToolChanges,
-                                    CacheControlEphemeral cacheControl) {
+                                    CacheControlEphemeral cacheControl,
+                                    boolean supportsStrictTools, boolean eagerToolInputStreaming) {
         var rows = new ArrayList<Row>();
         var pendingSystem = new ArrayList<Row>();
         for (int i = 0; i < conversation.size(); i++) {
@@ -317,11 +206,21 @@ final class AnthropicRequestBuilder {
                         .text(SanitizeUnicode.surrogates(text)).build()));
                 }
                 if (nativeToolChanges) {
+                    var redefined = new HashSet<String>();
+                    for (var added : system.toolsAdded()) {
+                        redefined.add(added.name());
+                    }
                     for (var removed : system.toolsRemoved()) {
-                        blocks.add(toolReferenceBlock("tool_removal", removed.name()));
+                        // 同名新定义**取代**旧定义 ⇒ 不需要 removal 块（pi :1343）。
+                        if (redefined.contains(removed.name())) {
+                            continue;
+                        }
+                        blocks.add(AnthropicToolWire.toolReferenceBlock("tool_removal",
+                            removed.name()));
                     }
                     for (var added : system.toolsAdded()) {
-                        blocks.add(toolReferenceBlock("tool_addition", added.name()));
+                        blocks.add(AnthropicToolWire.toolDefinitionBlock(added, supportsStrictTools,
+                            eagerToolInputStreaming));
                     }
                 }
                 if (!blocks.isEmpty()) {
@@ -468,28 +367,5 @@ final class AnthropicRequestBuilder {
     private static void flushPendingSystemMessages(List<Row> rows, List<Row> pending) {
         rows.addAll(pending);
         pending.clear();
-    }
-
-    /**
-     * {@code {type:"tool_addition"|"tool_removal", tool:{type:"tool_reference", name}}}。
-     *
-     * <p>⚠️ 这两个块**只存在于** {@code com.anthropic.models.beta.messages.*} —— 非 beta 的
-     * {@link ContentBlockParam} 没有对应变体。这里用 SDK 的**未知变体直通**（原始 JSON 反序列化，
-     * 序列化时原样写出）把 beta 形状装进非 beta 参数，绕开整条车道的类型族迁移。
-     * 通路与逐字节往返证据见 {@code SdkJsonEscapeHatchTest}（{@code 原 docs/51 §12.4}）。</p>
-     */
-    private static ContentBlockParam toolReferenceBlock(String type, String toolName) {
-        var tool = new LinkedHashMap<String, Object>();
-        tool.put("type", "tool_reference");
-        tool.put("name", toolName);
-        var block = new LinkedHashMap<String, Object>();
-        block.put("type", type);
-        block.put("tool", tool);
-        var mapper = com.anthropic.core.ObjectMappers.jsonMapper();
-        try {
-            return mapper.treeToValue(mapper.valueToTree(block), ContentBlockParam.class);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("cannot build a raw Anthropic content block", e);
-        }
     }
 }

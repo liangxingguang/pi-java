@@ -291,9 +291,19 @@ public final class Transcripts {
     /**
      * pi {@code transcript.ts:179-194} —— 同名的工具被声明了两次**且定义不同**。
      *
-     * <p>按名引用工具的车道（Anthropic 的 {@code tool_addition}/{@code tool_removal} 块）
-     * 表达不了这件事 ⇒ 那是它们的<b>回退判据之一</b>（{@code 原 docs/51 §2 P8}）。</p>
+     * <p>⚠️ <b>已弃用</b>（{@code b271b0a52}，pi {@code transcript.ts:186} 同形）：pi 的
+     * CHANGELOG 逐字写着 *"Deprecated {@code hasToolRedefinitions()}; no built-in transport
+     * needs it anymore."* —— 换成**定义内联**形状后，Anthropic 车道不再需要它做回退判据
+     * （重定义就是一条 {@code tool_addition}）。本仓 {@code main} 下**零生产调用点**，
+     * 只剩本类的测试与 {@code ToolStateChangesTest} 直接调用。</p>
+     *
+     * <p>函数体**保留**（与 pi 同形）—— 删了会让那些断言无处可去。语义仍是「按名引用的
+     * 车道表达不了这件事」（{@code 原 docs/51 §2 P8}）。</p>
+     *
+     * @deprecated no built-in transport needs it anymore (pi {@code CHANGELOG.md:20});
+     *             kept for the historical assertions only.
      */
+    @Deprecated
     public static boolean hasToolRedefinitions(List<Message> messages) {
         var declared = new LinkedHashMap<String, ToolDefinition>();
         for (var message : messages) {

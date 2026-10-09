@@ -54,6 +54,28 @@ class SdkJsonEscapeHatchTest {
             + "\"role\":\"system\"}");
     }
 
+    /**
+     * pi {@code anthropic-messages.ts:1351} 的 {@code tool_addition}（**定义内联**形状，
+     * 包 B165 / {@code docs/45}）。
+     *
+     * <p>⚠️ 这条是内联定义能落地的**唯一**依据 —— 与上面 {@code tool_reference} 那条同路。
+     * 判据是**逐字节**：嵌套的 {@code definition} 整棵子树必须原样写出（只保住外层
+     * {@code type} 是不够的，模型的参数形状就藏在里面）。</p>
+     */
+    @Test
+    void anthropicCarriesAnInlineToolDefinitionThroughRawJson() throws Exception {
+        var mapper = ObjectMappers.jsonMapper();
+        var raw = "{\"type\":\"tool_addition\",\"tool\":{\"type\":\"tool_definition\","
+            + "\"definition\":{\"name\":\"late_tool\",\"description\":\"late_tool tool\","
+            + "\"input_schema\":{\"type\":\"object\",\"properties\":{},"
+            + "\"required\":[]}}}}";
+
+        ContentBlockParam block = mapper.treeToValue(mapper.readTree(raw), ContentBlockParam.class);
+
+        assertThat(block._json()).isPresent();
+        assertThat(mapper.writeValueAsString(block)).isEqualTo(raw);
+    }
+
     /** pi {@code openai-completions.ts:1240-1246} 的 Kimi 形状。 */
     @Test
     void openAiCompletionsCarriesAToolBearingSystemMessageThroughRawJson() throws Exception {

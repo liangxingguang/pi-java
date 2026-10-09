@@ -31,22 +31,25 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
 /**
  * <b>包 A3c</b>：Anthropic 车道的**工具增删原生渲染**（{@code 原 docs/51 §4.4}）。
  *
- * <p>骨架镜像 pi 自己的 oracle {@code packages/ai/test/transcript-tool-changes.test.ts:73-186}
- * 的四条用例。观测面是**真出站请求体**（{@link RecordingHttpServer}）。</p>
+ * <p><b>包 B165</b>（{@code docs/45}）：形状换成 pi 的**定义内联**
+ * （{@code b271b0a52}，beta {@code inline-tools-2026-09-15}）。顶层工具表**就此定死**
+ * （初始 ＋ 占位符），后续工具在 {@code tool_addition} 块里带**完整定义**（含
+ * {@code input_schema}），同名重定义**不再回退**。骨架镜像 pi 重写后的 oracle
+ * {@code packages/ai/test/transcript-tool-changes.test.ts:103-190}。观测面是**真出站请求体**
+ * （{@link RecordingHttpServer}）。</p>
  *
- * <p>⚠️ <b>门的判据与 Responses **不同**</b>（这是最容易抄错的一处）：Anthropic 的四条件门
- * 只排除**重定义**（{@code hasToolRedefinitions}，{@code :1055}）—— 删除完全没问题，
- * 那正是 {@code tool_removal} 块的用途；Responses 的 {@code anchorsAdditions} 则用
- * {@code hasNonAdditiveToolChanges}，**任何删除都会关掉锚定**。两者的夹具因此用不同的上下文。</p>
+ * <p>⚠️ <b>门的判据与 Responses **不同**</b>（这是最容易抄错的一处）：Anthropic 的三条件门
+ * 只要求「有初始工具」—— 删除与**同名重定义**都没问题，前者靠 {@code tool_removal} 块、
+ * 后者靠重新内联一条 {@code tool_addition}（{@code b271b0a52} 前重定义曾是回退判据）；
+ * Responses 的 {@code anchorsAdditions} 则用 {@code hasNonAdditiveToolChanges}，
+ * **任何删除都会关掉锚定**。两者的夹具因此用不同的上下文。</p>
  *
  * <p>⚠️ <b>与 pi 夹具的三处有意差异</b>：</p>
  *
  * <ul>
  *   <li>~~<b>顶层 {@code system} 是字符串而不是块数组</b>（{@code docs/05} **B89**）
  *       —— ✅ 已随包 A-01 结案~~：{@code system} 现为 {@code [{type:"text",…}]} 块数组
- *       （pi {@code :1077-1097}），块上带缓存断点。⚠️ 本文件那两处
- *       {@code body.path("system")} 断言正是 B89 的**先红**（旧字符串形状下
- *       {@code ArrayNode} 不存在，{@code path(…).asText()} 返回 {@code ""}）。</li>
+ *       （pi {@code :1077-1097}），块上带缓存断点。</li>
  *   <li>~~<b>没有 {@code cache_control}</b>（A-01）~~：✅ 已随包 A-01 落地 ——
  *       pi 的 oracle 断言第一个工具带 {@code cache_control:{type:"ephemeral"}}、且断点可落在
  *       {@code tool_addition}/{@code tool_removal} 上（{@code 原 docs/51 §4.4 ⑥} 的那个落点）。
@@ -59,7 +62,7 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
 class AnthropicToolChangesWireTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final String BETA = "mid-conversation-tool-changes-2026-07-01";
+    private static final String BETA = "inline-tools-2026-09-15";
 
     private static final ToolDefinition BASE_TOOL = tool("base_tool");
     private static final ToolDefinition LATE_TOOL = tool("late_tool");
@@ -85,23 +88,33 @@ class AnthropicToolChangesWireTest {
             user("before"));
     }
 
-    /** pi oracle 用例 1 —— 三方都在场：beta 头、工具表三段式、更新块的三块序。 */
+    /**
+     * pi oracle 用例 1（{@code :104-141}）—— 三方都在场：beta 头、工具表两段式、更新块的三块序。
+     *
+     * <p>靶心是<b>顶层表就此定死</b>：{@code late_tool} **不在**顶层（旧形状下它在，且
+     * {@code defer_loading:true}），它的完整定义改在 {@code tool_addition} 块里内联。</p>
+     */
     @Test
     void sendsToolChangesInANativeSystemMessage() throws Exception {
         var body = capture(nativeModel(), removalTranscript());
 
         assertThat(betas(body)).contains(BETA);
+        // pi oracle 逐字：旧 beta 必须**不在**（换形状而非叠形状）。
+        assertThat(betas(body))
+            .as("旧 beta 必须消失 —— b271b0a52 是换值不是叠加")
+            .doesNotContain("mid-conversation-tool-changes-2026-07-01");
         // 包 A-01（结案 B89）：顶层 `system` 是**块数组**（pi :1077-1097），块上带缓存断点。
         assertThat(body.path("system").isArray()).isTrue();
         assertThat(body.path("system").get(0).path("type").asText()).isEqualTo("text");
         assertThat(body.path("system").get(0).path("text").asText()).isEqualTo("base prompt");
-        // 三段式：初始（活跃）＋ 占位符（deferred）＋ 后续声明（deferred）。
+        // 两段式：初始（活跃）＋ 占位符（deferred）。**后续工具不再摊在这里**。
         assertThat(toolNames(body)).containsExactly(
-            "base_tool", "__pi_deferred_placeholder__", "late_tool");
+            "base_tool", "__pi_deferred_placeholder__");
+        assertThat(toolNames(body)).as("顶层表长度必须是 2 —— 后续工具的定义内联在块里")
+            .hasSize(2);
         assertThat(tool(body, 0).path("defer_loading").isMissingNode())
             .as("初始工具必须**活跃** —— Anthropic 拒绝「全部 deferred」的工具表").isTrue();
         assertThat(tool(body, 1).path("defer_loading").asBoolean()).isTrue();
-        assertThat(tool(body, 2).path("defer_loading").asBoolean()).isTrue();
 
         // 最后一条消息：块序 [text, tool_removal, tool_addition]（pi :1250-1270）。
         var blocks = lastContent(body);
@@ -109,19 +122,33 @@ class AnthropicToolChangesWireTest {
         assertThat(blocks.get(0).path("text").asText())
             .contains("updated guidance")
             .contains("Updated system prompt section \"rules\":\n\n<rules>\nnew rules\n</rules>");
+        // tool_removal 的载荷**没变** —— 仍是按名引用。
+        assertThat(blocks.get(1).path("tool").path("type").asText()).isEqualTo("tool_reference");
         assertThat(blocks.get(1).path("tool").path("name").asText()).isEqualTo("base_tool");
-        assertThat(blocks.get(2).path("tool").path("name").asText()).isEqualTo("late_tool");
+        // tool_addition 换成**定义内联**：载荷是 tool_definition ＋ 完整 definition。
+        assertThat(blocks.get(2).path("tool").path("type").asText()).isEqualTo("tool_definition");
+        assertThat(blocks.get(2).path("tool").path("definition").path("name").asText())
+            .isEqualTo("late_tool");
+        assertThat(blocks.get(2).path("tool").path("definition").path("description").asText())
+            .isEqualTo("late_tool tool");
     }
 
-    /** 「删了的工具**仍然声明**」（靠 `tool_removal` 撤回）—— 请求级列表只增不减。 */
+    /**
+     * pi oracle 用例 1 的后半 —— 工具表两段式，且<b>被删的工具不再声明</b>。
+     *
+     * <p>⚠️ 这条替换了旧形状下的 {@code removedToolsStayDeclaredInTheRequestLevelList}：
+     * 那句「请求级列表只增不减」在新形状下**不再成立** —— 被删的工具本来就只在顶层出现过
+     * （初始工具），而 {@code tool_removal} 撤回的是「相对初始表新加又删掉」的那些，
+     * 它们的定义从不进顶层表。</p>
+     */
     @Test
-    void removedToolsStayDeclaredInTheRequestLevelList() throws Exception {
+    void laterToolsNeverAppearInTheRequestLevelList() throws Exception {
         var body = capture(nativeModel(), removalTranscript());
 
-        assertThat(toolNames(body)).containsExactly(
-            "base_tool", "__pi_deferred_placeholder__", "late_tool");
-        assertThat(toolNames(body)).as("被删的 base_tool 仍在请求级列表里")
-            .contains("base_tool");
+        assertThat(toolNames(body)).containsExactly("base_tool", "__pi_deferred_placeholder__");
+        assertThat(toolNames(body))
+            .as("late_tool 只在 tool_addition 块里内联，不进顶层表")
+            .doesNotContain("late_tool");
     }
 
     /** pi oracle 用例 1 的后半 —— 只有前两条消息时，工具表恰是「初始 ＋ 占位符」。 */
@@ -133,32 +160,105 @@ class AnthropicToolChangesWireTest {
         assertThat(lastRole(body)).as("还没发生工具变更 ⇒ 末尾仍是 user 消息").isEqualTo("user");
     }
 
-    /** pi oracle 用例 2 —— 同名**重定义**表达不了（块只按名引用）⇒ 关掉原生支。 */
+    /**
+     * pi oracle 用例 2（{@code :143-172}）—— 同名**重定义**按值内联，原生支**照走**。
+     *
+     * <p>⚠️ 整条是从旧形状的 {@code fallsBackWhenTheHistoryHasAToolRedefinition} **翻转**来的：
+     * 旧形状下块只按名引用 ⇒ 表达不了重定义 ⇒ 关掉整支、发完整当前表；新形状下
+     * 「同名新定义取代旧定义」就是一条 {@code tool_addition}，**不发** {@code tool_removal}。</p>
+     *
+     * <p>两个靶心：① 顶层表的声明保留**原始**定义（缓存前缀存活 —— 重定义不改它）；
+     * ② 末条系统消息的 content 只有**一个块**（没有 removal）。</p>
+     *
+     * <p>⚠️ 转录取自 pi oracle 逐字（{@code :149-158}）：{@code toolsRemoved} 与
+     * {@code toolsAdded} **两边都给同一个名字** —— 这才是「重定义」在这条状态线上的形状
+     * （{@code ToolStateChanges} 的纪律是「先删后加」）。少了 {@code toolsRemoved}，
+     * 「同名不发 removal」那条分支就**没有夹具**（探针 M6 零红印证）。</p>
+     */
     @Test
-    void fallsBackWhenTheHistoryHasAToolRedefinition() throws Exception {
+    void redefinesAToolByValueUnderTheSameName() throws Exception {
         var transcript = List.<Message>of(
             new Message.SystemMessage("base prompt", Instant.EPOCH, Map.of(),
                 List.of(BASE_TOOL), List.of()),
             user("before"),
-            new Message.SystemMessage("updated guidance", Instant.ofEpochMilli(2), Map.of(),
-                List.of(tool("base_tool", "changed")), List.of()));
+            new Message.SystemMessage("", Instant.ofEpochMilli(2), Map.of(),
+                List.of(tool("base_tool", "changed")),
+                List.of(new ToolReference("base_tool"))));
 
         var body = capture(nativeModel(), transcript);
 
-        assertThat(betas(body)).doesNotContain(BETA);
-        assertThat(toolNames(body)).containsExactly("base_tool");
-        assertThat(tool(body, 0).path("description").asText()).isEqualTo("changed");
+        assertThat(betas(body)).as("重定义不再是回退判据").contains(BETA);
+        // 顶层声明保留**原始**定义 —— 缓存前缀跨重定义存活。
+        assertThat(toolNames(body)).containsExactly("base_tool", "__pi_deferred_placeholder__");
+        assertThat(tool(body, 0).path("description").asText())
+            .as("顶层表保留**原始**定义，不是新的那份").isEqualTo("base_tool tool");
         assertThat(tool(body, 0).path("defer_loading").isMissingNode()).isTrue();
-        // pi oracle：回退支下中途系统消息**仍落线**，但只有 text 块（没有 tool_removal/addition）
-        // —— 模型支持中途系统消息，只是表达不了这段工具史。
-        assertThat(lastRole(body)).isEqualTo("system");
-        assertThat(blockTypes(lastContent(body))).containsExactly("text");
+        // 新定义就被内联替换；同名 ⇒ 不发 removal。
+        var content = lastContent(body);
+        assertThat(blockTypes(content)).containsExactly("tool_addition");
+        assertThat(content).as("同名重定义 ⇒ 只有一条 tool_addition，没有 tool_removal")
+            .hasSize(1);
+        assertThat(content.get(0).path("tool").path("type").asText()).isEqualTo("tool_definition");
+        var definition = content.get(0).path("tool").path("definition");
+        assertThat(definition.path("name").asText()).isEqualTo("base_tool");
+        assertThat(definition.path("description").asText()).isEqualTo("changed");
+    }
+
+    /**
+     * 顶层表的定义与内联定义**逐字段同源** —— 都出自 pi 的同一个 {@code convertTools}
+     * （{@code :1576-1614}）。
+     *
+     * <p>靶心是「顶层表不再是后续工具的家」这件事**不能**顺带丢掉它的参数形状：
+     * 内联 {@code definition} 必须带 {@code input_schema}（否则模型看不到迟到工具的参数），
+     * 且必须与顶层表里**同一工具**的 {@code input_schema} 相同。</p>
+     *
+     * <p>⚠️ 这里顺带钉住一处 SDK 陷阱（探针实测）：{@code Tool.InputSchema} 的声明字段
+     * {@code type} 与 additionalProperties **重叠**，走
+     * {@code putAllAdditionalProperties} 会让 {@code "type"} 键**写两遍**
+     * （{@code "type":"object","type":"object"}）—— 与 pi 的线格不符。断言因此打在
+     * <b>原始字节</b>上：被 Jackson 解析成树后重复键会被静默折叠，树级断言看不见它。</p>
+     */
+    @Test
+    void theInlineDefinitionCarriesTheSameSchemaAsTheRequestLevelTool() throws Exception {
+        var rich = new LinkedHashMap<String, Object>();
+        rich.put("type", "object");
+        rich.put("properties", Map.of("path", Map.of("type", "string")));
+        rich.put("required", List.of("path"));
+        rich.put("additionalProperties", false);
+
+        var transcript = List.<Message>of(
+            new Message.SystemMessage("base prompt", Instant.EPOCH, Map.of(),
+                List.of(new ToolDefinition("base_tool", "base_tool tool", rich)), List.of()),
+            user("before"),
+            new Message.SystemMessage("", Instant.ofEpochMilli(2), Map.of(),
+                List.of(new ToolDefinition("base_tool", "changed", rich)), List.of()));
+
+        var raw = captureRaw(nativeModel(), transcript);
+        var body = MAPPER.readTree(raw);
+
+        assertThat(betas(body)).contains(BETA);
+        var topLevel = tool(body, 0).path("input_schema");
+        assertThat(topLevel.path("type").asText()).isEqualTo("object");
+        assertThat(topLevel.path("additionalProperties").asBoolean()).isFalse();
+        assertThat(topLevel.path("required").get(0).asText()).isEqualTo("path");
+
+        var content = lastContent(body);
+        var inline = content.get(0).path("tool").path("definition").path("input_schema");
+        assertThat(inline)
+            .as("内联定义必须带**完整** input_schema，且与顶层表同源")
+            .isEqualTo(topLevel);
+
+        // 重复键回归：raw 字节里不许出现两次 type。
+        assertThat(raw)
+            .as("SDK 的 InputSchema 声明字段与 additionalProperties 重叠 ⇒ 不能走 "
+                + "putAllAdditionalProperties（会重复写 type 键）")
+            .doesNotContain("\"type\":\"object\",\"type\":\"object\"");
     }
 
     /**
      * pi oracle 用例 2 的第二个回退上下文 —— **没有初始工具**。
      *
-     * <p>四条件门的第三条（{@code initialTools.length > 0}）就是为它：Anthropic **拒绝**
+     * <p>三条件门的第三条（{@code initialTools.length > 0}）就是为它：Anthropic **拒绝**
      * 一张「全部 deferred」的工具表，所以必须有活跃工具做锚点。</p>
      */
     @Test
@@ -225,6 +325,11 @@ class AnthropicToolChangesWireTest {
     // ── 夹具 ─────────────────────────────────────────────────────────
 
     private static JsonNode capture(ModelInfo model, List<Message> messages) throws Exception {
+        return MAPPER.readTree(captureRaw(model, messages));
+    }
+
+    /** 观测面是**原始出站字节** —— 重复键只在这一层看得见（解析成树会被静默折叠）。 */
+    private static String captureRaw(ModelInfo model, List<Message> messages) throws Exception {
         try (var server = new RecordingHttpServer()) {
             var api = new AnthropicMessagesApi(
                 new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()),
@@ -239,7 +344,7 @@ class AnthropicToolChangesWireTest {
                 // 桩回 400：请求体已录到，流怎么结束与断言无关
             }
             assertThat(server.body()).as("请求必须真的发出去").isNotEmpty();
-            return MAPPER.readTree(server.body());
+            return server.body();
         }
     }
 

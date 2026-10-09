@@ -254,9 +254,11 @@ class AnthropicCacheControlWireTest {
 
     @Test
     void theNativeToolShapePutsTheBreakpointOnTheLastInitialToolOnly() throws Exception {
-        // P7/P10：原生支挂 **initialTools 的末项**；占位符与迟到工具都不挂。
+        // P7/P10：原生支挂 **initialTools 的末项**；占位符不挂。
         // ⚠️ 所以断点可能落在工具表的**中间** —— 用两个初始工具把这一点钉死
         //（只用一个初始工具时它同时是「首个」与「末项」，分不清是哪个判据）。
+        // ⚠️ 包 B165（docs/45）：顶层表**就此定死**，迟到工具不进这里（定义内联在
+        // tool_addition 块里）⇒ 长度 3 而不是旧的 4。
         var native_ = new ModelCompat(false, null, true, false, Boolean.TRUE, null,
             Boolean.TRUE, null, null, true, MaxTokensField.MAX_TOKENS, null, null, null);
         var baseA = tool("base_a");
@@ -271,11 +273,11 @@ class AnthropicCacheControlWireTest {
 
         var body = body(model(native_), messages, List.of(), null);
 
-        assertThat(body.path("tools").size()).isEqualTo(4);
+        assertThat(body.path("tools").size())
+            .as("初始 2 个 ＋ 占位符；late_tool 内联在块里，不摊在顶层").isEqualTo(3);
         assertNoBreakpoint(body.path("tools").get(0), "initialTools[0]");
         assertEphemeral(body.path("tools").get(1), "initialTools 的末项", null);
         assertNoBreakpoint(body.path("tools").get(2), "占位符");
-        assertNoBreakpoint(body.path("tools").get(3), "迟到工具");
     }
 
     // ── 消息表：末条/末块（P8/P10/P13）────────────────────────────

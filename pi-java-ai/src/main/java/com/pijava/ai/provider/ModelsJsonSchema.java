@@ -115,7 +115,10 @@ public final class ModelsJsonSchema {
      *                            {@code false} — pi's read points test {@code === true}
      * @param supportsMidConvoToolChanges whether the Anthropic lane may emit mid-conversation
      *                            {@code tool_addition}/{@code tool_removal} blocks (pi
-     *                            {@code types.ts:832}). Absent ⇒ {@code false}
+     *                            {@code types.ts:832}). ⚠️ 形状在 {@code b271b0a52} 换过：
+     *                            {@code tool_addition} 现为**定义内联**
+     *                            （{@code {type:"tool_definition", definition}}，beta
+     *                            {@code inline-tools-2026-09-15}）。Absent ⇒ {@code false}
      * @param supportsAdditionalTools Responses lanes: message-anchored {@code additional_tools}
      *                            items. Absent ⇒ {@code false}
      * @param supportsToolSearch Responses lanes: the client-executed {@code tool_search} pair used
