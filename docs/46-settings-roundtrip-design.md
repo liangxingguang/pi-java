@@ -1,6 +1,6 @@
 # 46 Settings 嵌套块回写不丢值（`B139`）
 
-> **状态：⬜ 待审核 → 待实施。**
+> **状态：✅ 已闭环（2026-10-10，fix `250f204e`；设计稿 `a240fc39`）。**
 > 承接 `docs/41` 的在册缺口 **`B139`**（请求选项/Provider 协议面；2026-10-10 §3.2 回测维持）。
 >
 > **一句话**：共享 mapper 关了 GETTER 可见性，5 个嵌套 record（`Compaction`/`Terminal`/`Image`/`Markdown`/`Tui`）
@@ -8,7 +8,7 @@
 > `Retry`/`ProviderRetry` 当年已用 `@JsonProperty` 修好，本包照同一药方补齐其余 5 块，
 > 并把组件类型校正到 pi 锚点的真实形状。
 >
-> **本稿只做「持久化往返不丢」这一件事**；接线缺失（见 §6 新登 `B222`）不做。
+> **本稿只做「持久化往返不丢」这一件事**；接线缺失（见 §6 新登 `B223`）不做。
 
 ---
 
@@ -265,14 +265,14 @@ project 部分块只覆盖自己设置的子键，`convertValue` 回 record 时�
 
 ## 6. 范围外 ／ 新登记
 
-**新登 `B222`：`Settings.compaction` 块零消费者 —— 自动压缩默认不跑。**
+**新登 `B223`：`Settings.compaction` 块零消费者 —— 自动压缩默认不跑。**
 
 - `AgentSession.java:375` 构造 `HarnessConfig.builder()` 时**不挂** `.compactionSettings(...)`
   ⇒ `LaneState.compactionSettings`（`LaneState.java:235`）恒 null
   ⇒ `PostRunCompactionCheck.check()` 的 G0（`PostRunCompactionCheck.java:133-137`，`settings == null`）恒 false。
 - pi 默认 `compaction?.enabled ?? true`（settings-manager.ts:914-916），主流即开。
 - `/compact` 手动路径用硬编码 `CompactionSettings.defaults()`（`MiscCommands.java:133`），
-  `modelOverrides` 在 B222 家族落地前是休眠字段。
+  `modelOverrides` 在 B223 家族落地前是休眠字段。
 - 这是**接线/功能**缺口，不属于「持久化往返」，本包只登记不做。
 
 其余范围外：terminal 5 个新子键的**消费行为**（协议探测等）、pi 新增的 `warnings`/`codemode` 等块
@@ -287,10 +287,22 @@ project 部分块只覆盖自己设置的子键，`convertValue` 回 record 时�
 - 收尾：`mvn -pl pi-java-coding-agent test`，再 `mvn checkstyle:check`；ai/agent-core 零改动。
 - 单个 commit（tests＋fix 必须同 commit 才绿，约 300 行）：
   `fix(coding-agent): preserve nested settings blocks on write (B139)`
-- 闭环回填：本稿 banner ＋ `docs/04`（删 B139、登 B222、计数）＋ `docs/41`（B139 状态与 §7）。
+- 闭环回填：本稿 banner ＋ `docs/04`（删 B139、登 B223、计数）＋ `docs/41`（B139 状态与 §7）。
 
 ---
 
 ## 12. 闭环记录
 
-（闭环时回填。）
+2026-10-10 闭环，fix commit `250f204e`（设计稿 `a240fc39`）。
+
+- 先红＝编译失败红（夹具引用新形状）；实施后 `FileSettingsRoundTripTest` **5/5**。
+- 变异探针：M1（删 `Compaction.enabled` 的 `@JsonProperty`）恰 3 红（T1/T2/T3 enabled 断言）；
+  M2（删 `Image` 类级 NON_NULL）恰 1 红（T5）；
+  **M3 实施偏离**：设计稿原定「`mermaid` 退回 `boolean`」，那会拖垮整模块编译，
+  改成删 `Markdown.mermaid` 的 `@JsonProperty`（运行时红 3 条：T1/T3/T4），
+  证明 mermaid 类型面的断言有牙。
+- 全模块：coding-agent **512** 全绿；tui 模块（ScrollConfig 消费者）全绿；
+  checkstyle 14 模块 0 违规。
+- 编号更正：新登记原拟 `B222`，取证时发现该号已被 docs/44 家族占用
+  （responses 车道 system/developer 角色），实际新登 **`B223`**。
+- B139 自 docs/04 移除；在册计数不变（销 1 登 1，108）。

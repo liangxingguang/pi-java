@@ -83,7 +83,7 @@
 | B132 | together/baseten/fireworks 目录常量只落代码路径 | pi 写了 thinkingFormat/chatTemplateArgs 常量 |
 | B135 | 错误 `metadata.raw` 追加未落 | OpenRouter provider 错误补充信息，pi 未含时追加 |
 | B137 | resolver 的 glob/scope 面 | pi 支持 minimatch 通配与 scope 诊断；**Java 无前后缀**，序＝精确（provider/id｜裸 id）→切 `:level`→provider 首条→modelName 精确→任意 id 兜底；`--models` 生产零消费者 |
-| B139 | 嵌套 record 经 Json mapper 序列化成空对象 | mapper 关 GETTER；Retry/ProviderRetry 已修，其余嵌套 record 待取证 |
+| B223 | **`compaction` 块零消费者，自动压缩默认不跑**（2026-10-10 B139 包新登，`docs/46`） | `AgentSession.java:375` 建 HarnessConfig 不挂 `.compactionSettings(...)` ⇒ `LaneState.compactionSettings` 恒 null ⇒ `PostRunCompactionCheck` G0（`PostRunCompactionCheck.java:133`）恒 false；pi 默认 `compaction?.enabled ?? true`（settings-manager.ts:914）。手动 `/compact` 走硬编码 defaults（`MiscCommands.java:133`）；`compaction.modelOverrides` 在本缺口家族落地前是休眠字段 |
 | B141 | bodyless 400/413 文案差异 | Java 现产 `"HTTP 400"`（`PiHttpClient.java:152`，非旧记 `400: Unknown`），pi 产 `` `400 status code (no body)` ``；Java 文案不匹配 `ContextOverflow.java:72` 的正则 ⇒ bodyless 400/413 丢溢出归类。同族 `B135`（error-body.ts 未搬） |
 | B147 | Responses 回放 item 分组块序不同 | pi 同循环按块序交错 push；Java 按类型分组 |
 | B148 | responseModel/diagnostics 真消费者未接 | pi 用于 usage 分组、cache 归属等 |

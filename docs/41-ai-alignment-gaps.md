@@ -9,6 +9,8 @@
 > **§3.2 全部 41 条已逐条回测完毕**（2026-10-10，见 §5.2）：4 条销号
 > （`B70`/`B87`/`B96`/`B134`）、4 条半闭（`B107`/`B113`/`B132`/`B98`）、33 条维持；
 > §6 ④ 就此闭环。
+> 维持的 33 条中 **`B139` 已随 `docs/46` 闭环**（2026-10-10，`250f204e`），
+> 同包新登 **`B223`**（`compaction` 块零消费者，自动压缩默认不跑）。
 >
 > **数据源**：`docs/map/02-ai.md`（基准 pi-java `351d199` / pi `200387122`，2026-10-04）
 > ＋ `docs/04-open-items-register.md` §3.2。
@@ -124,6 +126,7 @@
 
 粒度比地图细，是**请求选项 / Provider 协议面**的登记。地图管「能力单元」，台账管「同一个单元里的字段级差异」。
 ⚠️ 本稿初版写「43 条」是旧计数（2026-10-10 §5.2 按行实测：41 条在册；销号 4 条后剩 **37 条**）。
+2026-10-10 晚些：`B139` 随 `docs/46` 销号（→36），同包新登 `B223`（→**仍 37 条**）。
 
 挑几条代表：
 
@@ -136,7 +139,7 @@
 | `B158` | 输出截断字节预算差一倍 | Java `TruncationUtils.DEFAULT_MAX_BYTES = 100_000`（`TruncationUtils.java:17`），pi 主流 50KB ⇒ **模型可见文案不同** |
 | `B159` | `shouldStopAfterTurn` 更名 finishTurn 且语义变 | pi 从布尔改 `{action: continue/end}`，能强制多跑一轮 |
 | `B107` | 两条请求选项通道恒空 | `ApiOptions.java:43`／`StreamRequest.java:144` 都传 `Map.of()` |
-| `B139` | 嵌套 record 经 Json mapper 序列化成空对象 | mapper 关 GETTER；`Retry`/`ProviderRetry` 已修，其余嵌套 record 待取证 |
+| ~~`B139`~~ | ~~嵌套 record 经 Json mapper 序列化成空对象~~ | ✅ **已销号 2026-10-10**（`docs/46`，`250f204e`）：5 块逐组件 `@JsonProperty` ＋ 装箱 ＋ NON_NULL；顺带校正 Markdown 类型、补 `modelOverrides`/terminal 5 子键；新登 `B223` |
 
 ---
 
@@ -198,6 +201,7 @@ pi 侧一律 `git show 200387122:<path>`；pi-java 侧读当前工作树（HEAD 
 | `B98` | **0/8** | 8 字段四层全零；⚠️ 数字更正：pi 三 compat 接口实测 **46** 字段（非台账「40」）、Java `ModelCompat` **31** 组件（非「32」）。另：8 键均未被 models.json schema 兜住 ⇒ 手写真键**静默丢弃** |
 
 **③ 维持（33 条）** —— 一句话裁决：
+（其中 `B139` 当日晚些随 `docs/46` 闭环，下表行已划销；批次后实际维持 32 条。）
 
 | # | 裁决 |
 |---|---|
@@ -227,7 +231,7 @@ pi 侧一律 `git show 200387122:<path>`；pi-java 侧读当前工作树（HEAD 
 | `B131` | ❌ ⚠️ 行文更正：pi 的 ant-ling 臂与穿透点都要求**有级别**；真窄角＝手搓 models.json 写 ant-ling＋`supportsReasoningEffort:true`＋无级别。正确收口是一条穿透断言夹具 |
 | `B135` | ❌ `metadata.raw` 零命中；与 `B141` 同根（`error-body.ts` 整块未搬），应合包 |
 | `B137` | ❌ ⚠️ 行文更正：Java **无前后缀**匹配，实际序＝精确（provider/id｜裸 id）→切 `:level`→provider 首条→modelName 精确→任意 id 兜底；`--models` 生产零消费者 |
-| `B139` | ❌ 5 个嵌套 record（Compaction/Terminal/Image/Markdown/Tui）无 `@JsonProperty`，**实测**回写得 `{}`；`SettingsManager.flush()` 会静默吞用户 settings 块（夹具须走真 `FileSettingsStorage`） |
+| ~~`B139`~~ | ✅ **当日已销号**（`docs/46`，`250f204e`）：回测判定（5 个嵌套 record 无 `@JsonProperty`、实测回写 `{}`、flush 吞块）成立并随即修复 |
 | `B141` | ❌ ⚠️ 行文更正：Java 现文案是 `"HTTP 400"`（非旧记 `400: Unknown`），pi 是 `` `400 status code (no body)` ``；且 Java 文案不匹配 `ContextOverflow.java:72` 的正则 ⇒ bodyless 400/413 **丢溢出归类** |
 | `B147` | ❌ Java 仍按 reasoning→文本→工具分组（`ResponsesMessageConverter.java:426-428` 已注释为刻意偏差，原 docs/71 §12 裁决保留在册） |
 | `B148` | ❌ AssistantMessage 11 组件无 responseModel/responseId/diagnostics；pi 消费于 usage 分组（`usage-totals.ts:68`）、cache-warmer、fallback 成本 |
@@ -273,6 +277,9 @@ pi 侧一律 `git show 200387122:<path>`；pi-java 侧读当前工作树（HEAD 
 | `B110` | ⚠️ **改写**：pi 侧有该字段（原「两侧均无」误记）。 |
 | `B130` `B131` `B137` `B141` | ⚠️ **行文更正**（null 缺席/触发条件/无前后缀/现文案 HTTP n），条目保留。 |
 | `E5` | **新增结构债**：`ModelCompat.java` 737 行。 |
+| **2026-10-10 批次**（`docs/46`） | |
+| `B139` | ✅ **已销号**（`250f204e`）：5 块逐组件 `@JsonProperty`＋装箱＋NON_NULL；顺带校正 Markdown 为 String/String、补 `modelOverrides` 与 terminal 5 子键；理由见 `docs/46`。 |
+| `B223` | **新登记**：`compaction` 块零消费者（HarnessConfig 不挂 compactionSettings ⇒ G0 恒 false ⇒ 自动压缩默认不跑；pi 默认开）。 |
 
 ---
 
