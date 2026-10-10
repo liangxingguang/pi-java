@@ -165,6 +165,32 @@ public final class ProviderErrors {
         return null;
     }
 
+    /**
+     * pi {@code formatMistralError}（mistral-conversations.ts:271-281）。
+     *
+     * <p>Mistral 是裸 fetch 车道（异常是 {@link com.pijava.ai.http.PiHttpException}
+     * 而非 SDK 异常），格式自成一家：有 body ⇒
+     * {@code "Mistral API error (N): <body 原文截断>"}；只有状态码 ⇒
+     * {@code "… : Request failed with status N"}（pi {@code MistralHttpError}
+     * 的兜底 message，<b>不</b>回显 Java 异常里的 {@code "HTTP N"}）；
+     * 非 HTTP 错误（statusCode 0 的网络错误/内部 throw）⇒ message 透传。</p>
+     */
+    public static String formatMistralError(Throwable error) {
+        if (error instanceof com.pijava.ai.http.PiHttpException http) {
+            int statusCode = http.statusCode();
+            String rawBody = http.body();
+            if (statusCode > 0 && rawBody != null && !rawBody.isBlank()) {
+                return "Mistral API error (" + statusCode + "): "
+                    + truncate(rawBody.trim(), MAX_PROVIDER_ERROR_BODY_CHARS);
+            }
+            if (statusCode > 0) {
+                return "Mistral API error (" + statusCode
+                    + "): Request failed with status " + statusCode;
+            }
+        }
+        return error.getMessage();
+    }
+
     // ── 内部 ──────────────────────────────────────────────────────────────
 
     /** body trim、空体缺席、截断（次序照 pi：trim/空判在截长之前）。 */
