@@ -80,15 +80,14 @@
 | B130 | zai `supportsReasoningEffort` 数据驱动 | pi 从 models.dev reasoning_options 算；**Java 缺席 null（探测兜底 false），非「内置常量」**；pi 的 glm-5.2/5.3 带 true 而 Java 只载 glm-4.x ⇒ 模型集不重叠、今零差，pi 漂移才现形 |
 | B131 | ant-ling else-if 穿透角，窄角，需钉（2026-10-10 更正常见触发条件） | pi 的 ant-ling 臂与穿透点都要求**有级别**；真窄角＝手搓 models.json 写 ant-ling＋`supportsReasoningEffort:true`＋无级别（pi 生成数据不可达）。收口形状＝一条断言穿透的夹具，不改 switch |
 | B132 | together/baseten/fireworks 目录常量只落代码路径 | pi 写了 thinkingFormat/chatTemplateArgs 常量 |
-| B135 | 错误 `metadata.raw` 追加未落 | OpenRouter provider 错误补充信息，pi 未含时追加 |
 | B137 | resolver 的 glob/scope 面 | pi 支持 minimatch 通配与 scope 诊断；**Java 无前后缀**，序＝精确（provider/id｜裸 id）→切 `:level`→provider 首条→modelName 精确→任意 id 兜底；`--models` 生产零消费者 |
-| B141 | bodyless 400/413 文案差异 | Java 现产 `"HTTP 400"`（`PiHttpClient.java:152`，非旧记 `400: Unknown`），pi 产 `` `400 status code (no body)` ``；Java 文案不匹配 `ContextOverflow.java:72` 的正则 ⇒ bodyless 400/413 丢溢出归类。同族 `B135`（error-body.ts 未搬） |
 | B147 | Responses 回放 item 分组块序不同 | pi 同循环按块序交错 push；Java 按类型分组 |
 | B148 | responseModel/diagnostics 真消费者未接 | pi 用于 usage 分组、cache 归属等 |
 | B156 | ModelCompat 逐组件重建会静默丢字段 | 新组件追加时的副作用面 |
 | B158 | 输出截断字节预算差一倍 | Java 100KB，pi 主流 50KB（模型可见文案不同） |
 | B159 | `shouldStopAfterTurn` 更名 finishTurn 且语义变 | pi 从布尔改 `{action: continue/end}`，能强制多跑一轮 |
 | ~~B165~~ | ~~Anthropic 中段工具改为「定义内联」~~ | ✅ **已销号 2026-10-10**（`docs/45`）：beta 换 `inline-tools-2026-09-15`、顶层表就此定死、`tool_addition` 改按值内联、同名重定义不再回退。⚠️ 旧记「`hasToolRedefinitions` 被 pi 删除」实为**弃用**（`docs/45 §1.2`） |
+| B224 | pi-messages 车道错误格式未对齐 | pi `pi-messages.ts:117-135` 自有 `PiMessagesResponseError`：`` `${status} ${statusText}: ${message ?? body}` `` 后接可选 ` (code)`，8192 截断 ＋ `pi_messages_response_failure` 诊断事件；Java `PiMessagesApi`/`PiHttpClient:152` 只产 `"HTTP N"`（B141 包让异常带上了 body，但**措辞刻意没动**）。方言点：JDK `java.net.http` 不暴露 reason phrase。设计与裁决见 `docs/48 §3.7` |
 
 **compat 面细碎登记**（pi 有标注/消费、Java 无的字段与数据位）：
 

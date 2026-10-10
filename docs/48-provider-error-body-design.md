@@ -1,6 +1,7 @@
 # 48 · Provider 错误体透传对齐设计（B135 + B141）
 
-> 🚧 **待用户审核**（2026-10-11）。审核通过后才许写生产代码。
+> ✅ **已闭环**（2026-10-11，`fd51f478`→`3d2522e8`，6 commits）。B135/B141 销号，
+> 新登记 B224（pi-messages 错误格式）。闭环记录见 §9。
 > 锚点：pi `200387122`（取证一律 `git show 200387122:<path>`）。
 
 ## 1. 范围速览
@@ -443,6 +444,68 @@ SSE 200 路（finish reason），不经过 HTTP 错误分支，不动。
 4. checkstyle 0；无 `System.out.println`；ai 计数按模块汇总行更新。
 5. B135/B141 销号、B224 登记；docs/41 §7、map/02 回填；§9 闭环记录补全。
 
-## 9. 闭环记录
+## 9. 闭环记录（2026-10-11）
 
-（闭环时回填：commit、红/探针记录、偏差、计数。）
+### 9.1 提交序列
+
+| commit | 内容 |
+|---|---|
+| `6d279f4f` | docs(48) 设计稿 |
+| `fd51f478` | `ProviderErrors` util + 9 单测（先编译红后绿） |
+| `bab2ecf7` | completions 车道（format + metadata.raw） |
+| `e74b1115` | responses processor supplier/formatter 改形 + openai/azure 车道 |
+| `8c3b3765` | `PiHttpException` 带 body（措辞不动）+ Mistral formatter + images |
+| `dfb46cc2` | 16 条车道真 HTTP 夹具（L1–L15 + rate-limit 一条） |
+| `3d2522e8` | fix：文案未变时发原异常，保留异常类型身份 |
+
+### 9.2 先红记录
+
+- 单测：类不存在编译红（9 用例），实现后 9/9 绿。
+- 车道：接线前 16 条 **13 红 3 绿**；3 绿是刻意的锚点——L4（门控对非 cerebras 不开）、
+  L10（内部 throw 今天就不带前缀）、rate-limit（429 文本今天已在白名单）。
+- 实施中一处现网回归：Mistral/OpenAI 两条 retry-cap 夹具要求 `StreamError.error()`
+  **就是** `RetryDelayTooLongException`（按类型识别），无脑包 `IllegalStateException`
+  会把它换成包装类型 ⇒ 加「格式化文案等于原 message 时发原异常」的身份保持
+  （`3d2522e8`），与 pi 归一化对非 HTTP 错误恒等同构。
+- SDK 实测补证（设计 §5.1 留的两个实测点全部按预期）：
+  - openai-java 传输层 `ErrorHandler.errorBodyHandler` 对无 `error` 外层的体
+    **整节点回退**（等价 openai-node `makeStatusError` 的包回 `{error: body}`），
+    `body()` 正是归一化后的嵌套节点；
+  - 嵌套 error 为**字符串**时 SDK 保留标量 JsonValue（L1 实际今日文案
+    `403: "blocked…"`，重放后为 pi 的 `403 "blocked…"`）；
+  - `ErrorObject.additionalProperties` 确实保留 `metadata`（L5 真 HTTP 线上验证）。
+
+### 9.3 变异探针（grep 均复核落地；CRLF 教训：不用 `$` 跨行锚）
+
+| 探针 | 设计预期 | 实际红集 | 裁决 |
+|---|---|---|---|
+| M1 `fromOpenAi` 退回 `getMessage()` | L1,L2,L3,L5,L7,L8,L11,L12 | L1,L2,L3,**L6**,L7,L8,L11,L12 ＋单测 8（9 红） | L5 在 M1 下仍恰 1 次（append 独立于重放，真牙口在 L6 的 body JSON 曝光）；单测 8 同红。夹具牙口成立 |
+| M2 no-body 文案 → `: Unknown` | 单测 8a、L2、L3 | ＋ **L12**（4 红） | L12 含 images 空体子断言，多红合理 |
+| M3 metadata 无条件追加 | L5 | L5（1 红） | 一致 |
+| M4 前缀忽略 status 缺 | 单测 7、L10 | 单测 7 **+9**、L10 ＋ **9 条既有 responses 内部错误夹具**（12 红） | 既有 responses 失败族全靠这道门，牙口比预期更充分 |
+| M5 Mistral 不读 body | L13、L15 | L13、L15（2 红） | 一致 |
+
+全部恢复后 53 条相关用例复绿。
+
+### 9.4 偏差与方言点
+
+1. **异常身份**（见 9.2）：completions/processor/Mistral 三处统一为「文案变了才包装」，
+   设计稿只写了包装，实施时补上 pi 恒等语义对应的类型保持。
+2. **非 JSON 纯文本错误体**不可恢复：openai-node 透传原文，openai-java 解析失败只留
+   `JsonMissing` 且无原始体文本 API ⇒ 落 no-body 文案；已写进 `ProviderErrors`
+   类 javadoc，不登记（主流可达网关错误体均为 JSON）。
+3. wrapperless `{}`/JSON 标量等病理形状经 `ErrorHandler` 源码核对与 pi 归一化后同形
+   （空对象 ⇒ `N {}`；null/空体 ⇒ no-body），无夹具但源码等价性已证。
+4. pi-messages 同族错误格式按计划登记 **B224**，本包未动。
+5. 单测 8 的 `ErrorObject.builder()` 四字段（code/message/param/type）全部必填
+   （线格反序列化不经 builder，仅测试构造受影响）。
+
+### 9.5 验证与计数
+
+- ai 模块全量 **1425** 测试全绿（新增 25：9 单测 + 16 车道）；checkstyle 0；
+  改动文件无 `System.out.println`。
+- 反应堆：`-pl pi-java-evals -am`（telemetry/ai/mcp/agent-core/sqlite/coding-agent/evals）
+  **BUILD SUCCESS**（01:17）；`-pl pi-java-tui -am` **BUILD SUCCESS**（TUI 212 测试
+  1 skip，04:44）。protocol/client/server 不依赖 ai，不在影响面。
+- 台账：B135/B141 销号、B224 新登记（B 类计数 103→102）；map/02-ai 新增单元 102
+  并在单元 70 标注 Cerebras 门生产者已接通；docs/41 §7 已登记。

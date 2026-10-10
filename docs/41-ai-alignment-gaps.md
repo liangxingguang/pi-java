@@ -287,6 +287,9 @@ pi 侧一律 `git show 200387122:<path>`；pi-java 侧读当前工作树（HEAD 
 | **2026-10-11 批次**（`docs/47`） | |
 | `B223` | ✅ **已销号**（`4162460e`/`88895b2b`）：引擎值槽改按模型解析的 resolver 晚读口；宿主接 ?? true 默认开＋三级预算回退（`provider/id` 精确键）＋落盘 setter；手动 compact/RPC 改走当前模型现解析；理由与探针红集见 `docs/47 §12`。 |
 | `A9` | ✅ **已销号**：per-model 压缩设置——resolver 即 `Function<ModelId<?>,CompactionSettings>`，map/03 第 26 行同步对齐。 |
+| **2026-10-11 批次**（`docs/48`） | |
+| `B135` `B141` | ✅ **已销号**（`fd51f478`→`3d2522e8`，6 commits）：新建 `utils/ProviderErrors` 移植 `error-body.ts`；关键手法是用 openai-java 的 `statusCode()`+`body()` **重放 openai-node 7.19 `makeMessage`**（不信 JVM SDK 的 `400: Unknown` 文案）⇒ bodyless 逐字 `N status code (no body)`，救回 Cerebras 溢出归类；completions 接 OpenRouter `metadata.raw` 追加；responses/azure 经 processor supplier 改形让获取期错误落车道 catch（前缀＋ChatGPT 链接）；`PiHttpException` 带 body（措辞不动）＋ Mistral 自有格式。探针 M1–M5 红集与偏差见 `docs/48 §9`。 |
+| `B224` | **新登记**：pi-messages 车道错误格式（`${status} ${statusText}: …`＋8192 截断＋`pi_messages_response_failure` 诊断）；JDK `java.net.http` 无 reason-phrase API 是已知方言点。 |
 
 ---
 
