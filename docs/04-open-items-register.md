@@ -60,14 +60,12 @@
 
 | # | 条目 | 现状与出处 |
 |---|---|---|
-| B70 | `Agent.reset()` 是否保留基线 system 消息 | pi `agent.ts` 与 RunLifecycle.reset 行为存疑，未取证 |
 | B80 | Mistral 数组形态 `delta.content` 无解析路径 | pi 对数组 content 有三条分支；Java 不读 |
 | B81 | pi OAuth 分支两面未移植 | 系统提示前缀 ＋ 工具名映射（anthropic-messages isOAuthToken 分支） |
-| B87 | system 消息落线只写、不能回读 | 解码 `role:"system"` 报错；另有三处只写遗留 |
 | B103 | 会话亲和头**只落了 responses 一条车道** | pi 三条车道都发（`anthropic-messages.ts:1040`／`openai-completions.ts:777`／`openai-responses.ts`），Java 只有 `OpenAIResponsesApi.java:82` 接 `SessionAffinityHeaders`；组件与探测器已全在（`ModelCompat`／`CompatResolver`／`ModelsJsonCompat`）⇒ **缺的是两条车道的接线**（B140 同族：SDK streaming transport 不透传任意头） |
-| B107 | 两条请求选项通道恒空 | apiOptions 与 streamBlocking 的 extra 都传 Map.of() |
-| B110 | `providerThinkingLevel` 两侧均无 | pi 消息字段与 proxy 线字段 |
-| B113 | plumbing 异常包成 PiHttpException | pi 的等价物是流里一条错误消息（complete 不抛） |
+| B107 | 两条请求选项通道**只剩 1 条恒空**（2026-10-10 回测） | `ApiOptions.extra` 已有生产者（cacheRetention/sessionId/headers/protocol/maxRetryDelayMs）；`StreamRequest.extra` 仍恒 `Map.of()`（`DefaultProviders.java:283`） |
+| B110 | `providerThinkingLevel` **pi 有、Java 无**（2026-10-10 更正原「两侧均无」） | pi：`proxy.ts:51/58/386-396` 线字段 ＋ `anthropic-messages.ts:581/588` 消息字段；Java 侧 `JsonEventMapper.java:346` 不写 |
+| B113 | 车道错误已全部落流；**残留 `send()` 的死 catch**（2026-10-10 回测） | `AbstractChatApi` 已把 `onError` 映射 `StreamError.settle`；但 `send()` 仍 `catch → PiHttpException`，而 `QueueStreamIterator.hasNext()/next()` 永不抛（中断合成落定事件）⇒ 该 catch 结构不可达，待删 |
 | B115 | 宿主线是否整体不发终局帧 | pi RPC 形状：message_update 只发非终局增量 |
 | B116 | StreamDone 的 UsageInfo 嵌套包裹是 Java 方言 | pi 的 usage 只在消息上，proxy 线另发扁平 usage |
 | B117 | 「谁定终局 reason」两套写法互相遮蔽 | SessionRunner 逐事件写 stopReason 与终局收口两个权威 |
@@ -80,14 +78,13 @@
 | B127 | Responses reasoning 走平行通道 | ResponsesOptions 读 extra 的 reasoningEffort，与主路 reasoning 并存 |
 | B128 | thinkingBudgets 无选项通道 | pi SimpleStreamOptions.thinkingBudgets |
 | B129 | xiaomi `requiresReasoningContentOnAssistantMessages` 未标注 | 探测给不出该位 |
-| B130 | zai `supportsReasoningEffort` 数据驱动 | pi 从 models.dev reasoning_options 算；Java 内置常量 |
-| B131 | ant-ling else-if 穿透角 | map.off 为字符串等组合下链条行为，窄角，需钉 |
+| B130 | zai `supportsReasoningEffort` 数据驱动 | pi 从 models.dev reasoning_options 算；**Java 缺席 null（探测兜底 false），非「内置常量」**；pi 的 glm-5.2/5.3 带 true 而 Java 只载 glm-4.x ⇒ 模型集不重叠、今零差，pi 漂移才现形 |
+| B131 | ant-ling else-if 穿透角，窄角，需钉（2026-10-10 更正常见触发条件） | pi 的 ant-ling 臂与穿透点都要求**有级别**；真窄角＝手搓 models.json 写 ant-ling＋`supportsReasoningEffort:true`＋无级别（pi 生成数据不可达）。收口形状＝一条断言穿透的夹具，不改 switch |
 | B132 | together/baseten/fireworks 目录常量只落代码路径 | pi 写了 thinkingFormat/chatTemplateArgs 常量 |
-| B134 | completions 的 sessionId 消费面 | prompt_cache_key ＋ 会话亲和头 |
 | B135 | 错误 `metadata.raw` 追加未落 | OpenRouter provider 错误补充信息，pi 未含时追加 |
-| B137 | resolver 的 glob/scope 面 | pi 支持 minimatch 通配与 scope 诊断；Java 仅精确/前后缀 |
+| B137 | resolver 的 glob/scope 面 | pi 支持 minimatch 通配与 scope 诊断；**Java 无前后缀**，序＝精确（provider/id｜裸 id）→切 `:level`→provider 首条→modelName 精确→任意 id 兜底；`--models` 生产零消费者 |
 | B139 | 嵌套 record 经 Json mapper 序列化成空对象 | mapper 关 GETTER；Retry/ProviderRetry 已修，其余嵌套 record 待取证 |
-| B141 | bodyless 400/413 文案差异 | Java SDK 产 `400: Unknown`，TS SDK 产 `400 status code (no body)` |
+| B141 | bodyless 400/413 文案差异 | Java 现产 `"HTTP 400"`（`PiHttpClient.java:152`，非旧记 `400: Unknown`），pi 产 `` `400 status code (no body)` ``；Java 文案不匹配 `ContextOverflow.java:72` 的正则 ⇒ bodyless 400/413 丢溢出归类。同族 `B135`（error-body.ts 未搬） |
 | B147 | Responses 回放 item 分组块序不同 | pi 同循环按块序交错 push；Java 按类型分组 |
 | B148 | responseModel/diagnostics 真消费者未接 | pi 用于 usage 分组、cache 归属等 |
 | B156 | ModelCompat 逐组件重建会静默丢字段 | 新组件追加时的副作用面 |
@@ -102,9 +99,8 @@
 | B85 | read.ts：图片自动缩放 ＋ 非视觉模型注记 |
 | B94 | 8 个内置工具的 `promptSnippet`/`promptGuidelines` 声明 |
 | B95 | `docs` 段无生产者（ContextAssembler 不传 DocumentationPaths） |
-| B96 | PayloadRecording 投影缺 sections/toolsAdded/toolsRemoved |
 | B97 | 3 个内置 (provider,modelId) 与 pi 目录不匹配 |
-| B98 | compat 面**缺 8 个字段**（pi 有标注且**有消费点**，Java 无字段） | 逐字段对读 pi 三个 compat 接口（40 字段）vs `ModelCompat`（32 组件）—— 缺：`requiresToolResultName`（`openai-completions.ts:1429`）· `requiresAssistantAfterToolResult`（`:1241,1295,1451`）· `requiresThinkingAsText`（`:1323`）· `supportsUsageInStreaming`（`:834`）· `zaiToolStream`（`:857`）· `vllmPriority`（`:873`）· `vercelGatewayRouting`（`:993`）· `allowedFallbackModels`（`anthropic-messages.ts:212,674,1281`）。⚠️ **旧行文字「约 40 个零消费者 compat 字段」是误记** —— 那 40 是 **pi 的字段总数**，不是缺口数；真缺口是上面 8 个 |
+| B98 | compat 面**缺 8 个字段**（pi 有标注且**有消费点**，Java 无字段，0/8 落） | 逐字段对读 pi 三个 compat 接口（实测 **46** 字段）vs `ModelCompat`（实测 **31** 组件）—— 缺：`requiresToolResultName`（`openai-completions.ts:1429`）· `requiresAssistantAfterToolResult`（`:1241,1295,1451`）· `requiresThinkingAsText`（`:1323`）· `supportsUsageInStreaming`（`:834`，后果是**恒发** include_usage，行为已错）· `zaiToolStream`（`:857`）· `vllmPriority`（`:873`）· `vercelGatewayRouting`（`:993`）· `allowedFallbackModels`（`anthropic-messages.ts:212,674,1281`）。⚠️ 8 键均未被 models.json schema 兜住 ⇒ 手写真键静默丢弃。数字 40/32 为旧计数（2026-10-10 更正） |
 | B99 | supportsMidConvoEffort 半可移植 |
 | B100 | compat 探测的 baseUrl 来源不同（pi 读模型对象，不接受请求期覆盖） |
 
@@ -192,10 +188,11 @@
 
 | # | 文件 | 行数 |
 |---|---|---:|
-| E1 | coding-agent …/core/AgentSession.java | 1,081 |
-| E2 | coding-agent …/rpc/RpcDispatcher.java | 605 |
+| E1 | coding-agent …/core/AgentSession.java | 1,169 |
+| E2 | coding-agent …/rpc/RpcDispatcher.java | 647 |
 | E3 | agent-core …/harness/PiLaneSink.java | 562 |
-| E4 | agent-core …/harness/AgentHarness.java | 554 |
+| E4 | agent-core …/harness/AgentHarness.java | 577 |
+| E5 | ai …/catalog/ModelCompat.java | 737（2026-10-10 §3.2 回测新登） |
 
 均不与功能耦合，可随时拆，与功能包搭车推进。
 
