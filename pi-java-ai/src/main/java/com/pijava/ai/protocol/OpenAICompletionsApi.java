@@ -372,8 +372,10 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                     && !message.contains(rawMetadata)) {
                 message += "\n" + rawMetadata;
             }
+            // 归一化对非 HTTP 错误是恒等改写（内部 throw / RetryDelayTooLongException
+            // 等）⇒ 文案没变就发原异常，保留其类型身份供上游识别。
             publisher.submit(builder.emitError("error",
-                new IllegalStateException(message, e)));
+                message.equals(e.getMessage()) ? e : new IllegalStateException(message, e)));
         }
     }
 

@@ -201,9 +201,11 @@ final class ResponsesStreamProcessor {
             // pi 的 catch（openai-responses.ts:194-205）只 push 一条 error ⇒ 一条流
             // 只有一个终局事件；上面的 throw 全落在这里，emitDone 不会被发出去。
             // 文案由车道注入（前缀策略各不同）；内部错误无 status 时 formatter 内部
-            // 不套前缀（ProviderErrors 四分支表第二行）。
+            // 不套前缀（ProviderErrors 四分支表第二行）。文案没变就发原异常，
+            // 保留类型身份（如 RetryDelayTooLongException）。
+            String message = errorFormatter.apply(e);
             publisher.submit(builder.emitError("error",
-                new IllegalStateException(errorFormatter.apply(e), e)));
+                message.equals(e.getMessage()) ? e : new IllegalStateException(message, e)));
         }
     }
 
