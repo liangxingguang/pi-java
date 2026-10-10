@@ -10,7 +10,9 @@
 > （`B70`/`B87`/`B96`/`B134`）、4 条半闭（`B107`/`B113`/`B132`/`B98`）、33 条维持；
 > §6 ④ 就此闭环。
 > 维持的 33 条中 **`B139` 已随 `docs/46` 闭环**（2026-10-10，`250f204e`），
-> 同包新登 **`B223`**（`compaction` 块零消费者，自动压缩默认不跑）。
+> 同包新登 **`B223`**（`compaction` 块零消费者，自动压缩默认不跑）；
+> **`B223` 已随 `docs/47` 闭环**（2026-10-11，`4162460e`/`88895b2b`），
+> 同包顺带销 **`A9`**（per-model 压缩设置——resolver 槽改为按模型解析）。
 >
 > **数据源**：`docs/map/02-ai.md`（基准 pi-java `351d199` / pi `200387122`，2026-10-04）
 > ＋ `docs/04-open-items-register.md` §3.2。
@@ -127,6 +129,7 @@
 粒度比地图细，是**请求选项 / Provider 协议面**的登记。地图管「能力单元」，台账管「同一个单元里的字段级差异」。
 ⚠️ 本稿初版写「43 条」是旧计数（2026-10-10 §5.2 按行实测：41 条在册；销号 4 条后剩 **37 条**）。
 2026-10-10 晚些：`B139` 随 `docs/46` 销号（→36），同包新登 `B223`（→**仍 37 条**）。
+2026-10-11：`B223` 随 `docs/47` 销号（§3.2 →**36 条**；A9 不属 §3.2，另销）。
 
 挑几条代表：
 
@@ -140,6 +143,7 @@
 | `B159` | `shouldStopAfterTurn` 更名 finishTurn 且语义变 | pi 从布尔改 `{action: continue/end}`，能强制多跑一轮 |
 | `B107` | 两条请求选项通道恒空 | `ApiOptions.java:43`／`StreamRequest.java:144` 都传 `Map.of()` |
 | ~~`B139`~~ | ~~嵌套 record 经 Json mapper 序列化成空对象~~ | ✅ **已销号 2026-10-10**（`docs/46`，`250f204e`）：5 块逐组件 `@JsonProperty` ＋ 装箱 ＋ NON_NULL；顺带校正 Markdown 类型、补 `modelOverrides`/terminal 5 子键；新登 `B223` |
+| ~~`B223`~~ | ~~`compaction` 块零消费者，自动压缩默认不跑~~ | ✅ **已销号 2026-10-11**（`docs/47`，`4162460e`/`88895b2b`）：HarnessConfig 值槽改 `Function<ModelId<?>,CompactionSettings>` 晚读口（按 lane 当前模型现解析，顺带销 A9）；宿主接三件套（?? true／三级回退／落盘 setter）；手动 compact 走 pi 形 `compact(custom)`；RPC 开关落盘、get_state 读 settings |
 
 ---
 
@@ -280,6 +284,9 @@ pi 侧一律 `git show 200387122:<path>`；pi-java 侧读当前工作树（HEAD 
 | **2026-10-10 批次**（`docs/46`） | |
 | `B139` | ✅ **已销号**（`250f204e`）：5 块逐组件 `@JsonProperty`＋装箱＋NON_NULL；顺带校正 Markdown 为 String/String、补 `modelOverrides` 与 terminal 5 子键；理由见 `docs/46`。 |
 | `B223` | **新登记**：`compaction` 块零消费者（HarnessConfig 不挂 compactionSettings ⇒ G0 恒 false ⇒ 自动压缩默认不跑；pi 默认开）。 |
+| **2026-10-11 批次**（`docs/47`） | |
+| `B223` | ✅ **已销号**（`4162460e`/`88895b2b`）：引擎值槽改按模型解析的 resolver 晚读口；宿主接 ?? true 默认开＋三级预算回退（`provider/id` 精确键）＋落盘 setter；手动 compact/RPC 改走当前模型现解析；理由与探针红集见 `docs/47 §12`。 |
+| `A9` | ✅ **已销号**：per-model 压缩设置——resolver 即 `Function<ModelId<?>,CompactionSettings>`，map/03 第 26 行同步对齐。 |
 
 ---
 

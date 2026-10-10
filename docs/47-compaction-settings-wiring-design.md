@@ -1,6 +1,6 @@
 # 47 compaction 设置接线 —— 自动压缩默认开、预算按当前模型现解析（`B223`）
 
-> **状态：📝 待用户审核（2026-10-10 起稿）。**
+> **状态：✅ 已闭环（2026-10-11；agent-core `4162460e`、coding-agent `88895b2b`；设计稿 `be8d87a7`）。**
 > 承接 `docs/04` 在册缺口 **`B223`**（2026-10-10 B139 包取证时新登，`docs/46` §6）。
 >
 > **一句话**：B139 修好后 `settings.json` 的 `compaction` 块**能完整读写了，但全仓没有任何
@@ -491,4 +491,46 @@ public com.pijava.agent.compaction.CompactionResult compact(String customInstruc
 
 ## 12. 闭环记录
 
-（待闭环填写。）
+2026-10-11 闭环，2 commits（`4162460e` agent-core ／ `88895b2b` coding-agent）。
+
+**红证据（编译红＋行为探针混合，按落地顺序）**
+
+- T-A1/T-A2/T-A3 与 coding-agent 新夹具在旧代码上均为**编译红**（`compactionResolver`/
+  `currentCompactionSettings()`/accessor 三件套不存在；且 commit 1 已删引擎内存
+  getter，coding-agent 主源 javac 先失败，遮住了测试侧编译错误——行为牙改由探针钉）。
+- **M3**（AgentHarness 适配改建时快照 `final var m = lane.model`）：恰红 T-A2/T-A3，
+  T-A1 绿；恢复。
+- **M1**（`getCompactionEnabled` 缺席默认翻 false）：红 **6** 条——accessor
+  T1/T2/T4/T5/T5b ＋ RPC T8；T3/T6/T7（显式 enabled 或异常/落盘路径）绿。比设计预测
+  的 ≥4 更有牙。
+- **M2**（预算回退翻成 ordinary 优先）：恰红 **1** 条＝新增 T5b（见偏离 2）。
+
+**与设计稿的偏离**
+
+1. AgentHarness 观察口最终与 `ExecutionContext` **共用一个**
+   `private final Supplier<CompactionSettings> compactionSettingsSupplier` 字段
+   （设计稿是观察口重复一遍 resolver 表达式）；单一形状，M3 探针同时覆盖两条读路。
+2. 设计的 M2 预测「T4 恰 1 红」被实测推翻：T4 只有 override、无 ordinary，翻转
+   回退顺序对它等价（零红＝探针第五种成因的变体「夹具区分不了两条路径」）⇒ 新增
+   **T5b**（ordinary 与 override 同字段都在，override 必须赢），M2 遂恰红 T5b。
+3. **实施中发现的真实连带变化**：接线后自动压缩第一次在生产会话发火。未编目模型
+   `contextWindow=0` 时，post-run T2 门 `shouldCompact(tokens, 0, s)` ＝
+   `tokens > -16384`，对 faux 桩盖的任意正用量恒成立（pi 同形：`window>0` 守卫
+   只在**轮内投影门** `_compactBeforeNextAssistantResponse`，post-run `_checkCompaction`
+   直接用 `window ?? 0`）⇒ 5 条「只测手动 compact」的既有夹具在三轮 prompt 收尾时被
+   自动路抢先（`RpcDispatcherTest` ×2、`CompactSlashCommandTest` ×3，症状
+   "Nothing to compact: transcript too small"），统一在会话建好后
+   `setCompactionEnabled(false)` 关自动路（手动路不读 enabled，pi 同）。
+4. **A9 随本包销号**（「settings supplier 无模型参数」正是本次槽换型解决的）：
+   `docs/04` 同删 B223＋A9；`docs/map/03` 第 26 行 C/缺失→对齐（权重 2→3）。
+   `docs/42` 是时点快照、从无逐包更新先例，不动。
+
+**验证**
+
+- agent-core **655** 全绿；coding-agent **522** 全绿（+10：accessor 9 ＋ T8）；
+  下游 tui 212（1 存量 skip）／ evals 45（19 skip）／ sqlite 36 全绿。
+- `mvn checkstyle:check` 14 模块 0 违规；无 `System.out.println` 残留。
+- 文件行数：SettingsAccessors 242→317、HarnessConfig 273→290；存量超限
+  AgentHarness 577→595、AgentSession 1169→1187（+18/+18，搭车膨胀），
+  RpcDispatcher 647→642（净减）。
+- 台账计数：108 → **106**（`grep -c '^| [AB][0-9]* |'` 实测）。

@@ -125,7 +125,7 @@ pi 侧证据**全部改指** `agent/src/*` 或 `coding-agent/src/core/*`。
 | 23 | 输出截断（2000 行 / 头/尾两种） | C | **存疑** | **3** | pi `core/tools/truncate.ts:11-12` = **2000 行 / 50KB**；`core/tools/read.ts:76` 描述 50KB | `TruncationUtils.java:15-16` = 2000 行 / **100KB**（`ReadTool.java:42,120-131`）⇒ **字节预算翻倍**，模型可见文案即不同 |
 | 24 | **branch summary 生成** | C | **缺失** | **1** | `core/compaction/branch-summarization.ts:108,195`（`collectEntriesForBranchSummary`/`prepareBranchEntries`） | 只有 `Entry.BranchSummary` 类型 + 文案；**无生成器** | **B1** |
 | 25 | **会话树导航 `navigateTree`** | L | **缺失** | **1** | `core/agent-session.ts:3915` | 无导航操作 | B1 同族 |
-| 26 | **per-model 压缩设置** | C | **缺失** | **2** | `core/settings-manager.ts:929-966`（`modelOverrides` `:32`，`getCompactionSettings(model)`） | `HarnessConfig.java:89` 无模型参数 | **A9** |
+| 26 | **per-model 压缩设置** | C | **对齐**（2026-10-11，B223/`docs/47`） | **3** | `core/settings-manager.ts:929-966`（`modelOverrides` `:32`，`getCompactionSettings(model)`） | `SettingsAccessors.compactionToken` 三级回退 + `HarnessConfig.compactionResolver: Function<ModelId<?>,CompactionSettings>`，AgentHarness 按 lane 当前模型现解析 | —— |
 | 27 | **branch summary 设置**（`reserveTokens`/`skipPrompt`） | C | **缺失** | **1** | `core/settings-manager.ts:962-967` | 无 | B1 同族 |
 | 28 | bash 流式 `tool_execution_update` | L | **对齐** | **2** | `core/tools/bash.ts:265,278-284`（`onUpdate`） | `BashTool.java` + `BashUpdateEmitter.java` | —— |
 | 29 | bash 全量输出落盘 `fullOutputPath` | L | **对齐** | **1** | `core/tools/bash.ts:68` | `BashTool.java:46` | —— |
