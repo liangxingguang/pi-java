@@ -457,6 +457,7 @@ SSE 200 路（finish reason），不经过 HTTP 错误分支，不动。
 | `8c3b3765` | `PiHttpException` 带 body（措辞不动）+ Mistral formatter + images |
 | `dfb46cc2` | 16 条车道真 HTTP 夹具（L1–L15 + rate-limit 一条） |
 | `3d2522e8` | fix：文案未变时发原异常，保留异常类型身份 |
+| `3f201205` | refactor：拆 `MistralMessages`（文件 542→336 行）；Mistral formatter 归 `ProviderErrors` |
 
 ### 9.2 先红记录
 
@@ -499,6 +500,11 @@ SSE 200 路（finish reason），不经过 HTTP 错误分支，不动。
 4. pi-messages 同族错误格式按计划登记 **B224**，本包未动。
 5. 单测 8 的 `ErrorObject.builder()` 四字段（code/message/param/type）全部必填
    （线格反序列化不经 builder，仅测试构造受影响）。
+6. **文件行数纠偏**：`MistralConversationsApi` 本包接线后 542 行（存量 510 已超
+   500，§7 估算漏计）⇒ 把消息转换块（pi `:787-874`）整体抽到包级
+   `MistralMessages`（与既有 `MistralContent`/`MistralTools` 同风格，纯移动），
+   `formatMistralError` 归 `ProviderErrors`；车道降到 **336 行**，行为零变化。
+   顺带消解了 E 类未登记的存量超限。
 
 ### 9.5 验证与计数
 
