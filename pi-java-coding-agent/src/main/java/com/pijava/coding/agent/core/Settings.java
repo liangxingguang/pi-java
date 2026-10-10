@@ -6,17 +6,19 @@ import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonAnyGetter;
 import com.fasterxml.jackson.annotation.JsonAnySetter;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
  * Settings root object, aligned with pi's {@code Settings} interface
  * (Phase 3 design §12.1).
  *
- * <p>Fields keep pi's snake_case JSON names (Jackson maps them directly).
- * Enum-like values ({@code theme}, {@code steeringMode}, …) are stored as
- * strings at this JSON boundary and mapped to strong types at consumption
- * points. Unknown fields are preserved via {@link #setUnknown}/{@link #unknown}
- * so future pi fields round-trip without loss.</p>
+ * <p>Top-level fields keep pi's camelCase JSON names (Jackson maps them
+ * directly). Enum-like values ({@code theme}, {@code steeringMode}, …) are
+ * stored as strings at this JSON boundary and mapped to strong types at
+ * consumption points. Unknown fields are preserved via
+ * {@link #setUnknown}/{@link #unknown} so future pi fields round-trip without
+ * loss.</p>
  */
 public final class Settings {
 
@@ -122,47 +124,80 @@ public final class Settings {
         @JsonProperty("maxRetryDelayMs") Long maxRetryDelayMs
     ) {}
 
-    /** Compaction settings (JSON boundary representation). */
+    /**
+     * Compaction settings (JSON boundary representation)，对齐 pi
+     * {@code CompactionSettings}（settings-manager.ts:28-34）。全组件可选
+     * （≙ pi 的 {@code ?}），默认值在消费点按 pi 的 {@code ??} 链兜底。
+     * 类级 NON_NULL ⇒ 缺席组件不出现在 JSON 里（pi 只写已修改子键）。
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Compaction(
-        boolean enabled,
-        int reserveTokens,
-        int keepRecentTokens
-    ) {}
+        // @JsonProperty：Json mapper 关了 getter 可见性，record 访问器会被当作
+        // getter 忽略（实测 valueToTree 得 {}）⇒ 显式钉住组件的 JSON 属性。
+        @JsonProperty("enabled") Boolean enabled,
+        @JsonProperty("reserveTokens") Integer reserveTokens,
+        @JsonProperty("keepRecentTokens") Integer keepRecentTokens,
+        @JsonProperty("modelOverrides") Map<String, ModelOverride> modelOverrides
+    ) {
+        /** pi {@code CompactionModelOverride}（settings-manager.ts:18-21）。 */
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        public record ModelOverride(
+            @JsonProperty("reserveTokens") Integer reserveTokens,
+            @JsonProperty("keepRecentTokens") Integer keepRecentTokens
+        ) {}
+    }
 
-    /** Terminal settings (JSON boundary representation). */
+    /**
+     * Terminal settings (JSON boundary representation)，对齐 pi
+     * {@code TerminalSettings}（settings-manager.ts:57-65）。
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Terminal(
-        boolean showImages,
-        int imageWidthCells
+        @JsonProperty("showImages") Boolean showImages,
+        @JsonProperty("imageWidthCells") Integer imageWidthCells,
+        @JsonProperty("clearOnShrink") Boolean clearOnShrink,
+        @JsonProperty("showTerminalProgress") Boolean showTerminalProgress,
+        // pi 形状＝ boolean | "auto"；本边界原样保类型，消费点再判。
+        @JsonProperty("hyperlinks") Object hyperlinks,
+        // pi 形状＝ "kitty" | "iterm2" | "auto" | false。
+        @JsonProperty("images") Object images,
+        // pi 形状＝ boolean | "auto"。
+        @JsonProperty("trueColor") Object trueColor
     ) {}
 
-    /** Image settings (JSON boundary representation). */
+    /** Image settings (JSON boundary representation)，对齐 pi
+     *  {@code ImageSettings}（settings-manager.ts:67-71）。 */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Image(
-        boolean autoResize,
-        boolean blockImages
+        @JsonProperty("autoResize") Boolean autoResize,
+        @JsonProperty("blockImages") Boolean blockImages
     ) {}
 
-    /** Markdown settings (JSON boundary representation). */
+    /** Markdown settings (JSON boundary representation)，对齐 pi
+     *  {@code MarkdownSettings}（settings-manager.ts:85-90）。 */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Markdown(
-        int codeBlockIndent,
-        boolean mermaid
+        @JsonProperty("codeBlockIndent") String codeBlockIndent,
+        @JsonProperty("mermaid") String mermaid
     ) {}
 
     /**
-     * TUI settings (JSON boundary representation), aligned with Codex TUI2
-     * {@code tui.scroll_*} (PR #8357). Every component is optional at this
-     * boundary; {@code com.pijava.tui.util.ScrollConfig.from(Settings)} falls
-     * back to the documented defaults for null or invalid values.
+     * TUI settings (JSON boundary representation) —— <b>pi-java 自有扩展</b>
+     * （pi 锚点无此块；源自 Codex TUI2 PR #8357）。消费者＝
+     * {@code com.pijava.tui.util.ScrollConfig.from(Settings)}。全组件可选，
+     * null/非法值由 ScrollConfig 兜底为默认。
      */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Tui(
-        String scrollMode,
-        Integer scrollEventsPerTick,
-        Integer scrollWheelLines,
-        Integer scrollTrackpadLines,
-        Integer scrollTrackpadAccelEvents,
-        Integer scrollTrackpadAccelMax,
-        Boolean scrollInvert,
-        Integer scrollWheelTickDetectMaxMs,
-        Integer scrollWheelLikeMaxDurationMs,
-        Boolean disableMouseCapture
+        @JsonProperty("scrollMode") String scrollMode,
+        @JsonProperty("scrollEventsPerTick") Integer scrollEventsPerTick,
+        @JsonProperty("scrollWheelLines") Integer scrollWheelLines,
+        @JsonProperty("scrollTrackpadLines") Integer scrollTrackpadLines,
+        @JsonProperty("scrollTrackpadAccelEvents") Integer scrollTrackpadAccelEvents,
+        @JsonProperty("scrollTrackpadAccelMax") Integer scrollTrackpadAccelMax,
+        @JsonProperty("scrollInvert") Boolean scrollInvert,
+        @JsonProperty("scrollWheelTickDetectMaxMs") Integer scrollWheelTickDetectMaxMs,
+        @JsonProperty("scrollWheelLikeMaxDurationMs") Integer scrollWheelLikeMaxDurationMs,
+        @JsonProperty("disableMouseCapture") Boolean disableMouseCapture
     ) {}
 }
