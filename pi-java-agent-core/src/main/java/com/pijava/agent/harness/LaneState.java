@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.tool.AgentTool;
@@ -232,7 +231,6 @@ public final class LaneState {
     /** 追加提示（包 A4b；pi 的 {@code appendSystemPrompt}，渲染成 {@code addendum} 段）。 */
     String appendSystemPrompt = "";
     Set<AgentTool<?, ?>> activeTools;
-    CompactionSettings compactionSettings;
     /** steer / followUp 队列的排空模式（pi 在 Agent 上是纯内存的，不入日志）。 */
     QueueMode steeringMode;
     QueueMode followUpMode;

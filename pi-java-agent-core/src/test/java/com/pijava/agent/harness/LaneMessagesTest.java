@@ -118,7 +118,7 @@ class LaneMessagesTest {
         return AgentHarness.create(new HarnessConfig(
             streamFn, MODEL, ModelThinkingLevel.off(), "",
             Set.of(), maxInputTokens, registry, null, null,
-            settings, Map.of(),
+            m -> settings, Map.of(),
             com.pijava.telemetry.NoopTelemetryContext.INSTANCE,
             com.pijava.ai.thinking.ThinkingLevelMap.empty(),
             QueueMode.defaultMode(), QueueMode.defaultMode(), ToolExecution.defaultMode(),
@@ -233,7 +233,7 @@ class LaneMessagesTest {
         return AgentHarness.create(HarnessConfig.builder()
             .streamFn(streamFn)
             .model(model)
-            .compactionSettings(settings)
+            .compactionResolver(m -> settings)
             .toolRegistry(registry)
             .contextWindow(window)
             .build());

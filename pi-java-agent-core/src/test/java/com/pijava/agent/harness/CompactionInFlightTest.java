@@ -72,7 +72,7 @@ class CompactionInFlightTest {
             .model(MODEL)
             .maxInputTokens(200_000)
             .contextWindow(ignored -> 200_000)
-            .compactionSettings(SETTINGS)
+            .compactionResolver(m -> SETTINGS)
             .summaryGenerator(SummaryGenerator.truncating())
             .compactionObserver(observer)
             .build());

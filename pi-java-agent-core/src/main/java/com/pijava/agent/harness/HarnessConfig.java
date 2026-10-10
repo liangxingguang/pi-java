@@ -23,7 +23,8 @@ import com.pijava.telemetry.TelemetryContext;
 /**
  * Configuration for creating an {@link AgentHarness}.
  *
- * <p>Phase 2c: added compactionSettings. Phase 3: added steeringMode, followUpMode,
+ * <p>Phase 2c: added compaction settings (B223/{@code docs/47} later turned the value
+ * slot into a per-current-model resolver). Phase 3: added steeringMode, followUpMode,
  * toolExecution. {@code driveMode} was removed with the step chain — the harness
  * has exactly one driver now ({@code 原 docs/31 §6}).</p>
  *
@@ -49,7 +50,12 @@ import com.pijava.telemetry.TelemetryContext;
  * @param toolRegistry       tool registry for the harness
  * @param toolContext        execution environment for tools
  * @param commandPrefix      optional prefix for bash commands
- * @param compactionSettings compaction settings (null = no auto-compaction)
+ * @param compactionResolver B223（{@code docs/47}）：按<b>当前模型</b>解析压缩设置的
+ *                           晚读口。AgentHarness 每次压缩决策以本车道当前模型调用它
+ *                           （pi 四个决策点现读 {@code getCompactionSettings(this.model)}）
+ *                           ⇒ setModel、modelOverrides、设置文件改动下次决策即生效。
+ *                           {@code null} = 宿主未接线 ⇒ 不自动压缩（引擎旧契约；
+ *                           生产由 coding-agent 宿主必接，pi 的「默认开」在那一侧实现）
  * @param skills             named skills to register (default: empty)
  * @param telemetry          telemetry context (default: no-op)
  * @param thinkingLevelMap   per-model thinking translation (default: empty = no thinking)
@@ -89,7 +95,10 @@ public record HarnessConfig(
     ToolRegistry toolRegistry,
     ToolContext toolContext,
     String commandPrefix,
-    CompactionSettings compactionSettings,
+    // B223（docs/47）：宿主给「按模型解析」函数；AgentHarness 以 lane 当前模型逐次调用
+    // ⇒ setModel/modelOverrides/设置改动下次决策自然生效；fork 各自用自己的 lane.model。
+    // null = 未接线 ⇒ G0 关（引擎测试旧形状；生产 coding-agent 必接）。
+    java.util.function.Function<ModelId<?>, CompactionSettings> compactionResolver,
     Map<String, Skill> skills,
     TelemetryContext telemetry,
     ThinkingLevelMap thinkingLevelMap,
@@ -137,13 +146,13 @@ public record HarnessConfig(
             StreamFn streamFn, ModelId<?> model, ModelThinkingLevel thinkingLevel,
             String systemPrompt, Set<AgentTool<?, ?>> activeTools, int maxInputTokens,
             ToolRegistry toolRegistry, ToolContext toolContext, String commandPrefix,
-            CompactionSettings compactionSettings,
+            java.util.function.Function<ModelId<?>, CompactionSettings> compactionResolver,
             Map<String, Skill> skills, TelemetryContext telemetry,
             ThinkingLevelMap thinkingLevelMap, QueueMode steeringMode,
             QueueMode followUpMode, ToolExecution toolExecution,
             Consumer<StreamEvent> streamListener) {
         this(streamFn, model, thinkingLevel, systemPrompt, activeTools, maxInputTokens,
-             null, null, toolRegistry, toolContext, commandPrefix, compactionSettings,
+             null, null, toolRegistry, toolContext, commandPrefix, compactionResolver,
              skills, telemetry, thinkingLevelMap, steeringMode,
              followUpMode, toolExecution, streamListener, SummaryGenerator.truncating(),
              null, null, null, null, List.of(), "", null);
@@ -161,7 +170,7 @@ public record HarnessConfig(
         private ToolRegistry toolRegistry;
         private ToolContext toolContext;
         private String commandPrefix;
-        private CompactionSettings compactionSettings;
+        private java.util.function.Function<ModelId<?>, CompactionSettings> compactionResolver;
         private Map<String, Skill> skills = Map.of();
         private TelemetryContext telemetry = NoopTelemetryContext.INSTANCE;
         private ThinkingLevelMap thinkingLevelMap = ThinkingLevelMap.empty();
@@ -198,7 +207,15 @@ public record HarnessConfig(
         public Builder toolRegistry(ToolRegistry tr) { this.toolRegistry = tr; return this; }
         public Builder toolContext(ToolContext tc) { this.toolContext = tc; return this; }
         public Builder commandPrefix(String cp) { this.commandPrefix = cp; return this; }
-        public Builder compactionSettings(CompactionSettings cs) { this.compactionSettings = cs; return this; }
+        /**
+         * Set the per-current-model compaction settings resolver (B223, {@code docs/47});
+         * the harness calls it with the lane's current model at every decision point.
+         * Unset ({@code null}) keeps the engine's legacy "no auto-compaction" contract.
+         */
+        public Builder compactionResolver(
+                java.util.function.Function<ModelId<?>, CompactionSettings> resolver) {
+            this.compactionResolver = resolver; return this;
+        }
         /** Set the named skills to register; returns {@code this} for chaining. */
         public Builder skills(Map<String, Skill> s) {
             this.skills = Map.copyOf(s); return this;
@@ -262,7 +279,7 @@ public record HarnessConfig(
                                      systemPrompt, activeTools, maxInputTokens,
                                      contextWindow, maxOutputTokens,
                                      toolRegistry, toolContext, commandPrefix,
-                                     compactionSettings, skills,
+                                     compactionResolver, skills,
                                      telemetry, thinkingLevelMap,
                                      steeringMode, followUpMode, toolExecution,
                                      streamListener, summaryGenerator, compactionObserver,

@@ -3,6 +3,7 @@ package com.pijava.agent.harness;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.entry.Entry;
@@ -41,6 +42,11 @@ public class AgentHarness implements AutoCloseable {
     public static final String DEFAULT_LANE = "default";
 
     private final StreamFn streamFn;
+    /**
+     * B223（{@code docs/47}）：压缩设置晚读口 —— 唯一供给 {@link ExecutionContext}
+     * 与包私有观察口 {@link #currentCompactionSettings()}；每次决策按 lane 当前模型现解析。
+     */
+    private final Supplier<CompactionSettings> compactionSettingsSupplier;
     private final int maxInputTokens;
     private final ToolRegistry toolRegistry;
     private final ToolContext toolContext;
@@ -107,7 +113,6 @@ public class AgentHarness implements AutoCloseable {
         lane.steeringMode = config.steeringMode();
         lane.followUpMode = config.followUpMode();
         lane.toolExecution = config.toolExecution();
-        lane.compactionSettings = config.compactionSettings();
         this.telemetry = config.telemetry();
         this.hookSystem = new HookSystem(lane);
         config.skills().values().forEach(skillManager::register);
@@ -125,6 +130,16 @@ public class AgentHarness implements AutoCloseable {
             () -> lane.steeringMode,
             () -> lane.followUpMode);
 
+        // B223（docs/47）：压缩设置晚读口 —— 每次决策按 lane 的**当前**模型现解析
+        //（pi getCompactionSettings(this.model) 四调用点）；setModel/modelOverrides/
+        // 设置文件改动下次决策即生效；resolver == null ⇒ 引擎旧契约「不接＝不压」。
+        final java.util.function.Function<ModelId<?>, CompactionSettings> compactionResolver =
+            config.compactionResolver();
+        this.compactionSettingsSupplier = () -> compactionResolver == null
+            ? null
+            : compactionResolver.apply(lane.model);
+        Supplier<CompactionSettings> compactionSettings = compactionSettingsSupplier;
+
         // Build execution context and the run lifecycle
         var execCtx = new ExecutionContext(
             streamFn, () -> lane.model, () -> lane.thinkingLevel,
@@ -132,7 +147,7 @@ public class AgentHarness implements AutoCloseable {
             maxInputTokens, config.contextWindow(), config.maxOutputTokens(),
             toolRegistry, toolContext,
             skillManager,
-            hookSystem, lane, () -> lane.compactionSettings, config.thinkingLevelMap(),
+            hookSystem, lane, compactionSettings, config.thinkingLevelMap(),
             tokenCounter, snapshotService, queueManager, () -> lane.toolExecution,
             () -> eventBus::broadcastStream, config.summaryGenerator(),
             lane::applyTurn, telemetry, config.compactionObserver(),
@@ -539,11 +554,14 @@ public class AgentHarness implements AutoCloseable {
         }
     }
 
-    public CompactionSettings getCompactionSettings() { return lane.compactionSettings; }
-    /** Set the compaction settings used for subsequent runs. */
-    public void setCompactionSettings(CompactionSettings s) {
-        if (closed) throw new HarnessClosedException();
-        lane.compactionSettings = s;
+    /**
+     * 下一次压缩决策将使用的设置 —— 经 resolver 按<b>当前车道模型</b>现解析
+     * （B223，{@code docs/47}）；未接线返回 {@code null}（G0 关）。
+     * 包私有观察口：引擎测试钉「每次决策重读、读当前模型」，不进公开 API
+     * （pi 侧的权威读法在宿主 settings manager）。
+     */
+    CompactionSettings currentCompactionSettings() {
+        return compactionSettingsSupplier.get();
     }
 
     // ═══════════════════════════════════════════════════════════

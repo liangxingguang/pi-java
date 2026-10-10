@@ -95,7 +95,7 @@ class PostRunOverflowDriveTest {
             .maxInputTokens(200_000)
             .contextWindow(id -> 200)
             .maxOutputTokens(id -> 8_192)
-            .compactionSettings(SETTINGS)
+            .compactionResolver(m -> SETTINGS)
             .compactionObserver(obs)
             .build());
     }
