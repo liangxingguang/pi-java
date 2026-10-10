@@ -4,6 +4,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.SubmissionPublisher;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 import com.openai.core.http.StreamResponse;
 import com.openai.models.responses.Response;
@@ -70,13 +72,21 @@ final class ResponsesStreamProcessor {
     /**
      * 消费 Responses 流并发布 pi-java 事件。
      *
+     * <p>{@code streamSupplier} 的<b>获取动作</b>也在本方法的 try 内执行 —— SDK HTTP
+     * 错误发生在 {@code createStreaming} 获取期，放在外面会逃逸到
+     * {@code AbstractChatApi} 的虚拟线程包装、永远落不进车道 catch（pi 侧获取就在
+     * 车道 try 里，{@code openai-responses.ts:222-229} 的前缀因此必须在这里生效）。</p>
+     *
+     * @param streamSupplier 流获取（通常包一层 {@code ProviderRetry.retry}）
+     * @param errorFormatter catch 出口的错误文案函数（各车道自带前缀策略）
      * @param model 终局 usage 的计价用模型（pi {@code finalizeResponse} 里的
      *              {@code calculateCost(model, …)}）；{@code null} ⇒ 不计价
      */
-    static void process(StreamResponse<ResponseStreamEvent> stream,
+    static void process(Supplier<StreamResponse<ResponseStreamEvent>> streamSupplier,
                         SubmissionPublisher<StreamEvent> publisher,
                         ModelInfo model,
-                        Map<String, String> grammarProperties) {
+                        Map<String, String> grammarProperties,
+                        Function<Throwable, String> errorFormatter) {
         var builder = new StreamPartialBuilder();
         // Reasoning capture + Azure backfill (pi shared :533-549/:686-697).
         var ctx = ResponseEventContext.of(builder, publisher, grammarProperties,
@@ -85,85 +95,88 @@ final class ResponsesStreamProcessor {
         boolean sawTerminal = false;
         try {
             publisher.submit(builder.emitStart());
-            for (var event : stream.stream().toList()) {
-                if (event.outputItemAdded().isPresent()) {
-                    var added = event.outputItemAdded().get();
-                    ResponseItemHandlers.added(added.item(), added.outputIndex(), ctx);
-                } else if (event.reasoningSummaryTextDelta().isPresent()) {
-                    var d = event.reasoningSummaryTextDelta().get();
-                    if (isSlot(ctx.slotTypes, d.outputIndex(), THINKING)) {
-                        publisher.submit(builder.emitThinkingDelta(d.delta()));
-                    }
-                } else if (event.reasoningTextDelta().isPresent()) {
-                    var d = event.reasoningTextDelta().get();
-                    if (isSlot(ctx.slotTypes, d.outputIndex(), THINKING)) {
-                        publisher.submit(builder.emitThinkingDelta(d.delta()));
-                    }
-                } else if (event.reasoningSummaryPartDone().isPresent()) {
-                    var d = event.reasoningSummaryPartDone().get();
-                    if (isSlot(ctx.slotTypes, d.outputIndex(), THINKING)) {
-                        publisher.submit(builder.emitThinkingDelta("\n\n"));
-                    }
-                } else if (event.outputTextDelta().isPresent()) {
-                    var d = event.outputTextDelta().get();
-                    if (isSlot(ctx.slotTypes, d.outputIndex(), TEXT)) {
-                        publisher.submit(builder.emitTextDelta(d.delta()));
-                    }
-                } else if (event.refusalDelta().isPresent()) {
-                    var d = event.refusalDelta().get();
-                    if (isSlot(ctx.slotTypes, d.outputIndex(), TEXT)) {
-                        publisher.submit(builder.emitTextDelta(d.delta()));
-                    }
-                } else if (event.functionCallArgumentsDelta().isPresent()) {
-                    var d = event.functionCallArgumentsDelta().get();
-                    var state = ctx.toolCalls.get(d.outputIndex());
-                    if (state != null) {
-                        state.args += d.delta();
-                        publisher.submit(builder.emitToolCallDelta(state.callId, d.delta()));
-                    }
-                } else if (event.functionCallArgumentsDone().isPresent()) {
-                    var d = event.functionCallArgumentsDone().get();
-                    var state = ctx.toolCalls.get(d.outputIndex());
-                    if (state != null && d.arguments().startsWith(state.args)) {
-                        // 补齐尾部 delta，使 builder 缓冲与权威 arguments 一致。
-                        String tail = d.arguments().substring(state.args.length());
-                        if (!tail.isEmpty()) {
-                            state.args = d.arguments();
-                            publisher.submit(builder.emitToolCallDelta(state.callId, tail));
+            // 获取在车道 try 内：获取期 HTTP 错误也要落本车道 catch（见方法 javadoc）。
+            try (var stream = streamSupplier.get()) {
+                for (var event : stream.stream().toList()) {
+                    if (event.outputItemAdded().isPresent()) {
+                        var added = event.outputItemAdded().get();
+                        ResponseItemHandlers.added(added.item(), added.outputIndex(), ctx);
+                    } else if (event.reasoningSummaryTextDelta().isPresent()) {
+                        var d = event.reasoningSummaryTextDelta().get();
+                        if (isSlot(ctx.slotTypes, d.outputIndex(), THINKING)) {
+                            publisher.submit(builder.emitThinkingDelta(d.delta()));
                         }
+                    } else if (event.reasoningTextDelta().isPresent()) {
+                        var d = event.reasoningTextDelta().get();
+                        if (isSlot(ctx.slotTypes, d.outputIndex(), THINKING)) {
+                            publisher.submit(builder.emitThinkingDelta(d.delta()));
+                        }
+                    } else if (event.reasoningSummaryPartDone().isPresent()) {
+                        var d = event.reasoningSummaryPartDone().get();
+                        if (isSlot(ctx.slotTypes, d.outputIndex(), THINKING)) {
+                            publisher.submit(builder.emitThinkingDelta("\n\n"));
+                        }
+                    } else if (event.outputTextDelta().isPresent()) {
+                        var d = event.outputTextDelta().get();
+                        if (isSlot(ctx.slotTypes, d.outputIndex(), TEXT)) {
+                            publisher.submit(builder.emitTextDelta(d.delta()));
+                        }
+                    } else if (event.refusalDelta().isPresent()) {
+                        var d = event.refusalDelta().get();
+                        if (isSlot(ctx.slotTypes, d.outputIndex(), TEXT)) {
+                            publisher.submit(builder.emitTextDelta(d.delta()));
+                        }
+                    } else if (event.functionCallArgumentsDelta().isPresent()) {
+                        var d = event.functionCallArgumentsDelta().get();
+                        var state = ctx.toolCalls.get(d.outputIndex());
+                        if (state != null) {
+                            state.args += d.delta();
+                            publisher.submit(builder.emitToolCallDelta(state.callId, d.delta()));
+                        }
+                    } else if (event.functionCallArgumentsDone().isPresent()) {
+                        var d = event.functionCallArgumentsDone().get();
+                        var state = ctx.toolCalls.get(d.outputIndex());
+                        if (state != null && d.arguments().startsWith(state.args)) {
+                            // 补齐尾部 delta，使 builder 缓冲与权威 arguments 一致。
+                            String tail = d.arguments().substring(state.args.length());
+                            if (!tail.isEmpty()) {
+                                state.args = d.arguments();
+                                publisher.submit(builder.emitToolCallDelta(state.callId, tail));
+                            }
+                        }
+                    } else if (event.customToolCallInputDelta().isPresent()) {
+                        ResponsesCustomCalls.inputDelta(
+                            event.customToolCallInputDelta().get(), ctx);
+                    } else if (event.customToolCallInputDone().isPresent()) {
+                        ResponsesCustomCalls.inputDone(
+                            event.customToolCallInputDone().get(), ctx);
+                    } else if (event.outputItemDone().isPresent()) {
+                        var done = event.outputItemDone().get();
+                        ResponseItemHandlers.done(done.item(), done.outputIndex(), ctx);
+                    } else if (event.completed().isPresent()) {
+                        sawTerminal = true;
+                        finalizeResponse(builder, publisher,
+                            event.completed().get().response(),
+                            stop, model, ctx.reasoningCapture);
+                    } else if (event.incomplete().isPresent()) {
+                        sawTerminal = true;
+                        finalizeResponse(builder, publisher,
+                            event.incomplete().get().response(),
+                            stop, model, ctx.reasoningCapture);
+                    } else if (event.failed().isPresent()) {
+                        // pi 的 `response.failed` 分支（shared :745-755）：先记 sawTerminal 再 throw。
+                        sawTerminal = true;
+                        // pi `:747`：本支也写原值（写的是 **status**）⇒ 错误消息上可观测，照写。
+                        var failed = event.failed().get().response();
+                        builder.noteRawStopReason(failed.status()
+                            .map(Object::toString).orElse(null));
+                        throw new IllegalStateException(failedMessage(failed));
+                    } else if (event.error().isPresent()) {
+                        // pi :743-744 同样是 throw。字段缺席时保留 pi-java 既有「unknown」兜底。
+                        var e = event.error().get();
+                        throw new IllegalStateException("Error Code "
+                            + e.code().orElse("unknown") + ": " + e.message());
                     }
-                } else if (event.customToolCallInputDelta().isPresent()) {
-                    ResponsesCustomCalls.inputDelta(
-                        event.customToolCallInputDelta().get(), ctx);
-                } else if (event.customToolCallInputDone().isPresent()) {
-                    ResponsesCustomCalls.inputDone(
-                        event.customToolCallInputDone().get(), ctx);
-                } else if (event.outputItemDone().isPresent()) {
-                    var done = event.outputItemDone().get();
-                    ResponseItemHandlers.done(done.item(), done.outputIndex(), ctx);
-                } else if (event.completed().isPresent()) {
-                    sawTerminal = true;
-                    finalizeResponse(builder, publisher,
-                        event.completed().get().response(),
-                        stop, model, ctx.reasoningCapture);
-                } else if (event.incomplete().isPresent()) {
-                    sawTerminal = true;
-                    finalizeResponse(builder, publisher,
-                        event.incomplete().get().response(),
-                        stop, model, ctx.reasoningCapture);
-                } else if (event.failed().isPresent()) {
-                    // pi 的 `response.failed` 分支（shared :745-755）：先记 sawTerminal 再 throw。
-                    sawTerminal = true;
-                    // pi `:747`：本支也写原值（写的是 **status**）⇒ 错误消息上可观测，照写。
-                    var failed = event.failed().get().response();
-                    builder.noteRawStopReason(failed.status()
-                        .map(Object::toString).orElse(null));
-                    throw new IllegalStateException(failedMessage(failed));
-                } else if (event.error().isPresent()) {
-                    // pi :743-744 同样是 throw。字段缺席时保留 pi-java 既有「unknown」兜底。
-                    var e = event.error().get();
-                    throw new IllegalStateException("Error Code "
-                        + e.code().orElse("unknown") + ": " + e.message());
                 }
             }
             if (!sawTerminal) {
@@ -187,7 +200,10 @@ final class ResponsesStreamProcessor {
         } catch (Exception e) {
             // pi 的 catch（openai-responses.ts:194-205）只 push 一条 error ⇒ 一条流
             // 只有一个终局事件；上面的 throw 全落在这里，emitDone 不会被发出去。
-            publisher.submit(builder.emitError("error", e));
+            // 文案由车道注入（前缀策略各不同）；内部错误无 status 时 formatter 内部
+            // 不套前缀（ProviderErrors 四分支表第二行）。
+            publisher.submit(builder.emitError("error",
+                new IllegalStateException(errorFormatter.apply(e), e)));
         }
     }
 

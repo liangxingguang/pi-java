@@ -81,13 +81,32 @@ public final class OpenAIResponsesApi extends AbstractChatApi {
             grammarProperties,
             SessionAffinityHeaders.responses(responsesOptions.sessionId(),
                 compat.sessionAffinityFormat(), request.modelId().provider(), baseUrl));
-        // A-14（R7）：只包初始请求获取。
-        var stream = ProviderRetry.retry(
-            () -> client.responses().createStreaming(params),
-            ProviderRetry::ofOpenAi, providerRetry);
-        try (stream) {
-            ResponsesStreamProcessor.process(stream, publisher, request.model(),
-                grammarProperties);
+        // A-14（R7）：只包初始请求获取。获取动作放进 processor 的车道 try 内
+        // （supplier 里），获取期 HTTP 错误才会落 pi 的带前缀 catch（docs/48 §5.3）。
+        ResponsesStreamProcessor.process(
+            () -> ProviderRetry.retry(
+                () -> client.responses().createStreaming(params),
+                ProviderRetry::ofOpenAi, providerRetry),
+            publisher, request.model(), grammarProperties,
+            e -> formatResponseError(e, request.modelId().provider()));
+    }
+
+    /**
+     * pi {@code openai-responses.ts:222-230}：{@code `<Provider> API error`} 前缀
+     * （provider 为 {@code "openai"} 时首字母大写，其余原样）＋错误体归一；
+     * 含订阅共享用量码时另起一行追加 ChatGPT 用量链接（{@code :34}）。
+     */
+    private static String formatResponseError(Throwable error, String provider) {
+        // pi 模板对 null provider 会拼出 "null API error"；models.json 的 responses
+        // 模型 provider 恒有值，null 是测试/兜底形状 ⇒ 不给前缀（等价 pi 的 undefined 分支）。
+        String prefix = provider == null ? null
+            : "openai".equals(provider) ? "OpenAI API error" : provider + " API error";
+        String message =
+            com.pijava.ai.utils.ProviderErrors.format(
+                com.pijava.ai.utils.ProviderErrors.fromOpenAi(error), prefix);
+        if (message.contains("subscription_sharing_usage_limit_exceeded")) {
+            message += "\nCheck your ChatGPT usage: https://chatgpt.com/settings/usage";
         }
+        return message;
     }
 }

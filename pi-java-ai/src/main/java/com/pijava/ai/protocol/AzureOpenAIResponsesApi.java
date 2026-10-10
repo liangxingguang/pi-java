@@ -80,14 +80,17 @@ public final class AzureOpenAIResponsesApi extends AbstractChatApi {
         var params = ResponsesMessageConverter.buildParams(
             request, responsesOptions, deploymentName, apiName(),
             compat, grammarProperties, Map.of());
-        // A-14（R7）：只包初始请求获取。
-        var stream = ProviderRetry.retry(
-            () -> client.responses().createStreaming(params),
-            ProviderRetry::ofOpenAi, providerRetry);
-        try (stream) {
-            ResponsesStreamProcessor.process(stream, publisher, request.model(),
-                grammarProperties);
-        }
+        // A-14（R7）：只包初始请求获取。获取动作放进 processor 的车道 try 内
+        // （supplier 里），获取期 HTTP 错误才会落 pi 的带前缀 catch（docs/48 §5.3）。
+        ResponsesStreamProcessor.process(
+            () -> ProviderRetry.retry(
+                () -> client.responses().createStreaming(params),
+                ProviderRetry::ofOpenAi, providerRetry),
+            publisher, request.model(), grammarProperties,
+            // pi azure-openai-responses.ts:52-55：常量前缀，无 ChatGPT 链接。
+            e -> com.pijava.ai.utils.ProviderErrors.format(
+                com.pijava.ai.utils.ProviderErrors.fromOpenAi(e),
+                "Azure OpenAI API error"));
     }
 
     // ── 配置解析 ─────────────────────────────────────────────────────────
