@@ -25,6 +25,7 @@ import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.http.ProviderRetry;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
+import com.pijava.ai.utils.ProviderErrors;
 
 /**
  * OpenAI Chat Completions adapter using the official {@code openai-java} SDK.
@@ -362,7 +363,17 @@ public class OpenAICompletionsApi extends AbstractChatApi {
             // pi catch (:703-704) applies details onto thinking blocks before
             // emitting the error, so the error partial keeps replay metadata.
             stampStreamedDetails(builder, streamedDetails);
-            publisher.submit(builder.emitError("error", e));
+            // pi openai-completions.ts:719 —— 错误体经 normalize/format 透传
+            // （bodyless ⇒ "N status code (no body)"，见 utils/ProviderErrors）。
+            String message = ProviderErrors.format(ProviderErrors.fromOpenAi(e));
+            // pi :720-727（B135）：OpenRouter 的 metadata.raw 未含在文案里时追加。
+            String rawMetadata = ProviderErrors.openRouterRawMetadata(e);
+            if (rawMetadata != null && !rawMetadata.isEmpty()
+                    && !message.contains(rawMetadata)) {
+                message += "\n" + rawMetadata;
+            }
+            publisher.submit(builder.emitError("error",
+                new IllegalStateException(message, e)));
         }
     }
 
