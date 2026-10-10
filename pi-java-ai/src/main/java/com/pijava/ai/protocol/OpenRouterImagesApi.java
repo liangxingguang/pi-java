@@ -78,10 +78,14 @@ public final class OpenRouterImagesApi implements ImageApi {
                 output, ImageStopReason.STOP, null, timestamp);
         } catch (Exception e) {
             var aborted = options != null && isAborted(options);
+            // pi openrouter-images.ts:113-115 同样过 normalize/format（无 metadata 追加）。
+            String message =
+                com.pijava.ai.utils.ProviderErrors.format(
+                    com.pijava.ai.utils.ProviderErrors.fromOpenAi(e));
             return new ImageResult(request.model().provider(), request.model().modelName(),
                 List.of(),
                 aborted ? ImageStopReason.ABORTED : ImageStopReason.ERROR,
-                e.getMessage(), timestamp);
+                message, timestamp);
         }
     }
 

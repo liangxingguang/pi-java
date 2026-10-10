@@ -29,6 +29,7 @@ import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
 import com.pijava.ai.stream.ToolCallBuilder;
+import com.pijava.ai.utils.ProviderErrors;
 import com.pijava.ai.utils.SanitizeUnicode;
 
 /**
@@ -147,8 +148,39 @@ public final class MistralConversationsApi extends AbstractChatApi {
             publisher.submit(builder.emitDone(stop.reason));
         } catch (Exception e) {
             // pi 的 catch（:166-171）只发一条 error 就结束 ⇒ 一条流**只有一个**终局事件。
-            publisher.submit(builder.emitError("error", e));
+            // 只有 HTTP 错误（pi 的 MistralHttpError ≙ statusCode>0 的 PiHttpException）
+            // 改文案；其余错误原样发，保留异常身份（RetryDelayTooLongException 等要被
+            // 上游按类型识别，且 pi 的 formatMistralError 对它们也是 message 透传）。
+            boolean httpError =
+                e instanceof com.pijava.ai.http.PiHttpException http && http.statusCode() > 0;
+            publisher.submit(builder.emitError("error", httpError
+                ? new IllegalStateException(formatMistralError(e), e) : e));
         }
+    }
+
+    /**
+     * pi {@code formatMistralError}（mistral-conversations.ts:271-281）：
+     * 有 body ⇒ {@code "Mistral API error (N): <body 原文截断>"}；只有状态码 ⇒
+     * {@code "… : Request failed with status N"}（pi {@code MistralHttpError} 的
+     * 兜底 message；<b>不</b>回显 Java 异常里的 {@code "HTTP N"}）；非 HTTP 错误
+     * （statusCode 0 的网络错误/内部 throw）⇒ message 原样透传。
+     */
+    private static String formatMistralError(Throwable error) {
+        if (!(error instanceof com.pijava.ai.http.PiHttpException http)) {
+            return error.getMessage();
+        }
+        int statusCode = http.statusCode();
+        String rawBody = http.body();
+        if (statusCode > 0 && rawBody != null && !rawBody.isBlank()) {
+            return "Mistral API error (" + statusCode + "): "
+                + ProviderErrors.truncate(rawBody.trim(),
+                    ProviderErrors.MAX_PROVIDER_ERROR_BODY_CHARS);
+        }
+        if (statusCode > 0) {
+            return "Mistral API error (" + statusCode
+                + "): Request failed with status " + statusCode;
+        }
+        return error.getMessage();
     }
 
     /** pi 的 {@code output.stopReason} + {@code output.errorMessage} 两件套。 */

@@ -149,7 +149,10 @@ public final class PiHttpClient implements AutoCloseable {
             }
 
             if (status < 200 || status >= 300) {
-                throw new PiHttpException(status, "HTTP " + status);
+                // B135/B141：body 随异常带上（Mistral 车道要透传），message 措辞
+                // 一字不改 —— pi-messages 车道的 "HTTP N" 文本与 retry 日志断言不变。
+                throw new PiHttpException(status, "HTTP " + status,
+                    body == null ? "" : body);
             }
 
             return new SseIterator(body.lines().iterator());
