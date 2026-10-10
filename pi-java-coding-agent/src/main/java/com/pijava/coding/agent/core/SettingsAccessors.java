@@ -239,4 +239,79 @@ public final class SettingsAccessors {
         manager.markModified("retry");
         manager.flush();
     }
+
+    // ── B223（docs/47）：compaction 设置 ──────────────────────────────
+
+    /**
+     * 自动压缩主开关（pi {@code getCompactionEnabled}，settings-manager.ts:914-916：
+     * {@code compaction?.enabled ?? true} —— 默认<b>开</b>）。
+     */
+    public boolean getCompactionEnabled() {
+        var c = manager.effective().compaction;
+        return c == null || c.enabled() == null || c.enabled();
+    }
+
+    /**
+     * pi {@code getCompactionSettings(model)}（:964-974）：每个压缩决策点现读合并
+     * 视图，不缓存。预算三级回退 = {@code modelOverrides["provider/modelId"]}
+     * 精确命中 → ordinary 字段 → 16384/20000（:23-26）。{@code model} 为 null 时
+     * 不查 override（pi 的 model 缺席形状）。负数在解析点抛 pi 逐字异常。
+     */
+    public com.pijava.agent.compaction.CompactionSettings getCompactionSettings(
+            com.pijava.ai.model.ModelId<?> model) {
+        var c = manager.effective().compaction;
+        return new com.pijava.agent.compaction.CompactionSettings(
+            getCompactionEnabled(),
+            compactionToken(c, model, true),
+            compactionToken(c, model, false));
+    }
+
+    /** pi {@code getCompactionTokenSetting}（:927-953）的单字段三级回退 + 校验。 */
+    private static int compactionToken(Settings.Compaction c,
+                                        com.pijava.ai.model.ModelId<?> model,
+                                        boolean reserve) {
+        String field = reserve ? "reserveTokens" : "keepRecentTokens";
+        int dflt = reserve ? 16_384 : 20_000;
+        Integer ordinary = c == null
+            ? null
+            : reserve ? c.reserveTokens() : c.keepRecentTokens();
+        if (ordinary != null && ordinary < 0) {
+            // pi :935-938 逐字（Integer 必为安全整数，safe-integer 校验类型层已成立）。
+            throw new IllegalArgumentException(
+                "Invalid compaction." + field + " setting: " + ordinary
+                    + ". Expected a non-negative safe integer.");
+        }
+        Settings.Compaction.ModelOverride entry = null;
+        if (c != null && c.modelOverrides() != null && model != null) {
+            entry = c.modelOverrides().get(model.provider() + "/" + model.modelName());
+        }
+        Integer override = entry == null
+            ? null
+            : reserve ? entry.reserveTokens() : entry.keepRecentTokens();
+        if (override != null && override < 0) {
+            // pi :947-950 逐字（含精确键名；field 名在 pi 串里不带引号）。
+            throw new IllegalArgumentException(
+                "Invalid compaction.modelOverrides[\""
+                    + model.provider() + "/" + model.modelName() + "\"]." + field
+                    + " setting: " + override
+                    + ". Expected a non-negative safe integer.");
+        }
+        return override != null ? override : ordinary != null ? ordinary : dflt;
+    }
+
+    /**
+     * 写全局 {@code compaction.enabled}（pi {@code setCompactionEnabled}，:918-924）：
+     * 全局改写（保留其余组件与 modelOverrides）+ markModified + <b>即时</b> flush，
+     * 与 {@link #setRetryEnabled} 同款。引擎晚读口在下次决策自然读到新值。
+     */
+    public void setCompactionEnabled(boolean enabled) {
+        var global = manager.global();
+        var c = global.compaction;
+        global.compaction = c == null
+            ? new Settings.Compaction(enabled, null, null, null)
+            : new Settings.Compaction(enabled, c.reserveTokens(), c.keepRecentTokens(),
+                c.modelOverrides());
+        manager.markModified("compaction");
+        manager.flush();
+    }
 }

@@ -3,7 +3,6 @@ package com.pijava.coding.agent.core.slash.builtin;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
-import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.ai.auth.FileCredentialStore;
 import com.pijava.coding.agent.core.KeybindingsManager;
 import com.pijava.coding.agent.core.SessionShare;
@@ -130,7 +129,8 @@ public final class MiscCommands {
                     // B174（docs/23，pi interactive-mode.ts:3264）：trailing 文本
                     // trim 后作为 customInstructions；无/空白 ⇒ null。
                     String custom = args.isBlank() ? null : args.trim();
-                    ctx.session().compact(CompactionSettings.defaults(), custom);
+                    // B223（docs/47）：预算由会话按当前模型现解析（pi compact(custom)）。
+                    ctx.session().compact(custom);
                     return "Compacted.";
                 } catch (Exception e) {
                     return "Compaction failed: " + e.getMessage();

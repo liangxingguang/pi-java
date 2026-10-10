@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -105,6 +106,7 @@ class RpcDispatcherTest {
         dispatcher.handleLine("{\"id\":\"7\",\"type\":\"set_auto_compaction\",\"enabled\":true}");
         dispatcher.handleLine("{\"id\":\"8\",\"type\":\"get_commands\"}");
         dispatcher.handleLine("{\"id\":\"9\",\"type\":\"get_session_stats\"}");
+        dispatcher.handleLine("{\"id\":\"10\",\"type\":\"get_state\"}");
 
         String output = out.toString(StandardCharsets.UTF_8);
         assertThat(output).contains("\"command\":\"set_model\",\"success\":true");
@@ -122,9 +124,35 @@ class RpcDispatcherTest {
 
         // set_model 实际改动了 harness 模型
         assertThat(ctx.session().harness().getModel().modelName()).isEqualTo("gpt-5");
-        // set_auto_compaction 切换到 harness 压缩设置并反映在 get_state
-        assertThat(ctx.session().harness().getCompactionSettings()).isNotNull();
-        assertThat(ctx.session().harness().getCompactionSettings().enabled()).isTrue();
+        // B223（docs/47）：set_auto_compaction 写**全局 settings 文件**并即时 flush
+        //（旧实现只改引擎内存态，重启即忘）。
+        var settingsFile = ctx.home().resolve(".pi-java").resolve("agent")
+            .resolve("settings.json");
+        assertThat(settingsFile).exists();
+        var written = new ObjectMapper().readTree(settingsFile.toFile());
+        assertThat(written.path("compaction").path("enabled").asBoolean()).isTrue();
+        // get_state 从 settings getter 读 ⇒ 与落盘值一致。
+        assertThat(payloadOf(output, "10").get("autoCompactionEnabled").asBoolean())
+            .isTrue();
+    }
+
+    /**
+     * T8（B223/{@code docs/47}，主行为红）：全新会话（设置目录无 compaction 块）
+     * 的 {@code get_state} 必须报 {@code autoCompactionEnabled=true} —— pi 默认
+     * {@code compaction?.enabled ?? true}；旧实现读引擎内存态，全新会话恒报 false。
+     */
+    @Test
+    void freshSessionReportsAutoCompactionEnabledByDefault() throws Exception {
+        var ctx = context("faux-autocompact", textStream("Hi"));
+        var out = new ByteArrayOutputStream();
+        var dispatcher = new RpcDispatcher(ctx.session(), new JsonlWriter(out), ctx.args());
+
+        dispatcher.handleLine("{\"id\":\"1\",\"type\":\"get_state\"}");
+
+        var payload = payloadOf(out.toString(StandardCharsets.UTF_8), "1");
+        assertThat(payload.get("autoCompactionEnabled").asBoolean())
+            .as("pi 默认开自动压缩")
+            .isTrue();
     }
 
     @Test
@@ -339,6 +367,10 @@ class RpcDispatcherTest {
         var ctx = sessionCtx("rec", recording);
         var out = new ByteArrayOutputStream();
         var dispatcher = new RpcDispatcher(ctx.session(), new JsonlWriter(out), ctx.args());
+        // B223（docs/47）：自动压缩现在默认接通（修复前它从不发火）。未编目模型的
+        // window=0，post-run 阈值门对任意正用量成立 ⇒ 本用例只测手动 compact，
+        // 先关自动路，避免三轮 prompt 收尾时被自动压缩抢先（手动路不读 enabled）。
+        ctx.session().services().settings().accessors().setCompactionEnabled(false);
 
         // 三轮（第三轮 100k chars ⇒ 切点 split、历史非空；同
         // CompactSlashCommandTest 的夹具）。
@@ -371,6 +403,8 @@ class RpcDispatcherTest {
         var ctx = context("faux-compact2", textStream("Hi there"));
         var out = new ByteArrayOutputStream();
         var dispatcher = new RpcDispatcher(ctx.session(), new JsonlWriter(out), ctx.args());
+        // B223（docs/47）：本用例只测手动 compact ⇒ 关掉默认接通的自动路。
+        ctx.session().services().settings().accessors().setCompactionEnabled(false);
 
         runPrompt(dispatcher, out, "p1", "hi");
         runPrompt(dispatcher, out, "p2", "hello");
@@ -418,7 +452,7 @@ class RpcDispatcherTest {
         return value == null || value.isNull() ? null : value.asText();
     }
 
-    private record Ctx(AgentSession session, com.pijava.coding.agent.cli.Args args) {}
+    private record Ctx(AgentSession session, com.pijava.coding.agent.cli.Args args, Path home) {}
 
     private Ctx context(String provider, List<List<StreamEvent>> sequences) throws Exception {
         return sessionCtx(provider, FauxProvider.sequence(provider, sequences));
@@ -440,7 +474,7 @@ class RpcDispatcherTest {
             var session = AgentSession.create(args, providers,
                 new ToolContext(tmp.toString(), Map.of(),
                     new DefaultShellExecutor(), new DefaultFileSystem()));
-            return new Ctx(session, args);
+            return new Ctx(session, args, home);
         } finally {
             System.setProperty("user.home", savedHome);
         }

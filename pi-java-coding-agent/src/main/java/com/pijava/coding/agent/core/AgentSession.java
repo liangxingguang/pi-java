@@ -412,6 +412,12 @@ public final class AgentSession implements AutoCloseable {
             .retrySettings(retrySettings)
             .retryAborted(retryAborted)
             .retryObserver(retryObserver)
+            // B223（docs/47）：压缩设置晚读口 —— 引擎每次决策按 lane 当前模型
+            // 回调本 resolver（pi getCompactionSettings(this.model) 四调用点）；
+            // setModel/modelOverrides/设置文件改动下次决策即生效，fork 不串模型。
+            // 不接线 ⇒ 自动压缩恒关（B223 原状）；接了线 ⇒ pi 的「默认开」
+            // 由 settings 的 ?? true 语义在 resolver 内实现。
+            .compactionResolver(m -> settings.accessors().getCompactionSettings(m))
             // B64（docs/24）：AGENTS.md/CLAUDE.md 发现；-nc 关闭。
             // 晚读口：每次 run 重新遍历（与 pi 同），不缓存。
             .contextFiles(() -> args.noContextFiles()
@@ -699,6 +705,18 @@ public final class AgentSession implements AutoCloseable {
         // B34（docs/26）：pi followUp 入队后发 queue_update（agent-session.ts:2210）。
         emitQueueUpdate();
         return id;
+    }
+
+    /**
+     * pi {@code AgentSession.compact(customInstructions)}（agent-session.ts:2898-2907，
+     * B223/{@code docs/47}）：手动压缩的预算按<b>当前模型</b>现解析
+     * （modelOverrides 对手动路同样生效）；enabled 不门手动路
+     * （pi 手动 compact 不检查 enabled，关自动压缩时 /compact 仍可用）。
+     */
+    public com.pijava.agent.compaction.CompactionResult compact(String customInstructions) {
+        var resolved = services.settings().accessors()
+            .getCompactionSettings(harness.getModel());
+        return harness.compact(laneName(), resolved, customInstructions);
     }
 
     /** Trigger a manual context compaction without customInstructions ({@code /compact}). */

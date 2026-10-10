@@ -43,6 +43,9 @@ class CompactSlashCommandTest {
             var session = AgentSession.create(args, recording.register(),
                 new ToolContext(tmp.toString(), Map.of(),
                     new DefaultShellExecutor(), new DefaultFileSystem()));
+            // B223（docs/47）：自动压缩现在默认接通；未编目模型 window=0，post-run
+            // 阈值门会在三轮 prompt 收尾时抢先自动压缩。本夹具只测手动 /compact ⇒ 关自动路。
+            session.services().settings().accessors().setCompactionEnabled(false);
             session.processPrompt("first").statusFuture().get(10, TimeUnit.SECONDS);
             session.processPrompt("second").statusFuture().get(10, TimeUnit.SECONDS);
             session.processPrompt("x".repeat(100_000)).statusFuture().get(10, TimeUnit.SECONDS);

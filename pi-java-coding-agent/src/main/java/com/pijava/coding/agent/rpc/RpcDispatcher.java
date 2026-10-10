@@ -15,7 +15,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.harness.QueueMode;
 import com.pijava.ai.message.ContentBlock;
@@ -172,8 +171,8 @@ public final class RpcDispatcher {
                     // 完成时写出。
                     Thread.startVirtualThread(() -> {
                         try {
-                            var result = session.compact(
-                                CompactionSettings.defaults(), c.customInstructions());
+                            // B223（docs/47）：预算按会话当前模型现解析。
+                            var result = session.compact(c.customInstructions());
                             out.write(RpcResponse.ok(c.id(), "compact",
                                 CompactResultWire.of(result)));
                         } catch (RuntimeException e) {
@@ -189,7 +188,10 @@ public final class RpcDispatcher {
                     });
                 }
                 case RpcCommand.SetAutoCompaction a -> {
-                    setAutoCompaction(a.enabled());
+                    // B223（docs/47）：pi setCompactionEnabled 写全局 settings 文件
+                    // 并即时 save；引擎晚读口下次决策自然生效（旧实现只改内存态）。
+                    session.services().settings().accessors()
+                        .setCompactionEnabled(a.enabled());
                     out.write(RpcResponse.ok(a.id(), "set_auto_compaction"));
                 }
                 case RpcCommand.GetSessionStats g ->
@@ -388,7 +390,10 @@ public final class RpcDispatcher {
     private RpcSessionState buildState() {
         var harness = session.harness();
         var model = harness.getModel();
-        var compaction = harness.getCompactionSettings();
+        // B223（docs/47，pi rpc-mode.ts:459）：读 settings getter（?? true 默认开），
+        // 不再读引擎内存态（旧实现全新会话恒报 false）。
+        boolean autoCompactionEnabled =
+            session.services().settings().accessors().getCompactionEnabled();
         String modelId = model == null ? "" : model.provider() + "/" + model.modelName();
         // 逐字段取自会话，与 pi rpc-mode.ts:450-465 的取值表一一对应（包④，原 docs/31 §8.37）。
         // 此前 isCompacting / sessionFile / sessionId / pendingMessageCount 是写死的
@@ -403,7 +408,7 @@ public final class RpcDispatcher {
             session.sessionFile(),
             session.sessionId(),
             session.sessionName(),
-            compaction != null && compaction.enabled(),
+            autoCompactionEnabled,
             (int) session.entryCount(),
             session.pendingMessageCount());
     }
@@ -421,16 +426,6 @@ public final class RpcDispatcher {
     }
 
     // ── 次批辅助 ─────────────────────────────────────────────────────────
-
-    /** 切换自动压缩主开关，保留当前 reserve/keepRecent 预算。 */
-    private void setAutoCompaction(boolean enabled) {
-        var current = session.harness().getCompactionSettings();
-        var defaults = CompactionSettings.defaults();
-        session.harness().setCompactionSettings(new CompactionSettings(
-            enabled,
-            current == null ? defaults.reserveTokens() : current.reserveTokens(),
-            current == null ? defaults.keepRecentTokens() : current.keepRecentTokens()));
-    }
 
     /** 解析模型模式（"provider/model" 或纯 modelName）→ ModelId。 */
     private ModelId<?> resolveModel(String pattern) {
