@@ -79,10 +79,6 @@
 | B126 | codex-responses 车道忽略 maxTokens | 该文件零命中 `if (options?.maxTokens)` |
 | B127 | Responses reasoning 走平行通道 | ResponsesOptions 读 extra 的 reasoningEffort，与主路 reasoning 并存 |
 | B128 | thinkingBudgets 无选项通道 | pi SimpleStreamOptions.thinkingBudgets |
-| B129 | xiaomi `requiresReasoningContentOnAssistantMessages` 未标注 | 探测给不出该位 |
-| B130 | zai `supportsReasoningEffort` 数据驱动 | pi 从 models.dev reasoning_options 算；**Java 缺席 null（探测兜底 false），非「内置常量」**；pi 的 glm-5.2/5.3 带 true 而 Java 只载 glm-4.x ⇒ 模型集不重叠、今零差，pi 漂移才现形 |
-| B131 | ant-ling else-if 穿透角，窄角，需钉（2026-10-10 更正常见触发条件） | pi 的 ant-ling 臂与穿透点都要求**有级别**；真窄角＝手搓 models.json 写 ant-ling＋`supportsReasoningEffort:true`＋无级别（pi 生成数据不可达）。收口形状＝一条断言穿透的夹具，不改 switch |
-| B132 | together/baseten/fireworks 目录常量只落代码路径 | pi 写了 thinkingFormat/chatTemplateArgs 常量 |
 | B137 | resolver 的 glob/scope 面 | pi 支持 minimatch 通配与 scope 诊断；**Java 无前后缀**，序＝精确（provider/id｜裸 id）→切 `:level`→provider 首条→modelName 精确→任意 id 兜底；`--models` 生产零消费者 |
 | B147 | Responses 回放 item 分组块序不同 | pi 同循环按块序交错 push；Java 按类型分组 |
 | B148 | responseModel/diagnostics 真消费者未接 | pi 用于 usage 分组、cache 归属等；含 pi-messages 的 `pi_messages_response_failure` 信封（`{type,timestamp,error:{name,message,stack,code},details}`，details 二选一投影＋8192 U+2026 截断，`pi-messages.ts:133-152`）——B224 只对齐了文案半，信封半随本条（消费者＝bug-report，见 B79；裁决见 `原 docs/49 §4.3`） |
@@ -91,9 +87,7 @@
 | B159 | `shouldStopAfterTurn` 更名 finishTurn 且语义变 | pi 从布尔改 `{action: continue/end}`，能强制多跑一轮 |
 | ~~B165~~ | ~~Anthropic 中段工具改为「定义内联」~~ | ✅ **已销号 2026-10-10**（`原 docs/45`）：beta 换 `inline-tools-2026-09-15`、顶层表就此定死、`tool_addition` 改按值内联、同名重定义不再回退。⚠️ 旧记「`hasToolRedefinitions` 被 pi 删除」实为**弃用**（`原 docs/45 §1.2`） |
 | B226 | Radius 内建 provider 缺失 | pi 有 `providers/radius.ts`/`radius-config.ts`/`radius.models.ts` ＋ `coding-agent/core/radius.ts`；Java 侧只有 OAuth 设备码工厂（`OAuthProviders.radius`），无内建 chat provider/目录/注册。自定义网关可经 models.json `{"api":"pi-messages"}` 到达（`原 docs/49` 已补派发臂），内建 provider 本身未移植。⚠️ **2026-10-11 新锚点补记**（`43d376399`）：pi 的 `getModels` 已改为 gateway catalog **整体替换** baseline（一旦拿到账号目录就不再 overlay 合并，组织方可禁用模型），移植时按新语义 |
-| B227 | **新锚点**：请求上下文估算 4→3.5 字符/token | `27075fe07`：pi `ai/utils/estimate.ts:15` `CHARS_PER_TOKEN = 3.5`（修 OpenRouter DeepSeek V4 Flash 大输入下输出上限算错，#10497）；消费者 `simple-options.ts:20` 夹取默认 `max_tokens`。Java `Estimate.java:73` 仍 `= 4` ⇒ 大上下文时 Java 算出的占用偏小、输出上限偏大。⚠️ 压缩域那份估算器（`ContextUsageEstimator:231` `/4.0`）**不改**——pi `coding-agent/.../compaction.ts:309-345` 新锚点仍是逐字 `/4` |
-| B228 | **新锚点**：retry 白名单缺 3 个新模式 | `8b5708dbb`＋`5b6c792b4`：pi `utils/retry.ts` 新增 `"server_busy"`、`"servers are currently busy"`、`"pending stream has been canceled"`（HTTP/2 会话先死，Bedrock 5 分钟超时 #10379）。Java `RetryableError` 白名单三者全缺 ⇒ 瞬断不重试。同提交组的 `noRetryStatuses` 选项唯一消费者是 `classifier-shared.ts`（R5 面外），**不移植** |
-| B229 | **新锚点**：Mistral 停因文案＋超时形状 | `7fb59f995`：pi 流内 `finish_reason:"error"` 改发 `` `Provider stopped with: error (server error)` ``，让 retry 白名单的 `server.?error` 抓手生效（瞬态服务错误可重试）；Java `MistralConversationsApi.java:180` 仍是无后缀文案 ⇒ 不被重试。`6b07b4e57`：60s 超时改为**只盖等响应头**，长流（长思考）不再被固定截止时间切断；Java Mistral 走 `PiHttpClient` 无逐请求超时，形状差需设计裁决（不补 or 补成响应头超时） |
+| B229 | **新锚点**：Mistral 超时只盖响应头（文案半已闭） | `6b07b4e57`：pi 的 60s 超时改为**只盖等响应头**（headers 到达即释放），长思考流不再被固定截止时间切断；body 停顿交给 HTTP client 的 idle 超时。Java Mistral 走 `PiHttpClient`（`.timeout(300s)` 同时盖头和体）⇒ 对齐需要给 SSE 传输加「响应头到达后取消请求超时」。**文案半已随 `docs/50` 闭环**（`7fb59f995`：`finish_reason:"error"` → `Provider stopped with: error (server error)`，`server.?error` 抓手生效） |
 | B230 | **新锚点**：azure provider 改名＋Foundry Chat Completions | pi `a37306d43`（#9714）＋env 表：provider id `azure-openai-responses`→`azure`（env 键随之），新增 `providers/azure.ts`/`azure-openai-config.ts` 支持 **Foundry Chat Completions 部署**（responses 之外多一条 completions 车道）。Java 仍注册旧 id（`AzureOpenAIResponsesApi.java:34`）且只有 responses；models.json 写新 id 在 Java 不被识别 |
 | B231 | **新锚点**：OAuth 刷新取消时轮转 token 不持久化 | pi `bde882c74`＋`models.ts:621-633`：抽出 `refreshStoredOAuthCredential`，已开始的刷新**不怕调用方取消**，轮转后的 refresh token 一定落盘，后到的刷新读新凭证。Java 凭证明细刷新若仍随 abort 丢弃结果则有此窄角（设计时取证确认）。同批 `8d8ae2fc2` Anthropic 回调端口冲突回落空闲端口——Java `OAuthFlow.java:67` 本就绑端口 0（OS 分配），**无差距不登记** |
 | B232 | **新锚点**：内置目录数据漂移（v1.1.0） | pi 新锚点目录新增/改值：Claude Haiku 5.5（`f76c1db66`）、Claude 5.5 系列改吃 models.dev 元数据（`ce950d78f`）、Kimi K3 Moonshot 定价钉死＋Haiku 5.5 adaptive thinking（`a2eef9eb6`）、保留全部目录的 prompt-length 定价层（`943a10e74`）。Java `BuiltinCatalog.java:49` 最新只到 Haiku 4.5；与 B97（三个漂移 id）同族，属持续性数据漂移 |
@@ -187,6 +181,8 @@
 | B83（pi 自身三处 sanitize 缝） | 照缝移植、不多净化（普通工具重放入参/签名字段/google args） | pi 补上其三处时同步 |
 | B59（SQLite schema 与 pi 分叉） | pi 的 session-backends 已整包删除且从未进 `bin pi`；模块保留，分叉不再是缺口 | pi 重新推出主流存储后端时重裁 |
 | B62（chord）＋ B71/B72/B73（pico3/durable/micro） | R5：非 `bin pi` 可达，权重 0，不进对齐面 | 这些子系统进入 pi 主流发布版 |
+| B130（zai `supportsReasoningEffort` 数据驱动） | 2026-10-11 取证转 C（`docs/50`）：Java 只载 glm-4.7 族，pi 目录对其标 false、无级别表；Java 目录给 null＋探测（isZai）兜底 false ⇒ 有效值逐字节相同，今零行为差 | `ModelData` 引入任何带 thinkingLevelMap 的 glm-5.x（或任何 pi 标 sre=true 的 zai 模型）时：`CatalogCompatRules` 的 effort 位必须改成按级别表有无数据驱动（≙ pi 生成器按 reasoning_options 推导），守卫夹具 `carriedZaiModelsEffectivelyDontSupportReasoningEffort` 会先红 |
+| B132（together/baseten/fireworks 目录常量） | 2026-10-11 取证转 C（`docs/50`）：Java 不携带三个内置 provider（R5）；`ThinkingFormatWriter` 的 TOGETHER/BASETEN 臂、`ChatTemplateKwargValue`、models.json 的 thinkingFormat/chatTemplateArgs 显式键与 URL/provider 探测全在 ⇒ 手搓 models.json 接三类后端与 pi 等效（fireworks 目录恒 openai 格式、无特殊常量） | 携带三者内置 provider/目录时：常量随 `providers/data/*.json` 生成值一起搬（together 的 thinkingFormat、baseten 的 `chatTemplateArgs:{enable_thinking:{$var:thinking.enabled}}`） |
 
 ---
 

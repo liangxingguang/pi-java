@@ -1,6 +1,9 @@
 # 50 批量包：compat 常量标注族（B129–B132）＋ 新锚点漂移小修（B227/B228/B229 文案半）
 
-> 📝 **状态：设计稿，待用户审核（2026-10-11）。未批准前不写生产代码。**
+> ✅ **已闭环（2026-10-11，D5 按「修」裁决）**：红夹具 `59193967`（21 红）；生产 5 commits
+> `80d8754b`→`68b63886`（B227/B228/B229 文案/B129/B131）。
+> （B227 Estimate／B228 RetryableError／B229 Mistral／B129 CatalogCompatRules／B131 ThinkingFormatWriter）。
+> 红集、探针实测与偏差见 §8。
 >
 > pi 锚点：**`ea448f454`**（2026-10-11 迷你换锚后的新锚点，v1.1.0-22；证据一律
 > `git show ea448f454:<path>`）。pi-java 基线 HEAD `5b91d3be`。
@@ -334,9 +337,41 @@ ai 模块新增/改动测试数以 Maven 模块汇总行为准（当前基线 **
 
 每步 reactor 必须绿；stage 一律显式路径。
 
-## 8. 验证（闭环时回填）
+## 8. 验证（闭环回填）
 
-- ai 模块测试：`mvn -pl pi-java-ai -am test`，汇总行 Failures 0 / Errors 0，计数录实际值。
-- checkstyle 0；改动文件无 `System.out.println`；文件 ≤500 行（本包最大改动在既有 737 行的
-  ModelCompat **之外**，不增重 E5）。
-- evals/tui `-am` 反应堆 SUCCESS（Mistral/Estimate 被 evals 夹具消费的可能性在实现时确认）。
+### 8.1 红集（生产未动时）
+
+初次红灯 **21 failures**：EstimateTest 11、SimpleOptionsTest 3、RetryableErrorTest 3
+（参数 [2]/[3]/[39]）、MistralConversationsApiTest 1、CatalogCompatRulesTest 1
+（B130 守卫基线绿）、ThinkingFormatWireTest 1（门关对照绿）、XiaomiReasoningContentWireTest 1
+（zai 对照绿）。
+
+### 8.2 实施期偏差（3 条，均为既有夹具翻转，非范围变动）
+
+1. **B129 线格夹具首版零红**：直接在夹具里手搓 rrc=TRUE 的 ModelCompat 是同义反复（转换器
+   本来就读这个值）。改成走**内置目录真实条目** `ModelData.xiaomiModels()` 后恰 1 红。
+2. **3.5 常数波及三处既有期望**（设计红集只数了新增/改动的类）：
+   `EstimateTest.textAndImageInOneMessageAddUp`（字符先相加再除一次 ⇒ 1373，不是各除相加的 1374）、
+   `AnthropicMaxTokensWireTest.theClampReachesTheWire`（5903→4474，含前导系统消息 1 token）。
+3. **B131 让一条既有夹具翻转**：`antLingWritesNothingWithoutAMappedString` 旧断言「什么都不写」
+   编码的是穿透前形状——该夹具的 compat 给 null、探测在 localhost/test 背景给 sre=true，
+   本来就是 B131 窄角（重命名为 `antLingFallsBackToTheGenericEffortWithoutAMappedString`，
+   medium/high 两态）。这条期望是随生产同批改的，没走红先。
+
+### 8.3 变异探针（grep 复核落地→录红→还原→复绿）
+
+| 探针 | 实测红集 | 预测 |
+|---|---|---|
+| M1 常数回 4 | **15**（Estimate 11＋SimpleOptions 3＋Anthropic 线格 1） | 设计写「恰 3」，**低估** |
+| M2 三模式逐条删 | 删前两条恰 [2]/[3] 两红；删 http2 条恰 [39] 一红 | 全中 |
+| M3 Mistral 文案回退 | 恰 1（同条两断言：文案＋可重试） | 中 |
+| M4 rrc 回恒 null | 恰 2（Catalog 单测 1＋内置目录线格 1；zai 对照绿） | 中 |
+| M5 删穿透 else-if | 恰 2（新窄角夹具 1＋翻转的既有夹具 1） | 中 |
+
+### 8.4 最终验证
+
+- ai 模块：**1456** tests，Failures 0 / Errors 0 / Skipped 0（基线 1445＋净增 11）。
+- `mvn checkstyle:check -pl pi-java-ai` BUILD SUCCESS（两条 WARN 在 ContextOverflow/SanitizeUnicode，
+  本包未碰、预存）；五个生产文件均 ≤500 行；无 `System.out.println`。
+- `-am` 反应堆：coding-agent **522** 全绿、tui **212**（1 skip）、evals **45**（19 skip，跳的是 smoke）。
+- 台账 B 108→**102**（B129/B131/B227/B228 销号 4，B130/B132 转 §4 出数 2，B229 留半条）。

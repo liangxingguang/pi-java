@@ -130,6 +130,8 @@
 ⚠️ 本稿初版写「43 条」是旧计数（2026-10-10 §5.2 按行实测：41 条在册；销号 4 条后剩 **37 条**）。
 2026-10-10 晚些：`B139` 随 `原 docs/46` 销号（→36），同包新登 `B223`（→**仍 37 条**）。
 2026-10-11：`B223` 随 `原 docs/47` 销号（§3.2 →**36 条**；A9 不属 §3.2，另销）。
+2026-10-11 换锚：新登 `B227`–`B232`（→42，`B224` 文案半同日销号 →41）；`docs/50` 闭环后
+`B129`/`B131`/`B227`/`B228` 销号、`B130`/`B132` 转 §4（−6）⇒ §3.2 现 **35 条**（B229 留半条）。
 
 挑几条代表：
 
@@ -297,6 +299,10 @@ pi 侧一律 `git show 200387122:<path>`；pi-java 侧读当前工作树（HEAD 
 | `B227`–`B232` | **新登记 6 条**（屏过 ai 层全部 37 个改动文件）：B227 estimate `CHARS_PER_TOKEN` 4→3.5（默认 maxTokens 夹取；压缩域仍逐字 `/4` 不动）·B228 retry 白名单缺 `server_busy`/`servers are currently busy`/`pending stream has been canceled`（`noRetryStatuses` 仅 classifier 消费，不移植）·B229 Mistral 停因文案加 ` (server error)` ＋超时只盖响应头·B230 azure id 改名＋Foundry Chat Completions·B231 OAuth 刷新取消仍持久化轮转 token（免费端口半 Java 原生已一致，不登）·B232 目录数据漂移（Haiku 5.5/Claude 5.5/Kimi K3）。B226 补记 Radius gateway catalog 整体替换语义。 |
 | `A16` | **新登记**：6 份地图对新锚点逐条重测（24【确定】＋12【可能】引用文件），列入长尾批次。 |
 | 不登记 | 分类器三件套（`classifier-shared`/`openai-decisions`/llama.cpp classify）、`noRetryStatuses`、codex 调用方头优先（Java 无 codex 车道）、Bedrock haiku-5/reasoning-effort（Java 无 bedrock 车道）、配置 schema 发布（`compat-schema.ts` 等，chat 运行时零行为变化）、durable/codemode/pi-env 增量（R5 面外）。 |
+| **2026-10-11 批次**（`docs/50`，长尾批量化首包） | |
+| `B227` `B228` `B129` `B131` | ✅ **已销号**（见 `docs/50 §8`）：estimate 常数 4→3.5（#10497，压缩估算器仍 /4 不动）；retry 白名单补 `server_busy`/`servers are currently busy`/`pending stream has been canceled`；xiaomi 全族 rrc 目录标注（converter 空串补全的生产者补齐，线格夹具有内置目录走通）；ant-ling 窄角 else-if 穿透在 writer 臂内复刻（探测给 true 的 localhost 夹具证实既有两个断言编码的是穿透前形状，随修翻转）。 |
+| `B130` `B132` | ➡️ **转 §4 C 类**：zai sre 今零行为差（携带集 glm-4.7 在 pi 为 false，守卫夹具钉死，引入 glm-5.x 级别表时触发）；together/baseten/fireworks 不携带内置 provider（models.json 路径已完整等效，携带目录时触发）。 |
+| `B229` | ⚠️ **半闭**：文案半随本包闭环；超时半保留在册（PiHttpClient 响应头后取消请求超时的传输改造）。 |
 
 ---
 
