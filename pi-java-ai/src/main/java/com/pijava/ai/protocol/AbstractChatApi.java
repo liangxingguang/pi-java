@@ -156,12 +156,16 @@ public abstract class AbstractChatApi implements ChatApi {
      *
      * <p>此前遇 {@code StreamError} 只 {@code break}，然后返回一条空内容、无
      * {@code stopReason}、无 {@code errorMessage} 的基底消息 —— 错误静默消失
-     * （{@code 原 docs/55 §5 F5}）。{@link com.pijava.ai.http.PiHttpException} 只留给
-     * **本仓管道自身**的故障（车道内的错误已全部落进流，见登记 B113）。</p>
+     * （{@code 原 docs/55 §5 F5}）。B113（docs/52）后管道自身的未检查故障不再被包成
+     * {@link com.pijava.ai.http.PiHttpException}，原样传播；车道内的错误全部落进流。</p>
      */
     @Override
     public Message send(StreamRequest request, ApiOptions options) {
         var timestamp = Instant.now();
+        // B113（docs/52）：不包 try/catch —— 车道错误全部经 StreamError 落流（见上），
+        // QueueStreamIterator.hasNext()/next() 永不抛（中断合成落定事件），故旧 catch
+        // (→ PiHttpException "Streaming failed") 是不可达死结构。管道自身的未检查故障
+        // 保身份原样传播，与 pi result() 对意外 reject 同形。
         try (var iter = streamBlocking(request, options)) {
             while (iter.hasNext()) {
                 var event = iter.next();
@@ -173,8 +177,6 @@ public abstract class AbstractChatApi implements ChatApi {
                     return Message.AssistantMessage.fromPartial(err.partial());
                 }
             }
-        } catch (Exception e) {
-            throw new com.pijava.ai.http.PiHttpException(0, "Streaming failed", e);
         }
         // 走到这里只可能是管道自身故障（迭代器中断）—— 给一条基底消息，不假装是成功回答。
         return Message.AssistantMessage.fromPartial(identityBase(request, timestamp));
