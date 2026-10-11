@@ -173,6 +173,44 @@ class CatalogCompatRulesTest {
             .supportsReasoningEffort()).isFalse();
     }
 
+    /**
+     * B98：zai 全族目录恒标 {@code zaiToolStream=true}（新锚点 data/zai*.json 11/11 实测；
+     * 探测给 false，故这是目录-only 生产者）。其余 completions provider 不标。
+     */
+    @Test
+    void zaiFamilyCarriesTheToolStreamFlag() {
+        assertThat(CatalogCompatRules.completions("zai", "glm-4.7").zaiToolStream()).isTrue();
+        assertThat(CatalogCompatRules.completions("zai-coding-cn", "glm-4.6v").zaiToolStream())
+            .isTrue();
+        assertThat(CatalogCompatRules.completions("deepseek", "deepseek-v4-flash").zaiToolStream())
+            .isNull();
+        assertThat(CatalogCompatRules.completions("moonshotai", "kimi-k2.5").zaiToolStream())
+            .isNull();
+    }
+
+    /**
+     * B98：{@code claude-fable-5} 是 pi anthropic 目录唯一带 allowedFallbackModels 的模型
+     * —— opus-4-8/opus-5 两条，本地成本元数据逐字（5/25/0.5/6.25）。
+     */
+    @Test
+    void fableFiveCarriesTwoAllowedFallbackModels() {
+        var fallbacks = CatalogCompatRules.anthropic("anthropic", "claude-fable-5")
+            .allowedFallbackModels();
+        assertThat(fallbacks).hasSize(2);
+        assertThat(fallbacks.get(0).model()).isEqualTo("claude-opus-4-8");
+        assertThat(fallbacks.get(0).provider()).isEqualTo("anthropic");
+        assertThat(fallbacks.get(0).cost().inputPrice()).isEqualTo(5);
+        assertThat(fallbacks.get(0).cost().outputPrice()).isEqualTo(25);
+        assertThat(fallbacks.get(0).cost().cacheReadPrice()).isEqualTo(0.5);
+        assertThat(fallbacks.get(0).cost().cacheWritePrice()).isEqualTo(6.25);
+        assertThat(fallbacks.get(1).model()).isEqualTo("claude-opus-5");
+
+        assertThat(CatalogCompatRules.anthropic("anthropic", "claude-sonnet-4-6")
+            .allowedFallbackModels()).isNull();
+        assertThat(CatalogCompatRules.anthropic("openrouter", "claude-fable-5")
+            .allowedFallbackModels()).isNull();
+    }
+
     @Test
     void kimiK3IsNotCoveredHere() {
         // pi 对 Kimi K3 会给 supportsMidConvoToolAdditions —— 那是 moonshot/fireworks/opencode

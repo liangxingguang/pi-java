@@ -199,6 +199,48 @@ class ModelsJsonConfigTest {
     }
 
     /**
+     * B98（docs/51）：八个 compat 键从 models.json 读进 {@link ModelCompat}（手写真键
+     * 不再被静默丢弃），含两个嵌套形状（vercelGatewayRouting／allowedFallbackModels）。
+     */
+    @Test
+    void readsTheEightB98CompatKeys() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "openai-completions",
+              "models": [{"id": "m1", "compat": {
+                "requiresToolResultName": true,
+                "requiresAssistantAfterToolResult": true,
+                "requiresThinkingAsText": true,
+                "supportsUsageInStreaming": false,
+                "zaiToolStream": true,
+                "vllmPriority": -1,
+                "vercelGatewayRouting": {"only": ["bedrock"], "order": ["anthropic"]},
+                "allowedFallbackModels": [
+                  {"provider": "anthropic", "model": "claude-opus-5",
+                   "cost": {"input": 5, "output": 25, "cacheRead": 0.5, "cacheWrite": 6.25}}
+                ]
+              }}]
+            }}}
+            """);
+
+        var compat = config.catalog().find(ModelId.of("relay", "m1")).orElseThrow().compat();
+        assertThat(compat.requiresToolResultName()).isTrue();
+        assertThat(compat.requiresAssistantAfterToolResult()).isTrue();
+        assertThat(compat.requiresThinkingAsText()).isTrue();
+        assertThat(compat.supportsUsageInStreaming()).isFalse();
+        assertThat(compat.zaiToolStream()).isTrue();
+        assertThat(compat.vllmPriority()).isEqualTo(-1);
+        assertThat(compat.vercelGatewayRouting().only()).containsExactly("bedrock");
+        assertThat(compat.vercelGatewayRouting().order()).containsExactly("anthropic");
+        var fallback = compat.allowedFallbackModels().get(0);
+        assertThat(fallback.provider()).isEqualTo("anthropic");
+        assertThat(fallback.model()).isEqualTo("claude-opus-5");
+        assertThat(fallback.cost().outputPrice()).isEqualTo(25);
+        assertThat(fallback.cost().cacheWritePrice()).isEqualTo(6.25);
+    }
+
+    /**
      * 包 A-10 第 6 步：{@code supportsMaxOutputTokens} 从 models.json 读进 {@code compat}，
      * 且**原样保留三态**（「没写」必须与「写了 {@code true}」可分 —— 前者会吃车道缺省）。
      *
