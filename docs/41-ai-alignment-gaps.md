@@ -7,15 +7,15 @@
 >   **全量加权盘点**是 [`map/02-ai.md`](map/02-ai.md)（逐单元判定、权重、完成度）。
 > - 本稿 = 两者的 ai 层索引：§1 台账 B 项，§2 地图判「缺失」但没有 B 号的能力单元，
 >   §3 形状差（存疑、待裁决），§4 已裁决不做。
-> - pi 锚点 `ea448f454`（2026-10-11）。地图基准为 2026-10-04（pi `200387122`），
->   六图逐条重测是台账 **A16**；A16 闭环前，地图行号按旧锚点读。
-> - 整理：2026-10-11（旧版盘点过程稿已随此重写删除）。
+> - pi 锚点 `ea448f454`（2026-10-11）。**七份地图（含新建 07-mcp）已于 2026-10-12
+>   对该锚点逐条重测完毕**（原 A16 销号，新差异 B233/B234 已登记）。
+> - 整理：2026-10-12（旧版盘点过程稿已删）。
 
 ---
 
 ## 1. 台账在册功能缺口
 
-`docs/04` §3.2 全部 30 条 ＋ §3.3 中的 B222（同属 ai 协议面）：
+`docs/04` §3.2 全部 32 条 ＋ §3.3 中的 B222（同属 ai 协议面）：
 
 | # | 差什么（一句话） |
 |---|---|
@@ -50,6 +50,8 @@
 | B230 | azure provider 改名 `azure-openai-responses`→`azure`（env 键随之）＋ 新增 Foundry **Chat Completions** 车道；Java 仍注册旧 id 且只有 responses |
 | B231 | OAuth 刷新被调用方取消时，轮转后的 refresh token 仍须落盘（`refreshStoredOAuthCredential`）；Java 侧设计时取证确认 |
 | B232 | 内置目录数据漂移（v1.1.0）：Haiku 5.5、Claude 5.5 系列改吃 models.dev、Kimi K3 定价/级别表等；与 B97 同族，属持续性数据漂移 |
+| B233 | Mistral 开缓存时缺 `x-affinity: <sessionId>` 头（pi `mistral-conversations.ts:366-368`；B103 三车道不含 Mistral） |
+| B234 | `durationMs` 计时字段全无：AssistantMessage/ToolResultMessage（及 agent 侧 tool_execution_end/AgentSettled，见 docs/42） |
 
 ---
 

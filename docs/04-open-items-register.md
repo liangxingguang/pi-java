@@ -4,8 +4,9 @@
 >
 > **基准与口径**：
 > - pi 锚点 `ea448f454`（**2026-10-11 迷你换锚**起，v1.1.0-22；此前 `200387122`）。
->   本次为均匀前进、无结构删除，换锚记录见 `docs/map/ANCHOR.md`；6 份地图的逐条重测列 **A16**，
->   地图行号在 A16 闭环前仍按旧锚点读。换锚裁决与依据在 git 历史
+>   本次为均匀前进、无结构删除，换锚记录见 `docs/map/ANCHOR.md`；**七份地图（含新建 07-mcp）
+>   已于 2026-10-12 对该锚点逐条重测完毕**（原 A16 销号，新差异登记为 B233–B238）。
+>   换锚裁决与依据在 git 历史
 >   （`docs/11-pi-reanchor-ruling.md`，已随过程文档清理删除）。
 > - 判据是**行为**（`bin pi` 主流发布版可达的功能与表现），不是文档、API 形状或文件清单。
 > - **R5 裁决**：只做 `bin pi` 主流发布版可达的功能；pi 的 experimental/ 内部子系统
@@ -39,7 +40,6 @@
 | A10 | **内置工具线程安全审计**（read/write/edit/bash/glob…） | pi 契约「工具必须可并发执行」；审计未开始 |
 | A14 | shell 集成夹具无牙：多字节字符在 8 KiB 边界被切断 | 需字节精确的假 shell（当前 `.cmd`/sh 脚本做不到）；`Utf8ChunkStream` 只有单元级覆盖 |
 | A15 | 错误路 `AgentSettled` 形状无夹具 | SessionRunner 错误路发非空 toolResults 时无断言守护 |
-| A16 | **2026-10-11 换锚后 6 份地图逐条重测**（迷你换锚遗留，见 `docs/map/ANCHOR.md`） | `check-drift.sh` 圈定 24【确定】＋12【可能】被引文件（agent-loop/agent-session/bash-execution/settings-*/theme-*/tool-execution 等；ai 面 azure-openai-responses/env-api-keys/mistral-conversations/model-config）。需逐条判「行号漂」还是「语义变」，语义变的转 B 类，最后更新 6 份地图的 PI_PIN 自述 |
 
 ---
 
@@ -57,6 +57,8 @@
 | B49 | `turn_end` 颗粒度不同 | pi 每回合一条，Java 的 AgentSettled 每次驱动一条；真对齐要改事件时序 |
 | B53 | `find()` 缺 pi 的分级查找 | pi 三级阶梯（header-only → 项目内 → 跨项目）；Java 直接走跨项目全量扫描 |
 | B55 | 会话列表无进度/异步/取消维度 | pi list 带 onProgress、渐进发布、AbortSignal、并发扫描；Java 同步全量（仅交互选择器面） |
+| B235 | **新锚点**：`agent_settled.aborted` 缺失 | pi 事件带 `aborted` 布尔（`agent-session.ts:203,1083-1086`）区分中止收尾；Java `AgentSessionEvent.AgentSettled` 无该字段 |
+| B237 | RPC prompt disposition 缺 `handled` | pi 三态 `handled\|queued\|started`（`rpc-types.ts:118`、`agent-session.ts:310-311`）；Java `RpcDispatcher.java:117-130` 只产 started/queued |
 
 ### 3.2 请求选项 / Provider 协议面
 
@@ -87,6 +89,8 @@
 | B230 | **新锚点**：azure provider 改名＋Foundry Chat Completions | pi `a37306d43`（#9714）＋env 表：provider id `azure-openai-responses`→`azure`（env 键随之），新增 `providers/azure.ts`/`azure-openai-config.ts` 支持 **Foundry Chat Completions 部署**（responses 之外多一条 completions 车道）。Java 仍注册旧 id（`AzureOpenAIResponsesApi.java:34`）且只有 responses；models.json 写新 id 在 Java 不被识别 |
 | B231 | **新锚点**：OAuth 刷新取消时轮转 token 不持久化 | pi `bde882c74`＋`models.ts:621-633`：抽出 `refreshStoredOAuthCredential`，已开始的刷新**不怕调用方取消**，轮转后的 refresh token 一定落盘，后到的刷新读新凭证。Java 凭证明细刷新若仍随 abort 丢弃结果则有此窄角（设计时取证确认）。同批 `8d8ae2fc2` Anthropic 回调端口冲突回落空闲端口——Java `OAuthFlow.java:67` 本就绑端口 0（OS 分配），**无差距不登记** |
 | B232 | **新锚点**：内置目录数据漂移（v1.1.0） | pi 新锚点目录新增/改值：Claude Haiku 5.5（`f76c1db66`）、Claude 5.5 系列改吃 models.dev 元数据（`ce950d78f`）、Kimi K3 Moonshot 定价钉死＋Haiku 5.5 adaptive thinking（`a2eef9eb6`）、保留全部目录的 prompt-length 定价层（`943a10e74`）。Java `BuiltinCatalog.java:49` 最新只到 Haiku 4.5；与 B97（三个漂移 id）同族，属持续性数据漂移 |
+| B233 | **新锚点重测撞出**：Mistral `x-affinity` 头缺失 | pi `mistral-conversations.ts:366-368` 开缓存（有 sessionId）时发 `x-affinity: <sessionId>`；Java Mistral 车道零命中（B103 三车道不含 Mistral，旧图漏记） |
+| B234 | **新锚点**：`durationMs` 计时字段缺失 | pi `AssistantMessage.durationMs`/`ToolResultMessage.durationMs`（ai `types.ts:595/:635`）＋ agent-loop 计时（`agent-loop.ts:825-945`）＋ `tool_execution_end`/AgentSettled 携带（`types.ts:453-455,531-538`）；bash 卡显示单调 `Took …`。Java AssistantMessage/ToolResultMessage/ToolExecutionEnd 全无 |
 
 **compat 面细碎登记**（pi 有标注/消费、Java 无的字段与数据位）：
 
@@ -152,19 +156,21 @@
 | B217 | MCP `login` 的端到端（真授权服务器）无夹具 | 夹具覆盖到「连不上 / 非 OAuth / 缺参数 / 超时校验」为止；`--timeout` 秒数文案与 `reconnect` 后的成功路径需真 AS（包⑨ 的 `McpSignIn` 另有夹具） |
 | B163 | 主题/色彩系统差距 | pi 3,176 行（theme/system-theme/oklab…），Java 74 行 |
 | B164 | 分类器基础设施零对应 | image/classifier 统一模型设施 |
+| B236 | **新锚点**：`--tools`/`--exclude-tools` 模式面缺失 | pi 走 minimatch 模式：`*` 全选、`+name/-name` 修饰符、`mcp__` 前缀、空名单保留 MCP 注册（`args.ts:151-162`、`agent-session.ts` createToolNameMatcher/applyToolModifiers）；Java `ArgsParser.java:87-90,244-251` 只切逗号裸名 |
 
 ### 3.4 TUI（优先级最低，web UI 为主）
 
 | # | 条目 | 现状与出处 |
 |---|---|---|
-| B38 | compaction_end 后不重建聊天区 | pi 整表 clear＋重渲染＋压缩摘要消息；Java TUI 对压缩一无所知 |
+| B38 | compaction_end 后 TUI 不重建聊天区 | pi 整表 clear＋重渲染＋压缩摘要消息卡；Java 现只有压缩指示器/一行摘要/QueueUpdate（2026-10-12 重测更正措辞），整表重建与摘要卡仍缺 |
 | B39 | 压缩窗口 Esc 换绑 | 随 B36 |
-| B46 | BashTool 从不调 onUpdate | tool_execution_update 生产上永不发射（仅测试桩） |
+| B46 | BashTool 的 onUpdate 无 TUI 消费者 | 生产发射面已通（BashTool→BashUpdateEmitter→SessionRunner，2026-10-12 重测更正：旧记「生产永不发射」过期）；web 有 bashOutput，TUI 渲染面仍缺 |
 | B47 | TUI tool_execution_* 语义取错源 | Java 按「模型吐完调用」计数，pi 按真实工具执行事件 |
 | B65 | MarkdownRenderer/SyntaxHighlighter 是死代码 | 助手消息走纯文本，表格/mermaid/高亮/链接全不可达；先定「接线还是删声明」 |
 | B66 | 6 个已声明键位未接线 | MODEL_CYCLE/THINKING_CYCLE/TOOLS_EXPAND 等 |
 | B78 | FuzzyMatcher 语义不同 | pi 子序列匹配 ＋ 分词；Java 不同 |
 | B145 | 启动/登录后定向目录刷新未接线 | 仅 RPC 模式有后台刷新，pi 另有三处 |
+| B238 | **新锚点**：TUI 四项新行为缺失（明细见 map/05） | K20 视口滚动键改 Ctrl+Home/Ctrl+End（裸 Home/End 归还编辑器）；R29 安装变更每会话一次重启警告（`maybeShowInstallChangeWarning`）；K39 OSC 7501 程序状态上报（program-status）；C20 APC 标记假光标 |
 
 ---
 
@@ -185,10 +191,10 @@
 
 | # | 文件 | 行数 |
 |---|---|---:|
-| E1 | coding-agent …/core/AgentSession.java | 1,169 |
-| E2 | coding-agent …/rpc/RpcDispatcher.java | 647 |
+| E1 | coding-agent …/core/AgentSession.java | 1,187 |
+| E2 | coding-agent …/rpc/RpcDispatcher.java | 642 |
 | E3 | agent-core …/harness/PiLaneSink.java | 562 |
-| E4 | agent-core …/harness/AgentHarness.java | 577 |
+| E4 | agent-core …/harness/AgentHarness.java | 595 |
 | E5 | ai …/catalog/ModelCompat.java | **762**（2026-10-11 B98 加 8 组件；converter 侧已拆出 CompletionAssistantMessage 保 500 内） |
 
 均不与功能耦合，可随时拆，与功能包搭车推进。

@@ -7,10 +7,9 @@
 >   **全量加权盘点**是 [`map/03-agent-core.md`](map/03-agent-core.md)（104 个单元逐条判定、权重、完成度）。
 > - 本稿 = 两者的 agent-core 层索引：§1 确认缺口，§2 形状差（存疑、待裁决），
 >   §3 要取证/清点的 A 项，§4 已裁决不做。
-> - pi 锚点 `ea448f454`（2026-10-11）。地图基准为 2026-10-04（pi `200387122`），
->   六图逐条重测是台账 **A16**；A16 闭环前地图行号按旧锚点读。§1 无 B 号的条目已于
->   2026-10-11 对当前工作树复核（grep 命中情况见各行）。
-> - 整理：2026-10-11（旧版盘点过程稿已随此重写删除）。
+> - pi 锚点 `ea448f454`（2026-10-11）。**七份地图已于 2026-10-12 对该锚点逐条重测完毕**
+>   （原 A16 销号）；本稿数字随重测同步。
+> - 整理：2026-10-12（旧版盘点过程稿已删）。
 
 ---
 
@@ -50,9 +49,8 @@ B53 `find()` 缺三级阶梯（地图 #78）、B31/B32/B33（get_state 三处 RP
 | #34 | `before_request` ⇒ pi `prepareRequest` 返回 context/model/thinking 三样替换；Java `HookSystem` 老形状 | —— |
 | #46 | `AgentSessionEvent` 面：pi 24 变体 vs Java 20（具体缺口之一即 #48/B30） | B30 族 |
 | #52 | `agent_end` 载荷：pi 发**本 pass** `newMessages`；Java 会话层发 `accumulatedMessages()` | A8（旧过程稿编号） |
-| #54 | Entry union：pi 11 类 vs Java 10 类（缺 `LabelEntry`/`SessionInfoEntry`；Java 另有 `Replacement`） | —— |
+| #54 | Entry union：pi 11 类 vs Java 9 record（缺 `LabelEntry`/`SessionInfoEntry` 两个 record；二者以 Fact 标签存活并原生读写 v3 线；Java 另有 `Replacement`） | —— |
 | #58 | `convertToLlm`（含 `case "system"`）形状差 | A1（旧编号） |
-| #73 | JSONL 存储：pi 主流 v3 平铺 vs Java v4 平铺，互读不了 | —— |
 | #78 | `latest()`/`find()` 范围：pi `findMostRecentSession` 只读一个项目目录；Java 走跨项目全量 | **B53** |
 | #100 | 系统提示载体：pi 的 TranscriptContext 只有 messages（基线是首条 system 消息）；Java 走 `Context.systemPrompt` 字段 ⇒ 首条等价、**会话中变更不等价** | —— |
 
@@ -62,13 +60,16 @@ B53 `find()` 缺三级阶梯（地图 #78）、B31/B32/B33（get_state 三处 RP
 |---|---|
 | 内置工具 | bash 默认超时/上限（pi 无默认、上限 2147483 s vs Java 120 s/600 s）· grep 缺 4 参数＋50KB 截断 · find/glob 名称不同＋缺 limit/gitignore · ls 参数集不同 |
 | 队列/宿主 | #14 `QueueMode.All` 宿主语义（F1）· #80 `streamingBehavior` 两道门（A5/F4）· #84 两道门行为裁决（F4） |
-| 事件 | #53 `turn_end` 颗粒度（**B49**）· #86 `_emitSessionCompactFailed`（F3）· #88 `ActiveToolsChange` 发射（C1） |
+| 事件 | #53 `turn_end` 颗粒度（**B49**）· #86 `_emitSessionCompactFailed`、#88 `ActiveToolsChange` **2026-10-12 重测转 R1 作废**（公开事件面 pi 从不发射；#86 只剩扩展事件属 coding-agent 域） |
 | 存储/会话 | #56 `EntryProjector`（A1）· #57 四个消息类型（A1）· #60 `PendingEntry`/`InboxItem` 队列契约 · #75 session fork · #77 恢复 seed/replay（A2） |
 | prompt/技能 | #63 `loadSkills`、#64 `loadPromptTemplates`（生产者都在 coding-agent） |
 | API 面 | #81 工具线程安全契约（**A10**）· #82 `retry.provider.*` ↔ RetryPolicy（A7）· #83 `transcript()` 消费者清点（A2）· #85 `recordEvent` 兜底（F2） |
 | 并发/可见性 | #89 批内 join 源序（C2）· #90 transcript 可见性（C3）· #91 `reset` 不关 runSpan（C4） |
 | 夹具/文档/结构债 | #87 L5 thinking 块不对称（E8）· #92 遥测 javadoc（D2/D3）· #93 SummaryGenerator javadoc（D6）· #94 文件超限（**E3/E4**，另 E1/E2 在 coding-agent）· #95 集成层夹具无牙（**A14**）· #96 错误路 AgentSettled 无夹具（**A15**） |
-| 已被取证消解 | #102 reset 保留基线 system 消息（台账 **B70 已销号**：载体不同、行为一致）—— 建议 A16 时改判对齐 |
+
+> 2026-10-12 重测已转对齐：**#73 JSONL 存储**（PiV3Wire 原生 v3 线＋双向互读夹具，条目信封 #16 仍存疑见 map/06）、
+> **#102 reset 基线**（B70 消解坐实：systemPrompt 字段清空不丢基线）；#86/#88 转 R1 作废。
+> 新登记缺口：`durationMs` 计时字段、`agent_settled.aborted`（B234/B235）。
 
 > 旧 A/C/D/F 编号来自各过程稿（docs/31 族），其中一部分已随包闭环；与 `docs/04` §2 的 A 类
 > （A10/A14/A15/A16）不是同一编号空间。A16 重测时统一清理标签。
