@@ -133,4 +133,91 @@ class ProviderErrorsTest {
         assertThat(ProviderErrors.format(normalized, "OpenAI API error"))
             .isEqualTo("Stream ended without finish_reason");
     }
+
+    // ── pi-messages 车道格式（B224，pi pi-messages.ts:124-131 真值表）──────
+
+    /** T1：message + code 齐 ⇒ {@code "<status> <phrase>: <message> (<code>)"}。 */
+    @Test
+    void piMessagesMessageAndCodeSuffix() {
+        assertThat(ProviderErrors.formatPiMessagesError(401,
+            "{\"error\":{\"message\":\"Token expired\",\"code\":\"unauthorized\"}}"))
+            .isEqualTo("401 Unauthorized: Token expired (unauthorized)");
+    }
+
+    /** T2：只有 message ⇒ 无 code 后缀。 */
+    @Test
+    void piMessagesMessageWithoutCode() {
+        assertThat(ProviderErrors.formatPiMessagesError(400,
+            "{\"error\":{\"message\":\"bad\"}}"))
+            .isEqualTo("400 Bad Request: bad");
+    }
+
+    /** T3：message/code 都是空串 ⇒ suffix 空（?? 不回落 body）、code 真值门不加后缀。 */
+    @Test
+    void piMessagesEmptyMessageAndCodeGivesEmptySuffix() {
+        assertThat(ProviderErrors.formatPiMessagesError(400,
+            "{\"error\":{\"message\":\"\",\"code\":\"\"}}"))
+            .isEqualTo("400 Bad Request: ");
+    }
+
+    /** T4：空体 ⇒ parse 失败 ⇒ suffix 裸 body（空串）。 */
+    @Test
+    void piMessagesEmptyBody() {
+        assertThat(ProviderErrors.formatPiMessagesError(400, "")).isEqualTo("400 Bad Request: ");
+        assertThat(ProviderErrors.formatPiMessagesError(400, null)).isEqualTo("400 Bad Request: ");
+    }
+
+    /** T5：非 JSON 纯文本 ⇒ 裸 body 兜底。 */
+    @Test
+    void piMessagesPlainTextFallsBackToBody() {
+        assertThat(ProviderErrors.formatPiMessagesError(413, "policy overflow"))
+            .isEqualTo("413 Payload Too Large: policy overflow");
+    }
+
+    /** T6：error 是标量 ⇒ 解析门不通过 ⇒ 裸 body。 */
+    @Test
+    void piMessagesScalarErrorFallsBackToBody() {
+        assertThat(ProviderErrors.formatPiMessagesError(400, "{\"error\":\"boom\"}"))
+            .isEqualTo("400 Bad Request: {\"error\":\"boom\"}");
+    }
+
+    /** T7：error 是数组 ⇒ 同上，裸 body。 */
+    @Test
+    void piMessagesArrayErrorFallsBackToBody() {
+        assertThat(ProviderErrors.formatPiMessagesError(400, "{\"error\":[]}"))
+            .isEqualTo("400 Bad Request: {\"error\":[]}");
+    }
+
+    /** T8：message 非字符串（数字）⇒ message 缺席，回落裸 body；code 非串同理。 */
+    @Test
+    void piMessagesNonStringMessageFallsBackToBody() {
+        assertThat(ProviderErrors.formatPiMessagesError(400, "{\"error\":{\"message\":42}}"))
+            .isEqualTo("400 Bad Request: {\"error\":{\"message\":42}}");
+    }
+
+    /** T9：抛出文案不截断（8192 截断属于诊断 details，B225）。 */
+    @Test
+    void piMessagesLongBodyIsNotTruncated() {
+        String raw = "x".repeat(10000);
+        String formatted = ProviderErrors.formatPiMessagesError(400, raw);
+        assertThat(formatted).startsWith("400 Bad Request: ");
+        assertThat(formatted.substring("400 Bad Request: ".length())).isEqualTo(raw);
+        assertThat(formatted).doesNotContain("…");
+    }
+
+    /** T10：未知状态码 ⇒ phrase 空串 ⇒ {@code "599 : <suffix>"}。 */
+    @Test
+    void piMessagesUnknownStatusHasEmptyPhrase() {
+        assertThat(ProviderErrors.formatPiMessagesError(599, "weird"))
+            .isEqualTo("599 : weird");
+    }
+
+    /** RFC 标准短语表：标准码给短语，未知码给空串（≙ pi 空 statusText）。 */
+    @Test
+    void reasonPhrasesAreRfcStandardOrEmpty() {
+        assertThat(ProviderErrors.reasonPhrase(413)).isEqualTo("Payload Too Large");
+        assertThat(ProviderErrors.reasonPhrase(429)).isEqualTo("Too Many Requests");
+        assertThat(ProviderErrors.reasonPhrase(500)).isEqualTo("Internal Server Error");
+        assertThat(ProviderErrors.reasonPhrase(599)).isEmpty();
+    }
 }

@@ -1,5 +1,7 @@
 package com.pijava.ai.utils;
 
+import java.util.Map;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -190,6 +192,116 @@ public final class ProviderErrors {
         }
         return error.getMessage();
     }
+
+    /**
+     * pi {@code formatPiMessagesResponseError}（pi-messages.ts:124-131）。
+     *
+     * <p>pi-messages 是裸 fetch 车道（异常是 {@link com.pijava.ai.http.PiHttpException}），
+     * 格式自成一家：{@code "<status> <phrase>: <message ?? body> (<code>)"}。
+     * 结构错误体（根对象的 {@code error} 是<b>非数组对象</b>）的 message/code 只认
+     * 其下的字符串字段：</p>
+     * <ul>
+     *   <li>{@code message} 空串是真字符串 ⇒ suffix 落空串，<b>不</b>回落裸 body
+     *      （JS 的 {@code ??} 只挡 null/undefined，不挡空串）；</li>
+     *   <li>{@code code} 空串不拼接后缀（JS 真值门）；</li>
+     *   <li>抛错文案<b>不截断</b>：8192 的 U+2026 截断只属于诊断 details（B225）。</li>
+     * </ul>
+     *
+     * <p><b>方言</b>：JDK HTTP 客户端不暴露 reason phrase（docs/49 §4.2），
+     * 用 {@link #reasonPhrase} 的 RFC 标准短语表重放；未知码给空串，精确复现
+     * pi 空 statusText 的 {@code "<status> : <suffix>"} 形状。</p>
+     */
+    public static String formatPiMessagesError(int status, String rawBody) {
+        String body = rawBody == null ? "" : rawBody;
+        String message = null;
+        String code = null;
+        JsonNode error = piMessagesErrorNode(body);
+        if (error != null) {
+            JsonNode messageNode = error.get("message");
+            if (messageNode != null && messageNode.isTextual()) {
+                message = messageNode.asText(); // 可能为 ""：?? 不回落 body
+            }
+            JsonNode codeNode = error.get("code");
+            if (codeNode != null && codeNode.isTextual() && !codeNode.asText().isEmpty()) {
+                code = codeNode.asText();
+            }
+        }
+        String suffix = message != null ? message : body;
+        return status + " " + reasonPhrase(status) + ": " + suffix
+            + (code != null ? " (" + code + ")" : "");
+    }
+
+    /**
+     * pi {@code parsePiMessagesErrorBody}（pi-messages.ts:109-117）：JSON 解析成功
+     * ∧ 根是对象 ∧ {@code error} 是非数组对象 ⇒ 返回 error 节点；否则 {@code null}
+     * （≙ pi 的 undefined，调用方回落裸 body）。
+     */
+    private static JsonNode piMessagesErrorNode(String body) {
+        if (body == null || body.isBlank()) {
+            return null; // JSON.parse("") 抛错
+        }
+        try {
+            JsonNode root = ObjectMappers.jsonMapper().readTree(body);
+            JsonNode error = root instanceof ObjectNode ? root.get("error") : null;
+            return error instanceof ObjectNode ? error : null;
+        } catch (JsonProcessingException e) {
+            return null;
+        }
+    }
+
+    /**
+     * RFC 9110 标准 reason phrase（JDK {@code java.net.http} 不暴露状态行）。
+     * 未知码 ⇒ {@code ""}（≙ pi 看到空 statusText，见 docs/49 §4.2）。
+     */
+    static String reasonPhrase(int status) {
+        return REASON_PHRASES.getOrDefault(status, "");
+    }
+
+    private static final Map<Integer, String> REASON_PHRASES = Map.ofEntries(
+        Map.entry(301, "Moved Permanently"),
+        Map.entry(302, "Found"),
+        Map.entry(307, "Temporary Redirect"),
+        Map.entry(308, "Permanent Redirect"),
+        Map.entry(400, "Bad Request"),
+        Map.entry(401, "Unauthorized"),
+        Map.entry(402, "Payment Required"),
+        Map.entry(403, "Forbidden"),
+        Map.entry(404, "Not Found"),
+        Map.entry(405, "Method Not Allowed"),
+        Map.entry(406, "Not Acceptable"),
+        Map.entry(407, "Proxy Authentication Required"),
+        Map.entry(408, "Request Timeout"),
+        Map.entry(409, "Conflict"),
+        Map.entry(410, "Gone"),
+        Map.entry(411, "Length Required"),
+        Map.entry(412, "Precondition Failed"),
+        Map.entry(413, "Payload Too Large"),
+        Map.entry(414, "URI Too Long"),
+        Map.entry(415, "Unsupported Media Type"),
+        Map.entry(416, "Range Not Satisfiable"),
+        Map.entry(417, "Expectation Failed"),
+        Map.entry(418, "I'm a Teapot"),
+        Map.entry(421, "Misdirected Request"),
+        Map.entry(422, "Unprocessable Entity"),
+        Map.entry(423, "Locked"),
+        Map.entry(424, "Failed Dependency"),
+        Map.entry(425, "Too Early"),
+        Map.entry(426, "Upgrade Required"),
+        Map.entry(428, "Precondition Required"),
+        Map.entry(429, "Too Many Requests"),
+        Map.entry(431, "Request Header Fields Too Large"),
+        Map.entry(451, "Unavailable For Legal Reasons"),
+        Map.entry(500, "Internal Server Error"),
+        Map.entry(501, "Not Implemented"),
+        Map.entry(502, "Bad Gateway"),
+        Map.entry(503, "Service Unavailable"),
+        Map.entry(504, "Gateway Timeout"),
+        Map.entry(505, "HTTP Version Not Supported"),
+        Map.entry(506, "Variant Also Negotiates"),
+        Map.entry(507, "Insufficient Storage"),
+        Map.entry(508, "Loop Detected"),
+        Map.entry(510, "Not Extended"),
+        Map.entry(511, "Network Authentication Required"));
 
     // ── 内部 ──────────────────────────────────────────────────────────────
 
