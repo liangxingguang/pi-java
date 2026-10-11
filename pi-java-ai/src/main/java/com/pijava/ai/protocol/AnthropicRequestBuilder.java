@@ -23,7 +23,6 @@ import com.pijava.ai.api.TransformMessages;
 import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.catalog.CacheBreakpointSpec;
 import com.pijava.ai.catalog.CompatResolver;
-import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.message.MessageTexts;
 import com.pijava.ai.utils.SanitizeUnicode;
