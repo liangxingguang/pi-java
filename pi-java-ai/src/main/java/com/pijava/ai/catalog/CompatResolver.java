@@ -142,7 +142,10 @@ public final class CompatResolver {
             null,
             // 原 docs/69：grammar 能力位显式-only（目录标注/models.json），无探测。
             compat.supportsOpenAIGrammarTools()), detectedFormat, detectedEffort,
-            detectedCacheControlFormat, compat.supportsOpenAIGrammarTools());
+            detectedCacheControlFormat, compat.supportsOpenAIGrammarTools(),
+            // B103（docs/52，pi :1680-1681）：亲和两字段的 completions 探测缺省。
+            isOpenRouter,
+            isOpenRouter ? SessionAffinityFormat.OPENROUTER : SessionAffinityFormat.OPENAI);
     }
 
     /**
@@ -163,7 +166,9 @@ public final class CompatResolver {
     private static ModelCompat withCompletions(ModelCompat c, ThinkingFormat detectedFormat,
                                                Boolean detectedSupportsReasoningEffort,
                                                CacheControlFormat detectedCacheControlFormat,
-                                               Boolean supportsOpenAIGrammarTools) {
+                                               Boolean supportsOpenAIGrammarTools,
+                                               boolean detectedAffinitySend,
+                                               SessionAffinityFormat detectedAffinityFormat) {
         return new ModelCompat(
             c.allowEmptySignature(),
             c.requiresReasoningContentOnAssistantMessages(),
@@ -192,7 +197,10 @@ public final class CompatResolver {
             // openRouterRouting 只透传（pi 探测面 :1657 的 {} 无读者，原 docs/59 §4.8/R6）。
             c.cacheControlFormat() != null ? c.cacheControlFormat() : detectedCacheControlFormat,
             c.openRouterRouting(),
-            null, null, false, supportsOpenAIGrammarTools,
+            // B103：explicit ?? detected（resolved 现已保留显式值，不覆盖）。
+            pick(c.sendSessionAffinityHeaders(), detectedAffinitySend),
+            c.sessionAffinityFormat() != null ? c.sessionAffinityFormat() : detectedAffinityFormat,
+            false, supportsOpenAIGrammarTools,
             // 包 09：逐组件重建必须带上新字段（否则静默丢成缺省）。
             c.supportsEagerToolInputStreaming(), c.supportsExplicitPromptCacheMode(),
             // B98（docs/51）：completions 七字段在探测面给默认 —— usage 默认 true，
@@ -205,22 +213,26 @@ public final class CompatResolver {
     }
 
     /**
-     * anthropic-messages 车道：pi {@code getAnthropicCompat:206-219}。
+     * anthropic-messages 车道：pi {@code getAnthropicCompat:206-221}（一参形态，
+     * baseUrl 给 null —— 亲和位只按 provider 名探测；{@code anthropicCacheControl} 等
+     * 不读这两个组件的调用点用它）。
      *
-     * <p>⚠️ 本车道<b>没有 URL 探测</b>：那条 {@code isOpenRouter} 只影响
-     * {@code sendSessionAffinityHeaders}/{@code sessionAffinityFormat}，两个 java 都不携带
-     * ⇒ 本方法只做「两个 mid-convo 标志的 {@code ?? false}」。</p>
-     *
-     * <p>包 A-01 另加两个 cache 相关的 {@code ?? true}（{@code :212-213}）：两者 pi 的缺省
-     * 都是真，且**只**被本车道读。</p>
+     * <p>包 A-01 两个 cache {@code ?? true}（{@code :212-213}）保持，只被本车道读。</p>
      */
     public static ModelCompat forAnthropic(ModelInfo model) {
-        // docs/52 脚手架：带 baseUrl 的 openrouter 探测待 B103 实现。
         return forAnthropic(model, null);
     }
 
-    /** docs/52 脚手架形态：B103 实现后在此按 isOpenRouter 补两亲和位缺省。 */
+    /**
+     * B103（docs/52）：带有效 baseUrl 的形态（pi :215 的
+     * {@code model.provider === "openrouter" || model.baseUrl.includes("openrouter.ai")}）。
+     *
+     * <p>亲和两字段按 {@code explicit ?? detected} 合一：send 缺省 = isOpenRouter；
+     * format 缺省 = openrouter 端点给 OPENROUTER、否则 null（pi 的 undefined，头侧落
+     * x-session-affinity）。</p>
+     */
     public static ModelCompat forAnthropic(ModelInfo model, String baseUrl) {
+        boolean isOpenRouter = isOpenRouter(provider(model), baseUrl);
         var partial = resolved(base(model), null, Boolean.FALSE, null, Boolean.FALSE,
             null, null, null, null, null, null,
             Boolean.TRUE, Boolean.TRUE, null, null, null, null);
@@ -241,7 +253,9 @@ public final class CompatResolver {
             partial.thinkingFormat(), partial.chatTemplateKwargs(),
             partial.chatTemplateArgs(), partial.supportsReasoningEffort(),
             partial.cacheControlFormat(), partial.openRouterRouting(),
-            partial.sendSessionAffinityHeaders(), partial.sessionAffinityFormat(),
+            pick(partial.sendSessionAffinityHeaders(), isOpenRouter),
+            partial.sessionAffinityFormat() != null ? partial.sessionAffinityFormat()
+                : (isOpenRouter ? SessionAffinityFormat.OPENROUTER : null),
             base(model).supportsStrictTools(), null,
             // 包 09：同上 —— 两个新字段原样透传（本车道不定义它们）。
             partial.supportsEagerToolInputStreaming(), partial.supportsExplicitPromptCacheMode(),
@@ -349,6 +363,16 @@ public final class CompatResolver {
     }
 
     /**
+     * B103：openrouter 探测（pi 各车道的 {@code isOpenRouter}：provider 名或 baseUrl 子串）。
+     * catalog 层不引用 protocol.{@code SessionAffinityHeaders}（依赖方向 protocol → catalog），
+     * 两处同一谓词，改动须同步。
+     */
+    private static boolean isOpenRouter(String provider, String baseUrl) {
+        return "openrouter".equals(provider)
+            || (baseUrl != null && baseUrl.contains("openrouter.ai"));
+    }
+
+    /**
      * 把「本车道的探测结果」与模型上已有的覆盖合起来 —— pi 的
      * {@code explicit ?? detected}（{@code getCompat:1685-1721} 的每一行）。
      *
@@ -408,8 +432,12 @@ public final class CompatResolver {
             // cacheControlFormat/openRouterRouting/grammar 三个显式值丢成缺省。
             c.cacheControlFormat(),
             c.openRouterRouting(),
-            // affinity 两字段与 strictTools 在 resolved 这一层保持既有缺省（null/null/false）。
-            null, null, false, supportsOpenAIGrammarTools,
+            // B103（docs/52）：两亲和位**原样透传显式值**（此前硬编码 null,null 是
+            // B156 型事故——models.json/目录写的 sendSessionAffinityHeaders/sessionAffinityFormat
+            // 在四条车道全部被静默丢掉，连 responses 车道也不例外）。车道探测缺省在
+            // withCompletions/forAnthropic 里按 explicit ?? detected 合一。
+            c.sendSessionAffinityHeaders(), c.sessionAffinityFormat(),
+            false, supportsOpenAIGrammarTools,
             // 包 09：两个新字段**无探测面**（pi 只在生成目录与 models.json 里标注）
             // ⇒ 原样透传模型上的值，缺省由读点补（true / false）。
             c.supportsEagerToolInputStreaming(),

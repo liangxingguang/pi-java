@@ -93,6 +93,9 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         }
         if (options.baseUrl() != null && !options.baseUrl().isBlank()) {
             builder.baseUrl(options.baseUrl());
+            this.baseUrl = options.baseUrl();
+        } else {
+            this.baseUrl = null;
         }
         // A-14（G1）：SDK 内置重试关到 0，初始请求由 ProviderRetry 独占。
         builder.maxRetries(0);
@@ -101,6 +104,17 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         this.client = builder.build();
         this.providerRetry = ProviderRetry.optionsOf(options);
         this.cacheRetention = retentionOf(options);
+        // B103（docs/52）：pi :625 的 cacheSessionId 原料（none 门在 streamInternal
+        // 按解析后的保留期过）；Bearer（OAuth/copilot）分支 pi 不挂亲和头（:992-1031）。
+        this.bearer = bearer;
+        this.sessionId = sessionIdOf(options);
+    }
+
+    /** 从 extra 读 sessionId（B103）；blank ⇒ null。与 completions 车道同形。 */
+    private static String sessionIdOf(ApiOptions options) {
+        Map<String, Object> extra = options.extra();
+        Object raw = extra == null ? null : extra.get("sessionId");
+        return raw == null || raw.toString().isBlank() ? null : raw.toString();
     }
 
     /**
@@ -148,6 +162,15 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
      */
     private final Optional<CacheRetention> cacheRetention;
 
+    /** B103：Bearer（OAuth/copilot）分支不挂会话亲和头（pi :992-1031）。 */
+    private final boolean bearer;
+
+    /** B103：有效 baseUrl（openrouter 探测用；空白 ⇒ null）。 */
+    private final String baseUrl;
+
+    /** B103：原始 sessionId（亲和头原料；none 门在请求期过）。 */
+    private final String sessionId;
+
     /** A-14：初始请求获取的重试选项。 */
     private final ProviderRetry.Options providerRetry;
 
@@ -162,7 +185,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         var stop = new StopState();
         var usageState = new AnthropicUsageState(request.model());
         try {
-            var params = buildParams(request);
+            var params = buildParams(request, affinitySessionId(), baseUrl);
             publisher.submit(builder.emitStart());
 
             // A-14（R7）：只包初始请求获取；每次重试是全新 SDK 请求。
@@ -446,12 +469,27 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                 .orElse(null);
     }
 
-    private MessageCreateParams buildParams(StreamRequest request) {
+    private MessageCreateParams buildParams(StreamRequest request, String affinitySessionId,
+                                             String baseUrl) {
         // 包 A-01：断点规格在这里解析一次（三源的合并：请求期选项 ?? 环境变量 ?? "short"），
         // 随后由 AnthropicRequestBuilder 翻成 SDK 形状并挂到三处落点上。
         return AnthropicRequestBuilder.buildParams(request,
             CompatResolver.anthropicCacheControl(request.model(), cacheRetention,
-                System.getenv(CACHE_RETENTION_ENV)));
+                System.getenv(CACHE_RETENTION_ENV)),
+            affinitySessionId, baseUrl);
+    }
+
+    /**
+     * B103：过 {@code cacheRetention === "none"} 门（pi :625 的 cacheSessionId）后的
+     * 亲和头原料；Bearer 分支恒 null（pi :992-1031）。
+     */
+    private String affinitySessionId() {
+        if (bearer) {
+            return null;
+        }
+        var resolved = CompatResolver.resolveCacheRetention(cacheRetention,
+            System.getenv(CACHE_RETENTION_ENV));
+        return resolved == CacheRetention.NONE ? null : sessionId;
     }
 
 }

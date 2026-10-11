@@ -295,15 +295,22 @@ final class OpenAICompletionsMessageConverter {
         // 包 A-10：模型级采样参数（pi `:996-999`，**body 的最后一个变更** ⇒ 同名键压过具名字段）。
         SamplingParamsWriter.applyToCompletions(builder, request.model());
 
-        // 包 B103（pi :766-826）：会话亲和头（params 级，与 responses 同一路径）
-        // + prompt_cache_key（门看端点+保留期）。
-        if (rawSessionId != null && !rawSessionId.isBlank()) {
-            // 头由 API 层经 client builder 注入（params 级头在 streaming 不透传）。
+        // B103（docs/52，pi :766-826）：会话亲和头（params 级 additionalHeader 经
+        // streaming 透传，与 responses 同一路径；旧 B140「不透传」结论已翻案）
+        // + prompt_cache_key（门看端点+保留期）。两读者共用 pi :348 的 cacheSessionId 门。
+        String cacheSessionId = cacheRetention == CacheRetention.NONE ? null : rawSessionId;
+        if (cacheSessionId != null && !cacheSessionId.isBlank()) {
+            SessionAffinityHeaders.completions(cacheSessionId,
+                    Boolean.TRUE.equals(compat.sendSessionAffinityHeaders()),
+                    compat.sessionAffinityFormat(),
+                    request.modelId() == null ? null : request.modelId().provider(),
+                    baseUrl)
+                .forEach(builder::putAdditionalHeader);
             boolean officialOpenAi = baseUrl != null && baseUrl.contains("api.openai.com");
-            if ((officialOpenAi && cacheRetention != CacheRetention.NONE)
+            if (officialOpenAi
                     || (cacheRetention == CacheRetention.LONG
                         && Boolean.TRUE.equals(compat.supportsLongCacheRetention()))) {
-                builder.promptCacheKey(PromptCacheKeys.clamp(rawSessionId));
+                builder.promptCacheKey(PromptCacheKeys.clamp(cacheSessionId));
             }
         }
 

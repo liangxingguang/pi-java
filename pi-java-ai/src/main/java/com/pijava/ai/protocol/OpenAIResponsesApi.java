@@ -79,7 +79,11 @@ public final class OpenAIResponsesApi extends AbstractChatApi {
         var params = ResponsesMessageConverter.buildParams(
             request, responsesOptions, request.modelId().modelName(), apiName(), compat,
             grammarProperties,
-            SessionAffinityHeaders.responses(responsesOptions.sessionId(),
+            // B103（docs/52，pi openai-responses.ts:159）：cacheSessionId 门 —— retention=none
+            // 时连亲和头也不发（头无 send 开关，门只此一道）。
+            SessionAffinityHeaders.responses(
+                responsesOptions.cacheRetention() == ResponsesOptions.CacheRetention.NONE
+                    ? null : responsesOptions.sessionId(),
                 compat.sessionAffinityFormat(), request.modelId().provider(), baseUrl));
         // A-14（R7）：只包初始请求获取。获取动作放进 processor 的车道 try 内
         // （supplier 里），获取期 HTTP 错误才会落 pi 的带前缀 catch（原 docs/48 §5.3）。

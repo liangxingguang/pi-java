@@ -57,9 +57,21 @@ final class AnthropicRequestBuilder {
 
     static MessageCreateParams buildParams(StreamRequest request,
                                            Optional<CacheBreakpointSpec> cacheSpec) {
+        // 直调夹具形态：无亲和头（B103 的 sessionId/baseUrl 由车道传入）。
+        return buildParams(request, cacheSpec, null, null);
+    }
+
+    /**
+     * B103（docs/52）：带 cacheSessionId（过 cacheRetention=none 门、Bearer 分支给 null）
+     * 与有效 baseUrl 的形态；亲和头在 {@code return} 前经 params 级 additionalHeader 发出
+     * （pi {@code anthropic-messages.ts:1038-1048}）。
+     */
+    static MessageCreateParams buildParams(StreamRequest request,
+                                           Optional<CacheBreakpointSpec> cacheSpec,
+                                           String affinitySessionId, String baseUrl) {
         // 包 A7：车道的 compat 在这里**解析一次**（pi `getAnthropicCompat(model)` 的落点，
         // `anthropic-messages.ts:206`），其余读点全部改读它 —— 不再有第二处读 `model.compat()`。
-        var compat = CompatResolver.forAnthropic(request.model());
+        var compat = CompatResolver.forAnthropic(request.model(), baseUrl);
         // 包 A-01：断点规格（pi `:1041` 的 `getCacheControl` 返回值）在这里翻成 SDK 形状，
         // 一次算好、三处落点共用 —— pi 也是同一个 `cacheControl` 对象挂三处。
         var cacheControl = cacheSpec.map(AnthropicRequestBuilder::toCacheControl).orElse(null);
@@ -182,6 +194,15 @@ final class AnthropicRequestBuilder {
             builder.putAdditionalBodyProperty("fallbacks",
                 JsonValue.from(ObjectMappers.jsonMapper().valueToTree(fallbacks)));
         }
+
+        // B103（docs/52，pi :1038-1048）：会话亲和头（单头）。Bearer 分支不挂 ——
+        // 调用方在 OAuth/copilot 时传 null（pi :992-1031 的 mergeClientHeaders 不带它）。
+        SessionAffinityHeaders.anthropic(affinitySessionId,
+                Boolean.TRUE.equals(compat.sendSessionAffinityHeaders()),
+                compat.sessionAffinityFormat(),
+                request.modelId() == null ? null : request.modelId().provider(),
+                baseUrl)
+            .forEach(builder::putAdditionalHeader);
         return builder.build();
     }
 

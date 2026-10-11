@@ -120,8 +120,7 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         this.providerRetry = ProviderRetry.optionsOf(options);
         // 包 A-02（B105）：cacheRetention 的选项面（pi :342 的 options?.cacheRetention）。
         this.cacheRetention = retentionOf(options);
-        // 包 B103：原始 sessionId（prompt_cache_key 用；非标准亲和头在 Java SDK streaming
-        // 不可达，登记 B140）。
+        // B103（docs/52）：原始 sessionId —— prompt_cache_key 与亲和头共用（none 门在转换器）。
         this.sessionId = sessionIdOf(options);
     }
 
