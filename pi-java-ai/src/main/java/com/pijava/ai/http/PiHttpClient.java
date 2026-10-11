@@ -78,13 +78,30 @@ public final class PiHttpClient implements AutoCloseable {
      */
     public Iterator<ServerSentEvent> postSse(String url, String jsonBody,
                                               Map<String, String> headers, AbortSignal signal) {
+        return postSse(url, jsonBody, headers, signal, null);
+    }
+
+    /**
+     * POST JSON to {@code url} and consume the response as SSE events,
+     * honouring an optional abort signal and a <b>response-header-only</b>
+     * timeout (pi {@code 6b07b4e57}：超时只盖等响应头，头到达后释放；body 不再有
+     * 固定截止时间）。
+     *
+     * @param headerTimeout 等响应头的超时；{@code null} 走 legacy 形态（300s 盖全程、
+     *                      整 body 缓冲，pi-messages 车道在用）
+     */
+    public Iterator<ServerSentEvent> postSse(String url, String jsonBody,
+                                              Map<String, String> headers, AbortSignal signal,
+                                              Duration headerTimeout) {
         var requestBuilder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("Content-Type", "application/json")
                 .header("User-Agent", userAgent)
                 .header("Accept", "text/event-stream")
-                .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
-                .timeout(Duration.ofSeconds(300));
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody));
+        // docs/52 脚手架：headerTimeout 非空时的「只盖响应头」语义待 B229 实现 ——
+        // 目前与 legacy 同形（300s 盖头+体），红灯夹具先落。
+        requestBuilder.timeout(Duration.ofSeconds(300));
 
         if (headers != null) {
             headers.forEach(requestBuilder::header);

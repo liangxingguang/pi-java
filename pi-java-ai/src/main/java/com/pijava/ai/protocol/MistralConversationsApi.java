@@ -66,9 +66,17 @@ public final class MistralConversationsApi extends AbstractChatApi {
      */
     private static final String PENDING = "pending";
 
+    /**
+     * B229（pi {@code 6b07b4e57}）：超时只盖等响应头。生产值取 pi coding-agent 的
+     * {@code DEFAULT_HTTP_IDLE_TIMEOUT_MS = 300_000}（{@code http-dispatcher.ts:4}，
+     * sdk.ts:350 链恒给该值）；ai 包 standalone 的 60s 默认 bin pi 不可达。
+     */
+    private static final Duration DEFAULT_HEADER_TIMEOUT = Duration.ofSeconds(300);
+
     private final PiHttpClient http;
     private final String apiKey;
     private final String baseUrl;
+    private final Duration headerTimeout;
 
     /**
      * Create an adapter for the given options.
@@ -76,9 +84,17 @@ public final class MistralConversationsApi extends AbstractChatApi {
      * @param options API options (apiKey or {@code MISTRAL_API_KEY} required)
      */
     public MistralConversationsApi(ApiOptions options) {
+        this(options, DEFAULT_HEADER_TIMEOUT);
+    }
+
+    /**
+     * docs/52 测试接缝：自定义头超时（生产恒走 {@link #DEFAULT_HEADER_TIMEOUT}）。
+     */
+    MistralConversationsApi(ApiOptions options, Duration headerTimeout) {
         this.apiKey = resolveApiKey(options);
         this.baseUrl = options.baseUrl() != null && !options.baseUrl().isBlank()
                 ? options.baseUrl() : DEFAULT_BASE_URL;
+        this.headerTimeout = headerTimeout;
         // A-14（G3）：重试次数取选项（默认 0 ⇒ 不重试），cap 经 extra 过桥。
         var policyBuilder = new com.pijava.ai.http.RetryPolicy.Builder()
                 .maxRetries(options.maxRetries());
@@ -108,7 +124,8 @@ public final class MistralConversationsApi extends AbstractChatApi {
             publisher.submit(builder.emitStart());
 
             Iterator<PiHttpClient.ServerSentEvent> sseEvents =
-                    http.postSse(baseUrl + "/chat/completions", jsonBody, headers);
+                    http.postSse(baseUrl + "/chat/completions", jsonBody, headers, null,
+                        headerTimeout);
 
             var toolCallBuilders = new HashMap<String, ToolCallBuilder>();
             var textStarted = new boolean[]{false};
@@ -141,6 +158,13 @@ public final class MistralConversationsApi extends AbstractChatApi {
             publisher.submit(builder.emitDone(stop.reason));
         } catch (Exception e) {
             // pi 的 catch（:166-171）只发一条 error 就结束 ⇒ 一条流**只有一个**终局事件。
+            // B229（pi mistral-conversations.ts:321-324）：等响应头超时的文案逐字。
+            if (e instanceof com.pijava.ai.http.HeaderTimeoutException hte) {
+                publisher.submit(builder.emitError("error", new IllegalStateException(
+                    "Mistral response headers timed out after "
+                        + hte.timeout().toMillis() + "ms", e)));
+                return;
+            }
             // 只有 HTTP 错误（pi 的 MistralHttpError ≙ statusCode>0 的 PiHttpException）
             // 改文案；其余错误原样发，保留异常身份（RetryDelayTooLongException 等要被
             // 上游按类型识别，且 pi 的 formatMistralError 对它们也是 message 透传）。

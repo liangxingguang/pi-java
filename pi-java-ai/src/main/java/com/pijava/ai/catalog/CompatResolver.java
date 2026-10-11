@@ -215,6 +215,12 @@ public final class CompatResolver {
      * 都是真，且**只**被本车道读。</p>
      */
     public static ModelCompat forAnthropic(ModelInfo model) {
+        // docs/52 脚手架：带 baseUrl 的 openrouter 探测待 B103 实现。
+        return forAnthropic(model, null);
+    }
+
+    /** docs/52 脚手架形态：B103 实现后在此按 isOpenRouter 补两亲和位缺省。 */
+    public static ModelCompat forAnthropic(ModelInfo model, String baseUrl) {
         var partial = resolved(base(model), null, Boolean.FALSE, null, Boolean.FALSE,
             null, null, null, null, null, null,
             Boolean.TRUE, Boolean.TRUE, null, null, null, null);

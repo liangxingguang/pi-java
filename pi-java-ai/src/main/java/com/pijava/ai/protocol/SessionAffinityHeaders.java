@@ -20,7 +20,26 @@ public final class SessionAffinityHeaders {
     public static final String SESSION_ID = "session_id";
     public static final String X_CLIENT_REQUEST_ID = "x-client-request-id";
 
+    /** openai 形会话头里的 x-session-affinity（completions 车道专用）。 */
+    public static final String X_SESSION_AFFINITY = "x-session-affinity";
+
     private SessionAffinityHeaders() {}
+
+    // ── docs/52 脚手架：两车道的亲和头组装待 B103 实现，先给空表桩让红灯夹具编译 ──
+
+    /** completions 车道（pi {@code openai-completions.ts:776-786}）。 */
+    public static Map<String, String> completions(String sessionId, boolean send,
+                                                  SessionAffinityFormat format,
+                                                  String provider, String baseUrl) {
+        return Map.of();
+    }
+
+    /** anthropic 车道（pi {@code anthropic-messages.ts:1038-1043}）。 */
+    public static Map<String, String> anthropic(String sessionId, boolean send,
+                                                SessionAffinityFormat format,
+                                                String provider, String baseUrl) {
+        return Map.of();
+    }
 
     /**
      * openrouter 探测判据（pi 各车道 {@code detectSessionAffinityFormat}）：
