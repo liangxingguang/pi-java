@@ -335,22 +335,28 @@ class ThinkingFormatWireTest {
         assertThat(body.has("reasoning_effort")).isFalse();
     }
 
-    /** 键缺席／显式 null ⇒ **什么都不写**（openai 派在同样输入下会发级别名 —— 对照）。 */
+    /**
+     * 无映射字符串时 ant-ling 臂不写嵌套对象，但链条穿透到通用 openai 臂（B131）：
+     * 本夹具的探测背景是 localhost/{@code test} provider（探测给 sre=true，见类注释）
+     * ＋ 显式 ant-ling 格式 —— 与 pi 手搓 models.json 窄角同形 ⇒ pi 也发原始级别名。
+     */
     @Test
-    void antLingWritesNothingWithoutAMappedString() throws Exception {
+    void antLingFallsBackToTheGenericEffortWithoutAMappedString() throws Exception {
         var absent = body(model(compat(ThinkingFormat.ANT_LING, null, Map.of(), Map.of()),
                 ThinkingLevelMap.empty(), Map.of()),
             Optional.of(new ThinkingLevel.Medium()));
         assertThat(absent.has("reasoning")).isFalse();
-        assertThat(absent.has("reasoning_effort")).isFalse();
+        assertThat(absent.path("reasoning_effort").asText()).isEqualTo("medium");
 
-        // 显式 null 的双重效果：夹取把 medium 踢到 high，而 map[high] 又缺席 ⇒ 仍不写。
+        // 显式 null 的双重效果：夹取把 medium 踢到 high，而 map[high] 又缺席 ⇒
+        // ant-ling 臂仍不写，穿透臂发夹取后的 "high"。
         var explicitNull = body(model(compat(ThinkingFormat.ANT_LING, null, Map.of(), Map.of()),
                 ThinkingLevelMap.of(Map.of(
                     ModelThinkingLevel.of(new ThinkingLevel.Medium()), Optional.empty())),
                 Map.of()),
             Optional.of(new ThinkingLevel.Medium()));
         assertThat(explicitNull.has("reasoning")).isFalse();
+        assertThat(explicitNull.path("reasoning_effort").asText()).isEqualTo("high");
     }
 
     /** 无级别 ⇒ 臂不点火（空表下与 pi 的链条等价）。 */

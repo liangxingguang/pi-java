@@ -34,11 +34,11 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
  *   <li>{@code else if} ⇒ 命中即终止：「{@code chat-template} 的 map 为空」**不会**回落成
  *       {@code openai} 的 {@code reasoning_effort}，而是什么都不发 —— 故这里用
  *       <b>exhaustive switch、无 default</b>（编译器守十一臂），而不是查表＋兜底（R6）。</li>
- *   <li>pi 里落在 {@code :962-970} 的只有 {@code thinkingFormat === "openai"}（其余十值
- *       都在前面被吃掉）。⚠️ 唯一例外是手搓 models.json 把 {@code ant-ling} 与
- *       {@code supportsReasoningEffort:true} 写在一起且无级别时，pi 的链条会**穿透**到
- *       {@code :965} —— pi 的生成数据不可达（{@code antLingCompat} 明文写 false，
- *       探测同值），switch 形状不复制该穿透（{@code docs/05 B131} 登记）。</li>
+ *   <li>pi 里落在 {@code :962-977} 的除 {@code thinkingFormat === "openai"} 外，还有
+ *       {@code ant-ling} 臂的**穿透**：窄角＝ant-ling 格式（探测按 provider 名就给）＋
+ *       显式 {@code supportsReasoningEffort:true}（手搓 models.json；pi 生成目录恒 false）
+ *       ＋无级别表 —— ant-ling 臂不写，链条继续走到 {@code :969} 通用臂发原始级别名。
+ *       B131 已在 ANT_LING 臂内复刻该 else-if 穿透（{@code docs/50}）。</li>
  * </ol>
  *
  * <p>⚠️ 两派 null 语义（R4，{@code 原 docs/58 §2.4}）：{@code map?.[k] ?? k}（qwen／deepseek／
@@ -122,12 +122,19 @@ final class ThinkingFormatWriter {
                         .ifPresent(s -> builder.reasoningEffort(ReasoningEffort.of(s)));
                 }
             }
-            case ANT_LING ->
-                // ⚠️ 唯一**不回落级别名**的形状（原 docs/58 §2.4 第三行）：pi :942-944
-                // 只认 map[level] 的字符串值 —— 键缺席／显式 null 都不写，且本臂
-                // 从不写 reasoning_effort、也不读 supportsReasoningEffort。
-                level.map(ModelThinkingLevel::of).flatMap(map::mapped)
-                    .ifPresent(s -> put(builder, "reasoning", Map.of("effort", s)));
+            case ANT_LING -> {
+                // pi :948-952：只认 map[level] 的字符串值 —— 键缺席／显式 null 都不写。
+                var mapped = level.map(ModelThinkingLevel::of).flatMap(map::mapped);
+                if (mapped.isPresent()) {
+                    put(builder, "reasoning", Map.of("effort", mapped.orElseThrow()));
+                } else if (level.isPresent() && supportsEffort) {
+                    // B131（pi :948 臂未写时链条继续走到 :969-971 通用 openai 臂）：
+                    // 窄角＝ant-ling 格式（探测按 provider 名就给）＋显式 sre=true
+                    // （手搓 models.json；pi 生成目录恒 false）＋无级别表 ⇒ 发原始级别名。
+                    orLevel(map, level.get())
+                        .ifPresent(s -> builder.reasoningEffort(ReasoningEffort.of(s)));
+                }
+            }
             case OPENROUTER -> {
                 // pi :934-940 —— 本臂不读 supportsReasoningEffort，也不写顶层 effort。
                 if (level.isPresent()) {
