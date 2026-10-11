@@ -137,6 +137,9 @@ final class OpenAICompletionsMessageConverter {
             Boolean.TRUE.equals(compat.supportsMidConvoSystemMessages())
                 && Boolean.TRUE.equals(compat.supportsMidConvoToolAdditions()));
 
+        // B98（pi :1235）：上一条**输入消息**的角色 —— 部分 provider 不允许 tool 结果后
+        // 直接跟 user，requiresAssistantAfterToolResult 时中间要插一条桥消息。
+        String lastRole = null;
         for (int i = 0; i < messages.size(); i++) {
             var msg = messages.get(i);
             if (msg instanceof Message.SystemMessage system) {
@@ -163,12 +166,17 @@ final class OpenAICompletionsMessageConverter {
                     wire.add(instructionMessage(SanitizeUnicode.surrogates(update),
                         instructionRoleIsDeveloper));
                 }
+                lastRole = "system";
                 continue;
             }
             if (msg instanceof Message.UserMessage user) {
+                // B98（pi :1240-1246）：tool 结果组之后直接跟 user ⇒ 插桥。
+                addToolResultBridgeIfNeeded(wire, compat, lastRole);
                 addUserMessage(wire, user);
+                lastRole = "user";
             } else if (msg instanceof Message.AssistantMessage assistant) {
                 addAssistantMessage(wire, assistant, request.model(), compat, grammarProperties);
+                lastRole = "assistant";
             } else if (msg instanceof Message.ToolResultMessage) {
                 // pi :1398-1455 —— **连续的** toolResult 合成一组：各自落一条 tool 消息，
                 // 但图片**合并收集**进**同一条**合成 user 消息（不是一条结果配一条）。
@@ -176,11 +184,17 @@ final class OpenAICompletionsMessageConverter {
                 int j = i;
                 while (j < messages.size()
                         && messages.get(j) instanceof Message.ToolResultMessage tool) {
-                    wire.add(ChatCompletionMessageParam.ofTool(ChatCompletionToolMessageParam.builder()
+                    var toolBuilder = ChatCompletionToolMessageParam.builder()
                         .toolCallId(tool.toolUseId())
                         // pi :1416 —— 净化的是**选中之后**的串（含两个占位串）。
-                        .content(SanitizeUnicode.surrogates(toolResultText(tool.content())))
-                        .build()));
+                        .content(SanitizeUnicode.surrogates(toolResultText(tool.content())));
+                    // B98（pi :1429-1432）：部分 provider 要求 tool 结果带 name。
+                    if (Boolean.TRUE.equals(compat.requiresToolResultName())
+                            && tool.toolName() != null) {
+                        toolBuilder.putAdditionalProperty("name",
+                            JsonValue.from(tool.toolName()));
+                    }
+                    wire.add(ChatCompletionMessageParam.ofTool(toolBuilder.build()));
                     // pi :1424 —— 图片收集**另有**一道能力门（与共享闸冗余，pi 两处都写）。
                     // ⚠️ 这道门在 pi 与 pi-java **两侧都不可观察**：共享闸（TransformMessages）
                     // 已按同一个 model 把非视觉模型的图片换成了文本块 ⇒ 这里永远收不到图片。
@@ -193,9 +207,14 @@ final class OpenAICompletionsMessageConverter {
                 }
                 i = j - 1;
                 if (!imageParts.isEmpty()) {
+                    // pi :1448-1456 —— 合成 user 消息**之前**先插桥（B98，逐字文案）。
+                    addToolResultBridgeIfNeeded(wire, compat, "toolResult");
                     // pi :1448-1456 —— 合成的 user 消息（文案逐字）。
                     wire.add(ChatCompletionMessageParam.ofUser(
                         CompletionImageWire.syntheticToolImageMessage(imageParts)));
+                    lastRole = "user";
+                } else {
+                    lastRole = "toolResult";
                 }
             }
         }
@@ -217,6 +236,12 @@ final class OpenAICompletionsMessageConverter {
         wire.forEach(builder::addMessage);
         wireTools.forEach(builder::addTool);
 
+        // B98（pi :856-860/:873-875）：zai tool_stream（门＝有请求工具，位置紧随工具表）
+        // 与 vllm priority（位置在思考形态链条之前）。
+        CompletionsCompatWire.applyZaiToolStream(builder, compat,
+            !transcriptTools.requestTools().isEmpty());
+        CompletionsCompatWire.applyVllmPriority(builder, compat);
+
         // pi :825 —— prompt_cache_retention 的门**不含** cacheControlFormat（与断点族独立）。
         // prompt_cache_key（:819-823）不移植：两个合取支都终结在
         // clampOpenAIPromptCacheKey(options?.sessionId)，java 无该通道的生产者（B134；
@@ -227,9 +252,8 @@ final class OpenAICompletionsMessageConverter {
         }
 
         // Ask for usage in the stream so the token counter/status bar updates.
-        builder.streamOptions(ChatCompletionStreamOptions.builder()
-            .includeUsage(true)
-            .build());
+        // B98（pi :834）：显式 supportsUsageInStreaming=false 才不发（探测缺省 true）。
+        CompletionsCompatWire.applyUsageInStreaming(builder, compat);
 
         // pi :832-834 —— 支持就**显式**关掉服务端留存（注意值是 `false`，不是把开关原样发出去）。
         if (Boolean.TRUE.equals(compat.supportsStore())) {
@@ -270,6 +294,8 @@ final class OpenAICompletionsMessageConverter {
         if (routing != null) {
             builder.putAdditionalBodyProperty("provider", JsonValue.from(JSON.valueToTree(routing)));
         }
+        // B98（pi :992-1001）：Vercel AI Gateway 路由偏好（openRouter 之后、sampling 之前）。
+        CompletionsCompatWire.applyVercelGatewayRouting(builder, compat);
         // 包 A-10：模型级采样参数（pi `:996-999`，**body 的最后一个变更** ⇒ 同名键压过具名字段）。
         SamplingParamsWriter.applyToCompletions(builder, request.model());
 
@@ -347,6 +373,21 @@ final class OpenAICompletionsMessageConverter {
      * @param compat   the request's **resolved** compat ({@link CompatResolver}) — its
      *                 {@code requiresReasoningContentOnAssistantMessages} drives rule (ii)
      */
+    /**
+     * B98（pi {@code openai-completions.ts:1240-1246}）：上一条落线消息来自 toolResult 组、
+     * 当前是 user ⇒ 中间插一条固定文案的 assistant 桥消息（部分 provider 不允许两者相邻）。
+     */
+    private static void addToolResultBridgeIfNeeded(List<ChatCompletionMessageParam> wire,
+                                                    ModelCompat compat, String lastRole) {
+        if (Boolean.TRUE.equals(compat.requiresAssistantAfterToolResult())
+                && "toolResult".equals(lastRole)) {
+            wire.add(ChatCompletionMessageParam.ofAssistant(
+                ChatCompletionAssistantMessageParam.builder()
+                    .content("I have processed the tool results.")
+                    .build()));
+        }
+    }
+
     private static void addAssistantMessage(
             List<ChatCompletionMessageParam> wire,
             Message.AssistantMessage assistant, ModelInfo model, ModelCompat compat,
@@ -380,17 +421,44 @@ final class OpenAICompletionsMessageConverter {
             }
         }
         var ab = ChatCompletionAssistantMessageParam.builder();
-        if (!text.isEmpty()) {
-            ab.content(text.toString());
+        boolean assistantAfterToolResult =
+            Boolean.TRUE.equals(compat.requiresAssistantAfterToolResult());
+        // B98（pi :1294-1296）：flag 开时 assistant 消息默认 content 是 "" 而不是省略
+        // —— 只带 tool_calls 的助手消息也必须显式空串（下面各内容分支会覆盖它）。
+        if (assistantAfterToolResult) {
+            ab.content("");
         }
         if (!toolCalls.isEmpty()) {
             ab.toolCalls(toolCalls);
         }
 
+        // B98（pi :1322-1330）：requiresThinkingAsText ⇒ thinking 块降级为**普通文本块**
+        // 数组回放（思考在前、可见文本在后，无标签防模仿），且不发任何 reasoning 字段。
+        boolean thinkingAsText =
+            Boolean.TRUE.equals(compat.requiresThinkingAsText()) && !reasoning.isEmpty();
+
         // 规则 (i)：签名即线格名，原样发回 —— 仅在无 structured details 时走
         // （pi :1330 mutex：有 preserved ⇒ 不发裸 reasoning 字段）。
         boolean reasoningContentSent = false;
-        if (preservedDetails == null
+        if (thinkingAsText) {
+            var parts = new ArrayList<ChatCompletionAssistantMessageParam.Content.ChatCompletionRequestAssistantMessageContentPart>();
+            parts.add(ChatCompletionAssistantMessageParam.Content.ChatCompletionRequestAssistantMessageContentPart.ofText(
+                ChatCompletionContentPartText.builder()
+                    .text(SanitizeUnicode.surrogates(String.join("\n\n", reasoning)))
+                    .build()));
+            for (var block : assistant.content()) {
+                if (block instanceof ContentBlock.TextContent tc) {
+                    parts.add(ChatCompletionAssistantMessageParam.Content.ChatCompletionRequestAssistantMessageContentPart.ofText(
+                        ChatCompletionContentPartText.builder()
+                            .text(SanitizeUnicode.surrogates(tc.text()))
+                            .build()));
+                }
+            }
+            ab.contentOfArrayOfContentParts(parts);
+        } else if (!text.isEmpty()) {
+            ab.content(text.toString());
+        }
+        if (!thinkingAsText && preservedDetails == null
                 && signature != null && CompletionsReasoningWire.isReasoningField(signature)) {
             ab.putAdditionalProperty(signature, JsonValue.from(String.join("\n", reasoning)));
             reasoningContentSent = "reasoning_content".equals(signature);
@@ -417,8 +485,9 @@ final class OpenAICompletionsMessageConverter {
         }
 
         // pi :1365-1372 —— 既无内容又无工具调用的助手消息整条丢掉（有 provider 不接受
-        // 空助手消息）。⚠️ reasoning **不算内容**：只带 thinking 的消息就是要丢的那种。
-        if (!text.isEmpty() || !toolCalls.isEmpty()) {
+        // 空助手消息）。⚠️ reasoning **不算内容**：只带 thinking 的消息就是要丢的那种；
+        // 例外是 requiresThinkingAsText —— 思考在该分支已变成 content 文本块（pi 同形）。
+        if (!text.isEmpty() || !toolCalls.isEmpty() || thinkingAsText) {
             wire.add(ChatCompletionMessageParam.ofAssistant(ab.build()));
         }
     }
