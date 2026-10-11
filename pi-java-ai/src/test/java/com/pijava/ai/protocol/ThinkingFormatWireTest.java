@@ -319,9 +319,9 @@ class ThinkingFormatWireTest {
     // ── ant-ling 形状（pi :941-945）────────────────────────────────────
 
     /**
-     * ★ §2.4 第三行 —— 唯一**不回落级别名**的形状：只认 {@code map[level]} 的字符串值。
-     * 且本臂不读 supportsReasoningEffort、也**从不**写 reasoning_effort（命中即终止，
-     * §2.2 事实 2 —— 变异「ant-ling 臂顺带写 openai 的 effort」会红在这里）。
+     * §2.4 第三行 —— 只认 {@code map[level]} 的字符串值，不读 supportsReasoningEffort。
+     * 窄角例外见 {@link #antLingFallsThroughToGenericEffortWhenGateEnabledWithoutMap}：
+     * 门显式打开且无级别表时，pi 的 else-if 链穿透到通用 openai 臂（B131）。
      */
     @Test
     void antLingSendsTheMappedEffortOnly() throws Exception {
@@ -353,12 +353,41 @@ class ThinkingFormatWireTest {
         assertThat(explicitNull.has("reasoning")).isFalse();
     }
 
-    /** 无级别 ⇒ 臂不点火（空表下与 pi 的链条等价；off 字符串的穿透角见 docs/05 B131）。 */
+    /** 无级别 ⇒ 臂不点火（空表下与 pi 的链条等价）。 */
     @Test
     void antLingWithoutALevelWritesNothing() throws Exception {
         var body = body(model(compat(ThinkingFormat.ANT_LING, null, Map.of(), Map.of()),
                 ThinkingLevelMap.empty(), Map.of()),
             Optional.empty());
+
+        assertThat(body.has("reasoning")).isFalse();
+        assertThat(body.has("reasoning_effort")).isFalse();
+    }
+
+    /**
+     * ★ B131（pi {@code openai-completions.ts:948-971}）：ant-ling 臂要求**映射后的字符串**；
+     * 无级别表时它不写，但 else-if 链继续走到 :969 通用 openai 臂 —— 只要
+     * {@code supportsReasoningEffort} 被显式打开（手搓 models.json 窄角：ant-ling 格式
+     * 探测按 provider 名就给，但 pi 生成目录 sre 恒 false）⇒ 发**原始级别名**。
+     */
+    @Test
+    void antLingFallsThroughToGenericEffortWhenGateEnabledWithoutMap() throws Exception {
+        var body = body(model(compat(ThinkingFormat.ANT_LING, Boolean.TRUE, Map.of(), Map.of()),
+                ThinkingLevelMap.empty(), Map.of()),
+            Optional.of(new ThinkingLevel.Medium()));
+
+        assertThat(body.has("reasoning"))
+            .as("ant-ling 臂的嵌套对象仍不写（没有映射字符串）").isFalse();
+        assertThat(body.path("reasoning_effort").asText())
+            .as("穿透到 pi :969-971 通用臂，map 缺席 ⇒ 回落级别名").isEqualTo("medium");
+    }
+
+    /** 对照：同一窄角但门关（pi 数据的默认形状）⇒ 两边都不写。 */
+    @Test
+    void antLingFallThroughIsBoundByTheEffortGate() throws Exception {
+        var body = body(model(compat(ThinkingFormat.ANT_LING, Boolean.FALSE, Map.of(), Map.of()),
+                ThinkingLevelMap.empty(), Map.of()),
+            Optional.of(new ThinkingLevel.Medium()));
 
         assertThat(body.has("reasoning")).isFalse();
         assertThat(body.has("reasoning_effort")).isFalse();

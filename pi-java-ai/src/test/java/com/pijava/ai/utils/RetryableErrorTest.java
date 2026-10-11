@@ -29,7 +29,10 @@ class RetryableErrorTest {
     @ParameterizedTest
     @ValueSource(strings = {
         "The model is currently overloaded",
-        // pi 白名单里紧跟 "overloaded" 的那条（retry.ts:29）—— 移植时曾整条漏掉
+        // pi retry.ts:33-34（8b5708dbb）：server-busy 瞬断两种文案。
+        "server_busy",
+        "The servers are currently busy, please try again",
+        // pi 白名单里紧跟 "overloaded" 的那条（retry.ts:35）—— 移植时曾整条漏掉
         // （原 docs/43 包A0 步6）：高需求文案不重试、直接失败。
         "The model is currently experiencing high demand, please try again later",
         // pi 白名单里紧跟 high demand 的那条（retry.ts:34）。
@@ -69,6 +72,9 @@ class RetryableErrorTest {
         "ended without a terminal event",
         "stream ended before a terminal response event",
         "http2 request did not get a response",
+        // pi retry.ts:88（5b6c792b4）：Node ERR_HTTP2_STREAM_CANCEL，HTTP/2 会话先死
+        // （Bedrock SDK 5 分钟会话超时，#10379）。
+        "pending stream has been canceled",
         "retry delay exceeds cap",
         "you can retry your request",
         "try your request again",

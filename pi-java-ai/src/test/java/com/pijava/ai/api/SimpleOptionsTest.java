@@ -1,9 +1,11 @@
 package com.pijava.ai.api;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.pijava.ai.Usage;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
@@ -80,14 +82,14 @@ class SimpleOptionsTest {
     /**
      * ★ 余量不足 ⇒ 压到 {@code 窗口 − 已占 − 4096}。
      *
-     * <p>取值刻意算好：窗口 20000、消息 40000 字符 ⇒ 估 10000 token ⇒
-     * {@code 20000 − 10000 − 4096 = 5904}。</p>
+     * <p>取值刻意算好：窗口 20000、消息 40000 字符 ⇒ 估 ceil(40000/3.5)=11429 token ⇒
+     * {@code 20000 − 11429 − 4096 = 4475}（旧常数 4 时是 5904）。</p>
      */
     @Test
     void clampsToTheAvailableRoom() {
         var transcript = new TranscriptContext(List.of(user("x".repeat(40_000))));
         assertThat(SimpleOptions.clampMaxTokensToContext(model(20_000, 8192), transcript, 8192))
-            .isEqualTo(5904);
+            .isEqualTo(4475);
     }
 
     /** ★ 未知窗口（{@code contextWindow <= 0}）⇒ **不夹**，只做下限（pi 的第一支）。 */
@@ -111,8 +113,28 @@ class SimpleOptionsTest {
     @Test
     void resolveMaxTokensClampsTheModelCapToo() {
         var transcript = new TranscriptContext(List.of(user("x".repeat(40_000))));
+        // 40000/3.5 = 11429 ⇒ 20000 − 11429 − 4096 = 4475（旧常数 4 时是 5904）。
         assertThat(SimpleOptions.resolveMaxTokens(model(20_000, 8192), transcript, -1))
-            .isEqualTo(5904);
+            .isEqualTo(4475);
+    }
+
+    /**
+     * pi {@code 27075fe07}（#10497）回归：pi 的
+     * {@code context-estimate.test.ts} 同形状 —— 用量锚 2000 ＋ 3500 字符尾消息
+     * （1000 token）⇒ {@code 10000 − 3000 − 4096 = 2904}。
+     */
+    @Test
+    void largeInputIsClampedAtThreePointFiveCharsPerToken() {
+        var assistant = new Message.AssistantMessage(
+            List.of(new ContentBlock.TextContent("x")), "stop", null,
+            "openai-responses", "openai", "test-model",
+            new Usage(100, 1_900, 0, 0, null, null, 2_000, Usage.Cost.zero()),
+            Instant.ofEpochMilli(100), null, null);
+        var transcript = new TranscriptContext(List.of(
+            assistant, user("x".repeat(3_500), Instant.ofEpochMilli(200))));
+
+        assertThat(SimpleOptions.resolveMaxTokens(model(10_000, 8_000), transcript, -1))
+            .isEqualTo(2904);
     }
 
     // ── resolveRequest（漏斗的那一跳）──────────────────────────────────
@@ -166,6 +188,10 @@ class SimpleOptionsTest {
 
     private static Message user(String text) {
         return new Message.UserMessage(List.of(new ContentBlock.TextContent(text)));
+    }
+
+    private static Message user(String text, Instant timestamp) {
+        return new Message.UserMessage(List.of(new ContentBlock.TextContent(text)), timestamp);
     }
 
     private static ModelInfo model(int contextWindow, int maxOutput) {

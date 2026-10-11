@@ -19,6 +19,7 @@ import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
+import com.pijava.ai.utils.RetryableError;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -116,18 +117,24 @@ class MistralConversationsApiTest {
     }
 
     /**
-     * {@code error} ⇒ error + {@code "Provider stopped with: error"}。
+     * {@code error} ⇒ error + {@code "Provider stopped with: error (server error)"}。
      *
      * <p>⚠️ 旧实现把线格的 {@code "error"} **当成 stop reason 发成 {@code done("error")}** ——
-     * 「done = 成功」这条协议不变量被破。文案在**映射里**（pi {@code :937}），与 Google 车道
-     * 「映射只给裸 error、文案在收尾拼」的形状**相反**。</p>
+     * 「done = 成功」这条协议不变量被破。文案在**映射里**（pi {@code mistral-conversations.ts:948}，
+     * {@code 7fb59f995} 起补 {@code " (server error)"} 让 retry 白名单的 {@code server.?error}
+     * 抓手生效），与 Google 车道「映射只给裸 error、文案在收尾拼」的形状**相反**。</p>
      */
     @Test
     void errorFinishReasonIsAnError() throws Exception {
         var events = collect(text("cut"), finish("error"));
 
-        assertThat(errorMessage(events)).isEqualTo("Provider stopped with: error");
+        var message = errorMessage(events);
+        assertThat(message).isEqualTo("Provider stopped with: error (server error)");
         assertThat(dones(events)).isEmpty();
+        // 文案必须被瞬断白名单抓住（Mistral 的 finish_reason:"error" 是瞬态服务失败）。
+        assertThat(RetryableError.isRetryableAssistantError(
+            new Message.AssistantMessage(List.of(), "error", null,
+                null, null, null, null, null, message, null))).isTrue();
     }
 
     /**

@@ -133,6 +133,46 @@ class CatalogCompatRulesTest {
             .isEqualTo(ModelCompat.NONE);
     }
 
+    /**
+     * B129：xiaomi 全族的 {@code requiresReasoningContentOnAssistantMessages} 只存在于
+     * 目录（新锚点 {@code providers/data/xiaomi*.json} 六个文件实测全 true；探测给 false，
+     * 因为 isDeepSeek 不认 xiaomi）。消费者
+     * {@code OpenAICompletionsMessageConverter:413-417} 早已在等这个值。
+     */
+    @Test
+    void xiaomiFamilyRequiresReasoningContentOnAssistantMessages() {
+        assertThat(CatalogCompatRules.completions("xiaomi", "mimo-v2-omni")
+            .requiresReasoningContentOnAssistantMessages()).isTrue();
+        assertThat(CatalogCompatRules.completions("xiaomi-token-plan-cn", "mimo-v2-omni")
+            .requiresReasoningContentOnAssistantMessages()).isTrue();
+        // 同表的其余 provider 仍是 null（探测给值，目录不标）——deepseek 由探测给 true。
+        assertThat(CatalogCompatRules.completions("deepseek", "deepseek-v4-flash")
+            .requiresReasoningContentOnAssistantMessages()).isNull();
+        assertThat(CatalogCompatRules.completions("zai", "glm-4.7")
+            .requiresReasoningContentOnAssistantMessages()).isNull();
+    }
+
+    /**
+     * B130 守卫（2026-10-11 新锚点复核）：Java 携带的 zai 模型只有 glm-4.7 族，
+     * pi 目录对它们标 {@code supportsReasoningEffort:false}、无级别表。
+     * 目录常量缺席（null）＋ 探测（isZai ⇒ false）⇒ 解析后的有效值必须是 false。
+     * ⚠️ 触发条件：一旦引入 glm-5.x（pi 目录 sre=true 且带 7 档级别表），
+     * 该位必须改成按级别表有无数据驱动（见台账 §4 B130）——本用例会先红。
+     */
+    @Test
+    void carriedZaiModelsEffectivelyDontSupportReasoningEffort() {
+        var glm = ModelData.zaiModels()
+            .find(ModelId.of("zai", "glm-4.7")).orElseThrow();
+        assertThat(glm.compat().supportsReasoningEffort()).isNull();
+        assertThat(CompatResolver.forCompletions(glm, "https://api.z.ai/api/coding/paas/v4")
+            .supportsReasoningEffort()).isFalse();
+
+        var cnGlm = ModelData.zaiCodingCnModels()
+            .find(ModelId.of("zai-coding-cn", "glm-4.7")).orElseThrow();
+        assertThat(CompatResolver.forCompletions(cnGlm, "https://open.bigmodel.cn/api/coding/paas/v4")
+            .supportsReasoningEffort()).isFalse();
+    }
+
     @Test
     void kimiK3IsNotCoveredHere() {
         // pi 对 Kimi K3 会给 supportsMidConvoToolAdditions —— 那是 moonshot/fireworks/opencode

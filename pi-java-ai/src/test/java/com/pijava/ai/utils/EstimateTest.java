@@ -44,18 +44,18 @@ class EstimateTest {
 
     // ── estimateMessageTokens（pi estimate.ts:46-69）────────────────────
 
-    /** 文本按 {@code ceil(chars / 4)}：11 字符 ⇒ 3。 */
+    /** 文本按 {@code ceil(chars / 3.5)}：11 字符 ⇒ 4（pi `27075fe07` 起 4→3.5，#10497）。 */
     @Test
-    void textOnlyContentUsesCeilOfCharsOverFour() {
-        assertThat(Estimate.estimateMessageTokens(user("hello world"))).isEqualTo(3);
+    void textOnlyContentUsesCeilOfCharsOverThreePointFive() {
+        assertThat(Estimate.estimateMessageTokens(user("hello world"))).isEqualTo(4);
     }
 
-    /** ⚠️ 图片恒折 4800 字符 ⇒ 1200 token，与图片本身多大无关。 */
+    /** ⚠️ 图片恒折 4800 字符 ⇒ ceil(4800/3.5)=1372 token，与图片本身多大无关。 */
     @Test
     void imageBlockCountsAsFortyEightHundredChars() {
         var message = new Message.UserMessage(List.of(
             new ContentBlock.ImageContent("image/png", "AAAA")));
-        assertThat(Estimate.estimateMessageTokens(message)).isEqualTo(1200);
+        assertThat(Estimate.estimateMessageTokens(message)).isEqualTo(1372);
     }
 
     /** 文本块与图片块**相加**（pi 的 {@code estimateTextAndImageContentChars} 逐块累加）。 */
@@ -64,7 +64,8 @@ class EstimateTest {
         var message = new Message.UserMessage(List.of(
             new ContentBlock.TextContent("abcd"),
             new ContentBlock.ImageContent("image/png", "AAAA")));
-        assertThat(Estimate.estimateMessageTokens(message)).isEqualTo(1 + 1200);
+        // ceil(4/3.5)=2 ＋ 1372。
+        assertThat(Estimate.estimateMessageTokens(message)).isEqualTo(2 + 1372);
     }
 
     /** 工具结果走的是同一条「文本＋图片」路（pi 的 {@code toolResult} 分支）。 */
@@ -72,28 +73,28 @@ class EstimateTest {
     void toolResultUsesTheTextAndImagePath() {
         var message = new Message.ToolResultMessage("c1", "ls",
             List.of(new ContentBlock.TextContent("abcd")), false);
-        assertThat(Estimate.estimateMessageTokens(message)).isEqualTo(1);
+        assertThat(Estimate.estimateMessageTokens(message)).isEqualTo(2);
     }
 
-    /** 助手消息：{@code text} ＋ {@code thinking} ＋ {@code name + JSON(args)}，一起除 4 取整。 */
+    /** 助手消息：{@code text} ＋ {@code thinking} ＋ {@code name + JSON(args)}，一起除 3.5 取整。 */
     @Test
     void assistantCountsTextThinkingAndToolCallArguments() {
-        // 4 + 4 + (2 + 10) = 20 ⇒ ceil(20/4) = 5
+        // 4 + 4 + (2 + 10) = 20 ⇒ ceil(20/3.5) = 6
         var message = assistantMessage(Instant.ofEpochMilli(1), null,
             new ContentBlock.TextContent("abcd"),
             new ContentBlock.ThinkingContent("efgh", null, false),
             new ContentBlock.ToolUseContent("c1", "ls", Map.of("q", "hi")));
-        assertThat(Estimate.estimateMessageTokens(message)).isEqualTo(5);
+        assertThat(Estimate.estimateMessageTokens(message)).isEqualTo(6);
     }
 
     /** 系统消息：提示文本 ＋ 每个 section（保序、{@code \n\n} 拼）＋ 工具增删的 JSON。 */
     @Test
     void systemMessageCountsTextSectionsAndToolDeltas() {
         var bare = new Message.SystemMessage("abcd", null, null, null, null);
-        assertThat(Estimate.estimateMessageTokens(bare)).isEqualTo(1);
+        assertThat(Estimate.estimateMessageTokens(bare)).isEqualTo(2);
 
         var withSection = new Message.SystemMessage("abcd", null, Map.of("rules", "efgh"), null, null);
-        // "abcd\n\nefgh" = 10 字符 ⇒ 3
+        // "abcd\n\nefgh" = 10 字符 ⇒ ceil(10/3.5) = 3
         assertThat(Estimate.estimateMessageTokens(withSection)).isEqualTo(3);
 
         var added = new ToolDefinition("ls", "list", Map.of("type", "object"));
@@ -101,7 +102,7 @@ class EstimateTest {
             List.of(added), List.of(new ToolReference("rm")));
         var expectedTools = Estimate.estimateTextTokens(Estimate.safeJsonStringify(List.of(added)))
             + Estimate.estimateTextTokens(Estimate.safeJsonStringify(List.of(new ToolReference("rm"))));
-        assertThat(Estimate.estimateMessageTokens(withTools)).isEqualTo(1 + expectedTools);
+        assertThat(Estimate.estimateMessageTokens(withTools)).isEqualTo(2 + expectedTools);
     }
 
     // ── safeJsonStringify（pi estimate.ts:22-28）────────────────────────
@@ -144,8 +145,26 @@ class EstimateTest {
             user("abcd")));
 
         assertThat(estimate.usageTokens()).isEqualTo(15);
-        assertThat(estimate.trailingTokens()).isEqualTo(1);
-        assertThat(estimate.tokens()).isEqualTo(16);
+        assertThat(estimate.trailingTokens()).isEqualTo(2);
+        assertThat(estimate.tokens()).isEqualTo(17);
+        assertThat(estimate.lastUsageIndex()).isEqualTo(0);
+    }
+
+    /**
+     * pi {@code 27075fe07}（#10497）回归：新文本按 **3.5 字符/token** 预留输出空间。
+     * 3500 字符尾消息 ⇒ {@code ceil(3500/3.5) = 1000}；总 = 2000（用量锚）＋1000（尾估）。
+     * 旧常数 4 算出 875 ⇒ 大输入时输出上限偏大，DeepSeek V4 Flash 一类后端会 400。
+     */
+    @Test
+    void largeNewInputIsReservedAtThreePointFiveCharsPerToken() {
+        var estimate = Estimate.estimateContextTokens(List.of(
+            assistantMessage(Instant.ofEpochMilli(100), usage(100, 1_900, 0, 0, 2_000),
+                new ContentBlock.TextContent("x")),
+            user("x".repeat(3_500), Instant.ofEpochMilli(200))));
+
+        assertThat(estimate.usageTokens()).isEqualTo(2_000);
+        assertThat(estimate.trailingTokens()).isEqualTo(1_000);
+        assertThat(estimate.tokens()).isEqualTo(3_000);
         assertThat(estimate.lastUsageIndex()).isEqualTo(0);
     }
 
@@ -155,8 +174,8 @@ class EstimateTest {
         var estimate = Estimate.estimateContextTokens(List.of(user("abcd"), user("abcd")));
 
         assertThat(estimate.usageTokens()).isZero();
-        assertThat(estimate.trailingTokens()).isEqualTo(2);
-        assertThat(estimate.tokens()).isEqualTo(2);
+        assertThat(estimate.trailingTokens()).isEqualTo(4);
+        assertThat(estimate.tokens()).isEqualTo(4);
         assertThat(estimate.lastUsageIndex()).isNull();
     }
 
@@ -191,7 +210,7 @@ class EstimateTest {
             .as("时间戳 100 的锚早于前缀里的 300 ⇒ 必须被拒")
             .isEqualTo(0);
         assertThat(estimate.usageTokens()).isEqualTo(15);
-        assertThat(estimate.tokens()).isEqualTo(15 + 1);
+        assertThat(estimate.tokens()).isEqualTo(15 + 2);
     }
 
     /** 被中止／出错的回合不当作量锚（pi 的 {@code stopReason !== "aborted" && !== "error"}）。 */
@@ -217,7 +236,7 @@ class EstimateTest {
         var estimate = Estimate.estimateContextTokens(List.of(zero));
 
         assertThat(estimate.lastUsageIndex()).isNull();
-        assertThat(estimate.tokens()).isEqualTo(1);
+        assertThat(estimate.tokens()).isEqualTo(2);
     }
 
     // ── 原 docs/71 G1：user/toolResult 的时间戳也推进前缀守卫 ──────────────
