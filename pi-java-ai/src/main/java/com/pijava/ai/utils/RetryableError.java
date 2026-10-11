@@ -66,8 +66,10 @@ public final class RetryableError {
         buildProviderErrorPattern(List.of(
             // Generic provider load, HTTP status, and server-side transient failures.
             "overloaded",
-            "currently experiencing high demand", // retry.ts:29（紧跟 overloaded）
-            "model is at capacity", // retry.ts:34
+            "server_busy", // retry.ts:33（8b5708dbb：server-busy 瞬断）
+            "servers are currently busy", // retry.ts:34
+            "currently experiencing high demand", // retry.ts:35（紧跟 high demand 组）
+            "model is at capacity", // retry.ts:36
             "rate.?limit",
             "too many requests",
             "429",
@@ -117,6 +119,9 @@ public final class RetryableError {
             "stream ended before message_stop",
             "stream ended before a terminal response event",
             "http2 request did not get a response",
+            // Node ERR_HTTP2_STREAM_CANCEL：HTTP/2 会话在请求发出前死掉
+            // （Bedrock SDK 5 分钟会话超时，#10379）。retry.ts:88（5b6c792b4）
+            "pending stream has been canceled",
 
             // Provider-requested retry delay cap failures should flow through the outer
             // retry policy so callers can surface/abort the backoff (#1123).
