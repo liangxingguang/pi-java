@@ -14,6 +14,12 @@
 > **`B223` 已随 `原 docs/47` 闭环**（2026-10-11，`4162460e`/`88895b2b`），
 > 同包顺带销 **`A9`**（per-model 压缩设置——resolver 槽改为按模型解析）。
 >
+> **2026-10-11（docs/52）**：`B103` 全闭环（三车道亲和头齐，B140「SDK streaming 不透传头」
+> 翻案——javap＋responses 车道实证 `putAdditionalHeader` 透传；顺带修复显式亲和 compat 被
+> `CompatResolver.resolved()` 静默丢 null 的 B156 型事故）；`B107`（恒空 `StreamRequest.extra`
+> 删除，唯一通道确认为 `ApiOptions.extra`）、`B113`（send 死 catch 删除）、`B229`（Mistral 超时
+> 只盖响应头＋增量 SSE）均闭环。`B125` 更正为「仅 per-request samplingParams 半无生产者」。
+>
 > **数据源**：`docs/map/02-ai.md`（基准 pi-java `351d199` / pi `200387122`，2026-10-04）
 > ＋ `docs/04-open-items-register.md` §3.2。
 > **本稿新增**：对 w2 五条做了**逐条取证**（读 pi `git show 200387122:<path>` 与 pi-java 当前工作树），
@@ -132,7 +138,7 @@
 2026-10-11：`B223` 随 `原 docs/47` 销号（§3.2 →**36 条**；A9 不属 §3.2，另销）。
 2026-10-11 换锚：新登 `B227`–`B232`（→42，`B224` 文案半同日销号 →41）；`docs/50` 闭环后
 `B129`/`B131`/`B227`/`B228` 销号、`B130`/`B132` 转 §4（−6）⇒ §3.2 35 条（B229 留半条）；
-同日 `docs/51` 销 B98 ⇒ §3.2 现 **34 条**。
+同日 `docs/51` 销 B98 ⇒ §3.2 34 条；`docs/52` 销 B103/B107/B113/B229（−4）⇒ §3.2 现 **30 条**。
 
 挑几条代表：
 
@@ -160,7 +166,7 @@
 |---|---|---|---|
 | `B21` | 「Java 只有 `thinking.budgetTokens` 一种」 | `catalog/ThinkingFormat.java` **11 档枚举**；`protocol/ThinkingFormatWriter.java:84` **exhaustive switch、无 default（编译器守十一臂）**，生产调用点 `OpenAICompletionsMessageConverter.java:256` | ✅ **确已过期** —— **已从台账移除**（多形状随 `A-09` 落，唯一残留 `B131` 已单独在册） |
 | `B98` | 「约 40 个零消费者 compat 字段」 | 逐字段对读 pi 三个 compat 接口（**40 字段**）vs `ModelCompat`（**32 组件**）⇒ 真缺口 **8 个**：`requiresToolResultName` · `requiresAssistantAfterToolResult` · `requiresThinkingAsText` · `supportsUsageInStreaming` · `zaiToolStream` · `vllmPriority` · `vercelGatewayRouting` · `allowedFallbackModels`（每个都有 pi 消费点） | ⚠️ **文字误记，缺口真实** —— 「40」是 **pi 的字段总数**，不是缺口数。**已改写该行** |
-| `B103` | 「Anthropic 会话亲和头族**未落**」 | 组件、探测器、模型目录全在；Java **只接了一条车道**（`OpenAIResponsesApi.java:82`），pi 是**三条**（`anthropic-messages.ts:1040`／`openai-completions.ts:777`／`openai-responses.ts`） | ⚠️ **半闭** —— 不是「未落」，是「**只落 1/3 条车道**」。**已改写该行** |
+| ~~`B103`~~ | ~~「Anthropic 会话亲和头族**未落**」~~ | ✅ **docs/52 全闭环**（2026-10-11）：三车道齐；B140 翻案 |
 | `B128` | 「`thinkingBudgets` 无选项通道」 | ✅ **确认仍缺**：全仓非注释命中**零**；`SimpleOptions.java:213/:223` 只在 **javadoc 引用** pi 的写法；pi `types.ts:359` 是**真字段**（`adjustMaxTokensForThinking` 消费，`anthropic-messages.ts:965`） | ✅ **保留**（真缺口，不是过期） |
 
 > **回测结论**：4 条里 1 条确已过期（`B21`）、1 条文字误记但缺口真实（`B98`）、
@@ -196,14 +202,14 @@ pi 侧一律 `git show 200387122:<path>`；pi-java 侧读当前工作树（HEAD 
 | `B70` | **不成立**（取证消解，非「已补」） | pi `agent.ts:354-361` `reset()` 保留 `getCurrentSystemMessage(...)` 基线；本仓基线提示**本来就不在 transcript** —— 在 `LaneState.systemPrompt:229` 与 `activeTools` 上，`RunLifecycle.reset:235-257` 只清 transcript/messages/queues ⇒ 行为一致，只是载体不同 |
 | `B87` | ✅ 漏账（`9f86e8c3`，2026-09-26，早于基准 8 天） | `MessageJsonCodec.java:67` 有 `case "system"`；`MessageJsonCodecSystemReadbackTest` 覆盖消息表/`retainedTail`/`originalPrompt` 三个入口 |
 | `B96` | ✅ 漏账（`40bb3ead`，2026-09-26） | `PayloadRecordingStreamFn.java:131-143` 已落 `sections`/`toolsAdded`/`toolsRemoved`（后两键无夹具） |
-| `B134` | ✅ 已过期 | `prompt_cache_key` 随 `11a7d748` 落（`OpenAICompletionsMessageConverter.java:276-286`），sessionId 生产者/消费者全链通；残留「头没上线」归 `B140`/`B103` |
+| ~~`B134`~~ | ✅ 已过期 | `prompt_cache_key` 随 `11a7d748` 落；残留「头没上线」归 `B140`/`B103` —— **docs/52 已清**：`B140` 翻案（`putAdditionalHeader` 透传），亲和头三车道齐 |
 
 **② 半闭（4 条，保留，行文改写）**
 
 | # | 进度 | 现状 |
 |---|---|---|
-| `B107` | **1/2 通道** | `ApiOptions.extra` 已有生产者（`cacheRetention`/`sessionId`/`headers`/`protocol`/`maxRetryDelayMs`）；`StreamRequest.extra` 仍恒 `Map.of()`（`DefaultProviders.java:283`，`:308` javadoc 自陈） |
-| `B113` | **残留不可达** | 车道错误已全部落流（`AbstractChatApi` 把 `onError` 映射 `StreamError.settle`）；`send()` 的 `catch → PiHttpException` 结构上不可达 —— `QueueStreamIterator.hasNext()/next()` 永不抛（中断合成落定事件）⇒ 死 catch，待删 |
+| ~~`B107`~~ | ✅ **docs/52 闭环**：恒空 `StreamRequest.extra` 删除（唯一通道＝`ApiOptions.extra`，适配器每请求新建） |
+| ~~`B113`~~ | ✅ **docs/52 闭环**：`send()` 死 catch 删除，管道故障保类型原样传播 |
 | `B132` | **≈1/4 臂** | openrouter 一臂随 A-02 落（`CatalogCompatRules.java:222`）；together/baseten/fireworks 三 provider 的常量、目录、注册表原样 |
 | `B98` | **0/8** | 8 字段四层全零；⚠️ 数字更正：pi 三 compat 接口实测 **46** 字段（非台账「40」）、Java `ModelCompat` **31** 组件（非「32」）。另：8 键均未被 models.json schema 兜住 ⇒ 手写真键**静默丢弃** |
 
@@ -220,7 +226,7 @@ pi 侧一律 `git show 200387122:<path>`；pi-java 侧读当前工作树（HEAD 
 | `B97` | ❌ 三个漂移 id 一字未改；台账另漏「Java 有 pi 无」的 `text-embedding-3-*` 一类 |
 | `B99` | ❌ `supportsMidConvoEffort` 字段及两 beta/`insertThinkingLevelMessages` 全无（SDK 无 `BlockBinding`） |
 | `B100` | ❌ 偏差真实但**不可观察**（pi `detectCompat` 只读 `model.baseUrl`；Java 喂覆盖后有效值），建议随 map 降权为架构备注 |
-| `B103` | ❌ 仍 1/3 车道（另两条被 `B140` SDK streaming transport 挡住） |
+| ~~`B103`~~ | ✅ **docs/52 闭环（3/3 车道）**：B140 翻案——两 SDK params builder 均有 `putAdditionalHeader` 且经 streaming 透传 |
 | `B110` | ❌ ⚠️ 台账「两侧均无」是误记 —— pi **有**：`proxy.ts:51/58/386-396` 线字段 ＋ `anthropic-messages.ts:581/588` 消息字段 |
 | `B115` | ❌ 宿主终局帧面仍未对齐 |
 | `B116` | ❌ `StreamDone` usage 嵌套方言仍在 |
@@ -229,7 +235,7 @@ pi 侧一律 `git show 200387122:<path>`；pi-java 侧读当前工作树（HEAD 
 | `B119` | ❌ 停因闭集无校验点 |
 | `B121` | ❌ `stopReason` 仍 String 非闭集 |
 | `B124` | ❌ `maxTokens:0`/缺席仍被 −1 哨兵吞 |
-| `B125` | ❌ `ModelInfo.headers`/per-request samplingParams 仍零消费者 |
+| `B125` | ⚠️ **docs/52 更正**：`ModelInfo.headers` 半已闭环（`DefaultProviders.withPerModelOverrides`）；仅 per-request samplingParams 半无生产者（通道＝`ApiOptions.extra`） |
 | `B126` | ❌ codex-responses 仍忽略 maxTokens |
 | `B127` | ❌ Responses reasoning effort 仍走 extra 平行通道 |
 | `B128` | ❌ thinkingBudgets 全程无通道；⚠️ 本仓 `StreamOptions.java:22` 的「harness 不转发」pi 依据已过时（锚点 `packages/agent` 只有 6 文件，转发链完整） |
@@ -274,7 +280,7 @@ pi 侧一律 `git show 200387122:<path>`；pi-java 侧读当前工作树（HEAD 
 | `B165` | 已在册，本稿补 `inline-tools-2026-09-15` 的 pi 证据。 |
 | `B21` | ✅ **已销号**（2026-10-09 回测：确已过期，多形状随 `A-09` 落）。 |
 | `B98` | ⚠️ **已改写**：真缺口是 **8 个字段**（不是「约 40 个零消费者字段」）。 |
-| `B103` | ⚠️ **已改写**：半闭（只落 1/3 条车道，不是「整族未落」）。 |
+| ~~`B103`~~ | ✅ **docs/52 全闭环**：3/3 车道（B140 翻案）。 |
 | `B128` | ✅ **保留**：回测确认真缺口。 |
 | `B148` | 与本稿 §1.2 的 `responseModel`/`diagnostics` 同一条。 |
 | **2026-10-10 批次**（§5.2） | |
@@ -306,6 +312,12 @@ pi 侧一律 `git show 200387122:<path>`；pi-java 侧读当前工作树（HEAD 
 | `B229` | ⚠️ **半闭**：文案半随本包闭环；超时半保留在册（PiHttpClient 响应头后取消请求超时的传输改造）。 |
 | **2026-10-11 批次**（`docs/51`，长尾批量化第二包，B98 八字段） | |
 | `B98` | ✅ **已销号**（`docs/51 §8`，8/8）：completions 七字段（tool 结果 name、插桥三处、thinking 转文本、usage-in-streaming 显式 false 门、zai tool_stream、vllm priority、vercel gateway 路由）＋ anthropic fallback 请求半（beta＋params.fallbacks；内置生产者 zai 11 模型与 claude-fable-5）；models.json schema 八键全解析不再静默丢。流内 fallback 块/成本归属补记 B148。converter 超 500 拆出 CompletionAssistantMessage（436 行）；E5 ModelCompat 762 行。ai **1478**、探针 M1–M9 全过（M4 实红 2、M5 首版变异 NPE 换精准版、M8 首版零红换分支门版，见 §8）。台账 102→**101**、§3.2 35→**34** 条。 |
+| **2026-10-11 批次**（`docs/52`，请求通道收尾包） | |
+| `B103` | ✅ **已销号（3/3 车道）**：B140 翻案——javap 实证 openai-java 4.42/anthropic-java 2.52 params builder 的 `putAdditionalHeader` 经 streaming 透传（responses 车道早已用）。completions 三头（openai/nosession/openrouter）、anthropic 单头、responses 补 cacheRetention=none 门、OAuth Bearer 分支不挂；顺带修复 `CompatResolver.resolved()` 硬编码 null,null 导致显式亲和 compat 在四车道全丢的 B156 型事故。 |
+| `B107` `B113` | ✅ **已销号**：恒空 `StreamRequest.extra` 全通道删除（~103 构造点改签，唯一通道＝`ApiOptions.extra`）；`AbstractChatApi.send()` 不可达 catch 删除。 |
+| `B229` | ✅ **已销号**：Mistral 超时只盖等响应头（`sendAsync`＋自定义 `BodyHandler` 的 ResponseInfo 回调，超时 cancel exchange，JDK 25 实测对端收 EOF）；Mistral SSE 顺带从整缓冲改增量交付（新 `SseTransport` 抽出保 PiHttpClient 346 行）。残留：JDK 无 body idle 超时（pi 依赖 undici 300s 默认），宿主 abort 为安全网，见 docs/52 §5。 |
+| `B125` | ⚠️ **行更正**：`ModelInfo.headers` 已有消费者（`DefaultProviders.withPerModelOverrides`）；仅 samplingParams per-request 半无生产者，通道在 `ApiOptions.extra`。 |
+| | ai **1504**；探针 M1–M9 实红 8/8/2/1/1/1/2/1/6（M6 发现 JDK 在头/首字节后拒绝 cancel，改用「回退 legacy 缓冲路径」作变异体）；台账 §3.2 34→**30** 条。 |
 
 ---
 

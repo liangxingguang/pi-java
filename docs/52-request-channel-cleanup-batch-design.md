@@ -1,6 +1,6 @@
 # docs/52 设计稿：请求通道收尾包（B103 ＋ B107 ＋ B113 ＋ B229）
 
-> 状态：**待审核**（设计稿落地 → 用户审核 → 才写代码）
+> 状态：✅ **已闭环（2026-10-11）**。闭环记录见 §10。
 > 锚点：`ea448f454`（v1.1.0-22，2026-10-11 换锚）。pi 证据全部取自 `git show ea448f454:<path>`；B229 另引 `6b07b4e57` 的 diff。
 > 上一包：docs/51（B98 compat 八字段，已闭环）。
 
@@ -419,3 +419,75 @@ if (e instanceof HeaderTimeoutException hte) {
   `OpenRouterModels.java:42-44`、`CompatResolver:209-215`）
 - 台账：B103/B107/B113 销号；B229 销号并留 body-idle 残留注记；B125 行更正；B140 在 docs/41
   翻案；§1 计数与 docs/41 §4/§7、map/02 同步
+
+---
+
+## 10. 闭环记录（2026-10-11）
+
+### 10.1 提交序列（main）
+
+`7c924b24` 设计稿 → `4de7d9f5` 惰性脚手架 → `72485072` 红灯 22 条 →
+`273beadf` B103 三车道接线 → `2bc455e8` B113 删死 catch →
+`b9e89b47` B229 头超时＋增量 SSE → `12701106` 增量交付钉子 →
+`fcff014b` B107 ai（删 StreamRequest.extra）→ `43549d97` B107 下游跟随 →
+`ec7ae843` 抽 `SseTransport`（500 行规则）。
+
+### 10.2 红灯实测：22 条
+
+| 夹具类 | 红数 | 内容 |
+|---|---:|---|
+| `SessionAffinityHeadersTest`（新） | 6/9 | completions 三形/探测/门、anthropic 单头/探测（3 条门与 responses 回归当日即绿） |
+| `SessionAffinityWireTest`（翻案改写） | 7/13 | 两车道正断言 + responses none 门；旧 2 条反向断言删除 |
+| `CompatResolverTest` | 6/38 | completions/anthropic 探测缺省、显式透传、resolved 丢字段回归 |
+| `AbstractChatApiSendTest`（新） | 1/1 | 管道故障保类型 |
+| `PiHttpClientHeaderTimeoutTest`（新） | 1/3→4 | stall 头超时；slow-body/legacy 当日绿；事后补增量交付钉子 |
+| `MistralHeaderTimeoutTest`（新） | 1/1 | pi 文案 `Mistral response headers timed out after 300ms` |
+
+### 10.3 变异探针实测（M1–M9，全部还原复绿）
+
+| 探针 | 实红 | 与预计偏差 |
+|---|---:|---|
+| M1 completions 门恒关 | 8（pure 4＋wire 4） | 预计 4+1，wire 的 long/三头/两头/openrouter 均翻 |
+| M2 resolved() 重硬编码 null | 8（resolver 2＋wire 6） | responses 显式 format 存活夹具抓住 B156 事故 |
+| M3 anthropic 删 putAdditionalHeader | 2 | — |
+| M4 去 bearer 门 | 1 | — |
+| M5 responses none 门短路 | 1 | — |
+| M6 截止时间复活 | 1 | **探针换体**：发现 JDK 在头/首字节到达后 cancel 无效、`HttpRequest.timeout` 也在首字节后释放（裸 socket＋HttpClient 双 spike 实证）；改为「回退 legacy 缓冲路径」变异体，增量交付钉子恰红 1；该路径因此成为本包真正的行为增量 |
+| M7 头超时不抛本类型 | 2（传输 1＋车道文案 1） | — |
+| M8 恢复 send 包装 catch | 1 | — |
+| M9 漏发 x-session-affinity | 6（pure 3＋wire 3） | — |
+
+### 10.4 实现与设计的偏差（执行期发现）
+
+1. **B229 的 JDK 机制修正**：设计假设 `BodyHandler.apply` 在响应头到达时回调、
+   `ofInputStream` future 头后完成——实测（裸 socket 对照）com.sun 测试服务器与
+   JDK HttpClient 都在**首个 body 字节**才推进；RequestInfo 回调边界仍是头
+   （真实 SSE 服务器头发送即刷，测试用 `: heartbeat` 注释块模拟）。
+   `CompletableFuture.get(headerTimeout)` 等 ResponseInfo 的方案不变，
+   语义在真实「头先到、body 晚来」的 SSE 上成立（增量交付钉子验证）。
+2. **HeaderTimeoutException 改非检查异常**：checked IOException 会被 postSse 边界
+   包成 PiHttpException，车道就匹配不到类型、出不了 pi 文案；重试判定不受影响。
+3. **PiHttpClient 537 行破 500 上限**：流式传输整体抽到新包私有类
+   `SseTransport`（219 行），PiHttpClient 回到 346 行。
+4. **B107 机械脚本一次返工**：首版 Perl 对 8 参构造错删 reasoning（应删第 7 参 extra），
+   全量 ai 套件 110 红暴露；还原后按「7 参删 6／8 参保 7」重跑，二次幂等。
+5. **B103 既有潜在偏差顺手修**：responses 车道 retention=none 时仍发亲和头
+   （pi `:159` 有 cacheSessionId 门），旧套件无断言。
+6. **B113 反射夹具**：`AnthropicMessagesApi.buildParams(StreamRequest)` 一参私有方法
+   被 73 处反射调用，保留为委托形态。
+
+### 10.5 残留（已入台账/注释，未销号）
+
+- **JDK 无 body idle 超时**：pi 依赖 undici 默认 300s bodyTimeout；头之后流可无限挂，
+  安全网是宿主 `markAborted`/线程中断。无 pi 对应物不自造看门狗（§5 偏差 1）。
+- JDK 的 `HttpRequest.timeout` 在首字节后即释放——legacy pi-messages 路径保持
+  300s＋ofString 缓冲不动（该车道对齐 pi-messages 低层单次 fetch）。
+
+### 10.6 验证
+
+- ai **1504** 全绿（基线 1478，净 +26）；agent-core / coding-agent / tui **212**(1 skip) /
+  evals **45**(19 smoke skip) 四 reactor BUILD SUCCESS。
+- 触碰文件 checkstyle 零新增 WARN（PiHttpClient 537→346、SseTransport 219、ModelCompat 762 未动）。
+- 无 `System.out.println`；文件均 ≤500 行。
+- 台账 §3.2 34→**30**（B103/B107/B113/B229 销）；B125 行更正；
+  docs/41 翻案 B140；map/02 同步。

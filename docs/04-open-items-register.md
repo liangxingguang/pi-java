@@ -64,10 +64,7 @@
 |---|---|---|
 | B80 | Mistral 数组形态 `delta.content` 无解析路径 | pi 对数组 content 有三条分支；Java 不读 |
 | B81 | pi OAuth 分支两面未移植 | 系统提示前缀 ＋ 工具名映射（anthropic-messages isOAuthToken 分支） |
-| B103 | 会话亲和头**只落了 responses 一条车道** | pi 三条车道都发（`anthropic-messages.ts:1040`／`openai-completions.ts:777`／`openai-responses.ts`），Java 只有 `OpenAIResponsesApi.java:82` 接 `SessionAffinityHeaders`；组件与探测器已全在（`ModelCompat`／`CompatResolver`／`ModelsJsonCompat`）⇒ **缺的是两条车道的接线**（B140 同族：SDK streaming transport 不透传任意头） |
-| B107 | 两条请求选项通道**只剩 1 条恒空**（2026-10-10 回测） | `ApiOptions.extra` 已有生产者（cacheRetention/sessionId/headers/protocol/maxRetryDelayMs）；`StreamRequest.extra` 仍恒 `Map.of()`（`DefaultProviders.java:283`） |
 | B110 | `providerThinkingLevel` **pi 有、Java 无**（2026-10-10 更正原「两侧均无」） | pi：`proxy.ts:51/58/386-396` 线字段 ＋ `anthropic-messages.ts:581/588` 消息字段；Java 侧 `JsonEventMapper.java:346` 不写 |
-| B113 | 车道错误已全部落流；**残留 `send()` 的死 catch**（2026-10-10 回测） | `AbstractChatApi` 已把 `onError` 映射 `StreamError.settle`；但 `send()` 仍 `catch → PiHttpException`，而 `QueueStreamIterator.hasNext()/next()` 永不抛（中断合成落定事件）⇒ 该 catch 结构不可达，待删 |
 | B115 | 宿主线是否整体不发终局帧 | pi RPC 形状：message_update 只发非终局增量 |
 | B116 | StreamDone 的 UsageInfo 嵌套包裹是 Java 方言 | pi 的 usage 只在消息上，proxy 线另发扁平 usage |
 | B117 | 「谁定终局 reason」两套写法互相遮蔽 | SessionRunner 逐事件写 stopReason 与终局收口两个权威 |
@@ -75,7 +72,7 @@
 | B119 | 停因闭集无校验点 | 生产者各写自由字符串，拼错无人察觉 |
 | B121 | `AssistantMessage.stopReason()` 是 String 非闭集 | pi 是 `StopReason` 联合类型 |
 | B124 | `maxTokens: 0` 与缺席之别被哨兵吞掉 | pi 用 `??`/`!== undefined` 区分；Java int ＋ −1 哨兵 |
-| B125 | 两条「调用方给的」通道零消费者 | ModelInfo.headers；samplingParams 的 per-request 半 |
+| B125 | samplingParams 的 per-request 半无生产者 | 通道在 `ApiOptions.extra`（与 sessionId/cacheRetention 同形；适配器每请求新建）；`ModelInfo.headers` 半已随 D-P1 有消费者（`DefaultProviders.withPerModelOverrides`，B107/docs/52 核） |
 | B126 | codex-responses 车道忽略 maxTokens | 该文件零命中 `if (options?.maxTokens)` |
 | B127 | Responses reasoning 走平行通道 | ResponsesOptions 读 extra 的 reasoningEffort，与主路 reasoning 并存 |
 | B128 | thinkingBudgets 无选项通道 | pi SimpleStreamOptions.thinkingBudgets |
@@ -87,7 +84,6 @@
 | B159 | `shouldStopAfterTurn` 更名 finishTurn 且语义变 | pi 从布尔改 `{action: continue/end}`，能强制多跑一轮 |
 | ~~B165~~ | ~~Anthropic 中段工具改为「定义内联」~~ | ✅ **已销号 2026-10-10**（`原 docs/45`）：beta 换 `inline-tools-2026-09-15`、顶层表就此定死、`tool_addition` 改按值内联、同名重定义不再回退。⚠️ 旧记「`hasToolRedefinitions` 被 pi 删除」实为**弃用**（`原 docs/45 §1.2`） |
 | B226 | Radius 内建 provider 缺失 | pi 有 `providers/radius.ts`/`radius-config.ts`/`radius.models.ts` ＋ `coding-agent/core/radius.ts`；Java 侧只有 OAuth 设备码工厂（`OAuthProviders.radius`），无内建 chat provider/目录/注册。自定义网关可经 models.json `{"api":"pi-messages"}` 到达（`原 docs/49` 已补派发臂），内建 provider 本身未移植。⚠️ **2026-10-11 新锚点补记**（`43d376399`）：pi 的 `getModels` 已改为 gateway catalog **整体替换** baseline（一旦拿到账号目录就不再 overlay 合并，组织方可禁用模型），移植时按新语义 |
-| B229 | **新锚点**：Mistral 超时只盖响应头（文案半已闭） | `6b07b4e57`：pi 的 60s 超时改为**只盖等响应头**（headers 到达即释放），长思考流不再被固定截止时间切断；body 停顿交给 HTTP client 的 idle 超时。Java Mistral 走 `PiHttpClient`（`.timeout(300s)` 同时盖头和体）⇒ 对齐需要给 SSE 传输加「响应头到达后取消请求超时」。**文案半已随 `docs/50` 闭环**（`7fb59f995`：`finish_reason:"error"` → `Provider stopped with: error (server error)`，`server.?error` 抓手生效） |
 | B230 | **新锚点**：azure provider 改名＋Foundry Chat Completions | pi `a37306d43`（#9714）＋env 表：provider id `azure-openai-responses`→`azure`（env 键随之），新增 `providers/azure.ts`/`azure-openai-config.ts` 支持 **Foundry Chat Completions 部署**（responses 之外多一条 completions 车道）。Java 仍注册旧 id（`AzureOpenAIResponsesApi.java:34`）且只有 responses；models.json 写新 id 在 Java 不被识别 |
 | B231 | **新锚点**：OAuth 刷新取消时轮转 token 不持久化 | pi `bde882c74`＋`models.ts:621-633`：抽出 `refreshStoredOAuthCredential`，已开始的刷新**不怕调用方取消**，轮转后的 refresh token 一定落盘，后到的刷新读新凭证。Java 凭证明细刷新若仍随 abort 丢弃结果则有此窄角（设计时取证确认）。同批 `8d8ae2fc2` Anthropic 回调端口冲突回落空闲端口——Java `OAuthFlow.java:67` 本就绑端口 0（OS 分配），**无差距不登记** |
 | B232 | **新锚点**：内置目录数据漂移（v1.1.0） | pi 新锚点目录新增/改值：Claude Haiku 5.5（`f76c1db66`）、Claude 5.5 系列改吃 models.dev 元数据（`ce950d78f`）、Kimi K3 Moonshot 定价钉死＋Haiku 5.5 adaptive thinking（`a2eef9eb6`）、保留全部目录的 prompt-length 定价层（`943a10e74`）。Java `BuiltinCatalog.java:49` 最新只到 Haiku 4.5；与 B97（三个漂移 id）同族，属持续性数据漂移 |
