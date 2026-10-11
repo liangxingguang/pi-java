@@ -8,6 +8,7 @@ import com.pijava.ai.api.ProviderApi;
 import com.pijava.ai.catalog.ModelCatalog;
 import com.pijava.ai.protocol.AnthropicMessagesApi;
 import com.pijava.ai.protocol.OpenAICompletionsApi;
+import com.pijava.ai.protocol.PiMessagesApi;
 import com.pijava.ai.provider.ModelsJsonSchema.ProviderDef;
 
 /**
@@ -78,9 +79,13 @@ public final class ModelsJsonProvider extends ConfigurableProvider {
             // when nothing is configured (Ollama-style local endpoints).
             case OPENAI_COMPLETIONS -> new OpenAICompletionsApi(options, null);
             case ANTHROPIC_MESSAGES -> new AnthropicMessagesApi(options, null);
+            // B224：自定义 Radius 兼容网关（pi models.json 允许 "api": "pi-messages"）。
+            // null envVar 与另两臂同形（inline apiKey 已在 createApi 注入 options）。
+            case PI_MESSAGES -> new PiMessagesApi(options, null);
             default -> throw new IllegalArgumentException(
                 "models.json provider \"" + name() + "\": protocol " + protocol.wireName()
-                + " is not supported yet (openai-completions / anthropic-messages only)");
+                + " is not supported yet (openai-completions / anthropic-messages"
+                + " / pi-messages only)");
         };
     }
 }

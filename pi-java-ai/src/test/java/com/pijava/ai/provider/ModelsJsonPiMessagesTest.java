@@ -109,7 +109,8 @@ class ModelsJsonPiMessagesTest {
 
     private void startJsonErrorServer(int status, String body) throws Exception {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        server.createContext("/messages", exchange -> {
+        // PiMessagesApi 向 <baseUrl>/messages 发 POST（baseUrl 含 /v1）。
+        server.createContext("/v1/messages", exchange -> {
             var bytes = body.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(status, bytes.length);
