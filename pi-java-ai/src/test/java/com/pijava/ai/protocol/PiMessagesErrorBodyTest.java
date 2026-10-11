@@ -56,6 +56,24 @@ class PiMessagesErrorBodyTest {
         }
     }
 
+    /**
+     * E2b：结构化体但 message/code 都是空串 ⇒ suffix 空、<b>不</b>回落非空 body
+     * （JS {@code ??} 只挡 null/undefined，不挡空串；探针 M4 守这道门）。
+     */
+    @Test
+    void emptyStringMessageDoesNotFallBackToNonEmptyBody() throws Exception {
+        try (var server = new RecordingHttpServer()) {
+            server.enqueue(new RecordingHttpServer.Response(400,
+                Map.of("Content-Type", "application/json"),
+                "{\"error\":{\"message\":\"\",\"code\":\"\"}}"
+                    .getBytes(StandardCharsets.UTF_8)));
+
+            var msg = settle(server);
+
+            assertThat(msg.errorMessage()).isEqualTo("400 Bad Request: ");
+        }
+    }
+
     /** E3：非 JSON 纯文本体 ⇒ 裸 body 兜底（pi 的 {@code message ?? body}）。 */
     @Test
     void plainText413FallsBackToRawBody() throws Exception {
