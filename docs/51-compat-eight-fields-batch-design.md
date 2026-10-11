@@ -1,6 +1,7 @@
 # 51 批量包：B98 compat 八字段（completions 七字段＋anthropic fallbacks 请求半）
 
-> 📝 **状态：设计稿，待用户审核（2026-10-11）。未批准前不写生产代码。**
+> ✅ **已闭环（2026-10-11）**：脚手架 `（inert components）`；红灯 12 failures；
+> 消费者 2 commits＋500 行规则拆分 1 commit。红集、探针与偏差见 §8。
 >
 > pi 锚点 **`ea448f454`**（证据一律 `git show ea448f454:<path>`）；pi-java 基线 HEAD `8ba06ccf`。
 > 「长尾批量化」第二包，承接 `docs/50`（B129–B132 族）。
@@ -237,7 +238,40 @@ schema（:485-495）：数组 `maxItems:3`；元素 `{provider:string(min1), mod
 
 ## 8. 验证（闭环回填）
 
-- ai 模块汇总行 Failures 0 / Errors 0，计数录实际值（基线 **1456**）。
-- checkstyle BUILD SUCCESS；无 `System.out.println`；ModelCompat 行数录实际（E5 更新）。
-- coding-agent/tui/evals `-am` 反应堆 SUCCESS。
-- 探针红集表＋偏差记录。
+### 8.1 提交链
+
+`66669e7f` 设计 → `b43345a9` 惰性脚手架（8 组件＋两小类型＋schema/探测/目录生产者，1456 全绿）
+→ `b065c3a4` 红灯 → `78fbf733` completions 七字段消费点 → `1040f25c` anthropic fallback
+请求半 → `391cfa53` 500 行规则拆分。
+
+### 8.2 红集
+
+生产消费点未接时 **12 failures / 0 errors**：CompletionsB98WireTest 11（U1 门、U2 zai、
+U3 priority、U4 vercel×2、U5 name、U6 桥文本/空 content/图片桥、U7×2）＋
+AnthropicFallbacksWireTest 1。守卫（usage 默认、无工具不发 tool_stream、priority/name 缺席、
+noBridge 四角色精确、sonnet 无 fallback、catalog 2 条、models.json 8 键解析）基线即绿。
+
+### 8.3 变异探针（grep 落地→录红→还原→复绿）
+
+| 探针 | 变异 | 实测 |
+|---|---|---|
+| M1 usage 门 | 恒发 include_usage | 恰 1（U1） |
+| M2 zai 生产者 | 规则改永不命中 | 恰 2（catalog 单测＋内置线格） |
+| M3 tool_stream 门 | 去掉 hasRequestTools | 恰 1（无工具对照） |
+| M4 priority | 恒发且值固定 0 | **2**（缺席对照＋-1 值断言；设计预测 1，值断言也翻） |
+| M5 vercel 空表 | 去掉空表守卫 | 恰 1（空表对照）。**首版变异把 null 守卫也删了 ⇒ 15 条 NPE 连锁（假红），改精准变异后中** |
+| M6 name 门 | 去掉 flag 只留 toolName 非空 | 恰 1（默认对照） |
+| M7a/b/c 三处桥 | 逐处删 | 各恰 1（文本桥/图片桥/空 content） |
+| M8 thinking-as-text | 去 reasoning 字段门 | **0 红**（fixture 签名恒 null，门不可观察）；改变异＝强制走非文本分支后恰 2（两个思考用例） |
+| M9a fallback beta | beta 恒加 | 恰 1（sonnet 对照） |
+| M9b params | params 泄漏 provider | 恰 1（fable 逐字断言） |
+
+### 8.4 偏差与最终验证
+
+- **converter 565 行破 500 规则**：拆出 `CompletionAssistantMessage`（151 行，同
+  CompletionImageWire/CompletionToolWire 先例），converter 回 436；行为零变化、1478 全绿。
+- ai 模块 **1478**（基线 1456＋22 新测：completions 17＋anthropic 2＋catalog 2＋schema 1），
+  Failures/Errors 0；coding-agent 522、tui 212(1 skip)、evals 45(19 skip smoke) 反应堆 SUCCESS。
+- checkstyle BUILD SUCCESS；本包触碰文件无新增 WARN（ResponsesMessageConverter 的 7 条预存、
+  ContextOverflow/SanitizeUnicode 两条预存均未碰）；E5 ModelCompat 737→**762**（台账更新）。
+- 台账 B 102→**101**、§3.2 35→**34**；流内 fallback 块/成本归属补记 B148。

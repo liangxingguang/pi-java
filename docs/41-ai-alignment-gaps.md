@@ -131,7 +131,8 @@
 2026-10-10 晚些：`B139` 随 `原 docs/46` 销号（→36），同包新登 `B223`（→**仍 37 条**）。
 2026-10-11：`B223` 随 `原 docs/47` 销号（§3.2 →**36 条**；A9 不属 §3.2，另销）。
 2026-10-11 换锚：新登 `B227`–`B232`（→42，`B224` 文案半同日销号 →41）；`docs/50` 闭环后
-`B129`/`B131`/`B227`/`B228` 销号、`B130`/`B132` 转 §4（−6）⇒ §3.2 现 **35 条**（B229 留半条）。
+`B129`/`B131`/`B227`/`B228` 销号、`B130`/`B132` 转 §4（−6）⇒ §3.2 35 条（B229 留半条）；
+同日 `docs/51` 销 B98 ⇒ §3.2 现 **34 条**。
 
 挑几条代表：
 
@@ -303,6 +304,8 @@ pi 侧一律 `git show 200387122:<path>`；pi-java 侧读当前工作树（HEAD 
 | `B227` `B228` `B129` `B131` | ✅ **已销号**（见 `docs/50 §8`）：estimate 常数 4→3.5（#10497，压缩估算器仍 /4 不动）；retry 白名单补 `server_busy`/`servers are currently busy`/`pending stream has been canceled`；xiaomi 全族 rrc 目录标注（converter 空串补全的生产者补齐，线格夹具有内置目录走通）；ant-ling 窄角 else-if 穿透在 writer 臂内复刻（探测给 true 的 localhost 夹具证实既有两个断言编码的是穿透前形状，随修翻转）。 |
 | `B130` `B132` | ➡️ **转 §4 C 类**：zai sre 今零行为差（携带集 glm-4.7 在 pi 为 false，守卫夹具钉死，引入 glm-5.x 级别表时触发）；together/baseten/fireworks 不携带内置 provider（models.json 路径已完整等效，携带目录时触发）。 |
 | `B229` | ⚠️ **半闭**：文案半随本包闭环；超时半保留在册（PiHttpClient 响应头后取消请求超时的传输改造）。 |
+| **2026-10-11 批次**（`docs/51`，长尾批量化第二包，B98 八字段） | |
+| `B98` | ✅ **已销号**（`docs/51 §8`，8/8）：completions 七字段（tool 结果 name、插桥三处、thinking 转文本、usage-in-streaming 显式 false 门、zai tool_stream、vllm priority、vercel gateway 路由）＋ anthropic fallback 请求半（beta＋params.fallbacks；内置生产者 zai 11 模型与 claude-fable-5）；models.json schema 八键全解析不再静默丢。流内 fallback 块/成本归属补记 B148。converter 超 500 拆出 CompletionAssistantMessage（436 行）；E5 ModelCompat 762 行。ai **1478**、探针 M1–M9 全过（M4 实红 2、M5 首版变异 NPE 换精准版、M8 首版零红换分支门版，见 §8）。台账 102→**101**、§3.2 35→**34** 条。 |
 
 ---
 

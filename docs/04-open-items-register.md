@@ -81,7 +81,7 @@
 | B128 | thinkingBudgets 无选项通道 | pi SimpleStreamOptions.thinkingBudgets |
 | B137 | resolver 的 glob/scope 面 | pi 支持 minimatch 通配与 scope 诊断；**Java 无前后缀**，序＝精确（provider/id｜裸 id）→切 `:level`→provider 首条→modelName 精确→任意 id 兜底；`--models` 生产零消费者 |
 | B147 | Responses 回放 item 分组块序不同 | pi 同循环按块序交错 push；Java 按类型分组 |
-| B148 | responseModel/diagnostics 真消费者未接 | pi 用于 usage 分组、cache 归属等；含 pi-messages 的 `pi_messages_response_failure` 信封（`{type,timestamp,error:{name,message,stack,code},details}`，details 二选一投影＋8192 U+2026 截断，`pi-messages.ts:133-152`）——B224 只对齐了文案半，信封半随本条（消费者＝bug-report，见 B79；裁决见 `原 docs/49 §4.3`） |
+| B148 | responseModel/diagnostics 真消费者未接 | pi 用于 usage 分组、cache 归属等；含 pi-messages 的 `pi_messages_response_failure` 信封（`{type,timestamp,error:{name,message,stack,code},details}`，details 二选一投影＋8192 U+2026 截断，`pi-messages.ts:133-152`）——B224 只对齐了文案半，信封半随本条（消费者＝bug-report，见 B79；裁决见 `原 docs/49 §4.3`）。**2026-10-11 `docs/51` 补记**：Anthropic 服务端回退的流内半也随本条——`content_block_start` 的 `"fallback"` 块处理（已有内容时抛 mid-output fallback）＋ responseModel 成本归属（`anthropic-messages.ts:660-690`，按 `allowedFallbackModels[].cost` 取价；请求半 beta＋params.fallbacks 已随 B98 落） |
 | B156 | ModelCompat 逐组件重建会静默丢字段 | 新组件追加时的副作用面 |
 | B158 | 输出截断字节预算差一倍 | Java 100KB，pi 主流 50KB（模型可见文案不同） |
 | B159 | `shouldStopAfterTurn` 更名 finishTurn 且语义变 | pi 从布尔改 `{action: continue/end}`，能强制多跑一轮 |
@@ -100,7 +100,6 @@
 | B94 | 8 个内置工具的 `promptSnippet`/`promptGuidelines` 声明 |
 | B95 | `docs` 段无生产者（ContextAssembler 不传 DocumentationPaths） |
 | B97 | 3 个内置 (provider,modelId) 与 pi 目录不匹配 |
-| B98 | compat 面**缺 8 个字段**（pi 有标注且**有消费点**，Java 无字段，0/8 落） | 逐字段对读 pi 三个 compat 接口（实测 **46** 字段）vs `ModelCompat`（实测 **31** 组件）—— 缺：`requiresToolResultName`（`openai-completions.ts:1429`）· `requiresAssistantAfterToolResult`（`:1241,1295,1451`）· `requiresThinkingAsText`（`:1323`）· `supportsUsageInStreaming`（`:834`，后果是**恒发** include_usage，行为已错）· `zaiToolStream`（`:857`）· `vllmPriority`（`:873`）· `vercelGatewayRouting`（`:993`）· `allowedFallbackModels`（`anthropic-messages.ts:212,674,1281`）。⚠️ 8 键均未被 models.json schema 兜住 ⇒ 手写真键静默丢弃。数字 40/32 为旧计数（2026-10-10 更正） |
 | B99 | supportsMidConvoEffort 半可移植 |
 | B100 | compat 探测的 baseUrl 来源不同（pi 读模型对象，不接受请求期覆盖） |
 
@@ -194,7 +193,7 @@
 | E2 | coding-agent …/rpc/RpcDispatcher.java | 647 |
 | E3 | agent-core …/harness/PiLaneSink.java | 562 |
 | E4 | agent-core …/harness/AgentHarness.java | 577 |
-| E5 | ai …/catalog/ModelCompat.java | 737（2026-10-10 §3.2 回测新登） |
+| E5 | ai …/catalog/ModelCompat.java | **762**（2026-10-11 `docs/51` B98 加 8 组件；converter 侧已拆出 CompletionAssistantMessage 保 500 内） |
 
 均不与功能耦合，可随时拆，与功能包搭车推进。
 
