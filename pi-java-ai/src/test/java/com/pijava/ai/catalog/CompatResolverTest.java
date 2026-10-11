@@ -167,6 +167,72 @@ class CompatResolverTest {
         assertThat(compat.supportsMidConvoSystemMessages()).isFalse();
     }
 
+    // ── B103（docs/52）：会话亲和的探测缺省与显式透传 ────────────
+
+    @Test
+    void completionsDetectsAffinityOnOpenRouter() {
+        // pi detectCompat :1680-1681。
+        var openRouter = CompatResolver.forCompletions(
+            model("openrouter", "z-ai/glm-5.2"), "https://openrouter.ai/api/v1");
+        assertThat(openRouter.sendSessionAffinityHeaders()).isTrue();
+        assertThat(openRouter.sessionAffinityFormat()).isEqualTo(SessionAffinityFormat.OPENROUTER);
+    }
+
+    @Test
+    void completionsAffinityDefaultsOffAndOpenaiShapeElsewhere() {
+        var generic = CompatResolver.forCompletions(
+            model("fireworks-completions", "llama-3"), "http://localhost:9/v1");
+        assertThat(generic.sendSessionAffinityHeaders()).isFalse();
+        assertThat(generic.sessionAffinityFormat()).isEqualTo(SessionAffinityFormat.OPENAI);
+    }
+
+    @Test
+    void completionsKeepsExplicitAffinityOverDetection() {
+        var explicit = new ModelCompat(false, null, true, false, null, null, null, null, null,
+            true, null, null, null, null, null, null, null, null, null,
+            null, Map.of(), Map.of(), null, null, null,
+            Boolean.TRUE, SessionAffinityFormat.OPENROUTER);
+        var compat = CompatResolver.forCompletions(
+            model("deepseek", "deepseek-v4-pro", explicit), "https://api.deepseek.com");
+        assertThat(compat.sendSessionAffinityHeaders()).isTrue();
+        assertThat(compat.sessionAffinityFormat()).isEqualTo(SessionAffinityFormat.OPENROUTER);
+    }
+
+    @Test
+    void anthropicDetectsOpenRouterFromProviderOrBaseUrl() {
+        // pi getAnthropicCompat :215、:220-221。
+        assertThat(CompatResolver.forAnthropic(
+            model("openrouter", "anthropic/claude-sonnet-4-6"), null)
+            .sendSessionAffinityHeaders()).isTrue();
+        var byUrl = CompatResolver.forAnthropic(
+            model("relay", "claude"), "https://gateway.openrouter.ai/anthropic");
+        assertThat(byUrl.sendSessionAffinityHeaders()).isTrue();
+        assertThat(byUrl.sessionAffinityFormat()).isEqualTo(SessionAffinityFormat.OPENROUTER);
+    }
+
+    @Test
+    void anthropicAffinityOffAndFormatUndefinedByDefault() {
+        var compat = CompatResolver.forAnthropic(
+            model("anthropic", "claude-sonnet-4-6"), "https://api.anthropic.com");
+        assertThat(compat.sendSessionAffinityHeaders()).isFalse();
+        // pi 的 undefined（非 openrouter ⇒ 发 x-session-affinity）。
+        assertThat(compat.sessionAffinityFormat()).isNull();
+    }
+
+    @Test
+    void responsesExplicitAffinityFormatSurvivesResolution() {
+        // 回归 B156 型事故：resolved() 曾把两亲和位硬编码 null（docs/52 前连 responses
+        // 车道的显式 models.json format 都被静默丢掉）。
+        var explicit = new ModelCompat(false, null, true, false, null, null, null, null, null,
+            true, null, null, null, null, null, null, null, null, null,
+            null, Map.of(), Map.of(), null, null, null,
+            null, SessionAffinityFormat.OPENAI_NOSESSION);
+        var compat = CompatResolver.forResponses(
+            model("openai", "gpt-5", explicit), false);
+        assertThat(compat.sessionAffinityFormat())
+            .isEqualTo(SessionAffinityFormat.OPENAI_NOSESSION);
+    }
+
     // ── responses（车道的 strict 缺省两侧相反）───────────────────
 
     @Test
