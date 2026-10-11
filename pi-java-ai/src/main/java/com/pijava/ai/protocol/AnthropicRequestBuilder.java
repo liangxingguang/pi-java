@@ -43,6 +43,9 @@ final class AnthropicRequestBuilder {
      */
     private static final String INLINE_TOOLS_BETA = "inline-tools-2026-09-15";
 
+    /** B98（pi {@code anthropic-messages.ts:192}）：服务端拒绝回退 beta。 */
+    private static final String SERVER_SIDE_FALLBACK_BETA = "server-side-fallback-2026-07-01";
+
     /**
      * 包 09（B90）：pi {@code anthropic-messages.ts:181} —— 不支持
      * {@code eager_input_streaming} 的端点改挂的 beta 头。
@@ -147,6 +150,12 @@ final class AnthropicRequestBuilder {
                 && !Transcripts.getCurrentTools(transcript.messages()).isEmpty()) {
             betas.add(FINE_GRAINED_TOOL_STREAMING_BETA);
         }
+        // B98（pi anthropic-messages.ts:211-213/:1116）：模型带 allowedFallbackModels
+        // 才挂服务端回退 beta；流内回退块处理随 B148。
+        var allowedFallbackModels = compat.allowedFallbackModels();
+        if (allowedFallbackModels != null && !allowedFallbackModels.isEmpty()) {
+            betas.add(SERVER_SIDE_FALLBACK_BETA);
+        }
         if (!betas.isEmpty()) {
             builder.putAdditionalBodyProperty("betas", JsonValue.from(betas));
         }
@@ -163,6 +172,16 @@ final class AnthropicRequestBuilder {
         if (request.temperature() >= 0 && request.reasoning().isEmpty()
                 && compat.supportsTemperature()) {
             builder.temperature(request.temperature());
+        }
+
+        // B98（pi :1281-1284）：请求只发 model；provider/cost 是本地成本元数据（B148）。
+        // 空表必须省略 —— Anthropic 对无许可目标的模型拒绝该字段。
+        if (allowedFallbackModels != null && !allowedFallbackModels.isEmpty()) {
+            var fallbacks = allowedFallbackModels.stream()
+                .map(f -> java.util.Map.of("model", f.model()))
+                .toList();
+            builder.putAdditionalBodyProperty("fallbacks",
+                JsonValue.from(ObjectMappers.jsonMapper().valueToTree(fallbacks)));
         }
         return builder.build();
     }
