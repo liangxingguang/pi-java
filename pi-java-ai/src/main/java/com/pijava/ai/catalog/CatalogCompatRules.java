@@ -1,6 +1,9 @@
 package com.pijava.ai.catalog;
 
+import java.util.List;
 import java.util.Map;
+
+import com.pijava.ai.model.PricingInfo;
 
 /**
  * pi 的**生成期**目录 compat 规则（{@code scripts/generate-models.ts}）里，与内置目录
@@ -59,11 +62,23 @@ public final class CatalogCompatRules {
             null, null, null, null);
         // 原 docs/66：pi generate-models.ts:826-828 对全部 anthropic-messages 模型无条件
         // merge supportsStrictTools:true（与 id 无关）。
-        return withStrictTools(partial, "anthropic".equals(provider));
+        // B98（docs/51）：新锚点 data/anthropic.json 里 claude-fable-5 是唯一带
+        // allowedFallbackModels 的模型 —— 服务端拒绝回退到 opus-4-8/opus-5（beta
+        // server-side-fallback-2026-07-01）；成本是本地元数据，逐字照抄。
+        List<AllowedFallbackModel> fallbacks =
+            "anthropic".equals(provider) && "claude-fable-5".equals(id)
+                ? List.of(
+                    new AllowedFallbackModel("anthropic", "claude-opus-4-8",
+                        new PricingInfo(5, 25, 0.5, 6.25, List.of())),
+                    new AllowedFallbackModel("anthropic", "claude-opus-5",
+                        new PricingInfo(5, 25, 0.5, 6.25, List.of())))
+                : null;
+        return withStrictTools(partial, "anthropic".equals(provider), fallbacks);
     }
 
-    /** Copy a compat, overriding only {@code supportsStrictTools}. */
-    private static ModelCompat withStrictTools(ModelCompat c, boolean supportsStrictTools) {
+    /** Copy a compat, overriding {@code supportsStrictTools} and the fallback list. */
+    private static ModelCompat withStrictTools(ModelCompat c, boolean supportsStrictTools,
+                                               List<AllowedFallbackModel> fallbacks) {
         return new ModelCompat(
             c.allowEmptySignature(), c.requiresReasoningContentOnAssistantMessages(),
             c.supportsFinishReason(), c.forceAdaptiveThinking(),
@@ -80,7 +95,13 @@ public final class CatalogCompatRules {
             c.supportsOpenAIGrammarTools(),
             // 包 09：逐组件重建的地方**必须**带上新字段，否则会静默丢成缺省
             // （旧 29 参调用点现在落到便捷构造上）。
-            c.supportsEagerToolInputStreaming(), c.supportsExplicitPromptCacheMode());
+            c.supportsEagerToolInputStreaming(), c.supportsExplicitPromptCacheMode(),
+            // B98：逐组件重建，八字段原样透传（fallback 是 anthropic 专属也照传，
+            // 本方法只被 anthropic 目录调用）。
+            c.requiresToolResultName(), c.requiresAssistantAfterToolResult(),
+            c.requiresThinkingAsText(), c.supportsUsageInStreaming(),
+            c.zaiToolStream(), c.vllmPriority(), c.vercelGatewayRouting(),
+            fallbacks != null ? fallbacks : c.allowedFallbackModels());
     }
 
     /**
@@ -125,6 +146,10 @@ public final class CatalogCompatRules {
         var requiresReasoningContent =
             "xiaomi".equals(provider) || provider.startsWith("xiaomi-token-plan")
                 ? Boolean.TRUE : null;
+        // B98（docs/51）：zaiToolStream —— 新锚点 providers/data/zai.json 与
+        // zai-coding-cn.json 全部 11 条模型都标 true（与具体 id 无关），探测给 false。
+        var zaiToolStream = ("zai".equals(provider) || "zai-coding-cn".equals(provider))
+            ? Boolean.TRUE : null;
         return new ModelCompat(
             false,
             requiresReasoningContent,
@@ -136,7 +161,13 @@ public final class CatalogCompatRules {
             true,
             null, null, null, null,
             null, null, null, null, null,
-            format, Map.of(), Map.of(), supportsEffort);
+            format, Map.of(), Map.of(), supportsEffort,
+            // 24-31：cacheControl/routing/affinity 缺席；strictTools 恒 false（与
+            // 旧 29 参便捷构造的委托同形）；grammar/eager/explicit 缺席。
+            null, null, null, null, false, null, null, null,
+            // 32-39 B98：toolResult name/插桥/thinking-as-text/usage 走探测缺省，
+            // vllm/vercel 显式-only；fallback 是 anthropic 专属，本车道恒 null。
+            null, null, null, null, zaiToolStream, null, null, null);
     }
 
     /**
@@ -175,7 +206,12 @@ public final class CatalogCompatRules {
             c.openRouterRouting(), c.sendSessionAffinityHeaders(),
             c.sessionAffinityFormat(), c.supportsStrictTools(),
             supportsOpenAIGrammarTools,
-            c.supportsEagerToolInputStreaming(), c.supportsExplicitPromptCacheMode());
+            c.supportsEagerToolInputStreaming(), c.supportsExplicitPromptCacheMode(),
+            // B98：八字段原样透传。
+            c.requiresToolResultName(), c.requiresAssistantAfterToolResult(),
+            c.requiresThinkingAsText(), c.supportsUsageInStreaming(),
+            c.zaiToolStream(), c.vllmPriority(), c.vercelGatewayRouting(),
+            c.allowedFallbackModels());
     }
 
     /** pi {@code generate-models.ts:834} 谓词：{@code /^gpt-(\d+)/} 组 ≥5。 */

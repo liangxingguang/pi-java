@@ -123,6 +123,8 @@ class ResponsesPromptCacheWireTest {
         return new ModelCompat(false, null, true, false, null, null, null, null, null,
             true, null, null, null, null, longRetention, null, null, null, null,
             null, Map.of(), Map.of(), null, null, null, null, null, false, null,
-            null, explicitMode);
+            null, explicitMode,
+            // B98 八字段缺席。
+            null, null, null, null, null, null, null, null);
     }
 }

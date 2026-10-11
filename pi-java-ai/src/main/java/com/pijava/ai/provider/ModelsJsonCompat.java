@@ -1,8 +1,11 @@
 package com.pijava.ai.provider;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
+import com.pijava.ai.catalog.AllowedFallbackModel;
 import com.pijava.ai.catalog.CacheControlFormat;
 import com.pijava.ai.catalog.MaxTokensField;
 import com.pijava.ai.catalog.ModelCompat;
@@ -10,6 +13,8 @@ import com.pijava.ai.catalog.SessionAffinityFormat;
 import com.pijava.ai.catalog.ChatTemplateKwargValue;
 import com.pijava.ai.catalog.ThinkingFormat;
 import com.pijava.ai.catalog.ThinkingTokenBudgetField;
+import com.pijava.ai.catalog.VercelGatewayRouting;
+import com.pijava.ai.model.PricingInfo;
 import com.pijava.ai.provider.ModelsJsonSchema.CompatDef;
 import com.pijava.ai.provider.ModelsJsonSchema.ModelDef;
 
@@ -114,7 +119,16 @@ final class ModelsJsonCompat {
             def.supportsOpenAIGrammarTools(),
             // 包 09：两个可空新键原样透传（缺省由车道构造期补：true / false）。
             def.supportsEagerToolInputStreaming(),
-            def.supportsExplicitPromptCacheMode());
+            def.supportsExplicitPromptCacheMode(),
+            // B98（docs/51）：八字段原样透传；嵌套两类经专用助手转换。
+            def.requiresToolResultName(),
+            def.requiresAssistantAfterToolResult(),
+            def.requiresThinkingAsText(),
+            def.supportsUsageInStreaming(),
+            def.zaiToolStream(),
+            def.vllmPriority(),
+            vercelRoutingOf(providerId, model.id(), def.vercelGatewayRouting()),
+            fallbacksOf(providerId, model.id(), def.allowedFallbackModels()));
     }
 
     /**
@@ -204,7 +218,28 @@ final class ModelsJsonCompat {
                 : base.supportsEagerToolInputStreaming(),
             raw.supportsExplicitPromptCacheMode() != null
                 ? raw.supportsExplicitPromptCacheMode()
-                : base.supportsExplicitPromptCacheMode());
+                : base.supportsExplicitPromptCacheMode(),
+            // B98：标量 override ?? base；嵌套两类（vercel 路由 / fallback 列表）
+            // 非 map ⇒ 在场即整值替换（与 pi 的浅合并对非 map 值的语义同形）。
+            raw.requiresToolResultName() != null
+                ? raw.requiresToolResultName() : base.requiresToolResultName(),
+            raw.requiresAssistantAfterToolResult() != null
+                ? raw.requiresAssistantAfterToolResult()
+                : base.requiresAssistantAfterToolResult(),
+            raw.requiresThinkingAsText() != null
+                ? raw.requiresThinkingAsText() : base.requiresThinkingAsText(),
+            raw.supportsUsageInStreaming() != null
+                ? raw.supportsUsageInStreaming() : base.supportsUsageInStreaming(),
+            raw.zaiToolStream() != null
+                ? raw.zaiToolStream() : base.zaiToolStream(),
+            raw.vllmPriority() != null
+                ? raw.vllmPriority() : base.vllmPriority(),
+            raw.vercelGatewayRouting() != null
+                ? vercelRoutingOf(providerId, modelId, raw.vercelGatewayRouting())
+                : base.vercelGatewayRouting(),
+            raw.allowedFallbackModels() != null
+                ? fallbacksOf(providerId, modelId, raw.allowedFallbackModels())
+                : base.allowedFallbackModels());
     }
 
     /** base ChatTemplateKwargValue map 上叠加 raw JSON 层（raw 键经 kwargValueOf 转换）。 */
@@ -301,7 +336,70 @@ final class ModelsJsonCompat {
                 : base.supportsEagerToolInputStreaming(),
             override.supportsExplicitPromptCacheMode() != null
                 ? override.supportsExplicitPromptCacheMode()
-                : base.supportsExplicitPromptCacheMode());
+                : base.supportsExplicitPromptCacheMode(),
+            // B98：raw 层六标量逐字段覆盖，嵌套两类在场即整值替换。
+            override.requiresToolResultName() != null
+                ? override.requiresToolResultName() : base.requiresToolResultName(),
+            override.requiresAssistantAfterToolResult() != null
+                ? override.requiresAssistantAfterToolResult()
+                : base.requiresAssistantAfterToolResult(),
+            override.requiresThinkingAsText() != null
+                ? override.requiresThinkingAsText() : base.requiresThinkingAsText(),
+            override.supportsUsageInStreaming() != null
+                ? override.supportsUsageInStreaming() : base.supportsUsageInStreaming(),
+            override.zaiToolStream() != null
+                ? override.zaiToolStream() : base.zaiToolStream(),
+            override.vllmPriority() != null
+                ? override.vllmPriority() : base.vllmPriority(),
+            override.vercelGatewayRouting() != null
+                ? override.vercelGatewayRouting() : base.vercelGatewayRouting(),
+            override.allowedFallbackModels() != null
+                ? override.allowedFallbackModels() : base.allowedFallbackModels());
+    }
+
+    /**
+     * B98：raw {@code vercelGatewayRouting} → {@link VercelGatewayRouting}。
+     * 两列表原样保留（{@code null} ≙ 未写该子键）。
+     */
+    private static VercelGatewayRouting vercelRoutingOf(String providerId, String modelId,
+            ModelsJsonSchema.CompatDef.VercelGatewayRoutingDef def) {
+        if (def == null) {
+            return null;
+        }
+        return new VercelGatewayRouting(def.only(), def.order());
+    }
+
+    /**
+     * B98：raw {@code allowedFallbackModels} → 领域类型；{@code cost} 按
+     * {@link ModelsJsonConfig#pricingFrom} 同形四费率（缺 cache 取 -1 未知）。
+     * ⚠️ provider/model 必填（pi schema {@code minLength:1}），缺任一一律响亮报错。
+     */
+    private static List<AllowedFallbackModel> fallbacksOf(String providerId, String modelId,
+            List<ModelsJsonSchema.CompatDef.FallbackModelDef> defs) {
+        if (defs == null) {
+            return null;
+        }
+        var out = new ArrayList<AllowedFallbackModel>(defs.size());
+        for (var d : defs) {
+            if (d.provider() == null || d.provider().isBlank()
+                    || d.model() == null || d.model().isBlank()) {
+                throw new IllegalStateException("models.json provider \"" + providerId
+                    + "\", model \"" + modelId
+                    + "\": every allowedFallbackModels entry needs provider and model");
+            }
+            out.add(new AllowedFallbackModel(d.provider(), d.model(), fallbackCost(d.cost())));
+        }
+        return List.copyOf(out);
+    }
+
+    private static PricingInfo fallbackCost(ModelsJsonSchema.Cost cost) {
+        if (cost == null || cost.input() == null || cost.output() == null) {
+            return PricingInfo.UNKNOWN;
+        }
+        return new PricingInfo(cost.input(), cost.output(),
+            cost.cacheRead() != null ? cost.cacheRead() : -1,
+            cost.cacheWrite() != null ? cost.cacheWrite() : -1,
+            List.of());
     }
 
     /** 两个 raw JSON map 的键级合并（{@code override} 同键覆盖）；皆 null ⇒ null。 */

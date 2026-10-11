@@ -236,8 +236,41 @@ public final class ModelsJsonSchema {
          * **显式** prompt cache（发 {@code prompt_cache_options}、不发 {@code prompt_cache_retention}）；
          * 缺省 {@code false}。
          */
-        @JsonProperty("supportsExplicitPromptCacheMode") Boolean supportsExplicitPromptCacheMode
-    ) {}
+        @JsonProperty("supportsExplicitPromptCacheMode") Boolean supportsExplicitPromptCacheMode,
+        // ── B98（docs/51）：八字段 ──────────────────────────────────
+        /** pi {@code requiresToolResultName}：tool 结果消息补 {@code name}。 */
+        @JsonProperty("requiresToolResultName") Boolean requiresToolResultName,
+        /** pi {@code requiresAssistantAfterToolResult}：tool 结果与 user 之间插桥消息。 */
+        @JsonProperty("requiresAssistantAfterToolResult") Boolean requiresAssistantAfterToolResult,
+        /** pi {@code requiresThinkingAsText}：thinking 块降级为普通文本块回放。 */
+        @JsonProperty("requiresThinkingAsText") Boolean requiresThinkingAsText,
+        /** pi {@code supportsUsageInStreaming}：发 stream_options.include_usage；缺省 true。 */
+        @JsonProperty("supportsUsageInStreaming") Boolean supportsUsageInStreaming,
+        /** pi {@code zaiToolStream}：有请求工具时发顶层 {@code tool_stream:true}。 */
+        @JsonProperty("zaiToolStream") Boolean zaiToolStream,
+        /** pi {@code vllmPriority}：顶层 {@code priority}（整数），显式-only。 */
+        @JsonProperty("vllmPriority") Integer vllmPriority,
+        /** pi {@code vercelGatewayRouting}：{@code providerOptions.gateway} 路由偏好。 */
+        @JsonProperty("vercelGatewayRouting") VercelGatewayRoutingDef vercelGatewayRouting,
+        /** pi {@code allowedFallbackModels}：Anthropic 服务端回退许可（≤3 条）。 */
+        @JsonProperty("allowedFallbackModels") List<FallbackModelDef> allowedFallbackModels
+    ) {
+
+        /** pi {@code VercelGatewayRoutingSchema}（compat-schema.ts:151-169）。 */
+        @JsonIgnoreProperties(ignoreUnknown = true)
+        public record VercelGatewayRoutingDef(
+            @JsonProperty("only") List<String> only,
+            @JsonProperty("order") List<String> order
+        ) {}
+
+        /** pi {@code AnthropicAllowedFallbackModelSchema}（compat-schema.ts:171-179）。 */
+        @JsonIgnoreProperties(ignoreUnknown = true)
+        public record FallbackModelDef(
+            @JsonProperty("provider") String provider,
+            @JsonProperty("model") String model,
+            @JsonProperty("cost") Cost cost
+        ) {}
+    }
 
     /**
      * Per-million-token pricing (pi {@code ModelCostSchema},

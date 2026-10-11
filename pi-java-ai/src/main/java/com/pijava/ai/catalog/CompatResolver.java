@@ -194,7 +194,14 @@ public final class CompatResolver {
             c.openRouterRouting(),
             null, null, false, supportsOpenAIGrammarTools,
             // 包 09：逐组件重建必须带上新字段（否则静默丢成缺省）。
-            c.supportsEagerToolInputStreaming(), c.supportsExplicitPromptCacheMode());
+            c.supportsEagerToolInputStreaming(), c.supportsExplicitPromptCacheMode(),
+            // B98（docs/51）：completions 七字段在探测面给默认 —— usage 默认 true，
+            // 其余（tool-result name/插桥/thinking-as-text/zaiToolStream/vllm/vercel）
+            // 探测给 false/无 ⇒ 原样透传模型的显式值，由各读点补缺省。
+            c.requiresToolResultName(), c.requiresAssistantAfterToolResult(),
+            c.requiresThinkingAsText(), pick(c.supportsUsageInStreaming(), Boolean.TRUE),
+            c.zaiToolStream(), c.vllmPriority(), c.vercelGatewayRouting(),
+            null);
     }
 
     /**
@@ -231,7 +238,11 @@ public final class CompatResolver {
             partial.sendSessionAffinityHeaders(), partial.sessionAffinityFormat(),
             base(model).supportsStrictTools(), null,
             // 包 09：同上 —— 两个新字段原样透传（本车道不定义它们）。
-            partial.supportsEagerToolInputStreaming(), partial.supportsExplicitPromptCacheMode());
+            partial.supportsEagerToolInputStreaming(), partial.supportsExplicitPromptCacheMode(),
+            // B98：completions 七字段本车道不定义（透传 null）；fallback 列表是
+            // anthropic 专属，原样透传模型上的显式值。
+            null, null, null, null, null, null, null,
+            base(model).allowedFallbackModels());
     }
 
     /**
@@ -396,7 +407,13 @@ public final class CompatResolver {
             // 包 09：两个新字段**无探测面**（pi 只在生成目录与 models.json 里标注）
             // ⇒ 原样透传模型上的值，缺省由读点补（true / false）。
             c.supportsEagerToolInputStreaming(),
-            c.supportsExplicitPromptCacheMode());
+            c.supportsExplicitPromptCacheMode(),
+            // B98：resolved 层逐组件重建必须带齐八字段（否则静默丢成缺省）；
+            // completions 专属七字段的「explicit ?? detected」合一在 withCompletions。
+            c.requiresToolResultName(), c.requiresAssistantAfterToolResult(),
+            c.requiresThinkingAsText(), c.supportsUsageInStreaming(),
+            c.zaiToolStream(), c.vllmPriority(), c.vercelGatewayRouting(),
+            c.allowedFallbackModels());
     }
 
     private static Boolean pick(Boolean explicit, Boolean detected) {

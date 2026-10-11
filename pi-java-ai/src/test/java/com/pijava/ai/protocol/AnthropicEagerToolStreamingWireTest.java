@@ -119,7 +119,9 @@ class AnthropicEagerToolStreamingWireTest {
         var compat = new ModelCompat(false, null, true, false, null, null, null, null, null, true,
             null, null, null, null, null, null, null, null, null, null,
             Map.of(), Map.of(), null, null, null, null, null, true, null,
-            eagerToolInputStreaming, null);
+            eagerToolInputStreaming, null,
+            // B98 八字段缺席。
+            null, null, null, null, null, null, null, null);
         return new ModelInfo(ModelId.of("anthropic", "claude-opus-5"), "Claude Opus 5", Set.of(),
             100_000, 1000, false, PricingInfo.UNKNOWN, ThinkingLevelMap.empty(),
             Map.of(), Map.of(), compat);

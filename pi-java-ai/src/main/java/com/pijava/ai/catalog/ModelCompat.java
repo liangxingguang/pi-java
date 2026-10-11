@@ -298,6 +298,16 @@ import java.util.Map;
  *        {@code null} ≙ 车道缺省 <b>{@code false}</b>；生成目录只对
  *        {@code provider==="openai" && api==="openai-responses" && cost.cacheWrite > 0} 写 true
  *        （{@code generate-models.ts:926-932}，GPT-5.6 家族）。
+ * @param requiresToolResultName B98（completions）：tool 结果消息是否要带 {@code name}
+ * @param requiresAssistantAfterToolResult B98（completions）：tool 结果与后续 user 之间是否插桥消息
+ * @param requiresThinkingAsText B98（completions）：thinking 块是否降级成普通文本块回放
+ * @param supportsUsageInStreaming B98（completions）：是否发 stream_options.include_usage；
+ *        探测缺省 {@code true}，显式 {@code false} 才不发（≙ pi 的 {@code !== false}）
+ * @param zaiToolStream B98（completions）：有请求工具时发顶层 {@code tool_stream:true}
+ * @param vllmPriority B98（completions）：顶层 {@code priority}（整数），显式-only 无探测默认
+ * @param vercelGatewayRouting B98（completions）：{@code providerOptions.gateway} 路由偏好，显式-only
+ * @param allowedFallbackModels B98（anthropic）：服务端回退许可目标（请求发 model，
+ *        provider/cost 留本地）；{@code null} ≙ 省略 fallbacks 与 beta
  */
 public record ModelCompat(boolean allowEmptySignature,
                           Boolean requiresReasoningContentOnAssistantMessages,
@@ -329,7 +339,16 @@ public record ModelCompat(boolean allowEmptySignature,
                           boolean supportsStrictTools,
                           Boolean supportsOpenAIGrammarTools,
                           Boolean supportsEagerToolInputStreaming,
-                          Boolean supportsExplicitPromptCacheMode) {
+                          Boolean supportsExplicitPromptCacheMode,
+                          // ── docs/51（B98）：八字段 ────────────────────────────
+                          Boolean requiresToolResultName,
+                          Boolean requiresAssistantAfterToolResult,
+                          Boolean requiresThinkingAsText,
+                          Boolean supportsUsageInStreaming,
+                          Boolean zaiToolStream,
+                          Integer vllmPriority,
+                          VercelGatewayRouting vercelGatewayRouting,
+                          java.util.List<AllowedFallbackModel> allowedFallbackModels) {
 
     /** Compact constructor（包 A-09）：两个模板 map 的 {@code null} 归一成空表（pi 的
      *  {@code ?? {}}，{@code getCompat:1714-1715}）⇒ 二态、读点免判空；防御性复制
@@ -338,7 +357,10 @@ public record ModelCompat(boolean allowEmptySignature,
      *  <p>⚠️ {@code openRouterRouting}（包 A-02）**不归一**：缺席与空表线格可区分
      *  （原 docs/59 R6）。复制用 {@code LinkedHashMap} 而非 {@code Map.copyOf} —— routing 的
      *  值可空（如 {@code sort.partition: null}，{@code types.ts:884}），而 {@code Map.copyOf}
-     *  拒绝 {@code null} 值。</p> */
+     *  拒绝 {@code null} 值。</p>
+     *
+     *  <p>B98（docs/51）：{@code allowedFallbackModels} 缺席归一 {@code null}（不是空表 ——
+     *  读点以 null/空判定「省略键」），非空时防御复制；其余 7 个组件直接透传。</p> */
     public ModelCompat {
         chatTemplateKwargs = chatTemplateKwargs == null
             ? Map.of() : Map.copyOf(chatTemplateKwargs);
@@ -348,6 +370,8 @@ public record ModelCompat(boolean allowEmptySignature,
             ? null
             : java.util.Collections.unmodifiableMap(
                 new java.util.LinkedHashMap<>(openRouterRouting));
+        allowedFallbackModels = allowedFallbackModels == null
+            ? null : java.util.List.copyOf(allowedFallbackModels);
     }
 
     /**
@@ -395,7 +419,8 @@ public record ModelCompat(boolean allowEmptySignature,
              thinkingFormat, chatTemplateKwargs, chatTemplateArgs, supportsReasoningEffort,
              cacheControlFormat, openRouterRouting, sendSessionAffinityHeaders,
              sessionAffinityFormat, supportsStrictTools, supportsOpenAIGrammarTools,
-             null, null);
+             // 包 09 两字段缺席；B98 八字段在本便捷构造上全部缺席（null ≙ 探测/省略）。
+             null, null, null, null, null, null, null, null, null, null);
     }
 
     /**
