@@ -290,6 +290,8 @@ pi 侧一律 `git show 200387122:<path>`；pi-java 侧读当前工作树（HEAD 
 | **2026-10-11 批次**（`docs/48`） | |
 | `B135` `B141` | ✅ **已销号**（`fd51f478`→`3d2522e8`，6 commits）：新建 `utils/ProviderErrors` 移植 `error-body.ts`；关键手法是用 openai-java 的 `statusCode()`+`body()` **重放 openai-node 7.19 `makeMessage`**（不信 JVM SDK 的 `400: Unknown` 文案）⇒ bodyless 逐字 `N status code (no body)`，救回 Cerebras 溢出归类；completions 接 OpenRouter `metadata.raw` 追加；responses/azure 经 processor supplier 改形让获取期错误落车道 catch（前缀＋ChatGPT 链接）；`PiHttpException` 带 body（措辞不动）＋ Mistral 自有格式。探针 M1–M5 红集与偏差见 `docs/48 §9`。 |
 | `B224` | **新登记**：pi-messages 车道错误格式（`${status} ${statusText}: …`＋8192 截断＋`pi_messages_response_failure` 诊断）；JDK `java.net.http` 无 reason-phrase API 是已知方言点。 |
+| **2026-10-11 批次**（`docs/49`） | |
+| `B224` | ✅ **已销号（文案半）**（`77c712a6`→`aab0ee4d`，6 commits）：`ProviderErrors.formatPiMessagesError` 移植 `pi-messages.ts:124-131`（`N Phrase: message ?? body (code)`，空 message 不回落非空 body、抛出文案不截断）；JDK 拿不到 reason phrase ⇒ 44 条 RFC 9110 短语表重放，未知码给空串。顺带补 `ModelsJsonProvider` 的 PI_MESSAGES 派发臂（models.json 自定义网关此前加载认、用时拒）。诊断信封半不另立号（**B148** 已覆盖，消费者见 B79）；新登 **B226**（Radius 内建 provider）。探针 M1–M5 红集与 E2b 补强见 `docs/49 §9`。 |
 
 ---
 

@@ -82,12 +82,12 @@
 | B132 | together/baseten/fireworks 目录常量只落代码路径 | pi 写了 thinkingFormat/chatTemplateArgs 常量 |
 | B137 | resolver 的 glob/scope 面 | pi 支持 minimatch 通配与 scope 诊断；**Java 无前后缀**，序＝精确（provider/id｜裸 id）→切 `:level`→provider 首条→modelName 精确→任意 id 兜底；`--models` 生产零消费者 |
 | B147 | Responses 回放 item 分组块序不同 | pi 同循环按块序交错 push；Java 按类型分组 |
-| B148 | responseModel/diagnostics 真消费者未接 | pi 用于 usage 分组、cache 归属等 |
+| B148 | responseModel/diagnostics 真消费者未接 | pi 用于 usage 分组、cache 归属等；含 pi-messages 的 `pi_messages_response_failure` 信封（`{type,timestamp,error:{name,message,stack,code},details}`，details 二选一投影＋8192 U+2026 截断，`pi-messages.ts:133-152`）——B224 只对齐了文案半，信封半随本条（消费者＝bug-report，见 B79；裁决见 `docs/49 §4.3`） |
 | B156 | ModelCompat 逐组件重建会静默丢字段 | 新组件追加时的副作用面 |
 | B158 | 输出截断字节预算差一倍 | Java 100KB，pi 主流 50KB（模型可见文案不同） |
 | B159 | `shouldStopAfterTurn` 更名 finishTurn 且语义变 | pi 从布尔改 `{action: continue/end}`，能强制多跑一轮 |
 | ~~B165~~ | ~~Anthropic 中段工具改为「定义内联」~~ | ✅ **已销号 2026-10-10**（`docs/45`）：beta 换 `inline-tools-2026-09-15`、顶层表就此定死、`tool_addition` 改按值内联、同名重定义不再回退。⚠️ 旧记「`hasToolRedefinitions` 被 pi 删除」实为**弃用**（`docs/45 §1.2`） |
-| B224 | pi-messages 车道错误格式未对齐 | pi `pi-messages.ts:117-135` 自有 `PiMessagesResponseError`：`` `${status} ${statusText}: ${message ?? body}` `` 后接可选 ` (code)`，8192 截断 ＋ `pi_messages_response_failure` 诊断事件；Java `PiMessagesApi`/`PiHttpClient:152` 只产 `"HTTP N"`（B141 包让异常带上了 body，但**措辞刻意没动**）。方言点：JDK `java.net.http` 不暴露 reason phrase。设计与裁决见 `docs/48 §3.7` |
+| B226 | Radius 内建 provider 缺失 | pi 有 `providers/radius.ts`/`radius-config.ts`/`radius.models.ts` ＋ `coding-agent/core/radius.ts`；Java 侧只有 OAuth 设备码工厂（`OAuthProviders.radius`），无内建 chat provider/目录/注册。自定义网关可经 models.json `{"api":"pi-messages"}` 到达（`docs/49` 已补派发臂），内建 provider 本身未移植 |
 
 **compat 面细碎登记**（pi 有标注/消费、Java 无的字段与数据位）：
 

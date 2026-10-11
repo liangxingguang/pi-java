@@ -1,6 +1,7 @@
 # 49 · pi-messages 车道错误格式对齐设计（B224）
 
-> 🚧 **待审核**（2026-10-11）。用户批准后才许写生产代码。
+> ✅ **已闭环**（2026-10-11，`77c712a6`→`aab0ee4d`，6 commits）。B224 文案半销号；
+> 诊断信封半不另登记（B148＋B79 已覆盖），新登 B226（Radius 内建 provider）。闭环记录见 §9。
 > 锚点：pi `200387122`（取证一律 `git show 200387122:<path>`，不读 pi 工作树）。
 > 上一包：`docs/48`（B135/B141，已闭环）——本包是它点名拆出的同族收口。
 
@@ -445,6 +446,65 @@ suffix 仍落裸 body；这道门的牙口在诊断 details 的 `error` vs `body
    **B226**（Radius 内建 provider：OAuth 工厂 `OAuthProviders.radius` 已在、
    chat provider/catalog 无接线）；docs/41 §7、map/02 回填；§9 闭环记录补全。
 
-## 9. 闭环记录
+## 9. 闭环记录（2026-10-11）
 
-（闭环时回填：提交表、实际红集、探针实际红集与预测差异、偏差、验证计数。）
+### 9.1 提交表
+
+| commit | 内容 |
+|---|---|
+| `e47e9986` | 本设计稿 |
+| `a4699c0e` | 红灯夹具：车道 E1–E6 + models.json 可达性 2 条（**先红**：7 红 1 绿，见 §9.2） |
+| `77c712a6` | `ProviderErrors.formatPiMessagesError` + RFC 短语表（44 条）+ 11 条单测 |
+| `6e086526` | `PiMessagesApi` catch 接线（仅 statusCode>0 的 PiHttpException 成形，其余原样发） |
+| `ccf691a7` | `ModelsJsonProvider` 补 PI_MESSAGES 臂 + 端到端夹具（首跑夹具路径写错，见偏差 3） |
+| `aab0ee4d` | 探针 M4 纠出的 E2b 夹具（空 message + 非空 body） |
+
+### 9.2 先红记录（接线前）
+
+`PiMessagesErrorBodyTest`/`ModelsJsonPiMessagesTest` 首跑（`a4699c0e` 时）：
+**Tests run: 8, Failures: 5, Errors: 2** —— E1–E5 红（实际值一律 `HTTP N`）、
+E6 绿（SSE 流内 error 透传，接线前后都不该变），models.json 两条 error
+（`protocol pi-messages is not supported yet`）。与 §6.1 预测完全一致。
+
+util 单测（T1–T10＋短语表）随 `77c712a6` 一次绿（新符号编译红按既有包惯例计）。
+
+### 9.3 探针实际红集（全部 grep 复核落地、已恢复复绿）
+
+| 探针 | 预测 | 实际 | 裁决 |
+|---|---|---|---|
+| M1 catch 退回裸 e | E1–E5 红 | **恰** E1–E5 红（6 测中 5 红，E6 绿） | ✅ 一致 |
+| M2 删 ` (code)` | T1 + E1 | **恰** 2 红 | ✅ 一致 |
+| M3 phrase 恒空 | T1/T2/T5 等＋E1–E3 | **14 红**：单测 10（T1–T9 全部＋短语表，T10 599 绿）＋车道 E1/E2/E3/E5（E4=599 绿、E6 绿） | ✅ 形状一致，红面比表中举例更宽，全在「带标准短语」集合内 |
+| M4 suffix 改假值回落 | T3 + E2 | 首跑**仅 T3 红**：E2 是空**体**，变异后回落到的 body 仍是 `""` ⇒ 输出不变（设计预测错误）。补 E2b（空 message＋非空 body）后重跑＝**T3 + E2b 恰 2 红** | ⚠️ 预测更正＋夹具补强，见偏差 2 |
+| M5 删派发表 | models.json 2 红 | **恰** 2 error（两条都落 default 抛异常） | ✅ 一致 |
+
+零牙口项（§6.4 已预告，未设探针）：放松 error 解析门对**文案**零影响，
+其牙口在诊断 details 的 error/body 二选一，随 B148。
+
+### 9.4 与设计的偏差
+
+1. **B225 不另登记**。设计 §4.3/§8 拟新登 B225（诊断信封整体）；闭环取证发现台账
+   **B148**（responseModel/diagnostics 真消费者未接）与 **B79**（/bug 故障上报）
+   已分别覆盖「字段＋消费者」两面，新号会重复。处置：B148 描述补入
+   `pi_messages_response_failure` 信封形状与 docs/49 指针；本包只以文案半销号。
+2. **M4 预测错误＋新增 E2b**（见 §9.3）：E2（bodyless）对假值门变异语义等价，
+   `??` 与假值门的真正车道级分野是「message 是空串但 body 非空」，补 E2b 后两层都有牙。
+3. **端到端夹具首跑失败是夹具错**（`ccf691a7`）：服务器 context 写成 `/messages`，
+   实际请求路径是 `/v1/messages`，当次拿到 JDK HttpServer 的 404
+   （`404 Not Found: <h1>404…`——顺带实证了格式器对意外状态码也工作）。改 context 后绿。
+4. models.json 派补发臂是设计阶段才发现的**本仓自身断口**（加载认、用时拒），
+   随包闭合；车道由此首次有生产入口（自定义网关）。
+5. 未新增任何「截断」行为：8192 U+2026 只属于诊断 details（B148），抛出文案全文透传，
+   E5 用 10000 字符体钉死。
+
+### 9.5 验证
+
+- ai：`-pl pi-java-ai -am test` **Tests run: 1445, Failures: 0, Errors: 0, Skipped: 0**
+  （基线 1425 ＋ 20 新：util 11、车道 7、models.json 2），BUILD SUCCESS。
+- checkstyle：`checkstyle:check` exit 0（0 违规）；改动文件无 `System.out.println`。
+- 反应堆：`-pl pi-java-evals -am` 全链 SUCCESS（evals 45 测/19 skip 不变）；
+  `-pl pi-java-tui -am` SUCCESS（TUI 212 测/1 skip，02:51）。
+- 台账：B224 销号、B226 新登记，B 类计数 **102 → 102**（一销一登；B225 不立号）；
+  B148 描述补充信封归属。docs/41 §7、map/02 同步回填。
+- `PiHttpClient:154` 的 `"HTTP N"` 异常措辞与 retry 日志断言零改动；
+  Mistral/completions/responses 四车道零改动。
