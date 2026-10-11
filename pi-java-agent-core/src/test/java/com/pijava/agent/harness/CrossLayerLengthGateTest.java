@@ -167,7 +167,7 @@ class CrossLayerLengthGateTest {
         return (model, context, options) -> api.streamBlocking(
             new StreamRequest(ModelInfo.minimal(model), context.systemPrompt(),
                 context.messages(), ToolRegistry.definitionsOf(context.tools()),
-                -1, -1, Map.of()),
+                -1, -1),
             ApiOptions.defaults());
     }
 

@@ -278,7 +278,6 @@ public final class DefaultProviders {
             ToolRegistry.definitionsOf(context.tools()),
             options.maxTokens().orElse(-1),
             options.temperature().orElse(-1),
-            java.util.Map.of(),
             options.reasoning());
         return api.streamBlocking(request, effectiveOptions);
     }
@@ -304,8 +303,8 @@ public final class DefaultProviders {
     /**
      * 四参形态 ＋ 逐请求的 extra（包 A-01 起）。四参重载保持原签名，使既有调用点零改签。
      *
-     * <p>⚠️ {@code extra} 是**与 {@code StreamRequest.extra} 不同的**那条通道：后者在本仓的
-     * 生产路径上恒为空（{@code 原 docs/54 §3 F1} 的登记 B107）。</p>
+     * <p>per-request 选项的唯一通道：{@code StreamRequest} 不再携带 extra
+     * （B107/docs/52 删除恒空通道）——呼叫数据在 record 组件上，其余选项在此。</p>
      */
     static ApiOptions apiOptions(Args args, String providerName, Settings settings,
                                  Function<String, Optional<RecordedCredential>> credentialResolver,

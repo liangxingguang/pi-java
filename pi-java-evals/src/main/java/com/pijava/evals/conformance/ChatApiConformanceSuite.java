@@ -153,7 +153,7 @@ public final class ChatApiConformanceSuite implements EvalSuite {
                 "call_1", "echo", List.of(new ContentBlock.TextContent("ok")), false)
         );
         // 系统提示是请求上的独立字段，不在消息列表里（pi 的 Message 没有 system 角色）。
-        var request = new StreamRequest(MODEL, "sys", messages, List.of(), -1, -1, Map.of());
+        var request = new StreamRequest(MODEL, "sys", messages, List.of(), -1, -1);
         var events = collect(ctx.chatApi(), request);
         if (events.isEmpty()) {
             throw new AssertionError("multi-turn request produced no events");
