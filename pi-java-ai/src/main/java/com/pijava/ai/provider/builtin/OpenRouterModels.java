@@ -41,8 +41,8 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
  * （B98 家族）。completions 车道经 {@link CatalogCompatRules#completions}（openrouter 臂
  * 给 {@code thinkingFormat}，冗余照抄）；pi 数据里的 {@code sendSessionAffinityHeaders}/
  * {@code supportsDeveloperRole:false}/{@code cacheControlFormat:"anthropic"} 三个键
- * <b>不转录</b>——第一个 java 不携带（B103 家族），后两个与请求期探测同值
- * （A-07 原则：探测的差量不在目录标注）。</p>
+ * <b>不转录</b>——B103（docs/52）后第一个由请求期 isOpenRouter 探测补同值，后两个同样与
+ * 探测同值（A-07 原则：探测的差量不在目录标注）。</p>
  *
  * <p><b>能力集映射</b>（capabilities 是 pi-java 的发明，pi 只有 reasoning/input 两键）：
  * {@code reasoning→THINKING}、{@code "image"∈input→IMAGE_INPUT}、TEXT/TOOL_USE/STREAMING
