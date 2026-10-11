@@ -87,6 +87,41 @@ class PiHttpClientHeaderTimeoutTest {
     }
 
     @Test
+    void firstEventArrivesBeforeTheConnectionCloses() throws Exception {
+        var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            try {
+                exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
+                exchange.sendResponseHeaders(200, 0);
+                try (OutputStream os = exchange.getResponseBody()) {
+                    os.write(": heartbeat\n\n".getBytes(
+                        java.nio.charset.StandardCharsets.UTF_8));
+                    os.flush();
+                    Thread.sleep(200);
+                    os.write("data: early\n\n".getBytes(
+                        java.nio.charset.StandardCharsets.UTF_8));
+                    os.flush();
+                    Thread.sleep(2_000); // 事件早到，连接晚关
+                }
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        server.start();
+        try (var http = PiHttpClient.builder().build()) {
+            String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/chat/completions";
+            Iterator<PiHttpClient.ServerSentEvent> events = assertTimeoutPreemptively(
+                Duration.ofSeconds(1), () -> http.postSse(url, "{}", Map.of(), null,
+                    Duration.ofMillis(300)));
+            assertThat(events.hasNext()).isTrue();
+            assertThat(events.next().data()).isEqualTo("early");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void legacyNullTimeoutKeepsWholeRequestShape() throws Exception {
         // headerTimeout == null ⇒ legacy 路径（pi-messages 在用），头超时不适用。
         try (var server = new TestServer(false, 100, "legacy");
