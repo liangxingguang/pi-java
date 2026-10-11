@@ -101,11 +101,10 @@ public final class CatalogCompatRules {
      * 那些 provider ⇒ 只落代码路径、不落目录（{@code 原 docs/58 §9} 登记）。</p>
      *
      * <p>其余端点属性（{@code maxTokensField}／{@code supportsStore}／
-     * {@code supportsDeveloperRole}／{@code requiresReasoningContentOnAssistantMessages}）
-     * **不在这里标注**：它们在 pi 的目录里是**探测的差量**，而
-     * {@link CompatResolver#forCompletions} 在请求期会算出同一个值。⚠️ 已知例外：pi 的
-     * {@code xiaomiCompat} 写了 {@code requiresReasoningContentOnAssistantMessages: true}
-     * 而探测给不出 —— 属 A-09 之前的既有缺口，登记不改（{@code docs/05 B129}）。</p>
+     * {@code supportsDeveloperRole}）**不在这里标注**：它们在 pi 的目录里是**探测的差量**，
+     * 而 {@link CompatResolver#forCompletions} 在请求期会算出同一个值。⚠️ 例外：
+     * {@code requiresReasoningContentOnAssistantMessages} 对 xiaomi 全族由目录标注
+     * （探测的 {@code isDeepSeek} 不认 xiaomi）——B129 已落（{@code docs/50}）。</p>
      */
     public static ModelCompat completions(String provider, String modelId) {
         var isNativeDeepSeekPro =
@@ -120,9 +119,15 @@ public final class CatalogCompatRules {
         //    补上级别表，判据应改成 `!thinkingLevelMap.isEmpty()`（原 docs/58 §9 登记）。
         //    qwen-token-plan 的 true 是 pi 的明文常量（generate-models.ts:2537，冗余照抄）。
         var supportsEffort = "qwen-token-plan-cn".equals(provider) ? Boolean.TRUE : null;
+        // B129：xiaomi 全族目录都标 requiresReasoningContentOnAssistantMessages=true
+        // （新锚点 providers/data/xiaomi*.json 实测；探测给不出——isDeepSeek 只认
+        // provider "deepseek" 与 deepseek.com）。前缀同时覆盖 ams/sgp 两个 token-plan。
+        var requiresReasoningContent =
+            "xiaomi".equals(provider) || provider.startsWith("xiaomi-token-plan")
+                ? Boolean.TRUE : null;
         return new ModelCompat(
             false,
-            null,
+            requiresReasoningContent,
             true,
             false,
             // :875-900 —— deepseek-v4-pro 是 java 携带集里唯一拿 mid-convo 标志的 id。
