@@ -19,6 +19,7 @@ import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
+import com.pijava.ai.utils.ProviderErrors;
 
 /**
  * pi-messages 协议适配器。
@@ -164,7 +165,18 @@ public final class PiMessagesApi extends AbstractChatApi {
                     new RuntimeException("stream ended without a terminal event")));
             }
         } catch (Exception e) {
-            publisher.submit(builder.emitError("error", e));
+            // B224：HTTP 错误响应按 pi pi-messages.ts:124-131 成形
+            //（"N Phrase: message ?? body (code)"）；非 HTTP 故障（建连失败/中止/
+            // body 构造）原样发，保留异常身份。SSE 流内 error 事件在 switch 里已透传，
+            // 不走这里（与 pi createErrorEvent 只包 PiMessagesResponseError 同界）。
+            if (e instanceof com.pijava.ai.http.PiHttpException http && http.statusCode() > 0) {
+                String message = ProviderErrors.formatPiMessagesError(
+                    http.statusCode(), http.body());
+                publisher.submit(builder.emitError("error",
+                    message.equals(e.getMessage()) ? e : new IllegalStateException(message, e)));
+            } else {
+                publisher.submit(builder.emitError("error", e));
+            }
         }
     }
 
