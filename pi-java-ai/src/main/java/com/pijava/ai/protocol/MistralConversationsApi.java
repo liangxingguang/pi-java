@@ -177,7 +177,10 @@ public final class MistralConversationsApi extends AbstractChatApi {
             case "stop" -> new MappedStopReason("stop", null);
             case "length", "model_length" -> new MappedStopReason("length", null);
             case "tool_calls" -> new MappedStopReason("toolUse", null);
-            case "error" -> new MappedStopReason("error", "Provider stopped with: error");
+            // pi mistral-conversations.ts:948（7fb59f995）：补 " (server error)" 让 retry
+            // 白名单的 server.?error 抓手生效 —— Mistral 以此报告瞬态服务失败，应可重试。
+            case "error" -> new MappedStopReason("error",
+                "Provider stopped with: error (server error)");
             default -> new MappedStopReason("error", "Provider stopped with: " + reason);
         };
     }
