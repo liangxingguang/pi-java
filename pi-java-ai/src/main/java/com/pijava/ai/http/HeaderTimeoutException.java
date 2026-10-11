@@ -8,10 +8,10 @@ import java.time.Duration;
  *
  * <p>只可能在<b>头阶段</b>抛出：响应头一旦到达，固定截止时间即释放，长思考流不会被切断
  * （body 停顿交给 HTTP client 的 idle 超时；JDK HttpClient 无该机制，残留见 docs/52 §5）。
- * 是 {@link java.io.IOException} 子类 ⇒ 走 {@link RetryPolicy#shouldRetry(Exception)}
- * 既有的 IO 重试面。</p>
+ * 是非检查异常（要保类型穿过 postSse 边界，让车道映射 pi 文案）；
+ * {@link RetryPolicy#shouldRetry(Exception)} 按通用 Exception 面认它，与 IO 错误同重试。</p>
  */
-public final class HeaderTimeoutException extends java.io.IOException {
+public final class HeaderTimeoutException extends RuntimeException {
 
     private final transient Duration timeout;
 

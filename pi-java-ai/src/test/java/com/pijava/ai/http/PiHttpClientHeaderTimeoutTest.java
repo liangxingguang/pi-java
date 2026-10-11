@@ -28,13 +28,18 @@ class PiHttpClientHeaderTimeoutTest {
                 exchange.getRequestBody().readAllBytes();
                 try {
                     if (stallHeaders) {
-                        // 永不回状态行（客户端在 30s 后被 server.stop 断）。
-                        Thread.sleep(30_000);
+                        // 永不回状态行（4s 后 server.stop 断；产品超时 300ms 远在此之前）。
+                        Thread.sleep(1_500);
                         return;
                     }
                     exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
-                    exchange.sendResponseHeaders(200, 0); // chunked：头先到
+                    exchange.sendResponseHeaders(200, 0); // chunked
                     try (OutputStream os = exchange.getResponseBody()) {
+                        // com.sun HttpServer 在 chunked 模式把头与**首个 body 块**一起刷
+                        // （裸 socket 实测），故先发一条 SSE 注释心跳把状态行/头冲上线 ——
+                        // SseIterator 按 pi 规则忽略 ':' 起始行；真实 SSE 服务器头是即刷的。
+                        os.write(": heartbeat\n\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        os.flush();
                         Thread.sleep(bodyDelayMs);
                         os.write(("data: " + sseChunk + "\n\n")
                             .getBytes(java.nio.charset.StandardCharsets.UTF_8));

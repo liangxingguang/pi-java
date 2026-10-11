@@ -30,7 +30,7 @@ class MistralHeaderTimeoutTest {
         server.createContext("/", exchange -> {
             exchange.getRequestBody().readAllBytes();
             try {
-                Thread.sleep(30_000); // 永不回状态行
+                Thread.sleep(1_500); // 永不回状态行（1.5s 后 server.stop 断；超时 300ms）
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
             }
