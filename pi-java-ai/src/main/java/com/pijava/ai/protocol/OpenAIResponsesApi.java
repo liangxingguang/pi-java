@@ -82,7 +82,7 @@ public final class OpenAIResponsesApi extends AbstractChatApi {
             SessionAffinityHeaders.responses(responsesOptions.sessionId(),
                 compat.sessionAffinityFormat(), request.modelId().provider(), baseUrl));
         // A-14（R7）：只包初始请求获取。获取动作放进 processor 的车道 try 内
-        // （supplier 里），获取期 HTTP 错误才会落 pi 的带前缀 catch（docs/48 §5.3）。
+        // （supplier 里），获取期 HTTP 错误才会落 pi 的带前缀 catch（原 docs/48 §5.3）。
         ResponsesStreamProcessor.process(
             () -> ProviderRetry.retry(
                 () -> client.responses().createStreaming(params),

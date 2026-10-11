@@ -229,7 +229,7 @@ class ChatScreenSessionEventTest {
 
     @Test
     void queueUpdateRendersPendingRowsAndEmptyUpdateRemovesThem() throws Exception {
-        // B175（docs/26 §3.6）：pending 区在聊天区与编辑器之间。
+        // B175（原 docs/26 §3.6）：pending 区在聊天区与编辑器之间。
         var screen = new ChatScreen();
         screen.onSessionEvent(new AgentSessionEvent.QueueUpdate(
             List.of("turn here"), List.of("summarize later")));

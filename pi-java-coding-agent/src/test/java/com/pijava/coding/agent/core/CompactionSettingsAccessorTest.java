@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * B223（{@code docs/47}）：{@link SettingsAccessors} 的 compaction 三件套 ——
+ * B223（{@code 原 docs/47}）：{@link SettingsAccessors} 的 compaction 三件套 ——
  * enabled 的 {@code ?? true} 默认、预算三级回退（modelOverrides 精确键
  * {@code "provider/modelId"} → ordinary → 16384/20000）、负数逐字报错、
  * setter 写全局并即时落盘。

@@ -166,12 +166,12 @@ public final class RpcDispatcher {
                     out.write(RpcResponse.ok(g.id(), "get_available_thinking_levels",
                         availableThinkingLevels()));
                 case RpcCommand.Compact c -> {
-                    // B176（docs/27）：pi void handleInputLine(line)（rpc-mode.ts:809）
+                    // B176（原 docs/27）：pi void handleInputLine(line)（rpc-mode.ts:809）
                     // —— 压缩跑 worker 虚拟线程，读线程立即处理后续命令；响应压缩
                     // 完成时写出。
                     Thread.startVirtualThread(() -> {
                         try {
-                            // B223（docs/47）：预算按会话当前模型现解析。
+                            // B223（原 docs/47）：预算按会话当前模型现解析。
                             var result = session.compact(c.customInstructions());
                             out.write(RpcResponse.ok(c.id(), "compact",
                                 CompactResultWire.of(result)));
@@ -188,7 +188,7 @@ public final class RpcDispatcher {
                     });
                 }
                 case RpcCommand.SetAutoCompaction a -> {
-                    // B223（docs/47）：pi setCompactionEnabled 写全局 settings 文件
+                    // B223（原 docs/47）：pi setCompactionEnabled 写全局 settings 文件
                     // 并即时 save；引擎晚读口下次决策自然生效（旧实现只改内存态）。
                     session.services().settings().accessors()
                         .setCompactionEnabled(a.enabled());
@@ -296,7 +296,7 @@ public final class RpcDispatcher {
                     out.write(RpcResponse.ok(t.id(), "get_tree",
                         new RpcPayloads.RpcTreeData(buildTree(), leafId())));
                 case RpcCommand.ClearQueue c -> {
-                    // B34（docs/26）：pi clear_queue —— data 即被清文本两数组。
+                    // B34（原 docs/26）：pi clear_queue —— data 即被清文本两数组。
                     var cleared = session.clearQueue();
                     out.write(RpcResponse.ok(c.id(), "clear_queue",
                         new RpcPayloads.ClearQueueData(
@@ -317,7 +317,7 @@ public final class RpcDispatcher {
 
     private void handlePrompt(RpcCommand.Prompt prompt) throws IOException {
         String text = prompt.message() == null ? "" : prompt.message();
-        // A5（docs/25）：pi rpc-mode.ts:398-412 —— 响应在预检之后写，
+        // A5（原 docs/25）：pi rpc-mode.ts:398-412 —— 响应在预检之后写，
         // data.disposition = started | queued；路由门拒绝 ⇒ 恰一条失败响应。
         try {
             var result = session.processPrompt(text,
@@ -360,7 +360,7 @@ public final class RpcDispatcher {
     /** 事件 → 线格式写 stdout。 */
     private void emitEvent(AgentSessionEvent event) {
         try {
-            // B175（docs/26）：FlashStatus 是 TUI 方言事件，不上 RPC 线。
+            // B175（原 docs/26）：FlashStatus 是 TUI 方言事件，不上 RPC 线。
             if (event instanceof AgentSessionEvent.FlashStatus) {
                 return;
             }
@@ -390,7 +390,7 @@ public final class RpcDispatcher {
     private RpcSessionState buildState() {
         var harness = session.harness();
         var model = harness.getModel();
-        // B223（docs/47，pi rpc-mode.ts:459）：读 settings getter（?? true 默认开），
+        // B223（原 docs/47，pi rpc-mode.ts:459）：读 settings getter（?? true 默认开），
         // 不再读引擎内存态（旧实现全新会话恒报 false）。
         boolean autoCompactionEnabled =
             session.services().settings().accessors().getCompactionEnabled();

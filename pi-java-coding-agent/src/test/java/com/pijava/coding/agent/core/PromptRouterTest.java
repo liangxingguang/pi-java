@@ -6,7 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * A5（docs/25）：{@link PromptRouter} 门逻辑 —— pi {@code prompt()}
+ * A5（原 docs/25）：{@link PromptRouter} 门逻辑 —— pi {@code prompt()}
  * （{@code agent-session.ts:1939-1979}）的压缩门/流中门逐字移植。
  */
 class PromptRouterTest {

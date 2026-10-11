@@ -1,7 +1,7 @@
 package com.pijava.coding.agent.core;
 
 /**
- * 并发 prompt 路由门（A5，{@code docs/25}）：pi {@code AgentSession.prompt}
+ * 并发 prompt 路由门（A5，{@code 原 docs/25}）：pi {@code AgentSession.prompt}
  * 的压缩门（{@code agent-session.ts:1939-1943}）与流中门
  * （{@code agent-session.ts:1966-1979}）。
  *

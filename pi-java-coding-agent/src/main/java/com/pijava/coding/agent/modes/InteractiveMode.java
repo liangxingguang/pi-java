@@ -21,7 +21,7 @@ import com.pijava.coding.agent.core.slash.SlashContext;
  * TUI implements {@link EntryObserver}/{@link StreamObserver} and drives the
  * render loop.</p>
  *
- * <p>B175（docs/26）：压缩窗口内提交不抛错 —— 文本进
+ * <p>B175（原 docs/26）：压缩窗口内提交不抛错 —— 文本进
  * {@link CompactionInputBuffer}，{@code CompactionEnd} 时自动 flush 重放
  * （pi {@code interactive-mode.ts:4688-4783}）。</p>
  */
@@ -86,7 +86,7 @@ public final class InteractiveMode {
     /**
      * Submit a prompt.
      *
-     * <p>B175（{@code docs/26}；pi {@code interactive-mode.ts:3318-3338}）：
+     * <p>B175（{@code 原 docs/26}；pi {@code interactive-mode.ts:3318-3338}）：
      * 压缩中提交 ⇒ 客户端缓冲＋状态提示（不产生帧）；运行中提交 ⇒
      * steer 排队，返回 queued，不起驱动线程；空闲 ⇒ 驱动 harness（每条 run
      * 恰一条虚拟线程）。</p>

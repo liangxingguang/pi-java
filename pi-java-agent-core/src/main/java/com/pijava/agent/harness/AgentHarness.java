@@ -43,7 +43,7 @@ public class AgentHarness implements AutoCloseable {
 
     private final StreamFn streamFn;
     /**
-     * B223（{@code docs/47}）：压缩设置晚读口 —— 唯一供给 {@link ExecutionContext}
+     * B223（{@code 原 docs/47}）：压缩设置晚读口 —— 唯一供给 {@link ExecutionContext}
      * 与包私有观察口 {@link #currentCompactionSettings()}；每次决策按 lane 当前模型现解析。
      */
     private final Supplier<CompactionSettings> compactionSettingsSupplier;
@@ -130,7 +130,7 @@ public class AgentHarness implements AutoCloseable {
             () -> lane.steeringMode,
             () -> lane.followUpMode);
 
-        // B223（docs/47）：压缩设置晚读口 —— 每次决策按 lane 的**当前**模型现解析
+        // B223（原 docs/47）：压缩设置晚读口 —— 每次决策按 lane 的**当前**模型现解析
         //（pi getCompactionSettings(this.model) 四调用点）；setModel/modelOverrides/
         // 设置文件改动下次决策即生效；resolver == null ⇒ 引擎旧契约「不接＝不压」。
         final java.util.function.Function<ModelId<?>, CompactionSettings> compactionResolver =
@@ -420,7 +420,7 @@ public class AgentHarness implements AutoCloseable {
     }
 
     /**
-     * Whether an agent run is active on this lane（A5，{@code docs/25}；
+     * Whether an agent run is active on this lane（A5，{@code 原 docs/25}；
      * pi {@code isStreaming}，{@code agent-session.ts:1430-1432}）。宿主并发
      * prompt 路由门读它；与 {@link #isCompacting} 同形。
      */
@@ -429,7 +429,7 @@ public class AgentHarness implements AutoCloseable {
     }
 
     /**
-     * Pending steer-queue texts in queue order（B34，docs/26；
+     * Pending steer-queue texts in queue order（B34，原 docs/26；
      * pi {@code getSteeringMessages}，agent-session.ts:2371-2373）。
      */
     public List<String> queuedSteering(String laneName) {
@@ -556,7 +556,7 @@ public class AgentHarness implements AutoCloseable {
 
     /**
      * 下一次压缩决策将使用的设置 —— 经 resolver 按<b>当前车道模型</b>现解析
-     * （B223，{@code docs/47}）；未接线返回 {@code null}（G0 关）。
+     * （B223，{@code 原 docs/47}）；未接线返回 {@code null}（G0 关）。
      * 包私有观察口：引擎测试钉「每次决策重读、读当前模型」，不进公开 API
      * （pi 侧的权威读法在宿主 settings manager）。
      */

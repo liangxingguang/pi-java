@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
 /**
- * 并发 prompt 的排队行为（A5，{@code docs/25}；pi
+ * 并发 prompt 的排队行为（A5，{@code 原 docs/25}；pi
  * {@code streamingBehavior?: "steer" | "followUp"}，
  * {@code agent-session.ts:304}）。纯常量闭集 ⇒ enum。
  *

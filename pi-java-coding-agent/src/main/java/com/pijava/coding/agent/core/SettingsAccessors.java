@@ -240,7 +240,7 @@ public final class SettingsAccessors {
         manager.flush();
     }
 
-    // ── B223（docs/47）：compaction 设置 ──────────────────────────────
+    // ── B223（原 docs/47）：compaction 设置 ──────────────────────────────
 
     /**
      * 自动压缩主开关（pi {@code getCompactionEnabled}，settings-manager.ts:914-916：

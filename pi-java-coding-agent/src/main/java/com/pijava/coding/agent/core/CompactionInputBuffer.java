@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 压缩窗口内的用户输入缓冲（B175，docs/26；pi {@code compactionQueuedMessages}，
+ * 压缩窗口内的用户输入缓冲（B175，原 docs/26；pi {@code compactionQueuedMessages}，
  * {@code interactive-mode.ts:4688-4694}）。
  *
  * <p>压缩中 TUI 提交不抛错：文本按 mode 进本缓冲，压缩结束由

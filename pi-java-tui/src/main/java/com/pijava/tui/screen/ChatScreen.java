@@ -305,7 +305,7 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     }
 
     /**
-     * Append a dim status line to the chat area（B175，docs/26 §3.6；
+     * Append a dim status line to the chat area（B175，原 docs/26 §3.6；
      * pi {@code showStatus}，interactive-mode.ts:3773-3790）。
      */
     private void showStatus(String message) {

@@ -63,7 +63,7 @@ public sealed interface RpcCommand {
     @JsonProperty("type")
     String type();
 
-    // A5（docs/25）：streamingBehavior 复用 core enum（pi "steer"|"followUp"）。
+    // A5（原 docs/25）：streamingBehavior 复用 core enum（pi "steer"|"followUp"）。
     @JsonTypeName("prompt")
     record Prompt(String id, String message, List<ContentBlock.ImageContent> images,
                   StreamingBehavior streamingBehavior) implements RpcCommand {
@@ -231,7 +231,7 @@ public sealed interface RpcCommand {
         @Override public String type() { return "get_tree"; }
     }
 
-    // B34（docs/26）：pi clear_queue —— 清空 steer/followUp 队列，data 返回被清文本。
+    // B34（原 docs/26）：pi clear_queue —— 清空 steer/followUp 队列，data 返回被清文本。
     @JsonTypeName("clear_queue")
     record ClearQueue(String id) implements RpcCommand {
         @Override public String type() { return "clear_queue"; }

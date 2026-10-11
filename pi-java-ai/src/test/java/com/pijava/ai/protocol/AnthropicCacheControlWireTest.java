@@ -257,7 +257,7 @@ class AnthropicCacheControlWireTest {
         // P7/P10：原生支挂 **initialTools 的末项**；占位符不挂。
         // ⚠️ 所以断点可能落在工具表的**中间** —— 用两个初始工具把这一点钉死
         //（只用一个初始工具时它同时是「首个」与「末项」，分不清是哪个判据）。
-        // ⚠️ 包 B165（docs/45）：顶层表**就此定死**，迟到工具不进这里（定义内联在
+        // ⚠️ 包 B165（原 docs/45）：顶层表**就此定死**，迟到工具不进这里（定义内联在
         // tool_addition 块里）⇒ 长度 3 而不是旧的 4。
         var native_ = new ModelCompat(false, null, true, false, Boolean.TRUE, null,
             Boolean.TRUE, null, null, true, MaxTokensField.MAX_TOKENS, null, null, null);

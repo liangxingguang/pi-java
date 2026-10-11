@@ -17,11 +17,11 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * B224：pi-messages 车道 HTTP 错误响应文案的车道级真 HTTP 夹具（设计 docs/49 §6.1）。
+ * B224：pi-messages 车道 HTTP 错误响应文案的车道级真 HTTP 夹具（设计 原 docs/49 §6.1）。
  *
  * <p>对齐 pi {@code pi-messages.ts:124-131}：
  * {@code `<status> <statusText>: <message ?? body> (<code>)`}。phrase 是 JDK
- * 拿不到的 reason phrase，用 RFC 标准短语表重放（docs/49 §4.2）。</p>
+ * 拿不到的 reason phrase，用 RFC 标准短语表重放（原 docs/49 §4.2）。</p>
  */
 class PiMessagesErrorBodyTest {
 

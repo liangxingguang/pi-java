@@ -25,7 +25,7 @@ import com.pijava.ai.api.Transcripts;
  * <p>从 {@link AnthropicRequestBuilder} 拆出，只为守住「文件 ≤ 500 行」。两者是同一条车道的
  * 同一层关注点（工具怎么落到出站 JSON 上），拆缝按「工具」划，不按调用顺序划。</p>
  *
- * <p>包 B165（{@code docs/45}）：形状换成 pi 的**定义内联**（{@code b271b0a52}，beta
+ * <p>包 B165（{@code 原 docs/45}）：形状换成 pi 的**定义内联**（{@code b271b0a52}，beta
  * {@code inline-tools-2026-09-15}）。顶层表**就此定死**（初始 ＋ 占位符），后续工具改为在
  * {@code tool_addition} 块里带**完整定义**（含 {@code input_schema}）。</p>
  */
@@ -144,7 +144,7 @@ final class AnthropicToolWire {
      * SDK 的 {@code InputSchema} 把 {@code type} 声明成自己的字段，与 additionalProperties
      * **重叠** ⇒ 那条路径会把 {@code "type"} 键**写两遍**（{@code "type":"object","type":"object"}），
      * 与 pi 的线格不符。回读路径把 {@code type} 收进声明字段，只写一次（探针实测，
-     * {@code docs/45 §10}）。</p>
+     * {@code 原 docs/45 §10}）。</p>
      */
     private static Tool rawTool(Map<String, Object> definition) {
         var mapper = ObjectMappers.jsonMapper();

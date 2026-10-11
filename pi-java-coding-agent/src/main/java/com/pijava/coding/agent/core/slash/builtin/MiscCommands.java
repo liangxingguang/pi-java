@@ -121,7 +121,7 @@ public final class MiscCommands {
             (args, ctx) -> CHANGELOG));
         registry.register(simple("hotkeys", "Show all keyboard shortcuts", "",
             (args, ctx) -> hotkeys(ctx)));
-        // B176（docs/27）：压缩跑 worker 线程 —— pi handleCompactCommand 是
+        // B176（原 docs/27）：压缩跑 worker 线程 —— pi handleCompactCommand 是
         // async 函数，渲染/输入线程不被整次压缩阻塞。
         registry.register(async("compact", "Compact context manually", "<text>",
             (args, ctx) -> {
@@ -129,7 +129,7 @@ public final class MiscCommands {
                     // B174（docs/23，pi interactive-mode.ts:3264）：trailing 文本
                     // trim 后作为 customInstructions；无/空白 ⇒ null。
                     String custom = args.isBlank() ? null : args.trim();
-                    // B223（docs/47）：预算由会话按当前模型现解析（pi compact(custom)）。
+                    // B223（原 docs/47）：预算由会话按当前模型现解析（pi compact(custom)）。
                     ctx.session().compact(custom);
                     return "Compacted.";
                 } catch (Exception e) {

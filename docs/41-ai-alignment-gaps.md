@@ -3,15 +3,15 @@
 > **状态：📝 盘点稿（2026-10-09）。** 不是设计稿 —— 只回答「pi-ai 层还剩什么没对齐」，
 > 逐包设计在各自文档里出。
 >
-> **进度**：§1.1 的 `ContextOverflow` / `RetryableError` 两条**已闭环**（`docs/43`，2026-10-09）；
-> `xai` provider 端点**已闭环**（`docs/44`，2026-10-10）；Anthropic 中段工具内联（`B165`）
-> **已闭环**（`docs/45`，2026-10-10）⇒ w2 由 5 条降为 **1 条**（只剩目录规模 —— ⤵ 结构性差异）。
+> **进度**：§1.1 的 `ContextOverflow` / `RetryableError` 两条**已闭环**（`原 docs/43`，2026-10-09）；
+> `xai` provider 端点**已闭环**（`原 docs/44`，2026-10-10）；Anthropic 中段工具内联（`B165`）
+> **已闭环**（`原 docs/45`，2026-10-10）⇒ w2 由 5 条降为 **1 条**（只剩目录规模 —— ⤵ 结构性差异）。
 > **§3.2 全部 41 条已逐条回测完毕**（2026-10-10，见 §5.2）：4 条销号
 > （`B70`/`B87`/`B96`/`B134`）、4 条半闭（`B107`/`B113`/`B132`/`B98`）、33 条维持；
 > §6 ④ 就此闭环。
-> 维持的 33 条中 **`B139` 已随 `docs/46` 闭环**（2026-10-10，`250f204e`），
+> 维持的 33 条中 **`B139` 已随 `原 docs/46` 闭环**（2026-10-10，`250f204e`），
 > 同包新登 **`B223`**（`compaction` 块零消费者，自动压缩默认不跑）；
-> **`B223` 已随 `docs/47` 闭环**（2026-10-11，`4162460e`/`88895b2b`），
+> **`B223` 已随 `原 docs/47` 闭环**（2026-10-11，`4162460e`/`88895b2b`），
 > 同包顺带销 **`A9`**（per-model 压缩设置——resolver 槽改为按模型解析）。
 >
 > **数据源**：`docs/map/02-ai.md`（基准 pi-java `351d199` / pi `200387122`，2026-10-04）
@@ -40,11 +40,11 @@
 
 | 单元 | pi 侧证据 | pi-java 现状 | 差距 |
 |---|---|---|---|
-| ✅ `xai` provider 端点 | `providers/xai.ts`（`api: openAIResponsesApi()`、`baseUrl: https://api.x.ai/v1`）＋ `providers/data/xai.json`（**4 模型**，由 `scripts/generate-models.ts` 生成） | **只有 OAuth**（`auth/OAuthProviders.java:30` device code）；**无 provider 类、无 wire** | 主流 7 家里唯一没上车的端点。⚠️ `CompatResolver.java:79/:98` 已有 `provider.equals("xai")`／`isGrok` 分支 ⇒ **compat 层认识 xai，但没有车道可用**。**✅ 已闭环 2026-10-10**（`docs/44`，见 §12）。⚠️ 本行原写「14 模型」是**取证错**（那个 14 是 `xai.models.ts` 的**行数**），实测 `data/xai.json` 是 **4 条** |
+| ✅ `xai` provider 端点 | `providers/xai.ts`（`api: openAIResponsesApi()`、`baseUrl: https://api.x.ai/v1`）＋ `providers/data/xai.json`（**4 模型**，由 `scripts/generate-models.ts` 生成） | **只有 OAuth**（`auth/OAuthProviders.java:30` device code）；**无 provider 类、无 wire** | 主流 7 家里唯一没上车的端点。⚠️ `CompatResolver.java:79/:98` 已有 `provider.equals("xai")`／`isGrok` 分支 ⇒ **compat 层认识 xai，但没有车道可用**。**✅ 已闭环 2026-10-10**（`原 docs/44`，见 §12）。⚠️ 本行原写「14 模型」是**取证错**（那个 14 是 `xai.models.ts` 的**行数**），实测 `data/xai.json` 是 **4 条** |
 | ⤵ 内置目录规模 | 42 个 provider 由 `generate-models.ts` 生成 | `catalog/BuiltinCatalog.java` 手写 **24 个模型**；`B97` 另有 3 个 (provider,modelId) 与 pi 对不上 | 结构性差异：手写常量 vs 生成目录 |
-| ✅ `ContextOverflow` z.ai CN 模式 | `utils/overflow.ts:38-39`：`/prompt (?:is )?too long/i` ＋ **`/prompt exceeds max length/i`（CN endpoint）** | `utils/ContextOverflow.java` 26 条模式已逐条移植，**独缺第二条**（`prompt exceeds max length`） | **恰 1 条模式**。其余 z.ai 形状（`model_context_window_exceeded`、静默溢出）都已落。**✅ 已闭环 2026-10-09**（`docs/43`，见 §12） |
-| ✅ `RetryableError` 新模式 | `utils/retry.ts:26-90` 白名单 | `utils/RetryableError.java` 已落 40+ 条，**缺 3 条**：`model is at capacity`（:30）、`subscription_sharing_usage_unavailable`、`subscription_sharing_user_unavailable`（ChatGPT 登录路） | ⚠️ **地图记「两条」，实测为 3 条** —— 多出的 `model is at capacity` 是逐条 diff 才看见的。**✅ 已闭环 2026-10-09**（含配额排除表同族那条，见 `docs/43` §12） |
-| ✅ Anthropic 中段工具内联（`B165`） | `api/anthropic-messages.ts:195` `INLINE_TOOLS_BETA = "inline-tools-2026-09-15"`；`:1203-1232` 顶层表**就此定死**；`:1339-1351` 发 `tool_addition`（**按值内联** `{type:"tool_definition", definition}`）／`tool_removal`，同名重定义**不再回退** | `protocol/AnthropicToolWire.java`（自 `AnthropicRequestBuilder` 拆出）发内联定义；`Protocol/AnthropicRequestBuilder.java:136-141` 是**三条件门** | **✅ 已闭环 2026-10-10**（`docs/45`，见 §12）。⚠️ 原写「`tool_reference` 表达不了同名重定义」仍准，但 `hasToolRedefinitions` 在 pi 是**弃用**而非删除（`docs/45 §1.2`） |
+| ✅ `ContextOverflow` z.ai CN 模式 | `utils/overflow.ts:38-39`：`/prompt (?:is )?too long/i` ＋ **`/prompt exceeds max length/i`（CN endpoint）** | `utils/ContextOverflow.java` 26 条模式已逐条移植，**独缺第二条**（`prompt exceeds max length`） | **恰 1 条模式**。其余 z.ai 形状（`model_context_window_exceeded`、静默溢出）都已落。**✅ 已闭环 2026-10-09**（`原 docs/43`，见 §12） |
+| ✅ `RetryableError` 新模式 | `utils/retry.ts:26-90` 白名单 | `utils/RetryableError.java` 已落 40+ 条，**缺 3 条**：`model is at capacity`（:30）、`subscription_sharing_usage_unavailable`、`subscription_sharing_user_unavailable`（ChatGPT 登录路） | ⚠️ **地图记「两条」，实测为 3 条** —— 多出的 `model is at capacity` 是逐条 diff 才看见的。**✅ 已闭环 2026-10-09**（含配额排除表同族那条，见 `原 docs/43` §12） |
+| ✅ Anthropic 中段工具内联（`B165`） | `api/anthropic-messages.ts:195` `INLINE_TOOLS_BETA = "inline-tools-2026-09-15"`；`:1203-1232` 顶层表**就此定死**；`:1339-1351` 发 `tool_addition`（**按值内联** `{type:"tool_definition", definition}`）／`tool_removal`，同名重定义**不再回退** | `protocol/AnthropicToolWire.java`（自 `AnthropicRequestBuilder` 拆出）发内联定义；`Protocol/AnthropicRequestBuilder.java:136-141` 是**三条件门** | **✅ 已闭环 2026-10-10**（`原 docs/45`，见 §12）。⚠️ 原写「`tool_reference` 表达不了同名重定义」仍准，但 `hasToolRedefinitions` 在 pi 是**弃用**而非删除（`原 docs/45 §1.2`） |
 
 ### 1.2 w1 —— 广度（15 条，补完 **+6.60pp**）
 
@@ -128,8 +128,8 @@
 
 粒度比地图细，是**请求选项 / Provider 协议面**的登记。地图管「能力单元」，台账管「同一个单元里的字段级差异」。
 ⚠️ 本稿初版写「43 条」是旧计数（2026-10-10 §5.2 按行实测：41 条在册；销号 4 条后剩 **37 条**）。
-2026-10-10 晚些：`B139` 随 `docs/46` 销号（→36），同包新登 `B223`（→**仍 37 条**）。
-2026-10-11：`B223` 随 `docs/47` 销号（§3.2 →**36 条**；A9 不属 §3.2，另销）。
+2026-10-10 晚些：`B139` 随 `原 docs/46` 销号（→36），同包新登 `B223`（→**仍 37 条**）。
+2026-10-11：`B223` 随 `原 docs/47` 销号（§3.2 →**36 条**；A9 不属 §3.2，另销）。
 
 挑几条代表：
 
@@ -142,8 +142,8 @@
 | `B158` | 输出截断字节预算差一倍 | Java `TruncationUtils.DEFAULT_MAX_BYTES = 100_000`（`TruncationUtils.java:17`），pi 主流 50KB ⇒ **模型可见文案不同** |
 | `B159` | `shouldStopAfterTurn` 更名 finishTurn 且语义变 | pi 从布尔改 `{action: continue/end}`，能强制多跑一轮 |
 | `B107` | 两条请求选项通道恒空 | `ApiOptions.java:43`／`StreamRequest.java:144` 都传 `Map.of()` |
-| ~~`B139`~~ | ~~嵌套 record 经 Json mapper 序列化成空对象~~ | ✅ **已销号 2026-10-10**（`docs/46`，`250f204e`）：5 块逐组件 `@JsonProperty` ＋ 装箱 ＋ NON_NULL；顺带校正 Markdown 类型、补 `modelOverrides`/terminal 5 子键；新登 `B223` |
-| ~~`B223`~~ | ~~`compaction` 块零消费者，自动压缩默认不跑~~ | ✅ **已销号 2026-10-11**（`docs/47`，`4162460e`/`88895b2b`）：HarnessConfig 值槽改 `Function<ModelId<?>,CompactionSettings>` 晚读口（按 lane 当前模型现解析，顺带销 A9）；宿主接三件套（?? true／三级回退／落盘 setter）；手动 compact 走 pi 形 `compact(custom)`；RPC 开关落盘、get_state 读 settings |
+| ~~`B139`~~ | ~~嵌套 record 经 Json mapper 序列化成空对象~~ | ✅ **已销号 2026-10-10**（`原 docs/46`，`250f204e`）：5 块逐组件 `@JsonProperty` ＋ 装箱 ＋ NON_NULL；顺带校正 Markdown 类型、补 `modelOverrides`/terminal 5 子键；新登 `B223` |
+| ~~`B223`~~ | ~~`compaction` 块零消费者，自动压缩默认不跑~~ | ✅ **已销号 2026-10-11**（`原 docs/47`，`4162460e`/`88895b2b`）：HarnessConfig 值槽改 `Function<ModelId<?>,CompactionSettings>` 晚读口（按 lane 当前模型现解析，顺带销 A9）；宿主接三件套（?? true／三级回退／落盘 setter）；手动 compact 走 pi 形 `compact(custom)`；RPC 开关落盘、get_state 读 settings |
 
 ---
 
@@ -205,7 +205,7 @@ pi 侧一律 `git show 200387122:<path>`；pi-java 侧读当前工作树（HEAD 
 | `B98` | **0/8** | 8 字段四层全零；⚠️ 数字更正：pi 三 compat 接口实测 **46** 字段（非台账「40」）、Java `ModelCompat` **31** 组件（非「32」）。另：8 键均未被 models.json schema 兜住 ⇒ 手写真键**静默丢弃** |
 
 **③ 维持（33 条）** —— 一句话裁决：
-（其中 `B139` 当日晚些随 `docs/46` 闭环，下表行已划销；批次后实际维持 32 条。）
+（其中 `B139` 当日晚些随 `原 docs/46` 闭环，下表行已划销；批次后实际维持 32 条。）
 
 | # | 裁决 |
 |---|---|
@@ -235,7 +235,7 @@ pi 侧一律 `git show 200387122:<path>`；pi-java 侧读当前工作树（HEAD 
 | `B131` | ❌ ⚠️ 行文更正：pi 的 ant-ling 臂与穿透点都要求**有级别**；真窄角＝手搓 models.json 写 ant-ling＋`supportsReasoningEffort:true`＋无级别。正确收口是一条穿透断言夹具 |
 | `B135` | ❌ `metadata.raw` 零命中；与 `B141` 同根（`error-body.ts` 整块未搬），应合包 |
 | `B137` | ❌ ⚠️ 行文更正：Java **无前后缀**匹配，实际序＝精确（provider/id｜裸 id）→切 `:level`→provider 首条→modelName 精确→任意 id 兜底；`--models` 生产零消费者 |
-| ~~`B139`~~ | ✅ **当日已销号**（`docs/46`，`250f204e`）：回测判定（5 个嵌套 record 无 `@JsonProperty`、实测回写 `{}`、flush 吞块）成立并随即修复 |
+| ~~`B139`~~ | ✅ **当日已销号**（`原 docs/46`，`250f204e`）：回测判定（5 个嵌套 record 无 `@JsonProperty`、实测回写 `{}`、flush 吞块）成立并随即修复 |
 | `B141` | ❌ ⚠️ 行文更正：Java 现文案是 `"HTTP 400"`（非旧记 `400: Unknown`），pi 是 `` `400 status code (no body)` ``；且 Java 文案不匹配 `ContextOverflow.java:72` 的正则 ⇒ bodyless 400/413 **丢溢出归类** |
 | `B147` | ❌ Java 仍按 reasoning→文本→工具分组（`ResponsesMessageConverter.java:426-428` 已注释为刻意偏差，原 docs/71 §12 裁决保留在册） |
 | `B148` | ❌ AssistantMessage 11 组件无 responseModel/responseId/diagnostics；pi 消费于 usage 分组（`usage-totals.ts:68`）、cache-warmer、fallback 成本 |
@@ -253,13 +253,13 @@ pi 侧一律 `git show 200387122:<path>`；pi-java 侧读当前工作树（HEAD 
 
 | 序 | 内容 | 边际 | 理由 |
 |---|---|---|---|
-| **①** | `ContextOverflow` 补 1 条模式 ＋ `RetryableError` 补 3 条 | 计入 w2 簇 | **成本最低** —— 纯字符串表，都是逐条移植，无架构面；两条合一个包。**✅ 已闭环 2026-10-09**（`docs/43`） |
-| **②** | `xai` provider 端点 | 计入 w2 簇 | 纯补车道：`openai-responses` wire **已存在**，只需 provider 类 ＋ 模型目录（可手写 14 条或接生成脚本）；OAuth 已落。**✅ 已闭环 2026-10-10**（`docs/44`）—— 目录实测 **4 条**（非 14） |
-| **③** | `B165` Anthropic 中段工具内联 | 计入 w2 簇 | 依赖 `inline-tools-2026-09-15` 形状，改动集中在 `AnthropicRequestBuilder`；**与 ①② 无耦合**。**✅ 已闭环 2026-10-10**（`docs/45`）—— 实为**四处**可观察变化（beta 换值／顶层表定死／`tool_definition` 内联／同名重定义不再回退），并顺带修正「`hasToolRedefinitions` 被删」的误记（实为**弃用**） |
+| **①** | `ContextOverflow` 补 1 条模式 ＋ `RetryableError` 补 3 条 | 计入 w2 簇 | **成本最低** —— 纯字符串表，都是逐条移植，无架构面；两条合一个包。**✅ 已闭环 2026-10-09**（`原 docs/43`） |
+| **②** | `xai` provider 端点 | 计入 w2 簇 | 纯补车道：`openai-responses` wire **已存在**，只需 provider 类 ＋ 模型目录（可手写 14 条或接生成脚本）；OAuth 已落。**✅ 已闭环 2026-10-10**（`原 docs/44`）—— 目录实测 **4 条**（非 14） |
+| **③** | `B165` Anthropic 中段工具内联 | 计入 w2 簇 | 依赖 `inline-tools-2026-09-15` 形状，改动集中在 `AnthropicRequestBuilder`；**与 ①② 无耦合**。**✅ 已闭环 2026-10-10**（`原 docs/45`）—— 实为**四处**可观察变化（beta 换值／顶层表定死／`tool_definition` 内联／同名重定义不再回退），并顺带修正「`hasToolRedefinitions` 被删」的误记（实为**弃用**） |
 | **④** | §3.2 逐条回测（先清过期账） | — | 不产码，但**解锁**后续：避免做到已完成的活；建议**在 ①②③ 之前或并行**做。**✅ 已闭环 2026-10-10**（§5.2）—— 41 条全测：销号 4、半闭 4、维持 33 |
 | —— | w1 十五条 / 4 条 wire | +6.60pp / 计分母 | 广度活，单条边际低，宜搭车不宜单开包 |
 
-**①②③④ 均已闭环**（① `docs/43`、② `docs/44`、③ `docs/45`、④ 本稿 §5.2）。
+**①②③④ 均已闭环**（① `原 docs/43`、② `原 docs/44`、③ `原 docs/45`、④ 本稿 §5.2）。
 
 ---
 
@@ -281,17 +281,17 @@ pi 侧一律 `git show 200387122:<path>`；pi-java 侧读当前工作树（HEAD 
 | `B110` | ⚠️ **改写**：pi 侧有该字段（原「两侧均无」误记）。 |
 | `B130` `B131` `B137` `B141` | ⚠️ **行文更正**（null 缺席/触发条件/无前后缀/现文案 HTTP n），条目保留。 |
 | `E5` | **新增结构债**：`ModelCompat.java` 737 行。 |
-| **2026-10-10 批次**（`docs/46`） | |
-| `B139` | ✅ **已销号**（`250f204e`）：5 块逐组件 `@JsonProperty`＋装箱＋NON_NULL；顺带校正 Markdown 为 String/String、补 `modelOverrides` 与 terminal 5 子键；理由见 `docs/46`。 |
+| **2026-10-10 批次**（`原 docs/46`） | |
+| `B139` | ✅ **已销号**（`250f204e`）：5 块逐组件 `@JsonProperty`＋装箱＋NON_NULL；顺带校正 Markdown 为 String/String、补 `modelOverrides` 与 terminal 5 子键；理由见 `原 docs/46`。 |
 | `B223` | **新登记**：`compaction` 块零消费者（HarnessConfig 不挂 compactionSettings ⇒ G0 恒 false ⇒ 自动压缩默认不跑；pi 默认开）。 |
-| **2026-10-11 批次**（`docs/47`） | |
-| `B223` | ✅ **已销号**（`4162460e`/`88895b2b`）：引擎值槽改按模型解析的 resolver 晚读口；宿主接 ?? true 默认开＋三级预算回退（`provider/id` 精确键）＋落盘 setter；手动 compact/RPC 改走当前模型现解析；理由与探针红集见 `docs/47 §12`。 |
+| **2026-10-11 批次**（`原 docs/47`） | |
+| `B223` | ✅ **已销号**（`4162460e`/`88895b2b`）：引擎值槽改按模型解析的 resolver 晚读口；宿主接 ?? true 默认开＋三级预算回退（`provider/id` 精确键）＋落盘 setter；手动 compact/RPC 改走当前模型现解析；理由与探针红集见 `原 docs/47 §12`。 |
 | `A9` | ✅ **已销号**：per-model 压缩设置——resolver 即 `Function<ModelId<?>,CompactionSettings>`，map/03 第 26 行同步对齐。 |
-| **2026-10-11 批次**（`docs/48`） | |
-| `B135` `B141` | ✅ **已销号**（`fd51f478`→`3d2522e8`，6 commits）：新建 `utils/ProviderErrors` 移植 `error-body.ts`；关键手法是用 openai-java 的 `statusCode()`+`body()` **重放 openai-node 7.19 `makeMessage`**（不信 JVM SDK 的 `400: Unknown` 文案）⇒ bodyless 逐字 `N status code (no body)`，救回 Cerebras 溢出归类；completions 接 OpenRouter `metadata.raw` 追加；responses/azure 经 processor supplier 改形让获取期错误落车道 catch（前缀＋ChatGPT 链接）；`PiHttpException` 带 body（措辞不动）＋ Mistral 自有格式。探针 M1–M5 红集与偏差见 `docs/48 §9`。 |
+| **2026-10-11 批次**（`原 docs/48`） | |
+| `B135` `B141` | ✅ **已销号**（`fd51f478`→`3d2522e8`，6 commits）：新建 `utils/ProviderErrors` 移植 `error-body.ts`；关键手法是用 openai-java 的 `statusCode()`+`body()` **重放 openai-node 7.19 `makeMessage`**（不信 JVM SDK 的 `400: Unknown` 文案）⇒ bodyless 逐字 `N status code (no body)`，救回 Cerebras 溢出归类；completions 接 OpenRouter `metadata.raw` 追加；responses/azure 经 processor supplier 改形让获取期错误落车道 catch（前缀＋ChatGPT 链接）；`PiHttpException` 带 body（措辞不动）＋ Mistral 自有格式。探针 M1–M5 红集与偏差见 `原 docs/48 §9`。 |
 | `B224` | **新登记**：pi-messages 车道错误格式（`${status} ${statusText}: …`＋8192 截断＋`pi_messages_response_failure` 诊断）；JDK `java.net.http` 无 reason-phrase API 是已知方言点。 |
-| **2026-10-11 批次**（`docs/49`） | |
-| `B224` | ✅ **已销号（文案半）**（`77c712a6`→`aab0ee4d`，6 commits）：`ProviderErrors.formatPiMessagesError` 移植 `pi-messages.ts:124-131`（`N Phrase: message ?? body (code)`，空 message 不回落非空 body、抛出文案不截断）；JDK 拿不到 reason phrase ⇒ 44 条 RFC 9110 短语表重放，未知码给空串。顺带补 `ModelsJsonProvider` 的 PI_MESSAGES 派发臂（models.json 自定义网关此前加载认、用时拒）。诊断信封半不另立号（**B148** 已覆盖，消费者见 B79）；新登 **B226**（Radius 内建 provider）。探针 M1–M5 红集与 E2b 补强见 `docs/49 §9`。 |
+| **2026-10-11 批次**（`原 docs/49`） | |
+| `B224` | ✅ **已销号（文案半）**（`77c712a6`→`aab0ee4d`，6 commits）：`ProviderErrors.formatPiMessagesError` 移植 `pi-messages.ts:124-131`（`N Phrase: message ?? body (code)`，空 message 不回落非空 body、抛出文案不截断）；JDK 拿不到 reason phrase ⇒ 44 条 RFC 9110 短语表重放，未知码给空串。顺带补 `ModelsJsonProvider` 的 PI_MESSAGES 派发臂（models.json 自定义网关此前加载认、用时拒）。诊断信封半不另立号（**B148** 已覆盖，消费者见 B79）；新登 **B226**（Radius 内建 provider）。探针 M1–M5 红集与 E2b 补强见 `原 docs/49 §9`。 |
 | **2026-10-11 批次**（迷你换锚 `200387122 → ea448f454`，125 提交／v1.0.3–v1.1.0） | |
 | —— | 拉取 pi 最新后用户裁决**迷你换锚**（记录在 `docs/map/ANCHOR.md`）：均匀前进无结构删除，protocol/server/telemetry/client/chord/evals 六包逐字节未变；活跃对齐面 `compat.ts`／`openai-completions.ts`／`anthropic-messages.ts`／`pi-messages.ts` 两锚点间零改动 ⇒ §3.2 既有取证（含 B129–B132/B98 批量底稿）继续有效。 |
 | `B227`–`B232` | **新登记 6 条**（屏过 ai 层全部 37 个改动文件）：B227 estimate `CHARS_PER_TOKEN` 4→3.5（默认 maxTokens 夹取；压缩域仍逐字 `/4` 不动）·B228 retry 白名单缺 `server_busy`/`servers are currently busy`/`pending stream has been canceled`（`noRetryStatuses` 仅 classifier 消费，不移植）·B229 Mistral 停因文案加 ` (server error)` ＋超时只盖响应头·B230 azure id 改名＋Foundry Chat Completions·B231 OAuth 刷新取消仍持久化轮转 token（免费端口半 Java 原生已一致，不登）·B232 目录数据漂移（Haiku 5.5/Claude 5.5/Kimi K3）。B226 补记 Radius gateway catalog 整体替换语义。 |

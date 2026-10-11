@@ -56,7 +56,7 @@ class SdkJsonEscapeHatchTest {
 
     /**
      * pi {@code anthropic-messages.ts:1351} 的 {@code tool_addition}（**定义内联**形状，
-     * 包 B165 / {@code docs/45}）。
+     * 包 B165 / {@code 原 docs/45}）。
      *
      * <p>⚠️ 这条是内联定义能落地的**唯一**依据 —— 与上面 {@code tool_reference} 那条同路。
      * 判据是**逐字节**：嵌套的 {@code definition} 整棵子树必须原样写出（只保住外层

@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * B223（{@code docs/47}）：压缩设置槽从<b>静态值</b>改成「按当前模型解析」的函数。
+ * B223（{@code 原 docs/47}）：压缩设置槽从<b>静态值</b>改成「按当前模型解析」的函数。
  *
  * <p>pi 的四个压缩决策点全部现读 {@code getCompactionSettings(this.model)}
  * （settings-manager.ts 语义，锚点 {@code 200387122}），不缓存 —— 所以：</p>

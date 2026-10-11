@@ -81,7 +81,7 @@ java `cli/ArgsParser.java` 共 **43 个 `@Option`**，其中 **4 个 java 独有
 | 31 | `--no-skills`/`-ns` | `args.ts:201` | ✅ `ArgsParser.java:108` | 1 | 对齐 | |
 | 32 | `--no-prompt-templates`/`-np` | `args.ts:203` | ✅ `ArgsParser.java:114` | 1 | 对齐 | |
 | 33 | `--no-themes` | `args.ts:205` | ✅ `ArgsParser.java:120` | 1 | 对齐 | |
-| 34 | `--no-context-files`/`-nc` | `args.ts:207` | ✅ `ArgsParser.java:123` | 2 | 对齐 | 消费者 `AgentSession.java:417`（`discover` 由此门控；`docs/40` 闭环） |
+| 34 | `--no-context-files`/`-nc` | `args.ts:207` | ✅ `ArgsParser.java:123` | 2 | 对齐 | 消费者 `AgentSession.java:417`（`discover` 由此门控；`原 docs/40` 闭环） |
 | 35 | `--list-models` | `args.ts:209` | ✅ `ArgsParser.java:132` | 1 | 对齐 | 均可选搜索词（`cli/list-models.ts:29`） |
 | 36 | `--tui-mode` | `args.ts:216` | ✅ `ArgsParser.java:138` | 1 | 对齐 | 默认均为 fullscreen |
 | 37 | `--verbose` | `args.ts:230` | ✅ `ArgsParser.java:141` | 1 | 对齐 | |
@@ -444,11 +444,11 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1551-1877`）；java 面 = `
 
 | # | 能力单元 | pi 侧证据 | 权重 | 判定 | 说明 |
 |---|---|---|---|---|---|
-| G-1 | MCP 客户端 + 协议 + 连接运行时（JSON-RPC、initialize、tools/resources/prompts、capabilities、连接状态机） | `packages/mcp/src/client.ts`、`protocol/*`（3,167 行）＋ `src/extensions/mcp/{index,runtime,log}.ts` | 2 | **存疑** | **客户端/协议/运行时已落**（包①②⑨，`docs/29`/`36`）：`McpClient` 状态机＋协议 wire records＋`McpServerConnection`（lazy 重连/瞬态重试/session 重放/`mcp.log`）；**`extensions/mcp/index.ts`（1,225 行）的工厂接线未落**：⑫a 落了它的可移植半（`McpServersSection`/`McpServerPresentation`/`McpServerRegistry`，`docs/39`），**余下卡在扩展系统**（六事件 1/6、激活门拿不到、`ui.custom` 缺）⇒ **B221**，归属 D 域/E5 |
-| G-2 | MCP 传输（stdio / streamable-http / in-memory） | `packages/mcp/src/transports/{stdio,streamable-http,in-memory,transport}.ts` | 2 | **对齐** | 三条传输全落（包③④⑤，`docs/30`/`31`/`32`）；`in-memory` 在 test 源，对齐 pi 的 `@earendil-works/pi-mcp/testing` 导出；⚠️ 包⑤ 的 HTTP transport 此前**包外不可构造**（B201，包⑨ 补为 public） |
-| G-3 | MCP OAuth（discovery + RFC 9207 + client ID metadata + callback server） | `packages/mcp/src/oauth/*`（7 文件）＋ `src/extensions/mcp/oauth.ts`（532 行） | 1 | **对齐** | 两半全落（包⑥⑦⑨，`docs/33`/`34`/`36`）：`.well-known` 发现＋PR 回退、`WWW-Authenticate`、RFC 9207 `iss`、PKCE、6 分支客户端认证、`mcp-auth.json` 凭据 store（name\|url 键＋legacy 接管＋刷新锁）、登录编排＋回调服务器＋粘贴回退；⚠️ cimd 的文档托管在 `pi.dev`（**B192**）—— 两侧均未实测，见说明 |
-| G-4 | `mcp.json` 配置 + `/mcp` 子命令 + 审批 UI | `src/extensions/mcp/config.ts` 242、`cli.ts` 614、`ui.ts` 252；`main.ts:614` | 2 | **存疑** | **配置面与 CLI 已落**：配置（包⑧，`docs/35`，`362e2fb4`）＋ **`pi mcp` 五个子命令**（包⑪，`docs/38`，`677b04c4`，`com.pijava.coding.agent.subcommand.Mcp*` 8 文件＋7 夹具）；**`/mcp` 管理器 UI 未落**（**B214**，随 B221 顺延） |
-| G-5 | MCP 工具暴露（`codemode`/`deferred`/`direct`/`hidden`）+ 工具/资源接入模型 | `src/core/mcp-servers.ts`、`src/extensions/mcp/tools.ts`、`resources.ts` | 2 | **对齐** | 三处全落：exposure ADT 与 per-tool 判定（包⑧，`docs/35`）＋ `AgentTool` 适配与三个资源工具（包⑩，`docs/37`，`4465d58e`）。⚠️ **激活路径未落** —— 今天只有 `direct` 的 MCP 工具是模型可见的，`codemode`/`deferred`/`hidden` 依赖 **B161/B162**（登记 B203） |
+| G-1 | MCP 客户端 + 协议 + 连接运行时（JSON-RPC、initialize、tools/resources/prompts、capabilities、连接状态机） | `packages/mcp/src/client.ts`、`protocol/*`（3,167 行）＋ `src/extensions/mcp/{index,runtime,log}.ts` | 2 | **存疑** | **客户端/协议/运行时已落**（包①②⑨，`原 docs/29`/`36`）：`McpClient` 状态机＋协议 wire records＋`McpServerConnection`（lazy 重连/瞬态重试/session 重放/`mcp.log`）；**`extensions/mcp/index.ts`（1,225 行）的工厂接线未落**：⑫a 落了它的可移植半（`McpServersSection`/`McpServerPresentation`/`McpServerRegistry`，`原 docs/39`），**余下卡在扩展系统**（六事件 1/6、激活门拿不到、`ui.custom` 缺）⇒ **B221**，归属 D 域/E5 |
+| G-2 | MCP 传输（stdio / streamable-http / in-memory） | `packages/mcp/src/transports/{stdio,streamable-http,in-memory,transport}.ts` | 2 | **对齐** | 三条传输全落（包③④⑤，`原 docs/30`/`31`/`32`）；`in-memory` 在 test 源，对齐 pi 的 `@earendil-works/pi-mcp/testing` 导出；⚠️ 包⑤ 的 HTTP transport 此前**包外不可构造**（B201，包⑨ 补为 public） |
+| G-3 | MCP OAuth（discovery + RFC 9207 + client ID metadata + callback server） | `packages/mcp/src/oauth/*`（7 文件）＋ `src/extensions/mcp/oauth.ts`（532 行） | 1 | **对齐** | 两半全落（包⑥⑦⑨，`原 docs/33`/`34`/`36`）：`.well-known` 发现＋PR 回退、`WWW-Authenticate`、RFC 9207 `iss`、PKCE、6 分支客户端认证、`mcp-auth.json` 凭据 store（name\|url 键＋legacy 接管＋刷新锁）、登录编排＋回调服务器＋粘贴回退；⚠️ cimd 的文档托管在 `pi.dev`（**B192**）—— 两侧均未实测，见说明 |
+| G-4 | `mcp.json` 配置 + `/mcp` 子命令 + 审批 UI | `src/extensions/mcp/config.ts` 242、`cli.ts` 614、`ui.ts` 252；`main.ts:614` | 2 | **存疑** | **配置面与 CLI 已落**：配置（包⑧，`原 docs/35`，`362e2fb4`）＋ **`pi mcp` 五个子命令**（包⑪，`原 docs/38`，`677b04c4`，`com.pijava.coding.agent.subcommand.Mcp*` 8 文件＋7 夹具）；**`/mcp` 管理器 UI 未落**（**B214**，随 B221 顺延） |
+| G-5 | MCP 工具暴露（`codemode`/`deferred`/`direct`/`hidden`）+ 工具/资源接入模型 | `src/core/mcp-servers.ts`、`src/extensions/mcp/tools.ts`、`resources.ts` | 2 | **对齐** | 三处全落：exposure ADT 与 per-tool 判定（包⑧，`原 docs/35`）＋ `AgentTool` 适配与三个资源工具（包⑩，`原 docs/37`，`4465d58e`）。⚠️ **激活路径未落** —— 今天只有 `direct` 的 MCP 工具是模型可见的，`codemode`/`deferred`/`hidden` 依赖 **B161/B162**（登记 B203） |
 | G-6 | codemode 沙箱运行时（quickjs-wasi host/worker/protocol/prelude） | `packages/codemode/src/runtime/*`、`wasm.ts`（1,678 行）＋ `src/extensions/codemode/execute.ts`（630 行） | 2 | **缺失** | builtin 扩展 |
 | G-7 | codemode 工具（执行 JS、描述/inlineBudget、`mode: on\|only`、renderer） | `src/extensions/codemode/tool.ts`（404）、`renderer.ts`；`settings-manager.ts:95-108` | 2 | **缺失** | |
 | G-8 | `tool_search` 工具（BM25 排序 + 按需加载 deferred 工具） | `src/extensions/tool-search/{index,tool}.ts`（265 行） | 2 | **缺失** | builtin 扩展 |
@@ -460,7 +460,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1551-1877`）；java 面 = `
 > **模块归属**：MCP 面的 Java 代码主在**新模块 `pi-java-mcp`**（`com.pijava.mcp.*`，
 > 主源 **10,700 行**）；**工具与资源的 `AgentTool` 适配在 `pi-java-coding-agent`**
 > 的 `com.pijava.coding.agent.extension.mcp`（包⑩，约 1,400 行）—— `AgentTool` 在
-> agent-core，而 `pi-java-mcp` 看不见它（`ai ← mcp`）。映射裁决见 `docs/28` §2
+> agent-core，而 `pi-java-mcp` 看不见它（`ai ← mcp`）。映射裁决见 `原 docs/28` §2
 > 与 **B205**。
 > 部分落地的行按 **E7-3 同一惯例**记「存疑」（形状/一半存在），**不拆行**（拆行会改权重层归属，
 > 动到「权重 3 层 < 权重 1 层」那条读数）。每包闭环时回填对应行的判定与说明。
@@ -495,7 +495,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1551-1877`）；java 面 = `
 
 **整块缺失汇总：对齐 0 / 缺失 6 / 存疑 0 / 合计 6 = 0%**；**Σ权重 13 / Σ(w×c) 0 / 加权 0%**
 > ⚠️ 与 E4/E6 有重叠（「JSON 主题系统」↔ E4-4、「npm/git 包源…」↔ E6-3/4/6/7/8）。**模块合计按含重叠计**，另给去重口径见 §加权汇总。
-> ✅ **「上下文文件发现」已移出本表**（`docs/40` 闭环）：E4-5 判定 **对齐**，F 域子系统视图同步销号。
+> ✅ **「上下文文件发现」已移出本表**（`原 docs/40` 闭环）：E4-5 判定 **对齐**，F 域子系统视图同步销号。
 
 ---
 
@@ -624,7 +624,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1551-1877`）；java 面 = `
 | 权重 1（低频 / 边缘 / 内部） | 107 | 107 | 48.0 | 44.9% | 35/107 = 32.7% |
 | **合计** | **290** | **496** | **215.5** | **43.4%** | **92/290 = 31.7%** |
 
-> 读数：**权重 3 层（45.7%）已回到权重 1 层（44.9%）之上** —— 本轮 `docs/40` 把 E4-5（w3）由缺失转对齐，**首次出现「权重 3 层不低于其它层」**。此前「权重 3 层最低」的读数（39.6% vs 41.9% vs 44.9%）由**两件事共同造成**：换锚新增的 `context_with_system`（w3 缺失）＋ 上下文文件发现整块缺 —— 后者现已闭环。
+> 读数：**权重 3 层（45.7%）已回到权重 1 层（44.9%）之上** —— 本轮 `原 docs/40` 把 E4-5（w3）由缺失转对齐，**首次出现「权重 3 层不低于其它层」**。此前「权重 3 层最低」的读数（39.6% vs 41.9% vs 44.9%）由**两件事共同造成**：换锚新增的 `context_with_system`（w3 缺失）＋ 上下文文件发现整块缺 —— 后者现已闭环。
 > ⚠️ **但这不等于「每轮都走的地方不欠账了」**：w3 层里**扩展系统仍占 9 个**（#3–#10 事件面 + #17 示例库），全部缺失/存疑 ⇒ w3 层的**剩余欠账几乎全在 D 域**。
 
 ### 权重 3 单元（23 个 —— 最该先修）
@@ -657,7 +657,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1551-1877`）；java 面 = `
 
 > 权重 3 层 23 个单元中：**对齐 7 / 存疑 7 / 缺失 9**（Σ(w×c) 31.5 / 69 = 45.7%）。
 > 归属：扩展系统 **9 个**（#3–#10 事件面 + #17 扩展示例库）；包管理器 **3 个**（#18/#19/#23）；其余 11 个散在 CLI（2）、settings（3）、会话（1）、资源发现（1）、RPC（2）、整块缺失（2）。
-> **本轮新增权重 3 单元 1 个**（D-`context_with_system`）；**E4-5「上下文文件发现」由缺失转对齐**（`docs/40`），另一 w3 视图（F 域子系统视图）随之销号 ⇒ w3 层 24 → 23 单元。
+> **本轮新增权重 3 单元 1 个**（D-`context_with_system`）；**E4-5「上下文文件发现」由缺失转对齐**（`原 docs/40`），另一 w3 视图（F 域子系统视图）随之销号 ⇒ w3 层 24 → 23 单元。
 
 ### 未加权 vs 加权的差
 
@@ -671,10 +671,10 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1551-1877`）；java 面 = `
 
 **差在哪**：加权把完成度**抬高** 11.6 pp，因为 pi-java 的对齐单元**密集落在高权重的默认路径上**，而缺失质量集中在低权重长尾。
 - **抬高项**：A 域（CLI）未加权 69.8% → 加权 80.6%；C 域 44.0% → 65.8%；E3 58.3% → 68.8%；E1/E2 也抬高；**G 域 30.0% → 38.9%**（G-2 w2＋G-3 w1＋G-5 w2 全对齐）。
-- **压低项**：D 域 2.4% → **13.9%**。（E4 本轮由「压低项」转为**持平项**：未加权 57.1% ＝ 加权 57.1%，`docs/40` 闭环后该域已无 w3 缺口。）
+- **压低项**：D 域 2.4% → **13.9%**。（E4 本轮由「压低项」转为**持平项**：未加权 57.1% ＝ 加权 57.1%，`原 docs/40` 闭环后该域已无 w3 缺口。）
 - **换锚那一刻新增的权重全部落在缺失**：G 域 18 权重（+D 9 +E2 4 +B 2 +E7 1 +E5 8 等），当时**加权完成度只降不升** —— 那是「pi 前进、pi-java 静止」在加权口径下的直接读数。包⑧/⑨ 的回填是**同一基准下重记判定**，方向相反。
 
 - **两个点名项**：
   - **扩展事件面**：D 域 Σ权重 **83** = 模块 496 的 **16.7%**，是全部 15 个域里**最大的一块**。Σ(w×c) 仅 11.5 ⇒ 若 D 域全对齐，模块 Σ(w×c) 215.5 → **287.0**、完成度 43.4% → **57.9%**，即**这一域单独把模块拉低 14.5 pp**。
-  - ~~上下文文件发现整块缺失~~ —— ✅ **已闭环**（`docs/40`，2026-10-08）。原记「单元粒度封顶了权重上限」：作为单个能力单元只占 Σ权重 6（E4-5 w3 + F 域子系统视图 w3）；现 E4-5 转**对齐**、F 域视图销号，该 3 权重已并入 Σ(w×c)。
+  - ~~上下文文件发现整块缺失~~ —— ✅ **已闭环**（`原 docs/40`，2026-10-08）。原记「单元粒度封顶了权重上限」：作为单个能力单元只占 Σ权重 6（E4-5 w3 + F 域子系统视图 w3）；现 E4-5 转**对齐**、F 域视图销号，该 3 权重已并入 Σ(w×c)。
   - **口径修正建议**（沿用）：整块缺失的子系统应按「暴露的行为面个数」而非 1 计入分母。本表按用户给定规则计。

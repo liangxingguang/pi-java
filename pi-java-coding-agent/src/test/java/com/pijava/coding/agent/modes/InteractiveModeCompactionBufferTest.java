@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * B175（docs/26 §4-4）：压缩窗口缓冲与自动重放的会话级 E2E。
+ * B175（原 docs/26 §4-4）：压缩窗口缓冲与自动重放的会话级 E2E。
  *
  * <p>手动 compact 在 Java 是阻塞调用 ⇒ 测试把它放独立线程（pi 的 async 形状），
  * 轮询到窗口打开后从测试线程提交：submit 缓冲为 steer、followUp 缓冲为 followUp。

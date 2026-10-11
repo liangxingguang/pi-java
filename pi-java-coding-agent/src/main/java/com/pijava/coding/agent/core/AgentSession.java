@@ -80,7 +80,7 @@ public final class AgentSession implements AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(AgentSession.class);
 
-    /** A5（docs/25）：并发 prompt 路由门，无状态。 */
+    /** A5（原 docs/25）：并发 prompt 路由门，无状态。 */
     private static final PromptRouter PROMPT_ROUTER = new PromptRouter();
 
     private final AgentHarness harness;
@@ -412,13 +412,13 @@ public final class AgentSession implements AutoCloseable {
             .retrySettings(retrySettings)
             .retryAborted(retryAborted)
             .retryObserver(retryObserver)
-            // B223（docs/47）：压缩设置晚读口 —— 引擎每次决策按 lane 当前模型
+            // B223（原 docs/47）：压缩设置晚读口 —— 引擎每次决策按 lane 当前模型
             // 回调本 resolver（pi getCompactionSettings(this.model) 四调用点）；
             // setModel/modelOverrides/设置文件改动下次决策即生效，fork 不串模型。
             // 不接线 ⇒ 自动压缩恒关（B223 原状）；接了线 ⇒ pi 的「默认开」
             // 由 settings 的 ?? true 语义在 resolver 内实现。
             .compactionResolver(m -> settings.accessors().getCompactionSettings(m))
-            // B64（docs/24）：AGENTS.md/CLAUDE.md 发现；-nc 关闭。
+            // B64（原 docs/24）：AGENTS.md/CLAUDE.md 发现；-nc 关闭。
             // 晚读口：每次 run 重新遍历（与 pi 同），不缓存。
             .contextFiles(() -> args.noContextFiles()
                 ? List.of()
@@ -543,14 +543,14 @@ public final class AgentSession implements AutoCloseable {
      *
      * <p>pi 读三个专用中止控制器；pi-java 的等价窗口由压缩的两个入口置/清，
      * 见 {@link AgentHarness#isCompacting(String)}。消费者：RPC {@code get_state}
-     * 与 {@code InteractiveMode} 的提交门（A5，{@code docs/25}）。</p>
+     * 与 {@code InteractiveMode} 的提交门（A5，{@code 原 docs/25}）。</p>
      */
     public boolean isCompacting() {
         return harness.isCompacting(laneName());
     }
 
     /**
-     * 是否有 agent run 在飞（A5，{@code docs/25}；pi {@code isStreaming}，
+     * 是否有 agent run 在飞（A5，{@code 原 docs/25}；pi {@code isStreaming}，
      * {@code agent-session.ts:1430-1432}）。{@code InteractiveMode} 提交门消费者。
      */
     public boolean isRunning() {
@@ -642,7 +642,7 @@ public final class AgentSession implements AutoCloseable {
             PromptConfig config,
             StreamObserver streamObserver,
             EntryObserver entryObserver) {
-        // A5（docs/25）：路由门在任何副作用之前 —— 压缩中/运行中未指定
+        // A5（原 docs/25）：路由门在任何副作用之前 —— 压缩中/运行中未指定
         // streamingBehavior 的 prompt 在调用线程同步抛出（pi 同形状，
         // agent-session.ts:1939-1979）；运行中显式 steer/followUp 仅排队。
         var verdict = PROMPT_ROUTER.route(
@@ -651,7 +651,7 @@ public final class AgentSession implements AutoCloseable {
             config.streamingBehavior());
         if (verdict == PromptRouter.Verdict.QUEUE_STEER) {
             harness.steer(laneName(), prompt);
-            // B34（docs/26）：pi _queueSteer 排队后发 queue_update（:2193）。
+            // B34（原 docs/26）：pi _queueSteer 排队后发 queue_update（:2193）。
             emitQueueUpdate();
             return SessionResult.queued();
         }
@@ -702,14 +702,14 @@ public final class AgentSession implements AutoCloseable {
     /** Queue a follow-up message (processed when the current run finishes). */
     public String followUp(String prompt) {
         var id = harness.followUp(laneName(), prompt);
-        // B34（docs/26）：pi followUp 入队后发 queue_update（agent-session.ts:2210）。
+        // B34（原 docs/26）：pi followUp 入队后发 queue_update（agent-session.ts:2210）。
         emitQueueUpdate();
         return id;
     }
 
     /**
      * pi {@code AgentSession.compact(customInstructions)}（agent-session.ts:2898-2907，
-     * B223/{@code docs/47}）：手动压缩的预算按<b>当前模型</b>现解析
+     * B223/{@code 原 docs/47}）：手动压缩的预算按<b>当前模型</b>现解析
      * （modelOverrides 对手动路同样生效）；enabled 不门手动路
      * （pi 手动 compact 不检查 enabled，关自动压缩时 /compact 仍可用）。
      */
@@ -786,7 +786,7 @@ public final class AgentSession implements AutoCloseable {
     }
 
     /**
-     * 交互层状态文本广播（B175，docs/26 §3.4）—— 发射
+     * 交互层状态文本广播（B175，原 docs/26 §3.4）—— 发射
      * {@link AgentSessionEvent.FlashStatus} 方言事件，RPC 侧忽略。
      */
     public void flashStatus(String message) {
@@ -795,7 +795,7 @@ public final class AgentSession implements AutoCloseable {
 
     /**
      * 发射 queue_update：引擎队列文本聚合 {@code InteractiveMode} 的缓冲内容
-     * （B34/B175，docs/26 §3.3；pi {@code _emitQueueUpdate}，
+     * （B34/B175，原 docs/26 §3.3；pi {@code _emitQueueUpdate}，
      * agent-session.ts:1017-1023）。
      *
      * @param bufferedSteering 缓冲中待 steer 的文本（压缩窗口内）；无则空列表
@@ -817,7 +817,7 @@ public final class AgentSession implements AutoCloseable {
     }
 
     /**
-     * 清空两个引擎队列并返回被清掉的文本（B34，docs/26；pi {@code clearQueue}，
+     * 清空两个引擎队列并返回被清掉的文本（B34，原 docs/26；pi {@code clearQueue}，
      * agent-session.ts:2355-2364），随后发射 queue_update{空}。
      */
     public ClearedQueue clearQueue() {

@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * A5（docs/25）：{@code AgentHarness.isRunning(lane)} 宿主可见的运行窗口。
+ * A5（原 docs/25）：{@code AgentHarness.isRunning(lane)} 宿主可见的运行窗口。
  *
  * <p>pi 的路由门（{@code agent-session.ts:1966}）读的是会话级
  * {@code isStreaming}；Java 侧对应即 {@code LaneState.isRunning()}，

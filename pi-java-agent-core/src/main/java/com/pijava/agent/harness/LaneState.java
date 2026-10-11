@@ -106,7 +106,7 @@ public final class LaneState {
      *
      * <p>它是唯一的「是否在跑」判据 —— 取代了 {@code RunPhase} 三态枚举。</p>
      */
-    // A5（docs/25）：跨线程读取（RPC reader/TUI/web 在自己线程跑路由门）⇒ volatile。
+    // A5（原 docs/25）：跨线程读取（RPC reader/TUI/web 在自己线程跑路由门）⇒ volatile。
     volatile ActiveRun activeRun;
 
     /** Open {@code harness.run} telemetry span for the current run (observability). */
@@ -185,7 +185,7 @@ public final class LaneState {
     /**
      * 关闭压缩窗口 —— 窗口在则置零并返回 true；已是关闭态则 no-op 返回 false。
      *
-     * <p>B175（docs/26）：pi 发 {@code compaction_end} <b>之前</b>就清控制器
+     * <p>B175（原 docs/26）：pi 发 {@code compaction_end} <b>之前</b>就清控制器
      * （{@code agent-session.ts:2828-2829}，注释原文「compaction_end listeners may
      * submit queued prompts, so expose idle state before notifying them」；错误路
      * {@code :2842} 同序）⇒ 监听器 flush 里的 prompt 不会被自己的压缩门挡死。</p>

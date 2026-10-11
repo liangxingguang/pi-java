@@ -170,7 +170,7 @@ final class QueueManager {
     }
 
     /**
-     * Steer 队列的文本快照（B34，docs/26；pi {@code getSteeringMessages}，
+     * Steer 队列的文本快照（B34，原 docs/26；pi {@code getSteeringMessages}，
      * {@code agent-session.ts:2371-2373}），按队列序。
      */
     List<String> steeringTexts(String laneName) {

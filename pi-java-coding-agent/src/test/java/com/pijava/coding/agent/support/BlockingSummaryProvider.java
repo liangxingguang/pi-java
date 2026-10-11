@@ -19,7 +19,7 @@ import com.pijava.ai.stream.StreamEvent;
 
 /**
  * Test provider whose <b>compaction-summary requests block</b> until
- * {@link #release()} (B176, docs/27): keeps the compaction window open while
+ * {@link #release()} (B176, 原 docs/27): keeps the compaction window open while
  * the command thread must stay responsive. Normal turn requests stream an
  * {@code "ok"} reply at once.
  *

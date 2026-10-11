@@ -15,7 +15,7 @@ import com.pijava.ai.stream.StreamEvent;
  * a virtual thread), while {@link #entries()} and {@link #status()} block
  * until the run finishes.</p>
  *
- * <p>A5（{@code docs/25}）：{@link #disposition} 对齐 pi 预检结果
+ * <p>A5（{@code 原 docs/25}）：{@link #disposition} 对齐 pi 预检结果
  * （{@code started} = 起了 run；{@code queued} = 仅排队，无驱动线程）。</p>
  */
 public final class SessionResult {
@@ -63,7 +63,7 @@ public final class SessionResult {
 
     /**
      * A queued prompt: no run was started — empty stream, pre-settled status
-     * {@code (0, "queued")}, no entries (A5，{@code docs/25}；pi 的
+     * {@code (0, "queued")}, no entries (A5，{@code 原 docs/25}；pi 的
      * {@code preflightResult("queued")}，{@code agent-session.ts:1977}）。
      */
     public static SessionResult queued() {

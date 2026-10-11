@@ -8,7 +8,7 @@ import dev.tamboui.toolkit.element.Element;
 import com.pijava.tui.util.TamboUIAdapter;
 
 /**
- * 待处理消息区（B175，docs/26 §3.6；pi {@code pendingMessagesContainer}，
+ * 待处理消息区（B175，原 docs/26 §3.6；pi {@code pendingMessagesContainer}，
  * {@code interactive-mode.ts:4648-4660}）：{@code queue_update} 数据驱动，
  * 渲染在聊天区与编辑器之间。每条一行 dim 文本：{@code Steering: <x>} /
  * {@code Follow-up: <x>}。

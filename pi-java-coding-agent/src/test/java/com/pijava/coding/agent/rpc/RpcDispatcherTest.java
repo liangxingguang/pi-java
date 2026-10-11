@@ -124,7 +124,7 @@ class RpcDispatcherTest {
 
         // set_model 实际改动了 harness 模型
         assertThat(ctx.session().harness().getModel().modelName()).isEqualTo("gpt-5");
-        // B223（docs/47）：set_auto_compaction 写**全局 settings 文件**并即时 flush
+        // B223（原 docs/47）：set_auto_compaction 写**全局 settings 文件**并即时 flush
         //（旧实现只改引擎内存态，重启即忘）。
         var settingsFile = ctx.home().resolve(".pi-java").resolve("agent")
             .resolve("settings.json");
@@ -137,7 +137,7 @@ class RpcDispatcherTest {
     }
 
     /**
-     * T8（B223/{@code docs/47}，主行为红）：全新会话（设置目录无 compaction 块）
+     * T8（B223/{@code 原 docs/47}，主行为红）：全新会话（设置目录无 compaction 块）
      * 的 {@code get_state} 必须报 {@code autoCompactionEnabled=true} —— pi 默认
      * {@code compaction?.enabled ?? true}；旧实现读引擎内存态，全新会话恒报 false。
      */
@@ -367,7 +367,7 @@ class RpcDispatcherTest {
         var ctx = sessionCtx("rec", recording);
         var out = new ByteArrayOutputStream();
         var dispatcher = new RpcDispatcher(ctx.session(), new JsonlWriter(out), ctx.args());
-        // B223（docs/47）：自动压缩现在默认接通（修复前它从不发火）。未编目模型的
+        // B223（原 docs/47）：自动压缩现在默认接通（修复前它从不发火）。未编目模型的
         // window=0，post-run 阈值门对任意正用量成立 ⇒ 本用例只测手动 compact，
         // 先关自动路，避免三轮 prompt 收尾时被自动压缩抢先（手动路不读 enabled）。
         ctx.session().services().settings().accessors().setCompactionEnabled(false);
@@ -382,7 +382,7 @@ class RpcDispatcherTest {
         dispatcher.handleLine(
             "{\"id\":\"1\",\"type\":\"compact\",\"customInstructions\":\"Focus on auth\"}");
 
-        // B176（docs/27）：compact 在 worker 线程跑，响应压缩完成时写出。
+        // B176（原 docs/27）：compact 在 worker 线程跑，响应压缩完成时写出。
         String output = awaitResponse(out, "1");
         assertThat(recording.userTexts())
             .as("pi rpc-mode.ts:534：command 的 customInstructions 进历史摘要 prompt")
@@ -403,7 +403,7 @@ class RpcDispatcherTest {
         var ctx = context("faux-compact2", textStream("Hi there"));
         var out = new ByteArrayOutputStream();
         var dispatcher = new RpcDispatcher(ctx.session(), new JsonlWriter(out), ctx.args());
-        // B223（docs/47）：本用例只测手动 compact ⇒ 关掉默认接通的自动路。
+        // B223（原 docs/47）：本用例只测手动 compact ⇒ 关掉默认接通的自动路。
         ctx.session().services().settings().accessors().setCompactionEnabled(false);
 
         runPrompt(dispatcher, out, "p1", "hi");

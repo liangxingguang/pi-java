@@ -3,7 +3,7 @@ package com.pijava.coding.agent.core;
 import java.util.List;
 
 /**
- * {@link AgentSession#clearQueue()} 的结果：被清掉的队列文本（B34，docs/26；
+ * {@link AgentSession#clearQueue()} 的结果：被清掉的队列文本（B34，原 docs/26；
  * pi {@code clearQueue} 返回 {@code {steering, followUp}}，
  * agent-session.ts:2355-2364）。
  */

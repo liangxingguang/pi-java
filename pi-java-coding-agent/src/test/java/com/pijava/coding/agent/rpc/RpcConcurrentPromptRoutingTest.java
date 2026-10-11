@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * A5（docs/25）：RPC 并发 prompt 路由 —— pi
+ * A5（原 docs/25）：RPC 并发 prompt 路由 —— pi
  * {@code test/rpc-prompt-response-semantics.test.ts} 对应场景。
  *
  * <p>夹具<em>不经管道</em>：测试线程直接同步调 {@code handleLine}（pi 自己的
@@ -171,7 +171,7 @@ class RpcConcurrentPromptRoutingTest {
 
     @Test
     void clearQueueReturnsAndClearsTheQueuedTexts() throws Exception {
-        // B34（docs/26）：pi clear_queue（rpc-prompt-response-semantics.test.ts:446-457）
+        // B34（原 docs/26）：pi clear_queue（rpc-prompt-response-semantics.test.ts:446-457）
         try (var f = newFixture()) {
             f.dispatch("{\"id\":\"st\",\"type\":\"steer\",\"message\":\"Change direction\"}");
             f.response("st");

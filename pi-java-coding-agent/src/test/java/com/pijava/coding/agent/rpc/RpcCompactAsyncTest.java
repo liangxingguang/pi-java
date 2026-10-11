@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * B176（docs/27 §4-2）：RPC compact 压缩跑在 worker 线程，stdin 读线程在
+ * B176（原 docs/27 §4-2）：RPC compact 压缩跑在 worker 线程，stdin 读线程在
  * 压缩期间继续处理命令（pi {@code void handleInputLine(line)}，
  * rpc-mode.ts:809）。
  */

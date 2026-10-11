@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * B176（docs/27 §4-1）：{@code /compact} 的压缩跑在 worker 线程——dispatch
+ * B176（原 docs/27 §4-1）：{@code /compact} 的压缩跑在 worker 线程——dispatch
  * 立即返回未完成 stage，压缩窗口内命令线程仍可缓冲输入（包 26 手动路径
  * 自此可达）。
  */

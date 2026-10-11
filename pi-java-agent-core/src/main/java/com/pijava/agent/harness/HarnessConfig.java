@@ -23,7 +23,7 @@ import com.pijava.telemetry.TelemetryContext;
 /**
  * Configuration for creating an {@link AgentHarness}.
  *
- * <p>Phase 2c: added compaction settings (B223/{@code docs/47} later turned the value
+ * <p>Phase 2c: added compaction settings (B223/{@code 原 docs/47} later turned the value
  * slot into a per-current-model resolver). Phase 3: added steeringMode, followUpMode,
  * toolExecution. {@code driveMode} was removed with the step chain — the harness
  * has exactly one driver now ({@code 原 docs/31 §6}).</p>
@@ -50,7 +50,7 @@ import com.pijava.telemetry.TelemetryContext;
  * @param toolRegistry       tool registry for the harness
  * @param toolContext        execution environment for tools
  * @param commandPrefix      optional prefix for bash commands
- * @param compactionResolver B223（{@code docs/47}）：按<b>当前模型</b>解析压缩设置的
+ * @param compactionResolver B223（{@code 原 docs/47}）：按<b>当前模型</b>解析压缩设置的
  *                           晚读口。AgentHarness 每次压缩决策以本车道当前模型调用它
  *                           （pi 四个决策点现读 {@code getCompactionSettings(this.model)}）
  *                           ⇒ setModel、modelOverrides、设置文件改动下次决策即生效。
@@ -95,7 +95,7 @@ public record HarnessConfig(
     ToolRegistry toolRegistry,
     ToolContext toolContext,
     String commandPrefix,
-    // B223（docs/47）：宿主给「按模型解析」函数；AgentHarness 以 lane 当前模型逐次调用
+    // B223（原 docs/47）：宿主给「按模型解析」函数；AgentHarness 以 lane 当前模型逐次调用
     // ⇒ setModel/modelOverrides/设置改动下次决策自然生效；fork 各自用自己的 lane.model。
     // null = 未接线 ⇒ G0 关（引擎测试旧形状；生产 coding-agent 必接）。
     java.util.function.Function<ModelId<?>, CompactionSettings> compactionResolver,
@@ -208,7 +208,7 @@ public record HarnessConfig(
         public Builder toolContext(ToolContext tc) { this.toolContext = tc; return this; }
         public Builder commandPrefix(String cp) { this.commandPrefix = cp; return this; }
         /**
-         * Set the per-current-model compaction settings resolver (B223, {@code docs/47});
+         * Set the per-current-model compaction settings resolver (B223, {@code 原 docs/47});
          * the harness calls it with the lane's current model at every decision point.
          * Unset ({@code null}) keeps the engine's legacy "no auto-compaction" contract.
          */

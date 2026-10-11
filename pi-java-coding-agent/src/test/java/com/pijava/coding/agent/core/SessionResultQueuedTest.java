@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * A5（docs/25）：{@link SessionResult} 的 disposition 与 {@code queued()}
+ * A5（原 docs/25）：{@link SessionResult} 的 disposition 与 {@code queued()}
  * 工厂 —— pi prompt 预检 disposition（{@code started | queued}，
  * {@code agent-session.ts:294-295}）。
  */

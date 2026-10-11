@@ -31,7 +31,7 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
 /**
  * <b>包 A3c</b>：Anthropic 车道的**工具增删原生渲染**（{@code 原 docs/51 §4.4}）。
  *
- * <p><b>包 B165</b>（{@code docs/45}）：形状换成 pi 的**定义内联**
+ * <p><b>包 B165</b>（{@code 原 docs/45}）：形状换成 pi 的**定义内联**
  * （{@code b271b0a52}，beta {@code inline-tools-2026-09-15}）。顶层工具表**就此定死**
  * （初始 ＋ 占位符），后续工具在 {@code tool_addition} 块里带**完整定义**（含
  * {@code input_schema}），同名重定义**不再回退**。骨架镜像 pi 重写后的 oracle

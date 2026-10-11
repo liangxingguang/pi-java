@@ -60,7 +60,7 @@ interface ScriptTool {
 	 * frame can land between two partials of one call on either side (both
 	 * harnesses stream them in a synchronous loop), so "a tool's updates
 	 * interleaving with a concurrent batch" is unreachable in a script — see
-	 * `docs/31 §8.24`. S14 uses it to make the interleaving a declared fact.
+	 * `原 docs/31 §8.24`. S14 uses it to make the interleaving a declared fact.
 	 */
 	updateEveryMs?: number;
 }
@@ -309,7 +309,7 @@ class Normalizer {
 			return out;
 		}
 		if (m.role === "assistant") {
-			// 3a parity (docs/31 §8.19): provider identity + usage now render —
+			// 3a parity (原 docs/31 §8.19): provider identity + usage now render —
 			// twin of the Java FrameNormalizer assistant branch. The mock sets all
 			// of them via createAssistantMessage (never faux's withUsageEstimate),
 			// so they are deterministic. `timestamp` does NOT ride (Date.now() on
@@ -448,7 +448,7 @@ async function runScript(script: Script): Promise<string[]> {
 			for (let i = 1; i <= (t.updates ?? 0); i++) {
 				// First partial lands right after `delayMs`; later ones are spaced
 				// by `updateEveryMs` — byte-for-byte the same pacing as the Java
-				// driver (`ConformanceRunner.executed`), see docs/31 §8.24.
+				// driver (`ConformanceRunner.executed`), see 原 docs/31 §8.24.
 				if (i > 1 && (t.updateEveryMs ?? 0) > 0) {
 					await new Promise((resolve) => setTimeout(resolve, t.updateEveryMs));
 				}

@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * A5（docs/25）：{@link InteractiveMode} 提交门 —— pi
+ * A5（原 docs/25）：{@link InteractiveMode} 提交门 —— pi
  * {@code interactive-mode.ts:3331-3338}：运行中提交走 steer 排队、
  * 不产生新驱动线程。
  */

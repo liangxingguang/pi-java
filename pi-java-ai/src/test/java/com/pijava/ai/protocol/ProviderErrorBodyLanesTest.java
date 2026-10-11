@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * B135 + B141：provider 错误体透传的<b>车道级</b>真 HTTP 夹具（设计 docs/48 §6.2）。
+ * B135 + B141：provider 错误体透传的<b>车道级</b>真 HTTP 夹具（设计 原 docs/48 §6.2）。
  *
  * <p>全部走 {@link RecordingHttpServer} 真桩驱动真实 SDK / JDK HTTP 栈，断言终局
  * {@code AssistantMessage.errorMessage} 与 pi 逐字一致：</p>

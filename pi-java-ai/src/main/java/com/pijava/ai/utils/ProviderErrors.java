@@ -207,7 +207,7 @@ public final class ProviderErrors {
      *   <li>抛错文案<b>不截断</b>：8192 的 U+2026 截断只属于诊断 details（B225）。</li>
      * </ul>
      *
-     * <p><b>方言</b>：JDK HTTP 客户端不暴露 reason phrase（docs/49 §4.2），
+     * <p><b>方言</b>：JDK HTTP 客户端不暴露 reason phrase（原 docs/49 §4.2），
      * 用 {@link #reasonPhrase} 的 RFC 标准短语表重放；未知码给空串，精确复现
      * pi 空 statusText 的 {@code "<status> : <suffix>"} 形状。</p>
      */
@@ -251,7 +251,7 @@ public final class ProviderErrors {
 
     /**
      * RFC 9110 标准 reason phrase（JDK {@code java.net.http} 不暴露状态行）。
-     * 未知码 ⇒ {@code ""}（≙ pi 看到空 statusText，见 docs/49 §4.2）。
+     * 未知码 ⇒ {@code ""}（≙ pi 看到空 statusText，见 原 docs/49 §4.2）。
      */
     static String reasonPhrase(int status) {
         return REASON_PHRASES.getOrDefault(status, "");

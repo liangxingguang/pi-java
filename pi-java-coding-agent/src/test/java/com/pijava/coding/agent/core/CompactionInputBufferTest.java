@@ -8,7 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * B175（docs/26 §3.2/§4）：压缩窗口缓冲器纯逻辑用例 ——
+ * B175（原 docs/26 §3.2/§4）：压缩窗口缓冲器纯逻辑用例 ——
  * pi {@code queueCompactionMessage}/{@code flushCompactionQueue}
  * （interactive-mode.ts:4688-4783）。
  *

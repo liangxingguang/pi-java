@@ -39,7 +39,7 @@ final class CommandUtil {
 
     /**
      * Build a command whose body runs on a worker virtual thread and completes
-     * the returned stage when done (B176, docs/27): pi command handlers are
+     * the returned stage when done (B176, 原 docs/27): pi command handlers are
      * async functions, so a long body (compaction) never blocks the
      * render/input thread.
      */

@@ -13,7 +13,7 @@ final class RpcPayloads {
     private RpcPayloads() {}
 
     /**
-     * A5（docs/25）：{@code prompt}/{@code steer}/{@code follow_up} 响应 data
+     * A5（原 docs/25）：{@code prompt}/{@code steer}/{@code follow_up} 响应 data
      * —— pi {@code {disposition: "started" | "queued" | "handled"}}。
      */
     record DispositionData(String disposition) {}
@@ -58,7 +58,7 @@ final class RpcPayloads {
     ) {}
 
     /**
-     * B34（docs/26）：{@code clear_queue} 响应 data —— pi
+     * B34（原 docs/26）：{@code clear_queue} 响应 data —— pi
      * {@code {steering: string[], followUp: string[]}}（被清文本）。
      */
     record ClearQueueData(

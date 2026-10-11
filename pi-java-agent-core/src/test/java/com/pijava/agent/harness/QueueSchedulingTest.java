@@ -143,7 +143,7 @@ class QueueSchedulingTest {
 
     @Test
     void queuedSteeringAndFollowUpExposeTextsInQueueOrder() {
-        // B34（docs/26）：pi getSteeringMessages/getFollowUpMessages
+        // B34（原 docs/26）：pi getSteeringMessages/getFollowUpMessages
         // （agent-session.ts:2371-2378）—— 队列文本读口，按队列序。
         var h = harness();
         h.steer("default", "first steer");

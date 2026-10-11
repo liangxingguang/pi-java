@@ -7,7 +7,7 @@ import com.pijava.ai.thinking.ModelThinkingLevel;
  *
  * @param systemPrompt      system prompt override (null = keep harness value)
  * @param thinkingLevel     thinking level override (null = keep harness value)
- * @param streamingBehavior 运行中提交时的排队行为（A5，docs/25；null = 未指定，
+ * @param streamingBehavior 运行中提交时的排队行为（A5，原 docs/25；null = 未指定，
  *                          运行中无此值则在调用线程被路由门拒绝）
  */
 public record PromptConfig(

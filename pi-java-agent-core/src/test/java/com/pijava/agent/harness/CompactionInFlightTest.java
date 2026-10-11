@@ -108,7 +108,7 @@ class CompactionInFlightTest {
 
             // pi :1969 建控制器 → :1970 发 start ⇒ 观察者在 onStart 里已经看得见窗口。
             assertThat(observer.onStart).containsExactly(true);
-            // B175（docs/26）：pi 发 onEnd **之前**先清窗口
+            // B175（原 docs/26）：pi 发 onEnd **之前**先清窗口
             // （agent-session.ts:2828-2829，注释原文「listeners may submit queued
             // prompts, so expose idle state before notifying them」）⇒ onEnd 采样 false。
             assertThat(observer.onEnd).containsExactly(false);

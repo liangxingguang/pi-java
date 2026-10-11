@@ -369,7 +369,7 @@ public final class PiTuiApp {
         chatScreen.resetRunTracking();
         long startNanos = System.nanoTime();
         var result = mode.submit(text);
-        // A5（docs/25）：运行中提交仅排队，没有 run 收尾 ⇒ 不画 run 分隔线。
+        // A5（原 docs/25）：运行中提交仅排队，没有 run 收尾 ⇒ 不画 run 分隔线。
         if ("queued".equals(result.disposition())) {
             return;
         }
@@ -431,7 +431,7 @@ public final class PiTuiApp {
                 var text = chatScreen.inputText();
                 // A5：pi Alt+Enter —— 运行中才排 followUp；空闲等同普通 Enter
                 // （interactive-mode.ts:4418-4429）。
-                // B175（docs/26）：压缩中 ⇒ 缓冲为 followUp。
+                // B175（原 docs/26）：压缩中 ⇒ 缓冲为 followUp。
                 if (session.isCompacting() || session.isRunning()) {
                     mode.followUp(text);
                 } else {
