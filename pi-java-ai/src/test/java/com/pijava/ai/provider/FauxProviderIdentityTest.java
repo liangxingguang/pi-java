@@ -36,7 +36,7 @@ class FauxProviderIdentityTest {
         ModelId.of("faux", "test-model"),
         null,
         List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hello")))),
-        List.of(), -1, -1, java.util.Map.of());
+        List.of(), -1, -1);
 
     @Test
     void streamedPartialsCarryTheFiveIdentityFields() {

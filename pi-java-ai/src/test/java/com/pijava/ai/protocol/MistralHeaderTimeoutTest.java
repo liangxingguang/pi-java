@@ -42,7 +42,7 @@ class MistralHeaderTimeoutTest {
             var api = new MistralConversationsApi(options, Duration.ofMillis(300));
             var model = com.pijava.ai.catalog.ModelInfo.minimal(ModelId.of("mistral", "mistral-large"));
             var user = new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")));
-            var request = new StreamRequest(model, null, List.of(user), List.of(), -1, -1, Map.of());
+            var request = new StreamRequest(model, null, List.of(user), List.of(), -1, -1);
 
             assertTimeoutPreemptively(Duration.ofSeconds(10), () -> {
                 var result = api.send(request, options);

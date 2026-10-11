@@ -20,10 +20,13 @@ import com.pijava.ai.utils.Estimate;
  * <h2>为什么只有「半边」</h2>
  *
  * <p>pi 的 {@code buildBaseOptions(model, context, options?, apiKey?)} 返回一个 20 个键的
- * {@code StreamOptions}。java 里这一层<b>已经存在</b>：{@link StreamRequest} 就是那个载体
- * （它带 {@code maxTokens}/{@code temperature}/{@code reasoning}/{@code extra}），
- * 再发明一个对象只会多一处没有 pi 对应物的形状。故本类**不是** {@code buildBaseOptions}
- * 的形状移植，而是它那三处**可观察行为**的移植：</p>
+ * {@code StreamOptions}。java 里呼叫数据的载体是 {@link StreamRequest}
+ * （{@code maxTokens}/{@code temperature}/{@code reasoning}），per-request 的其余选项
+ * （sessionId/cacheRetention/headers…）走 {@code ApiOptions.extra} —— 适配器在
+ * {@code DefaultProviders.streamBlocking} 每请求新建，与 pi 的单一 options 对象同生命周期
+ * （B107 删除了恒空的 {@code StreamRequest.extra}，docs/52）。再发明一个对象只会多一处
+ * 没有 pi 对应物的形状。故本类<b>不是</b> {@code buildBaseOptions} 的形状移植，而是它那
+ * 三处**可观察行为**的移植：</p>
  *
  * <table border="1">
  *   <caption>pi 的 {@code buildBaseOptions} 逐项对账</caption>
@@ -33,8 +36,9 @@ import com.pijava.ai.utils.Estimate;
  *       <td>本包的核心</td></tr>
  *   <tr><td>{@code :27-30 samplingParams}（model ⨁ options 合并）</td>
  *       <td>{@link #samplingParamsOf}</td>
- *       <td>per-request 那一半在 java **没有生产者**（{@code StreamRequest.extra} 生产恒空）
- *           ⇒ 只落模型级，另一半登记（{@code 原 docs/57 §6 R5}）</td></tr>
+ *       <td>per-request 那一半在 java <b>没有生产者</b>（{@code ApiOptions.extra} 是它的通道，
+ *           与 sessionId/cacheRetention 同形，尚未接线）
+ *           ⇒ 只落模型级，另一半登记（B125）</td></tr>
  *   <tr><td>{@code :32 temperature} 直通</td><td>不动</td>
  *       <td>{@code StreamRequest.temperature} 的读点两侧已一致</td></tr>
  *   <tr><td>{@code fetch}/{@code onPayload}/{@code transport}/{@code metadata}/{@code env} …</td>
@@ -140,9 +144,9 @@ public final class SimpleOptions {
      * 模型级采样参数的直通（pi {@code buildBaseOptions:27-30} 的合并结果）。
      *
      * <p>pi 的合并是 {@code model.samplingParams || options?.samplingParams ? {...model, ...options} : undefined}。
-     * java 的 per-request 那一半**没有生产者**（{@code StreamRequest.extra} 在生产恒为
-     * {@code Map.of()}，{@link StreamRequest} 也没有第二个采样参数通道）⇒ 结果就是模型级那一份。
-     * 「per-request 压过模型级」这一支登记为 B125，本包不造通道。</p>
+     * java 的 per-request 那一半<b>没有生产者</b>（通道是 {@code ApiOptions.extra}，与
+     * sessionId/cacheRetention 同形，B107 后不再有 {@code StreamRequest.extra}）⇒ 结果就是
+     * 模型级那一份。「per-request 压过模型级」这一支登记为 B125，本包不造生产者。</p>
      *
      * <p>只在**非空**时返回 —— 与 pi 的落点等价：车道那边的写法是
      * {@code if (options?.samplingParams) Object.assign(params, ...)}，

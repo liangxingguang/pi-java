@@ -469,6 +469,11 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                 .orElse(null);
     }
 
+    /** 直调夹具形态（反射调用）：无亲和头。 */
+    private MessageCreateParams buildParams(StreamRequest request) {
+        return buildParams(request, null, null);
+    }
+
     private MessageCreateParams buildParams(StreamRequest request, String affinitySessionId,
                                              String baseUrl) {
         // 包 A-01：断点规格在这里解析一次（三源的合并：请求期选项 ?? 环境变量 ?? "short"），

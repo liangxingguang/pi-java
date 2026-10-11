@@ -52,7 +52,7 @@ class OpenAIImageContentTest {
     }
 
     private static ChatCompletionCreateParams build(ModelInfo model, List<Message> messages) {
-        var request = new StreamRequest(model, null, messages, List.of(), -1, -1, Map.of());
+        var request = new StreamRequest(model, null, messages, List.of(), -1, -1);
         return OpenAICompletionsMessageConverter.buildParams(request, "openai-completions", null);
     }
 

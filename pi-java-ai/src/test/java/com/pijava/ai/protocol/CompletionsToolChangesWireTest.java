@@ -145,7 +145,7 @@ class CompletionsToolChangesWireTest {
             var api = new OpenAICompletionsApi(
                 new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()),
                 "OPENAI_API_KEY");
-            var request = new StreamRequest(model, null, messages, List.of(), -1, -1, Map.of());
+            var request = new StreamRequest(model, null, messages, List.of(), -1, -1);
             try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {
                 var events = new ArrayList<StreamEvent>();
                 while (iter.hasNext() && events.size() < 100) {

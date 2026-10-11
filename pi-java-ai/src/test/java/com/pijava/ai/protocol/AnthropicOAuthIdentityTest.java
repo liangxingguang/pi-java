@@ -53,7 +53,7 @@ class AnthropicOAuthIdentityTest {
                 "ANTHROPIC_API_KEY");
             var request = new StreamRequest(TARGET, null,
                 List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")))),
-                List.of(), 100, 0.5, Map.of());
+                List.of(), 100, 0.5);
             try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {
                 var events = new ArrayList<StreamEvent>();
                 while (iter.hasNext() && events.size() < 100) events.add(iter.next());

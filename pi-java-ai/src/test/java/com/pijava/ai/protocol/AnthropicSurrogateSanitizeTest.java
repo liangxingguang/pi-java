@@ -152,14 +152,14 @@ class AnthropicSurrogateSanitizeTest {
     }
 
     private static StreamRequest request(String systemPrompt, List<Message> messages) {
-        return new StreamRequest(TARGET, systemPrompt, messages, List.of(), 100, 0.5, Map.of());
+        return new StreamRequest(TARGET, systemPrompt, messages, List.of(), 100, 0.5);
     }
 
     /** 带 {@code compat.allowEmptySignature} 的目标模型（B8 投送面）。 */
     private static StreamRequest requestWithCompat(List<Message> messages) {
         var info = new ModelInfo(TARGET, TARGET.modelName(), Set.of(), 0, 0, false,
             PricingInfo.UNKNOWN, ThinkingLevelMap.empty(), Map.of(), Map.of(), ModelCompat.of(true));
-        return new StreamRequest(info, null, messages, List.of(), 100, 0.5, Map.of());
+        return new StreamRequest(info, null, messages, List.of(), 100, 0.5);
     }
 
     // ── 六个落线点 ────────────────────────────────────────────────────────

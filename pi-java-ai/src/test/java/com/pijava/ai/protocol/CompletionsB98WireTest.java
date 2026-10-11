@@ -296,7 +296,7 @@ class CompletionsB98WireTest {
             var api = new OpenAICompletionsApi(
                 new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()));
             var request = new StreamRequest(model, "be brief", messages, tools,
-                -1, -1, Map.of(), reasoning);
+                -1, -1, reasoning);
             try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {
                 while (iter.hasNext()) {
                     iter.next();

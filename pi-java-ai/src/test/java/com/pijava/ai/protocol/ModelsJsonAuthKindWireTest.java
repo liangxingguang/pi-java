@@ -46,7 +46,7 @@ class ModelsJsonAuthKindWireTest {
                 "", "bearer-tok", Duration.ofSeconds(5), 0, Map.of(), AuthKind.BEARER));
             var request = new StreamRequest(ModelId.of("relay", "claude-x"), null,
                 List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")))),
-                List.of(), 100, -1, Map.of());
+                List.of(), 100, -1);
             try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {
                 var events = new ArrayList<StreamEvent>();
                 while (iter.hasNext() && events.size() < 100) {
@@ -82,7 +82,7 @@ class ModelsJsonAuthKindWireTest {
                 "", "", Duration.ofSeconds(5), 0, Map.of(), AuthKind.BEARER));
             var request = new StreamRequest(ModelId.of("relay", "claude-x"), null,
                 List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")))),
-                List.of(), 100, -1, Map.of());
+                List.of(), 100, -1);
             try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {
                 var events = new ArrayList<StreamEvent>();
                 while (iter.hasNext() && events.size() < 100) {

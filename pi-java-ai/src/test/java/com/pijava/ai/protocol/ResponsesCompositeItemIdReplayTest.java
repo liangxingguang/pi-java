@@ -61,7 +61,7 @@ class ResponsesCompositeItemIdReplayTest {
                 "OPENAI_API_KEY");
             var modelInfo = ModelInfo.minimal(ModelId.of("openai", targetModel));
             var request = new StreamRequest(modelInfo, null, history, List.of(),
-                -1, -1, Map.of());
+                -1, -1);
             try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {
                 var events = new ArrayList<StreamEvent>();
                 while (iter.hasNext() && events.size() < 100) {

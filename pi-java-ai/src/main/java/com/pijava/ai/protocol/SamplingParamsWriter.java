@@ -36,8 +36,9 @@ import com.pijava.ai.catalog.ModelInfo;
  * 要守 —— 但两个 builder 类型不同 ⇒ 路由代码仍是两段（M6 实测：只变异
  * {@code applyToCompletions} ⇒ 恰 1 红；两段同时变异 ⇒ 恰 2 红，{@code 原 docs/57 §8.2}）。</p>
  *
- * <p>数据来源只有**模型级**那一半：pi 的 per-request 半（{@code options.samplingParams}）
- * 在 java 没有生产者（{@code StreamRequest.extra} 生产恒空）⇒ 登记 B125。</p>
+ * <p>数据来源只有<b>模型级</b>那一半：pi 的 per-request 半（{@code options.samplingParams}）
+ * 在 java 没有生产者（通道是 {@code ApiOptions.extra}，B107 删了恒空的
+ * {@code StreamRequest.extra}，docs/52）⇒ 登记 B125。</p>
  */
 final class SamplingParamsWriter {
 

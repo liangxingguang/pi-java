@@ -76,7 +76,7 @@ class AnthropicThinkingReplayTest {
     }
 
     private static StreamRequest request(List<Message> messages) {
-        return new StreamRequest(TARGET, null, messages, List.of(), 100, 0.5, Map.of());
+        return new StreamRequest(TARGET, null, messages, List.of(), 100, 0.5);
     }
 
     /**
@@ -330,7 +330,7 @@ class AnthropicThinkingReplayTest {
         var info = new ModelInfo(TARGET, TARGET.modelName(), Set.of(), 0, 0, false,
             PricingInfo.UNKNOWN, ThinkingLevelMap.empty(), Map.of(), Map.of(),
             ModelCompat.of(allowEmptySignature));
-        return new StreamRequest(info, null, messages, List.of(), 100, 0.5, Map.of());
+        return new StreamRequest(info, null, messages, List.of(), 100, 0.5);
     }
 
     private List<String> wireWithCompat(boolean allowEmptySignature,

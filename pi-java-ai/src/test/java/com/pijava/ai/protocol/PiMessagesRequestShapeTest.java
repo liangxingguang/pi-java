@@ -39,7 +39,7 @@ class PiMessagesRequestShapeTest {
                 "PI_MESSAGES_API_KEY");
             var messages = List.<Message>of(prompt(), user("hi"));
             var request = new StreamRequest(ModelInfo.minimal(ModelId.of("pi-messages", "gw")),
-                null, messages, List.of(), -1, -1, Map.of());
+                null, messages, List.of(), -1, -1);
             try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {
                 while (iter.hasNext()) {
                     iter.next();
@@ -87,7 +87,7 @@ class PiMessagesRequestShapeTest {
             var bare = new Message.SystemMessage("just text", Instant.ofEpochMilli(7),
                 Map.of(), List.of(), List.of());
             var request = new StreamRequest(ModelInfo.minimal(ModelId.of("pi-messages", "gw")),
-                null, List.<Message>of(bare, user("hi")), List.of(), -1, -1, Map.of());
+                null, List.<Message>of(bare, user("hi")), List.of(), -1, -1);
             try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {
                 while (iter.hasNext()) {
                     iter.next();
@@ -127,7 +127,7 @@ class PiMessagesRequestShapeTest {
                 new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()),
                 "PI_MESSAGES_API_KEY");
             var request = new StreamRequest(ModelInfo.minimal(ModelId.of("pi-messages", "gw")),
-                null, List.<Message>of(prompt(), user("hi")), List.of(), -1, -1, Map.of());
+                null, List.<Message>of(prompt(), user("hi")), List.of(), -1, -1);
             try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {
                 while (iter.hasNext()) {
                     iter.next();

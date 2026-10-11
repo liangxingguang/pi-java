@@ -66,7 +66,7 @@ class LaneTransformMessagesWiringTest {
             List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi"))),
                 new Message.AssistantMessage(List.of(toolUse), "stop", null,
                     "anthropic-messages", "anthropic", "claude-x", null, null, null, null), result),
-            List.of(), -1, -1, Map.of());
+            List.of(), -1, -1);
 
         var params = OpenAICompletionsMessageConverter.buildParams(request,
             "openai-completions", null);
@@ -207,7 +207,7 @@ class LaneTransformMessagesWiringTest {
             apiName, target.provider(), "previous-model", null, null, null, null);
         return new StreamRequest(target, null,
             List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi"))), source),
-            List.of(), -1, -1, Map.of());
+            List.of(), -1, -1);
     }
 
     private static StreamRequest toolRequest(ModelId<?> target, String id) {
@@ -217,7 +217,7 @@ class LaneTransformMessagesWiringTest {
         return new StreamRequest(target, null,
             List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi"))), assistant,
                 new Message.ToolResultMessage(id, "read", List.of(new ContentBlock.TextContent("ok")), false)),
-            List.of(), -1, -1, Map.of());
+            List.of(), -1, -1);
     }
 
     @Test
@@ -301,7 +301,7 @@ class LaneTransformMessagesWiringTest {
             var request = new StreamRequest(ModelId.of("deepseek", "deepseek-v4-flash"), null,
                 List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi"))),
                     sameModel),
-                List.of(), -1, -1, Map.of());
+                List.of(), -1, -1);
             drainQuietly(() -> api.streamBlocking(request, ApiOptions.defaults()));
 
             assertThat(server.body()).contains(FOREIGN_TEXT);
@@ -317,7 +317,7 @@ class LaneTransformMessagesWiringTest {
             "stop", null, "anthropic-messages", "anthropic", "claude-x", null, null, null, null);
         return new StreamRequest(target, null,
             List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi"))), foreign),
-            List.of(), -1, -1, Map.of());
+            List.of(), -1, -1);
     }
 
     /** 消费整条流并**吞掉**异常 —— 桩回 400，请求体已经录到了，流怎么结束与本类无关。 */

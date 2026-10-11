@@ -59,7 +59,7 @@ class MistralSurrogateSanitizeTest {
             "buildRequestBody", StreamRequest.class);
         method.setAccessible(true);
         var request = new StreamRequest(ModelId.of("mistral", "devstral-medium-latest"),
-            systemPrompt, messages, List.of(), 100, 0.5, Map.of());
+            systemPrompt, messages, List.of(), 100, 0.5);
         return (String) method.invoke(api, request);
     }
 

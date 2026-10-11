@@ -67,7 +67,7 @@ class ResponsesCompositeItemIdWireTest {
             Message user = new Message.UserMessage(
                 List.of(new ContentBlock.TextContent("weather?")));
             var request = new StreamRequest(model, null, List.of(user), List.of(),
-                -1, -1, Map.of());
+                -1, -1);
 
             Message result = api.send(request, options);
 

@@ -99,7 +99,7 @@ class AnthropicCacheControlWireTest {
                 new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, extra),
                 "ANTHROPIC_API_KEY");
             var request = new StreamRequest(model, SYSTEM_PROMPT, messages, tools,
-                -1, -1, Map.of());
+                -1, -1);
             try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {
                 while (iter.hasNext()) {
                     iter.next();

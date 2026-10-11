@@ -71,7 +71,7 @@ class CompletionsMaxTokensWireTest {
                 new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()));
             var request = new StreamRequest(model, "be brief",
                 List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")))),
-                List.of(), maxTokens, -1, Map.of(), Optional.empty());
+                List.of(), maxTokens, -1, Optional.empty());
             try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {
                 while (iter.hasNext()) {
                     iter.next();

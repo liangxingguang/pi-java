@@ -83,7 +83,7 @@ class GoogleSurrogateSanitizeTest {
         try (var server = new RecordingHttpServer()) {
             var api = new GoogleGenerativeAiApi(
                 new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()));
-            var request = new StreamRequest(TARGET, systemPrompt, messages, List.of(), 100, 0.5, Map.of());
+            var request = new StreamRequest(TARGET, systemPrompt, messages, List.of(), 100, 0.5);
             try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {
                 var events = new ArrayList<StreamEvent>();
                 while (iter.hasNext() && events.size() < 100) events.add(iter.next());

@@ -107,7 +107,7 @@ class ResponsesReasoningIncludeWireTest {
                                   Map<String, Object> extras) throws Exception {
         try (var server = new RecordingHttpServer()) {
             var request = new StreamRequest(model, null, messages,
-                List.of(), -1, -1, Map.of());
+                List.of(), -1, -1);
             var options = new ApiOptions(server.baseUrl(), "test-key",
                 Duration.ofSeconds(5), 0, extras);
             var api = new OpenAIResponsesApi(options, "OPENAI_API_KEY");

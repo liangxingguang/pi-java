@@ -55,7 +55,7 @@ class AnthropicCompatWireTest {
         return new StreamRequest(
             model, null,
             List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")))),
-            List.of(), -1, temperature, Map.of(), reasoning);
+            List.of(), -1, temperature, reasoning);
     }
 
     // ── D1：思考形态（forceAdaptiveThinking）─────────────────────
@@ -139,7 +139,7 @@ class AnthropicCompatWireTest {
         return new StreamRequest(
             model, "be brief",
             List.of(user("a"), update, user("b")),
-            List.of(), -1, -1, Map.of(), Optional.empty());
+            List.of(), -1, -1, Optional.empty());
     }
 
     private static Message.UserMessage user(String text) {

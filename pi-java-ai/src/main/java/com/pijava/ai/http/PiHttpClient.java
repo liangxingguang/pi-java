@@ -309,8 +309,7 @@ public final class PiHttpClient implements AutoCloseable {
         }
         if (status < 200 || status >= 300) {
             String errorBody = drainQuietly(response.body());
-            throw new PiHttpException(status, "HTTP " + status,
-                errorBody == null ? "" : errorBody);
+            throw new PiHttpException(status, "HTTP " + status, errorBody);
         }
         // 2xx：body 交给 SseIterator 增量逐行消费（头已到达，固定截止时间不再适用）。
         var reader = new BufferedReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8));

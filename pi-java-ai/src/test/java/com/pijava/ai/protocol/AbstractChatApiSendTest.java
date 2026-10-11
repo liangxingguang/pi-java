@@ -39,7 +39,7 @@ class AbstractChatApiSendTest {
     void sendPropagatesPipelineFaultWithOriginalType() {
         var api = new FaultyApi();
         var request = new StreamRequest((com.pijava.ai.catalog.ModelInfo) null,
-            "sys", List.of(), List.of(), -1, -1, Map.of());
+            "sys", List.of(), List.of(), -1, -1);
         assertThatThrownBy(() -> api.send(request, ApiOptions.defaults()))
             .isInstanceOf(IllegalStateException.class)
             .hasMessage("pipeline fault")

@@ -243,7 +243,7 @@ class OpenAICompletionsReasoningReplayTest {
             "OPENAI_API_KEY");
         var request = new StreamRequest(model, null,
             List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi"))), assistant),
-            List.of(), -1, -1, Map.of());
+            List.of(), -1, -1);
         drainQuietly(() -> api.streamBlocking(request, ApiOptions.defaults()));
         return server.body();
     }

@@ -75,7 +75,7 @@ class OpenAICompletionsApiRequestTest {
                     new ContentBlock.TextContent("hi"))),
                 new Message.AssistantMessage(List.of(
                     new ContentBlock.TextContent("hello!")))),
-            List.of(), -1, -1, java.util.Map.of());
+            List.of(), -1, -1);
 
         var params = OpenAICompletionsMessageConverter.buildParams(request, "openai-completions", null);
 

@@ -41,7 +41,7 @@ class ZaiContextOverflowWireTest {
             Message user = new Message.UserMessage(
                     List.of(new ContentBlock.TextContent("hi")));
             var request = new StreamRequest(model, "", List.of(user), List.of(),
-                    -1, -1, Map.of());
+                    -1, -1);
 
             Message result = api.send(request, options);
 

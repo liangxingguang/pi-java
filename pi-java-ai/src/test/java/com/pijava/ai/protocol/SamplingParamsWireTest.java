@@ -152,7 +152,7 @@ class SamplingParamsWireTest {
     private static StreamRequest request(ModelInfo model, int maxTokens) {
         return new StreamRequest(model, "be brief",
             List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")))),
-            List.of(), maxTokens, -1, Map.of(), Optional.empty());
+            List.of(), maxTokens, -1, Optional.empty());
     }
 
     /** {@code sampling == null} ⇒ 空的采样表（≙ pi 的 {@code samplingParams: undefined}）。 */

@@ -64,7 +64,7 @@ class AnthropicProviderRetryWireTest {
 
     private static StreamRequest request() {
         Message user = new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")));
-        return new StreamRequest(model(), "", List.of(user), List.of(), -1, -1, Map.of());
+        return new StreamRequest(model(), "", List.of(user), List.of(), -1, -1);
     }
 
     private static ApiOptions options(String baseUrl, int maxRetries, Long capMs) {

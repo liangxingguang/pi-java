@@ -1,7 +1,6 @@
 package com.pijava.ai.api;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import com.pijava.ai.catalog.ModelInfo;
@@ -36,7 +35,6 @@ import com.pijava.ai.thinking.ThinkingLevel;
  *                     系统消息里（pi 的 {@code TranscriptContext}）
  * @param maxTokens    maximum output tokens (-1 for provider default)
  * @param temperature  sampling temperature (-1 for provider default)
- * @param extra        provider-specific parameters
  * @param reasoning    pi {@code SimpleStreamOptions.reasoning} —— <b>未翻译</b>的思考级别；
  *                     空 ≙ pi 的 {@code undefined}（不开思考）。<b>翻译归车道</b>：
  *                     它要读 {@code model.compat} 与 {@code model.thinkingLevelMap}
@@ -47,13 +45,11 @@ public record StreamRequest(
     TranscriptContext transcript,
     int maxTokens,
     double temperature,
-    Map<String, Object> extra,
     Optional<ThinkingLevel> reasoning
 ) {
-    /** Compact constructor that defensively copies the transcript and extra map. */
+    /** Compact constructor that defensively copies the transcript. */
     public StreamRequest {
         transcript = transcript == null ? new TranscriptContext(List.of()) : transcript;
-        extra = Map.copyOf(extra);
         if (reasoning.isEmpty()) {
             reasoning = Optional.empty();
         }
@@ -73,17 +69,14 @@ public record StreamRequest(
         List<ToolDefinition> tools,
         int maxTokens,
         double temperature,
-        Map<String, Object> extra,
         Optional<ThinkingLevel> reasoning
     ) {
         this(model, ContextNormalizer.normalize(systemPrompt, messages, tools),
-            maxTokens, temperature, extra, reasoning);
+            maxTokens, temperature, reasoning);
     }
 
     /**
      * Convenience constructor without a thinking level (≙ pi 的 {@code reasoning: undefined}).
-     *
-     * <p>保留此 7 参形态使既有构造点零改签。</p>
      */
     public StreamRequest(
         ModelInfo model,
@@ -91,10 +84,9 @@ public record StreamRequest(
         List<Message> messages,
         List<ToolDefinition> tools,
         int maxTokens,
-        double temperature,
-        Map<String, Object> extra
+        double temperature
     ) {
-        this(model, systemPrompt, messages, tools, maxTokens, temperature, extra,
+        this(model, systemPrompt, messages, tools, maxTokens, temperature,
             Optional.empty());
     }
 
@@ -111,11 +103,10 @@ public record StreamRequest(
         List<Message> messages,
         List<ToolDefinition> tools,
         int maxTokens,
-        double temperature,
-        Map<String, Object> extra
+        double temperature
     ) {
         this(ModelInfo.minimal(model), systemPrompt, messages, tools,
-            maxTokens, temperature, extra, Optional.empty());
+            maxTokens, temperature, Optional.empty());
     }
 
     /**
@@ -141,7 +132,7 @@ public record StreamRequest(
 
     /** Create a simple request with defaults. */
     public static StreamRequest of(ModelId<?> model, List<Message> messages) {
-        return new StreamRequest(model, null, messages, List.of(), -1, -1, Map.of());
+        return new StreamRequest(model, null, messages, List.of(), -1, -1);
     }
 
     /**
@@ -152,6 +143,6 @@ public record StreamRequest(
      * 那里把请求换成解析后的副本，车道就零改签地拿到 {@code maxTokens}。</p>
      */
     public StreamRequest withMaxTokens(int newMaxTokens) {
-        return new StreamRequest(model, transcript, newMaxTokens, temperature, extra, reasoning);
+        return new StreamRequest(model, transcript, newMaxTokens, temperature, reasoning);
     }
 }

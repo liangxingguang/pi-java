@@ -24,7 +24,7 @@ class FauxProviderTest {
             null,
             java.util.List.of(new Message.UserMessage(
                     java.util.List.of(new ContentBlock.TextContent("hello")))),
-            java.util.List.of(), -1, -1, java.util.Map.of());
+            java.util.List.of(), -1, -1);
 
     @Test
     void textModeShouldReturnTextAndDone() {

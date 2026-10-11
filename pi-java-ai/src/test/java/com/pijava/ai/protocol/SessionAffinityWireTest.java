@@ -67,7 +67,7 @@ class SessionAffinityWireTest {
                 default -> new OpenAIResponsesApi(opts, "OPENAI_API_KEY");
             };
             var request = new StreamRequest(model, "sys", List.of(user("hi")), List.of(),
-                -1, -1, Map.of());
+                -1, -1);
             try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {
                 while (iter.hasNext()) {
                     iter.next();

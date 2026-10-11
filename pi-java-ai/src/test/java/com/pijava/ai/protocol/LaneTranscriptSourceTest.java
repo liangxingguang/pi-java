@@ -183,7 +183,7 @@ class LaneTranscriptSourceTest {
      */
     private static StreamRequest transcriptRequest(ModelId<?> model, List<Message> messages) {
         return new StreamRequest(ModelInfo.minimal(model), null, messages, List.of(),
-            -1, -1, Map.of());
+            -1, -1);
     }
 
     /** 前导系统消息：文本 + 一条工具声明（{@code toolsAdded}，pi 的 {@code createInitialSystemMessage} 形状）。 */

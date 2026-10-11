@@ -64,7 +64,7 @@ class MistralImageContentTest {
         var method = MistralConversationsApi.class.getDeclaredMethod(
             "buildRequestBody", StreamRequest.class);
         method.setAccessible(true);
-        var request = new StreamRequest(model, null, messages, List.of(), -1, -1, Map.of());
+        var request = new StreamRequest(model, null, messages, List.of(), -1, -1);
         return (String) method.invoke(api, request);
     }
 

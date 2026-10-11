@@ -73,7 +73,7 @@ class OpenAICompletionsApiTest {
                 "write", "Write a file",
                 Map.of("type", "object",
                     "properties", Map.of("path", Map.of("type", "string"))))),
-            100, 0.5, Map.of());
+            100, 0.5);
 
         // 拆文件提交后 buildParams 住在 OpenAICompletionsMessageConverter（同包 package-private static）。
         var params = OpenAICompletionsMessageConverter.buildParams(
@@ -257,7 +257,7 @@ class OpenAICompletionsApiTest {
             List.of(new ContentBlock.TextContent("hi"))));
         var request = compat == null
             ? StreamRequest.of(ModelId.of("openai", "glm-5.3-flash"), messages)
-            : new StreamRequest(modelInfo(compat), null, messages, List.of(), -1, -1, Map.of());
+            : new StreamRequest(modelInfo(compat), null, messages, List.of(), -1, -1);
 
         var events = new CopyOnWriteArrayList<StreamEvent>();
         var finished = new CountDownLatch(1);

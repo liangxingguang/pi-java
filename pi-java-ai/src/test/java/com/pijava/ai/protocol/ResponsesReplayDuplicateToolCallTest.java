@@ -31,7 +31,7 @@ class ResponsesReplayDuplicateToolCallTest {
     private static final String DUP_ID = "call_1|fc_1";
 
     private static ResponseCreateParams buildParams(List<Message> messages) throws Exception {
-        var request = new StreamRequest(TARGET, null, messages, List.of(), 100, 0.5, Map.of());
+        var request = new StreamRequest(TARGET, null, messages, List.of(), 100, 0.5);
         return ResponsesMessageConverter.buildParams(request,
             ResponsesOptions.from(ApiOptions.defaults()), "gpt-5-mini", "openai-responses",
             CompatResolver.forResponses(request.model(), false));

@@ -183,7 +183,7 @@ class GrammarToolsWireTest {
                     "toolUse", null),
                 new Message.UserMessage(List.of(new ContentBlock.TextContent("again"))));
             drain(api, new StreamRequest(gateOpenModel(), null, transcript,
-                List.of(), -1, -1, Map.of()));
+                List.of(), -1, -1));
 
             var toolCall = firstField(MAPPER.readTree(server.body()).path("messages"), "tool_calls");
             var custom = toolCall.path("tool_calls").get(0);
@@ -256,7 +256,7 @@ class GrammarToolsWireTest {
             List.of(tool), List.of());
         var user = new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")));
         return new StreamRequest(model, null, List.of(system, user),
-            List.of(), -1, -1, Map.of());
+            List.of(), -1, -1);
     }
 
     private static ApiOptions options(RecordingHttpServer server) {

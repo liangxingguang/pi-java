@@ -147,7 +147,7 @@ class PiMessagesErrorBodyTest {
         ModelInfo model = ModelInfo.minimal(ModelId.of("radius", "gateway-model"));
         Message user = new Message.UserMessage(
             List.of(new ContentBlock.TextContent("hi")));
-        var request = new StreamRequest(model, "", List.of(user), List.of(), -1, -1, Map.of());
+        var request = new StreamRequest(model, "", List.of(user), List.of(), -1, -1);
 
         var result = api.send(request, options);
         assertThat(result).isInstanceOf(Message.AssistantMessage.class);

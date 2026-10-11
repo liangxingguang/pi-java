@@ -104,7 +104,7 @@ class MistralThinkingWireTest {
                 server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()));
             var request = new StreamRequest(model(modelName, levels, reasoningModel), "sys",
                 List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")))),
-                List.of(), -1, -1, Map.of(), reasoning);
+                List.of(), -1, -1, reasoning);
             try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {
                 var events = new ArrayList<StreamEvent>();
                 while (iter.hasNext() && events.size() < 100) {

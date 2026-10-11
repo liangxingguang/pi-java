@@ -234,7 +234,7 @@ class MistralConversationsApiUsageTest {
             Duration.ofSeconds(5), 0, Map.of()));
         var request = new StreamRequest(PRICED_MODEL, null,
             List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")))),
-            List.of(), -1, -1, Map.of());
+            List.of(), -1, -1);
 
         var events = new CopyOnWriteArrayList<StreamEvent>();
         var finished = new CountDownLatch(1);

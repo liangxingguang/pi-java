@@ -124,7 +124,7 @@ class ResponsesReasoningWireTest {
             var api = new OpenAIResponsesApi(opts, "OPENAI_API_KEY");
             var request = new StreamRequest(model, "sys",
                 List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")))),
-                List.of(), -1, -1, Map.of(), reasoning);
+                List.of(), -1, -1, reasoning);
             try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {
                 while (iter.hasNext()) {
                     iter.next();

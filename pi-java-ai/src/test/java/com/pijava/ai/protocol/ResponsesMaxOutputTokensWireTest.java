@@ -121,7 +121,7 @@ class ResponsesMaxOutputTokensWireTest {
         try (var server = new RecordingHttpServer()) {
             var request = new StreamRequest(model, null,
                 List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")))),
-                List.of(), -1, -1, Map.of());
+                List.of(), -1, -1);
             try (var iter = lane.api(new ApiOptions(server.baseUrl(), "test-key",
                     Duration.ofSeconds(5), 0, Map.of()))
                     .streamBlocking(request, ApiOptions.defaults())) {

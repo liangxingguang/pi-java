@@ -71,7 +71,7 @@ class AnthropicFallbacksWireTest {
                     java.time.Duration.ofSeconds(5), 0, Map.of()),
                 "ANTHROPIC_API_KEY");
             var request = new StreamRequest(model, "be brief", messages, List.of(),
-                -1, -1, Map.of());
+                -1, -1);
             try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {
                 while (iter.hasNext()) {
                     iter.next();

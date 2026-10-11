@@ -50,7 +50,7 @@ class OpenAICompletionsSurrogateSanitizeTest {
 
     private static ChatCompletionCreateParams buildParams(String systemPrompt, List<Message> messages) {
         var request = new StreamRequest(ModelId.of("deepseek", "deepseek-chat"), systemPrompt,
-            messages, List.of(), 100, 0.5, Map.of());
+            messages, List.of(), 100, 0.5);
         return OpenAICompletionsMessageConverter.buildParams(request, "openai-completions", null);
     }
 
@@ -205,7 +205,7 @@ class OpenAICompletionsSurrogateSanitizeTest {
             var request = new StreamRequest(ModelId.of("deepseek", "deepseek-chat"), DIRTY,
                 List.of(user(DIRTY), toolUse(), assistant(new ContentBlock.TextContent(DIRTY)),
                     toolResult(DIRTY)),
-                List.of(), 100, 0.5, Map.of());
+                List.of(), 100, 0.5);
             try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {
                 var events = new ArrayList<StreamEvent>();
                 while (iter.hasNext() && events.size() < 100) events.add(iter.next());

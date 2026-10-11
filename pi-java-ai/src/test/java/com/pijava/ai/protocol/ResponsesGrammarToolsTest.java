@@ -231,7 +231,7 @@ class ResponsesGrammarToolsTest {
                 new Message.UserMessage(List.of(new ContentBlock.TextContent("hi"))));
         }
         var request = new StreamRequest(model, null, actualTranscript,
-            List.of(), -1, -1, Map.of());
+            List.of(), -1, -1);
         collectRaw(api, request);
         return recordedBody;
     }
@@ -246,7 +246,7 @@ class ResponsesGrammarToolsTest {
                 List.of(requestTool), List.of()),
             new Message.UserMessage(List.of(new ContentBlock.TextContent("hi"))));
         var request = new StreamRequest(model, null, transcript,
-            List.of(), -1, -1, Map.of());
+            List.of(), -1, -1);
         return collectRaw(api, request);
     }
 

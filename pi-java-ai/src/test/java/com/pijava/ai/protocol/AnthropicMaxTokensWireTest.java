@@ -124,7 +124,7 @@ class AnthropicMaxTokensWireTest {
     void directBuildParamsOnACatalogMissUsesTheFallbackNotZero() throws Exception {
         var minimal = ModelInfo.minimal(ModelId.of("anthropic", "claude-sonnet-5"));
         var request = new StreamRequest(minimal, "", List.of(user("hi")), List.of(),
-            -1, -1, Map.of());
+            -1, -1);
 
         assertThat(directBuildParams(request).maxTokens())
             .as("不许是 0（Anthropic 会 400）、也不许是 pi 公式在这一格算出的 1")
@@ -148,7 +148,7 @@ class AnthropicMaxTokensWireTest {
                 new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()),
                 "ANTHROPIC_API_KEY");
             var request = new StreamRequest(model, "sys", messages, List.of(),
-                maxTokens, -1, Map.of(), reasoning);
+                maxTokens, -1, reasoning);
             try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {
                 while (iter.hasNext()) {
                     iter.next();

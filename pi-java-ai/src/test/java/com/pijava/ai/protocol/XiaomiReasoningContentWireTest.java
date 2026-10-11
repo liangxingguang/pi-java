@@ -80,7 +80,7 @@ class XiaomiReasoningContentWireTest {
             var api = new OpenAICompletionsApi(
                 new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()));
             var request = new StreamRequest(model, "be brief", List.of(assistant, user),
-                List.of(), -1, -1, Map.of(), Optional.empty());
+                List.of(), -1, -1, Optional.empty());
             try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {
                 while (iter.hasNext()) {
                     iter.next();

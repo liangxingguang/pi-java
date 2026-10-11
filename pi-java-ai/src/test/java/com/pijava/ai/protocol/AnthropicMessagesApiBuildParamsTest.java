@@ -68,7 +68,7 @@ class AnthropicMessagesApiBuildParamsTest {
                 "ls", "List directory contents",
                 Map.of("type", "object",
                     "properties", Map.of("path", Map.of("type", "string"))))),
-            100, 0.5, Map.of());
+            100, 0.5);
 
         var params = buildParams(request);
 
@@ -90,7 +90,7 @@ class AnthropicMessagesApiBuildParamsTest {
                     new ContentBlock.TextContent("I'll list the files."),
                     new ContentBlock.ToolUseContent(
                         "toolu_01", "ls", Map.of("path", "."))))),
-            List.of(), 100, 0.5, Map.of());
+            List.of(), 100, 0.5);
 
         var params = buildParams(request);
 
@@ -120,7 +120,7 @@ class AnthropicMessagesApiBuildParamsTest {
                 new Message.ToolResultMessage(
                     "toolu_01", "ls",
                     List.of(new ContentBlock.TextContent("a.txt\nb.txt")), false)),
-            List.of(), 100, 0.5, Map.of());
+            List.of(), 100, 0.5);
 
         var params = buildParams(request);
 
@@ -147,7 +147,7 @@ class AnthropicMessagesApiBuildParamsTest {
                 new Message.ToolResultMessage(
                     "toolu_01", "ls",
                     List.of(new ContentBlock.TextContent("a.txt")), false)),
-            List.of(), 100, 0.5, Map.of());
+            List.of(), 100, 0.5);
 
         var params = buildParams(request);
 
@@ -175,7 +175,7 @@ class AnthropicMessagesApiBuildParamsTest {
                 new Message.ToolResultMessage(
                     "toolu_02", "ls",
                     List.of(new ContentBlock.TextContent("b.txt")), false)),
-            List.of(), 100, 0.5, Map.of());
+            List.of(), 100, 0.5);
 
         var params = buildParams(request);
 
@@ -199,7 +199,7 @@ class AnthropicMessagesApiBuildParamsTest {
                     new ContentBlock.ThinkingContent("I should list files.", "sig_abc"),
                     new ContentBlock.ToolUseContent(
                         "toolu_01", "ls", Map.of("path", ".")))),
-            List.of(), 100, 0.5, Map.of());
+            List.of(), 100, 0.5);
 
         var params = buildParams(request);
 
@@ -222,7 +222,7 @@ class AnthropicMessagesApiBuildParamsTest {
                 new Message.UserMessage(
                     List.of(new ContentBlock.TextContent("hi"))),
                 assistant(new ContentBlock.ThinkingContent("implicit reasoning"))),
-            List.of(), 100, 0.5, Map.of());
+            List.of(), 100, 0.5);
 
         var params = buildParams(request);
 
@@ -243,7 +243,7 @@ class AnthropicMessagesApiBuildParamsTest {
                 new Message.UserMessage(
                     List.of(new ContentBlock.TextContent("hi"))),
                 assistant(new ContentBlock.ThinkingContent("  "))),
-            List.of(), 100, 0.5, Map.of());
+            List.of(), 100, 0.5);
 
         var params = buildParams(request);
 
@@ -265,7 +265,7 @@ class AnthropicMessagesApiBuildParamsTest {
             null,
             List.of(new Message.UserMessage(
                 List.of(new ContentBlock.TextContent("hi")))),
-            List.of(), 2048, -1, Map.of());
+            List.of(), 2048, -1);
 
         var params = buildParams(request);
 

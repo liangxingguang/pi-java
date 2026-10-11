@@ -64,7 +64,7 @@ class SimpleOptionsTest {
     @Test
     void nullModelUsesTheFallbackWithoutClamping() {
         var request = new StreamRequest((ModelInfo) null, "", List.of(user("hi")), List.of(),
-            -1, -1, Map.of(), java.util.Optional.empty());
+            -1, -1, java.util.Optional.empty());
         assertThat(SimpleOptions.resolveMaxTokens(null, request.transcript(), -1))
             .isEqualTo(SimpleOptions.NO_MODEL_CAP_FALLBACK);
     }
@@ -164,7 +164,6 @@ class SimpleOptionsTest {
         assertThat(resolved.model()).isSameAs(request.model());
         assertThat(resolved.transcript()).isSameAs(request.transcript());
         assertThat(resolved.temperature()).isEqualTo(request.temperature());
-        assertThat(resolved.extra()).isEqualTo(request.extra());
         assertThat(resolved.reasoning()).isEqualTo(request.reasoning());
     }
 
@@ -206,6 +205,6 @@ class SimpleOptionsTest {
 
     private static StreamRequest request(ModelInfo model, int maxTokens) {
         return new StreamRequest(model, "", List.of(user("hi")), List.of(),
-            maxTokens, -1, Map.of(), java.util.Optional.empty());
+            maxTokens, -1, java.util.Optional.empty());
     }
 }

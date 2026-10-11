@@ -51,7 +51,7 @@ class OpenAIResponsesSurrogateSanitizeTest {
 
     private static ResponseCreateParams buildParams(String systemPrompt, List<Message> messages)
             throws Exception {
-        var request = new StreamRequest(TARGET, systemPrompt, messages, List.of(), 100, 0.5, Map.of());
+        var request = new StreamRequest(TARGET, systemPrompt, messages, List.of(), 100, 0.5);
         // 同包直接调（本类与被测类同在 com.pijava.ai.protocol）。**不再走反射**：反射绑死
         // 形参表 —— 包 B87/B88 给 buildParams 加 `supportsStrictMode` 时，本仓四处反射
         // 调用点是以 21 个**运行期** `NoSuchMethod` 报出来的，编译期毫无提示。
@@ -228,7 +228,7 @@ class OpenAIResponsesSurrogateSanitizeTest {
             var request = new StreamRequest(TARGET, DIRTY,
                 List.of(user(DIRTY), toolUse(Map.of()), assistant(new ContentBlock.TextContent(DIRTY)),
                     toolResult(DIRTY)),
-                List.of(), 100, 0.5, Map.of());
+                List.of(), 100, 0.5);
             try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {
                 var events = new ArrayList<StreamEvent>();
                 while (iter.hasNext() && events.size() < 100) events.add(iter.next());

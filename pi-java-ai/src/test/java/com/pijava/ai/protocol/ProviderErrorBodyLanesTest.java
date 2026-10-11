@@ -310,7 +310,7 @@ class ProviderErrorBodyLanesTest {
         ModelInfo model = ModelInfo.minimal(ModelId.of(provider, "test-model"));
         Message user = new Message.UserMessage(
             List.of(new ContentBlock.TextContent("hi")));
-        return new StreamRequest(model, "", List.of(user), List.of(), -1, -1, Map.of());
+        return new StreamRequest(model, "", List.of(user), List.of(), -1, -1);
     }
 
     private static void jsonError(RecordingHttpServer server, int status, String json) {

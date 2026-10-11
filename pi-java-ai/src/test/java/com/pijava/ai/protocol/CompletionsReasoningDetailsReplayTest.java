@@ -112,7 +112,7 @@ class CompletionsReasoningDetailsReplayTest {
     private static JsonNode body(List<Message> messages) throws Exception {
         try (var server = new RecordingHttpServer()) {
             var request = new StreamRequest(model(), null, messages,
-                List.of(), -1, -1, Map.of());
+                List.of(), -1, -1);
             var api = new OpenAICompletionsApi(new ApiOptions(
                 server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()));
             try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {

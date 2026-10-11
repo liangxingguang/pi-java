@@ -331,7 +331,7 @@ class OpenAIResponsesApiTest {
             null,
             List.of(new Message.UserMessage(
                 List.of(new ContentBlock.TextContent("hi")))),
-            List.of(), 4, -1, Map.of());
+            List.of(), 4, -1);
 
         var params = ResponsesMessageConverter.buildParams(request,
             ResponsesOptions.from(ApiOptions.defaults()), "gpt-4o", "openai-responses", CompatResolver.forResponses(request.model(), false));
@@ -351,7 +351,7 @@ class OpenAIResponsesApiTest {
             null,
             List.of(new Message.UserMessage(
                 List.of(new ContentBlock.TextContent("hi")))),
-            List.of(), 100, -1, Map.of());
+            List.of(), 100, -1);
         var options = new ApiOptions("", "test-key", Duration.ofSeconds(10), 1,
             Map.of("reasoningEffort", "high", "reasoningSummary", "auto"));
 

@@ -37,7 +37,7 @@ class CompletionsCompatWireTest {
         return new StreamRequest(
             model, "be brief",
             List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")))),
-            List.of(), 512, -1, Map.of(), Optional.empty());
+            List.of(), 512, -1, Optional.empty());
     }
 
     private static ChatCompletionCreateParams build(ModelInfo model, String baseUrl) {

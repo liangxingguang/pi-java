@@ -79,7 +79,7 @@ class AnthropicThinkingWireTest {
         return new StreamRequest(
             model, null,
             List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")))),
-            List.of(), maxTokens, -1, Map.of(), reasoning);
+            List.of(), maxTokens, -1, reasoning);
     }
 
     // ── 分支 1：budget 型 ───────────────────────────────────────────────

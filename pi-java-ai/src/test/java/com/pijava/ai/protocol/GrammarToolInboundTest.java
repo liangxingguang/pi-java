@@ -233,7 +233,7 @@ class GrammarToolInboundTest {
                 List.of(GRAMMAR_TOOL), List.of()),
             new Message.UserMessage(List.of(new ContentBlock.TextContent("hi"))));
         var request = new StreamRequest(gateOpenModel(), null, transcript,
-            List.of(), -1, -1, Map.of());
+            List.of(), -1, -1);
 
         var events = new CopyOnWriteArrayList<StreamEvent>();
         var finished = new CountDownLatch(1);

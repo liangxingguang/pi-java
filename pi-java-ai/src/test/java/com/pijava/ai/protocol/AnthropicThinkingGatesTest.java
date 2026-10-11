@@ -68,7 +68,7 @@ class AnthropicThinkingGatesTest {
         return new StreamRequest(
             m, null,
             List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")))),
-            List.of(), -1, temperature, Map.of(), reasoning);
+            List.of(), -1, temperature, reasoning);
     }
 
     // ── 温度抑制（pi :1104-1112）────────────────────────────────────────

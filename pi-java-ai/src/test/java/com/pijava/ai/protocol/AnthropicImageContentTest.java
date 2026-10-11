@@ -70,7 +70,7 @@ class AnthropicImageContentTest {
         var options = new ApiOptions("https://api.example.test", "sk-test",
             Duration.ofSeconds(10), 1, Map.of());
         var api = new AnthropicMessagesApi(options, "ANTHROPIC_API_KEY");
-        var request = new StreamRequest(VISION, null, messages, List.of(), -1, -1, Map.of());
+        var request = new StreamRequest(VISION, null, messages, List.of(), -1, -1);
         Method method = AnthropicMessagesApi.class.getDeclaredMethod("buildParams", StreamRequest.class);
         method.setAccessible(true);
         return (MessageCreateParams) method.invoke(api, request);
@@ -264,7 +264,7 @@ class AnthropicImageContentTest {
             var options = new ApiOptions(server.baseUrl(), "sk-test",
                 Duration.ofSeconds(10), 1, Map.of());
             var api = new AnthropicMessagesApi(options, "ANTHROPIC_API_KEY");
-            var request = new StreamRequest(VISION, null, user(image()), List.of(), -1, -1, Map.of());
+            var request = new StreamRequest(VISION, null, user(image()), List.of(), -1, -1);
             var finished = new java.util.concurrent.CountDownLatch(1);
             // 桩服务器一律回 400 ⇒ 流走 error 收场；请求体此刻已经录到了。
             api.stream(request, options).subscribe(new java.util.concurrent.Flow.Subscriber<>() {

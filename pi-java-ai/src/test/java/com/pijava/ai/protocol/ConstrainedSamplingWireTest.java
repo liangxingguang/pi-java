@@ -173,7 +173,7 @@ class ConstrainedSamplingWireTest {
         return new StreamRequest(model, null,
             List.of(systemWithTool(), new Message.UserMessage(
                 List.of(new ContentBlock.TextContent("hi")))),
-            List.of(), -1, -1, Map.of());
+            List.of(), -1, -1);
     }
 
     private static Message.SystemMessage systemWithTool() {

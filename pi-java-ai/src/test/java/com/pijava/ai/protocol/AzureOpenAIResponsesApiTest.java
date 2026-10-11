@@ -72,7 +72,7 @@ class AzureOpenAIResponsesApiTest {
             null,
             List.of(new Message.UserMessage(
                 List.of(new ContentBlock.TextContent("hi")))),
-            List.of(), 100, -1, Map.of());
+            List.of(), 100, -1);
         var params = ResponsesMessageConverter.buildParams(request,
             ResponsesOptions.from(ApiOptions.defaults()), "my-deploy", "azure-openai-responses", CompatResolver.forResponses(request.model(), true));
         assertThat(params.model().orElseThrow().asString()).isEqualTo("my-deploy");
