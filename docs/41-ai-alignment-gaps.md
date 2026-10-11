@@ -292,6 +292,11 @@ pi 侧一律 `git show 200387122:<path>`；pi-java 侧读当前工作树（HEAD 
 | `B224` | **新登记**：pi-messages 车道错误格式（`${status} ${statusText}: …`＋8192 截断＋`pi_messages_response_failure` 诊断）；JDK `java.net.http` 无 reason-phrase API 是已知方言点。 |
 | **2026-10-11 批次**（`docs/49`） | |
 | `B224` | ✅ **已销号（文案半）**（`77c712a6`→`aab0ee4d`，6 commits）：`ProviderErrors.formatPiMessagesError` 移植 `pi-messages.ts:124-131`（`N Phrase: message ?? body (code)`，空 message 不回落非空 body、抛出文案不截断）；JDK 拿不到 reason phrase ⇒ 44 条 RFC 9110 短语表重放，未知码给空串。顺带补 `ModelsJsonProvider` 的 PI_MESSAGES 派发臂（models.json 自定义网关此前加载认、用时拒）。诊断信封半不另立号（**B148** 已覆盖，消费者见 B79）；新登 **B226**（Radius 内建 provider）。探针 M1–M5 红集与 E2b 补强见 `docs/49 §9`。 |
+| **2026-10-11 批次**（迷你换锚 `200387122 → ea448f454`，125 提交／v1.0.3–v1.1.0） | |
+| —— | 拉取 pi 最新后用户裁决**迷你换锚**（记录在 `docs/map/ANCHOR.md`）：均匀前进无结构删除，protocol/server/telemetry/client/chord/evals 六包逐字节未变；活跃对齐面 `compat.ts`／`openai-completions.ts`／`anthropic-messages.ts`／`pi-messages.ts` 两锚点间零改动 ⇒ §3.2 既有取证（含 B129–B132/B98 批量底稿）继续有效。 |
+| `B227`–`B232` | **新登记 6 条**（屏过 ai 层全部 37 个改动文件）：B227 estimate `CHARS_PER_TOKEN` 4→3.5（默认 maxTokens 夹取；压缩域仍逐字 `/4` 不动）·B228 retry 白名单缺 `server_busy`/`servers are currently busy`/`pending stream has been canceled`（`noRetryStatuses` 仅 classifier 消费，不移植）·B229 Mistral 停因文案加 ` (server error)` ＋超时只盖响应头·B230 azure id 改名＋Foundry Chat Completions·B231 OAuth 刷新取消仍持久化轮转 token（免费端口半 Java 原生已一致，不登）·B232 目录数据漂移（Haiku 5.5/Claude 5.5/Kimi K3）。B226 补记 Radius gateway catalog 整体替换语义。 |
+| `A16` | **新登记**：6 份地图对新锚点逐条重测（24【确定】＋12【可能】引用文件），列入长尾批次。 |
+| 不登记 | 分类器三件套（`classifier-shared`/`openai-decisions`/llama.cpp classify）、`noRetryStatuses`、codex 调用方头优先（Java 无 codex 车道）、Bedrock haiku-5/reasoning-effort（Java 无 bedrock 车道）、配置 schema 发布（`compat-schema.ts` 等，chat 运行时零行为变化）、durable/codemode/pi-env 增量（R5 面外）。 |
 
 ---
 

@@ -3,7 +3,9 @@
 > **这份文件解决一个问题**：「pi-java 还有什么没做完 / 没对齐」需要一处一眼看全的入口。
 >
 > **基准与口径**：
-> - pi 锚点 `200387122`（2026-10-04 起）；换锚裁决与依据在 git 历史
+> - pi 锚点 `ea448f454`（**2026-10-11 迷你换锚**起，v1.1.0-22；此前 `200387122`）。
+>   本次为均匀前进、无结构删除，换锚记录见 `docs/map/ANCHOR.md`；6 份地图的逐条重测列 **A16**，
+>   地图行号在 A16 闭环前仍按旧锚点读。换锚裁决与依据在 git 历史
 >   （`docs/11-pi-reanchor-ruling.md`，已随过程文档清理删除）。
 > - 判据是**行为**（`bin pi` 主流发布版可达的功能与表现），不是文档、API 形状或文件清单。
 > - **R5 裁决**：只做 `bin pi` 主流发布版可达的功能；pi 的 experimental/ 内部子系统
@@ -37,6 +39,7 @@
 | A10 | **内置工具线程安全审计**（read/write/edit/bash/glob…） | pi 契约「工具必须可并发执行」；审计未开始 |
 | A14 | shell 集成夹具无牙：多字节字符在 8 KiB 边界被切断 | 需字节精确的假 shell（当前 `.cmd`/sh 脚本做不到）；`Utf8ChunkStream` 只有单元级覆盖 |
 | A15 | 错误路 `AgentSettled` 形状无夹具 | SessionRunner 错误路发非空 toolResults 时无断言守护 |
+| A16 | **2026-10-11 换锚后 6 份地图逐条重测**（迷你换锚遗留，见 `docs/map/ANCHOR.md`） | `check-drift.sh` 圈定 24【确定】＋12【可能】被引文件（agent-loop/agent-session/bash-execution/settings-*/theme-*/tool-execution 等；ai 面 azure-openai-responses/env-api-keys/mistral-conversations/model-config）。需逐条判「行号漂」还是「语义变」，语义变的转 B 类，最后更新 6 份地图的 PI_PIN 自述 |
 
 ---
 
@@ -87,7 +90,13 @@
 | B158 | 输出截断字节预算差一倍 | Java 100KB，pi 主流 50KB（模型可见文案不同） |
 | B159 | `shouldStopAfterTurn` 更名 finishTurn 且语义变 | pi 从布尔改 `{action: continue/end}`，能强制多跑一轮 |
 | ~~B165~~ | ~~Anthropic 中段工具改为「定义内联」~~ | ✅ **已销号 2026-10-10**（`docs/45`）：beta 换 `inline-tools-2026-09-15`、顶层表就此定死、`tool_addition` 改按值内联、同名重定义不再回退。⚠️ 旧记「`hasToolRedefinitions` 被 pi 删除」实为**弃用**（`docs/45 §1.2`） |
-| B226 | Radius 内建 provider 缺失 | pi 有 `providers/radius.ts`/`radius-config.ts`/`radius.models.ts` ＋ `coding-agent/core/radius.ts`；Java 侧只有 OAuth 设备码工厂（`OAuthProviders.radius`），无内建 chat provider/目录/注册。自定义网关可经 models.json `{"api":"pi-messages"}` 到达（`docs/49` 已补派发臂），内建 provider 本身未移植 |
+| B226 | Radius 内建 provider 缺失 | pi 有 `providers/radius.ts`/`radius-config.ts`/`radius.models.ts` ＋ `coding-agent/core/radius.ts`；Java 侧只有 OAuth 设备码工厂（`OAuthProviders.radius`），无内建 chat provider/目录/注册。自定义网关可经 models.json `{"api":"pi-messages"}` 到达（`docs/49` 已补派发臂），内建 provider 本身未移植。⚠️ **2026-10-11 新锚点补记**（`43d376399`）：pi 的 `getModels` 已改为 gateway catalog **整体替换** baseline（一旦拿到账号目录就不再 overlay 合并，组织方可禁用模型），移植时按新语义 |
+| B227 | **新锚点**：请求上下文估算 4→3.5 字符/token | `27075fe07`：pi `ai/utils/estimate.ts:15` `CHARS_PER_TOKEN = 3.5`（修 OpenRouter DeepSeek V4 Flash 大输入下输出上限算错，#10497）；消费者 `simple-options.ts:20` 夹取默认 `max_tokens`。Java `Estimate.java:73` 仍 `= 4` ⇒ 大上下文时 Java 算出的占用偏小、输出上限偏大。⚠️ 压缩域那份估算器（`ContextUsageEstimator:231` `/4.0`）**不改**——pi `coding-agent/.../compaction.ts:309-345` 新锚点仍是逐字 `/4` |
+| B228 | **新锚点**：retry 白名单缺 3 个新模式 | `8b5708dbb`＋`5b6c792b4`：pi `utils/retry.ts` 新增 `"server_busy"`、`"servers are currently busy"`、`"pending stream has been canceled"`（HTTP/2 会话先死，Bedrock 5 分钟超时 #10379）。Java `RetryableError` 白名单三者全缺 ⇒ 瞬断不重试。同提交组的 `noRetryStatuses` 选项唯一消费者是 `classifier-shared.ts`（R5 面外），**不移植** |
+| B229 | **新锚点**：Mistral 停因文案＋超时形状 | `7fb59f995`：pi 流内 `finish_reason:"error"` 改发 `` `Provider stopped with: error (server error)` ``，让 retry 白名单的 `server.?error` 抓手生效（瞬态服务错误可重试）；Java `MistralConversationsApi.java:180` 仍是无后缀文案 ⇒ 不被重试。`6b07b4e57`：60s 超时改为**只盖等响应头**，长流（长思考）不再被固定截止时间切断；Java Mistral 走 `PiHttpClient` 无逐请求超时，形状差需设计裁决（不补 or 补成响应头超时） |
+| B230 | **新锚点**：azure provider 改名＋Foundry Chat Completions | pi `a37306d43`（#9714）＋env 表：provider id `azure-openai-responses`→`azure`（env 键随之），新增 `providers/azure.ts`/`azure-openai-config.ts` 支持 **Foundry Chat Completions 部署**（responses 之外多一条 completions 车道）。Java 仍注册旧 id（`AzureOpenAIResponsesApi.java:34`）且只有 responses；models.json 写新 id 在 Java 不被识别 |
+| B231 | **新锚点**：OAuth 刷新取消时轮转 token 不持久化 | pi `bde882c74`＋`models.ts:621-633`：抽出 `refreshStoredOAuthCredential`，已开始的刷新**不怕调用方取消**，轮转后的 refresh token 一定落盘，后到的刷新读新凭证。Java 凭证明细刷新若仍随 abort 丢弃结果则有此窄角（设计时取证确认）。同批 `8d8ae2fc2` Anthropic 回调端口冲突回落空闲端口——Java `OAuthFlow.java:67` 本就绑端口 0（OS 分配），**无差距不登记** |
+| B232 | **新锚点**：内置目录数据漂移（v1.1.0） | pi 新锚点目录新增/改值：Claude Haiku 5.5（`f76c1db66`）、Claude 5.5 系列改吃 models.dev 元数据（`ce950d78f`）、Kimi K3 Moonshot 定价钉死＋Haiku 5.5 adaptive thinking（`a2eef9eb6`）、保留全部目录的 prompt-length 定价层（`943a10e74`）。Java `BuiltinCatalog.java:49` 最新只到 Haiku 4.5；与 B97（三个漂移 id）同族，属持续性数据漂移 |
 
 **compat 面细碎登记**（pi 有标注/消费、Java 无的字段与数据位）：
 
