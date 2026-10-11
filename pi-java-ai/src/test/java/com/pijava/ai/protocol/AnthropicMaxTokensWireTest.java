@@ -77,13 +77,13 @@ class AnthropicMaxTokensWireTest {
     }
 
     /**
-     * ★ 夹取真的到场：窗口 20000、消息 40000 字符 ⇒ 估 10000 token ⇒
-     * {@code 20000 − 10000 − 4096 = 5904}。
+     * ★ 夹取真的到场：窗口 20000、消息 40000 字符 ⇒ 估 11429 token（3.5 字符/token，
+     * pi {@code 27075fe07}；旧常数 4 时是 10000）⇒ {@code 20000 − 11429 − 4096 = 4475}。
      *
-     * <p>⚠️ 实际发出去的是 <b>5903</b>：本条经**漏斗**（{@code StreamRequest} 的 legacy
+     * <p>⚠️ 实际发出去的是 <b>4474</b>：本条经**漏斗**（{@code StreamRequest} 的 legacy
      * 构造器 ⇒ {@code ContextNormalizer}）造转录，于是多一条前导系统消息
-     * （{@code "sys"} 3 字符 ⇒ {@code ceil(3/4) = 1}）⇒ 已占 10001。
-     * 与 {@code SimpleOptionsTest.clampsToTheAvailableRoom} 的 5904 差值正是这 1
+     * （{@code "sys"} 3 字符 ⇒ {@code ceil(3/3.5) = 1}）⇒ 已占 11430。
+     * 与 {@code SimpleOptionsTest.clampsToTheAvailableRoom} 的 4475 差值正是这 1
      * —— 两处**刻意都留**，让「系统消息也计入估算」这件事有一个可对照的证据。</p>
      *
      * <p>与上面几条的差别只有「窗口」与「消息长度」两格 ⇒ 证明这条线上的值是**算出来的**，
@@ -95,8 +95,8 @@ class AnthropicMaxTokensWireTest {
             List.of(longUser()), Optional.empty(), -1);
 
         assertThat(wire.path("max_tokens").asInt())
-            .as("20000 − (10000 + 1) − 4096")
-            .isEqualTo(5903);
+            .as("20000 − (11429 + 1) − 4096")
+            .isEqualTo(4474);
     }
 
     // ── ★ RED-8：绕过漏斗的那个入口（目录未命中）──────────────────────

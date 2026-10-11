@@ -38,7 +38,8 @@ import com.pijava.ai.message.MessageTexts;
  * <p>java 的 {@code com.pijava.agent.context.ContextUsageEstimator}（agent-core，包 3b）是
  * <b>②</b> 的忠实移植 —— 那份服务压缩触发，反向扫描正是它不需要逐条时间戳的原因。
  * 另一处自造启发式 {@code com.pijava.agent.context.ContextEstimator}
- * （3.5 字符/token，与 pi 无对应物）已随 A-20（原 docs/68）删除。
+ * （删除时取 3.5 字符/token、与 pi 无对应物）已随 A-20（原 docs/68）删除；
+ * pi 后来在 {@code 27075fe07} 把本类对应的常数也改成了 3.5（#10497）。
  * 本类补的是 <b>①</b>。</p>
  *
  * <p>⚠️ <b>不能把三者统一</b>：{@code pi-java-ai} 依赖不到 {@code pi-java-agent-core}
@@ -69,10 +70,14 @@ public final class Estimate {
                                double trailingTokens,
                                Integer lastUsageIndex) {}
 
-    /** pi {@code estimate.ts:15}。 */
-    static final double CHARS_PER_TOKEN = 4;
+    /**
+     * pi {@code estimate.ts:15}（锚点 {@code ea448f454}；{@code 27075fe07} #10497 起
+     * 4 → 3.5：大输入按 4 估会让输出上限偏大，DeepSeek V4 Flash 一类后端 400）。
+     * ⚠️ agent-core 的压缩估算器是另一份，pi 至今仍是 /4，别跟着改。
+     */
+    static final double CHARS_PER_TOKEN = 3.5;
 
-    /** pi {@code estimate.ts:16} —— 一张图折 4800 字符（≈1200 token）。 */
+    /** pi {@code estimate.ts:16} —— 一张图折 4800 字符（≈1372 token）。 */
     static final double ESTIMATED_IMAGE_CHARS = 4800;
 
     private static final ObjectMapper MAPPER = new ObjectMapper();

@@ -64,8 +64,8 @@ class EstimateTest {
         var message = new Message.UserMessage(List.of(
             new ContentBlock.TextContent("abcd"),
             new ContentBlock.ImageContent("image/png", "AAAA")));
-        // ceil(4/3.5)=2 ＋ 1372。
-        assertThat(Estimate.estimateMessageTokens(message)).isEqualTo(2 + 1372);
+        // ⚠️ 字符先相加再除一次（不是各除再相加）：ceil((4 + 4800)/3.5) = 1373。
+        assertThat(Estimate.estimateMessageTokens(message)).isEqualTo(1373);
     }
 
     /** 工具结果走的是同一条「文本＋图片」路（pi 的 {@code toolResult} 分支）。 */
