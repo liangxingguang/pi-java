@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <tr><td>{@code :795}</td><td>user 串 content</td><td>user 分支（java 恒串形态）</td><td>整串</td></tr>
  *   <tr><td>{@code :802}</td><td>user 文本项</td><td>同上（java 无 parts 形态）</td><td>逐项</td></tr>
  *   <tr><td>{@code :822}</td><td>assistant 文本块</td><td>assistant 分支</td><td><b>逐块</b>（pi 先净化后 join）</td></tr>
- *   <tr><td>{@code :830}</td><td>assistant thinking 块</td><td>—（java 的 extractText 只收 TextContent）</td><td>面不存在</td></tr>
+ *   <tr><td>{@code :830}</td><td>assistant thinking 块</td><td>{@code MistralMessages.assistantMessage} 的 thinking 支（B80）</td><td>逐项</td></tr>
  *   <tr><td>{@code :853}</td><td>tool result 文本 part</td><td>tool 分支</td><td><b>逐块</b>（pi 先净化后 join）</td></tr>
  * </table>
  *
@@ -139,7 +139,9 @@ class MistralSurrogateSanitizeTest {
         var assistantBody = body(null, List.of(user("hi"),
             assistant(new ContentBlock.TextContent("A" + HIGH),
                 new ContentBlock.TextContent(LOW + "B"))));
-        assertThat(assistantBody).as("assistant 逐块 ⇒ 跨块边界不许成对").contains("AB");
+        // B80/B239 后 assistant 是块数组：两块各自成项，不再有拼接串。
+        assertThat(assistantBody).as("assistant 逐块 ⇒ 跨块边界不许成对")
+            .contains("\"text\":\"A\"", "\"text\":\"B\"");
         assertThat(assistantBody).as("拼接后再净化才会出现的形态").doesNotContain("A" + EMOJI + "B");
 
         var toolBody = body(null, List.of(user("hi"), toolUse(),

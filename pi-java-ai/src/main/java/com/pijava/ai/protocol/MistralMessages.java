@@ -6,6 +6,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.TranscriptContext;
 import com.pijava.ai.api.TransformMessages;
@@ -20,6 +22,9 @@ import com.pijava.ai.utils.SanitizeUnicode;
  * 对应 pi {@code mistral-conversations.ts:787-874} 的消息映射段。纯静态、无状态。
  */
 final class MistralMessages {
+
+    /** toolCall arguments 的紧凑 JSON 序列化（pi {@code JSON.stringify}，:863）。 */
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private MistralMessages() {}
 
@@ -64,9 +69,13 @@ final class MistralMessages {
                     return null; // 已自行落线（pi :805/:811/:814 三条分支各有去向）
                 }
                 case Message.AssistantMessage a -> {
-                    m.put("role", "assistant");
-                    // pi :822 —— 逐块净化后再拼（不是拼完再净化）。
-                    m.put("content", extractSanitizedText(a.content()));
+                    // B80/B239：pi :840-872 —— parts(text/thinking) 组成数组 content，
+                    // 工具块落 tool_calls，prefix:false 恒带；皆空则整条不落线（:871）。
+                    var assistantMessage = assistantMessage(a);
+                    if (assistantMessage != null) {
+                        messages.add(assistantMessage);
+                    }
+                    return null; // 已自行落线（同 user/system 分支）
                 }
                 case Message.ToolResultMessage t -> {
                     // 具名模式而非组件解构：details/usage/addedToolNames 是结构化载荷，
@@ -186,15 +195,68 @@ final class MistralMessages {
     }
 
     /**
-     * pi {@code mistral-conversations.ts:822/:853} 的逐块口径：**先净化每块再拼**
-     * （不是拼完再净化 —— 跨块边界的孤高+孤低在 pi 会被各自删掉，拼完再净化则会让它们
-     * 配对成活 emoji）。拼接方式沿用本车道既有的 {@code concat}（无分隔符），
-     * 与 pi 的 {@code join("\n")} 的差别是本车道的既有偏差，不在本包范围内。
+     * Assistant 消息落线 —— pi {@code mistral-conversations.ts:840-872}。
+     *
+     * <p>与旧实现（content 恒为**串**、thinking 丢弃、toolCall 消失）的差别即 B80 请求半与
+     * B239：pi 的 assistant content 恒为**块数组**（{@code prefix:false} 恒带），文本与思考
+     * 各自成项，工具块落 {@code tool_calls}。thinking 块能走到这里靠共享预通道
+     * {@link TransformMessages} 的同模型闸（异模型已降成 TextContent，见 {@code :299-314}）。</p>
+     *
+     * <ul>
+     *   <li>text/thinking 用 pi {@code :846/:852} 的 <b>trim 判空</b>（非空才落），逐块净化；</li>
+     *   <li>每个 toolCall 的 {@code index} pi 恒写 0（{@code :864}，怪癖照抄），
+     *       arguments 是<b>紧凑 JSON 串</b>（{@code JSON.stringify}，{@code :863}）；</li>
+     *   <li>非 text/thinking/toolUse 的块（如展示用 DiffContent）pi 的类型表里不可达，忽略；</li>
+     *   <li>parts 与 toolCalls 皆空 ⇒ 返回 {@code null}（pi {@code :871} 的不落线）。</li>
+     * </ul>
      */
-    private static String extractSanitizedText(List<ContentBlock> blocks) {
-        return blocks.stream()
-                .filter(c -> c instanceof ContentBlock.TextContent)
-                .map(c -> SanitizeUnicode.surrogates(((ContentBlock.TextContent) c).text()))
-                .reduce("", String::concat);
+    private static Map<String, Object> assistantMessage(Message.AssistantMessage a) {
+        var parts = new ArrayList<Map<String, Object>>();
+        var toolCalls = new ArrayList<Map<String, Object>>();
+        for (var block : a.content()) {
+            if (block instanceof ContentBlock.TextContent tc
+                    && !tc.text().trim().isEmpty()) {
+                parts.add(MistralContent.textChunk(SanitizeUnicode.surrogates(tc.text())));
+            } else if (block instanceof ContentBlock.ThinkingContent th
+                    && th.text() != null && !th.text().trim().isEmpty()) {
+                parts.add(MistralContent.thinkingChunk(SanitizeUnicode.surrogates(th.text())));
+            } else if (block instanceof ContentBlock.ToolUseContent tu) {
+                toolCalls.add(toolCallWire(tu));
+            }
+        }
+        if (parts.isEmpty() && toolCalls.isEmpty()) {
+            return null;
+        }
+        // LinkedHashMap 钉住 pi 对象字面量次序：role, prefix, content?, tool_calls?
+        var m = new LinkedHashMap<String, Object>();
+        m.put("role", "assistant");
+        m.put("prefix", false);
+        if (!parts.isEmpty()) {
+            m.put("content", parts);
+        }
+        if (!toolCalls.isEmpty()) {
+            // 线格名（pi toMistralWireMessage :424 把 toolCalls 改名 tool_calls）。
+            m.put("tool_calls", toolCalls);
+        }
+        return m;
+    }
+
+    /** pi {@code mistral-conversations.ts:860-865} 的单个工具调用项。 */
+    private static Map<String, Object> toolCallWire(ContentBlock.ToolUseContent tu) {
+        var fn = new LinkedHashMap<String, Object>();
+        fn.put("name", tu.name());
+        try {
+            // pi :863 JSON.stringify(block.arguments || {})；紧凑无空格。
+            // 参数是 JSON 值 Map，Jackson 序列化只会在内存错误时失败 ⇒ 包装成非检查异常。
+            fn.put("arguments", MAPPER.writeValueAsString(tu.arguments()));
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException(e);
+        }
+        var call = new LinkedHashMap<String, Object>();
+        call.put("id", tu.id()); // 已过 MistralToolCallIds 9 字符归一（共享预通道）
+        call.put("type", "function");
+        call.put("function", fn);
+        call.put("index", 0); // pi :864 恒 0
+        return call;
     }
 }

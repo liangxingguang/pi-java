@@ -212,13 +212,19 @@ class MistralImageContentTest {
                 .containsExactly("user:hi");
     }
 
-    /** <b>回归门</b> 助手消息仍是**串形态**（pi 的助手分支是块数组 —— 既有偏差，本包不动）。 */
+    /**
+     * B80/B239：助手消息翻成 pi 的**块数组**形态（{@code mistral-conversations.ts:840-871}）——
+     * 旧实现是串形态（thinking 丢弃、toolCall 消失、无 prefix）。{@code prefix:false} 恒带。
+     */
     @Test
-    void assistantMessageStaysAString() throws Exception {
+    void assistantMessageIsAnArrayWithPrefixFalse() throws Exception {
         var assistant = new Message.AssistantMessage(List.of(new ContentBlock.TextContent("hi")),
             StopReason.STOP, null, "mistral-conversations", "mistral", TARGET.modelName(),
             null, null, null, null);
 
-        assertThat(render(VISION, List.of(assistant))).containsExactly("assistant:hi");
+        assertThat(render(VISION, List.of(assistant))).containsExactly("assistant_text:hi");
+        var message = JSON.readTree(body(VISION, List.of(assistant))).get("messages").get(0);
+        assertThat(message.get("prefix").asBoolean()).isFalse();
+        assertThat(message.get("content").isArray()).isTrue();
     }
 }

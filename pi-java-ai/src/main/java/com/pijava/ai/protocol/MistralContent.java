@@ -1,6 +1,7 @@
 package com.pijava.ai.protocol;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import com.pijava.ai.message.ContentBlock;
@@ -36,5 +37,16 @@ final class MistralContent {
 
     static Map<String, Object> imageChunk(String url) {
         return chunk("image_url", "image_url", url);
+    }
+
+    /**
+     * Assistant 重放的思考块 —— pi {@code mistral-conversations.ts:853-856}：
+     * {@code {type:"thinking", thinking:[{type:"text", text}]}}。
+     */
+    static Map<String, Object> thinkingChunk(String text) {
+        var chunk = new LinkedHashMap<String, Object>();
+        chunk.put("type", "thinking");
+        chunk.put("thinking", List.of(Map.of("type", "text", "text", text)));
+        return chunk;
     }
 }
