@@ -1,7 +1,7 @@
-# 41 pi-ai 层未对齐清单
+# 06 pi-ai 层未对齐清单
 
 > 这份文件只回答一个问题：**pi-java-ai 层还有什么要对齐**。一行一条；已闭环的不写（历史在 git：
-> `git log -- docs/41-ai-alignment-gaps.md`）。
+> `git log --follow -- docs/06-ai-alignment-gaps.md`）。
 >
 > - **权威台账**是 [`04-open-items-register.md`](04-open-items-register.md)（B 编号与裁决以此为准）；
 >   **全量加权盘点**是 [`map/02-ai.md`](map/02-ai.md)（逐单元判定、权重、完成度）。
@@ -51,7 +51,7 @@
 | B231 | OAuth 刷新被调用方取消时，轮转后的 refresh token 仍须落盘（`refreshStoredOAuthCredential`）；Java 侧设计时取证确认 |
 | B232 | 内置目录数据漂移（v1.1.0）：Haiku 5.5、Claude 5.5 系列改吃 models.dev、Kimi K3 定价/级别表等；与 B97 同族，属持续性数据漂移 |
 | B233 | Mistral 开缓存时缺 `x-affinity: <sessionId>` 头（pi `mistral-conversations.ts:366-368`；B103 三车道不含 Mistral） |
-| B234 | `durationMs` 计时字段全无：AssistantMessage/ToolResultMessage（及 agent 侧 tool_execution_end/AgentSettled，见 docs/42） |
+| B234 | `durationMs` 计时字段全无：AssistantMessage/ToolResultMessage（及 agent 侧 tool_execution_end/AgentSettled，见 docs/07） |
 
 ---
 

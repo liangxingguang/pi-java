@@ -1,7 +1,7 @@
-# 42 agent-core 层未对齐清单
+# 07 agent-core 层未对齐清单
 
 > 这份文件只回答一个问题：**pi-java-agent-core 层还有什么要对齐**。一行一条；已闭环的不写（历史在 git：
-> `git log -- docs/42-agent-core-alignment-gaps.md`）。
+> `git log --follow -- docs/07-agent-core-alignment-gaps.md`）。
 >
 > - **权威台账**是 [`04-open-items-register.md`](04-open-items-register.md)（B/A 编号与裁决以此为准）；
 >   **全量加权盘点**是 [`map/03-agent-core.md`](map/03-agent-core.md)（104 个单元逐条判定、权重、完成度）。
