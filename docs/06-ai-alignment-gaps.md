@@ -9,13 +9,16 @@
 >   §3 形状差（存疑、待裁决），§4 已裁决不做。
 > - pi 锚点 `ea448f454`（2026-10-11）。**七份地图（含新建 07-mcp）已于 2026-10-12
 >   对该锚点逐条重测完毕**（原 A16 销号，新差异 B233/B234 已登记）。
-> - 整理：2026-10-12（旧版盘点过程稿已删）。
+> - **2026-10-12 ai 批 0 裁决**（[`docs/08`](08-ai-layer-alignment-roadmap.md)）：B115/B117/B124
+>   取证关单；B100/B126/B147/B226/B230 转 04 §4；map 单元 #87 零代码对齐，#9/#10/#11/#12/#33/
+>   #74/#78/#92/#93/#94/#100 出分母（R5/w0/作废）；§1 剩 24 条。
+> - 整理：2026-10-12（旧版盘点过程稿已删；同日 docs/41 重编号为 06）。
 
 ---
 
 ## 1. 台账在册功能缺口
 
-`docs/04` §3.2 全部 32 条 ＋ §3.3 中的 B222（同属 ai 协议面）：
+`docs/04` §3.2 存活 23 条 ＋ §3.3 中的 B222（同属 ai 协议面）＝ 24 行：
 
 | # | 差什么（一句话） |
 |---|---|
@@ -26,68 +29,44 @@
 | B95 | `docs` 段无生产者（ContextAssembler 不传 DocumentationPaths） |
 | B97 | 3 个内置 `(provider,modelId)` 与 pi 目录不匹配；另有 Java 有 pi 无的 `text-embedding-3-*` 一类 |
 | B99 | `supportsMidConvoEffort` 半可移植：字段 ＋ 两个 beta ＋ `insertThinkingLevelMessages`（SDK 无 BlockBinding） |
-| B100 | compat 探测的 baseUrl 来源不同（pi 只读模型对象；差异不可观察，建议随 A16 降为架构备注） |
-| B110 | `providerThinkingLevel` pi 有 Java 无（`proxy.ts` 线字段 ＋ `anthropic-messages.ts` 消息字段） |
-| B115 | 宿主线终局帧形状：pi 的 message_update 只发非终局增量（跨宿主，与 map/03 #52 同族） |
-| B116 | StreamDone 的 UsageInfo 嵌套包裹是 Java 方言（pi usage 只在消息上，proxy 线另发扁平 usage） |
-| B117 | 「谁定终局 reason」两个权威并存互相遮蔽（SessionRunner 逐事件写 ＋ 终局收口） |
-| B118 | 「报 toolUse 却无工具块」stopReason 守卫缺失（pi 判 provider error） |
-| B119 | 停因闭集无校验点，生产者各写自由字符串 |
-| B121 | `AssistantMessage.stopReason()` 是 String 非闭集（pi 是 `StopReason` 联合类型） |
-| B124 | `maxTokens: 0` 与缺席之别被 Java `int` ＋ −1 哨兵吞掉（pi 用 `??`/`!== undefined` 区分） |
-| B125 | samplingParams 的 **per-request 半**无生产者（通道在 `ApiOptions.extra`；`ModelInfo.headers` 半已有消费者） |
-| B126 | codex-responses 车道忽略 maxTokens |
-| B127 | Responses reasoning effort 读 extra 平行通道，与主路 reasoning 并存 |
-| B128 | `thinkingBudgets` 无选项通道（pi `SimpleStreamOptions.thinkingBudgets`，`adjustMaxTokensForThinking` 消费） |
-| B137 | resolver 无 minimatch 通配与 scope 诊断；实际序＝精确→切 `:level`→provider 首条→modelName→任意 id 兜底；`--models` 生产零消费者 |
-| B147 | Responses 回放 item 按类型分组，pi 同循环按块序交错（已注释为刻意偏差，保留在册） |
+| B110 | `providerThinkingLevel` pi 有 Java 无（`proxy.ts` 线字段 ＋ `anthropic-messages.ts` 消息字段；批 4 随 B99） |
+| B116 | StreamDone 的 UsageInfo 嵌套包裹是 Java 方言（pi usage 只在消息上，proxy 线另发扁平 usage）——2026-10-12 取证线格式已扁化，内部组件保留 |
+| B118 | 「报 toolUse 却无工具块」stopReason 守卫缺失（pi 判 provider error；批 1） |
+| B119 | 停因闭集无校验点，生产者各写自由字符串（批 1，与 B121 同包） |
+| B121 | `AssistantMessage.stopReason()` 是 String 非闭集（pi 是 `StopReason` 联合类型；批 1） |
+| B125 | samplingParams 的 **per-request 半**无生产者（通道在 `ApiOptions.extra`；`ModelInfo.headers` 半已有消费者；批 1） |
+| B128 | `thinkingBudgets` 无选项通道（pi `SimpleStreamOptions.thinkingBudgets`，`adjustMaxTokensForThinking` 消费；批 4） |
+| B137 | resolver 无 minimatch 通配/子串/alias 排序与 scope 诊断；实际序＝精确→切 `:level`→provider 首条→modelName→任意 id 兜底（批 3；pi 的 `--models` 有消费者，旧「零消费者」指 java） |
 | B148 | responseModel/responseId/diagnostics 无真消费者（usage 分组、cache-warmer、fallback 成本归属、`pi_messages_response_failure` 信封、Anthropic 流内 fallback 块） |
 | B156 | ModelCompat 逐组件规范构造 ＋ 12 个便捷构造各自补 null：加组件必须全改，否则静默缺省 |
 | B158 | 输出截断字节预算 Java 100KB vs pi 主流 50KB（模型可见文案不同；对应 map/03 #23） |
 | B159 | pi 已改 `finishTurn()` 返回 `{action:"continue"|"end"}`，Java 仍是 Boolean `shouldStopAfterTurn`，缺「强制再跑一轮」臂（对应 map/03 #6/#41） |
 | B222 | responses 车道前导消息恒发 `system`，pi 对推理模型（`reasoning && supportsDeveloperRole !== false`）发 `developer`；字段有生产者但 responses 读点不存在 |
-| B226 | Radius 内建 provider 缺失（只有 OAuth 设备码工厂）；注意 pi 新语义＝gateway catalog **整体替换** baseline |
-| B230 | azure provider 改名 `azure-openai-responses`→`azure`（env 键随之）＋ 新增 Foundry **Chat Completions** 车道；Java 仍注册旧 id 且只有 responses |
-| B231 | OAuth 刷新被调用方取消时，轮转后的 refresh token 仍须落盘（`refreshStoredOAuthCredential`）；Java 侧设计时取证确认 |
+| B231 | OAuth 刷新被调用方取消时，轮转后的 refresh token 仍须落盘（`refreshStoredOAuthCredential`）；Java 侧刷新 HTTP 无超时（批 6） |
 | B232 | 内置目录数据漂移（v1.1.0）：Haiku 5.5、Claude 5.5 系列改吃 models.dev、Kimi K3 定价/级别表等；与 B97 同族，属持续性数据漂移 |
 | B233 | Mistral 开缓存时缺 `x-affinity: <sessionId>` 头（pi `mistral-conversations.ts:366-368`；B103 三车道不含 Mistral） |
 | B234 | `durationMs` 计时字段全无：AssistantMessage/ToolResultMessage（及 agent 侧 tool_execution_end/AgentSettled，见 docs/07） |
 
 ---
 
-## 2. 地图判「缺失」、但没有 B 号的能力单元（21 条，计分母）
+## 2. 地图判「缺失」、但没有 B 号的能力单元（9 条，计分母）
 
-编号是 `map/02-ai.md` 的单元号。除 #34 权重 2 外均权重 1。
+编号是 `map/02-ai.md` 的单元号。2026-10-12 批 0 后原 21 条中 11 条移出分母（见 §4）、#87 转对齐。
 
-**wire 适配器（4）**：#9 `bedrock-converse-stream` · #10 `google-vertex` · #11 `openai-codex-responses`
-· #12 `cloudflare-ai-binding`。
-> 口径待裁决：这四个端点本身是权重 0（R2 长尾、Java 无端点），地图把 **wire 协议能力**单独计了分母。
-> #11 与 B126/B127/#74 同族（codex 车道整体缺失）。
+**ContentBlock（1）**：#8 `ToolUseContent.namespace`（随 MCP 包 B203；仅 Responses 车道 round-trip）。
 
-**ContentBlock（1）**：#8 `ToolUseContent.namespace`。
-
-**模型元数据（8）**：
+**模型元数据（5）**：
 
 | 单元# | 缺口 | 备注 |
 |---|---|---|
-| #34 | 内置目录规模：Java 手写约 45 条 vs pi 42 provider 生成目录 | 权重 **2**，边际最大单条；B232/B97 同族 |
-| #33 | per-provider 图像模型目录/注册表（仅 openrouter 单家 8 条） | 与 #92/#94 同属统一模型设施 |
-| #37 | `responseModel`/`responseId`/`thinkingLevel`/`diagnostics`/`endTurn` 字段全无 | 即 B148 |
-| #86 | `Model.promptCache`（cache 寿命元数据，解析但忽略；CacheWarmer 未移植） | |
-| #87 | `MistralConversationsCompat`（compat 第 5 个 per-api 接口） | |
-| #90 | `Model.inputLimits`（图像输入上限，消费于缩放/注记） | 与 B85 同族 |
-| #91 | `Model.samplingParamsByThinkingLevel`（per-thinking-level 采样参数） | 与 B128 相邻但独立 |
-| #93 | `ToolResultMessage.nestedCalls` | codemode 族（B162） |
+| #34 | 内置目录规模：Java 手写 73 条 vs pi 锚点全量（npm 1.1.0 数据 18 家即 ~590 条） | 权重 **2**，边际最大单条；批 3 资源目录；B232/B97 同族 |
+| #37 | `responseModel`/`diagnostics` 等字段全无（responseId/endTurn 已随 codex 出分母） | 即 B148，批 5 |
+| #86 | `Model.promptCache`（cache 寿命元数据，解析但忽略） | 批 3 落字段；CacheWarmer 在 coding-agent 另案 |
+| #90 | `Model.inputLimits`（图像输入上限） | 批 3 落元数据；缩放/注记消费链（B85）在 coding tools 另案 |
+| #91 | `Model.samplingParamsByThinkingLevel`（per-thinking-level 采样参数） | 批 3，三 OpenAI 车道 merge |
 
-**类型基础设施 / 分类器（2）**：#92 统一模型类型系统（`BaseModel`/`Model`/`ImageModel`/`ClassifierModel` 联集）
-· #94 结构化分类 API（3 个分类器 wire 适配器 ＋ `Models.classify()`；即 B164）。
-
-**鉴权（3）**：#95 OAuth `openai-chatgpt`（OpenAI 备选登录）· #96 Anthropic OAuth copy-code 登录法
-· #98 Anthropic workload identity federation（5 个 `ANTHROPIC_*` env）。
-
-**横切（3）**：#74 `transport: "sse"|"websocket"|…`（依附 codex 车道，车道补时才可达）
-· #78 `session-resources` 清理注册表（生命周期在 agent-core）
-· #100 `onProviderStreamEvent` provider 流事件钩子（十车道调用点）。
+**鉴权（3）**：#95 OAuth `openai-chatgpt`（Sign in with ChatGPT，批 7）· #96 Anthropic OAuth copy-code 登录法
+（批 7）· #98 Anthropic workload identity federation（5 个 `ANTHROPIC_*` env，**用户裁决后排**）。
 
 ---
 
@@ -95,6 +74,10 @@
 
 这些是「Java 有、pi 无」或「两侧形状不同、行为近似」。**不直接当缺口清**；收口任一条前先定
 「形状差算不算偏差」，认账后转 §1 立 B 号，或正式记入 `docs/04` §4 裁决不做。
+
+> **2026-10-12 批 0 注记**：#20（StreamError 载 Throwable）、#21（UsageInfo 独立事件）、
+> #38（ToolResult.usage 无生产者）取证确认**出线形状与 pi 相同**（内部方言保留，不翻判定，
+> 仍计半分）；B115/B117 取证关单（终局帧与 reason 收口两侧同构）。详见 docs/08 §2.2。
 
 | 组 | 条目（map/02 单元号） |
 |---|---|
@@ -107,8 +90,22 @@
 
 ---
 
-## 4. 已裁决不做（不展开）
+## 4. 已裁决不做 / 出分母（不展开）
 
+- **2026-10-12 批 0 新裁决**（论证见 [`docs/08`](08-ai-layer-alignment-roadmap.md) §2）：
+  - **R5（codex/扩展面）**：#94 结构化分类 API＋4 分类器适配器、#92 统一模型类型（随 #33/#94，独立行为差≈0）、
+    #33 per-provider 图像目录（无 CLI/TUI 入口，openrouter 单家已对齐）、#74 transport、
+    #78 session-resources（唯一注册者是 codex WS）、#93 nestedCalls（仅扩展工具产生，B162 族）、
+    #100 onProviderStreamEvent（唯一订阅者是示例扩展）；B164 转 04 §4。
+  - **w0（主流 7 家口径外，用户裁决维持）**：#9 bedrock、#10 vertex、#11 openai-codex（含 WebSocket；
+    B126/responseId/endTurn 随它一起出分母）、B226 Radius、B230 azure——五家 /login 技术可达，
+    口径松动时 azure/radius 边际成本最低。
+  - **作废（死代码）**：#12 cloudflare-ai-binding（pi 侧零生产引用、不导出、无 lazy）。
+  - **零代码对齐**：#87 MistralConversationsCompat（唯一字段五车道共享、mistral 模型不挂 compat，
+    java 行为已在，同 #88 类型层先例）。
+  - **取证关单**：B115/B117（终局帧/reason 收口同构）、B124（pi 无 `maxTokens:0` 生产者、java 已
+    OptionalInt 门控）、B100（降架构备注）、B127（已对齐，优先级夹具随批 1）、B147（分组序刻意保留，
+    夹具随批 1）——B100/B126/B147/B164/B226/B230 在 `docs/04` §4 带触发条件。
 - **25 个长尾 provider 端点 ＋ 4 条对应鉴权**：权重 0、R2/R5 排除出分母，完整清单见 `map/02-ai.md`
   加权汇总「被排除的单位」。
 - **B18**（pi-messages 不按 pi 改造）、**B130/B132**（zai sre、together/baseten/fireworks 携带集零差，
