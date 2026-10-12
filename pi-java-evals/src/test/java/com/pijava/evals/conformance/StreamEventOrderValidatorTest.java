@@ -3,6 +3,7 @@ package com.pijava.evals.conformance;
 import java.util.List;
 
 import com.pijava.ai.message.AssistantMessage;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 
 import org.junit.jupiter.api.Test;
@@ -32,7 +33,7 @@ class StreamEventOrderValidatorTest {
     @Test
     void missingStartIsInvalid() {
         var empty = AssistantMessage.empty();
-        var events = List.<StreamEvent>of(new StreamEvent.StreamDone("stop", null, empty));
+        var events = List.<StreamEvent>of(new StreamEvent.StreamDone(StopReason.STOP, null, empty));
         assertThat(StreamEventOrderValidator.problems(events))
             .anyMatch(p -> p.contains("Start"));
     }

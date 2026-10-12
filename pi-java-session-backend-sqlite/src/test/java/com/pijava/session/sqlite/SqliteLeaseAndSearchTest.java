@@ -14,6 +14,7 @@ import com.pijava.agent.session.SessionSearchHit;
 import com.pijava.agent.session.SessionSearchOptions;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -94,7 +95,7 @@ class SqliteLeaseAndSearchTest {
         session.appendEntry(message("m1", "hello"), "main");
         session.appendEntry(new ProvisionedEntry<>(new Entry.Usage(
             "u1", 0, null, null, "assistant", "faux", "faux-model",
-            com.pijava.ai.Usage.of(5, 2), null, "run-1", "m1", null, 0, "stop")), "main");
+            com.pijava.ai.Usage.of(5, 2), null, "run-1", "m1", null, 0, StopReason.STOP)), "main");
 
         var usages = session.findEntries(
             new EntryQuery(Entry.TYPE_USAGE, null, EntryOrder.OLDEST_FIRST, null, null));

@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
@@ -27,22 +28,22 @@ class AgentHarnessTest {
     private static StreamFn textStreamFn(String text) {
         var partial = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent(text)))
-                .withStopReason("stop");
+                .withStopReason(StopReason.STOP);
         return (model, context, options) -> StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.TextStart(0, partial.withContent(
                         List.of(new ContentBlock.TextContent("")))),
-                new StreamEvent.TextDelta(0, text, partial.withStopReason(null)),
-                new StreamEvent.TextEnd(0, text, partial.withStopReason(null)),
-                new StreamEvent.StreamDone("stop", null, partial)
+                new StreamEvent.TextDelta(0, text, partial.withStopReason((StopReason) null)),
+                new StreamEvent.TextEnd(0, text, partial.withStopReason((StopReason) null)),
+                new StreamEvent.StreamDone(StopReason.STOP, null, partial)
         ));
     }
 
     private static StreamFn errorStreamFn(String errorMsg) {
-        var partial = AssistantMessage.empty().withStopReason("error");
+        var partial = AssistantMessage.empty().withStopReason(StopReason.ERROR);
         return (model, context, options) -> StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
-                new StreamEvent.StreamError("error",
+                new StreamEvent.StreamError(StopReason.ERROR,
                         new RuntimeException(errorMsg), partial)
         ));
     }
@@ -92,7 +93,7 @@ class AgentHarnessTest {
 
         var result = harness.lastAssistantMessage();
         assertThat(result).isNotNull();
-        assertThat(result.stopReason()).isEqualTo("error");
+        assertThat(result.stopReason()).isEqualTo(StopReason.ERROR);
     }
 
     /**
@@ -276,7 +277,7 @@ class AgentHarnessTest {
     void partialSnapshotUpdatedOnAllEventTypes() {
         var finalPartial = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent("all events processed")))
-                .withStopReason("stop");
+                .withStopReason(StopReason.STOP);
         var emptyPartial = AssistantMessage.empty();
 
         StreamFn allEventsFn = (model, context, options) -> StreamIterator.from(List.of(
@@ -294,7 +295,7 @@ class AgentHarnessTest {
                 new StreamEvent.ThinkingEnd(1, "hmm", emptyPartial
                         .withContent(List.of(new ContentBlock.TextContent("hello"),
                                 new ContentBlock.TextContent("hmm")))),
-                new StreamEvent.StreamDone("stop", null, finalPartial)
+                new StreamEvent.StreamDone(StopReason.STOP, null, finalPartial)
         ));
 
         var harness = createHarness(allEventsFn);
@@ -302,7 +303,7 @@ class AgentHarnessTest {
 
         var result = harness.lastAssistantMessage();
         assertThat(result).isNotNull();
-        assertThat(result.stopReason()).isEqualTo("stop");
+        assertThat(result.stopReason()).isEqualTo(StopReason.STOP);
         assertThat(result.content()).isNotEmpty();
         assertThat(((ContentBlock.TextContent) result.content().get(0)).text())
                 .isEqualTo("all events processed");
@@ -311,13 +312,13 @@ class AgentHarnessTest {
     @Test
     void errorEventPartialPreserved() {
         var errorPartial = AssistantMessage.empty()
-                .withStopReason("error");
+                .withStopReason(StopReason.ERROR);
         StreamFn errorFn = (model, context, options) -> StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.TextStart(0, AssistantMessage.empty()),
                 new StreamEvent.TextDelta(0, "partial text", errorPartial
                         .withContent(List.of(new ContentBlock.TextContent("partial text")))),
-                new StreamEvent.StreamError("error",
+                new StreamEvent.StreamError(StopReason.ERROR,
                         new RuntimeException("test error"), errorPartial)
         ));
 
@@ -326,7 +327,7 @@ class AgentHarnessTest {
 
         var result = harness.lastAssistantMessage();
         assertThat(result).isNotNull();
-        assertThat(result.stopReason()).isEqualTo("error");
+        assertThat(result.stopReason()).isEqualTo(StopReason.ERROR);
     }
 
     // ── 终局错误消息的形状（3d 建、C 批次改口径）──────────────────
@@ -344,12 +345,12 @@ class AgentHarnessTest {
         // 空快照（车道流到一半就断了）：settle 补 stopReason 与文本。
         var harness = createHarness((model, context, options) -> StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
-                StreamEvent.StreamError.settle("error",
+                StreamEvent.StreamError.settle(StopReason.ERROR,
                         new RuntimeException("overloaded_error"), AssistantMessage.empty()))));
         harness.prompt("test");
 
         var result = harness.lastAssistantMessage();
-        assertThat(result.stopReason()).isEqualTo("error");
+        assertThat(result.stopReason()).isEqualTo(StopReason.ERROR);
         assertThat(result.errorMessage()).isEqualTo("overloaded_error");
     }
 
@@ -357,11 +358,11 @@ class AgentHarnessTest {
     void settledStreamErrorKeepsTheAbortedReason() {
         var harness = createHarness((model, context, options) -> StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
-                StreamEvent.StreamError.settle("aborted",
+                StreamEvent.StreamError.settle(StopReason.ABORTED,
                         new RuntimeException("cancelled"), AssistantMessage.empty()))));
         harness.prompt("test");
 
-        assertThat(harness.lastAssistantMessage().stopReason()).isEqualTo("aborted");
+        assertThat(harness.lastAssistantMessage().stopReason()).isEqualTo(StopReason.ABORTED);
     }
 
     @Test
@@ -371,12 +372,12 @@ class AgentHarnessTest {
                 .withContent(List.of(new ContentBlock.TextContent("before the failure")));
         var harness = createHarness((model, context, options) -> StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
-                StreamEvent.StreamError.settle("error",
+                StreamEvent.StreamError.settle(StopReason.ERROR,
                         new RuntimeException("boom"), partial))));
         harness.prompt("test");
 
         var result = harness.lastAssistantMessage();
-        assertThat(result.stopReason()).isEqualTo("error");
+        assertThat(result.stopReason()).isEqualTo(StopReason.ERROR);
         assertThat(result.errorMessage()).isEqualTo("boom");
         assertThat(result.content())
                 .containsExactly(new ContentBlock.TextContent("before the failure"));

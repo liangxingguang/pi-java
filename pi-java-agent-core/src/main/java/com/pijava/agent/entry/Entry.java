@@ -218,7 +218,7 @@ public sealed interface Entry {
         String entryId,
         String toolCallId,
         Integer attempt,
-        String stopReason
+        com.pijava.ai.message.StopReason stopReason
     ) implements Entry {}
 
     /** A custom extension event. */

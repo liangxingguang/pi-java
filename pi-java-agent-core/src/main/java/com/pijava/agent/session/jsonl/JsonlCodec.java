@@ -449,8 +449,6 @@ public final class JsonlCodec {
 
     /** 旧转录里的归一化停因写法（B109 之前）—— 只在本迁移垫片里出现。 */
     private static final String LEGACY_TOOL_USE_STOP_REASON = "tool_use";
-    /** pi 的归一化停因写法，本仓自 B109 起同字面量。 */
-    private static final String TOOL_USE_STOP_REASON = "toolUse";
 
     /**
      * 读归一化停因，顺带把旧值迁移过来（B109，{@code 原 docs/56 §6 R2/R3}）。
@@ -459,14 +457,20 @@ public final class JsonlCodec {
      * 写作 {@code "toolUse"}。两条读路径（助手消息、usage 审计记录）都走这里，
      * 别直接 {@link #optionalString}。</p>
      *
+     * <p>批 1 ⑥ 起返回 {@link com.pijava.ai.message.StopReason}：旧字面在此单点归一到
+     * {@code TOOL_USE}；键缺席／null／未知值返 {@code null}（等价 pi TS 解码后比较全不命中）。</p>
+     *
      * <p>⚠️ <b>本方法在 pi 侧没有对应物</b> —— pi 从未有过 {@code "tool_use"} 这个归一化取值，
      * 所以它不需要读懂旧文件。这是纯粹的迁移垫片：不归一的话，旧会话的停因会带着外来字面量
      * 漏到对外面（遥测 span 属性、终局帧、RPC 转录、HTML 导出）。
      * 当仓库里不再有该垫片之前的会话文件时，整个方法连常量一起删。</p>
      */
-    public static String readStopReason(JsonNode node) {
+    public static com.pijava.ai.message.StopReason readStopReason(JsonNode node) {
         var raw = optionalString(node, "stopReason");
-        return LEGACY_TOOL_USE_STOP_REASON.equals(raw) ? TOOL_USE_STOP_REASON : raw;
+        if (LEGACY_TOOL_USE_STOP_REASON.equals(raw)) {
+            return com.pijava.ai.message.StopReason.TOOL_USE;
+        }
+        return com.pijava.ai.message.StopReason.fromWireOrNull(raw);
     }
 
     /** Read an optional boolean field, defaulting to {@code false} when absent. */

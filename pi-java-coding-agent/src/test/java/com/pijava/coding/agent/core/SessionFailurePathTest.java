@@ -19,6 +19,7 @@ import com.pijava.ai.AbortSignal;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.provider.FauxProvider;
 import com.pijava.ai.provider.ProviderRegistry;
 import com.pijava.ai.stream.StreamEvent;
@@ -82,19 +83,19 @@ class SessionFailurePathTest {
     private static List<StreamEvent> textSeq(String text) {
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent(text)))
-            .withStopReason("stop");
+            .withStopReason(StopReason.STOP);
         return List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.TextStart(0, AssistantMessage.empty()),
             new StreamEvent.TextDelta(0, text, done),
             new StreamEvent.TextEnd(0, text, done),
-            new StreamEvent.StreamDone("stop", null, done));
+            new StreamEvent.StreamDone(StopReason.STOP, null, done));
     }
 
     private static List<StreamEvent> toolCallSeq(List<ContentBlock.ToolUseContent> calls) {
         var partial = AssistantMessage.empty()
             .withContent(new ArrayList<ContentBlock>(calls))
-            .withStopReason("toolUse");
+            .withStopReason(StopReason.TOOL_USE);
         var events = new ArrayList<StreamEvent>();
         events.add(new StreamEvent.Start(AssistantMessage.empty()));
         for (int i = 0; i < calls.size(); i++) {
@@ -102,7 +103,7 @@ class SessionFailurePathTest {
             events.add(new StreamEvent.ToolCallEnd(i, calls.get(i).id(), calls.get(i).name(),
                 calls.get(i).arguments(), partial));
         }
-        events.add(new StreamEvent.StreamDone("toolUse", null, partial));
+        events.add(new StreamEvent.StreamDone(StopReason.TOOL_USE, null, partial));
         return List.copyOf(events);
     }
 
@@ -136,11 +137,11 @@ class SessionFailurePathTest {
      */
     @Test
     void abortedStreamErrorKeepsItsReason(@TempDir Path tmp) throws Exception {
-        var partial = AssistantMessage.empty().withStopReason("aborted");
+        var partial = AssistantMessage.empty().withStopReason(StopReason.ABORTED);
         var session = session("faux-aborted", List.of(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 StreamEvent.StreamError.settle(
-                    "aborted", new RuntimeException("cancelled"), partial))),
+                    StopReason.ABORTED, new RuntimeException("cancelled"), partial))),
             tmp, Set.of());
         try (session) {
             var result = session.processPrompt("go", PromptConfig.defaults());

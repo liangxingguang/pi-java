@@ -10,6 +10,7 @@ import com.pijava.agent.tool.DefaultShellExecutor;
 import com.pijava.agent.tool.ToolContext;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.provider.FauxProvider;
 import com.pijava.ai.provider.ProviderRegistry;
 import com.pijava.ai.stream.StreamEvent;
@@ -32,13 +33,13 @@ class AgentSessionSubscribeTest {
             "--provider", "faux-sub", "--model", "hello", "--no-session"});
         var providers = ProviderRegistry.create();
         var done = AssistantMessage.empty().withContent(List.of(
-            new ContentBlock.TextContent("hi"))).withStopReason("stop");
+            new ContentBlock.TextContent("hi"))).withStopReason(StopReason.STOP);
         providers.register(FauxProvider.sequence("faux-sub", List.of(List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.TextStart(0, AssistantMessage.empty()),
             new StreamEvent.TextDelta(0, "hi", done),
             new StreamEvent.TextEnd(0, "hi", done),
-            new StreamEvent.StreamDone("stop", null, done)))));
+            new StreamEvent.StreamDone(StopReason.STOP, null, done)))));
 
         var session = AgentSession.create(
             args, InMemorySessionRepository.create(), providers,
@@ -69,13 +70,13 @@ class AgentSessionSubscribeTest {
             "--provider", "faux-unsub", "--model", "hello", "--no-session"});
         var providers = ProviderRegistry.create();
         var done = AssistantMessage.empty().withContent(List.of(
-            new ContentBlock.TextContent("hi"))).withStopReason("stop");
+            new ContentBlock.TextContent("hi"))).withStopReason(StopReason.STOP);
         providers.register(FauxProvider.sequence("faux-unsub", List.of(List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.TextStart(0, AssistantMessage.empty()),
             new StreamEvent.TextDelta(0, "hi", done),
             new StreamEvent.TextEnd(0, "hi", done),
-            new StreamEvent.StreamDone("stop", null, done)))));
+            new StreamEvent.StreamDone(StopReason.STOP, null, done)))));
 
         var session = AgentSession.create(
             args, InMemorySessionRepository.create(), providers,
@@ -103,13 +104,13 @@ class AgentSessionSubscribeTest {
             "--provider", "faux-throw", "--model", "hello", "--no-session"});
         var providers = ProviderRegistry.create();
         var done = AssistantMessage.empty().withContent(List.of(
-            new ContentBlock.TextContent("hi"))).withStopReason("stop");
+            new ContentBlock.TextContent("hi"))).withStopReason(StopReason.STOP);
         providers.register(FauxProvider.sequence("faux-throw", List.of(List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.TextStart(0, AssistantMessage.empty()),
             new StreamEvent.TextDelta(0, "hi", done),
             new StreamEvent.TextEnd(0, "hi", done),
-            new StreamEvent.StreamDone("stop", null, done)))));
+            new StreamEvent.StreamDone(StopReason.STOP, null, done)))));
 
         var session = AgentSession.create(
             args, InMemorySessionRepository.create(), providers,

@@ -20,6 +20,7 @@ import com.pijava.agent.record.StepKind;
 import com.pijava.agent.record.UsageCause;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.telemetry.SpanOptions;
 import com.pijava.telemetry.TelemetrySpan;
@@ -216,12 +217,13 @@ final class PiLaneSink implements PiLoop.Sink {
      * {@code agent-session.ts:2154}），旁路字段删除。</p>
      */
     private void endRequest(LaneState lane, Message.AssistantMessage assistant, long durationMs) {
-        String stop = assistant.stopReason();
+        StopReason stop = assistant.stopReason();
         if (llmSpan != null) {
             llmSpan.addAttribute("inputTokens", inputTokens);
             llmSpan.addAttribute("outputTokens", outputTokens);
             if (stop != null) {
-                llmSpan.addAttribute("stopReason", stop);
+                // OTel 属性是字符串边界：显式出 wire 字面（camelCase）。
+                llmSpan.addAttribute("stopReason", stop.wireName());
             }
             llmSpan.close();
             ctx.telemetry().popCurrent(llmSpan);
@@ -385,15 +387,15 @@ final class PiLaneSink implements PiLoop.Sink {
                 batchCallCount = countToolCalls(assistant);
                 // 成功收尾（非 error/非 length）⇒ 溢出恢复闩锁复位
                 // （pi {@code agent-session.ts:694-696}；package 3c）。
-                String stopReason = assistant.stopReason();
-                if (!"error".equals(stopReason) && !"length".equals(stopReason)) {
+                StopReason stopReason = assistant.stopReason();
+                if (stopReason != StopReason.ERROR && stopReason != StopReason.LENGTH) {
                     lane.overflowRecoveryAttempted = false;
                 }
                 // 非 error 收尾 ⇒ 重试链成功终止：发 auto_retry_end{success:true,
                 // attempt} 并清零计数（pi {@code agent-session.ts:698-706}；
                 // package 3d，{@code 原 docs/31 §8.22}）。判据只排除 error ——
                 // **length 也复位**（pi 原文是 `stopReason !== "error"`）。
-                if (!"error".equals(stopReason) && lane.retryAttempt > 0) {
+                if (stopReason != StopReason.ERROR && lane.retryAttempt > 0) {
                     int attempt = lane.retryAttempt;
                     lane.retryAttempt = 0;
                     ctx.retryObserver().onAutoRetryEnd(true, attempt, null);

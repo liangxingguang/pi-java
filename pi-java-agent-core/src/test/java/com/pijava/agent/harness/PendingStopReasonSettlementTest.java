@@ -7,6 +7,7 @@ import com.pijava.ai.AbortSignal;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
@@ -79,7 +80,7 @@ class PendingStopReasonSettlementTest {
             config(streamFn, signal), event -> {
                 if (event instanceof PiLoop.Event.MessageUpdate update
                         && update.message() instanceof Message.AssistantMessage assistant) {
-                    updates.add(String.valueOf(assistant.stopReason()));
+                    updates.add(assistant.stopReason() == null ? null : assistant.stopReason().wireName()); // 探针仍钉 wire 字面
                 }
             });
 
@@ -87,7 +88,7 @@ class PendingStopReasonSettlementTest {
         assertThat(updates).isNotEmpty().containsOnly("pending");
 
         // ② 落定：绝不留在 "pending" —— 中止的轮次以 "aborted" 收尾。
-        assertThat(assistantMessages(newMessages).get(0).stopReason()).isEqualTo("aborted");
+        assertThat(assistantMessages(newMessages).get(0).stopReason()).isEqualTo(StopReason.ABORTED);
     }
 
     private static List<Message.AssistantMessage> assistantMessages(List<Message> messages) {

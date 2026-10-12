@@ -11,6 +11,7 @@ import com.pijava.ai.api.ChatApi;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.evals.api.EvalCase;
@@ -57,8 +58,9 @@ public final class ChatApiConformanceSuite implements EvalSuite {
         assertHas(events, StreamEvent.TextDelta.class);
         assertHas(events, StreamEvent.TextEnd.class);
         var done = requireDone(events);
-        if (!"stop".equals(done.reason())) {
-            throw new AssertionError("expected stop reason, got " + done.reason());
+        if (done.reason() != StopReason.STOP) {
+            throw new AssertionError("expected stop reason, got "
+                + (done.reason() == null ? null : done.reason().wireName()));
         }
         if (events.stream().anyMatch(e -> e instanceof StreamEvent.ToolCallStart)) {
             throw new AssertionError("plain text stream must not emit tool calls");
@@ -82,8 +84,9 @@ public final class ChatApiConformanceSuite implements EvalSuite {
         assertHas(events, StreamEvent.ToolCallDelta.class);
         assertHas(events, StreamEvent.ToolCallEnd.class);
         var done = requireDone(events);
-        if (!"toolUse".equals(done.reason())) {
-            throw new AssertionError("expected toolUse reason, got " + done.reason());
+        if (done.reason() != StopReason.TOOL_USE) {
+            throw new AssertionError("expected toolUse reason, got "
+                + (done.reason() == null ? null : done.reason().wireName()));
         }
     }
 
@@ -127,7 +130,7 @@ public final class ChatApiConformanceSuite implements EvalSuite {
             .map(e -> (StreamEvent.StreamError) e)
             .findFirst()
             .orElseThrow(() -> new AssertionError("missing StreamError"));
-        if (error.error() == null && (error.reason() == null || error.reason().isBlank())) {
+        if (error.error() == null && error.reason() == null) {
             throw new AssertionError("StreamError must carry a reason or throwable");
         }
     }

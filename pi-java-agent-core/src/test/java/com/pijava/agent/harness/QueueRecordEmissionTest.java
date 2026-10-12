@@ -18,6 +18,7 @@ import com.pijava.ai.AbortSignal;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -37,13 +38,13 @@ class QueueRecordEmissionTest {
 
     private static final AssistantMessage DONE = AssistantMessage.empty()
         .withContent(List.of(new ContentBlock.TextContent("done")))
-        .withStopReason("stop");
+        .withStopReason(StopReason.STOP);
 
     private static StreamFn simpleStreamFn() {
         return (model, context, options) -> StreamIterator.from(List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.TextEnd(0, "done", DONE),
-            new StreamEvent.StreamDone("stop", null, DONE)));
+            new StreamEvent.StreamDone(StopReason.STOP, null, DONE)));
     }
 
     /** First LLM call asks for a tool, later calls stop — one tool round. */
@@ -51,7 +52,7 @@ class QueueRecordEmissionTest {
         var toolUse = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.ToolUseContent(
                 "call-1", toolName, Map.of("text", "hello"))))
-            .withStopReason("toolUse");
+            .withStopReason(StopReason.TOOL_USE);
         var calls = new AtomicInteger();
         return (model, context, options) -> {
             var partial = calls.incrementAndGet() == 1 ? toolUse : DONE;

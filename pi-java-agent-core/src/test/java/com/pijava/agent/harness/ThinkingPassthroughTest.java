@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -39,13 +40,13 @@ class ThinkingPassthroughTest {
         var captured = new AtomicReference<StreamOptions>();
         var partial = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent("ok")))
-                .withStopReason("stop");
+                .withStopReason(StopReason.STOP);
         StreamFn sf = (model, context, options) -> {
             captured.set(options);
             return StreamIterator.from(List.of(
                     new StreamEvent.Start(AssistantMessage.empty()),
                     new StreamEvent.TextEnd(0, "ok", partial),
-                    new StreamEvent.StreamDone("stop", null, partial)));
+                    new StreamEvent.StreamDone(StopReason.STOP, null, partial)));
         };
 
         var harness = AgentHarness.create(new HarnessConfig(

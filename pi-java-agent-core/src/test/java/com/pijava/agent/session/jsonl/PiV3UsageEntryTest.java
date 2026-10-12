@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.session.LogItem;
 import com.pijava.agent.session.LogOptions;
+import com.pijava.ai.message.StopReason;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -126,7 +127,7 @@ class PiV3UsageEntryTest {
             "u1", 0, null, null, "assistant", "anthropic", "claude-sonnet-5-5",
             new com.pijava.ai.Usage(100, 20, 40, 10, 6.0, 8.0, 170,
                 new com.pijava.ai.Usage.Cost(0.30, 0.15, 0.02, 0.04, 0.51)),
-            null, "run-1", "e-1", null, 0, "stop")), "main");
+            null, "run-1", "e-1", null, 0, StopReason.STOP)), "main");
         session.storage().drain();
         Path file = repo.list(JsonlSessionListOptions.all()).getFirst().path();
 
@@ -167,7 +168,7 @@ class PiV3UsageEntryTest {
         assertThat(usage.usage().reasoning()).isEqualTo(8.0);
         assertThat(usage.runId()).isEqualTo("run-1");
         assertThat(usage.entryId()).isEqualTo("e-1");
-        assertThat(usage.stopReason()).isEqualTo("stop");
+        assertThat(usage.stopReason()).isEqualTo(StopReason.STOP);
     }
 
     /** 读一个会话文件的所有行（跳过空行）。 */

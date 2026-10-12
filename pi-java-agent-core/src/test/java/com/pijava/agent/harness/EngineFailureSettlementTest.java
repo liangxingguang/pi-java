@@ -20,6 +20,7 @@ import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -87,7 +88,7 @@ class EngineFailureSettlementTest {
     private static StreamFn toolCallStreamFn(List<ContentBlock.ToolUseContent> calls) {
         var partial = AssistantMessage.empty()
             .withContent(new ArrayList<ContentBlock>(calls))
-            .withStopReason("toolUse");
+            .withStopReason(StopReason.TOOL_USE);
         var events = new ArrayList<StreamEvent>();
         events.add(new StreamEvent.Start(AssistantMessage.empty()));
         for (int i = 0; i < calls.size(); i++) {
@@ -95,7 +96,7 @@ class EngineFailureSettlementTest {
             events.add(new StreamEvent.ToolCallEnd(i, calls.get(i).id(), calls.get(i).name(),
                 calls.get(i).arguments(), partial));
         }
-        events.add(new StreamEvent.StreamDone("toolUse", null, partial));
+        events.add(new StreamEvent.StreamDone(StopReason.TOOL_USE, null, partial));
         return (model, context, options) -> StreamIterator.from(events);
     }
 
@@ -103,13 +104,13 @@ class EngineFailureSettlementTest {
     private static StreamFn textStreamFn(String text) {
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent(text)))
-            .withStopReason("stop");
+            .withStopReason(StopReason.STOP);
         return (model, context, options) -> StreamIterator.from(List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.TextStart(0, AssistantMessage.empty()),
             new StreamEvent.TextDelta(0, text, done),
             new StreamEvent.TextEnd(0, text, done),
-            new StreamEvent.StreamDone("stop", null, done)));
+            new StreamEvent.StreamDone(StopReason.STOP, null, done)));
     }
 
     /** 按调用序号取剧本（越界后停在最后一条）：退避重试的多 pass 剧本靠它。 */
@@ -208,7 +209,7 @@ class EngineFailureSettlementTest {
         assertThat(failure.rawStopReason()).isNull();
 
         // C2：错误文本 = 抛出者自己的 message（pi `error.message`）
-        assertThat(failure.stopReason()).isEqualTo("error");
+        assertThat(failure.stopReason()).isEqualTo(StopReason.ERROR);
         assertThat(failure.errorMessage()).isEqualTo("boom");
     }
 
@@ -240,7 +241,7 @@ class EngineFailureSettlementTest {
         assertThat(assistants).as("助手消息：工具调用那条 + 合成的一条").hasSize(2);
         assertThat(assistants.get(1)).isInstanceOfSatisfying(Message.AssistantMessage.class,
             a -> {
-                assertThat(a.stopReason()).isEqualTo("error");
+                assertThat(a.stopReason()).isEqualTo(StopReason.ERROR);
                 assertThat(a.errorMessage()).isEqualTo("boom");
             });
 
@@ -325,7 +326,7 @@ class EngineFailureSettlementTest {
             .filter(Message.AssistantMessage.class::isInstance)
             .map(Message.AssistantMessage.class::cast)
             .reduce((first, second) -> second).orElseThrow();
-        assertThat(lastAssistant.stopReason()).isEqualTo("stop");
+        assertThat(lastAssistant.stopReason()).isEqualTo(StopReason.STOP);
         assertThat(h.snapshot(h.laneName()).records().stream()
             .filter(LaneRecord.OperationFinished.class::isInstance)
             .map(LaneRecord.OperationFinished.class::cast)

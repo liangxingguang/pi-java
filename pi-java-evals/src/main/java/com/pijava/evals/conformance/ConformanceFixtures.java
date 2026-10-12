@@ -5,6 +5,7 @@ import java.util.Map;
 
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.provider.FauxProvider;
 import com.pijava.ai.stream.StreamEvent;
 
@@ -25,7 +26,7 @@ public final class ConformanceFixtures {
         var empty = AssistantMessage.empty();
         var text = new ContentBlock.TextContent("hello");
         var mid = empty.withContent(List.of(text));
-        var done = mid.withStopReason("stop");
+        var done = mid.withStopReason(StopReason.STOP);
         var usage = new StreamEvent.UsageInfo(3, 5, mid);
         return new FauxProvider("faux-usage", List.of(
             new StreamEvent.Start(empty),
@@ -33,7 +34,7 @@ public final class ConformanceFixtures {
             new StreamEvent.TextDelta(0, "hello", mid),
             new StreamEvent.TextEnd(0, "hello", mid),
             usage,
-            new StreamEvent.StreamDone("stop", usage, done)
+            new StreamEvent.StreamDone(StopReason.STOP, usage, done)
         ), 0);
     }
 
@@ -42,13 +43,14 @@ public final class ConformanceFixtures {
         var empty = AssistantMessage.empty();
         var args = Map.<String, Object>of("q", "hi");
         var block = new ContentBlock.ToolUseContent("call_1", "echo", args);
-        var done = empty.withContent(List.of(block)).withStopReason("toolUse");
+        var done = empty.withContent(List.of(block)).withStopReason(StopReason.TOOL_USE);
         return new FauxProvider("faux-tool", List.of(
             new StreamEvent.Start(empty),
             new StreamEvent.ToolCallStart(0, empty),
             new StreamEvent.ToolCallDelta(0, "call_1", "{\"q\":\"hi\"}", empty),
-            new StreamEvent.ToolCallEnd(0, "call_1", "echo", args, done.withStopReason(null)),
-            new StreamEvent.StreamDone("toolUse", null, done)
+            new StreamEvent.ToolCallEnd(0, "call_1", "echo", args,
+                done.withStopReason((StopReason) null)),
+            new StreamEvent.StreamDone(StopReason.TOOL_USE, null, done)
         ), 0);
     }
 
@@ -62,13 +64,13 @@ public final class ConformanceFixtures {
         var empty = AssistantMessage.empty();
         var think = new ContentBlock.ThinkingContent("reason");
         var mid = empty.withContent(List.of(think));
-        var done = mid.withStopReason("stop");
+        var done = mid.withStopReason(StopReason.STOP);
         return new FauxProvider("faux-think", List.of(
             new StreamEvent.Start(empty),
             new StreamEvent.ThinkingStart(0, empty),
             new StreamEvent.ThinkingDelta(0, "reason", mid),
             new StreamEvent.ThinkingEnd(0, "reason", mid),
-            new StreamEvent.StreamDone("stop", null, done)
+            new StreamEvent.StreamDone(StopReason.STOP, null, done)
         ), 0);
     }
 

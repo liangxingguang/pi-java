@@ -6,6 +6,7 @@ import java.util.List;
 import com.pijava.ai.Usage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 
 /**
  * pi {@code Agent.handleRunFailure}（{@code agent.ts:506-525}）的逐条移植：
@@ -79,7 +80,7 @@ final class RunFailure {
         boolean aborted = signal != null && signal.isAborted();
         return new Message.AssistantMessage(
             List.of(new ContentBlock.TextContent("")),
-            aborted ? "aborted" : "error",
+            aborted ? StopReason.ABORTED : StopReason.ERROR,
             null,
             api,
             provider,

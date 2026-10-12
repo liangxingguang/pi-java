@@ -26,6 +26,7 @@ import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.protocol.OpenAICompletionsApi;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -105,10 +106,10 @@ class CrossLayerLengthGateTest {
         assertThat(assistants)
             .as("第一条助手消息应当来自线格，实际转录：" + names(h))
             .isNotEmpty();
-        assertThat(assistants.get(0).stopReason()).isEqualTo("length");
+        assertThat(assistants.get(0).stopReason()).isEqualTo(StopReason.LENGTH);
 
         // ③ 回合继续，模型重试后正常结束
-        assertThat(h.lastAssistantMessage().stopReason()).isEqualTo("stop");
+        assertThat(h.lastAssistantMessage().stopReason()).isEqualTo(StopReason.STOP);
     }
 
     /**
@@ -132,9 +133,9 @@ class CrossLayerLengthGateTest {
 
         assertThat(assistantMessages(h).get(0).stopReason())
             .as("转录：" + names(h))
-            .isEqualTo("toolUse");
+            .isEqualTo(StopReason.TOOL_USE);
         assertThat(executed.get()).isEqualTo(1);
-        assertThat(h.lastAssistantMessage().stopReason()).isEqualTo("stop");
+        assertThat(h.lastAssistantMessage().stopReason()).isEqualTo(StopReason.STOP);
     }
 
     // ── 宿主装配（照 AgentLoopL1Test 的形状）────────────────────────────
@@ -284,7 +285,7 @@ class CrossLayerLengthGateTest {
     private static List<String> names(AgentHarness h) {
         return messages(h).stream()
             .map(m -> m instanceof Message.AssistantMessage a
-                ? "assistant(" + a.stopReason()
+                ? "assistant(" + (a.stopReason() == null ? null : a.stopReason().wireName())
                     + (a.errorMessage() == null ? "" : ": " + a.errorMessage()) + ")"
                 : m.role())
             .toList();

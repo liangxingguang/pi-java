@@ -15,6 +15,7 @@ import com.pijava.agent.tool.ToolUpdateCallback;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -69,11 +70,11 @@ class PiLoopTurnHooksTest {
         var partial = AssistantMessage.empty();
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent(text)))
-            .withStopReason("stop");
+            .withStopReason(StopReason.STOP);
         return List.of(
             new StreamEvent.Start(partial),
             new StreamEvent.TextDelta(0, text, done),
-            new StreamEvent.StreamDone("stop", null, done));
+            new StreamEvent.StreamDone(StopReason.STOP, null, done));
     }
 
     /** 一段带单个工具调用的助手响应。 */
@@ -81,11 +82,11 @@ class PiLoopTurnHooksTest {
         var partial = AssistantMessage.empty();
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.ToolUseContent(callId, name, Map.of())))
-            .withStopReason("toolUse");
+            .withStopReason(StopReason.TOOL_USE);
         return List.of(
             new StreamEvent.Start(partial),
             new StreamEvent.ToolCallEnd(0, callId, name, Map.of(), done),
-            new StreamEvent.StreamDone("toolUse", null, done));
+            new StreamEvent.StreamDone(StopReason.TOOL_USE, null, done));
     }
 
     private static Message user(String text) {

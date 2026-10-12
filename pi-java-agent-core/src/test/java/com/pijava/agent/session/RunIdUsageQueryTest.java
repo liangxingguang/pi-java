@@ -17,6 +17,7 @@ import com.pijava.ai.Usage;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.AssistantMessage;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -57,10 +58,10 @@ class RunIdUsageQueryTest {
             List.of(new ContentBlock.TextContent("ok")),
             new StreamEvent.UsageInfo(100, 20, null,
                 new Usage(100, 20, 0, 0, null, null, 120, Usage.Cost.zero())),
-            "stop", null, "faux", "test-model", null, null, null);
+            StopReason.STOP, null, "faux", "test-model", null, null, null);
         var h = harnessWith((model, context, options) -> StreamIterator.from(List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
-            new StreamEvent.StreamDone("stop", null, finalPartial))));
+            new StreamEvent.StreamDone(StopReason.STOP, null, finalPartial))));
 
         var outcome = h.prompt("drive one turn");
 
@@ -86,7 +87,7 @@ class RunIdUsageQueryTest {
         var session = repo.create(new JsonlSessionCreateOptions(null, "work", null, null));
         session.appendEntry(new ProvisionedEntry<>(new Entry.Usage(
             "u1", 0, null, null, "assistant", "faux", "faux-model",
-            Usage.of(5, 2), null, "run-1", "e1", null, 0, "stop")), "main");
+            Usage.of(5, 2), null, "run-1", "e1", null, 0, StopReason.STOP)), "main");
         session.storage().drain();
 
         var usages = session.findEntries(

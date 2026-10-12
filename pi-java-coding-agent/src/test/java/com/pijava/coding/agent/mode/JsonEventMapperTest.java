@@ -5,6 +5,7 @@ import java.util.List;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.coding.agent.core.AgentSessionEvent;
 
@@ -64,7 +65,8 @@ class JsonEventMapperTest {
     @Test
     void agentSettledCarriesTheAssistantMessageWhenPresent() {
         var assistant = new Message.AssistantMessage(
-            List.of(new ContentBlock.TextContent("done")), "stop", null);
+            List.of(new ContentBlock.TextContent("done")), StopReason.STOP, null,
+            null, null, null, null, null, null, null);
         var result = new Message.ToolResultMessage("call_1", "write",
             List.of(new ContentBlock.TextContent("ok")), null, null, List.of(), false, null);
 
@@ -89,7 +91,8 @@ class JsonEventMapperTest {
     @Test
     void agentEndWireCarriesAssistantStopReasonAndOmitsNullDeferred() {
         var end = new AgentSessionEvent.AgentEnd(List.of(
-            new Message.AssistantMessage(List.of(new ContentBlock.TextContent("done")), "stop", null)),
+            new Message.AssistantMessage(List.of(new ContentBlock.TextContent("done")),
+            StopReason.STOP, null, null, null, null, null, null, null, null)),
             false);
 
         var node = JsonEventMapper.toWire(end);

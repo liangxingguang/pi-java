@@ -11,6 +11,7 @@ import com.pijava.agent.hook.HookSystem;
 import com.pijava.ai.Usage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.telemetry.NoopTelemetryContext;
 
@@ -52,7 +53,7 @@ class CompactionThresholdGateTest {
 
     private static Message.AssistantMessage withUsage(int totalTokens) {
         return new Message.AssistantMessage(
-            List.of(new ContentBlock.TextContent("ok")), "stop", null,
+            List.of(new ContentBlock.TextContent("ok")), StopReason.STOP, null,
             null, null, null,
             new Usage(totalTokens, 0, 0, 0, null, null, totalTokens, Usage.Cost.zero()),
             null, null, null);

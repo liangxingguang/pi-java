@@ -18,6 +18,7 @@ import com.pijava.ai.AbortSignal;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -85,7 +86,7 @@ class AgentLoopL1Test {
                 event -> { }));
     }
 
-    private static AssistantMessage toolUsePartial(String stopReason, String toolName,
+    private static AssistantMessage toolUsePartial(StopReason stopReason, String toolName,
                                                    Map<String, Object> args) {
         return AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.ToolUseContent("call-1", toolName, args)))
@@ -101,10 +102,10 @@ class AgentLoopL1Test {
         registry.register(recordingTool("echo", Map.of(), executed));
         // First response: toolUse + length stop (truncated arguments). Second:
         // plain stop — the model "retried" after seeing the failure.
-        var lengthStop = toolUsePartial("length", "echo", Map.of("text", "hello"));
+        var lengthStop = toolUsePartial(StopReason.LENGTH, "echo", Map.of("text", "hello"));
         var finalStop = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent("done")))
-            .withStopReason("stop");
+            .withStopReason(StopReason.STOP);
         var h = harness(registry, scriptedStreamFn(List.of(lengthStop, finalStop)));
 
         h.prompt("truncated call");
@@ -138,7 +139,7 @@ class AgentLoopL1Test {
         assertThat(finished.get(0).isError()).isTrue();
 
         // Run ended normally on the retry.
-        assertThat(h.lastAssistantMessage().stopReason()).isEqualTo("stop");
+        assertThat(h.lastAssistantMessage().stopReason()).isEqualTo(StopReason.STOP);
     }
 
     // ── ④ runtime schema validation ─────────────────────────
@@ -153,10 +154,10 @@ class AgentLoopL1Test {
         var registry = new ToolRegistry(null);
         registry.register(recordingTool("echo", schema, executed));
         // First response: toolUse with a non-string "text" (violates schema).
-        var badCall = toolUsePartial("toolUse", "echo", Map.of("text", 123));
+        var badCall = toolUsePartial(StopReason.TOOL_USE, "echo", Map.of("text", 123));
         var finalStop = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent("done")))
-            .withStopReason("stop");
+            .withStopReason(StopReason.STOP);
         var h = harness(registry, scriptedStreamFn(List.of(badCall, finalStop)));
 
         h.prompt("bad args");
@@ -180,7 +181,7 @@ class AgentLoopL1Test {
         assertThat(text).contains("text").contains("expected string");
 
         // Run continued and ended normally.
-        assertThat(h.lastAssistantMessage().stopReason()).isEqualTo("stop");
+        assertThat(h.lastAssistantMessage().stopReason()).isEqualTo(StopReason.STOP);
     }
 
     @Test
@@ -192,16 +193,16 @@ class AgentLoopL1Test {
             "required", List.of("text"));
         var registry = new ToolRegistry(null);
         registry.register(recordingTool("echo", schema, executed));
-        var goodCall = toolUsePartial("toolUse", "echo", Map.of("text", "hello"));
+        var goodCall = toolUsePartial(StopReason.TOOL_USE, "echo", Map.of("text", "hello"));
         var finalStop = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent("done")))
-            .withStopReason("stop");
+            .withStopReason(StopReason.STOP);
         var h = harness(registry, scriptedStreamFn(List.of(goodCall, finalStop)));
 
         h.prompt("good args");
 
         assertThat(executed.get()).isEqualTo(1);
-        assertThat(h.lastAssistantMessage().stopReason()).isEqualTo("stop");
+        assertThat(h.lastAssistantMessage().stopReason()).isEqualTo(StopReason.STOP);
     }
 
     // ── ⑤ before_tool deny-and-terminate ────────────────────
@@ -212,10 +213,10 @@ class AgentLoopL1Test {
         registry.register(recordingTool("echo", Map.of(), new AtomicInteger()));
         var stop = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent("done")))
-            .withStopReason("stop");
+            .withStopReason(StopReason.STOP);
         // The toolUse is the ONLY response — the run must end on the deny.
         var h = harness(registry, scriptedStreamFn(List.of(
-            toolUsePartial("toolUse", "echo", Map.of("text", "hello")), stop)));
+            toolUsePartial(StopReason.TOOL_USE, "echo", Map.of("text", "hello")), stop)));
         h.hookSystem().onBeforeTool("default", ctx -> BeforeToolResult.denyAndTerminate("not allowed"));
 
         h.prompt("denied call");
@@ -260,10 +261,10 @@ class AgentLoopL1Test {
         var denied = new AtomicBoolean();
         var stop = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent("done")))
-            .withStopReason("stop");
+            .withStopReason(StopReason.STOP);
         var h = harness(registry, scriptedStreamFn(List.of(
-            toolUsePartial("toolUse", "echo", Map.of("text", "hello")),
-            toolUsePartial("toolUse", "echo", Map.of("text", "hello")),
+            toolUsePartial(StopReason.TOOL_USE, "echo", Map.of("text", "hello")),
+            toolUsePartial(StopReason.TOOL_USE, "echo", Map.of("text", "hello")),
             stop)));
         h.hookSystem().onBeforeTool("default", ctx -> {
             if (denied.compareAndSet(false, true)) {
@@ -276,6 +277,6 @@ class AgentLoopL1Test {
 
         // Second attempt executed.
         assertThat(executed.get()).isEqualTo(1);
-        assertThat(h.lastAssistantMessage().stopReason()).isEqualTo("stop");
+        assertThat(h.lastAssistantMessage().stopReason()).isEqualTo(StopReason.STOP);
     }
 }

@@ -13,6 +13,7 @@ import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -38,7 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>本测试断言的是**应对齐 pi 的行为**：abort 必须记成 {@code aborted}。
  * 若它失败，即证明 A8 成立（原 docs/23 §4.4 已给出修法：break 后补
- * {@code lane.partial = lane.partial.withStopReason("aborted")}）。</p>
+ * {@code lane.partial = lane.partial.withStopReason(StopReason.ABORTED)}）。</p>
  */
 class MidStreamAbortTest {
 
@@ -65,8 +66,8 @@ class MidStreamAbortTest {
                     case 1 -> new StreamEvent.Start(AssistantMessage.empty());
                     case 2 -> new StreamEvent.TextEnd(0, "partial answer", partial);
                     // 这一帧**不应**被消费（循环已在检测到 abort 后 break）：
-                    default -> new StreamEvent.StreamDone("stop", null,
-                        partial.withStopReason("stop"));
+                    default -> new StreamEvent.StreamDone(StopReason.STOP, null,
+                        partial.withStopReason(StopReason.STOP));
                 };
             }
 
@@ -87,9 +88,9 @@ class MidStreamAbortTest {
         // 终态必须是 aborted（pi：中断的轮次不是 completed）。
         assertThat(operationOutcome(h)).isEqualTo(OperationOutcome.ABORTED);
         // 最新助手消息的 stopReason 必须是 aborted（否则会投影进后续请求）。
-        assertThat(h.lastAssistantMessage().stopReason()).isEqualTo("aborted");
+        assertThat(h.lastAssistantMessage().stopReason()).isEqualTo(StopReason.ABORTED);
         // 落库的助手 entry 同样（entry 是 stopReason 的唯一真相，原 docs/22 D1）。
-        assertThat(lastAssistantEntryStopReason(h)).isEqualTo("aborted");
+        assertThat(lastAssistantEntryStopReason(h)).isEqualTo(StopReason.ABORTED);
     }
 
     private static OperationOutcome operationOutcome(AgentHarness h) {
@@ -100,7 +101,7 @@ class MidStreamAbortTest {
             .orElseThrow(() -> new AssertionError("no OperationFinished record"));
     }
 
-    private static String lastAssistantEntryStopReason(AgentHarness h) {
+    private static StopReason lastAssistantEntryStopReason(AgentHarness h) {
         return h.snapshot("default").transcript().stream()
             .filter(Entry.Message.class::isInstance)
             .map(e -> ((Entry.Message) e).message())

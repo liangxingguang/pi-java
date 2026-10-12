@@ -14,6 +14,7 @@ import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.api.ToolReference;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 
 import org.junit.jupiter.api.Test;
 
@@ -151,7 +152,7 @@ class SessionJsonSystemMessageTest {
             .containsExactly("role", "content", "toolUseId", "toolName", "isError");
 
         var assistant = new Message.AssistantMessage(
-            List.of(new ContentBlock.TextContent("answer")), "stop", null,
+            List.of(new ContentBlock.TextContent("answer")), StopReason.STOP, null,
             "anthropic-messages", "anthropic", "claude-sonnet-5",
             com.pijava.ai.Usage.of(1, 2), Instant.ofEpochMilli(5), null, null);
         assertThat(fieldNames(SessionJson.messageNode(assistant)))

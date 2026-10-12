@@ -15,6 +15,7 @@ import com.pijava.agent.tool.DefaultShellExecutor;
 import com.pijava.agent.tool.ToolContext;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.provider.FauxProvider;
 import com.pijava.ai.provider.Provider;
 import com.pijava.ai.provider.ProviderRegistry;
@@ -337,7 +338,7 @@ class RpcDispatcherTest {
     void autoRetryRerunsAfterError() throws Exception {
         // 3d：环 A 住引擎、默认开启（pi retry.enabled ?? true），不再手动 setter
         // （那如今是落盘写）；错误文本必须命中 pi 白名单才会重试（"boom" 不可重试）。
-        var partial = AssistantMessage.empty().withStopReason("error");
+        var partial = AssistantMessage.empty().withStopReason(StopReason.ERROR);
         var errorSeq = List.<StreamEvent>of(
             new StreamEvent.Start(AssistantMessage.empty()),
             // C 批次（原 docs/55 §6.3-10）：生产者落定 ⇒ "overloaded" 在消息上，
@@ -482,13 +483,13 @@ class RpcDispatcherTest {
 
     private static List<List<StreamEvent>> textStream(String text) {
         var done = AssistantMessage.empty().withContent(List.of(
-            new ContentBlock.TextContent(text))).withStopReason("stop");
+            new ContentBlock.TextContent(text))).withStopReason(StopReason.STOP);
         return List.of(List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.TextStart(0, AssistantMessage.empty()),
             new StreamEvent.TextDelta(0, text, done),
             new StreamEvent.TextEnd(0, text, done),
-            new StreamEvent.StreamDone("stop", null, done)));
+            new StreamEvent.StreamDone(StopReason.STOP, null, done)));
     }
 
     private static void awaitOutput(ByteArrayOutputStream out, String fragment) {

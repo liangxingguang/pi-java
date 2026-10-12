@@ -6,6 +6,7 @@ import java.util.Set;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -24,11 +25,11 @@ class HookTest {
     private static StreamFn stream(String text) {
         var partial = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent(text)))
-                .withStopReason("stop");
+                .withStopReason(StopReason.STOP);
         return (model, context, options) -> StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.TextEnd(0, text, partial),
-                new StreamEvent.StreamDone("stop", null, partial)));
+                new StreamEvent.StreamDone(StopReason.STOP, null, partial)));
     }
 
     private static HarnessConfig configWith(StreamFn sf) {
@@ -157,10 +158,10 @@ class HookTest {
         var toolUse = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.ToolUseContent(
                     "call-1", "echo", java.util.Map.of())))
-                .withStopReason("toolUse");
+                .withStopReason(StopReason.TOOL_USE);
         var stop = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent("done")))
-                .withStopReason("stop");
+                .withStopReason(StopReason.STOP);
         // Alternate per call: runs now append to the transcript across turns,
         // so "no ToolResult in context" can no longer identify a run's first turn.
         var calls = new java.util.concurrent.atomic.AtomicInteger();

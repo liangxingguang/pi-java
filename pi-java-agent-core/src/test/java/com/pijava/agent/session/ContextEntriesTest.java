@@ -6,6 +6,7 @@ import java.util.List;
 import com.pijava.agent.entry.Entry;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 
 import org.junit.jupiter.api.Test;
 
@@ -330,7 +331,7 @@ class ContextEntriesTest {
             com.pijava.ai.Usage.Cost.zero());
         var timestamp = Instant.ofEpochMilli(42);
         var assistant = new Message.AssistantMessage(
-            List.of(new ContentBlock.TextContent("original")), "stop", null,
+            List.of(new ContentBlock.TextContent("original")), StopReason.STOP, null,
             "faux", "faux", "faux", usage, timestamp, null, null);
         var path = List.<Entry>of(
             new Entry.Message("a", 0, null, timestamp, assistant, null),
@@ -347,7 +348,7 @@ class ContextEntriesTest {
             .as("只换 content：usage 元数据保留（pi projectContextEntry 只覆盖 content）")
             .isSameAs(usage);
         assertThat(projected.timestamp()).isSameAs(timestamp);
-        assertThat(projected.stopReason()).isEqualTo("stop");
+        assertThat(projected.stopReason()).isEqualTo(StopReason.STOP);
     }
 
     @Test

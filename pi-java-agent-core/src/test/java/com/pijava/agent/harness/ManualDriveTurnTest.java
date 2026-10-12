@@ -6,6 +6,7 @@ import java.util.Set;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -37,16 +38,16 @@ class ManualDriveTurnTest {
     void singleTurnReturnsAssistantMessage() {
         var partial = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent("Hello, World!")))
-            .withStopReason("stop");
+            .withStopReason(StopReason.STOP);
         var h = harnessWith((model, context, options) -> StreamIterator.from(List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.TextStart(0, partial.withContent(
                 List.of(new ContentBlock.TextContent("")))),
             new StreamEvent.TextDelta(0, "Hello, World!",
-                partial.withStopReason(null)),
+                partial.withStopReason((StopReason) null)),
             new StreamEvent.TextEnd(0, "Hello, World!",
-                partial.withStopReason(null)),
-            new StreamEvent.StreamDone("stop", null, partial))));
+                partial.withStopReason((StopReason) null)),
+            new StreamEvent.StreamDone(StopReason.STOP, null, partial))));
 
         h.prompt("How are you?");
 
@@ -55,21 +56,21 @@ class ManualDriveTurnTest {
         assertThat(result.content()).hasSize(1);
         assertThat(((ContentBlock.TextContent) result.content().get(0)).text())
             .isEqualTo("Hello, World!");
-        assertThat(result.stopReason()).isEqualTo("stop");
+        assertThat(result.stopReason()).isEqualTo(StopReason.STOP);
     }
 
     @Test
     void errorTurnReturnsErrorPartial() {
-        var partial = AssistantMessage.empty().withStopReason("error");
+        var partial = AssistantMessage.empty().withStopReason(StopReason.ERROR);
         var h = harnessWith((model, context, options) -> StreamIterator.from(List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
-            new StreamEvent.StreamError("error",
+            new StreamEvent.StreamError(StopReason.ERROR,
                 new RuntimeException("boom"), partial))));
 
         h.prompt("test");
 
         var result = h.lastAssistantMessage();
         assertThat(result).isNotNull();
-        assertThat(result.stopReason()).isEqualTo("error");
+        assertThat(result.stopReason()).isEqualTo(StopReason.ERROR);
     }
 }

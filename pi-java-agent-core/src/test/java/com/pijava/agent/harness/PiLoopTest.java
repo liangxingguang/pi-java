@@ -11,6 +11,7 @@ import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -72,13 +73,13 @@ class PiLoopTest {
         var partial = AssistantMessage.empty();
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent(text)))
-            .withStopReason("stop");
+            .withStopReason(StopReason.STOP);
         return List.of(
             new StreamEvent.Start(partial),
             new StreamEvent.TextStart(0, partial),
             new StreamEvent.TextDelta(0, text, done),
             new StreamEvent.TextEnd(0, text, done),
-            new StreamEvent.StreamDone("stop", null, done));
+            new StreamEvent.StreamDone(StopReason.STOP, null, done));
     }
 
     /** 一段带单个工具调用的助手响应：stopReason = toolUse。 */
@@ -86,16 +87,16 @@ class PiLoopTest {
         var partial = AssistantMessage.empty();
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.ToolUseContent(callId, name, args)))
-            .withStopReason("toolUse");
+            .withStopReason(StopReason.TOOL_USE);
         return List.of(
             new StreamEvent.Start(partial),
             new StreamEvent.ToolCallStart(0, partial),
             new StreamEvent.ToolCallEnd(0, callId, name, args, done),
-            new StreamEvent.StreamDone("toolUse", null, done));
+            new StreamEvent.StreamDone(StopReason.TOOL_USE, null, done));
     }
 
     /** 一段以给定 stopReason 收尾的助手响应（无内容）。 */
-    private static List<StreamEvent> bareTurn(String stopReason) {
+    private static List<StreamEvent> bareTurn(StopReason stopReason) {
         var partial = AssistantMessage.empty();
         var done = AssistantMessage.empty().withStopReason(stopReason);
         return List.of(
@@ -244,7 +245,7 @@ class PiLoopTest {
         var context = Context.of(new ArrayList<>());
 
         PiLoop.run(List.of(user("hi")), context,
-            config(scripted(List.of(bareTurn("aborted"))), null), rec);
+            config(scripted(List.of(bareTurn(StopReason.ABORTED))), null), rec);
 
         assertThat(rec.frames).containsExactly(
             "agent_start",
@@ -265,13 +266,13 @@ class PiLoopTest {
         var partial = AssistantMessage.empty();
         var truncated = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.ToolUseContent("tc2", "bash", Map.of())))
-            .withStopReason("length");
+            .withStopReason(StopReason.LENGTH);
 
         PiLoop.run(List.of(user("go")), context,
             config(scripted(List.of(
                 // 第一轮：length 截断，带一个工具调用
                 List.of(new StreamEvent.Start(partial),
-                    new StreamEvent.StreamDone("length", null, truncated)),
+                    new StreamEvent.StreamDone(StopReason.LENGTH, null, truncated)),
                 // 第二轮：模型重新发出完整参数后正常收尾
                 textTurn("done"))),
                 tools),
@@ -330,12 +331,12 @@ class PiLoopTest {
                 new ContentBlock.ToolUseContent("c1", "bash", Map.of()),
                 new ContentBlock.ToolUseContent("c2", "read", Map.of()),
                 new ContentBlock.ToolUseContent("c3", "grep", Map.of())))
-            .withStopReason("toolUse");
+            .withStopReason(StopReason.TOOL_USE);
 
         PiLoop.run(List.of(user("go")), context,
             config(scripted(List.of(
                 List.of(new StreamEvent.Start(partial),
-                    new StreamEvent.StreamDone("toolUse", null, done)),
+                    new StreamEvent.StreamDone(StopReason.TOOL_USE, null, done)),
                 textTurn("done"))),
                 new StubTools()),
             rec);
@@ -371,7 +372,7 @@ class PiLoopTest {
             .withContent(List.of(
                 new ContentBlock.ToolUseContent("c1", "bash", Map.of()),
                 new ContentBlock.ToolUseContent("c2", "read", Map.of())))
-            .withStopReason("toolUse");
+            .withStopReason(StopReason.TOOL_USE);
 
         PiLoop.run(List.of(user("go")), context,
             new PiLoop.Config(
@@ -382,7 +383,7 @@ class PiLoopTest {
                 tools,
                 scripted(List.of(
                     List.of(new StreamEvent.Start(partial),
-                        new StreamEvent.StreamDone("toolUse", null, done)),
+                        new StreamEvent.StreamDone(StopReason.TOOL_USE, null, done)),
                     textTurn("stopped"))),
                 signal,
                 null, null, null, null, null, null),

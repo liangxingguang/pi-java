@@ -6,6 +6,7 @@ import java.util.Objects;
 import com.pijava.agent.context.ContextUsageEstimator;
 import com.pijava.agent.entry.Entry;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.utils.ContextOverflow;
 
 /**
@@ -90,7 +91,7 @@ final class PostRunCompactionCheck {
         if (retry.isRetryableError(lastAssistant) && retry.prepareRetry(lane, lastAssistant)) {
             return true;
         }
-        if ("error".equals(lastAssistant.stopReason()) && lane.retryAttempt > 0) {
+        if (lastAssistant.stopReason() == StopReason.ERROR && lane.retryAttempt > 0) {
             ctx.retryObserver().onAutoRetryEnd(false, lane.retryAttempt, lastAssistant.errorMessage());
             lane.retryAttempt = 0;
         }
@@ -136,7 +137,7 @@ final class PostRunCompactionCheck {
             return false;
         }
         // G1：aborted 是用户取消，不是上下文问题（:2158-2159）。
-        if (skipAbortedCheck && "aborted".equals(message.stopReason())) {
+        if (skipAbortedCheck && message.stopReason() == StopReason.ABORTED) {
             return false;
         }
         var model = ctx.model().get();
@@ -159,7 +160,7 @@ final class PostRunCompactionCheck {
         if (contextOverflow || recoverableLength) {
             // R0：stop 收尾的溢出（case 2）压完不重试 —— continue 接不上
             // 「已完成」的响应（:2186-2187）。
-            boolean willRetry = !"stop".equals(message.stopReason());
+            boolean willRetry = message.stopReason() != StopReason.STOP;
             if (!willRetry) {
                 return compactions.runAutoCompaction(laneName, lane, "overflow", false).shouldContinue();
             }
@@ -180,7 +181,7 @@ final class PostRunCompactionCheck {
         double contextTokens;
         double direct = message.usage() != null
             ? ContextUsageEstimator.calculateContextTokens(message.usage()) : 0;
-        if ("error".equals(message.stopReason()) || direct == 0) {
+        if (message.stopReason() == StopReason.ERROR || direct == 0) {
             // 错误/全零用量 ⇒ 退回纯估算，并校验用量锚点不是压缩前的旧值。
             var estimate = ContextUsageEstimator.estimateContextTokens(List.copyOf(lane.messages));
             if (estimate.lastUsageIndex() != null) {

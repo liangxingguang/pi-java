@@ -16,6 +16,7 @@ import com.pijava.agent.record.UsageCause;
 import com.pijava.ai.Usage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 
 /** Shared factories for conformance assertions. */
 public final class ConformanceSupport {
@@ -87,7 +88,7 @@ public final class ConformanceSupport {
                                                       double input, double output) {
         return new ProvisionedEntry<>(new Entry.Usage(id, 0, null, null,
             UsageCause.ASSISTANT.value(), "faux", "faux-model",
-            Usage.of(input, output), null, runId, "entry-1", null, 0, "stop"));
+            Usage.of(input, output), null, runId, "entry-1", null, 0, StopReason.STOP));
     }
 
     public static NewRecord<LaneRecord.StepAttempt> stepAttempt(String id, String lane,

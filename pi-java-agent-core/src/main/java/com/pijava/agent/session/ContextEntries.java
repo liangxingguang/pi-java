@@ -1,6 +1,7 @@
 package com.pijava.agent.session;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -10,6 +11,7 @@ import com.pijava.agent.entry.CustomMessageContent;
 import com.pijava.agent.entry.Entry;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 
 /**
  * 压缩感知的 LLM 上下文构建（对齐 pi {@code session-manager.ts} 的
@@ -48,8 +50,8 @@ public final class ContextEntries {
      * {@code aborted}, and {@code deferred}. This set is an exact port of
      * pi's code.
      */
-    private static final Set<String> NON_PROJECTED_STOP_REASONS =
-        Set.of("deferred", "error", "aborted");
+    private static final Set<StopReason> NON_PROJECTED_STOP_REASONS =
+        EnumSet.of(StopReason.DEFERRED, StopReason.ERROR, StopReason.ABORTED);
 
     private ContextEntries() {}
 
@@ -253,7 +255,7 @@ public final class ContextEntries {
     private static Message project(Entry e) {
         if (e instanceof Entry.Message m) {
             if (m.message() instanceof Message.AssistantMessage assistant
-                    && assistant.stopReason() != null
+                    // EnumSet.contains(null) 合法返 false ⇒ null（未落定）不被剔除。
                     && NON_PROJECTED_STOP_REASONS.contains(assistant.stopReason())) {
                 return null;
             }

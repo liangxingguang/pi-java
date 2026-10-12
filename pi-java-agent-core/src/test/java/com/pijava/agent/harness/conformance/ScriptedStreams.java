@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.pijava.ai.Usage;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 
 /**
@@ -42,7 +43,7 @@ final class ScriptedStreams {
     private ScriptedStreams() {}
 
     /** 与 pi 侧 {@code createAssistantMessage} 同形的桩快照。 */
-    private static AssistantMessage scripted(String stopReason, List<ContentBlock> content,
+    private static AssistantMessage scripted(StopReason stopReason, List<ContentBlock> content,
                                              Usage usage) {
         return AssistantMessage.empty()
             .withContent(content)
@@ -75,7 +76,7 @@ final class ScriptedStreams {
      * @return 该响应的完整流事件序列
      */
     static List<StreamEvent> eventsFor(ConformanceScript.Response response, AtomicInteger callIds) {
-        var blank = scripted("stop", List.of(), ZERO_USAGE);
+        var blank = scripted(StopReason.STOP, List.of(), ZERO_USAGE);
         var events = new ArrayList<StreamEvent>();
         var content = new ArrayList<ContentBlock>();
         events.add(new StreamEvent.Start(blank));
@@ -117,11 +118,12 @@ final class ScriptedStreams {
 
         // B109：剧本与 pi-java 现在同词表 ⇒ 原先的 internalStopReason 翻译成为恒等，已删。
         // 它顺带消掉一处不对称：error 分支一直用的是剧本原值，只有 done 走翻译。
-        var stopReason = response.stopReason();
+        // response.stopReason() 是剧本 wire（String）；构造领域事件前先容错解码成枚举。
+        var stopReason = StopReason.fromWireOrNull(response.stopReason());
         var terminal = scripted(stopReason, List.copyOf(content), usageOf(response.usage()));
-        if ("aborted".equals(response.stopReason()) || "error".equals(response.stopReason())) {
+        if (stopReason == StopReason.ABORTED || stopReason == StopReason.ERROR) {
             // pi: aborted 走 error 事件，而不是 done —— done.reason 的闭集里没有 aborted
-            events.add(new StreamEvent.StreamError(response.stopReason(), null, terminal));
+            events.add(new StreamEvent.StreamError(stopReason, null, terminal));
         } else {
             events.add(new StreamEvent.StreamDone(stopReason, null, terminal));
         }

@@ -12,6 +12,7 @@ import com.pijava.ai.catalog.ModelCatalog;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.protocol.AbstractChatApi;
 import com.pijava.ai.provider.Provider;
 import com.pijava.ai.provider.ProviderRegistry;
@@ -82,10 +83,10 @@ public final class RecordingChatProvider implements Provider {
                 }
             }
             var msg = AssistantMessage.empty().withContent(List.of(
-                new ContentBlock.TextContent("ok"))).withStopReason("stop");
+                new ContentBlock.TextContent("ok"))).withStopReason(StopReason.STOP);
             publisher.submit(new StreamEvent.Start(AssistantMessage.empty()));
-            publisher.submit(new StreamEvent.TextDelta(0, "ok", msg.withStopReason(null)));
-            publisher.submit(StreamEvent.StreamDone.settle("stop", msg));
+            publisher.submit(new StreamEvent.TextDelta(0, "ok", msg.withStopReason((StopReason) null)));
+            publisher.submit(StreamEvent.StreamDone.settle(StopReason.STOP, msg));
         }
     }
 }

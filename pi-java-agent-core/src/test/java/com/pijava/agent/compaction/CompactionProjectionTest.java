@@ -7,6 +7,7 @@ import java.util.List;
 import com.pijava.agent.entry.Entry;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -47,10 +48,10 @@ class CompactionProjectionTest {
         // user 上。pi 的摘要请求只看投影 —— 被剔除文本不许过桥。
         var transcript = builder()
             .user("e1", "first")
-            .assistant("e2", "FAILED-SECRET-TEXT", "error")
+            .assistant("e2", "FAILED-SECRET-TEXT", StopReason.ERROR)
             .omission("e3", "e2")
             .user("e4", "second")
-            .assistant("e5", "ok", "stop")
+            .assistant("e5", "ok", StopReason.STOP)
             .build();
 
         var generator = new CapturingGenerator();
@@ -71,10 +72,10 @@ class CompactionProjectionTest {
         var transcript = builder()
             .user("e1", "ancient one")
             .user("e2", "old")
-            .assistant("e3", "x".repeat(100), "error")
+            .assistant("e3", "x".repeat(100), StopReason.ERROR)
             .omission("e4", "e3")
             .user("e5", "tail")
-            .assistant("e6", "done", "stop")
+            .assistant("e6", "done", StopReason.STOP)
             .build();
 
         var result = CompactionService.compact(transcript,
@@ -105,7 +106,7 @@ class CompactionProjectionTest {
         var transcript = builder()
             .user("e1", "first")
             .user("e2", "hit")
-            .assistant("e3", "boom", "error")
+            .assistant("e3", "boom", StopReason.ERROR)
             .omission("e4", "e3")
             .build();
 
@@ -146,7 +147,7 @@ class CompactionProjectionTest {
         // 源条目上而不是落在它的 edit 上。
         var transcript = builder()
             .user("e1", "old")
-            .assistant("e2", "bad", "error")
+            .assistant("e2", "bad", StopReason.ERROR)
             .omission("e3", "e2")
             .user("e4", "tail")
             .build();
@@ -179,7 +180,7 @@ class CompactionProjectionTest {
             return this;
         }
 
-        Builder assistant(String id, String text, String stopReason) {
+        Builder assistant(String id, String text, StopReason stopReason) {
             entries.add(new Entry.Message(id, 0, lastId, Instant.EPOCH,
                 new Message.AssistantMessage(
                     List.of(new ContentBlock.TextContent(text)), stopReason, null,

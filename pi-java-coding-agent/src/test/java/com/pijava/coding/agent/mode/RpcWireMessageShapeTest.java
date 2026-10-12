@@ -7,6 +7,7 @@ import java.util.Map;
 import com.pijava.ai.Usage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.coding.agent.core.AgentSessionEvent;
 
 import org.junit.jupiter.api.Test;
@@ -35,7 +36,7 @@ class RpcWireMessageShapeTest {
     private static Message.AssistantMessage timestampedAssistant() {
         return new Message.AssistantMessage(
             List.of(new ContentBlock.TextContent("hello")),
-            "stop", null, "anthropic", "anthropic", "m", Usage.of(1, 2),
+            StopReason.STOP, null, "anthropic", "anthropic", "m", Usage.of(1, 2),
             Instant.ofEpochMilli(1_700_000_000_000L), null, null);
     }
 
@@ -100,7 +101,7 @@ class RpcWireMessageShapeTest {
             new ContentBlock.TextContent("t"),
             new ContentBlock.ThinkingContent("why"),
             new ContentBlock.ToolUseContent("c1", "bash", Map.of("cmd", "ls"))),
-            "toolUse", null, "anthropic", "anthropic", "m", Usage.of(1, 2), null, null, null);
+            StopReason.TOOL_USE, null, "anthropic", "anthropic", "m", Usage.of(1, 2), null, null, null);
 
         var content = JsonEventMapper.toWire(
             new AgentSessionEvent.AgentEnd(List.<Message>of(assistant), false))
@@ -126,7 +127,7 @@ class RpcWireMessageShapeTest {
             null, List.of(), false, null);
         var assistant = new Message.AssistantMessage(
             List.of(new ContentBlock.ThinkingContent("why")),
-            "stop", null, "anthropic", "anthropic", "m", Usage.of(1, 2), null, null, null);
+            StopReason.STOP, null, "anthropic", "anthropic", "m", Usage.of(1, 2), null, null, null);
 
         var node = JsonEventMapper.toWire(
             new AgentSessionEvent.AgentEnd(List.<Message>of(result, assistant), false));

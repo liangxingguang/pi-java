@@ -12,6 +12,7 @@ import com.pijava.agent.entry.Entry;
 import com.pijava.agent.hook.HookSystem;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.telemetry.NoopTelemetryContext;
 
@@ -87,7 +88,7 @@ class PostRunRetryTest {
     private static final RetrySettings FAST = new RetrySettings(true, 3, 1, 1_000L);
 
     private static Message.AssistantMessage error(String errorMessage) {
-        return new Message.AssistantMessage(List.<ContentBlock>of(), "error", null,
+        return new Message.AssistantMessage(List.<ContentBlock>of(), StopReason.ERROR, null,
             null, null, null, null, null, errorMessage, null);
     }
 

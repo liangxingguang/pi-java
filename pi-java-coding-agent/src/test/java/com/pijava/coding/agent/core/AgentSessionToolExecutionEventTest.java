@@ -9,6 +9,7 @@ import java.util.concurrent.TimeUnit;
 
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.provider.FauxProvider;
 import com.pijava.ai.provider.ProviderRegistry;
 import com.pijava.ai.stream.StreamEvent;
@@ -40,25 +41,25 @@ class AgentSessionToolExecutionEventTest {
         Map<String, Object> args = Map.of("path", "hello.py", "content", "print(\"hi\")");
         var toolMsg = AssistantMessage.empty().withContent(List.of(
             new ContentBlock.ToolUseContent("id1", "write", args)))
-            .withStopReason("toolUse");
+            .withStopReason(StopReason.TOOL_USE);
         return List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.ToolCallStart(0, AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.ToolUseContent(
                     "id1", "write", Map.of())))),
             new StreamEvent.ToolCallEnd(0, "id1", "write", args, toolMsg),
-            new StreamEvent.StreamDone("toolUse", null, toolMsg));
+            new StreamEvent.StreamDone(StopReason.TOOL_USE, null, toolMsg));
     }
 
     private static List<StreamEvent> doneSeq() {
         var doneMsg = AssistantMessage.empty().withContent(List.of(
-            new ContentBlock.TextContent("done"))).withStopReason("stop");
+            new ContentBlock.TextContent("done"))).withStopReason(StopReason.STOP);
         return List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.TextStart(0, AssistantMessage.empty()),
             new StreamEvent.TextDelta(0, "done", doneMsg),
             new StreamEvent.TextEnd(0, "done", doneMsg),
-            new StreamEvent.StreamDone("stop", null, doneMsg));
+            new StreamEvent.StreamDone(StopReason.STOP, null, doneMsg));
     }
 
     @Test

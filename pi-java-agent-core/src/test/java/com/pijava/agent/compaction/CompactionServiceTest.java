@@ -12,6 +12,7 @@ import com.pijava.ai.catalog.CacheRetention;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 
@@ -37,30 +38,30 @@ class CompactionServiceTest {
 
     private static StreamFn llm(String text) {
         var done = AssistantMessage.empty().withContent(List.of(
-            new ContentBlock.TextContent(text))).withStopReason("stop");
+            new ContentBlock.TextContent(text))).withStopReason(StopReason.STOP);
         return (model, context, options) -> StreamIterator.from(List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.TextStart(0, AssistantMessage.empty()),
             new StreamEvent.TextDelta(0, text, done),
             new StreamEvent.TextEnd(0, text, done),
             new StreamEvent.UsageInfo(5, 7, done),
-            new StreamEvent.StreamDone("stop", null, done)));
+            new StreamEvent.StreamDone(StopReason.STOP, null, done)));
     }
 
     /** 一次瞬断错误的流（partial 无终局快照 —— 合成路）。 */
     private static List<StreamEvent> transientError(String message) {
         return List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
-            new StreamEvent.StreamError("error", new RuntimeException(message), null));
+            new StreamEvent.StreamError(StopReason.ERROR, new RuntimeException(message), null));
     }
 
     private static List<StreamEvent> success(String text) {
         var done = AssistantMessage.empty().withContent(List.of(
-            new ContentBlock.TextContent(text))).withStopReason("stop");
+            new ContentBlock.TextContent(text))).withStopReason(StopReason.STOP);
         return List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.TextDelta(0, text, done),
-            new StreamEvent.StreamDone("stop", null, done));
+            new StreamEvent.StreamDone(StopReason.STOP, null, done));
     }
 
     /** 收集环 B 事件的观察口。 */
@@ -160,10 +161,10 @@ class CompactionServiceTest {
     void lengthStopThrowsIncompleteCapMessage() {
         // pi :549-551 固定文案；length 不是 error ⇒ 环不重试、无事件。
         var done = AssistantMessage.empty().withContent(List.of(
-            new ContentBlock.TextContent("## Goal\nhalf"))).withStopReason("length");
+            new ContentBlock.TextContent("## Goal\nhalf"))).withStopReason(StopReason.LENGTH);
         StreamFn fn = (m, c, o) -> StreamIterator.from(List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
-            new StreamEvent.StreamDone("length", null, done)));
+            new StreamEvent.StreamDone(StopReason.LENGTH, null, done)));
         var events = new Events();
         assertThatThrownBy(() -> rig(fn, events).summarize(ONE, null, null, 16_384, "manual"))
             .isInstanceOf(IllegalStateException.class)
@@ -176,10 +177,10 @@ class CompactionServiceTest {
     void toolCallInSummaryThrows() {
         // pi :719-721：content.some(toolCall) ⇒ 抛。
         var done = AssistantMessage.empty().withContent(List.of(
-            new ContentBlock.ToolUseContent("t1", "read", java.util.Map.of()))).withStopReason("toolUse");
+            new ContentBlock.ToolUseContent("t1", "read", java.util.Map.of()))).withStopReason(StopReason.TOOL_USE);
         StreamFn fn = (m, c, o) -> StreamIterator.from(List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
-            new StreamEvent.StreamDone("toolUse", null, done)));
+            new StreamEvent.StreamDone(StopReason.TOOL_USE, null, done)));
         var events = new Events();
         assertThatThrownBy(() -> rig(fn, events).summarize(ONE, null, null, 16_384, "manual"))
             .isInstanceOf(IllegalStateException.class)

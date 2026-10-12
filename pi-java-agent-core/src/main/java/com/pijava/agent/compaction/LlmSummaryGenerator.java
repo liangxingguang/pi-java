@@ -19,6 +19,7 @@ import com.pijava.ai.Usage;
 import com.pijava.ai.catalog.CacheRetention;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -184,14 +185,14 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
             var response = produce.get();
 
             // Abort: terminal but not successful. Never retry an aborted message.
-            if ("aborted".equals(response.stopReason())) {
+            if (response.stopReason() == StopReason.ABORTED) {
                 if (scheduled) {
                     retryObserver.onSummarizationRetryFinished();
                 }
                 return response;
             }
             // Success: non-error, non-abort responses return as-is.
-            if (!"error".equals(response.stopReason())) {
+            if (response.stopReason() != StopReason.ERROR) {
                 if (scheduled) {
                     retryObserver.onSummarizationRetryFinished();
                 }
@@ -222,10 +223,10 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
 
     /** pi {@code getSummarizationFailure(response, label)}（compaction.ts:580-588）。 */
     private static String getSummarizationFailure(Message.AssistantMessage response, String label) {
-        if ("error".equals(response.stopReason())) {
+        if (response.stopReason() == StopReason.ERROR) {
             return label + " failed: " + messageOrFallback(response.errorMessage());
         }
-        if ("length".equals(response.stopReason())) {
+        if (response.stopReason() == StopReason.LENGTH) {
             return label + " failed: generation hit the token cap and the summary is incomplete";
         }
         return null;
@@ -233,7 +234,7 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
 
     /** pi 的 {@code {...rest, stopReason:"aborted"}} 且剥掉 errorMessage（:217-218）。 */
     private static Message.AssistantMessage normalizeAborted(Message.AssistantMessage response) {
-        return new Message.AssistantMessage(response.content(), "aborted", response.deferred(),
+        return new Message.AssistantMessage(response.content(), StopReason.ABORTED, response.deferred(),
             response.api(), response.provider(), response.model(), response.usage(),
             response.timestamp(), null, response.rawStopReason());
     }
@@ -360,7 +361,7 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
             }
             if (result == null) {
                 // 流被截断、终局事件缺席 —— provider 方言的 aborted（见上注释）。
-                result = terminal(null, "aborted", text, toolCalls, usage[0], null);
+                result = terminal(null, StopReason.ABORTED, text, toolCalls, usage[0], null);
             }
         } finally {
             iter.close();
@@ -380,7 +381,7 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
      * {@code StreamError.settle}），只在消息上没有时才用这里传进来的值。</p>
      */
     private static Message.AssistantMessage terminal(
-            com.pijava.ai.message.AssistantMessage partial, String reason,
+            com.pijava.ai.message.AssistantMessage partial, StopReason reason,
             StringBuilder text, List<ContentBlock> toolCalls, Usage usage, String errorMessage) {
         if (partial != null && partial.stopReason() != null) {
             var projected = Message.AssistantMessage.fromPartial(partial);

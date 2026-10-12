@@ -96,7 +96,8 @@ public final class SessionJson {
         }
         if (message instanceof Message.AssistantMessage assistant) {
             if (assistant.stopReason() != null) {
-                node.put("stopReason", assistant.stopReason());
+                // 手写 JSON 边界：枚举显式出 wire 字面（camelCase，同 pi 存档）。
+                node.put("stopReason", assistant.stopReason().wireName());
             }
             if (assistant.deferred() != null) {
                 node.set("deferred", MAPPER.valueToTree(assistant.deferred()));

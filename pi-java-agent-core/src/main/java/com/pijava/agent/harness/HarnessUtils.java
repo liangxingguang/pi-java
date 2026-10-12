@@ -10,6 +10,7 @@ import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.session.ContextEntries;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 
 /**
  * Static helpers shared across the harness execution classes.
@@ -92,7 +93,7 @@ final class HarnessUtils {
         for (int i = lane.transcript.size() - 1; i >= 0; i--) {
             var entry = lane.transcript.get(i);
             if (entry instanceof Entry.Message msg && "assistant".equals(msg.message().role())) {
-                String stopReason = lane.partial != null ? lane.partial.stopReason() : null;
+                StopReason stopReason = lane.partial != null ? lane.partial.stopReason() : null;
                 return new LaneState.NewestOwn(
                     msg.id(), "message", "assistant", stopReason);
             }
@@ -124,8 +125,8 @@ final class HarnessUtils {
             new ProvisionedEntry<>(entry)));
     }
 
-    static boolean isErrorStopReason(String sr) {
-        return "error".equals(sr) || "aborted".equals(sr);
+    static boolean isErrorStopReason(StopReason sr) {
+        return sr == StopReason.ERROR || sr == StopReason.ABORTED;
     }
 
     /**
@@ -144,8 +145,8 @@ final class HarnessUtils {
      */
     static String determineOutcome(LaneState lane) {
         if (lane.newestOwn == null) return "error";
-        String sr = lane.newestOwn.stopReason();
-        if ("aborted".equals(sr)) return "aborted";
+        StopReason sr = lane.newestOwn.stopReason();
+        if (sr == StopReason.ABORTED) return "aborted";
         if (isErrorStopReason(sr)) return "error";
         return "completed";
     }

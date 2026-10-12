@@ -14,6 +14,7 @@ import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -50,11 +51,11 @@ class PostRunOverflowDriveTest {
     private static List<StreamEvent> errorOverflowTurn() {
         var errPartial = AssistantMessage.empty()
             .withIdentity("faux-api", "faux", "e2e-model", Instant.now())
-            .withStopReason("error")
+            .withStopReason(StopReason.ERROR)
             .withErrorMessage("prompt is too long: 210000 tokens > 200000 maximum");
         return List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
-            new StreamEvent.StreamError("error",
+            new StreamEvent.StreamError(StopReason.ERROR,
                 new IllegalStateException("prompt is too long"), errPartial));
     }
 
@@ -62,11 +63,11 @@ class PostRunOverflowDriveTest {
         var partial = AssistantMessage.empty();
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent(text)))
-            .withStopReason("stop");
+            .withStopReason(StopReason.STOP);
         return List.of(
             new StreamEvent.Start(partial),
             new StreamEvent.TextDelta(0, text, done),
-            new StreamEvent.StreamDone("stop", null, done));
+            new StreamEvent.StreamDone(StopReason.STOP, null, done));
     }
 
     private static final class Recorder implements CompactionObserver {

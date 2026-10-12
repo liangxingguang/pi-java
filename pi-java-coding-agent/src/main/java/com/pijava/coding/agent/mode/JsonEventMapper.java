@@ -9,6 +9,7 @@ import com.pijava.agent.tool.ToolResult;
 import com.pijava.ai.Usage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.coding.agent.core.AgentSessionEvent;
 import com.pijava.coding.agent.core.WireJson;
@@ -353,14 +354,15 @@ public final class JsonEventMapper {
             case StreamEvent.StreamDone done -> {
                 var node = MAPPER.createObjectNode();
                 node.put("type", "done");
-                node.put("reason", done.reason());
+                // 手写 wire 边界：枚举显式出 wire 字面（camelCase）；null 保持显式 NullNode。
+                putStopReason(node, "reason", done.reason());
                 node.set("usage", normalizedUsage(event));
                 yield node;
             }
             case StreamEvent.StreamError err -> {
                 var node = MAPPER.createObjectNode();
                 node.put("type", "error");
-                node.put("reason", err.reason());
+                putStopReason(node, "reason", err.reason());
                 var text = StreamEvent.StreamError.textOf(err);
                 if (text != null) {
                     node.put("errorMessage", text);
@@ -370,6 +372,15 @@ public final class JsonEventMapper {
             }
             default -> null;
         };
+    }
+
+    /** 停因写线：枚举出 wire 字面；null 保持显式 NullNode（同旧 {@code put(String,String)}）。 */
+    private static void putStopReason(ObjectNode node, String field, StopReason reason) {
+        if (reason == null) {
+            node.putNull(field);
+        } else {
+            node.put(field, reason.wireName());
+        }
     }
 
     /**

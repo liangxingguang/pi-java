@@ -10,6 +10,7 @@ import com.pijava.agent.session.SessionMutation;
 import com.pijava.ai.Usage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 
 import org.junit.jupiter.api.Test;
 
@@ -57,7 +58,7 @@ class StopReasonMigrationTest {
         return ((SessionMutation.Entry) result.value()).entry();
     }
 
-    private static String stopReasonOf(Entry entry) {
+    private static StopReason stopReasonOf(Entry entry) {
         return ((Message.AssistantMessage) ((Entry.Message) entry).message()).stopReason();
     }
 
@@ -69,10 +70,10 @@ class StopReasonMigrationTest {
     void legacyAssistantStopReasonIsMigratedOnRead() {
         var message = new Message.AssistantMessage(
             List.of(new ContentBlock.TextContent("done")),
-            "toolUse", null, null, null, null, null, Instant.ofEpochMilli(1L), null, null);
+            StopReason.TOOL_USE, null, null, null, null, null, Instant.ofEpochMilli(1L), null, null);
 
         assertThat(stopReasonOf(parseEntry(downgraded(legacyAssistantLine(message)))))
-            .isEqualTo("toolUse");
+            .isEqualTo(StopReason.TOOL_USE);
     }
 
     /**
@@ -104,7 +105,7 @@ class StopReasonMigrationTest {
         assertThat(parsed.entryId()).isEqualTo("e-legacy");
         assertThat(parsed.stopReason())
             .as("旧字面量必须被垫片归一（B109），哪怕是走转换路径进来的")
-            .isEqualTo("toolUse");
+            .isEqualTo(StopReason.TOOL_USE);
     }
 
     /**
@@ -118,10 +119,10 @@ class StopReasonMigrationTest {
     void rawStopReasonIsNotMigrated() {
         var message = new Message.AssistantMessage(
             List.of(new ContentBlock.TextContent("done")),
-            "toolUse", null, null, null, null, null, Instant.ofEpochMilli(1L), null, "tool_use");
+            StopReason.TOOL_USE, null, null, null, null, null, Instant.ofEpochMilli(1L), null, "tool_use");
 
         var entry = parseEntry(downgraded(legacyAssistantLine(message)));
-        assertThat(stopReasonOf(entry)).isEqualTo("toolUse");
+        assertThat(stopReasonOf(entry)).isEqualTo(StopReason.TOOL_USE);
         assertThat(rawStopReasonOf(entry)).isEqualTo("tool_use");
     }
 
@@ -129,16 +130,17 @@ class StopReasonMigrationTest {
     void currentStopReasonIsIdempotent() {
         var message = new Message.AssistantMessage(
             List.of(new ContentBlock.TextContent("done")),
-            "toolUse", null, null, null, null, null, Instant.ofEpochMilli(1L), null, null);
+            StopReason.TOOL_USE, null, null, null, null, null, Instant.ofEpochMilli(1L), null, null);
         var line = JsonlCodec.encodeMutation(new SessionMutation.Entry(null,
             new Entry.Message("e-new", 1L, null, Instant.ofEpochMilli(1L), message, null)));
 
-        assertThat(stopReasonOf(parseEntry(line))).isEqualTo("toolUse");
+        assertThat(stopReasonOf(parseEntry(line))).isEqualTo(StopReason.TOOL_USE);
     }
 
     @Test
     void otherStopReasonsAndAbsenceAreUntouched() {
-        for (String reason : List.of("stop", "length", "error", "aborted", "deferred", "pending")) {
+        for (StopReason reason : List.of(StopReason.STOP, StopReason.LENGTH, StopReason.ERROR,
+                StopReason.ABORTED, StopReason.DEFERRED, StopReason.PENDING)) {
             var message = new Message.AssistantMessage(
                 List.of(new ContentBlock.TextContent("done")),
                 reason, null, null, null, null, null, Instant.ofEpochMilli(1L), null, null);

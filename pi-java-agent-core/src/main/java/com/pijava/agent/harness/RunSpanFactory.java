@@ -1,5 +1,6 @@
 package com.pijava.agent.harness;
 
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.telemetry.SpanOptions;
@@ -43,9 +44,10 @@ final class RunSpanFactory {
             return;
         }
         lane.runSpan = null;
-        String stopReason = lane.partial != null ? lane.partial.stopReason() : null;
+        StopReason stopReason = lane.partial != null ? lane.partial.stopReason() : null;
         if (stopReason != null) {
-            span.addAttribute("stopReason", stopReason);
+            // OTel 属性是字符串边界：显式出 wire 字面（camelCase）。
+            span.addAttribute("stopReason", stopReason.wireName());
         }
         span.addAttribute("outcome", outcome);
         LOG.info("[agent] run end lane={} runId={} outcome={} durationMs={}",

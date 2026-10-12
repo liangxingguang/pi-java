@@ -10,6 +10,7 @@ import com.pijava.agent.entry.ProvisionedEntry;
 import com.pijava.ai.Usage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,7 +31,7 @@ class PiNativeSpellingWriteTest {
         var assistant = new Message.AssistantMessage(
             List.of(new ContentBlock.ToolUseContent("call-1", "read",
                 Map.of("path", "x"), null)),
-            "toolUse", null, "openai-completions", "stub", "stub-1",
+            StopReason.TOOL_USE, null, "openai-completions", "stub", "stub-1",
             new Usage(0, 0, 0, 0, null, null, 0, Usage.Cost.zero()),
             java.time.Instant.EPOCH, null, "tool_calls");
         session.appendEntry(new ProvisionedEntry<>(new Entry.Message(

@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -54,8 +55,8 @@ class AgentHarnessIsRunningTest {
             public StreamEvent next() {
                 return switch (++i) {
                     case 1 -> new StreamEvent.Start(AssistantMessage.empty());
-                    default -> new StreamEvent.StreamDone("stop", null,
-                        AssistantMessage.empty().withStopReason("stop"));
+                    default -> new StreamEvent.StreamDone(StopReason.STOP, null,
+                        AssistantMessage.empty().withStopReason(StopReason.STOP));
                 };
             }
 

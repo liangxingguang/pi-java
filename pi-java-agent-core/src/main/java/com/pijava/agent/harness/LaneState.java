@@ -12,6 +12,7 @@ import com.pijava.agent.tool.AgentTool;
 import com.pijava.ai.AbortSignal;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.telemetry.TelemetrySpan;
@@ -377,6 +378,6 @@ public final class LaneState {
         String entryId,
         String entryType,    // "message" | "thinking_level_change" | ...
         String role,         // "user" | "assistant" | "tool" (only for message type)
-        String stopReason    // "stop" | "toolUse" | "error" | "length" | null
+        StopReason stopReason // 终局停因；null＝partial 未落定（无终局判定）
     ) {}
 }

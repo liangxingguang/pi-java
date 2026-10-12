@@ -8,6 +8,7 @@ import java.util.concurrent.TimeUnit;
 import com.pijava.agent.entry.Entry;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.provider.FauxProvider;
 import com.pijava.ai.provider.ProviderRegistry;
 import com.pijava.ai.stream.StreamEvent;
@@ -32,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SessionRunnerRetryContextTest {
 
     private static List<StreamEvent> errorSeq() {
-        var partial = AssistantMessage.empty().withStopReason("error");
+        var partial = AssistantMessage.empty().withStopReason(StopReason.ERROR);
         // C 批次（原 docs/55 §6.3-10）：走**生产者**的落定入口 —— 白名单分类器要的
         // "overloaded" 文本现在从消息上读（此前靠 withErrorShape 补，已删）。
         return List.of(
@@ -43,13 +44,13 @@ class SessionRunnerRetryContextTest {
 
     private static List<StreamEvent> textSeq(String text) {
         var done = AssistantMessage.empty().withContent(List.of(
-            new ContentBlock.TextContent(text))).withStopReason("stop");
+            new ContentBlock.TextContent(text))).withStopReason(StopReason.STOP);
         return List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.TextStart(0, AssistantMessage.empty()),
             new StreamEvent.TextDelta(0, text, done),
             new StreamEvent.TextEnd(0, text, done),
-            new StreamEvent.StreamDone("stop", null, done));
+            new StreamEvent.StreamDone(StopReason.STOP, null, done));
     }
 
     private static List<String> userTexts(AgentSession session) {

@@ -7,6 +7,7 @@ import com.pijava.agent.entry.Entry;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -22,11 +23,11 @@ class ResetContinueTest {
     private static AgentHarness harness() {
         var partial = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent("done")))
-            .withStopReason("stop");
+            .withStopReason(StopReason.STOP);
         return harness((model, context, options) -> StreamIterator.from(List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.TextEnd(0, "done", partial),
-            new StreamEvent.StreamDone("stop", null, partial))));
+            new StreamEvent.StreamDone(StopReason.STOP, null, partial))));
     }
 
     private static AgentHarness harness(StreamFn sf) {
@@ -62,7 +63,7 @@ class ResetContinueTest {
         var failure = new java.util.concurrent.atomic.AtomicReference<Throwable>();
         var partial = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent("done")))
-            .withStopReason("stop");
+            .withStopReason(StopReason.STOP);
         var h = harness((model, context, options) -> {
             try {
                 holder.get().reset("default");
@@ -72,7 +73,7 @@ class ResetContinueTest {
             return StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.TextEnd(0, "done", partial),
-                new StreamEvent.StreamDone("stop", null, partial)));
+                new StreamEvent.StreamDone(StopReason.STOP, null, partial)));
         });
         holder.set(h);
 

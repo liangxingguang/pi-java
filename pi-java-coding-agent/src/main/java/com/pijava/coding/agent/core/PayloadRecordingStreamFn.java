@@ -193,9 +193,10 @@ final class PayloadRecordingStreamFn implements StreamFn {
 
         private Map<String, Object> responsePayload(StreamEvent terminal) {
             var payload = new LinkedHashMap<String, Object>();
-            payload.put("stopReason", terminal.partial() != null
-                ? terminal.partial().stopReason() : terminal instanceof StreamEvent.StreamError se
-                    ? "error" : null);
+            // 遥测 payload 是手写 JSON 边界：枚举显式出 wire 字面（camelCase）。
+            var partialReason = terminal.partial() != null ? terminal.partial().stopReason() : null;
+            payload.put("stopReason", partialReason != null ? partialReason.wireName()
+                : terminal instanceof StreamEvent.StreamError ? "error" : null);
             if (terminal instanceof StreamEvent.StreamError se) {
                 // C 批次（原 docs/55 §6.3-14）：与另外三处读点同规 —— 文本正源是消息
                 // （生产者落定），Throwable 只兜底（未经 settle 的裸事件）。
@@ -208,7 +209,8 @@ final class PayloadRecordingStreamFn implements StreamFn {
                 var message = new LinkedHashMap<String, Object>();
                 message.put("id", lastPartial.id());
                 message.put("content", lastPartial.content());
-                message.put("stopReason", lastPartial.stopReason());
+                message.put("stopReason", lastPartial.stopReason() == null
+                    ? null : lastPartial.stopReason().wireName());
                 payload.put("message", message);
             }
             return payload;

@@ -12,6 +12,7 @@ import com.pijava.agent.harness.PiLoop.NextTurnUpdate;
 import com.pijava.agent.harness.PiLoop.Sink;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.ai.thinking.ThinkingLevel;
@@ -100,7 +101,8 @@ final class PiLoopRunner {
                 newMessages.add(message);
 
                 // pi: error / aborted 直接收口（agent-loop.ts:189-193）
-                if ("error".equals(message.stopReason()) || "aborted".equals(message.stopReason())) {
+                if (message.stopReason() == StopReason.ERROR
+                        || message.stopReason() == StopReason.ABORTED) {
                     emit.emit(new Event.TurnEnd(message, List.of()));
                     emit.emit(new Event.AgentEnd(List.copyOf(newMessages)));
                     return;
@@ -112,7 +114,7 @@ final class PiLoopRunner {
                 if (!toolCalls.isEmpty()) {
                     // pi: length 截断 ⇒ 全部失败，不执行（:206-208 分派，:379-404 实现）
                     var batch = PiLoopTools.run(toolCalls, context, config, emit,
-                        "length".equals(message.stopReason()));
+                        message.stopReason() == StopReason.LENGTH);
                     toolResults.addAll(batch.messages());
                     hasMoreToolCalls = !batch.terminate();
                     for (var result : toolResults) {
@@ -291,7 +293,7 @@ final class PiLoopRunner {
             // —— pi 侧等价物是 provider 自己以 aborted 收尾的那条消息（faux.ts:321-328：
             // provider/model 来自请求、errorMessage="Request was aborted"、timestamp=now；
             // api 在循环层不可见 —— pi-java 的 ModelId 没有协议维度，故留 null，键省略）。
-            finalMessage = new Message.AssistantMessage(List.of(), "aborted", null,
+            finalMessage = new Message.AssistantMessage(List.of(), StopReason.ABORTED, null,
                 null, config.model().provider(), config.model().modelName(),
                 null, java.time.Instant.now(), "Request was aborted", null);
         }
@@ -333,17 +335,17 @@ final class PiLoopRunner {
         if (signal == null || !signal.isAborted()) {
             return message;
         }
-        if ("error".equals(message.stopReason()) || "aborted".equals(message.stopReason())) {
+        if (message.stopReason() == StopReason.ERROR
+                || message.stopReason() == StopReason.ABORTED) {
             return message;
         }
-        // ⑩：判据是「还没观测到终局判定」（＝占位值 "pending"，见
-        // StreamEvent.PENDING_STOP_REASON / isSettled）。null 是同一状态的旧形状
-        // （非流式构造的消息、旧转录），一并按「没观测到」办。
+        // ⑩：判据是「还没观测到终局判定」（＝占位值 PENDING，见 StopReason.isSettled）。
+        // null 是同一状态的旧形状（非流式构造的消息、旧转录），一并按「没观测到」办。
         boolean noTerminalYet = !StreamEvent.isSettled(message.stopReason());
         if (!cutShort && !noTerminalYet) {
             return message;
         }
-        return message.withStopReason("aborted");
+        return message.withStopReason(StopReason.ABORTED);
     }
 
     /** pi: 除 start/done/error 之外的流事件都是 update。 */

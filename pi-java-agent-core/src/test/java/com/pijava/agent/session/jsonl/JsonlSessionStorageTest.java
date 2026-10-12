@@ -12,6 +12,7 @@ import com.pijava.agent.session.SessionErrorCode;
 import com.pijava.agent.session.SessionJson;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,7 +33,7 @@ class JsonlSessionStorageTest {
         return new ProvisionedEntry<>(new Entry.Message(id, 0, null, null,
             new Message.AssistantMessage(
                 List.of(new ContentBlock.ThinkingContent(text, signature, redacted)),
-                "stop", null, null, null, null, null, null, null, null), null));
+                StopReason.STOP, null, null, null, null, null, null, null, null), null));
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -268,7 +269,7 @@ class JsonlSessionStorageTest {
             com.pijava.ai.Usage.Cost.zero());
         session.appendEntry(new ProvisionedEntry<>(new Entry.Message("e1", 0, null, null,
             new Message.AssistantMessage(List.of(new ContentBlock.TextContent("hi")),
-                "error", null, "anthropic-messages", "anthropic", "claude-sonnet-5",
+                StopReason.ERROR, null, "anthropic-messages", "anthropic", "claude-sonnet-5",
                 usage, at, "boom", "refusal"), null)), "main");
         session.appendEntry(new ProvisionedEntry<>(new Entry.Message("e2", 0, null, null,
             new Message.AssistantMessage(List.of(new ContentBlock.TextContent("old"))),
@@ -285,7 +286,7 @@ class JsonlSessionStorageTest {
         assertThat(rich.usage()).isEqualTo(usage);
         assertThat(rich.timestamp()).isEqualTo(at);
         assertThat(rich.errorMessage()).isEqualTo("boom");
-        assertThat(rich.stopReason()).isEqualTo("error");
+        assertThat(rich.stopReason()).isEqualTo(StopReason.ERROR);
         // ⑨（D5）：线格原值随消息落库再读回（pi types.ts:443；pi 的消息整体 stringify
         // 落盘 ⇒ 它在 pi 的转录里同样是一个键）。
         assertThat(rich.rawStopReason()).isEqualTo("refusal");

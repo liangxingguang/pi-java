@@ -20,6 +20,7 @@ import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -79,21 +80,21 @@ class LaneMessagesTest {
     private static List<StreamEvent> toolTurn(String callId, String name) {
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.ToolUseContent(callId, name, Map.of())))
-            .withStopReason("toolUse");
+            .withStopReason(StopReason.TOOL_USE);
         return List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.ToolCallEnd(0, callId, name, Map.of(), done),
-            new StreamEvent.StreamDone("toolUse", null, done));
+            new StreamEvent.StreamDone(StopReason.TOOL_USE, null, done));
     }
 
     private static List<StreamEvent> textTurn(String text) {
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent(text)))
-            .withStopReason("stop");
+            .withStopReason(StopReason.STOP);
         return List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.TextEnd(0, text, done),
-            new StreamEvent.StreamDone("stop", null, done));
+            new StreamEvent.StreamDone(StopReason.STOP, null, done));
     }
 
     /** 一段「报了巨量用量」的响应：溢出检测读的就是这个帧。 */
@@ -103,14 +104,14 @@ class LaneMessagesTest {
         // done、并盖当前模型的身份戳，否则 sameModel/C1 与用量直读都看不见这条溢出。
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent(text)))
-            .withStopReason("stop")
+            .withStopReason(StopReason.STOP)
             .withUsage(new StreamEvent.UsageInfo(500_000, 10, null))
             .withIdentity("faux-api", "faux", "test-model", Instant.now());
         return List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.TextEnd(0, text, done),
             new StreamEvent.UsageInfo(500_000, 10, done),
-            new StreamEvent.StreamDone("stop", null, done));
+            new StreamEvent.StreamDone(StopReason.STOP, null, done));
     }
 
     private AgentHarness harness(StreamFn streamFn, ToolRegistry registry,
@@ -247,12 +248,12 @@ class LaneMessagesTest {
     private static List<StreamEvent> usageToolTurn(long reportedInput) {
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.ToolUseContent("c1", "echo", Map.of())))
-            .withStopReason("toolUse")
+            .withStopReason(StopReason.TOOL_USE)
             .withUsage(new StreamEvent.UsageInfo(reportedInput, 0, null));
         return List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.ToolCallEnd(0, "c1", "echo", Map.of(), done),
-            new StreamEvent.StreamDone("toolUse", null, done));
+            new StreamEvent.StreamDone(StopReason.TOOL_USE, null, done));
     }
 
     private Entry.Compaction firstCompaction(AgentHarness h) {

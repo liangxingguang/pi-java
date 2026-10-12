@@ -17,6 +17,7 @@ import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -72,20 +73,20 @@ class ToolBatchParityTest {
                     .withContent(List.of(
                         new ContentBlock.ToolUseContent("c1", first, Map.of()),
                         new ContentBlock.ToolUseContent("c2", second, Map.of())))
-                    .withStopReason("toolUse");
+                    .withStopReason(StopReason.TOOL_USE);
                 return StreamIterator.from(List.of(
                     new StreamEvent.Start(AssistantMessage.empty()),
                     new StreamEvent.ToolCallEnd(0, "c1", first, Map.of(), partial),
                     new StreamEvent.ToolCallEnd(1, "c2", second, Map.of(), partial),
-                    new StreamEvent.StreamDone("toolUse", null, partial)));
+                    new StreamEvent.StreamDone(StopReason.TOOL_USE, null, partial)));
             }
             var done = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent("done")))
-                .withStopReason("stop");
+                .withStopReason(StopReason.STOP);
             return StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.TextEnd(0, "done", done),
-                new StreamEvent.StreamDone("stop", null, done)));
+                new StreamEvent.StreamDone(StopReason.STOP, null, done)));
         };
     }
 

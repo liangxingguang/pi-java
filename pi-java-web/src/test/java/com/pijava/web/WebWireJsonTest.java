@@ -6,6 +6,7 @@ import java.util.Map;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 
 import org.junit.jupiter.api.Test;
 
@@ -82,7 +83,7 @@ class WebWireJsonTest {
         var usage = new com.pijava.ai.Usage(10, 5, 1, 2, null, null, 18,
             com.pijava.ai.Usage.Cost.zero());
         var m = new Message.AssistantMessage(List.of(new ContentBlock.TextContent("hi")),
-            "stop", null, "openai-responses", "openai", "mock", usage,
+            StopReason.STOP, null, "openai-responses", "openai", "mock", usage,
             java.time.Instant.ofEpochMilli(1_700_000_000_000L), null, "max_tokens");
         var node = WebWireJson.messageNode(m);
         assertThat(node.get("stopReason").asText()).isEqualTo("stop");

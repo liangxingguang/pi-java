@@ -10,6 +10,7 @@ import com.pijava.agent.entry.Entry;
 import com.pijava.ai.Usage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 // 外层测试类直接构造 SummaryResult（它是 SummaryGenerator 的嵌套类型，
 // 仅在实现类内部可经简单名访问）。
 import com.pijava.agent.compaction.SummaryGenerator.SummaryResult;
@@ -222,7 +223,7 @@ class SplitTurnCompactionTest {
         Builder assistant(String id, String text) {
             entries.add(new Entry.Message(id, 0, lastId, Instant.EPOCH,
                 new Message.AssistantMessage(
-                    List.of(new ContentBlock.TextContent(text)), "stop", null,
+                    List.of(new ContentBlock.TextContent(text)), StopReason.STOP, null,
                     null, null, null, null, Instant.EPOCH, null, null),
                 false));
             lastId = id;
@@ -235,7 +236,7 @@ class SplitTurnCompactionTest {
             entries.add(new Entry.Message(id, 0, lastId, Instant.EPOCH,
                 new Message.AssistantMessage(
                     List.of(new ContentBlock.ToolUseContent(id + "-call", name, arguments)),
-                    "stop", null, null, null, null, null, Instant.EPOCH, null, null),
+                    StopReason.STOP, null, null, null, null, null, Instant.EPOCH, null, null),
                 false));
             lastId = id;
             return this;

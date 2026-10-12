@@ -9,6 +9,7 @@ import com.pijava.agent.session.ContextEntries;
 import com.pijava.ai.Usage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -82,7 +83,7 @@ class EstimateProjectedContextTokensTest {
             var usage = new Usage(5, 5, 0, 0, null, null, totalTokens, Usage.Cost.zero());
             entries.add(new Entry.Message(id, 0, lastId, Instant.EPOCH,
                 new Message.AssistantMessage(
-                    List.of(new ContentBlock.TextContent("hi")), "stop", null,
+                    List.of(new ContentBlock.TextContent("hi")), StopReason.STOP, null,
                     null, null, null, usage, Instant.EPOCH, null, null),
                 false));
             lastId = id;

@@ -15,6 +15,7 @@ import com.pijava.ai.Usage;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -96,13 +97,13 @@ class HarnessCompactionSummarySpanTest {
             var text = summarization ? SUMMARY_TEXT : "assistant reply";
             var partial = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent(text)))
-                .withStopReason("stop");
+                .withStopReason(StopReason.STOP);
             return StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.TextEnd(0, text, partial),
                 new StreamEvent.UsageInfo(SUMMARY_INPUT_TOKENS, SUMMARY_OUTPUT_TOKENS, partial,
                     Usage.of(SUMMARY_INPUT_TOKENS, SUMMARY_OUTPUT_TOKENS)),
-                new StreamEvent.StreamDone("stop", null, partial)));
+                new StreamEvent.StreamDone(StopReason.STOP, null, partial)));
         };
     }
 

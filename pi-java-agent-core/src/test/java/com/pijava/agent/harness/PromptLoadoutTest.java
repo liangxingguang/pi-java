@@ -22,6 +22,7 @@ import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -228,26 +229,26 @@ class PromptLoadoutTest {
         var partial = AssistantMessage.empty();
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent(text)))
-            .withStopReason("stop")
+            .withStopReason(StopReason.STOP)
             .withUsage(new StreamEvent.UsageInfo(11, 7, null, null));
         return List.of(
             new StreamEvent.Start(partial),
             new StreamEvent.TextDelta(0, text, done),
             new StreamEvent.UsageInfo(11, 7, done),
-            new StreamEvent.StreamDone("stop", null, done));
+            new StreamEvent.StreamDone(StopReason.STOP, null, done));
     }
 
     private static List<StreamEvent> toolTurn(String callId, String name) {
         var partial = AssistantMessage.empty();
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.ToolUseContent(callId, name, Map.of())))
-            .withStopReason("toolUse")
+            .withStopReason(StopReason.TOOL_USE)
             .withUsage(new StreamEvent.UsageInfo(5, 3, null, null));
         return List.of(
             new StreamEvent.Start(partial),
             new StreamEvent.ToolCallEnd(0, callId, name, Map.of(), done),
             new StreamEvent.UsageInfo(5, 3, done),
-            new StreamEvent.StreamDone("toolUse", null, done));
+            new StreamEvent.StreamDone(StopReason.TOOL_USE, null, done));
     }
 
     /** 带片段与准则的工具（pi 的 {@code promptSnippet}/{@code promptGuidelines}）。 */

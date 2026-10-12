@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.pijava.ai.Usage;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
 import com.pijava.coding.agent.core.AgentSessionEvent;
@@ -182,10 +183,10 @@ class JsonEventMapperMessageUpdateTest {
     void terminalDoneFrameUsesTheFlattenedProxyShape() {
         var partial = AssistantMessage.empty()
             .withUsage(new StreamEvent.UsageInfo(120, 30, null, Usage.of(120, 30)))
-            .withStopReason("stop");
+            .withStopReason(StopReason.STOP);
 
         var node = JsonEventMapper.toWire(msgUpdate(
-            StreamEvent.StreamDone.settle("stop", partial)));
+            StreamEvent.StreamDone.settle(StopReason.STOP, partial)));
 
         var delta = node.get("assistantMessageEvent");
         assertThat(delta.get("type").asText()).isEqualTo("done");
@@ -203,7 +204,7 @@ class JsonEventMapperMessageUpdateTest {
         var partial = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent("alpha")));
         var err = StreamEvent.StreamError.settle(
-            "error", new IllegalStateException("kaboom"), partial);
+            StopReason.ERROR, new IllegalStateException("kaboom"), partial);
 
         var node = JsonEventMapper.toWire(msgUpdate(err));
 
@@ -224,7 +225,7 @@ class JsonEventMapperMessageUpdateTest {
     void terminalErrorFrameOmitsErrorMessageWhenAbsent() {
         // pi 的 `errorMessage?: string` ⇒ 无文本时**不写键**（同本文件顶部的纪律）。
         var err = new StreamEvent.StreamError(
-            "error", null, AssistantMessage.empty().withStopReason("error"));
+            StopReason.ERROR, null, AssistantMessage.empty().withStopReason(StopReason.ERROR));
 
         var delta = JsonEventMapper.toWire(msgUpdate(err)).get("assistantMessageEvent");
 
@@ -238,7 +239,7 @@ class JsonEventMapperMessageUpdateTest {
         // 第二个观测面（--mode json 的逐条输出）走的是同一个投影 —— 否则
         // Throwable 会从另一条线漏出去。
         var err = StreamEvent.StreamError.settle(
-            "aborted", new RuntimeException("boom"), AssistantMessage.empty());
+            StopReason.ABORTED, new RuntimeException("boom"), AssistantMessage.empty());
 
         var json = JsonEventMapper.toStreamEventWire(err);
 

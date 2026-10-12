@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -36,11 +37,11 @@ class HarnessTelemetrySpansTest {
     private static StreamFn streamFn(String reply) {
         var partial = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent(reply)))
-                .withStopReason("toolUse");
+                .withStopReason(StopReason.TOOL_USE);
         return (model, context, options) -> StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.TextEnd(0, reply, partial),
-                new StreamEvent.StreamDone("toolUse", null, partial)));
+                new StreamEvent.StreamDone(StopReason.TOOL_USE, null, partial)));
     }
 
     private List<JsonNode> readLines(Path tracesDir) throws IOException {

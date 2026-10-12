@@ -24,6 +24,7 @@ import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -75,13 +76,13 @@ class PiLaneEngineTest {
         // UsageRecord 读的正是投影结果（A3 起不再读 sink 的旁路累加器）。
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent(text)))
-            .withStopReason("stop")
+            .withStopReason(StopReason.STOP)
             .withUsage(new StreamEvent.UsageInfo(11, 7, null, null));
         return List.of(
             new StreamEvent.Start(partial),
             new StreamEvent.TextDelta(0, text, done),
             new StreamEvent.UsageInfo(11, 7, done),
-            new StreamEvent.StreamDone("stop", null, done));
+            new StreamEvent.StreamDone(StopReason.STOP, null, done));
     }
 
     /** 带单个工具调用的助手响应。 */
@@ -89,13 +90,13 @@ class PiLaneEngineTest {
         var partial = AssistantMessage.empty();
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.ToolUseContent(callId, name, args)))
-            .withStopReason("toolUse")
+            .withStopReason(StopReason.TOOL_USE)
             .withUsage(new StreamEvent.UsageInfo(5, 3, null, null));
         return List.of(
             new StreamEvent.Start(partial),
             new StreamEvent.ToolCallEnd(0, callId, name, args, done),
             new StreamEvent.UsageInfo(5, 3, done),
-            new StreamEvent.StreamDone("toolUse", null, done));
+            new StreamEvent.StreamDone(StopReason.TOOL_USE, null, done));
     }
 
     // ── 夹具 ───────────────────────────────────────────────────────
@@ -278,7 +279,7 @@ class PiLaneEngineTest {
         assertThat(usage.get(0).kind()).isEqualTo("assistant");
         assertThat(usage.get(0).usage().input()).isEqualTo(11);
         assertThat(usage.get(0).usage().output()).isEqualTo(7);
-        assertThat(usage.get(0).stopReason()).isEqualTo("stop");
+        assertThat(usage.get(0).stopReason()).isEqualTo(StopReason.STOP);
     }
 
     /**
@@ -296,12 +297,12 @@ class PiLaneEngineTest {
         var partial = AssistantMessage.empty();
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent("hi")))
-            .withStopReason("stop")
+            .withStopReason(StopReason.STOP)
             .withUsage(new StreamEvent.UsageInfo(100, 20, null, full));
         var h = harness(scripted(List.of(List.of(
             new StreamEvent.Start(partial),
             new StreamEvent.UsageInfo(100, 20, done),
-            new StreamEvent.StreamDone("stop", null, done)))), null);
+            new StreamEvent.StreamDone(StopReason.STOP, null, done)))), null);
 
         h.prompt(AgentHarness.DEFAULT_LANE, "hi", List.of(), new Recorder());
 

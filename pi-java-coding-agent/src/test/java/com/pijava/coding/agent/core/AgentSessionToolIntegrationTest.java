@@ -12,6 +12,7 @@ import com.pijava.agent.entry.Entry;
 import com.pijava.agent.harness.SessionSnapshot;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.provider.FauxProvider;
 import com.pijava.ai.provider.ProviderRegistry;
 import com.pijava.ai.stream.StreamEvent;
@@ -45,21 +46,21 @@ class AgentSessionToolIntegrationTest {
             "content", "print(\"hello\")");
         var toolMsg = AssistantMessage.empty().withContent(List.of(
             new ContentBlock.ToolUseContent("id1", "write", argsMap)))
-            .withStopReason("toolUse");
+            .withStopReason(StopReason.TOOL_USE);
         var doneMsg = AssistantMessage.empty().withContent(List.of(
-            new ContentBlock.TextContent("done"))).withStopReason("stop");
+            new ContentBlock.TextContent("done"))).withStopReason(StopReason.STOP);
         providers.register(FauxProvider.sequence("faux-tool", List.of(
             List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.ToolCallStart(0, AssistantMessage.empty()),
                 new StreamEvent.ToolCallEnd(0, "id1", "write", argsMap, toolMsg),
-                new StreamEvent.StreamDone("toolUse", null, toolMsg)),
+                new StreamEvent.StreamDone(StopReason.TOOL_USE, null, toolMsg)),
             List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.TextStart(0, AssistantMessage.empty()),
                 new StreamEvent.TextDelta(0, "done", doneMsg),
                 new StreamEvent.TextEnd(0, "done", doneMsg),
-                new StreamEvent.StreamDone("stop", null, doneMsg)))));
+                new StreamEvent.StreamDone(StopReason.STOP, null, doneMsg)))));
         var toolContext = new ToolContext(
             tmp.toString(), Map.of(),
             new DefaultShellExecutor(), new DefaultFileSystem());
@@ -96,7 +97,7 @@ class AgentSessionToolIntegrationTest {
             new StreamEvent.TextDelta(0, "hi", partial0),
             new StreamEvent.UsageInfo(123, 45, partialWithUsage),
             new StreamEvent.TextEnd(0, "hi", partialWithUsage),
-            new StreamEvent.StreamDone("stop", usageInfo, partialWithUsage)))));
+            new StreamEvent.StreamDone(StopReason.STOP, usageInfo, partialWithUsage)))));
         var toolContext = new ToolContext(
             tmp.toString(), Map.of(),
             new DefaultShellExecutor(), new DefaultFileSystem());
@@ -132,22 +133,22 @@ class AgentSessionToolIntegrationTest {
             "--provider", "faux-replay", "--model", "hello", "--no-session"});
         var providers = ProviderRegistry.create();
         var helloMsg = AssistantMessage.empty().withContent(List.of(
-            new ContentBlock.TextContent("hello"))).withStopReason("stop");
+            new ContentBlock.TextContent("hello"))).withStopReason(StopReason.STOP);
         var worldMsg = AssistantMessage.empty().withContent(List.of(
-            new ContentBlock.TextContent("world"))).withStopReason("stop");
+            new ContentBlock.TextContent("world"))).withStopReason(StopReason.STOP);
         providers.register(FauxProvider.sequence("faux-replay", List.of(
             List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.TextStart(0, AssistantMessage.empty()),
                 new StreamEvent.TextDelta(0, "hello", helloMsg),
                 new StreamEvent.TextEnd(0, "hello", helloMsg),
-                new StreamEvent.StreamDone("stop", null, helloMsg)),
+                new StreamEvent.StreamDone(StopReason.STOP, null, helloMsg)),
             List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.TextStart(0, AssistantMessage.empty()),
                 new StreamEvent.TextDelta(0, "world", worldMsg),
                 new StreamEvent.TextEnd(0, "world", worldMsg),
-                new StreamEvent.StreamDone("stop", null, worldMsg)))));
+                new StreamEvent.StreamDone(StopReason.STOP, null, worldMsg)))));
         var toolContext = new ToolContext(
             tmp.toString(), Map.of(),
             new DefaultShellExecutor(), new DefaultFileSystem());
@@ -184,13 +185,13 @@ class AgentSessionToolIntegrationTest {
             "--provider", "faux-stream", "--model", "hello", "--no-session"});
         var providers = ProviderRegistry.create();
         var done = AssistantMessage.empty().withContent(List.of(
-            new ContentBlock.TextContent("hi"))).withStopReason("stop");
+            new ContentBlock.TextContent("hi"))).withStopReason(StopReason.STOP);
         providers.register(FauxProvider.sequence("faux-stream", List.of(List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.TextStart(0, AssistantMessage.empty()),
             new StreamEvent.TextDelta(0, "hi", done),
             new StreamEvent.TextEnd(0, "hi", done),
-            new StreamEvent.StreamDone("stop", null, done)))));
+            new StreamEvent.StreamDone(StopReason.STOP, null, done)))));
         var session = AgentSession.create(
             args, InMemorySessionRepository.create(), providers,
             new ToolContext(tmp.toString(), Map.of(),

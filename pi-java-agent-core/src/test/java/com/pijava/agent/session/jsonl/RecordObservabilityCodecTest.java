@@ -11,6 +11,7 @@ import com.pijava.agent.record.OperationOutcome;
 import com.pijava.agent.record.StepKind;
 import com.pijava.agent.session.SessionMutation;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.message.DeferredHandle;
 import com.pijava.ai.message.Message;
 
@@ -45,13 +46,14 @@ class RecordObservabilityCodecTest {
     void assistantEntryRoundTripsItsStopReason() {
         var entry = new Entry.Message("e-1", 11L, null, Instant.now(),
             new Message.AssistantMessage(
-                List.of(new ContentBlock.TextContent("done")), "toolUse", null), null);
+                List.of(new ContentBlock.TextContent("done")), StopReason.TOOL_USE, null,
+                null, null, null, null, null, null, null), null);
 
         var parsed = (Entry.Message) encodeThenParseEntry(entry);
 
         assertThat(parsed.message()).isInstanceOf(Message.AssistantMessage.class);
         assertThat(((Message.AssistantMessage) parsed.message()).stopReason())
-            .isEqualTo("toolUse");
+            .isEqualTo(StopReason.TOOL_USE);
     }
 
     @Test
@@ -92,12 +94,13 @@ class RecordObservabilityCodecTest {
             "batch-1/row-2", 1_700_000_000_000L, 500L, Map.of("row", 2, "done", false));
         var entry = new Entry.Message("e-5", 20L, null, Instant.now(),
             new Message.AssistantMessage(
-                List.of(new ContentBlock.TextContent("pending")), "deferred", handle), null);
+                List.of(new ContentBlock.TextContent("pending")), StopReason.DEFERRED, handle,
+                null, null, null, null, null, null, null), null);
 
         var parsed = (Entry.Message) encodeThenParseEntry(entry);
         var assistant = (Message.AssistantMessage) parsed.message();
 
-        assertThat(assistant.stopReason()).isEqualTo("deferred");
+        assertThat(assistant.stopReason()).isEqualTo(StopReason.DEFERRED);
         assertThat(assistant.deferred()).isEqualTo(handle);
         assertThat(assistant.deferred().data()).containsEntry("row", 2);
     }

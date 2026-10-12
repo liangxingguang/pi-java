@@ -11,6 +11,7 @@ import com.pijava.agent.tool.ToolResult;
 import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 
 /**
@@ -65,7 +66,7 @@ final class FrameNormalizer {
                 "id", toolCallId(e.toolCallId()), "name", e.toolName(),
                 "result", resultOf(e.result()), "isError", e.isError());
             case PiLoop.Event.TurnEnd e -> CanonicalJson.obj(
-                "type", "turn_end", "stopReason", e.message().stopReason(),
+                "type", "turn_end", "stopReason", reasonWire(e.message().stopReason()),
                 "toolResults", toolNames(e.toolResults()));
             case PiLoop.Event.AgentEnd e -> CanonicalJson.obj(
                 "type", "agent_end", "messages", messagesOf(e.messages()));
@@ -110,6 +111,11 @@ final class FrameNormalizer {
             out.put("raw", raw);
         }
         return out;
+    }
+
+    /** 停因进帧必须写 wire 字面（camelCase），null（未落定）照样省略成 null。 */
+    private static String reasonWire(StopReason reason) {
+        return reason == null ? null : reason.wireName();
     }
 
     /** pi 的 {@code AgentEventSink} 事件名 ⇒ 归一化后的 {@code evt} 字段。 */
@@ -166,7 +172,7 @@ final class FrameNormalizer {
                 var out = new LinkedHashMap<String, Object>();
                 out.put("role", "assistant");
                 out.put("content", blocksOf(assistant.content()));
-                out.put("stopReason", assistant.stopReason());
+                out.put("stopReason", reasonWire(assistant.stopReason()));
                 if (assistant.api() != null) {
                     out.put("api", assistant.api());
                 }

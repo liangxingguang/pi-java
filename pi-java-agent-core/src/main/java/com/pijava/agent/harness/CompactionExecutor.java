@@ -14,6 +14,7 @@ import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.record.OperationOutcome;
 import com.pijava.agent.record.StepKind;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.telemetry.SpanOptions;
 import com.pijava.telemetry.TelemetrySpan;
 
@@ -344,7 +345,8 @@ final class CompactionExecutor {
             return;
         }
         if (messages.get(messages.size() - 1) instanceof Message.AssistantMessage last
-                && ("error".equals(last.stopReason()) || "length".equals(last.stopReason()))) {
+                && (last.stopReason() == StopReason.ERROR
+                    || last.stopReason() == StopReason.LENGTH)) {
             messages.remove(messages.size() - 1);
         }
     }

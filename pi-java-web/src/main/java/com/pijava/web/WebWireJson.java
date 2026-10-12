@@ -58,7 +58,8 @@ final class WebWireJson {
             // timestamp 不带上：维持既有「wire 无消息 timestamp」的有意偏离
             // （client/main.ts:261/286 直贴不判重）。省略规则同 toolResult 支。
             if (assistant.stopReason() != null) {
-                node.put("stopReason", assistant.stopReason());
+                // 手写 wire JSON 边界：枚举显式出 wire 字面（camelCase，前端同 pi 词表）。
+                node.put("stopReason", assistant.stopReason().wireName());
             }
             if (assistant.deferred() != null) {
                 node.set("deferred", MAPPER.valueToTree(assistant.deferred()));

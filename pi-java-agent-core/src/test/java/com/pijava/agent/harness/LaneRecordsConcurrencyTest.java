@@ -22,6 +22,7 @@ import com.pijava.ai.AbortSignal;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -205,8 +206,8 @@ class LaneRecordsConcurrencyTest {
             blocks.add(new ContentBlock.ToolUseContent(id, name, Map.of()));
             events.add(new StreamEvent.ToolCallEnd(i, id, name, Map.of(), partial));
         }
-        var done = AssistantMessage.empty().withContent(blocks).withStopReason("toolUse");
-        events.add(new StreamEvent.StreamDone("toolUse", null, done));
+        var done = AssistantMessage.empty().withContent(blocks).withStopReason(StopReason.TOOL_USE);
+        events.add(new StreamEvent.StreamDone(StopReason.TOOL_USE, null, done));
         return List.copyOf(events);
     }
 
@@ -214,10 +215,10 @@ class LaneRecordsConcurrencyTest {
         var partial = AssistantMessage.empty();
         var done = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent(text)))
-            .withStopReason("stop");
+            .withStopReason(StopReason.STOP);
         return List.of(
             new StreamEvent.Start(partial),
             new StreamEvent.TextEnd(0, text, done),
-            new StreamEvent.StreamDone("stop", null, done));
+            new StreamEvent.StreamDone(StopReason.STOP, null, done));
     }
 }

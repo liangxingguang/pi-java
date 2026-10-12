@@ -16,6 +16,7 @@ import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -51,11 +52,11 @@ class LlmSummaryReasoningOptionTest {
 
     private static List<StreamEvent> success(String text) {
         var done = AssistantMessage.empty().withContent(List.of(
-            new ContentBlock.TextContent(text))).withStopReason("stop");
+            new ContentBlock.TextContent(text))).withStopReason(StopReason.STOP);
         return List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.TextDelta(0, text, done),
-            new StreamEvent.StreamDone("stop", null, done));
+            new StreamEvent.StreamDone(StopReason.STOP, null, done));
     }
 
     private static final IntSupplier NO_CAP = () -> 0;

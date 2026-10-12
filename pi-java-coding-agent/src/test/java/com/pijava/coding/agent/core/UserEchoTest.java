@@ -10,6 +10,7 @@ import com.pijava.agent.tool.ToolContext;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.provider.FauxProvider;
 import com.pijava.ai.provider.ProviderRegistry;
 import com.pijava.ai.stream.StreamEvent;
@@ -39,13 +40,13 @@ class UserEchoTest {
 
     private static List<StreamEvent> textSeq(String text) {
         var done = AssistantMessage.empty().withContent(List.of(
-            new ContentBlock.TextContent(text))).withStopReason("stop");
+            new ContentBlock.TextContent(text))).withStopReason(StopReason.STOP);
         return List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             new StreamEvent.TextStart(0, AssistantMessage.empty()),
             new StreamEvent.TextDelta(0, text, done),
             new StreamEvent.TextEnd(0, text, done),
-            new StreamEvent.StreamDone("stop", null, done));
+            new StreamEvent.StreamDone(StopReason.STOP, null, done));
     }
 
     private static List<String> echoedTexts(List<AgentSessionEvent> events) {

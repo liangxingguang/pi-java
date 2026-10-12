@@ -8,6 +8,7 @@ import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.ai.Usage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -24,7 +25,7 @@ class ContextUsageEstimatorTest {
         return new Message.UserMessage(List.of(new ContentBlock.TextContent(text)));
     }
 
-    private static Message assistant(String text, String stopReason, Usage usage) {
+    private static Message assistant(String text, StopReason stopReason, Usage usage) {
         return new Message.AssistantMessage(
             List.of(new ContentBlock.TextContent(text)), stopReason, null,
             null, null, null, usage, null, null, null);
@@ -58,7 +59,7 @@ class ContextUsageEstimatorTest {
 
     @Test
     void withoutAnyValidUsageEveryMessageIsCharEstimated() {
-        var messages = List.of(user("x".repeat(4_000)), assistant("ok", "stop", null));
+        var messages = List.of(user("x".repeat(4_000)), assistant("ok", StopReason.STOP, null));
         var estimate = ContextUsageEstimator.estimateContextTokens(messages);
         assertThat(estimate.lastUsageIndex()).isNull();
         assertThat(estimate.usageTokens()).isEqualTo(0);
@@ -70,7 +71,7 @@ class ContextUsageEstimatorTest {
     void lastValidUsageAnchorsTheEstimateAndTrailingCharsAddOn() {
         var messages = List.of(
             user("ignored-before-usage-usage-counts-it"),
-            assistant("answer", "stop", total(100)),
+            assistant("answer", StopReason.STOP, total(100)),
             user("abcd")); // ceil(4/4) = 1
         var estimate = ContextUsageEstimator.estimateContextTokens(messages);
         assertThat(estimate.lastUsageIndex()).isEqualTo(1);
@@ -84,11 +85,11 @@ class ContextUsageEstimatorTest {
         // pi getAssistantUsage（:167-180）：stopReason ∈ {aborted,error} 或
         // 折算值 ≤ 0 的 assistant **不供用量**，扫描继续向更早的消息找。
         var messages = List.of(
-            assistant("anchor", "stop", total(60)),
-            assistant("z", "stop", parts(0, 0, 0, 0)), // 折算 0 ⇒ 无效
+            assistant("anchor", StopReason.STOP, total(60)),
+            assistant("z", StopReason.STOP, parts(0, 0, 0, 0)), // 折算 0 ⇒ 无效
             user("mid"),
-            assistant("err", "error", total(999)),      // error ⇒ 跳过
-            assistant("ab", "aborted", total(999)));    // aborted ⇒ 跳过
+            assistant("err", StopReason.ERROR, total(999)),      // error ⇒ 跳过
+            assistant("ab", StopReason.ABORTED, total(999)));    // aborted ⇒ 跳过
         var estimate = ContextUsageEstimator.estimateContextTokens(messages);
         assertThat(estimate.lastUsageIndex()).isEqualTo(0);
         assertThat(estimate.usageTokens()).isEqualTo(60);
@@ -124,14 +125,14 @@ class ContextUsageEstimatorTest {
     @Test
     void assistantCountsThinkingAndToolCallNamePlusStringifiedArgs() {
         var thinking = new Message.AssistantMessage(
-            List.of(new ContentBlock.ThinkingContent("word")), "stop", null,
+            List.of(new ContentBlock.ThinkingContent("word")), StopReason.STOP, null,
             null, null, null, null, null, null, null);
         assertThat(ContextUsageEstimator.estimateTokens(thinking)).isEqualTo(1); // ceil(4/4)
 
         // pi :288：name.length + JSON.stringify(arguments).length
         var call = new Message.AssistantMessage(
             List.of(new ContentBlock.ToolUseContent("id-1", "echo", Map.of("a", "b"))),
-            "toolUse", null, null, null, null, null, null, null, null);
+            StopReason.TOOL_USE, null, null, null, null, null, null, null, null);
         assertThat(ContextUsageEstimator.estimateTokens(call))
             .isEqualTo((int) Math.ceil((4 + "{\"a\":\"b\"}".length()) / 4.0)); // ceil(13/4)=4
     }
@@ -143,7 +144,7 @@ class ContextUsageEstimatorTest {
         // 实现里纯属形状对齐。这里钉可达形状：空参数 ⇒ "{}"。
         var call = new Message.AssistantMessage(
             List.of(new ContentBlock.ToolUseContent("id-1", "x", Map.of())),
-            "toolUse", null, null, null, null, null, null, null, null);
+            StopReason.TOOL_USE, null, null, null, null, null, null, null, null);
         assertThat(ContextUsageEstimator.estimateTokens(call))
             .isEqualTo((int) Math.ceil((1 + "{}".length()) / 4.0)); // ceil(3/4)=1
     }
@@ -155,7 +156,7 @@ class ContextUsageEstimatorTest {
         var args = Map.<String, Object>of("l", java.util.Arrays.asList(null, "a"));
         var call = new Message.AssistantMessage(
             List.of(new ContentBlock.ToolUseContent("id-1", "e", args)),
-            "toolUse", null, null, null, null, null, null, null, null);
+            StopReason.TOOL_USE, null, null, null, null, null, null, null, null);
         assertThat(ContextUsageEstimator.estimateTokens(call))
             .isEqualTo((int) Math.ceil((1 + "{\"l\":[null,\"a\"]}".length()) / 4.0));
     }
@@ -166,7 +167,7 @@ class ContextUsageEstimatorTest {
         cyclic.put("self", cyclic); // Jackson 序列化抛错
         var call = new Message.AssistantMessage(
             List.of(new ContentBlock.ToolUseContent("id-1", "e", cyclic)),
-            "toolUse", null, null, null, null, null, null, null, null);
+            StopReason.TOOL_USE, null, null, null, null, null, null, null, null);
         assertThat(ContextUsageEstimator.estimateTokens(call))
             .isEqualTo((int) Math.ceil((1 + "[unserializable]".length()) / 4.0)); // ceil(17/4)=5
     }
@@ -194,7 +195,7 @@ class ContextUsageEstimatorTest {
     void synthesizedPartsUsageStillAnchorsViaTotal() {
         // 3a 合成的终局用量（total=input+output）直接命中 totalTokens 分支。
         var synthesized = new Message.AssistantMessage(
-            List.of(new ContentBlock.TextContent("ok")), "stop", null,
+            List.of(new ContentBlock.TextContent("ok")), StopReason.STOP, null,
             null, null, null,
             new Usage(3, 4, 0, 0, null, null, 7, Usage.Cost.zero()), null, null, null);
         var estimate = ContextUsageEstimator.estimateContextTokens(List.of(synthesized));

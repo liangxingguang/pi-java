@@ -5,6 +5,7 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 
 import com.pijava.ai.message.AssistantMessage;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 
 import org.junit.jupiter.api.Test;
@@ -55,7 +56,7 @@ class PrintModeTest {
         try {
             System.setErr(new PrintStream(err, true, StandardCharsets.UTF_8));
             PrintMode.renderEvent(new StreamEvent.StreamError(
-                "error", new IllegalStateException("boom"), AssistantMessage.empty()), false);
+                StopReason.ERROR, new IllegalStateException("boom"), AssistantMessage.empty()), false);
         } finally {
             System.setErr(original);
         }

@@ -212,6 +212,10 @@ final class AgentEventTranslator {
      */
     private static String errorText(StreamEvent.StreamError err) {
         var text = StreamEvent.StreamError.textOf(err);
-        return text != null ? text : "Stream error: " + err.reason();
+        // 生产路的 StreamError 必经营建（reason 非 null）；裸事件夹具可能给 null，
+        // 保留旧版字符串拼接的 "Stream error: null" 兜底。
+        return text != null
+            ? text
+            : "Stream error: " + (err.reason() == null ? null : err.reason().wireName());
     }
 }

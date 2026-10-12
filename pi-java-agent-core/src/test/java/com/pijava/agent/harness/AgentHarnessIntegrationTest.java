@@ -7,6 +7,7 @@ import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -28,11 +29,11 @@ class AgentHarnessIntegrationTest {
     private static StreamFn streamFn(String reply) {
         var partial = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent(reply)))
-                .withStopReason("stop");
+                .withStopReason(StopReason.STOP);
         return (model, context, options) -> StreamIterator.from(List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 new StreamEvent.TextEnd(0, reply, partial),
-                new StreamEvent.StreamDone("stop", null, partial)));
+                new StreamEvent.StreamDone(StopReason.STOP, null, partial)));
     }
 
     private static AgentHarness harness() {

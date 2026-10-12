@@ -15,6 +15,7 @@ import com.pijava.agent.hook.HookSystem;
 import com.pijava.ai.Usage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.telemetry.NoopTelemetryContext;
 
@@ -91,7 +92,7 @@ class PostRunCompactionCheckTest {
     }
 
     /** 终局助手消息（9 组件的全投影形状，3a）。 */
-    private static Message.AssistantMessage assistant(String stopReason, String provider,
+    private static Message.AssistantMessage assistant(StopReason stopReason, String provider,
             String model, Usage usage, Long timestampMs, String errorMessage) {
         return new Message.AssistantMessage(List.of(), stopReason, null, null,
             provider, model, usage,
@@ -99,7 +100,7 @@ class PostRunCompactionCheckTest {
     }
 
     private static Message.AssistantMessage overflowError() {
-        return assistant("error", "faux", "gate-model", null, 1L, "prompt is too long: 210000 tokens");
+        return assistant(StopReason.ERROR, "faux", "gate-model", null, 1L, "prompt is too long: 210000 tokens");
     }
 
     /**
@@ -162,7 +163,7 @@ class PostRunCompactionCheckTest {
         var first = new Message.UserMessage(List.of(new ContentBlock.TextContent("first")));
         var big = new Message.UserMessage(List.of(
             new ContentBlock.TextContent("x".repeat(4_000))));
-        var aborted = assistant("aborted", "faux", "gate-model", null, 1L, null);
+        var aborted = assistant(StopReason.ABORTED, "faux", "gate-model", null, 1L, null);
         lane.transcript.add(messageEntry("e1", null, first));
         lane.transcript.add(messageEntry("e2", "e1", big));
         lane.transcript.add(message("e3", "e2", aborted));
@@ -188,7 +189,7 @@ class PostRunCompactionCheckTest {
     void differentModelOverflowTextIgnored() {
         // pi 换模型后的旧溢出错误不该压新模型（:2167-2168）；此处窗口巨大，
         // 阈值线也不过 ⇒ 整条链静默。
-        var other = assistant("error", "other", "gate-model", null, 1L, "prompt is too long");
+        var other = assistant(StopReason.ERROR, "other", "gate-model", null, 1L, "prompt is too long");
         var lane = new LaneState();
         var user = new Message.UserMessage(List.of(new ContentBlock.TextContent("hello")));
         lane.transcript.add(messageEntry("e1", null, user));
@@ -212,10 +213,10 @@ class PostRunCompactionCheckTest {
             new Message.UserMessage(List.of(new ContentBlock.TextContent("hello")))));
         lane.transcript.add(new Entry.Compaction("c1", 0, "e1",
             Instant.ofEpochMilli(5_000), "old summary", "e1", List.of(), 10, null, null));
-        lane.transcript.add(messageEntry("e2", "c1", assistant("error", "faux", "gate-model",
+        lane.transcript.add(messageEntry("e2", "c1", assistant(StopReason.ERROR, "faux", "gate-model",
             null, 5_000L, "prompt is too long")));
         var r = rig(lane, SETTINGS, MODEL);
-        var stale = assistant("error", "faux", "gate-model", null, 5_000L, "prompt is too long");
+        var stale = assistant(StopReason.ERROR, "faux", "gate-model", null, 5_000L, "prompt is too long");
         assertThat(r.check().checkAfterRun("default", lane, stale)).isFalse();
         assertThat(r.obs().starts).isEmpty();
         assertThat(lane.transcript.stream().filter(Entry.Compaction.class::isInstance).count())
@@ -295,7 +296,7 @@ class PostRunCompactionCheckTest {
     void stopOverflowCompactsOnceWithoutRetryOrLatch() {
         // R0（:2186-2191）：case 2 的 stop 收尾「压而不重试」—— continue 接不上
         // 已完成的响应；闩不置（预算没花）。
-        var stop = assistant("stop", "faux", "gate-model", usage(210_000, 5, 0), 1L, null);
+        var stop = assistant(StopReason.STOP, "faux", "gate-model", usage(210_000, 5, 0), 1L, null);
         var lane = new LaneState();
         var first = new Message.UserMessage(List.of(new ContentBlock.TextContent("first")));
         var older = new Message.AssistantMessage(List.of(
@@ -321,7 +322,7 @@ class PostRunCompactionCheckTest {
     @Test
     void recoverableLengthLatchesAndRetries() {
         // C2（:2184）：length + output 低于钳制前上限 ⇒ 一次有界恢复。
-        var truncated = assistant("length", "faux", "gate-model", usage(10_000, 500, 0), 1L, null);
+        var truncated = assistant(StopReason.LENGTH, "faux", "gate-model", usage(10_000, 500, 0), 1L, null);
         var lane = new LaneState();
         var first = new Message.UserMessage(List.of(new ContentBlock.TextContent("first")));
         var older = new Message.AssistantMessage(List.of(
@@ -343,7 +344,7 @@ class PostRunCompactionCheckTest {
 
     @Test
     void latchedTruncationAnnouncesItsOwnText() {
-        var truncated = assistant("length", "faux", "gate-model", usage(10_000, 500, 0), 1L, null);
+        var truncated = assistant(StopReason.LENGTH, "faux", "gate-model", usage(10_000, 500, 0), 1L, null);
         var lane = new LaneState();
         lane.transcript.add(messageEntry("e1", null,
             new Message.UserMessage(List.of(new ContentBlock.TextContent("hello")))));
@@ -368,9 +369,9 @@ class PostRunCompactionCheckTest {
         var middle = new Message.AssistantMessage(List.of(
             new ContentBlock.TextContent("working on it")));
         var p2 = new Message.UserMessage(List.of(new ContentBlock.TextContent("p2")));
-        var anchored = assistant("stop", "faux", "gate-model", usage(500, 0, 0),
+        var anchored = assistant(StopReason.STOP, "faux", "gate-model", usage(500, 0, 0),
             usageMsgTimestampMs, null);
-        var err = assistant("error", "faux", "gate-model", null, 6_000L, "boom");
+        var err = assistant(StopReason.ERROR, "faux", "gate-model", null, 6_000L, "boom");
         lane.transcript.add(marker("c1", 5_000));
         lane.transcript.add(messageEntry("e1", "c1", p1));
         lane.transcript.add(messageEntry("e2", "e1", middle));
@@ -391,7 +392,7 @@ class PostRunCompactionCheckTest {
         // 判定返回 false（防刚压完就被旧用量再触发）。
         var lane = anchoredLane(4_000);
         var r = rig(lane, SETTINGS, MODEL);
-        var err = assistant("error", "faux", "gate-model", null, 6_000L, "boom");
+        var err = assistant(StopReason.ERROR, "faux", "gate-model", null, 6_000L, "boom");
         assertThat(r.check().checkAfterRun("default", lane, err)).isFalse();
         assertThat(r.obs().starts).isEmpty();
         assertThat(lane.transcript.stream().filter(Entry.Compaction.class::isInstance).count())
@@ -404,7 +405,7 @@ class PostRunCompactionCheckTest {
         // tokensBefore 走用量、estimatedTokensAfter 走**重建后的纯字符和**（:2383）。
         var lane = anchoredLane(6_000);
         var r = rig(lane, SETTINGS, MODEL);
-        var err = assistant("error", "faux", "gate-model", null, 6_000L, "boom");
+        var err = assistant(StopReason.ERROR, "faux", "gate-model", null, 6_000L, "boom");
         assertThat(r.check().checkAfterRun("default", lane, err)).isFalse(); // threshold 不重试
         assertThat(r.obs().starts).containsExactly("threshold");
         assertThat(r.obs().ends).containsExactly("threshold|result|false|false|null");
@@ -425,7 +426,7 @@ class PostRunCompactionCheckTest {
     void queuedMessagesAloneDriveAContinuation() {
         // pi :1143：压缩判定没发火，但队列有货 ⇒ post-run 仍要 continue。
         var lane = new LaneState();
-        var ok = assistant("stop", "faux", "gate-model", usage(5, 0, 0), 1L, null);
+        var ok = assistant(StopReason.STOP, "faux", "gate-model", usage(5, 0, 0), 1L, null);
         lane.transcript.add(messageEntry("e1", null,
             new Message.UserMessage(List.of(new ContentBlock.TextContent("hello")))));
         lane.transcript.add(messageEntry("e2", "e1", ok));

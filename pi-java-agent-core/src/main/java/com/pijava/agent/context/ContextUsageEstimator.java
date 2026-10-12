@@ -9,6 +9,7 @@ import com.pijava.agent.session.SessionJson;
 import com.pijava.ai.Usage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 
 /**
  * 上下文令牌估算 —— pi {@code harness/compaction/compaction.ts} 的
@@ -86,8 +87,8 @@ public final class ContextUsageEstimator {
      */
     private static Usage assistantUsageOf(Message message) {
         if (message instanceof Message.AssistantMessage assistant && assistant.usage() != null) {
-            String stopReason = assistant.stopReason();
-            if (!"aborted".equals(stopReason) && !"error".equals(stopReason)
+            StopReason stopReason = assistant.stopReason();
+            if (stopReason != StopReason.ABORTED && stopReason != StopReason.ERROR
                     && calculateContextTokens(assistant.usage()) > 0) {
                 return assistant.usage();
             }

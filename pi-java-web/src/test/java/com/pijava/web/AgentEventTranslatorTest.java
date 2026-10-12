@@ -5,6 +5,7 @@ import java.util.List;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.coding.agent.core.AgentSessionEvent;
 import com.pijava.web.WebProtocol.WebServerMessage;
@@ -57,7 +58,7 @@ class AgentEventTranslatorTest {
     @Test
     void streamErrorEmitsTopLevelError() {
         var msgs = translator.translate(new AgentSessionEvent.MessageUpdate(
-            new StreamEvent.StreamError("error", new RuntimeException("boom"), partial(""))));
+            new StreamEvent.StreamError(StopReason.ERROR, new RuntimeException("boom"), partial(""))));
         assertThat(msgs).hasSize(1);
         assertThat(msgs.get(0)).isInstanceOf(WebServerMessage.Error.class);
         assertThat(((WebServerMessage.Error) msgs.get(0)).message()).contains("boom");
@@ -98,7 +99,8 @@ class AgentEventTranslatorTest {
     @Test
     void turnEndCarriesTheToolResultsTheFrontendCollects() {
         var assistant = new Message.AssistantMessage(
-            List.of(new ContentBlock.TextContent("done")), "stop", null);
+            List.of(new ContentBlock.TextContent("done")), StopReason.STOP, null,
+            null, null, null, null, null, null, null);
         var result = new Message.ToolResultMessage("call-1", "bash",
             List.of(new ContentBlock.TextContent("out")), null, null, List.of(), false, null);
 

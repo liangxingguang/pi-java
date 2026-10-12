@@ -13,6 +13,7 @@ import com.pijava.agent.entry.Entry;
 import com.pijava.agent.harness.PiLoop;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 
 import org.slf4j.Logger;
@@ -65,7 +66,8 @@ final class SessionRunner {
         var runIds = new HashSet<String>();
         try (var registration = owner.harness().onStreamEvent(event -> {
             if (event instanceof StreamEvent.StreamDone done && done.reason() != null) {
-                stopReason.set(done.reason());
+                // Summary/exitCode 保留含 "completed" 的 String 词表：枚举边界出 wire 字面。
+                stopReason.set(done.reason().wireName());
             }
             if (event instanceof StreamEvent.StreamError err) {
                 // C 批次（原 docs/55 §5 F4）：采信车道给的 reason，不再一律塌成 "error"。
@@ -75,7 +77,8 @@ final class SessionRunner {
                 // ⚠️ 本改动**今天不可观察**：下面的读尾（B5 第 2 步）在尾条是
                 // error/aborted 的助手消息时会用 tail.stopReason() 覆盖这个值，
                 // 而流错误必然产生这样一条尾条 ⇒ 变异探针 M4 零红（原 docs/55 §12）。
-                stopReason.set(StreamEvent.isSettled(err.reason()) ? err.reason() : "error");
+                stopReason.set(StreamEvent.isSettled(err.reason())
+                    ? err.reason().wireName() : "error");
             }
             if (event instanceof StreamEvent.UsageInfo usage) {
                 // TokenCounter is the session-wide accumulator and cannot be
@@ -120,7 +123,7 @@ final class SessionRunner {
                 LOG.warn("[session] harness run error, stopReason=error", t);
                 stopReason.set("error");
                 var error = StreamEvent.StreamError.settle(
-                    "error", t, AssistantMessage.empty());
+                    StopReason.ERROR, t, AssistantMessage.empty());
                 if (streamObserver != null) {
                     streamObserver.onStreamEvent(error);
                 } else {
@@ -137,9 +140,9 @@ final class SessionRunner {
             // 判据逐字照抄 pi：尾条是助手且 stopReason 为 error/aborted 才改写 ——
             // 正常路径上尾条与流信号同源同值，不产生行为差异。
             var tail = tailAssistant(transcript);
-            if (tail != null && ("error".equals(tail.stopReason())
-                    || "aborted".equals(tail.stopReason()))) {
-                stopReason.set(tail.stopReason());
+            if (tail != null && (tail.stopReason() == StopReason.ERROR
+                    || tail.stopReason() == StopReason.ABORTED)) {
+                stopReason.set(tail.stopReason().wireName());
             }
 
             entriesFuture.complete(transcript);
@@ -186,7 +189,7 @@ final class SessionRunner {
             // B5 第 1 步（原 docs/31 §8.36.4）：同 `:105` 那处，`Exception` → `Throwable`。
             LOG.error("[session] drive failed; emitting empty AgentEnd (run=" + laneName + ")", t);
             var error = StreamEvent.StreamError.settle(
-                "error", t, AssistantMessage.empty());
+                StopReason.ERROR, t, AssistantMessage.empty());
             if (streamObserver != null) {
                 streamObserver.onStreamEvent(error);
             } else {

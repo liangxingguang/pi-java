@@ -21,6 +21,7 @@ import com.pijava.ai.AbortSignal;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -70,7 +71,7 @@ class HarnessToolExecutionSpansTest {
     private static StreamFn toolUseThenStopStreamFn(AssistantMessage toolUse) {
         var stop = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent("done")))
-                .withStopReason("stop");
+                .withStopReason(StopReason.STOP);
         var calls = new java.util.concurrent.atomic.AtomicInteger();
         return (model, context, options) -> {
             var partial = calls.incrementAndGet() == 1 ? toolUse : stop;
@@ -86,7 +87,7 @@ class HarnessToolExecutionSpansTest {
         return toolUseThenStopStreamFn(AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.ToolUseContent(
                     toolCallId, toolName, Map.of("text", "hello"))))
-                .withStopReason("toolUse"));
+                .withStopReason(StopReason.TOOL_USE));
     }
 
     private static AgentHarness harness(JsonlFileTelemetry telemetry,
@@ -216,7 +217,7 @@ class HarnessToolExecutionSpansTest {
             .withContent(List.of(
                 new ContentBlock.ToolUseContent("call-a", "echo-a", Map.of("text", "one")),
                 new ContentBlock.ToolUseContent("call-b", "echo-b", Map.of("text", "two"))))
-            .withStopReason("toolUse");
+            .withStopReason(StopReason.TOOL_USE);
         var h = harness(telemetry, registry, toolUseThenStopStreamFn(batch),
             new ToolExecution.Sequential());
 
