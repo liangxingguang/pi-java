@@ -196,6 +196,16 @@ final class ResponsesStreamProcessor {
                 throw new IllegalStateException(stop.errorMessage != null
                     ? stop.errorMessage : "An unknown error occurred");
             }
+            // pi shared:764-775：终局 toolUse 时拒绝交付 output_item.done 永不到达的
+            // 工具调用（scratch 槽仍在）——参数可能被截断/串位，执行它们等于拿残缺 JSON 真跑。
+            if ("toolUse".equals(stop.reason)) {
+                var unfinished = ResponseItemHandlers.unfinishedToolCall(ctx);
+                if (unfinished != null) {
+                    throw new IllegalStateException(
+                        "OpenAI Responses stream completed with an unfinished tool call: "
+                            + unfinished.name() + " (" + unfinished.id() + ")");
+                }
+            }
             publisher.submit(builder.emitDone(stop.reason));
         } catch (Exception e) {
             // pi 的 catch（openai-responses.ts:194-205）只 push 一条 error ⇒ 一条流

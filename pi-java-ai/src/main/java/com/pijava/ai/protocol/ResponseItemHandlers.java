@@ -165,4 +165,37 @@ final class ResponseItemHandlers {
         }
         ctx.slotTypes.remove(outputIndex);
     }
+
+    /**
+     * pi {@code openai-responses-shared.ts:764-775} 的终局守卫：{@code output_item.done}
+     * 永不到达的工具调用，其 scratch 缓冲（{@code toolCalls}/{@code customCalls} 槽位）
+     * 在 {@link #done} 里不会被移除 ⇒ 槽位非空即「未完成」。参数可能被截断或串位
+     * （不合规服务器漏发 output_index 时），pi 拒绝把这种调用交给执行器。
+     *
+     * @return 按 <b>输出块序</b>的第一个未完成调用（≙ pi 的 {@code for (block of output.content)}），
+     *         没有则 {@code null}
+     */
+    static UnfinishedCall unfinishedToolCall(ResponseEventContext ctx) {
+        var pending = new java.util.HashMap<String, String>();
+        for (var state : ctx.toolCalls.values()) {
+            pending.put(state.callId, state.name);
+        }
+        for (var state : ctx.customCalls.values()) {
+            pending.put(state.compositeId, state.name);
+        }
+        if (pending.isEmpty()) {
+            return null;
+        }
+        for (var block : ctx.builder.snapshot().content()) {
+            if (block instanceof com.pijava.ai.message.ContentBlock.ToolUseContent tool
+                    && pending.containsKey(tool.id())) {
+                return new UnfinishedCall(pending.get(tool.id()), tool.id());
+            }
+        }
+        return null;
+    }
+
+    /** 未完成工具调用的报错素材（pi 文案 {@code name (id)}）。 */
+    record UnfinishedCall(String name, String id) {
+    }
 }
