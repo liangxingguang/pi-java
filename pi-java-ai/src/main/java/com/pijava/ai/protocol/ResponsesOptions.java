@@ -1,5 +1,6 @@
 package com.pijava.ai.protocol;
 
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 
@@ -11,7 +12,8 @@ import com.pijava.ai.thinking.ThinkingLevel;
  *
  * <p>从 {@link ApiOptions#extra()} 读取，键名与 pi 对齐：{@code reasoningEffort} /
  * {@code reasoningSummary} / {@code serviceTier} / {@code cacheRetention} /
- * {@code sessionId}。</p>
+ * {@code sessionId} / {@code samplingParams}（B125 批1：per-request 采样参数，
+ * 同名压过模型级）。</p>
  */
 public record ResponsesOptions(
     /** 推理强度；为 null 时不发送 reasoning 配置 */
@@ -23,8 +25,17 @@ public record ResponsesOptions(
     /** pi: cacheRetention "short"（默认）|"long"|"none" */
     CacheRetention cacheRetention,
     /** pi: sessionId —— 用于 prompt cache key / 会话亲和 */
-    String sessionId
+    String sessionId,
+    /** B125：per-request 采样参数（非 Map/缺席 ⇒ 空 map），模型值打底、本图同名覆盖 */
+    Map<String, Object> samplingParams
 ) {
+    public ResponsesOptions {
+        // 不可变副本（值可能为 null，不能用 Map.copyOf）。
+        samplingParams = samplingParams == null
+            ? Map.of()
+            : java.util.Collections.unmodifiableMap(new LinkedHashMap<>(samplingParams));
+    }
+
     /** pi: cacheRetention；long → prompt_cache_retention="24h" */
     public enum CacheRetention {
         SHORT, LONG, NONE;
@@ -52,7 +63,8 @@ public record ResponsesOptions(
             stringOrNull(extra.get("reasoningSummary")),
             stringOrNull(extra.get("serviceTier")),
             CacheRetention.parse(stringOrNull(extra.get("cacheRetention"))),
-            stringOrNull(extra.get("sessionId")));
+            stringOrNull(extra.get("sessionId")),
+            com.pijava.ai.api.SimpleOptions.requestSamplingParams(options));
     }
 
     /**

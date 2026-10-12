@@ -105,20 +105,74 @@ class SamplingParamsWireTest {
         assertThat(occurrences(raw, "\"max_output_tokens\"")).isEqualTo(1);
     }
 
+    // ── B125（批1）：per-request 半（extra["samplingParams"]）同名压过模型级 ──
+
+    @Test
+    void completionsRequestParamsOverrideModelParams() throws Exception {
+        Map<String, Object> modelParams = Map.of("top_p", 0.9, "model_only", "m");
+        var requestParams = new LinkedHashMap<String, Object>();
+        requestParams.put("top_p", 0.1);
+        requestParams.put("request_only", "r");
+        requestParams.put("temperature", 0.5);
+        var body = MAPPER.readTree(completionsBody(request(model(modelParams), -1), requestParams));
+
+        assertThat(body.path("top_p").asDouble())
+            .as("pi simple-options.ts:25-33：请求值同名压过模型值").isEqualTo(0.1);
+        assertThat(body.path("model_only").asText()).isEqualTo("m");
+        assertThat(body.path("request_only").asText()).isEqualTo("r");
+        assertThat(body.path("temperature").asDouble()).isEqualTo(0.5);
+        assertThat(occurrences(body.toString(), "\"temperature\""))
+            .as("类型化键仍只一份").isEqualTo(1);
+    }
+
+    @Test
+    void responsesRequestParamsOverrideModelParams() throws Exception {
+        Map<String, Object> modelParams = Map.of("top_p", 0.9);
+        Map<String, Object> requestParams = Map.of("top_p", 0.1, "max_output_tokens", 7);
+        var body = MAPPER.readTree(responsesRaw(request(model(modelParams), -1), requestParams));
+
+        assertThat(body.path("top_p").asDouble()).isEqualTo(0.1);
+        assertThat(body.path("max_output_tokens").asInt()).isEqualTo(7);
+        assertThat(occurrences(body.toString(), "\"max_output_tokens\"")).isEqualTo(1);
+    }
+
+    @Test
+    void nonMapRequestSamplingParamsIsIgnored() throws Exception {
+        // 直接构造裸 extra（值不是对象），验证 SimpleOptions.requestSamplingParams 的类型门。
+        try (var server = new RecordingHttpServer()) {
+            var api = new OpenAICompletionsApi(
+                new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0,
+                    Map.of("samplingParams", "not-a-map")));
+            drain(api, request(model(Map.of("top_p", 0.9)), -1));
+            var body = MAPPER.readTree(server.body());
+            assertThat(body.path("top_p").asDouble())
+                .as("非对象值 ≙ 类型谎报，静默忽略，模型值照发").isEqualTo(0.9);
+        }
+    }
+
     // ── 夹具 ────────────────────────────────────────────────────────────
 
     private static JsonNode completionsWire(Map<String, Object> sampling) throws Exception {
-        return MAPPER.readTree(completionsBody(request(model(sampling), -1)));
+        return MAPPER.readTree(completionsBody(request(model(sampling), -1), Map.of()));
     }
 
     private static JsonNode responsesWire(Map<String, Object> sampling) throws Exception {
-        return MAPPER.readTree(responsesRaw(sampling));
+        return MAPPER.readTree(responsesRaw(request(model(sampling), -1), Map.of()));
     }
 
     private static String completionsBody(StreamRequest request) throws Exception {
+        return completionsBody(request, Map.of());
+    }
+
+    private static String completionsBody(StreamRequest request,
+                                           Map<String, Object> requestParams) throws Exception {
         try (var server = new RecordingHttpServer()) {
+            var extra = new LinkedHashMap<String, Object>();
+            if (requestParams != null && !requestParams.isEmpty()) {
+                extra.put("samplingParams", requestParams);
+            }
             var api = new OpenAICompletionsApi(
-                new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()));
+                new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, extra));
             drain(api, request);
             assertThat(server.body()).as("请求必须真的发出去").isNotEmpty();
             return server.body();
@@ -126,10 +180,19 @@ class SamplingParamsWireTest {
     }
 
     private static String responsesRaw(Map<String, Object> sampling) throws Exception {
+        return responsesRaw(request(model(sampling), -1), Map.of());
+    }
+
+    private static String responsesRaw(StreamRequest request,
+                                        Map<String, Object> requestParams) throws Exception {
         try (var server = new RecordingHttpServer()) {
+            var extra = new LinkedHashMap<String, Object>();
+            if (requestParams != null && !requestParams.isEmpty()) {
+                extra.put("samplingParams", requestParams);
+            }
             var api = new OpenAIResponsesApi(
-                new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()));
-            drain(api, request(model(sampling), -1));
+                new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, extra));
+            drain(api, request);
             assertThat(server.body()).as("请求必须真的发出去").isNotEmpty();
             return server.body();
         }

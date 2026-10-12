@@ -18,6 +18,7 @@ import com.openai.models.chat.completions.ChatCompletionChunk;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.GrammarInputProperties;
+import com.pijava.ai.api.SimpleOptions;
 import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.CacheRetention;
@@ -122,6 +123,8 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         this.cacheRetention = retentionOf(options);
         // B103（docs/52）：原始 sessionId —— prompt_cache_key 与亲和头共用（none 门在转换器）。
         this.sessionId = sessionIdOf(options);
+        // B125（批1）：per-request 采样参数（适配器每请求新建，options 即 per-request）。
+        this.requestSamplingParams = SimpleOptions.requestSamplingParams(options);
     }
 
     /** 从 extra 读 sessionId（包 B103）；blank ⇒ null。 */
@@ -142,6 +145,9 @@ public class OpenAICompletionsApi extends AbstractChatApi {
 
     /** 包 B103：原始 sessionId（prompt_cache_key 用）。 */
     private final String sessionId;
+
+    /** B125（批1）：per-request 采样参数（extra["samplingParams"]，空 map 表缺席）。 */
+    private final Map<String, Object> requestSamplingParams;
 
     /** A-14：初始请求获取的重试选项（pi {@code ProviderRetryOptions}）。 */
     private final ProviderRetry.Options providerRetry;
@@ -191,7 +197,7 @@ public class OpenAICompletionsApi extends AbstractChatApi {
             var resolvedRetention = CompatResolver.resolveCacheRetention(cacheRetention,
                 System.getenv(CACHE_RETENTION_ENV));
             var params = OpenAICompletionsMessageConverter.buildParams(request, apiName(), baseUrl,
-                resolvedRetention, sessionId);
+                resolvedRetention, sessionId, requestSamplingParams);
             publisher.submit(builder.emitStart());
 
             // A-14（R7）：只包初始请求获取；每次重试是全新 SDK 请求，X-Stainless-Retry-Count 恒 0。

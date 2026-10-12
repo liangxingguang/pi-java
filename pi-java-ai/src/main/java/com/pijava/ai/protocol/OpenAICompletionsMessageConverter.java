@@ -2,6 +2,7 @@ package com.pijava.ai.protocol;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 
@@ -88,6 +89,18 @@ final class OpenAICompletionsMessageConverter {
     static ChatCompletionCreateParams buildParams(StreamRequest request, String apiName,
                                                   String baseUrl, CacheRetention cacheRetention,
                                                   String rawSessionId) {
+        return buildParams(request, apiName, baseUrl, cacheRetention, rawSessionId, Map.of());
+    }
+
+    /**
+     * B125（批1）：带 per-request 采样参数的规范形态。{@code requestSamplingParams} 来自
+     * {@code ApiOptions.extra["samplingParams"]}，同名键压过模型级（pi
+     * {@code simple-options.ts:25-33}）；非 OpenAI 兼容车道不读它。
+     */
+    static ChatCompletionCreateParams buildParams(StreamRequest request, String apiName,
+                                                  String baseUrl, CacheRetention cacheRetention,
+                                                  String rawSessionId,
+                                                  Map<String, Object> requestSamplingParams) {
         // 包 A7：车道的 compat 在这里**解析一次**（pi `getCompat(model)` 的落点，
         // `openai-completions.ts:1685`），下面的读点全部改读它 —— 探测用的是车道传进来的
         // **有效** baseUrl（与 pi 的 `model.baseUrl` 有一处刻意的形状偏差，原 docs/53 §9 R2）。
@@ -292,8 +305,9 @@ final class OpenAICompletionsMessageConverter {
         }
         // B98（pi :992-1001）：Vercel AI Gateway 路由偏好（openRouter 之后、sampling 之前）。
         CompletionsCompatWire.applyVercelGatewayRouting(builder, compat);
-        // 包 A-10：模型级采样参数（pi `:996-999`，**body 的最后一个变更** ⇒ 同名键压过具名字段）。
-        SamplingParamsWriter.applyToCompletions(builder, request.model());
+        // 包 A-10＋B125：模型级采样参数打底、per-request 同名压过（pi `:996-999`，
+        // **body 的最后一个变更** ⇒ 同名键压过具名字段）。
+        SamplingParamsWriter.applyToCompletions(builder, request.model(), requestSamplingParams);
 
         // B103（docs/52，pi :766-826）：会话亲和头（params 级 additionalHeader 经
         // streaming 透传，与 responses 同一路径；旧 B140「不透传」结论已翻案）

@@ -1,5 +1,6 @@
 package com.pijava.ai.api;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -155,6 +156,28 @@ public final class SimpleOptions {
     public static Optional<Map<String, Object>> samplingParamsOf(ModelInfo model) {
         var params = model == null ? null : model.samplingParams();
         return params == null || params.isEmpty() ? Optional.empty() : Optional.of(params);
+    }
+
+    /**
+     * pi per-request 半（B125，批1）：{@code options.samplingParams}，通道是
+     * {@link ApiOptions#extra()} 的 {@code "samplingParams"} 键（与 headers/sessionId 同形）。
+     *
+     * <p>值必须是 JSON 对象（经 Jackson 反序列化进来即 {@code Map}）；其他类型/缺席 ⇒ 空 map，
+     * 与「类型谎报在 pi 也不会发生」同效。合并序见 {@code SamplingParamsWriter}：模型值打底、
+     * 请求值同名压过（pi {@code simple-options.ts:25-33} 的 {@code ...model, ...request}）。
+     * thinking-level 那一层（#91）随批 3，此处只做两层。</p>
+     */
+    public static Map<String, Object> requestSamplingParams(ApiOptions options) {
+        var extra = options == null ? null : options.extra();
+        Object raw = extra == null ? null : extra.get("samplingParams");
+        if (!(raw instanceof Map<?, ?> map)) {
+            return Map.of();
+        }
+        var out = new LinkedHashMap<String, Object>();
+        for (var entry : map.entrySet()) {
+            out.put(String.valueOf(entry.getKey()), entry.getValue());
+        }
+        return out;
     }
 
     // ── 顶层思考预算字段（pi openai-completions.ts:1004-1024，包 A-10）─────

@@ -1,6 +1,7 @@
 package com.pijava.ai.protocol;
 
 import java.util.LinkedHashMap;
+import java.util.Map;
 
 import com.openai.core.JsonValue;
 import com.openai.models.ReasoningEffort;
@@ -36,48 +37,66 @@ import com.pijava.ai.catalog.ModelInfo;
  * 要守 —— 但两个 builder 类型不同 ⇒ 路由代码仍是两段（M6 实测：只变异
  * {@code applyToCompletions} ⇒ 恰 1 红；两段同时变异 ⇒ 恰 2 红，{@code 原 docs/57 §8.2}）。</p>
  *
- * <p>数据来源只有<b>模型级</b>那一半：pi 的 per-request 半（{@code options.samplingParams}）
- * 在 java 没有生产者（通道是 {@code ApiOptions.extra}，B107 删了恒空的
- * {@code StreamRequest.extra}，docs/52）⇒ 登记 B125。</p>
+ * <p>两层来源（B125 已于批1接通 per-request 半）：模型级 {@code model.samplingParams} 打底，
+ * {@code ApiOptions.extra["samplingParams"]} 的请求值<b>同名压过</b>模型值
+ * （pi {@code simple-options.ts:25-33} 的 {@code {...model, ...request}}）。
+ * thinking-level 层（#91）随批 3。</p>
  */
 final class SamplingParamsWriter {
 
     private SamplingParamsWriter() {}
 
+    /** 两层合并：模型值打底、请求值同名覆盖；两源皆空 ⇒ null（不写任何键）。 */
+    private static LinkedHashMap<String, Object> merged(ModelInfo model,
+                                                        Map<String, Object> requestParams) {
+        var merged = new LinkedHashMap<String, Object>();
+        SimpleOptions.samplingParamsOf(model).ifPresent(merged::putAll);
+        if (requestParams != null) {
+            merged.putAll(requestParams);
+        }
+        return merged;
+    }
+
     /** pi {@code openai-completions.ts:996-999}。 */
-    static void applyToCompletions(ChatCompletionCreateParams.Builder builder, ModelInfo model) {
-        SimpleOptions.samplingParamsOf(model).ifPresent(params -> {
-            var extra = new LinkedHashMap<>(params);
-            if (extra.remove("temperature") instanceof Number temperature) {
-                builder.temperature(temperature.doubleValue());
-            }
-            if (extra.remove("max_tokens") instanceof Number maxTokens) {
-                builder.maxTokens(maxTokens.intValue());
-            }
-            if (extra.remove("max_completion_tokens") instanceof Number maxTokens) {
-                builder.maxCompletionTokens(maxTokens.intValue());
-            }
-            // 包 A-09（R5，原 docs/58 §4.8）：形态链条（ThinkingFormatWriter）用类型化
-            // setter 写 reasoning_effort ⇒ 同名采样键必须走同一个 setter 覆盖，
-            // 否则非类型化通道会把它写成**两份**（原 docs/57 §10 的实测病理）。
-            if (extra.remove("reasoning_effort") instanceof String effort) {
-                builder.reasoningEffort(ReasoningEffort.of(effort));
-            }
-            extra.forEach((key, value) -> builder.putAdditionalBodyProperty(key, JsonValue.from(value)));
-        });
+    static void applyToCompletions(ChatCompletionCreateParams.Builder builder, ModelInfo model,
+                                   Map<String, Object> requestParams) {
+        var params = merged(model, requestParams);
+        if (params.isEmpty()) {
+            return;
+        }
+        var extra = new LinkedHashMap<>(params);
+        if (extra.remove("temperature") instanceof Number temperature) {
+            builder.temperature(temperature.doubleValue());
+        }
+        if (extra.remove("max_tokens") instanceof Number maxTokens) {
+            builder.maxTokens(maxTokens.intValue());
+        }
+        if (extra.remove("max_completion_tokens") instanceof Number maxTokens) {
+            builder.maxCompletionTokens(maxTokens.intValue());
+        }
+        // 包 A-09（R5，原 docs/58 §4.8）：形态链条（ThinkingFormatWriter）用类型化
+        // setter 写 reasoning_effort ⇒ 同名采样键必须走同一个 setter 覆盖，
+        // 否则非类型化通道会把它写成**两份**（原 docs/57 §10 的实测病理）。
+        if (extra.remove("reasoning_effort") instanceof String effort) {
+            builder.reasoningEffort(ReasoningEffort.of(effort));
+        }
+        extra.forEach((key, value) -> builder.putAdditionalBodyProperty(key, JsonValue.from(value)));
     }
 
     /** pi {@code openai-responses.ts:362-365}（azure 的副本同上，java 两处共用本方法）。 */
-    static void applyToResponses(ResponseCreateParams.Builder builder, ModelInfo model) {
-        SimpleOptions.samplingParamsOf(model).ifPresent(params -> {
-            var extra = new LinkedHashMap<>(params);
-            if (extra.remove("temperature") instanceof Number temperature) {
-                builder.temperature(temperature.doubleValue());
-            }
-            if (extra.remove("max_output_tokens") instanceof Number maxOutput) {
-                builder.maxOutputTokens(maxOutput.intValue());
-            }
-            extra.forEach((key, value) -> builder.putAdditionalBodyProperty(key, JsonValue.from(value)));
-        });
+    static void applyToResponses(ResponseCreateParams.Builder builder, ModelInfo model,
+                                  Map<String, Object> requestParams) {
+        var params = merged(model, requestParams);
+        if (params.isEmpty()) {
+            return;
+        }
+        var extra = new LinkedHashMap<>(params);
+        if (extra.remove("temperature") instanceof Number temperature) {
+            builder.temperature(temperature.doubleValue());
+        }
+        if (extra.remove("max_output_tokens") instanceof Number maxOutput) {
+            builder.maxOutputTokens(maxOutput.intValue());
+        }
+        extra.forEach((key, value) -> builder.putAdditionalBodyProperty(key, JsonValue.from(value)));
     }
 }

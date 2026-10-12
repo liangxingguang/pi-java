@@ -194,7 +194,7 @@ final class ResponsesMessageConverter {
 
         applyCacheRetention(builder, ropts, compat);
         // 包 A-10：模型级采样参数（pi `openai-responses.ts:362-365`，**body 的最后一个变更**）。
-        SamplingParamsWriter.applyToResponses(builder, request.model());
+        SamplingParamsWriter.applyToResponses(builder, request.model(), ropts.samplingParams());
         // 包 B103：会话亲和头（pi openai-responses.ts:258-267）。
         affinityHeaders.forEach(builder::putAdditionalHeader);
         return builder.build();
