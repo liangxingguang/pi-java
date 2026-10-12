@@ -106,7 +106,10 @@ public final class PiHttpClient implements AutoCloseable {
         }
 
         if (headers != null) {
-            headers.forEach(requestBuilder::header);
+            // pi 的 Headers.set 语义：大小写不敏感**替换**（不是 .header() 的追加）——
+            // 车道头表是「最终表」，与上面 :98-100 的默认头（Content-Type/User-Agent/Accept）
+            // 重名时旧写法会在请求线上发两个同名头（B233 Mistral 头覆盖需要替换语义）。
+            headers.forEach(requestBuilder::setHeader);
         }
 
         var request = requestBuilder.build();

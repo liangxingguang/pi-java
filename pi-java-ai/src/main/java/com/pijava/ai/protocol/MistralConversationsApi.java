@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.SubmissionPublisher;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -15,6 +16,7 @@ import com.pijava.ai.api.SimpleOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.api.ToolDefinition;
+import com.pijava.ai.catalog.CacheRetention;
 import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.http.PiHttpClient;
@@ -68,10 +70,22 @@ public final class MistralConversationsApi extends AbstractChatApi {
      */
     private static final Duration DEFAULT_HEADER_TIMEOUT = Duration.ofSeconds(300);
 
+    /** pi 三源合并的缓存保留期环境变量（与 completions/anthropic 车道同一个，{@code :342} 共用）。 */
+    private static final String CACHE_RETENTION_ENV = "PI_CACHE_RETENTION";
+
     private final PiHttpClient http;
     private final String apiKey;
     private final String baseUrl;
     private final Duration headerTimeout;
+    /**
+     * B233：原始 sessionId —— {@code x-affinity} 头（mc.ts:368）与
+     * {@code prompt_cache_key} 体键（:546）共用；cacheRetention=none 门在 {@link #useCaching}。
+     */
+    private final String sessionId;
+    /** B233：extra["cacheRetention"]；缺席 {@code Optional.empty()} ≙ pi undefined（别塞默认值）。 */
+    private final Optional<CacheRetention> cacheRetention;
+    /** B233：extra["headers"] 原始 map（值可能为 null ⇒ 删除，pi :374-380）；缺席为 null。 */
+    private final Map<?, ?> optionHeaders;
 
     /**
      * Create an adapter for the given options.
@@ -90,6 +104,12 @@ public final class MistralConversationsApi extends AbstractChatApi {
         this.baseUrl = options.baseUrl() != null && !options.baseUrl().isBlank()
                 ? options.baseUrl() : DEFAULT_BASE_URL;
         this.headerTimeout = headerTimeout;
+        // B233：宿主 DefaultProviders.requestExtra 已对所有 provider 注入 sessionId/
+        // cacheRetention（适配器每请求新建，不串味）；per-request headers 走 extra["headers"]。
+        this.sessionId = sessionIdOf(options);
+        this.cacheRetention = retentionOf(options);
+        Object rawHeaders = options.extra() == null ? null : options.extra().get("headers");
+        this.optionHeaders = rawHeaders instanceof Map<?, ?> map ? map : null;
         // A-14（G3）：重试次数取选项（默认 0 ⇒ 不重试），cap 经 extra 过桥。
         var policyBuilder = new com.pijava.ai.http.RetryPolicy.Builder()
                 .maxRetries(options.maxRetries());
@@ -112,9 +132,11 @@ public final class MistralConversationsApi extends AbstractChatApi {
         var builder = new StreamPartialBuilder();
         try {
             String jsonBody = buildRequestBody(request);
-            var headers = Map.of(
-                    "Authorization", "Bearer " + apiKey,
-                    "Accept", "text/event-stream");
+            // B233（pi mc.ts:355-372）：基底头 → model.headers → options.headers
+            // （null 删除）→ 缓存门自动补 x-affinity。
+            var headers = MistralHeaders.build(apiKey,
+                    request.model() == null ? Map.of() : request.model().headers(),
+                    optionHeaders, sessionId, useCaching());
 
             publisher.submit(builder.emitStart());
 
@@ -404,7 +426,41 @@ public final class MistralConversationsApi extends AbstractChatApi {
             body.put("reasoningEffort", MistralThinking.effort(request.model(), clamped.get()));
         }
 
+        // B233（pi mc.ts:546 ＋ toMistralWirePayload :399）：开缓存时体键发**原始** sessionId
+        // —— 注意不夹 64 码点（clamp 是 OpenAI 系 clampOpenAIPromptCacheKey 的事）。
+        if (useCaching()) {
+            body.put("prompt_cache_key", sessionId);
+        }
+
         return MAPPER.writeValueAsString(body);
+    }
+
+    /**
+     * pi {@code shouldUsePromptCaching}（mc.ts:551-553）：retention 三源合并（选项 ??
+     * {@code PI_CACHE_RETENTION} ?? short）后≠{@code none}，且 sessionId 真值。
+     * 与 completions 车道同一个 {@link CompatResolver#resolveCacheRetention} 口。
+     */
+    private boolean useCaching() {
+        return CompatResolver.resolveCacheRetention(
+                    cacheRetention, System.getenv(CACHE_RETENTION_ENV)) != CacheRetention.NONE
+                && sessionId != null && !sessionId.isBlank();
+    }
+
+    /** 从 extra 读 sessionId（同 OpenAICompletionsApi.sessionIdOf）；blank ⇒ null。 */
+    private static String sessionIdOf(ApiOptions options) {
+        Map<String, Object> extra = options.extra();
+        Object raw = extra == null ? null : extra.get("sessionId");
+        return raw == null || raw.toString().isBlank() ? null : raw.toString();
+    }
+
+    /** 从 extra 读 cacheRetention（同 OpenAICompletionsApi.retentionOf）；非法串落缺席。 */
+    private static Optional<CacheRetention> retentionOf(ApiOptions options) {
+        Map<String, Object> extra = options.extra();
+        Object raw = extra == null ? null : extra.get("cacheRetention");
+        if (raw instanceof CacheRetention retention) {
+            return Optional.of(retention);
+        }
+        return CacheRetention.parse(raw == null ? null : raw.toString());
     }
 
     private List<Map<String, Object>> toMistralTools(List<ToolDefinition> definitions) {
