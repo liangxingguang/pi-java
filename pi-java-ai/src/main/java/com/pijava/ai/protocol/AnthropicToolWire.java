@@ -105,8 +105,11 @@ final class AnthropicToolWire {
      */
     private static Map<String, Object> toDefinitionJson(ToolDefinition td, boolean supportsStrictTools,
                                                         boolean eagerToolInputStreaming) {
+        // 批1/#101：探测遍带 Anthropic 专有谓词（minimum/format 等命中 ⇒ prefer 回落非 strict、
+        // require 抛错）；strict=true 时的实际转换走无谓词通用版（pi 同形两遍，
+        // anthropic-messages.ts:1586-1590）。
         var strict = Boolean.TRUE.equals(
-            StrictSampling.resolveStrict(td, supportsStrictTools));
+            StrictSampling.resolveStrict(td, supportsStrictTools, AnthropicStrictKeywords.PREDICATE));
         var schema = strict
             ? StrictJsonSchema.convert(td.inputSchema()) : td.inputSchema();
         var definition = new LinkedHashMap<String, Object>();

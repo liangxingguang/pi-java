@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -30,24 +31,50 @@ public final class StrictJsonSchema {
     private StrictJsonSchema() {}
 
     /**
-     * Convert a tool schema to the strict subset.
+     * Convert a tool schema to the strict subset（通用子集，无 provider 专有谓词）。
      *
      * @throws UnsupportedStrictJsonSchemaException schema 不可转换
      */
     public static Map<String, Object> convert(Map<String, Object> schema) {
+        return convert(schema, null);
+    }
+
+    /**
+     * Convert a tool schema to the strict subset.
+     *
+     * <p>对位 pi {@code makeStrictJsonSchema(schema, isUnsupportedKeyword)}：探测遍可传
+     * provider 专有谓词（如 Anthropic 的关键字集）；实际发送遍与其他车道传 {@code null}。</p>
+     *
+     * @param unsupportedKeyword provider 专有键值拒绝谓词，{@code null} 表示只做通用检查
+     * @throws UnsupportedStrictJsonSchemaException schema 不可转换
+     */
+    public static Map<String, Object> convert(Map<String, Object> schema,
+                                              UnsupportedStrictKeyword unsupportedKeyword) {
         var cloned = MAPPER.convertValue(schema, MAP_TYPE);
-        makeNodeStrict(cloned);
+        makeNodeStrict(cloned, unsupportedKeyword);
         if (!"object".equals(cloned.get("type"))) {
             throw new UnsupportedStrictJsonSchemaException("root schema must have type object");
         }
         return cloned;
     }
 
-    /** pi {@code makeJsonSchemaNodeStrict}（{@code :53-114}），原地改 node。 */
-    private static void makeNodeStrict(Map<String, Object> node) {
+    /** pi {@code makeJsonSchemaNodeStrict}（{@code :53-127}），原地改 node。 */
+    private static void makeNodeStrict(Map<String, Object> node,
+                                       UnsupportedStrictKeyword unsupportedKeyword) {
         for (var key : UNSUPPORTED_KEYS) {
             if (node.containsKey(key)) {
                 throw new UnsupportedStrictJsonSchemaException(key + " schemas are unsupported");
+            }
+        }
+
+        // pi :67-72：UNSUPPORTED_KEYS 之后逐 entry 跑 provider 专有谓词
+        // （文案 `${key}: ${JSON.stringify(value)} is unsupported`）。
+        if (unsupportedKeyword != null) {
+            for (var entry : node.entrySet()) {
+                if (unsupportedKeyword.test(entry.getKey(), entry.getValue())) {
+                    throw new UnsupportedStrictJsonSchemaException(
+                        entry.getKey() + ": " + jsonValue(entry.getValue()) + " is unsupported");
+                }
             }
         }
 
@@ -63,7 +90,7 @@ public final class StrictJsonSchema {
                     throw new UnsupportedStrictJsonSchemaException(
                         "object and array unions are unsupported");
                 }
-                makeNodeStrict(variantNode);
+                makeNodeStrict(variantNode, unsupportedKeyword);
             }
         }
 
@@ -72,7 +99,7 @@ public final class StrictJsonSchema {
             if (raw instanceof List<?>) {
                 throw new UnsupportedStrictJsonSchemaException("tuple schemas are unsupported");
             }
-            makeNodeStrict(asNode(raw));
+            makeNodeStrict(asNode(raw), unsupportedKeyword);
         }
 
         var isObject = "object".equals(node.get("type"));
@@ -116,7 +143,7 @@ public final class StrictJsonSchema {
 
         for (var key : propertyNames) {
             var property = asNode(properties.get(key));
-            makeNodeStrict(property);
+            makeNodeStrict(property, unsupportedKeyword);
             if (!required.contains(key) && !schemaAllowsNull(property)) {
                 properties.put(key, Map.of("anyOf", List.of(property, Map.of("type", "null"))));
             }
@@ -160,5 +187,14 @@ public final class StrictJsonSchema {
     private static boolean isStringList(Object value) {
         return value instanceof List<?> list && !list.isEmpty()
             && list.stream().allMatch(key -> key instanceof String);
+    }
+
+    /** 对位 pi 错误文案里的 {@code JSON.stringify(value)}；Jackson 失败时回落 String.valueOf。 */
+    private static String jsonValue(Object value) {
+        try {
+            return MAPPER.writeValueAsString(value);
+        } catch (JsonProcessingException e) {
+            return String.valueOf(value);
+        }
     }
 }

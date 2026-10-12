@@ -159,6 +159,42 @@ class ConstrainedSamplingWireTest {
         }
     }
 
+    // ── 批1/#101：Anthropic 专有不支持关键字 ⇒ prefer 回落非 strict ────────
+
+    @Test
+    void anthropicPreferToolWithUnsupportedKeywordFallsBackToPlainSchema() throws Exception {
+        // minimum 在 Anthropic strict 拒绝集（整请求会 400，不是降级）；pi 探测谓词命中后
+        // prefer 工具静默回落普通工具。
+        var nested = new java.util.LinkedHashMap<String, Object>();
+        nested.put("type", "integer");
+        nested.put("minimum", 0);
+        var schema = new java.util.LinkedHashMap<String, Object>();
+        schema.put("type", "object");
+        schema.put("properties", Map.of("n", nested));
+        var preferTool = new ToolDefinition("run", "Run", schema, "run", null, List.of(),
+            "default", new JsonSchemaSampling(StrictMode.PREFER));
+
+        try (var server = new RecordingHttpServer()) {
+            var api = new AnthropicMessagesApi(options(server));
+            var model = new ModelInfo(ModelId.of("anthropic", "claude-fable-5"),
+                "Claude Fable 5",
+                ModelInfo.minimal(ModelId.of("anthropic", "claude-fable-5")).capabilities(),
+                200_000, 16_384, false,
+                com.pijava.ai.model.PricingInfo.UNKNOWN,
+                com.pijava.ai.thinking.ThinkingLevelMap.empty(), Map.of(), Map.of(),
+                CatalogCompatRules.anthropic("anthropic", "claude-fable-5"));
+            drain(api, request(model, preferTool));
+
+            var tool = MAPPER.readTree(server.body()).path("tools").get(0);
+            assertThat(tool.path("strict").isMissingNode())
+                .as("命中 Anthropic 不支持关键字 ⇒ prefer 回落，不发 strict").isTrue();
+            assertThat(tool.path("input_schema").path("properties").path("n").path("minimum").asInt())
+                .as("schema 原样透传（未转 strict 子集）").isZero();
+            assertThat(tool.path("input_schema").path("additionalProperties").isMissingNode())
+                .as("未转换 ⇒ 无 strict 注入键").isTrue();
+        }
+    }
+
     // ── 夹具 ─────────────────────────────────────────────────────────
 
     private static void assertStrictSchema(JsonNode parameters) {
@@ -170,15 +206,23 @@ class ConstrainedSamplingWireTest {
     }
 
     private static StreamRequest request(ModelInfo model) {
+        return request(model, STRICT_TOOL);
+    }
+
+    private static StreamRequest request(ModelInfo model, ToolDefinition tool) {
         return new StreamRequest(model, null,
-            List.of(systemWithTool(), new Message.UserMessage(
+            List.of(systemWithTool(tool), new Message.UserMessage(
                 List.of(new ContentBlock.TextContent("hi")))),
             List.of(), -1, -1);
     }
 
     private static Message.SystemMessage systemWithTool() {
+        return systemWithTool(STRICT_TOOL);
+    }
+
+    private static Message.SystemMessage systemWithTool(ToolDefinition tool) {
         return new Message.SystemMessage("be brief", Instant.EPOCH, Map.of(),
-            List.of(STRICT_TOOL), List.of());
+            List.of(tool), List.of());
     }
 
     private static ApiOptions options(RecordingHttpServer server) {
