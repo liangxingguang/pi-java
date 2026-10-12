@@ -212,15 +212,6 @@ public final class StreamPartialBuilder {
     }
 
     /**
-     * @deprecated 批 1 ⑥ 桥接期重载，步 5 删除；未知/遗留 String 经
-     *             {@link StopReason#fromWireOrNull} 容错解码为 {@code null}。
-     */
-    @Deprecated
-    public void forceStopReason(String reason) {
-        forceStopReason(StopReason.fromWireOrNull(reason));
-    }
-
-    /**
      * Retain a thought signature onto the current thinking block during
      * streaming (same pi function, {@code google-generative-ai.ts:149-152}).
      * Non-empty incoming overwrites; empty/null does not erase.
@@ -528,15 +519,6 @@ public final class StreamPartialBuilder {
     }
 
     /**
-     * @deprecated 批 1 ⑥ 桥接期重载，步 5 删除；String 经
-     *             {@link StopReason#fromWireOrNull} 容错解码。
-     */
-    @Deprecated
-    public StreamEvent.StreamDone emitDone(String reason) {
-        return emitDone(StopReason.fromWireOrNull(reason));
-    }
-
-    /**
      * Emit stream-error, **settling the accumulator** before pushing it.
      *
      * <p>pi 的失败路是就地落定同一个对象：先删块的流式草稿字段，再
@@ -554,15 +536,6 @@ public final class StreamPartialBuilder {
         // 让 builder 自身的状态与事件一致（快照上已落定，字段不能还停在旧值）。
         this.stopReason = settled.partial().stopReason();
         return settled;
-    }
-
-    /**
-     * @deprecated 批 1 ⑥ 桥接期重载，步 5 删除；String 经 {@link StopReason#fromWireOrNull}
-     *             容错解码（未知值落 null ⇒ settle 补缺 ERROR）。
-     */
-    @Deprecated
-    public StreamEvent.StreamError emitError(String reason, Throwable error) {
-        return emitError(StopReason.fromWireOrNull(reason), error);
     }
 
 }

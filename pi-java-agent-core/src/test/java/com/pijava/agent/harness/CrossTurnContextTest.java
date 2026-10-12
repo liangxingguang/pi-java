@@ -95,7 +95,7 @@ class CrossTurnContextTest {
      */
     @Test
     void seededNonProjectedAssistantEntryStaysOutOfTheProviderContext() {
-        for (String stopReason : List.of("deferred", "error", "aborted")) {
+        for (StopReason stopReason : List.of(StopReason.DEFERRED, StopReason.ERROR, StopReason.ABORTED)) {
             var captured = new AtomicReference<List<Message>>();
             var h = harness(captured);
 

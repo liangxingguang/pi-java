@@ -66,17 +66,11 @@ public record AssistantMessage(
         content = List.copyOf(content);
     }
 
-    /**
-     * Compatibility constructor for pre-3a snapshots without identity fields.
-     *
-     * @deprecated 批 1 ⑥（B119/B121）桥接期重载：请直接传 {@link StopReason}。
-     *             步 5 删除；String 经 {@link StopReason#fromWireOrNull} 容错解码。
-     */
-    @Deprecated
+    /** Constructor for pre-3a snapshots without identity fields. */
     public AssistantMessage(
-            String id, List<ContentBlock> content, StreamEvent.UsageInfo usage, String stopReason) {
-        this(id, content, usage, StopReason.fromWireOrNull(stopReason),
-            null, null, null, null, null, null);
+            String id, List<ContentBlock> content, StreamEvent.UsageInfo usage,
+            StopReason stopReason) {
+        this(id, content, usage, stopReason, null, null, null, null, null, null);
     }
 
     /** Create an empty initial snapshot. */
@@ -111,15 +105,6 @@ public record AssistantMessage(
     public AssistantMessage withStopReason(StopReason newStopReason) {
         return new AssistantMessage(id, content, usage, newStopReason,
             api, provider, model, timestamp, errorMessage, rawStopReason);
-    }
-
-    /**
-     * @deprecated 批 1 ⑥ 桥接期重载，步 5 删除；未知/遗留 String 经
-     *             {@link StopReason#fromWireOrNull} 容错解码为 {@code null}。
-     */
-    @Deprecated
-    public AssistantMessage withStopReason(String newStopReason) {
-        return withStopReason(StopReason.fromWireOrNull(newStopReason));
     }
 
     /** Create a copy with the provider identity + creation time attached. */

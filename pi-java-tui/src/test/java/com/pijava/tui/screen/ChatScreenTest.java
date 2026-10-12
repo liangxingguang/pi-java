@@ -6,6 +6,7 @@ import com.pijava.agent.entry.Entry;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.tui.component.ChatMessage;
 
@@ -111,7 +112,7 @@ class ChatScreenTest {
         screen.onStreamEvent(new StreamEvent.TextEnd(
             1, "second", AssistantMessage.empty()));
         screen.onStreamEvent(new StreamEvent.StreamDone(
-            "stop", null, AssistantMessage.empty()));
+            StopReason.STOP, null, AssistantMessage.empty()));
         var countAfterStream = screen.messageCount();
 
         screen.onEntry(new Entry.Message(
@@ -130,12 +131,12 @@ class ChatScreenTest {
         screen.onStreamEvent(new StreamEvent.TextEnd(
             0, "first", AssistantMessage.empty()));
         screen.onStreamEvent(new StreamEvent.StreamDone(
-            "stop", null, AssistantMessage.empty()));
+            StopReason.STOP, null, AssistantMessage.empty()));
         screen.onStreamEvent(new StreamEvent.Start(AssistantMessage.empty()));
         screen.onStreamEvent(new StreamEvent.TextEnd(
             0, "second", AssistantMessage.empty()));
         screen.onStreamEvent(new StreamEvent.StreamDone(
-            "stop", null, AssistantMessage.empty()));
+            StopReason.STOP, null, AssistantMessage.empty()));
         var countAfterStream = screen.messageCount();
 
         screen.onEntry(new Entry.Message(
@@ -152,7 +153,7 @@ class ChatScreenTest {
     void streamErrorBecomesErrorBubble() {
         var screen = new ChatScreen();
         screen.onStreamEvent(new StreamEvent.StreamError(
-            "error", new IllegalStateException("boom"), AssistantMessage.empty()));
+            StopReason.ERROR, new IllegalStateException("boom"), AssistantMessage.empty()));
 
         assertThat(screen.lastMessage()).isInstanceOf(ChatMessage.Error.class);
     }

@@ -209,15 +209,10 @@ public sealed interface Message
             this(content, null, null, null, null, null, null, null, null, null);
         }
 
-        /**
-         * Compatibility constructor for the pre-3a (content, stopReason, deferred) shape.
-         *
-         * @deprecated 批 1 ⑥（B119/B121）桥接期重载，步 5 删除；String 经
-         *             {@link StopReason#fromWireOrNull} 容错解码。
-         */
-        @Deprecated
-        public AssistantMessage(List<ContentBlock> content, String stopReason, DeferredHandle deferred) {
-            this(content, StopReason.fromWireOrNull(stopReason), deferred,
+        /** Compatibility constructor for the (content, stopReason, deferred) shape. */
+        public AssistantMessage(List<ContentBlock> content, StopReason stopReason,
+                                DeferredHandle deferred) {
+            this(content, stopReason, deferred,
                 null, null, null, null, null, null, null);
         }
 
@@ -287,15 +282,6 @@ public sealed interface Message
         public AssistantMessage withStopReason(StopReason newStopReason) {
             return new AssistantMessage(content, newStopReason, deferred,
                 api, provider, model, usage, timestamp, errorMessage, rawStopReason);
-        }
-
-        /**
-         * @deprecated 批 1 ⑥ 桥接期重载，步 5 删除；未知/遗留 String 经
-         *             {@link StopReason#fromWireOrNull} 容错解码为 {@code null}。
-         */
-        @Deprecated
-        public AssistantMessage withStopReason(String newStopReason) {
-            return withStopReason(StopReason.fromWireOrNull(newStopReason));
         }
 
         @Override

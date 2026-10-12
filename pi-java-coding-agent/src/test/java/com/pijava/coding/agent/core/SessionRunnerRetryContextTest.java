@@ -39,7 +39,7 @@ class SessionRunnerRetryContextTest {
         return List.of(
             new StreamEvent.Start(AssistantMessage.empty()),
             StreamEvent.StreamError.settle(
-                "error", new RuntimeException("overloaded"), partial));
+                StopReason.ERROR, new RuntimeException("overloaded"), partial));
     }
 
     private static List<StreamEvent> textSeq(String text) {

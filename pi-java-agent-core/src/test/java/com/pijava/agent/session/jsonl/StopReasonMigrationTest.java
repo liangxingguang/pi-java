@@ -153,4 +153,26 @@ class StopReasonMigrationTest {
             null, null, null, null, null, null, Instant.ofEpochMilli(1L), null, null);
         assertThat(stopReasonOf(parseEntry(legacyAssistantLine(bare)))).isNull();
     }
+
+    /**
+     * 批 1 ⑥：未知/空字面容错为 {@code null}（pi TS 联合类型运行时擦除、解码零校验，
+     * 未知值只是让所有字符串比较不命中；Java 侧等价物即 null）。
+     */
+    @Test
+    void unknownWireLiteralDecodesToNullLikePiErasure() {
+        var stop = new Message.AssistantMessage(
+            List.of(new ContentBlock.TextContent("done")),
+            StopReason.STOP, null, null, null, null, null,
+            Instant.ofEpochMilli(1L), null, null);
+        var encoded = JsonlCodec.encodeMutation(new SessionMutation.Entry(null,
+            new Entry.Message("e-x", 1L, null, Instant.ofEpochMilli(1L), stop, null)));
+
+        for (var literal : List.of("bogus", "")) {
+            var line = encoded.replace("\"stopReason\":\"stop\"",
+                literal.isEmpty() ? "\"stopReason\":\"\"" : "\"stopReason\":\"" + literal + "\"");
+            assertThat(stopReasonOf(parseEntry(line)))
+                .as("未知停因字面 %s 必须容错为 null（比较全不命中），不得抛", literal)
+                .isNull();
+        }
+    }
 }

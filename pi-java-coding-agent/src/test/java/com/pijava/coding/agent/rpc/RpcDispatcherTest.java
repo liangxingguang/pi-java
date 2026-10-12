@@ -344,7 +344,7 @@ class RpcDispatcherTest {
             // C 批次（原 docs/55 §6.3-10）：生产者落定 ⇒ "overloaded" 在消息上，
             // 分类器读得到（此前靠 withErrorShape 补，已删）。
             StreamEvent.StreamError.settle(
-                "error", new RuntimeException("overloaded"), partial));
+                StopReason.ERROR, new RuntimeException("overloaded"), partial));
         var ctx = context("faux-retry",
             List.of(errorSeq, textStream("recovered").get(0)));
 

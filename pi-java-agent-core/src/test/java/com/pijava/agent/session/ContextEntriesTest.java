@@ -33,7 +33,7 @@ class ContextEntriesTest {
 
     /** Assistant message entry carrying an explicit stop reason (D4 provenance). */
     private static Entry.Message assistantEntry(String id, String parentId, String text,
-                                               String stopReason) {
+                                               StopReason stopReason) {
         var msg = new Message.AssistantMessage(List.of(new ContentBlock.TextContent(text)),
             stopReason, null);
         return new Entry.Message(id, 0, parentId, Instant.EPOCH, msg, null);
@@ -225,7 +225,7 @@ class ContextEntriesTest {
 
     @Test
     void deferredErrorAndAbortedAssistantMessagesProjectToNothing() {
-        for (String stopReason : List.of("deferred", "error", "aborted")) {
+        for (StopReason stopReason : List.of(StopReason.DEFERRED, StopReason.ERROR, StopReason.ABORTED)) {
             var assistant = assistantEntry("a-" + stopReason, "u-1", "partial text", stopReason);
             var messages = ContextEntries.toMessages(List.<Entry>of(
                 message("u-1", null, "user", "hello"), assistant));
@@ -239,7 +239,7 @@ class ContextEntriesTest {
 
     @Test
     void completedToolUseAndLengthMessagesStillProject() {
-        for (String stopReason : List.of("stop", "toolUse", "length")) {
+        for (StopReason stopReason : List.of(StopReason.STOP, StopReason.TOOL_USE, StopReason.LENGTH)) {
             var assistant = assistantEntry("a-" + stopReason, null, "answer", stopReason);
 
             assertThat(ContextEntries.toMessages(List.<Entry>of(assistant)))

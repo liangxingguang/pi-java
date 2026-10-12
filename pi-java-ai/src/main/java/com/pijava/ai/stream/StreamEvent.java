@@ -44,22 +44,6 @@ import com.pijava.ai.message.StopReason;
 public sealed interface StreamEvent {
 
     /**
-     * 累加器**尚未落定**时 {@code stopReason} 的占位字面量 —— pi 五条车道的同一个值
-     * （{@code anthropic-messages.ts:526}、{@code google-generative-ai.ts:75}、
-     * {@code mistral-conversations.ts:222}、{@code openai-completions.ts:333}、
-     * {@code openai-responses.ts:139}）；枚举侧权威是 {@link StopReason#PENDING}。
-     *
-     * <p><b>它被 pi 的存盘类型显式排除</b>
-     * （{@code harness/session/types.ts:13} 的 {@code Exclude<StopReason, "pending">}）。
-     * 它的含义是「还没有终局判定」⇒ 任何把它当落定取值用的读取点都是错的
-     * （{@link #isSettled(StopReason)} 是唯一的判据）。</p>
-     *
-     * @deprecated 批 1 ⑥（B119/B121）桥接期保留，步 5 删除；新代码用 {@link StopReason#PENDING}。
-     */
-    @Deprecated
-    String PENDING_STOP_REASON = "pending";
-
-    /**
      * Current snapshot of the assistant message being built.
      * All 13 event types carry this — consumers can simply replace
      * the last message with {@code event.partial()} on every event.
@@ -67,26 +51,17 @@ public sealed interface StreamEvent {
     AssistantMessage partial();
 
     /**
-     * 消息的 {@code stopReason} 是否已是**落定值**（非 null、非空、非
-     * {@link #PENDING_STOP_REASON}）。
+     * 消息的 {@code stopReason} 是否已是**落定值**（非 {@code null}、非
+     * {@link StopReason#PENDING}）。
      *
      * <p>pi 的对应物是一条隐式不变量：终局事件推出的一定是**已经就地写过**
      * {@code output.stopReason} 的那个累加器（{@code anthropic-messages.ts:817-826}）。
      * 终局载荷的消费者可以假定它成立；生产端由 {@code StreamDone.settle} /
      * {@code StreamError.settle} 保证。</p>
      */
-    /** 枚举权威版（批 1 ⑥）：语义同 {@link StopReason#isSettled}。 */
+    /** 消息停因是否落定（{@code null}／PENDING 为未落定），语义同 {@link StopReason#isSettled}。 */
     static boolean isSettled(StopReason stopReason) {
         return StopReason.isSettled(stopReason);
-    }
-
-    /**
-     * @deprecated 批 1 ⑥ 桥接期重载，步 5 删除；未知/遗留 String 经
-     *             {@link StopReason#fromWireOrNull} 解码后按枚举判据落定。
-     */
-    @Deprecated
-    static boolean isSettled(String stopReason) {
-        return StopReason.isSettled(StopReason.fromWireOrNull(stopReason));
     }
 
     /**
@@ -321,15 +296,6 @@ public sealed interface StreamEvent {
             return new StreamDone(StreamEvent.settleReason(reason, message, StopReason.STOP),
                 null, message);
         }
-
-        /**
-         * @deprecated 批 1 ⑥ 桥接期重载，步 5 删除；String 经
-         *             {@link StopReason#fromWireOrNull} 容错解码（未知值落 null ⇒ 走补缺）。
-         */
-        @Deprecated
-        public static StreamDone settle(String reason, AssistantMessage partial) {
-            return settle(StopReason.fromWireOrNull(reason), partial);
-        }
     }
 
     /**
@@ -371,15 +337,6 @@ public sealed interface StreamEvent {
             }
             return new StreamError(
                 StreamEvent.settleReason(reason, message, StopReason.ERROR), cause, message);
-        }
-
-        /**
-         * @deprecated 批 1 ⑥ 桥接期重载，步 5 删除；String 经
-         *             {@link StopReason#fromWireOrNull} 容错解码（未知值落 null ⇒ 补缺 ERROR）。
-         */
-        @Deprecated
-        public static StreamError settle(String reason, Throwable cause, AssistantMessage partial) {
-            return settle(StopReason.fromWireOrNull(reason), cause, partial);
         }
 
         /**
