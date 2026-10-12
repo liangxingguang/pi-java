@@ -7,6 +7,7 @@ import com.pijava.ai.api.ChatApi;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 
@@ -95,8 +96,8 @@ class FauxProviderTest {
         assertThat(error.error().getMessage()).isEqualTo("Connection refused");
         // C 批次（原 docs/55 §11-2）：faux 这条路**绕不过**落定 —— 文本必须在消息上，
         // 否则一切经 faux 驱动的夹具就仍在旧形状（文本只在 Throwable 上）上跑。
-        assertThat(error.reason()).isEqualTo("error");
-        assertThat(error.partial().stopReason()).isEqualTo("error");
+        assertThat(error.reason()).isEqualTo(StopReason.ERROR);
+        assertThat(error.partial().stopReason()).isEqualTo(StopReason.ERROR);
         assertThat(error.partial().errorMessage()).isEqualTo("Connection refused");
     }
 

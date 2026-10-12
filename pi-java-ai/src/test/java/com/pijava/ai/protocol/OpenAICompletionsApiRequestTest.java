@@ -7,6 +7,7 @@ import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.openai.models.chat.completions.ChatCompletionMessageParam;
 
@@ -105,7 +106,7 @@ class OpenAICompletionsApiRequestTest {
                 new Message.AssistantMessage(List.of(
                     new ContentBlock.ThinkingContent("let me reason", "reasoning_content"),
                     new ContentBlock.TextContent("answer")),
-                    "stop", null, "openai-completions", "deepseek", "deepseek-chat",
+                    StopReason.STOP, null, "openai-completions", "deepseek", "deepseek-chat",
                     null, null, null, null)));
 
         var params = OpenAICompletionsMessageConverter.buildParams(request, "openai-completions", null);
@@ -132,7 +133,7 @@ class OpenAICompletionsApiRequestTest {
                 new Message.AssistantMessage(List.of(
                     new ContentBlock.ThinkingContent("let me reason"),
                     new ContentBlock.TextContent("answer")),
-                    "stop", null, "openai-completions", "openai", "gpt-4o-mini",
+                    StopReason.STOP, null, "openai-completions", "openai", "gpt-4o-mini",
                     null, null, null, null)));
 
         var params = OpenAICompletionsMessageConverter.buildParams(request, "openai-completions", null);

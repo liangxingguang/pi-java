@@ -4,6 +4,7 @@ import java.io.IOException;
 
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 
 import org.junit.jupiter.api.Test;
 
@@ -33,10 +34,10 @@ class StreamEventSettlementTest {
         var builder = new StreamPartialBuilder();
         builder.emitStart();
 
-        var err = builder.emitError("error", new IOException("kaboom"));
+        var err = builder.emitError(StopReason.ERROR, new IOException("kaboom"));
 
-        assertThat(err.reason()).isEqualTo("error");
-        assertThat(err.partial().stopReason()).isEqualTo("error");
+        assertThat(err.reason()).isEqualTo(StopReason.ERROR);
+        assertThat(err.partial().stopReason()).isEqualTo(StopReason.ERROR);
         assertThat(err.partial().errorMessage()).isEqualTo("kaboom");
     }
 
@@ -48,11 +49,11 @@ class StreamEventSettlementTest {
         builder.emitTextStart();
         builder.emitTextDelta("partial text");
 
-        var err = builder.emitError("error", new IOException("kaboom"));
+        var err = builder.emitError(StopReason.ERROR, new IOException("kaboom"));
 
         assertThat(err.partial().content())
             .containsExactly(new ContentBlock.TextContent("partial text"));
-        assertThat(err.partial().stopReason()).isEqualTo("error");
+        assertThat(err.partial().stopReason()).isEqualTo(StopReason.ERROR);
     }
 
     @Test
@@ -60,10 +61,10 @@ class StreamEventSettlementTest {
         var builder = new StreamPartialBuilder();
         builder.emitStart();
 
-        var err = builder.emitError("aborted", null);
+        var err = builder.emitError(StopReason.ABORTED, null);
 
-        assertThat(err.reason()).isEqualTo("aborted");
-        assertThat(err.partial().stopReason()).isEqualTo("aborted");
+        assertThat(err.reason()).isEqualTo(StopReason.ABORTED);
+        assertThat(err.partial().stopReason()).isEqualTo(StopReason.ABORTED);
         assertThat(err.partial().errorMessage()).isNull();
     }
 
@@ -74,10 +75,10 @@ class StreamEventSettlementTest {
     @Test
     void errorSettleFillsTheBarePartial() {
         var err = StreamEvent.StreamError.settle(
-            "aborted", new IOException("Request was aborted"), AssistantMessage.empty());
+            StopReason.ABORTED, new IOException("Request was aborted"), AssistantMessage.empty());
 
-        assertThat(err.reason()).isEqualTo("aborted");
-        assertThat(err.partial().stopReason()).isEqualTo("aborted");
+        assertThat(err.reason()).isEqualTo(StopReason.ABORTED);
+        assertThat(err.partial().stopReason()).isEqualTo(StopReason.ABORTED);
         assertThat(err.partial().errorMessage()).isEqualTo("Request was aborted");
     }
 
@@ -87,8 +88,8 @@ class StreamEventSettlementTest {
         var err = StreamEvent.StreamError.settle(
             (String) null, new IOException("boom"), AssistantMessage.empty());
 
-        assertThat(err.reason()).isEqualTo("error");
-        assertThat(err.partial().stopReason()).isEqualTo("error");
+        assertThat(err.reason()).isEqualTo(StopReason.ERROR);
+        assertThat(err.partial().stopReason()).isEqualTo(StopReason.ERROR);
     }
 
     /**
@@ -98,14 +99,14 @@ class StreamEventSettlementTest {
     @Test
     void errorSettleLetsTheSettledPartialWin() {
         var partial = AssistantMessage.empty()
-            .withStopReason("aborted")
+            .withStopReason(StopReason.ABORTED)
             .withErrorMessage("from the message");
 
         var err = StreamEvent.StreamError.settle(
-            "error", new IOException("from the throwable"), partial);
+            StopReason.ERROR, new IOException("from the throwable"), partial);
 
-        assertThat(err.reason()).isEqualTo("aborted");
-        assertThat(err.partial().stopReason()).isEqualTo("aborted");
+        assertThat(err.reason()).isEqualTo(StopReason.ABORTED);
+        assertThat(err.partial().stopReason()).isEqualTo(StopReason.ABORTED);
         assertThat(err.partial().errorMessage()).isEqualTo("from the message");
     }
 
@@ -113,16 +114,16 @@ class StreamEventSettlementTest {
     @Test
     void errorSettleFallsBackToToStringWhenTheMessageIsAbsent() {
         var err = StreamEvent.StreamError.settle(
-            "error", new RuntimeException(), AssistantMessage.empty());
+            StopReason.ERROR, new RuntimeException(), AssistantMessage.empty());
 
         assertThat(err.partial().errorMessage()).isEqualTo("java.lang.RuntimeException");
     }
 
     @Test
     void errorSettleWithoutACauseLeavesTheTextAbsent() {
-        var err = StreamEvent.StreamError.settle("error", null, AssistantMessage.empty());
+        var err = StreamEvent.StreamError.settle(StopReason.ERROR, null, AssistantMessage.empty());
 
-        assertThat(err.partial().stopReason()).isEqualTo("error");
+        assertThat(err.partial().stopReason()).isEqualTo(StopReason.ERROR);
         assertThat(err.partial().errorMessage()).isNull();
     }
 
@@ -132,29 +133,29 @@ class StreamEventSettlementTest {
 
     @Test
     void doneSettleSettlesTheStopReason() {
-        var done = StreamEvent.StreamDone.settle("length", AssistantMessage.empty());
+        var done = StreamEvent.StreamDone.settle(StopReason.LENGTH, AssistantMessage.empty());
 
-        assertThat(done.reason()).isEqualTo("length");
-        assertThat(done.partial().stopReason()).isEqualTo("length");
+        assertThat(done.reason()).isEqualTo(StopReason.LENGTH);
+        assertThat(done.partial().stopReason()).isEqualTo(StopReason.LENGTH);
     }
 
     @Test
     void doneSettleTakesTheReasonFromTheMessageWhenAbsent() {
         // 批 1 ⑥ 桥接期：显式选 String 版（步 5 随测试枚举化删除）。
         var done = StreamEvent.StreamDone.settle(
-            (String) null, AssistantMessage.empty().withStopReason("toolUse"));
+            (String) null, AssistantMessage.empty().withStopReason(StopReason.TOOL_USE));
 
-        assertThat(done.reason()).isEqualTo("toolUse");
-        assertThat(done.partial().stopReason()).isEqualTo("toolUse");
+        assertThat(done.reason()).isEqualTo(StopReason.TOOL_USE);
+        assertThat(done.partial().stopReason()).isEqualTo(StopReason.TOOL_USE);
     }
 
     @Test
     void doneSettleDoesNotClobberASettledMessage() {
         var done = StreamEvent.StreamDone.settle(
-            "stop", AssistantMessage.empty().withStopReason("length"));
+            StopReason.STOP, AssistantMessage.empty().withStopReason(StopReason.LENGTH));
 
-        assertThat(done.reason()).isEqualTo("length");
-        assertThat(done.partial().stopReason()).isEqualTo("length");
+        assertThat(done.reason()).isEqualTo(StopReason.LENGTH);
+        assertThat(done.partial().stopReason()).isEqualTo(StopReason.LENGTH);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -164,16 +165,16 @@ class StreamEventSettlementTest {
     @Test
     void textPrefersTheMessageAndFallsBackToTheThrowable() {
         var settled = StreamEvent.StreamError.settle(
-            "error", new IOException("boom"), AssistantMessage.empty());
+            StopReason.ERROR, new IOException("boom"), AssistantMessage.empty());
         assertThat(StreamEvent.StreamError.textOf(settled)).isEqualTo("boom");
 
         // 未经 settle 的裸事件（旧夹具、conformance 桩）⇒ 回落 Throwable。
         var bare = new StreamEvent.StreamError(
-            "error", new IOException("legacy"), AssistantMessage.empty());
+            StopReason.ERROR, new IOException("legacy"), AssistantMessage.empty());
         assertThat(StreamEvent.StreamError.textOf(bare)).isEqualTo("legacy");
 
         // 两者皆无 ⇒ null（调用方自己决定兜底文案）。
-        var empty = new StreamEvent.StreamError("error", null, AssistantMessage.empty());
+        var empty = new StreamEvent.StreamError(StopReason.ERROR, null, AssistantMessage.empty());
         assertThat(StreamEvent.StreamError.textOf(empty)).isNull();
     }
 

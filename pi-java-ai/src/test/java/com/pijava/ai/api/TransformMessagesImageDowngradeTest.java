@@ -7,6 +7,7 @@ import java.util.Set;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
@@ -192,7 +193,7 @@ class TransformMessagesImageDowngradeTest {
      */
     @Test
     void assistantMessagesAreNotDowngraded() {
-        var assistant = new Message.AssistantMessage(List.of(image()), "stop", null,
+        var assistant = new Message.AssistantMessage(List.of(image()), StopReason.STOP, null,
                 API, TARGET.provider(), TARGET.modelName(), null, null, null, null);
 
         assertThat(applied(NON_VISION, assistant)).containsExactly("image:image/png");

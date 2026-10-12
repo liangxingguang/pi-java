@@ -6,6 +6,7 @@ import java.util.Map;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -143,20 +144,20 @@ class StreamEventTest {
     @Test
     void streamDone() {
         var usage = new StreamEvent.UsageInfo(200, 100, null);
-        var partial = EMPTY.withStopReason("stop");
-        var event = new StreamEvent.StreamDone("stop", usage, partial);
+        var partial = EMPTY.withStopReason(StopReason.STOP);
+        var event = new StreamEvent.StreamDone(StopReason.STOP, usage, partial);
 
-        assertThat(event.reason()).isEqualTo("stop");
+        assertThat(event.reason()).isEqualTo(StopReason.STOP);
         assertThat(event.usage()).isSameAs(usage);
         assertThat(event.partial()).isSameAs(partial);
     }
 
     @Test
     void streamDoneWithoutUsage() {
-        var partial = EMPTY.withStopReason("stop");
-        var event = new StreamEvent.StreamDone("stop", null, partial);
+        var partial = EMPTY.withStopReason(StopReason.STOP);
+        var event = new StreamEvent.StreamDone(StopReason.STOP, null, partial);
 
-        assertThat(event.reason()).isEqualTo("stop");
+        assertThat(event.reason()).isEqualTo(StopReason.STOP);
         assertThat(event.usage()).isNull();
         assertThat(event.partial()).isSameAs(partial);
     }
@@ -165,9 +166,9 @@ class StreamEventTest {
     void streamError() {
         var error = new RuntimeException("connection refused");
         var partial = AssistantMessage.empty();
-        var event = new StreamEvent.StreamError("error", error, partial);
+        var event = new StreamEvent.StreamError(StopReason.ERROR, error, partial);
 
-        assertThat(event.reason()).isEqualTo("error");
+        assertThat(event.reason()).isEqualTo(StopReason.ERROR);
         assertThat(event.error()).isSameAs(error);
         assertThat(event.partial()).isSameAs(partial);
     }
@@ -175,11 +176,11 @@ class StreamEventTest {
     @Test
     void streamErrorAborted() {
         var error = new InterruptedException("aborted");
-        var partial = EMPTY.withStopReason("aborted");
-        var event = new StreamEvent.StreamError("aborted", error, partial);
+        var partial = EMPTY.withStopReason(StopReason.ABORTED);
+        var event = new StreamEvent.StreamError(StopReason.ABORTED, error, partial);
 
-        assertThat(event.reason()).isEqualTo("aborted");
-        assertThat(event.partial().stopReason()).isEqualTo("aborted");
+        assertThat(event.reason()).isEqualTo(StopReason.ABORTED);
+        assertThat(event.partial().stopReason()).isEqualTo(StopReason.ABORTED);
     }
 
     // ── Partial access via sealed interface ──────────────────
@@ -199,8 +200,8 @@ class StreamEventTest {
             new StreamEvent.ToolCallDelta(0, "id", "{}", partial),
             new StreamEvent.ToolCallEnd(0, "id", "n", Map.of(), partial),
             new StreamEvent.UsageInfo(0, 0, partial),
-            new StreamEvent.StreamDone("stop", null, partial),
-            new StreamEvent.StreamError("error", new Exception(), partial),
+            new StreamEvent.StreamDone(StopReason.STOP, null, partial),
+            new StreamEvent.StreamError(StopReason.ERROR, new Exception(), partial),
         };
 
         for (var event : events) {
@@ -214,8 +215,8 @@ class StreamEventTest {
         var mapper = new ObjectMapper();
         var partial = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent("test")))
-                .withStopReason("stop");
-        var event = new StreamEvent.StreamDone("stop", null, partial);
+                .withStopReason(StopReason.STOP);
+        var event = new StreamEvent.StreamDone(StopReason.STOP, null, partial);
 
         String json = mapper.writeValueAsString(event);
         assertThat(json).contains("\"type\":\"done\"");
@@ -224,7 +225,7 @@ class StreamEventTest {
         var parsed = mapper.readValue(json, StreamEvent.class);
         assertThat(parsed).isInstanceOf(StreamEvent.StreamDone.class);
         var done = (StreamEvent.StreamDone) parsed;
-        assertThat(done.reason()).isEqualTo("stop");
-        assertThat(done.partial().stopReason()).isEqualTo("stop");
+        assertThat(done.reason()).isEqualTo(StopReason.STOP);
+        assertThat(done.partial().stopReason()).isEqualTo(StopReason.STOP);
     }
 }

@@ -1,6 +1,7 @@
 package com.pijava.ai.stream;
 
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -124,12 +125,12 @@ class StreamPartialBuilderTest {
         // mistral-conversations.ts:222 / openai-completions.ts:333 /
         // openai-responses.ts:139）⇒ 流进行中**每一帧**都是 "pending"。
         var builder = new StreamPartialBuilder();
-        assertThat(builder.snapshot().stopReason()).isEqualTo("pending");
-        assertThat(builder.emitStart().partial().stopReason()).isEqualTo("pending");
-        assertThat(builder.emitTextStart().partial().stopReason()).isEqualTo("pending");
-        assertThat(builder.emitTextDelta("hi").partial().stopReason()).isEqualTo("pending");
+        assertThat(builder.snapshot().stopReason()).isEqualTo(StopReason.PENDING);
+        assertThat(builder.emitStart().partial().stopReason()).isEqualTo(StopReason.PENDING);
+        assertThat(builder.emitTextStart().partial().stopReason()).isEqualTo(StopReason.PENDING);
+        assertThat(builder.emitTextDelta("hi").partial().stopReason()).isEqualTo(StopReason.PENDING);
 
         // 终局事件是唯一的改写点（这里是车道映射后的取值）。
-        assertThat(builder.emitDone("length").partial().stopReason()).isEqualTo("length");
+        assertThat(builder.emitDone(StopReason.LENGTH).partial().stopReason()).isEqualTo(StopReason.LENGTH);
     }
 }

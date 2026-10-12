@@ -186,7 +186,7 @@ public sealed interface Message
      */
     record AssistantMessage(
         List<ContentBlock> content,
-        String stopReason,
+        StopReason stopReason,
         DeferredHandle deferred,
         String api,
         String provider,
@@ -209,9 +209,16 @@ public sealed interface Message
             this(content, null, null, null, null, null, null, null, null, null);
         }
 
-        /** Compatibility constructor for the pre-3a (content, stopReason, deferred) shape. */
+        /**
+         * Compatibility constructor for the pre-3a (content, stopReason, deferred) shape.
+         *
+         * @deprecated 批 1 ⑥（B119/B121）桥接期重载，步 5 删除；String 经
+         *             {@link StopReason#fromWireOrNull} 容错解码。
+         */
+        @Deprecated
         public AssistantMessage(List<ContentBlock> content, String stopReason, DeferredHandle deferred) {
-            this(content, stopReason, deferred, null, null, null, null, null, null, null);
+            this(content, StopReason.fromWireOrNull(stopReason), deferred,
+                null, null, null, null, null, null, null);
         }
 
         /**
@@ -277,9 +284,18 @@ public sealed interface Message
          * or the interrupted response would be projected into later requests as
          * an ordinary answer.</p>
          */
-        public AssistantMessage withStopReason(String newStopReason) {
+        public AssistantMessage withStopReason(StopReason newStopReason) {
             return new AssistantMessage(content, newStopReason, deferred,
                 api, provider, model, usage, timestamp, errorMessage, rawStopReason);
+        }
+
+        /**
+         * @deprecated 批 1 ⑥ 桥接期重载，步 5 删除；未知/遗留 String 经
+         *             {@link StopReason#fromWireOrNull} 容错解码为 {@code null}。
+         */
+        @Deprecated
+        public AssistantMessage withStopReason(String newStopReason) {
+            return withStopReason(StopReason.fromWireOrNull(newStopReason));
         }
 
         @Override

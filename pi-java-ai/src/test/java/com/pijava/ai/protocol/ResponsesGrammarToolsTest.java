@@ -25,6 +25,7 @@ import com.pijava.ai.catalog.CatalogCompatRules;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 
@@ -141,7 +142,7 @@ class ResponsesGrammarToolsTest {
         var end = last(events, StreamEvent.ToolCallEnd.class);
         assertThat(end.arguments()).containsEntry("query", "hello");
         assertThat(last(events, StreamEvent.StreamDone.class).reason())
-            .isEqualTo("toolUse");
+            .isEqualTo(StopReason.TOOL_USE);
     }
 
     @Test
@@ -206,7 +207,7 @@ class ResponsesGrammarToolsTest {
         var assistant = new Message.AssistantMessage(
             List.of(new ContentBlock.ToolUseContent("call-1|ctc_1", "pick",
                 Map.of("query", "ab" + (char) 0xD800 + "cd"))),
-            "toolUse", null);
+            StopReason.TOOL_USE, null, null, null, null, null, null, null, null);
         var toolResult = new Message.ToolResultMessage("call-1|ctc_1", "pick",
             List.of(new ContentBlock.TextContent("ok")), false);
         var user = new Message.UserMessage(List.of(new ContentBlock.TextContent("again")));

@@ -17,6 +17,7 @@ import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.utils.RetryableError;
@@ -55,7 +56,7 @@ class MistralConversationsApiTest {
     void lengthFinishReasonMapsToLength() throws Exception {
         var events = collect(text("partial"), finish("length"));
 
-        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo("length");
+        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo(StopReason.LENGTH);
     }
 
     /**
@@ -69,7 +70,7 @@ class MistralConversationsApiTest {
     void modelLengthFinishReasonMapsToLength() throws Exception {
         var events = collect(text("partial"), finish("model_length"));
 
-        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo("length");
+        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo(StopReason.LENGTH);
     }
 
     /**
@@ -83,7 +84,7 @@ class MistralConversationsApiTest {
         var events = collect(text("partial"), finish("model_length"));
 
         var done = last(events, StreamEvent.StreamDone.class);
-        assertThat(done.reason()).isEqualTo("length");
+        assertThat(done.reason()).isEqualTo(StopReason.LENGTH);
         assertThat(done.partial().rawStopReason()).isEqualTo("model_length");
     }
 
@@ -92,7 +93,7 @@ class MistralConversationsApiTest {
     void stopFinishReasonMapsToStop() throws Exception {
         var events = collect(text("all done"), finish("stop"));
 
-        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo("stop");
+        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo(StopReason.STOP);
         assertThat(errors(events)).isEmpty();
     }
 
@@ -110,7 +111,7 @@ class MistralConversationsApiTest {
                 + "\"arguments\":\"{\\\"path\\\":\\\"a\\\"}\"}}]}}]"),
             finish("tool_calls"));
 
-        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo("toolUse");
+        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo(StopReason.TOOL_USE);
         // ⚠️ `classes()` 把终局渲染成 `StreamDone(取值)`，所以子序列里不能写裸 "StreamDone"。
         assertThat(classes(events)).containsSubsequence("ToolCallStart", "ToolCallEnd",
             "StreamDone(toolUse)");
@@ -133,7 +134,7 @@ class MistralConversationsApiTest {
         assertThat(dones(events)).isEmpty();
         // 文案必须被瞬断白名单抓住（Mistral 的 finish_reason:"error" 是瞬态服务失败）。
         assertThat(RetryableError.isRetryableAssistantError(
-            new Message.AssistantMessage(List.of(), "error", null,
+            new Message.AssistantMessage(List.of(), StopReason.ERROR, null,
                 null, null, null, null, null, message, null))).isTrue();
     }
 
@@ -166,7 +167,7 @@ class MistralConversationsApiTest {
     void finishReasonWithoutDeltaIsStillRead() throws Exception {
         var events = collect(data("\"choices\":[{\"index\":0,\"finish_reason\":\"length\"}]"));
 
-        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo("length");
+        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo(StopReason.LENGTH);
     }
 
     /**
@@ -282,7 +283,7 @@ class MistralConversationsApiTest {
     /** 事件名，{@code StreamDone} 带上取值 —— 红灯里能直接读出线格被翻成了什么。 */
     private static List<String> classes(List<StreamEvent> events) {
         return events.stream().map(e -> e instanceof StreamEvent.StreamDone d
-            ? "StreamDone(" + d.reason() + ")"
+            ? "StreamDone(" + d.reason().wireName() + ")"
             : e.getClass().getSimpleName()).toList();
     }
 

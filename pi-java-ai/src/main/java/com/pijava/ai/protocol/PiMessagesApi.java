@@ -17,6 +17,7 @@ import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.http.PiHttpClient;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
 import com.pijava.ai.utils.ProviderErrors;
@@ -145,15 +146,17 @@ public final class PiMessagesApi extends AbstractChatApi {
                             publisher.submit(builder.emitUsage(
                                 (long) done.usage().input(), (long) done.usage().output()));
                         }
-                        // B109：pi 消息通道发的归一化停因就是 "toolUse"，与 pi-java 同字面量
-                        // ⇒ 原先这里的 mapDoneReason 边界翻译已成为恒等，随本包一并删除。
-                        publisher.submit(builder.emitDone(done.reason()));
+                        // B109：pi 消息通道发的归一化停因与本枚举同词表（camelCase）。
+                        // 这是 JSON 解码边界（pi TS 类型擦除、零校验）⇒ fromWireOrNull
+                        // 容错：未知值落 null（比较全不命中），不走 JsonlCodec 的 tool_use 垫片。
+                        publisher.submit(builder.emitDone(StopReason.fromWireOrNull(done.reason())));
                         return;
                     }
                     case PiMessagesEvent.Error err -> {
                         sawTerminal = true;
+                        // 解码边界容错：未知/缺失 ⇒ null ⇒ settle 补缺 ERROR（同 pi 零校验）。
                         publisher.submit(builder.emitError(
-                            err.reason() == null ? "error" : err.reason(),
+                            StopReason.fromWireOrNull(err.reason()),
                             new RuntimeException(
                                 err.errorMessage() == null ? "pi-messages error" : err.errorMessage())));
                         return;
@@ -161,7 +164,7 @@ public final class PiMessagesApi extends AbstractChatApi {
                 }
             }
             if (!sawTerminal) {
-                publisher.submit(builder.emitError("error",
+                publisher.submit(builder.emitError(StopReason.ERROR,
                     new RuntimeException("stream ended without a terminal event")));
             }
         } catch (Exception e) {
@@ -172,10 +175,10 @@ public final class PiMessagesApi extends AbstractChatApi {
             if (e instanceof com.pijava.ai.http.PiHttpException http && http.statusCode() > 0) {
                 String message = ProviderErrors.formatPiMessagesError(
                     http.statusCode(), http.body());
-                publisher.submit(builder.emitError("error",
+                publisher.submit(builder.emitError(StopReason.ERROR,
                     message.equals(e.getMessage()) ? e : new IllegalStateException(message, e)));
             } else {
-                publisher.submit(builder.emitError("error", e));
+                publisher.submit(builder.emitError(StopReason.ERROR, e));
             }
         }
     }

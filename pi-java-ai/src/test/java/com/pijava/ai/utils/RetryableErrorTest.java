@@ -4,9 +4,11 @@ import java.util.List;
 
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -18,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RetryableErrorTest {
 
     private static Message.AssistantMessage error(String message) {
-        return new Message.AssistantMessage(List.<ContentBlock>of(), "error", null,
+        return new Message.AssistantMessage(List.<ContentBlock>of(), StopReason.ERROR, null,
             null, null, null, null, null, message, null);
     }
 
@@ -128,8 +130,9 @@ class RetryableErrorTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"stop", "length", "toolUse", "aborted"})
-    void nonErrorStopReasonsAreNotRetryable(String stopReason) {
+    @EnumSource(mode = EnumSource.Mode.INCLUDE,
+        names = {"STOP", "LENGTH", "TOOL_USE", "ABORTED"})
+    void nonErrorStopReasonsAreNotRetryable(StopReason stopReason) {
         var message = new Message.AssistantMessage(List.<ContentBlock>of(), stopReason, null,
             null, null, null, null, null, "overloaded", null);
         assertThat(RetryableError.isRetryableAssistantError(message)).isFalse();

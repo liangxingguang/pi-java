@@ -16,6 +16,7 @@ import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
 import com.pijava.ai.thinking.ThinkingLevelMap;
@@ -59,14 +60,14 @@ class AnthropicThinkingReplayTest {
 
     /** An assistant message whose identity matches {@link #TARGET} (same-model replay). */
     private static Message.AssistantMessage sameModel(ContentBlock... blocks) {
-        return new Message.AssistantMessage(List.of(blocks), "stop", null,
+        return new Message.AssistantMessage(List.of(blocks), StopReason.STOP, null,
             "anthropic-messages", TARGET.provider(), TARGET.modelName(),
             null, null, null, null);
     }
 
     /** An assistant message stamped by a different provider/model. */
     private static Message.AssistantMessage foreignModel(ContentBlock... blocks) {
-        return new Message.AssistantMessage(List.of(blocks), "stop", null,
+        return new Message.AssistantMessage(List.of(blocks), StopReason.STOP, null,
             "anthropic-messages", "teamorouter", "deepseek-v4-flash",
             null, null, null, null);
     }

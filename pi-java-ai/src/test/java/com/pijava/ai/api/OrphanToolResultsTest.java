@@ -7,6 +7,7 @@ import java.util.Set;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
@@ -35,12 +36,14 @@ class OrphanToolResultsTest {
         200_000, 8_192, false, PricingInfo.UNKNOWN);
 
     private static Message.AssistantMessage assistant(ContentBlock... blocks) {
-        return new Message.AssistantMessage(List.of(blocks), "stop", null);
+        return new Message.AssistantMessage(List.of(blocks), StopReason.STOP, null,
+            null, null, null, null, null, null, null);
     }
 
-    private static Message.AssistantMessage assistantWithStopReason(String stopReason,
+    private static Message.AssistantMessage assistantWithStopReason(StopReason stopReason,
                                                                     ContentBlock... blocks) {
-        return new Message.AssistantMessage(List.of(blocks), stopReason, null);
+        return new Message.AssistantMessage(List.of(blocks), stopReason, null,
+            null, null, null, null, null, null, null);
     }
 
     private static Message.UserMessage user(String text) {
@@ -151,7 +154,7 @@ class OrphanToolResultsTest {
      */
     @Test
     void errorAssistantSkippedEntirely() {
-        var errorAssistant = assistantWithStopReason("error", toolUse("call_e", "read"));
+        var errorAssistant = assistantWithStopReason(StopReason.ERROR, toolUse("call_e", "read"));
 
         var out = OrphanToolResults.apply(List.of(errorAssistant));
 
@@ -165,7 +168,7 @@ class OrphanToolResultsTest {
      */
     @Test
     void abortedAssistantSkippedEntirely() {
-        var abortedAssistant = assistantWithStopReason("aborted", toolUse("call_a", "read"));
+        var abortedAssistant = assistantWithStopReason(StopReason.ABORTED, toolUse("call_a", "read"));
 
         var out = OrphanToolResults.apply(List.of(abortedAssistant));
 
@@ -280,7 +283,7 @@ class OrphanToolResultsTest {
         ToolCallIdNormalizer pipeToUnderscore = (id, target, source) -> id.replace('|', '_');
         var assistant = new Message.AssistantMessage(
             List.of(new ContentBlock.ToolUseContent("call_123|fc_123", "read", Map.of())),
-            "stop", null, API, "teamorouter", "deepseek-v4-flash", null, null, null, null);
+            StopReason.STOP, null, API, "teamorouter", "deepseek-v4-flash", null, null, null, null);
 
         var out = TransformMessages.apply(List.of(assistant), TARGET, API, VISION_TARGET,
             pipeToUnderscore);

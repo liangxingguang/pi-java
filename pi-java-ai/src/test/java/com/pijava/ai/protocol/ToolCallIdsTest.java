@@ -2,6 +2,7 @@ package com.pijava.ai.protocol;
 
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.utils.ShortHash;
 import org.junit.jupiter.api.Test;
@@ -26,7 +27,7 @@ class ToolCallIdsTest {
      */
     private static final Message.AssistantMessage SOURCE = new Message.AssistantMessage(
             List.of(new ContentBlock.TextContent("x")),
-            "stop", null,
+            StopReason.STOP, null,
             "openai-responses", "github-copilot", "gpt-5",
             null, null, null, null);
 
@@ -242,7 +243,7 @@ class ToolCallIdsTest {
         // 同源：source.provider == target.provider 且 source.api == apiName
         var sameOriginSource = new Message.AssistantMessage(
                 List.of(new ContentBlock.TextContent("x")),
-                "stop", null,
+                StopReason.STOP, null,
                 "openai-responses", "openai", "gpt-5",
                 null, null, null, null);
         assertThat(n.normalize("call_123|abc", target, sameOriginSource))

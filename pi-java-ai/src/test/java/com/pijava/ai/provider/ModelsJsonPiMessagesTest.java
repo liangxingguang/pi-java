@@ -14,6 +14,7 @@ import com.pijava.ai.api.ChatApi;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.protocol.PiMessagesApi;
 
@@ -85,7 +86,7 @@ class ModelsJsonPiMessagesTest {
 
         assertThat(result).isInstanceOf(Message.AssistantMessage.class);
         var msg = (Message.AssistantMessage) result;
-        assertThat(msg.stopReason()).isEqualTo("error");
+        assertThat(msg.stopReason()).isEqualTo(StopReason.ERROR);
         assertThat(msg.errorMessage())
             .isEqualTo("401 Unauthorized: Token expired (unauthorized)");
     }

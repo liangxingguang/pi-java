@@ -16,6 +16,7 @@ import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
@@ -222,7 +223,7 @@ class AnthropicImageContentTest {
     @Test
     void assistantImagesAreIgnored() throws Exception {
         var assistant = new Message.AssistantMessage(List.of(
-                new ContentBlock.TextContent("hi"), image()), "stop", null,
+                new ContentBlock.TextContent("hi"), image()), StopReason.STOP, null,
                 "anthropic-messages", TARGET.provider(), TARGET.modelName(),
                 null, null, null, null);
 

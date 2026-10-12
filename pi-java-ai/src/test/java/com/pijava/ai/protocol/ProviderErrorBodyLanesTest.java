@@ -12,6 +12,7 @@ import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.utils.ContextOverflow;
 import com.pijava.ai.utils.RetryableError;
@@ -219,7 +220,7 @@ class ProviderErrorBodyLanesTest {
 
             assertThat(result).isInstanceOf(Message.AssistantMessage.class);
             var msg = (Message.AssistantMessage) result;
-            assertThat(msg.stopReason()).isEqualTo("error");
+            assertThat(msg.stopReason()).isEqualTo(StopReason.ERROR);
             assertThat(msg.errorMessage())
                 .isEqualTo("Azure OpenAI API error (403): "
                     + "{\"message\":\"forbidden\",\"type\":\"forbidden\"}");
@@ -355,7 +356,7 @@ class ProviderErrorBodyLanesTest {
     private static Message.AssistantMessage settleError(Message result) {
         assertThat(result).isInstanceOf(Message.AssistantMessage.class);
         var msg = (Message.AssistantMessage) result;
-        assertThat(msg.stopReason()).isEqualTo("error");
+        assertThat(msg.stopReason()).isEqualTo(StopReason.ERROR);
         return msg;
     }
 

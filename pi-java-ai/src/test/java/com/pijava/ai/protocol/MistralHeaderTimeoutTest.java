@@ -11,6 +11,7 @@ import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 
 import org.junit.jupiter.api.Test;
@@ -48,7 +49,7 @@ class MistralHeaderTimeoutTest {
                 var result = api.send(request, options);
                 assertThat(result).isInstanceOf(Message.AssistantMessage.class);
                 var msg = (Message.AssistantMessage) result;
-                assertThat(msg.stopReason()).isEqualTo("error");
+                assertThat(msg.stopReason()).isEqualTo(StopReason.ERROR);
                 assertThat(msg.errorMessage())
                     .isEqualTo("Mistral response headers timed out after 300ms");
             });

@@ -22,6 +22,7 @@ import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
@@ -58,7 +59,7 @@ class OpenAIResponsesApiTest {
             StreamEvent.TextDelta.class, StreamEvent.TextEnd.class,
             StreamEvent.UsageInfo.class, StreamEvent.StreamDone.class);
         var done = last(events, StreamEvent.StreamDone.class);
-        assertThat(done.reason()).isEqualTo("stop");
+        assertThat(done.reason()).isEqualTo(StopReason.STOP);
         var text = done.partial().content().stream()
             .filter(b -> b instanceof ContentBlock.TextContent)
             .map(b -> ((ContentBlock.TextContent) b).text())
@@ -80,7 +81,7 @@ class OpenAIResponsesApiTest {
         assertThat(end.name()).isEqualTo("get_weather");
         assertThat(end.arguments()).containsEntry("city", "Beijing");
         var done = last(events, StreamEvent.StreamDone.class);
-        assertThat(done.reason()).isEqualTo("toolUse");
+        assertThat(done.reason()).isEqualTo(StopReason.TOOL_USE);
     }
 
     @Test
@@ -131,7 +132,7 @@ class OpenAIResponsesApiTest {
         var baseUrl = startServer(incompleteSse("max_output_tokens"));
         var api = api(baseUrl);
         var done = last(collect(api, "hi"), StreamEvent.StreamDone.class);
-        assertThat(done.reason()).isEqualTo("length");
+        assertThat(done.reason()).isEqualTo(StopReason.LENGTH);
     }
 
     /**
@@ -148,7 +149,7 @@ class OpenAIResponsesApiTest {
 
         var done = last(collect(api, "hi"), StreamEvent.StreamDone.class);
 
-        assertThat(done.reason()).isEqualTo("length");
+        assertThat(done.reason()).isEqualTo(StopReason.LENGTH);
         assertThat(done.partial().rawStopReason()).isEqualTo("incomplete.max_output_tokens");
     }
 
@@ -472,7 +473,7 @@ class OpenAIResponsesApiTest {
     /** 事件名，{@code StreamDone} 带上取值 —— 红灯里能直接读出线格被翻成了什么。 */
     private static List<String> names(List<StreamEvent> events) {
         return events.stream().map(e -> e instanceof StreamEvent.StreamDone d
-            ? "StreamDone(" + d.reason() + ")"
+            ? "StreamDone(" + d.reason().wireName() + ")"
             : e.getClass().getSimpleName()).toList();
     }
 

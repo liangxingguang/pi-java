@@ -13,6 +13,7 @@ import com.pijava.ai.api.TranscriptContext;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.message.MessageTexts;
+import com.pijava.ai.message.StopReason;
 
 /**
  * 上下文 token 估算 —— pi {@code ai/src/utils/estimate.ts} 的逐条移植（包 A-10）。
@@ -227,8 +228,8 @@ public final class Estimate {
                 var appliesToPrefix = timestamp == null || timestamp >= latestPrefixTimestamp;
                 // `usage() != null` 是 java 的防御：pi 的 usage 必填，兼容构造器允许缺席。
                 if (appliesToPrefix
-                    && !"aborted".equals(assistant.stopReason())
-                    && !"error".equals(assistant.stopReason())
+                    && assistant.stopReason() != StopReason.ABORTED
+                    && assistant.stopReason() != StopReason.ERROR
                     && assistant.usage() != null
                     && calculateContextTokens(assistant.usage()) > 0) {
                     anchor = new UsageAnchor(assistant.usage(), i);

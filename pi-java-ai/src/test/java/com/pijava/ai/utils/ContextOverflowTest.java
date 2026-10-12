@@ -5,6 +5,7 @@ import java.util.List;
 import com.pijava.ai.Usage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -24,11 +25,11 @@ class ContextOverflowTest {
     }
 
     private static Message.AssistantMessage error(String provider, String message) {
-        return new Message.AssistantMessage(List.<ContentBlock>of(), "error", null,
+        return new Message.AssistantMessage(List.<ContentBlock>of(), StopReason.ERROR, null,
             null, provider, null, null, null, message, null);
     }
 
-    private static Message.AssistantMessage with(String stopReason, Usage usage) {
+    private static Message.AssistantMessage with(StopReason stopReason, Usage usage) {
         return new Message.AssistantMessage(List.<ContentBlock>of(), stopReason, null,
             null, null, null, usage, null, null, null);
     }
@@ -123,7 +124,7 @@ class ContextOverflowTest {
     @Test
     void errorOnlyPatternsIgnoreOtherStopReasons() {
         // 模式判据只戴 error 收尾的帽子（overflow.ts:135）。
-        var sameText = new Message.AssistantMessage(List.<ContentBlock>of(), "stop", null,
+        var sameText = new Message.AssistantMessage(List.<ContentBlock>of(), StopReason.STOP, null,
             null, null, null, null, null, "prompt is too long", null);
         assertThat(ContextOverflow.isContextOverflow(sameText, null)).isFalse();
     }
@@ -134,7 +135,7 @@ class ContextOverflowTest {
 
     @Test
     void silentOverflowPastWindow() {
-        var msg = with("stop", usage(210_000, 100, 0));
+        var msg = with(StopReason.STOP, usage(210_000, 100, 0));
         assertThat(ContextOverflow.isContextOverflow(msg, 200_000)).isTrue();
         assertThat(ContextOverflow.isContextOverflow(msg, 300_000)).isFalse();
     }
@@ -142,16 +143,16 @@ class ContextOverflowTest {
     @Test
     void windowAbsentShortCases2And3() {
         // pi 的 `contextWindow &&`：undefined/0 ⇒ case 2/3 判不出（:145/:153）。
-        var stop = with("stop", usage(210_000, 100, 0));
+        var stop = with(StopReason.STOP, usage(210_000, 100, 0));
         assertThat(ContextOverflow.isContextOverflow(stop, null)).isFalse();
         assertThat(ContextOverflow.isContextOverflow(stop, 0)).isFalse();
-        var length = with("length", usage(210_000, 0, 0));
+        var length = with(StopReason.LENGTH, usage(210_000, 0, 0));
         assertThat(ContextOverflow.isContextOverflow(length, null)).isFalse();
     }
 
     @Test
     void cacheReadCountsIntoSilentOverflow() {
-        var msg = with("stop", usage(120_000, 100, 90_000));
+        var msg = with(StopReason.STOP, usage(120_000, 100, 90_000));
         assertThat(ContextOverflow.isContextOverflow(msg, 200_000)).isTrue();
     }
 
@@ -163,16 +164,16 @@ class ContextOverflowTest {
     void lengthTruncationAtOrAboveNinetyNinePercent() {
         // input == window*0.99 ⇒ `>=` 命中；再低一分 ⇒ 不命中（:155-157）。
         assertThat(ContextOverflow.isContextOverflow(
-            with("length", usage(198_000, 0, 0)), 200_000)).isTrue();
+            with(StopReason.LENGTH, usage(198_000, 0, 0)), 200_000)).isTrue();
         assertThat(ContextOverflow.isContextOverflow(
-            with("length", usage(197_999, 0, 0)), 200_000)).isFalse();
+            with(StopReason.LENGTH, usage(197_999, 0, 0)), 200_000)).isFalse();
     }
 
     @Test
     void lengthCaseNeedsZeroOutput() {
         // output>0 ⇒ 不是「截满窗口零产出」的形状。
         assertThat(ContextOverflow.isContextOverflow(
-            with("length", usage(210_000, 5, 0)), 200_000)).isFalse();
+            with(StopReason.LENGTH, usage(210_000, 5, 0)), 200_000)).isFalse();
     }
 
     @Test
@@ -181,7 +182,7 @@ class ContextOverflowTest {
         // + output=0 ⇒ 溢出」—— pi 的 case 3 是 **>= window*0.99**，那条期望
         // 是错的；此处按 pi 真值重钉同一形状。
         assertThat(ContextOverflow.isContextOverflow(
-            with("length", usage(1_000, 0, 0)), 200_000)).isFalse();
+            with(StopReason.LENGTH, usage(1_000, 0, 0)), 200_000)).isFalse();
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -190,16 +191,16 @@ class ContextOverflowTest {
 
     @Test
     void recoverableLengthOnlyBelowDesiredMax() {
-        var truncated = with("length", usage(10_000, 500, 0));
+        var truncated = with(StopReason.LENGTH, usage(10_000, 500, 0));
         assertThat(ContextOverflow.isRecoverableLength(truncated, 8_192)).isTrue();
         // output 已达意图上限 ⇒ 正常截断，不恢复。
-        var full = with("length", usage(10_000, 8_192, 0));
+        var full = with(StopReason.LENGTH, usage(10_000, 8_192, 0));
         assertThat(ContextOverflow.isRecoverableLength(full, 8_192)).isFalse();
         // 非 length 收尾、预算为 0（裁决④的「判不出」形状）、usage 缺席 ⇒ 恒 false。
         assertThat(ContextOverflow.isRecoverableLength(
-            with("stop", usage(10_000, 500, 0)), 8_192)).isFalse();
+            with(StopReason.STOP, usage(10_000, 500, 0)), 8_192)).isFalse();
         assertThat(ContextOverflow.isRecoverableLength(truncated, 0)).isFalse();
         assertThat(ContextOverflow.isRecoverableLength(
-            with("length", null), 8_192)).isFalse();
+            with(StopReason.LENGTH, null), 8_192)).isFalse();
     }
 }

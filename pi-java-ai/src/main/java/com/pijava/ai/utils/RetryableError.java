@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 
 /**
  * 瞬断错误白名单判据 —— pi {@code packages/ai/src/utils/retry.ts} 的
@@ -155,7 +156,7 @@ public final class RetryableError {
      *                未命中瞬断表 ⇒ 一律 {@code false}
      */
     public static boolean isRetryableAssistantError(Message.AssistantMessage message) {
-        if (!"error".equals(message.stopReason()) || message.errorMessage() == null
+        if (message.stopReason() != StopReason.ERROR || message.errorMessage() == null
                 || message.errorMessage().isEmpty()) {
             return false;
         }

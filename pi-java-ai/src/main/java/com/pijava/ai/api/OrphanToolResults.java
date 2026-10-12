@@ -7,6 +7,7 @@ import java.util.Set;
 
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 
 /**
  * pi {@code transform-messages.ts:158-232} 的第二遍：重建消息序列，
@@ -43,8 +44,8 @@ final class OrphanToolResults {
                     // P9（:201-203）：error/aborted 整条不进 result、不更新 pending。
                     // continue 发生在 close 之后 ⇒ error 消息前面的孤儿照样被合成，
                     // error 消息自己的 toolCall 不进 pending。
-                    if ("error".equals(assistant.stopReason())
-                            || "aborted".equals(assistant.stopReason())) {
+                    if (assistant.stopReason() == StopReason.ERROR
+                            || assistant.stopReason() == StopReason.ABORTED) {
                         continue;
                     }
                     var toolCalls = assistant.content().stream()

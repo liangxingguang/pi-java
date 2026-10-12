@@ -54,10 +54,11 @@ class MessageTest {
         var handle = new DeferredHandle("faux", "test-model", "faux-api", "batch-1",
             1_700_000_000_000L, 500L, Map.of("row", 2));
         var msg = new Message.AssistantMessage(
-            List.of(new ContentBlock.TextContent("hi")), "deferred", handle);
+            List.of(new ContentBlock.TextContent("hi")),
+            StopReason.DEFERRED, handle, null, null, null, null, null, null, null);
 
         assertThat(msg.content()).hasSize(1);
-        assertThat(msg.stopReason()).isEqualTo("deferred");
+        assertThat(msg.stopReason()).isEqualTo(StopReason.DEFERRED);
         assertThat(msg.deferred()).isEqualTo(handle);
         assertThat(msg.role()).isEqualTo("assistant");
     }
@@ -130,7 +131,7 @@ class MessageTest {
         var at = java.time.Instant.ofEpochMilli(1_700_000_000_000L);
         var usage = new com.pijava.ai.Usage(10, 5, 1, 2, null, null, 18,
                 com.pijava.ai.Usage.Cost.zero());
-        var msg = new Message.AssistantMessage(List.of(), "stop", null,
+        var msg = new Message.AssistantMessage(List.of(), StopReason.STOP, null,
                 "anthropic-messages", "anthropic", "claude-sonnet-5", usage, at, null, null);
 
         assertThat(msg.api()).isEqualTo("anthropic-messages");
@@ -153,7 +154,7 @@ class MessageTest {
                 com.pijava.ai.Usage.Cost.zero());
         var partial = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent("hello")))
-                .withStopReason("error")
+                .withStopReason(StopReason.ERROR)
                 .withRawStopReason("refusal")
                 .withIdentity("openai-responses", "openai", "mock", at)
                 .withErrorMessage("boom")
@@ -162,7 +163,7 @@ class MessageTest {
         var msg = Message.AssistantMessage.fromPartial(partial);
 
         assertThat(msg.content()).hasSize(1);
-        assertThat(msg.stopReason()).isEqualTo("error");
+        assertThat(msg.stopReason()).isEqualTo(StopReason.ERROR);
         assertThat(msg.rawStopReason()).isEqualTo("refusal");
         assertThat(msg.deferred()).isNull();
         assertThat(msg.api()).isEqualTo("openai-responses");
@@ -214,12 +215,12 @@ class MessageTest {
         var at = java.time.Instant.ofEpochMilli(1_700_000_000_000L);
         var usage = new com.pijava.ai.Usage(1, 2, 0, 0, null, null, 3,
                 com.pijava.ai.Usage.Cost.zero());
-        var msg = new Message.AssistantMessage(List.of(), "stop", null,
+        var msg = new Message.AssistantMessage(List.of(), StopReason.STOP, null,
                 "pi-messages", "pi", "model-x", usage, at, "err", null);
 
-        var rewritten = msg.withStopReason("aborted");
+        var rewritten = msg.withStopReason(StopReason.ABORTED);
 
-        assertThat(rewritten.stopReason()).isEqualTo("aborted");
+        assertThat(rewritten.stopReason()).isEqualTo(StopReason.ABORTED);
         assertThat(rewritten.api()).isEqualTo("pi-messages");
         assertThat(rewritten.provider()).isEqualTo("pi");
         assertThat(rewritten.model()).isEqualTo("model-x");

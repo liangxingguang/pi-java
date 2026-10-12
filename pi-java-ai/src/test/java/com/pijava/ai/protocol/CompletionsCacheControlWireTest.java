@@ -19,6 +19,7 @@ import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
@@ -70,13 +71,13 @@ class CompletionsCacheControlWireTest {
 
     private static Message assistantText(String text) {
         return new Message.AssistantMessage(List.of(new ContentBlock.TextContent(text)),
-            "stop", null, null, null, null, null, null, null, null);
+            StopReason.STOP, null, null, null, null, null, null, null, null);
     }
 
     private static Message assistantToolCallOnly() {
         return new Message.AssistantMessage(
             List.of(new ContentBlock.ToolUseContent("t1", "lookup", Map.of())),
-            "toolUse", null, null, null, null, null, null, null, null);
+            StopReason.TOOL_USE, null, null, null, null, null, null, null, null);
     }
 
     private static Message toolResult(String text) {

@@ -10,6 +10,7 @@ import com.pijava.ai.api.ToolReference;
 import com.pijava.ai.api.TranscriptContext;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -217,9 +218,9 @@ class EstimateTest {
     @Test
     void abortedAndErroredAssistantsAreNotAnchors() {
         var aborted = assistantMessage(Instant.ofEpochMilli(1), usage(10, 5, 0, 0, 15),
-            "aborted", new ContentBlock.TextContent("abcd"));
+            StopReason.ABORTED, new ContentBlock.TextContent("abcd"));
         var errored = assistantMessage(Instant.ofEpochMilli(2), usage(10, 5, 0, 0, 15),
-            "error", new ContentBlock.TextContent("abcd"));
+            StopReason.ERROR, new ContentBlock.TextContent("abcd"));
 
         var estimate = Estimate.estimateContextTokens(List.of(aborted, errored));
 
@@ -305,11 +306,11 @@ class EstimateTest {
 
     private static Message.AssistantMessage assistantMessage(Instant timestamp, Usage usage,
                                                              ContentBlock... blocks) {
-        return assistantMessage(timestamp, usage, "stop", blocks);
+        return assistantMessage(timestamp, usage, StopReason.STOP, blocks);
     }
 
     private static Message.AssistantMessage assistantMessage(Instant timestamp, Usage usage,
-                                                             String stopReason, ContentBlock... blocks) {
+                                                             StopReason stopReason, ContentBlock... blocks) {
         return new Message.AssistantMessage(List.of(blocks), stopReason, null,
             "anthropic-messages", "anthropic", "claude-sonnet-5", usage, timestamp, null, null);
     }

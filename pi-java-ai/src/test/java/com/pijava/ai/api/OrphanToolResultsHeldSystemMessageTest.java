@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 
 /**
@@ -102,7 +103,7 @@ class OrphanToolResultsHeldSystemMessageTest {
     private static Message.AssistantMessage assistantToolCall(String id) {
         return new Message.AssistantMessage(
             List.of(new ContentBlock.ToolUseContent(id, "lookup", Map.of())),
-            "toolUse", null, "anthropic-messages", "anthropic", "claude-sonnet-5",
+            StopReason.TOOL_USE, null, "anthropic-messages", "anthropic", "claude-sonnet-5",
             null, null, null, null);
     }
 

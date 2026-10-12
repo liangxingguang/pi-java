@@ -13,6 +13,7 @@ import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.provider.builtin.ModelData;
 
@@ -72,7 +73,7 @@ class XiaomiReasoningContentWireTest {
     private static JsonNode requestBody(ModelInfo model, String provider, String modelId)
             throws Exception {
         var assistant = new Message.AssistantMessage(
-            List.of(new ContentBlock.TextContent("ok")), "stop", null,
+            List.of(new ContentBlock.TextContent("ok")), StopReason.STOP, null,
             "openai-completions", provider, modelId, null, null, null, null);
         var user = new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")));
 

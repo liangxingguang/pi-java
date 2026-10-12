@@ -18,6 +18,7 @@ import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 
@@ -84,7 +85,7 @@ class AnthropicMessagesApiTest {
         assertThat(errors(events))
             .as("max_tokens 是正常结束的一种（截断），不是错误")
             .isEmpty();
-        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo("length");
+        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo(StopReason.LENGTH);
     }
 
     /**
@@ -98,7 +99,7 @@ class AnthropicMessagesApiTest {
         var events = collect(streamWithDelta("{\"stop_reason\":\"max_tokens\",\"stop_sequence\":null}"));
 
         var done = last(events, StreamEvent.StreamDone.class);
-        assertThat(done.reason()).isEqualTo("length");
+        assertThat(done.reason()).isEqualTo(StopReason.LENGTH);
         assertThat(done.partial().rawStopReason()).isEqualTo("max_tokens");
     }
 
@@ -131,8 +132,8 @@ class AnthropicMessagesApiTest {
         var events = collect(body);
 
         var done = last(events, StreamEvent.StreamDone.class);
-        assertThat(done.reason()).isEqualTo("toolUse");
-        assertThat(done.partial().stopReason()).isEqualTo("toolUse");
+        assertThat(done.reason()).isEqualTo(StopReason.TOOL_USE);
+        assertThat(done.partial().stopReason()).isEqualTo(StopReason.TOOL_USE);
         assertThat(done.partial().rawStopReason())
             .as("线格原值仍是 tool_use —— 归一化停因与线格原值是两个字段，不能混")
             .isEqualTo("tool_use");
@@ -163,7 +164,7 @@ class AnthropicMessagesApiTest {
     void endTurnMapsToStop() throws Exception {
         var events = collect(streamWithDelta("{\"stop_reason\":\"end_turn\",\"stop_sequence\":null}"));
 
-        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo("stop");
+        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo(StopReason.STOP);
     }
 
     /** {@code sensitive} ⇒ error + 固定文案（pi {@code :1479-1480}）。 */

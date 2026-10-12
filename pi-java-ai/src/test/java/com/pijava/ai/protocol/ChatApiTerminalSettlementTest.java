@@ -9,6 +9,7 @@ import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
@@ -63,7 +64,7 @@ class ChatApiTerminalSettlementTest {
             publisher.submit(builder.emitStart());
             publisher.submit(builder.emitTextStart());
             publisher.submit(builder.emitTextDelta("alpha"));
-            publisher.submit(builder.emitError("error", cause));
+            publisher.submit(builder.emitError(StopReason.ERROR, cause));
         }
     }
 
@@ -83,8 +84,8 @@ class ChatApiTerminalSettlementTest {
 
         assertThat(events.getLast()).isInstanceOf(StreamEvent.StreamError.class);
         var err = (StreamEvent.StreamError) events.getLast();
-        assertThat(err.reason()).isEqualTo("error");
-        assertThat(err.partial().stopReason()).isEqualTo("error");
+        assertThat(err.reason()).isEqualTo(StopReason.ERROR);
+        assertThat(err.partial().stopReason()).isEqualTo(StopReason.ERROR);
         assertThat(err.partial().errorMessage()).isNotBlank();
     }
 
@@ -93,7 +94,7 @@ class ChatApiTerminalSettlementTest {
         var events = drain(new MidStreamErrorApi(new IOException("kaboom")), request("mid-error"));
 
         var err = (StreamEvent.StreamError) events.getLast();
-        assertThat(err.partial().stopReason()).isEqualTo("error");
+        assertThat(err.partial().stopReason()).isEqualTo(StopReason.ERROR);
         assertThat(err.partial().errorMessage()).isEqualTo("kaboom");
         assertThat(err.partial().content())
             .containsExactly(new ContentBlock.TextContent("alpha"));
@@ -113,7 +114,7 @@ class ChatApiTerminalSettlementTest {
         assertThat(message).isInstanceOfSatisfying(
             com.pijava.ai.message.Message.AssistantMessage.class,
             settled -> {
-                assertThat(settled.stopReason()).isEqualTo("error");
+                assertThat(settled.stopReason()).isEqualTo(StopReason.ERROR);
                 assertThat(settled.errorMessage()).isEqualTo("kaboom");
                 assertThat(settled.content())
                     .containsExactly(new ContentBlock.TextContent("alpha"));

@@ -8,6 +8,7 @@ import java.util.Map;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 
 import org.junit.jupiter.api.Test;
@@ -30,7 +31,7 @@ class TransformMessagesThoughtSignatureTest {
         200_000, 8_192, false, com.pijava.ai.model.PricingInfo.UNKNOWN);
 
     private static Message.AssistantMessage foreign(ContentBlock... blocks) {
-        return new Message.AssistantMessage(List.of(blocks), "stop", null,
+        return new Message.AssistantMessage(List.of(blocks), StopReason.STOP, null,
             API, "teamorouter", "deepseek-v4-flash", null, null, null, null);
     }
 
@@ -58,7 +59,7 @@ class TransformMessagesThoughtSignatureTest {
     @Test
     void keepsSameModelSignature() {
         var same = new Message.AssistantMessage(List.of(toolCall("U0lHTg==")),
-            "stop", null, API, TARGET.provider(), TARGET.modelName(),
+            StopReason.STOP, null, API, TARGET.provider(), TARGET.modelName(),
             null, null, null, null);
 
         var block = (ContentBlock.ToolUseContent)

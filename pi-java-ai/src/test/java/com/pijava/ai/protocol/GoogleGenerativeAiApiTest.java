@@ -17,6 +17,7 @@ import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 
@@ -60,7 +61,7 @@ class GoogleGenerativeAiApiTest {
     void maxTokensFinishReasonMapsToLength() throws Exception {
         var events = collect(text("partial"), finish("MAX_TOKENS"));
 
-        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo("length");
+        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo(StopReason.LENGTH);
     }
 
     /** {@code STOP} ⇒ {@code "stop"}（正常收尾的**对照面**：旧实现下也是绿的）。 */
@@ -68,7 +69,7 @@ class GoogleGenerativeAiApiTest {
     void stopFinishReasonMapsToStop() throws Exception {
         var events = collect(text("all done"), finish("STOP"));
 
-        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo("stop");
+        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo(StopReason.STOP);
         assertThat(errors(events)).isEmpty();
     }
 
@@ -84,7 +85,7 @@ class GoogleGenerativeAiApiTest {
         var events = collect(text("partial"), finish("MAX_TOKENS"));
 
         var done = last(events, StreamEvent.StreamDone.class);
-        assertThat(done.reason()).isEqualTo("length");
+        assertThat(done.reason()).isEqualTo(StopReason.LENGTH);
         assertThat(done.partial().rawStopReason()).isEqualTo("MAX_TOKENS");
     }
 
@@ -193,7 +194,7 @@ class GoogleGenerativeAiApiTest {
             + "{\"name\":\"write\",\"args\":{}}}],\"role\":\"model\"},"
             + "\"finishReason\":\"STOP\""));
 
-        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo("toolUse");
+        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo(StopReason.TOOL_USE);
     }
 
     // ── 夹具脚手架 ──────────────────────────────────────────────────────
@@ -297,7 +298,7 @@ class GoogleGenerativeAiApiTest {
     /** 事件名，{@code StreamDone} 带上取值 —— 红灯里能直接读出线格被翻成了什么。 */
     private static List<String> names(List<StreamEvent> events) {
         return events.stream().map(e -> e instanceof StreamEvent.StreamDone d
-            ? "StreamDone(" + d.reason() + ")"
+            ? "StreamDone(" + d.reason().wireName() + ")"
             : e.getClass().getSimpleName()).toList();
     }
 }

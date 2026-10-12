@@ -12,6 +12,7 @@ import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.http.ProviderRetry;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 
@@ -91,7 +92,7 @@ class GoogleProviderRetryWireTest {
 
             assertThat(server.requestCount()).isEqualTo(2);
             assertThat(events).anyMatch(
-                    e -> e instanceof StreamEvent.StreamDone d && "stop".equals(d.reason()));
+                    e -> e instanceof StreamEvent.StreamDone d && d.reason() == StopReason.STOP);
             // pi: retryIndex 0 ⇒ 0.5s * (1 - rand*0.25) ∈ [375,500] ms。
             assertThat(elapsedMs).isBetween(350L, 5_000L);
         }

@@ -4,6 +4,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamEvent.StreamDone;
 import com.pijava.ai.stream.StreamEvent.StreamError;
@@ -54,7 +55,7 @@ final class QueueStreamIterator implements StreamIterator {
             return event;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return StreamError.settle("error", e, AssistantMessage.empty());
+            return StreamError.settle(StopReason.ERROR, e, AssistantMessage.empty());
         }
     }
 
@@ -65,7 +66,7 @@ final class QueueStreamIterator implements StreamIterator {
         // that never received a terminal event would otherwise hang forever.
         // 这两条合成终局**没有累加器**（pi 的对等物是 `lazy.ts` 的合成错误消息），
         // 所以内容仍为空 —— 但落定那一半必须走工厂，否则下游只能回头读 Throwable。
-        queue.offer(StreamDone.settle("aborted", AssistantMessage.empty()));
+        queue.offer(StreamDone.settle(StopReason.ABORTED, AssistantMessage.empty()));
     }
 
     /**
@@ -85,6 +86,6 @@ final class QueueStreamIterator implements StreamIterator {
             return;
         }
         queue.clear();
-        queue.offer(StreamError.settle("aborted", cause, AssistantMessage.empty()));
+        queue.offer(StreamError.settle(StopReason.ABORTED, cause, AssistantMessage.empty()));
     }
 }

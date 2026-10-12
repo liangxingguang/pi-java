@@ -14,6 +14,7 @@ import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 
 /**
@@ -73,7 +74,7 @@ class ResponsesCompositeItemIdWireTest {
 
             assertThat(result).isInstanceOf(Message.AssistantMessage.class);
             var msg = (Message.AssistantMessage) result;
-            assertThat(msg.stopReason()).isEqualTo("toolUse");
+            assertThat(msg.stopReason()).isEqualTo(StopReason.TOOL_USE);
             assertThat(msg.content())
                 .singleElement()
                 .isInstanceOf(ContentBlock.ToolUseContent.class)

@@ -18,6 +18,7 @@ import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 
@@ -77,7 +78,7 @@ class PiMessagesApiTest {
             StreamEvent.UsageInfo.class, StreamEvent.StreamDone.class);
         var done = last(events, StreamEvent.StreamDone.class);
         // B109：pi 消息通道发的就是 "toolUse"，边界翻译已删 ⇒ 原样落地。
-        assertThat(done.reason()).isEqualTo("toolUse");
+        assertThat(done.reason()).isEqualTo(StopReason.TOOL_USE);
         var end = last(events, StreamEvent.ToolCallEnd.class);
         assertThat(end.name()).isEqualTo("write");
         assertThat(end.arguments()).containsEntry("path", "/tmp/x");
@@ -108,7 +109,7 @@ class PiMessagesApiTest {
             StreamEvent.TextDelta.class, StreamEvent.TextEnd.class,
             StreamEvent.UsageInfo.class, StreamEvent.StreamDone.class);
         var done = last(events, StreamEvent.StreamDone.class);
-        assertThat(done.reason()).isEqualTo("stop");
+        assertThat(done.reason()).isEqualTo(StopReason.STOP);
     }
 
     /**
@@ -145,7 +146,7 @@ class PiMessagesApiTest {
         var events = collect(api, "hi");
         assertThat(events).anyMatch(e -> e instanceof StreamEvent.StreamError);
         var error = last(events, StreamEvent.StreamError.class);
-        assertThat(error.reason()).isEqualTo("error");
+        assertThat(error.reason()).isEqualTo(StopReason.ERROR);
     }
 
     @Test

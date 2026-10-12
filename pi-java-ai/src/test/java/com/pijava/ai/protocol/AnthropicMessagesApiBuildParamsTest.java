@@ -13,6 +13,7 @@ import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 
 import org.junit.jupiter.api.Test;
@@ -53,7 +54,7 @@ class AnthropicMessagesApiBuildParamsTest {
      * —— 名字与覆盖面对不上，正是 §8.34.5-a 的「夹具没牙」。</p>
      */
     private static Message.AssistantMessage assistant(ContentBlock... blocks) {
-        return new Message.AssistantMessage(List.of(blocks), "stop", null,
+        return new Message.AssistantMessage(List.of(blocks), StopReason.STOP, null,
             "anthropic-messages", "anthropic", "claude-sonnet-5", null, null, null, null);
     }
 

@@ -29,8 +29,8 @@ import com.pijava.ai.stream.StreamEvent;
  * @param id           unique message identifier (generated on first event)
  * @param content      current content blocks (text, thinking, tool calls)
  * @param usage        token usage so far (may be null early in the stream)
- * @param stopReason   final stop reason (pi {@code StopReason}: "stop", "toolUse",
- *                     "length", "error", "aborted"), or null if still streaming.
+ * @param stopReason   final stop reason（pi {@code StopReason} 闭集枚举：STOP/TOOL_USE/
+ *                     LENGTH/ERROR/ABORTED/DEFERRED），流未成形时为 {@code null}。
  *                     ⚠️ **没有 "end_turn"** —— 那是 Anthropic 线格上的取值，pi 在
  *                     {@code mapStopReason}（{@code anthropic-messages.ts:1467}）里就翻成了
  *                     {@code "stop"}，故它从不进消息（原 docs/31 §8.35.14 裁决 D2／提交 ③）。
@@ -53,7 +53,7 @@ public record AssistantMessage(
     String id,
     List<ContentBlock> content,
     StreamEvent.UsageInfo usage,
-    String stopReason,
+    StopReason stopReason,
     String api,
     String provider,
     String model,
@@ -66,10 +66,17 @@ public record AssistantMessage(
         content = List.copyOf(content);
     }
 
-    /** Compatibility constructor for pre-3a snapshots without identity fields. */
+    /**
+     * Compatibility constructor for pre-3a snapshots without identity fields.
+     *
+     * @deprecated 批 1 ⑥（B119/B121）桥接期重载：请直接传 {@link StopReason}。
+     *             步 5 删除；String 经 {@link StopReason#fromWireOrNull} 容错解码。
+     */
+    @Deprecated
     public AssistantMessage(
             String id, List<ContentBlock> content, StreamEvent.UsageInfo usage, String stopReason) {
-        this(id, content, usage, stopReason, null, null, null, null, null, null);
+        this(id, content, usage, StopReason.fromWireOrNull(stopReason),
+            null, null, null, null, null, null);
     }
 
     /** Create an empty initial snapshot. */
@@ -101,9 +108,18 @@ public record AssistantMessage(
     }
 
     /** Create a copy with an updated stop reason. */
-    public AssistantMessage withStopReason(String newStopReason) {
+    public AssistantMessage withStopReason(StopReason newStopReason) {
         return new AssistantMessage(id, content, usage, newStopReason,
             api, provider, model, timestamp, errorMessage, rawStopReason);
+    }
+
+    /**
+     * @deprecated 批 1 ⑥ 桥接期重载，步 5 删除；未知/遗留 String 经
+     *             {@link StopReason#fromWireOrNull} 容错解码为 {@code null}。
+     */
+    @Deprecated
+    public AssistantMessage withStopReason(String newStopReason) {
+        return withStopReason(StopReason.fromWireOrNull(newStopReason));
     }
 
     /** Create a copy with the provider identity + creation time attached. */

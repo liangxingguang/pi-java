@@ -19,6 +19,7 @@ import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 
@@ -161,7 +162,7 @@ class ResponsesOutputItemDoneCaptureTest {
             completed(messageItem("msg_1", "completed", textContent("Hi"), "final_answer"))));
 
         var textEnd = last(events, StreamEvent.TextEnd.class);
-        assertThat(textEnd.partial().stopReason()).isEqualTo("stop");
+        assertThat(textEnd.partial().stopReason()).isEqualTo(StopReason.STOP);
     }
 
     /** 对照：没有 phase ⇒ text_end 的 partial 还是待定（这一支才有判别力）。 */

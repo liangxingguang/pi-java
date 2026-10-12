@@ -8,6 +8,7 @@ import java.util.Set;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
@@ -47,12 +48,12 @@ class TransformMessagesIdNormalizationTest {
             (id, target, source) -> id.replace('|', '_');
 
     private static Message.AssistantMessage foreignModel(ContentBlock... blocks) {
-        return new Message.AssistantMessage(List.of(blocks), "stop", null,
+        return new Message.AssistantMessage(List.of(blocks), StopReason.STOP, null,
             API, "teamorouter", "deepseek-v4-flash", null, null, null, null);
     }
 
     private static Message.AssistantMessage sameModel(ContentBlock... blocks) {
-        return new Message.AssistantMessage(List.of(blocks), "stop", null,
+        return new Message.AssistantMessage(List.of(blocks), StopReason.STOP, null,
             API, TARGET.provider(), TARGET.modelName(), null, null, null, null);
     }
 

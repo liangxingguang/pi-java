@@ -22,6 +22,7 @@ import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.utils.ShortHash;
@@ -64,7 +65,7 @@ class LaneTransformMessagesWiringTest {
             List.of(new ContentBlock.TextContent("ok")), false);
         var request = new StreamRequest(target, null,
             List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi"))),
-                new Message.AssistantMessage(List.of(toolUse), "stop", null,
+                new Message.AssistantMessage(List.of(toolUse), StopReason.STOP, null,
                     "anthropic-messages", "anthropic", "claude-x", null, null, null, null), result),
             List.of(), -1, -1);
 
@@ -203,7 +204,7 @@ class LaneTransformMessagesWiringTest {
 
     private static StreamRequest responsesToolRequest(ModelId<?> target, String apiName) {
         var source = new Message.AssistantMessage(List.of(
-            new ContentBlock.ToolUseContent("call_123|abc", "read", Map.of())), "stop", null,
+            new ContentBlock.ToolUseContent("call_123|abc", "read", Map.of())), StopReason.STOP, null,
             apiName, target.provider(), "previous-model", null, null, null, null);
         return new StreamRequest(target, null,
             List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi"))), source),
@@ -212,7 +213,7 @@ class LaneTransformMessagesWiringTest {
 
     private static StreamRequest toolRequest(ModelId<?> target, String id) {
         var assistant = new Message.AssistantMessage(List.of(
-            new ContentBlock.ToolUseContent(id, "read", Map.of())), "stop", null,
+            new ContentBlock.ToolUseContent(id, "read", Map.of())), StopReason.STOP, null,
             "foreign", "foreign", "foreign-model", null, null, null, null);
         return new StreamRequest(target, null,
             List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi"))), assistant,
@@ -296,7 +297,7 @@ class LaneTransformMessagesWiringTest {
             var sameModel = new Message.AssistantMessage(
                 List.of(new ContentBlock.ThinkingContent(FOREIGN_TEXT, "reasoning_content", false),
                     new ContentBlock.TextContent("VISIBLE")),
-                "stop", null, "openai-completions", "deepseek", "deepseek-v4-flash",
+                StopReason.STOP, null, "openai-completions", "deepseek", "deepseek-v4-flash",
                 null, null, null, null);
             var request = new StreamRequest(ModelId.of("deepseek", "deepseek-v4-flash"), null,
                 List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi"))),
@@ -314,7 +315,7 @@ class LaneTransformMessagesWiringTest {
         var foreign = new Message.AssistantMessage(
             List.of(new ContentBlock.ThinkingContent(FOREIGN_TEXT, "sig-foreign", false),
                 new ContentBlock.TextContent("VISIBLE")),
-            "stop", null, "anthropic-messages", "anthropic", "claude-x", null, null, null, null);
+            StopReason.STOP, null, "anthropic-messages", "anthropic", "claude-x", null, null, null, null);
         return new StreamRequest(target, null,
             List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi"))), foreign),
             List.of(), -1, -1);

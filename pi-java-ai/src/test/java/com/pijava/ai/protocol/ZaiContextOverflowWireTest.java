@@ -14,6 +14,7 @@ import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.utils.ContextOverflow;
 
@@ -48,7 +49,7 @@ class ZaiContextOverflowWireTest {
             assertThat(result).isInstanceOf(Message.AssistantMessage.class);
             var msg = (Message.AssistantMessage) result;
             assertThat(msg.provider()).isEqualTo("zai");
-            assertThat(msg.stopReason()).isEqualTo("error");
+            assertThat(msg.stopReason()).isEqualTo(StopReason.ERROR);
             // SDK 把状态码前缀与整节点体拼进 errorMessage（UnexpectedStatusCodeException）。
             assertThat(msg.errorMessage()).contains("Prompt too long");
             assertThat(ContextOverflow.isContextOverflow(msg, null)).isTrue();

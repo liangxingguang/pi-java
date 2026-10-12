@@ -21,6 +21,7 @@ import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
 import com.pijava.ai.stream.StreamEvent;
@@ -138,7 +139,7 @@ class AnthropicSurrogateSanitizeTest {
 
     /** 同模型助手消息（闸的同模型判据看 {@code api}/{@code provider}/{@code model} 三元）。 */
     private static Message.AssistantMessage assistant(ContentBlock... blocks) {
-        return new Message.AssistantMessage(List.of(blocks), "stop", null,
+        return new Message.AssistantMessage(List.of(blocks), StopReason.STOP, null,
             "anthropic-messages", TARGET.provider(), TARGET.modelName(), null, null, null, null);
     }
 

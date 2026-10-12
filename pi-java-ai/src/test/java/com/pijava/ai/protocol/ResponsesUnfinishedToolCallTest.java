@@ -19,6 +19,7 @@ import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 
@@ -85,7 +86,7 @@ class ResponsesUnfinishedToolCallTest {
             .filter(StreamEvent.StreamDone.class::isInstance)
             .map(StreamEvent.StreamDone.class::cast)
             .reduce((a, b) -> b).orElseThrow();
-        assertThat(done.reason()).isEqualTo("toolUse");
+        assertThat(done.reason()).isEqualTo(StopReason.TOOL_USE);
         var toolCall = (ContentBlock.ToolUseContent) done.partial().content().get(0);
         assertThat(toolCall.name()).isEqualTo("ls");
         assertThat(toolCall.arguments()).isEqualTo(Map.of("path", "docs"));

@@ -19,6 +19,7 @@ import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 
@@ -34,7 +35,7 @@ class ResponsesCompositeItemIdReplayTest {
     private static Message.AssistantMessage assistant(String model, String compositeId) {
         return new Message.AssistantMessage(
             List.of(new ContentBlock.ToolUseContent(compositeId, "get_weather", Map.of())),
-            "toolUse", null, "openai-responses", "openai", model, zeroUsage(),
+            StopReason.TOOL_USE, null, "openai-responses", "openai", model, zeroUsage(),
             Instant.EPOCH, null, null);
     }
 

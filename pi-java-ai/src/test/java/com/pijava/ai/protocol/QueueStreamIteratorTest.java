@@ -4,6 +4,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.pijava.ai.message.AssistantMessage;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 
 import org.junit.jupiter.api.Test;
@@ -55,8 +56,8 @@ class QueueStreamIteratorTest {
         iterator.abort(new RuntimeException("boom"));
 
         var event = (StreamEvent.StreamError) iterator.next();
-        assertThat(event.reason()).isEqualTo("aborted");
-        assertThat(event.partial().stopReason()).isEqualTo("aborted");
+        assertThat(event.reason()).isEqualTo(StopReason.ABORTED);
+        assertThat(event.partial().stopReason()).isEqualTo(StopReason.ABORTED);
         assertThat(event.partial().errorMessage()).isEqualTo("boom");
     }
 
@@ -66,8 +67,8 @@ class QueueStreamIteratorTest {
         iterator.close();
 
         var done = (StreamEvent.StreamDone) iterator.next();
-        assertThat(done.reason()).isEqualTo("aborted");
-        assertThat(done.partial().stopReason()).isEqualTo("aborted");
+        assertThat(done.reason()).isEqualTo(StopReason.ABORTED);
+        assertThat(done.partial().stopReason()).isEqualTo(StopReason.ABORTED);
     }
 
     @Test
@@ -87,7 +88,7 @@ class QueueStreamIteratorTest {
         var queue = new LinkedBlockingQueue<StreamEvent>();
         var done = AssistantMessage.empty();
         queue.offer(new StreamEvent.TextStart(0, done));
-        queue.offer(new StreamEvent.StreamDone("stop", null, done));
+        queue.offer(new StreamEvent.StreamDone(StopReason.STOP, null, done));
         var iterator = new QueueStreamIterator(queue);
 
         assertThat(iterator.next()).isInstanceOf(StreamEvent.TextStart.class);

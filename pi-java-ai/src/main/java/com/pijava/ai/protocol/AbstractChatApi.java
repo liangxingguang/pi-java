@@ -15,6 +15,7 @@ import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 
 import org.slf4j.Logger;
@@ -124,7 +125,7 @@ public abstract class AbstractChatApi implements ChatApi {
             @Override public void onNext(StreamEvent e) { queue.offer(e); }
             @Override public void onError(Throwable t) {
                 queue.offer(StreamEvent.StreamError.settle(
-                    "error", t, identityBase(request, netTimestamp)));
+                    StopReason.ERROR, t, identityBase(request, netTimestamp)));
             }
             @Override public void onComplete() {
                 // Safety net (liveness only): the SubmissionPublisher can drop the
@@ -137,7 +138,7 @@ public abstract class AbstractChatApi implements ChatApi {
                 // response completed"). Reporting a `done("stop")` here made a
                 // dropped terminal look like an empty-but-successful turn
                 // (`原 docs/55 §5 F3`).
-                queue.offer(StreamEvent.StreamError.settle("error",
+                queue.offer(StreamEvent.StreamError.settle(StopReason.ERROR,
                     new IllegalStateException("stream completed without a terminal event"),
                     identityBase(request, netTimestamp)));
             }

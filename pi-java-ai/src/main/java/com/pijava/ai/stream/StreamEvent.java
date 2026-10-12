@@ -44,16 +44,19 @@ import com.pijava.ai.message.StopReason;
 public sealed interface StreamEvent {
 
     /**
-     * 累加器**尚未落定**时 {@code stopReason} 的占位值 —— pi 五条车道的同一个字面量
+     * 累加器**尚未落定**时 {@code stopReason} 的占位字面量 —— pi 五条车道的同一个值
      * （{@code anthropic-messages.ts:526}、{@code google-generative-ai.ts:75}、
      * {@code mistral-conversations.ts:222}、{@code openai-completions.ts:333}、
-     * {@code openai-responses.ts:139}）。
+     * {@code openai-responses.ts:139}）；枚举侧权威是 {@link StopReason#PENDING}。
      *
-     * <p><b>它不是 pi 的 {@code StopReason} 词汇表成员</b>：pi 的存盘类型显式排除它
+     * <p><b>它被 pi 的存盘类型显式排除</b>
      * （{@code harness/session/types.ts:13} 的 {@code Exclude<StopReason, "pending">}）。
      * 它的含义是「还没有终局判定」⇒ 任何把它当落定取值用的读取点都是错的
-     * （{@link #isSettled} 是唯一的判据）。</p>
+     * （{@link #isSettled(StopReason)} 是唯一的判据）。</p>
+     *
+     * @deprecated 批 1 ⑥（B119/B121）桥接期保留，步 5 删除；新代码用 {@link StopReason#PENDING}。
      */
+    @Deprecated
     String PENDING_STOP_REASON = "pending";
 
     /**
@@ -72,33 +75,43 @@ public sealed interface StreamEvent {
      * 终局载荷的消费者可以假定它成立；生产端由 {@code StreamDone.settle} /
      * {@code StreamError.settle} 保证。</p>
      */
-    static boolean isSettled(String stopReason) {
-        return stopReason != null && !stopReason.isEmpty() && !PENDING_STOP_REASON.equals(stopReason);
+    /** 枚举权威版（批 1 ⑥）：语义同 {@link StopReason#isSettled}。 */
+    static boolean isSettled(StopReason stopReason) {
+        return StopReason.isSettled(stopReason);
     }
 
     /**
-     * 落定后的消息：{@code stopReason} 缺位（null／空／{@code "pending"}）时补上。
+     * @deprecated 批 1 ⑥ 桥接期重载，步 5 删除；未知/遗留 String 经
+     *             {@link StopReason#fromWireOrNull} 解码后按枚举判据落定。
+     */
+    @Deprecated
+    static boolean isSettled(String stopReason) {
+        return StopReason.isSettled(StopReason.fromWireOrNull(stopReason));
+    }
+
+    /**
+     * 落定后的消息：{@code stopReason} 缺位（{@code null}／{@code PENDING}）时补上。
      *
      * <p>已经落定的消息<b>原样返回</b> —— pi 的 {@code reason} 只是
      * {@code output.stopReason} 的冗余投影（{@code anthropic-messages.ts:815}），
      * 两者冲突时**消息是权威**。</p>
      */
     private static AssistantMessage settleMessage(
-            String reason, AssistantMessage partial, String fallback) {
+            StopReason reason, AssistantMessage partial, StopReason fallback) {
         var base = partial == null ? AssistantMessage.empty() : partial;
         if (isSettled(base.stopReason())) {
             return base;
         }
-        return base.withStopReason(reason == null || reason.isEmpty() ? fallback : reason);
+        return base.withStopReason(reason == null ? fallback : reason);
     }
 
     /** 落定后事件的 {@code reason} 组件：与消息上的落定值**同值**（同一权威）。 */
-    private static String settleReason(
-            String reason, AssistantMessage settled, String fallback) {
+    private static StopReason settleReason(
+            StopReason reason, AssistantMessage settled, StopReason fallback) {
         if (isSettled(settled.stopReason())) {
             return settled.stopReason();
         }
-        return reason == null || reason.isEmpty() ? fallback : reason;
+        return reason == null ? fallback : reason;
     }
 
     /**
@@ -285,32 +298,37 @@ public sealed interface StreamEvent {
      * 两者必须同值。{@link #usage()} 是事件级的计量副本，允许为 null
      * （消息上的 usage 才是权威，出口缝会兜零）。</p>
      *
-     * @param reason stop reason: "stop", "toolUse", "length"（pi {@code StopReason} 的词表；
-     *               ⚠️ 不含 "end_turn" —— 那是 Anthropic 线格取值，车道在映射时就翻了，
+     * @param reason stop reason（pi {@code StopReason} 闭集：STOP/TOOL_USE/LENGTH…；
+     *               ⚠️ 不含 END_TURN —— 那是 Anthropic 线格取值，车道在映射时就翻了，
      *               见 {@code AssistantMessage#stopReason}）
      * @param usage final token usage (may be null)
      * @param partial final complete assistant message snapshot
      */
-    record StreamDone(String reason, UsageInfo usage, AssistantMessage partial) implements StreamEvent {
+    record StreamDone(StopReason reason, UsageInfo usage, AssistantMessage partial) implements StreamEvent {
 
         /**
          * 用一条已落定的消息造终局（旁路生产者的唯一入口，见 {@code 原 docs/55 §6.2}）。
          *
          * <p>只做「在已有消息上补缺」：不新建消息、不重组内容 ⇒ 无论谁先落定，
          * 结果同值。落定值取 {@code partial.stopReason()}（已落定时）或 {@code reason}
-         * （缺省 {@code "stop"}）。</p>
+         * （缺省 {@link StopReason#STOP}）。</p>
          *
-         * @param reason  车道给的停因；空则用消息上的落定值，再空则 {@code "stop"}
+         * @param reason  车道给的停因；null 则用消息上的落定值，再缺则 {@link StopReason#STOP}
          * @param partial 终局快照；null 视作空快照
          */
-        public static StreamDone settle(String reason, AssistantMessage partial) {
-            var message = StreamEvent.settleMessage(reason, partial, "stop");
-            return new StreamDone(StreamEvent.settleReason(reason, message, "stop"), null, message);
+        public static StreamDone settle(StopReason reason, AssistantMessage partial) {
+            var message = StreamEvent.settleMessage(reason, partial, StopReason.STOP);
+            return new StreamDone(StreamEvent.settleReason(reason, message, StopReason.STOP),
+                null, message);
         }
 
-        /** 枚举入参版（批 1 ⑥ B119/B121）：边界经 {@link StopReason#wireName()} 落 String。 */
-        public static StreamDone settle(StopReason reason, AssistantMessage partial) {
-            return settle(reason.wireName(), partial);
+        /**
+         * @deprecated 批 1 ⑥ 桥接期重载，步 5 删除；String 经
+         *             {@link StopReason#fromWireOrNull} 容错解码（未知值落 null ⇒ 走补缺）。
+         */
+        @Deprecated
+        public static StreamDone settle(String reason, AssistantMessage partial) {
+            return settle(StopReason.fromWireOrNull(reason), partial);
         }
     }
 
@@ -327,36 +345,41 @@ public sealed interface StreamEvent {
      * 文本就在消息上）⇒ 它只留给日志与 Java 侧栈；<b>下游不许再从它反推文本</b>，
      * 要文本就用 {@link #textOf(StreamError)}（登记 B114）。</p>
      *
-     * @param reason discriminator: "aborted" | "error"
+     * @param reason discriminator：{@link StopReason#ABORTED} | {@link StopReason#ERROR}
      * @param error the underlying exception（仅日志用，可 null）
      * @param partial settled snapshot at the point of error
      */
-    record StreamError(String reason, Throwable error, AssistantMessage partial)
+    record StreamError(StopReason reason, Throwable error, AssistantMessage partial)
             implements StreamEvent {
 
         /**
          * 用一条已落定的消息造终局（旁路生产者的唯一入口，见 {@code 原 docs/55 §6.2}）。
          *
-         * <p>补两样：{@code stopReason}（缺省 {@code "error"}）与 {@code errorMessage}
+         * <p>补两样：{@code stopReason}（缺省 {@link StopReason#ERROR}）与 {@code errorMessage}
          * （取 {@code cause} 的文本；消息上已有文本则不动）。内容与身份原样保留。</p>
          *
-         * @param reason  车道给的停因；空则取 {@code "error"}
+         * @param reason  车道给的停因；null 则取 {@link StopReason#ERROR}
          * @param cause   底层异常；文本的唯一来源，可 null（此时 {@code errorMessage} 缺席）
          * @param partial 终局快照；null 视作空快照
          */
-        public static StreamError settle(String reason, Throwable cause, AssistantMessage partial) {
-            var message = StreamEvent.settleMessage(reason, partial, "error");
+        public static StreamError settle(StopReason reason, Throwable cause, AssistantMessage partial) {
+            var message = StreamEvent.settleMessage(reason, partial, StopReason.ERROR);
             var text = StreamEvent.errorTextOf(cause);
             if (text != null
                     && (message.errorMessage() == null || message.errorMessage().isEmpty())) {
                 message = message.withErrorMessage(text);
             }
-            return new StreamError(StreamEvent.settleReason(reason, message, "error"), cause, message);
+            return new StreamError(
+                StreamEvent.settleReason(reason, message, StopReason.ERROR), cause, message);
         }
 
-        /** 枚举入参版（批 1 ⑥ B119/B121）：边界经 {@link StopReason#wireName()} 落 String。 */
-        public static StreamError settle(StopReason reason, Throwable cause, AssistantMessage partial) {
-            return settle(reason.wireName(), cause, partial);
+        /**
+         * @deprecated 批 1 ⑥ 桥接期重载，步 5 删除；String 经
+         *             {@link StopReason#fromWireOrNull} 容错解码（未知值落 null ⇒ 补缺 ERROR）。
+         */
+        @Deprecated
+        public static StreamError settle(String reason, Throwable cause, AssistantMessage partial) {
+            return settle(StopReason.fromWireOrNull(reason), cause, partial);
         }
 
         /**

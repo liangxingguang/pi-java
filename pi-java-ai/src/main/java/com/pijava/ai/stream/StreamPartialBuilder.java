@@ -31,17 +31,15 @@ public final class StreamPartialBuilder {
      * {@code openai-responses.ts:139}），**只有终局事件改写它**。
      *
      * <p>⑩（B26）：故流进行中**每一帧**（{@code message_start} 与每个
-     * {@code message_update}）的载荷里它都是 {@code "pending"}；终局事件把它换成
-     * 车道的映射结果。<b>它不是 pi 的 {@code StopReason} 词汇表成员</b> ——
-     * pi 的**存盘**类型显式排除它（{@code harness/session/types.ts:13} 的
-     * {@code Exclude<StopReason, "pending">}，conformance
-     * {@code session/testing/conformance/session-repo.ts:264} 拿
+     * {@code message_update}）的载荷里它都是 {@link StopReason#PENDING}；终局事件把它换成
+     * 车道的映射结果。<b>pi 的**存盘**类型显式排除 PENDING</b>
+     * （{@code harness/session/types.ts:13} 的 {@code Exclude<StopReason, "pending">}，
+     * conformance {@code session/testing/conformance/session-repo.ts:264} 拿
      * 「append 一条 pending」当反例）⇒ 它的含义是「还没有终局判定」，任何把它
      * 当作落定取值的读取点都是错的（宿主侧由 {@code PiLoopRunner.markAborted}
-     * 显式折算，见该处注释）。判据与字面量见
-     * {@link StreamEvent#PENDING_STOP_REASON}／{@link StreamEvent#isSettled}。</p>
+     * 显式折算，见该处注释）。判据见 {@link StopReason#isSettled}。</p>
      */
-    private String stopReason = StreamEvent.PENDING_STOP_REASON;
+    private StopReason stopReason = StopReason.PENDING;
     /**
      * 线格**原值**（pi {@code output.rawStopReason}，{@code types.ts:443}）—— 与
      * {@link #stopReason} 的映射结果分开存。⑨（D5）：五条车道都在观测到线格取值的那一刻
@@ -208,16 +206,18 @@ public final class StreamPartialBuilder {
      * 就地设停止原因（不经终局事件）。⚠️ 终局事件的映射会再覆盖一次 —— 两侧同形
      * （pi {@code :590}），所以这一支只在 {@code text_end} 的 {@code partial} 上可观察。
      */
-    public void forceStopReason(String reason) {
+    /** 枚举权威版（批 1 ⑥ B119/B121）。 */
+    public void forceStopReason(StopReason reason) {
         this.stopReason = reason;
     }
 
     /**
-     * 枚举入参版（批 1 ⑥ B119/B121）：车道内部持闭集枚举，边界经
-     * {@link StopReason#wireName()} 落 String 组件（记录组件本步仍为 String）。
+     * @deprecated 批 1 ⑥ 桥接期重载，步 5 删除；未知/遗留 String 经
+     *             {@link StopReason#fromWireOrNull} 容错解码为 {@code null}。
      */
-    public void forceStopReason(StopReason reason) {
-        forceStopReason(reason.wireName());
+    @Deprecated
+    public void forceStopReason(String reason) {
+        forceStopReason(StopReason.fromWireOrNull(reason));
     }
 
     /**
@@ -522,14 +522,18 @@ public final class StreamPartialBuilder {
     }
 
     /** Emit stream-done. */
-    public StreamEvent.StreamDone emitDone(String reason) {
+    public StreamEvent.StreamDone emitDone(StopReason reason) {
         this.stopReason = reason;
         return new StreamEvent.StreamDone(reason, usage, snapshot());
     }
 
-    /** 枚举入参版（批 1 ⑥）：边界经 {@link StopReason#wireName()} 落 String。 */
-    public StreamEvent.StreamDone emitDone(StopReason reason) {
-        return emitDone(reason.wireName());
+    /**
+     * @deprecated 批 1 ⑥ 桥接期重载，步 5 删除；String 经
+     *             {@link StopReason#fromWireOrNull} 容错解码。
+     */
+    @Deprecated
+    public StreamEvent.StreamDone emitDone(String reason) {
+        return emitDone(StopReason.fromWireOrNull(reason));
     }
 
     /**
@@ -545,16 +549,20 @@ public final class StreamPartialBuilder {
      * <p>内容（{@link #snapshot()} 的 blocks）本来就保留 —— 那是 pi 的实测行为
      * （{@code 原 docs/55 §3.1} P4：中止时 {@code error.content} 是流到中止点的文本）。</p>
      */
-    public StreamEvent.StreamError emitError(String reason, Throwable error) {
+    public StreamEvent.StreamError emitError(StopReason reason, Throwable error) {
         var settled = StreamEvent.StreamError.settle(reason, error, snapshot());
         // 让 builder 自身的状态与事件一致（快照上已落定，字段不能还停在旧值）。
         this.stopReason = settled.partial().stopReason();
         return settled;
     }
 
-    /** 枚举入参版（批 1 ⑥）：边界经 {@link StopReason#wireName()} 落 String。 */
-    public StreamEvent.StreamError emitError(StopReason reason, Throwable error) {
-        return emitError(reason.wireName(), error);
+    /**
+     * @deprecated 批 1 ⑥ 桥接期重载，步 5 删除；String 经 {@link StopReason#fromWireOrNull}
+     *             容错解码（未知值落 null ⇒ settle 补缺 ERROR）。
+     */
+    @Deprecated
+    public StreamEvent.StreamError emitError(String reason, Throwable error) {
+        return emitError(StopReason.fromWireOrNull(reason), error);
     }
 
 }

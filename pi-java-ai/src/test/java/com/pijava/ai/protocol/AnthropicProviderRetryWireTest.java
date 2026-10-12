@@ -13,6 +13,7 @@ import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.http.ProviderRetry;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 
@@ -116,7 +117,7 @@ class AnthropicProviderRetryWireTest {
 
             assertThat(server.requestCount()).isEqualTo(2);
             assertThat(events).anyMatch(
-                    e -> e instanceof StreamEvent.StreamDone d && "stop".equals(d.reason()));
+                    e -> e instanceof StreamEvent.StreamDone d && d.reason() == StopReason.STOP);
         }
     }
 

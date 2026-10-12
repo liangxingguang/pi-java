@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 
 /**
  * 上下文溢出判定 —— pi {@code packages/ai/src/utils/overflow.ts} 的逐条移植
@@ -94,7 +95,7 @@ public final class ContextOverflow {
      */
     public static boolean isContextOverflow(Message.AssistantMessage message, Integer contextWindow) {
         // Case 1: error-message patterns.
-        if ("error".equals(message.stopReason()) && message.errorMessage() != null) {
+        if (message.stopReason() == StopReason.ERROR && message.errorMessage() != null) {
             String errorMessage = message.errorMessage();
             boolean isNonOverflow = false;
             for (var pattern : NON_OVERFLOW_PATTERNS) {
@@ -119,7 +120,7 @@ public final class ContextOverflow {
 
         // Case 2: silent overflow (z.ai style) — finished successfully but input fills past the window.
         boolean windowKnown = contextWindow != null && contextWindow > 0;
-        if (windowKnown && "stop".equals(message.stopReason()) && message.usage() != null) {
+        if (windowKnown && message.stopReason() == StopReason.STOP && message.usage() != null) {
             double inputTokens = message.usage().input() + message.usage().cacheRead();
             if (inputTokens > contextWindow) {
                 return true;
@@ -128,7 +129,7 @@ public final class ContextOverflow {
 
         // Case 3: length-stop overflow (Xiaomi MiMo style) — input truncated to exactly fill
         // the window, leaving no room for output: stopReason "length", output 0, input filling it.
-        if (windowKnown && "length".equals(message.stopReason()) && message.usage() != null
+        if (windowKnown && message.stopReason() == StopReason.LENGTH && message.usage() != null
                 && message.usage().output() == 0) {
             double inputTokens = message.usage().input() + message.usage().cacheRead();
             if (inputTokens >= contextWindow * 0.99) {
@@ -148,7 +149,7 @@ public final class ContextOverflow {
      *                         context 钳制）；0/负 ⇒ 与 pi 同样恒 false
      */
     public static boolean isRecoverableLength(Message.AssistantMessage message, long desiredMaxOutput) {
-        return "length".equals(message.stopReason()) && desiredMaxOutput > 0
+        return message.stopReason() == StopReason.LENGTH && desiredMaxOutput > 0
             && message.usage() != null && message.usage().output() < desiredMaxOutput;
     }
 

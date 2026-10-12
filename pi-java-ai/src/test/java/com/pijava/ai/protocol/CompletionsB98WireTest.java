@@ -17,6 +17,7 @@ import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.catalog.VercelGatewayRouting;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
@@ -215,7 +216,7 @@ class CompletionsB98WireTest {
     void thinkingBlocksReplayAsTextPartsWithoutReasoningFields() throws Exception {
         var assistant = new Message.AssistantMessage(List.of(
             new ContentBlock.ThinkingContent("internal reasoning", null, false),
-            new ContentBlock.TextContent("visible answer")), "stop", null,
+            new ContentBlock.TextContent("visible answer")), StopReason.STOP, null,
             "openai-completions", "test", "reasoner", null, null, null, null);
         var body = body(compat(b -> b.thinkingAsText = true),
             msgs(assistant, user("next")), List.of(), Optional.empty());
@@ -234,7 +235,7 @@ class CompletionsB98WireTest {
     void thinkingOnlyReplayIsASingleTextPart() throws Exception {
         var assistant = new Message.AssistantMessage(List.of(
             new ContentBlock.ThinkingContent("internal reasoning", null, false)),
-            "stop", null, "openai-completions", "test", "reasoner",
+            StopReason.STOP, null, "openai-completions", "test", "reasoner",
             null, null, null, null);
         var body = body(compat(b -> b.thinkingAsText = true),
             msgs(assistant), List.of(), Optional.empty());
@@ -320,7 +321,7 @@ class CompletionsB98WireTest {
     private static Message.AssistantMessage assistantToolCall() {
         return new Message.AssistantMessage(List.of(
             new ContentBlock.ToolUseContent("call_1", "write",
-                Map.of("path", "a"))), "toolUse", null,
+                Map.of("path", "a"))), StopReason.TOOL_USE, null,
             "openai-completions", "test", "reasoner", null, null, null, null);
     }
 

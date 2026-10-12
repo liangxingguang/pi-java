@@ -10,6 +10,7 @@ import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
 import com.pijava.ai.thinking.ThinkingLevelMap;
@@ -126,7 +127,7 @@ class SimpleOptionsTest {
     @Test
     void largeInputIsClampedAtThreePointFiveCharsPerToken() {
         var assistant = new Message.AssistantMessage(
-            List.of(new ContentBlock.TextContent("x")), "stop", null,
+            List.of(new ContentBlock.TextContent("x")), StopReason.STOP, null,
             "openai-responses", "openai", "test-model",
             new Usage(100, 1_900, 0, 0, null, null, 2_000, Usage.Cost.zero()),
             Instant.ofEpochMilli(100), null, null);

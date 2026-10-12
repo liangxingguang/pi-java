@@ -9,6 +9,7 @@ import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 
 import org.junit.jupiter.api.Test;
@@ -68,7 +69,7 @@ class MistralSurrogateSanitizeTest {
     }
 
     private static Message assistant(ContentBlock... blocks) {
-        return new Message.AssistantMessage(List.of(blocks), "stop", null,
+        return new Message.AssistantMessage(List.of(blocks), StopReason.STOP, null,
             "mistral-conversations", "mistral", "devstral-medium-latest", null, null, null, null);
     }
 

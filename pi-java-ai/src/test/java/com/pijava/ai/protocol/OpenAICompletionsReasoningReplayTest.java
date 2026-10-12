@@ -23,6 +23,7 @@ import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
@@ -226,7 +227,7 @@ class OpenAICompletionsReasoningReplayTest {
      * thinking 块在到达本车道之前就被降级成文本，整组夹具会去测另一条路径。
      */
     private static Message.AssistantMessage assistant(ModelInfo model, ContentBlock... content) {
-        return new Message.AssistantMessage(List.of(content), "stop", null,
+        return new Message.AssistantMessage(List.of(content), StopReason.STOP, null,
             "openai-completions", model.id().provider(), model.id().modelName(),
             null, null, null, null);
     }

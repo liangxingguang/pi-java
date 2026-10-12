@@ -13,6 +13,7 @@ import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 
 import org.junit.jupiter.api.Test;
@@ -45,7 +46,7 @@ class ResponsesReplayDuplicateToolCallTest {
         return new Message.AssistantMessage(List.of(
             new ContentBlock.ToolUseContent(DUP_ID, "ls", Map.of("path", "docs")),
             new ContentBlock.ToolUseContent(DUP_ID, "ls", Map.of("path", "docs"))),
-            "toolUse", null, "openai-responses", TARGET.provider(), TARGET.modelName(),
+            StopReason.TOOL_USE, null, "openai-responses", TARGET.provider(), TARGET.modelName(),
             null, null, null, null);
     }
 
@@ -77,7 +78,7 @@ class ResponsesReplayDuplicateToolCallTest {
         var assistant = new Message.AssistantMessage(List.of(
             new ContentBlock.ToolUseContent("call_1|fc_1", "ls", Map.of("path", "a")),
             new ContentBlock.ToolUseContent("call_2|fc_2", "ls", Map.of("path", "b"))),
-            "toolUse", null, "openai-responses", TARGET.provider(), TARGET.modelName(),
+            StopReason.TOOL_USE, null, "openai-responses", TARGET.provider(), TARGET.modelName(),
             null, null, null, null);
         var params = buildParams(List.of(user("hi"), assistant,
             new Message.ToolResultMessage("call_1|fc_1", "ls",

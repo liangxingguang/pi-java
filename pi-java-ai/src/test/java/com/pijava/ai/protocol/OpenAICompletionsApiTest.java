@@ -22,6 +22,7 @@ import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
 import com.pijava.ai.stream.StreamEvent;
@@ -101,7 +102,7 @@ class OpenAICompletionsApiTest {
     void lengthFinishReasonMapsToLength() throws Exception {
         var events = collect(stream(chunk("{\"content\":\"partial a\"}"), finishChunk("length")));
 
-        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo("length");
+        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo(StopReason.LENGTH);
     }
 
     /**
@@ -114,7 +115,7 @@ class OpenAICompletionsApiTest {
     void toolCallsFinishReasonMapsToToolUseEvenWithoutToolBlocks() throws Exception {
         var events = collect(stream(chunk("{\"content\":\"done\"}"), finishChunk("tool_calls")));
 
-        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo("toolUse");
+        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo(StopReason.TOOL_USE);
     }
 
     /**
@@ -128,7 +129,7 @@ class OpenAICompletionsApiTest {
         var events = collect(stream(chunk("{\"content\":\"done\"}"), finishChunk("tool_calls")));
 
         var done = last(events, StreamEvent.StreamDone.class);
-        assertThat(done.reason()).isEqualTo("toolUse");
+        assertThat(done.reason()).isEqualTo(StopReason.TOOL_USE);
         assertThat(done.partial().rawStopReason()).isEqualTo("tool_calls");
     }
 
@@ -217,7 +218,7 @@ class OpenAICompletionsApiTest {
         var events = collect(new ModelCompat(false, null, false),
             stream(chunkWithoutFinishReason("{\"content\":\"hi\"}")));
 
-        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo("stop");
+        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo(StopReason.STOP);
         assertThat(errors(events)).isEmpty();
     }
 

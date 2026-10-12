@@ -12,6 +12,7 @@ import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.ModelCatalog;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.protocol.AbstractChatApi;
 import com.pijava.ai.stream.StreamEvent;
 
@@ -78,16 +79,16 @@ public final class FauxProvider implements Provider {
     public static FauxProvider text(String text) {
         var msg = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent(text)))
-                .withStopReason("stop");
+                .withStopReason(StopReason.STOP);
         var partial0 = AssistantMessage.empty();
         var partial1 = AssistantMessage.empty()
                 .withContent(List.of(new ContentBlock.TextContent("")));
         return new FauxProvider("faux", List.of(
                 new StreamEvent.Start(partial0),
                 new StreamEvent.TextStart(0, partial1),
-                new StreamEvent.TextDelta(0, text, msg.withStopReason(null)),
-                new StreamEvent.TextEnd(0, text, msg.withStopReason(null)),
-                StreamEvent.StreamDone.settle("stop", msg)
+                new StreamEvent.TextDelta(0, text, msg.withStopReason((StopReason) null)),
+                new StreamEvent.TextEnd(0, text, msg.withStopReason((StopReason) null)),
+                StreamEvent.StreamDone.settle(StopReason.STOP, msg)
         ), 0);
     }
 
@@ -100,7 +101,7 @@ public final class FauxProvider implements Provider {
         var block = new ContentBlock.ToolUseContent(callId, toolName, args);
         var finalMsg = AssistantMessage.empty()
                 .withContent(List.of(block))
-                .withStopReason("toolUse");
+                .withStopReason(StopReason.TOOL_USE);
         return new FauxProvider("faux-tool", List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
                 // 包⑥：桩的起点块与生产同形（带 id/name）—— 改核心而不改桩会让
@@ -108,8 +109,9 @@ public final class FauxProvider implements Provider {
                 new StreamEvent.ToolCallStart(0, AssistantMessage.empty()
                         .withContent(List.of(new ContentBlock.ToolUseContent(
                             callId, toolName, java.util.Map.of())))),
-                new StreamEvent.ToolCallEnd(0, callId, toolName, args, finalMsg.withStopReason(null)),
-                StreamEvent.StreamDone.settle("toolUse", finalMsg)
+                new StreamEvent.ToolCallEnd(0, callId, toolName, args,
+                    finalMsg.withStopReason((StopReason) null)),
+                StreamEvent.StreamDone.settle(StopReason.TOOL_USE, finalMsg)
         ), 0);
     }
 
@@ -125,7 +127,7 @@ public final class FauxProvider implements Provider {
     public static FauxProvider error(String message) {
         return new FauxProvider("faux-error", List.of(
                 new StreamEvent.Start(AssistantMessage.empty()),
-                StreamEvent.StreamError.settle("error",
+                StreamEvent.StreamError.settle(StopReason.ERROR,
                         new RuntimeException(message), AssistantMessage.empty())
         ), 0);
     }
