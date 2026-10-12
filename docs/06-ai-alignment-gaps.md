@@ -18,7 +18,7 @@
 
 ## 1. 台账在册功能缺口
 
-`docs/04` §3.2 存活 23 条 ＋ §3.3 中的 B222（同属 ai 协议面）＝ 24 行：
+`docs/04` §3.2 存活 19 条（批 1 销号 4 条；原 §3.3 的 B222 同批销号，§3.3 已无 ai 协议面条目）：
 
 | # | 差什么（一句话） |
 |---|---|
@@ -31,17 +31,12 @@
 | B99 | `supportsMidConvoEffort` 半可移植：字段 ＋ 两个 beta ＋ `insertThinkingLevelMessages`（SDK 无 BlockBinding） |
 | B110 | `providerThinkingLevel` pi 有 Java 无（`proxy.ts` 线字段 ＋ `anthropic-messages.ts` 消息字段；批 4 随 B99） |
 | B116 | StreamDone 的 UsageInfo 嵌套包裹是 Java 方言（pi usage 只在消息上，proxy 线另发扁平 usage）——2026-10-12 取证线格式已扁化，内部组件保留 |
-| B118 | 「报 toolUse 却无工具块」stopReason 守卫缺失（pi 判 provider error；批 1） |
-| B119 | 停因闭集无校验点，生产者各写自由字符串（批 1，与 B121 同包） |
-| B121 | `AssistantMessage.stopReason()` 是 String 非闭集（pi 是 `StopReason` 联合类型；批 1） |
-| B125 | samplingParams 的 **per-request 半**无生产者（通道在 `ApiOptions.extra`；`ModelInfo.headers` 半已有消费者；批 1） |
 | B128 | `thinkingBudgets` 无选项通道（pi `SimpleStreamOptions.thinkingBudgets`，`adjustMaxTokensForThinking` 消费；批 4） |
 | B137 | resolver 无 minimatch 通配/子串/alias 排序与 scope 诊断；实际序＝精确→切 `:level`→provider 首条→modelName→任意 id 兜底（批 3；pi 的 `--models` 有消费者，旧「零消费者」指 java） |
 | B148 | responseModel/responseId/diagnostics 无真消费者（usage 分组、cache-warmer、fallback 成本归属、`pi_messages_response_failure` 信封、Anthropic 流内 fallback 块） |
 | B156 | ModelCompat 逐组件规范构造 ＋ 12 个便捷构造各自补 null：加组件必须全改，否则静默缺省 |
 | B158 | 输出截断字节预算 Java 100KB vs pi 主流 50KB（模型可见文案不同；对应 map/03 #23） |
 | B159 | pi 已改 `finishTurn()` 返回 `{action:"continue"|"end"}`，Java 仍是 Boolean `shouldStopAfterTurn`，缺「强制再跑一轮」臂（对应 map/03 #6/#41） |
-| B222 | responses 车道前导消息恒发 `system`，pi 对推理模型（`reasoning && supportsDeveloperRole !== false`）发 `developer`；字段有生产者但 responses 读点不存在 |
 | B231 | OAuth 刷新被调用方取消时，轮转后的 refresh token 仍须落盘（`refreshStoredOAuthCredential`）；Java 侧刷新 HTTP 无超时（批 6） |
 | B232 | 内置目录数据漂移（v1.1.0）：Haiku 5.5、Claude 5.5 系列改吃 models.dev、Kimi K3 定价/级别表等；与 B97 同族，属持续性数据漂移 |
 | B233 | Mistral 开缓存时缺 `x-affinity: <sessionId>` 头（pi `mistral-conversations.ts:366-368`；B103 三车道不含 Mistral） |
@@ -83,10 +78,10 @@
 |---|---|
 | Provider / wire（2） | `ollama` provider 是 Java 独有扩展 · pi-messages wire 线格自造（**B18 已裁决不做**，04 §4，此条留作地图索引） |
 | ContentBlock（2） | #4 `UrlImageContent`、#5 `DiffContent` 均为 Java 独有 |
-| StreamEvent（3） | #20 `error` 载 `Throwable` 而非 `AssistantMessage` · #21 `UsageInfo` 事件 Java 独有 · #23 signature 多发一条 `ThinkingDelta`（台账 C8） |
+| StreamEvent（2） | #20 `error` 载 `Throwable` 而非 `AssistantMessage` · #21 `UsageInfo` 事件 Java 独有 |
 | 元数据（4） | #24 `Model.input` 数组 vs `ModelCapability`＋`supportsImageInput` · #28 `Model.reasoning` vs `THINKING` 能力位 · #38 `ToolResultMessage.usage` 留形状无生产者（`details` 已接） · #88 `JsonObject` 以 `Map`＋Jackson 表达（裁决零代码） |
 | 鉴权（3） | #46 多 profile 凭证（Java 扩展） · #47 models.json 自定义 provider 形状不同 · #97 共享 OAuth 回调服务器/登录页形状不同、行为近似 |
-| 横切（5） | #68 `assistant-message-frame` 对应物在 web/protocol（跨模块） · #75 `DeferredHandle` 两侧同状无生产者 · #76 lazy `lazyApi`/`lazyStream` vs `ProviderFactory`/`Protocol` · #101 strict 工具默认翻转 ＋ Anthropic 不支持关键字拒绝（未核） |
+| 横切（4） | #68 `assistant-message-frame` 对应物在 web/protocol（跨模块） · #75 `DeferredHandle` 两侧同状无生产者 · #76 lazy `lazyApi`/`lazyStream` vs `ProviderFactory`/`Protocol` |
 
 ---
 
@@ -104,8 +99,13 @@
   - **零代码对齐**：#87 MistralConversationsCompat（唯一字段五车道共享、mistral 模型不挂 compat，
     java 行为已在，同 #88 类型层先例）。
   - **取证关单**：B115/B117（终局帧/reason 收口同构）、B124（pi 无 `maxTokens:0` 生产者、java 已
-    OptionalInt 门控）、B100（降架构备注）、B127（已对齐，优先级夹具随批 1）、B147（分组序刻意保留，
-    夹具随批 1）——B100/B126/B147/B164/B226/B230 在 `docs/04` §4 带触发条件。
+    OptionalInt 门控）、B100（降架构备注）——B100/B126/B147/B164/B226/B230 在 `docs/04` §4 带触发条件。
+- **2026-10-13 批 1（流语义）闭环**（设计 [`docs/09`](09-ai-batch1-stream-semantics-design.md)）：
+  map 单元 #23（signature 不再多发空 ThinkingDelta）、#101（strict 谓词探针＋Anthropic 11 关键字
+  拒绝）转对齐；B118（toolUse 无工具块守卫）、B119/B121（`StopReason` 闭集枚举化：五车道、
+  两个 AssistantMessage record、StreamEvent、Entry.Usage 全切，未知线格值容错 null；B109
+  `"tool_use"` 垫片留 JsonlCodec 单一口）、B125（per-request samplingParams 通道）、
+  B127（effort 优先级夹具）、B222（responses developer 角色）销号；B147 留 §4 并补分组序夹具。
 - **25 个长尾 provider 端点 ＋ 4 条对应鉴权**：权重 0、R2/R5 排除出分母，完整清单见 `map/02-ai.md`
   加权汇总「被排除的单位」。
 - **B18**（pi-messages 不按 pi 改造）、**B130/B132**（zai sre、together/baseten/fireworks 携带集零差，

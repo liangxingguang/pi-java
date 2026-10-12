@@ -1,5 +1,10 @@
 # 09 ai 批 1 设计稿：流语义收口（6 子件）
 
+> **✅ 已闭环 2026-10-13**：6 子件全落（①–⑤ commit 5d5489a9/e3da4cd2/a1d174c4/
+> 5dfb74aa/a629d9d8；⑥ StopReason 枚举化五步 3e9d4084/337702c0/cffd16e8/2bab748b/
+> 8ef3de49；B127/B147 夹具 2937dce2）。全 reactor clean test 3371 测绿（20 skip 为
+> 既有 provider/门控）；ai 加权 89.7%→90.2%、总表 58.3%→58.4%。以下为开工前设计原文。
+
 > 归属：[`docs/08`](08-ai-layer-alignment-roadmap.md) 批 1。基准 pi `ea448f454`，pi-java 工作树 HEAD。
 > pi 证据一律 `git show ea448f454:<path>`。本批全部在 **pi-java-ai** 模块内（B119/B121 枚举化
 > 机械涟漪到 agent-core/web/coding-agent，但行为不变）。

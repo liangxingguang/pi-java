@@ -75,7 +75,7 @@
 
 | 批 | 内容 | 条目 | 估时 | 详稿 |
 |---|---|---|---|---|
-| 1 | 流语义收口（ai 模块内） | B119/B121/B118、#23、B222、B125、#101 | M | **docs/09** |
+| 1 | ✅ **已闭环 2026-10-13**（3371 测全绿；加权 89.7%→90.2%） | B119/B121/B118、#23、B222、B125、#101；另补 B127 夹具、B147 分组序夹具 | M | **docs/09** |
 | 2 | Mistral 两件 | B80 数组 content 三支、B233 x-affinity＋prompt_cache_key | M | 开工前出 |
 | 3 | 模型目录数据面 | npm 数据转资源（18 家 391KB）、promptCache/inputLimits/samplingParamsByThinkingLevel 字段、B97/B232 id 修正、B137 resolver（可拆 3b） | M＋M | 开工前出 |
 | 4 | thinking/effort 通道 | B128 thinkingBudgets 通道；B99＋B110 supportsMidConvoEffort 全家桶（两 beta/夹消息/block_binding/output_config） | M＋L | 开工前出 |

@@ -8,7 +8,10 @@
 >   已于 2026-10-12 对该锚点逐条重测完毕**（原 A16 销号，新差异登记为 B233–B238）。
 > - **ai 层对齐路线**见 [`docs/08`](08-ai-layer-alignment-roadmap.md)：2026-10-12 批 0 裁决
 >   （B115/B117/B124 取证关单；B100/B126/B147/B164/B226/B230 转 §4；#87 零代码对齐），
->   批 1–7 为实施序列。
+>   批 1–7 为实施序列。**2026-10-13 批 1（流语义）已闭环**：
+>   #23/#101 存疑转对齐；B118/B119/B121/B125/B127/B222 销号（B119/B121＝StopReason
+>   闭集枚举化，五车道＋两个消息 record＋StreamEvent/Entry.Usage 全切，B109 垫片留
+>   JsonlCodec 单一口）；B147 留 §4 并补分组序夹具。
 >   换锚裁决与依据在 git 历史
 >   （`docs/11-pi-reanchor-ruling.md`，已随过程文档清理删除）。
 > - 判据是**行为**（`bin pi` 主流发布版可达的功能与表现），不是文档、API 形状或文件清单。
@@ -71,11 +74,6 @@
 | B81 | pi OAuth 分支两面未移植 | 系统提示前缀 ＋ 工具名映射（anthropic-messages isOAuthToken 分支） |
 | B110 | `providerThinkingLevel` **pi 有、Java 无**（2026-10-10 更正原「两侧均无」） | pi：`proxy.ts:51/58/386-396` 线字段 ＋ `anthropic-messages.ts:581/588` 消息字段；Java 侧 `JsonEventMapper.java:346` 不写 |
 | B116 | StreamDone 的 UsageInfo 嵌套包裹是 Java 方言 | pi 的 usage 只在消息上，proxy 线另发扁平 usage；2026-10-12 取证：线格式两处均已扁成 pi 形状（`JsonEventMapper.java:320-327,351-373`），内部组件保留（docs/08 §2.2） |
-| B118 | 「报 toolUse 却无工具块」守卫缺失 | pi 在该 stopReason 下判 provider error（docs/08 批 1） |
-| B119 | 停因闭集无校验点 | 生产者各写自由字符串，拼错无人察觉（docs/08 批 1，与 B121 同包） |
-| B121 | `AssistantMessage.stopReason()` 是 String 非闭集 | pi 是 `StopReason` 联合类型（docs/08 批 1） |
-| B125 | samplingParams 的 per-request 半无生产者 | 通道在 `ApiOptions.extra`（与 sessionId/cacheRetention 同形；适配器每请求新建）；`ModelInfo.headers` 半已随 D-P1 有消费者（`DefaultProviders.withPerModelOverrides`）（docs/08 批 1） |
-| B127 | Responses reasoning 走平行通道 | **2026-10-12 取证已对齐**：extra 显式值优先、否则循环级 clamped effort（`ResponsesOptions.java:46-56`、`ResponsesMessageConverter.java:159-175`），与 pi 同序；仅欠一条优先级夹具，随 docs/08 批 1 补 |
 | B128 | thinkingBudgets 无选项通道 | pi SimpleStreamOptions.thinkingBudgets（docs/08 批 4） |
 | B137 | resolver 的 glob/scope 面 | pi 支持 minimatch 通配/子串/alias 排序与 scope 诊断；**Java 无前后缀**，序＝精确（provider/id｜裸 id）→切 `:level`→provider 首条→modelName 精确→任意 id 兜底。2026-10-12 更正：pi 的 `--models` **有消费者**（Ctrl+P cycling，`main.ts:812-816`），旧记「零消费者」指 java 侧（docs/08 批 3） |
 | B148 | responseModel/diagnostics 真消费者未接 | pi 用于 usage 分组、cache 归属等；含 pi-messages 的 `pi_messages_response_failure` 信封（`{type,timestamp,error:{name,message,stack,code},details}`，details 二选一投影＋8192 U+2026 截断，`pi-messages.ts:133-152`）——B224 只对齐了文案半，信封半随本条（消费者＝bug-report，见 B79）。**2026-10-11 补记**：Anthropic 服务端回退的流内半也随本条——`content_block_start` 的 `"fallback"` 块处理（已有内容时抛 mid-output fallback）＋ responseModel 成本归属（`anthropic-messages.ts:660-690`，按 `allowedFallbackModels[].cost` 取价；请求半 beta＋params.fallbacks 已随 B98 落）（docs/08 批 5：responseId/endTurn 随 codex 出分母不做） |
@@ -108,7 +106,6 @@
 | B219 | `mcp_servers` 段的排序用 `String.compareTo` 代替 `localeCompare` | ASCII 名等价，非 ASCII 名排序有差（`原 docs/39` §3.2） |
 | B220 | `truncate` 的 `trimEnd()` ⇒ `stripTrailing()` | 后者不吃 ` `（窄角，`原 docs/39` §3.2） |
 | B221 | **MCP 扩展接线面整体顺延** | 六个 `on(...)` 事件（**1/6**，见 `原 docs/39` §2.4）、激活门暴露给扩展（机制在 `AgentHarness.getActiveTools:528` 但扩展拿不到）、`ctx.ui.custom`（**B214**）、`registerToolRenderer`（**B204**）、提示分节接线（`ContextAssembler.promptOptions:104-114` 从没调过 `.sections(...)`）—— **归属是 D 域与 E5，不是 MCP** |
-| B222 | **responses 车道恒发 `system`，pi 对推理模型发 `developer`** | pi `openai-responses-shared.ts:215` 的判据是 `model.reasoning && compat?.supportsDeveloperRole !== false ? "developer" : "system"`（前导指令消息的角色）。Java：`ModelCompat.supportsDeveloperRole` **有字段、有 models.json 生产者、有 completions 读点**（`OpenAICompletionsMessageConverter.java:102`），但 **responses 车道的读点不存在** —— `ResponsesMessageConverter` 落前导系统项时硬编 `EasyInputMessage.Role.SYSTEM`（`:238`）。影响面**不止 xai**：openai 自己的 responses 模型（gpt-5 系列，`reasoning:true`）pi 走 `developer`、java 走 `system` ⇒ 无线格等价性（`developer` 与 `system` 在 Responses API 是**两个不同的角色**）。`原 docs/44` §8 登记（xai 的 compat 不设该位 ⇒ 本包无差），独立缺口 |
 | B161 | **codemode 整块零对应** | quickjs-wasi 沙箱代码执行 |
 | B162 | tool-search / virtual-models / nested-tool-calls 三块零对应 | deferred 工具发现；虚拟模型；嵌套工具调用 |
 | B177 | MCP 默认 `codemode` exposure 暂不可达 | MCP 各包（包①–⑫a）的 wire/配置语义全保留，运行时激活路径依赖 B161 闭环（原 docs/28 §3 裁决） |
@@ -178,7 +175,7 @@
 | B62（chord）＋ B71/B72/B73（pico3/durable/micro） | R5：非 `bin pi` 可达，权重 0，不进对齐面 | 这些子系统进入 pi 主流发布版 |
 | B100（compat 探测 baseUrl 来源） | 2026-10-12 取证降架构备注：pi 只读模型对象，java 读 `--base-url` 覆盖后的有效值；内置模型两者同值，零行为差（docs/08 §2.2） | models.json baseUrl 与 `--base-url` 并存且被证实可观察时重裁 |
 | B126（codex 车道忽略 maxTokens） | 随 openai-codex 车道整体出对齐面（docs/08 §2.1：transport/responseId/endTurn/session-resources 同族 w0） | codex 订阅车道纳入对齐面（§6 口径松动）时与车道整体一起做 |
-| B147（Responses 回放 item 按类型分组） | 2026-10-12 裁决保留：java 三桶收集为刻意偏差（`ResponsesMessageConverter.java:426-428` 有注释），rs_ id 配对靠签名里的 id；改单循环 M 收益不值 | 发现 OpenAI 对交错序有配对校验差异时重裁；分组序夹具随 docs/08 批 1 补 |
+| B147（Responses 回放 item 按类型分组） | 2026-10-12 裁决保留：java 三桶收集为刻意偏差（`ResponsesMessageConverter.java:426-428` 有注释），rs_ id 配对靠签名里的 id；改单循环 M 收益不值。**2026-10-13 批 1 补分组序夹具**（`ResponsesCompositeItemIdReplayTest`：交错块固定 reasoning⇒message⇒function_call 分组） | 发现 OpenAI 对交错序有配对校验差异时重裁 |
 | B164（分类器/统一模型设施） | R5：`classify()` 消费者仅 codemode（默认关）/llama 扩展/示例；`/model` 选择器不可见（docs/08 §2.1，map/02 #92/#94/#33） | 分类器进 bin pi 主流非 codemode 路径 |
 | B226（Radius 内建 provider） | 主流 7 家口径外，**2026-10-12 用户裁决维持 w0**。注：/login 技术上可达（无白名单）；java 已有 pi-messages 线＋OAuth 设备码工厂，边际成本 M，语义须按 gateway catalog 整体替换 baseline | 用户口径纳入 Radius（azure 同族，优先于 bedrock/vertex/codex） |
 | B230（azure 改名＋Foundry 第二车道） | 主流 7 家口径外，**2026-10-12 用户裁决维持 w0**。java responses 协议已在（仍注册旧 id）；改名 S＋Foundry completions 复用现成车道，合计 S-M | 用户口径纳入 azure |
