@@ -106,6 +106,21 @@ class ResponsesReasoningWireTest {
         assertThat(body.has("reasoning")).isFalse();
     }
 
+    /**
+     * B127：{@code extra["reasoningEffort"]} 的显式覆盖**优先于**循环级 clamped effort
+     * （pi 同序：streamSimple 先夹取，直调语义的显式通道赢）。请求级给 Max（空映射表
+     * 会被夹成 high），extra 给 Low ⇒ 线上必须是 low，不是 high。
+     */
+    @Test
+    void explicitExtraEffortWinsOverRequestLevelClampedEffort() throws Exception {
+        var body = capture(model(reasoningCaps(), ThinkingLevelMap.empty()),
+            Optional.of(new ThinkingLevel.Max()), null, new ThinkingLevel.Low());
+
+        assertThat(body.path("reasoning").path("effort").asText())
+            .as("extra 显式值必须压过请求级 clamp 结果（high）")
+            .isEqualTo("low");
+    }
+
     // ── 夹具 ───────────────────────────────────────────────────────
 
     private static Set<ModelCapability> reasoningCaps() {
@@ -114,9 +129,17 @@ class ResponsesReasoningWireTest {
 
     private static JsonNode capture(ModelInfo model, Optional<ThinkingLevel> reasoning,
                                     String summary) throws Exception {
+        return capture(model, reasoning, summary, null);
+    }
+
+    private static JsonNode capture(ModelInfo model, Optional<ThinkingLevel> reasoning,
+                                    String summary, ThinkingLevel extraEffort) throws Exception {
         var extra = new LinkedHashMap<String, Object>();
         if (summary != null) {
             extra.put("reasoningSummary", summary);
+        }
+        if (extraEffort != null) {
+            extra.put("reasoningEffort", extraEffort);
         }
         try (var server = new RecordingHttpServer()) {
             var opts = new ApiOptions(server.baseUrl(), "test-key",

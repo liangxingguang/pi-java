@@ -128,4 +128,44 @@ class ResponsesCompositeItemIdReplayTest {
         assertThat(call.path("call_id").asText()).isEqualTo("call_2");
         assertThat(call.has("id")).isFalse();
     }
+
+    /**
+     * B147（刻意偏差，登记留 §4）：java 三桶收集与 pi 单循环的**块序**有差，但出站
+     * items 的分组序固定为 {@code reasoning ⇒ 文本 ⇒ 工具调用}。本夹具把块按
+     * 「工具／思考／文本／工具」交错塞入，钉死分组序与同组内顺序，且 rs_／fc_ 的
+     * id 配对不依赖交错位置（签名里各自带 id）。
+     */
+    @Test
+    void interleavedBlocksEmitInGroupedOrder() throws Exception {
+        var history = new ArrayList<Message>();
+        history.add(user());
+        history.add(new Message.AssistantMessage(
+            List.of(
+                new ContentBlock.ToolUseContent("call_1|fc_1001", "first", Map.of()),
+                new ContentBlock.ThinkingContent("hmm",
+                    "{\"id\":\"rs_9\",\"type\":\"reasoning\","
+                        + "\"summary\":[{\"type\":\"summary_text\",\"text\":\"hmm\"}]}"),
+                new ContentBlock.TextContent("answer"),
+                new ContentBlock.ToolUseContent("call_2|fc_1002", "second", Map.of())),
+            StopReason.TOOL_USE, null, "openai-responses", "openai", "gpt-5.4",
+            zeroUsage(), Instant.EPOCH, null, null));
+
+        var body = capture("gpt-5.4", history);
+
+        var types = new ArrayList<String>();
+        body.path("input").forEach(item -> types.add(item.path("type").asText()));
+        assertThat(types)
+            .as("交错块必须按 reasoning ⇒ message ⇒ function_call × 2 分组出线")
+            .containsSequence("reasoning", "message", "function_call", "function_call");
+
+        var reasoning = itemOfType(body, "reasoning");
+        assertThat(reasoning.path("id").asText()).isEqualTo("rs_9");
+        var calls = new ArrayList<String>();
+        body.path("input").forEach(item -> {
+            if ("function_call".equals(item.path("type").asText())) {
+                calls.add(item.path("call_id").asText());
+            }
+        });
+        assertThat(calls).containsExactly("call_1", "call_2");
+    }
 }
