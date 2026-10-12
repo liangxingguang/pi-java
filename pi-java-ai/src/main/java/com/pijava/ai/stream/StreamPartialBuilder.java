@@ -7,6 +7,7 @@ import java.util.Map;
 import com.pijava.ai.Usage;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 
 /**
  * Mutable builder that accumulates stream events into {@link AssistantMessage}
@@ -209,6 +210,14 @@ public final class StreamPartialBuilder {
      */
     public void forceStopReason(String reason) {
         this.stopReason = reason;
+    }
+
+    /**
+     * 枚举入参版（批 1 ⑥ B119/B121）：车道内部持闭集枚举，边界经
+     * {@link StopReason#wireName()} 落 String 组件（记录组件本步仍为 String）。
+     */
+    public void forceStopReason(StopReason reason) {
+        forceStopReason(reason.wireName());
     }
 
     /**
@@ -518,6 +527,11 @@ public final class StreamPartialBuilder {
         return new StreamEvent.StreamDone(reason, usage, snapshot());
     }
 
+    /** 枚举入参版（批 1 ⑥）：边界经 {@link StopReason#wireName()} 落 String。 */
+    public StreamEvent.StreamDone emitDone(StopReason reason) {
+        return emitDone(reason.wireName());
+    }
+
     /**
      * Emit stream-error, **settling the accumulator** before pushing it.
      *
@@ -536,6 +550,11 @@ public final class StreamPartialBuilder {
         // 让 builder 自身的状态与事件一致（快照上已落定，字段不能还停在旧值）。
         this.stopReason = settled.partial().stopReason();
         return settled;
+    }
+
+    /** 枚举入参版（批 1 ⑥）：边界经 {@link StopReason#wireName()} 落 String。 */
+    public StreamEvent.StreamError emitError(StopReason reason, Throwable error) {
+        return emitError(reason.wireName(), error);
     }
 
 }

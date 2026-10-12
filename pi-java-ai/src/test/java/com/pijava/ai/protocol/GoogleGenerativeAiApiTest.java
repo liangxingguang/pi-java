@@ -103,7 +103,7 @@ class GoogleGenerativeAiApiTest {
         assertThat(dones(events)).isEmpty();
     }
 
-    /** {@code FINISH_REASON_UNSPECIFIED} ⇒ error（它在 pi 的 15 个错误取值里，**不是**哨兵）。 */
+    /** {@code FINISH_REASON_UNSPECIFIED} ⇒ error（它在 pi 的 16 个错误取值里，**不是**哨兵）。 */
     @Test
     void unchangedSpecifiedFinishReasonIsAnError() throws Exception {
         var events = collect(text("cut"), finish("FINISH_REASON_UNSPECIFIED"));
@@ -126,6 +126,19 @@ class GoogleGenerativeAiApiTest {
         var events = collect(text("cut"), finish("NO_IMAGE"));
 
         assertThat(errorMessage(events)).isEqualTo("Provider stopped with: NO_IMAGE");
+        assertThat(dones(events)).isEmpty();
+    }
+
+    /**
+     * {@code TOO_MANY_TOOL_CALLS} ⇒ error（pi {@code google-shared.ts:455} 的 16 个错误取值
+     * 之一；批 1 ⑥ 枚举化时发现本仓映射比 pi 少这一个，补齐）。
+     */
+    @Test
+    void tooManyToolCallsFinishReasonIsAnError() throws Exception {
+        var events = collect(text("cut"), finish("TOO_MANY_TOOL_CALLS"));
+
+        assertThat(errorMessage(events))
+            .isEqualTo("Provider stopped with: TOO_MANY_TOOL_CALLS");
         assertThat(dones(events)).isEmpty();
     }
 

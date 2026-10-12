@@ -17,6 +17,7 @@ import com.openai.models.responses.ResponseUsage;
 import com.pijava.ai.Usage;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.CostCalculator;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
@@ -60,12 +61,6 @@ final class ResponsesStreamProcessor {
     static final String TEXT = "text";
     static final String THINKING = "thinking";
     static final String TOOLCALL = "toolcall";
-
-    /**
-     * pi 累加器的 stop reason 初值（{@code openai-responses.ts:139}），非 pi 词汇表取值；
-     * 收尾拿它当「一个 stop reason 都没观测到」的哨兵。
-     */
-    private static final String PENDING = "pending";
 
     private ResponsesStreamProcessor() {}
 
@@ -187,18 +182,18 @@ final class ResponsesStreamProcessor {
             // ⚠️ pi 的 pending 检查（openai-responses.ts:185-186）在本车道**结构上不可达**：
             // sawTerminal 只由 finalizeResponse / failed 两支写入，前者必经 mapStopReason 写下
             // 非 pending 取值、后者直接 throw。留着与 pi 收尾同形，不是补缺口。
-            if (PENDING.equals(stop.reason)) {
+            if (stop.reason == StopReason.PENDING) {
                 throw new IllegalStateException(
                     "OpenAI Responses stream ended without a stop reason");
             }
             // pi 此处还比了 `"aborted"`（:188），那个值只由 abort 检查写入 ⇒ 结构上不可达。
-            if ("error".equals(stop.reason)) {
+            if (stop.reason == StopReason.ERROR) {
                 throw new IllegalStateException(stop.errorMessage != null
                     ? stop.errorMessage : "An unknown error occurred");
             }
             // pi shared:764-775：终局 toolUse 时拒绝交付 output_item.done 永不到达的
             // 工具调用（scratch 槽仍在）——参数可能被截断/串位，执行它们等于拿残缺 JSON 真跑。
-            if ("toolUse".equals(stop.reason)) {
+            if (stop.reason == StopReason.TOOL_USE) {
                 var unfinished = ResponseItemHandlers.unfinishedToolCall(ctx);
                 if (unfinished != null) {
                     throw new IllegalStateException(
@@ -214,7 +209,7 @@ final class ResponsesStreamProcessor {
             // 不套前缀（ProviderErrors 四分支表第二行）。文案没变就发原异常，
             // 保留类型身份（如 RetryDelayTooLongException）。
             String message = errorFormatter.apply(e);
-            publisher.submit(builder.emitError("error",
+            publisher.submit(builder.emitError(StopReason.ERROR,
                 message.equals(e.getMessage()) ? e : new IllegalStateException(message, e)));
         }
     }
@@ -255,9 +250,9 @@ final class ResponsesStreamProcessor {
         var mapped = mapStopReason(status, incompleteReason);
         stop.reason = mapped.reason();
         stop.errorMessage = mapped.errorMessage();
-        if (hasToolUse(builder) && "stop".equals(stop.reason)) {
+        if (hasToolUse(builder) && stop.reason == StopReason.STOP) {
             // pi :593-595 —— 内容里有工具块时 stop 补成 toolUse
-            stop.reason = "toolUse";
+            stop.reason = StopReason.TOOL_USE;
         }
     }
 
@@ -297,7 +292,8 @@ final class ResponsesStreamProcessor {
 
     /** pi 的 {@code output.stopReason} + {@code output.errorMessage} 两件套。 */
     private static final class StopState {
-        private String reason = PENDING;
+        // 初值 "pending"（openai-responses.ts:139）：收尾的「没观测到 stop reason」哨兵。
+        private StopReason reason = StopReason.PENDING;
         private String errorMessage;
     }
 
@@ -322,28 +318,28 @@ final class ResponsesStreamProcessor {
      */
     private static MappedStopReason mapStopReason(ResponseStatus status, String incompleteReason) {
         if (status == null) {
-            return new MappedStopReason("stop", null);
+            return new MappedStopReason(StopReason.STOP, null);
         }
         return switch (status.toString()) {
-            case "completed" -> new MappedStopReason("stop", null);
+            case "completed" -> new MappedStopReason(StopReason.STOP, null);
             case "incomplete" -> {
                 if ("max_output_tokens".equals(incompleteReason)) {
-                    yield new MappedStopReason("length", null);
+                    yield new MappedStopReason(StopReason.LENGTH, null);
                 }
-                yield new MappedStopReason("error",
+                yield new MappedStopReason(StopReason.ERROR,
                     incompleteReason != null && !incompleteReason.isEmpty()
                         ? "Response incomplete: " + incompleteReason
                         : "Response incomplete without a provider reason");
             }
-            case "failed", "cancelled" -> new MappedStopReason("error", null);
+            case "failed", "cancelled" -> new MappedStopReason(StopReason.ERROR, null);
             // pi 注释标为 "wonky"：照抄行为 —— 这两个中间态被当成正常结束
-            case "in_progress", "queued" -> new MappedStopReason("stop", null);
+            case "in_progress", "queued" -> new MappedStopReason(StopReason.STOP, null);
             default -> throw new IllegalStateException("Unhandled stop reason: " + status);
         };
     }
 
     /** 映射结果：pi 的 {@code { stopReason, errorMessage? }}。 */
-    private record MappedStopReason(String reason, String errorMessage) {}
+    private record MappedStopReason(StopReason reason, String errorMessage) {}
 
     /**
      * {@code response.failed} 的文案（pi {@code openai-responses-shared.ts:748-754}）：

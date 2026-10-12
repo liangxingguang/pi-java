@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.pijava.ai.Usage;
 import com.pijava.ai.message.AssistantMessage;
+import com.pijava.ai.message.StopReason;
 
 /**
  * A streaming event emitted during an LLM response.
@@ -306,6 +307,11 @@ public sealed interface StreamEvent {
             var message = StreamEvent.settleMessage(reason, partial, "stop");
             return new StreamDone(StreamEvent.settleReason(reason, message, "stop"), null, message);
         }
+
+        /** 枚举入参版（批 1 ⑥ B119/B121）：边界经 {@link StopReason#wireName()} 落 String。 */
+        public static StreamDone settle(StopReason reason, AssistantMessage partial) {
+            return settle(reason.wireName(), partial);
+        }
     }
 
     /**
@@ -346,6 +352,11 @@ public sealed interface StreamEvent {
                 message = message.withErrorMessage(text);
             }
             return new StreamError(StreamEvent.settleReason(reason, message, "error"), cause, message);
+        }
+
+        /** 枚举入参版（批 1 ⑥ B119/B121）：边界经 {@link StopReason#wireName()} 落 String。 */
+        public static StreamError settle(StopReason reason, Throwable cause, AssistantMessage partial) {
+            return settle(reason.wireName(), cause, partial);
         }
 
         /**

@@ -83,8 +83,9 @@ class StreamEventSettlementTest {
 
     @Test
     void errorSettleDefaultsABlankReasonToError() {
+        // 批 1 ⑥ 桥接期：String/StopReason 双重载下 null 首参须显式选 String 版（步 5 迁枚举）。
         var err = StreamEvent.StreamError.settle(
-            null, new IOException("boom"), AssistantMessage.empty());
+            (String) null, new IOException("boom"), AssistantMessage.empty());
 
         assertThat(err.reason()).isEqualTo("error");
         assertThat(err.partial().stopReason()).isEqualTo("error");
@@ -139,8 +140,9 @@ class StreamEventSettlementTest {
 
     @Test
     void doneSettleTakesTheReasonFromTheMessageWhenAbsent() {
+        // 批 1 ⑥ 桥接期：显式选 String 版（步 5 随测试枚举化删除）。
         var done = StreamEvent.StreamDone.settle(
-            null, AssistantMessage.empty().withStopReason("toolUse"));
+            (String) null, AssistantMessage.empty().withStopReason("toolUse"));
 
         assertThat(done.reason()).isEqualTo("toolUse");
         assertThat(done.partial().stopReason()).isEqualTo("toolUse");

@@ -18,6 +18,7 @@ import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.http.PiHttpClient;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
@@ -59,12 +60,6 @@ public final class MistralConversationsApi extends AbstractChatApi {
 
     private static final String DEFAULT_BASE_URL = "https://api.mistral.ai/v1";
     private static final ObjectMapper MAPPER = new ObjectMapper();
-
-    /**
-     * pi 累加器的 stop reason 初值（{@code mistral-conversations.ts:222}），
-     * 非 pi 词汇表取值；收尾拿它当「一个 finish reason 都没观测到」的哨兵。
-     */
-    private static final String PENDING = "pending";
 
     /**
      * B229（pi {@code 6b07b4e57}）：超时只盖等响应头。生产值取 pi coding-agent 的
@@ -145,12 +140,12 @@ public final class MistralConversationsApi extends AbstractChatApi {
             if (textStarted[0]) publisher.submit(builder.emitTextEnd());
             // ⚠️ pi 的 abort 检查（:150）在车道层**结构上不可达** —— `StreamRequest` 没有
             // signal，中止由宿主 `PiLoopRunner.markAborted` 在流外处理（§8.35.14 第三节 ③）。
-            if (PENDING.equals(stop.reason)) {
+            if (stop.reason == StopReason.PENDING) {
                 // 严格收尾（pi :154-155）：一个 finish reason 都没观测到 ⇒ 绝不当成正常结束。
                 throw new IllegalStateException("Mistral stream ended without a finish reason");
             }
             // pi :157 还比了 `"aborted"`，那个值只由上面的 abort 检查写入 ⇒ 不可达。
-            if ("error".equals(stop.reason)) {
+            if (stop.reason == StopReason.ERROR) {
                 // pi :158：文案取 `errorMessage`（**映射里**给的），缺失才兜底。
                 throw new IllegalStateException(stop.errorMessage != null
                         ? stop.errorMessage : "An unknown error occurred");
@@ -160,7 +155,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
             // pi 的 catch（:166-171）只发一条 error 就结束 ⇒ 一条流**只有一个**终局事件。
             // B229（pi mistral-conversations.ts:321-324）：等响应头超时的文案逐字。
             if (e instanceof com.pijava.ai.http.HeaderTimeoutException hte) {
-                publisher.submit(builder.emitError("error", new IllegalStateException(
+                publisher.submit(builder.emitError(StopReason.ERROR, new IllegalStateException(
                     "Mistral response headers timed out after "
                         + hte.timeout().toMillis() + "ms", e)));
                 return;
@@ -170,14 +165,15 @@ public final class MistralConversationsApi extends AbstractChatApi {
             // 上游按类型识别，且 pi 的 formatMistralError 对它们也是 message 透传）。
             boolean httpError =
                 e instanceof com.pijava.ai.http.PiHttpException http && http.statusCode() > 0;
-            publisher.submit(builder.emitError("error", httpError
+            publisher.submit(builder.emitError(StopReason.ERROR, httpError
                 ? new IllegalStateException(ProviderErrors.formatMistralError(e), e) : e));
         }
     }
 
     /** pi 的 {@code output.stopReason} + {@code output.errorMessage} 两件套。 */
     private static final class StopState {
-        private String reason = PENDING;
+        // 初值 "pending"（mistral-conversations.ts:222）：收尾的「没观测到 finish reason」哨兵。
+        private StopReason reason = StopReason.PENDING;
         private String errorMessage;
     }
 
@@ -186,7 +182,8 @@ public final class MistralConversationsApi extends AbstractChatApi {
      *
      * <p>⚠️ 与 Google 车道的**形状差异**：Mistral 把文案**做进映射**（{@code error} 与
      * {@code default} 两支都自带 {@code Provider stopped with: …}），而 Google 的映射只返回
-     * 裸 {@code "error"}、文案由收尾处用 {@code rawStopReason} 拼。两处都照 pi 写，别「统一」。</p>
+     * 裸 {@link StopReason#ERROR}、文案由收尾处用 {@code rawStopReason} 拼。两处都照 pi 写，
+     * 别「统一」。</p>
      *
      * <p>⚠️ 与 completions / Google 又不同的一处：本车道的未知取值 pi **不抛**（落 error 事件），
      * 与 completions 同向、与 Anthropic / Google 反向。</p>
@@ -195,22 +192,22 @@ public final class MistralConversationsApi extends AbstractChatApi {
         if (reason == null) {
             // pi 的 `if (reason === null) return {stopReason:"stop"}`（`:927`）。调用点的
             // 真值守卫已挡掉 null 与空串 ⇒ 流路径上不可达，留着是为了与 pi 逐行同形。
-            return new MappedStopReason("stop", null);
+            return new MappedStopReason(StopReason.STOP, null);
         }
         return switch (reason) {
-            case "stop" -> new MappedStopReason("stop", null);
-            case "length", "model_length" -> new MappedStopReason("length", null);
-            case "tool_calls" -> new MappedStopReason("toolUse", null);
+            case "stop" -> new MappedStopReason(StopReason.STOP, null);
+            case "length", "model_length" -> new MappedStopReason(StopReason.LENGTH, null);
+            case "tool_calls" -> new MappedStopReason(StopReason.TOOL_USE, null);
             // pi mistral-conversations.ts:948（7fb59f995）：补 " (server error)" 让 retry
             // 白名单的 server.?error 抓手生效 —— Mistral 以此报告瞬态服务失败，应可重试。
-            case "error" -> new MappedStopReason("error",
+            case "error" -> new MappedStopReason(StopReason.ERROR,
                 "Provider stopped with: error (server error)");
-            default -> new MappedStopReason("error", "Provider stopped with: " + reason);
+            default -> new MappedStopReason(StopReason.ERROR, "Provider stopped with: " + reason);
         };
     }
 
     /** 映射结果：pi 的 {@code { stopReason, errorMessage? }}。 */
-    private record MappedStopReason(String reason, String errorMessage) {}
+    private record MappedStopReason(StopReason reason, String errorMessage) {}
 
     @SuppressWarnings("unchecked") // SSE response JSON parsing with generic Map types
     private void processSseData(String data,
@@ -294,7 +291,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
                 var mapped = mapChatStopReason(reason);
                 stop.reason = mapped.reason();
                 stop.errorMessage = mapped.errorMessage();
-                if ("toolUse".equals(stop.reason)) {
+                if (stop.reason == StopReason.TOOL_USE) {
                     for (var tb : toolBuilders.values()) {
                         if (tb.isComplete()) {
                             publisher.submit(builder.emitToolCallEnd(

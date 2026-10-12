@@ -136,7 +136,7 @@ final class ResponseItemHandlers {
             ctx.builder.retainTextSignature(TextSignatureV1.encode(message.id(), phase));
             // 原 docs/71 G4：phase=final_answer ⇒ 就地落 stop（pi :442-446，按字符串比较）。
             if ("final_answer".equals(phase)) {
-                ctx.builder.forceStopReason("stop");
+                ctx.builder.forceStopReason(com.pijava.ai.message.StopReason.STOP);
             }
             ctx.publisher.submit(ctx.builder.emitTextEnd());
         } else if (item.functionCall().isPresent()

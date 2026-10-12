@@ -24,6 +24,7 @@ import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.CacheRetention;
 import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.http.ProviderRetry;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
 import com.pijava.ai.utils.ProviderErrors;
@@ -66,12 +67,6 @@ import com.pijava.ai.utils.ProviderErrors;
  * </ol>
  */
 public class OpenAICompletionsApi extends AbstractChatApi {
-
-    /**
-     * pi 累加器的 stop reason 初值（{@code openai-completions.ts:333}），非 pi 词汇表取值。
-     * 收尾拿它当「一个 finish reason 都没观测到」的哨兵。
-     */
-    private static final String PENDING = "pending";
 
     @Override
     public String apiName() {
@@ -345,12 +340,12 @@ public class OpenAICompletionsApi extends AbstractChatApi {
             // pi 里这条恒不生效（detected 恒 true），只有 models.json 显式写 false 才放开；
             // 保留下来是因为它是 D1 严格判定的**对照面**（放宽的唯一途径）。
             if (!hasFinishReason && !supportsFinishReason) {
-                stop.reason = toolCall.started() ? "toolUse" : "stop";
+                stop.reason = toolCall.started() ? StopReason.TOOL_USE : StopReason.STOP;
             }
             // pi :688-690 —— 先判 error：走 error 通道且**不再**发 done。
             // 兜底文案是 pi 逐字（与其他三条车道的措辞不同，别「统一」）。
-            if ("error".equals(stop.reason)) {
-                publisher.submit(builder.emitError("error", new IllegalStateException(
+            if (stop.reason == StopReason.ERROR) {
+                publisher.submit(builder.emitError(StopReason.ERROR, new IllegalStateException(
                     stop.errorMessage != null ? stop.errorMessage
                         : "Provider returned an error stop reason")));
                 return;
@@ -358,8 +353,9 @@ public class OpenAICompletionsApi extends AbstractChatApi {
             // pi :691-693 —— 严格版：**没观测到** finish_reason 是错误，不是「正常结束」。
             // 后半（累加器仍停在 pending）在 pi 里结构上不可达（上面的容忍分支已改写它），
             // 保留原样以与 pi 那一行逐字对应。
-            if ((supportsFinishReason && !hasFinishReason) || PENDING.equals(stop.reason)) {
-                publisher.submit(builder.emitError("error",
+            if ((supportsFinishReason && !hasFinishReason)
+                    || stop.reason == StopReason.PENDING) {
+                publisher.submit(builder.emitError(StopReason.ERROR,
                     new IllegalStateException("Stream ended without finish_reason")));
                 return;
             }
@@ -379,7 +375,7 @@ public class OpenAICompletionsApi extends AbstractChatApi {
             }
             // 归一化对非 HTTP 错误是恒等改写（内部 throw / RetryDelayTooLongException
             // 等）⇒ 文案没变就发原异常，保留其类型身份供上游识别。
-            publisher.submit(builder.emitError("error",
+            publisher.submit(builder.emitError(StopReason.ERROR,
                 message.equals(e.getMessage()) ? e : new IllegalStateException(message, e)));
         }
     }
@@ -428,23 +424,24 @@ public class OpenAICompletionsApi extends AbstractChatApi {
      */
     private static MappedStopReason mapStopReason(String reason) {
         return switch (reason) {
-            case "stop", "end" -> new MappedStopReason("stop", null);
-            case "length" -> new MappedStopReason("length", null);
-            case "function_call", "tool_calls" -> new MappedStopReason("toolUse", null);
+            case "stop", "end" -> new MappedStopReason(StopReason.STOP, null);
+            case "length" -> new MappedStopReason(StopReason.LENGTH, null);
+            case "function_call", "tool_calls" -> new MappedStopReason(StopReason.TOOL_USE, null);
             case "content_filter" ->
-                new MappedStopReason("error", "Provider finish_reason: content_filter");
+                new MappedStopReason(StopReason.ERROR, "Provider finish_reason: content_filter");
             case "network_error" ->
-                new MappedStopReason("error", "Provider finish_reason: network_error");
-            default -> new MappedStopReason("error", "Provider finish_reason: " + reason);
+                new MappedStopReason(StopReason.ERROR, "Provider finish_reason: network_error");
+            default -> new MappedStopReason(StopReason.ERROR, "Provider finish_reason: " + reason);
         };
     }
 
     /** 映射结果（pi 的 {@code {stopReason, errorMessage?}}）。 */
-    private record MappedStopReason(String reason, String errorMessage) {}
+    private record MappedStopReason(StopReason reason, String errorMessage) {}
 
     /** 累加器的 stop reason 状态（pi 的 {@code output.stopReason}/{@code errorMessage} 那一对）。 */
     private static final class StopState {
-        private String reason = PENDING;
+        // 初值 "pending"（openai-completions.ts:333）：收尾的「没观测到 finish reason」哨兵。
+        private StopReason reason = StopReason.PENDING;
         private String errorMessage;
     }
 

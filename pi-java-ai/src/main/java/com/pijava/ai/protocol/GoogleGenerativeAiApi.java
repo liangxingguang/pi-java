@@ -27,6 +27,7 @@ import com.pijava.ai.api.TranscriptContext;
 import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.api.TransformMessages;
 import com.pijava.ai.message.MessageTexts;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.http.ProviderRetry;
 import com.pijava.ai.model.CostCalculator;
 import com.pijava.ai.stream.StreamEvent;
@@ -73,12 +74,6 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
 
     private static final String DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com";
 
-    /**
-     * pi 累加器的 stop reason 初值（{@code google-generative-ai.ts:75}），
-     * 非 pi 词汇表取值；收尾拿它当「一个 finish reason 都没观测到」的哨兵。
-     */
-    private static final String PENDING = "pending";
-
     private final Client client;
 
     /**
@@ -119,9 +114,10 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
     protected void streamInternal(StreamRequest request,
                                    SubmissionPublisher<StreamEvent> publisher) {
         var builder = new StreamPartialBuilder();
-        // pi 累加器初值（google-generative-ai.ts:75）—— **非** pi 词汇表取值，收尾拿它
-        // 当「一个 finish reason 都没观测到」的哨兵（`:268`）。
-        String stopReason = PENDING;
+        // pi 累加器初值（google-generative-ai.ts:75 的 "pending" 哨兵）：收尾拿
+        // StopReason.PENDING 当「一个 finish reason 都没观测到」的标记（`:268`）。
+        // 它是 pi 内存词表成员但被存盘类型显式排除，落定判据见 StopReason.isSettled。
+        StopReason stopReason = StopReason.PENDING;
         // pi 的 output.rawStopReason（`:217`）：映射**前**的线格原值，收尾用它拼错误文案
         // （`:272-273`）。第 ⑨ 包（D5）把它升成消息字段：观测到 finish reason 时下面
         // `builder.noteRawStopReason(...)` 落消息，本局部量留作**同一处**的文案来源
@@ -158,7 +154,7 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
                     if (response.promptFeedback().isPresent()) {
                         var fb = response.promptFeedback().get();
                         if (fb.blockReason().isPresent()) {
-                            publisher.submit(builder.emitError("error",
+                            publisher.submit(builder.emitError(StopReason.ERROR,
                                     new IllegalStateException(
                                             "Content blocked by Google safety filter: "
                                                     + fb.blockReason().get())));
@@ -268,10 +264,10 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
                             // pi `:217-218`：原值先落消息（⑨/D5），映射结果再落 stopReason。
                             builder.noteRawStopReason(rawStopReason);
                             stopReason = mapStopReason(rawStopReason);
-                            if (toolCallSeen && "stop".equals(stopReason)) {
+                            if (toolCallSeen && stopReason == StopReason.STOP) {
                                 // pi :219-220 —— Google 的 STOP 同时表示「正常收尾」与
                                 // 「调工具收尾」，已有工具块时补成 toolUse。
-                                stopReason = "toolUse";
+                                stopReason = StopReason.TOOL_USE;
                             }
                         }
                     }
@@ -281,15 +277,15 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
             if (textStarted) publisher.submit(builder.emitTextEnd());
             // ⚠️ pi 的 abort 检查（:264）在车道层**结构上不可达** —— `StreamRequest` 没有
             // signal，中止由宿主 `PiLoopRunner.markAborted` 在流外处理（§8.35.14 第三节 ③）。
-            if (PENDING.equals(stopReason)) {
+            if (stopReason == StopReason.PENDING) {
                 // 严格收尾（pi :268-269）：一个 finish reason 都没观测到 ⇒ **绝不**当成
                 // 正常结束。这是本车道此前最大的缺口 —— `null` 兜底成 "stop" 把
                 // 「什么都没看到」伪装成「正常收尾」。
                 throw new IllegalStateException("Google stream ended without a finish reason");
             }
             // pi 此处还比了 `"aborted"`（:271），那个值只由上面的 abort 检查写入 ⇒
-            // 在 pi-java 结构上不可达，故只比 `"error"`。
-            if ("error".equals(stopReason)) {
+            // 在 pi-java 结构上不可达，故只比 ERROR。
+            if (stopReason == StopReason.ERROR) {
                 // pi :271-277：文案由 `rawStopReason` 拼，缺失才兜底。
                 throw new IllegalStateException(rawStopReason != null
                         ? "Provider stopped with: " + rawStopReason
@@ -299,7 +295,7 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
         } catch (Exception e) {
             // pi 的 catch（:285-290）只发一条 error 就 `stream.end()` ⇒ 一条流**只有一个**
             // 终局事件；上面的 throw 落在这里，`emitDone` 不会被发出去。
-            publisher.submit(builder.emitError("error", e));
+            publisher.submit(builder.emitError(StopReason.ERROR, e));
         }
     }
 
@@ -307,22 +303,23 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
      * 线格原值 → pi 的 {@code StopReason}（pi {@code google-shared.ts:379-411}）。
      *
      * <p>pi 收的是 SDK 枚举、用 exhaustive switch + {@code default: throw}；本车道收的是
-     * 原始字符串（理由见 {@code streamInternal} 的读点注释），故把 17 个取值**显式列出**、
+     * 原始字符串（理由见 {@code streamInternal} 的读点注释），故把 18 个取值**显式列出**、
      * 其余 throw —— 与 pi 的 switch 逐值等价：枚举之外的线格值在 pi 侧同样落到
      * {@code default}。</p>
      *
-     * <p>⚠️ 那 15 个错误取值 pi **不给文案**（返回裸 {@code "error"}），文案由收尾处用
+     * <p>⚠️ 那 16 个错误取值 pi **不给文案**（返回裸 {@code ERROR}），文案由收尾处用
      * {@code rawStopReason} 拼成 {@code Provider stopped with: X} —— 两处分写，别合并。</p>
      */
-    private static String mapStopReason(String reason) {
+    private static StopReason mapStopReason(String reason) {
         return switch (reason) {
-            case "STOP" -> "stop";
-            case "MAX_TOKENS" -> "length";
+            case "STOP" -> StopReason.STOP;
+            case "MAX_TOKENS" -> StopReason.LENGTH;
             case "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "SAFETY",
                  "IMAGE_SAFETY", "IMAGE_PROHIBITED_CONTENT", "IMAGE_RECITATION",
                  "IMAGE_OTHER", "RECITATION", "FINISH_REASON_UNSPECIFIED", "OTHER",
                  "LANGUAGE", "MALFORMED_FUNCTION_CALL", "UNEXPECTED_TOOL_CALL",
-                 "NO_IMAGE" -> "error";
+                 "TOO_MANY_TOOL_CALLS",
+                 "NO_IMAGE" -> StopReason.ERROR;
             default -> throw new IllegalStateException("Unhandled stop reason: " + reason);
         };
     }

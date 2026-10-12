@@ -10,7 +10,6 @@ import com.anthropic.core.http.StreamResponse;
 import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.RawMessageDeltaEvent;
 import com.anthropic.models.messages.RawMessageStreamEvent;
-import com.anthropic.models.messages.StopReason;
 
 import com.anthropic.backends.AnthropicBackend;
 
@@ -20,6 +19,7 @@ import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.CacheRetention;
 import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.http.ProviderRetry;
+import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
 
@@ -43,9 +43,6 @@ import com.pijava.ai.stream.StreamPartialBuilder;
  * {@code PiLoopRunner.markAborted} 承担。此处**不**把信号塞进请求（§8.35.14 第三节③）。</p>
  */
 public final class AnthropicMessagesApi extends AbstractChatApi {
-
-    /** pi 累加器的 stop reason 初值（{@code anthropic-messages.ts:526}），非 pi 词汇表取值。 */
-    private static final String PENDING = "pending";
 
     @Override
     public String apiName() {
@@ -209,7 +206,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
             }
             submitTail(builder, publisher, stop);
         } catch (Exception e) {
-            publisher.submit(builder.emitError("error", e));
+            publisher.submit(builder.emitError(StopReason.ERROR, e));
         }
     }
 
@@ -234,13 +231,13 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         if (stop.errored) {
             return; // 循环内已发过 error：pi 在那一层 throw，收尾不跑
         }
-        if (PENDING.equals(stop.reason)) {
-            publisher.submit(builder.emitError("error",
+        if (stop.reason == StopReason.PENDING) {
+            publisher.submit(builder.emitError(StopReason.ERROR,
                     new IllegalStateException("Anthropic stream ended without a stop reason")));
             return;
         }
-        if ("error".equals(stop.reason)) {
-            publisher.submit(builder.emitError("error", new IllegalStateException(
+        if (stop.reason == StopReason.ERROR) {
+            publisher.submit(builder.emitError(StopReason.ERROR, new IllegalStateException(
                     stop.errorMessage != null ? stop.errorMessage : "An unknown error occurred")));
             return;
         }
@@ -251,15 +248,15 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
      * 一条流的 stop reason 状态 —— pi 累加器里的 {@code output.stopReason} 与
      * {@code output.errorMessage} 两个字段（{@code anthropic-messages.ts:526} 起）。
      *
-     * <p>初值 {@code "pending"} 是 pi 的哨兵值：收尾据此区分「流看完了但**一个** stop reason
-     * 都没观测到」与「正常结束」。修复前 pi-java 用局部变量兜底成 {@code "end_turn"}，
-     * 把前者伪装成后者（§8.35.14 第三节②）。</p>
+     * <p>初值 {@link StopReason#PENDING} 是 pi 的哨兵值：收尾据此区分「流看完了但**一个**
+     * stop reason 都没观测到」与「正常结束」。修复前 pi-java 用局部变量兜底成
+     * {@code "end_turn"}，把前者伪装成后者（§8.35.14 第三节②）。</p>
      *
      * <p>{@code errored} 是 pi-java 侧新增的（pi 靠 throw 逃逸循环，不需要这个位）：
      * 见 {@link #submitTail} 的说明。</p>
      */
     private static final class StopState {
-        private String reason = PENDING;
+        private StopReason reason = StopReason.PENDING;
         private String errorMessage;
         private boolean errored;
     }
@@ -386,7 +383,8 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                 // 键缺失、JSON null、空串三种都按「本事件没观测到 stop reason」处理。
                 var rawStopReason = delta._stopReason();
                 if (!rawStopReason.isMissing() && !rawStopReason.isNull()) {
-                    var raw = rawStopReason.asKnown().map(StopReason::asString).orElse("");
+                    var raw = rawStopReason.asKnown()
+                            .map(com.anthropic.models.messages.StopReason::asString).orElse("");
                     if (!raw.isEmpty()) {
                         // pi `:744`：原值先落消息（⑨/D5），映射结果再落 stopReason。
                         builder.noteRawStopReason(raw);
@@ -417,7 +415,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                 return null; // StreamDone emitted in streamInternal finally
             }
         } catch (Exception e) {
-            return builder.emitError("error", e);
+            return builder.emitError(StopReason.ERROR, e);
         }
         return null;
     }
@@ -442,22 +440,22 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
      */
     private static MappedStopReason mapStopReason(String raw, String explanation) {
         return switch (raw) {
-            case "end_turn" -> new MappedStopReason("stop", null);
-            case "max_tokens" -> new MappedStopReason("length", null);
-            case "tool_use" -> new MappedStopReason("toolUse", null);
-            case "refusal" -> new MappedStopReason("error",
+            case "end_turn" -> new MappedStopReason(StopReason.STOP, null);
+            case "max_tokens" -> new MappedStopReason(StopReason.LENGTH, null);
+            case "tool_use" -> new MappedStopReason(StopReason.TOOL_USE, null);
+            case "refusal" -> new MappedStopReason(StopReason.ERROR,
                     explanation != null && !explanation.isEmpty()
                             ? explanation
                             : "The model refused to complete the request");
-            case "pause_turn" -> new MappedStopReason("stop", null); // 重发即可，stop 足够
-            case "stop_sequence" -> new MappedStopReason("stop", null); // 未供 stop 序列，不该出现
-            case "sensitive" -> new MappedStopReason("error", "Provider stopped with: sensitive");
+            case "pause_turn" -> new MappedStopReason(StopReason.STOP, null); // 重发即可，stop 足够
+            case "stop_sequence" -> new MappedStopReason(StopReason.STOP, null); // 未供 stop 序列，不该出现
+            case "sensitive" -> new MappedStopReason(StopReason.ERROR, "Provider stopped with: sensitive");
             default -> throw new IllegalStateException("Unhandled stop reason: " + raw);
         };
     }
 
     /** pi {@code mapStopReason} 的返回形状 {@code { stopReason, errorMessage? }}。 */
-    private record MappedStopReason(String reason, String errorMessage) {}
+    private record MappedStopReason(StopReason reason, String errorMessage) {}
 
     /**
      * {@code message_delta.delta.stop_details.explanation}（pi {@code :1475} 的
