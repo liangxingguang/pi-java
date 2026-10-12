@@ -123,7 +123,8 @@ public final class MistralConversationsApi extends AbstractChatApi {
                         headerTimeout);
 
             var toolCallBuilders = new HashMap<String, ToolCallBuilder>();
-            var textStarted = new boolean[]{false};
+            // B80：pi :583 的 currentBlock（NONE/TEXT/THINKING），换型先关旧块再开新块。
+            var contentState = new ContentState();
             var stop = new StopState();
 
             while (sseEvents.hasNext()) {
@@ -135,9 +136,10 @@ public final class MistralConversationsApi extends AbstractChatApi {
                     break;
                 }
                 processSseData(sse.data(), publisher, builder,
-                        toolCallBuilders, textStarted, stop, request.model());
+                        toolCallBuilders, contentState, stop, request.model());
             }
-            if (textStarted[0]) publisher.submit(builder.emitTextEnd());
+            // pi :759 的 finishCurrentBlock(currentBlock)（此前只有单一文本槽）。
+            contentState.finish(builder, publisher);
             // ⚠️ pi 的 abort 检查（:150）在车道层**结构上不可达** —— `StreamRequest` 没有
             // signal，中止由宿主 `PiLoopRunner.markAborted` 在流外处理（§8.35.14 第三节 ③）。
             if (stop.reason == StopReason.PENDING) {
@@ -167,6 +169,48 @@ public final class MistralConversationsApi extends AbstractChatApi {
                 e instanceof com.pijava.ai.http.PiHttpException http && http.statusCode() > 0;
             publisher.submit(builder.emitError(StopReason.ERROR, httpError
                 ? new IllegalStateException(ProviderErrors.formatMistralError(e), e) : e));
+        }
+    }
+
+    /**
+     * pi {@code mistral-conversations.ts:583} 的 {@code currentBlock}：当前开着的内容块
+     * 只有 NONE/TEXT/THINKING 三态（B80 前只有一个 boolean 文本槽）。
+     *
+     * <p>异型到达（text→thinking 或反向；GLM 还会在<b>同一个事件</b>里切，
+     * {@code [thinking(…), {text:…}]}）先 {@link #finish} 旧块（发 {@code *_end}）
+     * 再发新块的 {@code *_start} —— 对应 pi :652-655/:674-678/:693-697；
+     * 工具调用到达即关块（pi :712-715）；流末统一收尾（pi :759）。</p>
+     */
+    private static final class ContentState {
+
+        private enum Open { NONE, TEXT, THINKING }
+
+        private Open current = Open.NONE;
+
+        /** 切到目标块型：同型空转；异型先关旧块再开新块（pi 的 finish＋push start）。 */
+        void switchTo(Open target, StreamPartialBuilder builder,
+                      SubmissionPublisher<StreamEvent> publisher) {
+            if (current == target) {
+                return;
+            }
+            finish(builder, publisher);
+            current = target;
+            switch (target) {
+                case TEXT -> publisher.submit(builder.emitTextStart());
+                case THINKING -> publisher.submit(builder.emitThinkingStart());
+                case NONE -> { }
+            }
+        }
+
+        /** pi {@code :588-607} 的 finishCurrentBlock：text→text_end，thinking→thinking_end。 */
+        void finish(StreamPartialBuilder builder,
+                    SubmissionPublisher<StreamEvent> publisher) {
+            switch (current) {
+                case TEXT -> publisher.submit(builder.emitTextEnd());
+                case THINKING -> publisher.submit(builder.emitThinkingEnd());
+                case NONE -> { }
+            }
+            current = Open.NONE;
         }
     }
 
@@ -214,7 +258,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
                                   SubmissionPublisher<StreamEvent> publisher,
                                   StreamPartialBuilder builder,
                                   Map<String, ToolCallBuilder> toolBuilders,
-                                  boolean[] textStarted,
+                                  ContentState contentState,
                                   StopState stop,
                                   ModelInfo model) {
         try {
@@ -240,21 +284,42 @@ public final class MistralConversationsApi extends AbstractChatApi {
             // 原先那道 `if (delta == null) return;` 会把它的取值整块丢掉。
             var delta = (Map<String, Object>) choice.get("delta");
             if (delta != null) {
-                // Text delta
-                var content = (String) delta.get("content");
-                if (content != null && !content.isEmpty()) {
-                    // pi mistral-conversations.ts:626 —— 流式文本增量净化（本车道唯一的响应面落点）。
-                    var textDelta = SanitizeUnicode.surrogates(content);
-                    if (!textStarted[0]) {
-                        publisher.submit(builder.emitTextStart());
-                        textStarted[0] = true;
+                // B80（pi :643-708）：delta.content 既可能是串也可能是块数组 ——
+                // 串 / {type:"thinking"} / {type:"text"} 三支，未知 type 静默忽略。
+                Object contentNode = delta.get("content");
+                if (contentNode != null) {
+                    // pi :644 的 typeof 归一：串→[串]；数组逐项；既非串也非数组（理论不可达）按空。
+                    List<?> items = contentNode instanceof String s
+                            ? List.of(s)
+                            : contentNode instanceof List<?> l ? l : List.of();
+                    for (Object item : items) {
+                        switch (MistralContentDelta.ofItem(item)) {
+                            case MistralContentDelta.Text(var raw) -> {
+                                // pi :647-650：先净化再判空（GLM 在 thinking/工具调用周围发的
+                                // 空串不许开块，否则 thinking 被切成多块、Mistral 重放会拒）。
+                                var textDelta = SanitizeUnicode.surrogates(raw);
+                                if (textDelta.isEmpty()) break;
+                                contentState.switchTo(ContentState.Open.TEXT, builder, publisher);
+                                publisher.submit(builder.emitTextDelta(textDelta));
+                            }
+                            case MistralContentDelta.Thinking(var raw) -> {
+                                // pi :667-687：parts 已在 MistralContentDelta 拼接、过滤非空。
+                                var thinkingDelta = SanitizeUnicode.surrogates(raw);
+                                if (thinkingDelta.isEmpty()) break;
+                                contentState.switchTo(
+                                        ContentState.Open.THINKING, builder, publisher);
+                                publisher.submit(builder.emitThinkingDelta(thinkingDelta));
+                            }
+                            case MistralContentDelta.Ignored ignored -> { }
+                        }
                     }
-                    publisher.submit(builder.emitTextDelta(textDelta));
                 }
 
-                // Tool call delta
+                // Tool call delta —— pi :712-715：**首个**工具调用到达即关当前文本/思考块
+                // （关闭在 toolCall 循环体内，空列表不触发 ⇒ 不能无条件 finish）。
                 var toolCalls = (List<Map<String, Object>>) delta.get("tool_calls");
-                if (toolCalls != null) {
+                if (toolCalls != null && !toolCalls.isEmpty()) {
+                    contentState.finish(builder, publisher);
                     for (var tc : toolCalls) {
                         var index = String.valueOf(tc.getOrDefault("index", "0"));
                         var tcId = (String) tc.get("id");
