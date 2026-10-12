@@ -106,8 +106,9 @@ class StreamPartialBuilderTest {
         builder.emitStart();
         builder.emitThinkingStart();
         builder.emitThinkingDelta("reasoning...");
-        builder.emitThinkingSignature("sig_");
-        builder.emitThinkingSignature("abc");
+        // 批1/#23：signature_delta 是「append 到块、不发事件」（pi anthropic-messages.ts:773-779）。
+        builder.appendThinkingSignature("sig_");
+        builder.appendThinkingSignature("abc");
 
         var blocks = builder.snapshot().content();
         assertThat(blocks.get(0)).isInstanceOf(ContentBlock.ThinkingContent.class);

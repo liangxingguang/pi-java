@@ -358,12 +358,15 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                 }
                 if (delta.isSignature()) {
                     // 同上的容忍规则（P2，原 docs/31 §8.31）：缺字段 ⇒ 空串，不抛。
-                    // pi 的 `block.thinkingSignature += event.delta.signature`（anthropic-messages.ts:705）
+                    // pi 的 `block.thinkingSignature += event.delta.signature`（anthropic-messages.ts:773-779）
                     // 在 JS 里会把 undefined 拼成字面量 "undefined" —— 那是 pi 的事故
                     // （TS 类型谎报 required），这里**故意不复制**；真 Anthropic 的
                     // signature_delta 恒带该字段，该分支不可达。
-                    return builder.emitThinkingSignature(
+                    // 批1/#23：pi 对 signature_delta **只改块、不 push 事件**；返回 null ⇒
+                    // 本事件不 submit（mapEvent 链对 null 有既有处理），签名随下一帧 partial 可见。
+                    builder.appendThinkingSignature(
                             delta.asSignature()._signature().asString().orElse(""));
+                    return null;
                 }
                 return null;
             }

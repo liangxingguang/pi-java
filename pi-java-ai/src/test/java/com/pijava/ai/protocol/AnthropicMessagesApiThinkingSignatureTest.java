@@ -184,6 +184,10 @@ class AnthropicMessagesApiThinkingSignatureTest {
      * {@code :145} 是同族的第二个严格访问器。线上的 {@code signature_delta}
      * 若缺 signature 字段，修复前同样抛（此处反序列化走 JSON 路径 —— SDK builder
      * 会拒绝这种形状）。
+     *
+     * <p>批1/#23：pi {@code anthropic-messages.ts:773-779} 对 signature_delta
+     * <b>只改块、不 push 事件</b> ⇒ mapEvent 返回 null（缺 signature 时追加空串），
+     * 流必须照常活着走到 content_block_stop。</p>
      */
     @Test
     void signatureDeltaWithoutSignatureDoesNotKillTheStream() throws Exception {
@@ -194,14 +198,17 @@ class AnthropicMessagesApiThinkingSignatureTest {
         var out = stream.feedJson("{\"type\":\"signature_delta\"}", SignatureDelta.class);
 
         assertThat(out)
-            .as("缺 signature 的 signature_delta 只应是无事发生，不应变成 StreamError（pi 的 JS 会把 "
-                + "undefined 拼成字面量 \"undefined\"，那是 pi 的事故，不复刻）")
-            .isInstanceOf(StreamEvent.ThinkingDelta.class);
-        assertThat(((StreamEvent.ThinkingDelta) out).delta()).isEmpty();
-        assertThat(firstThinking(((StreamEvent.ThinkingDelta) out).partial()).signature()).isEmpty();
+            .as("缺 signature 的 signature_delta 只应是无事发生（无事件、非 StreamError）；pi 的 JS 会把 "
+                + "undefined 拼成字面量 \"undefined\"，那是 pi 的事故，不复刻")
+            .isNull();
+
+        var end = stream.stop();
+        assertThat(end).isInstanceOf(StreamEvent.ThinkingEnd.class);
+        assertThat(firstThinking(((StreamEvent.ThinkingEnd) end).partial()).text()).isEqualTo("hidden");
+        assertThat(firstThinking(((StreamEvent.ThinkingEnd) end).partial()).signature()).isEmpty();
     }
 
-    /** 防回归：签名在时仍要落进 partial（供下一轮重放）。 */
+    /** 防回归：签名在时仍要落进块（供下一轮重放），但不产生独立事件，随下一帧 partial 可见。 */
     @Test
     void signatureDeltaWithSignatureLandsInPartial() throws Exception {
         var stream = new Stream();
@@ -209,9 +216,10 @@ class AnthropicMessagesApiThinkingSignatureTest {
 
         var out = stream.feedJson(
             "{\"type\":\"signature_delta\",\"signature\":\"sig-456\"}", SignatureDelta.class);
+        assertThat(out).as("批1/#23：signature_delta 不 push 事件").isNull();
 
-        assertThat(out).isInstanceOf(StreamEvent.ThinkingDelta.class);
-        assertThat(firstThinking(((StreamEvent.ThinkingDelta) out).partial()).signature())
+        var end = stream.stop();
+        assertThat(firstThinking(((StreamEvent.ThinkingEnd) end).partial()).signature())
             .isEqualTo("sig-456");
     }
 
@@ -253,10 +261,10 @@ class AnthropicMessagesApiThinkingSignatureTest {
     /**
      * <b>B9</b>：初始 {@code signature} 必须进**首个** {@code ThinkingStart.partial}。
      *
-     * <p>修复前 {@code emitThinkingStart()} 先 {@code snapshot()} 返回（{@code StreamPartialBuilder:127}），
-     * {@code AnthropicMessagesApi:131} 才拿 {@code emitThinkingSignature(initial)} 去改块
-     * —— 而且那个返回值**被直接丢弃、从未 submit**。于是初始签名只能从**下一个**事件的
-     * partial 起才可见，与 pi 的「先入块、后 push」差一拍。</p>
+     * <p>修复前 {@code emitThinkingStart()} 先 {@code snapshot()} 返回，初始签名事后才被写进块
+     * ——于是初始签名只能从**下一个**事件的 partial 起才可见，与 pi 的「先入块、后 push」差一拍。
+     * 现状：{@code content_block_start} 的签名直接随 {@code emitThinkingStart(text, signature, …)}
+     * 入块（批1/#23 后，流式 signature_delta 走无事件的 {@code appendThinkingSignature}）。</p>
      */
     @Test
     void initialThinkingSignatureLandsInFirstPartial() throws Exception {

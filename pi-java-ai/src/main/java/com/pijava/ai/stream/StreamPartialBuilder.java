@@ -288,13 +288,23 @@ public final class StreamPartialBuilder {
         return new StreamEvent.ThinkingDelta(idx, delta, snapshot());
     }
 
-    /** Emit a signature delta for the current thinking block (Anthropic). */
-    public StreamEvent.ThinkingDelta emitThinkingSignature(String signature) {
-        thinkingSigBuf.append(signature);
-        int idx = Math.max(0, thinkingBlockIndex);
-        blocks.set(idx, new ContentBlock.ThinkingContent(
-            thinkingBuf.toString(), thinkingSigBuf.toString(), thinkingRedacted));
-        return new StreamEvent.ThinkingDelta(idx, "", snapshot());
+    /**
+     * Append a signature delta to the current thinking block <b>without emitting an event</b>
+     * (Anthropic {@code signature_delta}).
+     *
+     * <p>对位 {@code anthropic-messages.ts:773-779}：pi 只做
+     * {@code block.thinkingSignature = (block.thinkingSignature || "") + signature}，
+     * <b>不 push 任何流事件</b>——签名随下一个增量帧的 partial 或 thinking_end 可见。
+     * 这是 append 语义（多段 signature_delta 累积），不要与替换语义的
+     * {@link #applyThinkingSignature}（pi-messages 线）混用。块不存在时 no-op，对位
+     * pi 的 {@code findIndex} 落空。</p>
+     */
+    public void appendThinkingSignature(String signature) {
+        thinkingSigBuf.append(signature == null ? "" : signature);
+        if (thinkingBlockIndex >= 0) {
+            blocks.set(thinkingBlockIndex, new ContentBlock.ThinkingContent(
+                thinkingBuf.toString(), thinkingSigBuf.toString(), thinkingRedacted));
+        }
     }
 
     /**
