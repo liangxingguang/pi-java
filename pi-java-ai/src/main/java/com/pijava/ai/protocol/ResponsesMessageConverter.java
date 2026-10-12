@@ -125,13 +125,19 @@ final class ResponsesMessageConverter {
         var transcriptTools = Transcripts.resolveTranscriptTools(transcript.messages(),
                 supportsAdditionalTools || supportsToolSearch);
 
+        // B222（pi openai-responses-shared.ts:214-215）：前导/中途系统指令的角色——
+        // 推理模型且 compat 未显式关掉 developer ⇒ "developer"，否则 "system"。
+        // 缺省 true（!== false）；注意 completions 车道是相反缺省（显式 true 才行）。
+        boolean instructionDeveloper = request.model() != null
+            && request.model().capabilities().contains(ModelCapability.THINKING)
+            && !Boolean.FALSE.equals(compat.supportsDeveloperRole());
         var builder = ResponseCreateParams.builder()
             .model(modelName)
             .store(false)
             .input(ResponseCreateParams.Input.ofResponse(
                 convertMessages(request, transcript, apiName, transcriptTools,
                     supportsAdditionalTools, supportsToolSearch, supportsStrictMode,
-                    grammarProperties)));
+                    grammarProperties, instructionDeveloper)));
 
         var tools = new ArrayList<Tool>();
         for (var td : transcriptTools.requestTools()) {
@@ -215,7 +221,11 @@ final class ResponsesMessageConverter {
                                                            boolean supportsAdditionalTools,
                                                            boolean supportsToolSearch,
                                                            boolean supportsStrictMode,
-                                                           Map<String, String> grammarProperties) {
+                                                           Map<String, String> grammarProperties,
+                                                           boolean instructionDeveloper) {
+        // B222：系统指令项的角色（developer 仅推理模型；pi shared:214-215）。
+        EasyInputMessage.Role instructionRole = instructionDeveloper
+            ? EasyInputMessage.Role.DEVELOPER : EasyInputMessage.Role.SYSTEM;
         var items = new ArrayList<ResponseInputItem>();
         // docs/05 B152：**回放侧**的同一次去重 —— 修复之前落盘的转录里已经带着重复的
         // tool call（同 `call_id`），只靠流解析的去重救不回来 ⇒ 那种会话会**永远** 400。
@@ -224,14 +234,15 @@ final class ResponsesMessageConverter {
         // ⚠️ 两个 set 必须分开：调用与结果各自去重（共用一个会把**第一条结果**当成重复丢掉）。
         var emittedCalls = new HashSet<String>();
         var emittedOutputs = new HashSet<String>();
-        // 系统文本来自**前导系统消息**（pi openai-responses-shared.ts:218-222 的
-        // `sourceIndex++ === 0` 支 → getSystemMessageText），落成 input 里的
-        // `{role:"system"}` 项 —— pi 在循环里就地转，折叠后头必在下标 0，故这里先落它。
+        // 系统文本来自**前导系统消息**（pi openai-responses-shared.ts:218-227 的
+        // `sourceIndex++ === 0` 支 → getSystemMessageText），落成 input 里的指令项
+        // —— 角色按 instructionRole（B222：推理模型 developer，否则 system）；
+        // pi 在循环里就地转，折叠后头必在下标 0，故这里先落它。
         var initialSystemMessage = Transcripts.getInitialSystemMessage(transcript.messages());
         var systemText = initialSystemMessage == null
             ? "" : MessageTexts.getSystemMessageText(initialSystemMessage);
         if (!systemText.isEmpty()) {
-            items.add(ResponseInputWire.inputMessage(EasyInputMessage.Role.SYSTEM,
+            items.add(ResponseInputWire.inputMessage(instructionRole,
                 SanitizeUnicode.surrogates(systemText)));
         }
         // 共享预通道先于本车道的映射跑（pi openai-responses-shared.ts:172 在消息转换前调
@@ -259,7 +270,7 @@ final class ResponsesMessageConverter {
                     }
                     var update = MessageTexts.renderSystemMessageUpdate(system);
                     if (!update.isEmpty()) {
-                        items.add(ResponseInputWire.inputMessage(EasyInputMessage.Role.SYSTEM,
+                        items.add(ResponseInputWire.inputMessage(instructionRole,
                             SanitizeUnicode.surrogates(update)));
                     }
                 }

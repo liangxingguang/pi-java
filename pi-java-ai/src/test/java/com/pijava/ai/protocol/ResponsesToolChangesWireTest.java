@@ -39,11 +39,11 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
  * <ul>
  *   <li><b>文本项的 role</b>：pi 的 {@code instructionRole} 是
  *       {@code model.reasoning &amp;&amp; compat?.supportsDeveloperRole !== false ? "developer" : "system"}
- *       （{@code openai-responses-shared.ts:213}），oracle 的模型 {@code reasoning:true}
- *       ⇒ 它断言 {@code developer}。java 侧恒发 {@code system}（{@code supportsDeveloperRole}
- *       尚未接进 {@code ModelCompat}，登记 {@code docs/07 A-07} / {@code 原 docs/51 §10 L-E}）
- *       ⇒ 本夹具用 {@code reasoning:false} 的模型，使两侧在这一点上**本来就同形**，
- *       于是「role 差异」不会混进对锚定结构的断言。注意 {@code additional_tools} 项自己的
+ *       （{@code openai-responses-shared.ts:214-215}），oracle 的模型 {@code reasoning:true}
+ *       ⇒ 它断言 {@code developer}。批1/B222 已对齐该判据
+ *       （{@code ResponsesDeveloperRoleWireTest} 覆盖 developer/system 四格）；本夹具继续用
+ *       {@code reasoning:false} 的模型，刻意覆盖**非推理模型的 system 支**，使角色变量不混进
+ *       对锚定结构的断言。注意 {@code additional_tools} 项自己的
  *       {@code role:"developer"} 是 pi **写死的**（{@code :188}），java 照抄。</li>
  *   <li><b>sections</b>：pi 的 {@code context} 带 {@code sections}（含 {@code docs: null} 的删除），
  *       java 的 {@code Map<String,String>} 表达不了「值在场但为 null」（{@code 原 docs/49 §9 R3①}）
