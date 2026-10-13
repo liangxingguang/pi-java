@@ -1,5 +1,6 @@
 package com.pijava.ai.provider.builtin;
 
+import com.pijava.ai.provider.BuiltinModelCatalogs;
 import com.pijava.ai.provider.OpenAiCompatibleProvider;
 import com.pijava.ai.provider.Protocol;
 import com.pijava.ai.provider.ProviderConfig;
@@ -14,6 +15,6 @@ public final class MoonshotAiProvider extends OpenAiCompatibleProvider {
         return ProviderConfig.single(
             "moonshotai", "Moonshot AI", "https://api.moonshot.ai/v1",
             "MOONSHOT_API_KEY", Protocol.OPENAI_COMPLETIONS,
-            ModelData.moonshotAiModels());
+            BuiltinModelCatalogs.catalog("moonshotai"));
     }
 }

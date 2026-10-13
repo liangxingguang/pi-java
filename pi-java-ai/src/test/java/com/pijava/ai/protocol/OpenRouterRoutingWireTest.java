@@ -19,7 +19,7 @@ import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
-import com.pijava.ai.provider.builtin.OpenRouterModels;
+import com.pijava.ai.provider.BuiltinModelCatalogs;
 import com.pijava.ai.thinking.ThinkingLevel;
 import com.pijava.ai.thinking.ThinkingLevelMap;
 
@@ -105,7 +105,7 @@ class OpenRouterRoutingWireTest {
         var wire = body(model(ModelCompat.NONE, Map.of()), Optional.empty());
         assertThat(wire.has("provider")).isFalse();
 
-        var builtin = body(OpenRouterModels.catalog()
+        var builtin = body(BuiltinModelCatalogs.catalog("openrouter")
             .find(ModelId.of("openrouter", "openai/gpt-5.1")).orElseThrow(), Optional.empty());
         assertThat(builtin.has("provider")).as("内置目录模型同样不发").isFalse();
     }
@@ -136,7 +136,7 @@ class OpenRouterRoutingWireTest {
     void builtinCatalogReachesTheOpenRouterThinkingShape() throws Exception {
         // A-09 落的 OPENROUTER 臂（pi :931-940）此前无生产模型可命中（B133）；
         // 自内置目录取真模型：级别经 thinkingLevelMap 翻译进嵌套 reasoning 对象。
-        var gpt51 = OpenRouterModels.catalog()
+        var gpt51 = BuiltinModelCatalogs.catalog("openrouter")
             .find(ModelId.of("openrouter", "openai/gpt-5.1")).orElseThrow();
 
         var high = body(gpt51, Optional.of(new ThinkingLevel.High()));

@@ -11,8 +11,8 @@ import java.util.jar.JarOutputStream;
 import com.pijava.agent.session.memory.MemorySessionRepository;
 import com.pijava.agent.skill.SkillManager;
 import com.pijava.agent.tool.ToolRegistry;
-import com.pijava.ai.catalog.BuiltinCatalog;
 import com.pijava.ai.model.DefaultModelResolver;
+import com.pijava.ai.provider.builtin.ProviderCatalog;
 import com.pijava.ai.provider.ProviderRegistry;
 import com.pijava.coding.agent.core.SessionServices;
 import com.pijava.coding.agent.core.SettingsManager;
@@ -89,7 +89,7 @@ class ExtensionManagerTest {
             SettingsManager.load(null),
             new TrustManager("none"),
             providers,
-            new DefaultModelResolver(BuiltinCatalog.all()),
+            new DefaultModelResolver(ProviderCatalog.allModels()),
             tools, commands, new MemorySessionRepository(),
             new PromptTemplateRegistry());
         return new DefaultExtensionContext(services, new SkillManager());

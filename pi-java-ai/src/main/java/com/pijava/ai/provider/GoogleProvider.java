@@ -2,7 +2,6 @@ package com.pijava.ai.provider;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.ChatApi;
-import com.pijava.ai.catalog.BuiltinCatalog;
 import com.pijava.ai.protocol.GoogleGenerativeAiApi;
 
 /**
@@ -15,7 +14,7 @@ public final class GoogleProvider extends ConfigurableProvider {
         return ProviderConfig.single(
             "google", "Google", "https://generativelanguage.googleapis.com",
             "GEMINI_API_KEY", Protocol.GOOGLE_GENERATIVE_AI,
-            BuiltinCatalog.googleModels());
+            BuiltinModelCatalogs.catalog("google"));
     }
 
     @Override

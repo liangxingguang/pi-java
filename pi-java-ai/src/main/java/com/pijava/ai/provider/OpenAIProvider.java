@@ -6,7 +6,6 @@ import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.ChatApi;
 import com.pijava.ai.api.EmbeddingApi;
 import com.pijava.ai.api.ProviderApi;
-import com.pijava.ai.catalog.BuiltinCatalog;
 import com.pijava.ai.protocol.OpenAICompletionsApi;
 import com.pijava.ai.protocol.OpenAIEmbeddingApi;
 import com.pijava.ai.protocol.OpenAIResponsesApi;
@@ -25,7 +24,7 @@ public final class OpenAIProvider extends ConfigurableProvider {
             "openai", "OpenAI", "https://api.openai.com/v1",
             "OPENAI_API_KEY", Protocol.OPENAI_RESPONSES,
             Set.of(Protocol.OPENAI_COMPLETIONS, Protocol.OPENAI_RESPONSES),
-            BuiltinCatalog.openaiModels());
+            BuiltinModelCatalogs.catalog("openai"));
     }
 
     @Override

@@ -1,5 +1,6 @@
 package com.pijava.ai.provider.builtin;
 
+import com.pijava.ai.provider.BuiltinModelCatalogs;
 import com.pijava.ai.provider.OpenAiCompatibleProvider;
 import com.pijava.ai.provider.Protocol;
 import com.pijava.ai.provider.ProviderConfig;
@@ -14,6 +15,6 @@ public final class XiaomiTokenPlanCnProvider extends OpenAiCompatibleProvider {
         return ProviderConfig.single(
             "xiaomi-token-plan-cn", "Xiaomi Token Plan CN", "https://token-plan-cn.xiaomimimo.com/v1",
             "XIAOMI_TOKEN_PLAN_CN_API_KEY", Protocol.OPENAI_COMPLETIONS,
-            ModelData.xiaomiTokenPlanCnModels());
+            BuiltinModelCatalogs.catalog("xiaomi-token-plan-cn"));
     }
 }

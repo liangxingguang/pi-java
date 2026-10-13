@@ -10,7 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
-import com.pijava.ai.catalog.BuiltinCatalog;
+import com.pijava.ai.provider.BuiltinModelCatalogs;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -38,12 +38,12 @@ class CompletionsMaxTokensWireTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    /** ★ RED-3：缺席 ⇒ 发**模型自己的上限**（{@code gpt-5} 内置目录 16384）。 */
+    /** ★ RED-3：缺席 ⇒ 发**模型自己的上限**（{@code gpt-5} npm 1.1.0 分片 128000）。 */
     @Test
     void absentCapSendsTheModelCap() throws Exception {
         var wire = outbound(builtIn("gpt-5"), -1);
 
-        assertThat(wire.path("max_completion_tokens").asInt()).isEqualTo(16_384);
+        assertThat(wire.path("max_completion_tokens").asInt()).isEqualTo(128_000);
         assertThat(wire.path("max_tokens").isMissingNode())
             .as("标准端点走 max_completion_tokens，不发 max_tokens")
             .isTrue();
@@ -56,11 +56,12 @@ class CompletionsMaxTokensWireTest {
             .isEqualTo(512);
     }
 
-    /** 配对：同一条漏斗下，另一个模型给的是**它自己的**上限（证明值不是常量漏下来的）。 */
+    /** 配对：同一条漏斗下，另一个模型给的是**它自己的**上限（gpt-4o 分片 16384，
+     *  与 gpt-5 的 128000 不同，证明值不是常量漏下来的）。 */
     @Test
     void anotherModelSendsItsOwnCap() throws Exception {
-        assertThat(outbound(builtIn("gpt-5-nano"), -1).path("max_completion_tokens").asInt())
-            .isEqualTo(4096);
+        assertThat(outbound(builtIn("gpt-4o"), -1).path("max_completion_tokens").asInt())
+            .isEqualTo(16_384);
     }
 
     // ── 夹具 ────────────────────────────────────────────────────────────
@@ -85,7 +86,7 @@ class CompletionsMaxTokensWireTest {
     }
 
     private static ModelInfo builtIn(String modelName) {
-        return BuiltinCatalog.openaiModels()
+        return BuiltinModelCatalogs.catalog("openai")
             .find(ModelId.of("openai", modelName)).orElseThrow();
     }
 }

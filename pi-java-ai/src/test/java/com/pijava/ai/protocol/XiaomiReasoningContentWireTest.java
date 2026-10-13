@@ -15,7 +15,7 @@ import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
-import com.pijava.ai.provider.builtin.ModelData;
+import com.pijava.ai.provider.BuiltinModelCatalogs;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code providers/data/xiaomi*.json} 实测全 true；探测给不出 ——
  * {@code isDeepSeek} 不认 xiaomi）。
  *
- * <p>夹具走**内置目录真实条目**（{@link ModelData#xiaomiModels()}）：
+ * <p>夹具走**内置目录真实条目**（npm 1.1.0 分片 {@code xiaomi.json}）：
  * 标注补上之前，{@code OpenAICompletionsMessageConverter:413-417} 的空串补全不点火 ⇒
  * 请求体里没有 {@code reasoning_content}，本用例红。</p>
  */
@@ -36,9 +36,9 @@ class XiaomiReasoningContentWireTest {
 
     @Test
     void xiaomiAssistantHistoryCarriesAnEmptyReasoningContent() throws Exception {
-        var model = ModelData.xiaomiModels()
-            .find(ModelId.of("xiaomi", "mimo-v2-omni")).orElseThrow();
-        var body = requestBody(model, "xiaomi", "mimo-v2-omni");
+        var model = BuiltinModelCatalogs.catalog("xiaomi")
+            .find(ModelId.of("xiaomi", "mimo-v2.5-pro")).orElseThrow();
+        var body = requestBody(model, "xiaomi", "mimo-v2.5-pro");
 
         JsonNode assistant = null;
         for (var message : body.path("messages")) {
@@ -57,7 +57,8 @@ class XiaomiReasoningContentWireTest {
     /** 对照：同样走内置目录的 zai/glm-4.7（pi 目录无此位）⇒ 不凭空补推理字段。 */
     @Test
     void otherBuiltInProvidersDoNotGetTheBackfill() throws Exception {
-        var model = ModelData.zaiModels().find(ModelId.of("zai", "glm-4.7")).orElseThrow();
+        var model = BuiltinModelCatalogs.catalog("zai")
+            .find(ModelId.of("zai", "glm-4.7")).orElseThrow();
         var body = requestBody(model, "zai", "glm-4.7");
 
         JsonNode assistant = null;

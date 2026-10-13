@@ -1,0 +1,9 @@
+The JSON files in this directory (except this file) are copied verbatim from
+the npm package @earendil-works/pi-ai@1.1.0 (dist/providers/data/),
+Copyright (c) 2025 Mario Zechner, MIT License.
+Source: https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-1.1.0.tgz
+Source integrity: sha512-1T7LAkc/5Bvc0v6w4vAGVdCrli0o/E0pEmYKTnixu95vSFArBjvbhS/G4ZwI0RUePgf0Imcu0VyqlM4EcXxqfw==
+Manifest: schemaVersion 6, generatedAt 2026-10-07T22:01:28.515Z.
+Per-file sha256 hashes: see .manifest.json.
+Only the 17 shards for the registered mainstream providers are carried;
+the remaining files listed in the manifest exist upstream but are not bundled.

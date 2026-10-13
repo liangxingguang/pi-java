@@ -8,7 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
-import com.pijava.ai.catalog.BuiltinCatalog;
+import com.pijava.ai.provider.BuiltinModelCatalogs;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -32,7 +32,7 @@ class AnthropicFallbacksWireTest {
 
     @Test
     void fableFiveCarriesTheFallbackBetaAndParams() throws Exception {
-        var model = BuiltinCatalog.anthropicModels()
+        var model = BuiltinModelCatalogs.catalog("anthropic")
             .find(ModelId.of("anthropic", "claude-fable-5")).orElseThrow();
 
         var body = body(model);
@@ -52,7 +52,7 @@ class AnthropicFallbacksWireTest {
 
     @Test
     void otherAnthropicModelsCarryNeitherBetaNorFallbacks() throws Exception {
-        var model = BuiltinCatalog.anthropicModels()
+        var model = BuiltinModelCatalogs.catalog("anthropic")
             .find(ModelId.of("anthropic", "claude-sonnet-4-6")).orElseThrow();
 
         var body = body(model);

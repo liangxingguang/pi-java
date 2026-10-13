@@ -1,5 +1,6 @@
 package com.pijava.ai.provider.builtin;
 
+import com.pijava.ai.provider.BuiltinModelCatalogs;
 import com.pijava.ai.provider.OpenAiCompatibleProvider;
 import com.pijava.ai.provider.Protocol;
 import com.pijava.ai.provider.ProviderConfig;
@@ -14,6 +15,6 @@ public final class AntLingProvider extends OpenAiCompatibleProvider {
         return ProviderConfig.single(
             "ant-ling", "Ant Ling", "https://api.ant-ling.com/v1",
             "ANT_LING_API_KEY", Protocol.OPENAI_COMPLETIONS,
-            ModelData.antLingModels());
+            BuiltinModelCatalogs.catalog("ant-ling"));
     }
 }

@@ -1,0 +1,4 @@
+# Pinned npm-published model catalog (pi-ai@1.1.0): the per-file sha256 hashes
+# in .manifest.json must match the classpath bytes verbatim on every checkout,
+# so treat the shards as binary — never let core.autocrlf rewrite their bytes.
+pi-java-ai/src/main/resources/catalog/*.json -text

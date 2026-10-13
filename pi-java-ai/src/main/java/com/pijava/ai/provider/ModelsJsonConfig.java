@@ -241,7 +241,11 @@ public final class ModelsJsonConfig {
      * 没有任何其它症状（pi 的 TypeBox 对 api 只校验非空串，但 java 的派发要过
      * {@link Protocol#fromWire}，这里把失败提前到加载期、带上文件定位）。
      */
-    private static String modelApiOf(String providerId, String modelId, String value) {
+    /**
+     * 同 {@link #modelApiOf}：包可见供 {@link BuiltinModelCatalogs} 复用——npm 生成数据
+     * 与 models.json 走同一套线格名校验（两源共用，错误文案沿用 models.json 前缀）。
+     */
+    static String modelApiOf(String providerId, String modelId, String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
@@ -264,7 +268,8 @@ public final class ModelsJsonConfig {
      *
      * <p>未知键被忽略（pi 的 schema 只列 {@code off|minimal|low|medium|high|xhigh|max}）。</p>
      */
-    private static ThinkingLevelMap thinkingLevelMapOf(Map<String, String> def) {
+    /** 包可见供 {@link BuiltinModelCatalogs} 复用（npm 生成数据同为三态 Map 形状）。 */
+    static ThinkingLevelMap thinkingLevelMapOf(Map<String, String> def) {
         if (def == null || def.isEmpty()) {
             return ThinkingLevelMap.empty();
         }
@@ -293,7 +298,11 @@ public final class ModelsJsonConfig {
      *       缺任一按校验失败拒载（不静默补 0 造出假价）。</li>
      * </ul>
      */
-    private static PricingInfo pricingFrom(String providerId, String modelId, Cost cost) {
+    /**
+     * 包可见供 {@link BuiltinModelCatalogs} 复用：npm 生成数据的 cost 块与 models.json
+     * 同 schema（四费率＋tiers，五字段必填）。
+     */
+    static PricingInfo pricingFrom(String providerId, String modelId, Cost cost) {
         if (cost == null) {
             return new PricingInfo(0, 0, 0, 0, List.of());
         }

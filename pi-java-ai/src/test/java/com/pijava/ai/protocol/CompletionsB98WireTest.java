@@ -21,7 +21,7 @@ import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
-import com.pijava.ai.provider.builtin.ModelData;
+import com.pijava.ai.provider.BuiltinModelCatalogs;
 import com.pijava.ai.thinking.ThinkingLevel;
 import com.pijava.ai.thinking.ThinkingLevelMap;
 
@@ -59,7 +59,7 @@ class CompletionsB98WireTest {
 
     @Test
     void builtinZaiModelSendsToolStreamWithRequestTools() throws Exception {
-        var model = ModelData.zaiModels().find(ModelId.of("zai", "glm-4.7")).orElseThrow();
+        var model = BuiltinModelCatalogs.catalog("zai").find(ModelId.of("zai", "glm-4.7")).orElseThrow();
         var body = body(model, msgs(user("hi")),
             List.of(new ToolDefinition("write", "write file", Map.of("type", "object"))),
             Optional.empty());
@@ -71,7 +71,7 @@ class CompletionsB98WireTest {
     @Test
     void zaiToolStreamAbsentWithoutRequestTools() throws Exception {
         // pi 的门是 requestTools.length > 0；历史工具只给 tools:[]，不发 tool_stream。
-        var model = ModelData.zaiModels().find(ModelId.of("zai", "glm-4.7")).orElseThrow();
+        var model = BuiltinModelCatalogs.catalog("zai").find(ModelId.of("zai", "glm-4.7")).orElseThrow();
         var body = body(model, msgs(user("hi")), List.of(), Optional.empty());
         assertThat(body.has("tool_stream")).isFalse();
     }

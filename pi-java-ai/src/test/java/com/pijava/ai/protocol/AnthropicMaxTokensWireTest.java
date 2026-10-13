@@ -12,7 +12,7 @@ import com.anthropic.models.messages.MessageCreateParams;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
-import com.pijava.ai.catalog.BuiltinCatalog;
+import com.pijava.ai.provider.BuiltinModelCatalogs;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -45,7 +45,7 @@ class AnthropicMaxTokensWireTest {
 
     /**
      * ★ RED-1：不传思考、不传上限 ⇒ {@code max_tokens} 是**模型的上限**
-     * （{@code claude-sonnet-4-6} 内置目录 8192）。
+     * （{@code claude-sonnet-4-6} npm 1.1.0 分片 maxTokens 128000）。
      *
      * <p>这一条走的是**默认分支**（用户不开 {@code --thinking} 时就是它）。修复前得
      * {@code 4096} —— 输出上限被拦腰砍半，长回答截断后会报 {@code stopReason: "length"}。</p>
@@ -53,7 +53,7 @@ class AnthropicMaxTokensWireTest {
     @Test
     void absentCapUsesTheBuiltInModelCap() throws Exception {
         assertThat(outboundMaxTokens(builtIn("claude-sonnet-4-6"), Optional.empty(), -1))
-            .isEqualTo(8192);
+            .isEqualTo(128_000);
     }
 
     /**
@@ -61,12 +61,12 @@ class AnthropicMaxTokensWireTest {
      *
      * <p>pi 的 adaptive 分支是 {@code {...base}} —— 即 {@code base.maxTokens}，
      * 与无思考那条**同源**（{@code anthropic-messages.ts:880-884}）。
-     * {@code claude-fable-5} 的内置上限是 16384。</p>
+     * {@code claude-fable-5} npm 1.1.0 分片的上限是 128000。</p>
      */
     @Test
     void adaptiveBranchUsesTheModelCapToo() throws Exception {
         assertThat(outboundMaxTokens(builtIn("claude-fable-5"),
-            Optional.of(new ThinkingLevel.High()), -1)).isEqualTo(16384);
+            Optional.of(new ThinkingLevel.High()), -1)).isEqualTo(128_000);
     }
 
     /** 调用方显式给了上限 ⇒ 它就是上限（夹取只在余量不足时才动手）。 */
@@ -173,7 +173,7 @@ class AnthropicMaxTokensWireTest {
     }
 
     private static ModelInfo builtIn(String modelName) {
-        return BuiltinCatalog.anthropicModels()
+        return BuiltinModelCatalogs.catalog("anthropic")
             .find(ModelId.of("anthropic", modelName)).orElseThrow();
     }
 

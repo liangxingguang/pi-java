@@ -37,8 +37,19 @@ public final class DefaultModelResolver implements ModelResolver {
 
         // Prefer the specified provider
         if (preferred.isPresent()) {
+            var family = preferred.get();
+            // 批 3a：pi defaultModelPerProvider 防回归切片 —— 裸 provider 启动选的是
+            // 常量表默认模型（DefaultModelIds），不是分片首条（google 首条是 deep-research
+            // 预览模型）。默认 id 缺席或不满足能力集时回退既有「首条候选」。
+            var defaultId = DefaultModelIds.forProvider(family)
+                .map(id -> ModelId.of(family, id))
+                .flatMap(catalog::find)
+                .filter(info -> info.capabilities().containsAll(required));
+            if (defaultId.isPresent()) {
+                return defaultId.get().id();
+            }
             for (var c : candidates) {
-                if (c.provider().equalsIgnoreCase(preferred.get())) {
+                if (c.provider().equalsIgnoreCase(family)) {
                     return c;
                 }
             }
@@ -165,7 +176,7 @@ public final class DefaultModelResolver implements ModelResolver {
             if (byProvider.isEmpty()) {
                 throw new IllegalStateException("No models found for provider: " + providerRef);
             }
-            return byProvider.getFirst().id();
+            return defaultOrFirst(providerRef, byProvider);
         }
 
         var matches = catalog.listModels().stream()
@@ -174,12 +185,13 @@ public final class DefaultModelResolver implements ModelResolver {
                 || m.id().provider().equalsIgnoreCase(providerRef))
             .toList();
         if (matches.isEmpty() && providerRef == null) {
-            // Bare provider name (e.g. "google") — resolve to its first model.
+            // Bare provider name (e.g. "google") — resolve to its default model
+            // (pi defaultModelPerProvider; falls back to the first listed one).
             var byProvider = catalog.listModels().stream()
                 .filter(m -> m.id().provider().equalsIgnoreCase(nameRef))
                 .toList();
             if (!byProvider.isEmpty()) {
-                return byProvider.getFirst().id();
+                return defaultOrFirst(nameRef, byProvider);
             }
         }
         if (matches.isEmpty()) {
@@ -198,6 +210,21 @@ public final class DefaultModelResolver implements ModelResolver {
             return ModelId.of(effectiveProvider, nameRef);
         }
         return matches.getFirst().id();
+    }
+
+    /**
+     * pi {@code defaultModelPerProvider}（model-resolver.ts:16-58）：默认表命中且该 id
+     * 在目录中 ⇒ 返回它；否则取 provider 首条（表外 provider 如 ollama 的既有行为）。
+     */
+    private ModelId<?> defaultOrFirst(String provider, List<com.pijava.ai.catalog.ModelInfo> byProvider) {
+        var defaultId = DefaultModelIds.forProvider(provider);
+        if (defaultId.isPresent()) {
+            var hit = catalog.find(ModelId.of(provider, defaultId.get()));
+            if (hit.isPresent()) {
+                return hit.get().id();
+            }
+        }
+        return byProvider.getFirst().id();
     }
 
     /**

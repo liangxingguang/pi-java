@@ -1,5 +1,6 @@
 package com.pijava.ai.provider.builtin;
 
+import com.pijava.ai.provider.BuiltinModelCatalogs;
 import com.pijava.ai.provider.OpenAiCompatibleProvider;
 import com.pijava.ai.provider.Protocol;
 import com.pijava.ai.provider.ProviderConfig;
@@ -14,6 +15,6 @@ public final class ZaiProvider extends OpenAiCompatibleProvider {
         return ProviderConfig.single(
             "zai", "Z.AI", "https://api.z.ai/api/coding/paas/v4",
             "ZAI_API_KEY", Protocol.OPENAI_COMPLETIONS,
-            ModelData.zaiModels());
+            BuiltinModelCatalogs.catalog("zai"));
     }
 }

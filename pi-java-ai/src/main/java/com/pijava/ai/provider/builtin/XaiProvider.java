@@ -3,6 +3,7 @@ package com.pijava.ai.provider.builtin;
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.ChatApi;
 import com.pijava.ai.protocol.OpenAIResponsesApi;
+import com.pijava.ai.provider.BuiltinModelCatalogs;
 import com.pijava.ai.provider.ConfigurableProvider;
 import com.pijava.ai.provider.Protocol;
 import com.pijava.ai.provider.ProviderConfig;
@@ -25,7 +26,8 @@ public final class XaiProvider extends ConfigurableProvider {
         // pi 是单车道 provider ⇒ ProviderConfig.single（OpenAIProvider 是多车道，不同形）。
         return ProviderConfig.single(
             "xai", "xAI", "https://api.x.ai/v1",
-            "XAI_API_KEY", Protocol.OPENAI_RESPONSES, XaiModels.catalog());
+            "XAI_API_KEY", Protocol.OPENAI_RESPONSES,
+            BuiltinModelCatalogs.catalog("xai"));
     }
 
     @Override

@@ -13,7 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.ToolDefinition;
-import com.pijava.ai.catalog.BuiltinCatalog;
+import com.pijava.ai.provider.BuiltinModelCatalogs;
 import com.pijava.ai.catalog.CacheRetention;
 import com.pijava.ai.catalog.MaxTokensField;
 import com.pijava.ai.catalog.ModelCompat;
@@ -355,7 +355,7 @@ class AnthropicCacheControlWireTest {
         // ⚠️ 内置 opus-4-8 带着两个 mid-convo 标志（A7b 的目录标注）⇒ 前导系统消息里有
         // toolsAdded 时走**原生工具支**：断点在 initialTools 的末项上，占位符与迟到工具都不挂。
         // 这正是「手搓 compat 遮不住」的那一半 —— 本用例因此比简单形状强一档。
-        var builtIn = BuiltinCatalog.anthropicModels()
+        var builtIn = BuiltinModelCatalogs.catalog("anthropic")
             .find(ModelId.of("anthropic", "claude-opus-4-8")).orElseThrow();
 
         var body = body(builtIn, List.of(user("hi")), List.of(tool("a")),

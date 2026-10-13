@@ -13,8 +13,8 @@ import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.GrammarSampling;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.ToolDefinition;
-import com.pijava.ai.catalog.CatalogCompatRules;
 import com.pijava.ai.catalog.ModelInfo;
+import com.pijava.ai.provider.BuiltinModelCatalogs;
 import com.pijava.ai.model.PricingInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -245,7 +245,8 @@ class GrammarToolsWireTest {
             java.util.Set.of(com.pijava.ai.model.ModelCapability.TEXT),
             128_000, 16_384, false, PricingInfo.UNKNOWN, ThinkingLevelMap.empty(),
             Map.of(), Map.of(),
-            CatalogCompatRules.openaiResponses("openai", "gpt-5"));
+            BuiltinModelCatalogs.catalog("openai")
+                .find(ModelId.of("openai", "gpt-5")).orElseThrow().compat());
     }
 
     private static ModelInfo gateClosedModel() {

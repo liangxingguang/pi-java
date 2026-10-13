@@ -23,7 +23,7 @@ import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
-import com.pijava.ai.provider.builtin.OpenRouterModels;
+import com.pijava.ai.provider.BuiltinModelCatalogs;
 import com.pijava.ai.thinking.ThinkingLevelMap;
 
 import org.junit.jupiter.api.Test;
@@ -51,13 +51,13 @@ class CompletionsCacheControlWireTest {
 
     /** 内置 openrouter batch 模型（探测给 cacheControlFormat=anthropic、developer 角色、长缓存支持）。 */
     private static ModelInfo batchModel() {
-        return OpenRouterModels.catalog()
+        return BuiltinModelCatalogs.catalog("openrouter")
             .find(ModelId.of("openrouter", "anthropic/claude-fable-5:batch")).orElseThrow();
     }
 
     /** 对照：内置 openrouter 的 openai/* 模型（探测给 cacheControlFormat=null）。 */
     private static ModelInfo openAiModel() {
-        return OpenRouterModels.catalog()
+        return BuiltinModelCatalogs.catalog("openrouter")
             .find(ModelId.of("openrouter", "openai/gpt-5.1")).orElseThrow();
     }
 

@@ -20,8 +20,8 @@ import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.GrammarSampling;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.ToolDefinition;
-import com.pijava.ai.catalog.CatalogCompatRules;
 import com.pijava.ai.catalog.ModelInfo;
+import com.pijava.ai.provider.BuiltinModelCatalogs;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
@@ -164,7 +164,8 @@ class GrammarToolInboundTest {
             com.pijava.ai.model.PricingInfo.UNKNOWN,
             com.pijava.ai.thinking.ThinkingLevelMap.empty(),
             Map.of(), Map.of(),
-            CatalogCompatRules.openaiResponses("openai", "gpt-5"));
+            BuiltinModelCatalogs.catalog("openai")
+                .find(ModelId.of("openai", "gpt-5")).orElseThrow().compat());
     }
 
     /** One custom-tool-call chunk; each field is omitted when its argument is null. */

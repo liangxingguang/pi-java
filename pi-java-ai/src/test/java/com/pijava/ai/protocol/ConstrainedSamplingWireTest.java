@@ -14,8 +14,8 @@ import com.pijava.ai.api.JsonSchemaSampling;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.StrictMode;
 import com.pijava.ai.api.ToolDefinition;
-import com.pijava.ai.catalog.CatalogCompatRules;
 import com.pijava.ai.catalog.ModelInfo;
+import com.pijava.ai.provider.BuiltinModelCatalogs;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
@@ -75,7 +75,8 @@ class ConstrainedSamplingWireTest {
                 128_000, 16_384, false,
                 com.pijava.ai.model.PricingInfo.UNKNOWN,
                 com.pijava.ai.thinking.ThinkingLevelMap.empty(), Map.of(), Map.of(),
-                CatalogCompatRules.openaiResponses("openai", "gpt-5"));
+                BuiltinModelCatalogs.catalog("openai")
+                    .find(ModelId.of("openai", "gpt-5")).orElseThrow().compat());
             drain(api, request(model));
 
             var tool = MAPPER.readTree(server.body()).path("tools").get(0);
@@ -106,7 +107,8 @@ class ConstrainedSamplingWireTest {
                 200_000, 16_384, false,
                 com.pijava.ai.model.PricingInfo.UNKNOWN,
                 com.pijava.ai.thinking.ThinkingLevelMap.empty(), Map.of(), Map.of(),
-                CatalogCompatRules.anthropic("anthropic", "claude-fable-5"));
+                BuiltinModelCatalogs.catalog("anthropic")
+                    .find(ModelId.of("anthropic", "claude-fable-5")).orElseThrow().compat());
             drain(api, request(model));
 
             var tool = MAPPER.readTree(server.body()).path("tools").get(0);
@@ -182,7 +184,8 @@ class ConstrainedSamplingWireTest {
                 200_000, 16_384, false,
                 com.pijava.ai.model.PricingInfo.UNKNOWN,
                 com.pijava.ai.thinking.ThinkingLevelMap.empty(), Map.of(), Map.of(),
-                CatalogCompatRules.anthropic("anthropic", "claude-fable-5"));
+                BuiltinModelCatalogs.catalog("anthropic")
+                    .find(ModelId.of("anthropic", "claude-fable-5")).orElseThrow().compat());
             drain(api, request(model, preferTool));
 
             var tool = MAPPER.readTree(server.body()).path("tools").get(0);

@@ -13,7 +13,7 @@ import com.anthropic.models.messages.MessageParam;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
-import com.pijava.ai.catalog.BuiltinCatalog;
+import com.pijava.ai.provider.BuiltinModelCatalogs;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>与 {@code AnthropicThinkingWireTest}／{@code AnthropicMessagesApiBuildParamsTest} 的分工：
  * 那两份用手搓的 {@code ModelInfo}（显式 compat）钉**分支**，本份用
- * {@link BuiltinCatalog#anthropicModels()} 的**真**模型钉**可达性** —— 包 A7 之前
+ * {@code BuiltinModelCatalogs.catalog("anthropic")} 的**真**模型钉**可达性** —— 包 A7 之前
  * 内置目录全是 {@code ModelCompat.NONE}，故这几条在旧代码上必红（{@code 原 docs/53 §3 F3}
  * 的 D1/D2/D4）。</p>
  */
@@ -46,7 +46,7 @@ class AnthropicCompatWireTest {
     }
 
     private static ModelInfo builtIn(String modelName) {
-        return BuiltinCatalog.anthropicModels()
+        return BuiltinModelCatalogs.catalog("anthropic")
             .find(ModelId.of("anthropic", modelName)).orElseThrow();
     }
 

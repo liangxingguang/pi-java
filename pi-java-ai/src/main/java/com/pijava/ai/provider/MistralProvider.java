@@ -2,7 +2,6 @@ package com.pijava.ai.provider;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.ChatApi;
-import com.pijava.ai.catalog.BuiltinCatalog;
 import com.pijava.ai.protocol.MistralConversationsApi;
 
 /**
@@ -15,7 +14,7 @@ public final class MistralProvider extends ConfigurableProvider {
         return ProviderConfig.single(
             "mistral", "Mistral", "https://api.mistral.ai/v1",
             "MISTRAL_API_KEY", Protocol.MISTRAL_CONVERSATIONS,
-            BuiltinCatalog.mistralModels());
+            BuiltinModelCatalogs.catalog("mistral"));
     }
 
     @Override

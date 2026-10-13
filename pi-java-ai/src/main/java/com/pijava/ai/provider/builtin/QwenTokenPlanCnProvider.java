@@ -1,5 +1,6 @@
 package com.pijava.ai.provider.builtin;
 
+import com.pijava.ai.provider.BuiltinModelCatalogs;
 import com.pijava.ai.provider.OpenAiCompatibleProvider;
 import com.pijava.ai.provider.Protocol;
 import com.pijava.ai.provider.ProviderConfig;
@@ -17,6 +18,6 @@ public final class QwenTokenPlanCnProvider extends OpenAiCompatibleProvider {
         return ProviderConfig.single(
             "qwen-token-plan-cn", "Qwen Token Plan CN", BASE_URL,
             "QWEN_TOKEN_PLAN_CN_API_KEY", Protocol.OPENAI_COMPLETIONS,
-            ModelData.qwenTokenPlanCnModels());
+            BuiltinModelCatalogs.catalog("qwen-token-plan-cn"));
     }
 }

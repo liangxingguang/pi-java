@@ -33,7 +33,7 @@ class AnthropicCacheControlTest {
 
     /** 内置 anthropic 目录里的真模型（经 {@code forAnthropic} 解析出两个 {@code ?? true}）。 */
     private static ModelInfo builtIn(String id) {
-        return BuiltinCatalog.anthropicModels()
+        return com.pijava.ai.provider.BuiltinModelCatalogs.catalog("anthropic")
             .find(ModelId.of("anthropic", id)).orElseThrow();
     }
 

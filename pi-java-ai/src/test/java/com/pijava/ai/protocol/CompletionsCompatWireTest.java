@@ -7,8 +7,8 @@ import java.util.Optional;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
 
 import com.pijava.ai.api.StreamRequest;
-import com.pijava.ai.catalog.BuiltinCatalog;
 import com.pijava.ai.catalog.MaxTokensField;
+import com.pijava.ai.provider.BuiltinModelCatalogs;
 import com.pijava.ai.catalog.ModelCatalog;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
@@ -49,7 +49,7 @@ class CompletionsCompatWireTest {
 
     @Test
     void theNativeDeepSeekModelUsesThePlainMaxTokensField() {
-        var model = builtIn(BuiltinCatalog.deepseekModels(), "deepseek", "deepseek-v4-pro");
+        var model = builtIn(BuiltinModelCatalogs.catalog("deepseek"), "deepseek", "deepseek-v4-pro");
 
         var params = build(model, "https://api.deepseek.com");
 
@@ -60,7 +60,7 @@ class CompletionsCompatWireTest {
     @Test
     void openAiKeepstheCompletionTokensField() {
         // 配对：同一个 maxTokens 在标准端点上仍走 OpenAI 自己的字段名。
-        var model = builtIn(BuiltinCatalog.openaiModels(), "openai", "gpt-5");
+        var model = builtIn(BuiltinModelCatalogs.catalog("openai"), "openai", "gpt-5");
 
         var params = build(model, "https://api.openai.com/v1");
 
@@ -71,7 +71,7 @@ class CompletionsCompatWireTest {
     @Test
     void anExplicitMaxTokensFieldWinsOverTheDetection() {
         // `explicit ?? detected`：显式写的值压过 deepseek 的探测。
-        var detected = builtIn(BuiltinCatalog.deepseekModels(), "deepseek", "deepseek-v4-pro");
+        var detected = builtIn(BuiltinModelCatalogs.catalog("deepseek"), "deepseek", "deepseek-v4-pro");
         var explicit = new ModelInfo(detected.id(), detected.displayName(),
             detected.capabilities(), detected.maxInputTokens(), detected.maxOutputTokens(),
             detected.deprecated(), detected.pricing(), detected.thinkingLevelMap(),
@@ -88,8 +88,8 @@ class CompletionsCompatWireTest {
 
     @Test
     void storeIsOmittedForNonStandardEndpointsAndExplicitlyFalseForStandardOnes() {
-        var deepseek = builtIn(BuiltinCatalog.deepseekModels(), "deepseek", "deepseek-v4-pro");
-        var openai = builtIn(BuiltinCatalog.openaiModels(), "openai", "gpt-5");
+        var deepseek = builtIn(BuiltinModelCatalogs.catalog("deepseek"), "deepseek", "deepseek-v4-pro");
+        var openai = builtIn(BuiltinModelCatalogs.catalog("openai"), "openai", "gpt-5");
 
         assertThat(build(deepseek, "https://api.deepseek.com").store()).isEmpty();
         // pi :832-834 —— 支持就发 `store: false`（显式退出服务端留存）。
@@ -98,8 +98,8 @@ class CompletionsCompatWireTest {
 
     @Test
     void theInstructionRoleFollowsTheModelAndTheEndpoint() {
-        var reasoning = builtIn(BuiltinCatalog.openaiModels(), "openai", "gpt-5");
-        var chat = builtIn(BuiltinCatalog.deepseekModels(), "deepseek", "deepseek-v4-flash");
+        var reasoning = builtIn(BuiltinModelCatalogs.catalog("openai"), "openai", "gpt-5");
+        var chat = builtIn(BuiltinModelCatalogs.catalog("deepseek"), "deepseek", "deepseek-flash");
 
         // pi :1225 —— 推理模型 ＋ 标准端点 ⇒ developer 角色。
         assertThat(instructionIsDeveloper(build(reasoning, "https://api.openai.com/v1"))).isTrue();

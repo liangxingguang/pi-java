@@ -1,5 +1,6 @@
 package com.pijava.ai.provider.builtin;
 
+import com.pijava.ai.provider.BuiltinModelCatalogs;
 import com.pijava.ai.provider.OpenAiCompatibleProvider;
 import com.pijava.ai.provider.Protocol;
 import com.pijava.ai.provider.ProviderConfig;
@@ -14,6 +15,6 @@ public final class XiaomiProvider extends OpenAiCompatibleProvider {
         return ProviderConfig.single(
             "xiaomi", "Xiaomi", "https://api.xiaomimimo.com/v1",
             "XIAOMI_API_KEY", Protocol.OPENAI_COMPLETIONS,
-            ModelData.xiaomiModels());
+            BuiltinModelCatalogs.catalog("xiaomi"));
     }
 }

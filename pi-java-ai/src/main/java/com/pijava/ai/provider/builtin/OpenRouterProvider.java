@@ -5,6 +5,7 @@ import com.pijava.ai.api.ChatApi;
 import com.pijava.ai.api.ProviderApi;
 import com.pijava.ai.protocol.AnthropicMessagesApi;
 import com.pijava.ai.protocol.OpenAICompletionsApi;
+import com.pijava.ai.provider.BuiltinModelCatalogs;
 import com.pijava.ai.provider.ConfigurableProvider;
 import com.pijava.ai.provider.Protocol;
 import com.pijava.ai.provider.ProviderConfig;
@@ -40,7 +41,7 @@ public final class OpenRouterProvider extends ConfigurableProvider {
             "openrouter", "OpenRouter", "https://openrouter.ai/api/v1",
             "OPENROUTER_API_KEY", Protocol.OPENAI_COMPLETIONS,
             Set.of(Protocol.OPENAI_COMPLETIONS, Protocol.ANTHROPIC_MESSAGES),
-            OpenRouterModels.catalog());
+            BuiltinModelCatalogs.catalog("openrouter"));
     }
 
     @Override

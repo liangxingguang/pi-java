@@ -1,6 +1,7 @@
 package com.pijava.ai.provider.builtin;
 
 import com.pijava.ai.provider.AnthropicCompatibleProvider;
+import com.pijava.ai.provider.BuiltinModelCatalogs;
 import com.pijava.ai.provider.Protocol;
 import com.pijava.ai.provider.ProviderConfig;
 
@@ -14,6 +15,6 @@ public final class MiniMaxCnProvider extends AnthropicCompatibleProvider {
         return ProviderConfig.single(
             "minimax-cn", "MiniMax CN", "https://api.minimaxi.com/anthropic",
             "MINIMAX_CN_API_KEY", Protocol.ANTHROPIC_MESSAGES,
-            ModelData.miniMaxCnModels());
+            BuiltinModelCatalogs.catalog("minimax-cn"));
     }
 }
