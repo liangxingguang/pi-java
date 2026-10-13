@@ -6,7 +6,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.pijava.ai.catalog.InputLimits;
 import com.pijava.ai.catalog.ModelInfo;
+import com.pijava.ai.catalog.PromptCacheLifetimes;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
@@ -152,9 +154,106 @@ public final class ModelJsonMerge {
         var headers = o.headers() != null
             ? mergeStringMaps(m.headers(), o.headers()) : m.headers();
 
+        // 批 3a（provider-composer.ts:190-204）：三字段覆盖合并。
+        // promptCache 键级；inputLimits 三层深合并；sptl 七档逐档 map 合并（falsy 档跳过）。
+        var promptCache = o.promptCache() != null
+            ? PromptCacheLifetimes.merge(m.promptCache(),
+                PromptCacheLifetimes.fromWire(o.promptCache()))
+            : m.promptCache();
+        var inputLimits = o.inputLimits() != null
+            ? mergeInputLimits(m.inputLimits(),
+                ModelsJsonConfig.inputLimitsFrom(o.inputLimits()))
+            : m.inputLimits();
+        var levelParams = mergeSamplingParamsByThinkingLevel(
+            m.samplingParamsByThinkingLevel(), o.samplingParamsByThinkingLevel());
+
         return rebuild(m, m.id(), displayName, capabilities, contextWindow, maxTokens,
-            pricing, levelMap, headers, samplingParams, compat, m.api(), m.baseUrl());
-        // R3：o.promptCache() 在 pi-java 无对应组件（CacheWarmer 未移植）⇒ 解析但忽略。
+            pricing, levelMap, headers, samplingParams, compat, m.api(), m.baseUrl(),
+            promptCache, inputLimits, levelParams);
+    }
+
+    /**
+     * inputLimits 三层深合并（pi {@code provider-composer.ts:144-162}）：
+     * 标量覆盖；{@code images} 再深一层；{@code images.resize} 再深一层。
+     */
+    private static InputLimits mergeInputLimits(InputLimits base, InputLimits override) {
+        if (override == null) {
+            return base;
+        }
+        if (base == null) {
+            return override;
+        }
+        var maxRequestBytes = override.maxRequestBytes() != null
+            ? override.maxRequestBytes() : base.maxRequestBytes();
+        var images = mergeImageLimits(base.images(), override.images());
+        if (maxRequestBytes == null && images == null) {
+            return null;
+        }
+        return new InputLimits(maxRequestBytes, images);
+    }
+
+    private static InputLimits.ImageLimits mergeImageLimits(InputLimits.ImageLimits base,
+                                                             InputLimits.ImageLimits override) {
+        if (override == null) {
+            return base;
+        }
+        if (base == null) {
+            return override;
+        }
+        var resize = mergeResize(base.resize(), override.resize());
+        var maxPerMessage = override.maxPerMessage() != null
+            ? override.maxPerMessage() : base.maxPerMessage();
+        var maxPerRequest = override.maxPerRequest() != null
+            ? override.maxPerRequest() : base.maxPerRequest();
+        if (resize == null && maxPerMessage == null && maxPerRequest == null) {
+            return null;
+        }
+        return new InputLimits.ImageLimits(resize, maxPerMessage, maxPerRequest);
+    }
+
+    private static InputLimits.ResizeOptions mergeResize(InputLimits.ResizeOptions base,
+                                                          InputLimits.ResizeOptions override) {
+        if (override == null) {
+            return base;
+        }
+        if (base == null) {
+            return override;
+        }
+        var maxWidth = override.maxWidth() != null ? override.maxWidth() : base.maxWidth();
+        var maxHeight = override.maxHeight() != null ? override.maxHeight() : base.maxHeight();
+        var maxBytes = override.maxBytes() != null ? override.maxBytes() : base.maxBytes();
+        var jpegQuality = override.jpegQuality() != null
+            ? override.jpegQuality() : base.jpegQuality();
+        if (maxWidth == null && maxHeight == null && maxBytes == null && jpegQuality == null) {
+            return null;
+        }
+        return new InputLimits.ResizeOptions(maxWidth, maxHeight, maxBytes, jpegQuality);
+    }
+
+    /**
+     * sptl 逐档 map 合并（pi {@code provider-composer.ts:164-180}）：override 缺席 ⇒ base；
+     * 每档 {@code {...base[level], ...override[level]}}，{@code null}/空档跳过（falsy 语义）；
+     * 未知档键忽略（与 thinkingLevelMap 同口径）。
+     */
+    private static Map<ModelThinkingLevel, Map<String, Object>> mergeSamplingParamsByThinkingLevel(
+            Map<ModelThinkingLevel, Map<String, Object>> base,
+            Map<String, Map<String, Object>> override) {
+        if (override == null || override.isEmpty()) {
+            return base;
+        }
+        var merged = new LinkedHashMap<>(base);
+        override.forEach((key, params) -> {
+            if (params == null || params.isEmpty()) {
+                return;
+            }
+            ModelThinkingLevel.parse(key).ifPresent(level -> {
+                var combined = new LinkedHashMap<>(
+                    merged.getOrDefault(level, Map.<String, Object>of()));
+                combined.putAll(params);
+                merged.put(level, Map.copyOf(combined));
+            });
+        });
+        return merged.isEmpty() ? Map.of() : Map.copyOf(merged);
     }
 
     /** cost 键级合并（pi {@code applyModelOverride:117-125}）。 */
@@ -192,7 +291,10 @@ public final class ModelJsonMerge {
                                          com.pijava.ai.catalog.ModelCompat compat) {
         return rebuild(m, m.id(), m.displayName(), m.capabilities(),
             m.maxInputTokens(), m.maxOutputTokens(), m.pricing(), m.thinkingLevelMap(),
-            headers, m.samplingParams(), compat, api, baseUrl);
+            headers, m.samplingParams(), compat, api, baseUrl,
+            // 批 3a：阶段重建只换 api/baseUrl/headers/compat，三新字段原样透传，
+            // 否则 Phase A/B/C 每过一道就把 promptCache/inputLimits/sptl 丢成缺席。
+            m.promptCache(), m.inputLimits(), m.samplingParamsByThinkingLevel());
     }
 
 
@@ -203,9 +305,13 @@ public final class ModelJsonMerge {
                                      Map<String, String> headers,
                                      Map<String, Object> samplingParams,
                                      com.pijava.ai.catalog.ModelCompat compat,
-                                     String api, String baseUrl) {
+                                     String api, String baseUrl,
+                                     PromptCacheLifetimes promptCache,
+                                     InputLimits inputLimits,
+                                     Map<ModelThinkingLevel, Map<String, Object>> levelParams) {
         return new ModelInfo(id, displayName, capabilities, contextWindow, maxTokens,
-            m.deprecated(), pricing, levelMap, headers, samplingParams, compat, api, baseUrl);
+            m.deprecated(), pricing, levelMap, headers, samplingParams, compat, api, baseUrl,
+            promptCache, inputLimits, levelParams);
     }
 
     private static Map<String, String> mergeStringMaps(Map<String, String> base,

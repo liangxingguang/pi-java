@@ -18,6 +18,7 @@ import com.pijava.ai.catalog.BuiltinCatalog;
 import com.pijava.ai.catalog.ModelCatalog;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
+import com.pijava.ai.catalog.PromptCacheLifetimes;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.provider.ModelsJsonSchema.ModelDef;
@@ -201,7 +202,12 @@ public final class BuiltinModelCatalogs {
             ModelsJsonConfig.thinkingLevelMapOf(def.thinkingLevelMap()),
             headers, samplingParams, compat,
             ModelsJsonConfig.modelApiOf(providerId, def.id(), def.api()),
-            def.baseUrl());
+            def.baseUrl(),
+            // 批 3a（#86/#90/#91）：生成分片三字段与 models.json 同 schema、同转换。
+            PromptCacheLifetimes.fromWire(def.promptCache()),
+            ModelsJsonConfig.inputLimitsFrom(def.inputLimits()),
+            ModelsJsonConfig.samplingParamsByThinkingLevelOf(
+                def.samplingParamsByThinkingLevel()));
     }
 
     private static InputStream openResource(String fileName) {

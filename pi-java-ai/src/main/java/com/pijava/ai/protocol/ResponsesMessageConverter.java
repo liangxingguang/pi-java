@@ -194,7 +194,13 @@ final class ResponsesMessageConverter {
 
         applyCacheRetention(builder, ropts, compat);
         // 包 A-10：模型级采样参数（pi `openai-responses.ts:362-365`，**body 的最后一个变更**）。
-        SamplingParamsWriter.applyToResponses(builder, request.model(), ropts.samplingParams());
+        // 批 3a（#91）：级别与上面 reasoning 块同源 —— extra 显式通道优先，否则循环级
+        // clampedReasoningEffort（request.reasoning），皆缺席 ⇒ off（pi `options?.reasoning ?? "off"`）。
+        var samplingLevel = ropts.reasoningEffort() != null
+            ? ModelThinkingLevel.of(ropts.reasoningEffort())
+            : level.map(ModelThinkingLevel::of).orElse(ModelThinkingLevel.off());
+        SamplingParamsWriter.applyToResponses(builder, request.model(),
+            samplingLevel, ropts.samplingParams());
         // 包 B103：会话亲和头（pi openai-responses.ts:258-267）。
         affinityHeaders.forEach(builder::putAdditionalHeader);
         return builder.build();

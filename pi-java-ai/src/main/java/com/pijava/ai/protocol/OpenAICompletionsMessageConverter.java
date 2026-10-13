@@ -305,9 +305,14 @@ final class OpenAICompletionsMessageConverter {
         }
         // B98（pi :992-1001）：Vercel AI Gateway 路由偏好（openRouter 之后、sampling 之前）。
         CompletionsCompatWire.applyVercelGatewayRouting(builder, compat);
-        // 包 A-10＋B125：模型级采样参数打底、per-request 同名压过（pi `:996-999`，
-        // **body 的最后一个变更** ⇒ 同名键压过具名字段）。
-        SamplingParamsWriter.applyToCompletions(builder, request.model(), requestSamplingParams);
+        // 包 A-10＋B125＋批 3a（#91）：模型级 → thinking 档（clamp 后）→ per-request
+        // 三层采样参数，后者同名压过（pi simple-options.ts:24-33；**body 的最后一个变更**）。
+        // 级别缺省 ⇒ off（pi `options?.reasoning ?? "off"`）。
+        var samplingLevel = request.reasoning()
+            .<com.pijava.ai.thinking.ModelThinkingLevel>map(com.pijava.ai.thinking.ModelThinkingLevel::of)
+            .orElse(com.pijava.ai.thinking.ModelThinkingLevel.off());
+        SamplingParamsWriter.applyToCompletions(builder, request.model(),
+            samplingLevel, requestSamplingParams);
 
         // B103（docs/52，pi :766-826）：会话亲和头（params 级 additionalHeader 经
         // streaming 透传，与 responses 同一路径；旧 B140「不透传」结论已翻案）

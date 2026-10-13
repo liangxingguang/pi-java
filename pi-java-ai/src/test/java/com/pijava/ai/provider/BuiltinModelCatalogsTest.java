@@ -121,6 +121,20 @@ class BuiltinModelCatalogsTest {
             .contains("xhigh");
         assertThat(tlm.mapped(ModelThinkingLevel.parse("max").orElseThrow()))
             .contains("max");
+
+        // 批 3a（#86/#90）：promptCache 两档寿命、inputLimits 三层值。
+        assertThat(fable.promptCache().shortSeconds()).isEqualTo(300);
+        assertThat(fable.promptCache().longSeconds()).isEqualTo(3600);
+        assertThat(fable.inputLimits().maxRequestBytes()).isEqualTo(33_554_432);
+        assertThat(fable.inputLimits().images().maxPerRequest()).isEqualTo(600);
+        assertThat(fable.inputLimits().images().maxPerMessage()).isNull();
+        assertThat(fable.inputLimits().images().resize().maxWidth()).isEqualTo(2000);
+        assertThat(fable.inputLimits().images().resize().maxHeight()).isEqualTo(2000);
+        assertThat(fable.inputLimits().images().resize().maxBytes()).isEqualTo(4_718_592);
+        assertThat(fable.inputLimits().images().resize().jpegQuality()).isEqualTo(80);
+        // 生成目录对 sptl 零生产者（#91 只来自 models.json）。
+        assertThat(fable.samplingParamsByThinkingLevel()).isEmpty();
+        assertThat(fable.samplingParams()).isEmpty();
     }
 
     @Test

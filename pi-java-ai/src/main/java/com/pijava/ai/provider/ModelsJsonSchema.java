@@ -53,7 +53,11 @@ public final class ModelsJsonSchema {
         @JsonProperty("maxTokens") Integer maxTokens,
         @JsonProperty("samplingParams") Map<String, Object> samplingParams,
         @JsonProperty("headers") Map<String, String> headers,
-        @JsonProperty("compat") CompatDef compat
+        @JsonProperty("compat") CompatDef compat,
+        // 批 3a（provider-composer.ts applyModelOverride:190-204）：
+        @JsonProperty("inputLimits") InputLimitsDef inputLimits,
+        @JsonProperty("samplingParamsByThinkingLevel")
+            Map<String, Map<String, Object>> samplingParamsByThinkingLevel
     ) {}
 
     /** One model definition. */
@@ -71,7 +75,12 @@ public final class ModelsJsonSchema {
         @JsonProperty("headers") Map<String, String> headers,
         @JsonProperty("samplingParams") Map<String, Object> samplingParams,
         @JsonProperty("compat") CompatDef compat,
-        @JsonProperty("thinkingLevelMap") Map<String, String> thinkingLevelMap
+        @JsonProperty("thinkingLevelMap") Map<String, String> thinkingLevelMap,
+        // 批 3a（#86/#90/#91，model-config.ts:40-64 同一 schema 件）：
+        @JsonProperty("promptCache") Map<String, Double> promptCache,
+        @JsonProperty("inputLimits") InputLimitsDef inputLimits,
+        @JsonProperty("samplingParamsByThinkingLevel")
+            Map<String, Map<String, Object>> samplingParamsByThinkingLevel
     ) {}
 
     /**
@@ -271,6 +280,34 @@ public final class ModelsJsonSchema {
             @JsonProperty("cost") Cost cost
         ) {}
     }
+
+    /**
+     * pi {@code ModelInputLimitsSchema}（model-schema.ts:47-79）的边界 DTO。
+     * 与领域类型 {@link com.pijava.ai.catalog.InputLimits} 分开：边界宽松（全 Integer 可空、
+     * ignoreUnknown），转换在 {@link ModelsJsonConfig}。
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record InputLimitsDef(
+        @JsonProperty("maxRequestBytes") Integer maxRequestBytes,
+        @JsonProperty("images") ImageLimitsDef images
+    ) {}
+
+    /** pi {@code ModelImageInputLimits}。 */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record ImageLimitsDef(
+        @JsonProperty("resize") ResizeDef resize,
+        @JsonProperty("maxPerMessage") Integer maxPerMessage,
+        @JsonProperty("maxPerRequest") Integer maxPerRequest
+    ) {}
+
+    /** pi {@code modelImageResizeOptions}；{@code maxBytes} 计 base64 字节、{@code jpegQuality} 1..100。 */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record ResizeDef(
+        @JsonProperty("maxWidth") Integer maxWidth,
+        @JsonProperty("maxHeight") Integer maxHeight,
+        @JsonProperty("maxBytes") Integer maxBytes,
+        @JsonProperty("jpegQuality") Integer jpegQuality
+    ) {}
 
     /**
      * Per-million-token pricing (pi {@code ModelCostSchema},

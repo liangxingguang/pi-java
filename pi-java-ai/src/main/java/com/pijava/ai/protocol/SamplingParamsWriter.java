@@ -10,6 +10,8 @@ import com.openai.models.responses.ResponseCreateParams;
 
 import com.pijava.ai.api.SimpleOptions;
 import com.pijava.ai.catalog.ModelInfo;
+import com.pijava.ai.catalog.ModelThinkingLevels;
+import com.pijava.ai.thinking.ModelThinkingLevel;
 
 /**
  * 包 A-10：把模型级采样参数写进 OpenAI 兼容车道的请求体。
@@ -37,20 +39,31 @@ import com.pijava.ai.catalog.ModelInfo;
  * 要守 —— 但两个 builder 类型不同 ⇒ 路由代码仍是两段（M6 实测：只变异
  * {@code applyToCompletions} ⇒ 恰 1 红；两段同时变异 ⇒ 恰 2 红，{@code 原 docs/57 §8.2}）。</p>
  *
- * <p>两层来源（B125 已于批1接通 per-request 半）：模型级 {@code model.samplingParams} 打底，
- * {@code ApiOptions.extra["samplingParams"]} 的请求值<b>同名压过</b>模型值
- * （pi {@code simple-options.ts:25-33} 的 {@code {...model, ...request}}）。
- * thinking-level 层（#91）随批 3。</p>
+ * <p>三层来源（#91 批 3a 接通 thinking-level 半）：模型级 {@code model.samplingParams} 打底，
+ * {@code model.samplingParamsByThinkingLevel[clamp(level)]} 居中，
+ * {@code ApiOptions.extra["samplingParams"]} 的请求值<b>同名压过</b>前两层
+ * （pi {@code simple-options.ts:24-33}：
+ * {@code {...model.samplingParams, ...thinkingLevelParams, ...requestParams}}）。
+ * 请求级别缺省 {@code reasoning} 时按 {@code "off"} 取档（pi {@code options?.reasoning ?? "off"}）。</p>
  */
 final class SamplingParamsWriter {
 
     private SamplingParamsWriter() {}
 
-    /** 两层合并：模型值打底、请求值同名覆盖；两源皆空 ⇒ null（不写任何键）。 */
+    /** 三层合并：模型 → clamp 后思考档 → 请求，后者同名覆盖；三源皆空 ⇒ 空表（不写任何键）。 */
     private static LinkedHashMap<String, Object> merged(ModelInfo model,
+                                                        ModelThinkingLevel effectiveLevel,
                                                         Map<String, Object> requestParams) {
         var merged = new LinkedHashMap<String, Object>();
         SimpleOptions.samplingParamsOf(model).ifPresent(merged::putAll);
+        if (model != null) {
+            // pi resolveSamplingParams：先 clampThinkingLevel 再取档（models.ts:1235-1256）。
+            var byLevel = model.samplingParamsByThinkingLevel()
+                .get(ModelThinkingLevels.clamp(model, effectiveLevel));
+            if (byLevel != null) {
+                merged.putAll(byLevel);
+            }
+        }
         if (requestParams != null) {
             merged.putAll(requestParams);
         }
@@ -59,8 +72,9 @@ final class SamplingParamsWriter {
 
     /** pi {@code openai-completions.ts:996-999}。 */
     static void applyToCompletions(ChatCompletionCreateParams.Builder builder, ModelInfo model,
+                                   ModelThinkingLevel effectiveLevel,
                                    Map<String, Object> requestParams) {
-        var params = merged(model, requestParams);
+        var params = merged(model, effectiveLevel, requestParams);
         if (params.isEmpty()) {
             return;
         }
@@ -85,8 +99,9 @@ final class SamplingParamsWriter {
 
     /** pi {@code openai-responses.ts:362-365}（azure 的副本同上，java 两处共用本方法）。 */
     static void applyToResponses(ResponseCreateParams.Builder builder, ModelInfo model,
+                                  ModelThinkingLevel effectiveLevel,
                                   Map<String, Object> requestParams) {
-        var params = merged(model, requestParams);
+        var params = merged(model, effectiveLevel, requestParams);
         if (params.isEmpty()) {
             return;
         }

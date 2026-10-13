@@ -17,8 +17,10 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 
 import com.pijava.ai.catalog.BuiltinCatalog;
+import com.pijava.ai.catalog.InputLimits;
 import com.pijava.ai.catalog.ModelCatalog;
 import com.pijava.ai.catalog.ModelInfo;
+import com.pijava.ai.catalog.PromptCacheLifetimes;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
@@ -231,7 +233,69 @@ public final class ModelsJsonConfig {
             // null（null ⇒ 合并器可再继承被替换模型的 api，R1）。
             modelApiOf(providerId, model.id(),
                 nonBlank(model.api()) ? model.api() : def.api()),
-            effectiveBaseUrl);
+            effectiveBaseUrl,
+            // 批 3a（#86/#90/#91）：modelFromJson 的整值语义，三字段 models[] 与
+            // npm 生成分片同源同 schema（provider-composer.ts:239-245）。
+            PromptCacheLifetimes.fromWire(model.promptCache()),
+            inputLimitsFrom(model.inputLimits()),
+            samplingParamsByThinkingLevelOf(model.samplingParamsByThinkingLevel()));
+    }
+
+    /**
+     * models.json/npm 数据的 {@code inputLimits} → 领域类型（model-schema.ts:47-79）。
+     * 任一层字段全 {@code null} ⇒ 该层不造空壳；整值缺席 ⇒ {@code null}。包可见供
+     * {@link BuiltinModelCatalogs} 复用。
+     */
+    static InputLimits inputLimitsFrom(ModelsJsonSchema.InputLimitsDef def) {
+        if (def == null) {
+            return null;
+        }
+        var images = imageLimitsFrom(def.images());
+        if (def.maxRequestBytes() == null && images == null) {
+            return null;
+        }
+        return new InputLimits(def.maxRequestBytes(), images);
+    }
+
+    private static InputLimits.ImageLimits imageLimitsFrom(ModelsJsonSchema.ImageLimitsDef def) {
+        if (def == null) {
+            return null;
+        }
+        var resize = resizeOptionsFrom(def.resize());
+        if (resize == null && def.maxPerMessage() == null && def.maxPerRequest() == null) {
+            return null;
+        }
+        return new InputLimits.ImageLimits(resize, def.maxPerMessage(), def.maxPerRequest());
+    }
+
+    private static InputLimits.ResizeOptions resizeOptionsFrom(ModelsJsonSchema.ResizeDef def) {
+        if (def == null
+                || (def.maxWidth() == null && def.maxHeight() == null
+                    && def.maxBytes() == null && def.jpegQuality() == null)) {
+            return null;
+        }
+        return new InputLimits.ResizeOptions(def.maxWidth(), def.maxHeight(),
+            def.maxBytes(), def.jpegQuality());
+    }
+
+    /**
+     * models.json/npm 数据的 {@code samplingParamsByThinkingLevel} → 七档闭集表。
+     * 未知档忽略（与 {@link #thinkingLevelMapOf} 同口径）；{@code null}/空值档跳过
+     * （≙ pi provider-composer.ts 合并时对 falsy 档跳过）。包可见供
+     * {@link BuiltinModelCatalogs} 与 {@link ModelJsonMerge} 复用。
+     */
+    static Map<ModelThinkingLevel, Map<String, Object>> samplingParamsByThinkingLevelOf(
+            Map<String, Map<String, Object>> def) {
+        if (def == null || def.isEmpty()) {
+            return Map.of();
+        }
+        var out = new LinkedHashMap<ModelThinkingLevel, Map<String, Object>>();
+        def.forEach((key, params) -> ModelThinkingLevel.parse(key).ifPresent(level -> {
+            if (params != null && !params.isEmpty()) {
+                out.put(level, Map.copyOf(params));
+            }
+        }));
+        return out.isEmpty() ? Map.of() : Map.copyOf(out);
     }
 
     /**

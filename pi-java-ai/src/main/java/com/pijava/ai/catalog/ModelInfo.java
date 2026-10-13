@@ -1,11 +1,13 @@
 package com.pijava.ai.catalog;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
+import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.ai.thinking.ThinkingLevelMap;
 
 /**
@@ -34,6 +36,10 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
  * @param baseUrl           pi {@code Model.baseUrl}：该模型请求实际打到的端点（D-P1，
  *                          {@code 原 docs/65}）。{@code null} ≙ 沿用车道/provider 默认；
  *                          三源 {@code model.baseUrl ?? provider.baseUrl ?? 内置}（B136 结案）
+ * @param promptCache       pi {@code Model.promptCache}：两档缓存寿命秒数（批 3a，#86）；{@code null} 缺席
+ * @param inputLimits       pi {@code Model.inputLimits}：请求字节/图片张数/缩放参数（批 3a，#90）；{@code null} 缺席
+ * @param samplingParamsByThinkingLevel pi {@code Model.samplingParamsByThinkingLevel}：按思考档叠加的
+ *                          采样参数表（批 3a，#91）；请求期经 clamp 后取档、三源合并
  */
 public record ModelInfo(
     ModelId<?> id,
@@ -48,7 +54,10 @@ public record ModelInfo(
     Map<String, Object> samplingParams,
     ModelCompat compat,
     String api,
-    String baseUrl
+    String baseUrl,
+    PromptCacheLifetimes promptCache,
+    InputLimits inputLimits,
+    Map<ModelThinkingLevel, Map<String, Object>> samplingParamsByThinkingLevel
 ) {
     /** Compact constructor that defensively copies capabilities and defaults a null thinking map. */
     public ModelInfo {
@@ -58,12 +67,52 @@ public record ModelInfo(
         }
         headers = Map.copyOf(headers);
         samplingParams = Map.copyOf(samplingParams);
+        // 深拷贝一层：外层档表不可变、每档的参数表也不可变（边界转换已滤掉 null 值档）。
+        samplingParamsByThinkingLevel = normalizeLevelParams(samplingParamsByThinkingLevel);
         if (compat == null) {
             compat = ModelCompat.NONE;
         }
         // 空串归一成缺席（pi 的 `undefined`；models.json 写 "api": "" 不算「选了一条车道」）。
         api = api == null || api.isBlank() ? null : api;
         baseUrl = baseUrl == null || baseUrl.isBlank() ? null : baseUrl;
+    }
+
+    private static Map<ModelThinkingLevel, Map<String, Object>> normalizeLevelParams(
+            Map<ModelThinkingLevel, Map<String, Object>> raw) {
+        if (raw == null || raw.isEmpty()) {
+            return Map.of();
+        }
+        var copy = new LinkedHashMap<ModelThinkingLevel, Map<String, Object>>();
+        raw.forEach((level, params) -> {
+            if (level != null && params != null) {
+                copy.put(level, Map.copyOf(params));
+            }
+        });
+        return Map.copyOf(copy);
+    }
+
+    /**
+     * 十三参便捷构造（批 3a 加 promptCache/inputLimits/sptl 之前的规范构造）：
+     * 三新字段缺席 ≙ {@code null}/{@code null}/空表。旧调用点**零改签**（同 A-01/A-09/A-10 手法）。
+     */
+    public ModelInfo(
+        ModelId<?> id,
+        String displayName,
+        Set<ModelCapability> capabilities,
+        int maxInputTokens,
+        int maxOutputTokens,
+        boolean deprecated,
+        PricingInfo pricing,
+        ThinkingLevelMap thinkingLevelMap,
+        Map<String, String> headers,
+        Map<String, Object> samplingParams,
+        ModelCompat compat,
+        String api,
+        String baseUrl
+    ) {
+        this(id, displayName, capabilities, maxInputTokens, maxOutputTokens, deprecated,
+             pricing, thinkingLevelMap, headers, samplingParams, compat, api, baseUrl,
+             null, null, Map.of());
     }
 
     /**

@@ -16,6 +16,8 @@ import com.pijava.ai.model.PricingInfo;
 import com.pijava.ai.provider.ModelsJsonSchema.ModelDef;
 import com.pijava.ai.provider.ModelsJsonSchema.ModelOverrideDef;
 import com.pijava.ai.provider.ModelsJsonSchema.ProviderDef;
+import com.pijava.ai.thinking.ModelThinkingLevel;
+import com.pijava.ai.thinking.ThinkingLevel;
 import com.pijava.ai.thinking.ThinkingLevelMap;
 
 /**
@@ -43,7 +45,7 @@ class ModelJsonMergeTest {
     private static ModelDef modelDef(String id, String api, String baseUrl,
                                      Map<String, String> headers) {
         return new ModelDef(id, null, api, baseUrl, null, null, null, null, null,
-            headers, null, null, null);
+            headers, null, null, null, null, null, null);
     }
 
     // ── provider 级覆盖 ─────────────────────────────────────────────
@@ -100,7 +102,8 @@ class ModelJsonMergeTest {
     void headersMergeBaseOverrideModelInOrder() {
         var override = new LinkedHashMap<String, ModelOverrideDef>();
         override.put("gpt-a", new ModelOverrideDef(null, null, null, null, null, null,
-            null, null, null, Map.of("X-Override", "o", "X-Shared", "from-override"), null));
+            null, null, null, Map.of("X-Override", "o", "X-Shared", "from-override"), null,
+            null, null));
         var merged = ModelJsonMerge.merge("openai",
             List.of(base("gpt-a", null, Map.of("X-Base", "b", "X-Shared", "from-base"))),
             cfg(null, null,
@@ -132,7 +135,7 @@ class ModelJsonMergeTest {
     void modelOverridesChangeOnlyNamedFields() {
         var override = new LinkedHashMap<String, ModelOverrideDef>();
         override.put("gpt-a", new ModelOverrideDef(null, null, null, null, null, null,
-            200_000, null, null, null, null));
+            200_000, null, null, null, null, null, null));
         var merged = ModelJsonMerge.merge("openai",
             List.of(base("gpt-a"), base("gpt-b")),
             cfg(null, null, null, null, override));
@@ -161,6 +164,38 @@ class ModelJsonMergeTest {
                 List.of(modelDef("gpt-c", null, null, null)),
                 null, null));
         assertThat(viaProvider.get(0).api()).isEqualTo("openai-responses");
+    }
+
+    // ── 批 3a：samplingParamsByThinkingLevel 逐档合并（#91）────────────
+
+    @Test
+    void overrideMergesSamplingParamsPerThinkingLevel() {
+        // base：high 档 {a:0,b:2}；override：high 档 {a:1,c:3} ⇒ 同档键级合并，
+        // base 独有键存活、override 同键赢；未提的档原样保留。
+        var byLevel = new LinkedHashMap<ModelThinkingLevel, Map<String, Object>>();
+        byLevel.put(ModelThinkingLevel.off(), Map.of("offOnly", true));
+        byLevel.put(ModelThinkingLevel.of(new ThinkingLevel.High()),
+            new LinkedHashMap<>(Map.of("a", 0, "b", 2)));
+        var withLevels = new ModelInfo(base("gpt-a", null, Map.of()).id(),
+            "gpt-a", java.util.Set.of(), 100_000, 16_384, false, PricingInfo.UNKNOWN,
+            ThinkingLevelMap.empty(), Map.of(), Map.of(), ModelCompat.NONE, null, null,
+            null, null, byLevel);
+
+        var rawOverride = new LinkedHashMap<String, Map<String, Object>>();
+        rawOverride.put("high", Map.of("a", 1, "c", 3));
+        rawOverride.put("ultra", Map.of("ignored", true));
+        var overrides = new LinkedHashMap<String, ModelOverrideDef>();
+        overrides.put("gpt-a", new ModelOverrideDef(null, null, null, null, null, null,
+            null, null, null, null, null, null, rawOverride));
+
+        var merged = ModelJsonMerge.merge("openai", List.of(withLevels),
+            cfg(null, null, null, null, overrides)).getFirst()
+            .samplingParamsByThinkingLevel();
+
+        var high = merged.get(ModelThinkingLevel.of(new ThinkingLevel.High()));
+        assertThat(high).containsEntry("a", 1).containsEntry("b", 2).containsEntry("c", 3);
+        assertThat(merged).containsKey(ModelThinkingLevel.off());
+        assertThat(merged).hasSize(2);
     }
 
     // ── 校验 ────────────────────────────────────────────────────────
