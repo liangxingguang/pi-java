@@ -116,11 +116,12 @@ public final class DefaultModelResolver implements ModelResolver {
     /**
      * Resolve a CLI model pattern to a concrete model.
      *
-     * <p>Phase 3: supports {@code "provider/model"}, bare {@code "model"}, and
-     * an optional {@code ":thinking"} suffix (e.g. {@code "claude-sonnet:high"})
-     * which is parsed off and ignored here — the thinking level is applied by
-     * the CLI layer via {@code --thinking}. A bare provider name resolves to
-     * the provider's first listed model.</p>
+     * <p>批 3b 起匹配核委托 {@link ModelPatterns}（pi model-resolver.ts）：精确引用
+     * （{@code provider/id}→provider 限定→裸 id，唯一性裁决）→ id/显示名子串 →
+     * alias 优先、dated 降序；合法 {@code ":level"} 后缀照切，<b>非法后缀留在
+     * 自定义 id 里</b>（CLI 严格模式，pi 测试「invalid thinking suffix on custom
+     * model is treated as part of model id」）。裸 provider 名仍走 Java 既有的
+     * 默认模型支路（pi 无此支路，{@link #defaultOrFirst}）。</p>
      *
      * @param pattern model pattern or ID (may be null → default provider)
      * @return the resolved model ID
@@ -146,31 +147,27 @@ public final class DefaultModelResolver implements ModelResolver {
             return resolve(Set.of(ModelCapability.TEXT), preferred);
         }
         var trimmed = pattern.trim();
-        // 包 A-02（pi parseModelPattern:209-216）：**精确匹配先行** —— OpenRouter 的
-        // ":batch"/":exacto" 一族 id 自带冒号，先切 thinking 后缀会把它们静默解析成
-        // 另一个模型（另一条车道、另一个价）。全串不中才走下面的冒号切分。
-        var exact = catalog.listModels().stream()
-            .filter(m -> matchesPattern(m, trimmed))
-            .map(m -> m.id())
-            .findFirst();
-        if (exact.isPresent()) {
-            return exact.get();
-        }
-        var colon = trimmed.lastIndexOf(':');
-        var base = colon > 0 ? trimmed.substring(0, colon) : trimmed;
+        var available = catalog.listModels();
 
-        String provider = null;
-        String name = base;
-        var slash = base.indexOf('/');
-        if (slash > 0) {
-            provider = base.substring(0, slash);
-            name = base.substring(slash + 1);
+        // Java 既有支路（pi resolveCliModel 无）：整串是裸 provider 名（可带一个
+        // 合法 :level 后缀，如 "google:high"）→ 该 provider 的默认模型/首条。
+        // 必须排在子串核之前：裸 "anthropic" 会子串命中 openrouter/anthropic/* 模型。
+        var withoutLevel = stripValidLevelSuffix(trimmed);
+        if (withoutLevel.indexOf('/') < 0) {
+            var byProvider = available.stream()
+                .filter(m -> m.id().provider().equalsIgnoreCase(withoutLevel))
+                .toList();
+            if (!byProvider.isEmpty()) {
+                return defaultOrFirst(withoutLevel, byProvider);
+            }
         }
-        final String providerRef = provider;
-        final String nameRef = name;
 
-        if (nameRef.isEmpty()) {
-            var byProvider = catalog.listModels().stream()
+        // Java 既有支路（pi 无）："provider/" → provider 默认模型；provider 下无模型
+        // 时抛错（保留既有形状）。同样排在子串核之前。
+        var firstSlash = withoutLevel.indexOf('/');
+        if (firstSlash >= 0 && withoutLevel.substring(firstSlash + 1).isEmpty()) {
+            var providerRef = withoutLevel.substring(0, firstSlash);
+            var byProvider = available.stream()
                 .filter(m -> providerRef.equalsIgnoreCase(m.id().provider()))
                 .toList();
             if (byProvider.isEmpty()) {
@@ -179,37 +176,45 @@ public final class DefaultModelResolver implements ModelResolver {
             return defaultOrFirst(providerRef, byProvider);
         }
 
-        var matches = catalog.listModels().stream()
-            .filter(m -> m.id().modelName().equalsIgnoreCase(nameRef))
-            .filter(m -> providerRef == null
-                || m.id().provider().equalsIgnoreCase(providerRef))
-            .toList();
-        if (matches.isEmpty() && providerRef == null) {
-            // Bare provider name (e.g. "google") — resolve to its default model
-            // (pi defaultModelPerProvider; falls back to the first listed one).
-            var byProvider = catalog.listModels().stream()
-                .filter(m -> m.id().provider().equalsIgnoreCase(nameRef))
-                .toList();
-            if (!byProvider.isEmpty()) {
-                return defaultOrFirst(nameRef, byProvider);
-            }
+        // pi 匹配核（CLI 严格模式：全串先试，保护 openrouter :batch/:exacto 冒号 id；
+        // 非法 :后缀不切，整串留作下面的自定义 id 兜底）。
+        var parsed = ModelPatterns.parse(trimmed, available, true);
+        if (parsed.model().isPresent()) {
+            return parsed.model().get().id();
         }
-        if (matches.isEmpty()) {
-            // Not in the builtin catalog: accept an arbitrary model ID so users
-            // can use any model their provider's API supports. The catalog only
-            // provides listing/pricing/context metadata for known models.
-            var effectiveProvider = providerRef != null
-                ? providerRef
-                : (defaultProvider != null && !defaultProvider.isBlank()
-                    ? defaultProvider : "google");
-            // Aligned with pi's resolveCliModel: warn that we're using a
-            // custom (uncatalogued) model id rather than a known entry.
-            System.err.println("Model \"" + nameRef
-                + "\" not found for provider \"" + effectiveProvider
-                + "\". Using custom model id.");
-            return ModelId.of(effectiveProvider, nameRef);
+
+        // Not in the builtin catalog: accept an arbitrary model ID so users
+        // can use any model their provider's API supports. The catalog only
+        // provides listing/pricing/context metadata for known models.
+        // pi resolveCliModel:567-580 —— 兜底前只剥<b>合法</b> level 后缀，非法后缀
+        // 留在 id 里（"x:random" 自定义 id 即 "x:random"）。
+        var fallbackPattern = stripValidLevelSuffix(trimmed);
+        String effectiveProvider;
+        String fallbackId;
+        var slash = fallbackPattern.indexOf('/');
+        if (slash > 0) {
+            effectiveProvider = fallbackPattern.substring(0, slash);
+            fallbackId = fallbackPattern.substring(slash + 1);
+        } else {
+            effectiveProvider = defaultProvider != null && !defaultProvider.isBlank()
+                ? defaultProvider : "google";
+            fallbackId = fallbackPattern;
         }
-        return matches.getFirst().id();
+        // Aligned with pi's resolveCliModel: warn that we're using a
+        // custom (uncatalogued) model id rather than a known entry.
+        System.err.println("Model \"" + fallbackId
+            + "\" not found for provider \"" + effectiveProvider
+            + "\". Using custom model id.");
+        return ModelId.of(effectiveProvider, fallbackId);
+    }
+
+    /** 尾缀是 7 档合法思考档（且冒号不在首位）时剥掉；否则原样返回。 */
+    private static String stripValidLevelSuffix(String pattern) {
+        var colon = pattern.lastIndexOf(':');
+        if (colon > 0 && ModelPatterns.isValidThinkingLevel(pattern.substring(colon + 1))) {
+            return pattern.substring(0, colon);
+        }
+        return pattern;
     }
 
     /**
@@ -225,14 +230,5 @@ public final class DefaultModelResolver implements ModelResolver {
             }
         }
         return byProvider.getFirst().id();
-    }
-
-    /**
-     * 精确匹配判据（包 A-02；pi {@code tryMatchModel} 的两种形态：全 id
-     * {@code provider/model} 或裸模型 id，忽略大小写——与本文件下方既有匹配同口径）。
-     */
-    private static boolean matchesPattern(com.pijava.ai.catalog.ModelInfo m, String pattern) {
-        return pattern.equalsIgnoreCase(m.id().provider() + "/" + m.id().modelName())
-            || pattern.equalsIgnoreCase(m.id().modelName());
     }
 }

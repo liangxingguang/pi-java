@@ -138,6 +138,55 @@ class ModelResolverTest {
         assertThat(resolved.modelName()).isEqualTo("deepseek-v4-flash");
     }
 
+    /**
+     * 批 3b（pi 测试「invalid thinking suffix on custom model is treated as part
+     * of model id」）：CLI 严格模式下非法后缀<b>不切</b>，整串留作自定义 id，
+     * 不会静默解析到前缀模型。
+     */
+    @Test
+    void resolveKeepsInvalidSuffixInCustomModelId() {
+        var catalog = catalog(List.of(
+                info("openai", "gpt-4o", Set.of(ModelCapability.TEXT))));
+        var resolver = new DefaultModelResolver(catalog);
+
+        var resolved = resolver.resolve("openai/gpt-4o:banana", "openai");
+        assertThat(resolved.provider()).isEqualTo("openai");
+        assertThat(resolved.modelName()).isEqualTo("gpt-4o:banana");
+    }
+
+    /** 合法 :level 后缀在自定义 id 兜底前剥掉（pi resolveCliModel:567-580）。 */
+    @Test
+    void resolveStripsValidSuffixFromCustomModelId() {
+        var catalog = catalog(List.of(
+                info("anthropic", "claude-sonnet", Set.of(ModelCapability.TEXT))));
+        var resolver = new DefaultModelResolver(catalog);
+
+        var resolved = resolver.resolve("anthropic/ghost-model:high", "anthropic");
+        assertThat(resolved.provider()).isEqualTo("anthropic");
+        assertThat(resolved.modelName()).isEqualTo("ghost-model");
+    }
+
+    /** 批 3b：精确不中走 id/显示名子串（pi parseModelPattern 宽容核，CLI 同链）。 */
+    @Test
+    void resolveFallsBackToSubstringMatch() {
+        var catalog = catalog(List.of(
+                info("anthropic", "claude-sonnet-4-5", Set.of(ModelCapability.TEXT))));
+        var resolver = new DefaultModelResolver(catalog);
+
+        assertThat(resolver.resolve("sonnet").modelName()).isEqualTo("claude-sonnet-4-5");
+    }
+
+    /** 裸 provider 名带合法后缀仍走 provider 默认表（Java 既有支路，批 3b 保留）。 */
+    @Test
+    void resolveBareProviderWithValidLevel() {
+        var catalog = catalog(List.of(
+                info("google", "gemini-2.5-flash", Set.of(ModelCapability.TEXT)),
+                info("google", "gemini-2.5-pro", Set.of(ModelCapability.TEXT))));
+        var resolver = new DefaultModelResolver(catalog);
+
+        assertThat(resolver.resolve("google:high").provider()).isEqualTo("google");
+    }
+
     @Test
     void resolveNullPatternFallsBackToDefaultProvider() {
         var catalog = catalog(List.of(
