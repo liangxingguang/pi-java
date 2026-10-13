@@ -8,7 +8,10 @@
 > - 本稿 = 两者的 ai 层索引：§1 台账 B 项，§2 地图判「缺失」但没有 B 号的能力单元，
 >   §3 形状差（存疑、待裁决），§4 已裁决不做。
 > - pi 锚点 `ea448f454`（2026-10-11）。**七份地图（含新建 07-mcp）已于 2026-10-12
->   对该锚点逐条重测完毕**（原 A16 销号，新差异 B233/B234 已登记）。
+>   对该锚点逐条重测完毕**（原 A16 销号，新差异 B233/B234 已登记；**B233 批 2 已销**）。
+> - **批 2（Mistral，2026-10-13 闭环，[`docs/10`](10-ai-batch2-mistral-design.md)）**：
+>   B80（数组 content 三支＋assistant thinking/tool_calls 重放）、B233（x-affinity＋
+>   prompt_cache_key）销号；B239 即登即销。
 > - **2026-10-12 ai 批 0 裁决**（[`docs/08`](08-ai-layer-alignment-roadmap.md)）：B115/B117/B124
 >   取证关单；B100/B126/B147/B226/B230 转 04 §4；map 单元 #87 零代码对齐，#9/#10/#11/#12/#33/
 >   #74/#78/#92/#93/#94/#100 出分母（R5/w0/作废）；§1 剩 24 条。
@@ -18,11 +21,11 @@
 
 ## 1. 台账在册功能缺口
 
-`docs/04` §3.2 存活 19 条（批 1 销号 4 条；原 §3.3 的 B222 同批销号，§3.3 已无 ai 协议面条目）：
+`docs/04` §3.2 存活 17 条（批 1 销号 4 条；批 2 销号 B80/B233，新登即销 B239；
+原 §3.3 的 B222 随批 1 销号，§3.3 已无 ai 协议面条目）：
 
 | # | 差什么（一句话） |
 |---|---|
-| B80 | Mistral 数组形态 `delta.content` 无解析路径（pi 有 string/thinking/text 三支） |
 | B81 | OAuth 分支两面未移植：系统提示 `"You are Claude Code…"` 前缀 ＋ 工具名 Claude Code 映射 |
 | B85 | read.ts：图片自动缩放 ＋ 非视觉模型注记（全仓无 `javax.imageio`） |
 | B94 | 8 个内置工具的 `promptSnippet`/`promptGuidelines` 声明缺失（补片段时须同时把 ContextAssembler 回落描述改回 pi 的稀疏规则） |
@@ -39,7 +42,6 @@
 | B159 | pi 已改 `finishTurn()` 返回 `{action:"continue"|"end"}`，Java 仍是 Boolean `shouldStopAfterTurn`，缺「强制再跑一轮」臂（对应 map/03 #6/#41） |
 | B231 | OAuth 刷新被调用方取消时，轮转后的 refresh token 仍须落盘（`refreshStoredOAuthCredential`）；Java 侧刷新 HTTP 无超时（批 6） |
 | B232 | 内置目录数据漂移（v1.1.0）：Haiku 5.5、Claude 5.5 系列改吃 models.dev、Kimi K3 定价/级别表等；与 B97 同族，属持续性数据漂移 |
-| B233 | Mistral 开缓存时缺 `x-affinity: <sessionId>` 头（pi `mistral-conversations.ts:366-368`；B103 三车道不含 Mistral） |
 | B234 | `durationMs` 计时字段全无：AssistantMessage/ToolResultMessage（及 agent 侧 tool_execution_end/AgentSettled，见 docs/07） |
 
 ---

@@ -12,6 +12,12 @@
 >   #23/#101 存疑转对齐；B118/B119/B121/B125/B127/B222 销号（B119/B121＝StopReason
 >   闭集枚举化，五车道＋两个消息 record＋StreamEvent/Entry.Usage 全切，B109 垫片留
 >   JsonlCodec 单一口）；B147 留 §4 并补分组序夹具。
+>   **2026-10-13 批 2（Mistral）已闭环**：B80 销号（响应面数组 content 三支
+>   string/thinking/text＋块状态机；请求面 assistant thinking 重放）、B233 销号
+>   （开缓存发 `x-affinity` 头＋`prompt_cache_key` 体键，含两层头覆盖/压制；
+>   `PiHttpClient.postSse` 头合并改替换语义）；**B239 即登即销**（设计取证撞出：
+>   assistant `tool_calls` 重放整体缺失、`prefix:false` 缺席，与 B80 请求半同分支修掉）。
+>   详稿 docs/10。
 >   换锚裁决与依据在 git 历史
 >   （`docs/11-pi-reanchor-ruling.md`，已随过程文档清理删除）。
 > - 判据是**行为**（`bin pi` 主流发布版可达的功能与表现），不是文档、API 形状或文件清单。
@@ -70,7 +76,6 @@
 
 | # | 条目 | 现状与出处 |
 |---|---|---|
-| B80 | Mistral 数组形态 `delta.content` 无解析路径 | pi 对数组 content 有三条分支；Java 不读 |
 | B81 | pi OAuth 分支两面未移植 | 系统提示前缀 ＋ 工具名映射（anthropic-messages isOAuthToken 分支） |
 | B110 | `providerThinkingLevel` **pi 有、Java 无**（2026-10-10 更正原「两侧均无」） | pi：`proxy.ts:51/58/386-396` 线字段 ＋ `anthropic-messages.ts:581/588` 消息字段；Java 侧 `JsonEventMapper.java:346` 不写 |
 | B116 | StreamDone 的 UsageInfo 嵌套包裹是 Java 方言 | pi 的 usage 只在消息上，proxy 线另发扁平 usage；2026-10-12 取证：线格式两处均已扁成 pi 形状（`JsonEventMapper.java:320-327,351-373`），内部组件保留（docs/08 §2.2） |
@@ -83,7 +88,6 @@
 | ~~B165~~ | ~~Anthropic 中段工具改为「定义内联」~~ | ✅ **已销号 2026-10-10**（`原 docs/45`）：beta 换 `inline-tools-2026-09-15`、顶层表就此定死、`tool_addition` 改按值内联、同名重定义不再回退。⚠️ 旧记「`hasToolRedefinitions` 被 pi 删除」实为**弃用**（`原 docs/45 §1.2`） |
 | B231 | **新锚点**：OAuth 刷新取消时轮转 token 不持久化 | pi `bde882c74`＋`models.ts:621-633`：抽出 `refreshStoredOAuthCredential`，已开始的刷新**不怕调用方取消**，轮转后的 refresh token 一定落盘，后到的刷新读新凭证。Java 凭证明细刷新若仍随 abort 丢弃结果则有此窄角（设计时取证确认）。同批 `8d8ae2fc2` Anthropic 回调端口冲突回落空闲端口——Java `OAuthFlow.java:67` 本就绑端口 0（OS 分配），**无差距不登记** |
 | B232 | **新锚点**：内置目录数据漂移（v1.1.0） | pi 新锚点目录新增/改值：Claude Haiku 5.5（`f76c1db66`）、Claude 5.5 系列改吃 models.dev 元数据（`ce950d78f`）、Kimi K3 Moonshot 定价钉死＋Haiku 5.5 adaptive thinking（`a2eef9eb6`）、保留全部目录的 prompt-length 定价层（`943a10e74`）。Java `BuiltinCatalog.java:49` 最新只到 Haiku 4.5；与 B97（三个漂移 id）同族，属持续性数据漂移 |
-| B233 | **新锚点重测撞出**：Mistral `x-affinity` 头缺失 | pi `mistral-conversations.ts:366-368` 开缓存（有 sessionId）时发 `x-affinity: <sessionId>`；Java Mistral 车道零命中（B103 三车道不含 Mistral，旧图漏记） |
 | B234 | **新锚点**：`durationMs` 计时字段缺失 | pi `AssistantMessage.durationMs`/`ToolResultMessage.durationMs`（ai `types.ts:595/:635`）＋ agent-loop 计时（`agent-loop.ts:825-945`）＋ `tool_execution_end`/AgentSettled 携带（`types.ts:453-455,531-538`）；bash 卡显示单调 `Took …`。Java AssistantMessage/ToolResultMessage/ToolExecutionEnd 全无 |
 
 **compat 面细碎登记**（pi 有标注/消费、Java 无的字段与数据位）：

@@ -76,7 +76,7 @@
 | 批 | 内容 | 条目 | 估时 | 详稿 |
 |---|---|---|---|---|
 | 1 | ✅ **已闭环 2026-10-13**（3371 测全绿；加权 89.7%→90.2%） | B119/B121/B118、#23、B222、B125、#101；另补 B127 夹具、B147 分组序夹具 | M | **docs/09** |
-| 2 | Mistral 两件 | B80 数组 content 三支、B233 x-affinity＋prompt_cache_key | M | 开工前出 |
+| 2 | ✅ **已闭环 2026-10-13**（ai 1561 测全绿；60→71 Mistral 夹具） | B80 数组 content 三支＋请求面 thinking 重放、B233 x-affinity＋prompt_cache_key；**B239 即登即销**（assistant tool_calls/prefix 重放） | M | **docs/10** |
 | 3 | 模型目录数据面 | npm 数据转资源（18 家 391KB）、promptCache/inputLimits/samplingParamsByThinkingLevel 字段、B97/B232 id 修正、B137 resolver（可拆 3b） | M＋M | 开工前出 |
 | 4 | thinking/effort 通道 | B128 thinkingBudgets 通道；B99＋B110 supportsMidConvoEffort 全家桶（两 beta/夹消息/block_binding/output_config） | M＋L | 开工前出 |
 | 5 | 消息字段与终局计量 | B148 responseModel/diagnostics＋三流内触点；B234 durationMs（消息 S＋工具 M）；消息级 thinkingLevel | L | 开工前出 |
