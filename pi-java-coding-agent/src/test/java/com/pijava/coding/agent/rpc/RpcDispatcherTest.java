@@ -453,6 +453,41 @@ class RpcDispatcherTest {
         return value == null || value.isNull() ? null : value.asText();
     }
 
+    @Test
+    void cycleModelStaysWithinScopedModels() throws Exception {
+        // B137：--models scope 非空时，cycle_model 在 scope 内正向轮转（旧实现扫全目录）。
+        var tmp = Files.createTempDirectory("pi-java-rpc-cycle");
+        var args = ArgsParser.parse(new String[] {"--models", "gemini-2.5*", "--no-session"});
+        var providers = ProviderRegistry.create();
+        providers.register(FauxProvider.text("ok"));
+        var home = Files.createTempDirectory("pi-java-rpc-cycle-home");
+        String savedHome = System.getProperty("user.home");
+        System.setProperty("user.home", home.toString());
+        AgentSession scoped;
+        try {
+            scoped = AgentSession.create(args, providers, new ToolContext(
+                tmp.toString(), Map.of(), new DefaultShellExecutor(), new DefaultFileSystem()));
+        } finally {
+            System.setProperty("user.home", savedHome);
+        }
+        var out = new ByteArrayOutputStream();
+        var dispatcher = new RpcDispatcher(scoped, new JsonlWriter(out), args);
+
+        dispatcher.handleLine("{\"id\":\"1\",\"type\":\"get_state\"}");
+        var before = payloadOf(out.toString(StandardCharsets.UTF_8), "1").get("model").asText();
+        out.reset();
+
+        dispatcher.handleLine("{\"id\":\"2\",\"type\":\"cycle_model\"}");
+        dispatcher.handleLine("{\"id\":\"3\",\"type\":\"get_state\"}");
+        var output = out.toString(StandardCharsets.UTF_8);
+        assertThat(output).contains("\"command\":\"cycle_model\",\"success\":true");
+        var after = payloadOf(output, "3").get("model").asText();
+
+        assertThat(before).startsWith("google/");
+        assertThat(after).startsWith("google/");
+        assertThat(after).isNotEqualTo(before);
+    }
+
     private record Ctx(AgentSession session, com.pijava.coding.agent.cli.Args args, Path home) {}
 
     private Ctx context(String provider, List<List<StreamEvent>> sequences) throws Exception {

@@ -113,6 +113,11 @@ public final class AgentSession implements AutoCloseable {
     private volatile boolean retrySleepActive;
     private final AtomicBoolean retryCancel = new AtomicBoolean();
     private volatile AbortSignal bashAbortSignal;
+    // B137：--models/settings patterns 解析出的 scope（Ctrl+P / cycle_model 在其间轮转）。
+    private List<com.pijava.ai.model.ScopedModel> scopedModels = List.of();
+    // scope 解析与轮转都对全目录（assemble 构造的同一实例）。
+    private com.pijava.ai.catalog.ModelCatalog modelCatalog =
+        com.pijava.ai.catalog.ModelCatalog.empty();
 
     private AgentSession(AgentHarness harness, SessionServices services,
                          Args args, String name) {
@@ -141,7 +146,10 @@ public final class AgentSession implements AutoCloseable {
                 Map.of(),
                 new DefaultShellExecutor(effective.shellPath),
                 new DefaultFileSystem()),
-            handle, handle.repository());
+            handle, handle.repository(),
+            // pi hasExistingSession＝buildSessionContext().messages.length>0；assemble
+            // 前查 latest 等价（裁决⑥：resume 存量会话时不应用 scoped 初始模型）。
+            handle.latest(System.getProperty("user.dir")).isPresent());
         session.persistentRepository = handle;
         return SessionPersistence.resolvePersistentWeb(session, args);
     }
@@ -168,7 +176,8 @@ public final class AgentSession implements AutoCloseable {
             ? PersistentSessionRepositories.sqlite(sessionsRoot)
             : PersistentSessionRepositories.jsonl(sessionsRoot);
         var session = assemble(args, settings, providers, toolContext,
-            handle, handle.repository());
+            handle, handle.repository(),
+            handle.latest(System.getProperty("user.dir")).isPresent());
         session.persistentRepository = handle;
         return SessionPersistence.resolvePersistentWeb(session, args);
     }
@@ -223,7 +232,7 @@ public final class AgentSession implements AutoCloseable {
                                        ToolContext toolContext,
                                        SettingsManager settings) {
         var session = assemble(args, settings, providers, toolContext,
-            null, new MemorySessionRepository());
+            null, new MemorySessionRepository(), resumeLike(args));
         session.repository = repository;
         return SessionSetup.resolveSession(session, args);
     }
@@ -232,18 +241,32 @@ public final class AgentSession implements AutoCloseable {
                                        ToolContext toolContext,
                                        SettingsManager settings) {
         var session = assemble(args, settings, providers, toolContext,
-            handle, handle.repository());
+            handle, handle.repository(), resumeLike(args));
         session.persistentRepository = handle;
         return SessionSetup.resolveSession(session, args);
     }
+
+    /**
+     * pi {@code hasExistingSession}（main.ts:826：buildSessionContext 有消息）的 args
+     * 侧近似（docs/12 §4⑥）：任一 resume/fork 旗标出线即视为存量会话，scope 初始模型
+     * 不应用（pi 门控同形）；scope 列表本身仍装配，Ctrl+P 轮转照常用。
+     */
+    private static boolean resumeLike(Args args) {
+        return args.continue_() || args.resume() || args.session() != null
+            || args.sessionId() != null || args.fork() != null;
+    }
+
     private static AgentSession assemble(Args args, SettingsManager settings,
                                          ProviderRegistry providers,
                                          ToolContext toolContext,
                                          PersistentSessionRepositories.RepositoryHandle handle,
-                                         SessionRepository<?, ?, ?> repository) {
+                                         SessionRepository<?, ?, ?> repository,
+                                         boolean existingSession) {
         var effective = settings.effective();
-        var models = new DefaultModelResolver(
-            com.pijava.ai.provider.ModelsJsonConfig.allModels());
+        var catalog = com.pijava.ai.provider.ModelsJsonConfig.allModels();
+        var models = new DefaultModelResolver(catalog);
+        // B137：--models ?? settings.enabledModels → scope（诊断此处打 stderr）。
+        var scope = ModelScoping.resolve(args, settings, catalog);
         var tools = new ToolRegistry(null);
         var commandPrefix = effective.shellCommandPrefix == null
             ? "" : effective.shellCommandPrefix;
@@ -275,13 +298,25 @@ public final class AgentSession implements AutoCloseable {
         if (modelPattern == null || modelPattern.isBlank()) {
             modelPattern = providerName;
         }
+        // pi buildSessionOptions:499-516：未显式 --model 且非 resume 存量会话时，
+        // saved 默认在 scope 内则用之，否则 scoped[0]；scope 空回退既有解析。
+        com.pijava.ai.model.ScopedModel scopedInitial = null;
+        if ((args.model() == null || args.model().isBlank()) && !existingSession) {
+            scopedInitial = ModelScoping.initial(
+                scope, effective.defaultProvider, effective.defaultModel, catalog)
+                .orElse(null);
+        }
+        String scopeLevel = scopedInitial != null
+            ? scopedInitial.thinkingLevel().orElse(null) : null;
         var streamFn = DefaultProviders.streamFnFor(
             args, effective.defaultProvider, providers, effective, args.sessionId());
         // Trace exporter: same instance powers harness telemetry (spans/counters)
         // and payload recording (wrapper), so events bind to the llm.request span.
         var telemetry = PayloadRecordingStreamFn.exporter(args.sessionId(), args.tracePayloads());
         var recordingStreamFn = new PayloadRecordingStreamFn(streamFn, telemetry);
-        var model = models.resolve(modelPattern, providerName);
+        var model = scopedInitial != null
+            ? scopedInitial.model().id()
+            : models.resolve(modelPattern, providerName);
         // 3c（原 docs/31 §8.21，裁决③）：宿主层的自动压缩事件走轻量 observer，不占
         // HookSystem。harness 先于会话构造 ⇒ 用引用晚绑定：observer 在压缩真正
         // 发生时（必晚于 create() 返回）才读得到会话。pi 的 compaction_start/end
@@ -392,7 +427,8 @@ public final class AgentSession implements AutoCloseable {
                 () -> models.maxOutputTokens(model),
                 () -> harnessRef.get().getThinkingLevel(),
                 models::supportsThinking))
-            .thinkingLevel(SessionSetup.thinkingLevelFor(args, settings.effective().defaultThinkingLevel))
+            .thinkingLevel(SessionSetup.thinkingLevelFor(
+                args, settings.effective().defaultThinkingLevel, scopeLevel))
             .systemPrompt(SessionSetup.customPromptFor(args))
             .promptGuidelines(SessionSetup.DEFAULT_PROMPT_GUIDELINES)
             .appendSystemPrompt(SessionSetup.appendSystemPromptFor(args))
@@ -432,6 +468,8 @@ public final class AgentSession implements AutoCloseable {
             args.name() != null ? args.name() : "session");
         sessionRef.set(agentSession);
         agentSession.persistentRepository = handle;
+        agentSession.setScopedModels(scope.models());
+        agentSession.modelCatalog = catalog;
         loadExtensions(args, services, harness, ExtensionUI.noop(), agentSession);
         return agentSession;
     }
@@ -513,6 +551,33 @@ public final class AgentSession implements AutoCloseable {
             emitSessionEvent(new AgentSessionEvent.ThinkingLevelChanged(level));
         }
         return level;
+    }
+
+    /** 装配期写入 scope（B137）；不可变拷贝。 */
+    void setScopedModels(List<com.pijava.ai.model.ScopedModel> models) {
+        this.scopedModels = List.copyOf(models);
+    }
+
+    /** 当前 scope（测试/RPC 只读面）。 */
+    public List<com.pijava.ai.model.ScopedModel> scopedModels() {
+        return scopedModels;
+    }
+
+    /**
+     * Ctrl+P / {@code cycle_model}（pi agent-session.ts:2519-2560）：scope 非空在其间
+     * 正向轮转，空 scope 在全目录轮转；≤1/无变化不动。切到带显式级别 scope 条目的
+     * 模型时，显式级别覆盖当前思考档；无显式级别则继承（pi undefined 语义）。
+     */
+    public void cycleModelForward() {
+        var current = harness.getModel();
+        var next = ScopedModelCycler.next(current, scopedModels, modelCatalog);
+        if (next.equals(current)) {
+            return;
+        }
+        harness.setModel(next);
+        ScopedModelCycler.levelFor(next, scopedModels)
+            .ifPresent(level -> setThinkingLevel(
+                com.pijava.coding.agent.cli.ThinkingLevels.parse(level)));
     }
 
     /** The assembled services. */

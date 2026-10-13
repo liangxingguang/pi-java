@@ -148,7 +148,8 @@ public final class RpcDispatcher {
                     out.write(RpcResponse.ok(m.id(), "set_model"));
                 }
                 case RpcCommand.CycleModel c -> {
-                    session.harness().setModel(cycleModel(session));
+                    // B137：scope 非空在 scope 内轮转，空 scope 全目录轮转（ScopedModelCycler）。
+                    session.cycleModelForward();
                     out.write(RpcResponse.ok(c.id(), "cycle_model"));
                 }
                 case RpcCommand.GetAvailableModels g ->
@@ -446,22 +447,6 @@ public final class RpcDispatcher {
             .filter(id -> id.modelName().equals(p))
             .findFirst()
             .orElseThrow(() -> new IllegalArgumentException("Unknown model: " + pattern));
-    }
-
-    private ModelId<?> cycleModel(AgentSession s) {
-        var models = com.pijava.ai.provider.ModelsJsonConfig.allModels().listModels();
-        if (models.isEmpty()) {
-            return s.harness().getModel();
-        }
-        ModelId<?> current = s.harness().getModel();
-        int idx = -1;
-        for (int i = 0; i < models.size(); i++) {
-            if (models.get(i).id().equals(current)) {
-                idx = i;
-                break;
-            }
-        }
-        return models.get((idx + 1) % models.size()).id();
     }
 
     private ModelThinkingLevel cycleThinking(AgentSession s) {

@@ -48,20 +48,25 @@ final class SessionSetup {
     /**
      * CLI thinking 参数 → {@link ModelThinkingLevel}。
      *
-     * <p>档位照 pi {@code agent-session.ts:1992-2005}：<b>① 显式值</b>（{@code --thinking}）
-     * → <b>② per-model 设置</b> → <b>③ 全局默认</b>。java 没有 ② 的设置键 ⇒ 登记不做
-     * （{@code 原 docs/46 §7 B15-残留-5}）；模型名后缀（{@code claude:high}）是 pi-java
-     * 自己的 CLI 形态，插在 ① 与 ③ 之间。</p>
+     * <p>档位照 pi {@code main.ts buildSessionOptions}：<b>① 显式值</b>（{@code --thinking}）
+     * → <b>② {@code --model :suffix}</b>（pi-java CLI 形态）→ <b>③ scope 初始模型的
+     * 显式级别</b>（{@code --models "p:high"}，B137）→ <b>④ 全局默认</b>。pi 的 per-model
+     * 设置键 java 没有 ⇒ 登记不做（{@code 原 docs/46 §7 B15-残留-5}）。</p>
      *
      * @param defaultThinkingLevel {@code settings.defaultThinkingLevel}；可为 {@code null}
+     * @param scopedLevel          scope 初始模型携带的显式级别；可为 {@code null}
      */
-    static ModelThinkingLevel thinkingLevelFor(Args args, String defaultThinkingLevel) {
+    static ModelThinkingLevel thinkingLevelFor(Args args, String defaultThinkingLevel,
+                                                String scopedLevel) {
         if (args.thinking() != null) {
             return ThinkingLevels.parse(args.thinking());
         }
         var fromModel = ThinkingLevels.parseFromModelPattern(args.model());
         if (fromModel != null) {
             return fromModel;
+        }
+        if (scopedLevel != null) {
+            return ThinkingLevels.parse(scopedLevel);
         }
         return ThinkingLevels.parse(defaultThinkingLevel);
     }

@@ -447,7 +447,10 @@ public final class PiTuiApp {
             }
             case KeybindingsManager.MODEL_SELECT ->
                 openOverlay(new ModelSelectorScreen(session));
-            default -> { /* model.cycle / thinking.* / tools.expand / editor.external / dequeue → Phase 6 */ }
+            // B137：Ctrl+P 在 --models/settings scope 内正向轮转（空 scope 走全目录）。
+            // TUI 无模型常驻标签，切换静默——与 Ctrl+L 选择器现状一致。
+            case KeybindingsManager.MODEL_CYCLE -> session.cycleModelForward();
+            default -> { /* thinking.* / tools.expand / editor.external / dequeue → Phase 6 */ }
         }
     }
 
