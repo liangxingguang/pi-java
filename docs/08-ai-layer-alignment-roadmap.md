@@ -50,8 +50,8 @@
 ### 2.3 跨模块另案（ai 包不做，台账挂指针）
 
 - **B94（8 工具 promptSnippet/Guidelines）、B95（docs 段）**：落点 agent-core `ContextAssembler`/`SystemPrompts`＋coding-agent 工具声明（pi `system-prompt.ts:128-166`，消费者 `agent-session.ts:3533-3541`）。
-- **B85＋#90 图像缩放管线**：inputLimits **元数据字段在批 3 补（S）**；缩放/注记消费链（sharp 替代、`tools/read.ts:138`、`utils/image-process.ts`）在 coding tools 另案（L）。
-- **#86 promptCache**：ai 侧字段批 3 补；**CacheWarmer 453 行在 coding-agent 另案**（默认 `cacheWarming:"streaming"` 开、只对直连 Anthropic；字段单做无消费者）。
+- **B85＋#90 图像缩放管线**：inputLimits **元数据字段批 3a 已补（2026-10-14，#90 转存疑）**；缩放/注记消费链（sharp 替代、`tools/read.ts:138`、`utils/image-process.ts`）在 coding tools 另案（L），落地后 #90 转对齐。
+- **#86 promptCache**：ai 侧字段**批 3a 已补**（17 条 anthropic 分片 300/3600）；**CacheWarmer 453 行在 coding-agent 另案**（默认 `cacheWarming:"streaming"` 开、只对直连 Anthropic；字段单做无消费者）。
 - **#8 ToolUseContent.namespace**：随 MCP 接线 B203（ai 侧仅 responses 车道 round-trip，`openai-responses-shared.ts` 六处稀疏透传）。
 - **B235 agent_settled.aborted**：coding-agent 面，ai 零触点。
 - **B148 的消费侧**（/session 费用分组、/bug diagnostics.json、cache-warmer）随各自模块另案，ai 只做字段＋流内触点（批 5）。
@@ -64,6 +64,9 @@
 - **批 1–7 全部完成后**：wc 再 +9.0 ⇒ **205.5/219 ≈ 93.8%**：
   批 1：#23、#101 存疑→对齐（+1）；批 3：#34(+2)、#86(+1)、#91(+1)、#90 字段半成转存疑(+0.5)；
   批 5：#37 四字段落（responseId/endTurn 随 codex R5）转对齐(+1)；批 7：#95(+1)、#96(+1)、#97(+0.5)。
+- **批 3a 后（2026-10-14 实际值）**：wc 197.5→**202.0/219＝92.2%**——#34/+2、#86/+1、#91/+1 已实现，
+  #90 缺失→存疑 +0.5（元数据齐、B85 消费链另案）；剩余推演增量：批 4（B99/B110/B128）、批 5 #37(+1)、
+  批 7 #95/#96/#97(+2.5)，全完工仍指向 **205.5（#90 消费链若随 coding tools 落地再 +0.5 → 206/219＝94.1%）**。
 - **残余 13.5 权重**（为什么不是 100%）：
   - 缺失 2：**#8 namespace**（随 MCP 包 B203）、**#98 federation**（用户裁决后排）；
   - 半成品 0.5：**#90** 元数据落、图像缩放消费链在 coding tools 另案（L）；
@@ -77,7 +80,8 @@
 |---|---|---|---|---|
 | 1 | ✅ **已闭环 2026-10-13**（3371 测全绿；加权 89.7%→90.2%） | B119/B121/B118、#23、B222、B125、#101；另补 B127 夹具、B147 分组序夹具 | M | **docs/09** |
 | 2 | ✅ **已闭环 2026-10-13**（ai 1561 测全绿；60→71 Mistral 夹具） | B80 数组 content 三支＋请求面 thinking 重放、B233 x-affinity＋prompt_cache_key；**B239 即登即销**（assistant tool_calls/prefix 重放） | M | **docs/10** |
-| 3 | 模型目录数据面 | npm 数据转资源（18 家 391KB）、promptCache/inputLimits/samplingParamsByThinkingLevel 字段、B97/B232 id 修正、B137 resolver（可拆 3b） | M＋M | 开工前出 |
+| 3a | ✅ **已闭环 2026-10-14**（ai 1599＋coding-agent 522 测全绿；加权 90.2%→**92.2%**；两 commit e38c3ab9/86465196） | npm `pi-ai@1.1.0` 17 分片 588 chat 逐字节入资源（391KB）＋manifest sha256 锚；promptCache/inputLimits/sptl 三字段；B97/B232 销号；`DefaultModelIds` 默认模型表（B137 防回归切片）；#90 转存疑（消费链 B85 另案） | M | **docs/11** |
+| 3b | resolver glob/scope（**B137 主体**） | minimatch `*?[]`、子串匹配、alias-vs-dated 排序（localeCompare）、`ModelScopeDiagnostic` 两码、`--models` 多模型解析 | M | 开工前出 |
 | 4 | thinking/effort 通道 | B128 thinkingBudgets 通道；B99＋B110 supportsMidConvoEffort 全家桶（两 beta/夹消息/block_binding/output_config） | M＋L | 开工前出 |
 | 5 | 消息字段与终局计量 | B148 responseModel/diagnostics＋三流内触点；B234 durationMs（消息 S＋工具 M）；消息级 thinkingLevel | L | 开工前出 |
 | 6 | OAuth 车道行为 | B81 Claude Code 伪装三件套；B231 刷新 15s 超时＋轮转 token 必落盘 | M | 开工前出 |

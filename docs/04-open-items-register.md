@@ -80,24 +80,24 @@
 | B110 | `providerThinkingLevel` **pi 有、Java 无**（2026-10-10 更正原「两侧均无」） | pi：`proxy.ts:51/58/386-396` 线字段 ＋ `anthropic-messages.ts:581/588` 消息字段；Java 侧 `JsonEventMapper.java:346` 不写 |
 | B116 | StreamDone 的 UsageInfo 嵌套包裹是 Java 方言 | pi 的 usage 只在消息上，proxy 线另发扁平 usage；2026-10-12 取证：线格式两处均已扁成 pi 形状（`JsonEventMapper.java:320-327,351-373`），内部组件保留（docs/08 §2.2） |
 | B128 | thinkingBudgets 无选项通道 | pi SimpleStreamOptions.thinkingBudgets（docs/08 批 4） |
-| B137 | resolver 的 glob/scope 面 | pi 支持 minimatch 通配/子串/alias 排序与 scope 诊断；**Java 无前后缀**，序＝精确（provider/id｜裸 id）→切 `:level`→provider 首条→modelName 精确→任意 id 兜底。2026-10-12 更正：pi 的 `--models` **有消费者**（Ctrl+P cycling，`main.ts:812-816`），旧记「零消费者」指 java 侧（docs/08 批 3） |
+| B137 | resolver 的 glob/scope 面 | pi 支持 minimatch 通配/子串/alias 排序与 scope 诊断；**Java 无前后缀**，序＝精确（provider/id｜裸 id）→切 `:level`→默认模型/首条→modelName 精确→任意 id 兜底。2026-10-12 更正：pi 的 `--models` **有消费者**（Ctrl+P cycling，`main.ts:812-816`），旧记「零消费者」指 java 侧。**批 3a（2026-10-14）落防回归切片**：`DefaultModelIds` 携 `defaultModelPerProvider` 17 家，裸 provider 走默认表而非分片首条；glob/子串/alias/dated 排序/`ModelScopeDiagnostic` 仍缺，留**批 3b** |
 | B148 | responseModel/diagnostics 真消费者未接 | pi 用于 usage 分组、cache 归属等；含 pi-messages 的 `pi_messages_response_failure` 信封（`{type,timestamp,error:{name,message,stack,code},details}`，details 二选一投影＋8192 U+2026 截断，`pi-messages.ts:133-152`）——B224 只对齐了文案半，信封半随本条（消费者＝bug-report，见 B79）。**2026-10-11 补记**：Anthropic 服务端回退的流内半也随本条——`content_block_start` 的 `"fallback"` 块处理（已有内容时抛 mid-output fallback）＋ responseModel 成本归属（`anthropic-messages.ts:660-690`，按 `allowedFallbackModels[].cost` 取价；请求半 beta＋params.fallbacks 已随 B98 落）（docs/08 批 5：responseId/endTurn 随 codex 出分母不做） |
 | B156 | ModelCompat 逐组件重建会静默丢字段 | 新组件追加时的副作用面；2026-10-12 评估：全仓 13 构造点集中 4 文件且有逐字段注释，列 backlog 不强改（docs/08 §2.2） |
 | B158 | 输出截断字节预算差一倍 | Java 100KB，pi 主流 50KB（模型可见文案不同） |
 | B159 | `shouldStopAfterTurn` 更名 finishTurn 且语义变 | pi 从布尔改 `{action: continue/end}`，能强制多跑一轮 |
 | ~~B165~~ | ~~Anthropic 中段工具改为「定义内联」~~ | ✅ **已销号 2026-10-10**（`原 docs/45`）：beta 换 `inline-tools-2026-09-15`、顶层表就此定死、`tool_addition` 改按值内联、同名重定义不再回退。⚠️ 旧记「`hasToolRedefinitions` 被 pi 删除」实为**弃用**（`原 docs/45 §1.2`） |
 | B231 | **新锚点**：OAuth 刷新取消时轮转 token 不持久化 | pi `bde882c74`＋`models.ts:621-633`：抽出 `refreshStoredOAuthCredential`，已开始的刷新**不怕调用方取消**，轮转后的 refresh token 一定落盘，后到的刷新读新凭证。Java 凭证明细刷新若仍随 abort 丢弃结果则有此窄角（设计时取证确认）。同批 `8d8ae2fc2` Anthropic 回调端口冲突回落空闲端口——Java `OAuthFlow.java:67` 本就绑端口 0（OS 分配），**无差距不登记** |
-| B232 | **新锚点**：内置目录数据漂移（v1.1.0） | pi 新锚点目录新增/改值：Claude Haiku 5.5（`f76c1db66`）、Claude 5.5 系列改吃 models.dev 元数据（`ce950d78f`）、Kimi K3 Moonshot 定价钉死＋Haiku 5.5 adaptive thinking（`a2eef9eb6`）、保留全部目录的 prompt-length 定价层（`943a10e74`）。Java `BuiltinCatalog.java:49` 最新只到 Haiku 4.5；与 B97（三个漂移 id）同族，属持续性数据漂移 |
+| ~~B232~~ | ~~**新锚点**：内置目录数据漂移（v1.1.0）~~ | ✅ **已销号 2026-10-14（批 3a）**：17 个 npm `pi-ai@1.1.0` 分片逐字节入 `resources/catalog/`（haiku-5-5、Claude 5.5 系列、kimi-k3 钉价 {3,15,.3,0}、prompt-length tiers 全携），manifest sha256 夹具钉字节；持续漂移随 npm 版本升级走 |
 | B234 | **新锚点**：`durationMs` 计时字段缺失 | pi `AssistantMessage.durationMs`/`ToolResultMessage.durationMs`（ai `types.ts:595/:635`）＋ agent-loop 计时（`agent-loop.ts:825-945`）＋ `tool_execution_end`/AgentSettled 携带（`types.ts:453-455,531-538`）；bash 卡显示单调 `Took …`。Java AssistantMessage/ToolResultMessage/ToolExecutionEnd 全无 |
 
 **compat 面细碎登记**（pi 有标注/消费、Java 无的字段与数据位）：
 
 | # | 条目 |
 |---|---|
-| B85 | read.ts：图片自动缩放 ＋ 非视觉模型注记 |
+| B85 | read.ts：图片自动缩放 ＋ 非视觉模型注记（**批 3a 注：`inputLimits` 三层元数据与 models.json 深合并已落，map/02 #90 转存疑；本项剩余＝sharp 替代/缩放/注记消费链**） |
 | B94 | 8 个内置工具的 `promptSnippet`/`promptGuidelines` 声明 |
 | B95 | `docs` 段无生产者（ContextAssembler 不传 DocumentationPaths） |
-| B97 | 3 个内置 (provider,modelId) 与 pi 目录不匹配 |
+| ~~B97~~ | ~~3 个内置 (provider,modelId) 与 pi 目录不匹配~~ ✅ **批 3a（2026-10-14）销号**：手写 id 全删（deepseek-v4-flash→deepseek-flash、mistral-large/small、kimi-k2.5、glm-4.5-air、mimo-v2、qwen3-*、ling-1t/ring 等被 npm 分片真值取代），Java 独有的 text-embedding-3-* 两条同步移除（embed CLI flag 默认值不查目录，保留） |
 | B99 | supportsMidConvoEffort 半可移植（docs/08 批 4） |
 
 ### 3.3 功能整块
