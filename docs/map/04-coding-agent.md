@@ -127,7 +127,7 @@ pi 另有 **`/skill:name` 命令族**（`enableSkillCommands` 默认 true，`int
 | 2 | `/model` | `:21` | ⚠️ `ModelCommands.java:21` | 2 | **存疑** | pi 支持 `/model <provider/model>` 直设；java `argumentHint()` 空且忽略 args |
 | 3 | `/tree` | `:22` | ⚠️ `SessionCommands.java:56` | 1 | **存疑** | pi `tree-selector.ts` 1,435 行 |
 | 4 | `/thinking` | `:23` | ❌ — | 2 | **缺失** | java 无此命令（CLI/RPC 有，slash 面无） |
-| 5 | `/scoped-models` | `:24` | ⚠️ `ModelCommands.java:29` | 1 | **存疑** | pi `scoped-models-selector.ts` 401 行 |
+| 5 | `/scoped-models` | `:24` | ⚠️ `ModelCommands.java:29` | 1 | **存疑** | pi `scoped-models-selector.ts` 401 行。**批 3b（2026-10-14）**：写入的 patterns 已被消费——`ModelScoping` 读 `--models ?? enabledModels` 解析 scope，驱动初始模型与 Ctrl+P/RPC 轮转（B137 销号）；仍缺 pi 的选择器 UI（＋/-/裸加 CLI 已齐） |
 | 6 | `/export` | `:25` | ⚠️ `MiscCommands.java:38` | 2 | **存疑** | pi 默认 HTML、路径可选；java `isBlank()` 时直接返回用法（`:40-41`） |
 | 7 | `/import` | `:26` | ✅ `MiscCommands.java:61` | 1 | 对齐 | |
 | 8 | `/share` | `:27` | ⚠️ `MiscCommands.java:76` | 1 | **存疑** | pi 主路径 **Radius 网关**（`session-share.ts`），gist fallback；java 只有 gist（`SessionShare.java`） |

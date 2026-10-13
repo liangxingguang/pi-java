@@ -17,6 +17,10 @@
 >   B97（3 个漂移 id＋Java 独有的 text-embedding 类）、B232（v1.1.0 数据漂移）销号；
 >   map 单元 #34/#86/#91 转对齐、#90 转存疑（消费链 B85 另案）；B137 只落默认模型表
 >   防回归切片，glob/scope 主体留批 3b。
+> - **批 3b（resolver glob/scope，2026-10-14 闭环，[`docs/12`](12-ai-batch3b-model-scope-design.md)）**：
+>   minimatch 子集＋子串＋alias/dated 排序＋两码 scope 诊断＋`--models` 消费链接通；
+>   B137 销号（行为台账项，加权不变 92.2%）；残留窄差见 04 B137 行（歧义硬错误/localeCompare/
+>   brace/反向 cycling/auth 过滤/resume 门近似，均经裁决）。
 > - **2026-10-12 ai 批 0 裁决**（[`docs/08`](08-ai-layer-alignment-roadmap.md)）：B115/B117/B124
 >   取证关单；B100/B126/B147/B226/B230 转 04 §4；map 单元 #87 零代码对齐，#9/#10/#11/#12/#33/
 >   #74/#78/#92/#93/#94/#100 出分母（R5/w0/作废）；§1 剩 24 条。
@@ -26,8 +30,8 @@
 
 ## 1. 台账在册功能缺口
 
-`docs/04` §3.2 存活 15 条（批 1 销号 4 条；批 2 销号 B80/B233，新登即销 B239；
-批 3a 销号 B97/B232；原 §3.3 的 B222 随批 1 销号，§3.3 已无 ai 协议面条目）：
+`docs/04` §3.2 存活 14 条（批 1 销号 4 条；批 2 销号 B80/B233，新登即销 B239；
+批 3a 销号 B97/B232；**批 3b 销号 B137**；原 §3.3 的 B222 随批 1 销号，§3.3 已无 ai 协议面条目）：
 
 | # | 差什么（一句话） |
 |---|---|
@@ -39,7 +43,6 @@
 | B110 | `providerThinkingLevel` pi 有 Java 无（`proxy.ts` 线字段 ＋ `anthropic-messages.ts` 消息字段；批 4 随 B99） |
 | B116 | StreamDone 的 UsageInfo 嵌套包裹是 Java 方言（pi usage 只在消息上，proxy 线另发扁平 usage）——2026-10-12 取证线格式已扁化，内部组件保留 |
 | B128 | `thinkingBudgets` 无选项通道（pi `SimpleStreamOptions.thinkingBudgets`，`adjustMaxTokensForThinking` 消费；批 4） |
-| B137 | resolver 无 minimatch 通配/子串/alias 排序与 scope 诊断。**批 3a 已落防回归切片**：`DefaultModelIds` 携 pi `defaultModelPerProvider` 17 家默认（裸 provider 不再取分片首条——google 首条是 deep-research 预览）；glob/子串/alias/dated 排序/诊断主体仍缺，留**批 3b** |
 | B148 | responseModel/responseId/diagnostics 无真消费者（usage 分组、cache-warmer、fallback 成本归属、`pi_messages_response_failure` 信封、Anthropic 流内 fallback 块） |
 | B156 | ModelCompat 逐组件规范构造 ＋ 12 个便捷构造各自补 null：加组件必须全改，否则静默缺省 |
 | B158 | 输出截断字节预算 Java 100KB vs pi 主流 50KB（模型可见文案不同；对应 map/03 #23） |
@@ -119,6 +122,11 @@
   B232（haiku-5-5/fable-5 1M/128K、kimi-k3 钉价、prompt-length tiers）销号；
   `DefaultModelIds` 落 pi `defaultModelPerProvider` 17 家切片（B137 防回归半，glob/scope
   主体留批 3b）。sptl 三层合并接两 OpenAI 车道（responses 车道补循环级 request.reasoning）。
+- **2026-10-14 批 3b（resolver glob/scope）闭环**（设计 [`docs/12`](12-ai-batch3b-model-scope-design.md)）：
+  ai 模块落 `ModelGlob`（minimatch 10.2.6 子集，语义靠 npm tarball **静态阅读**取证）、
+  `ModelPatterns`、`ModelScopeResolver`/`ScopedModel`/两码诊断；coding-agent 接通
+  `--models ?? enabledModels` → 初始模型 → Ctrl+P/RPC scope 轮转；B137 销号，加权不变。
+  六条窄差经用户裁决（歧义不硬错/码点序/无 brace/仅正向/无 auth 门/resume 门近似），见 04。
 - **25 个长尾 provider 端点 ＋ 4 条对应鉴权**：权重 0、R2/R5 排除出分母，完整清单见 `map/02-ai.md`
   加权汇总「被排除的单位」。
 - **B18**（pi-messages 不按 pi 改造）、**B130/B132**（zai sre、together/baseten/fireworks 携带集零差，

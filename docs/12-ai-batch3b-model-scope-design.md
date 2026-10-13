@@ -1,12 +1,25 @@
 # 12 ai 批 3b 详稿：resolver glob/scope 面（minimatch 通配 ＋ 子串 ＋ alias/dated 排序 ＋ scope 诊断 ＋ `--models` 消费链）
 
-> 状态：**待审核**（设计稿，审核通过前不写产品代码）。
+> 状态：**已闭环 2026-10-14**（两 commit `6f6f6ac3` ai 解析核、`90ae98f7` 装配/cycling；
+> 全量 `mvn clean verify` 绿——11 模块全 SUCCESS，ai **1589**＋coding-agent **536**＋tui **213**，
+> checkstyle 零警告；B137 是台账行为项、不占加权单元 ⇒ 加权不变 **202.0/219＝92.2%**）。
 > 基准：pi `ea448f454`（2026-10-11，v1.1.0-22）；pi 证据一律 `git show ea448f454:<path>`。
 > 唯一例外：minimatch 语义来自 **npm `minimatch@10.2.6` tarball**（pi `packages/coding-agent/package.json`
 > 直接依赖钉死版本号；npm 包不在 git 内，同批 3a 的 npm tarball 取证例外）。**只做静态阅读，未执行**。
 > 上游判据：`bin pi` 主流发布版行为。
 > 路线：[`08`](08-ai-layer-alignment-roadmap.md) §3 批 3b＝台账 **B137 主体**（批 3a 已落防回归半 `DefaultModelIds`）。
 > 前序：[`11`](11-ai-batch3a-catalog-data-design.md)（588 chat／17 分片已在 resources/catalog，本稿消费该目录）。
+>
+> **实施差异（相对本稿，均不改变设计结论；§4 六裁决按建议全部采纳）**：
+> 1. resume scoped-skip（裁决⑥）实测 record-log fold **不还原模型**（`RunLifecycle.restoreRecords` 只重建编排态），
+>    按备选实施：assemble 加 `existingSession` 参——CLI 路径看 resume/fork 五旗标，web 路径 assemble 前查
+>    `handle.latest(cwd)`；存量会话跳过 scope 初始模型但仍装配 scope（`ScopedStartupIntegrationTest` 钉夹具）。
+> 2. 夹具发现双车道 glob 的实用后果：`google/*` 会同时命中 openrouter 的 `google/...` 斜杠 id（pi 同形）；
+>    测试改用 `gemini-2.5*`／`claude-*`（目录实测该裸 id 前缀只在本家分片）断言单家。
+> 3. pi cycling「当前不在 scope」是**先归下标 0 再前进**（落到 pool[1]），不是直接选 pool[0]；逐字照移植。
+> 4. minimatch `parseClass` 步进在 Java for 循环下比 pi while 少一次自增（c-]/范围/转义三处），
+>    首跑夹具抓出，已按 for 语义修正。
+> 5. 新增类计数同稿：ai 6＋agent 2＝8 新文件；修改 5（同稿）。
 
 ---
 

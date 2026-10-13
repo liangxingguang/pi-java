@@ -81,7 +81,7 @@
 | 1 | ✅ **已闭环 2026-10-13**（3371 测全绿；加权 89.7%→90.2%） | B119/B121/B118、#23、B222、B125、#101；另补 B127 夹具、B147 分组序夹具 | M | **docs/09** |
 | 2 | ✅ **已闭环 2026-10-13**（ai 1561 测全绿；60→71 Mistral 夹具） | B80 数组 content 三支＋请求面 thinking 重放、B233 x-affinity＋prompt_cache_key；**B239 即登即销**（assistant tool_calls/prefix 重放） | M | **docs/10** |
 | 3a | ✅ **已闭环 2026-10-14**（全量 clean verify 绿：ai 1542＋coding-agent 522 等 11 模块；加权 90.2%→**92.2%**；两 commit e38c3ab9/86465196） | npm `pi-ai@1.1.0` 17 分片 588 chat 逐字节入资源（391KB）＋manifest sha256 锚；promptCache/inputLimits/sptl 三字段；B97/B232 销号；`DefaultModelIds` 默认模型表（B137 防回归切片）；#90 转存疑（消费链 B85 另案） | M | **docs/11** |
-| 3b | resolver glob/scope（**B137 主体**） | minimatch `*?[]`、子串匹配、alias-vs-dated 排序（localeCompare）、`ModelScopeDiagnostic` 两码、`--models` 多模型解析 | M | 开工前出 |
+| 3b | ✅ **已闭环 2026-10-14**（全量 clean verify 绿：11 模块；ai 1589＋coding-agent 536＋tui 213；加权不变 **92.2%**；两 commit `6f6f6ac3`/`90ae98f7`） | minimatch `*?[]` 子集（tarball 静态取证）、子串/id/name、alias 优先 dated 码点序降序、`:level` 严格/宽容两套、两码诊断逐字、`--models ?? enabledModels` 接通初始模型＋Ctrl+P/RPC scope 轮转；六条窄差裁决见 [`docs/12`](12-ai-batch3b-model-scope-design.md) §4 | M | **[docs/12](12-ai-batch3b-model-scope-design.md)** |
 | 4 | thinking/effort 通道 | B128 thinkingBudgets 通道；B99＋B110 supportsMidConvoEffort 全家桶（两 beta/夹消息/block_binding/output_config） | M＋L | 开工前出 |
 | 5 | 消息字段与终局计量 | B148 responseModel/diagnostics＋三流内触点；B234 durationMs（消息 S＋工具 M）；消息级 thinkingLevel | L | 开工前出 |
 | 6 | OAuth 车道行为 | B81 Claude Code 伪装三件套；B231 刷新 15s 超时＋轮转 token 必落盘 | M | 开工前出 |
