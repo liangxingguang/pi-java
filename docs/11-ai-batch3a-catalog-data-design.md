@@ -1,6 +1,6 @@
 # 11 ai 批 3a 详稿：模型目录数据面（npm 锚点数据转资源 ＋ promptCache/inputLimits/samplingParamsByThinkingLevel 字段）
 
-> 状态：**已闭环 2026-10-14**（两 commit `e38c3ab9` 资源＋装载器、`86465196` 三字段；ai 1599＋coding-agent 522 测全绿，checkstyle 零警告；加权 90.2%→**92.2%**）。
+> 状态：**已闭环 2026-10-14**（两 commit `e38c3ab9` 资源＋装载器、`86465196` 三字段；全量 `mvn clean verify` 绿——11 模块 3370 测，其中 ai **1542**＋coding-agent 522，checkstyle 零警告；加权 90.2%→**92.2%**）。
 > 基准：pi `ea448f454`（2026-10-11，v1.1.0-22）；数据源 **npm `@earendil-works/pi-ai@1.1.0` tarball**
 > （npm 包是 pi 发布物、git 里 data/ 被 ignore，`git show` 取不到——这是走 npm 的原因）。
 > 上游判据：`bin pi` 主流发布版行为；本包只做主流 7 家＋已注册 provider。
