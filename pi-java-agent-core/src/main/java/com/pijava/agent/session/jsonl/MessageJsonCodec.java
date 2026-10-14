@@ -50,12 +50,18 @@ final class MessageJsonCodec {
                 JsonlCodec.optionalString(node, "api"),
                 JsonlCodec.optionalString(node, "provider"),
                 JsonlCodec.optionalString(node, "model"),
+                // 批 5（B148）：旧盘无新键 ⇒ null ⇒ 写侧不出键，向前兼容。
+                JsonlCodec.optionalString(node, "responseModel"),
                 // B110：旧盘无此键 ⇒ null ⇒ NON_NULL 写侧不出键，向前兼容。
                 JsonlCodec.optionalString(node, "providerThinkingLevel"),
+                // 批 5：请求侧 pi 级别（含 off）。
+                JsonlCodec.optionalString(node, "thinkingLevel"),
+                decodeDiagnostics(node.get("diagnostics")),
                 decodeUsage(node.get("usage")),
                 decodeTimestamp(node.get("timestamp")),
                 JsonlCodec.optionalString(node, "errorMessage"),
-                JsonlCodec.optionalString(node, "rawStopReason"));
+                JsonlCodec.optionalString(node, "rawStopReason"),
+                JsonlCodec.optionalLong(node, "durationMs"));
             // pi 主流 role "toolResult"；2026-10-05 之前本仓写 "tool"（legacy，保留可读）。
             case "toolResult", "tool" -> new Message.ToolResultMessage(
                 JsonlCodec.firstText(node, "toolCallId", "toolUseId"),
@@ -65,7 +71,8 @@ final class MessageJsonCodec {
                 JsonlCodec.optionalAny(node, "usage"),
                 decodeStringList(node.get("addedToolNames")),
                 node.has("isError") && node.get("isError").asBoolean(false),
-                decodeTimestamp(node.get("timestamp")));
+                decodeTimestamp(node.get("timestamp")),
+                JsonlCodec.optionalLong(node, "durationMs"));
             case "system" -> new Message.SystemMessage(
                 content,
                 decodeTimestamp(node.get("timestamp")),
@@ -257,6 +264,27 @@ final class MessageJsonCodec {
             return SessionJson.mapper().treeToValue(node, Usage.class);
         } catch (Exception e) {
             throw JsonlCodec.DecodeError.schema("has invalid usage");
+        }
+    }
+
+    /**
+     * 批 5（B148）：{@code diagnostics} 列表（pi {@code AssistantMessageDiagnostic}）。
+     * 缺席/JSON null ⇒ null（≙ undefined，写侧省略）；非数组/元素非对象 ⇒ schema 错。
+     */
+    private static List<com.pijava.ai.message.AssistantMessageDiagnostic> decodeDiagnostics(
+            JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (!node.isArray()) {
+            throw JsonlCodec.DecodeError.schema("has invalid diagnostics");
+        }
+        try {
+            return SessionJson.mapper().convertValue(node,
+                new com.fasterxml.jackson.core.type.TypeReference<
+                    List<com.pijava.ai.message.AssistantMessageDiagnostic>>() {});
+        } catch (IllegalArgumentException e) {
+            throw JsonlCodec.DecodeError.schema("has invalid diagnostics entry");
         }
     }
 

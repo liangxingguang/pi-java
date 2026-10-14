@@ -299,6 +299,11 @@ final class PiLoopRunner {
                 null, java.time.Instant.now(), "Request was aborted", null);
         }
         finalMessage = markAborted(finalMessage, signal, cutShort);
+        // 批 5（pi agent-loop.ts:409）：终局结果盖<b>请求侧</b> pi 级别，
+        // `config.reasoning ?? "off"`——含 "off"，error/aborted/合成消息同盖；
+        // 流中 partial 不盖（与 pi message_update 不可观察一致）。
+        finalMessage = finalMessage.withThinkingLevel(
+            config.thinking() == null ? "off" : config.thinking().label());
         if (addedPartial) {
             messages.set(messages.size() - 1, finalMessage);
         } else {

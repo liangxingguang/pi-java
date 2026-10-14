@@ -71,9 +71,21 @@ public final class PiLoop {
         record ToolExecutionUpdate(String toolCallId, String toolName,
                                    Map<String, Object> args, Object partialResult) implements Event {}
 
-        /** pi {@code { type: "tool_execution_end"; ...; result; isError }}，result=完整结果对象（{@code :774-782}） */
+        /**
+         * pi {@code { type: "tool_execution_end"; ...; result; isError; durationMs? }}，
+         * result=完整结果对象（{@code :774-782}）。
+         * B234：{@code durationMs} 只围工具本体（agent types.ts:531-539）；
+         * 未执行（unknown/校验失败/blocked/执行前 abort/截断）⇒ null ⇒ 键省略。
+         */
         record ToolExecutionEnd(String toolCallId, String toolName,
-                                Object result, boolean isError) implements Event {}
+                                Object result, boolean isError, Long durationMs)
+                implements Event {
+            /** B234 之前的四参形状（未执行路径/存量构造点零改签用）。 */
+            ToolExecutionEnd(String toolCallId, String toolName,
+                             Object result, boolean isError) {
+                this(toolCallId, toolName, result, isError, null);
+            }
+        }
     }
 
     /** pi 的 {@code AgentEventSink}。 */

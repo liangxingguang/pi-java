@@ -78,6 +78,21 @@ public class ToolRegistry {
     }
 
     /**
+     * B234：{@code tool.execute()} 本体的计时结果（pi {@code agent-loop.ts:836-855}）。
+     * 工具成功返回 {@link Success}；工具抛异常返回 {@link Failure}（内容由调用方转成
+     * 错误结果）；审批拒绝/参数校验/工具缺失仍<b>抛出</b> —— 它们发生在钟起之前，
+     * 没有时长（pi 里属于 prepare 相，immediate outcome 无 durationMs）。
+     */
+    public sealed interface Execution permits Execution.Success, Execution.Failure {
+        /** 工具本体耗时（单调钟毫秒，四舍五入，≥0）。 */
+        long durationMs();
+
+        record Success(ToolResult<?> result, long durationMs) implements Execution {}
+
+        record Failure(Exception cause, long durationMs) implements Execution {}
+    }
+
+    /**
      * Execute a tool call by name.
      *
      * @throws SecurityException        if the tool call is not approved
@@ -85,6 +100,29 @@ public class ToolRegistry {
      * @throws Exception                on tool execution failure (harness catches and wraps)
      */
     public ToolResult<?> execute(
+            String toolName, String toolCallId,
+            Map<String, Object> arguments,
+            AbortSignal signal, ToolUpdateCallback<?> onUpdate,
+            ToolContext context) throws Exception {
+        return switch (executeTimed(toolName, toolCallId, arguments, signal, onUpdate, context)) {
+            case Execution.Success success -> success.result();
+            case Execution.Failure failure -> throw failure.cause();
+        };
+    }
+
+    /**
+     * B234：与 {@link #execute} 同链，但<b>只围工具本体</b>计时（pi
+     * {@code executePreparedToolCall}，agent-loop.ts:836-855）。
+     *
+     * <p>审批检查、schema 校验、{@code prepareArguments} 都在钟外（pi 里它们属于
+     * prepare 相/before 钩子；#10549 夹具：100ms 的 before 钩子不计入 durationMs）。
+     * 工具本体抛异常不重抛，收成 {@link Execution.Failure} 并同样带时长。</p>
+     *
+     * @throws SecurityException        审批拒绝（钟外，无时长）
+     * @throws IllegalArgumentException 工具缺失/参数非法（钟外，无时长）
+     * @throws Exception                prepareArguments 失败（钟外，无时长）
+     */
+    public Execution executeTimed(
             String toolName, String toolCallId,
             Map<String, Object> arguments,
             AbortSignal signal, ToolUpdateCallback<?> onUpdate,
@@ -109,10 +147,20 @@ public class ToolRegistry {
         // encodes as an error result fed back to the model.
         ToolArgumentsValidator.validate(rawTool.inputSchema(), arguments);
         var prepared = rawTool.prepareArguments(arguments);
-        @SuppressWarnings("unchecked")
-        var result = rawTool.execute(toolCallId, prepared, signal,
-                                     (ToolUpdateCallback<Object>) onUpdate, context);
-        return result;
+        long startNanos = System.nanoTime();
+        try {
+            @SuppressWarnings("unchecked")
+            var result = rawTool.execute(toolCallId, prepared, signal,
+                                         (ToolUpdateCallback<Object>) onUpdate, context);
+            return new Execution.Success(result, elapsedMillis(startNanos));
+        } catch (Exception e) {
+            return new Execution.Failure(e, elapsedMillis(startNanos));
+        }
+    }
+
+    /** pi {@code Math.round(performance.now() - startedAt)}：半入整毫秒、不为负。 */
+    private static long elapsedMillis(long startNanos) {
+        return Math.max(0L, Math.round((System.nanoTime() - startNanos) / 1_000_000.0));
     }
 
     /** Generate tool definitions suitable for the LLM request. */

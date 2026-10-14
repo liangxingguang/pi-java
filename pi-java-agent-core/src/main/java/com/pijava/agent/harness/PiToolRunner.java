@@ -150,8 +150,10 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
         var acceptingUpdates = new java.util.concurrent.atomic.AtomicBoolean(true);
         ToolResult<?> executed;
         boolean isError;
+        // B234：execute() 本体时长（钟不含审批/校验/prepareArguments）；钟外异常为 null。
+        Long durationMs;
         try {
-            executed = registry.execute(call.toolName(), call.toolCallId(), state.args(),
+            var execution = registry.executeTimed(call.toolName(), call.toolCallId(), state.args(),
                 signal, partial -> {
                     // pi :688：!acceptingUpdates 时静默丢弃
                     if (acceptingUpdates.get()) {
@@ -159,14 +161,27 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
                             call.toolName(), call.args(), partial));
                     }
                 }, toolContext);
-            // pi 的 isError 来自结果对象本身（`AgentToolResult.isError`，agent-session.ts:693），
-            // 不是「抛没抛」。MCP 工具的成功调用可以带回一个错误结果（服务器答了 isError），
-            // 那时内容要照带 —— 走抛出的话 harness 只会留一条消息。
-            isError = executed.isError();
+            if (execution instanceof ToolRegistry.Execution.Success success) {
+                executed = success.result();
+                // pi 的 isError 来自结果对象本身（`AgentToolResult.isError`，agent-session.ts:693），
+                // 不是「抛没抛」。MCP 工具的成功调用可以带回一个错误结果（服务器答了 isError），
+                // 那时内容要照带 —— 走抛出的话 harness 只会留一条消息。
+                isError = executed.isError();
+                durationMs = success.durationMs();
+            } else {
+                // pi :711-714：createErrorToolResult(error.message) —— 内容换掉、标记为错，
+                // 继续收尾；工具抛错同样带 execute() 本体时长。注意 createErrorToolResult
+                // 自身的 isError=false，错误位由这里显式置真（旧 catch 路径同此口径）。
+                var failure = (ToolRegistry.Execution.Failure) execution;
+                executed = PiLoopTools.createErrorToolResult(messageOf(failure.cause()));
+                isError = true;
+                durationMs = failure.durationMs();
+            }
         } catch (Exception e) {
-            // pi :711-714：createErrorToolResult(error.message) —— 内容换掉、标记为错，继续收尾
+            // 钟外失败（审批拒绝/参数校验/prepareArguments）：无时长（pi 的 immediate outcome）。
             executed = PiLoopTools.createErrorToolResult(messageOf(e));
             isError = true;
+            durationMs = null;
         } finally {
             acceptingUpdates.set(false);
         }
@@ -174,9 +189,10 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
             var finalized = hooks == null ? new AfterToolOutcome(executed, isError)
                 : hooks.fireAfterTool(laneName, new ToolResultContext(
                     laneName, call.toolCallId(), call.toolName(), executed, isError));
-            return toOutcome(call, finalized.result(), finalized.isError());
+            return toOutcome(call, finalized.result(), finalized.isError(), durationMs);
         } catch (Exception e) {
-            return errorOutcome(call, messageOf(e), false);
+            // pi finalizeExecutedToolCall 的 catch 保留 executed.durationMs（钩子耗时在外）。
+            return errorOutcome(call, messageOf(e), false, durationMs);
         }
     }
 
@@ -184,11 +200,11 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
     private record PreparedCall(PiLoop.ToolCall call, Map<String, Object> args)
             implements PiLoop.Prepared {}
 
-    /** 准备相当场失败：通知观测点后打包成 immediate 结果。 */
+    /** 准备相当场失败：通知观测点后打包成 immediate 结果（B234：未执行 ⇒ 无时长）。 */
     private PiLoop.Preparation immediate(PiLoop.ToolCall call, boolean allowed,
                                          String text, boolean terminate) {
         notify(call.toolCallId(), allowed);
-        return new PiLoop.ImmediateOutcome(errorOutcome(call, text, terminate));
+        return new PiLoop.ImmediateOutcome(errorOutcome(call, text, terminate, null));
     }
 
     private void notify(String toolCallId, boolean allowed) {
@@ -197,9 +213,13 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
         }
     }
 
-    /** pi 的 {@code createToolResultMessage}（{@code :784-797}）：消息由结果对象派生。 */
+    /**
+     * pi 的 {@code createToolResultMessage}（{@code :784-797}）：消息由结果对象派生。
+     * B234：{@code durationMs} 只围工具本体（{@code :925-927}）；null ≙ 未执行（键省略）。
+     */
     private static PiLoop.ToolOutcome toOutcome(PiLoop.ToolCall call,
-                                                ToolResult<?> result, boolean isError) {
+                                                ToolResult<?> result, boolean isError,
+                                                Long durationMs) {
         // pi :791：content ?? [] —— 无类型工具可能返回无内容的结果，null 不进历史
         var content = result.content() != null ? result.content() : List.<ContentBlock>of();
         // pi :792-794：details/usage/addedToolNames 原样转发到消息上（A7 的闭环点）
@@ -208,7 +228,7 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
         return new PiLoop.ToolOutcome(
             new Message.ToolResultMessage(call.toolCallId(), call.toolName(), content,
                 result.details(), result.usage(), result.addedToolNames(), isError,
-                java.time.Instant.now()),
+                java.time.Instant.now(), durationMs),
             result, isError);
     }
 
@@ -218,14 +238,16 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
      * 拒绝带 terminate 时补在结果对象上（pi {@code :645-647}）。
      * 消息与结果同源构造 —— pi 的 immediate 分支同样只经
      * {@code createToolResultMessage} 一条路（{@code :784-797}）。
+     *
+     * @param durationMs 工具本体时长（执行段异常/收尾段异常带值）；准备相失败传 null
      */
     private static PiLoop.ToolOutcome errorOutcome(PiLoop.ToolCall call, String text,
-                                                   boolean terminate) {
+                                                   boolean terminate, Long durationMs) {
         var base = PiLoopTools.createErrorToolResult(text);
         var result = terminate
             ? new ToolResult<>(base.content(), base.details(), null, true, List.of())
             : base;
-        return toOutcome(call, result, true);
+        return toOutcome(call, result, true, durationMs);
     }
 
     /**

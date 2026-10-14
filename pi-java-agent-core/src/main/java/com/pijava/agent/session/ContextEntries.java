@@ -240,13 +240,17 @@ public final class ContextEntries {
         }
         if (message instanceof Message.AssistantMessage assistant) {
             return new Message.AssistantMessage(blocks, assistant.stopReason(), assistant.deferred(),
-                assistant.api(), assistant.provider(), assistant.model(), assistant.usage(),
-                assistant.timestamp(), assistant.errorMessage(), assistant.rawStopReason());
+                assistant.api(), assistant.provider(), assistant.model(),
+                assistant.responseModel(), assistant.providerThinkingLevel(),
+                assistant.thinkingLevel(), assistant.diagnostics(),
+                assistant.usage(),
+                assistant.timestamp(), assistant.errorMessage(), assistant.rawStopReason(),
+                assistant.durationMs());
         }
         if (message instanceof Message.ToolResultMessage tool) {
             return new Message.ToolResultMessage(tool.toolUseId(), tool.toolName(), blocks,
                 tool.details(), tool.usage(), tool.addedToolNames(), tool.isError(),
-                tool.timestamp());
+                tool.timestamp(), tool.durationMs());
         }
         return message;
     }

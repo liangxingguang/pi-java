@@ -103,7 +103,8 @@ final class PiLoopTools {
             };
             outcomes.add(outcome);
             emit.emit(new PiLoop.Event.ToolExecutionEnd(
-                call.id(), call.name(), outcome.result(), outcome.isError()));
+                call.id(), call.name(), outcome.result(), outcome.isError(),
+                outcome.message().durationMs()));
             emit.emit(new PiLoop.Event.MessageStart(outcome.message()));
             emit.emit(new PiLoop.Event.MessageEnd(outcome.message()));
             messages.add(outcome.message());
@@ -158,7 +159,9 @@ final class PiLoopTools {
             if (preparation instanceof PiLoop.ImmediateOutcome immediate) {
                 emit.emit(new PiLoop.Event.ToolExecutionEnd(
                     call.id(), call.name(),
-                    immediate.outcome().result(), immediate.outcome().isError()));
+                    immediate.outcome().result(), immediate.outcome().isError(),
+                    // B234：immediate 是准备相当场失败（未执行），消息无 durationMs。
+                    immediate.outcome().message().durationMs()));
                 entries.add(immediate::outcome);
                 if (aborted(config)) {
                     break;
@@ -171,7 +174,8 @@ final class PiLoopTools {
                     ? abortedOutcome(call)
                     : config.toolRunner().execute(prepared, emit);
                 emit.emit(new PiLoop.Event.ToolExecutionEnd(
-                    call.id(), call.name(), outcome.result(), outcome.isError()));
+                    call.id(), call.name(), outcome.result(), outcome.isError(),
+                    outcome.message().durationMs()));
                 return outcome;
             });
             if (aborted(config)) {

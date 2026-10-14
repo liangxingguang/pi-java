@@ -87,6 +87,10 @@ public final class SessionJson {
             if (tool.timestamp() != null) {
                 node.put("timestamp", tool.timestamp().toEpochMilli());
             }
+            // B234（pi types.ts:635）：工具本体耗时；未执行/旧盘缺席 ⇒ 键省略。
+            if (tool.durationMs() != null) {
+                node.put("durationMs", tool.durationMs());
+            }
         }
         if (message instanceof Message.UserMessage user) {
             // 原 docs/71 G1：用户消息的时间戳（pi types.ts:512 必填）。
@@ -115,10 +119,22 @@ public final class SessionJson {
             if (assistant.model() != null) {
                 node.put("model", assistant.model());
             }
+            // B148（pi types.ts:571）：provider 实际服务模型；键位紧跟 model（pi 同序）。
+            if (assistant.responseModel() != null) {
+                node.put("responseModel", assistant.responseModel());
+            }
             // B110：managed effort 盖章随消息落库（位置紧跟 model，pi types.ts 同序）；
             // 非 managed 车道与旧消息为 null ⇒ 键省略（同 A7 规则）。
             if (assistant.providerThinkingLevel() != null) {
                 node.put("providerThinkingLevel", assistant.providerThinkingLevel());
+            }
+            // 批 5（pi types.ts:575-576，agent-loop.ts:409）：请求侧 pi 级别（含 off）。
+            if (assistant.thinkingLevel() != null) {
+                node.put("thinkingLevel", assistant.thinkingLevel());
+            }
+            // B148（pi types.ts:577）：provider/运行时诊断列表。
+            if (assistant.diagnostics() != null) {
+                node.set("diagnostics", MAPPER.valueToTree(assistant.diagnostics()));
             }
             if (assistant.usage() != null) {
                 node.set("usage", MAPPER.valueToTree(assistant.usage()));
@@ -135,6 +151,10 @@ public final class SessionJson {
             // 落盘 ⇒ 这个键在 pi 的转录里同样出现；未观测到 ⇒ null ⇒ 键省略（同 A7 规则）。
             if (assistant.rawStopReason() != null) {
                 node.put("rawStopReason", assistant.rawStopReason());
+            }
+            // B234（pi types.ts:595）：响应单调钟耗时；只在终局消息上有值。
+            if (assistant.durationMs() != null) {
+                node.put("durationMs", assistant.durationMs());
             }
         }
         if (message instanceof Message.SystemMessage system) {
