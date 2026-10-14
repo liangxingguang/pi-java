@@ -21,6 +21,11 @@
 >   minimatch 子集＋子串＋alias/dated 排序＋两码 scope 诊断＋`--models` 消费链接通；
 >   B137 销号（行为台账项，加权不变 92.2%）；残留窄差见 04 B137 行（歧义硬错误/localeCompare/
 >   brace/反向 cycling/auth 过滤/resume 门近似，均经裁决）。
+> - **批 4（thinking/effort，2026-10-14 闭环，[`docs/13`](13-ai-batch4-thinking-effort-design.md)）**：
+>   B128（thinkingBudgets 通道）、B99（managed effort：block_binding/两 beta/温度门/
+>   effort marker 重建）、B110（providerThinkingLevel）销号，加权不变 92.2%。探针附带修正：
+>   beta 协商改走 anthropic-beta **请求头**（body 的 betas 键从不上头，四个旧 beta 从未生效）。
+>   残留窄差：bedrock/vertex budget 支、agent proxy HTTP 透传（04 B99 行）。
 > - **2026-10-12 ai 批 0 裁决**（[`docs/08`](08-ai-layer-alignment-roadmap.md)）：B115/B117/B124
 >   取证关单；B100/B126/B147/B226/B230 转 04 §4；map 单元 #87 零代码对齐，#9/#10/#11/#12/#33/
 >   #74/#78/#92/#93/#94/#100 出分母（R5/w0/作废）；§1 剩 24 条。

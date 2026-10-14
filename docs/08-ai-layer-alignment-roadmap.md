@@ -65,8 +65,9 @@
   批 1：#23、#101 存疑→对齐（+1）；批 3：#34(+2)、#86(+1)、#91(+1)、#90 字段半成转存疑(+0.5)；
   批 5：#37 四字段落（responseId/endTurn 随 codex R5）转对齐(+1)；批 7：#95(+1)、#96(+1)、#97(+0.5)。
 - **批 3a 后（2026-10-14 实际值）**：wc 197.5→**202.0/219＝92.2%**——#34/+2、#86/+1、#91/+1 已实现，
-  #90 缺失→存疑 +0.5（元数据齐、B85 消费链另案）；剩余推演增量：批 4（B99/B110/B128）、批 5 #37(+1)、
+  #90 缺失→存疑 +0.5（元数据齐、B85 消费链另案）；剩余推演增量：批 5 #37(+1)、
   批 7 #95/#96/#97(+2.5)，全完工仍指向 **205.5（#90 消费链若随 coding tools 落地再 +0.5 → 206/219＝94.1%）**。
+  **批 4（B128/B99/B110）2026-10-14 闭环后仍 202.0/219＝92.2%**：三条都是行为台账项，不占加权单元。
 - **残余 13.5 权重**（为什么不是 100%）：
   - 缺失 2：**#8 namespace**（随 MCP 包 B203）、**#98 federation**（用户裁决后排）；
   - 半成品 0.5：**#90** 元数据落、图像缩放消费链在 coding tools 另案（L）；
@@ -82,7 +83,7 @@
 | 2 | ✅ **已闭环 2026-10-13**（ai 1561 测全绿；60→71 Mistral 夹具） | B80 数组 content 三支＋请求面 thinking 重放、B233 x-affinity＋prompt_cache_key；**B239 即登即销**（assistant tool_calls/prefix 重放） | M | **docs/10** |
 | 3a | ✅ **已闭环 2026-10-14**（全量 clean verify 绿：ai 1542＋coding-agent 522 等 11 模块；加权 90.2%→**92.2%**；两 commit e38c3ab9/86465196） | npm `pi-ai@1.1.0` 17 分片 588 chat 逐字节入资源（391KB）＋manifest sha256 锚；promptCache/inputLimits/sptl 三字段；B97/B232 销号；`DefaultModelIds` 默认模型表（B137 防回归切片）；#90 转存疑（消费链 B85 另案） | M | **docs/11** |
 | 3b | ✅ **已闭环 2026-10-14**（全量 clean verify 绿：11 模块；ai 1589＋coding-agent 536＋tui 213；加权不变 **92.2%**；两 commit `6f6f6ac3`/`90ae98f7`） | minimatch `*?[]` 子集（tarball 静态取证）、子串/id/name、alias 优先 dated 码点序降序、`:level` 严格/宽容两套、两码诊断逐字、`--models ?? enabledModels` 接通初始模型＋Ctrl+P/RPC scope 轮转；六条窄差裁决见 [`docs/12`](12-ai-batch3b-model-scope-design.md) §4 | M | **[docs/12](12-ai-batch3b-model-scope-design.md)** |
-| 4 | thinking/effort 通道 | B128 thinkingBudgets 通道；B99＋B110 supportsMidConvoEffort 全家桶（两 beta/夹消息/block_binding/output_config） | M＋L | 开工前出 |
+| 4 | ✅ **已闭环 2026-10-14**（全量 clean verify 绿：11 模块 3468 测；ai 1614＋coding-agent 542＋agent-core 661；加权不变 **92.2%**；四 commit `1206eaf2`/`9368bfe1`/`941e6898`/`b1c38a0f`/`aa29df66`/`ae9fc831`，设计稿 `1206eaf2`） | B128 thinkingBudgets 三层通道（settings→harness→StreamRequest，三消费点）；B99 managed effort（raw block_binding/两 beta **请求头**/温度第四门/历史＋队尾 effort marker）；B110 providerThinkingLevel 盖章＋JSONL＋终局帧＋pi-messages 透传。探针附带修正四个旧 beta 从未上头的隐患；bedrock/vertex 与 agent proxy 透传为裁决残留 | M＋L | **[docs/13](13-ai-batch4-thinking-effort-design.md)** |
 | 5 | 消息字段与终局计量 | B148 responseModel/diagnostics＋三流内触点；B234 durationMs（消息 S＋工具 M）；消息级 thinkingLevel | L | 开工前出 |
 | 6 | OAuth 车道行为 | B81 Claude Code 伪装三件套；B231 刷新 15s 超时＋轮转 token 必落盘 | M | 开工前出 |
 | 7 | ChatGPT 订阅登录 | #97 共享回调服务器（固定端口/state/品牌页/竞速）→ #95 动态客户端注册；#96 copy-code 同面并入 | M-L＋M | 开工前出 |

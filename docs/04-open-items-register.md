@@ -77,9 +77,9 @@
 | # | 条目 | 现状与出处 |
 |---|---|---|
 | B81 | pi OAuth 分支两面未移植 | 系统提示前缀 ＋ 工具名映射（anthropic-messages isOAuthToken 分支） |
-| B110 | `providerThinkingLevel` **pi 有、Java 无**（2026-10-10 更正原「两侧均无」） | pi：`proxy.ts:51/58/386-396` 线字段 ＋ `anthropic-messages.ts:581/588` 消息字段；Java 侧 `JsonEventMapper.java:346` 不写 |
+| ~~B110~~ | ~~`providerThinkingLevel` pi 有、Java 无~~ | ✅ **已销号 2026-10-14（批 4，[`docs/13`](13-ai-batch4-thinking-effort-design.md)，commit `aa29df66`）**：两层 AssistantMessage 加 `providerThinkingLevel`（model 之后）；anthropic-messages 车道在 `supportsMidConvoEffort` flag 下经 AbstractChatApi 身份缝盖 `effort ?? "high"`（start 帧即在、不认 forceAdaptive）；pi-messages done/error 帧透传；JSONL 编解码（旧盘解为 null）；JSON 终局帧在 usage 后按 `?` 写键；消息级 `thinkingLevel`（请求侧，含 off）仍留批 5 |
 | B116 | StreamDone 的 UsageInfo 嵌套包裹是 Java 方言 | pi 的 usage 只在消息上，proxy 线另发扁平 usage；2026-10-12 取证：线格式两处均已扁成 pi 形状（`JsonEventMapper.java:320-327,351-373`），内部组件保留（docs/08 §2.2） |
-| B128 | thinkingBudgets 无选项通道 | pi SimpleStreamOptions.thinkingBudgets（docs/08 批 4） |
+| ~~B128~~ | ~~thinkingBudgets 无选项通道~~ | ✅ **已销号 2026-10-14（批 4，[`docs/13`](13-ai-batch4-thinking-effort-design.md)，commit `9368bfe1`/`941e6898`/`b1c38a0f`）**：settings.json 四段（optional 无默认、无范围校验）→ SettingsAccessors → HarnessConfig/PiLoop.Config/StreamOptions（null≙undefined）→ StreamRequest.thinkingBudgets；anthropic budget adjust、completions 顶层预算字段、google custom 首支（0/-1 原样）三消费点接通，null 按 DEFAULT 浅合并。旧「harness 不转发」结论作废（引用的 harness/ 目录在锚点已删） |
 | ~~B137~~ | ~~resolver 的 glob/scope 面~~ | ✅ **已销号 2026-10-14（批 3b，[`docs/12`](12-ai-batch3b-model-scope-design.md)，commit `6f6f6ac3`/`90ae98f7`）**：`ModelGlob`（minimatch 10.2.6 子集 `* ? ** [class]`/转义/点门/nocase，静态取证未引 npm）、`ModelPatterns`（精确三段唯一性→id/显示名子串→alias 优先 dated 码点序降序→`:level` 严格/宽容两套）、`ModelScopeResolver`（双车道 glob、保序去重、两码诊断逐字）落 ai 模块；`--models ?? settings.enabledModels` 接通启动初始模型（saved-in-scope 优先）、诊断 stderr、Ctrl+P/RPC `cycle_model` scope 内正向轮转；`DefaultModelResolver` 改委托严格核，非法后缀留在自定义 id。**残留窄差**（均经裁决，docs/12 §4）：① 裸 id 跨家歧义（16 个国内镜像 id）不搬 pi 硬错误（Java 无 auth 门），落子串路取目录序确定性首中；② `localeCompare`→码点序降序；③ minimatch 不做 brace/extglob/posix（花括号按字面⇒no-match）；④ Ctrl+P 仅正向；⑤ scope/cycling 无 auth 可用性过滤（整体既有差异）；⑥ resume scoped-skip 门用 args 旗标/web latest 存在性近似 pi 的 messages>0 |
 | B148 | responseModel/diagnostics 真消费者未接 | pi 用于 usage 分组、cache 归属等；含 pi-messages 的 `pi_messages_response_failure` 信封（`{type,timestamp,error:{name,message,stack,code},details}`，details 二选一投影＋8192 U+2026 截断，`pi-messages.ts:133-152`）——B224 只对齐了文案半，信封半随本条（消费者＝bug-report，见 B79）。**2026-10-11 补记**：Anthropic 服务端回退的流内半也随本条——`content_block_start` 的 `"fallback"` 块处理（已有内容时抛 mid-output fallback）＋ responseModel 成本归属（`anthropic-messages.ts:660-690`，按 `allowedFallbackModels[].cost` 取价；请求半 beta＋params.fallbacks 已随 B98 落）（docs/08 批 5：responseId/endTurn 随 codex 出分母不做） |
 | B156 | ModelCompat 逐组件重建会静默丢字段 | 新组件追加时的副作用面；2026-10-12 评估：全仓 13 构造点集中 4 文件且有逐字段注释，列 backlog 不强改（docs/08 §2.2） |
@@ -98,7 +98,7 @@
 | B94 | 8 个内置工具的 `promptSnippet`/`promptGuidelines` 声明 |
 | B95 | `docs` 段无生产者（ContextAssembler 不传 DocumentationPaths） |
 | ~~B97~~ | ~~3 个内置 (provider,modelId) 与 pi 目录不匹配~~ ✅ **批 3a（2026-10-14）销号**：手写 id 全删（deepseek-v4-flash→deepseek-flash、mistral-large/small、kimi-k2.5、glm-4.5-air、mimo-v2、qwen3-*、ling-1t/ring 等被 npm 分片真值取代），Java 独有的 text-embedding-3-* 两条同步移除（embed CLI flag 默认值不查目录，保留） |
-| B99 | supportsMidConvoEffort 半可移植（docs/08 批 4） |
+| ~~B99~~ | ~~supportsMidConvoEffort 半可移植~~ ✅ **批 4（2026-10-14）销号**：[`docs/13`](13-ai-batch4-thinking-effort-design.md) §1.2，commit `aa29df66`/`ae9fc831`。compat 字段全链接通（9 个 Claude 5 目录模型的批 3a 数据开始生效）；managed 请求恒发 raw `adaptive`＋`block_binding:{prefix_mismatch_behavior:"drop_block"}`（stable SDK 无 typed 形状，走 JSON 逃生舱）＋顶层 `output_config:{effort:"high"}`＋两 beta 请求头；temperature 第四门；历史/队尾 effort marker 逐回合重放（五值白名单、同 api/provider、空块不索引、队尾 marker 在断点后不吃 cache_control）；显式 anthropic-beta 头整组替换自动 beta。**探针附带修复**：body "betas" 键从不上头，既有四个 beta 改走 anthropic-beta 请求头（此前从未真正协商）。**残留窄差**（docs/13 §6 裁决）：bedrock/vertex 预算支不做；agent proxy HTTP 透传随代理传输整块挂起 |
 
 ### 3.3 功能整块
 

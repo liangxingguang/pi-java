@@ -1,12 +1,14 @@
 # 13 ai 批 4 详稿：thinking/effort 通道（B128 thinkingBudgets 选项通道 ＋ B99 supportsMidConvoEffort 全家桶 ＋ B110 providerThinkingLevel）
 
-> 状态：**已审核通过**（2026-10-14 用户批准）。实施中：
-> commit 1 已落（探针 settle＋B128 三层通道）。
+> 状态：**已闭环（2026-10-14）**。三批提交：① `9368bfe1`/`941e6898`/`b1c38a0f`
+> B128 三层通道＋beta 通道修复；② `aa29df66` compat 字段链＋managed 请求体＋
+> providerThinkingLevel 盖章/JSONL/终局帧/pi-messages 透传；③ `ae9fc831`
+> effort marker 历史/队尾重建。台账 B99/B110/B128 销号，加权 **92.2% 不变**。
 > **裁决①探针结论（2026-10-14，SDK 2.66.0 loopback 抓包）**：body 的 `betas`
 > 未知键**不会**被 SDK 提升为 `anthropic-beta` 请求头（请求头集合无该头，键只留在 JSON 体里）
 > ⇒ 全部 beta 改走 `putAdditionalHeader("anthropic-beta", 逗号连接)`；既有 4 个 beta
 > （interleaved/inline-tools/fine-grained/fallback）此前确实一直没真正生效，本批一并修正。
-> 固化夹具＝{@code AnthropicBetaHeaderProbeTest}。
+> 固化夹具＝`AnthropicBetaHeaderProbeTest`。
 > 基准：pi `ea448f454`（2026-10-11，v1.1.0-22）；pi 证据一律 `git show ea448f454:<path>`，不读工作树。
 > 上游判据：`bin pi` 主流发布版行为。
 > 路线：[`08`](08-ai-layer-alignment-roadmap.md) §3 批 4＝台账 **B128 ＋ B99 ＋ B110**。
