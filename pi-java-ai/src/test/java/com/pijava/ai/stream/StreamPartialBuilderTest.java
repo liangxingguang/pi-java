@@ -133,4 +133,45 @@ class StreamPartialBuilderTest {
         // 终局事件是唯一的改写点（这里是车道映射后的取值）。
         assertThat(builder.emitDone(StopReason.LENGTH).partial().stopReason()).isEqualTo(StopReason.LENGTH);
     }
+
+    /** B148：responseModel 首值胜（completions 的 ||=），空/缺忽略。 */
+    @Test
+    void responseModelIsFirstWinAndNullSafe() {
+        var builder = new StreamPartialBuilder();
+        assertThat(builder.snapshot().responseModel()).isNull();
+
+        builder.noteResponseModel("routed-a");
+        builder.noteResponseModel("routed-b");
+        builder.noteResponseModel(null);
+        builder.noteResponseModel("");
+        assertThat(builder.snapshot().responseModel()).isEqualTo("routed-a");
+    }
+
+    /** B148：诊断逐条追加，每个快照持不可变拷贝（早快照不被后追加污染）。 */
+    @Test
+    void diagnosticsAppendAsImmutableSnapshots() {
+        var builder = new StreamPartialBuilder();
+        var first = builder.emitStart().partial();
+
+        builder.appendDiagnostic(new com.pijava.ai.message.AssistantMessageDiagnostic(
+            "pi_messages_rewrite", 1L, null, null));
+        var second = builder.snapshot();
+        builder.appendDiagnostic(new com.pijava.ai.message.AssistantMessageDiagnostic(
+            "anthropic_input_transformations", 2L, null, null));
+        var third = builder.snapshot();
+
+        assertThat(first.diagnostics()).isNull();
+        assertThat(second.diagnostics()).hasSize(1);
+        assertThat(third.diagnostics()).hasSize(2);
+        assertThat(third.diagnostics().get(0).type()).isEqualTo("pi_messages_rewrite");
+    }
+
+    /** B148：hasContentBlocks 是中段 fallback 块的硬错判据。 */
+    @Test
+    void hasContentBlocksTracksEmittedBlocks() {
+        var builder = new StreamPartialBuilder();
+        assertThat(builder.hasContentBlocks()).isFalse();
+        builder.emitTextStart();
+        assertThat(builder.hasContentBlocks()).isTrue();
+    }
 }

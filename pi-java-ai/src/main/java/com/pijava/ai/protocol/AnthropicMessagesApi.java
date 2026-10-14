@@ -12,13 +12,16 @@ import com.anthropic.models.messages.RawMessageDeltaEvent;
 import com.anthropic.models.messages.RawMessageStreamEvent;
 
 import com.anthropic.backends.AnthropicBackend;
+import com.anthropic.core.JsonValue;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.AuthKind;
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.catalog.AllowedFallbackModel;
 import com.pijava.ai.catalog.CacheRetention;
 import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.http.ProviderRetry;
+import com.pijava.ai.message.AssistantMessageDiagnostic;
 import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
@@ -187,6 +190,10 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         var pendingToolId = new String[]{""};
         var stop = new StopState();
         var usageState = new AnthropicUsageState(request.model());
+        // B148：服务端回退元数据（fallback 成本归属）＋ input_transformations 收集。
+        var fallbacks = request.model() == null ? java.util.List.<AllowedFallbackModel>of()
+            : CompatResolver.forAnthropic(request.model(), baseUrl).allowedFallbackModels();
+        var responseExtras = new AnthropicResponseExtras();
         try {
             var params = buildParams(request, affinitySessionId(), baseUrl,
                 effectiveHeaderNames);
@@ -198,8 +205,9 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                     ProviderRetry::ofAnthropic, providerRetry);
             try (sr) {
                 sr.stream().forEach(raw -> {
-                    StreamEvent se = mapEvent(raw, builder, isToolBlock,
-                            isThinkingBlock, pendingToolName, pendingToolId, stop, usageState);
+                    StreamEvent se = mapEvent(raw, request, builder, isToolBlock,
+                            isThinkingBlock, pendingToolName, pendingToolId, stop,
+                            usageState, fallbacks, responseExtras);
                     if (se != null) {
                         if (se instanceof StreamEvent.StreamError) {
                             // pi 在这一层是 throw（未知 stop reason、SDK 异常都会抛穿整条流），
@@ -211,7 +219,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                     }
                 });
             }
-            submitTail(builder, publisher, stop);
+            submitTail(builder, publisher, stop, responseExtras);
         } catch (Exception e) {
             publisher.submit(builder.emitError(StopReason.ERROR, e));
         }
@@ -234,7 +242,8 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
      */
     private static void submitTail(StreamPartialBuilder builder,
                                    SubmissionPublisher<StreamEvent> publisher,
-                                   StopState stop) {
+                                   StopState stop,
+                                   AnthropicResponseExtras responseExtras) {
         if (stop.errored) {
             return; // 循环内已发过 error：pi 在那一层 throw，收尾不跑
         }
@@ -247,6 +256,15 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
             publisher.submit(builder.emitError(StopReason.ERROR, new IllegalStateException(
                     stop.errorMessage != null ? stop.errorMessage : "An unknown error occurred")));
             return;
+        }
+        // B148（pi anthropic-messages.ts:871-885）：成功收尾时把 input_transformations
+        // 落成诊断（pending/error/aborted 的 throw 都在这之前，错误路不产出）。
+        if (responseExtras.hasTransformations()) {
+            builder.appendDiagnostic(new AssistantMessageDiagnostic(
+                "anthropic_input_transformations",
+                System.currentTimeMillis(),
+                null,
+                responseExtras.transformationsDetails()));
         }
         publisher.submit(builder.emitDone(stop.reason));
     }
@@ -269,20 +287,29 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
     }
 
     private StreamEvent mapEvent(RawMessageStreamEvent event,
+                                  StreamRequest request,
                                   StreamPartialBuilder builder,
                                   boolean[] isToolBlock,
                                   boolean[] isThinkingBlock,
                                   String[] pendingToolName,
                                   String[] pendingToolId,
                                   StopState stop,
-                                  AnthropicUsageState usageState) {
+                                  AnthropicUsageState usageState,
+                                  java.util.List<AllowedFallbackModel> fallbacks,
+                                  AnthropicResponseExtras responseExtras) {
         try {
             if (event.isMessageStart()) {
+                var startMessage = event.asMessageStart().message();
+                // B148（pi :666-690）：responseModel/fallback 计价/input_transformations
+                // 三件流内触点收敛在 AnthropicResponseExtras；定价切换必须在本次
+                // onMessageStart（首次计价）之前。
+                responseExtras.noteStart(builder, request, fallbacks, startMessage);
+                usageState.usePricing(responseExtras.servingPricing());
                 // pi `:615-625`：**首帧保留** —— 五字段无条件 `|| 0` 写入，注释逐字
                 // "This ensures we have input token counts even if the stream is aborted
                 // early"。pi 在此**不 push 任何事件**（它没有 usage 事件，usage 是
                 // output 对象上的字段）⇒ 本处用 noteUsage 而非 emitUsage，**帧数不变**。
-                var u = event.asMessageStart().message().usage();
+                var u = startMessage.usage();
                 Long oneHour = u._cacheCreation().asKnown()
                         .flatMap(c -> c._ephemeral1hInputTokens().asKnown())
                         .orElse(null);
@@ -297,6 +324,17 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
             }
             if (event.isContentBlockStart()) {
                 var block = event.asContentBlockStart().contentBlock();
+                // B148（pi :690-694，探针 AnthropicFallbackBlockProbeTest 已 settle
+                // 访问面）：SDK 联合无 "fallback" typed 变体，经 _json() 逃生槽判别。
+                // 无已有内容 ⇒ continue（块不入 content、不发事件）；已有内容 ⇒ 抛错，
+                // 被本方法 catch 收成 StreamError（errorMessage 逐字，已流块保留）。
+                if (AnthropicResponseExtras.isFallbackBlock(block)) {
+                    if (builder.hasContentBlocks()) {
+                        throw new IllegalStateException(
+                            "Anthropic performed an unsupported mid-output model fallback");
+                    }
+                    return null;
+                }
                 if (block.isToolUse()) {
                     var tu = block.toolUse().orElseThrow();
                     isToolBlock[0] = true;
@@ -385,7 +423,15 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                 return builder.emitTextEnd();
             }
             if (event.isMessageDelta()) {
-                var delta = event.asMessageDelta().delta();
+                // B148（pi :815-817）：input_transformations 在事件**顶层**（不在 delta 里），
+                // 是数组即整体替换 start 的列表（末值胜）。
+                var deltaEvent = event.asMessageDelta();
+                var deltaTransformations =
+                    deltaEvent._additionalProperties().get("input_transformations");
+                if (deltaTransformations != null) {
+                    responseExtras.replaceTransformations(deltaTransformations);
+                }
+                var delta = deltaEvent.delta();
                 // pi `:738-744`：`if (event.delta.stop_reason)` 是 JS 真值判断 ⇒
                 // 键缺失、JSON null、空串三种都按「本事件没观测到 stop reason」处理。
                 var rawStopReason = delta._stopReason();
@@ -395,7 +441,8 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                     if (!raw.isEmpty()) {
                         // pi `:744`：原值先落消息（⑨/D5），映射结果再落 stopReason。
                         builder.noteRawStopReason(raw);
-                        var mapped = mapStopReason(raw, refusalExplanation(delta));
+                        var mapped = AnthropicStopReasons.map(
+                            raw, AnthropicStopReasons.refusalExplanation(delta));
                         stop.reason = mapped.reason();
                         if (mapped.errorMessage() != null) {
                             stop.errorMessage = mapped.errorMessage();
@@ -427,55 +474,6 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         return null;
     }
 
-    /**
-     * pi {@code anthropic-messages.ts:1464-1493} {@code mapStopReason} 的逐字移植。
-     *
-     * <p>⚠️ **一处**刻意偏差：返回值是记录而不是 pi 的对象字面量
-     * （{@code {stopReason, errorMessage?}}）—— 同形，只是 Java 需要显式类型。</p>
-     *
-     * <p>（原第二条偏差「pi 返回 {@code "toolUse"} 而 pi-java 落 {@code "tool_use"}」已随
-     * B109 消失：归一化词表现在与 pi 同字面量，见 {@code 原 docs/56}。注意区分三个同名字面量
-     * —— 上面 {@code case} 的标号是**线格原值**，一直写作 {@code "tool_use"}，本包不动它。）</p>
-     *
-     * <p>未知取值**抛** {@code IllegalStateException}，与 pi 的 {@code default: throw} 一致；
-     * 它由 {@code mapEvent} 的 catch 转成 {@code StreamError}（文案相同），随后收尾不再补事件。</p>
-     *
-     * @param raw          wire 上的原始取值（{@code StopReason.asString()}；SDK 1.15.0 的
-     *                     {@code StopReason.Known} 不含 {@code sensitive} 一类新值，未知值会被
-     *                     {@code known()} 抛掉，只能读原始字符串）
-     * @param explanation  {@code stop_details.explanation}，无则 null
-     */
-    private static MappedStopReason mapStopReason(String raw, String explanation) {
-        return switch (raw) {
-            case "end_turn" -> new MappedStopReason(StopReason.STOP, null);
-            case "max_tokens" -> new MappedStopReason(StopReason.LENGTH, null);
-            case "tool_use" -> new MappedStopReason(StopReason.TOOL_USE, null);
-            case "refusal" -> new MappedStopReason(StopReason.ERROR,
-                    explanation != null && !explanation.isEmpty()
-                            ? explanation
-                            : "The model refused to complete the request");
-            case "pause_turn" -> new MappedStopReason(StopReason.STOP, null); // 重发即可，stop 足够
-            case "stop_sequence" -> new MappedStopReason(StopReason.STOP, null); // 未供 stop 序列，不该出现
-            case "sensitive" -> new MappedStopReason(StopReason.ERROR, "Provider stopped with: sensitive");
-            default -> throw new IllegalStateException("Unhandled stop reason: " + raw);
-        };
-    }
-
-    /** pi {@code mapStopReason} 的返回形状 {@code { stopReason, errorMessage? }}。 */
-    private record MappedStopReason(StopReason reason, String errorMessage) {}
-
-    /**
-     * {@code message_delta.delta.stop_details.explanation}（pi {@code :1475} 的
-     * {@code stopDetails?.explanation}）。
-     *
-     * <p>走非抛异常面 {@code _explanation()}（P2 处理 {@code signature} 的同一口径）：
-     * 字段缺失或类型不符都退化成「没有说明」，由调用方落 pi 的默认文案。</p>
-     */
-    private static String refusalExplanation(RawMessageDeltaEvent.Delta delta) {
-        return delta._stopDetails().asKnown()
-                .flatMap(details -> details._explanation().asString())
-                .orElse(null);
-    }
 
     /** 直调夹具形态（反射调用）：无亲和头、无显式 beta 覆写。 */
     private MessageCreateParams buildParams(StreamRequest request) {

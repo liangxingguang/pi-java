@@ -158,6 +158,12 @@ class MessageTest {
                 .withRawStopReason("refusal")
                 .withIdentity("openai-responses", "openai", "mock", at)
                 .withErrorMessage("boom")
+                .withResponseModel("served-model")
+                .withDurationMs(42L)
+                .withDiagnostics(List.of(new AssistantMessageDiagnostic(
+                    "pi_messages_rewrite", 123L, null,
+                    new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode()
+                        .put("policyId", "p"))))
                 .withUsage(new com.pijava.ai.stream.StreamEvent.UsageInfo(7, 3, null, usage));
 
         var msg = Message.AssistantMessage.fromPartial(partial);
@@ -171,6 +177,13 @@ class MessageTest {
         assertThat(msg.model()).isEqualTo("mock");
         assertThat(msg.timestamp()).isEqualTo(at);
         assertThat(msg.errorMessage()).isEqualTo("boom");
+        // 批 5（B148/B234）：流内字段逐字投影。
+        assertThat(msg.responseModel()).isEqualTo("served-model");
+        assertThat(msg.durationMs()).isEqualTo(42L);
+        assertThat(msg.diagnostics()).hasSize(1);
+        assertThat(msg.diagnostics().get(0).type()).isEqualTo("pi_messages_rewrite");
+        // 请求侧级别不随 partial：pi 只在 agent loop 终局 Object.assign（agent-loop.ts:409）。
+        assertThat(msg.thinkingLevel()).isNull();
         // 有全量分解 ⇒ 原样用（cache/cost 不丢）
         assertThat(msg.usage()).isEqualTo(usage);
     }

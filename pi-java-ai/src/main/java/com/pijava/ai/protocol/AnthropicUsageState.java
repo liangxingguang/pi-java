@@ -3,6 +3,7 @@ package com.pijava.ai.protocol;
 import com.pijava.ai.Usage;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.model.CostCalculator;
+import com.pijava.ai.model.PricingInfo;
 
 /**
  * Anthropic 车道的 per-stream usage 累加器 —— pi 把 {@code output.usage} 就地 mutate
@@ -35,8 +36,20 @@ final class AnthropicUsageState {
     /** 计价用的模型；{@code null} ⇒ 不计价（cost 保持零）。 */
     private final ModelInfo model;
 
+    /**
+     * B148：服务端回退命中 {@code allowedFallbackModels} 条目后切换的定价表
+     * （pi {@code usageModel = { …model, id: responseModel, cost: fallbackCost }}，
+     * anthropic-messages.ts:674-677）；{@code null} ⇒ 沿用请求模型定价。
+     */
+    private PricingInfo pricingOverride;
+
     AnthropicUsageState(ModelInfo model) {
         this.model = model;
+    }
+
+    /** B148：按 message_start 观测到的服务模型切换定价（null 还原请求模型表）。 */
+    void usePricing(PricingInfo override) {
+        this.pricingOverride = override;
     }
 
     /** 当前累计的 usage（pi 的 {@code output.usage}）。 */
@@ -93,9 +106,12 @@ final class AnthropicUsageState {
         double total = usage.input() + usage.output() + usage.cacheRead() + usage.cacheWrite();
         var withTotal = new Usage(usage.input(), usage.output(), usage.cacheRead(), usage.cacheWrite(),
             usage.cacheWrite1h(), usage.reasoning(), total, Usage.Cost.zero());
-        usage = model == null
+        // B148：命中 fallback 定价条目后用条目的 cost（pi usageModel 切换）。
+        var pricing = pricingOverride != null ? pricingOverride
+            : model == null ? null : model.pricing();
+        usage = pricing == null
             ? withTotal
-            : withTotal.withCost(CostCalculator.calculateCost(model.pricing(), withTotal));
+            : withTotal.withCost(CostCalculator.calculateCost(pricing, withTotal));
     }
 
     private static double orZero(Long value) {

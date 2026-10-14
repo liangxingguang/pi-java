@@ -6,6 +6,7 @@ import java.util.Map;
 
 import com.pijava.ai.Usage;
 import com.pijava.ai.message.AssistantMessage;
+import com.pijava.ai.message.AssistantMessageDiagnostic;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.StopReason;
 
@@ -54,6 +55,19 @@ public final class StreamPartialBuilder {
      */
     private String providerThinkingLevel;
 
+    /**
+     * B148：provider 实际服务的模型 id（pi {@code output.responseModel}）。
+     * 由车道在观测到线格 model 与请求 id 不同时写入；<b>首值胜</b>
+     * （completions 的 {@code output.responseModel ||= chunk.model}）。
+     */
+    private String responseModel;
+
+    /**
+     * B148：provider/运行时诊断（pi {@code output.diagnostics}）。
+     * 默认 null（≙ undefined，键省略）；{@link #appendDiagnostic} 按需建表追加。
+     */
+    private List<AssistantMessageDiagnostic> diagnostics;
+
     // Per-block accumulators
     private final StringBuilder textBuf = new StringBuilder();
     // Signature riding on the current text block (Google text parts). Empty
@@ -101,7 +115,9 @@ public final class StreamPartialBuilder {
      */
     public AssistantMessage snapshot() {
         return new AssistantMessage(messageId, List.copyOf(blocks), usage, stopReason,
-            null, null, null, providerThinkingLevel, null, null, rawStopReason);
+            null, null, null, responseModel, providerThinkingLevel,
+            diagnostics == null ? null : List.copyOf(diagnostics),
+            null, null, rawStopReason, null);
     }
 
     /**
@@ -111,6 +127,39 @@ public final class StreamPartialBuilder {
      */
     public void noteProviderThinkingLevel(String level) {
         this.providerThinkingLevel = level;
+    }
+
+    /**
+     * B148：记下 provider 实际服务的模型 id（pi {@code output.responseModel}）。
+     *
+     * <p><b>首值胜</b>：对位 completions 车道的
+     * {@code output.responseModel ||= chunk.model}（openai-completions.ts:566）——
+     * 已设非空值时后续 chunk 不覆盖；传 null/空白忽略。anthropic 车道一条流只有
+     * 一次 message_start，同函数收口。</p>
+     */
+    public void noteResponseModel(String model) {
+        if (this.responseModel == null && model != null && !model.isEmpty()) {
+            this.responseModel = model;
+        }
+    }
+
+    /**
+     * B148：追加一条诊断（pi {@code appendAssistantMessageDiagnostic}，
+     * diagnostics.ts:42-46）。每次追加生成不可变新表，快照持当前拷贝。
+     */
+    public void appendDiagnostic(AssistantMessageDiagnostic diagnostic) {
+        var copy = new ArrayList<AssistantMessageDiagnostic>(
+            diagnostics == null ? List.of() : diagnostics);
+        copy.add(diagnostic);
+        this.diagnostics = List.copyOf(copy);
+    }
+
+    /**
+     * B148：是否已经产出过内容块 —— anthropic 中段模型回退块的判据
+     * （{@code anthropic-messages.ts:690-693}：fallback 块在已有内容之后才硬错）。
+     */
+    public boolean hasContentBlocks() {
+        return !blocks.isEmpty();
     }
 
     /**

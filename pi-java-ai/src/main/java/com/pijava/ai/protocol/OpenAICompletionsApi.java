@@ -202,6 +202,18 @@ public class OpenAICompletionsApi extends AbstractChatApi {
             try (streamResponse) {
 
                 for (var chunk : streamResponse.stream().toList()) {
+                    // B148（pi openai-completions.ts:565-567）：首个非空且与请求 id
+                    // 不同的 chunk.model 落 responseModel（builder 内首值胜，||=）。
+                    // 放在 choices 判定之前：usage-only chunk 也可能先带 model。
+                    // 用非抛的 _model()：桩/relay 的 chunk 可整个不带 model 键，
+                    // 普通 model() 访问器会抛（同本仓其它 _additionalProperties 口径）。
+                    if (request.model() != null) {
+                        String chunkModel = chunk._model().asKnown().orElse(null);
+                        if (chunkModel != null && !chunkModel.isEmpty()
+                                && !chunkModel.equals(request.modelId().modelName())) {
+                            builder.noteResponseModel(chunkModel);
+                        }
+                    }
                     if (chunk.choices().isEmpty()) {
                         if (chunk.usage().isPresent()) {
                             publisher.submit(builder.emitUsage(

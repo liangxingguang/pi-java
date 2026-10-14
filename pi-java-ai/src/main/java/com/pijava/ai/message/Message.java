@@ -156,27 +156,19 @@ public sealed interface Message
      * （{@code "max_tokens"}／{@code "MAX_TOKENS"}／{@code "tool_calls"}），
      * 后者是 pi 的 {@code StopReason}。pi 的消息整体 stringify 落盘 ⇒ 它同样是转录里的键。</p>
      *
-     * <p>⚠️ <b>以下四个 pi 字段不移植，但**每个的理由各不相同**</b>（2026-10-14 复核，
-     * 批 4 把 {@code providerThinkingLevel} 移出清单）—— 旧注释把它们笼统写成「对齐面
-     * 没有任何消费者」，那个措辞只对其中两个成立：</p>
-     * <ul>
-     * <li>{@code responseId}（{@code types.ts:522}）、{@code endTurn}
-     *     （{@code :531-535}）：<b>零消费者</b>真的成立 —— 全仓只有同车道内的读点
-     *     （{@code openai-codex-responses.ts:1534/:1546}）与一个 write-only 生产者。
-     *     维持不移植。</li>
-     * <li>{@code responseModel}（{@code :521}）、{@code diagnostics}（{@code :525}）：
-     *     pi **有**真消费者（用量费用分组 {@code coding-agent/core/usage-totals.ts:44}、
-     *     缓存保温归属 {@code cache-warmer.ts:345}、bug 报告 {@code bug-report.ts:194}、
-     *     UI 计数 {@code interactive-mode.ts:3917}）—— 但那些模块**本仓一个都没有**
-     *     （{@code RunSummaryAggregator} 是按 run 汇总，不按 {@code provider/responseModel}
-     *     分组）⇒ 移植会变成「只有生产者没有消费者」。**等那些模块移植时一并做**
-     *     （台账批 5：B148）。</li>
-     * </ul>
-     * <p>{@code providerThinkingLevel}（{@code :523-524}）已随批 4（B110/B99）落地为
-     * {@link #providerThinkingLevel} 组件；消息级 {@code thinkingLevel}（agent-loop
-     * :409 的请求侧 pi 级别，含 "off"）仍留台账批 5。</p>
-     * <p>（{@code rawStopReason} 原本也在这张清单上，§8.35.14 第五节的复核把它移出：
-     * pi 的两个读点都在 Google 车道的**生产者层** —— 那一层 pi-java 也要实现。）</p>
+     * <p><b>批 5（B148/B234，2026-10-15）</b>：{@code responseModel}、
+     * {@code diagnostics}、{@code durationMs} 已落地为组件；消费侧（usage-totals
+     * 费用分组、cache-warmer、bug-report、UI 计数）仍在各自模块另案（docs/08 §2.3）。
+     * 消息级 {@code thinkingLevel}（agent-loop :409 的请求侧 pi 级别，含 "off"）
+     * 同批落地，唯一盖章点是 agent loop 的终局定案（{@code PiLoopRunner}）。</p>
+     *
+     * <p>仍<b>不移植</b>的两个 pi 字段（逐字证据）：{@code responseId}
+     * （{@code types.ts:572}）、{@code endTurn}（{@code :589-593}）——全仓只有
+     * codex-responses 车道内的读点（随该车道 R5 出分母，docs/08 §2.1）与一个
+     * write-only 生产者，主流七家零消费者。</p>
+     * <p>{@code providerThinkingLevel}（{@code :573-574}）随批 4（B110/B99）落地；
+     * {@code rawStopReason} 的两个读点都在 Google 车道的<b>生产者层</b>，
+     * pi-java 也要实现那一层。</p>
      *
      * <p>可选字段全部「null ≙ pi 的 undefined」：序列化时键主动省略（Jackson 会把
      * null 写出来，JS 的 stringify 会丢 undefined —— 规则同 §8.18 的 A7）。
@@ -190,19 +182,36 @@ public sealed interface Message
         String provider,
         String model,
         /**
-         * B110（pi {@code types.ts:523-524}）：本次响应的 provider-native effort；
+         * B148（pi {@code types.ts:571}）：provider 实际服务的模型 id；
+         * 与请求 {@code model} 不同时才有值（anthropic 服务端回退／openai 路由）。
+         */
+        String responseModel,
+        /**
+         * B110（pi {@code types.ts:573-574}）：本次响应的 provider-native effort；
          * 只在 anthropic managed（{@code supportsMidConvoEffort}）消息上有值，
          * 旧盘与其余车道解码为 null（键省略）。B99 marker 重建的唯一语义输入。
          */
         String providerThinkingLevel,
+        /**
+         * 批 5（pi {@code types.ts:575-576}，agent-loop.ts:409）：agent loop
+         * <b>请求侧</b>的 pi 级别（off/minimal/…/max），终局定案时单点盖；
+         * 直调 ai（agent loop 外）与旧盘为 null。与 {@link #providerThinkingLevel}
+         * （响应侧 provider-native 值）是两个字段。
+         */
+        String thinkingLevel,
+        /** B148（pi {@code types.ts:577}）：provider/运行时诊断列表；无诊断为 null。 */
+        List<AssistantMessageDiagnostic> diagnostics,
         com.pijava.ai.Usage usage,
         java.time.Instant timestamp,
         String errorMessage,
-        String rawStopReason
+        String rawStopReason,
+        /** B234（pi {@code types.ts:595}）：响应单调钟毫秒数；只在终局消息上有值。 */
+        Long durationMs
     ) implements Message {
         /** Compact constructor that defensively copies the content blocks. */
         public AssistantMessage {
             content = List.copyOf(content);
+            diagnostics = diagnostics == null ? null : List.copyOf(diagnostics);
         }
 
         /**
@@ -210,21 +219,23 @@ public sealed interface Message
          * written before stop reasons were recorded, carries neither field.
          */
         public AssistantMessage(List<ContentBlock> content) {
-            this(content, null, null, null, null, null, null, null, null, null, null);
+            this(content, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null);
         }
 
         /** Compatibility constructor for the (content, stopReason, deferred) shape. */
         public AssistantMessage(List<ContentBlock> content, StopReason stopReason,
                                 DeferredHandle deferred) {
             this(content, stopReason, deferred,
-                null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null,
+                null, null, null, null, null);
         }
 
         /**
-         * B110 之前的<b>规范</b>十参构造：{@code providerThinkingLevel} 缺席
-         * （≙ pi 的 {@code undefined} ⇒ 键省略）。保留它使批 4 之前的全部构造点
-         * （合成的中止/摘要消息、存量夹具）零改签；有值的消息（fromPartial、
-         * JSONL 解码、B99 重放）走十参规范构造。
+         * 批 5 之前的<b>规范</b>十参构造：{@code responseModel/providerThinkingLevel/
+         * thinkingLevel/diagnostics/durationMs} 五件缺席（≙ pi 的 {@code undefined}
+         * ⇒ 键省略）。保留它使批 5 之前的全部构造点（合成的中止/摘要消息、
+         * 存量夹具）零改签；有值的消息走十五参全参构造（fromPartial、JSONL 解码）。
          */
         public AssistantMessage(List<ContentBlock> content, StopReason stopReason,
                                 DeferredHandle deferred,
@@ -232,7 +243,23 @@ public sealed interface Message
                                 com.pijava.ai.Usage usage, java.time.Instant timestamp,
                                 String errorMessage, String rawStopReason) {
             this(content, stopReason, deferred,
-                api, provider, model, null, usage, timestamp, errorMessage, rawStopReason);
+                api, provider, model, null, null, null, null,
+                usage, timestamp, errorMessage, rawStopReason, null);
+        }
+
+        /**
+         * 批 4 的十一参构造（B110：{@code providerThinkingLevel} 在、批 5 四件缺席）：
+         * 批 4 夹具与 B99 重放构造点用它，零改签；新字段全 null。
+         */
+        public AssistantMessage(List<ContentBlock> content, StopReason stopReason,
+                                DeferredHandle deferred,
+                                String api, String provider, String model,
+                                String providerThinkingLevel,
+                                com.pijava.ai.Usage usage, java.time.Instant timestamp,
+                                String errorMessage, String rawStopReason) {
+            this(content, stopReason, deferred,
+                api, provider, model, null, providerThinkingLevel, null, null,
+                usage, timestamp, errorMessage, rawStopReason, null);
         }
 
         /**
@@ -240,6 +267,10 @@ public sealed interface Message
          * 对象形状</b>（{@code assistant-message-frame.ts:77-92} 的
          * {@code cloneStartMessage} 逐字段携带），所以投影必须全字段，
          * 不能只搬 content/stopReason（那是 3a 之前的丢点）。
+         *
+         * <p>{@code thinkingLevel} 恒为 null：partial 流中不盖该字段
+         * （pi 只在 agent-loop 终局 {@code Object.assign}），它由 loop 层
+         * 在投影之后经 {@link #withThinkingLevel} 单点盖上。</p>
          */
         public static AssistantMessage fromPartial(
                 com.pijava.ai.message.AssistantMessage partial) {
@@ -250,11 +281,15 @@ public sealed interface Message
                 partial.api(),
                 partial.provider(),
                 partial.model(),
+                partial.responseModel(),
                 partial.providerThinkingLevel(),
+                null,
+                partial.diagnostics(),
                 usageOf(partial.usage()),
                 partial.timestamp(),
                 partial.errorMessage(),
-                partial.rawStopReason());
+                partial.rawStopReason(),
+                partial.durationMs());
         }
 
         /**
@@ -301,8 +336,20 @@ public sealed interface Message
          */
         public AssistantMessage withStopReason(StopReason newStopReason) {
             return new AssistantMessage(content, newStopReason, deferred,
-                api, provider, model, providerThinkingLevel,
-                usage, timestamp, errorMessage, rawStopReason);
+                api, provider, model,
+                responseModel, providerThinkingLevel, thinkingLevel, diagnostics,
+                usage, timestamp, errorMessage, rawStopReason, durationMs);
+        }
+
+        /**
+         * 批 5（pi {@code agent-loop.ts:409}）：盖 agent loop <b>请求侧</b>
+         * pi 级别（含 {@code "off"}）的全字段复制；只在终局定案后单点调用。
+         */
+        public AssistantMessage withThinkingLevel(String newThinkingLevel) {
+            return new AssistantMessage(content, stopReason, deferred,
+                api, provider, model,
+                responseModel, providerThinkingLevel, newThinkingLevel, diagnostics,
+                usage, timestamp, errorMessage, rawStopReason, durationMs);
         }
 
         @Override
@@ -339,7 +386,13 @@ public sealed interface Message
     record ToolResultMessage(String toolUseId, String toolName,
                              List<ContentBlock> content,
                              Object details, Object usage, List<String> addedToolNames,
-                             boolean isError, java.time.Instant timestamp) implements Message {
+                             boolean isError, java.time.Instant timestamp,
+                             /**
+                              * B234（pi {@code types.ts:635}）：工具 {@code execute()}
+                              * 本体的单调钟毫秒数（不含校验/审批/hook）；未执行的调用
+                              * 与旧数据为 null（≙ pi 的 undefined，键省略）。
+                              */
+                             Long durationMs) implements Message {
         /** Compact constructor: defensive copies; empty {@code addedToolNames} ≙ pi 的省略。 */
         public ToolResultMessage {
             content = List.copyOf(content);
@@ -356,7 +409,19 @@ public sealed interface Message
          */
         public ToolResultMessage(String toolUseId, String toolName,
                                  List<ContentBlock> content, boolean isError) {
-            this(toolUseId, toolName, content, null, null, List.of(), isError, null);
+            this(toolUseId, toolName, content, null, null, List.of(), isError, null, null);
+        }
+
+        /**
+         * 批 5 之前的规范八参构造：{@code durationMs} 缺席（未执行的合成结果、
+         * 截断/中止消息、存量构造点零改签用）。
+         */
+        public ToolResultMessage(String toolUseId, String toolName,
+                                 List<ContentBlock> content,
+                                 Object details, Object usage, List<String> addedToolNames,
+                                 boolean isError, java.time.Instant timestamp) {
+            this(toolUseId, toolName, content, details, usage, addedToolNames,
+                isError, timestamp, null);
         }
 
         @Override

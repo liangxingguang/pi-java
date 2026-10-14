@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.SubmissionPublisher;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -15,6 +16,7 @@ import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.http.PiHttpClient;
+import com.pijava.ai.message.AssistantMessageDiagnostic;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.message.StopReason;
@@ -151,6 +153,8 @@ public final class PiMessagesApi extends AbstractChatApi {
                         if (done.providerThinkingLevel() != null) {
                             builder.noteProviderThinkingLevel(done.providerThinkingLevel());
                         }
+                        // B148（pi :173-180）：网关重写摘要在终局落成诊断（done/error 两支都附）。
+                        appendRewriteDiagnostic(builder, done.rewrite());
                         // B109：pi 消息通道发的归一化停因与本枚举同词表（camelCase）。
                         // 这是 JSON 解码边界（pi TS 类型擦除、零校验）⇒ fromWireOrNull
                         // 容错：未知值落 null（比较全不命中），不走 JsonlCodec 的 tool_use 垫片。
@@ -162,6 +166,7 @@ public final class PiMessagesApi extends AbstractChatApi {
                         if (err.providerThinkingLevel() != null) {
                             builder.noteProviderThinkingLevel(err.providerThinkingLevel());
                         }
+                        appendRewriteDiagnostic(builder, err.rewrite());
                         // 解码边界容错：未知/缺失 ⇒ null ⇒ settle 补缺 ERROR（同 pi 零校验）。
                         publisher.submit(builder.emitError(
                             StopReason.fromWireOrNull(err.reason()),
@@ -183,12 +188,83 @@ public final class PiMessagesApi extends AbstractChatApi {
             if (e instanceof com.pijava.ai.http.PiHttpException http && http.statusCode() > 0) {
                 String message = ProviderErrors.formatPiMessagesError(
                     http.statusCode(), http.body());
+                // B148（pi pi-messages.ts:336-341）：HTTP 故障附
+                // pi_messages_response_failure 诊断（信封半，见 failureDiagnostic）。
+                // SSE 流内 error 事件不附（switch 分支）；中止态不附（车道层不可达）。
+                builder.appendDiagnostic(failureDiagnostic(request, baseUrl, http, message));
                 publisher.submit(builder.emitError(StopReason.ERROR,
                     message.equals(e.getMessage()) ? e : new IllegalStateException(message, e)));
             } else {
                 publisher.submit(builder.emitError(StopReason.ERROR, e));
             }
         }
+    }
+
+    /**
+     * B148：pi {@code createPiMessagesResponseError} 的 details 信封
+     * （pi-messages.ts:133-152）＋ {@code createAssistantMessageDiagnostic}
+     * （:336-341）。
+     *
+     * <p>details 逐字：{@code version:1, provider, model, url, status, statusText,
+     * error|body（二选一）, timestampMs}。错误体可解析为 {@code {error:对象}} ⇒
+     * 挂原始 error 节点；否则挂截断裸 body（8192 + U+2026）。error 信息里
+     * name 恒为字面量 {@code PiMessagesResponseError}（Java 无同名异常），
+     * code 取 error.code 文本值，stack 取底层异常栈串。</p>
+     */
+    private static AssistantMessageDiagnostic failureDiagnostic(
+            StreamRequest request, String baseUrl,
+            com.pijava.ai.http.PiHttpException http, String formattedMessage) {
+        long now = System.currentTimeMillis();
+        var details = JSON.createObjectNode();
+        details.put("version", 1);
+        details.put("provider", request.modelId().provider());
+        details.put("model", request.modelId().modelName());
+        details.put("url", baseUrl + "/messages");
+        details.put("status", http.statusCode());
+        details.put("statusText", ProviderErrors.reasonPhrase(http.statusCode()));
+        JsonNode errorNode = ProviderErrors.parsePiMessagesErrorNode(http.body());
+        JsonNode codeNode = null;
+        if (errorNode != null) {
+            details.set("error", errorNode);
+            var rawCode = errorNode.get("code");
+            if (rawCode != null && rawCode.isTextual() && !rawCode.asText().isEmpty()) {
+                codeNode = rawCode;
+            }
+        } else {
+            details.put("body", ProviderErrors.truncateDiagnosticString(http.body()));
+        }
+        details.put("timestampMs", now);
+        var errorInfo = new AssistantMessageDiagnostic.DiagnosticErrorInfo(
+            "PiMessagesResponseError", formattedMessage, stackOf(http), codeNode);
+        return new AssistantMessageDiagnostic(
+            "pi_messages_response_failure", now, errorInfo, details);
+    }
+
+    /**
+     * B148（pi :165-180 {@code appendRewriteDiagnostic}）：非空 rewrite 摘要落成
+     * {@code pi_messages_rewrite} 诊断，details 是 impact 的逐字段拷贝（done/error 两支同法）。
+     */
+    private static void appendRewriteDiagnostic(StreamPartialBuilder builder,
+                                                 RewriteImpact rewrite) {
+        if (rewrite == null) {
+            return;
+        }
+        var details = JSON.createObjectNode();
+        details.put("policyId", rewrite.policyId());
+        details.put("policyVersion", rewrite.policyVersion());
+        details.put("changed", rewrite.changed());
+        details.put("tokenCountChange", rewrite.tokenCountChange());
+        details.put("messageCountChange", rewrite.messageCountChange());
+        details.put("systemPromptChanged", rewrite.systemPromptChanged());
+        builder.appendDiagnostic(new AssistantMessageDiagnostic(
+            "pi_messages_rewrite", System.currentTimeMillis(), null, details));
+    }
+
+    /** 异常栈串（pi 的 {@code error.stack}；JDK PrintWriter 重放）。 */
+    private static String stackOf(Throwable throwable) {
+        var writer = new java.io.StringWriter();
+        throwable.printStackTrace(new java.io.PrintWriter(writer));
+        return writer.toString();
     }
 
     // ── 请求构建 ─────────────────────────────────────────────────────────

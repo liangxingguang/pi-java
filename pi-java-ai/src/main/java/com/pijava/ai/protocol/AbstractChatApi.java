@@ -94,8 +94,11 @@ public abstract class AbstractChatApi implements ChatApi {
         var started = new AtomicBoolean();
         // 身份挂载只发生一次/每次订阅一致：一个流一个 timestamp。
         var timestamp = Instant.now();
+        // B234（pi AssistantMessageEventStream：event-stream.ts:94-129）：单调钟随
+        // 流对象创建起算，终局消息盖 durationMs。每订阅者一把同起点的钟。
+        long startNano = System.nanoTime();
         return subscriber -> {
-            publisher.subscribe(new IdentitySubscriber(subscriber, effective, timestamp));
+            publisher.subscribe(new IdentitySubscriber(subscriber, effective, timestamp, startNano));
             if (started.compareAndSet(false, true)) {
                 Thread.startVirtualThread(() -> {
                     try {
@@ -134,6 +137,9 @@ public abstract class AbstractChatApi implements ChatApi {
     public StreamIterator streamBlocking(StreamRequest request, ApiOptions options) {
         var queue = new LinkedBlockingQueue<StreamEvent>();
         var netTimestamp = Instant.now();
+        // B234：与 stream() 的订阅者钟同起点（流创建即起算）；两条合成终局
+        // （onError/onComplete 安全网）不经 IdentitySubscriber，在此补盖。
+        long startNano = System.nanoTime();
         stream(request, options).subscribe(new Flow.Subscriber<>() {
             private Flow.Subscription subscription;
             @Override public void onSubscribe(Flow.Subscription s) {
@@ -142,7 +148,8 @@ public abstract class AbstractChatApi implements ChatApi {
             @Override public void onNext(StreamEvent e) { queue.offer(e); }
             @Override public void onError(Throwable t) {
                 queue.offer(StreamEvent.StreamError.settle(
-                    StopReason.ERROR, t, identityBase(request, netTimestamp)));
+                    StopReason.ERROR, t,
+                    timed(identityBase(request, netTimestamp), startNano)));
             }
             @Override public void onComplete() {
                 // Safety net (liveness only): the SubmissionPublisher can drop the
@@ -157,10 +164,20 @@ public abstract class AbstractChatApi implements ChatApi {
                 // (`原 docs/55 §5 F3`).
                 queue.offer(StreamEvent.StreamError.settle(StopReason.ERROR,
                     new IllegalStateException("stream completed without a terminal event"),
-                    identityBase(request, netTimestamp)));
+                    timed(identityBase(request, netTimestamp), startNano)));
             }
         });
         return new QueueStreamIterator(queue);
+    }
+
+    /**
+     * B234（pi {@code AssistantMessageEventStream.#time}，event-stream.ts:126-129）：
+     * 从流创建到终局的单调钟毫秒数，{@code Math.max(0, round)}。给<b>未经
+     * IdentitySubscriber</b>的合成基底消息补盖（正常车道终局在订阅者处已盖）。
+     */
+    private static AssistantMessage timed(AssistantMessage base, long startNano) {
+        long ms = Math.max(0L, Math.round((System.nanoTime() - startNano) / 1_000_000.0));
+        return base.withDurationMs(ms);
     }
 
     /**
@@ -180,6 +197,7 @@ public abstract class AbstractChatApi implements ChatApi {
     @Override
     public Message send(StreamRequest request, ApiOptions options) {
         var timestamp = Instant.now();
+        long startNano = System.nanoTime();
         // B113（docs/52）：不包 try/catch —— 车道错误全部经 StreamError 落流（见上），
         // QueueStreamIterator.hasNext()/next() 永不抛（中断合成落定事件），故旧 catch
         // (→ PiHttpException "Streaming failed") 是不可达死结构。管道自身的未检查故障
@@ -197,7 +215,8 @@ public abstract class AbstractChatApi implements ChatApi {
             }
         }
         // 走到这里只可能是管道自身故障（迭代器中断）—— 给一条基底消息，不假装是成功回答。
-        return Message.AssistantMessage.fromPartial(identityBase(request, timestamp));
+        return Message.AssistantMessage.fromPartial(
+            timed(identityBase(request, timestamp), startNano));
     }
 
     /**
@@ -210,12 +229,17 @@ public abstract class AbstractChatApi implements ChatApi {
         private final Flow.Subscriber<? super StreamEvent> downstream;
         private final StreamRequest request;
         private final Instant timestamp;
+        /** B234：流创建时刻的单调钟读数（终局耗时基准）。 */
+        private final long startNano;
+        /** pi 的 {@code this.done} 守卫：终局只盖一次。 */
+        private final AtomicBoolean terminalTimed = new AtomicBoolean();
 
         IdentitySubscriber(Flow.Subscriber<? super StreamEvent> downstream,
-                           StreamRequest request, Instant timestamp) {
+                           StreamRequest request, Instant timestamp, long startNano) {
             this.downstream = downstream;
             this.request = request;
             this.timestamp = timestamp;
+            this.startNano = startNano;
         }
 
         @Override
@@ -243,6 +267,14 @@ public abstract class AbstractChatApi implements ChatApi {
                 identified = identified.withProviderThinkingLevel(level);
             }
             var attached = withTerminalUsage(event, identified);
+            // B234（pi event-stream.ts:121-129）：终局消息盖单调钟耗时，只盖一次；
+            // 消息已带值（转发流保留内层测量）则不覆盖。
+            if ((event instanceof StreamEvent.StreamDone
+                    || event instanceof StreamEvent.StreamError)
+                    && terminalTimed.compareAndSet(false, true)
+                    && attached.durationMs() == null) {
+                attached = timed(attached, startNano);
+            }
             downstream.onNext(StreamEvent.withPartial(event, attached));
         }
 

@@ -63,9 +63,12 @@ class AnthropicMessagesApiThinkingSignatureTest {
     private static Method findMapEvent() {
         try {
             var method = AnthropicMessagesApi.class.getDeclaredMethod("mapEvent",
-                RawMessageStreamEvent.class, StreamPartialBuilder.class,
+                RawMessageStreamEvent.class,
+                com.pijava.ai.api.StreamRequest.class,
+                StreamPartialBuilder.class,
                 boolean[].class, boolean[].class, String[].class, String[].class,
-                STOP_STATE_TYPE, AnthropicUsageState.class);
+                STOP_STATE_TYPE, AnthropicUsageState.class,
+                java.util.List.class, AnthropicResponseExtras.class);
             method.setAccessible(true);
             return method;
         } catch (ReflectiveOperationException e) {
@@ -88,6 +91,11 @@ class AnthropicMessagesApiThinkingSignatureTest {
         // 包 H1 步 3 起 mapEvent 多收一个 usage 累加器（原 docs/42）；本夹具不喂 usage，
         // 传一个无模型的实例即可（model == null ⇒ 不计价）。
         private final AnthropicUsageState usageState = new AnthropicUsageState(null);
+        // 批 5（B148）起 mapEvent 多收请求/回退元数据/响应面状态；本夹具只测签名块，
+        // request 传 null（消息面分支对 null 有守卫）、fallback 空表、extras 空实例。
+        private final AnthropicResponseExtras responseExtras = new AnthropicResponseExtras();
+        private final java.util.List<com.pijava.ai.catalog.AllowedFallbackModel> fallbacks =
+            java.util.List.of();
 
         Stream() throws ReflectiveOperationException {
             var ctor = STOP_STATE_TYPE.getDeclaredConstructor();
@@ -96,8 +104,9 @@ class AnthropicMessagesApiThinkingSignatureTest {
         }
 
         StreamEvent feed(RawMessageStreamEvent event) throws Exception {
-            return (StreamEvent) MAP_EVENT.invoke(api, event, builder,
-                isToolBlock, isThinkingBlock, pendingToolName, pendingToolId, stopState, usageState);
+            return (StreamEvent) MAP_EVENT.invoke(api, event, null, builder,
+                isToolBlock, isThinkingBlock, pendingToolName, pendingToolId, stopState,
+                usageState, fallbacks, responseExtras);
         }
 
         StreamEvent feedJson(String json, Class<?> type) throws Exception {

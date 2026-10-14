@@ -215,7 +215,7 @@ public final class ProviderErrors {
         String body = rawBody == null ? "" : rawBody;
         String message = null;
         String code = null;
-        JsonNode error = piMessagesErrorNode(body);
+        JsonNode error = parsePiMessagesErrorNode(body);
         if (error != null) {
             JsonNode messageNode = error.get("message");
             if (messageNode != null && messageNode.isTextual()) {
@@ -235,8 +235,11 @@ public final class ProviderErrors {
      * pi {@code parsePiMessagesErrorBody}（pi-messages.ts:109-117）：JSON 解析成功
      * ∧ 根是对象 ∧ {@code error} 是非数组对象 ⇒ 返回 error 节点；否则 {@code null}
      * （≙ pi 的 undefined，调用方回落裸 body）。
+     *
+     * <p>B148 起开放给 pi-messages 车道构造失败诊断信封（{@code details.error}
+     * 要原样挂这个节点）。</p>
      */
-    private static JsonNode piMessagesErrorNode(String body) {
+    public static JsonNode parsePiMessagesErrorNode(String body) {
         if (body == null || body.isBlank()) {
             return null; // JSON.parse("") 抛错
         }
@@ -250,10 +253,26 @@ public final class ProviderErrors {
     }
 
     /**
+     * pi {@code truncateDiagnosticString}（pi-messages.ts:122-126）：诊断 details
+     * 里裸 body 的截断 —— 超过 8192 字符截前 8192 加 U+2026（{@code …}），不是
+     * {@link #truncate} 的 {@code "... [truncated N chars]"}（那条是 4000 的错误体规则）。
+     */
+    public static String truncateDiagnosticString(String value) {
+        if (value == null) {
+            return null;
+        }
+        return value.length() > DIAGNOSTIC_BODY_MAX
+            ? value.substring(0, DIAGNOSTIC_BODY_MAX) + "…" : value;
+    }
+
+    /** pi {@code maxLength = 8192}（pi-messages.ts:123）。 */
+    public static final int DIAGNOSTIC_BODY_MAX = 8192;
+
+    /**
      * RFC 9110 标准 reason phrase（JDK {@code java.net.http} 不暴露状态行）。
      * 未知码 ⇒ {@code ""}（≙ pi 看到空 statusText，见 原 docs/49 §4.2）。
      */
-    static String reasonPhrase(int status) {
+    public static String reasonPhrase(int status) {
         return REASON_PHRASES.getOrDefault(status, "");
     }
 
