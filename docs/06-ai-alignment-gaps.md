@@ -26,6 +26,14 @@
 >   effort marker 重建）、B110（providerThinkingLevel）销号，加权不变 92.2%。探针附带修正：
 >   beta 协商改走 anthropic-beta **请求头**（body 的 betas 键从不上头，四个旧 beta 从未生效）。
 >   残留窄差：bedrock/vertex budget 支、agent proxy HTTP 透传（04 B99 行）。
+> - **批 5（消息字段与终局计量，2026-10-15 闭环，[`docs/14`](14-ai-batch5-message-fields-design.md)）**：
+>   B148 流内半（responseModel＋fallback 成本归属／mid-output fallback 硬错／
+>   input_transformations 诊断／pi-messages 失败信封＋rewrite）、B234（响应 durationMs
+>   身份缝加盖；工具 durationMs 只围 execute() 本体贯通事件与 JSONL/双 wire）、消息级
+>   thinkingLevel（agent loop 终局盖，含 off）销号；map 单元 #37 转对齐（+1），
+>   **加权 92.2%→92.7%**。探针附带 settle：SDK 2.66.0 未知块经 `_json()` 逃生槽可达；
+>   web 面补回批 4 漏同步的 providerThinkingLevel。残留：B148 消费侧（usage-totals/
+>   cache-warmer/bug-report）、B234 的 TUI「Took」卡另案。
 > - **2026-10-12 ai 批 0 裁决**（[`docs/08`](08-ai-layer-alignment-roadmap.md)）：B115/B117/B124
 >   取证关单；B100/B126/B147/B226/B230 转 04 §4；map 单元 #87 零代码对齐，#9/#10/#11/#12/#33/
 >   #74/#78/#92/#93/#94/#100 出分母（R5/w0/作废）；§1 剩 24 条。
@@ -35,8 +43,9 @@
 
 ## 1. 台账在册功能缺口
 
-`docs/04` §3.2 存活 14 条（批 1 销号 4 条；批 2 销号 B80/B233，新登即销 B239；
-批 3a 销号 B97/B232；**批 3b 销号 B137**；原 §3.3 的 B222 随批 1 销号，§3.3 已无 ai 协议面条目）：
+`docs/04` §3.2 存活 12 条（批 1 销号 4 条；批 2 销号 B80/B233，新登即销 B239；
+批 3a 销号 B97/B232；批 3b 销号 B137；**批 5 销号 B148 流内半/B234**，消费侧另案；
+原 §3.3 的 B222 随批 1 销号，§3.3 已无 ai 协议面条目）：
 
 | # | 差什么（一句话） |
 |---|---|
@@ -48,27 +57,22 @@
 | B110 | `providerThinkingLevel` pi 有 Java 无（`proxy.ts` 线字段 ＋ `anthropic-messages.ts` 消息字段；批 4 随 B99） |
 | B116 | StreamDone 的 UsageInfo 嵌套包裹是 Java 方言（pi usage 只在消息上，proxy 线另发扁平 usage）——2026-10-12 取证线格式已扁化，内部组件保留 |
 | B128 | `thinkingBudgets` 无选项通道（pi `SimpleStreamOptions.thinkingBudgets`，`adjustMaxTokensForThinking` 消费；批 4） |
-| B148 | responseModel/responseId/diagnostics 无真消费者（usage 分组、cache-warmer、fallback 成本归属、`pi_messages_response_failure` 信封、Anthropic 流内 fallback 块） |
+| ~~B148~~ | ✅ **批 5 已销（流内半，2026-10-15，[`docs/14`](14-ai-batch5-message-fields-design.md)）**：responseModel＋fallback 成本归属、mid-output fallback 硬错、input_transformations 诊断、pi-messages 失败信封/rewrite；~~responseModel/responseId/diagnostics 无真消费者~~（消费侧 usage 分组/cache-warmer/bug-report 仍另案，responseId 随 codex 出分母） |
 | B156 | ModelCompat 逐组件规范构造 ＋ 12 个便捷构造各自补 null：加组件必须全改，否则静默缺省 |
 | B158 | 输出截断字节预算 Java 100KB vs pi 主流 50KB（模型可见文案不同；对应 map/03 #23） |
 | B159 | pi 已改 `finishTurn()` 返回 `{action:"continue"|"end"}`，Java 仍是 Boolean `shouldStopAfterTurn`，缺「强制再跑一轮」臂（对应 map/03 #6/#41） |
 | B231 | OAuth 刷新被调用方取消时，轮转后的 refresh token 仍须落盘（`refreshStoredOAuthCredential`）；Java 侧刷新 HTTP 无超时（批 6） |
-| B234 | `durationMs` 计时字段全无：AssistantMessage/ToolResultMessage（及 agent 侧 tool_execution_end/AgentSettled，见 docs/07） |
+| ~~B234~~ | ✅ **批 5 已销（2026-10-15，[`docs/14`](14-ai-batch5-message-fields-design.md)）**：响应 durationMs 身份缝加盖；工具 durationMs 只围 execute() 本体，贯通 tool_execution_end/ToolResultMessage/JSONL/双 wire；~~`durationMs` 计时字段全无~~（TUI「Took」卡仍另案） |
 
 ---
 
-## 2. 地图判「缺失」、但没有 B 号的能力单元（5 条，计分母）
+## 2. 地图判「缺失」、但没有 B 号的能力单元（4 条，计分母）
 
 编号是 `map/02-ai.md` 的单元号。2026-10-12 批 0 后原 21 条中 11 条移出分母（见 §4）、#87 转对齐；
-**批 3a（2026-10-14）#34/#86/#91 转对齐出表、#90 转存疑（见 §3）**。
+**批 3a（2026-10-14）#34/#86/#91 转对齐出表、#90 转存疑（见 §3）**；
+**批 5（2026-10-15）#37 转对齐出表（responseModel/diagnostics/durationMs/thinkingLevel，+1）**。
 
 **ContentBlock（1）**：#8 `ToolUseContent.namespace`（随 MCP 包 B203；仅 Responses 车道 round-trip）。
-
-**模型元数据（1）**：
-
-| 单元# | 缺口 | 备注 |
-|---|---|---|
-| #37 | `responseModel`/`diagnostics` 等字段全无（responseId/endTurn 已随 codex 出分母） | 即 B148，批 5 |
 
 **鉴权（3）**：#95 OAuth `openai-chatgpt`（Sign in with ChatGPT，批 7）· #96 Anthropic OAuth copy-code 登录法
 （批 7）· #98 Anthropic workload identity federation（5 个 `ANTHROPIC_*` env，**用户裁决后排**）。
