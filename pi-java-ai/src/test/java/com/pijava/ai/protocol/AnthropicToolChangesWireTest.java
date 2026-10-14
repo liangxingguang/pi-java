@@ -98,9 +98,9 @@ class AnthropicToolChangesWireTest {
     void sendsToolChangesInANativeSystemMessage() throws Exception {
         var body = capture(nativeModel(), removalTranscript());
 
-        assertThat(betas(body)).contains(BETA);
+        assertThat(betas()).contains(BETA);
         // pi oracle 逐字：旧 beta 必须**不在**（换形状而非叠形状）。
-        assertThat(betas(body))
+        assertThat(betas())
             .as("旧 beta 必须消失 —— b271b0a52 是换值不是叠加")
             .doesNotContain("mid-conversation-tool-changes-2026-07-01");
         // 包 A-01（结案 B89）：顶层 `system` 是**块数组**（pi :1077-1097），块上带缓存断点。
@@ -187,7 +187,7 @@ class AnthropicToolChangesWireTest {
 
         var body = capture(nativeModel(), transcript);
 
-        assertThat(betas(body)).as("重定义不再是回退判据").contains(BETA);
+        assertThat(betas()).as("重定义不再是回退判据").contains(BETA);
         // 顶层声明保留**原始**定义 —— 缓存前缀跨重定义存活。
         assertThat(toolNames(body)).containsExactly("base_tool", "__pi_deferred_placeholder__");
         assertThat(tool(body, 0).path("description").asText())
@@ -236,7 +236,7 @@ class AnthropicToolChangesWireTest {
         var raw = captureRaw(nativeModel(), transcript);
         var body = MAPPER.readTree(raw);
 
-        assertThat(betas(body)).contains(BETA);
+        assertThat(betas()).contains(BETA);
         var topLevel = tool(body, 0).path("input_schema");
         assertThat(topLevel.path("type").asText()).isEqualTo("object");
         assertThat(topLevel.path("additionalProperties").asBoolean()).isFalse();
@@ -270,7 +270,7 @@ class AnthropicToolChangesWireTest {
 
         var body = capture(nativeModel(), transcript);
 
-        assertThat(betas(body)).doesNotContain(BETA);
+        assertThat(betas()).doesNotContain(BETA);
         assertThat(toolNames(body)).as("回退到完整当前表；没有占位符、没有 deferred")
             .containsExactly("late_tool");
         assertThat(tool(body, 0).path("defer_loading").isMissingNode()).isTrue();
@@ -306,7 +306,7 @@ class AnthropicToolChangesWireTest {
         var compat = new ModelCompat(false, null, true, false, null, null, true, null, null);
         var body = capture(model(compat), removalTranscript());
 
-        assertThat(betas(body)).doesNotContain(BETA);
+        assertThat(betas()).doesNotContain(BETA);
         assertThat(toolNames(body)).containsExactly("late_tool");
         assertThat(roleNames(body)).containsExactly("user");
     }
@@ -344,9 +344,14 @@ class AnthropicToolChangesWireTest {
                 // 桩回 400：请求体已录到，流怎么结束与断言无关
             }
             assertThat(server.body()).as("请求必须真的发出去").isNotEmpty();
+            // beta 协商在 anthropic-beta 请求头（docs/13 裁决①）；本文件 body 消费点多，
+            // 头随最近一次抓包记在这里供 betas() 读取（测试串行执行）。
+            lastHeaders = server.headers();
             return server.body();
         }
     }
+
+    private static Map<String, String> lastHeaders = Map.of();
 
     private static JsonNode lastMessage(JsonNode body) {
         return body.path("messages").get(body.path("messages").size() - 1);
@@ -360,12 +365,17 @@ class AnthropicToolChangesWireTest {
         return lastMessage(body).path("role").asText();
     }
 
-    private static List<String> betas(JsonNode body) {
-        var out = new ArrayList<String>();
-        for (var b : body.path("betas")) {
-            out.add(b.asText());
+    /**
+     * beta 协商走 {@code anthropic-beta} 请求头（逗号连接；docs/13 裁决①探针实测 body 的
+     * "betas" 键不会被 SDK 提升为请求头）。读最近一次 {@link #captureRaw} 录下的头。
+     */
+    private static List<String> betas() {
+        var header = lastHeaders.get("anthropic-beta");
+        if (header == null || header.isBlank()) {
+            return List.of();
         }
-        return out;
+        return java.util.Arrays.stream(header.split(","))
+            .map(String::trim).filter(s -> !s.isEmpty()).toList();
     }
 
     private static List<String> toolNames(JsonNode body) {

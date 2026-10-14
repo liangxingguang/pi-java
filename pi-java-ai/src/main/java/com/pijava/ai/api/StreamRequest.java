@@ -6,6 +6,7 @@ import java.util.Optional;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
+import com.pijava.ai.thinking.ThinkingBudgets;
 import com.pijava.ai.thinking.ThinkingLevel;
 
 /**
@@ -39,13 +40,17 @@ import com.pijava.ai.thinking.ThinkingLevel;
  *                     空 ≙ pi 的 {@code undefined}（不开思考）。<b>翻译归车道</b>：
  *                     它要读 {@code model.compat} 与 {@code model.thinkingLevelMap}
  *                     （{@code anthropic-messages.ts:858-904}），两者都在 {@code model} 上
+ * @param thinkingBudgets B128：pi {@code SimpleStreamOptions.thinkingBudgets}
+ *                     （settings.json 四段，全 optional 无默认）；<b>null ≙ {@code undefined}</b>
+ *                     ⇒ 消费边界按 {@link ThinkingBudgets#DEFAULT} 浅合并。
  */
 public record StreamRequest(
     ModelInfo model,
     TranscriptContext transcript,
     int maxTokens,
     double temperature,
-    Optional<ThinkingLevel> reasoning
+    Optional<ThinkingLevel> reasoning,
+    ThinkingBudgets thinkingBudgets
 ) {
     /** Compact constructor that defensively copies the transcript. */
     public StreamRequest {
@@ -72,7 +77,25 @@ public record StreamRequest(
         Optional<ThinkingLevel> reasoning
     ) {
         this(model, ContextNormalizer.normalize(systemPrompt, messages, tools),
-            maxTokens, temperature, reasoning);
+            maxTokens, temperature, reasoning, null);
+    }
+
+    /**
+     * B128：携带自定义 {@link ThinkingBudgets} 的 legacy-shape 构造（宿主生产路径用）；
+     * {@code thinkingBudgets} 为 {@code null} ≙ pi 的 {@code undefined}。
+     */
+    public StreamRequest(
+        ModelInfo model,
+        String systemPrompt,
+        List<Message> messages,
+        List<ToolDefinition> tools,
+        int maxTokens,
+        double temperature,
+        Optional<ThinkingLevel> reasoning,
+        ThinkingBudgets thinkingBudgets
+    ) {
+        this(model, ContextNormalizer.normalize(systemPrompt, messages, tools),
+            maxTokens, temperature, reasoning, thinkingBudgets);
     }
 
     /**
@@ -143,6 +166,7 @@ public record StreamRequest(
      * 那里把请求换成解析后的副本，车道就零改签地拿到 {@code maxTokens}。</p>
      */
     public StreamRequest withMaxTokens(int newMaxTokens) {
-        return new StreamRequest(model, transcript, newMaxTokens, temperature, reasoning);
+        return new StreamRequest(model, transcript, newMaxTokens, temperature, reasoning,
+            thinkingBudgets);
     }
 }

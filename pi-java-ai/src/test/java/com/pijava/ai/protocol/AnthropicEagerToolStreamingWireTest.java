@@ -59,36 +59,40 @@ class AnthropicEagerToolStreamingWireTest {
     /** 缺省（compat 未标）⇒ pi 的 {@code ?? true} ⇒ 每个工具都带 {@code eager_input_streaming: true}。 */
     @Test
     void eagerInputStreamingDefaultsToTrue() throws Exception {
-        var body = capture(model(null), transcript());
+        var captured = capture(model(null), transcript());
 
-        assertThat(body.path("tools").size()).isEqualTo(1);
-        assertThat(body.path("tools").get(0).path("eager_input_streaming").asBoolean())
+        assertThat(captured.body().path("tools").size()).isEqualTo(1);
+        assertThat(captured.body().path("tools").get(0).path("eager_input_streaming").asBoolean())
             .as("pi anthropic-messages.ts:209 的缺省是 true")
             .isTrue();
-        assertThat(betas(body)).doesNotContain(BETA);
+        assertThat(betas(captured)).doesNotContain(BETA);
     }
 
     /** 显式 false ⇒ 不发该字段，改挂细粒度工具流式 beta 头。 */
     @Test
     void eagerFalseOmitsTheFieldAndSendsTheBetaHeader() throws Exception {
-        var body = capture(model(Boolean.FALSE), transcript());
+        var captured = capture(model(Boolean.FALSE), transcript());
 
-        assertThat(body.path("tools").get(0).path("eager_input_streaming").isMissingNode())
+        assertThat(captured.body().path("tools").get(0).path("eager_input_streaming").isMissingNode())
             .as("pi 的 `...(cond ? {eager_input_streaming:true} : {})` 是**缺席**而非 false")
             .isTrue();
-        assertThat(betas(body)).contains(BETA);
+        assertThat(betas(captured)).contains(BETA);
     }
 
     /** 没有工具时 beta 头不挂（pi `:1450-1452` 的第一个合取项）。 */
     @Test
     void noToolsMeansNoFineGrainedBetaHeader() throws Exception {
-        var body = capture(model(Boolean.FALSE), toolLessTranscript());
+        var captured = capture(model(Boolean.FALSE), toolLessTranscript());
 
-        assertThat(body.path("tools").isMissingNode() || body.path("tools").isEmpty()).isTrue();
-        assertThat(betas(body)).doesNotContain(BETA);
+        assertThat(captured.body().path("tools").isMissingNode()
+            || captured.body().path("tools").isEmpty()).isTrue();
+        assertThat(betas(captured)).doesNotContain(BETA);
     }
 
-    private static JsonNode capture(ModelInfo model, List<Message> messages) throws Exception {
+    /** 一次抓包的请求体与请求头（beta 协商在 {@code anthropic-beta} **请求头**里，不在 body）。 */
+    private record Captured(JsonNode body, Map<String, String> headers) {}
+
+    private static Captured capture(ModelInfo model, List<Message> messages) throws Exception {
         try (var server = new RecordingHttpServer()) {
             var api = new AnthropicMessagesApi(
                 new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()),
@@ -103,16 +107,21 @@ class AnthropicEagerToolStreamingWireTest {
                 // 桩回 400：请求体已录到
             }
             assertThat(server.body()).as("请求必须真的发出去").isNotEmpty();
-            return MAPPER.readTree(server.body());
+            return new Captured(MAPPER.readTree(server.body()), server.headers());
         }
     }
 
-    private static List<String> betas(JsonNode body) {
-        var out = new ArrayList<String>();
-        for (var b : body.path("betas")) {
-            out.add(b.asText());
+    /**
+     * beta 协商走 {@code anthropic-beta} 请求头（逗号连接；docs/13 裁决①探针实测
+     * body 的 "betas" 键不会被 SDK 提升为请求头）。
+     */
+    private static List<String> betas(Captured captured) {
+        var header = captured.headers().get("anthropic-beta");
+        if (header == null || header.isBlank()) {
+            return List.of();
         }
-        return out;
+        return java.util.Arrays.stream(header.split(","))
+            .map(String::trim).filter(s -> !s.isEmpty()).toList();
     }
 
     private static ModelInfo model(Boolean eagerToolInputStreaming) {

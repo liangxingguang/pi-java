@@ -380,7 +380,9 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
                 if (GoogleThinking.usesThinkingLevel(request.model())) {
                     tc.thinkingLevel(level.apiName());
                 } else {
-                    tc.thinkingBudget(GoogleThinking.budget(request.model(), level));
+                    // B128：custom budgets 首支（pi getGoogleBudget :432-435）。
+                    tc.thinkingBudget(GoogleThinking.budget(
+                        request.model(), level, request.thinkingBudgets()));
                 }
                 builder.thinkingConfig(tc.build());
             } else {

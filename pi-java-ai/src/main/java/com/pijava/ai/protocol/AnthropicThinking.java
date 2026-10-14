@@ -115,7 +115,8 @@ final class AnthropicThinking {
      * @param transcript    夹取要读的会话（pi 的 {@code context}，{@code :896}）
      */
     static Resolved resolve(ModelInfo model, ModelCompat compat, Optional<ThinkingLevel> reasoning,
-                            OptionalInt baseMaxTokens, TranscriptContext transcript) {
+                            OptionalInt baseMaxTokens, TranscriptContext transcript,
+                            ThinkingBudgets budgets) {
         if (model == null || !model.capabilities().contains(ModelCapability.THINKING)) {
             return new Resolved(Optional.empty(), Optional.empty(), OptionalInt.empty());
         }
@@ -133,8 +134,11 @@ final class AnthropicThinking {
             return new Resolved(Optional.of(adaptiveParam()),
                 Optional.of(outputConfig(model, level)), OptionalInt.empty());
         }
+        // B128：budget 表由请求通道带入（settings.thinkingBudgets）；null ≙ pi 的
+        // undefined ⇒ 全默认表（simple-options.ts:72 的浅合并）。
         var adjusted = ThinkingBudgets.adjust(
-            baseMaxTokens, model.maxOutputTokens(), level, ThinkingBudgets.DEFAULT);
+            baseMaxTokens, model.maxOutputTokens(), level,
+            ThinkingBudgets.orDefault(budgets));
         // pi :896 —— adjust 之后**再**夹一次（adjust 会把上限抬到 base + budget）。
         var maxTokens = SimpleOptions.clampMaxTokensToContext(model, transcript, adjusted.maxTokens());
         long room = Math.max(0L, (long) maxTokens - ThinkingBudgets.MIN_ANSWER_TOKENS);

@@ -110,9 +110,10 @@ class AnthropicThinkingGatesTest {
         var params = buildParams(request(
             model(ModelCompat.NONE), Optional.of(new ThinkingLevel.High()), -1));
 
-        assertThat(params._additionalBodyProperties()).containsKey("betas");
-        assertThat(params._additionalBodyProperties().get("betas").toString())
+        // docs/13 裁决①：beta 协商在 anthropic-beta 请求头，body 无 betas 键。
+        assertThat(betaHeader(params))
             .contains("interleaved-thinking-2025-05-14");
+        assertThat(params._additionalBodyProperties()).doesNotContainKey("betas");
     }
 
     /** adaptive 模型**不带**该 beta（pi 的 {@code forceAdaptiveThinking !== true}）。 */
@@ -122,7 +123,7 @@ class AnthropicThinkingGatesTest {
             model(new ModelCompat(false, null, true, true)),
             Optional.of(new ThinkingLevel.High()), -1));
 
-        assertThat(params._additionalBodyProperties()).doesNotContainKey("betas");
+        assertThat(betaHeader(params)).doesNotContain("interleaved-thinking-2025-05-14");
     }
 
     /** 没开思考 ⇒ 不带该 beta（pi 的 {@code thinkingEnabled === true} 门）。 */
@@ -130,7 +131,7 @@ class AnthropicThinkingGatesTest {
     void interleavedBetaIsNotSentWithoutThinking() throws Exception {
         var params = buildParams(request(model(ModelCompat.NONE), Optional.empty(), -1));
 
-        assertThat(params._additionalBodyProperties()).doesNotContainKey("betas");
+        assertThat(betaHeader(params)).doesNotContain("interleaved-thinking-2025-05-14");
     }
 
     /** 模型**没有**思考能力 ⇒ 不带该 beta（pi 的 {@code model.reasoning} 门）。 */
@@ -141,6 +142,11 @@ class AnthropicThinkingGatesTest {
 
         var params = buildParams(request(plain, Optional.of(new ThinkingLevel.High()), -1));
 
-        assertThat(params._additionalBodyProperties()).doesNotContainKey("betas");
+        assertThat(betaHeader(params)).doesNotContain("interleaved-thinking-2025-05-14");
+    }
+
+    /** anthropic-beta 头的拼接原文（无该头 ⇒ 空串）。 */
+    private static String betaHeader(MessageCreateParams params) {
+        return String.join(",", params._additionalHeaders().values("anthropic-beta"));
     }
 }

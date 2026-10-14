@@ -35,11 +35,15 @@ class AnthropicFallbacksWireTest {
         var model = BuiltinModelCatalogs.catalog("anthropic")
             .find(ModelId.of("anthropic", "claude-fable-5")).orElseThrow();
 
-        var body = body(model);
+        var captured = capture(model);
+        var body = captured.body();
 
-        assertThat(body.path("betas").toString())
-            .as("beta 头在 java 落成 body 的 betas 数组（同 inline-tools 先例）")
+        assertThat(captured.betaHeader())
+            .as("beta 协商在 anthropic-beta 请求头（docs/13 裁决①：body 的 betas 键不上头）")
             .contains("server-side-fallback-2026-07-01");
+        assertThat(body.has("betas"))
+            .as("beta 列表不许再落进 body")
+            .isFalse();
         var fallbacks = body.path("fallbacks");
         assertThat(fallbacks.isArray()).isTrue();
         assertThat(fallbacks).hasSize(2);
@@ -55,14 +59,18 @@ class AnthropicFallbacksWireTest {
         var model = BuiltinModelCatalogs.catalog("anthropic")
             .find(ModelId.of("anthropic", "claude-sonnet-4-6")).orElseThrow();
 
-        var body = body(model);
+        var captured = capture(model);
 
-        assertThat(body.has("fallbacks")).isFalse();
-        var betas = body.path("betas").toString();
-        assertThat(betas).doesNotContain("server-side-fallback-2026-07-01");
+        assertThat(captured.body().has("fallbacks")).isFalse();
+        assertThat(captured.body().has("betas")).isFalse();
+        assertThat(captured.betaHeader())
+            .doesNotContain("server-side-fallback-2026-07-01");
     }
 
-    private static JsonNode body(ModelInfo model) throws Exception {
+    /** 一次抓包：请求体 + anthropic-beta 头原文（无该头时为空串）。 */
+    private record Captured(JsonNode body, String betaHeader) {}
+
+    private static Captured capture(ModelInfo model) throws Exception {
         List<Message> messages = List.of(new Message.UserMessage(
             List.of(new ContentBlock.TextContent("hi"))));
         try (var server = new RecordingHttpServer()) {
@@ -80,7 +88,8 @@ class AnthropicFallbacksWireTest {
                 // 桩回 400：请求体已录到。
             }
             assertThat(server.body()).as("请求必须真的发出去").isNotEmpty();
-            return MAPPER.readTree(server.body());
+            var header = server.headers().getOrDefault("anthropic-beta", "");
+            return new Captured(MAPPER.readTree(server.body()), header);
         }
     }
 }

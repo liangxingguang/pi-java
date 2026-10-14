@@ -94,7 +94,8 @@ final class AnthropicRequestBuilder {
                 request.maxTokens() > 0
                     ? java.util.OptionalInt.of(request.maxTokens())
                     : java.util.OptionalInt.empty(),
-                request.transcript());
+                request.transcript(),
+                request.thinkingBudgets());
         // 包 A-10：`.maxTokens(...)` 的回落**不再是**本仓自造的字面量 `4096L` ——
         // pi 的回落是 `options?.maxTokens ?? model.maxTokens`
         // （`anthropic-messages.ts:1072`，**低层** stream 里也有这一跳）。
@@ -167,8 +168,15 @@ final class AnthropicRequestBuilder {
         if (allowedFallbackModels != null && !allowedFallbackModels.isEmpty()) {
             betas.add(SERVER_SIDE_FALLBACK_BETA);
         }
+        // B128 批探针（docs/13 裁决①）实测：stable SDK 不认识 body 的 "betas" 键 ——
+        // 它既不被提升成请求头（抓包：请求头集合无 anthropic-beta），只作为未知键留在
+        // JSON 体里，服务端收不到 beta 协商。pi 的 TS SDK 是把 betas 编成
+        // `anthropic-beta: a,b` **请求头**。故全部 beta 走 putAdditionalHeader
+        // （params 级 additionalHeader 经 streaming 路径透传，SessionAffinityHeaders
+        // 已证），顺带修正此前 interleaved/inline-tools/fine-grained/fallback 四个
+        // beta 一直没真正生效的隐患。
         if (!betas.isEmpty()) {
-            builder.putAdditionalBodyProperty("betas", JsonValue.from(betas));
+            builder.putAdditionalHeader("anthropic-beta", String.join(",", betas));
         }
 
         addMessages(builder, conversation, allowEmptySignature, nativeToolChanges, cacheControl,

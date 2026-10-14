@@ -8,7 +8,10 @@ import com.google.genai.types.ThinkingConfig;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.thinking.ModelThinkingLevel;
+import com.pijava.ai.thinking.ThinkingBudgets;
 import com.pijava.ai.thinking.ThinkingLevel;
+
+import java.util.OptionalInt;
 
 /**
  * Google 车道的思考配置换算 —— pi {@code api/google-shared.ts:36-111} 的六件套 ＋
@@ -113,12 +116,25 @@ final class GoogleThinking {
 
     /**
      * pi {@code google-generative-ai.ts:430-471} {@code getGoogleBudget} ——
-     * **三张 Google 专属表** ＋ {@code -1} 兜底（Google 语义里 {@code -1} ＝动态思考）。
+     * **custom 首支** ＋ **三张 Google 专属表** ＋ {@code -1} 兜底（Google 语义里
+     * {@code -1} ＝动态思考）。
      *
-     * <p>⚠️ pi 的 {@code customBudgets?.[level]} 那一支（{@code options.thinkingBudgets}）
-     * 本仓**无选项通道**（{@code 原 docs/57 §6 R7} 登记）⇒ 不写死，见 {@code docs/10 §5 J1}。</p>
+     * <p>B128：custom（settings.thinkingBudgets）**原样返回**——不与硬编码表合并、
+     * 不做 answer-room 钳制、不抬上限；{@code 0}/{@code -1} 也原样
+     * （{@code if (customBudgets?.[level] !== undefined) return customBudgets[level]!}）。</p>
      */
-    static int budget(ModelInfo model, Level level) {
+    static int budget(ModelInfo model, Level level, ThinkingBudgets custom) {
+        if (custom != null) {
+            OptionalInt customValue = switch (level) {
+                case MINIMAL -> custom.minimal();
+                case LOW -> custom.low();
+                case MEDIUM -> custom.medium();
+                case HIGH -> custom.high();
+            };
+            if (customValue.isPresent()) {
+                return customValue.getAsInt();
+            }
+        }
         var id = model.id().modelName();
         if (id.contains("2.5-pro")) {
             return switch (level) {

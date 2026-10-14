@@ -31,6 +31,15 @@ public record ThinkingBudgets(
         OptionalInt.of(8192),
         OptionalInt.of(16384));
 
+    /**
+     * B128：通道值归一 —— {@code null} ≙ pi 的 {@code options.thinkingBudgets === undefined}
+     * （{@code simple-options.ts:72} 的 {@code {...DEFAULT, ...undefined}} ⇒ 全默认表）。
+     * 消费边界统一过这一道，不在调用点各写一遍判空。
+     */
+    public static ThinkingBudgets orDefault(ThinkingBudgets budgets) {
+        return budgets == null ? DEFAULT : budgets;
+    }
+
     /** 四级齐全的便捷构造。 */
     public static ThinkingBudgets of(int minimal, int low, int medium, int high) {
         return new ThinkingBudgets(

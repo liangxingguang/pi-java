@@ -284,7 +284,8 @@ final class OpenAICompletionsMessageConverter {
         var budgetField = SimpleOptions.thinkingTokenBudgetField(compat);
         var ceiling = SimpleOptions.maxTokensOrDefault(request.model(), request.maxTokens());
         var thinkingBudget = SimpleOptions.clampedThinkingBudget(request.model(), compat,
-            request.reasoning(), ThinkingBudgets.DEFAULT, ceiling);
+            request.reasoning(),
+            ThinkingBudgets.orDefault(request.thinkingBudgets()), ceiling);
         // 包 A-09：思考开关的形状（pi :873-970）。
         ThinkingFormatWriter.apply(builder, request, compat, thinkingBudget);
         // 包 A-10：顶层思考预算字段（pi :972-978）。⚠️ 它在形态链条**之外**
