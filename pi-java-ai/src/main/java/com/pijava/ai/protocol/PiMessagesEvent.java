@@ -52,9 +52,23 @@ public sealed interface PiMessagesEvent {
     record ToolCallEnd(int contentIndex, PiToolCall toolCall)
         implements PiMessagesEvent {}
 
-    record Done(String reason, Usage usage, String responseId, RewriteImpact rewrite)
-        implements PiMessagesEvent {}
+    record Done(String reason, Usage usage, String responseId, RewriteImpact rewrite,
+                // B110（pi pi-messages.ts:71-87）：终局帧的可选 provider-native effort。
+                String providerThinkingLevel)
+        implements PiMessagesEvent {
+        /** B110 之前的四参形状（providerThinkingLevel 缺席）。 */
+        Done(String reason, Usage usage, String responseId, RewriteImpact rewrite) {
+            this(reason, usage, responseId, rewrite, null);
+        }
+    }
 
     record Error(String reason, Usage usage, String errorMessage, String responseId,
-                 RewriteImpact rewrite) implements PiMessagesEvent {}
+                 RewriteImpact rewrite, String providerThinkingLevel)
+        implements PiMessagesEvent {
+        /** B110 之前的五参形状（providerThinkingLevel 缺席）。 */
+        Error(String reason, Usage usage, String errorMessage, String responseId,
+              RewriteImpact rewrite) {
+            this(reason, usage, errorMessage, responseId, rewrite, null);
+        }
+    }
 }

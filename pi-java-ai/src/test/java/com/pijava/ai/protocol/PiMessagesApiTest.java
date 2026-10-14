@@ -149,6 +149,31 @@ class PiMessagesApiTest {
         assertThat(error.reason()).isEqualTo(StopReason.ERROR);
     }
 
+    /**
+     * B110（pi {@code pi-messages.ts:180-217}）：done 帧的
+     * {@code providerThinkingLevel} 落进终局消息；error 帧同式（见下一条 SSE 夹具）。
+     */
+    @Test
+    void doneFrameCarriesProviderThinkingLevelIntoTheTerminalMessage() throws Exception {
+        var baseUrl = startServer(stampedDoneSse());
+        var api = api(baseUrl);
+        var events = collect(api, "hi");
+
+        var done = last(events, StreamEvent.StreamDone.class);
+        assertThat(done.partial().providerThinkingLevel()).isEqualTo("xhigh");
+    }
+
+    /** 不带该键的 done 帧（网关旧版本）⇒ 消息上键缺席（null），不报错。 */
+    @Test
+    void unstampedDoneFrameLeavesTheLevelAbsent() throws Exception {
+        var baseUrl = startServer(textSse());
+        var api = api(baseUrl);
+        var events = collect(api, "hi");
+
+        var done = last(events, StreamEvent.StreamDone.class);
+        assertThat(done.partial().providerThinkingLevel()).isNull();
+    }
+
     @Test
     void streamWithoutTerminalEventMapsToError() throws Exception {
         var baseUrl = startServer(noTerminalSse());
@@ -250,6 +275,20 @@ class PiMessagesApiTest {
             + "data: [DONE]\n\n";
     }
 
+    /** B110 夹具：done 帧带 providerThinkingLevel（usage 之后，pi proxy/网关形状）。 */
+    private static String stampedDoneSse() {
+        return event("{\"type\":\"start\"}")
+            + event("{\"type\":\"text_start\",\"contentIndex\":0}")
+            + event("{\"type\":\"text_delta\",\"contentIndex\":0,\"delta\":\"hi\"}")
+            + event("{\"type\":\"text_end\",\"contentIndex\":0,\"content\":\"hi\"}")
+            + event("{\"type\":\"done\",\"reason\":\"stop\","
+                + "\"usage\":{\"input\":10,\"output\":5,\"cacheRead\":0,\"cacheWrite\":0,"
+                + "\"totalTokens\":15,\"cost\":{\"input\":0,\"output\":0,\"cacheRead\":0,"
+                + "\"cacheWrite\":0,\"total\":0}},"
+                + "\"providerThinkingLevel\":\"xhigh\"}")
+            + "data: [DONE]\n\n";
+    }
+
     /** P4 夹具：thinking_end 带 contentSignature/redacted（pi-messages wire 形状）。 */
     private static String thinkingSse() {
         return event("{\"type\":\"start\"}")
@@ -264,8 +303,7 @@ class PiMessagesApiTest {
             + "data: [DONE]\n\n";
     }
 
-    private static String toolCallSse() {
-        return event("{\"type\":\"start\"}")
+    private static String toolCallSse() {        return event("{\"type\":\"start\"}")
             + event("{\"type\":\"toolcall_start\",\"contentIndex\":0,"
                 + "\"id\":\"call_1\",\"toolName\":\"write\"}")
             + event("{\"type\":\"toolcall_delta\",\"contentIndex\":0,"

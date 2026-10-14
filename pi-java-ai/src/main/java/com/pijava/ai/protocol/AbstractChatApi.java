@@ -50,7 +50,24 @@ public abstract class AbstractChatApi implements ChatApi {
             request.model() == null ? null : request.modelId().provider(),
             request.model() == null ? null : request.modelId().modelName(),
             timestamp);
-        return base;
+        // B110：managed 车道在错误/中止基底上同样盖章（pi 的产出消息创建于请求发出前，
+        // 错误路径的消息也带 providerThinkingLevel）。
+        var level = providerThinkingLevel(request);
+        return level == null ? base : base.withProviderThinkingLevel(level);
+    }
+
+    /**
+     * B110（pi {@code anthropic-messages.ts:581}）：本次响应实际生效的
+     * provider-native effort。默认 {@code null}（键缺席）；只有 anthropic-messages
+     * 车道在 {@code compat.supportsMidConvoEffort === true} 时覆盖为
+     * {@code options.effort ?? "high"}（见 {@link AnthropicThinking#activeEffort}）。
+     *
+     * <p>值在请求发出前定死、start 帧即携带，全程不更新；门只认 compat flag，
+     * 不认 {@code forceAdaptiveThinking}（后者走顶层 output_config 但不盖章＝
+     * 「unmanaged」，pi {@code :581} 同式）。</p>
+     */
+    protected String providerThinkingLevel(StreamRequest request) {
+        return null;
     }
 
     /**
@@ -215,11 +232,17 @@ public abstract class AbstractChatApi implements ChatApi {
                 downstream.onNext(event);
                 return;
             }
-            var attached = withTerminalUsage(event, event.partial().withIdentity(
+            var identified = event.partial().withIdentity(
                 apiName(),
                 request.model() == null ? null : request.modelId().provider(),
                 request.model() == null ? null : request.modelId().modelName(),
-                timestamp));
+                timestamp);
+            // B110：与身份同生命周期盖章（managed 车道）；start 帧即带值。
+            var level = providerThinkingLevel(request);
+            if (level != null) {
+                identified = identified.withProviderThinkingLevel(level);
+            }
+            var attached = withTerminalUsage(event, identified);
             downstream.onNext(StreamEvent.withPartial(event, attached));
         }
 

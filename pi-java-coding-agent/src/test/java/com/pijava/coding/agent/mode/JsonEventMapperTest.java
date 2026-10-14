@@ -113,6 +113,38 @@ class JsonEventMapperTest {
             .contains("\"delta\":\"world\"");
     }
 
+    /**
+     * B110（pi {@code proxy.ts:42-58}）：done/error 终局帧在 {@code usage} 后写
+     * {@code providerThinkingLevel?}；partial 没带值（非 managed 车道）⇒ 整键省略。
+     */
+    @Test
+    void terminalFramesCarryProviderThinkingLevelAfterUsage() {
+        var stamped = AssistantMessage.empty()
+            .withIdentity("anthropic-messages", "anthropic", "claude-fable-5-1", null)
+            .withProviderThinkingLevel("high");
+        var done = JsonEventMapper.toStreamEventWire(
+            new StreamEvent.StreamDone(StopReason.STOP, null, stamped));
+        assertThat(done).contains("\"type\":\"done\"")
+            .contains("\"providerThinkingLevel\":\"high\"");
+        // 键序：providerThinkingLevel 在 usage 之后。
+        assertThat(done.indexOf("\"usage\"")).isLessThan(done.indexOf("providerThinkingLevel"));
+
+        var error = JsonEventMapper.toStreamEventWire(new StreamEvent.StreamError(
+            StopReason.ERROR, new RuntimeException("boom"), stamped));
+        assertThat(error).contains("\"type\":\"error\"")
+            .contains("\"providerThinkingLevel\":\"high\"");
+    }
+
+    /** 非 managed 车道的终局帧不带该键。 */
+    @Test
+    void terminalFramesOmitProviderThinkingLevelWhenUnstamped() {
+        var plain = AssistantMessage.empty()
+            .withIdentity("openai-completions", "openai", "gpt-5", null);
+        var done = JsonEventMapper.toStreamEventWire(
+            new StreamEvent.StreamDone(StopReason.STOP, null, plain));
+        assertThat(done).doesNotContain("providerThinkingLevel");
+    }
+
     // ── 3d 环 B：summarization_retry_*（pi agent-session.ts:2888-2911）──
 
     @Test

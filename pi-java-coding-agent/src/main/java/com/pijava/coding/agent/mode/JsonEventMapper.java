@@ -344,8 +344,9 @@ public final class JsonEventMapper {
      *
      * <p>可空键按 pi 的 {@code ?} 省略（本文件顶部的纪律）：
      * {@code errorMessage?} 缺则**不写**，{@code usage} 是必填（恒写零值对象）。
-     * {@code providerThinkingLevel} 两侧都没有（登记 B110）⇒ 不写。键序照 pi 的类型
-     * 声明；跨实现夹具必须按键取值，别断键序。</p>
+     * B110 起 {@code providerThinkingLevel?} 写在 {@code usage} 之后（pi proxy.ts:42-58
+     * 的键序：type, reason, [errorMessage?,] usage, providerThinkingLevel?），
+     * 仅 managed anthropic 消息带值；跨实现夹具必须按键取值，别断键序。</p>
      *
      * @return 终局变体的线格式节点；非终局变体返回 {@code null}（调用方自己投影）
      */
@@ -357,6 +358,7 @@ public final class JsonEventMapper {
                 // 手写 wire 边界：枚举显式出 wire 字面（camelCase）；null 保持显式 NullNode。
                 putStopReason(node, "reason", done.reason());
                 node.set("usage", normalizedUsage(event));
+                putProviderThinkingLevel(node, event);
                 yield node;
             }
             case StreamEvent.StreamError err -> {
@@ -368,10 +370,22 @@ public final class JsonEventMapper {
                     node.put("errorMessage", text);
                 }
                 node.set("usage", normalizedUsage(event));
+                putProviderThinkingLevel(node, event);
                 yield node;
             }
             default -> null;
         };
+    }
+
+    /**
+     * B110（pi {@code proxy.ts:51}）：终局帧在 {@code usage} 后写
+     * {@code providerThinkingLevel?}；partial 没带值（非 managed 车道）⇒ 整键省略。
+     */
+    private static void putProviderThinkingLevel(ObjectNode node, StreamEvent event) {
+        var partial = event.partial();
+        if (partial != null && partial.providerThinkingLevel() != null) {
+            node.put("providerThinkingLevel", partial.providerThinkingLevel());
+        }
     }
 
     /** 停因写线：枚举出 wire 字面；null 保持显式 NullNode（同旧 {@code put(String,String)}）。 */

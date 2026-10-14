@@ -57,8 +57,8 @@ final class AnthropicRequestBuilder {
 
     static MessageCreateParams buildParams(StreamRequest request,
                                            Optional<CacheBreakpointSpec> cacheSpec) {
-        // 直调夹具形态：无亲和头（B103 的 sessionId/baseUrl 由车道传入）。
-        return buildParams(request, cacheSpec, null, null);
+        // 直调夹具形态：无亲和头（B103 的 sessionId/baseUrl 由车道传入），无显式 beta 覆写。
+        return buildParams(request, cacheSpec, null, null, java.util.Set.of());
     }
 
     /**
@@ -68,7 +68,8 @@ final class AnthropicRequestBuilder {
      */
     static MessageCreateParams buildParams(StreamRequest request,
                                            Optional<CacheBreakpointSpec> cacheSpec,
-                                           String affinitySessionId, String baseUrl) {
+                                           String affinitySessionId, String baseUrl,
+                                           java.util.Set<String> effectiveHeaderNames) {
         // 包 A7：车道的 compat 在这里**解析一次**（pi `getAnthropicCompat(model)` 的落点，
         // `anthropic-messages.ts:206`），其余读点全部改读它 —— 不再有第二处读 `model.compat()`。
         var compat = CompatResolver.forAnthropic(request.model(), baseUrl);
@@ -110,6 +111,10 @@ final class AnthropicRequestBuilder {
                     : SimpleOptions.maxTokensOrDefault(request.model(), request.maxTokens()));
         thinking.thinking().ifPresent(builder::thinking);
         thinking.outputConfig().ifPresent(builder::outputConfig);
+        // B99（裁决②）：managed thinking 走原始 JSON 树（typed adaptive 无 block_binding）。
+        // 与 typed thinking 互斥（managed 支的 thinking 为空），不会同键两写。
+        thinking.rawThinking().ifPresent(tree ->
+            builder.putAdditionalBodyProperty("thinking", JsonValue.from(tree)));
 
         // 系统文本来自**前导系统消息**（pi :1043-1044），随后把它从会话数组里**切掉**
         // （pi :1044 的 `transformedMessages.slice(1)`）—— 否则它会作为普通消息落线
@@ -168,6 +173,13 @@ final class AnthropicRequestBuilder {
         if (allowedFallbackModels != null && !allowedFallbackModels.isEmpty()) {
             betas.add(SERVER_SIDE_FALLBACK_BETA);
         }
+        // B99（pi :1117-1119）：managed effort 两 beta **无条件**随 flag 挂
+        // （不看 thinkingEnabled/effort；managed 模型 forceAdaptive 恒真，
+        // interleaved 已被上面的第四合取项自然排除）。
+        if (Boolean.TRUE.equals(compat.supportsMidConvoEffort())) {
+            betas.add(AnthropicThinking.MID_CONVERSATION_OUTPUT_CONFIG_BETA);
+            betas.add(AnthropicThinking.THINKING_BINDING_CONTROLS_BETA);
+        }
         // B128 批探针（docs/13 裁决①）实测：stable SDK 不认识 body 的 "betas" 键 ——
         // 它既不被提升成请求头（抓包：请求头集合无 anthropic-beta），只作为未知键留在
         // JSON 体里，服务端收不到 beta 协商。pi 的 TS SDK 是把 betas 编成
@@ -175,7 +187,15 @@ final class AnthropicRequestBuilder {
         // （params 级 additionalHeader 经 streaming 路径透传，SessionAffinityHeaders
         // 已证），顺带修正此前 interleaved/inline-tools/fine-grained/fallback 四个
         // beta 一直没真正生效的隐患。
-        if (!betas.isEmpty()) {
+        //
+        // B99 裁决③（pi getBetaFeatures :1087-1103）：**覆写陷阱** —— 有效 headers
+        // （models.json 的 provider/model headers 合并后）里显式配置了 anthropic-beta
+        // （大小写不敏感）⇒ 自动 beta 列表整组跳过（pi 是整体替换，值为 null ⇒ 空列表；
+        // java 的 header 值非 null 才进得来，故无需处理 null 支）。
+        boolean explicitBetaHeader = effectiveHeaderNames != null && effectiveHeaderNames.stream()
+            .anyMatch(name -> name != null
+                && "anthropic-beta".equalsIgnoreCase(name.trim()));
+        if (!betas.isEmpty() && !explicitBetaHeader) {
             builder.putAdditionalHeader("anthropic-beta", String.join(",", betas));
         }
 
@@ -186,9 +206,9 @@ final class AnthropicRequestBuilder {
 
         // pi :1104-1110 —— temperature 是**四重合取**：{@code temperature !== undefined} ＋
         // {@code !thinkingEnabled} ＋ {@code supportsMidConvoEffort !== true} ＋
-        // {@code compat.supportsTemperature}。本仓缺第三项（`supportsMidConvoEffort` 的主体行为
-        // `block_binding` 在钉住的 SDK 上写不出来，原 docs/53 §10 B99），前两项就是下面的两个条件。
+        // {@code compat.supportsTemperature}（B99 批 4 起四项齐全）。
         if (request.temperature() >= 0 && request.reasoning().isEmpty()
+                && !Boolean.TRUE.equals(compat.supportsMidConvoEffort())
                 && compat.supportsTemperature()) {
             builder.temperature(request.temperature());
         }

@@ -156,9 +156,9 @@ public sealed interface Message
      * （{@code "max_tokens"}／{@code "MAX_TOKENS"}／{@code "tool_calls"}），
      * 后者是 pi 的 {@code StopReason}。pi 的消息整体 stringify 落盘 ⇒ 它同样是转录里的键。</p>
      *
-     * <p>⚠️ <b>以下五个 pi 字段不移植，但**每个的理由各不相同**</b>（2026-10-03 复核，
-     * {@code 原 docs/71 §1.4}）—— 旧注释把它们笼统写成「对齐面没有任何消费者」，
-     * 那个措辞只对其中两个成立：</p>
+     * <p>⚠️ <b>以下四个 pi 字段不移植，但**每个的理由各不相同**</b>（2026-10-14 复核，
+     * 批 4 把 {@code providerThinkingLevel} 移出清单）—— 旧注释把它们笼统写成「对齐面
+     * 没有任何消费者」，那个措辞只对其中两个成立：</p>
      * <ul>
      * <li>{@code responseId}（{@code types.ts:522}）、{@code endTurn}
      *     （{@code :531-535}）：<b>零消费者</b>真的成立 —— 全仓只有同车道内的读点
@@ -170,13 +170,11 @@ public sealed interface Message
      *     UI 计数 {@code interactive-mode.ts:3917}）—— 但那些模块**本仓一个都没有**
      *     （{@code RunSummaryAggregator} 是按 run 汇总，不按 {@code provider/responseModel}
      *     分组）⇒ 移植会变成「只有生产者没有消费者」。**等那些模块移植时一并做**
-     *     （{@code docs/05} 已登记）。</li>
-     * <li>{@code providerThinkingLevel}（{@code :523-524}）：唯一消费者在
-     *     {@code packages/ai} 自己的 Anthropic 车道（{@code anthropic-messages.ts:1370-1376}
-     *     读它做**中途 effort 绑定**）—— 那层 pi-java 也要实现，但该行为被
-     *     <b>B99</b>（钉住的 SDK 写不出 {@code thinking.block_binding}）挡着 ⇒
-     *     **理由挂 B99，不是「无消费者」**。</li>
+     *     （台账批 5：B148）。</li>
      * </ul>
+     * <p>{@code providerThinkingLevel}（{@code :523-524}）已随批 4（B110/B99）落地为
+     * {@link #providerThinkingLevel} 组件；消息级 {@code thinkingLevel}（agent-loop
+     * :409 的请求侧 pi 级别，含 "off"）仍留台账批 5。</p>
      * <p>（{@code rawStopReason} 原本也在这张清单上，§8.35.14 第五节的复核把它移出：
      * pi 的两个读点都在 Google 车道的**生产者层** —— 那一层 pi-java 也要实现。）</p>
      *
@@ -191,6 +189,12 @@ public sealed interface Message
         String api,
         String provider,
         String model,
+        /**
+         * B110（pi {@code types.ts:523-524}）：本次响应的 provider-native effort；
+         * 只在 anthropic managed（{@code supportsMidConvoEffort}）消息上有值，
+         * 旧盘与其余车道解码为 null（键省略）。B99 marker 重建的唯一语义输入。
+         */
+        String providerThinkingLevel,
         com.pijava.ai.Usage usage,
         java.time.Instant timestamp,
         String errorMessage,
@@ -206,14 +210,29 @@ public sealed interface Message
          * written before stop reasons were recorded, carries neither field.
          */
         public AssistantMessage(List<ContentBlock> content) {
-            this(content, null, null, null, null, null, null, null, null, null);
+            this(content, null, null, null, null, null, null, null, null, null, null);
         }
 
         /** Compatibility constructor for the (content, stopReason, deferred) shape. */
         public AssistantMessage(List<ContentBlock> content, StopReason stopReason,
                                 DeferredHandle deferred) {
             this(content, stopReason, deferred,
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null);
+        }
+
+        /**
+         * B110 之前的<b>规范</b>十参构造：{@code providerThinkingLevel} 缺席
+         * （≙ pi 的 {@code undefined} ⇒ 键省略）。保留它使批 4 之前的全部构造点
+         * （合成的中止/摘要消息、存量夹具）零改签；有值的消息（fromPartial、
+         * JSONL 解码、B99 重放）走十参规范构造。
+         */
+        public AssistantMessage(List<ContentBlock> content, StopReason stopReason,
+                                DeferredHandle deferred,
+                                String api, String provider, String model,
+                                com.pijava.ai.Usage usage, java.time.Instant timestamp,
+                                String errorMessage, String rawStopReason) {
+            this(content, stopReason, deferred,
+                api, provider, model, null, usage, timestamp, errorMessage, rawStopReason);
         }
 
         /**
@@ -231,6 +250,7 @@ public sealed interface Message
                 partial.api(),
                 partial.provider(),
                 partial.model(),
+                partial.providerThinkingLevel(),
                 usageOf(partial.usage()),
                 partial.timestamp(),
                 partial.errorMessage(),
@@ -281,7 +301,8 @@ public sealed interface Message
          */
         public AssistantMessage withStopReason(StopReason newStopReason) {
             return new AssistantMessage(content, newStopReason, deferred,
-                api, provider, model, usage, timestamp, errorMessage, rawStopReason);
+                api, provider, model, providerThinkingLevel,
+                usage, timestamp, errorMessage, rawStopReason);
         }
 
         @Override

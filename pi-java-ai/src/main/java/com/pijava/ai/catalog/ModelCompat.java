@@ -176,10 +176,10 @@ import java.util.Map;
  *        generated catalogue writes {@code false} for those ids
  *        ({@code generate-models.ts:604} 的 {@code isAnthropicTemperatureUnsupportedModel}）。
  *
- *        <p>⚠️ 它的读点是**四重合取**（{@code temperature !== undefined} ＋ 未开思考 ＋
- *        {@code supportsMidConvoEffort !== true} ＋ 本标志），只有**最后一个**由本组件管 ——
- *        前三项在 {@link com.pijava.ai.protocol.AnthropicRequestBuilder} 的读点里。（本仓没有
- *        {@code supportsMidConvoEffort}，见 {@code 原 docs/53 §10 B99}。）</p>
+ *        <p>它的读点是**四重合取**（{@code temperature !== undefined} ＋ 未开思考 ＋
+ *        {@code supportsMidConvoEffort !== true} ＋ 本标志），四项全部在
+ *        {@link com.pijava.ai.protocol.AnthropicRequestBuilder} 的读点里
+ *        （B99 批 4 接通 {@link #supportsMidConvoEffort}）。</p>
  *
  *        <p>⚠️ 与 {@code supportsFinishReason} 同形：探测值是常量 {@code true}
  *        （{@code getAnthropicCompat:214} 的 {@code ?? true}，而 {@code isOpenRouter} 只影响
@@ -308,6 +308,9 @@ import java.util.Map;
  * @param vercelGatewayRouting B98（completions）：{@code providerOptions.gateway} 路由偏好，显式-only
  * @param allowedFallbackModels B98（anthropic）：服务端回退许可目标（请求发 model，
  *        provider/cost 留本地）；{@code null} ≙ 省略 fallbacks 与 beta
+ * @param supportsMidConvoEffort B99（anthropic，{@code compat-schema.ts:466-472}）：
+ *        是否支持中途 effort-only 系统消息与 thinking binding 控制；{@code null} ≙
+ *        {@code false}，读点全写 {@code === true}。只来自生成目录/models.json，无探测。
  */
 public record ModelCompat(boolean allowEmptySignature,
                           Boolean requiresReasoningContentOnAssistantMessages,
@@ -348,7 +351,15 @@ public record ModelCompat(boolean allowEmptySignature,
                           Boolean zaiToolStream,
                           Integer vllmPriority,
                           VercelGatewayRouting vercelGatewayRouting,
-                          java.util.List<AllowedFallbackModel> allowedFallbackModels) {
+                          java.util.List<AllowedFallbackModel> allowedFallbackModels,
+                          /**
+                           * B99（pi {@code compat-schema.ts:466-472}）：精确模型传输是否支持
+                           * effort-only 系统消息（中途 effort marker）与 thinking binding 控制
+                           * （{@code block_binding}）。{@code null}/{@code false} 同义，
+                           * 所有读点写 {@code === true}。值只来自生成目录（9 个 Claude 5 模型）
+                           * 与 models.json，无探测面。
+                           */
+                          Boolean supportsMidConvoEffort) {
 
     /** Compact constructor（包 A-09）：两个模板 map 的 {@code null} 归一成空表（pi 的
      *  {@code ?? {}}，{@code getCompat:1714-1715}）⇒ 二态、读点免判空；防御性复制
@@ -420,7 +431,9 @@ public record ModelCompat(boolean allowEmptySignature,
              cacheControlFormat, openRouterRouting, sendSessionAffinityHeaders,
              sessionAffinityFormat, supportsStrictTools, supportsOpenAIGrammarTools,
              // 包 09 两字段缺席；B98 八字段在本便捷构造上全部缺席（null ≙ 探测/省略）。
-             null, null, null, null, null, null, null, null, null, null);
+             null, null, null, null, null, null, null, null, null, null,
+             // B99：supportsMidConvoEffort 缺席（null ≙ false）。
+             null);
     }
 
     /**

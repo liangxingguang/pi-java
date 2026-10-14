@@ -125,6 +125,8 @@ class ResponsesPromptCacheWireTest {
             null, Map.of(), Map.of(), null, null, null, null, null, false, null,
             null, explicitMode,
             // B98 八字段缺席。
-            null, null, null, null, null, null, null, null);
+            null, null, null, null, null, null, null, null,
+            // B99：supportsMidConvoEffort 缺席。
+            null);
     }
 }

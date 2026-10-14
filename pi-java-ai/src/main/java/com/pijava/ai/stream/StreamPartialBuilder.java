@@ -47,6 +47,12 @@ public final class StreamPartialBuilder {
      * 同一个可变对象，形状相同）。
      */
     private String rawStopReason;
+    /**
+     * B110：provider-native effort（pi {@code output.providerThinkingLevel}）。
+     * 默认 null；由车道（anthropic managed ／ pi-messages 透传）经
+     * {@link #noteProviderThinkingLevel} 写入。
+     */
+    private String providerThinkingLevel;
 
     // Per-block accumulators
     private final StringBuilder textBuf = new StringBuilder();
@@ -95,7 +101,16 @@ public final class StreamPartialBuilder {
      */
     public AssistantMessage snapshot() {
         return new AssistantMessage(messageId, List.copyOf(blocks), usage, stopReason,
-            null, null, null, null, null, rawStopReason);
+            null, null, null, providerThinkingLevel, null, null, rawStopReason);
+    }
+
+    /**
+     * B110：盖上 provider-native effort（pi {@code output.providerThinkingLevel}）。
+     * 一旦记下，后续每个快照都携带（与 rawStopReason 同形）；传 null 不出键。
+     * pi-messages 终局帧透传在 emitDone/emitError 之前调它。
+     */
+    public void noteProviderThinkingLevel(String level) {
+        this.providerThinkingLevel = level;
     }
 
     /**

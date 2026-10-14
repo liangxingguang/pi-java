@@ -50,6 +50,8 @@ final class MessageJsonCodec {
                 JsonlCodec.optionalString(node, "api"),
                 JsonlCodec.optionalString(node, "provider"),
                 JsonlCodec.optionalString(node, "model"),
+                // B110：旧盘无此键 ⇒ null ⇒ NON_NULL 写侧不出键，向前兼容。
+                JsonlCodec.optionalString(node, "providerThinkingLevel"),
                 decodeUsage(node.get("usage")),
                 decodeTimestamp(node.get("timestamp")),
                 JsonlCodec.optionalString(node, "errorMessage"),

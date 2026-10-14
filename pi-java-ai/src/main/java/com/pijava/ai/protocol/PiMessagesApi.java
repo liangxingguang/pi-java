@@ -146,6 +146,11 @@ public final class PiMessagesApi extends AbstractChatApi {
                             publisher.submit(builder.emitUsage(
                                 (long) done.usage().input(), (long) done.usage().output()));
                         }
+                        // B110（pi pi-messages.ts:180-217）：终局帧的 providerThinkingLevel
+                        // 在 emitDone **之前**进快照 ⇒ 终局消息携带（缺席 ⇒ null ⇒ 不出键）。
+                        if (done.providerThinkingLevel() != null) {
+                            builder.noteProviderThinkingLevel(done.providerThinkingLevel());
+                        }
                         // B109：pi 消息通道发的归一化停因与本枚举同词表（camelCase）。
                         // 这是 JSON 解码边界（pi TS 类型擦除、零校验）⇒ fromWireOrNull
                         // 容错：未知值落 null（比较全不命中），不走 JsonlCodec 的 tool_use 垫片。
@@ -154,6 +159,9 @@ public final class PiMessagesApi extends AbstractChatApi {
                     }
                     case PiMessagesEvent.Error err -> {
                         sawTerminal = true;
+                        if (err.providerThinkingLevel() != null) {
+                            builder.noteProviderThinkingLevel(err.providerThinkingLevel());
+                        }
                         // 解码边界容错：未知/缺失 ⇒ null ⇒ settle 补缺 ERROR（同 pi 零校验）。
                         publisher.submit(builder.emitError(
                             StopReason.fromWireOrNull(err.reason()),

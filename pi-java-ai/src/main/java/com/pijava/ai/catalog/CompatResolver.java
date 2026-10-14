@@ -209,7 +209,10 @@ public final class CompatResolver {
             c.requiresToolResultName(), c.requiresAssistantAfterToolResult(),
             c.requiresThinkingAsText(), pick(c.supportsUsageInStreaming(), Boolean.TRUE),
             c.zaiToolStream(), c.vllmPriority(), c.vercelGatewayRouting(),
-            null);
+            // completions 车道不定义 fallback 列表（pi 同理）。
+            null,
+            // B99：completions 车道不读它，但逐组件重建不许静默丢值。
+            c.supportsMidConvoEffort());
     }
 
     /**
@@ -262,7 +265,9 @@ public final class CompatResolver {
             // B98：completions 七字段本车道不定义（透传 null）；fallback 列表是
             // anthropic 专属，原样透传模型上的显式值。
             null, null, null, null, null, null, null,
-            base(model).allowedFallbackModels());
+            base(model).allowedFallbackModels(),
+            // B99：managed effort 标志只来自目录/models.json（无探测），原样透传。
+            partial.supportsMidConvoEffort());
     }
 
     /**
@@ -447,7 +452,9 @@ public final class CompatResolver {
             c.requiresToolResultName(), c.requiresAssistantAfterToolResult(),
             c.requiresThinkingAsText(), c.supportsUsageInStreaming(),
             c.zaiToolStream(), c.vllmPriority(), c.vercelGatewayRouting(),
-            c.allowedFallbackModels());
+            c.allowedFallbackModels(),
+            // B99：无探测面，原样透传模型上的显式值（目录/models.json）。
+            c.supportsMidConvoEffort());
     }
 
     private static Boolean pick(Boolean explicit, Boolean detected) {

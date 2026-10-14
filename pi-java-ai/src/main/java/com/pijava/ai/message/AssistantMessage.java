@@ -38,6 +38,12 @@ import com.pijava.ai.stream.StreamEvent;
  *                     or null when the producer does not know it
  * @param provider     provider name (pi {@code AssistantMessage.provider}), or null
  * @param model        model id (pi {@code AssistantMessage.model}), or null
+ * @param providerThinkingLevel B110（pi {@code types.ts:565}）：本次响应实际使用的
+ *                     provider-native effort 字面量（{@code low|medium|high|xhigh|max}）。
+ *                     只由 anthropic-messages 车道在
+ *                     {@code compat.supportsMidConvoEffort === true} 时盖
+ *                     （值＝{@code options.effort ?? "high"}，请求发出前定死、start 帧即在）；
+ *                     其余车道与历史消息为 null。唯一语义消费者是 B99 的历史 effort marker 重建。
  * @param timestamp    creation instant (pi {@code timestamp}: number of epoch ms), or null
  * @param errorMessage error-path message text (pi {@code errorMessage}), or null
  * @param rawStopReason the **unmapped** wire stop reason (pi {@code rawStopReason},
@@ -57,6 +63,7 @@ public record AssistantMessage(
     String api,
     String provider,
     String model,
+    String providerThinkingLevel,
     Instant timestamp,
     String errorMessage,
     String rawStopReason
@@ -70,7 +77,21 @@ public record AssistantMessage(
     public AssistantMessage(
             String id, List<ContentBlock> content, StreamEvent.UsageInfo usage,
             StopReason stopReason) {
-        this(id, content, usage, stopReason, null, null, null, null, null, null);
+        this(id, content, usage, stopReason, null, null, null, null, null, null, null);
+    }
+
+    /**
+     * B110 之前的十参形状：{@code providerThinkingLevel} 缺席（null）。
+     * 供批 4 之前的存量夹具零改签；生产路径的盖章经
+     * {@link #withProviderThinkingLevel(String)}。
+     */
+    public AssistantMessage(
+            String id, List<ContentBlock> content, StreamEvent.UsageInfo usage,
+            StopReason stopReason,
+            String api, String provider, String model,
+            Instant timestamp, String errorMessage, String rawStopReason) {
+        this(id, content, usage, stopReason,
+            api, provider, model, null, timestamp, errorMessage, rawStopReason);
     }
 
     /** Create an empty initial snapshot. */
@@ -86,38 +107,55 @@ public record AssistantMessage(
     /** Create a copy with a new id. */
     public AssistantMessage withId(String newId) {
         return new AssistantMessage(newId, content, usage, stopReason,
-            api, provider, model, timestamp, errorMessage, rawStopReason);
+            api, provider, model, providerThinkingLevel,
+            timestamp, errorMessage, rawStopReason);
     }
 
     /** Create a copy with updated content blocks. */
     public AssistantMessage withContent(List<ContentBlock> newContent) {
         return new AssistantMessage(id, newContent, usage, stopReason,
-            api, provider, model, timestamp, errorMessage, rawStopReason);
+            api, provider, model, providerThinkingLevel,
+            timestamp, errorMessage, rawStopReason);
     }
 
     /** Create a copy with updated usage. */
     public AssistantMessage withUsage(StreamEvent.UsageInfo newUsage) {
         return new AssistantMessage(id, content, newUsage, stopReason,
-            api, provider, model, timestamp, errorMessage, rawStopReason);
+            api, provider, model, providerThinkingLevel,
+            timestamp, errorMessage, rawStopReason);
     }
 
     /** Create a copy with an updated stop reason. */
     public AssistantMessage withStopReason(StopReason newStopReason) {
         return new AssistantMessage(id, content, usage, newStopReason,
-            api, provider, model, timestamp, errorMessage, rawStopReason);
+            api, provider, model, providerThinkingLevel,
+            timestamp, errorMessage, rawStopReason);
     }
 
     /** Create a copy with the provider identity + creation time attached. */
     public AssistantMessage withIdentity(String newApi, String newProvider, String newModel,
                                          Instant newTimestamp) {
         return new AssistantMessage(id, content, usage, stopReason,
-            newApi, newProvider, newModel, newTimestamp, errorMessage, rawStopReason);
+            newApi, newProvider, newModel, providerThinkingLevel,
+            newTimestamp, errorMessage, rawStopReason);
+    }
+
+    /**
+     * Create a copy with the provider-native effort stamped (B110,
+     * pi {@code anthropic-messages.ts:581-588})。null 等价于不盖 ——
+     * 身份缝对非 managed 车道调它传 null，保持键缺席（与 pi 的展开省略同形）。
+     */
+    public AssistantMessage withProviderThinkingLevel(String newProviderThinkingLevel) {
+        return new AssistantMessage(id, content, usage, stopReason,
+            api, provider, model, newProviderThinkingLevel,
+            timestamp, errorMessage, rawStopReason);
     }
 
     /** Create a copy with an error-path message text attached (pi {@code errorMessage}). */
     public AssistantMessage withErrorMessage(String newErrorMessage) {
         return new AssistantMessage(id, content, usage, stopReason,
-            api, provider, model, timestamp, newErrorMessage, rawStopReason);
+            api, provider, model, providerThinkingLevel,
+            timestamp, newErrorMessage, rawStopReason);
     }
 
     /**
@@ -131,6 +169,7 @@ public record AssistantMessage(
      */
     public AssistantMessage withRawStopReason(String newRawStopReason) {
         return new AssistantMessage(id, content, usage, stopReason,
-            api, provider, model, timestamp, errorMessage, newRawStopReason);
+            api, provider, model, providerThinkingLevel,
+            timestamp, errorMessage, newRawStopReason);
     }
 }

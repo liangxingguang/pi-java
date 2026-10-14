@@ -262,7 +262,13 @@ public final class ModelsJsonSchema {
         /** pi {@code vercelGatewayRouting}：{@code providerOptions.gateway} 路由偏好。 */
         @JsonProperty("vercelGatewayRouting") VercelGatewayRoutingDef vercelGatewayRouting,
         /** pi {@code allowedFallbackModels}：Anthropic 服务端回退许可（≤3 条）。 */
-        @JsonProperty("allowedFallbackModels") List<FallbackModelDef> allowedFallbackModels
+        @JsonProperty("allowedFallbackModels") List<FallbackModelDef> allowedFallbackModels,
+        /**
+         * B99（pi {@code compat-schema.ts:466-472}）：精确模型传输是否支持
+         * effort-only 系统消息（中途 effort marker）与 thinking binding 控制
+         * （{@code block_binding}）。缺省 {@code false}，读点全写 {@code === true}。
+         */
+        @JsonProperty("supportsMidConvoEffort") Boolean supportsMidConvoEffort
     ) {
 
         /** pi {@code VercelGatewayRoutingSchema}（compat-schema.ts:151-169）。 */

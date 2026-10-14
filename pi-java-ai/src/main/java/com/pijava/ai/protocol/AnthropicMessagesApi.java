@@ -98,6 +98,9 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         builder.maxRetries(0);
         // D-P1：models.json 合并来的 default headers（原 docs/65）。
         putExtraHeaders(options, builder::putHeader);
+        // B99 裁决③：把有效 header 的<b>名集合</b>留给 buildParams —— 显式配置
+        // anthropic-beta 时自动 beta 列表整组跳过（pi getBetaFeatures :1087-1103）。
+        this.effectiveHeaderNames = extraHeaderNames(options);
         this.client = builder.build();
         this.providerRetry = ProviderRetry.optionsOf(options);
         this.cacheRetention = retentionOf(options);
@@ -165,6 +168,9 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
     /** B103：有效 baseUrl（openrouter 探测用；空白 ⇒ null）。 */
     private final String baseUrl;
 
+    /** B99 裁决③：models.json 合并后有效 header 的名集合（仅名，不传值）。 */
+    private final java.util.Set<String> effectiveHeaderNames;
+
     /** B103：原始 sessionId（亲和头原料；none 门在请求期过）。 */
     private final String sessionId;
 
@@ -182,7 +188,8 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         var stop = new StopState();
         var usageState = new AnthropicUsageState(request.model());
         try {
-            var params = buildParams(request, affinitySessionId(), baseUrl);
+            var params = buildParams(request, affinitySessionId(), baseUrl,
+                effectiveHeaderNames);
             publisher.submit(builder.emitStart());
 
             // A-14（R7）：只包初始请求获取；每次重试是全新 SDK 请求。
@@ -470,19 +477,54 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                 .orElse(null);
     }
 
-    /** 直调夹具形态（反射调用）：无亲和头。 */
+    /** 直调夹具形态（反射调用）：无亲和头、无显式 beta 覆写。 */
     private MessageCreateParams buildParams(StreamRequest request) {
-        return buildParams(request, null, null);
+        return buildParams(request, null, null, java.util.Set.of());
     }
 
     private MessageCreateParams buildParams(StreamRequest request, String affinitySessionId,
-                                             String baseUrl) {
+                                             String baseUrl,
+                                             java.util.Set<String> headerNames) {
         // 包 A-01：断点规格在这里解析一次（三源的合并：请求期选项 ?? 环境变量 ?? "short"），
         // 随后由 AnthropicRequestBuilder 翻成 SDK 形状并挂到三处落点上。
         return AnthropicRequestBuilder.buildParams(request,
             CompatResolver.anthropicCacheControl(request.model(), cacheRetention,
                 System.getenv(CACHE_RETENTION_ENV)),
-            affinitySessionId, baseUrl);
+            affinitySessionId, baseUrl, headerNames);
+    }
+
+    /**
+     * B110（pi {@code anthropic-messages.ts:581}）：唯一真生产者 —— compat flag
+     * 为真时盖 {@code options.effort ?? "high"}（{@link AnthropicThinking#activeEffort}），
+     * 与 managed 请求体的队尾 active marker <b>同一个函数</b>。门只认
+     * {@code supportsMidConvoEffort}，不认 {@code forceAdaptiveThinking}。
+     */
+    @Override
+    protected String providerThinkingLevel(StreamRequest request) {
+        if (request.model() == null) {
+            return null;
+        }
+        var compat = CompatResolver.forAnthropic(request.model(), baseUrl);
+        if (!Boolean.TRUE.equals(compat.supportsMidConvoEffort())) {
+            return null;
+        }
+        return AnthropicThinking.activeEffort(request.model(), request.reasoning());
+    }
+
+    /** B99 裁决③：从 ApiOptions.extra["headers"] 取名集合（无 ⇒ 空集）。 */
+    private static java.util.Set<String> extraHeaderNames(ApiOptions options) {
+        Map<String, Object> extra = options.extra();
+        Object raw = extra == null ? null : extra.get("headers");
+        if (!(raw instanceof Map<?, ?> map)) {
+            return java.util.Set.of();
+        }
+        var names = new java.util.HashSet<String>();
+        map.keySet().forEach(key -> {
+            if (key != null) {
+                names.add(key.toString());
+            }
+        });
+        return java.util.Set.copyOf(names);
     }
 
     /**

@@ -267,7 +267,9 @@ class CompletionsB98WireTest {
             null, Map.of(), Map.of(), null, null, null, null, null, false, null,
             null, null,
             b.toolResultName, b.assistantAfterToolResult, b.thinkingAsText, b.usage,
-            b.zaiToolStream, b.vllmPriority, b.vercel, null);
+            b.zaiToolStream, b.vllmPriority, b.vercel, null,
+            // B99：supportsMidConvoEffort 缺席。
+            null);
     }
 
     private static ModelInfo model(ModelCompat compat, Set<ModelCapability> capabilities) {

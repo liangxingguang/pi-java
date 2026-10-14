@@ -245,7 +245,8 @@ public final class TransformMessages {
             return msg;
         }
         return new Message.AssistantMessage(content, msg.stopReason(), msg.deferred(),
-            msg.api(), msg.provider(), msg.model(), msg.usage(), msg.timestamp(),
+            msg.api(), msg.provider(), msg.model(), msg.providerThinkingLevel(),
+            msg.usage(), msg.timestamp(),
             msg.errorMessage(), msg.rawStopReason());
     }
 

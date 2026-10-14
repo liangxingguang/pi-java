@@ -130,7 +130,9 @@ class AnthropicEagerToolStreamingWireTest {
             Map.of(), Map.of(), null, null, null, null, null, true, null,
             eagerToolInputStreaming, null,
             // B98 八字段缺席。
-            null, null, null, null, null, null, null, null);
+            null, null, null, null, null, null, null, null,
+            // B99：supportsMidConvoEffort 缺席。
+            null);
         return new ModelInfo(ModelId.of("anthropic", "claude-opus-5"), "Claude Opus 5", Set.of(),
             100_000, 1000, false, PricingInfo.UNKNOWN, ThinkingLevelMap.empty(),
             Map.of(), Map.of(), compat);

@@ -115,6 +115,11 @@ public final class SessionJson {
             if (assistant.model() != null) {
                 node.put("model", assistant.model());
             }
+            // B110：managed effort 盖章随消息落库（位置紧跟 model，pi types.ts 同序）；
+            // 非 managed 车道与旧消息为 null ⇒ 键省略（同 A7 规则）。
+            if (assistant.providerThinkingLevel() != null) {
+                node.put("providerThinkingLevel", assistant.providerThinkingLevel());
+            }
             if (assistant.usage() != null) {
                 node.set("usage", MAPPER.valueToTree(assistant.usage()));
             }

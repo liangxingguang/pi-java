@@ -3,6 +3,8 @@ package com.pijava.ai.protocol;
 import java.util.Optional;
 import java.util.OptionalInt;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import com.anthropic.core.JsonValue;
 import com.anthropic.models.messages.OutputConfig;
 import com.anthropic.models.messages.ThinkingConfigAdaptive;
@@ -69,17 +71,29 @@ final class AnthropicThinking {
     /** pi {@code :1173} 的 {@code thinkingBudgetTokens || 1024} —— **0 会落到 1024**。 */
     private static final long FALLBACK_BUDGET = 1024L;
 
+    /** B99（pi {@code anthropic-messages.ts:190}）：managed effort 两 beta。 */
+    static final String MID_CONVERSATION_OUTPUT_CONFIG_BETA =
+        "mid-conversation-output-config-2026-07-01";
+    static final String THINKING_BINDING_CONTROLS_BETA =
+        "thinking-binding-controls-2026-08-01";
+
     /**
      * 车道级解析结果。
      *
-     * @param thinking     要写进请求的 {@code thinking} 参数；<b>空 = 整个参数不发</b>
-     * @param outputConfig adaptive 分支的 {@code output_config}（带 effort）；其余分支为空
+     * @param thinking     要写进请求的<b>typed</b> {@code thinking} 参数；<b>空 = 不调
+     *                     {@code builder.thinking()}</b>（managed 支走 {@link #rawThinking}）
+     * @param outputConfig adaptive/managed 分支的 {@code output_config}（带 effort）
      * @param maxTokens    调整后的 {@code max_tokens}；空 = 沿用调用方给的值
      *                     （pi 的 adaptive ／ 无 reasoning 两条分支都是 {@code {...base}}）
+     * @param rawThinking  B99 managed 支的原始 JSON {@code thinking} 树（含
+     *                     {@code block_binding}，stable SDK 的 typed adaptive 无此字段）；
+     *                     经 {@code putAdditionalBodyProperty("thinking", …)} 上线，
+     *                     与 {@link #thinking} 互斥
      */
     record Resolved(Optional<ThinkingConfigParam> thinking,
                     Optional<OutputConfig> outputConfig,
-                    OptionalInt maxTokens) {}
+                    OptionalInt maxTokens,
+                    Optional<ObjectNode> rawThinking) {}
 
     /**
      * pi {@code anthropic-messages.ts:858-904}（streamSimple 的分流）＋
@@ -97,9 +111,10 @@ final class AnthropicThinking {
      * thinkingEnabled === false && map.off !== null → {type:"disabled"}
      * }</pre>
      *
-     * <p>⚠️ <b>{@code supportsMidConvoEffort} 那条分支不在内</b>（{@code 原 docs/46 §3-D3}）：
-     * 它要写 {@code thinking.block_binding}，而 {@code anthropic-java-core:2.52.0} 里
-     * <b>没有任何 {@code BlockBinding} 类型</b>（实测 javap ＋ unzip 零命中）。</p>
+     * <p>B99（批 4）：{@code supportsMidConvoEffort} 顶支已接通 —— managed 模型无条件
+     * adaptive＋{@code block_binding:{prefix_mismatch_behavior:"drop_block"}}（原始 JSON
+     * 树经 {@code putAdditionalBodyProperty}，stable SDK 2.66.0 的 typed adaptive 仍无
+     * blockBinding）＋顶层 {@code output_config:{effort:"high"}}，与是否开思考无关。</p>
      *
      * <p>包 A-10 前后这里变了两处：<b>① </b>{@code clampMaxTokensToContext} 现在**在**内
      * （pi {@code anthropic-messages.ts:896} 在 {@code adjustMaxTokensForThinking} **之后**
@@ -118,21 +133,31 @@ final class AnthropicThinking {
                             OptionalInt baseMaxTokens, TranscriptContext transcript,
                             ThinkingBudgets budgets) {
         if (model == null || !model.capabilities().contains(ModelCapability.THINKING)) {
-            return new Resolved(Optional.empty(), Optional.empty(), OptionalInt.empty());
+            return new Resolved(Optional.empty(), Optional.empty(), OptionalInt.empty(),
+                Optional.empty());
+        }
+        // B99（pi :1235-1241）：managed effort 顶支在 reasoning 空判定**之前**，
+        // 与 thinkingEnabled 无关 —— 无 reasoning 也恒发 adaptive＋block_binding＋
+        // 顶层 output_config:{effort:"high"}，不抬 maxTokens、不吃 thinkingBudgets。
+        if (compat != null && Boolean.TRUE.equals(compat.supportsMidConvoEffort())) {
+            return new Resolved(Optional.empty(),
+                Optional.of(outputConfigHigh()), OptionalInt.empty(),
+                Optional.of(managedThinkingTree()));
         }
         if (reasoning.isEmpty()) {
             // pi :1179 —— `thinkingEnabled === false && model.thinkingLevelMap?.off !== null`
             return new Resolved(
                 model.thinkingLevelMap().supportsExplicitOff()
                     ? Optional.of(disabledParam()) : Optional.empty(),
-                Optional.empty(), OptionalInt.empty());
+                Optional.empty(), OptionalInt.empty(), Optional.empty());
         }
         var level = reasoning.get();
         // ⚠️ `compat` 必须是**解析后**的（CompatResolver）—— 目录标注只给「覆盖」那一源，
         // 而 pi 的判据读的是「目录已烘进去」的值（原 docs/53 §4.1）。
         if (compat != null && compat.forceAdaptiveThinking()) {
             return new Resolved(Optional.of(adaptiveParam()),
-                Optional.of(outputConfig(model, level)), OptionalInt.empty());
+                Optional.of(outputConfig(model, level)), OptionalInt.empty(),
+                Optional.empty());
         }
         // B128：budget 表由请求通道带入（settings.thinkingBudgets）；null ≙ pi 的
         // undefined ⇒ 全默认表（simple-options.ts:72 的浅合并）。
@@ -144,7 +169,38 @@ final class AnthropicThinking {
         long room = Math.max(0L, (long) maxTokens - ThinkingBudgets.MIN_ANSWER_TOKENS);
         return new Resolved(
             Optional.of(enabledParam(Math.min(adjusted.thinkingBudget(), room))),
-            Optional.empty(), OptionalInt.of(maxTokens));
+            Optional.empty(), OptionalInt.of(maxTokens), Optional.empty());
+    }
+
+    /**
+     * B99/B110：managed 模型的 active marker effort 与盖章值的<b>同一个</b>函数
+     * （pi 的 {@code options?.effort ?? "high"}，{@code anthropic-messages.ts:1154-1161}
+     * 与 {@code :581} 共用）。
+     *
+     * <p>请求侧无 reasoning 时 options.effort 缺席 ⇒ {@code "high"}（managed 分支
+     * 无 reasoning 也恒发顶层 high）；有值 ⇒ {@link #mapLevelToEffort}（含目录映射）。</p>
+     */
+    static String activeEffort(ModelInfo model, Optional<ThinkingLevel> reasoning) {
+        return reasoning.<String>map(level -> mapLevelToEffort(model, level)).orElse("high");
+    }
+
+    /** 无 NON_NULL inclusion 的 mapper（与 ThinkingFormatWriter.PLAIN_JSON 同物）。 */
+    private static final com.fasterxml.jackson.databind.ObjectMapper PLAIN_JSON =
+        new com.fasterxml.jackson.databind.ObjectMapper();
+
+    /**
+     * B99（pi {@code :1236-1240}）：managed thinking 原始 JSON 树，键序逐字
+     * {@code type, display, block_binding.prefix_mismatch_behavior}。stable SDK 的
+     * {@code ThinkingConfigAdaptive} 无 blockBinding（javap 实测，只有 beta client
+     * 类型有）⇒ 经 {@code putAdditionalBodyProperty("thinking", …)} 上线（裁决②）。
+     */
+    private static ObjectNode managedThinkingTree() {
+        var tree = PLAIN_JSON.createObjectNode();
+        tree.put("type", "adaptive");
+        tree.put("display", DEFAULT_DISPLAY);
+        var binding = tree.putObject("block_binding");
+        binding.put("prefix_mismatch_behavior", "drop_block");
+        return tree;
     }
 
     /** pi {@code :1173} —— {@code {type:"enabled", budget_tokens, display}}。 */
@@ -182,5 +238,10 @@ final class AnthropicThinking {
         return OutputConfig.builder()
             .effort(OutputConfig.Effort.of(mapLevelToEffort(model, level)))
             .build();
+    }
+
+    /** B99：managed 支恒发 {@code output_config:{effort:"high"}}（pi {@code :1241}）。 */
+    private static OutputConfig outputConfigHigh() {
+        return OutputConfig.builder().effort(OutputConfig.Effort.HIGH).build();
     }
 }

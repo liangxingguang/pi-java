@@ -128,7 +128,9 @@ final class ModelsJsonCompat {
             def.zaiToolStream(),
             def.vllmPriority(),
             vercelRoutingOf(providerId, model.id(), def.vercelGatewayRouting()),
-            fallbacksOf(providerId, model.id(), def.allowedFallbackModels()));
+            fallbacksOf(providerId, model.id(), def.allowedFallbackModels()),
+            // B99：原样透传可空值（缺省 false 在车道读点以 === true 判定）。
+            def.supportsMidConvoEffort());
     }
 
     /**
@@ -239,7 +241,10 @@ final class ModelsJsonCompat {
                 : base.vercelGatewayRouting(),
             raw.allowedFallbackModels() != null
                 ? fallbacksOf(providerId, modelId, raw.allowedFallbackModels())
-                : base.allowedFallbackModels());
+                : base.allowedFallbackModels(),
+            // B99：标量 override ?? base。
+            raw.supportsMidConvoEffort() != null
+                ? raw.supportsMidConvoEffort() : base.supportsMidConvoEffort());
     }
 
     /** base ChatTemplateKwargValue map 上叠加 raw JSON 层（raw 键经 kwargValueOf 转换）。 */
@@ -354,7 +359,9 @@ final class ModelsJsonCompat {
             override.vercelGatewayRouting() != null
                 ? override.vercelGatewayRouting() : base.vercelGatewayRouting(),
             override.allowedFallbackModels() != null
-                ? override.allowedFallbackModels() : base.allowedFallbackModels());
+                ? override.allowedFallbackModels() : base.allowedFallbackModels(),
+            override.supportsMidConvoEffort() != null
+                ? override.supportsMidConvoEffort() : base.supportsMidConvoEffort());
     }
 
     /**
