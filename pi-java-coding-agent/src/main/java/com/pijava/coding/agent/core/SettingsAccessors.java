@@ -1,6 +1,7 @@
 package com.pijava.coding.agent.core;
 
 import java.util.List;
+import java.util.OptionalInt;
 
 /**
  * Per-field settings getters/setters (Phase 3 design §12.2).
@@ -228,6 +229,23 @@ public final class SettingsAccessors {
     /** pi {@code getProviderRetrySettings} 返回形状。 */
     public record ProviderRetrySettings(
             Long timeoutMs, Integer maxRetries, long maxRetryDelayMs) {}
+
+    /**
+     * B128：pi {@code getThinkingBudgets}（settings-manager.ts:1166-1168）。缺席 ⇒
+     * {@code null}（≙ pi 的 {@code undefined}，ai 侧按默认表浅合并）；逐段转换，
+     * 未配置的段落 {@link OptionalInt#empty()}。不做范围校验（pi schema 只验 number）。
+     */
+    public com.pijava.ai.thinking.ThinkingBudgets getThinkingBudgets() {
+        var b = manager.effective().thinkingBudgets;
+        if (b == null) {
+            return null;
+        }
+        return new com.pijava.ai.thinking.ThinkingBudgets(
+            b.minimal == null ? OptionalInt.empty() : OptionalInt.of(b.minimal),
+            b.low == null ? OptionalInt.empty() : OptionalInt.of(b.low),
+            b.medium == null ? OptionalInt.empty() : OptionalInt.of(b.medium),
+            b.high == null ? OptionalInt.empty() : OptionalInt.of(b.high));
+    }
 
     public void setRetryEnabled(boolean enabled) {
         var global = manager.global();

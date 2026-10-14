@@ -454,6 +454,9 @@ public final class AgentSession implements AutoCloseable {
             // 不接线 ⇒ 自动压缩恒关（B223 原状）；接了线 ⇒ pi 的「默认开」
             // 由 settings 的 ?? true 语义在 resolver 内实现。
             .compactionResolver(m -> settings.accessors().getCompactionSettings(m))
+            // B128：settings.thinkingBudgets（pi sdk.ts:444 new Agent({thinkingBudgets})）；
+            // 缺席为 null，ai 侧按默认表合并。
+            .thinkingBudgets(settings.accessors().getThinkingBudgets())
             // B64（原 docs/24）：AGENTS.md/CLAUDE.md 发现；-nc 关闭。
             // 晚读口：每次 run 重新遍历（与 pi 同），不缓存。
             .contextFiles(() -> args.noContextFiles()

@@ -278,7 +278,9 @@ public final class DefaultProviders {
             ToolRegistry.definitionsOf(context.tools()),
             options.maxTokens().orElse(-1),
             options.temperature().orElse(-1),
-            options.reasoning());
+            options.reasoning(),
+            // B128：settings.thinkingBudgets 经三层通道到这里（null ≙ undefined）。
+            options.thinkingBudgets());
         return api.streamBlocking(request, effectiveOptions);
     }
 

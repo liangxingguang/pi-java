@@ -64,6 +64,11 @@ public final class Settings {
     public Tui tui;
     /** 自动重试设置（3d，原 docs/31 §8.22；对齐 pi {@code RetrySettings}）。 */
     public Retry retry;
+    /**
+     * B128：每级思考的自定义 token 预算（pi {@code settings-schema.ts:121-133}，
+     * 四段全 optional、<b>无默认值</b>；缺席 ⇒ {@code null} ⇒ ai 侧默认表）。
+     */
+    public ThinkingBudgets thinkingBudgets;
 
     /** Unknown fields passthrough (aligned with pi's extensible settings). */
     private final Map<String, Object> unknown = new HashMap<>();
@@ -180,6 +185,20 @@ public final class Settings {
         @JsonProperty("codeBlockIndent") String codeBlockIndent,
         @JsonProperty("mermaid") String mermaid
     ) {}
+
+    /**
+     * Thinking token budgets (JSON boundary representation)，对齐 pi
+     * {@code ThinkingBudgets}（settings-schema.ts:121-133）。只有 {@code minimal/low/
+     * medium/high} 四段，全 optional 无默认（schema 只验 number，不做范围校验 ⇒
+     * 负数也原样上线，服务端拒就拒）。类级 NON_NULL ⇒ 未配置的段不写回 JSON。
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public static final class ThinkingBudgets {
+        public Integer minimal;
+        public Integer low;
+        public Integer medium;
+        public Integer high;
+    }
 
     /**
      * TUI settings (JSON boundary representation) —— <b>pi-java 自有扩展</b>
