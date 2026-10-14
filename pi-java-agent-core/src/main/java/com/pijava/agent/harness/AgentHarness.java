@@ -153,7 +153,7 @@ public class AgentHarness implements AutoCloseable {
             lane::applyTurn, telemetry, config.compactionObserver(),
             config.retrySettings(), config.retryAborted(), config.retryObserver(),
             () -> lane.promptGuidelines, () -> lane.appendSystemPrompt,
-            config.contextFiles());
+            config.contextFiles(), config.thinkingBudgets());
         this.runLifecycle = new RunLifecycle(execCtx);
         this.piEngine = new PiLaneEngine(execCtx, runLifecycle);
     }

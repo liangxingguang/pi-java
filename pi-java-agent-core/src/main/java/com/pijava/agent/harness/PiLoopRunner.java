@@ -177,7 +177,7 @@ final class PiLoopRunner {
             config.streamFn(), config.signal(), config.steeringMessages(),
             config.followUpMessages(), config.transformContext(),
             config.prepareNextTurn(), config.shouldStopAfterTurn(),
-            config.streamListener());
+            config.streamListener(), config.thinkingBudgets());
     }
 
     private static ArrayList<Message> poll(Supplier<List<Message>> source) {
@@ -225,7 +225,8 @@ final class PiLoopRunner {
         var llmContext = new Context(context.systemPrompt(), llmMessages, context.tools());
         var options = new StreamOptions(
             java.util.OptionalInt.empty(), java.util.OptionalDouble.empty(),
-            reasoningOf(config));
+            reasoningOf(config), java.util.Optional.empty(), java.util.Optional.empty(),
+            config.thinkingBudgets());
 
         var signal = config.signal();
         // 进入本次拉取时信号是否**已经**中止。它区分两件事：

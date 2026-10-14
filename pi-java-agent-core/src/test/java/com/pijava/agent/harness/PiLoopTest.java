@@ -171,6 +171,7 @@ class PiLoopTest {
             null,
             null,
             stopHook,
+            null,
             null);
     }
 
@@ -386,7 +387,7 @@ class PiLoopTest {
                         new StreamEvent.StreamDone(StopReason.TOOL_USE, null, done)),
                     textTurn("stopped"))),
                 signal,
-                null, null, null, null, null, null),
+                null, null, null, null, null, null, null),
             rec);
 
         assertThat(rec.frames.stream().filter(f -> f.startsWith("tool_execution_")).toList())

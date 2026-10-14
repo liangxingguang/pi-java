@@ -138,6 +138,7 @@ class PiLoopTurnHooksTest {
             null,
             nextTurn,
             stop,
+            null,
             null);
     }
 

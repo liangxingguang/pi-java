@@ -113,7 +113,9 @@ public record HarnessConfig(
     RetryObserver retryObserver,
     List<String> promptGuidelines,
     String appendSystemPrompt,
-    Supplier<List<com.pijava.agent.prompt.SystemPromptOptions.ContextFile>> contextFiles
+    Supplier<List<com.pijava.agent.prompt.SystemPromptOptions.ContextFile>> contextFiles,
+    /** B128：pi {@code AgentOptions.thinkingBudgets}（settings.json 四段，无默认）；null ≙ undefined。 */
+    com.pijava.ai.thinking.ThinkingBudgets thinkingBudgets
 ) {
     /** Canonical constructor applying default values and defensive copies. */
     public HarnessConfig {
@@ -155,7 +157,7 @@ public record HarnessConfig(
              null, null, toolRegistry, toolContext, commandPrefix, compactionResolver,
              skills, telemetry, thinkingLevelMap, steeringMode,
              followUpMode, toolExecution, streamListener, SummaryGenerator.truncating(),
-             null, null, null, null, List.of(), "", null);
+             null, null, null, null, List.of(), "", null, null);
     }
 
     public static final class Builder {
@@ -186,6 +188,7 @@ public record HarnessConfig(
         private List<String> promptGuidelines = List.of();
         private String appendSystemPrompt = "";
         private Supplier<List<com.pijava.agent.prompt.SystemPromptOptions.ContextFile>> contextFiles;
+        private com.pijava.ai.thinking.ThinkingBudgets thinkingBudgets;
 
         public Builder streamFn(StreamFn fn) { this.streamFn = fn; return this; }
         public Builder model(ModelId<?> m) { this.model = m; return this; }
@@ -271,6 +274,11 @@ public record HarnessConfig(
             this.contextFiles = value; return this;
         }
 
+        /** B128：自定义思考预算表（settings.json 四段）；null ≙ pi 的 {@code undefined}。 */
+        public Builder thinkingBudgets(com.pijava.ai.thinking.ThinkingBudgets value) {
+            this.thinkingBudgets = value; return this;
+        }
+
         /** Build the {@link HarnessConfig}, validating required fields. */
         public HarnessConfig build() {
             if (streamFn == null) throw new IllegalStateException("streamFn is required");
@@ -284,7 +292,8 @@ public record HarnessConfig(
                                      steeringMode, followUpMode, toolExecution,
                                      streamListener, summaryGenerator, compactionObserver,
                                      retrySettings, retryAborted, retryObserver,
-                                     promptGuidelines, appendSystemPrompt, contextFiles);
+                                     promptGuidelines, appendSystemPrompt, contextFiles,
+                                     thinkingBudgets);
         }
     }
 }

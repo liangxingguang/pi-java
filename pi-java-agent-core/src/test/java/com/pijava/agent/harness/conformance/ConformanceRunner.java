@@ -79,6 +79,7 @@ final class ConformanceRunner {
             null,
             driver::prepareNextTurn,
             null,
+            null,
             null);
 
         var prompt = new Message.UserMessage(

@@ -276,7 +276,9 @@ public final class PiLoop {
             ContextTransform transformContext,
             NextTurnHook prepareNextTurn,
             StopHook shouldStopAfterTurn,
-            Consumer<StreamEvent> streamListener) {}
+            Consumer<StreamEvent> streamListener,
+            /** B128：pi {@code AgentLoopConfig.thinkingBudgets}；null ≙ {@code undefined}。 */
+            com.pijava.ai.thinking.ThinkingBudgets thinkingBudgets) {}
 
     private PiLoop() {}
 

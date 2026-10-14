@@ -341,7 +341,8 @@ public final class PiLaneEngine {
             event -> {
                 sink.noteStreamEvent(event);
                 ctx.streamListener().get().accept(event);
-            });
+            },
+            ctx.thinkingBudgets());
     }
 
     /**

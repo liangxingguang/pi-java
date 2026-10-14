@@ -62,7 +62,9 @@ record ExecutionContext(
     RetryObserver retryObserver,
     Supplier<List<String>> promptGuidelines,
     Supplier<String> appendSystemPrompt,
-    Supplier<List<com.pijava.agent.prompt.SystemPromptOptions.ContextFile>> contextFiles
+    Supplier<List<com.pijava.agent.prompt.SystemPromptOptions.ContextFile>> contextFiles,
+    /** B128：pi {@code Agent.thinkingBudgets}（构造期固化，同 thinkingLevelMap）；null ≙ undefined。 */
+    com.pijava.ai.thinking.ThinkingBudgets thinkingBudgets
 ) {
     ExecutionContext {
         // 与 HarnessConfig 的规范默认同置：直接构造 ExecutionContext 的装配（测试、
