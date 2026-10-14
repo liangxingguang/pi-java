@@ -109,6 +109,64 @@ class WebWireJsonTest {
         assertThat(bare.has("rawStopReason")).isFalse();
     }
 
+    /** 批 5（B148/B234）：assistant 五件新字段上 wire，缺席省略（含批 4 漏同步的 providerThinkingLevel）。 */
+    @Test
+    void assistantBatch5FieldsOnWire() {
+        var details = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode()
+            .put("status", 500);
+        var diagnostics = List.of(
+            new com.pijava.ai.message.AssistantMessageDiagnostic(
+                "anthropic_input_transformations", 123L, null,
+                new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode()
+                    .set("transformations",
+                        new com.fasterxml.jackson.databind.ObjectMapper().createArrayNode())));
+        var m = new Message.AssistantMessage(
+            List.of(new ContentBlock.TextContent("hi")),
+            StopReason.STOP, null,
+            "anthropic-messages", "anthropic", "claude-fable-5",
+            "claude-opus-5", "high", "medium", diagnostics,
+            new com.pijava.ai.Usage(1, 1, 0, 0, null, null, 2,
+                com.pijava.ai.Usage.Cost.zero()),
+            java.time.Instant.ofEpochMilli(1_700_000_000_000L),
+            null, null, 88L);
+        var node = WebWireJson.messageNode(m);
+
+        assertThat(node.get("responseModel").asText()).isEqualTo("claude-opus-5");
+        assertThat(node.get("providerThinkingLevel").asText()).isEqualTo("high");
+        assertThat(node.get("thinkingLevel").asText()).isEqualTo("medium");
+        assertThat(node.get("diagnostics").get(0).get("type").asText())
+            .isEqualTo("anthropic_input_transformations");
+        assertThat(node.get("durationMs").asLong()).isEqualTo(88L);
+        // 键序：model, responseModel, providerThinkingLevel, thinkingLevel, diagnostics
+        var names = new java.util.ArrayList<String>();
+        node.fieldNames().forEachRemaining(names::add);
+        assertThat(names.indexOf("model") + 1).isEqualTo(names.indexOf("responseModel"));
+        assertThat(names.indexOf("responseModel") + 1)
+            .isEqualTo(names.indexOf("providerThinkingLevel"));
+
+        var bare = WebWireJson.messageNode(new Message.AssistantMessage(
+            List.of(new ContentBlock.TextContent("old"))));
+        assertThat(bare.has("responseModel")).isFalse();
+        assertThat(bare.has("providerThinkingLevel")).isFalse();
+        assertThat(bare.has("thinkingLevel")).isFalse();
+        assertThat(bare.has("diagnostics")).isFalse();
+        assertThat(bare.has("durationMs")).isFalse();
+    }
+
+    /** B234：toolResult 终局消息多一个可选 durationMs。 */
+    @Test
+    void toolResultCarriesDurationMs() {
+        var m = new Message.ToolResultMessage("call-1", "bash",
+            List.of(new ContentBlock.TextContent("out")), null, null, List.of(),
+            false, null, 21L);
+        var node = WebWireJson.messageNode(m);
+        assertThat(node.get("durationMs").asLong()).isEqualTo(21L);
+
+        var bare = WebWireJson.messageNode(new Message.ToolResultMessage("call-2", "bash",
+            List.of(new ContentBlock.TextContent("out")), false));
+        assertThat(bare.has("durationMs")).isFalse();
+    }
+
     @Test
     void userTextMessagePassesThrough() {
         var m = new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")));

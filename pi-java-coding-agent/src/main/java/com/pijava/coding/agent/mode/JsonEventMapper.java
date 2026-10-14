@@ -203,6 +203,10 @@ public final class JsonEventMapper {
                 node.set("result", toolPayload(e.result()));
                 // isError 是**另立的**字段，不在 result 里面（pi 同）。
                 node.put("isError", e.isError());
+                // B234（pi json.md:107）：execute() 本体耗时；未执行 ⇒ 键省略。
+                if (e.durationMs() != null) {
+                    node.put("durationMs", e.durationMs());
+                }
             }
             default -> node.put("type", "unsupported_event");
         }

@@ -70,6 +70,29 @@ class JsonEventMapperToolExecutionTest {
         assertThat(node.get("isError").asBoolean()).isTrue();
     }
 
+    /** B234：执行过的调用在 isError 后多一个 durationMs；键位与 pi json.md 同序。 */
+    @Test
+    void toolExecutionEndCarriesDurationWhenExecuted() {
+        var node = JsonEventMapper.toWire(new AgentSessionEvent.ToolExecutionEnd(
+            "call_1", "bash", ToolResult.success("ok"), false, 37L));
+
+        assertThat(node.get("durationMs").asLong()).isEqualTo(37L);
+        var names = new java.util.ArrayList<String>();
+        node.fieldNames().forEachRemaining(names::add);
+        assertThat(names).containsExactly(
+            "type", "toolCallId", "toolName", "result", "isError", "durationMs");
+    }
+
+    /** B234：未执行（unknown/blocked/截断/abort）⇒ 键省略，保持 5 键。 */
+    @Test
+    void toolExecutionEndOmitsDurationWhenNotExecuted() {
+        var node = JsonEventMapper.toWire(new AgentSessionEvent.ToolExecutionEnd(
+            "call_1", "write", ToolResult.success("blocked"), true, null));
+
+        assertThat(node.has("durationMs")).isFalse();
+        assertThat(node.size()).isEqualTo(5);
+    }
+
     @Test
     void argsAndResultsArePassedThroughAsObjectsNotStrings() {
         // 透传：不是把对象再 stringify 一遍。

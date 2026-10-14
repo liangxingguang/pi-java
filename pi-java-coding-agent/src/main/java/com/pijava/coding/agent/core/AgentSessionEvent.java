@@ -128,8 +128,8 @@ public sealed interface AgentSessionEvent {
     // 联合**复用** agent 联合（agent-session.ts:143-145 的
     // `Exclude<AgentEvent, {type:"agent_end"}> | {...}`）⇒ 它们就是 AgentSessionEvent。
     //
-    // ⚠️ **每个字段都必填，pi 侧一个 `?` 都没有**（对照 package ④ 那套「按 `?` 省略
-    // 可空键」的纪律 —— 这里**一个键都不许省**，别照抄邻行）。
+    // start/update 的字段全部必填；**end 自 pi #10549 起多一个可选 {@code durationMs}**
+    // （只围 tool.execute() 本体，未执行的调用无该键），与「按 `?` 省略可空键」同族。
     //
     // 时刻语义（pi 已核，原 docs/34 §2.1 P3/P4）：
     //   start 在**校验与 beforeToolCall 钩子之前**、工具即将执行时发；
@@ -144,9 +144,21 @@ public sealed interface AgentSessionEvent {
                                Map<String, Object> args, Object partialResult)
         implements AgentSessionEvent {}
 
-    /** pi {@code {type:"tool_execution_end"; …; result; isError}}。 */
+    /**
+     * pi {@code {type:"tool_execution_end"; …; result; isError; durationMs?}}。
+     *
+     * @param durationMs B234：execute() 本体单调钟毫秒；未执行（unknown/校验失败/
+     *                   blocked/执行前 abort/截断）为 null ⇒ 线上键省略
+     */
     record ToolExecutionEnd(String toolCallId, String toolName,
-                            Object result, boolean isError) implements AgentSessionEvent {}
+                            Object result, boolean isError, Long durationMs)
+            implements AgentSessionEvent {
+        /** B234 之前的四参形状（存量构造点零改签）。 */
+        public ToolExecutionEnd(String toolCallId, String toolName,
+                                Object result, boolean isError) {
+            this(toolCallId, toolName, result, isError, null);
+        }
+    }
 
     /** pi: "manual" | "threshold" | "overflow" */
     enum CompactionReason { MANUAL, THRESHOLD, OVERFLOW }

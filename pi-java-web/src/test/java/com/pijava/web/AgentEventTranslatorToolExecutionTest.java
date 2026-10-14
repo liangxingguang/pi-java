@@ -76,6 +76,18 @@ class AgentEventTranslatorToolExecutionTest {
         assertThat(ev.get("result").get("content").get(0).get("text").asText())
             .isEqualTo("ok");
         assertThat(ev.get("isError").asBoolean()).isFalse();
+        // B234：四参构造 = 未携带时长（unknown/blocked 路径），键省略。
+        assertThat(ev.has("durationMs")).isFalse();
+    }
+
+    /** B234：执行过的调用多带 durationMs（与 JsonEventMapper 两面同形）。 */
+    @Test
+    void toolExecutionEndCarriesDurationWhenExecuted() {
+        var msgs = translator.translate(new AgentSessionEvent.ToolExecutionEnd(
+            "call_1", "bash", ToolResult.success("ok"), false, 12L));
+
+        var ev = event(msgs.get(0));
+        assertThat(ev.get("durationMs").asLong()).isEqualTo(12L);
     }
 
     @Test

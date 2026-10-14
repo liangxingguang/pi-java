@@ -145,6 +145,77 @@ class JsonEventMapperTest {
         assertThat(done).doesNotContain("providerThinkingLevel");
     }
 
+    /**
+     * 批 5 裁决⑥：proxy 形状终局帧只有 type/reason/usage/providerThinkingLevel ——
+     * 消息字段（responseModel/diagnostics/thinkingLevel/durationMs）随
+     * message_end 的整条消息上线，不进这个扁平帧。
+     */
+    @Test
+    void terminalFramesNeverCarryMessageFields() {
+        var stamped = AssistantMessage.empty()
+            .withIdentity("anthropic-messages", "anthropic", "claude-fable-5", null)
+            .withResponseModel("claude-opus-5")
+            .withDurationMs(42L)
+            .withDiagnostics(List.of(
+                new com.pijava.ai.message.AssistantMessageDiagnostic(
+                    "pi_messages_rewrite", 1L, null,
+                    new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode())));
+        var done = JsonEventMapper.toStreamEventWire(
+            new StreamEvent.StreamDone(StopReason.STOP, null, stamped));
+        assertThat(done).doesNotContain("responseModel")
+            .doesNotContain("diagnostics")
+            .doesNotContain("thinkingLevel")
+            .doesNotContain("durationMs");
+    }
+
+    /**
+     * 批 5：message_end 的整条消息（messageNode 泛投影）携带
+     * responseModel/thinkingLevel/diagnostics/durationMs；null 省略。
+     */
+    @Test
+    void messageNodeCarriesBatch5Fields() {
+        var diagnostics = List.of(
+            new com.pijava.ai.message.AssistantMessageDiagnostic(
+                "pi_messages_rewrite", 9L, null,
+                new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode()
+                    .put("policyId", "p1")));
+        var message = new Message.AssistantMessage(
+            List.of(new ContentBlock.TextContent("hi")),
+            StopReason.STOP, null,
+            "anthropic-messages", "anthropic", "claude-fable-5",
+            "claude-opus-5", "high", "medium", diagnostics,
+            new com.pijava.ai.Usage(1, 1, 0, 0, null, null, 2,
+                com.pijava.ai.Usage.Cost.zero()),
+            java.time.Instant.ofEpochMilli(1_700_000_000_000L),
+            null, null, 33L);
+        var node = JsonEventMapper.messageNode(message);
+
+        assertThat(node.get("responseModel").asText()).isEqualTo("claude-opus-5");
+        assertThat(node.get("thinkingLevel").asText()).isEqualTo("medium");
+        assertThat(node.get("providerThinkingLevel").asText()).isEqualTo("high");
+        assertThat(node.get("diagnostics").get(0).get("type").asText())
+            .isEqualTo("pi_messages_rewrite");
+        assertThat(node.get("durationMs").asLong()).isEqualTo(33L);
+
+        var bare = JsonEventMapper.messageNode(new Message.AssistantMessage(
+            List.of(new ContentBlock.TextContent("hi"))));
+        assertThat(bare.has("responseModel")).isFalse();
+        assertThat(bare.has("thinkingLevel")).isFalse();
+        assertThat(bare.has("diagnostics")).isFalse();
+        assertThat(bare.has("durationMs")).isFalse();
+    }
+
+    /** B234：工具结果消息的 durationMs 随 messageNode 上线（键名仍是工具方言 toolCallId）。 */
+    @Test
+    void toolResultMessageCarriesDuration() {
+        var tool = new Message.ToolResultMessage("tc1", "bash",
+            List.of(new ContentBlock.TextContent("ok")), null, null, List.of(),
+            false, java.time.Instant.ofEpochMilli(1_700_000_000_000L), 14L);
+        var node = JsonEventMapper.messageNode(tool);
+        assertThat(node.get("toolCallId").asText()).isEqualTo("tc1");
+        assertThat(node.get("durationMs").asLong()).isEqualTo(14L);
+    }
+
     // ── 3d 环 B：summarization_retry_*（pi agent-session.ts:2888-2911）──
 
     @Test

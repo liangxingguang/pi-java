@@ -240,7 +240,8 @@ final class SessionRunner {
             }
             if (event instanceof PiLoop.Event.ToolExecutionEnd e) {
                 owner.emitSessionEvent(new AgentSessionEvent.ToolExecutionEnd(
-                    e.toolCallId(), e.toolName(), e.result(), e.isError()));
+                    e.toolCallId(), e.toolName(), e.result(), e.isError(),
+                    e.durationMs()));
             }
             if (event instanceof PiLoop.Event.AgentStart
                     && echoed.compareAndSet(false, true)) {

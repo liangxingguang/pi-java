@@ -51,6 +51,10 @@ final class WebWireJson {
                 }
             }
             node.put("isError", tool.isError());
+            // B234（pi types.ts:635）：工具本体耗时；未执行/缺席 ⇒ 键省略。
+            if (tool.durationMs() != null) {
+                node.put("durationMs", tool.durationMs());
+            }
         }
         if (m instanceof Message.AssistantMessage assistant) {
             // 3a（原 docs/31 §8.19）：assistant 的身份 + 计量随消息上 wire（pi 的消息本就
@@ -73,6 +77,22 @@ final class WebWireJson {
             if (assistant.model() != null) {
                 node.put("model", assistant.model());
             }
+            // B148（pi types.ts:571）：provider 实际服务模型。
+            if (assistant.responseModel() != null) {
+                node.put("responseModel", assistant.responseModel());
+            }
+            // B110（批 4 漏同步本面，批 5 补齐）：managed effort 盖章。
+            if (assistant.providerThinkingLevel() != null) {
+                node.put("providerThinkingLevel", assistant.providerThinkingLevel());
+            }
+            // 批 5（pi types.ts:575-576）：请求侧 pi 级别（含 off）。
+            if (assistant.thinkingLevel() != null) {
+                node.put("thinkingLevel", assistant.thinkingLevel());
+            }
+            // B148（pi types.ts:577）：provider/运行时诊断列表。
+            if (assistant.diagnostics() != null) {
+                node.set("diagnostics", MAPPER.valueToTree(assistant.diagnostics()));
+            }
             if (assistant.usage() != null) {
                 node.set("usage", MAPPER.valueToTree(assistant.usage()));
             }
@@ -84,6 +104,10 @@ final class WebWireJson {
             // 缺席规则同 toolResult 支（null ⇒ 键省略，Jackson 会写出 null 故必须主动省）。
             if (assistant.rawStopReason() != null) {
                 node.put("rawStopReason", assistant.rawStopReason());
+            }
+            // B234（pi types.ts:595）：响应单调钟耗时；只在终局消息上有值。
+            if (assistant.durationMs() != null) {
+                node.put("durationMs", assistant.durationMs());
             }
         }
         return node;
