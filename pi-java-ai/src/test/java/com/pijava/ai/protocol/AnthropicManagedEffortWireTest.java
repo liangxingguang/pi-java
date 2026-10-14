@@ -114,6 +114,39 @@ class AnthropicManagedEffortWireTest {
         assertThat(start.partial().providerThinkingLevel()).isNull();
     }
 
+    /**
+     * 夹具 7（pi 夹具同式）：custom models.json 单设 flag、不设 forceAdaptive 且开了
+     * 思考 ⇒ interleaved 与两个 managed beta 在<b>同一个</b>头里；managed 顶支仍
+     * 走 raw adaptive（分支顺序在 forceAdaptive 判定之前）。
+     */
+    @Test
+    void flagWithoutAdaptiveCoexistsWithTheInterleavedBeta() throws Exception {
+        var compat = new com.pijava.ai.catalog.ModelCompat(false, null, true, false,
+            null, null, null, null, null, true,
+            null, null, null, null, null, null, null, null, null, null,
+            Map.of(), Map.of(), null, null, null, null, null, true, null,
+            null, null,
+            null, null, null, null, null, null, null, null,
+            Boolean.TRUE);
+        var model = new com.pijava.ai.catalog.ModelInfo(
+            ModelId.of("anthropic", "custom-managed"), "Custom Managed",
+            java.util.Set.of(com.pijava.ai.model.ModelCapability.TEXT,
+                com.pijava.ai.model.ModelCapability.THINKING),
+            200_000, 64_000, false,
+            com.pijava.ai.model.PricingInfo.UNKNOWN,
+            com.pijava.ai.thinking.ThinkingLevelMap.empty(),
+            Map.of(), Map.of(), compat);
+
+        var captured = capture(model, Optional.of(new ThinkingLevel.High()), -1, Map.of());
+
+        assertThat(captured.betaHeader())
+            .contains("interleaved-thinking-2025-05-14")
+            .contains("mid-conversation-output-config-2026-07-01")
+            .contains("thinking-binding-controls-2026-08-01");
+        assertThat(captured.body().path("thinking").path("block_binding").isMissingNode())
+            .isFalse();
+    }
+
     /** 夹具 8（裁决③）：显式 anthropic-beta 头 ⇒ 自动 beta 列表整组撤下。 */
     @Test
     void explicitAnthropicBetaHeaderSuppressesTheAutoBetaList() throws Exception {

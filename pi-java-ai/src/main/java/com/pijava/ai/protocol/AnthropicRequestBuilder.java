@@ -199,8 +199,15 @@ final class AnthropicRequestBuilder {
             builder.putAdditionalHeader("anthropic-beta", String.join(",", betas));
         }
 
+        // B99（pi :1148）：managedProvider 只在 flag 为真时等于 model.provider；
+        // activeEffort ＝队尾 marker 与盖章共用的同一个值（AnthropicThinking.activeEffort）。
+        boolean managed = Boolean.TRUE.equals(compat.supportsMidConvoEffort());
+        String managedProvider = managed ? request.modelId().provider() : null;
+        String activeEffort = managed
+            ? AnthropicThinking.activeEffort(request.model(), request.reasoning()) : null;
         addMessages(builder, conversation, allowEmptySignature, nativeToolChanges, cacheControl,
-            compat.supportsStrictTools(), eagerToolInputStreaming);
+            compat.supportsStrictTools(), eagerToolInputStreaming,
+            managed, managedProvider, activeEffort);
         AnthropicToolWire.addTools(builder, transcript, initialTools, nativeToolChanges,
             toolCacheControl, compat.supportsStrictTools(), eagerToolInputStreaming);
 
@@ -259,7 +266,9 @@ final class AnthropicRequestBuilder {
     private static void addMessages(MessageCreateParams.Builder builder, List<Message> conversation,
                                     boolean allowEmptySignature, boolean nativeToolChanges,
                                     CacheControlEphemeral cacheControl,
-                                    boolean supportsStrictTools, boolean eagerToolInputStreaming) {
+                                    boolean supportsStrictTools, boolean eagerToolInputStreaming,
+                                    boolean managed, String managedProvider,
+                                    String activeEffort) {
         var rows = new ArrayList<Row>();
         var pendingSystem = new ArrayList<Row>();
         for (int i = 0; i < conversation.size(); i++) {
@@ -318,6 +327,16 @@ final class AnthropicRequestBuilder {
             if (blockParams.isEmpty()) {
                 continue;
             }
+            // B99（pi convertMessages :1449-1461 → insertThinkingLevelMessages :1518-1532）：
+            // 合格的**非空**历史 assistant 之前插 effort marker（空块在上面已 continue、
+            // 不索引，与 pi :1448 的空 blocks 跳过同）。pending 系统消息已在 assistant
+            // 入口刷出，故 marker 紧贴 assistant，线序 user(result) → system(marker) → assistant。
+            if (managed && msg instanceof Message.AssistantMessage a
+                    && isManagedHistoryAssistant(a, managedProvider)
+                    && isAnthropicEffort(a.providerThinkingLevel())) {
+                rows.add(new Row(MessageParam.Role.SYSTEM, List.of(),
+                    markerOutputConfig(a.providerThinkingLevel())));
+            }
             var role = msg instanceof Message.UserMessage
                     ? MessageParam.Role.USER : MessageParam.Role.ASSISTANT;
             rows.add(new Row(role, blockParams));
@@ -326,19 +345,71 @@ final class AnthropicRequestBuilder {
 
         applyConversationCacheBreakpoint(rows, cacheControl);
 
+        // B99（pi insertThinkingLevelMessages :1530）：队尾 active marker **无条件**追加
+        // （即使与历史末级相同）。刻意放在断点**之后**——pi 的断点在 convertMessages
+        // 内部、insert 之前挂，但 active marker 内容为空不会吃断点；java 这里先断点后
+        // 追加，保证 cache_control 永远落在它前面的消息上，形状等价且更直白。
+        if (managed) {
+            rows.add(new Row(MessageParam.Role.SYSTEM, List.of(),
+                markerOutputConfig(activeEffort)));
+        }
+
         for (var row : rows) {
             builder.addMessage(row.toParam());
         }
     }
 
-    /** 一条**尚未 wrap** 的消息：角色 ＋ 块列表。存在的唯一理由是末块的断点判定要在组装之后。 */
-    private record Row(MessageParam.Role role, List<ContentBlockParam> blocks) {
-        MessageParam toParam() {
-            return MessageParam.builder()
-                .role(role)
-                .content(MessageParam.Content.ofBlockParams(blocks))
-                .build();
+    /**
+     * 一条**尚未 wrap** 的消息：角色 ＋ 块列表（＋ B99 的消息级附加 JSON）。
+     * 存在的唯一理由是末块的断点判定要在组装之后。
+     *
+     * @param messageExtra B99 effort marker 的 {@code output_config:{effort}}（消息级，
+     *                     不是块）；普通消息为 {@code null}
+     */
+    private record Row(MessageParam.Role role, List<ContentBlockParam> blocks,
+                       com.fasterxml.jackson.databind.node.ObjectNode messageExtra) {
+        Row(MessageParam.Role role, List<ContentBlockParam> blocks) {
+            this(role, blocks, null);
         }
+
+        MessageParam toParam() {
+            var builder = MessageParam.builder()
+                .role(role)
+                .content(MessageParam.Content.ofBlockParams(blocks));
+            if (messageExtra != null) {
+                // marker 形状：{role:"system", content:[], output_config:{effort}}
+                builder.putAdditionalProperty("output_config",
+                    JsonValue.from(messageExtra));
+            }
+            return builder.build();
+        }
+    }
+
+    /**
+     * B99（pi {@code types.ts:1514-1516}）：盖章值白名单
+     * {@code low|medium|high|xhigh|max}；非法/旧消息（null）不插 marker。
+     */
+    private static boolean isAnthropicEffort(String value) {
+        return "low".equals(value) || "medium".equals(value) || "high".equals(value)
+            || "xhigh".equals(value) || "max".equals(value);
+    }
+
+    /**
+     * B99（pi {@code convertMessages :1454}）：历史 assistant 只有在<b>同 api 同
+     * provider</b>（managedProvider 是当前模型的 provider）时才在其前插 marker。
+     */
+    private static boolean isManagedHistoryAssistant(Message.AssistantMessage a,
+                                                      String managedProvider) {
+        return "anthropic-messages".equals(a.api())
+            && managedProvider != null && managedProvider.equals(a.provider());
+    }
+
+    /** B99：marker 的消息级 {@code output_config} 树（{@code {effort}}，键序 effort）。 */
+    private static com.fasterxml.jackson.databind.node.ObjectNode markerOutputConfig(
+            String effort) {
+        var node = ObjectMappers.jsonMapper().createObjectNode();
+        node.put("effort", effort);
+        return node;
     }
 
     /**
