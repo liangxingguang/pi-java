@@ -40,6 +40,7 @@ import com.pijava.agent.session.jsonl.JsonlSessionMetadata;
 import com.pijava.agent.session.SessionRepository;
 import com.pijava.agent.session.memory.MemorySessionRepository;
 
+import com.pijava.agent.tool.ImagePolicy;
 import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.agent.tool.ToolContext;
 import com.pijava.agent.tool.ToolSetFactory;
@@ -322,6 +323,12 @@ public final class AgentSession implements AutoCloseable {
         // 发生时（必晚于 create() 返回）才读得到会话。pi 的 compaction_start/end
         // 就发在会话层，这里经 emitSessionEvent 进同一条会话事件流。
         var sessionRef = new java.util.concurrent.atomic.AtomicReference<AgentSession>();
+        // B85（批 9，docs/18 §4.3/§4.5）：图片策略晚绑定——read 与工具结果收口点在
+        // 执行期现读，设置改动 / setModel 后下次工具调用即生效（pi _limitsModel 语义）。
+        var policyToolContext = toolContext.withImagePolicy(() -> {
+            var s = sessionRef.get();
+            return s == null ? ImagePolicy.defaults() : s.currentImagePolicy();
+        });
         var compactionObserver = new CompactionObserver() {
             @Override
             public void onStart(String reason) {
@@ -434,7 +441,7 @@ public final class AgentSession implements AutoCloseable {
             .appendSystemPrompt(SessionSetup.appendSystemPromptFor(args))
             .activeTools(SessionSetup.activeTools(args, toolList))
             .toolRegistry(tools)
-            .toolContext(toolContext)
+            .toolContext(policyToolContext)
             .steeringMode(SessionSetup.queueMode(effective.steeringMode))
             .followUpMode(SessionSetup.queueMode(effective.followUpMode))
             .toolExecution(ToolExecution.defaultMode())
@@ -564,6 +571,24 @@ public final class AgentSession implements AutoCloseable {
     /** 当前 scope（测试/RPC 只读面）。 */
     public List<com.pijava.ai.model.ScopedModel> scopedModels() {
         return scopedModels;
+    }
+
+    /**
+     * B85（批 9，docs/18 §4.5）：工具执行期的图片入模策略，经
+     * {@link com.pijava.agent.tool.ToolContext#withImagePolicy} 晚绑定。
+     *
+     * <ul>
+     *   <li>{@code autoResize}：{@code settings.images.autoResize ?? true}（pi settings-manager
+     *       :1298-1300），每次现读，设置文件改动下次工具执行即生效；</li>
+     *   <li>{@code resize}：当前车道模型的 {@code inputLimits.images.resize}，缺席 null
+     *       （引擎走 2000/2000/4.5MiB/80 默认档，等同 pi 无模型档位时）；</li>
+     *   <li>{@code supportsImages}：命中目录读 {@link com.pijava.ai.catalog.ModelInfo#supportsImageInput()}
+     *       （未知按支持的既有裁决），未编目模型 ⇒ true。</li>
+     * </ul>
+     */
+    com.pijava.agent.tool.ImagePolicy currentImagePolicy() {
+        return ImagePolicies.resolve(
+            services().settings().effective(), modelCatalog, harness.getModel());
     }
 
     /**
