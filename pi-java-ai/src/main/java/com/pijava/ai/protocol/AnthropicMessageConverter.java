@@ -37,7 +37,7 @@ final class AnthropicMessageConverter {
      * （pi {@code anthropic-messages.ts:1307-1369} 的 assistant 分支**没有** image 分支）。
      */
     static List<ContentBlockParam> toBlockParams(Message msg, boolean allowEmptySignature,
-                                                 boolean allowImages) {
+                                                 boolean allowImages, boolean oauth) {
         var result = new ArrayList<ContentBlockParam>();
         for (var block : msg.content()) {
             if (block instanceof ContentBlock.TextContent tc) {
@@ -61,7 +61,8 @@ final class AnthropicMessageConverter {
                         .build();
                 result.add(ContentBlockParam.ofToolUse(ToolUseBlockParam.builder()
                         .id(tu.id())
-                        .name(tu.name())
+                        // B81（pi :1443）：OAuth 车道历史 tool_use 名走 CC 规范名映射。
+                        .name(ClaudeCodeNames.toWire(tu.name(), oauth))
                         .input(input)
                         .build()));
             } else if (allowImages && block instanceof ContentBlock.ImageContent img) {

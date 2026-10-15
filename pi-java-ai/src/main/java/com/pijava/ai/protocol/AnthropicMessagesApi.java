@@ -1,6 +1,5 @@
 package com.pijava.ai.protocol;
 
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.SubmissionPublisher;
 
@@ -21,7 +20,6 @@ import com.pijava.ai.catalog.AllowedFallbackModel;
 import com.pijava.ai.catalog.CacheRetention;
 import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.http.ProviderRetry;
-import com.pijava.ai.message.AssistantMessageDiagnostic;
 import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
@@ -85,7 +83,8 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
             if (oauth) {
                 // pi :951-970 的 OAuth 分支：两枚身份头（accept ／
                 // anthropic-dangerous-direct-browser-access 是浏览器场景产物，不移植）。
-                builder.putHeader("user-agent", "claude-cli/" + CLAUDE_CODE_VERSION);
+                builder.putHeader("user-agent",
+                    "claude-cli/" + ClaudeCodeNames.CLAUDE_CODE_VERSION);
                 builder.putHeader("x-app", "cli");
             }
         } else {
@@ -103,49 +102,21 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         putExtraHeaders(options, builder::putHeader);
         // B99 裁决③：把有效 header 的<b>名集合</b>留给 buildParams —— 显式配置
         // anthropic-beta 时自动 beta 列表整组跳过（pi getBetaFeatures :1087-1103）。
-        this.effectiveHeaderNames = extraHeaderNames(options);
+        this.effectiveHeaderNames = AnthropicStreamSupport.extraHeaderNames(options);
         this.client = builder.build();
         this.providerRetry = ProviderRetry.optionsOf(options);
-        this.cacheRetention = retentionOf(options);
+        this.cacheRetention = AnthropicStreamSupport.retentionOf(options);
         // B103（docs/52）：pi :625 的 cacheSessionId 原料（none 门在 streamInternal
         // 按解析后的保留期过）；Bearer（OAuth/copilot）分支 pi 不挂亲和头（:992-1031）。
         this.bearer = bearer;
-        this.sessionId = sessionIdOf(options);
-    }
-
-    /** 从 extra 读 sessionId（B103）；blank ⇒ null。与 completions 车道同形。 */
-    private static String sessionIdOf(ApiOptions options) {
-        Map<String, Object> extra = options.extra();
-        Object raw = extra == null ? null : extra.get("sessionId");
-        return raw == null || raw.toString().isBlank() ? null : raw.toString();
+        this.oauth = oauth;
+        this.sessionId = AnthropicStreamSupport.sessionIdOf(options);
     }
 
     /**
-     * 从 {@code ApiOptions.extra} 读 {@code cacheRetention}。
-     *
-     * <p>两种来源都认：直接塞 {@link CacheRetention} 值（java 内代码走这条），或塞线格字符串
-     * （{@code models.json}／CLI 直给走这条）。与 {@code ResponsesOptions} 读
-     * {@code reasoningEffort} 的两分支同形。⚠️ 非法字符串经
-     * {@link CacheRetention#parse} 落成 <b>缺席</b>（不是 {@code SHORT}），
-     * 好让 {@code PI_CACHE_RETENTION} 仍能生效。</p>
-     */
-    private static Optional<CacheRetention> retentionOf(ApiOptions options) {
-        Map<String, Object> extra = options.extra();
-        Object raw = extra == null ? null : extra.get("cacheRetention");
-        if (raw instanceof CacheRetention retention) {
-            return Optional.of(retention);
-        }
-        return CacheRetention.parse(raw == null ? null : raw.toString());
-    }
-
-    /**
-     * pi {@code anthropic-messages.ts:906-908} 的 OAuth 值标记；
-     * 版本常量取 {@code :87} 的硬编码值 —— <b>照抄同值</b>，不读运行时版本。
+     * pi {@code anthropic-messages.ts:978-980} 的 OAuth 值标记。
      */
     private static final String OAUTH_TOKEN_MARKER = "sk-ant-oat";
-
-    /** pi {@code anthropic-messages.ts:87} 的硬编码常量。 */
-    private static final String CLAUDE_CODE_VERSION = "2.1.251";
 
     /**
      * pi 的缓存保留期环境变量（{@code anthropic-messages.ts:64}）。
@@ -168,6 +139,12 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
     /** B103：Bearer（OAuth/copilot）分支不挂会话亲和头（pi :992-1031）。 */
     private final boolean bearer;
 
+    /**
+     * B81：本车道是否 Claude Code 伪装（pi {@code isOAuthToken}）。为真时出站加系统前缀、
+     * 工具名 CC 映射、身份 beta 对，入站把工具名 demap 回本仓真名。
+     */
+    private final boolean oauth;
+
     /** B103：有效 baseUrl（openrouter 探测用；空白 ⇒ null）。 */
     private final String baseUrl;
 
@@ -188,15 +165,24 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         var isThinkingBlock = new boolean[]{false};
         var pendingToolName = new String[]{""};
         var pendingToolId = new String[]{""};
-        var stop = new StopState();
+        var stop = new AnthropicStreamSupport.StopState();
         var usageState = new AnthropicUsageState(request.model());
         // B148：服务端回退元数据（fallback 成本归属）＋ input_transformations 收集。
-        var fallbacks = request.model() == null ? java.util.List.<AllowedFallbackModel>of()
-            : CompatResolver.forAnthropic(request.model(), baseUrl).allowedFallbackModels();
+        var requestCompat = request.model() == null ? null
+            : CompatResolver.forAnthropic(request.model(), baseUrl);
+        var fallbacks = requestCompat == null ? java.util.List.<AllowedFallbackModel>of()
+            : requestCompat.allowedFallbackModels();
         var responseExtras = new AnthropicResponseExtras();
+        // B81（pi :578）：入站工具名 demap 的「当前工具」，整轮一次。必须走
+        // resolveTranscript —— compat 不支中途系统消息时会折叠，影响当前工具集。
+        var currentTools = oauth && requestCompat != null
+            ? com.pijava.ai.api.Transcripts.getCurrentTools(
+                com.pijava.ai.api.Transcripts.resolveTranscript(
+                    request.transcript(), requestCompat).messages())
+            : java.util.List.<com.pijava.ai.api.ToolDefinition>of();
         try {
             var params = buildParams(request, affinitySessionId(), baseUrl,
-                effectiveHeaderNames);
+                effectiveHeaderNames, oauth);
             publisher.submit(builder.emitStart());
 
             // A-14（R7）：只包初始请求获取；每次重试是全新 SDK 请求。
@@ -207,7 +193,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                 sr.stream().forEach(raw -> {
                     StreamEvent se = mapEvent(raw, request, builder, isToolBlock,
                             isThinkingBlock, pendingToolName, pendingToolId, stop,
-                            usageState, fallbacks, responseExtras);
+                            usageState, fallbacks, responseExtras, currentTools);
                     if (se != null) {
                         if (se instanceof StreamEvent.StreamError) {
                             // pi 在这一层是 throw（未知 stop reason、SDK 异常都会抛穿整条流），
@@ -219,71 +205,10 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                     }
                 });
             }
-            submitTail(builder, publisher, stop, responseExtras);
+            AnthropicStreamSupport.submitTail(builder, publisher, stop, responseExtras);
         } catch (Exception e) {
             publisher.submit(builder.emitError(StopReason.ERROR, e));
         }
-    }
-
-    /**
-     * 收尾三段判（pi {@code anthropic-messages.ts:779-804} 的四段去掉首段 abort）。
-     *
-     * <pre>
-     * signal aborted        → throw "Request was aborted"                        // 车道层不可达
-     * stopReason == pending → throw "Anthropic stream ended without a stop reason"
-     * stopReason == aborted/error → throw (errorMessage || "An unknown error occurred")
-     * 其余                  → push {type:"done", reason: stopReason}; stream.end()
-     * </pre>
-     *
-     * <p>⚠️ 与 pi 的差别不在判序、在 **throw 的去处**：pi 抛进自己的 {@code catch}，
-     * 那里发 {@code {type:"error"}} 并结束流 ⇒ 一条流**只有一个**终局事件。pi-java 的
-     * 等价物是 {@code emitError}，故前三个分支**必须**在这里返回 —— 修复前是无条件
-     * {@code emitDone}，物理错误轮次在通道上是「先 error 后 done」两条。</p>
-     */
-    private static void submitTail(StreamPartialBuilder builder,
-                                   SubmissionPublisher<StreamEvent> publisher,
-                                   StopState stop,
-                                   AnthropicResponseExtras responseExtras) {
-        if (stop.errored) {
-            return; // 循环内已发过 error：pi 在那一层 throw，收尾不跑
-        }
-        if (stop.reason == StopReason.PENDING) {
-            publisher.submit(builder.emitError(StopReason.ERROR,
-                    new IllegalStateException("Anthropic stream ended without a stop reason")));
-            return;
-        }
-        if (stop.reason == StopReason.ERROR) {
-            publisher.submit(builder.emitError(StopReason.ERROR, new IllegalStateException(
-                    stop.errorMessage != null ? stop.errorMessage : "An unknown error occurred")));
-            return;
-        }
-        // B148（pi anthropic-messages.ts:871-885）：成功收尾时把 input_transformations
-        // 落成诊断（pending/error/aborted 的 throw 都在这之前，错误路不产出）。
-        if (responseExtras.hasTransformations()) {
-            builder.appendDiagnostic(new AssistantMessageDiagnostic(
-                "anthropic_input_transformations",
-                System.currentTimeMillis(),
-                null,
-                responseExtras.transformationsDetails()));
-        }
-        publisher.submit(builder.emitDone(stop.reason));
-    }
-
-    /**
-     * 一条流的 stop reason 状态 —— pi 累加器里的 {@code output.stopReason} 与
-     * {@code output.errorMessage} 两个字段（{@code anthropic-messages.ts:526} 起）。
-     *
-     * <p>初值 {@link StopReason#PENDING} 是 pi 的哨兵值：收尾据此区分「流看完了但**一个**
-     * stop reason 都没观测到」与「正常结束」。修复前 pi-java 用局部变量兜底成
-     * {@code "end_turn"}，把前者伪装成后者（§8.35.14 第三节②）。</p>
-     *
-     * <p>{@code errored} 是 pi-java 侧新增的（pi 靠 throw 逃逸循环，不需要这个位）：
-     * 见 {@link #submitTail} 的说明。</p>
-     */
-    private static final class StopState {
-        private StopReason reason = StopReason.PENDING;
-        private String errorMessage;
-        private boolean errored;
     }
 
     private StreamEvent mapEvent(RawMessageStreamEvent event,
@@ -293,10 +218,11 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                                   boolean[] isThinkingBlock,
                                   String[] pendingToolName,
                                   String[] pendingToolId,
-                                  StopState stop,
+                                  AnthropicStreamSupport.StopState stop,
                                   AnthropicUsageState usageState,
                                   java.util.List<AllowedFallbackModel> fallbacks,
-                                  AnthropicResponseExtras responseExtras) {
+                                  AnthropicResponseExtras responseExtras,
+                                  java.util.List<com.pijava.ai.api.ToolDefinition> currentTools) {
         try {
             if (event.isMessageStart()) {
                 var startMessage = event.asMessageStart().message();
@@ -342,7 +268,10 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                     // B20：这里原来还置一个 `toolCallSeen` 标志，收尾据此二选一
                     // （`tool_use` / `end_turn`）。pi 不看工具块、只看
                     // `message_delta.stop_reason` ⇒ 该标志随本包一并删除。
-                    pendingToolName[0] = tu.name();
+                    // B81（pi :725-730）：OAuth 车道模型回的是 CC 规范名（Read…），
+                    // 在当前工具集内大小写不敏感 demap 回本仓真名；不命中原样透传。
+                    pendingToolName[0] = oauth
+                        ? ClaudeCodeNames.fromWire(tu.name(), currentTools) : tu.name();
                     pendingToolId[0] = tu.id();
                     // 包⑥：起点即带身份 —— pi 在此刻块已带 id/name 入 content
                     // （anthropic-messages.ts:648-660），两个值上一行刚取到。
@@ -475,20 +404,21 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
     }
 
 
-    /** 直调夹具形态（反射调用）：无亲和头、无显式 beta 覆写。 */
+    /** 直调夹具形态（反射调用）：无亲和头、无显式 beta 覆写、非 OAuth 身份。 */
     private MessageCreateParams buildParams(StreamRequest request) {
-        return buildParams(request, null, null, java.util.Set.of());
+        return buildParams(request, null, null, java.util.Set.of(), false);
     }
 
     private MessageCreateParams buildParams(StreamRequest request, String affinitySessionId,
                                              String baseUrl,
-                                             java.util.Set<String> headerNames) {
+                                             java.util.Set<String> headerNames,
+                                             boolean oauth) {
         // 包 A-01：断点规格在这里解析一次（三源的合并：请求期选项 ?? 环境变量 ?? "short"），
         // 随后由 AnthropicRequestBuilder 翻成 SDK 形状并挂到三处落点上。
         return AnthropicRequestBuilder.buildParams(request,
             CompatResolver.anthropicCacheControl(request.model(), cacheRetention,
                 System.getenv(CACHE_RETENTION_ENV)),
-            affinitySessionId, baseUrl, headerNames);
+            affinitySessionId, baseUrl, headerNames, oauth);
     }
 
     /**
@@ -507,22 +437,6 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
             return null;
         }
         return AnthropicThinking.activeEffort(request.model(), request.reasoning());
-    }
-
-    /** B99 裁决③：从 ApiOptions.extra["headers"] 取名集合（无 ⇒ 空集）。 */
-    private static java.util.Set<String> extraHeaderNames(ApiOptions options) {
-        Map<String, Object> extra = options.extra();
-        Object raw = extra == null ? null : extra.get("headers");
-        if (!(raw instanceof Map<?, ?> map)) {
-            return java.util.Set.of();
-        }
-        var names = new java.util.HashSet<String>();
-        map.keySet().forEach(key -> {
-            if (key != null) {
-                names.add(key.toString());
-            }
-        });
-        return java.util.Set.copyOf(names);
     }
 
     /**

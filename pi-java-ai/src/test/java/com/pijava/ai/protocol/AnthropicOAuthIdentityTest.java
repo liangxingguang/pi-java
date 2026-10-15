@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * if (apiKey &amp;&amp; isOAuthToken(apiKey)) {                                      // :946
  *   new Anthropic({ apiKey: null, authToken: apiKey,                        // Bearer
  *     defaultHeaders: { accept, "anthropic-dangerous-direct-browser-access",
- *                       "user-agent": `claude-cli/${claudeCodeVersion}`,   // "2.1.251"（:87）
+ *                       "user-agent": `claude-cli/${claudeCodeVersion}`,   // "2.1.280"（:96）
  *                       "x-app": "cli" } });
  * }
  * </pre>
@@ -68,7 +68,7 @@ class AnthropicOAuthIdentityTest {
     void oauthKindSendsIdentityHeaders() throws Exception {
         var headers = headersFor(AuthKind.OAUTH, "oat-tok");
 
-        assertThat(headers).containsEntry("user-agent", "claude-cli/2.1.251");
+        assertThat(headers).containsEntry("user-agent", "claude-cli/2.1.280");
         assertThat(headers).containsEntry("x-app", "cli");
         assertThat(headers).containsEntry("authorization", "Bearer oat-tok");
         assertThat(headers).doesNotContainKey("x-api-key");
@@ -80,7 +80,7 @@ class AnthropicOAuthIdentityTest {
         var headers = headersFor(AuthKind.API_KEY, "sk-ant-oat01-abc");
 
         assertThat(headers).containsEntry("authorization", "Bearer sk-ant-oat01-abc");
-        assertThat(headers).containsEntry("user-agent", "claude-cli/2.1.251");
+        assertThat(headers).containsEntry("user-agent", "claude-cli/2.1.280");
         assertThat(headers).containsEntry("x-app", "cli");
         assertThat(headers).doesNotContainKey("x-api-key");
     }
@@ -94,7 +94,7 @@ class AnthropicOAuthIdentityTest {
         assertThat(headers).containsEntry("authorization", "Bearer plain-bearer-tok");
         // ⚠️ SDK 自带一枚 user-agent（{@code AnthropicClientImpl/Java …}）⇒ 判据是
         // 「**不是** claude-cli 那枚」，不是「头不存在」。
-        assertThat(headers).doesNotContainEntry("user-agent", "claude-cli/2.1.251");
+        assertThat(headers).doesNotContainEntry("user-agent", "claude-cli/2.1.280");
         assertThat(headers).doesNotContainKey("x-app");
     }
 }

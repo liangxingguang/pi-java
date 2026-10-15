@@ -30,35 +30,13 @@ import com.pijava.ai.utils.SanitizeUnicode;
 /** Builds the Anthropic Messages request after shared message transformation. */
 final class AnthropicRequestBuilder {
 
-    private static final String INTERLEAVED_THINKING_BETA =
-            "interleaved-thinking-2025-05-14";
-
-    /**
-     * pi {@code anthropic-messages.ts:195} —— 原生工具增删的 beta 头（**定义内联形状**）。
-     *
-     * <p>{@code b271b0a52} 把旧值 {@code mid-conversation-tool-changes-2026-07-01} 换成了它：
-     * 后续工具不再按名引用（{@code tool_reference}），而是在 {@code tool_addition} 块里
-     * **按值内联**（{@code tool_definition}），于是**同名重定义**也能表达。</p>
-     */
-    private static final String INLINE_TOOLS_BETA = "inline-tools-2026-09-15";
-
-    /** B98（pi {@code anthropic-messages.ts:192}）：服务端拒绝回退 beta。 */
-    private static final String SERVER_SIDE_FALLBACK_BETA = "server-side-fallback-2026-07-01";
-
-    /**
-     * 包 09（B90）：pi {@code anthropic-messages.ts:181} —— 不支持
-     * {@code eager_input_streaming} 的端点改挂的 beta 头。
-     */
-    private static final String FINE_GRAINED_TOOL_STREAMING_BETA =
-            "fine-grained-tool-streaming-2025-05-14";
-
     private AnthropicRequestBuilder() {
     }
 
     static MessageCreateParams buildParams(StreamRequest request,
                                            Optional<CacheBreakpointSpec> cacheSpec) {
         // 直调夹具形态：无亲和头（B103 的 sessionId/baseUrl 由车道传入），无显式 beta 覆写。
-        return buildParams(request, cacheSpec, null, null, java.util.Set.of());
+        return buildParams(request, cacheSpec, null, null, java.util.Set.of(), false);
     }
 
     /**
@@ -69,7 +47,8 @@ final class AnthropicRequestBuilder {
     static MessageCreateParams buildParams(StreamRequest request,
                                            Optional<CacheBreakpointSpec> cacheSpec,
                                            String affinitySessionId, String baseUrl,
-                                           java.util.Set<String> effectiveHeaderNames) {
+                                           java.util.Set<String> effectiveHeaderNames,
+                                           boolean oauth) {
         // 包 A7：车道的 compat 在这里**解析一次**（pi `getAnthropicCompat(model)` 的落点，
         // `anthropic-messages.ts:206`），其余读点全部改读它 —— 不再有第二处读 `model.compat()`。
         var compat = CompatResolver.forAnthropic(request.model(), baseUrl);
@@ -121,14 +100,31 @@ final class AnthropicRequestBuilder {
         // （旧实现就是那样：msg 不是 UserMessage ⇒ 走 ASSISTANT 分支，静默错发）。
         //
         // 包 A-01（同时结案 **B89**）：pi 的顶层 `system` **恒为块数组**
-        // （`params.system = [{type:"text", text, …}]`，`:1077-1097`），且 `cacheRetention`
-        // 为 `none` 时**也是块**——只是块上没有 `cache_control`（探针 P18 实测）。
-        // 故这里是**无条件**的形状修正，与缓存无关。pi 的 OAuth 双块形状（`:1077-1090`）
-        // 属 A-15，本仓仍只发一块。
+        // （`params.system = [{type:"text", text, …}]`，非 OAuth 支 `:1181-1188`），
+        // 且 `cacheRetention` 为 `none` 时**也是块**——只是块上没有 `cache_control`。
+        //
+        // B81（pi `:1168-1188`）：OAuth 车道**恒发 system**，首块固定为 Claude Code
+        // 前缀（ASCII 字面量，不过净化），其后才是前导系统文本；两块同挂 cacheControl。
         var initialSystemMessage = Transcripts.getInitialSystemMessage(transcript.messages());
         var systemText = initialSystemMessage == null
                 ? "" : MessageTexts.getSystemMessageText(initialSystemMessage);
-        if (!systemText.isEmpty()) {
+        if (oauth) {
+            var systemBlocks = new ArrayList<TextBlockParam>();
+            var prefixBlock = TextBlockParam.builder().text(ClaudeCodeNames.SYSTEM_PREFIX);
+            if (cacheControl != null) {
+                prefixBlock.cacheControl(cacheControl);
+            }
+            systemBlocks.add(prefixBlock.build());
+            if (!systemText.isEmpty()) {
+                var ownBlock = TextBlockParam.builder()
+                    .text(SanitizeUnicode.surrogates(systemText));
+                if (cacheControl != null) {
+                    ownBlock.cacheControl(cacheControl);
+                }
+                systemBlocks.add(ownBlock.build());
+            }
+            builder.systemOfTextBlockParams(systemBlocks);
+        } else if (!systemText.isEmpty()) {
             var systemBlock = TextBlockParam.builder().text(SanitizeUnicode.surrogates(systemText));
             if (cacheControl != null) {
                 systemBlock.cacheControl(cacheControl);
@@ -152,34 +148,12 @@ final class AnthropicRequestBuilder {
                 && Boolean.TRUE.equals(compat.supportsMidConvoToolChanges())
                 && !initialTools.isEmpty();
 
-        var betas = new ArrayList<String>();
-        if (request.model() != null
-                && request.model().capabilities().contains(com.pijava.ai.model.ModelCapability.THINKING)
-                && request.reasoning().isPresent()
-                && !compat.forceAdaptiveThinking()) {
-            betas.add(INTERLEAVED_THINKING_BETA);
-        }
-        if (nativeToolChanges) {
-            betas.add(INLINE_TOOLS_BETA);
-        }
-        // 包 09（B90）：pi `:1450-1454` 的两个合取项 —— 工具表非空 **且** 端点不支持 eager。
-        if (!eagerToolInputStreaming
-                && !Transcripts.getCurrentTools(transcript.messages()).isEmpty()) {
-            betas.add(FINE_GRAINED_TOOL_STREAMING_BETA);
-        }
-        // B98（pi anthropic-messages.ts:211-213/:1116）：模型带 allowedFallbackModels
-        // 才挂服务端回退 beta；流内回退块处理随 B148。
+        // B81：beta 自动列表的拼装（顺序＝pi getBetaFeatures）抽到 AnthropicBetaFeatures。
+        var currentWireTools = Transcripts.getCurrentTools(transcript.messages());
         var allowedFallbackModels = compat.allowedFallbackModels();
-        if (allowedFallbackModels != null && !allowedFallbackModels.isEmpty()) {
-            betas.add(SERVER_SIDE_FALLBACK_BETA);
-        }
-        // B99（pi :1117-1119）：managed effort 两 beta **无条件**随 flag 挂
-        // （不看 thinkingEnabled/effort；managed 模型 forceAdaptive 恒真，
-        // interleaved 已被上面的第四合取项自然排除）。
-        if (Boolean.TRUE.equals(compat.supportsMidConvoEffort())) {
-            betas.add(AnthropicThinking.MID_CONVERSATION_OUTPUT_CONFIG_BETA);
-            betas.add(AnthropicThinking.THINKING_BINDING_CONTROLS_BETA);
-        }
+        var betas = AnthropicBetaFeatures.assemble(request, compat, oauth,
+            currentWireTools, eagerToolInputStreaming, allowedFallbackModels,
+            nativeToolChanges);
         // B128 批探针（docs/13 裁决①）实测：stable SDK 不认识 body 的 "betas" 键 ——
         // 它既不被提升成请求头（抓包：请求头集合无 anthropic-beta），只作为未知键留在
         // JSON 体里，服务端收不到 beta 协商。pi 的 TS SDK 是把 betas 编成
@@ -207,9 +181,9 @@ final class AnthropicRequestBuilder {
             ? AnthropicThinking.activeEffort(request.model(), request.reasoning()) : null;
         addMessages(builder, conversation, allowEmptySignature, nativeToolChanges, cacheControl,
             compat.supportsStrictTools(), eagerToolInputStreaming,
-            managed, managedProvider, activeEffort);
+            managed, managedProvider, activeEffort, oauth);
         AnthropicToolWire.addTools(builder, transcript, initialTools, nativeToolChanges,
-            toolCacheControl, compat.supportsStrictTools(), eagerToolInputStreaming);
+            toolCacheControl, compat.supportsStrictTools(), eagerToolInputStreaming, oauth);
 
         // pi :1104-1110 —— temperature 是**四重合取**：{@code temperature !== undefined} ＋
         // {@code !thinkingEnabled} ＋ {@code supportsMidConvoEffort !== true} ＋
@@ -268,7 +242,7 @@ final class AnthropicRequestBuilder {
                                     CacheControlEphemeral cacheControl,
                                     boolean supportsStrictTools, boolean eagerToolInputStreaming,
                                     boolean managed, String managedProvider,
-                                    String activeEffort) {
+                                    String activeEffort, boolean oauth) {
         var rows = new ArrayList<Row>();
         var pendingSystem = new ArrayList<Row>();
         for (int i = 0; i < conversation.size(); i++) {
@@ -292,11 +266,11 @@ final class AnthropicRequestBuilder {
                             continue;
                         }
                         blocks.add(AnthropicToolWire.toolReferenceBlock("tool_removal",
-                            removed.name()));
+                            removed.name(), oauth));
                     }
                     for (var added : system.toolsAdded()) {
                         blocks.add(AnthropicToolWire.toolDefinitionBlock(added, supportsStrictTools,
-                            eagerToolInputStreaming));
+                            eagerToolInputStreaming, oauth));
                     }
                 }
                 if (!blocks.isEmpty()) {
@@ -323,7 +297,7 @@ final class AnthropicRequestBuilder {
                 flushPendingSystemMessages(rows, pendingSystem);
             }
             var blockParams = AnthropicMessageConverter.toBlockParams(msg, allowEmptySignature,
-                    msg instanceof Message.UserMessage);
+                    msg instanceof Message.UserMessage, oauth);
             if (blockParams.isEmpty()) {
                 continue;
             }

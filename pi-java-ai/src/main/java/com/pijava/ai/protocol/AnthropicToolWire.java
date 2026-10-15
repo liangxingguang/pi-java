@@ -66,14 +66,15 @@ final class AnthropicToolWire {
                          List<ToolDefinition> initialTools, boolean nativeToolChanges,
                          CacheControlEphemeral toolCacheControl,
                          boolean supportsStrictTools,
-                         boolean eagerToolInputStreaming) {
+                         boolean eagerToolInputStreaming,
+                         boolean oauth) {
         if (!nativeToolChanges) {
             var tools = Transcripts.getCurrentTools(transcript.messages());
             for (int i = 0; i < tools.size(); i++) {
                 builder.addTool(ToolUnion.ofTool(
                     toAnthropicTool(tools.get(i),
                         atLast(i, tools.size(), toolCacheControl), supportsStrictTools,
-                        eagerToolInputStreaming)));
+                        eagerToolInputStreaming, oauth)));
             }
             return;
         }
@@ -81,8 +82,9 @@ final class AnthropicToolWire {
             builder.addTool(ToolUnion.ofTool(
                 toAnthropicTool(initialTools.get(i),
                     atLast(i, initialTools.size(), toolCacheControl), supportsStrictTools,
-                    eagerToolInputStreaming)));
+                    eagerToolInputStreaming, oauth)));
         }
+        // B81：占位符不经过 toClaudeCodeName（pi 里它独立于 convertTools 构造）。
         builder.addTool(ToolUnion.ofTool(deferredToolPlaceholder()));
     }
 
@@ -104,7 +106,8 @@ final class AnthropicToolWire {
      * 且只挂末项）；内联定义**没有** {@code cache_control}（pi 的回调实参缺省第 5 参）。</p>
      */
     private static Map<String, Object> toDefinitionJson(ToolDefinition td, boolean supportsStrictTools,
-                                                        boolean eagerToolInputStreaming) {
+                                                        boolean eagerToolInputStreaming,
+                                                        boolean oauth) {
         // 批1/#101：探测遍带 Anthropic 专有谓词（minimum/format 等命中 ⇒ prefer 回落非 strict、
         // require 抛错）；strict=true 时的实际转换走无谓词通用版（pi 同形两遍，
         // anthropic-messages.ts:1586-1590）。
@@ -113,7 +116,8 @@ final class AnthropicToolWire {
         var schema = strict
             ? StrictJsonSchema.convert(td.inputSchema()) : td.inputSchema();
         var definition = new LinkedHashMap<String, Object>();
-        definition.put("name", td.name());
+        // B81（pi convertTools :1603）：OAuth 车道工具名走 CC 规范名映射。
+        definition.put("name", ClaudeCodeNames.toWire(td.name(), oauth));
         if (td.description() != null && !td.description().isBlank()) {
             definition.put("description", td.description());
         }
@@ -135,8 +139,10 @@ final class AnthropicToolWire {
      */
     private static Tool toAnthropicTool(ToolDefinition td, CacheControlEphemeral cacheControl,
                                         boolean supportsStrictTools,
-                                        boolean eagerToolInputStreaming) {
-        var tool = rawTool(toDefinitionJson(td, supportsStrictTools, eagerToolInputStreaming));
+                                        boolean eagerToolInputStreaming,
+                                        boolean oauth) {
+        var tool = rawTool(toDefinitionJson(td, supportsStrictTools,
+            eagerToolInputStreaming, oauth));
         return cacheControl == null ? tool : tool.toBuilder().cacheControl(cacheControl).build();
     }
 
@@ -184,10 +190,11 @@ final class AnthropicToolWire {
      * <p>⚠️ {@code tool_removal} 的载荷形状**没变**：仍是按名引用。变的只是
      * {@code tool_addition}（见 {@link #toolDefinitionBlock}）。</p>
      */
-    static ContentBlockParam toolReferenceBlock(String type, String toolName) {
+    static ContentBlockParam toolReferenceBlock(String type, String toolName, boolean oauth) {
         var tool = new LinkedHashMap<String, Object>();
         tool.put("type", "tool_reference");
-        tool.put("name", toolName);
+        // B81（pi :1347）：OAuth 下被撤回的工具按 CC 规范名引用。
+        tool.put("name", ClaudeCodeNames.toWire(toolName, oauth));
         var block = new LinkedHashMap<String, Object>();
         block.put("type", type);
         block.put("tool", tool);
@@ -204,10 +211,12 @@ final class AnthropicToolWire {
      */
     static ContentBlockParam toolDefinitionBlock(ToolDefinition td,
                                                  boolean supportsStrictTools,
-                                                 boolean eagerToolInputStreaming) {
+                                                 boolean eagerToolInputStreaming,
+                                                 boolean oauth) {
         var tool = new LinkedHashMap<String, Object>();
         tool.put("type", "tool_definition");
-        tool.put("definition", toDefinitionJson(td, supportsStrictTools, eagerToolInputStreaming));
+        tool.put("definition", toDefinitionJson(td, supportsStrictTools,
+            eagerToolInputStreaming, oauth));
         var block = new LinkedHashMap<String, Object>();
         block.put("type", "tool_addition");
         block.put("tool", tool);

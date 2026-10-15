@@ -53,7 +53,8 @@ class AnthropicMessagesApiThinkingSignatureTest {
 
     private static Class<?> loadStopState() {
         try {
-            return Class.forName("com.pijava.ai.protocol.AnthropicMessagesApi$StopState");
+            // B81 重构：StopState 随收尾三段判一起抽到 AnthropicStreamSupport。
+            return Class.forName("com.pijava.ai.protocol.AnthropicStreamSupport$StopState");
         } catch (ClassNotFoundException e) {
             throw new IllegalStateException(
                 "StopState 改名/消失了，夹具需同步（原 docs/31 §8.35.14）", e);
@@ -68,7 +69,9 @@ class AnthropicMessagesApiThinkingSignatureTest {
                 StreamPartialBuilder.class,
                 boolean[].class, boolean[].class, String[].class, String[].class,
                 STOP_STATE_TYPE, AnthropicUsageState.class,
-                java.util.List.class, AnthropicResponseExtras.class);
+                java.util.List.class, AnthropicResponseExtras.class,
+                // B81：末位新增「当前工具」真名集（OAuth demap 用；本夹具传空表＝恒等）。
+                java.util.List.class);
             method.setAccessible(true);
             return method;
         } catch (ReflectiveOperationException e) {
@@ -106,7 +109,7 @@ class AnthropicMessagesApiThinkingSignatureTest {
         StreamEvent feed(RawMessageStreamEvent event) throws Exception {
             return (StreamEvent) MAP_EVENT.invoke(api, event, null, builder,
                 isToolBlock, isThinkingBlock, pendingToolName, pendingToolId, stopState,
-                usageState, fallbacks, responseExtras);
+                usageState, fallbacks, responseExtras, java.util.List.of());
         }
 
         StreamEvent feedJson(String json, Class<?> type) throws Exception {
