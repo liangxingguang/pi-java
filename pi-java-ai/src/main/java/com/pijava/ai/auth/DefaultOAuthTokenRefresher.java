@@ -16,6 +16,7 @@ public final class DefaultOAuthTokenRefresher implements OAuthTokenRefresher {
             new IOException("No OAuth flow registered for provider '" + provider + "'"));
         return switch (spec) {
             case OAuthProvider.Pkce(OAuthConfig c) -> new OAuthFlow(c).refresh(credential);
+            case OAuthProvider.Anthropic ignored -> new AnthropicOAuthFlow().refresh(credential);
             case OAuthProvider.Device(DeviceCodeConfig d) -> new DeviceCodeFlow(d).refresh(credential);
         };
     }

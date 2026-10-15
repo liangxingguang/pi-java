@@ -21,12 +21,7 @@ public final class OAuthProviders {
                 + "&code_challenge={code_challenge}&code_challenge_method=S256",
             "https://openrouter.ai/api/v1/auth/keys",
             Map.of("code_challenge_method", "S256"))),
-        "anthropic", new OAuthProvider.Pkce(OAuthConfig.standard(
-            "anthropic",
-            "https://claude.ai/oauth/authorize",
-            "https://platform.claude.com/v1/oauth/token",
-            "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
-            "org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload")),
+        "anthropic", new OAuthProvider.Anthropic(),
         "xai", new OAuthProvider.Device(DeviceCodeConfig.standard(
             "xai",
             "https://auth.x.ai/oauth2/device/code",

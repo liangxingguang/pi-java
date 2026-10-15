@@ -119,7 +119,8 @@ public final class OAuthFlow {
             .replace("{scope}", encode(config.scope()));
     }
 
-    private static boolean openBrowser(String url) {
+    /** 默认浏览器打开（失败返回 false，调用方回落手动提示）；三个浏览器登录流共用。 */
+    static boolean openBrowser(String url) {
         try {
             if (Desktop.isDesktopSupported()
                     && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {

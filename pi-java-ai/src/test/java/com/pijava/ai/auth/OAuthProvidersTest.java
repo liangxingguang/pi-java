@@ -22,13 +22,9 @@ class OAuthProvidersTest {
     }
 
     @Test
-    void anthropicIsPkceWithPiEndpoints() {
-        var spec = (OAuthProvider.Pkce) OAuthProviders.get("anthropic").orElseThrow();
-        var config = spec.config();
-        assertThat(config.authorizeTemplate()).startsWith("https://claude.ai/oauth/authorize");
-        assertThat(config.tokenUrl()).isEqualTo("https://platform.claude.com/v1/oauth/token");
-        assertThat(config.clientId()).isEqualTo("9d1c250a-e61b-44d9-88ed-5944d1962f5e");
-        assertThat(config.scope()).contains("user:inference");
+    void anthropicIsDedicatedBrowserCopyCodeFlow() {
+        // 端点/clientId/scopes 常量在 AnthropicOAuthFlow 内（专用夹具逐字钉）。
+        assertThat(OAuthProviders.get("anthropic")).contains(new OAuthProvider.Anthropic());
     }
 
     @Test

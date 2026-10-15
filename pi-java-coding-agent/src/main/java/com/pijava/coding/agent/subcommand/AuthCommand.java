@@ -2,6 +2,7 @@ package com.pijava.coding.agent.subcommand;
 
 import java.util.Optional;
 
+import com.pijava.ai.auth.AnthropicOAuthFlow;
 import com.pijava.ai.auth.AuthProfileManager;
 import com.pijava.ai.auth.Credentials;
 import com.pijava.ai.auth.DeviceCodeConfig;
@@ -136,6 +137,7 @@ public final class AuthCommand {
     private static OAuthCredential login(OAuthProvider provider) throws Exception {
         return switch (provider) {
             case OAuthProvider.Pkce(OAuthConfig c) -> new OAuthFlow(c).login(CONSOLE);
+            case OAuthProvider.Anthropic ignored -> new AnthropicOAuthFlow().login(CONSOLE);
             case OAuthProvider.Device(DeviceCodeConfig d) -> new DeviceCodeFlow(d).login(CONSOLE);
         };
     }
