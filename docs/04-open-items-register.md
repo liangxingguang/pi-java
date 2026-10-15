@@ -76,7 +76,7 @@
 
 | # | 条目 | 现状与出处 |
 |---|---|---|
-| B81 | pi OAuth 分支两面未移植 | 系统提示前缀 ＋ 工具名映射（anthropic-messages isOAuthToken 分支） |
+| ~~B81~~ | ~~pi OAuth 分支两面未移植~~ | ✅ **已销号 2026-10-15（批 6，[`docs/15`](15-ai-batch6-oauth-identity-design.md)，commit `e7222774`）**：伪装版本 2.1.251→2.1.280；OAuth 恒发双块 `system`（固定前缀首块＋前导文本，同挂 cache_control）；身份 beta 对 `claude-code-20250219,oauth-2025-04-20` 且 beta 序整体按 pi 重排；工具名出站三处（convertTools/tool_removal/历史 tool_use）CC 规范名映射、入站按当前工具集 demap；占位符与未知名不映射 |
 | ~~B110~~ | ~~`providerThinkingLevel` pi 有、Java 无~~ | ✅ **已销号 2026-10-14（批 4，[`docs/13`](13-ai-batch4-thinking-effort-design.md)，commit `aa29df66`）**：两层 AssistantMessage 加 `providerThinkingLevel`（model 之后）；anthropic-messages 车道在 `supportsMidConvoEffort` flag 下经 AbstractChatApi 身份缝盖 `effort ?? "high"`（start 帧即在、不认 forceAdaptive）；pi-messages done/error 帧透传；JSONL 编解码（旧盘解为 null）；JSON 终局帧在 usage 后按 `?` 写键；消息级 `thinkingLevel`（请求侧，含 off）仍留批 5 |
 | B116 | StreamDone 的 UsageInfo 嵌套包裹是 Java 方言 | pi 的 usage 只在消息上，proxy 线另发扁平 usage；2026-10-12 取证：线格式两处均已扁成 pi 形状（`JsonEventMapper.java:320-327,351-373`），内部组件保留（docs/08 §2.2） |
 | ~~B128~~ | ~~thinkingBudgets 无选项通道~~ | ✅ **已销号 2026-10-14（批 4，[`docs/13`](13-ai-batch4-thinking-effort-design.md)，commit `9368bfe1`/`941e6898`/`b1c38a0f`）**：settings.json 四段（optional 无默认、无范围校验）→ SettingsAccessors → HarnessConfig/PiLoop.Config/StreamOptions（null≙undefined）→ StreamRequest.thinkingBudgets；anthropic budget adjust、completions 顶层预算字段、google custom 首支（0/-1 原样）三消费点接通，null 按 DEFAULT 浅合并。旧「harness 不转发」结论作废（引用的 harness/ 目录在锚点已删） |
@@ -86,7 +86,7 @@
 | B158 | 输出截断字节预算差一倍 | Java 100KB，pi 主流 50KB（模型可见文案不同） |
 | B159 | `shouldStopAfterTurn` 更名 finishTurn 且语义变 | pi 从布尔改 `{action: continue/end}`，能强制多跑一轮 |
 | ~~B165~~ | ~~Anthropic 中段工具改为「定义内联」~~ | ✅ **已销号 2026-10-10**（`原 docs/45`）：beta 换 `inline-tools-2026-09-15`、顶层表就此定死、`tool_addition` 改按值内联、同名重定义不再回退。⚠️ 旧记「`hasToolRedefinitions` 被 pi 删除」实为**弃用**（`原 docs/45 §1.2`） |
-| B231 | **新锚点**：OAuth 刷新取消时轮转 token 不持久化 | pi `bde882c74`＋`models.ts:621-633`：抽出 `refreshStoredOAuthCredential`，已开始的刷新**不怕调用方取消**，轮转后的 refresh token 一定落盘，后到的刷新读新凭证。Java 凭证明细刷新若仍随 abort 丢弃结果则有此窄角（设计时取证确认）。同批 `8d8ae2fc2` Anthropic 回调端口冲突回落空闲端口——Java `OAuthFlow.java:67` 本就绑端口 0（OS 分配），**无差距不登记** |
+| ~~B231~~ | ~~**新锚点**：OAuth 刷新取消时轮转 token 不持久化~~ | ✅ **已销号 2026-10-15（批 6，[`docs/15`](15-ai-batch6-oauth-identity-design.md)，commit `2a4466c9`）**：`StoredOAuthCredentials.resolveEffective` 整段锁内读-刷-写挪到**新建虚拟线程**（不继承调用方中断位；进锁前看一次调用方中断，进锁后只受刷新超时约束），调用方中断只令自己的 `Future.get` 失败，worker 照常把轮转 token 落盘；PKCE/device 两刷新 POST 加 **15s 硬超时**（pi `AbortSignal.timeout(15_000)`），登录流不加。回调端口冲突项无差距（Java 绑端口 0），不登记 |
 | ~~B232~~ | ~~**新锚点**：内置目录数据漂移（v1.1.0）~~ | ✅ **已销号 2026-10-14（批 3a）**：17 个 npm `pi-ai@1.1.0` 分片逐字节入 `resources/catalog/`（haiku-5-5、Claude 5.5 系列、kimi-k3 钉价 {3,15,.3,0}、prompt-length tiers 全携），manifest sha256 夹具钉字节；持续漂移随 npm 版本升级走 |
 | ~~B234~~ | ~~**新锚点**：`durationMs` 计时字段缺失~~ | ✅ **已销号 2026-10-15（批 5，[`docs/14`](14-ai-batch5-message-fields-design.md)）**：响应计时由 AbstractChatApi 身份缝在终局消息加盖（单调钟、预设值保留）；工具计时 `ToolRegistry.executeTimed` 只围 `execute()` 本体（审批/校验/prepareArguments/after 钩子在外，成功/抛错都有、未执行无字段）；`ToolResultMessage.durationMs`/`tool_execution_end.durationMs` 贯通 agent-core→coding-agent JSON→web WS 两面＋JSONL；消息级 `thinkingLevel`（agent-loop.ts:409，含 off）同批落。**消费侧另案**：TUI/bash「Took …」卡（Java TUI 不订阅 ToolExecution 事件，随 tui bash 渲染器）；AgentSettled 不另加字段（toolResults 消息自带时长，与 pi 同） |
 

@@ -43,13 +43,13 @@
 
 ## 1. 台账在册功能缺口
 
-`docs/04` §3.2 存活 12 条（批 1 销号 4 条；批 2 销号 B80/B233，新登即销 B239；
+`docs/04` §3.2 存活 10 条（批 1 销号 4 条；批 2 销号 B80/B233，新登即销 B239；
 批 3a 销号 B97/B232；批 3b 销号 B137；**批 5 销号 B148 流内半/B234**，消费侧另案；
-原 §3.3 的 B222 随批 1 销号，§3.3 已无 ai 协议面条目）：
+**批 6 销号 B81/B231**；原 §3.3 的 B222 随批 1 销号，§3.3 已无 ai 协议面条目）：
 
 | # | 差什么（一句话） |
 |---|---|
-| B81 | OAuth 分支两面未移植：系统提示 `"You are Claude Code…"` 前缀 ＋ 工具名 Claude Code 映射 |
+| ~~B81~~ | ✅ **批 6 已销（2026-10-15，[`docs/15`](15-ai-batch6-oauth-identity-design.md)）**：~~OAuth 分支两面未移植~~ 系统前缀块＋工具名双向映射＋身份 beta 对＋伪装版本 2.1.280 全落 |
 | B85 | read.ts：图片自动缩放 ＋ 非视觉模型注记（全仓无 `javax.imageio`） |
 | B94 | 8 个内置工具的 `promptSnippet`/`promptGuidelines` 声明缺失（补片段时须同时把 ContextAssembler 回落描述改回 pi 的稀疏规则） |
 | B95 | `docs` 段无生产者（ContextAssembler 不传 DocumentationPaths） |
@@ -61,7 +61,7 @@
 | B156 | ModelCompat 逐组件规范构造 ＋ 12 个便捷构造各自补 null：加组件必须全改，否则静默缺省 |
 | B158 | 输出截断字节预算 Java 100KB vs pi 主流 50KB（模型可见文案不同；对应 map/03 #23） |
 | B159 | pi 已改 `finishTurn()` 返回 `{action:"continue"|"end"}`，Java 仍是 Boolean `shouldStopAfterTurn`，缺「强制再跑一轮」臂（对应 map/03 #6/#41） |
-| B231 | OAuth 刷新被调用方取消时，轮转后的 refresh token 仍须落盘（`refreshStoredOAuthCredential`）；Java 侧刷新 HTTP 无超时（批 6） |
+| ~~B231~~ | ✅ **批 6 已销（2026-10-15，[`docs/15`](15-ai-batch6-oauth-identity-design.md)）**：~~刷新取消丢轮转 token／HTTP 无超时~~ 刷新整体挪到脱离调用方中断的虚拟线程、刷新 POST 15s 硬超时（PKCE/device 两流） |
 | ~~B234~~ | ✅ **批 5 已销（2026-10-15，[`docs/14`](14-ai-batch5-message-fields-design.md)）**：响应 durationMs 身份缝加盖；工具 durationMs 只围 execute() 本体，贯通 tool_execution_end/ToolResultMessage/JSONL/双 wire；~~`durationMs` 计时字段全无~~（TUI「Took」卡仍另案） |
 
 ---

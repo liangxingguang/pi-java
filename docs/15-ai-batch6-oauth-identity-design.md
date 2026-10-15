@@ -1,5 +1,10 @@
 # 15 ai 批 6 详稿：OAuth 车道行为（B81 Claude Code 伪装三件套 ＋ B231 刷新取消安全/15s 超时）
 
+> 状态：**✅ 已闭环（2026-10-15）**。commits `2a4466c9`（B231）、`e7222774`（B81），设计稿 `eadba279`。
+> 全量 `mvn clean verify` BUILD SUCCESS（9:18）：ai **1651**（＋13 新夹具）/mcp 260/agent-core 674/
+> coding-agent 547/tui 213（1 skip）/web 53/evals 45（19 skip）；checkstyle 零新违规。
+> 加权不变 **203.0/219＝92.7%**（B81/B231 均为台账行为项，不占加权单元）。
+>
 > 锚点：pi `ea448f454`（v1.1.0-22，2026-10-11）。取证只走 `git show ea448f454:<path>`。
 > 路线：[`docs/08`](08-ai-layer-alignment-roadmap.md) §3 批 6。台账：`docs/04` §3.2 B81/B231。
 > 日期：2026-10-15。
