@@ -23,6 +23,12 @@ import com.pijava.ai.stream.StreamEvent;
  */
 public final class OpenAIResponsesApi extends AbstractChatApi {
 
+    /**
+     * pi {@code openai-responses.ts:42}：{@code isChatGPTSignIn} 的官方 baseUrl
+     * 严格相等值（也是本车道的默认 baseUrl，pi {@code providers/openai.ts:11}）。
+     */
+    private static final String OPENAI_OFFICIAL_BASE_URL = "https://api.openai.com/v1";
+
     @Override
     public String apiName() {
         return "openai-responses";
@@ -33,6 +39,9 @@ public final class OpenAIResponsesApi extends AbstractChatApi {
 
     /** A-14：初始请求获取的重试选项。 */
     private final ProviderRetry.Options providerRetry;
+
+    /** B240：构造期解析的凭证值（{@link #isChatGptSignIn} 分类器用）。 */
+    private final String apiKey;
 
     /** Create an adapter for the given options (key from {@code OPENAI_API_KEY}). */
     public OpenAIResponsesApi(ApiOptions options) {
@@ -48,7 +57,7 @@ public final class OpenAIResponsesApi extends AbstractChatApi {
     public OpenAIResponsesApi(ApiOptions options, String apiKeyEnvVar) {
         String apiKey = resolveApiKey(options, apiKeyEnvVar);
         String baseUrl = options.baseUrl() != null && !options.baseUrl().isBlank()
-            ? options.baseUrl() : "https://api.openai.com/v1";
+            ? options.baseUrl() : OPENAI_OFFICIAL_BASE_URL;
         // A-14（G1）：SDK 内置重试关到 0，初始请求由 ProviderRetry 独占。
         var clientBuilder = OpenAIOkHttpClient.builder()
             .apiKey(apiKey).baseUrl(baseUrl).maxRetries(0);
@@ -58,10 +67,36 @@ public final class OpenAIResponsesApi extends AbstractChatApi {
         this.providerRetry = ProviderRetry.optionsOf(options);
         this.responsesOptions = ResponsesOptions.from(options);
         this.baseUrl = baseUrl;
+        this.apiKey = apiKey;
     }
 
     /** 包 B103：解析后的 base URL（openrouter 探测用）。 */
     private final String baseUrl;
+
+    /**
+     * pi {@code openai-responses.ts:40-46} 的 {@code isChatGPTSignIn}：provider 为
+     * {@code "openai"}、走官方 baseUrl、凭证又不是 {@code sk-} 前缀 ⇒ Sign in with
+     * ChatGPT 订阅 access token（{@code providers/openai.ts:25-26} 的 oauth 车道）。
+     *
+     * <p>为真时 Responses API 拒绝四个请求字段，由
+     * {@link ResponsesMessageConverter} 按 {@code omitUnsupportedFields} 门裁掉
+     * （pi {@code :329/:335-336/:340-345}）：{@code prompt_cache_retention}、
+     * {@code prompt_cache_options}、{@code max_output_tokens}、{@code temperature}。
+     * 严格相等，不做 trim/大小写/尾斜杠归一（pi 逐字）；{@code prompt_cache_key}
+     * 不在裁剪列（pi {@code :334} 无门）。</p>
+     *
+     * <p>⚠️ key 取构造期<b>解析值</b>（options 优先、env 回落）而非 options 原文：
+     * 生产链路上 env {@code OPENAI_API_KEY} 由凭证解析层（{@code auth.Credentials}，
+     * 对应 pi {@code envApiKeyAuth}）在进车道前解析进 options，两者等价；直造 SDK 的
+     * 旁路形状下解析值与 pi 上游行为一致（见 docs/17 §3.1）。解析值不可能为 null/blank
+     * （{@code resolveAuth} 取不到即抛），null/blank 判 false 只是防御。</p>
+     */
+    static boolean isChatGptSignIn(String provider, String baseUrl, String apiKey) {
+        return "openai".equals(provider)
+            && OPENAI_OFFICIAL_BASE_URL.equals(baseUrl)
+            && apiKey != null && !apiKey.isBlank()
+            && !apiKey.startsWith("sk-");
+    }
 
     @Override
     protected void streamInternal(StreamRequest request,
@@ -76,9 +111,13 @@ public final class OpenAIResponsesApi extends AbstractChatApi {
                 com.pijava.ai.api.Transcripts.resolveTranscript(
                     request.transcript(), compat).messages()),
             Boolean.TRUE.equals(compat.supportsOpenAIGrammarTools()));
+        // B240（pi openai-responses.ts:329）：Sign in with ChatGPT 订阅 token 裁掉
+        // Responses 拒收的四个字段（分类器在构造期凭证＋本请求模型/provider 上判）。
+        boolean omitUnsupportedFields =
+            isChatGptSignIn(request.modelId().provider(), baseUrl, apiKey);
         var params = ResponsesMessageConverter.buildParams(
             request, responsesOptions, request.modelId().modelName(), apiName(), compat,
-            grammarProperties,
+            grammarProperties, omitUnsupportedFields,
             // B103（docs/52，pi openai-responses.ts:159）：cacheSessionId 门 —— retention=none
             // 时连亲和头也不发（头无 send 开关，门只此一道）。
             SessionAffinityHeaders.responses(

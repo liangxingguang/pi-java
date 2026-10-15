@@ -103,16 +103,23 @@ final class ResponsesMessageConverter {
                                             String modelName, String apiName,
                                             ModelCompat compat) {
         return buildParams(request, ropts, modelName, apiName, compat,
-            java.util.Map.of(), java.util.Map.of());
+            java.util.Map.of(), false, java.util.Map.of());
     }
 
     /**
      * 原 docs/69 + 包 B103：grammar 能力表（custom tool 出站/回放）与逐请求会话亲和头。
+     *
+     * @param omitUnsupportedFields B240（pi {@code openai-responses.ts:329}）：Sign in with
+     *                              ChatGPT 订阅 token 为真 ⇒ 裁 {@code prompt_cache_retention}、
+     *                              {@code prompt_cache_options}、{@code max_output_tokens}、
+     *                              {@code temperature}（{@code prompt_cache_key} 不裁）。
+     *                              只可能由 openai 车道传 true（azure 副本无此门）。
      */
     static ResponseCreateParams buildParams(StreamRequest request, ResponsesOptions ropts,
                                             String modelName, String apiName,
                                             ModelCompat compat,
                                             java.util.Map<String, String> grammarProperties,
+                                            boolean omitUnsupportedFields,
                                             java.util.Map<String, String> affinityHeaders) {
         // pi openai-responses.ts:119 / azure-openai-responses.ts:77 —— 车道入口先
         // resolveTranscript，之后再构建请求。
@@ -148,10 +155,13 @@ final class ResponsesMessageConverter {
             builder.tools(tools);
         }
 
-        if (request.maxTokens() > 0 && sendsMaxOutputTokens(apiName, compat)) {
+        // B240（pi :340-341）：订阅 token 的 omit 门叠在既有两条件之外，顺序按 pi。
+        if (request.maxTokens() > 0 && sendsMaxOutputTokens(apiName, compat)
+                && !omitUnsupportedFields) {
             builder.maxOutputTokens(Math.max(request.maxTokens(), MIN_OUTPUT_TOKENS));
         }
-        if (request.temperature() >= 0) {
+        // B240（pi :344-345）：temperature 同被裁。
+        if (request.temperature() >= 0 && !omitUnsupportedFields) {
             builder.temperature(request.temperature());
         }
         if (ropts.serviceTier() != null) {
@@ -192,8 +202,10 @@ final class ResponsesMessageConverter {
             }
         }
 
-        applyCacheRetention(builder, ropts, compat);
+        applyCacheRetention(builder, ropts, compat, omitUnsupportedFields);
         // 包 A-10：模型级采样参数（pi `openai-responses.ts:362-365`，**body 的最后一个变更**）。
+        // B240：pi 的 Object.assign 在 omit 门**之后**且自身无门 —— models.json 模型级
+        // samplingParams 即便回写 temperature 等也照发（pi 的事实行为，刻意不「改进」）。
         // 批 3a（#91）：级别与上面 reasoning 块同源 —— extra 显式通道优先，否则循环级
         // clampedReasoningEffort（request.reasoning），皆缺席 ⇒ off（pi `options?.reasoning ?? "off"`）。
         var samplingLevel = ropts.reasoningEffort() != null
@@ -556,26 +568,35 @@ final class ResponsesMessageConverter {
      *
      * <pre>{@code
      * prompt_cache_key:       cacheRetention === "none" ? undefined : clampOpenAIPromptCacheKey(sessionId),
-     * prompt_cache_retention: long && supportsLongCacheRetention && !supportsExplicitPromptCacheMode ? "24h" : undefined,
-     * prompt_cache_options:   !supportsExplicitPromptCacheMode ? undefined
+     * prompt_cache_retention: omit ? undefined
+     *                         : long && supportsLongCacheRetention && !supportsExplicitPromptCacheMode ? "24h" : undefined,
+     * prompt_cache_options:   omit ? undefined
+     *                         : !supportsExplicitPromptCacheMode ? undefined
      *                         : none  ? { mode: "explicit" }
      *                         : long && supportsLongCacheRetention ? { ttl: "30m" }
      *                         : undefined,
      * }</pre>
      *
      * <p>包 09（B104）：此前只有 {@code prompt_cache_key} 与**无条件**的 {@code 24h}，
-     * 且 {@code prompt_cache_options} 整个键从不出现。</p>
+     * 且 {@code prompt_cache_options} 整个键从不出现。B240：{@code omit}（ChatGPT 订阅
+     * token）只裁 retention/options 两支，{@code prompt_cache_key} 照发（pi {@code :334}）。</p>
      */
     private static void applyCacheRetention(ResponseCreateParams.Builder builder,
-                                            ResponsesOptions ropts, ModelCompat compat) {
+                                            ResponsesOptions ropts, ModelCompat compat,
+                                            boolean omitUnsupportedFields) {
         var retention = ropts.cacheRetention();
         // pi :73 的 `?? true`：只有显式 false 才关掉 long 那一支。
         var longOk = !Boolean.FALSE.equals(compat == null ? null : compat.supportsLongCacheRetention());
         // pi :78 的 `?? false`：只有显式 true 才走显式模式。
         var explicit = Boolean.TRUE.equals(compat == null ? null : compat.supportsExplicitPromptCacheMode());
 
+        // B240（pi :334）：prompt_cache_key **无 omit 门**，订阅 token 照发。
         if (retention != ResponsesOptions.CacheRetention.NONE && ropts.sessionId() != null) {
             builder.promptCacheKey(clampCacheKey(ropts.sessionId()));
+        }
+        // B240（pi :335-336）：retention 与 options 两支整体在门后，订阅 token 整键不发。
+        if (omitUnsupportedFields) {
+            return;
         }
         if (retention == ResponsesOptions.CacheRetention.LONG && longOk && !explicit) {
             builder.promptCacheRetention(ResponseCreateParams.PromptCacheRetention.of("24h"));

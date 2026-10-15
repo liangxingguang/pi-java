@@ -79,7 +79,8 @@ public final class AzureOpenAIResponsesApi extends AbstractChatApi {
             Boolean.TRUE.equals(compat.supportsOpenAIGrammarTools()));
         var params = ResponsesMessageConverter.buildParams(
             request, responsesOptions, deploymentName, apiName(),
-            compat, grammarProperties, Map.of());
+            // B240：pi azure-openai-responses.ts 无 isChatGPTSignIn/omit 门（零命中），恒 false。
+            compat, grammarProperties, false, Map.of());
         // A-14（R7）：只包初始请求获取。获取动作放进 processor 的车道 try 内
         // （supplier 里），获取期 HTTP 错误才会落 pi 的带前缀 catch（原 docs/48 §5.3）。
         ResponsesStreamProcessor.process(
