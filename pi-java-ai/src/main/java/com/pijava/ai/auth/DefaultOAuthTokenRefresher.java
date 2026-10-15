@@ -17,6 +17,7 @@ public final class DefaultOAuthTokenRefresher implements OAuthTokenRefresher {
         return switch (spec) {
             case OAuthProvider.Pkce(OAuthConfig c) -> new OAuthFlow(c).refresh(credential);
             case OAuthProvider.Anthropic ignored -> new AnthropicOAuthFlow().refresh(credential);
+            case OAuthProvider.ChatGpt ignored -> new ChatGptOAuthFlow().refresh(credential);
             case OAuthProvider.Device(DeviceCodeConfig d) -> new DeviceCodeFlow(d).refresh(credential);
         };
     }

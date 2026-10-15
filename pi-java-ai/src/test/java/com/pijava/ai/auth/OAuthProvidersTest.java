@@ -11,7 +11,7 @@ class OAuthProvidersTest {
     @Test
     void allPiProvidersAreRegistered() {
         assertThat(OAuthProviders.names()).containsExactlyInAnyOrder(
-            "openrouter", "anthropic", "xai", "kimi", "github-copilot", "openai-codex");
+            "openrouter", "anthropic", "openai", "xai", "kimi", "github-copilot", "openai-codex");
     }
 
     @Test
@@ -25,6 +25,12 @@ class OAuthProvidersTest {
     void anthropicIsDedicatedBrowserCopyCodeFlow() {
         // 端点/clientId/scopes 常量在 AnthropicOAuthFlow 内（专用夹具逐字钉）。
         assertThat(OAuthProviders.get("anthropic")).contains(new OAuthProvider.Anthropic());
+    }
+
+    @Test
+    void chatGptIsRegisteredUnderOpenAiProviderId() {
+        // pi 把订阅登录挂在 provider id「openai」上，凭证按该键存取。
+        assertThat(OAuthProviders.get("openai")).contains(new OAuthProvider.ChatGpt());
     }
 
     @Test

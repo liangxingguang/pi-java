@@ -22,6 +22,8 @@ public final class OAuthProviders {
             "https://openrouter.ai/api/v1/auth/keys",
             Map.of("code_challenge_method", "S256"))),
         "anthropic", new OAuthProvider.Anthropic(),
+        // 键取 provider id「openai」（pi 挂在 openai provider 上，凭证按 provider id 存）。
+        "openai", new OAuthProvider.ChatGpt(),
         "xai", new OAuthProvider.Device(DeviceCodeConfig.standard(
             "xai",
             "https://auth.x.ai/oauth2/device/code",

@@ -41,6 +41,34 @@ class OAuthCredentialStoreTest {
     }
 
     @Test
+    void chatGptCredentialRoundTripsIssuedClientIdAndScopes() {
+        var store = new OAuthCredentialStore(tmp.resolve("auth-oauth.json"));
+        var credential = new OAuthCredential("access", "refresh", 1_800_000_000L, null,
+            "oaiapp_issued", java.util.List.of("openid", "chatgpt.tokens.use.direct"));
+
+        store.store("openai", credential);
+
+        var read = store.resolve("openai").orElseThrow();
+        assertThat(read.clientId()).isEqualTo("oaiapp_issued");
+        assertThat(read.scopes()).containsExactly("openid", "chatgpt.tokens.use.direct");
+    }
+
+    @Test
+    void readsLegacyFileWithoutClientIdAndScopes() throws Exception {
+        // 批 7 前落盘的凭证只有四字段；新代码必须读回（两新字段为 null/空）。
+        var path = tmp.resolve("legacy.json");
+        java.nio.file.Files.writeString(path, """
+            {"anthropic":{"accessToken":"a","refreshToken":"r","expiresAtEpochSec":1800000000,"baseUrl":null}}
+            """);
+        var store = new OAuthCredentialStore(path);
+
+        var read = store.resolve("anthropic").orElseThrow();
+        assertThat(read.accessToken()).isEqualTo("a");
+        assertThat(read.clientId()).isNull();
+        assertThat(read.scopes()).isEmpty();
+    }
+
+    @Test
     void missingFileResolvesEmpty() {
         var store = new OAuthCredentialStore(tmp.resolve("none.json"));
         assertThat(store.resolve("any")).isEmpty();

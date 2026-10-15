@@ -191,6 +191,15 @@ class CredentialChainTest {
     }
 
     @Test
+    void chatGptSubscriptionTokenIsBearerUnderOpenAiProviderId() {
+        // ChatGPT 订阅登录存在 provider id「openai」下（pi providers/openai.ts），直连 token 走 Bearer。
+        var credential = resolve("openai", p -> java.util.Optional.of(credentialValidForSeconds(3600)));
+
+        assertThat(credential.get().kind()).isEqualTo(AuthKind.BEARER);
+        assertThat(credential.get().source()).isEqualTo("stored-oauth:openai");
+    }
+
+    @Test
     void emptyStoredOauthFallsThroughToAmbient() {
         // 来源返回 empty ⇒ 照常回落 token env（不阻断后续链）。
         env.put("ANTHROPIC_AUTH_TOKEN", "bearer-tok");

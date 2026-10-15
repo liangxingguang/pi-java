@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import com.pijava.ai.auth.AnthropicOAuthFlow;
 import com.pijava.ai.auth.AuthProfileManager;
+import com.pijava.ai.auth.ChatGptOAuthFlow;
 import com.pijava.ai.auth.Credentials;
 import com.pijava.ai.auth.DeviceCodeConfig;
 import com.pijava.ai.auth.DeviceCodeFlow;
@@ -138,6 +139,9 @@ public final class AuthCommand {
         return switch (provider) {
             case OAuthProvider.Pkce(OAuthConfig c) -> new OAuthFlow(c).login(CONSOLE);
             case OAuthProvider.Anthropic ignored -> new AnthropicOAuthFlow().login(CONSOLE);
+            // pi-ai CLI 每次登录用随机 UUID（不持久化安装 ID），agent 名 Pi。
+            case OAuthProvider.ChatGpt ignored -> new ChatGptOAuthFlow()
+                .login(CONSOLE, ChatGptOAuthFlow.LoginHints.cli());
             case OAuthProvider.Device(DeviceCodeConfig d) -> new DeviceCodeFlow(d).login(CONSOLE);
         };
     }
