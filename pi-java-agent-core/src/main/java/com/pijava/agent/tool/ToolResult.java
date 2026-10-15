@@ -79,6 +79,15 @@ public record ToolResult<TDetails>(
             details, null, false, List.of());
     }
 
+    /**
+     * 换内容、其余字段原样（批 9/B85：PiToolRunner 在 after_tool 钩子后对图片做
+     * 统一归一时用；无图片时 normalize 返回同一列表，不会真正调用）。
+     */
+    public ToolResult<TDetails> withContent(List<ContentBlock> content) {
+        return new ToolResult<>(content, details, usage, terminate,
+            addedToolNames, isError, structuredContent);
+    }
+
     /** Token usage info (aligned with pi). */
     public record UsageInfo(long inputTokens, long outputTokens) {}
 }

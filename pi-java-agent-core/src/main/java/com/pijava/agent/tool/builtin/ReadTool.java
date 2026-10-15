@@ -8,11 +8,13 @@ import java.util.Optional;
 
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ExecutionMode;
+import com.pijava.agent.tool.ImagePolicy;
 import com.pijava.agent.tool.PathUtils;
 import com.pijava.agent.tool.ToolContext;
 import com.pijava.agent.tool.ToolResult;
 import com.pijava.agent.tool.ToolUpdateCallback;
 import com.pijava.agent.tool.TruncationUtils;
+import com.pijava.agent.tool.image.ImageProcessor;
 import com.pijava.ai.api.JsonSchemaSampling;
 import com.pijava.ai.api.StrictMode;
 import com.pijava.ai.message.ContentBlock;
@@ -38,6 +40,7 @@ public final class ReadTool {
             @Override public String label() { return "read"; }
             @Override public String description() {
                 return "Read the contents of a file. Supports text files and images (jpg, png, gif, webp, bmp). "
+                    + "Images are sent as attachments. "
                     + "For text files, output is truncated to " + TruncationUtils.DEFAULT_MAX_LINES
                     + " lines or " + (TruncationUtils.DEFAULT_MAX_BYTES / 1024)
                     + "KB (whichever is hit first). Use offset/limit for large files.";
@@ -86,13 +89,7 @@ public final class ReadTool {
                 // Check if it's an image
                 var mimeType = PathUtils.detectImageMimeType(bytes);
                 if (mimeType.isPresent()) {
-                    String b64 = PathUtils.encodeBase64(bytes);
-                    return new ToolResult<>(
-                        List.of(
-                            new ContentBlock.TextContent("Read image file [" + mimeType.get() + "]"),
-                            new ContentBlock.ImageContent(mimeType.get(), b64)
-                        ),
-                        null, null, false, List.of());
+                    return readImage(bytes, mimeType.get(), context);
                 }
 
                 // Text file
@@ -145,5 +142,41 @@ public final class ReadTool {
                     details, null, false, List.of());
             }
         };
+    }
+
+    /**
+     * 图片读取（pi {@code tools/read.ts:128-153}，批 9/B85）：归一/转换/缩放后以
+     * {@code [text, image]} 两块返回；处理失败只回一块省略文本。非视觉模型在文本尾部
+     * 追加注记（图片块仍带上，真正省略由 ai 层 transform 降级闸做）。
+     */
+    private static ToolResult<ReadDetails> readImage(byte[] bytes, String mimeType,
+                                                      ToolContext context) {
+        ImagePolicy policy = context.imagePolicy();
+        String note = policy.supportsImages() ? null
+            : "[Current model does not support images. The image will be omitted from this request.]";
+
+        var processed = ImageProcessor.process(bytes, mimeType, policy);
+        if (processed instanceof ImageProcessor.Processed.Ok ok) {
+            String text = "Read image file [" + ok.mimeType() + "]";
+            if (!ok.hints().isEmpty()) {
+                text += "\n" + String.join("\n", ok.hints());
+            }
+            if (note != null) {
+                text += "\n" + note;
+            }
+            return new ToolResult<>(
+                List.of(
+                    new ContentBlock.TextContent(text),
+                    new ContentBlock.ImageContent(ok.mimeType(), ok.data())),
+                null, null, false, List.of());
+        }
+        var failure = (ImageProcessor.Processed.Failure) processed;
+        String text = "Read image file [" + mimeType + "]\n" + failure.message();
+        if (note != null) {
+            text += "\n" + note;
+        }
+        return new ToolResult<>(
+            List.of(new ContentBlock.TextContent(text)),
+            null, null, false, List.of());
     }
 }

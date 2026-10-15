@@ -505,4 +505,77 @@ class PiToolRunnerTest {
         assertThat(outcome.isError()).isTrue();
         assertThat(outcome.message().content().toString()).contains("before boom");
     }
+
+    // ═══ B85（批 9）：after_tool 钩子之后的图片统一归一（agent-session.ts:705-712）═══
+
+    /** 直接返回一块大图（模拟 MCP/截图工具），断言入历史前被缩放。 */
+    private static AgentTool<String, Void> imageTool(String name, String base64) {
+        return new AgentTool<>() {
+            @Override public String name() { return name; }
+            @Override public String label() { return name; }
+            @Override public String description() { return "image tool"; }
+            @Override public Map<String, Object> inputSchema() { return Map.of(); }
+            @Override public ExecutionMode executionMode() { return new ExecutionMode.Sequential(); }
+            @Override public String prepareArguments(Map<String, Object> raw) { return "prepared"; }
+            @Override public ToolResult<Void> execute(String id, String params, AbortSignal signal,
+                    ToolUpdateCallback<Void> onUpdate, ToolContext ctx) {
+                return new ToolResult<>(
+                    List.of(new ContentBlock.TextContent("captured"),
+                        new ContentBlock.ImageContent("image/png", base64)),
+                    null, null, false, List.of());
+            }
+        };
+    }
+
+    private static String noisyPngBase64(int width, int height) {
+        var img = new java.awt.image.BufferedImage(width, height,
+            java.awt.image.BufferedImage.TYPE_INT_RGB);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                img.setRGB(x, y, new java.awt.Color(
+                    (x * 37 + y * 91) % 256, (x * 17) % 256, (y * 23) % 256).getRGB());
+            }
+        }
+        var out = new java.io.ByteArrayOutputStream();
+        try {
+            javax.imageio.ImageIO.write(img, "png", out);
+        } catch (java.io.IOException e) {
+            throw new AssertionError(e);
+        }
+        return java.util.Base64.getEncoder().encodeToString(out.toByteArray());
+    }
+
+    @Test
+    void oversizedToolImageIsNormalizedBeforeEnteringHistory() {
+        String oversized = noisyPngBase64(2400, 100);
+        var runner = new PiToolRunner("default", registryWith(imageTool("screenshot", oversized)),
+            null, CTX, null, null);
+
+        var outcome = runBoth(runner, call("screenshot"));
+
+        var blocks = outcome.message().content();
+        assertThat(blocks).hasSize(3);
+        assertThat(blocks.get(0)).isInstanceOf(ContentBlock.TextContent.class);
+        assertThat(blocks.get(1)).isInstanceOf(ContentBlock.ImageContent.class);
+        assertThat(((ContentBlock.ImageContent) blocks.get(1)).data()).isNotEqualTo(oversized);
+        assertThat(blocks.get(2)).isInstanceOf(ContentBlock.TextContent.class);
+        assertThat(((ContentBlock.TextContent) blocks.get(2)).text())
+            .contains("original 2400x100");
+    }
+
+    @Test
+    void gateClosedLeavesToolImageUntouched() {
+        String oversized = noisyPngBase64(2400, 100);
+        var closed = new ToolContext(System.getProperty("java.io.tmpdir"), Map.of(),
+            new DefaultShellExecutor(), new DefaultFileSystem(),
+            () -> new com.pijava.agent.tool.ImagePolicy(false, null, true));
+        var runner = new PiToolRunner("default", registryWith(imageTool("screenshot", oversized)),
+            null, closed, null, null);
+
+        var outcome = runBoth(runner, call("screenshot"));
+
+        var blocks = outcome.message().content();
+        assertThat(blocks).hasSize(2);
+        assertThat(((ContentBlock.ImageContent) blocks.get(1)).data()).isEqualTo(oversized);
+    }
 }

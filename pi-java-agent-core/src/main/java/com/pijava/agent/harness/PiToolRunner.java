@@ -12,6 +12,7 @@ import com.pijava.agent.tool.ToolArgumentsValidator;
 import com.pijava.agent.tool.ToolContext;
 import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.agent.tool.ToolResult;
+import com.pijava.agent.tool.image.ToolResultImages;
 import com.pijava.ai.AbortSignal;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -189,7 +190,20 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
             var finalized = hooks == null ? new AfterToolOutcome(executed, isError)
                 : hooks.fireAfterTool(laneName, new ToolResultContext(
                     laneName, call.toolCallId(), call.toolName(), executed, isError));
-            return toOutcome(call, finalized.result(), finalized.isError(), durationMs);
+            // B85（批 9）：pi agent-session.ts:705-712 在扩展钩子之后对最终 content
+            // 跑 normalizeToolResultImages——扩展/MCP/截图工具直接塞回的 base64 大图
+            // 也要在入历史前按当前模型档位归一。无图/无变化返回同一引用。
+            // 测试夹具/精简 harness 可不装 ToolContext（基线只把它透传给工具），
+            // 此时等价 pi 无 settings/无模型的默认态。
+            var imagePolicy = toolContext == null
+                ? com.pijava.agent.tool.ImagePolicy.defaults()
+                : toolContext.imagePolicy();
+            var normalizedContent = ToolResultImages.normalize(
+                finalized.result().content(), imagePolicy);
+            var finalizedResult = normalizedContent == finalized.result().content()
+                ? finalized.result()
+                : finalized.result().withContent(normalizedContent);
+            return toOutcome(call, finalizedResult, finalized.isError(), durationMs);
         } catch (Exception e) {
             // pi finalizeExecutedToolCall 的 catch 保留 executed.durationMs（钩子耗时在外）。
             return errorOutcome(call, messageOf(e), false, durationMs);
