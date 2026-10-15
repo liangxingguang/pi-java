@@ -43,10 +43,11 @@
 
 ## 1. 台账在册功能缺口
 
-`docs/04` §3.2 存活 11 条（批 1 销号 4 条；批 2 销号 B80/B233，新登即销 B239；
+`docs/04` §3.2 存活 10 条（批 1 销号 4 条；批 2 销号 B80/B233，新登即销 B239；
 批 3a 销号 B97/B232；批 3b 销号 B137；**批 5 销号 B148 流内半/B234**，消费侧另案；
 **批 6 销号 B81/B231**；**批 7 无 B 号可销——#95/#96/#97 是地图单元**（见 §2/§3 出表），
-取证另登 **B240**（ChatGPT 请求时特判）；原 §3.3 的 B222 随批 1 销号，§3.3 已无 ai 协议面条目）：
+取证另登 B240；**批 8 销号 B240**（ChatGPT 请求时特判，重试臂取证时已在、classifier 臂真空）；
+原 §3.3 的 B222 随批 1 销号，§3.3 已无 ai 协议面条目）：
 
 | # | 差什么（一句话） |
 |---|---|
@@ -63,7 +64,7 @@
 | B158 | 输出截断字节预算 Java 100KB vs pi 主流 50KB（模型可见文案不同；对应 map/03 #23） |
 | B159 | pi 已改 `finishTurn()` 返回 `{action:"continue"|"end"}`，Java 仍是 Boolean `shouldStopAfterTurn`，缺「强制再跑一轮」臂（对应 map/03 #6/#41） |
 | ~~B231~~ | ✅ **批 6 已销（2026-10-15，[`docs/15`](15-ai-batch6-oauth-identity-design.md)）**：~~刷新取消丢轮转 token／HTTP 无超时~~ 刷新整体挪到脱离调用方中断的虚拟线程、刷新 POST 15s 硬超时（PKCE/device 两流） |
-| B240 | ChatGPT 订阅 token 的请求时特判：非 `sk-` 前缀裁 `prompt_cache_*`/`max_output_tokens`/`temperature`、分类器模型过滤、共享用量码重试（批 7 登记，随 openai-responses 适配器包做） |
+| ~~B240~~ | ✅ **批 8 已销（2026-10-16，[`docs/17`](17-ai-b240-chatgpt-request-time-design.md)，commit `efa66016`）**：~~非 `sk-` 前缀订阅 token 裁字段、分类器过滤、共享用量码重试~~ `isChatGPTSignIn`（provider=openai＋官方 baseUrl 严格相等＋非 `sk-`）为真裁 `prompt_cache_retention`/`prompt_cache_options`/`max_output_tokens`/`temperature`（`prompt_cache_key` 锚点确认不裁，旧文有误）；重试三码取证时已在 `RetryableError`；`filterAllModels` 真空（Java 无 classifier 模型面，随 R5） |
 | ~~B234~~ | ✅ **批 5 已销（2026-10-15，[`docs/14`](14-ai-batch5-message-fields-design.md)）**：响应 durationMs 身份缝加盖；工具 durationMs 只围 execute() 本体，贯通 tool_execution_end/ToolResultMessage/JSONL/双 wire；~~`durationMs` 计时字段全无~~（TUI「Took」卡仍另案） |
 
 ---
