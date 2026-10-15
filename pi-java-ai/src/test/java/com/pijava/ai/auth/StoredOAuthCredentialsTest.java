@@ -153,6 +153,68 @@ class StoredOAuthCredentialsTest {
         assertThat(store.resolve("anthropic")).hasValue(rotated);
     }
 
+    /**
+     * B231（pi commit {@code bde882c74} 两条 {@code persists an OAuth refresh that started
+     * before …} 夹具的 java 版）：刷新已开始后调用方才被取消 ⇒ 调用方立刻收到失败，
+     * 但刷新走完后<b>轮转后的凭证必须落盘</b>。
+     */
+    @Test
+    void cancelledCallerStillPersistsRotatedCredential() throws Exception {
+        store.store("anthropic", new OAuthCredential("old", "old-refresh", epochInSeconds(60), null));
+        var rotated = new OAuthCredential("new", "new-refresh", epochInSeconds(3600), null);
+        var refreshEntered = new CountDownLatch(1);
+        var finishRefresh = new CountDownLatch(1);
+        var callerRef = new Thread[1];
+        OAuthTokenRefresher rotating = (provider, credential) -> {
+            refreshEntered.countDown();
+            // provider 在返回前已作废旧 refresh token —— 此刻调用方被取消。
+            callerRef[0].interrupt();
+            try {
+                if (!finishRefresh.await(10, TimeUnit.SECONDS)) {
+                    throw new java.io.IOException("timed out waiting for test gate");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new java.io.IOException("interrupted while holding refresh gate", e);
+            }
+            return rotated;
+        };
+        var component = component(rotating);
+        var failure = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+        var interruptedFlag = new java.util.concurrent.atomic.AtomicBoolean();
+        var caller = new Thread(() -> {
+            try {
+                component.resolveEffective("anthropic");
+            } catch (OAuthRefreshException e) {
+                failure.set(e);
+                interruptedFlag.set(Thread.currentThread().isInterrupted());
+            }
+        });
+        callerRef[0] = caller;
+
+        caller.start();
+        assertThat(refreshEntered.await(5, TimeUnit.SECONDS)).isTrue();
+        caller.join(5000);
+        assertThat(caller.isAlive()).isFalse();
+        // 调用方以失败收场，中断位在抛出前重设。
+        assertThat(failure.get()).isInstanceOf(OAuthRefreshException.class);
+        assertThat(interruptedFlag).isTrue();
+        // 注：不在此刻读盘断言旧凭证 —— worker 仍持有独占文件锁，Windows 下另一柄读取
+        // 被锁拒（readAll 吞 IOException 回空 map，既有生产行为）；pi 夹具也只断言放行后。
+
+        finishRefresh.countDown();
+        // pi 的 vi.waitFor：轮询断言新凭证最终落盘。
+        OAuthCredential persisted = null;
+        for (int i = 0; i < 50; i++) {
+            persisted = store.resolve("anthropic").orElse(null);
+            if (persisted != null && "new-refresh".equals(persisted.refreshToken())) {
+                break;
+            }
+            Thread.sleep(100);
+        }
+        assertThat(persisted).isEqualTo(rotated);
+    }
+
     @Test
     void nearExpiryBoundary() {
         assertThat(StoredOAuthCredentials.nearExpiry(

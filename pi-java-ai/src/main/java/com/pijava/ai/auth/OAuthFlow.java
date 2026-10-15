@@ -17,6 +17,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -36,23 +37,39 @@ import java.util.concurrent.TimeUnit;
 public final class OAuthFlow {
 
     private static final long LOGIN_TIMEOUT_SECONDS = 5 * 60;
+
+    /**
+     * B231（pi {@code auth/resolve.ts:105-106}）：刷新请求的硬超时。pi 是
+     * {@code AbortSignal.timeout(DEFAULT_OAUTH_REFRESH_TIMEOUT_MS)}＝15s ——
+     * 调用方可以取消等待，但<b>已开始的刷新只受这个超时约束</b>（轮转 token 必须落盘）。
+     * 登录交换（{@link #exchangeToken}）不挂此超时，它走自己的 {@link #LOGIN_TIMEOUT_SECONDS}。
+     */
+    private static final Duration REFRESH_TIMEOUT = Duration.ofSeconds(15);
+
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final OAuthConfig config;
     private final boolean autoOpenBrowser;
+    private final Duration refreshTimeout;
     private final HttpClient http = HttpClient.newBuilder()
         .followRedirects(HttpClient.Redirect.NORMAL).build();
 
     /** @param config 目标 provider 的 OAuth 配置 */
     public OAuthFlow(OAuthConfig config) {
-        this(config, true);
+        this(config, true, REFRESH_TIMEOUT);
     }
 
     /** @param autoOpenBrowser false 时仅提示手动打开（测试/无桌面环境用） */
     OAuthFlow(OAuthConfig config, boolean autoOpenBrowser) {
+        this(config, autoOpenBrowser, REFRESH_TIMEOUT);
+    }
+
+    /** 测试注入：自定义刷新超时（夹具用短值，不真等 15s）。 */
+    OAuthFlow(OAuthConfig config, boolean autoOpenBrowser, Duration refreshTimeout) {
         this.config = config;
         this.autoOpenBrowser = autoOpenBrowser;
+        this.refreshTimeout = refreshTimeout;
     }
 
     /**
@@ -294,6 +311,7 @@ public final class OAuthFlow {
         var request = HttpRequest.newBuilder(URI.create(url))
             .header("accept", "application/json")
             .header("content-type", "application/x-www-form-urlencoded")
+            .timeout(refreshTimeout) // B231：刷新硬超时 15s（pi AbortSignal.timeout(15_000)）
             .POST(HttpRequest.BodyPublishers.ofString(formEncode(params)))
             .build();
         return send(request);

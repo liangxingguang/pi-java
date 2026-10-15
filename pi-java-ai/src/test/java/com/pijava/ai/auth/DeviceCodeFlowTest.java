@@ -97,6 +97,33 @@ class DeviceCodeFlowTest {
     }
 
     @Test
+    void refreshIsBoundedByFifteenSecondTimeout() throws Exception {
+        // B231：挂起不响应的刷新端点；注入 1s 超时（生产值 15s 在 REFRESH_TIMEOUT 常量）。
+        var tokenServer = HttpServer.create(
+            new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+        tokenServer.createContext("/token", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            try {
+                Thread.sleep(30_000);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        tokenServer.start();
+        var config = DeviceCodeConfig.standard("test",
+            "https://verify.example.com/device", url(tokenServer, "/token"), "client-1", "");
+        var flow = new DeviceCodeFlow(config, false, java.time.Duration.ofSeconds(1));
+
+        var started = System.nanoTime();
+        var thrown = catchThrowable(() ->
+            flow.refresh(new OAuthCredential("old", "rt", 0, null)));
+        var elapsedMs = (System.nanoTime() - started) / 1_000_000;
+
+        assertThat(thrown).isInstanceOf(java.io.IOException.class);
+        assertThat(elapsedMs).isLessThan(10_000L);
+    }
+
+    @Test
     void openAiCodexTwoStageExchange() throws Exception {
         var deviceServer = startServer("/usercode", req ->
             new Resp(200, "{\"device_auth_id\":\"daid\",\"user_code\":\"9999\",\"interval\":1}"));

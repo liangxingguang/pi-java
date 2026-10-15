@@ -88,6 +88,35 @@ class OAuthFlowTest {
     }
 
     @Test
+    void refreshIsBoundedByFifteenSecondTimeout() throws Exception {
+        // B231：挂起不响应的刷新端点；注入 1s 超时（生产值 15s 在 REFRESH_TIMEOUT 常量）。
+        var tokenServer = HttpServer.create(
+            new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+        tokenServer.createContext("/token", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            try {
+                Thread.sleep(30_000); // 永不响应（夹具 30s 后服务器随 JVM 退出）
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        tokenServer.start();
+        var config = OAuthConfig.standard("test",
+            "https://auth.example.com/authorize",
+            "http://127.0.0.1:" + port(tokenServer) + "/token",
+            "client-1", "");
+        var flow = new OAuthFlow(config, false, java.time.Duration.ofSeconds(1));
+
+        var started = System.nanoTime();
+        var thrown = catchThrowable(() ->
+            flow.refresh(new OAuthCredential("old", "rt", 0, null)));
+        var elapsedMs = (System.nanoTime() - started) / 1_000_000;
+
+        assertThat(thrown).isInstanceOf(java.io.IOException.class);
+        assertThat(elapsedMs).isLessThan(10_000L);
+    }
+
+    @Test
     void tokenExchangeFailureThrows() throws Exception {
         var tokenServer = startTokenServer(response -> "{\"error\":\"invalid_grant\"}");
         var config = OAuthConfig.standard("test",

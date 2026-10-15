@@ -8,6 +8,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -28,22 +29,36 @@ public final class DeviceCodeFlow {
     private static final long MIN_INTERVAL_MS = 1_000;
     private static final long DEFAULT_POLL_INTERVAL_SECONDS = 5;
     private static final long SLOW_DOWN_INCREMENT_MS = 5_000;
+
+    /**
+     * B231（pi {@code auth/resolve.ts:105-106}）：刷新请求硬超时 15s。只绑
+     * {@link #refresh}（设备码轮询走自己的 {@link #LOGIN_TIMEOUT_SECONDS}）。
+     */
+    private static final Duration REFRESH_TIMEOUT = Duration.ofSeconds(15);
+
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private final DeviceCodeConfig config;
     private final boolean autoOpenBrowser;
+    private final Duration refreshTimeout;
     private final HttpClient http = HttpClient.newBuilder()
         .followRedirects(HttpClient.Redirect.NORMAL).build();
 
     /** @param config 目标 provider 的 device-code 配置 */
     public DeviceCodeFlow(DeviceCodeConfig config) {
-        this(config, true);
+        this(config, true, REFRESH_TIMEOUT);
     }
 
     /** @param autoOpenBrowser false 时仅提示手动打开（测试/无桌面环境用） */
     DeviceCodeFlow(DeviceCodeConfig config, boolean autoOpenBrowser) {
+        this(config, autoOpenBrowser, REFRESH_TIMEOUT);
+    }
+
+    /** 测试注入：自定义刷新超时（夹具用短值，不真等 15s）。 */
+    DeviceCodeFlow(DeviceCodeConfig config, boolean autoOpenBrowser, Duration refreshTimeout) {
         this.config = config;
         this.autoOpenBrowser = autoOpenBrowser;
+        this.refreshTimeout = refreshTimeout;
     }
 
     /**
@@ -74,6 +89,7 @@ public final class DeviceCodeFlow {
         var request = HttpRequest.newBuilder(URI.create(refreshUrl))
             .header("accept", "application/json")
             .header("content-type", "application/x-www-form-urlencoded")
+            .timeout(refreshTimeout) // B231：刷新硬超时 15s（pi AbortSignal.timeout(15_000)）
             .POST(HttpRequest.BodyPublishers.ofString(formEncode(params)))
             .build();
         return parseCredential(parseJson(send(request)));

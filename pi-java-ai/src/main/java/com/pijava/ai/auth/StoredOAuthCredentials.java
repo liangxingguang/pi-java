@@ -1,8 +1,11 @@
 package com.pijava.ai.auth;
 
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 /**
  * 解析「stored OAuth → 有效凭证」（包 B1，{@code 原 docs/63}）—— 请求路径与 auth 命令共用。
@@ -40,19 +43,60 @@ public final class StoredOAuthCredentials {
      * 取 provider 当前有效的 OAuth 凭证。全程在 store 文件锁内读当前值 ⇒ 不存在并发下
      * 读到半截/空文件的问题；凭证仍新鲜则原样返回（{@code modify} 跳过覆写），临期则
      * 锁内刷新并回存 —— 串行化天然保证跨并发请求/进程全局只刷一次。
+     *
+     * <p><b>B231（pi {@code auth/resolve.ts:119-157}，commit {@code bde882c74}）</b>：
+     * 整段「锁内读当前→复核临期→刷新→回写」跑在<b>脱离调用方中断状态的新虚拟线程</b>上。
+     * 调用方线程的中断只取消它自己的等待（{@code Future.get} 抛 {@link InterruptedException}
+     * ⇒ 抛 {@link OAuthRefreshException}），<b>不取消已开始的刷新</b>：轮转后的 refresh
+     * token 在 worker 上照常完成并落盘。否则 ChatGPT 那类「刷新即作废旧 refresh token」的
+     * provider 会在调用方中止后只剩一枚已失效的旧 token。worker 进锁前看一眼调用方的
+     * 中断位（对应 pi「信号只取消等锁」），一旦进入 {@code modify} 就只受刷新自身的
+     * 15s 超时约束（见 {@code OAuthFlow}/{@code DeviceCodeFlow}）。</p>
      */
     public Optional<OAuthCredential> resolveEffective(String provider) {
-        var effective = store.modify(provider, current -> {
-            if (!nearExpiry(current)) {
-                return current;
-            }
+        var done = new CompletableFuture<OAuthCredential>();
+        var caller = Thread.currentThread();
+        Thread.startVirtualThread(() -> {
             try {
-                return refresher.refresh(provider, current);
-            } catch (RuntimeException | IOException e) {
-                throw new OAuthRefreshException(provider, e);
+                // pi：调用方信号只取消「等锁」。进锁前已取消就不发起这次刷新，
+                // 凭证留给下一个请求；进锁后不再受调用方中断影响。
+                if (caller.isInterrupted()) {
+                    done.complete(null);
+                    return;
+                }
+                var result = store.modify(provider, current -> {
+                    if (!nearExpiry(current)) {
+                        return current;
+                    }
+                    try {
+                        return refresher.refresh(provider, current);
+                    } catch (RuntimeException | IOException e) {
+                        throw new OAuthRefreshException(provider, e);
+                    }
+                });
+                done.complete(result);
+            } catch (Throwable t) {
+                done.completeExceptionally(t);
             }
         });
-        return Optional.ofNullable(effective);
+        try {
+            return Optional.ofNullable(done.get());
+        } catch (InterruptedException e) {
+            // 调用方取消等待：立刻收场（pi 的 raced caller 收 AbortError）；worker 不受
+            // 影响，刷新完成后照常经 store.modify 落盘轮转 token —— 本批的核心保证。
+            Thread.currentThread().interrupt();
+            throw new OAuthRefreshException(provider,
+                new InterruptedIOException("OAuth refresh wait interrupted"));
+        } catch (ExecutionException e) {
+            var cause = e.getCause();
+            if (cause instanceof OAuthRefreshException ore) {
+                throw ore;
+            }
+            if (cause instanceof RuntimeException re) {
+                throw re;
+            }
+            throw new OAuthRefreshException(provider, cause == null ? e : cause);
+        }
     }
 
     /**
