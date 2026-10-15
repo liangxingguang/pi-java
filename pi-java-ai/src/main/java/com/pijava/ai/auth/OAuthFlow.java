@@ -2,52 +2,47 @@ package com.pijava.ai.auth;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
 
 import java.awt.Desktop;
 import java.io.IOException;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.UUID;
 
 /**
- * OAuth2 授权码 + PKCE 流程（P6-17）。
+ * 通用 OAuth2 授权码 + PKCE 流程（pi {@code auth/oauth/openrouter.ts} 形状）——
+ * 主流 7 家里现仅 OpenRouter 使用；Anthropic 有专用 {@link AnthropicOAuthFlow}。
  *
- * <p>启动 loopback 回调服务器（随机端口 + 随机路径），生成 PKCE verifier/challenge，
- * 打开浏览器跳转授权页，收到 {@code code} 后换取 token。无控制台/远程场景下
- *  提供手动粘贴授权码或回调 URL 的兜底。token 请求
- * 支持表单与 JSON 两种编码（对齐 provider 差异）。</p>
+ * <p>回调走共享 {@link LoopbackCallbackServer}：端口 0（空闲端口）、随机
+ * {@code /oauth/callback/<uuid>} 路径（不发 state，随机路径挡野请求）、5 分钟
+ * 整体超时；token 交换在回调 {@code complete} 内完成（交换失败浏览器可见 502）；
+ * 回调与手工粘贴竞速（无控制台/SSH 场景粘贴完整回调 URL）。token 请求支持表单
+ * 与 JSON 两种编码（{@link OAuthConfig.TokenRequestStyle}）。</p>
  */
 public final class OAuthFlow {
 
     private static final long LOGIN_TIMEOUT_SECONDS = 5 * 60;
+    private static final Duration TOKEN_EXCHANGE_TIMEOUT = Duration.ofSeconds(30);
 
     /**
-     * B231（pi {@code auth/resolve.ts:105-106}）：刷新请求的硬超时。pi 是
-     * {@code AbortSignal.timeout(DEFAULT_OAUTH_REFRESH_TIMEOUT_MS)}＝15s ——
-     * 调用方可以取消等待，但<b>已开始的刷新只受这个超时约束</b>（轮转 token 必须落盘）。
-     * 登录交换（{@link #exchangeToken}）不挂此超时，它走自己的 {@link #LOGIN_TIMEOUT_SECONDS}。
+     * B231（pi {@code auth/resolve.ts:105-106}）：刷新请求的硬超时 15s。调用方可取消
+     * 等待，<b>已开始的刷新只受这个超时约束</b>；登录交换走 {@link #TOKEN_EXCHANGE_TIMEOUT}。
      */
     private static final Duration REFRESH_TIMEOUT = Duration.ofSeconds(15);
 
+    /** 品牌页/错误文案里的 provider 显示名（注册表键 → pi 页面名）。 */
+    private static final Map<String, String> DISPLAY_NAMES = Map.of("openrouter", "OpenRouter");
+
     private static final ObjectMapper JSON = new ObjectMapper();
-    private static final SecureRandom RANDOM = new SecureRandom();
 
     private final OAuthConfig config;
     private final boolean autoOpenBrowser;
@@ -78,131 +73,38 @@ public final class OAuthFlow {
      * @throws IOException 用户取消、超时、授权被拒或 token 换取失败
      */
     public OAuthCredential login(OAuthInteraction interaction) throws IOException {
-        var verifier = generateVerifier();
-        var challenge = generateChallenge(verifier);
-        var callbackPath = "/oauth/callback/" + Long.toHexString(RANDOM.nextLong());
-        var server = HttpServer.create(
-            new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
-        var codeFuture = new CompletableFuture<CodeResult>();
-        server.createContext(callbackPath, exchange -> handleCallback(exchange, codeFuture));
-        server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
-        server.start();
+        var pkce = Pkce.generate();
+        var callbackPath = "/oauth/callback/" + UUID.randomUUID();
+        // redirectUri 的实际端口要 start 后才知道；complete 在回调时才执行，用 holder 桥接。
+        var redirectUriHolder = new String[1];
+        var server = LoopbackCallbackServer.<OAuthCredential>start(
+            new LoopbackCallbackServer.Options<>(
+                displayName(), callbackHost(), 0, callbackPath, null, null,
+                Duration.ofSeconds(LOGIN_TIMEOUT_SECONDS),
+                (code, query) -> exchangeToken(code, pkce.verifier(), redirectUriHolder[0])));
+        redirectUriHolder[0] = server.redirectUri();
         try {
-            var port = server.getAddress().getPort();
-            var redirectUri = "http://127.0.0.1:" + port + callbackPath;
-            var authorizeUrl = buildAuthorizeUrl(redirectUri, challenge);
-            interaction.notify("Listening for OAuth callback on " + redirectUri);
+            var authorizeUrl = buildAuthorizeUrl(redirectUriHolder[0], pkce.challenge());
+            interaction.notify("Listening for " + displayName() + " OAuth callback on "
+                + redirectUriHolder[0]);
             if (!autoOpenBrowser || !openBrowser(authorizeUrl)) {
-                interaction.notify("Could not open a browser automatically.\nOpen this URL manually:\n  " + authorizeUrl);
+                interaction.notify("Could not open a browser automatically.\nOpen this URL manually:\n  "
+                    + authorizeUrl);
             }
-            var manual = interaction.prompt(
+            var outcome = LoopbackCallbackServer.awaitCallbackOrManual(interaction, server,
                 "Complete sign-in in your browser, or paste the authorization code / redirect URL here:");
-            var result = (manual != null && !manual.isBlank())
-                ? new CodeResult(parseCode(manual), null)
-                : awaitCode(codeFuture);
-            if (result.error() != null) {
-                throw new IOException(result.error());
+            if (outcome instanceof LoopbackCallbackServer.Outcome.Callback<?> cb) {
+                return (OAuthCredential) cb.value(); // 交换已在 complete 内完成（失败页面 502）。
             }
-            if (result.code() == null) {
+            var input = ((LoopbackCallbackServer.Outcome.Manual<?>) outcome).input();
+            var code = parseAuthorizationInput(input);
+            if (code == null) {
                 throw new IOException("Missing authorization code");
             }
-            interaction.notify("Exchanging authorization code for a token...");
-            return exchangeToken(result.code(), verifier, redirectUri);
+            interaction.notify("Exchanging authorization code for an API key...");
+            return exchangeToken(code, pkce.verifier(), redirectUriHolder[0]);
         } finally {
-            server.stop(0);
-        }
-    }
-
-    /** 用 refresh token 换取新凭证（凭证无 refresh token 时抛出）。 */
-    public OAuthCredential refresh(OAuthCredential credential) throws IOException {
-        if (credential.refreshToken().isBlank()) {
-            throw new IOException("No refresh token available for " + config.name());
-        }
-        var params = new LinkedHashMap<String, String>();
-        params.put("grant_type", "refresh_token");
-        params.put("refresh_token", credential.refreshToken());
-        params.put("client_id", config.clientId());
-        var response = postForm(config.tokenUrl(), params);
-        return parseTokenResponse(response);
-    }
-
-    // ── PKCE ─────────────────────────────────────────────────
-
-    private static String generateVerifier() {
-        var bytes = new byte[32];
-        RANDOM.nextBytes(bytes);
-        return base64Url(bytes);
-    }
-
-    private static String generateChallenge(String verifier) {
-        try {
-            var digest = MessageDigest.getInstance("SHA-256");
-            return base64Url(digest.digest(verifier.getBytes(StandardCharsets.US_ASCII)));
-        } catch (java.security.NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 unavailable", e);
-        }
-    }
-
-    private static String base64Url(byte[] bytes) {
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-    }
-
-    // ── Callback server ──────────────────────────────────────
-
-    private record CodeResult(String code, String error) {}
-
-    private static void handleCallback(HttpExchange exchange, CompletableFuture<CodeResult> future) {
-        try (exchange) {
-            var query = exchange.getRequestURI().getQuery();
-            var code = param(query, "code");
-            var error = param(query, "error");
-            var description = param(query, "error_description");
-            if (error != null) {
-                sendHtml(exchange, 400, "<h1>Authorization failed</h1><p>"
-                        + escapeHtml(description == null ? error : description) + "</p>");
-                future.complete(new CodeResult(null, error + (description == null ? "" : ": " + description)));
-            } else if (code != null) {
-                sendHtml(exchange, 200, "<h1>Signed in</h1><p>You may now close this page.</p>");
-                future.complete(new CodeResult(code, null));
-            } else {
-                sendHtml(exchange, 400, "<h1>No authorization code</h1>");
-                future.complete(new CodeResult(null, "No authorization code in callback"));
-            }
-        } catch (IOException e) {
-            future.complete(new CodeResult(null, e.getMessage()));
-        }
-    }
-
-    private static void sendHtml(HttpExchange exchange, int status, String html) throws IOException {
-        var body = html.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().set("content-type", "text/html; charset=utf-8");
-        exchange.sendResponseHeaders(status, body.length);
-        exchange.getResponseBody().write(body);
-    }
-
-    private static String param(String query, String key) {
-        if (query == null) {
-            return null;
-        }
-        for (var pair : query.split("&")) {
-            var parts = pair.split("=", 2);
-            if (parts.length == 2 && parts[0].equals(key)) {
-                return java.net.URLDecoder.decode(parts[1], StandardCharsets.UTF_8);
-            }
-        }
-        return null;
-    }
-
-    private static CodeResult awaitCode(CompletableFuture<CodeResult> future) throws IOException {
-        try {
-            return future.get(LOGIN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-        } catch (java.util.concurrent.TimeoutException e) {
-            throw new IOException("OAuth login timed out after " + LOGIN_TIMEOUT_SECONDS + "s");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("OAuth login interrupted", e);
-        } catch (java.util.concurrent.ExecutionException e) {
-            throw new IOException("OAuth callback failed", e.getCause());
+            server.close();
         }
     }
 
@@ -230,29 +132,54 @@ public final class OAuthFlow {
         return false;
     }
 
-    private static String parseCode(String input) {
+    /**
+     * pi {@code parseAuthorizationInput}：完整 URL 取 {@code code} 参 →
+     * 含 {@code code=} 的 query 串 → 裸 code。
+     */
+    private static String parseAuthorizationInput(String input) {
         var value = input.trim();
-        if (value.contains("code=")) {
-            var query = value.substring(value.indexOf("code=") + 5);
-            int amp = query.indexOf('&');
-            return amp >= 0 ? query.substring(0, amp) : query;
+        if (value.isEmpty()) {
+            return null;
         }
-        try {
+        if (value.startsWith("http://") || value.startsWith("https://")) {
             var uri = URI.create(value);
-            var code = param(uri.getQuery(), "code");
+            var code = param(uri.getRawQuery(), "code");
             if (code != null) {
                 return code;
             }
-        } catch (IllegalArgumentException ignored) {
-            // 非 URL
+        }
+        if (value.contains("code=")) {
+            var query = value.indexOf('?') >= 0 ? value.substring(value.indexOf('?') + 1) : value;
+            return param(query, "code");
         }
         return value;
     }
 
+    private String displayName() {
+        return DISPLAY_NAMES.getOrDefault(config.name(), config.name());
+    }
+
+    private String callbackHost() {
+        var env = System.getenv("PI_OAUTH_CALLBACK_HOST");
+        return env != null && !env.isBlank() ? env : "127.0.0.1";
+    }
+
+    /** 用 refresh token 换取新凭证（凭证无 refresh token 时抛出）。 */
+    public OAuthCredential refresh(OAuthCredential credential) throws IOException {
+        if (credential.refreshToken().isBlank()) {
+            throw new IOException("No refresh token available for " + config.name());
+        }
+        var params = new LinkedHashMap<String, String>();
+        params.put("grant_type", "refresh_token");
+        params.put("refresh_token", credential.refreshToken());
+        params.put("client_id", config.clientId());
+        var response = postForm(config.tokenUrl(), params);
+        return parseTokenResponse(response);
+    }
+
     // ── Token exchange ───────────────────────────────────────
 
-    private OAuthCredential exchangeToken(String code, String verifier, String redirectUri)
-            throws IOException {
+    OAuthCredential exchangeToken(String code, String verifier, String redirectUri) throws IOException {
         Map<String, String> params;
         String body;
         if (config.tokenStyle() == OAuthConfig.TokenRequestStyle.JSON) {
@@ -277,6 +204,7 @@ public final class OAuthFlow {
             .header("accept", "application/json")
             .header("content-type", config.tokenStyle() == OAuthConfig.TokenRequestStyle.JSON
                 ? "application/json" : "application/x-www-form-urlencoded")
+            .timeout(TOKEN_EXCHANGE_TIMEOUT)
             .POST(HttpRequest.BodyPublishers.ofString(body))
             .build();
         return parseTokenResponse(send(request));
@@ -320,13 +248,28 @@ public final class OAuthFlow {
     private HttpResponse<String> send(HttpRequest request) throws IOException {
         try {
             return http.send(request, HttpResponse.BodyHandlers.ofString());
+        } catch (HttpTimeoutException e) {
+            throw new IOException("OpenRouter OAuth token exchange timed out", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("Token request interrupted", e);
         }
     }
 
-    private static String formEncode(Map<String, String> params) {
+    private static String param(String query, String key) {
+        if (query == null) {
+            return null;
+        }
+        for (var pair : query.split("&")) {
+            var parts = pair.split("=", 2);
+            if (parts.length == 2 && parts[0].equals(key)) {
+                return java.net.URLDecoder.decode(parts[1], StandardCharsets.UTF_8);
+            }
+        }
+        return null;
+    }
+
+    static String formEncode(Map<String, String> params) {
         var sb = new StringBuilder();
         for (var entry : params.entrySet()) {
             if (entry.getValue() == null || entry.getValue().isBlank()) {
@@ -346,9 +289,5 @@ public final class OAuthFlow {
 
     private static String text(JsonNode node, String field) {
         return node.hasNonNull(field) ? node.get(field).asText() : null;
-    }
-
-    private static String escapeHtml(String text) {
-        return text.replace("&", "&amp;").replace("<", "&lt;");
     }
 }

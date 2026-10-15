@@ -16,7 +16,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * P6-17: OAuthFlow — PKCE 授权码流程（loopback 回调 + token 换取）与 refresh。
+ * 通用 PKCE 流（openrouter 形状）：loopback 回调走共享 {@link LoopbackCallbackServer}
+ * （品牌页、complete 内交换）、手工粘贴竞速、refresh。
  */
 class OAuthFlowTest {
 
@@ -25,8 +26,12 @@ class OAuthFlowTest {
         """;
 
     @Test
-    void loginExchangesAuthorizationCode() throws Exception {
-        var tokenServer = startTokenServer(response -> TOKEN_JSON);
+    void loginExchangesAuthorizationCodeThroughBrowserCallback() throws Exception {
+        var exchangedCode = new AtomicReference<String>();
+        var tokenServer = startTokenServer(requestBody -> {
+            exchangedCode.set(formField(requestBody, "code"));
+            return TOKEN_JSON;
+        });
         var config = OAuthConfig.standard("test",
             "https://auth.example.com/authorize",
             "http://127.0.0.1:" + port(tokenServer) + "/token",
@@ -34,12 +39,15 @@ class OAuthFlowTest {
         var flow = new OAuthFlow(config, false);
         var callbackUrl = new AtomicReference<String>();
 
-        var credential = flow.login(interaction(callbackUrl));
+        var credential = flow.login(browserInteraction(callbackUrl, "?code=auth-code"));
 
         assertThat(credential.accessToken()).isEqualTo("test-access");
         assertThat(credential.refreshToken()).isEqualTo("test-refresh");
         assertThat(credential.isExpired()).isFalse();
         assertThat(callbackUrl.get()).contains("/oauth/callback/");
+        // 交换发生在回调 complete 内：桩记录到授权码（品牌页本身由 LoopbackCallbackServerTest 钉）。
+        awaitCode(exchangedCode);
+        assertThat(exchangedCode.get()).isEqualTo("auth-code");
     }
 
     @Test
@@ -58,6 +66,33 @@ class OAuthFlowTest {
         var credential = flow.login(interaction);
 
         assertThat(credential.accessToken()).isEqualTo("test-access");
+    }
+
+    @Test
+    void exchangeFailureDuringCallbackShows502PageAndThrows() throws Exception {
+        var tokenServer = startTokenServer(response -> {
+            throw new ResponseFailure(503, "upstream down");
+        });
+        var config = OAuthConfig.standard("test",
+            "https://auth.example.com/authorize",
+            "http://127.0.0.1:" + port(tokenServer) + "/token",
+            "", "");
+        var flow = new OAuthFlow(config, false);
+        var callbackUrl = new AtomicReference<String>();
+
+        var thrown = catchThrowable(() ->
+            flow.login(browserInteraction(callbackUrl, "?code=auth-code")));
+
+        // complete 内交换失败 → 登录失败（502 页面由 LoopbackCallbackServerTest 钉）。
+        assertThat(thrown).isInstanceOf(Exception.class)
+            .hasMessageContaining("503");
+    }
+
+    private static void awaitCode(AtomicReference<String> code) throws InterruptedException {
+        var deadline = System.nanoTime() + java.time.Duration.ofSeconds(5).toNanos();
+        while (code.get() == null && System.nanoTime() < deadline) {
+            Thread.sleep(10);
+        }
     }
 
     @Test
@@ -116,43 +151,41 @@ class OAuthFlowTest {
         assertThat(elapsedMs).isLessThan(10_000L);
     }
 
-    @Test
-    void tokenExchangeFailureThrows() throws Exception {
-        var tokenServer = startTokenServer(response -> "{\"error\":\"invalid_grant\"}");
-        var config = OAuthConfig.standard("test",
-            "https://auth.example.com/authorize",
-            "http://127.0.0.1:" + port(tokenServer) + "/token",
-            "", "");
-        var flow = new OAuthFlow(config, false);
-        var callbackUrl = new AtomicReference<String>();
-
-        var thrown = catchThrowable(() -> flow.login(interaction(callbackUrl)));
-
-        assertThat(thrown).isInstanceOf(Exception.class);
-    }
-
     // ── Helpers ──────────────────────────────────────────────
 
-    private static OAuthInteraction interaction(AtomicReference<String> callbackUrl) {
+    /** prompt 被调用即模拟浏览器打回调 URL（discard 响应；页面行为在共享件夹具里钉）。 */
+    private static OAuthInteraction browserInteraction(AtomicReference<String> callbackUrl,
+                                                       String callbackQuery) {
         return new OAuthInteraction() {
             @Override public void notify(String message) {
-                if (message.startsWith("Listening for OAuth callback on ")) {
-                    callbackUrl.set(message.substring("Listening for OAuth callback on ".length()));
+                var marker = "OAuth callback on ";
+                var idx = message.indexOf(marker);
+                if (idx >= 0) {
+                    callbackUrl.set(message.substring(idx + marker.length()).strip());
                 }
             }
 
             @Override public String prompt(String message) {
-                // 模拟浏览器回调：命中 loopback 服务器 ?code=...
                 try (var client = HttpClient.newHttpClient()) {
                     client.send(HttpRequest.newBuilder(
-                        URI.create(callbackUrl.get() + "?code=auth-code")).GET().build(),
-                        HttpResponse.BodyHandlers.ofString());
+                        URI.create(callbackUrl.get() + callbackQuery)).GET().build(),
+                        HttpResponse.BodyHandlers.discarding());
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
                 return "";
             }
         };
+    }
+
+    private static String formField(String form, String key) {
+        for (var pair : form.split("&")) {
+            var parts = pair.split("=", 2);
+            if (parts.length == 2 && parts[0].equals(key)) {
+                return java.net.URLDecoder.decode(parts[1], StandardCharsets.UTF_8);
+            }
+        }
+        return null;
     }
 
     private static int port(HttpServer server) {
@@ -165,15 +198,34 @@ class OAuthFlowTest {
         server.createContext("/token", exchange -> {
             var requestBody = new String(
                 exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-            var payload = body.get(requestBody);
-            var bytes = payload.getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().set("content-type", "application/json");
-            exchange.sendResponseHeaders(200, bytes.length);
-            exchange.getResponseBody().write(bytes);
-            exchange.close();
+            try {
+                var payload = body.get(requestBody);
+                var bytes = payload.getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("content-type", "application/json");
+                exchange.sendResponseHeaders(200, bytes.length);
+                exchange.getResponseBody().write(bytes);
+                exchange.close();
+            } catch (ResponseFailure failure) {
+                var bytes = failure.getMessage().getBytes(StandardCharsets.UTF_8);
+                exchange.sendResponseHeaders(failure.status(), bytes.length);
+                exchange.getResponseBody().write(bytes);
+                exchange.close();
+            }
         });
         server.start();
         return server;
+    }
+
+    /** 桩用：让 token 端点返回非 2xx。 */
+    private static final class ResponseFailure extends RuntimeException {
+        private final int status;
+        ResponseFailure(int status, String message) {
+            super(message);
+            this.status = status;
+        }
+        int status() {
+            return status;
+        }
     }
 
     @FunctionalInterface
