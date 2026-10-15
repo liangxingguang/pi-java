@@ -68,8 +68,10 @@
   #90 缺失→存疑 +0.5（元数据齐、B85 消费链另案）；剩余推演增量：批 5 #37(+1)、
   批 7 #95/#96/#97(+2.5)，全完工仍指向 **205.5（#90 消费链若随 coding tools 落地再 +0.5 → 206/219＝94.1%）**。
   **批 4（B128/B99/B110）2026-10-14 闭环后仍 202.0/219＝92.2%**：三条都是行为台账项，不占加权单元。
-  **批 5（B148/B234/消息级 thinkingLevel）2026-10-15 闭环后 → 203.0/219＝92.7%**：#37 转对齐 +1；
-  剩余推演增量：批 6 #81(+1)、批 7 #95/#96/#97(+2.5)，全完工指向 206.5（#90 消费链另落 → 207＝94.5%）。
+  **批 5（B148/B234/消息级 thinkingLevel）2026-10-15 闭环后 → 203.0/219＝92.7%**：#37 转对齐 +1。
+  **批 6（B81/B231）2026-10-15 闭环后仍 203.0/219＝92.7%**：台账行为项不占单元。
+  **批 7（#95/#96/#97）2026-10-16 闭环后 → 205.5/219＝93.8%**：#95/+1、#96/+1、#97 存疑→对齐 +0.5；
+  剩余推演增量：仅 #90 消费链（若随 coding tools 落地再 +0.5 → 206/219＝94.1%）。
 - **残余 13.5 权重**（为什么不是 100%）：
   - 缺失 2：**#8 namespace**（随 MCP 包 B203）、**#98 federation**（用户裁决后排）；
   - 半成品 0.5：**#90** 元数据落、图像缩放消费链在 coding tools 另案（L）；
@@ -88,7 +90,7 @@
 | 4 | ✅ **已闭环 2026-10-14**（全量 clean verify 绿：11 模块 3468 测；ai 1614＋coding-agent 542＋agent-core 661；加权不变 **92.2%**；四 commit `1206eaf2`/`9368bfe1`/`941e6898`/`b1c38a0f`/`aa29df66`/`ae9fc831`，设计稿 `1206eaf2`） | B128 thinkingBudgets 三层通道（settings→harness→StreamRequest，三消费点）；B99 managed effort（raw block_binding/两 beta **请求头**/温度第四门/历史＋队尾 effort marker）；B110 providerThinkingLevel 盖章＋JSONL＋终局帧＋pi-messages 透传。探针附带修正四个旧 beta 从未上头的隐患；bedrock/vertex 与 agent proxy 透传为裁决残留 | M＋L | **[docs/13](13-ai-batch4-thinking-effort-design.md)** |
 | 5 | 消息字段与终局计量 | B148 responseModel/diagnostics＋三流内触点；B234 durationMs（消息 S＋工具 M）；消息级 thinkingLevel | L | ✅ **已闭环 2026-10-15**（[`docs/14`](14-ai-batch5-message-fields-design.md)，三 commit；ai 1638／core 674／coding-agent 547／web 53 测；加权 92.2→92.7%，#37 +1）。**残留另案**：B148 消费侧（usage-totals/cache-warmer/bug-report）、B234 的 TUI「Took」卡 |
 | 6 | ✅ **已闭环 2026-10-15**（ai 1651 测全绿；加权不变 **92.7%**，行为台账项不占单元；两 commit `2a4466c9`/`e7222774`，设计稿 `eadba279`） | B81 Claude Code 伪装（版本 2.1.280／系统前缀块／身份 beta 对且全序按 pi／工具名出站三映射＋入站 demap）；B231 刷新 15s 超时（PKCE＋device）＋取消安全（锁内读-刷-写跑在脱离调用方中断的虚拟线程上，轮转 token 必落盘）。窄差裁决见 [`docs/15`](15-ai-batch6-oauth-identity-design.md) §4 | M | **[docs/15](15-ai-batch6-oauth-identity-design.md)** |
-| 7 | ChatGPT 订阅登录 | #97 共享回调服务器（固定端口/state/品牌页/竞速）→ #95 动态客户端注册；#96 copy-code 同面并入 | M-L＋M | 开工前出 |
+| 7 | ✅ **已闭环 2026-10-16**（ai 测全绿；加权 92.7→**93.8%**，203.0→205.5；commits `55804990`/`073993f7`/`2f6d2e78`，设计稿 `44d05062`） | #97 共享回调服务器（固定端口/state/品牌页/竞速）→ #95 动态客户端注册；#96 copy-code 同面并入。窄差裁决见 [`docs/16`](16-ai-batch7-shared-callback-chatgpt-design.md) §4 | M-L＋M | **[docs/16](16-ai-batch7-shared-callback-chatgpt-design.md)** |
 
 顺序依据：批 1 纯 ai 内、便宜、收口一致性；批 3 是 B232/B97 数据正确性的大头且为 CacheWarmer/thinking 层供字段；批 4/5 依赖批 3 字段；批 6/7 同碰 OAuth 装配，连着做不拆两次。
 

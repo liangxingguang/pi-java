@@ -1,6 +1,9 @@
 # 16 - ai 批 7 设计：共享 OAuth 回调服务器（#97）→ ChatGPT 订阅登录（#95）→ Anthropic copy-code（#96）
 
-> 状态：**已闭环 2026-10-15**（见文末横幅）。
+> 状态：**✅ 已闭环（2026-10-16）**。设计稿 `44d05062`；commits `55804990`（#97）、
+> `073993f7`（#96）、`2f6d2e78`（#95）。全量 `mvn clean verify` BUILD SUCCESS：
+> ai **1689**（净增 38 夹具：共享件 13＋anthropic 9＋chatgpt 12＋凭证兼容/链 4）；
+> checkstyle 零违规；所有文件 ≤500 行。
 > 基准：pi `ea448f454`（2026-10-11，v1.1.0-22）。pi 证据一律 `git show ea448f454:<path>`。
 > 路线：[`docs/08`](08-ai-layer-alignment-roadmap.md) 批 7；地图单元 map/02 #95/#96/#97（鉴权组）。
 > 判据＝`bin pi` 主流发布版可达的**行为**，不是文件形状。
@@ -241,10 +244,14 @@ final class LoopbackCallbackServer<T> {
 
     /** 对齐 waitForCallbackOrManualInput；server==null 时只走手工。 */
     static <T> Outcome<T> awaitCallbackOrManual(OAuthInteraction interaction,
-            LoopbackCallbackServer<T> server, String prompt, Function<String,T> manualParser)
-            throws IOException;
+            LoopbackCallbackServer<T> server, String prompt) throws IOException;
 }
 ```
+
+> 实现注记（落码后修正）：竞速 helper 最终不带 `manualParser`——pi 也是返回
+> 「回调值 / 原始手工输入」二选一，各流拿到 {@code Manual(input)} 后自行解析
+> （openrouter/anthropic/chatgpt 解析规则不同）。空白手工输入（无控制台时 prompt
+> 立即返回空串）不参与竞速，让给浏览器回调，否则 headless 会在回调到达前自败。
 
 实现要点：
 
@@ -316,6 +323,9 @@ final class AnthropicOAuthFlow {
 record LoginHints(Supplier<String> deviceId, String agentName) {
     static LoginHints cli() { return new LoginHints(() -> UUID.randomUUID().toString(), "Pi"); }
 }
+// 实现注记：构造器另注入 callbackPort（生产恒 1455）——JDK HttpServer.stop(0) 在 Windows
+// 上解绑监听口是异步的，同 JVM 内紧接重绑固定端口会抖 BindException（Node 无此现象），
+// 夹具改绑空闲端口；1455 本身由 defaultCallbackPortIs1455 与占用硬失败夹具钉住。
 final class ChatGptOAuthFlow {
     OAuthCredential login(OAuthInteraction interaction, LoginHints hints) throws IOException;
     OAuthCredential refresh(OAuthCredential credential) throws IOException;
@@ -363,7 +373,9 @@ public record OAuthCredential(String accessToken, String refreshToken, long expi
 }
 ```
 
-Jackson 旧文件缺两字段 → 反序列化 null/空（record 引用类型组件缺省允许 null）；新写出两字段，旧版本读盘 `FAIL_ON_UNKNOWN_PROPERTIES=false` 已配置 ⇒ 双向兼容。
+Jackson 旧文件缺两字段 → 反序列化 null/空（显式 `@JsonCreator` 六参规范构造器，
+`scopes` 的 null 归一为 `List.of()`，四参便捷构造器保留）；新写出两字段，旧版本读盘
+`FAIL_ON_UNKNOWN_PROPERTIES=false` 已配置 ⇒ 双向兼容。
 
 `OAuthProvider`：
 
@@ -466,7 +478,7 @@ default String select(String message, List<LoginOption> options) throws IOExcept
 ## 6. 不做 / 出范围
 
 - **#98** Anthropic workload identity federation（5 个 `ANTHROPIC_*` 变量）——后排，用户已裁决。
-- ChatGPT 凭证的**请求时**行为：`isChatGPTSignIn`（非 `sk-` 前缀）裁掉 Responses 不支持字段、usage 链接提示、共享限额重试（`openai-responses.ts:38-46,226-228,328-329`、`utils/retry.ts:25,103`）——属 openai-responses 适配器单元，不属鉴权 #95；若地图无条目，闭环时登记新 B 项。
+- ChatGPT 凭证的**请求时**行为：`isChatGPTSignIn`（非 `sk-` 前缀）裁掉 Responses 不支持字段、共享限额重试（`openai-responses.ts:38-46,226-228,328-345`、`utils/retry.ts:25,103`）——属 openai-responses 适配器单元，不属鉴权 #95；**闭环已登记 B240**（usage 链接提示 Java 已在）。
 - `openai-codex`（R5/w0）与 radius/meta 等排除流不挪到共享件。
 - 交互模式（TUI）的持久 deviceId、oauth-selector 组件面——coding-agent/TUI 另案。
 - MCP 模块自己的 `mcp/oauth/OAuthFlow` 不动（独立 RFC 流程）。
@@ -485,7 +497,3 @@ default String select(String message, List<LoginOption> options) throws IOExcept
 
 验证：`mvn test -pl pi-java-ai`（带 `-am`）全绿；`mvn checkstyle:check`；全量 `mvn clean verify`；文件均 ≤500 行。
 
----
-
-> **闭环横幅（2026-10-15）**：本批已实施并闭环，见 commits：设计 `<design-sha>`；#97 `<s97>`；#96 `<s96>`；#95 `<s95>`；
-> 闭环台账 `<docs-sha>`。map/02 #95/#96 缺失→对齐、#97 存疑→对齐；ai 加权 203.0→**205.5/219＝93.8%**。

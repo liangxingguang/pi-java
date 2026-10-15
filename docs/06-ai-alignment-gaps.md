@@ -43,9 +43,10 @@
 
 ## 1. 台账在册功能缺口
 
-`docs/04` §3.2 存活 10 条（批 1 销号 4 条；批 2 销号 B80/B233，新登即销 B239；
+`docs/04` §3.2 存活 11 条（批 1 销号 4 条；批 2 销号 B80/B233，新登即销 B239；
 批 3a 销号 B97/B232；批 3b 销号 B137；**批 5 销号 B148 流内半/B234**，消费侧另案；
-**批 6 销号 B81/B231**；原 §3.3 的 B222 随批 1 销号，§3.3 已无 ai 协议面条目）：
+**批 6 销号 B81/B231**；**批 7 无 B 号可销——#95/#96/#97 是地图单元**（见 §2/§3 出表），
+取证另登 **B240**（ChatGPT 请求时特判）；原 §3.3 的 B222 随批 1 销号，§3.3 已无 ai 协议面条目）：
 
 | # | 差什么（一句话） |
 |---|---|
@@ -62,24 +63,25 @@
 | B158 | 输出截断字节预算 Java 100KB vs pi 主流 50KB（模型可见文案不同；对应 map/03 #23） |
 | B159 | pi 已改 `finishTurn()` 返回 `{action:"continue"|"end"}`，Java 仍是 Boolean `shouldStopAfterTurn`，缺「强制再跑一轮」臂（对应 map/03 #6/#41） |
 | ~~B231~~ | ✅ **批 6 已销（2026-10-15，[`docs/15`](15-ai-batch6-oauth-identity-design.md)）**：~~刷新取消丢轮转 token／HTTP 无超时~~ 刷新整体挪到脱离调用方中断的虚拟线程、刷新 POST 15s 硬超时（PKCE/device 两流） |
+| B240 | ChatGPT 订阅 token 的请求时特判：非 `sk-` 前缀裁 `prompt_cache_*`/`max_output_tokens`/`temperature`、分类器模型过滤、共享用量码重试（批 7 登记，随 openai-responses 适配器包做） |
 | ~~B234~~ | ✅ **批 5 已销（2026-10-15，[`docs/14`](14-ai-batch5-message-fields-design.md)）**：响应 durationMs 身份缝加盖；工具 durationMs 只围 execute() 本体，贯通 tool_execution_end/ToolResultMessage/JSONL/双 wire；~~`durationMs` 计时字段全无~~（TUI「Took」卡仍另案） |
 
 ---
 
-## 2. 地图判「缺失」、但没有 B 号的能力单元（4 条，计分母）
+## 2. 地图判「缺失」、但没有 B 号的能力单元（2 条，计分母）
 
 编号是 `map/02-ai.md` 的单元号。2026-10-12 批 0 后原 21 条中 11 条移出分母（见 §4）、#87 转对齐；
 **批 3a（2026-10-14）#34/#86/#91 转对齐出表、#90 转存疑（见 §3）**；
-**批 5（2026-10-15）#37 转对齐出表（responseModel/diagnostics/durationMs/thinkingLevel，+1）**。
+**批 5（2026-10-15）#37 转对齐出表（responseModel/diagnostics/durationMs/thinkingLevel，+1）**；
+**批 7（2026-10-16）#95/#96 转对齐出表（ChatGPT 订阅登录、copy-code，+2）**。
 
 **ContentBlock（1）**：#8 `ToolUseContent.namespace`（随 MCP 包 B203；仅 Responses 车道 round-trip）。
 
-**鉴权（3）**：#95 OAuth `openai-chatgpt`（Sign in with ChatGPT，批 7）· #96 Anthropic OAuth copy-code 登录法
-（批 7）· #98 Anthropic workload identity federation（5 个 `ANTHROPIC_*` env，**用户裁决后排**）。
+**鉴权（1）**：#98 Anthropic workload identity federation（5 个 `ANTHROPIC_*` env，**用户裁决后排**）。
 
 ---
 
-## 3. 形状差（地图判「存疑」，计半分；20 条，未认账为缺口）
+## 3. 形状差（地图判「存疑」，计半分；19 条，未认账为缺口）
 
 这些是「Java 有、pi 无」或「两侧形状不同、行为近似」。**不直接当缺口清**；收口任一条前先定
 「形状差算不算偏差」，认账后转 §1 立 B 号，或正式记入 `docs/04` §4 裁决不做。
@@ -94,7 +96,7 @@
 | ContentBlock（2） | #4 `UrlImageContent`、#5 `DiffContent` 均为 Java 独有 |
 | StreamEvent（2） | #20 `error` 载 `Throwable` 而非 `AssistantMessage` · #21 `UsageInfo` 事件 Java 独有 |
 | 元数据（5） | #24 `Model.input` 数组 vs `ModelCapability`＋`supportsImageInput` · #28 `Model.reasoning` vs `THINKING` 能力位 · #38 `ToolResultMessage.usage` 留形状无生产者（`details` 已接） · #88 `JsonObject` 以 `Map`＋Jackson 表达（裁决零代码） · **#90（批 3a）** `InputLimits` 三层元数据与 models.json 深合并已落，但图片缩放/注记消费链（B85）在 coding tools 另案，ai 层字段零消费者 |
-| 鉴权（3） | #46 多 profile 凭证（Java 扩展） · #47 models.json 自定义 provider 形状不同 · #97 共享 OAuth 回调服务器/登录页形状不同、行为近似 |
+| 鉴权（2） | #46 多 profile 凭证（Java 扩展） · #47 models.json 自定义 provider 形状不同（~~#97 共享回调服务器/登录页批 7 已转对齐~~：`LoopbackCallbackServer`/`OAuthPages` 落地） |
 | 横切（4） | #68 `assistant-message-frame` 对应物在 web/protocol（跨模块） · #75 `DeferredHandle` 两侧同状无生产者 · #76 lazy `lazyApi`/`lazyStream` vs `ProviderFactory`/`Protocol` |
 
 ---
@@ -136,6 +138,15 @@
   `ModelPatterns`、`ModelScopeResolver`/`ScopedModel`/两码诊断；coding-agent 接通
   `--models ?? enabledModels` → 初始模型 → Ctrl+P/RPC scope 轮转；B137 销号，加权不变。
   六条窄差经用户裁决（歧义不硬错/码点序/无 brace/仅正向/无 auth 门/resume 门近似），见 04。
+- **2026-10-16 批 7（共享回调／ChatGPT 订阅／copy-code）闭环**（设计 [`docs/16`](16-ai-batch7-shared-callback-chatgpt-design.md)）：
+  `LoopbackCallbackServer`（精确路径/state 门、claim-once 409、complete 内交换失败 502、
+  cancel/超时、BindException 上抛、回调-手工竞速）＋`OAuthPages`（pi 品牌页逐字）＋`Pkce`
+  抽出；通用 `OAuthFlow` 只剩 openrouter 形状（随机 UUID 路径、无 state、5min、30s 交换）；
+  map **#95 缺失→对齐**（`ChatGptOAuthFlow`：dynamic_agent_client＋urn:uuid host、签发
+  client_id 随回调返回、1455 占用硬失败、直连 scope 门、−3min、刷新带 client_id/resource；
+  凭证加 clientId/scopes 两字段，旧文件兼容；注册键 `openai`）、**#96 缺失→对齐**
+  （`AnthropicOAuthFlow`：browser 53692→0→无服务器回落＋copy-code 两法 select、JSON 交换/
+  刷新、−5min）、**#97 存疑→对齐**（共享服务器/品牌页/竞速）。加权 203.0→205.5（+2.5）。
 - **25 个长尾 provider 端点 ＋ 4 条对应鉴权**：权重 0、R2/R5 排除出分母，完整清单见 `map/02-ai.md`
   加权汇总「被排除的单位」。
 - **B18**（pi-messages 不按 pi 改造）、**B130/B132**（zai sre、together/baseten/fireworks 携带集零差，

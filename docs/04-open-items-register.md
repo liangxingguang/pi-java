@@ -18,6 +18,11 @@
 >   `PiHttpClient.postSse` 头合并改替换语义）；**B239 即登即销**（设计取证撞出：
 >   assistant `tool_calls` 重放整体缺失、`prefix:false` 缺席，与 B80 请求半同分支修掉）。
 >   详稿 docs/10。
+>   **2026-10-16 批 7（共享回调/ChatGPT 订阅/copy-code，详稿 docs/16）已闭环**：
+>   本批无 B 号——map/02 单元 #95/#96（缺失→对齐）、#97（存疑→对齐）直接在
+>   map/02 与 docs/06 §2/§3 翻判定；新增行为（动态客户端/1455 硬失败/品牌页/竞速/
+>   copy-code 两法）由 `LoopbackCallbackServer`/`OAuthPages`/`Pkce`/`AnthropicOAuthFlow`/
+>   `ChatGptOAuthFlow` 承接，commits `55804990`/`073993f7`/`2f6d2e78`。
 >   换锚裁决与依据在 git 历史
 >   （`docs/11-pi-reanchor-ruling.md`，已随过程文档清理删除）。
 > - 判据是**行为**（`bin pi` 主流发布版可达的功能与表现），不是文档、API 形状或文件清单。
@@ -88,6 +93,7 @@
 | ~~B165~~ | ~~Anthropic 中段工具改为「定义内联」~~ | ✅ **已销号 2026-10-10**（`原 docs/45`）：beta 换 `inline-tools-2026-09-15`、顶层表就此定死、`tool_addition` 改按值内联、同名重定义不再回退。⚠️ 旧记「`hasToolRedefinitions` 被 pi 删除」实为**弃用**（`原 docs/45 §1.2`） |
 | ~~B231~~ | ~~**新锚点**：OAuth 刷新取消时轮转 token 不持久化~~ | ✅ **已销号 2026-10-15（批 6，[`docs/15`](15-ai-batch6-oauth-identity-design.md)，commit `2a4466c9`）**：`StoredOAuthCredentials.resolveEffective` 整段锁内读-刷-写挪到**新建虚拟线程**（不继承调用方中断位；进锁前看一次调用方中断，进锁后只受刷新超时约束），调用方中断只令自己的 `Future.get` 失败，worker 照常把轮转 token 落盘；PKCE/device 两刷新 POST 加 **15s 硬超时**（pi `AbortSignal.timeout(15_000)`），登录流不加。回调端口冲突项无差距（Java 绑端口 0），不登记 |
 | ~~B232~~ | ~~**新锚点**：内置目录数据漂移（v1.1.0）~~ | ✅ **已销号 2026-10-14（批 3a）**：17 个 npm `pi-ai@1.1.0` 分片逐字节入 `resources/catalog/`（haiku-5-5、Claude 5.5 系列、kimi-k3 钉价 {3,15,.3,0}、prompt-length tiers 全携），manifest sha256 夹具钉字节；持续漂移随 npm 版本升级走 |
+| B240 | ChatGPT 订阅 token 的请求时特判缺失（批 7 取证登记） | pi `openai-responses.ts:38-46,328-345`：`isChatGPTSignIn`（provider=openai、官方 baseUrl、token 非 `sk-` 前缀）裁掉 Responses 拒绝的请求字段（`prompt_cache_key`/`prompt_cache_retention`/`prompt_cache_options`/`max_output_tokens`/`temperature` 等）；分类器模型过滤（`filterAllModels` 去 classifier）；`utils/retry.ts:25,103` 对共享用量/用户数据暂不可用码特殊重试。Java 现状：usage 链接提示已在（`OpenAIResponsesApi:112`），字段不区分凭证一律发送。属 openai-responses 适配器单元，不占鉴权 #95 |
 | ~~B234~~ | ~~**新锚点**：`durationMs` 计时字段缺失~~ | ✅ **已销号 2026-10-15（批 5，[`docs/14`](14-ai-batch5-message-fields-design.md)）**：响应计时由 AbstractChatApi 身份缝在终局消息加盖（单调钟、预设值保留）；工具计时 `ToolRegistry.executeTimed` 只围 `execute()` 本体（审批/校验/prepareArguments/after 钩子在外，成功/抛错都有、未执行无字段）；`ToolResultMessage.durationMs`/`tool_execution_end.durationMs` 贯通 agent-core→coding-agent JSON→web WS 两面＋JSONL；消息级 `thinkingLevel`（agent-loop.ts:409，含 off）同批落。**消费侧另案**：TUI/bash「Took …」卡（Java TUI 不订阅 ToolExecution 事件，随 tui bash 渲染器）；AgentSettled 不另加字段（toolResults 消息自带时长，与 pi 同） |
 
 **compat 面细碎登记**（pi 有标注/消费、Java 无的字段与数据位）：
