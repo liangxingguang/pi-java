@@ -23,5 +23,12 @@ public enum AuthKind {
     BEARER,
 
     /** {@code ANTHROPIC_OAUTH_TOKEN} 型：{@code Authorization: Bearer} ＋ claude-cli 身份头。 */
-    OAUTH
+    OAUTH,
+
+    /**
+     * #98：workload identity federation —— 无 key，访问令牌由 anthropic-java SDK 以
+     * OIDC 交换自管（pi {@code providers/anthropic.ts:49-69} 的末位回落；五变量经
+     * {@code RecordedCredential.env} 携带，{@code value} 恒为空串）。
+     */
+    FEDERATION
 }

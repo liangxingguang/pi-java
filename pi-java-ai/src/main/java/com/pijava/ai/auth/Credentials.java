@@ -21,6 +21,9 @@ import com.pijava.ai.api.AuthKind;
  *   <li>{@code ANTHROPIC_OAUTH_TOKEN} ⇒ {@code OAUTH} —— <b>仅 Anthropic</b></li>
  *   <li>默认环境变量（{@code <PROVIDER>_API_KEY}）⇒ {@code API_KEY}</li>
  *   <li>默认文件凭证 ⇒ {@code API_KEY}</li>
+ *   <li><b>workload identity federation</b>（#98，<b>仅 Anthropic</b>，五变量齐备才命中）
+ *       ⇒ {@code FEDERATION} —— pi 注释原意 "Last in line so keys and
+ *       {@code ANTHROPIC_AUTH_TOKEN} keep winning"</li>
  * </ol>
  *
  * <p>第 3 层（stored OAuth）的插入位置照 pi 的裁决（{@code auth/resolve.ts:63-110}）：
@@ -67,13 +70,15 @@ public final class Credentials {
      * {@link #resolveCredential(String)}。
      */
     public static Optional<String> resolveApiKey(String provider) {
-        return resolveCredential(provider).map(RecordedCredential::value);
+        // #98：federation 凭证无值（空串 ≙ pi 的 auth 空对象）⇒ 滤掉，展示侧照旧「未配置」。
+        return resolveCredential(provider).map(RecordedCredential::value).filter(v -> !v.isBlank());
     }
 
     /** 带注入 store 的解析（测试用）。 */
     static Optional<String> resolveApiKey(String provider, AuthProfileManager profiles,
                                           EnvApiKeyResolver env, FileCredentialStore file) {
-        return resolveCredential(provider, profiles, env, file).map(RecordedCredential::value);
+        return resolveCredential(provider, profiles, env, file).map(RecordedCredential::value)
+            .filter(v -> !v.isBlank());
     }
 
     /** 带注入 store 的解析（测试用，不含 stored OAuth）—— 环境读取口经 {@link EnvApiKeyResolver} 注入。 */
@@ -114,8 +119,42 @@ public final class Credentials {
             }
         }
         var envValue = env.resolveApiKey(provider);
-        return envValue.map(s -> plain(s, "env:" + providerEnvVar(provider))).or(() -> file.resolveApiKey(provider)
-                .map(value -> plain(value, "stored:" + provider)));
+        return envValue.map(s -> plain(s, "env:" + providerEnvVar(provider)))
+            .or(() -> file.resolveApiKey(provider).map(value -> plain(value, "stored:" + provider)))
+            // #98：federation 是末位回落（pi providers/anthropic.ts:49-69）。
+            .or(() -> resolveFederation(provider, env));
+    }
+
+    /** 仅 Anthropic：federation 三必需 ＋ 两可选（pi {@code env-api-keys.ts:32-36}）。 */
+    private static final List<String> FEDERATION_REQUIRED = List.of(
+        "ANTHROPIC_FEDERATION_RULE_ID", "ANTHROPIC_ORGANIZATION_ID", "ANTHROPIC_IDENTITY_TOKEN_FILE");
+    private static final List<String> FEDERATION_OPTIONAL = List.of(
+        "ANTHROPIC_SERVICE_ACCOUNT_ID", "ANTHROPIC_WORKSPACE_ID");
+
+    /**
+     * #98：workload identity federation（pi {@code providers/anthropic.ts:53-69} 逐字移植）：
+     * 仅 Anthropic；3 必需缺任一 ⇒ empty；2 可选有则收。凭证无值（{@code value} 空串
+     * ≙ pi 的 {@code auth: {}}），五变量经 {@link RecordedCredential#env} 携带。
+     */
+    private static Optional<RecordedCredential> resolveFederation(String provider,
+                                                                  EnvApiKeyResolver env) {
+        if (!"anthropic".equals(provider)) {
+            return Optional.empty();
+        }
+        var federation = new java.util.LinkedHashMap<String, String>();
+        for (var name : FEDERATION_REQUIRED) {
+            var value = env.resolveEnv(name);
+            if (value.isEmpty()) {
+                return Optional.empty();
+            }
+            federation.put(name, value.get());
+        }
+        for (var name : FEDERATION_OPTIONAL) {
+            env.resolveEnv(name).ifPresent(v -> federation.put(name, v));
+        }
+        // source 文案逐字 pi :68。
+        return Optional.of(new RecordedCredential(
+            AuthKind.FEDERATION, "", "workload identity federation", federation));
     }
 
     private static RecordedCredential plain(String value, String source) {

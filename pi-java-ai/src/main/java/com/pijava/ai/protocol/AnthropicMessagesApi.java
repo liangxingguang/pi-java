@@ -68,48 +68,70 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
      * @param apiKeyEnvVar the environment variable holding the API key
      */
     public AnthropicMessagesApi(ApiOptions options, String apiKeyEnvVar) {
-        // 包 A0 步7（原 docs/43 D5/D7）：按**凭证种类**分派，对应 pi
-        // api/anthropic-messages.ts:906-989 的三分支（github-copilot / OAuth / 默认）。
-        var auth = resolveAuth(options, apiKeyEnvVar);
-        // pi :906-908 的判据是**值**（`apiKey.includes("sk-ant-oat")`）——CLI 直给／文件凭证
-        // 里的 oat 值同样走 OAuth 形态；AuthKind.OAUTH（来自 ANTHROPIC_OAUTH_TOKEN）是
-        // pi-java 的显式载体。两者都认。
-        boolean oauth = auth.kind() == AuthKind.OAUTH
-            || auth.value().contains(OAUTH_TOKEN_MARKER);
-        boolean bearer = oauth || auth.kind() == AuthKind.BEARER;
-        var builder = AnthropicOkHttpClient.builder();
-        if (bearer) {
-            builder.authToken(auth.value());
-            if (oauth) {
-                // pi :951-970 的 OAuth 分支：两枚身份头（accept ／
-                // anthropic-dangerous-direct-browser-access 是浏览器场景产物，不移植）。
-                builder.putHeader("user-agent",
-                    "claude-cli/" + ClaudeCodeNames.CLAUDE_CODE_VERSION);
-                builder.putHeader("x-app", "cli");
+        // #98（pi :612-613/:933-934）：federation 车道在 resolveAuth **之前**分派 ——
+        // 它没有 key，落进 resolveAuth 只会抛「No API key」（pi 在 federation 在场时
+        // 同样跳过 assertRequestAuth）。门照 pi getAnthropicFederation（:346-370）：
+        // 仅真 anthropic 车道（host 路径：Credentials 只对 provider=="anthropic" 产出
+        // FEDERATION；直调路径：apiKeyEnvVar 判别 —— MiniMax/openrouter 等兼容
+        // provider 各自传自己的变量）、无任何 request auth（pi hasRequestAuth :316-322：
+        // apiKey 或 authorization/x-api-key/cf-aig-authorization 头）、三必需变量齐。
+        var federationEnv = AnthropicFederationSupport.federationEnvOf(options);
+        boolean federation = federationEnv != null
+            && (options.apiKey() == null || options.apiKey().isBlank())
+            && !AnthropicFederationSupport.hasAuthHeader(options)
+            && (options.authKind() == AuthKind.FEDERATION
+                || "ANTHROPIC_API_KEY".equals(apiKeyEnvVar));
+        boolean bearer;
+        boolean oauth;
+        if (federation) {
+            // federation 的头配方与 key 车道同（pi :1065 ＋ :1036-1046）⇒ bearer=false：
+            // 会话亲和头照常挂（Bearer/OAuth 分支 pi 才不挂，:992-1031）。
+            this.client = AnthropicFederationSupport.client(options, federationEnv);
+            bearer = false;
+            oauth = false;
+        } else {
+            // 包 A0 步7（原 docs/43 D5/D7）：按**凭证种类**分派，对应 pi
+            // api/anthropic-messages.ts:906-989 的三分支（github-copilot / OAuth / 默认）。
+            var auth = resolveAuth(options, apiKeyEnvVar);
+            // pi :906-908 的判据是**值**（`apiKey.includes("sk-ant-oat")`）——CLI 直给／文件凭证
+            // 里的 oat 值同样走 OAuth 形态；AuthKind.OAUTH（来自 ANTHROPIC_OAUTH_TOKEN）是
+            // pi-java 的显式载体。两者都认。
+            oauth = auth.kind() == AuthKind.OAUTH
+                || auth.value().contains(OAUTH_TOKEN_MARKER);
+            bearer = oauth || auth.kind() == AuthKind.BEARER;
+            var builder = AnthropicOkHttpClient.builder();
+            if (bearer) {
+                builder.authToken(auth.value());
+                if (oauth) {
+                    // pi :951-970 的 OAuth 分支：两枚身份头（accept ／
+                    // anthropic-dangerous-direct-browser-access 是浏览器场景产物，不移植）。
+                    builder.putHeader("user-agent",
+                        "claude-cli/" + ClaudeCodeNames.CLAUDE_CODE_VERSION);
+                    builder.putHeader("x-app", "cli");
+                }
+            } else {
+                builder.apiKey(auth.value());
             }
-        } else {
-            builder.apiKey(auth.value());
+            if (options.baseUrl() != null && !options.baseUrl().isBlank()) {
+                builder.baseUrl(options.baseUrl());
+            }
+            // A-14（G1）：SDK 内置重试关到 0，初始请求由 ProviderRetry 独占。
+            builder.maxRetries(0);
+            // D-P1：models.json 合并来的 default headers（原 docs/65）。
+            putExtraHeaders(options, builder::putHeader);
+            this.client = builder.build();
         }
-        if (options.baseUrl() != null && !options.baseUrl().isBlank()) {
-            builder.baseUrl(options.baseUrl());
-            this.baseUrl = options.baseUrl();
-        } else {
-            this.baseUrl = null;
-        }
-        // A-14（G1）：SDK 内置重试关到 0，初始请求由 ProviderRetry 独占。
-        builder.maxRetries(0);
-        // D-P1：models.json 合并来的 default headers（原 docs/65）。
-        putExtraHeaders(options, builder::putHeader);
+        this.baseUrl = options.baseUrl() != null && !options.baseUrl().isBlank()
+            ? options.baseUrl() : null;
+        this.bearer = bearer;
+        this.oauth = oauth;
         // B99 裁决③：把有效 header 的<b>名集合</b>留给 buildParams —— 显式配置
         // anthropic-beta 时自动 beta 列表整组跳过（pi getBetaFeatures :1087-1103）。
         this.effectiveHeaderNames = AnthropicStreamSupport.extraHeaderNames(options);
-        this.client = builder.build();
         this.providerRetry = ProviderRetry.optionsOf(options);
         this.cacheRetention = AnthropicStreamSupport.retentionOf(options);
         // B103（docs/52）：pi :625 的 cacheSessionId 原料（none 门在 streamInternal
         // 按解析后的保留期过）；Bearer（OAuth/copilot）分支 pi 不挂亲和头（:992-1031）。
-        this.bearer = bearer;
-        this.oauth = oauth;
         this.sessionId = AnthropicStreamSupport.sessionIdOf(options);
     }
 
