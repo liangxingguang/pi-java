@@ -807,6 +807,7 @@ public final class AgentSession implements AutoCloseable {
      * （pi 手动 compact 不检查 enabled，关自动压缩时 /compact 仍可用）。
      */
     public com.pijava.agent.compaction.CompactionResult compact(String customInstructions) {
+        abortAndWaitForIdle();
         var resolved = services.settings().accessors()
             .getCompactionSettings(harness.getModel());
         return harness.compact(laneName(), resolved, customInstructions);
@@ -823,7 +824,20 @@ public final class AgentSession implements AutoCloseable {
      */
     public com.pijava.agent.compaction.CompactionResult compact(
             CompactionSettings settings, String customInstructions) {
+        abortAndWaitForIdle();
         return harness.compact(laneName(), settings, customInstructions);
+    }
+
+    /**
+     * #17（pi {@code agent-session.ts:2764-2765}）：手动压缩开头即 {@code await this.abort()}
+     * —— 中止在飞 run 并等它落地，压缩读到的转录不含半截消息。{@link #abort()} 本身保持
+     * 非阻塞（UI Esc 同一条路），等待只加在压缩路，净效果与 pi 的 {@code await abort()}
+     * 相同。⚠️ pi 的 abort() 还中止在飞压缩/分支摘要 —— java 无 abortCompaction
+     * （B36 另案），在飞压缩撞上本调用仍走既有行为。自动压缩走引擎内部直路，不经这里。
+     */
+    private void abortAndWaitForIdle() {
+        abort();
+        harness.waitForIdle(laneName());
     }
 
     /** Queue a steering message (injected into the current run's next round). */
