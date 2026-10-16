@@ -50,7 +50,7 @@
 ### 2.3 跨模块另案（ai 包不做，台账挂指针）
 
 - **B94（8 工具 promptSnippet/Guidelines）、B95（docs 段）**：落点 agent-core `ContextAssembler`/`SystemPrompts`＋coding-agent 工具声明（pi `system-prompt.ts:128-166`，消费者 `agent-session.ts:3533-3541`）。
-- **B85＋#90 图像缩放管线**：inputLimits **元数据字段批 3a 已补（2026-10-14，#90 转存疑）**；缩放/注记消费链（sharp 替代、`tools/read.ts:138`、`utils/image-process.ts`）在 coding tools 另案（L），落地后 #90 转对齐。
+- ~~**B85＋#90 图像缩放管线**~~：✅ **批 9（2026-10-16）已闭环**（[`docs/18`](18-ai-batch9-image-resize-chain-design.md)，commits `fbf429c2`/`8de250a3`）——inputLimits 元数据批 3a 落、缩放/注记消费链批 9 落（JDK ImageIO 替代 photon，agent-core/coding-agent 两收口点），#90 存疑→对齐 **206/219＝94.1%**。
 - **#86 promptCache**：ai 侧字段**批 3a 已补**（17 条 anthropic 分片 300/3600）；**CacheWarmer 453 行在 coding-agent 另案**（默认 `cacheWarming:"streaming"` 开、只对直连 Anthropic；字段单做无消费者）。
 - **#8 ToolUseContent.namespace**：随 MCP 接线 B203（ai 侧仅 responses 车道 round-trip，`openai-responses-shared.ts` 六处稀疏透传）。
 - **B235 agent_settled.aborted**：coding-agent 面，ai 零触点。
@@ -70,14 +70,14 @@
   **批 4（B128/B99/B110）2026-10-14 闭环后仍 202.0/219＝92.2%**：三条都是行为台账项，不占加权单元。
   **批 5（B148/B234/消息级 thinkingLevel）2026-10-15 闭环后 → 203.0/219＝92.7%**：#37 转对齐 +1。
   **批 6（B81/B231）2026-10-15 闭环后仍 203.0/219＝92.7%**：台账行为项不占单元。
-  **批 7（#95/#96/#97）2026-10-16 闭环后 → 205.5/219＝93.8%**：#95/+1、#96/+1、#97 存疑→对齐 +0.5；
-  剩余推演增量：仅 #90 消费链（若随 coding tools 落地再 +0.5 → 206/219＝94.1%）。
-- **残余 13.5 权重**（为什么不是 100%）：
+  **批 7（#95/#96/#97）2026-10-16 闭环后 → 205.5/219＝93.8%**：#95/+1、#96/+1、#97 存疑→对齐 +0.5。
+  **批 9（B85/#90 图像消费链）2026-10-16 闭环后 → 206.0/219＝94.1%**：#90 存疑→对齐 +0.5（消费者落 agent-core/coding-agent）。
+- **残余 13.0 权重**（为什么不是 100%）：
   - 缺失 2：**#8 namespace**（随 MCP 包 B203）、**#98 federation**（用户裁决后排）；
-  - 半成品 0.5：**#90** 元数据落、图像缩放消费链在 coding tools 另案（L）；
   - 存疑方言 11：w1×10（#4/#5 java 独有 ContentBlock、#7/#63 pi-messages 自造线格、#24/#28 形状等价、#38、#46 java 扩展、#75/#76/#88）＋w2×6（#18 ollama、#20/#21 内部方言线上已扁化、#47 models.json、#68 跨 web/protocol）。
     其中 java **独有扩展**（#4/#5/#18/#46）与**行为等价形状**（#24/#28/#88/#75/#76）可另行逐条裁决——认「行为相同」即翻对齐，不认就永久挂存疑；它们不是「pi 有 java 无」的缺口。
 - 跨模块消费者不影响 ai 模块分，但用户可感知面在那些包里闭环：CacheWarmer、B94/B95 系统提示段、B148 的 /session 费用与 /bug、B234 的 "Took" 卡、B235。
+  批 9 真空臂（@file/`PromptImage` 附件、剪贴板、TUI Kitty 转码器/设置 UI、`maxPer*`、codemode structuredContent）登记在 [`docs/18`](18-ai-batch9-image-resize-chain-design.md) §6。
 
 ## 3. 批次路线
 
@@ -92,8 +92,9 @@
 | 6 | ✅ **已闭环 2026-10-15**（ai 1651 测全绿；加权不变 **92.7%**，行为台账项不占单元；两 commit `2a4466c9`/`e7222774`，设计稿 `eadba279`） | B81 Claude Code 伪装（版本 2.1.280／系统前缀块／身份 beta 对且全序按 pi／工具名出站三映射＋入站 demap）；B231 刷新 15s 超时（PKCE＋device）＋取消安全（锁内读-刷-写跑在脱离调用方中断的虚拟线程上，轮转 token 必落盘）。窄差裁决见 [`docs/15`](15-ai-batch6-oauth-identity-design.md) §4 | M | **[docs/15](15-ai-batch6-oauth-identity-design.md)** |
 | 7 | ✅ **已闭环 2026-10-16**（ai 测全绿；加权 92.7→**93.8%**，203.0→205.5；commits `55804990`/`073993f7`/`2f6d2e78`，设计稿 `44d05062`） | #97 共享回调服务器（固定端口/state/品牌页/竞速）→ #95 动态客户端注册；#96 copy-code 同面并入。窄差裁决见 [`docs/16`](16-ai-batch7-shared-callback-chatgpt-design.md) §4 | M-L＋M | **[docs/16](16-ai-batch7-shared-callback-chatgpt-design.md)** |
 | 8 | ✅ **已闭环 2026-10-16**（ai **1698** 测全绿；加权不变 **93.8%**，台账行为项不占地图单元；commits `26995e90`/`efa66016`） | B240 销号：ChatGPT 订阅 token（provider=openai＋官方 baseUrl 严格相等＋非 `sk-`）裁 `prompt_cache_retention`/`prompt_cache_options`/`max_output_tokens`/`temperature` 四键（**`prompt_cache_key` 不裁**，锚点纠正台账旧文）；重试三码取证时已在 `RetryableError`；`filterAllModels` 真空（Java 无 classifier 面，随 R5） | S | **[docs/17](17-ai-b240-chatgpt-request-time-design.md)** |
+| 9 | ✅ **已闭环 2026-10-16**（agent-core **719**＋coding-agent **552** 测全绿；加权 93.8→**94.1%**，205.5→206.0；commits `fbf429c2`/`8de250a3`/`89ee3495`） | B85 销号、map #90 存疑→对齐（+0.5）：JDK ImageIO 替代 photon 的图片缩放/注记消费链（`ImageProcessor`/`ImageResizer`/`ExifOrientation`/`WebpDimensions`），`ReadTool` 省略/非视觉注记两路径，`PiToolRunner` after_tool 后统一归一（MCP/截图大图），`ImagePolicy` 晚绑定 `images.autoResize`＋当前模型 resize 档。窄差 D1-D10 与真空臂见 [`docs/18`](18-ai-batch9-image-resize-chain-design.md) §5/§6 | M（跨 agent-core/coding-agent） | **[docs/18](18-ai-batch9-image-resize-chain-design.md)** |
 
-顺序依据：批 1 纯 ai 内、便宜、收口一致性；批 3 是 B232/B97 数据正确性的大头且为 CacheWarmer/thinking 层供字段；批 4/5 依赖批 3 字段；批 6/7 同碰 OAuth 装配，连着做不拆两次。
+顺序依据：批 1 纯 ai 内、便宜、收口一致性；批 3 是 B232/B97 数据正确性的大头且为 CacheWarmer/thinking 层供字段；批 4/5 依赖批 3 字段；批 6/7 同碰 OAuth 装配，连着做不拆两次；批 8/9 均为台账挂账的收口项（批 9 是批 3a 起明示「随 coding tools 另案」的 #90 消费链）。
 
 ## 4. 批 3 数据源（已取证，2026-10-12）
 

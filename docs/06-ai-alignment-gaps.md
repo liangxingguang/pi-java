@@ -43,16 +43,17 @@
 
 ## 1. 台账在册功能缺口
 
-`docs/04` §3.2 存活 10 条（批 1 销号 4 条；批 2 销号 B80/B233，新登即销 B239；
+`docs/04` §3.2 存活 9 条（批 1 销号 4 条；批 2 销号 B80/B233，新登即销 B239；
 批 3a 销号 B97/B232；批 3b 销号 B137；**批 5 销号 B148 流内半/B234**，消费侧另案；
 **批 6 销号 B81/B231**；**批 7 无 B 号可销——#95/#96/#97 是地图单元**（见 §2/§3 出表），
 取证另登 B240；**批 8 销号 B240**（ChatGPT 请求时特判，重试臂取证时已在、classifier 臂真空）；
+**批 9 销号 B85**（图片缩放/注记消费链落地，map #90 存疑→对齐 +0.5）；
 原 §3.3 的 B222 随批 1 销号，§3.3 已无 ai 协议面条目）：
 
 | # | 差什么（一句话） |
 |---|---|
 | ~~B81~~ | ✅ **批 6 已销（2026-10-15，[`docs/15`](15-ai-batch6-oauth-identity-design.md)）**：~~OAuth 分支两面未移植~~ 系统前缀块＋工具名双向映射＋身份 beta 对＋伪装版本 2.1.280 全落 |
-| B85 | read.ts：图片自动缩放 ＋ 非视觉模型注记（全仓无 `javax.imageio`） |
+| ~~B85~~ | ✅ **批 9 已销（2026-10-16，[`docs/18`](18-ai-batch9-image-resize-chain-design.md)，commits `fbf429c2`/`8de250a3`）**：~~read.ts 图片自动缩放＋非视觉模型注记~~ ImageIO 替代 photon 落 `ImageProcessor`/`ImageResizer`/`ExifOrientation`/`WebpDimensions`（BMP→PNG 恒转、PNG 先/JPEG 阶梯、0.75 收边）；`ReadTool` 省略/注记两路径；`PiToolRunner` after_tool 后统一归一（MCP/截图大图）；嗅探加严（0xF7/aPNG/BMP 校验）；`ImagePolicy` 晚绑定（`images.autoResize ?? true`＋当前模型 resize 档＋视觉位）。窄差：WebP 限内头解析直通/超省略、BICUBIC 非 Lanczos3；真空臂：@file/PromptImage 零生产者、剪贴板、TUI Kitty、`maxPer*`、codemode structuredContent |
 | B94 | 8 个内置工具的 `promptSnippet`/`promptGuidelines` 声明缺失（补片段时须同时把 ContextAssembler 回落描述改回 pi 的稀疏规则） |
 | B95 | `docs` 段无生产者（ContextAssembler 不传 DocumentationPaths） |
 | B99 | `supportsMidConvoEffort` 半可移植：字段 ＋ 两个 beta ＋ `insertThinkingLevelMessages`（SDK 无 BlockBinding） |
@@ -74,7 +75,8 @@
 编号是 `map/02-ai.md` 的单元号。2026-10-12 批 0 后原 21 条中 11 条移出分母（见 §4）、#87 转对齐；
 **批 3a（2026-10-14）#34/#86/#91 转对齐出表、#90 转存疑（见 §3）**；
 **批 5（2026-10-15）#37 转对齐出表（responseModel/diagnostics/durationMs/thinkingLevel，+1）**；
-**批 7（2026-10-16）#95/#96 转对齐出表（ChatGPT 订阅登录、copy-code，+2）**。
+**批 7（2026-10-16）#95/#96 转对齐出表（ChatGPT 订阅登录、copy-code，+2）**；
+**批 9（2026-10-16）#90 存疑→对齐（图片缩放/注记消费链，B85 销号，+0.5；消费者在 agent-core/coding-agent，见 [`docs/18`](18-ai-batch9-image-resize-chain-design.md)）**。
 
 **ContentBlock（1）**：#8 `ToolUseContent.namespace`（随 MCP 包 B203；仅 Responses 车道 round-trip）。
 
@@ -82,7 +84,7 @@
 
 ---
 
-## 3. 形状差（地图判「存疑」，计半分；19 条，未认账为缺口）
+## 3. 形状差（地图判「存疑」，计半分；18 条，未认账为缺口）
 
 这些是「Java 有、pi 无」或「两侧形状不同、行为近似」。**不直接当缺口清**；收口任一条前先定
 「形状差算不算偏差」，认账后转 §1 立 B 号，或正式记入 `docs/04` §4 裁决不做。
@@ -96,7 +98,7 @@
 | Provider / wire（2） | `ollama` provider 是 Java 独有扩展 · pi-messages wire 线格自造（**B18 已裁决不做**，04 §4，此条留作地图索引） |
 | ContentBlock（2） | #4 `UrlImageContent`、#5 `DiffContent` 均为 Java 独有 |
 | StreamEvent（2） | #20 `error` 载 `Throwable` 而非 `AssistantMessage` · #21 `UsageInfo` 事件 Java 独有 |
-| 元数据（5） | #24 `Model.input` 数组 vs `ModelCapability`＋`supportsImageInput` · #28 `Model.reasoning` vs `THINKING` 能力位 · #38 `ToolResultMessage.usage` 留形状无生产者（`details` 已接） · #88 `JsonObject` 以 `Map`＋Jackson 表达（裁决零代码） · **#90（批 3a）** `InputLimits` 三层元数据与 models.json 深合并已落，但图片缩放/注记消费链（B85）在 coding tools 另案，ai 层字段零消费者 |
+| 元数据（4） | #24 `Model.input` 数组 vs `ModelCapability`＋`supportsImageInput` · #28 `Model.reasoning` vs `THINKING` 能力位 · #38 `ToolResultMessage.usage` 留形状无生产者（`details` 已接） · #88 `JsonObject` 以 `Map`＋Jackson 表达（裁决零代码）。~~#90~~ **批 9 转对齐出表**（缩放/注记消费链落地，见 [`docs/18`](18-ai-batch9-image-resize-chain-design.md)） |
 | 鉴权（2） | #46 多 profile 凭证（Java 扩展） · #47 models.json 自定义 provider 形状不同（~~#97 共享回调服务器/登录页批 7 已转对齐~~：`LoopbackCallbackServer`/`OAuthPages` 落地） |
 | 横切（4） | #68 `assistant-message-frame` 对应物在 web/protocol（跨模块） · #75 `DeferredHandle` 两侧同状无生产者 · #76 lazy `lazyApi`/`lazyStream` vs `ProviderFactory`/`Protocol` |
 
@@ -148,6 +150,17 @@
   凭证加 clientId/scopes 两字段，旧文件兼容；注册键 `openai`）、**#96 缺失→对齐**
   （`AnthropicOAuthFlow`：browser 53692→0→无服务器回落＋copy-code 两法 select、JSON 交换/
   刷新、−5min）、**#97 存疑→对齐**（共享服务器/品牌页/竞速）。加权 203.0→205.5（+2.5）。
+- **2026-10-16 批 9（图片缩放/注记消费链，B85）闭环**（设计 [`docs/18`](18-ai-batch9-image-resize-chain-design.md)，
+  commits `fbf429c2` agent-core／`8de250a3` coding-agent）：JDK ImageIO 替代 photon——
+  MIME 归一（BMP 等异类恒转 PNG，不受 autoResize 门）、2000/2000/4.5MiB/80 默认档、
+  PNG 先＋JPEG 质量阶梯、0.75 收边到 1×1；EXIF 八向（仅重编码路径应用）；WebP 无 JDK
+  解码器 ⇒ 限内 RIFF 头取尺寸原字节直通、超限走省略（窄差 D1）。两收口点：`ReadTool`
+  （失败省略文本/非视觉逐字注记）与 `PiToolRunner`（after_tool 钩子后统一归一，MCP/截图
+  大图失败留原图）；嗅探加严照 pi（JPEG 0xF7、IHDR/aPNG、BMP 结构校验）；`ImagePolicy`
+  经 ToolContext 晚绑定（`images.autoResize ?? true`＋当前模型 `inputLimits.images.resize`
+  ＋视觉位）。**map #90 存疑→对齐（+0.5 ⇒ 206/219＝94.1%）**。真空臂登记：@file/PromptImage
+  零生产者（fileArgs 主代码无消费者）、剪贴板、TUI Kitty 转码器/设置 UI、`maxPer*`
+  （pi 也零消费）、read structuredContent（codemode）。agent-core 719＋coding-agent 552 全绿。
 - **25 个长尾 provider 端点 ＋ 4 条对应鉴权**：权重 0、R2/R5 排除出分母，完整清单见 `map/02-ai.md`
   加权汇总「被排除的单位」。
 - **B18**（pi-messages 不按 pi 改造）、**B130/B132**（zai sre、together/baseten/fireworks 携带集零差，

@@ -100,7 +100,7 @@
 
 | # | 条目 |
 |---|---|
-| B85 | read.ts：图片自动缩放 ＋ 非视觉模型注记（**批 3a 注：`inputLimits` 三层元数据与 models.json 深合并已落，map/02 #90 转存疑；本项剩余＝sharp 替代/缩放/注记消费链**） |
+| ~~B85~~ | ~~read.ts：图片自动缩放 ＋ 非视觉模型注记~~ ✅ **已销号 2026-10-16（批 9，[`docs/18`](18-ai-batch9-image-resize-chain-design.md)，commits `fbf429c2`/`8de250a3`）**：JDK ImageIO 替代 photon——`ImageProcessor`（MIME 归一、BMP→PNG 转换**不受 autoResize 门控**、hints 组装）、`ImageResizer`（2000/2000/4.5MiB/80 默认档、PNG 先＋JPEG 质量阶梯 [80,85,70,55,40]、0.75 收边到 1×1）、`ExifOrientation`（JPEG/WebP TIFF 0x0112 解析＋八向仿射，仅重编码路径应用）、`WebpDimensions`（RIFF VP8/VP8L/VP8X 头取尺寸）；`ReadTool` 走处理器（失败＝省略文本、非视觉模型加逐字注记、描述补 "Images are sent as attachments."）；`PiToolRunner` 在 after_tool 钩子后对**所有**工具结果归一（MCP/截图大图，失败留原图、hints 追文本）；`PathUtils` 嗅探加严照 pi（JPEG 0xF7 拒、PNG IHDR/aPNG、BMP 结构校验）；策略经 `ToolContext` 晚绑定 `ImagePolicy`（`images.autoResize ?? true`＋当前模型 `inputLimits.images.resize`＋视觉位，setModel/改设置下次执行即生效）。**窄差**（docs/18 §5 D1-D10）：WebP 限内头解析直通/超省略、BICUBIC 非 Lanczos3、JPEG alpha flatten 白底、无 worker（已在虚拟线程）。**真空臂登记**：@file/`PromptImage` 零生产者、剪贴板、TUI Kitty 转码器/设置 UI、`maxPer*` pi 也零消费、read structuredContent（codemode）。agent-core 719＋coding-agent 552 全绿；map #90 存疑→对齐（+0.5→206/219＝94.1%） |
 | B94 | 8 个内置工具的 `promptSnippet`/`promptGuidelines` 声明 |
 | B95 | `docs` 段无生产者（ContextAssembler 不传 DocumentationPaths） |
 | ~~B97~~ | ~~3 个内置 (provider,modelId) 与 pi 目录不匹配~~ ✅ **批 3a（2026-10-14）销号**：手写 id 全删（deepseek-v4-flash→deepseek-flash、mistral-large/small、kimi-k2.5、glm-4.5-air、mimo-v2、qwen3-*、ling-1t/ring 等被 npm 分片真值取代），Java 独有的 text-embedding-3-* 两条同步移除（embed CLI flag 默认值不查目录，保留） |

@@ -77,14 +77,14 @@ pi 工具定义现在**只有一处**：`packages/coding-agent/src/core/tools/`�
 | # | 工具 | pi 有 | java 有 | 判定 | 权重 | 证据（**新锚实读**） |
 |---|---|---|---|---|---|---|
 | 1 | `bash` | ✅ | ✅ | **存疑** | **3** | pi `{command, timeout?}`，**无默认超时**，上限 `2147483 s`（`core/tools/bash.ts:22`，`resolveTimeoutMs :27-37`，schema `:40-43`）。java 同参数，但**默认 120 s / 上限 600 s**（`BashTool.java:36-39`，描述 `:64,:73`）⇒ 模型不传 timeout 时行为不同 |
-| 2 | `read` | ✅ | ✅ | **对齐** | **3** | pi `{path, offset?, limit?}`（`core/tools/read.ts:15-17`）；java 同（`ReadTool.java:31`）。图片按 mime 分派成 `ImageContent`（`ReadTool.java:87-93` vs pi `core/tools/read.ts:109-141`） |
+| 2 | `read` | ✅ | ✅ | **对齐** | **3** | pi `{path, offset?, limit?}`（`core/tools/read.ts:15-17`）；java 同（`ReadTool.java:31`）。图片经批 9 缩放管线（`ReadTool.java` readImage：归一/转换/省略/非视觉注记，vs pi `core/tools/read.ts:88-153`） |
 | 3 | `write` | ✅ | ✅ | **对齐** | **3** | pi `{path, content}`（`core/tools/write.ts`）；java 同（`WriteTool.java:31`）＋ 同形状 `FileMutationQueue`（`WriteTool.java:29`） |
 | 4 | `edit` | ✅ | ✅ | **对齐** | **3** | pi `{path, edits:[{oldText,newText}]}`（`core/tools/edit.ts`）；java 同（`EditTool.java:39`） |
 | 5 | `grep` | ✅ | ✅ | **存疑** | **3** | pi `{pattern, path?, glob?, ignoreCase?, literal?, context?, limit?}` + gitignore + 默认 100/50KB 截断（`core/tools/grep.ts:22-32,41`，截断常量 `core/tools/truncate.ts:11-12`）。java 只有 `{pattern, path?, glob?}`（`GrepTool.java:30`）⇒ **缺 4 参数** |
 | 6 | `find` | ✅ `find` | ✅ `glob` | **存疑** | **2** | **名字不同**；pi `{pattern, path?, limit?}` 默认 1000，走 fd/ripgrep 尊重 gitignore（`core/tools/find.ts:27-31,41,112`）。java `{pattern, path?}`，NIO `PathMatcher` 全树 walk（`GlobTool.java:27`）⇒ 缺 limit + 无 gitignore + 无截断 |
 | 7 | `ls` | ✅ | ✅ | **存疑** | **2** | pi `{path?, limit?}`（默认 500，`core/tools/ls.ts:12-13,23`）；java `{path?, recursive?}`（`LsTool.java:25,43-44`）⇒ **参数集不同** |
 | 8 | `powershell` | ✅ | ❌ | **缺失** | **1** | pi `core/tools/powershell.ts`，工具名进 `allToolNames`（`core/tools/index.ts:96-104`）。java 仅系统提示词里按名条件拼过文案（`SystemPrompts.java:189-199`），**无工具实现** |
-| 9 | `image`（读图处理器） | ✅ | ✅ | **对齐** | **1** | pi `core/tools/read.ts:109-141` + `utils/image-process.ts` + `utils/mime.ts`；java `PathUtils.detectImageMimeType`/`encodeBase64`（`ReadTool.java:87-93`） |
+| 9 | `image`（读图处理器） | ✅ | ✅ | **对齐** | **1** | pi `core/tools/read.ts` + `utils/image-process.ts` + `utils/image-resize-core.ts` + `utils/mime.ts`；java **批 9（2026-10-16）**：`tool/image/{ImageProcessor,ImageResizer,ExifOrientation,WebpDimensions,ToolResultImages}.java`（ImageIO 替代 photon）＋ `PathUtils.detectImageMimeType` 加严（0xF7/aPNG/BMP 校验）＋ `PiToolRunner` after_tool 后统一归一；窄差见 docs/18 §5 |
 
 **Σ权重 21**（对齐 10.0 ／ 存疑 5.0 ／ 缺失 0 ＝ 15.0，71.4%）。
 
