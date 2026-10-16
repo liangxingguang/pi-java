@@ -23,6 +23,11 @@
 >   map/02 与 docs/06 §2/§3 翻判定；新增行为（动态客户端/1455 硬失败/品牌页/竞速/
 >   copy-code 两法）由 `LoopbackCallbackServer`/`OAuthPages`/`Pkce`/`AnthropicOAuthFlow`/
 >   `ChatGptOAuthFlow` 承接，commits `55804990`/`073993f7`/`2f6d2e78`。
+>   **2026-10-16 批 10（Anthropic workload identity federation，详稿 docs/19）已闭环**：
+>   本批无 B 号——map/02 单元 #98（缺失→对齐）直接在 map/02 与 docs/06 §2 翻判定；
+>   原「java 要逆协议」裁决作废（BOM 已钉的 anthropic-java 2.66.0 协议面全包），java 纯接线：
+>   `Credentials` 末位回落、`AnthropicMessagesApi` federation 车道、跨请求基座缓存，
+>   commits `81109b91`/`fcf9ceb8`。
 >   换锚裁决与依据在 git 历史
 >   （`docs/11-pi-reanchor-ruling.md`，已随过程文档清理删除）。
 > - 判据是**行为**（`bin pi` 主流发布版可达的功能与表现），不是文档、API 形状或文件清单。

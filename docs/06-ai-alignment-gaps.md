@@ -70,17 +70,16 @@
 
 ---
 
-## 2. 地图判「缺失」、但没有 B 号的能力单元（2 条，计分母）
+## 2. 地图判「缺失」、但没有 B 号的能力单元（1 条，计分母）
 
 编号是 `map/02-ai.md` 的单元号。2026-10-12 批 0 后原 21 条中 11 条移出分母（见 §4）、#87 转对齐；
 **批 3a（2026-10-14）#34/#86/#91 转对齐出表、#90 转存疑（见 §3）**；
 **批 5（2026-10-15）#37 转对齐出表（responseModel/diagnostics/durationMs/thinkingLevel，+1）**；
 **批 7（2026-10-16）#95/#96 转对齐出表（ChatGPT 订阅登录、copy-code，+2）**；
-**批 9（2026-10-16）#90 存疑→对齐（图片缩放/注记消费链，B85 销号，+0.5；消费者在 agent-core/coding-agent，见 [`docs/18`](18-ai-batch9-image-resize-chain-design.md)）**。
+**批 9（2026-10-16）#90 存疑→对齐（图片缩放/注记消费链，B85 销号，+0.5；消费者在 agent-core/coding-agent，见 [`docs/18`](18-ai-batch9-image-resize-chain-design.md)）**；
+**批 10（2026-10-16）#98 转对齐出表（Anthropic workload identity federation，+1；协议面 anthropic-java 2.66.0 代劳，java 纯接线，见 [`docs/19`](19-ai-batch10-federation-design.md)）**。
 
 **ContentBlock（1）**：#8 `ToolUseContent.namespace`（随 MCP 包 B203；仅 Responses 车道 round-trip）。
-
-**鉴权（1）**：#98 Anthropic workload identity federation（5 个 `ANTHROPIC_*` env，**用户裁决后排**）。
 
 ---
 
@@ -161,6 +160,19 @@
   ＋视觉位）。**map #90 存疑→对齐（+0.5 ⇒ 206/219＝94.1%）**。真空臂登记：@file/PromptImage
   零生产者（fileArgs 主代码无消费者）、剪贴板、TUI Kitty 转码器/设置 UI、`maxPer*`
   （pi 也零消费）、read structuredContent（codemode）。agent-core 719＋coding-agent 552 全绿。
+- **2026-10-16 批 10（Anthropic workload identity federation，#98）闭环**（设计
+  [`docs/19`](19-ai-batch10-federation-design.md)，commits `81109b91` ai／`fcf9ceb8` coding-agent）：
+  原裁决「pi 借官方 SDK 白拿 OIDC 交换，java 要逆协议」**作废**——BOM 已钉的 anthropic-java
+  2.66.0 自带全链路（交换体四字段＋两可选、双 beta 头、token 缓存三级刷新/401 invalidate、
+  身份 token 文件逐次重读，与 JS SDK 0.124.0 逐字同构，jar 实测），java 只写接线：
+  `AuthKind.FEDERATION`、`RecordedCredential` 加 `env` 组件（pi `{auth, env, source}` 三件套）、
+  `Credentials` 末位回落（3 必需＋2 可选，`resolveApiKey` 滤 blank）、`DefaultProviders`
+  `extra["federationEnv"]` 过桥、`AnthropicMessagesApi` federation 车道＋`AnthropicFederationSupport`
+  （跨请求基座缓存键 baseUrl＋五值，`withOptions` 克隆挂头共享 token 缓存——3 stream⇒1 交换
+  夹具实测）。守卫裁决：Java SDK 凭证链显式 opt-in（`configurationProvider`/`fromEnv`），不设即
+  不跑，无需 `PiAnthropic` 等价物——header 自有鉴权零交换夹具钉死。**map #98 缺失→对齐
+  （+1 ⇒ 207/219≈94.5%）**，§2 鉴权节清空，计分母缺失仅剩 #8（随 MCP 包 B203）。
+  全量 `mvn clean verify` 11 模块绿。
 - **25 个长尾 provider 端点 ＋ 4 条对应鉴权**：权重 0、R2/R5 排除出分母，完整清单见 `map/02-ai.md`
   加权汇总「被排除的单位」。
 - **B18**（pi-messages 不按 pi 改造）、**B130/B132**（zai sre、together/baseten/fireworks 携带集零差，

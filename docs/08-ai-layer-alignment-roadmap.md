@@ -11,7 +11,7 @@
 
 1. **bedrock / vertex / azure / radius / codex 五家维持 w0 排除**。取证修正：五家在 bin pi `/login` 里技术上全部可见（`interactive-mode.ts:5788-5818` 枚举全部注册 provider 无白名单，`providers/all.ts:134-176` 无条件注册），w0 依据是「主流 7 家」**权重口径**而非技术不可达；azure（responses 线已有）、radius（pi-messages 线＋OAuth 工厂已有）边际成本最低，口径若松动优先这两家。
 2. **模型目录数据＝锚点 npm 包数据转 Java 资源**（批 3）。
-3. **做** ChatGPT 订阅登录（#95）；Anthropic workload identity federation（#98，L）**后排**。
+3. **做** ChatGPT 订阅登录（#95）；Anthropic workload identity federation（#98，L）**后排**（批 10 已闭环 2026-10-16）。
 
 ## 2. 批 0：裁决翻案（纯文档，先于代码）
 
@@ -55,7 +55,7 @@
 - **#8 ToolUseContent.namespace**：随 MCP 接线 B203（ai 侧仅 responses 车道 round-trip，`openai-responses-shared.ts` 六处稀疏透传）。
 - **B235 agent_settled.aborted**：coding-agent 面，ai 零触点。
 - **B148 的消费侧**（/session 费用分组、/bug diagnostics.json、cache-warmer）随各自模块另案，ai 只做字段＋流内触点（批 5）。
-- **#98 federation**：后排（L；pi 借官方 SDK 白拿 OIDC 交换，java 要逆协议）。
+- ~~**#98 federation**~~：✅ **批 10（2026-10-16）已闭环**（[`docs/19`](19-ai-batch10-federation-design.md)，commits `81109b91`/`fcf9ceb8`）——原裁决「java 要逆协议」**作废**：BOM 已钉的 anthropic-java 2.66.0 自带全链路（交换常量与 JS SDK 0.124.0 逐字同构，jar 实测），java 只写接线（`Credentials` 末位回落、`AnthropicMessagesApi` federation 车道、跨请求基座缓存共享 token 缓存；守卫＝SDK 凭证链显式 opt-in）。
 
 ### 2.4 账面推演（2026-10-12 复核）
 
@@ -72,8 +72,9 @@
   **批 6（B81/B231）2026-10-15 闭环后仍 203.0/219＝92.7%**：台账行为项不占单元。
   **批 7（#95/#96/#97）2026-10-16 闭环后 → 205.5/219＝93.8%**：#95/+1、#96/+1、#97 存疑→对齐 +0.5。
   **批 9（B85/#90 图像消费链）2026-10-16 闭环后 → 206.0/219＝94.1%**：#90 存疑→对齐 +0.5（消费者落 agent-core/coding-agent）。
-- **残余 13.0 权重**（为什么不是 100%）：
-  - 缺失 2：**#8 namespace**（随 MCP 包 B203）、**#98 federation**（用户裁决后排）；
+  **批 10（#98 federation）2026-10-16 闭环后 → 207.0/219≈94.5%**：#98 缺失→对齐 +1（anthropic-java 2.66.0 代劳协议面，java 纯接线）。
+- **残余 12.0 权重**（为什么不是 100%）：
+  - 缺失 1：**#8 namespace**（随 MCP 包 B203）；
   - 存疑方言 11：w1×10（#4/#5 java 独有 ContentBlock、#7/#63 pi-messages 自造线格、#24/#28 形状等价、#38、#46 java 扩展、#75/#76/#88）＋w2×6（#18 ollama、#20/#21 内部方言线上已扁化、#47 models.json、#68 跨 web/protocol）。
     其中 java **独有扩展**（#4/#5/#18/#46）与**行为等价形状**（#24/#28/#88/#75/#76）可另行逐条裁决——认「行为相同」即翻对齐，不认就永久挂存疑；它们不是「pi 有 java 无」的缺口。
 - 跨模块消费者不影响 ai 模块分，但用户可感知面在那些包里闭环：CacheWarmer、B94/B95 系统提示段、B148 的 /session 费用与 /bug、B234 的 "Took" 卡、B235。
@@ -93,6 +94,7 @@
 | 7 | ✅ **已闭环 2026-10-16**（ai 测全绿；加权 92.7→**93.8%**，203.0→205.5；commits `55804990`/`073993f7`/`2f6d2e78`，设计稿 `44d05062`） | #97 共享回调服务器（固定端口/state/品牌页/竞速）→ #95 动态客户端注册；#96 copy-code 同面并入。窄差裁决见 [`docs/16`](16-ai-batch7-shared-callback-chatgpt-design.md) §4 | M-L＋M | **[docs/16](16-ai-batch7-shared-callback-chatgpt-design.md)** |
 | 8 | ✅ **已闭环 2026-10-16**（ai **1698** 测全绿；加权不变 **93.8%**，台账行为项不占地图单元；commits `26995e90`/`efa66016`） | B240 销号：ChatGPT 订阅 token（provider=openai＋官方 baseUrl 严格相等＋非 `sk-`）裁 `prompt_cache_retention`/`prompt_cache_options`/`max_output_tokens`/`temperature` 四键（**`prompt_cache_key` 不裁**，锚点纠正台账旧文）；重试三码取证时已在 `RetryableError`；`filterAllModels` 真空（Java 无 classifier 面，随 R5） | S | **[docs/17](17-ai-b240-chatgpt-request-time-design.md)** |
 | 9 | ✅ **已闭环 2026-10-16**（agent-core **719**＋coding-agent **552** 测全绿；加权 93.8→**94.1%**，205.5→206.0；commits `fbf429c2`/`8de250a3`/`89ee3495`） | B85 销号、map #90 存疑→对齐（+0.5）：JDK ImageIO 替代 photon 的图片缩放/注记消费链（`ImageProcessor`/`ImageResizer`/`ExifOrientation`/`WebpDimensions`），`ReadTool` 省略/非视觉注记两路径，`PiToolRunner` after_tool 后统一归一（MCP/截图大图），`ImagePolicy` 晚绑定 `images.autoResize`＋当前模型 resize 档。窄差 D1-D10 与真空臂见 [`docs/18`](18-ai-batch9-image-resize-chain-design.md) §5/§6 | M（跨 agent-core/coding-agent） | **[docs/18](18-ai-batch9-image-resize-chain-design.md)** |
+| 10 | ✅ **已闭环 2026-10-16**（全量 clean verify 11 模块绿；加权 94.1→**94.5%**，206.0→207.0；commits `81109b91`/`fcf9ceb8`，设计稿 `4efb6eea`） | #98 销号：Anthropic workload identity federation——`AuthKind.FEDERATION`、`RecordedCredential` 加 `env` 组件、`Credentials` 末位回落（3 必需＋2 可选，source 文案逐字；`resolveApiKey` 滤 blank）、`DefaultProviders` extra 过桥、`AnthropicMessagesApi` federation 车道＋`AnthropicFederationSupport`（静态基座缓存键 baseUrl＋五值、`withOptions` 克隆挂头共享 token 缓存：3 stream⇒1 交换实测）；守卫裁决＝Java SDK 凭证链显式 opt-in 无需 `PiAnthropic` 等价物（header 自有鉴权零交换夹具钉死）。**关键转向**：原「java 要逆协议」作废，anthropic-java 2.66.0 协议面全包 | M | **[docs/19](19-ai-batch10-federation-design.md)** |
 
 顺序依据：批 1 纯 ai 内、便宜、收口一致性；批 3 是 B232/B97 数据正确性的大头且为 CacheWarmer/thinking 层供字段；批 4/5 依赖批 3 字段；批 6/7 同碰 OAuth 装配，连着做不拆两次；批 8/9 均为台账挂账的收口项（批 9 是批 3a 起明示「随 coding tools 另案」的 #90 消费链）。
 
