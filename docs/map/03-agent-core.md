@@ -102,7 +102,7 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | 3 | `runAgentLoop`/`runAgentLoopContinue` 前置条件 | L | **对齐** | **3** | `agent/src/agent-loop.ts:135-150` | `PiLoop.java:266+`；`PiLaneEngine.java:87,122` | —— |
 | 4 | 工具批次 `terminate` 取**全部**（`every`） | L | **对齐** | **2** | `agent/src/agent-loop.ts:690-692` | `PiLoopTools.java:51-52` | —— |
 | 5 | `length` 截断 ⇒ 本回合**全部**工具调用判失败 | L | **对齐** | **2** | `agent/src/agent-loop.ts:264-272,470-503` | `PiLoopRunner.java:212+` | —— |
-| 6 | **`finishTurn`（原 `shouldStopAfterTurn`）** | L | **存疑（形状）** | **3** | `agent/src/types.ts:146-157,264`；调用 `agent-loop.ts:252,286`——返 `{action:"continue"\|"end"}`，能强制多跑一轮 | `PiLoop.java:237`（`StopHook` 返布尔，`:278`）；`HookSystem.java:98,270`；`PiLaneEngine.java:439-441` | **B159** |
+| 6 | **`finishTurn`（原 `shouldStopAfterTurn`）** | L | **对齐** | **3** | `agent/src/types.ts:146-158`；调用 `agent-loop.ts:252,286`——返 `{action:"continue"\|"end"}`，能强制多跑一轮 | `PiLoop.java`（`TurnDecision`＋`FinishTurnHook`、`NextTurnContext.newMessages`）；`PiLoopRunner`（turn_end 前调用、错误路照调、explicitContinuation 三段清零）；`HookSystem.fireFinishTurn`（END 先赢否则 CONTINUE）；`PiLaneEngine` | ~~B159~~ 销号（2026-10-17 批 agent-core-1） |
 | 7 | `prepareNextTurn` + `AgentLoopTurnUpdate` | L | **对齐** | **3** | `agent/src/agent-loop.ts:186`；`types.ts:159-169,278-283` | `PiLoop.java:198-224`；`PiLoopRunner.java:169` | —— |
 | 8 | `transformContext` | L | **对齐** | **3** | `agent/src/agent-loop.ts:390-391`；`types.ts:244` | `HookSystem.java:53,249` | —— |
 | 9 | 工具两相端口（immediate / prepared）与 end 次序 | L | **对齐** | **3** | `agent/src/agent-loop.ts:508-660,707-945` | `PiLoop.java`（两相）；`PiLoopTools.java:90-186` | —— |
@@ -113,13 +113,13 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | 14 | `QueueMode.All` 的宿主层语义 | L | **存疑** | **2** | `agent/src/types.ts:52-55`（`"all" \| "one-at-a-time"`） | `QueueMode.java`；引擎侧 drain 分支 `QueueManager.java:149-157`；宿主门语义未全核 | **F1** |
 | 15 | 溢出恢复（compact-and-retry 一次） | L | **对齐** | **2** | `core/agent-session.ts:405,2945-3041`（`_overflowRecoveryAttempted`） | `PostRunCompactionCheck.java` | —— |
 | 16 | 轮内阈值压缩门 | L | **对齐** | **3** | `core/agent-session.ts:776-905`（`_compactBeforeNextAssistantResponse`） | `ContextUsageEstimator.java:200-201`（`shouldCompact`） | —— |
-| 17 | **手动 `/compact` 先 `abort()` 当前运行** | L | **缺失** | **2** | `core/agent-session.ts:2764-2767`（`compact()` 开头 `await this.abort()`，随后才 `compaction_start`） | `CompactionExecutor.java:80-117` 与 `AgentSession.java:716-733`（直入 `harness.compact`）**均无 abort** | **A4/F4** |
+| 17 | **手动 `/compact` 先 `abort()` 当前运行** | L | **对齐** | **2** | `core/agent-session.ts:2764-2767`（`compact()` 开头 `await this.abort()`，随后才 `compaction_start`） | coding-agent `AgentSession.compact` 三手动入口 abort-first＋`harness.waitForIdle`（harness 零改动；pi abort 还中止在飞压缩 ⇒ 仍 **B36**） | ~~A4/F4~~ 销号（2026-10-17 批 agent-core-1） |
 | 18 | 压缩后重建工作副本（`NextTurnUpdate.context`） | L | **对齐** | **3** | `core/agent-session.ts`（compact → next turn context） | `PiLoop.java:198-224` | —— |
 | 19 | 摘要 prompt 前缀/后缀逐字节 | C | **对齐** | **2** | `core/messages.ts:11-24`（`COMPACTION_SUMMARY_*` / `BRANCH_SUMMARY_*`） | `ContextEntries.java:33-38` | —— |
 | 20 | 上下文计量（用量优先 + 尾字符估算） | C | **对齐** | **3** | `core/compaction/compaction.ts:196-225`（`estimateProjectedContextTokens :227`） | `ContextUsageEstimator.java:129-134` | —— |
 | 21 | `getLastAssistantUsage` | C | **对齐** | **2** | `core/compaction/compaction.ts:166` | `ContextUsageEstimator.java:87`（`assistantUsageOf`） | —— |
 | 22 | `findCutPoint` / `findTurnStartIndex` | C | **对齐** | **2** | `core/compaction/compaction.ts:446,412` | `CompactionService.java:211,268-269`（调用 `:83`） | —— |
-| 23 | 输出截断（2000 行 / 头/尾两种） | C | **存疑** | **3** | pi `core/tools/truncate.ts:11-12` = **2000 行 / 50KB（51,200）**；read 描述 `core/tools/read.ts:96` | `TruncationUtils.java:16-17` = 2000 行 / **100,000 字节**（`ReadTool.java:42-43`）⇒ **字节预算约两倍**，模型可见文案即不同 | **B158** |
+| 23 | 输出截断（2000 行 / 头/尾两种） | C | **对齐** | **3** | pi `core/tools/truncate.ts:11-12` = **2000 行 / 50KB（51,200）**；read 描述 `core/tools/read.ts:96` | `TruncationUtils.java:18` = 2000 行 / **51,200**；BashTool/ReadTool 描述与四处注记全由常量现算，`BashUpdateEmitter` 快照同值（夹具钉两口径合一） | ~~B158~~ 销号（2026-10-17 批 agent-core-1） |
 | 24 | **branch summary 生成** | C | **缺失** | **1** | `core/compaction/branch-summarization.ts:108,195`（`collectEntriesForBranchSummary`/`prepareBranchEntries`） | 只有 `Entry.BranchSummary` 类型 + 文案 + 读侧投影（`CompactionService.java:363`）；**无生成器** | **B1** |
 | 25 | **会话树导航 `navigateTree`** | L | **缺失** | **1** | `core/agent-session.ts:3964-3990` | 全仓零命中 | B1 同族 |
 | 26 | **per-model 压缩设置** | C | **对齐** | **3** | `core/settings-manager.ts:831-866`（`modelOverrides`，`getCompactionSettings(model)`） | `AgentSession.java:420`（`compactionResolver`）；`AgentHarness.java:136-140` 按车道当前模型现解析 | —— |
@@ -137,7 +137,7 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | 38 | 钩子 `after_tool` ⇒ **`afterToolCall`** | H | **对齐** | **2** | `agent/src/agent.ts:124`；`types.ts:341` | `HookSystem.java:78,185` | —— |
 | 39 | ~~钩子 `before_compaction`~~ | H | **作废（R1）** | 0 | 扩展事件 `session_before_compact`（`core/extensions/types.ts:772`）→ 属 04 | `HookSystem.java:83,221` | —— |
 | 40 | ~~钩子 `before_navigation`~~ | H | **作废（R1）** | 0 | 导航 hook 已删（导航本体见 #25） | `HookSystem.java:88,234` | —— |
-| 41 | 钩子 `should_stop_after_turn`/`prepare_next_turn` ⇒ **`finishTurn`/`prepareNextTurn`** | H | **存疑（形状）** | **3** | `agent/src/types.ts:152-169,278` | `HookSystem.java:98,103,270,289` | **#6 同根 B159** |
+| 41 | 钩子 `should_stop_after_turn`/`prepare_next_turn` ⇒ **`finishTurn`/`prepareNextTurn`** | H | **对齐** | **3** | `agent/src/types.ts:149-158`；合并 `agent-session.ts:891-895` | `HookSystem.onFinishTurn`/`fireFinishTurn`（END 短路即赢、否则 CONTINUE、全弃权 null；注册键 `should_stop_after_turn` 保留）；`ShouldStopAfterTurnHook` 返 `TurnDecision`（`FALSE`「不许停」方言删除） | ~~#6 同根 B159~~ 销号（2026-10-17 批 agent-core-1） |
 | 42 | ~~钩子 `before_resume`（java 独有）~~ | H | **作废（R1）** | 0 | pi 无对应（旧图即标 java 多） | `HookSystem.java:48,118` | —— |
 | 43 | ~~effect gate（`gate.admit`）~~ | A | **作废（R1）** | 0 | `git grep effect-gate ea448f454 -- packages/*/src` **零命中** | 零命中 | —— |
 | 44 | ~~HarnessEvent 28 类~~ | E | **作废（R1）** | 0 | `lane_created`/`run_suspend`/`value_update` **零命中** | `HarnessEventBus.java` | A6 |
@@ -237,12 +237,12 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | 表 | 对齐 | 缺失 | 存疑 | 合计 | 完成度 |
 |---|---:|---:|---:|---:|---:|
 | 内置工具 | 4 | 1 | 4 | 9 | **44.4%** |
-| 能力单元（除工具） | 38 | 11 | 34 | 83 | **45.8%** |
+| 能力单元（除工具） | 41 | 10 | 33 | 83 | **49.4%** |
 | 整块缺失（无独立计权项） | 0 | 0 | 0 | 0 | —— |
-| **合计** | **42** | **12** | **38** | **92** | **45.7%** |
+| **合计** | **45** | **11** | **37** | **92** | **48.9%** |
 
-**未加权完成度 = 42 / 92 = 45.7%**。
-（对齐＋存疑视为「有」：80/92 = **87.0%**）
+**未加权完成度 = 45 / 92 = 48.9%**。
+（对齐＋存疑视为「有」：82/92 = **89.1%**）
 
 ---
 
@@ -251,19 +251,19 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|
 | 内置工具（9） | 21 | 15.0 | **71.4%** | 44.4% |
-| 能力单元（除工具，83） | 162 | 117.0 | **72.2%** | 45.8% |
-| **模块合计（92）** | **183** | **132.0** | **72.1%** | **45.7%** |
+| 能力单元（除工具，83） | 162 | 123.5 | **76.2%** | 49.4% |
+| **模块合计（92）** | **183** | **138.5** | **75.7%** | **48.9%** |
 
-**模块合计**：Σ权重 183 ／ Σ(w×c) 132.0 ／ **加权完成度 = 132.0/183 = 72.1%**（未加权 45.7%）。
+**模块合计**：Σ权重 183 ／ Σ(w×c) 138.5 ／ **加权完成度 = 138.5/183 = 75.7%**（未加权 48.9%）。
 
 按权重分层（能力单元表，83 条）：
 
 | 权重 | 条数 | Σ权重 | 对齐 | 存疑 | 缺失 | Σ(w×c) | 层完成度 |
 |---:|---:|---:|---:|---:|---:|---:|---:|
-| 3 | 22 | 66 | 13 | 9 | 0 | 52.5 | **79.5%** |
-| 2 | 35 | 70 | 21 | 12 | 2 | 54.0 | **77.1%** |
+| 3 | 22 | 66 | 16 | 6 | 0 | 57.0 | **86.4%** |
+| 2 | 35 | 70 | 22 | 12 | 1 | 56.0 | **80.0%** |
 | 1 | 26 | 26 | 4 | 13 | 9 | 10.5 | **40.4%** |
-| 合计 | 83 | 162 | 38 | 34 | 11 | 117.0 | 72.2% |
+| 合计 | 83 | 162 | 41 | 33 | 10 | 123.5 | 76.2% |
 
 ### 权重 3 的单元清单（22 条能力单元 + 5 条工具 = 27 条）
 
@@ -275,7 +275,7 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | #1 `AgentEvent` 变体 | 对齐 |
 | #2 双循环 | 对齐 |
 | #3 `runAgentLoop`/`continue` 前置条件 | 对齐 |
-| #6 `finishTurn`（原 `shouldStopAfterTurn`） | **存疑（形状）** |
+| #6 `finishTurn`（原 `shouldStopAfterTurn`） | 对齐 |
 | #7 `prepareNextTurn` + `AgentLoopTurnUpdate` | 对齐 |
 | #8 `transformContext` | 对齐 |
 | #9 工具两相端口与 end 次序 | 对齐 |
@@ -283,9 +283,9 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | #16 轮内阈值压缩门 | 对齐 |
 | #18 压缩后重建工作副本 | 对齐 |
 | #20 上下文计量 | 对齐 |
-| #23 输出截断 | **存疑** |
+| #23 输出截断 | 对齐 |
 | #26 per-model 压缩设置 | 对齐 |
-| #41 `should_stop`/`prepare_next_turn` 钩子 | **存疑（形状）** |
+| #41 `should_stop`/`prepare_next_turn` 钩子 | 对齐 |
 | #46 `AgentSessionEvent` 面 | **存疑** |
 | #51 `compaction_start`/`compaction_end` 事件 | 对齐 |
 | #52 `agent_end` 载荷 | **存疑** |
@@ -295,29 +295,29 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | #78 `latest()`/`find()` 会话定位范围 | **存疑** |
 | #100 系统提示作为 system 消息 | **存疑（形状）** |
 
-**权重 3 层 = 13 对齐 / 9 存疑 / 0 缺失**。
+**权重 3 层 = 16 对齐 / 6 存疑 / 0 缺失**。
 
-### 未加权 vs 加权的差（45.7% → 72.1%，**+26.4 pp**）
+### 未加权 vs 加权的差（48.9% → 75.7%，**+26.8 pp**）
 
-差来自分母内的权重分配。模块未得分（Σw−Σ(w×c) = 51.0）分布：
+差来自分母内的权重分配。模块未得分（Σw−Σ(w×c) = 44.5）分布：
 
 | 池 | 未得分 | 占比 |
 |---|---:|---:|
-| 能力单元 权重 3 | **13.5** | 26% |
-| 能力单元 权重 2 | **16.0** | 31% |
-| 能力单元 权重 1 | **15.5** | 31% |
-| 内置工具 | 6.0 | 12% |
-| 合计 | 51.0 | 100% |
+| 能力单元 权重 3 | **9.0** | 20% |
+| 能力单元 权重 2 | **14.0** | 31% |
+| 能力单元 权重 1 | **15.5** | 35% |
+| 内置工具 | 6.0 | 13% |
+| 合计 | 44.5 | 100% |
 
-⇒ **权重 2 层与权重 1 层并列最大未得分池**。**缺失的权重分布**：11 条缺失里 **0 条权重 3**、2 条权重 2（#17/#62）、9 条权重 1。
+⇒ **权重 2 层与权重 1 层并列最大未得分池**。**缺失的权重分布**：10 条缺失里 **0 条权重 3**、1 条权重 2（#62）、9 条权重 1。
 
-### 三条点名项的边际影响（分母 183）
+### 三条点名项（✅ 2026-10-17 批 agent-core-1 全数闭环；基线 132.0 → 138.5/183 ≈ **75.7%**）
 
-| 条目 | 权重 | 补齐后 | 边际 |
-|---|---:|---:|---:|
-| **A4 `/compact` 缺 abort-first**（#17，缺失→对齐） | 2 | 133.0/183 = 72.68% | **+0.55 pp** |
-| **#23 截断字节预算 →50KB**（B158，存疑→对齐） | 3 | 133.5/183 = 72.95% | **+0.82 pp** |
-| **#6 `finishTurn` 形状对齐**（B159，存疑→对齐；含 #41 再加 1.5） | 3 | 133.5/183 = 72.95% | **+0.82 pp**（含 #41 共 **+1.64 pp**） |
+| 条目 | 权重 | 闭环内容 |
+|---|---:|---|
+| **A4 `/compact` 缺 abort-first**（#17，缺失→对齐，+2.0） | 2 | coding-agent `AgentSession.compact` 三手动入口 abort-first＋`harness.waitForIdle`；harness 零改动（abortCompaction 仍 B36） |
+| **#23 截断字节预算 →50KB**（B158，存疑→对齐，+1.5） | 3 | `TruncationUtils.DEFAULT_MAX_BYTES` 100_000→51_200，描述/注记全链现算；快照与终局两口径合一 |
+| **#6 `finishTurn` 形状对齐**（B159，存疑→对齐；含 #41 共 +3.0） | 3×2 | `TurnDecision`＋`FinishTurnHook`（turn_end 前调用、错误路照调）、`explicitContinuation` 三段清零、`NextTurnContext.newMessages`、`HookSystem.fireFinishTurn` 合并（END 先赢否则 CONTINUE，FALSE 方言删） |
 
 ---
 

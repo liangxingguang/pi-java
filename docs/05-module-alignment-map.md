@@ -4,7 +4,8 @@
 > **基准**：pi @ **`ea448f454`**（2026-10-11，v1.1.0-22）／pi-java @ **`edc8749d`**（2026-10-12）。
 > 七份地图（含新建 `map/07-mcp.md`）已于 **2026-10-12 对两基准逐条重测完毕**（原 A16 销号）。
 > **同日 ai 批 0 裁决**（[`docs/08`](08-ai-layer-alignment-roadmap.md)）：map/02 有 11 单位出分母、#87 转对齐，
-> ai 85.0%→**94.5%**（219/207.0：批 1/批 2 闭环 2026-10-13 至 90.2%，**批 3a 模型目录数据面闭环 2026-10-14** 至 92.2%，**批 5 消息字段/终局计量闭环 2026-10-15** 至 92.7%，**批 7 共享回调/ChatGPT 订阅/copy-code 闭环 2026-10-16** 至 93.8%，**批 9 图片缩放/注记消费链闭环 2026-10-16** 至 94.1%，**批 10 federation 闭环 2026-10-16** 至 94.5%；批 2 为单元 #6 Mistral 窄角修复，加权不变；批 0 后 89.7%），合计 57.8%→**59.1%**（批 9／批 10 累计 +1.5/1385）；**批 3b／批 4／批 6／批 8 销号均为台账行为项，读数不变**；剩余计分母缺失仅 #8。
+> ai 85.0%→**94.5%**（219/207.0：批 1/批 2 闭环 2026-10-13 至 90.2%，**批 3a 模型目录数据面闭环 2026-10-14** 至 92.2%，**批 5 消息字段/终局计量闭环 2026-10-15** 至 92.7%，**批 7 共享回调/ChatGPT 订阅/copy-code 闭环 2026-10-16** 至 93.8%，**批 9 图片缩放/注记消费链闭环 2026-10-16** 至 94.1%，**批 10 federation 闭环 2026-10-16** 至 94.5%；批 2 为单元 #6 Mistral 窄角修复，加权不变；批 0 后 89.7%）；**批 3b／批 4／批 6／批 8 销号均为台账行为项，读数不变**；剩余计分母缺失仅 #8。
+> **agent-core 批 1 闭环 2026-10-17**：72.1%→**75.7%**（183/138.5，B158 截断 50KB＋B159/#41 finishTurn 裁决形状＋#17 /compact abort-first，+6.5）；合计 57.8%→**59.5%**（824.5/1385）。
 >
 > **明细**：每模块逐条能力单元（两侧 `file:line` 证据、判定、权重）在 `docs/map/01..07-*.md`；
 > 开放缺口的权威台账是 [`04-open-items-register.md`](04-open-items-register.md)。
@@ -53,18 +54,18 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）；pi-j
 
 ---
 
-## 1 总表（ai 批 10 后值，2026-10-16；批 3b/4/6/8 为台账行为项、加权不变；其余模块为 2026-10-12 重测值）
+## 1 总表（agent-core 批 1 后值，2026-10-17；ai 批 10 后 2026-10-16；批 3b/4/6/8 为台账行为项、加权不变；其余模块为 2026-10-12 重测值）
 
 | 模块（地图） | Σ权重 | Σ(w×c) | **加权完成度** | 未加权 | 权重 3 层 |
 |---|---:|---:|---:|---:|---:|
 | pi-java-ai（map/02，**批10后**） | 219 | 207.0 | **94.5%** | 85.5%（100/117） | **100%（33/33）** |
 | pi-java-mcp（map/07，**新图**） | 129 | 98.0 | **76.0%** | 62.9%（56/89） | 100%（1/1） |
-| pi-java-agent-core（map/03） | 183 | 132.0 | **72.1%** | 45.7%（42/92） | 79.5%（13/22） |
+| pi-java-agent-core（map/03，**批1后**） | 183 | 138.5 | **75.7%** | 48.9%（45/92） | 86.4%（16/22） |
 | session-sqlite ＋ evals（map/06） | 87 | 44.5 | **51.1%** | 50.0%（20/40） | — |
 | pi-java-telemetry（map/01） | 35 | 17.5 | **50.0%** | 41.2% | 64.3% |
 | pi-java-tui/web（map/05） | 245 | 108.5 | **44.3%** | 25.7%（38/148） | 67.3% |
 | pi-java-coding-agent（map/04，剔 MCP 粗单元） | 487 | 210.5 | **43.2%** | 31.7%（92/290） | 50.0%（9/23） |
-| **合计（去重后，批10后）** | **1,385** | **818.0** | **59.1%** | — | — |
+| **合计（去重后，agent-core 批1后）** | **1,385** | **824.5** | **59.5%** | — | — |
 
 > map/04 原始口径（含 G-1..G-5）：Σw 496 ／ Σwc 217.5 ／ **43.9%**；两处账都在，总表用去重值。
 > protocol/client/server（R1 排除）未加权：map/01 全层 10 对齐/40 缺失/35 存疑（85 单元）。
@@ -73,7 +74,7 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）；pi-j
 - **ai 层权重 3 全齐**，每轮都走的请求/响应/计量主路无缺口；批 10 后计分母缺失仅 1 条（#8 namespace），无半成品（#90 图片缩放消费链已落 agent-core/coding-agent、#98 federation 批 10 闭环）；分类器面已裁 R5。
 - **mcp 模块本体高完成度（76%）**，但会话内接线面（B221：六个 on() 事件 0/6、激活门、ui.custom、工具渲染器、提示分节、registerMcpServer 挂载点）是 map/07 G 组 17 单元里 15 缺失——**进程外 `pi mcp` CLI 可用、会话内 MCP 不激活**。
 - **coding-agent 最低**，欠账集中在扩展系统（D 域 41 事件加权 12.7%、D′ UI 注入 6.3%、包管理器 16.1%）。
-- agent-core 权重 3 零缺失，9 条全是事件/载荷**形状差**（见 §2）。
+- agent-core 权重 3 零缺失，6 条全是事件/载荷**形状差**（见 §2）。
 
 ---
 
@@ -109,11 +110,15 @@ Ctrl+P/RPC 轮转全接通；台账行为项、无加权单元 ⇒ 百分比不�
 方言项（B181–B220 族）多判存疑：mcp-auth.json 字节形态、错误文本、WHATWG URL、redirect 平台替代等。
 codemode-only 的 4 个单元（exposure/deferred/discovery）权 0，B161/B162 闭环时重裁。
 
-### 2.3 agent-core — 72.1% ｜ map/03
-权重 3 的 9 条存疑（零缺失）：`finishTurn` 语义（B159）、截断 50KB（B158）、`prepareRequest` 返回替换三件套、
+### 2.3 agent-core — 75.7% ｜ map/03（批 1 后）
+**批 1（2026-10-17）**：B158（#23 截断字节预算 100KB→50KB，描述/注记全链现算）、B159＋#41
+（`finishTurn` 裁决形状：`TurnDecision`＋`FinishTurnHook`、turn_end 前调用、错误路照调、
+`explicitContinuation` 三段清零、`NextTurnContext.newMessages`、`fireFinishTurn` 合并 END 先赢）、
+#17（手动 `/compact` abort-first＋waitForIdle）三口闭环，+6.5。
+权重 3 的 6 条存疑（零缺失）：`prepareRequest` 返回替换三件套、
 AgentSessionEvent 面（pi 24/Java 20）、agent_end 本 pass 载荷、Entry union（pi 11/Java 9 record）、
 `convertToLlm`、find() 分级（B53）、系统提示载体。**#73 JSONL v3 已转对齐**（PiV3Wire 原生线＋双向互读夹具）。
-确认缺失仅 11 条：#17 手动 compact 不先 abort（w2）、#62 formatSkillInvocation（w2），余 w1
+确认缺失仅 10 条：#62 formatSkillInvocation（w2），余 w1
 （branch summary 族 B1、B30、B36、B55、fromHook、streamProxy、setDefaultStreamFn）。
 工具：7/8（powershell 缺），bash 默认超时/grep 参数/find/ls 存疑。
 
@@ -143,7 +148,7 @@ protocol/client/server 按 R1 整体出分母：protocol 是已删 pi 代码的�
 
 **ai：零条** ✅。
 
-**agent-core（9 存疑/0 缺失）**：B159 finishTurn ｛action｝ · B158 截断 50KB · prepareRequest 替换三件套 ·
+**agent-core（6 存疑/0 缺失）**：prepareRequest 替换三件套 ·
 AgentSessionEvent 面（含 B30） · agent_end 本 pass 载荷 · Entry union（B1 族 label/session_info） ·
 convertToLlm · B53 find() 分级 · 系统提示 transcript 载体。
 

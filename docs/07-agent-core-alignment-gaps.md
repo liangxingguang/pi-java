@@ -17,7 +17,6 @@
 
 | 地图# | 权重 | 差什么 | 台账 |
 |---|---:|---|---|
-| #17 | **2** | 手动 `/compact` 不先 `abort()` 在飞运行：pi `compact()` 开头即 `await this.abort()`；Java `AgentSession.compact()` 直入 `harness.compact(...)`，CompactionExecutor/RunLifecycle 全程无 abort | 地图记 **A4/F4，docs/04 已无此行** —— 需重新登记或裁决 |
 | #62 | **2** | `formatSkillInvocation`（技能调用格式）：全仓零命中 | —— |
 | #8（工具表） | 1 | `powershell` 工具缺失（pi 8 个内置工具，Java 7 个；系统提示词里有名字、无实现） | —— |
 | #24 | 1 | branch summary **生成器**缺失（只有 `Entry.BranchSummary` 类型＋文案） | **B1** |
@@ -40,12 +39,10 @@ B53 `find()` 缺三级阶梯（地图 #78）、B31/B32/B33（get_state 三处 RP
 这些不是「没有」，而是「形状/行为不同」。**每一条的收口顺序**：先定「算不算偏差」，
 认账则立 B 号转 §1，不认则进 `docs/04` §4 写裁决与触发条件。
 
-### 2.1 权重 3（11 条，真正要紧的）
+### 2.1 权重 3（7 条，真正要紧的）
 
 | 地图# | 形状差 | 台账 |
 |---|---|---|
-| #6/#41 | `finishTurn`：pi `{action:"continue"\"end"}`（能强制多跑一轮）vs Java `StopHook` 返布尔；钩子同根 | **B159** |
-| #23 | 输出截断 2000 行同、字节预算 Java 100KB vs pi 50KB（模型可见文案不同；流式快照已刻意用 51200） | **B158** |
 | #34 | `before_request` ⇒ pi `prepareRequest` 返回 context/model/thinking 三样替换；Java `HookSystem` 老形状 | —— |
 | #46 | `AgentSessionEvent` 面：pi 24 变体 vs Java 20（具体缺口之一即 #48/B30） | B30 族 |
 | #52 | `agent_end` 载荷：pi 发**本 pass** `newMessages`；Java 会话层发 `accumulatedMessages()` | A8（旧过程稿编号） |
