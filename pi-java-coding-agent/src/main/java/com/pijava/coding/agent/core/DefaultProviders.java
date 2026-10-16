@@ -314,8 +314,9 @@ public final class DefaultProviders {
         var baseUrl = firstNonBlank(args.baseUrl(), settings == null ? null : settings.defaultBaseUrl);
         var apiKey = firstNonBlank(args.apiKey(), settings == null ? null : settings.defaultApiKey);
         var kind = AuthKind.API_KEY;
+        RecordedCredential credential = null;
         if (apiKey == null && credentialResolver != null) {
-            var credential = credentialResolver.apply(providerName).orElse(null);
+            credential = credentialResolver.apply(providerName).orElse(null);
             if (credential != null) {
                 apiKey = credential.value();
                 kind = credential.kind();
@@ -335,6 +336,12 @@ public final class DefaultProviders {
             mergedExtra.putAll(extra);
         }
         mergedExtra.put("maxRetryDelayMs", maxRetryDelayMs);
+        // #98：federation 的 provider env（五变量）经 extra 过桥到车道（与 headers/
+        // cacheRetention 同通道；读点 AnthropicFederationSupport.federationEnvOf）。
+        // 三态口径同既有约定：键缺席 ≙ pi 的 undefined，非 federation 不塞。
+        if (credential != null && credential.kind() == AuthKind.FEDERATION) {
+            mergedExtra.put("federationEnv", credential.env());
+        }
         var timeout = providerRetry != null && providerRetry.timeoutMs() != null
             ? java.time.Duration.ofMillis(providerRetry.timeoutMs())
             : java.time.Duration.ofSeconds(120);

@@ -115,6 +115,47 @@ class DefaultProvidersTest {
         assertThat(opts.apiKey()).isEqualTo("sk-cli");
     }
 
+    // ── #98：federation 的 env 过桥 ─────────────────────────────────────
+
+    /**
+     * FEDERATION 凭证 ⇒ {@code apiKey} 空（federation 无 key）、kind 保真、五变量原样进
+     * {@code extra["federationEnv"]}（pi 的 {@code {auth: {}, env: federation}} 三件套
+     * 在 ApiOptions 上的投影）。
+     */
+    @Test
+    void federationCredentialBridgesEnvIntoExtra() {
+        var settings = new Settings();
+        var args = ArgsParser.parse(new String[] {});
+        var federationEnv = Map.of(
+            "ANTHROPIC_FEDERATION_RULE_ID", "rule-1",
+            "ANTHROPIC_ORGANIZATION_ID", "org-1",
+            "ANTHROPIC_IDENTITY_TOKEN_FILE", "/var/run/secrets/token");
+        var credential = new com.pijava.ai.auth.RecordedCredential(
+            com.pijava.ai.api.AuthKind.FEDERATION, "", "workload identity federation",
+            federationEnv);
+
+        var opts = DefaultProviders.apiOptions(args, "anthropic", settings,
+            provider -> java.util.Optional.of(credential));
+
+        assertThat(opts.apiKey()).isEmpty();
+        assertThat(opts.authKind()).isEqualTo(com.pijava.ai.api.AuthKind.FEDERATION);
+        assertThat(opts.extra()).containsEntry("federationEnv", federationEnv);
+    }
+
+    /** 非 federation 凭证 ⇒ 不塞 {@code federationEnv}（键缺席 ≙ pi 的 undefined）。 */
+    @Test
+    void nonFederationCredentialDoesNotBridgeEnv() {
+        var settings = new Settings();
+        var args = ArgsParser.parse(new String[] {});
+        var credential = new com.pijava.ai.auth.RecordedCredential(
+            com.pijava.ai.api.AuthKind.API_KEY, "sk-x", "env:ANTHROPIC_API_KEY");
+
+        var opts = DefaultProviders.apiOptions(args, "anthropic", settings,
+            provider -> java.util.Optional.of(credential));
+
+        assertThat(opts.extra()).doesNotContainKey("federationEnv");
+    }
+
     @Test
     void providerRetryDefaultsToZeroAttemptsAnd60sCap() {
         var settings = new Settings();
