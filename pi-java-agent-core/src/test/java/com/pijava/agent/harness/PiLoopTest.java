@@ -157,7 +157,7 @@ class PiLoopTest {
 
     private static PiLoop.Config config(StreamFn streamFn, PiLoop.ToolRunner tools,
                                         java.util.function.Supplier<List<Message>> followUp,
-                                        PiLoop.StopHook stopHook) {
+                                        PiLoop.FinishTurnHook finishTurn) {
         return new PiLoop.Config(
             ModelId.of("faux", "test-model"),
             ModelThinkingLevel.off(),
@@ -170,7 +170,7 @@ class PiLoopTest {
             followUp,
             null,
             null,
-            stopHook,
+            finishTurn,
             null,
             null);
     }

@@ -26,8 +26,8 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * {@code prepareNextTurn} / {@code shouldStopAfterTurn} 的调用**时机与上下文通道**，
- * 逐条对齐 pi {@code packages/agent/src/agent-loop.ts} @ {@code v0.85.1}。
+ * {@code prepareNextTurn} / {@code finishTurn} 的调用**时机与上下文通道**，
+ * 逐条对齐 pi {@code packages/agent/src/agent-loop.ts} @ {@code ea448f454}。
  *
  * <p>这个类是 {@code 原 docs/31 §8.3-6} 的落地验证。四处此前不一致的地方：</p>
  *
@@ -35,11 +35,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>{@code AgentLoopTurnUpdate} 的 {@code context} 字段缺失 —— 压缩的落地通道
  *       （{@code agent-session.ts:557-577}）</li>
  *   <li>{@code NextTurnContext} 只带消息列表，不带 tools —— pi 传的是整个 {@code AgentContext}
- *       （{@code :246}）</li>
- *   <li><b>两者顺序相反</b>：pi 是 {@code shouldStopAfterTurn} 先（{@code :249-252}）、
- *       {@code prepareNextTurn} 后（{@code :176-183}，在下一轮的开头）</li>
+ *       （{@code :280-285}）</li>
+ *   <li><b>两者顺序相反</b>：pi 是 {@code finishTurn} 先（{@code :286}，turn_end 之前）、
+ *       {@code prepareNextTurn} 后（{@code :186}，在下一轮的开头）</li>
  *   <li>{@code prepareNextTurn} 之后不重拉 steer —— pi 明写理由是「准备可能很慢，例如压缩」
- *       （{@code :184-189}）</li>
+ *       （{@code :204-206}）</li>
  * </ol>
  */
 class PiLoopTurnHooksTest {
@@ -123,7 +123,7 @@ class PiLoopTurnHooksTest {
     }
 
     private static PiLoop.Config config(StreamFn streamFn,
-                                        PiLoop.NextTurnHook nextTurn, PiLoop.StopHook stop,
+                                        PiLoop.NextTurnHook nextTurn, PiLoop.FinishTurnHook finishTurn,
                                         java.util.function.Supplier<List<Message>> steering) {
         return new PiLoop.Config(
             ModelId.of("faux", "test-model"),
@@ -137,7 +137,7 @@ class PiLoopTurnHooksTest {
             null,
             null,
             nextTurn,
-            stop,
+            finishTurn,
             null,
             null);
     }
@@ -237,13 +237,13 @@ class PiLoopTurnHooksTest {
     }
 
     /**
-     * <b>顺序</b>：{@code shouldStopAfterTurn} 为真时，pi **根本不会调用**
+     * <b>顺序</b>：{@code finishTurn} 判 END 时，pi **根本不会调用**
      * {@code prepareNextTurn} —— 它在 {@code turn_end} 之后立即返回
-     * （{@code agent-loop.ts:249-252}），而 {@code prepareNextTurn} 在下一轮的开头
-     * （{@code :176-183}）。
+     * （{@code agent-loop.ts:289-292}），而 {@code prepareNextTurn} 在下一轮的开头
+     * （{@code :186}）。
      */
     @Test
-    void shouldStopAfterTurnRunsBeforePrepareNextTurn() {
+    void finishTurnEndSkipsPrepareNextTurn() {
         var prepared = new AtomicInteger();
 
         var config = config(scripted(List.of(textTurn("bye"))),
@@ -251,7 +251,7 @@ class PiLoopTurnHooksTest {
                 prepared.incrementAndGet();
                 return null;
             },
-            ctx -> true,   // 立刻停
+            ctx -> PiLoop.TurnDecision.END,   // 立刻收口
             null);
 
         PiLoop.run(List.of(user("hi")), context(List.of()), config, new Recorder());

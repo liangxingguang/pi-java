@@ -104,9 +104,9 @@ class HookTest {
     }
 
     @Test
-    void shouldStopAfterTurnEndsRunButPostRunContinueDrainsFollowUp() {
-        // pi 真值（3c，原 docs/31 §8.21）：shouldStopAfterTurn 让内层循环在 followUp
-        // 排空**之前**就 agent_end 返回（agent-loop.ts:252-255，:261 的排空被跳过）⇒
+    void endDecisionEndsRunButPostRunContinueDrainsFollowUp() {
+        // pi 真值（3c，原 docs/31 §8.21）：finishTurn 判 END 让内层循环在 followUp
+        // 排空**之前**就 agent_end 返回（agent-loop.ts:289-292，:302 的排空被跳过）⇒
         // 运行内确实只烧了一次请求、队列确实没被运行内排空。但 _handlePostAgentRun
         // ③ 看到队列有货（agent-session.ts:1143）⇒ agent.continue()：副本以助手消息
         // 收尾 + followUp 有货 ⇒ 排空并按 runPromptMessages 再跑一个 pass
@@ -119,7 +119,7 @@ class HookTest {
         };
         var cfg = configWith(counting);
         var hookHarness = com.pijava.agent.harness.AgentHarness.create(cfg);
-        hookHarness.hookSystem().onShouldStopAfterTurn("default", ctx -> Boolean.TRUE);
+        hookHarness.hookSystem().onFinishTurn("default", ctx -> PiLoop.TurnDecision.END);
         hookHarness.followUp("default", "second");
         var outcome = hookHarness.prompt("go");
         // 运行内不排空（第一次请求不带 "second"），post-run continue 排空（第二次带）。
@@ -130,25 +130,68 @@ class HookTest {
     }
 
     @Test
-    void shouldStopAfterTurnNullAbstains() {
+    void finishTurnNullAbstains() {
         var seenModels = new java.util.ArrayList<String>();
         var h = com.pijava.agent.harness.AgentHarness.create(configWith(toolUseThenStopStreamFn(seenModels)));
-        h.hookSystem().onShouldStopAfterTurn("default", ctx -> null);
+        h.hookSystem().onFinishTurn("default", ctx -> null);
         h.prompt("go");
         // 弃权 ⇒ 循环继跑：toolUse 那一轮之后还有第二次请求。
         assertThat(seenModels).hasSize(2);
     }
 
     @Test
-    void throwingShouldStopHookAbstains() {
+    void throwingFinishTurnHookAbstains() {
         var seenModels = new java.util.ArrayList<String>();
         var h = com.pijava.agent.harness.AgentHarness.create(configWith(toolUseThenStopStreamFn(seenModels)));
-        h.hookSystem().onShouldStopAfterTurn("default", ctx -> {
+        h.hookSystem().onFinishTurn("default", ctx -> {
             throw new RuntimeException("boom");
         });
         h.prompt("go");
         // 抛异常等同于弃权 ⇒ 循环继跑。
         assertThat(seenModels).hasSize(2);
+    }
+
+    // ── #41：多钩子合并（pi agent-session.ts:891-895）─────────────────
+
+    @Test
+    void finishTurnMergeEndWinsOverContinueInEitherOrder() {
+        // pi：previousDecision?.action === "end" 直接赢 —— 与注册顺序无关。
+        for (boolean endFirst : new boolean[] {true, false}) {
+            var calls = new int[] {0};
+            StreamFn counting = (model, context, options) -> {
+                calls[0]++;
+                return stream("stop").stream(model, context, options);
+            };
+            var h = com.pijava.agent.harness.AgentHarness.create(configWith(counting));
+            if (endFirst) {
+                h.hookSystem().onFinishTurn("default", ctx -> PiLoop.TurnDecision.END);
+                h.hookSystem().onFinishTurn("default", ctx -> PiLoop.TurnDecision.CONTINUE);
+            } else {
+                h.hookSystem().onFinishTurn("default", ctx -> PiLoop.TurnDecision.CONTINUE);
+                h.hookSystem().onFinishTurn("default", ctx -> PiLoop.TurnDecision.END);
+            }
+            h.prompt("go");
+            assertThat(calls[0]).as("END 短路即赢（endFirst=" + endFirst + "）⇒ 只烧一次请求")
+                .isEqualTo(1);
+        }
+    }
+
+    @Test
+    void finishTurnMergeContinueBeatsAbstain() {
+        var calls = new int[] {0};
+        StreamFn counting = (model, context, options) -> {
+            calls[0]++;
+            return stream("stop").stream(model, context, options);
+        };
+        var h = com.pijava.agent.harness.AgentHarness.create(configWith(counting));
+        var hookCalls = new int[] {0};
+        h.hookSystem().onFinishTurn("default", ctx -> null);
+        h.hookSystem().onFinishTurn("default",
+            // CONTINUE 只给一次 —— 否则每轮都白送，永不收口。
+            ctx -> ++hookCalls[0] == 1 ? PiLoop.TurnDecision.CONTINUE : null);
+        h.prompt("go");
+        assertThat(calls[0]).as("无 END 有 CONTINUE ⇒ 白送一轮 context-only 请求，恰 2 次")
+            .isEqualTo(2);
     }
 
     // ── prepare_next_turn ─────────────────────────────────

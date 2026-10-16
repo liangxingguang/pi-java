@@ -7,6 +7,7 @@ import com.pijava.agent.tool.DefaultFileSystem;
 import com.pijava.agent.tool.ShellResult;
 import com.pijava.agent.tool.ShellOptions;
 import com.pijava.agent.tool.ToolContext;
+import com.pijava.ai.message.ContentBlock;
 
 class BashToolTest {
 
@@ -25,6 +26,29 @@ class BashToolTest {
                 .as("POSIX hosts run the command in bash")
                 .contains("bash");
         }
+    }
+
+    @Test
+    void descriptionPromisesPi50KBBudget() {
+        // B158：pi bash.ts:255 的描述由 DEFAULT_MAX_BYTES 现算 —— 50KB（旧值是 97KB）。
+        assertThat(BashTool.create().description()).contains("50KB").doesNotContain("97KB");
+    }
+
+    @Test
+    void truncationNoteQuotesThe50KBBudget() throws Exception {
+        // 多行、总字节 >51200 ⇒ 尾窗注记「(50.0KB limit). Full output saved to: …」。
+        var big = ("x".repeat(100) + "\n").repeat(600);   // 600 行 ×101B ≈ 60.6KB
+        var tool = BashTool.create();
+        var context = new ToolContext(
+            System.getProperty("user.dir"), java.util.Map.of(),
+            (command, options) -> new ShellResult(big, 0, false, false, 600, big.length()),
+            new DefaultFileSystem());
+
+        var result = tool.execute("id", new BashTool.BashInput("big", java.util.Optional.empty()),
+            null, null, context);
+
+        var text = ((ContentBlock.TextContent) result.content().get(0)).text();
+        assertThat(text).contains("(50.0KB limit). Full output saved to:");
     }
 
     @Test

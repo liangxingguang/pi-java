@@ -27,9 +27,9 @@ import com.pijava.ai.message.ContentBlock;
  *       消费者<b>整块替换</b>（{@code interactive-mode.ts:3348-3353}）。</li>
  * </ul>
  *
- * <p>快照的截断口径用 <b>pi 的值</b>（2000 行 / 51200 字节，{@code truncate.ts:11-12}），
- * 而不是 pi-java 的 {@code TruncationUtils.DEFAULT_MAX_BYTES}（100_000）—— 因为这是
- * <b>载荷快照</b>的口径；终局截断仍走 pi-java 现值（{@code 原 docs/35 §6-2}）。</p>
+ * <p>快照的截断口径用 <b>pi 的值</b>（2000 行 / 51200 字节，{@code truncate.ts:11-12}）。
+ * B158 起 {@code TruncationUtils.DEFAULT_MAX_BYTES} 也是 51200 —— 快照与终局同口径；
+ * 这里仍写显式值（它是<b>载荷快照</b>的独立预算），两值相等由夹具钉死防再分叉。</p>
  *
  * <p>时钟与调度器<b>可注入</b>：节流语义靠「等 100 ms 再看」是运气断言，夹具用假时钟
  * 与假调度器把每条边钉死（{@code 原 docs/31 §8.23.8 ⑥} 的口径）。</p>
@@ -75,9 +75,9 @@ final class BashUpdateEmitter implements ShellOutputSink {
             return thread;
         });
 
-    /** pi 的快照上限（{@code truncate.ts:11-12}）——**不是** pi-java 的默认值。 */
-    private static final int SNAPSHOT_MAX_LINES = 2000;
-    private static final long SNAPSHOT_MAX_BYTES = 51200L;
+    /** pi 的快照上限（{@code truncate.ts:11-12}）——独立预算；B158 后与默认值同值（夹具钉）。 */
+    static final int SNAPSHOT_MAX_LINES = 2000;
+    static final long SNAPSHOT_MAX_BYTES = 51200L;
 
     private final com.pijava.agent.tool.ToolUpdateCallback<BashDetails> onUpdate;
     private final long throttleMs;

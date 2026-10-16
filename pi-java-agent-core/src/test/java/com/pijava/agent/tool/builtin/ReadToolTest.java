@@ -39,6 +39,25 @@ class ReadToolTest {
     }
 
     @Test
+    void descriptionPromisesPi50KBBudget() {
+        // B158：pi read.ts 的描述由 DEFAULT_MAX_BYTES 现算 —— 50KB（旧值是 97KB）。
+        assertThat(ReadTool.create().description()).contains("50KB").doesNotContain("97KB");
+    }
+
+    @Test
+    void firstLineExceedsNoteQuotesThe50KBBudget(@TempDir Path tmp) throws Exception {
+        // 单行 >51200 字节 ⇒ 首行超限注记（50.0KB + head -c 51200，旧值是 100000）。
+        var file = tmp.resolve("long.txt");
+        Files.writeString(file, "x".repeat(60_000));
+        var tool = ReadTool.create();
+        var result = tool.execute("id1", new ReadTool.ReadInput(
+            file.toString(), Optional.empty(), Optional.empty()),
+            null, null, TestContexts.at(tmp));
+        var text = ((ContentBlock.TextContent) result.content().get(0)).text();
+        assertThat(text).contains("exceeds 50.0KB limit").contains("head -c 51200");
+    }
+
+    @Test
     void readsWithOffsetLimit(@TempDir Path tmp) throws Exception {
         var file = tmp.resolve("lines.txt");
         Files.writeString(file, "a\nb\nc\nd\ne");

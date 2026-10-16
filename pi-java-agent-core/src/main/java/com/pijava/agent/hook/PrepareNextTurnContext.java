@@ -9,8 +9,9 @@ import com.pijava.ai.message.Message;
  * Context for {@code prepare_next_turn} hooks.
  *
  * <p>Aligned with pi's {@code prepareNextTurn} callback
- * ({@code agent-loop.ts:226-245}): fired after a turn completes, before
- * {@code should_stop_after_turn} hooks decide whether the run continues.</p>
+ * ({@code agent-loop.ts:186}): fired at the start of the next turn — after
+ * the previous turn's {@code finishTurn} (which runs before {@code turn_end})
+ * has let the run continue.</p>
  *
  * @param lane             lane name
  * @param runId            current run identifier

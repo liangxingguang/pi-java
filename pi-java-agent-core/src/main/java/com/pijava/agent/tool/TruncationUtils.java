@@ -14,7 +14,8 @@ import java.util.Locale;
  */
 public final class TruncationUtils {
     public static final int DEFAULT_MAX_LINES = 2000;
-    public static final long DEFAULT_MAX_BYTES = 100_000L;
+    /** pi {@code truncate.ts:12}：{@code 50 * 1024}（B158）。 */
+    public static final long DEFAULT_MAX_BYTES = 51_200L;
 
     private TruncationUtils() {}
 

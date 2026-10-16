@@ -49,4 +49,31 @@ class TruncationUtilsTest {
         var result = TruncationUtils.truncateTail("short", 100, 100000);
         assertThat(result.truncated()).isFalse();
     }
+
+    // ── B158：默认预算 = pi 的 50KB（truncate.ts:11-12）────────────────
+
+    @Test
+    void defaultBudgetIsPi50KB() {
+        assertThat(TruncationUtils.DEFAULT_MAX_BYTES).isEqualTo(50 * 1024);
+        assertThat(TruncationUtils.DEFAULT_MAX_LINES).isEqualTo(2000);
+    }
+
+    @Test
+    void defaultHeadOverloadTruncatesExactlyAboveTheBudget() {
+        var exact = "x".repeat((int) TruncationUtils.DEFAULT_MAX_BYTES);
+        assertThat(TruncationUtils.truncateHead(exact).truncated())
+            .as("51200 字节整：不截").isFalse();
+        assertThat(TruncationUtils.truncateHead(exact + "y").truncated())
+            .as("51201 字节：截（首行超限）").isTrue();
+    }
+
+    @Test
+    void defaultTailOverloadTruncatesExactlyAboveTheBudget() {
+        var exact = "x".repeat((int) TruncationUtils.DEFAULT_MAX_BYTES);
+        assertThat(TruncationUtils.truncateTail(exact).truncated())
+            .as("51200 字节整：不截").isFalse();
+        var over = TruncationUtils.truncateTail(exact + "y");
+        assertThat(over.truncated()).as("51201 字节：截（尾窗末行部分保留）").isTrue();
+        assertThat(over.lastLinePartial()).isTrue();
+    }
 }

@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.pijava.agent.tool.ToolResult;
+import com.pijava.agent.tool.TruncationUtils;
 import com.pijava.agent.tool.builtin.BashTool.BashDetails;
 import com.pijava.ai.message.ContentBlock;
 
@@ -214,5 +215,15 @@ class BashUpdateEmitterTest {
         assertThat(last.details()).as("真截断 ⇒ details 非 null").isNotNull();
         assertThat(last.details().truncation().truncated()).isTrue();
         assertThat(text(last)).as("载荷里带的是截断后的尾窗").contains("line 2499");
+    }
+
+    // ── B158：快照预算与终局预算同口径（pi truncate.ts:11-12），防再分叉 ──
+
+    @Test
+    void snapshotBudgetMatchesTerminalBudget() {
+        assertThat(BashUpdateEmitter.SNAPSHOT_MAX_BYTES)
+            .as("B158 后快照与终局同值 51200").isEqualTo(TruncationUtils.DEFAULT_MAX_BYTES);
+        assertThat(BashUpdateEmitter.SNAPSHOT_MAX_LINES)
+            .isEqualTo(TruncationUtils.DEFAULT_MAX_LINES);
     }
 }

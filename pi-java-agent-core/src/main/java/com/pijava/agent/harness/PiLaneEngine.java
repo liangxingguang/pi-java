@@ -336,7 +336,7 @@ public final class PiLaneEngine {
             () -> drainFollowUp(laneName),
             ignored -> beforeRequest(laneName, lane, sink),
             next -> prepareNextTurn(laneName, lane),
-            next -> fireShouldStopAfterTurn(laneName, lane),
+            next -> fireFinishTurn(laneName, lane),
             // 原始帧旁路：喂既有的 harness 广播链，会话层的记账代码因此无需改造。
             event -> {
                 sink.noteStreamEvent(event);
@@ -437,8 +437,8 @@ public final class PiLaneEngine {
             new ArrayList<>(lane.messages), activeTools(lane));
     }
 
-    private boolean fireShouldStopAfterTurn(String laneName, LaneState lane) {
-        return ctx.hookSystem().fireShouldStopAfterTurn(laneName,
+    private PiLoop.TurnDecision fireFinishTurn(String laneName, LaneState lane) {
+        return ctx.hookSystem().fireFinishTurn(laneName,
             new ShouldStopAfterTurnContext(laneName, lane.runId, lane.partial, List.of()));
     }
 

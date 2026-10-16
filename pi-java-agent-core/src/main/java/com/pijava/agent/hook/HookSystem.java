@@ -7,6 +7,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 import com.pijava.agent.harness.LaneState;
+import com.pijava.agent.harness.PiLoop;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.record.UsageCause;
 import com.pijava.agent.tool.ToolResult;
@@ -94,8 +95,8 @@ public final class HookSystem {
         return registry.register(laneName, "before_run_end", hook);
     }
 
-    /** Register a {@code should_stop_after_turn} hook for the lane. */
-    public AutoCloseable onShouldStopAfterTurn(String laneName, ShouldStopAfterTurnHook hook) {
+    /** Register a {@code should_stop_after_turn} hook for the lane（pi 的 {@code finishTurn}）。 */
+    public AutoCloseable onFinishTurn(String laneName, ShouldStopAfterTurnHook hook) {
         return registry.register(laneName, "should_stop_after_turn", hook);
     }
 
@@ -262,21 +263,29 @@ public final class HookSystem {
     }
 
     /**
-     * Fire {@code should_stop_after_turn} hooks.
-     * First non-null return wins; a throwing hook is recorded and abstains.
+     * Fire {@code should_stop_after_turn} hooks，合并语义照 pi 的会话层链接
+     * （{@code agent-session.ts:891-895}）：<b>任一 END 短路即赢</b>；无 END 有
+     * CONTINUE ⇒ CONTINUE；全弃权 ⇒ {@code null}（≙ pi 的 undefined，照常调度）。
+     * 抛错的钩子记账并弃权。
      *
-     * @return true when a hook decided the run should stop
+     * @return 合并裁决；{@code null} 表示没有钩子发言
      */
-    public boolean fireShouldStopAfterTurn(String laneName, ShouldStopAfterTurnContext ctx) {
+    public PiLoop.TurnDecision fireFinishTurn(String laneName, ShouldStopAfterTurnContext ctx) {
+        boolean sawContinue = false;
         for (var hook : registry.get(laneName, "should_stop_after_turn")) {
             try {
                 var r = ((ShouldStopAfterTurnHook) hook).shouldStopAfterTurn(ctx);
-                if (r != null) return r;
+                if (r == PiLoop.TurnDecision.END) {
+                    return PiLoop.TurnDecision.END;
+                }
+                if (r == PiLoop.TurnDecision.CONTINUE) {
+                    sawContinue = true;
+                }
             } catch (Exception e) {
                 recordHookError(laneName, "should_stop_after_turn", e);
             }
         }
-        return false;
+        return sawContinue ? PiLoop.TurnDecision.CONTINUE : null;
     }
 
     /**

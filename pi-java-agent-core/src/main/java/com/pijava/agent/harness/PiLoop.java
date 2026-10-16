@@ -16,7 +16,7 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
 import com.pijava.agent.tool.ToolResult;
 
 /**
- * pi 双循环的 1:1 移植（{@code packages/agent/src/agent-loop.ts} @ pi {@code v0.85.1}，803 行）。
+ * pi 双循环的 1:1 移植（{@code packages/agent/src/agent-loop.ts} @ pi {@code ea448f454}）。
  *
  * <p><b>为什么有这个类</b>：{@code 原 docs/28} 判定 pi-java 自建的显式状态机
  * （{@code Action} / {@code RunPhase} / {@code peekAction} / {@code executeAction} /
@@ -189,15 +189,22 @@ public final class PiLoop {
     // ═══════════════════════════════════════════════════════════════
 
     /**
-     * pi {@code prepareNextTurn} 的入参。
+     * pi {@code AgentTurnContext}（{@code types.ts:134-144}）—— {@code finishTurn} 与
+     * {@code prepareNextTurn} <b>两个钩子共用这一份形状</b>（pi 的
+     * {@code PrepareNextTurnContext extends AgentTurnContext}，{@code types.ts:191}）。
      *
      * <p>pi 传的是 {@code lastCompletedTurn}，其 {@code context} 字段就是**当时**的
-     * {@code AgentContext}（{@code agent-loop.ts:165, 246}）—— 钩子因此能看到 systemPrompt 与
+     * {@code AgentContext}（{@code agent-loop.ts:280-285}）—— 钩子因此能看到 systemPrompt 与
      * tools，而不只是消息列表。Java 侧由 {@link Context} 承载。</p>
+     *
+     * @param newMessages pi {@code AgentTurnContext.newMessages}：本次循环调用迄今的新消息
+     *                    <b>快照</b>（pi 传的是活数组引用；java 钩子是同步调用，调用点之后
+     *                    循环才会继续追加，快照无可观察差异）。
      */
     public record NextTurnContext(Message.AssistantMessage message,
                                   List<Message.ToolResultMessage> toolResults,
-                                  Context context) {}
+                                  Context context,
+                                  List<Message> newMessages) {}
 
     /**
      * pi {@code AgentLoopTurnUpdate}（{@code types.ts:143-152}）：{@code prepareNextTurn}
@@ -240,15 +247,25 @@ public final class PiLoop {
     /** pi {@code prepareNextTurn}。返回 {@code null} 表示不改。 */
     @FunctionalInterface
     public interface NextTurnHook {
-        /** 在 {@code turn_end} 之后、{@code shouldStopAfterTurn} 之前调用；返回 {@code null} 表示不改。 */
+        /** 在上一轮 {@code turn_end} 之后、下一轮请求之前调用（{@code agent-loop.ts:186}）；返回 {@code null} 表示不改。 */
         NextTurnUpdate apply(NextTurnContext context);
     }
 
-    /** pi {@code shouldStopAfterTurn}。 */
+    /** pi {@code AgentTurnDecision}（{@code types.ts:146-147}）；纯常量闭集按规范用 enum。 */
+    public enum TurnDecision { CONTINUE, END }
+
+    /**
+     * pi {@code FinishTurn}（{@code types.ts:149-158}）：assistant 与其工具结果全部落完后、
+     * emit {@code turn_end} <b>之前</b>调用（{@code agent-loop.ts:286-287}）。
+     * {@link TurnDecision#END} 直接收口（不再查队列）；{@link TurnDecision#CONTINUE}
+     * 保证再来一次 provider 请求 —— 被工具结果/steering/follow-up 满足则不额外发
+     * （{@code :294-298, :302-314} 的三段清零）；返回 {@code null} ≙ pi 的
+     * {@code undefined}（照常调度）。错误/中止轮照样调用，裁决忽略（{@code :252}）。
+     */
     @FunctionalInterface
-    public interface StopHook {
-        /** 为真则发 {@code agent_end} 并结束整个驱动（不再检查 follow-up）。 */
-        boolean apply(NextTurnContext context);
+    public interface FinishTurnHook {
+        /** 裁决本轮回合之后的去向；{@code null} ≙ pi 的 undefined。 */
+        TurnDecision apply(NextTurnContext context);
     }
 
     /** pi {@code transformContext}。返回 {@code null} 表示不改。 */
@@ -287,7 +304,7 @@ public final class PiLoop {
             Supplier<List<Message>> followUpMessages,
             ContextTransform transformContext,
             NextTurnHook prepareNextTurn,
-            StopHook shouldStopAfterTurn,
+            FinishTurnHook finishTurn,
             Consumer<StreamEvent> streamListener,
             /** B128：pi {@code AgentLoopConfig.thinkingBudgets}；null ≙ {@code undefined}。 */
             com.pijava.ai.thinking.ThinkingBudgets thinkingBudgets) {}

@@ -23,8 +23,8 @@ import com.pijava.ai.thinking.ThinkingLevel;
  * <p>从 {@code PiLoop} 拆出，使两者都在 500 行以内（{@code CLAUDE.md} 编码规范）。
  * 公开 API 仍是 {@code PiLoop} —— 本类包内可见，不对外暴露。</p>
  *
- * <p>逐段对齐 pi {@code packages/agent/src/agent-loop.ts} @ {@code v0.85.1}：
- * {@link #runLoop} 对应 {@code :165-279}，{@link #streamAssistantResponse} 对应
+ * <p>逐段对齐 pi {@code packages/agent/src/agent-loop.ts} @ {@code ea448f454}：
+ * {@link #runLoop} 对应 {@code :163-320}，{@link #streamAssistantResponse} 对应
  * {@code :283-375}。</p>
  */
 final class PiLoopRunner {
@@ -51,6 +51,10 @@ final class PiLoopRunner {
         // pi: 已完成的上一轮（agent-loop.ts:164）。非空即「下一轮的开头」。
         // 它同时承担「首轮不发 turn_start」的判据 —— 调用方在进入本方法前已发过一次。
         NextTurnContext lastCompletedTurn = null;
+        // pi: explicitContinuation（agent-loop.ts:174）——finishTurn 判 CONTINUE 且
+        // 没有任何自然请求（工具结果/steering/follow-up）把它满足掉时，白送一轮
+        // context-only 请求来兑现这个裁决。
+        boolean explicitContinuation = false;
         // pi: 起始即检查 steer（用户可能在等待期间已经输入）
         var pending = poll(config.steeringMessages());
 
@@ -62,8 +66,8 @@ final class PiLoopRunner {
                 // 只有走了 prepareNextTurn 那一支才会被填上。
                 var prepared = List.<Message>of();
                 if (lastCompletedTurn != null) {
-                    // pi: prepareNextTurn 在**下一轮的开头**调用一次（agent-loop.ts:176-183），
-                    // 此时 shouldStopAfterTurn 已经放行 —— 顺序与本类此前的实现相反。
+                    // pi: prepareNextTurn 在**下一轮的开头**调用一次（agent-loop.ts:186），
+                    // 此时 finishTurn 未判 END —— 它与 finishTurn 之间隔着一次 turn_end。
                     if (config.prepareNextTurn() != null) {
                         var update = config.prepareNextTurn().apply(lastCompletedTurn);
                         if (update != null) {
@@ -100,9 +104,15 @@ final class PiLoopRunner {
                 var message = streamAssistantResponse(context, config, emit);
                 newMessages.add(message);
 
-                // pi: error / aborted 直接收口（agent-loop.ts:189-193）
+                // pi: error / aborted 直接收口（agent-loop.ts:245-257）——finishTurn
+                // **照调**（裁决忽略，错误/中止仍是硬出口），随后 turn_end/agent_end。
                 if (message.stopReason() == StopReason.ERROR
                         || message.stopReason() == StopReason.ABORTED) {
+                    lastCompletedTurn = new NextTurnContext(message, List.of(), context,
+                        List.copyOf(newMessages));
+                    if (config.finishTurn() != null) {
+                        config.finishTurn().apply(lastCompletedTurn);
+                    }
                     emit.emit(new Event.TurnEnd(message, List.of()));
                     emit.emit(new Event.AgentEnd(List.copyOf(newMessages)));
                     return;
@@ -123,28 +133,46 @@ final class PiLoopRunner {
                     }
                 }
 
+                // pi: lastCompletedTurn 带的是**当时**的 context（agent-loop.ts:280-285）
+                lastCompletedTurn = new NextTurnContext(message, List.copyOf(toolResults), context,
+                    List.copyOf(newMessages));
+
+                // pi: finishTurn 在 emit turn_end **之前**调用（agent-loop.ts:286-287）——
+                // 钩子在 turn_end 的载荷定型前就能看到本轮完整形状。
+                var decision = config.finishTurn() == null
+                    ? null : config.finishTurn().apply(lastCompletedTurn);
                 emit.emit(new Event.TurnEnd(message, List.copyOf(toolResults)));
 
-                // pi: lastCompletedTurn 带的是**当时**的 context（agent-loop.ts:246）
-                lastCompletedTurn = new NextTurnContext(message, List.copyOf(toolResults), context);
-
-                // pi: shouldStopAfterTurn 在 turn_end 之后、prepareNextTurn **之前**
-                // （agent-loop.ts:249-252）—— 它一旦为真，pi 就返回，**根本不会调用**
-                // prepareNextTurn。本类此前把两者写反了，会多跑一次有副作用的钩子。
-                if (config.shouldStopAfterTurn() != null
-                        && config.shouldStopAfterTurn().apply(lastCompletedTurn)) {
+                // pi: END ⇒ 直接收口，**不再查任何队列**（agent-loop.ts:289-292）。
+                if (decision == PiLoop.TurnDecision.END) {
                     emit.emit(new Event.AgentEnd(List.copyOf(newMessages)));
                     return;
                 }
 
+                // pi :294-298：CONTINUE 记 explicitContinuation；工具结果待处理或
+                // steering 已排到 ⇒ 这个继续裁决已被满足，清零。
+                explicitContinuation = decision == PiLoop.TurnDecision.CONTINUE;
                 pending = poll(config.steeringMessages());
+                if (hasMoreToolCalls || !pending.isEmpty()) {
+                    explicitContinuation = false;
+                }
             }
 
-            // pi: 内层结束 ⇒ 检查 follow-up，有则并入 pending 继续外层
+            // pi: 内层结束 ⇒ 检查 follow-up，有则并入 pending 继续外层（:302-307）——
+            // 这条自然请求同样满足 continue 裁决，先清零。
             var followUp = config.followUpMessages() == null
                 ? List.<Message>of() : config.followUpMessages().get();
             if (!followUp.isEmpty()) {
+                explicitContinuation = false;
                 pending = new ArrayList<>(followUp);
+                continue;
+            }
+
+            // pi :310-314：没有任何自然请求被选中 ⇒ 白送一轮 context-only 请求来兑现
+            // CONTINUE 裁决（外层顶部 hasMoreToolCalls=true 重置使内层必进，走完整的
+            // prepareNextTurn＋turn_start＋一次 provider 请求）。
+            if (explicitContinuation) {
+                explicitContinuation = false;
                 continue;
             }
             break;
@@ -176,7 +204,7 @@ final class PiLoopRunner {
             config.toolExecution(), config.toolRunner(),
             config.streamFn(), config.signal(), config.steeringMessages(),
             config.followUpMessages(), config.transformContext(),
-            config.prepareNextTurn(), config.shouldStopAfterTurn(),
+            config.prepareNextTurn(), config.finishTurn(),
             config.streamListener(), config.thinkingBudgets());
     }
 

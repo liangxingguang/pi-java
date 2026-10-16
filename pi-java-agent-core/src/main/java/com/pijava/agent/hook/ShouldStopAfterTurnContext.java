@@ -8,9 +8,8 @@ import com.pijava.ai.message.Message;
 /**
  * Context for {@code should_stop_after_turn} hooks.
  *
- * <p>Aligned with pi's {@code shouldStopAfterTurn} callback
- * ({@code agent-loop.ts:247-257}): fired after a completed turn, before the
- * run would continue to the next turn or drain follow-up queues.</p>
+ * <p>Aligned with pi's {@code FinishTurn} callback（{@code types.ts:149-158}；
+ * 调用点 {@code agent-loop.ts:286}）：一轮落定后、emit {@code turn_end} 之前触发。</p>
  *
  * @param lane             lane name
  * @param runId            current run identifier
