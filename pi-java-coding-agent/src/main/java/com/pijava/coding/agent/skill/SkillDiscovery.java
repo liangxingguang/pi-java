@@ -33,7 +33,7 @@ public final class SkillDiscovery {
         this.agentDir = agentDir;
     }
 
-    /** 扫描全部来源并合并去重（USER → PROJECT → EXPLICIT，后加载覆盖先加载）。 */
+    /** 扫描全部来源并合并去重（pi：先到先得 —— USER → PROJECT → 显式路径）。 */
     public LoadSkillsResult discoverAll(boolean includeDefaults, List<Path> explicitPaths) {
         var results = new ArrayList<LoadSkillsResult>();
         if (includeDefaults) {
@@ -43,7 +43,7 @@ public final class SkillDiscovery {
                 cwd.resolve(".pi-java").resolve("skills"), SkillSource.PROJECT, true));
         }
         for (var path : explicitPaths) {
-            results.add(loadExplicit(path));
+            results.add(loadExplicit(path, includeDefaults));
         }
         return LoadSkillsResult.dedupe(LoadSkillsResult.merge(results));
     }
@@ -100,16 +100,38 @@ public final class SkillDiscovery {
         }
     }
 
-    private LoadSkillsResult loadExplicit(Path path) {
+    private LoadSkillsResult loadExplicit(Path path, boolean includeDefaults) {
+        // pi getSource（skills.ts:473-479）：includeDefaults=false 时按落点推断来源 ——
+        // 默认 user/project 技能目录下 ⇒ user/project，否则 "path"（≙ EXPLICIT）。
+        SkillSource source = includeDefaults ? SkillSource.EXPLICIT : inferSource(path);
         if (Files.isDirectory(path)) {
-            return loadDirectory(path, SkillSource.EXPLICIT, true);
+            return loadDirectory(path, source, true);
         }
         if (Files.isRegularFile(path)) {
-            var r = loader.loadFile(path, SkillSource.EXPLICIT);
+            if (!path.toString().endsWith(".md")) {
+                // pi :502：warning，不产 error。
+                return new LoadSkillsResult(List.of(), List.of(ResourceDiagnostic.warning(
+                    path.toString(), "skill path is not a markdown file")));
+            }
+            var r = loader.loadFile(path, source);
             return new LoadSkillsResult(
                 r.skill().map(List::of).orElseGet(List::of), r.diagnostics());
         }
-        return new LoadSkillsResult(List.of(), List.of(
-            ResourceDiagnostic.error(path.toString(), "Not a file or directory")));
+        // pi :484-485：warning，不产 error。
+        return new LoadSkillsResult(List.of(), List.of(ResourceDiagnostic.warning(
+            path.toString(), "skill path does not exist")));
+    }
+
+    /** pi {@code getSource}：落在默认 user/project 技能目录下 ⇒ 对应来源，否则显式。 */
+    private SkillSource inferSource(Path path) {
+        Path normalized = path.toAbsolutePath().normalize();
+        if (normalized.startsWith(agentDir.resolve("skills").toAbsolutePath().normalize())) {
+            return SkillSource.USER;
+        }
+        if (normalized.startsWith(
+                cwd.resolve(".pi-java").resolve("skills").toAbsolutePath().normalize())) {
+            return SkillSource.PROJECT;
+        }
+        return SkillSource.EXPLICIT;
     }
 }

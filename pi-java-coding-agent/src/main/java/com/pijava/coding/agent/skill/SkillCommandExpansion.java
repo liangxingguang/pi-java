@@ -40,7 +40,7 @@ public final class SkillCommandExpansion {
         if (skill == null) {
             return text; // Unknown skill, pass through
         }
-        Path file = skill instanceof MarkdownSkill md ? md.filePath() : null;
+        Path file = skill.filePath();
         if (file == null) {
             return text;
         }

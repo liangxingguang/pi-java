@@ -6,7 +6,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 import com.pijava.agent.skill.SkillSource;
 
@@ -105,14 +104,14 @@ public final class MarkdownSkillLoader {
         return null;
     }
 
+    /** pi {@code loadSkillFromFile}（skills.ts:279-345）：父目录名原样（不 lower）。 */
     private static String fallbackName(Path file) {
         Path parent = file.getParent();
         if (parent == null) {
             return null;
         }
         Path fileName = parent.getFileName();
-        String dirName = fileName == null ? null : fileName.toString();
-        return dirName == null ? null : dirName.toLowerCase(Locale.ROOT);
+        return fileName == null ? null : fileName.toString();
     }
 
     private static String str(Object value) {

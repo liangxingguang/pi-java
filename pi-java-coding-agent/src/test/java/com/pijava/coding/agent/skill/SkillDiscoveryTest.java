@@ -68,7 +68,8 @@ class SkillDiscoveryTest {
     }
 
     @Test
-    void laterSourceOverridesEarlier() throws Exception {
+    void firstSourceWinsAndLaterCollisionIsDiagnosed() throws Exception {
+        // pi addSkills（skills.ts:437-449）：先到先得，后到者产 collision 诊断。
         var userSkills = Files.createDirectories(tmp.resolve("user-skills"));
         var projSkills = Files.createDirectories(tmp.resolve("proj-skills"));
         Files.writeString(userSkills.resolve("SKILL.md"),
@@ -83,7 +84,79 @@ class SkillDiscoveryTest {
             LoadSkillsResult.merge(List.of(user, proj)));
 
         assertThat(merged.skills()).hasSize(1);
-        assertThat(merged.skills().get(0).systemPrompt()).contains("proj body");
+        assertThat(merged.skills().get(0).systemPrompt())
+            .as("先到先得：USER 赢（pi 序 USER → PROJECT → 显式）")
+            .contains("user body");
+        var collisions = merged.diagnostics().stream()
+            .filter(d -> "collision".equals(d.level())).toList();
+        assertThat(collisions).hasSize(1);
+        var payload = collisions.get(0).collision();
+        assertThat(payload.name()).isEqualTo("shared");
+        assertThat(payload.winnerPath()).contains("user-skills");
+        assertThat(payload.loserPath()).contains("proj-skills");
+    }
+
+    @Test
+    void sameFileViaSymlinkIsSilentlySkipped() throws Exception {
+        // pi :432-435：realPath 同文件静默跳过（无诊断）。
+        var real = Files.createDirectories(tmp.resolve("real"));
+        Files.writeString(real.resolve("SKILL.md"),
+            "---\nname: linked\ndescription: x\n---\nbody");
+        var link = tmp.resolve("link");
+        try {
+            Files.createSymbolicLink(link, real);
+        } catch (UnsupportedOperationException | java.io.IOException | SecurityException e) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "symlink unavailable: " + e);
+            return;
+        }
+        var discovery = new SkillDiscovery(tmp, tmp);
+        var a = discovery.loadDirectory(real, SkillSource.EXPLICIT, true);
+        var b = discovery.loadDirectory(link, SkillSource.EXPLICIT, true);
+        var merged = LoadSkillsResult.dedupe(LoadSkillsResult.merge(List.of(a, b)));
+
+        assertThat(merged.skills()).hasSize(1);
+        assertThat(merged.diagnostics()).as("同文件静默跳过，无 collision").isEmpty();
+    }
+
+    @Test
+    void explicitMissingOrNonMdPathsAreWarnings() throws Exception {
+        // pi :484-485/:502：显式路径不存在 / 非 md ⇒ warning（不是 error）。
+        Files.writeString(tmp.resolve("note.txt"), "not markdown");
+        var discovery = new SkillDiscovery(tmp, tmp);
+        var result = discovery.discoverAll(false,
+            List.of(tmp.resolve("missing"), tmp.resolve("note.txt")));
+
+        assertThat(result.skills()).isEmpty();
+        assertThat(result.diagnostics()).extracting(ResourceDiagnostic::level)
+            .containsExactly("warning", "warning");
+        assertThat(result.diagnostics()).extracting(ResourceDiagnostic::message)
+            .containsExactly("skill path does not exist", "skill path is not a markdown file");
+    }
+
+    @Test
+    void explicitPathUnderDefaultDirsInfersSource() throws Exception {
+        // pi getSource（:473-479）：includeDefaults=false 且落在默认目录下 ⇒ user/project。
+        var agentDir = Files.createDirectories(tmp.resolve("agent"));
+        var userSkill = Files.createDirectories(agentDir.resolve("skills/mine"));
+        Files.writeString(userSkill.resolve("SKILL.md"),
+            "---\nname: mine\ndescription: x\n---\nbody");
+        var projSkill = Files.createDirectories(tmp.resolve(".pi-java/skills/ours"));
+        Files.writeString(projSkill.resolve("SKILL.md"),
+            "---\nname: ours\ndescription: x\n---\nbody");
+        var outside = Files.createDirectories(tmp.resolve("elsewhere"));
+        Files.writeString(outside.resolve("SKILL.md"),
+            "---\nname: out\ndescription: x\n---\nbody");
+
+        var discovery = new SkillDiscovery(tmp, agentDir);
+        var result = discovery.discoverAll(false, List.of(userSkill, projSkill, outside));
+
+        var byName = new java.util.HashMap<String, SkillSource>();
+        for (var s : result.skills()) {
+            byName.put(s.name(), s.sourceInfo());
+        }
+        assertThat(byName.get("mine")).isEqualTo(SkillSource.USER);
+        assertThat(byName.get("ours")).isEqualTo(SkillSource.PROJECT);
+        assertThat(byName.get("out")).isEqualTo(SkillSource.EXPLICIT);
     }
 
     @Test
