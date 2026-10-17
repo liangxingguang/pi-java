@@ -1,35 +1,30 @@
 # 06 会话后端 / 评测 / chord / 防漂移脚本
 
-> 基准：pi @ `ea448f454`（2026-10-11，`v1.1.0-22`）；pi-java @ `edc8749d`（main）。
-> 范围：`pi-java-session-backend-sqlite` ＋ `pi-java-agent-core` 的会话持久化面
-> （主流对照 pi `coding-agent/src/core/session-manager.ts`）；`pi-java-evals` ↔ pi `packages/evals`；
-> pi `packages/chord`（R5 不可达）；pi 仓库根 `scripts/` 与本仓 `docs/map/check-drift.sh`（口径外）。
-> 判定三档：**对齐** / **缺失** / **存疑**。每条给两侧 file:line。
-> pi 参照版本：`1.1.0`（`packages/evals/package.json` version 字段）。
+> 【背景摘要】本图覆盖四块：会话持久化（sqlite 模块与 agent-core 的 JSONL 面）、评测（evals）、chord（R5 不可达）、防漂移脚本（口径外）。核心结论：pi 主流会话持久化只有 JSONL＋in-memory，SQLite 后端无对齐参照物。
+
+## 基准与范围
+
+- 基准：pi @ `ea448f454`（2026-10-11，`v1.1.0-22`）；pi-java @ `edc8749d`（main）。
+- 范围：`pi-java-session-backend-sqlite` ＋ `pi-java-agent-core` 的会话持久化面（主流对照 pi `coding-agent/src/core/session-manager.ts`）；`pi-java-evals` ↔ pi `packages/evals`；pi `packages/chord`（R5 不可达）；pi 仓库根 `scripts/` 与本仓 `docs/map/check-drift.sh`（口径外）。
+- 判定三档：**对齐** / **缺失** / **存疑**。每条给两侧 `file:line`。
+- pi 参照版本：`1.1.0`（`packages/evals/package.json` version 字段）。
 
 ---
 
 ## 口径：两条铁律
 
-1. **R1「pi 删掉的，pi-java 也删」** —— 参照物被删除的单元**权重 0、移出分母**（不是改判「对齐」；
-   判据是「和 pi 表现一样」，pi 没这个行为了，就没有对齐可言）。
-2. **R5「只算 `bin pi` 主流可达的」** —— 判据是从 `bin pi → dist/bundle/cli.js ← src/cli.ts → main()`
-   这条线可达。不可达者权重 0、不进分母。
+1. **R1「pi 删掉的，pi-java 也删」**——参照物被删除的单元**权重 0、移出分母**。注意不是改判「对齐」：判据是「和 pi 表现一样」，pi 没这个行为了，就没有对齐可言。
+2. **R5「只算 `bin pi` 主流可达的」**——判据是从 `bin pi → dist/bundle/cli.js ← src/cli.ts → main()` 这条线可达。不可达者权重 0、不进分母。
 
 ### B59（SQLite schema 分叉）裁决：保持「不作缺口」
 
-pi 主流会话持久化**只有 JSONL ＋ in-memory**（`SessionManager`），没有 SQLite 后端；
-`packages/session-backends` 整包已删，且它在删除前就**从未被 `bin pi` 主流消费**（R1 ＋ R5）。
-故旧文「SQLite schema 完全分叉＝全项目单点最大拖累（Σ权重 25，+16.2 pp）」**自始即错，移出分母**。
+- 【场景】pi-java 有 SQLite 会话后端，schema 与 pi 曾经的 session-backends 分叉。旧文记「SQLite schema 完全分叉＝全项目单点最大拖累（Σ权重 25，+16.2 pp）」。
+- 【决定】不作缺口、移出分母。pi 主流会话持久化**只有 JSONL ＋ in-memory**（`SessionManager`），没有 SQLite 后端；`packages/session-backends` 整包已删，且删除前就**从未被 `bin pi` 主流消费**（R1 ＋ R5）。旧判定**自始即错**。
+- 【风险/代价】无影响。[内部，模型不可见] ⚠️ 这**不主张删除 `pi-java-session-backend-sqlite` 模块**——删模块是独立裁决。本文件只如实标注：该模块**无对齐参照物**，其内部改造（见「本轮翻转与改动摘要」）只影响 JSONL 互读等主流单元的判定。
 
-⚠️ 这**不主张删除 `pi-java-session-backend-sqlite` 模块** —— 删模块是独立裁决。本文件只如实标注：
-该模块**无对齐参照物**，其内部改造（见「本轮翻转与改动摘要」）只影响 JSONL 互读等主流单元的判定。
-
-JSONL 主流互读的残余差异（信封扩展键、pi v1/v2 迁移）与 `docs/map/03-agent-core.md` **#73**
-（JSONL 存储，判「存疑（形状）」）同一口径，以 #73 为上层挂账条目。
+JSONL 主流互读的残余差异（信封扩展键、pi v1/v2 迁移）与 [`03-agent-core.md`](03-agent-core.md) **#73**（JSONL 存储，判「存疑（形状）」）同一口径，以 #73 为上层挂账条目。
 
 ---
-
 ## 0. 会话持久化各在哪个模块
 
 | 后端 | pi 位置（`ea448f454`） | pi-java 位置（`edc8749d`） |
