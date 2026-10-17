@@ -202,9 +202,7 @@ public final class InMemoryTelemetryContext implements TelemetryContext {
                     // 两段式：先建合并副本再替换，失败整包原子忽略
                     // （pi memory.ts:63-69,149-156）。
                     var merged = new LinkedHashMap<>(attributes);
-                    for (var entry : copyAttributes(newAttributes).entrySet()) {
-                        merged.put(entry.getKey(), entry.getValue());
-                    }
+					merged.putAll(copyAttributes(newAttributes));
                     attributes.clear();
                     attributes.putAll(merged);
                 } catch (RuntimeException | Error e) {

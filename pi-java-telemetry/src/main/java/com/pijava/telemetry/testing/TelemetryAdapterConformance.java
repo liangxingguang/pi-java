@@ -1,18 +1,11 @@
 package com.pijava.telemetry.testing;
 
-import java.util.AbstractMap;
-import java.util.AbstractSet;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-
 import com.pijava.telemetry.RecordedTelemetrySpan;
 import com.pijava.telemetry.SpanOptions;
 import com.pijava.telemetry.SpanStatus;
 import com.pijava.telemetry.TelemetrySpan;
+
+import java.util.*;
 
 /**
  * pi {@code testing/conformance.ts:60-315} 的移植：回调式遥测适配器契约的
@@ -237,9 +230,9 @@ public final class TelemetryAdapterConformance {
 
         var spans = fixture.getSpans();
         checkEquals(1, spans.size(), "recorded span count");
-        checkEquals(Map.of("value", "initial"), spans.get(0).attributes(), "settled attributes");
-        checkEquals(0, spans.get(0).events().size(), "settled events");
-        checkEquals(new SpanStatus.Ok(), spans.get(0).status(), "settled status");
+        checkEquals(Map.of("value", "initial"), spans.getFirst().attributes(), "settled attributes");
+        checkEquals(0, spans.getFirst().events().size(), "settled events");
+        checkEquals(new SpanStatus.Ok(), spans.getFirst().status(), "settled status");
     }
 
     /**
