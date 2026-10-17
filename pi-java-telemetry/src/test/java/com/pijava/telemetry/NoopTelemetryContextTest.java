@@ -1,6 +1,7 @@
 package com.pijava.telemetry;
 
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
@@ -57,6 +58,27 @@ class NoopTelemetryContextTest {
             var inner = outer.openSpan(new SpanOptions("inner"));
             inner.addAttribute("k", 42);
             inner.close();
+            return null;
+        });
+    }
+
+    /**
+     * pi {@code telemetry.test.ts:187-197}：不检查、不保留遥测载荷——
+     * 炸弹 Map（任何读取都抛）喂给跨度三方法也不抛。
+     */
+    @Test
+    void doesNotInspectOrRetainPayloads() {
+        var ctx = NoopTelemetryContext.INSTANCE;
+        Map<String, Object> bomb = new java.util.AbstractMap<>() {
+            @Override
+            public Set<Entry<String, Object>> entrySet() {
+                throw new IllegalStateException("read");
+            }
+        };
+        ctx.startSpan(new SpanOptions("operation"), span -> {
+            span.addEvent("event", bomb);
+            span.setAttributes(bomb);
+            span.setStatus(new SpanStatus.Ok());
             return null;
         });
     }
