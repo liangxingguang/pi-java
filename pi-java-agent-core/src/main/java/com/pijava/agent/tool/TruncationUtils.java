@@ -16,8 +16,24 @@ public final class TruncationUtils {
     public static final int DEFAULT_MAX_LINES = 2000;
     /** pi {@code truncate.ts:12}：{@code 50 * 1024}（B158）。 */
     public static final long DEFAULT_MAX_BYTES = 51_200L;
+    /** pi {@code GREP_MAX_LINE_LENGTH}（truncate.ts:13）。 */
+    public static final int GREP_MAX_LINE_LENGTH = 500;
 
     private TruncationUtils() {}
+
+    /**
+     * pi {@code truncateLine}（truncate.ts:268-276）：超长截到 {@code maxChars}
+     * ＋ {@code "... [truncated]"}。JS slice 与 java substring 同为 UTF-16 单元。
+     */
+    public static LineTruncation truncateLine(String line, int maxChars) {
+        if (line.length() <= maxChars) {
+            return new LineTruncation(line, false);
+        }
+        return new LineTruncation(line.substring(0, maxChars) + "... [truncated]", true);
+    }
+
+    /** What {@link #truncateLine} produced. */
+    public record LineTruncation(String text, boolean wasTruncated) {}
 
     /**
      * Format a byte size for display.
