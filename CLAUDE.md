@@ -43,6 +43,8 @@ commands: `mvn clean verify`, `mvn test -pl <module>`, `mvn checkstyle:check`, `
 | `docs/04-open-items-register.md` | 未结项台账（「还剩什么没对齐」的唯一权威） |
 | `docs/05-module-alignment-map.md` | 模块对齐地图（量化）；明细在 `docs/map/` |
 
+遵循 .claude/rules.md 文档写作规则。当前任务：将技术裁决记录改写为开发工单可读版本，采用【场景/决定/风险】三段式，术语首次附带释义，分点列出裁决条目，区分模型可见/内部实现。
+
 ## 编码规范
 
 - **Erasable Java（代数数据类型）**：优先用 `record` + `sealed interface` + `switch` 模式匹配表达 ADT；`enum` 与 sealed 按数据形状取舍——**纯常量闭集用 `enum`**（判别字面量、错误码、状态、选项开关；需 snake_case/字符串序列化时用 `@JsonValue`，不手写 switch），**变体携带不同字段或行为时用 `sealed interface` + `record`**。不绝对禁用 `enum`（Java `enum` 是常态构造，无 pi TS `enum` 的运行时问题）；也不为凑「无 enum」而用 sealed 空 record 硬造纯常量枚举。
