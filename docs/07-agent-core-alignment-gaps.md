@@ -18,7 +18,7 @@
 | 地图# | 权重 | 差什么 | 台账 |
 |---|---:|---|---|
 | #62 | **2** | `formatSkillInvocation`（技能调用格式）：全仓零命中 | —— |
-| #8（工具表） | 1 | `powershell` 工具缺失（pi 8 个内置工具，Java 7 个；系统提示词里有名字、无实现） | **B241** |
+| #8（工具表） | 1 | `powershell` 工具缺失（pi 8 个内置工具，Java 7 个；系统提示词里有名字、无实现） | **B243** |
 | #24 | 1 | branch summary **生成器**缺失（只有 `Entry.BranchSummary` 类型＋文案） | **B1** |
 | #25 | 1 | 会话树导航 `navigateTree` 缺失 | B1 同族 |
 | #27 | 1 | branch summary 设置（`reserveTokens`/`skipPrompt`，注意与压缩阈值的同名 reserve 无关） | B1 同族 |
@@ -69,8 +69,9 @@ B53 `find()` 缺三级阶梯（地图 #78）、B31/B32/B33（get_state 三处 RP
 > 2026-10-17 批 agent-core-3（详稿 [`docs/22`](22-agent-core-batch3-design.md)）：内置工具四条存疑
 > **清零**——bash 超时面逐字（无默认/2147483.647 s 上限/毫秒粒度/isError 收尾）、grep 补七参＋gitignore
 > ＋输出形（纯 Java 引擎，**裁决①** rg/fd 外壳与 tools-manager 不移植）、`glob`→`find` 改名＋fd 语义、
-> ls `recursive`→`limit` 参数集换血；窄差 D1–D8 入 map/03 工具表备注。新登记：**B241**（powershell
-> 实现＋默认激活集，挂 B236 族）、**B242**（bash 的 `PI_*` 会话环境变量面）——均在 docs/04 §3.3。
+> ls `recursive`→`limit` 参数集换血；窄差 D1–D8 入 map/03 工具表备注。新登记：**B243**（powershell
+> 实现＋默认激活集，挂 B236 族；设计稿原编号 B241 与 telemetry 批 1 撞号）、**B242**（bash 的 `PI_*`
+> 会话环境变量面）——均在 docs/04 §3.3。
 
 > 旧 A/C/D/F 编号来自各过程稿（docs/31 族），其中一部分已随包闭环；与 `docs/04` §2 的 A 类
 > （A10/A14/A15/A16）不是同一编号空间。A16 重测时统一清理标签。
