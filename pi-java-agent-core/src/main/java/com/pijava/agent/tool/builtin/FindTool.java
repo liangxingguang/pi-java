@@ -128,7 +128,8 @@ public final class FindTool {
             Files.walkFileTree(root, new SimpleFileVisitor<>() {
                 @Override
                 public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-                    if (dir.getFileName() != null && dir.getFileName().toString().equals(".git")) {
+                    Path dirName = dir.getFileName();
+                    if (dirName != null && dirName.toString().equals(".git")) {
                         return FileVisitResult.SKIP_SUBTREE;
                     }
                     if (!dir.equals(root)) {

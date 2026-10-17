@@ -233,7 +233,8 @@ public final class GrepTool {
         Files.walkFileTree(root, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-                if (dir.getFileName() != null && dir.getFileName().toString().equals(".git")) {
+                Path dirName = dir.getFileName();
+                if (dirName != null && dirName.toString().equals(".git")) {
                     return FileVisitResult.SKIP_SUBTREE; // rg/fd 的 ignore crate 默认不下降 .git
                 }
                 if (!dir.equals(root) && ignore.isIgnored(rel(dir), true)) {
@@ -265,9 +266,11 @@ public final class GrepTool {
                 if (globPattern == null) {
                     return true;
                 }
-                return fullPath
-                    ? globPattern.matcher(rel(file)).matches()
-                    : globPattern.matcher(file.getFileName().toString()).matches();
+                if (fullPath) {
+                    return globPattern.matcher(rel(file)).matches();
+                }
+                Path fileName = file.getFileName();
+                return fileName != null && globPattern.matcher(fileName.toString()).matches();
             }
         });
         return candidates;
@@ -349,7 +352,8 @@ public final class GrepTool {
                 return rel;
             }
         }
-        return file.getFileName().toString();
+        Path fileName = file.getFileName();
+        return fileName == null ? file.toString() : fileName.toString();
     }
 
     /** pi getFileLines（grep.ts:148-160）：\r\n/\r → \n 归一后按 \n 切（保留尾空段，同 JS split）。 */
