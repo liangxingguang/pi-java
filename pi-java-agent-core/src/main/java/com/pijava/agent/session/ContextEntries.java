@@ -1,17 +1,14 @@
 package com.pijava.agent.session;
 
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import com.pijava.agent.entry.CustomMessageContent;
 import com.pijava.agent.entry.Entry;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
-import com.pijava.ai.message.StopReason;
 
 /**
  * 压缩感知的 LLM 上下文构建（对齐 pi {@code session-manager.ts} 的
@@ -38,20 +35,6 @@ public final class ContextEntries {
     private static final String BRANCH_SUMMARY_PREFIX =
         "The following is a summary of a branch that this conversation came back from:\n\n<summary>\n";
     private static final String BRANCH_SUMMARY_SUFFIX = "</summary>";
-
-    /**
-     * Assistant stop reasons whose message carries no content worth sending
-     * back to the provider. pi's spec ({@code docs/harness-v2.md:164}):
-     * "Assistant responses with stop reason error, aborted, or deferred
-     * project to no provider message. A genuine output-limit length response
-     * remains in context." and pi's current code ({@code
-     * packages/agent/src/harness/session/context.ts}, {@code isContextMessage},
-     * anchor 3390bd936) agree — both filter all three of {@code error},
-     * {@code aborted}, and {@code deferred}. This set is an exact port of
-     * pi's code.
-     */
-    private static final Set<StopReason> NON_PROJECTED_STOP_REASONS =
-        EnumSet.of(StopReason.DEFERRED, StopReason.ERROR, StopReason.ABORTED);
 
     private ContextEntries() {}
 
@@ -255,14 +238,19 @@ public final class ContextEntries {
         return message;
     }
 
-    /** Per-entry projection (pi {@code sessionEntryToContextMessages}); {@code null} = no message. */
+    /**
+     * Per-entry projection (pi {@code sessionEntryToContextMessages}); {@code null} = no message.
+     *
+     * <p><b>#58（本锚 ea448f454 重核）</b>：消息条目<b>恒透传</b> —— 现行 pi 主流
+     * <b>不过滤</b> stopReason：循环层只终止（{@code agent-loop.ts:245-256}）、写回
+     * context（{@code :441-450}），转换链无过滤（{@code :389-397}、{@code agent.ts:38-46}
+     * 只按 role），session-manager 投影侧零 stopReason 处理（{@code :440} 起
+     * {@code return [message]}）。本类此前的 {@code NON_PROJECTED_STOP_REASONS}
+     * （error/aborted/deferred 剔除）移植自已删除的 harness {@code isContextMessage}
+     * —— 参照物被删 ⇒ 移植作废（R1），已随 #58 移除。</p>
+     */
     private static Message project(Entry e) {
         if (e instanceof Entry.Message m) {
-            if (m.message() instanceof Message.AssistantMessage assistant
-                    // EnumSet.contains(null) 合法返 false ⇒ null（未落定）不被剔除。
-                    && NON_PROJECTED_STOP_REASONS.contains(assistant.stopReason())) {
-                return null;
-            }
             return m.message();
         }
         if (e instanceof Entry.Compaction c) {

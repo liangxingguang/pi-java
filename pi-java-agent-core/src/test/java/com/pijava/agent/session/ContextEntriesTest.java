@@ -221,19 +221,25 @@ class ContextEntriesTest {
         assertThat(ContextEntries.pathToLeaf(entries, null)).containsExactly(a, b);
     }
 
-    // ── D4: 投影规则（stopReason 决定 assistant entry 是否进 provider 上下文）────────
+    // ── D4: 投影规则（#58 翻转：stopReason 不再决定 assistant entry 是否进 provider 上下文）────────
 
+    /**
+     * #58（本锚 ea448f454 重核）：现行 pi 主流<b>不过滤</b> stopReason —— error/aborted 的
+     * assistant 消息原样发给 provider（循环层只终止，转换链无过滤，session-manager 投影侧
+     * 零 stopReason 处理）。翻转前这里断言「投影为零条」，其依据是已删除的 harness
+     * {@code isContextMessage}（R1：参照物被删 ⇒ 移植作废）。
+     */
     @Test
-    void deferredErrorAndAbortedAssistantMessagesProjectToNothing() {
+    void deferredErrorAndAbortedAssistantMessagesStillProject() {
         for (StopReason stopReason : List.of(StopReason.DEFERRED, StopReason.ERROR, StopReason.ABORTED)) {
             var assistant = assistantEntry("a-" + stopReason, "u-1", "partial text", stopReason);
             var messages = ContextEntries.toMessages(List.<Entry>of(
                 message("u-1", null, "user", "hello"), assistant));
 
             assertThat(messages)
-                .as("stopReason=%s 的 assistant 消息必须投影为零条（pi spec docs/harness-v2.md:164）", stopReason)
+                .as("stopReason=%s 的 assistant 消息投影后仍在列（#58：现行 pi 主流不过滤）", stopReason)
                 .extracting(Message::role)
-                .containsExactly("user");
+                .containsExactly("user", "assistant");
         }
     }
 
@@ -243,7 +249,7 @@ class ContextEntriesTest {
             var assistant = assistantEntry("a-" + stopReason, null, "answer", stopReason);
 
             assertThat(ContextEntries.toMessages(List.<Entry>of(assistant)))
-                .as("stopReason=%s 不属于被投影掉的集合", stopReason)
+                .as("stopReason=%s 的消息照常投影", stopReason)
                 .hasSize(1);
         }
     }
@@ -262,8 +268,7 @@ class ContextEntriesTest {
     /**
      * 系统消息是第四种 {@code Message} 变体，仍然以 {@code Entry.Message} 载荷的形式
      * 存在于路径中（A1 **不**新增 {@code Entry.SystemMessage} 子类型）。投影必须原样、
-     * 原位带过 —— 既不能被 {@code project} 的 stopReason 过滤吃掉（它只看 assistant），
-     * 也不能被挪到首位或末位。
+     * 原位带过 —— 不能被挪到首位或末位。
      */
     @Test
     void systemMessagePayloadSurvivesProjectionInPlace() {

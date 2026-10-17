@@ -26,9 +26,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code "pending"}（{@code anthropic-messages.ts:526} 等五处）之后，「provider 还没给终局
  * 判定」这个状态**换了取值**。宿主侧 {@code PiLoopRunner:237} 是拿每个 update 的 partial
  * 重建终局消息的 —— 所以一处按 {@code != null} 写的收尾检查会**恒真**，把
- * {@code "pending"} 当成「已落定」放行；而 {@code ContextEntries.NON_PROJECTED_STOP_REASONS}
- * 不含 {@code "pending"} ⇒ 被打断的响应会被投影进后续请求的上下文（原 docs/31 §8.35.15 八-8.3，
- * 即 {@code MidStreamAbortTest} 记的 A8 缺陷的复活形态）。</p>
+ * {@code "pending"} 当成「已落定」放行 ⇒ 被打断的一轮会被 {@code determineOutcome}
+ * 记成 {@code completed} 而不是 {@code aborted}（原 docs/31 §8.35.15 八-8.3；
+ * #58 起投影恒透传，这条不变量服务的是终局记账/重试判定，不再是投影剔除）。</p>
  *
  * <p><b>本夹具与 {@code MidStreamAbortTest} 的差别</b>：那条走「拉取**途中**中止」
  * （{@code cutShort} 支，收尾不看 stopReason，故对 ⑩ 免疫），且 partial 用

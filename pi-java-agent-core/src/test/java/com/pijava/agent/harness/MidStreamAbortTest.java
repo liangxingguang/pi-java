@@ -32,9 +32,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <ul>
  *   <li>{@code determineOutcome} 落到 {@code "completed"}（{@code HarnessUtils:126}）</li>
- *   <li>助手 entry 以 {@code stopReason == null} 落库，而
- *       {@code ContextEntries.NON_PROJECTED_STOP_REASONS} 只含 {@code deferred/error/aborted}
- *       ⇒ 这段被打断的响应会被**当成正常回答投影进后续请求的上下文**</li>
+ *   <li>助手 entry 以 {@code stopReason == null} 落库 —— 一个「没有终局判定」的
+ *       轮次被记成正常完成（#58 起投影恒透传，此处的问题只剩终局记账失真）</li>
  * </ul>
  *
  * <p>本测试断言的是**应对齐 pi 的行为**：abort 必须记成 {@code aborted}。

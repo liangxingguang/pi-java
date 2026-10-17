@@ -380,9 +380,10 @@ final class PiLoopRunner {
 
     /**
      * 被中断的一轮必须以 {@code aborted} 收尾，而不是徒留一个「没有终局判定」的
-     * {@code stopReason}（那样 {@code determineOutcome} 会落到 {@code completed}，
-     * 而 {@code ContextEntries.NON_PROJECTED_STOP_REASONS} 又不含它，
-     * 于是这段残缺的响应会被当成正常回答投影进后续请求）。
+     * {@code stopReason}（那样 {@code determineOutcome} 会落到 {@code completed}）。
+     * 这条「落定停因」不变量服务重试判定 / 读尾 / 估算 —— <b>不再</b>服务投影剔除：
+     * #58 起投影恒透传（现行 pi 主流本就把 error/aborted 消息内容发给 provider，
+     * 原 docs 里 A8 的「残缺响应投影」担忧按现行 pi 行为消解）。
      *
      * <p><b>只在流真的被切断时改写</b>（{@code cutShort}，或 provider 连终局事件都没发）。
      * provider 报出了终局判定就必须采信它 —— 否则一个「进场前就已中止、但 provider 照样
@@ -394,11 +395,10 @@ final class PiLoopRunner {
      * {@code finalMessage} 由每个 update 事件的 partial 重建（{@code :237}），而
      * {@code StreamPartialBuilder} 的初值已改成 pi 的 {@code "pending"} ⇒ 「没观测到终局」
      * 从 {@code null} 变成了 {@code "pending"}。若仍按 {@code != null} 判，这一支会把
-     * {@code "pending"} 当成「provider 已给终局判定」原样放行 —— 而
-     * {@code NON_PROJECTED_STOP_REASONS} 不含 {@code "pending"}，A8 那个缺陷（残缺响应
-     * 被投影进后续上下文）就会复活。pi 侧没有这条检查，因为 pi 的 provider 自己把终局
-     * reason 写进同一个累加器对象；这里是把 pi 那条隐式不变量（落定的消息不是
-     * {@code "pending"}）在宿主侧显式写出来。</p>
+     * {@code "pending"} 当成「provider 已给终局判定」原样放行 —— 中断轮的
+     * {@code determineOutcome} 就会被记成 {@code completed}。pi 侧没有这条检查，
+     * 因为 pi 的 provider 自己把终局 reason 写进同一个累加器对象；这里是把 pi 那条
+     * 隐式不变量（落定的消息不是 {@code "pending"}）在宿主侧显式写出来。</p>
      */
     private static Message.AssistantMessage markAborted(
             Message.AssistantMessage message, com.pijava.ai.AbortSignal signal, boolean cutShort) {

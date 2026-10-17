@@ -88,13 +88,14 @@ class CrossTurnContextTest {
     }
 
     /**
-     * The ContextEntries projection rule reaches the provider context through
-     * the <em>resume seed</em> path too, not just through the live transcript:
-     * a seeded assistant entry whose stop reason is deferred/error/aborted must
-     * never be sent to the provider (pi spec {@code docs/harness-v2.md:164}).
+     * The ContextEntries projection reaches the provider context through the
+     * <em>resume seed</em> path too, not just through the live transcript.
+     * <b>#58 翻转</b>：现行 pi 主流不过滤 stopReason（{@code agent-loop.ts:441-450}
+     * 写回、{@code agent.ts:38-46} 只按 role），deferred/error/aborted 的 seeded
+     * assistant 条目同样原样发给 provider。
      */
     @Test
-    void seededNonProjectedAssistantEntryStaysOutOfTheProviderContext() {
+    void seededErrorOrAbortedAssistantEntryReachesTheProviderContext() {
         for (StopReason stopReason : List.of(StopReason.DEFERRED, StopReason.ERROR, StopReason.ABORTED)) {
             var captured = new AtomicReference<List<Message>>();
             var h = harness(captured);
@@ -115,9 +116,8 @@ class CrossTurnContextTest {
                 .map(b -> ((ContentBlock.TextContent) b).text())
                 .toList();
             assertThat(texts)
-                .as("stopReason=%s 的 seeded assistant 条目不得进 provider 上下文", stopReason)
-                .doesNotContain("partial text")
-                .contains("hello", "next");
+                .as("stopReason=%s 的 seeded assistant 条目投影后仍在列（#58）", stopReason)
+                .contains("hello", "partial text", "next");
         }
     }
 

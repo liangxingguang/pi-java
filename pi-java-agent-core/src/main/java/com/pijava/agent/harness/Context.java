@@ -6,33 +6,35 @@ import com.pijava.agent.tool.AgentTool;
 import com.pijava.ai.message.Message;
 
 /**
- * 一次 LLM 请求的上下文 —— pi {@code Context}（{@code packages/ai/src/types.ts:524-528}）
- * 与 {@code AgentContext}（{@code packages/agent/src/types.ts:415-422}）在 pi-java 侧的统一对应物。
+ * 一次 LLM 请求的上下文 —— pi {@code Context} 与 {@code AgentContext} 在 pi-java 侧的统一对应物。
  *
- * <p>pi 把这两个类型分开，是因为它有 {@code AgentMessage} / {@code Message} 两套消息模型
+ * <p><b>载体对齐（#100，本锚 ea448f454 重核）</b>：pi 的请求上下文 {@code TranscriptContext}
+ * <b>只有 messages</b>（{@code packages/ai/src/types.ts:780-783}），系统提示由
+ * {@code normalizeContext}（{@code packages/ai/src/utils/transcript.ts:30-34}）折成
+ * <b>首条 system 消息</b>；pi-java 在 provider 边界经 {@code ContextNormalizer} 于
+ * <b>同一点</b>做同一折叠（{@code DefaultProviders} 交出本记录的 {@code systemPrompt}
+ * 字段）⇒ 请求线行为等价。pi 主流没有会话中变更系统提示的路径
+ * （{@code setSystemPrompt} 全仓零命中）；{@code AgentHarness.setSystemPrompt} 是
+ * pi-java 的超集能力，留痕。</p>
+ *
+ * <p>pi 把两个 Context 类型分开，是因为它有 {@code AgentMessage} / {@code Message} 两套消息模型
  * （多出的 {@code bashExecution} / {@code branchSummary} / {@code compactionSummary} 三个角色）。
  * 那三个角色来自 pi 的 {@code harness/} 层 —— **不在对齐范围内**（{@code 原 docs/31 §1.2}），
  * 且 {@code CustomAgentMessages} 默认为空。因此 pi-java 只有一套消息模型，两个类型合并为本记录。</p>
  *
  * <p><b>三个字段逐字对齐 pi</b>：{@code systemPrompt} / {@code messages} / {@code tools}。
- * 三者缺一不可 —— 系统提示与工具定义**都在这里**，不走在消息列表里：</p>
- *
- * <ul>
- *   <li>pi 的 {@code Message} 只有 user / assistant / toolResult 三个角色
- *       （{@code packages/ai/src/types.ts:470}），**没有 system 角色**；</li>
- *   <li>pi 的 provider 适配层读的是 {@code context.systemPrompt}
- *       （{@code api/anthropic-messages.ts:1074}、{@code api/openai-completions.ts:1214} 等），
- *       从不扫描消息列表找系统消息。</li>
- * </ul>
+ * 三者缺一不可 —— 系统提示与工具定义**都在这里**，不走在消息列表里（系统提示的折叠
+ * 点是 provider 边界，见上）。</p>
  *
  * <p>工具同理：pi 的 {@code AgentLoopConfig} **没有** tools 字段，工具只在本记录上。</p>
  *
- * <p><b>工具装的是 {@code AgentTool} 不是 {@code ToolDefinition}</b>（2026-09-13 更正）。
- * pi 的两个 Context 对 tools 的类型不同：ai 层的 {@code Context.tools?: Tool[]} 是
- * 「名字 + 描述 + 参数」的**窄定义**，agent 层的 {@code AgentContext.tools?: AgentTool[]}
- * 是**带行为的本体**；pi 把后者原样塞进前者（结构类型兼容）。本记录合并了两个 Context，
+ * <p><b>工具装的是 {@code AgentTool} 不是 {@code ToolDefinition}</b>（2026-09-13 更正，
+ * 行号锚已更新至 ea448f454）。pi 的两个 Context 对 tools 的类型不同：ai 层的
+ * {@code Context.tools?: Tool[]} 是「名字 + 描述 + 参数」的**窄定义**，agent 层的
+ * {@code AgentContext.tools?: AgentTool[]}（{@code agent/src/types.ts:501-507}）是
+ * **带行为的本体**；pi 把后者原样塞进前者（结构类型兼容）。本记录合并了两个 Context，
  * 一度取了窄的那份 —— 于是 {@code AgentTool.executionMode()}（决定整批走顺序还是并行，
- * {@code agent-loop.ts:417-421}）在循环里**根本够不着**：生产代码零读者。
+ * {@code agent-loop.ts:508-524}）在循环里**根本够不着**：生产代码零读者。
  * 现在取宽的那份，provider 边界用 {@code ToolRegistry.definitionsOf} 投影成定义。</p>
  *
  * @param systemPrompt 系统提示（{@code null} 表示不发送）。pi 的 {@code AgentState.systemPrompt}
