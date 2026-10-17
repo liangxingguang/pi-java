@@ -211,7 +211,7 @@ class LaneMessagesTest {
             List.of(new ContentBlock.TextContent("kept tail")));
         h.seedTranscript(AgentHarness.DEFAULT_LANE, List.of(
             new Entry.Compaction("cmp-1", 0, null, null, "a summary",
-                "u-2", List.of(kept), 100, Map.of(), null),
+                "u-2", List.of(kept), 100, Map.of(), null, null),
             new Entry.Message("u-2", 0, "cmp-1", null, kept, null)));
 
         h.prompt("next");

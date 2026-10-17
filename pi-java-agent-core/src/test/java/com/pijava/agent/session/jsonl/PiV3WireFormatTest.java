@@ -228,6 +228,43 @@ class PiV3WireFormatTest {
 
     // ── 往返 ────────────────────────────────────────────────────────
 
+    // ── fromHook（map #55）：可空兼容键 ─────────────────────────────
+
+    @Test
+    void fromHookIsOmittedWhenNullAndRoundTripsWhenTrue() throws Exception {
+        Path dir = Files.createTempDirectory("pi-v3-fromhook");
+        var repo = JsonlSessionRepository.over(dir);
+        var session = repo.create(new JsonlSessionCreateOptions(null, "work", null, null));
+        session.appendEntry(message("m1", "hello"), "main");
+        // pi session-manager.ts:100-101：fromHook?: boolean —— 缺席 ≙ undefined ≙ pi-generated。
+        session.appendEntry(new ProvisionedEntry<>(new Entry.Compaction("c1", 0, null, null,
+            "s", "m1", List.of(), 10, null, null, null)), "main");
+        session.appendEntry(new ProvisionedEntry<>(new Entry.Compaction("c2", 0, null, null,
+            "s", "m1", List.of(), 10, null, null, Boolean.TRUE)), "main");
+        session.storage().drain();
+
+        var rows = lines(repo.list(JsonlSessionListOptions.all()).getFirst().path());
+        JsonNode plain = rows.stream()
+            .filter(n -> "c1".equals(n.path("id").asText())).findFirst().orElseThrow();
+        JsonNode hooked = rows.stream()
+            .filter(n -> "c2".equals(n.path("id").asText())).findFirst().orElseThrow();
+        assertThat(plain.has("fromHook")).as("null ≙ undefined ⇒ 键省略（NON_NULL）").isFalse();
+        assertThat(hooked.path("fromHook").asBoolean()).isTrue();
+
+        Path file = repo.list(JsonlSessionListOptions.all()).getFirst().path();
+        var reloaded = JsonlSessionStorage.load(FS, file);
+        var entries = reloaded.getLog(com.pijava.agent.session.LogOptions.none()).stream()
+            .filter(item -> item instanceof com.pijava.agent.session.LogItem.EntryItem)
+            .map(item -> ((com.pijava.agent.session.LogItem.EntryItem) item).entry())
+            .toList();
+        var rePlain = (Entry.Compaction) entries.stream()
+            .filter(e -> "c1".equals(e.id())).findFirst().orElseThrow();
+        var reHooked = (Entry.Compaction) entries.stream()
+            .filter(e -> "c2".equals(e.id())).findFirst().orElseThrow();
+        assertThat(rePlain.fromHook()).as("旧文件无此键 ⇒ null ≙ pi undefined").isNull();
+        assertThat(reHooked.fromHook()).isEqualTo(Boolean.TRUE);
+    }
+
     @Test
     void roundTripsThroughTheNewWireFormat() throws Exception {
         Path dir = Files.createTempDirectory("pi-v3-roundtrip");

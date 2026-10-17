@@ -148,11 +148,11 @@ class MessageBubbleTest {
                 "t", 0, null, null, "high")))
             .isEqualTo(new ChatMessage.System("Thinking: high", MetaKind.THINKING_LEVEL));
         assertThat(ChatMessage.from(new Entry.Compaction(
-                "c", 0, null, null, "kept 3 msgs", null, List.of(), 100, null, null)))
+                "c", 0, null, null, "kept 3 msgs", null, List.of(), 100, null, null, null)))
             .isEqualTo(new ChatMessage.System(
                 "Compacted context: kept 3 msgs", MetaKind.COMPACTION));
         assertThat(ChatMessage.from(new Entry.BranchSummary(
-                "b", 0, null, null, "from-1", "summ", null, null)))
+                "b", 0, null, null, "from-1", "summ", null, null, null)))
             .isEqualTo(new ChatMessage.System("Branch: summ", MetaKind.BRANCH));
         assertThat(ChatMessage.from(new Entry.Custom(
                 "x", 0, null, null, "progress", null)))

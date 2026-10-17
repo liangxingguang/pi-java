@@ -63,7 +63,7 @@ class EntryTest {
     void compactionEntry() {
         var entry = new Entry.Compaction("id-1", 4L, "parent", Instant.now(),
             "summary", "kept-1", List.of(), 100,
-            Map.of("readFiles", List.of("a.txt")), null);
+            Map.of("readFiles", List.of("a.txt")), null, null);
         assertThat(entry.summary()).isEqualTo("summary");
         assertThat(entry.firstKeptEntryId()).isEqualTo("kept-1");
         assertThat(entry.tokensBefore()).isEqualTo(100);
@@ -73,7 +73,7 @@ class EntryTest {
     @Test
     void branchSummaryEntry() {
         var entry = new Entry.BranchSummary("id-1", 5L, "parent", Instant.now(),
-            "from-1", "Summary text", null, null);
+            "from-1", "Summary text", null, null, null);
         assertThat(entry.summary()).isEqualTo("Summary text");
         assertThat(entry.fromId()).isEqualTo("from-1");
     }

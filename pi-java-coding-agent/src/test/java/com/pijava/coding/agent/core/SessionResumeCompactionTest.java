@@ -36,7 +36,7 @@ class SessionResumeCompactionTest {
     private static ProvisionedEntry<Entry.Compaction> compaction(String id, String parentId,
                                                                  String firstKeptId) {
         return new ProvisionedEntry<>(new Entry.Compaction(id, 0, parentId, null,
-            "summary-text", firstKeptId, List.of(), 1000, null, null));
+            "summary-text", firstKeptId, List.of(), 1000, null, null, null));
     }
 
     @Test

@@ -41,12 +41,12 @@ class ContextEntriesTest {
 
     private static Entry.Compaction compaction(String id, String parentId, String summary, String firstKeptId) {
         return new Entry.Compaction(id, 0, parentId, Instant.EPOCH, summary,
-            firstKeptId, List.of(), 1000, null, null);
+            firstKeptId, List.of(), 1000, null, null, null);
     }
 
     private static Entry.BranchSummary branchSummary(String id, String parentId, String summary) {
         return new Entry.BranchSummary(id, 0, parentId, Instant.EPOCH, "from-1", summary,
-            java.util.Map.of(), null);
+            java.util.Map.of(), null, null);
     }
 
     private static Entry.ModelChange modelChange(String id, String parentId) {
@@ -133,7 +133,7 @@ class ContextEntriesTest {
         var path = List.<Entry>of(
             message("a", null, "user", "q"),
             bs,
-            new Entry.BranchSummary("bs2", 0, "bs", Instant.EPOCH, "from-2", null, java.util.Map.of(), null));
+            new Entry.BranchSummary("bs2", 0, "bs", Instant.EPOCH, "from-2", null, java.util.Map.of(), null, null));
         var msgs = ContextEntries.toMessages(path);
         assertThat(msgs).hasSize(2);
         assertThat(textOf(msgs.get(1))).isEqualTo(

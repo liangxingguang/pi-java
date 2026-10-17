@@ -61,7 +61,7 @@ class CompactionThresholdGateTest {
 
     private static Entry.Compaction marker(String id) {
         return new Entry.Compaction(id, 0, null, Instant.ofEpochMilli(1),
-            "old summary", "e1", List.of(), 10, null, null);
+            "old summary", "e1", List.of(), 10, null, null, null);
     }
 
     /**

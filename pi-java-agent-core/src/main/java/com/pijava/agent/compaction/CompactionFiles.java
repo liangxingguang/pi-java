@@ -62,13 +62,14 @@ final class CompactionFiles {
     /**
      * 把上一份 compaction 的 {@code details} 回灌进累加器。
      *
-     * <p>pi 的两份实现守卫不同：legacy 是 {@code !fromHook && details}
-     * （{@code coding-agent/.../compaction.ts:52}），harness 只做形状守卫
-     * （{@code compaction.ts:54-68}）。pi-java 的 {@code Entry.Compaction} **没有
-     * {@code fromHook} 字段**，故采用 harness 那份：对象非 null 非数组 + 逐元素判字符串。
-     * 差异后果（已知并接受）：钩子写下的 compaction entry 也会被回灌。</p>
+     * <p>守卫对位 pi {@code compaction.ts:70}：{@code !fromHook && details} —— 扩展
+     * 生成的 entry 的 {@code details} 结构不可信，**不回灌**（{@code null} ≙ pi 的
+     * undefined ⇒ pi-generated，回灌）。</p>
      */
     private static void carryOver(Entry.Compaction previous, FileOperations ops) {
+        if (Boolean.TRUE.equals(previous.fromHook())) {
+            return;
+        }
         Map<String, Object> details = previous.details();
         if (details == null) {
             return;

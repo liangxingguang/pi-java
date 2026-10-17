@@ -45,12 +45,14 @@ final class EntryJsonCodec {
                 MessageJsonCodec.decodeList(node.get("retainedTail")),
                 JsonlCodec.requireInt(node, "tokensBefore"),
                 JsonlCodec.optionalObject(node, "details"),
-                decodeUsage(node.get("usage")));
+                decodeUsage(node.get("usage")),
+                optionalFromHook(node));
             case Entry.TYPE_BRANCH_SUMMARY -> new Entry.BranchSummary(id, seq, parentId, timestamp,
                 JsonlCodec.requireString(node, "fromId"),
                 JsonlCodec.requireString(node, "summary"),
                 JsonlCodec.optionalObject(node, "details"),
-                decodeUsage(node.get("usage")));
+                decodeUsage(node.get("usage")),
+                optionalFromHook(node));
             case Entry.TYPE_CUSTOM -> new Entry.Custom(id, seq, parentId, timestamp,
                 JsonlCodec.requireString(node, "customType"),
                 JsonlCodec.optionalObject(node, "data"));
@@ -128,6 +130,12 @@ final class EntryJsonCodec {
             return new CustomMessageContent.Blocks(blocks);
         }
         throw JsonlCodec.DecodeError.schema("has invalid content");
+    }
+
+    /** pi {@code fromHook?: boolean}：键缺席/非布尔 ⇒ {@code null} ≙ pi undefined（旧文件兼容）。 */
+    private static Boolean optionalFromHook(JsonNode node) {
+        JsonNode value = node.get("fromHook");
+        return value != null && value.isBoolean() ? value.asBoolean() : null;
     }
 
     static com.pijava.ai.Usage decodeUsage(JsonNode node) {

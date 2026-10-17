@@ -447,7 +447,8 @@ final class CompactionExecutor {
         var compactionEntry = new Entry.Compaction(
             UUID.randomUUID().toString(), lane.nextSeq(), HarnessUtils.lastEntryId(lane),
             Instant.now(), result.summary(), result.firstKeptEntryId(),
-            retainedTail, (int) result.tokensBefore(), result.details(), result.usage());
+            // fromHook=null ≙ pi undefined（pi-generated；扩展摘要的 fromHook=true 写路随扩展边界包）。
+            retainedTail, (int) result.tokensBefore(), result.details(), result.usage(), null);
         var kept = new ArrayList<Entry>();
         String firstKept = result.firstKeptEntryId();
         boolean seen = false;

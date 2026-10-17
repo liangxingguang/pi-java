@@ -83,7 +83,7 @@ class PostRunCompactionCheckTest {
 
     private static Entry.Compaction marker(String id, long timestampMs) {
         return new Entry.Compaction(id, 0, null, Instant.ofEpochMilli(timestampMs),
-            "old summary", "e1", List.of(), 10, null, null);
+            "old summary", "e1", List.of(), 10, null, null, null);
     }
 
     private static Usage usage(double input, double output, double cacheRead) {
@@ -212,7 +212,7 @@ class PostRunCompactionCheckTest {
         lane.transcript.add(messageEntry("e1", null,
             new Message.UserMessage(List.of(new ContentBlock.TextContent("hello")))));
         lane.transcript.add(new Entry.Compaction("c1", 0, "e1",
-            Instant.ofEpochMilli(5_000), "old summary", "e1", List.of(), 10, null, null));
+            Instant.ofEpochMilli(5_000), "old summary", "e1", List.of(), 10, null, null, null));
         lane.transcript.add(messageEntry("e2", "c1", assistant(StopReason.ERROR, "faux", "gate-model",
             null, 5_000L, "prompt is too long")));
         var r = rig(lane, SETTINGS, MODEL);

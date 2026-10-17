@@ -95,9 +95,10 @@ public sealed interface Entry {
             case ThinkingLevelChange e ->
                 new ThinkingLevelChange(e.id(), seq, parentId, timestamp, e.thinkingLevel());
             case Compaction e -> new Compaction(e.id(), seq, parentId, timestamp, e.summary(),
-                e.firstKeptEntryId(), e.retainedTail(), e.tokensBefore(), e.details(), e.usage());
+                e.firstKeptEntryId(), e.retainedTail(), e.tokensBefore(), e.details(), e.usage(),
+                e.fromHook());
             case BranchSummary e -> new BranchSummary(e.id(), seq, parentId, timestamp, e.fromId(),
-                e.summary(), e.details(), e.usage());
+                e.summary(), e.details(), e.usage(), e.fromHook());
             case Custom e -> new Custom(e.id(), seq, parentId, timestamp, e.customType(), e.data());
             case CustomMessage e -> new CustomMessage(e.id(), seq, parentId, timestamp,
                 e.customType(), e.content(), e.display(), e.details());
@@ -147,7 +148,14 @@ public sealed interface Entry {
     ) implements Entry {
     }
 
-    /** A context compaction occurred. */
+    /**
+     * A context compaction occurred.
+     *
+     * <p>{@code fromHook} 对位 pi {@code CompactionEntry.fromHook?}
+     * （{@code session-manager.ts:100-101}）：{@code null} ≙ pi 的 undefined（旧文件
+     * 兼容），{@code true} ⇒ 扩展生成的 entry（其 {@code details} 结构不可信，
+     * 文件清单不回灌，见 {@code compaction.ts:70} 守卫）。</p>
+     */
     record Compaction(
         String id,
         long seq,
@@ -158,7 +166,8 @@ public sealed interface Entry {
         List<com.pijava.ai.message.Message> retainedTail,
         int tokensBefore,
         Map<String, Object> details,
-        com.pijava.ai.Usage usage
+        com.pijava.ai.Usage usage,
+        Boolean fromHook
     ) implements Entry {
         /** Defensively copies {@code retainedTail}. */
         public Compaction {
@@ -166,7 +175,13 @@ public sealed interface Entry {
         }
     }
 
-    /** A branch summary was generated. */
+    /**
+     * A branch summary was generated.
+     *
+     * <p>{@code fromHook} 对位 pi {@code BranchSummaryEntry.fromHook?}
+     * （{@code session-manager.ts:114-115}），语义同 {@link Compaction#fromHook}
+     * （守卫在 {@code branch-summarization.ts:204}）。</p>
+     */
     record BranchSummary(
         String id,
         long seq,
@@ -175,7 +190,8 @@ public sealed interface Entry {
         String fromId,
         String summary,
         Map<String, Object> details,
-        com.pijava.ai.Usage usage
+        com.pijava.ai.Usage usage,
+        Boolean fromHook
     ) implements Entry {}
 
     /**

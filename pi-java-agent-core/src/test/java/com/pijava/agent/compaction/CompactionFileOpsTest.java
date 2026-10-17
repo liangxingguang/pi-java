@@ -208,7 +208,7 @@ class CompactionFileOpsTest {
         // 丢弃段里**没有**任何 read —— 清单只能来自回灌。其后条目沿链挂在 marker 之后。
         var marker = new Entry.Compaction(UUID.randomUUID().toString(), 0, null, Instant.now(),
             firstResult.summary(), firstResult.firstKeptEntryId(), List.of(),
-            (int) firstResult.tokensBefore(), firstResult.details(), null);
+            (int) firstResult.tokensBefore(), firstResult.details(), null, null);
         // 保留段首条目必须沿用原始 id（marker.firstKeptEntryId 指向它），只重挂 parent。
         var kept = (Entry.Message) first.get(3);
         var relinked = new Entry.Message(kept.id(), 0, marker.id(),
@@ -236,7 +236,7 @@ class CompactionFileOpsTest {
         // pi 的形状守卫（compaction.ts:54-68）：非列表、非字符串元素一律跳过，不抛。
         var marker = new Entry.Compaction(UUID.randomUUID().toString(), 0, null, Instant.now(),
             "previous", "someone", List.of(), 0,
-            Map.of("readFiles", "not-a-list", "modifiedFiles", List.of(1, "b.ts")), null);
+            Map.of("readFiles", "not-a-list", "modifiedFiles", List.of(1, "b.ts")), null, null);
         List<Entry> transcript = new ArrayList<>();
         transcript.add(marker);
         String p1 = append(transcript, marker.id(), user("first"));
@@ -246,5 +246,26 @@ class CompactionFileOpsTest {
         var result = CompactionService.compact(transcript, KEEP_LAST, fixed("X"), 100L);
         assertThat(strings(result.details().get("readFiles"))).isEmpty();
         assertThat(strings(result.details().get("modifiedFiles"))).containsExactly("b.ts");
+    }
+
+    @Test
+    void fromHookPreviousDetailsAreNotCarriedOver() {
+        // pi compaction.ts:70：!fromHook && details —— 扩展写下的 entry 的 details 结构不可信，
+        // 回灌守卫直接拒收（fromHook=true 时连形状检查都不走）。
+        var hookMarker = new Entry.Compaction(UUID.randomUUID().toString(), 0, null, Instant.now(),
+            "hook summary", "someone", List.of(), 0,
+            Map.of("readFiles", List.of("hooked.ts"), "modifiedFiles", List.of("touched.ts")),
+            null, Boolean.TRUE);
+        List<Entry> transcript = new ArrayList<>();
+        transcript.add(hookMarker);
+        String p1 = append(transcript, hookMarker.id(), user("first"));
+        String p2 = append(transcript, p1, assistantText("ok"));
+        append(transcript, p2, user("second"));
+
+        var result = CompactionService.compact(transcript, KEEP_LAST, fixed("X"), 100L);
+        assertThat(strings(result.details().get("readFiles")))
+            .as("fromHook=true 的 details 不回灌").isEmpty();
+        assertThat(strings(result.details().get("modifiedFiles")))
+            .as("fromHook=true 的 details 不回灌").isEmpty();
     }
 }
