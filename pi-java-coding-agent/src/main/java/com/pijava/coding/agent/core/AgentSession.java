@@ -633,12 +633,26 @@ public final class AgentSession implements AutoCloseable {
         return name;
     }
 
-    /** Rename the session ({@code /name}). */
+    /**
+     * Rename the session ({@code /name})。
+     *
+     * <p>pi {@code agent-session.ts:3942-3947}：落盘 → 读回规范化名 → 发事件。
+     * 规范化对位 {@code session-manager.ts:1305}（换行消毒 + trim）；空名 ⇒ 清除
+     * （:1326-1328，≙ pi 的 undefined）。事件载荷是**规范化后的名字**，不是入参
+     * （3686/5996 回归对位）；扩展路 emit 随扩展面包（docs/24 §1.2#3）。</p>
+     */
     public void setSessionName(String newName) {
-        this.name = newName;
-        if (session != null) {
-            session.setName(newName);
+        String normalized = newName == null ? null
+            : newName.replaceAll("[\\r\\n]+", " ").trim();
+        if (normalized != null && normalized.isEmpty()) {
+            normalized = null;
         }
+        this.name = normalized;
+        if (session != null) {
+            // appendSessionInfo 对位（PiV3Wire 已映射 session_info 线格式）。
+            session.setName(normalized);
+        }
+        emitSessionEvent(new AgentSessionEvent.SessionInfoChanged(normalized));
     }
 
     /** 会话持久化 id（pi {@code AgentSession.sessionId}）；in-memory 会话回退显示名。 */
