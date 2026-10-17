@@ -30,6 +30,11 @@ public final class PromptTemplateRegistry {
         }
     }
 
+    /** 按名字查询；未知名字返回 {@code null}（pi {@code templates.find(...)} 对位）。 */
+    public PromptTemplates.PromptTemplate find(String name) {
+        return templates.get(name);
+    }
+
     /** 按名字查询；未知名字抛 {@link UnknownPromptTemplateException}。 */
     public PromptTemplates.PromptTemplate get(String name) {
         var template = templates.get(name);

@@ -76,7 +76,7 @@ public final class MarkdownSkillLoader {
         String label = str(fm.get("label"));
 
         var skill = new MarkdownSkill(name, label, description,
-            parsed.body(), file.getParent(), disable, source);
+            parsed.body(), file.getParent(), disable, source, file);
         return LoadSkillResult.of(skill);
     }
 

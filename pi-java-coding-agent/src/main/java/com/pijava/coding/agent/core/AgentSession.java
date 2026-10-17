@@ -4,6 +4,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -764,6 +765,8 @@ public final class AgentSession implements AutoCloseable {
             PromptConfig config,
             StreamObserver streamObserver,
             EntryObserver entryObserver) {
+        // pi :2008-2009（prompt 主路径）与 :2191-2192（队列路径同序）：先 /skill: 后模板。
+        var expandedPrompt = expandUserPrompt(prompt);
         // A5（原 docs/25）：路由门在任何副作用之前 —— 压缩中/运行中未指定
         // streamingBehavior 的 prompt 在调用线程同步抛出（pi 同形状，
         // agent-session.ts:1939-1979）；运行中显式 steer/followUp 仅排队。
@@ -772,13 +775,13 @@ public final class AgentSession implements AutoCloseable {
             harness.isRunning(laneName()),
             config.streamingBehavior());
         if (verdict == PromptRouter.Verdict.QUEUE_STEER) {
-            harness.steer(laneName(), prompt);
+            harness.steer(laneName(), expandedPrompt);
             // B34（原 docs/26）：pi _queueSteer 排队后发 queue_update（:2193）。
             emitQueueUpdate();
             return SessionResult.queued();
         }
         if (verdict == PromptRouter.Verdict.QUEUE_FOLLOW_UP) {
-            harness.followUp(laneName(), prompt);
+            harness.followUp(laneName(), expandedPrompt);
             emitQueueUpdate();
             return SessionResult.queued();
         }
@@ -794,7 +797,7 @@ public final class AgentSession implements AutoCloseable {
         var statusFuture = new CompletableFuture<RunStatus>();
 
         Thread.startVirtualThread(() -> SessionRunner.drive(
-            this, prompt, queue, entriesFuture, statusFuture,
+            this, expandedPrompt, queue, entriesFuture, statusFuture,
             streamObserver, entryObserver));
 
         Stream<StreamEvent> stream = Stream.generate(() -> {
@@ -826,7 +829,8 @@ public final class AgentSession implements AutoCloseable {
 
     /** Queue a follow-up message (processed when the current run finishes). */
     public String followUp(String prompt) {
-        var id = harness.followUp(laneName(), prompt);
+        // pi :2191-2192（_queueUserInput 队列路径）：先 /skill: 后模板。
+        var id = harness.followUp(laneName(), expandUserPrompt(prompt));
         // B34（原 docs/26）：pi followUp 入队后发 queue_update（agent-session.ts:2210）。
         emitQueueUpdate();
         return id;
@@ -874,9 +878,29 @@ public final class AgentSession implements AutoCloseable {
 
     /** Queue a steering message (injected into the current run's next round). */
     public String steer(String prompt) {
-        var id = harness.steer(laneName(), prompt);
+        // pi :2191-2192（_queueUserInput 队列路径）：先 /skill: 后模板。
+        var id = harness.steer(laneName(), expandUserPrompt(prompt));
         emitQueueUpdate();
         return id;
+    }
+
+    /**
+     * pi 展开序（:2008-2009 / :2191-2192）：先 {@code /skill:} 后模板，两步都是
+     * 「未命中 ⇒ 原文透传」。
+     */
+    private String expandUserPrompt(String prompt) {
+        var expanded = com.pijava.coding.agent.skill.SkillCommandExpansion.expand(
+            prompt, skillsByName());
+        return com.pijava.coding.agent.prompt.PromptTemplateExpansion.expand(
+            expanded, services.promptTemplates());
+    }
+
+    private Map<String, com.pijava.agent.skill.Skill> skillsByName() {
+        var map = new LinkedHashMap<String, com.pijava.agent.skill.Skill>();
+        for (var skill : harness.skillManager().all()) {
+            map.put(skill.name(), skill);
+        }
+        return map;
     }
 
     /** The most recent assistant text (for {@code /copy}). */

@@ -10,7 +10,9 @@ import com.pijava.agent.skill.SkillSource;
  *
  * <p>{@code baseDir} 为 {@code SKILL.md} 所在目录（正文内相对路径按此解析）；
  * {@code disableModelInvocation} 对应前言 {@code disable-model-invocation: true}；
- * {@code sourceInfo} 为来源（user/project/显式路径）。</p>
+ * {@code sourceInfo} 为来源（user/project/显式路径）；
+ * {@code filePath} 为技能文件本身（pi {@code Skill.filePath}，skills.ts:80 ——
+ * {@code /skill:} 展开时按它惰性重读剥前言，agent-session.ts:2159-2160）。</p>
  */
 public record MarkdownSkill(
     String name,
@@ -19,7 +21,8 @@ public record MarkdownSkill(
     String systemPrompt,
     Path baseDir,
     boolean disableModelInvocation,
-    SkillSource sourceInfo
+    SkillSource sourceInfo,
+    Path filePath
 ) implements Skill {
 
     /** 构造技能；label 缺失时回落为 name（设计 §6.4）。 */
