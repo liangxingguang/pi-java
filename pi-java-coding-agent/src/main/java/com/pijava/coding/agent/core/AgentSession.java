@@ -23,6 +23,7 @@ import com.pijava.agent.compaction.CompactionResult;
 import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.compaction.LlmSummaryGenerator;
 import com.pijava.agent.harness.AgentHarness;
+import com.pijava.agent.harness.DefaultStreamFn;
 import com.pijava.agent.harness.HarnessConfig;
 import com.pijava.agent.harness.RetryObserver;
 import com.pijava.agent.harness.RetrySettings;
@@ -320,6 +321,11 @@ public final class AgentSession implements AutoCloseable {
             ? scopedInitial.thinkingLevel().orElse(null) : null;
         var streamFn = DefaultProviders.streamFnFor(
             args, effective.defaultProvider, providers, effective, args.sessionId());
+        // pi sdk.ts:43-46 的模块顶层副作用对位（setDefaultStreamFn(streamSimple)）：
+        // 进程级缺省兜底，给省略 streamFn 的 HarnessConfig.build() 回落（#69）。
+        // 窄差：pi 装的 streamSimple 每次调用现解析环境凭证，这里装的是本次会话
+        // 装配的解析结果（后续会话覆盖安装）——单会话场景行为等价（docs/24 §3.3）。
+        DefaultStreamFn.set(streamFn);
         // Trace exporter: same instance powers harness telemetry (spans/counters)
         // and payload recording (wrapper), so events bind to the llm.request span.
         var telemetry = PayloadRecordingStreamFn.exporter(args.sessionId(), args.tracePayloads());

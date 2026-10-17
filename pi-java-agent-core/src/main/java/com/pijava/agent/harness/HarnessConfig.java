@@ -281,7 +281,11 @@ public record HarnessConfig(
 
         /** Build the {@link HarnessConfig}, validating required fields. */
         public HarnessConfig build() {
-            if (streamFn == null) throw new IllegalStateException("streamFn is required");
+            if (streamFn == null) {
+                // pi agent.ts:236 `?? getDefaultStreamFn()`：缺省走进程级兜底
+                // （未安装时抛 IllegalStateException，错文逐字见 DefaultStreamFn.get）。
+                streamFn = DefaultStreamFn.get();
+            }
             if (model == null) throw new IllegalStateException("model is required");
             return new HarnessConfig(streamFn, model, thinkingLevel,
                                      systemPrompt, activeTools, maxInputTokens,
