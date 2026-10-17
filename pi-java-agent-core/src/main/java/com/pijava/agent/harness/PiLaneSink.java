@@ -213,7 +213,7 @@ final class PiLaneSink implements PiLoop.Sink {
                 // OTel 属性是字符串边界：显式出 wire 字面（camelCase）。
                 llmSpan.addAttribute("stopReason", stop.wireName());
             }
-            // C5（docs/22 §6）：先 pop 后 close，与 JsonlFileTelemetry.startSpan
+            // C5（docs/23 §6）：先 pop 后 close，与 JsonlFileTelemetry.startSpan
             // 对称——close 期间的 recordEvent 无归属（可检测的缺席），而不是
             // 错挂到已闭跨度上。
             ctx.telemetry().popCurrent(llmSpan);

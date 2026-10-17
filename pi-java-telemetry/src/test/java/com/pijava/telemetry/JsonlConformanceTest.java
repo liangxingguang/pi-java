@@ -22,7 +22,7 @@ import com.pijava.telemetry.testing.TelemetryAdapterConformance;
 import com.pijava.telemetry.testing.TelemetryAdapterFixture;
 
 /**
- * 一致性套件挂 {@link JsonlFileTelemetry}（docs/22 §4.3）：fixture 读回
+ * 一致性套件挂 {@link JsonlFileTelemetry}（docs/23 §4.3）：fixture 读回
  * JSONL 行重建归一化快照——hex spanId 归一成序号 id、span_end 行序归一成
  * endSequence、JSON 数字归一成 long（pi fixture 的「normalized snapshot
  * reader」职责，{@code testing/types.ts:4}）。

@@ -11,7 +11,7 @@ import com.pijava.telemetry.testing.TelemetryAdapterFixture;
 
 /**
  * 一致性套件挂 {@link InMemoryTelemetryContext}——pi
- * {@code conformance.test.ts:5-21} 的对应挂载（docs/22 §4.3）。
+ * {@code conformance.test.ts:5-21} 的对应挂载（docs/23 §4.3）。
  */
 class InMemoryConformanceTest {
 

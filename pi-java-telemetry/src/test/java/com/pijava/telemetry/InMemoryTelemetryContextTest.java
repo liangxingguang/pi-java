@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * pi {@code memory.ts} 参考实现的行为钉床；逐条对应 pi
  * {@code telemetry.test.ts} 与 {@code conformance.test.ts} 中不经套件覆盖的部分。
  * 契约级行为（settled inert、显式状态、parentage、被动记录）由
- * {@code TelemetryAdapterConformance} 套件统一钉（docs/22 §4）。
+ * {@code TelemetryAdapterConformance} 套件统一钉（docs/23 §4）。
  */
 class InMemoryTelemetryContextTest {
 

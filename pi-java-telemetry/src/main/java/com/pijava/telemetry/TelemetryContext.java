@@ -22,9 +22,9 @@ import java.util.function.Function;
  * be closed: the callback here is synchronous ({@link Function}) where pi returns
  * a {@code Promise}, and a span here is {@link AutoCloseable} where pi's has no
  * {@code end()} because {@code startSpan} owns settlement (adjudication:
- * {@code 原 docs/31 §8.28}, upheld by docs/22 §7.3).  pi's span-side
+ * {@code 原 docs/31 §8.28}, upheld by docs/23 §7.3).  pi's span-side
  * {@code addEvent}/{@code setAttributes}/{@code setStatus} are ported on
- * {@link TelemetrySpan} (docs/22 §2).</p>
+ * {@link TelemetrySpan} (docs/23 §2).</p>
  */
 @FunctionalInterface
 public interface TelemetryContext {

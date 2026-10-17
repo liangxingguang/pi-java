@@ -33,7 +33,7 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Line kinds: {@code span_start}, {@code span_end}, {@code event},
  * {@code counter}, {@code timing}.  {@code event} lines come in two families
- * (docs/22 §5): {@link TelemetrySpan#addEvent} writes small span-bound
+ * (docs/23 §5): {@link TelemetrySpan#addEvent} writes small span-bound
  * attributes under the {@code attrs} key (never payload-gated), while
  * {@link #recordEvent} writes whole payloads under the {@code payload} key
  * ({@code --trace-payloads} gated, thread-bound).  Dimensions registered via
@@ -220,7 +220,7 @@ public final class JsonlFileTelemetry implements TelemetryContext {
     /**
      * 行内状态串解析：显式状态优先（pi memory.ts:96 的对偶面）；显式
      * {@link SpanStatus.Error} 带详情时附加 {@code errorName}/{@code errorMessage}
-     * 两键（java 扩展行格式，docs/22 §5）。
+     * 两键（java 扩展行格式，docs/23 §5）。
      */
     private static String wireStatus(SpanStatus explicit, String derived) {
         if (explicit == null) {
@@ -349,7 +349,7 @@ public final class JsonlFileTelemetry implements TelemetryContext {
         /**
          * pi {@code index.ts:19}：跨度事件行（{@code kind:"event"}＋{@code attrs}
          * 键）——与 {@link #recordEvent} 的整载荷 {@code payload} 键区分：小属性、
-         * 跨度绑定、不经 {@code --trace-payloads} 门控（docs/22 §5 行格式裁决）。
+         * 跨度绑定、不经 {@code --trace-payloads} 门控（docs/23 §5 行格式裁决）。
          */
         @Override
         public void addEvent(String name, Map<String, Object> attributes) {

@@ -611,7 +611,7 @@ pi 侧 935 LOC 中 ~280 LOC（`index.ts:26-354`）是 TS **编译期**类型机�
 （`InferStartAttributes`／`ExactTelemetryAttributes`／`UnionToIntersection` 等条件类型）。
 运行时残核仅 `bindTypedSpanStarter`（`index.ts:324-343`）= `startSpan({name, attributes},
 callback)` 的薄包装。证据：§1 表——pi 全库**零消费者**；Java 无法表达该类型级推断；
-R5：`bin pi` 不可达。⇒ 移出分母（35→34），map/01 T11 注「裁决不做（docs/22 §7.1）」。
+R5：`bin pi` 不可达。⇒ 移出分母（35→34），map/01 T11 注「裁决不做（docs/23 §7.1）」。
 
 ### 7.2 T4 `AttributeValue` 闭集：维持 `Map<String,Object>`（转对齐）
 
@@ -675,7 +675,7 @@ pi `ai/src/types.ts:159-160` 声明 `ProviderRequestOptions.telemetryContext?`�
 闭环回填（记忆：banner 是活状态，两处＋地图）：
 
 1. `docs/map/01-infra.md`：T 表判定列逐条更新＋§C/D/H 表（C5/C7/H 三行销号注
-   「docs/22 闭环」）＋§分权重档表重算＋规模行（java 侧 LOC 增长）；
+   「docs/23 闭环」）＋§分权重档表重算＋规模行（java 侧 LOC 增长）；
 2. `docs/05-module-alignment-map.md`：telemetry 行 50.0%→100%、§2.7 小节改写、
    总表联动（telemetry 计入总表，权重 +16.5）；
 3. `docs/04-open-items-register.md`：banner 加批 1 闭环段＋B241 登即销一行；

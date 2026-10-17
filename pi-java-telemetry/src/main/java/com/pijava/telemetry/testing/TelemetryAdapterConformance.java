@@ -18,10 +18,10 @@ import com.pijava.telemetry.TelemetrySpan;
  * pi {@code testing/conformance.ts:60-315} 的移植：回调式遥测适配器契约的
  * runner 无关一致性用例。7 用例 / 5 组。
  *
- * <p>与 pi 9 用例的差异（docs/22 §4.2，均登记于此）：</p>
+ * <p>与 pi 9 用例的差异（docs/23 §4.2，均登记于此）：</p>
  * <ul>
  * <li>「async rejection」子场景与同步路径合并——java 回调是同步的
- * （docs/22 §7.3 结构性裁决）；</li>
+ * （docs/23 §7.3 结构性裁决）；</li>
  * <li>{@code Promise.reject(undefined)} 子场景不移植——java 无空异常；</li>
  * <li>「unreadable {@code SpanOptions}」子场景不移植——{@link SpanOptions} 的
  * 紧凑构造器在调用点就完成读取（{@code Map.copyOf}），炸弹载荷到不了

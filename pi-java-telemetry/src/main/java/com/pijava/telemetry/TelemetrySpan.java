@@ -12,7 +12,7 @@ import java.util.Map;
  * <p><b>Port note.</b> The contract mirrors pi's {@code TelemetrySpan}
  * ({@code telemetry/src/index.ts:18-22}): {@link #addEvent},
  * {@link #setAttributes} and {@link #setStatus} are pi's own three methods
- * (ported in docs/22 §2, superseding the earlier 原 docs/31 §8.25.3/§8.28
+ * (ported in docs/23 §2, superseding the earlier 原 docs/31 §8.25.3/§8.28
  * &quot;not ported&quot; ruling — the port of pi's {@code memory.ts} and of the
  * adapter conformance suite requires them). {@link #close()} and the per-key
  * {@link #addAttribute} remain pi-java's shapes: pi's span type has no
