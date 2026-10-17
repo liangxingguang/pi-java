@@ -7,6 +7,7 @@
 > ai 85.0%→**94.5%**（219/207.0：批 1/批 2 闭环 2026-10-13 至 90.2%，**批 3a 模型目录数据面闭环 2026-10-14** 至 92.2%，**批 5 消息字段/终局计量闭环 2026-10-15** 至 92.7%，**批 7 共享回调/ChatGPT 订阅/copy-code 闭环 2026-10-16** 至 93.8%，**批 9 图片缩放/注记消费链闭环 2026-10-16** 至 94.1%，**批 10 federation 闭环 2026-10-16** 至 94.5%；批 2 为单元 #6 Mistral 窄角修复，加权不变；批 0 后 89.7%）；**批 3b／批 4／批 6／批 8 销号均为台账行为项，读数不变**；剩余计分母缺失仅 #8。
 > **agent-core 批 1 闭环 2026-10-17**：72.1%→**75.7%**（183/138.5，B158 截断 50KB＋B159/#41 finishTurn 裁决形状＋#17 /compact abort-first，+6.5）；合计 57.8%→**59.5%**（824.5/1385）。
 > **agent-core 批 2 闭环 2026-10-17**：75.7%→**81.1%**（183/148.5，#34 prepareRequest 写钩子＋#46 族会话事件面漏斗（含 #52 本 pass 载荷、agent_settled.aborted/B235 销号）＋#58 stopReason 剔除删除＋#54/#78/#100 三裁决，+10.0）；**权重 3 层 22/22 = 100%**；合计 59.5%→**60.3%**（834.5/1385）。未加权 57.6%（53/92，批 1 的 45/92 系误计、实为 46/92，本批按表内点算更正）。
+> **agent-core 批 3 闭环 2026-10-17**：81.1%→**83.9%**（183/153.5，bash/grep/find/ls 四工具模型可见面逐字＋glob→find 改名，+5.0）；工具表 71.4%→**95.2%**（20.0/21）；**权重 3 层含工具 27/27 = 100%**；合计 61.5%→**61.8%**（851.0→856.0/1384）。未加权 57.6%→**62.0%**（57/92）。
 >
 > **明细**：每模块逐条能力单元（两侧 `file:line` 证据、判定、权重）在 `docs/map/01..07-*.md`；
 > 开放缺口的权威台账是 [`04-open-items-register.md`](04-open-items-register.md)。
@@ -55,18 +56,18 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）；pi-j
 
 ---
 
-## 1 总表（telemetry 批 1 后值，2026-10-17；agent-core 批 2 后值，2026-10-17；ai 批 10 后 2026-10-16；批 3b/4/6/8 为台账行为项、加权不变；其余模块为 2026-10-12 重测值）
+## 1 总表（agent-core 批 3 后值，2026-10-17；telemetry 批 1 后值，2026-10-17；ai 批 10 后 2026-10-16；批 3b/4/6/8 为台账行为项、加权不变；其余模块为 2026-10-12 重测值）
 
 | 模块（地图） | Σ权重 | Σ(w×c) | **加权完成度** | 未加权 | 权重 3 层 |
 |---|---:|---:|---:|---:|---:|
 | pi-java-ai（map/02，**批10后**） | 219 | 207.0 | **94.5%** | 85.5%（100/117） | **100%（33/33）** |
 | pi-java-mcp（map/07，**新图**） | 129 | 98.0 | **76.0%** | 62.9%（56/89） | 100%（1/1） |
-| pi-java-agent-core（map/03，**批2后**） | 183 | 148.5 | **81.1%** | 57.6%（53/92） | **100%（22/22）** |
+| pi-java-agent-core（map/03，**批3后**） | 183 | 153.5 | **83.9%** | 62.0%（57/92） | **100%（27/27）** |
 | session-sqlite ＋ evals（map/06） | 87 | 44.5 | **51.1%** | 50.0%（20/40） | — |
 | pi-java-telemetry（map/01，**批1后**） | 34 | 34.0 | **100%** | 100%（16/16） | 100%（21/21） |
 | pi-java-tui/web（map/05） | 245 | 108.5 | **44.3%** | 25.7%（38/148） | 67.3% |
 | pi-java-coding-agent（map/04，剔 MCP 粗单元） | 487 | 210.5 | **43.2%** | 31.7%（92/290） | 50.0%（9/23） |
-| **合计（去重后，telemetry 批1后）** | **1,384** | **851.0** | **61.5%** | — | — |
+| **合计（去重后，agent-core 批3后）** | **1,384** | **856.0** | **61.8%** | — | — |
 
 > map/04 原始口径（含 G-1..G-5）：Σw 496 ／ Σwc 217.5 ／ **43.9%**；两处账都在，总表用去重值。
 > protocol/client/server（R1 排除）未加权：map/01 全层 10 对齐/40 缺失/35 存疑（85 单元）。
@@ -75,7 +76,7 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）；pi-j
 - **ai 层权重 3 全齐**，每轮都走的请求/响应/计量主路无缺口；批 10 后计分母缺失仅 1 条（#8 namespace），无半成品（#90 图片缩放消费链已落 agent-core/coding-agent、#98 federation 批 10 闭环）；分类器面已裁 R5。
 - **mcp 模块本体高完成度（76%）**，但会话内接线面（B221：六个 on() 事件 0/6、激活门、ui.custom、工具渲染器、提示分节、registerMcpServer 挂载点）是 map/07 G 组 17 单元里 15 缺失——**进程外 `pi mcp` CLI 可用、会话内 MCP 不激活**。
 - **coding-agent 最低**，欠账集中在扩展系统（D 域 41 事件加权 12.7%、D′ UI 注入 6.3%、包管理器 16.1%）。
-- **agent-core 权重 3 层 22/22 = 100%**（批 2 清零：六条形状差全转对齐/裁决）；未得分池移向权重 1 层（15.5/34.5）。
+- **agent-core 权重 3 层 27/27 = 100%**（批 2 能力单元 22 条清零＋批 3 工具 5 条 w3 全对）；未得分池 29.5，最大池是权重 1 层（15.5）。
 
 ---
 
@@ -111,7 +112,11 @@ Ctrl+P/RPC 轮转全接通；台账行为项、无加权单元 ⇒ 百分比不�
 方言项（B181–B220 族）多判存疑：mcp-auth.json 字节形态、错误文本、WHATWG URL、redirect 平台替代等。
 codemode-only 的 4 个单元（exposure/deferred/discovery）权 0，B161/B162 闭环时重裁。
 
-### 2.3 agent-core — 81.1% ｜ map/03（批 2 后）
+### 2.3 agent-core — 83.9% ｜ map/03（批 3 后）
+**批 3（2026-10-17，docs/22）**：bash/grep/find/ls 四工具模型可见面逐字（schema/描述/snippet/
+告示/错误文本；glob→find 改名、ls `recursive`→`limit`、grep 补七参＋gitignore、bash 超时面
+无默认/毫秒粒度/2147483.647s 上限）；工具表 71.4→**95.2%**（20.0/21），+5.0 ⇒ **权重 3 层含
+工具 27/27 = 100%**；新登 B242（bash `PI_*` 会话环境变量面）/B243（powershell，挂 B236 族）。
 **批 2（2026-10-17，docs/21）**：#34 `prepareRequest` 写钩子（每次请求前调、context 整体替换、
 config 写回本 run 生效；老 void `before_request` 退役）、**#46 族会话事件面重构**（补五帧＋
 `AgentSettled{aborted}` 真形状＋`UserMessageReceived` 删；`SessionRunner` 单一漏斗全量转发，
@@ -124,9 +129,9 @@ config 写回本 run 生效；老 void `before_request` 退役）、**#46 族会
 `explicitContinuation` 三段清零、`NextTurnContext.newMessages`、`fireFinishTurn` 合并 END 先赢）、
 #17（手动 `/compact` abort-first＋waitForIdle）三口闭环，+6.5。
 **#73 JSONL v3 已转对齐**（PiV3Wire 原生线＋双向互读夹具）。
-确认缺失仅 10 条：#62 formatSkillInvocation（w2），余 w1
-（branch summary 族 B1、B30、B36、B55、fromHook、streamProxy、setDefaultStreamFn）。
-工具：7/8（powershell 缺），bash 默认超时/grep 参数/find/ls 存疑。
+确认缺失 11 条：#62 formatSkillInvocation（w2），余 w1
+（powershell B243、branch summary 族 B1、B30、B36、B55、fromHook、streamProxy、setDefaultStreamFn）。
+工具表 **95.2%**（20.0/21）：bash/grep/find/ls 批 3 逐字对齐、存疑清零；唯缺 powershell（B243）。
 
 ### 2.4 coding-agent — 43.2%（去重）｜ map/04
 A CLI 参数 78.2%、C slash 63.2%、E3 会话管理 68.8%；**D 扩展事件 12.7%、D′ UI 注入 6.3%、E6 包管理器 16.1%、
@@ -155,7 +160,7 @@ protocol/client/server 按 R1 整体出分母：protocol 是已删 pi 代码的�
 
 **ai：零条** ✅。
 
-**agent-core：零条** ✅（批 2 后权重 3 层 22/22 = 100%；残余未对齐全在权重 1/2 层）。
+**agent-core：零条** ✅（批 3 后权重 3 层 27/27 = 100%；残余未对齐全在权重 1/2 层）。
 
 **coding-agent（w3 层 50%）**：D 域扩展事件 7–8 条缺失/存疑（引擎钩子存在但未桥接）、examples/ 可执行验收规格。
 
