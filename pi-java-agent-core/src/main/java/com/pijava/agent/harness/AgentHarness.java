@@ -327,6 +327,23 @@ public class AgentHarness implements AutoCloseable {
     }
 
     /**
+     * pi {@code abortCompaction()}（agent-session.ts:2914-2917，#98/B36）：中止该车道
+     * 的在飞压缩 —— 手动/自动双槽同时 abort（无在飞 ⇒ no-op，与 pi 的
+     * {@code ?.abort()} 同）。生效点在生成后落库前（:2843-2845）。
+     */
+    public void abortCompaction(String laneName) {
+        var lane = requireLane(laneName);
+        var manual = lane.manualCompactionAbort;
+        if (manual != null) {
+            manual.abort();
+        }
+        var auto = lane.autoCompactionAbort;
+        if (auto != null) {
+            auto.abort();
+        }
+    }
+
+    /**
      * Wait for the lane's current run to finish（pi {@code Agent.waitForIdle}）。
      *
      * <p>车道空闲时立即返回。它在「另一条线程 abort 之后等它真的停下来」这个场景里有用

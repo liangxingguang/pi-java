@@ -838,8 +838,18 @@ public final class AgentSession implements AutoCloseable {
         return processPrompt(prompt, PromptConfig.defaults());
     }
 
+    /**
+     * pi {@code abortCompaction()}（agent-session.ts:2914-2917，#98/B36）：
+     * 中止在飞压缩（无在飞 ⇒ no-op）。
+     */
+    public void abortCompaction() {
+        harness.abortCompaction(laneName());
+    }
+
     /** Abort the current run (cross-thread safe via the harness AbortSignal). */
     public void abort() {
+        // pi :2438-2440：abort() 内含 abortCompaction()（abortBranchSummary 随批 13）。
+        abortCompaction();
         // pi abort()（:1639-1646）第一步就是 abortRetry() —— 若正卡在 ① 的
         // 退避睡眠里，先把它掐掉（"Retry cancelled"），再中止 run 本身。
         abortRetry();
@@ -890,8 +900,9 @@ public final class AgentSession implements AutoCloseable {
      * #17（pi {@code agent-session.ts:2764-2765}）：手动压缩开头即 {@code await this.abort()}
      * —— 中止在飞 run 并等它落地，压缩读到的转录不含半截消息。{@link #abort()} 本身保持
      * 非阻塞（UI Esc 同一条路），等待只加在压缩路，净效果与 pi 的 {@code await abort()}
-     * 相同。⚠️ pi 的 abort() 还中止在飞压缩/分支摘要 —— java 无 abortCompaction
-     * （B36 另案），在飞压缩撞上本调用仍走既有行为。自动压缩走引擎内部直路，不经这里。
+     * 相同。pi 的 abort() 还中止在飞压缩/分支摘要 —— abortCompaction 已随
+     * #98/B36 落地（本类 {@link #abort()} 首步），分支摘要随 B1（docs/24 §7）。
+     * 自动压缩走引擎内部直路，不经这里。
      */
     private void abortAndWaitForIdle() {
         abort();

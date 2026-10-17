@@ -171,6 +171,17 @@ public final class LaneState {
     private int compactionInFlight;
 
     /**
+     * pi {@code agent-session.ts:403-404} 的 per-operation 压缩取消令牌
+     * （#98/B36，docs/24 §12.3）—— 手动/自动双槽，与 {@link #compactionInFlight}
+     * 窗口同生命周期（入口置、finally 清）；{@code volatile}：压缩跑在宿主线程、
+     * {@code abortCompaction()} 可从任意线程进来（TUI Esc/RPC）。
+     */
+    volatile CompactionAbortToken manualCompactionAbort;
+
+    /** 见 {@link #manualCompactionAbort}（自动路槽位）。 */
+    volatile CompactionAbortToken autoCompactionAbort;
+
+    /**
      * 进入压缩窗口（pi {@code this._compactionAbortController = new AbortController()}）。
      *
      * <p>⚠️ 三个方法都是 {@code synchronized}：{@code compactionInFlight} 是**跨线程读**的

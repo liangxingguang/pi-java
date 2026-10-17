@@ -85,6 +85,8 @@ final class CompactionExecutor {
         // 守卫（"Already compacted"）、压缩体、中止三条抛出路径都在窗口内；
         // 清位在 finally，与 pi 的 :2117 `_clearManualCompactionState()` 同形。
         lane.enterCompaction();
+        // pi :2766（:403 的手动槽）：per-operation 取消令牌随窗口置位（#98/B36）。
+        lane.manualCompactionAbort = new CompactionAbortToken();
         try {
             ctx.compactionObserver().onStart("manual");
             CompactionRun run;
@@ -96,7 +98,8 @@ final class CompactionExecutor {
                     throw new NothingToCompactException(laneName);
                 }
                 run = applyCompaction(laneName, lane, settings,
-                    (int) contextTokens(lane), "manual", false, customInstructions);
+                    (int) contextTokens(lane), "manual", false, customInstructions,
+                    lane.manualCompactionAbort);
             } catch (RuntimeException e) {
                 // pi 的 catch（:2092-2104）：end{manual, aborted: 取消类, errorMessage:
                 // 非取消类才有 "Compaction failed: " 前缀} 后再抛。取消分支的 end 已由
@@ -117,6 +120,7 @@ final class CompactionExecutor {
             ctx.publishState(laneName);
             return run.result();
         } finally {
+            lane.manualCompactionAbort = null; // pi :2744-2747 清位
             lane.exitCompaction();
         }
     }
@@ -216,10 +220,13 @@ final class CompactionExecutor {
         // （无模型 / 无设置 / prepareCompaction 空返回）都已 return，与 pi 的
         // :2276/:2286 一样**不进**窗口。清位在 finally（pi :2450）。
         lane.enterCompaction();
+        // pi :3116-3117（:404 的自动槽）：per-operation 取消令牌随窗口置位（#98/B36）。
+        lane.autoCompactionAbort = new CompactionAbortToken();
         try {
             // 自动压缩在 pi 恒无 customInstructions（agent-session.ts:3082）。
             var run = applyCompaction(laneName, lane, settings,
-                (int) contextTokens(lane), reason, willRetry, null);
+                (int) contextTokens(lane), reason, willRetry, null,
+                lane.autoCompactionAbort);
             if (run.aborted()) {
                 // pi :2362-2377：end{aborted:true, willRetry:false} 已在体内发，
                 // 转录未替换。
@@ -240,6 +247,7 @@ final class CompactionExecutor {
             ctx.compactionObserver().onEnd(reason, null, false, false, formatted);
             return AutoCompactionOutcome.SKIPPED;
         } finally {
+            lane.autoCompactionAbort = null; // pi :3239-3241 清位
             lane.exitCompaction();
         }
     }
@@ -260,11 +268,14 @@ final class CompactionExecutor {
      *
      * @param reason {@code "manual"} / {@code "threshold"} / {@code "overflow"}
      * @param willRetry pi 的 {@code compaction_end.willRetry}，随 end 事件透传
+     * @param abortToken per-operation 取消令牌（#98/B36；与 {@code lane.abortSignal()}
+     *        同点同语义 —— 生成后落库前）
      */
     CompactionRun applyCompaction(String laneName, LaneState lane,
                                   CompactionSettings settings, int estimatedTokens,
                                   String reason, boolean willRetry,
-                                  String customInstructions) {
+                                  String customInstructions,
+                                  CompactionAbortToken abortToken) {
         ctx.telemetry().incrementCounter("compactions", 1);
         int entriesBefore = lane.transcript.size();
         long start = System.nanoTime();
@@ -288,7 +299,9 @@ final class CompactionExecutor {
                 result = built.result();
             }
             var signal = lane.abortSignal();
-            if (signal != null && signal.isAborted()) {
+            // #98/B36：per-op 令牌与 lane 信号同点同语义（pi :2843-2845 落库前检查）。
+            if ((signal != null && signal.isAborted())
+                    || (abortToken != null && abortToken.isAborted())) {
                 // B175（原 docs/26）：中止路同样先关窗再发 onEnd（pi :2828-2829 顺序）。
                 lane.closeCompactionWindow();
                 ctx.compactionObserver().onEnd(reason, null, true, false, null);
