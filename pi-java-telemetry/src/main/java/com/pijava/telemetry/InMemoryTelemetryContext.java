@@ -219,12 +219,11 @@ public final class InMemoryTelemetryContext implements TelemetryContext {
                 if (settled) {
                     return;
                 }
-                try {
-                    status = Objects.requireNonNull(newStatus, "status");
-                    explicitStatus = true;
-                } catch (RuntimeException | Error e) {
-                    // Recording is passive (pi memory.ts:161-163).
-                }
+                // pi 的 try/catch 针对 Proxy 载荷（memory.ts:161-163）；java 的
+                // SpanStatus 是值语义的 sealed record，不可「读取失败」，null 是
+                // 契约外用法 ⇒ fail fast（docs/22 §4.2 不可表达子场景登记）。
+                status = Objects.requireNonNull(newStatus, "status");
+                explicitStatus = true;
             }
         }
 

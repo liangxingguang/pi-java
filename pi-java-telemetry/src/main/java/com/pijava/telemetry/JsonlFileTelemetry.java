@@ -14,6 +14,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.SplittableRandom;
 import java.util.function.Function;
 
@@ -31,8 +32,12 @@ import org.slf4j.LoggerFactory;
  * exporter degrades to a no-op — telemetry must never break the main flow.</p>
  *
  * <p>Line kinds: {@code span_start}, {@code span_end}, {@code event},
- * {@code counter}, {@code timing}.  Dimensions registered via {@link #with}
- * are merged into every line.  Child spans opened from a {@link TelemetrySpan}
+ * {@code counter}, {@code timing}.  {@code event} lines come in two families
+ * (docs/22 §5): {@link TelemetrySpan#addEvent} writes small span-bound
+ * attributes under the {@code attrs} key (never payload-gated), while
+ * {@link #recordEvent} writes whole payloads under the {@code payload} key
+ * ({@code --trace-payloads} gated, thread-bound).  Dimensions registered via
+ * {@link #with} are merged into every line.  Child spans opened from a {@link TelemetrySpan}
  * inherit its trace/span ids as parent — unless that span has already settled,
  * in which case the child is inert ({@link TelemetrySpan} has the rule);
  * {@link #pushCurrent}/{@link
@@ -120,7 +125,8 @@ public final class JsonlFileTelemetry implements TelemetryContext {
         try {
             return body.apply(span);
         } catch (RuntimeException | Error e) {
-            if (span instanceof JsonlSpan js) {
+            if (span instanceof JsonlSpan js && js.explicitStatus == null) {
+                // pi memory.ts:96：无显式状态才自动派生 error。
                 js.markError();
             }
             throw e;
@@ -211,6 +217,18 @@ public final class JsonlFileTelemetry implements TelemetryContext {
         }
     }
 
+    /**
+     * 行内状态串解析：显式状态优先（pi memory.ts:96 的对偶面）；显式
+     * {@link SpanStatus.Error} 带详情时附加 {@code errorName}/{@code errorMessage}
+     * 两键（java 扩展行格式，docs/22 §5）。
+     */
+    private static String wireStatus(SpanStatus explicit, String derived) {
+        if (explicit == null) {
+            return derived;
+        }
+        return explicit instanceof SpanStatus.Ok ? "ok" : "error";
+    }
+
     private void writeMetric(String kind, String name, long value) {
         var line = baseLine(kind, null);
         line.put("name", name);
@@ -287,6 +305,7 @@ public final class JsonlFileTelemetry implements TelemetryContext {
         private final Map<String, Object> startAttrs;
         private final Map<String, Object> lateAttrs = new LinkedHashMap<>();
         private String status = "ok";
+        private SpanStatus explicitStatus;
         private boolean ended;
 
         private JsonlSpan(String spanId, SpanOptions options, JsonlSpan parent) {
@@ -309,11 +328,56 @@ public final class JsonlFileTelemetry implements TelemetryContext {
 
         @Override
         public void setAttributes(Map<String, Object> attributes) {
-            attributes.forEach((key, value) -> {
-                if (value != null) {
-                    lateAttrs.put(key, value);
-                }
-            });
+            if (ended) {
+                return; // pi memory.ts:150 —— settled 后 inert。
+            }
+            try {
+                // 两段式：先暂存再合并，读取失败整包原子忽略
+                // （pi memory.ts:63-69,149-156）。
+                var staged = new LinkedHashMap<String, Object>();
+                attributes.forEach((key, value) -> {
+                    if (value != null) {
+                        staged.put(key, value);
+                    }
+                });
+                lateAttrs.putAll(staged);
+            } catch (RuntimeException | Error e) {
+                // Recording is passive (pi memory.ts:153-155).
+            }
+        }
+
+        /**
+         * pi {@code index.ts:19}：跨度事件行（{@code kind:"event"}＋{@code attrs}
+         * 键）——与 {@link #recordEvent} 的整载荷 {@code payload} 键区分：小属性、
+         * 跨度绑定、不经 {@code --trace-payloads} 门控（docs/22 §5 行格式裁决）。
+         */
+        @Override
+        public void addEvent(String name, Map<String, Object> attributes) {
+            if (ended) {
+                return; // pi memory.ts:142 —— settled 后 inert。
+            }
+            try {
+                var line = baseLine("event", traceId);
+                line.put("spanId", spanId);
+                line.put("name", name);
+                // null ≙ pi 的 attributes? 缺席（pi index.ts:19 签名可选）。
+                line.put("attrs", sanitize(attributes == null ? Map.of() : attributes));
+                writeLine(line);
+            } catch (RuntimeException | Error e) {
+                // Recording is passive (pi memory.ts:145-147).
+            }
+        }
+
+        /**
+         * pi {@code index.ts:21}：显式状态，后写赢；显式状态赢过失败时的自动
+         * 派生（pi memory.ts:96，{@code startSpan} 的 catch 读 {@link #explicitStatus}）。
+         */
+        @Override
+        public void setStatus(SpanStatus newStatus) {
+            if (ended) {
+                return; // pi memory.ts:158 —— settled 后 inert。
+            }
+            explicitStatus = Objects.requireNonNull(newStatus, "status");
         }
 
         private void markError() {
@@ -332,7 +396,11 @@ public final class JsonlFileTelemetry implements TelemetryContext {
             var line = baseLine("span_end", traceId);
             line.put("spanId", spanId);
             line.put("durationMs", (System.nanoTime() - startNanos) / 1_000_000);
-            line.put("status", status);
+            line.put("status", wireStatus(explicitStatus, status));
+            if (explicitStatus instanceof SpanStatus.Error error && error.name() != null) {
+                line.put("errorName", error.name());
+                line.put("errorMessage", error.message());
+            }
             line.put("attrs", attrs);
             writeLine(line);
         }
@@ -351,7 +419,10 @@ public final class JsonlFileTelemetry implements TelemetryContext {
             try {
                 return body.apply(child);
             } catch (RuntimeException | Error e) {
-                child.markError();
+                if (child.explicitStatus == null) {
+                    // pi memory.ts:96：无显式状态才自动派生 error。
+                    child.markError();
+                }
                 throw e;
             } finally {
                 child.close();

@@ -2,6 +2,7 @@ package com.pijava.telemetry;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 
 import io.opentelemetry.api.OpenTelemetry;
@@ -158,6 +159,45 @@ public final class OtelTelemetryContext implements TelemetryContext {
                     span.setAttribute(key, (long) i);
                 } else if (value instanceof Double d) {
                     span.setAttribute(key, d);
+                }
+            }
+        }
+
+        /**
+         * pi {@code index.ts:19} 的 OTel 映射：跨度事件 → OTel span event。
+         * settled 后 inert；记录被动（docs/22 §2）。
+         */
+        @Override
+        public void addEvent(String name, Map<String, Object> attributes) {
+            if (ended) {
+                return;
+            }
+            try {
+                span.addEvent(name, toAttributes(attributes));
+            } catch (RuntimeException e) {
+                // Recording is passive (pi memory.ts:145-147).
+            }
+        }
+
+        /**
+         * pi {@code index.ts:21} 的 OTel 映射：Error 带详情时压成
+         * {@code "name: message"} description。注意 OTel SDK 自有状态语义
+         * （OK 一旦设置不可被 ERROR 覆盖）与 pi 的「后写赢」不同——OTel 适配器
+         * 是扩展实现（docs/22 §7.4），不挂一致性套件。
+         */
+        @Override
+        public void setStatus(SpanStatus newStatus) {
+            if (ended) {
+                return;
+            }
+            switch (Objects.requireNonNull(newStatus, "status")) {
+                case SpanStatus.Ok ok -> span.setStatus(StatusCode.OK);
+                case SpanStatus.Error error -> {
+                    if (error.name() != null) {
+                        span.setStatus(StatusCode.ERROR, error.name() + ": " + error.message());
+                    } else {
+                        span.setStatus(StatusCode.ERROR);
+                    }
                 }
             }
         }
