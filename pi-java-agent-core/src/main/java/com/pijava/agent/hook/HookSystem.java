@@ -55,8 +55,8 @@ public final class HookSystem {
         return registry.register(laneName, "transform_context", hook);
     }
 
-    /** Register a {@code before_request} hook for the lane. */
-    public AutoCloseable onBeforeRequest(String laneName, BeforeRequestHook hook) {
+    /** Register a {@code before_request} hook for the lane（pi 的 {@code prepareRequest}；注册键保留 B221 族先例）。 */
+    public AutoCloseable onPrepareRequest(String laneName, PrepareRequestHook hook) {
         return registry.register(laneName, "before_request", hook);
     }
 
@@ -121,10 +121,40 @@ public final class HookSystem {
             hook -> ((BeforeResumeHook) hook).beforeResume(ctx));
     }
 
-    /** Fire all {@code before_request} hooks for the lane. */
-    public void fireBeforeRequest(String laneName, RequestContext ctx) {
-        fireVoid(laneName, "before_request",
-            hook -> ((BeforeRequestHook) hook).beforeRequest(ctx));
+    /**
+     * Fire {@code before_request} hooks（pi 的 {@code prepareRequest}，
+     * {@code agent-loop.ts:219-239}），链式合并：按注册序逐钩调用，<b>后钩看到前钩的
+     * 替换结果</b>；任一钩抛异常记账并弃权（与 {@link #fireFinishTurn} 同纪律）；
+     * 全弃权 ⇒ {@code null}。
+     *
+     * @return 合并后的 update；{@code null} 表示没有钩子发言
+     */
+    public PiLoop.RequestUpdate firePrepareRequest(String laneName,
+                                                   PiLoop.PrepareRequestContext request) {
+        PiLoop.RequestUpdate accumulated = null;
+        for (var hook : registry.get(laneName, "before_request")) {
+            try {
+                // 后钩看到前钩的替换结果：已积累的组件覆盖入参快照。
+                var visible = accumulated == null ? request
+                    : new PiLoop.PrepareRequestContext(
+                        accumulated.context() != null ? accumulated.context() : request.context(),
+                        accumulated.model() != null ? accumulated.model() : request.model(),
+                        accumulated.thinking() != null ? accumulated.thinking() : request.thinking());
+                var u = ((PrepareRequestHook) hook).prepareRequest(visible);
+                if (u != null) {
+                    accumulated = new PiLoop.RequestUpdate(
+                        u.context() != null ? u.context()
+                            : accumulated != null ? accumulated.context() : null,
+                        u.model() != null ? u.model()
+                            : accumulated != null ? accumulated.model() : null,
+                        u.thinking() != null ? u.thinking()
+                            : accumulated != null ? accumulated.thinking() : null);
+                }
+            } catch (Exception e) {
+                recordHookError(laneName, "before_request", e);
+            }
+        }
+        return accumulated;
     }
 
     /**

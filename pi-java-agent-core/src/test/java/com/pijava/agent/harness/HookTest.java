@@ -54,10 +54,13 @@ class HookTest {
     }
 
     @Test
-    void beforeRequestHookFires() {
+    void prepareRequestHookFires() {
         var h = harness();
         var fired = new boolean[1];
-        h.hookSystem().onBeforeRequest("default", ctx -> fired[0] = true);
+        h.hookSystem().onPrepareRequest("default", request -> {
+            fired[0] = true;
+            return null;
+        });
         h.prompt("hello");
         assertThat(fired[0]).isTrue();
     }

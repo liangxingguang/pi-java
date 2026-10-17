@@ -101,6 +101,24 @@ final class PiLoopRunner {
                 }
                 pending.clear();
 
+                // pi: prepareRequest（agent-loop.ts:219-239）——每次 provider 请求前都调
+                // （含第一轮），此时 pending 已 append 进 context（:95-101）。可整体替换
+                // context 或改写 model/thinking；写回 config ⇒ 对本 run 后续请求生效
+                // （pi 的 config 是 run 局部）。
+                if (config.prepareRequest() != null) {
+                    var requestUpdate = config.prepareRequest().apply(
+                        new PiLoop.PrepareRequestContext(context, config.model(), config.thinking()));
+                    if (requestUpdate != null) {
+                        if (requestUpdate.context() != null) {
+                            // pi: currentContext = u.context ?? currentContext
+                            context = copyOf(requestUpdate.context());
+                        }
+                        // pi: config = {...config, model, reasoning}
+                        config = withRequestUpdate(config, requestUpdate);
+                        messages = context.messages();   // context 可能已换，重指活列表
+                    }
+                }
+
                 var message = streamAssistantResponse(context, config, emit);
                 newMessages.add(message);
 
@@ -204,7 +222,25 @@ final class PiLoopRunner {
             config.toolExecution(), config.toolRunner(),
             config.streamFn(), config.signal(), config.steeringMessages(),
             config.followUpMessages(), config.transformContext(),
-            config.prepareNextTurn(), config.finishTurn(),
+            config.prepareRequest(), config.prepareNextTurn(), config.finishTurn(),
+            config.streamListener(), config.thinkingBudgets());
+    }
+
+    /**
+     * pi: {@code config = {...config, model, reasoning}} 的 prepareRequest 路
+     * （{@code agent-loop.ts:228-239}）—— 同样是只改写这两个字段（context 的替换
+     * 走 {@code currentContext}，不进 config）。{@link ModelThinkingLevel.Off}
+     * 就是 pi 的 {@code "off"} ⇒ {@code reasoning: undefined}（{@code reasoningOf} 消化）。
+     */
+    private static Config withRequestUpdate(Config config, PiLoop.RequestUpdate update) {
+        return new Config(
+            update.model() != null ? update.model() : config.model(),
+            update.thinking() != null ? update.thinking() : config.thinking(),
+            config.thinkingLevelMap(),
+            config.toolExecution(), config.toolRunner(),
+            config.streamFn(), config.signal(), config.steeringMessages(),
+            config.followUpMessages(), config.transformContext(),
+            config.prepareRequest(), config.prepareNextTurn(), config.finishTurn(),
             config.streamListener(), config.thinkingBudgets());
     }
 

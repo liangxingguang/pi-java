@@ -136,6 +136,7 @@ class PiLoopTurnHooksTest {
             steering,
             null,
             null,
+            null,
             nextTurn,
             finishTurn,
             null,

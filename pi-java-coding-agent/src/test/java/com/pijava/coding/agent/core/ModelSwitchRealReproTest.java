@@ -6,7 +6,6 @@ import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import com.pijava.agent.entry.Entry;
-import com.pijava.agent.hook.RequestContext;
 import com.pijava.agent.tool.DefaultFileSystem;
 import com.pijava.agent.tool.DefaultShellExecutor;
 import com.pijava.agent.tool.ToolContext;
@@ -44,9 +43,11 @@ class ModelSwitchRealReproTest {
             var harness = session.harness();
 
             var captured = new CopyOnWriteArrayList<List<Message>>();
-            try (var ignored = harness.hookSystem().onBeforeRequest("default",
-                    (RequestContext ctx) -> {
-                        captured.add(ctx.messages());
+            try (var ignored = harness.hookSystem().onPrepareRequest("default",
+                    request -> {
+                        // 观察语义不变：只看不改（返回 null ≙ pi 的 void）。
+                        captured.add(List.copyOf(request.context().messages()));
+                        return null;
                     })) {
                 // 第 1 轮：opus-4-8，thinking off（与用户 web 操作一致）
                 var r1 = session.processPrompt("1+1=? 只回答数字", PromptConfig.defaults());

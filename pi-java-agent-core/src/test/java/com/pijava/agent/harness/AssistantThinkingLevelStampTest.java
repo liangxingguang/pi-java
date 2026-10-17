@@ -64,7 +64,7 @@ class AssistantThinkingLevelStampTest {
             ToolExecution.defaultMode(),
             null,
             fn,
-            null, null, null, null, null, null, null, null);
+            null, null, null, null, null, null, null, null, null);
     }
 
     private static final class CollectingSink implements PiLoop.Sink {
@@ -128,7 +128,7 @@ class AssistantThinkingLevelStampTest {
                     }
                     @Override public void close() { }
                 },
-                signal, null, null, null, null, null, null, null),
+                signal, null, null, null, null, null, null, null, null),
             sink);
 
         var finalMessage = (Message.AssistantMessage) sink.events.stream()

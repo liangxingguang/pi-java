@@ -212,7 +212,7 @@ class ToolBatchConcurrencyTest {
                                         AbortSignal signal) {
         return new PiLoop.Config(MODEL, ModelThinkingLevel.off(), ThinkingLevelMap.empty(),
             ToolExecution.defaultMode(), tools, streamFn, signal, null, null, null, null, null, null,
-            null);
+            null, null);
     }
 
     private static Message user(String text) {

@@ -251,6 +251,29 @@ public final class PiLoop {
         NextTurnUpdate apply(NextTurnContext context);
     }
 
+    /** pi {@code PrepareRequestContext}（{@code types.ts:171-175}）：每次 provider 请求前的运行时快照。 */
+    public record PrepareRequestContext(Context context, ModelId<?> model,
+                                        ModelThinkingLevel thinking) {}
+
+    /**
+     * pi {@code AgentRequestUpdate}（{@code types.ts:176}，＝ {@code Omit<AgentLoopTurnUpdate,"messages">}）。
+     * 三组件全可选，{@code null} ≙ {@code undefined}（不改）。{@code context} 是整体替换。
+     * {@code thinking} 的 {@link ModelThinkingLevel.Off} ≙ pi 的 {@code "off"} ⇒ 请求侧「不传」
+     * （pi 的 {@code reasoning: undefined} 三分支由密封类型天然编码，无需特判）。
+     */
+    public record RequestUpdate(Context context, ModelId<?> model, ModelThinkingLevel thinking) {}
+
+    /**
+     * pi {@code PrepareRequest}（{@code types.ts:186-190}）：在<b>每一次</b>对话式 provider
+     * 请求之前调用（含第一次），此时 pending 消息已 append 进 context 并发过事件。
+     * 返回 {@code null} ≙ pi 的 {@code void}（不改）。
+     */
+    @FunctionalInterface
+    public interface PrepareRequestHook {
+        /** 裁决本次请求的运行时状态；{@code null} ≙ pi 的 undefined。 */
+        RequestUpdate apply(PrepareRequestContext request);
+    }
+
     /** pi {@code AgentTurnDecision}（{@code types.ts:146-147}）；纯常量闭集按规范用 enum。 */
     public enum TurnDecision { CONTINUE, END }
 
@@ -303,6 +326,8 @@ public final class PiLoop {
             Supplier<List<Message>> steeringMessages,
             Supplier<List<Message>> followUpMessages,
             ContextTransform transformContext,
+            /** pi {@code AgentLoopConfig.prepareRequest}；请求时序在 transformContext 之前（agent-loop.ts:219/:390）。 */
+            PrepareRequestHook prepareRequest,
             NextTurnHook prepareNextTurn,
             FinishTurnHook finishTurn,
             Consumer<StreamEvent> streamListener,

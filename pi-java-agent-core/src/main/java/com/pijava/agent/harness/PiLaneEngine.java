@@ -290,7 +290,6 @@ public final class PiLaneEngine {
         }
 
         var config = configFor(laneName, lane, sink);
-        sink.systemPrompt(systemPrompt);
         var runContext = new Context(systemPrompt, new ArrayList<>(lane.messages), tools);
         return new Pass(sink, config, runContext, passPrompts);
     }
@@ -335,6 +334,11 @@ public final class PiLaneEngine {
             () -> drainSteer(laneName),
             () -> drainFollowUp(laneName),
             ignored -> beforeRequest(laneName, lane, sink),
+            // pi prepareRequest（agent-loop.ts:219-239）：每次 provider 请求前的改写机会。
+            // ⚠️ 留痕（批 2 §2.5）：llm.request 跨度的 model/thinking 标签读车道 supplier
+            // （ctx.model().get()），prepareRequest 的 run 内替换不反映到跨度标签 ——
+            // 与 pi 的遥测口径未核，记窄差。
+            request -> ctx.hookSystem().firePrepareRequest(laneName, request),
             next -> prepareNextTurn(laneName, lane),
             next -> fireFinishTurn(laneName, lane),
             // 原始帧旁路：喂既有的 harness 广播链，会话层的记账代码因此无需改造。
@@ -379,8 +383,10 @@ public final class PiLaneEngine {
      * 日志重走 {@code pathToLeaf} 重建整份消息列表（{@code 原 docs/31 §4.2}）。三件都已搬走：
      * 配置变更归 {@link #prepareNextTurn}（钩子返回点），压缩归 pi 的两处触发点，消息改由
      * 车道的工作副本承载。留在请求路径上的只有 {@code transform_context} 钩子，以及
-     * 钩子看不到的两项**执行步开销**（{@code before_request} 与 {@code llm.request} 跨度）
-     * —— 它们原本长在 {@code AssistantStreamExecutor} 里，属「执行步」，{@link PiLoop} 不带。</p>
+     * 钩子看不到的**执行步开销**（{@code llm.request} 跨度）—— 它原本长在
+     * {@code AssistantStreamExecutor} 里，属「执行步」，{@link PiLoop} 不带。
+     * （旧的 {@code before_request} void 钩子已随 #34 退役：pi 的 {@code prepareRequest}
+     * 是可改写的运行时钩子，走 {@code Config.prepareRequest} 槽。）</p>
      */
     private List<Message> beforeRequest(String laneName, LaneState lane, PiLaneSink sink) {
         var messages = assembler.transformContext(laneName, List.copyOf(lane.messages));

@@ -12,7 +12,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.pijava.agent.entry.Entry;
-import com.pijava.agent.hook.RequestContext;
 import com.pijava.agent.hook.ResponseContext;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.record.ReplayKind;
@@ -118,14 +117,6 @@ final class PiLaneSink implements PiLoop.Sink {
     /** 本次请求实际发给 provider 的消息数，由引擎的 {@code transformContext} 回填。 */
     private int assembledMessageCount;
 
-    /**
-     * 本次 run 的系统提示，由引擎在 run 起点装进 {@code Context} 时同步回填。
-     *
-     * <p>它不在消息列表里（pi 的 {@code Message} 没有 system 角色），但
-     * {@code before_request} 钩子要看完整的请求，所以单独带一份。</p>
-     */
-    private String systemPrompt;
-
     /** 本次助手流的用量：pi-java 的 {@link StreamEvent.UsageInfo} 是独立帧，只能旁路累计。 */
     private long inputTokens;
     private long outputTokens;
@@ -163,11 +154,6 @@ final class PiLaneSink implements PiLoop.Sink {
         this.assembledMessageCount = count;
     }
 
-    /** 由引擎在 run 起点回填：系统提示不进消息列表，但 {@code before_request} 要看到它。 */
-    void systemPrompt(String prompt) {
-        this.systemPrompt = prompt;
-    }
-
     /**
      * 由引擎在 run 起点回填：这条**段补丁**系统消息已在 {@code RunLifecycle.startRun} 里落盘，
      * 循环稍后发来的那一份是它的**副本**（{@code declareToolChanges} 把工具字段写回时复制），
@@ -187,16 +173,18 @@ final class PiLaneSink implements PiLoop.Sink {
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * 一轮 provider 请求开始：发 {@code before_request} 钩子并打开 {@code llm.request} 跨度。
+     * 一轮 provider 请求开始：打开 {@code llm.request} 跨度。
      *
-     * <p>这些原本长在 {@code AssistantStreamExecutor.execute()} 里 —— 它们是**执行步**的
-     * 开销，不是驱动循环的，所以 {@link PiLoop} 不带它们。切换驱动时必须显式搬过来，
-     * 否则 {@code before_request} 钩子静默失效、{@code llm.request} 跨度消失
-     * （{@code PayloadRecordingStreamFnTest} 与 {@code ModelSwitchRealReproTest} 抓的就是这个）。</p>
+     * <p>这原本长在 {@code AssistantStreamExecutor.execute()} 里 —— 它是**执行步**的
+     * 开销，不是驱动循环的，所以 {@link PiLoop} 不带它。切换驱动时必须显式搬过来，
+     * 否则 {@code llm.request} 跨度消失（{@code PayloadRecordingStreamFnTest} 与
+     * {@code ModelSwitchRealReproTest} 抓的就是这个）。</p>
+     *
+     * <p>请求钩子不在这里：pi 的 {@code prepareRequest}（{@code agent-loop.ts:219}）
+     * 是<b>可改写</b>的运行时钩子，归 {@code PiLoop.Config.prepareRequest} 槽
+     * （引擎接线 {@code HookSystem.firePrepareRequest}）；本方法只剩跨度职责。</p>
      */
     void beginRequest(LaneState lane, List<Message> messages) {
-        ctx.hookSystem().fireBeforeRequest(laneName,
-            new RequestContext(laneName, lane.runId, systemPrompt, messages));
         llmStartNanos = System.nanoTime();
         var parent = lane.runSpan != null ? lane.runSpan : ctx.telemetry();
         llmSpan = parent.openSpan(new SpanOptions("llm.request", Map.of(

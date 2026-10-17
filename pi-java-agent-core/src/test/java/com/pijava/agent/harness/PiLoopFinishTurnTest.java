@@ -135,6 +135,7 @@ class PiLoopFinishTurnTest {
             steering,
             followUp,
             null,
+            null,
             nextTurn,
             finishTurn,
             null,
