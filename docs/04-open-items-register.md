@@ -28,6 +28,15 @@
 >   原「java 要逆协议」裁决作废（BOM 已钉的 anthropic-java 2.66.0 协议面全包），java 纯接线：
 >   `Credentials` 末位回落、`AnthropicMessagesApi` federation 车道、跨请求基座缓存，
 >   commits `81109b91`/`fcf9ceb8`。
+>   **2026-10-17 telemetry 批 1（详稿 [`docs/22`](22-telemetry-batch1-design.md)）已闭环**：
+>   核心取证——pi 的 telemetry 包是**休眠契约**（全库零 `startSpan` 调用点、
+>   类型化词汇零消费者）。map/01 T1–T17 全闭环：契约 T5/T6/T7/T9/T10 移植
+>   （`addEvent`/`setAttributes`/`setStatus`＋`SpanStatus` ADT、
+>   `InMemoryTelemetryContext`、一致性套件 7 用例 × InMemory/Jsonl 两挂，
+>   红→绿自证：改造前 Jsonl 红 3 例），T1/T2/T4 裁决、T12–T17 转「扩展·确认」
+>   （map/01 §0.1 增补子标签）、T11 移出分母（**50.0%→100%**，分母 35→34）；
+>   C5/C7/H×2 销号、**B241 即登即销**（pi ai `telemetryContext` 选项 dormant）。
+>   commits `75887b5b`/`dcb675b4`/`6a3937fe`/`da60ebb8`。
 >   换锚裁决与依据在 git 历史
 >   （`docs/11-pi-reanchor-ruling.md`，已随过程文档清理删除）。
 > - 判据是**行为**（`bin pi` 主流发布版可达的功能与表现），不是文档、API 形状或文件清单。
@@ -99,6 +108,7 @@
 | ~~B231~~ | ~~**新锚点**：OAuth 刷新取消时轮转 token 不持久化~~ | ✅ **已销号 2026-10-15（批 6，[`docs/15`](15-ai-batch6-oauth-identity-design.md)，commit `2a4466c9`）**：`StoredOAuthCredentials.resolveEffective` 整段锁内读-刷-写挪到**新建虚拟线程**（不继承调用方中断位；进锁前看一次调用方中断，进锁后只受刷新超时约束），调用方中断只令自己的 `Future.get` 失败，worker 照常把轮转 token 落盘；PKCE/device 两刷新 POST 加 **15s 硬超时**（pi `AbortSignal.timeout(15_000)`），登录流不加。回调端口冲突项无差距（Java 绑端口 0），不登记 |
 | ~~B232~~ | ~~**新锚点**：内置目录数据漂移（v1.1.0）~~ | ✅ **已销号 2026-10-14（批 3a）**：17 个 npm `pi-ai@1.1.0` 分片逐字节入 `resources/catalog/`（haiku-5-5、Claude 5.5 系列、kimi-k3 钉价 {3,15,.3,0}、prompt-length tiers 全携），manifest sha256 夹具钉字节；持续漂移随 npm 版本升级走 |
 | ~~B240~~ | ✅ **已销号 2026-10-16（批 8，[`docs/17`](17-ai-b240-chatgpt-request-time-design.md)，commit `efa66016`）**：~~ChatGPT 订阅 token 的请求时特判缺失~~ **字段裁剪臂**落地——`OpenAIResponsesApi.isChatGptSignIn`（provider=openai ＋ 官方 baseUrl **严格相等** ＋ 凭证非 `sk-` 前缀）为真时裁四键：`prompt_cache_retention`/`prompt_cache_options`/`max_output_tokens`/`temperature`（pi `openai-responses.ts:40-46,329-345`）；锚点取证纠正旧文：**`prompt_cache_key` 不裁**（pi `:334` 无门）；azure 副本无此门恒 false；模型级 samplingParams 有意不门（pi Object.assign 在后）。**重试臂取证时已在**：`RetryableError` 三码齐（`subscription_sharing_usage_limit_exceeded` 非重试表、`_usage_unavailable`/`_user_unavailable` 重试表）＋同族反向裁决夹具。**`filterAllModels` 臂真空**：Java 无 classifier 模型面（目录只携 chat、无 ModelType/openai-decisions），R5 classifier 落地时随附。9 新测（真值表 6＋omit 门 3），ai 1698 全绿 |
+| ~~B241~~ | ~~pi ai 层 `telemetryContext` 选项透传缺失~~ | ✅ **即登即销 2026-10-17（telemetry 批 1 取证，[`docs/22`](22-telemetry-batch1-design.md) §7.5）**：pi `ai/src/types.ts:159-160` 声明 `ProviderRequestOptions.telemetryContext?`＋`api/simple-options.ts:48` 透传，但 pi 全库**零设置点**（`grep telemetryContext packages/*/src` 只剩这两处＋telemetry 包自身）——dormant 公共 API 选项，R5 行为不可达 ⇒ 不做，登记防重复取证。pi-java ai 无对应字段；map/02 无需变动（该面从未入分母） |
 | ~~B234~~ | ~~**新锚点**：`durationMs` 计时字段缺失~~ | ✅ **已销号 2026-10-15（批 5，[`docs/14`](14-ai-batch5-message-fields-design.md)）**：响应计时由 AbstractChatApi 身份缝在终局消息加盖（单调钟、预设值保留）；工具计时 `ToolRegistry.executeTimed` 只围 `execute()` 本体（审批/校验/prepareArguments/after 钩子在外，成功/抛错都有、未执行无字段）；`ToolResultMessage.durationMs`/`tool_execution_end.durationMs` 贯通 agent-core→coding-agent JSON→web WS 两面＋JSONL；消息级 `thinkingLevel`（agent-loop.ts:409，含 off）同批落。**消费侧另案**：TUI/bash「Took …」卡（Java TUI 不订阅 ToolExecution 事件，随 tui bash 渲染器）；AgentSettled 不另加字段（toolResults 消息自带时长，与 pi 同） |
 
 **compat 面细碎登记**（pi 有标注/消费、Java 无的字段与数据位）：

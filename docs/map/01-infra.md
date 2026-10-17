@@ -19,6 +19,8 @@
 
 **⚠️ 读表须知**：三档里没有「都有但形状不同」这一档 —— 这类按定义**不能算对齐**，全部落在 **存疑**（判定列的子标签 `（形状）`/`（旧 pi）`/`（扩展）`/`（台账）` 指明是哪一种）。所以本表的「完成度」是**严格口径**：只数行为逐条相同的。
 
+> **子标签增补（2026-10-17，docs/22 §7.4）**：`（扩展·确认）`——pi 无对照物的扩展单元，经裁决确认保留、且行为有一致性套件/测试钉床 ⇒ 判 **对齐**（计满分、**留分母**，pi 若日后长出对照物可原位重测翻红）。判据是行为：pi 无此行为面，不存在「差距」。
+
 ### 0.2 参照物错位 —— 本层最大的单一事实
 
 **`pi-java-protocol` 的整个「命令/结果/事件」层，参照的是 pi 已经删掉的代码。**
@@ -51,7 +53,7 @@
 
 | 模块 | pi 包 | pi 文件数 | pi LOC | java 文件数 | java LOC | 比例 |
 |---|---|---:|---:|---:|---:|---:|
-| pi-java-telemetry | `packages/telemetry`（`src/`，含 `testing/`） | 6 | 935 | 6 | 787 | 84% |
+| pi-java-telemetry | `packages/telemetry`（`src/`，含 `testing/`） | 6 | 935 | 14 | 1682 | 180% |
 | pi-java-protocol | `packages/protocol`（`src/`） | 8 | 869 | 24 | 748 | 86% |
 | pi-java-client | `packages/client`（`src/`） | 8 | 1135 | 7 | 374 | 33% |
 | pi-java-server | `packages/server`（`src/`） | 16 | 1958 | 13 | 563 | 29% |
@@ -59,7 +61,7 @@
 > 两侧均只计 `src/`（`main`）生产代码（含随包发布的 `testing/`），不含测试。行数比不构成判据，仅示量级 —— 见 §0.1。
 > 参照量级：pi `packages/chord`（RPC 基座，pi-java 无对应包）**8817 LOC / 29 文件**（含 `src/delta/` 的 `diff`/`tracker`/`draft`/`revision-validator`/`apply-immutable-trusted` 与 `src/services/`、`api.ts` 的 `ReplicatedStateSource` API，见 §整块缺失第 2 行）；
 > pi `packages/server/src/testing/` **420** LOC；pi `packages/telemetry/src/testing/` 339 LOC。
-> pi 侧测试量：telemetry 243 / protocol 567 / client 799 / server **1054** LOC；java 侧：telemetry 678 / protocol 214 / client **0** / server 212 LOC。
+> pi 侧测试量：telemetry 243 / protocol 567 / client 799 / server **1054** LOC；java 侧：telemetry 1062 / protocol 214 / client **0** / server 212 LOC。
 
 ---
 
@@ -69,23 +71,23 @@
 
 | # | 能力单元 | 类别 | pi 侧证据 | pi-java 侧证据 | 判定 | 台账条目 | 权重 |
 |---|---|---|---|---|---|---|---|
-| T1 | `TelemetryContext.startSpan(options, callback)` | 契约级导出类型 | `telemetry/src/index.ts:14-16` | `TelemetryContext.java:40` | 存疑（形状） | — | 3 |
-| T2 | `TelemetrySpan`（span 即 context，可嵌子跨度） | 契约级导出类型 | `telemetry/src/index.ts:18-22` | `TelemetrySpan.java:26` | 存疑（形状） | D2 / D3 | 3 |
+| T1 | `TelemetryContext.startSpan(options, callback)` | 契约级导出类型 | `telemetry/src/index.ts:14-16` | `TelemetryContext.java:41` | **对齐**（结构性裁决：同步回调/AutoCloseable，docs/22 §7.3） | — | 3 |
+| T2 | `TelemetrySpan`（span 即 context，可嵌子跨度） | 契约级导出类型 | `telemetry/src/index.ts:18-22` | `TelemetrySpan.java:30` | **对齐**（同 T1 裁决） | D2 / D3 | 3 |
 | T3 | `SpanOptions {name, attributes}` | 契约级导出类型 | `telemetry/src/index.ts:7-10` | `SpanOptions.java:11` | **对齐** | — | 3 |
-| T4 | `AttributeValue` 类型闭集（string/number/boolean + 三个数组） | 契约级导出类型 | `telemetry/src/index.ts:1` | `SpanOptions.java:11`（`Map<String,Object>`，无闭集） | 存疑（形状） | — | 1 |
-| T5 | `TelemetrySpan.addEvent(name, attributes)` | 契约级导出类型 | `telemetry/src/index.ts:19` | 不移植（裁决见 `TelemetrySpan.java:13-19`） | **缺失** | H（历史台账记过 `addEvent`/`addLink`；**pi 侧无 `addLink`，该半条是旧映射文档的错记**） | 1 |
-| T6 | `TelemetrySpan.setAttributes(整包合并)` | 契约级导出类型 | `telemetry/src/index.ts:20` | `TelemetrySpan.java:39`（单键 `addAttribute`） | 存疑（形状） | — | 2 |
-| T7 | `TelemetrySpan.setStatus` + `SpanStatus{ok\|error}` | 契约级导出类型 | `telemetry/src/index.ts:12,21` | 不移植；状态自动派生（`TelemetrySpan.java:14-20`、`JsonlFileTelemetry.java:318`） | **缺失** | — | 2 |
+| T4 | `AttributeValue` 类型闭集（string/number/boolean + 三个数组） | 契约级导出类型 | `telemetry/src/index.ts:1` | `SpanOptions.java:11`（`Map<String,Object>`，无闭集） | **对齐**（裁决维持 Map：pi 运行时不校验、行为同值域，docs/22 §7.2） | — | 1 |
+| T5 | `TelemetrySpan.addEvent(name, attributes)` | 契约级导出类型 | `telemetry/src/index.ts:19` | `TelemetrySpan.java:44` | **对齐**（docs/22 §2 移植；旧「不移植」裁决翻转） | — | 1 |
+| T6 | `TelemetrySpan.setAttributes(整包合并)` | 契约级导出类型 | `telemetry/src/index.ts:20` | `TelemetrySpan.java:51`（`addAttribute:65` 为单键便捷 default） | **对齐**（docs/22 §2 移植） | — | 2 |
+| T7 | `TelemetrySpan.setStatus` + `SpanStatus{ok\|error}` | 契约级导出类型 | `telemetry/src/index.ts:12,21` | `TelemetrySpan.java:59` + `SpanStatus.java:11`（显式状态赢过自动派生，`JsonlFileTelemetry`/`InMemoryTelemetryContext` 同语义） | **对齐**（docs/22 §2 移植） | — | 2 |
 | T8 | `NOOP_TELEMETRY_CONTEXT` | 契约级导出类型 | `telemetry/src/noop.ts:20` | `NoopTelemetryContext.java:12` | **对齐** | — | 3 |
-| T9 | `InMemoryTelemetryContext` + `RecordedTelemetrySpan`/`RecordedTelemetryEvent` | 契约级导出类型 | `telemetry/src/memory.ts:192,16,11` | 无 | **缺失** | H | 1 |
-| T10 | `createTelemetryAdapterConformance` 套件（9 用例 / 6 组：status·recording×3·parentage·passivity×2） | 契约级导出类型 | `telemetry/src/testing/conformance.ts:142,184,206,220,246,274,301` | 无 | **缺失** | C7（倾向不做，触发条件＝出现 OTel 之外的真 adapter）、H | 1 |
-| T11 | `defineTelemetrySchema` + `createTypedSpanStarter` 类型化跨度词汇 | 契约级导出类型 | `telemetry/src/index.ts:72,349` | 无 | **缺失** | H | 1 |
-| T12 | `TelemetryContext.openSpan(options)`（无回调开跨度） | 契约级导出类型 | 无（pi 无对照物） | `TelemetryContext.java:47` | 存疑（扩展） | D3 | 3 |
-| T13 | `recordEvent` / `recordsPayloads` / `pushCurrent` / `popCurrent`（事件行 + 线程绑定） | 契约级导出类型 | 无 | `TelemetryContext.java:75,82,93,102` | 存疑（扩展） | C5 | 2 |
-| T14 | `incrementCounter` / `recordTiming` 指标 | 契约级导出类型 | 无 | `TelemetryContext.java:57,60` | 存疑（扩展） | — | 3 |
-| T15 | `with(key, value)` 维度上下文 | 契约级导出类型 | 无 | `TelemetryContext.java:63` | 存疑（扩展） | D1 | 2 |
-| T16 | `JsonlFileTelemetry` JSONL 落盘导出器（**每个会话无条件接线**，`AgentSession.java:282-283`；`--trace-payloads` 只门控 payload 事件行） | 契约级导出类型 | 无 | `JsonlFileTelemetry.java:44,107` | 存疑（扩展） | D4 / D5 | 3 |
-| T17 | `OtelTelemetryContext` OTel 适配器 | 契约级导出类型 | 无（pi 只有 noop + 测试用 memory 两个 adapter） | `OtelTelemetryContext.java:22` | 存疑（扩展） | C7 | 1 |
+| T9 | `InMemoryTelemetryContext` + `RecordedTelemetrySpan`/`RecordedTelemetryEvent` | 契约级导出类型 | `telemetry/src/memory.ts:192,16,11` | `InMemoryTelemetryContext.java:26`、`RecordedTelemetrySpan.java:19`、`RecordedTelemetryEvent.java:9` | **对齐**（docs/22 §3 移植；state 加锁为 java 必要偏差） | — | 1 |
+| T10 | `createTelemetryAdapterConformance` 套件（pi 9 用例 / 6 组 ⇒ java **7 用例 / 5 组**，2 个 TS Proxy 子场景登记不移植） | 契约级导出类型 | `telemetry/src/testing/conformance.ts:142,184,206,220,246,274,301` | `testing/TelemetryAdapterConformance.java:41`（InMemory＋Jsonl 两挂） | **对齐**（docs/22 §4 移植；C7 翻转——触发条件已满足） | — | 1 |
+| T11 | `defineTelemetrySchema` + `createTypedSpanStarter` 类型化跨度词汇 | 契约级导出类型 | `telemetry/src/index.ts:72,349` | 无 | **裁决不做 ⇒ 移出分母**（pi 全库零消费者＋TS 编译期类型机制不可表达，docs/22 §7.1） | — | 0 |
+| T12 | `TelemetryContext.openSpan(options)`（无回调开跨度） | 契约级导出类型 | 无（pi 无对照物） | `TelemetryContext.java:48` | **对齐**（扩展·确认，docs/22 §7.4） | D3 | 3 |
+| T13 | `recordEvent` / `recordsPayloads` / `pushCurrent` / `popCurrent`（事件行 + 线程绑定） | 契约级导出类型 | 无 | `TelemetryContext.java:76,83,94,103` | **对齐**（扩展·确认，docs/22 §7.4；C5 销号——`PiLaneSink.endRequest` 已统一先 pop 后 close） | — | 2 |
+| T14 | `incrementCounter` / `recordTiming` 指标 | 契约级导出类型 | 无 | `TelemetryContext.java:58,61` | **对齐**（扩展·确认，docs/22 §7.4） | — | 3 |
+| T15 | `with(key, value)` 维度上下文 | 契约级导出类型 | 无 | `TelemetryContext.java:64` | **对齐**（扩展·确认，docs/22 §7.4） | D1 | 2 |
+| T16 | `JsonlFileTelemetry` JSONL 落盘导出器（**每个会话无条件接线**，`AgentSession.java:282-283`；`--trace-payloads` 只门控 payload 事件行） | 契约级导出类型 | 无 | `JsonlFileTelemetry.java:44,107` | **对齐**（扩展·确认，docs/22 §7.4；批内补显式状态语义＋addEvent 行＋原子 setAttributes，套件钉住） | D4 / D5 | 3 |
+| T17 | `OtelTelemetryContext` OTel 适配器 | 契约级导出类型 | 无（pi 只有 noop + 测试用 memory 两个 adapter） | `OtelTelemetryContext.java:22` | **对齐**（扩展·确认，docs/22 §7.4；OTel SDK 自有 status 语义，不挂套件） | — | 1 |
 
 **权重依据（telemetry，逐个可查）**
 
@@ -96,10 +98,11 @@
 | 3 | T12 | `openSpan` 在默认路径每次调用：`RunSpanFactory.java:32`（每次运行）、`PiLaneSink.java:201`（每次 LLM 请求）、`PiLaneSink.java:253`（每次工具调用）、`CompactionExecutor.java:272,422` |
 | 3 | T14 | 指标在默认路径每次请求/工具：`PiLaneSink.java:230-236,502-506`、`PiLaneEngine.java:96`、`RunSpanFactory.java:31`、`CompactionExecutor.java:267` |
 | 3 | T16 | **每个会话无条件接线**（`AgentSession.java:282-283` → `PayloadRecordingStreamFn.exporter:69-71`）⇒ 每次会话都产 trace 文件 |
-| 2 | T6 T7 | 属性/状态写入常见，但非每个跨度都发生（T7 的**可观测量已由 java 自动派生保住**，缺的只是显式设置 API） |
+| 2 | T6 T7 | 属性/状态写入常见，但非每个跨度都发生 |
+| 0 | T11 | 裁决不做 ⇒ 移出分母（pi 全库零消费者＋TS 编译期类型机制不可表达，docs/22 §7.1） |
 | 2 | T13 | `pushCurrent(llmSpan)` **每 LLM 请求**都调（`PiLaneSink.java:207`），但可观察性受 `--trace-payloads` 门控（默认关）⇒ 频率 3 × 影响 1，取 2 |
 | 2 | T15 | `with("sessionId", …)` 每次会话一次（`PayloadRecordingStreamFn.java:71`） |
-| 1 | T4 T5 T9 T10 T11 T17 | 内部契约形状 / 遥测细节 / 仅测试后端 / 纯类型层（pi 侧 12 个 `pi.*` 跨度 11 个零发射点）/ 无生产接线（Otel 需外部 SDK） |
+| 1 | T4 T5 T9 T10 T17 | 内部契约形状 / 遥测细节 / 仅测试后端 / 无生产接线（Otel 需外部 SDK） |
 
 ### B. protocol（28 条）
 
@@ -206,7 +209,7 @@
 | **Chord service-addressed RPC 全层**（`RpcTarget`/`ServiceCall` 路由 + `cancel` + `service_update` 订阅/水合 + `attachment` 通知 + 校验型增量解码器） | ~1600（实测：`protocol/src/protocol.ts` 110 + `codec.ts` 141 + `server/src/session-router.ts` 312 + `server/src/server.ts` 576 + `client/src/client.ts` 479） | pi-java **零对应物**。这不是「少几条命令」—— 是**寻址模型不同**：pi 把会话/服务当可寻址端点（`RpcTarget` 两态 + `ServiceCall{serviceId, member, args}`），pi-java 把一切压成 9 个固定命令。见 §0.2。 |
 | **RPC 基座包 `packages/chord`** | **8817**（29 文件） | pi 的 protocol/client/server 三层都建立在 Chord 的 `defineService`/`ReplicatedState`/`ServiceCall`/`ServiceProviderUpdate` 之上；pi-java 无对应包（Maven 依赖图里没有）。**这是上一条缺失的根因。** chord 自身另有状态复制/差分机制（`src/delta/` 的 `diff`/`tracker`/`draft`/`revision-validator`/`apply-immutable-trusted` 五文件，提供 `track()`/`diffRevisions` 原语；`src/services/state.ts` 与 `api.ts`/`provider.ts`/`consumer.ts` 的 `ReplicatedStateSource` / `AttachedReplicatedState`），但那不属 protocol/client/server 的能力面；chord 在本层按裁决权重 0（pi-java 无 chord 包）⇒ **本层未因此长出任何新能力单元**。 |
 | **coding-agent 侧的接线层**（client-runtime / coordinator / session-worker / services/*） | **10454**（`src/experimental/` **9950** + `src/cli/experimental/` 504） | pi 的 `--serve`/`--connect` 面全在这里；pi-java 的 `pi-java-client`/`pi-java-server` **无任何生产消费者**（§0.3），`PiServerService` 无实现类。experimental 下另有 `durable/`、`vacation/` 等实验前端，均不在 `bin pi` 主流路径 ⇒ **不构成本层的新能力单元**。 |
-| **telemetry testing/（conformance 套件 + 类型化 schema 词汇）** | ~490（`testing/` 339 + `index.ts:26-354` 的类型化部分） | pi-java 只有 3 个自建测试类（678 行），无 runner 无关的一致性套件、无 `defineTelemetrySchema`。台账 C7 裁决「倾向不做」，触发条件＝出现 OTel 之外的真 adapter。 |
+| **telemetry 类型化 schema 词汇** | ~280（`index.ts:26-354` 的类型化部分） | **裁决不做**（docs/22 §7.1）：pi 全库零消费者、TS 编译期类型机制不可表达 ⇒ 移出分母。conformance 套件已移植（T10，`testing/` 4 文件＋两挂），不再是缺口。 |
 | **server testing/ 测试基础设施** | **420** | pi-java 的 server 测试只有一个集成测试（212 行），自建桩；pi 有可复用的 `ProtocolTestClient`/`TestHarness`/`createTestServer`。 |
 | **Unix 传输的可配置面**（权限 mode / 慢对端背压 / 优雅关闭超时 / serverId→路径派生 / 客户端服务发现） | ~380（估：`server/src/transports/unix/` 476 中约 300 + `client/src/unix.ts` 中约 80） | pi-java 两侧各一个极简实现（`UnixSocketListener.java` 77 行 / `UnixSocketTransport.java` 39 行），只有 bind/accept 与 connect。 |
 | **CBOR 自研编解码器 + 资源上限** | 436（`encoder.ts` 216 + `decoder.ts` 168 + `options.ts` 52） | pi-java 用 Jackson CBOR 34 行封装，无 `maxByteLength`/`maxContainerLength`/`maxDepth`/`CborError`。**口径**：这是**实现替换**不是缺口（Jackson 是成熟库），但上限这一层是真的没有。 |
@@ -216,44 +219,46 @@
 
 ## 汇总
 
-**对齐 10 / 缺失 40 / 存疑 35 / 合计 85 ；完成度 = 10/85 = 11.8%**
+**对齐 24 / 缺失 35 / 存疑 25 / 合计 84 ；完成度 = 24/84 = 28.6%**
 
 分模块：
 
 | 模块 | 对齐 | 缺失 | 存疑 | 合计 | 完成度 |
 |---|---:|---:|---:|---:|---:|
-| telemetry | 2 | 5 | 10 | 17 | 11.8% |
+| telemetry | 16 | 0 | 0 | 16 | **100%** |
 | protocol | 7 | 9 | 12 | 28 | 25.0% |
 | client | 1 | 12 | 5 | 18 | 5.6% |
 | server | 0 | 14 | 8 | 22 | 0.0% |
-| **合计** | **10** | **40** | **35** | **85** | **11.8%** |
+| **合计** | **24** | **35** | **25** | **84** | **28.6%** |
 
-**存疑的 35 条按成因拆开**（互斥计数，合计 35）：
+> telemetry 的 16 条对齐 = 10 条契约（T1–T10：移植/裁决后行为逐条相同）＋ 6 条扩展·确认（T12–T17，§0.1 增补子标签）；T11 裁决移出分母（docs/22 §7.1）。
+
+**存疑的 25 条按成因拆开**（互斥计数，合计 25）：
 
 | 成因 | 条数 | 条目 |
 |---|---:|---|
-| 形状不同（两侧都有，行为不达「相同」） | 20 | T1 T2 T4 T6 / P5 P16 P20 P28 / C3 C11 C13 C14 / S1 S2 S5 S8 S10 S14 S17 S18 |
+| 形状不同（两侧都有，行为不达「相同」） | 16 | P5 P16 P20 P28 / C3 C11 C13 C14 / S1 S2 S5 S8 S10 S14 S17 S18 |
 | 旧 pi 移植（参照物已被 pi 删除，见 §0.2） | 9 | P7 P14 P17 P22 P23 P24 P25 P27 / C18 |
-| pi-java 扩展（pi 无对照物） | 6 | T12 T13 T14 T15 T16 T17 |
+| pi-java 扩展（pi 无对照物） | 0 | —（T12–T17 已于 docs/22 批 1 转「扩展·确认」⇒ 对齐） |
 
 ### 挂到能力单元上的台账条目
 
 | 台账 | 条目 | 挂点 |
 |---|---|---|
-| C5 | 开/关顺序不对称（`JsonlFileTelemetry.startSpan:133-134` = `popCurrent()` 再 `close()`；`PiLaneSink.endRequest:226-227` = `close()` 再 `popCurrent()` ⇒ 相反） | T13 |
-| C7 | 是否另立 `TelemetryAdapterConformance` 套件（倾向不做） | T10 |
 | D1 | `JsonlFileTelemetry.with(...)` 返回新实例 | T15 |
-| D2 | `JsonlSpan.startSpan:338-349` 不碰当前栈 —— 未文档化的局部行为 | T2 |
+| D2 | `JsonlSpan.startSpan` 不碰当前栈 —— 未文档化的局部行为 | T2 |
 | D3 | 接口 `openSpan` 的 default 实现返回**已结束**的 span | T2 / T12 |
 | D4 | 摘要重试每次尝试没有各自跨度 | T16 |
 | D5 | 截断兜底生成器下「无事件、无 token」的跨度形状无测试 | T16 |
-| H | `TelemetrySpan` 的 `addLink`/`event` 未实现 | T5（`addLink` 半条是映射文档错记） |
-| H | telemetry memory 后端 + conformance 套件未实现 | T9 / T10 / T11 |
 | H | `session` / `process` 细粒度控制（pi 命令更多） | 见「整块缺失」第 1 行（service-addressed RPC 层） |
+
+> **销号（2026-10-17，docs/22 批 1）**：`C5`——`PiLaneSink.endRequest` 已统一先 pop 后 close（docs/22 §6）；
+> `C7`——翻转立套件（触发条件已满足：`JsonlFileTelemetry` 即 OTel 之外的真 adapter，docs/22 §4.1）；
+> `H`（`addLink`/`event`）——`addEvent` 已移植（T5）；`H`（memory 后端＋套件）——T9/T10 已移植、T11 裁决移出分母。
 
 **不挂能力单元的台账条目**：`D7` —— `client`/`protocol`/`server` 三个 `package-info.java` 仍写「Phase 6 will implement…」（`pi-java-client/.../package-info.java:4`、`pi-java-protocol/.../package-info.java`、`pi-java-server/.../package-info.java:4`），三个模块都已实现 ⇒ 纯注释级小账，无对应能力单元。
 
-**一句话结论**：这一层**没有一条「接线对上了」**。真正逐条相同的只有 framing/CBOR 基础件（P1–P4）、`ClientHello`/`ServerHelloError`/`ProtocolError` 三个信封、`NOOP`/`SpanOptions` 两个 telemetry 契约 —— 共 10 条。protocol 的 RPC 层是**已删除 pi 代码的移植**（§0.2），client/server 是**无消费者的孤岛**（§0.3）。
+**一句话结论**：telemetry 已全量闭环（docs/22 批 1，2026-10-17：16/16 对齐、T11 裁决移出分母）。本层其余部分**没有一条「接线对上了」**——真正逐条相同的只有 framing/CBOR 基础件（P1–P4）、`ClientHello`/`ServerHelloError`/`ProtocolError` 三个信封，共 7 条。protocol 的 RPC 层是**已删除 pi 代码的移植**（§0.2），client/server 是**无消费者的孤岛**（§0.3）。
 
 ---
 
@@ -264,12 +269,12 @@
 
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|
-| telemetry（T1–T17） | 35 | 17.5 | **50.0%** | 41.2% |
+| telemetry（T1–T17，T11 移出） | 34 | 34.0 | **100%** | 100% |
 | protocol（P1–P28，**权重 0，排除**） | 0 | 0 | — | 46.4% |
 | client（C1–C18，**权重 0，排除**） | 0 | 0 | — | 19.4% |
 | server（S1–S22，**权重 0，排除**） | 0 | 0 | — | 18.2% |
 
-**模块合计**：Σ权重 **35** ／ Σ(w×c) **17.5** ／ **加权完成度 = 17.5/35 = 50.0%**（未加权 41.2%）
+**模块合计**：Σ权重 **34** ／ Σ(w×c) **34.0** ／ **加权完成度 = 34/34 = 100%**（未加权 16/16 = 100%）
 
 > 分母口径：`protocol`/`client`/`server` 三模块按用户裁决整体排除（依据＝pi 删了 `schemas.ts`，见 §0.2），
 > 单列一行、权重填 0、不参与计算 ⇒ 模块合计 = telemetry。**未加权列**仍给出三模块的数字，便于对照。
@@ -278,36 +283,44 @@
 > 本文件 pi 侧引用全部经 `git show ea448f454:<path>` 重验命中（四包 `src/` 与上锚点同一内容）；本锚点仅更正 5 处行号，**判定与权重一条未动**：
 > - 跨模块 java 引用按 HEAD 工作树重定位：`PiLaneSink` 工具计数 `:497-501`→`:502-506`；`CompactionExecutor` 计数 `:249`→`:267`、开跨度 `:254,399`→`:272,422`；T16 接线点 `AgentSession.java`→`:282-283`（`PiLaneSink:201,207,226-227,230-236,253`、`PiLaneEngine:96`、`RunSpanFactory:31-32`、`PayloadRecordingStreamFn:69-71`、`JsonlFileTelemetry` 各锚点仍命中）。
 > - pi 侧笔误更正 1 处：`client/src/errors.ts` 证据 `:3,14,21,26`→`:3,13,20,27`（四类各自声明行；文件本身零变化）。
+>
+> **2026-10-17 telemetry 批 1 闭环（docs/22）**：T1–T17 全闭环——契约 10 条（T1–T10）移植/裁决后逐条对齐
+> （T5/T6/T7/T9/T10 移植，T1/T2/T4 裁决），扩展 6 条（T12–T17）转「扩展·确认」（§0.1 增补子标签），
+> T11 裁决移出分母 ⇒ Σ权重 35→34、Σ(w×c) 17.5→34.0、**50.0%→100%**（未加权 41.2%→100%）。
+> C5（开/关顺序）、C7（套件裁决，翻转）、H×2（addEvent／memory 后端＋套件）销号；一致性套件 7 用例 ×
+> InMemory/Jsonl 两挂全绿，红→绿自证：改造前 Jsonl 跑套件红 3 例（显式状态/addEvent/原子性）。
+> 实施 commits：`75887b5b`（契约）＋ `dcb675b4`（InMemory）＋ `6a3937fe`（套件＋Jsonl 语义）＋ `da60ebb8`（C5）。
 
-### 权重 3 的单元（7 条 —— 最该先修）
+### 权重 3 的单元（7 条）
 
 | # | 单元 | 判定 | 权重依据 |
 |---|---|---|---|
-| T1 | `TelemetryContext.startSpan` | 存疑（形状） | 每个跨度都走 |
-| T2 | `TelemetrySpan` | 存疑（形状） | 每个跨度都走 |
+| T1 | `TelemetryContext.startSpan` | **对齐**（结构性裁决，docs/22 §7.3） | 每个跨度都走 |
+| T2 | `TelemetrySpan` | **对齐**（同 T1） | 每个跨度都走 |
 | T3 | `SpanOptions {name, attributes}` | **对齐** | 每个跨度都走 |
 | T8 | `NOOP_TELEMETRY_CONTEXT` | **对齐** | 未配置遥测时的默认实现 |
-| T12 | `TelemetryContext.openSpan` | 存疑（扩展） | `RunSpanFactory:32`／`PiLaneSink:201,253`／`CompactionExecutor:272,422` —— 每次运行/每次 LLM 请求/每次工具调用 |
-| T14 | `incrementCounter` / `recordTiming` | 存疑（扩展） | `PiLaneSink:230-236,502-506`／`PiLaneEngine:96`／`RunSpanFactory:31`／`CompactionExecutor:267` —— 默认路径每次请求/工具 |
-| T16 | `JsonlFileTelemetry` | 存疑（扩展） | `AgentSession:282-283` → `PayloadRecordingStreamFn.exporter:69-71` **无条件接线** ⇒ 每次会话都产 trace 文件 |
+| T12 | `TelemetryContext.openSpan` | **对齐**（扩展·确认） | `RunSpanFactory:32`／`PiLaneSink:201,253`／`CompactionExecutor:272,422` —— 每次运行/每次 LLM 请求/每次工具调用 |
+| T14 | `incrementCounter` / `recordTiming` | **对齐**（扩展·确认） | `PiLaneSink:230-236,502-506`／`PiLaneEngine:96`／`RunSpanFactory:31`／`CompactionExecutor:267` —— 默认路径每次请求/工具 |
+| T16 | `JsonlFileTelemetry` | **对齐**（扩展·确认） | `AgentSession:282-283` → `PayloadRecordingStreamFn.exporter:69-71` **无条件接线** ⇒ 每次会话都产 trace 文件 |
 
-**权重 3 子集完成度：Σ权重 21 ／ Σ(w×c) 13.5 ／ = 64.3%**
+**权重 3 子集完成度：Σ权重 21 ／ Σ(w×c) 21.0 ／ = 100%**
 
 ### 分权重档完成度（telemetry）
 
 | 档 | 单元数 | Σ权重 | Σ(w×c) | 完成度 |
 |---|---:|---:|---:|---:|
-| 权重 3 | 7 | 21 | 13.5 | **64.3%** |
-| 权重 2 | 4（T6 T7 T13 T15） | 8 | 3.0 | 37.5% |
-| 权重 1 | 6（T4 T5 T9 T10 T11 T17） | 6 | 1.0 | 16.7% |
+| 权重 3 | 7 | 21 | 21.0 | **100%** |
+| 权重 2 | 4（T6 T7 T13 T15） | 8 | 8.0 | **100%** |
+| 权重 1 | 5（T4 T5 T9 T10 T17） | 5 | 5.0 | **100%** |
 
 ### 未加权 vs 加权的差 —— 差在哪
 
-**telemetry：41.2% → 50.0%，加权后拉高 +8.8 pt。**
+**telemetry：批 1 后未加权 = 加权 = 100%，本节历史结论失效。**
 
-- 拉高的原因：**权重 3 的 7 条里没有一条缺失**（2 对齐 + 5 存疑）⇒ 大件是齐的。
-- 被降权的原因：**5 条缺失全部落在权重 1–2**（T5=1、T7=2、T9=1、T10=1、T11=1）—— `addEvent`/`setStatus`/测试后端/conformance 套件/类型化 schema，都是**遥测细节与测试基础设施**。
-- 一句话：**telemetry 缺的都是小件**；核心契约（`startSpan`/`SpanOptions`/`NOOP`）、默认路径（`openSpan`/指标）、默认导出器（`JsonlFileTelemetry`）都在。
+- 批 1 前（41.2% → 50.0%）的形态是「缺的全是小件」：5 条缺失全落权重 1–2。
+- 批 1 把小件整组收编（T5/T7/T9/T10 移植、T11 裁决移出）、形状存疑裁决（T1/T2/T4）、
+  扩展确认（T12–T17）⇒ 三档全满。后续关注点只剩 **drift**：pi 若给 telemetry 包新增
+  对照物（如官方 exporter），T12–T17 原位重测。
 
 **protocol / client / server（若拉回分母）：加权只把它们拉高 +3.6 ~ +4.6 pt，幅度远小于 telemetry。**
 
