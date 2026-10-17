@@ -1,8 +1,11 @@
 # 03 Agent 运行时核心（pi-java-agent-core）
 
-> 基准：pi @ **`ea448f454`**（2026-10-11）；pi-java @ **`edc8749d`**（main，2026-10-11）。
-> 台账 = [`docs/04-open-items-register.md`](../04-open-items-register.md)。锚点事实 = [`ANCHOR.md`](ANCHOR.md)。
-> 所有 pi 侧 `file:line` 均由 `git -C D:/workplaceForai/pi show ea448f454:<path>` 实读，**未读工作树**。
+> 【背景摘要】本图是 pi-java-agent-core 层的全量加权盘点：104 个能力单元逐条判定、权重、两侧 `file:line` 证据。「还有什么要对齐」的可读索引见 [`../07-agent-core-alignment-gaps.md`](../07-agent-core-alignment-gaps.md)；台账是 [`../04-open-items-register.md`](../04-open-items-register.md)，锚点事实见 [`ANCHOR.md`](ANCHOR.md)。
+
+## 基准
+
+- pi @ **`ea448f454`**（2026-10-11）；pi-java @ **`edc8749d`**（main，2026-10-11）。
+- 所有 pi 侧 `file:line` 均由 `git -C D:/workplaceForai/pi show ea448f454:<path>` 实读，**未读工作树**。
 
 ---
 
@@ -14,32 +17,26 @@
 
 ### ★ 锚到两个 pi 面
 
-pi 在 `7fd478a2e`（2026-10-01）**删除了 `packages/agent/src/harness/**`（108 文件）**，
-连同 `agent/src/search/`、`agent/src/node.ts`。旧图 43 处引 `harness/*` 的参照物全部消失。
-
-`harness/compaction`、`harness/messages`、`harness/session`、`harness/tools`
-在主流 `coding-agent/src/core/*` 有**独立副本** —— 本图锚到两个面（均为 `bin pi` 主流可达）：
+- 【场景】pi 在 `7fd478a2e`（2026-10-01）**删除了 `packages/agent/src/harness/**`（108 文件）**，连同 `agent/src/search/`、`agent/src/node.ts`。旧图 43 处引用 `harness/*` 的参照物全部消失。
+- 【决定】`harness/compaction`、`harness/messages`、`harness/session`、`harness/tools` 在主流 `coding-agent/src/core/*` 有**独立副本**。本图锚到两个面（均为 `bin pi` 主流可达）：
 
 | 面 | pi 路径 | 规模 | 承担 |
 |---|---|---:|---|
 | **agent loop 本体** | `packages/agent/src/{agent-loop,agent,types,proxy,stream-fn,index}.ts` | **2,519 行** | 循环、事件、工具两相、proxy、stream-fn |
 | **core 主流副本** | `packages/coding-agent/src/core/*` | 见规模节 | `agent-session` / `session-manager` / `compaction` / `messages` / `system-prompt` / `skills` / `prompt-templates` / `tools` / `settings-manager` / `model-config` / `provider-composer` |
 
-实测支持（`git ls-tree -r ea448f454:packages/coding-agent/src/core/`）：上述文件**独立存在**；
-唯一一处 "harness" 字样在 `core/system-prompt.ts:156`，**只是提示词里的人话**，非依赖。
+实测支持（`git ls-tree -r ea448f454:packages/coding-agent/src/core/`）：上述文件**独立存在**；唯一一处 "harness" 字样在 `core/system-prompt.ts:156`，**只是提示词里的人话**，非依赖。
 
 ### R1 应用（删掉的参照物 ⇒ 单元作废，移出分母）
 
-**harness 专有、主流无副本**的行为一律作废（见「作废清单」21 条）。判据是「和 pi 表现一样」：
-行为在 pi 主流已不存在（删或只活在扩展事件里）⇒ 无从对齐，移出分母。
-`packages/durable`（61 文件 / 17,716 行）与 `pico3` 按 **R5 不可达**（import 者全在 `coding-agent/src/experimental/**`）⇒ 权 0。
+- **harness 专有、主流无副本**的行为一律作废（见「作废清单」21 条）。判据是「和 pi 表现一样」：行为在 pi 主流已不存在（删或只活在扩展事件里）⇒ 无从对齐，移出分母。
+- `packages/durable`（61 文件 / 17,716 行）与 `pico3` 按 **R5 不可达**（import 者全在 `coding-agent/src/experimental/**`）⇒ 权重 0。
 
 ### 判定三档
 
 **对齐** / **缺失** / **存疑**（`（形状）`/`（旧 pi）`/`（扩展）`/`（台账）`）。**pi-java 侧已闭环的旧「缺失/存疑」按现状改判为对齐**。
 
 ---
-
 ## 规模（本锚实测）
 
 | 模块 | pi 包 | pi LOC | java LOC | 比例 |
