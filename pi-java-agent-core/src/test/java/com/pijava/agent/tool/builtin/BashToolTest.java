@@ -223,6 +223,70 @@ class BashToolTest {
         assertThat(truncated.command()).isEqualTo("echo \"hi\" --max-time 15");
     }
 
+    // ── PI_* 会话环境变量面（B242；pi bash.ts:45-48,186-212,250,257）──
+
+    @Test
+    void piEnvInjectedWhenExposedAndContextPresent() throws Exception {
+        var captured = captureShellOptions(new ShellResult("ok", 0, false, false, 1, 2));
+        var context = context(captured).withSessionEnvironment(() ->
+            new com.pijava.agent.tool.SessionEnvironment(
+                "sid-1", "/tmp/s.jsonl", "anthropic", "claude-fable-5", "high"));
+
+        BashTool.create(null, true).execute("id",
+            new BashTool.BashInput("env", Optional.empty()), null, null, context);
+
+        var env = captured.get().env();
+        assertThat(env).containsEntry("PI_SESSION_ID", "sid-1")
+            .containsEntry("PI_SESSION_FILE", "/tmp/s.jsonl")
+            .containsEntry("PI_PROVIDER", "anthropic")
+            .containsEntry("PI_MODEL", "claude-fable-5")
+            .containsEntry("PI_REASONING_LEVEL", "high");
+        // pi 先删后设：无论开关恒删 5 键（bash.ts:194-198）。
+        assertThat(captured.get().envRemovals()).containsExactlyInAnyOrder(
+            "PI_SESSION_ID", "PI_SESSION_FILE", "PI_PROVIDER", "PI_MODEL", "PI_REASONING_LEVEL");
+    }
+
+    @Test
+    void nullComponentsAreConditionallySkipped() throws Exception {
+        // pi :203-208：sessionFile/model/thinkingLevel 各自 if 门控；sessionId 恒设。
+        var captured = captureShellOptions(new ShellResult("ok", 0, false, false, 1, 2));
+        var context = context(captured).withSessionEnvironment(() ->
+            new com.pijava.agent.tool.SessionEnvironment("sid-2", null, null, null, null));
+
+        BashTool.create(null, true).execute("id",
+            new BashTool.BashInput("env", Optional.empty()), null, null, context);
+
+        var env = captured.get().env();
+        assertThat(env).containsEntry("PI_SESSION_ID", "sid-2");
+        assertThat(env).doesNotContainKeys("PI_SESSION_FILE", "PI_PROVIDER",
+            "PI_MODEL", "PI_REASONING_LEVEL");
+    }
+
+    @Test
+    void notExposedMeansNoInjectionButStillDeletes() throws Exception {
+        // pi :199-208：exposeSessionEnvironment=false ⇒ 不设；:194-198 的删除不受门控。
+        var captured = captureShellOptions(new ShellResult("ok", 0, false, false, 1, 2));
+        var context = context(captured).withSessionEnvironment(() ->
+            new com.pijava.agent.tool.SessionEnvironment(
+                "sid-3", "/tmp/s.jsonl", "p", "m", "high"));
+
+        BashTool.create(null, false).execute("id",
+            new BashTool.BashInput("env", Optional.empty()), null, null, context);
+
+        assertThat(captured.get().env()).doesNotContainKeys(
+            "PI_SESSION_ID", "PI_SESSION_FILE", "PI_PROVIDER", "PI_MODEL", "PI_REASONING_LEVEL");
+        assertThat(captured.get().envRemovals()).containsExactlyInAnyOrder(
+            "PI_SESSION_ID", "PI_SESSION_FILE", "PI_PROVIDER", "PI_MODEL", "PI_REASONING_LEVEL");
+    }
+
+    @Test
+    void guidelineIsGatedByTheSameSwitch() {
+        // pi :257：说了就必须给，不给就不说（guideline 与注入同闸）；:47 逐字。
+        assertThat(BashTool.create(null, true).promptGuidelines()).containsExactly(
+            "You can inspect PI_* environment variables for current model and session details.");
+        assertThat(BashTool.create(null, false).promptGuidelines()).isEmpty();
+    }
+
     // ── helpers ───────────────────────────────────────────────────
 
     private static final ShellResult[] RESULT_SLOT = new ShellResult[1];

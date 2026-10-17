@@ -20,16 +20,30 @@ public record ShellOptions(
      * 全部选项」的载体（{@code AbortSignal} 同样在此）⇒ 加组件只动 3 处构造点，
      * 接口与调用点都不动。</p>
      */
-    ShellOutputSink outputSink
+    ShellOutputSink outputSink,
+    /**
+     * 继承环境后、{@link #env} 并入**之前**要删的键（pi 的 delete-then-set，
+     * bash.ts:194-198 的 {@code delete env.PI_*} ×5）—— 防继承环境污染/伪造
+     * （B242）。默认空集。
+     */
+    java.util.Set<String> envRemovals
 ) {
-    /** Defensively copies {@code env}. */
+    /** Defensively copies {@code env} / {@code envRemovals}. */
     public ShellOptions {
         env = Map.copyOf(env);
+        envRemovals = envRemovals == null ? java.util.Set.of() : java.util.Set.copyOf(envRemovals);
     }
 
     /** 不带输出汇的选项（既有调用点的默认形状）。 */
     public ShellOptions(String cwd, Map<String, String> env, boolean inheritEnv,
                         OptionalLong timeoutMillis, AbortSignal signal) {
         this(cwd, env, inheritEnv, timeoutMillis, signal, null);
+    }
+
+    /** 不带删键集的选项（既有调用点的默认形状）。 */
+    public ShellOptions(String cwd, Map<String, String> env, boolean inheritEnv,
+                        OptionalLong timeoutMillis, AbortSignal signal,
+                        ShellOutputSink outputSink) {
+        this(cwd, env, inheritEnv, timeoutMillis, signal, outputSink, null);
     }
 }

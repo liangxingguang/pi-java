@@ -37,6 +37,14 @@ public final class BashTool {
     /** pi {@code bash.ts:22}：{@code 2_147_483_647} ms（≙ 2147483.647 s）。 */
     private static final long MAX_TIMEOUT_MS = 2_147_483_647L;
 
+    /** pi bash.ts:47（{@code bashToolSystemPromptContribution.guidelines}）逐字。 */
+    private static final List<String> PI_GUIDELINES =
+        List.of("You can inspect PI_* environment variables for current model and session details.");
+
+    /** pi bash.ts:194-198 的 delete×5（先删后设；无论开关与否恒删，条件只门设）。 */
+    private static final java.util.Set<String> PI_ENV_KEYS = java.util.Set.of(
+        "PI_SESSION_ID", "PI_SESSION_FILE", "PI_PROVIDER", "PI_MODEL", "PI_REASONING_LEVEL");
+
     private BashTool() {}
 
     public record BashInput(String command, Optional<Double> timeoutSeconds) {}
@@ -49,6 +57,18 @@ public final class BashTool {
 
     /** Create the bash tool with an optional command prefix. */
     public static AgentTool<BashInput, BashDetails> create(String commandPrefix) {
+        // pi bash.ts:250：exposeSessionEnvironment 默认 true。
+        return create(commandPrefix, true);
+    }
+
+    /**
+     * Create the bash tool（pi {@code createBashTool} 全参形）。
+     *
+     * @param exposeSessionEnvironment PI_* 注入开关（pi bash.ts:221-222；与
+     *        {@link #promptGuidelines} 同一闸门 —— 说了就必须给，不给就不说，:257）
+     */
+    public static AgentTool<BashInput, BashDetails> create(
+            String commandPrefix, boolean exposeSessionEnvironment) {
         return new AgentTool<>() {
             @Override public String name() { return "bash"; }
             @Override public String label() { return "bash"; }
@@ -63,8 +83,12 @@ public final class BashTool {
                     + "Optionally provide a timeout in seconds.";
             }
             @Override public String promptSnippet() {
-                // pi bashToolSystemPromptContribution.snippet（无 PI_* guideline，随 B242）。
+                // pi bashToolSystemPromptContribution.snippet（bash.ts:45）逐字。
                 return "Execute bash commands (ls, grep, find, etc.)";
+            }
+            @Override public List<String> promptGuidelines() {
+                // pi bash.ts:257：与注入同一开关门控 —— 说了就必须给，不给就不说。
+                return exposeSessionEnvironment ? PI_GUIDELINES : List.of();
             }
             @Override
             public Map<String, Object> inputSchema() {
@@ -126,10 +150,11 @@ public final class BashTool {
                         emitter.start();
                     }
                     var options = new ShellOptions(
-                        context.cwd(), context.env(), true,
+                        context.cwd(), sessionEnv(context, exposeSessionEnvironment), true,
                         timeoutMs < 0 ? OptionalLong.empty() : OptionalLong.of(timeoutMs),
                         signal,
-                        emitter
+                        emitter,
+                        PI_ENV_KEYS // pi 先删后设：无论开关恒删 5 键，条件只门设（:194-208）
                     );
                     var shellResult = context.shell().execute(command, options);
                     if (emitter != null) {
@@ -162,6 +187,25 @@ public final class BashTool {
                 }
             }
         };
+    }
+
+    /**
+     * pi {@code resolveSpawnContext} 的组 env（bash.ts:199-208）：开关开且 ctx 在 ⇒
+     * 条件设 PI_*（sessionId 恒设，sessionFile/model/thinkingLevel 各自 if 门控）。
+     */
+    private static Map<String, String> sessionEnv(ToolContext context, boolean expose) {
+        var env = new java.util.LinkedHashMap<>(context.env());
+        if (expose) {
+            com.pijava.agent.tool.SessionEnvironment se = context.sessionEnvironment();
+            if (se != null) {
+                env.put("PI_SESSION_ID", se.sessionId());
+                if (se.sessionFile() != null) env.put("PI_SESSION_FILE", se.sessionFile());
+                if (se.provider() != null) env.put("PI_PROVIDER", se.provider());
+                if (se.model() != null) env.put("PI_MODEL", se.model());
+                if (se.thinkingLevel() != null) env.put("PI_REASONING_LEVEL", se.thinkingLevel());
+            }
+        }
+        return env;
     }
 
     /** pi {@code resolveTimeoutMs}（bash.ts:27-37）：{@code null} ≙ undefined ⇒ 返回 {@code -1} 表无超时。 */

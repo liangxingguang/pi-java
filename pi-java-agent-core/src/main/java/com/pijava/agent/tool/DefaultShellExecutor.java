@@ -65,6 +65,8 @@ public class DefaultShellExecutor implements ShellExecutor {
         if (!options.inheritEnv()) {
             pb.environment().clear();
         }
+        // pi bash.ts:194-198 的 delete×5：先删后设，防继承环境污染/伪造（B242）。
+        options.envRemovals().forEach(pb.environment()::remove);
         pb.environment().putAll(options.env());
         pb.redirectErrorStream(true);
 

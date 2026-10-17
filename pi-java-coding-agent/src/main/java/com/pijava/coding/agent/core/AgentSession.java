@@ -352,6 +352,21 @@ public final class AgentSession implements AutoCloseable {
             var s = sessionRef.get();
             return s == null ? ImagePolicy.defaults() : s.currentImagePolicy();
         });
+        // B242（docs/24 §8.3）：PI_* 会话身份晚绑定（pi bash.ts:199-208 的 ctx 三面）。
+        // 执行期现读 ⇒ setModel/setThinkingLevel 后下次工具调用即拿到新值。
+        policyToolContext = policyToolContext.withSessionEnvironment(() -> {
+            var s = sessionRef.get();
+            if (s == null) {
+                return null;
+            }
+            var m = s.harness.getModel();
+            return new com.pijava.agent.tool.SessionEnvironment(
+                s.sessionId(), s.sessionFile(),
+                m == null ? null : m.provider(),
+                m == null ? null : m.modelName(),
+                s.harness.getThinkingLevel() == null ? null
+                    : s.harness.getThinkingLevel().label());
+        });
         var compactionObserver = new CompactionObserver() {
             @Override
             public void onStart(String reason) {

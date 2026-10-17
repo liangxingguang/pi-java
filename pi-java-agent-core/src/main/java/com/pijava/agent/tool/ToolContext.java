@@ -23,6 +23,7 @@ public class ToolContext {
     private final ShellExecutor shell;
     private final FileSystem fs;
     private final Supplier<ImagePolicy> imagePolicy;
+    private final Supplier<SessionEnvironment> sessionEnvironment;
 
     /** Create a tool execution context (env is defensively copied). */
     public ToolContext(String cwd, Map<String, String> env,
@@ -34,11 +35,19 @@ public class ToolContext {
     public ToolContext(String cwd, Map<String, String> env,
                        ShellExecutor shell, FileSystem fs,
                        Supplier<ImagePolicy> imagePolicy) {
+        this(cwd, env, shell, fs, imagePolicy, () -> null);
+    }
+
+    private ToolContext(String cwd, Map<String, String> env,
+                        ShellExecutor shell, FileSystem fs,
+                        Supplier<ImagePolicy> imagePolicy,
+                        Supplier<SessionEnvironment> sessionEnvironment) {
         this.cwd = cwd;
         this.env = Map.copyOf(env);
         this.shell = shell;
         this.fs = fs;
         this.imagePolicy = imagePolicy != null ? imagePolicy : ImagePolicy::defaults;
+        this.sessionEnvironment = sessionEnvironment != null ? sessionEnvironment : () -> null;
     }
 
     /** Current working directory. */
@@ -64,6 +73,19 @@ public class ToolContext {
      * （coding-agent 装配时用，见 docs/18 §4.3/§4.5）。
      */
     public ToolContext withImagePolicy(Supplier<ImagePolicy> policy) {
-        return new ToolContext(cwd, env, shell, fs, policy);
+        return new ToolContext(cwd, env, shell, fs, policy, sessionEnvironment);
+    }
+
+    /**
+     * 当前会话身份（B242 的 PI_* 注入载荷；pi bash.ts:199-208 的 ctx 三面），
+     * 每次调用现读；未装配 ⇒ {@code null} ≙ pi 的 ctx 缺席（条件不设）。
+     */
+    public SessionEnvironment sessionEnvironment() { return sessionEnvironment.get(); }
+
+    /**
+     * 复制本上下文，换上会话身份晚绑定口（coding-agent 装配时用，docs/24 §8.3）。
+     */
+    public ToolContext withSessionEnvironment(Supplier<SessionEnvironment> supplier) {
+        return new ToolContext(cwd, env, shell, fs, imagePolicy, supplier);
     }
 }
