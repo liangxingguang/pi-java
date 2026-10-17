@@ -1,11 +1,15 @@
 # 01 基础设施层（telemetry / protocol / client / server）
 
-> 基准：`pi` @ **`ea448f454`**（2026-10-11，v1.1.0-22）；`pi-java` HEAD @ `edc8749d`。
-> 本锚点复测：pi `packages/{telemetry,protocol,client,server}/src` 与上一锚点**逐字节未变**（`git diff --stat` 只剩四个包的 CHANGELOG/package.json 版本号）；
-> pi-java 这四个模块自 `351d199` **0 个主源码文件改动**（跨模块引用的 agent-core / coding-agent 类按 HEAD 工作树重新定位，见文末）⇒ **判定一行未翻**。
-> 历次换锚裁决与旧基准叙述见 git 历史。
-> 判定单位 = **能力单元**（CLI 参数 / RPC 方法 / 事件类型 / 配置键 / span 名 / 契约级导出类型）；内部类与私有方法不计。
-> 每条给两侧 `file:line`。台账列标 `H` 的是 H 类历史台账条目（溯源见 git 历史）。
+> 【背景摘要】本图是基础设施层（telemetry / protocol / client / server 四个模块）的全量加权盘点。本层最大的单一事实：protocol 的命令层移植的是 **pi 已删除的代码**，client/server 在 pi-java 是**无消费者的孤岛**——这两件事决定了本层数字怎么读。
+
+## 基准与口径
+
+- 基准：pi @ **`ea448f454`**（2026-10-11，v1.1.0-22）；pi-java HEAD @ `edc8749d`。
+- 本锚点复测：pi `packages/{telemetry,protocol,client,server}/src` 与上一锚点**逐字节未变**（`git diff --stat` 只剩四个包的 CHANGELOG/package.json 版本号）。
+- pi-java 这四个模块自 `351d199` **0 个主源码文件改动**（跨模块引用的 agent-core / coding-agent 类按 HEAD 工作树重新定位，见文末）⇒ **判定一行未翻**。历次换锚裁决与旧基准叙述见 git 历史。
+- 判定单位 = **能力单元**（CLI 参数 / RPC 方法 / 事件类型 / 配置键 / span 名 / 契约级导出类型）；内部类与私有方法不计。
+- 每条给两侧 `file:line`。台账列标 `H` 的是 H 类历史台账条目（溯源见 git 历史）。
+- 通用术语（工单编号 / 裁决 / R1 / R5 / 分母 / 模型可见面）：见 [`../04-open-items-register.md`](../04-open-items-register.md) §0。
 
 ## 0. 三条必须先读的口径
 
@@ -17,7 +21,7 @@
 | **缺失** | pi 有、pi-java 无 |
 | **存疑** | 其余全部：① pi-java 有而 pi **无对照物**（扩展）；② pi-java 是 **pi 已删除版本**的移植；③ 两侧都有但**形状/行为不同**、够不上「行为相同」；④ 台账未结条目 |
 
-**⚠️ 读表须知**：三档里没有「都有但形状不同」这一档 —— 这类按定义**不能算对齐**，全部落在 **存疑**（判定列的子标签 `（形状）`/`（旧 pi）`/`（扩展）`/`（台账）` 指明是哪一种）。所以本表的「完成度」是**严格口径**：只数行为逐条相同的。
+**⚠️ 读表须知**：三档里没有「都有但形状不同」这一档——这类按定义**不能算对齐**，全部落在 **存疑**（判定列的子标签 `（形状）`/`（旧 pi）`/`（扩展）`/`（台账）` 指明是哪一种）。所以本表的「完成度」是**严格口径**：只数行为逐条相同的。
 
 > **子标签增补（2026-10-17，原 docs/23 §7.4）**：`（扩展·确认）`——pi 无对照物的扩展单元，经裁决确认保留、且行为有一致性套件/测试钉床 ⇒ 判 **对齐**（计满分、**留分母**，pi 若日后长出对照物可原位重测翻红）。判据是行为：pi 无此行为面，不存在「差距」。
 
@@ -29,7 +33,7 @@
 
 - pi 现 `packages/protocol/src/` 只有 `cbor/`、`codec.ts`、`framing.ts`、`index.ts`、`protocol.ts`（`ls` 实测）——**没有 `schemas.ts`**。
 - `git grep -l 'server_snapshot\|session_progress\|session_removed\|session_snapshot\|ServerSnapshotSchema\|SessionSnapshotSchema\|SessionPhaseSchema\|TranscriptItemSchema\|ModelMetadataSchema\|SessionMetadataSchema\|ProtocolThinkingLevel' ea448f454 -- 'packages/**/*.ts'` → **全部零命中**（本锚点复跑，结论不变）。
-  ⚠️ 单独 grep `CommandSchema` 会命中一处 `packages/coding-agent/src/experimental/session-worker.ts:116` —— 那是**无关**的 `SessionWorkerCommandSchema`（worker 控制协议，5 变体：shutdown/discover_workers/session_demand/operation/operation_cancel），**不是**会话 RPC 的 `CommandSchema`。
+  ⚠️ 单独 grep `CommandSchema` 会命中一处 `packages/coding-agent/src/experimental/session-worker.ts:116`——那是**无关**的 `SessionWorkerCommandSchema`（worker 控制协议，5 变体：shutdown/discover_workers/session_demand/operation/operation_cancel），**不是**会话 RPC 的 `CommandSchema`。
 - pi 侧最后一个含 `CommandSchema` 的 `schemas.ts` 是 `1bd9c3f67`（2026-08-08，`PROTOCOL_VERSION = 1`）；它在 `e52de91d0`「feat(protocol): add service-addressed session RPC」（**2026-08-13**）被换成 `rpc.ts` + 瘦身版 `schemas.ts`。该提交同时删掉 `packages/client/src/session-handle.ts`(111)、`packages/client/src/state.ts`(156)、`packages/server/src/protocol.ts`(382)、`packages/server/src/sessions.ts`(346)、`packages/server/src/snapshots.ts`(62)。
 - `git show e52de91d0^:packages/protocol/src/schemas.ts` 与 pi-java 逐项对上：9 个命令同名同字段、`SessionSnapshot` 14 字段同序、`ProtocolErrorCode` 7 值同集、`ServerHello{version, connectionId, snapshot}`、`ServerEvent` 4 变体、`PROTOCOL_VERSION = 1`（= `ProtocolVersion.java:9`）。
 - 反证：pi 的 `Command` 判别键**始终**是 `command`（`1bd9c3f67:385`、`6189e53b3:291`、`e52de91d0^`），pi-java 用的是 `type`（`Command.java:14`、`CommandResult.java:16`）⇒ 连旧 pi 也没完全照抄。
@@ -46,7 +50,6 @@
 即：pi-java 的 client/server 是**能跑通集成测试的孤岛**，pi 的对应物是**已接线的生产子系统**。
 
 ---
-
 ## 规模
 
 > pi 侧数字以 `git show ea448f454:<path>` 管道 `wc -l` 实测；java 侧为 HEAD 工作树 `src/main/java` 实测。本锚点四包 `src/` 零变化，pi 侧数字与上一锚点逐项相同。
