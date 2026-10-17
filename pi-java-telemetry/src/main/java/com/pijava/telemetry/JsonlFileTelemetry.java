@@ -55,7 +55,6 @@ public final class JsonlFileTelemetry implements TelemetryContext {
 
     private final Object lock = new Object();
     private BufferedWriter writer;
-    private Path file;
     private boolean degraded;
     private final Map<String, String> dimensions;
 
@@ -254,7 +253,7 @@ public final class JsonlFileTelemetry implements TelemetryContext {
             Files.createDirectories(tracesDir);
             String sessionId = dimensions.getOrDefault("sessionId", "unknown");
             String fileName = "trace-" + sessionId + "-" + FILE_TS.format(Instant.now()) + ".jsonl";
-            file = tracesDir.resolve(fileName);
+            Path file = tracesDir.resolve(fileName);
             writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         }
