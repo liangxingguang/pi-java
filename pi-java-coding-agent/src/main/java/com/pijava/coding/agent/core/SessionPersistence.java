@@ -72,6 +72,12 @@ final class SessionPersistence {
     static void attach(AgentSession owner, PersistentSessionRepositories.RepositoryHandle handle,
                        SessionMetadata metadata) {
         Session<?> opened = handle.open(metadata);
+        attachOpened(owner, opened, metadata);
+    }
+
+    /** Attach an already-opened session（⓪ 路径快道与常规道共用）。 */
+    private static void attachOpened(AgentSession owner, Session<?> opened,
+                                     SessionMetadata metadata) {
         owner.session(opened);
         owner.name(sessionNameOf(opened, metadata));
         String lane = owner.laneName();
@@ -144,6 +150,12 @@ final class SessionPersistence {
         records.forEach(r -> owner.persistedRecordIds().add(r.id()));
     }
 
+    /** pi {@code resolveSessionPath} 的路径形判定（main.ts:247-249）逐字。 */
+    private static boolean isPathShaped(String arg) {
+        return arg != null
+            && (arg.contains("/") || arg.contains("\\") || arg.endsWith(".jsonl"));
+    }
+
     /** Resolve {@code -c/-r/--fork/--session-id} against the persistent repo. */
     /** Web 默认：恢复最近一个持久会话（刷新/重连保留历史），仅当无会话时新建。 */
     static AgentSession resolvePersistentWeb(AgentSession session, Args args) {
@@ -184,12 +196,32 @@ final class SessionPersistence {
             });
         }
         if (args.resume() || args.session() != null) {
+            // ⓪ 路径快道（pi resolveSessionPath，main.ts:253-256）：路径形入参直接开文件。
+            if (isPathShaped(args.session())) {
+                var path = java.nio.file.Path.of(args.session()).toAbsolutePath().normalize();
+                return handle.openPath(path).map(opened -> {
+                    attachOpened(session, opened, opened.getMetadata());
+                    return session;
+                }).orElseThrow(() -> new IllegalStateException(
+                    "Session not found: " + args.session()));
+            }
             return handle.find(args.session()).map(meta -> {
                 attach(session, handle, meta);
                 return session;
             }).orElseThrow(() -> new IllegalStateException("Session not found: " + args.session()));
         }
         if (args.fork() != null) {
+            if (isPathShaped(args.fork())) {
+                var path = java.nio.file.Path.of(args.fork()).toAbsolutePath().normalize();
+                return handle.openPath(path).map(opened -> {
+                    var forked = handle.fork(opened.getMetadata(), new ForkOptions.Tree(), cwd);
+                    session.session(forked);
+                    session.name(session.sessionName() + " (fork)");
+                    attach(session, handle, forked.getMetadata());
+                    return session;
+                }).orElseThrow(() -> new IllegalStateException(
+                    "Session not found: " + args.fork()));
+            }
             return handle.find(args.fork()).map(meta -> {
                 var forked = handle.fork(meta, new ForkOptions.Tree(), cwd);
                 session.session(forked);

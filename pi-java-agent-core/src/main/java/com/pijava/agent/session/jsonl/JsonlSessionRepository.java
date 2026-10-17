@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -93,6 +94,38 @@ public final class JsonlSessionRepository implements
     @Override
     public void delete(JsonlSessionMetadata metadata) {
         fs.remove(metadata.path(), true);
+    }
+
+    /**
+     * pi {@code SessionManager.findById}（session-manager.ts:1874-1911）对位：
+     * **只读各文件 header** 的精确道（不加载 transcript）——会话 find 阶梯的 ① 级
+     * （pi {@code resolveSessionPath}，main.ts:260-262；B53，docs/24 §10）。
+     *
+     * @param cwd 项目工作目录（{@code null} ⇒ 跨项目全扫）
+     * @param id  精确会话 id
+     */
+    public Optional<JsonlSessionMetadata> findById(String cwd, String id) {
+        for (var directory : sessionDirectories(cwd)) {
+            for (var entry : fs.listDir(directory)) {
+                if ("directory".equals(entry.kind()) || !entry.name().endsWith(".jsonl")) {
+                    continue;
+                }
+                List<String> firstLine = fs.readTextLines(entry.path(), 1);
+                if (firstLine.isEmpty()) {
+                    continue;
+                }
+                var headerResult = JsonlCodec.parseHeader(firstLine.getFirst());
+                if (!headerResult.ok()) {
+                    continue;
+                }
+                var metadata = JsonlSessionStorage.metadataFromHeader(
+                    headerResult.value(), entry.path(), entry.mtimeMs());
+                if (metadata.id().equals(id)) {
+                    return Optional.of(metadata);
+                }
+            }
+        }
+        return Optional.empty();
     }
 
     @Override

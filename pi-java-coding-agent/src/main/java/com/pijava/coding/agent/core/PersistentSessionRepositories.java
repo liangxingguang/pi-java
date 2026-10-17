@@ -60,9 +60,36 @@ final class PersistentSessionRepositories {
                 if (idOrPrefix == null || idOrPrefix.isBlank()) {
                     return Optional.empty();
                 }
-                return repo.list(JsonlSessionListOptions.all()).stream()
-                    .filter(m -> m.id().equals(idOrPrefix) || m.id().startsWith(idOrPrefix))
-                    .findFirst();
+                // pi resolveSessionPath（main.ts:260-276）阶梯（B53，docs/24 §10）：
+                // ① 项目内 header-only 精确（findById 不加载 transcript）→
+                // ② 项目内前缀 → ③ 跨项目**精确优先于前缀**（pi 是一次扫里
+                // `exact ?? prefix`，java 单扫两谓词，行为等价留痕）。
+                String cwd = System.getProperty("user.dir");
+                return repo.findById(cwd, idOrPrefix)
+                    .or(() -> repo.list(new JsonlSessionListOptions(cwd)).stream()
+                        .filter(m -> m.id().startsWith(idOrPrefix))
+                        .findFirst())
+                    .or(() -> {
+                        Optional<JsonlSessionMetadata> prefix = Optional.empty();
+                        for (var m : repo.list(JsonlSessionListOptions.all())) {
+                            if (m.id().equals(idOrPrefix)) {
+                                return Optional.of(m);
+                            }
+                            if (prefix.isEmpty() && m.id().startsWith(idOrPrefix)) {
+                                prefix = Optional.of(m);
+                            }
+                        }
+                        return prefix;
+                    });
+            }
+
+            @Override
+            public Optional<Session<?>> openPath(Path path) {
+                // ⓪ 路径快道（pi main.ts:253-256）：直接按路径开 JSONL 文件。
+                if (!Files.exists(path)) {
+                    return Optional.empty();
+                }
+                return Optional.of(new Session<>(JsonlSessionStorage.load(fs, path)));
             }
 
             @Override
@@ -271,6 +298,15 @@ final class PersistentSessionRepositories {
         List<? extends SessionMetadata> list(String cwd);
 
         Session<?> open(SessionMetadata metadata);
+
+        /**
+         * ⓪ 路径快道（pi {@code resolveSessionPath}，main.ts:253-256）：入参是
+         * 路径形（含 {@code /}、{@code \} 或 {@code .jsonl} 结尾）时直接按路径开
+         * 会话文件，不走 id/前缀阶梯。后端不支持 ⇒ {@code empty}。
+         */
+        default Optional<Session<?>> openPath(Path path) {
+            return Optional.empty();
+        }
 
         Session<?> fork(SessionMetadata source, ForkOptions options, String cwd);
 
