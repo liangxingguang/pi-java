@@ -15,16 +15,29 @@ import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 
 /**
- * User-defined prompt templates（pi {@code harness/prompt-templates.ts}）。
+ * User-defined prompt templates（pi {@code core/prompt-templates.ts:222-297}）。
  *
  * <p>加载目录/文件中的 {@code .md} 模板（YAML frontmatter 的 {@code description}/
  * {@code argument-hint} + markdown 正文），并提供命令行参数替换：{@code $1}、
- * {@code $@}、{@code $ARGUMENTS}、{@code ${@:N}}、{@code ${@:N:L}}。</p>
+ * {@code $@}、{@code $ARGUMENTS}、{@code ${@:N}}、{@code ${@:N:L}}、
+ * {@code ${N:-default}}、{@code ${@:-default}}、{@code ${ARGUMENTS:-default}}。</p>
  */
 public final class PromptTemplates {
 
-    /** 一个已加载的模板：名称（文件名去 .md）、描述、正文。 */
-    public record PromptTemplate(String name, String description, String content) {
+    /**
+     * 一个已加载的模板。
+     *
+     * <p>{@code argumentHint} 对位 pi {@code PromptTemplate.argumentHint?}
+     * （prompt-templates.ts:19，读 {@code argument-hint} frontmatter :144）；
+     * {@code filePath} 为模板文件路径。两者 {@code null} ≙ pi 的缺席。</p>
+     */
+    public record PromptTemplate(String name, String description, String content,
+                                 String argumentHint, String filePath) {
+
+        /** 兼容构造：无 {@code argumentHint}/{@code filePath}。 */
+        public PromptTemplate(String name, String description, String content) {
+            this(name, description, content, null, null);
+        }
     }
 
     /** 加载告警（对齐 pi {@code PromptTemplateDiagnostic}）。 */
@@ -42,7 +55,8 @@ public final class PromptTemplates {
 
     /**
      * 从一个或多个路径加载模板：目录读取直接 {@code .md} 子文件（非递归），
-     * 文件读取显式 {@code .md}；缺失路径与非 markdown 跳过，读/解析失败返回告警。
+     * 文件读取显式 {@code .md}；**缺失路径静默跳过**（pi
+     * {@code prompt-templates.ts:271-273}），非 markdown 跳过，读/解析失败返回告警。
      */
     public static LoadResult load(FileSystem fs, List<String> paths) {
         var templates = new ArrayList<PromptTemplate>();
@@ -52,8 +66,7 @@ public final class PromptTemplates {
             try {
                 info = fs.fileInfo(path);
             } catch (IOException e) {
-                diagnostics.add(new Diagnostic("file_info_failed", e.getMessage(), path));
-                continue;
+                continue; // pi :271-273：显式路径不存在 ⇒ 静默跳过（无诊断）
             }
             if ("dir".equals(info.kind())) {
                 loadFromDir(fs, info.path(), templates, diagnostics);
@@ -62,6 +75,17 @@ public final class PromptTemplates {
             }
         }
         return new LoadResult(templates, diagnostics);
+    }
+
+    /**
+     * pi {@code includeDefaults} 分支（:262-265）：默认目录两路 ——
+     * {@code agentDir/prompts}（user）与 {@code cwd/.pi-java/prompts}（project，
+     * 品牌分叉：pi 是 {@code .pi}，窄差登记 docs/24 §14）。缺失目录静默。
+     */
+    public static LoadResult loadDefaults(FileSystem fs, String agentDir, String cwd) {
+        return load(fs, List.of(
+            agentDir + java.io.File.separator + "prompts",
+            cwd + java.io.File.separator + ".pi-java" + java.io.File.separator + "prompts"));
     }
 
     private static void loadFromDir(FileSystem fs, String dir,
@@ -98,7 +122,11 @@ public final class PromptTemplates {
             var firstLine = parsed.body().lines().filter(line -> !line.isBlank()).findFirst().orElse("");
             description = firstLine.length() > 60 ? firstLine.substring(0, 60) + "..." : firstLine;
         }
-        templates.add(new PromptTemplate(fileName, description, parsed.body()));
+        // pi :144：argument-hint frontmatter ⇒ argumentHint。
+        String argumentHint =
+            parsed.frontmatter().get("argument-hint") instanceof String h ? h : null;
+        templates.add(new PromptTemplate(fileName, description, parsed.body(),
+            argumentHint, filePath));
     }
 
     private static String baseNameWithoutMd(String path) {
@@ -180,29 +208,55 @@ public final class PromptTemplates {
     }
 
     /**
-     * 用命令参数替换模板占位符（pi {@code substituteArgs}）：{@code $1}、{@code $@}、
-     * {@code $ARGUMENTS}、{@code ${@:N}}、{@code ${@:N:L}}。
+     * pi {@code substituteArgs}（prompt-templates.ts:71-109）逐字对位：**单正则五支、
+     * 单 pass**（不递归替换）：
+     *
+     * <pre>
+     * /\$\{(\d+|ARGUMENTS|@):-([^}]*)\}|\$\{@:(\d+)(?::(\d+))?\}|\$(ARGUMENTS|@|\d+)/g
+     * </pre>
+     *
+     * <p>支序：① {@code ${N:-d}}/{@code ${@:-d}}/{@code ${ARGUMENTS:-d}}（default 判空是
+     * JS 真值 —— <b>空串也落 default</b>，{@code $N} 越界 ≙ undefined ⇒ default）；
+     * ② {@code ${@:N[:L]}} 切片（0 按 1 计）；③ {@code $N}/{@code $@}/{@code $ARGUMENTS}
+     * （{@code $N} 越界 ⇒ 空串）。</p>
      */
+    private static final Pattern ARGS_PATTERN = Pattern.compile(
+        "\\$\\{(\\d+|ARGUMENTS|@):-([^}]*)}|\\$\\{@:(\\d+)(?::(\\d+))?}|\\$(ARGUMENTS|@|\\d+)");
+
+    /** 见 {@link #ARGS_PATTERN}。 */
     public static String substituteArgs(String content, List<String> args) {
-        String result = replaceAll(Pattern.compile("\\$(\\d+)"), content, m -> {
-            int n = Integer.parseInt(m.group(1));
-            return n >= 1 && n <= args.size() ? args.get(n - 1) : "";
-        });
-        result = replaceAll(Pattern.compile("\\$\\{@:(\\d+)(?::(\\d+))?\\}"), result, m -> {
-            int start = Integer.parseInt(m.group(1)) - 1;
-            if (start < 0) {
-                start = 0;
-            }
-            if (m.group(2) != null) {
-                int length = Integer.parseInt(m.group(2));
-                return args.stream().skip(start).limit(length).reduce((a, b) -> a + " " + b).orElse("");
-            }
-            return args.stream().skip(start).reduce((a, b) -> a + " " + b).orElse("");
-        });
         String allArgs = String.join(" ", args);
-        result = result.replace("$ARGUMENTS", allArgs);
-        result = result.replace("$@", allArgs);
-        return result;
+        return replaceAll(ARGS_PATTERN, content, m -> {
+            String defaultTarget = m.group(1);
+            if (defaultTarget != null) {
+                // pi :412-415：@/ARGUMENTS ⇒ allArgs；否则 args[N-1]（越界 ≙ undefined）。
+                String value = defaultTarget.equals("@") || defaultTarget.equals("ARGUMENTS")
+                    ? allArgs
+                    : indexed(args, Integer.parseInt(defaultTarget) - 1);
+                // JS `value ? value : defaultValue`：null 与空串都落 default。
+                return value != null && !value.isEmpty() ? value : m.group(2);
+            }
+            if (m.group(3) != null) {
+                // ${@:N[:L]}：0 按 1 计（JS Math.max(0, N-1)）。
+                int start = Math.max(0, Integer.parseInt(m.group(3)) - 1);
+                var stream = args.stream().skip(start);
+                if (m.group(4) != null) {
+                    stream = stream.limit(Integer.parseInt(m.group(4)));
+                }
+                return stream.reduce((a, b) -> a + " " + b).orElse("");
+            }
+            String simple = m.group(5);
+            if (simple.equals("ARGUMENTS") || simple.equals("@")) {
+                return allArgs;
+            }
+            String indexed = indexed(args, Integer.parseInt(simple) - 1);
+            return indexed != null ? indexed : ""; // pi :420 `args[index] ?? ""`
+        });
+    }
+
+    /** {@code args[i]}，越界 ⇒ {@code null}（≙ JS undefined）。 */
+    private static String indexed(List<String> args, int index) {
+        return index >= 0 && index < args.size() ? args.get(index) : null;
     }
 
     /** {@code Matcher.appendReplacement}-based substitution with escaped replacements. */

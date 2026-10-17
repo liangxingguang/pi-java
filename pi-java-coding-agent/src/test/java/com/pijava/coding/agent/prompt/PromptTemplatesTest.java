@@ -35,6 +35,67 @@ class PromptTemplatesTest {
     }
 
     @Test
+    void substituteArgsDefaultBranchesFollowJsTruthySemantics() {
+        // pi :71-109 单正则五支、单 pass。default 判空是 JS 真值：空串也落 default；
+        // $N 越界 ≙ undefined ⇒ default。
+        var args = List.of("a", "b");
+        assertThat(PromptTemplates.substituteArgs("${1:-dflt}", args)).isEqualTo("a");
+        assertThat(PromptTemplates.substituteArgs("${3:-dflt}", args)).isEqualTo("dflt");
+        assertThat(PromptTemplates.substituteArgs("${@:-none}", args)).isEqualTo("a b");
+        assertThat(PromptTemplates.substituteArgs("${@:-none}", List.of())).isEqualTo("none");
+        assertThat(PromptTemplates.substituteArgs("${ARGUMENTS:-none}", List.of())).isEqualTo("none");
+        assertThat(PromptTemplates.substituteArgs("${1:-d}", List.of(""))).isEqualTo("d");
+        // 切片 0 按 1 计（JS Math.max(0, N-1)）
+        assertThat(PromptTemplates.substituteArgs("${@:0:1}", args)).isEqualTo("a");
+        // 单 pass：替换结果里的 $ 形不再二次展开
+        assertThat(PromptTemplates.substituteArgs("$1", List.of("$2", "x"))).isEqualTo("$2");
+        // ${...} 形不会被简单支误吃
+        assertThat(PromptTemplates.substituteArgs("${@:1:1} tail", args)).isEqualTo("a tail");
+    }
+
+    @Test
+    void loadReadsArgumentHintFrontmatter(@TempDir Path tmp) throws Exception {
+        Files.writeString(tmp.resolve("review.md"),
+            "---\ndescription: Review\nargument-hint: <file> [focus]\n---\nReview $1");
+        var result = PromptTemplates.load(new DefaultFileSystem(), List.of(tmp.toString()));
+        var template = result.templates().get(0);
+        // pi :19/:144：argument-hint ⇒ argumentHint；filePath 随行。
+        assertThat(template.argumentHint()).isEqualTo("<file> [focus]");
+        assertThat(template.filePath()).endsWith("review.md");
+    }
+
+    @Test
+    void missingExplicitPathIsSilentlySkipped(@TempDir Path tmp) throws Exception {
+        // pi :271-273：显式路径不存在 ⇒ 静默（无诊断）。
+        var result = PromptTemplates.load(new DefaultFileSystem(),
+            List.of(tmp.resolve("does-not-exist").toString()));
+        assertThat(result.templates()).isEmpty();
+        assertThat(result.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void loadDefaultsScansAgentAndProjectPromptDirs(@TempDir Path tmp) throws Exception {
+        // pi :262-265 includeDefaults：agentDir/prompts + cwd/.pi-java/prompts（品牌分叉）。
+        Path agentDir = tmp.resolve("agent");
+        Path cwd = tmp.resolve("proj");
+        Files.createDirectories(agentDir.resolve("prompts"));
+        Files.createDirectories(cwd.resolve(".pi-java/prompts"));
+        Files.writeString(agentDir.resolve("prompts/u.md"), "---\ndescription: U\n---\nuser tpl");
+        Files.writeString(cwd.resolve(".pi-java/prompts/p.md"), "---\ndescription: P\n---\nproj tpl");
+
+        var result = PromptTemplates.loadDefaults(
+            new DefaultFileSystem(), agentDir.toString(), cwd.toString());
+
+        assertThat(result.templates()).extracting(PromptTemplates.PromptTemplate::name)
+            .containsExactlyInAnyOrder("u", "p");
+        // 缺失目录静默（proj2 无任何目录）
+        var empty = PromptTemplates.loadDefaults(
+            new DefaultFileSystem(), tmp.resolve("nope1").toString(), tmp.resolve("nope2").toString());
+        assertThat(empty.templates()).isEmpty();
+        assertThat(empty.diagnostics()).isEmpty();
+    }
+
+    @Test
     void parseFrontmatterExtractsDescriptionAndBody() {
         var parsed = PromptTemplates.parseFrontmatter("---\ndescription: Greet someone\n---\nHello $1");
         assertThat(parsed.frontmatter().get("description")).isEqualTo("Greet someone");

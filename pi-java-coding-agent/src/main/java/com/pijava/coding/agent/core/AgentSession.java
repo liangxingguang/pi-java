@@ -286,12 +286,19 @@ public final class AgentSession implements AutoCloseable {
         tools.registerAll(toolList);
 
         var promptTemplates = new PromptTemplateRegistry();
-        // CLI --prompt-template 路径先载入注册表（--no-prompt-templates 时为空）。
-        if (!args.noPromptTemplates() && args.promptTemplates() != null
-                && !args.promptTemplates().isEmpty()) {
-            var load = PromptTemplates.load(
-                new DefaultFileSystem(), args.promptTemplates());
-            promptTemplates.registerAll(load.templates());
+        if (!args.noPromptTemplates()) {
+            // pi loadPromptTemplates includeDefaults（prompt-templates.ts:262-265）：
+            // 默认两目录 agentDir/prompts（user）+ cwd/.pi-java/prompts（project）。
+            var defaults = PromptTemplates.loadDefaults(new DefaultFileSystem(),
+                FileSettingsStorage.defaultAgentDir().toString(),
+                System.getProperty("user.dir"));
+            promptTemplates.registerAll(defaults.templates());
+            // CLI --prompt-template 路径再载入（同名后注册胜出，pi 同序）。
+            if (args.promptTemplates() != null && !args.promptTemplates().isEmpty()) {
+                var load = PromptTemplates.load(
+                    new DefaultFileSystem(), args.promptTemplates());
+                promptTemplates.registerAll(load.templates());
+            }
         }
         var services = new SessionServices(
             settings,
