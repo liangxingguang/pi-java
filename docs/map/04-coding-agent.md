@@ -283,7 +283,7 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 | E2-30 | `themes` | `:312` | `:47` | 2 | 对齐 | 4 处消费 |
 | E2-31 | `enableSkillCommands` | `:313` | `:48` | 2 | **存疑** | 字段有、1 处消费，但 `/skill:name` 命令族**未实现** |
 | E2-32 | `terminal` | `:319`（schema `:74-100`，7 键） | `:49`（7 键，`Settings.java:155-166`） | 1 | **存疑** | 字段形状已齐（7/7），本模块内**零消费**（TUI 侧归 05 图） |
-| E2-33 | `images` | `:320` | `:50` | 1 | **存疑** | java 2 键与 pi 同；**批 9（2026-10-16）`autoResize` 已消费**（`ImagePolicies.resolve` 经 ToolContext 晚绑定，docs/18）；`blockImages` 仍零消费（独立阻断特性，非 B85） |
+| E2-33 | `images` | `:320` | `:50` | 1 | **存疑** | java 2 键与 pi 同；**批 9（2026-10-16）`autoResize` 已消费**（`ImagePolicies.resolve` 经 ToolContext 晚绑定，原 docs/18）；`blockImages` 仍零消费（独立阻断特性，非 B85） |
 | E2-34 | `enabledModels` | `:321` | `:51` | 2 | 对齐 | `SettingsAccessors.java:101` |
 | E2-35 | `defaultTools`（支持 `+name`/`-name`） | `:326` | — | 2 | **缺失** | 无字段；pi `mergeDefaultTools`/`resolveDefaultTools`（`settings-manager.ts:124/135`），CLI `--tools +x` 同套 modifier |
 | E2-36 | `doubleEscapeAction` | `:332` | `:52` | 1 | **存疑** | accessor 有（`:172`），行为未核 |

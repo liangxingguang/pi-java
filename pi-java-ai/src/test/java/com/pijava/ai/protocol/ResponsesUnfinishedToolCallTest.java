@@ -27,7 +27,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * B118（批1，docs/09 ⑤）：pi {@code openai-responses-shared.ts:764-775} 的终局守卫——
+ * B118（批1，原 docs/09 ⑤）：pi {@code openai-responses-shared.ts:764-775} 的终局守卫——
  * {@code output_item.done} 永不到达的工具调用（scratch 槽仍在）在 {@code stopReason:"toolUse"}
  * 时必须判 provider error，不能把残缺/串位的参数当真工具调用执行。
  */

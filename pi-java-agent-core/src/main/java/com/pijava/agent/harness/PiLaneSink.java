@@ -213,7 +213,7 @@ final class PiLaneSink implements PiLoop.Sink {
                 // OTel 属性是字符串边界：显式出 wire 字面（camelCase）。
                 llmSpan.addAttribute("stopReason", stop.wireName());
             }
-            // C5（docs/23 §6）：先 pop 后 close，与 JsonlFileTelemetry.startSpan
+            // C5（原 docs/23 §6）：先 pop 后 close，与 JsonlFileTelemetry.startSpan
             // 对称——close 期间的 recordEvent 无归属（可检测的缺席），而不是
             // 错挂到已闭跨度上。
             ctx.telemetry().popCurrent(llmSpan);
@@ -452,7 +452,7 @@ final class PiLaneSink implements PiLoop.Sink {
         // B41 兜零值 ⇒ 恒非 null。旧代码这里的 Usage.of(i, o) 把
         // cacheRead/cacheWrite/cacheWrite1h/reasoning/cost 整段丢掉 ⇒
         // 会话账（SessionState.applyRecord 读的正是这条记录）四分量与 costTotal 恒 0。
-        // D6（docs/12 §6）：usage 落成 pi 的**原生 usage 条目**，不再落成 custom 审计行。
+        // D6（原 docs/12 §6）：usage 落成 pi 的**原生 usage 条目**，不再落成 custom 审计行。
         // pi 的 UsageEntry（session-manager.ts:80-89）＝ 自由类别串 ＋ provider/model ＋
         // Usage 载荷；本仓的审计字段（runId/entryId/attempt/stopReason）搭同一条行的扩展键
         // —— pi 的 parseSessionEntries 只做 JSON.parse（:353-368），未知键照读不误。

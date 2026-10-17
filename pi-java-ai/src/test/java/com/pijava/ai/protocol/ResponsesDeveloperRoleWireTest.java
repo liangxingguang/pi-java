@@ -26,7 +26,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * B222（批 1，docs/09 ③）：Responses 车道前导/中途系统指令的角色。
+ * B222（批 1，原 docs/09 ③）：Responses 车道前导/中途系统指令的角色。
  *
  * <p>pi {@code openai-responses-shared.ts:214-215}：
  * {@code model.reasoning && compat?.supportsDeveloperRole !== false ? "developer" : "system"}

@@ -3,7 +3,7 @@
 > **判据**：`bin pi` 主流发布版可达的**行为**与 pi 相同——不是文档、不是 API 形状、不是文件清单。
 > **基准**：pi @ **`ea448f454`**（2026-10-11，v1.1.0-22）／pi-java @ **`edc8749d`**（2026-10-12）。
 > 七份地图（含新建 `map/07-mcp.md`）已于 **2026-10-12 对两基准逐条重测完毕**（原 A16 销号）。
-> **同日 ai 批 0 裁决**（[`docs/08`](08-ai-layer-alignment-roadmap.md)）：map/02 有 11 单位出分母、#87 转对齐，
+> **同日 ai 批 0 裁决**（原 docs/08）：map/02 有 11 单位出分母、#87 转对齐，
 > ai 85.0%→**94.5%**（219/207.0：批 1/批 2 闭环 2026-10-13 至 90.2%，**批 3a 模型目录数据面闭环 2026-10-14** 至 92.2%，**批 5 消息字段/终局计量闭环 2026-10-15** 至 92.7%，**批 7 共享回调/ChatGPT 订阅/copy-code 闭环 2026-10-16** 至 93.8%，**批 9 图片缩放/注记消费链闭环 2026-10-16** 至 94.1%，**批 10 federation 闭环 2026-10-16** 至 94.5%；批 2 为单元 #6 Mistral 窄角修复，加权不变；批 0 后 89.7%）；**批 3b／批 4／批 6／批 8 销号均为台账行为项，读数不变**；剩余计分母缺失仅 #8。
 > **agent-core 批 1 闭环 2026-10-17**：72.1%→**75.7%**（183/138.5，B158 截断 50KB＋B159/#41 finishTurn 裁决形状＋#17 /compact abort-first，+6.5）；合计 57.8%→**59.5%**（824.5/1385）。
 > **agent-core 批 2 闭环 2026-10-17**：75.7%→**81.1%**（183/148.5，#34 prepareRequest 写钩子＋#46 族会话事件面漏斗（含 #52 本 pass 载荷、agent_settled.aborted/B235 销号）＋#58 stopReason 剔除删除＋#54/#78/#100 三裁决，+10.0）；**权重 3 层 22/22 = 100%**；合计 59.5%→**60.3%**（834.5/1385）。未加权 57.6%（53/92，批 1 的 45/92 系误计、实为 46/92，本批按表内点算更正）。
@@ -92,7 +92,7 @@ anthropic-java 2.66.0 全包（原「java 要逆协议」裁决作废），守�
 **批 9（2026-10-16）**：#90 存疑→对齐（+0.5，B85 销号）——JDK ImageIO 替代 photon 落
 `ImageProcessor`/`ImageResizer`/`ExifOrientation`/`WebpDimensions`，`ReadTool` 缩放省略/非视觉注记两路径，
 `PiToolRunner` after_tool 后统一归一（MCP/截图大图失败留原图），`ImagePolicy` 晚绑定
-`images.autoResize ?? true`＋当前模型 `inputLimits.images.resize`＋视觉位；窄差见 docs/18 §5。
+`images.autoResize ?? true`＋当前模型 `inputLimits.images.resize`＋视觉位；窄差见 原 docs/18 §5。
 **批 7（2026-10-16）**：#97 存疑→对齐（`LoopbackCallbackServer` 共享回调＋pi 品牌页＋回调/手工竞速）、
 #95 缺失→对齐（Sign in with ChatGPT：动态客户端/1455 硬失败/直连 scope 门/签发 clientId 刷新）、
 #96 缺失→对齐（Anthropic browser/copy-code select、53692→0 回落、JSON 交换刷新），+2.5。
@@ -105,7 +105,7 @@ Ctrl+P/RPC 轮转全接通；台账行为项、无加权单元 ⇒ 百分比不�
 残余计分母缺失 1 条：#8 namespace（随 MCP 包 B203）。
 批 0 出分母：分类器/统一模型类型/图像目录（#92/#94/#33，仅 codemode 消费＝R5）、bedrock/vertex/codex
 三 wire（主流 7 家口径外 w0；azure/radius 同口径，B230/B226 在 04 §4）、cf-binding 死代码作废。
-路线与账面（批 1–10 已完工 94.5%；残余仅 #8 计分母缺失）见 docs/08。
+路线与账面（批 1–10 已完工 94.5%；残余仅 #8 计分母缺失）见 原 docs/08。
 
 ### 2.2 mcp — 76.0% ｜ map/07（**本次新建**）
 配置/协议/传输/OAuth/工具内容/CLI 六组加权 83–96%；**G 组生命周期与接线 8.7%**（B221＝下一包主战场）。
@@ -113,11 +113,11 @@ Ctrl+P/RPC 轮转全接通；台账行为项、无加权单元 ⇒ 百分比不�
 codemode-only 的 4 个单元（exposure/deferred/discovery）权 0，B161/B162 闭环时重裁。
 
 ### 2.3 agent-core — 83.9% ｜ map/03（批 3 后）
-**批 3（2026-10-17，docs/22）**：bash/grep/find/ls 四工具模型可见面逐字（schema/描述/snippet/
+**批 3（2026-10-17，原 docs/22（批 3 设计稿））**：bash/grep/find/ls 四工具模型可见面逐字（schema/描述/snippet/
 告示/错误文本；glob→find 改名、ls `recursive`→`limit`、grep 补七参＋gitignore、bash 超时面
 无默认/毫秒粒度/2147483.647s 上限）；工具表 71.4→**95.2%**（20.0/21），+5.0 ⇒ **权重 3 层含
 工具 27/27 = 100%**；新登 B242（bash `PI_*` 会话环境变量面）/B243（powershell，挂 B236 族）。
-**批 2（2026-10-17，docs/21）**：#34 `prepareRequest` 写钩子（每次请求前调、context 整体替换、
+**批 2（2026-10-17，原 docs/21（批 2 设计稿））**：#34 `prepareRequest` 写钩子（每次请求前调、context 整体替换、
 config 写回本 run 生效；老 void `before_request` 退役）、**#46 族会话事件面重构**（补五帧＋
 `AgentSettled{aborted}` 真形状＋`UserMessageReceived` 删；`SessionRunner` 单一漏斗全量转发，
 #52 `agent_end` 改本 pass 载荷、A8/B235 销号；RPC 五新帧、web 直译化＋`transcriptSource` 吸收整表替换）、
@@ -150,7 +150,7 @@ web 对齐面 78.8% 最高；**渲染特性 14.5%**：MarkdownRenderer/SyntaxHig
 chord R5 权 0；sqlite 模块保留但参照后端已删（B59 裁决）。
 
 ### 2.7 telemetry / protocol / client / server — map/01
-telemetry **100%**（批 1 闭环，2026-10-17，docs/22：契约 T1–T10 移植/裁决、扩展 T12–T17 确认、T11 移出分母；
+telemetry **100%**（批 1 闭环，2026-10-17，原 docs/23：契约 T1–T10 移植/裁决、扩展 T12–T17 确认、T11 移出分母；
 adapter 一致性套件 7 用例 × InMemory/Jsonl 两挂在跑，形状差已可变红）。
 protocol/client/server 按 R1 整体出分母：protocol 是已删 pi 代码的移植，client/server 无消费者孤岛。
 

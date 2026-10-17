@@ -30,7 +30,7 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
  * omit 门——直接断言出参 SDK 对象的 Optional 访问器（缺席即 {@code JsonMissing}，
  * SDK 序列化时整个键不落线，与 ResponsesMaxOutputTokensWireTest 同一事实链）。</p>
  *
- * <p>锚点事实（docs/17 §2）：裁剪集合恰好四个键，{@code prompt_cache_key} <b>不裁</b>；
+ * <p>锚点事实（原 docs/17 §2）：裁剪集合恰好四个键，{@code prompt_cache_key} <b>不裁</b>；
  * 门只在 openai 车道（azure 副本零命中）；严格相等不归一。</p>
  */
 class ResponsesChatGptSignInWireTest {

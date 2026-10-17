@@ -41,7 +41,7 @@ B53 `find()` 缺三级阶梯（地图 #78）、B31/B32/B33（get_state 三处 RP
 
 ### 2.1 权重 3（✅ 清零，2026-10-17 批 agent-core-2）
 
-> 七条全部转对齐（map/03 权重 3 层 22/22 = **100%**；详稿 [`docs/21`](21-agent-core-batch2-design.md)）：
+> 七条全部转对齐（map/03 权重 3 层 22/22 = **100%**；详稿 原 docs/21（批 2 设计稿））：
 > **#34** `prepareRequest` 写钩子（老 void `before_request` 退役）；**#46** `AgentSessionEvent` 面
 > （补五帧＋`agent_settled{aborted}` 真形状＋单一漏斗全量转发）；**#52** `agent_end` 本 pass 载荷
 > （A8 销号）；**#54** Entry union（裁决：行为等价，docs/04 §4）；**#58** `convertToLlm`
@@ -66,7 +66,7 @@ B53 `find()` 缺三级阶梯（地图 #78）、B31/B32/B33（get_state 三处 RP
 > 新登记缺口的去向：`durationMs`（B234 已于 ai 批 5 销号）、`agent_settled.aborted`（B235 已随批 agent-core-2 销号）；
 > `--tools` glob/modifier 模式面在册 **B236**（docs/04 §3.3，归 coding-agent 批）。
 
-> 2026-10-17 批 agent-core-3（详稿 [`docs/22`](22-agent-core-batch3-design.md)）：内置工具四条存疑
+> 2026-10-17 批 agent-core-3（详稿 原 docs/22（批 3 设计稿））：内置工具四条存疑
 > **清零**——bash 超时面逐字（无默认/2147483.647 s 上限/毫秒粒度/isError 收尾）、grep 补七参＋gitignore
 > ＋输出形（纯 Java 引擎，**裁决①** rg/fd 外壳与 tools-manager 不移植）、`glob`→`find` 改名＋fd 语义、
 > ls `recursive`→`limit` 参数集换血；窄差 D1–D8 入 map/03 工具表备注。新登记：**B243**（powershell
