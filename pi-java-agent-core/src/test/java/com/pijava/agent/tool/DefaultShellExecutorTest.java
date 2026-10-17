@@ -38,6 +38,31 @@ class DefaultShellExecutorTest {
         assertThat(result.output()).contains("echo hello-bash");
     }
 
+    @Test
+    void timeoutSnapshotContainsAllBytesWrittenBeforeKill() throws Exception {
+        // 契约钉：超时刻收编的部分输出必须完整（kill 前写出的全部字节）。
+        // destroy 后读取线程还在 drain 管道残量，不 join 就快照会概率性丢尾
+        // （批 3 评审发现 2）——竞窗口 <5ms 且叠加 login-shell 启动抖动，
+        // 公共 API 上做不出确定性 RED，此测试钉终态契约，join 结构性保证。
+        var probe = new DefaultShellExecutor();
+        try {
+            probe.execute("true", options(tmp));
+        } catch (Exception e) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(false,
+                "no bash on this host: " + e.getMessage());
+        }
+
+        var executor = new DefaultShellExecutor();
+        var opts = new ShellOptions(tmp.toString(), Map.of(), true,
+            OptionalLong.of(6_000), null);
+
+        var result = executor.execute(
+            "head -c 3000000 /dev/zero | tr '\\0' 'x'; sleep 30", opts);
+
+        assertThat(result.timedOut()).isTrue();
+        assertThat(result.output()).hasSize(3_000_000);
+    }
+
     private Path createFakeBash() throws Exception {
         if (isWindows()) {
             // A .cmd is spawnable directly on Windows; it reads the command

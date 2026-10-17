@@ -3,7 +3,6 @@ import com.pijava.ai.AbortSignal;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.FileSystems;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -227,8 +226,9 @@ public final class GrepTool {
         var candidates = new ArrayList<Path>();
         // glob 语义按 rg --glob（gitignore 式）：无 "/" ⇒ 匹配 basename；
         // 有 "/" ⇒ 相对 root 的锚定匹配（与 find 的 fd 语义不同，两工具各写各的）。
-        final var matcher = glob == null
-            ? null : FileSystems.getDefault().getPathMatcher("glob:" + glob);
+        // 不能用 NIO PathMatcher：java 的 ** 不吃零段（'**/*.spec.ts' 漏根下文件），
+        // rg 的 **/ 是「零或多段」——走 globToRegex 翻译（评审发现 1）。
+        final Pattern globPattern = glob == null ? null : globToRegex(glob);
         final boolean fullPath = glob != null && glob.contains("/");
         Files.walkFileTree(root, new SimpleFileVisitor<>() {
             @Override
@@ -262,15 +262,83 @@ public final class GrepTool {
             }
 
             private boolean matchesGlob(Path file) {
-                if (matcher == null) {
+                if (globPattern == null) {
                     return true;
                 }
                 return fullPath
-                    ? matcher.matches(root.relativize(file))
-                    : matcher.matches(file.getFileName());
+                    ? globPattern.matcher(rel(file)).matches()
+                    : globPattern.matcher(file.getFileName().toString()).matches();
             }
         });
         return candidates;
+    }
+
+    /**
+     * rg {@code --glob} 语义翻译（gitignore 式）：{@code **&#47;} ＝ 零或多段、
+     * 裸 {@code **} ＝ 跨段任意、{@code *}＝ 段内任意、{@code ?} ＝ 段内单字、
+     * {@code [...]} 字符类（{@code !} 取反）、{@code {a,b}} 支选。调用方负责
+     * basename 模式（pattern 无 {@code /}）与锚定模式的分派；两侧都全串匹配。
+     */
+    private static Pattern globToRegex(String glob) {
+        var re = new StringBuilder("^");
+        int i = 0;
+        while (i < glob.length()) {
+            char c = glob.charAt(i);
+            if (c == '*') {
+                if (i + 1 < glob.length() && glob.charAt(i + 1) == '*') {
+                    if (i + 2 < glob.length() && glob.charAt(i + 2) == '/') {
+                        re.append("(?:[^/]+/)*");   // **/ ⇒ 零或多段（rg 语义）
+                        i += 3;
+                    } else {
+                        re.append(".*");            // 裸 ** ⇒ 跨段任意
+                        i += 2;
+                    }
+                } else {
+                    re.append("[^/]*");
+                    i++;
+                }
+            } else if (c == '?') {
+                re.append("[^/]");
+                i++;
+            } else if (c == '[') {
+                int end = glob.indexOf(']', i + 1);
+                if (end < 0) {
+                    re.append("\\[");
+                    i++;
+                } else {
+                    String cls = glob.substring(i + 1, end);
+                    if (cls.startsWith("!")) {
+                        cls = "^" + cls.substring(1);
+                    }
+                    re.append('[').append(cls).append(']');
+                    i = end + 1;
+                }
+            } else if (c == '{') {
+                int end = glob.indexOf('}', i + 1);
+                if (end < 0) {
+                    re.append("\\{");
+                    i++;
+                } else {
+                    String[] alts = glob.substring(i + 1, end).split(",", -1);
+                    re.append("(?:");
+                    for (int k = 0; k < alts.length; k++) {
+                        if (k > 0) {
+                            re.append('|');
+                        }
+                        re.append(Pattern.quote(alts[k]));
+                    }
+                    re.append(')');
+                    i = end + 1;
+                }
+            } else {
+                if ("\\.^$|()+".indexOf(c) >= 0) {
+                    re.append('\\');
+                }
+                re.append(c);
+                i++;
+            }
+        }
+        return Pattern.compile(re.append('$').toString());
     }
 
     /** pi formatPath（grep.ts:137-145）：目录搜索 ⇒ 相对 root（\→/）；单文件 ⇒ basename。 */

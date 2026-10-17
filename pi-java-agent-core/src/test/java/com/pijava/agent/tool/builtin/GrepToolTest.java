@@ -200,6 +200,38 @@ class GrepToolTest {
     }
 
     @Test
+    void doubleStarSlashGlobMatchesZeroSegmentsAtSearchRoot() throws Exception {
+        // rg glob 语义：**/ 匹配零或多段——schema 自证例 '**/*.spec.ts'
+        // 对搜索根下的直接文件也必须命中（java PathMatcher 的 ** 不吃零段，故走翻译器）。
+        Files.writeString(tmp.resolve("a.spec.ts"), "needle");
+        Files.createDirectories(tmp.resolve("sub"));
+        Files.writeString(tmp.resolve("sub/b.spec.ts"), "needle");
+
+        var result = grep(new GrepTool.GrepInput("needle",
+            Optional.empty(), Optional.of("**/*.spec.ts"), Optional.empty(),
+            Optional.empty(), Optional.empty(), Optional.empty()));
+
+        assertThat(textOf(result).split("\n")).containsExactlyInAnyOrder(
+            "a.spec.ts:1: needle", "sub/b.spec.ts:1: needle");
+    }
+
+    @Test
+    void doubleStarInMiddleMatchesDirectChildren() throws Exception {
+        Files.createDirectories(tmp.resolve("sub/deep"));
+        Files.createDirectories(tmp.resolve("other"));
+        Files.writeString(tmp.resolve("sub/a.txt"), "needle");
+        Files.writeString(tmp.resolve("sub/deep/b.txt"), "needle");
+        Files.writeString(tmp.resolve("other/c.txt"), "needle");
+
+        var result = grep(new GrepTool.GrepInput("needle",
+            Optional.empty(), Optional.of("sub/**/*.txt"), Optional.empty(),
+            Optional.empty(), Optional.empty(), Optional.empty()));
+
+        assertThat(textOf(result).split("\n")).containsExactlyInAnyOrder(
+            "sub/a.txt:1: needle", "sub/deep/b.txt:1: needle");
+    }
+
+    @Test
     void gitignoreRulesAreRespected() throws Exception {
         Files.writeString(tmp.resolve(".gitignore"), "ignored.txt\nbuild/\n");
         Files.writeString(tmp.resolve("ignored.txt"), "needle");

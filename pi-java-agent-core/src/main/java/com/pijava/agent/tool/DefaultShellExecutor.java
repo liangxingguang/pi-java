@@ -117,7 +117,17 @@ public class DefaultShellExecutor implements ShellExecutor {
                 try {
                     exitCode = process.waitFor();
                 } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
                     exitCode = -1;
+                }
+                // 快照前 join 读取线程：进程死亡后管道残量要 drain 完，否则超时面的
+                // 「部分输出」概率性丢尾（批 3 评审发现 2；非超时路径 future.get 已含 join）。
+                try {
+                    future.get();
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                } catch (java.util.concurrent.ExecutionException ignored) {
+                    // 读取线程失败：已 drain 的部分照用（进程已毁，输出不会再长）。
                 }
             }
 
