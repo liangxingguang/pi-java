@@ -76,17 +76,27 @@ pi 工具定义现在**只有一处**：`packages/coding-agent/src/core/tools/`�
 
 | # | 工具 | pi 有 | java 有 | 判定 | 权重 | 证据（**新锚实读**） |
 |---|---|---|---|---|---|---|
-| 1 | `bash` | ✅ | ✅ | **存疑** | **3** | pi `{command, timeout?}`，**无默认超时**，上限 `2147483 s`（`core/tools/bash.ts:22`，`resolveTimeoutMs :27-37`，schema `:40-43`）。java 同参数，但**默认 120 s / 上限 600 s**（`BashTool.java:36-39`，描述 `:64,:73`）⇒ 模型不传 timeout 时行为不同 |
+| 1 | `bash` | ✅ | ✅ | **对齐** | **3** | pi `{command, timeout?}`：无默认超时、上限 `2147483.647 s`、小数秒、三分支截断 notice（`Full output:` 行文）、非零退出 resolve `isError`（`core/tools/bash.ts:22,27-37,40-43,261-263,317-366`）。java **批 3（2026-10-17，docs/22）**逐字：`BashTool.java`＋`ShellOptions.timeoutMillis` 毫秒粒度＋描述/schema/snippet 常量现算＋`pi-bash-*.log` 落盘 |
 | 2 | `read` | ✅ | ✅ | **对齐** | **3** | pi `{path, offset?, limit?}`（`core/tools/read.ts:15-17`）；java 同（`ReadTool.java:31`）。图片经批 9 缩放管线（`ReadTool.java` readImage：归一/转换/省略/非视觉注记，vs pi `core/tools/read.ts:88-153`） |
 | 3 | `write` | ✅ | ✅ | **对齐** | **3** | pi `{path, content}`（`core/tools/write.ts`）；java 同（`WriteTool.java:31`）＋ 同形状 `FileMutationQueue`（`WriteTool.java:29`） |
 | 4 | `edit` | ✅ | ✅ | **对齐** | **3** | pi `{path, edits:[{oldText,newText}]}`（`core/tools/edit.ts`）；java 同（`EditTool.java:39`） |
-| 5 | `grep` | ✅ | ✅ | **存疑** | **3** | pi `{pattern, path?, glob?, ignoreCase?, literal?, context?, limit?}` + gitignore + 默认 100/50KB 截断（`core/tools/grep.ts:22-32,41`，截断常量 `core/tools/truncate.ts:11-12`）。java 只有 `{pattern, path?, glob?}`（`GrepTool.java:30`）⇒ **缺 4 参数** |
-| 6 | `find` | ✅ `find` | ✅ `glob` | **存疑** | **2** | **名字不同**；pi `{pattern, path?, limit?}` 默认 1000，走 fd/ripgrep 尊重 gitignore（`core/tools/find.ts:27-31,41,112`）。java `{pattern, path?}`，NIO `PathMatcher` 全树 walk（`GlobTool.java:27`）⇒ 缺 limit + 无 gitignore + 无截断 |
-| 7 | `ls` | ✅ | ✅ | **存疑** | **2** | pi `{path?, limit?}`（默认 500，`core/tools/ls.ts:12-13,23`）；java `{path?, recursive?}`（`LsTool.java:25,43-44`）⇒ **参数集不同** |
-| 8 | `powershell` | ✅ | ❌ | **缺失** | **1** | pi `core/tools/powershell.ts`，工具名进 `allToolNames`（`core/tools/index.ts:96-104`）。java 仅系统提示词里按名条件拼过文案（`SystemPrompts.java:189-199`），**无工具实现** |
+| 5 | `grep` | ✅ | ✅ | **对齐** | **3** | pi 七参＋gitignore＋默认 100 匹配/50KB＋500 字行截＋`path:N:`/`path-N-` 两形＋告示序（`core/tools/grep.ts:22-32,78,86-318`）。java **批 3** 逐字：`GrepTool.java` 纯 Java 引擎（**裁决①**：不移植 rg 外壳/tools-manager 下载子系统）＋`ToolIgnoreFilter`（JGit 全语义，含 `**/` 零段 glob 翻译器）；窄差 D1–D3/D8 |
+| 6 | `find` | ✅ | ✅（批 3 自 `glob` 改名） | **对齐** | **2** | pi `{pattern, path?, limit?}` 默认 1000，fd 语义：basename vs `--full-path`＋`**/` 前缀适配、目录入选、gitignore、`No files found matching pattern`（`core/tools/find.ts:26-41,201-213,261-299`）。java **批 3**：`FindTool.java`（full-path 模式对**绝对候选路径**匹配——java `**` 不吃零段，fd 本就匹配绝对路径）＋`ToolSetFactory` 注册序对齐 `createAllTools`；窄差 D5/D8 |
+| 7 | `ls` | ✅ | ✅ | **对齐** | **2** | pi `{path?, limit?}` 默认 500、裸名大小写不敏感排序＋`/` 目录后缀＋dotfiles＋三错误文本＋`(empty directory)`（`core/tools/ls.ts:11-15,62,86-172`）。java **批 3** 参数集换血（`LsTool.java`：`recursive`→`limit`，`[DIR]/[FILE]`＋size 列全删）；窄差 D4 |
+| 8 | `powershell` | ✅ | ❌ | **缺失** | **1** | pi `core/tools/powershell.ts`，工具名进 `allToolNames`（`core/tools/index.ts:96-104`）。java 仅系统提示词里按名条件拼过文案（`SystemPrompts.java:189-199`），**无工具实现**——**B241**（实现＋默认激活集随 B236 批，docs/22 §5.2） |
 | 9 | `image`（读图处理器） | ✅ | ✅ | **对齐** | **1** | pi `core/tools/read.ts` + `utils/image-process.ts` + `utils/image-resize-core.ts` + `utils/mime.ts`；java **批 9（2026-10-16）**：`tool/image/{ImageProcessor,ImageResizer,ExifOrientation,WebpDimensions,ToolResultImages}.java`（ImageIO 替代 photon）＋ `PathUtils.detectImageMimeType` 加严（0xF7/aPNG/BMP 校验）＋ `PiToolRunner` after_tool 后统一归一；窄差见 docs/18 §5 |
 
-**Σ权重 21**（对齐 10.0 ／ 存疑 5.0 ／ 缺失 0 ＝ 15.0，71.4%）。
+**Σ权重 21**（对齐 20.0 ／ 存疑 0 ／ 缺失 0 ＝ 20.0，**95.2%**；powershell w1 缺失挂 **B241**）。
+
+> **批 3 窄差登记**（触发重裁条件随各条；docs/22 §5.4＋评审补登）：
+> - **D1** grep 正则方言：Java `Pattern` vs Rust regex——lookaround/反向引用 java 多出面；字面/字符类/量词主流一致（触发：模型产出 Rust 方言失配 pattern 的案例）
+> - **D2** gitignore 三件全读（grep 侧 rg 不读 `.fdignore`）；嵌套 git 仓库边界不停（pi `--no-require-git` 取舍 `find.ts:171-181`）；**搜索根之上的父 .gitignore 不读**（rg 上溯仓库根）（触发：嵌套仓库/父规则场景的可见误报）
+> - **D3** 二进制 NUL 嗅探（首 8 KiB 含 0x00 即跳过）近似 rg 默认；**grep 整文件入内存**（rg 流式，超大文本文件内存画像有别）（触发：二进制误中/超大文件案例）
+> - **D4** ls 排序：`toLowerCase(ROOT)` 码点序 vs pi `localeCompare`（ASCII 全等）（触发：非 ASCII 文件名排序差异被踩）
+> - **D5** find 绝对 glob（`/` 开头）的 Windows 分隔符不逐字 `[/\\]`；path 不存在错文采 custom-ops 形；**普通文件作 find 根 ⇒ 报错**（fd 会把该文件自身列入候选）（触发：Windows 绝对 pattern/文件根实测差异）
+> - **D6** bash `Command terminated without an exit code`（`bash.ts:354`）java 不可达（`ShellResult.exitCode` 恒 int）（结构性）
+> - **D7** fd/rg 遍历序 vs `Files.walkFileTree` 序——两侧都不保证顺序
+> - **D8** find 的 glob 在 Windows 大小写**不敏感**（NIO PathMatcher；fd smart-case）⇒ 过匹配；grep 走 globToRegex 大小写敏感不受影响（触发：大小写混排文件名场景）
 
 ---
 
@@ -236,12 +246,12 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 
 | 表 | 对齐 | 缺失 | 存疑 | 合计 | 完成度 |
 |---|---:|---:|---:|---:|---:|
-| 内置工具 | 4 | 1 | 4 | 9 | **44.4%** |
+| 内置工具 | 8 | 1 | 0 | 9 | **88.9%** |
 | 能力单元（除工具） | 49 | 10 | 24 | 83 | **59.0%** |
 | 整块缺失（无独立计权项） | 0 | 0 | 0 | 0 | —— |
-| **合计** | **53** | **11** | **28** | **92** | **57.6%** |
+| **合计** | **57** | **11** | **24** | **92** | **62.0%** |
 
-**未加权完成度 = 53 / 92 = 57.6%**。
+**未加权完成度 = 57 / 92 = 62.0%**。
 （对齐＋存疑视为「有」：81/92 = **88.0%**）
 
 > 2026-10-17 批 2 复核更正：批 1 的未加权计数有误（45/92；实测表内逐条点算为 46/92 ——
@@ -253,11 +263,11 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|
-| 内置工具（9） | 21 | 15.0 | **71.4%** | 44.4% |
+| 内置工具（9） | 21 | 20.0 | **95.2%** | 88.9% |
 | 能力单元（除工具，83） | 162 | 133.5 | **82.4%** | 59.0% |
-| **模块合计（92）** | **183** | **148.5** | **81.1%** | **57.6%** |
+| **模块合计（92）** | **183** | **153.5** | **83.9%** | **62.0%** |
 
-**模块合计**：Σ权重 183 ／ Σ(w×c) 148.5 ／ **加权完成度 = 148.5/183 = 81.1%**（未加权 57.6%）。
+**模块合计**：Σ权重 183 ／ Σ(w×c) 153.5 ／ **加权完成度 = 153.5/183 = 83.9%**（未加权 62.0%）。
 
 按权重分层（能力单元表，83 条）：
 
@@ -268,13 +278,13 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | 1 | 26 | 26 | 4 | 13 | 9 | 10.5 | **40.4%** |
 | 合计 | 83 | 162 | 49 | 24 | 10 | 133.5 | 82.4% |
 
-### 权重 3 的单元清单（22 条能力单元 + 5 条工具 = 27 条）
+### 权重 3 的单元清单（22 条能力单元 + 5 条工具 = 27 条，批 3 起 **27/27 = 100%**）
 
 | 单元 | 判定 |
 |---|---|
-| `bash` 工具 | **存疑** |
+| `bash` 工具 | 对齐（批 3） |
 | `read` / `write` / `edit` 工具 | 对齐（3 条） |
-| `grep` 工具 | **存疑** |
+| `grep` 工具 | 对齐（批 3） |
 | #1 `AgentEvent` 变体 | 对齐 |
 | #2 双循环 | 对齐 |
 | #3 `runAgentLoop`/`continue` 前置条件 | 对齐 |

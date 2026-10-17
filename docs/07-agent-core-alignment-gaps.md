@@ -18,7 +18,7 @@
 | 地图# | 权重 | 差什么 | 台账 |
 |---|---:|---|---|
 | #62 | **2** | `formatSkillInvocation`（技能调用格式）：全仓零命中 | —— |
-| #8（工具表） | 1 | `powershell` 工具缺失（pi 8 个内置工具，Java 7 个；系统提示词里有名字、无实现） | —— |
+| #8（工具表） | 1 | `powershell` 工具缺失（pi 8 个内置工具，Java 7 个；系统提示词里有名字、无实现） | **B241** |
 | #24 | 1 | branch summary **生成器**缺失（只有 `Entry.BranchSummary` 类型＋文案） | **B1** |
 | #25 | 1 | 会话树导航 `navigateTree` 缺失 | B1 同族 |
 | #27 | 1 | branch summary 设置（`reserveTokens`/`skipPrompt`，注意与压缩阈值的同名 reserve 无关） | B1 同族 |
@@ -53,7 +53,6 @@ B53 `find()` 缺三级阶梯（地图 #78）、B31/B32/B33（get_state 三处 RP
 
 | 类 | 条目 |
 |---|---|
-| 内置工具 | bash 默认超时/上限（pi 无默认、上限 2147483 s vs Java 120 s/600 s）· grep 缺 4 参数＋50KB 截断 · find/glob 名称不同＋缺 limit/gitignore · ls 参数集不同 |
 | 队列/宿主 | #14 `QueueMode.All` 宿主语义（F1）· #80 `streamingBehavior` 两道门（A5/F4）· #84 两道门行为裁决（F4） |
 | 事件 | #53 `turn_end` 颗粒度（**B49**）· #86 `_emitSessionCompactFailed`、#88 `ActiveToolsChange` **2026-10-12 重测转 R1 作废**（公开事件面 pi 从不发射；#86 只剩扩展事件属 coding-agent 域） |
 | 存储/会话 | #56 `EntryProjector`（A1）· #57 四个消息类型（A1）· #60 `PendingEntry`/`InboxItem` 队列契约 · #75 session fork · #77 恢复 seed/replay（A2） |
@@ -67,6 +66,12 @@ B53 `find()` 缺三级阶梯（地图 #78）、B31/B32/B33（get_state 三处 RP
 > 新登记缺口的去向：`durationMs`（B234 已于 ai 批 5 销号）、`agent_settled.aborted`（B235 已随批 agent-core-2 销号）；
 > `--tools` glob/modifier 模式面在册 **B236**（docs/04 §3.3，归 coding-agent 批）。
 
+> 2026-10-17 批 agent-core-3（详稿 [`docs/22`](22-agent-core-batch3-design.md)）：内置工具四条存疑
+> **清零**——bash 超时面逐字（无默认/2147483.647 s 上限/毫秒粒度/isError 收尾）、grep 补七参＋gitignore
+> ＋输出形（纯 Java 引擎，**裁决①** rg/fd 外壳与 tools-manager 不移植）、`glob`→`find` 改名＋fd 语义、
+> ls `recursive`→`limit` 参数集换血；窄差 D1–D8 入 map/03 工具表备注。新登记：**B241**（powershell
+> 实现＋默认激活集，挂 B236 族）、**B242**（bash 的 `PI_*` 会话环境变量面）——均在 docs/04 §3.3。
+
 > 旧 A/C/D/F 编号来自各过程稿（docs/31 族），其中一部分已随包闭环；与 `docs/04` §2 的 A 类
 > （A10/A14/A15/A16）不是同一编号空间。A16 重测时统一清理标签。
 
@@ -76,7 +81,7 @@ B53 `find()` 缺三级阶梯（地图 #78）、B31/B32/B33（get_state 三处 RP
 
 | # | 事项 |
 |---|---|
-| A10 | 内置工具线程安全审计（read/write/edit/bash/glob…）：pi 契约「工具必须可并发执行」，审计未开始 |
+| A10 | 内置工具线程安全审计（read/write/edit/bash/find…）：pi 契约「工具必须可并发执行」，审计未开始 |
 | A14 | shell 集成夹具无牙：多字节字符在 8 KiB 边界被切断，需字节精确的假 shell |
 | A15 | 错误路 `AgentSettled` 形状无夹具（非空 toolResults 的断言守护缺失） |
 

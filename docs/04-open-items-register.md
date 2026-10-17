@@ -173,6 +173,8 @@
 | B217 | MCP `login` 的端到端（真授权服务器）无夹具 | 夹具覆盖到「连不上 / 非 OAuth / 缺参数 / 超时校验」为止；`--timeout` 秒数文案与 `reconnect` 后的成功路径需真 AS（包⑨ 的 `McpSignIn` 另有夹具） |
 | B163 | 主题/色彩系统差距 | pi 3,176 行（theme/system-theme/oklab…），Java 74 行 |
 | B236 | **新锚点**：`--tools`/`--exclude-tools` 模式面缺失 | pi 走 minimatch 模式：`*` 全选、`+name/-name` 修饰符、`mcp__` 前缀、空名单保留 MCP 注册（`args.ts:151-162`、`agent-session.ts` createToolNameMatcher/applyToolModifiers）；Java `ArgsParser.java:87-90,244-251` 只切逗号裸名 |
+| B241 | **powershell 工具实现＋默认激活集**（挂 B236 族） | pi `core/tools/powershell.ts:1-67`＝bash 的 `createShellToolDefinition` 变体（`name/label "powershell"`、prompt `PS>`、`tempFilePrefix "pi-powershell"`、UTF8 前缀、`shell.ts:126-133` 仅 Windows＋`pwsh.exe`→`powershell.exe` 解析）；但 pi **默认不激活**（`DEFAULT_TOOL_NAMES = ["read","bash","edit","write"]`，`settings-manager.ts:83`），激活走 `defaultTools` 修饰符/`--tools` 模式面——即 B236 的面 ⇒ 实现＋激活策略（含四件默认集差）整体随 B236 批落地（docs/22 §5.2） |
+| B242 | **bash 的 `PI_*` 会话环境变量面** | pi 默认向子进程暴露 `PI_SESSION_ID/PI_SESSION_FILE/PI_PROVIDER/PI_MODEL/PI_REASONING_LEVEL`（`resolveSpawnContext`，`bash.ts:185-213`；`exposeSessionEnvironment` 默认 true），bash 的 promptGuidelines 因此带 `You can inspect PI_* environment variables…`（`bash.ts:47`）；java `ToolContext` 拿不到会话身份（在 coding-agent 层），跨层接线（ToolContext 增会话身份供应器或 ToolOptions 注入）待做——在此之前 bash guideline 不加（加了是假话）（docs/22 §5.3） |
 
 ### 3.4 TUI（优先级最低，web UI 为主）
 
