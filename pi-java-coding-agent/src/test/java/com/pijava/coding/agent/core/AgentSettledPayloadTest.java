@@ -23,18 +23,11 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 包⑨（原 docs/36，B42）：`turn_end` 的载荷。
- *
- * <p>pi 的 {@code turn_end} 是 {@code { message: AgentMessage; toolResults:
- * ToolResultMessage[] }}，**两个字段都必填、一个 `?` 都没有**
- * （{@code agent/src/types.ts:438}），而且**原样上 RPC/JSON 线**
- * （{@code json-event.ts:48-51}）。pi-java 此前把它翻成一个**只有类型**的空事件。</p>
- *
- * <p>⚠️ <b>颗粒度如实说明</b>：pi 的 {@code turn_end} 是<b>每回合</b>一条，而 pi-java 的
- * {@code AgentSettled} 是<b>每次驱动</b>一条。若照字面取「最后一回合的工具结果」，
- * 那个字段在常见形状下<b>反而恒空</b>（最后那回合通常是纯文本收尾、没有工具调用）
- * ⇒ 本包按<b>本次驱动</b>填，让该字段真的能承载前端要的结果。
- * 颗粒度差异本身另登记（见 原 docs/36 §10）。</p>
+ * 批 2 迁移：{@code AgentSettled} 重塑为 pi 的 {@code { type: "agent_settled";
+ * aborted: boolean }}（{@code agent-session.ts:203}）—— 每次驱动恰一条，aborted
+ * 读会话层 abort 请求旗。旧载荷（message + toolResults 冒充 turn_end）由真
+ * {@link AgentSessionEvent.TurnEnd} 继承（{@code types.ts:517}，两字段必填、
+ * <b>每回合</b>一条、引擎直供）——「每驱动 vs 每回合」的颗粒度偏差就此拆除。
  */
 class AgentSettledPayloadTest {
 
@@ -86,53 +79,56 @@ class AgentSettledPayloadTest {
         return events;
     }
 
-    private static AgentSessionEvent.AgentSettled settledOf(List<AgentSessionEvent> events) {
+    private static List<AgentSessionEvent.AgentSettled> settledOf(List<AgentSessionEvent> events) {
         return events.stream()
             .filter(AgentSessionEvent.AgentSettled.class::isInstance)
             .map(AgentSessionEvent.AgentSettled.class::cast)
-            .findFirst().orElseThrow();
+            .toList();
+    }
+
+    private static List<AgentSessionEvent.TurnEnd> turnEndsOf(List<AgentSessionEvent> events) {
+        return events.stream()
+            .filter(AgentSessionEvent.TurnEnd.class::isInstance)
+            .map(AgentSessionEvent.TurnEnd.class::cast)
+            .toList();
     }
 
     @Test
-    void settledCarriesTheAssistantMessageAndTheDrivesToolResults() throws Exception {
+    void settledIsEmittedOncePerDriveWithAbortedFalse() throws Exception {
         var settled = settledOf(driveToolRun("faux-settled", 1));
 
-        assertThat(settled.message())
-            .as("pi 的 turn_end.message 必填 ⇒ 终局助手消息")
-            .isInstanceOf(Message.AssistantMessage.class);
-        assertThat(settled.toolResults()).hasSize(1);
-        assertThat(settled.toolResults().get(0))
-            .isInstanceOf(Message.ToolResultMessage.class);
-        assertThat(((Message.ToolResultMessage) settled.toolResults().get(0)).toolUseId())
-            .isEqualTo("id1");
+        assertThat(settled)
+            .as("pi agent-session.ts:1849 —— 每次 _runAgentPrompt 恰一条")
+            .hasSize(1);
+        assertThat(settled.get(0).aborted())
+            .as("正常路无 abort 请求 ⇒ aborted=false")
+            .isFalse();
     }
 
     @Test
-    void settledCarriesEveryToolResultOfTheDrive() throws Exception {
-        // 两次工具调用 ⇒ 两条结果都要带上（前端按 toolCallId 去重，多发是幂等的）。
-        var settled = settledOf(driveToolRun("faux-settled2", 2));
+    void turnEndIsPerTurnAndCarriesThatTurnsPayload() throws Exception {
+        var turnEnds = turnEndsOf(driveToolRun("faux-settled2", 2));
 
-        assertThat(settled.toolResults()).hasSize(2);
-        assertThat(settled.toolResults()).allSatisfy(
-            m -> assertThat(m).isInstanceOf(Message.ToolResultMessage.class));
+        // 两次工具回合 + 一次文本收尾 ⇒ 三条 turn_end（每回合一条，pi 同粒度）。
+        assertThat(turnEnds).hasSize(3);
+        for (var turnEnd : turnEnds) {
+            assertThat(turnEnd.message())
+                .as("pi 的 turn_end.message 必填 ⇒ 本回合的助手消息，恒非 null")
+                .isInstanceOf(Message.AssistantMessage.class);
+        }
+        assertThat(turnEnds.get(0).toolResults()).hasSize(1);
+        assertThat(turnEnds.get(0).toolResults().get(0).toolUseId()).isEqualTo("id1");
+        assertThat(turnEnds.get(2).toolResults())
+            .as("文本收尾回合没有工具结果（pi 无工具回合同样发空数组，非 null）")
+            .isNotNull().isEmpty();
     }
 
     @Test
-    void settledToolResultsAreEmptyWhenNoToolRan() throws Exception {
-        // 反向：没有工具调用时是**空列表**（pi 的无工具回合同样发 []），不是 null。
-        var settled = settledOf(driveToolRun("faux-settled3", 0));
+    void turnEndToolResultsAreEmptyWhenNoToolRan() throws Exception {
+        var turnEnds = turnEndsOf(driveToolRun("faux-settled3", 0));
 
-        assertThat(settled.toolResults()).isNotNull().isEmpty();
-        assertThat(settled.message()).isNotNull();
-    }
-
-    @Test
-    void compatConstructorStillWorksForPathsWithoutATurn() {
-        // pi 的错误/中止路发 {message(合成失败消息), toolResults: []}；
-        // pi-java 的错误路拿不到转写 ⇒ 用无参兼容构造器（两字段都缺）。
-        var empty = new AgentSessionEvent.AgentSettled();
-
-        assertThat(empty.message()).isNull();
-        assertThat(empty.toolResults()).isNotNull().isEmpty();
+        assertThat(turnEnds).hasSize(1);
+        assertThat(turnEnds.get(0).toolResults()).isNotNull().isEmpty();
+        assertThat(turnEnds.get(0).message()).isNotNull();
     }
 }

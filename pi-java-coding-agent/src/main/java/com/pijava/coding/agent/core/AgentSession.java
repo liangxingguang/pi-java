@@ -113,6 +113,15 @@ public final class AgentSession implements AutoCloseable {
     // （读 effective.retry.enabled ?? true，写 global + markModified + save）。
     private volatile boolean retrySleepActive;
     private final AtomicBoolean retryCancel = new AtomicBoolean();
+
+    // pi agent-session.ts:1083/2434-2436/1823：settled 时读旗；abort() 置位；run 起手清零。
+    // 包内可见：SessionRunner 在驱动起手清零、收尾读值。
+    final AtomicBoolean agentRunAbortRequested = new AtomicBoolean();
+
+    /** pi {@code _agentRunAbortRequested}：settled 事件的 aborted 载荷源（包内可见）。 */
+    boolean agentRunAbortRequested() {
+        return agentRunAbortRequested.get();
+    }
     private volatile AbortSignal bashAbortSignal;
     // B137：--models/settings patterns 解析出的 scope（Ctrl+P / cycle_model 在其间轮转）。
     private List<com.pijava.ai.model.ScopedModel> scopedModels = List.of();
@@ -789,6 +798,9 @@ public final class AgentSession implements AutoCloseable {
         // pi abort()（:1639-1646）第一步就是 abortRetry() —— 若正卡在 ① 的
         // 退避睡眠里，先把它掐掉（"Retry cancelled"），再中止 run 本身。
         abortRetry();
+        // pi :2434-2436：abort 请求旗置位（pi 有 _isAgentRunActive 门；java 侧旗在
+        // 驱动起手清零，空转期置位无害）。settled 事件的 aborted 载荷读它。
+        agentRunAbortRequested.set(true);
         harness.abort(laneName());
     }
 

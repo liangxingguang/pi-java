@@ -133,9 +133,11 @@ class AgentSessionRetryEventOrderTest {
         assertThat(end.success()).isTrue();
         assertThat(end.attempt()).isEqualTo(1);
 
-        // 用户回显只在首 pass 起点一次（续跑不重复注入）。
+        // 用户回显（批 2 起 = 真 message_end(user) 帧）只在首 pass 起点一次
+        // （续跑不重复注入）。
         assertThat(events.stream()
-            .filter(e -> e instanceof AgentSessionEvent.UserMessageReceived)
+            .filter(e -> e instanceof AgentSessionEvent.MessageEnd me
+                && me.message() instanceof com.pijava.ai.message.Message.UserMessage)
             .count()).isEqualTo(1);
         // 静默收口：agent_settled 在所有事件之后。
         assertThat(events.get(events.size() - 1))

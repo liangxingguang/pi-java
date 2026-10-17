@@ -21,46 +21,37 @@ public sealed interface AgentSessionEvent {
     /** 包装底层 StreamEvent；序列化时剥除 partial（RPC §4.2）。 */
     record MessageUpdate(StreamEvent streamEvent) implements AgentSessionEvent {}
 
-    /** 用户消息即时回显（run 启动即发，不等 agent_end；对齐 pi message_end(user)）。 */
-    record UserMessageReceived(Message message) implements AgentSessionEvent {}
+    // ═══════════════════════════════════════════════════════════
+    // 包装的 AgentEvent（pi agent-session.ts:193-234 的 9 个
+    // WithParentToolCallId<Exclude<AgentEvent, {type:"agent_end"}>> 变体
+    // 中此前缺的 5 个；工具三支在下文「工具执行生命周期」节）
+    // ═══════════════════════════════════════════════════════════
 
-    /** Agent 一次 run 结束（转录完成）。 */
+    /** pi {@code { type: "agent_start" }}（types.ts:511）。 */
+    record AgentStart() implements AgentSessionEvent {}
+
+    /** pi {@code { type: "turn_start" }}（types.ts:514）。 */
+    record TurnStart() implements AgentSessionEvent {}
+
+    /** pi {@code { type: "turn_end"; message; toolResults }}（types.ts:517）——两字段必填。 */
+    record TurnEnd(Message.AssistantMessage message, List<Message.ToolResultMessage> toolResults)
+        implements AgentSessionEvent {}
+
+    /** pi {@code { type: "message_start"; message }}（types.ts:520）——system/user/assistant/toolResult 全角色。 */
+    record MessageStart(Message message) implements AgentSessionEvent {}
+
+    /** pi {@code { type: "message_end"; message }}（types.ts:526）。 */
+    record MessageEnd(Message message) implements AgentSessionEvent {}
+
+    /** Agent 一次 run 结束（pi 的覆写版 {@code agent_end}：本 pass 的 newMessages + willRetry）。 */
     record AgentEnd(List<Message> messages, boolean willRetry) implements AgentSessionEvent {}
 
     /**
-     * Agent 一次 run 结束（转录完成）。
-     *
-     * <p>包⑨（原 docs/36，B42）：pi 的 {@code turn_end} 是
-     * {@code { message: AgentMessage; toolResults: ToolResultMessage[] }}，
-     * <b>两个字段都必填、一个 {@code ?} 都没有</b>（{@code agent/src/types.ts:438}），
-     * 且<b>原样上 RPC/JSON 线</b>（{@code json-event.ts:48-51}）。</p>
-     *
-     * <p>⚠️ <b>颗粒度偏差（如实）</b>：pi 的 {@code turn_end} 是<b>每回合</b>一条，
-     * 而这里是<b>每次驱动</b>一条。若照字面取「最后一回合的工具结果」，该字段在常见
-     * 形状下<b>反而恒空</b>（最后那回合通常是纯文本收尾、没有工具调用）⇒ 本类按
-     * <b>本次驱动</b>装。颗粒度差异本身另登记。</p>
-     *
-     * @param message     终局助手消息（pi 的错误/中止路发合成的失败消息）；无转写时可为 null
-     * @param toolResults 本次驱动的工具结果（pi 无工具回合同样发空数组，非 null）
+     * pi {@code { type: "agent_settled"; aborted: boolean }}（agent-session.ts:203）——
+     * 每次驱动（≙ pi {@code _runAgentPrompt}）恰一条；aborted 取自会话层 abort 请求旗
+     * （pi {@code _agentRunAbortRequested}，:1083）。
      */
-    record AgentSettled(Message message, List<Message> toolResults) implements AgentSessionEvent {
-
-        /** 防 null 的紧凑构造器（pi 恒发数组）。 */
-        public AgentSettled {
-            toolResults = toolResults == null ? List.of() : List.copyOf(toolResults);
-        }
-
-        /**
-         * 兼容构造器：错误/中止路拿不到转写时用。
-         *
-         * <p>pi 那条路也发 {@code {message(合成失败消息), toolResults: []}}
-         * （{@code agent-loop.ts:216}、{@code agent.ts:511-527}）—— Java 侧该处没有
-         * 合成消息可给，故 message 为 null，投影时按 pi 的可空键纪律省略。</p>
-         */
-        public AgentSettled() {
-            this(null, List.of());
-        }
-    }
+    record AgentSettled(boolean aborted) implements AgentSessionEvent {}
 
     /** 一条新 entry 追加进会话转录。 */
     record EntryAppended(Entry entry) implements AgentSessionEvent {}

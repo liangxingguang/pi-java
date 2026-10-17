@@ -59,6 +59,14 @@ class AgentSessionCompactAbortTest {
      * ①③：run 在飞时手动压缩 ⇒ 先 abort、等 run 完整落地（agent_end 先于
      * compaction_start），随后压缩正常完成 —— 顺序本身就是「压缩没读到半截
      * 转录」的证据（waitForIdle 在 {@code run.done()} 上 join）。
+     *
+     * <p><b>批 2 起先喂一轮完整历史再挂第二轮</b>：#58 删除 stopReason 投影剔除后，
+     * 被 abort 的空内容助手消息留在投影里、字符估算为 0 —— 切点扫描会落在 user 上，
+     * 若全场只有这一条 user ⇒ 历史为空 ⇒ pi 同形状地报 "Nothing to compact"
+     * （现行 pi 主流本就把 aborted 消息计入投影，空历史就是不可压缩）。先前能过是
+     * 旧剔除把 aborted 消息变成「被 omission」、恢复后缀规则把切点推过它 —— 那个
+     * 前提已随 isContextMessage 的删除作废。先完成的种子轮让历史恒非空，
+     * 「abort-first ＋ 等待」的断言与 abort 落在哪一帧（内容空/非空）脱钩。</p>
      */
     @Test
     void compactAbortsInFlightRunAndWaitsBeforeCompacting(
@@ -75,6 +83,8 @@ class AgentSessionCompactAbortTest {
         try (session) {
             var events = new CopyOnWriteArrayList<AgentSessionEvent>();
             session.subscribe(events::add);
+            // 种子轮：完整落地的一轮（call 1 立即给全文），让压缩历史恒非空。
+            session.processPrompt("seed").statusFuture().get(20, TimeUnit.SECONDS);
             session.processPrompt("go");
             assertThat(started.await(10, TimeUnit.SECONDS)).as("run 已在飞（流挂住）").isTrue();
 
@@ -141,9 +151,10 @@ class AgentSessionCompactAbortTest {
     }
 
     /**
-     * 第一个请求挂住 run：起手发 {@code Start} 后只发心跳帧 —— pi-java 的 abort 在
-     * <b>拉取侧</b>两帧之间生效（{@code PiLoopRunner} 的 cutShort），心跳让循环总能在
-     * 25ms 内观察到中止；之后（压缩的摘要请求）立即给完整文本。
+     * 第 1 个请求（种子轮）立即给完整文本；第 2 个挂住 run：起手发 {@code Start}
+     * 后只发心跳帧 —— pi-java 的 abort 在<b>拉取侧</b>两帧之间生效
+     * （{@code PiLoopRunner} 的 cutShort），心跳让循环总能在 25ms 内观察到中止；
+     * 之后（压缩的摘要请求）立即给完整文本。
      */
     private static final class GatedProvider implements Provider {
         private final String name;
@@ -179,7 +190,12 @@ class AgentSessionCompactAbortTest {
             @Override
             protected void streamInternal(StreamRequest request,
                     SubmissionPublisher<StreamEvent> publisher) {
-                if (calls.incrementAndGet() > 1) {
+                int call = calls.incrementAndGet();
+                if (call == 1) {
+                    textSeq("seed answer").forEach(publisher::submit);
+                    return;
+                }
+                if (call > 2) {
                     textSeq("SUMMARY").forEach(publisher::submit);
                     return;
                 }

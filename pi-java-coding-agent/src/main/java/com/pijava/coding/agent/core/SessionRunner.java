@@ -1,12 +1,10 @@
 package com.pijava.coding.agent.core;
 
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.pijava.agent.entry.Entry;
@@ -54,6 +52,8 @@ final class SessionRunner {
             StreamObserver streamObserver,
             EntryObserver entryObserver) {
         var laneName = owner.laneName();
+        // pi _runAgentPrompt:1823：驱动起手清 abort 请求旗（settled 的 aborted 载荷源）。
+        owner.agentRunAbortRequested.set(false);
         var stopReason = new AtomicReference<>("completed");
         // Run summary (§8): wall-clock of the whole drive (incl. the engine's
         // retry backoff) and stream usage accumulated here; tool/step counters
@@ -158,21 +158,16 @@ final class SessionRunner {
                     }
                 }
             }
-            var driveToolResults = new ArrayList<Message>();
             for (var entry : transcript) {
                 if (owner.deliveredEntryIds().add(entry.id())) {
                     owner.emitSessionEvent(new AgentSessionEvent.EntryAppended(entry));
-                    if (entry instanceof Entry.Message em
-                            && em.message() instanceof Message.ToolResultMessage result) {
-                        driveToolResults.add(result);
-                    }
                 }
             }
             flush(owner, laneName);
-            // 包⑨（原 docs/36，B42）：pi 的 turn_end 两个字段都必填
-            // （types.ts:438）⇒ 终局助手消息 ＋ 本次驱动的工具结果。
+            // pi agent_settled（agent-session.ts:203/:1083/:1849）：每次驱动恰一条，
+            // aborted 读会话层 abort 请求旗。每回合的 turn_end 由漏斗直供（引擎发射）。
             owner.emitSessionEvent(new AgentSessionEvent.AgentSettled(
-                tailAssistant(transcript), driveToolResults));
+                owner.agentRunAbortRequested()));
             var summary = RunSummaryAggregator.aggregate(
                 owner.harness().snapshot(laneName).records(), runIds)
                 .withTotals(new RunSummaryAggregator.Totals(
@@ -195,8 +190,10 @@ final class SessionRunner {
             } else {
                 queue.add(Optional.of(error));
             }
+            // 防御方言（正常路径不可达）：引擎抛穿时补一对收口事件，pi 无对应。
             owner.emitSessionEvent(new AgentSessionEvent.AgentEnd(List.of(), false));
-            owner.emitSessionEvent(new AgentSessionEvent.AgentSettled());
+            owner.emitSessionEvent(new AgentSessionEvent.AgentSettled(
+                owner.agentRunAbortRequested()));
             statusFuture.complete(new RunStatus(1, "error"));
             entriesFuture.complete(List.of());
         } finally {
@@ -215,61 +212,52 @@ final class SessionRunner {
     }
 
     /**
-     * 下游 sink 包装（每 pass 一收）：MessageEnd 逐条落盘、首 pass 的
-     * AgentStart 上发用户回显、AgentEnd 补 flush 并发<b>每 pass 一条</b>的
-     * {@code AgentEnd(willRetry)}（pi 的 agent_end 装饰，:666）。
+     * 下游 sink 包装：pi 的<b>单一漏斗全量转发</b>（{@code agent-session.ts:1139-1142}）——
+     * 引擎事件全量成为会话事件，仅 {@code agent_end} 过漏斗时装饰 {@code willRetry}。
      */
     private static PiLoop.Sink passEvents(AgentSession owner, String laneName) {
-        var echoed = new AtomicBoolean();
         return event -> {
-            if (event instanceof PiLoop.Event.MessageEnd) {
-                // 原 docs/27 §2.1：每条 entry 产生后即写（崩溃窗口 = 一条 entry）。
-                flush(owner, laneName);
-            }
-            // 包⑦（原 docs/34）：工具执行生命周期事件出口。pi 的 AgentSessionEvent
-            // **复用** agent 联合（agent-session.ts:143-145）⇒ 这三条本就在会话事件
-            // 流上，RPC 线逐字节透传（json-event.ts:48-51）、pi 的 TUI 逐字段读它
-            // （interactive-mode.ts:3324-3365）。此前它们在这里被静默丢弃。
-            if (event instanceof PiLoop.Event.ToolExecutionStart s) {
-                owner.emitSessionEvent(new AgentSessionEvent.ToolExecutionStart(
-                    s.toolCallId(), s.toolName(), s.args()));
-            }
-            if (event instanceof PiLoop.Event.ToolExecutionUpdate u) {
-                owner.emitSessionEvent(new AgentSessionEvent.ToolExecutionUpdate(
-                    u.toolCallId(), u.toolName(), u.args(), u.partialResult()));
-            }
-            if (event instanceof PiLoop.Event.ToolExecutionEnd e) {
-                owner.emitSessionEvent(new AgentSessionEvent.ToolExecutionEnd(
-                    e.toolCallId(), e.toolName(), e.result(), e.isError(),
-                    e.durationMs()));
-            }
-            if (event instanceof PiLoop.Event.AgentStart
-                    && echoed.compareAndSet(false, true)) {
-                // Immediate user echo (pi alignment: agent-loop emits
-                // message_start/message_end(user) before streaming; the
-                // frontend relies on this to render the prompt instantly
-                // instead of only at agent_end's whole-table replacement).
-                // 3d 起回显挪到 pass 起点 —— AgentEnd 已在 pass 收尾处发，
-                // 驱动返回后再回显就会排在第一条 agent_end 之后。只发首
-                // pass（续跑 pass 不重复）；取尾条 user = 本 drive 的 prompt。
-                owner.harness().snapshot(laneName).transcript().stream()
-                    .filter(Entry.Message.class::isInstance)
-                    .map(e -> ((Entry.Message) e).message())
-                    .filter(m -> m instanceof Message.UserMessage)
-                    .reduce((first, second) -> second)
-                    .ifPresent(m -> owner.emitSessionEvent(
-                        new AgentSessionEvent.UserMessageReceived(m)));
-            }
-            if (event instanceof PiLoop.Event.AgentEnd end) {
-                // Flush this pass's entries before AgentEnd so the full-history
-                // payload matches stateSync's accumulatedEntries() source
-                // (id-deduped, safe to call again at end of drive).
-                flush(owner, laneName);
-                var willRetry = willRetryAfter(owner, end.messages());
-                LOG.info("[session] AgentEnd emit (pass): messages={} willRetry={}",
-                    owner.accumulatedMessages().size(), willRetry);
-                owner.emitSessionEvent(new AgentSessionEvent.AgentEnd(
-                    owner.accumulatedMessages(), willRetry));
+            // pi 漏斗（agent-session.ts:1139-1142）：引擎事件全量成为会话事件，
+            // 仅 agent_end 过漏斗时装饰 willRetry。
+            // ⚠️ MessageUpdate 刻意不在此列：会话层的 MessageUpdate 由 :92 的原始帧
+            // 广播链喂（含 UsageInfo 等非生命周期帧），漏斗再转一手会双发。
+            switch (event) {
+                case PiLoop.Event.AgentStart ignored ->
+                    owner.emitSessionEvent(new AgentSessionEvent.AgentStart());
+                case PiLoop.Event.TurnStart ignored ->
+                    owner.emitSessionEvent(new AgentSessionEvent.TurnStart());
+                case PiLoop.Event.TurnEnd e ->
+                    owner.emitSessionEvent(new AgentSessionEvent.TurnEnd(
+                        e.message(), e.toolResults()));
+                case PiLoop.Event.MessageStart m ->
+                    owner.emitSessionEvent(new AgentSessionEvent.MessageStart(m.message()));
+                case PiLoop.Event.MessageEnd m -> {
+                    // 原 docs/27 §2.1：每条 entry 产生后即写（崩溃窗口 = 一条 entry）。
+                    flush(owner, laneName);
+                    owner.emitSessionEvent(new AgentSessionEvent.MessageEnd(m.message()));
+                }
+                case PiLoop.Event.ToolExecutionStart s ->
+                    owner.emitSessionEvent(new AgentSessionEvent.ToolExecutionStart(
+                        s.toolCallId(), s.toolName(), s.args()));
+                case PiLoop.Event.ToolExecutionUpdate u ->
+                    owner.emitSessionEvent(new AgentSessionEvent.ToolExecutionUpdate(
+                        u.toolCallId(), u.toolName(), u.args(), u.partialResult()));
+                case PiLoop.Event.ToolExecutionEnd e ->
+                    owner.emitSessionEvent(new AgentSessionEvent.ToolExecutionEnd(
+                        e.toolCallId(), e.toolName(), e.result(), e.isError(),
+                        e.durationMs()));
+                case PiLoop.Event.AgentEnd end -> {
+                    flush(owner, laneName);
+                    var willRetry = willRetryAfter(owner, end.messages());
+                    LOG.info("[session] AgentEnd emit (pass): newMessages={} willRetry={}",
+                        end.messages().size(), willRetry);
+                    // #52：载荷改 pi 形状 —— 本 pass 的 newMessages
+                    // （agent-loop.ts:254/290/320），不再是 accumulatedMessages() 全历史。
+                    // web 的整表替换由 AgentEventTranslator 的 transcriptSource 吸收（§1.7）。
+                    owner.emitSessionEvent(new AgentSessionEvent.AgentEnd(
+                        end.messages(), willRetry));
+                }
+                case PiLoop.Event.MessageUpdate ignored -> { /* :92 广播已喂，见 switch 注释 */ }
             }
         };
     }

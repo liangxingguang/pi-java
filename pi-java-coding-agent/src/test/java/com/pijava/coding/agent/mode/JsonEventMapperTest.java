@@ -45,25 +45,22 @@ class JsonEventMapperTest {
     }
 
     /**
-     * 包⑨（原 docs/36，B42）更新：`agent_settled`（≙ pi 的 `turn_end`）不再只有类型 ——
-     * pi 的 {@code turn_end} 是 {@code { message, toolResults }}，两个字段都必填
-     * （{@code agent/src/types.ts:438}）。
+     * 批 2：`agent_settled` 改回 pi 的真形状 —— {@code { type: "agent_settled";
+     * aborted: boolean }}（{@code agent-session.ts:203}），单字段必填。
+     * 旧的 message+toolResults 载荷由真 {@code turn_end} 帧继承（{@code types.ts:517}）。
      */
     @Test
-    void agentSettledCarriesMessageAndToolResults() {
-        var node = JsonEventMapper.toWire(new AgentSessionEvent.AgentSettled());
+    void agentSettledCarriesOnlyAborted() {
+        var node = JsonEventMapper.toWire(new AgentSessionEvent.AgentSettled(false));
 
         assertThat(node.get("type").asText()).isEqualTo("agent_settled");
-        assertThat(node.get("toolResults").isArray())
-            .as("pi 的工具结果恒是数组（无工具时发 []）").isTrue();
-        assertThat(node.get("toolResults")).isEmpty();
-        assertThat(node.has("message"))
-            .as("无转写时省略 message（pi 那条路给合成失败消息 —— 残余偏差，已登记）")
-            .isFalse();
+        assertThat(node.get("aborted").asBoolean()).isFalse();
+        assertThat(node.has("message")).as("旧载荷已拆（同型异义雷）").isFalse();
+        assertThat(node.has("toolResults")).isFalse();
     }
 
     @Test
-    void agentSettledCarriesTheAssistantMessageWhenPresent() {
+    void turnEndCarriesMessageAndToolResults() {
         var assistant = new Message.AssistantMessage(
             List.of(new ContentBlock.TextContent("done")), StopReason.STOP, null,
             null, null, null, null, null, null, null);
@@ -71,21 +68,34 @@ class JsonEventMapperTest {
             List.of(new ContentBlock.TextContent("ok")), null, null, List.of(), false, null);
 
         var node = JsonEventMapper.toWire(
-            new AgentSessionEvent.AgentSettled(assistant, List.of(result)));
+            new AgentSessionEvent.TurnEnd(assistant, List.of(result)));
 
-        // ⚠️ 这里**不**断 `role` —— `Message.role()` 是接口方法、不是 record 组件，
-        // Jackson 不把它序列化（web 线的 `WebWireJson:28` 正因如此手工 put("role")）。
-        // RPC 线的消息因此没有 role 判别值 —— **既有形状**，本包不改，
-        // 已作为待核项登记（原 docs/36 §10）。
-        // ⚠️ 包⑩（原 docs/37）**已修**这两条**既有**的 RPC 线偏差（此处随之更新）：
-        //  ① 消息现在带 `role` 判别值（线级投影补上）。
-        //  ② 工具结果的键名已从 record 组件名 `toolUseId` 改为 pi 的 **`toolCallId`**。
+        // pi 的 turn_end 是 { message, toolResults }，两个字段都必填（types.ts:517）。
+        assertThat(node.get("type").asText()).isEqualTo("turn_end");
         assertThat(node.get("message").get("role").asText()).isEqualTo("assistant");
         assertThat(node.get("message").get("stopReason").asText()).isEqualTo("stop");
         assertThat(node.get("toolResults")).hasSize(1);
         assertThat(node.get("toolResults").get(0).get("toolCallId").asText())
             .isEqualTo("call_1");
         assertThat(node.get("toolResults").get(0).get("isError").asBoolean()).isFalse();
+    }
+
+    /** 批 2 五新帧的其余四个：字段全必填 ⇒ 一律不省键。 */
+    @Test
+    void wrappedAgentEventFrames() {
+        assertThat(JsonEventMapper.toWire(new AgentSessionEvent.AgentStart())
+            .get("type").asText()).isEqualTo("agent_start");
+        assertThat(JsonEventMapper.toWire(new AgentSessionEvent.TurnStart())
+            .get("type").asText()).isEqualTo("turn_start");
+
+        var user = new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")));
+        var start = JsonEventMapper.toWire(new AgentSessionEvent.MessageStart(user));
+        assertThat(start.get("type").asText()).isEqualTo("message_start");
+        assertThat(start.get("message").get("role").asText()).isEqualTo("user");
+
+        var end = JsonEventMapper.toWire(new AgentSessionEvent.MessageEnd(user));
+        assertThat(end.get("type").asText()).isEqualTo("message_end");
+        assertThat(end.get("message").get("role").asText()).isEqualTo("user");
     }
 
     @Test

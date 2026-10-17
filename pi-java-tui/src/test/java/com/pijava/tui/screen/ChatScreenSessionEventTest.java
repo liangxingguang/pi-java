@@ -195,8 +195,14 @@ class ChatScreenSessionEventTest {
     @Test
     void unrelatedSessionEventsAreIgnored() {
         var screen = new ChatScreen();
-        screen.onSessionEvent(new AgentSessionEvent.AgentSettled());
-        screen.onSessionEvent(new AgentSessionEvent.UserMessageReceived(null));
+        // 批 2：新事件面（漏斗五帧＋agent_settled{aborted}）落 default 忽略。
+        var user = new com.pijava.ai.message.Message.UserMessage(
+            List.of(new com.pijava.ai.message.ContentBlock.TextContent("hi")));
+        screen.onSessionEvent(new AgentSessionEvent.AgentSettled(false));
+        screen.onSessionEvent(new AgentSessionEvent.AgentStart());
+        screen.onSessionEvent(new AgentSessionEvent.TurnStart());
+        screen.onSessionEvent(new AgentSessionEvent.MessageStart(user));
+        screen.onSessionEvent(new AgentSessionEvent.MessageEnd(user));
 
         assertThat(screen.indicator()).isNull();
         assertThat(screen.messages()).isEmpty();

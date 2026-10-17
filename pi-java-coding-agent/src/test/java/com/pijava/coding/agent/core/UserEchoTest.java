@@ -22,8 +22,12 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * web 回显 bug 回归：跨轮 run 追加语义下，即时回显（UserMessageReceived）
- * 必须是本轮 prompt（最后一条 user），而不是 transcript 第一条 user。
+ * web 回显 bug 回归：跨轮 run 追加语义下，即时回显必须是本轮 prompt
+ * （最后一条 user），而不是 transcript 第一条 user。
+ *
+ * <p>批 2 迁移：回显改走真 {@code message_end(user)} 帧（引擎
+ * {@code PiLoop.run} 对 prompt 发 {@code MessageStart/MessageEnd}，会话面漏斗透传）
+ * —— 原 {@code UserMessageReceived} 合成事件已删除。</p>
  */
 class UserEchoTest {
 
@@ -49,11 +53,12 @@ class UserEchoTest {
             new StreamEvent.StreamDone(StopReason.STOP, null, done));
     }
 
+    /** 会话事件流里 message_end(user) 帧携带的文本（即时回显的真源）。 */
     private static List<String> echoedTexts(List<AgentSessionEvent> events) {
         return events.stream()
-            .filter(AgentSessionEvent.UserMessageReceived.class::isInstance)
-            .map(e -> (AgentSessionEvent.UserMessageReceived) e)
-            .map(AgentSessionEvent.UserMessageReceived::message)
+            .filter(AgentSessionEvent.MessageEnd.class::isInstance)
+            .map(e -> ((AgentSessionEvent.MessageEnd) e).message())
+            .filter(m -> m instanceof Message.UserMessage)
             .flatMap(m -> m.content().stream())
             .filter(ContentBlock.TextContent.class::isInstance)
             .map(b -> ((ContentBlock.TextContent) b).text())
@@ -84,9 +89,10 @@ class UserEchoTest {
                 session.processPrompt("hi", PromptConfig.defaults()).status();
             }
             assertThat(events)
-                .filteredOn(AgentSessionEvent.UserMessageReceived.class::isInstance)
+                .filteredOn(e -> e instanceof AgentSessionEvent.MessageEnd me
+                    && me.message() instanceof Message.UserMessage)
                 .first()
-                .extracting(e -> ((AgentSessionEvent.UserMessageReceived) e).message().role())
+                .extracting(e -> ((AgentSessionEvent.MessageEnd) e).message().role())
                 .isEqualTo("user");
         }
     }
