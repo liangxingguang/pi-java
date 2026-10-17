@@ -5,16 +5,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ToolSetFactoryTest {
     @Test
-    void createCodingToolsReturnsAllSeven() {
+    void createCodingToolsFollowsPiCreateAllToolsOrder() {
+        // pi index.ts:213-224（无 powershell —— B241 随 B236 批）。
         var tools = ToolSetFactory.createCodingTools(null);
-        assertThat(tools).hasSize(7);
+        assertThat(tools.stream().map(AgentTool::name).toList())
+            .containsExactly("read", "bash", "edit", "write", "grep", "find", "ls");
     }
 
     @Test
-    void createReadOnlyToolsHasNoMutationTools() {
+    void createReadOnlyToolsFollowsPiOrder() {
+        // pi index.ts:205-212。
         var tools = ToolSetFactory.createReadOnlyTools();
-        var names = tools.stream().map(AgentTool::name).toList();
-        assertThat(names).doesNotContain("bash", "write", "edit");
-        assertThat(tools).hasSize(4);
+        assertThat(tools.stream().map(AgentTool::name).toList())
+            .containsExactly("read", "grep", "find", "ls");
     }
 }

@@ -9,7 +9,7 @@ import java.util.List;
  *
  * <p>{@code glob()} and {@code grep()} are NOT on this interface —
  * those are tool-level operations, not filesystem primitives.
- * GrepTool and GlobTool use {@code listDir()} + own logic.</p>
+ * GrepTool and FindTool use {@code listDir()} + own logic.</p>
  */
 public interface FileSystem {
     /** Read a text file. Returns lines as a list. */

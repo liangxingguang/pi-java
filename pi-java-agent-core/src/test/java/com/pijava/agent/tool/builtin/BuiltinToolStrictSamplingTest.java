@@ -37,7 +37,7 @@ class BuiltinToolStrictSamplingTest {
     @Test
     void otherBuiltinToolsDoNotCarrySampling() {
         var plainTools = List.of(
-            GlobTool.create(), GrepTool.create(), LsTool.create());
+            FindTool.create(), GrepTool.create(), LsTool.create());
 
         for (AgentTool<?, ?> tool : plainTools) {
             assertThat(tool.constrainedSampling()).isNull();
