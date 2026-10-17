@@ -2,11 +2,13 @@ package com.pijava.agent.tool.builtin;
 import com.pijava.ai.AbortSignal;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ExecutionMode;
@@ -21,26 +23,23 @@ import com.pijava.ai.message.ContentBlock;
 
 /**
  * Shell command execution tool.
- * Aligned with pi's {@code createBashTool}.
+ * Aligned with pi's {@code createBashTool}（anchor ea448f454，批 3/docs/22 §1）。
  *
- * <p>Schema: { command: String, timeout?: Number }
- * Execution: ProcessBuilder + Virtual Threads + output capture
- * Truncation: last 2000 lines or 100KB (whichever hit first),
- *   save full output to temp file if truncated</p>
+ * <p>Schema: { command: String, timeout?: Number } —— timeout 小数秒、无默认、
+ * 上限 2147483.647 s（{@link #resolveTimeoutMs}）。描述/schema/snippet/截断 notice
+ * 全部逐字；非零退出 resolve {@code isError:true} 而非 throw（bash.ts:355-364）。</p>
  *
  * <h4>Security model (Phase 2b)</h4>
  * Phase 2b runs commands directly via {@code ProcessBuilder} with no sandbox.
  * The {@code ApprovalHandler} callback (§2.4) is the primary safeguard.
  */
 public final class BashTool {
-    /** Default timeout in seconds when the model omits {@code timeout} (aligned with Claude Code / Codex: 120s). */
-    private static final long DEFAULT_TIMEOUT_SECONDS = 120L;
-    /** Max timeout in seconds (aligned with Claude Code / pi-bash-timeout: 600s). */
-    private static final long MAX_TIMEOUT_SECONDS = 600L;
+    /** pi {@code bash.ts:22}：{@code 2_147_483_647} ms（≙ 2147483.647 s）。 */
+    private static final long MAX_TIMEOUT_MS = 2_147_483_647L;
 
     private BashTool() {}
 
-    public record BashInput(String command, Optional<Long> timeoutSeconds) {}
+    public record BashInput(String command, Optional<Double> timeoutSeconds) {}
     public record BashDetails(TruncationUtils.TruncationResult truncation, String fullOutputPath) {}
 
     /** Create the bash tool with no command prefix. */
@@ -54,23 +53,28 @@ public final class BashTool {
             @Override public String name() { return "bash"; }
             @Override public String label() { return "bash"; }
             @Override public String description() {
-                return "Execute a shell command in the current working directory. "
-                    + shellNote()
+                // pi bash.ts:261-263 逐字（config.shellName 对 bash 恒 "bash"；
+                // pi 在 Windows 跑 Git Bash 但不告诉模型 —— 无 shellNote 段）。
+                return "Execute a bash command in the current working directory. "
                     + "Returns stdout and stderr. Output is truncated to last "
                     + TruncationUtils.DEFAULT_MAX_LINES + " lines or "
                     + (TruncationUtils.DEFAULT_MAX_BYTES / 1024) + "KB (whichever is hit first). "
                     + "If truncated, full output is saved to a temp file. "
-                    + "Optionally provide a timeout in seconds "
-                    + "(default 120, max 600; pass a larger value for long-running commands).";
+                    + "Optionally provide a timeout in seconds.";
+            }
+            @Override public String promptSnippet() {
+                // pi bashToolSystemPromptContribution.snippet（无 PI_* guideline，随 B242）。
+                return "Execute bash commands (ls, grep, find, etc.)";
             }
             @Override
             public Map<String, Object> inputSchema() {
+                // pi bash.ts:40-43 逐字。
                 return Map.of(
                     "type", "object",
                     "properties", Map.of(
-                        "command", Map.of("type", "string", "description", "Bash command to execute"),
+                        "command", Map.of("type", "string", "description", "Shell command to execute"),
                         "timeout", Map.of("type", "number", "description",
-                        "Timeout in seconds (optional; default 120, max 600)")
+                        "Timeout in seconds (optional, no default timeout)")
                     ),
                     "required", List.of("command")
                 );
@@ -91,10 +95,11 @@ public final class BashTool {
                     // command so the call still runs instead of silently failing.
                     command = extractCommand(rawJson);
                 }
-                Optional<Long> timeout = Optional.empty();
+                Optional<Double> timeout = Optional.empty();
                 Object timeoutObj = raw.get("timeout");
                 if (timeoutObj instanceof Number n) {
-                    timeout = Optional.of(n.longValue());
+                    // pi Type.Number：小数秒保留（旧 longValue() 会把 0.5 截成 0）。
+                    timeout = Optional.of(n.doubleValue());
                 }
                 return new BashInput(command, timeout);
             }
@@ -107,12 +112,7 @@ public final class BashTool {
                 if (commandPrefix != null && !commandPrefix.isEmpty()) {
                     command = commandPrefix + "\n" + command;
                 }
-                long timeout = params.timeoutSeconds().filter(t -> t > 0)
-                    .orElse(DEFAULT_TIMEOUT_SECONDS);
-                if (timeout > MAX_TIMEOUT_SECONDS) {
-                    throw new IllegalArgumentException(
-                        "Timeout exceeds maximum of " + MAX_TIMEOUT_SECONDS + " seconds");
-                }
+                long timeoutMs = resolveTimeoutMs(params.timeoutSeconds().orElse(null));
 
                 // 包⑧（原 docs/35）：流式部分结果。pi 侧只有 bash 一家真的流式
                 // （bash.ts:265/:297），其余六个内置工具声明为 `_onUpdate?`（故意未使用）。
@@ -127,7 +127,7 @@ public final class BashTool {
                     }
                     var options = new ShellOptions(
                         context.cwd(), context.env(), true,
-                        java.util.OptionalLong.of(timeout),
+                        timeoutMs < 0 ? OptionalLong.empty() : OptionalLong.of(timeoutMs),
                         signal,
                         emitter
                     );
@@ -137,54 +137,23 @@ public final class BashTool {
                         emitter.flush();
                     }
 
+                    // pi bash.ts:337-366 三路收尾。
                     if (shellResult.timedOut()) {
-                        String partial = shellResult.output();
-                        if (partial.length() > 2000) {
-                            partial = partial.substring(0, 2000) + "\n...(truncated)";
-                        }
-                        throw new RuntimeException("Command timed out after " + timeout + " seconds"
-                            + (partial.isBlank() ? "" : "\n\nPartial output before timeout:\n" + partial));
+                        var snap = formatOutput(shellResult.output(), "");
+                        throw new RuntimeException(appendStatus(snap.text(),
+                            "Command timed out after "
+                                + jsNumber(params.timeoutSeconds().orElseThrow()) + " seconds"));
                     }
-
-                    String output = shellResult.output();
-                    if (output.isEmpty()) {
-                        return ToolResult.success("(no output)");
-                    }
-
-                    var truncation = TruncationUtils.truncateTail(output);
-                    BashDetails details = null;
-                    String outputText;
-
-                    if (truncation.truncated()) {
-                        // Save full output to temp file
-                        String tempPath = saveTempFile(output);
-                        details = new BashDetails(truncation, tempPath);
-                        int startLine = truncation.totalLines() - truncation.outputLines() + 1;
-                        int endLine = truncation.totalLines();
-                        if (truncation.lastLinePartial()) {
-                            outputText = truncation.content()
-                                + "\n\n[Showing last " + TruncationUtils.formatSize(truncation.outputBytes())
-                                + " of line " + endLine + " (line is "
-                                + TruncationUtils.formatSize(shellResult.outputBytes()) + ")."
-                                + "\nFull output saved to: " + tempPath + "]";
-                        } else {
-                            outputText = truncation.content()
-                                + "\n\n[Showing lines " + startLine + "-" + endLine
-                                + " of " + truncation.totalLines()
-                                + " (" + TruncationUtils.formatSize(TruncationUtils.DEFAULT_MAX_BYTES)
-                                + " limit). Full output saved to: " + tempPath + "]";
-                        }
-                    } else {
-                        outputText = truncation.content();
-                    }
-
+                    var snap = formatOutput(shellResult.output(), "(no output)");
                     if (shellResult.exitCode() != 0) {
-                        throw new RuntimeException((outputText.isEmpty() ? "" : outputText + "\n\n")
-                            + "Command exited with code " + shellResult.exitCode());
+                        // pi resolve(isError:true)，不 reject（bash.ts:355-364）。
+                        return new ToolResult<>(
+                            List.of(new ContentBlock.TextContent(appendStatus(snap.text(),
+                                "Command exited with code " + shellResult.exitCode()))),
+                            snap.details(), null, false, List.of(), true, null);
                     }
-                    return new ToolResult<>(
-                        List.of(new ContentBlock.TextContent(outputText)),
-                        details, null, false, List.of());
+                    return new ToolResult<>(List.of(new ContentBlock.TextContent(snap.text())),
+                        snap.details(), null, false, List.of());
                 } finally {
                     if (emitter != null) {
                         // pi 的 finally 只清定时器、不补发（bash.ts:367-369）。
@@ -195,10 +164,73 @@ public final class BashTool {
         };
     }
 
+    /** pi {@code resolveTimeoutMs}（bash.ts:27-37）：{@code null} ≙ undefined ⇒ 返回 {@code -1} 表无超时。 */
+    private static long resolveTimeoutMs(Double timeout) {
+        if (timeout == null) {
+            return -1;
+        }
+        if (!Double.isFinite(timeout) || timeout <= 0) {
+            throw new IllegalArgumentException(
+                "Invalid timeout: must be a finite number of seconds");
+        }
+        double timeoutMs = timeout * 1000;
+        if (timeoutMs > MAX_TIMEOUT_MS) {
+            throw new IllegalArgumentException(
+                "Invalid timeout: maximum is " + MAX_TIMEOUT_MS / 1000.0 + " seconds");
+        }
+        return (long) timeoutMs;
+    }
+
     /**
-     * Tells the model which shell actually runs the command on this host so it
-     * knows bash semantics always apply (Git Bash on Windows, per pi).
+     * JS {@code String(number)}：整值去小数点（30.0→"30"），其余原样（0.5→"0.5"）。
+     * pi bash.ts:350 的超时回显值。
      */
+    private static String jsNumber(double v) {
+        return v == Math.rint(v) && Math.abs(v) < 1e15
+            ? Long.toString((long) v) : Double.toString(v);
+    }
+
+    /** pi {@code formatOutput}（bash.ts:316-333）：truncateTail＋截断时落 temp 文件＋三分支 notice。 */
+    private static FormatOut formatOutput(String fullOutput, String emptyText) throws IOException {
+        var truncation = TruncationUtils.truncateTail(fullOutput);
+        String text = truncation.content().isEmpty() ? emptyText : truncation.content();
+        BashDetails details = null;
+        if (truncation.truncated()) {
+            String tempPath = saveTempFile(fullOutput);
+            details = new BashDetails(truncation, tempPath);
+            int startLine = truncation.totalLines() - truncation.outputLines() + 1;
+            int endLine = truncation.totalLines();
+            if (truncation.lastLinePartial()) {
+                text += "\n\n[Showing last " + TruncationUtils.formatSize(truncation.outputBytes())
+                    + " of line " + endLine + " (line is " + lastLineSize(fullOutput) + ")."
+                    + " Full output: " + tempPath + "]";
+            } else if ("lines".equals(truncation.truncatedBy())) {
+                text += "\n\n[Showing lines " + startLine + "-" + endLine
+                    + " of " + truncation.totalLines() + ". Full output: " + tempPath + "]";
+            } else {
+                text += "\n\n[Showing lines " + startLine + "-" + endLine
+                    + " of " + truncation.totalLines()
+                    + " (" + TruncationUtils.formatSize(TruncationUtils.DEFAULT_MAX_BYTES)
+                    + " limit). Full output: " + tempPath + "]";
+            }
+        }
+        return new FormatOut(text, details);
+    }
+
+    private record FormatOut(String text, BashDetails details) {}
+
+    /** pi {@code appendStatus}（bash.ts:335）。 */
+    private static String appendStatus(String text, String status) {
+        return (text.isEmpty() ? "" : text + "\n\n") + status;
+    }
+
+    /** pi {@code output.getLastLineBytes()}：全量输出最后一行的 UTF-8 字节数。 */
+    private static String lastLineSize(String fullOutput) {
+        int idx = fullOutput.lastIndexOf('\n');
+        String last = idx < 0 ? fullOutput : fullOutput.substring(idx + 1);
+        return TruncationUtils.formatSize(last.getBytes(StandardCharsets.UTF_8).length);
+    }
+
     /** Best-effort command extraction from a raw (possibly malformed) JSON argument. */
     private static String extractCommand(String rawJson) {
         try {
@@ -220,24 +252,18 @@ public final class BashTool {
             ? matcher.group(1).replace("\\\"", "\"").replace("\\\\", "\\")
             : null;
     }
-    private static String shellNote() {
-        var os = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT);
-        if (os.contains("win")) {
-            return "On this Windows host the command runs in Git Bash (real bash), so "
-                + "bash syntax such as `ls -la`, `pwd`, `cat`, and `&&` works. If bash "
-                + "commands fail with 'No bash shell found', install Git for Windows "
-                + "or set shellPath in settings.json. ";
-        }
-        return "The command runs in bash. ";
-    }
 
     /**
      * Save the full (untruncated) output to a temp file.
+     * pi {@code utils/output-files.ts:17-20}：{@code $TMPDIR/pi-bash-<hex>.log}
+     * （前缀 bash.ts:435 {@code tempFilePrefix: "pi-bash"}；POSIX 0600 与 pi 同，
+     * 随机段形状差 {@code <16hex>} vs JDK 长数不钉，docs/22 §1.3）。
+     *
      * @return the absolute path to the temp file
      * @throws IOException if the temp file cannot be created or written
      */
     private static String saveTempFile(String output) throws IOException {
-        Path tempFile = Files.createTempFile("bash-output-", ".txt");
+        Path tempFile = Files.createTempFile("pi-bash-", ".log");
         tempFile.toFile().deleteOnExit();
         Files.writeString(tempFile, output);
         return tempFile.toAbsolutePath().toString();

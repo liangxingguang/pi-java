@@ -106,8 +106,8 @@ public class DefaultShellExecutor implements ShellExecutor {
             int exitCode;
             boolean timedOut = false;
             try {
-                if (options.timeoutSeconds().isPresent()) {
-                    exitCode = future.get(options.timeoutSeconds().getAsLong(), TimeUnit.SECONDS);
+                if (options.timeoutMillis().isPresent()) {
+                    exitCode = future.get(options.timeoutMillis().getAsLong(), TimeUnit.MILLISECONDS);
                 } else {
                     exitCode = future.get();
                 }

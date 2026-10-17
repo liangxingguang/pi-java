@@ -8,7 +8,8 @@ public record ShellOptions(
     String cwd,
     Map<String, String> env,
     boolean inheritEnv,
-    OptionalLong timeoutSeconds,
+    /** pi {@code resolveTimeoutMs}（bash.ts:27-37）：毫秒粒度，{@code empty} ＝ 无超时。 */
+    OptionalLong timeoutMillis,
     AbortSignal signal,
     /**
      * 执行中接收输出增量的汇（包⑧，{@code 原 docs/35}）；{@code null} ＝ 不订阅
@@ -28,7 +29,7 @@ public record ShellOptions(
 
     /** 不带输出汇的选项（既有调用点的默认形状）。 */
     public ShellOptions(String cwd, Map<String, String> env, boolean inheritEnv,
-                        OptionalLong timeoutSeconds, AbortSignal signal) {
-        this(cwd, env, inheritEnv, timeoutSeconds, signal, null);
+                        OptionalLong timeoutMillis, AbortSignal signal) {
+        this(cwd, env, inheritEnv, timeoutMillis, signal, null);
     }
 }
