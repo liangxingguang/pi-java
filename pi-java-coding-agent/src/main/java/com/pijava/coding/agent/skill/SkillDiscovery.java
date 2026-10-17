@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.pijava.agent.tool.ignore.ToolIgnoreFilter;
 import com.pijava.agent.skill.Skill;
 import com.pijava.agent.skill.SkillSource;
 
@@ -54,7 +55,7 @@ public final class SkillDiscovery {
         }
         var skills = new ArrayList<Skill>();
         var diagnostics = new ArrayList<ResourceDiagnostic>();
-        var filter = new IgnoreFilter(dir);
+        var filter = new ToolIgnoreFilter(dir);
         scan(dir, dir, source, includeRootFiles, filter, skills, diagnostics);
         return new LoadSkillsResult(List.copyOf(skills), List.copyOf(diagnostics));
     }
@@ -62,12 +63,12 @@ public final class SkillDiscovery {
     // ── 递归扫描 ─────────────────────────────────────────────────────────
 
     private void scan(Path dir, Path root, SkillSource source, boolean includeRootFiles,
-                      IgnoreFilter filter, List<Skill> skills,
+                      ToolIgnoreFilter filter, List<Skill> skills,
                       List<ResourceDiagnostic> diagnostics) {
         filter.push(dir);
         try {
             Path skillMd = dir.resolve("SKILL.md");
-            String skillMdRel = IgnoreFilter.toPosix(root.relativize(skillMd));
+            String skillMdRel = ToolIgnoreFilter.toPosix(root.relativize(skillMd));
             if (Files.isRegularFile(skillMd) && !filter.isIgnored(skillMdRel, false)) {
                 var r = loader.loadFile(skillMd, source);
                 r.skill().ifPresent(skills::add);
@@ -76,7 +77,7 @@ public final class SkillDiscovery {
             }
             try (var entries = Files.list(dir)) {
                 for (var file : entries.sorted().toList()) {
-                    String rel = IgnoreFilter.toPosix(root.relativize(file));
+                    String rel = ToolIgnoreFilter.toPosix(root.relativize(file));
                     if (Files.isDirectory(file)) {
                         if (!filter.isIgnored(rel, true)) {
                             // 规则③：递归子目录（includeRootFiles=false）
