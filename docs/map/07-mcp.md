@@ -1,25 +1,17 @@
 # 07 MCP（pi-java-mcp ＋ coding-agent MCP 集成面）
 
-> 基准：pi-java @ **`edc8749d`**（main，2026-10-12）；pi @ **`ea448f454`**（2026-10-11，v1.1.0-22）。
-> 本模块在旧基准之后才成 pi 主流，六张旧图从未覆盖；pi-java 侧为 **2026-10 对齐批次**（12 个对齐包）新建。
-> 判定三档：**对齐** = pi 有 ∧ pi-java 有 ∧ 行为相同（读代码确认语义）；
-> **缺失** = pi 有 ∧ pi-java 无（或差异有行为后果）；
-> **存疑** = 形状/字节形态未逐字核对，或差异是刻意设计/跨模块/台账在册方言（子标签 **（形状）/（扩展）/（台账）**）。
-> 所有证据为 `file:line`，两侧均已打开源码确认。**pi 侧一律 `git -C D:/workplaceForai/pi show ea448f454:<path>` 取证，未读工作树。**
->
-> **范围**：pi `packages/mcp`（SDK 本体）＋ `packages/coding-agent/src/extensions/mcp/**` 与 `core/mcp-servers.ts`（集成面）
-> ↔ pi-java `pi-java-mcp` ＋ `pi-java-coding-agent` 的 `extension/mcp/**` 与 `subcommand/Mcp*`。
->
-> **权重** = 用户可观察影响 × 频率（不含排期优先级）：
-> **3** = 每轮对话都走/默认路径；**2** = 每次会话走/常用命令/常用配置；**1** = 低频/边缘/纯内部；**0** = 非目标，**排除出分母**。
-> 完成系数：对齐 1.0 ／ 存疑 0.5 ／ 缺失 0。
->
-> **R5 口径（关键）**：只计 `bin pi` 主流可达面。MCP 在 pi 的**默认 exposure 是 `codemode`**
-> （`index.ts:123`），默认配置下模型根本看不到 MCP 工具——整条 codemode/tool-search 激活链依赖
-> quickjs-wasi 沙箱（**B161**）与 deferred 工具发现（**B162**），二者本仓零对应。codemode-only
-> 能力（90–93）记**权重 0 出分母**，**B161/B162 闭环时重裁**。**已落的 wire/配置/CLI/适配形状全部保留计分**
-> （B177 裁决：语义不废，只是运行时激活门未通）。
+> 【背景摘要】本图是 MCP 模块的全量加权盘点，2026-10-12 新建。MCP 在旧基准之后才成为 pi 主流模块，六张旧图从未覆盖；pi-java 侧为 2026-10 对齐批次（12 个对齐包）新建。核心结论：模块本体完成度高，但会话内激活链（codemode 依赖）未通。
 
+## 基准与口径
+
+- 基准：pi-java @ **`edc8749d`**（main，2026-10-12）；pi @ **`ea448f454`**（2026-10-11，v1.1.0-22）。
+- 判定三档：**对齐** = pi 有 ∧ pi-java 有 ∧ 行为相同（读代码确认语义）；**缺失** = pi 有 ∧ pi-java 无（或差异有行为后果）；**存疑** = 形状/字节形态未逐字核对，或差异是刻意设计/跨模块/台账在册方言（子标签 **（形状）/（扩展）/（台账）**）。
+- 所有证据为 `file:line`，两侧均已打开源码确认。**pi 侧一律 `git -C D:/workplaceForai/pi show ea448f454:<path>` 取证，未读工作树。**
+- **范围**：pi `packages/mcp`（SDK 本体）＋ `packages/coding-agent/src/extensions/mcp/**` 与 `core/mcp-servers.ts`（集成面）↔ pi-java `pi-java-mcp` ＋ `pi-java-coding-agent` 的 `extension/mcp/**` 与 `subcommand/Mcp*`。
+- **权重** = 用户可观察影响 × 频率（不含排期优先级）：**3** = 每轮对话都走/默认路径；**2** = 每次会话走/常用命令/常用配置；**1** = 低频/边缘/纯内部；**0** = 非目标，**排除出分母**。完成系数：对齐 1.0 ／ 存疑 0.5 ／ 缺失 0。
+- **R5 口径（关键）**：只计 `bin pi` 主流可达面。MCP 在 pi 的**默认 exposure 是 `codemode`**（`index.ts:123`），默认配置下模型根本看不到 MCP 工具——整条 codemode/tool-search 激活链依赖 quickjs-wasi 沙箱（**B161**）与 deferred 工具发现（**B162**），二者本仓零对应。codemode-only 能力（90–93）记**权重 0 出分母**，**B161/B162 闭环时重裁**。**已落的 wire/配置/CLI/适配形状全部保留计分**（B177 裁决：语义不废，只是运行时激活门未通）。
+
+---
 ## 规模
 
 | 模块 | pi 路径 | pi LOC | java LOC | 文件 pi→java |
