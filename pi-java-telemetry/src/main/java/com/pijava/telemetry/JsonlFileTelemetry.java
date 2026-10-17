@@ -308,10 +308,12 @@ public final class JsonlFileTelemetry implements TelemetryContext {
         }
 
         @Override
-        public void addAttribute(String key, Object value) {
-            if (value != null) {
-                lateAttrs.put(key, value);
-            }
+        public void setAttributes(Map<String, Object> attributes) {
+            attributes.forEach((key, value) -> {
+                if (value != null) {
+                    lateAttrs.put(key, value);
+                }
+            });
         }
 
         private void markError() {

@@ -141,20 +141,24 @@ public final class OtelTelemetryContext implements TelemetryContext {
         }
 
         @Override
-        public void addAttribute(String key, Object value) {
+        public void setAttributes(Map<String, Object> attributes) {
             if (ended) {
                 return;
             }
-            if (value instanceof String s) {
-                span.setAttribute(key, s);
-            } else if (value instanceof Boolean b) {
-                span.setAttribute(key, b);
-            } else if (value instanceof Long l) {
-                span.setAttribute(key, l);
-            } else if (value instanceof Integer i) {
-                span.setAttribute(key, (long) i);
-            } else if (value instanceof Double d) {
-                span.setAttribute(key, d);
+            for (var entry : attributes.entrySet()) {
+                var key = entry.getKey();
+                var value = entry.getValue();
+                if (value instanceof String s) {
+                    span.setAttribute(key, s);
+                } else if (value instanceof Boolean b) {
+                    span.setAttribute(key, b);
+                } else if (value instanceof Long l) {
+                    span.setAttribute(key, l);
+                } else if (value instanceof Integer i) {
+                    span.setAttribute(key, (long) i);
+                } else if (value instanceof Double d) {
+                    span.setAttribute(key, d);
+                }
             }
         }
 

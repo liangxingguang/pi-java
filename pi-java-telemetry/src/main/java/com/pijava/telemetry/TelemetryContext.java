@@ -21,9 +21,10 @@ import java.util.function.Function;
  * test-only in-memory one).  Two differences are <em>structural</em> and cannot
  * be closed: the callback here is synchronous ({@link Function}) where pi returns
  * a {@code Promise}, and a span here is {@link AutoCloseable} where pi's has no
- * {@code end()} because {@code startSpan} owns settlement.  pi's
- * {@code addEvent}/{@code setStatus} are deliberately not ported — see
- * {@link TelemetrySpan}.  Evidence and adjudication: {@code 原 docs/31 §8.28}.</p>
+ * {@code end()} because {@code startSpan} owns settlement (adjudication:
+ * {@code 原 docs/31 §8.28}, upheld by docs/22 §7.3).  pi's span-side
+ * {@code addEvent}/{@code setAttributes}/{@code setStatus} are ported on
+ * {@link TelemetrySpan} (docs/22 §2).</p>
  */
 @FunctionalInterface
 public interface TelemetryContext {
