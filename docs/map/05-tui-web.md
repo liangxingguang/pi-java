@@ -1,14 +1,16 @@
 # 05 用户界面层（pi-java-tui / pi-java-web）
 
-> 基准：pi-java @ edc8749d（main，2026-10-11）；pi @ ea448f454（2026-10-11，v1.1.0-22）。
->
-> 判定单位＝**可被外部观察到的行为承诺**（一个屏幕 / 一个键绑定 / 一个渲染特性 / 一个主题能力 / 一个 TUI 组件 / 一个 web 能力）。
-> 三档：**对齐**＝pi 有、pi-java 有、行为相同；**缺失**＝pi 有、pi-java 无；**存疑**＝pi-java 有但行为/形状与 pi 不同或未核。
-> 所有证据均为 file:line。pi 侧路径前缀 `D:\workplaceForai\pi\packages\`，java 侧 `D:\workplaceForai\pi-java\`。
-> pi 侧取证一律 `git show ea448f454:<path>`（不读 pi 工作树）；本锚点对前锚点 `200387122` 的逐条漂移复核见文末。
+> 【背景摘要】本图是用户界面层（pi-java-tui 与 pi-java-web）的全量加权盘点：屏幕/面板、渲染特性、键绑定、TUI 组件、主题、web 面逐单元判定与证据。开放缺口的权威台账是 [`../04-open-items-register.md`](../04-open-items-register.md)。
+
+## 基准与口径
+
+- 基准：pi-java @ `edc8749d`（main，2026-10-11）；pi @ `ea448f454`（2026-10-11，v1.1.0-22）。
+- 判定单位＝**可被外部观察到的行为承诺**（一个屏幕 / 一个键绑定 / 一个渲染特性 / 一个主题能力 / 一个 TUI 组件 / 一个 web 能力）。
+- 三档：**对齐**＝pi 有、pi-java 有、行为相同；**缺失**＝pi 有、pi-java 无；**存疑**＝pi-java 有但行为/形状与 pi 不同或未核。
+- 所有证据均为 `file:line`。pi 侧路径前缀 `D:\workplaceForai\pi\packages\`，java 侧 `D:\workplaceForai\pi-java\`。
+- pi 侧取证一律 `git show ea448f454:<path>`（不读 pi 工作树）；本锚点对前锚点 `200387122` 的逐条漂移复核见文末。
 
 ---
-
 ## 规模
 
 | 模块 | pi 包 | pi LOC | java LOC | 比例 |
