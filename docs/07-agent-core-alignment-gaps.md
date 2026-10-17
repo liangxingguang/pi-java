@@ -39,17 +39,15 @@ B53 `find()` 缺三级阶梯（地图 #78）、B31/B32/B33（get_state 三处 RP
 这些不是「没有」，而是「形状/行为不同」。**每一条的收口顺序**：先定「算不算偏差」，
 认账则立 B 号转 §1，不认则进 `docs/04` §4 写裁决与触发条件。
 
-### 2.1 权重 3（7 条，真正要紧的）
+### 2.1 权重 3（✅ 清零，2026-10-17 批 agent-core-2）
 
-| 地图# | 形状差 | 台账 |
-|---|---|---|
-| #34 | `before_request` ⇒ pi `prepareRequest` 返回 context/model/thinking 三样替换；Java `HookSystem` 老形状 | —— |
-| #46 | `AgentSessionEvent` 面：pi 24 变体 vs Java 20（具体缺口之一即 #48/B30） | B30 族 |
-| #52 | `agent_end` 载荷：pi 发**本 pass** `newMessages`；Java 会话层发 `accumulatedMessages()` | A8（旧过程稿编号） |
-| #54 | Entry union：pi 11 类 vs Java 9 record（缺 `LabelEntry`/`SessionInfoEntry` 两个 record；二者以 Fact 标签存活并原生读写 v3 线；Java 另有 `Replacement`） | —— |
-| #58 | `convertToLlm`（含 `case "system"`）形状差 | A1（旧编号） |
-| #78 | `latest()`/`find()` 范围：pi `findMostRecentSession` 只读一个项目目录；Java 走跨项目全量 | **B53** |
-| #100 | 系统提示载体：pi 的 TranscriptContext 只有 messages（基线是首条 system 消息）；Java 走 `Context.systemPrompt` 字段 ⇒ 首条等价、**会话中变更不等价** | —— |
+> 七条全部转对齐（map/03 权重 3 层 22/22 = **100%**；详稿 [`docs/21`](21-agent-core-batch2-design.md)）：
+> **#34** `prepareRequest` 写钩子（老 void `before_request` 退役）；**#46** `AgentSessionEvent` 面
+> （补五帧＋`agent_settled{aborted}` 真形状＋单一漏斗全量转发）；**#52** `agent_end` 本 pass 载荷
+> （A8 销号）；**#54** Entry union（裁决：行为等价，docs/04 §4）；**#58** `convertToLlm`
+> （case 合并部裁决＋stopReason 剔除已删）；**#78** `latest()`/`find()`（裁决＋排序键差留痕，
+> B53 分级阶梯另案）；**#100** 系统提示载体（裁决：provider 边界同点折叠，请求线等价）。
+> 此前批 agent-core-1 已清 #6/#41/#17/#23。
 
 ### 2.2 权重 1/2（按类归并，编号是 map/03 单元号）
 
@@ -66,7 +64,8 @@ B53 `find()` 缺三级阶梯（地图 #78）、B31/B32/B33（get_state 三处 RP
 
 > 2026-10-12 重测已转对齐：**#73 JSONL 存储**（PiV3Wire 原生 v3 线＋双向互读夹具，条目信封 #16 仍存疑见 map/06）、
 > **#102 reset 基线**（B70 消解坐实：systemPrompt 字段清空不丢基线）；#86/#88 转 R1 作废。
-> 新登记缺口：`durationMs` 计时字段、`agent_settled.aborted`（B234/B235）。
+> 新登记缺口的去向：`durationMs`（B234 已于 ai 批 5 销号）、`agent_settled.aborted`（B235 已随批 agent-core-2 销号）；
+> `--tools` glob/modifier 模式面在册 **B236**（docs/04 §3.3，归 coding-agent 批）。
 
 > 旧 A/C/D/F 编号来自各过程稿（docs/31 族），其中一部分已随包闭环；与 `docs/04` §2 的 A 类
 > （A10/A14/A15/A16）不是同一编号空间。A16 重测时统一清理标签。

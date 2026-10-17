@@ -130,7 +130,7 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | 31 | ~~钩子 `before_drive`~~ | H | **作废（R1）** | 0 | drive 运行时已删 | 零命中 | —— |
 | 32 | 钩子 `before_run_end`（`followUp`）⇒ **`getFollowUpMessages`** | H | **对齐** | **2** | `agent/src/types.ts:306` | `HookSystem.java:93,240` | —— |
 | 33 | 钩子 `transform_context` | H | **对齐** | **2** | 见 #8（`agent/src/types.ts:244`） | `HookSystem.java:53,249` | —— |
-| 34 | 钩子 `before_request` ⇒ **`prepareRequest`** | H | **存疑（形状）** | **2** | `agent/src/types.ts:171-175,271`（返回 context/model/thinking 替换，**不含 messages**） | `HookSystem.java:58,124`（老 payload 形状） | —— |
+| 34 | 钩子 `before_request` ⇒ **`prepareRequest`** | H | **对齐** | **2** | `agent/src/types.ts:159-190`（返回 context/model/thinking 替换，**不含 messages**）；调用 `agent-loop.ts:219-239`（每次请求前，pending 已 append） | `PiLoop.PrepareRequestContext/RequestUpdate/PrepareRequestHook`；`PiLoopRunner` 调用点（context 整体替换＋config 写回，本 run 生效不跨 run）；`HookSystem.firePrepareRequest` 链式合并（注册键 `before_request` 保留）；老 void 钩与 `PiLaneSink.systemPrompt` 字段删除 | —— |
 | 35 | ~~钩子 `before_payload`~~ | H | **作废（R1）** | 0 | 载荷改写改在扩展事件 `before_provider_request`（`core/extensions/types.ts:888`）→ 属 04 | `HookSystem.java:63,134` | —— |
 | 36 | ~~钩子 `after_response`~~ | H | **作废（R1）** | 0 | 扩展事件 `after_provider_response`（`core/extensions/types.ts:904`）→ 属 04 | `HookSystem.java:68,148` | —— |
 | 37 | 钩子 `before_tool` ⇒ **`beforeToolCall`** | H | **对齐** | **2** | `agent/src/agent.ts:123`；`types.ts:326` | `HookSystem.java:73,158` | —— |
@@ -142,19 +142,19 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | 43 | ~~effect gate（`gate.admit`）~~ | A | **作废（R1）** | 0 | `git grep effect-gate ea448f454 -- packages/*/src` **零命中** | 零命中 | —— |
 | 44 | ~~HarnessEvent 28 类~~ | E | **作废（R1）** | 0 | `lane_created`/`run_suspend`/`value_update` **零命中** | `HarnessEventBus.java` | A6 |
 | 45 | ~~`run_suspend` + `DeferredHandle` 挂起驱动~~ | L | **作废（R1）** | 0 | `run_suspend` 零命中 | 零生产者 | —— |
-| 46 | `AgentSessionEvent` 面（pi **24** 变体） | E | **存疑** | **3** | `core/agent-session.ts:196-237`（9 个被包装的 AgentEvent 变体 + 15 个会话变体） | `AgentSessionEvent.java:19-153`（**20** record；缺 agent_start/turn_start/turn_end/message_start/message_end 等面，attempt_start 两形状合一，另有 FlashStatus 方言） | B30 族 |
+| 46 | `AgentSessionEvent` 面（pi **24** 变体） | E | **对齐** | **3** | `core/agent-session.ts:193-234`（9 个被包装的 AgentEvent 变体 + 15 个会话变体）；单一漏斗全量转发 `:1139-1142`（仅 agent_end 装饰 willRetry） | `AgentSessionEvent.java`（**24** record：补 agent_start/turn_start/turn_end/message_start/message_end 五帧，`AgentSettled{aborted}` 重塑为 pi 真形状 `:203`，`UserMessageReceived` 删——回显走真 message_end(user)）；`SessionRunner.passEvents` 漏斗化（MessageUpdate 仍走 :92 广播链防双发）；RPC `JsonEventMapper` 五新帧；web 直译化 | B30 族 |
 | 47 | `queue_update` 生产者 | E | **对齐** | **2** | `core/agent-session.ts:1045-1051`（`_emitQueueUpdate`），入队/出队点多处 | `AgentSession.java:655,660,706,739` 发射 + 公共 flush `:810,:828` | 已闭环 |
 | 48 | **`session_info_changed` 生产者** | E | **缺失** | **1** | `core/agent-session.ts:3942-3948`（`setSessionName` 内 emit + 扩展 emit） | 只有定义（`AgentSessionEvent.java:73`）+ 映射（`JsonEventMapper.java:103`）；`AgentSession.java:529-534` **只改名不发事件** | **B30** |
 | 49 | `thinking_level_changed` 生产者 | E | **对齐** | **2** | `core/agent-session.ts:2628`（isChanging 门内） | `AgentSession.java:509-516`（门同，`:513` 发射） | 已闭环 |
 | 50 | `bash_execution_update` 生产者 | E | **对齐** | **2** | `core/agent-session.ts:3862` | `AgentSessionEvent.BashExecutionUpdate` | —— |
 | 51 | `compaction_start`/`compaction_end` 事件 | E | **对齐** | **3** | 定义 `core/agent-session.ts:209-222`；手动发射 `:2767,2878-2902`；自动 `:3119,3205` | `CompactionObserver`（接线 `AgentSession.java:290-306`） | —— |
-| 52 | `agent_end` 载荷 = **本 pass** `newMessages` | E | **存疑** | **3** | 引擎 `agent/src/agent-loop.ts:254,290,320`；会话层**透传引擎载荷** `core/agent-session.ts:1141,1288-1289` | 引擎对（`PiLoop.java:48`）；**会话层**发 `accumulatedMessages()`（`SessionRunner.java:259-268`） | **A8** |
-| 53 | `turn_end` 颗粒度 | E | **存疑** | **2** | pi 引擎每回合 `agent/src/agent-loop.ts:253,287`；会话边界 `core/agent-session.ts:1290+` | 每**驱动**一条 `AgentSettled`（`SessionRunner.java:171-172,196`） | **B49** |
-| 54 | Entry union | N | **存疑（形状）** | **3** | **11 类**（`core/session-manager.ts:65-176`：message/thinking_level_change/model_change/usage/compaction/branch_summary/custom/custom_message/context_edit/label/session_info）；v3 平铺（`:41` `CURRENT_SESSION_VERSION=3`） | 内存 union **9 类**（`Entry.java:46-294`，缺 label/session_info）；二者改以 fact 形态存活（`SessionMutation.FactName/FactLabel`），**线格式按 pi 原生拼写写出读入**（见 #73） | —— |
+| 52 | `agent_end` 载荷 = **本 pass** `newMessages` | E | **对齐** | **3** | 引擎 `agent/src/agent-loop.ts:254,290,320`；会话层**透传引擎载荷** `core/agent-session.ts:1141,1288-1289` | 会话层透传本 pass `newMessages`＋`willRetry` 装饰（`SessionRunner.passEvents`）；web 的整表替换由 `AgentEventTranslator` 注入的 `transcriptSource`（`session::accumulatedMessages`）吸收 | ~~A8~~ 销号（2026-10-17 批 agent-core-2） |
+| 53 | `turn_end` 颗粒度 | E | **存疑** | **2** | pi 引擎每回合 `agent/src/agent-loop.ts:253,287`；会话边界 `core/agent-session.ts:1290+` | 批 2 起每**回合**一条真 `TurnEnd`（引擎直供，漏斗透传）——颗粒度偏差事实上已拆；`AgentSettled` 已重塑为 `{aborted}` 单字段。**B49 前提随批 2 改变，待评**（本批未收编） | **B49** |
+| 54 | Entry union | N | **对齐（裁决）** | **3** | **11 类**（`core/session-manager.ts:65-176`）；v3 平铺（`:41` `CURRENT_SESSION_VERSION=3`） | **裁决：行为等价，不认账**（docs/04 §4 map/03-#54）——label/session_info 零 Entry 身份消费者（消费者全 pattern-match `SessionMutation`/`LogItem`）；wire 读写 pi 原生行＋fact 链进树 ⇒ 磁盘全互通、树位等价；`SessionTreeNode.label` 两侧都是同构访问器。内存 union 不补 2 record | —— |
 | 55 | `CompactionEntry.fromHook` / `BranchSummaryEntry.fromHook` | N | **缺失** | **1** | `core/session-manager.ts:101,115`（`fromHook?: boolean` 兼容字段） | 无该字段（仅 `CompactionFiles.java:65-68` javadoc 提及） | —— |
 | 56 | `EntryProjector`（`ProjectedSessionEntry` / `buildSessionProjection`） | N | **存疑** | **1** | `core/session-manager.ts:209,543` | `ContextEntries.java:167-218`（`ProjectedEntry`/`projectEntries`） | A1 |
 | 57 | 四个消息类型 | N | **存疑** | **2** | `core/messages.ts:29-66`（bashExecution/custom/branchSummary/compactionSummary） | `ContextEntries.java` + `CustomMessageContent.java` | A1 |
-| 58 | `convertToLlm` | N | **存疑** | **3** | `core/messages.ts:148-196`（`case "system"` `:184`）；默认 `agent/src/agent.ts:38` | `ContextEntries.java:253-294` | **A1** |
+| 58 | `convertToLlm` | N | **对齐（裁决＋剔除已删）** | **3** | `core/messages.ts:148-196`；默认 `agent/src/agent.ts:38-46`（只按 role）；session-manager 投影侧零 stopReason 处理（`:440` 起 `return [message]`） | 合并管线消解（docs/04 §4 map/03-#58：case 语义逐条对上；bashExecution 角色不在对齐范围）；**stopReason 剔除已删**——`NON_PROJECTED_STOP_REASONS` 移植自已删除的 harness `isContextMessage`（R1 作废），error/aborted 消息恒投影（现行 pi 主流行为） | **A1** |
 | 59 | ~~`LaneConfiguration`~~ | N | **作废（R1）** | 0 | `harness/session/types.ts` 已删 | entry 化 | #54 同根 |
 | 60 | `PendingEntry` / `InboxItem` ⇒ 队列契约 | N | **存疑** | **2** | `agent/src/types.ts:293,306` | `QueueManager.java` | —— |
 | 61 | **`formatSkillsForSystemPrompt`** | P | **对齐** | **2** | `core/skills.ts:358`（`formatSkillsForPrompt`）；调用 `core/system-prompt.ts:180` | `SkillsPrompt.java:30-58`（三行指引 + XML 逐字） | 已闭环 |
@@ -174,7 +174,7 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | 75 | session fork | S | **存疑** | **2** | `core/session-manager.ts:1815`（`SessionManager.forkFrom`） | `ForkOptions.java`（参数形状有，调用面未全核） | —— |
 | 76 | `session_start` / `resources_discover` | S | **对齐** | **2** | `core/agent-session.ts:509,3695`；resources `:3285`；扩展侧 `core/extensions/runner.ts:1487-1490` | `AgentSession.java:104,453-460,1156` | —— |
 | 77 | 会话恢复（resume seed + record replay） | S | **存疑** | **2** | `core/agent-session.ts:525,1809,4138`（`_restoreToolsFromTranscript`） | `RunLifecycle.java:284,330`（seed/restore） | A2 |
-| 78 | `latest()` / `find()` 会话定位范围 | S | **存疑** | **3** | `core/session-manager.ts:749`（`findMostRecentSession` 只读一个项目目录） | `PersistentSessionRepositories`（coding-agent）走跨项目全量扫描 | **B53** |
+| 78 | `latest()` / `find()` 会话定位范围 | S | **对齐（裁决）** | **3** | `core/session-manager.ts:749`（`findMostRecentSession` 只读一个项目目录）；`listSessions` 按**最后活动时间** desc（`:858-864`，mtime 仅兜底） | 裁决（docs/04 §4 map/03-#78）：latest/resume 等价；`find(idOrPrefix)` 跨项目扫描保留（CLI `--resume <id>` 需要）；**排序键差留痕**——java list 按 mtime desc（`JsonlSessionRepository.java:85-90`），pi 的 lastActivity 需全量扫 entry（正是 java 优化掉的成本），追加写下 mtime 序 ≈ 活动序 | **B53**（分级阶梯另案） |
 | 79 | 会话列表 `onProgress` | S | **缺失** | **1** | `core/session-manager.ts:943-965` | list 同步全量 | **B55** |
 | 80 | 宿主 `prompt()` 的 `streamingBehavior` | L | **存疑** | **2** | `core/agent-session.ts:320,1921,1997-2019`（steer/followUp 两门） | `AgentSession.java:640-651`（门在调用线程抛）；引擎门 `PiLaneEngine.java:87-91` | **A5/F4** |
 | 81 | 工具线程安全契约 | A | **存疑** | **1** | `agent/src/agent-loop.ts:508-660`（契约：工具必须可并发） | 无显式声明/审计 | **A10/A11** |
@@ -196,7 +196,7 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | 97 | **扩展开启（extended thinking）目录→请求投送** | C | **对齐** | **2** | `models.json thinkingLevelMap` → `core/provider-composer.ts` → `provider-composer`/`anthropic-messages` | `AgentHarness.java:136-145`；`PiLaneEngine.java:329-330`；`PiLoopRunner.java:173`；`DefaultProviders.java:255-261`（coding-agent） | 已闭环 |
 | 98 | **`abortCompaction`** | A | **缺失** | **1** | `core/agent-session.ts:2914-2917`（另 `abortBranchSummary :2921`）；TUI Esc 换绑依赖 | 全仓零命中（压缩只借 lane abortSignal，无 per-operation 句柄） | **B36** |
 | 99 | **工具装配变更声明**（`declareToolChanges`） | L | **对齐** | **2** | `agent/src/agent-loop.ts:333-374`（含 `ToolStateChanges`/`NO_CHANGES`，types 侧无独立声明） | `ToolChangeDeclaration.java` | 已闭环 |
-| 100 | **系统提示作为 transcript 的 system 消息** | N | **存疑（形状）** | **3** | `packages/ai/src/types.ts:748-751`（`TranscriptContext` **只有 messages**）；`agent/src/agent.ts:85`；`agent/src/types.ts:500-505`（`AgentContext` 只有 messages/tools） | java 走 `Context.systemPrompt` 字段（`harness/Context.java:44`）+ `AgentHarness.java:506`；sections/差分已移植（`SystemPrompts.java`）⇒ 首条等价、会话中变更不等价 | —— |
+| 100 | **系统提示作为 transcript 的 system 消息** | N | **对齐（裁决）** | **3** | `packages/ai/src/types.ts:780-783`（`TranscriptContext` **只有 messages**）；系统提示由 `normalizeContext`（`utils/transcript.ts:30-34`）折成**首条 system 消息**；主流**无会话中变更路径**（`setSystemPrompt` 全仓零命中） | 裁决（docs/04 §4 map/03-#100）：provider 边界 `DefaultProviders` 交 `Context.systemPrompt` 经 `ContextNormalizer` 于**同一点**折叠 ⇒ 请求线行为等价；`Context.java` 类注按本锚重写；`AgentHarness.setSystemPrompt` 是超集能力（pi 无），留痕不删 | —— |
 | 101 | **`prepareNextTurn` 可返回 `messages`** | L | **对齐** | **2** | `agent/src/types.ts:163-169`；`agent-loop.ts:186,211` | `PiLoop.java:210,222-224`（已有 `messages`） | 已闭环 |
 | 102 | `Agent.reset()` **保留基线 system 消息** | L | **对齐** | **1** | `agent/src/agent.ts:354-368`（`getCurrentSystemMessage` 保留首条） | `RunLifecycle.java:235-254` 清空 transcript 与工作副本；**系统提示载体是 `Context.systemPrompt` 字段而非首条消息，清空不丢基线、下次请求重新注入 ⇒ 行为一致** | **B70 已取证消解** |
 | 103 | ~~`experimental/pico3` kernel~~ | S | **作废（R5）** | 0 | 已随 harness 删除 | 无 | —— |
@@ -237,12 +237,15 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | 表 | 对齐 | 缺失 | 存疑 | 合计 | 完成度 |
 |---|---:|---:|---:|---:|---:|
 | 内置工具 | 4 | 1 | 4 | 9 | **44.4%** |
-| 能力单元（除工具） | 41 | 10 | 33 | 83 | **49.4%** |
+| 能力单元（除工具） | 49 | 10 | 24 | 83 | **59.0%** |
 | 整块缺失（无独立计权项） | 0 | 0 | 0 | 0 | —— |
-| **合计** | **45** | **11** | **37** | **92** | **48.9%** |
+| **合计** | **53** | **11** | **28** | **92** | **57.6%** |
 
-**未加权完成度 = 45 / 92 = 48.9%**。
-（对齐＋存疑视为「有」：82/92 = **89.1%**）
+**未加权完成度 = 53 / 92 = 57.6%**。
+（对齐＋存疑视为「有」：81/92 = **88.0%**）
+
+> 2026-10-17 批 2 复核更正：批 1 的未加权计数有误（45/92；实测表内逐条点算为 46/92 ——
+> 能力单元 41→42），本表按**点算值**记（53/92；加权账不受影响，权重与系数全对得上）。
 
 ---
 
@@ -251,19 +254,19 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|
 | 内置工具（9） | 21 | 15.0 | **71.4%** | 44.4% |
-| 能力单元（除工具，83） | 162 | 123.5 | **76.2%** | 49.4% |
-| **模块合计（92）** | **183** | **138.5** | **75.7%** | **48.9%** |
+| 能力单元（除工具，83） | 162 | 133.5 | **82.4%** | 59.0% |
+| **模块合计（92）** | **183** | **148.5** | **81.1%** | **57.6%** |
 
-**模块合计**：Σ权重 183 ／ Σ(w×c) 138.5 ／ **加权完成度 = 138.5/183 = 75.7%**（未加权 48.9%）。
+**模块合计**：Σ权重 183 ／ Σ(w×c) 148.5 ／ **加权完成度 = 148.5/183 = 81.1%**（未加权 57.6%）。
 
 按权重分层（能力单元表，83 条）：
 
 | 权重 | 条数 | Σ权重 | 对齐 | 存疑 | 缺失 | Σ(w×c) | 层完成度 |
 |---:|---:|---:|---:|---:|---:|---:|---:|
-| 3 | 22 | 66 | 16 | 6 | 0 | 57.0 | **86.4%** |
-| 2 | 35 | 70 | 22 | 12 | 1 | 56.0 | **80.0%** |
+| 3 | 22 | 66 | 22 | 0 | 0 | 66.0 | **100%** |
+| 2 | 35 | 70 | 23 | 11 | 1 | 57.0 | **81.4%** |
 | 1 | 26 | 26 | 4 | 13 | 9 | 10.5 | **40.4%** |
-| 合计 | 83 | 162 | 41 | 33 | 10 | 123.5 | 76.2% |
+| 合计 | 83 | 162 | 49 | 24 | 10 | 133.5 | 82.4% |
 
 ### 权重 3 的单元清单（22 条能力单元 + 5 条工具 = 27 条）
 
@@ -286,30 +289,42 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | #23 输出截断 | 对齐 |
 | #26 per-model 压缩设置 | 对齐 |
 | #41 `should_stop`/`prepare_next_turn` 钩子 | 对齐 |
-| #46 `AgentSessionEvent` 面 | **存疑** |
+| #46 `AgentSessionEvent` 面 | 对齐（批 2） |
 | #51 `compaction_start`/`compaction_end` 事件 | 对齐 |
-| #52 `agent_end` 载荷 | **存疑** |
-| #54 Entry union | **存疑（形状）** |
-| #58 `convertToLlm` | **存疑** |
+| #52 `agent_end` 载荷 | 对齐（批 2） |
+| #54 Entry union | 对齐（批 2 裁决） |
+| #58 `convertToLlm` | 对齐（批 2，剔除已删） |
 | #73 JSONL 存储（v3 平铺） | 对齐 |
-| #78 `latest()`/`find()` 会话定位范围 | **存疑** |
-| #100 系统提示作为 system 消息 | **存疑（形状）** |
+| #78 `latest()`/`find()` 会话定位范围 | 对齐（批 2 裁决） |
+| #100 系统提示作为 system 消息 | 对齐（批 2 裁决） |
 
-**权重 3 层 = 16 对齐 / 6 存疑 / 0 缺失**。
+**权重 3 层 = 22 对齐 / 0 存疑 / 0 缺失 = 100%**（2026-10-17 批 agent-core-2 清零）。
 
-### 未加权 vs 加权的差（48.9% → 75.7%，**+26.8 pp**）
+### 未加权 vs 加权的差（57.6% → 81.1%，**+23.5 pp**）
 
-差来自分母内的权重分配。模块未得分（Σw−Σ(w×c) = 44.5）分布：
+差来自分母内的权重分配。模块未得分（Σw−Σ(w×c) = 34.5）分布：
 
 | 池 | 未得分 | 占比 |
 |---|---:|---:|
-| 能力单元 权重 3 | **9.0** | 20% |
-| 能力单元 权重 2 | **14.0** | 31% |
-| 能力单元 权重 1 | **15.5** | 35% |
-| 内置工具 | 6.0 | 13% |
-| 合计 | 44.5 | 100% |
+| 能力单元 权重 3 | **0** | 0% |
+| 能力单元 权重 2 | **13.0** | 38% |
+| 能力单元 权重 1 | **15.5** | 45% |
+| 内置工具 | 6.0 | 17% |
+| 合计 | 34.5 | 100% |
 
-⇒ **权重 2 层与权重 1 层并列最大未得分池**。**缺失的权重分布**：10 条缺失里 **0 条权重 3**、1 条权重 2（#62）、9 条权重 1。
+⇒ **权重 1 层是最大未得分池**。**缺失的权重分布**：10 条缺失里 **0 条权重 3**、1 条权重 2（#62）、9 条权重 1。
+
+### 七条点名项（✅ 2026-10-17 批 agent-core-2 全数闭环；基线 138.5 → 148.5/183 ≈ **81.1%**，+10.0）
+
+| 条目 | 权重 | 闭环内容 |
+|---|---:|---|
+| **#34 `prepareRequest` 写钩子**（存疑→对齐，+1.0） | 2 | `PiLoop` 三类型＋Config 槽（每次请求前调、context 整体替换、config 写回本 run 生效）；`HookSystem.firePrepareRequest` 链式合并；老 void `before_request` 与 `PiLaneSink.systemPrompt` 字段删除 |
+| **#46 `AgentSessionEvent` 面**（存疑→对齐，+1.5） | 3 | 补五帧（agent_start/turn_start/turn_end/message_start/message_end）＋`AgentSettled{aborted}` 真形状＋`UserMessageReceived` 删；`SessionRunner` 单一漏斗全量转发（pi `:1139-1142` 同形）；RPC 五新帧；web 直译化＋`transcriptSource` 吸收整表替换 |
+| **#52 `agent_end` 本 pass 载荷**（存疑→对齐，+1.5） | 3 | 会话层透传引擎 `newMessages`（不再发 `accumulatedMessages()` 全历史）；A8 销号 |
+| **#54 Entry union**（存疑→对齐·裁决，+1.5） | 3 | 消解：零 Entry 身份消费者＋线格式原生读写＋fact 链进树 ⇒ 行为等价；裁决进 docs/04 §4 |
+| **#58 `convertToLlm`**（存疑→对齐，+1.5） | 3 | case 合并部消解（裁决）；**stopReason 剔除删除**（参照物 `isContextMessage` 已删 ⇒ R1，error/aborted 恒投影） |
+| **#78 `latest()`/`find()` 范围**（存疑→对齐·裁决，+1.5） | 3 | latest/resume 等价；find 跨项目裁决保留；排序键差（lastActivity vs mtime）留痕进 docs/04 §4 |
+| **#100 系统提示载体**（存疑→对齐·裁决，+1.5） | 3 | pi 无会话中变更路径（`setSystemPrompt` 零命中）；provider 边界 `ContextNormalizer` 同点折叠 ⇒ 请求线等价；`Context.java` 类注重写；裁决进 docs/04 §4 |
 
 ### 三条点名项（✅ 2026-10-17 批 agent-core-1 全数闭环；基线 132.0 → 138.5/183 ≈ **75.7%**）
 
@@ -329,14 +344,14 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | **#102** reset 基线 system | 存疑 | **对齐** | **B70 已取证消解**：载体不同（pi 首条消息 vs java `Context.systemPrompt` 字段）、行为一致（清空工作副本不丢基线，下次请求重注入） |
 | **#86** `_emitSessionCompactFailed` | 存疑（F3） | **作废（R1）** | pi 该方法**只**发扩展事件 `session_compact_failed`（归 04）；公开失败事件是 java 已齐的 `compaction_end{errorMessage}`；java 源码注释同裁决 |
 | **#88** `ActiveToolsChange` | 存疑（C1） | **作废（R1）** | `active_tools_change` 在 pi 两锚全树零命中；java 早已据 R2 删变体（`Entry.java:23-24`） |
-| #54 计数 | 11 vs **7** | 11 vs **9**（仍存疑） | java 内存 union 实测 9 record（新增 CustomMessage/ContextEdit）；label/session_info 改以 fact 存活、线格式原生读写 |
-| #46 计数 | 24 vs 20 | **24 vs 20**（维持） | 两侧重数一致；pi 本锚给 `agent_settled` 加 `aborted` 字段（见下「新缺口」） |
+| #54 计数 | 11 vs **7** | 11 vs **9**（批 2 裁决：行为等价） | java 内存 union 9 record；label/session_info 以 fact 存活、线格式原生读写 ⇒ 磁盘全互通（docs/04 §4） |
+| #46 计数 | 24 vs 20 | **24 vs 24**（批 2 对齐） | 补五帧＋`agent_settled{aborted}` 真形状；java 另有 `FlashStatus` 方言（TUI 专用，不上 RPC 线） |
 
 ### 新缺口（只报告，本图不登记编号）
 
-1. **工具耗时 `durationMs`**：pi 本锚给 `tool_execution_end` 事件与 ToolResult 消息都加了单调时钟 `durationMs?`（`agent-loop.ts:825-945`、`types.ts:453-455,531-538`，会话层透传 `core/agent-session.ts:1355-1358`）。java `ToolResult.java:27-35` 与 `AgentSessionEvent.ToolExecutionEnd` 均无该字段。
-2. **`agent_settled.aborted`**：pi `core/agent-session.ts:203,1083-1086` 现在随事件带中止标志；java `AgentSettled(message, toolResults)`（`AgentSessionEvent.java:46-63`）无。
-3. **`--tools` 模式匹配与 MCP 保留**：pi allow/deny 名单改 glob 模式匹配（`createToolNameMatcher`）、新增 `defaultToolModifiers`（`+name/-name`）、空名单/`mcp__*` 名单下 MCP 工具仍注册（`core/agent-session.ts:271-289,501-510,1533-1557,3662-3690`）；java 侧为精确名集合，未核。
+1. ~~**工具耗时 `durationMs`**~~ —— ✅ **销号（2026-10-17 批 agent-core-2 复核）**：事件（`PiLoop.java:74-88`／`AgentSessionEvent.java:148-161`）、消息（`Message.java:386-395`）、单调钟（`ToolRegistry.java:150-164`，`System.nanoTime` 只围本体）、生产链（`PiToolRunner`→`PiLoopTools`→事件）与两条消费链（`JsonEventMapper`、`AgentEventTranslator`＋`WebWireJson`）全部在案；null⇒键省略一致。（B234 本体已于 ai 批 5 落地。）
+2. ~~**`agent_settled.aborted`**~~ —— ✅ **销号（批 agent-core-2，随 #46 收编）**：`AgentSettled{aborted}` 真形状（pi `agent-session.ts:203`），旗源 `agentRunAbortRequested`（abort() 置位、驱动起手清零、收尾读值）；B235 同步销号。
+3. **`--tools` 模式匹配与 MCP 保留**：pi allow/deny 名单改 glob 模式匹配（`createToolNameMatcher`）、新增 `defaultToolModifiers`（`+name/-name`）、空名单/`mcp__*` 名单下 MCP 工具仍注册（`core/agent-session.ts:271-289,501-510,1533-1557,3662-3690`）；java 侧为精确名集合，未核 —— **在册 B236**（docs/04 §3.3），归 coding-agent 批。
 4. `streamProxy` 返型改为 pi-ai 工厂 `createAssistantMessageEventStream()`（`agent/src/proxy.ts:107-111`）—— #68 缺失判定不变，对齐时照新形状。
 
 ---
