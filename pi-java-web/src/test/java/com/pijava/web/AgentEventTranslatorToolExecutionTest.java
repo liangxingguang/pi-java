@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class AgentEventTranslatorToolExecutionTest {
 
-    private final AgentEventTranslator translator = new AgentEventTranslator();
+    private final AgentEventTranslator translator = new AgentEventTranslator(List::of);
 
     private static com.fasterxml.jackson.databind.JsonNode event(WebServerMessage msg) {
         return ((WebServerMessage.AgentEvent) msg).event();

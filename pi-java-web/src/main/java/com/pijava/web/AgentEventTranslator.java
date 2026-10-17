@@ -2,10 +2,12 @@ package com.pijava.web;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.coding.agent.core.AgentSessionEvent;
 import com.pijava.web.WebProtocol.WebServerMessage;
@@ -15,12 +17,15 @@ import org.slf4j.LoggerFactory;
 
 /**
  * pi-java {@link AgentSessionEvent} → pi-webui 前端 {@code agentEvent} 词汇翻译层
- * （Phase 7 设计 §4）。前端不改：{@code agent_start} / {@code message_update} /
- * {@code tool_execution_*} / {@code error} / {@code agent_end} / {@code turn_end}。
+ * （Phase 7 设计 §4）。前端不改：{@code agent_start} / {@code turn_start} /
+ * {@code message_start} / {@code message_update} / {@code message_end} /
+ * {@code tool_execution_*} / {@code error} / {@code turn_end} / {@code agent_end}。
  *
- * <p>策略：流式阶段仅推 {@code message_update}（累积 {@code partial}）与工具事件；
- * 回合结束由 {@code AgentEnd} 推带完整 messages 的 {@code agent_end}（前端整表替换），
- * 避免逐条 {@code message_end} 的去重竞态。</p>
+ * <p><b>批 2 直译化</b>：会话事件面已是 pi 的单一漏斗（{@code agent-session.ts:1139-1142}
+ * 的全量转发），本层逐帧透传，只剩两处适配 —— ① {@code agent_end} 的
+ * {@code messages} 数组由构造注入的<b>全量转录源</b>供（会话面的载荷自 #52 起是
+ * 本 pass 的 newMessages，前端的整表替换语义不变）；② {@code agent_settled}
+ * 不发帧（{@code main.ts} 无此消费），只保留它对 streaming 的兜底收束。</p>
  */
 final class AgentEventTranslator {
 
@@ -28,7 +33,14 @@ final class AgentEventTranslator {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
+    /** 全量转录源（agent_end 帧的 messages 数组；前端整表替换语义靠它维持）。 */
+    private final Supplier<List<Message>> transcriptSource;
+
     private volatile boolean streaming;
+
+    AgentEventTranslator(Supplier<List<Message>> transcriptSource) {
+        this.transcriptSource = transcriptSource;
+    }
 
     /** 当前是否在流式运行中（getState 用）。 */
     boolean isStreaming() {
@@ -40,23 +52,36 @@ final class AgentEventTranslator {
         var out = new ArrayList<WebServerMessage>();
         switch (event) {
             case AgentSessionEvent.MessageUpdate u -> translateStream(u.streamEvent(), out);
-            // 即时回显：run 启动即推 message_end(user)，前端收到即上列表，
-            // 不等 agent_end 整表替换（对齐 pi agent-loop 的 message_end）。
-            case AgentSessionEvent.UserMessageReceived u ->
-                out.add(userMessageEnd(u.message()));
+            case AgentSessionEvent.AgentStart ignored -> {
+                streaming = true;
+                out.add(new WebServerMessage.AgentEvent(typeNode("agent_start")));
+            }
+            // main.ts:317 仅 renderApp()，无副作用。
+            case AgentSessionEvent.TurnStart ignored ->
+                out.add(new WebServerMessage.AgentEvent(typeNode("turn_start")));
+            // 每回合一条；main.ts:341-353 按 toolCallId 去重追加，天然耐受多条。
+            // ⚠️ 不动 streaming —— 多回合 run 的第一个 turn_end 不能收流式态。
+            case AgentSessionEvent.TurnEnd e -> out.add(turnEnd(e));
+            case AgentSessionEvent.MessageStart m -> {
+                var node = typeNode("message_start");
+                node.set("message", WebWireJson.messageNode(m.message()));
+                out.add(new WebServerMessage.AgentEvent(node));
+            }
+            // main.ts:327-339：user 回显路径不变；assistant 的 streamingMessage = null
+            // 语义正确。
+            case AgentSessionEvent.MessageEnd m -> {
+                var node = typeNode("message_end");
+                node.set("message", WebWireJson.messageNode(m.message()));
+                out.add(new WebServerMessage.AgentEvent(node));
+            }
             case AgentSessionEvent.AgentEnd e -> {
                 streaming = false;
                 out.add(agentEnd(e));
             }
-            case AgentSessionEvent.AgentSettled ignored -> {
-                streaming = false;
-                out.add(turnEnd(ignored));
-            }
+            // main.ts 无 agent_settled 消费；保留它对 streaming 的兜底收束，不发帧。
+            case AgentSessionEvent.AgentSettled ignored -> streaming = false;
             case AgentSessionEvent.BashExecutionUpdate b -> out.add(bashOutput(b));
-            // 包⑦（原 docs/34）：工具执行生命周期事件的**真源**。此前 web 的
-            // tool_execution_* 由 StreamEvent.ToolCall* 伪造 —— 那是「模型把调用
-            // 吐完」的时刻，不是工具执行的生命周期（工具跑 30 秒，前端此前在这
-            // 30 秒里收不到任何东西）。载荷按裁决 A 照 pi 的透传带上。
+            // 包⑦（原 docs/34）：工具执行生命周期事件的**真源**。载荷按裁决 A 照 pi 透传。
             case AgentSessionEvent.ToolExecutionStart s -> out.add(toolExecutionStart(s));
             case AgentSessionEvent.ToolExecutionUpdate u -> out.add(toolExecutionUpdate(u));
             case AgentSessionEvent.ToolExecutionEnd e -> out.add(toolExecutionEnd(e));
@@ -71,10 +96,8 @@ final class AgentEventTranslator {
 
     private void translateStream(StreamEvent ev, List<WebServerMessage> out) {
         switch (ev) {
-            case StreamEvent.Start ignored -> {
-                streaming = true;
-                out.add(new WebServerMessage.AgentEvent(typeNode("agent_start")));
-            }
+            // 会话面的 AgentStart 恒先到（引擎 :117/:146 在流开始之前发射）⇒
+            // 此前 StreamEvent.Start → agent_start 的合成支已删（防双发）。
             case StreamEvent.TextDelta delta -> out.add(messageUpdate(delta.partial()));
             case StreamEvent.ThinkingDelta delta -> out.add(messageUpdate(delta.partial()));
             // 包⑥（B40）：工具增量上推 message_update —— 前端在 tool_execution_*
@@ -82,7 +105,7 @@ final class AgentEventTranslator {
             // 调用**之前**那条 ⇒ 工具卡要等 agent_end 整表替换才出现。
             //
             // 包⑦（原 docs/34）**换源**：这里**不再**伪造 tool_execution_*（那三条改由
-            // 真正的工具执行事件驱动，见下面 AgentSessionEvent.ToolExecution* 的三支）。
+            // 真正的工具执行事件驱动，见上面 AgentSessionEvent.ToolExecution* 的三支）。
             case StreamEvent.ToolCallStart s -> out.add(messageUpdate(s.partial()));
             case StreamEvent.ToolCallDelta s -> out.add(messageUpdate(s.partial()));
             case StreamEvent.ToolCallEnd s -> out.add(messageUpdate(s.partial()));
@@ -103,23 +126,21 @@ final class AgentEventTranslator {
         return new WebServerMessage.AgentEvent(node);
     }
 
-    /** user 消息 wire 帧：{type:"message_end", message:{role:"user",content:[...]}}。 */
-    private WebServerMessage userMessageEnd(com.pijava.ai.message.Message userMsg) {
-        var node = typeNode("message_end");
-        node.set("message", WebWireJson.messageNode(userMsg));
-        return new WebServerMessage.AgentEvent(node);
-    }
-
+    /**
+     * {@code agent_end} 帧：messages 数组由全量转录源供 —— 前端整表替换语义逐字节
+     * 不动（会话面载荷自 #52 起是本 pass 的 newMessages，不能直接上这条线）。
+     * 事件本体只取 {@code willRetry}。空 ⇒ 省键＋warn 的现状保留。
+     */
     private WebServerMessage agentEnd(AgentSessionEvent.AgentEnd e) {
         var node = typeNode("agent_end");
         node.put("willRetry", e.willRetry());
-        // 空消息（错误/中止路径）不带 messages，避免前端整表清空
-        if (!e.messages().isEmpty()) {
+        var transcript = transcriptSource.get();
+        if (!transcript.isEmpty()) {
             var arr = node.putArray("messages");
-            for (var m : e.messages()) {
+            for (var m : transcript) {
                 arr.add(WebWireJson.messageNode(m));
             }
-            LOG.debug("[web] agent_end translated with {} messages", e.messages().size());
+            LOG.debug("[web] agent_end translated with {} messages", transcript.size());
         } else {
             LOG.warn("[web] agent_end has EMPTY messages — payload omits messages; "
                 + "frontend will keep stale list. willRetry={}", e.willRetry());
@@ -135,24 +156,16 @@ final class AgentEventTranslator {
     }
 
     /**
-     * {@code turn_end} 帧（包⑨，原 docs/36，B42）。
-     *
-     * <p>pi 的 {@code turn_end} 是 {@code { message, toolResults }}，两个字段都必填
-     * （{@code agent/src/types.ts:438}）。前端按 {@code toolCallId} 去重后把
-     * {@code toolResults} 追加进消息列表（{@code client/main.ts:325-337}）；
-     * 此前这里发的是**只有类型**的空帧 ⇒ 那条路恒空（今天靠 {@code agent_end} 的整表
-     * 替换兜住）。</p>
-     *
-     * <p>⚠️ {@code message} 在错误/中止路为 null ⇒ 省略该键（pi 那条路给合成的失败
-     * 消息，Java 侧没有可给）。这是**残余偏差**，已登记。</p>
+     * {@code turn_end} 帧 —— pi {@code { message, toolResults }} 两个字段都必填
+     * （{@code agent/src/types.ts:517}）。前端按 {@code toolCallId} 去重后把
+     * {@code toolResults} 追加进消息列表（{@code client/main.ts:341-353}）。
+     * 批 2 起每回合一条（引擎直供），message 恒非 null（失败路是合成失败消息）。
      */
-    private WebServerMessage turnEnd(AgentSessionEvent.AgentSettled settled) {
+    private WebServerMessage turnEnd(AgentSessionEvent.TurnEnd e) {
         var node = typeNode("turn_end");
-        if (settled.message() != null) {
-            node.set("message", WebWireJson.messageNode(settled.message()));
-        }
+        node.set("message", WebWireJson.messageNode(e.message()));
         var results = node.putArray("toolResults");
-        for (var m : settled.toolResults()) {
+        for (var m : e.toolResults()) {
             results.add(WebWireJson.messageNode(m));
         }
         return new WebServerMessage.AgentEvent(node);

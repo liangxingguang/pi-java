@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class AgentEventTranslatorToolCallVisibilityTest {
 
-    private final AgentEventTranslator translator = new AgentEventTranslator();
+    private final AgentEventTranslator translator = new AgentEventTranslator(List::of);
 
     private static StreamEvent.ToolCallStart toolCallStart() {
         var builder = new StreamPartialBuilder();

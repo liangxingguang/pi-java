@@ -40,7 +40,7 @@ final class WebDispatcher {
 
     private final Args args;
     private final Consumer<WebServerMessage> send;
-    private final AgentEventTranslator translator = new AgentEventTranslator();
+    private final AgentEventTranslator translator;
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private final FileBrowserService files;
@@ -53,6 +53,10 @@ final class WebDispatcher {
         this.session = session;
         this.args = args;
         this.send = send;
+        // 批 2：agent_end 帧的 messages 由全量转录源供（会话面载荷自 #52 起是本 pass
+        // 新增）。lambda 迟读字段 —— newSession/loadSession 会换 session 实例，
+        // 方法引用会把旧实例钉死。
+        this.translator = new AgentEventTranslator(() -> this.session.accumulatedMessages());
         this.files = new FileBrowserService(Path.of(System.getProperty("user.dir")));
     }
 
