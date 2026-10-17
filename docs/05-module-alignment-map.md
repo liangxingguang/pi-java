@@ -84,28 +84,12 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）；pi-j
 
 ### 2.1 ai — 94.5% ｜ map/02（批 10 后）
 最强：usage 计量 100%、wire 适配器 97.1%、provider 端点 97.3%、元数据 92.3%、ContentBlock 91.7%、横切 93.4%。
-**批 10（2026-10-16）**：#98 缺失→对齐（+1）——Anthropic workload identity federation：
-`AuthKind.FEDERATION`＋`RecordedCredential.env`＋`Credentials` 末位回落（3 必需＋2 可选，
-`resolveApiKey` 滤 blank）、`DefaultProviders` extra 过桥、`AnthropicMessagesApi` federation 车道＋
-`AnthropicFederationSupport`（静态基座缓存＋`withOptions` 挂头，3 stream⇒1 交换实测）；协议面
-anthropic-java 2.66.0 全包（原「java 要逆协议」裁决作废），守卫＝SDK 凭证链显式 opt-in（夹具钉死）。
-**批 9（2026-10-16）**：#90 存疑→对齐（+0.5，B85 销号）——JDK ImageIO 替代 photon 落
-`ImageProcessor`/`ImageResizer`/`ExifOrientation`/`WebpDimensions`，`ReadTool` 缩放省略/非视觉注记两路径，
-`PiToolRunner` after_tool 后统一归一（MCP/截图大图失败留原图），`ImagePolicy` 晚绑定
-`images.autoResize ?? true`＋当前模型 `inputLimits.images.resize`＋视觉位；窄差见 原 docs/18 §5。
-**批 7（2026-10-16）**：#97 存疑→对齐（`LoopbackCallbackServer` 共享回调＋pi 品牌页＋回调/手工竞速）、
-#95 缺失→对齐（Sign in with ChatGPT：动态客户端/1455 硬失败/直连 scope 门/签发 clientId 刷新）、
-#96 缺失→对齐（Anthropic browser/copy-code select、53692→0 回落、JSON 交换刷新），+2.5。
-**批 3a（2026-10-14）**：17 个 npm `pi-ai@1.1.0` 分片（588 chat，391KB）逐字节入资源＋manifest sha256 锚，
-#34/#86/#91 转对齐、#90 转存疑（B85 消费链另案），B97/B232 销号；`DefaultModelIds` 落 pi 默认模型表
-（B137 防回归切片，glob/scope 主体留批 3b）。
-**批 3b（2026-10-14）**：B137 销号——minimatch 10.2.6 子集（`* ? ** [class]`，tarball 静态取证）、
-子串/显示名匹配、alias 优先 dated 降序、两码 scope 诊断、`--models ?? enabledModels` → 初始模型＋
-Ctrl+P/RPC 轮转全接通；台账行为项、无加权单元 ⇒ 百分比不变。
-残余计分母缺失 1 条：#8 namespace（随 MCP 包 B203）。
-批 0 出分母：分类器/统一模型类型/图像目录（#92/#94/#33，仅 codemode 消费＝R5）、bedrock/vertex/codex
-三 wire（主流 7 家口径外 w0；azure/radius 同口径，B230/B226 在 04 §4）、cf-binding 死代码作废。
-路线与账面（批 1–10 已完工 94.5%；残余仅 #8 计分母缺失）见 原 docs/08。
+批 0–10 全部闭环（2026-10-12→10-16，逐批账面见 map/02 头部，实施记录在原 docs/08–19）：
+11 单位出分母（分类器/统一模型类型/图像目录 R5、bedrock/vertex/codex w0、cf-binding 作废）、
+npm 目录 17 分片逐字节入资源＋manifest sha256 锚、thinking/effort 三层通道、OAuth 伪装＋共享回调、
+ChatGPT 订阅特判、图片缩放消费链（ImageIO 替代 photon）、federation 接线（anthropic-java 2.66.0
+代劳协议面）。
+残余计分母缺失仅 1 条：#8 namespace（随 MCP 包 B203）；其余欠账全是存疑方言（见 docs/06 §3）。
 
 ### 2.2 mcp — 76.0% ｜ map/07（**本次新建**）
 配置/协议/传输/OAuth/工具内容/CLI 六组加权 83–96%；**G 组生命周期与接线 8.7%**（B221＝下一包主战场）。
@@ -113,25 +97,14 @@ Ctrl+P/RPC 轮转全接通；台账行为项、无加权单元 ⇒ 百分比不�
 codemode-only 的 4 个单元（exposure/deferred/discovery）权 0，B161/B162 闭环时重裁。
 
 ### 2.3 agent-core — 83.9% ｜ map/03（批 3 后）
-**批 3（2026-10-17，原 docs/22（批 3 设计稿））**：bash/grep/find/ls 四工具模型可见面逐字（schema/描述/snippet/
-告示/错误文本；glob→find 改名、ls `recursive`→`limit`、grep 补七参＋gitignore、bash 超时面
-无默认/毫秒粒度/2147483.647s 上限）；工具表 71.4→**95.2%**（20.0/21），+5.0 ⇒ **权重 3 层含
-工具 27/27 = 100%**；新登 B242（bash `PI_*` 会话环境变量面）/B243（powershell，挂 B236 族）。
-**批 2（2026-10-17，原 docs/21（批 2 设计稿））**：#34 `prepareRequest` 写钩子（每次请求前调、context 整体替换、
-config 写回本 run 生效；老 void `before_request` 退役）、**#46 族会话事件面重构**（补五帧＋
-`AgentSettled{aborted}` 真形状＋`UserMessageReceived` 删；`SessionRunner` 单一漏斗全量转发，
-#52 `agent_end` 改本 pass 载荷、A8/B235 销号；RPC 五新帧、web 直译化＋`transcriptSource` 吸收整表替换）、
-**#58** stopReason 投影剔除删除（参照物 `isContextMessage` 已删 ⇒ R1；error/aborted 恒投影）、
-**#54/#78/#100 三裁决**（Entry union 行为等价、latest/find 等价＋排序键差留痕、系统提示载体请求线等价），
-+10.0 ⇒ **权重 3 层 22/22 = 100%**。
-**批 1（2026-10-17）**：B158（#23 截断字节预算 100KB→50KB，描述/注记全链现算）、B159＋#41
-（`finishTurn` 裁决形状：`TurnDecision`＋`FinishTurnHook`、turn_end 前调用、错误路照调、
-`explicitContinuation` 三段清零、`NextTurnContext.newMessages`、`fireFinishTurn` 合并 END 先赢）、
-#17（手动 `/compact` abort-first＋waitForIdle）三口闭环，+6.5。
-**#73 JSONL v3 已转对齐**（PiV3Wire 原生线＋双向互读夹具）。
-确认缺失 11 条：#62 formatSkillInvocation（w2），余 w1
-（powershell B243、branch summary 族 B1、B30、B36、B55、fromHook、streamProxy、setDefaultStreamFn）。
-工具表 **95.2%**（20.0/21）：bash/grep/find/ls 批 3 逐字对齐、存疑清零；唯缺 powershell（B243）。
+批 1–3 全部闭环（2026-10-17，逐批账面见 map/03，实施记录在原 docs/20–22）：截断预算 50KB、
+`finishTurn` 裁决形状、`/compact` abort-first、`prepareRequest` 写钩子、#46 族会话事件面重构
+（五帧＋`AgentSettled{aborted}`＋单一漏斗）、stopReason 剔除删除、#54/#78/#100 三裁决、
+bash/grep/find/ls 四工具模型可见面逐字（glob→find 改名）。**权重 3 层含工具 27/27 = 100%**；
+工具表 71.4→**95.2%**（20.0/21）。
+确认缺失 11 条：#62 formatSkillInvocation（w2），余 w1（powershell B243、branch summary 族 B1、
+B30、B36、B55、fromHook、streamProxy、setDefaultStreamFn）；形状差 24 条在 docs/07 §2.2。
+新登 B242（bash `PI_*` 会话环境变量面）/B243（powershell，挂 B236 族）。
 
 ### 2.4 coding-agent — 43.2%（去重）｜ map/04
 A CLI 参数 78.2%、C slash 63.2%、E3 会话管理 68.8%；**D 扩展事件 12.7%、D′ UI 注入 6.3%、E6 包管理器 16.1%、
