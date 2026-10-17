@@ -1,20 +1,19 @@
 # 04 CLI 宿主 / 产品层（pi-java-coding-agent）
 
-> 范围：`D:\workplaceForai\pi-java\pi-java-coding-agent` ↔ `D:\workplaceForai\pi\packages\coding-agent`。
-> 判定三档：**对齐**（两侧都有且行为相同）/ **缺失**（pi 有、pi-java 无）/ **存疑**（形状存在但语义/可达性有差，或台账未结）。
-> 所有证据为 `file:line`；pi 侧路径省略 `D:\workplaceForai\pi\packages\coding-agent\` 前缀，java 侧省略 `D:\workplaceForai\pi-java\pi-java-coding-agent\src\main\java\com\pijava\coding\agent\` 前缀（跨模块证据会写明模块）。
-> 基准：pi @ `ea448f454`（2026-10-11，v1.1.0-22）；pi-java @ `edc8749d`（2026-10-11，main）。
->
-> **MCP 面整体移出本图**：MCP 注册表/`pi mcp` CLI/MCP 工具·渲染器接线（含 B161/B162/B203/B214/B218/B221）由 `map/07-mcp.md` 覆盖；本图保留单元编号与判定，证据列只给指针，不展开。
->
-> **权重口径**（用户已认可）：权重 = 用户可观察影响 × 频率，**不含排期优先级**。
-> `3` = 每轮对话都走 / 默认路径；`2` = 每次会话走 / 常用命令·参数·配置键；`1` = 低频·边缘·纯内部；`0` = 非目标（排除出分母）。
-> 完成系数：**对齐 = 1.0 ／ 存疑 = 0.5 ／ 缺失 = 0**。加权汇总见文末 §加权汇总。
-> **R5 可达性**：只算 `bin pi` 主流可达的；`coding-agent/src/experimental/**` 一律权 0。
-> **R1 作废**：`src/experimental/micro/**` 与 `src/experimental/mini/**` 已被 pi 删除（`7fd478a2e`）⇒ 相关单元权重 0、移出分母。
+> 【背景摘要】本图是 coding-agent（CLI 宿主 / 产品层）的全量加权盘点：CLI 参数、子命令、slash 命令、扩展系统、settings 键、会话管理、包管理器等逐单元判定与证据。开放缺口的权威台账是 [`../04-open-items-register.md`](../04-open-items-register.md)。
+
+## 基准与口径
+
+- 范围：`D:\workplaceForai\pi-java\pi-java-coding-agent` ↔ `D:\workplaceForai\pi\packages\coding-agent`。
+- 基准：pi @ `ea448f454`（2026-10-11，v1.1.0-22）；pi-java @ `edc8749d`（2026-10-11，main）。
+- 判定三档：**对齐**（两侧都有且行为相同）/ **缺失**（pi 有、pi-java 无）/ **存疑**（形状存在但语义/可达性有差，或台账未结）。
+- 所有证据为 `file:line`；pi 侧路径省略 `D:\workplaceForai\pi\packages\coding-agent\` 前缀，java 侧省略 `D:\workplaceForai\pi-java\pi-java-coding-agent\src\main\java\com\pijava\coding\agent\` 前缀（跨模块证据会写明模块）。
+- **权重口径**（用户已认可）：权重 = 用户可观察影响 × 频率，**不含排期优先级**。`3` = 每轮对话都走 / 默认路径；`2` = 每次会话走 / 常用命令·参数·配置键；`1` = 低频·边缘·纯内部；`0` = 非目标（排除出分母）。完成系数：**对齐 = 1.0 ／ 存疑 = 0.5 ／ 缺失 = 0**。加权汇总见文末。
+- **R5 可达性**：只算 `bin pi` 主流可达的；`coding-agent/src/experimental/**` 一律权重 0。
+- **R1 作废**：`src/experimental/micro/**` 与 `src/experimental/mini/**` 已被 pi 删除（`7fd478a2e`）⇒ 相关单元权重 0、移出分母。
+- **MCP 面整体移出本图**：MCP 注册表 / `pi mcp` CLI / MCP 工具·渲染器接线（含 B161/B162/B203/B214/B218/B221）由 [`07-mcp.md`](07-mcp.md) 覆盖；本图保留单元编号与判定，证据列只给指针，不展开。
 
 ---
-
 ## 规模
 
 | 模块 | pi 包 | pi LOC | java LOC | 比例 |
