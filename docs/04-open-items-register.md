@@ -108,7 +108,6 @@
 | B184 | 用户可见 | `McpConfigError` 是 Java 特有类型，写出字面量有偏差 | pi 抛裸 `Error`；`JSON.stringify` 把 `1.0` 写成 `1`；`pi mcp add` 的键序按 record 组件序（原 docs/35 §5.4） |
 | B185 | 内部 | `OAuthMetadataParsers.optionalBoolean` 的 SpotBugs 排除 | TRUE/FALSE/null 三态（null 表示键缺席），与 B144 同形的误报；jspecify 的 `@Nullable` 不被 SpotBugs 识别（原 docs/35 §10 发现 2） |
 | B186 | 内部 | **mcp 模块的 `verify` 在包⑥/⑦从未跑过** | `spotbugs:check` 绑在 `verify` 阶段；包⑥/⑦只跑了 `test`＋`checkstyle`，所以本包一跑 verify 就红两条（本包的 NPE 已修，另一条是 B185）。**教训：包闭环验证口径必须含 `verify`** |
-| B187 | 内部 | 包④ `InMemoryTransportTest` 断言**抢跑**（已修） | 旧夹具断言「`send` 返回时监听器尚未跑」（`delivered.isEmpty()`），那是在跟虚拟线程抢调度（实测 7 跑 1 红）。产品契约（`send` 不在调用栈上重入）由 `startVirtualThread` 结构性保证，改成确定性断言「监听器线程 ≠ 发送线程」。反向变异验证：改成内联投送恰好 1 红。**教训：凡「某时刻还没发生」的断言都是运气** |
 | B188 | 内部 | MCP `!cmd` 的 `settings.shellPath` 层未接 | pi 是两段式（先配置 shell，ENOENT 错误时回落默认 shell）；`CommandRunner` 已可注入，第 12 包接线（原 docs/36 §2.4） |
 | B189 | 协议面 | MCP 客户端身份由调用方注入 | pi 取 `config.ts:540,543`；Java 的 `Version.VERSION` 在 coding-agent 模块，mcp 模块内零字面量，第 12 包传入（原 docs/36 §2.3） |
 | B190 | 内部 | `isTransientError` 的判定范围宽于 pi | pi 判 `TypeError`（fetch 网络错）；Java 判 `IOException`，包含 TLS、中断、重定向策略错误（原 docs/36 §5.1） |
@@ -120,9 +119,6 @@
 | B196 | 内部 | `connectOnce` 顺序拉取工具/资源 | pi 用 `Promise.all` 并发拉取；差异仅在时序 |
 | B197 | 内部 | `URI.create` 接受相对引用，而 pi 的 `new URL` 会抛异常 | `responseFromRedirectUrl` 已显式挡 scheme；其余 URL 入口未逐个复核 |
 | B198 | 内部 | `OAuthPage` 的 CSS 折行 | 字节差仅在 `<style>` 内空白，计算值相同（受 checkstyle 120 列限制） |
-| B199 | 内部 | 包③的 stdio `cwd` 未移植（**已修**） | 包⑨已补：`StdioTransportOptions` 加 `cwd` ＋ `ProcessBuilder.directory`。此前 `mcp.json` 的 `cwd` 字段是死的 |
-| B200 | 内部 | 包⑧的 checkstyle 是「错误 0、警告 2」（**已修**） | 闭环记录写「checkstyle 0」未区分错误与警告。教训：闭环口径必须写明各几个 |
-| B201 | 内部 | 包⑤的 HTTP transport 无公开构造面（**已修**） | 包⑨已补：此前 `StreamableHttpTransport` 及其 Options 是包私有且无工厂，包外无法构造；pi 从 `@earendil-works/pi-mcp` 公开导出 |
 | B202 | 内部 | MCP 结果的 `structuredContent` 没有消费者 | `ToolResult.structuredContent` 形状已落（包⑩）；消费者是 codemode（B161）与 `after_tool` 钩子改写（pi `types.ts:1439`），均未落 |
 | B203 | 模型可见 | MCP 的 exposure/namespace/outputSchema/annotations 未接到 `AgentTool` | pi 的 `ToolDefinition` 有这四项；Java 的 `AgentTool` 没有，包⑩让 `McpToolDefinition` 承载；激活路径是第⑫包与 B161/B162 |
 | B204 | 用户可见 | MCP 工具与资源的 TUI 渲染器未移植 | pi 的 `createMcpToolRenderers`（`tools.ts:301-339`）用 `Text`/`Container`/`VisualLinePreview`/`keyHint`；pi-java 的工具渲染另成一路（B65/B47） |
@@ -130,13 +126,11 @@
 | B206 | 内部 | `ToolResult.isError` 是新增的语义通道 | pi 的 `isError` 来自结果对象（`AgentToolResult.isError`），pi-java 此前只由「抛没抛异常」派生。`PiToolRunner` 已改读结果字段，`after_tool` 钩子仍可改写 |
 | B207 | 内部 | `McpToolExposure` 是 pi 的 `ToolExposure`，暂居 mcp 包 | 5 个取值 `direct/model-only/codemode/deferred/hidden`；pi-java 扩展系统没有这个类型，唯一生产者是 MCP 适配器，待 E5（扩展 API）面成型时上移 |
 | B208 | 内部 | `ContentBlock.ImageContent(mediaType, data)` 与 pi 的 `{data, mimeType}` **参数序相反** | mcp 侧 `LlmContent.Image(data, mimeType)` 又跟 pi 一致，同一条转换链上有两个相反的序。换序点唯一（`McpResultContent.toBlock`），测试夹具两侧钉住 |
-| B209 | 用户可见 | `TruncationUtils.formatSize` 用默认 locale（**已修**） | `%.1f` 在德语区渲染成 `1,5KB`，pi 的 `toFixed` 恒用 `.`；包⑩已加 `Locale.ROOT` |
 | B210 | 用户可见 | `pi mcp` 的选项解析是自建的 | pi 的 `parseOptions` 有「收够 N 个位置参数即停止」语义（`add` 传 2），让 `add <server> <command> --flag` 的 `--flag` 透传给命令；picocli 表达不了这个语义（原 docs/38 §2.4） |
 | B211 | 用户可见 | `openBrowser` 是 pi-java 新增件 | 对应 pi `utils/open-browser.ts`；Java 新增 `BrowserLauncher`（Desktop → 平台命令 → 静默失败）；headless 环境只提示「visit the URL above」 |
 | B212 | 用户可见 | `waitForRedirectUrl` 有两处平台替代 | `process.stdin.isTTY` 用 `System.console() != null` 替代（**不等价**，Java 没有 isatty）；readline 的 `{ signal }` 用虚拟线程读 ＋ abort 竞速替代（原 docs/38 §3.6） |
 | B213 | 用户可见 | `pi mcp` 的文本字面量按 pi-java 命名 | 帮助/提示里的 `pi`→`pi-java`、`.pi`→`.pi-java`（与 B182 同族）；`chalk.dim` 去掉（pi-java 不做 ANSI 着色） |
 | B214 | 用户可见 | `/mcp` 管理器视图（`ui.ts:252`）顺延第⑫包 | `McpManagerView` 是 pi `ctx.ui.custom(...)` 的载荷，而 pi-java 的扩展 UI 是 RPC 请求/应答，**没有组件挂载面**（E5 域）。菜单编排在 `index.ts`（9 个 `ui.menu/status/redirectUrl` 调用点），两半一起进⑫（原 docs/38 §2.1，R-A 裁决 A） |
-| B215 | 内部 | `FileAuthJsonBackend` 的整文件字节锁**挡不住自己的读**（**已修**） | 包⑨用 `tryLock()` 锁整个文件后另开句柄 `Files.readString` 读它；Windows 对同进程其它句柄同样执行字节区间锁，报 ERROR_LOCK_VIOLATION（POSIX 不挡读，所以只在 Windows 可见）。修法＝读走持锁 channel。注意：文件后端在包⑨从未被实例化（测试用内存后端），包⑪补了 `FileAuthJsonBackendTest` |
 | B216 | 内部 | 包⑪开的四处跨包小缝 | ① `McpServerConnection.oauthSettings()` 包私有改 public（pi 是公开）；② 新增 `clearChallenge()`（pi 是直接赋 `undefined`）；③ 新增 `McpServerState.wire()`（CLI 要打 `needs-auth`）；④ 新增 `SettingsManager.load(agentDir, projectDir, override)`（原先只能为进程自己的目录解析信任） |
 | B217 | 内部 | MCP `login` 的端到端（真授权服务器）没有测试夹具 | 夹具覆盖到「连不上 / 非 OAuth / 缺参数 / 超时校验」为止；`--timeout` 秒数文案与 `reconnect` 后的成功路径需要真授权服务器（包⑨的 `McpSignIn` 另有夹具） |
 | B163 | 用户可见 | 主题/色彩系统差距大 | pi 3,176 行（theme、system-theme、oklab 等），Java 74 行 |
@@ -309,3 +303,7 @@
 4. 「不做」类进 §4，按【场景/决定/风险】三段式写清裁决与触发条件；分类变动在包文档记录。
 5. §1 计数由命令实测，不手记。
 6. 包设计稿闭环后随过程文档清理删除（历史在 git），**编号不复用**；下一包号 `docs/24`。
+7. 闭环口径的三条教训（来自 B186/B187/B200，已销号行的原文在 git 历史）：
+   - 包闭环验证必须含 `mvn verify`（spotbugs 绑在 verify 阶段，只跑 test＋checkstyle 会漏）。
+   - checkstyle 结果须写明错误、警告各几个，不接受一句「checkstyle 0」。
+   - 「某时刻还没发生」的时序断言是运气（跟虚拟线程抢调度），要改确定性断言（如「监听器线程 ≠ 发送线程」）。
