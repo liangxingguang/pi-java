@@ -46,39 +46,23 @@
 
 这些不是「没有」，而是「形状/行为不同」。**每一条的收口顺序**：先定「算不算偏差」；认账则立 B 号转 §1，不认则进 `docs/04` §4 写裁决与触发条件。
 
-### 2.1 权重 3（✅ 清零，2026-10-17 批 agent-core-2）
+### 2.1 权重 3（✅ 已清零）
 
-七条全部转对齐（map/03 权重 3 层 22/22 = **100%**；详稿原 docs/21（批 2 设计稿））：
-
-- **#34** `prepareRequest` 写钩子（老 void `before_request` 退役）。
-- **#46** `AgentSessionEvent` 面（补五帧＋`agent_settled{aborted}` 真形状＋单一漏斗全量转发）。
-- **#52** `agent_end` 本 pass 载荷（A8 销号）。
-- **#54** Entry union（裁决：行为等价，docs/04 §4）。
-- **#58** `convertToLlm`（case 合并部裁决＋stopReason 剔除已删）。
-- **#78** `latest()`/`find()`（裁决＋排序键差留痕；B53 分级阶梯另案）。
-- **#100** 系统提示载体（裁决：provider 边界同点折叠，请求线等价）。
-
-此前批 agent-core-1 已清 #6/#41/#17/#23。
+权重 3 层 22/22 = **100%**，无存活条目。批 agent-core-1 清 #6/#41/#17/#23，批 agent-core-2 清 #34/#46/#52/#54/#58/#78/#100（2026-10-17）；逐条闭环记录见 map/03 与 git 历史。其中 #54/#58/#78/#100 的裁决仍有效，收在 `docs/04` §4。
 
 ### 2.2 权重 1/2（按类归并，编号是 map/03 单元号）
 
 | 类 | 条目 |
 |---|---|
 | 队列/宿主 | #14 `QueueMode.All` 宿主语义（F1）· #80 `streamingBehavior` 两道门（A5/F4）· #84 两道门行为裁决（F4） |
-| 事件 | #53 `turn_end` 颗粒度（**B49**）· #86 `_emitSessionCompactFailed`、#88 `ActiveToolsChange` **2026-10-12 重测转 R1 作废**（公开事件面 pi 从不发射；#86 只剩扩展事件属 coding-agent 域） |
+| 事件 | #53 `turn_end` 颗粒度（**B49**） |
 | 存储/会话 | #56 `EntryProjector`（A1）· #57 四个消息类型（A1）· #60 `PendingEntry`/`InboxItem` 队列契约 · #75 session fork · #77 恢复 seed/replay（A2） |
 | prompt/技能 | #63 `loadSkills`、#64 `loadPromptTemplates`（生产者都在 coding-agent） |
 | API 面 | #81 工具线程安全契约（**A10**）· #82 `retry.provider.*` ↔ RetryPolicy（A7）· #83 `transcript()` 消费者清点（A2）· #85 `recordEvent` 兜底（F2） |
 | 并发/可见性 | #89 批内 join 源序（C2）· #90 transcript 可见性（C3）· #91 `reset` 不关 runSpan（C4） |
 | 夹具/文档/结构债 | #87 L5 thinking 块不对称（E8）· #92 遥测 javadoc（D2/D3）· #93 SummaryGenerator javadoc（D6）· #94 文件超限（**E3/E4**，另 E1/E2 在 coding-agent）· #95 集成层夹具无牙（**A14**）· #96 错误路 AgentSettled 无夹具（**A15**） |
 
-**2026-10-12 重测已转对齐**：
-
-- **#73 JSONL 存储**（PiV3Wire 原生 v3 线＋双向互读夹具；条目信封 #16 仍存疑，见 map/06）。
-- **#102 reset 基线**（B70 消解坐实：systemPrompt 字段清空不丢基线）。
-- #86/#88 转 R1 作废。
-
-新登记缺口的去向：`durationMs`（B234 已于 ai 批 5 销号）、`agent_settled.aborted`（B235 已随批 agent-core-2 销号）；`--tools` glob/modifier 模式面在册 **B236**（docs/04 §3.3，归 coding-agent 批）。
+**跨层挂账提醒**：JSONL 条目信封 #16 仍存疑（见 map/06）；`--tools` glob/modifier 模式面在册 **B236**（docs/04 §3.3，归 coding-agent 批）。
 
 **2026-10-17 批 agent-core-3**（详稿原 docs/22（批 3 设计稿））：内置工具四条存疑**清零**：
 
