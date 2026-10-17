@@ -1044,15 +1044,26 @@ public final class AgentSession implements AutoCloseable {
     }
 
     /**
-     * 列出 {@code cwd} 下的持久化会话摘要。name/messageCount/firstMessage 需
-     * 打开会话读取（逐会话 writer lease），本地工具场景可接受；打开失败降级为
-     * 元数据摘要。
+     * 列出 {@code cwd} 下的持久化会话摘要。
+     *
+     * <p>#79/B55：JSONL 后端走富列表（pi {@code SessionManager.list} —
+     * {@code buildSessionInfo} 全文件逐行读，不再逐会话 writer lease）；
+     * 其它后端留旧路（逐会话 open，失败降级元数据摘要）。</p>
      */
     public List<SessionSummary> listSessionsSummary(String cwd) {
         if (persistentRepository == null) {
             return List.of();
         }
         String dir = cwd == null || cwd.isBlank() ? System.getProperty("user.dir") : cwd;
+        if (persistentRepository.repository()
+                instanceof com.pijava.agent.session.jsonl.JsonlSessionRepository repo) {
+            return repo.listRich(dir, null, null).stream()
+                .map(info -> new SessionSummary(info.id(), info.path(),
+                    info.name() == null ? "" : info.name(), info.cwd(),
+                    java.time.Instant.ofEpochMilli(info.createdMs()), info.modifiedMs(),
+                    info.messageCount(), info.firstMessage()))
+                .toList();
+        }
         var result = new java.util.ArrayList<SessionSummary>();
         for (var meta : persistentRepository.list(dir)) {
             result.add(summaryFor(meta));

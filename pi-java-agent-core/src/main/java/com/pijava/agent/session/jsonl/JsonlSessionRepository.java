@@ -15,6 +15,7 @@ import com.pijava.agent.session.SessionError;
 import com.pijava.agent.session.SessionErrorCode;
 import com.pijava.agent.session.SessionRepository;
 import com.pijava.agent.session.UuidV7;
+import com.pijava.ai.AbortSignal;
 
 /**
  * JSONL session repository (aligned with pi {@code JsonlSessionRepo}). Guards
@@ -29,11 +30,13 @@ public final class JsonlSessionRepository implements
     private final JsonlSessionRepoFileSystem fs;
     private final Path sessionsRoot;
     private final Set<String> activeCreateDestinations = new HashSet<>();
+    private final RichSessionLister richLister;
 
     /** Create a JSONL repository rooted at {@code sessionsRoot}. */
     public JsonlSessionRepository(Path sessionsRoot, JsonlSessionRepoFileSystem fs) {
         this.sessionsRoot = sessionsRoot;
         this.fs = fs;
+        this.richLister = new RichSessionLister(sessionsRoot, fs, this::sessionDirectories);
     }
 
     /** Default file system over {@code sessionsRoot}. */
@@ -95,6 +98,20 @@ public final class JsonlSessionRepository implements
     public void delete(JsonlSessionMetadata metadata) {
         fs.remove(metadata.path(), true);
     }
+
+    // #79/B55：渐进富列表的实现在 RichSessionLister（本类只留转发 —— ≤500 行规约）。
+
+    /** pi {@code listSessionsFromDir} —— 转发 {@link RichSessionLister}。 */
+    public List<RichSessionInfo> listRich(String cwd, SessionListProgress progress,
+                                          AbortSignal signal) {
+        return richLister.listRich(cwd, progress, signal);
+    }
+
+    /** pi {@code listAll} —— 转发 {@link RichSessionLister}。 */
+    public List<RichSessionInfo> listAllRich(SessionListProgress progress, AbortSignal signal) {
+        return richLister.listAllRich(progress, signal);
+    }
+
 
     /**
      * pi {@code SessionManager.findById}（session-manager.ts:1874-1911）对位：
@@ -256,7 +273,7 @@ public final class JsonlSessionRepository implements
             .anyMatch(e -> !"directory".equals(e.kind()) && e.name().endsWith(suffix));
     }
 
-    private List<Path> sessionDirectories(String cwd) {
+    List<Path> sessionDirectories(String cwd) {
         if (cwd != null) {
             String resolved = fs.absolutePath(cwd);
             String directory = sessionDirectory(resolved);
