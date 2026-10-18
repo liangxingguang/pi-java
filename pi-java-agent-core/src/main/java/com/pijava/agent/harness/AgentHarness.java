@@ -3,7 +3,6 @@ package com.pijava.agent.harness;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.entry.Entry;
@@ -12,12 +11,10 @@ import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.skill.SkillManager;
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ToolContext;
-import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.thinking.ModelThinkingLevel;
-import com.pijava.telemetry.TelemetryContext;
 
 /**
  * Central agent runtime — prompt → LLM → tool → repeat loop.
@@ -31,64 +28,14 @@ import com.pijava.telemetry.TelemetryContext;
  * <p>{@link #prompt} / {@link #continueRun} 是**阻塞**的：pi 的 {@code prompt()} 返回
  * Promise，Java 侧由调用线程直接跑到收口（{@code 原 docs/31 §8.5} 的口径 —— 对齐的是
  * 「可观察效果的顺序」，不是 async 机器）。</p>
+ *
+ * <p>#94（docs/25 §8）：字段、构造装配、队列调度委托与内部助手抽在包私有基类
+ * {@link HarnessBootstrap} —— 纯移动，公共 API 面（继承所得成员与下述声明）不变。</p>
  */
-public class AgentHarness implements AutoCloseable {
-
-    // ═══════════════════════════════════════════════════════════
-    // Fields
-    // ═══════════════════════════════════════════════════════════
+public class AgentHarness extends HarnessBootstrap {
 
     /** Default lane name. */
     public static final String DEFAULT_LANE = "default";
-
-    private final StreamFn streamFn;
-    /**
-     * B223（{@code 原 docs/47}）：压缩设置晚读口 —— 唯一供给 {@link ExecutionContext}
-     * 与包私有观察口 {@link #currentCompactionSettings()}；每次决策按 lane 当前模型现解析。
-     */
-    private final Supplier<CompactionSettings> compactionSettingsSupplier;
-    private final int maxInputTokens;
-    private final ToolRegistry toolRegistry;
-    private final ToolContext toolContext;
-    private volatile boolean closed;
-
-    /** 构造配置的留存副本 —— 只为 {@link #fork()} 用（新会话要一个**同配置**的独立 harness）。 */
-    private final HarnessConfig config;
-
-    /**
-     * 本 harness **唯一**的车道（pi {@code AgentState}，{@code 原 docs/31 §4.3}）。
-     *
-     * <p>运行时多车道容器（{@code LaneRegistry} / {@code LaneHandle} / {@code LaneConfig}）
-     * 已删除：pi 的对齐目标 {@code agent.ts} 是单状态的，而「多分支」归会话层 —— 每个
-     * {@code AgentSession} 持有自己的 harness，分支就是新会话（存储层 lane 保留，那正是
-     * pi 的分支模型）。</p>
-     */
-    private final LaneState lane = new LaneState();
-
-    // Phase 2c: hooks
-    private final HookSystem hookSystem;
-
-    // Phase 2c: skills
-    private final SkillManager skillManager = new SkillManager();
-
-    // Phase 2c: event bus
-    final HarnessEventBus eventBus = new HarnessEventBus();
-
-    // Phase 2c: token counter
-    private final ExecutionContext.TokenCounter tokenCounter = new ExecutionContext.TokenCounter();
-
-    // run 的起手/收口（pi runWithLifecycle / finishRun）
-    private RunLifecycle runLifecycle;
-
-    // 唯一的驱动：pi 双循环引擎
-    private final PiLaneEngine piEngine;
-
-    // Phase 2c: snapshot service
-    private SnapshotService snapshotService;
-
-    // Phase 2c: queue manager + telemetry
-    private QueueManager queueManager;
-    private final TelemetryContext telemetry;
 
     // ── Factory ──────────────────────────────────────────────
 
@@ -98,64 +45,7 @@ public class AgentHarness implements AutoCloseable {
     }
 
     private AgentHarness(HarnessConfig config) {
-        this.config = config;
-        this.streamFn = config.streamFn();
-        lane.laneName = DEFAULT_LANE;
-        lane.model = config.model();
-        lane.thinkingLevel = config.thinkingLevel();
-        lane.systemPrompt = config.systemPrompt();
-        lane.promptGuidelines = config.promptGuidelines();
-        lane.appendSystemPrompt = config.appendSystemPrompt();
-        lane.activeTools = config.activeTools();
-        this.maxInputTokens = config.maxInputTokens();
-        this.toolRegistry = config.toolRegistry();
-        this.toolContext = config.toolContext();
-        lane.steeringMode = config.steeringMode();
-        lane.followUpMode = config.followUpMode();
-        lane.toolExecution = config.toolExecution();
-        this.telemetry = config.telemetry();
-        this.hookSystem = new HookSystem(lane);
-        config.skills().values().forEach(skillManager::register);
-
-        // Build snapshot service first (referenced by execution context)
-        this.snapshotService = new SnapshotService(
-            lane, eventBus, tokenCounter,
-            () -> lane.model != null ? lane.model.modelName() : "unknown",
-            () -> lane.activeTools.stream().map(AgentTool::name)
-                .collect(java.util.stream.Collectors.toSet()));
-
-        // Build queue manager first (referenced by the execution context)
-        this.queueManager = new QueueManager(
-            lane,
-            () -> lane.steeringMode,
-            () -> lane.followUpMode);
-
-        // B223（原 docs/47）：压缩设置晚读口 —— 每次决策按 lane 的**当前**模型现解析
-        //（pi getCompactionSettings(this.model) 四调用点）；setModel/modelOverrides/
-        // 设置文件改动下次决策即生效；resolver == null ⇒ 引擎旧契约「不接＝不压」。
-        final java.util.function.Function<ModelId<?>, CompactionSettings> compactionResolver =
-            config.compactionResolver();
-        this.compactionSettingsSupplier = () -> compactionResolver == null
-            ? null
-            : compactionResolver.apply(lane.model);
-        Supplier<CompactionSettings> compactionSettings = compactionSettingsSupplier;
-
-        // Build execution context and the run lifecycle
-        var execCtx = new ExecutionContext(
-            streamFn, () -> lane.model, () -> lane.thinkingLevel,
-            () -> lane.systemPrompt, () -> lane.activeTools,
-            maxInputTokens, config.contextWindow(), config.maxOutputTokens(),
-            toolRegistry, toolContext,
-            skillManager,
-            hookSystem, lane, compactionSettings, config.thinkingLevelMap(),
-            tokenCounter, snapshotService, queueManager, () -> lane.toolExecution,
-            () -> eventBus::broadcastStream, config.summaryGenerator(),
-            lane::applyTurn, telemetry, config.compactionObserver(),
-            config.retrySettings(), config.retryAborted(), config.retryObserver(),
-            () -> lane.promptGuidelines, () -> lane.appendSystemPrompt,
-            config.contextFiles(), config.thinkingBudgets());
-        this.runLifecycle = new RunLifecycle(execCtx);
-        this.piEngine = new PiLaneEngine(execCtx, runLifecycle);
+        super(config);
     }
 
     /**
@@ -182,65 +72,6 @@ public class AgentHarness implements AutoCloseable {
     /** The lane's name — 一个 harness 只有一条，恒为 {@link #DEFAULT_LANE}（{@code 原 docs/31 §4.3}）。 */
     public String laneName() {
         return lane.laneName;
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    // Queue scheduling — delegated to QueueManager
-    // ═══════════════════════════════════════════════════════════
-
-    /** Enqueue a steer prompt (injected into the current run's next round). */
-    public String steer(String laneName, String prompt) {
-        return queueManager.steer(laneName, prompt);
-    }
-
-    /** Enqueue a steer prompt with images. */
-    public String steer(String laneName, String prompt, List<PromptImage> images) {
-        return queueManager.steer(laneName, prompt, images == null ? List.of() : images);
-    }
-
-    /** Enqueue a follow-up prompt (processed when the current run finishes). */
-    public String followUp(String laneName, String prompt) {
-        return queueManager.followUp(laneName, prompt);
-    }
-
-    /** Enqueue a follow-up prompt with images. */
-    public String followUp(String laneName, String prompt, List<PromptImage> images) {
-        return queueManager.followUp(laneName, prompt, images == null ? List.of() : images);
-    }
-
-    /** Enqueue a next-run prompt (starts a run when the lane is idle). */
-    public String nextRun(String laneName, String prompt) {
-        return queueManager.nextRun(laneName, prompt);
-    }
-
-    /** Enqueue a next-run prompt with images. */
-    public String nextRun(String laneName, String prompt, List<PromptImage> images) {
-        return queueManager.nextRun(laneName, prompt, images == null ? List.of() : images);
-    }
-
-    /** Cancel all queued items of the given type ("steer", "followUp", "nextRun"). */
-    public void cancelQueued(String laneName, String queueType) {
-        queueManager.cancelQueued(laneName, queueType);
-    }
-
-    /** Current steer-queue drain mode. */
-    public QueueMode steeringMode() {
-        return lane.steeringMode;
-    }
-
-    /** Change the steer-queue drain mode (Phase 3). */
-    public void steeringMode(QueueMode mode) {
-        lane.steeringMode = mode;
-    }
-
-    /** Current follow-up-queue drain mode. */
-    public QueueMode followUpMode() {
-        return lane.followUpMode;
-    }
-
-    /** Change the follow-up-queue drain mode (Phase 3). */
-    public void followUpMode(QueueMode mode) {
-        lane.followUpMode = mode;
     }
 
     /** The shared tool context (shell executor, cwd, env) for this harness. */
@@ -476,19 +307,6 @@ public class AgentHarness implements AutoCloseable {
         return requireLane(laneName).isRunning();
     }
 
-    /**
-     * Pending steer-queue texts in queue order（B34，原 docs/26；
-     * pi {@code getSteeringMessages}，agent-session.ts:2371-2373）。
-     */
-    public List<String> queuedSteering(String laneName) {
-        return queueManager.steeringTexts(laneName);
-    }
-
-    /** Pending follow-up-queue texts（pi {@code getFollowUpMessages}，:2376-2378）。 */
-    public List<String> queuedFollowUp(String laneName) {
-        return queueManager.followUpTexts(laneName);
-    }
-
     // ═══════════════════════════════════════════════════════════
     // Skills
     // ═══════════════════════════════════════════════════════════
@@ -524,11 +342,6 @@ public class AgentHarness implements AutoCloseable {
     /** Subscribe to session-level snapshot updates. */
     public WatchHandle<SessionSnapshot> watchSession() {
         return snapshotService.watchSession();
-    }
-
-    /** Publish lane + session snapshots after a state change. */
-    private void publishState(String laneName) {
-        snapshotService.publishState(laneName);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -602,16 +415,6 @@ public class AgentHarness implements AutoCloseable {
         }
     }
 
-    /**
-     * 下一次压缩决策将使用的设置 —— 经 resolver 按<b>当前车道模型</b>现解析
-     * （B223，{@code 原 docs/47}）；未接线返回 {@code null}（G0 关）。
-     * 包私有观察口：引擎测试钉「每次决策重读、读当前模型」，不进公开 API
-     * （pi 侧的权威读法在宿主 settings manager）。
-     */
-    CompactionSettings currentCompactionSettings() {
-        return compactionSettingsSupplier.get();
-    }
-
     // ═══════════════════════════════════════════════════════════
     // Close
     // ═══════════════════════════════════════════════════════════
@@ -631,13 +434,5 @@ public class AgentHarness implements AutoCloseable {
                 lane.runId == null ? "" : lane.runId));
         }
         snapshotService.publishState(lane.laneName);
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    // Internal helpers
-    // ═══════════════════════════════════════════════════════════
-
-    private LaneState requireLane(String laneName) {
-        return HarnessUtils.requireLane(lane, laneName);
     }
 }

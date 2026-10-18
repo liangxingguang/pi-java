@@ -12,7 +12,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.pijava.agent.entry.Entry;
-import com.pijava.agent.hook.ResponseContext;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.record.ReplayKind;
 import com.pijava.agent.record.StepKind;
@@ -117,16 +116,11 @@ final class PiLaneSink implements PiLoop.Sink {
     /** 本次请求实际发给 provider 的消息数，由引擎的 {@code transformContext} 回填。 */
     private int assembledMessageCount;
 
-    /** 本次助手流的用量：pi-java 的 {@link StreamEvent.UsageInfo} 是独立帧，只能旁路累计。 */
-    private long inputTokens;
-    private long outputTokens;
-
     /** 本次请求的 step 序号（每次助手流 +1）。 */
     private int stepIndex;
 
-    /** 本轮 {@code llm.request} 遥测跨度，由 {@link #beginRequest} 打开、{@link #endRequest} 关闭。 */
-    private TelemetrySpan llmSpan;
-    private long llmStartNanos;
+    /** 请求遥测族（llm.request 跨度＋token 旁路）—— #94 抽离，见 {@link PiLaneRequestTelemetry}。 */
+    private final PiLaneRequestTelemetry requestTelemetry;
 
     /**
      * 本次运行最后一个落定的助手消息（pi {@code _lastAssistantMessage}，
@@ -147,6 +141,7 @@ final class PiLaneSink implements PiLoop.Sink {
         this.laneName = laneName;
         this.alreadyPresent = alreadyPresent;
         this.downstream = downstream;
+        this.requestTelemetry = new PiLaneRequestTelemetry(ctx, laneName);
     }
 
     /** 由引擎的 {@code transformContext} 回填，供 {@code StepAttempt.messageCount} 使用。 */
@@ -172,66 +167,9 @@ final class PiLaneSink implements PiLoop.Sink {
     // 一轮请求的开销侧：钩子 + 遥测（对齐 AssistantStreamExecutor:67-95）
     // ═══════════════════════════════════════════════════════════
 
-    /**
-     * 一轮 provider 请求开始：打开 {@code llm.request} 跨度。
-     *
-     * <p>这原本长在 {@code AssistantStreamExecutor.execute()} 里 —— 它是**执行步**的
-     * 开销，不是驱动循环的，所以 {@link PiLoop} 不带它。切换驱动时必须显式搬过来，
-     * 否则 {@code llm.request} 跨度消失（{@code PayloadRecordingStreamFnTest} 与
-     * {@code ModelSwitchRealReproTest} 抓的就是这个）。</p>
-     *
-     * <p>请求钩子不在这里：pi 的 {@code prepareRequest}（{@code agent-loop.ts:219}）
-     * 是<b>可改写</b>的运行时钩子，归 {@code PiLoop.Config.prepareRequest} 槽
-     * （引擎接线 {@code HookSystem.firePrepareRequest}）；本方法只剩跨度职责。</p>
-     */
+    /** 一轮 provider 请求开始：打开 {@code llm.request} 跨度（#94 起本体在 {@link PiLaneRequestTelemetry}）。 */
     void beginRequest(LaneState lane, List<Message> messages) {
-        llmStartNanos = System.nanoTime();
-        var parent = lane.runSpan != null ? lane.runSpan : ctx.telemetry();
-        llmSpan = parent.openSpan(new SpanOptions("llm.request", Map.of(
-            "attempt", stepIndex,
-            "model", RunSpanFactory.modelLabel(ctx.model().get()),
-            "messageCount", messages.size(),
-            "toolCount", toolCount(),
-            "thinking", RunSpanFactory.thinkingLabel(ctx.thinkingLevel().get()))));
-        ctx.telemetry().pushCurrent(llmSpan);
-    }
-
-    /**
-     * 一轮请求结束：发 {@code after_response}、关跨度、记指标。
-     *
-     * <p>3c 之前这里还挂着「最后一请求停因」的旁路字段供运行后的溢出判定；
-     * 现在溢出判定读的是<b>终局助手消息本身</b>（pi {@code _checkCompaction} 读
-     * {@code assistantMessage} 的 stopReason/errorMessage/usage/timestamp，
-     * {@code agent-session.ts:2154}），旁路字段删除。</p>
-     */
-    private void endRequest(LaneState lane, Message.AssistantMessage assistant, long durationMs) {
-        StopReason stop = assistant.stopReason();
-        if (llmSpan != null) {
-            llmSpan.addAttribute("inputTokens", inputTokens);
-            llmSpan.addAttribute("outputTokens", outputTokens);
-            if (stop != null) {
-                // OTel 属性是字符串边界：显式出 wire 字面（camelCase）。
-                llmSpan.addAttribute("stopReason", stop.wireName());
-            }
-            // C5（原 docs/23 §6）：先 pop 后 close，与 JsonlFileTelemetry.startSpan
-            // 对称——close 期间的 recordEvent 无归属（可检测的缺席），而不是
-            // 错挂到已闭跨度上。
-            ctx.telemetry().popCurrent(llmSpan);
-            llmSpan.close();
-            llmSpan = null;
-        }
-        ctx.telemetry().incrementCounter("llm.requests", 1);
-        ctx.telemetry().recordTiming("llm.request.duration", durationMs);
-        if (inputTokens > 0) {
-            ctx.telemetry().incrementCounter("llm.tokens.input", inputTokens);
-        }
-        if (outputTokens > 0) {
-            ctx.telemetry().incrementCounter("llm.tokens.output", outputTokens);
-        }
-
-        var usage = new StreamEvent.UsageInfo(inputTokens, outputTokens, lane.partial);
-        ctx.hookSystem().fireAfterResponse(laneName,
-            new ResponseContext(laneName, lane.runId, lane.partial, usage));
+        requestTelemetry.beginRequest(lane, messages.size(), toolCount(), stepIndex);
     }
 
     /**
@@ -291,27 +229,9 @@ final class PiLaneSink implements PiLoop.Sink {
         return count;
     }
 
-    /**
-     * 原始帧旁路：维护 {@code lane.partial} 与 token 记账。
-     *
-     * <p>两点都只能在这里做：① pi-java 把用量做成独立的
-     * {@link StreamEvent.UsageInfo} 帧，而它不属于生命周期事件，{@link PiLoop} 不会为它发
-     * {@code message_update}；② {@code lane.partial} 必须是**流式 partial**
-     * （{@code com.pijava.ai.message.AssistantMessage}），与消息记录
-     * （{@link Message.AssistantMessage}）是两个类型，只有原始帧才携带前者。
-     * 旧路径 {@code AssistantStreamExecutor:114-121} 读的正是同一对字段。</p>
-     */
+    /** 原始帧旁路：{@code lane.partial} 与 token 记账（#94 起本体在 {@link PiLaneRequestTelemetry}）。 */
     void noteStreamEvent(StreamEvent event) {
-        if (event.partial() != null) {
-            ctx.requireLane(laneName).partial = event.partial();
-        }
-        if (event instanceof StreamEvent.Start) {
-            inputTokens = 0;
-            outputTokens = 0;
-        } else if (event instanceof StreamEvent.UsageInfo usage) {
-            inputTokens += usage.inputTokens();
-            outputTokens += usage.outputTokens();
-        }
+        requestTelemetry.noteStreamEvent(ctx.requireLane(laneName), event);
     }
 
     @Override
@@ -402,10 +322,10 @@ final class PiLaneSink implements PiLoop.Sink {
                         .withStopReason(assistant.stopReason())
                         .withErrorMessage(assistant.errorMessage());
                 }
-                var durationMs = llmDurationMs();
+                var durationMs = requestTelemetry.llmDurationMs();
                 var entry = append(lane, message);
                 emitAssistantRecords(lane, entry, assistant, durationMs);
-                endRequest(lane, assistant, durationMs);
+                requestTelemetry.endRequest(lane, assistant, durationMs);
                 lane.newestOwn = HarnessUtils.deriveNewestOwn(lane);
             }
             case Message.ToolResultMessage result -> emitToolRecords(lane, append(lane, message), result);
@@ -415,11 +335,6 @@ final class PiLaneSink implements PiLoop.Sink {
         // 新驱动的等价点是「每条 entry 产生后」。少了这一步，会话快照会停在
         // 起手时的 token 数（AgentSessionToolIntegrationTest 抓的就是这个）。
         ctx.publishState(laneName);
-    }
-
-    /** 本次 {@code llm.request} 已经过的毫秒数。 */
-    private long llmDurationMs() {
-        return (System.nanoTime() - llmStartNanos) / 1_000_000;
     }
 
     /** 建 entry 并挂上车道。entry 一旦产生就直接进 transcript，没有中间态。 */
@@ -464,7 +379,7 @@ final class PiLaneSink implements PiLoop.Sink {
             UsageCause.ASSISTANT.value(), model.provider(), model.modelName(),
             assistant.usage(), null,
             lane.runId, entry.id(), null, attempt, assistant.stopReason()));
-        ctx.addTokens(inputTokens + outputTokens);
+        ctx.addTokens(requestTelemetry.inputTokens() + requestTelemetry.outputTokens());
     }
 
     /**
