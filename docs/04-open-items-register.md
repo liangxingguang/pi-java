@@ -124,9 +124,9 @@
 | B216 | 内部 | 包⑪开的四处跨包小缝 | ① `McpServerConnection.oauthSettings()` 包私有改 public（pi 是公开）；② 新增 `clearChallenge()`（pi 是直接赋 `undefined`）；③ 新增 `McpServerState.wire()`（CLI 要打 `needs-auth`）；④ 新增 `SettingsManager.load(agentDir, projectDir, override)`（原先只能为进程自己的目录解析信任） |
 | B217 | 内部 | MCP `login` 的端到端（真授权服务器）没有测试夹具 | 夹具覆盖到「连不上 / 非 OAuth / 缺参数 / 超时校验」为止；`--timeout` 秒数文案与 `reconnect` 后的成功路径需要真授权服务器（包⑨的 `McpSignIn` 另有夹具） |
 | B163 | 用户可见 | 主题/色彩系统差距大 | pi 3,176 行（theme、system-theme、oklab 等），Java 74 行 |
-| B236 | 混合 | **新锚点**：`--tools`/`--exclude-tools` 的模式面缺失 | pi 走 minimatch 模式：`*` 全选、`+name`/`-name` 修饰符、`mcp__` 前缀、空名单保留 MCP 注册（`args.ts:151-162`、`agent-session.ts` 的 createToolNameMatcher/applyToolModifiers）；Java `ArgsParser.java:87-90,244-251` 只支持逗号分隔的裸名。powershell 的激活面也挂本项（~~B243~~ 已销号：本体＋注册＋默认不激活已于批 agent-core-4 落地） |
 | B244 | 用户可见 | **`skill:` slash 命令注册＋settings `skillCommands` 开关**（批 agent-core-4 新登记，docs/09 §13.5） | pi `agent-session.ts:3377` 注册 `skill:<name>` 命令；settings-schema.ts:315 有 `skillCommands` 开关。批 4 只做了 `/skill:` 文本展开（`SkillCommandExpansion`），命令注册面未做 |
 | B245 | 混合 | **tree 扩展事件＋TUI 摘要流**（批 agent-core-4 新登记，docs/09 §13.5） | ① `session_before_tree`/`session_tree` 扩展事件（types.ts:817-846,1488-1501，含 `result.summary` 整体替代生成器的 fromHook=true 旁路）；② TUI 树选择器摘要三选对话框（interactive-mode.ts:5559-5706）＋摘要期 Esc 换绑 `abortBranchSummary`（:5637-5640）＋`skipPrompt` 弹窗门（:5590，设置项批 4 已备）。挂扩展事件（D 域）与 TUI 两族；`navigateTree`/`abortBranchSummary` 本体批 4 已落 |
+| B246 | 混合 | **工具选择的 reload 臂＋SDK `tools` 选项抛错面**（批 coding-agent-1 新登记，docs/11 裁决④） | pi `usesDefaultTools`/`defaultToolModifiers`（`sdk.ts:472-473`）只在 `reload()` 有语义（`agent-session.ts:3660-3685`：设置重载后激活**新增**默认工具、移除的保持激活、`-name` 移除的保持移除），依附扩展运行时重载面；java 无 reload 面（设置改动走 accessors 即效）。SDK `tools` 选项的 `Invalid tools option` 抛错（`sdk.ts:280-281`）java 无 SDK 面；CLI 等价物＝解析期 error 诊断（批 1 已落）。触发条件＝java 出现 session reload/扩展运行时或 SDK 面 |
 
 ### 3.4 TUI（优先级最低，web UI 为主）
 
@@ -309,13 +309,20 @@
 - 【风险/代价】无影响。[内部，模型不可见]
 - 触发条件：pi 重新引入同形类型时重裁。出处：docs/10 §13。
 
+### map/04-B236 — 工具选择三层语义（`--tools` pattern/modifier/`mcp__` ＋ `defaultTools`）
+
+- 【场景】pi 的 `--tools` 不是逗号裸名过滤，而是三层语义：名单条目（裸名/`*` 模式/`mcp__` 前缀）→ 修饰符解析（`+name`/`-name` 叠在默认选择上）→ 注册面门（`_isAllowedTool`：不匹配的内置工具连注册都不注册，MCP 工具有保留条款）；settings `defaultTools` 键同套 modifier 语义并有分层 merge 特判（覆盖层全修饰符 ⇒ 追加）。java 原是逗号裸名切分＋七件全激活。
+- 【决定】2026-10-18 批 coding-agent-1（docs/11）：三层语义＋`defaultTools` 键整体落地（`ToolNameMatcher`/`ToolSelection`/装配接线，map/04 A-20/A-21/E2-35 翻对齐）。**裁决①**：默认激活集 **7→4**（read/bash/edit/write——pi `DEFAULT_TOOL_NAMES` 恒四件，pi 自有测试实证裸跑激活面；本批最大用户可见变化，裸跑不再向模型声明 grep/find/ls，恢复途径 `--tools +grep,+find,+ls` 或 settings `defaultTools`）。**裁决②**：`ToolSetFactory.createCodingTools`（七件形）删除——pi 现锚点 `createCodingTools`＝四件，java 七件形无对位，唯一主码消费点改走 `createAllTools` 八件＋选择策略。**裁决③**：`mcp__` 保留语义**策略先行**（`isMcpToolName`/`allowlistFiltersMcp`/注册面门的 MCP 保留臂全量落地为纯函数＋测试）——java MCP 工具尚未进会话注册面（B221 ⑫b），本批无可观察 MCP 行为变化，MCP 工具进注册面时自动获得 pi 语义。**裁决④**：reload 臂（`usesDefaultTools`/`defaultToolModifiers`，`agent-session.ts:3660-3685`）与 SDK `tools` 抛错面登记 **B246** 不做。窄差登记（docs/11 §5）：D1 校验诊断前缀恒 `--tools`（picocli 不暴露实敲别名）；D2 SDK 面抛错无对位（CLI 等价物＝解析期 error 诊断）；D3 `defaultTools` 形状异常 pi 容忍、java 类型化读入即抛；D4 `_pendingToolNames` 晚注册臂随 B221 ⑫b，本批点名的未注册名静默丢弃。
+- 【风险/代价】裁决①是**意图中的模型可见面收缩**（非回归）；裁决③在 MCP 工具进注册面前不可观察；D1–D4 均为边缘/内部近似。[① 用户可见；②③④＋D 族 内部，模型不可见]
+- 触发条件：③④ MCP 工具进会话注册面（B221 ⑫b）时收编；java 出现 session reload/扩展运行时或 SDK 面时重裁（B246）。出处：docs/11 §5。
+
 ---
 
 ## 5. E 类 —— 结构债（仓库规则：单文件 ≤ 500 行）
 
 | # | 文件 | 行数 |
 |---|---|---:|---:|
-| E1 | coding-agent …/core/AgentSession.java | **1,592**（2026-10-18 批 agent-core-5 实测；拆分宜搭下一 coding-agent 批） |
+| E1 | coding-agent …/core/AgentSession.java | **1,605**（2026-10-18 批 coding-agent-1 实测；拆分宜搭下一 coding-agent 批） |
 | E2 | coding-agent …/rpc/RpcDispatcher.java | 627 |
 | E5 | ai …/catalog/ModelCompat.java | **762**（2026-10-11 B98 加 8 组件；converter 侧已拆出 CompletionAssistantMessage 保 500 内） |
 

@@ -1,6 +1,7 @@
 # 11 coding-agent 批 1 设计 —— B236 工具选择模式面（`--tools` pattern/modifier/`mcp__` ＋ `defaultTools` 设置）
 
-> **状态：🟢 审核通过（2026-10-18）——实施中**
+> **状态：✅ 已闭环（2026-10-18）**——6 commits：`48053f0f` ToolNameMatcher+ToolSelection、`5e603584` defaultTools 设置键、`3acd01f6` --tools 解析期校验＋help 文本、`b1cefdc1` 装配接线（注册面门＋默认 7→4＋createCodingTools 删除）、`ca0e1177` DefaultToolsSelectionTest、闭环回填 commit。账面：coding-agent 217.5/496（43.9%）→ **221.0/496 = 44.6%**（未加权 92 → 95/290 = 32.8%）；合计 882.5/1381（63.9%）→ **886.0/1381 ≈ 64.2%**。全量 `mvn clean verify` 绿（exit 0）。
+> 实施偏差注记：① `Resolved.isActiveOnLoad` 加了 `isAllowed` 门（§3.6 对账表行 7 自洽——设计稿 Resolved 代码与其自身对账表的潜在不一致，测试按对账表写）；② `PowerShellToolTest` 七件形断言**删除**而非 §3.8 预想的改断（agent-core 看不见 coding-agent 的 `ToolSelection`，语义覆盖在 ToolSelectionTest/DefaultToolsSelectionTest）；③ §6 回填的全仓数字按批 5 后真实基线重算（882.5/1381，非本稿 0 批次卡的 869.0/1383）。
 > 基线：pi `ea448f454`（2026-10-11）；pi-java main（agent-core 批 4 闭环后，`c5f0f06c`）。
 > 所有 pi 侧 `file:line` 均经 `git -C D:/workplaceForai/pi show ea448f454:<path>` 实读，未读 pi 工作树。
 > 前批：`09-agent-core-batch4-design.md`（已闭环）。

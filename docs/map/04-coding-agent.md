@@ -64,10 +64,10 @@ java `cli/ArgsParser.java` 共 **43 个 `@Option`**，其中 **4 个 java 独有
 | 15 | `--fork` | `args.ts:138` | ⚠️ `ArgsParser.java:78` | 1 | **存疑** | 同上（B53）；`SessionPersistence.java:192-199` |
 | 16 | `--session-dir` | `args.ts:140` | ✅ `ArgsParser.java:81` | 1 | 对齐 | `AgentSession.java:131/164/180` |
 | 17 | `--models` | `args.ts:142` | ❌ `ArgsParser.java:84` | 2 | **缺失** | `args.models()` **零消费者** ⇒ Ctrl+P 循环列表无实现 |
-| 18 | `--no-tools`/`-nt` | `args.ts:147` | ✅ `ArgsParser.java:93` | 1 | 对齐 | `-nt` 由 `:258` 展开 |
-| 19 | `--no-builtin-tools`/`-nbt` | `args.ts:149` | ✅ `ArgsParser.java:96` | 1 | 对齐 | |
-| 20 | `--tools`/`-t` | `args.ts:151` | ⚠️ `ArgsParser.java:87` | 2 | **存疑** | pi 现支持**通配 pattern（`*`）、`+name`/`-name` 增量项、`mcp__` 前缀**（`args.ts:151-160` + `getToolListError`，接线 `agent-session.ts` `createToolNameMatcher`/`applyToolModifiers`）；java 仅逗号切分裸名（`ArgsParser.java:244-251`）。`mcp__` 细则见 map/07 |
-| 21 | `--exclude-tools`/`-xt` | `args.ts:162` | ⚠️ `ArgsParser.java:90` | 1 | **存疑** | pi 收**通配 pattern 的 denylist**（`agent-session.ts:1534-1540` `createToolNameMatcher(excludedToolNames)`，含 MCP 工具）；java 仅逗号切分裸名 |
+| 18 | `--no-tools`/`-nt` | `args.ts:147` | ✅ `ArgsParser.java:93` | 1 | 对齐 | `-nt` 由 `:258` 展开；**批 1 补注**（B236/docs/11）：注册面语义对齐——空 allowlist ⇒ 注册面空（pi `noTools:"all"` ⇒ `getAllTools()==[]`，`DefaultToolsSelectionTest.noToolsEmptiesTheRegistry`） |
+| 19 | `--no-builtin-tools`/`-nbt` | `args.ts:149` | ✅ `ArgsParser.java:96` | 1 | 对齐 | **批 1 补注**（B236/docs/11）：注册面保留八件、激活面空（pi `noTools:"builtin"` 语义；扩展工具默认激活臂 java 无扩展面，免登） |
+| 20 | `--tools`/`-t` | `args.ts:151` | ✅ `ArgsParser.java:87` | 2 | **对齐** | **批 1（2026-10-18，B236/docs/11）**：`*` 通配（`ToolNameMatcher`，mcp-servers.ts:11-42 对位）、`+name`/`-name` 修饰符（`ToolSelection`，settings-manager.ts:83-137＋sdk.ts:280-294 对位）、`mcp__` 保留策略（裁决③）、解析期 `getToolListError` 逐字校验；窄差 D1：诊断前缀恒 `--tools`（picocli 不暴露实敲别名） |
+| 21 | `--exclude-tools`/`-xt` | `args.ts:162` | ✅ `ArgsParser.java:90` | 1 | **对齐** | **批 1（2026-10-18，B236/docs/11）**：`*` 通配 denylist（同一 `ToolNameMatcher`），注册面剔除（`_isAllowedTool` 对位 `Resolved.isAllowed`），excluded 优先于 allowlisted |
 | 22 | `--thinking` | `args.ts:167` | ✅ `ArgsParser.java:45` | 2 | 对齐 | 两侧都是 7 档 `off..max`（`ThinkingLevels.java:33`） |
 | 23 | `--print`/`-p` | `args.ts:177` | ✅ `ArgsParser.java:126` | **3** | 对齐 | pi 吞下紧随的非 `@`/`-` 参数（`:179-181`） |
 | 24 | `--export` | `args.ts:184` | ⚠️ `ArgsParser.java:129` | 1 | **存疑** | pi 支持 **2 个位置参数**（`main.ts:639-644`，输出路径取 `messages[0]`）；java 只取 1 个（`Main.java:84-87`） |
@@ -91,9 +91,10 @@ java `cli/ArgsParser.java` 共 **43 个 `@Option`**，其中 **4 个 java 独有
 | 42 | `@files` 位置参数 | `args.ts:248`（另 `:85-86`） | ✅ `ArgsParser.java:204-205` | 2 | 对齐 | 两侧都剥离 `@` 前缀进 `fileArgs` |
 | 43 | 扩展注册的 CLI flag | `args.ts:250-259` + `registerFlag`/`getFlag`（`extensions/types.ts:1664/1680`） | ❌ | 1 | **缺失** | java `ArgsParser.java:206-213` 只把未知 flag 收进 `unmatched`，**无 `registerFlag` API** |
 
-**汇总：对齐 28 / 缺失 4 / 存疑 11 / 合计 43 = 65.1%**；**Σ权重 62 / Σ(w×c) 48.5 / 加权 78.2%**
+**汇总：对齐 30 / 缺失 4 / 存疑 9 / 合计 43 = 69.8%**；**Σ权重 62 / Σ(w×c) 50.0 / 加权 80.6%**
 > pi 新增 `--no-mcp`（`args.ts:191` → `disabledBuiltinExtensions:["mcp"]`，`main.ts:787`）属 MCP 面，判定归 map/07。
 > 本锚点改判：`--tools`（A-20）/ `--exclude-tools`（A-21）对齐 → **存疑**（pi 现收 pattern `*`；`--tools` 另收 `+name`/`-name`/`mcp__`，java 仅裸名切分）。
+> 批 1（2026-10-18，B236/docs/11）：A-20/A-21 存疑 → **对齐**（三层语义全落，窄差 D1 登记）。
 
 ### B. 子命令对齐
 
@@ -284,7 +285,7 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 | E2-32 | `terminal` | `:319`（schema `:74-100`，7 键） | `:49`（7 键，`Settings.java:155-166`） | 1 | **存疑** | 字段形状已齐（7/7），本模块内**零消费**（TUI 侧归 05 图） |
 | E2-33 | `images` | `:320` | `:50` | 1 | **存疑** | java 2 键与 pi 同；**批 9（2026-10-16）`autoResize` 已消费**（`ImagePolicies.resolve` 经 ToolContext 晚绑定，原 docs/18）；`blockImages` 仍零消费（独立阻断特性，非 B85） |
 | E2-34 | `enabledModels` | `:321` | `:51` | 2 | 对齐 | `SettingsAccessors.java:101` |
-| E2-35 | `defaultTools`（支持 `+name`/`-name`） | `:326` | — | 2 | **缺失** | 无字段；pi `mergeDefaultTools`/`resolveDefaultTools`（`settings-manager.ts:124/135`），CLI `--tools +x` 同套 modifier |
+| E2-35 | `defaultTools`（支持 `+name`/`-name`） | `:326` | `Settings.java:59` | 2 | **对齐** | **批 1（2026-10-18，B236/docs/11）**：字段＋`mergeDefaultTools` 分层特判（`SettingsManager.merge`，settings-manager.ts:124-129/139-145 对位）＋`resolveDefaultTools`（`SettingsAccessors.getDefaultTools`，:1328-1333 对位）；消费点 `SessionSetup.resolveToolSelection`；窄差 D3：形状异常 pi 容忍、java 类型化读入即抛 |
 | E2-36 | `doubleEscapeAction` | `:332` | `:52` | 1 | **存疑** | accessor 有（`:172`），行为未核 |
 | E2-37 | `treeFilterMode` | `:338` | `:53` | 1 | **存疑** | 同上（`:162`） |
 | E2-38 | `thinkingBudgets` | `:353` | — | 1 | **缺失** | 无字段 |
@@ -306,9 +307,10 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 | E2-54 | `fullscreenCopyOnSelect` | `:424` | — | 1 | **缺失** | 无字段 |
 | E2-55 | `fullscreenWheelScrollLines` | `:430` | — | 1 | **缺失** | 无字段 |
 
-**E2 汇总：对齐 20 / 缺失 23 / 存疑 12 / 合计 55 = 36.4%**；**Σ权重 86 / Σ(w×c) 49.0 / 加权 57.0%**
+**E2 汇总：对齐 21 / 缺失 22 / 存疑 12 / 合计 55 = 38.2%**；**Σ权重 86 / Σ(w×c) 51.0 / 加权 59.3%**
 > `queueMode`（`:436`）/`websockets`（`:442`）只存在于 `SettingsSchema` 输入侧，`interface Settings`（`:471`）显式 Omit，非 settings.json 键，不列单元。
 > 本锚点改判：`compaction`（E2-10）存疑 → **对齐**（modelOverrides 字段＋per-model resolver 接线，A9 闭环）。
+> 批 1（2026-10-18，B236/docs/11）：`defaultTools`（E2-35）缺失 → **对齐**（键＋分层 merge＋解析＋消费点全落，窄差 D3 登记）。
 
 ### E3 会话管理行为（24）
 
@@ -522,14 +524,14 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 
 | 分区 | 对齐 | 缺失 | 存疑 | 合计 | 完成度 |
 |---|---:|---:|---:|---:|---:|
-| A. CLI 参数 | 28 | 4 | 11 | 43 | 65.1% |
+| A. CLI 参数 | 30 | 4 | 9 | 43 | 69.8% |
 | B. 子命令 | 3 | 1 | 4 | 8 | 37.5% |
 | C. Slash 命令 | 10 | 3 | 12 | 25 | 40.0% |
 | D. 扩展系统 41 事件 | 1 | 33 | 7 | 41 | 2.4% |
 | D′. 扩展 UI 注入面 | 0 | 8 | 1 | 9 | 0% |
-| E. 其余能力单元 | 47 | 68 | 33 | 148 | 31.8% |
+| E. 其余能力单元 | 48 | 67 | 33 | 148 | 32.4% |
 | ├ E1 配置文件 | 2 | 1 | 2 | 5 | 40.0% |
-| ├ E2 settings 键 | 20 | 23 | 12 | 55 | 36.4% |
+| ├ E2 settings 键 | 21 | 22 | 12 | 55 | 38.2% |
 | ├ E3 会话管理 | 14 | 4 | 6 | 24 | 58.3% |
 | ├ E4 资源发现 | 4 | 3 | 0 | 7 | 57.1% |
 | ├ E5 扩展 API | 5 | 26 | 4 | 35 | 14.3% |
@@ -537,17 +539,17 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | └ E7 RPC 面 | 2 | 0 | 4 | 6 | 33.3% |
 | G. 主流新增子系统（MCP/codemode/…） | 3 | 5 | 2 | 10 | 30.0% |
 | F. 整块缺失（子系统） | 0 | 6 | 0 | 6 | 0% |
-| **合计（模块，不含 E8）** | **92** | **128** | **70** | **290** | **31.7%** |
+| **合计（模块，不含 E8）** | **95** | **125** | **67** | **290** | **32.8%** |
 | E8. 边缘/面外子系统（**与 E3/C/G 重叠，不计入**） | 0 | 6 | 0 | 6 | 0% |
 
-**严格口径**（把「引擎钩子存在但未桥接」的 7 条也算缺失）：对齐 **92** / 缺失 **135** / 存疑 **63** / 合计 **290** = **31.7%**。
+**严格口径**（把「引擎钩子存在但未桥接」的 7 条也算缺失）：对齐 **95** / 缺失 **134** / 存疑 **61** / 合计 **290** = **32.8%**。
 
 **扩展系统单独口径**（D + D′ + E5）：41 事件 = 1 对齐；UI 注入 9 面 = 0 对齐；扩展 API 35 项 = 5 对齐 ⇒ **85 个单元中 6 个对齐 = 7.1%**。
 
 **java 独有（不计入分母）**：`--base-url`、`--port`、`--debug`、`--trace-payloads`（CLI）；`/help`、`/create-skill`（slash）；`auth oauth-login`、`auth profile…`（子命令）。
 
 **最大三处差距**：① **D 域扩展事件面 41→1（可订阅）**；② **E6 包管理器**且**零对齐单元**；③ **扩展系统长尾**——MCP 面主体已落（明细见 map/07），但 **codemode（3,957 行）＋ tool-search/virtual-models/nested（766 行）共 4,723 行仍为 0**，且 MCP 的 builtin 工厂接线卡在 D/E5 扩展面（B221）。
-**其余长期缺口**：④ `cache_warming` 设置＋`/bug`＋`defaultTools +name/-name`＋`--tools` pattern/modifier＋RPC `"handled"` disposition（已分别计入 E2/A/E7/G）。
+**其余长期缺口**：④ `cache_warming` 设置＋`/bug`＋RPC `"handled"` disposition（已分别计入 E2/C/E7；`defaultTools` 与 `--tools` pattern/modifier 批 1 已对齐）。
 
 ---
 
@@ -558,13 +560,13 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|
-| A. CLI 参数 | 62 | 48.5 | 78.2% | 65.1% |
+| A. CLI 参数 | 62 | 50.0 | 80.6% | 69.8% |
 | B. 子命令 | 15 | 9.0 | 60.0% | 37.5% |
 | C. Slash 命令 | 38 | 24.0 | 63.2% | 40.0% |
 | D. 扩展系统 41 事件 | 83 | 10.5 | 12.7% | 2.4% |
 | D′. 扩展 UI 注入面 | 16 | 1.0 | 6.3% | 0% |
 | E1. 配置文件 / 清单 | 10 | 6.0 | 60.0% | 40.0% |
-| E2. settings.json 键 | 86 | 49.0 | 57.0% | 36.4% |
+| E2. settings.json 键 | 86 | 51.0 | 59.3% | 38.2% |
 | E3. 会话管理行为 | 40 | 27.5 | 68.8% | 58.3% |
 | E4. 资源发现 | 14 | 8.0 | 57.1% | 57.1% |
 | E5. 扩展 API 面 | 58 | 14.0 | 24.1% | 14.3% |
@@ -572,12 +574,12 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | E7. RPC 面 | 12 | 8.0 | 66.7% | 33.3% |
 | G. 主流新增子系统 | 18 | 7.0 | 38.9% | 30.0% |
 | F. 整块缺失（子系统） | 13 | 0.0 | 0% | 0% |
-| **模块合计（不含 E8）** | **496** | **217.5** | **43.9%** | **31.7%** |
+| **模块合计（不含 E8）** | **496** | **221.0** | **44.6%** | **32.8%** |
 | E8. 边缘/面外子系统（与 E3/C/G 重叠，不计入） | 7 | 0.0 | 0% | 0% |
 
-**模块合计**：Σ权重 496 ／ Σ(w×c) 217.5 ／ **加权完成度 = 217.5/496 = 43.9%**（未加权 92/290 = 31.7%）。
+**模块合计**：Σ权重 496 ／ Σ(w×c) 221.0 ／ **加权完成度 = 221.0/496 = 44.6%**（未加权 95/290 = 32.8%）。
 
-**去重口径**（F 域有 2 行与 E4/E6 重叠）：剔除 F 域 ⇒ Σ权重 **483** ／ Σ(w×c) **217.5** ／ **加权完成度 = 217.5/483 = 45.0%**（未加权 92/284 = 32.4%）。
+**去重口径**（F 域有 2 行与 E4/E6 重叠）：剔除 F 域 ⇒ Σ权重 **483** ／ Σ(w×c) **221.0** ／ **加权完成度 = 221.0/483 = 45.8%**（未加权 95/284 = 33.5%）。
 
 **扩展系统单独口径**（D + D′ + E5）：Σ权重 157 ／ Σ(w×c) 25.5 ／ **加权 16.2%**（未加权 6/85 = 7.1%）。
 
@@ -586,9 +588,9 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | 权重层 | 单元数 | Σ权重 | Σ(w×c) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|---:|
 | 权重 3（每轮 / 默认路径） | 23 | 69 | 34.5 | **50.0%** | 9/23 = 39.1% |
-| 权重 2（每次会话 / 常用） | 160 | 320 | 135.0 | 42.2% | 49/160 = 30.6% |
-| 权重 1（低频 / 边缘 / 内部） | 107 | 107 | 48.0 | 44.9% | 34/107 = 31.8% |
-| **合计** | **290** | **496** | **217.5** | **43.9%** | **92/290 = 31.7%** |
+| 权重 2（每次会话 / 常用） | 160 | 320 | 138.5 | 43.3% | 52/160 = 32.5% |
+| 权重 1（低频 / 边缘 / 内部） | 107 | 107 | 48.5 | 45.3% | 35/107 = 32.7% |
+| **合计** | **290** | **496** | **221.0** | **44.6%** | **95/290 = 32.8%** |
 
 > 读数：**权重 3 层（50.0%）已明显高于其余两层**。本锚点 E2-10（compaction modelOverrides）与 E7-1（RPC 命令集）两条 w3 转对齐，w3 对齐数 7 → 9。
 > ⚠️ **但这不等于「每轮都走的地方不欠账了」**：w3 层里**扩展系统仍占 7 个缺失/存疑**（#3–#10 事件面中的 8 个 + #17 示例库），w3 层的**剩余欠账几乎全在 D 域**。
@@ -628,15 +630,15 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 
 | 指标 | 数值 |
 |---|---|
-| 未加权完成度 | 31.7%（92/290） |
-| 加权完成度（含 F 域） | **43.9%**（217.5/496） |
-| 差 | **+12.0 pp** |
-| 加权完成度（去重，剔 F 域） | 45.0%（217.5/483）＝ +12.6 pp |
+| 未加权完成度 | 32.8%（95/290） |
+| 加权完成度（含 F 域） | **44.6%**（221.0/496） |
+| 差 | **+11.8 pp** |
+| 加权完成度（去重，剔 F 域） | 45.8%（221.0/483）＝ +13.0 pp |
 
-**差在哪**：加权把完成度**抬高** 12.0 pp，因为 pi-java 的对齐单元**密集落在高权重的默认路径上**，而缺失质量集中在低权重长尾。
-- **抬高项**：A 域（CLI）未加权 65.1% → 加权 78.2%；B 域 37.5% → 60.0%；C 域 44.0% → 65.8%；E3 58.3% → 68.8%；E7 33.3% → 66.7%；**G 域 30.0% → 38.9%**。
+**差在哪**：加权把完成度**抬高** 11.8 pp，因为 pi-java 的对齐单元**密集落在高权重的默认路径上**，而缺失质量集中在低权重长尾。
+- **抬高项**：A 域（CLI）未加权 69.8% → 加权 80.6%；B 域 37.5% → 60.0%；C 域 44.0% → 65.8%；E3 58.3% → 68.8%；E7 33.3% → 66.7%；**G 域 30.0% → 38.9%**。
 - **压低项**：D 域 2.4% → **12.7%**；E5 14.3% → 24.1%；E6 0% → 16.1%。E4 持平（57.1% ＝ 57.1%，无 w3 缺口）。
 
 - **两个点名项**：
-  - **扩展事件面**：D 域 Σ权重 **83** = 模块 496 的 **16.7%**，是全部 15 个域里**最大的一块**。Σ(w×c) 仅 10.5 ⇒ 若 D 域全对齐，模块 Σ(w×c) 217.5 → **290.0**、完成度 43.9% → **58.5%**，即**这一域单独把模块拉低 14.6 pp**。
+  - **扩展事件面**：D 域 Σ权重 **83** = 模块 496 的 **16.7%**，是全部 15 个域里**最大的一块**。Σ(w×c) 仅 10.5 ⇒ 若 D 域全对齐，模块 Σ(w×c) 221.0 → **293.5**、完成度 44.6% → **59.2%**，即**这一域单独把模块拉低 14.6 pp**。
   - **口径修正建议**（沿用）：整块缺失的子系统应按「暴露的行为面个数」而非 1 计入分母。本表按用户给定规则计。
