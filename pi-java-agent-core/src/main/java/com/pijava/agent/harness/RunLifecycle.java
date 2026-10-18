@@ -309,6 +309,24 @@ final class RunLifecycle {
         HarnessUtils.rebuildLaneMessages(lane);
     }
 
+    /**
+     * 运行外向车道追加一条 entry 并重建工作副本 —— pi 的
+     * {@code sessionManager.appendMessage} ＋ {@code _refreshFinalizedContext}
+     * （{@code agent-session.ts:3878-3899} 的空闲臂，#57/docs/25 §3.3 ⑥）。
+     * 车道必须空闲；运行中的会话级 bash 结果由调用方先暂存
+     * （pi 的 {@code _pendingBashMessages}），settled 时才经本方法 flush。
+     */
+    void appendLaneEntry(String laneName, Entry entry) {
+        var lane = ctx.requireLane(laneName);
+        if (lane.isRunning()) {
+            throw new IllegalStateException(
+                "Cannot append lane entry: lane " + laneName + " is running");
+        }
+        lane.appendEntry((seq, parentId) -> entry.committed(seq, parentId,
+            entry.timestamp() != null ? entry.timestamp() : java.time.Instant.now()));
+        HarnessUtils.rebuildLaneMessages(lane);
+    }
+
     /** 日志里最后一条 {@code ThinkingLevelChange} 的标签；没有则为 {@code null}。 */
     private static String lastRecordedThinking(LaneState lane) {
         for (int i = lane.transcript.size() - 1; i >= 0; i--) {

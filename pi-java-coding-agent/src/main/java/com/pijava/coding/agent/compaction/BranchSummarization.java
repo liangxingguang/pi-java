@@ -264,6 +264,14 @@ public final class BranchSummarization {
         if (entry instanceof Entry.Compaction c) {
             return userMessage(ContextEntries.compactionText(c.summary()), c.timestamp());
         }
+        if (entry instanceof Entry.BashExecution be) {
+            // pi 的摘要输入走 convertToLlm 同文（messages.ts:147-160）：!! 跳过，
+            // 否则 bashExecutionToText 的 user 文本（#57，docs/25 §3.3 ⑧）。
+            if (Boolean.TRUE.equals(be.excludeFromContext())) {
+                return null;
+            }
+            return userMessage(ContextEntries.bashExecutionText(be), be.timestamp());
+        }
         return null;
     }
 

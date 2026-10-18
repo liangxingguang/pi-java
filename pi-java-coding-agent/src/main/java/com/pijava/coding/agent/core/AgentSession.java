@@ -126,6 +126,9 @@ public final class AgentSession implements AutoCloseable {
         return agentRunAbortRequested.get();
     }
     private volatile AbortSignal bashAbortSignal;
+    // pi _pendingBashMessages（agent-session.ts:421）：运行中暂存的会话级 bash 结果，
+    // settled 时 flush（保 tool_use/tool_result 次序）。
+    private final List<Entry.BashExecution> pendingBashMessages = new ArrayList<>();
     // B137：--models/settings patterns 解析出的 scope（Ctrl+P / cycle_model 在其间轮转）。
     private List<com.pijava.ai.model.ScopedModel> scopedModels = List.of();
     // scope 解析与轮转都对全目录（assemble 构造的同一实例）。
@@ -1410,10 +1413,48 @@ public final class AgentSession implements AutoCloseable {
                 toolContext.cwd(), toolContext.env(), true,
                 java.util.OptionalLong.empty(), signal));
             eventHub.emit(new AgentSessionEvent.BashExecutionUpdate(id, result.output()));
+            // pi executeBash 同位调用（agent-session.ts:3878-3899）：结果落会话。
+            recordBashResult(command, result, excludeFromContext);
             return result;
         } catch (Exception e) {
             throw new RuntimeException("Bash command failed: " + command, e);
         }
+    }
+
+    /**
+     * pi {@code recordBashResult}（agent-session.ts:3878-3899）：会话级 bash 结果落会话——
+     * 空闲 ⇒ 追加 bashExecution 条目＋刷新工作副本＋即刻落盘；运行中 ⇒ 暂存
+     * （{@link #pendingBashMessages}），settled 时由 {@code SessionRunner} flush
+     * （pi 的 {@code _pendingBashMessages}/agent_end，:421,3925-3940，
+     * 保 tool_use/tool_result 次序）。
+     *
+     * <p>ShellResult 语义（#57 现场确认）：{@code cancelled} 引擎无字段 ⇒ 取会话侧
+     * {@link #bashAborted()}；{@code truncated} 引擎恒 false（截断在工具层，会话级
+     * bash 绕开）⇒ 照传、{@code fullOutputPath} 恒 null；中断兜底的 {@code exitCode=-1}
+     * ⇒ {@code null} ≙ pi 的 undefined。</p>
+     */
+    public void recordBashResult(String command, ShellResult result, boolean excludeFromContext) {
+        var entry = new Entry.BashExecution(
+            java.util.UUID.randomUUID().toString(), 0, null, Instant.now(),
+            command, result.output(),
+            result.exitCode() >= 0 ? result.exitCode() : null,
+            bashAborted(), result.truncated(), null,
+            excludeFromContext ? Boolean.TRUE : null);
+        if (harness.isRunning(laneName())) {
+            pendingBashMessages.add(entry);
+        } else {
+            harness.appendLaneEntry(laneName(), entry);
+            if (session != null) {
+                SessionPersistence.persistPending(this, session, laneName());
+            }
+        }
+    }
+
+    /** pi {@code _flushPendingBashMessages} 的取出半：清空并返回暂存队列（包内可见）。 */
+    List<Entry.BashExecution> drainPendingBashMessages() {
+        var drained = List.copyOf(pendingBashMessages);
+        pendingBashMessages.clear();
+        return drained;
     }
 
     /** 中止正在执行的会话级 bash（RPC {@code abort_bash}）。 */

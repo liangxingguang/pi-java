@@ -163,6 +163,12 @@ final class SessionRunner {
                     owner.emitSessionEvent(new AgentSessionEvent.EntryAppended(entry));
                 }
             }
+            // pi _flushPendingBashMessages（agent_end 时机，agent-session.ts:3925-3940）：
+            // 运行中暂存的会话级 bash 结果在 settled 前落进车道（保 tool_use/tool_result
+            // 次序），随下方 flush 一起落盘（#57，docs/25 §3.3 ⑦）。
+            for (var pendingBash : owner.drainPendingBashMessages()) {
+                owner.harness().appendLaneEntry(laneName, pendingBash);
+            }
             flush(owner, laneName);
             // pi agent_settled（agent-session.ts:203/:1083/:1849）：每次驱动恰一条，
             // aborted 读会话层 abort 请求旗。每回合的 turn_end 由漏斗直供（引擎发射）。

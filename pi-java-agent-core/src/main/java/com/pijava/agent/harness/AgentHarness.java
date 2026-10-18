@@ -386,6 +386,17 @@ public class AgentHarness implements AutoCloseable {
         runLifecycle.replaceTranscript(laneName, entries);
     }
 
+    /**
+     * Append an entry to an <b>idle</b> lane and rebuild its working messages — pi
+     * {@code recordBashResult} 的空闲臂（{@code appendMessage} ＋
+     * {@code _refreshFinalizedContext}，agent-session.ts:3878-3899，#57/docs/25 §3.3 ⑥）。
+     * 运行中的车道抛 {@link IllegalStateException}：调用方应先暂存、settled 再 flush
+     * （pi 的 {@code _pendingBashMessages}）。
+     */
+    public void appendLaneEntry(String laneName, Entry entry) {
+        runLifecycle.appendLaneEntry(laneName, entry);
+    }
+
     /** Load a lane's persisted record log on resume; the lane comes back idle (原 docs/30 §4.1). */
     public void restoreRecords(String laneName, List<LaneRecord> records) {
         if (closed) throw new HarnessClosedException();
