@@ -58,4 +58,16 @@ public final class SkillCommandItems {
             case EXPLICIT -> "t";
         };
     }
+
+    /**
+     * B247：scope 直取版（模板臂用，{@link PromptTemplateItems}）——pi
+     * {@code getAutocompleteSourceTag} :683 的 scope 三值分支。
+     */
+    static String sourceTag(com.pijava.coding.agent.core.source.SourceInfo.Scope scope) {
+        return switch (scope) {
+            case USER -> "u";
+            case PROJECT -> "p";
+            case TEMPORARY -> "t";
+        };
+    }
 }

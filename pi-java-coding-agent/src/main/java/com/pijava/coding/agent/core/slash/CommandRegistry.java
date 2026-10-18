@@ -91,6 +91,17 @@ public final class CommandRegistry {
             if (parts[0].startsWith("skill:")) {
                 return null;
             }
+            // B247：已注册模板名同形——pi 提交处理器无模板分支，落 prompt 后
+            // 由 expandPromptTemplate 展开（agent-session.ts:2009，java 批 4
+            // 已挂 AgentSession.expandUserPrompt）。按注册表判定（窄差 D3：
+            // pi 任何未识别 slash 都落 prompt，java 只放行 /skill: 前缀与
+            // 已注册模板名）；模板名撞内置时上面已命中注册表，内置胜出
+            //（pi 同形）。session 缺席（单测路）落 Unknown command。
+            var session = context.session();
+            if (session != null
+                    && session.services().promptTemplates().find(parts[0]) != null) {
+                return null;
+            }
             return CompletableFuture.completedFuture(
                 "Unknown command: /" + parts[0]
                     + " (try /hotkeys for the list of commands)");
