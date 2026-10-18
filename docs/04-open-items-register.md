@@ -51,11 +51,7 @@
 
 ## 2. A 类 —— 要证据 / 清点才能定案
 
-| # | 面 | 条目 | 挡在什么上 |
-|---|---|---|---|
-| A10 | 内部 | **内置工具线程安全审计**（read/write/edit/bash/find 等） | pi 的契约是「工具必须可并发执行」，Java 侧尚未逐工具审计 |
-| A14 | 内部 | shell 集成夹具无牙：多字节字符在 8 KiB 边界被切断的场景没有覆盖 | 需要字节精确的假 shell，现有 `.cmd`/sh 脚本做不到；`Utf8ChunkStream` 目前只有单元级测试覆盖 |
-| A15 | 内部 | 错误路径 `AgentSettled` 的形状没有测试守护 | SessionRunner 错误路径发非空 toolResults 时没有断言守护 |
+**✅ 已清零（2026-10-18 批 agent-core-5，设计稿 docs/25）**：A10（并发审计＋`FileMutationQueue` 共享单例修真）、A14（`ShellByteBoundaryTest` 字节精确假 shell，泵审计无 bug）、A15（错误路 `TurnEnd.toolResults` 恒空夹具）全数销号。
 
 ---
 
@@ -68,7 +64,6 @@
 | B31 | 协议面 | `get_state.model` 字段形状不同 | Java 的 `RpcDispatcher.buildState` 发字符串 `"provider/id"`；pi 发的是整个 `Model` 对象 |
 | B32 | 协议面 | `get_state.sessionName` 恒有值，pi 是可选 | Java 默认 `"session"`，客户端分不出用户命名与默认名；pi 在首次 session_info 事件之前不带这个键 |
 | B33 | 协议面 | `get_state.messageCount` 计数口径不同 | Java 取转录条数，pi 取工作副本条数。压缩后两者必然分叉：转录含 compaction、model_change 等非消息条目 |
-| B49 | 协议面 | `turn_end` 事件颗粒度不同 | pi 每回合发一条；Java 的 AgentSettled 每次驱动发一条。真对齐要改事件时序 |
 | B237 | 协议面 | RPC prompt 的处理结果缺 `handled` 状态 | pi 是三态 `handled\|queued\|started`（`rpc-types.ts:118`、`agent-session.ts:310-311`）；Java `RpcDispatcher.java:117-130` 只产生 started/queued |
 
 ### 3.2 请求选项 / Provider 协议面
@@ -272,17 +267,59 @@
 - 【风险/代价】若日后做服务端托管鉴权代理车道，需补回并按新返型对齐。[内部，模型不可见]
 - 触发条件：pi-java 做服务端托管鉴权代理车道（TeamoRouter 服务端化之类），或 pi 在 coding-agent 主流接入 streamProxy。
 
+### map/03-#14 — QueueMode 宿主语义（设置同步非即效）
+
+- 【场景】steer/followUp 队列的 drain 模式（`"all" | "one-at-a-time"`）在运行时与设置文件之间的同步路径两侧不同：pi 写入设置后靠 `syncQueueModesFromSettings` 在 `_buildRuntime`/`reload` 才同步进 agent（`agent-session.ts:2691-2693,3674`）；pi-java 没有 reload 面，装配时一次读入。
+- 【决定】2026-10-18 批 agent-core-5 裁决：**对齐**。drain 语义（`QueueManager.java:144-160` ≡ pi `agent.ts:156-170`：All 全排、one-at-a-time 排最老一件）、默认值（pi `SETTINGS_DEFAULTS.steeringMode` = one-at-a-time = `QueueMode.defaultMode()`）、运行时 setter（pi 直写 agent ≡ `AgentHarness.steeringMode/followUpMode`＋`RpcDispatcher`）三面逐字等价；设置改动**两侧都非即效**（pi 等 reload，java 等下次装配）⇒ 净效果一致。
+- 【风险/代价】无影响。[内部，模型不可见]
+- 触发条件：pi-java 获得会话 reload/扩展运行时面（B221 族）时重裁同步时机。出处：docs/25 §12.1。
+
+### map/03-#80/#84 — prompt 两道门与「压缩窗」
+
+- 【场景】运行中/压缩中提交 prompt 的两道门：pi 的压缩与 run 单飞、门在 prompt 入口直接抛（`agent-session.ts:1988`）；pi-java 有「压缩窗」概念（包 25–27：B175 关窗、B176 worker），窗口内提交缓冲为 followUp。
+- 【决定】2026-10-18 批 agent-core-5 裁决：**对齐**。① 两道抛文逐字（pi `:1988` "Cannot submit a prompt while compaction is in progress. Wait for compaction to finish and retry." 与 `:2016` "Agent is already processing. Specify streamingBehavior ('steer' or 'followUp') to queue the message." ＝ `PromptRouter` 两常量）；② 顺序等价：展开（输入钩子/`/skill:`/模板）先于门（pi `:1997-2011`→`:2012`；java `AgentSession.java:808`→`:812`）；③ 排队等价：steer/followUp 入队＋`queue_update`（B34）。pi 无窗概念——窗口是 pi-java 的宿主方言，门外的可观察行为（何时抛、抛什么文、排队去向）两侧一致。
+- 【风险/代价】压缩窗内提交在 pi-java 缓冲而 pi 直接抛：这是批 25–27 已裁决的窗口语义（B175/B176），不属于本门。[内部，模型不可见]
+- 触发条件：pi 引入压缩窗/缓冲语义，或 pi-java 拆除压缩窗时重裁。出处：docs/25 §12.3。
+
+### map/03-#82 — retry.provider 三键映射
+
+- 【场景】provider 重试三键（`maxRetries`/`maxRetryDelayMs`/`timeoutMs`）从设置到 HTTP 重试策略的映射。
+- 【决定】2026-10-18 批 agent-core-5 裁决：**对齐**。`maxRetries` 缺席两侧同为 0（pi `provider-retry.ts:106` `?? 0` ＝ `DefaultProviders.java:330-331`）；`maxRetryDelayMs ?? 60000`（pi `settings-manager.ts:925-931` ＝ `:332-333`）；`timeoutMs` 明给替换默认（pi `sdk.ts` buildRequestOptions ＝ `:345-346`）。`httpIdleTimeoutMs` 默认值差异属 map/04 E2-48，另案。
+- 【风险/代价】无影响。[内部，模型不可见]
+- 触发条件：pi 改三键默认值或新增键时重裁。出处：docs/25 §12.4。
+
+### map/03-#90/#91 — transcript 可见性与 reset 的 runSpan
+
+- 【场景】① 车道转录/工作副本的跨线程可见性；② `RunLifecycle.reset` 把 `lane.runSpan` 置 null 而不 `close()`。
+- 【决定】2026-10-18 批 agent-core-5 裁决：**对齐**。① 写者唯一（驱动线程 `lane.appendEntry`，lane 锁内）；读者全走快照 COW（`LaneSnapshot`/`SessionSnapshot` 的 `List.copyOf`——records COW 裁决同族）或存储级新解码（`findEntries`）；无锁裸读面不存在（#83 清点表，docs/25 §10.2）。② `finishRun` 在 `PiLaneEngine.java:217-231` 的 finally 收口（error 路同走）⇒ 空闲车道 runSpan 必已关闭，reset 置 null 是防御性清场（注释已补强）。
+- 【风险/代价】无影响。[内部，模型不可见]
+- 触发条件：出现新的转录写入点或不走快照的读取面时重裁。出处：docs/25 §12.6/§12.7。
+
+### map/03-#57 — bashExecution 分层与窄差包（含 #53/#75/#77 窄差）
+
+- 【场景】pi 的 `BashExecutionMessage` 经 declaration merging 挂在 `AgentMessage` 超集上，`convertToLlm` 在请求前转译；pi-java 无 AgentMessage 层（批 2 #58 已裁决消解），且若干周边形状差。
+- 【决定】2026-10-18 批 agent-core-5：本体**做**（`Entry.BashExecution` 变体＋编解码＋投影逐字＋`recordBashResult`＋pending flush，docs/25 §3——与 branchSummary/compactionSummary 同分层），窄差**登记不认账**：① `excludeFromContext`（!!）条目在 pi 留 `state.messages` 占工作副本位、仅 `convertToLlm` 跳过；java 投影层直接不产消息——下游唯一消费者是 LLM 请求装配，模型可见面等价；② token 估算 java 走投影后文本（比 pi 的 `command+output` 多 `Ran `/围栏包装 ~20 字符，阈值精度差忽略）；③ 会话级 bash 无 50KB 截断/`fullOutputPath` 落盘（`ShellResult.truncated` 恒 false——截断在工具层，会话级 bash 绕开）；④ #53：pi 会话事件的 `parentToolCallId` 包装（子代理上下文）java 无——无嵌套代理面，顶层会话恒 absent；⑤ #75 F-d：空/无头 fork 源文件的错误形是 load 期 DecodeError，非 pi 两条专属文案；⑥ #77：pi 的 `_pendingToolNames` 晚注册臂随 B221 ⑫b，未注册名现静默落。
+- 【风险/代价】①②③ 均为模型不可见的内部近似；④⑤⑥ 在对应功能面（嵌套代理/SDK/扩展运行时）落地前不可观察。[内部，模型不可见]
+- 触发条件：③ 会话级 bash 截断面立项时；④ 嵌套代理面落地时；⑤ fork 错误面投诉时；⑥ B221 ⑫b 落地时同批收编。出处：docs/25 §3.2/§5.2/§12.2。
+
+### map/03-#60 — PendingEntry/InboxItem 按 R1 出分母
+
+- 【场景】旧图把 pi `agent/src/types.ts:293,306` 的 `PendingEntry`/`InboxItem` 列为队列契约参照；现锚点全仓零命中。
+- 【决定】2026-10-18 批 agent-core-5 裁决：**R1 作废出分母**（Σw 182→180、91→90）。二者是 Pico 实验 harness（`agent/src/harness/**`）的类型，随 pi `7fd478a2e feat(agent): remove the experimental harness from pi-agent-core` 整包删除——与「作废清单」19 单元同一条删除链。java 队列契约以 pi 存活的 `PendingMessageQueue`（`agent.ts:142-176`）为参照，#14 已核齐。
+- 【风险/代价】无影响。[内部，模型不可见]
+- 触发条件：pi 重新引入同形类型时重裁。出处：docs/25 §13。
+
 ---
 
 ## 5. E 类 —— 结构债（仓库规则：单文件 ≤ 500 行）
 
 | # | 文件 | 行数 |
 |---|---|---:|---:|
-| E1 | coding-agent …/core/AgentSession.java | **1,554**（2026-10-18 批 agent-core-4 实测；navigateTree/展开接线随批长进，拆分宜搭下一 coding-agent 批） |
+| E1 | coding-agent …/core/AgentSession.java | **1,592**（2026-10-18 批 agent-core-5 实测；拆分宜搭下一 coding-agent 批） |
 | E2 | coding-agent …/rpc/RpcDispatcher.java | 627 |
-| E3 | agent-core …/harness/PiLaneSink.java | 555 |
-| E4 | agent-core …/harness/AgentHarness.java | 621（2026-10-18 批 agent-core-4 实测） |
 | E5 | ai …/catalog/ModelCompat.java | **762**（2026-10-11 B98 加 8 组件；converter 侧已拆出 CompletionAssistantMessage 保 500 内） |
+
+（E3/E4 已销号——2026-10-18 批 agent-core-5 拆分：`PiLaneSink` 470＋`PiLaneRequestTelemetry` 131、`AgentHarness` 438＋`HarnessBootstrap` 231，行为零变化纯移动。）
 
 均不与功能耦合，可随时拆，与功能包搭车推进。[全部内部，模型不可见]
 

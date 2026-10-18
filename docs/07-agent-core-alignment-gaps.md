@@ -9,7 +9,7 @@
 - **全量加权盘点**是 [`map/03-agent-core.md`](map/03-agent-core.md)：104 个单元逐条判定、权重、完成度。
 - 本稿＝两者的 agent-core 层索引：§1 确认缺口，§2 形状差（存疑、待裁决），§3 要取证/清点的 A 项，§4 已裁决不做。
 - **map 单元号（#N）**：`map/03-agent-core.md` 里的能力单元编号。
-- **批 agent-core-1/2/3**：2026-10-17 闭环的三个对齐包，实施记录在原 docs/20–22（已删，历史在 git）；**批 agent-core-4**：2026-10-18（设计稿 docs/24），确认缺口清零。
+- **批 agent-core-1/2/3**：2026-10-17 闭环的三个对齐包，实施记录在原 docs/20–22（已删，历史在 git）；**批 agent-core-4**：2026-10-18（设计稿 docs/24），确认缺口清零；**批 agent-core-5**：2026-10-18（设计稿 docs/25），存疑清零 ⇒ **模块 100%**（加权 180/180、未加权 90/90）。
 
 ## 基准
 
@@ -27,7 +27,7 @@
 
 **同层相关、挂在 docs/04 但生产者跨模块的条目**：
 
-- B49 `turn_end` 颗粒度（地图 #53，形状差见 §2）。
+- ~~B49 `turn_end` 颗粒度~~ —— 批 5 销号：pi 会话事件 union 本就含引擎逐回合 `turn_end`，批 2 的 TurnEnd 重塑已对齐（docs/25 §12.2）。
 - ~~B53 `find()` 缺三级阶梯~~ —— 批 4 阶梯对齐（路径快车道＋header-only findById＋项目前缀＋跨项目精确胜前缀），无账面变动（挂 #78 行），销号。
 - B31/B32/B33（get_state 三处 RPC 形状，生产者在 coding-agent）。
 - **B244**（`skill:` slash 命令注册＋settings `skillCommands` 开关）、**B245**（tree 扩展事件＋TUI 摘要流）——批 4 新登记，归 coding-agent/TUI 批（docs/04 §3.3）。
@@ -42,18 +42,11 @@
 
 权重 3 层 22/22 = **100%**，无存活条目。批 agent-core-1 清 #6/#41/#17/#23，批 agent-core-2 清 #34/#46/#52/#54/#58/#78/#100（2026-10-17）；逐条闭环记录见 map/03 与 git 历史。其中 #54/#58/#78/#100 的裁决仍有效，收在 `docs/04` §4。
 
-### 2.2 权重 1/2（按类归并，编号是 map/03 单元号）
+### 2.2 权重 1/2（✅ 已清零）
 
-| 类 | 条目 |
-|---|---|
-| 队列/宿主 | #14 `QueueMode.All` 宿主语义（F1）· #80 `streamingBehavior` 两道门（A5/F4）· #84 两道门行为裁决（F4） |
-| 事件 | #53 `turn_end` 颗粒度（**B49**） |
-| 存储/会话 | #56 `EntryProjector`（A1）· #57 四个消息类型（A1）· #60 `PendingEntry`/`InboxItem` 队列契约 · #75 session fork · #77 恢复 seed/replay（A2） |
-| API 面 | #81 工具线程安全契约（**A10**）· #82 `retry.provider.*` ↔ RetryPolicy（A7）· #83 `transcript()` 消费者清点（A2）· #85 `recordEvent` 兜底（F2） |
-| 并发/可见性 | #89 批内 join 源序（C2）· #90 transcript 可见性（C3）· #91 `reset` 不关 runSpan（C4） |
-| 夹具/文档/结构债 | #87 L5 thinking 块不对称（E8）· #92 遥测 javadoc（D2/D3）· #93 SummaryGenerator javadoc（D6）· #94 文件超限（**E3/E4**，另 E1/E2 在 coding-agent）· #95 集成层夹具无牙（**A14**）· #96 错误路 AgentSettled 无夹具（**A15**） |
+**✅ 已清零（2026-10-18 批 agent-core-5，设计稿 docs/25）**——原 22 行全数收编：**模块加权 180/180 = 100%、未加权 90/90 = 100%**。13 条做（#57 bashExecution 全链最大件、#77 navigateTree 工具恢复、#75 fork 消费 `--session-id`＋删 `" (fork)"` 后缀、#87 双 twin thinking 帧＋S16 对拍零 diff、#89/#96 两夹具、#94 拆 `PiLaneSink`/`AgentHarness`（470/438）、#95 字节精确假 shell、#81 并发审计＋`FileMutationQueue` 共享单例修真、#83 消费者清点、#85/#92/#93 javadoc 三枚）；8 条裁决对齐（#14/#53〔**B49 销号**〕/#56/#80/#82/#84/#90/#91，裁决文本进 `docs/04` §4）；#60 按 R1 出分母（参照物随 pi `7fd478a2e` 删除，Σw 182→180）。旧字母编号（F1/F2/F4/C2/C3/C4/D2/D3/D6/E3/E4/E8/A1/A2/A5/A7/A10/A14/A15）同批全收尾。逐条证据见 `map/03-agent-core.md`「二十二条点名项」。
 
-**跨层挂账提醒**：JSONL 条目信封 #16 仍存疑（见 map/06）；`--tools` glob/modifier 模式面在册 **B236**（docs/04 §3.3，归 coding-agent 批）。
+**跨层挂账提醒**：JSONL 条目信封 #16 仍存疑（见 map/06）；`--tools` glob/modifier 模式面在册 **B236**（docs/04 §3.3，归 coding-agent 批，设计稿 docs/26 搁置待审）。
 
 **2026-10-17 批 agent-core-3**（详稿原 docs/22（批 3 设计稿））：内置工具四条存疑**清零**：
 
@@ -70,11 +63,9 @@
 
 ## 3. 要取证 / 清点才能定案（docs/04 §2 中归属本层的）
 
-| # | 事项 |
-|---|---|
-| A10 | 内置工具线程安全审计（read/write/edit/bash/find…）：pi 契约「工具必须可并发执行」，审计未开始 |
-| A14 | shell 集成夹具无牙：多字节字符在 8 KiB 边界被切断，需字节精确的假 shell |
-| A15 | 错误路 `AgentSettled` 形状无夹具（非空 toolResults 的断言守护缺失） |
+**✅ 已清零（2026-10-18 批 agent-core-5）**：A10（并发审计＋`FileMutationQueue` 共享单例修真）、
+A14（`ShellByteBoundaryTest` 字节精确假 shell，泵审计无 bug）、A15（错误路 `TurnEnd.toolResults`
+恒空夹具）全部销号。
 
 （A16＝六图换锚重测，跨所有层，已销号；见 `docs/04` §2。）
 

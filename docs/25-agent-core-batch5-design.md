@@ -1,6 +1,6 @@
 # 25 agent-core 批 5 设计 —— 存疑 22 条全收编，目标 100%
 
-> **状态：✅ 审核通过（2026-10-18）——按 §15 开工**
+> **状态：✅ 已闭环（2026-10-18）**——12＋1 commits（§15 十二计划＋S16 对拍验收一个）；agent-core **180/180 = 100%**（未加权 90/90），存疑清零，全仓 882.5/1381 ≈ 63.9%；回填 map/03＋docs/04＋docs/05＋docs/07。
 > 基线：pi `ea448f454`（2026-10-11）；pi-java main（批 4 闭环后，`c5f0f06c`）。
 > 所有 pi 侧 `file:line` 均经 `git -C D:/workplaceForai/pi show ea448f454:<path>` 实读，未读 pi 工作树。
 > 前批：`24-agent-core-batch4-design.md`（已闭环）。搁置中：`26-coding-agent-batch1-design.md`（B236，待审核，本批不动它）。
