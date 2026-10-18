@@ -249,6 +249,9 @@ final class RunLifecycle {
             lane.newestOwn = null;
             lane.runId = null;
             lane.recordedThinking = null;
+            // #91（C4，docs/25 §11.4）：reset 要求车道空闲，而 finishRun 在
+            // PiLaneEngine 的 finally（:217-231，error 路同走）必已关闭 runSpan
+            // —— 这里置 null 是防御性清场，**不是**关跨度（跨度不会在此泄漏）。
             lane.runSpan = null;
             lane.runStartNanos = 0;
             lane.steerQueue.clear();

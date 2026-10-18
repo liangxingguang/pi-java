@@ -25,8 +25,8 @@ import com.pijava.ai.api.StrictMode;
 public final class WriteTool {
     private WriteTool() {}
 
-    /** Serializes writes to the same canonical path across concurrent tool calls. */
-    private static final FileMutationQueue QUEUE = new FileMutationQueue();
+    /** Serializes writes to the same canonical path across concurrent tool calls（与 edit 共享，pi 模块级单例）。 */
+    private static final FileMutationQueue QUEUE = FileMutationQueue.shared();
 
     public record WriteInput(String path, String content) {}
 

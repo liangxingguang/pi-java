@@ -31,7 +31,20 @@ public interface TelemetryContext {
 
     /**
      * Start a new span, invoke the callback with it, and close the span
-     * when the callback returns (or throws).
+     * when the callback returns (or throws) — #92（docs/25 §11.2）按实现现状：
+     *
+     * <ul>
+     *   <li><b>回调作用域绑定</b>：{@link JsonlFileTelemetry} 在回调期间把跨度
+     *       {@link #pushCurrent} 为本线程的当前跨度（{@link #recordEvent} 的归属），
+     *       回调退出在 finally 里<b>对称解绑</b>（pop 只在栈顶是本跨度时生效，
+     *       内外嵌套互不拆台）；</li>
+     *   <li><b>异常 ⇒ 自动 error 态</b>：回调抛出时跨度记 error
+     *       （{@code JsonlSpan} 只在无显式状态时派生，pi memory.ts:96；
+     *       OTel 适配器 {@code recordException}＋{@code StatusCode.ERROR}），
+     *       异常原样重抛；</li>
+     *   <li>跨度<b>必然关闭</b>（try/finally 或 try-with-resources），
+     *       返回值即回调返回值。</li>
+     * </ul>
      *
      * @param <T>     the result type
      * @param options span name and attributes
@@ -41,9 +54,11 @@ public interface TelemetryContext {
     <T> T startSpan(SpanOptions options, Function<? super TelemetrySpan, ? extends T> body);
 
     /**
-     * Open a span without a callback; the caller is responsible for closing
-     * it (which ends the span).  Use for spans that must cross action or
-     * thread boundaries.
+     * Open a span <b>without</b> a callback — #92：与 {@link #startSpan} 的差别
+     * 是<b>不绑定、不自动关闭</b>：调用方自持柄并负责 {@code close()}（close 即
+     * 结束跨度）。用于必须跨 action/线程边界的跨度（如 {@code harness.run} 跨整个
+     * 驱动、{@code tool.execute} 跨工具线程）；绑定给 {@link #recordEvent} 用要
+     * 显式 {@link #pushCurrent}。
      */
     default TelemetrySpan openSpan(SpanOptions options) {
         var holder = new Object() { TelemetrySpan span; };
@@ -86,8 +101,10 @@ public interface TelemetryContext {
 
     /**
      * Bind a span (opened on this or another thread) as the current span for
-     * {@link #recordEvent} on this thread.  Must be paired with {@link
-     * #popCurrent} in a finally block. Default no-op.
+     * {@link #recordEvent} <b>on this thread</b> — #92：线程归属是绑定栈的
+     * 本质（{@code JsonlFileTelemetry} 用 {@code ThreadLocal} 栈；别线程的绑定
+     * 互不可见，跨线程用跨度必须各自 push）。必须与 {@link #popCurrent} 在
+     * finally 里配对（{@code startSpan} 的实现就是这么做的）。Default no-op.
      *
      * @param span the span to bind
      */
@@ -95,8 +112,8 @@ public interface TelemetryContext {
 
     /**
      * Remove a span previously bound with {@link #pushCurrent}.  Only pops
-     * if it is the current top (guards against unbalanced pairs). Default
-     * no-op.
+     * if it is the current top — 不平衡对不会误拆外层绑定（嵌套跨度的
+     * finally 乱序时外层仍在）。Default no-op.
      *
      * @param span the span to unbind
      */

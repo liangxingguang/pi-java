@@ -203,11 +203,15 @@ class JsonlFileTelemetryTest {
     void recordEventWithoutActiveSpanHasNoSpanId() throws IOException {
         var telemetry = JsonlFileTelemetry.create(tempDir).withPayloads(true);
 
-        telemetry.recordEvent("llm.payload.request", Map.of());
+        telemetry.recordEvent("llm.payload.request", Map.of("messages", 14));
 
         var lines = readLines(onlyTraceFile());
         assertThat(lines).hasSize(1);
         assertThat(lines.get(0).get("kind").asText()).isEqualTo("event");
+        // #85（docs/25 §11.1）：无跨度兜底 —— 事件照写（name/payload 在），
+        // spanId/traceId 两键缺席（不是 null 值键），读侧按「无归属事件」识别。
+        assertThat(lines.get(0).get("name").asText()).isEqualTo("llm.payload.request");
+        assertThat(lines.get(0).get("payload").get("messages").asInt()).isEqualTo(14);
         assertThat(lines.get(0).has("traceId")).isFalse();
         assertThat(lines.get(0).has("spanId")).isFalse();
     }

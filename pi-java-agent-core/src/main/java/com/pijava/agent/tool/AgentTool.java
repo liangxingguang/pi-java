@@ -17,6 +17,12 @@ import java.util.Map;
  *       wraps in error content (pi identical approach)</li>
  *   <li>{@code @FunctionalInterface} for callbacks instead of inline lambdas</li>
  * </ul></p>
+ *
+ * <p><b>并发契约（#81，docs/25 §10.1）</b>：并行批次的工具调用以虚拟线程
+ * <b>真并发</b>执行（pi {@code Promise.all} 不设上限，{@code agent-loop.ts:516-520}；
+ * 对位 {@code PiLoopTools} 的虚拟线程×1/任务）⇒ 实现必须并发安全：不得把
+ * 跨调用的可变状态挂在实例/静态字段上而不加串行化；同一文件上的
+ * 读-改-写走 {@code FileMutationQueue}（pi 模块级单例，edit/write 共享）。</p>
  */
 public interface AgentTool<TParams, TDetails> {
 

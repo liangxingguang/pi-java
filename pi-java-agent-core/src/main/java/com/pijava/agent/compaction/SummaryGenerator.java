@@ -8,8 +8,14 @@ import com.pijava.ai.message.Message;
 /**
  * LLM-driven summary generator (aligned with pi
  * {@code generateSummary}/{@code generateSummaryWithUsage}). The harness
- * drives this via its stream function; {@link #truncating()} provides a
- * deterministic placeholder until Phase 6 wires the real summarization flow.
+ * drives this via its stream function.
+ *
+ * <p><b>#93（D6，docs/25 §11.3）—— {@link #truncating()} 的定位</b>：它不是
+ * 「Phase 6 前的临时占位」（真路 {@link LlmSummaryGenerator} 已全线接线），而是
+ * <b>未接 LLM 生成器时的确定性兜底默认</b> —— {@code HarnessConfig} 的三处默认
+ * （builder 字段、紧凑构造、便利构造）与测试夹具的消费方。分工：生产路径由宿主
+ * 显式注入 {@link LlmSummaryGenerator}；缺省/测试路径拿到的是不打 LLM、
+ * 输出确定可断言的截断式生成器。</p>
  *
  * <p><b>3d 的失败语义</b>（{@code 原 docs/31 §8.22}）：pi 的
  * {@code generateSummaryWithUsage} 对 error/length 收尾的摘要响应<b>抛错</b>
@@ -50,7 +56,8 @@ public interface SummaryGenerator {
 
     /**
      * Deterministic fallback: a terse structural summary. Does not call the
-     * LLM; used by the harness until the summarization prompt flow lands.
+     * LLM — the default when the host wires no {@link LlmSummaryGenerator}
+     * （{@code HarnessConfig} 的三处默认）与测试夹具（#93）。
      */
     static SummaryGenerator truncating() {
         return new SummaryGenerator() {

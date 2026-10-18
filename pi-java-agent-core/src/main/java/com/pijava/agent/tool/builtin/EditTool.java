@@ -33,8 +33,8 @@ import com.pijava.ai.message.ContentBlock;
 public final class EditTool {
     private EditTool() {}
 
-    /** Serializes edits to the same canonical path across concurrent tool calls. */
-    private static final FileMutationQueue QUEUE = new FileMutationQueue();
+    /** Serializes edits to the same canonical path across concurrent tool calls（与 write 共享，pi 模块级单例）。 */
+    private static final FileMutationQueue QUEUE = FileMutationQueue.shared();
 
     public record EditInput(String path, List<Edit> edits) {}
     public record Edit(String oldText, String newText) {}
