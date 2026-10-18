@@ -490,6 +490,14 @@ public final class RpcDispatcher {
                     name, cmd.description(), cmd.argumentHint()));
             }
         }
+        // B244（pi rpc-mode.ts:699-707）：skill 臂，不受 enableSkillCommands
+        // 门（pi get_commands 无门——开关只管交互补全）。pi 形状含
+        // source/sourceInfo 且不收内置——形状对齐随 B247；本批在现形状
+        // 追加（argumentHint 恒 null）。
+        for (var skill : session.harness().skillManager().all()) {
+            commands.add(new RpcSlashCommand(
+                "skill:" + skill.name(), skill.description(), null));
+        }
         return commands;
     }
 
