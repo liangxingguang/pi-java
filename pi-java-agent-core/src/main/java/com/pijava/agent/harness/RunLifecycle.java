@@ -295,6 +295,20 @@ final class RunLifecycle {
         HarnessUtils.rebuildLaneMessages(lane);
     }
 
+    /**
+     * Replace a lane transcript wholesale — pi {@code navigateTree} 的
+     * {@code _refreshFinalizedContext}（agent-session.ts:4136-4137）对位：树导航后
+     * 上下文按新叶<b>整体换掉</b>，不是 {@link #seedTranscript} 的「首次填充」。
+     * 调用方负责只在车道空闲时调用（navigateTree 有 isRunning 门）。
+     */
+    void replaceTranscript(String laneName, List<Entry> entries) {
+        var lane = ctx.requireLane(laneName);
+        lane.transcript.clear();
+        lane.transcript.addAll(entries);
+        lane.recordedThinking = lastRecordedThinking(lane);
+        HarnessUtils.rebuildLaneMessages(lane);
+    }
+
     /** 日志里最后一条 {@code ThinkingLevelChange} 的标签；没有则为 {@code null}。 */
     private static String lastRecordedThinking(LaneState lane) {
         for (int i = lane.transcript.size() - 1; i >= 0; i--) {

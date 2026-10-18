@@ -178,7 +178,7 @@ public final class CompactionService {
         // 两份消息（compaction.ts:927-935），这里合并后交给同一条 collect。
         List<Message> fileOpsMessages = new ArrayList<>(plan.toSummarize());
         fileOpsMessages.addAll(plan.turnPrefix());
-        CompactionFiles.Lists lists = CompactionFiles.collect(fileOpsMessages, transcript);
+        FileOperationLists.Lists lists = CompactionFiles.collect(fileOpsMessages, transcript);
         return new CompactionResult(
             summary + lists.formatted(), plan.firstKeptId(), tokensBefore, null,
             usage, lists.details());

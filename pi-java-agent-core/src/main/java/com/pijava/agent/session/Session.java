@@ -71,6 +71,32 @@ public final class Session<TMetadata extends SessionMetadata> implements Session
         storage.moveLane(lane, to);
     }
 
+    /**
+     * pi {@code resetLeaf()}（session-manager.ts:1591-1593）：叶清 {@code null} ⇒
+     * 下次 {@link #appendEntry} 开新根（父指针为 null）。
+     */
+    public void resetLeaf(String lane) {
+        moveLane(lane, null);
+    }
+
+    /**
+     * pi {@code branchWithSummary}（session-manager.ts:1600-1625）：移叶到
+     * {@code branchFromId} ＋ 追加 {@link Entry.BranchSummary}（{@code fromId} 取
+     * 旧叶或 {@code "root"}）。返回提交的 entry。
+     *
+     * @param oldLeafId 移叶前的旧叶（{@code null} ⇒ {@code fromId = "root"}）
+     */
+    public Entry.BranchSummary branchWithSummary(String lane, String branchFromId,
+                                                 String oldLeafId, String summary,
+                                                 java.util.Map<String, Object> details,
+                                                 Boolean fromHook, com.pijava.ai.Usage usage) {
+        moveLane(lane, branchFromId);
+        return appendEntry(new ProvisionedEntry<>(new Entry.BranchSummary(
+            idGenerator.next(), 0, null, null,
+            oldLeafId != null ? oldLeafId : "root",
+            summary, details, usage, fromHook)), lane);
+    }
+
     /** Append an entry and return the committed entry. */
     public <T extends Entry> T appendEntry(ProvisionedEntry<T> entry, String lane) {
         return storage.appendEntry(entry, lane);

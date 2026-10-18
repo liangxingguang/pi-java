@@ -5,10 +5,10 @@ package com.pijava.agent.compaction;
  * {@link LlmSummaryGenerator} 只保留调用/重试机制。文本逐字取自 pi 锚点
  * {@code 200387122}，{@code \} 续行仅用于 Java 行宽，产出字节无折行。
  */
-final class SummaryPrompts {
+public final class SummaryPrompts {
 
     /** pi {@code SUMMARIZATION_SYSTEM_PROMPT}（{@code compaction/utils.ts:161-163}）。 */
-    static final String SYSTEM = """
+    public static final String SYSTEM = """
         You are a context summarization assistant. Your task is to read a conversation \
         between a user and an AI assistant, then produce a structured summary following \
         the exact format specified.

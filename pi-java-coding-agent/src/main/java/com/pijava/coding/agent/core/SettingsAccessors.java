@@ -284,6 +284,25 @@ public final class SettingsAccessors {
             compactionToken(c, model, false));
     }
 
+    /** pi {@code settings-defaults.ts:14}：branchSummary.reserveTokens 默认值。 */
+    private static final int BRANCH_SUMMARY_RESERVE_DEFAULT = 16_384;
+
+    /**
+     * pi {@code branchSummary.reserveTokens} 访问器（settings-manager.ts:867-876
+     * 同族）：独立键，与 {@code compaction.reserveTokens} 无关（默认值同为 16384）。
+     */
+    public int getBranchSummaryReserveTokens() {
+        var b = manager.effective().branchSummary;
+        return b == null || b.reserveTokens() == null
+            ? BRANCH_SUMMARY_RESERVE_DEFAULT : b.reserveTokens();
+    }
+
+    /** pi {@code branchSummary.skipPrompt}（settings-defaults.ts:15：默认 false）。 */
+    public boolean getBranchSummarySkipPrompt() {
+        var b = manager.effective().branchSummary;
+        return b != null && Boolean.TRUE.equals(b.skipPrompt());
+    }
+
     /** pi {@code getCompactionTokenSetting}（:927-953）的单字段三级回退 + 校验。 */
     private static int compactionToken(Settings.Compaction c,
                                         com.pijava.ai.model.ModelId<?> model,

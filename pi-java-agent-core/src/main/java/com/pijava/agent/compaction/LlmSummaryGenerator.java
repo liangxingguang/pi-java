@@ -160,6 +160,27 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
     }
 
     /**
+     * pi {@code generateBranchSummary} 的 LLM 调用段（branch-summarization.ts:340-356）：
+     * 与压缩摘要同一套 retry 环（reason 传 {@code "branchSummary"}）＋ 同一请求形状
+     * （系统提示词 / 单 user message / cacheRetention none）；{@code maxTokens} 由
+     * 调用方按 {@code min(4096, model.maxTokens)} 算好传入。原样响应（aborted /
+     * failure / toolCall 的判定在调用方 —— 分支摘要路是返回值不是抛）。
+     */
+    public Message.AssistantMessage callBranch(String promptText, int maxTokens, String reason) {
+        return callWithRetries(() -> request(promptText, OptionalInt.of(maxTokens)), reason);
+    }
+
+    /** pi {@code getSummarizationFailure(response, label)}（compaction.ts:580-588）。 */
+    public static String summarizationFailure(Message.AssistantMessage response, String label) {
+        return getSummarizationFailure(response, label);
+    }
+
+    /** pi {@code contentText}（text.ts:6-12）：text 块以 \n 连接，无 strip。 */
+    public static String contentTextOf(List<ContentBlock> content) {
+        return contentText(content);
+    }
+
+    /**
      * pi {@code compaction.ts:1083-1087}：{@code min(floor(0.5*reserveTokens),
      * model.maxTokens > 0 ? model.maxTokens : Infinity)}。
      */

@@ -35,6 +35,8 @@ public final class Settings {
     public String followUpMode;
     public String theme;
     public Compaction compaction;
+    /** pi {@code BranchSummarySettingsSchema}（settings-schema.ts:29-42）。 */
+    public BranchSummary branchSummary;
     public Boolean hideThinkingBlock;
     public String externalEditor;
     public String shellPath;
@@ -151,6 +153,17 @@ public final class Settings {
             @JsonProperty("keepRecentTokens") Integer keepRecentTokens
         ) {}
     }
+
+    /**
+     * pi {@code BranchSummarySettingsSchema}（settings-schema.ts:29-42）。与压缩的
+     * 同名 reserve <b>无关</b> —— 独立键 {@code branchSummary.reserveTokens}
+     * （defaults 同值 16384，settings-defaults.ts:14；skipPrompt 默认 false :15）。
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record BranchSummary(
+        @JsonProperty("reserveTokens") Integer reserveTokens,
+        @JsonProperty("skipPrompt") Boolean skipPrompt
+    ) {}
 
     /**
      * Terminal settings (JSON boundary representation)，对齐 pi

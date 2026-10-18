@@ -69,6 +69,7 @@ import com.pijava.coding.agent.extension.ExtensionUI;
 import com.pijava.coding.agent.extension.ResourcePaths;
 import com.pijava.coding.agent.prompt.PromptTemplateRegistry;
 import com.pijava.coding.agent.prompt.PromptTemplates;
+import com.pijava.coding.agent.compaction.BranchSummarization;
 import com.pijava.coding.agent.skill.SkillDiscovery;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
 
@@ -130,6 +131,11 @@ public final class AgentSession implements AutoCloseable {
     // scope 解析与轮转都对全目录（assemble 构造的同一实例）。
     private com.pijava.ai.catalog.ModelCatalog modelCatalog =
         com.pijava.ai.catalog.ModelCatalog.empty();
+    // B1（map #24/#25）：分支摘要生成器与模型解析器（create 装配）。
+    private com.pijava.coding.agent.compaction.BranchSummarization branchSummarization;
+    private com.pijava.ai.model.DefaultModelResolver modelResolver;
+    /** pi {@code _branchSummaryAbortController}（agent-session.ts:4018 创建/:4155 清）。 */
+    private volatile com.pijava.agent.harness.CompactionAbortToken branchSummaryAbort;
 
     private AgentSession(AgentHarness harness, SessionServices services,
                          Args args, String name) {
@@ -248,10 +254,11 @@ public final class AgentSession implements AutoCloseable {
         session.repository = repository;
         return SessionSetup.resolveSession(session, args);
     }
-    private static AgentSession create(Args args, PersistentSessionRepositories.RepositoryHandle handle,
-                                       ProviderRegistry providers,
-                                       ToolContext toolContext,
-                                       SettingsManager settings) {
+    /** 持久仓＋注入 provider 组合（NavigateTreeTest 等同包夹具用，createWeb 的 CLI 对应形）。 */
+    static AgentSession create(Args args, PersistentSessionRepositories.RepositoryHandle handle,
+                               ProviderRegistry providers,
+                               ToolContext toolContext,
+                               SettingsManager settings) {
         var session = assemble(args, settings, providers, toolContext,
             handle, handle.repository(), resumeLike(args));
         session.persistentRepository = handle;
@@ -518,6 +525,16 @@ public final class AgentSession implements AutoCloseable {
         agentSession.persistentRepository = handle;
         agentSession.setScopedModels(scope.models());
         agentSession.modelCatalog = catalog;
+        // B1（map #24/#25）：分支摘要生成器 —— 与压缩同源的 StreamFn/retry 环，
+        // reason 传 "branchSummary"（重试事件线已预留该源，docs/24 §7.2#6）。
+        agentSession.modelResolver = models;
+        agentSession.branchSummarization = new BranchSummarization(
+            new LlmSummaryGenerator(recordingStreamFn,
+                () -> agentSession.harness.getModel(),
+                retrySettings, retryAborted, retryObserver,
+                () -> models.maxOutputTokens(agentSession.harness.getModel()),
+                () -> agentSession.harness.getThinkingLevel(),
+                models::supportsThinking));
         loadExtensions(args, services, harness, ExtensionUI.noop(), agentSession);
         return agentSession;
     }
@@ -848,8 +865,9 @@ public final class AgentSession implements AutoCloseable {
 
     /** Abort the current run (cross-thread safe via the harness AbortSignal). */
     public void abort() {
-        // pi :2438-2440：abort() 内含 abortCompaction()（abortBranchSummary 随批 13）。
+        // pi :2438-2440：abort() 内含 abortCompaction()＋abortBranchSummary()。
         abortCompaction();
+        abortBranchSummary();
         // pi abort()（:1639-1646）第一步就是 abortRetry() —— 若正卡在 ① 的
         // 退避睡眠里，先把它掐掉（"Retry cancelled"），再中止 run 本身。
         abortRetry();
@@ -894,6 +912,148 @@ public final class AgentSession implements AutoCloseable {
             CompactionSettings settings, String customInstructions) {
         abortAndWaitForIdle();
         return harness.compact(laneName(), settings, customInstructions);
+    }
+
+    // ── navigateTree（pi agent-session.ts:3964-4156，B1，map #25）──────
+
+    /** pi {@code navigateTree} 的返回：取消旗 + 编辑器回填文本 + 摘要 entry（可无）。 */
+    public record TreeNavigation(boolean cancelled, String editorText,
+                                 Entry.BranchSummary summaryEntry) {}
+
+    /**
+     * pi {@code navigateTree}（agent-session.ts:3964-4156）核心流（B1，map #25）。
+     *
+     * <p>双门错文逐字（:3977-3982）；目标 = 当前叶 ⇒ 不动；user/custom_message 目标
+     * ⇒ 新叶 = 父 ＋ 回填 editorText；有摘要 ⇒ {@code branchWithSummary}，无摘要到根
+     * ⇒ {@code resetLeaf}，否则 {@code branch}（moveLane）；label 贴摘要 entry 或
+     * targetId（:4118-4126）。{@code session_before_tree}/{@code session_tree} 扩展
+     * 事件与 TUI 三选/Esc 随 B245（docs/24 §13.5）。</p>
+     */
+    public TreeNavigation navigateTree(String targetId, boolean summarize,
+                                       String customInstructions, boolean replaceInstructions,
+                                       String label) {
+        if (isRunning()) {
+            throw new IllegalStateException(
+                "Wait for the current response to finish before navigating the session tree.");
+        }
+        if (isCompacting()) {
+            throw new IllegalStateException("Wait for the current compaction or tree navigation "
+                + "to finish before navigating the session tree.");
+        }
+        if (session == null) {
+            throw new IllegalStateException("Tree navigation requires a persistent session");
+        }
+        var tree = session.view(laneName());
+        String oldLeafId = tree.getLeafId();
+        if (targetId.equals(oldLeafId)) {
+            return new TreeNavigation(false, null, null); // pi :3989-3991
+        }
+        Entry target = tree.getEntry(targetId);
+        if (target == null) {
+            throw new IllegalStateException("Entry " + targetId + " not found");
+        }
+
+        branchSummaryAbort = new com.pijava.agent.harness.CompactionAbortToken(); // pi :4018
+        try {
+            String summaryText = null;
+            com.pijava.ai.Usage summaryUsage = null;
+            java.util.Map<String, Object> summaryDetails = null;
+            if (summarize) {
+                var collected = BranchSummarization.collectEntries(oldLeafId, targetId, session);
+                if (!collected.entries().isEmpty()) {
+                    var model = harness.getModel();
+                    int contextWindow = modelResolver.contextWindow(model);
+                    if (contextWindow <= 0) {
+                        contextWindow = 128_000; // pi :306 `model.contextWindow || 128000`
+                    }
+                    var outcome = branchSummarization.generate(collected.entries(),
+                        new BranchSummarization.Options(model, contextWindow,
+                            modelResolver.maxOutputTokens(model),
+                            services.settings().accessors().getBranchSummaryReserveTokens(),
+                            customInstructions, replaceInstructions));
+                    switch (outcome) {
+                        case BranchSummarization.Outcome.Aborted a -> {
+                            return new TreeNavigation(true, null, null); // pi cancelled:true
+                        }
+                        case BranchSummarization.Outcome.Failed f ->
+                            throw new IllegalStateException(f.error());
+                        case BranchSummarization.Outcome.Summary s -> {
+                            summaryText = s.text();
+                            summaryUsage = s.usage();
+                            summaryDetails = BranchSummarization.detailsOf(
+                                s.readFiles(), s.modifiedFiles());
+                        }
+                    }
+                }
+            }
+
+            // 新叶按目标类型（pi :4094-4103 逐字序）：user 消息/custom_message ⇒
+            // 叶=父＋回填 editorText；其他 ⇒ 叶=targetId。
+            String newLeafId;
+            String editorText = null;
+            if (target instanceof Entry.Message m && "user".equals(m.message().role())) {
+                newLeafId = m.parentId();
+                editorText = textOf(m.message().content());
+            } else if (target instanceof Entry.CustomMessage cm) {
+                newLeafId = cm.parentId();
+                editorText = textOf(cm.content().toBlocks());
+            } else {
+                newLeafId = targetId;
+            }
+
+            Entry.BranchSummary summaryEntry = null;
+            if (summaryText != null) {
+                // pi :4107-4115：摘要挂在目标位置（可在根），fromHook=false（pi 生成）。
+                summaryEntry = session.branchWithSummary(laneName(), newLeafId, oldLeafId,
+                    summaryText, summaryDetails, Boolean.FALSE, summaryUsage);
+                if (label != null) {
+                    session.setLabel(summaryEntry.id(), label);
+                }
+            } else if (newLeafId == null) {
+                session.resetLeaf(laneName());
+            } else {
+                session.moveLane(laneName(), newLeafId);
+            }
+            if (label != null && summaryText == null) {
+                session.setLabel(targetId, label);
+            }
+
+            // pi :4136-4137（_refreshFinalizedContext/_restoreToolsFromTranscript）对位：
+            // 从新叶重建车道上下文；已落盘 id 重标记，防 persistPending 复写。
+            String leafId = summaryEntry != null ? summaryEntry.id() : newLeafId;
+            List<Entry> entries = session.findEntries(
+                new EntryQuery(null, null, com.pijava.agent.session.EntryOrder.OLDEST_FIRST,
+                    null, null));
+            persistedEntryIds().clear();
+            entries.forEach(e -> persistedEntryIds().add(e.id()));
+            // replaceTranscript（非 seedTranscript）：导航是整体换上下文，
+            // seed 的「首填才生效」门会在已有转录上静默不播。
+            harness.replaceTranscript(laneName(),
+                leafId == null ? List.of()
+                    : ContextEntries.contextEntries(ContextEntries.pathToLeaf(entries, leafId)));
+            return new TreeNavigation(false, editorText, summaryEntry);
+        } finally {
+            branchSummaryAbort = null; // pi :4155
+        }
+    }
+
+    /** pi {@code abortBranchSummary()}（agent-session.ts:2922-2924）。 */
+    public void abortBranchSummary() {
+        var token = branchSummaryAbort;
+        if (token != null) {
+            token.abort();
+        }
+    }
+
+    /** 提取消息纯文本（pi {@code contentText(..., "")}：text 块拼接）。 */
+    private static String textOf(List<com.pijava.ai.message.ContentBlock> content) {
+        var parts = new ArrayList<String>();
+        for (var block : content) {
+            if (block instanceof com.pijava.ai.message.ContentBlock.TextContent t) {
+                parts.add(t.text());
+            }
+        }
+        return String.join("\n", parts);
     }
 
     /**

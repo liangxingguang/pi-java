@@ -16,7 +16,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * 模型把它当成要续写的对话。tool result 截到 {@link #TOOL_RESULT_MAX_CHARS}
  * 字符，摘要不需要全文。
  */
-final class ConversationSerializer {
+public final class ConversationSerializer {
 
     /** pi {@code TOOL_RESULT_MAX_CHARS}（utils.ts:94）。 */
     static final int TOOL_RESULT_MAX_CHARS = 2_000;
@@ -25,7 +25,7 @@ final class ConversationSerializer {
 
     private ConversationSerializer() {}
 
-    static String serialize(List<Message> messages) {
+    public static String serialize(List<Message> messages) {
         List<String> parts = new ArrayList<>();
         for (Message message : messages) {
             switch (message) {

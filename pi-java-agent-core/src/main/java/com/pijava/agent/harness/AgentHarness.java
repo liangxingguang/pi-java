@@ -377,6 +377,15 @@ public class AgentHarness implements AutoCloseable {
         runLifecycle.seedTranscript(laneName, entries);
     }
 
+    /**
+     * Replace the lane transcript wholesale (tree navigation — pi
+     * {@code _refreshFinalizedContext}); unlike {@link #seedTranscript} this is
+     * not first-fill-only.
+     */
+    public void replaceTranscript(String laneName, List<Entry> entries) {
+        runLifecycle.replaceTranscript(laneName, entries);
+    }
+
     /** Load a lane's persisted record log on resume; the lane comes back idle (原 docs/30 §4.1). */
     public void restoreRecords(String laneName, List<LaneRecord> records) {
         if (closed) throw new HarnessClosedException();
