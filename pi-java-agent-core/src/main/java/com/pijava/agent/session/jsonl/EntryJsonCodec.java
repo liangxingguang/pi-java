@@ -46,13 +46,13 @@ final class EntryJsonCodec {
                 JsonlCodec.requireInt(node, "tokensBefore"),
                 JsonlCodec.optionalObject(node, "details"),
                 decodeUsage(node.get("usage")),
-                optionalFromHook(node));
+                optionalFromHook(node).orElse(null));
             case Entry.TYPE_BRANCH_SUMMARY -> new Entry.BranchSummary(id, seq, parentId, timestamp,
                 JsonlCodec.requireString(node, "fromId"),
                 JsonlCodec.requireString(node, "summary"),
                 JsonlCodec.optionalObject(node, "details"),
                 decodeUsage(node.get("usage")),
-                optionalFromHook(node));
+                optionalFromHook(node).orElse(null));
             case Entry.TYPE_CUSTOM -> new Entry.Custom(id, seq, parentId, timestamp,
                 JsonlCodec.requireString(node, "customType"),
                 JsonlCodec.optionalObject(node, "data"));
@@ -132,10 +132,12 @@ final class EntryJsonCodec {
         throw JsonlCodec.DecodeError.schema("has invalid content");
     }
 
-    /** pi {@code fromHook?: boolean}：键缺席/非布尔 ⇒ {@code null} ≙ pi undefined（旧文件兼容）。 */
-    private static Boolean optionalFromHook(JsonNode node) {
+    /** pi {@code fromHook?: boolean}：键缺席/非布尔 ⇒ empty ≙ pi undefined（旧文件兼容）。
+     *  Optional 返回而非 {@code Boolean}＋null —— SpotBugs NP_BOOLEAN_RETURN_NULL。 */
+    private static java.util.Optional<Boolean> optionalFromHook(JsonNode node) {
         JsonNode value = node.get("fromHook");
-        return value != null && value.isBoolean() ? value.asBoolean() : null;
+        return value != null && value.isBoolean()
+            ? java.util.Optional.of(value.asBoolean()) : java.util.Optional.empty();
     }
 
     static com.pijava.ai.Usage decodeUsage(JsonNode node) {
