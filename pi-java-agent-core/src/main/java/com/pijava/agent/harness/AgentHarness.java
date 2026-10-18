@@ -397,6 +397,17 @@ public class AgentHarness implements AutoCloseable {
         runLifecycle.appendLaneEntry(laneName, entry);
     }
 
+    /**
+     * Restore the active tool set from the lane's latest system message after tree
+     * navigation（#77；pi {@code _restoreToolsFromTranscript}，
+     * agent-session.ts:1809-1820，调用点 {@code navigateTree:4138}）。
+     * 须在 {@link #replaceTranscript} 之后调用（pi :4136-4138 同序）；
+     * 无系统消息 ⇒ 不动。
+     */
+    public void restoreToolsFromTranscript(String laneName) {
+        runLifecycle.restoreToolsFromTranscript(laneName);
+    }
+
     /** Load a lane's persisted record log on resume; the lane comes back idle (原 docs/30 §4.1). */
     public void restoreRecords(String laneName, List<LaneRecord> records) {
         if (closed) throw new HarnessClosedException();

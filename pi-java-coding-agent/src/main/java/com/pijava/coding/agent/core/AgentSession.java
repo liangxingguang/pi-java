@@ -1034,6 +1034,8 @@ public final class AgentSession implements AutoCloseable {
             harness.replaceTranscript(laneName(),
                 leafId == null ? List.of()
                     : ContextEntries.contextEntries(ContextEntries.pathToLeaf(entries, leafId)));
+            // pi :4138（#77）：导航后按新叶最新系统消息的 toolsAdded 恢复激活装配。
+            harness.restoreToolsFromTranscript(laneName());
             return new TreeNavigation(false, editorText, summaryEntry);
         } finally {
             branchSummaryAbort = null; // pi :4155
