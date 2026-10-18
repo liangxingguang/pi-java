@@ -88,6 +88,26 @@ public final class SettingsAccessors {
         manager.markModified("quietStartup");
     }
 
+    /**
+     * B244（pi {@code getEnableSkillCommands}，settings-manager.ts:1156-1158）：
+     * 是否把技能注册为 {@code /skill:name} 补全命令；缺省回落 pi 默认
+     * {@code true}（settings-defaults.ts:33）。
+     */
+    public boolean getEnableSkillCommands() {
+        var value = manager.effective().enableSkillCommands;
+        return value == null || value;
+    }
+
+    /**
+     * B244（pi {@code setEnableSkillCommands}，settings-manager.ts:1160-1164）：
+     * 写全局域＋标脏（pi 的 {@code save()} 对位在调用方 ——
+     * {@code SettingsScreen.cycle} 统一 {@code flush()}）。
+     */
+    public void setEnableSkillCommands(Boolean enabled) {
+        manager.global().enableSkillCommands = enabled;
+        manager.markModified("enableSkillCommands");
+    }
+
     public String getDefaultProjectTrust() {
         return manager.effective().defaultProjectTrust;
     }

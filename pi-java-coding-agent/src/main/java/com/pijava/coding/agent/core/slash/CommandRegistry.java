@@ -84,6 +84,13 @@ public final class CommandRegistry {
         var parts = input.substring(1).split("\\s+", 2);
         var command = commands.get(parts[0]);
         if (command == null) {
+            // B244：/skill:<name> 不是注册命令——pi 里它只活在补全名单
+            //（interactive-mode.ts:803-815），提交时随普通 prompt 走
+            // _expandSkillCommand 展开（agent-session.ts:2008）。透传为 prompt
+            //（null ≙ 非命令），未知名/读失败由展开器原文透传（批 4 语义）。
+            if (parts[0].startsWith("skill:")) {
+                return null;
+            }
             return CompletableFuture.completedFuture(
                 "Unknown command: /" + parts[0]
                     + " (try /hotkeys for the list of commands)");
