@@ -1,0 +1,17 @@
+{
+  "id": "S16",
+  "name": "thinking 块三帧（#87 对拍：start/delta/end 两侧对称）",
+  "systemPrompt": "You are helpful.",
+  "prompt": "Think then answer",
+  "toolExecution": "parallel",
+  "tools": [],
+  "responses": [
+    {
+      "content": [
+        { "type": "thinking", "thinking": "Let me think." },
+        { "type": "text", "text": "The answer." }
+      ],
+      "stopReason": "stop"
+    }
+  ]
+}
