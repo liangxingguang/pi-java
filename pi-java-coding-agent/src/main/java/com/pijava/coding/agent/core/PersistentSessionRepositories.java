@@ -60,7 +60,7 @@ final class PersistentSessionRepositories {
                 if (idOrPrefix == null || idOrPrefix.isBlank()) {
                     return Optional.empty();
                 }
-                // pi resolveSessionPath（main.ts:260-276）阶梯（B53，docs/24 §10）：
+                // pi resolveSessionPath（main.ts:260-276）阶梯（B53，docs/09 §10）：
                 // ① 项目内 header-only 精确（findById 不加载 transcript）→
                 // ② 项目内前缀 → ③ 跨项目**精确优先于前缀**（pi 是一次扫里
                 // `exact ?? prefix`，java 单扫两谓词，行为等价留痕）。
@@ -329,7 +329,7 @@ final class PersistentSessionRepositories {
         /**
          * pi {@code forkSessionOrExit(..., parsed.sessionId)}（main.ts:380-386）：
          * {@code --fork} 与 {@code --session-id} 组合时，新会话用给定 id
-         * （{@code forkFrom(..., { id: sessionId })}；#75/docs/25 §5）。
+         * （{@code forkFrom(..., { id: sessionId })}；#75/docs/10 §5）。
          */
         default Session<?> fork(SessionMetadata source, ForkOptions options, String cwd,
                                 String sessionId) {

@@ -13,7 +13,7 @@ import com.pijava.agent.skill.Skill;
  * pi {@code _expandSkillCommand}（{@code agent-session.ts:2147-2171}）对位（map #62）。
  *
  * <p>（{@code formatSkillInvocation} 已随 pi {@code 7fd478a2e} 删除 —— R1 不复活，
- * 现行行为就是这个内联形状，docs/24 §13.4 裁决④。）</p>
+ * 现行行为就是这个内联形状，docs/09 §13.4 裁决④。）</p>
  *
  * <p>展开序：先 {@code /skill:} 后模板（两调用点 :2008-2009 / :2191-2192 同序）。</p>
  */
@@ -54,7 +54,7 @@ public final class SkillCommandExpansion {
             return args.isEmpty() ? block : block + "\n\n" + args;
         } catch (IOException | FrontmatterParser.FrontmatterException e) {
             // pi :2164-2170 emitError({event:"skill_expansion"}) —— 扩展错误总线缺位，
-            // 先 LOG，原文透传（事件随扩展包，docs/24 §13.5 留痕）。
+            // 先 LOG，原文透传（事件随扩展包，docs/09 §13.5 留痕）。
             LOG.warning("[skill] expansion failed for " + skill.name() + ": " + e.getMessage());
             return text;
         }

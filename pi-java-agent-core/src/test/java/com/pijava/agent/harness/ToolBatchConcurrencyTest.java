@@ -293,7 +293,7 @@ class ToolBatchConcurrencyTest {
     }
 
     /**
-     * #89（C2，docs/25 §7.1）：三调用受控完成序 <b>3→1→2</b> ——
+     * #89（C2，docs/10 §7.1）：三调用受控完成序 <b>3→1→2</b> ——
      * ① {@code tool_execution_end} 帧 = 完成序（{@code three, one, two}）；
      * ② 结果消息 = 源序（{@code one, two, three}，pi {@code :549-554} 收束段按
      * entries 顺序补发）。完成序由闩锁链保证（1 等 3 的 end、2 等 1 的 end），

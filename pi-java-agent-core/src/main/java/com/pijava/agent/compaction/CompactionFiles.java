@@ -9,7 +9,7 @@ import com.pijava.ai.message.Message;
 /**
  * 压缩产物的文件清单（pi {@code compaction.ts:46-76}，B2，见 {@code 原 docs/31 §8.30}）。
  *
- * <p>与 {@link FileOperationLists}（公共件，docs/24 §7.3）的分工：这里只剩压缩路
+ * <p>与 {@link FileOperationLists}（公共件，docs/09 §7.3）的分工：这里只剩压缩路
  * 特有的<b>跨压缩累积</b> —— 上一份 compaction entry 的 {@code details} 先回灌
  * （带 {@code fromHook} 守卫，compaction.ts:70），再走本次丢弃的消息；抽取/拆分/
  * 文本尾块/details 四段全在公共件。</p>

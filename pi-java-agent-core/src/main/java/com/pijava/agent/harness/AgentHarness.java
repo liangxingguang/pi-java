@@ -29,7 +29,7 @@ import com.pijava.ai.thinking.ModelThinkingLevel;
  * Promise，Java 侧由调用线程直接跑到收口（{@code 原 docs/31 §8.5} 的口径 —— 对齐的是
  * 「可观察效果的顺序」，不是 async 机器）。</p>
  *
- * <p>#94（docs/25 §8）：字段、构造装配、队列调度委托与内部助手抽在包私有基类
+ * <p>#94（docs/10 §8）：字段、构造装配、队列调度委托与内部助手抽在包私有基类
  * {@link HarnessBootstrap} —— 纯移动，公共 API 面（继承所得成员与下述声明）不变。</p>
  */
 public class AgentHarness extends HarnessBootstrap {
@@ -220,7 +220,7 @@ public class AgentHarness extends HarnessBootstrap {
     /**
      * Append an entry to an <b>idle</b> lane and rebuild its working messages — pi
      * {@code recordBashResult} 的空闲臂（{@code appendMessage} ＋
-     * {@code _refreshFinalizedContext}，agent-session.ts:3878-3899，#57/docs/25 §3.3 ⑥）。
+     * {@code _refreshFinalizedContext}，agent-session.ts:3878-3899，#57/docs/10 §3.3 ⑥）。
      * 运行中的车道抛 {@link IllegalStateException}：调用方应先暂存、settled 再 flush
      * （pi 的 {@code _pendingBashMessages}）。
      */

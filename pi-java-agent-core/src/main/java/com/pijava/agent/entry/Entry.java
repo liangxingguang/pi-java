@@ -134,7 +134,7 @@ public sealed interface Entry {
      * {@code message.role:"bashExecution"}（pi 无独立条目类型，
      * {@code session-manager.ts:1204-1214}）；域内按条目变体承载，投影点转 user 文本
      * （{@link com.pijava.agent.session.ContextEntries}），与 branchSummary/compactionSummary
-     * 同分层（docs/25 §3）。{@code @JsonSubTypes} <b>不加</b> —— 线判别共享
+     * 同分层（docs/10 §3）。{@code @JsonSubTypes} <b>不加</b> —— 线判别共享
      * {@link #TYPE_MESSAGE}，编解码在 {@code EntryJsonCodec}/{@code SessionWireShape}
      * 特判 {@code message.role}。
      *

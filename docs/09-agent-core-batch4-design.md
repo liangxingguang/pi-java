@@ -306,7 +306,7 @@ public final class SkillCommandExpansion {
             return args.isEmpty() ? block : block + "\n\n" + args;
         } catch (IOException | FrontmatterParser.FrontmatterException e) {
             // pi :2164-2170 emitError({event:"skill_expansion"}) —— 扩展错误总线缺位，
-            // 先 LOG，原文透传（事件随扩展包，docs/24 §13.5 留痕）。
+            // 先 LOG，原文透传（事件随扩展包，docs/09 §13.5 留痕）。
             LOG.warn("[skill] expansion failed for {}: {}", skill.name(), e.getMessage());
             return text;
         }

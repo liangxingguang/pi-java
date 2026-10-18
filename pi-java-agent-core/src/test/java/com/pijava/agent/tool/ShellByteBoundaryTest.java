@@ -13,7 +13,7 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * #95（A14，docs/25 §9）：**字节级**假 shell —— 泵边界上的多字节字符切分。
+ * #95（A14，docs/10 §9）：**字节级**假 shell —— 泵边界上的多字节字符切分。
  *
  * <p>{@code ShellOutputStreamingTest} 的假 shell 喂的是**字符串**（字符级写入永远
  * 不会切在半字符）；本夹具直接让假 shell 把预制的 {@code byte[]} 原样喷到
@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 第 2 字节恰好落在 8192 泵边界」：前缀 8191 字节 ASCII ＋ 3 字节字符 ＋ 尾巴，
  * 第一次 {@code read(buf, 8192)} 恰好停在 {@code 0xE4} 之后。</p>
  *
- * <p>泵审计结论（docs/25 §9.3）：{@code ShellProcessEngine} 的终局输出是
+ * <p>泵审计结论（docs/10 §9.3）：{@code ShellProcessEngine} 的终局输出是
  * {@code ByteArrayOutputStream} 攒齐后**一次**解码（字节精确），增量路径走
  * {@link Utf8ChunkStream} 的字符边界增量解码 —— 两侧都不劈字符；本夹具把这条
  * 端到端钉死（真进程、真 8 KiB 读缓冲）。</p>

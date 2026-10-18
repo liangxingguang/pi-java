@@ -26,7 +26,7 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * #77（docs/25 §4）：pi {@code _restoreToolsFromTranscript}
+ * #77（docs/10 §4）：pi {@code _restoreToolsFromTranscript}
  * （agent-session.ts:1809-1820，调用点 {@code navigateTree:4138}）——
  * 树导航后按新叶最新系统消息的 {@code toolsAdded} 恢复激活装配。
  *

@@ -342,7 +342,7 @@ public final class AgentSession implements AutoCloseable {
         // pi sdk.ts:43-46 的模块顶层副作用对位（setDefaultStreamFn(streamSimple)）：
         // 进程级缺省兜底，给省略 streamFn 的 HarnessConfig.build() 回落（#69）。
         // 窄差：pi 装的 streamSimple 每次调用现解析环境凭证，这里装的是本次会话
-        // 装配的解析结果（后续会话覆盖安装）——单会话场景行为等价（docs/24 §3.3）。
+        // 装配的解析结果（后续会话覆盖安装）——单会话场景行为等价（docs/09 §3.3）。
         DefaultStreamFn.set(streamFn);
         // Trace exporter: same instance powers harness telemetry (spans/counters)
         // and payload recording (wrapper), so events bind to the llm.request span.
@@ -362,7 +362,7 @@ public final class AgentSession implements AutoCloseable {
             var s = sessionRef.get();
             return s == null ? ImagePolicy.defaults() : s.currentImagePolicy();
         });
-        // B242（docs/24 §8.3）：PI_* 会话身份晚绑定（pi bash.ts:199-208 的 ctx 三面）。
+        // B242（docs/09 §8.3）：PI_* 会话身份晚绑定（pi bash.ts:199-208 的 ctx 三面）。
         // 执行期现读 ⇒ setModel/setThinkingLevel 后下次工具调用即拿到新值。
         policyToolContext = policyToolContext.withSessionEnvironment(() -> {
             var s = sessionRef.get();
@@ -529,7 +529,7 @@ public final class AgentSession implements AutoCloseable {
         agentSession.setScopedModels(scope.models());
         agentSession.modelCatalog = catalog;
         // B1（map #24/#25）：分支摘要生成器 —— 与压缩同源的 StreamFn/retry 环，
-        // reason 传 "branchSummary"（重试事件线已预留该源，docs/24 §7.2#6）。
+        // reason 传 "branchSummary"（重试事件线已预留该源，docs/09 §7.2#6）。
         agentSession.modelResolver = models;
         agentSession.branchSummarization = new BranchSummarization(
             new LlmSummaryGenerator(recordingStreamFn,
@@ -682,7 +682,7 @@ public final class AgentSession implements AutoCloseable {
      * <p>pi {@code agent-session.ts:3942-3947}：落盘 → 读回规范化名 → 发事件。
      * 规范化对位 {@code session-manager.ts:1305}（换行消毒 + trim）；空名 ⇒ 清除
      * （:1326-1328，≙ pi 的 undefined）。事件载荷是**规范化后的名字**，不是入参
-     * （3686/5996 回归对位）；扩展路 emit 随扩展面包（docs/24 §1.2#3）。</p>
+     * （3686/5996 回归对位）；扩展路 emit 随扩展面包（docs/09 §1.2#3）。</p>
      */
     public void setSessionName(String newName) {
         String normalized = newName == null ? null
@@ -930,7 +930,7 @@ public final class AgentSession implements AutoCloseable {
      * ⇒ 新叶 = 父 ＋ 回填 editorText；有摘要 ⇒ {@code branchWithSummary}，无摘要到根
      * ⇒ {@code resetLeaf}，否则 {@code branch}（moveLane）；label 贴摘要 entry 或
      * targetId（:4118-4126）。{@code session_before_tree}/{@code session_tree} 扩展
-     * 事件与 TUI 三选/Esc 随 B245（docs/24 §13.5）。</p>
+     * 事件与 TUI 三选/Esc 随 B245（docs/09 §13.5）。</p>
      */
     public TreeNavigation navigateTree(String targetId, boolean summarize,
                                        String customInstructions, boolean replaceInstructions,
@@ -1066,7 +1066,7 @@ public final class AgentSession implements AutoCloseable {
      * —— 中止在飞 run 并等它落地，压缩读到的转录不含半截消息。{@link #abort()} 本身保持
      * 非阻塞（UI Esc 同一条路），等待只加在压缩路，净效果与 pi 的 {@code await abort()}
      * 相同。pi 的 abort() 还中止在飞压缩/分支摘要 —— abortCompaction 已随
-     * #98/B36 落地（本类 {@link #abort()} 首步），分支摘要随 B1（docs/24 §7）。
+     * #98/B36 落地（本类 {@link #abort()} 首步），分支摘要随 B1（docs/09 §7）。
      * 自动压缩走引擎内部直路，不经这里。
      */
     private void abortAndWaitForIdle() {

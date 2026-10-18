@@ -244,7 +244,7 @@ class ScriptedStream extends EventStream<AssistantMessageEvent, AssistantMessage
 						partial: blank,
 					});
 				} else if (block.type === "thinking") {
-					// #87（docs/25 §6）：真实 provider 流有 thinking 三帧 ——
+					// #87（docs/10 §6）：真实 provider 流有 thinking 三帧 ——
 					// twin 此前静默丢弃，与 java twin 修平。
 					const text = block.thinking ?? "";
 					this.push({ type: "thinking_start", contentIndex: index, partial: blank });

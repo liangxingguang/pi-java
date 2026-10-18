@@ -20,7 +20,7 @@ import com.pijava.ai.AbortSignal;
 
 /**
  * #79/B55：渐进富列表（pi {@code listSessionsFromDir}/{@code listAll}，
- * session-manager.ts:884-974,:1921-2012；docs/24 §11）—— 从
+ * session-manager.ts:884-974,:1921-2012；docs/09 §11）—— 从
  * {@link JsonlSessionRepository} 拆出（≤500 行规约），行为不变。
  */
 final class RichSessionLister {

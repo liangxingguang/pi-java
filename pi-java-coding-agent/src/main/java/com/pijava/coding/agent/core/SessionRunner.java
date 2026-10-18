@@ -165,7 +165,7 @@ final class SessionRunner {
             }
             // pi _flushPendingBashMessages（agent_end 时机，agent-session.ts:3925-3940）：
             // 运行中暂存的会话级 bash 结果在 settled 前落进车道（保 tool_use/tool_result
-            // 次序），随下方 flush 一起落盘（#57，docs/25 §3.3 ⑦）。
+            // 次序），随下方 flush 一起落盘（#57，docs/10 §3.3 ⑦）。
             for (var pendingBash : owner.drainPendingBashMessages()) {
                 owner.harness().appendLaneEntry(laneName, pendingBash);
             }

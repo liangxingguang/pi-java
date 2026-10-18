@@ -267,7 +267,7 @@ public final class ContextEntries {
         }
         if (e instanceof Entry.BashExecution be) {
             // pi convertToLlm "bashExecution" 支：excludeFromContext（!! 前缀）⇒ 不产消息；
-            // 否则 bashExecutionToText 的 user 文本（messages.ts:82-99,147-160，docs/25 §3.3 ③）。
+            // 否则 bashExecutionToText 的 user 文本（messages.ts:82-99,147-160，docs/10 §3.3 ③）。
             if (Boolean.TRUE.equals(be.excludeFromContext())) {
                 return null;
             }

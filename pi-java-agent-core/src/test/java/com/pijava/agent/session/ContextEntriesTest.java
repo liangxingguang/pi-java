@@ -423,7 +423,7 @@ class ContextEntriesTest {
             .isEqualTo("edited retained");
     }
 
-    // ── #57：bashExecution 投影（pi messages.ts:82-99,147-160，docs/25 §3.3 ③）────
+    // ── #57：bashExecution 投影（pi messages.ts:82-99,147-160，docs/10 §3.3 ③）────
 
     private static Entry.BashExecution bash(String id, String parentId, String command,
                                             String output, Integer exitCode, boolean cancelled,

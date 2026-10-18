@@ -249,7 +249,7 @@ final class RunLifecycle {
             lane.newestOwn = null;
             lane.runId = null;
             lane.recordedThinking = null;
-            // #91（C4，docs/25 §11.4）：reset 要求车道空闲，而 finishRun 在
+            // #91（C4，docs/10 §11.4）：reset 要求车道空闲，而 finishRun 在
             // PiLaneEngine 的 finally（:217-231，error 路同走）必已关闭 runSpan
             // —— 这里置 null 是防御性清场，**不是**关跨度（跨度不会在此泄漏）。
             lane.runSpan = null;
@@ -317,7 +317,7 @@ final class RunLifecycle {
     /**
      * 运行外向车道追加一条 entry 并重建工作副本 —— pi 的
      * {@code sessionManager.appendMessage} ＋ {@code _refreshFinalizedContext}
-     * （{@code agent-session.ts:3878-3899} 的空闲臂，#57/docs/25 §3.3 ⑥）。
+     * （{@code agent-session.ts:3878-3899} 的空闲臂，#57/docs/10 §3.3 ⑥）。
      * 车道必须空闲；运行中的会话级 bash 结果由调用方先暂存
      * （pi 的 {@code _pendingBashMessages}），settled 时才经本方法 flush。
      */
@@ -336,7 +336,7 @@ final class RunLifecycle {
      * pi {@code _restoreToolsFromTranscript}（agent-session.ts:1809-1820）：树导航后按
      * 新叶最新系统消息的 {@code toolsAdded} 恢复激活装配（pi 的调用点
      * {@code navigateTree:4138}）。未注册名静默落 —— {@code activeOf} 按注册表过滤
-     * （pi 的 {@code _pendingToolNames} 晚注册臂随 B221 ⑫b，docs/25 窄差 D4 同族）。
+     * （pi 的 {@code _pendingToolNames} 晚注册臂随 B221 ⑫b，docs/10 窄差 D4 同族）。
      * 无系统消息 ⇒ 不动（pi {@code if (!current) return}）。
      *
      * <p>调用方须先于本方法重建工作副本（{@link #replaceTranscript}）：

@@ -185,7 +185,7 @@ final class SessionPersistence {
             }).orElseThrow(() -> new IllegalStateException("No previous session to continue"));
         }
         if (args.fork() != null) {
-            // #75（docs/25 §5）：pi 的 --fork 支配 --session-id —— fork 源解析
+            // #75（docs/10 §5）：pi 的 --fork 支配 --session-id —— fork 源解析
             // （main.ts:380-386 的 path/local/global 支）把 parsed.sessionId 当作
             // **新会话**的 id 传给 forkFrom(..., { id: sessionId })。
             if (isPathShaped(args.fork())) {

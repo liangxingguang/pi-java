@@ -10,7 +10,7 @@ import com.pijava.ai.message.Message;
  * {@code generateSummary}/{@code generateSummaryWithUsage}). The harness
  * drives this via its stream function.
  *
- * <p><b>#93（D6，docs/25 §11.3）—— {@link #truncating()} 的定位</b>：它不是
+ * <p><b>#93（D6，docs/10 §11.3）—— {@link #truncating()} 的定位</b>：它不是
  * 「Phase 6 前的临时占位」（真路 {@link LlmSummaryGenerator} 已全线接线），而是
  * <b>未接 LLM 生成器时的确定性兜底默认</b> —— {@code HarnessConfig} 的三处默认
  * （builder 字段、紧凑构造、便利构造）与测试夹具的消费方。分工：生产路径由宿主

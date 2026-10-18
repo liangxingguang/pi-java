@@ -97,7 +97,7 @@ final class ScriptedStreams {
                     content.add(new ContentBlock.TextContent(text));
                 }
                 case "thinking" -> {
-                    // #87（docs/25 §6）：真实 provider 流有 thinking_start/delta/end 三帧
+                    // #87（docs/10 §6）：真实 provider 流有 thinking_start/delta/end 三帧
                     // （FrameNormalizer :127-129 在册）—— 补 delta 与 pi twin 修平。
                     var text = block.thinking() == null ? "" : block.thinking();
                     events.add(new StreamEvent.ThinkingStart(index, blank));

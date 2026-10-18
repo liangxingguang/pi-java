@@ -31,7 +31,7 @@ final class EntryJsonCodec {
             case Entry.TYPE_MESSAGE -> {
                 JsonNode messageNode = node.get("message");
                 // pi 的 BashExecutionMessage 寄居在 message 条目里
-                // （session-manager.ts:1204-1214），靠 message.role 判别（docs/25 §3）。
+                // （session-manager.ts:1204-1214），靠 message.role 判别（docs/10 §3）。
                 if (messageNode != null && "bashExecution".equals(messageNode.path("role").asText())) {
                     yield decodeBashExecution(messageNode, id, seq, parentId, timestamp);
                 }

@@ -21,7 +21,7 @@ import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelId;
 
 /**
- * pi {@code branch-summarization.ts}（382 行）对位（B1，map #24，docs/24 §7）：
+ * pi {@code branch-summarization.ts}（382 行）对位（B1，map #24，docs/09 §7）：
  * 收集被放弃的分支条目 → 预算装填 → 摘要调用 → 文件清单。
  *
  * <p>LLM 车道复用 {@link LlmSummaryGenerator}（同款 StreamFn/retry 环注入，
@@ -266,7 +266,7 @@ public final class BranchSummarization {
         }
         if (entry instanceof Entry.BashExecution be) {
             // pi 的摘要输入走 convertToLlm 同文（messages.ts:147-160）：!! 跳过，
-            // 否则 bashExecutionToText 的 user 文本（#57，docs/25 §3.3 ⑧）。
+            // 否则 bashExecutionToText 的 user 文本（#57，docs/10 §3.3 ⑧）。
             if (Boolean.TRUE.equals(be.excludeFromContext())) {
                 return null;
             }

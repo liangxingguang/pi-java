@@ -11,7 +11,7 @@ import com.pijava.telemetry.SpanOptions;
 import com.pijava.telemetry.TelemetrySpan;
 
 /**
- * {@link PiLaneSink} 的**请求遥测族**抽离（#94，docs/25 §8）：一轮 provider 请求的
+ * {@link PiLaneSink} 的**请求遥测族**抽离（#94，docs/10 §8）：一轮 provider 请求的
  * {@code llm.request} 跨度、token 旁路累计与原始帧旁路（{@code lane.partial} 维护）。
  * 纯移动、零行为变化 —— 方法体与 javadoc 原样来自 {@code PiLaneSink}。
  *

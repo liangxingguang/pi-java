@@ -128,7 +128,7 @@ codemode-only 的 4 个单元（exposure/deferred/discovery）权重 0，B161/B1
 
 ### 2.3 agent-core — 100% ｜ map/03（批 5 后）
 
-批 1–5 全部闭环（2026-10-17 → 10-18，逐批账面见 map/03，批 1–3 实施记录在原 docs/20–22，批 4/5 设计稿 docs/24/25）。闭环内容：
+批 1–5 全部闭环（2026-10-17 → 10-18，逐批账面见 map/03，批 1–3 实施记录在原 docs/20–22，批 4/5 设计稿 docs/09/25）。闭环内容：
 
 - 截断预算 50KB、`finishTurn` 裁决形状、`/compact` abort-first。
 - `prepareRequest` 写钩子。

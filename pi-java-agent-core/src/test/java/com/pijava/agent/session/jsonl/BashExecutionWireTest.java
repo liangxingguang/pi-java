@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * #57（docs/25 §3）：pi 的 {@code BashExecutionMessage} 寄居在
+ * #57（docs/10 §3）：pi 的 {@code BashExecutionMessage} 寄居在
  * {@code type:"message"} 条目里（{@code session-manager.ts:1204-1214}），
  * 靠 {@code message.role:"bashExecution"} 判别。
  *

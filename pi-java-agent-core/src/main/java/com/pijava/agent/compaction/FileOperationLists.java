@@ -13,7 +13,7 @@ import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 
 /**
- * 文件清单公共件（docs/24 §7.3）—— pi {@code compaction/utils.ts} 被
+ * 文件清单公共件（docs/09 §7.3）—— pi {@code compaction/utils.ts} 被
  * {@code compaction.ts}（压缩）与 {@code branch-summarization.ts}（分支摘要）
  * 共用；{@link CompactionFiles}（压缩路，带回灌守卫）与 coding-agent 的
  * {@code BranchSummarization}（分支摘要路，fromHook 守卫同形）都从这里取

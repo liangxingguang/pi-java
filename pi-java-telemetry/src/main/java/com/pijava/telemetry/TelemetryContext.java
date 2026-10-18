@@ -31,7 +31,7 @@ public interface TelemetryContext {
 
     /**
      * Start a new span, invoke the callback with it, and close the span
-     * when the callback returns (or throws) — #92（docs/25 §11.2）按实现现状：
+     * when the callback returns (or throws) — #92（docs/10 §11.2）按实现现状：
      *
      * <ul>
      *   <li><b>回调作用域绑定</b>：{@link JsonlFileTelemetry} 在回调期间把跨度

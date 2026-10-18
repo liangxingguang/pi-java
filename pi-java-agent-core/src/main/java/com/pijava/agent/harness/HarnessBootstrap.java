@@ -13,7 +13,7 @@ import com.pijava.ai.model.ModelId;
 import com.pijava.telemetry.TelemetryContext;
 
 /**
- * {@link AgentHarness} 的**初始化装配族**抽离（#94，docs/25 §8）：字段、构造装配
+ * {@link AgentHarness} 的**初始化装配族**抽离（#94，docs/10 §8）：字段、构造装配
  * （快照/队列/执行上下文/引擎的组网）、内部助手与队列调度委托。纯移动、零行为变化
  * —— 包私有抽象基类，{@code AgentHarness} 经继承获得的成员与其原声明逐一同形，
  * 公共 API 面（签名与语义）不变。

@@ -21,7 +21,7 @@ public final class ToolSetFactory {
     /**
      * Create the full coding tool set, in pi {@code createAllTools} order
      * （index.ts:213-224：read, bash, edit, write, grep, find, ls；
-     * powershell 不随默认集——注册≠激活，裁决③ docs/24 §13.3）。
+     * powershell 不随默认集——注册≠激活，裁决③ docs/09 §13.3）。
      *
      * @param commandPrefix optional prefix prepended to every bash command
      */

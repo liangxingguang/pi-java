@@ -83,7 +83,7 @@ public class ToolContext {
     public SessionEnvironment sessionEnvironment() { return sessionEnvironment.get(); }
 
     /**
-     * 复制本上下文，换上会话身份晚绑定口（coding-agent 装配时用，docs/24 §8.3）。
+     * 复制本上下文，换上会话身份晚绑定口（coding-agent 装配时用，docs/09 §8.3）。
      */
     public ToolContext withSessionEnvironment(Supplier<SessionEnvironment> supplier) {
         return new ToolContext(cwd, env, shell, fs, imagePolicy, supplier);

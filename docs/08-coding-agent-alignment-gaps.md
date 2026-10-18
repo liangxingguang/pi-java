@@ -1,7 +1,7 @@
 # coding-agent 层待对齐清单（快照）
 
 > **性质**：这不是台账，是从权威明细 [`map/04-coding-agent.md`](map/04-coding-agent.md)（基线 pi @ `ea448f454`、v1.1.0-22）导出的**一次性快照**（2026-10-18，agent-core 批 5 闭环后）。后续以 map/04 与 [`04-open-items-register.md`](04-open-items-register.md) 为准；完成任何一项后应回改 map/04，而非本文件。
-> **不占用设计稿包号**（下一包号 docs/27，见 docs/04 §7 规则 6）。
+> **编号**：2026-10-18 连续重编后归入常驻文档序列（本文件＝docs/08，与 06/07 同族）；设计稿下一包号 docs/12（见 docs/04 §7 规则 6）。
 
 ## 总览
 
@@ -58,7 +58,7 @@ D 域 Σ权重 83 是全模块最大域；若 D 域全对齐，模块加权 43.9
 
 **存疑**（按重量排）：
 - **`--resume` 无参抛 `Session not found: null`** —— pi 开交互式选择器（session-selector 族 1,294 行），java 走 `find(null)`。**这是最像 bug 的一条**。
-- `--tools` / `--exclude-tools` 只吃逗号裸名；pi 收 `*` 通配、`+name`/`-name` modifier、`mcp__` 前缀 ⇒ **docs/26（B236 设计稿，搁置待审）**。
+- `--tools` / `--exclude-tools` 只吃逗号裸名；pi 收 `*` 通配、`+name`/`-name` modifier、`mcp__` 前缀 ⇒ **docs/11（B236 设计稿，搁置待审）**。
 - `--session` / `--session-id` / `--fork`：java `find()` 走 `list(all())`，O(全量) 且跨项目；pi 是路径形快道 + 三级阶梯（**台账 B53**）。
 - `--no-session` web 路径被忽略（**B54**）。
 - `--export` 只收 1 个位置参数（pi 收 2 个）；`--theme` 只收 `.tcss`（pi 收 JSON 主题名/文件）；`--offline` 只覆盖目录刷新；`--` 选项终止无夹具。
@@ -113,7 +113,7 @@ E8（不计入模块合计）：crash-log（170 行）、WSL/zip 工具、system
 
 ## 推进抓手（已在册）
 
-1. **docs/26（B236，搁置待审）** — coding-agent 批 1 设计稿：`--tools` glob/modifier、`mcp__` 策略、`defaultTools`、active 默认 7→4。审核通过即开工。
+1. **docs/11（B236，搁置待审）** — coding-agent 批 1 设计稿：`--tools` glob/modifier、`mcp__` 策略、`defaultTools`、active 默认 7→4。审核通过即开工。
 2. **B244** — `/skill:<name>` 命令族 + `enableSkillCommands` 消费。
 3. **B245** — tree 扩展事件 + TUI 摘要流。
 4. **B246** — `/reload` 工具选择臂（重载资源 + 激活新 defaultTools）。

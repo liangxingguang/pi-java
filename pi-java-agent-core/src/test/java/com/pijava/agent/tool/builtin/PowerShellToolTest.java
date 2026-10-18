@@ -17,7 +17,7 @@ import com.pijava.agent.tool.ToolSetFactory;
 
 /**
  * B243：pi {@code powershell.ts} 对位夹具 —— 六面差异逐字、UTF8 前缀、
- * 注册≠激活（裁决③，docs/24 §13.3）。
+ * 注册≠激活（裁决③，docs/09 §13.3）。
  */
 class PowerShellToolTest {
 

@@ -391,7 +391,7 @@ import java.util.regex.Pattern;
 
 /**
  * pi {@code toolPatternRegExp}/{@code createToolNameMatcher}/{@code isMcpToolName}
- * （core/mcp-servers.ts:11-42，B236/docs/26 §1.3）。
+ * （core/mcp-servers.ts:11-42，B236/docs/11 §1.3）。
  *
  * <p>模式规则只有一条：{@code *} → 任意字符；其余字符全部字面化，全串锚定
  * （<b>不是</b> minimatch——ai 层 ModelGlob 那套不适用于工具名）。</p>
@@ -451,7 +451,7 @@ import java.util.List;
 import java.util.function.Predicate;
 
 /**
- * pi 的工具选择语义（B236，docs/26）：
+ * pi 的工具选择语义（B236，docs/11）：
  * {@code DEFAULT_TOOL_NAMES}/{@code isToolModifier}/{@code getToolListError}/
  * {@code applyToolModifiers}/{@code resolveDefaultTools}/{@code mergeDefaultTools}
  * （core/settings-manager.ts:83-137）＋ {@code sdk.ts:280-294} 的装配解析 ＋
@@ -713,14 +713,14 @@ public final class ToolSelection {
 ```java
         models = copy(models);
         // tools/excludeTools 不归一化：null ≙ pi 的 undefined（旗标缺席），与空表语义不同
-        //（docs/26 §3.4）。
+        //（docs/11 §3.4）。
         extensions = copy(extensions);
 ```
 
 ### 3.5 `SessionSetup.activeTools` 重写（G4/G5/G10/G11，§1.4/§1.5 对位）
 
 ```java
-    /** pi {@code sdk.ts:280-294} 的装配解析（B236/docs/26 §3.2）。 */
+    /** pi {@code sdk.ts:280-294} 的装配解析（B236/docs/11 §3.2）。 */
     static ToolSelection.Resolved resolveToolSelection(Args args, SettingsManager settings) {
         return ToolSelection.resolve(
             args.tools(), args.excludeTools(),
@@ -751,7 +751,7 @@ public final class ToolSelection {
         var tools = new ToolRegistry(null);
         var commandPrefix = effective.shellCommandPrefix == null
             ? "" : effective.shellCommandPrefix;
-        // B236（docs/26 §3.6）：注册面 = pi createAllTools 八件（tools/index.ts:213-224，
+        // B236（docs/11 §3.6）：注册面 = pi createAllTools 八件（tools/index.ts:213-224，
         // 含 powershell——批 4 只落了本体，注册面在本批）经 pi _isAllowedTool 门过滤
         //（agent-session.ts:1537-1541 → _refreshToolRegistry :3514）：allowlist 不匹配或
         // excluded 的内置工具**不注册**；空名单（--no-tools / --tools ""）注册面空
@@ -803,7 +803,7 @@ public final class ToolSelection {
 ### 3.8 `ToolSetFactory` 清理（G14，裁决②）
 
 - `createCodingTools(String)` **删除**：pi 现锚点 `createCodingTools` = 四件（`tools/index.ts:193-200`），java 七件形无对位（批 3/4 注释引的「createAllTools 七件序」在现锚点是八件含 powershell）。四件默认集的语义已由 `ToolSelection.DEFAULT_TOOL_NAMES` 表达。
-- `createAllTools` javadoc 修正：对位 pi `createAllTools`（`tools/index.ts:213-224`）**八件**注册面；「注册≠激活」段保留，激活通道的「随 B236」改「docs/26 已落」。
+- `createAllTools` javadoc 修正：对位 pi `createAllTools`（`tools/index.ts:213-224`）**八件**注册面；「注册≠激活」段保留，激活通道的「随 B236」改「docs/11 已落」。
 - `createReadOnlyTools` 不动（对位 pi `createReadOnlyTools`，`tools/index.ts:205-211`）。
 - 测试连带：`ToolSetFactoryTest.createCodingToolsFollowsPiCreateAllToolsOrder` 删除（`PowerShellToolTest:79` 的八件序断言已覆盖 `createAllTools`）；`PowerShellToolTest:88-90` 引用 `createCodingTools` 的断言改断 `ToolSelection.DEFAULT_TOOL_NAMES` 四件。
 

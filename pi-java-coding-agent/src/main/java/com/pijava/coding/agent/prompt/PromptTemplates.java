@@ -80,7 +80,7 @@ public final class PromptTemplates {
     /**
      * pi {@code includeDefaults} 分支（:262-265）：默认目录两路 ——
      * {@code agentDir/prompts}（user）与 {@code cwd/.pi-java/prompts}（project，
-     * 品牌分叉：pi 是 {@code .pi}，窄差登记 docs/24 §14）。缺失目录静默。
+     * 品牌分叉：pi 是 {@code .pi}，窄差登记 docs/09 §14）。缺失目录静默。
      */
     public static LoadResult loadDefaults(FileSystem fs, String agentDir, String cwd) {
         return load(fs, List.of(

@@ -116,7 +116,7 @@ public final class JsonlSessionRepository implements
     /**
      * pi {@code SessionManager.findById}（session-manager.ts:1874-1911）对位：
      * **只读各文件 header** 的精确道（不加载 transcript）——会话 find 阶梯的 ① 级
-     * （pi {@code resolveSessionPath}，main.ts:260-262；B53，docs/24 §10）。
+     * （pi {@code resolveSessionPath}，main.ts:260-262；B53，docs/09 §10）。
      *
      * @param cwd 项目工作目录（{@code null} ⇒ 跨项目全扫）
      * @param id  精确会话 id

@@ -20,7 +20,7 @@ final class FileMutationQueue {
      * pi 的模块级单例（{@code file-mutation-queue.ts} 的 {@code fileMutationQueues} 是
      * 模块顶层 Map）—— edit 与 write 共享**同一条**队列：同一规范路径上的 edit↔write
      * 组合也互斥。此前两个工具各持一条静态队列，edit/write 交错在彼此射程之外
-     * （#81 审计挖出，docs/25 §10.1）。
+     * （#81 审计挖出，docs/10 §10.1）。
      */
     private static final FileMutationQueue SHARED = new FileMutationQueue();
 

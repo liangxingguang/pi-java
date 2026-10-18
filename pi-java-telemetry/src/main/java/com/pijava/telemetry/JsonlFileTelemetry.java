@@ -167,7 +167,7 @@ public final class JsonlFileTelemetry implements TelemetryContext {
      * #pushCurrent}).  Skipped entirely unless payloads are enabled via
      * {@link #withPayloads(boolean)}.
      *
-     * <p><b>无跨度兜底（#85，docs/25 §11.1）</b>：当前线程没有绑定跨度时事件
+     * <p><b>无跨度兜底（#85，docs/10 §11.1）</b>：当前线程没有绑定跨度时事件
      * <b>照写</b>——行上只有 {@code type}/{@code ts}/{@code name}/{@code payload}，
      * {@code spanId} 与 {@code traceId} 两键<b>缺席</b>（不写 {@code null} 值键），
      * 读侧按「无归属事件」识别。这是可检测的缺席，不是静默丢弃：{@code close()}

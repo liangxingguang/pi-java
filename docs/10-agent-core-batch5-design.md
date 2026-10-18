@@ -18,7 +18,7 @@
 | 裁决类（证据已齐，无代码） | #14（F1）、#53（**B49 销号**）、#80（A5 收尾）、#82（旧 A7）、#84（F4）、#56（A1）、#90（C3）、#91（C4）——§12 |
 | 作废 | **#60 R1**（`PendingEntry`/`InboxItem` 是 Pico 实验 harness 类型，随 pi `7fd478a2e` 整包删除，Σw 182→180）——§13 |
 | 销号 | **B49**；旧字母编号 F1/F2/F4/C2/C3/C4/D2/D3/D6/E8/A1/A2/A5/A7/A10/A14/A15 全收尾（docs/07 §2 表随之清空） |
-| 不碰 | E1（AgentSession 1,554 行—— coding-agent 层，随 coding-agent 批）；B236（docs/26 已搁置）；B244/B245；扩展事件 D 域；TUI 渲染 |
+| 不碰 | E1（AgentSession 1,554 行—— coding-agent 层，随 coding-agent 批）；B236（docs/11 已搁置）；B244/B245；扩展事件 D 域；TUI 渲染 |
 
 **落点**：主战场 pi-java-agent-core；#57 的 `recordBashResult` 与 #77 的 navigateTree 接线在 pi-java-coding-agent；#87 一侧在 `conformance/pi/run.test.ts`（pi twin）。
 
@@ -162,7 +162,7 @@ export function bashExecutionToText(msg: BashExecutionMessage): string {
      * 会话级 bash 执行的记录。线形是 {@code type:"message"} 条目、
      * {@code message.role:"bashExecution"}（pi 无独立条目类型，
      * {@code session-manager.ts:1204-1214}）；域内按条目变体承载，投影点转 user 文本
-     * （{@link ContextEntries}），与 branchSummary/compactionSummary 同分层（docs/25 §3）。
+     * （{@link ContextEntries}），与 branchSummary/compactionSummary 同分层（docs/10 §3）。
      *
      * @param exitCode           {@code null} ≙ pi 的 undefined
      * @param fullOutputPath     截断时完整输出落盘路径；{@code null} ≙ undefined
@@ -292,7 +292,7 @@ java `AgentSession.navigateTree`（批 4）走 `harness.replaceTranscript` → `
     /**
      * pi {@code _restoreToolsFromTranscript}（agent-session.ts:1809-1820）：树导航后按
      * 新叶最新系统消息的 {@code toolsAdded} 恢复激活装配。未注册名静默落
-     * （pi 的 pending 晚注册臂随 B221 ⑫b——docs/25 窄差 D4 同族）。无系统消息 ⇒ 不动
+     * （pi 的 pending 晚注册臂随 B221 ⑫b——docs/10 窄差 D4 同族）。无系统消息 ⇒ 不动
      * （pi {@code if (!current) return}）。
      */
     void restoreToolsFromTranscript(String laneName) {

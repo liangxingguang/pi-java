@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * B53（docs/24 §10）：会话 {@code find()} 分级阶梯 —— pi {@code resolveSessionPath}
+ * B53（docs/09 §10）：会话 {@code find()} 分级阶梯 —— pi {@code resolveSessionPath}
  * （main.ts:243-283）对位：① 项目内 header-only 精确 → ② 项目内前缀 →
  * ③ 跨项目**精确优先于前缀**；⓪ 路径快道另案（{@code openPath}）。
  */

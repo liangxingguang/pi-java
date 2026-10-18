@@ -59,7 +59,7 @@ public sealed interface ChatMessage {
                     + customMessage.content().plainText(), MetaKind.CUSTOM)
                 : null;
             case Entry.Usage usage -> cacheWarmNotice(usage);
-            // #57（docs/25 §3.3 ⑧）：bashExecution 按消息条目同格渲染，文本取 pi
+            // #57（docs/10 §3.3 ⑧）：bashExecution 按消息条目同格渲染，文本取 pi
             // bashExecutionToText（!! 条目持久化但不进上下文，仍照 pi 显示；
             // 渲染格是 R3 域窄差，不逐字）。
             case Entry.BashExecution bash ->

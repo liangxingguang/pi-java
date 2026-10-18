@@ -48,7 +48,7 @@ public final class SessionWireShape {
      * （{@code session-manager.ts:1204-1214}），{@code message.timestamp} 是 epoch 毫秒
      * （{@code Date.now()}，{@code messages.ts:39}）；可选键缺席省略（NON_NULL 惯例）。
      * {@code Entry.BashExecution} 故意不在 {@code @JsonSubTypes} 里（线判别共享
-     * {@code "message"}），所以这棵树手工拼（docs/25 §3.3 ②）。
+     * {@code "message"}），所以这棵树手工拼（docs/10 §3.3 ②）。
      */
     private static ObjectNode bashExecutionTree(Entry.BashExecution be) {
         var mapper = SessionJson.mapper();

@@ -21,7 +21,7 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * #75（docs/25 §5）：pi {@code --fork} 调用面 ——
+ * #75（docs/10 §5）：pi {@code --fork} 调用面 ——
  * <ul>
  *   <li>F-b：{@code --fork} 与 {@code --session-id} 组合时新会话用给定 id
  *       （pi {@code forkSessionOrExit(..., parsed.sessionId)}，main.ts:380-386）；

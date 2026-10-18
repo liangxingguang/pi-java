@@ -15,7 +15,7 @@ import com.pijava.agent.tool.PowerShellShellExecutor;
  *       shell.ts:122-136；平台门在执行时不在注册时）；</li>
  *   <li>options 裁掉 commandPrefix/shellPath（:27-28 的 {@code Pick}）；</li>
  *   <li>注册≠激活：pi 全平台注册进 {@code allToolNames}，但
- *       {@code DEFAULT_TOOL_NAMES} 恒四件 —— 默认不激活（裁决③，docs/24 §13.3）。</li>
+ *       {@code DEFAULT_TOOL_NAMES} 恒四件 —— 默认不激活（裁决③，docs/09 §13.3）。</li>
  * </ul>
  */
 public final class PowerShellTool {

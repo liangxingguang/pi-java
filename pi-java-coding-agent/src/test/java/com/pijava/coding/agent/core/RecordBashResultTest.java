@@ -25,7 +25,7 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * #57（docs/25 §3.3 ⑤⑦⑨）：pi {@code recordBashResult}
+ * #57（docs/10 §3.3 ⑤⑦⑨）：pi {@code recordBashResult}
  * （agent-session.ts:3878-3899）—— 空闲即写（＋落盘），运行中暂存、
  * settled flush（pi {@code _pendingBashMessages}/agent_end，:421,3925-3940）。
  */
