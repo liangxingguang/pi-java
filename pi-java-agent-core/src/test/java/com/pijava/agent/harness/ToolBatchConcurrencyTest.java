@@ -293,6 +293,87 @@ class ToolBatchConcurrencyTest {
     }
 
     /**
+     * #89（C2，docs/25 §7.1）：三调用受控完成序 <b>3→1→2</b> ——
+     * ① {@code tool_execution_end} 帧 = 完成序（{@code three, one, two}）；
+     * ② 结果消息 = 源序（{@code one, two, three}，pi {@code :549-554} 收束段按
+     * entries 顺序补发）。完成序由闩锁链保证（1 等 3 的 end、2 等 1 的 end），
+     * 不靠睡眠。
+     */
+    @Test
+    void threeCallsEndInCompletionOrder312ButResultsStaySourceOrder() {
+        var ended3 = new CountDownLatch(1);
+        var ended1 = new CountDownLatch(1);
+        var tools = new ScriptedTools(Map.of(
+            "one", () -> awaitPeers(ended3),      // 源序 1：等 3 的 end 记下后才返回
+            "two", () -> awaitPeers(ended1),      // 源序 2：等 1 的 end 记下后才返回
+            "three", () -> { }), 0);               // 源序 3：立即完成
+        var frames = new Frames(Map.of("three", ended3, "one", ended1));
+
+        PiLoop.run(List.of(user("go")), Context.of(new ArrayList<>()), config(
+            scripted(List.of(
+                toolTurn(List.of(new String[] {"c1", "one"}, new String[] {"c2", "two"},
+                    new String[] {"c3", "three"})),
+                textTurn("done"))),
+            tools, null), frames);
+
+        assertThat(frames.ends())
+            .as("end 帧是完成序 3→1→2（pi 的 Promise.all 各任务完成时自发 end）")
+            .containsExactly("end:three", "end:one", "end:two");
+        assertThat(frames.toolFrames())
+            .as("结果消息按源序 1,2,3 补发")
+            .endsWith("result:one", "result:two", "result:three");
+    }
+
+    /**
+     * #89 ③：{@code terminate} 随**源序** outcome 收束（{@code shouldTerminateToolBatch}
+     * 是 {@code every(terminate === true)}，{@code :589-591}）。三调用全部 terminate、
+     * 完成序仍是 3→1→2 —— 批收束后循环**不再**拉取下一段剧本（只备了一段；
+     * 误收 terminate 或漏收都会让 streamFn 被第二次调用）。
+     */
+    @Test
+    void terminateTravelsWithSourceOrderedOutcomes() {
+        var ended3 = new CountDownLatch(1);
+        var ended1 = new CountDownLatch(1);
+        var tools = new PiLoop.ToolRunner() {
+            @Override
+            public PiLoop.Preparation prepare(PiLoop.ToolCall call) {
+                return new PiLoop.ToolRunner.CallPrepared(call);
+            }
+
+            @Override
+            public PiLoop.ToolOutcome execute(PiLoop.Prepared prepared, PiLoop.Sink emit) {
+                var call = prepared.call();
+                switch (call.toolName()) {
+                    case "one" -> awaitPeers(ended3);
+                    case "two" -> awaitPeers(ended1);
+                    default -> { }
+                }
+                var message = new Message.ToolResultMessage(call.toolCallId(), call.toolName(),
+                    List.of(new ContentBlock.TextContent(call.toolName() + " ok")), false);
+                // terminate 是 ToolResult 的第 4 分量（ToolOutcome.terminate() 读它，:123-124）。
+                return new PiLoop.ToolOutcome(message, new ToolResult<Void>(
+                    List.of(new ContentBlock.TextContent("ok")), null, null, true, List.of()),
+                    false);
+            }
+        };
+        var frames = new Frames(Map.of("three", ended3, "one", ended1));
+        var streamCalls = new AtomicInteger();
+        StreamFn counting = (model, context, options) -> StreamIterator.from(
+            streamCalls.incrementAndGet() == 1
+                ? toolTurn(List.of(new String[] {"c1", "one"}, new String[] {"c2", "two"},
+                    new String[] {"c3", "three"}))
+                : textTurn("unexpected"));
+
+        PiLoop.run(List.of(user("go")), Context.of(new ArrayList<>()),
+            config(counting, tools, null), frames);
+
+        assertThat(frames.ends()).containsExactly("end:three", "end:one", "end:two");
+        assertThat(streamCalls.get())
+            .as("全批 terminate ⇒ 回合终止：不再拉取下一段剧本（pi :589-591 every 语义）")
+            .isEqualTo(1);
+    }
+
+    /**
      * 中止是**协作式**的：批次执行途中信号被置位，已启动的调用照样跑完并发自己的 end
      * （pi 把 signal 交给工具本体，没有取消竞速）。{@code faster} 先等 {@code slower} 的
      * 执行体真的开跑再置位，因此这条测的确实是「在途调用不被打断」，不掺入「谁先抢到中止检查」

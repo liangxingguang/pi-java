@@ -51,6 +51,23 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class SessionFailurePathTest {
 
+    /** 正常返回的工具（错误路 toolResults 泄漏探针的对照组）。 */
+    private static AgentTool<String, Void> ok(String name) {
+        return new AgentTool<>() {
+            @Override public String name() { return name; }
+            @Override public String label() { return name; }
+            @Override public String description() { return "Always ok"; }
+            @Override public Map<String, Object> inputSchema() { return Map.of(); }
+            @Override public ExecutionMode executionMode() { return new ExecutionMode.Sequential(); }
+            @Override public String prepareArguments(Map<String, Object> raw) { return ""; }
+            @Override public ToolResult<Void> execute(String id, String params, AbortSignal signal,
+                    ToolUpdateCallback<Void> onUpdate, ToolContext ctx) {
+                return new ToolResult<>(List.of(new ContentBlock.TextContent(name + " ok")),
+                    null, null, false, List.of());
+            }
+        };
+    }
+
     /** 恒抛 {@code AssertionError} 的工具（{@code Error} 不在 {@code PiToolRunner} 的射程内）。 */
     private static AgentTool<String, Void> thrower(String name, String message) {
         return new AgentTool<>() {
@@ -187,6 +204,57 @@ class SessionFailurePathTest {
                     .anySatisfy(m -> assertThat(m).isInstanceOfSatisfying(
                         Message.AssistantMessage.class,
                         a -> assertThat(a.errorMessage()).isEqualTo("boom"))));
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // #96（A15，docs/25 §7.2）：错误路的 TurnEnd.toolResults 恒空
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * pi {@code agent-loop.ts:253}：回合失败路的 {@code turn_end} 载荷是
+     * {@code { message, toolResults: [] }} —— 已产出的工具结果**不**搭进错误帧
+     * （{@code RunFailure} 的 {@code TurnEnd(failure, List.of())} 同形）。
+     * 守护的回归：非空 toolResults 泄漏进错误帧（批里 {@code good} 已先出结果、
+     * {@code boom} 随后抛 {@code Error}）。同路的 {@code AgentSettled} 载荷仍是
+     * {@code {aborted}} 单字段，且错误路不把它改写成 true。
+     */
+    @Test
+    void errorPathTurnEndCarriesEmptyToolResults(@TempDir Path tmp) throws Exception {
+        var session = session("faux-partial-boom",
+            List.of(toolCallSeq(List.of(
+                new ContentBlock.ToolUseContent("c1", "good", Map.of()),
+                new ContentBlock.ToolUseContent("c2", "boom", Map.of())))),
+            tmp, Set.<AgentTool<?, ?>>of(ok("good"), thrower("boom", "boom")));
+        var events = new CopyOnWriteArrayList<AgentSessionEvent>();
+        try (session; var ignored = session.subscribe(events::add)) {
+            var result = session.processPrompt("go", PromptConfig.defaults());
+
+            var status = result.statusFuture().get(10, TimeUnit.SECONDS);
+            assertThat(status.reason()).isEqualTo("error");
+
+            assertThat(events.stream()
+                    .filter(AgentSessionEvent.TurnEnd.class::isInstance)
+                    .map(AgentSessionEvent.TurnEnd.class::cast)
+                    .toList())
+                .as("错误路必有一条 turn_end")
+                .isNotEmpty()
+                .allSatisfy(end -> {
+                    if (end.message().stopReason() == StopReason.ERROR) {
+                        assertThat(end.toolResults())
+                            .as("pi :253 —— 错误路的 turn_end 恒 toolResults: []，"
+                                + "已产出的 good 结果不许泄漏进来")
+                            .isEmpty();
+                    }
+                });
+
+            assertThat(events.stream()
+                    .filter(AgentSessionEvent.AgentSettled.class::isInstance)
+                    .map(AgentSessionEvent.AgentSettled.class::cast)
+                    .toList())
+                .isNotEmpty()
+                .allSatisfy(settled -> assertThat(settled.aborted())
+                    .as("错误路不把 settled 的 aborted 改写成 true").isFalse());
         }
     }
 
