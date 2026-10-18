@@ -203,8 +203,10 @@ public final class RpcDispatcher {
                     out.write(RpcResponse.ok(s.id(), "set_session_name"));
                 }
                 case RpcCommand.GetCommands g ->
+                    // B247（pi rpc-types.ts:241 / rpc-client.ts:459 两证）：
+                    // data 包 {commands} 键（批 2 偏差②回本——彼时按裸数组钉死）。
                     out.write(RpcResponse.ok(g.id(), "get_commands",
-                        buildCommands()));
+                        java.util.Map.of("commands", buildCommands())));
                 // ── 末批（P6-5d）：队列模式 / 重试 / bash / 会话 / 导出 ──
                 case RpcCommand.SetSteeringMode s -> {
                     session.harness().steeringMode(fromWire(s.mode()));
@@ -481,24 +483,48 @@ public final class RpcDispatcher {
     }
 
     private List<RpcSlashCommand> buildCommands() {
-        var registry = session.services().slashCommands();
         var commands = new ArrayList<RpcSlashCommand>();
-        for (var name : registry.names()) {
-            var cmd = registry.get(name);
-            if (cmd != null) {
-                commands.add(new RpcSlashCommand(
-                    name, cmd.description(), cmd.argumentHint()));
-            }
+        // B247（pi rpc-mode.ts:691-697）：模板臂。sourceInfo 由加载期打标
+        //（B247 §3.2）；手造实例无 sourceInfo ⇒ 组件 null、线格式省略
+        //（pi 恒有，此臂仅测试/手工注册路）。pi 第一臂是扩展注册命令——
+        // java 扩展命令与内置同池、无 sourceInfo 溯源，随 B221（窄差 D5）；
+        // 内置不收（pi 语义＝可经 prompt 调用，rpc-types.ts:73-74）。
+        for (var template : session.services().promptTemplates().all()) {
+            commands.add(new RpcSlashCommand(
+                template.name(), template.description(),
+                RpcSlashCommand.Source.PROMPT, template.sourceInfo()));
         }
-        // B244（pi rpc-mode.ts:699-707）：skill 臂，不受 enableSkillCommands
-        // 门（pi get_commands 无门——开关只管交互补全）。pi 形状含
-        // source/sourceInfo 且不收内置——形状对齐随 B247；本批在现形状
-        // 追加（argumentHint 恒 null）。
+        // B244/B247（pi rpc-mode.ts:699-707）：skill 臂，不受
+        // enableSkillCommands 门（pi get_commands 无门——开关只管交互补全）。
         for (var skill : session.harness().skillManager().all()) {
             commands.add(new RpcSlashCommand(
-                "skill:" + skill.name(), skill.description(), null));
+                "skill:" + skill.name(), skill.description(),
+                RpcSlashCommand.Source.SKILL, skillSourceInfo(skill)));
         }
         return commands;
+    }
+
+    /**
+     * pi {@code createSkillSourceInfo}（skills.ts:136-157）的 java 三面映射：
+     * USER/PROJECT→同值 scope，EXPLICIT→temporary（pi {@code "path"} 源 scope
+     * 缺省落 temporary）；{@code source} 恒 {@code "local"}、{@code origin}
+     * 恒 {@code "top-level"}。
+     */
+    private static com.pijava.coding.agent.core.source.SourceInfo skillSourceInfo(
+            com.pijava.agent.skill.Skill skill) {
+        var scope = switch (skill.sourceInfo()) {
+            case USER -> com.pijava.coding.agent.core.source.SourceInfo.Scope.USER;
+            case PROJECT -> com.pijava.coding.agent.core.source.SourceInfo.Scope.PROJECT;
+            case EXPLICIT -> com.pijava.coding.agent.core.source.SourceInfo.Scope.TEMPORARY;
+        };
+        var filePath = skill.filePath();
+        var baseDir = skill.baseDir();
+        return new com.pijava.coding.agent.core.source.SourceInfo(
+            // pi path 必填；非文件技能（java 独有边）给空串。
+            filePath == null ? "" : filePath.toString(),
+            "local", scope,
+            com.pijava.coding.agent.core.source.SourceInfo.Origin.TOP_LEVEL,
+            baseDir == null ? null : baseDir.toString());
     }
 
     /**

@@ -119,8 +119,10 @@ class RpcDispatcherTest {
         // compact 空会话可能无内容可压缩 → 只要返回 compact 响应即可
         assertThat(output).contains("\"command\":\"compact\"");
         assertThat(output).contains("\"command\":\"set_auto_compaction\",\"success\":true");
+        // B247（pi rpc-types.ts:241）：data 包 {commands} 键、内置不收——
+        // 空会话即空数组（旧钉 "name":"help" 是 java 自造形状，随对齐删除）。
         assertThat(output).contains("\"command\":\"get_commands\",\"success\":true")
-            .contains("\"name\":\"help\"");
+            .contains("\"commands\":[]");
         assertThat(output).contains("\"command\":\"get_session_stats\",\"success\":true");
 
         // set_model 实际改动了 harness 模型
