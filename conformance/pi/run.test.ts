@@ -243,6 +243,13 @@ class ScriptedStream extends EventStream<AssistantMessageEvent, AssistantMessage
 						content: block.text ?? "",
 						partial: blank,
 					});
+				} else if (block.type === "thinking") {
+					// #87（docs/25 §6）：真实 provider 流有 thinking 三帧 ——
+					// twin 此前静默丢弃，与 java twin 修平。
+					const text = block.thinking ?? "";
+					this.push({ type: "thinking_start", contentIndex: index, partial: blank });
+					this.push({ type: "thinking_delta", contentIndex: index, delta: text, partial: blank });
+					this.push({ type: "thinking_end", contentIndex: index, content: text, partial: blank });
 				} else if (block.type === "toolCall") {
 					this.push({ type: "toolcall_start", contentIndex: index, partial: blank });
 					this.push({
