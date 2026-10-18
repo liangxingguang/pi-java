@@ -1,6 +1,7 @@
 package com.pijava.coding.agent.core.slash;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 import com.pijava.agent.skill.Skill;
@@ -22,7 +23,7 @@ public final class SkillCommandItems {
      * 受 {@code enableSkillCommands} 门的 skill 条目清单（pi :807-814）；
      * {@code disableModelInvocation} 技能照样列出（pi 不过滤——该标志只管系统提示）。
      */
-    public static List<Entry> list(List<? extends Skill> skills, boolean enabled) {
+    public static List<Entry> list(Collection<? extends Skill> skills, boolean enabled) {
         if (!enabled) {
             return List.of();
         }

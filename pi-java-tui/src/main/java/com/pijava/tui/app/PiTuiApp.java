@@ -1,6 +1,7 @@
 package com.pijava.tui.app;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 import com.pijava.agent.harness.WatchHandle;
@@ -8,6 +9,7 @@ import com.pijava.coding.agent.cli.Args;
 import com.pijava.coding.agent.core.AgentSession;
 import com.pijava.coding.agent.core.KeybindingsManager;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
+import com.pijava.coding.agent.core.slash.SkillCommandItems;
 import com.pijava.coding.agent.core.slash.SlashContext;
 import com.pijava.coding.agent.modes.InteractiveMode;
 import com.pijava.tui.component.KeybindingHints;
@@ -110,13 +112,21 @@ public final class PiTuiApp {
     /** Build the completion catalog from the slash-command registry. */
     private List<SlashCompleter.CommandItem> loadSlashItems() {
         var registry = session.services().slashCommands();
-        return registry.names().stream()
+        var items = new ArrayList<>(registry.names().stream()
             .map(name -> {
                 var command = registry.get(name);
                 return new SlashCompleter.CommandItem(
                     name, command.argumentHint(), command.description());
             })
-            .toList();
+            .toList());
+        // B244（pi interactive-mode.ts:803-815）：开关开 ⇒ 每个技能一个
+        // skill:<name> 补全条目，排在内置之后（pi 序：内置→模板→扩展→skill；
+        // java 无模板/扩展臂，追加即等价）。
+        var enabled = session.services().settings().accessors().getEnableSkillCommands();
+        for (var entry : SkillCommandItems.list(session.harness().skillManager().all(), enabled)) {
+            items.add(new SlashCompleter.CommandItem(entry.name(), null, entry.description()));
+        }
+        return List.copyOf(items);
     }
 
     /** Attach to a runner: register the global key handler + snapshot feed. */
@@ -296,6 +306,10 @@ public final class PiTuiApp {
             if (overlay.isDone()) {
                 overlay.apply(session, this::switchSession);
                 overlay = null;
+                // B244（pi interactive-mode.ts:4986-4989 对位）：设置可能已改，
+                // 关屏统一重建补全目录（pi 是 toggle 即时重建，窄差 D4 时机差；
+                // 重建是纯读装配，无副作用）。
+                chatScreen.setSlashCommands(loadSlashItems());
             }
             return EventResult.HANDLED;
         }

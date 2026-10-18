@@ -54,7 +54,11 @@ public final class SettingsScreen implements ScreenOverlay {
             SettingsAccessors::setTreeFilterMode),
         new SettingField("Quiet startup", List.of("false", "true"),
             a -> bool(a.getQuietStartup()),
-            (a, v) -> a.setQuietStartup(Boolean.parseBoolean(v))));
+            (a, v) -> a.setQuietStartup(Boolean.parseBoolean(v))),
+        // B244（pi settings-selector.ts:797-806）："Skill commands" 开关。
+        new SettingField("Skill commands", List.of("false", "true"),
+            a -> String.valueOf(a.getEnableSkillCommands()),
+            (a, v) -> a.setEnableSkillCommands(Boolean.parseBoolean(v))));
 
     /**
      * Creates the settings page bound to the session's settings service.
