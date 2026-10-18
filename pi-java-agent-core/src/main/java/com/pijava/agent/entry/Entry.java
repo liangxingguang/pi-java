@@ -76,6 +76,7 @@ public sealed interface Entry {
     default String type() {
         return switch (this) {
             case Message m -> TYPE_MESSAGE;
+            case BashExecution be -> TYPE_MESSAGE;
             case ModelChange mc -> TYPE_MODEL_CHANGE;
             case ThinkingLevelChange tlc -> TYPE_THINKING_LEVEL_CHANGE;
             case Compaction c -> TYPE_COMPACTION;
@@ -91,6 +92,9 @@ public sealed interface Entry {
     default Entry committed(long seq, String parentId, Instant timestamp) {
         return switch (this) {
             case Message e -> new Message(e.id(), seq, parentId, timestamp, e.message(), e.terminate());
+            case BashExecution e -> new BashExecution(e.id(), seq, parentId, timestamp, e.command(),
+                e.output(), e.exitCode(), e.cancelled(), e.truncated(), e.fullOutputPath(),
+                e.excludeFromContext());
             case ModelChange e -> new ModelChange(e.id(), seq, parentId, timestamp, e.provider(), e.modelId());
             case ThinkingLevelChange e ->
                 new ThinkingLevelChange(e.id(), seq, parentId, timestamp, e.thinkingLevel());
@@ -122,6 +126,34 @@ public sealed interface Entry {
         Instant timestamp,
         com.pijava.ai.message.Message message,
         Boolean terminate
+    ) implements Entry {}
+
+    /**
+     * pi {@code BashExecutionMessage}（{@code messages.ts:29-42}）—— {@code !}/{@code !!}
+     * 会话级 bash 执行的记录。线形是 {@code type:"message"} 条目、
+     * {@code message.role:"bashExecution"}（pi 无独立条目类型，
+     * {@code session-manager.ts:1204-1214}）；域内按条目变体承载，投影点转 user 文本
+     * （{@link com.pijava.agent.session.ContextEntries}），与 branchSummary/compactionSummary
+     * 同分层（docs/25 §3）。{@code @JsonSubTypes} <b>不加</b> —— 线判别共享
+     * {@link #TYPE_MESSAGE}，编解码在 {@code EntryJsonCodec}/{@code SessionWireShape}
+     * 特判 {@code message.role}。
+     *
+     * @param exitCode           {@code null} ≙ pi 的 undefined
+     * @param fullOutputPath     截断时完整输出落盘路径；{@code null} ≙ undefined
+     * @param excludeFromContext true ⇒ 持久化但不进 LLM 上下文（{@code !!} 前缀）
+     */
+    record BashExecution(
+        String id,
+        long seq,
+        String parentId,
+        Instant timestamp,
+        String command,
+        String output,
+        Integer exitCode,
+        boolean cancelled,
+        boolean truncated,
+        String fullOutputPath,
+        Boolean excludeFromContext
     ) implements Entry {}
 
     /** The model was changed. */

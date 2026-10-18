@@ -29,7 +29,13 @@ final class EntryJsonCodec {
         String type = typeOverride != null ? typeOverride : JsonlCodec.requireString(node, "type");
         return switch (type) {
             case Entry.TYPE_MESSAGE -> {
-                Message message = MessageJsonCodec.decode(node.get("message"));
+                JsonNode messageNode = node.get("message");
+                // pi 的 BashExecutionMessage 寄居在 message 条目里
+                // （session-manager.ts:1204-1214），靠 message.role 判别（docs/25 §3）。
+                if (messageNode != null && "bashExecution".equals(messageNode.path("role").asText())) {
+                    yield decodeBashExecution(messageNode, id, seq, parentId, timestamp);
+                }
+                Message message = MessageJsonCodec.decode(messageNode);
                 Boolean terminate = node.has("terminate") && node.get("terminate").asBoolean(false)
                     ? Boolean.TRUE : null;
                 yield new Entry.Message(id, seq, parentId, timestamp, message, terminate);
@@ -81,6 +87,25 @@ final class EntryJsonCodec {
                 decodeContextEditReplacement(node.get("replacement")));
             default -> throw JsonlCodec.DecodeError.schema("has unknown entry type " + type);
         };
+    }
+
+    /**
+     * pi {@code BashExecutionMessage}（{@code messages.ts:29-42}）：{@code command}/{@code output}
+     * 必填；可选键（{@code exitCode}/{@code fullOutputPath}/{@code excludeFromContext}）
+     * 缺席 ⇒ {@code null} ≙ pi 的 undefined。
+     */
+    private static Entry.BashExecution decodeBashExecution(JsonNode node, String id, long seq,
+                                                           String parentId, Instant timestamp) {
+        JsonNode exitCode = node.get("exitCode");
+        JsonNode exclude = node.get("excludeFromContext");
+        return new Entry.BashExecution(id, seq, parentId, timestamp,
+            JsonlCodec.requireString(node, "command"),
+            JsonlCodec.requireString(node, "output"),
+            exitCode != null && exitCode.isNumber() ? exitCode.asInt() : null,
+            node.path("cancelled").asBoolean(false),
+            node.path("truncated").asBoolean(false),
+            JsonlCodec.optionalString(node, "fullOutputPath"),
+            exclude != null && exclude.isBoolean() ? exclude.asBoolean() : null);
     }
 
     /**

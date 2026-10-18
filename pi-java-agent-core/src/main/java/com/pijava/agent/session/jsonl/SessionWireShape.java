@@ -33,11 +33,56 @@ public final class SessionWireShape {
 
     /** Serialize {@code entry} and convert it to pi spellings; the identity fields stay intact. */
     public static ObjectNode toPiTree(Entry entry) {
+        if (entry instanceof Entry.BashExecution be) {
+            return bashExecutionTree(be);
+        }
         JsonNode node = SessionJson.mapper().valueToTree(entry);
         if (!(node instanceof ObjectNode object)) {
             throw new IllegalStateException("entry serialized to " + node.getNodeType());
         }
         return (ObjectNode) remap(object);
+    }
+
+    /**
+     * pi 的 bashExecution 寄居在 {@code type:"message"} 条目里
+     * （{@code session-manager.ts:1204-1214}），{@code message.timestamp} 是 epoch 毫秒
+     * （{@code Date.now()}，{@code messages.ts:39}）；可选键缺席省略（NON_NULL 惯例）。
+     * {@code Entry.BashExecution} 故意不在 {@code @JsonSubTypes} 里（线判别共享
+     * {@code "message"}），所以这棵树手工拼（docs/25 §3.3 ②）。
+     */
+    private static ObjectNode bashExecutionTree(Entry.BashExecution be) {
+        var mapper = SessionJson.mapper();
+        var root = mapper.createObjectNode();
+        root.put("type", Entry.TYPE_MESSAGE);
+        root.put("id", be.id());
+        root.put("seq", be.seq());
+        if (be.parentId() != null) {
+            root.put("parentId", be.parentId());
+        } else {
+            root.putNull("parentId");
+        }
+        if (be.timestamp() != null) {
+            root.put("timestamp", PiV3Wire.isoTimestamp(be.timestamp().toEpochMilli()));
+        }
+        var msg = root.putObject("message");
+        msg.put("role", "bashExecution");
+        msg.put("command", be.command());
+        msg.put("output", be.output());
+        if (be.exitCode() != null) {
+            msg.put("exitCode", be.exitCode().intValue());
+        }
+        msg.put("cancelled", be.cancelled());
+        msg.put("truncated", be.truncated());
+        if (be.fullOutputPath() != null) {
+            msg.put("fullOutputPath", be.fullOutputPath());
+        }
+        if (be.timestamp() != null) {
+            msg.put("timestamp", be.timestamp().toEpochMilli());
+        }
+        if (be.excludeFromContext() != null) {
+            msg.put("excludeFromContext", be.excludeFromContext().booleanValue());
+        }
+        return root;
     }
 
     private static JsonNode remap(JsonNode node) {
