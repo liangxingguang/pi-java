@@ -21,7 +21,8 @@ import com.pijava.ai.message.Message;
  * 使父链断开时，回退为按列表顺序构建路径（存储条目即提交序，等价 pi 的
  * leaf-path 语义）。压缩/分支摘要条目转为带 pi 确切前缀/后缀的 user 消息，
  * custom_message 条目按 pi 语义转为 user 消息（display/details 不进上下文），
- * 其余非消息条目不产消息。</p>
+ * bashExecution 条目按 pi {@code convertToLlm} 转 user 文本
+ * （{@code excludeFromContext} 跳过），其余非消息条目不产消息。</p>
  *
  * <p>live 构建（{@code buildMessagesForLane}）与 resume seed
  * （{@code SessionPersistence.attach}）共用本类——单一事实源，对齐 pi 的
@@ -264,6 +265,14 @@ public final class ContextEntries {
             // block, block list passes through; display/details never reach the LLM.
             return new Message.UserMessage(cm.content().toBlocks(), cm.timestamp());
         }
+        if (e instanceof Entry.BashExecution be) {
+            // pi convertToLlm "bashExecution" 支：excludeFromContext（!! 前缀）⇒ 不产消息；
+            // 否则 bashExecutionToText 的 user 文本（messages.ts:82-99,147-160，docs/25 §3.3 ③）。
+            if (Boolean.TRUE.equals(be.excludeFromContext())) {
+                return null;
+            }
+            return userMessage(bashExecutionText(be), be.timestamp());
+        }
         return null;
     }
 
@@ -275,6 +284,30 @@ public final class ContextEntries {
     /** pi {@code BRANCH_SUMMARY_PREFIX + summary + BRANCH_SUMMARY_SUFFIX}. */
     public static String branchSummaryText(String summary) {
         return BRANCH_SUMMARY_PREFIX + summary + BRANCH_SUMMARY_SUFFIX;
+    }
+
+    /**
+     * pi {@code bashExecutionToText}（{@code messages.ts:82-99}）逐字：
+     * {@code Ran \`cmd\`\n} ＋输出三态（非空 ⇒ 围栏块；空 ⇒ {@code (no output)}），
+     * cancelled 优先于非零 exitCode，截断尾注仅在
+     * {@code truncated && fullOutputPath != null} 时追加。
+     */
+    public static String bashExecutionText(Entry.BashExecution be) {
+        StringBuilder text = new StringBuilder("Ran `").append(be.command()).append("`\n");
+        if (be.output() != null && !be.output().isEmpty()) {
+            text.append("```\n").append(be.output()).append("\n```");
+        } else {
+            text.append("(no output)");
+        }
+        if (be.cancelled()) {
+            text.append("\n\n(command cancelled)");
+        } else if (be.exitCode() != null && be.exitCode().intValue() != 0) {
+            text.append("\n\nCommand exited with code ").append(be.exitCode().intValue());
+        }
+        if (be.truncated() && be.fullOutputPath() != null) {
+            text.append("\n\n[Output truncated. Full output: ").append(be.fullOutputPath()).append("]");
+        }
+        return text.toString();
     }
 
     /**

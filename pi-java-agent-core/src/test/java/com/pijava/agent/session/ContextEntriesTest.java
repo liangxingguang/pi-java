@@ -422,4 +422,58 @@ class ContextEntriesTest {
             .as("压缩后 edit 命中保留条目（pi session-context-edit 测试同名场景）")
             .isEqualTo("edited retained");
     }
+
+    // ── #57：bashExecution 投影（pi messages.ts:82-99,147-160，docs/25 §3.3 ③）────
+
+    private static Entry.BashExecution bash(String id, String parentId, String command,
+                                            String output, Integer exitCode, boolean cancelled,
+                                            boolean truncated, String fullOutputPath,
+                                            Boolean excludeFromContext) {
+        return new Entry.BashExecution(id, 0, parentId, Instant.EPOCH, command, output,
+            exitCode, cancelled, truncated, fullOutputPath, excludeFromContext);
+    }
+
+    @Test
+    void bashExecutionProjectsToVerbatimUserText() {
+        var path = List.<Entry>of(
+            message("a", null, "user", "q"),
+            bash("b", "a", "git status", "On branch main\n", 1, false, true,
+                "/tmp/full.log", null));
+
+        var msgs = ContextEntries.toMessages(path);
+        assertThat(msgs).hasSize(2);
+        assertThat(msgs.get(1).role()).isEqualTo("user");
+        // pi bashExecutionToText（messages.ts:82-99）逐字：围栏块＋非零 exitCode＋截断尾注。
+        assertThat(textOf(msgs.get(1))).isEqualTo(
+            "Ran `git status`\n```\nOn branch main\n\n```"
+                + "\n\nCommand exited with code 1"
+                + "\n\n[Output truncated. Full output: /tmp/full.log]");
+    }
+
+    @Test
+    void bashExecutionExcludeFromContextProducesNoMessage() {
+        var path = List.<Entry>of(
+            message("a", null, "user", "q"),
+            bash("b", "a", "secret", "leak", 0, false, false, null, Boolean.TRUE));
+
+        assertThat(ContextEntries.toMessages(path))
+            .as("!! 前缀（excludeFromContext）⇒ 持久化但不进 LLM 上下文（pi :147-160）")
+            .hasSize(1);
+    }
+
+    @Test
+    void bashExecutionTextEdgeCases() {
+        // 空输出 ⇒ (no output)；exitCode 0 ⇒ 无尾注。
+        assertThat(ContextEntries.bashExecutionText(
+            bash("b", null, "true", "", 0, false, false, null, null)))
+            .isEqualTo("Ran `true`\n(no output)");
+        // cancelled 优先于非零 exitCode；truncated 无 fullOutputPath ⇒ 无尾注。
+        assertThat(ContextEntries.bashExecutionText(
+            bash("b", null, "sleep 99", "partial", 137, true, true, null, null)))
+            .isEqualTo("Ran `sleep 99`\n```\npartial\n```\n\n(command cancelled)");
+        // exitCode null（pi undefined）⇒ 无 exitCode 尾注。
+        assertThat(ContextEntries.bashExecutionText(
+            bash("b", null, "cmd", null, null, false, false, null, null)))
+            .isEqualTo("Ran `cmd`\n(no output)");
+    }
 }
