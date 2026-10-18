@@ -184,6 +184,28 @@ final class SessionPersistence {
                 return session;
             }).orElseThrow(() -> new IllegalStateException("No previous session to continue"));
         }
+        if (args.fork() != null) {
+            // #75（docs/25 §5）：pi 的 --fork 支配 --session-id —— fork 源解析
+            // （main.ts:380-386 的 path/local/global 支）把 parsed.sessionId 当作
+            // **新会话**的 id 传给 forkFrom(..., { id: sessionId })。
+            if (isPathShaped(args.fork())) {
+                var path = java.nio.file.Path.of(args.fork()).toAbsolutePath().normalize();
+                return handle.openPath(path).map(opened -> {
+                    var forked = handle.fork(opened.getMetadata(), new ForkOptions.Tree(), cwd,
+                        args.sessionId());
+                    session.session(forked);
+                    attach(session, handle, forked.getMetadata());
+                    return session;
+                }).orElseThrow(() -> new IllegalStateException(
+                    "Session not found: " + args.fork()));
+            }
+            return handle.find(args.fork()).map(meta -> {
+                var forked = handle.fork(meta, new ForkOptions.Tree(), cwd, args.sessionId());
+                session.session(forked);
+                attach(session, handle, forked.getMetadata());
+                return session;
+            }).orElseThrow(() -> new IllegalStateException("Session not found: " + args.fork()));
+        }
         if (args.sessionId() != null) {
             return handle.find(args.sessionId()).map(meta -> {
                 attach(session, handle, meta);
@@ -209,26 +231,6 @@ final class SessionPersistence {
                 attach(session, handle, meta);
                 return session;
             }).orElseThrow(() -> new IllegalStateException("Session not found: " + args.session()));
-        }
-        if (args.fork() != null) {
-            if (isPathShaped(args.fork())) {
-                var path = java.nio.file.Path.of(args.fork()).toAbsolutePath().normalize();
-                return handle.openPath(path).map(opened -> {
-                    var forked = handle.fork(opened.getMetadata(), new ForkOptions.Tree(), cwd);
-                    session.session(forked);
-                    session.name(session.sessionName() + " (fork)");
-                    attach(session, handle, forked.getMetadata());
-                    return session;
-                }).orElseThrow(() -> new IllegalStateException(
-                    "Session not found: " + args.fork()));
-            }
-            return handle.find(args.fork()).map(meta -> {
-                var forked = handle.fork(meta, new ForkOptions.Tree(), cwd);
-                session.session(forked);
-                session.name(session.sessionName() + " (fork)");
-                attach(session, handle, forked.getMetadata());
-                return session;
-            }).orElseThrow(() -> new IllegalStateException("Session not found: " + args.fork()));
         }
         var created = handle.create(cwd, null);
         session.session(created);

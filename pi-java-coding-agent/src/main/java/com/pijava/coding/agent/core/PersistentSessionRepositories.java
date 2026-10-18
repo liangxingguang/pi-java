@@ -114,6 +114,13 @@ final class PersistentSessionRepositories {
             }
 
             @Override
+            public Session<?> fork(SessionMetadata source, ForkOptions options, String cwd,
+                                   String sessionId) {
+                return repo.fork((JsonlSessionMetadata) source, options,
+                    new JsonlSessionCreateOptions(sessionId, cwd, null, null));
+            }
+
+            @Override
             public SessionRepository<?, ?, ?> repository() {
                 return repo;
             }
@@ -198,6 +205,15 @@ final class PersistentSessionRepositories {
                 @SuppressWarnings("rawtypes")
                 SessionRepository raw = repo;
                 return (Session<?>) raw.fork(source, options, sqliteCreateOptions(cwd, null));
+            }
+
+            @Override
+            public Session<?> fork(SessionMetadata source, ForkOptions options, String cwd,
+                                   String sessionId) {
+                @SuppressWarnings("rawtypes")
+                SessionRepository raw = repo;
+                return (Session<?>) raw.fork(source, options,
+                    sqliteCreateOptions(sessionId, cwd, null));
             }
 
             @Override
@@ -309,6 +325,16 @@ final class PersistentSessionRepositories {
         }
 
         Session<?> fork(SessionMetadata source, ForkOptions options, String cwd);
+
+        /**
+         * pi {@code forkSessionOrExit(..., parsed.sessionId)}（main.ts:380-386）：
+         * {@code --fork} 与 {@code --session-id} 组合时，新会话用给定 id
+         * （{@code forkFrom(..., { id: sessionId })}；#75/docs/25 §5）。
+         */
+        default Session<?> fork(SessionMetadata source, ForkOptions options, String cwd,
+                                String sessionId) {
+            return fork(source, options, cwd);
+        }
 
         SessionRepository<?, ?, ?> repository();
 
