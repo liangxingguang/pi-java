@@ -65,14 +65,10 @@
 
 | # | 面 | 条目 | 现状与出处 |
 |---|---|---|---|
-| B30 | 协议面 | `session_info_changed` 事件没有生产者 | RPC 的 set_session_name 改了会话名但不发事件；pi 在 setSessionName 内部发射该事件 |
 | B31 | 协议面 | `get_state.model` 字段形状不同 | Java 的 `RpcDispatcher.buildState` 发字符串 `"provider/id"`；pi 发的是整个 `Model` 对象 |
 | B32 | 协议面 | `get_state.sessionName` 恒有值，pi 是可选 | Java 默认 `"session"`，客户端分不出用户命名与默认名；pi 在首次 session_info 事件之前不带这个键 |
 | B33 | 协议面 | `get_state.messageCount` 计数口径不同 | Java 取转录条数，pi 取工作副本条数。压缩后两者必然分叉：转录含 compaction、model_change 等非消息条目 |
-| B36 | 协议面 | 没有 `abortCompaction`（按操作的压缩取消） | TUI 无法取消压缩。Java 借用 lane 的 abortSignal，没有按操作的取消句柄。B39 的 Esc 换绑被它挡着 |
 | B49 | 协议面 | `turn_end` 事件颗粒度不同 | pi 每回合发一条；Java 的 AgentSettled 每次驱动发一条。真对齐要改事件时序 |
-| B53 | 协议面 | `find()` 缺 pi 的分级查找 | pi 是三级阶梯（只看头部 → 项目内 → 跨项目）；Java 直接做跨项目全量扫描 |
-| B55 | 协议面 | 会话列表缺进度、异步、取消三个维度 | pi 的 list 带 onProgress 回调、渐进发布、AbortSignal、并发扫描；Java 是同步全量（仅交互选择器面） |
 | B237 | 协议面 | RPC prompt 的处理结果缺 `handled` 状态 | pi 是三态 `handled\|queued\|started`（`rpc-types.ts:118`、`agent-session.ts:310-311`）；Java `RpcDispatcher.java:117-130` 只产生 started/queued |
 
 ### 3.2 请求选项 / Provider 协议面
@@ -93,7 +89,6 @@
 
 | # | 面 | 条目 | 现状与出处 |
 |---|---|---|---|
-| B1 | 模型可见 | **branch summary（分支摘要）没有实现** | pi 有 branch-summarization；Java 只在重试路径保留了 `source:"branchSummary"` 的形状 |
 | B79 | 用户可见 | `/bug` 故障上报 ＋ 崩溃记录未实现 | pi 的 slash 命令流程：同意提示 → 生成摘要 → 上报 |
 | B218 | 内部 | `McpServerRegistry` 与 `McpScope.EXTENSION` 闭环前**没有生产者** | 注册表代码已落（原 docs/39），但 `pi.registerMcpServer` 没有挂载点；接线归 B221 |
 | B219 | 模型可见 | `mcp_servers` 段的排序用 `String.compareTo` 代替 pi 的 `localeCompare` | 纯 ASCII 名字两者等价，非 ASCII 名字排序有差（原 docs/39 §3.2） |
@@ -134,16 +129,16 @@
 | B216 | 内部 | 包⑪开的四处跨包小缝 | ① `McpServerConnection.oauthSettings()` 包私有改 public（pi 是公开）；② 新增 `clearChallenge()`（pi 是直接赋 `undefined`）；③ 新增 `McpServerState.wire()`（CLI 要打 `needs-auth`）；④ 新增 `SettingsManager.load(agentDir, projectDir, override)`（原先只能为进程自己的目录解析信任） |
 | B217 | 内部 | MCP `login` 的端到端（真授权服务器）没有测试夹具 | 夹具覆盖到「连不上 / 非 OAuth / 缺参数 / 超时校验」为止；`--timeout` 秒数文案与 `reconnect` 后的成功路径需要真授权服务器（包⑨的 `McpSignIn` 另有夹具） |
 | B163 | 用户可见 | 主题/色彩系统差距大 | pi 3,176 行（theme、system-theme、oklab 等），Java 74 行 |
-| B236 | 混合 | **新锚点**：`--tools`/`--exclude-tools` 的模式面缺失 | pi 走 minimatch 模式：`*` 全选、`+name`/`-name` 修饰符、`mcp__` 前缀、空名单保留 MCP 注册（`args.ts:151-162`、`agent-session.ts` 的 createToolNameMatcher/applyToolModifiers）；Java `ArgsParser.java:87-90,244-251` 只支持逗号分隔的裸名 |
-| B243 | 模型可见 | **powershell 工具实现＋默认激活集**（挂 B236 族；设计稿原编号 B241，与 telemetry 批 1 撞号改此） | pi `core/tools/powershell.ts:1-67` 是 bash 的 `createShellToolDefinition` 变体：name/label 为 `"powershell"`、prompt 为 `PS>`、tempFilePrefix 为 `"pi-powershell"`、UTF8 前缀；`shell.ts:126-133` 仅 Windows 且按 `pwsh.exe`→`powershell.exe` 顺序解析。但 pi **默认不激活**它（`DEFAULT_TOOL_NAMES = ["read","bash","edit","write"]`，`settings-manager.ts:83`），激活走 `defaultTools` 修饰符或 `--tools` 模式面——也就是 B236 的面。所以实现＋激活策略（含四件默认集差）整体随 B236 批落地（原 docs/22 §5.2） |
-| B242 | 混合 | **bash 的 `PI_*` 会话环境变量面** | pi 默认向子进程暴露 `PI_SESSION_ID/PI_SESSION_FILE/PI_PROVIDER/PI_MODEL/PI_REASONING_LEVEL`（`resolveSpawnContext`，`bash.ts:185-213`；`exposeSessionEnvironment` 默认 true）；bash 的 promptGuidelines 因此带 `You can inspect PI_* environment variables…`（`bash.ts:47`）。Java 的 `ToolContext` 拿不到会话身份（在 coding-agent 层），跨层接线（ToolContext 增会话身份供应器或 ToolOptions 注入）待做；在此之前 bash 的 guideline 先不加（加了是假话）（原 docs/22 §5.3） |
+| B236 | 混合 | **新锚点**：`--tools`/`--exclude-tools` 的模式面缺失 | pi 走 minimatch 模式：`*` 全选、`+name`/`-name` 修饰符、`mcp__` 前缀、空名单保留 MCP 注册（`args.ts:151-162`、`agent-session.ts` 的 createToolNameMatcher/applyToolModifiers）；Java `ArgsParser.java:87-90,244-251` 只支持逗号分隔的裸名。powershell 的激活面也挂本项（~~B243~~ 已销号：本体＋注册＋默认不激活已于批 agent-core-4 落地） |
+| B244 | 用户可见 | **`skill:` slash 命令注册＋settings `skillCommands` 开关**（批 agent-core-4 新登记，docs/24 §13.5） | pi `agent-session.ts:3377` 注册 `skill:<name>` 命令；settings-schema.ts:315 有 `skillCommands` 开关。批 4 只做了 `/skill:` 文本展开（`SkillCommandExpansion`），命令注册面未做 |
+| B245 | 混合 | **tree 扩展事件＋TUI 摘要流**（批 agent-core-4 新登记，docs/24 §13.5） | ① `session_before_tree`/`session_tree` 扩展事件（types.ts:817-846,1488-1501，含 `result.summary` 整体替代生成器的 fromHook=true 旁路）；② TUI 树选择器摘要三选对话框（interactive-mode.ts:5559-5706）＋摘要期 Esc 换绑 `abortBranchSummary`（:5637-5640）＋`skipPrompt` 弹窗门（:5590，设置项批 4 已备）。挂扩展事件（D 域）与 TUI 两族；`navigateTree`/`abortBranchSummary` 本体批 4 已落 |
 
 ### 3.4 TUI（优先级最低，web UI 为主）
 
 | # | 面 | 条目 | 现状与出处 |
 |---|---|---|---|
 | B38 | 用户可见 | compaction_end 后 TUI 不重建聊天区 | pi 整表 clear＋重渲染＋压缩摘要消息卡；Java 现只有压缩指示器、一行摘要、QueueUpdate（2026-10-12 重测更正措辞），整表重建与摘要卡仍缺 |
-| B39 | 用户可见 | 压缩窗口 Esc 换绑 | 随 B36 |
+| B39 | 用户可见 | 压缩窗口 Esc 换绑 | ~~随 B36~~ B36 已销号（批 agent-core-4 落 `abortCompaction`/`abortBranchSummary`）；换绑本体未做，与 B245 的 TUI 摘要流同族 |
 | B46 | 用户可见 | BashTool 的 onUpdate 没有 TUI 消费者 | 生产发射面已通（BashTool→BashUpdateEmitter→SessionRunner；2026-10-12 重测更正：旧记「生产永不发射」已过期）。web 有 bashOutput，TUI 渲染面仍缺 |
 | B47 | 用户可见 | TUI tool_execution_* 语义取错源 | Java 按「模型吐完调用」计数，pi 按真实工具执行事件计数 |
 | B65 | 用户可见 | MarkdownRenderer/SyntaxHighlighter 是死代码 | 助手消息走纯文本，表格/mermaid/高亮/链接全不可达；先定「接线还是删声明」 |
@@ -270,16 +265,23 @@
 - 【风险/代价】无影响。[内部，模型不可见]
 - 触发条件：pi 出现会话中系统提示变更路径（`setSystemPrompt` 类 API）时重裁。出处：原 docs/21 §4.4。
 
+### map/03-#68 — streamProxy 按 R5 出分母
+
+- 【场景】pi 的 `agent/src/proxy.ts`（393 行）在锚点逐字存活（返型已改 pi-ai 工厂 `createAssistantMessageEventStream()`），pi-java 没有对应物；旧图据此判「缺失」计分母。
+- 【决定】2026-10-18 批 agent-core-4 裁决①（docs/24 §13.1）：**按 R5 移出分母**（权重 1→0）。pi 侧虽存活但 **bin pi 主流不可达**：coding-agent 全包零 import；引用点只有 `agent/src/index.ts:3` 的 `export *` 再导出、单测、`scripts/browser-smoke-entry.ts:23`（仅 `typeof` 存在性断言的构建冒烟，从不调用）。它是面向「服务端托管鉴权代理」宿主的可选 StreamFn，等价「只被工具面/测试引用」。
+- 【风险/代价】若日后做服务端托管鉴权代理车道，需补回并按新返型对齐。[内部，模型不可见]
+- 触发条件：pi-java 做服务端托管鉴权代理车道（TeamoRouter 服务端化之类），或 pi 在 coding-agent 主流接入 streamProxy。
+
 ---
 
 ## 5. E 类 —— 结构债（仓库规则：单文件 ≤ 500 行）
 
 | # | 文件 | 行数 |
 |---|---|---:|---:|
-| E1 | coding-agent …/core/AgentSession.java | 1,187 |
-| E2 | coding-agent …/rpc/RpcDispatcher.java | 642 |
-| E3 | agent-core …/harness/PiLaneSink.java | 562 |
-| E4 | agent-core …/harness/AgentHarness.java | 595 |
+| E1 | coding-agent …/core/AgentSession.java | **1,554**（2026-10-18 批 agent-core-4 实测；navigateTree/展开接线随批长进，拆分宜搭下一 coding-agent 批） |
+| E2 | coding-agent …/rpc/RpcDispatcher.java | 627 |
+| E3 | agent-core …/harness/PiLaneSink.java | 555 |
+| E4 | agent-core …/harness/AgentHarness.java | 621（2026-10-18 批 agent-core-4 实测） |
 | E5 | ai …/catalog/ModelCompat.java | **762**（2026-10-11 B98 加 8 组件；converter 侧已拆出 CompletionAssistantMessage 保 500 内） |
 
 均不与功能耦合，可随时拆，与功能包搭车推进。[全部内部，模型不可见]

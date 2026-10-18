@@ -9,7 +9,7 @@
 - **全量加权盘点**是 [`map/03-agent-core.md`](map/03-agent-core.md)：104 个单元逐条判定、权重、完成度。
 - 本稿＝两者的 agent-core 层索引：§1 确认缺口，§2 形状差（存疑、待裁决），§3 要取证/清点的 A 项，§4 已裁决不做。
 - **map 单元号（#N）**：`map/03-agent-core.md` 里的能力单元编号。
-- **批 agent-core-1/2/3**：2026-10-17 闭环的三个对齐包，实施记录在原 docs/20–22（已删，历史在 git）。
+- **批 agent-core-1/2/3**：2026-10-17 闭环的三个对齐包，实施记录在原 docs/20–22（已删，历史在 git）；**批 agent-core-4**：2026-10-18（设计稿 docs/24），确认缺口清零。
 
 ## 基准
 
@@ -20,25 +20,17 @@
 
 ## 1. 确认缺口（地图判「缺失」，计分母）
 
-| 地图# | 权重 | 差什么 | 台账 |
-|---|---:|---|---|
-| #62 | **2** | `formatSkillInvocation`（技能调用格式）：全仓零命中 | —— |
-| #8（工具表） | 1 | `powershell` 工具缺失（pi 8 个内置工具，Java 7 个；系统提示词里有名字、无实现） | **B243** |
-| #24 | 1 | branch summary **生成器**缺失（只有 `Entry.BranchSummary` 类型＋文案） | **B1** |
-| #25 | 1 | 会话树导航 `navigateTree` 缺失 | B1 同族 |
-| #27 | 1 | branch summary 设置（`reserveTokens`/`skipPrompt`，注意与压缩阈值的同名 reserve 无关） | B1 同族 |
-| #48 | 1 | `session_info_changed` 无生产者：类型＋RPC mapper 都在，零 emit（`setSessionName` 只赋值） | **B30** |
-| #55 | 1 | `CompactionEntry.fromHook`/`BranchSummaryEntry.fromHook` 字段缺失（只在 javadoc 出现） | —— |
-| #68 | 1 | `streamProxy`（`agent/src/proxy.ts`，新锚存活）零命中 | —— |
-| #69 | 1 | `setDefaultStreamFn`/`getDefaultStreamFn`（`agent/src/stream-fn.ts`，新锚存活）零命中 | —— |
-| #79 | 1 | 会话列表无 `onProgress`/渐进发布/AbortSignal/并发扫描（Java 同步全量） | **B55** |
-| #98 | 1 | 无 `abortCompaction`（per-operation 取消句柄；TUI Esc 换绑被它挡着） | **B36** |
+**✅ 已清零（2026-10-18 批 agent-core-4，设计稿 docs/24）**——原 11 行全数闭环：
+#62/#63/#64 技能与模板族、#24/#25/#27 branch summary 族（B1 销号）、工具表 #8 powershell（B243 销号，
+激活面随 B236）、#48（B30 销号）/#55/#69/#79（B55 销号）/#98（B36 销号）翻对齐，#68 `streamProxy`
+按裁决① R5 出分母（docs/24 §13.1）。逐条证据见 `map/03-agent-core.md`「十一条点名项」。
 
 **同层相关、挂在 docs/04 但生产者跨模块的条目**：
 
 - B49 `turn_end` 颗粒度（地图 #53，形状差见 §2）。
-- B53 `find()` 缺三级阶梯（地图 #78）。
+- ~~B53 `find()` 缺三级阶梯~~ —— 批 4 阶梯对齐（路径快车道＋header-only findById＋项目前缀＋跨项目精确胜前缀），无账面变动（挂 #78 行），销号。
 - B31/B32/B33（get_state 三处 RPC 形状，生产者在 coding-agent）。
+- **B244**（`skill:` slash 命令注册＋settings `skillCommands` 开关）、**B245**（tree 扩展事件＋TUI 摘要流）——批 4 新登记，归 coding-agent/TUI 批（docs/04 §3.3）。
 
 ---
 
@@ -57,7 +49,6 @@
 | 队列/宿主 | #14 `QueueMode.All` 宿主语义（F1）· #80 `streamingBehavior` 两道门（A5/F4）· #84 两道门行为裁决（F4） |
 | 事件 | #53 `turn_end` 颗粒度（**B49**） |
 | 存储/会话 | #56 `EntryProjector`（A1）· #57 四个消息类型（A1）· #60 `PendingEntry`/`InboxItem` 队列契约 · #75 session fork · #77 恢复 seed/replay（A2） |
-| prompt/技能 | #63 `loadSkills`、#64 `loadPromptTemplates`（生产者都在 coding-agent） |
 | API 面 | #81 工具线程安全契约（**A10**）· #82 `retry.provider.*` ↔ RetryPolicy（A7）· #83 `transcript()` 消费者清点（A2）· #85 `recordEvent` 兜底（F2） |
 | 并发/可见性 | #89 批内 join 源序（C2）· #90 transcript 可见性（C3）· #91 `reset` 不关 runSpan（C4） |
 | 夹具/文档/结构债 | #87 L5 thinking 块不对称（E8）· #92 遥测 javadoc（D2/D3）· #93 SummaryGenerator javadoc（D6）· #94 文件超限（**E3/E4**，另 E1/E2 在 coding-agent）· #95 集成层夹具无牙（**A14**）· #96 错误路 AgentSettled 无夹具（**A15**） |
@@ -71,7 +62,7 @@
 - `glob`→`find` 改名＋fd 语义。
 - ls `recursive`→`limit` 参数集换血。
 - 窄差 D1–D8 入 map/03 工具表备注。
-- 新登记：**B243**（powershell 实现＋默认激活集，挂 B236 族；设计稿原编号 B241，与 telemetry 批 1 撞号）、**B242**（bash 的 `PI_*` 会话环境变量面）——均在 docs/04 §3.3。
+- 新登记：**B243**（powershell 实现＋默认激活集，挂 B236 族；设计稿原编号 B241，与 telemetry 批 1 撞号）、**B242**（bash 的 `PI_*` 会话环境变量面）——两者均于 2026-10-18 批 agent-core-4 销号。
 
 **编号空间提醒**：旧 A/C/D/F 编号（如 A1/A2/C2/F1）来自各过程稿（docs/31 族），其中一部分已随包闭环；它们与 `docs/04` §2 的 A 类（A10/A14/A15/A16）**不是同一编号空间**。A16 重测时统一清理标签。
 
@@ -92,7 +83,7 @@
 ## 4. 已裁决不做（不展开）
 
 - **R1 作废 19 个单元 ＋ drive 运行时整块**：参照物（`agent/src/harness/**` 108 文件）已被 pi 删除；完整清单见 `map/03-agent-core.md`「作废清单」。
-- **R5 不可达**：pico3、durable（import 者全在 `experimental/`）。
+- **R5 不可达**：pico3、durable（import 者全在 `experimental/`）、**`streamProxy`（#68，批 4 裁决①：pi 侧存活但 bin pi 主流不可达——coding-agent 零 import，仅再导出/单测/构建冒烟；docs/24 §13.1）**。
 - 替身归属：`before_payload`/`after_response`/`before_compaction` 的对应物是 coding-agent 扩展事件，不属本模块。
 - **B59**（SQLite schema 分叉）：pi 的 session 后端已整包删除且从未进 `bin pi`，见 `docs/04` §4。
 

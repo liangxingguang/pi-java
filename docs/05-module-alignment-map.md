@@ -27,10 +27,11 @@
   - 批 10 federation（2026-10-16 闭环）：94.5%。
   - 批 3b／批 4／批 6／批 8 销号的都是台账行为项，读数不变。
   - 剩余计分母缺失仅 1 条：#8。
-- **agent-core 层**：批 1–3 全部闭环（2026-10-17）。
+- **agent-core 层**：批 1–4 全部闭环（2026-10-17 → 10-18）。
   - 批 1：72.1% → **75.7%**（138.5/183，+6.5）。内容：B158 截断 50KB、B159/#41 finishTurn 裁决形状、#17 /compact abort-first。合计 57.8% → 59.5%（824.5/1385）。
   - 批 2：75.7% → **81.1%**（148.5/183，+10.0）。内容：#34 prepareRequest 写钩子、#46 族会话事件面漏斗（含 #52 本 pass 载荷、agent_settled.aborted 即 B235 销号）、#58 stopReason 剔除删除、#54/#78/#100 三条裁决。权重 3 层 22/22 = 100%。合计 59.5% → 60.3%（834.5/1385）。未加权 57.6%（53/92；批 1 记的 45/92 是误计，实为 46/92，本批按表内点算更正）。
   - 批 3：81.1% → **83.9%**（153.5/183，+5.0）。内容：bash/grep/find/ls 四个工具的模型可见面逐字对齐、glob 改名 find。工具表 71.4% → 95.2%（20.0/21）。权重 3 层含工具 27/27 = 100%。合计 61.5% → 61.8%（851.0 → 856.0/1384）。未加权 57.6% → 62.0%（57/92）。
+  - 批 4：83.9% → **91.5%**（166.5/182，+13.0；#68 streamProxy 按裁决① R5 出分母，Σw 183→182）。内容：技能族 #62/#63/#64、branch summary 族 B1（#24/#25/#27＋navigateTree）、工具族 B242/B243/B53、API 面 #48/B30/#55/#69/#79/B55/#98/B36；powershell 本体＋注册＋默认不激活（激活面随 B236）⇒ 工具表 **21/21 = 100%**；**确认缺失清零**；新登记 B244/B245。合计 61.8% → 62.8%（856.0 → 869.0/1383）。未加权 62.0% → 75.8%（69/91）。
 - **telemetry 层**：批 1 闭环（2026-10-17，原 docs/23），完成度 100%。
 
 ---
@@ -75,18 +76,18 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 
 ---
 
-## 1 总表（agent-core 批 3 后值，2026-10-17；telemetry 批 1 后值，2026-10-17；ai 批 10 后 2026-10-16；批 3b/4/6/8 为台账行为项、加权不变；其余模块为 2026-10-12 重测值）
+## 1 总表（agent-core 批 4 后值，2026-10-18；telemetry 批 1 后值，2026-10-17；ai 批 10 后 2026-10-16；批 3b/4/6/8 为台账行为项、加权不变；其余模块为 2026-10-12 重测值）
 
 | 模块（地图） | Σ权重 | Σ(w×c) | **加权完成度** | 未加权 | 权重 3 层 |
 |---|---:|---:|---:|---:|---:|
 | pi-java-ai（map/02，**批10后**） | 219 | 207.0 | **94.5%** | 85.5%（100/117） | **100%（33/33）** |
 | pi-java-mcp（map/07，**新图**） | 129 | 98.0 | **76.0%** | 62.9%（56/89） | 100%（1/1） |
-| pi-java-agent-core（map/03，**批3后**） | 183 | 153.5 | **83.9%** | 62.0%（57/92） | **100%（27/27）** |
+| pi-java-agent-core（map/03，**批4后**） | 182 | 166.5 | **91.5%** | 75.8%（69/91） | **100%（27/27）** |
 | session-sqlite ＋ evals（map/06） | 87 | 44.5 | **51.1%** | 50.0%（20/40） | — |
 | pi-java-telemetry（map/01，**批1后**） | 34 | 34.0 | **100%** | 100%（16/16） | 100%（21/21） |
 | pi-java-tui/web（map/05） | 245 | 108.5 | **44.3%** | 25.7%（38/148） | 67.3% |
 | pi-java-coding-agent（map/04，剔 MCP 粗单元） | 487 | 210.5 | **43.2%** | 31.7%（92/290） | 50.0%（9/23） |
-| **合计（去重后，agent-core 批3后）** | **1,384** | **856.0** | **61.8%** | — | — |
+| **合计（去重后，agent-core 批4后）** | **1,383** | **869.0** | **62.8%** | — | — |
 
 > map/04 原始口径（含 G-1..G-5）：Σw 496 ／ Σwc 217.5 ／ **43.9%**；两处账都在，总表用去重值。
 > protocol/client/server（R1 排除）未加权：map/01 全层 10 对齐 / 40 缺失 / 35 存疑（85 单元）。
@@ -96,7 +97,7 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 - **ai 层权重 3 全齐**：每轮都走的请求/响应/计量主路无缺口。批 10 后计分母缺失仅 1 条（#8 namespace），无半成品——#90 图片缩放消费链已落 agent-core/coding-agent，#98 federation 批 10 闭环。分类器面已裁 R5。
 - **mcp 模块本体完成度高（76%）**，但会话内接线面是缺口（B221：六个 on() 事件 0/6、激活门、ui.custom、工具渲染器、提示分节、registerMcpServer 挂载点）。这批缺口对应 map/07 G 组 17 单元里的 15 个缺失——**进程外 `pi mcp` CLI 可用、会话内 MCP 不激活**。
 - **coding-agent 最低**：欠账集中在扩展系统（D 域 41 事件加权 12.7%、D′ UI 注入 6.3%、包管理器 16.1%）。
-- **agent-core 权重 3 层 27/27 = 100%**（批 2 能力单元 22 条清零＋批 3 工具 5 条权重 3 全对）；未得分池 29.5，最大池是权重 1 层（15.5）。
+- **agent-core 权重 3 层 27/27 = 100%**（批 2 能力单元 22 条清零＋批 3 工具 5 条权重 3 全对）；批 4 后**确认缺失清零**、工具表 21/21 = 100%，未得分池 15.5（全部来自存疑半分），最大池是权重 2 层（9.0）。
 
 ---
 
@@ -124,19 +125,19 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 方言项（B181–B220 族）多判存疑：mcp-auth.json 字节形态、错误文本、WHATWG URL、redirect 平台替代等。
 codemode-only 的 4 个单元（exposure/deferred/discovery）权重 0，B161/B162 闭环时重裁。
 
-### 2.3 agent-core — 83.9% ｜ map/03（批 3 后）
+### 2.3 agent-core — 91.5% ｜ map/03（批 4 后）
 
-批 1–3 全部闭环（2026-10-17，逐批账面见 map/03，实施记录在原 docs/20–22）。闭环内容：
+批 1–4 全部闭环（2026-10-17 → 10-18，逐批账面见 map/03，批 1–3 实施记录在原 docs/20–22，批 4 设计稿 docs/24）。闭环内容：
 
 - 截断预算 50KB、`finishTurn` 裁决形状、`/compact` abort-first。
 - `prepareRequest` 写钩子。
 - #46 族会话事件面重构（五帧＋`AgentSettled{aborted}`＋单一漏斗）。
 - stopReason 剔除删除、#54/#78/#100 三条裁决。
 - bash/grep/find/ls 四工具模型可见面逐字对齐（glob 改名 find）。
+- 批 4：技能族（`/skill:` 展开、loadSkills/loadPromptTemplates 面）、branch summary 族（生成器＋navigateTree＋设置，B1 销号）、工具族（PI_\* 注入 B242、powershell B243、find 阶梯 B53 三销号）、API 面（session_info_changed B30、fromHook、setDefaultStreamFn、列表 onProgress B55、abortCompaction B36 五销号）；#68 streamProxy 裁决① R5 出分母。
 
-现状：**权重 3 层含工具 27/27 = 100%**；工具表 71.4% → **95.2%**（20.0/21）。
-确认缺失 11 条：#62 formatSkillInvocation（权重 2），其余权重 1（powershell B243、branch summary 族 B1、B30、B36、B55、fromHook、streamProxy、setDefaultStreamFn）。形状差 24 条在 docs/07 §2.2。
-新登记：B242（bash `PI_*` 会话环境变量面）、B243（powershell，挂 B236 族）。
+现状：**权重 3 层含工具 27/27 = 100%**；工具表 **21/21 = 100%**（powershell 本体＋注册＋默认不激活，激活面随 B236）；**确认缺失清零**（批 3 后的 11 条全收）。
+形状差 22 条在 docs/07 §2.2。批 4 新登记：B244（skill slash 命令）、B245（tree 扩展事件＋TUI 摘要流）。
 
 ### 2.4 coding-agent — 43.2%（去重）｜ map/04
 
@@ -165,7 +166,7 @@ protocol/client/server 按 R1 整体移出分母：protocol 是已删 pi 代码�
 ## 3 P0 队列：权重 3 的未对齐项
 
 - **ai：零条** ✅。
-- **agent-core：零条** ✅（批 3 后权重 3 层 27/27 = 100%；残余未对齐全在权重 1/2 层）。
+- **agent-core：零条** ✅（批 4 后权重 3 层 27/27 = 100%＋确认缺失清零；残余未对齐全是权重 1/2 层的存疑半分）。
 - **coding-agent（权重 3 层 50%）**：D 域扩展事件 7–8 条缺失/存疑（引擎钩子存在但未桥接）、examples/ 可执行验收规格。
 - **tui（权重 3 层 67.3%）**：Markdown 渲染死路（B65）、逐工具渲染器（B47）、spinner/working 指示器、主题 token 覆盖（B163）等渲染长尾。
 - **session**：JSONL 条目信封形状（map/06 #16，权重 3 存疑）。
@@ -186,7 +187,7 @@ protocol/client/server 按 R1 整体移出分母：protocol 是已删 pi 代码�
 ## 5 R1/R5 排除面（不进分母）
 
 - **R1 已删**：旧 schemas RPC 层/SessionHandle/writer_leases（`e52de91d0`）；session-backends 整包与 agent harness 108 文件（`7fd478a2e`，harness 内容搬进 R5 不可达的 durable）；experimental micro/mini；image registry 旧三件（被 #9948 统一模型设施取代）；active_tools_change/公开 compact-failed 事件（重测确认 pi 主流从不发射，map/03 #86/#88）。
-- **R5 不可达**：durable 22,473 行、codemode 2,597 行（quickjs-wasi；B161）、chord 8,817 行、pico3、tool-search/virtual-models/nested-tool-calls（B162）、22 个长尾 provider 及 4 条对应鉴权（R2）、4 个边缘 wire 适配器（map/02 #9–12）。
+- **R5 不可达**：durable 22,473 行、codemode 2,597 行（quickjs-wasi；B161）、chord 8,817 行、pico3、tool-search/virtual-models/nested-tool-calls（B162）、22 个长尾 provider 及 4 条对应鉴权（R2）、4 个边缘 wire 适配器（map/02 #9–12）、`streamProxy`（map/03 #68，批 agent-core-4 裁决①：pi 侧存活但 bin pi 主流不可达）。
 - pi-java-web（pi 无对应物）与 sqlite 模块存废不计完成度（B59：保留模块、不主张删）。
 
 ---
