@@ -165,4 +165,50 @@ class ArgsParserTest {
         assertThat(ArgsParser.parse(new String[] {"-h"}).help()).isTrue();
         assertThat(ArgsParser.parse(new String[] {"-v"}).version()).isTrue();
     }
+
+    // ── B236（docs/11 §3.4）：tools/excludeTools 的 null ≙ 缺席语义＋解析期校验 ──
+
+    @Test
+    void absentToolFlagsYieldNullNotEmpty() {
+        var args = ArgsParser.parse(new String[] {});
+        assertThat(args.tools()).isNull();
+        assertThat(args.excludeTools()).isNull();
+    }
+
+    @Test
+    void blankToolsValueIsAnEmptyAllowlist() {
+        // pi args.ts:151-161：给了但全空 ⇒ []（空 allowlist，零工具），与缺席不同。
+        var args = ArgsParser.parse(new String[] {"--tools", ""});
+        assertThat(args.tools()).isEmpty();
+        assertThat(args.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void mixedToolsEntriesAreAnErrorDiagnostic() {
+        // pi getToolListError 逐字文案 + `${arg}: ${error}` 前缀（窄差 D1：恒 --tools）。
+        var args = ArgsParser.parse(new String[] {"--tools", "read,+grep"});
+        assertThat(args.diagnostics())
+            .anyMatch(d -> "error".equals(d.type())
+                && d.message().equals(
+                    "--tools: tool names cannot be mixed with +name or -name entries"));
+        // 校验失败不写 tools（≙ pi 不写 result.tools）。
+        assertThat(args.tools()).isNull();
+    }
+
+    @Test
+    void modifierPatternIsAnErrorDiagnosticEvenViaShortAlias() {
+        var args = ArgsParser.parse(new String[] {"-t", "-gr*"});
+        assertThat(args.diagnostics())
+            .anyMatch(d -> "error".equals(d.type())
+                && d.message().equals(
+                    "--tools: +name and -name entries take exact tool names, not patterns: -gr*"));
+        assertThat(args.tools()).isNull();
+    }
+
+    @Test
+    void pureModifierToolsListIsAccepted() {
+        var args = ArgsParser.parse(new String[] {"--tools", "+grep,-bash"});
+        assertThat(args.tools()).containsExactly("+grep", "-bash");
+        assertThat(args.diagnostics()).isEmpty();
+    }
 }

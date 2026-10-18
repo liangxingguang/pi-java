@@ -3,6 +3,9 @@ package com.pijava.coding.agent.cli;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+
+import com.pijava.coding.agent.core.ToolSelection;
+
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -90,6 +93,11 @@ public final class ArgsParser {
     @Option(names = "--exclude-tools")
     String excludeTools;
 
+    /** --tools/-t 是否实给（pi result.tools 的 undefined vs [] 之分，args.ts:151-161）。 */
+    boolean toolsFlagPresent;
+    /** --exclude-tools/-xt 是否实给。 */
+    boolean excludeToolsFlagPresent;
+
     @Option(names = "--no-tools")
     boolean noTools;
 
@@ -172,6 +180,8 @@ public final class ArgsParser {
             return parser.toArgs(diagnostics);
         }
         var parser = (ArgsParser) result.commandSpec().userObject();
+        parser.toolsFlagPresent = result.hasMatchedOption("--tools");
+        parser.excludeToolsFlagPresent = result.hasMatchedOption("--exclude-tools");
         return parser.toArgs(diagnostics);
     }
 
@@ -227,11 +237,22 @@ public final class ArgsParser {
             trustOverride = false;
         }
 
+        // pi args.ts:151-161：--tools 解析期校验；失败 error 诊断且不写 tools（≙ null）。
+        var toolEntries = splitOrNull(tools, toolsFlagPresent);
+        if (toolEntries != null) {
+            var error = ToolSelection.getToolListError(toolEntries);
+            if (error != null) {
+                // pi `${arg}: ${error}`；窄差 D1：picocli 不暴露实敲别名，前缀恒 --tools。
+                diagnostics.add(new Args.ArgDiagnostic("error", "--tools: " + error));
+                toolEntries = null;
+            }
+        }
+
         return new Args(
             provider, model, apiKey, baseUrl, systemPrompt, List.copyOf(appendSystemPrompt),
             thinking, continue_, resume, help, version, mode, port, name, noSession,
             session, sessionId, fork, sessionDir,
-            split(models), split(tools), split(excludeTools),
+            split(models), toolEntries, splitOrNull(excludeTools, excludeToolsFlagPresent),
             noTools, noBuiltinTools, List.copyOf(extensions), noExtensions,
             List.copyOf(skills), noSkills,
             List.copyOf(promptTemplates), noPromptTemplates,
@@ -239,6 +260,14 @@ public final class ArgsParser {
             print, export, listModels, offline, tuiMode, verbose, debug, tracePayloads,
             trustOverride,
             parsedMessages, parsedFileArgs, parsedUnmatched, diagnostics);
+    }
+
+    /**
+     * tools/excludeTools 专用 split：旗标缺席 ⇒ {@code null}（≙ pi undefined）；
+     * 给了但全空白 ⇒ 空表（pi 的 [] —— {@code --tools ""} 是空 allowlist，零工具）。
+     */
+    private static List<String> splitOrNull(String commaSeparated, boolean present) {
+        return present ? split(commaSeparated) : null;
     }
 
     private static List<String> split(String commaSeparated) {

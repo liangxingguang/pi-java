@@ -26,8 +26,9 @@ import java.util.List;
  * @param fork                  fork from an existing session
  * @param sessionDir            session storage directory (Phase 4)
  * @param models                model patterns for Ctrl+P cycling
- * @param tools                 tool allowlist (comma separated)
- * @param excludeTools          tool denylist (comma separated)
+ * @param tools                 tool allowlist 条目（裸名/`*` 模式/`+name`/`-name`）；
+ *                              null = 旗标缺席（≙ pi undefined），空表 = 给了但全空
+ * @param excludeTools          tool denylist 条目（裸名/`*` 模式）；null = 旗标缺席
  * @param noTools               disable all tools
  * @param noBuiltinTools        disable built-in tools only
  * @param extensions            extension sources (repeatable)
@@ -108,8 +109,8 @@ public record Args(
     public Args {
         appendSystemPrompt = copy(appendSystemPrompt);
         models = copy(models);
-        tools = copy(tools);
-        excludeTools = copy(excludeTools);
+        // tools/excludeTools 不归一化：null ≙ pi 的 undefined（旗标缺席），与空表语义不同
+        //（docs/11 §3.4）。
         extensions = copy(extensions);
         skills = copy(skills);
         promptTemplates = copy(promptTemplates);

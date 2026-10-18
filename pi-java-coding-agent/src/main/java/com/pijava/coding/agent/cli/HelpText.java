@@ -42,10 +42,13 @@ public final class HelpText {
               --no-session                   Do not save a session
               --name, -n <name>              Session display name
               --models <list>                Ctrl+P cycling model list (comma separated)
-              --tools, -t <list>             Tool allowlist (comma separated)
-              --exclude-tools, -xt <list>    Tool denylist (comma separated)
-              --no-tools, -nt                Disable all tools
-              --no-builtin-tools, -nbt       Disable built-in tools only
+              --tools, -t <tools>            Comma-separated allowlist of tool names or patterns (*) to enable
+                                             Keeps MCP tools unless an entry starts with mcp__
+                                             Only +name/-name entries add to or remove from the defaults
+              --exclude-tools, -xt <tools>   Comma-separated denylist of tool names or patterns (*) to disable
+                                             Applies to all tools, MCP tools included
+              --no-tools, -nt                Disable all tools by default (built-in and extension)
+              --no-builtin-tools, -nbt       Disable built-in tools by default but keep extension/custom tools enabled
               --approve, -a                  Trust project local files for this run
               --no-approve, -na              Ignore project local files for this run
               --extension, -e <source>       Load extension (repeatable; Phase 6)
