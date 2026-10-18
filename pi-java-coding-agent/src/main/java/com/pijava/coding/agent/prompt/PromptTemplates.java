@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 
 import com.pijava.agent.tool.FileInfo;
 import com.pijava.agent.tool.FileSystem;
+import com.pijava.coding.agent.core.source.SourceInfo;
 
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
@@ -30,13 +31,18 @@ public final class PromptTemplates {
      * <p>{@code argumentHint} 对位 pi {@code PromptTemplate.argumentHint?}
      * （prompt-templates.ts:19，读 {@code argument-hint} frontmatter :144）；
      * {@code filePath} 为模板文件路径。两者 {@code null} ≙ pi 的缺席。</p>
+     *
+     * <p>B247：{@code sourceInfo} 对位 pi {@code PromptTemplate.sourceInfo}
+     * （prompt-templates.ts:16），由加载期按来源目录打标（:235-261）；
+     * 兼容构造/手造实例为 {@code null} ≙ pi 的缺席。</p>
      */
     public record PromptTemplate(String name, String description, String content,
-                                 String argumentHint, String filePath) {
+                                 String argumentHint, String filePath,
+                                 SourceInfo sourceInfo) {
 
-        /** 兼容构造：无 {@code argumentHint}/{@code filePath}。 */
+        /** 兼容构造：无 {@code argumentHint}/{@code filePath}/{@code sourceInfo}。 */
         public PromptTemplate(String name, String description, String content) {
-            this(name, description, content, null, null);
+            this(name, description, content, null, null, null);
         }
     }
 
@@ -68,28 +74,45 @@ public final class PromptTemplates {
             } catch (IOException e) {
                 continue; // pi :271-273：显式路径不存在 ⇒ 静默跳过（无诊断）
             }
+            // B247（pi :257-261）：显式路径 scope 缺省落 temporary；baseDir
+            // 目录入参⇒自身、文件入参⇒父目录（pi :259 statSync 分支）。
             if ("dir".equals(info.kind())) {
-                loadFromDir(fs, info.path(), templates, diagnostics);
+                loadFromDir(fs, info.path(), templates, diagnostics,
+                    SourceInfo.Scope.TEMPORARY, info.path());
             } else if ("file".equals(info.kind()) && info.path().endsWith(".md")) {
-                loadFromFile(fs, info.path(), templates, diagnostics);
+                loadFromFile(fs, info.path(), templates, diagnostics,
+                    SourceInfo.Scope.TEMPORARY, parentDir(info.path()));
             }
         }
         return new LoadResult(templates, diagnostics);
     }
 
     /**
-     * pi {@code includeDefaults} 分支（:262-265）：默认目录两路 ——
-     * {@code agentDir/prompts}（user）与 {@code cwd/.pi-java/prompts}（project，
-     * 品牌分叉：pi 是 {@code .pi}，窄差登记 docs/09 §14）。缺失目录静默。
+     * pi {@code includeDefaults} 分支（:262-265）＋ {@code getSourceInfo} 打标
+     * （:247-256）：默认目录两路 —— {@code agentDir/prompts}（scope=user）与
+     * {@code cwd/.pi-java/prompts}（scope=project，品牌分叉：pi 是 {@code .pi}，
+     * 窄差登记 docs/09 §14），baseDir 各为所属 prompts 目录。缺失目录静默
+     * （零诊断，pi :164-166 existsSync 短路）。
      */
     public static LoadResult loadDefaults(FileSystem fs, String agentDir, String cwd) {
-        return load(fs, List.of(
-            agentDir + java.io.File.separator + "prompts",
-            cwd + java.io.File.separator + ".pi-java" + java.io.File.separator + "prompts"));
+        var sep = java.io.File.separator;
+        var globalDir = agentDir + sep + "prompts";
+        var projectDir = cwd + sep + ".pi-java" + sep + "prompts";
+        var templates = new ArrayList<PromptTemplate>();
+        var diagnostics = new ArrayList<Diagnostic>();
+        loadFromDir(fs, globalDir, templates, diagnostics, SourceInfo.Scope.USER, globalDir);
+        loadFromDir(fs, projectDir, templates, diagnostics, SourceInfo.Scope.PROJECT, projectDir);
+        return new LoadResult(templates, diagnostics);
     }
 
     private static void loadFromDir(FileSystem fs, String dir,
-            List<PromptTemplate> templates, List<Diagnostic> diagnostics) {
+            List<PromptTemplate> templates, List<Diagnostic> diagnostics,
+            SourceInfo.Scope scope, String baseDir) {
+        try {
+            fs.fileInfo(dir);
+        } catch (IOException e) {
+            return; // pi :164-166：目录不存在 ⇒ 静默短路（零诊断）
+        }
         List<FileInfo> entries;
         try {
             entries = fs.listDir(dir, false);
@@ -102,12 +125,13 @@ public final class PromptTemplates {
             if (!"file".equals(entry.kind()) || !entry.path().endsWith(".md")) {
                 continue;
             }
-            loadFromFile(fs, entry.path(), templates, diagnostics);
+            loadFromFile(fs, entry.path(), templates, diagnostics, scope, baseDir);
         }
     }
 
     private static void loadFromFile(FileSystem fs, String filePath,
-            List<PromptTemplate> templates, List<Diagnostic> diagnostics) {
+            List<PromptTemplate> templates, List<Diagnostic> diagnostics,
+            SourceInfo.Scope scope, String baseDir) {
         String raw;
         try {
             raw = new String(fs.readBinary(filePath), StandardCharsets.UTF_8);
@@ -125,8 +149,17 @@ public final class PromptTemplates {
         // pi :144：argument-hint frontmatter ⇒ argumentHint。
         String argumentHint =
             parsed.frontmatter().get("argument-hint") instanceof String h ? h : null;
+        // B247（pi :235-261 经 createSyntheticSourceInfo，source-info.ts:33-46）：
+        // source 恒 "local"、origin 恒 top-level，scope/baseDir 由调用方按来源定。
         templates.add(new PromptTemplate(fileName, description, parsed.body(),
-            argumentHint, filePath));
+            argumentHint, filePath,
+            new SourceInfo(filePath, "local", scope, SourceInfo.Origin.TOP_LEVEL, baseDir)));
+    }
+
+    /** 父目录（pi {@code dirname}）；无分隔符时返回空串。 */
+    private static String parentDir(String path) {
+        int slash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+        return slash >= 0 ? path.substring(0, slash) : "";
     }
 
     private static String baseNameWithoutMd(String path) {
