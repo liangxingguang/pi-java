@@ -292,7 +292,15 @@ public final class AgentSession implements AutoCloseable {
         var tools = new ToolRegistry(null);
         var commandPrefix = effective.shellCommandPrefix == null
             ? "" : effective.shellCommandPrefix;
-        var toolList = ToolSetFactory.createCodingTools(commandPrefix);
+        // B236（docs/11 §3.6）：注册面 = pi createAllTools 八件（tools/index.ts:213-224，
+        // 含 powershell——批 4 只落了本体，注册面在本批）经 pi _isAllowedTool 门过滤
+        //（agent-session.ts:1537-1541 → _refreshToolRegistry :3514）：allowlist 不匹配或
+        // excluded 的内置工具**不注册**；空名单（--no-tools / --tools ""）注册面空
+        //（pi getAllTools()==[]，default-tools-setting.test.ts:155）。
+        var selection = SessionSetup.resolveToolSelection(args, settings);
+        var toolList = ToolSetFactory.createAllTools(commandPrefix).stream()
+            .filter(t -> selection.isAllowed(t.name()))
+            .toList();
         tools.registerAll(toolList);
 
         var promptTemplates = new PromptTemplateRegistry();
@@ -487,7 +495,7 @@ public final class AgentSession implements AutoCloseable {
             .systemPrompt(SessionSetup.customPromptFor(args))
             .promptGuidelines(SessionSetup.DEFAULT_PROMPT_GUIDELINES)
             .appendSystemPrompt(SessionSetup.appendSystemPromptFor(args))
-            .activeTools(SessionSetup.activeTools(args, toolList))
+            .activeTools(SessionSetup.activeTools(selection, toolList))
             .toolRegistry(tools)
             .toolContext(policyToolContext)
             .steeringMode(SessionSetup.queueMode(effective.steeringMode))

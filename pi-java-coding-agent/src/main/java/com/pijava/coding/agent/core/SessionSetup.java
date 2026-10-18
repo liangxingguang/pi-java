@@ -25,24 +25,24 @@ final class SessionSetup {
 
     private SessionSetup() {}
 
-    /** 按 CLI 过滤参数确定激活的工具集。 */
-    static Set<AgentTool<?, ?>> activeTools(Args args, List<AgentTool<?, ?>> toolList) {
-        if (args.noTools() || args.noBuiltinTools()) {
-            return Set.of();
-        }
-        if (args.tools() != null && !args.tools().isEmpty()) {
-            var allow = Set.copyOf(args.tools());
-            return toolList.stream()
-                .filter(t -> allow.contains(t.name()))
-                .collect(Collectors.toSet());
-        }
-        if (args.excludeTools() != null && !args.excludeTools().isEmpty()) {
-            var deny = Set.copyOf(args.excludeTools());
-            return toolList.stream()
-                .filter(t -> !deny.contains(t.name()))
-                .collect(Collectors.toSet());
-        }
-        return Set.copyOf(toolList);
+    /** pi {@code sdk.ts:280-294} 的装配解析（B236/docs/11 §3.2）。 */
+    static ToolSelection.Resolved resolveToolSelection(Args args, SettingsManager settings) {
+        return ToolSelection.resolve(
+            args.tools(), args.excludeTools(),
+            args.noTools(), args.noBuiltinTools(),
+            settings.accessors().getDefaultTools());
+    }
+
+    /**
+     * pi 的激活面（agent-session.ts:3566-3585）：allowlist 在册 ⇒ 注册工具中匹配者
+     * 全激活（「点名/匹配即激活」，含默认不激活的 powershell）；否则 ⇒ 初始激活名表
+     * ∩ 注册面。{@code _pendingToolNames} 的晚注册臂（MCP）随 B221 ⑫b（窄差 D4）。
+     */
+    static Set<AgentTool<?, ?>> activeTools(ToolSelection.Resolved selection,
+                                            List<AgentTool<?, ?>> registered) {
+        return registered.stream()
+            .filter(t -> selection.isActiveOnLoad(t.name()))
+            .collect(Collectors.toSet());
     }
 
     /**

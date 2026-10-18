@@ -83,13 +83,10 @@ class PowerShellToolTest {
             "read", "bash", "powershell", "edit", "write", "grep", "find", "ls");
     }
 
-    @Test
-    void defaultCodingToolsStayAtSevenWithoutPowerShell() {
-        // pi DEFAULT_TOOL_NAMES 恒四件、createAllTools 注册八件 —— 默认编码集不含
-        // powershell（Windows 裸跑也不激活，裁决③）。
-        var names = ToolSetFactory.createCodingTools(null).stream().map(t -> t.name()).toList();
-        assertThat(names).containsExactly("read", "bash", "edit", "write", "grep", "find", "ls");
-    }
+    // 原 defaultCodingToolsStayAtSevenWithoutPowerShell 随 createCodingTools 删除
+    //（裁决② docs/11 §3.8）——「默认激活四件」的语义覆盖在 coding-agent 的
+    // ToolSelectionTest.bareRunRegistersAllAndActivatesDefaultFour /
+    // DefaultToolsSelectionTest（agent-core 看不见 ToolSelection，此层不重述）。
 
     private static boolean isWindows() {
         return System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
