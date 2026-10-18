@@ -110,6 +110,19 @@ public final class SettingsAccessors {
         manager.markModified("enabledModels");
     }
 
+    /**
+     * pi {@code getDefaultTools}（settings-manager.ts:1328-1333）：解析后的
+     * {@code defaultTools} 选择；无任何层设置 ⇒ {@code null}（≙ pi undefined ⇒ 消费点
+     * 回落 {@link ToolSelection#DEFAULT_TOOL_NAMES}）。
+     */
+    public List<String> getDefaultTools() {
+        var tools = manager.effective().defaultTools;
+        if (tools == null) {
+            return null;
+        }
+        return ToolSelection.resolveDefaultTools(tools);
+    }
+
     public String getTuiMode() {
         return manager.effective().tuiMode;
     }

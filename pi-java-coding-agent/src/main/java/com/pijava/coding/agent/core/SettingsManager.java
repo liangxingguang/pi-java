@@ -162,7 +162,12 @@ public final class SettingsManager {
         var baseNode = (ObjectNode) Json.mapper().valueToTree(base);
         var overrideNode = (ObjectNode) Json.mapper().valueToTree(override);
         deepMerge(baseNode, overrideNode);
-        return Json.mapper().convertValue(baseNode, Settings.class);
+        var merged = Json.mapper().convertValue(baseNode, Settings.class);
+        // pi mergeDefaultTools（settings-manager.ts:124-129）经 deepMergeSettings 特判（:139-145）：
+        // JSON 深合并里数组整体替换；pi 对 defaultTools 另立语义——覆盖层全是 +name/-name
+        // 修饰符时追加到继承选择之后（逐层修饰），否则整体替换。
+        merged.defaultTools = ToolSelection.mergeDefaultTools(base.defaultTools, override.defaultTools);
+        return merged;
     }
 
     private static void deepMerge(ObjectNode base, ObjectNode override) {

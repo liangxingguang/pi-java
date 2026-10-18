@@ -51,6 +51,12 @@ public final class Settings {
     public Terminal terminal;
     public Image images;
     public List<String> enabledModels;
+    /**
+     * pi {@code defaultTools}（settings-schema.ts:326-331）：初始工具选择——裸名替换
+     * 继承选择，{@code +name}/{@code -name} 增删。分层 merge 特判与解析见
+     * {@link ToolSelection#mergeDefaultTools}/{@link ToolSelection#resolveDefaultTools}。
+     */
+    public List<String> defaultTools;
     public String doubleEscapeAction;
     public String treeFilterMode;
     public Integer editorPaddingX;
