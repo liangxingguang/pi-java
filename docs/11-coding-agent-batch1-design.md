@@ -1,9 +1,9 @@
-# 26 coding-agent 批 1 设计 —— B236 工具选择模式面（`--tools` pattern/modifier/`mcp__` ＋ `defaultTools` 设置）
+# 11 coding-agent 批 1 设计 —— B236 工具选择模式面（`--tools` pattern/modifier/`mcp__` ＋ `defaultTools` 设置）
 
-> **状态：🔵 待审核**
+> **状态：🟢 审核通过（2026-10-18）——实施中**
 > 基线：pi `ea448f454`（2026-10-11）；pi-java main（agent-core 批 4 闭环后，`c5f0f06c`）。
 > 所有 pi 侧 `file:line` 均经 `git -C D:/workplaceForai/pi show ea448f454:<path>` 实读，未读 pi 工作树。
-> 前批：`24-agent-core-batch4-design.md`（已闭环）。
+> 前批：`09-agent-core-batch4-design.md`（已闭环）。
 
 ## 0. 批次卡
 
