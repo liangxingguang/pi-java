@@ -9,6 +9,7 @@ import com.pijava.coding.agent.cli.Args;
 import com.pijava.coding.agent.core.AgentSession;
 import com.pijava.coding.agent.core.KeybindingsManager;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
+import com.pijava.coding.agent.core.slash.PromptTemplateItems;
 import com.pijava.coding.agent.core.slash.SkillCommandItems;
 import com.pijava.coding.agent.core.slash.SlashContext;
 import com.pijava.coding.agent.modes.InteractiveMode;
@@ -119,9 +120,15 @@ public final class PiTuiApp {
                     name, command.argumentHint(), command.description());
             })
             .toList());
+        // B247（pi interactive-mode.ts:787-792）：模板臂——无条件（pi 无门，
+        // 对照 skill 臂的开关），序在内置之后、skill 之前（pi :820-823
+        // 内置→模板→扩展→skill；java 无扩展臂，B221）。
+        for (var entry : PromptTemplateItems.list(session.services().promptTemplates().all())) {
+            items.add(new SlashCompleter.CommandItem(
+                entry.name(), entry.argumentHint(), entry.description()));
+        }
         // B244（pi interactive-mode.ts:803-815）：开关开 ⇒ 每个技能一个
-        // skill:<name> 补全条目，排在内置之后（pi 序：内置→模板→扩展→skill；
-        // java 无模板/扩展臂，追加即等价）。
+        // skill:<name> 补全条目，排在模板之后。
         var enabled = session.services().settings().accessors().getEnableSkillCommands();
         for (var entry : SkillCommandItems.list(session.harness().skillManager().all(), enabled)) {
             items.add(new SlashCompleter.CommandItem(entry.name(), null, entry.description()));
