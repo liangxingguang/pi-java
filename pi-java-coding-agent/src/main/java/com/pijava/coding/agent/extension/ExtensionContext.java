@@ -9,6 +9,9 @@ import com.pijava.ai.provider.ProviderRegistry;
 import com.pijava.coding.agent.core.SessionServices;
 import com.pijava.coding.agent.core.SettingsManager;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
+import com.pijava.coding.agent.extension.event.ExtensionEvent;
+import com.pijava.coding.agent.extension.event.ExtensionEventHandler;
+import com.pijava.coding.agent.extension.event.ExtensionEventSpec;
 
 /**
  * 扩展注册上下文 —— 包装 {@link SessionServices}，另补一个 {@link SkillManager}
@@ -38,6 +41,33 @@ public interface ExtensionContext {
 
     /** 便捷访问底层服务集合。 */
     SessionServices services();
+
+    /**
+     * 订阅扩展事件（pi {@code ExtensionAPI.on()}，loader.ts:272-288；裁决① 的
+     * spec-token 单方法 —— pi 的 41 个重载只是类型约束，运行时全走一个 {@code on()}）。
+     *
+     * <p>注册序即触发序；返回的退订闭包按实例移除、空表删键（pi 逐字语义）。
+     * 只能在扩展 {@code register} 期间经 per-extension 上下文调用
+     * （pi 的 {@code assertActive} 同构）——共享基础上下文调用会抛
+     * {@link IllegalStateException}。</p>
+     *
+     * @param spec    事件规格令牌（{@code ExtensionEventSpec.CONTEXT} 等）
+     * @param handler 处理器；返回 {@code null ≙ pi 的 undefined}（不发言）
+     * @param <E>     事件载荷类型
+     * @param <R>     结果类型（观察型为 {@link Void}）
+     * @return 退订闭包
+     */
+    <E extends ExtensionEvent, R> AutoCloseable on(ExtensionEventSpec<E, R> spec,
+                                                   ExtensionEventHandler<E, R> handler);
+
+    /**
+     * 派生 per-extension 上下文（docs/14：错误按扩展名归属，pi 的 {@code extensionPath}
+     * 对齐点）。默认返回自身 —— 无归属概念的实现用它保持 {@link ExtensionManager}
+     * 装配路径不炸。
+     */
+    default ExtensionContext forExtension(String extensionName) {
+        return this;
+    }
 
     /**
      * 落盘一条 custom_message（对齐 pi {@code pi.sendMessage} 的仅落盘路径）：

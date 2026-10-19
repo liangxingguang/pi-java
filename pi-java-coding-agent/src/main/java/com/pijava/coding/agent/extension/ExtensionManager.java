@@ -101,6 +101,8 @@ public final class ExtensionManager {
 
     private void load(PiExtension ext) {
         loaded.put(ext.name(), ext);
-        ext.register(context);
+        // docs/14：per-extension 上下文 —— 扩展的 on() 订阅带扩展名归属
+        // （pi 的 extension.handlers 按扩展分桶 + 错误按 extensionPath 归属）。
+        ext.register(context.forExtension(ext.name()));
     }
 }
