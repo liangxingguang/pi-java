@@ -102,6 +102,15 @@ public sealed interface AgentSessionEvent {
     record BashExecutionUpdate(String id, String delta) implements AgentSessionEvent {}
 
     /**
+     * 扩展错误上报（docs/14 裁决⑥）—— pi {@code extension_error}
+     * （rpc-mode.ts:349）：pi 的 {@code emitError} 不进事件流、走独立 listener，
+     * RPC 写成线上事件；java 把它桥成本事件变体，RPC 经既有 {@code subscribe}
+     * 通道上线（线形逐字 pi），TUI 暂不展示（窄差 D5，归 D′ 域）。
+     */
+    record ExtensionError(com.pijava.coding.agent.extension.ExtensionError error)
+            implements AgentSessionEvent {}
+
+    /**
      * 交互层状态文本（<b>方言，pi 无此事件</b>）。
      *
      * <p>B175（原 docs/26 §3.4）：pi 的 InteractiveMode 是 UI/会话混合对象，

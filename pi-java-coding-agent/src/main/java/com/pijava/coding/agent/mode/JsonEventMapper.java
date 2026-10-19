@@ -188,6 +188,14 @@ public final class JsonEventMapper {
                 }
                 node.put("delta", b.delta());
             }
+            case AgentSessionEvent.ExtensionError x -> {
+                // pi 逐字（rpc-mode.ts:349）：{type, extensionPath, event, error} ——
+                // extensionPath 在 java 是扩展名；stack 不上线（pi 同）。
+                node.put("type", "extension_error");
+                node.put("extensionPath", x.error().extensionName());
+                node.put("event", x.error().event());
+                node.put("error", x.error().message());
+            }
             // ── 工具执行生命周期（包⑦，原 docs/34）──────────────────────────────
             // pi 对非 message_update 事件**原样透传**（json-event.ts:48-51 的
             // `return event;`）⇒ 这三条的载荷在 pi 的线上逐字节可见。三条变体的

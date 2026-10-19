@@ -1553,14 +1553,23 @@ public final class AgentSession implements AutoCloseable {
 
     // ── Internals ────────────────────────────────────────────
 
-    /** 加载扩展（ServiceLoader + 扩展目录 JAR），--no-extensions 时跳过。 */
+    /**
+     * 加载扩展（ServiceLoader + 扩展目录 JAR），--no-extensions 时跳过
+     * （pi 无扩展＝runner 空表，行为等价）。
+     *
+     * <p>docs/14 §3.6：事件面接线 —— 总线随上下文建；引擎钩子桥**恒装**（裁决②）；
+     * 宿主事件桥在装配期订阅（裁决⑤：先于模式层 TUI/RPC，与 pi「扩展先」同向）；
+     * 扩展错误经 {@link AgentSessionEvent.ExtensionError} 进会话事件流（裁决⑥：
+     * RPC 同管道上线，pi 的 {@code emitError} 独立 listener 对位）。</p>
+     */
     private static void loadExtensions(Args args, SessionServices services,
                                        AgentHarness harness, ExtensionUI ui,
                                        AgentSession owner) {
         if (args.noExtensions()) {
             return;
         }
-        var context = new DefaultExtensionContext(services, harness.skillManager(), ui);
+        var bus = new com.pijava.coding.agent.extension.ExtensionEventBus();
+        var context = new DefaultExtensionContext(services, harness.skillManager(), ui, bus);
         // session 由 SessionPersistence 稍后赋值，惰性求值绑定供 sendMessage 落盘用。
         context.bindSession(() -> owner.session());
         var manager = new ExtensionManager(context);
@@ -1571,6 +1580,12 @@ public final class AgentSession implements AutoCloseable {
         for (var jar : ExtensionPackageManager.project().installedJars()) {
             manager.loadJar(jar);
         }
+        com.pijava.coding.agent.extension.bridge.EngineHookBridge.install(
+            harness.hookSystem(), owner.laneName(), bus, context);
+        owner.subscribe(new com.pijava.coding.agent.extension.bridge.SessionEventBridge(
+            bus, context, harness.getThinkingLevel())::onEvent);
+        bus.onError(err ->
+            owner.emitSessionEvent(new AgentSessionEvent.ExtensionError(err)));
         applySessionStartResources(harness, services,
             manager.sessionStartResources(), args, owner);
     }
