@@ -71,6 +71,7 @@
 | # | 面 | 条目 | 现状与出处 |
 |---|---|---|---|
 | B116 | 协议面 | StreamDone 的 UsageInfo 嵌套包裹是 Java 方言 | pi 的 usage 只挂在消息上，proxy 线另发扁平 usage。2026-10-12 取证：线格式两处均已改成 pi 的扁平形状（`JsonEventMapper.java:320-327,351-373`），仅内部组件保留嵌套（原 docs/08 §2.2） |
+| B248 | 协议面 | **provider 请求面扩展事件四件**：`before_provider_request`/`before_provider_headers`/`after_provider_response`/`provider_stream_event` | 批 coding-agent-4（docs/14）新登记。pi 经 ai 层注入口 firing（sdk.ts:384-386/356-363/388-395 的 `onPayload`/`transformHeaders`/`onResponse`）；java ai 模块**无这三个注入口**（`SimpleOptions.java:45` 明文不移植），引擎 `before_payload`/`before_navigation` 钩子**连 firing 点都没有**（全仓 grep 零命中）——不是桥接能解决的，是 ai 层先开口子的事。map/04 D-17/18/19/20 四行挂此 |
 | B156 | 内部 | ModelCompat 逐组件重建会静默丢字段 | 新增组件时所有构造点都要改，漏改就静默缺省。2026-10-12 评估：全仓 13 个构造点集中在 4 个文件且有逐字段注释，列入 backlog 不强制改（原 docs/08 §2.2） |
 
 **compat 面细碎登记**（pi 有标注或消费、Java 没有的字段与数据位）：
@@ -126,6 +127,8 @@
 | B163 | 用户可见 | 主题/色彩系统差距大 | pi 3,176 行（theme、system-theme、oklab 等），Java 74 行 |
 | B245 | 混合 | **tree 扩展事件＋TUI 摘要流**（批 agent-core-4 新登记，docs/09 §13.5） | ① `session_before_tree`/`session_tree` 扩展事件（types.ts:817-846,1488-1501，含 `result.summary` 整体替代生成器的 fromHook=true 旁路）；② TUI 树选择器摘要三选对话框（interactive-mode.ts:5559-5706）＋摘要期 Esc 换绑 `abortBranchSummary`（:5637-5640）＋`skipPrompt` 弹窗门（:5590，设置项批 4 已备）。挂扩展事件（D 域）与 TUI 两族；`navigateTree`/`abortBranchSummary` 本体批 4 已落 |
 | B246 | 混合 | **工具选择的 reload 臂＋SDK `tools` 选项抛错面**（批 coding-agent-1 新登记，docs/11 裁决④） | pi `usesDefaultTools`/`defaultToolModifiers`（`sdk.ts:472-473`）只在 `reload()` 有语义（`agent-session.ts:3660-3685`：设置重载后激活**新增**默认工具、移除的保持激活、`-name` 移除的保持移除），依附扩展运行时重载面；java 无 reload 面（设置改动走 accessors 即效）。SDK `tools` 选项的 `Invalid tools option` 抛错（`sdk.ts:280-281`）java 无 SDK 面；CLI 等价物＝解析期 error 诊断（批 1 已落）。触发条件＝java 出现 session reload/扩展运行时或 SDK 面 |
+| B249 | 协议面 | **扩展事件结果臂族**（批 coding-agent-4 新登记，docs/14 §6） | 观察面批 4 已桥（D 域 16 行对齐），本族是**结果型/cancel 型**：① `message_end` 替换臂（agent-session.ts:1316-1333，有持久化后果——java eventHub 同步广播无 await 语义，需先裁决）；② `turn_end`/`agent_before_settle` boundary 派发（emitBoundary，runner.ts:1029）；③ `input`、`user_bash`、`before_agent_start`（systemPrompt 改写，types.ts:1468）；④ `session_before_switch`/`session_before_fork` cancel；⑤ `session_before_compact` cancel＋全载荷＋`session_compact` 的 `compactionEntry`（窄差 D4——需 CompactionExecutor 把条目本体带进事件）。map/04 D-5/6/7/21/24/29/32/40/41 挂此 |
+| B250 | 协议面 | **会话生命周期发射点**：`session_start`/`session_shutdown` | 批 coding-agent-4（docs/14）新登记。`session_start` 需 reason 五级映射＋`previousSessionFile` 载荷；`session_shutdown` pi 走 `emitSessionShutdownEvent`（runner.ts:255-266 的 hasHandlers 门）。java 有装配/关闭点（`AgentSession.create`/`close`）但无事件发射。map/04 D-3/D-10 挂此 |
 
 ### 3.4 TUI（优先级最低，web UI 为主）
 
@@ -328,6 +331,13 @@
 - 【决定】2026-10-19 批 coding-agent-3（docs/13）：① 注册面两层落地——补全目录模板臂（`PromptTemplateItems`，无条件＋u/p/t 标签＋argumentHint 透传，序在内置后 skill 前）＋dispatch 对**已注册模板名**透传（`SlashContext.session()` 查注册表，null 守卫）；② 加载期 sourceInfo 打标——`PromptTemplate` 记录增 `sourceInfo`（新叶子包 `core.source.SourceInfo`，裁决⑦防 core↔prompt 包环），`loadDefaults` 拆 user/project 两路、显式路径 temporary＋pi baseDir 规则（目录⇒自身、文件⇒父目录）；③ RPC 形状一次收平——`RpcSlashCommand` 改四组件（删 `argumentHint`，裁决⑤）、去内置（裁决①，pi 语义＝可经 prompt 调用，内部消费者零命中复核）、`data` 包 `{commands}` 键（裁决②，批 2 偏差②回本）、skill 臂补五字段 sourceInfo（EXPLICIT→temporary）。**裁决③**：扩展臂随 B221（java 扩展命令与内置同池、无 sourceInfo 溯源），不新立 B 号、差入窄差 D5。**裁决④**：透传按「已注册模板名」判定，D3 保持不扩成任意 slash 透传。**裁决⑥**：sourceInfo 值域落 `"local"`/`"top-level"`＋scope 三值子集（npm:/git:/package 随包域，窄差 D2 同族）。
 - 【风险/代价】线格式三变（去内置/改形/包键）——外部裸读旧形状脚本断，内部 client/server/web 零命中（2026-10-19 grep 复核）；窄差：D3（更新）未识别 slash 放行 `/skill:` 前缀＋已注册模板名，其余仍 Unknown command；D5（新）`get_commands` 无扩展臂（当前无触发者——java 扩展命令注册面无实际生产者）。[线格式用户可见；D5 当前空转]
 - 触发条件：B221 落地时同批收编扩展臂（销 D5）；java 包源加载落地时回收 D2 族（npm:/git: 标签＋package origin）。出处：docs/13 §5。
+
+### map/04-批 coding-agent-4（docs/14）— D 域地基：扩展事件订阅面＋双源桥接
+
+- 【场景】pi 的扩展事件面＝`ExtensionAPI.on()` 41 重载＋loader 订阅表＋runner 发射语义。java 的引擎钩子（agent-core `HookSystem` 13 钩）与宿主事件（`AgentSessionEvent` 24 变体）早已各自生产，但 `ExtensionContext` 不暴露订阅面——扩展一个事件也订不到。D 域 Σ权重 83 是 map/04 最大域（单独拉低模块 14.6pp）。
+- 【决定】2026-10-20 批 coding-agent-4（docs/14）：① 订阅面——`ExtensionContext.on(spec, handler)`（裁决① spec-token 单方法，非 41 便捷方法、非裸字符串）＋`ExtensionEventBus`（注册序触发、退订按实例移除空表删键、`emitError` 独立通道、`hasHandlers` 快走）＋`DefaultExtensionContext.forExtension` per-extension 委托（错误按扩展名归属，pi `extensionPath` 对位）；② 引擎钩子族 3 适配器恒装快走（裁决②）——`context` 两阶段（系统消息过滤、原地可变列表＋**引用相等**快照〔裁决④〕、`restoreSystemMessages` 逐字、阶段二丢头系统上报仍采用）、`tool_call`（block 短路、**异常向上传播**〔裁决③〕、input 原地可变链显式回流）、`tool_result`（逐字段合并＋structuredContent 丢弃规则逐字）；③ 宿主事件族 14 事件 `SessionEventBridge`（裁决⑤ 装配期订阅先于模式层；turnIndex 复位/递增、previousLevel 桥内跟踪、CompactionEnd 成功/失败两支）；④ 错误通道——`AgentSessionEvent.ExtensionError` 新变体（裁决⑥），RPC `extension_error` 线四键逐字（rpc-mode.ts:349），TUI 先忽略（窄差 D5）；⑤ 存量修真——`applyAfterToolPatch` 5 参重建洗 `isError`/`structuredContent` 的 bug（docs/14 §2.3），`ToolResultContext` 增 `arguments`（pi `prepared.args`）。
+- 【风险/代价】窄差（map/04 D 域批 4 窄差表）：D1 引用相等快照（pi `===` 同构）；D2 无逐工具判别子类型；D3 message_update 从 partial 投影；D4 `session_compact` 无 compactionEntry（判存疑，挂 B249）；D5 extension_error TUI 不展示；D6 fromExtension 恒 false；D7 parentToolCallId 缺席（G-10）；D8 `tool_execution_end` 扩展事件 args 恒 null（宿主事件不带，实施期新登记）。新开放项：**B248**（provider 请求面四件——ai 注入口缺席）、**B249**（结果臂族）、**B250**（session_start/shutdown 发射点）。[D4 模型可见；D5 用户可见边缘；余内部/无影响]
+- 触发条件：B248＝ai 层开 `onPayload`/`transformHeaders`/`onResponse` 注入口；B249 ①＝java eventHub 引入 await 语义或持久化臂裁决；B249 ⑤＝CompactionExecutor 带条目本体；B250＝会话生命周期事件面批次。出处：docs/14 §4–§6。
 
 ---
 

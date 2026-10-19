@@ -77,7 +77,7 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 
 ---
 
-## 1 总表（coding-agent 批 2 后值，2026-10-19；agent-core 批 5 后值，2026-10-18；telemetry 批 1 后值，2026-10-17；ai 批 10 后 2026-10-16；批 3b/4/6/8 为台账行为项、加权不变；其余模块为 2026-10-12 重测值）
+## 1 总表（coding-agent 批 4 后值，2026-10-20；agent-core 批 5 后值，2026-10-18；telemetry 批 1 后值，2026-10-17；ai 批 10 后 2026-10-16；批 3b/4/6/8 为台账行为项、加权不变；其余模块为 2026-10-12 重测值）
 
 | 模块（地图） | Σ权重 | Σ(w×c) | **加权完成度** | 未加权 | 权重 3 层 |
 |---|---:|---:|---:|---:|---:|
@@ -87,17 +87,17 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 | session-sqlite ＋ evals（map/06） | 87 | 44.5 | **51.1%** | 50.0%（20/40） | — |
 | pi-java-telemetry（map/01，**批1后**） | 34 | 34.0 | **100%** | 100%（16/16） | 100%（21/21） |
 | pi-java-tui/web（map/05） | 245 | 108.5 | **44.3%** | 25.7%（38/148） | 67.3% |
-| pi-java-coding-agent（map/04，剔 MCP 粗单元） | 487 | 219.0 | **45.0%** | 33.8%（98/290） | 50.0%（9/23） |
-| **合计（去重后，coding-agent 批2后）** | **1,381** | **891.0** | **64.5%** | — | — |
+| pi-java-coding-agent（map/04，剔 MCP 粗单元） | 487 | 251.5 | **51.6%** | 39.7%（115/290） | 65.2%（14/23） |
+| **合计（去重后，coding-agent 批4后）** | **1,381** | **923.5** | **66.9%** | — | — |
 
-> map/04 原始口径（含 G-1..G-5）：Σw 496 ／ Σwc 226.0 ／ **45.6%**；两处账都在，总表用去重值。
+> map/04 原始口径（含 G-1..G-5）：Σw 496 ／ Σwc 258.5 ／ **52.1%**；两处账都在，总表用去重值。
 > protocol/client/server（R1 排除）未加权：map/01 全层 10 对齐 / 40 缺失 / 35 存疑（85 单元）。
 
 **读数**：
 
 - **ai 层权重 3 全齐**：每轮都走的请求/响应/计量主路无缺口。批 10 后计分母缺失仅 1 条（#8 namespace），无半成品——#90 图片缩放消费链已落 agent-core/coding-agent，#98 federation 批 10 闭环。分类器面已裁 R5。
 - **mcp 模块本体完成度高（76%）**，但会话内接线面是缺口（B221：六个 on() 事件 0/6、激活门、ui.custom、工具渲染器、提示分节、registerMcpServer 挂载点）。这批缺口对应 map/07 G 组 17 单元里的 15 个缺失——**进程外 `pi mcp` CLI 可用、会话内 MCP 不激活**。
-- **coding-agent 最低**：欠账集中在扩展系统（D 域 41 事件加权 12.7%、D′ UI 注入 6.3%、包管理器 16.1%）。
+- **coding-agent 最低**：批 4 后欠账集中在扩展系统剩余面（D 域加权 49.4%——provider 请求面 B248／结果臂族 B249／生命周期 B250、D′ UI 注入 6.3%、包管理器 16.1%）。
 - **agent-core 批 5 后 180/180 = 100%**（第二个满分模块）：权重 3 层 27/27、工具表 21/21、确认缺失与存疑**双清零**（批 5 收编 22 条存疑：13 做、8 裁决、#60 R1 出分母），未得分池 = 0。
 
 ---
@@ -140,14 +140,15 @@ codemode-only 的 4 个单元（exposure/deferred/discovery）权重 0，B161/B1
 
 现状：**模块 100%**——加权 180/180、未加权 90/90、权重 3 层含工具 27/27、工具表 21/21、确认缺失与存疑**双清零**、未得分池 = 0。批 4 新登记仍存活：B244（skill slash 命令）、B245（tree 扩展事件＋TUI 摘要流），归 coding-agent/TUI 批。
 
-### 2.4 coding-agent — 45.0%（去重）｜ map/04
+### 2.4 coding-agent — 51.6%（去重）｜ map/04
 
-A CLI 参数 80.6%、C slash 68.4%、E3 会话管理 68.8%；**D 扩展事件 12.7%、D′ UI 注入 6.3%、E6 包管理器 16.1%、E5 扩展 API 24.1%** 四块拉低整体。
+A CLI 参数 80.6%、C slash 68.4%、E3 会话管理 68.8%；**D 扩展事件 49.4%（批 4 后）、D′ UI 注入 6.3%、E6 包管理器 16.1%、E5 扩展 API 27.6%** 拉低整体。
 G 域新子系统：MCP 明细在 map/07；codemode 3,957 行＋tool-search/virtual-models/nested 766 行仍为 0（B161/B162）。
 新缺口：B237（RPC `handled` disposition）。
 - 批 1（2026-10-18 闭环，B236/docs/11）：`--tools` 三层语义（`*` 通配/`+name`/`-name` 修饰符/`mcp__` 保留）＋`--exclude-tools` 通配 denylist＋settings `defaultTools`（merge/resolve）＋注册面门接线（`createAllTools` 八件经 `_isAllowedTool` 过滤）＋默认激活集 **7→4**（裁决①）；map/04 A-20/A-21/E2-35 翻对齐（+3.5）；**B236 销号**、B246 新登记（reload 臂＋SDK 抛错面）；43.2% → **43.9%**（未加权 31.7% → 32.8%）。合计 63.9% → 64.2%（882.5 → 886.0/1381）。
 - 批 2（2026-10-19 闭环，B244/docs/12）：`/skill:` 命令注册面三层——settings `enableSkillCommands` accessor（缺省 true）＋设置页字段、TUI 补全目录 skill 臂（u/p/t 来源标签）、`CommandRegistry.dispatch` `/skill:` 透传（批 4 展开器由此接通）＋RPC `get_commands` skill 臂；map/04 C-#25/E2-31/E4-2 翻对齐（+5.0）；**B244 销号**、B247 新登记（prompt template 注册面＋RPC 形状对齐）；43.9% → **45.0%**（未加权 32.8% → 33.8%；map/04 原始口径 44.6% → 45.6%）。合计 64.2% → 64.5%（886.0 → 891.0/1381）。
 - 批 3（2026-10-19 闭环，B247/docs/13）：prompt template 注册面两层（补全目录模板臂——pi 无门＋u/p/t 标签＋argumentHint；dispatch 已注册模板名透传）＋模板 `sourceInfo` 加载期打标（新叶子包 `core.source`）＋RPC `get_commands` 线格式一次收平（`{commands}` 包键、`source`/`sourceInfo`、去内置、删 `argumentHint`；扩展臂随 B221＝窄差 D5）；**B247 销号**；无计分母行翻动（模板注册面折叠进 map/04 E4-3 台账注，RPC 注记挂 E7-1），账面不变 **45.0%**（原始口径 45.6%），合计不变 64.5%（891.0/1381）。
+- 批 4（2026-10-20 闭环，docs/14）：**D 域地基**——`ExtensionContext.on()` 订阅面（spec-token 单方法＋退订＋错误归属，`ExtensionEventBus`）＋双源桥接：引擎钩子族 3 适配器（`context` 两阶段·引用相等快照·restoreSystemMessages、`tool_call` block 短路·异常向上传播、`tool_result` 逐字段合并·structuredContent 丢弃规则）＋宿主事件族 14 事件（`SessionEventBridge`：turnIndex/previousLevel 桥内跟踪、CompactionEnd 两支分发）；错误通道 `AgentSessionEvent.ExtensionError` → RPC `extension_error` 线逐字；顺带修真 `applyAfterToolPatch` 洗 `isError`/`structuredContent` 存量 bug。map/04 D 域 16 行翻对齐＋2 行翻存疑（#8 compactionEntry 缺、#32 替换臂）、E5-35 翻对齐（+32.5）；**B30/B35/F3/B46 销号**（map/04 台账纠错区），**B248/B249/B250 新登记**；45.0% → **51.6%**（原始口径 45.6% → 52.1%；未加权 33.8% → 39.7%；w3 50.0% → 65.2%）。合计 64.5% → **66.9%**（891.0 → 923.5/1381）。
 
 ### 2.5 tui/web — 44.3% ｜ map/05
 

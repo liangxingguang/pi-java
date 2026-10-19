@@ -168,48 +168,63 @@ pi-java 的**引擎钩子** = `pi-java-agent-core/.../agent/hook/HookSystem.java
 | 1 | `project_trust` | `:1569` | ❌ | 2 | **缺失** | java 有 `TrustManager.java` 标记文件，但无注册面 |
 | 2 | `resources_discover` | `:1571` | ✅ `PiExtension.java:29` | 2 | **对齐** | `ExtensionManager.java:85-100` 合并保序 + 异常隔离 |
 | 3 | `session_start` | `:1574` | ❌ | 2 | **缺失** | 无钩子 |
-| 4 | `session_info_changed` | `:1575` | ❌ | 1 | **缺失** | 宿主 `AgentSessionEvent.SessionInfoChanged`（`:73`）**仍零生产者**（`JsonEventMapper.java:103` 只是消费）—— 台账 **B30** |
+| 4 | `session_info_changed` | `:1575` | ✅ | 1 | **对齐** | 宿主生产者已有（`AgentSession.java:706`——旧证据「零生产者/B30」已过期）；批 coding-agent-4（docs/14）`SessionEventBridge` 桥接 |
 | 5 | `session_before_switch` | `:1577` | ❌ | 2 | **缺失** | 可取消的切换钩子不存在 |
 | 6 | `session_before_fork` | `:1581` | ❌ | 2 | **缺失** | 同上 |
 | 7 | `session_before_compact` | `:1585` | ⚠️ | 2 | **存疑** | 引擎钩子 `onBeforeCompaction:83`**未桥接**；pi 事件带 `signal: AbortSignal` |
-| 8 | `session_compact` | `:1588` | ❌ | 2 | **缺失** | 宿主有 `CompactionEnd`（`AgentSessionEvent.java:87`），非扩展面 |
-| 9 | `session_compact_failed` | `:1589` | ❌ | 1 | **缺失** | 台账 **F3**；pi `aborted` 判定为**信号权威**（`agent-session.ts:2887`） |
+| 8 | `session_compact` | `:1588` | ⚠️ | 2 | **存疑** | 批 4 已桥 `{reason, willRetry, fromExtension:false}`；**无 `compactionEntry` 载荷**（`CompactionResult` 无条目本体——窄差 D4，挂 **B249**） |
+| 9 | `session_compact_failed` | `:1589` | ✅ | 1 | **对齐** | 批 4 桥接（`CompactionEnd` 失败/中止臂）；pi `aborted` 判定为**信号权威**（`agent-session.ts:2887`） |
 | 10 | `session_shutdown` | `:1590` | ❌ | 2 | **缺失** | `ExtensionManager.java:70` `unload()` 只从表移除 |
 | 11 | `mcp_servers_change` | `:1591` | ❌ | 2 | **缺失** | 扩展订阅面不存在；java MCP 注册表本身见 map/07（B221） |
 | 12 | `session_before_tree` | `:1593` | ⚠️ | 1 | **存疑** | 引擎钩子 `onBeforeNavigation:88`**未桥接** |
 | 13 | `session_tree` | `:1596` | ❌ | 1 | **缺失** | 无导航完成事件 |
-| 14 | `context` | `:1597` | ⚠️ | **3** | **存疑** | 引擎钩子 `onTransformContext:53`**未桥接** |
-| 15 | `context_with_system` | `:1598` | ❌ | **3** | **缺失** | 可改 context 与 system prompt 的事件；java 无对应面 |
+| 14 | `context` | `:1597` | ✅ | **3** | **对齐** | 批 4 `EngineHookBridge`（`transform_context` 适配器）：两阶段逐字、系统消息过滤＋restore、引用相等快照（docs/14 §3.4.1） |
+| 15 | `context_with_system` | `:1598` | ✅ | **3** | **对齐** | 批 4 阶段二：全量可见、返回即采用、弄丢头系统 `emitError` 上报仍采用（错误文本逐字） |
 | 16 | `cache_warming_decision` | `:1600` | ❌ | 2 | **缺失** | `core/cache-warmer.ts` 453 行；java 无缓存预热子系统 |
 | 17 | `before_provider_request` | `:1604` | ⚠️ | **3** | **存疑** | 引擎钩子 `onBeforePayload:63`**未桥接** |
 | 18 | `before_provider_headers` | `:1607` | ⚠️ | 2 | **存疑** | 引擎钩子 `onBeforeRequest:58`**只读、不能改 header**，未桥接 |
 | 19 | `after_provider_response` | `:1608` | ⚠️ | 2 | **存疑** | 引擎钩子 `onAfterResponse:68`**未桥接** |
 | 20 | `provider_stream_event` | `:1609` | ❌ | 2 | **缺失** | 流式事件级扩展观察面；java 无 |
 | 21 | `before_agent_start` | `:1611` | ❌ | **3** | **缺失** | pi 可**改 systemPrompt**（`types.ts:1468` `BeforeAgentStartEventResult.systemPrompt`）；java `onBeforeRun:43` **不能改提示词** |
-| 22 | `agent_start` | `:1614` | ❌ | 2 | **缺失** | 无钩子（宿主 `PiLoop` 有 start 帧，非扩展面） |
-| 23 | `agent_end` | `:1615` | ❌ | 2 | **缺失** | 宿主 `AgentEnd`（`AgentSessionEvent.java:28`），非扩展面 |
+| 22 | `agent_start` | `:1614` | ✅ | 2 | **对齐** | 批 4 桥接（顺带 `turnIndex = 0`，pi `:1286` 同） |
+| 23 | `agent_end` | `:1615` | ✅ | 2 | **对齐** | 批 4 桥接（宿主 `AgentEnd`，`AgentSessionEvent.java:28`） |
 | 24 | `agent_before_settle` | `:1617` | ❌ | 2 | **缺失** | 可边界结果；java 无 |
-| 25 | `agent_settled` | `:1620` | ❌ | 2 | **缺失** | 宿主 `AgentSettled`（`:46`），非扩展面 |
+| 25 | `agent_settled` | `:1620` | ✅ | 2 | **对齐** | 批 4 桥接（宿主 `AgentSettled`，`:46`；`{aborted}` 直译） |
 | 26 | `ui_prompt_start` | `:1621` | ❌ | 1 | **缺失** | 无对应 |
 | 27 | `ui_prompt_end` | `:1622` | ❌ | 1 | **缺失** | 无对应 |
-| 28 | `turn_start` | `:1623` | ❌ | 2 | **缺失** | 无对应 |
-| 29 | `turn_end` | `:1624` | ❌ | 2 | **缺失** | 台账 **B49** |
-| 30 | `message_start` | `:1625` | ❌ | 2 | **缺失** | 无对应 |
-| 31 | `message_update` | `:1626` | ❌ | **3** | **缺失** | 宿主有 `MessageUpdate`（`:22`），非扩展面 |
-| 32 | `message_end` | `:1627` | ❌ | 2 | **缺失** | 非扩展面 |
-| 33 | `tool_execution_start` | `:1628` | ❌ | 2 | **缺失** | 宿主事件**已生产**（`SessionRunner.java:231`），非扩展面 |
-| 34 | `tool_execution_update` | `:1629` | ❌ | 2 | **缺失** | 宿主转发已接线（`SessionRunner.java:235`，数据源＝引擎 `PiLoop.Event.ToolExecutionUpdate`），仍非扩展面 —— 台账 **B46** 状态变化见 §台账纠错 |
-| 35 | `tool_execution_end` | `:1630` | ❌ | 2 | **缺失** | 宿主事件已生产（`SessionRunner.java:239`），非扩展面；台账 **B43** |
+| 28 | `turn_start` | `:1623` | ✅ | 2 | **对齐** | 批 4 桥接（`{turnIndex, timestamp}`；turnIndex 桥内跟踪，pi `_turnIndex` 同构） |
+| 29 | `turn_end` | `:1624` | ❌ | 2 | **缺失** | boundary 派发臂挂 **B249**（`turnIndex++` 语义批 4 已复制）；台账 **B49** |
+| 30 | `message_start` | `:1625` | ✅ | 2 | **对齐** | 批 4 桥接 |
+| 31 | `message_update` | `:1626` | ✅ | **3** | **对齐** | 批 4 桥接：`message` 从 `StreamEvent.partial()` 投影（`Message.AssistantMessage.fromPartial`，验证任务 V1 通过）；无订阅者零投影快走 |
+| 32 | `message_end` | `:1627` | ⚠️ | 2 | **存疑** | 批 4 桥接观察臂；**替换臂**（`MessageEndEventResult`，agent-session.ts:1316-1333）挂 **B249** |
+| 33 | `tool_execution_start` | `:1628` | ✅ | 2 | **对齐** | 批 4 桥接（宿主 `SessionRunner.java:231`），字段直译 |
+| 34 | `tool_execution_update` | `:1629` | ✅ | 2 | **对齐** | 批 4 桥接（宿主 `SessionRunner.java:235`）—— 台账 **B46** 的扩展面已补 |
+| 35 | `tool_execution_end` | `:1630` | ✅ | 2 | **对齐** | 批 4 桥接（宿主 `SessionRunner.java:239`）；`durationMs` 可空直译。⚠️ 宿主事件不带 `args`（pi types.ts:1087 有）⇒ 扩展事件该字段 null（批 4 窄差 D8） |
 | 36 | `model_select` | `:1631` | ❌ | 2 | **缺失** | 无对应 |
-| 37 | `thinking_level_select` | `:1632` | ❌ | 2 | **缺失** | 宿主 `ThinkingLevelChanged`（`:83`）**已生产**（`AgentSession.java:513`），但**非扩展面** —— 台账 **B35**（宿主侧生产者已补，扩展事件仍缺） |
-| 38 | `tool_call` | `:1633` | ⚠️ | **3** | **存疑** | 引擎钩子 `onBeforeTool:73`**未桥接** |
-| 39 | `tool_result` | `:1634` | ⚠️ | **3** | **存疑** | 引擎钩子 `onAfterTool:78`**未桥接** |
+| 37 | `thinking_level_select` | `:1632` | ✅ | 2 | **对齐** | 批 4 桥接（宿主 `AgentSession.java:513`）；`previousLevel` 桥内跟踪（种子＝装配时当前等级）—— 台账 **B35** 的扩展面已补 |
+| 38 | `tool_call` | `:1633` | ✅ | **3** | **对齐** | 批 4 `EngineHookBridge`（`before_tool` 适配器）：block 短路、异常向上传播（pi 逐字）、input 原地可变链（docs/14 §3.4.2） |
+| 39 | `tool_result` | `:1634` | ✅ | **3** | **对齐** | 批 4（`after_tool` 适配器）：逐字段合并＋structuredContent 丢弃规则（pi :1194-1214 逐字）；顺带修真 `applyAfterToolPatch` 洗 `isError`/`structuredContent` 的存量 bug（docs/14 §2.3） |
 | 40 | `user_bash` | `:1635` | ❌ | 1 | **缺失** | java `!`/`!!` 无扩展拦截面 |
 | 41 | `input` | `:1636` | ❌ | **3** | **缺失** | java 无输入处理链 |
 
-**汇总（宽口径）：对齐 1 / 缺失 33 / 存疑 7 / 合计 41 = 2.4%**；**Σ权重 83 / Σ(w×c) 10.5 / 加权 12.7%**
-**汇总（严格口径，未桥接的引擎钩子也算缺失）：对齐 1 / 缺失 40 / 存疑 0 = 2.4%**；**加权 2/83 = 2.4%**
-> ⚠️ D 域 Σ权重 **83** = 模块 496 的 **16.7%**，仍是模块最大域。
+**汇总（宽口径，批 coding-agent-4 后）：对齐 17 / 缺失 17 / 存疑 7 / 合计 41 = 41.5%**；**Σ权重 83 / Σ(w×c) 41.0 / 加权 49.4%**
+**汇总（严格口径，未桥接的引擎钩子也算缺失）：对齐 17 / 缺失 22 / 存疑 2 = 41.5%**；**加权 32/83 = 38.6%**
+> ⚠️ D 域 Σ权重 **83** = 模块 496 的 **16.7%**，仍是模块最大域。批 coding-agent-4（docs/14）翻 16 行对齐＋2 行存疑（+30.5）：剩余存疑＝#7/#8/#12/#17/#18/#19/#32；严格口径的「未桥接引擎钩子」从 7 条减到 5 条（#7/#12/#17/#18/#19，全挂 B248/B245/B249）。
+
+### 批 coding-agent-4（docs/14，2026-10-20 闭环）窄差表
+
+| # | 内容 | 等级 |
+|---|---|---|
+| D1 | `context` 快照用引用相等（pi `===` 同构）；java 无 `structuredClone`（Message 不可变，无需） | 无影响 |
+| D2 | `tool_call`/`tool_result` 事件不做 pi 的逐工具判别子类型（`BashToolCallEvent` 等 9 支），`input` 恒 map 形 | [内部] |
+| D3 | `message_update` 的 `message` 提取自 StreamEvent partial（V1 通过：`fromPartial` 投影；无快照帧不发射） | 边缘场景 |
+| D4 | `session_compact` 无 `compactionEntry` 载荷（CompactionResult 无条目本体） ⇒ D-8 判存疑，挂 B249 | [模型可见：扩展读不到该字段] |
+| D5 | `extension_error` TUI 暂不展示（RPC 线已逐字）；TUI 通知面归 D′ 域 | [用户可见，边缘] |
+| D6 | `fromExtension` 恒 false——java 无扩展触发压缩的路径（`sendMessage(triggerTurn)` 未实现），与当前全部可达行为一致 | 无影响 |
+| D7 | pi 的 `parentToolCallId` 不带（嵌套工具调用 G-10 零对应，落地时补） | 存量约束，非本批范围 |
+| D8 | 宿主 `ToolExecutionEnd` 事件不带 `args`（pi types.ts:1087 有）⇒ 扩展 `tool_execution_end` 的 `args` 恒 null（start/update 两支有）；改宿主事件牵涉 `PiLaneSink` 生产者，留后续批次 | [内部，边缘] |
+
+**新登记**：**B248**（provider 请求面三件套＋流事件，D-17/18/19/20 挂此）、**B249**（结果臂事件族：message_end 替换／turn_end·agent_before_settle boundary／input／user_bash／before_agent_start／session_before_switch·fork cancel／session_before_compact cancel＋compactionEntry）、**B250**（`session_start`/`session_shutdown` 发射点）——明细在 docs/04。
 
 ### D′. 扩展 UI 注入点（单列）
 
@@ -399,9 +414,9 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | E5-32 | 扩展 UI 通道（RPC，9 method） | `rpc-types.ts:253-297` | ⚠️ `RpcExtensionUIRequest.java` 形有，`ui()` **无生产者**（`RpcDispatcher.java:337-348`，队列 `:57`） | 1 | **存疑** | — |
 | E5-33 | 扩展示例库（可执行验收规格） | `examples/extensions/`（105 个 `.ts`，16,033 行） | ❌ 只有 5 个测试夹具 | **3** | **缺失** | — |
 | E5-34 | 扩展来源追踪（`SourceInfo`） | `types.ts:1543/2055/2098` | ⚠️ `InstalledExtension.java:15` 有路径，无 `sourceInfo` 投影 | 1 | **存疑** | — |
-| E5-35 | `on()` 返回退订函数 | `types.ts:1569-1636`（41 条 `() => void`） | ❌ `PiExtension` 是装配期一次性注册 | 2 | **缺失** | — |
+| E5-35 | `on()` 返回退订函数 | `types.ts:1569-1636`（41 条 `() => void`） | ✅ `ExtensionContext.on(spec, handler)`（批 4，docs/14 §3.2）→ `AutoCloseable` 退订：按实例移除、空表删键（loader.ts:272-288 逐字语义） | 2 | **对齐** | — |
 
-**E5 汇总：对齐 5 / 缺失 26 / 存疑 4 / 合计 35 = 14.3%**；**Σ权重 58 / Σ(w×c) 14.0 / 加权 24.1%**
+**E5 汇总（批 4 后）：对齐 6 / 缺失 25 / 存疑 4 / 合计 35 = 17.1%**；**Σ权重 58 / Σ(w×c) 16.0 / 加权 27.6%**
 > E5-23..25 的 MCP 注册 API 判定随 MCP 整体面在 `map/07` 复核；本表按「扩展 SPI 是否暴露」判，仍为缺失。
 
 ### E6 包管理器（16）
@@ -507,16 +522,16 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | **B53** | 「`find()` 走 `all()` 越界」 | ✅ **属实**。jsonl `PersistentSessionRepositories.java:59-66` 与 sqlite `:139-146` 仍走 `all()`/`list(null)`。pi `resolveSessionPath`（`main.ts:252-283`）多了**路径形快道**（`:253-256`），三级阶梯不变。⇒ 真差距仍是**次序与成本**（缺 header-only ①②） | `PersistentSessionRepositories.java:63`；`main.ts:243-283` |
 | **B54** | 「`--no-session` 在 web 路径被忽略」 | ✅ **属实**（java 侧未变）。`resolvePersistentWeb` 在 `:149`，`:149-164` 不引用 `args` | `SessionPersistence.java:149-164` |
 | **B55** | 「pi 会话列表 API 带 `onProgress`」 | ✅ **属实**。`listSessionsFromDir`（`:941`）＋ `AbortSignal` ＋ `publishPartial`；java `list`（`:74-76`）同步全量 | `session-manager.ts:941`；`PersistentSessionRepositories.java:74-76` |
-| **B30** | 「`session_info_changed` 无生产者」 | ✅ **仍属实**。`AgentSessionEvent.SessionInfoChanged`（`:73`）有消费（`JsonEventMapper.java:103`）但**无 emit** | `AgentSessionEvent.java:73` |
-| **B35** | 「`thinking_level_changed` 无生产者」 | ⚠️ **宿主侧已补**：`AgentSession.java:513` 现 emit `ThinkingLevelChanged`；但**扩展事件 `thinking_level_select` 仍无面** ⇒ D-37 判定不变 | `AgentSession.java:513` |
+| **B30** | 「`session_info_changed` 无生产者」 | ❌ **已过期 ⇒ 销号**：生产者早已在（`AgentSession.java:706` emit）；批 4 扩展面桥接（D-4 翻对齐） | `AgentSession.java:706` |
+| **B35** | 「`thinking_level_changed` 无生产者」 | ❌ **已闭环 ⇒ 销号**：宿主（`AgentSession.java:513`）与扩展面（批 4，D-37 翻对齐，`previousLevel` 桥内跟踪）双补 | `AgentSession.java:513` |
 | **B1** | 「branch summary 无实现」 | ✅ **属实**。`Settings.java` 无 `branchSummary`，全模块无分支摘要代码 | `Settings.java:26-66` |
 | **B32** | 「`get_state.sessionName` 恒有值」 | ✅ **属实**。`SessionPersistence.java:249-255` `sessionNameOf` 兜底 `"session"` | `SessionPersistence.java:249-255` |
-| **F3** | 「`_emitSessionCompactFailed`」 | ✅ **属实**（无该扩展面）。pi 侧 `aborted` 判定为**信号权威**（`agent-session.ts:2887`） | `AgentSessionEvent.java:87` |
+| **F3** | 「`_emitSessionCompactFailed`」 | ❌ **已闭环 ⇒ 销号**：批 4 桥接（`CompactionEnd` 失败/中止臂 ⇒ `session_compact_failed`，D-9 翻对齐）。pi 侧 `aborted` 判定为**信号权威**（`agent-session.ts:2887`） | `AgentSessionEvent.java:87` |
 | **F6** | 「`ModelsJsonProvider` 钉死 baseUrl」 | ⚠️ **本模块范围外**；症状仍在（`Args.baseUrl` 在 coding-agent 侧不消费） | `Args.java:60` |
 | **A4** | 「运行中手动 `/compact` 有没有门」 | ❌ **仍缺（abort-first 半）**。pi 语义是 **abort-first**：`compact()`（`agent-session.ts:2764`）第一句 `await this.abort()`（`:2765`），自建 `_compactionAbortController`（`:2766`）；`_getSummarizationRequestAuth(model, signal)`（`:2727`）；`aborted = signal.aborted \|\| cancelledByExtension`（`:2887`）；`abortCompaction()`（`:2914`）。java 侧落的是**另一件事**——「压缩自身可取消」：压缩窗口（`LaneState.enterCompaction` 仅计数，不中止在飞运行）＋信号检查＋「Compaction cancelled」中止路（agent-core `CompactionExecutor.java:80-121`，B175/B176）；宿主入口 `MiscCommands.java:126-138`/`AgentSession.java:716` 无 isRunning 守卫、不调 `abort()` ⇒ 运行中压缩不中止回合。开放项另见 map/03 #17 与 B36 | pi `agent-session.ts:2727/2764-2766/2887/2914`；java `CompactionExecutor.java:80-121`、`LaneState.java:181`、`MiscCommands.java:126` |
 | **A7** | 「`retry` 子对象保形不接线」 | ✅ **已闭环**：`getRetrySettings()`（`SettingsAccessors.java:197`，消费 `AgentSession.java:317`）+ `getProviderRetrySettings()`（`:218`） | 同证据 |
 | **A9** | 「per-model 压缩设置」 | ✅ **已闭环**：`Settings.Compaction.modelOverrides`（`Settings.java:140`，`ModelOverride:144-147`）+ `getCompactionSettings(ModelId)` 精确键三级回退（`SettingsAccessors.java:260-300`），接线 `AgentSession.java:420/717-718` | 同证据 |
-| **B46** | 「`tool_execution_update` 生产无数据源」 | ⚠️ **状态变化**：宿主转发已接线（`SessionRunner.java:234-237` 透传引擎 `PiLoop.Event.ToolExecutionUpdate.partialResult`）；扩展面仍缺（D-34 判定不变）。是否有工具实际发 update 事件取决于 agent-core 工具实现，台账条目建议改写措辞 | `SessionRunner.java:235` |
+| **B46** | 「`tool_execution_update` 生产无数据源」 | ❌ **扩展面已闭环 ⇒ 销号**：宿主转发（`SessionRunner.java:234-237`）＋批 4 桥接（D-34 翻对齐）。是否有工具实际发 update 事件取决于 agent-core 工具实现（观察面语义不受影响） | `SessionRunner.java:235` |
 
 **未发现反向误报**。
 
@@ -529,28 +544,28 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | A. CLI 参数 | 30 | 4 | 9 | 43 | 69.8% |
 | B. 子命令 | 3 | 1 | 4 | 8 | 37.5% |
 | C. Slash 命令 | 11 | 2 | 12 | 25 | 44.0% |
-| D. 扩展系统 41 事件 | 1 | 33 | 7 | 41 | 2.4% |
+| D. 扩展系统 41 事件 | 17 | 17 | 7 | 41 | 41.5% |
 | D′. 扩展 UI 注入面 | 0 | 8 | 1 | 9 | 0% |
-| E. 其余能力单元 | 50 | 66 | 32 | 148 | 33.8% |
+| E. 其余能力单元 | 51 | 65 | 32 | 148 | 34.5% |
 | ├ E1 配置文件 | 2 | 1 | 2 | 5 | 40.0% |
 | ├ E2 settings 键 | 22 | 22 | 11 | 55 | 40.0% |
 | ├ E3 会话管理 | 14 | 4 | 6 | 24 | 58.3% |
 | ├ E4 资源发现 | 5 | 2 | 0 | 7 | 71.4% |
-| ├ E5 扩展 API | 5 | 26 | 4 | 35 | 14.3% |
+| ├ E5 扩展 API | 6 | 25 | 4 | 35 | 17.1% |
 | ├ E6 包管理器 | 0 | 11 | 5 | 16 | 0% |
 | └ E7 RPC 面 | 2 | 0 | 4 | 6 | 33.3% |
 | G. 主流新增子系统（MCP/codemode/…） | 3 | 5 | 2 | 10 | 30.0% |
 | F. 整块缺失（子系统） | 0 | 6 | 0 | 6 | 0% |
-| **合计（模块，不含 E8）** | **98** | **123** | **66** | **290** | **33.8%** |
+| **合计（模块，不含 E8）** | **115** | **106** | **66** | **290** | **39.7%** |
 | E8. 边缘/面外子系统（**与 E3/C/G 重叠，不计入**） | 0 | 6 | 0 | 6 | 0% |
 
-**严格口径**（把「引擎钩子存在但未桥接」的 7 条也算缺失）：对齐 **98** / 缺失 **131** / 存疑 **60** / 合计 **290** = **33.8%**。
+**严格口径**（把「引擎钩子存在但未桥接」的 5 条——#7/#12/#17/#18/#19——也算缺失）：对齐 **115** / 缺失 **114** / 存疑 **61** / 合计 **290** = **39.7%**。
 
-**扩展系统单独口径**（D + D′ + E5）：41 事件 = 1 对齐；UI 注入 9 面 = 0 对齐；扩展 API 35 项 = 5 对齐 ⇒ **85 个单元中 6 个对齐 = 7.1%**。
+**扩展系统单独口径**（D + D′ + E5）：41 事件 = 17 对齐；UI 注入 9 面 = 0 对齐；扩展 API 35 项 = 6 对齐 ⇒ **85 个单元中 23 个对齐 = 27.1%**。
 
 **java 独有（不计入分母）**：`--base-url`、`--port`、`--debug`、`--trace-payloads`（CLI）；`/help`、`/create-skill`（slash）；`auth oauth-login`、`auth profile…`（子命令）。
 
-**最大三处差距**：① **D 域扩展事件面 41→1（可订阅）**；② **E6 包管理器**且**零对齐单元**；③ **扩展系统长尾**——MCP 面主体已落（明细见 map/07），但 **codemode（3,957 行）＋ tool-search/virtual-models/nested（766 行）共 4,723 行仍为 0**，且 MCP 的 builtin 工厂接线卡在 D/E5 扩展面（B221）。
+**最大三处差距**（批 4 后）：① **E6 包管理器**且**零对齐单元**；② **扩展系统长尾**——MCP 面主体已落（明细见 map/07），但 **codemode（3,957 行）＋ tool-search/virtual-models/nested（766 行）共 4,723 行仍为 0**，且 MCP 的 builtin 工厂接线卡在 D/E5 扩展面（B221）；③ **D 域剩余 24 个未对齐事件**（provider 请求面 B248、结果臂族 B249、生命周期 B250、tree 两事件 B245、D′ UI 注入面）。
 **其余长期缺口**：④ `cache_warming` 设置＋`/bug`＋RPC `"handled"` disposition（已分别计入 E2/C/E7；`defaultTools` 与 `--tools` pattern/modifier 批 1 已对齐）。
 
 ---
@@ -565,37 +580,37 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | A. CLI 参数 | 62 | 50.0 | 80.6% | 69.8% |
 | B. 子命令 | 15 | 9.0 | 60.0% | 37.5% |
 | C. Slash 命令 | 38 | 26.0 | 68.4% | 44.0% |
-| D. 扩展系统 41 事件 | 83 | 10.5 | 12.7% | 2.4% |
+| D. 扩展系统 41 事件 | 83 | 41.0 | 49.4% | 41.5% |
 | D′. 扩展 UI 注入面 | 16 | 1.0 | 6.3% | 0% |
 | E1. 配置文件 / 清单 | 10 | 6.0 | 60.0% | 40.0% |
 | E2. settings.json 键 | 86 | 52.0 | 60.5% | 40.0% |
 | E3. 会话管理行为 | 40 | 27.5 | 68.8% | 58.3% |
 | E4. 资源发现 | 14 | 10.0 | 71.4% | 71.4% |
-| E5. 扩展 API 面 | 58 | 14.0 | 24.1% | 14.3% |
+| E5. 扩展 API 面 | 58 | 16.0 | 27.6% | 17.1% |
 | E6. 包管理器 | 31 | 5.0 | 16.1% | 0% |
 | E7. RPC 面 | 12 | 8.0 | 66.7% | 33.3% |
 | G. 主流新增子系统 | 18 | 7.0 | 38.9% | 30.0% |
 | F. 整块缺失（子系统） | 13 | 0.0 | 0% | 0% |
-| **模块合计（不含 E8）** | **496** | **226.0** | **45.6%** | **33.8%** |
+| **模块合计（不含 E8）** | **496** | **258.5** | **52.1%** | **39.7%** |
 | E8. 边缘/面外子系统（与 E3/C/G 重叠，不计入） | 7 | 0.0 | 0% | 0% |
 
-**模块合计**：Σ权重 496 ／ Σ(w×c) 226.0 ／ **加权完成度 = 226.0/496 = 45.6%**（未加权 98/290 = 33.8%）。
+**模块合计**：Σ权重 496 ／ Σ(w×c) 258.5 ／ **加权完成度 = 258.5/496 = 52.1%**（未加权 115/290 = 39.7%）。
 
-**去重口径**（F 域有 2 行与 E4/E6 重叠）：剔除 F 域 ⇒ Σ权重 **483** ／ Σ(w×c) **226.0** ／ **加权完成度 = 226.0/483 = 46.8%**（未加权 98/284 = 34.5%）。
+**去重口径**（F 域有 2 行与 E4/E6 重叠）：剔除 F 域 ⇒ Σ权重 **483** ／ Σ(w×c) **258.5** ／ **加权完成度 = 258.5/483 = 53.5%**（未加权 115/284 = 40.5%）。
 
-**扩展系统单独口径**（D + D′ + E5）：Σ权重 157 ／ Σ(w×c) 25.5 ／ **加权 16.2%**（未加权 6/85 = 7.1%）。
+**扩展系统单独口径**（D + D′ + E5）：Σ权重 157 ／ Σ(w×c) 58.0 ／ **加权 36.9%**（未加权 23/85 = 27.1%）。
 
 **权重分层**：
 
 | 权重层 | 单元数 | Σ权重 | Σ(w×c) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|---:|
-| 权重 3（每轮 / 默认路径） | 23 | 69 | 34.5 | **50.0%** | 9/23 = 39.1% |
-| 权重 2（每次会话 / 常用） | 160 | 320 | 143.5 | 44.8% | 55/160 = 34.4% |
+| 权重 3（每轮 / 默认路径） | 23 | 69 | 45.0 | **65.2%** | 14/23 = 60.9% |
+| 权重 2（每次会话 / 常用） | 160 | 320 | 165.5 | 51.7% | 67/160 = 41.9% |
 | 权重 1（低频 / 边缘 / 内部） | 107 | 107 | 48.5 | 45.3% | 35/107 = 32.7% |
-| **合计** | **290** | **496** | **226.0** | **45.6%** | **98/290 = 33.8%** |
+| **合计** | **290** | **496** | **258.5** | **52.1%** | **115/290 = 39.7%** |
 
-> 读数：**权重 3 层（50.0%）已明显高于其余两层**。本锚点 E2-10（compaction modelOverrides）与 E7-1（RPC 命令集）两条 w3 转对齐，w3 对齐数 7 → 9。
-> ⚠️ **但这不等于「每轮都走的地方不欠账了」**：w3 层里**扩展系统仍占 7 个缺失/存疑**（#3–#10 事件面中的 8 个 + #17 示例库），w3 层的**剩余欠账几乎全在 D 域**。
+> 读数：**权重 3 层（65.2%）继续领跑**。批 coding-agent-4（docs/14）五条 w3 翻对齐（`context`/`context_with_system`/`message_update`/`tool_call`/`tool_result`，+10.5），w3 对齐数 9 → 14。
+> ⚠️ w3 层剩余欠账：扩展系统 4 个（#5 `before_provider_request`＝B248、#6 `before_agent_start`／#8 `input`＝B249、#17 扩展示例库）＋包管理器 3 个＋RPC/整块各 1。
 
 ### 权重 3 单元（23 个 —— 最该先修）
 
@@ -603,14 +618,14 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 |---|---|---|---|---|
 | 1 | A | `--model` | 3 | 对齐 |
 | 2 | A | `--print`/`-p` | 3 | 对齐 |
-| 3 | D | `context` | 3 | **存疑** |
-| 4 | D | `context_with_system` | 3 | **缺失** |
+| 3 | D | `context` | 3 | 对齐（批 4） |
+| 4 | D | `context_with_system` | 3 | 对齐（批 4） |
 | 5 | D | `before_provider_request` | 3 | **存疑** |
 | 6 | D | `before_agent_start` | 3 | **缺失** |
-| 7 | D | `message_update` | 3 | **缺失** |
+| 7 | D | `message_update` | 3 | 对齐（批 4） |
 | 8 | D | `input` | 3 | **缺失** |
-| 9 | D | `tool_call` | 3 | **存疑** |
-| 10 | D | `tool_result` | 3 | **存疑** |
+| 9 | D | `tool_call` | 3 | 对齐（批 4） |
+| 10 | D | `tool_result` | 3 | 对齐（批 4） |
 | 11 | E2 | `defaultProvider` | 3 | 对齐 |
 | 12 | E2 | `defaultModel` | 3 | 对齐 |
 | 13 | E2 | `compaction`（含 modelOverrides） | 3 | 对齐 |
@@ -625,22 +640,22 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | 22 | F | `examples/` 可执行验收规格 | 3 | **缺失** |
 | 23 | F | npm/git 包源 + 优先级 + 忽略文件 | 3 | **缺失** |
 
-> 权重 3 层 23 个单元中：**对齐 9 / 存疑 5 / 缺失 9**（Σ(w×c) 34.5 / 69 = 50.0%）。
-> 归属：扩展系统 **8 个**（#3–#10 事件面 + #17 扩展示例库）；包管理器 **3 个**（#18/#19/#23）；其余 12 个散在 CLI（2）、settings（3）、会话（1）、资源发现（1）、RPC（2）、整块缺失（2）。
+> 权重 3 层 23 个单元中：**对齐 14 / 存疑 2 / 缺失 7**（Σ(w×c) 45.0 / 69 = 65.2%）。
+> 归属：扩展系统 **4 个**（#5/#6/#8 事件面 + #17 扩展示例库）；包管理器 **3 个**（#18/#19/#23）；其余散在 RPC（#21 存疑）与整块缺失（#22）。
 
 ### 未加权 vs 加权的差
 
 | 指标 | 数值 |
 |---|---|
-| 未加权完成度 | 33.8%（98/290） |
-| 加权完成度（含 F 域） | **45.6%**（226.0/496） |
-| 差 | **+11.8 pp** |
-| 加权完成度（去重，剔 F 域） | 46.8%（226.0/483）＝ +13.0 pp |
+| 未加权完成度 | 39.7%（115/290） |
+| 加权完成度（含 F 域） | **52.1%**（258.5/496） |
+| 差 | **+12.4 pp** |
+| 加权完成度（去重，剔 F 域） | 53.5%（258.5/483）＝ +13.8 pp |
 
-**差在哪**：加权把完成度**抬高** 11.8 pp，因为 pi-java 的对齐单元**密集落在高权重的默认路径上**，而缺失质量集中在低权重长尾。
-- **抬高项**：A 域（CLI）未加权 69.8% → 加权 80.6%；B 域 37.5% → 60.0%；C 域 44.0% → 68.4%；E3 58.3% → 68.8%；E7 33.3% → 66.7%；**G 域 30.0% → 38.9%**。
-- **压低项**：D 域 2.4% → **12.7%**；E5 14.3% → 24.1%；E6 0% → 16.1%。E4 持平（71.4% ＝ 71.4%，无 w3 缺口）。
+**差在哪**：加权把完成度**抬高** 12.4 pp，因为 pi-java 的对齐单元**密集落在高权重的默认路径上**，而缺失质量集中在低权重长尾。
+- **抬高项**：A 域（CLI）未加权 69.8% → 加权 80.6%；B 域 37.5% → 60.0%；C 域 44.0% → 68.4%；E3 58.3% → 68.8%；E7 33.3% → 66.7%；**G 域 30.0% → 38.9%**；**D 域 41.5% → 49.4%**。
+- **压低项**：E5 17.1% → 27.6%；E6 0% → 16.1%。E4 持平（71.4% ＝ 71.4%，无 w3 缺口）。
 
 - **两个点名项**：
-  - **扩展事件面**：D 域 Σ权重 **83** = 模块 496 的 **16.7%**，是全部 15 个域里**最大的一块**。Σ(w×c) 仅 10.5 ⇒ 若 D 域全对齐，模块 Σ(w×c) 226.0 → **298.5**、完成度 45.6% → **60.2%**，即**这一域单独把模块拉低 14.6 pp**。
+  - **扩展事件面**：D 域 Σ权重 **83** = 模块 496 的 **16.7%**，是全部 15 个域里**最大的一块**。批 4 后 Σ(w×c) 41.0 ⇒ 若 D 域全对齐，模块 Σ(w×c) 258.5 → **300.5**、完成度 52.1% → **60.6%**，即**这一域单独把模块拉低 8.5 pp**（批 4 前 14.6 pp）。
   - **口径修正建议**（沿用）：整块缺失的子系统应按「暴露的行为面个数」而非 1 计入分母。本表按用户给定规则计。
