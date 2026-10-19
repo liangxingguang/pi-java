@@ -22,18 +22,34 @@ import com.pijava.ai.message.ContentBlock;
  * 收尾函数里而不是钩子系统里，pi-java 同构：异常由 {@code HookSystem.fireAfterTool}
  * **向上传播**，{@code PiToolRunner.execute} 的 catch 负责转错误结果。</p>
  *
- * @param content   替换内容块（{@code null}=保留）
- * @param details   替换结构化细节（{@code null}=保留）
- * @param usage     替换用量（{@code null}=保留）
- * @param terminate 替换批次终止提示（{@code null}=保留）
- * @param isError   替换错误标记（{@code null}=保留；作用于结果，而非工具本身）
+ * <p>docs/14 扩形：{@code structuredContent} 与 {@code dropStructuredContent} 两支 ——
+ * pi {@code emitToolResult}（runner.ts:1194-1214）的 structuredContent 语义：
+ * 独立合并（{@code !== undefined} 即覆盖）；content 被替换而 structuredContent 未同换时
+ * <b>丢弃</b>（{@code delete}）—— 丢弃由 {@code dropStructuredContent} 显式表达，
+ * 因为 {@code null = 保留} 的既有约定表达不了「清成 null」。</p>
+ *
+ * @param content               替换内容块（{@code null}=保留）
+ * @param details               替换结构化细节（{@code null}=保留）
+ * @param usage                 替换用量（{@code null}=保留）
+ * @param terminate             替换批次终止提示（{@code null}=保留）
+ * @param isError               替换错误标记（{@code null}=保留；作用于结果，而非工具本身）
+ * @param structuredContent     替换机器可读载荷（{@code null}=保留）
+ * @param dropStructuredContent {@code true} ⇒ 清空 structuredContent（优先于替换值）
  */
 public record AfterToolPatch(
     List<ContentBlock> content,
     Object details,
     ToolResult.UsageInfo usage,
     Boolean terminate,
-    Boolean isError) {
+    Boolean isError,
+    Object structuredContent,
+    boolean dropStructuredContent) {
+
+    /** docs/14 之前的五参形状（structuredContent 保留、不清空；存量构造点零改签）。 */
+    public AfterToolPatch(List<ContentBlock> content, Object details,
+                          ToolResult.UsageInfo usage, Boolean terminate, Boolean isError) {
+        this(content, details, usage, terminate, isError, null, false);
+    }
 
     /** 什么都不改的补丁（等价于返回 {@code null}）。 */
     public static AfterToolPatch none() {

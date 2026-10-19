@@ -220,7 +220,7 @@ public final class HookSystem {
             try {
                 var patch = ((AfterToolHook) hook).afterTool(
                     new ToolResultContext(ctx.lane(), ctx.toolCallId(), ctx.toolName(),
-                        result, isError));
+                        result, isError, ctx.arguments()));
                 if (patch != null) {
                     result = applyAfterToolPatch(result, patch);
                     if (patch.isError() != null) {
@@ -235,14 +235,25 @@ public final class HookSystem {
         return new AfterToolOutcome(result, isError);
     }
 
-    /** pi 的 {@code ??} 合并：补丁字段为 null = 保留原值（pi 的 null/undefined 同样落右操作数，清不成 null）。 */
+    /**
+     * pi 的 {@code ??} 合并：补丁字段为 null = 保留原值（pi 的 null/undefined 同样落右操作数，清不成 null）。
+     *
+     * <p>docs/14 修真：旧实现走 5 参构造器重建，任何补丁都会把 {@code isError} 洗成
+     * {@code false}、{@code structuredContent} 洗成 {@code null} —— pi 的合并是逐字段的，
+     * 未设的字段必须原样活着。structuredContent 三支：drop 优先 ⇒ null；补丁给值 ⇒ 替换；
+     * 否则保留（pi {@code emitToolResult} 的 delete/独立合并/保留三态，runner.ts:1194-1214）。</p>
+     */
     private static ToolResult<Object> applyAfterToolPatch(ToolResult<?> cur, AfterToolPatch p) {
         return new ToolResult<>(
             p.content() != null ? p.content() : cur.content(),
             p.details() != null ? p.details() : cur.details(),
             p.usage() != null ? p.usage() : cur.usage(),
             p.terminate() != null ? p.terminate() : cur.terminate(),
-            cur.addedToolNames());
+            cur.addedToolNames(),
+            cur.isError(),
+            p.dropStructuredContent() ? null
+                : p.structuredContent() != null ? p.structuredContent()
+                : cur.structuredContent());
     }
 
     /**

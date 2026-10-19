@@ -189,7 +189,8 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
         try {
             var finalized = hooks == null ? new AfterToolOutcome(executed, isError)
                 : hooks.fireAfterTool(laneName, new ToolResultContext(
-                    laneName, call.toolCallId(), call.toolName(), executed, isError));
+                    laneName, call.toolCallId(), call.toolName(), executed, isError,
+                    state.args()));
             // B85（批 9）：pi agent-session.ts:705-712 在扩展钩子之后对最终 content
             // 跑 normalizeToolResultImages——扩展/MCP/截图工具直接塞回的 base64 大图
             // 也要在入历史前按当前模型档位归一。无图/无变化返回同一引用。
