@@ -7,7 +7,7 @@
 >
 > **闭环 commits**：`334928c8`（T1 agent-core 扩形＋修真）→ T2 订阅面（ADT/spec/handler/bus/forExtension）→ T3 `EngineHookBridge` 三适配器 → T4 `SessionEventBridge`＋`ExtensionError` 通道＋接线（tui 另 1 commit）→ docs 回填（本稿＋map/04＋docs/04＋docs/05）。
 > **验证**：新测试 42 例全绿（`AfterToolPatchPreservationTest` 4＋`ExtensionEventBusTest` 7＋`EngineHookBridgeTest` 16＋`SessionEventBridgeTest` 16——含 14 事件逐一对拍、turnIndex/previousLevel、CompactionEnd 两支、V1 投影——＋`CrossExtensionOrderTest` 1＋`JsonEventMapperExtensionErrorTest` 1，减去共享类复数）；agent-core 850/850 绿；全量 `mvn clean verify` BUILD SUCCESS（7:56 min），`[ERROR]` 0 条、无 `System.out.println` 残留。
-> **实施偏差**（均不改变裁决；台账 Ruling 同载）：① 宿主 `AgentSessionEvent.ToolExecutionEnd` 不带 `args`（pi types.ts:1087 有）⇒ 扩展 `tool_execution_end.args` 恒 null——**新登记窄差 D8**（改宿主事件牵涉 `PiLaneSink` 生产者，超本批范围）；② §7.7「--no-extensions ⇒ 零 firing」未做 AgentSession 端到端夹具（测试 classpath 无全局 META-INF/services，`ExtensionManagerTest` 走作用域 loader 防污染的先例；noExtensions 早退是结构保证），跨扩展序以 `loadAll(ClassLoader)` 夹具覆盖；③ `ExtensionContext.forExtension` 落成接口 default 方法（返回 this）——`ExtensionManager` 字段保持 `ExtensionContext` 类型、存量测试构造零改签；④ `SessionRunnerFunnelTest`/web `AgentEventTranslator` 的 switch 有 default 分支，新变体自然落默认即设计行为，未加显式 case（ChatScreen 按设计补显式 case 钉 D5）；⑤ V1 通过——`message_update` 的 `message` 经 `StreamEvent.partial()`＋`Message.AssistantMessage.fromPartial` 投影（无快照的 `UsageInfo` 帧不发射），D-31 按对齐翻。
+> **实施偏差**（均不改变裁决；台账 Ruling 同载）：① ~~宿主 `ToolExecutionEnd` 不带 `args` ⇒ 窄差 D8~~ **闭环评审推翻**：pi `ToolExecutionEndEvent`（types.ts:1086-1097）是独立 interface、**本无 `args`**——§1.5 表的「上＋」系误读；扩展事件误加的 `args` 组件已删，D8 作废（载荷与 pi 逐字段一致，无差）；② §7.7「--no-extensions ⇒ 零 firing」未做 AgentSession 端到端夹具（测试 classpath 无全局 META-INF/services，`ExtensionManagerTest` 走作用域 loader 防污染的先例；noExtensions 早退是结构保证），跨扩展序以 `loadAll(ClassLoader)` 夹具覆盖；③ `ExtensionContext.forExtension` 落成接口 default 方法（返回 this）——`ExtensionManager` 字段保持 `ExtensionContext` 类型、存量测试构造零改签；④ `SessionRunnerFunnelTest`/web `AgentEventTranslator` 的 switch 有 default 分支，新变体自然落默认即设计行为，未加显式 case（ChatScreen 按设计补显式 case 钉 D5）；⑤ V1 通过——`message_update` 的 `message` 经 `StreamEvent.partial()`＋`Message.AssistantMessage.fromPartial` 投影（无快照的 `UsageInfo` 帧不发射），D-31 按对齐翻；⑥ **§8 算术修正**（闭环评审发现）：D 域逐行 Δ 加总为 **+32.5**（§8 正文写 +30.5，系本稿对账表加总错误），D 域基线逐行实算 **11.5**（map/04 旧汇总行 10.5，存疑 8 行被计成 7 行）⇒ 实际账面 D 域 **44.0/83＝53.0%**、模块 **261.5/496＝52.7%**（非预期的 258.5/52.1%）、全仓 **926.5/1381 ≈ 67.1%**；⑦ 闭环评审补修：扩展处理器抛 `Error`（非 Exception）的捕获链——pi catch 一切，java 原 `catch (Exception)` 会让 `AssertionError` 炸穿 prepare；`tool_call` 包 `RuntimeException`（保 message）走错误结果链、其余族改 `Throwable` 逐处理器上报（两测试 RED→GREEN）。
 
 | 项 | 内容 |
 |---|---|
@@ -18,7 +18,7 @@
 | 不碰 | 结果臂事件族（message_end 替换 / turn_end·agent_before_settle boundary / input / user_bash / before_agent_start / session_before_switch·fork —— 新登记 **B249**）；provider 请求面三件套＋流事件（ai 模块注入口缺席——新登记 **B248**）；`session_before_compact` cancel＋全载荷（挂 B249）；`session_before_tree`/`session_tree`（**B245** 在册）；会话生命周期发射点 `session_start`/`session_shutdown`（新登记 **B250**）；D′ 扩展 UI 注入面；E6 包管理器 |
 | 一句话 | pi 的扩展事件面＝`ExtensionAPI.on()` 41 重载＋loader 订阅表＋runner 发射语义。java 的引擎钩子（agent-core `HookSystem` 13 钩）与宿主事件（`AgentSessionEvent` 24 变体）早已各自生产，但 `ExtensionContext` 不暴露订阅面——扩展一个事件也订不到。本批建订阅面，并把「引擎钩子族 4 事件＋宿主事件族 14 事件」按 pi runner 语义桥上去。 |
 
-预期账面（对账表见 §8）：D 域 17 行翻对齐、2 行翻存疑，E5-35 翻对齐；模块加权 45.6% → **52.1%**（226.0 → 258.5/496，+32.5）。
+预期账面（对账表见 §8）：D 域 17 行翻对齐、2 行翻存疑，E5-35 翻对齐；模块加权 45.6% → **52.1%**（226.0 → 258.5/496，+32.5）。**实际闭环账面**（§8 算术修正后，见闭环头偏差⑥）：D 域 44.0/83＝53.0%、模块 **52.7%**（261.5/496）、全仓 67.1%（926.5/1381）。
 
 ---
 

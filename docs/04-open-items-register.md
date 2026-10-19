@@ -336,7 +336,7 @@
 
 - 【场景】pi 的扩展事件面＝`ExtensionAPI.on()` 41 重载＋loader 订阅表＋runner 发射语义。java 的引擎钩子（agent-core `HookSystem` 13 钩）与宿主事件（`AgentSessionEvent` 24 变体）早已各自生产，但 `ExtensionContext` 不暴露订阅面——扩展一个事件也订不到。D 域 Σ权重 83 是 map/04 最大域（单独拉低模块 14.6pp）。
 - 【决定】2026-10-20 批 coding-agent-4（docs/14）：① 订阅面——`ExtensionContext.on(spec, handler)`（裁决① spec-token 单方法，非 41 便捷方法、非裸字符串）＋`ExtensionEventBus`（注册序触发、退订按实例移除空表删键、`emitError` 独立通道、`hasHandlers` 快走）＋`DefaultExtensionContext.forExtension` per-extension 委托（错误按扩展名归属，pi `extensionPath` 对位）；② 引擎钩子族 3 适配器恒装快走（裁决②）——`context` 两阶段（系统消息过滤、原地可变列表＋**引用相等**快照〔裁决④〕、`restoreSystemMessages` 逐字、阶段二丢头系统上报仍采用）、`tool_call`（block 短路、**异常向上传播**〔裁决③〕、input 原地可变链显式回流）、`tool_result`（逐字段合并＋structuredContent 丢弃规则逐字）；③ 宿主事件族 14 事件 `SessionEventBridge`（裁决⑤ 装配期订阅先于模式层；turnIndex 复位/递增、previousLevel 桥内跟踪、CompactionEnd 成功/失败两支）；④ 错误通道——`AgentSessionEvent.ExtensionError` 新变体（裁决⑥），RPC `extension_error` 线四键逐字（rpc-mode.ts:349），TUI 先忽略（窄差 D5）；⑤ 存量修真——`applyAfterToolPatch` 5 参重建洗 `isError`/`structuredContent` 的 bug（docs/14 §2.3），`ToolResultContext` 增 `arguments`（pi `prepared.args`）。
-- 【风险/代价】窄差（map/04 D 域批 4 窄差表）：D1 引用相等快照（pi `===` 同构）；D2 无逐工具判别子类型；D3 message_update 从 partial 投影；D4 `session_compact` 无 compactionEntry（判存疑，挂 B249）；D5 extension_error TUI 不展示；D6 fromExtension 恒 false；D7 parentToolCallId 缺席（G-10）；D8 `tool_execution_end` 扩展事件 args 恒 null（宿主事件不带，实施期新登记）。新开放项：**B248**（provider 请求面四件——ai 注入口缺席）、**B249**（结果臂族）、**B250**（session_start/shutdown 发射点）。[D4 模型可见；D5 用户可见边缘；余内部/无影响]
+- 【风险/代价】窄差（map/04 D 域批 4 窄差表）：D1 引用相等快照（pi `===` 同构）；D2 无逐工具判别子类型；D3 message_update 从 partial 投影；D4 `session_compact` 无 compactionEntry（判存疑，挂 B249）；D5 extension_error TUI 不展示；D6 fromExtension 恒 false；D7 parentToolCallId 缺席（G-10）。（~~D8~~ 作废：闭环评审发现 pi `ToolExecutionEndEvent` 本无 `args`，误加组件已删。）新开放项：**B248**（provider 请求面四件——ai 注入口缺席）、**B249**（结果臂族）、**B250**（session_start/shutdown 发射点）。闭环评审两修已落：① `tool_execution_end` 扩展事件 `args` 组件删除；② 扩展处理器抛 `Error` 的捕获链（pi catch 一切——`tool_call` 包 `RuntimeException` 走错误结果链、其余族 `Throwable` 逐处理器上报继续）。[D4 模型可见；D5 用户可见边缘；余内部/无影响]
 - 触发条件：B248＝ai 层开 `onPayload`/`transformHeaders`/`onResponse` 注入口；B249 ①＝java eventHub 引入 await 语义或持久化臂裁决；B249 ⑤＝CompactionExecutor 带条目本体；B250＝会话生命周期事件面批次。出处：docs/14 §4–§6。
 
 ---
@@ -345,7 +345,7 @@
 
 | # | 文件 | 行数 |
 |---|---|---:|---:|
-| E1 | coding-agent …/core/AgentSession.java | **1,605**（2026-10-18 批 coding-agent-1 实测；拆分宜搭下一 coding-agent 批） |
+| E1 | coding-agent …/core/AgentSession.java | **1,620**（2026-10-20 批 coding-agent-4 实测；拆分宜搭下一 coding-agent 批） |
 | E2 | coding-agent …/rpc/RpcDispatcher.java | 661（2026-10-19 批 coding-agent-3 实测） |
 | E5 | ai …/catalog/ModelCompat.java | **762**（2026-10-11 B98 加 8 组件；converter 侧已拆出 CompletionAssistantMessage 保 500 内） |
 | E6 | tui …/app/PiTuiApp.java | 519（2026-10-19 批 coding-agent-3 新登记——批 2 闭环时已 512 未入册，本批 +7） |
