@@ -147,6 +147,7 @@ G 域新子系统：MCP 明细在 map/07；codemode 3,957 行＋tool-search/virt
 新缺口：B237（RPC `handled` disposition）。
 - 批 1（2026-10-18 闭环，B236/docs/11）：`--tools` 三层语义（`*` 通配/`+name`/`-name` 修饰符/`mcp__` 保留）＋`--exclude-tools` 通配 denylist＋settings `defaultTools`（merge/resolve）＋注册面门接线（`createAllTools` 八件经 `_isAllowedTool` 过滤）＋默认激活集 **7→4**（裁决①）；map/04 A-20/A-21/E2-35 翻对齐（+3.5）；**B236 销号**、B246 新登记（reload 臂＋SDK 抛错面）；43.2% → **43.9%**（未加权 31.7% → 32.8%）。合计 63.9% → 64.2%（882.5 → 886.0/1381）。
 - 批 2（2026-10-19 闭环，B244/docs/12）：`/skill:` 命令注册面三层——settings `enableSkillCommands` accessor（缺省 true）＋设置页字段、TUI 补全目录 skill 臂（u/p/t 来源标签）、`CommandRegistry.dispatch` `/skill:` 透传（批 4 展开器由此接通）＋RPC `get_commands` skill 臂；map/04 C-#25/E2-31/E4-2 翻对齐（+5.0）；**B244 销号**、B247 新登记（prompt template 注册面＋RPC 形状对齐）；43.9% → **45.0%**（未加权 32.8% → 33.8%；map/04 原始口径 44.6% → 45.6%）。合计 64.2% → 64.5%（886.0 → 891.0/1381）。
+- 批 3（2026-10-19 闭环，B247/docs/13）：prompt template 注册面两层（补全目录模板臂——pi 无门＋u/p/t 标签＋argumentHint；dispatch 已注册模板名透传）＋模板 `sourceInfo` 加载期打标（新叶子包 `core.source`）＋RPC `get_commands` 线格式一次收平（`{commands}` 包键、`source`/`sourceInfo`、去内置、删 `argumentHint`；扩展臂随 B221＝窄差 D5）；**B247 销号**；无计分母行翻动（模板注册面折叠进 map/04 E4-3 台账注，RPC 注记挂 E7-1），账面不变 **45.0%**（原始口径 45.6%），合计不变 64.5%（891.0/1381）。
 
 ### 2.5 tui/web — 44.3% ｜ map/05
 

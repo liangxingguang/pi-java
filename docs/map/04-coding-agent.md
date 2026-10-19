@@ -351,7 +351,7 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 |---|---|---|---|---|---|---|
 | E4-1 | skill 发现（目录 + `SKILL.md` + 忽略文件） | `core/skills.ts:168/414`、`resource-loader.ts` | `skill/SkillDiscovery.java:36/51` + `IgnoreFilter.java` | 2 | 对齐 | — |
 | E4-2 | skill 注册为 `/skill:<name>` 命令 | `interactive-mode.ts:805-815` | ✅ `SkillCommandItems.java`＋`PiTuiApp.loadSlashItems` | 2 | **对齐** | **批 2（2026-10-19，B244/docs/12）**：补全目录条目＋来源标签 u/p/t 三值子集（裁决⑥，npm/git 复合标签窄差 D2）；pi 从不注册真命令——注册面＝补全＋透传（裁决①），同 C 域 #25 |
-| E4-3 | prompt template 发现 + 参数替换 | `core/prompt-templates.ts:222` | `prompt/PromptTemplates.java:47/186` | 2 | 对齐 | — |
+| E4-3 | prompt template 发现 + 参数替换 | `core/prompt-templates.ts:222` | `prompt/PromptTemplates.java:47/186` | 2 | 对齐 | **批 3（2026-10-19，B247/docs/13）**：注册面补齐（折叠进本单元，不另计分母）——补全目录模板臂（`PromptTemplateItems`，pi 无门＋u/p/t 标签＋argumentHint 透传）＋dispatch 已注册模板名透传（`CommandRegistry.java`）；记录增 `sourceInfo` 加载期打标（`loadDefaults` user/project、显式 temporary，pi :235-261） |
 | E4-4 | theme 发现（JSON + schema + 目录扫描） | `theme/`：`theme.ts` 1,086 + `theme-controller.ts` 253 + `system-theme.ts` 655 + `theme-schema.ts` 146（typebox）+ `theme-tokens.ts` 121 + dark/light.json 156（旧 JSON-schema 文件已删） | ❌ 只有 2 个内建 `.tcss`（pi-java-tui `PiTheme.java:23-24`） | 2 | **缺失** | — |
 | E4-5 | 上下文文件发现（`AGENTS.md`/`CLAUDE.md`） | `resource-loader.ts:185`（5 候选名）+ `loadProjectContextFiles:232` + `findShadowedContextFile:214` + worktree 影子判定（`:252-262`）+ `findGitPaths`（`footer-data-provider.ts:16-48`） | agent-core `prompt/ContextFileDiscovery.java`（5 候选名 / 向上遍历 / canonical 去重 / linked-worktree 影子去重）+ 接线 `AgentSession.java:423-425`（`--no-context-files` 有消费者） | **3** | 对齐 | — |
 | E4-6 | 系统提示词文件发现 | `resource-loader.ts:1213` `discoverSystemPromptFile` | ❌ | 2 | **缺失** | — |
@@ -431,7 +431,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 
 | # | 能力单元 | pi 侧证据 | pi-java 侧证据 | 权重 | 判定 | 台账 |
 |---|---|---|---|---|---|---|
-| E7-1 | RPC 命令集（pi 33 / java 33） | `rpc-types.ts:22-74` 33 个 `type` | `RpcCommand.java:23-55` 33 个 `@JsonSubTypes`（含 `ClearQueue:236`，`:298` 分发） | **3** | 对齐 | B34 闭环，两边集合逐一对上 |
+| E7-1 | RPC 命令集（pi 33 / java 33） | `rpc-types.ts:22-74` 33 个 `type` | `RpcCommand.java:23-55` 33 个 `@JsonSubTypes`（含 `ClearQueue:236`，`:298` 分发） | **3** | 对齐 | B34 闭环，两边集合逐一对上；**批 3（2026-10-19，B247/docs/13）**：`get_commands` 线格式对齐——`data` 包 `{commands}` 键（rpc-types.ts:241）、条目 `(name, description?, source, sourceInfo)`、去内置（pi 语义＝可经 prompt 调用）；扩展臂随 B221（窄差 D5） |
 | E7-2 | `extension_ui_request/response` 双向通道 | `rpc-types.ts:253-297`（9 method） | `RpcDispatcher.java:337-348` + `:57` `uiQueue` | 2 | **存疑** | 形有；`ui()` 无生产者 |
 | E7-3 | `get_state` 状态字段 | `rpc-types.ts:96-109`（`model?: Model` 对象） | `RpcDispatcher.java:390` `buildState` / `RpcSessionState.java:20-32` | 2 | **存疑** | java 已补 `isCompacting`/`sessionFile`/`sessionId`/`pendingMessageCount`；**B31**（model 是字符串非对象，`RpcSessionState:21`）/ **B32**（sessionName 恒有默认值，`SessionPersistence:249-255`）/ **B33**（messageCount 取 entryCount） |
 | E7-4 | RPC 事件线格式 | `modes/json-event.ts` | `mode/JsonEventMapper.java` | **3** | **存疑** | **B27/B28/B29**（另 `queue_update:98-99`、压缩/重试事件已上线） |

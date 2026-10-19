@@ -27,7 +27,7 @@
 ## 基准与口径
 
 - 七份地图（含 2026-10-12 新建的 `map/07-mcp.md`）已于 2026-10-12 对当前锚点逐条重测完毕。重测销号 A16，新发现的差异登记为 B233–B238。
-- 已闭环批次：ai 批 0–10（原 docs/08–19）、agent-core 批 1–3（原 docs/20–22）、telemetry 批 1（原 docs/23）、agent-core 批 4–5（docs/09–10）、coding-agent 批 1–2（docs/11–12）。
+- 已闭环批次：ai 批 0–10（原 docs/08–19）、agent-core 批 1–3（原 docs/20–22）、telemetry 批 1（原 docs/23）、agent-core 批 4–5（docs/09–10）、coding-agent 批 1–3（docs/11–13）。
   - ai 批 0 裁决：B115/B117/B124 取证关单、#87 零代码对齐、11 个单元移出分母。
   - telemetry 批 1 结论：pi 的 telemetry 是休眠契约（没有实际调用点），`map/01` 完成度 100%。
   - 换锚裁决依据在原 `docs/11-pi-reanchor-ruling.md`。
@@ -88,7 +88,7 @@
 | B218 | 内部 | `McpServerRegistry` 与 `McpScope.EXTENSION` 闭环前**没有生产者** | 注册表代码已落（原 docs/39），但 `pi.registerMcpServer` 没有挂载点；接线归 B221 |
 | B219 | 模型可见 | `mcp_servers` 段的排序用 `String.compareTo` 代替 pi 的 `localeCompare` | 纯 ASCII 名字两者等价，非 ASCII 名字排序有差（原 docs/39 §3.2） |
 | B220 | 模型可见 | `truncate` 的尾部裁剪字符集与 pi 不同 | Java 用 `trimEnd()`，pi 对应 `stripTrailing()` 语义；两者对窄角空格（U+00A0）处理不同（原 docs/39 §3.2） |
-| B221 | 协议面 | **MCP 扩展接线面整体顺延** | 缺口清单：① 六个 `on(...)` 事件只接了 1 个（原 docs/39 §2.4）；② 激活门未暴露给扩展（机制在 `AgentHarness.getActiveTools:528`，扩展拿不到）；③ `ctx.ui.custom`（即 B214）；④ `registerToolRenderer`（即 B204）；⑤ 提示分节接线（`ContextAssembler.promptOptions:104-114` 从未调过 `.sections(...)`）。归属是扩展系统（D 域与 E5），不是 MCP 模块本身 |
+| B221 | 协议面 | **MCP 扩展接线面整体顺延** | 缺口清单：① 六个 `on(...)` 事件只接了 1 个（原 docs/39 §2.4）；② 激活门未暴露给扩展（机制在 `AgentHarness.getActiveTools:528`，扩展拿不到）；③ `ctx.ui.custom`（即 B214）；④ `registerToolRenderer`（即 B204）；⑤ 提示分节接线（`ContextAssembler.promptOptions:104-114` 从未调过 `.sections(...)`）；⑥ RPC `get_commands` 扩展臂（pi `rpc-mode.ts:684-690`：`source:"extension"`＋per-command sourceInfo——java 扩展命令与内置同池注册、无溯源，B247 裁决③挂此）。归属是扩展系统（D 域与 E5），不是 MCP 模块本身 |
 | B161 | — | **codemode 整块零对应** | pi 用 quickjs-wasi 沙箱执行代码，Java 没有对应实现 |
 | B162 | — | tool-search / virtual-models / nested-tool-calls 三块零对应 | pi 的 deferred 工具发现、虚拟模型、嵌套工具调用，Java 均未实现 |
 | B177 | — | MCP 默认 `codemode` exposure 暂不可达 | MCP 各包（①–⑫a）的 wire/配置语义全部保留，但运行时激活路径依赖 B161 闭环（原 docs/28 §3 裁决） |
@@ -126,7 +126,6 @@
 | B163 | 用户可见 | 主题/色彩系统差距大 | pi 3,176 行（theme、system-theme、oklab 等），Java 74 行 |
 | B245 | 混合 | **tree 扩展事件＋TUI 摘要流**（批 agent-core-4 新登记，docs/09 §13.5） | ① `session_before_tree`/`session_tree` 扩展事件（types.ts:817-846,1488-1501，含 `result.summary` 整体替代生成器的 fromHook=true 旁路）；② TUI 树选择器摘要三选对话框（interactive-mode.ts:5559-5706）＋摘要期 Esc 换绑 `abortBranchSummary`（:5637-5640）＋`skipPrompt` 弹窗门（:5590，设置项批 4 已备）。挂扩展事件（D 域）与 TUI 两族；`navigateTree`/`abortBranchSummary` 本体批 4 已落 |
 | B246 | 混合 | **工具选择的 reload 臂＋SDK `tools` 选项抛错面**（批 coding-agent-1 新登记，docs/11 裁决④） | pi `usesDefaultTools`/`defaultToolModifiers`（`sdk.ts:472-473`）只在 `reload()` 有语义（`agent-session.ts:3660-3685`：设置重载后激活**新增**默认工具、移除的保持激活、`-name` 移除的保持移除），依附扩展运行时重载面；java 无 reload 面（设置改动走 accessors 即效）。SDK `tools` 选项的 `Invalid tools option` 抛错（`sdk.ts:280-281`）java 无 SDK 面；CLI 等价物＝解析期 error 诊断（批 1 已落）。触发条件＝java 出现 session reload/扩展运行时或 SDK 面 |
-| B247 | 混合 | **prompt template 命令注册面＋RPC `get_commands` 形状对齐**（批 coding-agent-2 新登记，docs/12 裁决④） | ① prompt template 补全条目（pi **无条件**注册，`interactive-mode.ts:787-792`）＋`/tpl` 提交透传（与 B244 裁决①同形：dispatch 返回 null 落 prompt，批 4 展开器接手）；② RPC `get_commands` 形状差：pi＝扩展＋模板＋skill（**无内置**）且条目带 `source`/`sourceInfo`（rpc-types.ts:81-89），java＝内置 24 条＋skill、`(name, description, argumentHint)` 形状（批 2 只在现形状追加 skill 臂）。触发条件＝coding-agent 下一包排期 |
 
 ### 3.4 TUI（优先级最低，web UI 为主）
 
@@ -320,8 +319,15 @@
 
 - 【场景】pi 的 `skill:<name>` 不是真注册命令——只活在补全名单里（`interactive-mode.ts:803-815`，受 `enableSkillCommands` 门，默认 true），提交时靠「非内置命令 ⇒ 落普通 prompt ⇒ `_expandSkillCommand` 展开」生效；设置只门补全名单，展开恒开（`agent-session.ts:2003-2011` 的 gate 是 `expandPromptTemplates` 参数）。java 批 4 已把展开器装进 `AgentSession`，但 `CommandRegistry.dispatch` 把 `/skill:foo` 当未知命令吞掉，展开永远到不了。
 - 【决定】2026-10-19 批 coding-agent-2（docs/12）：注册面三层整体落地——① settings accessor（缺省回落 true、写全局域）＋设置页 "Skill commands" 字段；② TUI 补全目录 skill 臂（`SkillCommandItems`，来源标签 u/p/t 三值子集）；③ `CommandRegistry.dispatch` 对 `/skill:` 前缀返回 null 透传为 prompt；④ RPC `get_commands` 追加 skill 臂（现形状）。**裁决①**：不注册真 `SlashCommand`（pi 同形，`SlashCommand` 返回语义无「转 prompt」通道）。**裁决②**：展开不受开关门（pi 实证）。**裁决⑤**：pi 的 `skillCommands` Map 只写不读，不移植。**裁决⑦**：overlay 关闭统一重建补全目录（pi 是 toggle 即时重建）。**不移植**（裁决③）：legacy 嵌套 `skills` 对象迁移。RPC 形状差（builtins/source/sourceInfo/模板臂）登记 **B247**。
-- 【风险/代价】窄差（docs/12 §5）：D1 手抄 pi 旧格式 `skills` 对象进 `.pi-java` ⇒ Jackson 加载期报错（pi 静默迁移）；D2 来源标签仅 u/p/t（pi 另有 npm:/git: 复合标签，java 无包源加载面）；D3 未识别 slash 仅放行 `/skill:` 前缀，其余仍报 Unknown command（pi 任何 `/xxx` 都落 prompt，java 既有 UX）；D4 补全目录在设置屏关闭时重建（pi toggle 即时）。[D3 用户可见；D1/D2/D4 边缘/时机]
-- 触发条件：java 包源加载落地时回收 D2；prompt template 命令面排期时收编 B247。出处：docs/12 §5。
+- 【风险/代价】窄差（docs/12 §5）：D1 手抄 pi 旧格式 `skills` 对象进 `.pi-java` ⇒ Jackson 加载期报错（pi 静默迁移）；D2 来源标签仅 u/p/t（pi 另有 npm:/git: 复合标签，java 无包源加载面）；D3 未识别 slash 仅放行 `/skill:` 前缀，其余仍报 Unknown command（pi 任何 `/xxx` 都落 prompt，java 既有 UX；批 3 起放行面扩到已注册模板名，见 B247 条目）；D4 补全目录在设置屏关闭时重建（pi toggle 即时）。[D3 用户可见；D1/D2/D4 边缘/时机]
+- 触发条件：java 包源加载落地时回收 D2。出处：docs/12 §5。
+
+### map/04-B247 — prompt template 命令注册面 ＋ RPC `get_commands` 形状对齐
+
+- 【场景】B244 把 `/skill:` 注册面补齐时，模板族还是老三样缺：补全目录无模板臂（pi **无条件**注册，`interactive-mode.ts:787-792`）、手敲 `/tpl` 被 `CommandRegistry` 当未知命令吞掉（批 4 的 `PromptTemplateExpansion` 触达不到）、RPC `get_commands` 是 java 自造形状（收内置 24 条、`(name, description, argumentHint)`、`data` 裸数组；pi＝扩展＋模板＋skill **无内置**、`(name, description?, source, sourceInfo)`、`data` 包 `{commands}` 键——rpc-types.ts:77-89,241／rpc-client.ts:459）。
+- 【决定】2026-10-19 批 coding-agent-3（docs/13）：① 注册面两层落地——补全目录模板臂（`PromptTemplateItems`，无条件＋u/p/t 标签＋argumentHint 透传，序在内置后 skill 前）＋dispatch 对**已注册模板名**透传（`SlashContext.session()` 查注册表，null 守卫）；② 加载期 sourceInfo 打标——`PromptTemplate` 记录增 `sourceInfo`（新叶子包 `core.source.SourceInfo`，裁决⑦防 core↔prompt 包环），`loadDefaults` 拆 user/project 两路、显式路径 temporary＋pi baseDir 规则（目录⇒自身、文件⇒父目录）；③ RPC 形状一次收平——`RpcSlashCommand` 改四组件（删 `argumentHint`，裁决⑤）、去内置（裁决①，pi 语义＝可经 prompt 调用，内部消费者零命中复核）、`data` 包 `{commands}` 键（裁决②，批 2 偏差②回本）、skill 臂补五字段 sourceInfo（EXPLICIT→temporary）。**裁决③**：扩展臂随 B221（java 扩展命令与内置同池、无 sourceInfo 溯源），不新立 B 号、差入窄差 D5。**裁决④**：透传按「已注册模板名」判定，D3 保持不扩成任意 slash 透传。**裁决⑥**：sourceInfo 值域落 `"local"`/`"top-level"`＋scope 三值子集（npm:/git:/package 随包域，窄差 D2 同族）。
+- 【风险/代价】线格式三变（去内置/改形/包键）——外部裸读旧形状脚本断，内部 client/server/web 零命中（2026-10-19 grep 复核）；窄差：D3（更新）未识别 slash 放行 `/skill:` 前缀＋已注册模板名，其余仍 Unknown command；D5（新）`get_commands` 无扩展臂（当前无触发者——java 扩展命令注册面无实际生产者）。[线格式用户可见；D5 当前空转]
+- 触发条件：B221 落地时同批收编扩展臂（销 D5）；java 包源加载落地时回收 D2 族（npm:/git: 标签＋package origin）。出处：docs/13 §5。
 
 ---
 
@@ -330,8 +336,9 @@
 | # | 文件 | 行数 |
 |---|---|---:|---:|
 | E1 | coding-agent …/core/AgentSession.java | **1,605**（2026-10-18 批 coding-agent-1 实测；拆分宜搭下一 coding-agent 批） |
-| E2 | coding-agent …/rpc/RpcDispatcher.java | 627 |
+| E2 | coding-agent …/rpc/RpcDispatcher.java | 661（2026-10-19 批 coding-agent-3 实测） |
 | E5 | ai …/catalog/ModelCompat.java | **762**（2026-10-11 B98 加 8 组件；converter 侧已拆出 CompletionAssistantMessage 保 500 内） |
+| E6 | tui …/app/PiTuiApp.java | 519（2026-10-19 批 coding-agent-3 新登记——批 2 闭环时已 512 未入册，本批 +7） |
 
 （E3/E4 已销号——2026-10-18 批 agent-core-5 拆分：`PiLaneSink` 470＋`PiLaneRequestTelemetry` 131、`AgentHarness` 438＋`HarnessBootstrap` 231，行为零变化纯移动。）
 
