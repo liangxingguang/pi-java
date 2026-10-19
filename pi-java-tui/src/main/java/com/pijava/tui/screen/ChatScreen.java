@@ -300,6 +300,8 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
             case AgentSessionEvent.QueueUpdate q ->
                 pendingQueue.update(q.steering(), q.followUp());
             case AgentSessionEvent.FlashStatus status -> showStatus(status.message());
+            // docs/14（窄差 D5）：extension_error 已上 RPC 线；TUI 通知面归 D′ 域，本批先忽略。
+            case AgentSessionEvent.ExtensionError ignored -> { }
             default -> { }
         }
     }
