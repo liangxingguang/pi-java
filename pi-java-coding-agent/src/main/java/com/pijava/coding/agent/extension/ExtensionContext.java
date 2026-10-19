@@ -47,9 +47,9 @@ public interface ExtensionContext {
      * spec-token 单方法 —— pi 的 41 个重载只是类型约束，运行时全走一个 {@code on()}）。
      *
      * <p>注册序即触发序；返回的退订闭包按实例移除、空表删键（pi 逐字语义）。
-     * 只能在扩展 {@code register} 期间经 per-extension 上下文调用
-     * （pi 的 {@code assertActive} 同构）——共享基础上下文调用会抛
-     * {@link IllegalStateException}。</p>
+     * 需经 per-extension 上下文（{@link #forExtension} 的委托）调用 —— 委托可
+     * 在 register 期或其后任何时候使用（pi 的扩展也能运行期订阅）；共享基础
+     * 上下文调用抛 {@link IllegalStateException}（无扩展名可归属，非时限门）。</p>
      *
      * @param spec    事件规格令牌（{@code ExtensionEventSpec.CONTEXT} 等）
      * @param handler 处理器；返回 {@code null ≙ pi 的 undefined}（不发言）

@@ -22,8 +22,9 @@ import com.pijava.coding.agent.extension.event.ExtensionEventSpec;
  * <p>docs/14：本实例是**全扩展共享的基础上下文**（桥传给处理器的 {@code ctx} 也是它）。
  * 扩展注册走的是 {@link #forExtension} 派生的委托实例 —— 其 {@code on()} 把扩展名
  * 带给 {@link ExtensionEventBus}，错误归属与 pi 的 {@code extensionPath} 对齐。
- * 基础上下文自己的 {@code on()} 抛 {@link IllegalStateException}（pi 的
- * {@code assertActive} 同构：订阅只能发生在扩展注册期）。</p>
+ * 委托实例可随时 {@code on()}（pi 的扩展同样能在 register 后经持有的 API 在运行期订阅；
+ * pi 的 {@code assertActive} 只对**加载失败**的扩展抛）。基础上下文自己的 {@code on()}
+ * 抛 {@link IllegalStateException} —— 不是 pi 的时限语义，而是「无扩展名可归属」。</p>
  */
 public final class DefaultExtensionContext implements ExtensionContext {
 

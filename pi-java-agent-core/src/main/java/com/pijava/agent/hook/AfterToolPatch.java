@@ -32,7 +32,11 @@ import com.pijava.ai.message.ContentBlock;
  * @param details               替换结构化细节（{@code null}=保留）
  * @param usage                 替换用量（{@code null}=保留）
  * @param terminate             替换批次终止提示（{@code null}=保留）
- * @param isError               替换错误标记（{@code null}=保留；作用于结果，而非工具本身）
+ * @param isError               替换错误标记（{@code null}=保留）。⚠️ 它走的是
+ *                              {@code AfterToolOutcome.isError} 通道（消息/线格式的权威值），
+ *                              <b>不</b>回写 {@link ToolResult#isError} record 字段 ——
+ *                              结果对象上的该字段保持执行相的值（pi 的结果对象无此字段，
+ *                              该通道本就是 java 方言，读它要读 outcome）
  * @param structuredContent     替换机器可读载荷（{@code null}=保留）
  * @param dropStructuredContent {@code true} ⇒ 清空 structuredContent（优先于替换值）
  */

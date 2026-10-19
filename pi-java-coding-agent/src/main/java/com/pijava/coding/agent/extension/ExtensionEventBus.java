@@ -17,7 +17,8 @@ import com.pijava.coding.agent.extension.event.ExtensionEventSpec;
  *
  * <p>订阅表按线名分桶，桶内注册序即触发序。pi 的表挂在单个扩展上、触发时按
  * 「扩展加载序 × 扩展内注册序」展开 —— java 的桶是全局追加序：装配期逐扩展加载、
- * 加载内逐次 {@code on()}，展开序与 pi 相同。</p>
+ * 加载内逐次 {@code on()}，展开序与 pi 相同。⚠️ 若扩展在装配后**交错**运行期订阅，
+ * 全局追加序会与 pi 的「按扩展分组」序不同（评审 M7 登记；当前无运行期订阅生产者）。</p>
  *
  * <p>线程模型：订阅集中在装配期（单线程），触发可并发（工具 worker 虚拟线程）——
  * 桶用 {@link CopyOnWriteArrayList}，表用 {@link ConcurrentHashMap}；

@@ -314,6 +314,26 @@ class EngineHookBridgeTest {
         assertThat(outcome.message().content().toString()).contains("ext boom");
     }
 
+    /** 处理器抛 {@link Error}（非 Exception）⇒ 同样转工具错误结果（pi 的 catch 捕获一切）。 */
+    @Test
+    void aToolCallHandlerThrowingAnErrorStillBecomesTheToolErrorResult() {
+        var bus = new ExtensionEventBus();
+        bus.on("ext", ExtensionEventSpec.TOOL_CALL, (event, ctx) -> {
+            throw new AssertionError("ext assertion blew up");
+        });
+        var hooks = new HookSystem(new LaneState());
+        EngineHookBridge.install(hooks, "default", bus, null);
+        var tool = new CapturingTool();
+
+        var outcome = runBoth(runnerWith(tool, hooks),
+            new PiLoop.ToolCall("tc1", "cap", Map.of(), false));
+
+        assertThat(tool.executed).isFalse();
+        assertThat(outcome.isError()).isTrue();
+        assertThat(outcome.message().content().toString())
+            .contains("ext assertion blew up");
+    }
+
     // ═══════════════════════════════════════════════════════════
     // ToolResultAdapter（§7.4）
     // ═══════════════════════════════════════════════════════════
@@ -408,6 +428,30 @@ class EngineHookBridgeTest {
             new PiLoop.ToolCall("tc1", "t", Map.of(), false));
 
         assertThat(outcome.result()).isSameAs(holder.get());
+    }
+
+    /** 处理器抛 {@link Error} ⇒ 同样上报＋后续照跑（pi 的 catch 捕获一切，逐处理器）。 */
+    @Test
+    void aToolResultHandlerThrowingAnErrorIsReportedAndLaterHandlersStillApply() {
+        var bus = new ExtensionEventBus();
+        var errors = new ArrayList<ExtensionError>();
+        bus.onError(errors::add);
+        bus.on("ext-bad", ExtensionEventSpec.TOOL_RESULT, (event, ctx) -> {
+            throw new AssertionError("tr assertion blew up");
+        });
+        bus.on("ext-good", ExtensionEventSpec.TOOL_RESULT, (event, ctx) ->
+            new ToolResultEventResult(
+                List.of(new ContentBlock.TextContent("patched")), null, null, null, null));
+        var hooks = new HookSystem(new LaneState());
+        EngineHookBridge.install(hooks, "default", bus, null);
+        var holder = new AtomicReference<ToolResult<?>>();
+
+        var outcome = runBoth(runnerWith(structuredTool("t", false, null, holder), hooks),
+            new PiLoop.ToolCall("tc1", "t", Map.of(), false));
+
+        assertThat(outcome.message().content().toString()).contains("patched");
+        assertThat(errors).hasSize(1);
+        assertThat(errors.get(0).message()).isEqualTo("tr assertion blew up");
     }
 
     /** 处理器抛错 ⇒ 上报＋后续处理器照跑（逐处理器捕获，错误归属正确）。 */

@@ -99,7 +99,7 @@ public final class EngineHookBridge {
                 if (returned != null) {
                     current = restoreSystemMessages(current, snapshot, returned);
                 }
-            } catch (Exception e) {
+            } catch (Throwable e) { // pi 的 catch 捕获一切：逐处理器上报 ⇒ 继续
                 bus.emitError(h.error(e));
             }
         }
@@ -116,7 +116,7 @@ public final class EngineHookBridge {
                         || !(current.get(0) instanceof Message.SystemMessage))) {
                     bus.emitError(h.error(LEADING_SYSTEM_REMOVED)); // pi 逐字
                 }
-            } catch (Exception e) {
+            } catch (Throwable e) { // pi 的 catch 捕获一切
                 bus.emitError(h.error(e));
             }
         }
@@ -182,6 +182,12 @@ public final class EngineHookBridge {
                 // 裁决③：不捕获、向上传播。sneaky throw —— BeforeToolHook 接口无
                 // throws 声明，原样抛出保住 pi 的错误文本（messageOf 取 getMessage）。
                 throw throwAsIs(e);
+            } catch (Error e) {
+                // pi 的 catch 捕获一切（agent-loop.ts:668-673 把 error.message 转成
+                // 工具错误结果）；java 的 HookSystem/PiToolRunner 只 catch Exception ——
+                // Error 在这里包成 RuntimeException（保 message），走同一条转换链，
+                // 而不是炸穿 prepare 逃出工具 worker。
+                throw new RuntimeException(e.getMessage(), e);
             }
             if (r != null && Boolean.TRUE.equals(r.block())) {
                 return new BeforeToolResult(false,
@@ -244,7 +250,7 @@ public final class EngineHookBridge {
                     currentUsage = r.usage();
                     modified = true;
                 }
-            } catch (Exception e) {
+            } catch (Throwable e) { // pi 的 catch 捕获一切：逐处理器上报 ⇒ 继续
                 bus.emitError(h.error(e));
             }
         }

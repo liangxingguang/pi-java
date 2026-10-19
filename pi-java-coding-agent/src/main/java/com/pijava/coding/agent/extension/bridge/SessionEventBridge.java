@@ -54,6 +54,10 @@ import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.TURN_ST
  * 需要，宿主事件只有新值 ⇒ 桥内跟踪，种子＝装配时当前等级）。</p>
  *
  * <p>{@code fromExtension} 恒 {@code false}（窄差 D6：java 无扩展触发压缩的路径）。</p>
+ *
+ * <p><b>线程假设</b>：{@code turnIndex}/{@code previousLevel} 是普通字段 —— 宿主事件
+ * 发射在实践中按事件类型单线程（引擎车道线程 / setter 调用线程），pi 更是天然单线程。
+ * 若未来出现多线程并发发射同族事件，这两个计数器需要同步化（评审 M6 登记）。</p>
  */
 public final class SessionEventBridge {
 
@@ -100,9 +104,8 @@ public final class SessionEventBridge {
                 fire(TOOL_EXECUTION_UPDATE, new ToolExecutionUpdateEvent(
                     e.toolCallId(), e.toolName(), e.args(), e.partialResult()));
             case AgentSessionEvent.ToolExecutionEnd e ->
-                // ⚠️ 宿主事件不带 args（pi types.ts:1087 有）——直译只能给 null（窄差，闭环登记）。
                 fire(TOOL_EXECUTION_END, new ToolExecutionEndEvent(
-                    e.toolCallId(), e.toolName(), null, e.result(), e.isError(), e.durationMs()));
+                    e.toolCallId(), e.toolName(), e.result(), e.isError(), e.durationMs()));
             case AgentSessionEvent.ThinkingLevelChanged e -> {
                 fire(THINKING_LEVEL_SELECT,
                     new ThinkingLevelSelectEvent(e.level(), previousLevel));
@@ -142,7 +145,7 @@ public final class SessionEventBridge {
         }
     }
 
-    /** 观察型发射：无订阅者快走；逐处理器 try/catch ⇒ emitError ⇒ 继续。 */
+    /** 观察型发射：无订阅者快走；逐处理器 try/catch ⇒ emitError ⇒ 继续（pi 的 catch 捕获一切）。 */
     private <E extends ExtensionEvent> void fire(ExtensionEventSpec<E, Void> spec, E event) {
         if (!bus.hasHandlers(spec)) {
             return;
@@ -150,7 +153,7 @@ public final class SessionEventBridge {
         for (var h : bus.snapshot(spec)) {
             try {
                 h.handle(event, ctx);
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 bus.emitError(h.error(e));
             }
         }

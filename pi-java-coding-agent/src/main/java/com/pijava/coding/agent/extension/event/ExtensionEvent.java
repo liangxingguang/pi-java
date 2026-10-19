@@ -98,8 +98,12 @@ public sealed interface ExtensionEvent {
                                     Map<String, Object> args, Object partialResult)
             implements ExtensionEvent {}
 
-    /** pi {@code tool_execution_end}（types.ts:1087；{@code durationMs} 可空 ≙ 键省略）。 */
-    record ToolExecutionEndEvent(String toolCallId, String toolName, Map<String, Object> args,
+    /**
+     * pi {@code tool_execution_end}（types.ts:1086-1097 逐字段：toolCallId/toolName/result/
+     * isError/durationMs?——⚠️ **无 {@code args}**，pi 的 end 是独立 interface，不继承
+     * start/update 的字段；{@code durationMs} 可空 ≙ 键省略）。
+     */
+    record ToolExecutionEndEvent(String toolCallId, String toolName,
                                  Object result, boolean isError, Long durationMs)
             implements ExtensionEvent {}
 
