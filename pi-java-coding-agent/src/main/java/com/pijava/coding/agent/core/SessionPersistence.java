@@ -78,6 +78,17 @@ final class SessionPersistence {
     /** Attach an already-opened session（⓪ 路径快道/常规道/fork 臂共用，docs/16 提为包可见）。 */
     static void attachOpened(AgentSession owner, Session<?> opened,
                              SessionMetadata metadata) {
+        // docs/16（B252 §3.7）：原地 attach 关旧 storage —— 先 persistPending（未落盘
+        // 写入不丢），再关 JDBC/文件句柄。恒等跳过两臂：同一对象（fork 臂 copy.session
+        // 已先置好）；同一会话 id（attach 经 handle.open 重开**同一文件**的另一视图 —
+        // 持久路 create/resume 的 resolvePersistent(Web)，关旧视图毫无收益还可能
+        // 双写 lane 记录）。
+        var previousStorage = owner.session();
+        if (previousStorage != null && previousStorage != opened
+                && !previousStorage.getMetadata().id().equals(metadata.id())) {
+            persistPending(owner, previousStorage, owner.laneName());
+            previousStorage.close();
+        }
         owner.session(opened);
         owner.name(sessionNameOf(opened, metadata));
         String lane = owner.laneName();

@@ -132,14 +132,14 @@ public final class RpcDispatcher {
                 case RpcCommand.GetState g ->
                     out.write(RpcResponse.ok(g.id(), "get_state", buildState()));
                 case RpcCommand.NewSession n -> {
-                    // docs/15（B250）：替换式新建 —— start{new, previous}＋旧侧
-                    // shutdown{new, 新 id}（pi newSession 序列，序差在册 D20；
-                    // 旧会话不 close 是存量，B252 在册）。
+                    // docs/15（B250）＋docs/16（B252）：替换式新建 —— start{new,
+                    // previous}＋旧会话真正关闭（closeForReplacement 内含
+                    // shutdown{new, 新 id}；pi newSession 序列，序差在册 D20）。
                     var old = session;
                     var previousId = old.sessionId();
-                    closeSession();
+                    unsubscribe();
                     session = AgentSession.createReplacing(args, previousId);
-                    old.fireSessionShutdown("new", session.sessionId());
+                    old.closeForReplacement("new", session.sessionId());
                     eventSubscription = session.subscribe(this::emitEvent);
                     out.write(RpcResponse.ok(n.id(), "new_session", buildState()));
                 }
@@ -267,7 +267,8 @@ public final class RpcDispatcher {
                         out.write(RpcResponse.ok(fk.id(), "fork",
                             Map.of("text", "", "cancelled", true)));
                     } else {
-                        closeSession();
+                        // docs/16（B252）：旧会话关闭已收进 fork 内部（closeForFork）。
+                        unsubscribe();
                         session = forked.get();
                         eventSubscription = session.subscribe(this::emitEvent);
                         out.write(RpcResponse.ok(fk.id(), "fork",
@@ -283,7 +284,7 @@ public final class RpcDispatcher {
                         out.write(RpcResponse.ok(c.id(), "clone",
                             Map.of("cancelled", true)));
                     } else {
-                        closeSession();
+                        unsubscribe();
                         session = forked.get();
                         eventSubscription = session.subscribe(this::emitEvent);
                         out.write(RpcResponse.ok(c.id(), "clone",
@@ -332,9 +333,18 @@ public final class RpcDispatcher {
         }
     }
 
-    /** 关闭当前会话与其事件订阅。 */
+    /**
+     * 关闭当前会话与其事件订阅（docs/16 T3：pi rpc-mode.ts:736 对位 —— EOF 时
+     * dispose <b>当前</b>会话，shutdown{quit} 自此在 RPC 退出路径发射；替换过的
+     * run 里关的是新会话，旧会话已在替换路径关过、幂等门下 no-op）。
+     */
     public void close() {
-        closeSession();
+        unsubscribe();
+        try {
+            session.close();
+        } catch (Exception e) {
+            // 退出期关闭失败忽略（pi dispose 的 try/catch 同旨）
+        }
     }
 
     // ── 命令实现 ─────────────────────────────────────────────────────────
@@ -398,7 +408,8 @@ public final class RpcDispatcher {
         }
     }
 
-    private void closeSession() {
+    /** 仅退订事件通道（docs/16 改名：会话关闭归 closeForReplacement/closeForFork/close）。 */
+    private void unsubscribe() {
         try {
             if (eventSubscription != null) {
                 eventSubscription.close();

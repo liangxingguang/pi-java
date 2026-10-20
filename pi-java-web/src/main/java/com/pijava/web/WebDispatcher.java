@@ -342,7 +342,7 @@ final class WebDispatcher {
         });
     }
 
-    /** fork：{@code entryId} 之后的会话拷贝为新会话（共享 harness，不关旧会话）。 */
+    /** fork：{@code entryId} 之后的会话拷贝为新会话（docs/16：旧会话关闭收进 fork 内部）。 */
     private void forkFrom(String entryId) {
         if (entryId == null || entryId.isBlank()) {
             send.accept(new WebServerMessage.Error("Entry id required"));

@@ -67,12 +67,13 @@ public final class SessionCommands {
         });
         registry.register(simple("new", "Start a new session", "",
             (args, ctx) -> {
-                // docs/15（B250）：替换式新建 —— 新会话 start{new, previous}，
-                // 旧侧 shutdown{new, 新 id}（pi newSession 序列，序差在册 D20）。
+                // docs/15（B250）＋docs/16（B252）：替换式新建 —— 新会话 start{new,
+                // previous}，旧会话真正关闭（closeForReplacement 内含 shutdown{new,
+                // 新 id}；pi newSession 序列，序差在册 D20）。
                 var previousId = ctx.session().sessionId();
                 var fresh = AgentSession.createReplacing(ctx.session().sessionArgs(),
                     previousId);
-                ctx.session().fireSessionShutdown("new", fresh.sessionId());
+                ctx.session().closeForReplacement("new", fresh.sessionId());
                 ctx.onSwitchSession().accept(fresh);
                 return "Started new session";
             }));

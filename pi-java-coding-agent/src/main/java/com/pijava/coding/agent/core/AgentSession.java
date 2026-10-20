@@ -146,6 +146,8 @@ public final class AgentSession implements AutoCloseable {
     // 发射口（pi 的 extensionRunner 宿主发射法对位）。--no-extensions 时为 null，
     // 全部 firing 点判空快走（pi 无扩展＝runner 空表，行为等价）。
     private com.pijava.coding.agent.extension.SessionEventFirer extensionFirer;
+    /** docs/16（B252，裁决⑥）：替换/退出关闭幂等门。 */
+    private volatile boolean closed;
 
     private AgentSession(AgentHarness harness, SessionServices services,
                          Args args, String name) {
@@ -217,8 +219,9 @@ public final class AgentSession implements AutoCloseable {
     /**
      * docs/15（B250）：替换式新建（/new、RPC new_session、Web newSession）——
      * 新会话装配时 {@code session_start} 带 {@code {reason:"new",
-     * previousSessionFile:旧会话 id}}。旧侧的 {@code session_shutdown} 由调用方
-     * 在拿到新会话后 {@link #fireSessionShutdown}（目标 id 先知才行，窄差 D20）。
+     * previousSessionFile:旧会话 id}}。旧侧关闭由调用方在拿到新会话后
+     * {@link #closeForReplacement}（目标 id 先知才行，窄差 D20；docs/16 起
+     * 内含 shutdown{new}＋真正关闭）。
      */
     public static AgentSession createReplacing(Args args, String previousSessionId) {
         return create(args, new SessionStartInfo("new", previousSessionId));
@@ -1477,10 +1480,11 @@ public final class AgentSession implements AutoCloseable {
     /**
      * Create a forked copy ({@code /fork /clone --fork}）：整棵树都复制（pi {@code ForkOptions.Tree}）。
      *
-     * <p>docs/15（B249④）：先发射 {@code session_before_fork{entryId:当前叶,
-     * position:"at"}}（整枝拷贝的映射，窄差 D17）——cancel ⇒ {@code Optional.empty}
-     * （pi 的 {@code {cancelled:true}}）；建成后旧侧发射
-     * {@code session_shutdown{fork, 新会话 id}}（pi teardownCurrent 对位）。</p>
+     * <p>docs/15（B249④）＋docs/16（B252）：先发射 {@code session_before_fork
+     * {entryId:当前叶, position:"at"}}（整枝拷贝的映射，窄差 D17）——cancel ⇒
+     * {@code Optional.empty}（pi 的 {@code {cancelled:true}}）；建成后旧会话经
+     * {@code closeForFork} 真正关闭（内含 {@code session_shutdown{fork, 新会话 id}}，
+     * pi teardownCurrent 对位），forked 再全量重装扩展（start{fork}）。</p>
      */
     public Optional<AgentSession> forkCopy(String branchName) {
         var leafId = harness.snapshot(laneName()).leafId();
@@ -1489,7 +1493,9 @@ public final class AgentSession implements AutoCloseable {
         }
         var previousId = sessionId();
         var copy = forkCopyInternal(branchName);
-        fireSessionShutdown("fork", copy.sessionId());
+        // docs/16（T2，pi teardownCurrent 对位）：旧会话真正关闭（abort→shutdown→
+        // 关独占资源），共享的 repository 句柄留给 forked。
+        closeForFork(copy.sessionId());
         // docs/16（T1，pi §1.2 序：teardown → createRuntime → rebind）：forked 会话
         // 全量重装扩展并发射 session_start{fork, previousSessionFile} —— 与全新会话
         // 享有完全相同的扩展面（pi bindExtensions 同一口，agent-session.ts:3258-3281）。
@@ -1544,7 +1550,7 @@ public final class AgentSession implements AutoCloseable {
         }
         var previousId = sessionId();
         var copy = forkFromEntryInternal(entryId);
-        fireSessionShutdown("fork", copy.sessionId());
+        closeForFork(copy.sessionId());
         // docs/16（T1）：与 forkCopy 同序 —— forked 全量重装扩展＋start{fork}。
         loadExtensions(args, copy.services(), copy.harness(), extensionUI, copy,
             new SessionStartInfo("fork", previousId));
@@ -1771,7 +1777,7 @@ public final class AgentSession implements AutoCloseable {
     /** Flush settings, persist pending writes and close the harness. */
     @Override
     public void close() {
-        closeWith("quit", null);
+        closeWith("quit", null, true);
     }
 
     /**
@@ -1780,13 +1786,20 @@ public final class AgentSession implements AutoCloseable {
      * targetSessionFile}}，再走原关闭流程。
      */
     public void closeForReplacement(String reason, String targetSessionFile) {
-        closeWith(reason, targetSessionFile);
+        closeWith(reason, targetSessionFile, true);
     }
 
     /**
-     * docs/15（B249④）：仅发射 {@code session_shutdown}（不关闭）——/new、fork 等
-     * 路径的旧会话在 java 不 close（存量，B252 在册），但扩展运行时该收到拆解通知
-     * （pi 的 teardownCurrent 语义）。
+     * docs/16（B252）：fork 臂拆解 —— persistentRepository 句柄与 services 由
+     * forked 继承，不关（父关即杀子，§2.5③）。
+     */
+    private void closeForFork(String forkedSessionId) {
+        closeWith("fork", forkedSessionId, false);
+    }
+
+    /**
+     * docs/15（B249④）：仅发射 {@code session_shutdown}（不关闭）——switchTo 的
+     * 原地 attach 路会话对象不换（持久路），只发拆解通知（pi teardownCurrent 语义）。
      */
     public void fireSessionShutdown(String reason, String targetSessionFile) {
         if (extensionFirer != null) {
@@ -1794,16 +1807,27 @@ public final class AgentSession implements AutoCloseable {
         }
     }
 
-    private void closeWith(String reason, String targetSessionFile) {
+    /**
+     * pi teardownCurrent（agent-session-runtime.ts:167-178）＋ dispose
+     * （agent-session.ts:1393-1414）对位：abort 在途（让被中止的 turn 落盘到出站
+     * 会话，:168/:1395-1401 第一步）→ shutdown 事件 → 关独占资源。
+     * 幂等（裁决⑥）：二次调用零效果（不重发事件、不双关句柄）。
+     */
+    private void closeWith(String reason, String targetSessionFile, boolean closeHandle) {
+        if (closed) {
+            return;
+        }
+        closed = true;
+        // docs/16 裁决⑤：abort() 内含 abortCompaction/abortBranchSummary/abortRetry
+        // 并置中止旗 —— pi 的 settle 在途 turn 第一步（原实现只 abortRetry）。
+        abort();
         // pi dispose/teardownCurrent：shutdown 事件在 dispose 之前（:258-267）。
         fireSessionShutdown(reason, targetSessionFile);
-        // pi dispose()（:876-885）第一步 abortRetry() —— 关窗时掐掉待完成的退避睡眠。
-        abortRetry();
         if (session != null) {
             SessionPersistence.persistPending(this, session, laneName());
             session.close();
         }
-        if (persistentRepository != null) {
+        if (closeHandle && persistentRepository != null) {
             persistentRepository.close();
         }
         services.settings().flush();
