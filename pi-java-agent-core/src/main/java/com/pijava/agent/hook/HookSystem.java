@@ -105,6 +105,16 @@ public final class HookSystem {
         return registry.register(laneName, "prepare_next_turn", hook);
     }
 
+    /** Register a {@code message_end} hook for the lane（docs/15 裁决①：pi {@code emitMessageEnd} 的引擎侧落点）。 */
+    public AutoCloseable onMessageEnd(String laneName, MessageEndHook hook) {
+        return registry.register(laneName, "message_end", hook);
+    }
+
+    /** Register a {@code before_settle} hook for the lane（docs/15 裁决②：pi {@code _runBeforeSettleBoundary} 的引擎侧落点）。 */
+    public AutoCloseable onBeforeSettle(String laneName, BeforeSettleHook hook) {
+        return registry.register(laneName, "before_settle", hook);
+    }
+
     // ═══════════════════════════════════════════════════════════
     // Firing (10 fire* methods)
     // ═══════════════════════════════════════════════════════════
@@ -353,6 +363,54 @@ public final class HookSystem {
             }
         }
         return result;
+    }
+
+    /**
+     * Fire {@code message_end} hooks（docs/15 裁决①，pi {@code runner.ts:1144-1181} 的
+     * 链式语义）：按注册序逐钩调用，<b>后钩看到前钩的替换结果</b>；任一钩抛异常记账并
+     * 弃权（非致命族）；全程无替换 ⇒ {@code null}。
+     *
+     * @return 链终替换消息；{@code null} 表示没有钩子发言（调用方用原消息）
+     */
+    public com.pijava.ai.message.Message fireMessageEnd(String laneName, MessageEndContext ctx) {
+        com.pijava.ai.message.Message current = ctx.message();
+        boolean modified = false;
+        for (var hook : registry.get(laneName, "message_end")) {
+            try {
+                var r = ((MessageEndHook) hook).messageEnd(
+                    new MessageEndContext(ctx.lane(), ctx.runId(), current));
+                if (r != null) {
+                    current = r;
+                    modified = true;
+                }
+            } catch (Exception e) {
+                recordHookError(laneName, "message_end", e);
+            }
+        }
+        return modified ? current : null;
+    }
+
+    /**
+     * Fire {@code before_settle} hooks（docs/15 裁决②）：任一 {@code TRUE} 短路即赢；
+     * 无 TRUE 有 FALSE ⇒ FALSE；全弃权 ⇒ {@code null}（调用方按无桥行为收口——
+     * pi 此刻队列必空，弃权与 {@code hasQueuedMessages()} 同值）。抛错的钩子记账并弃权。
+     */
+    public Boolean fireBeforeSettle(String laneName, BeforeSettleContext ctx) {
+        Boolean decision = null;
+        for (var hook : registry.get(laneName, "before_settle")) {
+            try {
+                var r = ((BeforeSettleHook) hook).beforeSettle(ctx);
+                if (Boolean.TRUE.equals(r)) {
+                    return Boolean.TRUE;
+                }
+                if (r != null) {
+                    decision = r;
+                }
+            } catch (Exception e) {
+                recordHookError(laneName, "before_settle", e);
+            }
+        }
+        return decision;
     }
 
     // ═══════════════════════════════════════════════════════════

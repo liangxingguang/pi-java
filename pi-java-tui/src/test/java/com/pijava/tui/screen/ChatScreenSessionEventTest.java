@@ -138,7 +138,7 @@ class ChatScreenSessionEventTest {
             .isEqualTo("Context overflow detected, Auto-compacting... (esc to cancel)");
 
         screen.onSessionEvent(new AgentSessionEvent.CompactionEnd(
-            CompactionReason.OVERFLOW, null, false, false, null));
+            CompactionReason.OVERFLOW, null, false, false, null, null));
         assertThat(screen.indicator()).isNull();
     }
 

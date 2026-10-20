@@ -10,6 +10,7 @@ import com.pijava.agent.compaction.CompactionService;
 import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.hook.CompactionContext;
+import com.pijava.agent.hook.SuppliedCompaction;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.record.OperationOutcome;
 import com.pijava.agent.record.StepKind;
@@ -108,7 +109,8 @@ final class CompactionExecutor {
                     // B175（原 docs/26）：pi agent-session.ts:2842 —— onEnd 前先清窗口。
                     lane.closeCompactionWindow();
                     ctx.compactionObserver().onEnd("manual", null, false, false,
-                        "Compaction failed: " + (e.getMessage() == null ? "compaction failed" : e.getMessage()));
+                        "Compaction failed: " + (e.getMessage() == null ? "compaction failed" : e.getMessage()),
+                        null);
                 }
                 throw e;
             }
@@ -244,7 +246,7 @@ final class CompactionExecutor {
                 : "Auto-compaction failed: " + message;
             // B175（原 docs/26）：同手动路，onEnd 发射前先关窗口（pi :2828-2829 顺序）。
             lane.closeCompactionWindow();
-            ctx.compactionObserver().onEnd(reason, null, false, false, formatted);
+            ctx.compactionObserver().onEnd(reason, null, false, false, formatted, null);
             return AutoCompactionOutcome.SKIPPED;
         } finally {
             lane.autoCompactionAbort = null; // pi :3239-3241 清位
@@ -285,12 +287,29 @@ final class CompactionExecutor {
                 java.util.Map.of("reason", reason, "estimatedTokens", estimatedTokens,
                     "entriesBefore", entriesBefore)));
         try {
+            // docs/15 裁决⑥：prepare 前置 —— pi 的 preparation 载荷（compaction.ts:
+            // 872-960）在钩子时点必须可见。compactTranscript 内的 CompactionService.compact
+            // 会再 prepare 一次（压缩罕见，双份投影可接受）；守卫保证非 null，null 仅防御。
+            var preparation = CompactionService.prepare(lane.transcript, settings);
             var compactCtx = new CompactionContext(laneName,
-                List.copyOf(lane.transcript), estimatedTokens);
+                List.copyOf(lane.transcript), estimatedTokens, preparation, reason,
+                willRetry, customInstructions, abortToken);
             var plan = ctx.hookSystem().fireBeforeCompaction(laneName, compactCtx);
+            if (plan != null && Boolean.TRUE.equals(plan.cancel())) {
+                // pi cancelledByExtension（agent-session.ts:2804-2807, 3139-3142）：
+                // 中止臂 —— end{aborted:true}（errorMessage 空，pi 同）；手动路随后由
+                // :115-119 抛 "Compaction cancelled"，自动路按 SKIPPED 结算。
+                lane.closeCompactionWindow();
+                ctx.compactionObserver().onEnd(reason, null, true, false, null, null);
+                return new CompactionRun(null, true);
+            }
             List<Entry> compacted;
             CompactionResult result = null;
-            if (plan != null && !plan.keepEntries().isEmpty()) {
+            if (plan != null && plan.supplied() != null) {
+                var built = suppliedTranscript(lane, plan.supplied());
+                compacted = built.kept();
+                result = built.result();
+            } else if (plan != null && !plan.keepEntries().isEmpty()) {
                 compacted = plan.keepEntries();
             } else {
                 var built = compactTranscript(lane, settings, reason, span,
@@ -304,7 +323,7 @@ final class CompactionExecutor {
                     || (abortToken != null && abortToken.isAborted())) {
                 // B175（原 docs/26）：中止路同样先关窗再发 onEnd（pi :2828-2829 顺序）。
                 lane.closeCompactionWindow();
-                ctx.compactionObserver().onEnd(reason, null, true, false, null);
+                ctx.compactionObserver().onEnd(reason, null, true, false, null, null);
                 return new CompactionRun(null, true);
             }
             lane.transcript.clear();
@@ -315,8 +334,10 @@ final class CompactionExecutor {
             HarnessUtils.rebuildLaneMessages(lane);
             // The builder path puts the fresh marker at the head; the hook-plan
             // path keeps caller-supplied entries and creates no marker.
-            if (!compacted.isEmpty() && compacted.get(0) instanceof Entry.Compaction marker) {
-                compactionEntryId = marker.id();
+            Entry.Compaction marker = null;
+            if (!compacted.isEmpty() && compacted.get(0) instanceof Entry.Compaction m) {
+                marker = m;
+                compactionEntryId = m.id();
             }
             if (result != null) {
                 // pi :2383：estimatedTokensAfter 从**重建后**的消息读，纯字符和
@@ -337,7 +358,9 @@ final class CompactionExecutor {
             // null ≙ pi 的 undefined（自定义压缩内容本就没有 CompactionResult 的方言）。
             // B175（原 docs/26）：end 之前先关窗口（pi :2828-2829）。
             lane.closeCompactionWindow();
-            ctx.compactionObserver().onEnd(reason, result, false, willRetry, null);
+            // docs/15：成功路的落库条目随 end 上交（pi session_compact 的
+            // compactionEntry 载荷链，agent-session.ts:2855-2864）。
+            ctx.compactionObserver().onEnd(reason, result, false, willRetry, null, marker);
             return new CompactionRun(result, false);
         } finally {
             span.close();
@@ -460,21 +483,50 @@ final class CompactionExecutor {
         var compactionEntry = new Entry.Compaction(
             UUID.randomUUID().toString(), lane.nextSeq(), HarnessUtils.lastEntryId(lane),
             Instant.now(), result.summary(), result.firstKeptEntryId(),
-            // fromHook=null ≙ pi undefined（pi-generated；扩展摘要的 fromHook=true 写路随扩展边界包）。
+            // fromHook=null ≙ pi undefined（pi-generated；扩展摘要的 fromHook=true
+            // 写路在 suppliedTranscript，docs/15）。
             retainedTail, (int) result.tokensBefore(), result.details(), result.usage(), null);
+        return new Built(assembleKept(lane.transcript, result.firstKeptEntryId(),
+            compactionEntry), result);
+    }
+
+    /**
+     * pi 的「扩展供应压缩」臂（docs/15 裁决⑥，agent-session.ts:2813-2836/3145-3167）：
+     * 跳过摘要生成器，直接以供应产物装配新转录；{@code fromHook=true}（pi
+     * {@code appendCompaction(..., fromExtension, ...)} 的同位）。{@code tokensBefore}
+     * 以扩展值为准（pi 同）；{@code estimatedTokensAfter} 由调用方在重建后补（与
+     * 默认路同一来源，pi :2383）。
+     */
+    private Built suppliedTranscript(LaneState lane, SuppliedCompaction supplied) {
+        var result = new CompactionResult(supplied.summary(), supplied.firstKeptEntryId(),
+            supplied.tokensBefore(), null, supplied.usage(), supplied.details());
+        var compactionEntry = new Entry.Compaction(
+            UUID.randomUUID().toString(), lane.nextSeq(), HarnessUtils.lastEntryId(lane),
+            Instant.now(), supplied.summary(), supplied.firstKeptEntryId(),
+            keptMessagesFrom(lane.transcript, supplied.firstKeptEntryId()),
+            (int) supplied.tokensBefore(), supplied.details(), supplied.usage(), true);
+        return new Built(assembleKept(lane.transcript, supplied.firstKeptEntryId(),
+            compactionEntry), result);
+    }
+
+    /**
+     * 装配新转录：压缩标记置头＋第一条保留条目起的后缀（{@link #compactTranscript}
+     * 与 {@link #suppliedTranscript} 共用）。firstKeptId 找不到 ⇒ 自留压缩（仅标记）。
+     */
+    private static List<Entry> assembleKept(List<Entry> transcript, String firstKeptId,
+                                            Entry.Compaction marker) {
         var kept = new ArrayList<Entry>();
-        String firstKept = result.firstKeptEntryId();
         boolean seen = false;
-        for (var entry : lane.transcript) {
+        for (var entry : transcript) {
             if (seen) {
                 kept.add(entry);
-            } else if (entry.id().equals(firstKept)) {
+            } else if (entry.id().equals(firstKeptId)) {
                 kept.add(entry);
                 seen = true;
             }
         }
-        kept.add(0, compactionEntry);
-        return new Built(kept, result);
+        kept.add(0, marker);
+        return kept;
     }
 
     private static List<Message> keptMessagesFrom(List<Entry> transcript, String firstKeptId) {

@@ -75,8 +75,14 @@ public sealed interface AgentSessionEvent {
 
     record CompactionStart(CompactionReason reason) implements AgentSessionEvent {}
 
+    /**
+     * @param compactionEntry 落库的压缩条目（docs/15 —— pi {@code session_compact} 的
+     *                        {@code compactionEntry} 载荷链）；成功路非 null，
+     *                        中止/失败/R1 路 null
+     */
     record CompactionEnd(CompactionReason reason, CompactionResult result,
-                         boolean aborted, boolean willRetry, String errorMessage)
+                         boolean aborted, boolean willRetry, String errorMessage,
+                         com.pijava.agent.entry.Entry.Compaction compactionEntry)
         implements AgentSessionEvent {}
 
     record AutoRetryStart(int attempt, int maxAttempts, long delayMs, String errorMessage)

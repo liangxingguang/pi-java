@@ -277,7 +277,7 @@ class JsonEventMapperTest {
             AgentSessionEvent.CompactionReason.OVERFLOW,
             new com.pijava.agent.compaction.CompactionResult(
                 "summary", "kept-1", 100L, 40L, null, java.util.Map.of()),
-            false, false, null));
+            false, false, null, null));
         assertThat(end.get("type").asText()).isEqualTo("compaction_end");
         assertThat(end.get("reason").asText()).isEqualTo("overflow");
     }
@@ -310,7 +310,7 @@ class JsonEventMapperTest {
         // pi 的 `result: CompactionResult | undefined`（:164）：取消/中止/失败/R1 闩锁
         // 四路都显式写 undefined（:2100/:2201/:2311/:2366）⇒ 键被省略。
         var aborted = JsonEventMapper.toWire(new AgentSessionEvent.CompactionEnd(
-            AgentSessionEvent.CompactionReason.MANUAL, null, true, false, null));
+            AgentSessionEvent.CompactionReason.MANUAL, null, true, false, null, null));
         assertThat(aborted.get("reason").asText()).isEqualTo("manual");
         assertThat(aborted.get("aborted").asBoolean()).isTrue();
         assertThat(aborted.get("willRetry").asBoolean()).isFalse();
@@ -324,7 +324,7 @@ class JsonEventMapperTest {
             AgentSessionEvent.CompactionReason.OVERFLOW,
             new com.pijava.agent.compaction.CompactionResult(
                 "summary", "kept-1", 100L, 40L, null, java.util.Map.of()),
-            false, false, null));
+            false, false, null, null));
         assertThat(succeeded.has("result")).isTrue();
         assertThat(succeeded.get("result").get("firstKeptEntryId").asText())
             .isEqualTo("kept-1");
@@ -333,7 +333,7 @@ class JsonEventMapperTest {
         // 反向：失败路（CompactionExecutor:98/:210 发 errorMessage + result=null）。
         var failed = JsonEventMapper.toWire(new AgentSessionEvent.CompactionEnd(
             AgentSessionEvent.CompactionReason.THRESHOLD, null, false, false,
-            "Auto-compaction failed: boom"));
+            "Auto-compaction failed: boom", null));
         assertThat(failed.get("errorMessage").asText()).isEqualTo("Auto-compaction failed: boom");
         assertThat(failed.has("result")).isFalse();
     }

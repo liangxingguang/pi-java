@@ -61,7 +61,8 @@ class PostRunRetryTest {
 
         @Override
         public void onEnd(String reason, CompactionResult result,
-                          boolean aborted, boolean willRetry, String errorMessage) {
+                          boolean aborted, boolean willRetry, String errorMessage,
+                          com.pijava.agent.entry.Entry.Compaction compactionEntry) {
             ends.add(reason + "|" + (errorMessage == null ? "null" : errorMessage));
         }
     }

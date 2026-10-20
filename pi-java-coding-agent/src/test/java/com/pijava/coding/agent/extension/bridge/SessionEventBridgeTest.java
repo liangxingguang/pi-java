@@ -211,7 +211,7 @@ class SessionEventBridgeTest {
         var result = new CompactionResult("sum", "kept-1", 1000, null, null, null);
 
         bridge.onEvent(new AgentSessionEvent.CompactionEnd(
-            AgentSessionEvent.CompactionReason.MANUAL, result, false, false, null));
+            AgentSessionEvent.CompactionReason.MANUAL, result, false, false, null, null));
 
         var e = (SessionCompactEvent) only("session_compact");
         assertThat(e.reason()).isEqualTo("manual");
@@ -225,9 +225,9 @@ class SessionEventBridgeTest {
         record(ExtensionEventSpec.SESSION_COMPACT_FAILED);
 
         bridge.onEvent(new AgentSessionEvent.CompactionEnd(
-            AgentSessionEvent.CompactionReason.THRESHOLD, null, false, true, "boom"));
+            AgentSessionEvent.CompactionReason.THRESHOLD, null, false, true, "boom", null));
         bridge.onEvent(new AgentSessionEvent.CompactionEnd(
-            AgentSessionEvent.CompactionReason.OVERFLOW, null, true, false, null));
+            AgentSessionEvent.CompactionReason.OVERFLOW, null, true, false, null, null));
 
         var events = fired.get("session_compact_failed");
         assertThat(events).hasSize(2);
@@ -290,7 +290,7 @@ class SessionEventBridgeTest {
             new StreamEvent.TextDelta(0, "x",
                 new AssistantMessage("id", List.of(), null, null))));
         bridge.onEvent(new AgentSessionEvent.CompactionEnd(
-            AgentSessionEvent.CompactionReason.MANUAL, null, false, false, null));
+            AgentSessionEvent.CompactionReason.MANUAL, null, false, false, null, null));
 
         assertThat(fired).isEmpty();
         assertThat(errors).isEmpty();

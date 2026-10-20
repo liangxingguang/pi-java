@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.pijava.agent.entry.Entry;
+import com.pijava.agent.hook.MessageEndContext;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.record.ReplayKind;
 import com.pijava.agent.record.StepKind;
@@ -246,6 +247,17 @@ final class PiLaneSink implements PiLoop.Sink {
                 onMessageStart(start.message());
             }
             if (event instanceof PiLoop.Event.MessageEnd end) {
+                // docs/15 裁决①：message_end 替换臂（pi emitMessageEnd +
+                // _replaceMessageInPlace 的对位）。宿主事件在 flush 之后、Message 不可变
+                // —— 唯一能保语义的缝在这里：换引用则工作副本/transcript/下游事件三处
+                // 同换（onMessageEnd 与 downstream 都拿替换后的事件）。
+                var replaced = ctx.hookSystem().fireMessageEnd(laneName,
+                    new MessageEndContext(laneName, ctx.requireLane(laneName).runId,
+                        end.message()));
+                if (replaced != null) {
+                    end = new PiLoop.Event.MessageEnd(replaced);
+                    event = end;
+                }
                 onMessageEnd(end.message());
             }
             if (downstream != null) {

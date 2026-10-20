@@ -397,11 +397,13 @@ public final class AgentSession implements AutoCloseable {
 
             @Override
             public void onEnd(String reason, CompactionResult result, boolean aborted,
-                              boolean willRetry, String errorMessage) {
+                              boolean willRetry, String errorMessage,
+                              com.pijava.agent.entry.Entry.Compaction compactionEntry) {
                 var session = sessionRef.get();
                 if (session != null) {
                     session.emitSessionEvent(new AgentSessionEvent.CompactionEnd(
-                        compactionReasonOf(reason), result, aborted, willRetry, errorMessage));
+                        compactionReasonOf(reason), result, aborted, willRetry, errorMessage,
+                        compactionEntry));
                 }
             }
         };

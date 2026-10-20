@@ -53,7 +53,8 @@ class PostRunCompactionCheckTest {
 
         @Override
         public void onEnd(String reason, CompactionResult result, boolean aborted,
-                          boolean willRetry, String errorMessage) {
+                          boolean willRetry, String errorMessage,
+                          com.pijava.agent.entry.Entry.Compaction compactionEntry) {
             ends.add(reason + "|" + (result == null ? "-" : "result")
                 + "|" + aborted + "|" + willRetry + "|" + errorMessage);
             lastResult = result;

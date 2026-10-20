@@ -9,6 +9,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import com.pijava.agent.entry.Entry;
+import com.pijava.agent.hook.BeforeSettleContext;
 import com.pijava.agent.hook.PrepareNextTurnContext;
 import com.pijava.agent.hook.ShouldStopAfterTurnContext;
 import com.pijava.agent.record.LaneRecord;
@@ -210,7 +211,15 @@ public final class PiLaneEngine {
                     RunFailure.settle(lane, pass.sink(), thrown);
                 }
                 if (!postRun.checkAfterRun(laneName, lane, pass.sink().lastAssistant())) {
-                    break;
+                    // docs/15 裁决②：pi agent-session.ts:1839 —— ①②③ 都说收之后、
+                    // finishRun 之前，before_settle 是 settle 前最后一道门。钩子全弃权
+                    // ⇒ 收口（此刻队列必空，与 pi 无处理器时返回 hasQueuedMessages() 同值
+                    // —— 无桥行为逐比特不变）。
+                    Boolean settle = ctx.hookSystem().fireBeforeSettle(laneName,
+                        new BeforeSettleContext(laneName, lane.runId));
+                    if (!Boolean.TRUE.equals(settle)) {
+                        break;
+                    }
                 }
                 // pi 的 agent.continue() 在续跑前判「副本尾部 + 队列」（agent.ts:362-388），
                 // 判崩了（助手尾且队列双空）异常要落在**上一个 pass 的开口之内** ——
@@ -340,7 +349,11 @@ public final class PiLaneEngine {
             // 与 pi 的遥测口径未核，记窄差。
             request -> ctx.hookSystem().firePrepareRequest(laneName, request),
             next -> prepareNextTurn(laneName, lane),
-            next -> fireFinishTurn(laneName, lane),
+            // docs/15：修真 —— 旧接线丢掉 next，给钩子喂 lane.partial + 空工具结果；
+            // pi 的 FinishTurn 拿的是定案消息与本轮真工具结果（types.ts:149-158）。
+            next -> ctx.hookSystem().fireFinishTurn(laneName,
+                new ShouldStopAfterTurnContext(laneName, lane.runId, next.message(),
+                    next.toolResults())),
             // 原始帧旁路：喂既有的 harness 广播链，会话层的记账代码因此无需改造。
             event -> {
                 sink.noteStreamEvent(event);
@@ -441,11 +454,6 @@ public final class PiLaneEngine {
     private Context rebuiltContext(LaneState lane) {
         return new Context(assembler.renderPrompt(lane),
             new ArrayList<>(lane.messages), activeTools(lane));
-    }
-
-    private PiLoop.TurnDecision fireFinishTurn(String laneName, LaneState lane) {
-        return ctx.hookSystem().fireFinishTurn(laneName,
-            new ShouldStopAfterTurnContext(laneName, lane.runId, lane.partial, List.of()));
     }
 
     // ═══════════════════════════════════════════════════════════

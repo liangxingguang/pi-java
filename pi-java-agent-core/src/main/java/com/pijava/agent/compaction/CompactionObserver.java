@@ -1,5 +1,7 @@
 package com.pijava.agent.compaction;
 
+import com.pijava.agent.entry.Entry;
+
 /**
  * 压缩事件的宿主观察口 —— pi {@code AgentSession._emit} 的
  * {@code compaction_start} / {@code compaction_end} 两个会话事件
@@ -25,7 +27,8 @@ public interface CompactionObserver {
 
         @Override
         public void onEnd(String reason, CompactionResult result,
-                          boolean aborted, boolean willRetry, String errorMessage) { }
+                          boolean aborted, boolean willRetry, String errorMessage,
+                          Entry.Compaction compactionEntry) { }
     };
 
     /** pi {@code { type: "compaction_start"; reason }}。 */
@@ -34,10 +37,14 @@ public interface CompactionObserver {
     /**
      * pi {@code { type: "compaction_end"; reason; result; aborted; willRetry; errorMessage }}。
      *
-     * @param result       压缩产物；{@code null} ≙ pi 的 {@code undefined}
-     *                     （取消、中止、失败、R1 闩锁都带空结果）
-     * @param errorMessage pi 的可选错误文案，{@code null} ≙ 无
+     * @param result          压缩产物；{@code null} ≙ pi 的 {@code undefined}
+     *                        （取消、中止、失败、R1 闩锁都带空结果）
+     * @param errorMessage    pi 的可选错误文案，{@code null} ≙ 无
+     * @param compactionEntry 落库的压缩条目（docs/15 —— pi {@code session_compact}
+     *                        事件的 {@code compactionEntry} 载荷对位，types.ts:787-795）；
+     *                        成功路（含扩展供应臂）非 null，plan/中止/失败/R1 路 null
      */
     void onEnd(String reason, CompactionResult result,
-               boolean aborted, boolean willRetry, String errorMessage);
+               boolean aborted, boolean willRetry, String errorMessage,
+               Entry.Compaction compactionEntry);
 }

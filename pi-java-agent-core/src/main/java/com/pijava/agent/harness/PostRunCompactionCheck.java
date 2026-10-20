@@ -168,7 +168,7 @@ final class PostRunCompactionCheck {
                 // R1：预算只有一次。pi :2194-2211 只发 end{overflow}（无 start），
                 // 伴生的 _emitSessionCompactFailed 属扩展层，不在 3c 面。
                 ctx.compactionObserver().onEnd("overflow", null, false, false,
-                    contextOverflow ? OVERFLOW_RETRY_FAILED : TRUNCATED_RETRY_FAILED);
+                    contextOverflow ? OVERFLOW_RETRY_FAILED : TRUNCATED_RETRY_FAILED, null);
                 return false;
             }
             // R2：置闩，失败助手＋其工具结果以**持久 edit 行**剔除（pi :2214-2223

@@ -81,7 +81,8 @@ class PostRunOverflowDriveTest {
 
         @Override
         public void onEnd(String reason, CompactionResult result, boolean aborted,
-                          boolean willRetry, String errorMessage) {
+                          boolean willRetry, String errorMessage,
+                          com.pijava.agent.entry.Entry.Compaction compactionEntry) {
             ends.add(reason + "|" + aborted + "|" + willRetry);
         }
     }

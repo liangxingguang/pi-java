@@ -2,7 +2,6 @@ package com.pijava.agent.hook;
 
 import java.util.List;
 
-import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.Message;
 
 /**
@@ -10,6 +9,10 @@ import com.pijava.ai.message.Message;
  *
  * <p>Aligned with pi's {@code FinishTurn} callback（{@code types.ts:149-158}；
  * 调用点 {@code agent-loop.ts:286}）：一轮落定后、emit {@code turn_end} 之前触发。</p>
+ *
+ * <p>docs/15 修真：载荷类型改为循环定案的 ADT 形状 —— 旧实现喂的是
+ * {@code lane.partial}（顶层 {@code AssistantMessage}，流中快照、可能未落定）
+ * 与空工具结果列表；pi 给的是<b>定案消息</b>与<b>本轮真工具结果</b>。</p>
  *
  * @param lane             lane name
  * @param runId            current run identifier
@@ -19,8 +22,8 @@ import com.pijava.ai.message.Message;
 public record ShouldStopAfterTurnContext(
     String lane,
     String runId,
-    AssistantMessage assistantMessage,
-    List<Message> toolResults
+    Message.AssistantMessage assistantMessage,
+    List<Message.ToolResultMessage> toolResults
 ) {
     /** Defensively copies {@code toolResults}. */
     public ShouldStopAfterTurnContext {
