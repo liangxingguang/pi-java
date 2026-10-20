@@ -3,28 +3,34 @@ package com.pijava.coding.agent.extension.event;
 import java.util.List;
 import java.util.Map;
 
+import com.pijava.agent.entry.Entry;
+import com.pijava.agent.harness.CompactionAbortToken;
 import com.pijava.agent.tool.ToolResult;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
+import com.pijava.coding.agent.extension.event.ExtensionResults.BoundaryContextPreview;
+import com.pijava.coding.agent.extension.event.ExtensionResults.CompactionPreparation;
+import com.pijava.coding.agent.extension.event.ExtensionResults.SessionBoundaryDraft;
 
 /**
- * pi {@code ExtensionEvent} 联合（types.ts:1377-1409）的 docs/14 子集 —— 只收已有
- * firing 源的 18 个事件，其余随 B248（provider 请求面）/B249（结果臂族）/B250
- * （会话生命周期）/B245（tree 两事件）逐批扩。
+ * pi {@code ExtensionEvent} 联合（types.ts:1377-1409）的对齐子集 —— docs/14 的 18 个
+ * ＋ docs/15（批 5）的 11 个结果臂/生命周期事件。剩余随 B248（provider 请求面）/
+ * B245（tree 两事件）等逐批扩。
  *
  * <p>两族语义（pi runner.ts）：</p>
  * <ul>
  *   <li><b>引擎钩子族</b>（{@link ContextEvent}/{@link ContextWithSystemEvent}/
  *       {@link ToolCallEvent}/{@link ToolResultEvent}）—— 结果型：处理器可返回结果对象
  *       改写行为（合并语义见 {@code EngineHookBridge}，pi runner.ts:1183-1359 逐字）。</li>
- *   <li><b>宿主事件族</b>（其余 14 个）—— 观察型：处理器只读，返回值被忽略
- *       （pi agent-session.ts:1284-1362 的 {@code _emitExtensionEvent}）。</li>
+ *   <li><b>宿主事件族</b>（其余）—— 观察型（返回值被忽略）或结果臂型
+ *       （{@code message_end}/boundary/before 族/input/user_bash，语义见各记录与
+ *       {@code SessionEventFirer}/{@code EngineHookBridge}）。</li>
  * </ul>
  *
  * <p>变体携带不同字段 ⇒ sealed interface + record（CLAUDE.md 规范）。
- * {@code null ≙ pi 的 undefined}。</p>
+ * {@code null ≙ pi 的 undefined}。结果类型全部在 {@link ExtensionResults}。</p>
  */
 public sealed interface ExtensionEvent {
 
@@ -64,7 +70,7 @@ public sealed interface ExtensionEvent {
             implements ExtensionEvent {}
 
     // ═══════════════════════════════════════════════════════════
-    // 宿主事件族（观察型）
+    // 宿主事件族（观察型，docs/14）
     // ═══════════════════════════════════════════════════════════
 
     /** pi {@code agent_start}（types.ts:929，无载荷）。 */
@@ -86,7 +92,11 @@ public sealed interface ExtensionEvent {
     record MessageUpdateEvent(Message message, StreamEvent assistantMessageEvent)
             implements ExtensionEvent {}
 
-    /** pi {@code message_end}（types.ts:1062）——观察臂；替换臂（{@code MessageEndEventResult}）挂 B249。 */
+    /**
+     * pi {@code message_end}（types.ts:1062）——docs/15 起结果臂落地
+     * （{@code MessageEndEventResult} 替换语义见 {@code EngineHookBridge} 的
+     * sink 适配器，裁决①）；观察订阅与结果订阅同批火一次。
+     */
     record MessageEndEvent(Message message) implements ExtensionEvent {}
 
     /** pi {@code tool_execution_start}（types.ts:1067）。 */
@@ -108,11 +118,12 @@ public sealed interface ExtensionEvent {
             implements ExtensionEvent {}
 
     /**
-     * pi {@code session_compact}（types.ts:787）——暂**无 {@code compactionEntry} 字段**：
-     * java 宿主事件给不出条目本体（窄差 D4，挂 B249）。
+     * pi {@code session_compact}（types.ts:787-795）——docs/15 起带
+     * {@code compactionEntry}（落库的同一条目，窄差 D4 销号）；
+     * {@code fromExtension} 读条目的 {@code fromHook}（D6 销号）。
      */
-    record SessionCompactEvent(String reason, boolean willRetry, boolean fromExtension)
-            implements ExtensionEvent {}
+    record SessionCompactEvent(String reason, boolean willRetry, boolean fromExtension,
+                               Entry.Compaction compactionEntry) implements ExtensionEvent {}
 
     /** pi {@code session_compact_failed}（types.ts:799）。 */
     record SessionCompactFailedEvent(String reason, String errorMessage, boolean aborted,
@@ -127,25 +138,97 @@ public sealed interface ExtensionEvent {
             implements ExtensionEvent {}
 
     // ═══════════════════════════════════════════════════════════
-    // 结果类型（pi types.ts:1415-1464）
+    // 生命周期（docs/15，pi types.ts:740-819）
     // ═══════════════════════════════════════════════════════════
 
-    /** pi {@code ContextEventResult}（types.ts:1415）。 */
-    record ContextEventResult(List<Message> messages) {}
+    /**
+     * pi {@code session_start}（types.ts:740-748）——reason 五级：
+     * {@code "startup"|"reload"|"new"|"resume"|"fork"}（初始装配恒 startup，CLI resume
+     * 也是 —— pi 逐字；reload 臂随 B246）。{@code previousSessionFile} 装会话 <b>id</b>
+     * （裁决⑤，new/resume/fork 时有值）。
+     */
+    record SessionStartEvent(String reason, String previousSessionFile)
+            implements ExtensionEvent {}
 
     /**
-     * pi {@code ToolCallEventResult}（types.ts:1426）——{@code block=true} 短路后续处理器，
-     * 该次调用转错误结果（文本 {@code reason}，空则 pi 兜底文案）；
-     * {@code terminate} 仅在 block 时生效（pi agent-loop.ts:640-647）。
+     * pi {@code session_shutdown}（types.ts:812-819）——reason：
+     * {@code "quit"|"reload"|"new"|"resume"|"fork"}；{@code targetSessionFile}
+     * 装目标会话 id（替换时有值）。
      */
-    record ToolCallEventResult(Boolean block, String reason, Boolean terminate) {}
+    record SessionShutdownEvent(String reason, String targetSessionFile)
+            implements ExtensionEvent {}
 
     /**
-     * pi {@code ToolResultEventResult}（types.ts:1455）——逐字段合并：null=不发言；
-     * content 被替换而 structuredContent 未同换 ⇒ structuredContent 被丢弃
-     * （pi runner.ts:1194-1197）。
+     * pi {@code session_before_switch}（types.ts:756-762，可取消）——reason：
+     * {@code "new"|"resume"}；{@code targetSessionFile} 装目标会话 id（new 臂为 null）。
      */
-    record ToolResultEventResult(List<ContentBlock> content, Object details,
-                                 Object structuredContent, Boolean isError,
-                                 ToolResult.UsageInfo usage) {}
+    record SessionBeforeSwitchEvent(String reason, String targetSessionFile)
+            implements ExtensionEvent {}
+
+    /**
+     * pi {@code session_before_fork}（types.ts:764-769，可取消）——
+     * {@code position}: {@code "before"|"at"}；{@code forkCopy}（整枝拷贝）映射
+     * {@code {entryId:当前叶, position:"at"}}（窄差 D17）。
+     */
+    record SessionBeforeForkEvent(String entryId, String position) implements ExtensionEvent {}
+
+    // ═══════════════════════════════════════════════════════════
+    // 压缩（docs/15，pi types.ts:771-784）
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * pi {@code SessionBeforeCompactEvent}（types.ts:771-784，可取消/可接管）——
+     * {@code preparation} 是 {@code CompactionService.Plan} 的视图（无 fileOps，窄差 D22）；
+     * {@code branchEntries} 是当前 branch 条目；{@code signal} 是 per-operation 取消令牌
+     * （pi {@code AbortSignal} 对位）。
+     */
+    record SessionBeforeCompactEvent(CompactionPreparation preparation,
+                                     List<Entry> branchEntries,
+                                     String customInstructions, String reason,
+                                     boolean willRetry, CompactionAbortToken signal)
+            implements ExtensionEvent {}
+
+    // ═══════════════════════════════════════════════════════════
+    // 输入与 bash（docs/15，pi types.ts:1120-1160）
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * pi {@code InputEvent}（types.ts:1143-1154）——{@code images} 恒 null
+     * （java prompt 无图片面，窄差 D12）；{@code source}:
+     * {@code "interactive"|"rpc"|"extension"}（extension 无生产者，E5-12 在册）；
+     * {@code streamingBehavior}: {@code "steer"|"followUp"}，空闲时 null。
+     */
+    record InputEvent(String text, List<ContentBlock> images, String source,
+                      String streamingBehavior) implements ExtensionEvent {}
+
+    /** pi {@code UserBashEvent}（types.ts:1125-1134）。 */
+    record UserBashEvent(String command, boolean excludeFromContext, String cwd)
+            implements ExtensionEvent {}
+
+    /**
+     * pi {@code BeforeAgentStartEvent}（types.ts:917-928）——{@code systemPrompt}
+     * 是当前生效值（渲染后）；{@code systemPromptOptions} 可变对象不移植（窄差 D11）。
+     */
+    record BeforeAgentStartEvent(String prompt, String systemPrompt) implements ExtensionEvent {}
+
+    // ═══════════════════════════════════════════════════════════
+    // boundary 族（docs/15，pi types.ts:1000-1044）
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * pi {@code TurnEndEvent}（types.ts:1037-1044）＋{@code BoundaryState}（:987-992）——
+     * 键名 {@code continue} ⇒ 组件名 {@code shouldContinue}（关键字规避）；
+     * {@code outcome}: {@code "completed"|"aborted"|"error"}（:942）。
+     */
+    record TurnEndEvent(int turnIndex, Message.AssistantMessage message,
+                        List<Message.ToolResultMessage> toolResults,
+                        String messageEntryId, List<String> toolResultEntryIds,
+                        List<SessionBoundaryDraft> entries, boolean shouldContinue,
+                        BoundaryContextPreview context, String outcome)
+            implements ExtensionEvent {}
+
+    /** pi {@code AgentBeforeSettleEvent}（types.ts:1000-1002）＋{@code BoundaryState}。 */
+    record AgentBeforeSettleEvent(List<SessionBoundaryDraft> entries, boolean shouldContinue,
+                                  BoundaryContextPreview context, String outcome)
+            implements ExtensionEvent {}
 }

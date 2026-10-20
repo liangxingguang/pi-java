@@ -17,9 +17,9 @@ import com.pijava.coding.agent.extension.ExtensionEventBus;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.ContextEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.ContextWithSystemEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.ToolCallEvent;
-import com.pijava.coding.agent.extension.event.ExtensionEvent.ToolCallEventResult;
+import com.pijava.coding.agent.extension.event.ExtensionResults.ToolCallEventResult;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.ToolResultEvent;
-import com.pijava.coding.agent.extension.event.ExtensionEvent.ToolResultEventResult;
+import com.pijava.coding.agent.extension.event.ExtensionResults.ToolResultEventResult;
 import com.pijava.coding.agent.extension.event.ExtensionEventSpec;
 
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.CONTEXT;

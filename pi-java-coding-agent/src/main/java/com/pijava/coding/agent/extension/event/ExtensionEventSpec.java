@@ -1,26 +1,44 @@
 package com.pijava.coding.agent.extension.event;
 
+import com.pijava.coding.agent.extension.event.ExtensionEvent.AgentBeforeSettleEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.AgentEndEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.AgentSettledEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.AgentStartEvent;
+import com.pijava.coding.agent.extension.event.ExtensionEvent.BeforeAgentStartEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.ContextEvent;
-import com.pijava.coding.agent.extension.event.ExtensionEvent.ContextEventResult;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.ContextWithSystemEvent;
+import com.pijava.coding.agent.extension.event.ExtensionEvent.InputEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.MessageEndEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.MessageStartEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.MessageUpdateEvent;
+import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionBeforeCompactEvent;
+import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionBeforeForkEvent;
+import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionBeforeSwitchEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionCompactEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionCompactFailedEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionInfoChangedEvent;
+import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionShutdownEvent;
+import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionStartEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.ThinkingLevelSelectEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.ToolCallEvent;
-import com.pijava.coding.agent.extension.event.ExtensionEvent.ToolCallEventResult;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.ToolExecutionEndEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.ToolExecutionStartEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.ToolExecutionUpdateEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.ToolResultEvent;
-import com.pijava.coding.agent.extension.event.ExtensionEvent.ToolResultEventResult;
+import com.pijava.coding.agent.extension.event.ExtensionEvent.TurnEndEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.TurnStartEvent;
+import com.pijava.coding.agent.extension.event.ExtensionEvent.UserBashEvent;
+import com.pijava.coding.agent.extension.event.ExtensionResults.BeforeAgentStartEventResult;
+import com.pijava.coding.agent.extension.event.ExtensionResults.BoundaryResult;
+import com.pijava.coding.agent.extension.event.ExtensionResults.ContextEventResult;
+import com.pijava.coding.agent.extension.event.ExtensionResults.InputEventResult;
+import com.pijava.coding.agent.extension.event.ExtensionResults.MessageEndEventResult;
+import com.pijava.coding.agent.extension.event.ExtensionResults.SessionBeforeCompactResult;
+import com.pijava.coding.agent.extension.event.ExtensionResults.SessionBeforeForkResult;
+import com.pijava.coding.agent.extension.event.ExtensionResults.SessionBeforeSwitchResult;
+import com.pijava.coding.agent.extension.event.ExtensionResults.ToolCallEventResult;
+import com.pijava.coding.agent.extension.event.ExtensionResults.ToolResultEventResult;
+import com.pijava.coding.agent.extension.event.ExtensionResults.UserBashEventResult;
 
 /**
  * 事件规格令牌：线名 + 事件/结果类型参数（裁决① —— pi types.ts:1569-1636 的 41 个
@@ -79,8 +97,11 @@ public final class ExtensionEventSpec<E extends ExtensionEvent, R> {
     public static final ExtensionEventSpec<MessageUpdateEvent, Void> MESSAGE_UPDATE =
         new ExtensionEventSpec<>("message_update");
 
-    /** pi {@code "message_end"}。 */
-    public static final ExtensionEventSpec<MessageEndEvent, Void> MESSAGE_END =
+    /**
+     * pi {@code "message_end"} —— docs/15 起 R 由 Void 改为
+     * {@link MessageEndEventResult}（替换臂，裁决①）；纯观察处理器返回 null 即不发言。
+     */
+    public static final ExtensionEventSpec<MessageEndEvent, MessageEndEventResult> MESSAGE_END =
         new ExtensionEventSpec<>("message_end");
 
     /** pi {@code "tool_execution_start"}。 */
@@ -110,6 +131,50 @@ public final class ExtensionEventSpec<E extends ExtensionEvent, R> {
     /** pi {@code "thinking_level_select"}。 */
     public static final ExtensionEventSpec<ThinkingLevelSelectEvent, Void>
         THINKING_LEVEL_SELECT = new ExtensionEventSpec<>("thinking_level_select");
+
+    // ── 生命周期（docs/15）──
+
+    /** pi {@code "session_start"}（types.ts:1574）。 */
+    public static final ExtensionEventSpec<SessionStartEvent, Void> SESSION_START =
+        new ExtensionEventSpec<>("session_start");
+
+    /** pi {@code "session_shutdown"}（types.ts:1590）。 */
+    public static final ExtensionEventSpec<SessionShutdownEvent, Void> SESSION_SHUTDOWN =
+        new ExtensionEventSpec<>("session_shutdown");
+
+    /** pi {@code "session_before_switch"}（types.ts:1577，可取消）。 */
+    public static final ExtensionEventSpec<SessionBeforeSwitchEvent, SessionBeforeSwitchResult>
+        SESSION_BEFORE_SWITCH = new ExtensionEventSpec<>("session_before_switch");
+
+    /** pi {@code "session_before_fork"}（types.ts:1581，可取消）。 */
+    public static final ExtensionEventSpec<SessionBeforeForkEvent, SessionBeforeForkResult>
+        SESSION_BEFORE_FORK = new ExtensionEventSpec<>("session_before_fork");
+
+    // ── 结果臂族（docs/15）──
+
+    /** pi {@code "session_before_compact"}（types.ts:1585，可取消/可接管）。 */
+    public static final ExtensionEventSpec<SessionBeforeCompactEvent, SessionBeforeCompactResult>
+        SESSION_BEFORE_COMPACT = new ExtensionEventSpec<>("session_before_compact");
+
+    /** pi {@code "input"}（types.ts:1636）。 */
+    public static final ExtensionEventSpec<InputEvent, InputEventResult> INPUT =
+        new ExtensionEventSpec<>("input");
+
+    /** pi {@code "user_bash"}（types.ts:1635）。 */
+    public static final ExtensionEventSpec<UserBashEvent, UserBashEventResult> USER_BASH =
+        new ExtensionEventSpec<>("user_bash");
+
+    /** pi {@code "before_agent_start"}（types.ts:1611）。 */
+    public static final ExtensionEventSpec<BeforeAgentStartEvent, BeforeAgentStartEventResult>
+        BEFORE_AGENT_START = new ExtensionEventSpec<>("before_agent_start");
+
+    /** pi {@code "turn_end"}（types.ts:1624，boundary 派发）。 */
+    public static final ExtensionEventSpec<TurnEndEvent, BoundaryResult> TURN_END =
+        new ExtensionEventSpec<>("turn_end");
+
+    /** pi {@code "agent_before_settle"}（types.ts:1617，boundary 派发）。 */
+    public static final ExtensionEventSpec<AgentBeforeSettleEvent, BoundaryResult>
+        AGENT_BEFORE_SETTLE = new ExtensionEventSpec<>("agent_before_settle");
 
     private final String name;
 

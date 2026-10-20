@@ -24,9 +24,9 @@ import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.coding.agent.extension.ExtensionError;
 import com.pijava.coding.agent.extension.ExtensionEventBus;
-import com.pijava.coding.agent.extension.event.ExtensionEvent.ContextEventResult;
-import com.pijava.coding.agent.extension.event.ExtensionEvent.ToolCallEventResult;
-import com.pijava.coding.agent.extension.event.ExtensionEvent.ToolResultEventResult;
+import com.pijava.coding.agent.extension.event.ExtensionResults.ContextEventResult;
+import com.pijava.coding.agent.extension.event.ExtensionResults.ToolCallEventResult;
+import com.pijava.coding.agent.extension.event.ExtensionResults.ToolResultEventResult;
 import com.pijava.coding.agent.extension.event.ExtensionEventSpec;
 
 import org.junit.jupiter.api.Test;

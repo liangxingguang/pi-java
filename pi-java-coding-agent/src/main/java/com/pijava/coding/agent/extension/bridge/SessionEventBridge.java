@@ -11,7 +11,6 @@ import com.pijava.coding.agent.extension.event.ExtensionEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.AgentEndEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.AgentSettledEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.AgentStartEvent;
-import com.pijava.coding.agent.extension.event.ExtensionEvent.MessageEndEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.MessageStartEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.MessageUpdateEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionCompactEvent;
@@ -27,7 +26,6 @@ import com.pijava.coding.agent.extension.event.ExtensionEventSpec;
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.AGENT_END;
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.AGENT_SETTLED;
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.AGENT_START;
-import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.MESSAGE_END;
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.MESSAGE_START;
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.MESSAGE_UPDATE;
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.SESSION_COMPACT;
@@ -95,8 +93,9 @@ public final class SessionEventBridge {
             case AgentSessionEvent.MessageStart e ->
                 fire(MESSAGE_START, new MessageStartEvent(e.message()));
             case AgentSessionEvent.MessageUpdate e -> messageUpdate(e);
-            case AgentSessionEvent.MessageEnd e ->
-                fire(MESSAGE_END, new MessageEndEvent(e.message())); // 替换臂挂 B249
+            // docs/15 裁决①：message_end 改由 EngineHookBridge 的 sink 适配器统一发射
+            // （替换＋观察同批一次，pi emitMessageEnd 同位）——宿主 case 删除防双发。
+            case AgentSessionEvent.MessageEnd ignored -> { }
             case AgentSessionEvent.ToolExecutionStart e ->
                 fire(TOOL_EXECUTION_START,
                     new ToolExecutionStartEvent(e.toolCallId(), e.toolName(), e.args()));
@@ -137,16 +136,22 @@ public final class SessionEventBridge {
     private void compaction(AgentSessionEvent.CompactionEnd e) {
         var reason = e.reason().name().toLowerCase(Locale.ROOT);
         if (!e.aborted() && e.errorMessage() == null) {
-            // 窄差 D4：compactionEntry 载荷缺席（CompactionResult 无条目本体，挂 B249）。
-            fire(SESSION_COMPACT, new SessionCompactEvent(reason, e.willRetry(), false));
+            // docs/15：compactionEntry 载荷落地（D4 销号）；fromExtension 读条目的
+            // fromHook（D6 销号——扩展供应压缩的条目带 true，引擎自带 null）。
+            var entry = e.compactionEntry();
+            fire(SESSION_COMPACT, new SessionCompactEvent(reason, e.willRetry(),
+                entry != null && Boolean.TRUE.equals(entry.fromHook()), entry));
         } else {
             fire(SESSION_COMPACT_FAILED, new SessionCompactFailedEvent(
                 reason, e.errorMessage(), e.aborted(), e.willRetry(), false));
         }
     }
 
-    /** 观察型发射：无订阅者快走；逐处理器 try/catch ⇒ emitError ⇒ 继续（pi 的 catch 捕获一切）。 */
-    private <E extends ExtensionEvent> void fire(ExtensionEventSpec<E, Void> spec, E event) {
+    /**
+     * 观察型发射：无订阅者快走；逐处理器 try/catch ⇒ emitError ⇒ 继续（pi 的 catch
+     * 捕获一切）。{@code R} 泛化只为兼容结果型 spec（此处全部观察语义，返回值被忽略）。
+     */
+    private <E extends ExtensionEvent, R> void fire(ExtensionEventSpec<E, R> spec, E event) {
         if (!bus.hasHandlers(spec)) {
             return;
         }

@@ -47,7 +47,7 @@ class SessionEventBridgeTest {
         bus.onError(errors::add);
     }
 
-    private <E extends ExtensionEvent> void record(ExtensionEventSpec<E, Void> spec) {
+    private <E extends ExtensionEvent, R> void record(ExtensionEventSpec<E, R> spec) {
         bus.on("ext", spec, (event, ctx) -> {
             fired.computeIfAbsent(spec.name(), k -> new ArrayList<>()).add(event);
             return null;
@@ -102,16 +102,20 @@ class SessionEventBridgeTest {
     }
 
     @Test
-    void messageStartAndEndCarryTheMessage() {
+    void messageStartCarriesTheMessage() {
         record(ExtensionEventSpec.MESSAGE_START);
-        record(ExtensionEventSpec.MESSAGE_END);
         var message = user("hello");
         bridge.onEvent(new AgentSessionEvent.MessageStart(message));
-        bridge.onEvent(new AgentSessionEvent.MessageEnd(message));
         assertThat(((ExtensionEvent.MessageStartEvent) only("message_start")).message())
             .isSameAs(message);
-        assertThat(((ExtensionEvent.MessageEndEvent) only("message_end")).message())
-            .isSameAs(message);
+    }
+
+    /** docs/15 裁决①：message_end 改由 sink 适配器发射，宿主桥不再火（防双发）。 */
+    @Test
+    void messageEndIsNotFiredByTheHostBridge() {
+        record(ExtensionEventSpec.MESSAGE_END);
+        bridge.onEvent(new AgentSessionEvent.MessageEnd(user("hello")));
+        assertThat(fired).isEmpty();
     }
 
     /** V1 落锤：message 从 StreamEvent partial 投影；assistantMessageEvent 原样带。 */
