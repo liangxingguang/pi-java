@@ -47,9 +47,10 @@ class AgentHarnessIntegrationTest {
     }
 
     @Test
-    void forkedHarnessRunsIndependentlyWithHookAndCompaction() {
+    void secondHarnessRunsIndependentlyWithHookAndCompaction() {
         var h = harness();
-        var forked = h.fork();
+        // docs/16 删除 AgentHarness.fork()：「同配置独立宿主」即同工厂新实例。
+        var forked = harness();
 
         // Register a hook that fires on every run end — only on the parent.
         var runEndCount = new int[1];

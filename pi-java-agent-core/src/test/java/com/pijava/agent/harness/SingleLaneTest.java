@@ -21,7 +21,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * <p>运行时多车道容器（{@code LaneRegistry} / {@code LaneHandle} / {@code LaneConfig} /
  * {@code createLane} / {@code lanes()} / {@code moveLane}）已删除：pi 的对齐目标
  * {@code agent.ts} 是**单状态**的，分支归会话层 —— 每个 {@code AgentSession} 持有自己的
- * harness（{@link AgentHarness#fork()}），存储层的 lane 才是 pi 的分支模型。</p>
+ * harness（docs/16 删除 {@code AgentHarness#fork()} 后由会话层 wireSession 现建），
+ * 存储层的 lane 才是 pi 的分支模型。</p>
  *
  * <p>本类取代原先的 {@code MultiLaneTest}：它钉住的不再是「容器怎么用」，而是
  * **容器不在了**之后仍然成立的三条 —— 一条车道、名字对不上就炸、两个 harness 互不相干。</p>
@@ -78,13 +79,14 @@ class SingleLaneTest {
     }
 
     /**
-     * {@link AgentHarness#fork()} 给会话分支一个**独立**宿主：空日志，且父 harness 的运行
-     * 不会漏进去（这正是删除容器之前「子会话共用父 harness、靠新建 lane 假装隔离」的反面）。
+     * 同配置的两个 harness 互为**独立**宿主：空日志，且一侧的运行不会漏进另一侧
+     * （这正是删除容器之前「子会话共用父 harness、靠新建 lane 假装隔离」的反面；
+     * docs/16 删除 {@code fork()} 后，「独立宿主」就是同配置新实例）。
      */
     @Test
-    void forkReturnsAnIndependentEmptyHarness() {
+    void aSecondHarnessIsIndependentAndEmpty() {
         var parent = harness();
-        var forked = parent.fork();
+        var forked = harness();
 
         assertThat(forked.laneName()).isEqualTo(AgentHarness.DEFAULT_LANE);
         assertThat(forked.snapshot(AgentHarness.DEFAULT_LANE).transcript()).isEmpty();

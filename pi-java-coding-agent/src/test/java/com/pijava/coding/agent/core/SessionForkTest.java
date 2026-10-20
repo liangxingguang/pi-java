@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * <p>删除运行时多车道容器之前，这里靠「共享父 harness + 新建一条**空** lane」实现，
  * 分支会话拿不到任何历史（{@code LaneConfig.parentLeafId} 只写不读）。现在分支是会话层的
- * 事，与持久化路径同形：{@code harness.fork()} + {@code seedTranscript}。</p>
+ * 事，与持久化路径同形：docs/16 起经 wireSession 现建 harness + {@code seedTranscript}。</p>
  */
 class SessionForkTest {
 

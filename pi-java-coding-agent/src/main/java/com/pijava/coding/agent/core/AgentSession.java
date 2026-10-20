@@ -139,6 +139,9 @@ public final class AgentSession implements AutoCloseable {
     private com.pijava.ai.model.DefaultModelResolver modelResolver;
     /** pi {@code _branchSummaryAbortController}（agent-session.ts:4018 创建/:4155 清）。 */
     private volatile com.pijava.agent.harness.CompactionAbortToken branchSummaryAbort;
+    // docs/16（T1）：装配期的**原始** ToolContext（图片策略/PI_* 晚绑定包装之前）——
+    // fork 重建会话时 wireSession 的原料（pi createRuntime 重装配 cwd 绑定服务对位）。
+    private ToolContext baseToolContext;
     // docs/15（B249/B250）：宿主发射器 —— 生命周期/可取消 before 族/结果臂的统一
     // 发射口（pi 的 extensionRunner 宿主发射法对位）。--no-extensions 时为 null，
     // 全部 firing 点判空快走（pi 无扩展＝runner 空表，行为等价）。
@@ -325,6 +328,33 @@ public final class AgentSession implements AutoCloseable {
                                          SessionRepository<?, ?, ?> repository,
                                          boolean existingSession,
                                          SessionStartInfo startInfo) {
+        var agentSession = wireSession(args, settings, providers, toolContext, repository,
+            existingSession, args.name() != null ? args.name() : "session", null, null);
+        agentSession.persistentRepository = handle;
+        // 初始装配立即加载扩展（pi 初始序）；fork 臂在旧会话 teardown 后另发
+        //（docs/16 §3.2/§3.4）。
+        loadExtensions(args, agentSession.services(), agentSession.harness(),
+            ExtensionUI.noop(), agentSession, startInfo);
+        return agentSession;
+    }
+
+    /**
+     * docs/16（T1）：assemble 与 fork 共用的「会话＋harness」装配 —— pi createRuntime
+     * （agent-session-runtime.ts:29-42 工厂型）对位：每次替换都重建注册表与会话绑定
+     * 闭包（sessionRef 五组：压缩/重试事件、重试中止旗、图片策略、PI_* 会话身份），
+     * 只共享真正的进程级件（settings/providers/两侧 repository）。**不加载扩展**
+     * （loadExtensions 由调用方按 pi 的序另发 —— 初始装配立即、fork 在旧会话
+     * teardown 后，§3.4）。
+     *
+     * @param carryModel    非 null ⇒ 携带父会话当前模型（{@code "provider/id"}，fork 臂，
+     *                      裁决①）；null ⇒ 按 args/settings/scope 解析（初始装配臂）
+     * @param carryThinking 同上，携带思考级别
+     */
+    private static AgentSession wireSession(Args args, SettingsManager settings,
+            ProviderRegistry providers, ToolContext toolContext,
+            SessionRepository<?, ?, ?> harnessRepository,
+            boolean existingSession, String name,
+            String carryModel, ModelThinkingLevel carryThinking) {
         var effective = settings.effective();
         var catalog = com.pijava.ai.provider.ModelsJsonConfig.allModels();
         var models = new DefaultModelResolver(catalog);
@@ -366,7 +396,7 @@ public final class AgentSession implements AutoCloseable {
             models,
             tools,
             CommandRegistry.withBuiltins(),
-            repository,
+            harnessRepository,
             promptTemplates);
 
         var providerName = DefaultProviders.resolveProviderName(
@@ -397,9 +427,13 @@ public final class AgentSession implements AutoCloseable {
         // and payload recording (wrapper), so events bind to the llm.request span.
         var telemetry = PayloadRecordingStreamFn.exporter(args.sessionId(), args.tracePayloads());
         var recordingStreamFn = new PayloadRecordingStreamFn(streamFn, telemetry);
-        var model = scopedInitial != null
-            ? scopedInitial.model().id()
-            : models.resolve(modelPattern, providerName);
+        // docs/16 裁决①：fork 臂携带父会话当前模型（java 的 setModel 无 persist 面，
+        // 携带＝pi persist→settings 重解析臂的实际效果）；初始装配臂走既有解析链。
+        var model = carryModel != null
+            ? models.resolve(carryModel, null)
+            : scopedInitial != null
+                ? scopedInitial.model().id()
+                : models.resolve(modelPattern, providerName);
         // 3c（原 docs/31 §8.21，裁决③）：宿主层的自动压缩事件走轻量 observer，不占
         // HookSystem。harness 先于会话构造 ⇒ 用引用晚绑定：observer 在压缩真正
         // 发生时（必晚于 create() 返回）才读得到会话。pi 的 compaction_start/end
@@ -533,8 +567,9 @@ public final class AgentSession implements AutoCloseable {
                 () -> models.maxOutputTokens(model),
                 () -> harnessRef.get().getThinkingLevel(),
                 models::supportsThinking))
-            .thinkingLevel(SessionSetup.thinkingLevelFor(
-                args, settings.effective().defaultThinkingLevel, scopeLevel))
+            .thinkingLevel(carryThinking != null ? carryThinking
+                : SessionSetup.thinkingLevelFor(
+                    args, settings.effective().defaultThinkingLevel, scopeLevel))
             .systemPrompt(SessionSetup.customPromptFor(args))
             .promptGuidelines(SessionSetup.DEFAULT_PROMPT_GUIDELINES)
             .appendSystemPrompt(SessionSetup.appendSystemPromptFor(args))
@@ -572,11 +607,8 @@ public final class AgentSession implements AutoCloseable {
                     FileSettingsStorage.defaultAgentDir()))
             .build());
         harnessRef.set(harness);
-        var agentSession = new AgentSession(
-            harness, services, args,
-            args.name() != null ? args.name() : "session");
+        var agentSession = new AgentSession(harness, services, args, name);
         sessionRef.set(agentSession);
-        agentSession.persistentRepository = handle;
         agentSession.setScopedModels(scope.models());
         agentSession.modelCatalog = catalog;
         // B1（map #24/#25）：分支摘要生成器 —— 与压缩同源的 StreamFn/retry 环，
@@ -589,7 +621,7 @@ public final class AgentSession implements AutoCloseable {
                 () -> models.maxOutputTokens(agentSession.harness.getModel()),
                 () -> agentSession.harness.getThinkingLevel(),
                 models::supportsThinking));
-        loadExtensions(args, services, harness, ExtensionUI.noop(), agentSession, startInfo);
+        agentSession.baseToolContext = toolContext;
         return agentSession;
     }
 
@@ -1455,9 +1487,28 @@ public final class AgentSession implements AutoCloseable {
         if (extensionFirer != null && extensionFirer.sessionBeforeFork(leafId, "at")) {
             return Optional.empty();
         }
+        var previousId = sessionId();
         var copy = forkCopyInternal(branchName);
         fireSessionShutdown("fork", copy.sessionId());
+        // docs/16（T1，pi §1.2 序：teardown → createRuntime → rebind）：forked 会话
+        // 全量重装扩展并发射 session_start{fork, previousSessionFile} —— 与全新会话
+        // 享有完全相同的扩展面（pi bindExtensions 同一口，agent-session.ts:3258-3281）。
+        loadExtensions(args, copy.services(), copy.harness(), extensionUI, copy,
+            new SessionStartInfo("fork", previousId));
         return Optional.of(copy);
+    }
+
+    /**
+     * docs/16（T1）：fork 臂的 wireSession 调用 —— 携带父会话当前 model/thinkingLevel
+     * （裁决①），注册表 fresh、进程级件共享（裁决②）。
+     */
+    private AgentSession wireForkSession(String name) {
+        var currentModel = harness.getModel();
+        return wireSession(args, services.settings(), services.providers(), baseToolContext,
+            services.sessionRepository(), true, name,
+            currentModel == null ? null
+                : currentModel.provider() + "/" + currentModel.modelName(),
+            harness.getThinkingLevel());
     }
 
     private AgentSession forkCopyInternal(String branchName) {
@@ -1465,10 +1516,11 @@ public final class AgentSession implements AutoCloseable {
             var metadata = session.getMetadata();
             var forked = persistentRepository.fork(metadata, new ForkOptions.Tree(),
                 System.getProperty("user.dir"));
-            var copy = new AgentSession(harness.fork(), services, args, branchName);
+            var copy = wireForkSession(branchName);
             copy.persistentRepository = persistentRepository;
             copy.session = forked;
-            SessionPersistence.attach(copy, persistentRepository, forked.getMetadata());
+            // forked 已是开着的 storage（attachOpened 恒等跳过 §3.7 的旧 storage 关闭）。
+            SessionPersistence.attachOpened(copy, forked, forked.getMetadata());
             copy.name = branchName;
             return copy;
         }
@@ -1490,8 +1542,12 @@ public final class AgentSession implements AutoCloseable {
                 && extensionFirer.sessionBeforeFork(entryId, "before")) {
             return Optional.empty();
         }
+        var previousId = sessionId();
         var copy = forkFromEntryInternal(entryId);
         fireSessionShutdown("fork", copy.sessionId());
+        // docs/16（T1）：与 forkCopy 同序 —— forked 全量重装扩展＋start{fork}。
+        loadExtensions(args, copy.services(), copy.harness(), extensionUI, copy,
+            new SessionStartInfo("fork", previousId));
         return Optional.of(copy);
     }
 
@@ -1502,10 +1558,10 @@ public final class AgentSession implements AutoCloseable {
             var forked = persistentRepository.fork(metadata,
                 new ForkOptions.Branch(entryId, ForkOptions.Branch.Position.BEFORE),
                 System.getProperty("user.dir"));
-            var copy = new AgentSession(harness.fork(), services, args, branchName);
+            var copy = wireForkSession(branchName);
             copy.persistentRepository = persistentRepository;
             copy.session = forked;
-            SessionPersistence.attach(copy, persistentRepository, forked.getMetadata());
+            SessionPersistence.attachOpened(copy, forked, forked.getMetadata());
             copy.name = branchName;
             return copy;
         }
@@ -1538,9 +1594,8 @@ public final class AgentSession implements AutoCloseable {
      * （{@code 原 docs/31 §4.2} 的重建点）。</p>
      */
     private AgentSession forkInMemory(String branchName, List<Entry> seedEntries) {
-        var forkedHarness = harness.fork();
-        forkedHarness.seedTranscript(AgentHarness.DEFAULT_LANE, seedEntries);
-        var forked = new AgentSession(forkedHarness, services, args, branchName);
+        var forked = wireForkSession(branchName);
+        forked.harness().seedTranscript(AgentHarness.DEFAULT_LANE, seedEntries);
         forked.repository = repository;
         repository.create(forked);
         return forked;
@@ -1772,8 +1827,13 @@ public final class AgentSession implements AutoCloseable {
         if (args.noExtensions()) {
             return;
         }
+        // docs/16（§2.6）：UI 烘进 context 前同步会话字段 —— fork 重建时 mode 层注入的
+        // UI 经父会话字段传入，forked 的字段与 context 自此一致（初始装配 noop→RPC
+        // 注入的既有顺序不变）。
+        owner.extensionUI = ui == null ? ExtensionUI.noop() : ui;
         var bus = new com.pijava.coding.agent.extension.ExtensionEventBus();
-        var context = new DefaultExtensionContext(services, harness.skillManager(), ui, bus);
+        var context = new DefaultExtensionContext(
+            services, harness.skillManager(), owner.extensionUI, bus);
         // session 由 SessionPersistence 稍后赋值，惰性求值绑定供 sendMessage 落盘用。
         context.bindSession(() -> owner.session());
         var manager = new ExtensionManager(context);

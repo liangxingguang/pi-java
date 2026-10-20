@@ -49,18 +49,6 @@ public class AgentHarness extends HarnessBootstrap {
     }
 
     /**
-     * 同配置的**全新** harness —— 会话层建分支时给新会话一个独立宿主（{@code 原 docs/31 §4.3}）。
-     *
-     * <p>车道是**空的**：pi 的 fork 复制 entry 是会话层的事（{@code harness/session/fork.ts}），
-     * 这里只负责「一个新的、同配置的 Agent 状态」，内容由调用方 {@link #seedTranscript} 播种。
-     * 与父 harness 共享的是 {@link HarnessConfig} 里那几个不可变依赖（streamFn、toolRegistry、
-     * toolContext）—— 比删除容器之前「子会话直接用父 harness」的隔离度只增不减。</p>
-     */
-    public AgentHarness fork() {
-        return new AgentHarness(config);
-    }
-
-    /**
      * Register a listener for every {@link StreamEvent} the harness consumes.
      * Phase 6: multiple concurrent listeners supported (RPC + TUI sharing a
      * harness); closing the handle removes only this listener.

@@ -75,9 +75,9 @@ final class SessionPersistence {
         attachOpened(owner, opened, metadata);
     }
 
-    /** Attach an already-opened session（⓪ 路径快道与常规道共用）。 */
-    private static void attachOpened(AgentSession owner, Session<?> opened,
-                                     SessionMetadata metadata) {
+    /** Attach an already-opened session（⓪ 路径快道/常规道/fork 臂共用，docs/16 提为包可见）。 */
+    static void attachOpened(AgentSession owner, Session<?> opened,
+                             SessionMetadata metadata) {
         owner.session(opened);
         owner.name(sessionNameOf(opened, metadata));
         String lane = owner.laneName();

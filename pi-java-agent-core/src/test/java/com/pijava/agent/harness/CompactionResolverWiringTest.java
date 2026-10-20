@@ -80,11 +80,12 @@ class CompactionResolverWiringTest {
         }
     }
 
-    /** T-A3（设计红）：fork 用自己的 lane.model 解析，fork 切模型不串父 harness。 */
+    /** T-A3（设计红）：同配置第二 harness 用自己的 lane.model 解析，切模型不串另一侧
+     *  （docs/16 删除 {@code fork()} 后，「fork」即同配置新实例）。 */
     @Test
-    void forkResolvesAgainstItsOwnCurrentModel() {
+    void secondHarnessResolvesAgainstItsOwnCurrentModel() {
         try (var parent = harness(MODEL_A, perModel());
-                var forked = parent.fork()) {
+                var forked = harness(MODEL_A, perModel())) {
             assertThat(parent.currentCompactionSettings()).isEqualTo(FOR_A);
             assertThat(forked.currentCompactionSettings()).isEqualTo(FOR_A);
 
