@@ -52,7 +52,8 @@ public final class TreeSelectorScreen implements ScreenOverlay {
             if (parts.length < 2) {
                 return;                       // 空分支：无 entry 可分支
             }
-            switcher.accept(session.forkFromEntry(parts[1]));
+            // docs/15：session_before_fork cancel ⇒ empty，不切换。
+            session.forkFromEntry(parts[1]).ifPresent(switcher);
         });
     }
 

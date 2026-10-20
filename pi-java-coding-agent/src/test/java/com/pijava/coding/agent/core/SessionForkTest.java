@@ -40,7 +40,7 @@ class SessionForkTest {
     void forkCopySeedsTheWholeParentLogIntoAnIndependentHarness() {
         var repo = InMemorySessionRepository.create();
         try (var parent = session(repo, userEntry("e1", null, "one"))) {
-            var forked = parent.forkCopy("branch");
+            var forked = parent.forkCopy("branch").orElseThrow();
 
             assertThat(forked.harness()).as("分支要有自己的 harness").isNotSameAs(parent.harness());
             assertThat(forked.laneName()).isEqualTo(LANE);
@@ -63,7 +63,7 @@ class SessionForkTest {
                 userEntry("e1", null, "one"),
                 userEntry("e2", "e1", "two"),
                 userEntry("e3", "e2", "three"))) {
-            var forked = parent.forkFromEntry("e2");
+            var forked = parent.forkFromEntry("e2").orElseThrow();
 
             assertThat(forked.entryCount()).as("只到 e2 的父节点 e1").isEqualTo(1);
             assertThat(forked.harness().snapshot(LANE).transcript().get(0).id()).isEqualTo("e1");

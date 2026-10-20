@@ -38,9 +38,16 @@ public final class ExtensionManager {
         return found;
     }
 
-    /** 加载所有已发现扩展，返回已加载扩展名。 */
+    /**
+     * 加载所有已发现扩展，返回已加载扩展名。
+     *
+     * <p>用线程上下文 classloader（ServiceLoader 标准惯例；CLI 主线程的 TCCL 即应用
+     * loader，生产行为不变）——docs/15 起测试可经 TCCL 注入作用域 loader，让
+     * {@code AgentSession.create} 的装配期扩展发现不污染全局 classpath。</p>
+     */
     public Set<String> loadAll() {
-        return loadAll(ExtensionManager.class.getClassLoader());
+        var tccl = Thread.currentThread().getContextClassLoader();
+        return loadAll(tccl != null ? tccl : ExtensionManager.class.getClassLoader());
     }
 
     /** 用指定 classloader 发现并加载（测试用作用域 loader，避免污染全局 classpath）。 */

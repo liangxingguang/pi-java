@@ -132,8 +132,14 @@ public final class RpcDispatcher {
                 case RpcCommand.GetState g ->
                     out.write(RpcResponse.ok(g.id(), "get_state", buildState()));
                 case RpcCommand.NewSession n -> {
+                    // docs/15（B250）：替换式新建 —— start{new, previous}＋旧侧
+                    // shutdown{new, 新 id}（pi newSession 序列，序差在册 D20；
+                    // 旧会话不 close 是存量，B252 在册）。
+                    var old = session;
+                    var previousId = old.sessionId();
                     closeSession();
-                    session = AgentSession.create(args);
+                    session = AgentSession.createReplacing(args, previousId);
+                    old.fireSessionShutdown("new", session.sessionId());
                     eventSubscription = session.subscribe(this::emitEvent);
                     out.write(RpcResponse.ok(n.id(), "new_session", buildState()));
                 }
@@ -242,32 +248,47 @@ public final class RpcDispatcher {
                         Map.of("path", path)));
                 }
                 case RpcCommand.SwitchSession s -> {
-                    if (session.findSession(s.sessionPath()).isEmpty()) {
-                        out.write(RpcResponse.fail(s.id(), "switch_session",
+                    // docs/15（B250）：switchTo 集中 before_switch/shutdown/start
+                    // 序列；cancel ⇒ pi 同形回 {cancelled:true}（rpc-mode.ts:591-596）。
+                    var result = session.switchTo(s.sessionPath());
+                    switch (result.outcome()) {
+                        case NOT_FOUND -> out.write(RpcResponse.fail(s.id(), "switch_session",
                             "Session not found: " + s.sessionPath()));
-                    } else {
-                        out.write(RpcResponse.ok(s.id(), "switch_session",
+                        case CANCELLED -> out.write(RpcResponse.ok(s.id(), "switch_session",
+                            Map.of("cancelled", true)));
+                        case SWITCHED -> out.write(RpcResponse.ok(s.id(), "switch_session",
                             Map.of("cancelled", false)));
                     }
                 }
                 case RpcCommand.Fork fk -> {
                     var forked = session.forkFromEntry(fk.entryId());
-                    closeSession();
-                    session = forked;
-                    eventSubscription = session.subscribe(this::emitEvent);
-                    out.write(RpcResponse.ok(fk.id(), "fork",
-                        Map.of("text", "", "cancelled", false)));
+                    if (forked.isEmpty()) {
+                        // docs/15：session_before_fork cancel ⇒ pi 的 {cancelled:true}。
+                        out.write(RpcResponse.ok(fk.id(), "fork",
+                            Map.of("text", "", "cancelled", true)));
+                    } else {
+                        closeSession();
+                        session = forked.get();
+                        eventSubscription = session.subscribe(this::emitEvent);
+                        out.write(RpcResponse.ok(fk.id(), "fork",
+                            Map.of("text", "", "cancelled", false)));
+                    }
                 }
                 case RpcCommand.Clone c -> {
                     var leaf = leafId();
                     var forked = leaf == null
                         ? session.forkCopy(session.sessionName() + "-clone")
                         : session.forkFromEntry(leaf);
-                    closeSession();
-                    session = forked;
-                    eventSubscription = session.subscribe(this::emitEvent);
-                    out.write(RpcResponse.ok(c.id(), "clone",
-                        Map.of("cancelled", false)));
+                    if (forked.isEmpty()) {
+                        out.write(RpcResponse.ok(c.id(), "clone",
+                            Map.of("cancelled", true)));
+                    } else {
+                        closeSession();
+                        session = forked.get();
+                        eventSubscription = session.subscribe(this::emitEvent);
+                        out.write(RpcResponse.ok(c.id(), "clone",
+                            Map.of("cancelled", false)));
+                    }
                 }
                 case RpcCommand.GetForkMessages g -> {
                     var messages = session.getUserMessagesForForking().stream()
@@ -324,7 +345,7 @@ public final class RpcDispatcher {
         // data.disposition = started | queued；路由门拒绝 ⇒ 恰一条失败响应。
         try {
             var result = session.processPrompt(text,
-                PromptConfig.withStreamingBehavior(prompt.streamingBehavior()));
+                PromptConfig.rpc(prompt.streamingBehavior())); // docs/15：input source="rpc"
             if ("started".equals(result.disposition())) {
                 // 异步 run：事件经订阅推送；AgentSettled 复位。
                 streaming = true;

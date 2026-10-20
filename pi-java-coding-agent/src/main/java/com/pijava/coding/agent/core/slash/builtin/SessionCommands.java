@@ -40,7 +40,11 @@ public final class SessionCommands {
                     return CompletableFuture.completedFuture(CommandRegistry.UI_TREE_SELECTOR);
                 }
                 var forked = ctx.session().forkCopy(args.trim());
-                ctx.onSwitchSession().accept(forked);
+                if (forked.isEmpty()) {
+                    // docs/15：session_before_fork cancel ⇒ pi 的 {cancelled:true}。
+                    return CompletableFuture.completedFuture("Fork cancelled by extension");
+                }
+                ctx.onSwitchSession().accept(forked.get());
                 return CompletableFuture.completedFuture(
                     "Forked to \"" + args.trim() + "\"");
             }
@@ -49,8 +53,9 @@ public final class SessionCommands {
             (args, ctx) -> {
                 var name = ctx.session().sessionName() + " (clone)";
                 var forked = ctx.session().forkCopy(name);
-                ctx.onSwitchSession().accept(forked);
-                return "Cloned to \"" + name + "\"";
+                forked.ifPresent(ctx.onSwitchSession());
+                return forked.map(f -> "Cloned to \"" + name + "\"")
+                    .orElse("Clone cancelled by extension");
             }));
         registry.register(new SlashCommand() {
             @Override public String name() { return "tree"; }
@@ -62,7 +67,12 @@ public final class SessionCommands {
         });
         registry.register(simple("new", "Start a new session", "",
             (args, ctx) -> {
-                var fresh = AgentSession.create(ctx.session().sessionArgs());
+                // docs/15（B250）：替换式新建 —— 新会话 start{new, previous}，
+                // 旧侧 shutdown{new, 新 id}（pi newSession 序列，序差在册 D20）。
+                var previousId = ctx.session().sessionId();
+                var fresh = AgentSession.createReplacing(ctx.session().sessionArgs(),
+                    previousId);
+                ctx.session().fireSessionShutdown("new", fresh.sessionId());
                 ctx.onSwitchSession().accept(fresh);
                 return "Started new session";
             }));
@@ -74,14 +84,20 @@ public final class SessionCommands {
                 if (args.isBlank()) {
                     return CompletableFuture.completedFuture(CommandRegistry.UI_SESSION_SELECTOR);
                 }
-                return ctx.session().findSession(args.trim())
-                    .<CompletionStage<String>>map(found -> {
-                        ctx.onSwitchSession().accept(found);
-                        return CompletableFuture.completedFuture(
-                            "Resumed session \"" + found.sessionName() + "\"");
-                    })
-                    .orElseGet(() -> CompletableFuture.completedFuture(
-                        "Session not found: " + args.trim()));
+                // docs/15（B250）：switchTo 集中 before_switch/shutdown/start 序列
+                // （pi switchSession 对位）。
+                var result = ctx.session().switchTo(args.trim());
+                return switch (result.outcome()) {
+                    case SWITCHED -> {
+                        ctx.onSwitchSession().accept(result.session());
+                        yield CompletableFuture.completedFuture(
+                            "Resumed session \"" + result.session().sessionName() + "\"");
+                    }
+                    case CANCELLED -> CompletableFuture.completedFuture(
+                        "Resume cancelled by extension");
+                    case NOT_FOUND -> CompletableFuture.completedFuture(
+                        "Session not found: " + args.trim());
+                };
             }
         });
     }

@@ -73,4 +73,16 @@ public final class SessionResult {
             CompletableFuture.completedFuture(new RunStatus(0, "queued")),
             "queued");
     }
+
+    /**
+     * pi {@code preflightResult("handled")}（agent-session.ts:1999-2002，docs/15）：
+     * 扩展 {@code input} 事件已处置该输入 —— 无展开、无排队、无驱动。
+     */
+    public static SessionResult handled() {
+        return new SessionResult(
+            Stream.empty(),
+            CompletableFuture.completedFuture(List.of()),
+            CompletableFuture.completedFuture(new RunStatus(0, "handled")),
+            "handled");
+    }
 }

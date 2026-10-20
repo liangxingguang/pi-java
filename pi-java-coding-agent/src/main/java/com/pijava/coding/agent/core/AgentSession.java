@@ -139,6 +139,10 @@ public final class AgentSession implements AutoCloseable {
     private com.pijava.ai.model.DefaultModelResolver modelResolver;
     /** pi {@code _branchSummaryAbortController}（agent-session.ts:4018 创建/:4155 清）。 */
     private volatile com.pijava.agent.harness.CompactionAbortToken branchSummaryAbort;
+    // docs/15（B249/B250）：宿主发射器 —— 生命周期/可取消 before 族/结果臂的统一
+    // 发射口（pi 的 extensionRunner 宿主发射法对位）。--no-extensions 时为 null，
+    // 全部 firing 点判空快走（pi 无扩展＝runner 空表，行为等价）。
+    private com.pijava.coding.agent.extension.SessionEventFirer extensionFirer;
 
     private AgentSession(AgentHarness harness, SessionServices services,
                          Args args, String name) {
@@ -204,6 +208,20 @@ public final class AgentSession implements AutoCloseable {
     }
 
     public static AgentSession create(Args args) {
+        return create(args, (SessionStartInfo) null);
+    }
+
+    /**
+     * docs/15（B250）：替换式新建（/new、RPC new_session、Web newSession）——
+     * 新会话装配时 {@code session_start} 带 {@code {reason:"new",
+     * previousSessionFile:旧会话 id}}。旧侧的 {@code session_shutdown} 由调用方
+     * 在拿到新会话后 {@link #fireSessionShutdown}（目标 id 先知才行，窄差 D20）。
+     */
+    public static AgentSession createReplacing(Args args, String previousSessionId) {
+        return create(args, new SessionStartInfo("new", previousSessionId));
+    }
+
+    private static AgentSession create(Args args, SessionStartInfo startInfo) {
         var settings = SettingsManager.load(args.projectTrustOverride());
         var effective = settings.effective();
         var backend = effective.sessionBackend == null ? "jsonl" : effective.sessionBackend;
@@ -219,7 +237,7 @@ public final class AgentSession implements AutoCloseable {
                 Map.of(),
                 new DefaultShellExecutor(effective.shellPath),
                 new DefaultFileSystem()),
-            settings);
+            settings, startInfo);
     }
 
     /** Assemble a session against a specific in-memory repository (tests). */
@@ -262,8 +280,17 @@ public final class AgentSession implements AutoCloseable {
                                ProviderRegistry providers,
                                ToolContext toolContext,
                                SettingsManager settings) {
+        return create(args, handle, providers, toolContext, settings, null);
+    }
+
+    private static AgentSession create(Args args,
+                                       PersistentSessionRepositories.RepositoryHandle handle,
+                                       ProviderRegistry providers,
+                                       ToolContext toolContext,
+                                       SettingsManager settings,
+                                       SessionStartInfo startInfo) {
         var session = assemble(args, settings, providers, toolContext,
-            handle, handle.repository(), resumeLike(args));
+            handle, handle.repository(), resumeLike(args), startInfo);
         session.persistentRepository = handle;
         return SessionSetup.resolveSession(session, args);
     }
@@ -278,12 +305,26 @@ public final class AgentSession implements AutoCloseable {
             || args.sessionId() != null || args.fork() != null;
     }
 
+    /** docs/15（B250）：替换式新建的 {@code session_start} 载荷（null ⇒ 初始 {@code "startup"}）。 */
+    private record SessionStartInfo(String reason, String previousSessionFile) {}
+
     private static AgentSession assemble(Args args, SettingsManager settings,
                                          ProviderRegistry providers,
                                          ToolContext toolContext,
                                          PersistentSessionRepositories.RepositoryHandle handle,
                                          SessionRepository<?, ?, ?> repository,
                                          boolean existingSession) {
+        return assemble(args, settings, providers, toolContext, handle, repository,
+            existingSession, null);
+    }
+
+    private static AgentSession assemble(Args args, SettingsManager settings,
+                                         ProviderRegistry providers,
+                                         ToolContext toolContext,
+                                         PersistentSessionRepositories.RepositoryHandle handle,
+                                         SessionRepository<?, ?, ?> repository,
+                                         boolean existingSession,
+                                         SessionStartInfo startInfo) {
         var effective = settings.effective();
         var catalog = com.pijava.ai.provider.ModelsJsonConfig.allModels();
         var models = new DefaultModelResolver(catalog);
@@ -548,7 +589,7 @@ public final class AgentSession implements AutoCloseable {
                 () -> models.maxOutputTokens(agentSession.harness.getModel()),
                 () -> agentSession.harness.getThinkingLevel(),
                 models::supportsThinking));
-        loadExtensions(args, services, harness, ExtensionUI.noop(), agentSession);
+        loadExtensions(args, services, harness, ExtensionUI.noop(), agentSession, startInfo);
         return agentSession;
     }
 
@@ -817,8 +858,22 @@ public final class AgentSession implements AutoCloseable {
             PromptConfig config,
             StreamObserver streamObserver,
             EntryObserver entryObserver) {
+        // docs/15：pi :1991-2003 —— input 事件在 skill/模板展开**之前**
+        // （pi 注释逐字："Emit input event for extension interception (before
+        // skill/template expansion)"）；handled ⇒ 不展开、不排队、不驱动。
+        String inputText = prompt;
+        if (extensionFirer != null) {
+            var outcome = extensionFirer.input(prompt,
+                config.source() == null ? "interactive" : config.source(),
+                config.streamingBehavior() == null ? null
+                    : config.streamingBehavior().wireName());
+            if (outcome.handled()) {
+                return SessionResult.handled();
+            }
+            inputText = outcome.text();
+        }
         // pi :2008-2009（prompt 主路径）与 :2191-2192（队列路径同序）：先 /skill: 后模板。
-        var expandedPrompt = expandUserPrompt(prompt);
+        var expandedPrompt = expandUserPrompt(inputText);
         // A5（原 docs/25）：路由门在任何副作用之前 —— 压缩中/运行中未指定
         // streamingBehavior 的 prompt 在调用线程同步抛出（pi 同形状，
         // agent-session.ts:1939-1979）；运行中显式 steer/followUp 仅排队。
@@ -842,6 +897,19 @@ public final class AgentSession implements AutoCloseable {
         }
         if (config.thinkingLevel() != null) {
             setThinkingLevel(config.thinkingLevel());
+        }
+        // docs/15：pi :2061-2110 —— before_agent_start（仅非流式驱动路；流式排队路
+        // 在上面路由门已返回）。systemPrompt 覆盖是 harness 全局态（窄差 D11）；
+        // result.message 落盘序为 custom 条目先于用户消息（窄差 D19）。
+        if (extensionFirer != null) {
+            var start = extensionFirer.beforeAgentStart(expandedPrompt,
+                harness::getSystemPrompt);
+            for (var draft : start.messages()) {
+                appendCustomDraft(draft);
+            }
+            if (start.systemPrompt() != null) {
+                harness.setSystemPrompt(start.systemPrompt());
+            }
         }
 
         var queue = new LinkedBlockingQueue<Optional<StreamEvent>>();
@@ -1327,6 +1395,40 @@ public final class AgentSession implements AutoCloseable {
         return repository.find(idOrPrefix);
     }
 
+    /** docs/15：{@link #switchTo} 的结局（pi 的 {@code {cancelled}} 对位）。 */
+    public enum SwitchOutcome { SWITCHED, CANCELLED, NOT_FOUND }
+
+    /** docs/15：切换结局＋切换后的会话（持久路原地 attach ⇒ 即本会话）。 */
+    public record SwitchResult(SwitchOutcome outcome, AgentSession session) {}
+
+    /**
+     * docs/15（B249④/B250）：pi {@code AgentSessionRuntime.switchSession}/
+     * {@code importFromJsonl}（agent-session-runtime.ts:194-214, 355-397）的序列集中点——
+     * {@code session_before_switch}（cancel ⇒ 旧会话不动）→ 预检目标存在（pi 先开
+     * SessionManager 再 teardown）→ {@code session_shutdown{resume, target}} → 原地
+     * attach → {@code session_start{resume, previousSessionFile}}。原地换装下
+     * shutdown/start 在同一条 bus 上发射（pi 是旧/新两条 runner，窄差 D23）。
+     */
+    public SwitchResult switchTo(String idOrPrefix) {
+        if (extensionFirer != null
+                && extensionFirer.sessionBeforeSwitch("resume", idOrPrefix)) {
+            return new SwitchResult(SwitchOutcome.CANCELLED, this);
+        }
+        boolean exists = persistentRepository != null
+            ? persistentRepository.find(idOrPrefix).isPresent()
+            : repository.find(idOrPrefix).isPresent();
+        if (!exists) {
+            return new SwitchResult(SwitchOutcome.NOT_FOUND, this);
+        }
+        var previousId = sessionId();
+        fireSessionShutdown("resume", idOrPrefix);
+        var found = findSession(idOrPrefix).orElseThrow();
+        if (extensionFirer != null) {
+            extensionFirer.sessionStart("resume", previousId);
+        }
+        return new SwitchResult(SwitchOutcome.SWITCHED, found);
+    }
+
     /** Export the current session to a JSONL file ({@code /export}). */
     public void exportJsonl(java.nio.file.Path target) {
         SessionPersistence.exportJsonl(this, target);
@@ -1337,8 +1439,25 @@ public final class AgentSession implements AutoCloseable {
         return SessionPersistence.importJsonl(this, source);
     }
 
-    /** Create a forked copy ({@code /fork /clone --fork}）：整棵树都复制（pi {@code ForkOptions.Tree}）。 */
-    public AgentSession forkCopy(String branchName) {
+    /**
+     * Create a forked copy ({@code /fork /clone --fork}）：整棵树都复制（pi {@code ForkOptions.Tree}）。
+     *
+     * <p>docs/15（B249④）：先发射 {@code session_before_fork{entryId:当前叶,
+     * position:"at"}}（整枝拷贝的映射，窄差 D17）——cancel ⇒ {@code Optional.empty}
+     * （pi 的 {@code {cancelled:true}}）；建成后旧侧发射
+     * {@code session_shutdown{fork, 新会话 id}}（pi teardownCurrent 对位）。</p>
+     */
+    public Optional<AgentSession> forkCopy(String branchName) {
+        var leafId = harness.snapshot(laneName()).leafId();
+        if (extensionFirer != null && extensionFirer.sessionBeforeFork(leafId, "at")) {
+            return Optional.empty();
+        }
+        var copy = forkCopyInternal(branchName);
+        fireSessionShutdown("fork", copy.sessionId());
+        return Optional.of(copy);
+    }
+
+    private AgentSession forkCopyInternal(String branchName) {
         if (persistentRepository != null && session != null) {
             var metadata = session.getMetadata();
             var forked = persistentRepository.fork(metadata, new ForkOptions.Tree(),
@@ -1363,7 +1482,17 @@ public final class AgentSession implements AutoCloseable {
      * entry 前截断，再播种给新 harness —— 与 {@code selectBranchFork} 的
      * {@code position: "before"} 一致（{@code harness/session/fork-policy.ts:25-27}）。</p>
      */
-    public AgentSession forkFromEntry(String entryId) {
+    public Optional<AgentSession> forkFromEntry(String entryId) {
+        if (extensionFirer != null
+                && extensionFirer.sessionBeforeFork(entryId, "before")) {
+            return Optional.empty();
+        }
+        var copy = forkFromEntryInternal(entryId);
+        fireSessionShutdown("fork", copy.sessionId());
+        return Optional.of(copy);
+    }
+
+    private AgentSession forkFromEntryInternal(String entryId) {
         String branchName = name + "-fork";
         if (persistentRepository != null && session != null) {
             var metadata = session.getMetadata();
@@ -1417,6 +1546,18 @@ public final class AgentSession implements AutoCloseable {
     /** 会话级 bash 执行（RPC {@code bash}）：经 harness shell 运行并发射一条
      *  {@link AgentSessionEvent.BashExecutionUpdate}。v1 阻塞执行，不增量流式。 */
     public ShellResult executeBash(String id, String command, boolean excludeFromContext) {
+        // docs/15：pi emitUserBash 拦截（rpc-mode.ts:561-580 同位）——{result} 臂
+        // 直接落盘返回、不执行；处理器异常沿调用方错误链（不得回落本地执行，pi
+        // interactive-mode.ts:6994-6999 注释逐字）。{operations} 臂不移植（窄差 D10）。
+        if (extensionFirer != null) {
+            var replaced = extensionFirer.userBash(command, excludeFromContext,
+                harness.toolContext().cwd());
+            if (replaced.isPresent()) {
+                var extensionResult = replaced.get();
+                recordBashResult(command, extensionResult, excludeFromContext);
+                return extensionResult;
+            }
+        }
         var toolContext = harness.toolContext();
         var signal = AbortSignal.create();
         bashAbortSignal = signal;
@@ -1431,6 +1572,38 @@ public final class AgentSession implements AutoCloseable {
         } catch (Exception e) {
             throw new RuntimeException("Bash command failed: " + command, e);
         }
+    }
+
+    /**
+     * docs/15（boundary 提交臂，pi {@code _commitBoundaryDrafts} :1024-1028 对位）：
+     * 追加 entry ⇒ 广播 {@link AgentSessionEvent.EntryAppended} ⇒ 落盘。
+     * {@code BoundaryBridge} 专用（包内可见）。
+     */
+    void appendBoundaryEntry(Entry entry) {
+        harness.appendLaneEntry(laneName(), entry);
+        emitSessionEvent(new AgentSessionEvent.EntryAppended(entry));
+        if (session != null) {
+            SessionPersistence.persistPending(this, session, laneName());
+        }
+    }
+
+    /**
+     * docs/15（before_agent_start 的 result.message 落盘点，pi :2092-2104 对位）：
+     * 追加 custom message 条目。持久会话走 {@code SessionTree.appendCustomMessageEntry}
+     * （含落盘）；无持久会话时退化为 harness 追加（内存态）。
+     */
+    private void appendCustomDraft(
+            com.pijava.coding.agent.extension.event.ExtensionResults.CustomMessageDraft draft) {
+        var content = draft.content() != null ? draft.content()
+            : new com.pijava.agent.entry.CustomMessageContent.Text("");
+        if (session != null) {
+            session.appendCustomMessageEntry(draft.customType(), content, draft.display(),
+                draft.details());
+            return;
+        }
+        harness.appendLaneEntry(laneName(), new Entry.CustomMessage(
+            java.util.UUID.randomUUID().toString(), 0, null, Instant.now(),
+            draft.customType(), content, draft.display(), draft.details()));
     }
 
     /**
@@ -1540,6 +1713,32 @@ public final class AgentSession implements AutoCloseable {
     /** Flush settings, persist pending writes and close the harness. */
     @Override
     public void close() {
+        closeWith("quit", null);
+    }
+
+    /**
+     * docs/15（B250）：替换式关闭（pi {@code teardownCurrent}，
+     * agent-session-runtime.ts:168-178）——先发射 {@code session_shutdown{reason,
+     * targetSessionFile}}，再走原关闭流程。
+     */
+    public void closeForReplacement(String reason, String targetSessionFile) {
+        closeWith(reason, targetSessionFile);
+    }
+
+    /**
+     * docs/15（B249④）：仅发射 {@code session_shutdown}（不关闭）——/new、fork 等
+     * 路径的旧会话在 java 不 close（存量，B252 在册），但扩展运行时该收到拆解通知
+     * （pi 的 teardownCurrent 语义）。
+     */
+    public void fireSessionShutdown(String reason, String targetSessionFile) {
+        if (extensionFirer != null) {
+            extensionFirer.sessionShutdown(reason, targetSessionFile);
+        }
+    }
+
+    private void closeWith(String reason, String targetSessionFile) {
+        // pi dispose/teardownCurrent：shutdown 事件在 dispose 之前（:258-267）。
+        fireSessionShutdown(reason, targetSessionFile);
         // pi dispose()（:876-885）第一步 abortRetry() —— 关窗时掐掉待完成的退避睡眠。
         abortRetry();
         if (session != null) {
@@ -1566,7 +1765,7 @@ public final class AgentSession implements AutoCloseable {
      */
     private static void loadExtensions(Args args, SessionServices services,
                                        AgentHarness harness, ExtensionUI ui,
-                                       AgentSession owner) {
+                                       AgentSession owner, SessionStartInfo startInfo) {
         if (args.noExtensions()) {
             return;
         }
@@ -1588,6 +1787,15 @@ public final class AgentSession implements AutoCloseable {
             bus, context, harness.getThinkingLevel())::onEvent);
         bus.onError(err ->
             owner.emitSessionEvent(new AgentSessionEvent.ExtensionError(err)));
+        // docs/15（B250）：firer 提为会话字段（close/switch/fork/prompt/bash 都要发）；
+        // session_start 在桥与错误通道接好后、resources_discover 之前发射
+        // （pi bindExtensions 的逐字序，agent-session.ts:3279-3281）。初始装配恒
+        // "startup"（CLI resume 也是——pi 逐字）；替换式新建由 createReplacing 穿载荷。
+        owner.extensionFirer = new com.pijava.coding.agent.extension.SessionEventFirer(
+            bus, context);
+        owner.extensionFirer.sessionStart(
+            startInfo == null ? "startup" : startInfo.reason(),
+            startInfo == null ? null : startInfo.previousSessionFile());
         applySessionStartResources(harness, services,
             manager.sessionStartResources(), args, owner);
     }

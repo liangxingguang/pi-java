@@ -143,9 +143,11 @@ final class WebDispatcher {
     private void newSession() {
         closeSubscription();
         var previous = session;
-        session = AgentSession.create(args);
+        var previousId = previous.sessionId();
+        // docs/15（B250）：替换式新建＋替换式关闭（shutdown{new, 新 id}）。
+        session = AgentSession.createReplacing(args, previousId);
         try {
-            previous.close();
+            previous.closeForReplacement("new", session.sessionId());
         } catch (Exception ignored) {
             // 忽略旧会话关闭失败
         }
@@ -159,9 +161,14 @@ final class WebDispatcher {
             send.accept(new WebServerMessage.Error("Session path required"));
             return;
         }
-        var found = session.findSession(idFromPath(sessionPath));
-        if (found.isEmpty()) {
+        // docs/15（B250）：switchTo 集中 before_switch/shutdown/start 序列。
+        var result = session.switchTo(idFromPath(sessionPath));
+        if (result.outcome() == AgentSession.SwitchOutcome.NOT_FOUND) {
             send.accept(new WebServerMessage.Error("Session not found: " + sessionPath));
+            return;
+        }
+        if (result.outcome() == AgentSession.SwitchOutcome.CANCELLED) {
+            send.accept(new WebServerMessage.Error("Session switch cancelled by extension"));
             return;
         }
         closeSubscription();
@@ -341,8 +348,14 @@ final class WebDispatcher {
             send.accept(new WebServerMessage.Error("Entry id required"));
             return;
         }
+        var forked = session.forkFromEntry(entryId);
+        if (forked.isEmpty()) {
+            // docs/15：session_before_fork cancel。
+            send.accept(new WebServerMessage.Error("Fork cancelled by extension"));
+            return;
+        }
         closeSubscription();
-        session = session.forkFromEntry(entryId);
+        session = forked.get();
         resubscribe();
         send.accept(new WebServerMessage.SessionChanged(session.sessionId()));
         send.accept(stateSync());
@@ -352,10 +365,15 @@ final class WebDispatcher {
     private void cloneSession() {
         var entries = session.harness().snapshot(session.laneName()).transcript();
         String leaf = entries.isEmpty() ? null : entries.get(entries.size() - 1).id();
-        closeSubscription();
-        session = leaf == null
+        var forked = leaf == null
             ? session.forkCopy(session.sessionName() + "-clone")
             : session.forkFromEntry(leaf);
+        if (forked.isEmpty()) {
+            send.accept(new WebServerMessage.Error("Clone cancelled by extension"));
+            return;
+        }
+        closeSubscription();
+        session = forked.get();
         resubscribe();
         send.accept(new WebServerMessage.SessionChanged(session.sessionId()));
         send.accept(stateSync());

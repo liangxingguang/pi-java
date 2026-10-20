@@ -77,9 +77,11 @@ public final class InMemorySessionRepository {
             .findFirst();
     }
 
-    /** Fork an existing session under a new ID ({@code --fork /fork /clone}). */
+    /** Fork an existing session under a new ID ({@code --fork /fork /clone})。 */
     public AgentSession fork(AgentSession source, String branchName) {
-        var forked = source.forkCopy(branchName);
+        // docs/15：forkCopy 返回 Optional（session_before_fork cancel ⇒ empty）——
+        // 本仓库路径（--fork CLI 旗标）无扩展取消面，orElseThrow 防御。
+        var forked = source.forkCopy(branchName).orElseThrow();
         return create(forked);
     }
 
