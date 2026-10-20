@@ -484,7 +484,8 @@ public final class PiTuiApp {
         return overlay;
     }
 
-    private void switchSession(AgentSession newSession) {
+    /** Visible for testing (docs/16 ExitPathCloseTest 的替换臂驱动口)。 */
+    void switchSession(AgentSession newSession) {
         this.session = newSession;
         mode.switchSession(newSession);
         // 会话事件通道与快照订阅都跟着换会话重接（各自先摘旧句柄）。
@@ -497,7 +498,8 @@ public final class PiTuiApp {
             dispatcher.dispatch(() -> chatScreen.updateSnapshot(snapshot)));
     }
 
-    private void exit() {
+    /** Visible for testing（docs/16 ExitPathCloseTest 的退出驱动口）。 */
+    void exit() {
         running = false;
         sessionEvents.close();
         if (countdownWake != null) {
@@ -509,6 +511,14 @@ public final class PiTuiApp {
         }
         if (runner != null) {
             runner.quit();
+        }
+        // docs/16（B252）：pi interactive shutdown 交互臂（interactive-mode.ts:4316-4322）
+        // —— 先停 UI 再 dispose（shutdown{quit} 自此在 TUI 发射）。关的是**当前**会话
+        // （this.session 随 switchSession 跟踪替换）。
+        try {
+            session.close();
+        } catch (Exception ignored) {
+            // 退出期关闭失败忽略（pi dispose 的 try/catch 同旨，agent-session.ts:1394-1402）
         }
     }
 
