@@ -167,14 +167,14 @@ pi-java 的**引擎钩子** = `pi-java-agent-core/.../agent/hook/HookSystem.java
 |---|---|---|---|---|---|---|
 | 1 | `project_trust` | `:1569` | ❌ | 2 | **缺失** | java 有 `TrustManager.java` 标记文件，但无注册面 |
 | 2 | `resources_discover` | `:1571` | ✅ `PiExtension.java:29` | 2 | **对齐** | `ExtensionManager.java:85-100` 合并保序 + 异常隔离 |
-| 3 | `session_start` | `:1574` | ❌ | 2 | **缺失** | 无钩子 |
+| 3 | `session_start` | `:1574` | ✅ | 2 | **对齐** | 批 coding-agent-5（docs/15）：装配期发射（初始恒 startup，CLI resume 也是——pi 逐字）；`createReplacing` 带 new+previous、`switchTo` 带 resume+previous；fork 臂挂 **B251**（forked 不加载扩展） |
 | 4 | `session_info_changed` | `:1575` | ✅ | 1 | **对齐** | 宿主生产者已有（`AgentSession.java:706`——旧证据「零生产者/B30」已过期）；批 coding-agent-4（docs/14）`SessionEventBridge` 桥接 |
-| 5 | `session_before_switch` | `:1577` | ❌ | 2 | **缺失** | 可取消的切换钩子不存在 |
-| 6 | `session_before_fork` | `:1581` | ❌ | 2 | **缺失** | 同上 |
-| 7 | `session_before_compact` | `:1585` | ⚠️ | 2 | **存疑** | 引擎钩子 `onBeforeCompaction:83`**未桥接**；pi 事件带 `signal: AbortSignal` |
-| 8 | `session_compact` | `:1588` | ⚠️ | 2 | **存疑** | 批 4 已桥 `{reason, willRetry, fromExtension:false}`；**无 `compactionEntry` 载荷**（`CompactionResult` 无条目本体——窄差 D4，挂 **B249**） |
+| 5 | `session_before_switch` | `:1577` | ✅ | 2 | **对齐** | 批 5 `AgentSession.switchTo` 集中（cancel ⇒ 旧会话不动，pi runtime :201-203 逐字）；预检目标存在再 teardown（pi 序） |
+| 6 | `session_before_fork` | `:1581` | ✅ | 2 | **对齐** | 批 5 `forkCopy`/`forkFromEntry` 内发射（cancel ⇒ `Optional.empty`）；`forkCopy` 映射 `{当前叶,"at"}`（窄差 D17） |
+| 7 | `session_before_compact` | `:1585` | ✅ | 2 | **对齐** | 批 5 `EngineHookBridge` 第 5 适配器：preparation（Plan 视图；无 fileOps=窄差 D22）＋cancel 短路＋supplied 接管（fromHook=true）；signal=abortToken |
+| 8 | `session_compact` | `:1588` | ✅ | 2 | **对齐** | 批 5：`compactionEntry` 落（D4 销号——`CompactionObserver.onEnd` 第 6 参穿透）；`fromExtension` 读条目 `fromHook`（D6 销号） |
 | 9 | `session_compact_failed` | `:1589` | ✅ | 1 | **对齐** | 批 4 桥接（`CompactionEnd` 失败/中止臂）；pi `aborted` 判定为**信号权威**（`agent-session.ts:2887`） |
-| 10 | `session_shutdown` | `:1590` | ❌ | 2 | **缺失** | `ExtensionManager.java:70` `unload()` 只从表移除 |
+| 10 | `session_shutdown` | `:1590` | ✅ | 2 | **对齐** | 批 5：`close()`=quit、`closeForReplacement`/`fireSessionShutdown` 带 reason+target（hasHandlers 门同 pi :258-267）；TUI 退出不 close 是存量（B252） |
 | 11 | `mcp_servers_change` | `:1591` | ❌ | 2 | **缺失** | 扩展订阅面不存在；java MCP 注册表本身见 map/07（B221） |
 | 12 | `session_before_tree` | `:1593` | ⚠️ | 1 | **存疑** | 引擎钩子 `onBeforeNavigation:88`**未桥接** |
 | 13 | `session_tree` | `:1596` | ❌ | 1 | **缺失** | 无导航完成事件 |
@@ -185,18 +185,18 @@ pi-java 的**引擎钩子** = `pi-java-agent-core/.../agent/hook/HookSystem.java
 | 18 | `before_provider_headers` | `:1607` | ⚠️ | 2 | **存疑** | 引擎钩子 `onBeforeRequest:58`**只读、不能改 header**，未桥接 |
 | 19 | `after_provider_response` | `:1608` | ⚠️ | 2 | **存疑** | 引擎钩子 `onAfterResponse:68`**未桥接** |
 | 20 | `provider_stream_event` | `:1609` | ❌ | 2 | **缺失** | 流式事件级扩展观察面；java 无 |
-| 21 | `before_agent_start` | `:1611` | ❌ | **3** | **缺失** | pi 可**改 systemPrompt**（`types.ts:1468` `BeforeAgentStartEventResult.systemPrompt`）；java `onBeforeRun:43` **不能改提示词** |
+| 21 | `before_agent_start` | `:1611` | ✅ | **3** | **对齐** | 批 5 `SessionEventFirer`（processPrompt 内、覆盖应用后）：systemPrompt 链式覆盖＋result.message 累积；options 可变对象不移植、覆盖是 harness 全局态（窄差 D11/D19） |
 | 22 | `agent_start` | `:1614` | ✅ | 2 | **对齐** | 批 4 桥接（顺带 `turnIndex = 0`，pi `:1286` 同） |
 | 23 | `agent_end` | `:1615` | ✅ | 2 | **对齐** | 批 4 桥接（宿主 `AgentEnd`，`AgentSessionEvent.java:28`） |
-| 24 | `agent_before_settle` | `:1617` | ❌ | 2 | **缺失** | 可边界结果；java 无 |
+| 24 | `agent_before_settle` | `:1617` | ✅ | 2 | **对齐** | 批 5 `BoundaryBridge`（引擎新钩 `before_settle`，firing 于 drive 循环 settle 前门——pi :1839 同位）；草稿四型＋预览＋continue 校验全落 |
 | 25 | `agent_settled` | `:1620` | ✅ | 2 | **对齐** | 批 4 桥接（宿主 `AgentSettled`，`:46`；`{aborted}` 直译） |
 | 26 | `ui_prompt_start` | `:1621` | ❌ | 1 | **缺失** | 无对应 |
 | 27 | `ui_prompt_end` | `:1622` | ❌ | 1 | **缺失** | 无对应 |
 | 28 | `turn_start` | `:1623` | ✅ | 2 | **对齐** | 批 4 桥接（`{turnIndex, timestamp}`；turnIndex 桥内跟踪，pi `_turnIndex` 同构） |
-| 29 | `turn_end` | `:1624` | ❌ | 2 | **缺失** | boundary 派发臂挂 **B249**（`turnIndex++` 语义批 4 已复制）；台账 **B49** |
+| 29 | `turn_end` | `:1624` | ✅ | 2 | **对齐** | 批 5 `BoundaryBridge`（`should_stop_after_turn` 钩，位置与 pi finishTurn 包裹同位；顺手修真钩子载荷——旧喂 lane.partial＋空工具结果）；`turnIndex` 与宿主桥共享 |
 | 30 | `message_start` | `:1625` | ✅ | 2 | **对齐** | 批 4 桥接 |
 | 31 | `message_update` | `:1626` | ✅ | **3** | **对齐** | 批 4 桥接：`message` 从 `StreamEvent.partial()` 投影（`Message.AssistantMessage.fromPartial`，验证任务 V1 通过）；无订阅者零投影快走 |
-| 32 | `message_end` | `:1627` | ⚠️ | 2 | **存疑** | 批 4 桥接观察臂；**替换臂**（`MessageEndEventResult`，agent-session.ts:1316-1333）挂 **B249** |
+| 32 | `message_end` | `:1627` | ✅ | 2 | **对齐** | 批 5 裁决①：引擎新钩 `message_end` 在 `PiLaneSink` 前替换（宿主事件在 flush 后、Message 不可变——唯一保语义的缝）；观察/结果同批火一次（宿主桥 case 已删防双发） |
 | 33 | `tool_execution_start` | `:1628` | ✅ | 2 | **对齐** | 批 4 桥接（宿主 `SessionRunner.java:231`），字段直译 |
 | 34 | `tool_execution_update` | `:1629` | ✅ | 2 | **对齐** | 批 4 桥接（宿主 `SessionRunner.java:235`）—— 台账 **B46** 的扩展面已补 |
 | 35 | `tool_execution_end` | `:1630` | ✅ | 2 | **对齐** | 批 4 桥接（宿主 `SessionRunner.java:239`）；载荷与 pi types.ts:1086-1097 逐字段一致（`durationMs` 可空直译；pi 的 end 本就无 `args`） |
@@ -204,13 +204,13 @@ pi-java 的**引擎钩子** = `pi-java-agent-core/.../agent/hook/HookSystem.java
 | 37 | `thinking_level_select` | `:1632` | ✅ | 2 | **对齐** | 批 4 桥接（宿主 `AgentSession.java:513`）；`previousLevel` 桥内跟踪（种子＝装配时当前等级）—— 台账 **B35** 的扩展面已补 |
 | 38 | `tool_call` | `:1633` | ✅ | **3** | **对齐** | 批 4 `EngineHookBridge`（`before_tool` 适配器）：block 短路、异常向上传播（pi 逐字）、input 原地可变链（docs/14 §3.4.2） |
 | 39 | `tool_result` | `:1634` | ✅ | **3** | **对齐** | 批 4（`after_tool` 适配器）：逐字段合并＋structuredContent 丢弃规则（pi :1194-1214 逐字）；顺带修真 `applyAfterToolPatch` 洗 `isError`/`structuredContent` 的存量 bug（docs/14 §2.3） |
-| 40 | `user_bash` | `:1635` | ❌ | 1 | **缺失** | java `!`/`!!` 无扩展拦截面 |
-| 41 | `input` | `:1636` | ❌ | **3** | **缺失** | java 无输入处理链 |
+| 40 | `user_bash` | `:1635` | ✅ | 1 | **对齐** | 批 5 `executeBash` chokepoint 拦截（{result} 替换臂＋异常重抛不回落，pi :1262-1296 逐字）；{operations} 臂不移植（窄差 D10） |
+| 41 | `input` | `:1636` | ✅ | **3** | **对齐** | 批 5 `processPrompt` 内、展开**之前**（pi :1991 逐字）；transform 链＋handled（SessionResult "handled"）；images 恒 null（窄差 D12） |
 
-**汇总（宽口径，批 coding-agent-4 后）：对齐 17 / 缺失 17 / 存疑 7 / 合计 41 = 41.5%**；**Σ权重 83 / Σ(w×c) 44.0 / 加权 53.0%**
-**汇总（严格口径，未桥接的引擎钩子也算缺失）：对齐 17 / 缺失 22 / 存疑 2 = 41.5%**；**加权 39/83 = 47.0%**
-> ⚠️ D 域 Σ权重 **83** = 模块 496 的 **16.7%**，仍是模块最大域。批 coding-agent-4（docs/14）翻 16 行对齐＋2 行存疑（逐行实算 Δ＝**+32.5**——设计稿 §8 正文写 +30.5，系其自身对账表加总错误，以逐行为准）：剩余存疑＝#7/#8/#12/#17/#18/#19/#32；严格口径的「未桥接引擎钩子」从 7 条减到 5 条（#7/#12/#17/#18/#19，全挂 B248/B245/B249）。
-> ⚠️ **基线修正**：D 域批前基线逐行实算为 **11.5**（旧汇总行 10.5——存疑行 8 条被汇总行计成 7 条、漏计 1.0，批 2 已知的「汇总行与逐行不符」同族）；本批起 D 域与模块合计按逐行实算。
+**汇总（宽口径，批 coding-agent-5 后）：对齐 29 / 缺失 8 / 存疑 4 / 合计 41 = 70.7%**；**Σ权重 83 / Σ(w×c) 66.0 / 加权 79.5%**
+**汇总（严格口径，未桥接的引擎钩子也算缺失）：对齐 29 / 缺失 11 / 存疑 1（#12）= 70.7%**；**加权 62.5/83 = 75.3%**（未桥接引擎钩子仅剩 #12 before_navigation——挂 B245；#17/#18/#19 是**死 firing 点**而非未桥接，挂 B248）
+> ⚠️ D 域 Σ权重 **83** = 模块 496 的 **16.7%**。批 coding-agent-5（docs/15）翻 12 行（9 缺失→对齐、3 存疑→对齐，逐行实算 Δ＝**+22.0**）：剩余存疑＝#12/#17/#18/#19；缺失 8 行＝#1 project_trust／#11 mcp_servers_change／#13 session_tree／#16 cache_warming／#20 provider_stream_event／#26/#27 ui_prompt×2／#36 model_select（各随子系统：B221/B245/B248/E5）。
+> ⚠️ **基线纪律**（批 4 起）：D 域与模块合计按逐行实算（批 4 发现汇总行与逐行不符同族教训——批 4 基线实算 11.5≠旧汇总行 10.5）。
 
 ### 批 coding-agent-4（docs/14，2026-10-20 闭环）窄差表
 
@@ -225,7 +225,29 @@ pi-java 的**引擎钩子** = `pi-java-agent-core/.../agent/hook/HookSystem.java
 | D7 | pi 的 `parentToolCallId` 不带（嵌套工具调用 G-10 零对应，落地时补） | 存量约束，非本批范围 |
 | ~~D8~~ | ~~宿主 `ToolExecutionEnd` 不带 `args`~~ | **作废**（闭环评审发现）：设计 §1.5 的「上＋」系误读——pi `ToolExecutionEndEvent`（types.ts:1086-1097）是独立 interface、**本就没有 `args`**；扩展事件的 `args` 组件已删除，事件载荷与 pi 逐字段一致，无差可登记 |
 
-**新登记**：**B248**（provider 请求面三件套＋流事件，D-17/18/19/20 挂此）、**B249**（结果臂事件族：message_end 替换／turn_end·agent_before_settle boundary／input／user_bash／before_agent_start／session_before_switch·fork cancel／session_before_compact cancel＋compactionEntry）、**B250**（`session_start`/`session_shutdown` 发射点）——明细在 docs/04。
+**新登记**：**B248**（provider 请求面三件套＋流事件，D-17/18/19/20 挂此）、**B249**（结果臂事件族）、**B250**（`session_start`/`session_shutdown` 发射点）——明细在 docs/04。~~B249/B250~~ **批 5 已销号**（docs/15，2026-10-20 闭环）。
+
+### 批 coding-agent-5（docs/15，2026-10-20 闭环）窄差表
+
+| # | 内容 | 等级 |
+|---|---|---|
+| D9 | `message_end` 观察处理器在 sink 时点与结果处理器同批火一次（看到链中值）；pi 观察与结果同序但后续观察看到链终值。替换对宿主监听者/TUI/RPC 的效果与 pi 原地改写一致 | [内部] |
+| D10 | `user_bash` 的 `{operations}` 臂不移植（java 无 per-call BashOperations 缝；ToolContext 级 ShellExecutor 注入是既有等价物）；`{result}` 替换臂全落 | [内部] |
+| D11 | `before_agent_start` 的 `systemPromptOptions` 可变对象不移植（java 无 BuildSystemPromptOptions 面；selectedTools 编辑臂随之不移植）；`systemPrompt` 覆盖是 harness **全局态**（粘性），非 pi 的 per-prompt options；事件的 `systemPrompt` 是配置原值（渲染拼装在引擎内） | [模型可见：覆盖持续生效] |
+| D12 | `input` 事件 `images` 恒 null（java prompt 无图片面）；`source` 无 "extension" 生产者（E5-12 在册） | [内部，边缘] |
+| D14 | `previousSessionFile`/`targetSessionFile` 载荷装会话 **id**（裁决⑤：SQLite/JSONL 仓无文件路径面） | [内部] |
+| D15 | boundary 预览的 `contextMessages`/`llmMessages` 同源（java 无 pi 的 AgentMessage→LLM 二次转换缝） | [内部] |
+| D16 | `session_before_fork` 的 `skipConversationRestore` 结果臂收下不消费（java fork 无恢复跳过面） | [内部] |
+| D17 | `forkCopy`（整枝拷贝）映射 `before_fork{entryId:当前叶, position:"at"}`；pi 的 fork 恒显式 entryId | [内部] |
+| D18 | pi 的 emitUserBash 模式间不对称（interactive catch＋不回落、rpc 传播）；java 单发射点（executeBash），异常统一沿调用方错误链 | [内部] |
+| D19 | `before_agent_start` 的 result.message 落盘序为「custom 条目先于用户消息」（java 在 drive 前 append；pi 插在本轮 user 之后） | [内部，边缘] |
+| D20 | /new 臂的 shutdown 在 start 之后（java 需先建会话才知目标 id；pi 先 teardown 后 create） | [内部] |
+| D21 | boundary 预览 `pendingMessages` 由队列**文本**重建 UserMessage（java QueueManager 只读文本）；java 无 `_pendingCustomMessages` 面（sendMessage 即写） | [内部] |
+| D22 | `session_before_compact` 载荷 `preparation.fileOps` 不译（java 的 fileOps 在 compact() 内收集，prepare 时点缺席） | [内部] |
+| D23 | 原地 resume 的 shutdown/start 在**同一条 bus** 上发射（pi 是旧/新两条 runner）；内存路 switchTo 的 start 在新侧 firer 发射 | [内部] |
+
+**销号**：**B249**/**B250**（D-3/5/6/7/8/10/21/24/29/32/40/41 十二行翻转）；批 4 窄差 **D4**（compactionEntry 落）、**D6**（fromExtension 读 fromHook）同步销号。
+**新登记**：**B251**（forked 会话不加载扩展——forkInMemory/持久 fork 路不过 loadExtensions，fork 后扩展机制整体消失；`session_start{fork}` 臂随之无消费者）、**B252**（TUI/RPC 切换路径旧会话不 close、TUI 退出不 close ⇒ `session_shutdown{quit}` 在 TUI 永不发射）——明细在 docs/04。
 
 ### D′. 扩展 UI 注入点（单列）
 

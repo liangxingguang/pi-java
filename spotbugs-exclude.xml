@@ -29,4 +29,14 @@
         <Method name="optionalBoolean"/>
         <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
     </Match>
+
+    <!-- docs/15 裁决②：`beforeSettle` 的返回是刻意的三态 —— TRUE（再 continue 一轮）
+         / FALSE（收口）/ null（弃权，引擎按无桥行为收口；pi 此刻队列必空，弃权与
+         hasQueuedMessages() 同值）。null 从不当「假」用，Boolean 是判别值不是
+         「可空的 boolean」；NP_BOOLEAN_RETURN_NULL 是误报（与 B144 同形）。 -->
+    <Match>
+        <Class name="com.pijava.coding.agent.extension.bridge.BoundaryBridge"/>
+        <Method name="beforeSettle"/>
+        <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
+    </Match>
 </FindBugsFilter>

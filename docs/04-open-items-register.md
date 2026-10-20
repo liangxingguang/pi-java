@@ -127,8 +127,8 @@
 | B163 | 用户可见 | 主题/色彩系统差距大 | pi 3,176 行（theme、system-theme、oklab 等），Java 74 行 |
 | B245 | 混合 | **tree 扩展事件＋TUI 摘要流**（批 agent-core-4 新登记，docs/09 §13.5） | ① `session_before_tree`/`session_tree` 扩展事件（types.ts:817-846,1488-1501，含 `result.summary` 整体替代生成器的 fromHook=true 旁路）；② TUI 树选择器摘要三选对话框（interactive-mode.ts:5559-5706）＋摘要期 Esc 换绑 `abortBranchSummary`（:5637-5640）＋`skipPrompt` 弹窗门（:5590，设置项批 4 已备）。挂扩展事件（D 域）与 TUI 两族；`navigateTree`/`abortBranchSummary` 本体批 4 已落 |
 | B246 | 混合 | **工具选择的 reload 臂＋SDK `tools` 选项抛错面**（批 coding-agent-1 新登记，docs/11 裁决④） | pi `usesDefaultTools`/`defaultToolModifiers`（`sdk.ts:472-473`）只在 `reload()` 有语义（`agent-session.ts:3660-3685`：设置重载后激活**新增**默认工具、移除的保持激活、`-name` 移除的保持移除），依附扩展运行时重载面；java 无 reload 面（设置改动走 accessors 即效）。SDK `tools` 选项的 `Invalid tools option` 抛错（`sdk.ts:280-281`）java 无 SDK 面；CLI 等价物＝解析期 error 诊断（批 1 已落）。触发条件＝java 出现 session reload/扩展运行时或 SDK 面 |
-| B249 | 协议面 | **扩展事件结果臂族**（批 coding-agent-4 新登记，docs/14 §6） | 观察面批 4 已桥（D 域 16 行对齐），本族是**结果型/cancel 型**：① `message_end` 替换臂（agent-session.ts:1316-1333，有持久化后果——java eventHub 同步广播无 await 语义，需先裁决）；② `turn_end`/`agent_before_settle` boundary 派发（emitBoundary，runner.ts:1029）；③ `input`、`user_bash`、`before_agent_start`（systemPrompt 改写，types.ts:1468）；④ `session_before_switch`/`session_before_fork` cancel；⑤ `session_before_compact` cancel＋全载荷＋`session_compact` 的 `compactionEntry`（窄差 D4——需 CompactionExecutor 把条目本体带进事件）。map/04 D-5/6/7/21/24/29/32/40/41 挂此 |
-| B250 | 协议面 | **会话生命周期发射点**：`session_start`/`session_shutdown` | 批 coding-agent-4（docs/14）新登记。`session_start` 需 reason 五级映射＋`previousSessionFile` 载荷；`session_shutdown` pi 走 `emitSessionShutdownEvent`（runner.ts:255-266 的 hasHandlers 门）。java 有装配/关闭点（`AgentSession.create`/`close`）但无事件发射。map/04 D-3/D-10 挂此 |
+| B251 | 协议面 | **forked 会话不加载扩展** | 批 coding-agent-5（docs/15）新登记。`forkInMemory`/持久 fork 路直 new 私有构造、不过 `loadExtensions` ⇒ fork/clone 后扩展机制整体消失（工具/命令/事件订阅全无）；`session_start{fork}` 臂随之无消费者（map/04 D-3 证据列挂此）。触发条件＝fork 路径重用 assemble 的扩展装配 |
+| B252 | 内部 | **切换路径旧会话不 close** | 批 coding-agent-5（docs/15）新登记。/new /resume /fork /clone、RPC new_session/fork/clone 均摘订阅即弃（harness 线程池待 GC）；TUI 退出亦不 close ⇒ `session_shutdown{quit}` 在 TUI 永不发射（map/04 D-10 证据列挂此）。触发条件＝会话生命周期统一治理 |
 
 ### 3.4 TUI（优先级最低，web UI 为主）
 
@@ -337,7 +337,14 @@
 - 【场景】pi 的扩展事件面＝`ExtensionAPI.on()` 41 重载＋loader 订阅表＋runner 发射语义。java 的引擎钩子（agent-core `HookSystem` 13 钩）与宿主事件（`AgentSessionEvent` 24 变体）早已各自生产，但 `ExtensionContext` 不暴露订阅面——扩展一个事件也订不到。D 域 Σ权重 83 是 map/04 最大域（单独拉低模块 14.6pp）。
 - 【决定】2026-10-20 批 coding-agent-4（docs/14）：① 订阅面——`ExtensionContext.on(spec, handler)`（裁决① spec-token 单方法，非 41 便捷方法、非裸字符串）＋`ExtensionEventBus`（注册序触发、退订按实例移除空表删键、`emitError` 独立通道、`hasHandlers` 快走）＋`DefaultExtensionContext.forExtension` per-extension 委托（错误按扩展名归属，pi `extensionPath` 对位）；② 引擎钩子族 3 适配器恒装快走（裁决②）——`context` 两阶段（系统消息过滤、原地可变列表＋**引用相等**快照〔裁决④〕、`restoreSystemMessages` 逐字、阶段二丢头系统上报仍采用）、`tool_call`（block 短路、**异常向上传播**〔裁决③〕、input 原地可变链显式回流）、`tool_result`（逐字段合并＋structuredContent 丢弃规则逐字）；③ 宿主事件族 14 事件 `SessionEventBridge`（裁决⑤ 装配期订阅先于模式层；turnIndex 复位/递增、previousLevel 桥内跟踪、CompactionEnd 成功/失败两支）；④ 错误通道——`AgentSessionEvent.ExtensionError` 新变体（裁决⑥），RPC `extension_error` 线四键逐字（rpc-mode.ts:349），TUI 先忽略（窄差 D5）；⑤ 存量修真——`applyAfterToolPatch` 5 参重建洗 `isError`/`structuredContent` 的 bug（docs/14 §2.3），`ToolResultContext` 增 `arguments`（pi `prepared.args`）。
 - 【风险/代价】窄差（map/04 D 域批 4 窄差表）：D1 引用相等快照（pi `===` 同构）；D2 无逐工具判别子类型；D3 message_update 从 partial 投影；D4 `session_compact` 无 compactionEntry（判存疑，挂 B249）；D5 extension_error TUI 不展示；D6 fromExtension 恒 false；D7 parentToolCallId 缺席（G-10）。（~~D8~~ 作废：闭环评审发现 pi `ToolExecutionEndEvent` 本无 `args`，误加组件已删。）新开放项：**B248**（provider 请求面四件——ai 注入口缺席）、**B249**（结果臂族）、**B250**（session_start/shutdown 发射点）。闭环评审两修已落：① `tool_execution_end` 扩展事件 `args` 组件删除；② 扩展处理器抛 `Error` 的捕获链（pi catch 一切——`tool_call` 包 `RuntimeException` 走错误结果链、其余族 `Throwable` 逐处理器上报继续）。[D4 模型可见；D5 用户可见边缘；余内部/无影响]
-- 触发条件：B248＝ai 层开 `onPayload`/`transformHeaders`/`onResponse` 注入口；B249 ①＝java eventHub 引入 await 语义或持久化臂裁决；B249 ⑤＝CompactionExecutor 带条目本体；B250＝会话生命周期事件面批次。出处：docs/14 §4–§6。
+- 触发条件：B248＝ai 层开 `onPayload`/`transformHeaders`/`onResponse` 注入口；~~B249~~/~~B250~~ 批 5 已销号（docs/15）。出处：docs/14 §4–§6。
+
+### map/04-批 coding-agent-5（docs/15）— 结果臂事件族＋会话生命周期（B249＋B250 合包）
+
+- 【场景】批 4 把扩展事件的**观察面**桥完了（能订、能看），但 pi 事件面的另一半——**结果面**——扩展一个也用不了：改不了定案消息（message_end 替换）、改不了输入（input）、改不了系统提示（before_agent_start）、注不了条目也续不了跑（boundary）、否决不了切换/压缩（cancel 族）、接管不了 bash 与压缩生成；会话生命周期两事件（session_start/shutdown）连发射点都没有。D 域剩 17 缺失＋7 存疑里 12 行挂这一族。
+- 【决定】2026-10-20 批 coding-agent-5（docs/15，T1 引擎扩形→T2 事件 ADT→T3 宿主发射器→T4 boundary 子系统）：① **裁决①**——message_end 替换走引擎新钩（`PiLaneSink` 前换引用：宿主事件在 flush 后、Message 不可变，这是唯一保语义的缝；宿主桥 case 删防双发，观察/结果同批一次）；② **裁决②**——boundary 落引擎钩子（turn_end 复用 `should_stop_after_turn` 并修真载荷〔旧喂 lane.partial＋空工具结果〕；agent_before_settle 新钩 firing 于 drive 循环 settle 前门，pi :1839 同位），`BoundaryBridge` 全落 emitBoundary 逐字（entries/continue 链、每处理器后预览重建、Invalid boundary entries 上报）、草稿四型 commit（compaction 草稿算 retainedTail＋tokensBefore，fromHook=true）、消息→entryId identity 映射、`<boundary>` 归属上报；③ **裁决③**——`SessionEventFirer` 合订宿主发射（同步执行即 pi await 时点）：input 变换/handled（展开**之前**，pi :1991 逐字）、user_bash 首发言者赢＋异常重抛不回落、before_agent_start 累积＋systemPrompt 链式覆盖、before_switch/fork cancel 短路；④ **裁决⑥**——before_compact 引擎钩子载荷/结果三臂扩形（cancel＞supplied＞keepEntries），prepare 前置补 preparation 载荷；`CompactionObserver.onEnd` 第 6 参穿透 compactionEntry（批 4 窄差 **D4 销号**），`fromExtension` 读 fromHook（**D6 销号**）；⑤ **B250**——session_start 装配期发射（初始恒 startup，CLI resume 也是——pi 逐字）、`createReplacing`（new+previous）、`switchTo` 集中 switchSession 序列（cancel→预检→shutdown→attach→start，start 在新侧 firer）、fork 两法集中 before_fork＋shutdown、close/closeForReplacement/fireSessionShutdown（quit/reason+target）；⑥ 调用点改签——SessionCommands/RpcDispatcher/WebDispatcher/TreeSelectorScreen；`ExtensionManager.loadAll` 改 TCCL（生产不变，测试注入用）。
+- 【风险/代价】窄差 15 条（map/04 D 域批 5 窄差表 D9–D23）：D11 systemPrompt 覆盖是 harness 全局态（模型可见）、D10 user_bash operations 臂不移植、D12 input images 恒 null、D14 文件路径位装会话 id、D20 /new 臂 shutdown/start 序反，余皆内部/边缘。引擎钩子 13→15 个。新开放项：**B251**（forked 不加载扩展）、**B252**（旧会话 close 治理）。[D11 模型可见；余内部/边缘]
+- 触发条件：B251＝fork 路径重用 assemble 扩展装配；B252＝会话生命周期统一治理。出处：docs/15 §4–§6。
 
 ---
 
@@ -345,8 +352,8 @@
 
 | # | 文件 | 行数 |
 |---|---|---:|---:|
-| E1 | coding-agent …/core/AgentSession.java | **1,620**（2026-10-20 批 coding-agent-4 实测；拆分宜搭下一 coding-agent 批） |
-| E2 | coding-agent …/rpc/RpcDispatcher.java | 661（2026-10-19 批 coding-agent-3 实测） |
+| E1 | coding-agent …/core/AgentSession.java | **1,841**（2026-10-20 批 coding-agent-5 实测——批 5 +221：firer 接线/生命周期/fork/switchTo；拆分宜搭下一 coding-agent 批） |
+| E2 | coding-agent …/rpc/RpcDispatcher.java | 682（2026-10-20 批 coding-agent-5 实测） |
 | E5 | ai …/catalog/ModelCompat.java | **762**（2026-10-11 B98 加 8 组件；converter 侧已拆出 CompletionAssistantMessage 保 500 内） |
 | E6 | tui …/app/PiTuiApp.java | 519（2026-10-19 批 coding-agent-3 新登记——批 2 闭环时已 512 未入册，本批 +7） |
 

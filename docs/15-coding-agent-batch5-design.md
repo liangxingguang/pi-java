@@ -1,9 +1,13 @@
 # coding-agent 批 5 设计稿：结果臂事件族＋会话生命周期发射点（B249＋B250）
 
-> **状态：🚧 设计完成，实施中（用户授意免人工审核，设计落地后直接实施）**。
+> **状态：✅ 已闭环（2026-10-20，用户授意免人工审核：设计稿落地后直接实施、当日闭环）**。
 > 基线：pi `ea448f454`（2026-10-11）；pi-java main（coding-agent 批 4 闭环后，`849d154f`）。
 > 所有 pi 侧 `file:line` 均经 `git -C D:/workplaceForai/pi show ea448f454:<path>` 实读，未读 pi 工作树。
 > 前批：`14-coding-agent-batch4-design.md`（已闭环，D 域地基：订阅面＋双源桥接）。
+>
+> **闭环 commits**：`bc71e909`（本稿）→ `b5e76e93`（T1 引擎扩形：message_end/before_settle 两新钩、finishTurn 载荷修真、before_compaction 三臂、compactionEntry 穿透）→ `2b7ff003`（T2 事件 ADT＋12 spec）→ `d7c8d6cf`（T3 `SessionEventFirer`＋生命周期/结果臂接线＋调用点改签）→ `4db99998`（T4 `BoundaryBridge`＋messageEnd/beforeCompaction 适配器）＋ docs 回填（本稿＋map/04＋docs/04＋docs/05＋spotbugs 排除）。
+> **验证**：新测试 35 例全绿（`Batch15EngineHooksTest` 8＋`SessionEventFirerTest` 6＋`SessionLifecycleEventsTest` 10＋`Batch15BridgeAdaptersTest` 10＋`SessionEventBridgeTest` 改 1——message_end 无双发断言）；agent-core 852/852、coding-agent 758/758、tui 219、web 56 绿（`-am` 全 reactor ai 1,716 同绿）；全量 `mvn clean verify` BUILD SUCCESS（`[ERROR]` 0 条、无 `System.out.println` 残留；`RichSessionListTest` 存量红排除见偏差⑨）。
+> **实施偏差**（均不改变裁决；台账/map 同载）：① §3.2.3 before_settle firing 点从「checkAfterRun 内部」改为 **drive 循环**（pi :1839 同位更准——设计稿内已修订）；② `ShouldStopAfterTurnContext` 修真伴随**组件类型变更**（顶层 AssistantMessage→`Message.AssistantMessage` ADT、toolResults 收紧 `List<Message.ToolResultMessage>`）——旧喂的 `lane.partial` 本就是错型错值（流中快照），修真一并正型；③ `ExtensionManager.loadAll` 改 TCCL（生产 TCCL＝app loader 不变；端到端夹具注入作用域 loader 所迫，设计稿未载）；④ 「Invalid boundary entries」防御臂无夹具（java 四型草稿装配构造不出失败路径，语义位置保留）；⑤ `switchTo` 的 session_start 在**新侧** firer 发射（内存路 found 是另一对象；持久路原地 attach 同一对象——设计稿 §3.7 未细分，实施期修正）；⑥ 夹具发现「处理器每轮 continue=true 且每轮排队」会无限续跑——pi 同形（非 java 方言），夹具定为首轮 continue＋次轮弃权；⑦ message_end 对 loadout 系统消息同样发射（sink 过所有定案消息——pi 对每个 AgentMessage 火 message_end，一致，补记在案）；⑧ spotbugs `NP_BOOLEAN_RETURN_NULL` 排除＋1（`BoundaryBridge.beforeSettle` 三态返回，B144 同族）；⑨ `RichSessionListTest` 存量红（干净 main 复现、时序敏感、非本批引入）——全量 verify 以 `-Dtest='!RichSessionListTest'` 排除；⑩ `SessionCompactEvent` 组件序与 pi 不同（compactionEntry 追加在末——进程内对象，线格式不涉及）；⑪ E1 涨到 **1,841** 行（+221）。
 
 | 项 | 内容 |
 |---|---|
