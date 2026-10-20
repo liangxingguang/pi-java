@@ -1423,8 +1423,11 @@ public final class AgentSession implements AutoCloseable {
         var previousId = sessionId();
         fireSessionShutdown("resume", idOrPrefix);
         var found = findSession(idOrPrefix).orElseThrow();
-        if (extensionFirer != null) {
-            extensionFirer.sessionStart("resume", previousId);
+        // session_start 在**新侧**发射（pi 的 createRuntime 对位）：持久路原地
+        // attach ⇒ found == this；内存路是另一会话对象，firer 在那一侧。
+        var startFirer = found.extensionFirer != null ? found.extensionFirer : extensionFirer;
+        if (startFirer != null) {
+            startFirer.sessionStart("resume", previousId);
         }
         return new SwitchResult(SwitchOutcome.SWITCHED, found);
     }
