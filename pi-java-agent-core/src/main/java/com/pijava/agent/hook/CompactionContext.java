@@ -1,6 +1,7 @@
 package com.pijava.agent.hook;
 
 import com.pijava.agent.compaction.CompactionService;
+import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.harness.CompactionAbortToken;
 
@@ -24,13 +25,15 @@ import java.util.List;
  * @param willRetry          压缩后是否重试被中止的轮（溢出恢复路）
  * @param customInstructions 手动路的自定义指令；自动路恒 null（pi 同）
  * @param abortToken         per-operation 取消令牌（pi {@code signal} 的对位）
+ * @param settings           本次压缩的设置（pi {@code preparation.settings}）
  */
 public record CompactionContext(String lane, List<Entry> transcript, int currentTokens,
                                 CompactionService.Plan plan, String reason, boolean willRetry,
-                                String customInstructions, CompactionAbortToken abortToken) {
+                                String customInstructions, CompactionAbortToken abortToken,
+                                CompactionSettings settings) {
 
     /** 兼容批前 3 组件形状：扩展载荷全空。 */
     public CompactionContext(String lane, List<Entry> transcript, int currentTokens) {
-        this(lane, transcript, currentTokens, null, "manual", false, null, null);
+        this(lane, transcript, currentTokens, null, "manual", false, null, null, null);
     }
 }

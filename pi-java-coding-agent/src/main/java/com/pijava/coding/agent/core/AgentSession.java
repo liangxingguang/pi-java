@@ -1783,8 +1783,16 @@ public final class AgentSession implements AutoCloseable {
         }
         com.pijava.coding.agent.extension.bridge.EngineHookBridge.install(
             harness.hookSystem(), owner.laneName(), bus, context);
+        // docs/15 §3.5：boundary 两适配器恒装（turn_end 挂 should_stop_after_turn、
+        // agent_before_settle 挂 before_settle）；turnIndex 与宿主桥共享
+        // （pi _turnIndex 同字段——boundary 在宿主 turn_end 事件之前读）。
+        var turnIndex =
+            new com.pijava.coding.agent.extension.bridge.BoundaryBridge.TurnIndex();
+        com.pijava.coding.agent.extension.bridge.EngineHookBridge.installBoundary(
+            harness.hookSystem(), harness, owner.laneName(), bus, context,
+            owner::appendBoundaryEntry, owner.agentRunAbortRequested::get, turnIndex);
         owner.subscribe(new com.pijava.coding.agent.extension.bridge.SessionEventBridge(
-            bus, context, harness.getThinkingLevel())::onEvent);
+            bus, context, harness.getThinkingLevel(), turnIndex)::onEvent);
         bus.onError(err ->
             owner.emitSessionEvent(new AgentSessionEvent.ExtensionError(err)));
         // docs/15（B250）：firer 提为会话字段（close/switch/fork/prompt/bash 都要发）；

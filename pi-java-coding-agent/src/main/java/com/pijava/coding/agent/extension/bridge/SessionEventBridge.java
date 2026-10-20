@@ -61,7 +61,7 @@ public final class SessionEventBridge {
 
     private final ExtensionEventBus bus;
     private final ExtensionContext ctx;
-    private int turnIndex;
+    private final BoundaryBridge.TurnIndex turnIndex;
     private ModelThinkingLevel previousLevel;
 
     /**
@@ -71,21 +71,31 @@ public final class SessionEventBridge {
      */
     public SessionEventBridge(ExtensionEventBus bus, ExtensionContext ctx,
                               ModelThinkingLevel seedLevel) {
+        this(bus, ctx, seedLevel, new BoundaryBridge.TurnIndex());
+    }
+
+    /**
+     * docs/15：与 boundary 派发共享 turnIndex（pi {@code _turnIndex} 同字段——
+     * boundary 在宿主 turn_end 事件之前读，本桥随后递增）。
+     */
+    public SessionEventBridge(ExtensionEventBus bus, ExtensionContext ctx,
+                              ModelThinkingLevel seedLevel, BoundaryBridge.TurnIndex turnIndex) {
         this.bus = bus;
         this.ctx = ctx;
         this.previousLevel = seedLevel;
+        this.turnIndex = turnIndex;
     }
 
     /** 会话事件入口（{@code AgentSession.subscribe(...)} 的消费者形状）。 */
     public void onEvent(AgentSessionEvent event) {
         switch (event) {
             case AgentSessionEvent.AgentStart ignored -> {
-                turnIndex = 0; // pi :1286
+                turnIndex.value = 0; // pi :1286
                 fire(AGENT_START, new AgentStartEvent());
             }
             case AgentSessionEvent.TurnStart ignored ->
-                fire(TURN_START, new TurnStartEvent(turnIndex, System.currentTimeMillis()));
-            case AgentSessionEvent.TurnEnd ignored -> turnIndex++; // pi :1301；boundary 臂挂 B249
+                fire(TURN_START, new TurnStartEvent(turnIndex.value, System.currentTimeMillis()));
+            case AgentSessionEvent.TurnEnd ignored -> turnIndex.value++; // pi :1301
             case AgentSessionEvent.AgentEnd e ->
                 fire(AGENT_END, new AgentEndEvent(e.messages()));
             case AgentSessionEvent.AgentSettled e ->

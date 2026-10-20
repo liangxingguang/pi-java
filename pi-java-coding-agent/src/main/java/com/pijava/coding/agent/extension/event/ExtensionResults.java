@@ -116,10 +116,10 @@ public final class ExtensionResults {
                 implements SessionBoundaryDraft {}
         /**
          * pi {@code CompactionEntryDraft}（:964-971）——{@code firstKeptEntryId} 为 null
-         * 创建自留压缩（pi 注释逐字）。
+         * 创建自留压缩（pi 注释逐字）。{@code usage} 是 LLM 用量（pi {@code Usage}）。
          */
         record Compaction(String summary, String firstKeptEntryId,
-                          Map<String, Object> details, ToolResult.UsageInfo usage)
+                          Map<String, Object> details, com.pijava.ai.Usage usage)
                 implements SessionBoundaryDraft {}
     }
 

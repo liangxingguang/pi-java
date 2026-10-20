@@ -293,7 +293,7 @@ final class CompactionExecutor {
             var preparation = CompactionService.prepare(lane.transcript, settings);
             var compactCtx = new CompactionContext(laneName,
                 List.copyOf(lane.transcript), estimatedTokens, preparation, reason,
-                willRetry, customInstructions, abortToken);
+                willRetry, customInstructions, abortToken, settings);
             var plan = ctx.hookSystem().fireBeforeCompaction(laneName, compactCtx);
             if (plan != null && Boolean.TRUE.equals(plan.cancel())) {
                 // pi cancelledByExtension（agent-session.ts:2804-2807, 3139-3142）：

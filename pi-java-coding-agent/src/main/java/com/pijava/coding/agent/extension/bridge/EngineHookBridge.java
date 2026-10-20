@@ -5,9 +5,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.pijava.agent.harness.AgentHarness;
 import com.pijava.agent.hook.AfterToolPatch;
 import com.pijava.agent.hook.BeforeToolResult;
+import com.pijava.agent.hook.CompactionContext;
+import com.pijava.agent.hook.CompactionPlan;
 import com.pijava.agent.hook.HookSystem;
+import com.pijava.agent.hook.MessageEndContext;
+import com.pijava.agent.hook.SuppliedCompaction;
 import com.pijava.agent.hook.ToolCallContext;
 import com.pijava.agent.hook.ToolResultContext;
 import com.pijava.ai.api.Transcripts;
@@ -16,7 +21,10 @@ import com.pijava.coding.agent.extension.ExtensionContext;
 import com.pijava.coding.agent.extension.ExtensionEventBus;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.ContextEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.ContextWithSystemEvent;
+import com.pijava.coding.agent.extension.event.ExtensionEvent.MessageEndEvent;
+import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionBeforeCompactEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.ToolCallEvent;
+import com.pijava.coding.agent.extension.event.ExtensionResults.CompactionPreparation;
 import com.pijava.coding.agent.extension.event.ExtensionResults.ToolCallEventResult;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.ToolResultEvent;
 import com.pijava.coding.agent.extension.event.ExtensionResults.ToolResultEventResult;
@@ -24,6 +32,8 @@ import com.pijava.coding.agent.extension.event.ExtensionEventSpec;
 
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.CONTEXT;
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.CONTEXT_WITH_SYSTEM;
+import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.MESSAGE_END;
+import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.SESSION_BEFORE_COMPACT;
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.TOOL_CALL;
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.TOOL_RESULT;
 
@@ -56,13 +66,36 @@ public final class EngineHookBridge {
         this.ctx = ctx;
     }
 
-    /** 装配期恒装三个适配器（每个引擎钩子一个）。 */
+    /** 装配期恒装五个适配器（docs/14 三个＋docs/15 的 message_end/before_compaction）。 */
     public static void install(HookSystem hooks, String laneName,
                                ExtensionEventBus bus, ExtensionContext ctx) {
         var bridge = new EngineHookBridge(bus, ctx);
         hooks.onTransformContext(laneName, bridge::transformContext);
         hooks.onBeforeTool(laneName, bridge::beforeTool);
         hooks.onAfterTool(laneName, bridge::afterTool);
+        hooks.onMessageEnd(laneName, bridge::messageEnd);
+        hooks.onBeforeCompaction(laneName, bridge::beforeCompaction);
+    }
+
+    /**
+     * 装配期恒装 boundary 两适配器（docs/15 §3.5，裁决②）：{@code should_stop_after_turn}
+     * 挂 {@code turn_end} 派发、{@code before_settle} 挂 {@code agent_before_settle} 派发。
+     *
+     * @param commitSink 草稿落盘点（{@code AgentSession.appendBoundaryEntry}：append＋
+     *        EntryAppended＋persist）
+     * @param abortProbe 中止探针（pi {@code _abortDuringBeforeSettle} 对位）
+     * @param turnIndex  与 {@code SessionEventBridge} 共享的计数（pi {@code _turnIndex}
+     *        同字段：boundary 在宿主 turn_end 事件<b>之前</b>读，宿主桥随后递增）
+     */
+    public static void installBoundary(HookSystem hooks, AgentHarness harness, String laneName,
+                                       ExtensionEventBus bus, ExtensionContext ctx,
+                                       java.util.function.Consumer<com.pijava.agent.entry.Entry> commitSink,
+                                       java.util.function.BooleanSupplier abortProbe,
+                                       BoundaryBridge.TurnIndex turnIndex) {
+        var boundary = new BoundaryBridge(harness, laneName, bus, ctx, commitSink, abortProbe,
+            turnIndex);
+        hooks.onFinishTurn(laneName, boundary::turnEnd);
+        hooks.onBeforeSettle(laneName, boundary::beforeSettle);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -268,5 +301,84 @@ public final class EngineHookBridge {
     @SuppressWarnings("unchecked") // T 的擦除使受检异常绕过编译期检查，运行时原样
     private static <T extends Throwable> RuntimeException throwAsIs(Throwable t) throws T {
         throw (T) t;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // MessageEndAdapter：pi emitMessageEnd（runner.ts:1144-1181 逐字，docs/15 裁决①）
+    // ═══════════════════════════════════════════════════════════
+
+    /** pi role 校验的错误文本（runner.ts:1158-1162 逐字）。 */
+    static final String MESSAGE_ROLE_MISMATCH =
+        "message_end handlers must return a message with the same role";
+
+    /**
+     * pi 的链式替换：后处理器看到前处理器的产物（{@code currentMessage}）；role 不同
+     * ⇒ emitError（文本逐字）＋跳过该替换；逐处理器 catch ⇒ emitError ⇒ 继续；
+     * 全程无替换 ⇒ {@code null}（sink 用原消息）。
+     */
+    Message messageEnd(MessageEndContext c) {
+        if (!bus.hasHandlers(MESSAGE_END)) {
+            return null;
+        }
+        Message current = c.message();
+        boolean modified = false;
+        for (var h : bus.snapshot(MESSAGE_END)) {
+            try {
+                var r = h.handle(new MessageEndEvent(current), ctx);
+                if (r == null || r.message() == null) {
+                    continue;
+                }
+                // pi 的 role 字符串比较在 java 是 variant 类比较（ADT 一一对应）。
+                if (r.message().getClass() != current.getClass()) {
+                    bus.emitError(h.error(MESSAGE_ROLE_MISMATCH));
+                    continue;
+                }
+                current = r.message();
+                modified = true;
+            } catch (Throwable e) { // pi 的 catch 捕获一切：逐处理器上报 ⇒ 继续
+                bus.emitError(h.error(e));
+            }
+        }
+        return modified ? current : null;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // BeforeCompactionAdapter：pi session_before_compact
+    // （agent-session.ts:2792-2811/:3124-3144，docs/15 裁决⑥）
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * pi 的 cancel 短路（通用 emit 纪律，runner.ts:1089-1118）＋接管臂（最后一个给
+     * {@code compaction} 的处理器赢）；逐处理器 catch ⇒ emitError ⇒ 继续。
+     *
+     * @return cancel ⇒ {@link CompactionPlan#cancelled()}；接管 ⇒
+     *         {@link CompactionPlan#supplied}；无发言 ⇒ {@code null}（引擎走默认生成）
+     */
+    CompactionPlan beforeCompaction(CompactionContext c) {
+        if (!bus.hasHandlers(SESSION_BEFORE_COMPACT)) {
+            return null;
+        }
+        var preparation = c.plan() == null ? null : new CompactionPreparation(
+            c.plan().firstKeptId(), c.plan().toSummarize(), c.plan().turnPrefix(),
+            c.plan().splitTurn(), c.currentTokens(), c.plan().previousSummary(), c.settings());
+        var event = new SessionBeforeCompactEvent(preparation, c.transcript(),
+            c.customInstructions(), c.reason(), c.willRetry(), c.abortToken());
+        SuppliedCompaction supplied = null;
+        for (var h : bus.snapshot(SESSION_BEFORE_COMPACT)) {
+            try {
+                var r = h.handle(event, ctx);
+                if (r != null) {
+                    if (Boolean.TRUE.equals(r.cancel())) {
+                        return CompactionPlan.cancelled(); // pi cancelledByExtension
+                    }
+                    if (r.compaction() != null) {
+                        supplied = r.compaction();
+                    }
+                }
+            } catch (Throwable e) { // pi 的 catch 捕获一切：逐处理器上报 ⇒ 继续
+                bus.emitError(h.error(e));
+            }
+        }
+        return supplied != null ? CompactionPlan.supplied(supplied) : null;
     }
 }

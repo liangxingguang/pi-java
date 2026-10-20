@@ -57,6 +57,7 @@ class SessionLifecycleEventsTest {
     static volatile boolean handleInput;
     static volatile String systemPromptOverride;
     static volatile ShellResult bashReplacement;
+    static volatile String messageEndReplacement;
 
     /** 测试扩展：订阅本批全部宿主发射点并录制。 */
     public static final class Recorder implements PiExtension {
@@ -102,6 +103,17 @@ class SessionLifecycleEventsTest {
                     true, Map.of());
                 return new BeforeAgentStartEventResult(draft, systemPromptOverride);
             });
+            ctx.on(com.pijava.coding.agent.extension.event.ExtensionEventSpec.MESSAGE_END,
+                (e, c) -> {
+                    EVENTS.add("message_end:" + e.message().role());
+                    if (messageEndReplacement != null
+                            && e.message() instanceof com.pijava.ai.message.Message.AssistantMessage) {
+                        return new com.pijava.coding.agent.extension.event.ExtensionResults
+                            .MessageEndEventResult(new com.pijava.ai.message.Message.AssistantMessage(
+                                List.of(new ContentBlock.TextContent(messageEndReplacement))));
+                    }
+                    return null;
+                });
         }
     }
 
@@ -119,6 +131,7 @@ class SessionLifecycleEventsTest {
         handleInput = false;
         systemPromptOverride = null;
         bashReplacement = null;
+        messageEndReplacement = null;
         var servicesDir = Files.createDirectories(tmp.resolve("META-INF/services"));
         Files.writeString(
             servicesDir.resolve("com.pijava.coding.agent.extension.PiExtension"),
@@ -273,6 +286,27 @@ class SessionLifecycleEventsTest {
                 .toList();
             assertThat(customs).hasSize(1);
             assertThat(customs.get(0).customType()).isEqualTo("hook-note");
+        }
+    }
+
+    @Test
+    void messageEndReplacementReachesTranscriptExactlyOnce() {
+        try (var s = session(InMemorySessionRepository.create(), "--session-id", "me1")) {
+            messageEndReplacement = "replaced-by-extension";
+            EVENTS.clear();
+            s.processPrompt("hello").status();
+            // sink 适配器统一发射：每个定案消息恰火一次（loadout 系统消息也在
+            // sink 过——pi 同样对每个 AgentMessage 火 message_end），无双发。
+            assertThat(EVENTS.stream().filter(e -> e.startsWith("message_end:")).toList())
+                .containsExactly("message_end:system", "message_end:user",
+                    "message_end:assistant");
+            var assistantTexts = s.harness().snapshot(s.laneName()).transcript().stream()
+                .filter(e -> e instanceof Entry.Message)
+                .map(e -> ((Entry.Message) e).message())
+                .filter(m -> "assistant".equals(m.role()))
+                .map(m -> ((ContentBlock.TextContent) m.content().get(0)).text())
+                .toList();
+            assertThat(assistantTexts).containsExactly("replaced-by-extension");
         }
     }
 
