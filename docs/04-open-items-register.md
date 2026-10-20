@@ -27,7 +27,7 @@
 ## 基准与口径
 
 - 七份地图（含 2026-10-12 新建的 `map/07-mcp.md`）已于 2026-10-12 对当前锚点逐条重测完毕。重测销号 A16，新发现的差异登记为 B233–B238。
-- 已闭环批次：ai 批 0–10（原 docs/08–19）、agent-core 批 1–3（原 docs/20–22）、telemetry 批 1（原 docs/23）、agent-core 批 4–5（docs/09–10）、coding-agent 批 1–3（docs/11–13）。
+- 已闭环批次：ai 批 0–10（原 docs/08–19）、agent-core 批 1–3（原 docs/20–22）、telemetry 批 1（原 docs/23）、agent-core 批 4–5（docs/09–10）、coding-agent 批 1–6（docs/11–16）。
   - ai 批 0 裁决：B115/B117/B124 取证关单、#87 零代码对齐、11 个单元移出分母。
   - telemetry 批 1 结论：pi 的 telemetry 是休眠契约（没有实际调用点），`map/01` 完成度 100%。
   - 换锚裁决依据在原 `docs/11-pi-reanchor-ruling.md`。
@@ -127,9 +127,6 @@
 | B163 | 用户可见 | 主题/色彩系统差距大 | pi 3,176 行（theme、system-theme、oklab 等），Java 74 行 |
 | B245 | 混合 | **tree 扩展事件＋TUI 摘要流**（批 agent-core-4 新登记，docs/09 §13.5） | ① `session_before_tree`/`session_tree` 扩展事件（types.ts:817-846,1488-1501，含 `result.summary` 整体替代生成器的 fromHook=true 旁路）；② TUI 树选择器摘要三选对话框（interactive-mode.ts:5559-5706）＋摘要期 Esc 换绑 `abortBranchSummary`（:5637-5640）＋`skipPrompt` 弹窗门（:5590，设置项批 4 已备）。挂扩展事件（D 域）与 TUI 两族；`navigateTree`/`abortBranchSummary` 本体批 4 已落 |
 | B246 | 混合 | **工具选择的 reload 臂＋SDK `tools` 选项抛错面**（批 coding-agent-1 新登记，docs/11 裁决④） | pi `usesDefaultTools`/`defaultToolModifiers`（`sdk.ts:472-473`）只在 `reload()` 有语义（`agent-session.ts:3660-3685`：设置重载后激活**新增**默认工具、移除的保持激活、`-name` 移除的保持移除），依附扩展运行时重载面；java 无 reload 面（设置改动走 accessors 即效）。SDK `tools` 选项的 `Invalid tools option` 抛错（`sdk.ts:280-281`）java 无 SDK 面；CLI 等价物＝解析期 error 诊断（批 1 已落）。触发条件＝java 出现 session reload/扩展运行时或 SDK 面 |
-| B251 | 协议面 | **forked 会话不加载扩展** | 批 coding-agent-5（docs/15）新登记。`forkInMemory`/持久 fork 路直 new 私有构造、不过 `loadExtensions` ⇒ fork/clone 后扩展机制整体消失（工具/命令/事件订阅全无）；`session_start{fork}` 臂随之无消费者（map/04 D-3 证据列挂此）。触发条件＝fork 路径重用 assemble 的扩展装配 |
-| B252 | 内部 | **切换路径旧会话不 close** | 批 coding-agent-5（docs/15）新登记。/new /resume /fork /clone、RPC new_session/fork/clone 均摘订阅即弃（harness 线程池待 GC）；TUI 退出亦不 close ⇒ `session_shutdown{quit}` 在 TUI 永不发射（map/04 D-10 证据列挂此）。触发条件＝会话生命周期统一治理 |
-
 ### 3.4 TUI（优先级最低，web UI 为主）
 
 | # | 面 | 条目 | 现状与出处 |
@@ -344,7 +341,14 @@
 - 【场景】批 4 把扩展事件的**观察面**桥完了（能订、能看），但 pi 事件面的另一半——**结果面**——扩展一个也用不了：改不了定案消息（message_end 替换）、改不了输入（input）、改不了系统提示（before_agent_start）、注不了条目也续不了跑（boundary）、否决不了切换/压缩（cancel 族）、接管不了 bash 与压缩生成；会话生命周期两事件（session_start/shutdown）连发射点都没有。D 域剩 17 缺失＋7 存疑里 12 行挂这一族。
 - 【决定】2026-10-20 批 coding-agent-5（docs/15，T1 引擎扩形→T2 事件 ADT→T3 宿主发射器→T4 boundary 子系统）：① **裁决①**——message_end 替换走引擎新钩（`PiLaneSink` 前换引用：宿主事件在 flush 后、Message 不可变，这是唯一保语义的缝；宿主桥 case 删防双发，观察/结果同批一次）；② **裁决②**——boundary 落引擎钩子（turn_end 复用 `should_stop_after_turn` 并修真载荷〔旧喂 lane.partial＋空工具结果〕；agent_before_settle 新钩 firing 于 drive 循环 settle 前门，pi :1839 同位），`BoundaryBridge` 全落 emitBoundary 逐字（entries/continue 链、每处理器后预览重建、Invalid boundary entries 上报）、草稿四型 commit（compaction 草稿算 retainedTail＋tokensBefore，fromHook=true）、消息→entryId identity 映射、`<boundary>` 归属上报；③ **裁决③**——`SessionEventFirer` 合订宿主发射（同步执行即 pi await 时点）：input 变换/handled（展开**之前**，pi :1991 逐字）、user_bash 首发言者赢＋异常重抛不回落、before_agent_start 累积＋systemPrompt 链式覆盖、before_switch/fork cancel 短路；④ **裁决⑥**——before_compact 引擎钩子载荷/结果三臂扩形（cancel＞supplied＞keepEntries），prepare 前置补 preparation 载荷；`CompactionObserver.onEnd` 第 6 参穿透 compactionEntry（批 4 窄差 **D4 销号**），`fromExtension` 读 fromHook（**D6 销号**）；⑤ **B250**——session_start 装配期发射（初始恒 startup，CLI resume 也是——pi 逐字）、`createReplacing`（new+previous）、`switchTo` 集中 switchSession 序列（cancel→预检→shutdown→attach→start，start 在新侧 firer）、fork 两法集中 before_fork＋shutdown、close/closeForReplacement/fireSessionShutdown（quit/reason+target）；⑥ 调用点改签——SessionCommands/RpcDispatcher/WebDispatcher/TreeSelectorScreen；`ExtensionManager.loadAll` 改 TCCL（生产不变，测试注入用）。
 - 【风险/代价】窄差 15 条（map/04 D 域批 5 窄差表 D9–D23）：D11 systemPrompt 覆盖是 harness 全局态（模型可见）、D10 user_bash operations 臂不移植、D12 input images 恒 null、D14 文件路径位装会话 id、D20 /new 臂 shutdown/start 序反，余皆内部/边缘。引擎钩子 13→15 个。新开放项：**B251**（forked 不加载扩展）、**B252**（旧会话 close 治理）。[D11 模型可见；余内部/边缘]
-- 触发条件：B251＝fork 路径重用 assemble 扩展装配；B252＝会话生命周期统一治理。出处：docs/15 §4–§6。
+- 触发条件：~~B251~~/~~B252~~ 批 6 已销号（docs/16）。出处：docs/15 §4–§6。
+
+### map/04-批 coding-agent-6（docs/16）— fork 扩展装配＋会话关闭治理（B251＋B252 合包）
+
+- 【场景】批 5 把生命周期的「发射点」点着了，但 fork 后的会话是个没有扩展的空壳（`forkInMemory`/持久 fork 路直 new 私有构造、不过 `loadExtensions` ⇒ fork/clone 后扩展工具/命令/订阅/资源发现整体消失、`start{fork}` 无消费者）；被替换的旧会话从不真正关闭（/new、fork/clone、TUI 退出、RPC EOF 全摘订阅即弃，`session_shutdown{quit}` 在 TUI 永不发射）。同根新发现：`harness.fork()` 共享成品 config ⇒ 压缩/重试事件、重试中止旗、图片策略、PI_* 会话身份五组闭包经 sessionRef 全读父会话。
+- 【决定】2026-10-21 批 coding-agent-6（docs/16，T1 fork 装配重建→T2 teardown 集中→T3 退出面）：① **T1**——assemble 的「harness＋会话绑定装配」抽为共用 `wireSession`（pi createRuntime 工厂型对位），fork 三路全走它（fresh ToolRegistry/CommandRegistry＋fresh 会话绑定闭包——五组串线同修），forked `loadExtensions` 全量重装并发射 `session_start{fork, previousSessionFile}`（pi 逐字序：teardown → 重建 → rebind）；**裁决①** model/thinkingLevel 携带父会话当前值（java 无 setModel persist 面，携带＝pi persist 臂实际效果），其余按 args/settings 重解析；**裁决②** 注册表 fresh、providers 共享（注入缝所限，窄差 D30）；② **T2**——`closeWith` 三参化（**裁决⑤** abort() 首步对位 pi settle 在途 turn、句柄开关、**裁决⑥** 幂等门）；fork 内部 `closeForFork`（保共享 repository 句柄）；/new＋RPC new_session 改 `closeForReplacement`（`closeSession()` 改名 `unsubscribe()`）；`attachOpened` 原地 attach 关旧 storage（先 persistPending 后关句柄，同对象/同 id 恒等跳过）；`AgentHarness.fork()` 删除（无引用）；③ **T3**——`PiTuiApp.exit()` 关**当前**会话（pi 交互 quit 臂：先停 UI 后 dispose）、`RpcDispatcher.close()` 关 dispatcher 当前会话（pi rpc-mode.ts:736）——`session_shutdown{quit}` 自此在 TUI 与 RPC 退出路径发射。
+- 【风险/代价】窄差 7 条（map/04 D 域批 6 窄差表 D24–D30，均内部/边缘）：D24 fork 携带模型略宽于 pi 的 Ctrl+P 臂、D25 内存路 switchTo 旧对象不关（关即毁数据）、D26/D27 内存 CLI --fork 两测试路边、D28 内存注册表残留 closed 会话、D29 无 extensionRunner.invalidate 对位、D30 providers 共享。账面：行翻转 0（D-3/D-10 早已判对齐，摘「挂 B251/B252」帽）；D 域 66.0/83＝79.5% 与模块 283.5/496≈57.2% 均不变（缺陷闭环，同批 3 口径）；引擎钩子 15 不变。[均内部/边缘]
+- 触发条件：无（本族已闭；D25/D28 随内存会话治理立项时重裁）。出处：docs/16 §3–§6。
 
 ---
 
@@ -352,10 +356,10 @@
 
 | # | 文件 | 行数 |
 |---|---|---:|---:|
-| E1 | coding-agent …/core/AgentSession.java | **1,841**（2026-10-20 批 coding-agent-5 实测——批 5 +221：firer 接线/生命周期/fork/switchTo；拆分宜搭下一 coding-agent 批） |
-| E2 | coding-agent …/rpc/RpcDispatcher.java | 682（2026-10-20 批 coding-agent-5 实测） |
+| E1 | coding-agent …/core/AgentSession.java | **1,925**（2026-10-21 批 coding-agent-6 实测——批 6 +84：wireSession 抽取/closeWith 三参/关闭治理；拆分宜搭下一 coding-agent 批） |
+| E2 | coding-agent …/rpc/RpcDispatcher.java | 693（2026-10-21 批 coding-agent-6 实测） |
 | E5 | ai …/catalog/ModelCompat.java | **762**（2026-10-11 B98 加 8 组件；converter 侧已拆出 CompletionAssistantMessage 保 500 内） |
-| E6 | tui …/app/PiTuiApp.java | 519（2026-10-19 批 coding-agent-3 新登记——批 2 闭环时已 512 未入册，本批 +7） |
+| E6 | tui …/app/PiTuiApp.java | 529（2026-10-21 批 coding-agent-6 实测——退出面 close＋测试钩 +10） |
 
 （E3/E4 已销号——2026-10-18 批 agent-core-5 拆分：`PiLaneSink` 470＋`PiLaneRequestTelemetry` 131、`AgentHarness` 438＋`HarnessBootstrap` 231，行为零变化纯移动。）
 

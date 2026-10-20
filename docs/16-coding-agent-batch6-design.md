@@ -1,6 +1,6 @@
 # coding-agent 批 6 设计稿：fork 扩展装配＋会话关闭治理（B251＋B252）
 
-> **状态：待审核**。
+> **状态：已闭环（2026-10-21）**。T1 wireSession 抽取＋fork 三路重建＋`harness.fork()` 删除；T2 closeWith 三参＋closeForFork/closeForReplacement/attachOpened 关旧 storage；T3 TUI exit＋RPC EOF 关当前会话。新夹具 5 件 14 用例全绿（ForkExtensionWiringTest 3／ForkWiringIsolationTest 3／SessionTeardownTest 5／PiTuiAppExitCloseTest 2〔tui 模块〕／RpcExitCloseTest 1——T3 按模块边界分置两件）；coding-agent 770＋tui 858＋web 56 回归全绿；全量 clean verify 零错误零警告。**B251/B252 销号**；行翻转 0（D 域 79.5%、模块 57.2% 不变）；窄差 +D24–D30（均内部/边缘）。
 > 基线：pi `ea448f454`（2026-10-11）；pi-java main（coding-agent 批 5 闭环后，`1a8878f0`）。
 > 所有 pi 侧 `file:line` 均经 `git -C D:/workplaceForai/pi show ea448f454:<path>` 实读，未读 pi 工作树。
 > 前批：`15-coding-agent-batch5-design.md`（已闭环，结果臂事件族＋生命周期发射点；B251/B252 即彼批新登记）。

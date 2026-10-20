@@ -167,14 +167,14 @@ pi-java 的**引擎钩子** = `pi-java-agent-core/.../agent/hook/HookSystem.java
 |---|---|---|---|---|---|---|
 | 1 | `project_trust` | `:1569` | ❌ | 2 | **缺失** | java 有 `TrustManager.java` 标记文件，但无注册面 |
 | 2 | `resources_discover` | `:1571` | ✅ `PiExtension.java:29` | 2 | **对齐** | `ExtensionManager.java:85-100` 合并保序 + 异常隔离 |
-| 3 | `session_start` | `:1574` | ✅ | 2 | **对齐** | 批 coding-agent-5（docs/15）：装配期发射（初始恒 startup，CLI resume 也是——pi 逐字）；`createReplacing` 带 new+previous、`switchTo` 带 resume+previous；fork 臂挂 **B251**（forked 不加载扩展） |
+| 3 | `session_start` | `:1574` | ✅ | 2 | **对齐** | 批 coding-agent-5（docs/15）：装配期发射（初始恒 startup，CLI resume 也是——pi 逐字）；`createReplacing` 带 new+previous、`switchTo` 带 resume+previous；fork 臂批 6 落（docs/16：forked 全量 `loadExtensions`＋`start{fork, previous}`，pi rebind→bindExtensions 对位） |
 | 4 | `session_info_changed` | `:1575` | ✅ | 1 | **对齐** | 宿主生产者已有（`AgentSession.java:706`——旧证据「零生产者/B30」已过期）；批 coding-agent-4（docs/14）`SessionEventBridge` 桥接 |
 | 5 | `session_before_switch` | `:1577` | ✅ | 2 | **对齐** | 批 5 `AgentSession.switchTo` 集中（cancel ⇒ 旧会话不动，pi runtime :201-203 逐字）；预检目标存在再 teardown（pi 序） |
 | 6 | `session_before_fork` | `:1581` | ✅ | 2 | **对齐** | 批 5 `forkCopy`/`forkFromEntry` 内发射（cancel ⇒ `Optional.empty`）；`forkCopy` 映射 `{当前叶,"at"}`（窄差 D17） |
 | 7 | `session_before_compact` | `:1585` | ✅ | 2 | **对齐** | 批 5 `EngineHookBridge` 第 5 适配器：preparation（Plan 视图；无 fileOps=窄差 D22）＋cancel 短路＋supplied 接管（fromHook=true）；signal=abortToken |
 | 8 | `session_compact` | `:1588` | ✅ | 2 | **对齐** | 批 5：`compactionEntry` 落（D4 销号——`CompactionObserver.onEnd` 第 6 参穿透）；`fromExtension` 读条目 `fromHook`（D6 销号） |
 | 9 | `session_compact_failed` | `:1589` | ✅ | 1 | **对齐** | 批 4 桥接（`CompactionEnd` 失败/中止臂）；pi `aborted` 判定为**信号权威**（`agent-session.ts:2887`） |
-| 10 | `session_shutdown` | `:1590` | ✅ | 2 | **对齐** | 批 5：`close()`=quit、`closeForReplacement`/`fireSessionShutdown` 带 reason+target（hasHandlers 门同 pi :258-267）；TUI 退出不 close 是存量（B252） |
+| 10 | `session_shutdown` | `:1590` | ✅ | 2 | **对齐** | 批 5：`close()`=quit、`closeForReplacement`/`fireSessionShutdown` 带 reason+target（hasHandlers 门同 pi :258-267）；TUI 退出/RPC EOF 批 6 落（docs/16：`PiTuiApp.exit()` 关当前会话、`RpcDispatcher.close()` 关 dispatcher 当前会话，quit 在两退出路径发射） |
 | 11 | `mcp_servers_change` | `:1591` | ❌ | 2 | **缺失** | 扩展订阅面不存在；java MCP 注册表本身见 map/07（B221） |
 | 12 | `session_before_tree` | `:1593` | ⚠️ | 1 | **存疑** | 引擎钩子 `onBeforeNavigation:88`**未桥接** |
 | 13 | `session_tree` | `:1596` | ❌ | 1 | **缺失** | 无导航完成事件 |
@@ -247,7 +247,21 @@ pi-java 的**引擎钩子** = `pi-java-agent-core/.../agent/hook/HookSystem.java
 | D23 | 原地 resume 的 shutdown/start 在**同一条 bus** 上发射（pi 是旧/新两条 runner）；内存路 switchTo 的 start 在新侧 firer 发射 | [内部] |
 
 **销号**：**B249**/**B250**（D-3/5/6/7/8/10/21/24/29/32/40/41 十二行翻转）；批 4 窄差 **D4**（compactionEntry 落）、**D6**（fromExtension 读 fromHook）同步销号。
-**新登记**：**B251**（forked 会话不加载扩展——forkInMemory/持久 fork 路不过 loadExtensions，fork 后扩展机制整体消失；`session_start{fork}` 臂随之无消费者）、**B252**（TUI/RPC 切换路径旧会话不 close、TUI 退出不 close ⇒ `session_shutdown{quit}` 在 TUI 永不发射）——明细在 docs/04。
+**新登记**：**B251**（forked 会话不加载扩展——forkInMemory/持久 fork 路不过 loadExtensions，fork 后扩展机制整体消失；`session_start{fork}` 臂随之无消费者）、**B252**（TUI/RPC 切换路径旧会话不 close、TUI 退出不 close ⇒ `session_shutdown{quit}` 在 TUI 永不发射）——明细在 docs/04。~~B251/B252~~ **批 6 已销号**（docs/16，2026-10-21 闭环）。
+
+### 批 coding-agent-6（docs/16，2026-10-21 闭环）窄差表
+
+| # | 内容 | 等级 |
+|---|---|---|
+| D24 | fork 携带当前 model/thinkingLevel（pi 经 persist→settings 重解析，效果同；java 无 persist 面故直接携带）；systemPrompt/activeTools/skills 重解析＋扩展 `start{fork}` 重激活（pi createRuntime 语义） | [内部] |
+| D25 | 内存路 `switchTo` 旧会话对象不关闭（内存注册表的会话对象即存储本体，关即毁数据；pi 内存 SessionManager 无切回面——`switchSession` 恒要文件路径） | [内部] |
+| D26 | 内存 CLI `--fork` 经 `forkCopy` ⇒ 发射 `start{fork}`（pi CLI fork 恒 `startup`；持久路不过 forkCopy＝startup，与 pi 一致） | [内部，测试路] |
+| D27 | 内存 CLI `--fork` 的初始会话空转 `start{startup}` 后被弃置不 close（两步装配的存量形状；持久路无此问题） | [内部，测试路] |
+| D28 | 内存 fork/clone 后旧会话已关但仍列在内存注册表（`/resume` 选到 ⇒ 拿到 closed 会话）；pi 内存态无切回面 | [内部，边缘] |
+| D29 | 无 `extensionRunner.invalidate` 对位（pi dispose :1405 的 stale ctx 防御）；java 会话关闭后扩展持有的旧 ctx 仍可调共享 services | [内部，边缘] |
+| D30 | providers 注册表 fork 间共享（初始装配注入缝无复制面）；扩展在 fork 两侧重复注册 provider 会叠加 | [内部，边缘] |
+
+**销号**：**B251**/**B252**（缺陷闭环、无行翻转——D-3/D-10 早已判对齐，本批摘证据列「挂 B251/B252」帽；D 域 66.0/83＝79.5% 与模块 283.5/496≈57.2% 均不变，同批 3 口径）。
 
 ### D′. 扩展 UI 注入点（单列）
 
