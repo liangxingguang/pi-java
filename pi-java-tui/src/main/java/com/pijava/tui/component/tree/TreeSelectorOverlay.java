@@ -94,6 +94,16 @@ public final class TreeSelectorOverlay implements ScreenOverlay {
         return labelEditor != null;
     }
 
+    /** 当前选中 entry id（宿主/测试只读探针；空表 ⇒ {@code null}）。 */
+    public String selectedEntryId() {
+        return model.selectedEntryId();
+    }
+
+    /** 当前过滤模式（宿主/测试只读探针）。 */
+    public FilterMode filterMode() {
+        return model.filterMode();
+    }
+
     // ── 键分派（pi handleInput :1004-1110 分派序逐字）─────────
 
     @Override

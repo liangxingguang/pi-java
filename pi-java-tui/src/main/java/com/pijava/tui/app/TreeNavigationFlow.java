@@ -1,16 +1,18 @@
 package com.pijava.tui.app;
 
 import java.util.function.Consumer;
-import java.util.function.Supplier;
+import java.util.function.IntSupplier;
 
-import com.pijava.agent.harness.SessionSnapshot;
 import com.pijava.coding.agent.core.AgentSession;
+import com.pijava.coding.agent.core.KeybindingsManager;
 import com.pijava.tui.component.StatusIndicator;
+import com.pijava.tui.component.tree.FilterMode;
+import com.pijava.tui.component.tree.TreeSelectorOverlay;
 import com.pijava.tui.screen.ChatScreen;
 import com.pijava.tui.screen.CustomInstructionsScreen;
 import com.pijava.tui.screen.ScreenOverlay;
 import com.pijava.tui.screen.SummaryChoiceScreen;
-import com.pijava.tui.screen.TreeSelectorScreen;
+import com.pijava.tui.util.ClipboardSupport;
 import com.pijava.tui.util.TuiEventDispatcher;
 
 /**
@@ -38,25 +40,32 @@ public final class TreeNavigationFlow {
     private final AgentSession session;
     private final ChatScreen chatScreen;
     private final TuiEventDispatcher dispatcher;
-    private final Supplier<SessionSnapshot> snapshot;
     private final Consumer<ScreenOverlay> openOverlay;
+    private final IntSupplier terminalRows;
+    private final IntSupplier terminalCols;
+    private final KeybindingsManager keybindings;
 
     /**
-     * @param session     当前会话（构造时捕获；切换会话后应重建 flow）
-     * @param chatScreen  聊天区（全部写入须在渲染线程——内部经 dispatcher 排回）
-     * @param dispatcher  跨线程派发器
-     * @param snapshot    树选择器的 lane 列表来源（现取，重开时反映新叶）
-     * @param openOverlay overlay 开关（{@code PiTuiApp.openOverlay} 对位）
+     * @param session      当前会话（构造时捕获；切换会话后应重建 flow）
+     * @param chatScreen   聊天区（全部写入须在渲染线程——内部经 dispatcher 排回）
+     * @param dispatcher   跨线程派发器
+     * @param openOverlay  overlay 开关（{@code PiTuiApp.openOverlay} 对位）
+     * @param terminalRows 终端行数源（maxVisibleLines，pi {@code ui.terminal.rows}）
+     * @param terminalCols 终端列数源（水平视口宽度）
+     * @param keybindings  键位表（app.tree.*／app.message.copy）
      */
     public TreeNavigationFlow(AgentSession session, ChatScreen chatScreen,
                               TuiEventDispatcher dispatcher,
-                              Supplier<SessionSnapshot> snapshot,
-                              Consumer<ScreenOverlay> openOverlay) {
+                              Consumer<ScreenOverlay> openOverlay,
+                              IntSupplier terminalRows, IntSupplier terminalCols,
+                              KeybindingsManager keybindings) {
         this.session = session;
         this.chatScreen = chatScreen;
         this.dispatcher = dispatcher;
-        this.snapshot = snapshot;
         this.openOverlay = openOverlay;
+        this.terminalRows = terminalRows;
+        this.terminalCols = terminalCols;
+        this.keybindings = keybindings;
     }
 
     /** {@code /tree} 入口：开树选择器（导航模式）。 */
@@ -70,19 +79,70 @@ public final class TreeNavigationFlow {
     }
 
     private void openTree(String initialSelectedId) {
-        var snap = snapshot.get();
-        if (snap == null) {
-            chatScreen.appendSystemText("No session snapshot yet.");
+        // docs/19 §3.9：选择器本体＝entry 树（D37 收编；pi showTreeSelector
+        // 的唯一构造点 interactive-mode.ts:5559-5707 对位）。
+        var tree = session.getTree();
+        if (tree.isEmpty()) {   // pi :5563-5566：空树不打开
+            chatScreen.appendSystemText("No entries in session");
             return;
         }
-        openOverlay.accept(new TreeSelectorScreen(snap, initialSelectedId,
+        // pi :5572：初值过滤读全局 settings（选择器内切换不回写；非法值回退
+        // default——pi settings-manager 读时校验对位）。
+        var mode = FilterMode.parse(
+            session.services().settings().accessors().getTreeFilterMode());
+        openOverlay.accept(new TreeSelectorOverlay(
+            tree, treeLeafId(), terminalRows.getAsInt(),
+            initialSelectedId, mode,
             this::onTreeSelected,
-            () -> { })); // Esc：pi 的 onCancel 只关选择器，无后续
+            () -> { }, // Esc：pi 的 onCancel 只关选择器，无后续
+            session::setLabel, this::onCopySelected, keybindings, terminalCols));
+    }
+
+    /**
+     * 树选择器语义叶（pi {@code getLeafId()} 的 UX 对位）：java 每回合把
+     * {@code usage} 记账行链上车道（D6 既有方言，选择器里恒隐），pi 无此
+     * 条目——pi 的「当前位置」对位到 java 的**最近一条非 usage 条目**。
+     * 不折算的后果：/tree 初始选中恒落在叶（usage）的可见祖先上，直接
+     * Enter 不会触发 "Already at this point" 而是弹三选（与 pi 主流分叉）。
+     */
+    private String treeLeafId() {
+        String leaf = currentLeafId();
+        if (leaf == null) {
+            return null;
+        }
+        var byId = new java.util.HashMap<String, com.pijava.agent.entry.Entry>();
+        for (var entry : session.accumulatedEntries()) {
+            byId.put(entry.id(), entry);
+        }
+        String current = leaf;
+        while (current != null) {
+            var entry = byId.get(current);
+            if (entry == null || !(entry instanceof com.pijava.agent.entry.Entry.Usage)) {
+                return current;
+            }
+            current = entry.parentId();
+        }
+        return null;
+    }
+
+    /** pi onCopy（:5595-5607）逐字三结局【模型可见】。 */
+    private void onCopySelected(String text) {
+        if (text == null) {
+            chatScreen.showError("Selected entry has no text to copy");
+            return;
+        }
+        try {
+            ClipboardSupport.copy(text);
+            chatScreen.appendSystemText("Copied selected message to clipboard");
+        } catch (Exception e) {
+            chatScreen.showError(e.getMessage());
+        }
     }
 
     private void onTreeSelected(String entryId) {
         // pi :5574-5579：选中当前叶 ⇒ no-op（文案逐字【模型可见】）。
-        if (entryId.equals(currentLeafId())) {
+        // 叶取树选择器语义叶（usage 记账行折算——见 treeLeafId）。
+        if (entryId.equals(treeLeafId())) {
             chatScreen.appendSystemText("Already at this point");
             return;
         }

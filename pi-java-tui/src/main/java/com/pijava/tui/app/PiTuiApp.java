@@ -43,6 +43,7 @@ import dev.tamboui.tui.event.KeyEvent;
 import dev.tamboui.tui.event.MouseEvent;
 import dev.tamboui.tui.event.MouseEventKind;
 import dev.tamboui.tui.event.PasteEvent;
+import dev.tamboui.tui.event.ResizeEvent;
 import dev.tamboui.tui.event.TickEvent;
 
 /**
@@ -70,6 +71,10 @@ public final class PiTuiApp {
     // Written on the render thread (dispatcher drain) and read by the global
     // key handler plus test hooks on other threads — needs volatile visibility.
     private volatile ScreenOverlay overlay;
+    // docs/19 §3.10（裁决⑧）：树选择器的 maxVisibleLines/水平视口数据源
+    // （pi ui.terminal.rows/cols 对位）；初值 80×24，随 ResizeEvent 跟踪。
+    private volatile int lastTerminalRows = 24;
+    private volatile int lastTerminalCols = 80;
     private volatile boolean running = true;
     private InlineTuiShell inlineShell;
     // inline 模式专用的 1 Hz 倒计时唤醒（fullscreen 每帧重绘，不需要）。
@@ -277,6 +282,11 @@ public final class PiTuiApp {
             // virtual-thread observer) reaches the draft inside the viewport.
             return EventResult.HANDLED;
         }
+        if (event instanceof ResizeEvent resizeEvent) {
+            lastTerminalCols = resizeEvent.width();
+            lastTerminalRows = resizeEvent.height();
+            return EventResult.HANDLED;
+        }
         if (event instanceof KeyEvent keyEvent) {
             return onKeyEvent(keyEvent);
         }
@@ -429,9 +439,11 @@ public final class PiTuiApp {
             case CommandRegistry.UI_SESSION_SELECTOR ->
                 openOverlay(new SessionListScreen(session.listSessions()));
             case CommandRegistry.UI_TREE_SELECTOR ->
-                // docs/18（§3.8/§3.9）：/tree 走原地导航流（选 entry 后三选摘要）。
+                // docs/18（§3.8/§3.9）＋ docs/19（§3.9）：/tree 走原地导航流
+                // （entry 树选择器 → 选 entry 后三选摘要）。
                 new TreeNavigationFlow(session, chatScreen, dispatcher,
-                    chatScreen::snapshot, this::openOverlay).begin();
+                    this::openOverlay, this::terminalRows, this::terminalCols, keys)
+                    .begin();
             case CommandRegistry.UI_FORK_SELECTOR -> {
                 // docs/18（§3.8）：/fork（空参）保持旧 fork 行为。
                 var snapshot = chatScreen.snapshot();
@@ -485,6 +497,16 @@ public final class PiTuiApp {
 
     private void openOverlay(ScreenOverlay screenOverlay) {
         this.overlay = screenOverlay;
+    }
+
+    /** 终端行数（ResizeEvent 跟踪，初值 24——裁决⑧）。 */
+    int terminalRows() {
+        return lastTerminalRows;
+    }
+
+    /** 终端列数（ResizeEvent 跟踪，初值 80）。 */
+    int terminalCols() {
+        return lastTerminalCols;
     }
 
     /** The current modal overlay, or null (test hook). */

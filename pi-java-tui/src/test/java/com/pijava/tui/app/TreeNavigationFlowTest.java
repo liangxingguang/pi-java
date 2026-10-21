@@ -8,10 +8,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 
 import com.pijava.agent.entry.Entry;
-import com.pijava.agent.harness.LaneInfo;
-import com.pijava.agent.harness.SessionSnapshot;
 import com.pijava.coding.agent.cli.ArgsParser;
 import com.pijava.coding.agent.core.AgentSession;
+import com.pijava.coding.agent.core.KeybindingsManager;
 import com.pijava.coding.agent.extension.ExtensionContext;
 import com.pijava.coding.agent.extension.PiExtension;
 import com.pijava.coding.agent.extension.event.ExtensionEventSpec;
@@ -22,7 +21,9 @@ import com.pijava.tui.screen.CustomInstructionsScreen;
 import com.pijava.tui.screen.ScreenOverlay;
 import com.pijava.tui.screen.ChatScreen;
 import com.pijava.tui.screen.SummaryChoiceScreen;
-import com.pijava.tui.screen.TreeSelectorScreen;
+import com.pijava.tui.component.tree.FilterMode;
+import com.pijava.tui.component.tree.TreeSelectorOverlay;
+import com.pijava.tui.util.ClipboardSupport;
 import com.pijava.tui.support.ScriptedChatProvider;
 import com.pijava.tui.util.TuiEventDispatcher;
 
@@ -68,6 +69,7 @@ class TreeNavigationFlowTest {
 
     @AfterEach
     void tearDown() {
+        ClipboardSupport.overrideForTest(null); // 防静态替换点跨用例泄漏
         if (previousTccl != null) {
             Thread.currentThread().setContextClassLoader(previousTccl);
             previousTccl = null;
@@ -83,6 +85,11 @@ class TreeNavigationFlowTest {
     }
 
     private void newRig(boolean skipPrompt, boolean installCancelProbe) throws Exception {
+        newRig(skipPrompt, installCancelProbe, true, null);
+    }
+
+    private void newRig(boolean skipPrompt, boolean installCancelProbe,
+                        boolean drivePrompts, String treeFilterMode) throws Exception {
         // TCCL 注入：provider factory（恒——公共 create 的 ServiceLoader 发现通道）
         // ＋ cancel 探针扩展（按需）。
         var servicesDir = Files.createDirectories(tmp.resolve("META-INF/services"));
@@ -103,10 +110,18 @@ class TreeNavigationFlowTest {
         // FileSettingsStorage 在构造时捕获 user.home（CompactSlashCommandTest 先例）
         // —— 窗口只包住 create，设置读写全落临时 home，不碰真实用户目录。
         var home = Files.createTempDirectory("pi-flow-home");
-        if (skipPrompt) {
+        String settingsJson = null;
+        if (skipPrompt && treeFilterMode != null) {
+            settingsJson = "{\"branchSummary\":{\"skipPrompt\":true},\"treeFilterMode\":\""
+                + treeFilterMode + "\"}";
+        } else if (skipPrompt) {
+            settingsJson = "{\"branchSummary\":{\"skipPrompt\":true}}";
+        } else if (treeFilterMode != null) {
+            settingsJson = "{\"treeFilterMode\":\"" + treeFilterMode + "\"}";
+        }
+        if (settingsJson != null) {
             var agentDir = Files.createDirectories(home.resolve(".pi-java/agent"));
-            Files.writeString(agentDir.resolve("settings.json"),
-                "{\"branchSummary\":{\"skipPrompt\":true}}");
+            Files.writeString(agentDir.resolve("settings.json"), settingsJson);
         }
         var sessionDir = Files.createTempDirectory("pi-flow-session");
         var args = ArgsParser.parse(new String[] {"--provider", "scripted", "--model", "hello",
@@ -121,14 +136,16 @@ class TreeNavigationFlowTest {
         // 未编目模型 window=0，阈值门会在 prompt 收尾抢先自动压缩（既有夹具先例）。
         session.services().settings().accessors().setCompactionEnabled(false);
         provider = ScriptedChatProvider.Factory.lastInstance();
-        provider.enqueue("r1");
-        provider.enqueue("r2");
         chatScreen = new ChatScreen();
         dispatcher = new TuiEventDispatcher();
         overlayRef.set(null);
-        session.processPrompt("first question").status();
-        session.processPrompt("second question").status();
-        targetEntryId = userEntryIds().get(1);
+        if (drivePrompts) {
+            provider.enqueue("r1");
+            provider.enqueue("r2");
+            session.processPrompt("first question").status();
+            session.processPrompt("second question").status();
+            targetEntryId = userEntryIds().get(1);
+        }
     }
 
     private List<String> userEntryIds() {
@@ -141,23 +158,27 @@ class TreeNavigationFlowTest {
         return session.harness().snapshot(session.laneName()).leafId();
     }
 
-    private SessionSnapshot snapshotForFlow() {
-        return new SessionSnapshot("s", "m", "idle", 0L, 0, List.of(),
-            List.of(new LaneInfo(session.laneName(), currentLeaf(), null),
-                new LaneInfo("alt", targetEntryId, null)));
+    private TreeNavigationFlow newFlow() {
+        // docs/19 §3.9 新签名：entry 树选择器（terminalRows/Cols 定值、真键位表）。
+        return new TreeNavigationFlow(session, chatScreen, dispatcher,
+            overlayRef::set, () -> 24, () -> 80, new KeybindingsManager());
     }
 
-    private TreeNavigationFlow newFlow() {
-        return new TreeNavigationFlow(session, chatScreen, dispatcher,
-            this::snapshotForFlow, overlayRef::set);
+    /** docs/19：entry 树选择器的选中驱动——初始选中＝当前叶，UP 一步到导航目标。 */
+    private void driveTargetEntry() {
+        drive(overlayRef.get(), UP, ENTER);
     }
 
     private static final dev.tamboui.tui.event.KeyEvent ENTER =
         dev.tamboui.tui.event.KeyEvent.ofKey(dev.tamboui.tui.event.KeyCode.ENTER);
+    private static final dev.tamboui.tui.event.KeyEvent UP =
+        dev.tamboui.tui.event.KeyEvent.ofKey(dev.tamboui.tui.event.KeyCode.UP);
     private static final dev.tamboui.tui.event.KeyEvent DOWN =
         dev.tamboui.tui.event.KeyEvent.ofKey(dev.tamboui.tui.event.KeyCode.DOWN);
     private static final dev.tamboui.tui.event.KeyEvent ESC =
         dev.tamboui.tui.event.KeyEvent.ofKey(dev.tamboui.tui.event.KeyCode.ESCAPE);
+    private static final dev.tamboui.tui.event.KeyEvent CTRL_X =
+        dev.tamboui.tui.event.KeyEvent.ofChar('x', dev.tamboui.tui.event.KeyModifiers.CTRL);
 
     /** 模仿 PiTuiApp 的 overlay 循环：喂键 → 定案 → 先清位再 apply → 排干。 */
     private void drive(ScreenOverlay overlay, dev.tamboui.tui.event.KeyEvent... keys) {
@@ -216,9 +237,9 @@ class TreeNavigationFlowTest {
         newRig(true);
         newFlow().begin();
         var tree = overlayRef.get();
-        assertThat(tree).isInstanceOf(TreeSelectorScreen.class);
+        assertThat(tree).isInstanceOf(TreeSelectorOverlay.class);
 
-        drive(tree, ENTER); // "alt" 行字母序在 "main" 前 ⇒ 默认选中即导航目标
+        driveTargetEntry();
         awaitText("Navigated to selected point");
 
         assertThat(overlayRef.get()).as("skipPrompt ⇒ 不出三选").isNull();
@@ -239,7 +260,7 @@ class TreeNavigationFlowTest {
     void choiceNoSummaryNavigatesWithoutSummary() throws Exception {
         newRig(false);
         newFlow().begin();
-        drive(overlayRef.get(), ENTER);
+        driveTargetEntry();
         var choice = overlayRef.get();
         assertThat(choice).isInstanceOf(SummaryChoiceScreen.class);
 
@@ -257,7 +278,7 @@ class TreeNavigationFlowTest {
         newRig(false);
         provider.enqueue("branch sum");
         newFlow().begin();
-        drive(overlayRef.get(), ENTER);
+        driveTargetEntry();
         drive(overlayRef.get(), DOWN, ENTER); // 行 1 = "Summarize"
 
         awaitText("Navigated to selected point");
@@ -276,7 +297,7 @@ class TreeNavigationFlowTest {
         newRig(false);
         provider.enqueue("custom sum");
         newFlow().begin();
-        drive(overlayRef.get(), ENTER);
+        driveTargetEntry();
         drive(overlayRef.get(), DOWN, DOWN, ENTER); // 行 2 = custom
         var editor = overlayRef.get();
         assertThat(editor).isInstanceOf(CustomInstructionsScreen.class);
@@ -303,7 +324,7 @@ class TreeNavigationFlowTest {
     void escFlowsBackToChoiceThenReopensTree() throws Exception {
         newRig(false);
         newFlow().begin();
-        drive(overlayRef.get(), ENTER);
+        driveTargetEntry();
         drive(overlayRef.get(), DOWN, DOWN, ENTER); // → 编辑器
         assertThat(overlayRef.get()).isInstanceOf(CustomInstructionsScreen.class);
 
@@ -312,8 +333,8 @@ class TreeNavigationFlowTest {
 
         drive(overlayRef.get(), ESC); // 三选 Esc ⇒ 重开树选择器（pi :5599）
         var reopened = overlayRef.get();
-        assertThat(reopened).isInstanceOf(TreeSelectorScreen.class);
-        assertThat(((TreeSelectorScreen) reopened).selectedEntryId())
+        assertThat(reopened).isInstanceOf(TreeSelectorOverlay.class);
+        assertThat(((TreeSelectorOverlay) reopened).selectedEntryId())
             .as("恢复上次选中（pi initialSelectedId 对位）").isEqualTo(targetEntryId);
     }
 
@@ -322,7 +343,7 @@ class TreeNavigationFlowTest {
     void selectingCurrentLeafIsANoop() throws Exception {
         newRig(false);
         newFlow().begin();
-        drive(overlayRef.get(), DOWN, ENTER); // 行 1 = 当前车道（叶=当前叶）
+        drive(overlayRef.get(), ENTER); // 初始选中即当前叶（pi initialSelectedId ?? currentLeafId）
 
         assertThat(messageTexts()).anyMatch(t -> t.equals("Already at this point"));
         assertThat(overlayRef.get()).as("不进三选").isNull();
@@ -338,7 +359,7 @@ class TreeNavigationFlowTest {
         newRig(false);
         provider.armSummaryGate();
         newFlow().begin();
-        drive(overlayRef.get(), ENTER);
+        driveTargetEntry();
         drive(overlayRef.get(), DOWN, ENTER); // "Summarize"
         provider.awaitSummaryStarted();       // worker 已进摘要调用
 
@@ -347,7 +368,7 @@ class TreeNavigationFlowTest {
         awaitText("Branch summarization cancelled");
 
         assertThat(overlayRef.get()).as("中止 ⇒ 重开树选择器（pi :5659-5664）")
-            .isInstanceOf(TreeSelectorScreen.class);
+            .isInstanceOf(TreeSelectorOverlay.class);
         assertThat(session.accumulatedEntries().stream()
                 .filter(e -> e instanceof Entry.BranchSummary))
             .as("摘要未落库").isEmpty();
@@ -359,8 +380,8 @@ class TreeNavigationFlowTest {
         newRig(false, true);
         String oldLeaf = currentLeaf();
         newFlow().begin();
-        drive(overlayRef.get(), ENTER);
-        drive(overlayRef.get(), ENTER); // "No summary"（cancel 不受 summarize 门限制）
+        driveTargetEntry();
+        drive(overlayRef.get(), ENTER); // 三选行 0 = "No summary"（cancel 不受 summarize 门限制）
 
         awaitText("Navigation cancelled");
         assertThat(currentLeaf()).isEqualTo(oldLeaf);
@@ -377,7 +398,7 @@ class TreeNavigationFlowTest {
         newRig(true);
         chatScreen.insertText("draft");
         newFlow().begin();
-        drive(overlayRef.get(), ENTER);
+        driveTargetEntry();
         awaitText("Navigated to selected point");
 
         assertThat(chatScreen.inputText()).isEqualTo("draft");
@@ -396,7 +417,7 @@ class TreeNavigationFlowTest {
         awaitTrue(() -> session.isRunning(), "run 起跑");
 
         newFlow().begin();
-        drive(overlayRef.get(), ENTER);
+        driveTargetEntry();
         awaitText("Navigated to selected point");
 
         assertThat(session.isRunning()).isFalse();
@@ -418,7 +439,7 @@ class TreeNavigationFlowTest {
         assertThat(session.isCompacting()).isTrue();
 
         newFlow().begin();
-        drive(overlayRef.get(), ENTER);
+        driveTargetEntry();
         awaitText("Wait for the current compaction or tree navigation to finish"
             + " before navigating the session tree.");
 
@@ -437,7 +458,7 @@ class TreeNavigationFlowTest {
         newRig(false);
         provider.armSummaryGate();
         newFlow().begin();
-        drive(overlayRef.get(), ENTER);
+        driveTargetEntry();
         drive(overlayRef.get(), DOWN, ENTER); // "Summarize"
         provider.awaitSummaryStarted();       // 指示器 dispatch 必先于摘要调用入队
 
@@ -449,5 +470,77 @@ class TreeNavigationFlowTest {
         provider.releaseSummary();
         awaitText("Navigated to selected point");
         assertThat(chatScreen.indicator()).as("finally 清指示器（pi :5684）").isNull();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // ⑧ docs/19 §3.9/§6.25：entry 树本体接线（空树／copy 三结局／filterMode 初值）
+    // ═══════════════════════════════════════════════════════════
+
+    /** ⑧a：空树 ⇒ "No entries in session"，不开 overlay（pi :5563-5566）。 */
+    @Test
+    void emptyTreeShowsMessageAndSkipsOverlay() throws Exception {
+        newRig(false, false, false, null);
+        newFlow().begin();
+        assertThat(overlayRef.get()).as("空树不开选择器").isNull();
+        assertThat(messageTexts()).anyMatch(t -> t.equals("No entries in session"));
+    }
+
+    /** ⑧b：copy 成功臂——文本进剪贴板＋状态文案逐字（pi :5604-5606）。 */
+    @Test
+    void copySuccessWritesClipboardAndShowsStatus() throws Exception {
+        newRig(false);
+        var captured = new AtomicReference<String>();
+        ClipboardSupport.overrideForTest(captured::set);
+        newFlow().begin();
+        // 初始选中＝当前叶（asst-2，文本 "r2"）；ctrl+x 复制全文。
+        overlayRef.get().onKeyEvent(CTRL_X);
+
+        assertThat(captured.get()).isEqualTo("r2");
+        assertThat(messageTexts())
+            .anyMatch(t -> t.equals("Copied selected message to clipboard"));
+        assertThat(overlayRef.get()).as("复制不关选择器（pi 同）").isNotNull();
+    }
+
+    /** ⑧c：copy 空文臂——"Selected entry has no text to copy"（pi :5597-5599）。 */
+    @Test
+    void copyEmptyTextShowsVerbatimError() throws Exception {
+        newRig(false);
+        provider.enqueue("");   // 空文本 assistant：当前叶恒显，copyText trim 空 ⇒ null
+        session.processPrompt("third").status();
+        newFlow().begin();
+        overlayRef.get().onKeyEvent(CTRL_X);   // 初始选中即该叶
+
+        assertThat(messageTexts())
+            .anyMatch(t -> t.contains("Selected entry has no text to copy"));
+    }
+
+    /** ⑧d：copy 失败臂——剪贴板异常 ⇒ showError(e.getMessage())（pi :5605-5607）。 */
+    @Test
+    void copyFailureShowsErrorMessage() throws Exception {
+        newRig(false);
+        ClipboardSupport.overrideForTest(text -> {
+            throw new java.io.IOException("boom-no-clipboard");
+        });
+        newFlow().begin();
+        overlayRef.get().onKeyEvent(CTRL_X);
+
+        assertThat(messageTexts()).anyMatch(t -> t.contains("boom-no-clipboard"));
+    }
+
+    /** ⑧e：treeFilterMode 初值读全局 settings，选择器内切换不回写（pi :5572）。 */
+    @Test
+    void treeFilterModeInitialValueComesFromSettings() throws Exception {
+        newRig(false, false, true, "user-only");
+        newFlow().begin();
+        var tree = overlayRef.get();
+        assertThat(tree).isInstanceOf(TreeSelectorOverlay.class);
+        assertThat(((TreeSelectorOverlay) tree).filterMode())
+            .as("settings 初值消费").isEqualTo(FilterMode.USER_ONLY);
+        // 选择器内切回 default（ctrl+d）——settings 不回写。
+        tree.onKeyEvent(dev.tamboui.tui.event.KeyEvent.ofChar('d',
+            dev.tamboui.tui.event.KeyModifiers.CTRL));
+        assertThat(((TreeSelectorOverlay) tree).filterMode()).isEqualTo(FilterMode.DEFAULT);
+        assertThat(session.services().settings().accessors().getTreeFilterMode())
+            .as("选择器内切换不回写 settings").isEqualTo("user-only");
     }
 }
