@@ -37,7 +37,7 @@ public final class HookSystem {
     }
 
     // ═══════════════════════════════════════════════════════════
-    // Registration (11 on* methods)
+    // Registration（13 个 on* 方法；before_navigation 死钩已随 docs/18 裁决① 删除）
     // ═══════════════════════════════════════════════════════════
 
     /** Register a {@code before_run} hook for the lane. */
@@ -85,11 +85,6 @@ public final class HookSystem {
         return registry.register(laneName, "before_compaction", hook);
     }
 
-    /** Register a {@code before_navigation} hook for the lane. */
-    public AutoCloseable onBeforeNavigation(String laneName, BeforeNavigationHook hook) {
-        return registry.register(laneName, "before_navigation", hook);
-    }
-
     /** Register a {@code before_run_end} hook for the lane. */
     public AutoCloseable onBeforeRunEnd(String laneName, BeforeRunEndHook hook) {
         return registry.register(laneName, "before_run_end", hook);
@@ -116,7 +111,7 @@ public final class HookSystem {
     }
 
     // ═══════════════════════════════════════════════════════════
-    // Firing (10 fire* methods)
+    // Firing（13 个 fire* 方法）
     // ═══════════════════════════════════════════════════════════
 
     /** Fire all {@code before_run} hooks for the lane. */
@@ -280,12 +275,6 @@ public final class HookSystem {
             }
         }
         return null;
-    }
-
-    /** Fire all {@code before_navigation} hooks for the lane. */
-    public void fireBeforeNavigation(String laneName, NavigationContext ctx) {
-        fireVoid(laneName, "before_navigation",
-            hook -> ((BeforeNavigationHook) hook).beforeNavigation(ctx));
     }
 
     /** Fire all {@code before_run_end} hooks for the lane. */
