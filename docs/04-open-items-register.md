@@ -27,7 +27,7 @@
 ## 基准与口径
 
 - 七份地图（含 2026-10-12 新建的 `map/07-mcp.md`）已于 2026-10-12 对当前锚点逐条重测完毕。重测销号 A16，新发现的差异登记为 B233–B238。
-- 已闭环批次：ai 批 0–10（原 docs/08–19）、agent-core 批 1–3（原 docs/20–22）、telemetry 批 1（原 docs/23）、agent-core 批 4–5（docs/09–10）、coding-agent 批 1–6（docs/11–16）。
+- 已闭环批次：ai 批 0–10（原 docs/08–19）、agent-core 批 1–3（原 docs/20–22）、telemetry 批 1（原 docs/23）、agent-core 批 4–5（docs/09–10）、coding-agent 批 1–7（docs/11–17）。
   - ai 批 0 裁决：B115/B117/B124 取证关单、#87 零代码对齐、11 个单元移出分母。
   - telemetry 批 1 结论：pi 的 telemetry 是休眠契约（没有实际调用点），`map/01` 完成度 100%。
   - 换锚裁决依据在原 `docs/11-pi-reanchor-ruling.md`。
@@ -71,7 +71,7 @@
 | # | 面 | 条目 | 现状与出处 |
 |---|---|---|---|
 | B116 | 协议面 | StreamDone 的 UsageInfo 嵌套包裹是 Java 方言 | pi 的 usage 只挂在消息上，proxy 线另发扁平 usage。2026-10-12 取证：线格式两处均已改成 pi 的扁平形状（`JsonEventMapper.java:320-327,351-373`），仅内部组件保留嵌套（原 docs/08 §2.2） |
-| B248 | 协议面 | **provider 请求面扩展事件四件**：`before_provider_request`/`before_provider_headers`/`after_provider_response`/`provider_stream_event` | 批 coding-agent-4（docs/14）新登记。pi 经 ai 层注入口 firing（sdk.ts:384-386/356-363/388-395 的 `onPayload`/`transformHeaders`/`onResponse`）；java ai 模块**无这三个注入口**（`SimpleOptions.java:45` 明文不移植），引擎 `before_payload`/`before_navigation` 钩子**连 firing 点都没有**（全仓 grep 零命中）——不是桥接能解决的，是 ai 层先开口子的事。map/04 D-17/18/19/20 四行挂此 |
+| B253 | 协议面 | **attribution 头层**（pi `provider-attribution.ts:33-99`） | 批 coding-agent-7（docs/17）新登记。openrouter `HTTP-Referer`/`X-OpenRouter-Title`/`X-OpenRouter-Categories`、nvidia `X-BILLING-INVOKE-ORIGIN`、cloudflare User-Agent、opencode 会话头（`x-opencode-session`/`x-opencode-client`）——java 全仓零命中（安装遥测门 `isInstallTelemetryEnabled` 同层缺席）。pi 在 sdk.ts:355 的 `transformHeaders` 闭包里并入事件可见头集与线上请求；批 7 的头事件因此比 pi 少这一层（窄差 D33）。归属待定点：pi 在 coding-agent 包，java 落点在 ai provider/宿主缝 |
 | B156 | 内部 | ModelCompat 逐组件重建会静默丢字段 | 新增组件时所有构造点都要改，漏改就静默缺省。2026-10-12 评估：全仓 13 个构造点集中在 4 个文件且有逐字段注释，列入 backlog 不强制改（原 docs/08 §2.2） |
 
 **compat 面细碎登记**（pi 有标注或消费、Java 没有的字段与数据位）：
@@ -350,13 +350,20 @@
 - 【风险/代价】窄差 7 条（map/04 D 域批 6 窄差表 D24–D30，均内部/边缘）：D24 fork 携带模型略宽于 pi 的 Ctrl+P 臂、D25 内存路 switchTo 旧对象不关（关即毁数据）、D26/D27 内存 CLI --fork 两测试路边、D28 内存注册表残留 closed 会话、D29 无 extensionRunner.invalidate 对位、D30 providers 共享。账面：行翻转 0（D-3/D-10 早已判对齐，摘「挂 B251/B252」帽）；D 域 66.0/83＝79.5% 与模块 283.5/496≈57.2% 均不变（缺陷闭环，同批 3 口径）；引擎钩子 15 不变。[均内部/边缘]
 - 触发条件：无（本族已闭；D25/D28 随内存会话治理立项时重裁）。出处：docs/16 §3–§6。
 
+### map/04-批 coding-agent-7（docs/17）— provider 请求面扩展事件四件（B248）
+
+- 【场景】D 域最后一条 w3 事件线：pi 的扩展能看/改每一次出站 provider 请求（载荷、头）并观察响应与原始流事件（`on()` 四重载 types.ts:1604-1609）；java 的 ai 模块没有注入口（`SimpleOptions` 明文不移植）、引擎旧钩 `before_payload`/`after_response` 形状不符且从未 firing——要穿的是「ai 层先开口子 → 七车道 firing → 扩展桥」整条链。
+- 【决定】2026-10-21 批 coding-agent-7（docs/17，T1 ai 缝→T2 自备 HTTP 面→T3 扩展桥）：① **裁决①**——缝的载体＝`ApiOptions.extra` 三键（`onPayload`/`onResponse`/`onProviderStreamEvent` 逐字对位 pi StreamOptions 键），车道构造期读取（`ProviderHooks`）；`transformHeaders` 不设 extra 键——在 `DefaultProviders` 的 createApi 前缝消费、钩本体剥离（pi models.ts:866-871/「without forwarding the transform」对位）；② **裁决②**——桥放 StreamFn 层（`ProviderEventBridge`，pi `extensionRunnerRef`＋四闭包对位），不动引擎 HookSystem（旧钩是 legacy 遗物，形状不符，维持不 firing），引擎钩子数 15 不变；③ **裁决③**——bus/ctx 晚绑定（`loadExtensions` 回填；`--no-extensions` ⇒ 全跳＝pi 空表同效；`hasHandlers` 调用时现查）；④ **裁决④**——`onResponse` 覆盖：SDK 四车道 `withRawResponse()`（成功获取后、流消费前）＋自备两车道 `SseResponseObserver` 终态面（含错误状态，pi fetch 车道同形）；**google 不发＝pi 同缺**（pi google-generative-ai.ts/google-vertex.ts 全文件零命中）；⑤ **裁决⑤**——payload 载体＝车道原生对象（SDK params 类/Map/ObjectNode/`GooglePayload` record），同型守卫不符 ⇒ 请求失败（pi 发垃圾形状收 400，同属失败、失败点提前）；⑥ **裁决⑥**——headers 事件＝可变 map 原位改＋null 删除（合并集内；SDK 默认头抑制不可达）；⑦ **裁决⑦**——Azure 补 `putExtraHeaders`、PiMessages 补 `extra["headers"]` 合并（小写规范化＋null 删除，pi providerHeadersToRecord 逐字）——不补则头事件对这两条车道是空操作。
+- 【风险/代价】窄差 5 条（map/04 D 域批 7 窄差表 D31–D35，均内部/边缘）：D31 类型不符提前失败、D32 google 载体 record、D33 头集少 pi 的 auth.headers/显式头/attribution 三层（attribution 新登记 **B253**）、D34 null 抑制 SDK 默认头不可达、D35 响应头名大小写。账面：D-17（w3）/D-18/D-19/D-20 四行翻转 **+5.5**；D 域 66.0→71.5/83＝**86.1%**、模块 283.5→289.0/496≈**58.3%**、全仓 948.5→954.0/1381≈**69.1%**；w3 层 #5 翻（D 域 w3 欠账清零，map/04 权重 3 表 #6/#8 批 5 滞后一并修正）。[均内部/边缘]
+- 触发条件：无（本族已闭）。出处：docs/17 §3–§6。
+
 ---
 
 ## 5. E 类 —— 结构债（仓库规则：单文件 ≤ 500 行）
 
 | # | 文件 | 行数 |
 |---|---|---:|---:|
-| E1 | coding-agent …/core/AgentSession.java | **1,925**（2026-10-21 批 coding-agent-6 实测——批 6 +84：wireSession 抽取/closeWith 三参/关闭治理；拆分宜搭下一 coding-agent 批） |
+| E1 | coding-agent …/core/AgentSession.java | **1,938**（2026-10-21 批 coding-agent-7 实测——批 7 +13：providerBridge 字段/wireSession 建桥/loadExtensions 回填；拆分宜搭下一 coding-agent 批） |
 | E2 | coding-agent …/rpc/RpcDispatcher.java | 693（2026-10-21 批 coding-agent-6 实测） |
 | E5 | ai …/catalog/ModelCompat.java | **762**（2026-10-11 B98 加 8 组件；converter 侧已拆出 CompletionAssistantMessage 保 500 内） |
 | E6 | tui …/app/PiTuiApp.java | 529（2026-10-21 批 coding-agent-6 实测——退出面 close＋测试钩 +10） |

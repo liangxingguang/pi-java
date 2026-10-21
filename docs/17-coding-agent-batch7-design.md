@@ -1,6 +1,6 @@
 # coding-agent 批 7 设计稿：provider 请求面扩展事件四件（B248）
 
-> **状态：设计稿（用户授权免审直接实施，2026-10-21）**。
+> **状态：已闭环（2026-10-21，用户授权免审直接实施）**。T1 ai 缝（`ProviderHooks` 三键＋七车道 `onPayload`/`onProviderStreamEvent`＋SDK 四车道 `withRawResponse` onResponse）＋T2 自备 HTTP 面（`SseResponseObserver` 终态外露＋mistral/pi-messages onResponse＋Azure/PiMessages 头通道补）＋T3 扩展桥（ADT/spec 四件＋`ProviderEventBridge`＋createApi 前头变换缝＋`wireSession`/`loadExtensions` 晚绑定接线）。新夹具 9 件 37 用例全绿（ai 六件 18：Anthropic 6／OpenAi 3／Mistral 3／PiMessages 3／Google 2／Azure 1；coding-agent 三件 19：bridge 12／providers 4／session wiring 3）；ai 1,734＋coding-agent 789＋tui 221＋web 56 回归全绿；全量 clean verify 见 git 记录。**B248 销号**、**B253**（attribution 头层）新登记；D 域 66.0→71.5/83＝**86.1%**、模块 283.5→289.0/496≈**58.3%**、全仓 948.5→954.0/1381≈**69.1%**；窄差 +D31–D35；引擎钩子 15 不变。
 > 基线：pi `ea448f454`（2026-10-11）；pi-java main（coding-agent 批 6 闭环后，`cfd696e6`）。
 > 所有 pi 侧 `file:line` 均经 `git -C D:/workplaceForai/pi show ea448f454:<path>` 实读，未读 pi 工作树。
 > 前批：`16-coding-agent-batch6-design.md`（已闭环，fork 扩展装配＋会话关闭治理；B251/B252 销号）。

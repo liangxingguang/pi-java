@@ -181,10 +181,10 @@ pi-java 的**引擎钩子** = `pi-java-agent-core/.../agent/hook/HookSystem.java
 | 14 | `context` | `:1597` | ✅ | **3** | **对齐** | 批 4 `EngineHookBridge`（`transform_context` 适配器）：两阶段逐字、系统消息过滤＋restore、引用相等快照（docs/14 §3.4.1） |
 | 15 | `context_with_system` | `:1598` | ✅ | **3** | **对齐** | 批 4 阶段二：全量可见、返回即采用、弄丢头系统 `emitError` 上报仍采用（错误文本逐字） |
 | 16 | `cache_warming_decision` | `:1600` | ❌ | 2 | **缺失** | `core/cache-warmer.ts` 453 行；java 无缓存预热子系统 |
-| 17 | `before_provider_request` | `:1604` | ⚠️ | **3** | **存疑** | 引擎钩子 `onBeforePayload:63`**未桥接** |
-| 18 | `before_provider_headers` | `:1607` | ⚠️ | 2 | **存疑** | 引擎钩子 `onBeforeRequest:58`**只读、不能改 header**，未桥接 |
-| 19 | `after_provider_response` | `:1608` | ⚠️ | 2 | **存疑** | 引擎钩子 `onAfterResponse:68`**未桥接** |
-| 20 | `provider_stream_event` | `:1609` | ❌ | 2 | **缺失** | 流式事件级扩展观察面；java 无 |
+| 17 | `before_provider_request` | `:1604` | ✅ | **3** | **对齐** | 批 coding-agent-7（docs/17）：ai 缝 `ProviderHooks`＋`ProviderEventBridge`——七车道 `onPayload`（车道原生载荷，同型守卫裁决⑤），链式替换＋逐处理器异常隔离（pi runner.ts:1360-1392 逐字） |
+| 18 | `before_provider_headers` | `:1607` | ✅ | 2 | **对齐** | 批 7：`transformHeaders` 在 createApi 前缝消费（pi models.ts:866-871 对位，钩本体剥离）——原位改写＋null 删除（合并集内；SDK 默认头抑制不可达＝窄差 D34） |
+| 19 | `after_provider_response` | `:1608` | ✅ | 2 | **对齐** | 批 7：SDK 四车道 `withRawResponse`（成功获取后、流消费前）＋自备两车道 `SseResponseObserver` 终态面（含错误状态，pi fetch 车道同形）；**google 不发＝pi 同缺**（pi google-generative-ai.ts 全文件零命中） |
+| 20 | `provider_stream_event` | `:1609` | ✅ | 2 | **对齐** | 批 7：七车道迭代点首行（原始事件、归一化前）；事件五键 {data,provider,api,model}，`api` 目录未命中时 null |
 | 21 | `before_agent_start` | `:1611` | ✅ | **3** | **对齐** | 批 5 `SessionEventFirer`（processPrompt 内、覆盖应用后）：systemPrompt 链式覆盖＋result.message 累积；options 可变对象不移植、覆盖是 harness 全局态（窄差 D11/D19） |
 | 22 | `agent_start` | `:1614` | ✅ | 2 | **对齐** | 批 4 桥接（顺带 `turnIndex = 0`，pi `:1286` 同） |
 | 23 | `agent_end` | `:1615` | ✅ | 2 | **对齐** | 批 4 桥接（宿主 `AgentEnd`，`AgentSessionEvent.java:28`） |
@@ -207,9 +207,9 @@ pi-java 的**引擎钩子** = `pi-java-agent-core/.../agent/hook/HookSystem.java
 | 40 | `user_bash` | `:1635` | ✅ | 1 | **对齐** | 批 5 `executeBash` chokepoint 拦截（{result} 替换臂＋异常重抛不回落，pi :1262-1296 逐字）；{operations} 臂不移植（窄差 D10） |
 | 41 | `input` | `:1636` | ✅ | **3** | **对齐** | 批 5 `processPrompt` 内、展开**之前**（pi :1991 逐字）；transform 链＋handled（SessionResult "handled"）；images 恒 null（窄差 D12） |
 
-**汇总（宽口径，批 coding-agent-5 后）：对齐 29 / 缺失 8 / 存疑 4 / 合计 41 = 70.7%**；**Σ权重 83 / Σ(w×c) 66.0 / 加权 79.5%**
-**汇总（严格口径，未桥接的引擎钩子也算缺失）：对齐 29 / 缺失 11 / 存疑 1（#12）= 70.7%**；**加权 62.5/83 = 75.3%**（未桥接引擎钩子仅剩 #12 before_navigation——挂 B245；#17/#18/#19 是**死 firing 点**而非未桥接，挂 B248）
-> ⚠️ D 域 Σ权重 **83** = 模块 496 的 **16.7%**。批 coding-agent-5（docs/15）翻 12 行（9 缺失→对齐、3 存疑→对齐，逐行实算 Δ＝**+22.0**）：剩余存疑＝#12/#17/#18/#19；缺失 8 行＝#1 project_trust／#11 mcp_servers_change／#13 session_tree／#16 cache_warming／#20 provider_stream_event／#26/#27 ui_prompt×2／#36 model_select（各随子系统：B221/B245/B248/E5）。
+**汇总（宽口径，批 coding-agent-7 后）：对齐 33 / 缺失 7 / 存疑 1 / 合计 41 = 80.5%**；**Σ权重 83 / Σ(w×c) 71.5 / 加权 86.1%**
+**汇总（严格口径，未桥接的引擎钩子也算缺失）：对齐 33 / 缺失 7 / 存疑 1（#12）= 80.5%**；**加权 68.0/83 = 81.9%**（未桥接引擎钩子仅剩 #12 before_navigation——挂 B245；批 7 后 D 域不再有死 firing 点）
+> ⚠️ D 域 Σ权重 **83** = 模块 496 的 **16.7%**。批 coding-agent-7（docs/17）翻 4 行（#17 w3 存疑→对齐、#18/#19 存疑→对齐、#20 缺失→对齐，逐行实算 Δ＝**+5.5**）：剩余存疑＝#12；缺失 7 行＝#1 project_trust／#11 mcp_servers_change／#13 session_tree／#16 cache_warming／#26/#27 ui_prompt×2／#36 model_select（各随子系统：B221/B245/E5）。**D 域 w3 欠账清零**（#5/#6/#8 全对齐）。
 > ⚠️ **基线纪律**（批 4 起）：D 域与模块合计按逐行实算（批 4 发现汇总行与逐行不符同族教训——批 4 基线实算 11.5≠旧汇总行 10.5）。
 
 ### 批 coding-agent-4（docs/14，2026-10-20 闭环）窄差表
@@ -262,6 +262,20 @@ pi-java 的**引擎钩子** = `pi-java-agent-core/.../agent/hook/HookSystem.java
 | D30 | providers 注册表 fork 间共享（初始装配注入缝无复制面）；扩展在 fork 两侧重复注册 provider 会叠加 | [内部，边缘] |
 
 **销号**：**B251**/**B252**（缺陷闭环、无行翻转——D-3/D-10 早已判对齐，本批摘证据列「挂 B251/B252」帽；D 域 66.0/83＝79.5% 与模块 283.5/496≈57.2% 均不变，同批 3 口径）。
+
+### 批 coding-agent-7（docs/17，2026-10-21 闭环）窄差表
+
+| # | 内容 | 等级 |
+|---|---|---|
+| D31 | 替换 payload 类型不符 ⇒ 车道抛 `IllegalStateException`（请求失败）；pi 会把垃圾形状发给 provider 收 400——同属「扩展弄坏请求 ⇒ 请求失败」，失败点提前（裁决⑤） | [内部，边缘] |
+| D32 | google 车道 payload 载体是 `GooglePayload(model, contents, config)` record（pi 是单一 `GenerateContentParameters` 对象；java SDK 三分参调用所致） | [内部] |
+| D33 | `before_provider_headers` 事件头集＝models.json 三层（provider⨁model⨁override）合并值；pi 另有 `auth.headers` 与调用方显式 `options.headers` 两层（java 无生产者）及 attribution 层（**B253** 新登记） | [内部] |
+| D34 | null 抑制 **SDK 默认头**不可达（通道只作用于 extra["headers"] 合并集；pi 的 null 还能压 provider 默认头如 User-Agent）；合并集内 null＝删除全落 | [内部，边缘] |
+| D35 | 响应头摊平口径：名按 SDK/JDK 原样大小写（pi fetch `Headers.entries()` 小写化），同名多值逗号连接（≈fetch 行为） | [内部] |
+
+**销号**：**B248**（D-17/18/19/20 四行翻转：ai 缝 `ProviderHooks` 三键＋七车道 firing＋`ProviderEventBridge`＋createApi 前头变换缝；D 域 66.0→71.5/83＝86.1%、模块 283.5→289.0/496≈58.3%）。
+**新登记**：**B253**（attribution 头层——openrouter `HTTP-Referer`/`X-OpenRouter-*`、nvidia、cloudflare User-Agent、opencode 会话头，`provider-attribution.ts:33-99` 整体未移植，java 全仓零命中）。
+**说明（非窄差）**：google 车道不发 `after_provider_response`＝pi 同缺（pi google-generative-ai.ts/google-vertex.ts 全文件零 `onResponse` 命中）；SDK 车道只在成功获取后发、fetch 车道含错误状态——pi 自身两族口径即如此（§1.4）。
 
 ### D′. 扩展 UI 注入点（单列）
 
@@ -649,7 +663,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 > ⚠️ 分层合计（261.0）与模块逐行实算（261.5）差 0.5，为存量基线口径差（旧账分层 226.5 vs 域汇总 226.0 同源），随下次全量重测一并收平。
 
 > 读数：**权重 3 层（65.2%）继续领跑**。批 coding-agent-4（docs/14）五条 w3 翻对齐（`context`/`context_with_system`/`message_update`/`tool_call`/`tool_result`，+10.5），w3 对齐数 9 → 14。
-> ⚠️ w3 层剩余欠账：扩展系统 4 个（#5 `before_provider_request`＝B248、#6 `before_agent_start`／#8 `input`＝B249、#17 扩展示例库）＋包管理器 3 个＋RPC/整块各 1。
+> ⚠️ w3 层剩余欠账（批 7 后）：扩展系统 1 个（#17 扩展示例库）＋包管理器 3 个（#18/#19/#23＝E6 域）＋RPC #21 存疑＋整块 #22。~~#5~~（批 7）、~~#6/#8~~（批 5）。
 
 ### 权重 3 单元（23 个 —— 最该先修）
 
@@ -659,10 +673,10 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | 2 | A | `--print`/`-p` | 3 | 对齐 |
 | 3 | D | `context` | 3 | 对齐（批 4） |
 | 4 | D | `context_with_system` | 3 | 对齐（批 4） |
-| 5 | D | `before_provider_request` | 3 | **存疑** |
-| 6 | D | `before_agent_start` | 3 | **缺失** |
+| 5 | D | `before_provider_request` | 3 | 对齐（批 7） |
+| 6 | D | `before_agent_start` | 3 | 对齐（批 5） |
 | 7 | D | `message_update` | 3 | 对齐（批 4） |
-| 8 | D | `input` | 3 | **缺失** |
+| 8 | D | `input` | 3 | 对齐（批 5） |
 | 9 | D | `tool_call` | 3 | 对齐（批 4） |
 | 10 | D | `tool_result` | 3 | 对齐（批 4） |
 | 11 | E2 | `defaultProvider` | 3 | 对齐 |
@@ -679,8 +693,8 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | 22 | F | `examples/` 可执行验收规格 | 3 | **缺失** |
 | 23 | F | npm/git 包源 + 优先级 + 忽略文件 | 3 | **缺失** |
 
-> 权重 3 层 23 个单元中：**对齐 14 / 存疑 2 / 缺失 7**（Σ(w×c) 45.0 / 69 = 65.2%）。
-> 归属：扩展系统 **4 个**（#5/#6/#8 事件面 + #17 扩展示例库）；包管理器 **3 个**（#18/#19/#23）；其余散在 RPC（#21 存疑）与整块缺失（#22）。
+> 权重 3 层 23 个单元中（批 7 后实算）：**对齐 17 / 存疑 1 / 缺失 5**（Σ(w×c) 52.5 / 69 = 76.1%）。
+> 归属：扩展系统仅剩 **1 个**（#17 扩展示例库——#5 批 7 翻、#6/#8 批 5 翻〔本表批 5 滞后，批 7 一并修正〕）；包管理器 **3 个**（#18/#19/#23）；其余散在 RPC（#21 存疑）与整块缺失（#22）。
 
 ### 未加权 vs 加权的差
 
