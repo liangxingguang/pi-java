@@ -125,7 +125,7 @@ pi 另有 **`/skill:name` 命令族**（`enableSkillCommands` 默认 true，`int
 |---|---|---|---|---|---|---|
 | 1 | `/settings` | `:20` | ⚠️ `SettingsCommands.java:22` | 2 | **存疑** | java 只返回 `UI_SETTINGS` marker（`:26`）；pi `settings-selector.ts`（995 行） |
 | 2 | `/model` | `:21` | ⚠️ `ModelCommands.java:21` | 2 | **存疑** | pi 支持 `/model <provider/model>` 直设；java `argumentHint()` 空且忽略 args |
-| 3 | `/tree` | `:22` | ⚠️ `SessionCommands.java:61` | 1 | **存疑** | 批 8（docs/18）：`/tree` 与 `/fork` marker 拆分，原地导航＋摘要三选/自定义指令流已接（`TreeNavigationFlow`，Esc 回退链＋指示器＋aborted/cancelled 区分全落）；选择器本体仍 lane 列表（pi `tree-selector.ts` 1,435 行 entry 树＝map/05 S12，窄差 D37） |
+| 3 | `/tree` | `:22` | ⚠️ `SessionCommands.java:61` | 1 | **对齐** | 批 8（docs/18）：marker 拆分＋原地导航＋摘要三选流；**批 9（docs/19）**：选择器本体＝entry 树落地（`TreeSelectorOverlay`＋`TreeListModel`＋`TreeListRenderer`，map/05 S12/S13 对齐，D37/D40 销号，窄差 D43–D46/D48） |
 | 4 | `/thinking` | `:23` | ❌ — | 2 | **缺失** | java 无此命令（CLI/RPC 有，slash 面无） |
 | 5 | `/scoped-models` | `:24` | ⚠️ `ModelCommands.java:29` | 1 | **存疑** | pi `scoped-models-selector.ts` 401 行。**批 3b（2026-10-14）**：写入的 patterns 已被消费——`ModelScoping` 读 `--models ?? enabledModels` 解析 scope，驱动初始模型与 Ctrl+P/RPC 轮转（B137 销号）；仍缺 pi 的选择器 UI（＋/-/裸加 CLI 已齐） |
 | 6 | `/export` | `:25` | ⚠️ `MiscCommands.java:38` | 2 | **存疑** | pi 默认 HTML、路径可选；java `isBlank()` 时直接返回用法（`:40-41`） |

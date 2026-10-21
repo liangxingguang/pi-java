@@ -42,6 +42,7 @@ commands: `mvn clean verify`, `mvn test -pl <module>`, `mvn checkstyle:check`, `
 | `docs/03-detailed-design.md` | 类级设计：Entry/LaneRecord、AgentHarness、SessionStorage/Repository、SQLite schema、JSONL 格式、TamboUI 业务组件、slash 命令、CLI 参数 |
 | `docs/04-open-items-register.md` | 未结项台账（「还剩什么没对齐」的唯一权威） |
 | `docs/05-module-alignment-map.md` | 模块对齐地图（量化）；明细在 `docs/map/` |
+| `docs/20-coding-agent-batch-plan.md` | coding-agent 对齐批次总账（活文档：多少批/到哪批/账面；**每批闭环必更**） |
 
 遵循 .claude/rules.md 文档写作规则。当前任务：将技术裁决记录改写为开发工单可读版本，采用【场景/决定/风险】三段式，术语首次附带释义，分点列出裁决条目，区分模型可见/内部实现。
 

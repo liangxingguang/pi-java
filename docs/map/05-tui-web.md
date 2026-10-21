@@ -55,8 +55,8 @@
 | S9 | theme 选择器 | ✓ `components/theme-selector.ts:13`（67 行） | ✗ | **缺失** | 1 | java 只在 `SettingsScreen.java:30` 里循环 `dark/light` |
 | S10 | 会话选择器（列表 / 选 / 确认） | ✓ `session-selector.ts:694 class SessionSelectorComponent`（1045 行） | ✓ `SessionListScreen.java:16`（50 行） | **对齐** | 2 | java：`session.listSessions()` + 前 8 位 id |
 | S11 | 会话选择器：搜索 / 排序 / 命名过滤 / 路径切换 / 重命名 / 删除 / 进度 | ✓ `session-selector.ts:76-116`、`session-selector-search.ts`、`user-message-selector.ts`；`onProgress` 带 `partialSessions` 增量渲染 + `AbortController` 取消 | ✗ | **缺失** | 1 | java 全部无（`SessionListScreen.java` 全文 50 行无一处） |
-| S12 | 会话树选择器（分支列表） | ✓ `components/tree-selector.ts:1336 class TreeSelectorComponent`（~1400 行） | ✓ `TreeSelectorScreen.java:16`（112 行） | **存疑** | 2 | java 列的是 **lane 名 + leafId**，不是 pi 的 entry 树（窄差 D37）；批 8（docs/18）：`/tree` 选中＝原地导航＋摘要三选流（`TreeNavigationFlow`；`/fork` 保持 fork 行为，marker 已拆） |
-| S13 | 树选择器：折叠展开 / 标签编辑 / 过滤模式 / 搜索 / 复制 | ✓ `tree-selector.ts:112 filterMode`（5 种）、`:632 copySelected`、`:637 updateNodeLabel`、`:1004 handleInput` | ✗ | **缺失** | 1 | — |
+| S12 | 会话树选择器（分支列表） | ✓ `components/tree-selector.ts:1336 class TreeSelectorComponent`（~1400 行） | ✓ `component/tree/TreeSelectorOverlay.java`＋`TreeListModel`＋`TreeListRenderer`（批 9，docs/19） | **对齐** | 2 | 批 9（docs/19）：entry 树本体落地（D37 销号）——树形缩进/连接符/gutter、折叠、活动路径、多根虚拟根全对位；窄差 D43–D46/D48 登记；`/fork` 的 lane 平表留在旧 `TreeSelectorScreen`（pi 实为 user-message 选择器，B254） |
+| S13 | 树选择器：折叠展开 / 标签编辑 / 过滤模式 / 搜索 / 复制 | ✓ `tree-selector.ts:112 filterMode`（5 种）、`:632 copySelected`、`:637 updateNodeLabel`、`:1004 handleInput` | ✓ `TreeListModel.java`（折叠传染/五过滤/搜索 AND/段跳）、`TreeSelectorOverlay.java`（label 编辑臂/copy 三结局）、`AgentSession.setLabel`（持久化＋时间戳） | **对齐** | 1 | 批 9（docs/19）：折叠/标签编辑（含 `[+label time]`）/五过滤/搜索/复制全落（pi tree-selector.test.ts 13 用例对位移植 23 测） |
 | S14 | 设置页（字段列表 + 循环取值） | ✓ `settings-selector.ts:465 class SettingsSelectorComponent`（~960 行） | ✓ `SettingsScreen.java:21`（153 行） | **对齐** | 2 | java `SettingsScreen.java:30-47`；pi 侧字段含 `tuiMode`/`fullscreenExitOutput`/`fullscreenScrollbar`/`fullscreenWheelScrollLines`/`outputPad`（本锚点起说明文案改为「messages, tool output, and command output」）等，java 列表是其子集 |
 | S15 | 设置页：子菜单 / 主题页 / 警告页 / 实验项 | ✓ `settings-submenu.ts:31 SelectSubmenu` + `:178 SteppedSubmenu` | ✗ | **缺失** | 1 | java 是单一平铺列表 |
 | S16 | config 选择器（`/config`） | ✓ `components/config-selector.ts:875`（~940 行） | ✗ | **缺失** | 1 | java 无 config 命令 |
@@ -263,7 +263,7 @@
 | **Markdown 组件** | **1025**（`tui/components/markdown.ts`） | 严格删除线 tokenizer、链接、hr、任务列表、流式围栏修剪、缓存、padding/背景；测试 `markdown.test.ts`（pi-java 有 `MarkdownRenderer` 221 行但**生产零调用**） |
 | **alt-screen 搜索 + 选择** | **327 + ~500**（`alt-screen-search.ts` + `tui-alt-screen.ts` 的选择/复制/闪烁部分） | 搜索索引、匹配导航、文本选择、自动滚动、copy-on-select、OSC133 zone |
 | **扩展 UI 组件族** | **~1000**（`extension-selector/input/editor` + `interactive-mode.ts:2398-2870`） | `custom<T>()` / `setFooter` / `setHeader` / widget / 通知 / 错误显示；pi-java 仅 RPC 通道 |
-| **选择器族（未实现 9 个）** | **~2900**（config 875 + scoped-models 401 + session-selector 1045 非基础部分 + thinking 154 + theme 67 + trust 134 + oauth 214 + login 238 + first-time-setup + show-images 50 + user-message 155） | 见 S6-S9、S11、S13、S15-S21、S32 |
+| **选择器族（未实现 9 个）** | **~2900**（config 875 + scoped-models 401 + session-selector 1045 非基础部分 + thinking 154 + theme 67 + trust 134 + oauth 214 + login 238 + first-time-setup + show-images 50 + user-message 155） | 见 S6-S9、S11、S15-S21、S32（S13 批 9 已闭环） |
 | **逐工具渲染器** | **1053 + 112**（`core/tools/renderers/*.ts` + `render-utils.ts`） | read/write/edit/bash/grep/find/ls 各自展示形状；MCP/fallback 工具的 args 展示；记录在案的 `Took` 计时 |
 | **工具执行卡（可折叠 + 流式）** | **631**（`tool-execution.ts` 408 + `bash-execution.ts` 223） | `Ctrl+O` 展开、部分结果、diff、图像 |
 | **主题系统（JSON + schema + 热重载 + OKLab 色值 + system 主题 + 70 token）** | **3105**（`theme.ts` 1086 + `theme-controller.ts` 253 + `theme/theme-schema.ts` 146 + `schemas/theme.schema.json` 365 + `theme/system-theme.ts` 655 + `tui/src/colors.ts` 367 + `tui/src/oklab.ts` 233） | pi-java 只有 2 个各 37 行的 `.tcss`，**无 schema、无色值系统、无 system 主题** |
@@ -315,19 +315,19 @@
 | **存疑** | **25** |
 | 非对齐项（pi-java 独有，**不计入分母**） | 2 |
 | **合计（枚举）** | **150** |
-| **完成度（未加权）** | **38 / 148 = 25.7%** |
+| **完成度（未加权）** | **40 / 148 = 27.0%** |
 
 **分面完成度（148）**
 
 | 面 | 对齐 | 缺失 | 存疑 | 判定单位 | 完成度 |
 |---|---:|---:|---:|---:|---:|
-| 屏幕/面板（S1–S30 + S2a–d + S32，35） | 8 | 23 | 4 | 35 | **22.9%** |
+| 屏幕/面板（S1–S30 + S2a–d + S32，35） | 10 | 22 | 3 | 35 | **28.6%** |
 | 渲染特性（R1–R29，29 单元，含 R21） | 2 | 21 | 5 | 28 | **7.1%** |
 | 键绑定/交互（K1–K39，39 单元，含 K36） | 10 | 22 | 6 | 38 | **26.3%** |
 | TUI 组件（C1–C20，20 单元） | 7 | 9 | 4 | 20 | **35.0%** |
 | 主题/样式（T1–T11，11 单元） | 3 | 6 | 2 | 11 | **27.3%** |
 | web 对齐面（W1–W16，16 单元） | 8 | 4 | 4 | 16 | **50.0%** |
-| **合计** | **38** | **85** | **25** | **148** | **25.7%** |
+| **合计** | **40** | **84** | **24** | **148** | **27.0%** |
 
 > 非对齐项 2 条（R21 回合分隔条、K36 模式 2027 规避）已从分母剔除。
 
@@ -337,13 +337,13 @@
 |---|---|---|---|
 | UI 总 LOC（含 pi 的框架层） | **43685** | 6799 | **15.6%** |
 | 应用层 LOC（剔 pi `packages/tui` 框架层） | **21895** | 6799 | **31.1%** |
-| **能力单元** | — | — | **25.7%** |
+| **能力单元** | — | — | **27.0%** |
 
-**结论**：「TUI 大约只对齐 30%」这个线索 —— **能力单元口径下勉强成立**（**25.7%**，38/148）。三个口径分叉的成因：
+**结论**：「TUI 大约只对齐 30%」这个线索 —— **能力单元口径下勉强成立**（**27.0%**，40/148）。三个口径分叉的成因：
 
 1. **含框架层的 LOC 口径（15.6%）偏低**：pi 的 `packages/tui`（19505 行）在 pi-java 侧被**外部库 TamboUI** 顶替，把它算进 pi-java 的分母不成立。
 2. **应用层 LOC 口径（31.1%）偏高**：LOC 对「整块缺失」不敏感 —— pi 的 21895 行里有 **12000+ 行**属于 **17 个整块子系统**（图像协议、LaTeX、Markdown 组件、alt-screen 搜索、扩展 UI、选择器族、工具渲染器、主题系统、彩蛋族、OSC 7501…），这些在 pi-java 侧是 **0 行**，而不是「少写了几行」。
-3. **能力单元口径（25.7%）最贴近判据**：它把「有没有这个行为承诺」与「实现得多厚」分开计。**渲染特性面只有 7.1%** 是最大短板（28 项判定里 21 项缺失，且 `MarkdownRenderer`/`SyntaxHighlighter` 两块**存在但是死代码**）；**web 对齐面 50.0%** 是最高面（web 的事件/线格式面已被包⑥⑦⑨⑩⑪逐条对齐过）。
+3. **能力单元口径（27.0%）最贴近判据**：它把「有没有这个行为承诺」与「实现得多厚」分开计。**渲染特性面只有 7.1%** 是最大短板（28 项判定里 21 项缺失，且 `MarkdownRenderer`/`SyntaxHighlighter` 两块**存在但是死代码**）；**web 对齐面 50.0%** 是最高面（web 的事件/线格式面已被包⑥⑦⑨⑩⑪逐条对齐过）。
 
 ---
 
@@ -352,7 +352,7 @@
 | # | 能力单元 | 为何存疑 | 证据 |
 |---|---|---|---|
 | S2 | 全屏 alt-screen 模式 | java 用 TamboUI 通用 runner，pi 是自带搜索/选择/复制/图像的专用实现；承诺「全屏 + 内部视口」相同，能力面差 4 块（S2a-d；OSC 7501 状态另见 K39） | `PiTuiLauncher.java:61` vs `tui-alt-screen.ts:202` |
-| S12 | 会话树选择器 | java 列 **lane 名 + leafId**，pi 是 entry 级真树 | `TreeSelectorScreen.java:26-29` vs `tree-selector.ts:1336` |
+| S12 | 会话树选择器 | ~~java 列 lane 名 + leafId~~ 批 9（docs/19）已对齐：entry 树本体（`TreeSelectorOverlay`＋`TreeListModel`＋`TreeListRenderer`） | `component/tree/*` vs `tree-selector.ts:1336` |
 | S27 | `/share` | 承诺相同、**后端不同**（pi=Radius 网关，java=GitHub gist），且 java 无 `BorderedLoader` | `session-share.ts:57` vs `MiscCommands.java:76-92` |
 | S28 | `/export` HTML | pi 用 vendored marked/highlight + 模板，java 自写 `MarkdownToHtml.java`；输出形状未逐项核 | `export-html/index.ts:236` vs `HtmlExporter.java:21` |
 | R10 | Diff 渲染 | java 按行首字符着色，无 hunk 头/行号/词级；pi 的 diff 走富渲染器 | `DiffView.java:52-63` vs `components/diff.ts:79` |
@@ -383,7 +383,7 @@
 
 ## 缺失清单（全部 85 条）
 
-**屏幕/面板（23）**：S2a 转录搜索 · S2b 文本选择/copy-on-select · S2c flash 提示 · S2d 全屏图像 · S6 模型搜索 · S7 scoped-models 选择器 · S8 thinking 选择器 · S9 theme 选择器 · S11 会话选择器高级功能 · S13 树选择器折叠/标签/过滤/搜索 · S15 设置子菜单 · S16 config 选择器 · S17 OAuth/登录对话框 · S18 首次设置向导 · S19 信任选择器 · S20 排队消息选择器 · S21 show-images 选择器 · S22 扩展 UI 四件套 · S23 扩展 widget/footer · S25 会话统计面 · S29 `/bug` 故障上报 · S30 崩溃记录 + 启动提示
+**屏幕/面板（22）**：S2a 转录搜索 · S2b 文本选择/copy-on-select · S2c flash 提示 · S2d 全屏图像 · S6 模型搜索 · S7 scoped-models 选择器 · S8 thinking 选择器 · S9 theme 选择器 · S11 会话选择器高级功能 · S15 设置子菜单 · S16 config 选择器 · S17 OAuth/登录对话框 · S18 首次设置向导 · S19 信任选择器 · S20 排队消息选择器 · S21 show-images 选择器 · S22 扩展 UI 四件套 · S23 扩展 widget/footer · S25 会话统计面 · S29 `/bug` 故障上报 · S30 崩溃记录 + 启动提示
 
 **渲染特性（21）**：R1 Markdown 渲染（死代码）· R2 表格 · R3 删除线 · R4 链接 · R5 流式围栏修剪 · R6 transformer 钩子 · R7 mermaid · R8 LaTeX · R9 代码块高亮（死代码）· R11 逐工具渲染器 · R12 工具卡折叠 · R13 bash 执行组件 · R14 图像协议 · R15 图片粘贴 · R19 skill 调用卡 · R22 公告 · R23 终端标题 · R25 thinking 丢弃提示 · R26 工具调用参数渲染 · R27 3D 彩蛋/logo · **R29 安装变更重启警告（新锚点新增）**
 
@@ -493,14 +493,14 @@
 
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|
-| 屏幕/面板（35 单元） | 47 | 17.0 | **36.2%** | 22.9% |
+| 屏幕/面板（35 单元） | 47 | 19.0 | **40.4%** | 28.6% |
 | 渲染特性（R1–R29，29 单元；R21 权重 0 已剔） | 40 | 7.0 | **17.5%** | 7.1% |
 | 键绑定/交互（K1–K39，39 单元；K36 权重 0 已剔） | 66 | 29.5 | **44.7%** | 26.3% |
 | TUI 组件（C1–C20，20 单元） | 41 | 22.5 | **54.9%** | 35.0% |
 | 主题/样式（T1–T11，11 单元） | 18 | 6.5 | **36.1%** | 27.3% |
 | web 对齐面（W1–W16，16 单元） | 33 | 26.0 | **78.8%** | 50.0% |
 
-**模块合计**：Σ权重 **245** ／ Σ(w×c) **108.5** ／ **加权完成度 = 108.5/245 = 44.3%**（未加权 **25.7%**，**+18.6pp**）
+**模块合计**：Σ权重 **245** ／ Σ(w×c) **110.5** ／ **加权完成度 = 110.5/245 = 45.1%**（未加权 **27.0%**，**+18.1pp**）
 
 > 较前锚点（144 单元：241 权 / 108.0 / **44.8%**）变化 **−0.5pp**，构成：① K20 对齐→存疑（w2）分子 −1.0；② R18/R24 缺失→存疑（w1×2）分子 +1.0；③ 新增 4 单元（R28 存疑 w1 +0.5；R29/K39/C20 缺失 w1×3）分母 +4、分子 +0.5。净效果：分子 +0.5、分母 +4。
 
@@ -555,7 +555,7 @@
 | 存疑 | 25 | 45 | 1.80 |
 | 缺失 | 85 | 114 | **1.34** |
 
-缺失单元里多数是权重 1（低频选择器、扩展 UI、彩蛋、原生 helper、内部契约形状、新锚点新增项…），它们把**未加权**完成度压到 25.7%，但在**加权**口径下只占 77/245 = 31.4% 的权重。反过来，**权重 3 的 26 条里 15 条已对齐**（web 事件词汇 7 条 + TUI 核心管线 8 条）—— 这正是 pi-java 的真实形态：**核心管线对齐得不错，外围能力大面积空缺**。
+缺失单元里多数是权重 1（低频选择器、扩展 UI、彩蛋、原生 helper、内部契约形状、新锚点新增项…），它们把**未加权**完成度压到 27.0%，但在**加权**口径下只占 77/245 = 31.4% 的权重。反过来，**权重 3 的 26 条里 15 条已对齐**（web 事件词汇 7 条 + TUI 核心管线 8 条）—— 这正是 pi-java 的真实形态：**核心管线对齐得不错，外围能力大面积空缺**。
 
 **两项重点发现各自的加权拖累（按新锚点重算，分母 245）**
 

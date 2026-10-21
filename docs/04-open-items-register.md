@@ -27,7 +27,7 @@
 ## 基准与口径
 
 - 七份地图（含 2026-10-12 新建的 `map/07-mcp.md`）已于 2026-10-12 对当前锚点逐条重测完毕。重测销号 A16，新发现的差异登记为 B233–B238。
-- 已闭环批次：ai 批 0–10（原 docs/08–19）、agent-core 批 1–3（原 docs/20–22）、telemetry 批 1（原 docs/23）、agent-core 批 4–5（docs/09–10）、coding-agent 批 1–8（docs/11–18）。
+- 已闭环批次：ai 批 0–10（原 docs/08–19）、agent-core 批 1–3（原 docs/20–22）、telemetry 批 1（原 docs/23）、agent-core 批 4–5（docs/09–10）、coding-agent 批 1–9（docs/11–19）。
   - ai 批 0 裁决：B115/B117/B124 取证关单、#87 零代码对齐、11 个单元移出分母。
   - telemetry 批 1 结论：pi 的 telemetry 是休眠契约（没有实际调用点），`map/01` 完成度 100%。
   - 换锚裁决依据在原 `docs/11-pi-reanchor-ruling.md`。
@@ -139,6 +139,7 @@
 | B78 | 用户可见 | FuzzyMatcher 语义不同 | pi 是子序列匹配＋分词；Java 的实现不同 |
 | B145 | 内部 | 启动/登录后定向目录刷新未接线 | 仅 RPC 模式有后台刷新，pi 另有三处刷新点 |
 | B238 | 用户可见 | **新锚点**：TUI 四项新行为缺失（明细见 map/05） | ① K20 视口滚动键改 Ctrl+Home/Ctrl+End（裸 Home/End 归还编辑器）；② R29 安装变更每会话一次重启警告（`maybeShowInstallChangeWarning`）；③ K39 OSC 7501 程序状态上报（program-status）；④ C20 APC 标记假光标 |
+| B254 | 用户可见 | **`/fork` 选择器本体＝pi user-message 选择器**（批 coding-agent-9 新登记，docs/19 §1.7/裁决⑥） | 取证撞出：pi `/fork` 不用树选择器——走 `UserMessageSelectorComponent`（`user-message-selector.ts`，与 map/05 S20 排队消息选择器同文件），列用户消息（初始选中最后一条），选中 ⇒ `runtimeHost.fork(entryId)`＋编辑器回填选中文本＋"Forked to new session"（`interactive-mode.ts:5500-5538`；`/clone` 无选择器）。java 的 `/fork` 现为 lane 平表（`TreeSelectorScreen`，批 9 后仅它用）。触发条件：与 S20 合包（docs/20 §3 批 10） |
 
 ---
 
@@ -363,16 +364,23 @@
 - 【风险/代价】窄差 7 条（docs/18 §5 D36–D40＋闭环新登 D41/D42）：D36 `_resolveIdleWaitIfIdle` 无对位（java waitForIdle 是车道 run 级，树导航不是 run）；D37 树选择器仍是 lane 列表（pi 1,435 行 entry 树本体＝map/05 S12 存疑项，存量约束）；D38 `flushCompactionQueue` 在 java 恒 no-op（缓冲由 CompactionEnd 重放，导航时必空）；D39 三选/编辑器 SelectList/EditorComponent 弱形状（行文案逐字）[模型可见 UI 形态]；D40 重开恢复选中＝lane 行定位（pi 恢复 entry 节点）；D41 `restoreQueuedMessagesToEditor` 未移植（运行中导航前被 abort 的排队消息不回填编辑器，无既有取用面）；D42 摘要窗口期 followUp 入压缩缓冲、CompactionEnd 才重放（`isCompacting` 语义修复④的连带——滞留至下次压缩；放行起跑新 run 撕转录的风险更大）。[D39 模型可见；D37 存量约束；D41/D42 边缘；余无影响]
 - 触发条件：D37 随树选择器本体批次（S12）收编；D41/D42 随排队消息治理立项时重裁。出处：docs/18 §3–§6＋§9 闭环回填。
 
+### map/04-批 coding-agent-9（docs/19）— 树选择器本体（D37 收编＝map/05 S12＋S13）
+
+- 【场景】批 8 留下的窄差 D37：`/tree` 的选择器本体。java 列 lane 名＋leafId（112 行平表），pi 是 entry 树选择器（`tree-selector.ts` 1,435 行：树形缩进/连接符/gutter、折叠、五种过滤、搜索、标签编辑、复制、水平视口）。取证另撞出三处：① java 的 label 事实表**无时间戳**（pi `[+label time]` 开关的数据源）；② RPC/Web `get_tree` 建在 harness 单车道转录上且 label 恒 null（pi 数据源即 `sessionManager.getTree()` 全分支）；③ pi `/fork` 用的是**用户消息选择器**而非树选择器（本体差异，另立 B254）。
+- 【决定】2026-10-21/22 批 coding-agent-9（docs/19，T1 数据面→T2 纯状态机→T3 渲染层→T4 overlay→T5 接线）：① **裁决①**——label/session_info 不进 `Entry` ADT（java 事实旁表 wire 与 pi 原生互通，「all」模式少两种行登记 D43）；② **裁决②**——`SessionState` 加 `labelTimestamps`（pi `_buildIndex` 最新一条赢、清除两表同删），全链转发到 `AgentSession.getTree()`；**顺带修真**分支复制重发保留原 label 时间戳（pi `createBranchedSession:1694-1712`——SessionState 与 sqlite 原生表拷贝**双点**同修，一致性测试先在 sqlite 抓红）；③ **裁决③**——`AgentSession.getTree()`（`SessionTreeBuilder` 逐字：两轮链接、孤儿/自指/父缺失 ⇒ 根、子表时间戳升序、迭代防爆栈）落成后 RPC/Web `get_tree` 改走它，私有构建器删除；④ **T2/T3/T4**——`TreeListModel`（pi TreeList 状态机逐字：flattenTree/recalculateVisualStructure、五过滤＋空白分词 AND 搜索、折叠传染、环绕导航、段跳；`TreeStructure` 拆出保 500 行）＋`TreeListRenderer`（span 行＋水平视口按列切片，裁决⑦ 不接 ANSI；语义色近似值常量）＋`TreeSelectorOverlay`（pi handleInput 分派序逐字；label 编辑臂换入 EditorComponent）；⑤ **T5**——`TreeNavigationFlow.openTree` 改道（空树不开、filterMode 初值读 settings 不回写、copy 三结局文案逐字）、`PiTuiApp` ResizeEvent 跟踪（裁决⑧ 初值 80×24）、`ClipboardSupport` 仅 AWT（裁决⑤，D44）、`KeybindingsManager` 多键＋12 tree 动作。**treeLeafId 折算**（本批撞出必裁）：java 每回合 usage 记账行链上车道（D6 方言），harness 叶恒为隐藏 usage 条目——不折算则 /tree 初始 Enter 弹三选而非 "Already at this point"（与 pi 主流 UX 分叉），语义叶取最近非 usage 条目。**闭环评审三修**（均 RED→GREEN）：⑥ **C1**——tree 键与全局同表致 hash 序污染 `resolve()`（ctrl+l/u/a 主屏失效、ctrl+d 靠运气；设计裁决④「resolve 任一命中即返」被证伪）⇒ 全局/tree 两表分离（resolve 只见 11 全局、matches 两表皆查，pi 全局 handler 按动作查同形）；⑦ **I1**——TamboUI 不报字母 SHIFT 修饰键，shift+l/t 真实输入永不可达 ⇒ `toStroke` 落 pi legacy 规则（大写字符即 shift+letter）；⑧ **I2**——`--no-session` 下 label 提交异常进渲染线程 ⇒ flow 回调 try/catch 转 showError。
+- 【风险/代价】窄差 5 条新登（docs/19 §5 D43–D46＋闭环评审 M1 登 D48；D47 条件登记**作废**——sqlite facts 表自带 timestamp 列）：D43 「all」模式无 label/session_info 条目行（labeled-only 过滤/标签显示/编辑/时间戳均不受影响）；D44 剪贴板仅 AWT（无平台命令/OSC 52 降级链，headless 报错）；D45 tree 键用户覆写不支持（keybindings.json 未接线，既有全局约束）；D46 帮助行键名静态取默认（含回环键只画 ctrl+o，评审 M4 并入）；D48 RPC `get_tree` 节点缺 `labelTimestamp`（pi 线有；web 面已带，RPC 浅映射是设计 sanction）[D43/D44/D48 边缘；D45/D46 内部]。**D37/D40 销号**（本体落地；恢复选中粒度＝entry 节点，`findNearestVisibleIndex(initialSelectedId ?? currentLeafId)` 逐字）。**B254 新登**（§3.4）。账面：map/05 S12 存疑→对齐 +1.0（权重 2）、S13 缺失→对齐 +1.0、map/04 #3 `/tree` 存疑→对齐 +0.5 ⇒ 模块 283.5→**286.0/487 ≈ 58.7%**、全仓 955.5→**958.0/1381 ≈ 69.4%**；D 域不动（73.0/83 ＝ 88.0%）。
+- 触发条件：B254 与 map/05 S20 合包（docs/20 §3 批 10）；M2（sqlite getTree N+1 查询）随 sqlite 性能立项时重裁。出处：docs/19 §3–§6＋§9 闭环回填。
+
 ---
 
 ## 5. E 类 —— 结构债（仓库规则：单文件 ≤ 500 行）
 
 | # | 文件 | 行数 |
 |---|---|---:|---:|
-| E1 | coding-agent …/core/AgentSession.java | **2,010**（2026-10-21 批 coding-agent-8 实测——批 8 +72：navigateTree 事件面/aborted/truthiness 重构＋isCompacting 定义；拆分宜搭下一 coding-agent 批） |
-| E2 | coding-agent …/rpc/RpcDispatcher.java | 693（2026-10-21 批 coding-agent-6 实测） |
+| E1 | coding-agent …/core/AgentSession.java | **2,060**（2026-10-22 批 coding-agent-9 实测——批 9 +50：getTree/getLabel/setLabel 三面；拆分宜搭下一 coding-agent 批） |
+| E2 | coding-agent …/rpc/RpcDispatcher.java | 674（2026-10-22 批 coding-agent-9 实测——私有 buildTree 删除改走 session.getTree() −19） |
 | E5 | ai …/catalog/ModelCompat.java | **762**（2026-10-11 B98 加 8 组件；converter 侧已拆出 CompletionAssistantMessage 保 500 内） |
-| E6 | tui …/app/PiTuiApp.java | 537（2026-10-21 批 coding-agent-8 实测——/tree 导航流分派＋overlay 先清位再 apply +8） |
+| E6 | tui …/app/PiTuiApp.java | 559（2026-10-22 批 coding-agent-9 实测——ResizeEvent 跟踪＋导航流构造同步 +22） |
 
 （E3/E4 已销号——2026-10-18 批 agent-core-5 拆分：`PiLaneSink` 470＋`PiLaneRequestTelemetry` 131、`AgentHarness` 438＋`HarnessBootstrap` 231，行为零变化纯移动。）
 
