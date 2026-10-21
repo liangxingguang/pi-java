@@ -379,6 +379,7 @@ class SessionBeforeTreeTest {
             String target = firstUserEntryId(session);
             String oldLeaf = leafId(session);
             abortInHandler = true; // h1 在事件里中止摘要令牌（pi 的 signal.abort() 同位）
+            int promptsBefore = rig.recording().userTexts().size();
 
             var nav = session.navigateTree(target, true, null, false, null);
 
@@ -387,6 +388,53 @@ class SessionBeforeTreeTest {
             assertThat(nav.summaryEntry()).isNull();
             assertThat(leafId(session)).as("摘要未落库、叶不动").isEqualTo(oldLeaf);
             assertThat(TREE_EVENTS).isEmpty();
+            // 终审 Important ③：token 已中止 ⇒ 预检拦在 generate 前，不发起 LLM 调用。
+            assertThat(rig.recording().userTexts()
+                    .subList(promptsBefore, rig.recording().userTexts().size()))
+                .noneMatch(t -> t.startsWith("<conversation>"));
+        }
+    }
+
+    /** ⑪（终审 Important ②）：扩展 summary 对象文本为 null ⇒ 跳过默认生成器且不产摘要。 */
+    @Test
+    void nullExtensionSummaryTextSkipsGeneratorAndWritesNoEntry() throws Exception {
+        Path dir = Files.createTempDirectory("pi-tree-nullsum");
+        try (var rig = rig(dir, true)) {
+            var session = drivenSession(rig);
+            String target = firstUserEntryId(session);
+            int promptsBefore = rig.recording().userTexts().size();
+            SCRIPT_H1.add(new SessionBeforeTreeResult(null,
+                new ExtensionTreeSummary(null, null, null), null, null, null));
+
+            var nav = session.navigateTree(target, true, null, false, null);
+
+            assertThat(nav.cancelled()).isFalse();
+            // pi：extensionSummary 非 null ⇒ 默认生成器门关闭（!extensionSummary，:4054）。
+            assertThat(rig.recording().userTexts()
+                    .subList(promptsBefore, rig.recording().userTexts().size()))
+                .noneMatch(t -> t.startsWith("<conversation>"));
+            // pi：if (summaryText) falsy ⇒ 不建摘要 entry（:4107）。
+            assertThat(nav.summaryEntry()).isNull();
+            assertThat(TREE_EVENTS.get(0).fromExtension()).isNull(); // pi :4145
+        }
+    }
+
+    /** ⑫（终审 Important ②）：空串文本/标签走 pi truthiness——不建 entry、不贴 label。 */
+    @Test
+    void emptySummaryTextAndEmptyLabelAreFalsyLikePi() throws Exception {
+        Path dir = Files.createTempDirectory("pi-tree-empty");
+        try (var rig = rig(dir, true)) {
+            var session = drivenSession(rig);
+            String target = firstUserEntryId(session);
+            SCRIPT_H1.add(new SessionBeforeTreeResult(null,
+                new ExtensionTreeSummary("", null, null), null, null, ""));
+
+            var nav = session.navigateTree(target, true, null, false, null);
+
+            assertThat(nav.summaryEntry())
+                .as("pi if (summaryText)（:4107）：空串不建摘要 entry").isNull();
+            assertThat(session.session().getLabel(target))
+                .as("pi if (label)（:4118/:4125）：空串不贴 label").isNull();
         }
     }
 

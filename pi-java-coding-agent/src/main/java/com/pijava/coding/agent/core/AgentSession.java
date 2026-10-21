@@ -798,14 +798,18 @@ public final class AgentSession implements AutoCloseable {
     }
 
     /**
-     * 是否有压缩在飞（pi {@code AgentSession.isCompacting}，{@code agent-session.ts:983-990}）。
+     * 是否有压缩/分支摘要在飞（pi {@code AgentSession.isCompacting}，
+     * {@code agent-session.ts:1622-1630}：读三个专用中止控制器，<b>含
+     * {@code _branchSummaryAbortController}</b>——摘要在飞即「压缩或树导航进行中」，
+     * 双门第二句错文的互斥语义由此承重）。
      *
-     * <p>pi 读三个专用中止控制器；pi-java 的等价窗口由压缩的两个入口置/清，
-     * 见 {@link AgentHarness#isCompacting(String)}。消费者：RPC {@code get_state}
-     * 与 {@code InteractiveMode} 的提交门（A5，{@code 原 docs/25}）。</p>
+     * <p>压缩两路窗口由引擎置/清（{@link AgentHarness#isCompacting(String)}）；
+     * 分支摘要窗口＝{@link #branchSummaryAbort} 非 null（navigateTree 的 try 期间，
+     * volatile 字段）。消费者：RPC {@code get_state}、{@code InteractiveMode} 的
+     * 提交门（A5，{@code 原 docs/25}）、{@link #navigateTree} 双门。</p>
      */
     public boolean isCompacting() {
-        return harness.isCompacting(laneName());
+        return harness.isCompacting(laneName()) || branchSummaryAbort != null;
     }
 
     /**
@@ -921,7 +925,9 @@ public final class AgentSession implements AutoCloseable {
         // streamingBehavior 的 prompt 在调用线程同步抛出（pi 同形状，
         // agent-session.ts:1939-1979）；运行中显式 steer/followUp 仅排队。
         var verdict = PROMPT_ROUTER.route(
-            harness.isCompacting(laneName()),
+            // docs/18 终审①：走会话级 isCompacting（含分支摘要在飞，pi getter 同形），
+            // 不直达 harness——否则摘要窗口期 prompt 起跑新 run 撕转录。
+            isCompacting(),
             harness.isRunning(laneName()),
             config.streamingBehavior());
         if (verdict == PromptRouter.Verdict.QUEUE_STEER) {
@@ -1103,6 +1109,9 @@ public final class AgentSession implements AutoCloseable {
             com.pijava.ai.Usage summaryUsage = null;
             java.util.Map<String, Object> summaryDetails = null;
             boolean fromExtension = false;
+            // pi 的 !extensionSummary 生成器门（:4054）看的是 summary 对象有无，
+            // 不看文本是否为空（终审②）——退化输入（null/空串文本）同样跳过默认生成器。
+            boolean hasExtensionSummary = false;
             // pi :4024-4051：session_before_tree 发射＋cancel 短路＋摘要/三覆盖臂。
             if (extensionFirer != null) {
                 var preparation =
@@ -1119,6 +1128,7 @@ public final class AgentSession implements AutoCloseable {
                         summaryDetails = mapDetails(r.summary().details());
                         summaryUsage = r.summary().usage();
                         fromExtension = true;
+                        hasExtensionSummary = true;
                     }
                     // 三覆盖不受 summarize 门限制（pi :4043-4051）。
                     if (r.customInstructions() != null) {
@@ -1133,7 +1143,12 @@ public final class AgentSession implements AutoCloseable {
                 }
             }
             // pi :4054-4085 默认生成器门：summarize && 非空 && 无扩展摘要。
-            if (summarize && !entriesToSummarize.isEmpty() && summaryText == null) {
+            if (summarize && !entriesToSummarize.isEmpty() && !hasExtensionSummary) {
+                // 预检（终审③）：token 已中止 ⇒ 不发 LLM 调用（pi 的
+                // generateBranchSummary 对已 abort signal 直接返回 aborted 同效）。
+                if (branchSummaryAbort.isAborted()) {
+                    return new TreeNavigation(true, true, null, null);
+                }
                 var model = harness.getModel();
                 int contextWindow = modelResolver.contextWindow(model);
                 if (contextWindow <= 0) {
@@ -1178,12 +1193,16 @@ public final class AgentSession implements AutoCloseable {
                 newLeafId = targetId;
             }
 
+            // pi truthiness（终审②）：空串文本/标签与 null 同为 falsy
+            // （if (summaryText) :4107、if (label) :4118、if (label && !summaryText) :4129）。
+            boolean hasSummaryText = summaryText != null && !summaryText.isEmpty();
+            boolean hasLabel = effectiveLabel != null && !effectiveLabel.isEmpty();
             Entry.BranchSummary summaryEntry = null;
-            if (summaryText != null) {
+            if (hasSummaryText) {
                 // pi :4107-4115：摘要挂在目标位置（可在根），fromHook＝fromExtension 透传。
                 summaryEntry = session.branchWithSummary(laneName(), newLeafId, oldLeafId,
                     summaryText, summaryDetails, fromExtension, summaryUsage);
-                if (effectiveLabel != null) {
+                if (hasLabel) {
                     session.setLabel(summaryEntry.id(), effectiveLabel);
                 }
             } else if (newLeafId == null) {
@@ -1191,7 +1210,7 @@ public final class AgentSession implements AutoCloseable {
             } else {
                 session.moveLane(laneName(), newLeafId);
             }
-            if (effectiveLabel != null && summaryText == null) {
+            if (hasLabel && !hasSummaryText) {
                 session.setLabel(targetId, effectiveLabel);
             }
 
@@ -1211,10 +1230,10 @@ public final class AgentSession implements AutoCloseable {
             // pi :4138（#77）：导航后按新叶最新系统消息的 toolsAdded 恢复激活装配。
             harness.restoreToolsFromTranscript(laneName());
             // pi :4140-4147：session_tree（newLeafId＝导航后当前叶；fromExtension
-            // 仅在有摘要时有值）。
+            // 仅在有摘要时有值——pi 同取 truthiness：summaryText ? fromExtension : undefined）。
             if (extensionFirer != null) {
                 extensionFirer.sessionTree(leafId, oldLeafId, summaryEntry,
-                    summaryText != null ? fromExtension : null);
+                    hasSummaryText ? fromExtension : null);
             }
             return new TreeNavigation(false, false, editorText, summaryEntry);
         } finally {
