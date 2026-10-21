@@ -43,6 +43,30 @@ class KeybindingsManagerTest {
     }
 
     @Test
+    void treeActionsNeverLeakIntoGlobalResolve() {
+        // 批 9 评审 C1：tree 键与全局同键（ctrl+d/t/o/l）或新占（ctrl+u/a/x）——
+        // 全局 resolve 只能见 11 个全局动作；漏进 tree 动作会让主屏按键被
+        // handleAction 的 default 臂静默吞掉（ctrl+l 选模型/ctrl+u 删行头失效）。
+        assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("l", true, false, false)))
+            .isEqualTo(KeybindingsManager.MODEL_SELECT);
+        assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("d", true, false, false)))
+            .isEqualTo(KeybindingsManager.EXIT);
+        assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("t", true, false, false)))
+            .isEqualTo(KeybindingsManager.THINKING_TOGGLE);
+        assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("o", true, false, false)))
+            .isEqualTo(KeybindingsManager.TOOLS_EXPAND);
+        assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("u", true, false, false)))
+            .isNull();
+        assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("a", true, false, false)))
+            .isNull();
+        assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("x", true, false, false)))
+            .isNull();
+        // tree 动作仍按 pi matches 形可查（overlay 语境）。
+        assertThat(keys.matches(KeybindingsManager.TREE_FILTER_LABELED,
+            KeybindingsManager.KeyStroke.of("l", true, false, false))).isTrue();
+    }
+
+    @Test
     void treeActionsResolveTheirDefaultStrokes() {
         // foldOrUp 双键（ctrl／alt）任一命中（pi keybindings.ts:83-167）。
         assertThat(keys.matches(KeybindingsManager.TREE_FOLD_OR_UP,

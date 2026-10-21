@@ -72,7 +72,14 @@ public final class KeybindingsManager {
         }
     }
 
+    /**
+     * 全局动作表（11 个）与 overlay 语境动作表（12 个 app.tree.*／
+     * app.message.copy）**分持**——批 9 评审 C1：同表时 {@link #resolve} 的
+     * hash 序会把 ctrl+l/u/a 等解析成 tree 动作，主屏按键被静默吞掉。
+     * pi 无此歧义（全局 handler 按动作逐个查，即本类的 {@link #matches} 形）。
+     */
     private final Map<String, List<KeyStroke>> bindings = new HashMap<>();
+    private final Map<String, List<KeyStroke>> overlayBindings = new HashMap<>();
 
     /** Create a manager pre-populated with the default keybindings. */
     public KeybindingsManager() {
@@ -88,29 +95,30 @@ public final class KeybindingsManager {
         bindings.put(FOLLOW_UP, List.of(KeyStroke.of("enter", false, true, false)));
         bindings.put(DEQUEUE, List.of(KeyStroke.of("up", false, true, false)));
 
-        bindings.put(TREE_FOLD_OR_UP, List.of(
+        overlayBindings.put(TREE_FOLD_OR_UP, List.of(
             KeyStroke.of("left", true, false, false),
             KeyStroke.of("left", false, true, false)));
-        bindings.put(TREE_UNFOLD_OR_DOWN, List.of(
+        overlayBindings.put(TREE_UNFOLD_OR_DOWN, List.of(
             KeyStroke.of("right", true, false, false),
             KeyStroke.of("right", false, true, false)));
-        bindings.put(TREE_EDIT_LABEL, List.of(KeyStroke.of("l", false, false, true)));
-        bindings.put(TREE_TOGGLE_LABEL_TIMESTAMP,
+        overlayBindings.put(TREE_EDIT_LABEL, List.of(KeyStroke.of("l", false, false, true)));
+        overlayBindings.put(TREE_TOGGLE_LABEL_TIMESTAMP,
             List.of(KeyStroke.of("t", false, false, true)));
-        bindings.put(TREE_FILTER_DEFAULT, List.of(KeyStroke.of("d", true, false, false)));
-        bindings.put(TREE_FILTER_NO_TOOLS, List.of(KeyStroke.of("t", true, false, false)));
-        bindings.put(TREE_FILTER_USER_ONLY, List.of(KeyStroke.of("u", true, false, false)));
-        bindings.put(TREE_FILTER_LABELED, List.of(KeyStroke.of("l", true, false, false)));
-        bindings.put(TREE_FILTER_ALL, List.of(KeyStroke.of("a", true, false, false)));
-        bindings.put(TREE_FILTER_CYCLE_FORWARD,
+        overlayBindings.put(TREE_FILTER_DEFAULT, List.of(KeyStroke.of("d", true, false, false)));
+        overlayBindings.put(TREE_FILTER_NO_TOOLS, List.of(KeyStroke.of("t", true, false, false)));
+        overlayBindings.put(TREE_FILTER_USER_ONLY, List.of(KeyStroke.of("u", true, false, false)));
+        overlayBindings.put(TREE_FILTER_LABELED, List.of(KeyStroke.of("l", true, false, false)));
+        overlayBindings.put(TREE_FILTER_ALL, List.of(KeyStroke.of("a", true, false, false)));
+        overlayBindings.put(TREE_FILTER_CYCLE_FORWARD,
             List.of(KeyStroke.of("o", true, false, false)));
-        bindings.put(TREE_FILTER_CYCLE_BACKWARD,
+        overlayBindings.put(TREE_FILTER_CYCLE_BACKWARD,
             List.of(KeyStroke.of("o", true, false, true)));
-        bindings.put(MESSAGE_COPY, List.of(KeyStroke.of("x", true, false, false)));
+        overlayBindings.put(MESSAGE_COPY, List.of(KeyStroke.of("x", true, false, false)));
     }
 
     /**
-     * Resolve a stroke to an action ID.
+     * Resolve a stroke to a **global** action ID（overlay 语境动作不参与——
+     * 它们只经 {@link #matches} 按动作查询）。
      *
      * @param stroke the neutral stroke
      * @return the action ID or {@code null} when unbound
@@ -126,22 +134,30 @@ public final class KeybindingsManager {
 
     /**
      * pi {@code kb.matches(keyData, action)} 对位：stroke 是否命中**指定**动作
-     * 的任一键。overlay 内按动作逐个判定（pi handleInput 的分派形），同名键
-     * 在不同上下文各解各的。
+     * 的任一键（两表都查）。overlay 内按动作逐个判定（pi handleInput 的
+     * 分派形），同名键在不同上下文各解各的。
      */
     public boolean matches(String actionId, KeyStroke stroke) {
-        var strokes = bindings.get(actionId);
+        var strokes = overlayBindings.get(actionId);
+        if (strokes == null) {
+            strokes = bindings.get(actionId);
+        }
         return strokes != null && strokes.contains(stroke);
     }
 
-    /** All bound action IDs, for the {@code /hotkeys} command. */
+    /** All bound action IDs（两表并集）, for the {@code /hotkeys} command. */
     public List<String> actionIds() {
-        return List.copyOf(bindings.keySet());
+        var ids = new java.util.ArrayList<>(bindings.keySet());
+        ids.addAll(overlayBindings.keySet());
+        return List.copyOf(ids);
     }
 
     /** The default (first) stroke for an action ID (or null). */
     public KeyStroke strokeFor(String actionId) {
         var strokes = bindings.get(actionId);
+        if (strokes == null) {
+            strokes = overlayBindings.get(actionId);
+        }
         return strokes == null || strokes.isEmpty() ? null : strokes.get(0);
     }
 }
