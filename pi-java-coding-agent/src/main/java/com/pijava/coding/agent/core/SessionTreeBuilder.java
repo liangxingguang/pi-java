@@ -41,7 +41,7 @@ public final class SessionTreeBuilder {
      * @param labelById           entryId → 当前标签（pi {@code labelsById}）
      * @param labelTimestampById  entryId → 标签时间戳（pi {@code labelTimestampsById}）
      */
-    public static List<SessionTreeNode> build(List<Entry> entries,
+    public static List<SessionTreeNode> build(List<? extends Entry> entries,
                                               Function<String, String> labelById,
                                               Function<String, Instant> labelTimestampById) {
         // pi :89-93：先全量建节点（label 解析在这一程）。
