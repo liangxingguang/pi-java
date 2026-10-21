@@ -143,7 +143,7 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | 37 | 钩子 `before_tool` ⇒ **`beforeToolCall`** | H | **对齐** | **2** | `agent/src/agent.ts:123`；`types.ts:326` | `HookSystem.java:73,158` | —— |
 | 38 | 钩子 `after_tool` ⇒ **`afterToolCall`** | H | **对齐** | **2** | `agent/src/agent.ts:124`；`types.ts:341` | `HookSystem.java:78,185` | —— |
 | 39 | ~~钩子 `before_compaction`~~ | H | **作废（R1）** | 0 | 扩展事件 `session_before_compact`（`core/extensions/types.ts:772`）→ 属 04 | `HookSystem.java:83,221` | —— |
-| 40 | ~~钩子 `before_navigation`~~ | H | **作废（R1）** | 0 | 导航 hook 已删（导航本体见 #25） | `HookSystem.java:88,234` | —— |
+| 40 | ~~钩子 `before_navigation`~~ | H | **作废（R1）** | 0 | 导航 hook 已删（导航本体见 #25） | 死钩三件套（`onBeforeNavigation`/`fireBeforeNavigation`＋`BeforeNavigationHook`/`NavigationContext`）已随批 coding-agent-8 删除（docs/18 裁决①：pi 无引擎层 tree 钩，事件由 agent-session 直发） | —— |
 | 41 | 钩子 `should_stop_after_turn`/`prepare_next_turn` ⇒ **`finishTurn`/`prepareNextTurn`** | H | **对齐** | **3** | `agent/src/types.ts:149-158`；合并 `agent-session.ts:891-895` | `HookSystem.onFinishTurn`/`fireFinishTurn`（END 短路即赢、否则 CONTINUE、全弃权 null；注册键 `should_stop_after_turn` 保留）；`ShouldStopAfterTurnHook` 返 `TurnDecision`（`FALSE`「不许停」方言删除） | ~~#6 同根 B159~~ 销号（2026-10-17 批 agent-core-1） |
 | 42 | ~~钩子 `before_resume`（java 独有）~~ | H | **作废（R1）** | 0 | pi 无对应（旧图即标 java 多） | `HookSystem.java:48,118` | —— |
 | 43 | ~~effect gate（`gate.admit`）~~ | A | **作废（R1）** | 0 | `git grep effect-gate ea448f454 -- packages/*/src` **零命中** | 零命中 | —— |

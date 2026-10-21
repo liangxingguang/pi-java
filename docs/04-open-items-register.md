@@ -27,7 +27,7 @@
 ## 基准与口径
 
 - 七份地图（含 2026-10-12 新建的 `map/07-mcp.md`）已于 2026-10-12 对当前锚点逐条重测完毕。重测销号 A16，新发现的差异登记为 B233–B238。
-- 已闭环批次：ai 批 0–10（原 docs/08–19）、agent-core 批 1–3（原 docs/20–22）、telemetry 批 1（原 docs/23）、agent-core 批 4–5（docs/09–10）、coding-agent 批 1–7（docs/11–17）。
+- 已闭环批次：ai 批 0–10（原 docs/08–19）、agent-core 批 1–3（原 docs/20–22）、telemetry 批 1（原 docs/23）、agent-core 批 4–5（docs/09–10）、coding-agent 批 1–8（docs/11–18）。
   - ai 批 0 裁决：B115/B117/B124 取证关单、#87 零代码对齐、11 个单元移出分母。
   - telemetry 批 1 结论：pi 的 telemetry 是休眠契约（没有实际调用点），`map/01` 完成度 100%。
   - 换锚裁决依据在原 `docs/11-pi-reanchor-ruling.md`。
@@ -125,7 +125,6 @@
 | B216 | 内部 | 包⑪开的四处跨包小缝 | ① `McpServerConnection.oauthSettings()` 包私有改 public（pi 是公开）；② 新增 `clearChallenge()`（pi 是直接赋 `undefined`）；③ 新增 `McpServerState.wire()`（CLI 要打 `needs-auth`）；④ 新增 `SettingsManager.load(agentDir, projectDir, override)`（原先只能为进程自己的目录解析信任） |
 | B217 | 内部 | MCP `login` 的端到端（真授权服务器）没有测试夹具 | 夹具覆盖到「连不上 / 非 OAuth / 缺参数 / 超时校验」为止；`--timeout` 秒数文案与 `reconnect` 后的成功路径需要真授权服务器（包⑨的 `McpSignIn` 另有夹具） |
 | B163 | 用户可见 | 主题/色彩系统差距大 | pi 3,176 行（theme、system-theme、oklab 等），Java 74 行 |
-| B245 | 混合 | **tree 扩展事件＋TUI 摘要流**（批 agent-core-4 新登记，docs/09 §13.5） | ① `session_before_tree`/`session_tree` 扩展事件（types.ts:817-846,1488-1501，含 `result.summary` 整体替代生成器的 fromHook=true 旁路）；② TUI 树选择器摘要三选对话框（interactive-mode.ts:5559-5706）＋摘要期 Esc 换绑 `abortBranchSummary`（:5637-5640）＋`skipPrompt` 弹窗门（:5590，设置项批 4 已备）。挂扩展事件（D 域）与 TUI 两族；`navigateTree`/`abortBranchSummary` 本体批 4 已落 |
 | B246 | 混合 | **工具选择的 reload 臂＋SDK `tools` 选项抛错面**（批 coding-agent-1 新登记，docs/11 裁决④） | pi `usesDefaultTools`/`defaultToolModifiers`（`sdk.ts:472-473`）只在 `reload()` 有语义（`agent-session.ts:3660-3685`：设置重载后激活**新增**默认工具、移除的保持激活、`-name` 移除的保持移除），依附扩展运行时重载面；java 无 reload 面（设置改动走 accessors 即效）。SDK `tools` 选项的 `Invalid tools option` 抛错（`sdk.ts:280-281`）java 无 SDK 面；CLI 等价物＝解析期 error 诊断（批 1 已落）。触发条件＝java 出现 session reload/扩展运行时或 SDK 面 |
 ### 3.4 TUI（优先级最低，web UI 为主）
 
@@ -357,16 +356,23 @@
 - 【风险/代价】窄差 5 条（map/04 D 域批 7 窄差表 D31–D35，均内部/边缘）：D31 类型不符提前失败、D32 google 载体 record、D33 头集少 pi 的 auth.headers/显式头/attribution 三层（attribution 新登记 **B253**）、D34 null 抑制 SDK 默认头不可达、D35 响应头名大小写。账面：D-17（w3）/D-18/D-19/D-20 四行翻转 **+5.5**；D 域 66.0→71.5/83＝**86.1%**、模块 283.5→289.0/496≈**58.3%**、全仓 948.5→954.0/1381≈**69.1%**；w3 层 #5 翻（D 域 w3 欠账清零，map/04 权重 3 表 #6/#8 批 5 滞后一并修正）。[均内部/边缘]
 - 触发条件：无（本族已闭）。出处：docs/17 §3–§6。
 
+### map/04-批 coding-agent-8（docs/18）— tree 两扩展事件＋TUI 摘要导航流（B245）
+
+- 【场景】D 域仅剩的 tree 两事件开放项：pi 的扩展能在树导航前取消/供摘要/覆盖指令（`session_before_tree` 结果臂，types.ts:832-838/1488-1501）、在导航后观察（`session_tree`）；TUI 侧 `/tree` 与 `/fork` 共用 marker，`/tree` 实为 fork，pi 的「选 entry 后原地导航＋可选摘要」流（interactive-mode.ts:5560-5690）从未接线。另：旧图把希望挂在引擎钩 `onBeforeNavigation` 上，该钩是 java 早期自造、零调用点、装不下 pi 的 preparation 载荷。
+- 【决定】2026-10-21 批 coding-agent-8（docs/18，T1 事件三件套→T2 navigateTree 重构→T3 TUI 流）：① **T1**——`TreePreparation`（entriesToSummarize 是**活列表**，与默认生成器共引用，pi :3995/4056 同构）/`ExtensionTreeSummary`/`SessionBeforeTreeResult`＋两事件变体＋两 spec 令牌＋`SessionEventFirer` 两方法（通用 emit 逐字：cancel 短路、最后发言者赢、逐处理器 catch⇒emitError⇒继续、hasHandlers 快走）；② **T2**——navigateTree 逐 pi :3964-4156 全序：模型门（错文逐字）、无条件先收集、token 事件前建、before_tree 三臂（扩展摘要仅在用户本来要摘要时生效，三覆盖不受门限）、`fromHook`＝fromExtension 透传、session_tree 载荷（newLeafId=导航后当前叶）、`TreeNavigation` 加 `aborted` 字段（pi 区分扩展取消与摘要中止）；**裁决①**——死引擎钩三件套删除（pi 无引擎层 tree 钩，事件由 agent-session 直发）；③ **T3**——`/fork` 与 `/tree` marker 拆分（`UI_FORK_SELECTOR` 新增）；`TreeNavigationFlow` 编排（当前叶 no-op 文案、skipPrompt 门、三选⇄自定义指令编辑器 Esc 回退链、worker 虚拟线程上 abort＋waitForIdle＋重查 isCompacting、指示器置/清成对、结局四分）；`TreeSelectorScreen` 导航模式（initialSelectedId 恢复选中）；`ChatScreen` 三 public 面（showBranchSummaryIndicator/showError 提 public/rebuildTranscript 参数形）；PiTuiApp overlay **先清位再 apply**（链式重开必要修复）；**裁决③**——Esc 换绑不移植（java Esc⇒abort() 首步即 abortBranchSummary，已与 pi 换绑后等价）。**闭环评审三修**（均 RED→GREEN）：④ `isCompacting()` 含分支摘要在飞（pi getter :1622-1630——门错文「or tree navigation」的互斥语义承重墙；prompt 路由门同改道，摘要窗口期重入导航/prompt 起跑的 NPE＋撕转录消除）；⑤ `hasExtensionSummary` 生成器门＋pi truthiness（summary 对象非 null 即跳过默认生成器不看文本；空串文本不建 entry、空串 label 不贴，pi `if (summaryText)`/`if (label)`）；⑥ generate 前 abort 预检（token 已中止不发 LLM 调用）。
+- 【风险/代价】窄差 7 条（docs/18 §5 D36–D40＋闭环新登 D41/D42）：D36 `_resolveIdleWaitIfIdle` 无对位（java waitForIdle 是车道 run 级，树导航不是 run）；D37 树选择器仍是 lane 列表（pi 1,435 行 entry 树本体＝map/05 S12 存疑项，存量约束）；D38 `flushCompactionQueue` 在 java 恒 no-op（缓冲由 CompactionEnd 重放，导航时必空）；D39 三选/编辑器 SelectList/EditorComponent 弱形状（行文案逐字）[模型可见 UI 形态]；D40 重开恢复选中＝lane 行定位（pi 恢复 entry 节点）；D41 `restoreQueuedMessagesToEditor` 未移植（运行中导航前被 abort 的排队消息不回填编辑器，无既有取用面）；D42 摘要窗口期 followUp 入压缩缓冲、CompactionEnd 才重放（`isCompacting` 语义修复④的连带——滞留至下次压缩；放行起跑新 run 撕转录的风险更大）。[D39 模型可见；D37 存量约束；D41/D42 边缘；余无影响]
+- 触发条件：D37 随树选择器本体批次（S12）收编；D41/D42 随排队消息治理立项时重裁。出处：docs/18 §3–§6＋§9 闭环回填。
+
 ---
 
 ## 5. E 类 —— 结构债（仓库规则：单文件 ≤ 500 行）
 
 | # | 文件 | 行数 |
 |---|---|---:|---:|
-| E1 | coding-agent …/core/AgentSession.java | **1,938**（2026-10-21 批 coding-agent-7 实测——批 7 +13：providerBridge 字段/wireSession 建桥/loadExtensions 回填；拆分宜搭下一 coding-agent 批） |
+| E1 | coding-agent …/core/AgentSession.java | **2,010**（2026-10-21 批 coding-agent-8 实测——批 8 +72：navigateTree 事件面/aborted/truthiness 重构＋isCompacting 定义；拆分宜搭下一 coding-agent 批） |
 | E2 | coding-agent …/rpc/RpcDispatcher.java | 693（2026-10-21 批 coding-agent-6 实测） |
 | E5 | ai …/catalog/ModelCompat.java | **762**（2026-10-11 B98 加 8 组件；converter 侧已拆出 CompletionAssistantMessage 保 500 内） |
-| E6 | tui …/app/PiTuiApp.java | 529（2026-10-21 批 coding-agent-6 实测——退出面 close＋测试钩 +10） |
+| E6 | tui …/app/PiTuiApp.java | 537（2026-10-21 批 coding-agent-8 实测——/tree 导航流分派＋overlay 先清位再 apply +8） |
 
 （E3/E4 已销号——2026-10-18 批 agent-core-5 拆分：`PiLaneSink` 470＋`PiLaneRequestTelemetry` 131、`AgentHarness` 438＋`HarnessBootstrap` 231，行为零变化纯移动。）
 

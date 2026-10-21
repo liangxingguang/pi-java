@@ -835,3 +835,46 @@ public void rebuildTranscript() {
 D 域 71.5→**73.0/83（88.0%）**；模块 289.0→**290.5/496（58.6%）**；全仓
 954.0→**955.5/1381（≈69.2%）**。D 域剩余：存疑 0；缺失 6（#1/#11/#16/#26/#27/#36，
 各随 B221/E5/子系统）。
+
+---
+
+## §9 闭环回填（2026-10-21，已闭环）
+
+**B245 销号。** 对账实测与 §8 预期一致：D 域 71.5→**73.0/83（88.0%）**
+（D-12 存疑→对齐 +0.5、D-13 缺失→对齐 +1.0，D 域**存疑清零**）；模块
+289.0→**290.5/496（58.6%）**（去重口径 282.0→283.5/487＝58.2%）；全仓
+954.0→**955.5/1381（69.2%）**。C-3/S12/S13 判定不动、证据已更新（map/04、
+map/05）；map/03 #40 死钩删除回填。
+
+**实施**：T1（事件 ADT＋spec＋firer，2 测试）→ T2（navigateTree 重构＋死钩
+删除，SessionBeforeTreeTest 10 例＋NavigateTreeTest/RestoreToolsOnNavigateTest
+回归）→ T3（marker 拆分＋TreeNavigationFlow＋两 overlay＋ChatScreen 三面，
+TreeNavigationFlowTest 12 例）。全量 `mvn clean verify` 绿（10:09 min，
+零错误；警告均为环境/依赖噪音）。
+
+**闭环评审（fresh reviewer）三修**（各 RED→GREEN，TreeNavigationMutexTest
+2 例＋SessionBeforeTreeTest ⑪⑫ 新增、⑨ 增断言）：
+
+1. **Critical——`isCompacting()` 含分支摘要在飞**（pi getter :1622-1630 读
+   `_branchSummaryAbortController`）：这是双门错文「or tree navigation」半句的
+   承重语义——修复前摘要窗口期重入导航覆写 token 字段致 NPE、prompt 路由直达
+   harness 不起门、起跑新 run 撕转录。修法＝定义改 `harness.isCompacting(lane)
+   || branchSummaryAbort != null`＋processPrompt 路由门改道（:924）。
+2. **Important——`hasExtensionSummary` 生成器门＋pi truthiness**：pi 的
+   `!extensionSummary` 看 summary 对象有无（不看文本），`if (summaryText)`/
+   `if (label)` 空串同 falsy；修复前 null 文本被当成「无扩展摘要」放行默认
+   生成器、空串文本建空 entry、空串 label 照贴。
+3. **Important——generate 前 abort 预检**：token 已中止不再发起完整 LLM
+   调用（pi 对已 abort signal 直接 aborted 同效）。
+
+**评审 Minor（登记缓办，未进 fix pass）**：① TreeSelectorScreen `split(" @")`
+解析在 lane 名含 " @" 时混名（双路径改 `lastIndexOf`）；② 导航模式选中无叶
+lane 静默无反馈＋`endsWith` 恢复选中可被无叶行误匹配；③ HookSystem 头注释
+计数（实测 14/14）；④ 会话切换中途的 flow 结局把旧会话转录 rebuild 进当前
+聊天区（pi 是响亮错、java 静默错）；⑤ 本稿 §1.3 步骤编号与 ledger 曾表述
+「pi 模型门在 noop 门前」——**勘误**：pi 实为 noop 门（:3979-3982）在前、
+模型门（:3985-3987）在后，实现顺序与 pi 一致，勿按错误注释「修」回。
+
+**窄差**：D36–D40 照 §5 登记；闭环新登 D41（`restoreQueuedMessagesToEditor`
+未移植，无取用面）、D42（摘要窗口期 followUp 入压缩缓冲、CompactionEnd 才
+重放——`isCompacting` 语义修复的连带窄场景）。台账 docs/04 §4 批 8 条。

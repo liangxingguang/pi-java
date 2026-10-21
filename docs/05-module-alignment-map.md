@@ -77,7 +77,7 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 
 ---
 
-## 1 总表（coding-agent 批 7 后值，2026-10-21；agent-core 批 5 后值，2026-10-18；telemetry 批 1 后值，2026-10-17；ai 批 10 后 2026-10-16；批 3b/4/6/8 为台账行为项、加权不变；其余模块为 2026-10-12 重测值）
+## 1 总表（coding-agent 批 8 后值，2026-10-21；agent-core 批 5 后值，2026-10-18；telemetry 批 1 后值，2026-10-17；ai 批 10 后 2026-10-16；批 3b/4/6/8 为台账行为项、加权不变；其余模块为 2026-10-12 重测值）
 
 | 模块（地图） | Σ权重 | Σ(w×c) | **加权完成度** | 未加权 | 权重 3 层 |
 |---|---:|---:|---:|---:|---:|
@@ -87,10 +87,10 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 | session-sqlite ＋ evals（map/06） | 87 | 44.5 | **51.1%** | 50.0%（20/40） | — |
 | pi-java-telemetry（map/01，**批1后**） | 34 | 34.0 | **100%** | 100%（16/16） | 100%（21/21） |
 | pi-java-tui/web（map/05） | 245 | 108.5 | **44.3%** | 25.7%（38/148） | 67.3% |
-| pi-java-coding-agent（map/04，剔 MCP 粗单元） | 487 | 282.0 | **57.9%** | 45.2%（131/290） | 73.9%（17/23） |
-| **合计（去重后，coding-agent 批7后）** | **1,381** | **954.0** | **69.1%** | — | — |
+| pi-java-coding-agent（map/04，剔 MCP 粗单元） | 487 | 283.5 | **58.2%** | 45.9%（133/290） | 73.9%（17/23） |
+| **合计（去重后，coding-agent 批8后）** | **1,381** | **955.5** | **69.2%** | — | — |
 
-> map/04 原始口径（含 G-1..G-5）：Σw 496 ／ Σwc 289.0 ／ **58.3%**；两处账都在，总表用去重值。
+> map/04 原始口径（含 G-1..G-5）：Σw 496 ／ Σwc 290.5 ／ **58.6%**；两处账都在，总表用去重值。
 > ⚠️ 批 4 复核修正：D 域基线逐行实算 11.5（旧汇总行 10.5，存疑漏计 1.0）＋设计稿 §8 正文 Δ 加总错误（30.5→32.5）⇒ 账面较批 4 设计稿预期（258.5/52.1%）高 3.0。
 > protocol/client/server（R1 排除）未加权：map/01 全层 10 对齐 / 40 缺失 / 35 存疑（85 单元）。
 
@@ -98,7 +98,7 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 
 - **ai 层权重 3 全齐**：每轮都走的请求/响应/计量主路无缺口。批 10 后计分母缺失仅 1 条（#8 namespace），无半成品——#90 图片缩放消费链已落 agent-core/coding-agent，#98 federation 批 10 闭环。分类器面已裁 R5。
 - **mcp 模块本体完成度高（76%）**，但会话内接线面是缺口（B221：六个 on() 事件 0/6、激活门、ui.custom、工具渲染器、提示分节、registerMcpServer 挂载点）。这批缺口对应 map/07 G 组 17 单元里的 15 个缺失——**进程外 `pi mcp` CLI 可用、会话内 MCP 不激活**。
-- **coding-agent 最低**：批 7 后欠账集中在扩展系统剩余面（D 域加权 86.1%——仅剩 tree 两事件 B245 在列；D′ UI 注入 6.3%、E5 27.6%、包管理器 16.1%）。
+- **coding-agent 最低**：批 8 后欠账集中在扩展系统剩余面（D 域加权 88.0%——存疑清零，缺失 6 行各随 B221/E5/子系统；D′ UI 注入 6.3%、E5 27.6%、包管理器 16.1%）。
 - **agent-core 批 5 后 180/180 = 100%**（第二个满分模块）：权重 3 层 27/27、工具表 21/21、确认缺失与存疑**双清零**（批 5 收编 22 条存疑：13 做、8 裁决、#60 R1 出分母），未得分池 = 0。
 
 ---
@@ -139,11 +139,11 @@ codemode-only 的 4 个单元（exposure/deferred/discovery）权重 0，B161/B1
 - 批 4：技能族（`/skill:` 展开、loadSkills/loadPromptTemplates 面）、branch summary 族（生成器＋navigateTree＋设置，B1 销号）、工具族（PI_\* 注入 B242、powershell B243、find 阶梯 B53 三销号）、API 面（session_info_changed B30、fromHook、setDefaultStreamFn、列表 onProgress B55、abortCompaction B36 五销号）；#68 streamProxy 裁决① R5 出分母。
 - 批 5：#57 bashExecution 全链（`Entry.BashExecution` 变体＋jsonl 互读修复＋投影逐字＋`recordBashResult`/pending flush）、#77 navigateTree 工具恢复、#75 fork 消费 `--session-id`＋删 `" (fork)"` 后缀、#87 双 twin thinking 帧＋S16 对拍零 diff、#89/#96 夹具、#94 拆 `PiLaneSink`/`AgentHarness`（470/438，行为零变化）、#95 字节精确假 shell、#81 并发审计＋`FileMutationQueue` 共享单例修真、#83 消费者清点、#85/#92/#93 javadoc；8 裁决（**B49 销号**、#14/#56/#80/#82/#84/#90/#91，入 docs/04 §4）；#60 R1 出分母。
 
-现状：**模块 100%**——加权 180/180、未加权 90/90、权重 3 层含工具 27/27、工具表 21/21、确认缺失与存疑**双清零**、未得分池 = 0。批 4 新登记仍存活：B244（skill slash 命令）、B245（tree 扩展事件＋TUI 摘要流），归 coding-agent/TUI 批。
+现状：**模块 100%**——加权 180/180、未加权 90/90、权重 3 层含工具 27/27、工具表 21/21、确认缺失与存疑**双清零**、未得分池 = 0。（批 4 登记的 B244/B245 已分别随 coding-agent 批 2/批 8 销号。）
 
-### 2.4 coding-agent — 57.9%（去重）｜ map/04
+### 2.4 coding-agent — 58.2%（去重）｜ map/04
 
-A CLI 参数 80.6%、C slash 68.4%、E3 会话管理 68.8%；**D 扩展事件 86.1%（批 7 后）、D′ UI 注入 6.3%、E6 包管理器 16.1%、E5 扩展 API 27.6%** 拉低整体。
+A CLI 参数 80.6%、C slash 68.4%、E3 会话管理 68.8%；**D 扩展事件 88.0%（批 8 后）、D′ UI 注入 6.3%、E6 包管理器 16.1%、E5 扩展 API 27.6%** 拉低整体。
 G 域新子系统：MCP 明细在 map/07；codemode 3,957 行＋tool-search/virtual-models/nested 766 行仍为 0（B161/B162）。
 新缺口：B237（RPC `handled` disposition）。
 - 批 1（2026-10-18 闭环，B236/docs/11）：`--tools` 三层语义（`*` 通配/`+name`/`-name` 修饰符/`mcp__` 保留）＋`--exclude-tools` 通配 denylist＋settings `defaultTools`（merge/resolve）＋注册面门接线（`createAllTools` 八件经 `_isAllowedTool` 过滤）＋默认激活集 **7→4**（裁决①）；map/04 A-20/A-21/E2-35 翻对齐（+3.5）；**B236 销号**、B246 新登记（reload 臂＋SDK 抛错面）；43.2% → **43.9%**（未加权 31.7% → 32.8%）。合计 63.9% → 64.2%（882.5 → 886.0/1381）。
@@ -153,6 +153,7 @@ G 域新子系统：MCP 明细在 map/07；codemode 3,957 行＋tool-search/virt
 - 批 5（2026-10-20 闭环，docs/15，B249＋B250 合包）：**结果臂事件族＋会话生命周期**——message_end 替换走引擎新钩（裁决①：`PiLaneSink` 前换引用，宿主事件在 flush 后的唯一保语义缝；宿主桥 case 删防双发）；boundary 子系统（裁决②：turn_end 复用 `should_stop_after_turn` 并修真载荷、agent_before_settle 新钩 firing 于 drive settle 前门；`BoundaryBridge` 落 emitBoundary 逐字＋草稿四型 commit＋预览/canContinue＋`<boundary>` 归属上报）；`SessionEventFirer`（裁决③：input 变换/handled·user_bash 首发言者＋重抛·before_agent_start 累积＋systemPrompt 链式·before_switch/fork cancel 短路）；before_compact 三臂扩形（cancel＞supplied＞keepEntries，裁决⑥）＋`compactionEntry` 穿透（批 4 窄差 D4/D6 销号）；生命周期（session_start 恒 startup＋createReplacing/switchTo/fork 序列、close/closeForReplacement）。map/04 D 域 12 行翻转（9 缺失→对齐、3 存疑→对齐，逐行实算 **+22.0**，D 域 53.0% → **79.5%**）；**B249/B250 销号**、**B251**（forked 不加载扩展）/**B252**（旧会话 close 治理）新登记；窄差 D9–D23（D11 模型可见：systemPrompt 覆盖是 harness 全局态）；引擎钩子 13→15；52.3% → **56.8%**（原始口径 52.7% → 57.2%；未加权 39.7% → 43.8%；w3 65.2% → 69.6%）。合计 67.1% → **68.7%**（926.5 → 948.5/1381）。
 - 批 6（2026-10-21 闭环，docs/16，B251＋B252 合包）：**fork 扩展装配＋会话关闭治理**——`wireSession` 抽取（pi createRuntime 对位），fork 三路全走它（fresh 注册表＋fresh 会话绑定闭包：压缩/重试事件、重试中止旗、图片策略、PI_* 身份五组串线同修），forked `loadExtensions` 全量重装＋`session_start{fork, previous}`（pi 逐字序 teardown→rebind）；`closeWith` 三参化（abort 对位＋句柄开关＋幂等）＋fork 内部 `closeForFork`＋/new·RPC new_session `closeForReplacement`＋原地 attach 关旧 storage；`PiTuiApp.exit()`/`RpcDispatcher.close()` 关当前会话（`session_shutdown{quit}` 在 TUI/RPC 退出路径发射）；`AgentHarness.fork()` 删除。**B251/B252 销号**（map/04 D-3/D-10 摘「挂 B251/B252」帽）；行翻转 0——D 域 79.5%、模块 56.8%（原始口径 57.2%）、合计 68.7%（948.5/1381）**均不变**（缺陷闭环，同批 3 口径）；窄差 D24–D30（均内部/边缘）；引擎钩子 15 不变。
 - 批 7（2026-10-21 闭环，docs/17，B248）：**provider 请求面扩展事件四件**——ai 缝 `ProviderHooks`（`ApiOptions.extra` 三键逐字对位 pi StreamOptions 键；裁决①）＋七车道 `onPayload`（车道原生载荷＋同型守卫，裁决⑤）与 `onProviderStreamEvent`（原始事件、归一化前）；`onResponse` 六车道（SDK 四车道 `withRawResponse`＋自备两车道 `SseResponseObserver` 终态面含错误状态；**google 不发＝pi 同缺**，裁决④）；`transformHeaders` 在 createApi 前缝消费、钩本体剥离（pi models.ts:866-871 对位）＋`ProviderEventBridge`（pi `extensionRunnerRef`＋四闭包；`hasHandlers` 调用时现查；裁决②③）；Azure 补 `putExtraHeaders`、PiMessages 补 `extra["headers"]` 合并（裁决⑦）。map/04 D 域 4 行翻转（#17 w3 存疑→对齐、#18/#19 存疑→对齐、#20 缺失→对齐，逐行实算 **+5.5**，D 域 79.5% → **86.1%**）；**B248 销号**、**B253**（attribution 头层）新登记；窄差 D31–D35（均内部/边缘）；引擎钩子 15 不变；56.8% → **57.9%**（原始口径 57.2% → 58.3%；未加权 43.8% → 45.2%；w3 69.6% → 73.9%——D 域 w3 欠账清零）。合计 68.7% → **69.1%**（948.5 → 954.0/1381）。
+- 批 8（2026-10-21 闭环，docs/18，B245）：**tree 两扩展事件＋TUI 摘要导航流**——`session_before_tree`（结果臂：cancel 短路/扩展摘要 summarize 门/三覆盖，通用 emit 逐字）＋`session_tree`（观察型，导航后当前叶载荷）；navigateTree 全序重构（模型门、无条件先收集、token 事件前建、fromHook=fromExtension 透传、`TreeNavigation.aborted` 区分扩展取消与摘要中止）；死引擎钩 `onBeforeNavigation` 三件套删除（裁决①）；TUI `/fork`·`/tree` marker 拆分＋`TreeNavigationFlow`（skipPrompt 门、三选⇄编辑器 Esc 回退链、worker 上 abort+waitForIdle+重查、指示器成对、结局四分）＋`ChatScreen.rebuildTranscript`＋overlay 先清位再 apply；**闭环评审三修**——`isCompacting()` 含分支摘要在飞（pi getter 承重互斥语义）、`hasExtensionSummary` 生成器门＋pi truthiness、generate 前 abort 预检。map/04 D 域 2 行翻转（#12 存疑→对齐、#13 缺失→对齐，逐行实算 **+1.5**，D 域 86.1% → **88.0%**——**存疑清零**，缺失 6 行各随 B221/E5/子系统）；**B245 销号**；窄差 D36–D42（D39 模型可见 UI 形态、D37 存量约束 S12，余内部/边缘）；57.9% → **58.2%**（原始口径 58.3% → 58.6%；未加权 45.2% → 45.9%；w3 73.9% 不变）。合计 69.1% → **69.2%**（954.0 → 955.5/1381）。
 
 ### 2.5 tui/web — 44.3% ｜ map/05
 

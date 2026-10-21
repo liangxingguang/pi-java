@@ -125,7 +125,7 @@ pi 另有 **`/skill:name` 命令族**（`enableSkillCommands` 默认 true，`int
 |---|---|---|---|---|---|---|
 | 1 | `/settings` | `:20` | ⚠️ `SettingsCommands.java:22` | 2 | **存疑** | java 只返回 `UI_SETTINGS` marker（`:26`）；pi `settings-selector.ts`（995 行） |
 | 2 | `/model` | `:21` | ⚠️ `ModelCommands.java:21` | 2 | **存疑** | pi 支持 `/model <provider/model>` 直设；java `argumentHint()` 空且忽略 args |
-| 3 | `/tree` | `:22` | ⚠️ `SessionCommands.java:56` | 1 | **存疑** | pi `tree-selector.ts` 1,435 行 |
+| 3 | `/tree` | `:22` | ⚠️ `SessionCommands.java:61` | 1 | **存疑** | 批 8（docs/18）：`/tree` 与 `/fork` marker 拆分，原地导航＋摘要三选/自定义指令流已接（`TreeNavigationFlow`，Esc 回退链＋指示器＋aborted/cancelled 区分全落）；选择器本体仍 lane 列表（pi `tree-selector.ts` 1,435 行 entry 树＝map/05 S12，窄差 D37） |
 | 4 | `/thinking` | `:23` | ❌ — | 2 | **缺失** | java 无此命令（CLI/RPC 有，slash 面无） |
 | 5 | `/scoped-models` | `:24` | ⚠️ `ModelCommands.java:29` | 1 | **存疑** | pi `scoped-models-selector.ts` 401 行。**批 3b（2026-10-14）**：写入的 patterns 已被消费——`ModelScoping` 读 `--models ?? enabledModels` 解析 scope，驱动初始模型与 Ctrl+P/RPC 轮转（B137 销号）；仍缺 pi 的选择器 UI（＋/-/裸加 CLI 已齐） |
 | 6 | `/export` | `:25` | ⚠️ `MiscCommands.java:38` | 2 | **存疑** | pi 默认 HTML、路径可选；java `isBlank()` 时直接返回用法（`:40-41`） |
@@ -176,8 +176,8 @@ pi-java 的**引擎钩子** = `pi-java-agent-core/.../agent/hook/HookSystem.java
 | 9 | `session_compact_failed` | `:1589` | ✅ | 1 | **对齐** | 批 4 桥接（`CompactionEnd` 失败/中止臂）；pi `aborted` 判定为**信号权威**（`agent-session.ts:2887`） |
 | 10 | `session_shutdown` | `:1590` | ✅ | 2 | **对齐** | 批 5：`close()`=quit、`closeForReplacement`/`fireSessionShutdown` 带 reason+target（hasHandlers 门同 pi :258-267）；TUI 退出/RPC EOF 批 6 落（docs/16：`PiTuiApp.exit()` 关当前会话、`RpcDispatcher.close()` 关 dispatcher 当前会话，quit 在两退出路径发射） |
 | 11 | `mcp_servers_change` | `:1591` | ❌ | 2 | **缺失** | 扩展订阅面不存在；java MCP 注册表本身见 map/07（B221） |
-| 12 | `session_before_tree` | `:1593` | ⚠️ | 1 | **存疑** | 引擎钩子 `onBeforeNavigation:88`**未桥接** |
-| 13 | `session_tree` | `:1596` | ❌ | 1 | **缺失** | 无导航完成事件 |
+| 12 | `session_before_tree` | `:1593` | ✅ | 1 | **对齐** | 批 coding-agent-8（docs/18）：`SessionEventFirer.sessionBeforeTree`（通用 emit 逐字——cancel 短路＋最后发言者赢）＋`navigateTree` 发射（preparation 活列表＋signal；cancel/摘要/三覆盖臂）；死引擎钩 `onBeforeNavigation` 三件套删除（裁决①）；**互斥语义**：`isCompacting()` 含分支摘要在飞（pi getter :1622-1630，终审①修真） |
+| 13 | `session_tree` | `:1596` | ✅ | 1 | **对齐** | 批 8（docs/18）：导航后发射（newLeafId=导航后当前叶、summaryEntry、fromExtension 仅在有摘要时有值，pi :4140-4147 逐字） |
 | 14 | `context` | `:1597` | ✅ | **3** | **对齐** | 批 4 `EngineHookBridge`（`transform_context` 适配器）：两阶段逐字、系统消息过滤＋restore、引用相等快照（docs/14 §3.4.1） |
 | 15 | `context_with_system` | `:1598` | ✅ | **3** | **对齐** | 批 4 阶段二：全量可见、返回即采用、弄丢头系统 `emitError` 上报仍采用（错误文本逐字） |
 | 16 | `cache_warming_decision` | `:1600` | ❌ | 2 | **缺失** | `core/cache-warmer.ts` 453 行；java 无缓存预热子系统 |
@@ -207,9 +207,9 @@ pi-java 的**引擎钩子** = `pi-java-agent-core/.../agent/hook/HookSystem.java
 | 40 | `user_bash` | `:1635` | ✅ | 1 | **对齐** | 批 5 `executeBash` chokepoint 拦截（{result} 替换臂＋异常重抛不回落，pi :1262-1296 逐字）；{operations} 臂不移植（窄差 D10） |
 | 41 | `input` | `:1636` | ✅ | **3** | **对齐** | 批 5 `processPrompt` 内、展开**之前**（pi :1991 逐字）；transform 链＋handled（SessionResult "handled"）；images 恒 null（窄差 D12） |
 
-**汇总（宽口径，批 coding-agent-7 后）：对齐 33 / 缺失 7 / 存疑 1 / 合计 41 = 80.5%**；**Σ权重 83 / Σ(w×c) 71.5 / 加权 86.1%**
-**汇总（严格口径，未桥接的引擎钩子也算缺失）：对齐 33 / 缺失 7 / 存疑 1（#12）= 80.5%**；**加权 68.0/83 = 81.9%**（未桥接引擎钩子仅剩 #12 before_navigation——挂 B245；批 7 后 D 域不再有死 firing 点）
-> ⚠️ D 域 Σ权重 **83** = 模块 496 的 **16.7%**。批 coding-agent-7（docs/17）翻 4 行（#17 w3 存疑→对齐、#18/#19 存疑→对齐、#20 缺失→对齐，逐行实算 Δ＝**+5.5**）：剩余存疑＝#12；缺失 7 行＝#1 project_trust／#11 mcp_servers_change／#13 session_tree／#16 cache_warming／#26/#27 ui_prompt×2／#36 model_select（各随子系统：B221/B245/E5）。**D 域 w3 欠账清零**（#5/#6/#8 全对齐）。
+**汇总（宽口径，批 coding-agent-8 后）：对齐 35 / 缺失 6 / 存疑 0 / 合计 41 = 85.4%**；**Σ权重 83 / Σ(w×c) 73.0 / 加权 88.0%**
+**汇总（严格口径）**：批 8 起与宽口径**合一**——最后一个未桥接引擎钩子（#12 `before_navigation`）随死钩删除出账，D 域不再有死 firing 点。
+> ⚠️ D 域 Σ权重 **83** = 模块 496 的 **16.7%**。批 coding-agent-8（docs/18）翻 2 行（#12 存疑→对齐 +0.5、#13 缺失→对齐 +1.0，逐行实算 Δ＝**+1.5**）：存疑**清零**；缺失 6 行＝#1 project_trust／#11 mcp_servers_change／#16 cache_warming／#26/#27 ui_prompt×2／#36 model_select（各随子系统：B221/E5）。
 > ⚠️ **基线纪律**（批 4 起）：D 域与模块合计按逐行实算（批 4 发现汇总行与逐行不符同族教训——批 4 基线实算 11.5≠旧汇总行 10.5）。
 
 ### 批 coding-agent-4（docs/14，2026-10-20 闭环）窄差表
