@@ -4,29 +4,12 @@ import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Queue;
-import java.util.Set;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.harness.LaneInfo;
 import com.pijava.agent.harness.SessionSnapshot;
-import com.pijava.ai.api.ApiOptions;
-import com.pijava.ai.api.ProviderApi;
-import com.pijava.ai.api.StreamRequest;
-import com.pijava.ai.catalog.ModelCatalog;
-import com.pijava.ai.message.AssistantMessage;
-import com.pijava.ai.message.ContentBlock;
-import com.pijava.ai.message.Message;
-import com.pijava.ai.message.StopReason;
-import com.pijava.ai.protocol.AbstractChatApi;
-import com.pijava.ai.provider.Provider;
-import com.pijava.ai.provider.ProviderFactory;
-import com.pijava.ai.stream.StreamEvent;
 import com.pijava.coding.agent.cli.ArgsParser;
 import com.pijava.coding.agent.core.AgentSession;
 import com.pijava.coding.agent.extension.ExtensionContext;
@@ -40,6 +23,7 @@ import com.pijava.tui.screen.ScreenOverlay;
 import com.pijava.tui.screen.ChatScreen;
 import com.pijava.tui.screen.SummaryChoiceScreen;
 import com.pijava.tui.screen.TreeSelectorScreen;
+import com.pijava.tui.support.ScriptedChatProvider;
 import com.pijava.tui.util.TuiEventDispatcher;
 
 import org.junit.jupiter.api.AfterEach;
@@ -68,133 +52,6 @@ class TreeNavigationFlowTest {
             ctx.on(ExtensionEventSpec.SESSION_BEFORE_TREE,
                 (e, c) -> new ExtensionResults.SessionBeforeTreeResult(
                     true, null, null, null, null));
-        }
-    }
-
-    /**
-     * provider SPI 工厂（ServiceLoader 发现，TCCL 作用域注入——公共
-     * {@code AgentSession.create(args)} 的 defaultProviders 会捡到；实例经
-     * {@link #lastInstance} 回取）。tui 模块摸不到包级的
-     * {@code PersistentSessionRepositories}，持久仓装配只能走公共 create。
-     */
-    public static final class ScriptedChatProviderFactory implements ProviderFactory {
-        static volatile ScriptedChatProvider lastInstance;
-
-        /** ServiceLoader 无参构造。 */
-        public ScriptedChatProviderFactory() {}
-
-        @Override public Provider create() {
-            var p = new ScriptedChatProvider("scripted");
-            lastInstance = p;
-            return p;
-        }
-
-        @Override public String providerName() { return "scripted"; }
-    }
-
-    /**
-     * 剧本 provider：逐 call 消费回复队列（空 ⇒ "ok"）；{@code <conversation>}
-     * 请求＝摘要类调用（分支摘要/压缩同形），可被闩住等测试放行。
-     */
-    static final class ScriptedChatProvider implements Provider {
-        private final String name;
-        private final Queue<String> replies = new ConcurrentLinkedQueue<>();
-        private volatile CountDownLatch summaryStarted;
-        private volatile CountDownLatch summaryGate;
-        private volatile long nextDelayMs;
-
-        ScriptedChatProvider(String name) {
-            this.name = name;
-        }
-
-        void enqueue(String text) {
-            replies.add(text);
-        }
-
-        void delayNextCall(long ms) {
-            nextDelayMs = ms;
-        }
-
-        void armSummaryGate() {
-            summaryStarted = new CountDownLatch(1);
-            summaryGate = new CountDownLatch(1);
-        }
-
-        void awaitSummaryStarted() throws InterruptedException {
-            assertThat(summaryStarted.await(15, TimeUnit.SECONDS)).as("摘要调用发起").isTrue();
-        }
-
-        void releaseSummary() {
-            summaryGate.countDown();
-        }
-
-        @Override public String name() { return name; }
-        @Override public String displayName() { return name; }
-        @Override public Set<Class<? extends ProviderApi>> supportedApis() {
-            return Set.of(com.pijava.ai.api.ChatApi.class);
-        }
-
-        @Override
-        public <T extends ProviderApi> T createApi(Class<T> apiType, ApiOptions options) {
-            return apiType.cast(new Api(this));
-        }
-
-        @Override public ModelCatalog builtinModels() { return ModelCatalog.empty(); }
-
-        private static final class Api extends AbstractChatApi {
-            private final ScriptedChatProvider provider;
-
-            Api(ScriptedChatProvider provider) {
-                this.provider = provider;
-            }
-
-            @Override public String apiName() { return "scripted"; }
-            @Override protected boolean resolvesRequestOptions() { return false; }
-
-            @Override
-            protected void streamInternal(StreamRequest request,
-                    java.util.concurrent.SubmissionPublisher<StreamEvent> publisher) {
-                boolean summarization = false;
-                for (Message message : request.messages()) {
-                    if (message instanceof Message.UserMessage user
-                            && ChatMessage.joinText(user.content()).contains("<conversation>")) {
-                        summarization = true;
-                    }
-                }
-                if (summarization) {
-                    var started = provider.summaryStarted;
-                    if (started != null) {
-                        started.countDown();
-                    }
-                    var gate = provider.summaryGate;
-                    if (gate != null) {
-                        try {
-                            gate.await(15, TimeUnit.SECONDS); // 防挂死：超时放行
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        }
-                    }
-                }
-                long delay = provider.nextDelayMs;
-                provider.nextDelayMs = 0;
-                if (delay > 0) {
-                    try {
-                        Thread.sleep(delay);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
-                }
-                String text = provider.replies.poll();
-                if (text == null) {
-                    text = "ok";
-                }
-                var msg = AssistantMessage.empty().withContent(List.of(
-                    new ContentBlock.TextContent(text))).withStopReason(StopReason.STOP);
-                publisher.submit(new StreamEvent.Start(AssistantMessage.empty()));
-                publisher.submit(new StreamEvent.TextDelta(0, text,
-                    msg.withStopReason((StopReason) null)));
-                publisher.submit(StreamEvent.StreamDone.settle(StopReason.STOP, msg));
-            }
         }
     }
 
@@ -231,7 +88,7 @@ class TreeNavigationFlowTest {
         var servicesDir = Files.createDirectories(tmp.resolve("META-INF/services"));
         Files.writeString(
             servicesDir.resolve("com.pijava.ai.provider.ProviderFactory"),
-            ScriptedChatProviderFactory.class.getName() + "\n");
+            ScriptedChatProvider.Factory.class.getName() + "\n");
         if (installCancelProbe) {
             Files.writeString(
                 servicesDir.resolve("com.pijava.coding.agent.extension.PiExtension"),
@@ -263,7 +120,7 @@ class TreeNavigationFlowTest {
         }
         // 未编目模型 window=0，阈值门会在 prompt 收尾抢先自动压缩（既有夹具先例）。
         session.services().settings().accessors().setCompactionEnabled(false);
-        provider = ScriptedChatProviderFactory.lastInstance;
+        provider = ScriptedChatProvider.Factory.lastInstance();
         provider.enqueue("r1");
         provider.enqueue("r2");
         chatScreen = new ChatScreen();
