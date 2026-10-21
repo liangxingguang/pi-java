@@ -87,6 +87,7 @@ class NavigateTreeTest {
             var nav = session.navigateTree(target, false, null, false, null);
 
             assertThat(nav.cancelled()).isFalse();
+            assertThat(nav.aborted()).isFalse(); // docs/18：aborted 旗独立于 cancelled
             // pi :4094-4099：user 消息目标 ⇒ 叶=父、editorText=消息文本（回填编辑器）。
             assertThat(nav.editorText()).isEqualTo("first question");
             assertThat(nav.summaryEntry()).isNull();
@@ -94,6 +95,7 @@ class NavigateTreeTest {
             var noop = session.navigateTree(
                 entries(session).getLast().id(), false, null, false, null);
             assertThat(noop.cancelled()).isFalse();
+            assertThat(noop.aborted()).isFalse();
             assertThat(noop.editorText()).isNull();
         }
     }
@@ -123,6 +125,7 @@ class NavigateTreeTest {
             var nav = session.navigateTree(target, true, null, false, "explored");
 
             assertThat(nav.cancelled()).isFalse();
+            assertThat(nav.aborted()).isFalse();
             var summary = nav.summaryEntry();
             assertThat(summary).isNotNull();
             assertThat(summary.summary()).startsWith(

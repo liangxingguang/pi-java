@@ -1040,18 +1040,26 @@ public final class AgentSession implements AutoCloseable {
 
     // ── navigateTree（pi agent-session.ts:3964-4156，B1，map #25）──────
 
-    /** pi {@code navigateTree} 的返回：取消旗 + 编辑器回填文本 + 摘要 entry（可无）。 */
-    public record TreeNavigation(boolean cancelled, String editorText,
+    /**
+     * pi {@code navigateTree} 的返回：取消旗＋摘要中止旗（pi 区分
+     * {@code {cancelled:true}} 扩展取消与 {@code {cancelled:true, aborted:true}}
+     * 摘要中止，:4032/:4069）＋编辑器回填文本＋摘要 entry（可无）。
+     */
+    public record TreeNavigation(boolean cancelled, boolean aborted, String editorText,
                                  Entry.BranchSummary summaryEntry) {}
 
     /**
-     * pi {@code navigateTree}（agent-session.ts:3964-4156）核心流（B1，map #25）。
+     * pi {@code navigateTree}（agent-session.ts:3964-4156）逐字序（B1 map #25 ＋
+     * docs/18 B245 事件面）。
      *
-     * <p>双门错文逐字（:3977-3982）；目标 = 当前叶 ⇒ 不动；user/custom_message 目标
-     * ⇒ 新叶 = 父 ＋ 回填 editorText；有摘要 ⇒ {@code branchWithSummary}，无摘要到根
-     * ⇒ {@code resetLeaf}，否则 {@code branch}（moveLane）；label 贴摘要 entry 或
-     * targetId（:4118-4126）。{@code session_before_tree}/{@code session_tree} 扩展
-     * 事件与 TUI 三选/Esc 随 B245（docs/09 §13.5）。</p>
+     * <p>双门错文逐字（:3977-3982）；目标 = 当前叶 ⇒ 不动；模型门
+     * （:3985-3987）；preparation 载荷无条件先收集（:3995-3999，<b>活列表</b>与默认
+     * 生成器共引用）；中止令牌在事件前建（:4018）；{@code session_before_tree}
+     * 发射＋cancel 短路＋摘要/三覆盖臂（:4024-4051，扩展摘要仅在用户本来要摘要时
+     * 生效）；默认生成器门（:4054）；user/custom_message 目标 ⇒ 新叶 = 父 ＋ 回填
+     * editorText；有摘要 ⇒ {@code branchWithSummary}（fromHook＝fromExtension
+     * 透传）；label 贴摘要 entry 或 targetId；{@code session_tree} 发射
+     * （:4140-4147）；令牌 finally 清零（:4155）。</p>
      */
     public TreeNavigation navigateTree(String targetId, boolean summarize,
                                        String customInstructions, boolean replaceInstructions,
@@ -1070,46 +1078,91 @@ public final class AgentSession implements AutoCloseable {
         var tree = session.view(laneName());
         String oldLeafId = tree.getLeafId();
         if (targetId.equals(oldLeafId)) {
-            return new TreeNavigation(false, null, null); // pi :3989-3991
+            return new TreeNavigation(false, false, null, null); // pi :3989-3991
+        }
+        // pi :3985-3987 模型门（错文逐字【模型可见】）。
+        if (summarize && harness.getModel() == null) {
+            throw new IllegalStateException("No model available for summarization");
         }
         Entry target = tree.getEntry(targetId);
         if (target == null) {
             throw new IllegalStateException("Entry " + targetId + " not found");
         }
+        // pi :3995-3999：无条件先收集（preparation 载荷＋默认生成器输入共一份
+        // 活列表——pi 处理器原地改它会影响摘要输入，:3995/4056 同构）。
+        var collected = BranchSummarization.collectEntries(oldLeafId, targetId, session);
+        var entriesToSummarize = new java.util.ArrayList<>(collected.entries());
+        // pi :4006-4016：preparation 三覆盖先取入参值。
+        String effectiveInstructions = customInstructions;
+        boolean effectiveReplace = replaceInstructions;
+        String effectiveLabel = label;
 
         branchSummaryAbort = new com.pijava.agent.harness.CompactionAbortToken(); // pi :4018
         try {
             String summaryText = null;
             com.pijava.ai.Usage summaryUsage = null;
             java.util.Map<String, Object> summaryDetails = null;
-            if (summarize) {
-                var collected = BranchSummarization.collectEntries(oldLeafId, targetId, session);
-                if (!collected.entries().isEmpty()) {
-                    var model = harness.getModel();
-                    int contextWindow = modelResolver.contextWindow(model);
-                    if (contextWindow <= 0) {
-                        contextWindow = 128_000; // pi :306 `model.contextWindow || 128000`
+            boolean fromExtension = false;
+            // pi :4024-4051：session_before_tree 发射＋cancel 短路＋摘要/三覆盖臂。
+            if (extensionFirer != null) {
+                var preparation =
+                    new com.pijava.coding.agent.extension.event.ExtensionResults.TreePreparation(
+                        targetId, oldLeafId, collected.commonAncestorId(), entriesToSummarize,
+                        summarize, customInstructions, replaceInstructions, label);
+                var r = extensionFirer.sessionBeforeTree(preparation, branchSummaryAbort);
+                if (r != null) {
+                    if (Boolean.TRUE.equals(r.cancel())) {
+                        return new TreeNavigation(true, false, null, null); // pi :4032
                     }
-                    var outcome = branchSummarization.generate(collected.entries(),
-                        new BranchSummarization.Options(model, contextWindow,
-                            modelResolver.maxOutputTokens(model),
-                            services.settings().accessors().getBranchSummaryReserveTokens(),
-                            customInstructions, replaceInstructions));
-                    switch (outcome) {
-                        case BranchSummarization.Outcome.Aborted a -> {
-                            return new TreeNavigation(true, null, null); // pi cancelled:true
-                        }
-                        case BranchSummarization.Outcome.Failed f ->
-                            throw new IllegalStateException(f.error());
-                        case BranchSummarization.Outcome.Summary s -> {
-                            summaryText = s.text();
-                            summaryUsage = s.usage();
-                            summaryDetails = BranchSummarization.detailsOf(
-                                s.readFiles(), s.modifiedFiles());
-                        }
+                    if (r.summary() != null && summarize) { // pi :4036 summarize 门
+                        summaryText = r.summary().summary();
+                        summaryDetails = mapDetails(r.summary().details());
+                        summaryUsage = r.summary().usage();
+                        fromExtension = true;
+                    }
+                    // 三覆盖不受 summarize 门限制（pi :4043-4051）。
+                    if (r.customInstructions() != null) {
+                        effectiveInstructions = r.customInstructions();
+                    }
+                    if (r.replaceInstructions() != null) {
+                        effectiveReplace = r.replaceInstructions();
+                    }
+                    if (r.label() != null) {
+                        effectiveLabel = r.label();
                     }
                 }
             }
+            // pi :4054-4085 默认生成器门：summarize && 非空 && 无扩展摘要。
+            if (summarize && !entriesToSummarize.isEmpty() && summaryText == null) {
+                var model = harness.getModel();
+                int contextWindow = modelResolver.contextWindow(model);
+                if (contextWindow <= 0) {
+                    contextWindow = 128_000; // pi :306 `model.contextWindow || 128000`
+                }
+                var outcome = branchSummarization.generate(entriesToSummarize,
+                    new BranchSummarization.Options(model, contextWindow,
+                        modelResolver.maxOutputTokens(model),
+                        services.settings().accessors().getBranchSummaryReserveTokens(),
+                        effectiveInstructions, effectiveReplace));
+                // 中止检查点：生成后、落库前（CompactionAbortToken 同款窄差——LLM
+                // 流内不可中断，docs/09 §12.2#2）；pi 的 result.aborted 对位（:4069）。
+                if (branchSummaryAbort.isAborted()) {
+                    return new TreeNavigation(true, true, null, null);
+                }
+                switch (outcome) {
+                    case BranchSummarization.Outcome.Aborted a -> {
+                        return new TreeNavigation(true, true, null, null); // pi :4069
+                    }
+                    case BranchSummarization.Outcome.Failed f ->
+                        throw new IllegalStateException(f.error());
+                    case BranchSummarization.Outcome.Summary s -> {
+                        summaryText = s.text();
+                        summaryUsage = s.usage();
+                        summaryDetails = BranchSummarization.detailsOf(
+                            s.readFiles(), s.modifiedFiles());
+                    }
+                }
+            } // 扩展摘要臂：text/details/usage 已在上面全取扩展值（pi :4082-4085）。
 
             // 新叶按目标类型（pi :4094-4103 逐字序）：user 消息/custom_message ⇒
             // 叶=父＋回填 editorText；其他 ⇒ 叶=targetId。
@@ -1127,19 +1180,19 @@ public final class AgentSession implements AutoCloseable {
 
             Entry.BranchSummary summaryEntry = null;
             if (summaryText != null) {
-                // pi :4107-4115：摘要挂在目标位置（可在根），fromHook=false（pi 生成）。
+                // pi :4107-4115：摘要挂在目标位置（可在根），fromHook＝fromExtension 透传。
                 summaryEntry = session.branchWithSummary(laneName(), newLeafId, oldLeafId,
-                    summaryText, summaryDetails, Boolean.FALSE, summaryUsage);
-                if (label != null) {
-                    session.setLabel(summaryEntry.id(), label);
+                    summaryText, summaryDetails, fromExtension, summaryUsage);
+                if (effectiveLabel != null) {
+                    session.setLabel(summaryEntry.id(), effectiveLabel);
                 }
             } else if (newLeafId == null) {
                 session.resetLeaf(laneName());
             } else {
                 session.moveLane(laneName(), newLeafId);
             }
-            if (label != null && summaryText == null) {
-                session.setLabel(targetId, label);
+            if (effectiveLabel != null && summaryText == null) {
+                session.setLabel(targetId, effectiveLabel);
             }
 
             // pi :4136-4137（_refreshFinalizedContext/_restoreToolsFromTranscript）对位：
@@ -1157,10 +1210,29 @@ public final class AgentSession implements AutoCloseable {
                     : ContextEntries.contextEntries(ContextEntries.pathToLeaf(entries, leafId)));
             // pi :4138（#77）：导航后按新叶最新系统消息的 toolsAdded 恢复激活装配。
             harness.restoreToolsFromTranscript(laneName());
-            return new TreeNavigation(false, editorText, summaryEntry);
+            // pi :4140-4147：session_tree（newLeafId＝导航后当前叶；fromExtension
+            // 仅在有摘要时有值）。
+            if (extensionFirer != null) {
+                extensionFirer.sessionTree(leafId, oldLeafId, summaryEntry,
+                    summaryText != null ? fromExtension : null);
+            }
+            return new TreeNavigation(false, false, editorText, summaryEntry);
         } finally {
             branchSummaryAbort = null; // pi :4155
         }
+    }
+
+    /**
+     * 扩展摘要的 {@code details}（pi {@code unknown}）→ 存储形 {@code Map<String,Object>}：
+     * Map 形按键字符串化拷贝（保序）；非 Map 形 ⇒ null（java 存储 schema 约束，pi 会原样存）。
+     */
+    private static java.util.Map<String, Object> mapDetails(Object details) {
+        if (!(details instanceof java.util.Map<?, ?> m)) {
+            return null;
+        }
+        var copy = new java.util.LinkedHashMap<String, Object>();
+        m.forEach((k, v) -> copy.put(String.valueOf(k), v));
+        return copy;
     }
 
     /** pi {@code abortBranchSummary()}（agent-session.ts:2922-2924）。 */
