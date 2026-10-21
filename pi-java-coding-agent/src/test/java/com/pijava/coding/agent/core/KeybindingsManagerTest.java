@@ -37,7 +37,26 @@ class KeybindingsManagerTest {
 
     @Test
     void exposesAllActionIds() {
-        assertThat(keys.actionIds()).hasSize(11);
+        // 批 9（docs/19 §3.11）：11 全局＋12 tree/copy。
+        assertThat(keys.actionIds()).hasSize(23);
         assertThat(keys.actionIds()).contains(KeybindingsManager.INTERRUPT);
+    }
+
+    @Test
+    void treeActionsResolveTheirDefaultStrokes() {
+        // foldOrUp 双键（ctrl／alt）任一命中（pi keybindings.ts:83-167）。
+        assertThat(keys.matches(KeybindingsManager.TREE_FOLD_OR_UP,
+            KeybindingsManager.KeyStroke.of("left", true, false, false))).isTrue();
+        assertThat(keys.matches(KeybindingsManager.TREE_FOLD_OR_UP,
+            KeybindingsManager.KeyStroke.of("left", false, true, false))).isTrue();
+        assertThat(keys.matches(KeybindingsManager.TREE_FOLD_OR_UP,
+            KeybindingsManager.KeyStroke.of("left", false, false, false))).isFalse();
+        // matches 按动作判定——同名键（ctrl+d＝EXIT/TREE_FILTER_DEFAULT）各解各的。
+        assertThat(keys.matches(KeybindingsManager.TREE_FILTER_DEFAULT,
+            KeybindingsManager.KeyStroke.of("d", true, false, false))).isTrue();
+        assertThat(keys.matches(KeybindingsManager.EXIT,
+            KeybindingsManager.KeyStroke.of("d", true, false, false))).isTrue();
+        assertThat(keys.strokeFor(KeybindingsManager.TREE_FOLD_OR_UP))
+            .isEqualTo(KeybindingsManager.KeyStroke.of("left", true, false, false));
     }
 }
