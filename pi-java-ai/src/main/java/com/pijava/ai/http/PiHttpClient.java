@@ -93,6 +93,18 @@ public final class PiHttpClient implements AutoCloseable {
     public Iterator<ServerSentEvent> postSse(String url, String jsonBody,
                                               Map<String, String> headers, AbortSignal signal,
                                               Duration headerTimeout) {
+        return postSse(url, jsonBody, headers, signal, headerTimeout, null);
+    }
+
+    /**
+     * docs/17（B248）：带终态响应观察的完整形态——observer 在<b>重试环退出后、
+     * 2xx 判定前</b>对终态响应 fire（含错误状态，pi fetch 车道 {@code onResponse}
+     * 的 firing 位对位）；{@code null} ⇒ 不观察（旧行为）。
+     */
+    public Iterator<ServerSentEvent> postSse(String url, String jsonBody,
+                                              Map<String, String> headers, AbortSignal signal,
+                                              Duration headerTimeout,
+                                              SseResponseObserver observer) {
         var requestBuilder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("Content-Type", "application/json")
@@ -114,8 +126,9 @@ public final class PiHttpClient implements AutoCloseable {
 
         var request = requestBuilder.build();
         return headerTimeout == null
-                ? executeWithRetrySse(request, 0, signal)
-                : new SseTransport(http, retryPolicy).execute(request, 0, signal, headerTimeout);
+                ? executeWithRetrySse(request, 0, signal, observer)
+                : new SseTransport(http, retryPolicy).execute(request, 0, signal, headerTimeout,
+                    observer);
     }
 
     /**
@@ -146,7 +159,8 @@ public final class PiHttpClient implements AutoCloseable {
     // ── Retry / SSE internals ──────────────────────────────────
 
     private Iterator<ServerSentEvent> executeWithRetrySse(HttpRequest request, int attempt,
-                                                          AbortSignal signal) {
+                                                          AbortSignal signal,
+                                                          SseResponseObserver observer) {
         if (signal != null && signal.isAborted()) {
             throw new PiHttpException(0, "Request aborted");
         }
@@ -169,7 +183,13 @@ public final class PiHttpClient implements AutoCloseable {
                 if (delayMs > 0) {
                     Thread.sleep(delayMs);
                 }
-                return executeWithRetrySse(request, attempt + 1, signal);
+                return executeWithRetrySse(request, attempt + 1, signal, observer);
+            }
+
+            // docs/17：终态响应（重试环已退出）——2xx 判定前 fire，含错误状态
+            // （pi pi-messages.ts:404 在 !ok 检查之前）。
+            if (observer != null) {
+                observer.onResponse(status, response.headers());
             }
 
             if (status < 200 || status >= 300) {
@@ -196,7 +216,7 @@ public final class PiHttpClient implements AutoCloseable {
                         throw new PiHttpException(0, "Retry interrupted", e);
                     }
                 }
-                return executeWithRetrySse(request, attempt + 1, signal);
+                return executeWithRetrySse(request, attempt + 1, signal, observer);
             }
             throw new PiHttpException(0, "Request failed after " + (attempt + 1) + " attempts", e);
         } catch (InterruptedException e) {

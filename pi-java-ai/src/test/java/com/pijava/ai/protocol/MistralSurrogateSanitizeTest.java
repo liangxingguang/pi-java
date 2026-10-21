@@ -56,12 +56,15 @@ class MistralSurrogateSanitizeTest {
     private static String body(String systemPrompt, List<Message> messages) throws Exception {
         var api = new MistralConversationsApi(new ApiOptions(
             "http://localhost:1", "test-key", Duration.ofSeconds(5), 0, Map.of()));
+        // docs/17：buildRequestBody 拆成 buildRequestBodyMap＋调用点序列化（onPayload 缝），
+        // 观测面不变（map 序列化即原出参 JSON 串）。
         var method = MistralConversationsApi.class.getDeclaredMethod(
-            "buildRequestBody", StreamRequest.class);
+            "buildRequestBodyMap", StreamRequest.class);
         method.setAccessible(true);
         var request = new StreamRequest(ModelId.of("mistral", "devstral-medium-latest"),
             systemPrompt, messages, List.of(), 100, 0.5);
-        return (String) method.invoke(api, request);
+        return new com.fasterxml.jackson.databind.ObjectMapper()
+            .writeValueAsString(method.invoke(api, request));
     }
 
     private static Message user(String text) {

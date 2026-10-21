@@ -46,7 +46,8 @@ final class SseTransport {
     /** 发请求并返回增量 SSE 迭代器；{@code attempt} 为重试深度。 */
     Iterator<PiHttpClient.ServerSentEvent> execute(HttpRequest request, int attempt,
                                                     AbortSignal signal,
-                                                    Duration headerTimeout) {
+                                                    Duration headerTimeout,
+                                                    SseResponseObserver observer) {
         if (signal != null && signal.isAborted()) {
             throw new PiHttpException(0, "Request aborted");
         }
@@ -75,7 +76,7 @@ final class SseTransport {
             if (retryPolicy.shouldRetry(new HeaderTimeoutException(headerTimeout))
                     && attempt < retryPolicy.maxRetries()) {
                 sleepBeforeRetry(request, attempt, new HeaderTimeoutException(headerTimeout));
-                return execute(request, attempt + 1, signal, headerTimeout);
+                return execute(request, attempt + 1, signal, headerTimeout, observer);
             }
             // 不包 PiHttpException：车道（Mistral）按本类型映射 pi 文案。
             throw new HeaderTimeoutException(headerTimeout);
@@ -89,7 +90,7 @@ final class SseTransport {
             if (cause instanceof java.io.IOException io && retryPolicy.shouldRetry(io)
                     && attempt < retryPolicy.maxRetries()) {
                 sleepBeforeRetry(request, attempt, io);
-                return execute(request, attempt + 1, signal, headerTimeout);
+                return execute(request, attempt + 1, signal, headerTimeout, observer);
             }
             throw new PiHttpException(0,
                 "Request failed after " + (attempt + 1) + " attempts", cause);
@@ -127,7 +128,12 @@ final class SseTransport {
                     throw new PiHttpException(0, "Retry interrupted");
                 }
             }
-            return execute(request, attempt + 1, signal, headerTimeout);
+            return execute(request, attempt + 1, signal, headerTimeout, observer);
+        }
+        // docs/17：终态响应（重试环已退出）——2xx 判定前 fire，含错误状态
+        // （pi fetch 车道 onResponse 的 firing 位）。
+        if (observer != null) {
+            observer.onResponse(status, response.headers());
         }
         if (status < 200 || status >= 300) {
             String errorBody = drainQuietly(response.body());

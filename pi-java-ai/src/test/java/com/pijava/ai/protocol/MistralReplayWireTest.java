@@ -45,11 +45,12 @@ class MistralReplayWireTest {
     private static JsonNode messages(List<Message> transcript) throws Exception {
         var api = new MistralConversationsApi(new ApiOptions(
             "http://localhost:1", "test-key", Duration.ofSeconds(5), 0, Map.of()));
+        // docs/17：buildRequestBody → buildRequestBodyMap（onPayload 缝），观测面不变。
         var method = MistralConversationsApi.class.getDeclaredMethod(
-            "buildRequestBody", StreamRequest.class);
+            "buildRequestBodyMap", StreamRequest.class);
         method.setAccessible(true);
         var request = new StreamRequest(VISION, null, transcript, List.of(), -1, -1);
-        return JSON.readTree((String) method.invoke(api, request)).get("messages");
+        return JSON.readTree(JSON.writeValueAsString(method.invoke(api, request))).get("messages");
     }
 
     /** 同模型身份三元组（api/provider/model 与 TARGET 一致 ⇒ 闸保留 thinking 原形）。 */

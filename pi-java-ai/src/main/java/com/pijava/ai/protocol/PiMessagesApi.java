@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import com.pijava.ai.api.ApiOptions;
+import com.pijava.ai.api.ProviderHooks;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.api.Transcripts;
@@ -60,6 +61,17 @@ public final class PiMessagesApi extends AbstractChatApi {
     private final PiHttpClient client;
     private final String baseUrl;
     private final String apiKey;
+    /** docs/17（裁决⑦）：extra["headers"] 原始 map（null 值＝删除）；缺席为 null。 */
+    private final Map<?, ?> optionHeaders;
+
+    /** docs/17（B248）：pi {@code onPayload}（pi-messages.ts:387）——null ≙ undefined。 */
+    private final ProviderHooks.PayloadHook payloadHook;
+
+    /** docs/17（B248）：pi {@code onResponse}（:404）——null ≙ undefined。 */
+    private final ProviderHooks.ResponseHook responseHook;
+
+    /** docs/17（B248）：pi {@code onProviderStreamEvent}（:415）——null ≙ undefined。 */
+    private final ProviderHooks.StreamEventHook streamEventHook;
 
     /**
      * Create an adapter, resolving the API key from an env var.
@@ -71,6 +83,13 @@ public final class PiMessagesApi extends AbstractChatApi {
         this.apiKey = resolveApiKey(options, apiKeyEnvVar);
         this.baseUrl = resolveBaseUrl(options);
         this.client = PiHttpClient.builder().userAgent("pi-java/dev").build();
+        Object rawHeaders = options.extra() == null ? null : options.extra().get("headers");
+        this.optionHeaders = rawHeaders instanceof Map<?, ?> map ? map : null;
+        // docs/17（B248）：pi 请求面三钩——pi-messages 车道在 pi **不豁免**
+        // （pi-messages.ts:387/:404/:415 全有，与 R2 的 resolvesRequestOptions 豁免是两层事）。
+        this.payloadHook = ProviderHooks.payloadHookOf(options);
+        this.responseHook = ProviderHooks.responseHookOf(options);
+        this.streamEventHook = ProviderHooks.streamEventHookOf(options);
     }
 
     @Override
@@ -82,12 +101,42 @@ public final class PiMessagesApi extends AbstractChatApi {
         boolean sawTerminal = false;
         try {
             publisher.submit(builder.emitStart());
-            String body = buildBody(request);
-            var headers = Map.of(
-                "Authorization", "Bearer " + apiKey,
-                "Accept", "text/event-stream");
+            // docs/17（pi :386-391 逐字）：载荷＝envelope ObjectNode；非 null 返回 ⇒ 替换后再序列化。
+            ObjectNode envelope = buildBody(request);
+            if (payloadHook != null) {
+                var next = payloadHook.onPayload(envelope, request.model());
+                if (next != null) {
+                    envelope = ProviderHooks.requirePayloadType(next, ObjectNode.class);
+                }
+            }
+            String body = JSON.writeValueAsString(envelope);
+            // docs/17（裁决⑦，pi :394-399）：手写头打底＋extra["headers"] 覆盖/null 删除
+            // （pi providerHeadersToRecord 逐字：名小写规范化、null＝删、调用方值压默认）——
+            // 本车道此前不读 extra["headers"]（存量缺口）。
+            var headers = new java.util.LinkedHashMap<String, String>();
+            headers.put("authorization", "Bearer " + apiKey);
+            headers.put("accept", "text/event-stream");
+            if (optionHeaders != null) {
+                optionHeaders.forEach((k, v) -> {
+                    if (k == null) {
+                        return;
+                    }
+                    var key = k.toString().toLowerCase(java.util.Locale.ROOT);
+                    if (v == null) {
+                        headers.remove(key);
+                    } else {
+                        headers.put(key, v.toString());
+                    }
+                });
+            }
+            // docs/17（pi :404）：终态响应观察（在 !ok 判定前——含错误状态）。
+            var responseObserver = responseHook == null ? null
+                : (com.pijava.ai.http.SseResponseObserver) (status, responseHeaders) ->
+                    responseHook.onResponse(status,
+                        ProviderHooks.flattenHeaders(responseHeaders.map()), request.model());
             Iterator<PiHttpClient.ServerSentEvent> sseEvents =
-                client.postSse(baseUrl + "/messages", body, headers);
+                client.postSse(baseUrl + "/messages", body, headers, null, null,
+                    responseObserver);
 
             while (sseEvents.hasNext()) {
                 var sse = sseEvents.next();
@@ -96,6 +145,10 @@ public final class PiMessagesApi extends AbstractChatApi {
                     continue;
                 }
                 PiMessagesEvent event = JSON.readValue(data, PiMessagesEvent.class);
+                // docs/17（pi :415）：反序列化后、归一化（switch）前。
+                if (streamEventHook != null) {
+                    streamEventHook.onEvent(event, request.model());
+                }
                 switch (event) {
                     case PiMessagesEvent.Start start -> {
                         // 已由 emitStart 发出，wire start 无对应事件
@@ -278,7 +331,11 @@ public final class PiMessagesApi extends AbstractChatApi {
         return base;
     }
 
-    private static String buildBody(StreamRequest request) {
+    /**
+     * docs/17：序列化前移到调用点（{@code onPayload} 钩要拿 envelope 本体）——
+     * 本方法只构建，返回 {@link ObjectNode}。
+     */
+    private static ObjectNode buildBody(StreamRequest request) {
         try {
             // pi api/pi-messages.ts:374-390 —— body 是 `{model, context, options}`，而
             // `context` **就是** TranscriptContext：只有 `messages`，系统提示与工具声明都在
@@ -302,7 +359,7 @@ public final class PiMessagesApi extends AbstractChatApi {
             body.put("model", request.modelId().modelName());
             body.set("context", context);
             body.set("options", options);
-            return JSON.writeValueAsString(body);
+            return body;
         } catch (Exception e) {
             throw new IllegalStateException("Failed to build pi-messages body", e);
         }

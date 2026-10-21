@@ -12,6 +12,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.pijava.ai.api.ApiOptions;
+import com.pijava.ai.api.ProviderHooks;
 import com.pijava.ai.api.SimpleOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.Transcripts;
@@ -121,7 +122,20 @@ public final class MistralConversationsApi extends AbstractChatApi {
                 .userAgent("pi-java/dev")
                 .retryPolicy(policyBuilder.build())
                 .build();
+        // docs/17（B248）：pi 请求面三钩（mistral-conversations.ts:148/330/611）。
+        this.payloadHook = ProviderHooks.payloadHookOf(options);
+        this.responseHook = ProviderHooks.responseHookOf(options);
+        this.streamEventHook = ProviderHooks.streamEventHookOf(options);
     }
+
+    /** docs/17（B248）：pi {@code onPayload}（mistral-conversations.ts:148）——null ≙ undefined。 */
+    private final ProviderHooks.PayloadHook payloadHook;
+
+    /** docs/17（B248）：pi {@code onResponse}（:330）——null ≙ undefined。 */
+    private final ProviderHooks.ResponseHook responseHook;
+
+    /** docs/17（B248）：pi {@code onProviderStreamEvent}（:611）——null ≙ undefined。 */
+    private final ProviderHooks.StreamEventHook streamEventHook;
 
     // ── Internals ─────────────────────────────────────────────
 
@@ -131,7 +145,18 @@ public final class MistralConversationsApi extends AbstractChatApi {
                                    SubmissionPublisher<StreamEvent> publisher) {
         var builder = new StreamPartialBuilder();
         try {
-            String jsonBody = buildRequestBody(request);
+            // docs/17（pi mc.ts:147-152 逐字）：载荷＝构建出的 Map；非 null 返回 ⇒ 替换后再序列化。
+            Map<String, Object> bodyMap = buildRequestBodyMap(request);
+            if (payloadHook != null) {
+                var next = payloadHook.onPayload(bodyMap, request.model());
+                if (next != null) {
+                    @SuppressWarnings("unchecked") // 同型守卫已过；泛型擦除下 Map 即本体
+                    var replaced = (Map<String, Object>) ProviderHooks.requirePayloadType(
+                        next, Map.class);
+                    bodyMap = replaced;
+                }
+            }
+            String jsonBody = MAPPER.writeValueAsString(bodyMap);
             // B233（pi mc.ts:355-372）：基底头 → model.headers → options.headers
             // （null 删除）→ 缓存门自动补 x-affinity。
             var headers = MistralHeaders.build(apiKey,
@@ -140,9 +165,15 @@ public final class MistralConversationsApi extends AbstractChatApi {
 
             publisher.submit(builder.emitStart());
 
+            // docs/17（pi mc.ts:330）：终态响应观察（含错误状态——pi fetch 车道在
+            // !ok 判定前 fire）；无钩 ⇒ null observer（零开销旧路径）。
+            var responseObserver = responseHook == null ? null
+                : (com.pijava.ai.http.SseResponseObserver) (status, responseHeaders) ->
+                    responseHook.onResponse(status,
+                        ProviderHooks.flattenHeaders(responseHeaders.map()), request.model());
             Iterator<PiHttpClient.ServerSentEvent> sseEvents =
                     http.postSse(baseUrl + "/chat/completions", jsonBody, headers, null,
-                        headerTimeout);
+                        headerTimeout, responseObserver);
 
             var toolCallBuilders = new HashMap<String, ToolCallBuilder>();
             // B80：pi :583 的 currentBlock（NONE/TEXT/THINKING），换型先关旧块再开新块。
@@ -285,6 +316,11 @@ public final class MistralConversationsApi extends AbstractChatApi {
                                   ModelInfo model) {
         try {
             var json = MAPPER.readValue(data, Map.class);
+            // docs/17（pi mc.ts:611）：解析后 chunk、逐字段映射前（pi 喂的是解析后
+            // JSON chunk ⇒ java 对位为解析出的 Map，不是 SSE 原文行）。
+            if (streamEventHook != null) {
+                streamEventHook.onEvent(json, model);
+            }
 
             // Usage —— 位置照 pi：usage 应用（{@code :596-611}）在「choices 空帧早退」
             // （{@code :613} 的 `if (!choice) continue`）**之前**。两个后果：
@@ -393,7 +429,11 @@ public final class MistralConversationsApi extends AbstractChatApi {
         }
     }
 
-    private String buildRequestBody(StreamRequest request) throws JsonProcessingException {
+    /**
+     * docs/17：序列化前移到调用点（{@code onPayload} 钩要拿 Map 本体）——
+     * 本方法只构建，返回 Map。
+     */
+    private Map<String, Object> buildRequestBodyMap(StreamRequest request) {
         var body = new HashMap<String, Object>();
         body.put("model", request.modelId().modelName());
         body.put("stream", true);
@@ -432,7 +472,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
             body.put("prompt_cache_key", sessionId);
         }
 
-        return MAPPER.writeValueAsString(body);
+        return body;
     }
 
     /**

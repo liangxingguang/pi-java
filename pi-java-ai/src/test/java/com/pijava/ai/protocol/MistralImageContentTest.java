@@ -62,11 +62,13 @@ class MistralImageContentTest {
     private static String body(ModelInfo model, List<Message> messages) throws Exception {
         var api = new MistralConversationsApi(new ApiOptions(
             "http://localhost:1", "test-key", Duration.ofSeconds(5), 0, Map.of()));
+        // docs/17：buildRequestBody → buildRequestBodyMap（onPayload 缝），观测面不变。
         var method = MistralConversationsApi.class.getDeclaredMethod(
-            "buildRequestBody", StreamRequest.class);
+            "buildRequestBodyMap", StreamRequest.class);
         method.setAccessible(true);
         var request = new StreamRequest(model, null, messages, List.of(), -1, -1);
-        return (String) method.invoke(api, request);
+        return new com.fasterxml.jackson.databind.ObjectMapper()
+            .writeValueAsString(method.invoke(api, request));
     }
 
     /** 每条消息压成 {@code role:…}；content 是数组时展开成 {@code text:…} ／ {@code image:…}。 */
