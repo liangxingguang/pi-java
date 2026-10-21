@@ -77,6 +77,9 @@ public interface SessionStorage<TMetadata extends SessionMetadata> {
     /** The label for an entry, or {@code null}. */
     String getLabel(String id);
 
+    /** pi {@code labelTimestampsById} 对位：最近一次 label 变更的时间戳（无标签 ⇒ {@code null}）。 */
+    java.time.Instant getLabelTimestamp(String id);
+
     /** Set (or clear) an entry label. */
     void setLabel(String id, String label);
 

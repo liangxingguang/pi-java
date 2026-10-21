@@ -172,6 +172,11 @@ public final class Session<TMetadata extends SessionMetadata> implements Session
     }
 
     @Override
+    public java.time.Instant getLabelTimestamp(String targetId) {
+        return storage.getLabelTimestamp(targetId);
+    }
+
+    @Override
     public void setLabel(String targetId, String label) {
         storage.setLabel(targetId, label);
     }

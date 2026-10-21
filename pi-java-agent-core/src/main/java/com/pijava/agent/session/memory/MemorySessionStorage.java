@@ -163,6 +163,11 @@ public final class MemorySessionStorage implements SessionStorage<MemorySessionM
     }
 
     @Override
+    public Instant getLabelTimestamp(String id) {
+        return state.getLabelTimestamp(id);
+    }
+
+    @Override
     public void setLabel(String id, String label) {
         synchronized (lock) {
             state.validateTarget(id);

@@ -94,6 +94,36 @@ public abstract class ConformanceGroup3Test {
     }
 
     @Test
+    void labelTimestampTracksLatestClearsAndSurvivesFork() {
+        try (var b = backend()) {
+            var session = b.create("cwd");
+            session.appendEntry(userMessage("m1", "root"), "main");
+            session.appendEntry(assistantMessage("m2", "answer"), "main");
+            // 未打标 ⇒ 无时间戳（pi labelTimestampsById 无条目）。
+            assertThat(session.getLabelTimestamp("m2")).isNull();
+            session.setLabel("m2", "kept");
+            var t1 = session.getLabelTimestamp("m2");
+            assertThat(t1).isNotNull();
+            session.setLabel("m2", "renamed");
+            var t2 = session.getLabelTimestamp("m2");
+            // 最新一条赢（pi _buildIndex :1103-1122 同语义）。
+            assertThat(t2).isNotNull().isAfterOrEqualTo(t1);
+            // 分支复制重发保留原 label 时间戳（pi createBranchedSession:1694-1712）。
+            // 对比基准走同一持久化往返（fork 读的是落盘态；jsonl 行精度到毫秒，
+            // 活会话内存里是纳秒——直接比 live 值会差一个量化步）。
+            var forked = b.fork(session.getMetadata().id(), new ForkOptions.Tree());
+            var reopened = b.open(session.getMetadata().id());
+            assertThat(forked.getLabel("m2")).isEqualTo("renamed");
+            assertThat(forked.getLabelTimestamp("m2"))
+                .isEqualTo(reopened.getLabelTimestamp("m2"));
+            // 清除 ⇒ 值与时间戳同删（pi :996-997 否则臂两表同删）。
+            session.setLabel("m2", null);
+            assertThat(session.getLabel("m2")).isNull();
+            assertThat(session.getLabelTimestamp("m2")).isNull();
+        }
+    }
+
+    @Test
     void forkPositionsAtAndBeforeAndInvalidTarget() {
         try (var b = backend()) {
             var session = b.create("cwd");

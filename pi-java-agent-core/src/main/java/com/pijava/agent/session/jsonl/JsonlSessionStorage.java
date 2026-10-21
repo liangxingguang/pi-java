@@ -260,6 +260,11 @@ public final class JsonlSessionStorage implements SessionStorage<JsonlSessionMet
     }
 
     @Override
+    public Instant getLabelTimestamp(String id) {
+        return state.getLabelTimestamp(id);
+    }
+
+    @Override
     public void setLabel(String id, String label) {
         synchronized (writeLock) {
             state.validateTarget(id);

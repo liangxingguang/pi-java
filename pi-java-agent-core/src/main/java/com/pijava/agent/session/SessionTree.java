@@ -31,6 +31,12 @@ public interface SessionTree {
     /** The label for an entry, or {@code null}. */
     String getLabel(String targetId);
 
+    /**
+     * pi {@code labelTimestampsById} 对位：最近一次 label 变更的时间戳
+     * （无标签 ⇒ {@code null}；清除 label 时同删）。
+     */
+    java.time.Instant getLabelTimestamp(String targetId);
+
     /** Set (or clear) an entry label. */
     void setLabel(String targetId, String label);
 

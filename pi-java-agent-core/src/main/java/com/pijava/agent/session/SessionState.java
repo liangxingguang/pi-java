@@ -36,6 +36,7 @@ public final class SessionState {
     }
     private final List<LogItem> log = new ArrayList<>();
     private final Map<String, String> labels = new LinkedHashMap<>();
+    private final Map<String, Instant> labelTimestamps = new LinkedHashMap<>();
     private String name;
     private long messageCount;
     private double cachedTokens;
@@ -227,6 +228,11 @@ public final class SessionState {
         return labels.get(id);
     }
 
+    /** pi {@code labelTimestampsById} 对位：最近一次 label 变更的时间戳（无标签 ⇒ {@code null}）。 */
+    public Instant getLabelTimestamp(String id) {
+        return labelTimestamps.get(id);
+    }
+
     /** Accumulated statistics. */
     public SessionStats getStats() {
         return new SessionStats(messageCount, cachedTokens, uncachedTokens, totalTokens, costTotal);
@@ -285,7 +291,10 @@ public final class SessionState {
         for (var entry : copiedEntries) {
             String label = labels.get(entry.id());
             if (label != null) {
-                mutations.add(new SessionMutation.FactLabel(sequence++, tipId, tipTime,
+                // pi createBranchedSession（session-manager.ts:1694-1712）：重发的
+                // label 行保留**原变更时间戳**（原值缺失兜底 tipTime）。
+                var labelTime = labelTimestamps.getOrDefault(entry.id(), tipTime);
+                mutations.add(new SessionMutation.FactLabel(sequence++, tipId, labelTime,
                     entry.id(), label));
             }
         }
@@ -377,9 +386,12 @@ public final class SessionState {
         }
         sequence = seq;
         if (m.label() == null) {
+            // pi _buildIndex（session-manager.ts:1103-1122）否则臂：两表同删。
             labels.remove(m.targetId());
+            labelTimestamps.remove(m.targetId());
         } else {
             labels.put(m.targetId(), m.label());
+            labelTimestamps.put(m.targetId(), m.timestamp());
         }
         log.add(new LogItem.LabelItem(seq, m.parentId(), m.timestamp(), m.targetId(), m.label()));
     }
