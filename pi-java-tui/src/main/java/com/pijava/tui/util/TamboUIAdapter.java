@@ -236,8 +236,15 @@ public final class TamboUIAdapter {
             }
             default -> "unknown";
         };
+        // pi keys.ts:1222-1229 的 legacy 规则：legacy 终端不报 SHIFT 修饰键，
+        // 打出的**大写字母即 shift+letter**（shift+l/t 类绑定否则永不可达，
+        // 批 9 评审 I1）；ctrl/alt 同按时不脑补。
+        boolean shift = event.hasShift()
+            || (!event.hasCtrl() && !event.hasAlt()
+                && event.code() == KeyCode.CHAR
+                && Character.isUpperCase(event.codePoint()));
         return new KeybindingsManager.KeyStroke(
-            key, event.hasCtrl(), event.hasAlt(), event.hasShift());
+            key, event.hasCtrl(), event.hasAlt(), shift);
     }
 
     /**

@@ -51,4 +51,23 @@ class TamboUIAdapterTest {
         assertThat(TamboUIAdapter.toStroke(KeyEvent.ofChar('/')).key())
             .isEqualTo("/");
     }
+
+    @Test
+    void uppercaseCharYieldsShiftLetterStroke() {
+        // 批 9 评审 I1：pi keys.ts:1222-1229 的 legacy 规则——终端不报 SHIFT
+        // 修饰键，打出的**大写字母即 shift+letter**（否则 shift+l/t 类绑定
+        // 在真实输入下永不可达）。
+        var stroke = TamboUIAdapter.toStroke(KeyEvent.ofChar('L'));
+        assertThat(stroke).isEqualTo(
+            com.pijava.coding.agent.core.KeybindingsManager.KeyStroke.of(
+                "l", false, false, true));
+        // 小写不带 shift；ctrl/alt 同按时不脑补 shift。
+        assertThat(TamboUIAdapter.toStroke(KeyEvent.ofChar('l'))).isEqualTo(
+            com.pijava.coding.agent.core.KeybindingsManager.KeyStroke.of(
+                "l", false, false, false));
+        assertThat(TamboUIAdapter.toStroke(
+            KeyEvent.ofChar('L', KeyModifiers.CTRL)).shift()).isFalse();
+        // 数字/符号非字母，不受影响。
+        assertThat(TamboUIAdapter.toStroke(KeyEvent.ofChar('!')).shift()).isFalse();
+    }
 }

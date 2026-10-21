@@ -261,6 +261,24 @@ class TreeSelectorOverlayTest {
     }
 
     @Test
+    void uppercaseCharsDriveShiftActionsLikeRealTerminals() {
+        // 批 9 评审 I1：真实终端报的是无修饰键的大写 CHAR——label 编辑臂与
+        // 时间戳开关必须可达（合成 SHIFT 修饰键的形态真实输入永不产生）。
+        var rig = rig(branchingEntries(), "asst-4a", null, null);
+        rig.overlay().onKeyEvent(KeyEvent.ofChar('L'));
+        assertThat(rig.overlay().isEditingLabel()).isTrue();
+        rig.overlay().onKeyEvent(key(KeyCode.ESCAPE));
+
+        boolean before = rig.overlay().model().showLabelTimestamps();
+        rig.overlay().onKeyEvent(KeyEvent.ofChar('T'));
+        assertThat(rig.overlay().model().showLabelTimestamps()).isEqualTo(!before);
+
+        // 小写仍进搜索（pi 同：大写被绑定吃掉是 legacy 规则的既定代价）。
+        rig.overlay().onKeyEvent(KeyEvent.ofChar('l'));
+        assertThat(rig.overlay().model().searchQuery()).isEqualTo("l");
+    }
+
+    @Test
     void renderProducesTitleHelpSearchAndTreeRows() {
         var rig = rig(branchingEntries(), "asst-4a", null, null);
         var element = rig.overlay().render();
