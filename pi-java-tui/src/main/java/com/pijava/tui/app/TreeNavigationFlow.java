@@ -95,7 +95,20 @@ public final class TreeNavigationFlow {
             initialSelectedId, mode,
             this::onTreeSelected,
             () -> { }, // Esc：pi 的 onCancel 只关选择器，无后续
-            session::setLabel, this::onCopySelected, keybindings, terminalCols));
+            this::onLabelChanged, this::onCopySelected, keybindings, terminalCols));
+    }
+
+    /**
+     * label 持久化回调（pi appendLabelChange 对位经 {@code AgentSession.setLabel}）。
+     * --no-session 无持久面 ⇒ 异常转 showError，绝不漏进渲染线程（评审 I2：
+     * overlay 键处理跑在 PiTuiApp.onKeyEvent，无 catch）。
+     */
+    private void onLabelChanged(String entryId, String label) {
+        try {
+            session.setLabel(entryId, label);
+        } catch (IllegalStateException e) {
+            chatScreen.showError(e.getMessage());
+        }
     }
 
     /**

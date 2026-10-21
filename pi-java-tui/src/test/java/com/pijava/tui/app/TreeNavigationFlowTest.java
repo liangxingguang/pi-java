@@ -90,6 +90,12 @@ class TreeNavigationFlowTest {
 
     private void newRig(boolean skipPrompt, boolean installCancelProbe,
                         boolean drivePrompts, String treeFilterMode) throws Exception {
+        newRig(skipPrompt, installCancelProbe, drivePrompts, treeFilterMode, false);
+    }
+
+    private void newRig(boolean skipPrompt, boolean installCancelProbe,
+                        boolean drivePrompts, String treeFilterMode,
+                        boolean noSession) throws Exception {
         // TCCL 注入：provider factory（恒——公共 create 的 ServiceLoader 发现通道）
         // ＋ cancel 探针扩展（按需）。
         var servicesDir = Files.createDirectories(tmp.resolve("META-INF/services"));
@@ -124,8 +130,11 @@ class TreeNavigationFlowTest {
             Files.writeString(agentDir.resolve("settings.json"), settingsJson);
         }
         var sessionDir = Files.createTempDirectory("pi-flow-session");
-        var args = ArgsParser.parse(new String[] {"--provider", "scripted", "--model", "hello",
-            "--session-dir", sessionDir.toString()});
+        var args = noSession
+            ? ArgsParser.parse(new String[] {"--provider", "scripted", "--model", "hello",
+                "--no-session"})
+            : ArgsParser.parse(new String[] {"--provider", "scripted", "--model", "hello",
+                "--session-dir", sessionDir.toString()});
         String savedHome = System.getProperty("user.home");
         System.setProperty("user.home", home.toString());
         try {
@@ -525,6 +534,23 @@ class TreeNavigationFlowTest {
         overlayRef.get().onKeyEvent(CTRL_X);
 
         assertThat(messageTexts()).anyMatch(t -> t.contains("boom-no-clipboard"));
+    }
+
+    /** ⑧f：--no-session 下 label 提交不炸渲染线程——错误转 showError（评审 I2）。 */
+    @Test
+    void labelEditOnNoSessionShowsErrorNotCrash() throws Exception {
+        newRig(false, false, true, null, true);   // 无持久会话：harness 转录成树
+        newFlow().begin();
+        var tree = overlayRef.get();
+        assertThat(tree).as("无持久会话也能开树（harness 转录兜底）").isNotNull();
+        // shift+l（真实输入形态：无修饰大写）→ 输入 → Enter 提交。
+        tree.onKeyEvent(dev.tamboui.tui.event.KeyEvent.ofChar('L'));
+        tree.onKeyEvent(dev.tamboui.tui.event.KeyEvent.ofChar('x'));
+        tree.onKeyEvent(ENTER);   // setLabel 抛 IllegalStateException ⇒ showError
+
+        assertThat(messageTexts())
+            .anyMatch(t -> t.contains("Cannot set labels without a persistent session"));
+        assertThat(overlayRef.get()).as("选择器不被异常带走").isSameAs(tree);
     }
 
     /** ⑧e：treeFilterMode 初值读全局 settings，选择器内切换不回写（pi :5572）。 */
