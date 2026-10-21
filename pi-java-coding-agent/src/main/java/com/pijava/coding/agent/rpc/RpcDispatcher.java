@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,7 +15,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.harness.QueueMode;
-import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -261,6 +259,12 @@ public final class RpcDispatcher {
                     }
                 }
                 case RpcCommand.Fork fk -> {
+                    // docs/21（T1）：pi rpc-mode.ts:611-617——text 载荷＝selectedText
+                    // （目标 user 消息的 text，position "before"）；fork 后旧会话已关，
+                    // 必须先查表（与该表同一条目的 text 同序同源，裁决②）。
+                    var selectedText = session.getUserMessagesForForking().stream()
+                        .filter(m -> m.entryId().equals(fk.entryId()))
+                        .map(AgentSession.ForkMessage::text).findFirst().orElse("");
                     var forked = session.forkFromEntry(fk.entryId());
                     if (forked.isEmpty()) {
                         // docs/15：session_before_fork cancel ⇒ pi 的 {cancelled:true}。
@@ -272,7 +276,7 @@ public final class RpcDispatcher {
                         session = forked.get();
                         eventSubscription = session.subscribe(this::emitEvent);
                         out.write(RpcResponse.ok(fk.id(), "fork",
-                            Map.of("text", "", "cancelled", false)));
+                            Map.of("text", selectedText, "cancelled", false)));
                     }
                 }
                 case RpcCommand.Clone c -> {
@@ -292,9 +296,11 @@ public final class RpcDispatcher {
                     }
                 }
                 case RpcCommand.GetForkMessages g -> {
+                    // docs/21（T1）：pi rpc-mode.ts:631-634——数据源即
+                    // session.getUserMessagesForForking()（修真后＝全分支＋空串分隔
+                    // ＋空文本滤除），text 不再在 RPC 侧另提（forkMessageText 已删）。
                     var messages = session.getUserMessagesForForking().stream()
-                        .map(e -> new RpcPayloads.RpcForkMessage(
-                            e.id(), forkMessageText(e)))
+                        .map(m -> new RpcPayloads.RpcForkMessage(m.entryId(), m.text()))
                         .toList();
                     out.write(RpcResponse.ok(g.id(), "get_fork_messages",
                         new RpcPayloads.RpcForkMessagesData(messages)));
@@ -647,19 +653,6 @@ public final class RpcDispatcher {
         return nodes.stream()
             .map(n -> new RpcPayloads.RpcSessionTreeNode(n.entry(), toRpcTree(n.children()), n.label()))
             .toList();
-    }
-
-    /** 取消息 entry 的纯文本（get_fork_messages / fork 的 text 载荷）。 */
-    private static String forkMessageText(Entry e) {
-        if (e instanceof Entry.Message m
-                && m.message() instanceof Message.UserMessage user) {
-            return user.content().stream()
-                .filter(ContentBlock.TextContent.class::isInstance)
-                .map(ContentBlock.TextContent.class::cast)
-                .map(ContentBlock.TextContent::text)
-                .collect(Collectors.joining("\n"));
-        }
-        return "";
     }
 
     private static String extractField(String line, String field) {

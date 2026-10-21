@@ -336,6 +336,36 @@ class RpcDispatcherTest {
         assertThat(output).contains("\"command\":\"fork\",\"success\":true");
     }
 
+    /** docs/21（T1）：get_fork_messages／fork 的 text 载荷＝选中 user 消息文本
+     *  （修真前 fork 恒 ""，get_fork_messages 走 RPC 侧 "\n" 分隔另提）。 */
+    @Test
+    void forkMessagesAndForkCarrySelectedText() throws Exception {
+        var ctx = context("faux-forktext", textStream("Hi there"));
+        var out = new ByteArrayOutputStream();
+        var dispatcher = new RpcDispatcher(ctx.session(), new JsonlWriter(out), ctx.args());
+
+        dispatcher.handleLine("{\"id\":\"p\",\"type\":\"prompt\",\"message\":\"hello fork\"}");
+        awaitSettled(out);
+
+        var forkMessages = ctx.session().getUserMessagesForForking();
+        assertThat(forkMessages).hasSize(1);
+        String userEntryId = forkMessages.get(0).entryId();
+
+        dispatcher.handleLine("{\"id\":\"1\",\"type\":\"get_fork_messages\"}");
+        dispatcher.handleLine("{\"id\":\"2\",\"type\":\"fork\",\"entryId\":\"" + userEntryId + "\"}");
+
+        String output = out.toString(StandardCharsets.UTF_8);
+        var messages = payloadOf(output, "1").get("messages");
+        assertThat(messages).hasSize(1);
+        assertThat(messages.get(0).get("entryId").asText()).isEqualTo(userEntryId);
+        assertThat(messages.get(0).get("text").asText()).isEqualTo("hello fork");
+        var forkData = payloadOf(output, "2");
+        assertThat(forkData.get("cancelled").asBoolean()).isFalse();
+        assertThat(forkData.get("text").asText())
+            .as("pi rpc-mode.ts:611-617——text＝selectedText（不再恒空）")
+            .isEqualTo("hello fork");
+    }
+
     @Test
     void autoRetryRerunsAfterError() throws Exception {
         // 3d：环 A 住引擎、默认开启（pi retry.enabled ?? true），不再手动 setter

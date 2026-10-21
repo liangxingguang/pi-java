@@ -1293,15 +1293,25 @@ public final class AgentSession implements AutoCloseable {
         }
     }
 
-    /** 提取消息纯文本（pi {@code contentText(..., "")}：text 块拼接）。 */
+    /** 提取消息纯文本（pi {@code contentText} 默认分隔符 {@code "\n"}：text 块拼接）。 */
     private static String textOf(List<com.pijava.ai.message.ContentBlock> content) {
+        return textOf(content, "\n");
+    }
+
+    /**
+     * 带分隔符的 {@link #textOf}（docs/21 T1）：pi {@code contentText(content, separator)}
+     * ——导航 editorText 臂用默认 {@code "\n"}，fork 面用 {@code ""}（pi 两处分叉
+     * 是原生行为：ai/utils/text.ts:6-11 的第二参）。
+     */
+    private static String textOf(List<com.pijava.ai.message.ContentBlock> content,
+                                 String separator) {
         var parts = new ArrayList<String>();
         for (var block : content) {
             if (block instanceof com.pijava.ai.message.ContentBlock.TextContent t) {
                 parts.add(t.text());
             }
         }
-        return String.join("\n", parts);
+        return String.join(separator, parts);
     }
 
     /**
@@ -1894,14 +1904,27 @@ public final class AgentSession implements AutoCloseable {
         retryCancel.set(false);
     }
 
-    /** 可供 fork 的用户消息（RPC {@code get_fork_messages}，对齐 pi
-     *  {@code getUserMessagesForForking}）。 */
-    public List<Entry.Message> getUserMessagesForForking() {
-        return harness().snapshot(laneName()).transcript().stream()
-            .filter(Entry.Message.class::isInstance)
-            .map(Entry.Message.class::cast)
-            .filter(e -> "user".equals(e.message().role()))
-            .toList();
+    /** pi {@code getUserMessagesForForking} 的返回项（{@code {entryId, text}}，docs/21 裁决①）。 */
+    public record ForkMessage(String entryId, String text) {}
+
+    /**
+     * 可供 fork 的用户消息（docs/21 T1；pi {@code getUserMessagesForForking}，
+     * agent-session.ts:4161-4178 逐字）：数据源＝{@link #accumulatedEntries()}
+     * （持久会话<b>全分支</b>提交序，pi {@code sessionManager.getEntries()} 对位；
+     * 无持久面 harness 转录兜底——既有兜底语义保留）；text 块空串拼接
+     * （pi {@code contentText(content, "")}），空文本滤掉（pi {@code if (text)}）。
+     */
+    public List<ForkMessage> getUserMessagesForForking() {
+        var result = new ArrayList<ForkMessage>();
+        for (var entry : accumulatedEntries()) {
+            if (entry instanceof Entry.Message m && "user".equals(m.message().role())) {
+                var text = textOf(m.message().content(), "");
+                if (!text.isEmpty()) {
+                    result.add(new ForkMessage(m.id(), text));
+                }
+            }
+        }
+        return result;
     }
 
     /** Flush settings, persist pending writes and close the harness. */
