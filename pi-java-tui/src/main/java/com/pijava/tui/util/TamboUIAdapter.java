@@ -89,6 +89,12 @@ public final class TamboUIAdapter {
         return Toolkit.markupText(markup);
     }
 
+    /** A rich-text element over a span-built {@link dev.tamboui.text.Text}. */
+    public static dev.tamboui.toolkit.elements.RichTextElement richText(
+            dev.tamboui.text.Text text) {
+        return Toolkit.richText(text);
+    }
+
     /** An untitled panel wrapping the given children. */
     public static Panel panel(dev.tamboui.toolkit.element.Element... children) {
         return Toolkit.panel(children);
