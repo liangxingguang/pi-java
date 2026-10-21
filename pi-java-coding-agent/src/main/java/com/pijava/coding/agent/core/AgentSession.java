@@ -894,6 +894,37 @@ public final class AgentSession implements AutoCloseable {
             .toList();
     }
 
+    /**
+     * pi {@code sessionManager.getTree()}（{@code session-manager.ts:1529-1567}）对位：
+     * 持久层**全分支**条目组 entry 树，label／labelTimestamp 经事实表解析
+     * （java 的 label 是事实旁表而非树内条目——docs/19 裁决①，窄差 D43）。
+     * 无持久会话时 label 维度为空（harness 转录兜底路径）。
+     */
+    public List<SessionTreeNode> getTree() {
+        var entries = accumulatedEntries();
+        if (session == null) {
+            return SessionTreeBuilder.build(entries, id -> null, id -> null);
+        }
+        return SessionTreeBuilder.build(entries, session::getLabel, session::getLabelTimestamp);
+    }
+
+    /** pi {@code sessionManager.getLabel()} 对位（无标签或无持久会话 ⇒ {@code null}）。 */
+    public String getLabel(String entryId) {
+        return session == null ? null : session.getLabel(entryId);
+    }
+
+    /**
+     * pi {@code appendLabelChange}（{@code session-manager.ts:1441-1462}）的行为对位：
+     * label 变更即持久化；java 落 FactLabel（wire 即 pi 原生 label 行），
+     * {@code label == null} ⇒ 清除。
+     */
+    public void setLabel(String entryId, String label) {
+        if (session == null) {
+            throw new IllegalStateException("Cannot set labels without a persistent session");
+        }
+        session.view(laneName()).setLabel(entryId, label);
+    }
+
     /** Run a prompt, returning a live {@link SessionResult} (Phase 3 §11.1). */
     public SessionResult processPrompt(String prompt, PromptConfig config) {
         return processPrompt(prompt, config, null, null);

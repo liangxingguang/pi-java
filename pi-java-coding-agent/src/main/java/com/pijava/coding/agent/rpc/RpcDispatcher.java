@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -26,6 +25,7 @@ import com.pijava.coding.agent.cli.ThinkingLevels;
 import com.pijava.coding.agent.core.AgentSession;
 import com.pijava.coding.agent.core.AgentSessionEvent;
 import com.pijava.coding.agent.core.PromptConfig;
+import com.pijava.coding.agent.core.SessionTreeNode;
 import com.pijava.coding.agent.core.WireJson;
 import com.pijava.coding.agent.export.HtmlExporter;
 import com.pijava.coding.agent.mode.JsonEventMapper;
@@ -318,8 +318,10 @@ public final class RpcDispatcher {
                     }
                 }
                 case RpcCommand.GetTree t ->
+                    // docs/19 裁决③：数据源＝session.getTree()（持久会话全分支＋解析
+                    // label，pi sessionManager.getTree 对位），不再是 harness 单车道转录。
                     out.write(RpcResponse.ok(t.id(), "get_tree",
-                        new RpcPayloads.RpcTreeData(buildTree(), leafId())));
+                        new RpcPayloads.RpcTreeData(toRpcTree(session.getTree()), leafId())));
                 case RpcCommand.ClearQueue c -> {
                     // B34（原 docs/26）：pi clear_queue —— data 即被清文本两数组。
                     var cleared = session.clearQueue();
@@ -640,32 +642,11 @@ public final class RpcDispatcher {
         return -1;
     }
 
-    /** 从 transcript 按 parentId 建会话树（对齐 pi {@code getTree}）。 */
-    private List<RpcPayloads.RpcSessionTreeNode> buildTree() {
-        var entries = harnessTranscript();
-        if (entries.isEmpty()) {
-            return List.of();
-        }
-        var byParent = new LinkedHashMap<String, List<Entry>>();
-        for (var e : entries) {
-            byParent.computeIfAbsent(e.parentId(), k -> new ArrayList<>()).add(e);
-        }
-        List<Entry> roots = entries.stream()
-            .filter(e -> e.parentId() == null)
+    /** {@link SessionTreeNode} → RPC 线形浅映射（label 从此有值）。 */
+    private static List<RpcPayloads.RpcSessionTreeNode> toRpcTree(List<SessionTreeNode> nodes) {
+        return nodes.stream()
+            .map(n -> new RpcPayloads.RpcSessionTreeNode(n.entry(), toRpcTree(n.children()), n.label()))
             .toList();
-        if (roots.isEmpty()) {
-            // 线性 lane 首条作根（parentId 由存储补全前）
-            roots = List.of(entries.get(0));
-        }
-        return roots.stream().map(r -> treeNode(r, byParent)).toList();
-    }
-
-    private static RpcPayloads.RpcSessionTreeNode treeNode(
-            Entry entry, Map<String, List<Entry>> byParent) {
-        var children = byParent.getOrDefault(entry.id(), List.of()).stream()
-            .map(c -> treeNode(c, byParent))
-            .toList();
-        return new RpcPayloads.RpcSessionTreeNode(entry, children, null);
     }
 
     /** 取消息 entry 的纯文本（get_fork_messages / fork 的 text 载荷）。 */
