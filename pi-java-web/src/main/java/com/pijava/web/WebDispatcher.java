@@ -397,30 +397,31 @@ final class WebDispatcher {
         return new WebServerMessage.Skills(skills);
     }
 
-    /** 会话树（节点 {@code {entry, children}}），对齐 pi {@code getTree}。 */
+    /**
+     * 会话树（节点 {@code {entry, children, label?}}），对齐 pi {@code getTree}。
+     * docs/19 裁决③：数据源＝{@code session.getTree()}（持久会话全分支＋解析 label），
+     * 不再是 harness 单车道转录。
+     */
     private WebServerMessage.Tree buildTree() {
-        var entries = session.harness().snapshot(session.laneName()).transcript();
-        var byParent = new LinkedHashMap<String, List<Entry>>();
-        for (var e : entries) {
-            byParent.computeIfAbsent(e.parentId(), k -> new ArrayList<>()).add(e);
-        }
-        List<Entry> roots = entries.stream()
-            .filter(e -> e.parentId() == null)
-            .toList();
-        if (roots.isEmpty() && !entries.isEmpty()) {
-            roots = List.of(entries.get(0));
-        }
-        var tree = roots.stream().map(r -> treeNode(r, byParent)).toList();
-        String leafId = entries.isEmpty() ? null : entries.get(entries.size() - 1).id();
-        return new WebServerMessage.Tree(tree, leafId);
+        var tree = session.getTree().stream().map(WebDispatcher::treeNode).toList();
+        var leafId = session.harness().snapshot(session.laneName()).transcript();
+        return new WebServerMessage.Tree(tree,
+            leafId.isEmpty() ? null : leafId.get(leafId.size() - 1).id());
     }
 
-    private ObjectNode treeNode(Entry entry, Map<String, List<Entry>> byParent) {
+    private static ObjectNode treeNode(com.pijava.coding.agent.core.SessionTreeNode treeNode) {
         var node = JSON.createObjectNode();
-        node.set("entry", SessionJson.mapper().valueToTree(entry));
+        node.set("entry", SessionJson.mapper().valueToTree(treeNode.entry()));
+        if (treeNode.label() != null) {
+            node.put("label", treeNode.label());
+        }
+        if (treeNode.labelTimestamp() != null) {
+            // pi SessionTreeNode.labelTimestamp 是 ISO 串。
+            node.put("labelTimestamp", treeNode.labelTimestamp().toString());
+        }
         var children = node.putArray("children");
-        for (var child : byParent.getOrDefault(entry.id(), List.of())) {
-            children.add(treeNode(child, byParent));
+        for (var child : treeNode.children()) {
+            children.add(treeNode(child));
         }
         return node;
     }
