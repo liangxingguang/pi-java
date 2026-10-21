@@ -13,11 +13,12 @@ import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.coding.agent.extension.event.ExtensionResults.BoundaryContextPreview;
 import com.pijava.coding.agent.extension.event.ExtensionResults.CompactionPreparation;
 import com.pijava.coding.agent.extension.event.ExtensionResults.SessionBoundaryDraft;
+import com.pijava.coding.agent.extension.event.ExtensionResults.TreePreparation;
 
 /**
  * pi {@code ExtensionEvent} 联合（types.ts:1377-1409）的对齐子集 —— docs/14 的 18 个
- * ＋ docs/15（批 5）的 11 个结果臂/生命周期事件。剩余随 B248（provider 请求面）/
- * B245（tree 两事件）等逐批扩。
+ * ＋ docs/15（批 5）的 11 个结果臂/生命周期事件 ＋ docs/17（批 7）provider 请求面
+ * ＋ docs/18（批 8）tree 两事件。剩余随各批逐批扩。
  *
  * <p>两族语义（pi runner.ts）：</p>
  * <ul>
@@ -186,6 +187,26 @@ public sealed interface ExtensionEvent {
                                      List<Entry> branchEntries,
                                      String customInstructions, String reason,
                                      boolean willRetry, CompactionAbortToken signal)
+            implements ExtensionEvent {}
+
+    // ═══════════════════════════════════════════════════════════
+    // tree 导航（docs/18，pi types.ts:832-846）
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * pi {@code session_before_tree}（types.ts:832-838，可取消）——{@code signal}
+     * 是分支摘要中止令牌（pi AbortSignal 对位 {@link CompactionAbortToken}，
+     * 与 {@link SessionBeforeCompactEvent} 同型）。
+     */
+    record SessionBeforeTreeEvent(TreePreparation preparation,
+                                  CompactionAbortToken signal) implements ExtensionEvent {}
+
+    /**
+     * pi {@code session_tree}（types.ts:840-846，观察型）——{@code summaryEntry}/
+     * {@code fromExtension} 可空；fromExtension 仅在有摘要时有值（pi :4145）。
+     */
+    record SessionTreeEvent(String newLeafId, String oldLeafId,
+                            Entry.BranchSummary summaryEntry, Boolean fromExtension)
             implements ExtensionEvent {}
 
     // ═══════════════════════════════════════════════════════════

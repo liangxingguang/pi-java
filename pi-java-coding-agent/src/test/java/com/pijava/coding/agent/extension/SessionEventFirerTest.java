@@ -10,6 +10,8 @@ import com.pijava.coding.agent.extension.event.ExtensionResults.CustomMessageDra
 import com.pijava.coding.agent.extension.event.ExtensionResults.InputEventResult;
 import com.pijava.coding.agent.extension.event.ExtensionResults.SessionBeforeForkResult;
 import com.pijava.coding.agent.extension.event.ExtensionResults.SessionBeforeSwitchResult;
+import com.pijava.coding.agent.extension.event.ExtensionResults.SessionBeforeTreeResult;
+import com.pijava.coding.agent.extension.event.ExtensionResults.TreePreparation;
 import com.pijava.coding.agent.extension.event.ExtensionResults.UserBashEventResult;
 import com.pijava.coding.agent.extension.event.ExtensionResults.BeforeAgentStartEventResult;
 
@@ -22,6 +24,8 @@ import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.BEFORE_
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.INPUT;
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.SESSION_BEFORE_FORK;
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.SESSION_BEFORE_SWITCH;
+import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.SESSION_BEFORE_TREE;
+import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.SESSION_TREE;
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.SESSION_SHUTDOWN;
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.SESSION_START;
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.USER_BASH;
@@ -101,6 +105,78 @@ class SessionEventFirerTest {
             (e, c) -> new SessionBeforeForkResult(false, null));
         assertThat(firer.sessionBeforeFork("e1", "at")).isFalse();
         assertThat(firer.sessionBeforeSwitch("new", null)).isFalse(); // 无订阅者
+    }
+
+    // ── session_before_tree / session_tree（docs/18 §3.4，pi runner.ts:1089-1118）──
+
+    @Test
+    void beforeTreeLastSpeakerWinsCancelShortCircuitsAndErrorsAreReported() {
+        var prep = new TreePreparation("target", "old", "ancestor",
+            List.of(), true, null, null, null);
+        var token = new com.pijava.agent.harness.CompactionAbortToken();
+
+        var ran = new ArrayList<String>();
+        bus.on("bad", SESSION_BEFORE_TREE, (e, c) -> {
+            ran.add("bad");
+            throw new IllegalStateException("boom");
+        });
+        bus.on("first", SESSION_BEFORE_TREE, (e, c) -> {
+            ran.add("first");
+            // 事件载荷透传（pi :4024-4031：preparation + signal）。
+            assertThat(e.preparation()).isSameAs(prep);
+            assertThat(e.signal()).isSameAs(token);
+            return new SessionBeforeTreeResult(null, null, "first", null, null);
+        });
+        bus.on("second", SESSION_BEFORE_TREE, (e, c) -> {
+            ran.add("second");
+            return new SessionBeforeTreeResult(null, null, "second", Boolean.TRUE, "lbl");
+        });
+
+        var r = firer.sessionBeforeTree(prep, token);
+        // 逐处理器 catch ⇒ emitError ⇒ 继续；最后发言者赢（pi :1099）。
+        assertThat(ran).containsExactly("bad", "first", "second");
+        assertThat(r.customInstructions()).isEqualTo("second");
+        assertThat(r.replaceInstructions()).isTrue();
+        assertThat(r.label()).isEqualTo("lbl");
+        assertThat(errors).hasSize(1);
+        assertThat(errors.get(0).extensionName()).isEqualTo("bad");
+
+        // cancel 短路：后续处理器不跑（pi :1100-1104）。
+        bus.on("canceler", SESSION_BEFORE_TREE,
+            (e, c) -> new SessionBeforeTreeResult(true, null, null, null, null));
+        bus.on("late", SESSION_BEFORE_TREE, (e, c) -> {
+            ran.add("late");
+            return null;
+        });
+        var cancelled = firer.sessionBeforeTree(prep, token);
+        assertThat(cancelled.cancel()).isTrue();
+        assertThat(ran).doesNotContain("late");
+    }
+
+    @Test
+    void beforeTreeNoSubscribersFastPathAndSessionTreeObservational() {
+        var prep = new TreePreparation("t", null, null, List.of(), false, null, null, null);
+        var token = new com.pijava.agent.harness.CompactionAbortToken();
+        assertThat(firer.sessionBeforeTree(prep, token)).isNull(); // 无订阅者 ⇒ null
+        firer.sessionTree("new", "old", null, null); // 无订阅者：无效果、不抛
+        assertThat(errors).isEmpty();
+
+        var seen = new ArrayList<String>();
+        bus.on("obs", SESSION_TREE, (e, c) -> {
+            seen.add(e.newLeafId() + ":" + e.oldLeafId() + ":" + e.fromExtension());
+            return null;
+        });
+        bus.on("bad", SESSION_TREE, (e, c) -> {
+            throw new IllegalStateException("boom");
+        });
+        bus.on("late", SESSION_TREE, (e, c) -> {
+            seen.add("late");
+            return null;
+        });
+        firer.sessionTree("new-leaf", "old-leaf", null, Boolean.TRUE);
+        // 观察型：逐处理器 catch ⇒ emitError ⇒ 继续；返回值忽略。
+        assertThat(seen).containsExactly("new-leaf:old-leaf:true", "late");
+        assertThat(errors).hasSize(1);
     }
 
     // ── input 变换链 ──

@@ -154,4 +154,30 @@ public final class ExtensionResults {
                                         long tokensBefore,
                                         String previousSummary,
                                         CompactionSettings settings) {}
+
+    // ═══════════════════════════════════════════════════════════
+    // 批 8：tree 导航（pi types.ts:818-830、1488-1501）
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * pi {@code TreePreparation}（types.ts:818-830）——导航准备数据。
+     * {@code entriesToSummarize} 是<b>活列表</b>（与默认生成器共用同一引用，
+     * pi 处理器原地改它会影响摘要输入，agent-session.ts:3995/4056 同构）。
+     */
+    public record TreePreparation(String targetId, String oldLeafId, String commonAncestorId,
+                                  List<Entry> entriesToSummarize, boolean userWantsSummary,
+                                  String customInstructions, Boolean replaceInstructions,
+                                  String label) {}
+
+    /** pi {@code SessionBeforeTreeResult.summary}（types.ts:1490-1494）。 */
+    public record ExtensionTreeSummary(String summary, Object details,
+                                       com.pijava.ai.Usage usage) {}
+
+    /**
+     * pi {@code SessionBeforeTreeResult}（types.ts:1488-1501）——cancel 短路；
+     * summary 仅在用户本来要摘要时生效；三个 override 不受 summarize 门限制。
+     */
+    public record SessionBeforeTreeResult(Boolean cancel, ExtensionTreeSummary summary,
+                                          String customInstructions, Boolean replaceInstructions,
+                                          String label) {}
 }

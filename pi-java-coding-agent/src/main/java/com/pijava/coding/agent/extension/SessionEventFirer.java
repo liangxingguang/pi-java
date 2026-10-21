@@ -5,27 +5,35 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
 
+import com.pijava.agent.entry.Entry;
+import com.pijava.agent.harness.CompactionAbortToken;
 import com.pijava.agent.tool.ShellResult;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.BeforeAgentStartEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.InputEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionBeforeForkEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionBeforeSwitchEvent;
+import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionBeforeTreeEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionShutdownEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionStartEvent;
+import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionTreeEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.UserBashEvent;
 import com.pijava.coding.agent.extension.event.ExtensionResults.BeforeAgentStartEventResult;
 import com.pijava.coding.agent.extension.event.ExtensionResults.CustomMessageDraft;
 import com.pijava.coding.agent.extension.event.ExtensionResults.InputEventResult;
 import com.pijava.coding.agent.extension.event.ExtensionResults.SessionBeforeForkResult;
 import com.pijava.coding.agent.extension.event.ExtensionResults.SessionBeforeSwitchResult;
+import com.pijava.coding.agent.extension.event.ExtensionResults.SessionBeforeTreeResult;
+import com.pijava.coding.agent.extension.event.ExtensionResults.TreePreparation;
 import com.pijava.coding.agent.extension.event.ExtensionResults.UserBashEventResult;
 
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.BEFORE_AGENT_START;
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.INPUT;
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.SESSION_BEFORE_FORK;
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.SESSION_BEFORE_SWITCH;
+import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.SESSION_BEFORE_TREE;
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.SESSION_SHUTDOWN;
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.SESSION_START;
+import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.SESSION_TREE;
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.USER_BASH;
 
 /**
@@ -150,6 +158,51 @@ public final class SessionEventFirer {
             }
         }
         return false;
+    }
+
+    /**
+     * pi {@code session_before_tree}（通用 emit，runner.ts:1089-1118）：
+     * cancel 短路；否则<b>最后发言者赢</b>；逐处理器 catch ⇒ emitError ⇒ 继续。
+     *
+     * @return 最后一个非 null 结果；无订阅者/无人发言 ⇒ null
+     */
+    public SessionBeforeTreeResult sessionBeforeTree(TreePreparation preparation,
+                                                     CompactionAbortToken signal) {
+        if (!bus.hasHandlers(SESSION_BEFORE_TREE)) {
+            return null;
+        }
+        var event = new SessionBeforeTreeEvent(preparation, signal);
+        SessionBeforeTreeResult result = null;
+        for (var h : bus.snapshot(SESSION_BEFORE_TREE)) {
+            try {
+                var r = h.handle(event, ctx);
+                if (r != null) {
+                    result = r; // 最后发言者赢（pi :1099）
+                    if (Boolean.TRUE.equals(r.cancel())) {
+                        return result; // cancel 短路（pi :1100-1104）
+                    }
+                }
+            } catch (Throwable e) {
+                bus.emitError(h.error(e));
+            }
+        }
+        return result;
+    }
+
+    /** pi {@code session_tree}（观察型；通用 emit 返回值忽略）。 */
+    public void sessionTree(String newLeafId, String oldLeafId,
+                            Entry.BranchSummary summaryEntry, Boolean fromExtension) {
+        if (!bus.hasHandlers(SESSION_TREE)) {
+            return;
+        }
+        var event = new SessionTreeEvent(newLeafId, oldLeafId, summaryEntry, fromExtension);
+        for (var h : bus.snapshot(SESSION_TREE)) {
+            try {
+                h.handle(event, ctx);
+            } catch (Throwable e) {
+                bus.emitError(h.error(e));
+            }
+        }
     }
 
     // ═══════════════════════════════════════════════════════════

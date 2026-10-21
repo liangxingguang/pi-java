@@ -18,11 +18,13 @@ import com.pijava.coding.agent.extension.event.ExtensionEvent.ProviderStreamEven
 import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionBeforeCompactEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionBeforeForkEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionBeforeSwitchEvent;
+import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionBeforeTreeEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionCompactEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionCompactFailedEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionInfoChangedEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionShutdownEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionStartEvent;
+import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionTreeEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.ThinkingLevelSelectEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.ToolCallEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.ToolExecutionEndEvent;
@@ -40,6 +42,7 @@ import com.pijava.coding.agent.extension.event.ExtensionResults.MessageEndEventR
 import com.pijava.coding.agent.extension.event.ExtensionResults.SessionBeforeCompactResult;
 import com.pijava.coding.agent.extension.event.ExtensionResults.SessionBeforeForkResult;
 import com.pijava.coding.agent.extension.event.ExtensionResults.SessionBeforeSwitchResult;
+import com.pijava.coding.agent.extension.event.ExtensionResults.SessionBeforeTreeResult;
 import com.pijava.coding.agent.extension.event.ExtensionResults.ToolCallEventResult;
 import com.pijava.coding.agent.extension.event.ExtensionResults.ToolResultEventResult;
 import com.pijava.coding.agent.extension.event.ExtensionResults.UserBashEventResult;
@@ -159,6 +162,14 @@ public final class ExtensionEventSpec<E extends ExtensionEvent, R> {
     /** pi {@code "session_before_compact"}（types.ts:1585，可取消/可接管）。 */
     public static final ExtensionEventSpec<SessionBeforeCompactEvent, SessionBeforeCompactResult>
         SESSION_BEFORE_COMPACT = new ExtensionEventSpec<>("session_before_compact");
+
+    /** pi {@code "session_before_tree"}（types.ts:1593，可取消/可给摘要/可覆盖）。 */
+    public static final ExtensionEventSpec<SessionBeforeTreeEvent, SessionBeforeTreeResult>
+        SESSION_BEFORE_TREE = new ExtensionEventSpec<>("session_before_tree");
+
+    /** pi {@code "session_tree"}（types.ts:1596，观察型）。 */
+    public static final ExtensionEventSpec<SessionTreeEvent, Void> SESSION_TREE =
+        new ExtensionEventSpec<>("session_tree");
 
     /** pi {@code "input"}（types.ts:1636）。 */
     public static final ExtensionEventSpec<InputEvent, InputEventResult> INPUT =
