@@ -123,6 +123,22 @@ public final class SelectList<T> {
         confirmed = false;
     }
 
+    /**
+     * Move the selection to the first visible item matching {@code pred}
+     * (docs/18 §3.10：重开选择器时恢复上次选中，pi {@code initialSelectedId} 对位)。
+     *
+     * @return false when no item matches (selection unchanged)
+     */
+    public boolean selectItem(java.util.function.Predicate<T> pred) {
+        for (int i = 0; i < visible.size(); i++) {
+            if (pred.test(visible.get(i))) {
+                selected = i;
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** Render the list with the current selection highlighted. */
     public Element render() {
         String title = filter.isEmpty()

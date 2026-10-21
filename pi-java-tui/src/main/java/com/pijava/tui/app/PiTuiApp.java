@@ -311,8 +311,11 @@ public final class PiTuiApp {
         if (overlay != null) {
             overlay.onKeyEvent(event);
             if (overlay.isDone()) {
-                overlay.apply(session, this::switchSession);
+                // docs/18：先清位再 apply——apply 可链式开下一个 overlay
+                // （树导航流：树选择器→三选→编辑器），旧序会把它立即抹掉。
+                var done = overlay;
                 overlay = null;
+                done.apply(session, this::switchSession);
                 // B244（pi interactive-mode.ts:4986-4989 对位）：设置可能已改，
                 // 关屏统一重建补全目录（pi 是 toggle 即时重建，窄差 D4 时机差；
                 // 重建是纯读装配，无副作用）。
@@ -425,7 +428,12 @@ public final class PiTuiApp {
                 openOverlay(new ModelSelectorScreen(session));
             case CommandRegistry.UI_SESSION_SELECTOR ->
                 openOverlay(new SessionListScreen(session.listSessions()));
-            case CommandRegistry.UI_TREE_SELECTOR -> {
+            case CommandRegistry.UI_TREE_SELECTOR ->
+                // docs/18（§3.8/§3.9）：/tree 走原地导航流（选 entry 后三选摘要）。
+                new TreeNavigationFlow(session, chatScreen, dispatcher,
+                    chatScreen::snapshot, this::openOverlay).begin();
+            case CommandRegistry.UI_FORK_SELECTOR -> {
+                // docs/18（§3.8）：/fork（空参）保持旧 fork 行为。
                 var snapshot = chatScreen.snapshot();
                 if (snapshot != null) {
                     openOverlay(new TreeSelectorScreen(snapshot));

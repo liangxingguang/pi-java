@@ -104,10 +104,9 @@ public sealed interface StatusIndicator {
     /**
      * branchSummary 指示器 —— 文本照 pi {@code BranchSummaryStatusIndicator}（:102-112）。
      *
-     * <p>⚠️ 今天<b>不可达</b>：branch summary 在 pi-java 无实现（台账 B1），
-     * {@code summarization_retry_attempt_start} 的 source 恒为 {@code "compaction"}。
-     * 照写是为了 B1 落地后自动生效 —— <b>不得</b>为它造一个假的可达性
-     * （原 docs/31 §8.38.7-D）。</p>
+     * <p>可达点：{@code ChatScreen.showBranchSummaryIndicator()}（docs/18 树导航流，
+     * pi interactive-mode.ts:5640 对位）与 {@code summarization_retry_attempt_start}
+     * 的 {@code "branchSummary"} 源。</p>
      */
     record BranchSummary(String interruptHint) implements StatusIndicator {
 

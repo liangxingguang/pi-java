@@ -320,6 +320,14 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     }
 
     /**
+     * 置分支摘要指示器（docs/18 §3.11；pi {@code showStatusIndicator(
+     * new BranchSummaryStatusIndicator)}，interactive-mode.ts:5640）。
+     */
+    public void showBranchSummaryIndicator() {
+        setIndicator(new StatusIndicator.BranchSummary(interruptHint));
+    }
+
+    /**
      * 清指示器（pi {@code clearStatusIndicator}，{@code :2115-2134}）。
      *
      * <p>⚠️ 给了 kind 时 <b>kind 不匹配即 no-op</b> —— 这是 pi 的第一句守卫，照抄：
@@ -354,8 +362,35 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     }
 
     /** 往聊天区追加一条错误（pi {@code showError}，{@code :4273-4277}：红字 + {@code Error: } 前缀）。 */
-    private void showError(String message) {
+    public void showError(String message) {
         chatPanel.append(new ChatMessage.Error("Error: " + message));
+    }
+
+    /**
+     * 导航后整表重建（docs/18 §3.11；pi {@code chatContainer.clear()}＋
+     * {@code renderInitialMessages()}，interactive-mode.ts:5671-5672）：
+     * 清面板＋草稿，按新叶 {@code pathToLeaf} 逐条 {@link ChatMessage#from} 重放。
+     *
+     * @param entries 会话全量 entries（{@code AgentSession.accumulatedEntries()}）
+     * @param leafId  导航后的当前叶（null ⇒ 空转录）
+     */
+    public void rebuildTranscript(java.util.List<Entry> entries, String leafId) {
+        chatPanel.clear();
+        assistantDraft.setLength(0);
+        thinkingDraft.setLength(0);
+        chatPanel.setDraft(null);
+        pendingUserText = null;
+        assistantStreamed = false;
+        thinkingRendered = false;
+        if (leafId != null) {
+            for (var e : com.pijava.agent.session.ContextEntries.pathToLeaf(entries, leafId)) {
+                var bubble = ChatMessage.from(e);
+                if (bubble != null) {
+                    chatPanel.append(bubble);
+                }
+            }
+        }
+        scrollToBottom();
     }
 
     /** Forward a key event: slash completion first, then the editor. */
