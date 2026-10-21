@@ -146,6 +146,9 @@ public final class AgentSession implements AutoCloseable {
     // 发射口（pi 的 extensionRunner 宿主发射法对位）。--no-extensions 时为 null，
     // 全部 firing 点判空快走（pi 无扩展＝runner 空表，行为等价）。
     private com.pijava.coding.agent.extension.SessionEventFirer extensionFirer;
+    /** docs/17（B248）：provider 请求面桥（pi extensionRunnerRef 对位）——wireSession
+     *  随 StreamFn 建、loadExtensions 回填 bus/ctx；null ⇒ 无扩展装配（测试形状）。 */
+    private com.pijava.coding.agent.extension.bridge.ProviderEventBridge providerBridge;
     /** docs/16（B252，裁决⑥）：替换/退出关闭幂等门。 */
     private volatile boolean closed;
 
@@ -419,8 +422,12 @@ public final class AgentSession implements AutoCloseable {
         }
         String scopeLevel = scopedInitial != null
             ? scopedInitial.thinkingLevel().orElse(null) : null;
+        // docs/17（B248，裁决③）：provider 请求面桥随 StreamFn 建（pi extensionRunnerRef
+        // 先建后填对位）——bus 在 loadExtensions 才诞生，install 回填前全钩空跳。
+        var providerBridge = new com.pijava.coding.agent.extension.bridge.ProviderEventBridge();
         var streamFn = DefaultProviders.streamFnFor(
-            args, effective.defaultProvider, providers, effective, args.sessionId());
+            args, effective.defaultProvider, providers, effective, args.sessionId(),
+            providerBridge);
         // pi sdk.ts:43-46 的模块顶层副作用对位（setDefaultStreamFn(streamSimple)）：
         // 进程级缺省兜底，给省略 streamFn 的 HarnessConfig.build() 回落（#69）。
         // 窄差：pi 装的 streamSimple 每次调用现解析环境凭证，这里装的是本次会话
@@ -611,6 +618,7 @@ public final class AgentSession implements AutoCloseable {
             .build());
         harnessRef.set(harness);
         var agentSession = new AgentSession(harness, services, args, name);
+        agentSession.providerBridge = providerBridge;
         sessionRef.set(agentSession);
         agentSession.setScopedModels(scope.models());
         agentSession.modelCatalog = catalog;
@@ -1858,6 +1866,11 @@ public final class AgentSession implements AutoCloseable {
         var bus = new com.pijava.coding.agent.extension.ExtensionEventBus();
         var context = new DefaultExtensionContext(
             services, harness.skillManager(), owner.extensionUI, bus);
+        // docs/17（B248）：provider 请求面桥回填（pi extensionRunnerRef.current = runner
+        // 对位）——此后该会话的每一次 provider 请求过四事件线。
+        if (owner.providerBridge != null) {
+            owner.providerBridge.install(bus, context);
+        }
         // session 由 SessionPersistence 稍后赋值，惰性求值绑定供 sendMessage 落盘用。
         context.bindSession(() -> owner.session());
         var manager = new ExtensionManager(context);

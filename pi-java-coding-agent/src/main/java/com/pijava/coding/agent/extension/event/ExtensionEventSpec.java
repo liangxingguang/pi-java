@@ -4,13 +4,17 @@ import com.pijava.coding.agent.extension.event.ExtensionEvent.AgentBeforeSettleE
 import com.pijava.coding.agent.extension.event.ExtensionEvent.AgentEndEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.AgentSettledEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.AgentStartEvent;
+import com.pijava.coding.agent.extension.event.ExtensionEvent.AfterProviderResponseEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.BeforeAgentStartEvent;
+import com.pijava.coding.agent.extension.event.ExtensionEvent.BeforeProviderHeadersEvent;
+import com.pijava.coding.agent.extension.event.ExtensionEvent.BeforeProviderRequestEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.ContextEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.ContextWithSystemEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.InputEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.MessageEndEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.MessageStartEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.MessageUpdateEvent;
+import com.pijava.coding.agent.extension.event.ExtensionEvent.ProviderStreamEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionBeforeCompactEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionBeforeForkEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionBeforeSwitchEvent;
@@ -175,6 +179,28 @@ public final class ExtensionEventSpec<E extends ExtensionEvent, R> {
     /** pi {@code "agent_before_settle"}（types.ts:1617，boundary 派发）。 */
     public static final ExtensionEventSpec<AgentBeforeSettleEvent, BoundaryResult>
         AGENT_BEFORE_SETTLE = new ExtensionEventSpec<>("agent_before_settle");
+
+    // ── provider 请求面（docs/17）──
+
+    /**
+     * pi {@code "before_provider_request"}（types.ts:1604）——结果型：
+     * {@code BeforeProviderRequestEventResult = unknown}（:1422）对位为 {@link Object}，
+     * 处理器返回非 null ⇒ 替换当前载荷。
+     */
+    public static final ExtensionEventSpec<BeforeProviderRequestEvent, Object>
+        BEFORE_PROVIDER_REQUEST = new ExtensionEventSpec<>("before_provider_request");
+
+    /** pi {@code "before_provider_headers"}（types.ts:1607）——原位改写，返回值忽略。 */
+    public static final ExtensionEventSpec<BeforeProviderHeadersEvent, Void>
+        BEFORE_PROVIDER_HEADERS = new ExtensionEventSpec<>("before_provider_headers");
+
+    /** pi {@code "after_provider_response"}（types.ts:1608）。 */
+    public static final ExtensionEventSpec<AfterProviderResponseEvent, Void>
+        AFTER_PROVIDER_RESPONSE = new ExtensionEventSpec<>("after_provider_response");
+
+    /** pi {@code "provider_stream_event"}（types.ts:1609）。 */
+    public static final ExtensionEventSpec<ProviderStreamEvent, Void>
+        PROVIDER_STREAM_EVENT = new ExtensionEventSpec<>("provider_stream_event");
 
     private final String name;
 

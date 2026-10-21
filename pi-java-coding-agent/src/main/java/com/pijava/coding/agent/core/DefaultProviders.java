@@ -153,6 +153,19 @@ public final class DefaultProviders {
     public static StreamFn streamFnFor(Args args, String defaultProvider,
                                        ProviderRegistry providers, Settings settings,
                                        String sessionId) {
+        return streamFnFor(args, defaultProvider, providers, settings, sessionId, null);
+    }
+
+    /**
+     * docs/17（B248）：带 provider 请求面桥的完整形态——pi sdk.ts 的四闭包
+     * （{@code onPayload}/{@code onResponse}/{@code onProviderStreamEvent} 经 extra
+     * 三键下车道、{@code transformHeaders} 在 createApi 前缝消费）对位。
+     * {@code bridge} 为 {@code null} ⇒ 零注入（旧行为）。
+     */
+    public static StreamFn streamFnFor(Args args, String defaultProvider,
+                                       ProviderRegistry providers, Settings settings,
+                                       String sessionId,
+                                       com.pijava.coding.agent.extension.bridge.ProviderEventBridge bridge) {
         var fallbackName = resolveProviderName(args, defaultProvider);
         return (model, context, options) -> {
             var provider = providers.get(model.provider()).orElseGet(() -> {
@@ -163,7 +176,7 @@ public final class DefaultProviders {
             });
             return streamBlocking(provider, model, context, options,
                 apiOptions(args, model.provider(), settings, Credentials::resolveCredential,
-                    requestExtra(options, sessionId)));
+                    requestExtra(options, sessionId)), bridge);
         };
     }
 
@@ -248,7 +261,8 @@ public final class DefaultProviders {
             ModelId<?> model,
             com.pijava.agent.harness.Context context,
             com.pijava.agent.harness.StreamOptions options,
-            ApiOptions apiOptions) {
+            ApiOptions apiOptions,
+            com.pijava.coding.agent.extension.bridge.ProviderEventBridge bridge) {
         // 系统提示与工具定义都来自 Context（pi 的 Context）；它们不再走消息列表或 options。
         //
         // 模型**元数据**（而非只有 id）必须随请求走：pi 的请求构建器拿到整个 Model<TApi>，
@@ -269,6 +283,13 @@ public final class DefaultProviders {
                 .orElseGet(() -> ModelInfo.minimal(model));
         // D-P1（原 docs/65）：per-model baseUrl/headers（三源合并的产物）在请求面生效。
         var effectiveOptions = withPerModelOverrides(apiOptions, modelInfo);
+        if (bridge != null) {
+            // docs/17（B248，pi models.ts:866-871 对位）：合并头集过 transformHeaders
+            // 写回 extra["headers"]（钩本体不入 extra——pi :870 剥离键对位）；
+            // 随后三钩入 extra，车道构造期经 ProviderHooks 读取。
+            effectiveOptions = bridge.withRequestHooks(
+                bridge.applyHeaderTransform(effectiveOptions));
+        }
         // 包 A-02（原 docs/59 §4.6）：车道跟着 modelInfo.api 走（pi compat.ts:262）。
         // ⚠️ 必须**先**查 modelInfo 再 createApi —— 派发键在 modelInfo 上，此前 createApi
         // 用的是不含 protocol 的 apiOptions，多协议 provider（openrouter）恒走默认车道。

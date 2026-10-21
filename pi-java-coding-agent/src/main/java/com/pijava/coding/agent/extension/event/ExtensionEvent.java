@@ -231,4 +231,35 @@ public sealed interface ExtensionEvent {
     record AgentBeforeSettleEvent(List<SessionBoundaryDraft> entries, boolean shouldContinue,
                                   BoundaryContextPreview context, String outcome)
             implements ExtensionEvent {}
+
+    // ═══════════════════════════════════════════════════════════
+    // provider 请求面（docs/17，pi types.ts:885-914）
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * pi {@code BeforeProviderRequestEvent}（types.ts:887-891）——{@code payload} 是
+     * <b>车道原生对象</b>（SDK params 类／{@code Map}／{@code ObjectNode}／
+     * {@code GooglePayload}；裁决⑤）。结果型：处理器返回非 null ⇒ 替换当前载荷
+     * （pi runner.ts:1360-1392 的链式语义，后处理器见到前值）。
+     */
+    record BeforeProviderRequestEvent(Object payload) implements ExtensionEvent {}
+
+    /**
+     * pi {@code BeforeProviderHeadersEvent}（types.ts:893-902）——{@code headers} 是
+     * <b>可变</b> map（原位改写，返回值被忽略；{@code null} 值＝删除该头，裁决⑥）。
+     * 头集＝models.json 三层（provider⨁model⨁override）合并值（窄差 D33）。
+     */
+    record BeforeProviderHeadersEvent(Map<String, String> headers) implements ExtensionEvent {}
+
+    /** pi {@code AfterProviderResponseEvent}（types.ts:904-908）——观察型。 */
+    record AfterProviderResponseEvent(int status, Map<String, String> headers)
+            implements ExtensionEvent {}
+
+    /**
+     * pi {@code ProviderStreamEvent}（types.ts:910-914）——{@code data} 是适配器所有的
+     * 原始事件对象（<b>只读</b>）；{@code api} 在目录未命中（ModelInfo.minimal）时为
+     * {@code null}（pi 的必填字段在 java 数据面缺席）。
+     */
+    record ProviderStreamEvent(String provider, String api, String model, Object data)
+            implements ExtensionEvent {}
 }
