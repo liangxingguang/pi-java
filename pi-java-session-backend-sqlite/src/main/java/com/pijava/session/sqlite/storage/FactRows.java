@@ -42,10 +42,13 @@ public final class FactRows {
             """, FactRows::map, sessionId, kind, key);
     }
 
-    /** Latest non-null label facts. */
-    public static List<String[]> readLatestLabelFacts(SqliteDatabase db, String sessionId) {
+    /** A latest label fact with its original change timestamp. */
+    public record LabelFact(String key, String value, String timestamp) {}
+
+    /** Latest non-null label facts（含原变更时间戳——fork 重发要保留，pi :1694-1712）。 */
+    public static List<LabelFact> readLatestLabelFacts(SqliteDatabase db, String sessionId) {
         return db.all("""
-            SELECT f.key, f.value
+            SELECT f.key, f.value, f.timestamp
             FROM facts AS f INDEXED BY idx_facts_session_kind_key_seq
             WHERE f.session_id = ?
                 AND f.kind = 'label'
@@ -58,7 +61,8 @@ public final class FactRows {
                         AND candidate.key IS f.key
                 )
             ORDER BY f.key
-            """, rs -> new String[] { rs.getString("key"), rs.getString("value") }, sessionId);
+            """, rs -> new LabelFact(
+                rs.getString("key"), rs.getString("value"), rs.getString("timestamp")), sessionId);
     }
 
     /** Read fact rows, optionally after a sequence and limited in count. */

@@ -239,6 +239,17 @@ public final class SqliteSessionStorage implements SessionStorage<SqliteSessionM
     }
 
     @Override
+    public Instant getLabelTimestamp(String id) {
+        // facts 表自带 timestamp 列（docs/19 裁决②：D47 条件登记不触发）；
+        // 最新一条是清除（value null）⇒ 无标签 ⇒ 无时间戳。
+        var row = FactRows.readLatestFact(db, metadata.id(), "label", id);
+        return row.filter(r -> r.value() != null)
+            .map(FactRows.FactRow::timestamp)
+            .map(SqliteCodecs::textToTimestamp)
+            .orElse(null);
+    }
+
+    @Override
     public SessionStats getStats() {
         return StatsRows.readStats(db, metadata.id());
     }

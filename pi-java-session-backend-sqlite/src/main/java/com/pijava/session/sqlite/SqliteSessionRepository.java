@@ -212,7 +212,7 @@ public final class SqliteSessionRepository implements
             var latestName = FactRows.readLatestFact(db, source.id(), "name", null);
             var latestLabels = FactRows.readLatestLabelFacts(db, source.id());
             var labelsToCopy = latestLabels.stream()
-                .filter(label -> options instanceof ForkOptions.Tree || copiedIds.contains(label[0]))
+                .filter(label -> options instanceof ForkOptions.Tree || copiedIds.contains(label.key()))
                 .toList();
             String createdAt = Instant.now().toString();
             var metadata = createOptions.metadata() != null
@@ -254,8 +254,11 @@ public final class SqliteSessionRepository implements
                             latestName.get().value());
                     }
                     for (var label : labelsToCopy) {
-                        FactRows.appendFact(db, id, nextSeq++, tipId, tipTs, "label",
-                            label[0], label[1]);
+                        // pi createBranchedSession（:1694-1712）：重发的 label 行保留
+                        // **原变更时间戳**（原值缺失兜底 tipTs）。
+                        String labelTs = label.timestamp() != null ? label.timestamp() : tipTs;
+                        FactRows.appendFact(db, id, nextSeq++, tipId, labelTs, "label",
+                            label.key(), label.value());
                     }
 
                     SequenceRows.setNextSequence(db, id, nextSeq);

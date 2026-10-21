@@ -26,6 +26,11 @@ final class SqliteCodecs {
         return timestamp.toString();
     }
 
+    /** {@link #timestampToText} 的逆（ISO-8601 往返精确）。 */
+    static Instant textToTimestamp(String text) {
+        return text == null ? null : Instant.parse(text);
+    }
+
     static String jsonString(String value) {
         try {
             return SessionJson.mapper().writeValueAsString(value);
