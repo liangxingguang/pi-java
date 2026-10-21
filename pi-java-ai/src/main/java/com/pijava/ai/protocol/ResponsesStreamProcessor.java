@@ -76,12 +76,15 @@ final class ResponsesStreamProcessor {
      * @param errorFormatter catch 出口的错误文案函数（各车道自带前缀策略）
      * @param model 终局 usage 的计价用模型（pi {@code finalizeResponse} 里的
      *              {@code calculateCost(model, …)}）；{@code null} ⇒ 不计价
+     * @param streamEventHook docs/17（B248）：pi {@code onProviderStreamEvent}
+     *        （openai-responses-shared.ts:600）——原始事件、归一化前；{@code null} ≙ 缺席
      */
     static void process(Supplier<StreamResponse<ResponseStreamEvent>> streamSupplier,
                         SubmissionPublisher<StreamEvent> publisher,
                         ModelInfo model,
                         Map<String, String> grammarProperties,
-                        Function<Throwable, String> errorFormatter) {
+                        Function<Throwable, String> errorFormatter,
+                        com.pijava.ai.api.ProviderHooks.StreamEventHook streamEventHook) {
         var builder = new StreamPartialBuilder();
         // Reasoning capture + Azure backfill (pi shared :533-549/:686-697).
         var ctx = ResponseEventContext.of(builder, publisher, grammarProperties,
@@ -93,6 +96,10 @@ final class ResponsesStreamProcessor {
             // 获取在车道 try 内：获取期 HTTP 错误也要落本车道 catch（见方法 javadoc）。
             try (var stream = streamSupplier.get()) {
                 for (var event : stream.stream().toList()) {
+                    // docs/17（pi openai-responses-shared.ts:600）：原始事件、归一化前。
+                    if (streamEventHook != null) {
+                        streamEventHook.onEvent(event, model);
+                    }
                     if (event.outputItemAdded().isPresent()) {
                         var added = event.outputItemAdded().get();
                         ResponseItemHandlers.added(added.item(), added.outputIndex(), ctx);

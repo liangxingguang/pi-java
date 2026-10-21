@@ -15,6 +15,7 @@ import com.anthropic.core.JsonValue;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.AuthKind;
+import com.pijava.ai.api.ProviderHooks;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.AllowedFallbackModel;
 import com.pijava.ai.catalog.CacheRetention;
@@ -133,6 +134,10 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         // B103（docs/52）：pi :625 的 cacheSessionId 原料（none 门在 streamInternal
         // 按解析后的保留期过）；Bearer（OAuth/copilot）分支 pi 不挂亲和头（:992-1031）。
         this.sessionId = AnthropicStreamSupport.sessionIdOf(options);
+        // docs/17（B248）：pi 请求面三钩（anthropic-messages.ts:640/657/664）。
+        this.payloadHook = ProviderHooks.payloadHookOf(options);
+        this.responseHook = ProviderHooks.responseHookOf(options);
+        this.streamEventHook = ProviderHooks.streamEventHookOf(options);
     }
 
     /**
@@ -179,6 +184,15 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
     /** A-14：初始请求获取的重试选项。 */
     private final ProviderRetry.Options providerRetry;
 
+    /** docs/17（B248）：pi {@code onPayload}（anthropic-messages.ts:640）——null ≙ undefined。 */
+    private final ProviderHooks.PayloadHook payloadHook;
+
+    /** docs/17（B248）：pi {@code onResponse}（:657）——null ≙ undefined。 */
+    private final ProviderHooks.ResponseHook responseHook;
+
+    /** docs/17（B248）：pi {@code onProviderStreamEvent}（:664）——null ≙ undefined。 */
+    private final ProviderHooks.StreamEventHook streamEventHook;
+
     @Override
     protected void streamInternal(StreamRequest request,
                                    SubmissionPublisher<StreamEvent> publisher) {
@@ -205,14 +219,35 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         try {
             var params = buildParams(request, affinitySessionId(), baseUrl,
                 effectiveHeaderNames, oauth);
+            // docs/17（pi :639-643 逐字）：载荷构建后、HTTP 前；非 null 返回 ⇒ 替换。
+            if (payloadHook != null) {
+                var next = payloadHook.onPayload(params, request.model());
+                if (next != null) {
+                    params = ProviderHooks.requirePayloadType(next, MessageCreateParams.class);
+                }
+            }
             publisher.submit(builder.emitStart());
 
             // A-14（R7）：只包初始请求获取；每次重试是全新 SDK 请求。
-            StreamResponse<RawMessageStreamEvent> sr = ProviderRetry.retry(
-                    () -> client.messages().createStreaming(params),
+            // docs/17（pi :652-657）：withRawResponse 拿到 status/headers（pi .asResponse()
+            // 对位）；成功获取后、流消费前 fire onResponse——重试耗尽在 retry 内抛 ⇒ 不发。
+            final var finalParams = params; // 替换臂后 lambda 捕获需要 effectively final
+            var rawResponse = ProviderRetry.retry(
+                    () -> client.withRawResponse().messages().createStreaming(finalParams),
                     ProviderRetry::ofAnthropic, providerRetry);
+            if (responseHook != null) {
+                responseHook.onResponse(rawResponse.statusCode(),
+                    ProviderHooks.flattenHeaders(rawResponse.headers().names(),
+                        rawResponse.headers()::values),
+                    request.model());
+            }
+            StreamResponse<RawMessageStreamEvent> sr = rawResponse.parse();
             try (sr) {
                 sr.stream().forEach(raw -> {
+                    // docs/17（pi :664）：原始事件、归一化前。
+                    if (streamEventHook != null) {
+                        streamEventHook.onEvent(raw, request.model());
+                    }
                     StreamEvent se = mapEvent(raw, request, builder, isToolBlock,
                             isThinkingBlock, pendingToolName, pendingToolId, stop,
                             usageState, fallbacks, responseExtras, currentTools);

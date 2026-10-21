@@ -4,9 +4,11 @@ import java.util.concurrent.SubmissionPublisher;
 
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
+import com.openai.models.responses.ResponseCreateParams;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.GrammarInputProperties;
+import com.pijava.ai.api.ProviderHooks;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.http.ProviderRetry;
@@ -68,7 +70,20 @@ public final class OpenAIResponsesApi extends AbstractChatApi {
         this.responsesOptions = ResponsesOptions.from(options);
         this.baseUrl = baseUrl;
         this.apiKey = apiKey;
+        // docs/17（B248）：pi 请求面三钩（openai-responses.ts:174/shared:600 族）。
+        this.payloadHook = ProviderHooks.payloadHookOf(options);
+        this.responseHook = ProviderHooks.responseHookOf(options);
+        this.streamEventHook = ProviderHooks.streamEventHookOf(options);
     }
+
+    /** docs/17（B248）：pi {@code onPayload}（openai-responses.ts:174）——null ≙ undefined。 */
+    private final ProviderHooks.PayloadHook payloadHook;
+
+    /** docs/17（B248）：pi {@code onResponse}——null ≙ undefined。 */
+    private final ProviderHooks.ResponseHook responseHook;
+
+    /** docs/17（B248）：pi {@code onProviderStreamEvent}（shared:600）——null ≙ undefined。 */
+    private final ProviderHooks.StreamEventHook streamEventHook;
 
     /** 包 B103：解析后的 base URL（openrouter 探测用）。 */
     private final String baseUrl;
@@ -124,14 +139,33 @@ public final class OpenAIResponsesApi extends AbstractChatApi {
                 responsesOptions.cacheRetention() == ResponsesOptions.CacheRetention.NONE
                     ? null : responsesOptions.sessionId(),
                 compat.sessionAffinityFormat(), request.modelId().provider(), baseUrl));
+        // docs/17（pi :174-177 逐字）：载荷构建后、HTTP 前；非 null 返回 ⇒ 替换。
+        if (payloadHook != null) {
+            var next = payloadHook.onPayload(params, request.model());
+            if (next != null) {
+                params = ProviderHooks.requirePayloadType(next, ResponseCreateParams.class);
+            }
+        }
         // A-14（R7）：只包初始请求获取。获取动作放进 processor 的车道 try 内
         // （supplier 里），获取期 HTTP 错误才会落 pi 的带前缀 catch（原 docs/48 §5.3）。
+        // docs/17：withRawResponse 拿 status/headers，成功获取后、流消费前 fire onResponse。
+        final var finalParams = params; // 替换臂后 lambda 捕获需要 effectively final
         ResponsesStreamProcessor.process(
-            () -> ProviderRetry.retry(
-                () -> client.responses().createStreaming(params),
-                ProviderRetry::ofOpenAi, providerRetry),
+            () -> {
+                var rawResponse = ProviderRetry.retry(
+                    () -> client.withRawResponse().responses().createStreaming(finalParams),
+                    ProviderRetry::ofOpenAi, providerRetry);
+                if (responseHook != null) {
+                    responseHook.onResponse(rawResponse.statusCode(),
+                        ProviderHooks.flattenHeaders(rawResponse.headers().names(),
+                            rawResponse.headers()::values),
+                        request.model());
+                }
+                return rawResponse.parse();
+            },
             publisher, request.model(), grammarProperties,
-            e -> formatResponseError(e, request.modelId().provider()));
+            e -> formatResponseError(e, request.modelId().provider()),
+            streamEventHook);
     }
 
     /**

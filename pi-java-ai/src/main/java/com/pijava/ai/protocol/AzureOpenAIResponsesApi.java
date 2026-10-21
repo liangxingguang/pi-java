@@ -8,9 +8,11 @@ import com.openai.azure.AzureUrlPathMode;
 import com.openai.azure.credential.AzureApiKeyCredential;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
+import com.openai.models.responses.ResponseCreateParams;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.GrammarInputProperties;
+import com.pijava.ai.api.ProviderHooks;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.http.ProviderRetry;
@@ -52,17 +54,34 @@ public final class AzureOpenAIResponsesApi extends AbstractChatApi {
         String apiKey = resolveApiKey(options, apiKeyEnvVar);
         String baseUrl = resolveBaseUrl(options);
         String apiVersion = resolveApiVersion();
-        this.client = OpenAIOkHttpClient.builder()
+        var clientBuilder = OpenAIOkHttpClient.builder()
             .baseUrl(baseUrl)
             .credential(AzureApiKeyCredential.create(apiKey))
             .azureServiceVersion(AzureOpenAIServiceVersion.fromString(apiVersion))
             .azureUrlPathMode(AzureUrlPathMode.AUTO)
             // A-14（G1）：SDK 内置重试关到 0，初始请求由 ProviderRetry 独占。
-            .maxRetries(0)
-            .build();
+            .maxRetries(0);
+        // docs/17（裁决⑦）：extra["headers"] 应用补挂——pi azure-openai-responses.ts:156-169
+        // 是 {User-Agent, ...model.headers, ...options.headers} 全量进 defaultHeaders；
+        // 本车道此前从不读（存量缺口，头事件/models.json 头对本车道曾为空操作）。
+        putExtraHeaders(options, clientBuilder::putHeader);
+        this.client = clientBuilder.build();
         this.providerRetry = ProviderRetry.optionsOf(options);
         this.responsesOptions = ResponsesOptions.from(options);
+        // docs/17（B248）：pi 请求面三钩（azure-openai-responses.ts:77/94/98）。
+        this.payloadHook = ProviderHooks.payloadHookOf(options);
+        this.responseHook = ProviderHooks.responseHookOf(options);
+        this.streamEventHook = ProviderHooks.streamEventHookOf(options);
     }
+
+    /** docs/17（B248）：pi {@code onPayload}（azure-openai-responses.ts:77）——null ≙ undefined。 */
+    private final ProviderHooks.PayloadHook payloadHook;
+
+    /** docs/17（B248）：pi {@code onResponse}（:94）——null ≙ undefined。 */
+    private final ProviderHooks.ResponseHook responseHook;
+
+    /** docs/17（B248）：pi {@code onProviderStreamEvent}（:98）——null ≙ undefined。 */
+    private final ProviderHooks.StreamEventHook streamEventHook;
 
     @Override
     protected void streamInternal(StreamRequest request,
@@ -81,17 +100,36 @@ public final class AzureOpenAIResponsesApi extends AbstractChatApi {
             request, responsesOptions, deploymentName, apiName(),
             // B240：pi azure-openai-responses.ts 无 isChatGPTSignIn/omit 门（零命中），恒 false。
             compat, grammarProperties, false, Map.of());
+        // docs/17（pi :77-80 逐字）：载荷构建后、HTTP 前；非 null 返回 ⇒ 替换。
+        if (payloadHook != null) {
+            var next = payloadHook.onPayload(params, request.model());
+            if (next != null) {
+                params = ProviderHooks.requirePayloadType(next, ResponseCreateParams.class);
+            }
+        }
         // A-14（R7）：只包初始请求获取。获取动作放进 processor 的车道 try 内
         // （supplier 里），获取期 HTTP 错误才会落 pi 的带前缀 catch（原 docs/48 §5.3）。
+        // docs/17：withRawResponse 拿 status/headers，成功获取后、流消费前 fire onResponse。
+        final var finalParams = params; // 替换臂后 lambda 捕获需要 effectively final
         ResponsesStreamProcessor.process(
-            () -> ProviderRetry.retry(
-                () -> client.responses().createStreaming(params),
-                ProviderRetry::ofOpenAi, providerRetry),
+            () -> {
+                var rawResponse = ProviderRetry.retry(
+                    () -> client.withRawResponse().responses().createStreaming(finalParams),
+                    ProviderRetry::ofOpenAi, providerRetry);
+                if (responseHook != null) {
+                    responseHook.onResponse(rawResponse.statusCode(),
+                        ProviderHooks.flattenHeaders(rawResponse.headers().names(),
+                            rawResponse.headers()::values),
+                        request.model());
+                }
+                return rawResponse.parse();
+            },
             publisher, request.model(), grammarProperties,
             // pi azure-openai-responses.ts:52-55：常量前缀，无 ChatGPT 链接。
             e -> com.pijava.ai.utils.ProviderErrors.format(
                 com.pijava.ai.utils.ProviderErrors.fromOpenAi(e),
-                "Azure OpenAI API error"));
+                "Azure OpenAI API error"),
+            streamEventHook);
     }
 
     // ── 配置解析 ─────────────────────────────────────────────────────────

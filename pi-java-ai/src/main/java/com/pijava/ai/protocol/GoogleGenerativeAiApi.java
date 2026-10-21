@@ -17,6 +17,7 @@ import com.google.genai.types.HttpRetryOptions;
 import com.google.genai.types.Part;
 import com.google.genai.types.ThinkingConfig;
 import com.google.genai.types.Tool;
+import com.pijava.ai.api.ProviderHooks;
 import com.pijava.ai.api.SimpleOptions;
 import com.pijava.ai.model.ModelCapability;
 
@@ -103,10 +104,20 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
                 .build();
         // A-14：Google SDK 无内置重试，初始请求由 ProviderRetry 独占。
         this.providerRetry = ProviderRetry.optionsOf(options);
+        // docs/17（B248）：pi 请求面两钩（google-generative-ai.ts:96/:107——
+        // pi 本车道无 onResponse，全文件零命中 ⇒ java 同缺＝对齐，§3.5）。
+        this.payloadHook = ProviderHooks.payloadHookOf(options);
+        this.streamEventHook = ProviderHooks.streamEventHookOf(options);
     }
 
     /** A-14：初始请求获取的重试选项。 */
     private final ProviderRetry.Options providerRetry;
+
+    /** docs/17（B248）：pi {@code onPayload}（google-generative-ai.ts:96）——null ≙ undefined。 */
+    private final ProviderHooks.PayloadHook payloadHook;
+
+    /** docs/17（B248）：pi {@code onProviderStreamEvent}（:107）——null ≙ undefined。 */
+    private final ProviderHooks.StreamEventHook streamEventHook;
 
     // ── Internals ─────────────────────────────────────────────────
 
@@ -139,17 +150,39 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
                 request.modelId(), request.model());
             var config = buildConfig(request, transcript);
 
+            // docs/17（pi :95-100 逐字）：载荷＝{model, contents, config} 三件打包
+            // （GooglePayload 载体，窄差 D32——java SDK 三分参调用无单对象）；非 null
+            // 返回 ⇒ 替换后拆包。
+            String modelName = request.modelId().modelName();
+            if (payloadHook != null) {
+                var next = payloadHook.onPayload(
+                    new GooglePayload(modelName, contents, config), request.model());
+                if (next != null) {
+                    var replaced = ProviderHooks.requirePayloadType(next, GooglePayload.class);
+                    modelName = replaced.model();
+                    contents = replaced.contents();
+                    config = replaced.config();
+                }
+            }
+
             publisher.submit(builder.emitStart());
 
             boolean textStarted = false;
             boolean thinkingStarted = false;
             // A-14（R7）：只包初始请求获取；Google 异常无 headers，重试走指数退避。
+            final var finalModelName = modelName;
+            final var finalContents = contents;
+            final var finalConfig = config;
             ResponseStream<GenerateContentResponse> stream = ProviderRetry.retry(
                     () -> client.models.generateContentStream(
-                            request.modelId().modelName(), contents, config),
+                            finalModelName, finalContents, finalConfig),
                     ProviderRetry::ofGoogle, providerRetry);
             try (stream) {
                 for (var response : stream) {
+                    // docs/17（pi :107）：原始响应块、归一化前。
+                    if (streamEventHook != null) {
+                        streamEventHook.onEvent(response, request.model());
+                    }
                     // Safety filter check
                     if (response.promptFeedback().isPresent()) {
                         var fb = response.promptFeedback().get();

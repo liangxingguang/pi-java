@@ -15,9 +15,11 @@ import com.openai.core.ObjectMappers;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
 import com.openai.models.chat.completions.ChatCompletionChunk;
+import com.openai.models.chat.completions.ChatCompletionCreateParams;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.GrammarInputProperties;
+import com.pijava.ai.api.ProviderHooks;
 import com.pijava.ai.api.SimpleOptions;
 import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.api.StreamRequest;
@@ -120,6 +122,10 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         this.sessionId = sessionIdOf(options);
         // B125（批1）：per-request 采样参数（适配器每请求新建，options 即 per-request）。
         this.requestSamplingParams = SimpleOptions.requestSamplingParams(options);
+        // docs/17（B248）：pi 请求面三钩（openai-completions.ts:366/383/559）。
+        this.payloadHook = ProviderHooks.payloadHookOf(options);
+        this.responseHook = ProviderHooks.responseHookOf(options);
+        this.streamEventHook = ProviderHooks.streamEventHookOf(options);
     }
 
     /** 从 extra 读 sessionId（包 B103）；blank ⇒ null。 */
@@ -146,6 +152,15 @@ public class OpenAICompletionsApi extends AbstractChatApi {
 
     /** A-14：初始请求获取的重试选项（pi {@code ProviderRetryOptions}）。 */
     private final ProviderRetry.Options providerRetry;
+
+    /** docs/17（B248）：pi {@code onPayload}（openai-completions.ts:366）——null ≙ undefined。 */
+    private final ProviderHooks.PayloadHook payloadHook;
+
+    /** docs/17（B248）：pi {@code onResponse}（:383）——null ≙ undefined。 */
+    private final ProviderHooks.ResponseHook responseHook;
+
+    /** docs/17（B248）：pi {@code onProviderStreamEvent}（:559）——null ≙ undefined。 */
+    private final ProviderHooks.StreamEventHook streamEventHook;
 
     /**
      * 从 {@code ApiOptions.extra} 读 {@code cacheRetention} —— 与
@@ -193,15 +208,35 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                 System.getenv(CACHE_RETENTION_ENV));
             var params = OpenAICompletionsMessageConverter.buildParams(request, apiName(), baseUrl,
                 resolvedRetention, sessionId, requestSamplingParams);
+            // docs/17（pi :366-369 逐字）：载荷构建后、HTTP 前；非 null 返回 ⇒ 替换。
+            if (payloadHook != null) {
+                var next = payloadHook.onPayload(params, request.model());
+                if (next != null) {
+                    params = ProviderHooks.requirePayloadType(next, ChatCompletionCreateParams.class);
+                }
+            }
             publisher.submit(builder.emitStart());
 
             // A-14（R7）：只包初始请求获取；每次重试是全新 SDK 请求，X-Stainless-Retry-Count 恒 0。
-            var streamResponse = ProviderRetry.retry(
-                    () -> client.chat().completions().createStreaming(params),
+            // docs/17（pi :383）：withRawResponse 拿 status/headers，成功获取后、流消费前发。
+            final var finalParams = params; // 替换臂后 lambda 捕获需要 effectively final
+            var rawResponse = ProviderRetry.retry(
+                    () -> client.withRawResponse().chat().completions().createStreaming(finalParams),
                     ProviderRetry::ofOpenAi, providerRetry);
+            if (responseHook != null) {
+                responseHook.onResponse(rawResponse.statusCode(),
+                    ProviderHooks.flattenHeaders(rawResponse.headers().names(),
+                        rawResponse.headers()::values),
+                    request.model());
+            }
+            var streamResponse = rawResponse.parse();
             try (streamResponse) {
 
                 for (var chunk : streamResponse.stream().toList()) {
+                    // docs/17（pi :559）：原始 chunk、归一化前。
+                    if (streamEventHook != null) {
+                        streamEventHook.onEvent(chunk, request.model());
+                    }
                     // B148（pi openai-completions.ts:565-567）：首个非空且与请求 id
                     // 不同的 chunk.model 落 responseModel（builder 内首值胜，||=）。
                     // 放在 choices 判定之前：usage-only chunk 也可能先带 model。

@@ -42,8 +42,11 @@ import com.pijava.ai.utils.Estimate;
  *           ⇒ 只落模型级，另一半登记（B125）</td></tr>
  *   <tr><td>{@code :32 temperature} 直通</td><td>不动</td>
  *       <td>{@code StreamRequest.temperature} 的读点两侧已一致</td></tr>
- *   <tr><td>{@code fetch}/{@code onPayload}/{@code transport}/{@code metadata}/{@code env} …</td>
- *       <td>不移植</td><td><b>子系统缺席</b>，不是偏差：java 没有可注入点（{@code 原 docs/57 §3.2}）</td></tr>
+ *   <tr><td>{@code fetch}/{@code transport}/{@code metadata}/{@code env} …</td>
+ *       <td>不移植</td><td><b>子系统缺席</b>，不是偏差：java 没有可注入点（{@code 原 docs/57 §3.2}）。
+ *           ⚠️ {@code onPayload}/{@code onResponse}/{@code onProviderStreamEvent} 三键
+ *           自 docs/17（B248）起<b>已移植</b>——经 {@code extra} 通道，见
+ *           {@link ProviderHooks}；{@code transformHeaders} 在宿主缝消费（裁决①）</td></tr>
  * </table>
  *
  * <h2>★ 落点：为什么解析发生在 {@code AbstractChatApi}</h2>
