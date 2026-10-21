@@ -26,6 +26,8 @@ public final class CommandRegistry {
     public static final String UI_MODEL_SELECTOR = "@ui:model-selector";
     public static final String UI_SESSION_SELECTOR = "@ui:session-selector";
     public static final String UI_TREE_SELECTOR = "@ui:tree-selector";
+    /** docs/18（§3.8）：{@code /fork}（空参）与 {@code /tree} 拆 marker——fork 旧行为、tree 走导航流。 */
+    public static final String UI_FORK_SELECTOR = "@ui:fork-selector";
     public static final String UI_SETTINGS = "@ui:settings";
     public static final String UI_SCOPED_MODELS = "@ui:scoped-models";
 

@@ -37,7 +37,8 @@ public final class SessionCommands {
             @Override public String argumentHint() { return "[branch-name]"; }
             @Override public CompletionStage<String> execute(String args, SlashContext ctx) {
                 if (args.isBlank()) {
-                    return CompletableFuture.completedFuture(CommandRegistry.UI_TREE_SELECTOR);
+                    // docs/18（§3.8）：/fork（空参）与 /tree 拆 marker——这里仍开 fork 选择器。
+                    return CompletableFuture.completedFuture(CommandRegistry.UI_FORK_SELECTOR);
                 }
                 var forked = ctx.session().forkCopy(args.trim());
                 if (forked.isEmpty()) {
