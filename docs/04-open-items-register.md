@@ -378,14 +378,21 @@
 - 【风险/代价】窄差 3 条新登（docs/21 §5）：**D49** `app.message.followUp` 键平台分叉未落（pi Windows/WSL 是 `ctrl+q`，java 恒 `alt+enter`——换键动肌肉记忆，单独裁决）[用户可见，边缘]；**D50** `/fork <name>` 带参臂（`forkCopy`）是 java 独有便捷路（pi `/fork` 精确匹配无参）[用户可见，边缘]；**D51** RPC `fork` 对非 user 消息 entry 不报错（pi position "before" 校验抛 `"Invalid entry ID for forking"`）[边缘]。**B254 销号**；map/04 #15 `/fork` 存疑→对齐（+1.0）＋E3-8 同能力行同翻（+1.0，设计对账表漏列、闭环逐行实算补）；map/05 S20 缺失→对齐（+1.0）＋K11 同能力行同翻（+1.0，同前）；R28 不翻（hint 行＋取回流补齐，「流式 bash/工具组件挂该区」仍缺，证据列更新）。账面：模块 286.0→**288.0/487 ≈ 59.1%**（原始口径 290.5→292.5/496 ≈ 59.0%）、tui/web 110.5→**112.5/245 ≈ 45.9%**、全仓 958.0→**962.0/1381 ≈ 69.7%**；D 域不动（73.0/83＝88.0%）。**B66 核账**（死键 6→4：DEQUEUE 本批接、MODEL_CYCLE ai 批 3b 早接）。E1 涨到 2,083（+23）、E2 667（−7）、E6 615（+56，设计预估 +~50）。
 - 触发条件：D41 残余（扩展 abortHandler 的 restore）随 E5 批次；D49 随键位平台规则统一裁决时。出处：docs/21 §3–§6＋§9 闭环回填。
 
+### map/04-批 coding-agent-11（docs/22）— settings 键批量第一批（E2 域：核销×2＋消费链×5＋声明面×14）
+
+- 【场景】docs/20 §3 批 11 行「settings 键批量（E2 域 22 缺失＋11 存疑）」的前半：核销更正＋coding-agent 模块内可闭环的消费链＋纯声明面；TUI 行为键与包管理器两键、`theme` 留「消费点批」。取证发现 map/04 两行账面滞后（B1/B128 早已落地未翻行）。
+- 【决定】2026-10-22 批 coding-agent-11（docs/22，T1→T7）：① **T1 核销**（零代码）——E2-38 `thinkingBudgets`（字段 `Settings:91`＋访问器＋消费点 `AgentSession:614`，B128 已落）、E2-11 `branchSummary`（字段 `Settings:42`＋访问器＋消费点 `AgentSession:1231`＋`TreeNavigationFlow:169`，B1 已销）⇒ 翻对齐；② **T2 `modelThinkingLevels`**——字段＋四访问器（pi :768-793 对位）＋三消费点：`SessionSetup.thinkingLevelFor` 第四臂（**B15-残留-5 销号**，javadoc 自述同删）、`AgentSession.setModel` 包装＋`thinkingLevelForModelSwitch` 三臂（pi :2477-2496/:2669-2681；RPC/Web/TUI 切模型三点改道）、`cycleModelForward` 走解析链；③ **T3 `httpProxy`**——`HttpProxySupport`（pi applyHttpProxySettings 对位；JVM 不可写进程 env ⇒ 通道换 `http(s).proxyHost/Port` 系统属性，**裁决③**，`??=` 语义保持）＋应用点 `SettingsManager.load` 唯一漏斗（读全局域；`withStorage` 测试道不应用）；④ **T4 `httpIdleTimeoutMs`**——字段（number|"disabled" 联合边界）＋`TimeoutSettings` 解析（pi :5/20-36＋:147-157 逐字）＋`SettingsNetworkAccessors`＋消费点 `DefaultProviders.apiOptions`（pi sdk.ts:344-354 链序：providerRetry ?? 有效值，0⇒MAX_INT，缺席 300s——**java 自造 120s 兜底删除**）；⑤ **T5 `deviceId`**——`SettingsInstallAccessors.getOrCreateDeviceId`（只读写全局域／生成即 flush〔**裁决⑥**〕／幂等）＋`AuthCommand` ChatGPT 臂弃 `LoginHints.cli()`（每次随机）改持久安装 ID（pi interactive-mode.ts:6331 对位，**裁决⑤**）；⑥ **T6 `blockImages`**——`ImageBlockFilter`（pi sdk.ts:296-329 逐字：user/toolResult 两臂、占位文案、连续去重、URL 图片不滤）＋`EngineHookBridge.transformContext` 尾部殿后（动态现读；桥加 `BooleanSupplier` 参，4 参 install 重载默认 off 不动存量测试）＋`--no-extensions` 裸注册过滤钩（pi 过滤独立于扩展面——**执行裁决**：设计未虑及 no-extensions 早退）；压缩/分支摘要/bug 报告不滤（pi 同，非窄差）；⑦ **T7 声明面 14 键**——字段块（pi 行号逐键钉注）＋`Warnings` record＋三域访问器（**裁决⑧**拆分：`SettingsNetworkAccessors`/`SettingsInstallAccessors`/`SettingsUiPrefsAccessors`，`SettingsManager` 加 `network()`/`install()`/`uiPrefs()` 三入口）；**裁决②通过**：E2-45 `codemode` 出分母（R5 面外 B161）。
+- 【风险/代价】窄差 3 条新登（docs/22 §5）：**D52** httpProxy 通道＝系统属性（pi 写进程 env 由 undici EnvHttpProxyAgent 全局生效；java 由 jdk 默认 ProxySelector 生效。URL 内嵌凭证不解析、`nonProxyHosts` 不支持、socks scheme 不支持；闭环评审补记两边缘：https scheme 缺省端口取 80（pi/Node URL 解析取 443）、env 优先级按组判定〔任一 HTTP_PROXY/HTTPS_PROXY 在场即整体跳过〕（pi 两变量独立 `??=`））[内部]；**D53** httpIdleTimeoutMs 单臂对齐（只接 request timeout 臂；pi 另有 `configureHttpDispatcher` undici 全局 dispatcher 面 java 无对位——jdk 无全局 dispatcher）[内部]；**D54** 切模型「全无级别配置」不写思考档 entry（pi 回落 DEFAULT 并 `setThinkingLevel` 写 entry；java 继承当前档不写，裁决⑦）[会话文件，边缘]。**B15-残留-5 销号**。账面：模块 288.0→**303.5/485 ≈ 62.6%**（原始口径 292.5→308.0/494 ≈ 62.3%；E2-45 出分母 487→485/496→494/1381→1379）、全仓 962.0→**977.5/1379 ≈ 70.9%**；E2 域 52.0→67.5/84＝**80.4%**；D 域不动（88.0%）。行为变化注记：provider 请求超时兜底 120s⇒300s（pi 对齐方向，changelog 级）。
+- 触发条件：声明面 14 键的消费点（changelog 流／analytics／cache-warmer／websocket 传输／TUI 硬件光标·全屏面）随「settings 消费点批」落地后逐行翻对齐；`setModelThinkingLevel`/`removeModelThinkingLevel` 的 TUI 入口同批。出处：docs/22 §3–§6＋§9 闭环回填。
+
 ---
 
 ## 5. E 类 —— 结构债（仓库规则：单文件 ≤ 500 行）
 
 | # | 文件 | 行数 |
 |---|---|---:|---:|
-| E1 | coding-agent …/core/AgentSession.java | **2,083**（2026-10-22 批 coding-agent-10 实测——批 10 +23：ForkMessage record＋getUserMessagesForForking 修真＋textOf 分隔符参；拆分宜搭下一 coding-agent 批） |
-| E2 | coding-agent …/rpc/RpcDispatcher.java | 667（2026-10-22 批 coding-agent-10 实测——forkMessageText 删除、fork/get_fork_messages 两点修真 −7） |
+| E1 | coding-agent …/core/AgentSession.java | **2,131**（2026-10-22 批 coding-agent-11 实测——批 11 +48：setModel 包装＋thinkingLevelForModelSwitch＋no-extensions 过滤钩＋per-model 装配臂；拆分宜搭下一 coding-agent 批） |
+| E2 | coding-agent …/rpc/RpcDispatcher.java | 671（2026-10-22 批 coding-agent-11 实测——set_model 改道注释 +4） |
 | E5 | ai …/catalog/ModelCompat.java | **762**（2026-10-11 B98 加 8 组件；converter 侧已拆出 CompletionAssistantMessage 保 500 内） |
 | E6 | tui …/app/PiTuiApp.java | 615（2026-10-22 批 coding-agent-10 实测——fork 流＋dequeue/INTERRUPT 臂 +56） |
 
