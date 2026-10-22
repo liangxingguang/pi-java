@@ -570,11 +570,9 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     /** Show the user's message immediately on submit (optimistic bubble). */
     public void appendUserText(String text) {
         pendingUserText = text;
-        // 批 12 T6：与 from(entry) 链同格烘焙——乐观气泡与提交后的条目
-        // （pendingUserText 去重后不再渲染）不因 pad 切换而跳动。
-        var pad = outputPad.getAsInt();
-        var bubble = new ChatMessage.User(text);
-        chatPanel.append(pad > 0 ? new ChatMessage.Padded(bubble, pad) : bubble);
+        // 批 12 T6 注记：乐观气泡<b>不</b>烘焙 pad（设计消费面＝from(entry) 链
+        // 三处；提交后的条目经 pendingUserText 去重本就不再渲染，无跳动面）。
+        chatPanel.append(new ChatMessage.User(text));
     }
 
     /** The current snapshot (for tree selectors). */

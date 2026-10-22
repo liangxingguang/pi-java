@@ -70,7 +70,7 @@ class SkillCommandsTuiTest {
     void settingsScreenHasSkillCommandsFieldThatCyclesAccessors() throws Exception {
         try (var session = createSession()) {
             var screen = new SettingsScreen(session);
-            var index = skillCommandsIndex();
+            var index = skillCommandsIndex(screen);
             setSelectedField(screen, index);
 
             // 缺省 true ⇒ 首次 Enter 落到 false；再 Enter 回 true（往返）。
@@ -109,11 +109,11 @@ class SkillCommandsTuiTest {
         return chatScreen;
     }
 
-    /** 反射读 FIELDS 中 "Skill commands" 的下标（断言字段存在）。 */
-    private static int skillCommandsIndex() throws Exception {
-        Field fields = SettingsScreen.class.getDeclaredField("FIELDS");
+    /** 反射读 fields（批 12 起为实例装配）中 "Skill commands" 的下标（断言字段存在）。 */
+    private static int skillCommandsIndex(SettingsScreen screen) throws Exception {
+        Field fields = SettingsScreen.class.getDeclaredField("fields");
         fields.setAccessible(true);
-        List<?> list = (List<?>) fields.get(null);
+        List<?> list = (List<?>) fields.get(screen);
         Method label = null;
         for (int i = 0; i < list.size(); i++) {
             var item = list.get(i);
@@ -125,7 +125,7 @@ class SkillCommandsTuiTest {
                 return i;
             }
         }
-        throw new AssertionError("SettingsScreen.FIELDS 无 \"Skill commands\" 字段");
+        throw new AssertionError("SettingsScreen.fields 无 \"Skill commands\" 字段");
     }
 
     private static void setSelectedField(SettingsScreen screen, int index)
