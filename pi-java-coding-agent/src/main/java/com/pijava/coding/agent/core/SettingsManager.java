@@ -53,6 +53,9 @@ public final class SettingsManager {
             : new FileSettingsStorage(agentDir, projectDir);
         var manager = new SettingsManager(storage);
         manager.reload();
+        // 批 11 T3（pi main.ts:596/874 启动期应用对位）：读全局域；测试道
+        // withStorage 不应用（不改 JVM 全局态）。
+        HttpProxySupport.apply(manager.global().httpProxy);
         manager.setProjectTrusted(
             resolveTrust(projectTrustOverride, manager.merged().defaultProjectTrust));
         return manager;
