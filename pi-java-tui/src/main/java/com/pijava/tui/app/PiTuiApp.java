@@ -6,7 +6,9 @@ import java.util.List;
 
 import com.pijava.agent.harness.WatchHandle;
 import com.pijava.coding.agent.cli.Args;
+import com.pijava.coding.agent.cli.Version;
 import com.pijava.coding.agent.core.AgentSession;
+import com.pijava.coding.agent.core.AnthropicExtraUsageWarning;
 import com.pijava.coding.agent.core.KeybindingsManager;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
 import com.pijava.coding.agent.core.slash.PromptTemplateItems;
@@ -17,6 +19,7 @@ import com.pijava.tui.component.KeybindingHints;
 import com.pijava.tui.component.SlashCompleter;
 import com.pijava.tui.screen.ChatScreen;
 import com.pijava.tui.screen.ModelSelectorScreen;
+import com.pijava.tui.screen.ModelThinkingLevelScreen;
 import com.pijava.tui.screen.ScreenOverlay;
 import com.pijava.tui.screen.SessionListScreen;
 import com.pijava.tui.screen.SettingsScreen;
@@ -83,6 +86,18 @@ public final class PiTuiApp {
     private boolean welcomeShown;
     private final InlineRenderContext renderContext = new InlineRenderContext();
     private static final int MAX_EDITOR_LINES = 6;
+    // 批 12 T2（docs/23 §3）：双击 Esc 的 500ms 时间窗（pi lastEscapeTime 对位）。
+    private long lastEscapeAt;
+    private java.util.function.LongSupplier nowMillis = System::currentTimeMillis;
+    // 批 12 T13：Anthropic 订阅凭证警告（每会话一次——随 switchSession 重建）。
+    private AnthropicExtraUsageWarning subscriptionWarning;
+    /** 凭证解析闭包（生产＝{@code Credentials.resolveCredential}；测试注入）。 */
+    private java.util.function.Supplier<
+            java.util.Optional<com.pijava.ai.auth.RecordedCredential>> credentialProbe =
+        () -> com.pijava.ai.auth.Credentials.resolveCredential("anthropic");
+    // 批 12 T7：启动 changelog（runInteractive 装配，welcome 之后展示一次）。
+    private String startupChangelog;
+    private boolean startupChangelogCollapse;
 
     /** Creates the app with the default scroll configuration. */
     public PiTuiApp(InteractiveMode mode, ChatScreen chatScreen,
@@ -109,6 +124,18 @@ public final class PiTuiApp {
         this.normalizer = new ScrollInputNormalizer(scrollConfig);
         this.session = mode.session();
         this.sessionEvents = new SessionEventChannel(dispatcher, chatScreen::onSessionEvent);
+        // 批 12（docs/23）：settings 消费键 live-read 注入——先于补全目录装配
+        // （completer 重建带上 maxVisible 源）；现读 this.session ⇒ switchSession
+        // 后新会话的设置面自然生效。
+        chatScreen.setOutputPadSource(
+            () -> session.services().settings().uiPrefs().getOutputPad());
+        chatScreen.setEditorPaddingSource(
+            () -> session.services().settings().uiPrefs().getEditorPaddingX());
+        chatScreen.setAutocompleteMaxVisibleSource(
+            () -> session.services().settings().uiPrefs().getAutocompleteMaxVisible());
+        chatScreen.setScrollbarModeSource(
+            () -> session.services().settings().uiPrefs().getFullscreenScrollbar());
+        subscriptionWarning = newSubscriptionWarning();
         chatScreen.setSlashCommands(loadSlashItems());
         chatScreen.setInterruptHint(
             KeybindingHints.keyText(keys.strokeFor(KeybindingsManager.INTERRUPT)));
@@ -153,6 +180,7 @@ public final class PiTuiApp {
         snapshotHandle = session.watchSession();
         snapshotHandle.subscribe(snapshot ->
             dispatcher.dispatch(() -> chatScreen.updateSnapshot(snapshot)));
+        maybeWarnSubscriptionAuth();   // 批 12 T13（pi :1228 init 后时机对位）
     }
 
     /** Attach the raw-scrollback inline shell (regular TUI mode). */
@@ -182,6 +210,7 @@ public final class PiTuiApp {
         // one 1 Hz nudge while a ticking indicator is alive (fullscreen
         // recomputes it per frame instead — see CountdownWake).
         countdownWake = CountdownWake.start(chatScreen::hasTickingIndicator, shell::markDirty);
+        maybeWarnSubscriptionAuth();   // 批 12 T13（pi :1228 init 后时机对位）
     }
 
     /** Apply the CSS theme to the inline render context. */
@@ -196,6 +225,36 @@ public final class PiTuiApp {
         }
         welcomeShown = true;
         chatScreen.showWelcome(new WelcomeOverlay(session).text());
+        showStartupChangelog();
+    }
+
+    /**
+     * 批 12 T7（docs/23 §3）：启动 changelog 装配（runInteractive 在 runner
+     * 启动前调用；welcome 之后、dispatcher 首帧前展示一次）。
+     */
+    public void setStartupChangelog(java.util.Optional<String> markdown, boolean collapse) {
+        this.startupChangelog = markdown.orElse(null);
+        this.startupChangelogCollapse = collapse;
+    }
+
+    /** pi {@code showStartupNoticesIfNeeded}（:843-872）两臂对位。 */
+    private void showStartupChangelog() {
+        if (startupChangelog == null) {
+            return;
+        }
+        var markdown = startupChangelog;
+        startupChangelog = null;
+        if (startupChangelogCollapse) {
+            // pi 折叠臂一行（文案逐字【模型可见】）。
+            var v = com.pijava.coding.agent.core.ChangelogSupport
+                .latestVersionOf(markdown).orElse(Version.VERSION);
+            chatScreen.appendSystemText(
+                "Updated to v" + v + ". Use /changelog to view full changelog.");
+        } else {
+            // pi 非折叠臂："What's New" 标题＋正文（D63：纯文本渲染，Markdown
+            // 组件随 R1 批）。
+            chatScreen.appendSystemText("What's New\n\n" + markdown.trim());
+        }
     }
 
     /** Submit initial CLI messages when the TUI starts. */
@@ -329,6 +388,17 @@ public final class PiTuiApp {
                 var done = overlay;
                 overlay = null;
                 done.apply(session, this::switchSession);
+                // 批 12 T14：设置屏的 thinking-level 子菜单请求 ⇒ 不关屏改开
+                // ModelThinkingLevelScreen（pi settings-selector.ts:607-610 对位）。
+                if (done instanceof SettingsScreen settings
+                        && settings.pollModelThinkingRequest()) {
+                    openOverlay(new ModelThinkingLevelScreen(session));
+                    return EventResult.HANDLED;
+                }
+                // 批 12 T13（pi :4550 模型选择结果时机对位）。
+                if (done instanceof ModelSelectorScreen) {
+                    maybeWarnSubscriptionAuth();
+                }
                 // B244（pi interactive-mode.ts:4986-4989 对位）：设置可能已改，
                 // 关屏统一重建补全目录（pi 是 toggle 即时重建，窄差 D4 时机差；
                 // 重建是纯读装配，无副作用）。
@@ -424,8 +494,15 @@ public final class PiTuiApp {
         var command = mode.dispatch(text, slashContext);
         if (command != null) {
             chatScreen.clearInput();
+            boolean loginCommand = text.startsWith("/login");
             command.thenAccept(result ->
-                dispatcher.dispatch(() -> handleCommandResult(result)));
+                dispatcher.dispatch(() -> {
+                    handleCommandResult(result);
+                    // 批 12 T13（pi :5207/:5352 登录后时机对位）。
+                    if (loginCommand) {
+                        maybeWarnSubscriptionAuth();
+                    }
+                }));
         } else {
             chatScreen.appendUserText(text);
             chatScreen.submitInput();
@@ -441,27 +518,8 @@ public final class PiTuiApp {
                 openOverlay(new ModelSelectorScreen(session));
             case CommandRegistry.UI_SESSION_SELECTOR ->
                 openOverlay(new SessionListScreen(session.listSessions()));
-            case CommandRegistry.UI_TREE_SELECTOR ->
-                // docs/18（§3.8/§3.9）＋ docs/19（§3.9）：/tree 走原地导航流
-                // （entry 树选择器 → 选 entry 后三选摘要）。
-                new TreeNavigationFlow(session, mode, chatScreen, dispatcher,
-                    this::openOverlay, this::terminalRows, this::terminalCols, keys)
-                    .begin();
-            case CommandRegistry.UI_FORK_SELECTOR -> {
-                // docs/21（T3，B254）：/fork＝user-message 选择器（pi
-                // showUserMessageSelector，interactive-mode.ts:5500-5538 对位）。
-                var forkMessages = session.getUserMessagesForForking();
-                if (forkMessages.isEmpty()) {                       // pi :5503-5506
-                    chatScreen.appendSystemText("No messages to fork from");
-                } else {
-                    var initialSelectedId =
-                        forkMessages.get(forkMessages.size() - 1).entryId();
-                    openOverlay(new UserMessageSelectorScreen(forkMessages, initialSelectedId,
-                        this::terminalCols,
-                        entryId -> forkFromMessage(entryId, forkMessages),
-                        () -> { }));                                // Esc：pi 的 onCancel 只关选择器
-                }
-            }
+            case CommandRegistry.UI_TREE_SELECTOR -> openTreeSelector();
+            case CommandRegistry.UI_FORK_SELECTOR -> openForkSelector();
             case CommandRegistry.UI_SETTINGS ->
                 openOverlay(new SettingsScreen(session));
             case CommandRegistry.UI_SCOPED_MODELS ->
@@ -469,6 +527,35 @@ public final class PiTuiApp {
                     "Use /scoped-models +<model> or /scoped-models -<model>");
             default -> chatScreen.appendSystemText(result);
         }
+    }
+
+    /**
+     * /tree 入口（批 12 T2 抽出，双击 Esc 与 slash 两路共用）：
+     * docs/18（§3.8/§3.9）＋ docs/19（§3.9）——原地导航流（entry 树选择器 →
+     * 选 entry 后三选摘要）。
+     */
+    private void openTreeSelector() {
+        new TreeNavigationFlow(session, mode, chatScreen, dispatcher,
+            this::openOverlay, this::terminalRows, this::terminalCols, keys)
+            .begin();
+    }
+
+    /**
+     * /fork 入口（批 12 T2 抽出；docs/21 T3，B254）：pi
+     * {@code showUserMessageSelector}（interactive-mode.ts:5500-5538 对位）——
+     * user-message 选择器。
+     */
+    private void openForkSelector() {
+        var forkMessages = session.getUserMessagesForForking();
+        if (forkMessages.isEmpty()) {                       // pi :5503-5506
+            chatScreen.appendSystemText("No messages to fork from");
+            return;
+        }
+        var initialSelectedId = forkMessages.get(forkMessages.size() - 1).entryId();
+        openOverlay(new UserMessageSelectorScreen(forkMessages, initialSelectedId,
+            this::terminalCols,
+            entryId -> forkFromMessage(entryId, forkMessages),
+            () -> { }));                                // Esc：pi 的 onCancel 只关选择器
     }
 
     /**
@@ -506,8 +593,30 @@ public final class PiTuiApp {
                     if (restored != null) {
                         chatScreen.restoreToEditor(restored.combinedText());
                     }
+                    mode.abort();
+                    // 批 12 T2：流式中断消费本次 Esc，不计双击（pi :3071-3073 短路）。
+                    lastEscapeAt = 0L;
+                } else if (chatScreen.isInputEmpty()) {
+                    // 批 12 T2（docs/23 §3；pi :3067-3097 对位）：空编辑器双击 Esc
+                    // （500ms 窗）⇒ doubleEscapeAction（默认 "tree"）。
+                    var action =
+                        session.services().settings().accessors().getDoubleEscapeAction();
+                    if (!"none".equals(action)) {
+                        long now = nowMillis.getAsLong();
+                        if (now - lastEscapeAt < 500) {
+                            if ("tree".equals(action)) {
+                                openTreeSelector();
+                            } else {
+                                openForkSelector();
+                            }
+                            lastEscapeAt = 0L;
+                        } else {
+                            lastEscapeAt = now;
+                        }
+                    }
+                } else {
+                    mode.abort();   // 既有：非空编辑器/空闲 abort（幂等）
                 }
-                mode.abort();
             }
             case KeybindingsManager.FOLLOW_UP -> {
                 if (chatScreen.isInputEmpty()) {
@@ -534,7 +643,12 @@ public final class PiTuiApp {
                 openOverlay(new ModelSelectorScreen(session));
             // B137：Ctrl+P 在 --models/settings scope 内正向轮转（空 scope 走全目录）。
             // TUI 无模型常驻标签，切换静默——与 Ctrl+L 选择器现状一致。
-            case KeybindingsManager.MODEL_CYCLE -> session.cycleModelForward();
+            case KeybindingsManager.MODEL_CYCLE -> {
+                session.cycleModelForward();
+                maybeWarnSubscriptionAuth();   // 批 12 T13（pi :6120/:6126 切换时机对位）
+            }
+            // 批 12 T3（docs/23 §3；pi :4596-4611 对位）：Ctrl+G 外部编辑器往返。
+            case KeybindingsManager.EXTERNAL_EDITOR -> openExternalEditor();
             case KeybindingsManager.DEQUEUE -> {
                 // docs/21（T4，S20）：pi handleDequeue（:4507-4513）——全部排队
                 // （引擎两队列＋压缩缓冲）合并取回编辑器，文案逐字【模型可见】。
@@ -547,12 +661,73 @@ public final class PiTuiApp {
                         + " queued message" + (restored.count() > 1 ? "s" : "") + " to editor");
                 }
             }
-            default -> { /* thinking.* / tools.expand / editor.external → Phase 6 */ }
+            default -> { /* thinking.* / tools.expand → Phase 6 */ }
+        }
+    }
+
+    /**
+     * 批 12 T3（docs/23 §3；pi {@code handleOpenExternalEditor} :4596-4611 对位）：
+     * 编辑器内容写临时文件 ⇒ 外部编辑器（inheritIO）⇒ 退出码 0 读回。
+     * alt 屏模式先退后进（pi ui.stop()/ui.start()）；渲染线程阻塞在等待上，
+     * 子进程输出与 TUI 帧由 alt 屏序列隔离。
+     */
+    private void openExternalEditor() {
+        var command = session.services().settings().accessors().getExternalEditorCommand();
+        var content = chatScreen.inputText();
+        boolean altScreen = runner != null;   // regular 内联模式无 alt 屏 ⇒ 空操作
+        if (altScreen) {
+            TamboUIAdapter.leaveAlternateScreen();
+        }
+        try {
+            var result =
+                com.pijava.coding.agent.core.ExternalEditorSupport.edit(command, content);
+            if (result instanceof com.pijava.coding.agent.core.ExternalEditorSupport
+                    .Result.Complete(var text)) {
+                chatScreen.setEditorText(text);
+            }
+        } catch (Exception e) {
+            chatScreen.showError("External editor failed: " + e.getMessage());
+        } finally {
+            if (altScreen) {
+                TamboUIAdapter.enterAlternateScreen();
+            }
         }
     }
 
     private void openOverlay(ScreenOverlay screenOverlay) {
         this.overlay = screenOverlay;
+    }
+
+    // ── 批 12 T13（docs/23 §3）：Anthropic 订阅凭证警告接线 ──────
+
+    /** 警告 guard（现读 this.session 的 warnings——switchSession 后自然跟随）。 */
+    private AnthropicExtraUsageWarning newSubscriptionWarning() {
+        return new AnthropicExtraUsageWarning(
+            () -> session.services().settings().uiPrefs().getWarnings());
+    }
+
+    /**
+     * pi 四触发时机的统一入口（:1228 init／:4550 模型选择／:6120 切换／
+     * :5352 登录）：命中则聊天区一条警告（每会话一次，guard 内部去重）。
+     */
+    private void maybeWarnSubscriptionAuth() {
+        if (subscriptionWarning == null) {
+            return;
+        }
+        subscriptionWarning.maybeWarn(session.harness().getModel(), credentialProbe)
+            .ifPresent(chatScreen::appendSystemText);
+    }
+
+    /** 凭证探针注入（T13 测试面——不碰真实 env/凭证库）。 */
+    void setCredentialProbe(java.util.function.Supplier<
+            java.util.Optional<com.pijava.ai.auth.RecordedCredential>> probe) {
+        credentialProbe = probe == null
+            ? () -> com.pijava.ai.auth.Credentials.resolveCredential("anthropic") : probe;
+    }
+
+    /** 双击时间窗的时钟注入（测试面；生产 System::currentTimeMillis）。 */
+    void setNowMillis(java.util.function.LongSupplier supplier) {
+        nowMillis = supplier == null ? System::currentTimeMillis : supplier;
     }
 
     /** 终端行数（ResizeEvent 跟踪，初值 24——裁决⑧）。 */
@@ -574,6 +749,9 @@ public final class PiTuiApp {
     void switchSession(AgentSession newSession) {
         this.session = newSession;
         mode.switchSession(newSession);
+        // 批 12 T13：警告 guard 随会话重建（pi anthropicSubscriptionWarningShown
+        // 每会话一次）。
+        subscriptionWarning = newSubscriptionWarning();
         // 会话事件通道与快照订阅都跟着换会话重接（各自先摘旧句柄）。
         sessionEvents.open(newSession, null);
         if (snapshotHandle != null) {

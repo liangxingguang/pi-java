@@ -62,6 +62,70 @@ class SettingsScreenTest {
         });
     }
 
+    // ── 批 12（docs/23 §3/§7）：消费键行＋T14 子菜单入口 ─────────
+
+    private static final dev.tamboui.tui.event.KeyEvent ENTER =
+        KeyEvent.ofKey(dev.tamboui.tui.event.KeyCode.ENTER);
+    private static final dev.tamboui.tui.event.KeyEvent DOWN =
+        KeyEvent.ofKey(dev.tamboui.tui.event.KeyCode.DOWN);
+
+    @Test
+    void outputPadRowCyclesAndFlushes() throws Exception {
+        withIsolatedHome(() -> {
+            try (var session = AgentSession.create(
+                    ArgsParser.parse(new String[] {}))) {
+                var screen = new SettingsScreen(session);
+                // Output pad 行（第 11 行，0 起）：默认 1 ⇒ 循环到 0。
+                for (int i = 0; i < 11; i++) {
+                    screen.onKeyEvent(DOWN);
+                }
+                screen.onKeyEvent(ENTER);
+
+                assertThat(session.services().settings().uiPrefs().getOutputPad()).isZero();
+            }
+        });
+    }
+
+    @Test
+    void warningsRowTogglesAnthropicExtraUsage() throws Exception {
+        withIsolatedHome(() -> {
+            try (var session = AgentSession.create(
+                    ArgsParser.parse(new String[] {}))) {
+                var screen = new SettingsScreen(session);
+                // Warn Anthropic extra usage 行（第 15 行）：默认 true ⇒ 循环到 false。
+                for (int i = 0; i < 15; i++) {
+                    screen.onKeyEvent(DOWN);
+                }
+                screen.onKeyEvent(ENTER);
+
+                assertThat(session.services().settings().uiPrefs()
+                    .getWarnings().anthropicExtraUsage()).isFalse();
+            }
+        });
+    }
+
+    @Test
+    void thinkingLevelRowRequestsTheSubmenu() throws Exception {
+        withIsolatedHome(() -> {
+            try (var session = AgentSession.create(
+                    ArgsParser.parse(new String[] {}))) {
+                var screen = new SettingsScreen(session);
+                // 末行（第 16 行）＝子菜单入口：Enter 置请求位、不写设置、不关屏。
+                for (int i = 0; i < 16; i++) {
+                    screen.onKeyEvent(DOWN);
+                }
+                screen.onKeyEvent(ENTER);
+
+                assertThat(screen.pollModelThinkingRequest()).isTrue();
+                // 一次性检出：再 poll 复位。
+                assertThat(screen.pollModelThinkingRequest()).isFalse();
+                assertThat(screen.isDone()).isFalse();
+                assertThat(session.services().settings().effective().modelThinkingLevels)
+                    .isNull();
+            }
+        });
+    }
+
     /** Point user.home at a temp dir so flush() never touches real settings. */
     private static void withIsolatedHome(Runnable action) throws Exception {
         var tempHome = Files.createTempDirectory("pi-java-settings-test");
