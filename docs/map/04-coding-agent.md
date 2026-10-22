@@ -181,7 +181,7 @@ pi-java 的**引擎钩子** = `pi-java-agent-core/.../agent/hook/HookSystem.java
 | 13 | `session_tree` | `:1596` | ✅ | 1 | **对齐** | 批 8（docs/18）：导航后发射（newLeafId=导航后当前叶、summaryEntry、fromExtension 仅在有摘要时有值，pi :4140-4147 逐字） |
 | 14 | `context` | `:1597` | ✅ | **3** | **对齐** | 批 4 `EngineHookBridge`（`transform_context` 适配器）：两阶段逐字、系统消息过滤＋restore、引用相等快照（docs/14 §3.4.1） |
 | 15 | `context_with_system` | `:1598` | ✅ | **3** | **对齐** | 批 4 阶段二：全量可见、返回即采用、弄丢头系统 `emitError` 上报仍采用（错误文本逐字） |
-| 16 | `cache_warming_decision` | `:1600` | ❌ | 2 | **缺失** | `core/cache-warmer.ts` 453 行；java 无缓存预热子系统 |
+| 16 | `cache_warming_decision` | `:1600` | ✅ | 2 | **对齐** | 批 13（docs/24）：`CacheWarmingBridge`（pi runner.ts:1121-1142 逐字——last-override-wins＋逐处理器异常 emitError 后继续；未安装/无订阅 ⇒ 事件自带 action）＋`CacheWarmer` decide 消费（双层回落 :315-317 同保留）＋事件/结果/spec 三件套 |
 | 17 | `before_provider_request` | `:1604` | ✅ | **3** | **对齐** | 批 coding-agent-7（docs/17）：ai 缝 `ProviderHooks`＋`ProviderEventBridge`——七车道 `onPayload`（车道原生载荷，同型守卫裁决⑤），链式替换＋逐处理器异常隔离（pi runner.ts:1360-1392 逐字） |
 | 18 | `before_provider_headers` | `:1607` | ✅ | 2 | **对齐** | 批 7：`transformHeaders` 在 createApi 前缝消费（pi models.ts:866-871 对位，钩本体剥离）——原位改写＋null 删除（合并集内；SDK 默认头抑制不可达＝窄差 D34） |
 | 19 | `after_provider_response` | `:1608` | ✅ | 2 | **对齐** | 批 7：SDK 四车道 `withRawResponse`（成功获取后、流消费前）＋自备两车道 `SseResponseObserver` 终态面（含错误状态，pi fetch 车道同形）；**google 不发＝pi 同缺**（pi google-generative-ai.ts 全文件零命中） |
@@ -208,9 +208,9 @@ pi-java 的**引擎钩子** = `pi-java-agent-core/.../agent/hook/HookSystem.java
 | 40 | `user_bash` | `:1635` | ✅ | 1 | **对齐** | 批 5 `executeBash` chokepoint 拦截（{result} 替换臂＋异常重抛不回落，pi :1262-1296 逐字）；{operations} 臂不移植（窄差 D10） |
 | 41 | `input` | `:1636` | ✅ | **3** | **对齐** | 批 5 `processPrompt` 内、展开**之前**（pi :1991 逐字）；transform 链＋handled（SessionResult "handled"）；images 恒 null（窄差 D12） |
 
-**汇总（宽口径，批 coding-agent-8 后）：对齐 35 / 缺失 6 / 存疑 0 / 合计 41 = 85.4%**；**Σ权重 83 / Σ(w×c) 73.0 / 加权 88.0%**
+**汇总（宽口径，批 coding-agent-13 后）：对齐 36 / 缺失 5 / 存疑 0 / 合计 41 = 87.8%**；**Σ权重 83 / Σ(w×c) 75.0 / 加权 90.4%**
 **汇总（严格口径）**：批 8 起与宽口径**合一**——最后一个未桥接引擎钩子（#12 `before_navigation`）随死钩删除出账，D 域不再有死 firing 点。
-> ⚠️ D 域 Σ权重 **83** = 模块 496 的 **16.7%**。批 coding-agent-8（docs/18）翻 2 行（#12 存疑→对齐 +0.5、#13 缺失→对齐 +1.0，逐行实算 Δ＝**+1.5**）：存疑**清零**；缺失 6 行＝#1 project_trust／#11 mcp_servers_change／#16 cache_warming／#26/#27 ui_prompt×2／#36 model_select（各随子系统：B221/E5）。
+> ⚠️ D 域 Σ权重 **83** = 模块 496 的 **16.7%**。批 coding-agent-13（docs/24）翻 1 行（#16 缺失→对齐 +2.0）；缺失 5 行＝#1 project_trust／#11 mcp_servers_change／#26/#27 ui_prompt×2／#36 model_select（各随子系统：B221/E5）。批 8 翻 2 行（+1.5）：存疑**清零**。
 > ⚠️ **基线纪律**（批 4 起）：D 域与模块合计按逐行实算（批 4 发现汇总行与逐行不符同族教训——批 4 基线实算 11.5≠旧汇总行 10.5）。
 
 ### 批 coding-agent-4（docs/14，2026-10-20 闭环）窄差表
@@ -332,7 +332,7 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 | E2-11 | `branchSummary` | `:236` | `:42` | 2 | **对齐** | **批 11（2026-10-22，docs/22 T1）核销**（账面滞后）：B1 已在 agent-core 批 4 销号——字段＋访问器（`getBranchSummaryReserveTokens`/`getBranchSummarySkipPrompt`）＋消费点 `AgentSession.java:1231`（reserve 进分支摘要选项）＋`TreeNavigationFlow.java:169`（skipPrompt 门，TUI） |
 | E2-12 | `retry` | `:237` | `:66` | 2 | 对齐 | `SettingsAccessors.java:197` `getRetrySettings()` → `AgentSession.java:317`；`getProviderRetrySettings():218` → api options |
 | E2-13 | `hideThinkingBlock` | `:238` | `:38` | 2 | 对齐 | 2 处消费 |
-| E2-14 | `showCacheMissNotices` | `:239` | `:97` | 1 | **存疑** | 批 11（docs/22 T7）：字段＋UiPrefs 访问器（`?? false`）；**批 12（docs/23 §4）**：消费点＝cache-warmer 的 5 处通知门（interactive-mode.ts:3999/4110/4121/4151/4185），随「cache-warmer 子系统批」（docs/20 §3 插行，与 R24 同批） |
+| E2-14 | `showCacheMissNotices` | `:239` | `:97` | 1 | **对齐** | 批 11：字段＋UiPrefs 访问器；**批 13（docs/24，裁决⑥）**：有载体三门落地——:4110 暖用量行（`ChatScreen.appendUsageNotice` 门控收口＋:3449 即时臂 `EntryAppended`＋onEntry 去重）、:4185 即时臂（`CacheMissTracker.detectOnMessageEnd`，判定后推进 prev 对位 pi scan 本 run 可见性）、:3999 重建臂（rebuildTranscript 逐条 feed＋气泡后注入，pi :4062 序）；设置页行（SettingsScreen "Cache miss notices"＋改动 rebuild，pi :5045-5048）；**两门无载体登 D67**（:4121 压缩成本通知挂 B38／:4151 thinking-drop 挂 diagnostics 面） |
 | E2-15 | `externalEditor` | `:245` | `:39` | 1 | **对齐** | **批 12（2026-10-22，docs/23 T3）**：accessor 回落链逐字（`SettingsAccessors.getExternalEditorCommand`：configured⇒VISUAL⇒EDITOR⇒平台默认，settings-manager.ts:946-956）＋`ExternalEditorSupport`（pi external-editor.ts:14-44：tmpdir/pi-editor-\*/prompt.md、split(" ") 简单拆、BOM＋尾换行规范化）＋Ctrl+G 接线 `PiTuiApp.openExternalEditor`（pi :4596-4611；alt 屏退出/重进） |
 | E2-16 | `shellPath` | `:248` | `:40` | 2 | 对齐 | 5 处消费 |
 | E2-17 | `quietStartup` | `:253` | `:42` | 1 | 对齐 | `SettingsAccessors.java:80` |
@@ -367,7 +367,7 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 | E2-46 | `sessionDir` | `:382` | `:58` | 2 | 对齐 | 7 处消费 |
 | E2-47 | `httpProxy` | `:387` | `:71` | 1 | **对齐** | **批 11（2026-10-22，docs/22 T3）**：`HttpProxySupport`（pi applyHttpProxySettings 对位，通道换 JVM 系统属性，裁决③）＋应用点 `SettingsManager.load:61`（读全局域）；窄差 D52（凭证/nonProxyHosts/socks 不解析） |
 | E2-48 | `httpIdleTimeoutMs` | `:390` | `:74` | 1 | **对齐** | **批 11（2026-10-22，docs/22 T4）**：字段（number\|"disabled" 联合）＋`TimeoutSettings` 解析＋`SettingsNetworkAccessors.getHttpIdleTimeoutMs`＋消费点 `DefaultProviders.apiOptions:372`（pi sdk.ts:344-354 链序；120s 自造兜底删除⇒300s）；窄差 D53（单臂对齐） |
-| E2-49 | `cacheWarming` | `:395` | `:109` | 2 | **存疑** | 批 11（docs/22 T7）：字段＋Network 访问器（只读全局域、非法回落 streaming，settings-manager.ts:914-923 对位）；**批 12（docs/23 §4）**：pi cache-warmer 是子系统（cache-warmer.ts 449 行＋sdk.ts 装配＋agent-session 四面接线＋扩展 decide 钩），随「cache-warmer 子系统批」（docs/20 §3 插行） |
+| E2-49 | `cacheWarming` | `:395` | `:109` | 2 | **对齐** | 批 11：字段＋Network 访问器；**批 13（docs/24）子系统全链**：`CacheWarmer` 状态机（pi cache-warmer.ts:162-401 逐字——三纯函数/双安全窗/deadline/经济闸门 $0.05/停止理由全集）＋装配（裁决①分包门：warming wrapper 只包 harness 注入点，摘要/压缩保持 recordingStreamFn；暖路径 maxRetries 钉 0/跳三钩/保头变换）＋四面接线（settled 双发射点/dispose cancel/setCacheWarmingMode＋onModeChanged/cacheWarmingStatus）＋设置页行（SettingsScreen "Cache warming" 三值循环走会话入口，pi :5005-5008）；评审 C1：isCurrent 捕获改快照（lane.messages 就地重写⇒活视图比对恒真） |
 | E2-50 | `websocketConnectTimeoutMs` | `:402` | `:77` | 1 | **存疑** | 批 11（docs/22 T4/T7）：字段＋Network 访问器（缺席无兜底，settings-manager.ts:935-937 对位）；**批 12（docs/23 §4）**：pi 唯一消费者＝openai-codex-responses 的 WebSocket 传输（connect 握手超时，默认 15s、0 禁用）；java 无 WS 传输（codex 车道走 HTTP/SSE）⇒ **窄差 D58** |
 | E2-51 | `tuiMode` | `:407` | `:63` | 2 | 对齐 | `SettingsAccessors.java:112`；默认均 fullscreen |
 | E2-52 | `fullscreenExitOutput` | `:412` | `:113` | 1 | **对齐** | **批 12（2026-10-22，docs/23 T10）**：退出两臂（pi :881-887＋:4322-4328）——resume-hint 只留提示行、transcript（默认）`TranscriptDump` 倾倒对话滚动回退进主屏＋两臂统一恢复提示（仅已持久化会话）；窄差 D64（文案 `pi-java -r` 指引，`-r` 选择器随批 13） |
@@ -375,13 +375,14 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 | E2-54 | `fullscreenCopyOnSelect` | `:424` | `:117` | 1 | **存疑** | 批 11（docs/22 T7）：字段＋UiPrefs 访问器（`?? true`）；**批 12（docs/23 §4）**：消费依赖 alt-screen 选区/复制子系统（map/05 S2a-d 未排期）⇒ **窄差 D59** |
 | E2-55 | `fullscreenWheelScrollLines` | `:430` | `:119` | 1 | **对齐** | **批 12（2026-10-22，docs/23 T12，裁决⑥）**：数字臂接 `ScrollConfig.from` 第三参（固定行数 `withWheelLines`，accessor 已 clamp 1–100）；auto 臂维持既有 Codex 有界加速模型（窄差 D60＝K38：pi auto 是 mac/SSH 判定＋速率加速 ≤6＋Alt×5 的速度模型，不新造） |
 
-**E2 汇总：对齐 44 / 缺失 2 / 存疑 8 / 出分母 1 / 合计 54**；**Σ权重 84 / Σ(w×c) 75.0 / 加权 89.3%**
+**E2 汇总：对齐 46 / 缺失 2 / 存疑 6 / 出分母 1 / 合计 54**；**Σ权重 84 / Σ(w×c) 76.5 / 加权 91.1%**
 > `queueMode`（`:436`）/`websockets`（`:442`）只存在于 `SettingsSchema` 输入侧，`interface Settings`（`:471`）显式 Omit，非 settings.json 键，不列单元。
 > 本锚点改判：`compaction`（E2-10）存疑 → **对齐**（modelOverrides 字段＋per-model resolver 接线，A9 闭环）。
 > 批 1（2026-10-18，B236/docs/11）：`defaultTools`（E2-35）缺失 → **对齐**（键＋分层 merge＋解析＋消费点全落，窄差 D3 登记）。
 > 批 2（2026-10-19，B244/docs/12）：`enableSkillCommands`（E2-31）存疑 → **对齐**（accessor＋设置页＋补全门全落，窄差 D1 登记）。
 > 批 11（2026-10-22，docs/22）：**22 行翻动**——核销 2（E2-38/E2-11 账面滞后⇒对齐）；消费链 5（E2-5/E2-47/E2-48/E2-25/E2-33⇒对齐，B15-残留-5 销号，窄差 D52–D54）；声明面 14（缺失⇒存疑：E2-1/14/21/22/23/24/42/44/49/50/52/53/54/55）；E2-45 `codemode` **出分母**（裁决②，R5 面外 B161）。Σ 52.0→67.5（出分母后 67.5/84＝80.4%）。
 > 批 12（2026-10-22，docs/23）：**15 行翻动**（全部存疑⇒对齐）＋**表头口径修订（裁决①：TUI 消费点计入）**——核销 3（E2-37 批 9 账面滞后〔裁决②〕；E2-23/E2-24 pi 侧零消费⇒声明面即全量〔裁决③口径先例〕）；TUI 行为键 5（E2-36 双击 Esc／E2-15 外部编辑器／E2-39 编辑器留白／E2-41 补全行数〔裁决④默认 8⇒5〕／E2-40 outputPad 烘焙）；声明面消费点 7（E2-1＋E2-21 changelog 流、E2-42 硬件光标、E2-52 退出两臂、E2-53 滚动条三态、E2-55 滚轮数字臂、E2-44 订阅警告）；窄差 D55–D64（D56 terminal／D57 mermaid／D58 无 WS 传输／D59 选区子系统／D60 auto 加速模型／D61 auto/always 同形／D62 不回溯／D63 纯文本／D64 提示文案）；不动 6 行证据更新（E2-14/E2-49 随 cache-warmer 子系统批）。Σ 67.5→**75.0/84＝89.3%**。另 `setModelThinkingLevel` TUI 入口落地（E2-5 批 11 已对齐，无账面）。
+> 批 13（2026-10-23，docs/24）：**2 行翻动**（存疑⇒对齐）——E2-49 `cacheWarming`（+1.0：cache-warmer 子系统全链＋设置页行）、E2-14 `showCacheMissNotices`（+0.5：有载体三门落地，两门无载体登 D67 随载体批次收，裁决⑥）；窄差 D65–D68（abort＝iterator.close／暖选项现读／E2-14 两门无载体／/session 结构差）。Σ 75.0→**76.5/84 ≈ 91.1%**。
 
 ### E3 会话管理行为（24）
 
@@ -635,10 +636,10 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | A. CLI 参数 | 62 | 50.0 | 80.6% | 69.8% |
 | B. 子命令 | 15 | 9.0 | 60.0% | 37.5% |
 | C. Slash 命令 | 38 | 26.0 | 68.4% | 44.0% |
-| D. 扩展系统 41 事件 | 83 | 44.0 | 53.0% | 41.5% |
+| D. 扩展系统 41 事件 | 83 | 75.0 | 90.4% | 87.8% |
 | D′. 扩展 UI 注入面 | 16 | 1.0 | 6.3% | 0% |
 | E1. 配置文件 / 清单 | 10 | 6.0 | 60.0% | 40.0% |
-| E2. settings.json 键 | 84 | 75.0 | 89.3% | 83.0% |
+| E2. settings.json 键 | 84 | 76.5 | 91.1% | 85.2% |
 | E3. 会话管理行为 | 40 | 27.5 | 68.8% | 58.3% |
 | E4. 资源发现 | 14 | 10.0 | 71.4% | 71.4% |
 | E5. 扩展 API 面 | 58 | 16.0 | 27.6% | 17.1% |
@@ -646,14 +647,14 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | E7. RPC 面 | 12 | 8.0 | 66.7% | 33.3% |
 | G. 主流新增子系统 | 18 | 7.0 | 38.9% | 30.0% |
 | F. 整块缺失（子系统） | 13 | 0.0 | 0% | 0% |
-| **模块合计（不含 E8）** | **494** | **315.5** | **63.9%** | **55.4%** |
+| **模块合计（不含 E8）** | **494** | **319.5** | **64.7%** | **56.7%** |
 | E8. 边缘/面外子系统（与 E3/C/G 重叠，不计入） | 7 | 0.0 | 0% | 0% |
 
-**模块合计**：Σ权重 494 ／ Σ(w×c) 315.5 ／ **加权完成度 = 315.5/494 = 63.9%**（未加权 160/289 = 55.4%；批 12 后值——E2-45 出分母 496→494/290→289、批 11/12 逐行实算补入）。
+**模块合计**：Σ权重 494 ／ Σ(w×c) 319.5 ／ **加权完成度 = 319.5/494 ≈ 64.7%**（未加权 164/289 ≈ 56.7%；批 13 后值——E2-45 出分母 496→494/290→289、批 11–13 逐行实算补入）。
 
-**去重口径**（F 域有 2 行与 E4/E6 重叠＋G-1..G-5 归 map/07）：Σ权重 **485** ／ Σ(w×c) **311.0** ／ **加权完成度 = 311.0/485 = 64.1%**（未加权 160/289 = 55.4%）。
+**去重口径**（F 域有 2 行与 E4/E6 重叠＋G-1..G-5 归 map/07）：Σ权重 **485** ／ Σ(w×c) **315.0** ／ **加权完成度 = 315.0/485 ≈ 64.9%**（未加权 164/289 ≈ 56.7%）。
 
-**扩展系统单独口径**（D + D′ + E5）：Σ权重 157 ／ Σ(w×c) 61.0 ／ **加权 38.9%**（未加权 23/85 = 27.1%）。
+**扩展系统单独口径**（D + D′ + E5）：Σ权重 157 ／ Σ(w×c) 63.0 ／ **加权 40.1%**（未加权 24/85 ≈ 28.2%）。
 
 **权重分层**：
 

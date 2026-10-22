@@ -107,7 +107,7 @@
 | R21 | 回合分隔条（`Worked for Ns • Local tools: N calls`） | ✗（pi 无此构造） | ✓ `ChatScreen.java:170-181` | **非对齐项**（java 独有，Codex 风格） | 0 | 见「pi-java 独有」，**排除出分母** |
 | R22 | 启动公告组件（`earendil-announcement`、`armin`） | ✓ `components/earendil-announcement.ts:27`、`armin.ts:62 class ArminComponent`（384 行） | ✗ | **缺失** | 1 | 旧的 `daxnuts.ts` 已删，彩蛋迁到 R27 |
 | R23 | 窗口/终端标题更新 | ✓ `interactive-mode.ts:1132 updateTerminalTitle` | ✗ | **缺失** | 1 | — |
-| R24 | 缓存预热用量行（聊天区 `formatCacheWarmingUsage` + `/session` 的 `formatCacheWarmingStatus`／missCost／warmCost；footer 计入 `usage` 条目） | ✓ `core/cache-warmer.ts:449/433`；`interactive-mode.ts:4110 addCacheWarmingUsage` | 部分：`ChatMessage.java:75-83 cacheWarmNotice` | **存疑** | 1 | **本锚点翻判定**：java 新增渲染分支 —— 仅当跨读 pi 会话条目 `usage.kind == "cache_warm"` 时显示 `Cache warming: N tokens` 一行；但 java **无 cache-warmer 生产者**（自己只产 `assistant`/`hook` 且刻意不渲染）、无 `/session` 状态、无 footer 用量、门设置 `getShowCacheMissNotices()` 亦无 |
+| R24 | 缓存预热用量行（聊天区 `formatCacheWarmingUsage` + `/session` 的 `formatCacheWarmingStatus`／missCost／warmCost；footer 计入 `usage` 条目） | ✓ `core/cache-warmer.ts:449/433`；`interactive-mode.ts:4110 addCacheWarmingUsage` | 批 13：`ChatMessage.cacheWarmNotice`（pi :449-453 逐字经 `CacheWarmingFormatting.formatUsage`）＋`ChatScreen.appendUsageNotice` 门控＋`/session` Cache Warming 段＋footer `AgentHarness.addTokens` | **对齐** | 1 | **批 13（docs/24）翻判定**：生产者（CacheWarmer）落地 ⇒ 自有 `cache_warm` 条目照渲染；文案改 pi 逐字（"Cache warmed[: (note)]: $cost"，原自造 "Cache warming: N tokens" 删）；门 `getShowCacheMissNotices()` 三处调用点全接（onEntry/rebuild/EntryAppended 即时臂）；`/session` 段逐字（Mode/Status/decision 两行＋Cache Re-billed 挂段尾＝D68 结构差）；footer 计入（pi getSessionStats usage 条目臂对位） |
 | R25 | thinking 块被丢弃提示（`Anthropic dropped N thinking blocks …`） | ✓ `interactive-mode.ts:4134 countDroppedThinkingBlocks`、`:4150 maybeShowThinkingDropNotice` | ✗ | **缺失** | 1 | 只在与上一条 assistant 消息的丢弃数**增加**时显示；java 无此构造 |
 | R26 | **工具调用参数渲染（MCP 与 fallback 渲染工具显式展示 args）** | ✓ `core/tools/render-utils.ts:78 formatToolCallWithArgs` + `tool-execution.ts:143` | ✗ | **缺失** | 1 | java `ToolCallCard.java:13-37` 对全部工具走同一「name+status+截断 args」，且无 MCP 渲染器 |
 | R27 | **3D 彩蛋（pi logo / Armin）+ header logo**（全屏 overlay，惰性加载） | ✓ `components/easter-egg-3d.ts`（**1292 行**）+ `easter-egg-3d.lazy.ts` + `pi-logo.ts:15 piLogoLines`（40 行） | ✗ | **缺失** | 1 | java 无任何彩蛋/logo 动画；取代旧的 daxnuts（R22） |
@@ -358,7 +358,7 @@
 | R10 | Diff 渲染 | java 按行首字符着色，无 hunk 头/行号/词级；pi 的 diff 走富渲染器 | `DiffView.java:52-63` vs `components/diff.ts:79` |
 | R17 | 压缩摘要消息卡 | java 一行 `System`，pi 是独立卡 + `usage` 开销提示 + **鼠标点击展开** | `ChatMessage.java:50` vs `compaction-summary-message.ts:10` + `interactive-mode.ts:4121` |
 | **R18** | **分支摘要消息卡** | **本锚点翻判定**：java 有跨读条目的一行弱形状（旧图误记「无」），但无卡/Markdown/点击，生产者 B1 缺 | `ChatMessage.java:53-54` vs `branch-summary-message.ts:10` |
-| **R24** | **缓存预热用量行** | **本锚点翻判定**：java 仅渲染跨读 pi 会话的 `cache_warm` 条目；无生产者、无 `/session`、无 footer | `ChatMessage.java:75-83` vs `cache-warmer.ts:449` + `interactive-mode.ts:4110` |
+| **R24** | **缓存预热用量行** | ~~java 仅渲染跨读 pi 会话的 `cache_warm` 条目~~ 批 13（docs/24）已对齐：生产者落地＋文案逐字＋门＋`/session` 段＋footer 计入 | `ChatMessage.java:114` vs `cache-warmer.ts:449` + `interactive-mode.ts:4110` |
 | **R28** | **排队消息区** | dim Steering/Follow-up 行对齐；缺 dequeue 提示行/取回编辑流程（S20）、流式 bash/工具挂载 | `PendingQueueView.java:15` vs `interactive-mode.ts:4724-4740` |
 | K5 | `Alt+Enter` 排队 follow-up | 键位与 pi 的 Windows 默认（`ctrl+q`）冲突；「Alt+Enter=换行」被 java 换成 Shift+Enter | `KeybindingsManager.java:67` vs `keybindings.ts:67-70` |
 | K18 | 键位提示渲染 | java 只有 `keyText`，无 `keyHint`/`rawKeyHint`/`keyDisplayText` | `KeybindingHints.java:29` vs `keybinding-hints.ts:48` |
@@ -494,15 +494,16 @@
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|
 | 屏幕/面板（35 单元） | 47 | 20.0 | **42.6%** | 31.4% |
-| 渲染特性（R1–R29，29 单元；R21 权重 0 已剔） | 40 | 7.0 | **17.5%** | 7.1% |
+| 渲染特性（R1–R29，29 单元；R21 权重 0 已剔） | 40 | 7.5 | **18.8%** | 10.7% |
 | 键绑定/交互（K1–K39，39 单元；K36 权重 0 已剔） | 66 | 30.5 | **46.2%** | 28.9% |
 | TUI 组件（C1–C20，20 单元） | 41 | 22.5 | **54.9%** | 35.0% |
 | 主题/样式（T1–T11，11 单元） | 18 | 6.5 | **36.1%** | 27.3% |
 | web 对齐面（W1–W16，16 单元） | 33 | 26.0 | **78.8%** | 50.0% |
 
-**模块合计**：Σ权重 **245** ／ Σ(w×c) **112.5** ／ **加权完成度 = 112.5/245 = 45.9%**（未加权 **28.4%**，**+17.5pp**）
+**模块合计**：Σ权重 **245** ／ Σ(w×c) **113.0** ／ **加权完成度 = 113.0/245 ≈ 46.1%**（未加权 **29.1%**，**+17.7pp**）
 
 > 批 10（2026-10-22，docs/21）：S20 缺失→对齐（+1.0）、K11 缺失→对齐（+1.0）；R28 证据更新不翻（流式 bash/工具挂载仍缺）。
+> 批 13（2026-10-23，docs/24）：R24 存疑→对齐（+0.5，cache-warmer 子系统批随收——生产者/文案逐字/门//session 段/footer）。
 
 > 较前锚点（144 单元：241 权 / 108.0 / **44.8%**）变化 **−0.5pp**，构成：① K20 对齐→存疑（w2）分子 −1.0；② R18/R24 缺失→存疑（w1×2）分子 +1.0；③ 新增 4 单元（R28 存疑 w1 +0.5；R29/K39/C20 缺失 w1×3）分母 +4、分子 +0.5。净效果：分子 +0.5、分母 +4。
 
@@ -512,11 +513,11 @@
 |---|---:|---:|---:|---:|
 | 3（每轮／默认路径） | 26 | 78 | 52.5 | **67.3%** |
 | 2（每次会话／常用命令） | 45 | 90 | 46.0 | **51.1%** |
-| 1（低频／边缘／纯内部） | 77 | 77 | 12.0 | **15.6%** |
+| 1（低频／边缘／纯内部） | 77 | 77 | 12.5 | **16.2%** |
 | 0（非对齐项，已剔） | 2 | 0 | 0 | — |
-| **合计** | **150** | **245** | **110.5** | **45.1%** |
+| **合计** | **150** | **245** | **111.0** | **45.3%** |
 
-> ⚠️ 本表与上方域表旧账差 2.0（既有漂移，批 10 未追账；域表 112.5 为权威）。
+> ⚠️ 本表与上方域表旧账差 2.0（既有漂移，批 10 未追账；域表 113.0 为权威）。
 
 **权重 3 的单元清单（26 条 —— 最该先修）**
 
