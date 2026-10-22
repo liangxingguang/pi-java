@@ -63,7 +63,7 @@
 | S17 | OAuth / 登录对话框 | ✓ `login-dialog.ts:12` + `oauth-selector.ts:58` | ✗ | **缺失** | 2 | java 的 `/login` 是 `System.console().readPassword`（`MiscCommands.java:134-148`），无对话框 |
 | S18 | 首次设置向导 | ✓ `components/first-time-setup.ts:33` | ✗ | **缺失** | 1 | 一次性路径 |
 | S19 | 项目信任选择器 | ✓ `components/trust-selector.ts:32` | ✗ | **缺失** | 2 | java 只有 `SettingsScreen.java:40-42` 的 `Project trust` 循环 |
-| S20 | 排队消息选择器（Alt+Up 取回并编辑） | ✓ `components/user-message-selector.ts:110`（155 行） | ✗ | **缺失** | 1 | java 的 `DEQUEUE` 常量存在（`KeybindingsManager.java:29`）但未接线（`PiTuiApp.java:450` default 分支） |
+| S20 | 排队消息选择器（Alt+Up 取回并编辑） | ✓ `components/user-message-selector.ts:110`（155 行） | ✓ `InteractiveMode.restoreQueuedMessages`＋`PiTuiApp` DEQUEUE 臂＋`ChatScreen.restoreToEditor`（批 10，docs/21） | **对齐** | 1 | 批 10（docs/21）：dequeue 全链接地——引擎两队列＋压缩缓冲清空、pi 序合并 `"\n\n"` 回填编辑器（排队在前草稿在后）、文案逐字＋复数形、hint 行随绑定表取键名；键平台规则同批落（Windows/WSL `alt+q`，K11 同翻） |
 | S21 | show-images 选择器 | ✓ `components/show-images-selector.ts:13`（50 行） | ✗ | **缺失** | 1 | — |
 | S22 | 扩展 UI：选择器 / 输入框 / 确认框 / 编辑器 | ✓ `interactive-mode.ts:2690 showExtensionSelector`/`:2773 showExtensionInput`/`:2831 showExtensionEditor` | ✗ | **缺失** | 1 | java 只有 RPC 通道 `ExtensionUI.java:16`（`AgentSession.java:98` 默认 `noop()`；两者在 `pi-java-coding-agent`），TUI 无实现 |
 | S23 | 扩展 widget / footer / header / 状态槽 | ✓ `interactive-mode.ts:2398 setExtensionWidget`、`:2524 setExtensionFooter`、`:2551 setExtensionHeader` | ✗ | **缺失** | 1 | — |
@@ -111,7 +111,7 @@
 | R25 | thinking 块被丢弃提示（`Anthropic dropped N thinking blocks …`） | ✓ `interactive-mode.ts:4134 countDroppedThinkingBlocks`、`:4150 maybeShowThinkingDropNotice` | ✗ | **缺失** | 1 | 只在与上一条 assistant 消息的丢弃数**增加**时显示；java 无此构造 |
 | R26 | **工具调用参数渲染（MCP 与 fallback 渲染工具显式展示 args）** | ✓ `core/tools/render-utils.ts:78 formatToolCallWithArgs` + `tool-execution.ts:143` | ✗ | **缺失** | 1 | java `ToolCallCard.java:13-37` 对全部工具走同一「name+status+截断 args」，且无 MCP 渲染器 |
 | R27 | **3D 彩蛋（pi logo / Armin）+ header logo**（全屏 overlay，惰性加载） | ✓ `components/easter-egg-3d.ts`（**1292 行**）+ `easter-egg-3d.lazy.ts` + `pi-logo.ts:15 piLogoLines`（40 行） | ✗ | **缺失** | 1 | java 无任何彩蛋/logo 动画；取代旧的 daxnuts（R22） |
-| R28 | **排队消息区（streaming 时聊天区与编辑器之间的 dim `Steering:`/`Follow-up:` 行）** | ✓ `interactive-mode.ts:461 pendingMessagesContainer`、`:4724 updatePendingMessagesDisplay`（末尾另有 `↳ <dequeue 键> to edit all queued messages` 提示行）；流式期间 bash/工具组件也挂该区 | ✓ `PendingQueueView.java:15`（59 行）+ `ChatScreen.java:300-301`（`QueueUpdate` 驱动） | **存疑** | 1 | **新单元（重测补列；pi 前锚点已有，旧图漏列）**：两种 dim 行渲染对齐；java 缺 dequeue 提示行与取回编辑整条流程（S20 仍缺失），流式 bash/工具组件也不进该区 |
+| R28 | **排队消息区（streaming 时聊天区与编辑器之间的 dim `Steering:`/`Follow-up:` 行）** | ✓ `interactive-mode.ts:461 pendingMessagesContainer`、`:4724 updatePendingMessagesDisplay`（末尾另有 `↳ <dequeue 键> to edit all queued messages` 提示行）；流式期间 bash/工具组件也挂该区 | ✓ `PendingQueueView.java`（含 hint 行，批 10）+ `ChatScreen.java`（`QueueUpdate` 驱动） | **存疑** | 1 | 批 10（docs/21）证据更新：dequeue hint 行（键名随绑定表大写形）＋取回编辑整条流程已补齐（S20/K11 翻对齐）；**「流式 bash/工具组件挂该区」仍缺** ⇒ 判定维持存疑 |
 | R29 | **安装变更警告（会话运行中 pi 被升级/替换 → 错误时提示重启命令）** | ✓ `interactive-mode.ts:2193 maybeShowInstallChangeWarning`（调用点 `:2184`、`:3643`）+ `config.ts detectInstallChange`（#10439，每会话一次） | ✗ | **缺失** | 1 | **新锚点新增**；java 全仓无 install-change 检测 |
 
 ---
@@ -132,7 +132,7 @@
 | K8 | `Ctrl+O` 展开/折叠工具输出 | 键绑定 | `keybindings.ts:50 app.tools.expand` | 同上（`:25` → 死码），且无折叠态（R12） | **缺失** | 2 | B66 |
 | K9 | `Ctrl+T` 显隐 thinking 块 | 键绑定 | `keybindings.ts:51 app.thinking.toggle` | 同上（`:26` → 死码） | **缺失** | 2 | B66 |
 | K10 | `Ctrl+G` 外部编辑器 | 键绑定 | `keybindings.ts:59 app.editor.external` + `external-editor.ts:46` | 同上（`:27` → 死码） | **缺失** | 1 | B66 |
-| K11 | `Alt+Up` 取回排队消息 | 键绑定 | `keybindings.ts:71-73 app.message.dequeue`（**Windows 默认改为 `alt+q`**） | 同上（`:29` → 死码） | **缺失** | 1 | B66 |
+| K11 | `Alt+Up` 取回排队消息 | 键绑定 | `keybindings.ts:71-73 app.message.dequeue`（**Windows 默认改为 `alt+q`**） | `KeybindingsManager.java`（`useWindowsKeybindings` 逐字：Windows/WSL `alt+q`、其余 `alt+up`）＋`PiTuiApp` DEQUEUE 臂 | **对齐** | 1 | ~~B66~~ 批 10（docs/21，2026-10-22）接线 |
 | K12 | `Ctrl+Z` 挂起进程 | 键绑定 | `keybindings.ts:29-32 app.suspend`（非 Windows） | ✗ | **缺失** | 1 | — |
 | K13 | `Ctrl+X` 复制消息到剪贴板 | 键绑定 | `keybindings.ts:63 app.message.copy`（描述「Copy selection or last assistant message」） | ✗（有 `/copy` 命令 `MiscCommands.java:95-96`，无键位） | **缺失** | 1 | — |
 | K14 | `Ctrl+V`/`Alt+V` 粘贴图片 | 键绑定 | `keybindings.ts:75-78 app.clipboard.pasteImage` | ✗ | **缺失** | 1 | — |
@@ -297,7 +297,7 @@
 | **B38** | 「compaction_end 后不重建聊天区；Java TUI 对压缩一无所知」 | **台账措辞部分过期**：java 现消费 `CompactionStart/End`（状态指示器，`ChatScreen.java:295-299`）、压缩摘要条目经 EntryObserver 以一行 `System` 追加（`ChatMessage.java:50`，R17 弱形状）、队列另有 `QueueUpdate`/`FlashStatus`；仍缺 pi 的整表 clear＋重渲染与摘要卡 | `ChatScreen.java:295-303` |
 | **B39** | 「压缩窗口 Esc 换绑，随 B36」 | **仍开**：B36（无 `abortCompaction` 句柄）台账仍开，Esc 在压缩窗口未换绑 | `PiTuiApp.java:426`（中断不区分压缩窗口） |
 | **B65** | MarkdownRenderer/SyntaxHighlighter 死代码 | **仍成立**：`MarkdownRenderer` 生产零调用；`SyntaxHighlighter` 唯一调用点是输入编辑器 `EditorElement.java:123` | 全仓 grep（非 test）仅命中自身与 `EditorElement.java` |
-| **B66** | 6 个已声明键位未接线 | **仍成立**：default 死码分支在 `PiTuiApp.java:450`（MODEL_CYCLE/THINKING_CYCLE/TOOLS_EXPAND/THINKING_TOGGLE/EXTERNAL_EDITOR/DEQUEUE） | 同左 |
+| **B66** | ~~6~~ 4 个已声明键位未接线 | **仍成立（核账后剩 4）**：THINKING_CYCLE/TOOLS_EXPAND/THINKING_TOGGLE/EXTERNAL_EDITOR 走 `PiTuiApp.java` default 分支；MODEL_CYCLE 随 ai 批 3b（B137）已接、DEQUEUE 随批 10（docs/21）已接 | 同左 |
 | **B78** | FuzzyMatcher 语义不同 | **仍成立**（子串 vs pi 子序列+分词），挂载点仍只服务 `SelectList.java:142` | `FuzzyMatcher.java:50` vs `fuzzy.ts:12,100` |
 | **B145** | 启动/登录后定向目录刷新未接线 | **本次未核**（目录刷新在 coding-agent/RPC 面，超出 TUI 判定），保持台账原文 | —— |
 | **H-9.2-①④⑤⑥** | inline 超长草稿 artifact / STDIN 共享管道 / Codex logo 动画 / 命令恢复 | **本次未核**（超出 TUI 判定面或需实机复现），**保持台账原文** | —— |
@@ -387,7 +387,7 @@
 
 **渲染特性（21）**：R1 Markdown 渲染（死代码）· R2 表格 · R3 删除线 · R4 链接 · R5 流式围栏修剪 · R6 transformer 钩子 · R7 mermaid · R8 LaTeX · R9 代码块高亮（死代码）· R11 逐工具渲染器 · R12 工具卡折叠 · R13 bash 执行组件 · R14 图像协议 · R15 图片粘贴 · R19 skill 调用卡 · R22 公告 · R23 终端标题 · R25 thinking 丢弃提示 · R26 工具调用参数渲染 · R27 3D 彩蛋/logo · **R29 安装变更重启警告（新锚点新增）**
 
-**键绑定/交互（22）**：K6 Ctrl+P · K7 Shift+Tab · K8 Ctrl+O · K9 Ctrl+T · K10 Ctrl+G · K11 Alt+Up（pi Windows 为 Alt+Q）· K12 Ctrl+Z · K13 Ctrl+X · K14 Ctrl+V · K15 Ctrl+N · K16 app.session.* · K17 keybindings.json · K21 转录搜索 · K22 鼠标选择 · K25 @文件补全 · K26 大粘贴折叠 · K27 提示历史 · K31 jump mode · K34 原生剪贴板 · K35 终端能力探测 · K37 消息卡鼠标点击展开 · **K39 OSC 7501 程序状态（新锚点新增）**
+**键绑定/交互（21）**：K6 Ctrl+P · K7 Shift+Tab · K8 Ctrl+O · K9 Ctrl+T · K10 Ctrl+G · K12 Ctrl+Z · K13 Ctrl+X · K14 Ctrl+V · K15 Ctrl+N · K16 app.session.* · K17 keybindings.json · K21 转录搜索 · K22 鼠标选择 · K25 @文件补全 · K26 大粘贴折叠 · K27 提示历史 · K31 jump mode · K34 原生剪贴板 · K35 终端能力探测 · K37 消息卡鼠标点击展开 · **K39 OSC 7501 程序状态（新锚点新增）**（~~K11~~ 批 10 已翻对齐）
 
 **TUI 组件（9）**：C3 settings-list · C4 input · C5 loader/spinner · C6 working 指示器 · C7 bordered loader · C8 cancellable loader · C14 mouse-region · C15 dynamic-border · **C20 假光标（新锚点新增）**
 
@@ -493,14 +493,16 @@
 
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|
-| 屏幕/面板（35 单元） | 47 | 19.0 | **40.4%** | 28.6% |
+| 屏幕/面板（35 单元） | 47 | 20.0 | **42.6%** | 31.4% |
 | 渲染特性（R1–R29，29 单元；R21 权重 0 已剔） | 40 | 7.0 | **17.5%** | 7.1% |
-| 键绑定/交互（K1–K39，39 单元；K36 权重 0 已剔） | 66 | 29.5 | **44.7%** | 26.3% |
+| 键绑定/交互（K1–K39，39 单元；K36 权重 0 已剔） | 66 | 30.5 | **46.2%** | 28.9% |
 | TUI 组件（C1–C20，20 单元） | 41 | 22.5 | **54.9%** | 35.0% |
 | 主题/样式（T1–T11，11 单元） | 18 | 6.5 | **36.1%** | 27.3% |
 | web 对齐面（W1–W16，16 单元） | 33 | 26.0 | **78.8%** | 50.0% |
 
-**模块合计**：Σ权重 **245** ／ Σ(w×c) **110.5** ／ **加权完成度 = 110.5/245 = 45.1%**（未加权 **27.0%**，**+18.1pp**）
+**模块合计**：Σ权重 **245** ／ Σ(w×c) **112.5** ／ **加权完成度 = 112.5/245 = 45.9%**（未加权 **28.4%**，**+17.5pp**）
+
+> 批 10（2026-10-22，docs/21）：S20 缺失→对齐（+1.0）、K11 缺失→对齐（+1.0）；R28 证据更新不翻（流式 bash/工具挂载仍缺）。
 
 > 较前锚点（144 单元：241 权 / 108.0 / **44.8%**）变化 **−0.5pp**，构成：① K20 对齐→存疑（w2）分子 −1.0；② R18/R24 缺失→存疑（w1×2）分子 +1.0；③ 新增 4 单元（R28 存疑 w1 +0.5；R29/K39/C20 缺失 w1×3）分母 +4、分子 +0.5。净效果：分子 +0.5、分母 +4。
 
@@ -510,9 +512,11 @@
 |---|---:|---:|---:|---:|
 | 3（每轮／默认路径） | 26 | 78 | 52.5 | **67.3%** |
 | 2（每次会话／常用命令） | 45 | 90 | 46.0 | **51.1%** |
-| 1（低频／边缘／纯内部） | 77 | 77 | 10.0 | **13.0%** |
+| 1（低频／边缘／纯内部） | 77 | 77 | 12.0 | **15.6%** |
 | 0（非对齐项，已剔） | 2 | 0 | 0 | — |
-| **合计** | **150** | **245** | **108.5** | **44.3%** |
+| **合计** | **150** | **245** | **110.5** | **45.1%** |
+
+> ⚠️ 本表与上方域表旧账差 2.0（既有漂移，批 10 未追账；域表 112.5 为权威）。
 
 **权重 3 的单元清单（26 条 —— 最该先修）**
 

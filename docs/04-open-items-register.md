@@ -135,11 +135,11 @@
 | B46 | 用户可见 | BashTool 的 onUpdate 没有 TUI 消费者 | 生产发射面已通（BashTool→BashUpdateEmitter→SessionRunner；2026-10-12 重测更正：旧记「生产永不发射」已过期）。web 有 bashOutput，TUI 渲染面仍缺 |
 | B47 | 用户可见 | TUI tool_execution_* 语义取错源 | Java 按「模型吐完调用」计数，pi 按真实工具执行事件计数 |
 | B65 | 用户可见 | MarkdownRenderer/SyntaxHighlighter 是死代码 | 助手消息走纯文本，表格/mermaid/高亮/链接全不可达；先定「接线还是删声明」 |
-| B66 | 用户可见 | 6 个已声明键位未接线 | MODEL_CYCLE/THINKING_CYCLE/TOOLS_EXPAND 等，按键无反应 |
+| B66 | 用户可见 | ~~6~~ 4 个已声明键位未接线 | THINKING_CYCLE/TOOLS_EXPAND/THINKING_TOGGLE/EXTERNAL_EDITOR，按键无反应（2026-10-22 批 coding-agent-10 核账：MODEL_CYCLE 随 ai 批 3b（B137）已接、DEQUEUE 随批 10（docs/21）已接，原记 6 个两处滞后） |
 | B78 | 用户可见 | FuzzyMatcher 语义不同 | pi 是子序列匹配＋分词；Java 的实现不同 |
 | B145 | 内部 | 启动/登录后定向目录刷新未接线 | 仅 RPC 模式有后台刷新，pi 另有三处刷新点 |
 | B238 | 用户可见 | **新锚点**：TUI 四项新行为缺失（明细见 map/05） | ① K20 视口滚动键改 Ctrl+Home/Ctrl+End（裸 Home/End 归还编辑器）；② R29 安装变更每会话一次重启警告（`maybeShowInstallChangeWarning`）；③ K39 OSC 7501 程序状态上报（program-status）；④ C20 APC 标记假光标 |
-| B254 | 用户可见 | **`/fork` 选择器本体＝pi user-message 选择器**（批 coding-agent-9 新登记，docs/19 §1.7/裁决⑥） | 取证撞出：pi `/fork` 不用树选择器——走 `UserMessageSelectorComponent`（`user-message-selector.ts`，与 map/05 S20 排队消息选择器同文件），列用户消息（初始选中最后一条），选中 ⇒ `runtimeHost.fork(entryId)`＋编辑器回填选中文本＋"Forked to new session"（`interactive-mode.ts:5500-5538`；`/clone` 无选择器）。java 的 `/fork` 现为 lane 平表（`TreeSelectorScreen`，批 9 后仅它用）。触发条件：与 S20 合包（docs/20 §3 批 10） |
+| ~~B254~~ | 用户可见 | ~~**`/fork` 选择器本体＝pi user-message 选择器**~~（批 coding-agent-9 登记，docs/19 §1.7/裁决⑥） | **批 coding-agent-10 已销号**（docs/21，2026-10-22 闭环）：`UserMessageSelectorScreen` 落地＋`/fork` 改道＋`TreeSelectorScreen` 删除；顺带 S20 dequeue 链全接。原记录：pi `/fork` 走 `UserMessageSelectorComponent`（`user-message-selector.ts`），java 旧为 lane 平表 |
 
 ---
 
@@ -371,16 +371,23 @@
 - 【风险/代价】窄差 5 条新登（docs/19 §5 D43–D46＋闭环评审 M1 登 D48；D47 条件登记**作废**——sqlite facts 表自带 timestamp 列）：D43 「all」模式无 label/session_info 条目行（labeled-only 过滤/标签显示/编辑/时间戳均不受影响）；D44 剪贴板仅 AWT（无平台命令/OSC 52 降级链，headless 报错）；D45 tree 键用户覆写不支持（keybindings.json 未接线，既有全局约束）；D46 帮助行键名静态取默认（含回环键只画 ctrl+o，评审 M4 并入）；D48 RPC `get_tree` 节点缺 `labelTimestamp`（pi 线有；web 面已带，RPC 浅映射是设计 sanction）[D43/D44/D48 边缘；D45/D46 内部]。**D37/D40 销号**（本体落地；恢复选中粒度＝entry 节点，`findNearestVisibleIndex(initialSelectedId ?? currentLeafId)` 逐字）。**B254 新登**（§3.4）。账面：map/05 S12 存疑→对齐 +1.0（权重 2）、S13 缺失→对齐 +1.0、map/04 #3 `/tree` 存疑→对齐 +0.5 ⇒ 模块 283.5→**286.0/487 ≈ 58.7%**、全仓 955.5→**958.0/1381 ≈ 69.4%**；D 域不动（73.0/83 ＝ 88.0%）。
 - 触发条件：B254 与 map/05 S20 合包（docs/20 §3 批 10）；M2（sqlite getTree N+1 查询）随 sqlite 性能立项时重裁。出处：docs/19 §3–§6＋§9 闭环回填。
 
+### map/04-批 coding-agent-10（docs/21）— `/fork`＝user-message 选择器（B254）＋S20 dequeue 链
+
+- 【场景】批 9 登记的 B254：pi `/fork` 不走树选择器，走 **user-message 选择器**（`user-message-selector.ts` 155 行——列全部 user 消息、初始选中最后一条、选中即 fork＋编辑器回填选中消息文本）；同文件的 **S20**（map/05）排队消息取回（dequeue：清空引擎 steer/followUp 两队列＋压缩缓冲，合并回填编辑器）在 java 只有键常量未接线。两处 RPC 顺带欠账：`fork` 的 `text` 载荷恒 `""`、`get_fork_messages` 数据源是单车道转录且文本 `"\n"` 分隔（pi 两处均空串分隔）。
+- 【决定】2026-10-22 批 coding-agent-10（docs/21，T1 数据面→T2 选择器本体→T3 接线→T4 dequeue 链→T5 D41 重裁）：① **T1**——`getUserMessagesForForking` 收平为 `ForkMessage{entryId,text}`（裁决①），数据源改 `accumulatedEntries()`（持久会话**全分支**提交序＝pi `sessionManager.getEntries()` 对位）、text 块空串拼接、空文本滤除；RPC `fork` 成功臂带 `selectedText`（裁决②：fork 前查表，签名不动）、`get_fork_messages` 直用会话表，`forkMessageText` 删除；② **T2**——`UserMessageSelectorScreen`（pi `UserMessageList`＋容器层逐字：环绕导航、可视窗 10 条滑动公式、单行化＋列宽截断 `...`、序位行、滚动指示、DynamicBorder 行）；③ **T3**——`/fork` 改道（空表预检 "No messages to fork from"、选中 fork＋switchSession＋`setEditorText(selectedText)`＋"Forked to new session"）、**`TreeSelectorScreen` 删除**（裁决⑧：/tree、/fork 改道后零用户）；④ **T4**——`InteractiveMode.restoreQueuedMessages`（pi `clearAllQueues` 逐字序：引擎 steer、缓冲 steer、引擎 followUp、缓冲 followUp，`"\n\n"` 连接，返回 `RestoredQueue{text,count}`）＋DEQUEUE 臂（文案逐字＋复数形）＋`PendingQueueView` hint 行（`↳ {key} to edit all queued messages`，键名随绑定表取大写形——pi `getAppKeyDisplay` 对位）＋dequeue 键平台规则（裁决③：Windows/WSL `alt+q`、其余 `alt+up`，`useWindowsKeybindings` 逐字）；⑤ **T5（D41 重裁，裁决④）**——Esc 流式臂与树导航臂各 ~10 行落地（restore 先行于 abort；合并式收 `ChatScreen.restoreToEditor` 三臂共用，裁决⑦）；扩展 `ctx.abort()` 两臂 java 无挂点（E5 域），**D41 改述保留登记**（触发条件随 E5 批次）；D42 维持登记不动。
+- 【风险/代价】窄差 3 条新登（docs/21 §5）：**D49** `app.message.followUp` 键平台分叉未落（pi Windows/WSL 是 `ctrl+q`，java 恒 `alt+enter`——换键动肌肉记忆，单独裁决）[用户可见，边缘]；**D50** `/fork <name>` 带参臂（`forkCopy`）是 java 独有便捷路（pi `/fork` 精确匹配无参）[用户可见，边缘]；**D51** RPC `fork` 对非 user 消息 entry 不报错（pi position "before" 校验抛 `"Invalid entry ID for forking"`）[边缘]。**B254 销号**；map/04 #15 `/fork` 存疑→对齐（+1.0）＋E3-8 同能力行同翻（+1.0，设计对账表漏列、闭环逐行实算补）；map/05 S20 缺失→对齐（+1.0）＋K11 同能力行同翻（+1.0，同前）；R28 不翻（hint 行＋取回流补齐，「流式 bash/工具组件挂该区」仍缺，证据列更新）。账面：模块 286.0→**288.0/487 ≈ 59.1%**（原始口径 290.5→292.5/496 ≈ 59.0%）、tui/web 110.5→**112.5/245 ≈ 45.9%**、全仓 958.0→**962.0/1381 ≈ 69.7%**；D 域不动（73.0/83＝88.0%）。**B66 核账**（死键 6→4：DEQUEUE 本批接、MODEL_CYCLE ai 批 3b 早接）。E1 涨到 2,083（+23）、E2 667（−7）、E6 615（+56，设计预估 +~50）。
+- 触发条件：D41 残余（扩展 abortHandler 的 restore）随 E5 批次；D49 随键位平台规则统一裁决时。出处：docs/21 §3–§6＋§9 闭环回填。
+
 ---
 
 ## 5. E 类 —— 结构债（仓库规则：单文件 ≤ 500 行）
 
 | # | 文件 | 行数 |
 |---|---|---:|---:|
-| E1 | coding-agent …/core/AgentSession.java | **2,060**（2026-10-22 批 coding-agent-9 实测——批 9 +50：getTree/getLabel/setLabel 三面；拆分宜搭下一 coding-agent 批） |
-| E2 | coding-agent …/rpc/RpcDispatcher.java | 674（2026-10-22 批 coding-agent-9 实测——私有 buildTree 删除改走 session.getTree() −19） |
+| E1 | coding-agent …/core/AgentSession.java | **2,083**（2026-10-22 批 coding-agent-10 实测——批 10 +23：ForkMessage record＋getUserMessagesForForking 修真＋textOf 分隔符参；拆分宜搭下一 coding-agent 批） |
+| E2 | coding-agent …/rpc/RpcDispatcher.java | 667（2026-10-22 批 coding-agent-10 实测——forkMessageText 删除、fork/get_fork_messages 两点修真 −7） |
 | E5 | ai …/catalog/ModelCompat.java | **762**（2026-10-11 B98 加 8 组件；converter 侧已拆出 CompletionAssistantMessage 保 500 内） |
-| E6 | tui …/app/PiTuiApp.java | 559（2026-10-22 批 coding-agent-9 实测——ResizeEvent 跟踪＋导航流构造同步 +22） |
+| E6 | tui …/app/PiTuiApp.java | 615（2026-10-22 批 coding-agent-10 实测——fork 流＋dequeue/INTERRUPT 臂 +56） |
 
 （E3/E4 已销号——2026-10-18 批 agent-core-5 拆分：`PiLaneSink` 470＋`PiLaneRequestTelemetry` 131、`AgentHarness` 438＋`HarnessBootstrap` 231，行为零变化纯移动。）
 

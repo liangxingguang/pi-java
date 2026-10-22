@@ -137,7 +137,7 @@ pi 另有 **`/skill:name` 命令族**（`enableSkillCommands` 默认 true，`int
 | 12 | `/session` | `:31` | ⚠️ `SessionCommands.java:30` | 1 | **存疑** | pi "info **and stats**"；java 只打 4 行（`:89-98`） |
 | 13 | `/changelog` | `:32` | ⚠️ `MiscCommands.java:120` | 1 | **存疑** | pi 读文件；java 硬编码字符串（`:24-30`） |
 | 14 | `/hotkeys` | `:33` | ✅ `MiscCommands.java:122` | 1 | 对齐 | |
-| 15 | `/fork` | `:34` | ⚠️ `SessionCommands.java:33` | 2 | **存疑** | pi 从历史用户消息分叉（`user-message-selector.ts` 155 行） |
+| 15 | `/fork` | `:34` | ✅ `SessionCommands.java:33` | 2 | **对齐** | **批 10（2026-10-22，B254/docs/21）**：user-message 选择器落地（`UserMessageSelectorScreen`，pi `user-message-selector.ts` 155 行对位——全量 user 消息、初始选中最后一条、环绕导航、选中 fork＋编辑器回填选中消息文本＋"Forked to new session"）；描述改 pi 逐字；窄差 D50（带参 `forkCopy` 臂 java 独有） |
 | 16 | `/clone` | `:35` | ✅ `SessionCommands.java:48` | 1 | 对齐 | |
 | 17 | `/trust` | `:36` | ✅ `SettingsCommands.java:30` | 2 | 对齐 | |
 | 18 | `/login` | `:37` | ⚠️ `MiscCommands.java:140` | 2 | **存疑** | pi `login-dialog.ts` + OAuth 选择器 **＋ 顶层直供 Radius**（`interactive-mode.ts:5887-5952`）**＋ 登录后提供把 Radius 写进全局 `mcp.json`**（`offerRadiusMcpServer:6377`，调用点 `:6357`）；java 只用 `System.console().readPassword`（`:154`）收 API key |
@@ -149,8 +149,9 @@ pi 另有 **`/skill:name` 命令族**（`enableSkillCommands` 默认 true，`int
 | 24 | `/quit` | `:43` | ✅ `MiscCommands.java:173` | 2 | 对齐 | |
 | 25 | `/skill:<name>` 命令族 | `interactive-mode.ts:805-815` | ✅ `CommandRegistry.java` dispatch 透传＋`SkillCommandItems.java` | 2 | **对齐** | **批 2（2026-10-19，B244/docs/12）**：注册面＝补全目录（`PiTuiApp.loadSlashItems` skill 臂，受开关门）＋提交透传（`/skill:` 前缀 dispatch 返回 null 落 prompt，批 4 展开器接手）＋RPC `get_commands` skill 臂（`RpcDispatcher.buildCommands`）；裁决②展开不受开关门；窄差 D3 仅放行 `/skill:` 前缀（pi 任何未识别 slash 都落 prompt） |
 
-**汇总：对齐 11 / 缺失 2 / 存疑 12 / 合计 25 = 44.0%**；**Σ权重 38 / Σ(w×c) 26.0 / 加权 68.4%**
+**汇总：对齐 12 / 缺失 2 / 存疑 11 / 合计 25 = 48.0%**；**Σ权重 38 / Σ(w×c) 27.0 / 加权 71.1%**
 > 批 2（2026-10-19，B244/docs/12）：#25 缺失 → **对齐**。同批更正本行旧账（旧行「对齐 11/Σwc 25.0」与逐行判定不符；逐行实算为对齐 10/Σwc 24.0，与下方汇总表 C 域 24.0 一致）。
+> 批 10（2026-10-22，B254/docs/21）：#15 `/fork` 存疑 → **对齐**（user-message 选择器，窄差 D50 登记）。
 
 ---
 
@@ -391,7 +392,7 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 | E3-5 | `--session-id` 精确 ID（缺则建） | `main.ts:437-447` | `SessionPersistence.java:175-184` | 2 | **存疑** | **B53** |
 | E3-6 | `--fork` 分叉 | `main.ts:369-381` | `SessionPersistence.java:192-199` | 2 | **存疑** | **B53** |
 | E3-7 | `/clone` 原位复制 | `session-manager.ts:1632` `createBranchedSession` | `SessionCommands.java:48` `forkCopy` | 1 | 对齐 | — |
-| E3-8 | `/fork` 从历史用户消息分叉 | `user-message-selector.ts`（155 行） | `SessionCommands.java:33` `forkCopy(name)` | 2 | **存疑** | — |
+| E3-8 | `/fork` 从历史用户消息分叉 | `user-message-selector.ts`（155 行） | `PiTuiApp.java`（forkFromMessage）＋`UserMessageSelectorScreen.java` | 2 | **对齐** | **批 10（2026-10-22，B254/docs/21）**：选择器本体＋fork-before＋编辑器回填全落；窄差 D50/D51 登记（同 C 域 #15——设计对账表漏列本行，闭环逐行实算同翻） |
 | E3-9 | 会话列表（加强） | `listSessionsFromDir`（`:941`）、`SessionListProgress`（3 参）、`AbortSignal`、`publishPartial`、`listAll` | `PersistentSessionRepositories.java:74-76` `list(cwd)` **同步全量、无回调、无取消** | 2 | **存疑** | **B55** |
 | E3-10 | 导出 JSONL | `core/session-export.ts` | `PersistentSessionRepositories.java:95` | 2 | 对齐 | — |
 | E3-11 | 导出 HTML | `core/export-html/`（748 行） | `export/HtmlExporter.java` | 2 | 对齐 | — |
@@ -409,7 +410,8 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 | E3-23 | 会话元数据变更事件 | `session_info_changed`（`types.ts:1575`） | `AgentSessionEvent.SessionInfoChanged` **零生产者** | 1 | **缺失** | **B30** |
 | E3-24 | 提示缓存预热 | `core/cache-warmer.ts`（453 行）+ `settings-schema.ts:395` | ❌ | 2 | **缺失** | — |
 
-**E3 汇总：对齐 14 / 缺失 4 / 存疑 6 / 合计 24 = 58.3%**；**Σ权重 40 / Σ(w×c) 27.5 / 加权 68.8%**
+**E3 汇总：对齐 15 / 缺失 4 / 存疑 5 / 合计 24 = 62.5%**；**Σ权重 40 / Σ(w×c) 28.5 / 加权 71.3%**
+> 批 10（2026-10-22，B254/docs/21）：E3-8 `/fork` 存疑 → **对齐**。
 
 ### E4 资源发现（7）
 
