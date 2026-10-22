@@ -33,7 +33,7 @@ public final class KeybindingsManager {
     public static final String THINKING_TOGGLE = "app.thinking.toggle";  // Ctrl+T
     public static final String EXTERNAL_EDITOR = "app.editor.external";  // Ctrl+G
     public static final String FOLLOW_UP = "app.message.followUp";       // Alt+Enter
-    public static final String DEQUEUE = "app.message.dequeue";          // Alt+Up
+    public static final String DEQUEUE = "app.message.dequeue";          // Alt+Up（Windows/WSL ⇒ Alt+Q）
 
     // ── app.tree.*／app.message.copy（docs/19 §3.11，pi keybindings.ts 默认键）─
     public static final String TREE_FOLD_OR_UP = "app.tree.foldOrUp";     // ctrl+left, alt+left
@@ -83,6 +83,15 @@ public final class KeybindingsManager {
 
     /** Create a manager pre-populated with the default keybindings. */
     public KeybindingsManager() {
+        this(useWindowsKeybindings(System.getProperty("os.name", ""), System.getenv()));
+    }
+
+    /**
+     * 平台旗可注入的构造（测试面；生产走 {@link #KeybindingsManager()} 的系统探测）。
+     *
+     * @param windowsKeybindings pi 的 {@code windowsKeybindings} 模块级常量对位
+     */
+    KeybindingsManager(boolean windowsKeybindings) {
         bindings.put(INTERRUPT, List.of(KeyStroke.of("esc", false, false, false)));
         bindings.put(CLEAR, List.of(KeyStroke.of("c", true, false, false)));
         bindings.put(EXIT, List.of(KeyStroke.of("d", true, false, false)));
@@ -93,7 +102,11 @@ public final class KeybindingsManager {
         bindings.put(THINKING_TOGGLE, List.of(KeyStroke.of("t", true, false, false)));
         bindings.put(EXTERNAL_EDITOR, List.of(KeyStroke.of("g", true, false, false)));
         bindings.put(FOLLOW_UP, List.of(KeyStroke.of("enter", false, true, false)));
-        bindings.put(DEQUEUE, List.of(KeyStroke.of("up", false, true, false)));
+        // pi keybindings.ts:71-74（裁决③）：Windows/WSL ⇒ alt+q，其余 alt+up——
+        // 单键不双绑（双绑会让 Alt+Q 在非 Windows 吃掉编辑器输入）。
+        bindings.put(DEQUEUE, windowsKeybindings
+            ? List.of(KeyStroke.of("q", false, true, false))
+            : List.of(KeyStroke.of("up", false, true, false)));
 
         overlayBindings.put(TREE_FOLD_OR_UP, List.of(
             KeyStroke.of("left", true, false, false),
@@ -114,6 +127,19 @@ public final class KeybindingsManager {
         overlayBindings.put(TREE_FILTER_CYCLE_BACKWARD,
             List.of(KeyStroke.of("o", true, false, true)));
         overlayBindings.put(MESSAGE_COPY, List.of(KeyStroke.of("x", true, false, false)));
+    }
+
+    /**
+     * pi {@code useWindowsKeybindings}（keybindings.ts:16-20 逐字，docs/21 §3.8）：
+     * win32，或 linux＋WSL 环境变量（{@code WSL_DISTRO_NAME}／{@code WSL_INTEROP}）。
+     * JVM 的 {@code os.name} 在 Windows 含 {@code "windows"}、Linux 含 {@code "linux"}，
+     * 判定串与 pi 的平台集合对齐（裁决③）。
+     */
+    static boolean useWindowsKeybindings(String osName, java.util.Map<String, String> env) {
+        var name = osName.toLowerCase(java.util.Locale.ROOT);
+        return name.contains("windows")
+            || (name.contains("linux")
+                && (env.containsKey("WSL_DISTRO_NAME") || env.containsKey("WSL_INTEROP")));
     }
 
     /**

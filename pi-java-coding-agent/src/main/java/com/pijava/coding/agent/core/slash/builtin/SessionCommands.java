@@ -32,7 +32,8 @@ public final class SessionCommands {
         registry.register(new SlashCommand() {
             @Override public String name() { return "fork"; }
             @Override public String description() {
-                return "Fork from a history user message";
+                // pi slash-commands.ts:34 逐字【模型可见】（docs/21 §3.4）。
+                return "Create a new fork from a previous user message";
             }
             @Override public String argumentHint() { return "[branch-name]"; }
             @Override public CompletionStage<String> execute(String args, SlashContext ctx) {

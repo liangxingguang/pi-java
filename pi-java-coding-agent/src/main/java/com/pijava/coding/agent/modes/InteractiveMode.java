@@ -111,6 +111,38 @@ public final class InteractiveMode {
         session.abort();
     }
 
+    /** pi {@code restoreQueuedMessagesToEditor} 的返回（合并文本＋条数——状态文案
+     *  复数形依赖条数，pi interactive-mode.ts:4512）。 */
+    public record RestoredQueue(String combinedText, int count) {}
+
+    /**
+     * pi {@code clearAllQueues}（interactive-mode.ts:4708-4722）＋
+     * {@code restoreQueuedMessagesToEditor} 的队列侧（:4742-4763，docs/21 §3.5，
+     * S20）：清空引擎两队列＋压缩缓冲，返回 pi 序合并文本（引擎 steer、缓冲
+     * steer、引擎 followUp、缓冲 followUp——pi 的 {@code [...engine, ...compaction]}
+     * 两数组再拼接，逐字等价；{@code "\n\n"} 连接）；空 ⇒ {@code null}。
+     * 编辑器回填与 abort 由调用方按 pi 调用点形态组合（dequeue／Esc 流式／树导航）。
+     *
+     * @return 合并后的排队文本与条数；无排队 ⇒ {@code null}
+     */
+    public RestoredQueue restoreQueuedMessages() {
+        var cleared = session.clearQueue();              // 引擎两队列＋queue_update{空}
+        var buffered = buffer.contents();                // 压缩缓冲
+        buffer.clear();
+        if (!buffered.isEmpty()) {
+            // 缓冲清空后的真状态（引擎队列已空）——pi updatePendingMessagesDisplay 对位。
+            session.emitQueueUpdate();
+        }
+        var all = new java.util.ArrayList<String>();
+        all.addAll(cleared.steering());
+        buffered.stream().filter(q -> q.mode() == StreamingBehavior.STEER)
+            .forEach(q -> all.add(q.text()));
+        all.addAll(cleared.followUp());
+        buffered.stream().filter(q -> q.mode() == StreamingBehavior.FOLLOW_UP)
+            .forEach(q -> all.add(q.text()));
+        return all.isEmpty() ? null : new RestoredQueue(String.join("\n\n", all), all.size());
+    }
+
     /**
      * Queue a follow-up message (Alt+Enter).
      *

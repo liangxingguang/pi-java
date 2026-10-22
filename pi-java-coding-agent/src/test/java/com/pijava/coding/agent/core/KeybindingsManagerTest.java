@@ -1,5 +1,7 @@
 package com.pijava.coding.agent.core;
 
+import java.util.Map;
+
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -64,6 +66,36 @@ class KeybindingsManagerTest {
         // tree 动作仍按 pi matches 形可查（overlay 语境）。
         assertThat(keys.matches(KeybindingsManager.TREE_FILTER_LABELED,
             KeybindingsManager.KeyStroke.of("l", true, false, false))).isTrue();
+    }
+
+    /** docs/21（§3.8，裁决③）：pi useWindowsKeybindings 四态（keybindings.ts:16-20）。 */
+    @Test
+    void windowsKeybindingsDetectionFollowsThePiRule() {
+        assertThat(KeybindingsManager.useWindowsKeybindings("Windows 11", Map.of())).isTrue();
+        assertThat(KeybindingsManager.useWindowsKeybindings("Linux",
+            Map.of("WSL_DISTRO_NAME", "Ubuntu"))).isTrue();
+        assertThat(KeybindingsManager.useWindowsKeybindings("Linux",
+            Map.of("WSL_INTEROP", "/run/WSL"))).isTrue();
+        assertThat(KeybindingsManager.useWindowsKeybindings("Linux", Map.of())).isFalse();
+        assertThat(KeybindingsManager.useWindowsKeybindings("Mac OS X", Map.of())).isFalse();
+    }
+
+    /** docs/21（§3.8）：dequeue 键平台分叉——Windows/WSL ⇒ alt+q，其余 alt+up（单键不双绑）。 */
+    @Test
+    void dequeueBindingFollowsThePlatform() {
+        var win = new KeybindingsManager(true);
+        assertThat(win.matches(KeybindingsManager.DEQUEUE,
+            KeybindingsManager.KeyStroke.of("q", false, true, false))).isTrue();
+        assertThat(win.matches(KeybindingsManager.DEQUEUE,
+            KeybindingsManager.KeyStroke.of("up", false, true, false))).isFalse();
+        assertThat(win.strokeFor(KeybindingsManager.DEQUEUE))
+            .isEqualTo(KeybindingsManager.KeyStroke.of("q", false, true, false));
+
+        var nix = new KeybindingsManager(false);
+        assertThat(nix.matches(KeybindingsManager.DEQUEUE,
+            KeybindingsManager.KeyStroke.of("up", false, true, false))).isTrue();
+        assertThat(nix.matches(KeybindingsManager.DEQUEUE,
+            KeybindingsManager.KeyStroke.of("q", false, true, false))).isFalse();
     }
 
     @Test
