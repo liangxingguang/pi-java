@@ -22,6 +22,7 @@ public final class SettingsManager {
     private final Set<String> modifiedFields = new HashSet<>();
     private final SettingsAccessors accessors = new SettingsAccessors(this);
     private final SettingsNetworkAccessors network = new SettingsNetworkAccessors(this);
+    private final SettingsInstallAccessors install = new SettingsInstallAccessors(this);
 
     private SettingsManager(SettingsStorage storage) {
         this.storage = storage;
@@ -101,6 +102,11 @@ public final class SettingsManager {
     /** 网络面访问器（批 11 裁决⑧拆分：httpIdleTimeoutMs/websocketConnectTimeoutMs/cacheWarming）。 */
     public SettingsNetworkAccessors network() {
         return network;
+    }
+
+    /** 安装/分析面访问器（批 11 裁决⑧拆分：deviceId/changelog/analytics 族）。 */
+    public SettingsInstallAccessors install() {
+        return install;
     }
 
     /** Record a field as modified so {@link #flush()} persists it. */

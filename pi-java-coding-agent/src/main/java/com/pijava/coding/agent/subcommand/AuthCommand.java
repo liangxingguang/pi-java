@@ -139,11 +139,23 @@ public final class AuthCommand {
         return switch (provider) {
             case OAuthProvider.Pkce(OAuthConfig c) -> new OAuthFlow(c).login(CONSOLE);
             case OAuthProvider.Anthropic ignored -> new AnthropicOAuthFlow().login(CONSOLE);
-            // pi-ai CLI 每次登录用随机 UUID（不持久化安装 ID），agent 名 Pi。
+            // 批 11 T5（pi interactive-mode.ts:6331 对位）：持久安装 ID。
             case OAuthProvider.ChatGpt ignored -> new ChatGptOAuthFlow()
-                .login(CONSOLE, ChatGptOAuthFlow.LoginHints.cli());
+                .login(CONSOLE, chatGptHints());
             case OAuthProvider.Device(DeviceCodeConfig d) -> new DeviceCodeFlow(d).login(CONSOLE);
         };
+    }
+
+    /**
+     * pi interactive-mode.ts:6331 对位：deviceId 来自设置的持久安装 ID
+     * （{@code getOrCreateDeviceId}）。信任覆盖 {@code TRUE} 加载——登录命令不执行
+     * 项目代码，且避免「defaultProjectTrust=never ⇒ 项目域被清空」的加载副作用。
+     */
+    private static ChatGptOAuthFlow.LoginHints chatGptHints() {
+        var settings = com.pijava.coding.agent.core.SettingsManager.load(
+            null, null, Boolean.TRUE);
+        return new ChatGptOAuthFlow.LoginHints(
+            () -> settings.install().getOrCreateDeviceId(), "Pi");
     }
 
     /** 多 profile 认证（P6-18）：{@code auth profile set|unset|list|set-key ...}。 */

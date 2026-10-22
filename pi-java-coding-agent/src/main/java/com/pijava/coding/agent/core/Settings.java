@@ -75,6 +75,9 @@ public final class Settings {
     /** pi {@code websocketConnectTimeoutMs}（settings-schema.ts:402-406）：number |
      *  "disabled" 联合，同 {@link #httpIdleTimeoutMs} 边界处理。 */
     public Object websocketConnectTimeoutMs;
+    /** pi {@code deviceId}（settings-schema.ts:302-307）：稳定安装 UUID，首次认证需要
+     *  时生成；仅全局域。 */
+    public String deviceId;
     /** 远程模型目录的根 URL（原 docs/70 R7）；null/空 ⇒ {@code https://pi.dev}。 */
     public String catalogBaseUrl;
     public String tuiMode;
