@@ -172,6 +172,8 @@ final class SessionRunner {
             flush(owner, laneName);
             // pi agent_settled（agent-session.ts:203/:1083/:1849）：每次驱动恰一条，
             // aborted 读会话层 abort 请求旗。每回合的 turn_end 由漏斗直供（引擎发射）。
+            // 批 13（T8-①，pi :1079 对位）：settled 第一步先调和 cache warmer。
+            owner.notifyCacheWarmerSettled();
             owner.emitSessionEvent(new AgentSessionEvent.AgentSettled(
                 owner.agentRunAbortRequested()));
             var summary = RunSummaryAggregator.aggregate(
@@ -198,6 +200,8 @@ final class SessionRunner {
             }
             // 防御方言（正常路径不可达）：引擎抛穿时补一对收口事件，pi 无对应。
             owner.emitSessionEvent(new AgentSessionEvent.AgentEnd(List.of(), false));
+            // 批 13（T8-①）：双发射点同序（pi :1079 对位）。
+            owner.notifyCacheWarmerSettled();
             owner.emitSessionEvent(new AgentSessionEvent.AgentSettled(
                 owner.agentRunAbortRequested()));
             statusFuture.complete(new RunStatus(1, "error"));

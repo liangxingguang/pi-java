@@ -97,6 +97,46 @@ class PiV3UsageEntryTest {
     }
 
     /**
+     * 批 13（docs/24 §7）：<b>java 写 ⇒ pi 同形 ⇒ 读回</b>的反向钉——cache-warmer
+     * 落盘的 {@code cache_warm} 行（审计五键空，非车道产出）与 pi 的生产者行
+     * （cache-warmer.ts:342-348）同形可跨读。
+     */
+    @Test
+    void writesACacheWarmRowShapedLikePis() throws Exception {
+        Path dir = Files.createTempDirectory("pi-v3-usage-cache-warm");
+        var repo = JsonlSessionRepository.over(dir);
+        var session = repo.create(new JsonlSessionCreateOptions(null, "work", null, null));
+        session.appendEntry(new com.pijava.agent.entry.ProvisionedEntry<>(new Entry.Usage(
+            "u9", 0, null, null, "cache_warm", "anthropic", "claude-opus-4-6",
+            new com.pijava.ai.Usage(0, 1, 100, 0, null, null, 101,
+                new com.pijava.ai.Usage.Cost(0, 0, 0.01, 0, 0.01)),
+            "extension override", null, null, null, null, null)), "main");
+        session.storage().drain();
+        Path file = repo.list(JsonlSessionListOptions.all()).getFirst().path();
+
+        var row = lines(file).stream()
+            .filter(n -> "u9".equals(n.path("id").asText(null)))
+            .findFirst().orElseThrow();
+        assertThat(row.path("type").asText()).isEqualTo("usage");
+        assertThat(row.path("kind").asText()).isEqualTo("cache_warm");
+        assertThat(row.path("note").asText()).isEqualTo("extension override");
+        assertThat(row.has("runId")).as("审计五键空 ⇒ 键省略（pi 行无此键）").isFalse();
+        assertThat(row.has("entryId")).isFalse();
+
+        // 读回逐字段相等（pi parseSessionEntries 只做 JSON.parse——同形即可跨读）。
+        var reloaded = JsonlSessionStorage.load(FS, file);
+        var usage = reloaded.getLog(LogOptions.none()).stream()
+            .filter(item -> item instanceof LogItem.EntryItem e
+                && e.entry() instanceof Entry.Usage)
+            .map(item -> (Entry.Usage) ((LogItem.EntryItem) item).entry())
+            .findFirst().orElseThrow();
+        assertThat(usage.kind()).isEqualTo("cache_warm");
+        assertThat(usage.note()).isEqualTo("extension override");
+        assertThat(usage.usage().cacheRead()).isEqualTo(100);
+        assertThat(usage.usage().cost().total()).isEqualTo(0.01);
+    }
+
+    /**
      * 反向钉子：**本仓的** usage 行（{@code kind:"assistant"}）也要能读回来 ——
      * pi 的 kind 是自由串，本仓的取值来自 {@code UsageCause}，两侧共用一个键。
      */

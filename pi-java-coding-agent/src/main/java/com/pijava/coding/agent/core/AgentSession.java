@@ -150,6 +150,11 @@ public final class AgentSession implements AutoCloseable {
     /** docs/17（B248）：provider 请求面桥（pi extensionRunnerRef 对位）——wireSession
      *  随 StreamFn 建、loadExtensions 回填 bus/ctx；null ⇒ 无扩展装配（测试形状）。 */
     private com.pijava.coding.agent.extension.bridge.ProviderEventBridge providerBridge;
+    /** 批 13（docs/24 T6）：cache warmer（pi sdk.ts:334-339 对位）——volatile：
+     *  读侧是 SessionRunner 驱动线程与 TUI/RPC 线程，写侧仅装配/fork 重建。 */
+    private volatile CacheWarmer cacheWarmer;
+    /** 批 13（T3）：decide 钩桥——loadExtensions 回填（providerBridge 同点）。 */
+    private com.pijava.coding.agent.extension.bridge.CacheWarmingBridge cacheWarmingBridge;
     /** docs/16（B252，裁决⑥）：替换/退出关闭幂等门。 */
     private volatile boolean closed;
 
@@ -558,8 +563,49 @@ public final class AgentSession implements AutoCloseable {
         // 构造之后才诞生 —— 按 sessionRef/compactionObserver 同款引用晚绑定；
         // supplier 只在摘要请求时（必晚于 create 返回）才读。
         var harnessRef = new java.util.concurrent.atomic.AtomicReference<AgentHarness>();
+        // 批 13（docs/24 T6，pi sdk.ts:334-339 对位）：cache warmer 先于 harness 构造
+        // （isCurrent/sessionAccess 经 harnessRef/sessionRef 晚绑定——首请求必晚于
+        // create 返回）。decide 经 CacheWarmingBridge 晚绑定（pi extensionRunnerRef
+        // 对位），loadExtensions 处 install（providerBridge.install 同点）。
+        var cacheWarmingBridge =
+            new com.pijava.coding.agent.extension.bridge.CacheWarmingBridge();
+        var cacheWarmer = new CacheWarmer(
+            warmStream(DefaultProviders.warmStreamFnFor(
+                args, effective.defaultProvider, providers, effective, args.sessionId(),
+                providerBridge)),
+            new CacheWarmer.SessionAccess() {
+                @Override
+                public Entry.Usage appendUsage(String kind, String provider, String model,
+                                               com.pijava.ai.Usage usage, String note) {
+                    var s = sessionRef.get();
+                    return s == null ? null : s.appendUsage(kind, provider, model, usage, note);
+                }
+
+                @Override
+                public List<Entry> getBranch() {
+                    var s = sessionRef.get();
+                    return s == null ? List.of()
+                        : ContextEntries.pathToLeaf(s.accumulatedEntries(), s.currentLeafId());
+                }
+            },
+            () -> settings.network().getCacheWarmingMode(),
+            cacheWarmingBridge::emitOrDefault,
+            WarmScheduler.virtualThreadDaemon(), System::currentTimeMillis, catalog::find);
+        // 裁决①（替代 pi sdk.ts:427 的 sessionId 比较——java 的 StreamOptions.sessionId
+        // 在车道请求恒空、亲和 id 由宿主层 requestExtra 统一注入，门无法逐字抄）：
+        // warming wrapper 只包 harness 注入点；LlmSummaryGenerator（:573）保持
+        // recordingStreamFn ⇒ 压缩/摘要天然不触发 start（pi「仅会话请求」门的 java 形：
+        // 「compaction and summaries use their own routing ids; only session requests
+        // replace the cache entry」）。
+        var warmingStreamFn = (com.pijava.agent.harness.StreamFn) (requestModel,
+                requestContext, requestOptions) -> {
+            cacheWarmer.start(
+                new CacheWarming.WarmRequest(requestModel, requestContext, requestOptions),
+                cacheContextIsCurrent(harnessRef, requestModel));
+            return recordingStreamFn.stream(requestModel, requestContext, requestOptions);
+        };
         var harness = AgentHarness.create(HarnessConfig.builder()
-            .streamFn(recordingStreamFn)
+            .streamFn(warmingStreamFn)
             .model(model)
             // 3b（原 docs/31 §8.20）：阈值压缩的门读**当前模型**的上下文窗口
             // （pi model.contextWindow，agent-session.ts:548）；目录字段
@@ -623,6 +669,10 @@ public final class AgentSession implements AutoCloseable {
         harnessRef.set(harness);
         var agentSession = new AgentSession(harness, services, args, name);
         agentSession.providerBridge = providerBridge;
+        // 批 13（T6/T8）：warmer 与 decide 桥随会话走（fork 经 wireSession 公共路径
+        // 自动重装——pi 每会话新建 CacheWarmer 同），旧 warmer 随 closeWith cancel。
+        agentSession.cacheWarmer = cacheWarmer;
+        agentSession.cacheWarmingBridge = cacheWarmingBridge;
         sessionRef.set(agentSession);
         agentSession.setScopedModels(scope.models());
         agentSession.modelCatalog = catalog;
@@ -650,6 +700,72 @@ public final class AgentSession implements AutoCloseable {
             case "manual" -> AgentSessionEvent.CompactionReason.MANUAL;
             case "threshold" -> AgentSessionEvent.CompactionReason.THRESHOLD;
             default -> AgentSessionEvent.CompactionReason.OVERFLOW;
+        };
+    }
+
+    /**
+     * 批 13（T7 尾巴，pi cache-warmer.ts:332-338 的 {@code streamSimple(...).result()}
+     * 对位）：暖 {@link com.pijava.agent.harness.StreamFn} ⇒ 阻塞消费到终局。
+     * try-with-resources 包迭代器（abort 句柄持有它、close 即断连，裁决②/D65）；
+     * {@code StreamError} ⇒ ERROR 终局消息（warmer 侧不记账，pi catch 全吞对位）。
+     */
+    private static CacheWarmer.WarmStreamFn warmStream(
+            com.pijava.agent.harness.StreamFn warmStreamFn) {
+        return (model, context, options, abort) -> {
+            com.pijava.ai.message.Message.AssistantMessage finalMessage = null;
+            try (var iterator = warmStreamFn.stream(model, context, options)) {
+                abort.bind(iterator);
+                while (iterator.hasNext()) {
+                    switch (iterator.next()) {
+                        case StreamEvent.StreamDone done -> finalMessage =
+                            com.pijava.ai.message.Message.AssistantMessage.fromPartial(
+                                done.partial());
+                        case StreamEvent.StreamError error -> finalMessage =
+                            new com.pijava.ai.message.Message.AssistantMessage(List.of(),
+                                com.pijava.ai.message.StopReason.ERROR, null, null, null, null,
+                                null, Instant.now(),
+                                error.error() == null ? null : error.error().getMessage(), null);
+                        default -> { /* 中间帧不消费（maxTokens=1 重放只有增量帧）。 */ }
+                    }
+                }
+            }
+            return finalMessage;
+        };
+    }
+
+    /**
+     * 批 13（T6，pi sdk.ts:369-381 逐字对位）：provider/id 相同＋捕获消息数组是当前
+     * 数组的前缀（逐元素恒等）。pi 注释：agent 可能浅拷贝 messages 数组，顶层对象
+     * 身份不是有效缓存键——java 捕获的是 lane 工作副本的<b>活视图</b>（T4），
+     * 与 pi 捕获数组引用同形（引擎就地支改，活视图等价）。
+     */
+    private static BooleanSupplier cacheContextIsCurrent(
+            java.util.concurrent.atomic.AtomicReference<AgentHarness> harnessRef,
+            ModelId<?> requestModel) {
+        var harness = harnessRef.get();
+        var messages = harness == null
+            ? List.<com.pijava.ai.message.Message>of() : harness.getMessages();
+        return () -> {
+            var current = harnessRef.get();
+            if (current == null) {
+                return false;
+            }
+            var currentModel = current.getModel();
+            var currentMessages = current.getMessages();
+            if (currentModel == null
+                    || !currentModel.provider().equals(requestModel.provider())
+                    || !currentModel.modelName().equals(requestModel.modelName())) {
+                return false;
+            }
+            if (messages.size() > currentMessages.size()) {
+                return false;
+            }
+            for (int i = 0; i < messages.size(); i++) {
+                if (currentMessages.get(i) != messages.get(i)) {
+                    return false;
+                }
+            }
+            return true;
         };
     }
 
@@ -1834,6 +1950,66 @@ public final class AgentSession implements AutoCloseable {
     }
 
     /**
+     * 批 13（docs/24 T5，pi session-manager.ts:1244-1258 的 {@code appendUsage}
+     * 对位；收口样板照 {@link #appendBoundaryEntry}）：模型归因用量条目
+     * （不进 LLM 上下文）——追加 ⇒ {@link AgentSessionEvent.EntryAppended} 广播 ⇒
+     * 落盘。生产者：{@link CacheWarmer}（kind="cache_warm"）。footer 计入
+     * （pi getSessionStats :4192-4193 的 usage 条目臂对位）。
+     *
+     * <p>双态：run 中经 {@code appendDeferredLaneEntry} 记 deferred write
+     * （与 PiLaneSink 的 assistant usage 条目同生命周期），idle 纯追加。</p>
+     */
+    public Entry.Usage appendUsage(String kind, String provider, String model,
+                                   com.pijava.ai.Usage usage, String note) {
+        var entry = harness.appendDeferredLaneEntry(laneName(),
+            (seq, parentId) -> new Entry.Usage(
+                java.util.UUID.randomUUID().toString(), seq, parentId,
+                Instant.now(), kind, provider, model, usage, note,
+                null, null, null, null, null));     // 审计五键空（非车道产出）
+        emitSessionEvent(new AgentSessionEvent.EntryAppended(entry));
+        if (session != null) {
+            SessionPersistence.persistPending(this, session, laneName());
+        }
+        harness.addTokens((long) usage.totalTokens());
+        return entry;
+    }
+
+    /** 批 13（T6）：当前叶 id——{@code CacheWarmer.SessionAccess.getBranch} 的操作数。 */
+    String currentLeafId() {
+        return harness.snapshot(laneName()).leafId();
+    }
+
+    // ── 批 13（T8）：cache-warmer 会话四面 ─────────────────────────
+
+    /**
+     * pi agent-session.ts:1079（{@code _emitAgentSettled} 第一步）对位——
+     * {@code SessionRunner} 在每一处 AgentSettled 发射前调用（包私有）。
+     */
+    void notifyCacheWarmerSettled() {
+        var warmer = cacheWarmer;
+        if (warmer != null) {
+            warmer.onAgentSettled();
+        }
+    }
+
+    /**
+     * pi :1436-1439 对位：写设置后<b>立即重调和</b>（设置页走这里，不走裸 accessor）。
+     */
+    public void setCacheWarmingMode(String mode) {
+        services.settings().network().setCacheWarmingMode(mode);
+        var warmer = cacheWarmer;
+        if (warmer != null) {
+            warmer.onModeChanged();
+        }
+    }
+
+    /** pi :1431-1433 对位（{@code /session} 的 Cache Warming 段消费）；未装配 ⇒ null。 */
+    public CacheWarming.Status cacheWarmingStatus() {
+        var warmer = cacheWarmer;
+        return warmer == null ? null : warmer.status();
+    }
+
+    /**
      * docs/15（before_agent_start 的 result.message 落盘点，pi :2092-2104 对位）：
      * 追加 custom message 条目。持久会话走 {@code SessionTree.appendCustomMessageEntry}
      * （含落盘）；无持久会话时退化为 harness 追加（内存态）。
@@ -2016,6 +2192,12 @@ public final class AgentSession implements AutoCloseable {
         // docs/16 裁决⑤：abort() 内含 abortCompaction/abortBranchSummary/abortRetry
         // 并置中止旗 —— pi 的 settle 在途 turn 第一步（原实现只 abortRetry）。
         abort();
+        // 批 13（T8-②，pi :1409-1412 对位）：dispose 停暖（onWarmed 无——裁决⑧，
+        // 广播内建于 appendUsage 收口）。
+        var warmer = cacheWarmer;
+        if (warmer != null) {
+            warmer.cancel();
+        }
         // pi dispose/teardownCurrent：shutdown 事件在 dispose 之前（:258-267）。
         fireSessionShutdown(reason, targetSessionFile);
         if (session != null) {
@@ -2063,6 +2245,10 @@ public final class AgentSession implements AutoCloseable {
         // 对位）——此后该会话的每一次 provider 请求过四事件线。
         if (owner.providerBridge != null) {
             owner.providerBridge.install(bus, context);
+        }
+        // 批 13（T3）：decide 钩桥回填（同点同晚绑定形）。
+        if (owner.cacheWarmingBridge != null) {
+            owner.cacheWarmingBridge.install(bus, context);
         }
         // session 由 SessionPersistence 稍后赋值，惰性求值绑定供 sendMessage 落盘用。
         context.bindSession(() -> owner.session());
