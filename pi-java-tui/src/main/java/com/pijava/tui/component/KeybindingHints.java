@@ -43,4 +43,26 @@ public final class KeybindingHints {
         parts.add(stroke.key());
         return String.join("+", parts);
     }
+
+    /**
+     * pi {@code keyDisplayText}（keybinding-hints.ts:38-40，docs/21 §3.7）：
+     * {@link #keyText} 的每段首字母大写形（{@code "alt+up" ⇒ "Alt+Up"}）——
+     * dequeue 取回提示等「展示用」键名。
+     *
+     * @param stroke 中性键位（可为 null）
+     * @return 大写形提示文本；{@code null} 或键名为空时返回空串
+     */
+    public static String displayText(KeyStroke stroke) {
+        var text = keyText(stroke);
+        if (text.isEmpty()) {
+            return text;
+        }
+        var parts = text.split("\\+");
+        for (int i = 0; i < parts.length; i++) {
+            if (!parts[i].isEmpty()) {
+                parts[i] = Character.toUpperCase(parts[i].charAt(0)) + parts[i].substring(1);
+            }
+        }
+        return String.join("+", parts);
+    }
 }

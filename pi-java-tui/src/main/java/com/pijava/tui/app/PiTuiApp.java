@@ -20,7 +20,7 @@ import com.pijava.tui.screen.ModelSelectorScreen;
 import com.pijava.tui.screen.ScreenOverlay;
 import com.pijava.tui.screen.SessionListScreen;
 import com.pijava.tui.screen.SettingsScreen;
-import com.pijava.tui.screen.TreeSelectorScreen;
+import com.pijava.tui.screen.UserMessageSelectorScreen;
 import com.pijava.tui.screen.WelcomeOverlay;
 import com.pijava.tui.util.CountdownWake;
 import com.pijava.tui.util.InlineRenderContext;
@@ -112,6 +112,9 @@ public final class PiTuiApp {
         chatScreen.setSlashCommands(loadSlashItems());
         chatScreen.setInterruptHint(
             KeybindingHints.keyText(keys.strokeFor(KeybindingsManager.INTERRUPT)));
+        // docs/21（§3.7）：排队区 hint 行键名随绑定表取（pi getAppKeyDisplay 对位）。
+        chatScreen.setDequeueHint(
+            KeybindingHints.displayText(keys.strokeFor(KeybindingsManager.DEQUEUE)));
         chatScreen.onSubmit(this::submitPrompt);
     }
 
@@ -441,16 +444,22 @@ public final class PiTuiApp {
             case CommandRegistry.UI_TREE_SELECTOR ->
                 // docs/18（§3.8/§3.9）＋ docs/19（§3.9）：/tree 走原地导航流
                 // （entry 树选择器 → 选 entry 后三选摘要）。
-                new TreeNavigationFlow(session, chatScreen, dispatcher,
+                new TreeNavigationFlow(session, mode, chatScreen, dispatcher,
                     this::openOverlay, this::terminalRows, this::terminalCols, keys)
                     .begin();
             case CommandRegistry.UI_FORK_SELECTOR -> {
-                // docs/18（§3.8）：/fork（空参）保持旧 fork 行为。
-                var snapshot = chatScreen.snapshot();
-                if (snapshot != null) {
-                    openOverlay(new TreeSelectorScreen(snapshot));
+                // docs/21（T3，B254）：/fork＝user-message 选择器（pi
+                // showUserMessageSelector，interactive-mode.ts:5500-5538 对位）。
+                var forkMessages = session.getUserMessagesForForking();
+                if (forkMessages.isEmpty()) {                       // pi :5503-5506
+                    chatScreen.appendSystemText("No messages to fork from");
                 } else {
-                    chatScreen.appendSystemText("No session snapshot yet.");
+                    var initialSelectedId =
+                        forkMessages.get(forkMessages.size() - 1).entryId();
+                    openOverlay(new UserMessageSelectorScreen(forkMessages, initialSelectedId,
+                        this::terminalCols,
+                        entryId -> forkFromMessage(entryId, forkMessages),
+                        () -> { }));                                // Esc：pi 的 onCancel 只关选择器
                 }
             }
             case CommandRegistry.UI_SETTINGS ->
@@ -462,9 +471,44 @@ public final class PiTuiApp {
         }
     }
 
+    /**
+     * pi {@code /fork} 选择器的 onSelect 回调（interactive-mode.ts:5514-5528 逐字序，
+     * docs/21 §3.3）：fork ⇒ 切换会话 ⇒ 选中消息文本回填编辑器 ⇒ 状态文案。
+     */
+    private void forkFromMessage(String entryId, List<AgentSession.ForkMessage> messages) {
+        try {
+            var forked = session.forkFromEntry(entryId);    // position "before"（批 5/6）
+            if (forked.isEmpty()) {
+                // session_before_fork cancel ⇒ pi {cancelled}：仅 requestRender（:5517-5520）。
+                return;
+            }
+            switchSession(forked.get());
+            // pi :5522：editor.setText(selectedText ?? "")——selectedText＝选中消息 text
+            // （与 fork 消息表同一条目，裁决②）。
+            var selectedText = messages.stream()
+                .filter(m -> m.entryId().equals(entryId))
+                .map(AgentSession.ForkMessage::text).findFirst().orElse("");
+            chatScreen.setEditorText(selectedText);
+            chatScreen.appendSystemText("Forked to new session");
+        } catch (Exception e) {                             // pi :5526-5527
+            chatScreen.showError(e.getMessage() == null ? String.valueOf(e) : e.getMessage());
+        }
+    }
+
     private void handleAction(String keyId) {
         switch (keyId) {
-            case KeybindingsManager.INTERRUPT -> mode.abort();
+            case KeybindingsManager.INTERRUPT -> {
+                // docs/21（T5，D41 重裁）：pi onEscape 首臂（:3071-3073）——流式中
+                // Esc 先把排队消息回填编辑器再 abort（pi 的 {abort:true} 在 restore 内
+                // 触发；java 拆开等价：restore 同步清队列，abort 紧随其后无交错窗口）。
+                if (session.isRunning()) {
+                    var restored = mode.restoreQueuedMessages();
+                    if (restored != null) {
+                        chatScreen.restoreToEditor(restored.combinedText());
+                    }
+                }
+                mode.abort();
+            }
             case KeybindingsManager.FOLLOW_UP -> {
                 if (chatScreen.isInputEmpty()) {
                     break;
@@ -491,7 +535,19 @@ public final class PiTuiApp {
             // B137：Ctrl+P 在 --models/settings scope 内正向轮转（空 scope 走全目录）。
             // TUI 无模型常驻标签，切换静默——与 Ctrl+L 选择器现状一致。
             case KeybindingsManager.MODEL_CYCLE -> session.cycleModelForward();
-            default -> { /* thinking.* / tools.expand / editor.external / dequeue → Phase 6 */ }
+            case KeybindingsManager.DEQUEUE -> {
+                // docs/21（T4，S20）：pi handleDequeue（:4507-4513）——全部排队
+                // （引擎两队列＋压缩缓冲）合并取回编辑器，文案逐字【模型可见】。
+                var restored = mode.restoreQueuedMessages();
+                if (restored == null) {
+                    chatScreen.appendSystemText("No queued messages to restore");
+                } else {
+                    chatScreen.restoreToEditor(restored.combinedText());
+                    chatScreen.appendSystemText("Restored " + restored.count()
+                        + " queued message" + (restored.count() > 1 ? "s" : "") + " to editor");
+                }
+            }
+            default -> { /* thinking.* / tools.expand / editor.external → Phase 6 */ }
         }
     }
 

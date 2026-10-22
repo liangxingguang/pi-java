@@ -502,6 +502,30 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
         completer.update(editor.getText());
     }
 
+    /** Replace the editor content（pi {@code editor.setText}；dequeue/fork 回填用，docs/21 §3.3）。 */
+    public void setEditorText(String text) {
+        editor.setText(text);
+        completer.update(editor.getText());
+    }
+
+    /**
+     * pi {@code restoreQueuedMessagesToEditor} 的编辑器侧合并式
+     * （interactive-mode.ts:4752-4756 逐字，docs/21 裁决⑦）：
+     * {@code [queuedText, currentText].filter(trim).join("\n\n")}——排队在前、
+     * 草稿在后、空白段丢弃。dequeue／Esc 流式／树导航三臂共用。
+     */
+    public void restoreToEditor(String queuedText) {
+        var combined = java.util.stream.Stream.of(queuedText, editor.getText())
+            .filter(t -> !t.isBlank())
+            .collect(java.util.stream.Collectors.joining("\n\n"));
+        setEditorText(combined);
+    }
+
+    /** dequeue 取回提示键名（pi {@code getAppKeyDisplay("app.message.dequeue")}；装配处注入）。 */
+    public void setDequeueHint(String hint) {
+        pendingQueue.dequeueHint(hint);
+    }
+
     /** Append a system/info bubble (slash command results). */
     public void appendSystemText(String text) {
         chatPanel.append(new ChatMessage.System(text, MetaKind.GENERIC));

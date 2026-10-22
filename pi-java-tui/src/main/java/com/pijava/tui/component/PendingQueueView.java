@@ -17,6 +17,16 @@ public final class PendingQueueView {
 
     private List<String> steering = List.of();
     private List<String> followUp = List.of();
+    // pi getAppKeyDisplay("app.message.dequeue")（:4736）；默认键显示，
+    // 装配处按平台表注入（Windows/WSL ⇒ "Alt+Q"）。
+    private String dequeueHint = "Alt+Up";
+
+    /** dequeue 键显示名（pi {@code getAppKeyDisplay} 对位；空值忽略）。 */
+    public void dequeueHint(String hint) {
+        if (hint != null && !hint.isEmpty()) {
+            this.dequeueHint = hint;
+        }
+    }
 
     /** Replace with queue_update contents. */
     public void update(List<String> steering, List<String> followUp) {
@@ -44,6 +54,9 @@ public final class PendingQueueView {
         for (var text : followUp) {
             rows.add(TamboUIAdapter.markupText("[dim]Follow-up: " + text + "[/]"));
         }
+        // docs/21（§3.7）：pi interactive-mode.ts:4736-4738——末行 dim 取回提示。
+        rows.add(TamboUIAdapter.markupText(
+            "[dim]↳ " + dequeueHint + " to edit all queued messages[/]"));
         return TamboUIAdapter.column(rows);
     }
 

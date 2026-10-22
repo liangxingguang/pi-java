@@ -33,11 +33,13 @@ import com.pijava.tui.util.TuiEventDispatcher;
  *
  * <p>Esc 换绑不移植（裁决③）：java 的 Esc＝INTERRUPT⇒{@code session.abort()}，
  * 首步即 {@code abortBranchSummary()}，摘要期行为已与 pi 换绑后等价。
- * {@code restoreQueuedMessagesToEditor} 未随本批（无既有取用面，随窄差登记）。</p>
+ * docs/21（T5，D41 重裁）：运行中导航先把排队消息回填编辑器再 abort
+ * （pi :5619-5621 的 {@code restoreQueuedMessagesToEditor()} 对位）。</p>
  */
 public final class TreeNavigationFlow {
 
     private final AgentSession session;
+    private final com.pijava.coding.agent.modes.InteractiveMode mode;
     private final ChatScreen chatScreen;
     private final TuiEventDispatcher dispatcher;
     private final Consumer<ScreenOverlay> openOverlay;
@@ -47,6 +49,7 @@ public final class TreeNavigationFlow {
 
     /**
      * @param session      当前会话（构造时捕获；切换会话后应重建 flow）
+     * @param mode         交互模式（docs/21 T5：restore 的队列侧落点）
      * @param chatScreen   聊天区（全部写入须在渲染线程——内部经 dispatcher 排回）
      * @param dispatcher   跨线程派发器
      * @param openOverlay  overlay 开关（{@code PiTuiApp.openOverlay} 对位）
@@ -54,12 +57,15 @@ public final class TreeNavigationFlow {
      * @param terminalCols 终端列数源（水平视口宽度）
      * @param keybindings  键位表（app.tree.*／app.message.copy）
      */
-    public TreeNavigationFlow(AgentSession session, ChatScreen chatScreen,
+    public TreeNavigationFlow(AgentSession session,
+                              com.pijava.coding.agent.modes.InteractiveMode mode,
+                              ChatScreen chatScreen,
                               TuiEventDispatcher dispatcher,
                               Consumer<ScreenOverlay> openOverlay,
                               IntSupplier terminalRows, IntSupplier terminalCols,
                               KeybindingsManager keybindings) {
         this.session = session;
+        this.mode = mode;
         this.chatScreen = chatScreen;
         this.dispatcher = dispatcher;
         this.openOverlay = openOverlay;
@@ -196,6 +202,13 @@ public final class TreeNavigationFlow {
                                  String customInstructions) {
         Thread.startVirtualThread(() -> {
             if (session.isRunning()) { // pi :5619-5621
+                // docs/21（T5，D41 重裁）：pi :5619——排队消息先回填编辑器再 abort
+                // （restore 不带 abort 参；队列清理线程安全，编辑器写经 dispatcher
+                // 回渲染线程——本段跑 worker 虚拟线程）。
+                var restored = mode.restoreQueuedMessages();
+                if (restored != null) {
+                    dispatcher.dispatch(() -> chatScreen.restoreToEditor(restored.combinedText()));
+                }
                 session.abort();
                 session.harness().waitForIdle(session.laneName()); // pi 的 await abort()
             }

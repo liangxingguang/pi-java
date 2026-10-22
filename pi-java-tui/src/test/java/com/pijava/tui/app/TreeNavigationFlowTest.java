@@ -60,6 +60,7 @@ class TreeNavigationFlowTest {
     Path tmp;
 
     private AgentSession session;
+    private com.pijava.coding.agent.modes.InteractiveMode mode;
     private ChatScreen chatScreen;
     private TuiEventDispatcher dispatcher;
     private ScriptedChatProvider provider;
@@ -145,6 +146,7 @@ class TreeNavigationFlowTest {
         // 未编目模型 window=0，阈值门会在 prompt 收尾抢先自动压缩（既有夹具先例）。
         session.services().settings().accessors().setCompactionEnabled(false);
         provider = ScriptedChatProvider.Factory.lastInstance();
+        mode = new com.pijava.coding.agent.modes.InteractiveMode(session);
         chatScreen = new ChatScreen();
         dispatcher = new TuiEventDispatcher();
         overlayRef.set(null);
@@ -168,8 +170,9 @@ class TreeNavigationFlowTest {
     }
 
     private TreeNavigationFlow newFlow() {
-        // docs/19 §3.9 新签名：entry 树选择器（terminalRows/Cols 定值、真键位表）。
-        return new TreeNavigationFlow(session, chatScreen, dispatcher,
+        // docs/19 §3.9 新签名：entry 树选择器（terminalRows/Cols 定值、真键位表）；
+        // docs/21 T5：mode 注入（restore 的队列侧落点）。
+        return new TreeNavigationFlow(session, mode, chatScreen, dispatcher,
             overlayRef::set, () -> 24, () -> 80, new KeybindingsManager());
     }
 
@@ -433,6 +436,26 @@ class TreeNavigationFlowTest {
         assertThat(messageTexts())
             .as("双门第一句错文不得出现（abort+waitForIdle 在导航前）")
             .noneMatch(t -> t.contains("Wait for the current response"));
+    }
+
+    /** ⑥c（docs/21 T5，D41 重裁）：运行中有排队 ⇒ restore 先行于 abort，
+     *  排队文本进编辑器（pi :5619-5621）。 */
+    @Test
+    void queuedMessagesRestoreToEditorBeforeAbort() throws Exception {
+        newRig(true);
+        provider.delayNextCall(600);
+        session.processPrompt("third question"); // 不 .status()：让 run 挂着
+        awaitTrue(() -> session.isRunning(), "run 起跑");
+        mode.submit("queued while navigating"); // 运行中 ⇒ steer 排队
+
+        newFlow().begin();
+        driveTargetEntry();
+        awaitText("Navigated to selected point");
+
+        // restore 先占住编辑器 ⇒ editorText 回填门（pi :5673 isInputEmpty）不再生效，
+        // 编辑器＝排队文本（非 "second question"）。
+        assertThat(chatScreen.inputText()).isEqualTo("queued while navigating");
+        assertThat(session.isRunning()).isFalse();
     }
 
     /** ⑥b：重查 isCompacting ⇒ 双门第二句错文逐字（pi :5624-5629）。 */
