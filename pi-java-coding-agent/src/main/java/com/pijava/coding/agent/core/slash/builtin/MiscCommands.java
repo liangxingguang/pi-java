@@ -21,14 +21,6 @@ public final class MiscCommands {
 
     private MiscCommands() {}
 
-    private static final String CHANGELOG = """
-        pi-java 0.1.0-SNAPSHOT (Phase 3)
-        - CLI: pi-java [options] [@files...] [messages...]
-        - Interactive TUI with streaming bubbles, slash commands, settings
-        - Print mode: pi-java -p "prompt"
-        Phase 4: persistent sessions (SQLite/JSONL). Phase 6: extensions, RPC.
-        """;
-
     /** Register the remaining 10 commands. */
     public static void registerAll(CommandRegistry registry) {
         registry.register(simple("help", "Show slash commands and shortcuts", "",
@@ -117,8 +109,22 @@ public final class MiscCommands {
                 }
             }
         });
+        // 批 12 T7（docs/23 §3；pi :6774-6793 对位）：内置 CHANGELOG.md 全量
+        // reverse（最新在前）拼接，**不回写** lastChangelogVersion（回写只在
+        // 启动比较两臂，见 ChangelogSupport.forDisplay）。
         registry.register(simple("changelog", "Show changelog", "",
-            (args, ctx) -> CHANGELOG));
+            (args, ctx) -> {
+                var entries = com.pijava.coding.agent.core.ChangelogSupport.parse(
+                    com.pijava.coding.agent.core.ChangelogSupport.loadBundledUnchecked());
+                if (entries.isEmpty()) {
+                    return "No changelog entries found.";
+                }
+                var reversed = new java.util.ArrayList<>(entries);
+                java.util.Collections.reverse(reversed);
+                return "What's New\n\n" + reversed.stream()
+                    .map(com.pijava.coding.agent.core.ChangelogSupport.ChangelogEntry::content)
+                    .collect(java.util.stream.Collectors.joining("\n\n"));
+            }));
         registry.register(simple("hotkeys", "Show all keyboard shortcuts", "",
             (args, ctx) -> hotkeys(ctx)));
         // B176（原 docs/27）：压缩跑 worker 线程 —— pi handleCompactCommand 是
