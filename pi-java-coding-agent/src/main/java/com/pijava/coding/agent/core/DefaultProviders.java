@@ -345,7 +345,8 @@ public final class DefaultProviders {
         }
         // A-14（G4/G5）：provider 重试设置在 Settings POJO 上按 pi 的 ?? 链现读
         // （settings-manager.ts:966-972）：maxRetries 缺席 ⇒ 0；
-        // maxRetryDelayMs ?? 60000 经 extra 过桥；timeoutMs 明给则替换 120s 默认。
+        // maxRetryDelayMs ?? 60000 经 extra 过桥；timeoutMs 明给则替换
+        // httpIdleTimeoutMs 有效值（批 11 T4，缺席 300s）。
         var providerRetry = settings != null && settings.retry != null
             ? settings.retry.provider() : null;
         int providerMaxRetries = providerRetry != null && providerRetry.maxRetries() != null
@@ -363,12 +364,23 @@ public final class DefaultProviders {
         if (credential != null && credential.kind() == AuthKind.FEDERATION) {
             mergedExtra.put("federationEnv", credential.env());
         }
+        // 批 11 T4（pi sdk.ts:344-354 链序）：provider retry timeoutMs ??
+        // httpIdleTimeoutMs 有效值（0 ⇒ 2147483647；缺席 ⇒ 300_000）。java 原 120s
+        // 自造兜底删除。
         var timeout = providerRetry != null && providerRetry.timeoutMs() != null
             ? java.time.Duration.ofMillis(providerRetry.timeoutMs())
-            : java.time.Duration.ofSeconds(120);
+            : effectiveHttpIdleTimeout(settings);
         return new ApiOptions(baseUrl == null ? "" : baseUrl,
             apiKey == null ? "" : apiKey,
             timeout, providerMaxRetries, Map.copyOf(mergedExtra), kind);
+    }
+
+    /** pi sdk.ts:345-346：0/"disabled" ⇒ 2147483647；缺席 ⇒ 300s（非法值随访问器抛）。 */
+    private static java.time.Duration effectiveHttpIdleTimeout(Settings settings) {
+        long ms = TimeoutSettings.parseTimeoutSetting(
+            settings == null ? null : settings.httpIdleTimeoutMs, "httpIdleTimeoutMs")
+            .orElse(TimeoutSettings.DEFAULT_HTTP_IDLE_TIMEOUT_MS);
+        return java.time.Duration.ofMillis(ms == 0 ? Integer.MAX_VALUE : ms);
     }
 
     private static String firstNonBlank(String first, String second) {

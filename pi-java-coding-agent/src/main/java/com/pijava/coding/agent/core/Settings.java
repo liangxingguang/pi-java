@@ -69,6 +69,12 @@ public final class Settings {
     public String sessionDir;
     public String sessionBackend;
     public String httpProxy;
+    /** pi {@code httpIdleTimeoutMs}（settings-schema.ts:390-394）：number | "disabled"
+     *  联合 ⇒ 边界原样保类型（同 {@link Terminal#hyperlinks} 先例）。 */
+    public Object httpIdleTimeoutMs;
+    /** pi {@code websocketConnectTimeoutMs}（settings-schema.ts:402-406）：number |
+     *  "disabled" 联合，同 {@link #httpIdleTimeoutMs} 边界处理。 */
+    public Object websocketConnectTimeoutMs;
     /** 远程模型目录的根 URL（原 docs/70 R7）；null/空 ⇒ {@code https://pi.dev}。 */
     public String catalogBaseUrl;
     public String tuiMode;
