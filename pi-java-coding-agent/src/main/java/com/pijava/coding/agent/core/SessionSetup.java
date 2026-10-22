@@ -48,16 +48,19 @@ final class SessionSetup {
     /**
      * CLI thinking 参数 → {@link ModelThinkingLevel}。
      *
-     * <p>档位照 pi {@code main.ts buildSessionOptions}：<b>① 显式值</b>（{@code --thinking}）
-     * → <b>② {@code --model :suffix}</b>（pi-java CLI 形态）→ <b>③ scope 初始模型的
-     * 显式级别</b>（{@code --models "p:high"}，B137）→ <b>④ 全局默认</b>。pi 的 per-model
-     * 设置键 java 没有 ⇒ 登记不做（{@code 原 docs/46 §7 B15-残留-5}）。</p>
+     * <p>档位照 pi {@code main.ts buildSessionOptions} ＋ {@code sdk.ts:262-270}：
+     * <b>① 显式值</b>（{@code --thinking}）→ <b>② {@code --model :suffix}</b>
+     * （pi-java CLI 形态）→ <b>③ scope 初始模型的显式级别</b>（{@code --models "p:high"}，
+     * B137）→ <b>④ per-model 设置键</b>（{@code modelThinkingLevels}，批 11 T2，
+     * B15-残留-5 销号）→ <b>⑤ 全局默认</b>。</p>
      *
      * @param defaultThinkingLevel {@code settings.defaultThinkingLevel}；可为 {@code null}
      * @param scopedLevel          scope 初始模型携带的显式级别；可为 {@code null}
+     * @param perModelLevel        初始模型命中 {@code modelThinkingLevels} 的级别；
+     *                             可为 {@code null}
      */
     static ModelThinkingLevel thinkingLevelFor(Args args, String defaultThinkingLevel,
-                                                String scopedLevel) {
+                                                String scopedLevel, String perModelLevel) {
         if (args.thinking() != null) {
             return ThinkingLevels.parse(args.thinking());
         }
@@ -67,6 +70,9 @@ final class SessionSetup {
         }
         if (scopedLevel != null) {
             return ThinkingLevels.parse(scopedLevel);
+        }
+        if (perModelLevel != null) {
+            return ThinkingLevels.parse(perModelLevel);
         }
         return ThinkingLevels.parse(defaultThinkingLevel);
     }

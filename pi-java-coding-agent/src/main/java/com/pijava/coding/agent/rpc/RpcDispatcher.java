@@ -148,7 +148,9 @@ public final class RpcDispatcher {
                         session.lastAssistantText()));
                 // ── 次批：模型/思考等级/压缩控制面 ──
                 case RpcCommand.SetModel m -> {
-                    session.harness().setModel(resolveModel(m.model()));
+                    // 批 11 T2：走会话包装（pi AgentSession.setModel）——per-model
+                    // 思考档覆盖随之应用；直调 harness 会绕过该解析。
+                    session.setModel(resolveModel(m.model()));
                     out.write(RpcResponse.ok(m.id(), "set_model"));
                 }
                 case RpcCommand.CycleModel c -> {

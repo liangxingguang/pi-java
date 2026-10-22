@@ -48,6 +48,42 @@ public final class SettingsAccessors {
         manager.markModified("defaultThinkingLevel");
     }
 
+    /** pi {@code getModelThinkingLevel}（:768-770）：合并视图查 {@code provider/modelId}。 */
+    public String getModelThinkingLevel(String provider, String modelId) {
+        var levels = manager.effective().modelThinkingLevels;
+        return levels == null ? null : levels.get(provider + "/" + modelId);
+    }
+
+    /** pi {@code getAllModelThinkingLevels}（:772-774）：浅拷贝，缺席 ⇒ 空表。 */
+    public java.util.Map<String, String> getAllModelThinkingLevels() {
+        var levels = manager.effective().modelThinkingLevels;
+        return levels == null ? java.util.Map.of() : java.util.Map.copyOf(levels);
+    }
+
+    /** pi {@code setModelThinkingLevel}（:776-783）：写全局域。java 惯例 markModified
+     *  （TUI 调用方统一 flush；pi 的 save 对位在调用方，同 B244）。 */
+    public void setModelThinkingLevel(String provider, String modelId, String level) {
+        var global = manager.global();
+        if (global.modelThinkingLevels == null) {
+            global.modelThinkingLevels = new java.util.LinkedHashMap<>();
+        }
+        global.modelThinkingLevels.put(provider + "/" + modelId, level);
+        manager.markModified("modelThinkingLevels");
+    }
+
+    /** pi {@code removeModelThinkingLevel}（:785-793）：删空后整键抹除（JSON 不出空表）。 */
+    public void removeModelThinkingLevel(String provider, String modelId) {
+        var global = manager.global();
+        if (global.modelThinkingLevels == null) {
+            return;
+        }
+        global.modelThinkingLevels.remove(provider + "/" + modelId);
+        if (global.modelThinkingLevels.isEmpty()) {
+            global.modelThinkingLevels = null;
+        }
+        manager.markModified("modelThinkingLevels");
+    }
+
     public String getTheme() {
         return manager.effective().theme;
     }

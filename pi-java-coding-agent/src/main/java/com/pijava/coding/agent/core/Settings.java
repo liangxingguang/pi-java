@@ -26,6 +26,9 @@ public final class Settings {
     public String defaultProvider;
     public String defaultModel;
     public String defaultThinkingLevel;
+    /** pi {@code modelThinkingLevels}（settings-schema.ts:213-217）：per-model 默认
+     *  思考档覆盖，键形 {@code "provider/modelId"}。 */
+    public Map<String, String> modelThinkingLevels;
     /** API endpoint override (OpenAI/Anthropic-compatible relay); blank = provider default. */
     public String defaultBaseUrl;
     /** API key override; blank = environment variable / auth.json resolution. */

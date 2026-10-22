@@ -56,6 +56,7 @@ import com.pijava.agent.tool.ShellResult;
 import com.pijava.ai.AbortSignal;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.model.DefaultModelResolver;
+import com.pijava.ai.model.ModelId;
 import com.pijava.ai.provider.ProviderRegistry;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -579,7 +580,10 @@ public final class AgentSession implements AutoCloseable {
                 models::supportsThinking))
             .thinkingLevel(carryThinking != null ? carryThinking
                 : SessionSetup.thinkingLevelFor(
-                    args, settings.effective().defaultThinkingLevel, scopeLevel))
+                    args, settings.effective().defaultThinkingLevel, scopeLevel,
+                    // 批 11 T2（pi sdk.ts:262-270）：初始模型命中 per-model 表 ⇒ 应用。
+                    model == null ? null : settings.accessors()
+                        .getModelThinkingLevel(model.provider(), model.modelName())))
             .systemPrompt(SessionSetup.customPromptFor(args))
             .promptGuidelines(SessionSetup.DEFAULT_PROMPT_GUIDELINES)
             .appendSystemPrompt(SessionSetup.appendSystemPromptFor(args))
@@ -754,10 +758,46 @@ public final class AgentSession implements AutoCloseable {
         if (next.equals(current)) {
             return;
         }
+        // 批 11 T2（pi :2548）：显式级别＝scope 条目的级别；解析不出 ⇒ 不动
+        // （继承当前档，pi undefined 语义）。
         harness.setModel(next);
-        ScopedModelCycler.levelFor(next, scopedModels)
-            .ifPresent(level -> setThinkingLevel(
-                com.pijava.coding.agent.cli.ThinkingLevels.parse(level)));
+        var level = thinkingLevelForModelSwitch(next,
+            ScopedModelCycler.levelFor(next, scopedModels).orElse(null));
+        if (level != null) {
+            setThinkingLevel(com.pijava.coding.agent.cli.ThinkingLevels.parse(level));
+        }
+    }
+
+    /**
+     * pi {@code setModel}（agent-session.ts:2477-2496）：换模型并解析新思考档——
+     * per-model 覆盖 &gt; 全局默认 &gt; 继承当前（pi 的 {@code ?? this.thinkingLevel
+     * ?? DEFAULT} 两臂：java harness 恒有当前档，解析不出就不动，语义等价；
+     * 「全无配置时写 thinking-level entry」的 pi 臂不移植，窄差 D54，裁决⑦）。
+     *
+     * <p>pi {@code setModel} 的 persist（写默认模型）与 auth 预检面 java 本无
+     * （既有登记，docs/16 裁决①）。</p>
+     */
+    public void setModel(ModelId<?> model) {
+        var level = thinkingLevelForModelSwitch(model, null);
+        harness.setModel(model);
+        if (level != null) {
+            setThinkingLevel(com.pijava.coding.agent.cli.ThinkingLevels.parse(level));
+        }
+    }
+
+    /** pi {@code _getThinkingLevelForModelSwitch}（:2669-2681）逐字三臂。 */
+    String thinkingLevelForModelSwitch(ModelId<?> target, String explicitLevel) {
+        if (explicitLevel != null) {
+            return explicitLevel;
+        }
+        if (target != null) {
+            var perModel = services.settings().accessors()
+                .getModelThinkingLevel(target.provider(), target.modelName());
+            if (perModel != null) {
+                return perModel;
+            }
+        }
+        return services.settings().accessors().getDefaultThinkingLevel();
     }
 
     /** The assembled services. */
