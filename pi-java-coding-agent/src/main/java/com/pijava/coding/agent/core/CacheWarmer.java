@@ -13,13 +13,10 @@ import com.pijava.agent.harness.Context;
 import com.pijava.agent.harness.StreamOptions;
 import com.pijava.ai.Usage;
 import com.pijava.ai.catalog.CacheRetention;
-import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.message.StopReason;
-import com.pijava.ai.model.CostCalculator;
 import com.pijava.ai.model.ModelId;
-import com.pijava.ai.model.PricingInfo;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.CacheWarmingDecisionEvent;
 
 /**
@@ -39,9 +36,10 @@ import com.pijava.coding.agent.extension.event.ExtensionEvent.CacheWarmingDecisi
  * <p><b>并发纪律</b>（pi 单线程 ⇒ java 显式化）：{@code run} 槽与状态迁移走
  * {@code synchronized} 小块；阻塞段（decide 钩／暖 stream）在<b>锁外</b>，前后各做
  * 一次 {@link #validateRun}＋deadline 检查（pi :302/:318/:340 三段校验逐字）。
- * {@code isCurrent} 在锁外现读 harness 活视图（与 pi 调用点现算同）；活视图读到
- * 追加中间态的方向安全（误判 false ⇒ 提前停 warm，不会误判 true），残余
- * {@link RuntimeException}（竞态下列表缩容）按 false 收。</p>
+ * {@code isCurrent} 在锁外现读（与 pi 调用点现算同）——装配侧捕获的是
+ * {@code List.copyOf} 快照（{@code lane.messages} 全走就地重写，活视图会让
+ * 前缀比对恒真，评审 C1）；快照读到追加中间态的方向安全（误判 false ⇒
+ * 提前停 warm），残余 {@link RuntimeException}（竞态下列表缩容）按 false 收。</p>
  */
 public final class CacheWarmer {
 
@@ -136,47 +134,7 @@ public final class CacheWarmer {
             null, null, null);
     }
 
-    // ── 三纯函数（pi :29-58 逐字）────────────────────────────────────
-
-    /** pi :29-32：TTL 的 90% 且至少留 10 秒余量；TTL ≤ 10s 不 warm。 */
-    public static Long getCacheWarmingDelayMs(long ttlMs) {
-        if (ttlMs <= 10_000) {
-            return null;
-        }
-        return Math.max(1, (long) Math.floor(Math.min(ttlMs * 0.9, ttlMs - 10_000)));
-    }
-
-    /**
-     * pi :39-46：{@code options.cacheRetention ?? PI_CACHE_RETENTION env ?? "short"}
-     * （java 的 {@code StreamOptions} 无 env 键——与车道同读进程 env，经
-     * {@link CompatResolver#resolveCacheRetention} 同一判据）；{@code none} ⇒ 不 warm；
-     * 读 {@code promptCache} 对应档秒数。
-     */
-    public static Long getPromptCacheTtlMs(ModelInfo model, StreamOptions options) {
-        var retention = CompatResolver.resolveCacheRetention(
-            options == null ? Optional.empty() : options.cacheRetention(),
-            System.getenv("PI_CACHE_RETENTION"));
-        if (retention == CacheRetention.NONE) {
-            return null;
-        }
-        var lifetimes = model.promptCache();
-        var seconds = retention == CacheRetention.LONG
-            ? (lifetimes == null ? null : lifetimes.longSeconds())
-            : (lifetimes == null ? null : lifetimes.shortSeconds());
-        return seconds == null ? null : seconds.longValue() * 1000L;
-    }
-
-    /**
-     * pi :55-58：anthropic-messages 的预算思考（非 adaptive）从 max_tokens 推
-     * budget_tokens——{@code maxTokens=1} 重放会改变缓存键且可能真思考 ⇒ 不可重放。
-     */
-    public static boolean isReplayable(ModelInfo model, StreamOptions options) {
-        if (options == null || options.reasoning().isEmpty()
-                || !"anthropic-messages".equals(model.api())) {
-            return true;
-        }
-        return model.compat().forceAdaptiveThinking();
-    }
+    // ── 三纯函数（pi :29-58）在 {@link CacheWarmingEconomics}（≤500 行规拆分）──
 
     // ── 状态读口（pi :186-202）───────────────────────────────────────
 
@@ -221,11 +179,11 @@ public final class CacheWarmer {
         }
         var info = modelInfo.apply(request.model())
             .orElseGet(() -> ModelInfo.minimal(request.model()));
-        if (!isReplayable(info, options)) {
+        if (!CacheWarmingEconomics.isReplayable(info, options)) {
             stop("request cannot be replayed safely");
             return;
         }
-        var ttlMs = getPromptCacheTtlMs(info, options);
+        var ttlMs = CacheWarmingEconomics.getPromptCacheTtlMs(info, options);
         if (ttlMs == null) {
             stop(options.cacheRetention().isPresent()
                     && options.cacheRetention().get() == CacheRetention.NONE
@@ -233,7 +191,7 @@ public final class CacheWarmer {
                 : "cache lifetime unavailable");
             return;
         }
-        var delayMs = getCacheWarmingDelayMs(ttlMs);
+        var delayMs = CacheWarmingEconomics.getCacheWarmingDelayMs(ttlMs);
         if (delayMs == null) {
             stop("cache lifetime unavailable");
             return;
@@ -456,51 +414,12 @@ public final class CacheWarmer {
         }
     }
 
-    // ── 经济学（pi :378-400＋:61-86）──────────────────────────────────
+    // ── 经济学 ──────────────────────────────────────────────────────
 
-    /** pi :61-70：分支上最近一次真实请求的 prompt 量（provider 上报口径）。 */
-    private static long lastPromptTokens(List<Entry> entries) {
-        for (var index = entries.size() - 1; index >= 0; index--) {
-            if (entries.get(index) instanceof Entry.Message messageEntry
-                    && messageEntry.message() instanceof Message.AssistantMessage assistant) {
-                var usage = assistant.usage();
-                // pi 假设 usage 恒在；缺失按 0 收（⇒ economics unavailable，安全方向）。
-                return usage == null ? 0
-                    : (long) (usage.input() + usage.cacheRead() + usage.cacheWrite());
-            }
-        }
-        return 0;
-    }
-
-    /** pi :72-86：按目录价目给 token 组合计价（{@link CostCalculator} 逐行移植对位）。 */
-    private static double price(PricingInfo pricing, double input, double output,
-                                double cacheRead, double cacheWrite) {
-        var usage = new Usage(input, output, cacheRead, cacheWrite, null, null, 0,
-            Usage.Cost.zero());
-        return CostCalculator.calculateCost(pricing, usage).total();
-    }
-
-    /** pi :378-400 逐字：期望节省 ≥ $0.05 ⇒ warm。 */
+    /** pi :378-400（本体在 {@link CacheWarmingEconomics}——≤500 行规拆分，评审 I2）。 */
     private CacheWarming.Decision evaluate(ActiveRun active) {
-        var pricing = modelInfo.apply(active.request.model())
-            .orElseGet(() -> ModelInfo.minimal(active.request.model()))
-            .pricing();
-        var promptTokens = lastPromptTokens(sessionAccess.getBranch());
-        var cacheHitCost = price(pricing, 0, 0, promptTokens, 0);
-        // pi :382-385：有 cacheWrite 价 ⇒ miss 落在 cacheWrite 桶，否则落在 input 桶。
-        var cacheMissCost = pricing.cacheWritePrice() > 0
-            ? price(pricing, 0, 0, 0, promptTokens)
-            : price(pricing, promptTokens, 0, 0, 0);
-        var warmCost = price(pricing, 0, 1, promptTokens, 0);
-        var missCost = Math.max(0, cacheMissCost - cacheHitCost);
-        var continuationProbability = "idle".equals(active.phase)
-            ? IDLE_CONTINUATION_PROBABILITY : 1;
-        var economicsAvailable = promptTokens > 0 && (cacheHitCost > 0 || cacheMissCost > 0);
-        var expectedSavings = continuationProbability * missCost - warmCost;
-        return new CacheWarming.Decision(active.phase, warmCost, missCost,
-            continuationProbability, expectedSavings, economicsAvailable,
-            expectedSavings >= MINIMUM_EXPECTED_SAVINGS
-                ? CacheWarming.Action.WARM : CacheWarming.Action.STOP);
+        return CacheWarmingEconomics.evaluate(modelInfo, active.request.model(),
+            sessionAccess.getBranch(), active.phase);
     }
 
     // ── 内部 ────────────────────────────────────────────────────────

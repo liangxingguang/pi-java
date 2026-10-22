@@ -736,15 +736,22 @@ public final class AgentSession implements AutoCloseable {
     /**
      * 批 13（T6，pi sdk.ts:369-381 逐字对位）：provider/id 相同＋捕获消息数组是当前
      * 数组的前缀（逐元素恒等）。pi 注释：agent 可能浅拷贝 messages 数组，顶层对象
-     * 身份不是有效缓存键——java 捕获的是 lane 工作副本的<b>活视图</b>（T4），
-     * 与 pi 捕获数组引用同形（引擎就地支改，活视图等价）。
+     * 身份不是有效缓存键。
+     *
+     * <p><b>捕获必须是快照（评审 C1）</b>：java 的 {@code lane.messages} 是 final
+     * 字段、压缩/树导航/resume/reset 全走<b>就地</b> {@code clear()+addAll()}
+     * （{@code HarnessUtils.rebuildLaneMessages}）——捕获活视图会让前后两个视图
+     * 包装同一存储，前缀恒等退化为恒真，{@code "conversation context changed"} 门
+     * 整体失效。{@code List.copyOf} 拍下捕获点元素身份：run 中引擎只追加（含
+     * {@code set(last)} 替换在飞 assistant——索引超出快照长度）⇒ 前缀稳定；
+     * 就地重写从 0 索引放新实例（或变短）⇒ 比对失败 ⇒ 与 pi 同点停暖。</p>
      */
     private static BooleanSupplier cacheContextIsCurrent(
             java.util.concurrent.atomic.AtomicReference<AgentHarness> harnessRef,
             ModelId<?> requestModel) {
         var harness = harnessRef.get();
         var messages = harness == null
-            ? List.<com.pijava.ai.message.Message>of() : harness.getMessages();
+            ? List.<com.pijava.ai.message.Message>of() : List.copyOf(harness.getMessages());
         return () -> {
             var current = harnessRef.get();
             if (current == null) {

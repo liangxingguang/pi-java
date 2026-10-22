@@ -181,21 +181,21 @@ class CacheWarmerTest {
             Optional.of(CacheRetention.NONE), Optional.empty(), null);
         var openaiLongCache = withPromptCache(OPENAI, new PromptCacheLifetimes(300, 86_400));
 
-        assertThat(CacheWarmer.getPromptCacheTtlMs(ADAPTIVE, noOptions)).isEqualTo(300_000L);
-        assertThat(CacheWarmer.getPromptCacheTtlMs(ADAPTIVE, longRetention)).isEqualTo(3_600_000L);
-        assertThat(CacheWarmer.getPromptCacheTtlMs(ADAPTIVE, noRetention)).isNull();
-        assertThat(CacheWarmer.getPromptCacheTtlMs(openaiLongCache, longRetention))
+        assertThat(CacheWarmingEconomics.getPromptCacheTtlMs(ADAPTIVE, noOptions)).isEqualTo(300_000L);
+        assertThat(CacheWarmingEconomics.getPromptCacheTtlMs(ADAPTIVE, longRetention)).isEqualTo(3_600_000L);
+        assertThat(CacheWarmingEconomics.getPromptCacheTtlMs(ADAPTIVE, noRetention)).isNull();
+        assertThat(CacheWarmingEconomics.getPromptCacheTtlMs(openaiLongCache, longRetention))
             .isEqualTo(86_400_000L);
-        assertThat(CacheWarmer.getPromptCacheTtlMs(UNKNOWN, noOptions)).isNull();
+        assertThat(CacheWarmingEconomics.getPromptCacheTtlMs(UNKNOWN, noOptions)).isNull();
 
-        assertThat(CacheWarmer.getCacheWarmingDelayMs(300_000)).isEqualTo(270_000L);
-        assertThat(CacheWarmer.getCacheWarmingDelayMs(60_000)).isEqualTo(50_000L);
-        assertThat(CacheWarmer.getCacheWarmingDelayMs(10_000)).isNull();
+        assertThat(CacheWarmingEconomics.getCacheWarmingDelayMs(300_000)).isEqualTo(270_000L);
+        assertThat(CacheWarmingEconomics.getCacheWarmingDelayMs(60_000)).isEqualTo(50_000L);
+        assertThat(CacheWarmingEconomics.getCacheWarmingDelayMs(10_000)).isNull();
 
-        assertThat(CacheWarmer.isReplayable(BUDGET, optionsWithReasoning())).isFalse();
-        assertThat(CacheWarmer.isReplayable(BUDGET, noOptions)).isTrue();
-        assertThat(CacheWarmer.isReplayable(ADAPTIVE, optionsWithReasoning())).isTrue();
-        assertThat(CacheWarmer.isReplayable(OPENAI, optionsWithReasoning())).isTrue();
+        assertThat(CacheWarmingEconomics.isReplayable(BUDGET, optionsWithReasoning())).isFalse();
+        assertThat(CacheWarmingEconomics.isReplayable(BUDGET, noOptions)).isTrue();
+        assertThat(CacheWarmingEconomics.isReplayable(ADAPTIVE, optionsWithReasoning())).isTrue();
+        assertThat(CacheWarmingEconomics.isReplayable(OPENAI, optionsWithReasoning())).isTrue();
     }
 
     // ── pi :147-180 replay 保 options＋二轮 schedule ────────────────────

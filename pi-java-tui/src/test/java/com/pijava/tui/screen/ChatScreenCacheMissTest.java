@@ -63,14 +63,13 @@ class ChatScreenCacheMissTest {
         // 首 turn：充 prev（报过缓存活动）。
         assertThat(tracker.feed(entryOf(assistant("claude-opus-4-6", 0,
             usage(0, 0, 100_000)), "m1"))).isEmpty();
-        // 即时臂：未投递消息用当前 prev 判一次（不推进——同一 prev 可再判）。
+        // 即时臂：未投递消息用当前 prev 判一次（判定后推进——下条消息相对本条判，
+        // pi 的整表 scan 看得到本 run 已落的 turn，评审 I1）。
         var miss = tracker.detectOnMessageEnd(assistant("claude-opus-4-6", 400_000,
             usage(100_000, 0, 0)));
         assertThat(miss).isPresent();
         assertThat(miss.get().missedTokens()).isEqualTo(100_000);
         assertThat(miss.get().idleMs()).isEqualTo(400_000);
-        assertThat(tracker.detectOnMessageEnd(assistant("claude-opus-4-6", 400_000,
-            usage(100_000, 0, 0)))).as("detect 不推进 prev").isPresent();
 
         // compaction 复位。
         tracker.feed(new Entry.Compaction("c1", 0, null, Instant.now(),
@@ -84,6 +83,35 @@ class ChatScreenCacheMissTest {
             null, null, null, null, null));
         assertThat(tracker.detectOnMessageEnd(assistant("claude-opus-4-6", 610_000,
             usage(100_000, 0, 0)))).isPresent();
+    }
+
+    /** 评审 I1：多 turn run——detect 判定后推进 prev（idleMs 相对上一 turn 量起）；
+     *  run 末 feed 同一条目按实例跳过（防重复判定/重复推进）。 */
+    @Test
+    void detectOnMessageEndAdvancesPrevAndFeedSkipsTheSameInstance() {
+        var tracker = CacheMissTracker.noModels();
+        tracker.feed(entryOf(assistant("claude-opus-4-6", 0,
+            usage(0, 0, 100_000)), "m1"));
+
+        // turn 2 完成（未落盘）：相对 m1 判；判定后 prev 推进到 turn 2。
+        var turn2 = assistant("claude-opus-4-6", 400_000, usage(110_000, 0, 0));
+        assertThat(tracker.detectOnMessageEnd(turn2)).isPresent();
+
+        // turn 3 完成：相对 turn 2 判（pi scan 同——看得到本 run 已落的 turn 2），
+        // idleMs 从 turn 2 量起而不是从上一 run 尾量起。
+        var turn3 = assistant("claude-opus-4-6", 400_100, usage(120_000, 0, 0));
+        var miss3 = tracker.detectOnMessageEnd(turn3);
+        assertThat(miss3).isPresent();
+        assertThat(miss3.get().idleMs()).isEqualTo(100);
+
+        // run 末 onEntry 投递同一实例 ⇒ 跳过（不重复判定、不重复推进）。
+        assertThat(tracker.feed(entryOf(turn2, "m2"))).isEmpty();
+        assertThat(tracker.feed(entryOf(turn3, "m3"))).isEmpty();
+        // 新 turn 仍相对 turn 3 判（推进未被 feed 扰乱）。
+        var turn4 = assistant("claude-opus-4-6", 400_200, usage(130_000, 0, 0));
+        var miss4 = tracker.detectOnMessageEnd(turn4);
+        assertThat(miss4).isPresent();
+        assertThat(miss4.get().idleMs()).isEqualTo(100);
     }
 
     // ── 即时臂＋同实例去重（pi :4185-4191）──────────────────────────────

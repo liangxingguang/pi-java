@@ -218,14 +218,18 @@ public class AgentHarness extends HarnessBootstrap {
 
     /**
      * pi {@code agent.state.messages} 的读口（批 13，sdk.ts:370-377 对位）：lane 工作副本
-     * 的<b>活视图</b>——元素身份随 run 推进稳定（cache-warmer 的前缀恒等比较的操作数），
+     * 的<b>活视图</b>——run 推进中引擎只追加（含 {@code set(last)} 替换在飞 assistant），
      * 修改抛 {@link UnsupportedOperationException}。
      *
-     * <p>竞态注记：{@code lane.messages} 由引擎线程支改、读侧可能是 warmer 调度线程
-     * ⇒ 可能读到追加中间态。后果方向安全：isCurrent 误判 false ⇒ 提前停 warm（pi 的
-     * isCurrent 本就是 best-effort 闸门）；不会误判 true（同位元素一旦恒等，引擎只
-     * 追加不替换前缀——replaceTranscript/compact 走整表替换，视图随之整体失效，
-     * 下一校验即停）。</p>
+     * <p>⚠️ <b>前缀恒等比较（cache-warmer isCurrent）必须先在捕获点拍快照</b>
+     * （{@code List.copyOf}）：{@code lane.messages} 是 final 字段，压缩/树导航/
+     * resume/reset 全走<b>就地</b> {@code clear()+addAll()}
+     * （{@code HarnessUtils.rebuildLaneMessages}）——直接持有本视图会让「捕获 vs
+     * 当前」两侧包装同一存储，比对恒真（批 13 评审 C1）。</p>
+     *
+     * <p>竞态注记：本视图由引擎线程支改、读侧可能是 warmer 调度线程 ⇒ 快照可能
+     * 拍到追加中间态。后果方向安全：isCurrent 误判 false ⇒ 提前停 warm（pi 的
+     * isCurrent 本就是 best-effort 闸门）。</p>
      */
     public List<com.pijava.ai.message.Message> getMessages() {
         return java.util.Collections.unmodifiableList(lane.messages);

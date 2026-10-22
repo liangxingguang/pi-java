@@ -130,6 +130,28 @@ class AgentSessionCacheWarmingTest {
 
     /** ③ dispose：closeWith ⇒ cancel（pi :1409-1412 对位）。 */
     @Test
+    void compactionInvalidatesTheCapturedContext() throws Exception {
+        try (var session = anthropicSession(List.of(
+                textSeq("one"), textSeq("two"), textSeq("summary")))) {
+            session.setCacheWarmingMode("idle");
+            drive(session, "first");
+            drive(session, "second");
+            // idle 相 settled 不停暖（run 仍在）——但停因还不是 context changed。
+            assertThat(session.cacheWarmingStatus().reason())
+                .isNotEqualTo("conversation context changed");
+
+            session.compact(new com.pijava.agent.compaction.CompactionSettings(
+                true, 16_384, 1));
+
+            // 批 13 评审 C1：压缩就地重写 lane.messages ⇒ 捕获快照前缀比对失败，
+            // 与 pi 同点停暖（pi 整体替换 agent.state.messages 数组）。
+            assertThat(session.cacheWarmingStatus().reason())
+                .isEqualTo("conversation context changed");
+        }
+    }
+
+    /** ③ dispose：closeWith ⇒ cancel（pi :1409-1412 对位）。 */
+    @Test
     void closeCancelsWarmer() throws Exception {
         var session = anthropicSession(List.of(textSeq("hi")));
         drive(session, "go");
