@@ -110,8 +110,9 @@ class SettingsScreenTest {
             try (var session = AgentSession.create(
                     ArgsParser.parse(new String[] {}))) {
                 var screen = new SettingsScreen(session);
-                // 末行（第 16 行）＝子菜单入口：Enter 置请求位、不写设置、不关屏。
-                for (int i = 0; i < 16; i++) {
+                // 末行（第 18 行；批 13 T9 在其前插了 cache-warming 两行）＝子菜单
+                // 入口：Enter 置请求位、不写设置、不关屏。
+                for (int i = 0; i < 18; i++) {
                     screen.onKeyEvent(DOWN);
                 }
                 screen.onKeyEvent(ENTER);
