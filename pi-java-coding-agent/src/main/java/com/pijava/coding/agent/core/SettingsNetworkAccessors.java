@@ -34,4 +34,24 @@ public final class SettingsNetworkAccessors {
         return TimeoutSettings.parseTimeoutSetting(
             manager.effective().websocketConnectTimeoutMs, "websocketConnectTimeoutMs");
     }
+
+    /** pi {@code CACHE_WARMING_MODES}（settings-manager.ts:52）。 */
+    private static final java.util.Set<String> CACHE_WARMING_MODES =
+        java.util.Set.of("off", "streaming", "idle");
+
+    /**
+     * pi {@code getCacheWarmingMode}（:914-918）：<b>只读全局域</b>（pi 注释：
+     * warming costs money——项目域被忽略）；值 ∉ {off,streaming,idle} ⇒ 回落
+     * {@code "streaming"}（settings-defaults.ts:65）。
+     */
+    public String getCacheWarmingMode() {
+        var mode = manager.global().cacheWarming;
+        return mode != null && CACHE_WARMING_MODES.contains(mode) ? mode : "streaming";
+    }
+
+    /** pi {@code setCacheWarmingMode}（:920-923）：写全局域＋markModified。 */
+    public void setCacheWarmingMode(String mode) {
+        manager.global().cacheWarming = mode;
+        manager.markModified("cacheWarming");
+    }
 }

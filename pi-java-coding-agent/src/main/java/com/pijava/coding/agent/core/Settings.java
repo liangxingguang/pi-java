@@ -90,6 +90,40 @@ public final class Settings {
      */
     public ThinkingBudgets thinkingBudgets;
 
+    // ── 批 11 声明面（pi settings-schema.ts 行号逐键钉注）──────────────
+    /** pi :209。changelog 流 java 暂无（声明面）。 */
+    public String lastChangelogVersion;
+    /** pi :239-244。 */
+    public Boolean showCacheMissNotices;
+    /** pi :274-279。 */
+    public Boolean collapseChangelog;
+    /** pi :280-285。 */
+    public Boolean enableInstallTelemetry;
+    /** pi :286-291。 */
+    public Boolean enableAnalytics;
+    /** pi :292-294。 */
+    public String trackingId;
+    /** pi :380（WarningSettingsSchema :144-147）。 */
+    public Warnings warnings;
+    /** pi :395-401（off|streaming|idle；仅全局域生效——accessor 只读全局）。 */
+    public String cacheWarming;
+    /** pi :376-378。 */
+    public Boolean showHardwareCursor;
+    /** pi :412-417（transcript|resume-hint）。 */
+    public String fullscreenExitOutput;
+    /** pi :418-423（auto|always|hidden）。 */
+    public String fullscreenScrollbar;
+    /** pi :424-429。 */
+    public Boolean fullscreenCopyOnSelect;
+    /** pi :430-436（number | "auto" 联合）。 */
+    public Object fullscreenWheelScrollLines;
+
+    /** pi {@code WarningSettingsSchema}（settings-schema.ts:144-147）。 */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record Warnings(
+        @JsonProperty("anthropicExtraUsage") Boolean anthropicExtraUsage
+    ) {}
+
     /** Unknown fields passthrough (aligned with pi's extensible settings). */
     private final Map<String, Object> unknown = new HashMap<>();
 

@@ -23,6 +23,7 @@ public final class SettingsManager {
     private final SettingsAccessors accessors = new SettingsAccessors(this);
     private final SettingsNetworkAccessors network = new SettingsNetworkAccessors(this);
     private final SettingsInstallAccessors install = new SettingsInstallAccessors(this);
+    private final SettingsUiPrefsAccessors uiPrefs = new SettingsUiPrefsAccessors(this);
 
     private SettingsManager(SettingsStorage storage) {
         this.storage = storage;
@@ -107,6 +108,11 @@ public final class SettingsManager {
     /** 安装/分析面访问器（批 11 裁决⑧拆分：deviceId/changelog/analytics 族）。 */
     public SettingsInstallAccessors install() {
         return install;
+    }
+
+    /** UI 偏好面访问器（批 11 裁决⑧拆分：showCacheMissNotices/warnings/fullscreen 族）。 */
+    public SettingsUiPrefsAccessors uiPrefs() {
+        return uiPrefs;
     }
 
     /** Record a field as modified so {@link #flush()} persists it. */
