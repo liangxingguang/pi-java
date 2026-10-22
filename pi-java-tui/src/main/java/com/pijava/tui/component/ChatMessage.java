@@ -33,11 +33,44 @@ public sealed interface ChatMessage {
     record TurnSeparator(String label) implements ChatMessage {}
 
     /**
+     * 批 12 T6（docs/23 §3）：{@code outputPad} 烘焙包装——append 时记下当时的
+     * 水平留白（0|1），改值<b>不回溯</b>已渲染条目（窄差 D62：pi 遍历容器
+     * duck-type 热更；java 新条目用新值）。渲染语义：每行左 indent 加 pad、
+     * 内容宽减 2×pad（{@link com.pijava.tui.component.ChatViewportElement}）。
+     */
+    record Padded(ChatMessage inner, int pad) implements ChatMessage {
+        /** Canonical：pad 下限 0。 */
+        public Padded {
+            pad = Math.max(0, pad);
+        }
+    }
+
+    /** 消息的烘焙 pad（非 {@link Padded} ⇒ 0）。 */
+    static int padOf(ChatMessage message) {
+        return message instanceof Padded padded ? padded.pad() : 0;
+    }
+
+    /**
      * Project an agent-core {@link Entry} into a chat bubble. Returns
      * {@code null} for entries that must not be rendered (a custom message
      * with {@code display=false}, aligned with pi's interactive-mode gate).
      */
     static ChatMessage from(Entry entry) {
+        // 旧签名保测试面（零 pad）；生产默认 1 由 ChatScreen 经
+        // uiPrefs().getOutputPad() 注入（pi 默认 outputPad=1 在 accessor 回落）。
+        return from(entry, 0);
+    }
+
+    /**
+     * 批 12 T6：带 {@code outputPad} 的投影——pad ≤ 0 不包装（与 {@link #from(Entry)}
+     * 逐字节同形），pad 1 包 {@link Padded}（append 时烘焙，D62 不回溯）。
+     */
+    static ChatMessage from(Entry entry, int pad) {
+        var projected = project(entry);
+        return projected == null || pad <= 0 ? projected : new Padded(projected, pad);
+    }
+
+    private static ChatMessage project(Entry entry) {
         return switch (entry) {
             case Entry.Message message -> fromMessage(message);
             case Entry.ModelChange change ->

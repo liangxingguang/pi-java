@@ -97,6 +97,35 @@ public record ScrollConfig(
             defaults.streamGapMs());
     }
 
+    /**
+     * 批 12 T12（docs/23 §3，裁决⑥）：pi {@code fullscreenWheelScrollLines}
+     * 数字臂 ⇒ 固定行数（accessor 已 clamp 1–100，pi wheel-scroll.ts 同 clamp）；
+     * {@code "auto"}/缺席 ⇒ 维持既有 Codex 有界加速模型（窄差 D60＝K38
+     * 已登记差异：pi auto 是 mac/SSH 判定＋速率加速 ≤6＋Alt×5 的速度模型，
+     * 不新造）。
+     *
+     * @param settings                   the settings root (may be null)
+     * @param defaultEventsPerTick       per-notch event density fallback
+     * @param fullscreenWheelScrollLines accessor 值（{@code Integer} 或
+     *                                   {@code "auto"}，可 null）
+     * @return the effective scroll configuration
+     */
+    public static ScrollConfig from(Settings settings, int defaultEventsPerTick,
+            Object fullscreenWheelScrollLines) {
+        var base = from(settings, defaultEventsPerTick);
+        if (fullscreenWheelScrollLines instanceof Integer lines) {
+            return base.withWheelLines(lines);
+        }
+        return base;
+    }
+
+    /** Copy with a different {@link #wheelLines()}（pi 数字臂固定行数）。 */
+    public ScrollConfig withWheelLines(int lines) {
+        return new ScrollConfig(mode, eventsPerTick, lines, trackpadLines,
+            trackpadAccelEvents, trackpadAccelMax, invert,
+            wheelTickDetectMaxMs, wheelLikeMaxDurationMs, streamGapMs);
+    }
+
     /** Whether the mode forces wheel semantics. */
     public boolean wheelLike() {
         return "wheel".equals(mode);

@@ -119,6 +119,7 @@ public final class ScrollbackTranscript {
             case ChatMessage.Error(String text) -> text;
             case ChatMessage.System(String text, MetaKind kind) -> text;
             case ChatMessage.TurnSeparator(String label) -> label;
+            case ChatMessage.Padded(var inner, int pad) -> joinText(inner);
         };
     }
 

@@ -24,6 +24,11 @@ public final class ChatPanel {
         .fill()
         .addClass("ChatPanel");
 
+    /** 批 12 T11：滚动条三态现读源（ChatScreen 装配注入；渲染期现读热更）。 */
+    public void scrollbarMode(java.util.function.Supplier<ChatViewportElement.ScrollbarMode> source) {
+        element.scrollbarMode(source);
+    }
+
     /** Append a message (thread-safe: called via the render-thread dispatcher). */
     public void append(ChatMessage message) {
         messages.add(message);

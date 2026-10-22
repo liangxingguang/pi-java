@@ -43,6 +43,9 @@ public final class MessageBubble {
             case ChatMessage.System(var text, var kind) -> system(text, kind);
             case ChatMessage.TurnSeparator(var label) ->
                 List.of(new LogicalLine(separator(label), 0, 0, false, Style.EMPTY.dim()));
+            // 批 12 T6：outputPad 烘焙包装——每个 LogicalLine 左 indent 加 pad
+            // （右 pad 由 ChatViewportElement.flatten 的内容宽 −2×pad 承担）。
+            case ChatMessage.Padded(var inner, var pad) -> indent(lines(inner), pad);
         };
     }
 

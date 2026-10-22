@@ -70,4 +70,47 @@ class TamboUIAdapterTest {
         // 数字/符号非字母，不受影响。
         assertThat(TamboUIAdapter.toStroke(KeyEvent.ofChar('!')).shift()).isFalse();
     }
+
+    // ── 批 12 T9（docs/23 §3/§7）：showHardwareCursor ⇒ hideCursor 取反 ──
+
+    /** 不建真终端后端（JLine 无控制台时阻塞）；配置断言不需要 IO。 */
+    private static final dev.tamboui.terminal.Backend NOOP_BACKEND =
+        new dev.tamboui.terminal.Backend() {
+            @Override public void draw(dev.tamboui.buffer.DiffResult diff) { }
+            @Override public void flush() { }
+            @Override public void clear() { }
+            @Override public dev.tamboui.layout.Size size() {
+                return new dev.tamboui.layout.Size(80, 24);
+            }
+            @Override public void showCursor() { }
+            @Override public void hideCursor() { }
+            @Override public dev.tamboui.layout.Position getCursorPosition() {
+                return new dev.tamboui.layout.Position(0, 0);
+            }
+            @Override public void setCursorPosition(dev.tamboui.layout.Position position) { }
+            @Override public void enterAlternateScreen() { }
+            @Override public void leaveAlternateScreen() { }
+            @Override public void enableRawMode() { }
+            @Override public void disableRawMode() { }
+            @Override public void onResize(Runnable handler) { }
+            @Override public int read(int timeout) {
+                return -1;
+            }
+            @Override public int peek(int timeout) {
+                return -1;
+            }
+            @Override public void close() { }
+        };
+
+    @Test
+    void hardwareCursorOnLeavesTheTerminalCursorVisible() {
+        // pi tui.ts:1477-1484 对位：开＝真终端光标（hideCursor(false)）。
+        assertThat(TamboUIAdapter.tuiConfig(NOOP_BACKEND, true).hideCursor()).isFalse();
+    }
+
+    @Test
+    void hardwareCursorOffKeepsTheFakeCursor() {
+        // 默认关＝自绘假光标（hideCursor(true)）——pi/java 默认皆关。
+        assertThat(TamboUIAdapter.tuiConfig(NOOP_BACKEND, false).hideCursor()).isTrue();
+    }
 }

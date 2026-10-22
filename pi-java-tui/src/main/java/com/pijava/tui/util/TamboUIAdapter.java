@@ -40,22 +40,56 @@ public final class TamboUIAdapter {
 
     // ── Runner / config ──────────────────────────────────────
 
-    /** Create a full-screen TUI runner with a 50ms tick (streaming animation). */
+    /** Create a full-screen TUI runner with a 33ms tick (streaming animation). */
     public static ToolkitRunner createRunner() throws Exception {
-        return ToolkitRunner.create(TuiConfig.builder()
-            .backend(createBackend())
+        return createRunner(false);
+    }
+
+    /**
+     * 批 12 T9（docs/23 §3；pi tui.ts:1477-1484 resolveFakeCursors 对位）：
+     * {@code showHardwareCursor} 开 ⇒ 真终端光标（{@code hideCursor(false)}，
+     * 聚焦组件不再自绘假光标）；关 ⇒ 自绘假光标（反色块）——pi/java 默认皆关。
+     */
+    public static ToolkitRunner createRunner(boolean showHardwareCursor) throws Exception {
+        return ToolkitRunner.create(tuiConfig(createBackend(), showHardwareCursor));
+    }
+
+    /**
+     * 拆出的配置工厂（测试断言面；{@link TuiConfig#hideCursor()} 可读）——
+     * backend 作参数传入，测试不建真终端后端（JLine 无控制台时阻塞）。
+     */
+    static TuiConfig tuiConfig(Backend backend, boolean showHardwareCursor) {
+        return TuiConfig.builder()
+            .backend(backend)
             // 33ms (~30Hz) keeps continuous motion — trackpad scroll and the
             // streaming draft — visibly smooth; the diff renderer keeps the
             // cost low. The normalizer flushes fractional rows every tick.
             .tickRate(Duration.ofMillis(33))
             .alternateScreen(true)
-            .hideCursor(true)
+            .hideCursor(!showHardwareCursor)
             .bracketedPaste(true)
             // Scroll input is normalized by the app shell before element
             // routing; capture stays enabled (disable_mouse_capture defaults
             // to false in the alignment design).
             .mouseCapture(true)
-            .build());
+            .build();
+    }
+
+    /**
+     * 批 12 T3：退出 alt 屏＋复显光标（pi {@code ui.stop()} 对位；复用
+     * {@code PiTuiLauncher} 异常恢复的同一序列）。外部编辑器（inheritIO
+     * 子进程）接管主屏期间，渲染线程阻塞在按键 handler 里——alt 屏序列
+     * 隔离子进程输出与 TUI 帧。
+     */
+    public static void leaveAlternateScreen() {
+        System.out.print("\033[?1049l\033[?25h");
+        System.out.flush();
+    }
+
+    /** 批 12 T3：重进 alt 屏（pi {@code ui.start()}＋{@code requestRender(true)}）。 */
+    public static void enterAlternateScreen() {
+        System.out.print("\033[?1049h");
+        System.out.flush();
     }
 
     /**

@@ -302,4 +302,72 @@ class ChatViewportElementTest {
         harness.route(mouse(MouseEventKind.PRESS, MouseButton.LEFT, 5, 1));
         assertThat(element.scrollbarDragging()).isFalse();
     }
+
+    // ── 批 12 T11（docs/23 §3/§7）：fullscreenScrollbar 三态 ──────
+
+    @Test
+    void hiddenModeRemovesScrollbarColumnAndHitArea() throws Exception {
+        var element = new ChatViewportElement().scrollbar(true)
+            .scrollbarMode(() -> ChatViewportElement.ScrollbarMode.HIDDEN)
+            .messages(List.of(new ChatMessage.User("0\n1\n2\n3\n4\n5")), null);
+        var harness = mouseHarness(element, 20, 3);
+
+        // HIDDEN ⇒ 无滚动条列（内容铺满整宽）、命中恒 false。
+        for (int y = 0; y < 3; y++) {
+            assertThat(bufferSymbol(harness.buffer(), 19, y)).isNotEqualTo("█");
+        }
+        harness.route(mouse(MouseEventKind.MOVE, MouseButton.NONE, 19, 1));
+        assertThat(element.scrollbarHovered()).isFalse();
+        harness.route(mouse(MouseEventKind.PRESS, MouseButton.LEFT, 19, 0));
+        assertThat(element.scrollbarDragging()).isFalse();
+    }
+
+    @Test
+    void autoAndAlwaysKeepTheResidentScrollbar() throws Exception {
+        for (var mode : new ChatViewportElement.ScrollbarMode[] {
+                ChatViewportElement.ScrollbarMode.AUTO,
+                ChatViewportElement.ScrollbarMode.ALWAYS }) {
+            var element = new ChatViewportElement().scrollbar(true)
+                .scrollbarMode(() -> mode)
+                .messages(List.of(new ChatMessage.User("0\n1\n2\n3\n4\n5")), null);
+            var harness = mouseHarness(element, 20, 3);
+
+            // D61（裁决⑧）：auto/always 同形常驻（宽 1、hover 加宽 2）。
+            harness.route(mouse(MouseEventKind.MOVE, MouseButton.NONE, 19, 1));
+            assertThat(element.scrollbarHovered()).isTrue();
+        }
+    }
+
+    // ── 批 12 T6（docs/23 §3/§7）：outputPad 烘焙宽度 ────────────
+
+    @Test
+    void paddedMessageShiftsRightAndNarrowsContent() throws Exception {
+        var element = viewport(List.of(
+            new ChatMessage.Padded(new ChatMessage.User("hi"), 1)), null);
+        var buffer = render(element, 20, 1);
+
+        // pad=1 ⇒ 左 indent +1（"› hi" → " › hi"）。
+        assertThat(row(buffer, 0, 20)).isEqualTo(" › hi");
+    }
+
+    @Test
+    void paddedWrapWidthShrinksByTwoPad() throws Exception {
+        // preformatted 行走 hardTruncate（确定性截断）：indent 4、usable = 宽−indent。
+        var text = new ChatMessage.ToolResult(List.of(
+            new ContentBlock.TextContent("t".repeat(30))), false);
+
+        // 宽 20：indent 4、usable 16 ⇒ 15 t＋省略号。
+        var plain = viewport(List.of(text), null);
+        assertThat(row(render(plain, 20, 1), 0, 20))
+            .isEqualTo("    " + "t".repeat(15) + "…");
+
+        // pad=1 ⇒ 有效宽 18、indent 5、usable 13 ⇒ 12 t＋省略号（左 pad＋右 pad 各 1）。
+        var padded = viewport(List.of(new ChatMessage.Padded(text, 1)), null);
+        assertThat(row(render(padded, 20, 1), 0, 20))
+            .isEqualTo("     " + "t".repeat(12) + "…");
+    }
+
+    private static String bufferSymbol(Buffer buffer, int x, int y) {
+        return buffer.get(x, y).symbol();
+    }
 }

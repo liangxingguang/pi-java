@@ -107,10 +107,22 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
         }
     }
 
+    /**
+     * 批 12 T11（docs/23 §3）：pi {@code fullscreenScrollbar} 三态
+     * （scroll-view.ts:75-77,94 对位）。AUTO/ALWAYS 同形常驻（窄差 D61，
+     * 裁决⑧：pi auto＝内容超高且刚滚动过短暂显示 transient；java 无
+     * transient 计时面，现状即常驻）；HIDDEN＝永不渲染、命中恒 false、
+     * 内容区不让列。
+     */
+    public enum ScrollbarMode { AUTO, ALWAYS, HIDDEN }
+
     private final ScrollState scrollState = new ScrollState();
     private List<ChatMessage> messages = List.of();
     private ChatMessage draft;
     private boolean scrollbarEnabled = true;
+    /** 渲染期现读 ⇒ 改值下一帧生效（天然热更，docs/23 §3 T11）。 */
+    private java.util.function.Supplier<ScrollbarMode> scrollbarMode =
+        () -> ScrollbarMode.ALWAYS;
     private int lastRowCount;
     private int lastVisibleRows = 1;
     private Rect lastArea;
@@ -169,6 +181,17 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
         return this;
     }
 
+    /** 批 12 T11：注入滚动条三态现读源（{@code uiPrefs().getFullscreenScrollbar()} 对位）。 */
+    public ChatViewportElement scrollbarMode(java.util.function.Supplier<ScrollbarMode> source) {
+        this.scrollbarMode = source == null ? () -> ScrollbarMode.ALWAYS : source;
+        return this;
+    }
+
+    /** 滚动条本帧是否占位（HIDDEN ⇒ 不渲染、内容区不让列）。 */
+    private boolean scrollbarVisible() {
+        return scrollbarEnabled && scrollbarMode.get() != ScrollbarMode.HIDDEN;
+    }
+
     /** The row-level scroll state (driver entry point for the app shell). */
     public ScrollState scrollState() {
         return scrollState;
@@ -221,7 +244,7 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
     @Override
     protected void renderContent(Frame frame, Rect area, RenderContext context) {
         lastArea = area;
-        int scrollbarWidth = scrollbarEnabled ? currentScrollbarWidth() : 0;
+        int scrollbarWidth = scrollbarVisible() ? currentScrollbarWidth() : 0;
         int contentWidth = Math.max(1, area.width() - scrollbarWidth);
         var rows = flatten(contentWidth);
         lastRowCount = rows.size();
@@ -243,7 +266,11 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
             if (!rows.isEmpty()) {
                 rows.add(new RenderRow("", Style.EMPTY)); // blank row between blocks
             }
-            rows.addAll(TextLayout.wrap(MessageBubble.lines(message), contentWidth));
+            // 批 12 T6：outputPad 烘焙消息的右 pad＝内容宽 −2×pad（左 pad 由
+            // MessageBubble 的 indent 承担）；块间空行不动（pi 的 pad 是水平向）。
+            int pad = ChatMessage.padOf(message);
+            rows.addAll(TextLayout.wrap(MessageBubble.lines(message),
+                Math.max(1, contentWidth - 2 * pad)));
         }
         if (draft != null) {
             rows.addAll(TextLayout.wrap(MessageBubble.lines(draft), contentWidth));
@@ -277,7 +304,7 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
 
     /** Whether the pointer position falls on the scrollbar column(s). */
     private boolean inScrollbar(int x, int y) {
-        if (lastArea == null || !scrollbarEnabled) {
+        if (lastArea == null || !scrollbarVisible()) {
             return false;
         }
         int width = currentScrollbarWidth();

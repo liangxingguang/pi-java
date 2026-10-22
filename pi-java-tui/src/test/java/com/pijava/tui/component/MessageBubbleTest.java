@@ -196,6 +196,46 @@ class MessageBubbleTest {
         assertThat(lines.get(0).markup()).startsWith("[cyan]bash[/]");
     }
 
+    // ── 批 12 T6（docs/23 §3/§7）：outputPad 烘焙包装 ─────────────
+
+    @Test
+    void paddedShiftsEveryLineIndent() {
+        var plain = MessageBubble.lines(new ChatMessage.User("hi"));
+        var padded = MessageBubble.lines(new ChatMessage.Padded(new ChatMessage.User("hi"), 1));
+
+        assertThat(padded).hasSize(plain.size());
+        for (int i = 0; i < plain.size(); i++) {
+            assertThat(padded.get(i).initialIndent()).isEqualTo(plain.get(i).initialIndent() + 1);
+            assertThat(padded.get(i).subsequentIndent())
+                .isEqualTo(plain.get(i).subsequentIndent() + 1);
+            assertThat(padded.get(i).markup()).isEqualTo(plain.get(i).markup());
+        }
+    }
+
+    @Test
+    void paddedWrapsToolCardsToo() {
+        var card = new ChatMessage.Assistant(List.of(
+            new ContentBlock.ToolUseContent("id", "bash", java.util.Map.of("command", "x"))));
+        var lines = MessageBubble.lines(new ChatMessage.Padded(card, 1));
+
+        // 工具卡两行（名称行 indent 0→1、参数行 indent 4→5）。
+        assertThat(lines.get(0).initialIndent()).isEqualTo(1);
+        assertThat(lines.get(1).initialIndent()).isEqualTo(5);
+    }
+
+    @Test
+    void fromWithPadBakesPaddedOnlyAboveZero() {
+        var entry = new Entry.ModelChange("m", 0, null, null, "deepseek", "v4");
+
+        assertThat(ChatMessage.from(entry, 0))
+            .isEqualTo(new ChatMessage.System("Model: deepseek/v4", MetaKind.MODEL_CHANGE));
+        assertThat(ChatMessage.from(entry, 1))
+            .isEqualTo(new ChatMessage.Padded(
+                new ChatMessage.System("Model: deepseek/v4", MetaKind.MODEL_CHANGE), 1));
+        assertThat(ChatMessage.padOf(ChatMessage.from(entry, 1))).isEqualTo(1);
+        assertThat(ChatMessage.padOf(ChatMessage.from(entry, 0))).isZero();
+    }
+
     @Test
     void toolCardUnwrapsRawArgumentsAndFallsBackName() {
         var lines = MessageBubble.lines(new ChatMessage.Assistant(List.of(

@@ -35,6 +35,10 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     private final ChatPanel chatPanel = new ChatPanel();
     private final PendingQueueView pendingQueue = new PendingQueueView();
     private final EditorComponent editor = new EditorComponent();
+    // 批 12（docs/23）：settings 消费键的 live-read 源（PiTuiApp 装配注入；
+    // 默认值保持批 12 前行为——直构 ChatScreen 的测试面零变化）。
+    private java.util.function.IntSupplier outputPad = () -> 0;
+    private java.util.function.IntSupplier autocompleteMaxVisible = () -> 5;
     private SlashCompleter completer = new SlashCompleter(List.of());
     private SessionSnapshot snapshot;
     private final StringBuilder assistantDraft = new StringBuilder();
@@ -87,7 +91,8 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
             pendingUserText = null;
             return;
         }
-        var bubble = ChatMessage.from(entry);
+        // 批 12 T6：outputPad append 时烘焙（D62 不回溯已渲染条目）。
+        var bubble = ChatMessage.from(entry, outputPad.getAsInt());
         if (bubble != null) {
             chatPanel.append(bubble);
         }
@@ -384,7 +389,7 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
         thinkingRendered = false;
         if (leafId != null) {
             for (var e : com.pijava.agent.session.ContextEntries.pathToLeaf(entries, leafId)) {
-                var bubble = ChatMessage.from(e);
+                var bubble = ChatMessage.from(e, outputPad.getAsInt());
                 if (bubble != null) {
                     chatPanel.append(bubble);
                 }
@@ -412,8 +417,39 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
 
     /** Inject the slash-command catalog for completion (from the registry). */
     public void setSlashCommands(List<SlashCompleter.CommandItem> items) {
-        completer = new SlashCompleter(items);
+        completer = new SlashCompleter(items, autocompleteMaxVisible);
         completer.update(editor.getText());
+    }
+
+    // ── 批 12（docs/23）：settings 消费键 live-read 源（PiTuiApp 注入）──
+
+    /** 批 12 T6：{@code outputPad} 现读源（append 时烘焙，D62 不回溯）。 */
+    public void setOutputPadSource(java.util.function.IntSupplier source) {
+        outputPad = source == null ? () -> 0 : source;
+    }
+
+    /** 批 12 T4：{@code editorPaddingX} 现读源（编辑器双侧留白热更）。 */
+    public void setEditorPaddingSource(java.util.function.IntSupplier source) {
+        editor.setPaddingXSource(source);
+    }
+
+    /**
+     * 批 12 T5：{@code autocompleteMaxVisible} 现读源——对<b>之后</b>的
+     * {@link #setSlashCommands} 重建生效（PiTuiApp 装配时先注入再建目录；
+     * 设置 overlay 关闭时的目录重建自然带上新值——pi applyRuntimeSettings
+     * 同效的热更时机）。
+     */
+    public void setAutocompleteMaxVisibleSource(java.util.function.IntSupplier source) {
+        autocompleteMaxVisible = source == null ? () -> 5 : source;
+    }
+
+    /** 批 12 T11：{@code fullscreenScrollbar} 三态现读源（渲染期热更）。 */
+    public void setScrollbarModeSource(java.util.function.Supplier<String> mode) {
+        chatPanel.scrollbarMode(() -> switch (mode.get()) {
+            case "hidden" -> com.pijava.tui.component.ChatViewportElement.ScrollbarMode.HIDDEN;
+            case "always" -> com.pijava.tui.component.ChatViewportElement.ScrollbarMode.ALWAYS;
+            default -> com.pijava.tui.component.ChatViewportElement.ScrollbarMode.AUTO;
+        });
     }
 
     /** Replace the input with the highlighted command (Tab or Enter). */
@@ -534,7 +570,11 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     /** Show the user's message immediately on submit (optimistic bubble). */
     public void appendUserText(String text) {
         pendingUserText = text;
-        chatPanel.append(new ChatMessage.User(text));
+        // 批 12 T6：与 from(entry) 链同格烘焙——乐观气泡与提交后的条目
+        // （pendingUserText 去重后不再渲染）不因 pad 切换而跳动。
+        var pad = outputPad.getAsInt();
+        var bubble = new ChatMessage.User(text);
+        chatPanel.append(pad > 0 ? new ChatMessage.Padded(bubble, pad) : bubble);
     }
 
     /** The current snapshot (for tree selectors). */

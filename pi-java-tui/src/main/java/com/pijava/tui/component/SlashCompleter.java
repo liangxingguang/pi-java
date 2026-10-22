@@ -35,9 +35,11 @@ public final class SlashCompleter {
     /** Result of feeding a key to the completer. */
     public enum KeyAction { IGNORED, HANDLED, COMPLETE }
 
-    private static final int MAX_ROWS = 8;
-
     private final List<CommandItem> allItems;
+    /** 批 12 T5（docs/23 §3）：pi {@code autocompleteMaxVisible}（editor.ts:2241
+     *  {@code new SelectList(items, this.autocompleteMaxVisible, ...)} 对位）——
+     *  live-read 热更（pi applyRuntimeSettings 同效）；默认 5（裁决④，旧硬编码 8 改齐 pi）。 */
+    private final java.util.function.IntSupplier maxVisible;
     private final List<CommandItem> matches = new ArrayList<>();
     private int selected;
     private boolean active;
@@ -48,7 +50,18 @@ public final class SlashCompleter {
      * @param items all available commands in registry order
      */
     public SlashCompleter(List<CommandItem> items) {
+        this(items, () -> 5);
+    }
+
+    /**
+     * Creates the completer with a live-visible-row-count source.
+     *
+     * @param items      all available commands in registry order
+     * @param maxVisible visible row count source (pi accessor clamp 3..20)
+     */
+    public SlashCompleter(List<CommandItem> items, java.util.function.IntSupplier maxVisible) {
         this.allItems = List.copyOf(items);
+        this.maxVisible = maxVisible;
     }
 
     /** Refresh from the current editor text; closes unless it is "/..." input. */
@@ -121,7 +134,7 @@ public final class SlashCompleter {
             return null;
         }
         var rows = new ArrayList<Element>();
-        int shown = Math.min(matches.size(), MAX_ROWS);
+        int shown = Math.min(matches.size(), maxVisible.getAsInt());
         for (int i = 0; i < shown; i++) {
             String line = matches.get(i).display();
             rows.add(i == selected
@@ -140,7 +153,7 @@ public final class SlashCompleter {
         if (!active) {
             return 0;
         }
-        int shown = Math.min(matches.size(), MAX_ROWS);
+        int shown = Math.min(matches.size(), maxVisible.getAsInt());
         return matches.size() > shown ? shown + 1 : shown;
     }
 }

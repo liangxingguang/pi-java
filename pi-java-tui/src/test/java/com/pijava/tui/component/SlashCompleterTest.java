@@ -75,4 +75,67 @@ class SlashCompleterTest {
             .isEqualTo(SlashCompleter.KeyAction.HANDLED);
         assertThat(completer.active()).isFalse();
     }
+
+    // ── 批 12 T5（docs/23 §3/§7）：autocompleteMaxVisible（裁决④ 默认 5）──
+
+    private static List<SlashCompleter.CommandItem> manyItems(int count) {
+        var items = new java.util.ArrayList<SlashCompleter.CommandItem>();
+        for (int i = 0; i < count; i++) {
+            items.add(new SlashCompleter.CommandItem("cmd" + i, "", "item " + i));
+        }
+        return List.copyOf(items);
+    }
+
+    @Test
+    void defaultMaxVisibleIsFive() {
+        var completer = new SlashCompleter(manyItems(9));
+        completer.update("/");
+
+        assertThat(completer.lineCount()).isEqualTo(6);   // 5 行＋「… N more」
+    }
+
+    @Test
+    void maxVisibleClampsRowsAndCountsTheRemainder() throws Exception {
+        var completer = new SlashCompleter(manyItems(9), () -> 3);
+        completer.update("/");
+
+        assertThat(completer.lineCount()).isEqualTo(4);   // 3 行＋汇总行
+        assertThat(renderLines(completer.render(), 40, 4).get(3)).contains("… 6 more");
+        // live-read：改值下一帧生效。
+        completer = new SlashCompleter(manyItems(9), () -> 20);
+        completer.update("/");
+        assertThat(completer.lineCount()).isEqualTo(9);
+    }
+
+    private static List<String> renderLines(dev.tamboui.toolkit.element.Element element,
+            int width, int height) throws Exception {
+        var buffer = dev.tamboui.buffer.Buffer.empty(new dev.tamboui.layout.Rect(0, 0, width, height));
+        var frame = dev.tamboui.terminal.Frame.forTesting(buffer);
+        var focus = new dev.tamboui.toolkit.focus.FocusManager();
+        var mark = dev.tamboui.tui.RenderThread.class.getDeclaredMethod("markAsRenderThread");
+        mark.setAccessible(true);
+        mark.invoke(null);
+        try {
+            element.render(frame, new dev.tamboui.layout.Rect(0, 0, width, height),
+                new dev.tamboui.toolkit.element.DefaultRenderContext(focus,
+                    new dev.tamboui.toolkit.event.EventRouter(focus,
+                        new dev.tamboui.toolkit.element.ElementRegistry())));
+        } finally {
+            var clear = dev.tamboui.tui.RenderThread.class.getDeclaredMethod("clearRenderThread");
+            clear.setAccessible(true);
+            clear.invoke(null);
+        }
+        var lines = new java.util.ArrayList<String>();
+        for (int y = 0; y < height; y++) {
+            var row = new StringBuilder();
+            for (int x = 0; x < width; x++) {
+                var cell = buffer.get(x, y);
+                if (!cell.isContinuation()) {
+                    row.append(cell.symbol());
+                }
+            }
+            lines.add(row.toString().stripTrailing());
+        }
+        return lines;
+    }
 }

@@ -41,6 +41,9 @@ public final class EditorComponent {
     private final ArrayDeque<Snapshot> undoStack = new ArrayDeque<>();
     private Consumer<String> submitHandler = text -> { };
     private String lastAction;
+    /** 批 12 T4（docs/23 §3）：pi {@code editorPaddingX}（editor.ts:523-524
+     *  双侧留白对位）——live-read 热更；默认 0。 */
+    private java.util.function.IntSupplier paddingX = () -> 0;
 
     /** Creates the editor component backed by a fresh {@link TextAreaState}. */
     public EditorComponent() {
@@ -52,9 +55,24 @@ public final class EditorComponent {
 
     /** The input row for the render tree: a {@code >} prompt plus the editor. */
     public Row render() {
+        // pi editor.ts:523-524/560：双侧 paddingX 留白（clamp 0..3 在 accessor；
+        // 这里再夹一次防 live-read 越界）。java 编辑器无鼠标命中面，仅渲染留白；
+        // 内容可用宽度随 Row 布局自然收缩。
+        int pad = Math.min(3, Math.max(0, paddingX.getAsInt()));
+        if (pad == 0) {
+            return TamboUIAdapter.row(
+                TamboUIAdapter.text("> ").cyan(),
+                element);
+        }
         return TamboUIAdapter.row(
-            TamboUIAdapter.text("> ").cyan(),
-            element);
+            TamboUIAdapter.text(" ".repeat(pad) + "> ").cyan(),
+            element,
+            TamboUIAdapter.text(" ".repeat(pad)));
+    }
+
+    /** 注入 paddingX 现读源（{@code uiPrefs().getEditorPaddingX()} 对位）。 */
+    public void setPaddingXSource(java.util.function.IntSupplier source) {
+        paddingX = source == null ? () -> 0 : source;
     }
 
     /**
