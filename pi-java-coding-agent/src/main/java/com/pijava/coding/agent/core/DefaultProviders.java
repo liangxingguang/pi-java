@@ -256,6 +256,38 @@ public final class DefaultProviders {
             options.maxRetries(), extra, options.authKind());
     }
 
+    /**
+     * 批 13（docs/24 T7，pi cache-warmer.ts:332-338 对位）：暖重放专用 {@link StreamFn}——
+     * <ol>
+     *   <li>{@code maxRetries} 强制 0（pi 展开覆盖 {@code {...options, maxRetries: 0}}；
+     *       java 的 maxRetries 在 {@link #apiOptions} 从 settings 现读，需强制通道）；</li>
+     *   <li>跳过 {@code ProviderHooks} 三钩（pi 的 onPayload/onResponse/onProviderStreamEvent
+     *       是 Agent 级回调，{@code models.streamSimple} 直调不过）；</li>
+     *   <li>保留 transformHeaders（pi 暖请求 options 含 buildRequestOptions 烘焙的头变换
+     *       闭包 ⇒ before_provider_headers 钩与头合并照走）。</li>
+     * </ol>
+     */
+    public static StreamFn warmStreamFnFor(Args args, String defaultProvider,
+                                           ProviderRegistry providers, Settings settings,
+                                           String sessionId,
+                                           com.pijava.coding.agent.extension.bridge.ProviderEventBridge bridge) {
+        var fallbackName = resolveProviderName(args, defaultProvider);
+        return (model, context, options) -> {
+            var provider = providers.get(model.provider()).orElseGet(() -> {
+                System.err.println("[provider] unknown model provider \"" + model.provider()
+                    + "\"; falling back to \"" + fallbackName + "\"");
+                return providers.get(fallbackName).orElseThrow(
+                    () -> new IllegalStateException("Unknown provider: " + fallbackName));
+            });
+            var resolved = apiOptions(args, model.provider(), settings,
+                Credentials::resolveCredential, requestExtra(options, sessionId));
+            // ①：六参重建，maxRetries 钉 0（authKind 保真，B138 同族教训）。
+            resolved = new ApiOptions(resolved.baseUrl(), resolved.apiKey(),
+                resolved.timeout(), 0, resolved.extra(), resolved.authKind());
+            return streamBlocking(provider, model, context, options, resolved, bridge, true);
+        };
+    }
+
     private static StreamIterator streamBlocking(
             Provider provider,
             ModelId<?> model,
@@ -263,6 +295,17 @@ public final class DefaultProviders {
             com.pijava.agent.harness.StreamOptions options,
             ApiOptions apiOptions,
             com.pijava.coding.agent.extension.bridge.ProviderEventBridge bridge) {
+        return streamBlocking(provider, model, context, options, apiOptions, bridge, false);
+    }
+
+    private static StreamIterator streamBlocking(
+            Provider provider,
+            ModelId<?> model,
+            com.pijava.agent.harness.Context context,
+            com.pijava.agent.harness.StreamOptions options,
+            ApiOptions apiOptions,
+            com.pijava.coding.agent.extension.bridge.ProviderEventBridge bridge,
+            boolean warm) {
         // 系统提示与工具定义都来自 Context（pi 的 Context）；它们不再走消息列表或 options。
         //
         // 模型**元数据**（而非只有 id）必须随请求走：pi 的请求构建器拿到整个 Model<TApi>，
@@ -287,8 +330,12 @@ public final class DefaultProviders {
             // docs/17（B248，pi models.ts:866-871 对位）：合并头集过 transformHeaders
             // 写回 extra["headers"]（钩本体不入 extra——pi :870 剥离键对位）；
             // 随后三钩入 extra，车道构造期经 ProviderHooks 读取。
-            effectiveOptions = bridge.withRequestHooks(
-                bridge.applyHeaderTransform(effectiveOptions));
+            // 批 13（T7）：暖路径只过头变换、跳过三钩（pi streamSimple 直调不过
+            // Agent 级回调，cache-warmer.ts:332-338）。
+            effectiveOptions = bridge.applyHeaderTransform(effectiveOptions);
+            if (!warm) {
+                effectiveOptions = bridge.withRequestHooks(effectiveOptions);
+            }
         }
         // 包 A-02（原 docs/59 §4.6）：车道跟着 modelInfo.api 走（pi compat.ts:262）。
         // ⚠️ 必须**先**查 modelInfo 再 createApi —— 派发键在 modelInfo 上，此前 createApi
