@@ -372,6 +372,13 @@ public final class SettingsAccessors {
         return b != null && Boolean.TRUE.equals(b.skipPrompt());
     }
 
+    /** pi {@code getBlockImages}（settings-manager.ts:1311-1313）：
+     *  {@code images?.blockImages ?? false}。 */
+    public boolean getBlockImages() {
+        var images = manager.effective().images;
+        return images != null && Boolean.TRUE.equals(images.blockImages());
+    }
+
     /** pi {@code getCompactionTokenSetting}（:927-953）的单字段三级回退 + 校验。 */
     private static int compactionToken(Settings.Compaction c,
                                         com.pijava.ai.model.ModelId<?> model,

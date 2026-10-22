@@ -60,16 +60,31 @@ public final class EngineHookBridge {
 
     private final ExtensionEventBus bus;
     private final ExtensionContext ctx;
+    private final java.util.function.BooleanSupplier blockImages;
 
-    private EngineHookBridge(ExtensionEventBus bus, ExtensionContext ctx) {
+    private EngineHookBridge(ExtensionEventBus bus, ExtensionContext ctx,
+                             java.util.function.BooleanSupplier blockImages) {
         this.bus = bus;
         this.ctx = ctx;
+        this.blockImages = blockImages;
     }
 
     /** 装配期恒装五个适配器（docs/14 三个＋docs/15 的 message_end/before_compaction）。 */
     public static void install(HookSystem hooks, String laneName,
                                ExtensionEventBus bus, ExtensionContext ctx) {
-        var bridge = new EngineHookBridge(bus, ctx);
+        install(hooks, laneName, bus, ctx, () -> false);
+    }
+
+    /**
+     * 批 11 T6：带 {@code blockImages} 晚读口的装配（pi sdk.ts:296-329 的
+     * convertToLlm 包装对位）——过滤挂在 {@link #transformContext} 尾部
+     * （扩展链之后，pi 的 transformContext→convertToLlm 序），每次现读设置
+     * （pi 注释逐字：mid-session changes take effect）。
+     */
+    public static void install(HookSystem hooks, String laneName,
+                               ExtensionEventBus bus, ExtensionContext ctx,
+                               java.util.function.BooleanSupplier blockImages) {
+        var bridge = new EngineHookBridge(bus, ctx, blockImages);
         hooks.onTransformContext(laneName, bridge::transformContext);
         hooks.onBeforeTool(laneName, bridge::beforeTool);
         hooks.onAfterTool(laneName, bridge::afterTool);
@@ -109,7 +124,8 @@ public final class EngineHookBridge {
      * @return 变换后的列表；无订阅者 ⇒ {@code null}（HookSystem 保留原列表）
      */
     List<Message> transformContext(List<Message> messages) {
-        if (!bus.hasHandlers(CONTEXT) && !bus.hasHandlers(CONTEXT_WITH_SYSTEM)) {
+        var blocking = blockImages.getAsBoolean();
+        if (!blocking && !bus.hasHandlers(CONTEXT) && !bus.hasHandlers(CONTEXT_WITH_SYSTEM)) {
             return null;
         }
         // pi 的 structuredClone 不需要：java Message 是不可变 record（裁决④附注）。
@@ -153,7 +169,11 @@ public final class EngineHookBridge {
                 bus.emitError(h.error(e));
             }
         }
-        return current;
+        // 批 11 T6（pi sdk.ts:296-329）：blockImages 过滤殿后——pi 序：
+        // transformContext（扩展）在先、convertToLlm 包装（本过滤）殿后。
+        return blocking
+            ? com.pijava.coding.agent.core.ImageBlockFilter.apply(current)
+            : current;
     }
 
     /**

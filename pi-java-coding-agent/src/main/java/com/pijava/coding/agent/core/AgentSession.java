@@ -2042,6 +2042,12 @@ public final class AgentSession implements AutoCloseable {
                                        AgentHarness harness, ExtensionUI ui,
                                        AgentSession owner, SessionStartInfo startInfo) {
         if (args.noExtensions()) {
+            // 批 11 T6：pi 的 blockImages 过滤独立于扩展面（sdk.ts:296-329 的
+            // convertToLlm 包装与扩展加载无关）⇒ --no-extensions 也裸注册过滤钩。
+            harness.hookSystem().onTransformContext(owner.laneName(), messages ->
+                services.settings().accessors().getBlockImages()
+                    ? com.pijava.coding.agent.core.ImageBlockFilter.apply(messages)
+                    : null);
             return;
         }
         // docs/16（§2.6）：UI 烘进 context 前同步会话字段 —— fork 重建时 mode 层注入的
@@ -2067,7 +2073,9 @@ public final class AgentSession implements AutoCloseable {
             manager.loadJar(jar);
         }
         com.pijava.coding.agent.extension.bridge.EngineHookBridge.install(
-            harness.hookSystem(), owner.laneName(), bus, context);
+            harness.hookSystem(), owner.laneName(), bus, context,
+            // 批 11 T6：blockImages 晚读口（pi 注释：mid-session changes take effect）。
+            () -> services.settings().accessors().getBlockImages());
         // docs/15 §3.5：boundary 两适配器恒装（turn_end 挂 should_stop_after_turn、
         // agent_before_settle 挂 before_settle）；turnIndex 与宿主桥共享
         // （pi _turnIndex 同字段——boundary 在宿主 turn_end 事件之前读）。
