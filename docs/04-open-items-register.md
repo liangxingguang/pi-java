@@ -27,7 +27,7 @@
 ## 基准与口径
 
 - 七份地图（含 2026-10-12 新建的 `map/07-mcp.md`）已于 2026-10-12 对当前锚点逐条重测完毕。重测销号 A16，新发现的差异登记为 B233–B238。
-- 已闭环批次：ai 批 0–10（原 docs/08–19）、agent-core 批 1–3（原 docs/20–22）、telemetry 批 1（原 docs/23）、agent-core 批 4–5（docs/09–10）、coding-agent 批 1–9（docs/11–19）。
+- 已闭环批次：ai 批 0–10（原 docs/08–19）、agent-core 批 1–3（原 docs/20–22）、telemetry 批 1（原 docs/23）、agent-core 批 4–5（docs/09–10）、coding-agent 批 1–12（docs/11–23）。
   - ai 批 0 裁决：B115/B117/B124 取证关单、#87 零代码对齐、11 个单元移出分母。
   - telemetry 批 1 结论：pi 的 telemetry 是休眠契约（没有实际调用点），`map/01` 完成度 100%。
   - 换锚裁决依据在原 `docs/11-pi-reanchor-ruling.md`。
@@ -135,7 +135,7 @@
 | B46 | 用户可见 | BashTool 的 onUpdate 没有 TUI 消费者 | 生产发射面已通（BashTool→BashUpdateEmitter→SessionRunner；2026-10-12 重测更正：旧记「生产永不发射」已过期）。web 有 bashOutput，TUI 渲染面仍缺 |
 | B47 | 用户可见 | TUI tool_execution_* 语义取错源 | Java 按「模型吐完调用」计数，pi 按真实工具执行事件计数 |
 | B65 | 用户可见 | MarkdownRenderer/SyntaxHighlighter 是死代码 | 助手消息走纯文本，表格/mermaid/高亮/链接全不可达；先定「接线还是删声明」 |
-| B66 | 用户可见 | ~~6~~ 4 个已声明键位未接线 | THINKING_CYCLE/TOOLS_EXPAND/THINKING_TOGGLE/EXTERNAL_EDITOR，按键无反应（2026-10-22 批 coding-agent-10 核账：MODEL_CYCLE 随 ai 批 3b（B137）已接、DEQUEUE 随批 10（docs/21）已接，原记 6 个两处滞后） |
+| B66 | 用户可见 | ~~6~~ 3 个已声明键位未接线 | THINKING_CYCLE/TOOLS_EXPAND/THINKING_TOGGLE，按键无反应（2026-10-22 批 coding-agent-10 核账 6→4：MODEL_CYCLE 随 ai 批 3b（B137）已接、DEQUEUE 随批 10（docs/21）已接；批 12（docs/23 T3）核账 4→3：EXTERNAL_EDITOR 已接 Ctrl+G 外部编辑器往返） |
 | B78 | 用户可见 | FuzzyMatcher 语义不同 | pi 是子序列匹配＋分词；Java 的实现不同 |
 | B145 | 内部 | 启动/登录后定向目录刷新未接线 | 仅 RPC 模式有后台刷新，pi 另有三处刷新点 |
 | B238 | 用户可见 | **新锚点**：TUI 四项新行为缺失（明细见 map/05） | ① K20 视口滚动键改 Ctrl+Home/Ctrl+End（裸 Home/End 归还编辑器）；② R29 安装变更每会话一次重启警告（`maybeShowInstallChangeWarning`）；③ K39 OSC 7501 程序状态上报（program-status）；④ C20 APC 标记假光标 |
@@ -385,6 +385,13 @@
 - 【风险/代价】窄差 3 条新登（docs/22 §5）：**D52** httpProxy 通道＝系统属性（pi 写进程 env 由 undici EnvHttpProxyAgent 全局生效；java 由 jdk 默认 ProxySelector 生效。URL 内嵌凭证不解析、`nonProxyHosts` 不支持、socks scheme 不支持；闭环评审补记两边缘：https scheme 缺省端口取 80（pi/Node URL 解析取 443）、env 优先级按组判定〔任一 HTTP_PROXY/HTTPS_PROXY 在场即整体跳过〕（pi 两变量独立 `??=`））[内部]；**D53** httpIdleTimeoutMs 单臂对齐（只接 request timeout 臂；pi 另有 `configureHttpDispatcher` undici 全局 dispatcher 面 java 无对位——jdk 无全局 dispatcher）[内部]；**D54** 切模型「全无级别配置」不写思考档 entry（pi 回落 DEFAULT 并 `setThinkingLevel` 写 entry；java 继承当前档不写，裁决⑦）[会话文件，边缘]。**B15-残留-5 销号**。账面：模块 288.0→**303.5/485 ≈ 62.6%**（原始口径 292.5→308.0/494 ≈ 62.3%；E2-45 出分母 487→485/496→494/1381→1379）、全仓 962.0→**977.5/1379 ≈ 70.9%**；E2 域 52.0→67.5/84＝**80.4%**；D 域不动（88.0%）。行为变化注记：provider 请求超时兜底 120s⇒300s（pi 对齐方向，changelog 级）。
 - 触发条件：声明面 14 键的消费点（changelog 流／analytics／cache-warmer／websocket 传输／TUI 硬件光标·全屏面）随「settings 消费点批」落地后逐行翻对齐；`setModelThinkingLevel`/`removeModelThinkingLevel` 的 TUI 入口同批。出处：docs/22 §3–§6＋§9 闭环回填。
 
+### map/04-批 coding-agent-12（docs/23）— settings 消费点批（E2 域核销×3＋TUI 行为键×5＋声明面消费点×7＋setter TUI 入口）
+
+- 【场景】批 11 留了「消费点在 TUI 域」的键：TUI 行为键 8 个与批 11 声明面 14 键的消费点，外加 `setModelThinkingLevel` 的 TUI 入口（批 11 T2 留白）。E2 行的判定口径「TUI 模块消费者不计入本图」使这些键永远无法翻行——本批整体是跨模块接线，口径本身要修。
+- 【决定】2026-10-22 批 coding-agent-12（docs/23，T1→T14）：① **裁决①（E2 判定口径修订）**——「非零消费者」计入 TUI 模块消费点（map/04 行与 map/05 行是不同单元，不重复计分；先例 E2-11 证据引 `TreeNavigationFlow:169`），map/04 E2 表头注记同步修订；② **核销×3（零代码）**——E2-37 `treeFilterMode`（裁决②：消费点批 9 已随树选择器落地，账面滞后）；E2-23/E2-24（**裁决③口径先例：pi 侧零消费 ⇒ 声明面即全量**——pi 运行时无 analytics 客户端/上报端点，docs/settings.md:168 自述仅首次设置向导用）；③ **TUI 行为键×5**——T2 `doubleEscapeAction`（accessor 默认回落 `"tree"`＋空编辑器双击 Esc 500ms 窗〔pi :3067-3097〕，流式中断不计双击）；T3 `externalEditor`（accessor 回落链逐字＋`ExternalEditorSupport`〔tmpdir/pi-editor-\*/prompt.md、split(" ") 简单拆、BOM＋尾换行规范化〕＋Ctrl+G alt 屏退出/重进接线；**B66 核账 4→3**）；T4 `editorPaddingX`（uiPrefs accessor clamp 0..3＋编辑器双侧留白 live-read）；T5 `autocompleteMaxVisible`（**裁决④默认 8⇒5**＋`SlashCompleter` maxVisible 注入）；T6 `outputPad`（accessor 逐字〔仅显式 0⇒0〕＋`ChatMessage.Padded` 烘焙变体〔append 时定值〕＋`MessageBubble` indent＋flatten 宽 −2×pad）；④ **声明面消费点×7**——T7 changelog 流（`ChangelogSupport` 逐字 parse/compareVersions/getNewEntries＋`forDisplay` 三臂＋内置 `resources/CHANGELOG.md`〔**裁决⑦** 数据各自维护非窄差〕＋启动两臂〔折叠一行逐字/What's New 全文〕＋`/changelog` 全量 reverse 不回写；`normalizeChangelogLinks` 不移植〔首发无相对链接〕）；T9 `showHardwareCursor`（`createRunner` 参数化 `hideCursor(!show)`）；T10 `fullscreenExitOutput`（退出两臂：transcript 默认 `TranscriptDump` 倾倒〔复用 ScrollbackTranscript 打印面〕／resume-hint 只留提示＋统一恢复提示〔仅已持久化会话〕）；T11 `fullscreenScrollbar`（三态：hidden 真实落地〔不让列/命中恒 false〕、auto/always 同形常驻〔**裁决⑧**〕）；T12 `fullscreenWheelScrollLines`（**裁决⑥**：数字臂接 `ScrollConfig` 固定行数、auto 维持既有 Codex 加速不新造）；T13 `warnings.anthropicExtraUsage`（`AnthropicExtraUsageWarning`＋四时机接线〔init/模型选择/Ctrl+P/登录〕＋每会话一次；种类判据退化为 stored-oauth source 标记＋`sk-ant-oat` 值前缀双判据）；⑤ **T14**——`ModelThinkingLevelScreen` 两级子菜单（pi settings-selector.ts:607-700 对位：模型步当前置顶＋override 摘要、级别步 reasoning 门＋clear 项；提交回调 pi :5009-5019 当前模型即时生效/回退全局默认 ?? "off"）＋`SettingsScreen` 实例化重构（getter/setter 闭包跨三访问器面）＋子菜单检出 `pollModelThinkingRequest`；⑥ **不做（§4 重排/窄差）**——E2-32 terminal 七键（D56）、E2-43 markdown（D57＋随 R1 激活批，计入拍板变量③）、E2-14/E2-49 cache 两键（**「cache-warmer 子系统批」** docs/20 §3 插行，pi cache-warmer.ts 449 行是子系统不是键接线）、E2-50（D58 无 WS 传输）、E2-22（**裁决⑤** install ping 不移植〔pi.dev 是 pi 自有端点，复刻发送会污染其遥测〕＝D55＋归因头随 B253）、E2-54（D59 挂 S2a-d）。
+- 【风险/代价】窄差 10 条新登（docs/23 §5）：**D55** install telemetry ping 不移植（`PI_OFFLINE`/`PI_TELEMETRY` 门与归因头随 B253）[内部]；**D56** `terminal` 七键消费面无对位（能力覆盖/OSC 9;4/inline 图片/clearOnShrink；可移植子集随 TUI 屏域拍板）[用户可见·终端集成]；**D57** `markdown.mermaid` 无 grok-mermaid 对位（pi 渲染 Unicode 字符画；`codeBlockIndent` 随 R1 激活批）[用户可见]；**D58** `websocketConnectTimeoutMs` 无 WS 传输对位[内部]；**D59** `fullscreenCopyOnSelect` 依赖 alt-screen 选区子系统（S2a-d 未排期）[用户可见]；**D60** 滚轮 auto 臂＝既有 Codex 有界加速（非 pi 速度模型；数字臂对齐，同 K38）[用户可见·手感]；**D61** 滚动条 auto/always 同形常驻（pi auto＝滚动后短暂显示）[用户可见]；**D62** `outputPad` 改值不回溯已渲染条目（pi 遍历容器热更；java 新条目用新值）[内部]；**D63** changelog 渲染为纯文本（Markdown 组件随 R1 批）[用户可见]；**D64** resume-hint 文案按 java CLI 能力成形（`pi-java -r` 指引，`-r` 选择器随批 13）[用户可见]。行为变化注记（changelog 级）：**双击 Esc 默认开树选择器**（此前无行为）、**fullscreen 退出默认倾倒 transcript**（此前静默）、autocompleteMaxVisible 默认 8⇒5——均 pi 默认同向。账面：模块 303.5→**311.0/485 ≈ 64.1%**（原始口径 308.0→315.5/494 ≈ 63.9%；未加权 145→160/289 ≈ 55.4%）、全仓 977.5→**985.0/1379 ≈ 71.4%**；E2 域 67.5→**75.0/84 ≈ 89.3%**（对齐 29→44/存疑 23→8）；D 域不动（88.0%）；w3 73.9% 不动。E6 涨到 793（+178）。**B15-残留系无新增**。
+- 触发条件：cache-warmer 两键（E2-14/E2-49＋R24＋5 通知门）随「cache-warmer 子系统批」；markdown 激活（R1 联动 E2-43）计入拍板变量③；D49 随键位平台规则统一裁决时；外部编辑器的 TamboUI 状态错位风险（继承 IO 与 runner 渲染交错由 alt 屏序列隔离——实测未见异常，光标落位属 TamboUI 后端行为域）如出现实害再裁窄差。出处：docs/23 §3–§6＋§9 闭环回填。
+
 ---
 
 ## 5. E 类 —— 结构债（仓库规则：单文件 ≤ 500 行）
@@ -394,7 +401,7 @@
 | E1 | coding-agent …/core/AgentSession.java | **2,131**（2026-10-22 批 coding-agent-11 实测——批 11 +48：setModel 包装＋thinkingLevelForModelSwitch＋no-extensions 过滤钩＋per-model 装配臂；拆分宜搭下一 coding-agent 批） |
 | E2 | coding-agent …/rpc/RpcDispatcher.java | 671（2026-10-22 批 coding-agent-11 实测——set_model 改道注释 +4） |
 | E5 | ai …/catalog/ModelCompat.java | **762**（2026-10-11 B98 加 8 组件；converter 侧已拆出 CompletionAssistantMessage 保 500 内） |
-| E6 | tui …/app/PiTuiApp.java | 615（2026-10-22 批 coding-agent-10 实测——fork 流＋dequeue/INTERRUPT 臂 +56） |
+| E6 | tui …/app/PiTuiApp.java | **793**（2026-10-22 批 coding-agent-12 实测——双击 Esc/外部编辑器/changelog 装配/T13 警告/T14 检出 +178，超设计预估 ~675：含 T13 凭证探针面与评审回补；拆分宜搭下一 TUI 批） |
 
 （E3/E4 已销号——2026-10-18 批 agent-core-5 拆分：`PiLaneSink` 470＋`PiLaneRequestTelemetry` 131、`AgentHarness` 438＋`HarnessBootstrap` 231，行为零变化纯移动。）
 

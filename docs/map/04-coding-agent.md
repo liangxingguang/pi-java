@@ -315,11 +315,11 @@ pi `ExtensionUIContext` 共 **28 个成员**（`types.ts:149-323`，两锚点间
 ### E2 settings.json 键（54）
 
 pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`interface Settings` 在 `:471`，Omit 掉 schema-only 的 `queueMode`/`websockets`）；java 来自 `core/Settings.java:26-119`。
-**判定为「对齐」需字段存在且有非零消费者**（getter/setter 不算消费者；TUI 模块的消费者不计入本图）。
+**判定为「对齐」需字段存在且有非零消费者**（getter/setter 不算消费者；**批 12（docs/23 裁决①）起 TUI 模块的消费点计入本图**——map/04 行（settings 键）与 map/05 行（屏/组件单元）是不同单元，不构成重复计分；先例 E2-11 证据引 `TreeNavigationFlow:169`）。
 
 | # | 键 | pi 行 | java 行 | 权重 | 判定 | 证据 |
 |---|---|---|---|---|---|---|
-| E2-1 | `lastChangelogVersion` | `:209` | `:95` | 1 | **存疑** | 批 11（2026-10-22，docs/22）：字段＋Install 访问器；changelog 流无（声明面） |
+| E2-1 | `lastChangelogVersion` | `:209` | `:95` | 1 | **对齐** | **批 12（2026-10-22，docs/23 T7）**：changelog 流全链——`ChangelogSupport`（parse/compareVersions/getNewEntries 逐字对位 utils/changelog.ts:111/173/182-192）＋`forDisplay` 三臂（interactive-mode.ts:1332-1357：有消息⇒不显示／全新安装只写版本／有更新写回＋返回拼接）＋启动装配 `PiTuiLauncher.runInteractive`＋`/changelog` 全量 reverse 不回写（pi :6774-6793）；内置 `resources/CHANGELOG.md`（裁决⑦ 数据各自维护）；窄差 D63（纯文本渲染随 R1 批） |
 | E2-2 | `defaultProvider` | `:210` | `:26` | **3** | 对齐 | `SettingsAccessors.java:20` |
 | E2-3 | `defaultModel` | `:211` | `:27` | **3** | 对齐 | `SettingsAccessors.java:30` |
 | E2-4 | `defaultThinkingLevel` | `:212` | `:28` | 2 | 对齐 | `SettingsAccessors.java:40` |
@@ -332,17 +332,17 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 | E2-11 | `branchSummary` | `:236` | `:42` | 2 | **对齐** | **批 11（2026-10-22，docs/22 T1）核销**（账面滞后）：B1 已在 agent-core 批 4 销号——字段＋访问器（`getBranchSummaryReserveTokens`/`getBranchSummarySkipPrompt`）＋消费点 `AgentSession.java:1231`（reserve 进分支摘要选项）＋`TreeNavigationFlow.java:169`（skipPrompt 门，TUI） |
 | E2-12 | `retry` | `:237` | `:66` | 2 | 对齐 | `SettingsAccessors.java:197` `getRetrySettings()` → `AgentSession.java:317`；`getProviderRetrySettings():218` → api options |
 | E2-13 | `hideThinkingBlock` | `:238` | `:38` | 2 | 对齐 | 2 处消费 |
-| E2-14 | `showCacheMissNotices` | `:239` | `:97` | 1 | **存疑** | 批 11（docs/22 T7）：字段＋UiPrefs 访问器（`?? false`）；通知流无（声明面） |
-| E2-15 | `externalEditor` | `:245` | `:39` | 1 | **存疑** | accessor 有（`:142`），TUI 行为未核 |
+| E2-14 | `showCacheMissNotices` | `:239` | `:97` | 1 | **存疑** | 批 11（docs/22 T7）：字段＋UiPrefs 访问器（`?? false`）；**批 12（docs/23 §4）**：消费点＝cache-warmer 的 5 处通知门（interactive-mode.ts:3999/4110/4121/4151/4185），随「cache-warmer 子系统批」（docs/20 §3 插行，与 R24 同批） |
+| E2-15 | `externalEditor` | `:245` | `:39` | 1 | **对齐** | **批 12（2026-10-22，docs/23 T3）**：accessor 回落链逐字（`SettingsAccessors.getExternalEditorCommand`：configured⇒VISUAL⇒EDITOR⇒平台默认，settings-manager.ts:946-956）＋`ExternalEditorSupport`（pi external-editor.ts:14-44：tmpdir/pi-editor-\*/prompt.md、split(" ") 简单拆、BOM＋尾换行规范化）＋Ctrl+G 接线 `PiTuiApp.openExternalEditor`（pi :4596-4611；alt 屏退出/重进） |
 | E2-16 | `shellPath` | `:248` | `:40` | 2 | 对齐 | 5 处消费 |
 | E2-17 | `quietStartup` | `:253` | `:42` | 1 | 对齐 | `SettingsAccessors.java:80` |
 | E2-18 | `defaultProjectTrust` | `:259` | `:43` | 2 | 对齐 | `SettingsAccessors.java:90` |
 | E2-19 | `shellCommandPrefix` | `:265` | `:41` | 2 | 对齐 | 4 处消费 |
 | E2-20 | `npmCommand` | `:268` | — | 2 | **缺失** | 无字段 |
-| E2-21 | `collapseChangelog` | `:274` | `:99` | 1 | **存疑** | 批 11（docs/22 T7）：字段＋Install 访问器（`?? false`）；changelog 流无（声明面） |
-| E2-22 | `enableInstallTelemetry` | `:280` | `:101` | 1 | **存疑** | 批 11（docs/22 T7）：字段＋Install 访问器（`?? true`）；安装遥测无（声明面） |
-| E2-23 | `enableAnalytics` | `:286` | `:103` | 1 | **存疑** | 批 11（docs/22 T7）：字段＋Install 访问器（`?? false`＋`setEnableAnalytics` 生成 trackingId 即时 flush）；analytics 无（pi 自身也纯声明） |
-| E2-24 | `trackingId` | `:292` | `:105` | 1 | **存疑** | 批 11（docs/22 T7）：字段＋Install 访问器（直读）；随 E2-23 |
+| E2-21 | `collapseChangelog` | `:274` | `:99` | 1 | **对齐** | **批 12（2026-10-22，docs/23 T7）**：折叠门两臂（pi :843-872）——折叠 ⇒ 一行文案逐字（"Updated to vX.Y.Z. Use /changelog to view full changelog."）、非折叠 ⇒ "What's New"＋全文；设置页行 `SettingsScreen` "Collapse changelog"（install 域）；窄差 D63 |
+| E2-22 | `enableInstallTelemetry` | `:280` | `:101` | 1 | **存疑** | 批 11（docs/22 T7）：字段＋Install 访问器（`?? true`）；**批 12（docs/23 §4/裁决⑤）**：pi 两消费——changelog 版本推进后 ping `pi.dev/api/report-install`（**不移植**：pi.dev 是 pi 自有端点，复刻发送会污染其遥测，窄差 D55）＋provider 归因头（随 B253 批 19） |
+| E2-23 | `enableAnalytics` | `:286` | `:103` | 1 | **对齐** | **批 12（2026-10-22，docs/23 T8）核销**（裁决③口径先例）：pi 运行时**零消费者**（全锚点 grep：除 UUID 生成/首次设置向导/bug-report 脱敏剔除外无 analytics 客户端、无上报端点；docs/settings.md:168 自述 "Currently used only by the experimental first-run setup."）⇒ pi 侧零消费＝声明面即全量（批 11 已落字段＋访问器＋UUID 生成） |
+| E2-24 | `trackingId` | `:292` | `:105` | 1 | **对齐** | 同 E2-23（批 12 核销，裁决③）；bug-report 的 trackingId/deviceId 脱敏（pi bug-report.ts:62）随批 14（/bug＋crash-log）带上 |
 | E2-25 | `deviceId` | `:303` | `:80` | 1 | **对齐** | **批 11（2026-10-22，docs/22 T5）**：字段＋`SettingsInstallAccessors.getOrCreateDeviceId`（只读写全局域／生成即 flush／幂等，settings-manager.ts:1066-1074 对位）＋消费点 `AuthCommand` ChatGPT 臂（持久安装 ID，pi interactive-mode.ts:6331 对位） |
 | E2-26 | `packages` | `:295` | — | 2 | **缺失** | 无字段 |
 | E2-27 | `extensions` | `:300` | `:44` | 2 | 对齐 | 2 处消费 |
@@ -350,37 +350,38 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 | E2-29 | `prompts` | `:309` | `:46` | 2 | 对齐 | 5 处消费 |
 | E2-30 | `themes` | `:312` | `:47` | 2 | 对齐 | 4 处消费 |
 | E2-31 | `enableSkillCommands` | `:313` | `:50` | 2 | **对齐** | **批 2（2026-10-19，B244/docs/12）**：accessor（`SettingsAccessors.getEnableSkillCommands`，缺省回落 true，settings-manager.ts:1156-1164 对位）＋设置页字段（`SettingsScreen` "Skill commands"）＋补全目录门（`PiTuiApp.loadSlashItems`）；裁决③ legacy 对象形 `skills` 迁移不移植（窄差 D1） |
-| E2-32 | `terminal` | `:319`（schema `:74-100`，7 键） | `:49`（7 键，`Settings.java:155-166`） | 1 | **存疑** | 字段形状已齐（7/7），本模块内**零消费**（TUI 侧归 05 图） |
+| E2-32 | `terminal` | `:319`（schema `:74-100`，7 键） | `:49`（7 键，`Settings.java:155-166`） | 1 | **存疑** | 字段形状已齐（7/7）；**批 12（docs/23 §4）**：pi 消费面＝能力覆盖（hyperlinks/trueColor/images 短路终端探测）＋OSC 9;4 进度＋工具卡 inline 图片＋clearOnShrink——全部依赖 TamboUI 后端能力面或 java 没有的终端协议面（窄差 D56；可移植子集 OSC 9;4/clearOnShrink 随 TUI 屏域拍板〔变量③〕再裁） |
 | E2-33 | `images` | `:320` | `:55` | 1 | **对齐** | java 2 键与 pi 同；**批 9（2026-10-16）`autoResize` 已消费**（`ImagePolicies.resolve` 经 ToolContext 晚绑定，原 docs/18）；**批 11（2026-10-22，docs/22 T6）`blockImages` 消费链接通**：`ImageBlockFilter`（pi sdk.ts:296-329 逐字）＋`EngineHookBridge.transformContext` 尾部殿后＋`--no-extensions` 裸注册；压缩/分支摘要不滤（pi 同） |
 | E2-34 | `enabledModels` | `:321` | `:51` | 2 | 对齐 | `SettingsAccessors.java:101` |
 | E2-35 | `defaultTools`（支持 `+name`/`-name`） | `:326` | `Settings.java:59` | 2 | **对齐** | **批 1（2026-10-18，B236/docs/11）**：字段＋`mergeDefaultTools` 分层特判（`SettingsManager.merge`，settings-manager.ts:124-129/139-145 对位）＋`resolveDefaultTools`（`SettingsAccessors.getDefaultTools`，:1328-1333 对位）；消费点 `SessionSetup.resolveToolSelection`；窄差 D3：形状异常 pi 容忍、java 类型化读入即抛 |
-| E2-36 | `doubleEscapeAction` | `:332` | `:52` | 1 | **存疑** | accessor 有（`:172`），行为未核 |
-| E2-37 | `treeFilterMode` | `:338` | `:53` | 1 | **存疑** | 同上（`:162`） |
+| E2-36 | `doubleEscapeAction` | `:332` | `:52` | 1 | **对齐** | **批 12（2026-10-22，docs/23 T2）**：accessor 默认回落 `"tree"`（settings-manager.ts:1341-1343）＋空编辑器双击 Esc 行为（`PiTuiApp` INTERRUPT 臂，pi interactive-mode.ts:3067-3097：500ms 窗、流式中断不计双击、tree/fork 两选择器）＋设置页行已有 |
+| E2-37 | `treeFilterMode` | `:338` | `:53` | 1 | **对齐** | **批 12（2026-10-22，docs/23 T1）核销**（裁决②，账面滞后）：消费点批 9 已随树选择器落地——`TreeNavigationFlow.java:97-98` 初值读 accessor（pi :5562 对位）＋`TreeSelectorOverlay.java:141-149` 选择器内切换**不回写**（`TreeNavigationFlowTest.java:579-592` 钉死；pi tree-selector.ts:1049-1083 同形） |
 | E2-38 | `thinkingBudgets` | `:353` | `:91` | 1 | **对齐** | **批 11（2026-10-22，docs/22 T1）核销**（账面滞后）：B128 三件俱齐——字段＋访问器 `SettingsAccessors.getThinkingBudgets`＋消费点 `AgentSession.java:614`（进 harness 配置） |
-| E2-39 | `editorPaddingX` | `:358` | `:54` | 1 | **存疑** | 字段有，**零消费** |
-| E2-40 | `outputPad` | `:364` | `:55` | 1 | **存疑** | 字段有，**零消费**（pi 本锚点把它接进了工具渲染器 `ToolRenderContext`，java 无） |
-| E2-41 | `autocompleteMaxVisible` | `:370` | `:56` | 1 | **存疑** | 字段有，**零消费** |
-| E2-42 | `showHardwareCursor` | `:376` | `:111` | 1 | **存疑** | 批 11（docs/22 T7）：字段＋UiPrefs 访问器（`?? env PI_HARDWARE_CURSOR === "1"`）；TUI 硬件光标面随消费点批 |
-| E2-43 | `markdown` | `:379` | `:57` | 1 | **存疑** | java 2 键但 `codeBlockIndent`/`mermaid` 零消费 |
-| E2-44 | `warnings` | `:380`（`WarningSettingsSchema:144`） | `:107` | 1 | **存疑** | 批 11（docs/22 T7）：字段（`Warnings` record）＋UiPrefs 访问器（浅拷贝语义）；告警消费面随消费点批 |
+| E2-39 | `editorPaddingX` | `:358` | `:54` | 1 | **对齐** | **批 12（2026-10-22，docs/23 T4）**：uiPrefs accessor（缺席 0、clamp 0..3，settings-manager.ts:1373-1380 对位）＋`EditorComponent` 双侧留白 live-read（pi editor.ts:523-524/560；java 无鼠标命中面仅渲染留白） |
+| E2-40 | `outputPad` | `:364` | `:55` | 1 | **对齐** | **批 12（2026-10-22，docs/23 T6）**：uiPrefs accessor（pi :1383-1385 逐字：仅显式 0⇒0 否则 1）＋消费链 `ChatScreen.onEntry`/`rebuildTranscript` ⇒ `ChatMessage.from(entry, pad)` ⇒ `Padded` 烘焙变体（append 时定值）⇒ `MessageBubble` indent＋`ChatViewportElement.flatten` 内容宽 −2×pad；设置页行 "Output pad"；窄差 D62（改值不回溯已渲染条目）；扩展渲染器 `ToolRenderContext.outputPad` 面 java 无（B204 域） |
+| E2-41 | `autocompleteMaxVisible` | `:370` | `:56` | 1 | **对齐** | **批 12（2026-10-22，docs/23 T5，裁决④）**：uiPrefs accessor（缺席 **5**〔java 旧硬编码 8 改齐 pi〕、clamp 3..20）＋`SlashCompleter` maxVisible live-read（pi editor.ts:2241 `new SelectList(items, maxVisible, ...)` 对位；overlay 关闭目录重建热更） |
+| E2-42 | `showHardwareCursor` | `:376` | `:111` | 1 | **对齐** | **批 12（2026-10-22，docs/23 T9）**：`TamboUIAdapter.createRunner(showHardwareCursor)` 参数化（`hideCursor(!show)`，pi tui.ts:1477-1484 resolveFakeCursors 对位：开＝真终端光标、关＝自绘假光标）＋`PiTuiLauncher.runFullscreen` 注入＋设置页行 "Hardware cursor" |
+| E2-43 | `markdown` | `:379` | `:57` | 1 | **存疑** | java 2 键；**批 12（docs/23 §4）**：`mermaid` 无 grok-mermaid 对位库（pi 渲染 Unicode 字符画；java 硬编码 panel 且 MarkdownRenderer 生产零调用）⇒ **窄差 D57**；`codeBlockIndent` 消费前提是 MarkdownRenderer 接入 MessageBubble——随 R1 激活批（map/05 R1，计入拍板变量③） |
+| E2-44 | `warnings` | `:380`（`WarningSettingsSchema:144`） | `:107` | 1 | **对齐** | **批 12（2026-10-22，docs/23 T13）**：`AnthropicExtraUsageWarning`（pi :5261-5286 门控＋:321-323 文案逐字＋:325-327 判据——种类判据退化为 stored-oauth source 标记＋`sk-ant-oat` 值前缀双判据）＋四时机接线 `PiTuiApp`（init/模型选择/Ctrl+P/登录，pi :1228/:4550/:6120/:5352 对位）＋每会话一次（switchSession 重建）＋设置页行 "Warn Anthropic extra usage" |
 | E2-45 | `codemode`（`CodemodeSettings`） | `:381`（schema `:154-167`） | — | 2 | **出分母** | **批 11（docs/22 裁决②）**：java 无 codemode 子系统（B161），R5 面外——不进 `bin pi` 主流发布版的不做对齐、不进分母；未来立项再入列 |
 | E2-46 | `sessionDir` | `:382` | `:58` | 2 | 对齐 | 7 处消费 |
 | E2-47 | `httpProxy` | `:387` | `:71` | 1 | **对齐** | **批 11（2026-10-22，docs/22 T3）**：`HttpProxySupport`（pi applyHttpProxySettings 对位，通道换 JVM 系统属性，裁决③）＋应用点 `SettingsManager.load:61`（读全局域）；窄差 D52（凭证/nonProxyHosts/socks 不解析） |
 | E2-48 | `httpIdleTimeoutMs` | `:390` | `:74` | 1 | **对齐** | **批 11（2026-10-22，docs/22 T4）**：字段（number\|"disabled" 联合）＋`TimeoutSettings` 解析＋`SettingsNetworkAccessors.getHttpIdleTimeoutMs`＋消费点 `DefaultProviders.apiOptions:372`（pi sdk.ts:344-354 链序；120s 自造兜底删除⇒300s）；窄差 D53（单臂对齐） |
-| E2-49 | `cacheWarming` | `:395` | `:109` | 2 | **存疑** | 批 11（docs/22 T7）：字段＋Network 访问器（只读全局域、非法回落 streaming，settings-manager.ts:914-923 对位）；cache-warmer 无（声明面） |
-| E2-50 | `websocketConnectTimeoutMs` | `:402` | `:77` | 1 | **存疑** | 批 11（docs/22 T4/T7）：字段＋Network 访问器（缺席无兜底，settings-manager.ts:935-937 对位）；websocket 传输无（声明面） |
+| E2-49 | `cacheWarming` | `:395` | `:109` | 2 | **存疑** | 批 11（docs/22 T7）：字段＋Network 访问器（只读全局域、非法回落 streaming，settings-manager.ts:914-923 对位）；**批 12（docs/23 §4）**：pi cache-warmer 是子系统（cache-warmer.ts 449 行＋sdk.ts 装配＋agent-session 四面接线＋扩展 decide 钩），随「cache-warmer 子系统批」（docs/20 §3 插行） |
+| E2-50 | `websocketConnectTimeoutMs` | `:402` | `:77` | 1 | **存疑** | 批 11（docs/22 T4/T7）：字段＋Network 访问器（缺席无兜底，settings-manager.ts:935-937 对位）；**批 12（docs/23 §4）**：pi 唯一消费者＝openai-codex-responses 的 WebSocket 传输（connect 握手超时，默认 15s、0 禁用）；java 无 WS 传输（codex 车道走 HTTP/SSE）⇒ **窄差 D58** |
 | E2-51 | `tuiMode` | `:407` | `:63` | 2 | 对齐 | `SettingsAccessors.java:112`；默认均 fullscreen |
-| E2-52 | `fullscreenExitOutput` | `:412` | `:113` | 1 | **存疑** | 批 11（docs/22 T7）：字段＋UiPrefs 访问器（非法回落 transcript）；TUI 全屏面随消费点批 |
-| E2-53 | `fullscreenScrollbar` | `:418` | `:115` | 1 | **存疑** | 批 11（docs/22 T7）：字段＋UiPrefs 访问器（always/hidden 否则 auto）；同上 |
-| E2-54 | `fullscreenCopyOnSelect` | `:424` | `:117` | 1 | **存疑** | 批 11（docs/22 T7）：字段＋UiPrefs 访问器（`?? true`）；同上 |
-| E2-55 | `fullscreenWheelScrollLines` | `:430` | `:119` | 1 | **存疑** | 批 11（docs/22 T7）：字段＋UiPrefs 访问器（clamp 1–100 floor／"auto"）；同上 |
+| E2-52 | `fullscreenExitOutput` | `:412` | `:113` | 1 | **对齐** | **批 12（2026-10-22，docs/23 T10）**：退出两臂（pi :881-887＋:4322-4328）——resume-hint 只留提示行、transcript（默认）`TranscriptDump` 倾倒对话滚动回退进主屏＋两臂统一恢复提示（仅已持久化会话）；窄差 D64（文案 `pi-java -r` 指引，`-r` 选择器随批 13） |
+| E2-53 | `fullscreenScrollbar` | `:418` | `:115` | 1 | **对齐** | **批 12（2026-10-22，docs/23 T11，裁决⑧）**：`ChatViewportElement` 三态——HIDDEN 不渲染/命中恒 false/内容区不让列；AUTO/ALWAYS 同形常驻（窄差 D61：pi auto＝滚动后短暂显示 transient，java 无计时面）；渲染期现读热更＋设置页行 "Fullscreen scrollbar" |
+| E2-54 | `fullscreenCopyOnSelect` | `:424` | `:117` | 1 | **存疑** | 批 11（docs/22 T7）：字段＋UiPrefs 访问器（`?? true`）；**批 12（docs/23 §4）**：消费依赖 alt-screen 选区/复制子系统（map/05 S2a-d 未排期）⇒ **窄差 D59** |
+| E2-55 | `fullscreenWheelScrollLines` | `:430` | `:119` | 1 | **对齐** | **批 12（2026-10-22，docs/23 T12，裁决⑥）**：数字臂接 `ScrollConfig.from` 第三参（固定行数 `withWheelLines`，accessor 已 clamp 1–100）；auto 臂维持既有 Codex 有界加速模型（窄差 D60＝K38：pi auto 是 mac/SSH 判定＋速率加速 ≤6＋Alt×5 的速度模型，不新造） |
 
-**E2 汇总：对齐 29 / 缺失 2 / 存疑 23 / 出分母 1 / 合计 54**；**Σ权重 84 / Σ(w×c) 67.5 / 加权 80.4%**
+**E2 汇总：对齐 44 / 缺失 2 / 存疑 8 / 出分母 1 / 合计 54**；**Σ权重 84 / Σ(w×c) 75.0 / 加权 89.3%**
 > `queueMode`（`:436`）/`websockets`（`:442`）只存在于 `SettingsSchema` 输入侧，`interface Settings`（`:471`）显式 Omit，非 settings.json 键，不列单元。
 > 本锚点改判：`compaction`（E2-10）存疑 → **对齐**（modelOverrides 字段＋per-model resolver 接线，A9 闭环）。
 > 批 1（2026-10-18，B236/docs/11）：`defaultTools`（E2-35）缺失 → **对齐**（键＋分层 merge＋解析＋消费点全落，窄差 D3 登记）。
 > 批 2（2026-10-19，B244/docs/12）：`enableSkillCommands`（E2-31）存疑 → **对齐**（accessor＋设置页＋补全门全落，窄差 D1 登记）。
 > 批 11（2026-10-22，docs/22）：**22 行翻动**——核销 2（E2-38/E2-11 账面滞后⇒对齐）；消费链 5（E2-5/E2-47/E2-48/E2-25/E2-33⇒对齐，B15-残留-5 销号，窄差 D52–D54）；声明面 14（缺失⇒存疑：E2-1/14/21/22/23/24/42/44/49/50/52/53/54/55）；E2-45 `codemode` **出分母**（裁决②，R5 面外 B161）。Σ 52.0→67.5（出分母后 67.5/84＝80.4%）。
+> 批 12（2026-10-22，docs/23）：**15 行翻动**（全部存疑⇒对齐）＋**表头口径修订（裁决①：TUI 消费点计入）**——核销 3（E2-37 批 9 账面滞后〔裁决②〕；E2-23/E2-24 pi 侧零消费⇒声明面即全量〔裁决③口径先例〕）；TUI 行为键 5（E2-36 双击 Esc／E2-15 外部编辑器／E2-39 编辑器留白／E2-41 补全行数〔裁决④默认 8⇒5〕／E2-40 outputPad 烘焙）；声明面消费点 7（E2-1＋E2-21 changelog 流、E2-42 硬件光标、E2-52 退出两臂、E2-53 滚动条三态、E2-55 滚轮数字臂、E2-44 订阅警告）；窄差 D55–D64（D56 terminal／D57 mermaid／D58 无 WS 传输／D59 选区子系统／D60 auto 加速模型／D61 auto/always 同形／D62 不回溯／D63 纯文本／D64 提示文案）；不动 6 行证据更新（E2-14/E2-49 随 cache-warmer 子系统批）。Σ 67.5→**75.0/84＝89.3%**。另 `setModelThinkingLevel` TUI 入口落地（E2-5 批 11 已对齐，无账面）。
 
 ### E3 会话管理行为（24）
 
@@ -602,7 +603,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | D′. 扩展 UI 注入面 | 0 | 8 | 1 | 9 | 0% |
 | E. 其余能力单元 | 51 | 65 | 32 | 148 | 34.5% |
 | ├ E1 配置文件 | 2 | 1 | 2 | 5 | 40.0% |
-| ├ E2 settings 键 | 22 | 22 | 11 | 55 | 40.0% |
+| ├ E2 settings 键 | 44 | 2 | 8 | 54 | 81.5% |
 | ├ E3 会话管理 | 14 | 4 | 6 | 24 | 58.3% |
 | ├ E4 资源发现 | 5 | 2 | 0 | 7 | 71.4% |
 | ├ E5 扩展 API | 6 | 25 | 4 | 35 | 17.1% |
@@ -637,7 +638,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | D. 扩展系统 41 事件 | 83 | 44.0 | 53.0% | 41.5% |
 | D′. 扩展 UI 注入面 | 16 | 1.0 | 6.3% | 0% |
 | E1. 配置文件 / 清单 | 10 | 6.0 | 60.0% | 40.0% |
-| E2. settings.json 键 | 86 | 52.0 | 60.5% | 40.0% |
+| E2. settings.json 键 | 84 | 75.0 | 89.3% | 83.0% |
 | E3. 会话管理行为 | 40 | 27.5 | 68.8% | 58.3% |
 | E4. 资源发现 | 14 | 10.0 | 71.4% | 71.4% |
 | E5. 扩展 API 面 | 58 | 16.0 | 27.6% | 17.1% |
@@ -645,12 +646,12 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | E7. RPC 面 | 12 | 8.0 | 66.7% | 33.3% |
 | G. 主流新增子系统 | 18 | 7.0 | 38.9% | 30.0% |
 | F. 整块缺失（子系统） | 13 | 0.0 | 0% | 0% |
-| **模块合计（不含 E8）** | **496** | **261.5** | **52.7%** | **39.7%** |
+| **模块合计（不含 E8）** | **494** | **315.5** | **63.9%** | **55.4%** |
 | E8. 边缘/面外子系统（与 E3/C/G 重叠，不计入） | 7 | 0.0 | 0% | 0% |
 
-**模块合计**：Σ权重 496 ／ Σ(w×c) 261.5 ／ **加权完成度 = 261.5/496 = 52.7%**（未加权 115/290 = 39.7%）。
+**模块合计**：Σ权重 494 ／ Σ(w×c) 315.5 ／ **加权完成度 = 315.5/494 = 63.9%**（未加权 160/289 = 55.4%；批 12 后值——E2-45 出分母 496→494/290→289、批 11/12 逐行实算补入）。
 
-**去重口径**（F 域有 2 行与 E4/E6 重叠）：剔除 F 域 ⇒ Σ权重 **483** ／ Σ(w×c) **261.5** ／ **加权完成度 = 261.5/483 = 54.1%**（未加权 115/284 = 40.5%）。
+**去重口径**（F 域有 2 行与 E4/E6 重叠＋G-1..G-5 归 map/07）：Σ权重 **485** ／ Σ(w×c) **311.0** ／ **加权完成度 = 311.0/485 = 64.1%**（未加权 160/289 = 55.4%）。
 
 **扩展系统单独口径**（D + D′ + E5）：Σ权重 157 ／ Σ(w×c) 61.0 ／ **加权 38.9%**（未加权 23/85 = 27.1%）。
 

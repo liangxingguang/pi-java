@@ -77,7 +77,7 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 
 ---
 
-## 1 总表（coding-agent 批 11 后值，2026-10-22；agent-core 批 5 后值，2026-10-18；telemetry 批 1 后值，2026-10-17；ai 批 10 后 2026-10-16；批 3b/4/6/8 为台账行为项、加权不变；其余模块为 2026-10-12 重测值）
+## 1 总表（coding-agent 批 12 后值，2026-10-22；agent-core 批 5 后值，2026-10-18；telemetry 批 1 后值，2026-10-17；ai 批 10 后 2026-10-16；批 3b/4/6/8 为台账行为项、加权不变；其余模块为 2026-10-12 重测值）
 
 | 模块（地图） | Σ权重 | Σ(w×c) | **加权完成度** | 未加权 | 权重 3 层 |
 |---|---:|---:|---:|---:|---:|
@@ -87,10 +87,10 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 | session-sqlite ＋ evals（map/06） | 87 | 44.5 | **51.1%** | 50.0%（20/40） | — |
 | pi-java-telemetry（map/01，**批1后**） | 34 | 34.0 | **100%** | 100%（16/16） | 100%（21/21） |
 | pi-java-tui/web（map/05） | 245 | 110.5 | **45.1%** | 27.0%（40/148） | 67.3% |
-| pi-java-coding-agent（map/04，剔 MCP 粗单元） | 485 | 303.5 | **62.6%** | 50.2%（145/289） | 73.9%（17/23） |
-| **合计（去重后，coding-agent 批11后）** | **1,379** | **977.5** | **70.9%** | — | — |
+| pi-java-coding-agent（map/04，剔 MCP 粗单元） | 485 | 311.0 | **64.1%** | 55.4%（160/289） | 73.9%（17/23） |
+| **合计（去重后，coding-agent 批12后）** | **1,379** | **985.0** | **71.4%** | — | — |
 
-> map/04 原始口径（含 G-1..G-5）：Σw 494 ／ Σwc 308.0 ／ **62.3%**；两处账都在，总表用去重值。
+> map/04 原始口径（含 G-1..G-5）：Σw 494 ／ Σwc 315.5 ／ **63.9%**；两处账都在，总表用去重值。
 > ⚠️ 批 4 复核修正：D 域基线逐行实算 11.5（旧汇总行 10.5，存疑漏计 1.0）＋设计稿 §8 正文 Δ 加总错误（30.5→32.5）⇒ 账面较批 4 设计稿预期（258.5/52.1%）高 3.0。
 > protocol/client/server（R1 排除）未加权：map/01 全层 10 对齐 / 40 缺失 / 35 存疑（85 单元）。
 
@@ -141,7 +141,7 @@ codemode-only 的 4 个单元（exposure/deferred/discovery）权重 0，B161/B1
 
 现状：**模块 100%**——加权 180/180、未加权 90/90、权重 3 层含工具 27/27、工具表 21/21、确认缺失与存疑**双清零**、未得分池 = 0。（批 4 登记的 B244/B245 已分别随 coding-agent 批 2/批 8 销号。）
 
-### 2.4 coding-agent — 62.6%（去重）｜ map/04
+### 2.4 coding-agent — 64.1%（去重）｜ map/04
 
 A CLI 参数 80.6%、C slash 68.4%、E3 会话管理 68.8%；**D 扩展事件 88.0%（批 8 后）、D′ UI 注入 6.3%、E6 包管理器 16.1%、E5 扩展 API 27.6%** 拉低整体。
 G 域新子系统：MCP 明细在 map/07；codemode 3,957 行＋tool-search/virtual-models/nested 766 行仍为 0（B161/B162）。
@@ -157,6 +157,7 @@ G 域新子系统：MCP 明细在 map/07；codemode 3,957 行＋tool-search/virt
 - 批 9（2026-10-22 闭环，docs/19，D37 收编）：**树选择器本体（map/05 S12＋S13）**——T1 数据面（`SessionState` label 时间戳＋分支复制重发保留原值〔SessionState/sqlite 双点修真〕、`SessionTreeBuilder` 逐字 `getTree()`、`AgentSession.getTree/getLabel/setLabel` 三面、RPC/Web `get_tree` 改走全分支＋label 修真）→ T2 `TreeListModel`（pi TreeList 状态机逐字：平铺/可见结构重算/五过滤/搜索 AND/折叠传染/环绕/段跳，`TreeStructure` 拆分保 500 行）→ T3 `TreeListRenderer`（span 行＋水平视口按列切片＋全类型文案表＋`formatToolCall`＋label 时间戳三档）→ T4 `TreeSelectorOverlay`（pi handleInput 分派序＋label 编辑臂）→ T5 接线（`TreeNavigationFlow.openTree` 改道、空树不开、filterMode 初值读 settings、copy 三结局逐字、`PiTuiApp` ResizeEvent 跟踪、`ClipboardSupport` AWT、`KeybindingsManager` 多键＋12 tree 动作；**treeLeafId 折算**——usage 记账行叶置空主流 UX 分叉）。**闭环评审三修**——C1 tree 键污染全局 resolve（ctrl+l/u/a 主屏失效）⇒ 全局/tree 两表分离；I1 TamboUI 不报字母 SHIFT ⇒ `toStroke` 落 pi legacy 规则（大写即 shift+letter）；I2 `--no-session` label 提交异常 ⇒ flow 转 showError。map/05 S12 存疑→对齐（+1.0）、S13 缺失→对齐（+1.0）、map/04 #3 `/tree` 存疑→对齐（+0.5）；**D37/D40 销号**、**B254** 新登记（`/fork`＝user-message 选择器）；窄差 D43–D46/D48（D47 作废——sqlite facts 有 timestamp 列）；58.2% → **58.7%**（未加权 45.9% → 46.9%；w3 73.9% 不变；D 域 88.0% 不动）。合计 69.2% → **69.4%**（955.5 → 958.0/1381）。
 - 批 10（2026-10-22 闭环，docs/21，B254＋S20 合包）：**`/fork`＝user-message 选择器＋dequeue 链**——T1 `getUserMessagesForForking` 修真（`ForkMessage{entryId,text}` 收平、`accumulatedEntries` 全分支源、空串拼接、空文本滤除）＋RPC 两点（`fork` 带 `selectedText`、`get_fork_messages` 直用会话表，`forkMessageText` 删）→ T2 `UserMessageSelectorScreen`（pi `UserMessageList`＋容器层逐字：环绕导航、10 条滑窗、单行化＋列宽截断、DynamicBorder）→ T3 `/fork` 改道＋**`TreeSelectorScreen` 删除**（裁决⑧零用户）→ T4 `InteractiveMode.restoreQueuedMessages`（pi `clearAllQueues` 序逐字，`RestoredQueue{text,count}`）＋DEQUEUE 臂（文案逐字＋复数形）＋`PendingQueueView` hint 行（键名随绑定表大写形）＋dequeue 平台键（Windows/WSL `alt+q`，裁决③）→ T5 **D41 重裁两臂**（Esc 流式／树导航 restore 先行于 abort，合并式收 `ChatScreen.restoreToEditor`；扩展臂残留改述保留登记）。map/04 #15 存疑→对齐（+1.0）＋**E3-8 同翻**（+1.0，设计对账表漏列、闭环逐行实算补）、map/05 S20 缺失→对齐（+1.0）＋**K11 同翻**（+1.0，同前）、R28 证据更新不翻；**B254 销号**；窄差 D49–D51（followUp 平台键未落／带参 forkCopy 独有／RPC fork 不校验 user 目标）；**B66 核账 6→4**（DEQUEUE 本批接、MODEL_CYCLE ai 批 3b 早接）；58.7% → **59.1%**（未加权 46.9% → 47.6%；w3 73.9% 不变；D 域 88.0% 不动）；tui/web 44.3% → **45.1%**（总表行；map/05 域表 45.9%，旧账漂移 2.0 未随批追）。合计 69.4% → **69.7%**（958.0 → 962.0/1381）。E1 涨到 2,083、E2 667、E6 615。
 - 批 11（2026-10-22 闭环，docs/22，settings 键批量第一批·E2 域）：**核销×2＋消费链×5＋声明面×14**——T1 零代码核销账面滞后两行（E2-38 `thinkingBudgets` B128 三件俱齐、E2-11 `branchSummary` B1 已销）→ T2 `modelThinkingLevels`（字段＋四访问器＋**三消费点**：`SessionSetup.thinkingLevelFor` 第四臂〔**B15-残留-5 销号**〕、`AgentSession.setModel` 包装＋`thinkingLevelForModelSwitch` 三臂〔RPC/Web/TUI 切模型三点改道〕、`cycleModelForward` 走解析链）→ T3 `httpProxy`（`HttpProxySupport` 通道换 JVM 系统属性〔裁决③〕，`SettingsManager.load` 唯一漏斗应用）→ T4 `httpIdleTimeoutMs`（`TimeoutSettings` 解析＋`SettingsNetworkAccessors`＋`DefaultProviders.apiOptions` 链序对齐，**120s 自造兜底删除⇒300s**）→ T5 `deviceId`（`SettingsInstallAccessors.getOrCreateDeviceId` 只读写全局域＋生成即 flush〔裁决⑥〕，`AuthCommand` ChatGPT 臂弃随机改持久）→ T6 `blockImages`（`ImageBlockFilter` 逐字＋`EngineHookBridge.transformContext` 尾部殿后动态现读＋`--no-extensions` 裸注册〔pi 过滤独立于扩展面〕）→ T7 声明面 14 键（字段块＋`Warnings` record＋三域访问器〔裁决⑧拆分 Network/Install/UiPrefs，`SettingsManager` 三入口〕）。map/04 E2 域 **22 行翻动**（对齐 22→29、缺失 22→2、存疑 11→23，逐行实算 **+15.5**，E2 域 60.5% → **80.4%**）＋E2-45 `codemode` **出分母**（裁决②，R5 面外 B161；模块 Σ 487→485、全仓 Σ 1381→1379）；窄差 D52–D54（httpProxy 系统属性通道／httpIdleTimeoutMs 单臂／切模型全无配置不写 entry）；59.1% → **62.6%**（未加权 47.6% → 50.2%；w3 73.9% 不变；D 域 88.0% 不动）。合计 69.7% → **70.9%**（962.0 → 977.5/1379）。新文件 6（`HttpProxySupport`/`TimeoutSettings`/`ImageBlockFilter`＋访问器拆分 Network/Install/UiPrefs）。
+- 批 12（2026-10-22 闭环，docs/23，settings 消费点批·E2 域＋TUI 接线）：**核销×3＋TUI 行为键×5＋声明面消费点×7＋setter TUI 入口**——T1/T8 零代码核销三行（E2-37 `treeFilterMode` 批 9 账面滞后〔裁决②〕、E2-23/E2-24 pi 侧零消费⇒声明面即全量〔**裁决③口径先例**〕）→ T2 `doubleEscapeAction`（accessor 默认回落 tree＋空编辑器双击 Esc 500ms 窗，pi :3067-3097）→ T3 `externalEditor`（accessor 回落链＋`ExternalEditorSupport`＋Ctrl+G alt 屏往返，**B66 核账 4→3**）→ T4/T5/T6（`editorPaddingX` 双侧留白／`autocompleteMaxVisible` 默认 **8⇒5**〔裁决④〕＋`SlashCompleter` live-read／`outputPad` 烘焙链 `ChatMessage.Padded`〔窄差 D62〕）→ T7 changelog 流（`ChangelogSupport`＋内置 CHANGELOG.md〔裁决⑦〕＋启动两臂＋/changelog 全量 reverse 不回写）→ T9 硬件光标（`createRunner` 参数化）→ T10 退出两臂（`TranscriptDump` 倾倒默认／resume-hint＋恢复提示〔D64〕）→ T11 滚动条三态（hidden 真实落地、auto/always 同形常驻〔D61 裁决⑧〕）→ T12 滚轮数字臂（`ScrollConfig` 第三参；auto 维持 Codex 加速〔D60 裁决⑥〕）→ T13 订阅凭证警告（`AnthropicExtraUsageWarning`＋四时机接线）→ T14 `setModelThinkingLevel` TUI 入口（`ModelThinkingLevelScreen` 两级子菜单＋SettingsScreen 实例化重构＋消费键 5 新行）；**裁决① E2 表头口径修订**（TUI 消费点计入）。map/04 E2 域 **15 行翻动**（存疑⇒对齐，逐行实算 **+7.5**，E2 域 80.4% → **89.3%**〔75.0/84〕）＋6 行证据更新（E2-14/E2-49 随 cache-warmer 子系统批、E2-32 D56、E2-43 D57、E2-50 D58、E2-22 D55、E2-54 D59）；窄差 D55–D64；62.6% → **64.1%**（未加权 50.2% → 55.4%；w3 73.9% 不变；D 域 88.0% 不动）。合计 70.9% → **71.4%**（977.5 → 985.0/1379）。行为变化注记：双击 Esc 默认开树选择器／fullscreen 退出默认倾倒 transcript（pi 默认同向）。新文件 7（`ExternalEditorSupport`/`ChangelogSupport`/`AnthropicExtraUsageWarning`＋CHANGELOG.md＋`TranscriptDump`/`ModelThinkingLevelScreen`＋测试 5）；E6 涨到 793（+178，设计预估 ~675）。评审回补：SkillCommandsTuiTest 反射面随实例化 fields、appendUserText 不烘焙 pad、启动 changelog 两字段 volatile（spotbugs AT_STALE）。夹具教训：settings 懒解析——rig user.home 必须保持到 tearDown（本批曾污染真实 settings.json，已复原）。
 
 ### 2.5 tui/web — 45.1%（总表行；map/05 域表 45.9%）｜ map/05
 
@@ -191,7 +192,7 @@ protocol/client/server 按 R1 整体移出分母：protocol 是已删 pi 代码�
 | # | 死功能 | 用户感知 | 台账 |
 |---|---|---|---|
 | 1 | TUI 不渲染 Markdown（MarkdownRenderer 生产零调用，消息走纯文本 split） | 表格/代码高亮/mermaid/链接全不可见 | B65 |
-| 2 | TUI 4 个声明键位空接（THINKING_CYCLE/TOOLS_EXPAND/THINKING_TOGGLE/EXTERNAL_EDITOR；~~MODEL_CYCLE~~ ai 批 3b 已接、~~DEQUEUE~~ 批 10 已接） | 按键无反应 | B66 |
+| 2 | TUI 3 个声明键位空接（THINKING_CYCLE/TOOLS_EXPAND/THINKING_TOGGLE；~~MODEL_CYCLE~~ ai 批 3b 已接、~~DEQUEUE~~ 批 10 已接、~~EXTERNAL_EDITOR~~ 批 12 已接） | 按键无反应 | B66 |
 | 3 | 语法高亮代码块路径死（唯一调用点是输入编辑器当前行） | 代码块无高亮 | B65 族 |
 | 4 | 会话内 MCP 不激活（注册表/传输/OAuth/CLI 全落，但六个 on() 事件 0/6 等接线面缺） | `pi mcp` 进程外可用，对话中无 MCP 工具 | B221/B218 |
 
