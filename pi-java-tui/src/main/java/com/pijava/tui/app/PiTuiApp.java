@@ -406,6 +406,13 @@ public final class PiTuiApp {
                     openOverlay(new ModelThinkingLevelScreen(session));
                     return EventResult.HANDLED;
                 }
+                // 批 13 T9（pi :5045-5048 的 rebuildChatFromMessages 对位）：
+                // "Cache miss notices" 改动 ⇒ 整表重建（重推导 miss 通知/暖行）。
+                if (done instanceof SettingsScreen settings
+                        && settings.pollCacheMissNoticesToggled()) {
+                    chatScreen.rebuildTranscript(session.accumulatedEntries(),
+                        session.harness().snapshot(session.laneName()).leafId());
+                }
                 // 批 12 T13（pi :4550 模型选择结果时机对位）。
                 if (done instanceof ModelSelectorScreen) {
                     maybeWarnSubscriptionAuth();

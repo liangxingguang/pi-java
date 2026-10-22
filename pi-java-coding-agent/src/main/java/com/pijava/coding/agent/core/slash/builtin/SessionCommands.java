@@ -113,6 +113,49 @@ public final class SessionCommands {
         builder.append("Entries: ").append(session.entryCount()).append('\n');
         builder.append("Sessions in process: ")
             .append(session.listSessions().size());
+
+        // 批 13（docs/24 T12，pi interactive-mode.ts:6739-6746 逐字）：Cache Warming
+        // 段——无条件显示，不吃 showCacheMissNotices 门（pi 同）；java 无主题色面，
+        // 纯文本同既有 4 行风格。
+        builder.append("\nCache Warming\n");
+        builder.append("Mode: ").append(
+            session.services().settings().network().getCacheWarmingMode()).append('\n');
+        var status = session.cacheWarmingStatus();
+        builder.append("Status: ").append(status != null
+            ? com.pijava.coding.agent.core.CacheWarmingFormatting.formatStatus(status)
+            : "Inactive (cache warming unavailable)").append('\n');
+        if (status != null && status.decision() != null
+                && status.decision().economicsAvailable()) {
+            builder.append("Cache miss penalty: $")
+                .append(fmt3(status.decision().missCost())).append('\n');
+            builder.append("Refresh cost: $")
+                .append(fmt3(status.decision().warmCost())).append('\n');
+        }
+        // pi :6757-6764 的 Cache Re-billed 行（D68：java /session 无 Cost/token
+        // 统计块，挂 Cache Warming 段尾——结构差随窄差登记）。
+        var waste = com.pijava.coding.agent.core.CacheStats.computeCacheWaste(
+            session.accumulatedEntries(), key -> {
+                var slash = key.indexOf('/');
+                return slash < 0 ? java.util.Optional.empty()
+                    : session.modelCatalog().find(com.pijava.ai.model.ModelId.of(
+                        key.substring(0, slash), key.substring(slash + 1)));
+            });
+        if (waste.missedTokens() > 0) {
+            var missLabel = waste.missCount() == 1 ? "1 miss" : waste.missCount() + " misses";
+            var detail = String.format(java.util.Locale.US, "%,d", waste.missedTokens())
+                + " tokens, " + missLabel;
+            if (waste.missedCost() >= 0.0001) {
+                builder.append("Cache Re-billed: $").append(fmt3(waste.missedCost()))
+                    .append(" (").append(detail).append(")\n");
+            } else {
+                builder.append("Cache Re-billed: ").append(detail).append('\n');
+            }
+        }
         return builder.toString();
+    }
+
+    /** pi {@code toFixed(3)}（/session 金额行）。 */
+    private static String fmt3(double value) {
+        return String.format(java.util.Locale.ROOT, "%.3f", value);
     }
 }

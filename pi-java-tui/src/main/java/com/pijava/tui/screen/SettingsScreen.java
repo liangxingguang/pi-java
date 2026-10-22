@@ -31,6 +31,8 @@ public final class SettingsScreen implements ScreenOverlay {
     private int selected;
     /** 批 12 T14：Enter 命中子菜单行置位；PiTuiApp 检出后改开 ModelThinkingLevelScreen。 */
     private boolean modelThinkingRequested;
+    /** 批 13 T9："Cache miss notices" 改动置位；PiTuiApp 检出后重建聊天区（pi :5045-5048）。 */
+    private boolean cacheMissNoticesToggled;
 
     /**
      * Creates the settings page bound to the session's settings service.
@@ -44,10 +46,12 @@ public final class SettingsScreen implements ScreenOverlay {
 
     // All cyclable enum/boolean settings (Phase 3 design §12.1). Free-form
     // string/list/nested fields need a text-input UX and remain out of scope.
-    private static List<SettingField> buildFields(AgentSession session) {
+    // 批 13 T9 起为实例方法："Cache miss notices" 的 setter 要置实例检出位。
+    private List<SettingField> buildFields(AgentSession session) {
         var accessors = session.services().settings().accessors();
         var uiPrefs = session.services().settings().uiPrefs();
         var install = session.services().settings().install();
+        var network = session.services().settings().network();
         var fields = new ArrayList<SettingField>();
         fields.add(new SettingField("Theme", List.of("dark", "light"),
             accessors::getTheme, accessors::setTheme));
@@ -98,6 +102,20 @@ public final class SettingsScreen implements ScreenOverlay {
             () -> String.valueOf(
                 !Boolean.FALSE.equals(uiPrefs.getWarnings().anthropicExtraUsage())),
             v -> uiPrefs.setWarnings(new Settings.Warnings(Boolean.parseBoolean(v)))));
+        // ── 批 13（docs/24 T9）：cache-warming 两键行 ─────────────────
+        // T9（pi settings-selector.ts:521-527 对位）：三值循环；setter 走会话入口
+        // （pi :5005-5008——含 onModeChanged 重调和），不走裸 accessor。
+        fields.add(new SettingField("Cache warming", List.of("off", "streaming", "idle"),
+            network::getCacheWarmingMode,
+            v -> session.setCacheWarmingMode(v)));
+        // T9（pi :543-548 对位）：改动后 rebuild（pi :5045-5048——检出模式随批 12
+        // T14：置位 ⇒ PiTuiApp 关屏处理点 rebuildTranscript）。
+        fields.add(new SettingField("Cache miss notices", List.of("false", "true"),
+            () -> String.valueOf(uiPrefs.getShowCacheMissNotices()),
+            v -> {
+                uiPrefs.setShowCacheMissNotices(Boolean.parseBoolean(v));
+                cacheMissNoticesToggled = true;
+            }));
         // T14（pi settings-selector.ts:607-610 菜单项对位）：子菜单行——Enter
         // 不循环取值，置 modelThinkingRequested 由 PiTuiApp 改开两级选择器。
         fields.add(SettingField.submenu("Default thinking level per model",
@@ -156,6 +174,17 @@ public final class SettingsScreen implements ScreenOverlay {
         var requested = modelThinkingRequested;
         modelThinkingRequested = false;
         return requested;
+    }
+
+    /**
+     * 批 13 T9："Cache miss notices" 改动的一次性检出（pi :5045-5048 的
+     * rebuildChatFromMessages 对位——PiTuiApp 关屏处理点检出后
+     * {@code chatScreen.rebuildTranscript}；返回 true 后复位）。
+     */
+    public boolean pollCacheMissNoticesToggled() {
+        var toggled = cacheMissNoticesToggled;
+        cacheMissNoticesToggled = false;
+        return toggled;
     }
 
     @Override
