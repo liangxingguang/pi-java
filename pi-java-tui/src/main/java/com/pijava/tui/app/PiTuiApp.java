@@ -95,9 +95,10 @@ public final class PiTuiApp {
     private java.util.function.Supplier<
             java.util.Optional<com.pijava.ai.auth.RecordedCredential>> credentialProbe =
         () -> com.pijava.ai.auth.Credentials.resolveCredential("anthropic");
-    // 批 12 T7：启动 changelog（runInteractive 装配，welcome 之后展示一次）。
-    private String startupChangelog;
-    private boolean startupChangelogCollapse;
+    // 批 12 T7：启动 changelog（runInteractive 装配线程写入，渲染线程
+    // showWelcomeOnce 读取 ⇒ volatile 跨线程可见性，同 lastTerminalRows 先例）。
+    private volatile String startupChangelog;
+    private volatile boolean startupChangelogCollapse;
 
     /** Creates the app with the default scroll configuration. */
     public PiTuiApp(InteractiveMode mode, ChatScreen chatScreen,
