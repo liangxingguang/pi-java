@@ -130,7 +130,8 @@ class ThinkingLevelForModelSwitchTest {
         });
     }
 
-    /** 裁决⑦／窄差 D54：无 per-model、无全局默认 ⇒ 继承当前档（不动）。 */
+    /** 裁决⑦／窄差 D54：无 per-model、无全局默认 ⇒ 继承当前档（不动），
+     *  且<b>不发</b>思考档变更事件（D54 钉死：java 不写 pi 的回落 entry）。 */
     @Test
     void setModelWithoutConfigKeepsCurrentLevel(@TempDir Path home) throws Exception {
         var tmp = Files.createTempDirectory("pi-b11-work2");
@@ -139,10 +140,14 @@ class ThinkingLevelForModelSwitchTest {
                 "--thinking", "low", "--no-session", "--no-skills", "--no-extensions"});
             try (var session = AgentSession.create(args, fauxProviders(), toolContext(tmp))) {
                 assertThat(label(session.harness().getThinkingLevel())).isEqualTo("low");
+                var events = new java.util.ArrayList<AgentSessionEvent>();
+                session.subscribe(events::add);
 
                 session.setModel(ModelId.of("anthropic", "claude-sonnet"));
 
                 assertThat(label(session.harness().getThinkingLevel())).isEqualTo("low");
+                assertThat(events)
+                    .noneMatch(e -> e instanceof AgentSessionEvent.ThinkingLevelChanged);
             }
         });
     }

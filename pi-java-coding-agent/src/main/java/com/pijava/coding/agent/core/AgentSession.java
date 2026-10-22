@@ -749,8 +749,10 @@ public final class AgentSession implements AutoCloseable {
 
     /**
      * Ctrl+P / {@code cycle_model}（pi agent-session.ts:2519-2560）：scope 非空在其间
-     * 正向轮转，空 scope 在全目录轮转；≤1/无变化不动。切到带显式级别 scope 条目的
-     * 模型时，显式级别覆盖当前思考档；无显式级别则继承（pi undefined 语义）。
+     * 正向轮转，空 scope 在全目录轮转；≤1/无变化不动。思考档走
+     * {@link #thinkingLevelForModelSwitch}（批 11 T2）：scope 显式级别 &gt;
+     * per-model 覆盖 &gt; 全局默认 &gt; 继承当前（pi :2548 的 explicit 臂＋
+     * :2669-2681 三臂）。
      */
     public void cycleModelForward() {
         var current = harness.getModel();
