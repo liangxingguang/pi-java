@@ -213,6 +213,36 @@ public final class SettingsAccessors {
         return manager.effective().externalEditor;
     }
 
+    /**
+     * 批 12 T3（pi {@code getExternalEditorCommand}，settings-manager.ts:946-956
+     * 逐字回落链）：配置非空白 ⇒ 配置；否则 {@code VISUAL || EDITOR}；否则平台默认
+     * （Windows {@code notepad}，其余 {@code nano}）。
+     */
+    public String getExternalEditorCommand() {
+        return externalEditorCommand(System::getenv);
+    }
+
+    /** 环境变量注入形态（测试面；pi 的 {@code process.env} 对位）。 */
+    String externalEditorCommand(java.util.function.Function<String, String> env) {
+        var configured = manager.effective().externalEditor;
+        if (configured != null && !configured.isBlank()) {
+            return configured;
+        }
+        var fromEnv = env.apply("VISUAL");
+        if (fromEnv == null || fromEnv.isEmpty()) {
+            fromEnv = env.apply("EDITOR");
+        }
+        if (fromEnv != null && !fromEnv.isEmpty()) {
+            return fromEnv;
+        }
+        return isWindows() ? "notepad" : "nano";
+    }
+
+    private static boolean isWindows() {
+        return System.getProperty("os.name", "")
+            .toLowerCase(java.util.Locale.ROOT).contains("win");
+    }
+
     /** Set the external editor command in the global scope. */
     public void setExternalEditor(String editor) {
         manager.global().externalEditor = editor;
@@ -239,8 +269,13 @@ public final class SettingsAccessors {
         manager.markModified("treeFilterMode");
     }
 
+    /**
+     * 批 12 T2（pi {@code getDoubleEscapeAction}，settings-manager.ts:1341-1343）：
+     * 非法/缺席 ⇒ 默认 {@code "tree"}（settings-defaults.ts:44）。
+     */
     public String getDoubleEscapeAction() {
-        return manager.effective().doubleEscapeAction;
+        var value = manager.effective().doubleEscapeAction;
+        return "fork".equals(value) || "none".equals(value) ? value : "tree";
     }
 
     /** Set the action bound to double-Escape in the global scope. */

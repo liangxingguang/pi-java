@@ -3,8 +3,8 @@ package com.pijava.coding.agent.core;
 /**
  * UI 偏好面设置访问器（批 11 裁决⑧的 {@link SettingsAccessors} 拆分）：
  * {@code showCacheMissNotices}/{@code warnings}/{@code showHardwareCursor}/
- * {@code fullscreen}×4。消费点（TUI）随「settings 消费点批」落地，本批只到
- * 声明面。
+ * {@code fullscreen}×4，批 12 追加 {@code editorPaddingX}/
+ * {@code autocompleteMaxVisible}/{@code outputPad}（消费点同在 TUI 域）。
  */
 public final class SettingsUiPrefsAccessors {
 
@@ -113,5 +113,46 @@ public final class SettingsUiPrefsAccessors {
 
     private static int clampWheelLines(double value) {
         return (int) Math.min(100, Math.max(1, Math.floor(value)));
+    }
+
+    // ── 批 12（docs/23）：编辑器/补全/内容卡水平留白 ─────────────
+
+    /** pi {@code getEditorPaddingX}（settings-manager.ts:1373-1375）：缺席 ⇒ 默认 0。 */
+    public int getEditorPaddingX() {
+        var value = manager.effective().editorPaddingX;
+        return value == null ? 0 : Math.min(3, Math.max(0, value));
+    }
+
+    /** pi {@code setEditorPaddingX}（:1377-1380）：clamp 0..3，写全局＋markModified。 */
+    public void setEditorPaddingX(int padding) {
+        manager.global().editorPaddingX = Math.min(3, Math.max(0, padding));
+        manager.markModified("editorPaddingX");
+    }
+
+    /**
+     * pi {@code getAutocompleteMaxVisible}（:1393-1395 族）：缺席 ⇒ 默认
+     * <b>5</b>（settings-defaults.ts:48；批 12 裁决④——java 旧硬编码 8 改齐 pi）。
+     */
+    public int getAutocompleteMaxVisible() {
+        var value = manager.effective().autocompleteMaxVisible;
+        return value == null ? 5 : Math.min(20, Math.max(3, value));
+    }
+
+    /** pi {@code setAutocompleteMaxVisible}（:1397-1399 族）：clamp 3..20。 */
+    public void setAutocompleteMaxVisible(int max) {
+        manager.global().autocompleteMaxVisible = Math.min(20, Math.max(3, max));
+        manager.markModified("autocompleteMaxVisible");
+    }
+
+    /** pi {@code getOutputPad}（:1383-1385 逐字）：仅显式 0 ⇒ 0，否则默认 1。 */
+    public int getOutputPad() {
+        var value = manager.effective().outputPad;
+        return value != null && value == 0 ? 0 : 1;
+    }
+
+    /** pi {@code setOutputPad}（:1387-1391 族）：0|1 字面量联合，写全局＋markModified。 */
+    public void setOutputPad(int pad) {
+        manager.global().outputPad = pad == 0 ? 0 : 1;
+        manager.markModified("outputPad");
     }
 }
