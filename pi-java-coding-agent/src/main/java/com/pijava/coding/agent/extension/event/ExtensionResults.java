@@ -180,4 +180,12 @@ public final class ExtensionResults {
     public record SessionBeforeTreeResult(Boolean cancel, ExtensionTreeSummary summary,
                                           String customInstructions, Boolean replaceInstructions,
                                           String label) {}
+
+    /**
+     * pi {@code CacheWarmingDecisionEventResult}（cache-warmer.ts:117-120，批 13）——
+     * 覆写本次刷新是否发出；{@code null} ≙ pi 的 {@code action?: undefined}（不发言）。
+     * "stop" 结束本轮保温直到下一个真实请求。
+     */
+    public record CacheWarmingDecisionEventResult(
+            com.pijava.coding.agent.core.CacheWarming.Action action) {}
 }

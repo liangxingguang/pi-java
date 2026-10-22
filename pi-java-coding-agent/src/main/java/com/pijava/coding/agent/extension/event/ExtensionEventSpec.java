@@ -7,6 +7,7 @@ import com.pijava.coding.agent.extension.event.ExtensionEvent.AgentStartEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.AfterProviderResponseEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.BeforeAgentStartEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.BeforeProviderHeadersEvent;
+import com.pijava.coding.agent.extension.event.ExtensionEvent.CacheWarmingDecisionEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.BeforeProviderRequestEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.ContextEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.ContextWithSystemEvent;
@@ -36,6 +37,7 @@ import com.pijava.coding.agent.extension.event.ExtensionEvent.TurnStartEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.UserBashEvent;
 import com.pijava.coding.agent.extension.event.ExtensionResults.BeforeAgentStartEventResult;
 import com.pijava.coding.agent.extension.event.ExtensionResults.BoundaryResult;
+import com.pijava.coding.agent.extension.event.ExtensionResults.CacheWarmingDecisionEventResult;
 import com.pijava.coding.agent.extension.event.ExtensionResults.ContextEventResult;
 import com.pijava.coding.agent.extension.event.ExtensionResults.InputEventResult;
 import com.pijava.coding.agent.extension.event.ExtensionResults.MessageEndEventResult;
@@ -212,6 +214,14 @@ public final class ExtensionEventSpec<E extends ExtensionEvent, R> {
     /** pi {@code "provider_stream_event"}（types.ts:1609）。 */
     public static final ExtensionEventSpec<ProviderStreamEvent, Void>
         PROVIDER_STREAM_EVENT = new ExtensionEventSpec<>("provider_stream_event");
+
+    /**
+     * pi {@code "cache_warming_decision"}（types.ts:1599-1602，批 13）——结果型：
+     * 处理器返回 {@link CacheWarmingDecisionEventResult} 覆写 warm/stop（last wins）。
+     */
+    public static final ExtensionEventSpec<CacheWarmingDecisionEvent,
+        CacheWarmingDecisionEventResult> CACHE_WARMING_DECISION =
+        new ExtensionEventSpec<>("cache_warming_decision");
 
     private final String name;
 

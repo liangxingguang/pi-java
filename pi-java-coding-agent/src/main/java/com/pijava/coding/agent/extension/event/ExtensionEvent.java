@@ -283,4 +283,15 @@ public sealed interface ExtensionEvent {
      */
     record ProviderStreamEvent(String provider, String api, String model, Object data)
             implements ExtensionEvent {}
+
+    /**
+     * pi {@code CacheWarmingDecisionEvent}（cache-warmer.ts:112-115，批 13）——
+     * 每次暖刷新前问扩展：四键逐字（{@code type} 由
+     * {@link ExtensionEventSpec#CACHE_WARMING_DECISION} 承载）。
+     * {@code action} 是 pi 自己的决策，扩展经结果覆写（last override wins）。
+     */
+    record CacheWarmingDecisionEvent(double warmCost, double missCost,
+                                     double continuationProbability,
+                                     com.pijava.coding.agent.core.CacheWarming.Action action)
+            implements ExtensionEvent {}
 }
