@@ -217,6 +217,43 @@ public class AgentHarness extends HarnessBootstrap {
     }
 
     /**
+     * pi {@code agent.state.messages} 的读口（批 13，sdk.ts:370-377 对位）：lane 工作副本
+     * 的<b>活视图</b>——元素身份随 run 推进稳定（cache-warmer 的前缀恒等比较的操作数），
+     * 修改抛 {@link UnsupportedOperationException}。
+     *
+     * <p>竞态注记：{@code lane.messages} 由引擎线程支改、读侧可能是 warmer 调度线程
+     * ⇒ 可能读到追加中间态。后果方向安全：isCurrent 误判 false ⇒ 提前停 warm（pi 的
+     * isCurrent 本就是 best-effort 闸门）；不会误判 true（同位元素一旦恒等，引擎只
+     * 追加不替换前缀——replaceTranscript/compact 走整表替换，视图随之整体失效，
+     * 下一校验即停）。</p>
+     */
+    public List<com.pijava.ai.message.Message> getMessages() {
+        return java.util.Collections.unmodifiableList(lane.messages);
+    }
+
+    /**
+     * pi {@code SessionManager._appendEntry} 的双态对位（批 13）：委托
+     * {@link LaneState#appendDeferredEntry}——run 中记 deferred write（与
+     * {@code PiLaneSink} 的 assistant usage 条目同生命周期），idle 纯追加
+     * （{@code HarnessUtils.recordDeferredWrite} 自带 idle 门）。带锁。
+     * 不重建 working messages（usage/custom 类条目不参与投影）。
+     */
+    public <E extends Entry> E appendDeferredLaneEntry(
+            String laneName, LaneState.EntryFactory<E> factory) {
+        return requireLane(laneName).appendDeferredEntry(factory);
+    }
+
+    /**
+     * footer token 计数入口（批 13 T5）：委托
+     * {@link ExecutionContext.TokenCounter}——与 {@code PiLaneSink} 车道内记账
+     * 同一计数器。生产者：cache-warmer 的暖用量条目（pi getSessionStats 的
+     * usage 条目臂对位，footer 计入暖 token）。
+     */
+    public void addTokens(long tokens) {
+        tokenCounter.add(tokens);
+    }
+
+    /**
      * Restore the active tool set from the lane's latest system message after tree
      * navigation（#77；pi {@code _restoreToolsFromTranscript}，
      * agent-session.ts:1809-1820，调用点 {@code navigateTree:4138}）。
