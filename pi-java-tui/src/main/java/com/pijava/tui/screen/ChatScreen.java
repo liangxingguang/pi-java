@@ -39,6 +39,16 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     // 默认值保持批 12 前行为——直构 ChatScreen 的测试面零变化）。
     private java.util.function.IntSupplier outputPad = () -> 0;
     private java.util.function.IntSupplier autocompleteMaxVisible = () -> 5;
+    // 批 13（docs/24 T10/T11）：showCacheMissNotices 门（pi interactive-mode.ts
+    // :4111/:4185 逐字——晚绑定现读，pi 每次渲染现查同）＋即时臂已上屏的暖条目 id
+    // （java 增量追加特有的去重——pi 是重建式渲染，无此问题）。
+    private java.util.function.BooleanSupplier showCacheMissNotices = () -> false;
+    private final java.util.Set<String> liveUsageNoticeIds = new java.util.HashSet<>();
+    // 批 13（T11）：miss 检测的增量跟踪器（裁决⑤）＋即时臂已通知的消息（onEntry
+    // 同实例去重——pi 无此问题：pi 重建式渲染；java 是增量追加）。
+    private com.pijava.tui.util.CacheMissTracker cacheMissTracker =
+        com.pijava.tui.util.CacheMissTracker.noModels();
+    private com.pijava.ai.message.Message.AssistantMessage lastMissNotifiedMessage;
     private SlashCompleter completer = new SlashCompleter(List.of());
     private SessionSnapshot snapshot;
     private final StringBuilder assistantDraft = new StringBuilder();
@@ -73,6 +83,10 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     /** Receive a complete transcript entry (dedupes streamed assistant text). */
     @Override
     public void onEntry(Entry entry) {
+        // 批 13（T11）：先 feed tracker 再渲染——assistant 气泡被 streaming 去重
+        // 跳过也要 feed（条目客观存在；pi scan 同样遍历全量）。miss 通知在条目
+        // 自身气泡<b>之后</b>注入（pi :4062-4065 的序）。
+        var trackedMiss = cacheMissTracker.feed(entry);
         if (entry instanceof Entry.Message message
                 && "assistant".equals(message.message().role())) {
             // Skip entries already rendered via the streaming path, and empty
@@ -91,11 +105,67 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
             pendingUserText = null;
             return;
         }
+        // 批 13（T10）：usage 条目走门控收口（pi :4111）；即时臂已上屏的跳过。
+        if (entry instanceof Entry.Usage usage) {
+            if (!liveUsageNoticeIds.contains(usage.id())) {
+                appendUsageNotice(usage);
+            }
+            return;
+        }
         // 批 12 T6：outputPad append 时烘焙（D62 不回溯已渲染条目）。
         var bubble = ChatMessage.from(entry, outputPad.getAsInt());
         if (bubble != null) {
             chatPanel.append(bubble);
         }
+        // 批 13（T11）：条目流臂 miss 通知（pi :4062-4065 注入点对位）——
+        // 即时臂已通知的同实例跳过；aborted/error 不注入（pi 同门）。
+        if (trackedMiss.isPresent() && showCacheMissNotices.getAsBoolean()
+                && entry instanceof Entry.Message messageEntry
+                && messageEntry.message() instanceof com.pijava.ai.message.Message.AssistantMessage am
+                && am != lastMissNotifiedMessage
+                && am.stopReason() != com.pijava.ai.message.StopReason.ABORTED
+                && am.stopReason() != com.pijava.ai.message.StopReason.ERROR) {
+            appendCacheMissNotice(trackedMiss.get());
+        }
+    }
+
+    /**
+     * 批 13（T10，pi interactive-mode.ts:4110-4115 对位）：暖用量行的唯一收口——
+     * 门控（{@code showCacheMissNotices} 晚绑定现读）＋渲染（from 是纯投影，
+     * 门在调用点，批 12 T6 的 pad 参数同构）。非 cache_warm kind 由 from 滤掉。
+     */
+    private void appendUsageNotice(Entry.Usage usage) {
+        if (!showCacheMissNotices.getAsBoolean()) {
+            return;
+        }
+        var bubble = ChatMessage.from(usage, outputPad.getAsInt());
+        if (bubble != null) {
+            chatPanel.append(bubble);
+        }
+    }
+
+    /**
+     * 批 13（T11，pi interactive-mode.ts:4193-4206 逐字）：miss 通知行——
+     * 门：{@code missedTokens<20_000 且 missedCost<0.1 ⇒ 不显示}；label 三态
+     * （模型切换／idle 超 TTL／普通）。（pi 用 warning 主题色＋前置 Spacer；java
+     * System 气泡无主题/Spacer 面——与既有 System 通知同格，风格差随 R 域既有口径。）
+     */
+    private void appendCacheMissNotice(com.pijava.coding.agent.core.CacheStats.CacheMiss miss) {
+        if (miss.missedTokens() < 20_000 && miss.missedCost() < 0.1) {
+            return;
+        }
+        var cost = miss.missedCost() >= 0.01
+            ? " (~$" + String.format(java.util.Locale.ROOT, "%.2f", miss.missedCost()) + ")"
+            : "";
+        var reBilled = com.pijava.coding.agent.core.CacheWarmingFormatting.formatTokens(
+            miss.missedTokens()) + " tokens re-billed" + cost;
+        String label = "Cache miss";
+        if (miss.modelChanged()) {
+            label = "Cache miss after model switch";
+        } else if (miss.idleMs() >= com.pijava.coding.agent.core.CacheStats.CACHE_TTL_MS) {
+            label = "Cache miss after " + Math.round(miss.idleMs() / 60_000.0) + "m idle";
+        }
+        chatPanel.append(new ChatMessage.System(label + ": " + reBilled, MetaKind.GENERIC));
     }
 
     /** Incremental stream events → draft inside the viewport (typewriter). */
@@ -305,6 +375,28 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
             case AgentSessionEvent.QueueUpdate q ->
                 pendingQueue.update(q.steering(), q.followUp());
             case AgentSessionEvent.FlashStatus status -> showStatus(status.message());
+            // 批 13（T10，pi :3444-3451 对位）：暖条目即时上屏（appendUsage 收口
+            // 广播的 EntryAppended）；记 id——run 结束 onEntry 投递时跳过。
+            case AgentSessionEvent.EntryAppended appended -> {
+                if (appended.entry() instanceof Entry.Usage usage
+                        && "cache_warm".equals(usage.kind())) {
+                    appendUsageNotice(usage);
+                    liveUsageNoticeIds.add(usage.id());
+                }
+            }
+            // 批 13（T11 即时臂，pi :4185-4191＋:3593 挂点对位——message_end 先于
+            // 落盘，tracker 只见过已投递条目 ⇒「entries 未含 message」天然成立）。
+            case AgentSessionEvent.MessageEnd end -> {
+                if (end.message() instanceof com.pijava.ai.message.Message.AssistantMessage am
+                        && am.stopReason() != com.pijava.ai.message.StopReason.ABORTED
+                        && am.stopReason() != com.pijava.ai.message.StopReason.ERROR) {
+                    var miss = cacheMissTracker.detectOnMessageEnd(am);
+                    if (miss.isPresent() && showCacheMissNotices.getAsBoolean()) {
+                        appendCacheMissNotice(miss.get());
+                        lastMissNotifiedMessage = am; // onEntry 同实例去重
+                    }
+                }
+            }
             // docs/14（窄差 D5）：extension_error 已上 RPC 线；TUI 通知面归 D′ 域，本批先忽略。
             case AgentSessionEvent.ExtensionError ignored -> { }
             default -> { }
@@ -387,11 +479,31 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
         pendingUserText = null;
         assistantStreamed = false;
         thinkingRendered = false;
+        // 批 13（T10/T11）：重建即新一轮增量流——去重集与 miss 跟踪器归零。
+        liveUsageNoticeIds.clear();
+        cacheMissTracker.reset();
         if (leafId != null) {
             for (var e : com.pijava.agent.session.ContextEntries.pathToLeaf(entries, leafId)) {
+                // 批 13（T11 重建臂，pi :3999-4065 对位）：逐条 feed，assistant
+                // 渲染后注入其 miss（aborted/error 不注入，即时臂同实例去重）。
+                var trackedMiss = cacheMissTracker.feed(e);
+                // 批 13（T10）：usage 条目同走门控收口。
+                if (e instanceof Entry.Usage usage) {
+                    appendUsageNotice(usage);
+                    continue;
+                }
                 var bubble = ChatMessage.from(e, outputPad.getAsInt());
                 if (bubble != null) {
                     chatPanel.append(bubble);
+                }
+                if (trackedMiss.isPresent() && showCacheMissNotices.getAsBoolean()
+                        && e instanceof Entry.Message messageEntry
+                        && messageEntry.message()
+                                instanceof com.pijava.ai.message.Message.AssistantMessage am
+                        && am != lastMissNotifiedMessage
+                        && am.stopReason() != com.pijava.ai.message.StopReason.ABORTED
+                        && am.stopReason() != com.pijava.ai.message.StopReason.ERROR) {
+                    appendCacheMissNotice(trackedMiss.get());
                 }
             }
         }
@@ -441,6 +553,18 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
      */
     public void setAutocompleteMaxVisibleSource(java.util.function.IntSupplier source) {
         autocompleteMaxVisible = source == null ? () -> 5 : source;
+    }
+
+    /** 批 13（T10/T11）：{@code showCacheMissNotices} 现读源（pi 每次渲染现查同）。 */
+    public void setShowCacheMissNoticesSupplier(java.util.function.BooleanSupplier supplier) {
+        showCacheMissNotices = supplier == null ? () -> false : supplier;
+    }
+
+    /** 批 13（T11）：miss 检测的目录查询源（provider+"/"+model ⇒ {@code catalog.find}）。 */
+    public void setCacheMissTrackerModels(
+            java.util.function.Function<String, java.util.Optional<com.pijava.ai.catalog.ModelInfo>> models) {
+        cacheMissTracker = new com.pijava.tui.util.CacheMissTracker(
+            models == null ? key -> java.util.Optional.empty() : models);
     }
 
     /** 批 12 T11：{@code fullscreenScrollbar} 三态现读源（渲染期热更）。 */

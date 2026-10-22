@@ -117,6 +117,23 @@ public final class CacheStats {
             reportedCache || usage.cacheRead() + usage.cacheWrite() > 0);
     }
 
+    /**
+     * pi :120-129：{@code cache_warm} 用量条目充 prev（{@code reportedCache} 恒
+     * true——暖请求就是一次缓存活动）；promptTokens ≤ 0 ⇒ {@code null}（不动 prev）。
+     * 公开供增量 tracker（裁决⑤）与 {@link #scan} 共用同一构造。
+     */
+    public static PreviousRequest cacheWarmAsPrevious(Entry.Usage entry) {
+        var usage = entry.usage();
+        var promptTokens = usage == null ? 0
+            : usage.input() + usage.cacheRead() + usage.cacheWrite();
+        if (promptTokens <= 0) {
+            return null;
+        }
+        return new PreviousRequest((long) promptTokens,
+            entry.provider() + "/" + entry.model(),
+            entry.timestamp().toEpochMilli(), true);
+    }
+
     /** pi :104-142 的单趟扫描（三公开函数共用）。 */
     private static Scan scan(List<Entry> entries, Function<String, Optional<ModelInfo>> models) {
         PreviousRequest prev = null;
@@ -134,14 +151,8 @@ public final class CacheStats {
             }
             if (entry instanceof Entry.Usage usageEntry
                     && "cache_warm".equals(usageEntry.kind())) {
-                var usage = usageEntry.usage();
-                var promptTokens = usage == null ? 0
-                    : usage.input() + usage.cacheRead() + usage.cacheWrite();
-                if (promptTokens > 0) {
-                    prev = new PreviousRequest((long) promptTokens,
-                        usageEntry.provider() + "/" + usageEntry.model(),
-                        usageEntry.timestamp().toEpochMilli(), true);
-                }
+                var warmPrev = cacheWarmAsPrevious(usageEntry);
+                prev = warmPrev != null ? warmPrev : prev;
             } else if (entry instanceof Entry.Message messageEntry
                     && messageEntry.message() instanceof Message.AssistantMessage assistant) {
                 var miss = detectMiss(prev, assistant, models);

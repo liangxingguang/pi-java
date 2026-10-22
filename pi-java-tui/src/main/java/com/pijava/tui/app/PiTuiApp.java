@@ -136,6 +136,16 @@ public final class PiTuiApp {
             () -> session.services().settings().uiPrefs().getAutocompleteMaxVisible());
         chatScreen.setScrollbarModeSource(
             () -> session.services().settings().uiPrefs().getFullscreenScrollbar());
+        // 批 13（docs/24 T10/T11）：showCacheMissNotices 门＋miss 价目目录源
+        // （ModelKey＝provider+"/"+model，首个斜杠切分——openrouter 斜杠 id 只吃前缀）。
+        chatScreen.setShowCacheMissNoticesSupplier(
+            () -> session.services().settings().uiPrefs().getShowCacheMissNotices());
+        chatScreen.setCacheMissTrackerModels(key -> {
+            var slash = key.indexOf('/');
+            return slash < 0 ? java.util.Optional.empty()
+                : session.modelCatalog().find(com.pijava.ai.model.ModelId.of(
+                    key.substring(0, slash), key.substring(slash + 1)));
+        });
         subscriptionWarning = newSubscriptionWarning();
         chatScreen.setSlashCommands(loadSlashItems());
         chatScreen.setInterruptHint(

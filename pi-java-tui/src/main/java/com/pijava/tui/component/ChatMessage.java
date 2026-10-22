@@ -115,7 +115,10 @@ public sealed interface ChatMessage {
         if (!"cache_warm".equals(usage.kind()) || usage.usage() == null) {
             return null;
         }
-        return new System("Cache warming: " + (long) usage.usage().totalTokens() + " tokens",
+        // 批 13（T10）：pi cache-warmer.ts:449-453 逐字（经格式化族共享），
+        // kind 判据（interactive-mode.ts:3401/:4030）既有不动。
+        return new System(
+            com.pijava.coding.agent.core.CacheWarmingFormatting.formatUsage(usage),
             MetaKind.GENERIC);
     }
 

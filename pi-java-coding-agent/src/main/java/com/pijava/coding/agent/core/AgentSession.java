@@ -840,6 +840,11 @@ public final class AgentSession implements AutoCloseable {
         this.scopedModels = List.copyOf(models);
     }
 
+    /** 批 13（T11/T12）：装配目录只读面（miss 价目查询与 /session Cache Re-billed）。 */
+    public com.pijava.ai.catalog.ModelCatalog modelCatalog() {
+        return modelCatalog;
+    }
+
     /** 当前 scope（测试/RPC 只读面）。 */
     public List<com.pijava.ai.model.ScopedModel> scopedModels() {
         return scopedModels;
