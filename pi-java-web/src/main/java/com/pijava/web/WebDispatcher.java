@@ -79,7 +79,9 @@ final class WebDispatcher {
                 }
                 case WebClientMessage.GetModels ignored -> send.accept(models());
                 case WebClientMessage.SetModel m -> {
-                    session.harness().setModel(resolveModelId(m.provider(), m.modelId()));
+                    // 批 11 T2：走会话包装（pi AgentSession.setModel）——per-model
+                    // 思考档覆盖随之应用（与 RpcDispatcher/ModelSelectorScreen 同改道）。
+                    session.setModel(resolveModelId(m.provider(), m.modelId()));
                     send.accept(new WebServerMessage.ModelChanged(
                         currentModelInfo(), thinkingWire(session.harness().getThinkingLevel())));
                 }

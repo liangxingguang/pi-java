@@ -47,7 +47,8 @@ public final class ModelSelectorScreen implements ScreenOverlay {
     public void apply(AgentSession session, Consumer<AgentSession> switcher) {
         list.selected().ifPresent(selection -> {
             var parts = selection.split("/", 2);
-            session.harness().setModel(ModelId.of(parts[0], parts[1]));
+            // 批 11 T2：走会话包装（pi AgentSession.setModel）——per-model 思考档覆盖。
+            session.setModel(ModelId.of(parts[0], parts[1]));
         });
     }
 
