@@ -186,8 +186,15 @@ public final class TuiExtensionUI implements ExtensionUI {
         if (opts.onHandle() != null) {
             opts.onHandle().accept(new OverlayHandleNarrowed(overlay));
         }
-        openAndTrack(overlay, overlay, result);
-        return (T) awaitResult(result);
+        // 批 17 评审回补（Minor 1）：结局后清账——活动对话表不滞留死条目。
+        var active = new ActiveDialog(overlay, overlay, result);
+        activeDialogs.add(active);
+        host.openOverlay(overlay);
+        try {
+            return (T) awaitResult(result);
+        } finally {
+            activeDialogs.remove(active);
+        }
     }
 
     // ── 非阻塞注入面（窄差 D96：dispatcher 入队、渲染线程生效）──
@@ -313,11 +320,9 @@ public final class TuiExtensionUI implements ExtensionUI {
         }
     }
 
-    /** custom 臂的开屏＋登记（无 signal/timeout 面——pi custom 选项无此二键）。 */
-    private void openAndTrack(ExtensionDialog dialog, ScreenOverlay overlay,
-                              CompletableFuture<Object> result) {
-        activeDialogs.add(new ActiveDialog(dialog, overlay, result));
-        host.openOverlay(overlay);
+    /** 活动对话数（评审回补 Minor 1 的测试探针）。 */
+    int activeDialogCount() {
+        return activeDialogs.size();
     }
 
     /** abort/到期/复位的公共取消：取消 ⇒ 渲染线程摘 overlay（apply 完成结局）⇒ 兜底完成。 */

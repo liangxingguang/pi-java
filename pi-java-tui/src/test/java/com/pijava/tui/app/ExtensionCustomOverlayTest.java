@@ -194,6 +194,34 @@ class ExtensionCustomOverlayTest {
         assertThat(call.get(5, TimeUnit.SECONDS)).isEqualTo("done-via-overlay");
     }
 
+    /** 批 17 评审回补（Minor 1）：custom 完成后活动对话表清账（不再滞留死条目）。 */
+    @Test
+    void completedCustomLeavesNoActiveDialog() throws Exception {
+        var call = callCustom((env, keys, done) -> {
+            Thread.ofVirtual().start(() -> {
+                try {
+                    Thread.sleep(50);
+                } catch (InterruptedException ignored) { }
+                done.accept("ok");
+            });
+            return new FakeComponent();
+        }, null);
+        awaitOverlay();
+        assertThat(call.get(5, TimeUnit.SECONDS)).isEqualTo("ok");
+        for (int i = 0; i < 100; i++) {
+            dispatcher.drain();
+            if (ui.activeDialogCount() == 0) {
+                break;
+            }
+            Thread.sleep(5);
+        }
+        assertThat(ui.activeDialogCount()).isEqualTo(0);
+        // 复位不再触碰已完成对话（幂等、无残留）。
+        ui.onSessionInvalidated();
+        dispatcher.drain();
+        assertThat(ui.activeDialogCount()).isEqualTo(0);
+    }
+
     @Test
     void doneBeforeMountDiscardsComponent() throws Exception {
         // pi :3003 臂：resolve 前已 closed ⇒ 组件直接丢弃（不开屏）。
