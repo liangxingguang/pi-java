@@ -168,8 +168,10 @@ public final class PiTuiLauncher {
     }
 
     private static String themeFrom(Args args, AgentSession session) {
-        var cli = args.themes() != null && !args.themes().isEmpty()
-            ? args.themes().get(0) : null;
+        // 批 14（docs/25 T16；pi main.ts:681-683）：--use-theme 优先于 --theme
+        //（--theme 的「选择」语义属 A-29 重排批 20，现维持文件加载现状）。
+        var cli = args.useTheme() != null ? args.useTheme()
+            : (args.themes() != null && !args.themes().isEmpty() ? args.themes().get(0) : null);
         var settingsTheme = session.services().settings().effective().theme;
         return PiTheme.resolveTheme(cli, settingsTheme, session.themePaths());
     }

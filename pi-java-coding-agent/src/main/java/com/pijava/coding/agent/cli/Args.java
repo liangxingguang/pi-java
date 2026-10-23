@@ -39,6 +39,7 @@ import java.util.List;
  * @param noPromptTemplates     disable prompt template discovery
  * @param themes                theme files to load (Phase 6)
  * @param noThemes              disable theme discovery
+ * @param useTheme              --use-theme 主题选择覆盖（pi args.ts:202-209）；null = 缺席
  * @param noContextFiles        disable AGENTS.md/CLAUDE.md discovery
  * @param print                 non-interactive print mode (-p)
  * @param export                export session file to HTML and exit (Phase 6)
@@ -87,6 +88,7 @@ public record Args(
         boolean noPromptTemplates,
         List<String> themes,
         boolean noThemes,
+        String useTheme,
         boolean noContextFiles,
         boolean print,
         String export,

@@ -276,6 +276,55 @@ class ArgsParserTest {
         }
     }
 
+    // ── 批 14（docs/25 T12）：pi args.ts:83-90 的 "--" 预分流 ──
+
+    @Test
+    void doubleDashRoutesDashPrefixedTokensToMessages() {
+        // 现误判 Unknown option 的修真：-- 后 -foo 是消息不是旗。
+        var args = ArgsParser.parse(new String[] {"--", "-foo"});
+        assertThat(args.messages()).containsExactly("-foo");
+        assertThat(args.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void doubleDashRoutesFileArgsAndMessages() {
+        var args = ArgsParser.parse(new String[] {"--", "@a.txt", "b"});
+        assertThat(args.fileArgs()).containsExactly("a.txt");
+        assertThat(args.messages()).containsExactly("b");
+        assertThat(args.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void doubleDashStopsFlagParsing() {
+        var args = ArgsParser.parse(new String[] {"--tools", "read", "--", "-t"});
+        assertThat(args.tools()).containsExactly("read");
+        assertThat(args.messages()).containsExactly("-t");
+        assertThat(args.diagnostics()).isEmpty();
+    }
+
+    // ── 批 14（docs/25 T16）：--use-theme 两臂诊断（pi args.ts:204-205 同文）──
+
+    @Test
+    void useThemeMissingValueIsPiDiagnostic() {
+        var args = ArgsParser.parse(new String[] {"--use-theme"});
+        assertThat(args.diagnostics()).anyMatch(d -> "error".equals(d.type())
+            && d.message().equals("--use-theme requires a theme name"));
+    }
+
+    @Test
+    void useThemeDashPrefixedValueIsPiDiagnostic() {
+        var args = ArgsParser.parse(new String[] {"--use-theme=-dark"});
+        assertThat(args.diagnostics()).anyMatch(d -> "error".equals(d.type())
+            && d.message().equals("--use-theme requires a theme name"));
+    }
+
+    @Test
+    void useThemeParsesClean() {
+        var args = ArgsParser.parse(new String[] {"--use-theme", "light"});
+        assertThat(args.useTheme()).isEqualTo("light");
+        assertThat(args.diagnostics()).isEmpty();
+    }
+
     @Test
     void conflictDiagnosticPrecedesFormatAssertion() {
         // pi 先冲突诊断后格式断言（main.ts:329-335 同序），两者独立上报。

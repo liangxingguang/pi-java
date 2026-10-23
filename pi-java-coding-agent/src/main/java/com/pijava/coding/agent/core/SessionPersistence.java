@@ -296,7 +296,7 @@ final class SessionPersistence {
             (progress, signal) -> handle.listRich(cwd, progress, signal),
             (progress, signal) -> handle.listAllRich(progress, signal),
             session.services().settings(),
-            null); // useThemeOverride——T16 接线（pi :681-683 先覆盖 settings 再进选择器）
+            args.useTheme()); // pi :681-683（T16）：--use-theme 先覆盖 settings 再进选择器
         if (selected.isEmpty()) {
             throw SessionResolutionExit.plain(0, "No session selected"); // pi :423-424
         }

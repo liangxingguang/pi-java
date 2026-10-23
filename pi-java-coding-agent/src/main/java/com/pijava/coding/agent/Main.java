@@ -98,13 +98,18 @@ public final class Main {
             return 2;
         }
         if (parsed.export() != null) {
+            // pi main.ts:639-651（T13）：第二位置参数是输出路径；文案逐字。
             try {
                 var input = java.nio.file.Path.of(parsed.export());
-                var out = new HtmlExporter().export(input);
-                System.out.println("Exported session to " + out);
+                var exporter = new HtmlExporter();
+                var out = parsed.messages().isEmpty()
+                    ? exporter.export(input)
+                    : exporter.export(input, java.nio.file.Path.of(parsed.messages().getFirst()));
+                System.out.println("Exported to: " + out);
                 return 0;
             } catch (Exception e) {
-                System.err.println("error: " + e.getMessage());
+                System.err.println("Error: " + (e.getMessage() != null
+                    ? e.getMessage() : "Failed to export session"));
                 return 1;
             }
         }

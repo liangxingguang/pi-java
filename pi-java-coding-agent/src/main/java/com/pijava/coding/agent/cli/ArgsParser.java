@@ -132,6 +132,9 @@ public final class ArgsParser {
     @Option(names = "--no-themes")
     boolean noThemes;
 
+    @Option(names = "--use-theme")
+    String useTheme;
+
     @Option(names = "--no-context-files")
     boolean noContextFiles;
 
@@ -171,25 +174,40 @@ public final class ArgsParser {
     /** Parse CLI arguments into an {@link Args} record. */
     public static Args parse(String[] args) {
         var diagnostics = new ArrayList<Args.ArgDiagnostic>();
+        // pi args.ts:83-90（T12）：首个 "--" 之后全部停止解析——@x ⇒ fileArgs，
+        // 其余 ⇒ messages（含 -/-- 起头，不再判旗）。"--" 前段才走短旗展开＋picocli。
+        int sep = List.of(args).indexOf("--");
+        var head = sep < 0 ? args : java.util.Arrays.copyOf(args, sep);
+        var tail = sep < 0 ? new String[0]
+            : java.util.Arrays.copyOfRange(args, sep + 1, args.length);
         var commandLine = new CommandLine(new ArgsParser());
         commandLine.setUnmatchedArgumentsAllowed(true);
         commandLine.setOverwrittenOptionsAllowed(true);
 
         ParseResult result;
         try {
-            result = commandLine.parseArgs(expandShortFlags(args));
+            result = commandLine.parseArgs(expandShortFlags(head));
         } catch (ParameterException e) {
-            diagnostics.add(new Args.ArgDiagnostic("error", e.getMessage()));
+            var message = e.getMessage();
+            // pi args.ts:204-205（T16）：--use-theme 缺值与 "-" 起头值同一诊断文案。
+            if (message != null && message.contains("--use-theme")) {
+                message = "--use-theme requires a theme name";
+            }
+            diagnostics.add(new Args.ArgDiagnostic("error", message));
             var parser = (ArgsParser) e.getCommandLine().getCommand();
-            return parser.toArgs(diagnostics);
+            return parser.toArgs(diagnostics, tail);
         }
         var parser = (ArgsParser) result.commandSpec().userObject();
         parser.toolsFlagPresent = result.hasMatchedOption("--tools");
         parser.excludeToolsFlagPresent = result.hasMatchedOption("--exclude-tools");
-        return parser.toArgs(diagnostics);
+        return parser.toArgs(diagnostics, tail);
     }
 
     private Args toArgs(List<Args.ArgDiagnostic> diagnostics) {
+        return toArgs(diagnostics, new String[0]);
+    }
+
+    private Args toArgs(List<Args.ArgDiagnostic> diagnostics, String[] doubleDashTail) {
         if (mode != null && !Set.of("text", "json", "rpc", "web").contains(mode)) {
             diagnostics.add(new Args.ArgDiagnostic("error",
                 "Invalid --mode \"" + mode + "\". Valid values: text, json, rpc, web"));
@@ -208,6 +226,11 @@ public final class ArgsParser {
             diagnostics.add(new Args.ArgDiagnostic("warning",
                 "Invalid thinking level \"" + thinking + "\". Valid values: "
                     + String.join(", ", ThinkingLevels.validValues())));
+        }
+        // pi args.ts:204-205（T16）：值以 "-" 起头 ⇒ 同一诊断（缺值臂在 parse 的 catch 里）。
+        if (useTheme != null && useTheme.startsWith("-")) {
+            diagnostics.add(new Args.ArgDiagnostic("error",
+                "--use-theme requires a theme name"));
         }
 
         // pi validateForkFlags（main.ts:299-310）：--fork 与
@@ -264,6 +287,15 @@ public final class ArgsParser {
                 parsedMessages.add(token);
             }
         }
+        // pi args.ts:83-90（T12）逐字："--" 后段路由——@x ⇒ fileArgs，其余 ⇒
+        // messages（含 -/-- 起头，pi 不再判）。
+        for (var token : doubleDashTail) {
+            if (token.startsWith("@")) {
+                parsedFileArgs.add(token.substring(1));
+            } else {
+                parsedMessages.add(token);
+            }
+        }
 
         Boolean trustOverride = null;
         if (approve) {
@@ -292,7 +324,7 @@ public final class ArgsParser {
             noTools, noBuiltinTools, List.copyOf(extensions), noExtensions,
             List.copyOf(skills), noSkills,
             List.copyOf(promptTemplates), noPromptTemplates,
-            List.copyOf(themes), noThemes, noContextFiles,
+            List.copyOf(themes), noThemes, useTheme, noContextFiles,
             print, export, listModels, offline, tuiMode, verbose, debug, tracePayloads,
             trustOverride,
             parsedMessages, parsedFileArgs, parsedUnmatched, diagnostics);

@@ -51,7 +51,7 @@ public final class HelpText {
               --no-builtin-tools, -nbt       Disable built-in tools by default but keep extension/custom tools enabled
               --approve, -a                  Trust project local files for this run
               --no-approve, -na              Ignore project local files for this run
-              --extension, -e <source>       Load extension (repeatable; Phase 6)
+              --extension, -e <source>       Load an extension JAR (repeatable; explicit paths still load with -ne)
               --no-extensions, -ne           Disable extension discovery
               --skill <name>                 Load skill (repeatable; Phase 6)
               --no-skills, -ns               Disable skills discovery
@@ -59,6 +59,7 @@ public final class HelpText {
               --no-prompt-templates, -np     Disable prompt template discovery
               --theme <name|file>            Theme: dark|light or a .tcss file path
               --no-themes                    Disable theme discovery
+              --use-theme <name>             Select a theme for this run (overrides settings)
               --no-context-files, -nc        Disable AGENTS.md/CLAUDE.md discovery
               --print, -p                    Non-interactive print mode
               --export <path>                Export session to HTML and exit (Phase 6)
