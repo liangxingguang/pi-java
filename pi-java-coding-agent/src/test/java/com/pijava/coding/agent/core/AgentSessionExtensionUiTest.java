@@ -112,6 +112,41 @@ class AgentSessionExtensionUiTest {
         }
     }
 
+    /**
+     * 批 17 评审回补（Important #2）：{@code switchTo} 把模式层 UI/mode 注入
+     * 换入会话（pi finishSessionReplacement→rebindSession 对位，
+     * agent-session-runtime.ts:187-191）——内存路 find 返回<b>另一会话对象</b>，
+     * 不注入则扩展 UI 静默落 noop。
+     */
+    @Test
+    void switchToInjectsUiIntoSwappedInSession() {
+        var repo = InMemorySessionRepository.create();
+        try (var a = sessionOn(repo, "sw-a");
+             var b = sessionOn(repo, "sw-b")) {
+            var ui = new CountingUI();
+            a.extensionUI(ui, "tui");
+            var result = a.switchTo("sw-b");
+            assertThat(result.outcome()).isEqualTo(AgentSession.SwitchOutcome.SWITCHED);
+            assertThat(b.extensionUI()).isSameAs(ui);
+            assertThat(b.extensionMode()).isEqualTo("tui");
+            // 旧会话失效前已复位（先于 shutdown——pi setBeforeSessionInvalidate 对位）。
+            assertThat(ui.invalidations.get()).isEqualTo(1);
+        }
+    }
+
+    private AgentSession sessionOn(InMemorySessionRepository repo, String id) {
+        // 注意：不能带 --no-session——内存仓路 session 注册进 repo 是 switchTo
+        // find 的前提（SessionLifecycleEventsTest 同形夹具先例）。
+        var args = ArgsParser.parse(new String[] {"--provider", "faux", "--model", "hello",
+            "--no-extensions", "--session-id", id});
+        var providers = ProviderRegistry.create();
+        providers.register(FauxProvider.text("ok"));
+        return AgentSession.create(args, repo, providers,
+            new ToolContext(tmp.toString(), Map.of(),
+                new DefaultShellExecutor(), new DefaultFileSystem()),
+            SettingsManager.withStorage(new InMemorySettingsStorage()));
+    }
+
     @Test
     void createWithUiAndModeBakesAtConstruction() {
         // 批 17（T7）：create(args, ui, mode) 重载——扩展加载前 UI 已烘入字段。

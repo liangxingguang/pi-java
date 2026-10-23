@@ -245,6 +245,12 @@ final class UiPromptEventExtensionUI implements ExtensionUI {
         return delegate.request(request);
     }
 
+    /** 批 17 评审回补（Minor 2）：生命周期方法也透传——包装器透明性（pi {@code ...ui} 展开对位）。 */
+    @Override
+    public void onSessionInvalidated() {
+        delegate.onSessionInvalidated();
+    }
+
     /** 未包装的委托（恒等比较/测试面）。 */
     ExtensionUI delegate() {
         return delegate;

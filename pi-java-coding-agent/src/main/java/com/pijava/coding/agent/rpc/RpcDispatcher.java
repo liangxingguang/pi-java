@@ -6,7 +6,6 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -52,8 +51,16 @@ public final class RpcDispatcher {
     private AgentSession session;
     private AutoCloseable eventSubscription;
     private volatile boolean streaming;
-    private final LinkedBlockingQueue<RpcExtensionUIResponse> uiQueue =
-        new LinkedBlockingQueue<>();
+    /**
+     * 批 17 评审回补（Important #1）：扩展 UI 应答<b>按 id 路由</b>——pi
+     * {@code pendingExtensionRequests} map（rpc-mode.ts:80-84）对位。旧广播队列
+     * 失配即弃 ⇒ 超时/abort 的孤儿通道线程会偷走后发对话的应答。
+     */
+    private final java.util.concurrent.ConcurrentMap<String,
+        java.util.concurrent.CompletableFuture<RpcExtensionUIResponse>> pendingUiRequests =
+        new java.util.concurrent.ConcurrentHashMap<>();
+    /** 批 17（T3/评审回补 #2）：RPC 臂 typed UI 实例（构造一次，new_session 重绑复用）。 */
+    private final RpcExtensionUI extensionUI;
 
     /**
      * @param session 目标会话（new_session 会重建）
@@ -67,8 +74,9 @@ public final class RpcDispatcher {
         this.eventSubscription = session.subscribe(this::emitEvent);
         // 批 17（T3）：RPC 臂 typed 实现——九方法通道的 java 生产者自此接通
         // （晚绑定修真：context 现读会话字段，后注入不再落空，E5-32）。
-        session.extensionUI(
-            new RpcExtensionUI(this::extensionUiRequest, this::writeExtensionUiRequest), "rpc");
+        this.extensionUI =
+            new RpcExtensionUI(this::extensionUiRequest, this::writeExtensionUiRequest);
+        session.extensionUI(extensionUI, "rpc");
     }
 
     /** 解析并分发一行；解析失败或处理器异常都回 success:false 响应而非抛出。 */
@@ -79,9 +87,14 @@ public final class RpcDispatcher {
         String type = extractField(line, "type");
         String id = extractField(line, "id");
         if ("extension_ui_response".equals(type)) {
-            // UI 响应 → 路由到阻塞队列，非命令
+            // UI 响应 → 按 id 路由到挂起对话（pi pendingExtensionRequests 对位；
+            // 无 waiter 的迟到应答丢弃——裁决⑦）。
             try {
-                uiQueue.offer(JSON.readValue(line, RpcExtensionUIResponse.class));
+                var response = JSON.readValue(line, RpcExtensionUIResponse.class);
+                var pending = pendingUiRequests.remove(response.id());
+                if (pending != null) {
+                    pending.complete(response);
+                }
             } catch (Exception ignored) {
                 // 畸形响应忽略
             }
@@ -140,6 +153,10 @@ public final class RpcDispatcher {
                     var previousId = old.sessionId();
                     unsubscribe();
                     session = AgentSession.createReplacing(args, previousId);
+                    // 批 17 评审回补（Important #2）：新会话重绑 RPC 扩展 UI 通道
+                    //（pi finishSessionReplacement→rebindSession 对位，
+                    // agent-session-runtime.ts:187-191／rpc-mode.ts:313-321）。
+                    session.extensionUI(extensionUI, "rpc");
                     old.closeForReplacement("new", session.sessionId());
                     eventSubscription = session.subscribe(this::emitEvent);
                     out.write(RpcResponse.ok(n.id(), "new_session", buildState()));
@@ -392,25 +409,33 @@ public final class RpcDispatcher {
 
     /** 扩展 UI 请求：写 extension_ui_request 到 stdout，阻塞等 extension_ui_response。 */
     private RpcExtensionUIResponse extensionUiRequest(RpcExtensionUIRequest request) {
+        var pending = new java.util.concurrent.CompletableFuture<RpcExtensionUIResponse>();
+        pendingUiRequests.put(request.id(), pending);
         try {
             out.write(request);
         } catch (IOException e) {
+            pendingUiRequests.remove(request.id());
             throw new UncheckedIOException(e);
         }
-        long deadline = System.nanoTime() + java.time.Duration.ofMinutes(5).toNanos();
-        while (System.nanoTime() < deadline) {
-            RpcExtensionUIResponse response;
-            try {
-                response = uiQueue.poll(10, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new RuntimeException("Extension UI interrupted", e);
-            }
-            if (response != null && request.id().equals(response.id())) {
-                return response;
-            }
+        try {
+            return pending.get(5, TimeUnit.MINUTES);
+        } catch (java.util.concurrent.TimeoutException e) {
+            throw new RuntimeException("Extension UI request timed out: " + request.method());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Extension UI interrupted", e);
+        } catch (java.util.concurrent.ExecutionException e) {
+            throw new RuntimeException(e.getCause());
+        } finally {
+            // 孤儿防护：超时/中断后摘除挂起项——迟到的应答自此无 waiter 可偷
+            // （pi cleanup() 的 pendingExtensionRequests.delete(id) 对位）。
+            pendingUiRequests.remove(request.id());
         }
-        throw new RuntimeException("Extension UI request timed out: " + request.method());
+    }
+
+    /** 当前会话（批 17 评审回补 #2 的测试探针；new_session 后是新对象）。 */
+    AgentSession currentSession() {
+        return session;
     }
 
     /** 事件 → 线格式写 stdout。 */

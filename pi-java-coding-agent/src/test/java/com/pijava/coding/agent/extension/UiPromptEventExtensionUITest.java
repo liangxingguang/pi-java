@@ -181,6 +181,22 @@ class UiPromptEventExtensionUITest {
         assertThat(events).isEmpty();
     }
 
+    /** 批 17 评审回补（Minor 2）：包装器透明性——生命周期方法直委托（pi 的
+     *  {@code ...ui} 展开对位——不包的方法全部透传，含 T7 的 onSessionInvalidated）。 */
+    @Test
+    void onSessionInvalidatedDelegatesThroughWrapper() {
+        var invalidated = new java.util.concurrent.atomic.AtomicInteger();
+        var delegate = new ExtensionUI() {
+            @Override
+            public void onSessionInvalidated() {
+                invalidated.incrementAndGet();
+            }
+        };
+        var ui = new UiPromptEventExtensionUI(delegate, () -> firer);
+        ui.onSessionInvalidated();
+        assertThat(invalidated.get()).isEqualTo(1);
+    }
+
     @Test
     void nullFirerSkipsEmission() {
         // firer 未回填（loadExtensions 早期）⇒ 静默不发射（供应器现读）。

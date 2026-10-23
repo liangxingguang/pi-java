@@ -1969,6 +1969,10 @@ public final class AgentSession implements AutoCloseable {
         extensionUI.onSessionInvalidated();
         fireSessionShutdown("resume", idOrPrefix);
         var found = findSession(idOrPrefix).orElseThrow();
+        // 批 17 评审回补（Important #2）：模式层 UI/mode 注入换入会话（pi
+        // rebindSession 对位）——内存路 found 是另一对象（其字段是 noop），
+        // 持久路原地 attach ⇒ found==this（自赋恒等无害）。
+        found.extensionUI(extensionUI, extensionMode);
         // session_start 在**新侧**发射（pi 的 createRuntime 对位）：持久路原地
         // attach ⇒ found == this；内存路是另一会话对象，firer 在那一侧。
         var startFirer = found.extensionFirer != null ? found.extensionFirer : extensionFirer;
