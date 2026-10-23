@@ -1003,6 +1003,14 @@ public final class AgentSession implements AutoCloseable {
     }
 
     /**
+     * 会话工作目录（pi {@code sessionManager.getCwd()} 对位；批 15 崩溃记录与
+     * bug 上报包的操作数）。
+     */
+    public String cwd() {
+        return harness.toolContext().cwd();
+    }
+
+    /**
      * 待处理消息数 = steer 队列 + followUp 队列（pi {@code pendingMessageCount}，
      * {@code :1619-1621}）。
      *
@@ -1983,6 +1991,24 @@ public final class AgentSession implements AutoCloseable {
             SessionPersistence.persistPending(this, session, laneName());
         }
         harness.addTokens((long) usage.totalTokens());
+        return entry;
+    }
+
+    /**
+     * pi {@code sessionManager.appendCustomEntry} 对位（批 15：bug 上报的会话尾
+     * 记录生产者）：追加 {@code custom} 条目（不进 LLM 上下文）⇒
+     * {@link AgentSessionEvent.EntryAppended} 广播 ⇒ 落盘。收口样板照
+     * {@link #appendUsage}。
+     */
+    public Entry.Custom appendCustomEntry(String customType, java.util.Map<String, Object> data) {
+        var entry = harness.appendDeferredLaneEntry(laneName(),
+            (seq, parentId) -> new Entry.Custom(
+                java.util.UUID.randomUUID().toString(), seq, parentId,
+                Instant.now(), customType, data));
+        emitSessionEvent(new AgentSessionEvent.EntryAppended(entry));
+        if (session != null) {
+            SessionPersistence.persistPending(this, session, laneName());
+        }
         return entry;
     }
 
