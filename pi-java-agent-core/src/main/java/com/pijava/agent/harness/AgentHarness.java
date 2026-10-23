@@ -466,6 +466,16 @@ public class AgentHarness extends HarnessBootstrap {
     }
 
     /**
+     * 批 16（T5b）：pi {@code syncQueueModesFromSettings} 对位——/reload 后
+     * steer/followUp 排空模式随设置（pi agent-session.ts:3679 同位）。
+     */
+    public void setQueueModes(QueueMode steering, QueueMode followUp) {
+        if (closed) throw new HarnessClosedException();
+        lane.steeringMode = steering;
+        lane.followUpMode = followUp;
+    }
+
+    /**
      * 系统提示自定义段（批 16 T3a；pi {@code BuildSystemPromptOptions.sections}）。
      * 唯一生产者是扩展 {@code before_agent_start} 的写回。
      */
