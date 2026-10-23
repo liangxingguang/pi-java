@@ -5,12 +5,10 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Optional;
-import java.util.ServiceLoader;
 
 import com.pijava.agent.session.ForkOptions;
 import com.pijava.agent.session.MutationReplayer;
 import com.pijava.agent.session.Session;
-import com.pijava.agent.session.SessionBackendFactory;
 import com.pijava.agent.session.SessionMetadata;
 import com.pijava.agent.entry.ProvisionedEntry;
 import com.pijava.agent.record.NewRecord;
@@ -26,7 +24,10 @@ import com.pijava.agent.session.jsonl.JsonlSessionMetadata;
 import com.pijava.agent.session.jsonl.JsonlSessionRepoFileSystem;
 import com.pijava.agent.session.jsonl.JsonlSessionRepository;
 import com.pijava.agent.session.jsonl.JsonlSessionStorage;
+import com.pijava.agent.session.jsonl.RichSessionInfo;
+import com.pijava.agent.session.jsonl.SessionListProgress;
 import com.pijava.agent.session.memory.MemorySessionMetadata;
+import com.pijava.ai.AbortSignal;
 
 /**
  * Type-erased persistent-session facade used by {@link AgentSession}
@@ -81,6 +82,62 @@ final class PersistentSessionRepositories {
                         }
                         return prefix;
                     });
+            }
+
+            @Override
+            public Optional<ScopedMatch> findWithScope(String idOrPrefix) {
+                if (idOrPrefix == null || idOrPrefix.isBlank()) {
+                    return Optional.empty();
+                }
+                // pi resolveSessionPath（main.ts:260-276）阶梯带 scope 标：
+                // ① 项目内精确 / ② 项目内前缀 ⇒ local；③ 跨项目精确优先于前缀 ⇒ global。
+                String cwd = System.getProperty("user.dir");
+                var local = repo.findById(cwd, idOrPrefix)
+                    .or(() -> repo.list(new JsonlSessionListOptions(cwd)).stream()
+                        .filter(m -> m.id().startsWith(idOrPrefix))
+                        .findFirst());
+                if (local.isPresent()) {
+                    return local.map(m -> new ScopedMatch(m, false));
+                }
+                Optional<JsonlSessionMetadata> prefix = Optional.empty();
+                for (var m : repo.list(JsonlSessionListOptions.all())) {
+                    if (m.id().equals(idOrPrefix)) {
+                        return Optional.of(new ScopedMatch(m, true));
+                    }
+                    if (prefix.isEmpty() && m.id().startsWith(idOrPrefix)) {
+                        prefix = Optional.of(m);
+                    }
+                }
+                return prefix.map(m -> new ScopedMatch(m, true));
+            }
+
+            @Override
+            public Optional<? extends SessionMetadata> findLocalById(String cwd, String id) {
+                // pi findLocalSessionByExactId（main.ts:243-250）：项目内 header-only 精确。
+                if (id == null || id.isBlank()) {
+                    return Optional.empty();
+                }
+                return repo.findById(cwd, id);
+            }
+
+            @Override
+            public Session<?> createWithId(String cwd, String id) {
+                // pi SessionManager.create(cwd, dir, {id})（main.ts:448）对位：带 id 新建。
+                return repo.create(new JsonlSessionCreateOptions(id, cwd, null, null));
+            }
+
+            @Override
+            public List<RichSessionInfo> listRich(String cwd, SessionListProgress progress,
+                                                  AbortSignal signal) {
+                // pi SessionManager.list(cwd, dir, onProgress, signal)（:943）对位。
+                return repo.listRich(cwd, progress, signal);
+            }
+
+            @Override
+            public List<RichSessionInfo> listAllRich(SessionListProgress progress,
+                                                     AbortSignal signal) {
+                // pi SessionManager.listAll(dir, onProgress, signal)（:1921）对位。
+                return repo.listAllRich(progress, signal);
             }
 
             @Override
@@ -147,147 +204,14 @@ final class PersistentSessionRepositories {
     }
 
     /**
-     * SQLite repository handle, discovered at runtime via
-     * {@link SessionBackendFactory}. Options are built reflectively so
-     * coding-agent keeps no compile-time dependency on the sqlite module
-     * (Phase 4 §14).
+     * SQLite repository handle — implementation lives in {@link SqliteRepositoryHandle}
+     * (split for the ≤500-line rule, batch 14 docs/25 T4); this delegate keeps the
+     * call sites unchanged.
      */
     static RepositoryHandle sqlite(Path dbPath) {
-        var factory = ServiceLoader.load(SessionBackendFactory.class).stream()
-            .map(ServiceLoader.Provider::get)
-            .filter(f -> "sqlite".equals(f.name()))
-            .findFirst()
-            .orElseThrow(() -> new IllegalStateException(
-                "SQLite session backend requested but no SessionBackendFactory is registered"));
-        SessionRepository<?, ?, ?> repo = factory.create(dbPath);
-        return new RepositoryHandle() {
-            @Override
-            public Session<?> create(String cwd, String parentSessionId) {
-                // Raw call: the runtime repository is the sqlite repo.
-                @SuppressWarnings("rawtypes")
-                SessionRepository raw = repo;
-                return (Session<?>) raw.create(sqliteCreateOptions(cwd, parentSessionId));
-            }
-
-            @Override
-            public Optional<? extends SessionMetadata> find(String idOrPrefix) {
-                if (idOrPrefix == null || idOrPrefix.isBlank()) {
-                    return Optional.empty();
-                }
-                return list(null).stream()
-                    .filter(m -> m.id().equals(idOrPrefix) || m.id().startsWith(idOrPrefix))
-                    .findFirst();
-            }
-
-            @Override
-            public Optional<? extends SessionMetadata> latest(String cwd) {
-                return list(cwd).stream().findFirst();
-            }
-
-            @Override
-            public List<? extends SessionMetadata> list(String cwd) {
-                @SuppressWarnings("rawtypes")
-                SessionRepository raw = repo;
-                return ((List<?>) raw.list(sqliteListOptions(cwd))).stream()
-                    .map(SessionMetadata.class::cast)
-                    .toList();
-            }
-
-            @Override
-            public Session<?> open(SessionMetadata metadata) {
-                @SuppressWarnings("rawtypes")
-                SessionRepository raw = repo;
-                return (Session<?>) raw.open(metadata);
-            }
-
-            @Override
-            public Session<?> fork(SessionMetadata source, ForkOptions options, String cwd) {
-                @SuppressWarnings("rawtypes")
-                SessionRepository raw = repo;
-                return (Session<?>) raw.fork(source, options, sqliteCreateOptions(cwd, null));
-            }
-
-            @Override
-            public Session<?> fork(SessionMetadata source, ForkOptions options, String cwd,
-                                   String sessionId) {
-                @SuppressWarnings("rawtypes")
-                SessionRepository raw = repo;
-                return (Session<?>) raw.fork(source, options,
-                    sqliteCreateOptions(sessionId, cwd, null));
-            }
-
-            @Override
-            public SessionRepository<?, ?, ?> repository() {
-                return repo;
-            }
-
-            @Override
-            public void exportJsonl(Session<?> session, Path target) {
-                exportViaLog(session, target);
-            }
-
-            @Override
-            public Session<?> importJsonl(Path source, String cwd) {
-                List<String> lines;
-                try {
-                    lines = Files.readAllLines(source, java.nio.charset.StandardCharsets.UTF_8);
-                } catch (java.io.IOException e) {
-                    throw new SessionError(SessionErrorCode.INVALID_PAYLOAD,
-                        "Failed to read import file " + source, e);
-                }
-                if (lines.isEmpty()) {
-                    throw new SessionError(SessionErrorCode.INVALID_PAYLOAD, "Import file is empty");
-                }
-                var header = JsonlCodec.parseHeader(lines.getFirst());
-                if (!header.ok()) {
-                    throw new SessionError(SessionErrorCode.INVALID_PAYLOAD,
-                        "Import file has an invalid header");
-                }
-                // Raw call: the runtime repository is the sqlite repo.
-                @SuppressWarnings("rawtypes")
-                SessionRepository raw = repo;
-                Session<?> created = (Session<?>) raw.create(
-                    sqliteCreateOptions(header.value().id(), cwd, header.value().parentSessionId()));
-                replayInto(created, source);
-                return created;
-            }
-
-            @Override
-            public void close() {
-                if (repo instanceof AutoCloseable closable) {
-                    try {
-                        closable.close();
-                    } catch (Exception e) {
-                        throw new IllegalStateException("Failed to close SQLite repository", e);
-                    }
-                }
-            }
-        };
+        return SqliteRepositoryHandle.sqlite(dbPath);
     }
 
-    private static Object sqliteCreateOptions(String cwd, String parentSessionId) {
-        return sqliteCreateOptions(null, cwd, parentSessionId);
-    }
-
-    private static Object sqliteCreateOptions(String id, String cwd, String parentSessionId) {
-        try {
-            var type = Class.forName("com.pijava.session.sqlite.SqliteSessionCreateOptions");
-            var ctor = type.getConstructor(String.class, String.class, String.class, java.util.Map.class);
-            return ctor.newInstance(id, cwd, parentSessionId, null);
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("SQLite backend unavailable", e);
-        }
-    }
-
-    private static Object sqliteListOptions(String cwd) {
-        try {
-            var type = Class.forName("com.pijava.session.sqlite.SqliteSessionListOptions");
-            var ctor = type.getConstructor(String.class);
-            return ctor.newInstance(cwd);
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("SQLite backend unavailable", e);
-        }
-    }
     /** Type-erased repository facade used by the persistent session flow. */
     interface RepositoryHandle extends AutoCloseable {
         Session<?> create(String cwd, String parentSessionId);
@@ -322,6 +246,66 @@ final class PersistentSessionRepositories {
          */
         default Optional<Session<?>> openPath(Path path) {
             return Optional.empty();
+        }
+
+        /**
+         * pi {@code findLocalSessionByExactId}（main.ts:243-250）：项目内 header-only
+         * 精确查找（不走前缀阶梯）。默认臂＝同步 {@link #list} 过滤；jsonl 臂走
+         * header-only 快道。
+         */
+        default Optional<? extends SessionMetadata> findLocalById(String cwd, String id) {
+            if (id == null || id.isBlank()) {
+                return Optional.empty();
+            }
+            return list(cwd).stream().filter(m -> m.id().equals(id)).findFirst();
+        }
+
+        /**
+         * pi {@code SessionManager.create(cwd, dir, { id })}（main.ts:448）＋
+         * {@code forkFrom(..., { id: sessionId })} 对位：带指定 id 新建会话。
+         */
+        Session<?> createWithId(String cwd, String id);
+
+        /**
+         * pi {@code SessionManager.list(cwd, dir, onProgress, signal)}
+         * （session-manager.ts:941）对位——E3-9。退化臂（sqlite/未知后端，窄差 D74）：
+         * 同步 {@link #list} 映射最小 {@link RichSessionInfo}（无名字/首条消息/全文/
+         * 计数），单次终末进度回调。
+         */
+        default List<RichSessionInfo> listRich(String cwd, SessionListProgress progress,
+                                               AbortSignal signal) {
+            var infos = list(cwd).stream()
+                .map(PersistentSessionRepositories::minimalRichInfo)
+                .toList();
+            if (progress != null) {
+                progress.onProgress(infos.size(), infos.size(), infos);
+            }
+            return infos;
+        }
+
+        /**
+         * pi {@code SessionManager.listAll(dir, onProgress, signal)}
+         * （session-manager.ts:1921）对位。退化臂＝{@code listRich(null, ...)}。
+         */
+        default List<RichSessionInfo> listAllRich(SessionListProgress progress,
+                                                  AbortSignal signal) {
+            return listRich(null, progress, signal);
+        }
+
+        /**
+         * pi {@code resolveSessionPath} 的 scope 标（main.ts:252-283）：
+         * {@code global=false} ≙ pi {@code local}（项目内 ①② 命中），
+         * {@code global=true} ≙ pi {@code global}（跨项目 ③ 命中，带对端 cwd——
+         * 由 metadata 携带）。
+         */
+        record ScopedMatch(SessionMetadata metadata, boolean global) {}
+
+        /**
+         * {@link #find} 的 scope 带标变体——{@code --session} 的全局臂（pi main.ts:391-413）
+         * 需要区分项目内/跨项目命中。默认臂＝{@code find} 命中即 local（单项目假设）。
+         */
+        default Optional<ScopedMatch> findWithScope(String idOrPrefix) {
+            return find(idOrPrefix).map(m -> new ScopedMatch(m, false));
         }
 
         Session<?> fork(SessionMetadata source, ForkOptions options, String cwd);
@@ -444,8 +428,18 @@ final class PersistentSessionRepositories {
         };
     }
 
+    /**
+     * 退化臂的最小 {@link RichSessionInfo}（窄差 D74：sqlite/未知后端无富扫描——
+     * 名字/首条消息/全文/计数缺省，选择器列表退化但可用）。
+     */
+    private static RichSessionInfo minimalRichInfo(SessionMetadata metadata) {
+        long ms = metadata.createdAt() == null ? 0L : metadata.createdAt().toEpochMilli();
+        return new RichSessionInfo(metadata.id(), "", null, metadataCwd(metadata), ms, ms, 0,
+            "(no messages)", "", metadata.parentSessionId());
+    }
+
     /** Resolve the session cwd from metadata; the SQLite type is read reflectively. */
-    private static String metadataCwd(SessionMetadata metadata) {
+    static String metadataCwd(SessionMetadata metadata) {
         if (metadata instanceof JsonlSessionMetadata j) {
             return j.cwd();
         }
