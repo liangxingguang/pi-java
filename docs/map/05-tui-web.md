@@ -72,8 +72,8 @@
 | S26 | `/changelog` 面板 | ✓ `core/slash-commands.ts:32` | ✓ `MiscCommands.java:120` | **对齐** | 1 | 均为文本输出 |
 | S27 | `/share`（会话分享） | ✓ `session-share.ts:217`（`shareSession:57`；Radius 网关 + `BorderedLoader`） | ✓ `MiscCommands.java:76`（GitHub gist） | **存疑** | 1 | 承诺相同、**后端不同**（pi=Radius，java=gist），且 java 无加载指示器 |
 | S28 | `/export`（HTML 导出） | ✓ `core/export-html/index.ts:236 exportSessionToHtml` | ✓ `export/HtmlExporter.java:21`（288 行） | **存疑** | 1 | pi 用 vendored marked.min.js + highlight.min.js + `template.html/css/js`；java 自写 `MarkdownToHtml.java`（201 行）—— 输出形状未逐项核 |
-| S29 | `/bug` 故障上报流程（同意提示 → 可选摘要 → 上传或导出 zip） | ✓ `bug-report.ts:50 reportBug`（298 行）+ `core/bug-report.ts`（375 行）+ `utils/zip.ts`；命令注册 `core/slash-commands.ts:28` | ✗ | **缺失** | 1 | pi slash 命令 **26** 条（含 `bug`）；java 的 slash 注册表无 `bug` |
-| S30 | **崩溃记录 + 下次启动提示**（写 crash log，下次启动提示「Run /bug」；`/bug` 提示每会话最多一次） | ✓ `core/crash-log.ts`；`interactive-mode.ts` 的 `takeUnnotifiedCrash`/`recordCrash`/`suggestBugReport`；本锚点另加死终端（EIO/EPIPE/ENOTCONN/**ENOTTY**）静默退出（stdin/stdout/stderr 三流监听，`:4332 emergencyTerminalExit`，调用点 `:4355/:4411`） | ✗ | **缺失** | 1 | java 全仓无 crash-log 命中 |
+| S29 | `/bug` 故障上报流程（同意提示 → 可选摘要 → 上传或导出 zip） | ✓ `bug-report.ts:50 reportBug`（298 行）+ `core/bug-report.ts`（375 行）+ `utils/zip.ts`；命令注册 `core/slash-commands.ts:28` | ✓ `BugReportFlow.java`＋三屏（`BugReportInputScreen`/`BugReportChoiceScreen`/`BugReportLoaderScreen`）＋`core/bugreport/`＋`core/util/ZipArchives.java` | **对齐** | 1 | **批 15（2026-10-23，docs/26 T7）**：reportBug 逐段（hint 输入→转录→摘要→递交→离线门→摘要 loader→组包→上传 fallback/导出→会话尾记录）；窄差 D79/D82/D84–D86/D88 |
+| S30 | **崩溃记录 + 下次启动提示**（写 crash log，下次启动提示「Run /bug」；`/bug` 提示每会话最多一次） | ✓ `core/crash-log.ts`；`interactive-mode.ts` 的 `takeUnnotifiedCrash`/`recordCrash`/`suggestBugReport`；本锚点另加死终端（EIO/EPIPE/ENOTCONN/**ENOTTY**）静默退出（stdin/stdout/stderr 三流监听，`:4332 emergencyTerminalExit`，调用点 `:4355/:4411`） | ✓ `core/crash/CrashLog.java`＋`CrashIntegration.java`＋`PiTuiLauncher`（启动提示/未捕获钩）＋`PiTuiApp.maybeSuggestBugReport` | **对齐** | 1 | **批 15（2026-10-23，docs/26 T1/T2）**：末 5 条/7 天窗/全量 notified 回写逐字＋启动提示＋uncaught 钩＋`/import` fatal（B256）＋`/bug` 建议门序逐字（R29 门恒 false 裁决④）；窄差 D80/D81/D83/D87（死终端面不做、dim 文本、JAR 名针） |
 | S32 | **登录 URL 复制 + Radius 登录入口**（`/login` 展示 URL，`app.message.copy` 复制整条 URL；提供 Radius 登录/MCP 设置） | ✓ `components/auth-url.ts:9 class AuthUrlComponent`（39 行）+ `components/radius-login-selector.ts`（114 行）+ `login-dialog.ts`（238 行） | ✗ | **缺失** | 1 | java `/login` 只 `System.console().readPassword`（`MiscCommands.java:134-148`），无 URL 展示/复制/Radius |
 
 > ~~S31 实验性 micro TUI~~ —— **作废**（pi `7fd478a2e` 删 `experimental/{micro,mini}`，裁决 R1：参照物被删即移出分母）。
@@ -112,7 +112,7 @@
 | R26 | **工具调用参数渲染（MCP 与 fallback 渲染工具显式展示 args）** | ✓ `core/tools/render-utils.ts:78 formatToolCallWithArgs` + `tool-execution.ts:143` | ✗ | **缺失** | 1 | java `ToolCallCard.java:13-37` 对全部工具走同一「name+status+截断 args」，且无 MCP 渲染器 |
 | R27 | **3D 彩蛋（pi logo / Armin）+ header logo**（全屏 overlay，惰性加载） | ✓ `components/easter-egg-3d.ts`（**1292 行**）+ `easter-egg-3d.lazy.ts` + `pi-logo.ts:15 piLogoLines`（40 行） | ✗ | **缺失** | 1 | java 无任何彩蛋/logo 动画；取代旧的 daxnuts（R22） |
 | R28 | **排队消息区（streaming 时聊天区与编辑器之间的 dim `Steering:`/`Follow-up:` 行）** | ✓ `interactive-mode.ts:461 pendingMessagesContainer`、`:4724 updatePendingMessagesDisplay`（末尾另有 `↳ <dequeue 键> to edit all queued messages` 提示行）；流式期间 bash/工具组件也挂该区 | ✓ `PendingQueueView.java`（含 hint 行，批 10）+ `ChatScreen.java`（`QueueUpdate` 驱动） | **存疑** | 1 | 批 10（docs/21）证据更新：dequeue hint 行（键名随绑定表大写形）＋取回编辑整条流程已补齐（S20/K11 翻对齐）；**「流式 bash/工具组件挂该区」仍缺** ⇒ 判定维持存疑 |
-| R29 | **安装变更警告（会话运行中 pi 被升级/替换 → 错误时提示重启命令）** | ✓ `interactive-mode.ts:2193 maybeShowInstallChangeWarning`（调用点 `:2184`、`:3643`）+ `config.ts detectInstallChange`（#10439，每会话一次） | ✗ | **缺失** | 1 | **新锚点新增**；java 全仓无 install-change 检测 |
+| R29 | **安装变更警告（会话运行中 pi 被升级/替换 → 错误时提示重启命令）** | ✓ `interactive-mode.ts:2193 maybeShowInstallChangeWarning`（调用点 `:2184`、`:3643`）+ `config.ts detectInstallChange`（#10439，每会话一次） | ✗ | **缺失（挂起）** | 1 | **批 15 裁决④挂起**（docs/26 §4/§6）：java 无 package.json 安装形态也无自更新通道（docs/20 §3 序 21），三件套不做；`maybeSuggestBugReport` 的 install-change 门恒 false（≡ pi `detectInstallChange()` 恒 undefined 臂）；随自更新批评估 |
 
 ---
 
@@ -310,24 +310,24 @@
 
 | 档 | 条数 |
 |---|---:|
-| **对齐** | **38** |
-| **缺失** | **85** |
+| **对齐** | **40** |
+| **缺失** | **83** |
 | **存疑** | **25** |
 | 非对齐项（pi-java 独有，**不计入分母**） | 2 |
 | **合计（枚举）** | **150** |
-| **完成度（未加权）** | **40 / 148 = 27.0%** |
+| **完成度（未加权）** | **42 / 148 = 28.4%** |
 
 **分面完成度（148）**
 
 | 面 | 对齐 | 缺失 | 存疑 | 判定单位 | 完成度 |
 |---|---:|---:|---:|---:|---:|
-| 屏幕/面板（S1–S30 + S2a–d + S32，35） | 10 | 22 | 3 | 35 | **28.6%** |
+| 屏幕/面板（S1–S30 + S2a–d + S32，35） | 12 | 20 | 3 | 35 | **34.3%** |
 | 渲染特性（R1–R29，29 单元，含 R21） | 2 | 21 | 5 | 28 | **7.1%** |
 | 键绑定/交互（K1–K39，39 单元，含 K36） | 10 | 22 | 6 | 38 | **26.3%** |
 | TUI 组件（C1–C20，20 单元） | 7 | 9 | 4 | 20 | **35.0%** |
 | 主题/样式（T1–T11，11 单元） | 3 | 6 | 2 | 11 | **27.3%** |
 | web 对齐面（W1–W16，16 单元） | 8 | 4 | 4 | 16 | **50.0%** |
-| **合计** | **40** | **84** | **24** | **148** | **27.0%** |
+| **合计** | **42** | **82** | **24** | **148** | **28.4%** |
 
 > 非对齐项 2 条（R21 回合分隔条、K36 模式 2027 规避）已从分母剔除。
 
@@ -383,7 +383,7 @@
 
 ## 缺失清单（全部 85 条）
 
-**屏幕/面板（22）**：S2a 转录搜索 · S2b 文本选择/copy-on-select · S2c flash 提示 · S2d 全屏图像 · S6 模型搜索 · S7 scoped-models 选择器 · S8 thinking 选择器 · S9 theme 选择器 · S11 会话选择器高级功能 · S15 设置子菜单 · S16 config 选择器 · S17 OAuth/登录对话框 · S18 首次设置向导 · S19 信任选择器 · S20 排队消息选择器 · S21 show-images 选择器 · S22 扩展 UI 四件套 · S23 扩展 widget/footer · S25 会话统计面 · S29 `/bug` 故障上报 · S30 崩溃记录 + 启动提示
+**屏幕/面板（20）**：S2a 转录搜索 · S2b 文本选择/copy-on-select · S2c flash 提示 · S2d 全屏图像 · S6 模型搜索 · S7 scoped-models 选择器 · S8 thinking 选择器 · S9 theme 选择器 · S11 会话选择器高级功能 · S15 设置子菜单 · S16 config 选择器 · S17 OAuth/登录对话框 · S18 首次设置向导 · S19 信任选择器 · S20 排队消息选择器 · S21 show-images 选择器 · S22 扩展 UI 四件套 · S23 扩展 widget/footer · S25 会话统计面
 
 **渲染特性（21）**：R1 Markdown 渲染（死代码）· R2 表格 · R3 删除线 · R4 链接 · R5 流式围栏修剪 · R6 transformer 钩子 · R7 mermaid · R8 LaTeX · R9 代码块高亮（死代码）· R11 逐工具渲染器 · R12 工具卡折叠 · R13 bash 执行组件 · R14 图像协议 · R15 图片粘贴 · R19 skill 调用卡 · R22 公告 · R23 终端标题 · R25 thinking 丢弃提示 · R26 工具调用参数渲染 · R27 3D 彩蛋/logo · **R29 安装变更重启警告（新锚点新增）**
 
@@ -493,18 +493,19 @@
 
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|
-| 屏幕/面板（35 单元） | 47 | 20.5 | **43.6%** | 31.4% |
+| 屏幕/面板（35 单元） | 47 | 22.5 | **47.9%** | 34.3% |
 | 渲染特性（R1–R29，29 单元；R21 权重 0 已剔） | 40 | 7.5 | **18.8%** | 10.7% |
 | 键绑定/交互（K1–K39，39 单元；K36 权重 0 已剔） | 66 | 33.5 | **50.8%** | 28.9% |
 | TUI 组件（C1–C20，20 单元） | 41 | 22.5 | **54.9%** | 35.0% |
 | 主题/样式（T1–T11，11 单元） | 18 | 6.5 | **36.1%** | 27.3% |
 | web 对齐面（W1–W16，16 单元） | 33 | 26.0 | **78.8%** | 50.0% |
 
-**模块合计**：Σ权重 **245** ／ Σ(w×c) **116.5** ／ **加权完成度 = 116.5/245 ≈ 47.6%**（未加权 **29.1%**，**+17.7pp**）
+**模块合计**：Σ权重 **245** ／ Σ(w×c) **118.5** ／ **加权完成度 = 118.5/245 ≈ 48.4%**（未加权 **28.4%**，**+20.0pp**）
 
 > 批 10（2026-10-22，docs/21）：S20 缺失→对齐（+1.0）、K11 缺失→对齐（+1.0）；R28 证据更新不翻（流式 bash/工具挂载仍缺）。
 > 批 13（2026-10-23，docs/24）：R24 存疑→对齐（+0.5，cache-warmer 子系统批随收——生产者/文案逐字/门//session 段/footer）。
 > 批 14（2026-10-23，docs/25）：**K16 缺失→对齐（+2.0，app.session.* 键位族）＋K15 缺失→对齐（+1.0，对账表漏列同翻）＋S11 缺失→存疑（+0.5，picker 臂全落、rename 面板留白裁决⑦）**。Σ 113.0→**116.5/245 ≈ 47.6%**。
+> 批 15（2026-10-23，docs/26）：**S29 `/bug` 流程 缺失→对齐（+1.0）＋S30 崩溃记录＋启动提示 缺失→对齐（+1.0）**；R29 安装变更警告挂起注记（裁决④，随自更新批）。Σ 116.5→**118.5/245 ≈ 48.4%**。
 
 > 较前锚点（144 单元：241 权 / 108.0 / **44.8%**）变化 **−0.5pp**，构成：① K20 对齐→存疑（w2）分子 −1.0；② R18/R24 缺失→存疑（w1×2）分子 +1.0；③ 新增 4 单元（R28 存疑 w1 +0.5；R29/K39/C20 缺失 w1×3）分母 +4、分子 +0.5。净效果：分子 +0.5、分母 +4。
 
@@ -553,7 +554,7 @@
 
 ⇒ 权重 3 里 **15 对齐 / 6 缺失 / 5 存疑**（**67.3%**）。缺失的 6 条全部是 **TUI 的「每轮都看得见」的能力**：`R1` Markdown、`R11` 逐工具渲染器、`K27` 提示历史、`C5` spinner、`C6` working 指示器、`T2` 主题 token。**这 6 条是加权口径下的最高收益点**；本锚点新增/翻转的单元无一进入这个子集（最高权重 2）。
 
-**未加权 vs 加权的差（+18.6pp）差在哪**
+**未加权 vs 加权的差（+20.0pp）差在哪**
 
 | 判定 | 单元数 | Σ权重 | 平均权重 |
 |---|---:|---:|---:|

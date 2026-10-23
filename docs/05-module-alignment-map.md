@@ -86,9 +86,9 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 | pi-java-agent-core（map/03，**批5后**） | 180 | 180.0 | **100%** | 100%（90/90） | **100%（27/27）** |
 | session-sqlite ＋ evals（map/06） | 87 | 44.5 | **51.1%** | 50.0%（20/40） | — |
 | pi-java-telemetry（map/01，**批1后**） | 34 | 34.0 | **100%** | 100%（16/16） | 100%（21/21） |
-| pi-java-tui/web（map/05） | 245 | 116.5 | **47.6%** | 29.1%（43/148） | 67.3% |
-| pi-java-coding-agent（map/04，剔 MCP 粗单元） | 485 | 334.0 | **68.9%** | 60.7%（175.5/289） | 73.9%（17/23） |
-| **合计（去重后，coding-agent 批14后）** | **1,379** | **1,011.5** | **73.3%** | — | — |
+| pi-java-tui/web（map/05） | 245 | 118.5 | **48.4%** | 28.4%（42/148） | 67.3% |
+| pi-java-coding-agent（map/04，剔 MCP 粗单元） | 485 | 341.0 | **70.3%** | 62.3%（180.0/289） | 73.9%（17/23） |
+| **合计（去重后，coding-agent 批15后）** | **1,379** | **1,020.5** | **74.0%** | — | — |
 
 > map/04 原始口径（含 G-1..G-5）：Σw 494 ／ Σwc 338.5 ／ **68.5%**；两处账都在，总表用去重值。
 > ⚠️ 批 4 复核修正：D 域基线逐行实算 11.5（旧汇总行 10.5，存疑漏计 1.0）＋设计稿 §8 正文 Δ 加总错误（30.5→32.5）⇒ 账面较批 4 设计稿预期（258.5/52.1%）高 3.0。
@@ -141,9 +141,9 @@ codemode-only 的 4 个单元（exposure/deferred/discovery）权重 0，B161/B1
 
 现状：**模块 100%**——加权 180/180、未加权 90/90、权重 3 层含工具 27/27、工具表 21/21、确认缺失与存疑**双清零**、未得分池 = 0。（批 4 登记的 B244/B245 已分别随 coding-agent 批 2/批 8 销号。）
 
-### 2.4 coding-agent — 68.9%（去重）｜ map/04
+### 2.4 coding-agent — 70.3%（去重）｜ map/04
 
-A CLI 参数 97.6%、C slash 68.4%、E3 会话管理 92.5%；**D 扩展事件 90.4%（批 13 后）、D′ UI 注入 6.3%、E6 包管理器 16.1%、E5 扩展 API 27.6%** 拉低整体。
+A CLI 参数 97.6%、C slash 89.5%（批 15 后）、E3 会话管理 92.5%；**D 扩展事件 90.4%（批 13 后）、D′ UI 注入 6.3%、E6 包管理器 16.1%、E5 扩展 API 27.6%** 拉低整体。
 G 域新子系统：MCP 明细在 map/07；codemode 3,957 行＋tool-search/virtual-models/nested 766 行仍为 0（B161/B162）。
 新缺口：B237（RPC `handled` disposition）。
 - 批 1（2026-10-18 闭环，B236/docs/11）：`--tools` 三层语义（`*` 通配/`+name`/`-name` 修饰符/`mcp__` 保留）＋`--exclude-tools` 通配 denylist＋settings `defaultTools`（merge/resolve）＋注册面门接线（`createAllTools` 八件经 `_isAllowedTool` 过滤）＋默认激活集 **7→4**（裁决①）；map/04 A-20/A-21/E2-35 翻对齐（+3.5）；**B236 销号**、B246 新登记（reload 臂＋SDK 抛错面）；43.2% → **43.9%**（未加权 31.7% → 32.8%）。合计 63.9% → 64.2%（882.5 → 886.0/1381）。
@@ -162,7 +162,9 @@ G 域新子系统：MCP 明细在 map/07；codemode 3,957 行＋tool-search/virt
 - 批 14（2026-10-23 闭环，docs/25，CLI 参数尾＋`-r` 会话选择器）：**选择器子系统＋会话解析 pi 全序＋CLI 旗面十件**——T1 `FuzzyMatch`（pi fuzzy.ts 子序列打分逐字：词界奖/连击奖/间隙罚/全等 −100/互换臂）→ T2 `SessionSelectorSearch`（re: 三臂/引号 phrase/未闭合回落/relevance 平分 modified 降序）→ T3 键位表（选择器六键入 overlay 表〔批 9 C1 同构〕＋ app.session.new/tree/fork/resume 四空绑定，map/05 **K16 对齐**）→ T5 `RichSessionInfo.parentSessionPath`（threaded 树认父）→ T4 `RepositoryHandle` 富列表/findLocalById/createWithId/findWithScope 四口＋sqlite 臂拆文件（E3-9）→ T6–T9 `resolvePersistent` 按 pi `createSessionManager` 全序重排（fork→session→resume→continue→sessionId→create）＋`SessionResolutionExit` 干净错误面（裁决②，废栈 trace）＋`validateForkFlags`/`validateSessionIdFlags`/`assertValidSessionId` 正则三校验＋**-c 空臂静默新建**（裁决③，**B255 即登即销**）＋`--session` 全局臂（提示＋promptConfirm fork／`Aborted.` exit 0）＋`--session-id` warning＋带 id 新建＋`--fork` 目标查重 → T10 选择器本体七件（`SessionTreeBuilder`/`SessionListModel`/`SessionListRenderer`/`SessionSelectorHeader`/`SessionSelectorComponent`＋`SessionText`＋搜索复用 `EditorComponent`；pi 1,294 行域对位：双 scope 懒载/isActive 弃旧/删除流/三档排序/进度回调/状态消息 deadline）→ T11 `SessionSelectorProvider` SPI＋tui 实现注册＋`SessionSelectorRunner` 启动壳（裁决①，四模式同获；SPI 缺席报 D70）→ T12 `--` 预分流 → T13 `--export` 位置输出参＋文案逐字 → T16 `--use-theme`（缺值/`-` 起头两诊断同文＋themeFrom 优先＋选择器 SPI 覆盖）→ T14 web `--no-session` 赢（裁决⑤，**B54 销号**）→ T15 `-e` 显式 JAR 恒加载（`-ne` 旁路）→ T17 A-17 核销（链早已通）＋**裁决④ `--offline` 判对齐**（面＝java 已实现操作全集，批 12 裁决③同族）。map/04 **A 域 11 行翻动**（+10.5，A 域 80.6% → **97.6%**〔60.5/62，余 A-29 重排批 20、A-43 重排批 15〕）＋**E3 域 7 行翻动**（+8.5：E3-3/4/5/6/9 设计内＋**E3-19 对账表漏列同翻**〔批 10 E3-8 先例〕＋**E3-24 批 13 漏列核销**，E3 域 71.3% → **92.5%**〔37.0/40，余 E3-15/E3-23 各挂 B1/B30〕）；map/05 **K16 缺失→对齐**（+2.0）＋**K15 同翻**（+1.0，漏列同前）＋**S11 缺失→存疑**（+0.5，rename 面板留白裁决⑦）；窄差 D69–D78（trash 臂无/SPI 缺席/校验诊断出口/rename 留白/键位 helper/sqlite 富扫描退化/正则错误文案/ctrl+backspace 死键/品牌名/builtin: 不收）；64.9% → **68.9%**（未加权 56.7% → 60.7%；w3 73.9% 不变；D 域 90.4%/E2 91.1% 不动）；tui/web 46.1% → **47.6%**（113.0 → 116.5/245）。合计 71.7% → **73.3%**（989.0 → 1,011.5/1379）。行为变化注记：**`-r` 裸敲弹全屏会话选择器**（此前抛栈）、**`-c` 空库静默新建**（此前报错）、`--session` 跨项目命中需确认 fork（此前直挂）、`-e` 显式扩展加载、套件性红 `ModelsJsonOverrideWireTest`×2 **修真**（真因＝auth 三存储 `static final STORE_PATH` 类初始化冻结 user.home，临时 home 夹具先触发即全 JVM 钉死；批 13「凭据修复」系误因——基线复跑证红、隔离跑证绿、修后 979/979 绿）。新文件 19（tui 选择器 7＋测试 6、coding-agent `SqliteRepositoryHandle`/`SessionResolutionExit`/SPI×2＋测试 4、ai 修真 3 改）；**回归抓回两修**——`/hotkeys` 空绑定 NPE（`strokeFor` null ⇒ `""`，pi `formatKeys([])` 对位）、`AgentSessionTest.continueInFreshProcessFailsClearly` 改钉 B255 新行为。E1 涨到 2,341（T15 +10）、`SessionPersistence` 447（近线）。
 - 批 14 补注（评审先例沿用）：对账表漏列三处按**逐行实算同翻**（E3-19/E3-24/K15），map/04 未加权汇总表与 E2 行同步收平（对齐 44→46、分母 290→288 逐行实算）。
 
-### 2.5 tui/web — 47.6%（总表行；map/05 域表 47.6%）｜ map/05
+- 批 15（2026-10-23 闭环，docs/26，slash 尾 C 域）：**`/bug` 故障上报全链＋crash-log 子系统＋C 域存疑修**——T1 `CrashLog`/`CrashRecord`（末 5 条/7 天窗/全量 notified 回写逐字）→ T2 集成（启动提示/未捕获钩〔裁决③死终端面不做〕/**`/import` 修真 fatal**〔裁决⑤，**B256 即登即销**〕/`/bug` 建议门序逐字＋`CrashIntegration` 文案件）→ T3 `BugReport` 核心（SENSITIVE_KEY 逐字/redactUrl 裁决⑨手写解析/收集裁决⑧子集/尾选）＋T3b 摘要缝（`LlmSummaryGenerator` systemPrompt 参化＋`BugReportSummarizer` 四守卫逐字）→ T4 `SessionBranchSerializer`（pi.share trailing）→ T5 `ZipArchives`（裁决① JDK 形）→ T6 `BugReportUpload`（multipart/网关/裁决⑩恒匿名）→ T7 `/bug` TUI 流（三屏＋`BugReportFlow`，裁决⑦ hint 从输入行切）→ T8 `/thinking`（空参选择器裁决⑥简版/有参直设，可用集过滤逐字）→ T9 `/model` 直设臂（`ModelExactMatch`＋scoped 收口＋15s 刷新回落）→ T10 `/export` 默认臂＋引号解析 → T11 `/session` 全段（`SessionStats`/`UsageCostBreakdown`，**D68 销号**）→ T12 `/changelog` `/compact` 核销核验（`SlashChangelogCompactTest` 双钉）。map/04 **C 域 7 行翻动**（+7.0 ⇒ 34.0/38 ≈ **89.5%**，余 6：设置/scoped-models 选择器、Radius 分享/登录、reload〔批 16〕）＋E8-2/E8-3 注记行随翻；map/05 **S29/S30 缺失→对齐**（+2.0；**R29 挂起注记**〔裁决④〕）；**B79 销号**；窄差 D79–D88（ZIP 字节/JAR 名针/死终端/schema 子集/dim 文本/简版选择器/恒匿名/裸选择器/无子进程清理/无外部编辑器）；68.9% → **70.3%**（未加权 60.7% → 62.3%；w3 73.9%/D 域 90.4%/E2 91.1% 不动）；tui/web 47.6% → **48.4%**（116.5 → 118.5/245）。合计 73.3% → **74.0%**（1,011.5 → 1,020.5/1379）。行为变化注记：**`/import` 失败 ⇒ 记 crash＋exit 1**（pi 语义，file-not-found 除外）、**`/export` 无参 ⇒ `session-<ts>.html` 落 cwd**、`/model <ref>` 直设生效、**崩溃后下次启动提示「Run /bug」**、非重试错误后 `/bug` 建议行（每进程一次）、`/session` 全段。**回归回补三钉**（命令数 24⇒26／/export Usage 钉废／Re-billed 位置钉）＋**前存红修真**（`TreeNavigationFlowTest.queuedMessagesRestore…`——根因＝steer 提交早于 run 首个 provider 调用的测试时序缺陷，callCount 门修）。排障注记：真 home `compaction.enabled=false` 被不设 compaction 的测试继承（套件性环境影响——本批 T12 排障所得）。新文件 15＋测试 14；E1 涨到 2,392、E6 912、E7 734。
+
+### 2.5 tui/web — 48.4%（总表行；map/05 域表 48.4%）｜ map/05
 
 web 对齐面 78.8% 最高；**渲染特性 14.5%** 最低：MarkdownRenderer/SyntaxHighlighter 是生产死代码（B65）、4 键位空接（B66，批 10 核账 6→4：DEQUEUE/MODEL_CYCLE 已接）、逐工具渲染器缺（B47）。主题系统 pi 3,105 行 vs Java 74 行（B163）。
 新锚点带来 4 条新行为缺口（B238）：Ctrl+Home/End 视口键、安装变更重启警告、OSC 7501 程序状态、APC 假光标。
