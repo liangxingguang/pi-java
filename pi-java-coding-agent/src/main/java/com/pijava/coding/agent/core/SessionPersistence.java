@@ -170,6 +170,12 @@ final class SessionPersistence {
     /** Resolve {@code -c/-r/--fork/--session-id} against the persistent repo. */
     /** Web 默认：恢复最近一个持久会话（刷新/重连保留历史），仅当无会话时新建。 */
     static AgentSession resolvePersistentWeb(AgentSession session, Args args) {
+        // 裁决⑤（docs/25 T14，B54 销号）：--no-session 赢——与 CLI 臂
+        //（SessionSetup.resolveSession:122-124）同语义；ephemeral 是更安全一侧
+        //（不落盘的一方可逆，反之不可）。
+        if (args.noSession()) {
+            return session;
+        }
         var handle = session.persistentRepository();
         var cwd = System.getProperty("user.dir");
         // Scoped to this project's directory (原 docs/39 §6.1) —— 全项目扫描是 A12

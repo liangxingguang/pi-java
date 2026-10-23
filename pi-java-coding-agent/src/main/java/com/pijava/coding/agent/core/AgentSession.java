@@ -2237,7 +2237,10 @@ public final class AgentSession implements AutoCloseable {
     private static void loadExtensions(Args args, SessionServices services,
                                        AgentHarness harness, ExtensionUI ui,
                                        AgentSession owner, SessionStartInfo startInfo) {
-        if (args.noExtensions()) {
+        // 批 14（docs/25 T15，A-25）：早退臂收紧为「-ne 且无显式路径」——
+        // pi resource-loader.ts:578/690 的 noExtensions ? cliEnabledExtensions : merge(...)
+        // 对位：显式 -e 路径恒加载（-ne 旁路），且扩展事件面随加载活着。
+        if (args.noExtensions() && args.extensions().isEmpty()) {
             // 批 11 T6：pi 的 blockImages 过滤独立于扩展面（sdk.ts:296-329 的
             // convertToLlm 包装与扩展加载无关）⇒ --no-extensions 也裸注册过滤钩。
             harness.hookSystem().onTransformContext(owner.laneName(), messages ->
@@ -2265,12 +2268,19 @@ public final class AgentSession implements AutoCloseable {
         // session 由 SessionPersistence 稍后赋值，惰性求值绑定供 sendMessage 落盘用。
         context.bindSession(() -> owner.session());
         var manager = new ExtensionManager(context);
-        manager.loadAll();
-        for (var jar : ExtensionPackageManager.global().installedJars()) {
-            manager.loadJar(jar);
+        if (!args.noExtensions()) {
+            manager.loadAll();
+            for (var jar : ExtensionPackageManager.global().installedJars()) {
+                manager.loadJar(jar);
+            }
+            for (var jar : ExtensionPackageManager.project().installedJars()) {
+                manager.loadJar(jar);
+            }
         }
-        for (var jar : ExtensionPackageManager.project().installedJars()) {
-            manager.loadJar(jar);
+        // 批 14（docs/25 T15）：pi additionalExtensionPaths（main.ts:728
+        // resolveCliPaths 对位＝cwd 相对 ⇒ 绝对规范化）——显式 -e 恒加载（-ne 旁路）。
+        for (var explicit : args.extensions()) {
+            manager.loadJar(java.nio.file.Path.of(explicit).toAbsolutePath().normalize());
         }
         com.pijava.coding.agent.extension.bridge.EngineHookBridge.install(
             harness.hookSystem(), owner.laneName(), bus, context,
