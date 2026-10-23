@@ -63,6 +63,14 @@ public final class KeybindingsManager {
     public static final String SESSION_FORK = "app.session.fork";
     public static final String SESSION_RESUME = "app.session.resume";
 
+    // ── tui.select.*／tui.input.newLine（批 17 T4，docs/28 §1.8；pi tui/
+    // keybindings.ts:143-158 默认键逐字）——overlay 表（批 9 C1 教训：同表污染主屏）。
+    public static final String SELECT_UP = "tui.select.up";           // up
+    public static final String SELECT_DOWN = "tui.select.down";       // down
+    public static final String SELECT_CONFIRM = "tui.select.confirm"; // enter
+    public static final String SELECT_CANCEL = "tui.select.cancel";   // escape, ctrl+c
+    public static final String INPUT_NEW_LINE = "tui.input.newLine";  // shift+enter, ctrl+j
+
     /**
      * Neutral key representation produced by the TUI adapter.
      *
@@ -157,6 +165,16 @@ public final class KeybindingsManager {
         overlayBindings.put(SESSION_RENAME, List.of(KeyStroke.of("r", true, false, false)));
         overlayBindings.put(SESSION_DELETE, List.of(KeyStroke.of("d", true, false, false)));
         overlayBindings.put(SESSION_DELETE_NONINVASIVE, List.of(KeyStroke.of("backspace", true, false, false)));
+        // 批 17（T4）：pi tui/keybindings.ts:143-158 默认键逐字——扩展对话框五键。
+        overlayBindings.put(SELECT_UP, List.of(KeyStroke.of("up", false, false, false)));
+        overlayBindings.put(SELECT_DOWN, List.of(KeyStroke.of("down", false, false, false)));
+        overlayBindings.put(SELECT_CONFIRM, List.of(KeyStroke.of("enter", false, false, false)));
+        overlayBindings.put(SELECT_CANCEL, List.of(
+            KeyStroke.of("esc", false, false, false),
+            KeyStroke.of("c", true, false, false)));
+        overlayBindings.put(INPUT_NEW_LINE, List.of(
+            KeyStroke.of("enter", false, false, true),
+            KeyStroke.of("j", true, false, false)));
     }
 
     /**

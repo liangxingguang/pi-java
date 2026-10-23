@@ -59,6 +59,33 @@ public final class ExternalEditorSupport {
         }
     }
 
+    /**
+     * 批 17（T4）：pi extension-editor.ts:55-59 的命令回落链逐字——
+     * {@code settings ?? VISUAL ?? EDITOR ?? (win32 ? "notepad" : "nano")}
+     * （JS 的 {@code ||}  falsy 语义 ⇒ 空串也回落）。
+     *
+     * @param configured settings 的 externalEditor 值（可空）
+     * @param env        环境变量读取（测试注入 map；生产 {@code System::getenv}）
+     * @param windows    平台旗（测试注入；生产 {@code os.name} 含 "win"）
+     * @return 解析出的编辑器命令（恒非空）
+     */
+    public static String resolveCommand(String configured,
+                                        java.util.function.Function<String, String> env,
+                                        boolean windows) {
+        if (configured != null && !configured.isBlank()) {
+            return configured;
+        }
+        var visual = env.apply("VISUAL");
+        if (visual != null && !visual.isBlank()) {
+            return visual;
+        }
+        var editor = env.apply("EDITOR");
+        if (editor != null && !editor.isBlank()) {
+            return editor;
+        }
+        return windows ? "notepad" : "nano";
+    }
+
     /** pi 读回规范化：stripBom＋去尾部换行（CR/LF 混合串）。 */
     static String normalize(String text) {
         var stripped = text.startsWith("﻿") ? text.substring(1) : text;

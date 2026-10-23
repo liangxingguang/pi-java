@@ -40,9 +40,31 @@ class KeybindingsManagerTest {
 
     @Test
     void exposesAllActionIds() {
-        // 11 实键全局＋4 空绑定 session（批 14）＋12 tree/copy＋6 选择器 session（批 14）。
-        assertThat(keys.actionIds()).hasSize(33);
+        // 11 实键全局＋4 空绑定 session（批 14）＋12 tree/copy＋6 选择器 session（批 14）
+        // ＋5 扩展对话框 tui.select.*/tui.input.newLine（批 17，overlay 表）。
+        assertThat(keys.actionIds()).hasSize(38);
         assertThat(keys.actionIds()).contains(KeybindingsManager.INTERRUPT);
+    }
+
+    /** 批 17（T4）：扩展对话框五键在 overlay 表——enter/esc 等主屏键全局 resolve 零污染。 */
+    @Test
+    void extensionDialogKeysLiveInTheOverlayTable() {
+        assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("enter", false, false, false)))
+            .as("enter 不洩全局（主屏提交由应用壳直管）").isNull();
+        assertThat(keys.matches(KeybindingsManager.SELECT_CONFIRM,
+            KeybindingsManager.KeyStroke.of("enter", false, false, false))).isTrue();
+        assertThat(keys.matches(KeybindingsManager.SELECT_CANCEL,
+            KeybindingsManager.KeyStroke.of("esc", false, false, false))).isTrue();
+        assertThat(keys.matches(KeybindingsManager.SELECT_CANCEL,
+            KeybindingsManager.KeyStroke.of("c", true, false, false))).isTrue();
+        assertThat(keys.matches(KeybindingsManager.INPUT_NEW_LINE,
+            KeybindingsManager.KeyStroke.of("enter", false, false, true))).isTrue();
+        assertThat(keys.matches(KeybindingsManager.INPUT_NEW_LINE,
+            KeybindingsManager.KeyStroke.of("j", true, false, false))).isTrue();
+        assertThat(keys.matches(KeybindingsManager.SELECT_UP,
+            KeybindingsManager.KeyStroke.of("up", false, false, false))).isTrue();
+        assertThat(keys.matches(KeybindingsManager.SELECT_DOWN,
+            KeybindingsManager.KeyStroke.of("down", false, false, false))).isTrue();
     }
 
     /** 批 14（docs/25 T3）：选择器六键在 overlay 表，全局 resolve 零污染（批 9 C1 同构）。 */
