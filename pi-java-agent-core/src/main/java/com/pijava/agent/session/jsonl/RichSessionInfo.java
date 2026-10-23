@@ -9,7 +9,10 @@ package com.pijava.agent.session.jsonl;
  *
  * @param createdMs   header 时刻（epoch ms）
  * @param modifiedMs  活动时刻（epoch ms；pi 的 modified）
+ * @param parentSessionPath header {@code parentSession}（pi session-manager.ts:857 同字段；
+ *                          缺席 ⇒ {@code null}）——threaded 排序的树认父（批 14，docs/25 T5）
  */
 public record RichSessionInfo(String id, String path, String name, String cwd,
                               long createdMs, long modifiedMs, int messageCount,
-                              String firstMessage, String allMessagesText) {}
+                              String firstMessage, String allMessagesText,
+                              String parentSessionPath) {}

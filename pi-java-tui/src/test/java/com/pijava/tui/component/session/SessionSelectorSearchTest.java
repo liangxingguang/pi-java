@@ -20,7 +20,8 @@ import static org.assertj.core.api.Assertions.within;
 class SessionSelectorSearchTest {
 
     private static RichSessionInfo session(String id, String name, String allText, String cwd, long modifiedMs) {
-        return new RichSessionInfo(id, "/tmp/" + id + ".jsonl", name, cwd, 0L, modifiedMs, 1, "(no messages)", allText);
+        return new RichSessionInfo(id, "/tmp/" + id + ".jsonl", name, cwd, 0L, modifiedMs, 1,
+            "(no messages)", allText, null);
     }
 
     private static RichSessionInfo session(String id, String allText, long modifiedMs) {

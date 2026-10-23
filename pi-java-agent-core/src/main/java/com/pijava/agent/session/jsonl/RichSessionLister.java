@@ -150,6 +150,7 @@ final class RichSessionLister {
             String id = null;
             String cwd = "";
             long headerTimeMs = -1;
+            String parentSessionPath = null;
             String name = null;
             int messageCount = 0;
             String firstMessage = "";
@@ -179,6 +180,9 @@ final class RichSessionLister {
                     id = node.path("id").isTextual() ? node.path("id").asText() : null;
                     cwd = node.path("cwd").isTextual() ? node.path("cwd").asText() : "";
                     headerTimeMs = parseTimeMs(node.path("timestamp"));
+                    // pi header.parentSession（session-manager.ts:857）：threaded 树认父。
+                    parentSessionPath = node.path("parentSession").isTextual()
+                        ? node.path("parentSession").asText() : null;
                     continue;
                 }
                 if ("session_info".equals(type)) {
@@ -222,7 +226,7 @@ final class RichSessionLister {
             long modified = lastActivity > 0 ? lastActivity : created;
             return new RichSessionInfo(id, path.toString(), name, cwd, created, modified,
                 messageCount, firstMessage.isEmpty() ? "(no messages)" : firstMessage,
-                allMessages.toString());
+                allMessages.toString(), parentSessionPath);
         } catch (SessionListAbortedException e) {
             throw e;
         } catch (Exception e) {
