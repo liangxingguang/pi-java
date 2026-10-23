@@ -440,14 +440,21 @@ class TreeNavigationFlowTest {
     }
 
     /** ⑥c（docs/21 T5，D41 重裁）：运行中有排队 ⇒ restore 先行于 abort，
-     *  排队文本进编辑器（pi :5619-5621）。 */
+     *  排队文本进编辑器（pi :5619-5621）。
+     *
+     * <p>批 15 修真（批 14 登记的确定性红）：steer 必须在<b>首个 provider 调用
+     * 发起之后</b>提交——引擎在 turn 装配边界 drain 转向队列，提交早于调用入口
+     * 时消息被吸入当前 turn（队列瞬空，restore 门恒 false），这正是旧的 600ms
+     * 版本在本机确定性红的根因；调用入口后 run 堵在 5s 延迟里，队列必存活到
+     * 导航 worker 的 restore。</p> */
     @Test
     void queuedMessagesRestoreToEditorBeforeAbort() throws Exception {
         newRig(true);
-        provider.delayNextCall(600);
+        provider.delayNextCall(5_000);
+        int baselineCalls = provider.callCount();
         session.processPrompt("third question"); // 不 .status()：让 run 挂着
-        awaitTrue(() -> session.isRunning(), "run 起跑");
-        mode.submit("queued while navigating"); // 运行中 ⇒ steer 排队
+        awaitTrue(() -> provider.callCount() > baselineCalls, "本次 run 的 provider 调用已发起");
+        mode.submit("queued while navigating"); // run 堵在 provider 内 ⇒ steer 必排队
 
         newFlow().begin();
         driveTargetEntry();

@@ -54,9 +54,16 @@ public final class ScriptedChatProvider implements Provider {
 
     private final String name;
     private final Queue<String> replies = new ConcurrentLinkedQueue<>();
+    private final java.util.concurrent.atomic.AtomicInteger calls =
+        new java.util.concurrent.atomic.AtomicInteger();
     private volatile CountDownLatch summaryStarted;
     private volatile CountDownLatch summaryGate;
     private volatile long nextDelayMs;
+
+    /** 已发起的 provider 调用数（streamInternal 入口计数）——时序门用。 */
+    public int callCount() {
+        return calls.get();
+    }
 
     private ScriptedChatProvider(String name) {
         this.name = name;
@@ -116,6 +123,7 @@ public final class ScriptedChatProvider implements Provider {
         @Override
         protected void streamInternal(StreamRequest request,
                 java.util.concurrent.SubmissionPublisher<StreamEvent> publisher) {
+            provider.calls.incrementAndGet();
             boolean summarization = false;
             for (Message message : request.messages()) {
                 if (message instanceof Message.UserMessage user) {
