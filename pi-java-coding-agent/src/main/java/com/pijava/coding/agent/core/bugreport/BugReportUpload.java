@@ -33,8 +33,8 @@ public final class BugReportUpload {
             gatewayUrl());
     }
 
-    /** 测试注入：HttpClient 与网关 URL（SessionShare 先例）。 */
-    BugReportUpload(HttpClient http, String gateway) {
+    /** 测试注入：HttpClient 与网关 URL（SessionShare 先例；tui 流测试跨模块用）。 */
+    public BugReportUpload(HttpClient http, String gateway) {
         this.http = http;
         this.gateway = gateway;
     }

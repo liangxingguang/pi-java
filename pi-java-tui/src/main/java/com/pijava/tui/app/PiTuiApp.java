@@ -541,7 +541,7 @@ public final class PiTuiApp {
             boolean loginCommand = text.startsWith("/login");
             command.thenAccept(result ->
                 dispatcher.dispatch(() -> {
-                    handleCommandResult(result);
+                    handleCommandResult(result, text);
                     // 批 12 T13（pi :5207/:5352 登录后时机对位）。
                     if (loginCommand) {
                         maybeWarnSubscriptionAuth();
@@ -554,6 +554,14 @@ public final class PiTuiApp {
     }
 
     private void handleCommandResult(String result) {
+        handleCommandResult(result, null);
+    }
+
+    /**
+     * @param input 原始输入行（裁决⑦：marker 不携载荷，{@code /bug} 的 hint
+     *              由此切——pi :3242-3245 对位）
+     */
+    private void handleCommandResult(String result, String input) {
         if (result == null) {
             return;
         }
@@ -581,6 +589,13 @@ public final class PiTuiApp {
             case CommandRegistry.UI_SCOPED_MODELS ->
                 chatScreen.appendSystemText(
                     "Use /scoped-models +<model> or /scoped-models -<model>");
+            // 批 15（T7）：/bug 故障上报流——hint 从原始输入行切（pi :3242-3245）。
+            case CommandRegistry.UI_BUG_REPORT -> {
+                var hint = input != null && input.length() > 4
+                    ? input.substring(4).trim() : "";
+                new BugReportFlow(session, chatScreen, dispatcher, this::openOverlay)
+                    .begin(hint.isEmpty() ? null : hint);
+            }
             default -> chatScreen.appendSystemText(result);
         }
     }

@@ -140,6 +140,10 @@ public final class MiscCommands {
             }));
         registry.register(simple("hotkeys", "Show all keyboard shortcuts", "",
             (args, ctx) -> hotkeys(ctx)));
+        // 批 15（T7，pi slash-commands.ts:28 逐字）：/bug 故障上报流——marker
+        // 不携载荷（裁决⑦），hint 由 TUI 从原始输入行切（pi :3242-3245）。
+        registry.register(simple("bug", "Report a bug to the Pi developers", "<description>",
+            (args, ctx) -> CommandRegistry.UI_BUG_REPORT));
         // B176（原 docs/27）：压缩跑 worker 线程 —— pi handleCompactCommand 是
         // async 函数，渲染/输入线程不被整次压缩阻塞。
         registry.register(async("compact", "Compact context manually", "<text>",

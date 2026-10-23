@@ -85,13 +85,17 @@ public final class SettingsManager {
         return merge(global, project);
     }
 
-    /** The raw global scope (mutated by {@link SettingsAccessors}). */
-    Settings global() {
+    /**
+     * The raw global scope (mutated by {@link SettingsAccessors}).
+     * 批 15 转 public：pi {@code settingsManager.getGlobalSettings()} 是公共面
+     * （bug 上报包的 settings 节操作数）。
+     */
+    public Settings global() {
         return global;
     }
 
-    /** The raw project scope. */
-    Settings project() {
+    /** The raw project scope（pi {@code getProjectSettings()} 对位，批 15 转 public）。 */
+    public Settings project() {
         return project;
     }
 

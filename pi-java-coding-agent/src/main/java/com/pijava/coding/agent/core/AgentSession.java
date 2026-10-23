@@ -137,6 +137,8 @@ public final class AgentSession implements AutoCloseable {
         com.pijava.ai.catalog.ModelCatalog.empty();
     // B1（map #24/#25）：分支摘要生成器与模型解析器（create 装配）。
     private com.pijava.coding.agent.compaction.BranchSummarization branchSummarization;
+    /** 批 15（T3b）：bug 摘要生成器（wireSession 公共路径装配，fork 自动重装）。 */
+    private com.pijava.coding.agent.core.bugreport.BugReportSummarizer bugReportSummarizer;
     private com.pijava.ai.model.DefaultModelResolver modelResolver;
     /** pi {@code _branchSummaryAbortController}（agent-session.ts:4018 创建/:4155 清）。 */
     private volatile com.pijava.agent.harness.CompactionAbortToken branchSummaryAbort;
@@ -686,6 +688,16 @@ public final class AgentSession implements AutoCloseable {
                 () -> models.maxOutputTokens(agentSession.harness.getModel()),
                 () -> agentSession.harness.getThinkingLevel(),
                 models::supportsThinking));
+        // 批 15（T3b）：bug 摘要生成器——与分支摘要同源的 StreamFn/retry 环
+        //（pi agent-session.ts:4322 的 _getSummarizationRequestAuth 对位：
+        // auth 参在 java 由 streamFn 车道自取）。
+        agentSession.bugReportSummarizer = new com.pijava.coding.agent.core.bugreport
+            .BugReportSummarizer(new LlmSummaryGenerator(recordingStreamFn,
+                () -> agentSession.harness.getModel(),
+                retrySettings, retryAborted, retryObserver,
+                () -> models.maxOutputTokens(agentSession.harness.getModel()),
+                () -> agentSession.harness.getThinkingLevel(),
+                models::supportsThinking));
         agentSession.baseToolContext = toolContext;
         return agentSession;
     }
@@ -1008,6 +1020,19 @@ public final class AgentSession implements AutoCloseable {
      */
     public String cwd() {
         return harness.toolContext().cwd();
+    }
+
+    /**
+     * pi {@code AgentSession.summarizeForBugReport}（agent-session.ts:4322-4336）
+     * 对位（批 15 T3b）：model 缺 ⇒ {@code No model selected}；否则由会话模型
+     * 代写 bug 摘要（四守卫在 {@code BugReportSummarizer}）。
+     */
+    public String summarizeForBugReport(String hint) {
+        var summarizer = bugReportSummarizer;
+        if (summarizer == null) {
+            throw new IllegalStateException("Bug report summarizer not wired");
+        }
+        return summarizer.summarize(this, hint);
     }
 
     /**
