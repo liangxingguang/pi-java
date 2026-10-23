@@ -64,7 +64,14 @@ record ExecutionContext(
     Supplier<String> appendSystemPrompt,
     Supplier<List<com.pijava.agent.prompt.SystemPromptOptions.ContextFile>> contextFiles,
     /** B128：pi {@code Agent.thinkingBudgets}（构造期固化，同 thinkingLevelMap）；null ≙ undefined。 */
-    com.pijava.ai.thinking.ThinkingBudgets thinkingBudgets
+    com.pijava.ai.thinking.ThinkingBudgets thinkingBudgets,
+    /**
+     * 批 16（T3a，docs/27）：系统提示<b>自定义段</b>（pi
+     * {@code BuildSystemPromptOptions.sections}，system-prompt.ts:29-30）——
+     * 段名 → 内容；唯一生产者是扩展的 {@code before_agent_start} 写回
+     * （{@code AgentHarness.setPromptSections}）。
+     */
+    Supplier<java.util.Map<String, String>> promptSections
 ) {
     ExecutionContext {
         // 与 HarnessConfig 的规范默认同置：直接构造 ExecutionContext 的装配（测试、
@@ -93,6 +100,9 @@ record ExecutionContext(
         }
         if (contextFiles == null) {
             contextFiles = List::of;
+        }
+        if (promptSections == null) {
+            promptSections = java.util.Map::of;
         }
     }
 

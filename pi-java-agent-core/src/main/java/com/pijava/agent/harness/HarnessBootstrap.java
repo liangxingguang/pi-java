@@ -129,7 +129,9 @@ abstract class HarnessBootstrap implements AutoCloseable {
             lane::applyTurn, telemetry, config.compactionObserver(),
             config.retrySettings(), config.retryAborted(), config.retryObserver(),
             () -> lane.promptGuidelines, () -> lane.appendSystemPrompt,
-            config.contextFiles(), config.thinkingBudgets());
+            config.contextFiles(), config.thinkingBudgets(),
+            // 批 16（T3a）：自定义段晚读口（before_agent_start 写回后下一 run 生效）。
+            () -> lane.promptSections);
         this.runLifecycle = new RunLifecycle(execCtx);
         this.piEngine = new PiLaneEngine(execCtx, runLifecycle);
     }

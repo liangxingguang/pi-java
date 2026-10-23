@@ -29,6 +29,17 @@ public class SkillManager {
         return List.copyOf(skills.values());
     }
 
+    /**
+     * 批 16（T5b，/reload）：整体替换技能集（pi {@code updateSkillsFromPaths} 的
+     * 「替换」语义对位）——只动技能表，prompt 模板表不受影响。
+     */
+    public void replaceAll(Collection<Skill> replacements) {
+        skills.clear();
+        for (var skill : replacements) {
+            register(skill);
+        }
+    }
+
     /** Register a named prompt template. */
     public void registerTemplate(PromptTemplate template) {
         templates.put(template.name(), template);

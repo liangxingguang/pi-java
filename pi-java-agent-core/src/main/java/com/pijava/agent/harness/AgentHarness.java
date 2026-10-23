@@ -434,14 +434,49 @@ public class AgentHarness extends HarnessBootstrap {
         return Set.copyOf(lane.activeTools);
     }
 
-    /** Replace the set of active tools, re-registering them in the tool registry. */
+    /**
+     * 替换激活工具集（pi {@code _applyToolLoadout} 只写 {@code agent.state.tools}
+     * 的对位，agent-session.ts:1575-1579）。
+     *
+     * <p>批 16（T2a，裁决①）：<b>注册面与激活面分离</b>——本方法不再清/重填
+     * {@code toolRegistry}（旧语义会把扩展后注册的工具从注册表抹掉）。</p>
+     */
     public void setActiveTools(Set<AgentTool<?, ?>> tools) {
         if (closed) throw new HarnessClosedException();
         lane.activeTools = Set.copyOf(tools);
-        if (toolRegistry != null) {
-            toolRegistry.clear();
-            toolRegistry.registerAll(List.copyOf(tools));
+    }
+
+    /**
+     * 按名并入激活集（批 16 T2d：pi 的「注册即激活」臂，
+     * agent-session.ts:3603 对位）——注册表查无的名静默忽略。
+     */
+    public void activateTools(java.util.Collection<String> names) {
+        if (closed) throw new HarnessClosedException();
+        if (toolRegistry == null) {
+            return;
         }
+        var next = new java.util.LinkedHashSet<>(lane.activeTools);
+        for (var name : names) {
+            var tool = toolRegistry.get(name);
+            if (tool != null) {
+                next.add(tool);
+            }
+        }
+        lane.activeTools = Set.copyOf(next);
+    }
+
+    /**
+     * 系统提示自定义段（批 16 T3a；pi {@code BuildSystemPromptOptions.sections}）。
+     * 唯一生产者是扩展 {@code before_agent_start} 的写回。
+     */
+    public void setPromptSections(java.util.Map<String, String> sections) {
+        if (closed) throw new HarnessClosedException();
+        lane.promptSections = sections == null ? java.util.Map.of() : java.util.Map.copyOf(sections);
+    }
+
+    /** 当前系统提示自定义段（批 16 T3a）。 */
+    public java.util.Map<String, String> getPromptSections() {
+        return lane.promptSections;
     }
 
     // ═══════════════════════════════════════════════════════════

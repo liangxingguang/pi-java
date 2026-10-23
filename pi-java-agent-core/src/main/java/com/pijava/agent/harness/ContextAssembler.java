@@ -90,9 +90,12 @@ final class ContextAssembler {
         var promptGuidelines = ctx.promptGuidelines().get();
         var appendSystemPrompt = ctx.appendSystemPrompt().get();
         var contextFiles = ctx.contextFiles().get();
+        // 批 16（T3b）：扩展 before_agent_start 写入的自定义段进装配（段名校验/
+        // <name> 包装/diff 补丁全部既有——SystemPrompts.buildSections/:67 校验）。
+        var sections = ctx.promptSections().get();
         if (!isPresent(customPrompt) && tools.isEmpty() && promptGuidelines.isEmpty()
                 && skills.isEmpty() && !isPresent(appendSystemPrompt)
-                && contextFiles.isEmpty()) {
+                && contextFiles.isEmpty() && sections.isEmpty()) {
             // ⚠️ 什么都没配 ⇒ **没有提示**，而不是「默认提示」。这是 pi
             // `createInitialSystemMessage`（`utils/transcript.ts:12-22`）的空判据在 harness 层的
             // 对应物：pi 的 `createMutableAgentState` 见「提示与工具都空」就**不建**前导消息
@@ -108,6 +111,7 @@ final class ContextAssembler {
             .toolGuidelines(guidelines)
             .promptGuidelines(promptGuidelines)
             .appendSystemPrompt(appendSystemPrompt)
+            .sections(sections)
             .skills(skills)
             .contextFiles(contextFiles)
             .cwd(System.getProperty("user.dir", ""))

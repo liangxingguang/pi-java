@@ -242,6 +242,12 @@ public final class LaneState {
     List<String> promptGuidelines = List.of();
     /** 追加提示（包 A4b；pi 的 {@code appendSystemPrompt}，渲染成 {@code addendum} 段）。 */
     String appendSystemPrompt = "";
+    /**
+     * 批 16（T3a，docs/27）：系统提示自定义段（pi {@code BuildSystemPromptOptions.sections}，
+     * system-prompt.ts:29-30）——唯一生产者是扩展 {@code before_agent_start} 的写回；
+     * {@link ContextAssembler} 每 run 起点现读进装配。
+     */
+    java.util.Map<String, String> promptSections = java.util.Map.of();
     Set<AgentTool<?, ?>> activeTools;
     /** steer / followUp 队列的排空模式（pi 在 Agent 上是纯内存的，不入日志）。 */
     QueueMode steeringMode;

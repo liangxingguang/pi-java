@@ -31,7 +31,7 @@ class ContextAssemblerContextFilesTest {
             null, lane, null, null,
             null, null, null, null,
             null, null, null, NoopTelemetryContext.INSTANCE, null,
-            null, null, null, java.util.List::of, () -> "", contextFiles, null);
+            null, null, null, java.util.List::of, () -> "", contextFiles, null, null);
     }
 
     @Test
