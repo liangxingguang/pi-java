@@ -105,18 +105,63 @@ public final class SessionCommands {
         });
     }
 
+    /**
+     * 批 15（T11，pi {@code handleSessionCommand} interactive-mode.ts:6693-6772
+     * 逐段对位；D68 销号——Cache Re-billed 从 Cache Warming 段尾搬入 Cost 段）：
+     * 段序 Session Info → Messages → Tokens → Cache Warming → Cost。
+     * java 无主题色面，纯文本同 pi 行形。
+     */
     private static String sessionInfo(SlashContext ctx) {
         var session = ctx.session();
-        var builder = new StringBuilder();
-        builder.append("Session: ").append(session.sessionName()).append('\n');
-        builder.append("Lane: ").append(session.laneName()).append('\n');
-        builder.append("Entries: ").append(session.entryCount()).append('\n');
-        builder.append("Sessions in process: ")
-            .append(session.listSessions().size());
+        var stats = com.pijava.coding.agent.core.SessionStats.of(session);
+        var usageBreakdown = com.pijava.coding.agent.core.UsageCostBreakdown.of(
+            session.accumulatedEntries());
+        var waste = com.pijava.coding.agent.core.CacheStats.computeCacheWaste(
+            session.accumulatedEntries(), key -> {
+                var slash = key.indexOf('/');
+                return slash < 0 ? java.util.Optional.empty()
+                    : session.modelCatalog().find(com.pijava.ai.model.ModelId.of(
+                        key.substring(0, slash), key.substring(slash + 1)));
+            });
 
-        // 批 13（docs/24 T12，pi interactive-mode.ts:6739-6746 逐字）：Cache Warming
-        // 段——无条件显示，不吃 showCacheMissNotices 门（pi 同）；java 无主题色面，
-        // 纯文本同既有 4 行风格。
+        var builder = new StringBuilder("Session Info\n\n");
+        var name = session.sessionName();
+        if (name != null && !name.isBlank()) {
+            builder.append("Name: ").append(name).append('\n');
+        }
+        builder.append("File: ").append(
+            stats.sessionFile() != null ? stats.sessionFile() : "In-memory").append('\n');
+        builder.append("ID: ").append(stats.sessionId()).append("\n\n");
+
+        builder.append("Messages\n");
+        builder.append("Total: ").append(stats.totalMessages()).append('\n');
+        builder.append("User: ").append(stats.userMessages()).append('\n');
+        builder.append("Assistant: ").append(stats.assistantMessages()).append('\n');
+        builder.append("Tools: ").append(stats.toolCalls()).append(" calls, ")
+            .append(stats.toolResults()).append(" results\n\n");
+
+        // "Input" 是全 prompt 量；有缓存活动时拆 Cached/Uncached（pi 注释原意）。
+        builder.append("Tokens\n");
+        double input = stats.tokens().input();
+        double cacheRead = stats.tokens().cacheRead();
+        double cacheWrite = stats.tokens().cacheWrite();
+        double promptTokens = input + cacheRead + cacheWrite;
+        builder.append("Input: ").append(thousands(promptTokens)).append('\n');
+        if (promptTokens > 0 && (cacheRead > 0 || cacheWrite > 0)) {
+            builder.append("  Cached: ").append(thousands(cacheRead))
+                .append(String.format(java.util.Locale.US, " (%.1f%%)",
+                    cacheRead / promptTokens * 100)).append('\n');
+            builder.append("  Uncached: ").append(thousands(input + cacheWrite));
+            if (cacheWrite > 0) {
+                builder.append(" (").append(thousands(cacheWrite))
+                    .append(" written to cache)");
+            }
+            builder.append('\n');
+        }
+        builder.append("Output: ").append(thousands(stats.tokens().output())).append('\n');
+        builder.append("Total: ").append(thousands(stats.tokens().total())).append('\n');
+
+        // 批 13 段（pi :6739-6746）原样。
         builder.append("\nCache Warming\n");
         builder.append("Mode: ").append(
             session.services().settings().network().getCacheWarmingMode()).append('\n');
@@ -131,27 +176,46 @@ public final class SessionCommands {
             builder.append("Refresh cost: $")
                 .append(fmt3(status.decision().warmCost())).append('\n');
         }
-        // pi :6757-6764 的 Cache Re-billed 行（D68：java /session 无 Cost/token
-        // 统计块，挂 Cache Warming 段尾——结构差随窄差登记）。
-        var waste = com.pijava.coding.agent.core.CacheStats.computeCacheWaste(
-            session.accumulatedEntries(), key -> {
-                var slash = key.indexOf('/');
-                return slash < 0 ? java.util.Optional.empty()
-                    : session.modelCatalog().find(com.pijava.ai.model.ModelId.of(
-                        key.substring(0, slash), key.substring(slash + 1)));
-            });
-        if (waste.missedTokens() > 0) {
-            var missLabel = waste.missCount() == 1 ? "1 miss" : waste.missCount() + " misses";
-            var detail = String.format(java.util.Locale.US, "%,d", waste.missedTokens())
-                + " tokens, " + missLabel;
-            if (waste.missedCost() >= 0.0001) {
-                builder.append("Cache Re-billed: $").append(fmt3(waste.missedCost()))
-                    .append(" (").append(detail).append(")\n");
-            } else {
-                builder.append("Cache Re-billed: ").append(detail).append('\n');
+
+        // pi :6749-6767：Cost 段（门 cost>0 || missedTokens>0）；Cache Re-billed
+        // 在本段内（D68 销号——批 13 挂 Cache Warming 段尾的结构差消除）。
+        if (stats.cost() > 0 || waste.missedTokens() > 0) {
+            builder.append("\nCost\n");
+            builder.append("Total: $").append(fmt3(stats.cost()));
+            var model = session.harness().getModel();
+            var selectedModelKey = (model != null ? model.provider() : "null")
+                + "/" + (model != null ? model.modelName() : "null");
+            // 单桶且即当前模型键 ⇒ 重复总额不列行（pi :6754-6758）。
+            if (usageBreakdown.size() > 1
+                    || (!usageBreakdown.isEmpty()
+                        && !usageBreakdown.getFirst().key().equals(selectedModelKey))) {
+                for (var bucket : usageBreakdown) {
+                    builder.append("\n  ").append(bucket.key()).append(": $")
+                        .append(fmt3(bucket.cost())).append(" (")
+                        .append(com.pijava.coding.agent.core.CacheWarmingFormatting
+                            .formatTokens(bucket.tokens()))
+                        .append(" tokens)");
+                }
+            }
+            if (waste.missedTokens() > 0) {
+                var missLabel = waste.missCount() == 1
+                    ? "1 miss" : waste.missCount() + " misses";
+                var detail = String.format(java.util.Locale.US, "%,d", waste.missedTokens())
+                    + " tokens, " + missLabel;
+                if (waste.missedCost() >= 0.0001) {
+                    builder.append("\nCache Re-billed: $").append(fmt3(waste.missedCost()))
+                        .append(" (").append(detail).append(")");
+                } else {
+                    builder.append("\nCache Re-billed: ").append(detail);
+                }
             }
         }
         return builder.toString();
+    }
+
+    /** pi {@code toLocaleString()}（/session token 行千分位）。 */
+    private static String thousands(double value) {
+        return String.format(java.util.Locale.US, "%,d", (long) value);
     }
 
     /** pi {@code toFixed(3)}（/session 金额行）。 */
