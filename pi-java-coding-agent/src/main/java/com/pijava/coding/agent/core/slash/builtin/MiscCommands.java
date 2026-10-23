@@ -29,27 +29,32 @@ public final class MiscCommands {
             (args, ctx) -> ctx.keybindings() == null
                 ? registry.helpText()
                 : registry.helpText() + "\n\n" + hotkeys(ctx)));
-        registry.register(simple("export", "Export session as HTML or JSONL", "<path>",
+        // 批 15（T10，pi handleExportCommand interactive-mode.ts:6520-6533 对位）：
+        // 路径参经引号解析；.jsonl 尾 ⇒ JSONL；其余（含无参）⇒ HTML——无参时
+        // session-<ISO 时间戳 :.→->.html 落 cwd。状态/失败文案逐字。
+        registry.register(simple("export",
+            "Export session (HTML default, or specify path: .html/.jsonl)", "",
             (args, ctx) -> {
-                if (args.isBlank()) {
-                    return "Usage: /export <path>.html|.jsonl";
-                }
+                var path = pathCommandArgument(args);
                 try {
-                    var target = java.nio.file.Path.of(args.trim());
-                    if (target.getFileName().toString().endsWith(".html")) {
-                        var tmp = java.nio.file.Files.createTempFile("pi-java-export", ".jsonl");
-                        try {
-                            ctx.session().exportJsonl(tmp);
-                            var out = new HtmlExporter().export(tmp, target);
-                            return "Exported session to " + out;
-                        } finally {
-                            java.nio.file.Files.deleteIfExists(tmp);
-                        }
+                    if (path != null && path.endsWith(".jsonl")) {
+                        var target = java.nio.file.Path.of(path);
+                        ctx.session().exportJsonl(target);
+                        return "Session exported to: " + target;   // pi :6527 逐字
                     }
-                    ctx.session().exportJsonl(target);
-                    return "Exported session to " + target;
+                    var target = java.nio.file.Path.of(path != null ? path
+                        : "session-" + java.time.Instant.now().toString()
+                            .replace(":", "-").replace(".", "-") + ".html");
+                    var tmp = java.nio.file.Files.createTempFile("pi-java-export", ".jsonl");
+                    try {
+                        ctx.session().exportJsonl(tmp);
+                        var out = new HtmlExporter().export(tmp, target);
+                        return "Session exported to: " + out;      // pi :6531 逐字
+                    } finally {
+                        java.nio.file.Files.deleteIfExists(tmp);
+                    }
                 } catch (Exception e) {
-                    return "Export failed: " + e.getMessage();
+                    return "Failed to export session: " + e.getMessage();  // pi :6535 逐字
                 }
             }));
         registry.register(simple("import", "Import session from JSONL", "<file>",
@@ -201,6 +206,34 @@ public final class MiscCommands {
                 return CompletableFuture.completedFuture("Bye.");
             }
         });
+    }
+
+    /**
+     * pi {@code getPathCommandArgument}（interactive-mode.ts:6537-6562）逐字：
+     * trimStart 后空 ⇒ 缺省；首字符 {@code '}/{@code "} ⇒ 取到配对引号为止
+     * （无配对 ⇒ 缺省）；否则取到首个空白。
+     */
+    static String pathCommandArgument(String args) {
+        var argsString = args == null ? "" : args.stripLeading();
+        if (argsString.isEmpty()) {
+            return null;
+        }
+        var firstChar = argsString.charAt(0);
+        if (firstChar == '"' || firstChar == '\'') {
+            int closing = argsString.indexOf(firstChar, 1);
+            if (closing < 0) {
+                return null;
+            }
+            return argsString.substring(1, closing);
+        }
+        int whitespace = -1;
+        for (int i = 0; i < argsString.length(); i++) {
+            if (Character.isWhitespace(argsString.charAt(i))) {
+                whitespace = i;
+                break;
+            }
+        }
+        return whitespace < 0 ? argsString : argsString.substring(0, whitespace);
     }
 
     /** 原因链查找（/import 的 file-not-found 非致命臂判据）。 */
