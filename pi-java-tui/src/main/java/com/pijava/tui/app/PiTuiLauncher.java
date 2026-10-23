@@ -56,16 +56,103 @@ public final class PiTuiLauncher {
                 sessionHasMessages(session)),
             session.services().settings().install().getCollapseChangelog());
 
+        // 批 15（T2a，pi :1220-1226 对位；changelog/models.json 警告之后）：
+        // 上次未通知崩溃 ⇒ 启动提示「Run /bug」。路径每调现解析（批 14 教训）。
+        var crash = com.pijava.coding.agent.core.crash.CrashLog.takeUnnotified(
+            com.pijava.coding.agent.core.crash.CrashLog.crashLogPath(),
+            System.currentTimeMillis());
+        if (crash != null) {
+            app.setStartupCrashNotice("pi-java crashed on " + localizedWhen(crash.timestamp())
+                + " (" + crash.message() + "). Run /bug to report it; the crash details"
+                + " are attached automatically.");
+        }
+
+        // 批 15（T2b，pi :4363-4390 uncaughtCrash 对位）：未捕获异常钩——
+        // 恢复终端 ⇒ stderr 打印 ⇒ 扩展提示 ⇒ 记 crash ⇒ 崩溃指引 ⇒ exit 1。
+        // pi 是 prepend 独占；java 亦独占，交互模式退出时恢复旧 handler。
+        var previousHandler = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler((thread, error) -> {
+            // pi isShuttingDown 臂对位：退出中直接 exit 1（不重入）。
+            restoreTerminalSequences();
+            System.err.println("pi-java exiting due to uncaughtException:");
+            error.printStackTrace(System.err);
+            var hint = com.pijava.coding.agent.core.crash.CrashIntegration
+                .formatCrashExtensionHint(
+                    com.pijava.coding.agent.core.crash.CrashLog
+                        .findExtensionStackMatches(stackTraceText(error), loadedExtensions(session)));
+            if (hint != null) {
+                System.err.println("\n" + hint);
+            }
+            var record = com.pijava.coding.agent.core.crash.CrashLog.record(
+                com.pijava.coding.agent.core.crash.CrashRecord.Kind.UNCAUGHT_EXCEPTION,
+                error, session.sessionFile(), session.cwd(),
+                com.pijava.coding.agent.core.crash.CrashLog.crashLogPath());
+            if (record != null) {
+                System.err.println("\n" + com.pijava.coding.agent.core.crash.CrashIntegration
+                    .crashReportInstructions(session.sessionFile()));
+            }
+            System.exit(1);
+        });
+
         // Virtual-thread events → render-thread queue (thread model §11.1).
         mode.setObservers(
             entry -> dispatcher.dispatch(() -> chatScreen.onEntry(entry)),
             event -> dispatcher.dispatch(() -> chatScreen.onStreamEvent(event)));
 
         var theme = themeFrom(args, session);
-        if ("fullscreen".equalsIgnoreCase(tuiModeFrom(args, session))) {
-            return runFullscreen(app, args, theme, session);
+        try {
+            if ("fullscreen".equalsIgnoreCase(tuiModeFrom(args, session))) {
+                return runFullscreen(app, args, theme, session);
+            }
+            return runRegular(app, args, theme, session);
+        } finally {
+            // 交互模式退出 ⇒ 恢复旧 handler（钩的独占装配只活在本模式内）。
+            Thread.setDefaultUncaughtExceptionHandler(previousHandler);
         }
-        return runRegular(app, args, theme, session);
+    }
+
+    /** 批 15（T2a）：pi {@code new Date(crash.timestamp).toLocaleString()} 对位。 */
+    private static String localizedWhen(String isoTimestamp) {
+        try {
+            var instant = java.time.Instant.parse(isoTimestamp);
+            return java.time.format.DateTimeFormatter
+                .ofLocalizedDateTime(java.time.format.FormatStyle.MEDIUM)
+                .withLocale(java.util.Locale.getDefault())
+                .format(java.time.LocalDateTime.ofInstant(instant,
+                    java.time.ZoneId.systemDefault()));
+        } catch (Exception e) {
+            return isoTimestamp;
+        }
+    }
+
+    /** 批 15（T2b）：fullscreen catch 块同序的终端恢复序列。 */
+    private static void restoreTerminalSequences() {
+        try {
+            System.out.print("\033[?1049l\033[?25h\033[0m");
+            System.out.flush();
+        } catch (Throwable ignored) {
+            // best-effort restore
+        }
+    }
+
+    /** 批 15（T2b）：栈文本化（扩展栈匹配的操作数）。 */
+    private static String stackTraceText(Throwable error) {
+        var writer = new java.io.StringWriter();
+        error.printStackTrace(new java.io.PrintWriter(writer));
+        return writer.toString();
+    }
+
+    /** 批 15（T2b/裁决②）：已安装扩展表（best-effort，崩了不能再崩）。 */
+    private static java.util.List<com.pijava.coding.agent.extension.InstalledExtension>
+            loadedExtensions(AgentSession session) {
+        try {
+            var all = new java.util.ArrayList<com.pijava.coding.agent.extension.InstalledExtension>();
+            all.addAll(com.pijava.coding.agent.extension.ExtensionPackageManager.global().list());
+            all.addAll(com.pijava.coding.agent.extension.ExtensionPackageManager.project().list());
+            return all;
+        } catch (Exception e) {
+            return java.util.List.of();
+        }
     }
 
     /**
@@ -87,6 +174,11 @@ public final class PiTuiLauncher {
             app.start(runner);
             app.submitInitial(args);
             runner.run(app::root);
+            if (app.consumeFatalExit()) {
+                // 批 15（T2c）：pi handleFatalRuntimeError（停 TUI ⇒ exit 1；
+                // 不倾倒 transcript——那不是正常退出）。
+                return 1;
+            }
             afterFullscreenExit(session, app.terminalCols(), System.out);
             return 0;
         } catch (Exception e) {
@@ -119,6 +211,10 @@ public final class PiTuiLauncher {
             app.startInline(shell);
             app.submitInitial(args);
             shell.run(app::onInlineEvent, app::renderInline);
+            if (app.consumeFatalExit()) {
+                // 批 15（T2c）：pi handleFatalRuntimeError ⇒ exit 1。
+                return 1;
+            }
             // 批 12 T10：regular 无 alt 屏——transcript 本就在主屏滚动回退里，
             // 两臂都不动；恢复提示同样接上（pi 非 fullscreen 也只打提示）。
             printResumeHint(session, System.out);

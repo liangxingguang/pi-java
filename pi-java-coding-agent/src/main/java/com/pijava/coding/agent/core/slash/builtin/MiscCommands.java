@@ -63,6 +63,10 @@ public final class MiscCommands {
                     ctx.onSwitchSession().accept(imported);
                     return "Imported session from " + args.trim();
                 } catch (Exception e) {
+                    // pi :6602-6605：file-not-found 是非致命臂（showError 继续会话）。
+                    if (hasCause(e, java.nio.file.NoSuchFileException.class)) {
+                        return "Failed to import session: " + e.getMessage();
+                    }
                     // 批 15（裁决⑤/B256）：pi 的 /import 失败＝fatal（interactive-mode.ts
                     // :6607 → handleFatalRuntimeError）——记 crash ⇒ TUI 打错误＋崩溃指引
                     // ⇒ exit 1。旧「Import failed 继续会话」臂与 pi 语义相悖。
@@ -193,6 +197,16 @@ public final class MiscCommands {
                 return CompletableFuture.completedFuture("Bye.");
             }
         });
+    }
+
+    /** 原因链查找（/import 的 file-not-found 非致命臂判据）。 */
+    private static boolean hasCause(Throwable error, Class<? extends Throwable> type) {
+        for (var cursor = error; cursor != null; cursor = cursor.getCause()) {
+            if (type.isInstance(cursor)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String hotkeys(SlashContext ctx) {

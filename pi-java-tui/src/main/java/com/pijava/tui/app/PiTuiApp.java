@@ -99,6 +99,12 @@ public final class PiTuiApp {
     // showWelcomeOnce 读取 ⇒ volatile 跨线程可见性，同 lastTerminalRows 先例）。
     private volatile String startupChangelog;
     private volatile boolean startupChangelogCollapse;
+    // 批 15（T2a，pi :1220-1226）：启动崩溃提示（同 startupChangelog 装配形）。
+    private volatile String startupCrashNotice;
+    // 批 15（T2d，pi bugReportHintShown）：/bug 建议每进程最多一次。
+    private volatile boolean bugReportHintShown;
+    // 批 15（T2c）：fatal marker 臂置位——launcher 退出码改 1（pi exit(1)）。
+    private volatile boolean fatalExit;
 
     /** Creates the app with the default scroll configuration. */
     public PiTuiApp(InteractiveMode mode, ChatScreen chatScreen,
@@ -153,6 +159,8 @@ public final class PiTuiApp {
         // docs/21（§3.7）：排队区 hint 行键名随绑定表取（pi getAppKeyDisplay 对位）。
         chatScreen.setDequeueHint(
             KeybindingHints.displayText(keys.strokeFor(KeybindingsManager.DEQUEUE)));
+        // 批 15（T2d）：message_end 的 /bug 建议钩（pi :3586 挂点对位）。
+        chatScreen.setBugReportHook(this::maybeSuggestBugReport);
         chatScreen.onSubmit(this::submitPrompt);
     }
 
@@ -237,6 +245,24 @@ public final class PiTuiApp {
         welcomeShown = true;
         chatScreen.showWelcome(new WelcomeOverlay(session).text());
         showStartupChangelog();
+        showStartupCrashNotice();
+    }
+
+    /**
+     * 批 15（T2a，pi :1220-1226 对位）：启动崩溃提示装配（changelog 之后）。
+     * 裁决⑪：走 dim 系统文本（pi 是 warning 色 ThemedText，窄差 D83）。
+     */
+    public void setStartupCrashNotice(String text) {
+        this.startupCrashNotice = text;
+    }
+
+    private void showStartupCrashNotice() {
+        if (startupCrashNotice == null) {
+            return;
+        }
+        var text = startupCrashNotice;
+        startupCrashNotice = null;
+        chatScreen.appendSystemText(text);
     }
 
     /**
@@ -531,6 +557,18 @@ public final class PiTuiApp {
         if (result == null) {
             return;
         }
+        // 批 15（T2c，pi handleFatalRuntimeError :2113-2126 对位）：致命错误——
+        // showError ⇒ 崩溃指引（crash 已记 ⇒ 恒打）⇒ 停 TUI ⇒ 退出码 1。
+        if (result.startsWith(CommandRegistry.UI_FATAL_EXIT_PREFIX)) {
+            chatScreen.showError(
+                result.substring(CommandRegistry.UI_FATAL_EXIT_PREFIX.length()));
+            chatScreen.appendSystemText(
+                com.pijava.coding.agent.core.crash.CrashIntegration
+                    .crashReportInstructions(session.sessionFile()));
+            fatalExit = true;
+            exit();
+            return;
+        }
         switch (result) {
             case CommandRegistry.UI_MODEL_SELECTOR ->
                 openOverlay(new ModelSelectorScreen(session));
@@ -807,5 +845,46 @@ public final class PiTuiApp {
     /** The session-event channel (test hook). */
     SessionEventChannel sessionEvents() {
         return sessionEvents;
+    }
+
+    /**
+     * 批 15（T2c）：fatal 退出一次性读取（launcher 据此把退出码改 1——pi
+     * {@code process.exit(1)} 对位）。
+     */
+    boolean consumeFatalExit() {
+        var was = fatalExit;
+        fatalExit = false;
+        return was;
+    }
+
+    // ── 批 15（T2d，pi :2168-2190＋:3586 对位）：/bug 建议 ──────────
+
+    /** pi 逐字：{@code /\b(?:abort(?:ed)?|cancel(?:l?ed)?)\b/i}。 */
+    private static final java.util.regex.Pattern ABORT_CANCEL_WORD =
+        java.util.regex.Pattern.compile("\\b(?:abort(?:ed)?|cancel(?:l?ed)?)\\b",
+            java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /**
+     * pi {@code maybeSuggestBugReport}：stopReason 非 error ⇒ 不提示；可重试错误
+     * ⇒ 不提示；errorMessage 含 abort/cancel 词 ⇒ 不提示；每进程最多一次。
+     * R29 安装变更警告门恒 false（批 15 裁决④）。裁决⑪：dim 系统文本（D83）。
+     */
+    private void maybeSuggestBugReport(com.pijava.ai.message.Message.AssistantMessage message) {
+        if (bugReportHintShown) {
+            return;
+        }
+        if (message.stopReason() != com.pijava.ai.message.StopReason.ERROR) {
+            return;
+        }
+        if (com.pijava.ai.utils.RetryableError.isRetryableAssistantError(message)) {
+            return;
+        }
+        var errorMessage = message.errorMessage() == null ? "" : message.errorMessage();
+        if (ABORT_CANCEL_WORD.matcher(errorMessage).find()) {
+            return;
+        }
+        bugReportHintShown = true;
+        chatScreen.appendSystemText(
+            "If this looks like a pi-java bug, /bug sends a report to the developers.");
     }
 }

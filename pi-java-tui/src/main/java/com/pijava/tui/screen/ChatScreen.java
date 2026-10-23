@@ -49,6 +49,9 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     private com.pijava.tui.util.CacheMissTracker cacheMissTracker =
         com.pijava.tui.util.CacheMissTracker.noModels();
     private com.pijava.ai.message.Message.AssistantMessage lastMissNotifiedMessage;
+    // 批 15（T2d）：message_end 的 /bug 建议钩（PiTuiApp 装配，门在钩内）。
+    private java.util.function.Consumer<com.pijava.ai.message.Message.AssistantMessage>
+        bugReportHook = message -> { };
     private SlashCompleter completer = new SlashCompleter(List.of());
     private SessionSnapshot snapshot;
     private final StringBuilder assistantDraft = new StringBuilder();
@@ -387,14 +390,17 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
             // 批 13（T11 即时臂，pi :4185-4191＋:3593 挂点对位——message_end 先于
             // 落盘，tracker 只见过已投递条目 ⇒「entries 未含 message」天然成立）。
             case AgentSessionEvent.MessageEnd end -> {
-                if (end.message() instanceof com.pijava.ai.message.Message.AssistantMessage am
-                        && am.stopReason() != com.pijava.ai.message.StopReason.ABORTED
-                        && am.stopReason() != com.pijava.ai.message.StopReason.ERROR) {
-                    var miss = cacheMissTracker.detectOnMessageEnd(am);
-                    if (miss.isPresent() && showCacheMissNotices.getAsBoolean()) {
-                        appendCacheMissNotice(miss.get());
-                        lastMissNotifiedMessage = am; // onEntry 同实例去重
+                if (end.message() instanceof com.pijava.ai.message.Message.AssistantMessage am) {
+                    if (am.stopReason() != com.pijava.ai.message.StopReason.ABORTED
+                            && am.stopReason() != com.pijava.ai.message.StopReason.ERROR) {
+                        var miss = cacheMissTracker.detectOnMessageEnd(am);
+                        if (miss.isPresent() && showCacheMissNotices.getAsBoolean()) {
+                            appendCacheMissNotice(miss.get());
+                            lastMissNotifiedMessage = am; // onEntry 同实例去重
+                        }
                     }
+                    // 批 15（T2d，pi :3586 挂点对位）：/bug 建议（门在 PiTuiApp）。
+                    bugReportHook.accept(am);
                 }
             }
             // docs/14（窄差 D5）：extension_error 已上 RPC 线；TUI 通知面归 D′ 域，本批先忽略。
@@ -565,6 +571,12 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
             java.util.function.Function<String, java.util.Optional<com.pijava.ai.catalog.ModelInfo>> models) {
         cacheMissTracker = new com.pijava.tui.util.CacheMissTracker(
             models == null ? key -> java.util.Optional.empty() : models);
+    }
+
+    /** 批 15（T2d）：message_end 的 /bug 建议钩（pi :3586 挂点；门在钩内）。 */
+    public void setBugReportHook(
+            java.util.function.Consumer<com.pijava.ai.message.Message.AssistantMessage> hook) {
+        bugReportHook = hook == null ? message -> { } : hook;
     }
 
     /** 批 12 T11：{@code fullscreenScrollbar} 三态现读源（渲染期热更）。 */

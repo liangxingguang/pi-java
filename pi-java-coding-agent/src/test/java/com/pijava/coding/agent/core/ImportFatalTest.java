@@ -2,13 +2,13 @@ package com.pijava.coding.agent.core;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 
 import com.pijava.coding.agent.cli.ArgsParser;
 import com.pijava.coding.agent.core.crash.CrashLog;
 import com.pijava.coding.agent.core.crash.CrashRecord;
-import com.pijava.coding.agent.core.session.InMemorySessionRepository;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
 import com.pijava.coding.agent.core.slash.SlashContext;
 import org.junit.jupiter.api.AfterEach;
@@ -19,7 +19,8 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * 批 15（裁决⑤/B256）：{@code /import} 失败修真为 pi fatal 形——记
  * {@code fatal_error} crash＋{@code @ui:fatal-exit:} marker（pi
- * interactive-mode.ts :6607 → handleFatalRuntimeError）。
+ * interactive-mode.ts :6607 → handleFatalRuntimeError）；file-not-found 是
+ * 非致命臂（pi :6602-6605 的 SessionImportFileNotFoundError ⇒ showError 继续）。
  *
  * <p>崩溃落盘走 {@code user.home}（{@link CrashLog#crashLogPath} 每调现解析，
  * 批 14 教训）⇒ 夹具重定向到临时目录，<b>tearDown 前不得提前复原</b>
@@ -46,13 +47,30 @@ class ImportFatalTest {
     }
 
     @Test
-    void failedImportRecordsFatalCrashAndReturnsFatalMarker() throws Exception {
-        try (var session = AgentSession.create(
-                ArgsParser.parse(new String[] {"--no-session"}),
-                InMemorySessionRepository.create())) {
-            var ctx = SlashContext.of(session);
+    void missingFileIsNonFatalAndRecordsNoCrash() throws Exception {
+        try (var session = AgentSession.create(ArgsParser.parse(
+                new String[] {"--session-dir",
+                    fakeHome.resolve("sessions").toString()}))) {
             var result = session.services().slashCommands()
-                .dispatch("/import " + fakeHome.resolve("no-such.jsonl"), ctx)
+                .dispatch("/import " + fakeHome.resolve("no-such.jsonl"),
+                    SlashContext.of(session))
+                .toCompletableFuture().get(10, TimeUnit.SECONDS);
+
+            assertThat(result).startsWith("Failed to import session: ");
+            assertThat(result).doesNotStartWith(CommandRegistry.UI_FATAL_EXIT_PREFIX);
+            assertThat(CrashLog.read(CrashLog.crashLogPath())).isEmpty();
+        }
+    }
+
+    @Test
+    void invalidHeaderRecordsFatalCrashAndReturnsFatalMarker() throws Exception {
+        var badFile = fakeHome.resolve("bad.jsonl");
+        Files.writeString(badFile, "{\"type\":\"session\",\"version\":99}\n");
+        try (var session = AgentSession.create(ArgsParser.parse(
+                new String[] {"--session-dir",
+                    fakeHome.resolve("sessions").toString()}))) {
+            var result = session.services().slashCommands()
+                .dispatch("/import " + badFile, SlashContext.of(session))
                 .toCompletableFuture().get(10, TimeUnit.SECONDS);
 
             assertThat(result)
