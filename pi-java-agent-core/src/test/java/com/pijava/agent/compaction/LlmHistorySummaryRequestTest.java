@@ -211,6 +211,32 @@ class LlmHistorySummaryRequestTest {
     }
 
     @Test
+    void callBranchDefaultsToSummarySystemPrompt() {
+        var captured = new Captured();
+
+        generator(captured.fn(), 0).callBranch("prompt", 4_096, "branchSummary");
+
+        assertThat(captured.contexts.get(0).systemPrompt())
+            .as("旧三参行为不变：SummaryPrompts.SYSTEM")
+            .isEqualTo(EXPECTED_SYSTEM_PROMPT);
+        assertThat(captured.options.get(0).maxTokens()).hasValue(4_096);
+    }
+
+    @Test
+    void callBranchSystemPromptOverloadOverridesContextSystemPrompt() {
+        var captured = new Captured();
+
+        generator(captured.fn(), 0)
+            .callBranch("prompt", 2_048, "bugReport", "BUG SYSTEM PROMPT");
+
+        assertThat(captured.contexts.get(0).systemPrompt())
+            .as("批 15 T3b：completeSummarization 的 systemPrompt 参化缝")
+            .isEqualTo("BUG SYSTEM PROMPT");
+        assertThat(captured.promptText()).isEqualTo("prompt");
+        assertThat(captured.options.get(0).maxTokens()).hasValue(2_048);
+    }
+
+    @Test
     void modelOutputCapClampsTheEightyPercentReserve() {
         var capped = new Captured();
         generator(capped.fn(), 4_096)

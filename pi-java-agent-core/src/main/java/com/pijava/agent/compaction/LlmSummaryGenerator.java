@@ -167,7 +167,19 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
      * failure / toolCall 的判定在调用方 —— 分支摘要路是返回值不是抛）。
      */
     public Message.AssistantMessage callBranch(String promptText, int maxTokens, String reason) {
-        return callWithRetries(() -> request(promptText, OptionalInt.of(maxTokens)), reason);
+        return callBranch(promptText, maxTokens, reason, SummaryPrompts.SYSTEM);
+    }
+
+    /**
+     * pi {@code completeSummarization} 的 {@code systemPrompt} 参化缝（批 15 T3b）：
+     * bug 摘要用自己的系统提示词（{@code BUG_SUMMARY_SYSTEM_PROMPT}），不走压缩的
+     * {@link SummaryPrompts#SYSTEM}。其余形状与 {@link #callBranch(String, int,
+     * String)} 完全一致。
+     */
+    public Message.AssistantMessage callBranch(String promptText, int maxTokens, String reason,
+                                               String systemPrompt) {
+        return callWithRetries(() -> request(promptText, OptionalInt.of(maxTokens), systemPrompt),
+            reason);
     }
 
     /** pi {@code getSummarizationFailure(response, label)}（compaction.ts:580-588）。 */
@@ -305,7 +317,7 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
     private Message.AssistantMessage produceOnce(List<Message> compressed, String previousSummary,
                                                  String customInstructions, int reserveTokens) {
         return request(buildPrompt(compressed, previousSummary, customInstructions),
-            OptionalInt.of(historyMaxTokens(reserveTokens)));
+            OptionalInt.of(historyMaxTokens(reserveTokens)), SummaryPrompts.SYSTEM);
     }
 
     /** pi {@code compaction.ts:712-715}：{@code min(floor(0.8*reserveTokens), cap > 0 ? cap : ∞)}。 */
@@ -317,7 +329,7 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
 
     /** turn-prefix 路：prompt 已按 prefix 形状构造，maxTokens 带 0.5×reserve 上限。 */
     private Message.AssistantMessage produceOnce(String promptText, int maxTokens) {
-        return request(promptText, OptionalInt.of(maxTokens));
+        return request(promptText, OptionalInt.of(maxTokens), SummaryPrompts.SYSTEM);
     }
 
     /**
@@ -342,7 +354,8 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
      * （StreamError ⇒ {@code err.reason()} 即 error/aborted，errorMessage 取
      * 异常文本；流被截断没有终局 ⇒ 中止方言，与 PiLoopRunner 的 cutShort 同形）。
      */
-    private Message.AssistantMessage request(String promptText, OptionalInt maxTokens) {
+    private Message.AssistantMessage request(String promptText, OptionalInt maxTokens,
+                                             String systemPrompt) {
         // 原 docs/71 G1：摘要请求的用户消息在构造点盖时间戳（pi compaction.ts:582 的 Date.now()）。
         var user = new Message.UserMessage(
             List.of(new ContentBlock.TextContent(promptText)),
@@ -359,7 +372,7 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
         StringBuilder text = new StringBuilder();
         Usage[] usage = {null};
         var iter = streamFn.stream(model.get(),
-            new Context(SummaryPrompts.SYSTEM, List.of(user), List.of()), options);
+            new Context(systemPrompt, List.of(user), List.of()), options);
         Message.AssistantMessage result;
         try {
             result = null;
