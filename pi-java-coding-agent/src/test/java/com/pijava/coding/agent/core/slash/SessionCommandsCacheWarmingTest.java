@@ -135,7 +135,8 @@ class SessionCommandsCacheWarmingTest {
             session.processPrompt("second").statusFuture().get(30, TimeUnit.SECONDS);
 
             var info = sessionInfo(session);
-            assertThat(info).contains("Cache Re-billed: 100,000 tokens, 1 miss\n");
+            // 批 15（T11，D68 销号）：行从 Cache Warming 段尾搬入 Cost 段内。
+            assertThat(info).contains("Cache Re-billed: 100,000 tokens, 1 miss");
         }
     }
 

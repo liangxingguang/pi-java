@@ -25,13 +25,13 @@ class SlashCommandTest {
         var registry = CommandRegistry.withBuiltins();
         var names = registry.names();
 
-        // P6-27 新增 /create-skill。
-        assertThat(names).hasSize(24);
+        // P6-27 新增 /create-skill；批 15 新增 /bug＋/thinking。
+        assertThat(names).hasSize(26);
         assertThat(names).contains(
             "help", "settings", "model", "scoped-models", "export", "import", "share",
             "copy", "name", "session", "changelog", "hotkeys", "fork", "clone",
             "tree", "trust", "login", "logout", "new", "compact", "resume",
-            "reload", "quit", "create-skill");
+            "reload", "quit", "create-skill", "bug", "thinking");
     }
 
     @Test
@@ -95,8 +95,10 @@ class SlashCommandTest {
         var context = SlashContext.of(null);
 
         // Phase 4 §4.7: /export and /import must be wired, not "not implemented".
+        // 批 15（T10）：/export 无参走 pi 默认臂（session-<ts>.html），Usage 臂废
+        // ——null 会话到此为止失败文案（会话在 TUI 恒在，此处只钉「已接线」）。
         assertThat(registry.dispatch("/export", context).toCompletableFuture().join())
-            .contains("Usage: /export");
+            .contains("Failed to export session:");
         assertThat(registry.dispatch("/import", context).toCompletableFuture().join())
             .contains("Usage: /import");
     }
