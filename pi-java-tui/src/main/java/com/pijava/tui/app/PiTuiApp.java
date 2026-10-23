@@ -539,11 +539,14 @@ public final class PiTuiApp {
         if (command != null) {
             chatScreen.clearInput();
             boolean loginCommand = text.startsWith("/login");
+            // 批 15（T9，pi :5207 直设臂的 auth 警告时机对位——guard 内部去重，
+            // 未直设（开选择器）也调用无害）。
+            boolean modelCommand = text.startsWith("/model ") || text.equals("/model");
             command.thenAccept(result ->
                 dispatcher.dispatch(() -> {
                     handleCommandResult(result, text);
                     // 批 12 T13（pi :5207/:5352 登录后时机对位）。
-                    if (loginCommand) {
+                    if (loginCommand || modelCommand) {
                         maybeWarnSubscriptionAuth();
                     }
                 }));
