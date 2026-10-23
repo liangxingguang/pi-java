@@ -330,8 +330,10 @@ public final class PiLaneEngine {
 
     private PiLoop.Config configFor(String laneName, LaneState lane, PiLaneSink sink) {
         var signal = lane.abortSignal();
+        // 批 16（T2 修真）：查找面接活跃集活视图（pi currentContext.tools 对位）——
+        // setActiveTools 失活的工具下轮调用即 "not found"（pi 同断言的 oracle 行为）。
         var toolRunner = new PiToolRunner(laneName, ctx.toolRegistry(), ctx.hookSystem(),
-            ctx.toolContext(), signal, sink::noteToolAllowed);
+            ctx.toolContext(), signal, sink::noteToolAllowed, ctx.activeTools());
         return new PiLoop.Config(
             ctx.model().get(),
             ctx.thinkingLevel().get(),

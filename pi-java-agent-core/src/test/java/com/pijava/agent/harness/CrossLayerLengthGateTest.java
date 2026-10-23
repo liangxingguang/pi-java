@@ -147,9 +147,11 @@ class CrossLayerLengthGateTest {
         var api = new OpenAICompletionsApi(new ApiOptions(
             "http://localhost:" + stub.getAddress().getPort() + "/v1", "test-key",
             Duration.ofSeconds(5), 0, Map.of()));
+        // 批 16（裁决① 修真连带）：激活面=注册面（pi state.tools 同形——执行查找面
+        // 是活跃集，空激活集的工具调用在 pi 即 not found）。
         return AgentHarness.create(new HarnessConfig(
             laneStreamFn(api), MODEL, ModelThinkingLevel.off(), "",
-            Set.of(), 200_000, registry, null, null,
+            Set.copyOf(registry.all()), 200_000, registry, null, null,
             null, Map.of(),
             com.pijava.telemetry.NoopTelemetryContext.INSTANCE,
             com.pijava.ai.thinking.ThinkingLevelMap.empty(),

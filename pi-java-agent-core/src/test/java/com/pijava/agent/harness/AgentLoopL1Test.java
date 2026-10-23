@@ -76,9 +76,11 @@ class AgentLoopL1Test {
     }
 
     private static AgentHarness harness(ToolRegistry registry, StreamFn streamFn) {
+        // 批 16（裁决① 修真连带）：激活面=注册面（pi state.tools 同形）——旧夹具的
+        //「空激活集＋注册表全局执行」在 pi 无对位（pi 失活工具执行即 not found）。
         return AgentHarness.create(new HarnessConfig(
                 streamFn, MODEL, ModelThinkingLevel.off(), "",
-                Set.of(), 200_000, registry, null, null,
+                Set.copyOf(registry.all()), 200_000, registry, null, null,
             null, Map.of(),
                 com.pijava.telemetry.NoopTelemetryContext.INSTANCE,
                 com.pijava.ai.thinking.ThinkingLevelMap.empty(),

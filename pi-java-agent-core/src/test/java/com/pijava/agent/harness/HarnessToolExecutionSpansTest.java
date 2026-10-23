@@ -98,16 +98,17 @@ class HarnessToolExecutionSpansTest {
     /**
      * 同上，但可指定工具批次的执行模式。
      *
-     * <p>这里必须**显式**给模式：夹具的 {@code activeTools} 是空的，于是
-     * {@code PiLoopTools.useSequentialPath} 的「工具自带 {@code ExecutionMode.Sequential}
-     * 即整批降级」那条分支查不到工具（{@code Context.toolNamed} 走的是 {@code context.tools}，
-     * 不是注册表），只剩模式这一条判据。工具本身照旧按名从注册表取，所以能正常执行。</p>
+     * <p>批 16（裁决① 修真连带）：激活面=注册面（pi {@code state.tools} 同形——
+     * pi 的执行查找面是 {@code currentContext.tools}，失活工具即 not found）。
+     * 注意夹具工具自带 {@link ExecutionMode.Sequential}：activeTools 填满后
+     * {@code PiLoopTools.useSequentialPath} 的「Sequential 整批降级」分支能查到它——
+     * 现有三用例均为单调用/显式顺序批，模式判据不受影响。</p>
      */
     private static AgentHarness harness(JsonlFileTelemetry telemetry, ToolRegistry registry,
             StreamFn streamFn, ToolExecution toolExecution) {
         return AgentHarness.create(new HarnessConfig(
                 streamFn, MODEL, ModelThinkingLevel.off(), "",
-                Set.of(), 200_000, registry, null, null,
+                Set.copyOf(registry.all()), 200_000, registry, null, null,
             null, Map.of(),
                 telemetry, com.pijava.ai.thinking.ThinkingLevelMap.empty(),
                 QueueMode.defaultMode(), QueueMode.defaultMode(), toolExecution,

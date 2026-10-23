@@ -8,6 +8,7 @@ import com.pijava.agent.hook.BeforeToolResult;
 import com.pijava.agent.hook.HookSystem;
 import com.pijava.agent.hook.ToolCallContext;
 import com.pijava.agent.hook.ToolResultContext;
+import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ToolArgumentsValidator;
 import com.pijava.agent.tool.ToolContext;
 import com.pijava.agent.tool.ToolRegistry;
@@ -73,6 +74,10 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
     private final ToolContext toolContext;
     private final AbortSignal signal;
     private final ToolObserver observer;
+    /** 批 16（T2 修真）：活跃工具集的<b>活视图</b>（pi 的查找面
+     *  {@code currentContext.tools}，agent-loop.ts:712-716 对位——失活工具调用即
+     *  {@code Tool <name> not found}）；{@code null} ⇒ 回落注册表全局查找（旧行为）。 */
+    private final java.util.function.Supplier<java.util.Set<AgentTool<?, ?>>> activeTools;
 
     /**
      * @param laneName    车道名（传给钩子；pi 的钩子事件带 {@code lane}）
@@ -85,12 +90,24 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
      */
     public PiToolRunner(String laneName, ToolRegistry registry, HookSystem hooks,
                         ToolContext toolContext, AbortSignal signal, ToolObserver observer) {
+        this(laneName, registry, hooks, toolContext, signal, observer, null);
+    }
+
+    /**
+     * 批 16：带活跃集活视图的完整形态（{@link PiLaneEngine} 装配点传
+     * {@code ctx.activeTools}——run 中途 setActiveTools 后下一轮即生效，与 pi 的
+     * currentContext 逐轮重建同效）。
+     */
+    public PiToolRunner(String laneName, ToolRegistry registry, HookSystem hooks,
+                        ToolContext toolContext, AbortSignal signal, ToolObserver observer,
+                        java.util.function.Supplier<java.util.Set<AgentTool<?, ?>>> activeTools) {
         this.laneName = laneName;
         this.registry = registry;
         this.hooks = hooks;
         this.toolContext = toolContext;
         this.signal = signal;
         this.observer = observer;
+        this.activeTools = activeTools;
     }
 
     /**
@@ -101,8 +118,10 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
      */
     @Override
     public PiLoop.Preparation prepare(PiLoop.ToolCall call) {
-        // pi {@code :613}：{@code tools?.find} —— 无注册表与查不到同一张面孔。
-        var tool = registry == null ? null : registry.get(call.toolName());
+        // pi {@code :613/:716}：{@code (currentContext.tools ?? []).find} —— 查找面是
+        // **活跃集**（批 16 修真：失活工具 ⇒ "Tool <name> not found"，与 pi 的
+        // system-prompt-updates.test.ts oracle 同断言）；无供应口时回落注册表全局查找。
+        var tool = findTool(call.toolName());
         if (tool == null) {
             return immediate(call, true, "Tool " + call.toolName() + " not found", false);
         }
@@ -126,6 +145,23 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
         var args = decision != null && decision.arguments() != null
             ? decision.arguments() : call.args();
         return new PreparedCall(call, args);
+    }
+
+    /** 批 16：活跃集按名查找（供应口缺席 ⇒ 注册表全局查找，旧行为）。 */
+    private AgentTool<?, ?> findTool(String name) {
+        if (activeTools == null) {
+            return registry == null ? null : registry.get(name);
+        }
+        var active = activeTools.get();
+        if (active == null) {
+            return null; // pi 的 tools ?? []：无活跃集 ≙ 查不到
+        }
+        for (var candidate : active) {
+            if (candidate.name().equals(name)) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     /**

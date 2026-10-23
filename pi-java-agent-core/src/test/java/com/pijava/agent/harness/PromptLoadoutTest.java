@@ -191,6 +191,10 @@ class PromptLoadoutTest {
                                         StreamFn script, AgentTool<?, ?> initialTool) {
         var registry = new ToolRegistry(null);
         registry.register(initialTool);
+        // 批 16（裁决①）：注册面与激活面分离——pi 的注册表恒含全部工具，
+        // setActiveTools 只挑激活子集；夹具注册面补齐 second（此前靠
+        // setActiveTools 的重注册副作用进表，该副作用已删）。
+        registry.register(second());
         var context = new ToolContext(System.getProperty("java.io.tmpdir"), Map.of(),
             new com.pijava.agent.tool.DefaultShellExecutor(),
             new com.pijava.agent.tool.DefaultFileSystem());
