@@ -93,6 +93,9 @@ class SessionFailurePathTest {
         var session = AgentSession.create(args, InMemorySessionRepository.create(), providers,
             new ToolContext(tmp.toString(), Map.of(),
                 new DefaultShellExecutor(), new DefaultFileSystem()));
+        // 批 16（裁决① 修真连带）：注册面与激活面分离——setActiveTools 不再代注册；
+        // 夹具工具先注册再激活（pi：注册表恒含全部工具，state.tools 挑子集）。
+        tools.forEach(session.services().tools()::register);
         session.harness().setActiveTools(tools);
         return session;
     }
