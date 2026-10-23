@@ -159,7 +159,7 @@ pi SDK 逐文件（`packages/mcp/src`）：`client.ts` 615 · `transports/stream
 | 82 | 工具运行时注册/改名裁定/撤销重注 hidden/disable 隐藏 | 接线 | `index.ts:388-463` | 适配件齐（52/56），无注册路径 | **缺失** | 2 | B221 |
 | 83 | 资源工具 exposure 同步（取可达服务器最宽 exposure；direct→active 集） | 接线 | `index.ts:466-491` | 无 | **缺失** | 1 | B221 |
 | 84 | `pi.registerToolRenderer` ＋ `createMcpToolRenderers`（Text/Container/VisualLinePreview） | 接线 | `index.ts:383-386`；`tools.ts:301-339` | 无渲染器挂载面 | **缺失** | 1 | B204 |
-| 85 | `ctx.ui.custom` 组件挂载面 ＋ `/mcp` 管理器视图（菜单/状态/redirectUrl 屏） | 接线 | `extensions/mcp/ui.ts:73,244-258` | 扩展 UI 是 RPC 请求/应答，无组件挂载 | **缺失** | 1 | B214 |
+| 85 | `ctx.ui.custom` 组件挂载面 ＋ `/mcp` 管理器视图（菜单/状态/redirectUrl 屏） | 接线 | `extensions/mcp/ui.ts:73,244-258` | **挂载面已落**（批 17：docs/28 T5——`TuiExtensionUI.custom`＋`ExtensionComponentOverlay`＋`ExtensionComponentFactory` SPI）；载荷（`McpManagerView` 菜单编排九调用点）随 MCP 扩展工厂批（G 组 73–84/86–87） | **缺失** | 1 | B214（批 17 改注：挂载面落、载荷随工厂批） |
 | 86 | `/mcp` 斜杠命令（manager、login/logout/reconnect）＋管理动作（enable/disable/exposure/project override） | 接线 | `index.ts:1257-1344,743-778` | 无（进程外 CLI 无 reconnect/enable/disable/exposure） | **缺失** | 2 | B221 |
 | 87 | `pi.registerMcpServer/getMcpServers` 扩展挂载点 | 接线 | `index.ts:349-364` | `McpServerRegistry` 无生产者 | **缺失** | 1 | B218 |
 | 88 | `SettingsManager.load(agentDir,projectDir,override)` 三参信任解析缝 | 接线 | `index.ts:1112`（默认 loadConfig） | coding-agent `core/SettingsManager.java:49` | 对齐 | 1 | B216（缝已开） |

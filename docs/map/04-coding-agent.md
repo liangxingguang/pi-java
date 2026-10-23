@@ -195,8 +195,8 @@ pi-java 的**引擎钩子** = `pi-java-agent-core/.../agent/hook/HookSystem.java
 | 23 | `agent_end` | `:1615` | ✅ | 2 | **对齐** | 批 4 桥接（宿主 `AgentEnd`，`AgentSessionEvent.java:28`） |
 | 24 | `agent_before_settle` | `:1617` | ✅ | 2 | **对齐** | 批 5 `BoundaryBridge`（引擎新钩 `before_settle`，firing 于 drive 循环 settle 前门——pi :1839 同位）；草稿四型＋预览＋continue 校验全落 |
 | 25 | `agent_settled` | `:1620` | ✅ | 2 | **对齐** | 批 4 桥接（宿主 `AgentSettled`，`:46`；`{aborted}` 直译） |
-| 26 | `ui_prompt_start` | `:1621` | ❌ | 1 | **缺失** | 无对应 |
-| 27 | `ui_prompt_end` | `:1622` | ❌ | 1 | **缺失** | 无对应 |
+| 26 | `ui_prompt_start` | `:1621` | ✅ `UiPromptEventExtensionUI`＋`SessionEventFirer.uiPromptStart` | 1 | **对齐** | 批 17（docs/28 T2）：深度计数嵌套只发最外层＋同步抛先 finish＋异步发射（queueMicrotask⇒FIFO 单虚拟线程执行器） |
+| 27 | `ui_prompt_end` | `:1622` | ✅ 同上 | 1 | **对齐** | 批 17（docs/28 T2）：深度归零发、kind/title 取最外层记录值（activePrompt 回落逐字） |
 | 28 | `turn_start` | `:1623` | ✅ | 2 | **对齐** | 批 4 桥接（`{turnIndex, timestamp}`；turnIndex 桥内跟踪，pi `_turnIndex` 同构） |
 | 29 | `turn_end` | `:1624` | ✅ | 2 | **对齐** | 批 5 `BoundaryBridge`（`should_stop_after_turn` 钩，位置与 pi finishTurn 包裹同位；顺手修真钩子载荷——旧喂 lane.partial＋空工具结果）；`turnIndex` 与宿主桥共享 |
 | 30 | `message_start` | `:1625` | ✅ | 2 | **对齐** | 批 4 桥接 |
@@ -212,9 +212,9 @@ pi-java 的**引擎钩子** = `pi-java-agent-core/.../agent/hook/HookSystem.java
 | 40 | `user_bash` | `:1635` | ✅ | 1 | **对齐** | 批 5 `executeBash` chokepoint 拦截（{result} 替换臂＋异常重抛不回落，pi :1262-1296 逐字）；{operations} 臂不移植（窄差 D10） |
 | 41 | `input` | `:1636` | ✅ | **3** | **对齐** | 批 5 `processPrompt` 内、展开**之前**（pi :1991 逐字）；transform 链＋handled（SessionResult "handled"）；images 恒 null（窄差 D12） |
 
-**汇总（宽口径，批 coding-agent-16 后）：对齐 37 / 缺失 4 / 存疑 0 / 合计 41 = 90.2%**；**Σ权重 83 / Σ(w×c) 77.0 / 加权 92.8%**
+**汇总（宽口径，批 coding-agent-17 后）：对齐 39 / 缺失 2 / 存疑 0 / 合计 41 = 95.1%**；**Σ权重 83 / Σ(w×c) 79.0 / 加权 95.2%**
 **汇总（严格口径）**：批 8 起与宽口径**合一**——最后一个未桥接引擎钩子（#12 `before_navigation`）随死钩删除出账，D 域不再有死 firing 点。
-> ⚠️ D 域 Σ权重 **83** = 模块 496 的 **16.7%**。批 coding-agent-13（docs/24）翻 1 行（#16 缺失→对齐 +2.0）；缺失 5 行＝#1 project_trust／#11 mcp_servers_change／#26/#27 ui_prompt×2／#36 model_select（各随子系统：B221/E5）。批 8 翻 2 行（+1.5）：存疑**清零**。批 16（docs/27）翻 1 行（#36 model_select 缺失→对齐 +2.0）；#11 经裁决⑤随 E5-23 批（发射链唯一生产者＝registerMcpServer，不在批 16 范围）。余缺失 4 行＝#1/#11/#26/#27。
+> ⚠️ D 域 Σ权重 **83** = 模块 496 的 **16.7%**。批 coding-agent-13（docs/24）翻 1 行（#16 缺失→对齐 +2.0）；缺失 5 行＝#1 project_trust／#11 mcp_servers_change／#26/#27 ui_prompt×2／#36 model_select（各随子系统：B221/E5）。批 8 翻 2 行（+1.5）：存疑**清零**。批 16（docs/27）翻 1 行（#36 model_select 缺失→对齐 +2.0）；#11 经裁决⑤随 E5-23 批（发射链唯一生产者＝registerMcpServer，不在批 16 范围）。批 17（docs/28）翻 2 行（#26/#27 ui_prompt×2 缺失→对齐 +2.0）。**余缺失 2 行＝#1 project_trust／#11（随 E5-23 批）**。
 > ⚠️ **基线纪律**（批 4 起）：D 域与模块合计按逐行实算（批 4 发现汇总行与逐行不符同族教训——批 4 基线实算 11.5≠旧汇总行 10.5）。
 
 ### 批 coding-agent-4（docs/14，2026-10-20 闭环）窄差表
@@ -471,13 +471,13 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | E5-28 | `events`（扩展间 EventBus） | `:1890` | ❌ | 1 | **缺失** | — |
 | E5-29 | 热重载（`/reload` 重载 extensions/skills/prompts/themes + 激活新 defaultTools） | `agent-session.ts:3660`（modifier 合并 `:3662-3680`） | ✅ `SessionReload` 七步序 | 2 | **对齐** | 批 16 T5（:3660-3701 对位；窄差 D90 不重建扩展运行时/D93 可见面收窄/D94 provider 重置烘焙臂；themes 重扫随批 20） |
 | E5-30 | 扩展注册 CLI flag | `:1664` + `args.ts:186` | ✅ `ExtensionFlagBinder`＋`--help` 段 | 1 | **对齐** | 批 16 T1c–T1e（args.ts:247-271 三态＋agent-session-services.ts:82-128 绑定＋args.ts:273-283 help 面对位） |
-| E5-31 | 扩展 UI 注入（TUI） | `types.ts:149-323` | ❌ 只回落 `ExtensionUI.noop()`（`ExtensionContext.java:35-37`） | 2 | **缺失** | — |
-| E5-32 | 扩展 UI 通道（RPC，9 method） | `rpc-types.ts:253-297` | ⚠️ `RpcExtensionUIRequest.java` 形有，`ui()` **无生产者**（`RpcDispatcher.java:337-348`，队列 `:57`） | 1 | **存疑** | — |
+| E5-31 | 扩展 UI 注入（TUI） | `types.ts:149-323` | ⚠️ `TuiExtensionUI`（13 方法：对话四件套＋custom＋notify/setStatus/setWidget/setFooter/setHeader/setEditorText/getEditorText）＋widget/footer/header/状态段注入层；余 15 成员 default＝pi noOp 语义、TUI 臂挂账（docs/28 §4） | 2 | **存疑** | 批 17（docs/28 T1/T4–T6；窄差 D95–D101；余面：working 指示器/主题四面/补全/编辑器替换等随后续批） |
+| E5-32 | 扩展 UI 通道（RPC，9 method） | `rpc-types.ts:253-297` | ✅ `RpcExtensionUI` 九方法 typed 实现＋`RpcDispatcher` 注入（晚绑定修真——context 现读会话字段） | 1 | **对齐** | 批 17（docs/28 T3）：参数键平铺顶层（pi spread 逐字）＋signal/timeout 本地解除（裁决⑦）＋setWidget 工厂臂静默忽略（pi 同缺） |
 | E5-33 | 扩展示例库（可执行验收规格） | `examples/extensions/`（105 个 `.ts`，16,033 行） | ❌ 只有 5 个测试夹具 | **3** | **缺失** | — |
 | E5-34 | 扩展来源追踪（`SourceInfo`） | `types.ts:1543/2055/2098` | ⚠️ `InstalledExtension.java:15` 有路径，无 `sourceInfo` 投影 | 1 | **存疑** | — |
 | E5-35 | `on()` 返回退订函数 | `types.ts:1569-1636`（41 条 `() => void`） | ✅ `ExtensionContext.on(spec, handler)`（批 4，docs/14 §3.2）→ `AutoCloseable` 退订：按实例移除、空表删键（loader.ts:272-288 逐字语义） | 2 | **对齐** | — |
 
-**E5 汇总（批 16 后）：对齐 10 / 缺失 22 / 存疑 3 / 合计 35 = 28.6%**；**Σ权重 58 / Σ(w×c) 22.0 / 加权 37.9%**
+**E5 汇总（批 17 后）：对齐 11 / 缺失 21 / 存疑 3 / 合计 35 = 31.4%**；**Σ权重 58 / Σ(w×c) 23.5 / 加权 40.5%**
 > 批 16（2026-10-23，docs/27）：**5 行翻动**——E5-7/E5-30 缺失→对齐（T1 flag 面）、E5-18 缺失→对齐（T2 激活门三件套）、E5-11 缺失→对齐（T4 registerToolRenderer，B204 销号）、E5-29 存疑→对齐（T5 /reload 七步序，B246 销号）；E8-7 注记行随翻（不计入分母）。
 > E5-23..25 的 MCP 注册 API 判定随 MCP 整体面在 `map/07` 复核；本表按「扩展 SPI 是否暴露」判，仍为缺失。
 

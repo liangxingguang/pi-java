@@ -65,8 +65,8 @@
 | S19 | 项目信任选择器 | ✓ `components/trust-selector.ts:32` | ✗ | **缺失** | 2 | java 只有 `SettingsScreen.java:40-42` 的 `Project trust` 循环 |
 | S20 | 排队消息选择器（Alt+Up 取回并编辑） | ✓ `components/user-message-selector.ts:110`（155 行） | ✓ `InteractiveMode.restoreQueuedMessages`＋`PiTuiApp` DEQUEUE 臂＋`ChatScreen.restoreToEditor`（批 10，docs/21） | **对齐** | 1 | 批 10（docs/21）：dequeue 全链接地——引擎两队列＋压缩缓冲清空、pi 序合并 `"\n\n"` 回填编辑器（排队在前草稿在后）、文案逐字＋复数形、hint 行随绑定表取键名；键平台规则同批落（Windows/WSL `alt+q`，K11 同翻） |
 | S21 | show-images 选择器 | ✓ `components/show-images-selector.ts:13`（50 行） | ✗ | **缺失** | 1 | — |
-| S22 | 扩展 UI：选择器 / 输入框 / 确认框 / 编辑器 | ✓ `interactive-mode.ts:2690 showExtensionSelector`/`:2773 showExtensionInput`/`:2831 showExtensionEditor` | ✗ | **缺失** | 1 | java 只有 RPC 通道 `ExtensionUI.java:16`（`AgentSession.java:98` 默认 `noop()`；两者在 `pi-java-coding-agent`），TUI 无实现 |
-| S23 | 扩展 widget / footer / header / 状态槽 | ✓ `interactive-mode.ts:2398 setExtensionWidget`、`:2524 setExtensionFooter`、`:2551 setExtensionHeader` | ✗ | **缺失** | 1 | — |
+| S22 | 扩展 UI：选择器 / 输入框 / 确认框 / 编辑器 | ✓ `interactive-mode.ts:2690 showExtensionSelector`/`:2773 showExtensionInput`/`:2831 showExtensionEditor` | ✓ `ExtensionSelectorOverlay`/`ExtensionInputOverlay`/`ExtensionEditorOverlay`＋`TuiExtensionUI`（pi-java-tui） | **对齐** | 1 | **批 17（2026-10-24，docs/28 T4）**：ScreenOverlay 模态层落位（裁决④/窄差 D95）、k/j 别名＋空表不提交＋hint 行逐字、倒计时标题 ({N}s)＋到期取消、confirm＝selector 特化 Yes/No、ctrl+g 外部编辑器回落链逐字；窄差 D95–D98 |
+| S23 | 扩展 widget / footer / header / 状态槽 | ✓ `interactive-mode.ts:2398 setExtensionWidget`、`:2524 setExtensionFooter`、`:2551 setExtensionHeader` | ✓ `ChatScreen` 注入层（widgetsAbove/Below＋customFooter/customHeader＋extensionStatuses）＋`TuiExtensionUI` 四方法 | **对齐** | 1 | **批 17（2026-10-24，docs/28 T6）**：同 key 两区先清、MAX_WIDGET_LINES=10 截断＋逐字标记行、spacer 序逐字、footer/header dispose 序、状态段字典序＋sanitize 逐字＋截断 dim "..."；窄差 D100/D101 |
 | S24 | `/hotkeys` 与 `/help` 面板 | ✓ `interactive-mode.ts` + `core/slash-commands.ts:33 hotkeys`（Markdown 渲染） | ✓ `MiscCommands.java:34`、`:122` | **对齐** | 1 | 都是往聊天区追加纯文本；pi 走 Markdown 组件 |
 | S25 | 会话统计面（`/session`） | ✓ `core/slash-commands.ts:31 session` + `components/footer.ts:120-137` 用量（计入 `usage` 条目） | ✗（TUI） / ✓（web `panels/stats.ts:1`） | **缺失** | 2 | java TUI 无统计屏 |
 | S26 | `/changelog` 面板 | ✓ `core/slash-commands.ts:32` | ✓ `MiscCommands.java:120` | **对齐** | 1 | 均为文本输出 |
@@ -493,19 +493,20 @@
 
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|
-| 屏幕/面板（35 单元） | 47 | 22.5 | **47.9%** | 34.3% |
+| 屏幕/面板（35 单元） | 47 | 24.5 | **52.1%** | 40.0% |
 | 渲染特性（R1–R29，29 单元；R21 权重 0 已剔） | 40 | 7.5 | **18.8%** | 10.7% |
 | 键绑定/交互（K1–K39，39 单元；K36 权重 0 已剔） | 66 | 33.5 | **50.8%** | 28.9% |
 | TUI 组件（C1–C20，20 单元） | 41 | 22.5 | **54.9%** | 35.0% |
 | 主题/样式（T1–T11，11 单元） | 18 | 6.5 | **36.1%** | 27.3% |
 | web 对齐面（W1–W16，16 单元） | 33 | 26.0 | **78.8%** | 50.0% |
 
-**模块合计**：Σ权重 **245** ／ Σ(w×c) **118.5** ／ **加权完成度 = 118.5/245 ≈ 48.4%**（未加权 **28.4%**，**+20.0pp**）
+**模块合计**：Σ权重 **245** ／ Σ(w×c) **120.5** ／ **加权完成度 = 120.5/245 ≈ 49.2%**（未加权 **29.7%**，**+19.5pp**）
 
 > 批 10（2026-10-22，docs/21）：S20 缺失→对齐（+1.0）、K11 缺失→对齐（+1.0）；R28 证据更新不翻（流式 bash/工具挂载仍缺）。
 > 批 13（2026-10-23，docs/24）：R24 存疑→对齐（+0.5，cache-warmer 子系统批随收——生产者/文案逐字/门//session 段/footer）。
 > 批 14（2026-10-23，docs/25）：**K16 缺失→对齐（+2.0，app.session.* 键位族）＋K15 缺失→对齐（+1.0，对账表漏列同翻）＋S11 缺失→存疑（+0.5，picker 臂全落、rename 面板留白裁决⑦）**。Σ 113.0→**116.5/245 ≈ 47.6%**。
 > 批 15（2026-10-23，docs/26）：**S29 `/bug` 流程 缺失→对齐（+1.0）＋S30 崩溃记录＋启动提示 缺失→对齐（+1.0）**；R29 安装变更警告挂起注记（裁决④，随自更新批）。Σ 116.5→**118.5/245 ≈ 48.4%**。
+> 批 17（2026-10-24，docs/28）：**S22 扩展对话框四件套 缺失→对齐（+1.0）＋S23 扩展 widget/footer/header/状态槽 缺失→对齐（+1.0）**。Σ 118.5→**120.5/245 ≈ 49.2%**。
 
 > 较前锚点（144 单元：241 权 / 108.0 / **44.8%**）变化 **−0.5pp**，构成：① K20 对齐→存疑（w2）分子 −1.0；② R18/R24 缺失→存疑（w1×2）分子 +1.0；③ 新增 4 单元（R28 存疑 w1 +0.5；R29/K39/C20 缺失 w1×3）分母 +4、分子 +0.5。净效果：分子 +0.5、分母 +4。
 
