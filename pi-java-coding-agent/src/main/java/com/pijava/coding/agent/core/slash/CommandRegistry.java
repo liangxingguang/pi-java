@@ -11,6 +11,7 @@ import com.pijava.coding.agent.core.slash.builtin.ModelCommands;
 import com.pijava.coding.agent.core.slash.builtin.SessionCommands;
 import com.pijava.coding.agent.core.slash.builtin.SettingsCommands;
 import com.pijava.coding.agent.core.slash.builtin.SkillsCommands;
+import com.pijava.coding.agent.core.slash.builtin.ThinkingCommands;
 
 /**
  * Slash command registry (Phase 3 design §14.1).
@@ -32,6 +33,8 @@ public final class CommandRegistry {
     public static final String UI_SCOPED_MODELS = "@ui:scoped-models";
     /** 批 15（T7）：{@code /bug} 故障上报流；hint 由 TUI 从原始输入行切（裁决⑦）。 */
     public static final String UI_BUG_REPORT = "@ui:bug-report";
+    /** 批 15（T8）：{@code /thinking}（空参）的思考级别选择器（裁决⑥简版）。 */
+    public static final String UI_THINKING_SELECTOR = "@ui:thinking-selector";
     /**
      * 批 15（T2c/B256）：致命错误 marker <b>前缀</b>——载荷是去前缀的错误文案，
      * TUI 打错误＋崩溃指引后 exit 1（pi {@code handleFatalRuntimeError}）。
@@ -126,6 +129,7 @@ public final class CommandRegistry {
         SettingsCommands.registerAll(registry);
         MiscCommands.registerAll(registry);
         SkillsCommands.registerAll(registry);
+        ThinkingCommands.registerAll(registry); // 批 15（T8）
         return registry;
     }
 }

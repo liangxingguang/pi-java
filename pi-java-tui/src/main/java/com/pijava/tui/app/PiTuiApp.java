@@ -589,6 +589,10 @@ public final class PiTuiApp {
             case CommandRegistry.UI_SCOPED_MODELS ->
                 chatScreen.appendSystemText(
                     "Use /scoped-models +<model> or /scoped-models -<model>");
+            // 批 15（T8）：/thinking（空参）的选择器（裁决⑥简版）。
+            case CommandRegistry.UI_THINKING_SELECTOR ->
+                openOverlay(new com.pijava.tui.screen.ThinkingLevelScreen(
+                    session, chatScreen::appendSystemText));
             // 批 15（T7）：/bug 故障上报流——hint 从原始输入行切（pi :3242-3245）。
             case CommandRegistry.UI_BUG_REPORT -> {
                 var hint = input != null && input.length() > 4
