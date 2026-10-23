@@ -16,9 +16,8 @@ class ArgsParserTest {
         var args = ArgsParser.parse(new String[] {
             "--provider", "openai", "--model", "gpt-5", "--api-key", "k",
             "--system-prompt", "sys", "--append-system-prompt", "extra",
-            "--thinking", "high", "-c", "--name", "demo",
-            "--no-session", "--session", "abc", "--session-id", "xyz",
-            "--fork", "f", "--session-dir", "dir",
+            "--thinking", "high", "--name", "demo",
+            "--no-session", "--session", "abc", "--session-dir", "dir",
             "--models", "gpt-5,claude", "--tools", "read,write",
             "--exclude-tools", "bash", "--no-builtin-tools",
             "--extension", "ext", "--no-extensions",
@@ -34,12 +33,14 @@ class ArgsParserTest {
         assertThat(args.systemPrompt()).isEqualTo("sys");
         assertThat(args.appendSystemPrompt()).containsExactly("extra");
         assertThat(args.thinking()).isEqualTo("high");
-        assertThat(args.continue_()).isTrue();
+        // 批 14（T6b）后 -c/--session-id/--fork 与 --session 等互斥，不再同屏出现——
+        // 三者的字段覆盖见下方 conflict/legal 夹具。
+        assertThat(args.continue_()).isFalse();
         assertThat(args.name()).isEqualTo("demo");
         assertThat(args.noSession()).isTrue();
         assertThat(args.session()).isEqualTo("abc");
-        assertThat(args.sessionId()).isEqualTo("xyz");
-        assertThat(args.fork()).isEqualTo("f");
+        assertThat(args.sessionId()).isNull();
+        assertThat(args.fork()).isNull();
         assertThat(args.sessionDir()).isEqualTo("dir");
         assertThat(args.models()).containsExactly("gpt-5", "claude");
         assertThat(args.tools()).containsExactly("read", "write");
@@ -210,5 +211,80 @@ class ArgsParserTest {
         var args = ArgsParser.parse(new String[] {"--tools", "+grep,-bash"});
         assertThat(args.tools()).containsExactly("+grep", "-bash");
         assertThat(args.diagnostics()).isEmpty();
+    }
+
+    // ── 批 14（docs/25 T6b）：pi validateForkFlags/validateSessionIdFlags 两臂 ──
+
+    @Test
+    void forkConflictsWithSessionContinueResumeNoSession() {
+        var args = ArgsParser.parse(new String[] {
+            "--fork", "abc", "--session", "x", "-c", "-r", "--no-session"});
+        assertThat(args.diagnostics())
+            .anyMatch(d -> "error".equals(d.type()) && d.message().equals(
+                "--fork cannot be combined with --session, --continue, --resume, --no-session"));
+    }
+
+    @Test
+    void forkWithSessionIdAloneIsLegal() {
+        // F-b 组合（pi forkSessionOrExit 消费 sessionId 作新会话 id）不诊断。
+        var args = ArgsParser.parse(new String[] {"--fork", "abc", "--session-id", "fork-id-1"});
+        assertThat(args.diagnostics()).isEmpty();
+        assertThat(args.fork()).isEqualTo("abc");
+        assertThat(args.sessionId()).isEqualTo("fork-id-1");
+
+        var c = ArgsParser.parse(new String[] {"-c"});
+        assertThat(c.diagnostics()).isEmpty();
+        assertThat(c.continue_()).isTrue();
+    }
+
+    @Test
+    void sessionIdConflictsWithSessionContinueResume() {
+        var args = ArgsParser.parse(new String[] {"--session-id", "sid", "--session", "x"});
+        assertThat(args.diagnostics())
+            .anyMatch(d -> "error".equals(d.type()) && d.message().equals(
+                "--session-id cannot be combined with --session"));
+
+        var args2 = ArgsParser.parse(new String[] {"--session-id", "sid", "-c", "-r"});
+        assertThat(args2.diagnostics())
+            .anyMatch(d -> "error".equals(d.type()) && d.message().equals(
+                "--session-id cannot be combined with --continue, --resume"));
+    }
+
+    @Test
+    void sessionIdWithNoSessionAloneIsLegal() {
+        // pi validateSessionIdFlags 不含 --no-session（内存会话带 id，main.ts:364-366）。
+        var args = ArgsParser.parse(new String[] {"--session-id", "sid", "--no-session"});
+        assertThat(args.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void sessionIdFormatAssertionFollowsPiRegex() {
+        // pi assertValidSessionId：^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$
+        // （"=" 形式喂值，避免 picocli 把 "-" 起头的值当选项）
+        // 前导 "-" 的坏值（"-abc"）喂不进 picocli（撞短旗簇）——那是 CLI 分词边界，
+        // 非格式断言面，反例表不列。
+        for (var bad : new String[] {".abc", "abc-", "abc def", "a/b", ""}) {
+            var args = ArgsParser.parse(new String[] {"--session-id=" + bad});
+            assertThat(args.diagnostics())
+                .as("session-id %s", (Object) bad)
+                .anyMatch(d -> "error".equals(d.type()) && d.message().startsWith(
+                    "Session id must be non-empty, contain only alphanumeric characters"));
+        }
+        for (var good : new String[] {"a", "abc", "a.b-c_d", "A1"}) {
+            var args = ArgsParser.parse(new String[] {"--session-id", good});
+            assertThat(args.diagnostics()).as("session-id %s", good).isEmpty();
+        }
+    }
+
+    @Test
+    void conflictDiagnosticPrecedesFormatAssertion() {
+        // pi 先冲突诊断后格式断言（main.ts:329-335 同序），两者独立上报。
+        var args = ArgsParser.parse(new String[] {"--session-id=-bad-", "--session", "x"});
+        var errors = args.diagnostics().stream()
+            .filter(d -> "error".equals(d.type())).map(d -> d.message()).toList();
+        assertThat(errors).containsSubsequence(
+            "--session-id cannot be combined with --session",
+            "Session id must be non-empty, contain only alphanumeric characters,"
+                + " '-', '_', and '.', and start and end with an alphanumeric character");
     }
 }

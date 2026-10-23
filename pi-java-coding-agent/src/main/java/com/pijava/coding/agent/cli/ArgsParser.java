@@ -27,6 +27,10 @@ import picocli.CommandLine.Unmatched;
 @Command(name = "pi-java")
 public final class ArgsParser {
 
+    /** pi assertValidSessionId（session-manager.ts:268-273）正则逐字。 */
+    private static final java.util.regex.Pattern SESSION_ID_PATTERN =
+        java.util.regex.Pattern.compile("^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$");
+
     @Option(names = "--provider")
     String provider;
 
@@ -204,6 +208,38 @@ public final class ArgsParser {
             diagnostics.add(new Args.ArgDiagnostic("warning",
                 "Invalid thinking level \"" + thinking + "\". Valid values: "
                     + String.join(", ", ThinkingLevels.validValues())));
+        }
+
+        // pi validateForkFlags（main.ts:299-310）：--fork 与
+        // --session/--continue/--resume/--no-session 互斥（--session-id 不在列——F-b 组合合法）。
+        if (fork != null) {
+            var conflicts = java.util.stream.Stream.of(
+                session != null ? "--session" : null,
+                continue_ ? "--continue" : null,
+                resume ? "--resume" : null,
+                noSession ? "--no-session" : null).filter(java.util.Objects::nonNull).toList();
+            if (!conflicts.isEmpty()) {
+                diagnostics.add(new Args.ArgDiagnostic("error",
+                    "--fork cannot be combined with " + String.join(", ", conflicts)));
+            }
+        }
+        // pi validateSessionIdFlags（main.ts:312-336）：--session-id 与
+        // --session/--continue/--resume 互斥（无 --no-session），冲突诊断后仍跑格式断言（pi :329-335 同序）。
+        if (sessionId != null) {
+            var conflicts = java.util.stream.Stream.of(
+                session != null ? "--session" : null,
+                continue_ ? "--continue" : null,
+                resume ? "--resume" : null).filter(java.util.Objects::nonNull).toList();
+            if (!conflicts.isEmpty()) {
+                diagnostics.add(new Args.ArgDiagnostic("error",
+                    "--session-id cannot be combined with " + String.join(", ", conflicts)));
+            }
+            if (!SESSION_ID_PATTERN.matcher(sessionId).matches()) {
+                // pi assertValidSessionId（session-manager.ts:268-273）文案逐字。
+                diagnostics.add(new Args.ArgDiagnostic("error",
+                    "Session id must be non-empty, contain only alphanumeric characters,"
+                        + " '-', '_', and '.', and start and end with an alphanumeric character"));
+            }
         }
 
         var parsedMessages = new ArrayList<String>();

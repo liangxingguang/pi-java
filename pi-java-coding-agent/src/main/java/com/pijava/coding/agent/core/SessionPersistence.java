@@ -186,74 +186,187 @@ final class SessionPersistence {
         });
     }
 
+    /**
+     * pi {@code createSessionManager} 判定序（main.ts:358-449）逐字重排（批 14，docs/25 T6a）：
+     * --fork（:368）→ --session（:391）→ --resume（:415）→ --continue（:432）→
+     * --session-id（:436）→ create（:448）。失败面＝{@link SessionResolutionExit}
+     * （pi 的干净 {@code Error: <msg>} exit 1，裁决②），不再是栈 trace。
+     */
     static AgentSession resolvePersistent(AgentSession session, Args args) {
         var handle = session.persistentRepository();
         var cwd = System.getProperty("user.dir");
+        if (args.fork() != null) {
+            resolveFork(session, args, handle, cwd);
+            return session;
+        }
+        if (args.session() != null) {
+            resolveSessionArg(session, args, handle, cwd);
+            return session;
+        }
+        if (args.resume()) {
+            resolveResume(session, args, handle, cwd);
+            return session;
+        }
         if (args.continue_()) {
+            // pi :432 continueRecent——空臂静默新建（:1800，裁决③/B255），不报错。
             return handle.latest(cwd).map(meta -> {
                 attach(session, handle, meta);
                 return session;
-            }).orElseThrow(() -> new IllegalStateException("No previous session to continue"));
-        }
-        if (args.fork() != null) {
-            // #75（docs/10 §5）：pi 的 --fork 支配 --session-id —— fork 源解析
-            // （main.ts:380-386 的 path/local/global 支）把 parsed.sessionId 当作
-            // **新会话**的 id 传给 forkFrom(..., { id: sessionId })。
-            if (isPathShaped(args.fork())) {
-                var path = java.nio.file.Path.of(args.fork()).toAbsolutePath().normalize();
-                return handle.openPath(path).map(opened -> {
-                    var forked = handle.fork(opened.getMetadata(), new ForkOptions.Tree(), cwd,
-                        args.sessionId());
-                    session.session(forked);
-                    attach(session, handle, forked.getMetadata());
-                    return session;
-                }).orElseThrow(() -> new IllegalStateException(
-                    "Session not found: " + args.fork()));
-            }
-            return handle.find(args.fork()).map(meta -> {
-                var forked = handle.fork(meta, new ForkOptions.Tree(), cwd, args.sessionId());
-                session.session(forked);
-                attach(session, handle, forked.getMetadata());
-                return session;
-            }).orElseThrow(() -> new IllegalStateException("Session not found: " + args.fork()));
+            }).orElseGet(() -> createAttached(session, handle, cwd));
         }
         if (args.sessionId() != null) {
-            return handle.find(args.sessionId()).map(meta -> {
-                attach(session, handle, meta);
-                return session;
-            }).orElseGet(() -> {
-                var created = handle.create(cwd, null);
-                session.session(created);
-                attach(session, handle, created.getMetadata());
-                return session;
-            });
+            resolveSessionId(session, args, handle, cwd);
+            return session;
         }
-        if (args.resume() || args.session() != null) {
-            // ⓪ 路径快道（pi resolveSessionPath，main.ts:253-256）：路径形入参直接开文件。
-            if (isPathShaped(args.session())) {
-                var path = java.nio.file.Path.of(args.session()).toAbsolutePath().normalize();
-                return handle.openPath(path).map(opened -> {
-                    attachOpened(session, opened, opened.getMetadata());
-                    return session;
-                }).orElseThrow(() -> new IllegalStateException(
-                    "Session not found: " + args.session()));
-            }
-            return handle.find(args.session()).map(meta -> {
-                attach(session, handle, meta);
-                return session;
-            }).orElseThrow(() -> new IllegalStateException("Session not found: " + args.session()));
+        return createAttached(session, handle, cwd);
+    }
+
+    /** pi :368-390（--fork 臂）：session-id 目标查重（T9）→ 源解析 → forkFrom {id}。 */
+    private static void resolveFork(AgentSession session, Args args,
+                                    PersistentSessionRepositories.RepositoryHandle handle,
+                                    String cwd) {
+        // pi :369-375（T9）：fork 目标 id 已存在 ⇒ 干净错误 exit 1。
+        if (args.sessionId() != null
+                && handle.findLocalById(cwd, args.sessionId()).isPresent()) {
+            throw SessionResolutionExit.error(
+                "Session already exists with id '" + args.sessionId() + "'");
         }
+        // #75（docs/10 §5）：pi 的 --fork 支配 --session-id —— fork 源解析
+        // （main.ts:380-386 的 path/local/global 支）把 parsed.sessionId 当作
+        // **新会话**的 id 传给 forkFrom(..., { id: sessionId })。
+        SessionMetadata source;
+        if (isPathShaped(args.fork())) {
+            var path = java.nio.file.Path.of(args.fork()).toAbsolutePath().normalize();
+            source = handle.openPath(path)
+                .orElseThrow(() -> SessionResolutionExit.error(
+                    "No session found matching '" + args.fork() + "'"))
+                .getMetadata();
+        } else {
+            source = handle.find(args.fork())
+                .orElseThrow(() -> SessionResolutionExit.error(
+                    "No session found matching '" + args.fork() + "'"));
+        }
+        var forked = handle.fork(source, new ForkOptions.Tree(), cwd, args.sessionId());
+        session.session(forked);
+        attach(session, handle, forked.getMetadata());
+    }
+
+    /** pi :391-413（--session 臂，T7）：⓪ 路径快道 → local 直开 → global 提示＋确认 fork。 */
+    private static void resolveSessionArg(AgentSession session, Args args,
+                                          PersistentSessionRepositories.RepositoryHandle handle,
+                                          String cwd) {
+        if (isPathShaped(args.session())) {
+            var path = java.nio.file.Path.of(args.session()).toAbsolutePath().normalize();
+            var opened = handle.openPath(path)
+                .orElseThrow(() -> SessionResolutionExit.error(
+                    "No session found matching '" + args.session() + "'"));
+            attachOpened(session, opened, opened.getMetadata());
+            return;
+        }
+        var match = handle.findWithScope(args.session())
+            .orElseThrow(() -> SessionResolutionExit.error(
+                "No session found matching '" + args.session() + "'"));
+        if (!match.global()) {
+            attach(session, handle, match.metadata());
+            return;
+        }
+        // pi :396-412：跨项目命中 ⇒ 提示（pi 黄色，java 无色——B213 族）＋确认 fork。
+        System.out.println("Session found in different project: "
+            + PersistentSessionRepositories.metadataCwd(match.metadata()));
+        if (!promptConfirm("Fork this session into current directory?")) {
+            throw SessionResolutionExit.plain(0, "Aborted.");
+        }
+        var forked = handle.fork(match.metadata(), new ForkOptions.Tree(), cwd);
+        session.session(forked);
+        attach(session, handle, forked.getMetadata());
+    }
+
+    /** pi :415-430（--resume 臂，T11）：选择器 SPI（裁决①）；取消 ⇒ exit 0。 */
+    private static void resolveResume(AgentSession session, Args args,
+                                      PersistentSessionRepositories.RepositoryHandle handle,
+                                      String cwd) {
+        var provider = java.util.ServiceLoader.load(
+            com.pijava.coding.agent.spi.SessionSelectorProvider.class).findFirst();
+        if (provider.isEmpty()) {
+            // 窄差 D70：pi 恒打包 TUI；java 裁 tui 的精简部署报干净错误。
+            throw SessionResolutionExit.error(
+                "--resume requires the pi-java-tui module on the classpath");
+        }
+        var selected = provider.get().selectSession(
+            (progress, signal) -> handle.listRich(cwd, progress, signal),
+            (progress, signal) -> handle.listAllRich(progress, signal),
+            session.services().settings(),
+            null); // useThemeOverride——T16 接线（pi :681-683 先覆盖 settings 再进选择器）
+        if (selected.isEmpty()) {
+            throw SessionResolutionExit.plain(0, "No session selected"); // pi :423-424
+        }
+        // pi :427 SessionManager.open(path)——选中项必来自列表扫描 ⇒ openPath 必中，兜底防御。
+        var opened = handle.openPath(java.nio.file.Path.of(selected.get()))
+            .orElseThrow(() -> SessionResolutionExit.error(
+                "No session found matching '" + selected.get() + "'"));
+        attachOpened(session, opened, opened.getMetadata());
+    }
+
+    /** pi :436-448（--session-id 臂，T8）：只项目内精确；缺 ⇒ warning＋带 id 新建。 */
+    private static void resolveSessionId(AgentSession session, Args args,
+                                         PersistentSessionRepositories.RepositoryHandle handle,
+                                         String cwd) {
+        var existing = handle.findLocalById(cwd, args.sessionId());
+        if (existing.isPresent()) {
+            attach(session, handle, existing.get());
+            return;
+        }
+        // pi :441-445（黄色 ⇒ 无色，B213 族）：warning 后落到 :448 的 create——带 id（T8 修丢 id 现状）。
+        System.err.println("Warning: No project session found with id '" + args.sessionId()
+            + "'; creating a new session with that id.");
+        var created = handle.createWithId(cwd, args.sessionId());
+        session.session(created);
+        attach(session, handle, created.getMetadata());
+    }
+
+    /** create＋session 置换＋attach 的公共形（pi :448 / :1800 静默新建共用，T6a）。 */
+    private static AgentSession createAttached(AgentSession session,
+                                               PersistentSessionRepositories.RepositoryHandle handle,
+                                               String cwd) {
         var created = handle.create(cwd, null);
         session.session(created);
+        attach(session, handle, created.getMetadata());
         return session;
+    }
+
+    /**
+     * pi {@code promptConfirm}（main.ts:285-297）逐字：{@code <message> [y/N] }，
+     * 仅 {@code y}/{@code yes}（小写化）为真；EOF（readline 关闭 ⇒ 空答）⇒ false。
+     */
+    private static boolean promptConfirm(String message) {
+        System.out.print(message + " [y/N] ");
+        System.out.flush();
+        String answer;
+        try {
+            var console = System.console();
+            answer = console != null
+                ? console.readLine()
+                : new java.io.BufferedReader(new java.io.InputStreamReader(System.in,
+                    java.nio.charset.StandardCharsets.UTF_8)).readLine();
+        } catch (java.io.IOException e) {
+            answer = null;
+        }
+        if (answer == null) {
+            return false;
+        }
+        var lowered = answer.toLowerCase(java.util.Locale.ROOT);
+        return "y".equals(lowered) || "yes".equals(lowered);
     }
 
     /** Resolve {@code -c/-r/--fork/--session-id} against the in-memory registry (tests). */
     static AgentSession resolveInMemory(AgentSession session, com.pijava.coding.agent.cli.Args args) {
         var repository = session.inMemoryRepository();
         if (args.continue_()) {
-            return repository.latest().orElseThrow(() -> new IllegalStateException(
-                "No previous session to continue"));
+            // 裁决③/B255：-c 空臂静默新建（pi :1800），不报错。
+            return repository.latest().orElseGet(() -> {
+                repository.create(session);
+                return session;
+            });
         }
         if (args.sessionId() != null) {
             return repository.find(args.sessionId()).orElseGet(() ->

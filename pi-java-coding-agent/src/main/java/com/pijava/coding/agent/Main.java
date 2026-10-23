@@ -8,6 +8,7 @@ import com.pijava.coding.agent.cli.HelpText;
 import com.pijava.coding.agent.cli.ListModelsCommand;
 import com.pijava.coding.agent.cli.Version;
 import com.pijava.coding.agent.core.Logging;
+import com.pijava.coding.agent.core.SessionResolutionExit;
 import com.pijava.coding.agent.export.HtmlExporter;
 import com.pijava.coding.agent.modes.PrintMode;
 import com.pijava.coding.agent.rpc.RpcMode;
@@ -50,6 +51,21 @@ public final class Main {
             printDiagnostics(parsed);
             return 2;
         }
+        try {
+            return dispatch(parsed);
+        } catch (SessionResolutionExit e) {
+            // 批 14（docs/25 T6c，裁决②）：会话解析的干净结局——pi 的
+            // console.error("Error: <msg>") exit 1 / console.log(<msg>) exit 0 对位。
+            if (e.errorPrefix()) {
+                System.err.println("Error: " + e.getMessage());
+            } else {
+                System.out.println(e.getMessage());
+            }
+            return e.code();
+        }
+    }
+
+    private static int dispatch(Args parsed) {
         if (parsed.help()) {
             System.out.print(HelpText.text());
             return 0;
