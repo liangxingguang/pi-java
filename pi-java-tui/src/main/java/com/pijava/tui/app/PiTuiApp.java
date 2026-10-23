@@ -196,6 +196,10 @@ public final class PiTuiApp {
     public void start(ToolkitRunner runner) {
         showWelcomeOnce();
         this.runner = runner;
+        // 批 17（T7，裁决⑤）：渲染循环起步 ⇒ 扩展阻塞对话自此可用。
+        if (extensionUiHost != null) {
+            extensionUiHost.markRenderLoopActive(Thread.currentThread());
+        }
         runner.eventRouter().addGlobalHandler(this::onEvent);
         sessionEvents.open(session, null);
         snapshotHandle = session.watchSession();
@@ -208,6 +212,9 @@ public final class PiTuiApp {
     public void startInline(InlineTuiShell shell) {
         showWelcomeOnce();
         this.inlineShell = shell;
+        if (extensionUiHost != null) {
+            extensionUiHost.markRenderLoopActive(Thread.currentThread());
+        }
         this.transcript = new ScrollbackTranscript(new ScrollbackTranscript.Sink() {
             @Override
             public void println(Line line) {
@@ -321,6 +328,9 @@ public final class PiTuiApp {
         if (update.lines() != 0) {
             chatScreen.scrollByRows(update.lines());
         }
+        // 批 17（T4/T5）：扩展对话框的程序式完成（倒计时到期/abort/会话复位）
+        // 不走键路径——帧级收口。
+        closeOverlayIfDone();
         if (overlay != null) {
             return TamboUIAdapter.column(
                 chatScreen.render().fill(),
@@ -344,6 +354,7 @@ public final class PiTuiApp {
      */
     void renderInline(Frame frame) {
         dispatcher.drain();
+        closeOverlayIfDone();   // 批 17（T4/T5）：inline 同帧级收口
         if (overlay != null) {
             renderOverlayInline();
             return;
@@ -377,8 +388,10 @@ public final class PiTuiApp {
             return;
         }
         int editorLines = Math.min(Math.max(1, chatScreen.editorLineCount()), MAX_EDITOR_LINES);
+        // 批 17（T6）：扩展注入层（header/widget/状态段/自定义 footer）占位行数。
         inlineShell.setContentHeight(
-            chatScreen.completerLineCount() + editorLines + 1);
+            chatScreen.completerLineCount() + editorLines + 1
+                + chatScreen.extensionAreaLineCount());
     }
 
     public boolean isRunning() {
@@ -429,35 +442,7 @@ public final class PiTuiApp {
     private EventResult onKeyEvent(KeyEvent event) {
         if (overlay != null) {
             overlay.onKeyEvent(event);
-            if (overlay.isDone()) {
-                // docs/18：先清位再 apply——apply 可链式开下一个 overlay
-                // （树导航流：树选择器→三选→编辑器），旧序会把它立即抹掉。
-                var done = overlay;
-                overlay = null;
-                done.apply(session, this::switchSession);
-                // 批 12 T14：设置屏的 thinking-level 子菜单请求 ⇒ 不关屏改开
-                // ModelThinkingLevelScreen（pi settings-selector.ts:607-610 对位）。
-                if (done instanceof SettingsScreen settings
-                        && settings.pollModelThinkingRequest()) {
-                    openOverlay(new ModelThinkingLevelScreen(session));
-                    return EventResult.HANDLED;
-                }
-                // 批 13 T9（pi :5045-5048 的 rebuildChatFromMessages 对位）：
-                // "Cache miss notices" 改动 ⇒ 整表重建（重推导 miss 通知/暖行）。
-                if (done instanceof SettingsScreen settings
-                        && settings.pollCacheMissNoticesToggled()) {
-                    chatScreen.rebuildTranscript(session.accumulatedEntries(),
-                        session.harness().snapshot(session.laneName()).leafId());
-                }
-                // 批 12 T13（pi :4550 模型选择结果时机对位）。
-                if (done instanceof ModelSelectorScreen) {
-                    maybeWarnSubscriptionAuth();
-                }
-                // B244（pi interactive-mode.ts:4986-4989 对位）：设置可能已改，
-                // 关屏统一重建补全目录（pi 是 toggle 即时重建，窄差 D4 时机差；
-                // 重建是纯读装配，无副作用）。
-                chatScreen.setSlashCommands(loadSlashItems());
-            }
+            closeOverlayIfDone();
             return EventResult.HANDLED;
         }
         if (TamboUIAdapter.isSendEnter(event)) {
@@ -782,8 +767,115 @@ public final class PiTuiApp {
         }
     }
 
+    /**
+     * overlay 结局收口（键路径与帧路径共用——批 17 起倒计时/abort/会话复位在
+     * 键路径外完成）。docs/18：先清位再 apply——apply 可链式开下一个 overlay
+     * （树导航流：树选择器→三选→编辑器），旧序会把它立即抹掉。
+     */
+    private void closeOverlayIfDone() {
+        var done = overlay;
+        if (done == null || !done.isDone()) {
+            return;
+        }
+        overlay = null;
+        done.apply(session, this::switchSession);
+        // 批 12 T14：设置屏的 thinking-level 子菜单请求 ⇒ 不关屏改开
+        // ModelThinkingLevelScreen（pi settings-selector.ts:607-610 对位）。
+        if (done instanceof SettingsScreen settings
+                && settings.pollModelThinkingRequest()) {
+            openOverlay(new ModelThinkingLevelScreen(session));
+            return;
+        }
+        // 批 13 T9（pi :5045-5048 的 rebuildChatFromMessages 对位）：
+        // "Cache miss notices" 改动 ⇒ 整表重建（重推导 miss 通知/暖行）。
+        if (done instanceof SettingsScreen settings
+                && settings.pollCacheMissNoticesToggled()) {
+            chatScreen.rebuildTranscript(session.accumulatedEntries(),
+                session.harness().snapshot(session.laneName()).leafId());
+        }
+        // 批 12 T13（pi :4550 模型选择结果时机对位）。
+        if (done instanceof ModelSelectorScreen) {
+            maybeWarnSubscriptionAuth();
+        }
+        // B244（pi interactive-mode.ts:4986-4989 对位）：设置可能已改，
+        // 关屏统一重建补全目录（pi 是 toggle 即时重建，窄差 D4 时机差；
+        // 重建是纯读装配，无副作用）。
+        chatScreen.setSlashCommands(loadSlashItems());
+    }
+
     private void openOverlay(ScreenOverlay screenOverlay) {
         this.overlay = screenOverlay;
+    }
+
+    /**
+     * 批 17（T4/T5）：扩展对话框的程序式关闭（abort/timeout/会话复位路径——
+     * pi {@code hideExtensionSelector} 族的「清位＋编辑器回槽」在 java 的对位：
+     * 编辑器从未离屏（裁决④），只需清位；apply 照常完成结局 future）。
+     */
+    void dismissOverlay(ScreenOverlay target) {
+        if (overlay != target) {
+            return;
+        }
+        overlay = null;
+        target.apply(session, this::switchSession);
+    }
+
+    // ── 批 17（T7）：扩展 UI 宿主接线 ─────────────────────────
+
+    /** 扩展 UI 宿主（bindExtensionUi 回填；null ⇒ 无扩展 UI 装配）。 */
+    private TuiExtensionUiHost extensionUiHost;
+
+    /**
+     * 批 17（T7，docs/28 §3-T7.1）：回填扩展 UI 宿主——overlay 开合回调、
+     * 外部编辑器往返、终端几何（host 先于 {@code AgentSession.create} 存在，
+     * app 构造后回填＝晚绑定 holder）。
+     */
+    public void bindExtensionUi(TuiExtensionUiHost host) {
+        this.extensionUiHost = host;
+        host.bindApp(this::openOverlay, this::dismissOverlay, this::externalEditorRoundtrip,
+            this::terminalCols, this::terminalRows);
+        chatScreen.setTerminalWidthSource(this::terminalCols);
+    }
+
+    /**
+     * 批 17（T4）：扩展编辑对话框的 ctrl+g 外部编辑器往返（pi
+     * {@code handleOpenExternalEditor} :129-139 对位——tui.stop/start ⇒
+     * java 的 alt 屏退出/重进；inline 臂摘/挂 overlay 同旨）。
+     */
+    private java.util.Optional<String> externalEditorRoundtrip(String command, String content) {
+        boolean altScreen = runner != null;
+        boolean inlineOverlay = !altScreen && inlineShell != null && inlineShell.overlayActive();
+        if (altScreen) {
+            TamboUIAdapter.leaveAlternateScreen();
+        } else if (inlineOverlay) {
+            try {
+                inlineShell.endOverlay();
+            } catch (IOException ignored) {
+                // best-effort；下同
+            }
+        }
+        try {
+            var result =
+                com.pijava.coding.agent.core.ExternalEditorSupport.edit(command, content);
+            if (result instanceof com.pijava.coding.agent.core.ExternalEditorSupport
+                    .Result.Complete(var text)) {
+                return java.util.Optional.of(text);
+            }
+            return java.util.Optional.empty();
+        } catch (Exception e) {
+            chatScreen.showError("External editor failed: " + e.getMessage());
+            return java.util.Optional.empty();
+        } finally {
+            if (altScreen) {
+                TamboUIAdapter.enterAlternateScreen();
+            } else if (inlineOverlay) {
+                try {
+                    inlineShell.beginOverlay();
+                } catch (IOException ignored) {
+                    // best-effort
+                }
+            }
+        }
     }
 
     // ── 批 12 T13（docs/23 §3）：Anthropic 订阅凭证警告接线 ──────

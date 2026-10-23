@@ -76,6 +76,14 @@ public final class EditorComponent {
     }
 
     /**
+     * 批 17（T4）：对话框内嵌用的<b>裸</b>编辑器元素（无 {@code "> "} 提示列、
+     * 无 padding——pi extension-editor.ts 内嵌 {@code Editor} 组件对位）。
+     */
+    public EditorElement renderBare() {
+        return element;
+    }
+
+    /**
      * Handle a key event by driving the {@link TextAreaState} directly.
      *
      * <p>The app shell owns all keys (the editor element has no id, so the
