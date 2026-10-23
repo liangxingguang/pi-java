@@ -65,7 +65,10 @@ public final class RpcDispatcher {
         this.out = out;
         this.args = args;
         this.eventSubscription = session.subscribe(this::emitEvent);
-        session.extensionUI(this::extensionUiRequest);
+        // 批 17（T3）：RPC 臂 typed 实现——九方法通道的 java 生产者自此接通
+        // （晚绑定修真：context 现读会话字段，后注入不再落空，E5-32）。
+        session.extensionUI(
+            new RpcExtensionUI(this::extensionUiRequest, this::writeExtensionUiRequest), "rpc");
     }
 
     /** 解析并分发一行；解析失败或处理器异常都回 success:false 响应而非抛出。 */
@@ -375,6 +378,15 @@ public final class RpcDispatcher {
         } catch (IllegalStateException e) {
             // 压缩中 / 运行中未指定 streamingBehavior（pi 在调用线程同步抛）。
             out.write(RpcResponse.fail(prompt.id(), "prompt", e.getMessage()));
+        }
+    }
+
+    /** 批 17（T3）：fire-and-forget 写出（pi notify/setStatus/setTitle/set_editor_text/setWidget 臂——不等应答）。 */
+    private void writeExtensionUiRequest(RpcExtensionUIRequest request) {
+        try {
+            out.write(request);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 

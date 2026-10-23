@@ -227,6 +227,16 @@ public final class ExtensionEventSpec<E extends ExtensionEvent, R> {
         CacheWarmingDecisionEventResult> CACHE_WARMING_DECISION =
         new ExtensionEventSpec<>("cache_warming_decision");
 
+    // ── ui_prompt 事件对（docs/28 批 17 T2）──
+
+    /** pi {@code "ui_prompt_start"}（types.ts:1621 订阅口，观察型）。 */
+    public static final ExtensionEventSpec<ExtensionEvent.UiPromptStartEvent, Void>
+        UI_PROMPT_START = new ExtensionEventSpec<>("ui_prompt_start");
+
+    /** pi {@code "ui_prompt_end"}（types.ts:1622 订阅口，观察型）。 */
+    public static final ExtensionEventSpec<ExtensionEvent.UiPromptEndEvent, Void>
+        UI_PROMPT_END = new ExtensionEventSpec<>("ui_prompt_end");
+
     private final String name;
 
     private ExtensionEventSpec(String name) {

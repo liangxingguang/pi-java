@@ -105,8 +105,11 @@ public final class AgentSession implements AutoCloseable {
     private final Set<String> deliveredEntryIds = new HashSet<>();
     // Phase 6: 会话级事件广播（多监听器）。
     private final SessionEventHub eventHub = new SessionEventHub();
-    // Phase 6 (P6-7b): 扩展 UI 服务（RPC 模式注入，缺省 noop）。
-    private ExtensionUI extensionUI = ExtensionUI.noop();
+    // Phase 6 (P6-7b): 扩展 UI 服务（RPC/TUI 模式注入，缺省 noop）。
+    // 批 17（T1，裁决②）：volatile——晚绑定后写侧是模式层装配线程，读侧是扩展线程。
+    private volatile ExtensionUI extensionUI = ExtensionUI.noop();
+    /** 批 17（T1）：pi {@code ExtensionMode}（"tui"|"rpc"|"json"|"print"）——随 UI 注入。 */
+    private volatile String extensionMode = "print";
     // resources_discover：扩展贡献的主题候选（启动时选第一个可用）。
     private List<Path> themePaths = List.of();
     // 3d（原 docs/31 §8.22）：pi 的重试中止是「仅退避睡眠存活」的
@@ -1733,16 +1736,34 @@ public final class AgentSession implements AutoCloseable {
         return new ClearedQueue(steering, followUp);
     }
 
-    /** 注入扩展 UI 服务（RPC 模式用；覆盖 loadExtensions 时的 noop）。 */
+    /** 注入扩展 UI 服务（覆盖 loadExtensions 时的 noop）；mode 维持原值。 */
     public void extensionUI(ExtensionUI ui) {
         if (ui != null) {
             this.extensionUI = ui;
         }
     }
 
+    /**
+     * 批 17（T1/T3）：双参 setter——pi {@code setUIContext(uiContext, mode)}
+     * （runner.ts:580-584）对位；mode ∈ {@code "tui"|"rpc"|"json"|"print"}。
+     */
+    public void extensionUI(ExtensionUI ui, String mode) {
+        if (ui != null) {
+            this.extensionUI = ui;
+        }
+        if (mode != null) {
+            this.extensionMode = mode;
+        }
+    }
+
     /** 当前扩展 UI 服务。 */
     public ExtensionUI extensionUI() {
         return extensionUI;
+    }
+
+    /** 批 17（T1）：pi {@code runner.mode} 对位（现读）。 */
+    public String extensionMode() {
+        return extensionMode;
     }
 
     /** List sessions for {@code /session} and the resume picker. */
@@ -1929,6 +1950,8 @@ public final class AgentSession implements AutoCloseable {
         // docs/16（T1，pi §1.2 序：teardown → createRuntime → rebind）：forked 会话
         // 全量重装扩展并发射 session_start{fork, previousSessionFile} —— 与全新会话
         // 享有完全相同的扩展面（pi bindExtensions 同一口，agent-session.ts:3258-3281）。
+        // 批 17（T1）：mode 随 UI 字段一同携带（pi 的 runner mode 重建对位）。
+        copy.extensionMode = extensionMode;
         loadExtensions(args, copy.services(), copy.harness(), extensionUI, copy,
             new SessionStartInfo("fork", previousId));
         return Optional.of(copy);
@@ -1982,6 +2005,8 @@ public final class AgentSession implements AutoCloseable {
         var copy = forkFromEntryInternal(entryId);
         closeForFork(copy.sessionId());
         // docs/16（T1）：与 forkCopy 同序 —— forked 全量重装扩展＋start{fork}。
+        // 批 17（T1）：mode 随 UI 字段一同携带。
+        copy.extensionMode = extensionMode;
         loadExtensions(args, copy.services(), copy.harness(), extensionUI, copy,
             new SessionStartInfo("fork", previousId));
         return Optional.of(copy);
@@ -2397,8 +2422,10 @@ public final class AgentSession implements AutoCloseable {
         // 注入的既有顺序不变）。
         owner.extensionUI = ui == null ? ExtensionUI.noop() : ui;
         var bus = new com.pijava.coding.agent.extension.ExtensionEventBus();
+        // 批 17（T1，裁决②）：晚绑定——context 持 owner 字段的供给器而非烘死值，
+        // RPC/TUI 后注入的 UI 自此到得了扩展（pi runner.ts:876-884 getter 逐字）。
         var context = new DefaultExtensionContext(
-            services, harness.skillManager(), owner.extensionUI, bus);
+            services, harness.skillManager(), owner::extensionUI, owner::extensionMode, bus);
         // 批 16（T4c）：内置 MCP 渲染器 resolver 先注册（pi 内置 MCP 扩展随运行时
         // 先载，extensions/mcp/index.ts:384-386）；其 next() ?? 委托优先逐字。
         context.toolRenderers().register(
@@ -2481,6 +2508,8 @@ public final class AgentSession implements AutoCloseable {
         // "startup"（CLI resume 也是——pi 逐字）；替换式新建由 createReplacing 穿载荷。
         owner.extensionFirer = new com.pijava.coding.agent.extension.SessionEventFirer(
             bus, context);
+        // 批 17（T2）：ui_prompt 发射器回填（firer 晚于 context 诞生；包装器现读）。
+        context.bindUiPromptFirer(owner.extensionFirer);
         owner.extensionFirer.sessionStart(
             startInfo == null ? "startup" : startInfo.reason(),
             startInfo == null ? null : startInfo.previousSessionFile());

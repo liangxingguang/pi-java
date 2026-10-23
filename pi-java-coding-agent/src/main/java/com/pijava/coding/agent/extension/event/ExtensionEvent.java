@@ -302,6 +302,22 @@ public sealed interface ExtensionEvent {
     record ProviderStreamEvent(String provider, String api, String model, Object data)
             implements ExtensionEvent {}
 
+    // ═══════════════════════════════════════════════════════════
+    // ui_prompt 事件对（docs/28 批 17 T2，pi types.ts:1012-1030）
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * pi {@code UIPromptStartEvent}（types.ts:1018-1024）——五个阻塞 UI 方法
+     * （select/confirm/input/editor/custom）被调用时发射；带深度计数，嵌套只发
+     * 最外层。{@code reason} 恒 {@code "ui_prompt"}（同既有 spec 惯例不列字段）；
+     * {@code kind} ∈ {@code "select"|"confirm"|"input"|"editor"|"custom"}
+     * （pi {@code UIPromptKind} 五字面量，types.ts:1012）；{@code title} null ≙ 键省略。
+     */
+    record UiPromptStartEvent(String kind, String title) implements ExtensionEvent {}
+
+    /** pi {@code UIPromptEndEvent}（types.ts:1025-1030）——深度归零时发，kind/title 取最外层记录值。 */
+    record UiPromptEndEvent(String kind, String title) implements ExtensionEvent {}
+
     /**
      * pi {@code CacheWarmingDecisionEvent}（cache-warmer.ts:112-115，批 13）——
      * 每次暖刷新前问扩展：四键逐字（{@code type} 由

@@ -30,8 +30,18 @@ public final class DefaultExtensionContext implements ExtensionContext {
 
     private final SessionServices services;
     private final SkillManager skills;
-    private final ExtensionUI ui;
+    /** 批 17（T1，裁决②）：UI 晚绑定——pi runner.ts:876-884「Context values are
+     *  resolved at call time」逐字；烘死字段会让 RPC 后注入的生产者到不了扩展
+     * （E5-32 存疑的实质）。 */
+    private final Supplier<ExtensionUI> uiSupplier;
+    /** pi {@code ExtensionContext.mode} 的晚绑定源（同上）。 */
+    private final Supplier<String> modeSupplier;
     private final ExtensionEventBus bus;
+    /** 批 17（T2）：ui_prompt 包装器缓存（按 delegate 恒等；depth 状态随包装器）。 */
+    private final java.util.Map<ExtensionUI, ExtensionUI> uiWrappers =
+        new java.util.IdentityHashMap<>();
+    /** 批 17（T2）：ui_prompt 事件发射器（loadExtensions 尾部回填；null ⇒ 不发射）。 */
+    private volatile SessionEventFirer uiPromptFirer;
     private volatile Supplier<SessionTree> sessionSupplier;
     /** 批 16（T2c）：激活门三件套的会话晚绑定（loadExtensions 回填）。 */
     private volatile Supplier<com.pijava.coding.agent.core.AgentSession> toolControl;
@@ -56,9 +66,24 @@ public final class DefaultExtensionContext implements ExtensionContext {
      *  @param bus      扩展事件总线（{@code on()} 的登记目标；null ⇒ 订阅面不可用） */
     public DefaultExtensionContext(SessionServices services, SkillManager skills,
                                    ExtensionUI ui, ExtensionEventBus bus) {
+        this(services, skills,
+            ui == null ? ExtensionUI::noop : () -> ui, () -> "print", bus);
+    }
+
+    /**
+     * 批 17（T1，裁决②）：晚绑定构造——{@code ui}/{@code mode} 都是调用时现取的
+     * 供给器（pi {@code createContext()} 的 getter 对位）。
+     *
+     * @param uiSupplier   UI 供给器（返回 null ≙ noop）
+     * @param modeSupplier 模式供给器（pi {@code ExtensionMode} 四值）
+     */
+    public DefaultExtensionContext(SessionServices services, SkillManager skills,
+                                   Supplier<ExtensionUI> uiSupplier,
+                                   Supplier<String> modeSupplier, ExtensionEventBus bus) {
         this.services = services;
         this.skills = skills;
-        this.ui = ui == null ? ExtensionUI.noop() : ui;
+        this.uiSupplier = uiSupplier;
+        this.modeSupplier = modeSupplier;
         this.bus = bus;
     }
 
@@ -106,9 +131,40 @@ public final class DefaultExtensionContext implements ExtensionContext {
         return services.settings();
     }
 
+    /**
+     * 批 17（T1/T2）：晚绑定现取＋ui_prompt 包装——pi {@code setUIContext} 的
+     * {@code uiContext ? wrapUIPromptContext(uiContext) : noOpUIContext}
+     * （runner.ts:581-584）对位：非 NOOP 才包；包装器按 delegate 恒等缓存
+     * （depth 计数随包装器存活，runner.ts:598 的 runner 字段对位）。
+     */
     @Override
     public ExtensionUI ui() {
-        return ui;
+        var delegate = uiSupplier.get();
+        if (delegate == null || delegate == ExtensionUI.NOOP) {
+            return ExtensionUI.NOOP;
+        }
+        synchronized (uiWrappers) {
+            return uiWrappers.computeIfAbsent(delegate,
+                d -> new UiPromptEventExtensionUI(d, () -> uiPromptFirer));
+        }
+    }
+
+    /** pi {@code hasUI}（runner.ts:622 恒等比较对位——读<b>未包装</b>的 delegate）。 */
+    @Override
+    public boolean hasUi() {
+        var delegate = uiSupplier.get();
+        return delegate != null && delegate != ExtensionUI.NOOP;
+    }
+
+    /** pi {@code ExtensionContext.mode}（现读）。 */
+    @Override
+    public String mode() {
+        return modeSupplier.get();
+    }
+
+    /** 批 17（T2）：loadExtensions 尾部回填 ui_prompt 发射器（firer 晚于 context 诞生）。 */
+    public void bindUiPromptFirer(SessionEventFirer firer) {
+        this.uiPromptFirer = firer;
     }
 
     @Override
@@ -309,6 +365,16 @@ public final class DefaultExtensionContext implements ExtensionContext {
         @Override
         public ExtensionUI ui() {
             return DefaultExtensionContext.this.ui();
+        }
+
+        @Override
+        public boolean hasUi() {
+            return DefaultExtensionContext.this.hasUi();
+        }
+
+        @Override
+        public String mode() {
+            return DefaultExtensionContext.this.mode();
         }
 
         @Override

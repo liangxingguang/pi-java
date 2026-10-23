@@ -34,9 +34,33 @@ public interface ExtensionContext {
     /** 设置管理器。 */
     SettingsManager settings();
 
-    /** 扩展 UI 服务（RPC 模式可交互；无通道回落 noop）。 */
+    /**
+     * 扩展 UI 服务（批 17 全面化为 pi {@code ExtensionUIContext} 28 成员——
+     * TUI 模式可弹对话/注入槽位，RPC 模式走九方法通道，无通道回落 {@link ExtensionUI#NOOP}）。
+     *
+     * <p>实现按 pi runner.ts:876-884 的<b>晚绑定</b>语义：调用时才解析当前 UI
+     * （{@code bindUI}/{@code bindCore} 的改动即时反映——java 对位＝
+     * {@code AgentSession.extensionUI(ui, mode)} 后注入）。</p>
+     */
     default ExtensionUI ui() {
         return ExtensionUI.noop();
+    }
+
+    /**
+     * 批 17（T1）：pi {@code ExtensionContext.mode}（types.ts:330）——
+     * {@code "tui" | "rpc" | "json" | "print"}；无模式概念 ⇒ {@code "print"}。
+     */
+    default String mode() {
+        return "print";
+    }
+
+    /**
+     * 批 17（T1）：pi {@code ExtensionContext.hasUI}（types.ts:332：
+     * 「true in TUI and RPC modes」）——对话级 UI 可用性。
+     * 对位 pi runner.ts:622 的恒等比较（{@code uiContext !== noOpUIContext}）。
+     */
+    default boolean hasUi() {
+        return false;
     }
 
     /** 便捷访问底层服务集合。 */

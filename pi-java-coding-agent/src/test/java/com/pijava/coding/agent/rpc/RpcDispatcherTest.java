@@ -186,9 +186,12 @@ class RpcDispatcherTest {
         var mapper = new ObjectMapper();
         var request = new RpcExtensionUIRequest("r1", "confirm", Map.of("message", "OK?"));
         var requestJson = mapper.writeValueAsString(request);
-        assertThat(requestJson).contains("\"type\":\"extension_ui_request\"");
-        var back = mapper.readValue(requestJson, RpcExtensionUIRequest.class);
-        assertThat(back).isEqualTo(request);
+        // 批 17（T3）：参数平铺顶层（pi output({type, id, ...request}) 的 spread 逐字，
+        // rpc-mode.ts:117）——请求只序列化（宿主侧读），java 从不反序列化请求。
+        assertThat(requestJson).contains("\"type\":\"extension_ui_request\"")
+            .contains("\"method\":\"confirm\"")
+            .contains("\"message\":\"OK?\"")
+            .doesNotContain("\"params\"");
 
         var response = RpcExtensionUIResponse.confirm("r1", true);
         var responseJson = mapper.writeValueAsString(response);

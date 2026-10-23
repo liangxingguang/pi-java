@@ -308,6 +308,43 @@ public final class SessionEventFirer {
             java.util.Map.copyOf(sections));
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // ui_prompt 事件对（docs/28 批 17 T2，pi runner.ts:614-621 发射面）
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * pi {@code ui_prompt_start} 发射（runner.ts:602-605 构造点对位；
+     * {@code queueMicrotask} 异步调度由调用方 {@code UiPromptEventExtensionUI} 承担）。
+     */
+    public void uiPromptStart(String kind, String title) {
+        if (!bus.hasHandlers(ExtensionEventSpec.UI_PROMPT_START)) {
+            return;
+        }
+        var event = new ExtensionEvent.UiPromptStartEvent(kind, title);
+        for (var h : bus.snapshot(ExtensionEventSpec.UI_PROMPT_START)) {
+            try {
+                h.handle(event, ctx);
+            } catch (Throwable e) {
+                bus.emitError(h.error(e));
+            }
+        }
+    }
+
+    /** pi {@code ui_prompt_end} 发射（runner.ts:609-613 构造点对位；kind/title 取最外层记录值）。 */
+    public void uiPromptEnd(String kind, String title) {
+        if (!bus.hasHandlers(ExtensionEventSpec.UI_PROMPT_END)) {
+            return;
+        }
+        var event = new ExtensionEvent.UiPromptEndEvent(kind, title);
+        for (var h : bus.snapshot(ExtensionEventSpec.UI_PROMPT_END)) {
+            try {
+                h.handle(event, ctx);
+            } catch (Throwable e) {
+                bus.emitError(h.error(e));
+            }
+        }
+    }
+
     /**
      * 批 16（T6b）：pi {@code _emitModelSelect}（agent-session.ts:2457-2469）——
      * 观察型；同模型的 equals 门在<b>调用方</b>（pi :2461-2463 同位）。
