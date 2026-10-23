@@ -240,7 +240,7 @@ class SessionEventFirerTest {
             seenPrompts.add(e.systemPrompt());
             return new BeforeAgentStartEventResult(null, "override-two");
         });
-        var outcome = firer.beforeAgentStart("prompt text", () -> "base-prompt");
+        var outcome = firer.beforeAgentStart("prompt text", () -> "base-prompt", Map.of());
 
         assertThat(outcome.messages()).hasSize(1);
         assertThat(outcome.messages().get(0).customType()).isEqualTo("note");

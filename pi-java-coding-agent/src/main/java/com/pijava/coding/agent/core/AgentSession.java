@@ -42,6 +42,7 @@ import com.pijava.agent.session.jsonl.JsonlSessionMetadata;
 import com.pijava.agent.session.SessionRepository;
 import com.pijava.agent.session.memory.MemorySessionRepository;
 
+import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ImagePolicy;
 import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.agent.tool.ToolContext;
@@ -159,6 +160,18 @@ public final class AgentSession implements AutoCloseable {
     private com.pijava.coding.agent.extension.bridge.CacheWarmingBridge cacheWarmingBridge;
     /** docs/16（B252，裁决⑥）：替换/退出关闭幂等门。 */
     private volatile boolean closed;
+    // ── 批 16（docs/27）──
+    /** T5a：工具选择策略（reload 的 defaultTools diff／装配后激活臂的操作数）。 */
+    private ToolSelection.Resolved toolSelection;
+    /** T1d：扩展 flag 绑定诊断（pi AgentSessionRuntimeDiagnostic 对位，裁决⑧落点）。 */
+    private final List<com.pijava.coding.agent.cli.Args.ArgDiagnostic> startupDiagnostics =
+        new java.util.concurrent.CopyOnWriteArrayList<>();
+    /** T1b/T4b：扩展上下文（loadExtensions 回填；flag 值表与渲染器注册表的宿主）。 */
+    private com.pijava.coding.agent.extension.DefaultExtensionContext extensionContext;
+    /** T5b：扩展管理器（/reload 的 resources_discover 重放口）。 */
+    private com.pijava.coding.agent.extension.ExtensionManager extensionManager;
+    /** T5b（裁决④）：扩展注册的 provider 名集（loadExtensions 按 diff 簿记，reload 快照保留）。 */
+    private java.util.Set<String> extensionProviderNames = java.util.Set.of();
 
     private AgentSession(AgentHarness harness, SessionServices services,
                          Args args, String name) {
@@ -283,7 +296,8 @@ public final class AgentSession implements AutoCloseable {
         return create(args, repository, providers, toolContext,
             SettingsManager.load(args.projectTrustOverride()));
     }
-    private static AgentSession create(Args args, InMemorySessionRepository repository,
+    /** 批 16（T5/T6 夹具缝）：注入 settings 的 in-memory 形态（防真 home 继承坑）。 */
+    static AgentSession create(Args args, InMemorySessionRepository repository,
                                        ProviderRegistry providers,
                                        ToolContext toolContext,
                                        SettingsManager settings) {
@@ -389,20 +403,9 @@ public final class AgentSession implements AutoCloseable {
         tools.registerAll(toolList);
 
         var promptTemplates = new PromptTemplateRegistry();
-        if (!args.noPromptTemplates()) {
-            // pi loadPromptTemplates includeDefaults（prompt-templates.ts:262-265）：
-            // 默认两目录 agentDir/prompts（user）+ cwd/.pi-java/prompts（project）。
-            var defaults = PromptTemplates.loadDefaults(new DefaultFileSystem(),
-                FileSettingsStorage.defaultAgentDir().toString(),
-                System.getProperty("user.dir"));
-            promptTemplates.registerAll(defaults.templates());
-            // CLI --prompt-template 路径再载入（同名后注册胜出，pi 同序）。
-            if (args.promptTemplates() != null && !args.promptTemplates().isEmpty()) {
-                var load = PromptTemplates.load(
-                    new DefaultFileSystem(), args.promptTemplates());
-                promptTemplates.registerAll(load.templates());
-            }
-        }
+        // pi loadPromptTemplates includeDefaults（prompt-templates.ts:262-265）：
+        // 默认两目录＋CLI 显式路径（批 16 抽取进 SessionSetup，/reload 重扫复用）。
+        promptTemplates.registerAll(SessionSetup.loadPromptTemplates(args));
         var services = new SessionServices(
             settings,
             new TrustManager(effective.defaultProjectTrust),
@@ -676,6 +679,9 @@ public final class AgentSession implements AutoCloseable {
         agentSession.cacheWarmer = cacheWarmer;
         agentSession.cacheWarmingBridge = cacheWarmingBridge;
         sessionRef.set(agentSession);
+        // 批 16（T5a）：选择策略随会话存（fork 经 wireSession 公共路径自动继承——
+        // pi 的 fork 重建带同配置）。
+        agentSession.toolSelection = selection;
         agentSession.setScopedModels(scope.models());
         agentSession.modelCatalog = catalog;
         // B1（map #24/#25）：分支摘要生成器 —— 与压缩同源的 StreamFn/retry 环，
@@ -796,7 +802,7 @@ public final class AgentSession implements AutoCloseable {
      * promptPaths 经 {@code PromptTemplates} 载入 {@code SessionServices} 的
      * 注册表；themePaths 作为候选列表存于会话，供 TUI 启动时选第一个。</p>
      */
-    private static void applySessionStartResources(AgentHarness harness,
+    static void applySessionStartResources(AgentHarness harness,
             SessionServices services, ResourcePaths paths, Args args,
             AgentSession owner) {
         if (paths == null || paths.isEmpty()) {
@@ -908,6 +914,12 @@ public final class AgentSession implements AutoCloseable {
         if (level != null) {
             setThinkingLevel(com.pijava.coding.agent.cli.ThinkingLevels.parse(level));
         }
+        // 批 16（T6b）：pi cycleModel 的 model_select 发射点（:2565/:2597）——
+        // 直呼 harness.setModel 绕过会话层，故在此处补发射（不改道 setModel：
+        // cycleModelForward 的思考档语义与 setModel 不同）。
+        if (extensionFirer != null) {
+            extensionFirer.modelSelect(next, current, "cycle");
+        }
     }
 
     /**
@@ -920,11 +932,82 @@ public final class AgentSession implements AutoCloseable {
      * （既有登记，docs/16 裁决①）。</p>
      */
     public void setModel(ModelId<?> model) {
+        var previous = harness.getModel();
         var level = thinkingLevelForModelSwitch(model, null);
         harness.setModel(model);
         if (level != null) {
             setThinkingLevel(com.pijava.coding.agent.cli.ThinkingLevels.parse(level));
         }
+        // 批 16（T6b）：pi setModel 尾的 _emitModelSelect（:2496，在思考档变更
+        // 之后）；同模型不发射（pi modelsAreEqual 门逐字）。
+        if (extensionFirer != null && !java.util.Objects.equals(previous, model)) {
+            extensionFirer.modelSelect(model, previous, "set");
+        }
+    }
+
+    // ── 批 16（docs/27）：激活门三件套（pi agent-session.ts:1483-1531 对位）──
+
+    /**
+     * pi {@code getActiveToolNames}（agent-session.ts:1483-1485）——声明给模型的
+     * 工具名。java 侧以<b>注册表序</b>为稳定源（{@code activeTools} 是 Set，
+     * 其迭代序不可作输出——ContextAssembler 同口径）。
+     */
+    public java.util.List<String> getActiveToolNames() {
+        return services.tools().activeOf(
+            harness.getActiveTools().stream().map(AgentTool::name).toList())
+            .stream().map(AgentTool::name).toList();
+    }
+
+    /**
+     * pi {@code setActiveToolsByName}（agent-session.ts:1518-1525）——注册表查无的
+     * 名静默忽略（pi「unknown 忽略」逐字）。系统提示不手动重建：java 的提示每 run
+     * 起点由 ContextAssembler 重装配＋promptLoadout diff 补丁（既有机制），与 pi
+     * {@code _rebuildSystemPrompt} 净效果同。pi 的 {@code _pendingToolNames.clear()}
+     * 臂 java 无 pending 概念（批 1 窄差 D4 同族，随 B221⑫b）——不移植。
+     */
+    public void setActiveToolsByName(java.util.List<String> names) {
+        var deduped = new java.util.LinkedHashSet<>(names);
+        var tools = new java.util.LinkedHashSet<AgentTool<?, ?>>();
+        for (var name : deduped) {
+            var tool = services.tools().get(name);
+            if (tool != null) {
+                tools.add(tool);
+            }
+        }
+        harness.setActiveTools(tools);
+    }
+
+    /**
+     * pi {@code getAllTools}（agent-session.ts:1495-1506）的窄化投影（裁决⑥，
+     * 窄差 D91：parameters/exposure/namespace/annotations/sourceInfo 无对位）。
+     */
+    public java.util.List<com.pijava.coding.agent.extension.ExtensionToolInfo> getAllTools() {
+        return services.tools().all().stream()
+            .map(t -> new com.pijava.coding.agent.extension.ExtensionToolInfo(
+                t.name(), t.description(),
+                t.promptGuidelines() == null ? java.util.List.of()
+                    : java.util.List.copyOf(t.promptGuidelines())))
+            .toList();
+    }
+
+    /** 批 16（T1d，裁决⑧）：启动期扩展 flag 绑定诊断（只读面）。 */
+    public java.util.List<com.pijava.coding.agent.cli.Args.ArgDiagnostic> startupDiagnostics() {
+        return java.util.List.copyOf(startupDiagnostics);
+    }
+
+    /** 批 16（T4d）：工具渲染器责任链（无扩展装配 ⇒ {@code null}，消费方回落默认）。 */
+    public com.pijava.coding.agent.extension.ToolRendererRegistry toolRenderers() {
+        var context = extensionContext;
+        return context == null ? null : context.toolRenderers();
+    }
+
+    /**
+     * 批 16（T5b，C-23/E5-29/B246）：pi {@code AgentSession.reload()}
+     * （agent-session.ts:3660-3701）的 java 对位——七步序见 {@link SessionReload}。
+     * 双门（isStreaming/isCompacting）在命令层（pi interactive-mode.ts:6430-6440 同位）。
+     */
+    public void reload() {
+        SessionReload.reload(this);
     }
 
     /** pi {@code _getThinkingLevelForModelSwitch}（:2669-2681）逐字三臂。 */
@@ -1185,14 +1268,18 @@ public final class AgentSession implements AutoCloseable {
         // 在上面路由门已返回）。systemPrompt 覆盖是 harness 全局态（窄差 D11）；
         // result.message 落盘序为 custom 条目先于用户消息（窄差 D19）。
         if (extensionFirer != null) {
+            // 批 16（T3c）：sections 基线＝harness 当前自定义段的拷贝，处理器改写
+            // 的终态写回 harness——下一 run 的 promptLoadout diff 自动产补丁
+            //（pi systemPromptOptions.sections 贯穿处理器、写回装配输入的链对位）。
             var start = extensionFirer.beforeAgentStart(expandedPrompt,
-                harness::getSystemPrompt);
+                harness::getSystemPrompt, harness.getPromptSections());
             for (var draft : start.messages()) {
                 appendCustomDraft(draft);
             }
             if (start.systemPrompt() != null) {
                 harness.setSystemPrompt(start.systemPrompt());
             }
+            harness.setPromptSections(start.sections());
         }
 
         var queue = new LinkedBlockingQueue<Optional<StreamEvent>>();
@@ -2298,6 +2385,11 @@ public final class AgentSession implements AutoCloseable {
                 services.settings().accessors().getBlockImages()
                     ? com.pijava.coding.agent.core.ImageBlockFilter.apply(messages)
                     : null);
+            // 批 16（T1d）：无注册面 ⇒ 所有未知 --flag 报未知（pi：registeredFlags
+            // 空 ⇒ unknownFlags 全收，agent-session-services.ts:107-111）。
+            owner.startupDiagnostics.addAll(
+                com.pijava.coding.agent.extension.ExtensionFlagBinder.apply(
+                    args.unmatched(), null));
             return;
         }
         // docs/16（§2.6）：UI 烘进 context 前同步会话字段 —— fork 重建时 mode 层注入的
@@ -2307,6 +2399,13 @@ public final class AgentSession implements AutoCloseable {
         var bus = new com.pijava.coding.agent.extension.ExtensionEventBus();
         var context = new DefaultExtensionContext(
             services, harness.skillManager(), owner.extensionUI, bus);
+        // 批 16（T4c）：内置 MCP 渲染器 resolver 先注册（pi 内置 MCP 扩展随运行时
+        // 先载，extensions/mcp/index.ts:384-386）；其 next() ?? 委托优先逐字。
+        context.toolRenderers().register(
+            com.pijava.coding.agent.extension.McpToolCallRenderer.resolver());
+        // 批 16（T2c）：激活门三件套晚绑定（pi runner.bindCore 先于扩展加载对位）。
+        context.bindToolControl(() -> owner);
+        owner.extensionContext = context;
         // docs/17（B248）：provider 请求面桥回填（pi extensionRunnerRef.current = runner
         // 对位）——此后该会话的每一次 provider 请求过四事件线。
         if (owner.providerBridge != null) {
@@ -2319,6 +2418,11 @@ public final class AgentSession implements AutoCloseable {
         // session 由 SessionPersistence 稍后赋值，惰性求值绑定供 sendMessage 落盘用。
         context.bindSession(() -> owner.session());
         var manager = new ExtensionManager(context);
+        // 批 16（T2d/T5b）：加载前基线——diff 出扩展贡献的工具/provider 名。
+        var baselineToolNames = new java.util.HashSet<>(services.tools().toolNames());
+        var baselineProviderNames = services.providers().listAll().stream()
+            .map(com.pijava.ai.provider.Provider::name)
+            .collect(java.util.stream.Collectors.toSet());
         if (!args.noExtensions()) {
             manager.loadAll();
             for (var jar : ExtensionPackageManager.global().installedJars()) {
@@ -2333,6 +2437,28 @@ public final class AgentSession implements AutoCloseable {
         for (var explicit : args.extensions()) {
             manager.loadJar(java.nio.file.Path.of(explicit).toAbsolutePath().normalize());
         }
+        owner.extensionManager = manager;
+        // 批 16（T1d）：CLI 未知 --flag 绑定进共享值表（pi applyExtensionFlagValues，
+        // agent-session-services.ts:82-128）；诊断落 startupDiagnostics（裁决⑧）。
+        owner.startupDiagnostics.addAll(
+            com.pijava.coding.agent.extension.ExtensionFlagBinder.apply(
+                args.unmatched(), context));
+        // 批 16（T2d，pi「注册即激活」臂 agent-session.ts:3603 对位）：装配后新注册的
+        // 扩展工具经注册面门（isAllowed，含 mcp__ 保留臂）并入 activeTools。
+        // pi 的 defaultActive:false 闸 java 无字段 ⇒ 全量激活（窄差 D89，裁决②）。
+        var selection = owner.toolSelection;
+        var newToolNames = services.tools().toolNames().stream()
+            .filter(name -> !baselineToolNames.contains(name))
+            .filter(name -> selection == null || selection.isAllowed(name))
+            .toList();
+        if (!newToolNames.isEmpty()) {
+            harness.activateTools(newToolNames);
+        }
+        // 批 16（T5b 裁决④）：扩展注册的 provider 名簿记（reload 重置时快照保留）。
+        owner.extensionProviderNames = services.providers().listAll().stream()
+            .map(com.pijava.ai.provider.Provider::name)
+            .filter(name -> !baselineProviderNames.contains(name))
+            .collect(java.util.stream.Collectors.toSet());
         com.pijava.coding.agent.extension.bridge.EngineHookBridge.install(
             harness.hookSystem(), owner.laneName(), bus, context,
             // 批 11 T6：blockImages 晚读口（pi 注释：mid-session changes take effect）。
@@ -2365,6 +2491,20 @@ public final class AgentSession implements AutoCloseable {
     // ── Package-private accessors ───────────────────────────
     Session<?> session() {
         return session;
+    }
+
+    /** 批 16（T5b）：{@link SessionReload} 的读取面。 */
+    com.pijava.coding.agent.extension.SessionEventFirer extensionFirer() {
+        return extensionFirer;
+    }
+    ToolSelection.Resolved toolSelection() {
+        return toolSelection;
+    }
+    com.pijava.coding.agent.extension.ExtensionManager extensionManager() {
+        return extensionManager;
+    }
+    java.util.Set<String> extensionProviderNames() {
+        return extensionProviderNames;
     }
     void session(Session<?> session) {
         this.session = session;

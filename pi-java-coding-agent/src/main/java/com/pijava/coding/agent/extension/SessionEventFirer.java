@@ -8,6 +8,7 @@ import java.util.function.Supplier;
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.harness.CompactionAbortToken;
 import com.pijava.agent.tool.ShellResult;
+import com.pijava.coding.agent.extension.event.ExtensionEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.BeforeAgentStartEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.InputEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.SessionBeforeForkEvent;
@@ -25,6 +26,8 @@ import com.pijava.coding.agent.extension.event.ExtensionResults.SessionBeforeSwi
 import com.pijava.coding.agent.extension.event.ExtensionResults.SessionBeforeTreeResult;
 import com.pijava.coding.agent.extension.event.ExtensionResults.TreePreparation;
 import com.pijava.coding.agent.extension.event.ExtensionResults.UserBashEventResult;
+
+import com.pijava.coding.agent.extension.event.ExtensionEventSpec;
 
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.BEFORE_AGENT_START;
 import static com.pijava.coding.agent.extension.event.ExtensionEventSpec.INPUT;
@@ -58,9 +61,11 @@ public final class SessionEventFirer {
     /** pi {@code emitInput} 的产出（runner.ts:1520-1558）。 */
     public record InputOutcome(boolean handled, String text) {}
 
-    /** pi {@code emitBeforeAgentStart} 的产出（runner.ts:1420-1472）。 */
+    /** pi {@code emitBeforeAgentStart} 的产出（runner.ts:1420-1472）。批 16（T3c）：
+     *  增 {@code sections}——处理器改写后的终态段表，调用方写回 harness。 */
     public record BeforeAgentStartOutcome(List<CustomMessageDraft> messages,
-                                          String systemPrompt) {}
+                                          String systemPrompt,
+                                          java.util.Map<String, String> sections) {}
 
     private final ExtensionEventBus bus;
     private final ExtensionContext ctx;
@@ -268,18 +273,25 @@ public final class SessionEventFirer {
      * pi {@code emitBeforeAgentStart}（runner.ts:1420-1472 逐字）：{@code message}
      * 逐处理器累积；{@code systemPrompt} 链式覆盖（后处理器看到前处理器的改写值）。
      * 逐处理器 catch ⇒ emitError ⇒ 继续。
+     *
+     * <p>批 16（T3c，裁决⑪）：{@code sectionsBaseline}（harness 当前自定义段的
+     * <b>拷贝</b>）作为事件的可变 {@code sections} 传入，同一对象贯穿所有处理器；
+     * 终态经 {@link BeforeAgentStartOutcome#sections()} 返回（调用方写回 harness，
+     * 下一 run 的 promptLoadout diff 自动产补丁）。</p>
      */
     public BeforeAgentStartOutcome beforeAgentStart(String prompt,
-                                                    Supplier<String> currentSystemPrompt) {
+                                                    Supplier<String> currentSystemPrompt,
+                                                    java.util.Map<String, String> sectionsBaseline) {
         if (!bus.hasHandlers(BEFORE_AGENT_START)) {
-            return new BeforeAgentStartOutcome(List.of(), null);
+            return new BeforeAgentStartOutcome(List.of(), null, sectionsBaseline);
         }
         var messages = new ArrayList<CustomMessageDraft>();
+        var sections = new java.util.LinkedHashMap<String, String>(sectionsBaseline);
         String systemPrompt = null;
         for (var h : bus.snapshot(BEFORE_AGENT_START)) {
             try {
                 var effective = systemPrompt != null ? systemPrompt : currentSystemPrompt.get();
-                var r = h.handle(new BeforeAgentStartEvent(prompt, effective), ctx);
+                var r = h.handle(new BeforeAgentStartEvent(prompt, effective, sections), ctx);
                 if (r != null) {
                     if (r.message() != null) {
                         messages.add(r.message());
@@ -292,6 +304,26 @@ public final class SessionEventFirer {
                 bus.emitError(h.error(e));
             }
         }
-        return new BeforeAgentStartOutcome(List.copyOf(messages), systemPrompt);
+        return new BeforeAgentStartOutcome(List.copyOf(messages), systemPrompt,
+            java.util.Map.copyOf(sections));
+    }
+
+    /**
+     * 批 16（T6b）：pi {@code _emitModelSelect}（agent-session.ts:2457-2469）——
+     * 观察型；同模型的 equals 门在<b>调用方</b>（pi :2461-2463 同位）。
+     */
+    public void modelSelect(com.pijava.ai.model.ModelId<?> model,
+                            com.pijava.ai.model.ModelId<?> previousModel, String source) {
+        if (!bus.hasHandlers(ExtensionEventSpec.MODEL_SELECT)) {
+            return;
+        }
+        var event = new ExtensionEvent.ModelSelectEvent(model, previousModel, source);
+        for (var h : bus.snapshot(ExtensionEventSpec.MODEL_SELECT)) {
+            try {
+                h.handle(event, ctx);
+            } catch (Throwable e) {
+                bus.emitError(h.error(e));
+            }
+        }
     }
 }

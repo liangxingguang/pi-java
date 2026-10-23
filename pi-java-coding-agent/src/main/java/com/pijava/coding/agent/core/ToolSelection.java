@@ -91,13 +91,37 @@ public final class ToolSelection {
         private final Predicate<String> excluded;
         /** pi {@code _allowlistFiltersMcp}（agent-session.ts:504-506）。 */
         private final boolean allowlistFiltersMcp;
+        /**
+         * 批 16（T5a）：pi {@code usesDefaultTools}（sdk.ts:472）——
+         * {@code (tools 未给 || 纯 +/- 修饰符列表) && !noTools}；为 false 的会话
+         * （显式纯名列表 {@code --tools}）reload 完全不碰工具集。
+         */
+        private final boolean usesDefaultTools;
+        /**
+         * 批 16（T5a）：pi {@code defaultToolModifiers}（sdk.ts:473）——
+         * 修饰符列表；无 ⇒ 空表（pi 的 undefined，applyToolModifiers 空表即恒等）。
+         */
+        private final List<String> defaultToolModifiers;
 
         private Resolved(List<String> initialActiveToolNames, Predicate<String> allowed,
-                         Predicate<String> excluded, boolean allowlistFiltersMcp) {
+                         Predicate<String> excluded, boolean allowlistFiltersMcp,
+                         boolean usesDefaultTools, List<String> defaultToolModifiers) {
             this.initialActiveToolNames = initialActiveToolNames;
             this.allowed = allowed;
             this.excluded = excluded;
             this.allowlistFiltersMcp = allowlistFiltersMcp;
+            this.usesDefaultTools = usesDefaultTools;
+            this.defaultToolModifiers = defaultToolModifiers;
+        }
+
+        /** pi {@code usesDefaultTools}（sdk.ts:472）。 */
+        public boolean usesDefaultTools() {
+            return usesDefaultTools;
+        }
+
+        /** pi {@code defaultToolModifiers}（sdk.ts:473）；空表 ≙ undefined。 */
+        public List<String> defaultToolModifiers() {
+            return defaultToolModifiers;
         }
 
         /** pi {@code _isAllowedTool}（agent-session.ts:1537-1541）——<b>注册面</b>门。 */
@@ -159,8 +183,14 @@ public final class ToolSelection {
         var allowlistFiltersMcp = allowedToolNames != null
             && (allowedToolNames.isEmpty()
                 || allowedToolNames.stream().anyMatch(e -> e.startsWith("mcp__")));
+        // 批 16（T5a，pi sdk.ts:472-473）：reload 的 defaultTools diff 前置状态。
+        // pi 的 noTools 真值 ⇔ java 的 noToolsAll || noBuiltinTools（:281 的
+        // `options.noTools ? [] : ...` 同口径）。
+        var usesDefaultTools = (tools == null || toolModifiers != null)
+            && !noToolsAll && !noBuiltinTools;
         return new Resolved(initialActiveToolNames,
             allowedToolNames != null ? ToolNameMatcher.create(allowedToolNames) : null,
-            excluded, allowlistFiltersMcp);
+            excluded, allowlistFiltersMcp, usesDefaultTools,
+            toolModifiers != null ? List.copyOf(toolModifiers) : List.of());
     }
 }

@@ -67,7 +67,11 @@ public final class Main {
 
     private static int dispatch(Args parsed) {
         if (parsed.help()) {
-            System.out.print(HelpText.text());
+            // 批 16（T1e，裁决⑩）：pi 的 --help 在完整运行时（含扩展加载）后打印
+            //（main.ts:877-884）——轻量装载收集扩展 flag，追加 "Extension CLI Flags:"
+            // 段（无 flag ⇒ 段落消失，args.ts:273-283 逐字）。
+            System.out.print(HelpText.text(
+                com.pijava.coding.agent.extension.ExtensionFlagSupport.collectForHelp(parsed)));
             return 0;
         }
         if (parsed.version()) {

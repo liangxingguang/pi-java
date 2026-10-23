@@ -136,6 +136,28 @@ final class SessionSetup {
         return new QueueMode.OneAtATime();
     }
 
+    /**
+     * 批 16（T5b）：提示模板载入的抽取（默认两目录＋CLI 显式路径，同名后注册胜出），
+     * {@code wireSession} 初装与 {@code /reload} 重扫共用（pi loadPromptTemplates
+     * includeDefaults，prompt-templates.ts:262-265）。
+     */
+    static List<com.pijava.coding.agent.prompt.PromptTemplates.PromptTemplate>
+            loadPromptTemplates(Args args) {
+        if (args.noPromptTemplates()) {
+            return List.of();
+        }
+        var fs = new com.pijava.agent.tool.DefaultFileSystem();
+        var defaults = com.pijava.coding.agent.prompt.PromptTemplates.loadDefaults(fs,
+            com.pijava.coding.agent.core.FileSettingsStorage.defaultAgentDir().toString(),
+            System.getProperty("user.dir"));
+        var all = new java.util.ArrayList<>(defaults.templates());
+        if (args.promptTemplates() != null && !args.promptTemplates().isEmpty()) {
+            all.addAll(com.pijava.coding.agent.prompt.PromptTemplates.load(fs,
+                args.promptTemplates()).templates());
+        }
+        return all;
+    }
+
     /** 发现技能（USER + PROJECT + 显式路径），--no-skills 时为空。 */
     static Map<String, Skill> discoverSkills(Args args) {
         if (args.noSkills()) {

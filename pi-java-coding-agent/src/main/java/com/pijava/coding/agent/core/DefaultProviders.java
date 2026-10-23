@@ -119,6 +119,32 @@ public final class DefaultProviders {
     }
 
     /**
+     * 批 16（T5b，裁决④）：pi {@code resetApiProviders}（ai/compat.ts:209-213）的
+     * java 对位——取证结论：内置车道<b>构造期烘焙</b> settings/models.json
+     * （{@code catalogBaseUrl} 烘进 {@link RemoteCatalogProvider}、models.json 合并烘进
+     * {@code OverrideProvider}），故 reload 走「快照扩展项 → 清表 → 重灌内置流程
+     * （含重读 settings 的 catalogBaseUrl 与 models.json）→ 回灌扩展项」。
+     *
+     * @param extensionProviderNames 扩展经 {@code ctx.providers().register(...)} 注册的
+     *                               名字集（loadExtensions 按 diff 簿记）；这些实例
+     *                               原样保留（pi 的扩展运行时重建不移植，窄差 D90，
+     *                               其 provider 实例自然存活）
+     */
+    public static void resetProviders(ProviderRegistry registry, String catalogBaseUrl,
+                                      java.util.Set<String> extensionProviderNames) {
+        var kept = new java.util.LinkedHashMap<String, Provider>();
+        for (var name : extensionProviderNames) {
+            registry.get(name).ifPresent(p -> kept.put(name, p));
+        }
+        registry.clear();
+        registry.loadBuiltinProviders();
+        registry.discoverFromServiceLoader();
+        registerModelsJsonProviders(registry);
+        wrapRemoteCatalogs(registry, catalogBaseUrl);
+        kept.values().forEach(registry::register);
+    }
+
+    /**
      * Resolve the effective provider name: CLI {@code --provider} &gt; settings
      * {@code defaultProvider} &gt; the built-in default ("google").
      */

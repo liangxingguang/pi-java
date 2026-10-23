@@ -9,7 +9,40 @@ public final class HelpText {
 
     /** Render the full help text. */
     public static String text() {
-        return """
+        return text(java.util.List.of());
+    }
+
+    /**
+     * 批 16（T1e，docs/27）：带扩展 flag 段的完整帮助（pi {@code printHelp}
+     * args.ts:273-283 对位）——无扩展 flag ⇒ 段落整体消失（逐字）。
+     */
+    public static String text(
+            java.util.List<com.pijava.coding.agent.extension.ExtensionFlag> extensionFlags) {
+        var base = BASE;
+        if (extensionFlags == null || extensionFlags.isEmpty()) {
+            return base;
+        }
+        var section = new StringBuilder("\nExtension CLI Flags:\n");
+        for (var flag : extensionFlags) {
+            // pi 逐字：--name（string 型补 " <value>"）padEnd(30)＋description，
+            // 缺省回落 Registered by <扩展名>（pi 的 extensionPath 对位）。
+            var value = flag.type()
+                == com.pijava.coding.agent.extension.ExtensionFlag.Type.STRING
+                ? " <value>" : "";
+            var description = flag.description() != null ? flag.description()
+                : "Registered by " + flag.extensionName();
+            var label = "  --" + flag.name() + value;
+            section.append(label);
+            if (label.length() < 30) {
+                section.append(" ".repeat(30 - label.length()));
+            }
+            section.append(description).append("\n");
+        }
+        return base + section;
+    }
+
+    /** pi printHelp 的静态主体（扩展段在其后追加）。 */
+    private static final String BASE = """
             pi-java - AI coding assistant with read, bash, edit, write tools
 
             Usage:
@@ -74,5 +107,4 @@ public final class HelpText {
 
             @file arguments are added to the initial message.
             """;
-    }
 }

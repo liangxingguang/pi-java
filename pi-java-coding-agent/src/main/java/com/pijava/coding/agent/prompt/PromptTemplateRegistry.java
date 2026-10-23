@@ -30,6 +30,15 @@ public final class PromptTemplateRegistry {
         }
     }
 
+    /**
+     * 批 16（T5b，/reload）：整体替换模板集（pi {@code updatePromptsFromPaths}
+     * 的「替换」语义对位）——重扫前先清，否则模板叠积。
+     */
+    public void replaceAll(Collection<PromptTemplates.PromptTemplate> replacements) {
+        templates.clear();
+        registerAll(replacements);
+    }
+
     /** 按名字查询；未知名字返回 {@code null}（pi {@code templates.find(...)} 对位）。 */
     public PromptTemplates.PromptTemplate find(String name) {
         return templates.get(name);

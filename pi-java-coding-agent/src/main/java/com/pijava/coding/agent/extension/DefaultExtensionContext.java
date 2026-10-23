@@ -33,6 +33,22 @@ public final class DefaultExtensionContext implements ExtensionContext {
     private final ExtensionUI ui;
     private final ExtensionEventBus bus;
     private volatile Supplier<SessionTree> sessionSupplier;
+    /** 批 16（T2c）：激活门三件套的会话晚绑定（loadExtensions 回填）。 */
+    private volatile Supplier<com.pijava.coding.agent.core.AgentSession> toolControl;
+    // ── 批 16（T1b）：flag 面——声明存本扩展（pi extension.flags）、值存共享表
+    // （pi runtime.flagValues）。pi 的 pending/commit 两阶段不移植：java 加载与
+    // 绑定同线程顺序执行（register 全在 loadAll 内、CLI 绑定在其后），
+    // set-if-absent 一刀即同净效果（docs/27 T1b 注记）。
+    private final java.util.Map<String, Object> flagValues =
+        new java.util.concurrent.ConcurrentHashMap<>();
+    /** 全局名 → 声明（pi registeredFlags；同名后到胜出）。 */
+    private final java.util.Map<String, ExtensionFlag> flagsByName =
+        new java.util.LinkedHashMap<>();
+    /** 扩展名 → 该扩展的声明表（pi extension.flags；getFlag 所有权门的数据源）。 */
+    private final java.util.Map<String, java.util.Map<String, ExtensionFlag>> flagDeclarations =
+        new java.util.LinkedHashMap<>();
+    /** 批 16（T4b）：工具渲染器责任链（pi extension.toolRenderers 拍平对位）。 */
+    private final ToolRendererRegistry toolRenderers = new ToolRendererRegistry();
 
     /** @param services 会话服务（工具/命令/Provider/settings）
      *  @param skills   技能注册表（harness 的 skillManager）
@@ -105,6 +121,132 @@ public final class DefaultExtensionContext implements ExtensionContext {
         return bus;
     }
 
+    // ── 批 16（T1b/T2c/T4b）：flag 面 / 激活门 / 渲染器注册表 ──
+
+    /** 批 16（T2c）：激活门三件套的会话晚绑定（loadExtensions 回填；重复调用覆盖）。 */
+    public void bindToolControl(
+            Supplier<com.pijava.coding.agent.core.AgentSession> sessionSupplier) {
+        this.toolControl = sessionSupplier;
+    }
+
+    /** 共享 flag 值表（pi {@code runtime.flagValues}；binder 写入、getFlag 读）。 */
+    public java.util.Map<String, Object> flagValues() {
+        return flagValues;
+    }
+
+    /** 全部已声明 flag（pi --help 面的拍平，注册序）。 */
+    public java.util.List<ExtensionFlag> allFlags() {
+        return java.util.List.copyOf(flagsByName.values());
+    }
+
+    /** 按名查声明（pi registeredFlags.get）；未注册 ⇒ {@code null}。 */
+    public ExtensionFlag findFlag(String name) {
+        return flagsByName.get(name);
+    }
+
+    /** 工具渲染器责任链（T4b；装配点注册内置 MCP resolver，扩展经 registerToolRenderer 追加）。 */
+    public ToolRendererRegistry toolRenderers() {
+        return toolRenderers;
+    }
+
+    @Override
+    public void registerFlag(String name, ExtensionFlagOptions options) {
+        throw new IllegalStateException(
+            "registerFlag() 只能在扩展 register 期间经 per-extension 上下文调用（pi 的 assertActive）");
+    }
+
+    @Override
+    public Object getFlag(String name) {
+        throw new IllegalStateException(
+            "getFlag() 只能在扩展 register 期间经 per-extension 上下文调用（pi 的 assertActive）");
+    }
+
+    /** pi loader.ts:331-349 的本体（per-extension 委托转到这里）。 */
+    void registerFlag(String extensionName, String name, ExtensionFlagOptions options) {
+        var defaultValue = options.defaultValue();
+        if (defaultValue != null && !typeMatches(options.type(), defaultValue)) {
+            throw new IllegalArgumentException(
+                "Invalid default for flag \"" + name + "\": expected "
+                    + jsType(options.type()) + ", got " + jsTypeOf(defaultValue));
+        }
+        var flag = new ExtensionFlag(name, options.description(), options.type(),
+            defaultValue, extensionName);
+        flagDeclarations.computeIfAbsent(extensionName, k -> new java.util.LinkedHashMap<>())
+            .put(name, flag);
+        flagsByName.put(name, flag);
+        if (defaultValue != null) {
+            // pi loader.ts:342-348：default set-if-absent（CLI 值/先到 default 不被覆盖）。
+            flagValues.putIfAbsent(name, defaultValue);
+        }
+    }
+
+    /** pi loader.ts:373-378 的本体：所有权门（只能读本扩展注册的名）。 */
+    Object getFlag(String extensionName, String name) {
+        var declared = flagDeclarations.get(extensionName);
+        if (declared == null || !declared.containsKey(name)) {
+            return null;
+        }
+        return flagValues.get(name);
+    }
+
+    private static boolean typeMatches(ExtensionFlag.Type type, Object value) {
+        return switch (type) {
+            case BOOLEAN -> value instanceof Boolean;
+            case STRING -> value instanceof String;
+        };
+    }
+
+    private static String jsType(ExtensionFlag.Type type) {
+        return switch (type) {
+            case BOOLEAN -> "boolean";
+            case STRING -> "string";
+        };
+    }
+
+    /** pi {@code typeof default} 的 java 近似（文案逐字的第二操作数）。 */
+    private static String jsTypeOf(Object value) {
+        if (value instanceof Boolean) {
+            return "boolean";
+        }
+        if (value instanceof String) {
+            return "string";
+        }
+        if (value instanceof Number) {
+            return "number";
+        }
+        return "object";
+    }
+
+    @Override
+    public java.util.List<String> getActiveTools() {
+        return requireToolControl().getActiveToolNames();
+    }
+
+    @Override
+    public java.util.List<ExtensionToolInfo> getAllTools() {
+        return requireToolControl().getAllTools();
+    }
+
+    @Override
+    public void setActiveTools(java.util.List<String> toolNames) {
+        requireToolControl().setActiveToolsByName(toolNames);
+    }
+
+    @Override
+    public void registerToolRenderer(ToolRendererResolver resolver) {
+        toolRenderers.register(resolver);
+    }
+
+    private com.pijava.coding.agent.core.AgentSession requireToolControl() {
+        var supplier = toolControl;
+        var session = supplier == null ? null : supplier.get();
+        if (session == null) {
+            throw new IllegalStateException(
+                "tool control requires a bound session; none is available yet");
+        }
+        return session;
+    }
+
     @Override
     public <E extends ExtensionEvent, R> AutoCloseable on(ExtensionEventSpec<E, R> spec,
                                                           ExtensionEventHandler<E, R> handler) {
@@ -172,6 +314,36 @@ public final class DefaultExtensionContext implements ExtensionContext {
         @Override
         public SessionServices services() {
             return DefaultExtensionContext.this.services();
+        }
+
+        @Override
+        public void registerFlag(String name, ExtensionFlagOptions options) {
+            DefaultExtensionContext.this.registerFlag(extensionName, name, options);
+        }
+
+        @Override
+        public Object getFlag(String name) {
+            return DefaultExtensionContext.this.getFlag(extensionName, name);
+        }
+
+        @Override
+        public java.util.List<String> getActiveTools() {
+            return DefaultExtensionContext.this.getActiveTools();
+        }
+
+        @Override
+        public java.util.List<ExtensionToolInfo> getAllTools() {
+            return DefaultExtensionContext.this.getAllTools();
+        }
+
+        @Override
+        public void setActiveTools(java.util.List<String> toolNames) {
+            DefaultExtensionContext.this.setActiveTools(toolNames);
+        }
+
+        @Override
+        public void registerToolRenderer(ToolRendererResolver resolver) {
+            DefaultExtensionContext.this.registerToolRenderer(resolver);
         }
 
         @Override

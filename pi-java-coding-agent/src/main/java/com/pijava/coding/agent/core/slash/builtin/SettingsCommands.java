@@ -52,13 +52,34 @@ public final class SettingsCommands {
         registry.register(new SlashCommand() {
             @Override public String name() { return "reload"; }
             @Override public String description() {
-                return "Reload settings and keybindings";
+                // 批 16（T5c）：pi 逐字（slash-commands.ts:42）。
+                return "Reload keybindings, extensions, skills, prompts, themes, and context files";
             }
             @Override public String argumentHint() { return ""; }
             @Override public CompletionStage<String> execute(String args, SlashContext ctx) {
-                ctx.session().services().settings().reload();
-                return CompletableFuture.completedFuture(
-                    "Reloaded settings (extensions/skills/prompts in Phase 6)");
+                // 批 16（T5c）：pi handleReloadCommand 双门文案逐字
+                //（interactive-mode.ts:6430-6440）；java slash 返回 String 状态文案——
+                // 警告与结果同通道（既有样式）。pi 的 isStreaming ≙ java isRunning（A5）。
+                var session = ctx.session();
+                if (session.isRunning()) {
+                    return CompletableFuture.completedFuture(
+                        "Wait for the current response to finish before reloading.");
+                }
+                if (session.isCompacting()) {
+                    return CompletableFuture.completedFuture(
+                        "Wait for compaction to finish before reloading.");
+                }
+                try {
+                    session.reload();
+                    // pi 成功文案逐字（interactive-mode.ts:6506-6510）。themes 实际
+                    // 重扫随批 20（裁决⑨）；Reloading 边框盒/beforeSessionStart 重建
+                    // chat 属 pi TUI 组件层，java 无对等体系（窄差 D93）。
+                    return CompletableFuture.completedFuture(
+                        "Reloaded keybindings, extensions, skills, prompts, themes, and context files");
+                } catch (Exception e) {
+                    return CompletableFuture.completedFuture(
+                        "Reload failed: " + e.getMessage());
+                }
             }
         });
     }

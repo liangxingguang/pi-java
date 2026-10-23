@@ -141,6 +141,10 @@ public final class ExtensionEventSpec<E extends ExtensionEvent, R> {
     public static final ExtensionEventSpec<ThinkingLevelSelectEvent, Void>
         THINKING_LEVEL_SELECT = new ExtensionEventSpec<>("thinking_level_select");
 
+    /** 批 16（T6a）：pi {@code "model_select"}（types.ts:1619 族，观察型）。 */
+    public static final ExtensionEventSpec<ExtensionEvent.ModelSelectEvent, Void>
+        MODEL_SELECT = new ExtensionEventSpec<>("model_select");
+
     // ── 生命周期（docs/15）──
 
     /** pi {@code "session_start"}（types.ts:1574）。 */

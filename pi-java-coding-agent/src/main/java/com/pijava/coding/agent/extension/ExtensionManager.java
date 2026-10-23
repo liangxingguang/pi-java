@@ -58,6 +58,35 @@ public final class ExtensionManager {
         return Set.copyOf(loaded.keySet());
     }
 
+    /**
+     * 批 16（T1e，裁决⑩）：{@code --help} 轻量装载——逐扩展 try/catch 隔离
+     * （扩展 {@code register()} 抛错不该让 {@code --help} 崩；pi loader 同旨的
+     * 异常隔离）。
+     */
+    public Set<String> loadAllIsolated() {
+        var tccl = Thread.currentThread().getContextClassLoader();
+        var loader = tccl != null ? tccl : ExtensionManager.class.getClassLoader();
+        for (var ext : ServiceLoader.load(PiExtension.class, loader)) {
+            loadIsolated(ext);
+        }
+        return Set.copyOf(loaded.keySet());
+    }
+
+    /** {@link #loadJar(Path)} 的逐扩展隔离变体（{@code --help} 轻量装载用）。 */
+    public Set<String> loadJarIsolated(Path jar) {
+        var names = new LinkedHashSet<String>();
+        try (var loader = new URLClassLoader(
+                new URL[] {jar.toUri().toURL()}, getClass().getClassLoader())) {
+            for (var ext : ServiceLoader.load(PiExtension.class, loader)) {
+                loadIsolated(ext);
+                names.add(ext.name());
+            }
+            return Set.copyOf(names);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     /** 从外部 JAR 加载扩展（URLClassLoader），返回已加载扩展名。 */
     public Set<String> loadJar(Path jar) {
         var names = new LinkedHashSet<String>();
@@ -111,5 +140,15 @@ public final class ExtensionManager {
         // docs/14：per-extension 上下文 —— 扩展的 on() 订阅带扩展名归属
         // （pi 的 extension.handlers 按扩展分桶 + 错误按 extensionPath 归属）。
         ext.register(context.forExtension(ext.name()));
+    }
+
+    /** 逐扩展异常隔离的 {@link #load}（批 16 T1e：--help 装载不被单个扩展搞崩）。 */
+    private void loadIsolated(PiExtension ext) {
+        try {
+            load(ext);
+        } catch (Throwable e) {
+            java.util.logging.Logger.getLogger(ExtensionManager.class.getName())
+                .warning("Extension '" + ext.name() + "' register() threw: " + e);
+        }
     }
 }

@@ -228,9 +228,27 @@ public sealed interface ExtensionEvent {
 
     /**
      * pi {@code BeforeAgentStartEvent}（types.ts:917-928）——{@code systemPrompt}
-     * 是当前生效值（渲染后）；{@code systemPromptOptions} 可变对象不移植（窄差 D11）。
+     * 是当前生效值（渲染后）。
+     *
+     * <p>批 16（T3c，裁决⑪）：新增 {@code sections}——pi
+     * {@code systemPromptOptions.sections} 的可变语义直译：record 组件但持<b>可变
+     * LinkedHashMap</b>，同一对象贯穿所有处理器（后者见前者改动，
+     * runner.ts:1425-1471）；firer 建基线拷贝传入、结束后读回写 harness。
+     * record 的不可变惯例在此让位逐字语义。原 {@code systemPromptOptions} 其余
+     * 部分不移植（窄差 D11）。</p>
      */
-    record BeforeAgentStartEvent(String prompt, String systemPrompt) implements ExtensionEvent {}
+    record BeforeAgentStartEvent(String prompt, String systemPrompt,
+                                 java.util.Map<String, String> sections)
+            implements ExtensionEvent {}
+
+    /**
+     * 批 16（T6a）：pi {@code ModelSelectEvent}（types.ts:1103-1111）——
+     * {@code source} ∈ {@code "set"|"cycle"|"restore"}（"restore" pi 本锚点亦无
+     * 发射点，仅声明）；同模型（equals 门，pi modelsAreEqual 对位）不发射。
+     */
+    record ModelSelectEvent(com.pijava.ai.model.ModelId<?> model,
+                            com.pijava.ai.model.ModelId<?> previousModel,
+                            String source) implements ExtensionEvent {}
 
     // ═══════════════════════════════════════════════════════════
     // boundary 族（docs/15，pi types.ts:1000-1044）

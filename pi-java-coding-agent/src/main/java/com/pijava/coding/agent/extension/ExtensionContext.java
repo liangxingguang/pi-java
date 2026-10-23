@@ -69,6 +69,49 @@ public interface ExtensionContext {
         return this;
     }
 
+    // ── 批 16（docs/27）：CLI flag 面 / 激活门 / 工具渲染器 ──
+
+    /**
+     * 批 16（T1b）：pi {@code registerFlag}（loader.ts:331-349）——声明一个 CLI flag。
+     * default 类型不匹配即抛（pi 文案逐字：
+     * {@code Invalid default for flag "<name>": expected <type>, got <实际>}）；
+     * default 是 set-if-absent（CLI 值/先到 default 不被覆盖）。
+     */
+    void registerFlag(String name, ExtensionFlagOptions options);
+
+    /**
+     * 批 16（T1b）：pi {@code getFlag}（loader.ts:373-378）——<b>所有权门</b>：
+     * 只能读本扩展注册的名，否则 {@code null}（≙ pi undefined）。
+     *
+     * @return {@link Boolean} | {@link String} | {@code null}
+     */
+    Object getFlag(String name);
+
+    /**
+     * 批 16（T2c）：pi {@code getActiveTools}（types.ts:1737-1738）——
+     * 声明给模型的工具名（pi 读 {@code agent.state.tools}；java 读
+     * {@code lane.activeTools}）。
+     */
+    java.util.List<String> getActiveTools();
+
+    /**
+     * 批 16（T2c）：pi {@code getAllTools}（types.ts:1740-1741）的窄化投影
+     * （裁决⑥，窄差 D91）。
+     */
+    java.util.List<ExtensionToolInfo> getAllTools();
+
+    /**
+     * 批 16（T2c）：pi {@code setActiveTools}（types.ts:1743-1749）——
+     * 未知名静默忽略；java 无 hidden/exposure 概念（窄差并入 D91）。
+     */
+    void setActiveTools(java.util.List<String> toolNames);
+
+    /**
+     * 批 16（T4b）：pi {@code registerToolRenderer}（types.ts:1695-1696）——
+     * resolver 按注册序（＝扩展加载序）成责任链。
+     */
+    void registerToolRenderer(ToolRendererResolver resolver);
+
     /**
      * 落盘一条 custom_message（对齐 pi {@code pi.sendMessage} 的仅落盘路径）：
      * content 参与后续 LLM 上下文，{@code display} 仅控制 TUI 渲染，

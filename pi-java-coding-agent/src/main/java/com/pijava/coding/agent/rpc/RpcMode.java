@@ -40,6 +40,11 @@ public final class RpcMode {
         try (var session = providers == null
                 ? AgentSession.create(args)
                 : AgentSession.create(args, providers, toolContext)) {
+            // 批 16（T1d 裁决⑧）：扩展 flag 绑定诊断落 stderr（RPC 线是 stdout，
+            // 诊断不能混进去）。
+            for (var diagnostic : session.startupDiagnostics()) {
+                System.err.println(diagnostic.type() + ": " + diagnostic.message());
+            }
             // pi main.ts:924-932 —— RPC 模式在后台刷目录；不阻塞启动、错误吞掉、
             // 离线（--offline / PI_OFFLINE）时整个跳过。
             if (backgroundCatalogRefresh) {
