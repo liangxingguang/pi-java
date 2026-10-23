@@ -1,5 +1,6 @@
 package com.pijava.coding.agent.core;
 
+import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
@@ -39,9 +40,48 @@ class KeybindingsManagerTest {
 
     @Test
     void exposesAllActionIds() {
-        // 批 9（docs/19 §3.11）：11 全局＋12 tree/copy。
-        assertThat(keys.actionIds()).hasSize(23);
+        // 11 实键全局＋4 空绑定 session（批 14）＋12 tree/copy＋6 选择器 session（批 14）。
+        assertThat(keys.actionIds()).hasSize(33);
         assertThat(keys.actionIds()).contains(KeybindingsManager.INTERRUPT);
+    }
+
+    /** 批 14（docs/25 T3）：选择器六键在 overlay 表，全局 resolve 零污染（批 9 C1 同构）。 */
+    @Test
+    void sessionSelectorKeysLiveInTheOverlayTable() {
+        // 撞名核查：ctrl+p/ctrl+d 全局仍解 MODEL_CYCLE/EXIT
+        assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("p", true, false, false)))
+            .isEqualTo(KeybindingsManager.MODEL_CYCLE);
+        assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("d", true, false, false)))
+            .isEqualTo(KeybindingsManager.EXIT);
+        assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("s", true, false, false))).isNull();
+        assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("n", true, false, false))).isNull();
+        assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("r", true, false, false))).isNull();
+        assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("backspace", true, false, false))).isNull();
+        // overlay 语境按动作 matches 可解
+        assertThat(keys.matches(KeybindingsManager.SESSION_TOGGLE_PATH,
+            KeybindingsManager.KeyStroke.of("p", true, false, false))).isTrue();
+        assertThat(keys.matches(KeybindingsManager.SESSION_DELETE,
+            KeybindingsManager.KeyStroke.of("d", true, false, false))).isTrue();
+        assertThat(keys.matches(KeybindingsManager.SESSION_TOGGLE_SORT,
+            KeybindingsManager.KeyStroke.of("s", true, false, false))).isTrue();
+        assertThat(keys.matches(KeybindingsManager.SESSION_TOGGLE_NAMED_FILTER,
+            KeybindingsManager.KeyStroke.of("n", true, false, false))).isTrue();
+        assertThat(keys.matches(KeybindingsManager.SESSION_RENAME,
+            KeybindingsManager.KeyStroke.of("r", true, false, false))).isTrue();
+        assertThat(keys.matches(KeybindingsManager.SESSION_DELETE_NONINVASIVE,
+            KeybindingsManager.KeyStroke.of("backspace", true, false, false))).isTrue();
+    }
+
+    /** 批 14（docs/25 T3）：app.session.new/tree/fork/resume 空绑定（pi defaultKeys: []）。 */
+    @Test
+    void sessionEmptyBindingsAreRegisteredButNeverResolve() {
+        for (var action : List.of(KeybindingsManager.SESSION_NEW, KeybindingsManager.SESSION_TREE,
+                KeybindingsManager.SESSION_FORK, KeybindingsManager.SESSION_RESUME)) {
+            assertThat(keys.actionIds()).contains(action);
+            assertThat(keys.strokeFor(action)).isNull();
+            assertThat(keys.matches(action,
+                KeybindingsManager.KeyStroke.of("n", true, false, false))).isFalse();
+        }
     }
 
     @Test

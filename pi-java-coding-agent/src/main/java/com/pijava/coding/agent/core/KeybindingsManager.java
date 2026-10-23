@@ -49,6 +49,20 @@ public final class KeybindingsManager {
     public static final String TREE_FILTER_CYCLE_BACKWARD = "app.tree.filter.cycleBackward"; // shift+ctrl+o
     public static final String MESSAGE_COPY = "app.message.copy";         // ctrl+x
 
+    // ── app.session.*（批 14，docs/25 T3；pi core/keybindings.ts 默认键）─
+    // 选择器六键（overlay 表——ctrl+p/ctrl+d 与全局 MODEL_CYCLE/EXIT 撞名，批 9 C1 同构）
+    public static final String SESSION_TOGGLE_NAMED_FILTER = "app.session.toggleNamedFilter"; // ctrl+n
+    public static final String SESSION_TOGGLE_PATH = "app.session.togglePath";                // ctrl+p
+    public static final String SESSION_TOGGLE_SORT = "app.session.toggleSort";                // ctrl+s
+    public static final String SESSION_RENAME = "app.session.rename";                         // ctrl+r
+    public static final String SESSION_DELETE = "app.session.delete";                         // ctrl+d
+    public static final String SESSION_DELETE_NONINVASIVE = "app.session.deleteNoninvasive";  // ctrl+backspace
+    // pi `defaultKeys: []`（keybindings.ts:79-82）声明无绑定——全局表空表注册
+    public static final String SESSION_NEW = "app.session.new";
+    public static final String SESSION_TREE = "app.session.tree";
+    public static final String SESSION_FORK = "app.session.fork";
+    public static final String SESSION_RESUME = "app.session.resume";
+
     /**
      * Neutral key representation produced by the TUI adapter.
      *
@@ -73,8 +87,9 @@ public final class KeybindingsManager {
     }
 
     /**
-     * 全局动作表（11 个）与 overlay 语境动作表（12 个 app.tree.*／
-     * app.message.copy）**分持**——批 9 评审 C1：同表时 {@link #resolve} 的
+     * 全局动作表（11 实键＋4 空绑定 app.session.new/tree/fork/resume）与
+     * overlay 语境动作表（12 个 app.tree.*／app.message.copy＋6 个选择器
+     * app.session.*）**分持**——批 9 评审 C1：同表时 {@link #resolve} 的
      * hash 序会把 ctrl+l/u/a 等解析成 tree 动作，主屏按键被静默吞掉。
      * pi 无此歧义（全局 handler 按动作逐个查，即本类的 {@link #matches} 形）。
      */
@@ -107,6 +122,12 @@ public final class KeybindingsManager {
         bindings.put(DEQUEUE, windowsKeybindings
             ? List.of(KeyStroke.of("q", false, true, false))
             : List.of(KeyStroke.of("up", false, true, false)));
+        // 批 14（docs/25 T3）：pi `defaultKeys: []` 空绑定——注册动作但不挂键
+        // （resolve 永不命中、actionIds 可见、strokeFor ⇒ null ≙ pi formatKeys([]) ⇒ ""）。
+        bindings.put(SESSION_NEW, List.of());
+        bindings.put(SESSION_TREE, List.of());
+        bindings.put(SESSION_FORK, List.of());
+        bindings.put(SESSION_RESUME, List.of());
 
         overlayBindings.put(TREE_FOLD_OR_UP, List.of(
             KeyStroke.of("left", true, false, false),
@@ -127,6 +148,15 @@ public final class KeybindingsManager {
         overlayBindings.put(TREE_FILTER_CYCLE_BACKWARD,
             List.of(KeyStroke.of("o", true, false, true)));
         overlayBindings.put(MESSAGE_COPY, List.of(KeyStroke.of("x", true, false, false)));
+        // 批 14（docs/25 T3）：会话选择器六键——overlay 表（ctrl+p/ctrl+d 与全局
+        // MODEL_CYCLE/EXIT 撞名，选择器内按动作 matches 解析，全局零影响）。
+        // ctrl+backspace 在不上报该组合的终端是死键（pi 注释同病，窄差 D76）。
+        overlayBindings.put(SESSION_TOGGLE_NAMED_FILTER, List.of(KeyStroke.of("n", true, false, false)));
+        overlayBindings.put(SESSION_TOGGLE_PATH, List.of(KeyStroke.of("p", true, false, false)));
+        overlayBindings.put(SESSION_TOGGLE_SORT, List.of(KeyStroke.of("s", true, false, false)));
+        overlayBindings.put(SESSION_RENAME, List.of(KeyStroke.of("r", true, false, false)));
+        overlayBindings.put(SESSION_DELETE, List.of(KeyStroke.of("d", true, false, false)));
+        overlayBindings.put(SESSION_DELETE_NONINVASIVE, List.of(KeyStroke.of("backspace", true, false, false)));
     }
 
     /**
