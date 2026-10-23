@@ -34,6 +34,10 @@ final class SessionReload {
     private SessionReload() {}
 
     static void reload(AgentSession session) {
+        // 批 17（T7，docs/28 §3-T7.2）：pi handleReloadCommand:6440 对位——
+        // resetExtensionUI 在真正 reload 之前（pi 的两道门〔流式/压缩中〕在调用方
+        // 命令层，java 已有同门，本批不动）。七步序首步之**前**。
+        session.extensionUI().onSessionInvalidated();
         // ① session_shutdown{reload}（pi :3662-3664；firer 的 hasHandlers 门逐字）。
         var firer = session.extensionFirer();
         if (firer != null) {

@@ -180,6 +180,15 @@ public interface ExtensionUI {
     /** pi {@code { success: boolean; error?: string }}（types.ts:285）。 */
     record SetThemeResult(boolean success, @Nullable String error) {}
 
+    // ── 生命周期（批 17 T7 接线：会话替换前/reload 首步前调用）──
+
+    /**
+     * pi {@code resetExtensionUI}（interactive-mode.ts:2452-2483）对位——会话失效
+     * 前复位全部扩展 UI 态（活动对话框/注入槽位/状态段）。TUI 臂实现；
+     * RPC/noOp 为空操作（pi 的 RPC 臂亦无 reset 面——宿主各自复位）。
+     */
+    default void onSessionInvalidated() { }
+
     // ── noOp 单例 ──
 
     /**

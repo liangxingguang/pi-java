@@ -244,6 +244,38 @@ public final class AgentSession implements AutoCloseable {
     }
 
     /**
+     * 批 17（T7，docs/28 §3-T7.1）：交互模式的扩展 UI 构造期注入——pi
+     * {@code bindings.uiContext} 构造期传入（agent-session.ts:3260）对位：
+     * 扩展在 create 内的 loadExtensions 加载，UI/mode 必须先烘进会话字段。
+     *
+     * @param ui   扩展 UI 实现（TUI ⇒ {@code TuiExtensionUI}；null ⇒ noop）
+     * @param mode pi {@code ExtensionMode}（{@code "tui"} 等；null ⇒ "print"）
+     */
+    public static AgentSession create(Args args, ExtensionUI ui, String mode) {
+        return create(args, null, ui, mode);
+    }
+
+    private static AgentSession create(Args args, SessionStartInfo startInfo,
+                                       ExtensionUI ui, String mode) {
+        var settings = SettingsManager.load(args.projectTrustOverride());
+        var effective = settings.effective();
+        var backend = effective.sessionBackend == null ? "jsonl" : effective.sessionBackend;
+        var sessionsRoot = Path.of(args.sessionDir() != null ? args.sessionDir()
+            : (effective.sessionDir != null ? effective.sessionDir
+                : Path.of(System.getProperty("user.home"), ".pi-java", "agent", "sessions").toString()));
+        var handle = "sqlite".equals(backend)
+            ? PersistentSessionRepositories.sqlite(sessionsRoot)
+            : PersistentSessionRepositories.jsonl(sessionsRoot);
+        return create(args, handle, DefaultProviders.defaultProviders(effective.catalogBaseUrl),
+            new ToolContext(
+                System.getProperty("user.dir"),
+                Map.of(),
+                new DefaultShellExecutor(effective.shellPath),
+                new DefaultFileSystem()),
+            settings, startInfo, ui, mode);
+    }
+
+    /**
      * docs/15（B250）：替换式新建（/new、RPC new_session、Web newSession）——
      * 新会话装配时 {@code session_start} 带 {@code {reason:"new",
      * previousSessionFile:旧会话 id}}。旧侧关闭由调用方在拿到新会话后
@@ -323,8 +355,20 @@ public final class AgentSession implements AutoCloseable {
                                        ToolContext toolContext,
                                        SettingsManager settings,
                                        SessionStartInfo startInfo) {
+        return create(args, handle, providers, toolContext, settings, startInfo,
+            ExtensionUI.noop(), "print");
+    }
+
+    /** 批 17（T7）：带扩展 UI/mode 的持久仓装配（TUI 构造期注入路径）。 */
+    private static AgentSession create(Args args,
+                                       PersistentSessionRepositories.RepositoryHandle handle,
+                                       ProviderRegistry providers,
+                                       ToolContext toolContext,
+                                       SettingsManager settings,
+                                       SessionStartInfo startInfo,
+                                       ExtensionUI ui, String mode) {
         var session = assemble(args, settings, providers, toolContext,
-            handle, handle.repository(), resumeLike(args), startInfo);
+            handle, handle.repository(), resumeLike(args), startInfo, ui, mode);
         session.persistentRepository = handle;
         return SessionSetup.resolveSession(session, args);
     }
@@ -359,13 +403,27 @@ public final class AgentSession implements AutoCloseable {
                                          SessionRepository<?, ?, ?> repository,
                                          boolean existingSession,
                                          SessionStartInfo startInfo) {
+        return assemble(args, settings, providers, toolContext, handle, repository,
+            existingSession, startInfo, ExtensionUI.noop(), "print");
+    }
+
+    /** 批 17（T7）：带扩展 UI/mode 的装配（初始装配即烘——pi bindings.uiContext 对位）。 */
+    private static AgentSession assemble(Args args, SettingsManager settings,
+                                         ProviderRegistry providers,
+                                         ToolContext toolContext,
+                                         PersistentSessionRepositories.RepositoryHandle handle,
+                                         SessionRepository<?, ?, ?> repository,
+                                         boolean existingSession,
+                                         SessionStartInfo startInfo,
+                                         ExtensionUI ui, String mode) {
         var agentSession = wireSession(args, settings, providers, toolContext, repository,
             existingSession, args.name() != null ? args.name() : "session", null, null);
         agentSession.persistentRepository = handle;
+        agentSession.extensionMode = mode != null ? mode : "print";
         // 初始装配立即加载扩展（pi 初始序）；fork 臂在旧会话 teardown 后另发
         //（docs/16 §3.2/§3.4）。
         loadExtensions(args, agentSession.services(), agentSession.harness(),
-            ExtensionUI.noop(), agentSession, startInfo);
+            ui, agentSession, startInfo);
         return agentSession;
     }
 
@@ -1907,6 +1965,8 @@ public final class AgentSession implements AutoCloseable {
             return new SwitchResult(SwitchOutcome.NOT_FOUND, this);
         }
         var previousId = sessionId();
+        // 批 17（T7）：pi setBeforeSessionInvalidate 对位——切换前复位扩展 UI。
+        extensionUI.onSessionInvalidated();
         fireSessionShutdown("resume", idOrPrefix);
         var found = findSession(idOrPrefix).orElseThrow();
         // session_start 在**新侧**发射（pi 的 createRuntime 对位）：持久路原地
@@ -2332,6 +2392,9 @@ public final class AgentSession implements AutoCloseable {
      * targetSessionFile}}，再走原关闭流程。
      */
     public void closeForReplacement(String reason, String targetSessionFile) {
+        // 批 17（T7，docs/28 §3-T7.2）：pi setBeforeSessionInvalidate 对位——
+        // 会话失效前复位扩展 UI（活动对话框/注入槽位/状态段）。
+        extensionUI.onSessionInvalidated();
         closeWith(reason, targetSessionFile, true);
     }
 
@@ -2340,6 +2403,10 @@ public final class AgentSession implements AutoCloseable {
      * forked 继承，不关（父关即杀子，§2.5③）。
      */
     private void closeForFork(String forkedSessionId) {
+        // 批 17（T7）：fork 同属会话失效（pi 的 invalidate 覆盖一切 swap）——
+        // 扩展 UI 先复位（Ruling：设计稿 T7.2 只列 closeForReplacement/switchTo，
+        // fork 臂补上以对齐 pi「一切 swap 前复位」语义）。
+        extensionUI.onSessionInvalidated();
         closeWith("fork", forkedSessionId, false);
     }
 
@@ -2400,6 +2467,10 @@ public final class AgentSession implements AutoCloseable {
     private static void loadExtensions(Args args, SessionServices services,
                                        AgentHarness harness, ExtensionUI ui,
                                        AgentSession owner, SessionStartInfo startInfo) {
+        // 批 17（T1）：UI/mode 烘值独立于扩展加载——pi {@code setUIContext}
+        // 是模式层装配而非扩展加载（runner.ts:580；早退臂曾把它跳过 ⇒
+        // --no-extensions 下 TUI/RPC 注入落空）。
+        owner.extensionUI = ui == null ? ExtensionUI.noop() : ui;
         // 批 14（docs/25 T15，A-25）：早退臂收紧为「-ne 且无显式路径」——
         // pi resource-loader.ts:578/690 的 noExtensions ? cliEnabledExtensions : merge(...)
         // 对位：显式 -e 路径恒加载（-ne 旁路），且扩展事件面随加载活着。
@@ -2417,10 +2488,8 @@ public final class AgentSession implements AutoCloseable {
                     args.unmatched(), null));
             return;
         }
-        // docs/16（§2.6）：UI 烘进 context 前同步会话字段 —— fork 重建时 mode 层注入的
-        // UI 经父会话字段传入，forked 的字段与 context 自此一致（初始装配 noop→RPC
-        // 注入的既有顺序不变）。
-        owner.extensionUI = ui == null ? ExtensionUI.noop() : ui;
+        // docs/16（§2.6）：UI 烘值已上提至早退臂之前（批 17）——fork 重建时 mode 层
+        // 注入的 UI 经父会话字段传入，forked 的字段与 context 自此一致。
         var bus = new com.pijava.coding.agent.extension.ExtensionEventBus();
         // 批 17（T1，裁决②）：晚绑定——context 持 owner 字段的供给器而非烘死值，
         // RPC/TUI 后注入的 UI 自此到得了扩展（pi runner.ts:876-884 getter 逐字）。

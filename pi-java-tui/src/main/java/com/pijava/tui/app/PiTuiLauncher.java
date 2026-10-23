@@ -33,10 +33,26 @@ public final class PiTuiLauncher {
                 + "(run from Windows Terminal / cmd / PowerShell)");
             return 1;
         }
-        var session = AgentSession.create(args);
+        // 批 17（T7，docs/28 §3-T7.1）：ChatScreen/dispatcher/host/UI 提前到
+        // AgentSession.create 之前构造——扩展在 create 内加载，UI/mode 构造期烘入
+        //（pi bindings.uiContext 对位，agent-session.ts:3260）。渲染循环未起步时
+        // 扩展阻塞对话不可用（裁决⑤：明确失败）；非阻塞注入入队、首帧生效。
         var chatScreen = new ChatScreen();
-        var mode = new InteractiveMode(session);
         var dispatcher = new TuiEventDispatcher();
+        var keybindings = new KeybindingsManager();
+        // settings 尚未加载（session 未建）——externalEditor 命令源晚读 session
+        //（host 的 Supplier 在对话框打开时才取值，此时 session 早已装配完）。
+        var sessionRef = new java.util.concurrent.atomic.AtomicReference<AgentSession>();
+        var extensionUiHost = new TuiExtensionUiHost(dispatcher, chatScreen, keybindings,
+            () -> {
+                var s = sessionRef.get();
+                return s == null ? null
+                    : s.services().settings().accessors().getExternalEditorCommand();
+            });
+        var extensionUI = new TuiExtensionUI(extensionUiHost);
+        var session = AgentSession.create(args, extensionUI, "tui");
+        sessionRef.set(session);
+        var mode = new InteractiveMode(session);
         // Windows Terminal/ConPTY send about one raw event per wheel notch
         // (VS Code class), so the per-notch density default is 1 instead of 3.
         // 批 12 T12（裁决⑥）：pi fullscreenWheelScrollLines 数字臂 ⇒ 固定行数。
@@ -44,8 +60,9 @@ public final class PiTuiLauncher {
             session.services().settings().effective(),
             TamboUIAdapter.isWindows() ? 1 : 3,
             session.services().settings().uiPrefs().getFullscreenWheelScrollLines());
-        var app = new PiTuiApp(mode, chatScreen,
-            new KeybindingsManager(), dispatcher, scrollConfig);
+        var app = new PiTuiApp(mode, chatScreen, keybindings, dispatcher, scrollConfig);
+        // 批 17（T7）：overlay 开合/外部编辑器往返/终端几何回填（晚绑定 holder）。
+        app.bindExtensionUi(extensionUiHost);
 
         // 批 12 T7（docs/23 §3；pi :948-949 init 调用点对位）：启动 changelog
         // 比较＋回写（runner 启动前装配，welcome 后展示）。
