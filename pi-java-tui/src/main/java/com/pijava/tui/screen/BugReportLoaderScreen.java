@@ -22,7 +22,9 @@ public final class BugReportLoaderScreen implements ScreenOverlay {
     private final String message;
     private volatile Runnable onAbort;
     private volatile boolean aborted;
-    private boolean done;
+    // volatile：写在键处理线程、读在渲染帧（isDone）——spotbugs
+    // AT_STALE_THREAD_WRITE_OF_PRIMITIVE（ChatScreen indicator 同手法）。
+    private volatile boolean done;
 
     /**
      * @param message 等待文案（pi 逐字）
