@@ -42,11 +42,16 @@ public final class ExtensionSelectorOverlay implements ScreenOverlay, ExtensionD
     private final KeybindingsManager keys;
     private final IntSupplier terminalCols;
     private final CompletableFuture<String> result;
-    private int selectedIndex;
+    // ⚠️ 写点在渲染线程（onKeyEvent），读点在 layout()——但倒计时线程会经
+    // countdownTick/cancel 触达本对象（volatile 族）⇒ spotbugs 按共享变量审：
+    // 读-改-写用 AtomicInteger（批 12 ChatScreen.runToolCalls 先例同旨）。
+    private final java.util.concurrent.atomic.AtomicInteger selectedIndex =
+        new java.util.concurrent.atomic.AtomicInteger();
     /** 倒计时秒数（-1 ⇒ 无倒计时；倒计时线程写、渲染线程读 ⇒ volatile）。 */
     private volatile int countdownSeconds = -1;
     private volatile boolean done;
-    private boolean cancelled;
+    /** cancel 可从倒计时/abort 线程进入（⇒ volatile；pi 单线程无此形态）。 */
+    private volatile boolean cancelled;
 
     /**
      * @param title        对话框标题（confirm 特化时宿主已拼 {@code title\nmessage}）
@@ -72,10 +77,10 @@ public final class ExtensionSelectorOverlay implements ScreenOverlay, ExtensionD
         var stroke = TamboUIAdapter.toStroke(event);
         if (keys.matches(KeybindingsManager.SELECT_UP, stroke)
                 || ("k".equals(stroke.key()) && !stroke.ctrl() && !stroke.alt() && !stroke.shift())) {
-            selectedIndex = Math.max(0, selectedIndex - 1);
+            selectedIndex.getAndUpdate(i -> Math.max(0, i - 1));
         } else if (keys.matches(KeybindingsManager.SELECT_DOWN, stroke)
                 || ("j".equals(stroke.key()) && !stroke.ctrl() && !stroke.alt() && !stroke.shift())) {
-            selectedIndex = Math.min(options.size() - 1, selectedIndex + 1);
+            selectedIndex.getAndUpdate(i -> Math.min(options.size() - 1, i + 1));
         } else if (keys.matches(KeybindingsManager.SELECT_CONFIRM, stroke)
                 || TamboUIAdapter.isSendEnter(event)) {
             // pi :97-99：空表不提交。
@@ -109,7 +114,7 @@ public final class ExtensionSelectorOverlay implements ScreenOverlay, ExtensionD
 
     @Override
     public void apply(AgentSession session, Consumer<AgentSession> switcher) {
-        result.complete(cancelled ? null : options.get(selectedIndex));
+        result.complete(cancelled ? null : options.get(selectedIndex.get()));
     }
 
     /** 结局 future（宿主复位时补完成——幂等）。 */
@@ -156,8 +161,9 @@ public final class ExtensionSelectorOverlay implements ScreenOverlay, ExtensionD
         }
         rows.add(List.of());
         // pi updateList：选中项 "→ " 前缀＋accent；未选 "  " 前缀＋正文色。
+        int selected = selectedIndex.get();
         for (int i = 0; i < options.size(); i++) {
-            if (i == selectedIndex) {
+            if (i == selected) {
                 rows.add(List.of(new Span(" → " + options.get(i), SemanticColors.ACCENT)));
             } else {
                 rows.add(List.of(new Span("   " + options.get(i), SemanticColors.PLAIN)));

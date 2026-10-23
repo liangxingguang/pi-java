@@ -47,7 +47,8 @@ public final class ExtensionEditorOverlay implements ScreenOverlay, ExtensionDia
     /** 已解析的编辑器命令（pi :55-59 回落链由宿主构造期解析）。 */
     private final String externalEditorCommand;
     private volatile boolean done;
-    private boolean cancelled;
+    /** cancel 可从宿主复位线程进入（⇒ volatile；pi 单线程无此形态）。 */
+    private volatile boolean cancelled;
 
     /**
      * @param title                 标题

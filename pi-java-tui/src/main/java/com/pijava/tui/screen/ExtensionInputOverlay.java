@@ -47,7 +47,8 @@ public final class ExtensionInputOverlay implements ScreenOverlay, ExtensionDial
     private final TextAreaState input = new TextAreaState();
     private volatile int countdownSeconds = -1;
     private volatile boolean done;
-    private boolean cancelled;
+    /** cancel 可从倒计时/abort 线程进入（⇒ volatile；pi 单线程无此形态）。 */
+    private volatile boolean cancelled;
 
     /**
      * @param title        标题
