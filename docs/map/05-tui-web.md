@@ -54,7 +54,7 @@
 | S8 | thinking level 选择器 | ✓ `components/thinking-selector.ts:36`（154 行） | ✗ | **缺失** | 2 | java 只在 `SettingsScreen.java:36` 里循环 6 个值 |
 | S9 | theme 选择器 | ✓ `components/theme-selector.ts:13`（67 行） | ✗ | **缺失** | 1 | java 只在 `SettingsScreen.java:30` 里循环 `dark/light` |
 | S10 | 会话选择器（列表 / 选 / 确认） | ✓ `session-selector.ts:694 class SessionSelectorComponent`（1045 行） | ✓ `SessionListScreen.java:16`（50 行） | **对齐** | 2 | java：`session.listSessions()` + 前 8 位 id |
-| S11 | 会话选择器：搜索 / 排序 / 命名过滤 / 路径切换 / 重命名 / 删除 / 进度 | ✓ `session-selector.ts:76-116`、`session-selector-search.ts`、`user-message-selector.ts`；`onProgress` 带 `partialSessions` 增量渲染 + `AbortController` 取消 | ✗ | **缺失** | 1 | java 全部无（`SessionListScreen.java` 全文 50 行无一处） |
+| S11 | 会话选择器：搜索 / 排序 / 命名过滤 / 路径切换 / 重命名 / 删除 / 进度 | ✓ `session-selector.ts:76-116`、`session-selector-search.ts`、`user-message-selector.ts`；`onProgress` 带 `partialSessions` 增量渲染 + `AbortController` 取消 | ✓ `component/session/`（批 14，docs/25：搜索/三档排序/命名过滤/路径开关/删除流/双 scope 进度全落） | **存疑** | 1 | **批 14 翻判定**：picker 语境与 pi 逐字节一致；**rename 面板 UI 不移植**（picker 臂 pi 本就无生产者，裁决⑦——rename 生产者是会话内 `/resume` 面，随交互选择器批收编）；`SessionListScreen`（S10 的 `/resume` 旧屏）未换引擎 |
 | S12 | 会话树选择器（分支列表） | ✓ `components/tree-selector.ts:1336 class TreeSelectorComponent`（~1400 行） | ✓ `component/tree/TreeSelectorOverlay.java`＋`TreeListModel`＋`TreeListRenderer`（批 9，docs/19） | **对齐** | 2 | 批 9（docs/19）：entry 树本体落地（D37 销号）——树形缩进/连接符/gutter、折叠、活动路径、多根虚拟根全对位；窄差 D43–D46/D48 登记；`/fork` 的 lane 平表留在旧 `TreeSelectorScreen`（pi 实为 user-message 选择器，B254） |
 | S13 | 树选择器：折叠展开 / 标签编辑 / 过滤模式 / 搜索 / 复制 | ✓ `tree-selector.ts:112 filterMode`（5 种）、`:632 copySelected`、`:637 updateNodeLabel`、`:1004 handleInput` | ✓ `TreeListModel.java`（折叠传染/五过滤/搜索 AND/段跳）、`TreeSelectorOverlay.java`（label 编辑臂/copy 三结局）、`AgentSession.setLabel`（持久化＋时间戳） | **对齐** | 1 | 批 9（docs/19）：折叠/标签编辑（含 `[+label time]`）/五过滤/搜索/复制全落（pi tree-selector.test.ts 13 用例对位移植 23 测） |
 | S14 | 设置页（字段列表 + 循环取值） | ✓ `settings-selector.ts:465 class SettingsSelectorComponent`（~960 行） | ✓ `SettingsScreen.java:21`（153 行） | **对齐** | 2 | java `SettingsScreen.java:30-47`；pi 侧字段含 `tuiMode`/`fullscreenExitOutput`/`fullscreenScrollbar`/`fullscreenWheelScrollLines`/`outputPad`（本锚点起说明文案改为「messages, tool output, and command output」）等，java 列表是其子集 |
@@ -136,8 +136,8 @@
 | K12 | `Ctrl+Z` 挂起进程 | 键绑定 | `keybindings.ts:29-32 app.suspend`（非 Windows） | ✗ | **缺失** | 1 | — |
 | K13 | `Ctrl+X` 复制消息到剪贴板 | 键绑定 | `keybindings.ts:63 app.message.copy`（描述「Copy selection or last assistant message」） | ✗（有 `/copy` 命令 `MiscCommands.java:95-96`，无键位） | **缺失** | 1 | — |
 | K14 | `Ctrl+V`/`Alt+V` 粘贴图片 | 键绑定 | `keybindings.ts:75-78 app.clipboard.pasteImage` | ✗ | **缺失** | 1 | — |
-| K15 | `Ctrl+N` 命名会话过滤 | 键绑定 | `keybindings.ts:55 app.session.toggleNamedFilter` | ✗ | **缺失** | 1 | — |
-| K16 | `app.session.*` 家族（new/tree/fork/resume + 树/会话选择器内键位） | 键绑定 | `core/keybindings.ts:79-115` | ✗ | **缺失** | 2 | — |
+| K15 | `Ctrl+N` 命名会话过滤 | 键绑定 | `keybindings.ts:55 app.session.toggleNamedFilter` | ✓ `KeybindingsManager.SESSION_TOGGLE_NAMED_FILTER`（overlay 表）＋`SessionSelectorComponent` 消费（批 14，docs/25 T3/T10） | **对齐** | 1 | **批 14 同翻**（设计对账表只列 K16，闭环逐行实算补——命名过滤键注册并被选择器消费） |
+| K16 | `app.session.*` 家族（new/tree/fork/resume + 树/会话选择器内键位） | 键绑定 | `core/keybindings.ts:79-115` | ✓ `KeybindingsManager`（批 14，docs/25 T3）：选择器六键入 overlay 表（ctrl+n/p/s/r/d＋ctrl+backspace，与全局撞名分表——批 9 C1 同构）＋ new/tree/fork/resume 四空绑定注册（pi `defaultKeys: []` 对位） | **对齐** | 2 | **批 14 翻判定**：六键被选择器消费；四空绑定 `resolve` 永不命中、`/hotkeys` 渲染 `""`（pi `formatKeys([])` 对位）；`tui.select.*` 沿批 10 KeyEvent-helper 先例不入表（裁决⑥，窄差 D73） |
 | K17 | 用户键位覆盖（`keybindings.json`） | 配置 | `core/keybindings.ts`（本锚点改用 typebox `KeybindingValueSchema` 校验、跳过 `$schema`；schema 文件另出 `schemas/keybindings.schema.json`）+ migration 测试 | ✗（`KeybindingsManager.java:14` 注释「User overrides from keybindings.json → Phase 6」） | **缺失** | 1 | H-9.2-⑩ |
 | K18 | 键位提示渲染（`keyText`/`keyHint`/`rawKeyHint`） | 组件 | `components/keybinding-hints.ts:48` | `KeybindingHints.java:19`（只有 `keyText:29`，无 `keyHint`/`rawKeyHint`） | **存疑** | 2 | — |
 | K19 | 滚轮/触控板归一化（事件流 → 行滚动） | 交互 | `tui/src/tui-alt-screen.ts:491 scrollBy` + `tui/src/wheel-scroll.ts` | `ScrollInputNormalizer.java:20`（274 行，Codex TUI2 PR#8357 移植）+ `ScrollConfig.java:35` | **存疑** | 3 | — |
@@ -493,17 +493,18 @@
 
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|
-| 屏幕/面板（35 单元） | 47 | 20.0 | **42.6%** | 31.4% |
+| 屏幕/面板（35 单元） | 47 | 20.5 | **43.6%** | 31.4% |
 | 渲染特性（R1–R29，29 单元；R21 权重 0 已剔） | 40 | 7.5 | **18.8%** | 10.7% |
-| 键绑定/交互（K1–K39，39 单元；K36 权重 0 已剔） | 66 | 30.5 | **46.2%** | 28.9% |
+| 键绑定/交互（K1–K39，39 单元；K36 权重 0 已剔） | 66 | 33.5 | **50.8%** | 28.9% |
 | TUI 组件（C1–C20，20 单元） | 41 | 22.5 | **54.9%** | 35.0% |
 | 主题/样式（T1–T11，11 单元） | 18 | 6.5 | **36.1%** | 27.3% |
 | web 对齐面（W1–W16，16 单元） | 33 | 26.0 | **78.8%** | 50.0% |
 
-**模块合计**：Σ权重 **245** ／ Σ(w×c) **113.0** ／ **加权完成度 = 113.0/245 ≈ 46.1%**（未加权 **29.1%**，**+17.7pp**）
+**模块合计**：Σ权重 **245** ／ Σ(w×c) **116.5** ／ **加权完成度 = 116.5/245 ≈ 47.6%**（未加权 **29.1%**，**+17.7pp**）
 
 > 批 10（2026-10-22，docs/21）：S20 缺失→对齐（+1.0）、K11 缺失→对齐（+1.0）；R28 证据更新不翻（流式 bash/工具挂载仍缺）。
 > 批 13（2026-10-23，docs/24）：R24 存疑→对齐（+0.5，cache-warmer 子系统批随收——生产者/文案逐字/门//session 段/footer）。
+> 批 14（2026-10-23，docs/25）：**K16 缺失→对齐（+2.0，app.session.* 键位族）＋K15 缺失→对齐（+1.0，对账表漏列同翻）＋S11 缺失→存疑（+0.5，picker 臂全落、rename 面板留白裁决⑦）**。Σ 113.0→**116.5/245 ≈ 47.6%**。
 
 > 较前锚点（144 单元：241 权 / 108.0 / **44.8%**）变化 **−0.5pp**，构成：① K20 对齐→存疑（w2）分子 −1.0；② R18/R24 缺失→存疑（w1×2）分子 +1.0；③ 新增 4 单元（R28 存疑 w1 +0.5；R29/K39/C20 缺失 w1×3）分母 +4、分子 +0.5。净效果：分子 +0.5、分母 +4。
 

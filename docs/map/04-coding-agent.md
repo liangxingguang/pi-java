@@ -51,32 +51,32 @@ java `cli/ArgsParser.java` 共 **43 个 `@Option`**，其中 **4 个 java 独有
 | 2 | `--version`/`-v` | `args.ts:94` | ✅ `ArgsParser.java:57` | 1 | 对齐 | `Main.java:61` |
 | 3 | `--mode` | `args.ts:96` | ✅ `ArgsParser.java:60` | 2 | 对齐 | java 多 `web`（`Args.java:26`） |
 | 4 | `--continue`/`-c` | `args.ts:111` | ✅ `ArgsParser.java:48` | 2 | 对齐 | `SessionPersistence.java:169` |
-| 5 | `--resume`/`-r` | `args.ts:113` | ⚠️ `ArgsParser.java:51` | 2 | **存疑** | pi 无 `--session` 时**开选择器**（`main.ts:417`，`listAll:419`）；java `SessionPersistence.java:186-190` 走 `find(null)` ⇒ 抛 `Session not found: null` |
+| 5 | `--resume`/`-r` | `args.ts:113` | ✅ `ArgsParser.java:51` | 2 | **对齐** | **批 14（2026-10-23，docs/25）**：选择器全链——`SessionSelectorProvider` SPI（裁决①）＋tui `SessionSelectorComponent`（pi 1,045 行域）＋`SessionSelectorRunner` 启动壳；取消 ⇒ `No session selected` exit 0；SPI 缺席报 D70 干净错误 |
 | 6 | `--provider` | `args.ts:115` | ✅ `ArgsParser.java:27` | 2 | 对齐 | |
 | 7 | `--model` | `args.ts:117` | ✅ `ArgsParser.java:30` | **3** | 对齐 | 均支持 `provider/id` 与 `:thinking` |
 | 8 | `--api-key` | `args.ts:119` | ✅ `ArgsParser.java:33` | 2 | 对齐 | |
 | 9 | `--system-prompt` | `args.ts:121` | ✅ `ArgsParser.java:39` | 1 | 对齐 | |
 | 10 | `--append-system-prompt` | `args.ts:123` | ✅ `ArgsParser.java:42` | 1 | 对齐 | 均 repeatable |
 | 11 | `--name`/`-n` | `args.ts:126` | ✅ `ArgsParser.java:66` | 1 | 对齐 | `AgentSession.java:529` |
-| 12 | `--no-session` | `args.ts:132` | ⚠️ `ArgsParser.java:69` | 1 | **存疑** | 非 web 生效；**web 路径被忽略**（`SessionPersistence.java:149-164` 的 `args` 零使用）—— 台账 **B54** |
-| 13 | `--session` | `args.ts:134` | ⚠️ `ArgsParser.java:72` | 2 | **存疑** | 行为有差：java `find()` 走 `repo.list(all())`（`PersistentSessionRepositories.java:63`）⇒ **O(全部) 且跨项目**；pi `main.ts:252-283` 路径形快道＋三级阶梯 —— 台账 **B53** |
-| 14 | `--session-id` | `args.ts:136` | ⚠️ `ArgsParser.java:75` | 2 | **存疑** | 同上（B53）；缺失时 java 创建（`SessionPersistence.java:179-184`）↔ pi `main.ts:437-447` |
-| 15 | `--fork` | `args.ts:138` | ⚠️ `ArgsParser.java:78` | 1 | **存疑** | 同上（B53）；`SessionPersistence.java:192-199` |
+| 12 | `--no-session` | `args.ts:132` | ✅ `ArgsParser.java:69` | 1 | **对齐** | **批 14（docs/25 T14）**：web 臂 `--no-session` 赢（裁决⑤，**B54 销号**）——`resolvePersistentWeb` ephemeral 早退，`WebNoSessionTest` 钉无持久仓写入 |
+| 13 | `--session` | `args.ts:134` | ✅ `ArgsParser.java:72` | 2 | **对齐** | **批 14（docs/25 T6/T7）**：pi `main.ts:391-413` 逐字——⓪ 路径快道→①② local（B53 阶梯）直开→③ global 提示 `Session found in different project`＋`promptConfirm` fork（EOF/n ⇒ `Aborted.` exit 0）；not_found 文案逐字＋`SessionResolutionExit` 干净错误面（裁决②） |
+| 14 | `--session-id` | `args.ts:136` | ✅ `ArgsParser.java:75` | 2 | **对齐** | **批 14（docs/25 T6/T8）**：pi `main.ts:436-448` 逐字——只项目内精确（`findLocalById` header-only）；缺 ⇒ `Warning: No project session found with id ...`＋`createWithId` 带 id 新建（修丢 id 现状） |
+| 15 | `--fork` | `args.ts:138` | ✅ `ArgsParser.java:78` | 1 | **对齐** | **批 14（docs/25 T6/T9）**：pi `main.ts:368-390` 逐字——`--session-id` 目标查重（`Session already exists with id` exit 1）＋`forkFrom {id}`；`validateForkFlags` 互斥诊断 |
 | 16 | `--session-dir` | `args.ts:140` | ✅ `ArgsParser.java:81` | 1 | 对齐 | `AgentSession.java:131/164/180` |
-| 17 | `--models` | `args.ts:142` | ❌ `ArgsParser.java:84` | 2 | **缺失** | `args.models()` **零消费者** ⇒ Ctrl+P 循环列表无实现 |
+| 17 | `--models` | `args.ts:142` | ✅ `ArgsParser.java:84` | 2 | **对齐** | **批 14（docs/25 T17）核销**：消费链早已通（账面滞后）——`AgentSession.java:374` `ModelScoping.resolve` 吃 `args.models()` → `:677 setScopedModels` → `PiTuiApp.java:665` Ctrl+P 轮转＋`:423-428` 初始模型（pi `main.ts:499-535` 对位） |
 | 18 | `--no-tools`/`-nt` | `args.ts:147` | ✅ `ArgsParser.java:93` | 1 | 对齐 | `-nt` 由 `:258` 展开；**批 1 补注**（B236/docs/11）：注册面语义对齐——空 allowlist ⇒ 注册面空（pi `noTools:"all"` ⇒ `getAllTools()==[]`，`DefaultToolsSelectionTest.noToolsEmptiesTheRegistry`） |
 | 19 | `--no-builtin-tools`/`-nbt` | `args.ts:149` | ✅ `ArgsParser.java:96` | 1 | 对齐 | **批 1 补注**（B236/docs/11）：注册面保留八件、激活面空（pi `noTools:"builtin"` 语义；扩展工具默认激活臂 java 无扩展面，免登） |
 | 20 | `--tools`/`-t` | `args.ts:151` | ✅ `ArgsParser.java:87` | 2 | **对齐** | **批 1（2026-10-18，B236/docs/11）**：`*` 通配（`ToolNameMatcher`，mcp-servers.ts:11-42 对位）、`+name`/`-name` 修饰符（`ToolSelection`，settings-manager.ts:83-137＋sdk.ts:280-294 对位）、`mcp__` 保留策略（裁决③）、解析期 `getToolListError` 逐字校验；窄差 D1：诊断前缀恒 `--tools`（picocli 不暴露实敲别名） |
 | 21 | `--exclude-tools`/`-xt` | `args.ts:162` | ✅ `ArgsParser.java:90` | 1 | **对齐** | **批 1（2026-10-18，B236/docs/11）**：`*` 通配 denylist（同一 `ToolNameMatcher`），注册面剔除（`_isAllowedTool` 对位 `Resolved.isAllowed`），excluded 优先于 allowlisted |
 | 22 | `--thinking` | `args.ts:167` | ✅ `ArgsParser.java:45` | 2 | 对齐 | 两侧都是 7 档 `off..max`（`ThinkingLevels.java:33`） |
 | 23 | `--print`/`-p` | `args.ts:177` | ✅ `ArgsParser.java:126` | **3** | 对齐 | pi 吞下紧随的非 `@`/`-` 参数（`:179-181`） |
-| 24 | `--export` | `args.ts:184` | ⚠️ `ArgsParser.java:129` | 1 | **存疑** | pi 支持 **2 个位置参数**（`main.ts:639-644`，输出路径取 `messages[0]`）；java 只取 1 个（`Main.java:84-87`） |
-| 25 | `--extension`/`-e` | `args.ts:186` | ❌ `ArgsParser.java:99` | 2 | **缺失** | `args.extensions()` **零消费者** ⇒ 显式扩展文件路径无实现 |
+| 24 | `--export` | `args.ts:184` | ✅ `ArgsParser.java:129` | 1 | **对齐** | **批 14（docs/25 T13）**：第二位置参数＝输出路径（`Main.java` `parsed.messages().getFirst()`）；文案逐字 `Exported to: <path>`／`Error: <msg>` exit 1；窄差 D77（默认名 `pi-java-session-*` 品牌族） |
+| 25 | `--extension`/`-e` | `args.ts:186` | ✅ `ArgsParser.java:99` | 2 | **对齐** | **批 14（docs/25 T15）**：`AgentSession.loadExtensions` 显式 JAR 恒加载（`-ne` 旁路，pi `resource-loader.ts:578/690` 对位）；`-ne` 裸早退不变；窄差 D78（不收 `builtin:<name>`） |
 | 26 | `--no-extensions` | `args.ts:189` | ✅ `ArgsParser.java:102` | 1 | 对齐 | `AgentSession.java:1142` |
 | 27 | `--skill` | `args.ts:193` | ✅ `ArgsParser.java:105` | 1 | 对齐 | `SkillDiscovery.java:36` |
 | 28 | `--prompt-template` | `args.ts:196` | ✅ `ArgsParser.java:111` | 1 | 对齐 | `PromptTemplates.java:47` |
-| 29 | `--theme` | `args.ts:199` | ⚠️ `ArgsParser.java:117` | 1 | **存疑** | pi 收 **JSON 主题名或文件**；java 只收 `.tcss` 路径（pi-java-tui `PiTheme.java:97`） |
-| 30 | `--use-theme` | `args.ts:202` | ❌ — | 1 | **缺失** | java 无此 flag |
+| 29 | `--theme` | `args.ts:199` | ⚠️ `ArgsParser.java:117` | 1 | **存疑** | pi 收 **JSON 主题名或文件**；java 只收 `.tcss` 路径（pi-java-tui `PiTheme.java:97`）——**批 14（docs/25 §4）重排批 20**（依赖 JSON 主题系统 E4-4/B163，现做只能是空壳） |
+| 30 | `--use-theme` | `args.ts:202` | ✅ `ArgsParser.java:126` | 1 | **对齐** | **批 14（docs/25 T16）**：flag＋缺值/`-` 起头两诊断（`--use-theme requires a theme name` 逐字）＋消费 `PiTuiLauncher.themeFrom`（优先于 `--theme`）＋`-r` 选择器 SPI `useThemeOverride`（pi `main.ts:681-683` 对位） |
 | 31 | `--no-skills`/`-ns` | `args.ts:210` | ✅ `ArgsParser.java:108` | 1 | 对齐 | |
 | 32 | `--no-prompt-templates`/`-np` | `args.ts:212` | ✅ `ArgsParser.java:114` | 1 | 对齐 | |
 | 33 | `--no-themes` | `args.ts:214` | ✅ `ArgsParser.java:120` | 1 | 对齐 | |
@@ -86,12 +86,13 @@ java `cli/ArgsParser.java` 共 **43 个 `@Option`**，其中 **4 个 java 独有
 | 37 | `--verbose` | `args.ts:239` | ✅ `ArgsParser.java:141` | 1 | 对齐 | |
 | 38 | `--approve`/`-a` | `args.ts:241` | ✅ `ArgsParser.java:150` | 2 | 对齐 | |
 | 39 | `--no-approve`/`-na` | `args.ts:243` | ✅ `ArgsParser.java:153` | 1 | 对齐 | |
-| 40 | `--offline` | `args.ts:245` | ⚠️ `ArgsParser.java:135` | 1 | **存疑** | java 有消费者：`ModelCatalogRefresh.java:77-78` 用它跳过联网目录刷新（`PI_OFFLINE` 亦读）—— 但只覆盖目录刷新，pi 的 offline 面更广 |
-| 41 | `--`（选项终止） | `args.ts:83-90` | ⚠️ picocli 内建 | 1 | **存疑** | java 未显式处理（无夹具） |
+| 40 | `--offline` | `args.ts:245` | ✅ `ArgsParser.java:135` | 1 | **对齐** | **批 14（docs/25 裁决④）**：java 启动网络操作全集＝模型目录刷新，已被 `ModelCatalogRefresh.java:77` 门控；pi 其余 `PI_OFFLINE` 消费点在 java 无对应子系统（version-check/self-update/install-telemetry/package-update-check 均不存在）——按「pi 零消费⇒声明面即全量」同族口径（批 12 裁决③）；触发条件入 docs/04 §4 |
+| 41 | `--`（选项终止） | `args.ts:83-90` | ✅ `ArgsParser.java:168-176` | 1 | **对齐** | **批 14（docs/25 T12）**：首个 `--` 预分流——后段 `@x` ⇒ fileArgs、其余 ⇒ messages（含 `-`/`--` 起头）；修 `-- -foo` 误判 `Unknown option`；夹具×3 |
 | 42 | `@files` 位置参数 | `args.ts:248`（另 `:85-86`） | ✅ `ArgsParser.java:204-205` | 2 | 对齐 | 两侧都剥离 `@` 前缀进 `fileArgs` |
-| 43 | 扩展注册的 CLI flag | `args.ts:250-259` + `registerFlag`/`getFlag`（`extensions/types.ts:1664/1680`） | ❌ | 1 | **缺失** | java `ArgsParser.java:206-213` 只把未知 flag 收进 `unmatched`，**无 `registerFlag` API** |
+| 43 | 扩展注册的 CLI flag | `args.ts:250-259` + `registerFlag`/`getFlag`（`extensions/types.ts:1664/1680`） | ❌ | 1 | **缺失** | java `ArgsParser.java:206-213` 只把未知 flag 收进 `unmatched`，**无 `registerFlag` API**——**批 14（docs/25 §4）重排批 15/E5**（是扩展 API 面工作，`parsedUnmatched` 已留料） |
 
-**汇总：对齐 30 / 缺失 4 / 存疑 9 / 合计 43 = 69.8%**；**Σ权重 62 / Σ(w×c) 50.0 / 加权 80.6%**
+**汇总：对齐 41 / 缺失 1 / 存疑 1 / 合计 43 = 95.3%**；**Σ权重 62 / Σ(w×c) 60.5 / 加权 97.6%**
+> 批 14（2026-10-23，docs/25）：**11 行翻动**——A-5/A-12/A-13/A-14/A-15/A-24/A-30/A-40/A-41 存疑⇒对齐、A-17/A-25 缺失⇒对齐（A-17 核销）；A-29 重排批 20、A-43 重排批 15（判定不动，证据改注）。Σ 50.0→**60.5/62 ≈ 97.6%**。
 > pi 新增 `--no-mcp`（`args.ts:191` → `disabledBuiltinExtensions:["mcp"]`，`main.ts:787`）属 MCP 面，判定归 map/07。
 > 本锚点改判：`--tools`（A-20）/ `--exclude-tools`（A-21）对齐 → **存疑**（pi 现收 pattern `*`；`--tools` 另收 `+name`/`-name`/`mcp__`，java 仅裸名切分）。
 > 批 1（2026-10-18，B236/docs/11）：A-20/A-21 存疑 → **对齐**（三层语义全落，窄差 D1 登记）。
@@ -390,13 +391,13 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 |---|---|---|---|---|---|---|
 | E3-1 | 新建会话（无参） | `session-manager.ts:1057` `newSession` | `SessionPersistence.java:201` `handle.create` | **3** | 对齐 | — |
 | E3-2 | 续最近会话（`-c`） | `main.ts:432-433` → `SessionManager.continueRecent`（`session-manager.ts:1793` → `findMostRecentSession:749`） | `SessionPersistence.java:170` `handle.latest(cwd)` | 2 | 对齐 | A12 已结案 |
-| E3-3 | `-r` 交互式会话选择器 | `main.ts:417` `selectSession`（`cli/session-picker.ts` 55 行 + `session-selector.ts` 1,045 + `session-selector-search.ts` 194） | ❌ `SessionPersistence.java:186-190` → `find(null)` 抛异常 | 2 | **缺失** | — |
-| E3-4 | `--session` 精确/前缀查找 | **路径形快道＋三级阶梯**（`main.ts:252-283`）：路径形（`:253-256`）→ ① `findLocalSessionByExactId`（`:243`/`:260`）→ ② 项目内前缀 `SessionManager.list`（`:263-268`）→ ③ `SessionManager.listAll`（`:273`，跨项目） | `PersistentSessionRepositories.java:59-66` 走 `list(all())`（**直接跳到第 ③ 级**；sqlite 支在 `:139-146`） | 2 | **存疑** | **B53** |
-| E3-5 | `--session-id` 精确 ID（缺则建） | `main.ts:437-447` | `SessionPersistence.java:175-184` | 2 | **存疑** | **B53** |
-| E3-6 | `--fork` 分叉 | `main.ts:369-381` | `SessionPersistence.java:192-199` | 2 | **存疑** | **B53** |
+| E3-3 | `-r` 交互式会话选择器 | `main.ts:417` `selectSession`（`cli/session-picker.ts` 55 行 + `session-selector.ts` 1,045 + `session-selector-search.ts` 194） | ✅ tui `component/session/`（`SessionSelectorComponent`/`SessionListModel`/`SessionListRenderer`/`SessionSelectorHeader`/`SessionTreeBuilder`/`SessionSelectorSearch`）＋`SessionSelectorRunner`＋coding-agent SPI（批 14，docs/25） | 2 | **对齐** | **批 14**：搜索（re:/引号/未闭合回落/fuzzy 子序列）/三档排序/命名过滤/路径开关/双 scope 懒载/删除流/进度全落；窄差 D69–D76（trash 臂无/SPI 缺席/键位 helper 等）；rename 面板留白随交互选择器批（裁决⑦） |
+| E3-4 | `--session` 精确/前缀查找 | **路径形快道＋三级阶梯**（`main.ts:252-283`）：路径形（`:253-256`）→ ① `findLocalSessionByExactId`（`:243`/`:260`）→ ② 项目内前缀 `SessionManager.list`（`:263-268`）→ ③ `SessionManager.listAll`（`:273`，跨项目） | `PersistentSessionRepositories.java:59-93` 阶梯（B53）＋`findWithScope` scope 标＋`SessionPersistence.resolveSessionArg`（批 14） | 2 | **对齐** | **批 14（docs/25 T6/T7）**：pi 全序重排＋③ global 臂（提示＋`promptConfirm` fork／`Aborted.` exit 0）＋`SessionResolutionExit` 干净错误面 |
+| E3-5 | `--session-id` 精确 ID（缺则建） | `main.ts:437-447` | `SessionPersistence.resolveSessionId`（批 14）＋`RepositoryHandle.findLocalById/createWithId`（T4） | 2 | **对齐** | **批 14（docs/25 T8）**：只项目内精确（pi `:437`）；缺 ⇒ warning 逐字＋带 id 新建（修丢 id）；`assertValidSessionId` 正则逐字入 ArgsParser |
+| E3-6 | `--fork` 分叉 | `main.ts:369-381` | `SessionPersistence.resolveFork`（批 14） | 2 | **对齐** | **批 14（docs/25 T9）**：`--session-id` 目标查重（`Session already exists with id '<id>'` exit 1）＋not_found 文案逐字；`validateForkFlags` 互斥 |
 | E3-7 | `/clone` 原位复制 | `session-manager.ts:1632` `createBranchedSession` | `SessionCommands.java:48` `forkCopy` | 1 | 对齐 | — |
 | E3-8 | `/fork` 从历史用户消息分叉 | `user-message-selector.ts`（155 行） | `PiTuiApp.java`（forkFromMessage）＋`UserMessageSelectorScreen.java` | 2 | **对齐** | **批 10（2026-10-22，B254/docs/21）**：选择器本体＋fork-before＋编辑器回填全落；窄差 D50/D51 登记（同 C 域 #15——设计对账表漏列本行，闭环逐行实算同翻） |
-| E3-9 | 会话列表（加强） | `listSessionsFromDir`（`:941`）、`SessionListProgress`（3 参）、`AbortSignal`、`publishPartial`、`listAll` | `PersistentSessionRepositories.java:74-76` `list(cwd)` **同步全量、无回调、无取消** | 2 | **存疑** | **B55** |
+| E3-9 | 会话列表（加强） | `listSessionsFromDir`（`:941`）、`SessionListProgress`（3 参）、`AbortSignal`、`publishPartial`、`listAll` | `RepositoryHandle.listRich/listAllRich`（批 14 T4）→ `JsonlSessionRepository.listRich/listAllRich`（B55 已落：进度＋取消＋并发） | 2 | **对齐** | **批 14（docs/25 T4）**：repo 层能力暴露到句柄面（选择器消费）；sqlite 臂退化（窄差 D74） |
 | E3-10 | 导出 JSONL | `core/session-export.ts` | `PersistentSessionRepositories.java:95` | 2 | 对齐 | — |
 | E3-11 | 导出 HTML | `core/export-html/`（748 行） | `export/HtmlExporter.java` | 2 | 对齐 | — |
 | E3-12 | 导入 JSONL | `session-manager.ts` | `PersistentSessionRepositories.java:109` | 1 | 对齐 | — |
@@ -406,15 +407,16 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 | E3-16 | 条目标签（labels） | `session-manager.ts:1237/1246` | agent-core `JsonlSessionStorage.java:263/267` | 1 | 对齐 | — |
 | E3-17 | 自定义条目（custom entry） | `session-manager.ts:1290` | agent-core `Session.java:183` | 2 | 对齐 | — |
 | E3-18 | bash 执行条目 | `session-manager.ts:1071` | `AgentSession.java:1036-1045` + `AgentSessionEvent.BashExecutionUpdate:111` | 1 | 对齐 | — |
-| E3-19 | `--no-session` 语义 | `main.ts`（ephemeral） | 非 web 生效；**web 路径忽略** | 1 | **存疑** | **B54** |
+| E3-19 | `--no-session` 语义 | `main.ts`（ephemeral） | `SessionSetup.resolveSession:122`（CLI 臂）＋`SessionPersistence.resolvePersistentWeb` no-session 早退（批 14 T14） | 1 | **对齐** | **批 14（docs/25 裁决⑤，B54 销号）**：web 路径 `--no-session` 赢（ephemeral 是更安全一侧）——**设计对账表漏列本行，闭环逐行实算同翻**（批 10 E3-8 先例） |
 | E3-20 | `--session-dir` | `session-manager.ts:596` `getDefaultSessionDir` | `AgentSession.java:131/164/180` | 1 | 对齐 | — |
 | E3-21 | 按 cwd 分目录 | `session-manager.ts:589/596` | `AgentSession.java:131`（`--path--` 编码） | 2 | 对齐 | — |
 | E3-22 | 崩溃恢复（settle 未结操作） | `session-manager.ts:341` `migrateSessionEntries` | `SessionPersistence.java:114` `settleOpenOperation` | 2 | 对齐 | — |
 | E3-23 | 会话元数据变更事件 | `session_info_changed`（`types.ts:1575`） | `AgentSessionEvent.SessionInfoChanged` **零生产者** | 1 | **缺失** | **B30** |
-| E3-24 | 提示缓存预热 | `core/cache-warmer.ts`（453 行）+ `settings-schema.ts:395` | ❌ | 2 | **缺失** | — |
+| E3-24 | 提示缓存预热 | `core/cache-warmer.ts`（453 行）+ `settings-schema.ts:395` | `CacheWarmer`＋`CacheWarmingEconomics`＋`CacheStats`＋`CacheWarmingBridge`＋装配四面（批 13，docs/24） | 2 | **对齐** | **批 14 核销**：批 13 对账表漏列本行（cache-warmer 子系统即本行内容），闭环逐行实算补翻 |
 
-**E3 汇总：对齐 15 / 缺失 4 / 存疑 5 / 合计 24 = 62.5%**；**Σ权重 40 / Σ(w×c) 28.5 / 加权 71.3%**
+**E3 汇总：对齐 22 / 缺失 2 / 存疑 0 / 合计 24 = 91.7%**；**Σ权重 40 / Σ(w×c) 37.0 / 加权 92.5%**
 > 批 10（2026-10-22，B254/docs/21）：E3-8 `/fork` 存疑 → **对齐**。
+> 批 14（2026-10-23，docs/25）：**7 行翻动**——E3-3 缺失⇒对齐（+2.0，选择器本体）、E3-4/E3-5/E3-6/E3-9 存疑⇒对齐（+4.0）、**E3-19 同翻**（+0.5，B54 销号——设计对账表漏列，批 10 E3-8 先例）、**E3-24 核销**（+2.0，批 13 对账表漏列，cache-warmer 本体已落）。Σ 28.5→**37.0/40 ≈ 92.5%**（余 3.0：E3-15 挂 B1、E3-23 挂 B30）。
 
 ### E4 资源发现（7）
 
@@ -541,7 +543,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 
 | # | 能力单元 | pi 侧证据 | 权重 | 判定 |
 |---|---|---|---|---|
-| E8-1 | 提示缓存预热 | `core/cache-warmer.ts` 453 行（已计入 E3-24） | 2 | **缺失** |
+| E8-1 | 提示缓存预热 | `core/cache-warmer.ts` 453 行（已计入 E3-24） | 2 | **对齐**（随 E3-24，批 14 核销） |
 | E8-2 | bug 上报（`/bug`） | `core/bug-report.ts` 375 + `bug-report-upload.ts` 37 + `modes/interactive/bug-report.ts`（已计入 C-9） | 1 | **缺失** |
 | E8-3 | 崩溃日志（crash log） | `core/crash-log.ts` **170 行** | 1 | **缺失** |
 | E8-4 | 扩展加载器依赖延迟（jiti lazy / Bun·SEA static） | `core/extensions/jiti-loader.ts` 3 + `jiti-static-loader.ts` + `virtual-modules.ts` 38 | 1 | **缺失（不适用）** |
@@ -597,25 +599,26 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 
 | 分区 | 对齐 | 缺失 | 存疑 | 合计 | 完成度 |
 |---|---:|---:|---:|---:|---:|
-| A. CLI 参数 | 30 | 4 | 9 | 43 | 69.8% |
+| A. CLI 参数 | 41 | 1 | 1 | 43 | 95.3% |
 | B. 子命令 | 3 | 1 | 4 | 8 | 37.5% |
 | C. Slash 命令 | 11 | 2 | 12 | 25 | 44.0% |
 | D. 扩展系统 41 事件 | 17 | 17 | 7 | 41 | 41.5% |
 | D′. 扩展 UI 注入面 | 0 | 8 | 1 | 9 | 0% |
 | E. 其余能力单元 | 51 | 65 | 32 | 148 | 34.5% |
 | ├ E1 配置文件 | 2 | 1 | 2 | 5 | 40.0% |
-| ├ E2 settings 键 | 44 | 2 | 8 | 54 | 81.5% |
-| ├ E3 会话管理 | 14 | 4 | 6 | 24 | 58.3% |
+| ├ E2 settings 键 | 46 | 1 | 6 | 53 | 86.8% |
+| ├ E3 会话管理 | 22 | 2 | 0 | 24 | 91.7% |
 | ├ E4 资源发现 | 5 | 2 | 0 | 7 | 71.4% |
 | ├ E5 扩展 API | 6 | 25 | 4 | 35 | 17.1% |
 | ├ E6 包管理器 | 0 | 11 | 5 | 16 | 0% |
 | └ E7 RPC 面 | 2 | 0 | 4 | 6 | 33.3% |
 | G. 主流新增子系统（MCP/codemode/…） | 3 | 5 | 2 | 10 | 30.0% |
 | F. 整块缺失（子系统） | 0 | 6 | 0 | 6 | 0% |
-| **合计（模块，不含 E8）** | **115** | **106** | **66** | **290** | **39.7%** |
+| **合计（模块，不含 E8）** | **158** | **82** | **48** | **288** | **54.9%** |
 | E8. 边缘/面外子系统（**与 E3/C/G 重叠，不计入**） | 0 | 6 | 0 | 6 | 0% |
 
-**严格口径**（把「引擎钩子存在但未桥接」的 5 条——#7/#12/#17/#18/#19——也算缺失）：对齐 **115** / 缺失 **114** / 存疑 **61** / 合计 **290** = **39.7%**。
+**严格口径**（把「引擎钩子存在但未桥接」的 5 条——#7/#12/#17/#18/#19——也算缺失）：对齐 **153** / 缺失 **87** / 存疑 **48** / 合计 **288** = **53.1%**。
+> 批 14（2026-10-23，docs/25）：本表逐行实算收平——A 域 11 行＋E3 域 7 行翻动；E2 行同步批 13 台账文本（对齐 44→46、E2-45 出分母 54→53）；分母 290→288 为逐行实算值（含往批汇总滞后吸收）。
 
 **扩展系统单独口径**（D + D′ + E5）：41 事件 = 17 对齐；UI 注入 9 面 = 0 对齐；扩展 API 35 项 = 6 对齐 ⇒ **85 个单元中 23 个对齐 = 27.1%**。
 
@@ -633,26 +636,27 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|
-| A. CLI 参数 | 62 | 50.0 | 80.6% | 69.8% |
+| A. CLI 参数 | 62 | 60.5 | 97.6% | 95.3% |
 | B. 子命令 | 15 | 9.0 | 60.0% | 37.5% |
 | C. Slash 命令 | 38 | 26.0 | 68.4% | 44.0% |
 | D. 扩展系统 41 事件 | 83 | 75.0 | 90.4% | 87.8% |
 | D′. 扩展 UI 注入面 | 16 | 1.0 | 6.3% | 0% |
 | E1. 配置文件 / 清单 | 10 | 6.0 | 60.0% | 40.0% |
 | E2. settings.json 键 | 84 | 76.5 | 91.1% | 85.2% |
-| E3. 会话管理行为 | 40 | 27.5 | 68.8% | 58.3% |
+| E3. 会话管理行为 | 40 | 37.0 | 92.5% | 91.7% |
 | E4. 资源发现 | 14 | 10.0 | 71.4% | 71.4% |
 | E5. 扩展 API 面 | 58 | 16.0 | 27.6% | 17.1% |
 | E6. 包管理器 | 31 | 5.0 | 16.1% | 0% |
 | E7. RPC 面 | 12 | 8.0 | 66.7% | 33.3% |
 | G. 主流新增子系统 | 18 | 7.0 | 38.9% | 30.0% |
 | F. 整块缺失（子系统） | 13 | 0.0 | 0% | 0% |
-| **模块合计（不含 E8）** | **494** | **319.5** | **64.7%** | **56.7%** |
+| **模块合计（不含 E8）** | **494** | **338.5** | **68.5%** | **60.7%** |
 | E8. 边缘/面外子系统（与 E3/C/G 重叠，不计入） | 7 | 0.0 | 0% | 0% |
 
-**模块合计**：Σ权重 494 ／ Σ(w×c) 319.5 ／ **加权完成度 = 319.5/494 ≈ 64.7%**（未加权 164/289 ≈ 56.7%；批 13 后值——E2-45 出分母 496→494/290→289、批 11–13 逐行实算补入）。
+**模块合计**：Σ权重 494 ／ Σ(w×c) 338.5 ／ **加权完成度 = 338.5/494 ≈ 68.5%**（未加权 175.5/289 ≈ 60.7%；批 14 后值——按 Δ 续列：批 13 的 319.5＋本批 19.0）。
 
-**去重口径**（F 域有 2 行与 E4/E6 重叠＋G-1..G-5 归 map/07）：Σ权重 **485** ／ Σ(w×c) **315.0** ／ **加权完成度 = 315.0/485 ≈ 64.9%**（未加权 164/289 ≈ 56.7%）。
+**去重口径**（F 域有 2 行与 E4/E6 重叠＋G-1..G-5 归 map/07）：Σ权重 **485** ／ Σ(w×c) **334.0** ／ **加权完成度 = 334.0/485 ≈ 68.9%**（未加权 175.5/289 ≈ 60.7%）。
+> 口径注记（批 14）：A/E3 域行与未加权汇总表已逐行实算（含往批滞后收平：E2 对齐 44→46、E3 段汇总 27.5→28.5 的批 10 滞后）；模块加权合计按 Δ 续列，与逐行域和的 ±1.5 存量口径差随下次全量重测一并收平（批 4 同例）。
 
 **扩展系统单独口径**（D + D′ + E5）：Σ权重 157 ／ Σ(w×c) 63.0 ／ **加权 40.1%**（未加权 24/85 ≈ 28.2%）。
 
