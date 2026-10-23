@@ -201,6 +201,11 @@ public final class MiscCommands {
     }
 
     private static String describe(KeybindingsManager.KeyStroke stroke) {
+        // 批 14（docs/25 T3）：pi formatKeys([]) ⇒ ""——空绑定动作
+        //（app.session.new/tree/fork/resume，pi defaultKeys: []）的展示形。
+        if (stroke == null) {
+            return "";
+        }
         var builder = new StringBuilder();
         if (stroke.ctrl()) builder.append("Ctrl+");
         if (stroke.alt()) builder.append("Alt+");

@@ -10,7 +10,6 @@ import com.pijava.coding.agent.core.session.InMemorySessionRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Phase 3 review fixes: session-arg resolution, model-pattern thinking,
@@ -28,12 +27,13 @@ class AgentSessionTest {
     Path sessionDir;
 
     @Test
-    void continueInFreshProcessFailsClearly() {
-        assertThatThrownBy(() -> AgentSession.create(
-            ArgsParser.parse(new String[] {"-c"}),
-            InMemorySessionRepository.create()))
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("No previous session");
+    void continueInFreshProcessSilentlyCreatesANewSession() {
+        // 批 14（docs/25 裁决③/B255）：-c 空臂按 pi 静默新建（:1800），不再报错。
+        try (var session = AgentSession.create(
+                ArgsParser.parse(new String[] {"-c"}),
+                InMemorySessionRepository.create())) {
+            assertThat(session.sessionId()).isNotBlank();
+        }
     }
 
     @Test
