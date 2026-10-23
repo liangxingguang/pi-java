@@ -24,14 +24,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public final class AuthProfileManager {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final Path STORE_PATH = Path.of(
-            System.getProperty("user.home"), ".pi-java", "auth-profiles.json");
 
     private final Path path;
 
     /** 使用默认 {@code ~/.pi-java/auth-profiles.json}。 */
     public AuthProfileManager() {
-        this(STORE_PATH);
+        this(defaultStorePath());
+    }
+
+    /** 默认存储路径——构造时现读 {@code user.home}（批 14：同 {@link FileCredentialStore} 的静态冻结修真）。 */
+    private static Path defaultStorePath() {
+        return Path.of(System.getProperty("user.home"), ".pi-java", "auth-profiles.json");
     }
 
     /** 使用给定文件（测试注入）。 */

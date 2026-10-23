@@ -30,14 +30,16 @@ public final class OAuthCredentialStore {
             false);
     private static final TypeReference<HashMap<String, OAuthCredential>> MAP_TYPE =
         new TypeReference<>() {};
-    private static final Path STORE_PATH = Path.of(
-            System.getProperty("user.home"), ".pi-java", "auth-oauth.json");
-
     private final Path path;
 
     /** 使用默认 {@code ~/.pi-java/auth-oauth.json}。 */
     public OAuthCredentialStore() {
-        this(STORE_PATH);
+        this(defaultStorePath());
+    }
+
+    /** 默认存储路径——构造时现读 {@code user.home}（批 14：同 {@link FileCredentialStore} 的静态冻结修真）。 */
+    private static Path defaultStorePath() {
+        return Path.of(System.getProperty("user.home"), ".pi-java", "auth-oauth.json");
     }
 
     /** 使用给定文件（测试注入）。 */

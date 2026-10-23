@@ -23,14 +23,23 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public final class FileCredentialStore implements CredentialStore {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final Path STORE_PATH = Path.of(
-            System.getProperty("user.home"), ".pi-java", "auth.json");
 
     private final Path path;
 
     /** Create a store backed by the default {@code ~/.pi-java/auth.json} file. */
     public FileCredentialStore() {
-        this(STORE_PATH);
+        this(defaultStorePath());
+    }
+
+    /**
+     * 默认存储路径——构造时现读 {@code user.home}（批 14 闭环修真：原
+     * {@code static final STORE_PATH} 在类初始化时冻结 home，测试套件里任一
+     * 临时 home 夹具先触发类初始化就会把全 JVM 的凭证路径钉死到临时目录，
+     * {@code ModelsJsonOverrideWireTest} 的套件性红〔批 13 误记为凭据内容问题〕
+     * 真因即此；生产 user.home 不变，行为无差）。
+     */
+    private static Path defaultStorePath() {
+        return Path.of(System.getProperty("user.home"), ".pi-java", "auth.json");
     }
 
     /**
