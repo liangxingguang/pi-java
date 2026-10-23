@@ -148,6 +148,10 @@ public final class PiWebServer {
                         "Failed to create agent session: " + e.getMessage()));
                     return;
                 }
+                // 批 16（T1d 裁决⑧）：扩展 flag 绑定诊断落 stderr（web 模式同旨）。
+                for (var diagnostic : session.startupDiagnostics()) {
+                    System.err.println(diagnostic.type() + ": " + diagnostic.message());
+                }
                 var dispatcher = new WebDispatcher(session, args, msg -> sendJson(conn, msg));
                 dispatcher.start();
                 conn.setAttachment(dispatcher);

@@ -130,6 +130,8 @@ public final class PiTuiApp {
         this.dispatcher = dispatcher;
         this.normalizer = new ScrollInputNormalizer(scrollConfig);
         this.session = mode.session();
+        // 批 16（T4d）：工具渲染器责任链随会话注入（MessageBubble 查表消费）。
+        com.pijava.tui.component.ToolRenderers.install(session.toolRenderers());
         this.sessionEvents = new SessionEventChannel(dispatcher, chatScreen::onSessionEvent);
         // 批 12（docs/23）：settings 消费键 live-read 注入——先于补全目录装配
         // （completer 重建带上 maxVisible 源）；现读 this.session ⇒ switchSession
@@ -246,6 +248,14 @@ public final class PiTuiApp {
         chatScreen.showWelcome(new WelcomeOverlay(session).text());
         showStartupChangelog();
         showStartupCrashNotice();
+        showStartupDiagnostics();
+    }
+
+    /** 批 16（T1d 裁决⑧）：扩展 flag 绑定诊断随启动提示展示（dim 系统文本）。 */
+    private void showStartupDiagnostics() {
+        for (var diagnostic : session.startupDiagnostics()) {
+            chatScreen.appendSystemText(diagnostic.type() + ": " + diagnostic.message());
+        }
     }
 
     /**
@@ -826,6 +836,8 @@ public final class PiTuiApp {
     /** Visible for testing (docs/16 ExitPathCloseTest 的替换臂驱动口)。 */
     void switchSession(AgentSession newSession) {
         this.session = newSession;
+        // 批 16（T4d）：渲染器注册表随会话切换重装。
+        com.pijava.tui.component.ToolRenderers.install(newSession.toolRenderers());
         mode.switchSession(newSession);
         // 批 12 T13：警告 guard 随会话重建（pi anthropicSubscriptionWarningShown
         // 每会话一次）。

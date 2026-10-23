@@ -92,14 +92,14 @@ public final class MessageBubble {
                 // "[Reasoning redacted]" placeholder — anthropic-messages.ts:641).
                 case ContentBlock.ThinkingContent(var text, _, _) -> dim(
                     TextLayout.split(TextLayout.escapeMarkup(text), false));
+                // 批 16（T4d）：渲染器责任链优先（扩展/MCP resolver），未命中 ⇒
+                // 原 ToolCallCard 路径不变。renderer 产已转义文本行（裁决⑦），
+                // 着色由本适配层补。
                 case ContentBlock.ToolUseContent(var id, var name, var arguments, _) ->
-                    new ToolCallCard(toolName(name), toolArgs(arguments), "running").lines();
+                    toolUseLines(name, arguments);
                 case ContentBlock.ToolResultContent(
                         var toolUseId, var toolName, var content, var isError) ->
-                    new ToolCallCard(
-                        toolName(toolName),
-                        truncate(TextLayout.escapeMarkup(joinText(content)), 500),
-                        isError ? "error" : "done").lines();
+                    toolResultLines(toolName, content, isError);
                 case ContentBlock.ImageContent(var mediaType, var data) ->
                     List.of(new LogicalLine(
                         "[image: " + mediaType + "]", 0, 0, false, Style.EMPTY.dim()));
@@ -117,6 +117,50 @@ public final class MessageBubble {
     private static List<LogicalLine> toolCallCard(String name, String arguments) {
         return new ToolCallCard(toolName(name),
             TextLayout.escapeMarkup(arguments), "running").lines();
+    }
+
+    /**
+     * 批 16（T4d）：ToolUse 臂——渲染器命中用其行（标题行加粗对位 pi 的
+     * {@code toolTitle} bold；args 部分 pi 是 muted，文本级接口不分段 ⇒ 整行 bold
+     * 首行＋dim 续行，窄差 D92 的着色粒度差），未命中回落 ToolCallCard。
+     * java 无 expanded 交互缝 ⇒ 恒折叠臂（D92 含此项）。
+     */
+    private static List<LogicalLine> toolUseLines(String name, Map<String, Object> arguments) {
+        var renderer = ToolRenderers.resolve(name);
+        if (renderer == null) {
+            return new ToolCallCard(toolName(name), toolArgs(arguments), "running").lines();
+        }
+        var rendered = renderer.renderCall(toolName(name),
+            arguments == null ? Map.of() : arguments, false);
+        return styledFlat(rendered, 0, Style.EMPTY.bold(), Style.EMPTY.dim());
+    }
+
+    /** 批 16（T4d）：ToolResult 臂——渲染器命中用其行（isError ⇒ 红，否则 dim，
+     *  对位 pi 的 error/toolOutput 色），未命中回落 ToolCallCard。 */
+    private static List<LogicalLine> toolResultLines(String toolName,
+            List<ContentBlock> content, boolean isError) {
+        var renderer = ToolRenderers.resolve(toolName);
+        if (renderer == null) {
+            return new ToolCallCard(
+                toolName(toolName),
+                truncate(TextLayout.escapeMarkup(joinText(content)), 500),
+                isError ? "error" : "done").lines();
+        }
+        var rendered = renderer.renderResult(toolName(toolName), joinText(content),
+            isError, false);
+        var style = isError ? Style.EMPTY.red() : Style.EMPTY.dim();
+        return styledFlat(rendered, TOOL_INDENT, style, style);
+    }
+
+    /** renderer 产行 → LogicalLine（首行 firstStyle、续行 restStyle，统一 indent）。 */
+    private static List<LogicalLine> styledFlat(List<String> lines, int indent,
+                                                Style firstStyle, Style restStyle) {
+        var out = new ArrayList<LogicalLine>(lines.size());
+        for (int i = 0; i < lines.size(); i++) {
+            out.add(new LogicalLine(lines.get(i), indent, indent, true,
+                (i == 0 ? firstStyle : restStyle)));
+        }
+        return out;
     }
     /** Tool card label: fall back to "tool" when the stream omits the name. */
     private static String toolName(String name) {
