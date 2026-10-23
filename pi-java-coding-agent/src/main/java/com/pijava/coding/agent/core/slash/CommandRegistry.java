@@ -30,6 +30,13 @@ public final class CommandRegistry {
     public static final String UI_FORK_SELECTOR = "@ui:fork-selector";
     public static final String UI_SETTINGS = "@ui:settings";
     public static final String UI_SCOPED_MODELS = "@ui:scoped-models";
+    /** 批 15（T7）：{@code /bug} 故障上报流；hint 由 TUI 从原始输入行切（裁决⑦）。 */
+    public static final String UI_BUG_REPORT = "@ui:bug-report";
+    /**
+     * 批 15（T2c/B256）：致命错误 marker <b>前缀</b>——载荷是去前缀的错误文案，
+     * TUI 打错误＋崩溃指引后 exit 1（pi {@code handleFatalRuntimeError}）。
+     */
+    public static final String UI_FATAL_EXIT_PREFIX = "@ui:fatal-exit:";
 
     private final ConcurrentMap<String, SlashCommand> commands = new ConcurrentHashMap<>();
 

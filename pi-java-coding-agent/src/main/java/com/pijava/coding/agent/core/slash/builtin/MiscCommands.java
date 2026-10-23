@@ -6,6 +6,8 @@ import java.util.concurrent.CompletionStage;
 import com.pijava.ai.auth.FileCredentialStore;
 import com.pijava.coding.agent.core.KeybindingsManager;
 import com.pijava.coding.agent.core.SessionShare;
+import com.pijava.coding.agent.core.crash.CrashLog;
+import com.pijava.coding.agent.core.crash.CrashRecord;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
 import com.pijava.coding.agent.export.HtmlExporter;
 import com.pijava.coding.agent.core.slash.SlashCommand;
@@ -61,7 +63,14 @@ public final class MiscCommands {
                     ctx.onSwitchSession().accept(imported);
                     return "Imported session from " + args.trim();
                 } catch (Exception e) {
-                    return "Import failed: " + e.getMessage();
+                    // 批 15（裁决⑤/B256）：pi 的 /import 失败＝fatal（interactive-mode.ts
+                    // :6607 → handleFatalRuntimeError）——记 crash ⇒ TUI 打错误＋崩溃指引
+                    // ⇒ exit 1。旧「Import failed 继续会话」臂与 pi 语义相悖。
+                    CrashLog.record(CrashRecord.Kind.FATAL_ERROR, e,
+                        ctx.session().sessionFile(), ctx.session().cwd(),
+                        CrashLog.crashLogPath());
+                    return CommandRegistry.UI_FATAL_EXIT_PREFIX
+                        + "Failed to import session: " + e.getMessage();
                 }
             }));
         registry.register(new SlashCommand() {
