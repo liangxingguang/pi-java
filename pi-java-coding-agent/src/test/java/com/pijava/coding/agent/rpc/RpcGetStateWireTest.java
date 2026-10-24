@@ -111,6 +111,48 @@ class RpcGetStateWireTest {
     }
 
     @Test
+    void modelLookupReadsAssemblySnapshotNotPerCallDisk() throws Exception {
+        // 批 20 评审回补（I-4）：models.json 在装配后损坏 ⇒ get_state 照走
+        //（pi 读内存运行时模型；逐调用重读盘会让 get_state 随文件损坏整个失败，
+        // 且每次调用付一份盘读＋全目录解析）。
+        var home = java.nio.file.Files.createDirectories(tmp.resolve("home"));
+        var agentDir = java.nio.file.Files.createDirectories(
+            home.resolve(".pi-java").resolve("agent"));
+        java.nio.file.Files.writeString(agentDir.resolve("models.json"), """
+            {"providers":{"customprov":{"baseUrl":"https://custom.example/v1",\
+            "api":"openai-completions",\
+            "models":[{"id":"cm-1","name":"Custom One"}]}}}
+            """);
+        String savedHome = System.getProperty("user.home");
+        System.setProperty("user.home", home.toString());
+        try {
+            var args = ArgsParser.parse(new String[] {
+                "--provider", "customprov", "--model", "cm-1",
+                "--session-dir", tmp.toString()});
+            var providers = ProviderRegistry.create();
+            providers.register(FauxProvider.sequence("faux-gs", List.of(textTurn("r")), 0));
+            try (var s = AgentSession.create(args, providers,
+                    new ToolContext(tmp.toString(), Map.of(),
+                        new DefaultShellExecutor(), new DefaultFileSystem()))) {
+                var out = new ByteArrayOutputStream();
+                var data = getState(s, out);
+                assertThat(data.get("model").get("id").asText()).isEqualTo("cm-1");
+                assertThat(data.get("model").get("api").asText())
+                    .isEqualTo("openai-completions");
+
+                // 装配后损坏 models.json：快照语义下 get_state 不受影响。
+                java.nio.file.Files.writeString(agentDir.resolve("models.json"),
+                    "{corrupted!!!");
+                out.reset();
+                var after = getState(s, out);
+                assertThat(after.get("model").get("id").asText()).isEqualTo("cm-1");
+            }
+        } finally {
+            System.setProperty("user.home", savedHome);
+        }
+    }
+
+    @Test
     void messageCountFollowsWorkingCopyNotTranscript() throws Exception {
         // B33：pi 取 agent.state.messages.length（工作副本），java 旧取转录条数。
         // 确定性分叉构造：excludeFromContext 的 BashExecution 条目进转录

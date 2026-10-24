@@ -382,7 +382,9 @@ public final class AgentSession implements AutoCloseable {
                                        ToolContext toolContext,
                                        SettingsManager settings,
                                        SessionStartInfo startInfo) {
-        return create(args, handle, providers, toolContext, settings, startInfo, null);
+        // 初始装配路：--name 写回开启（pi main.ts:709 一次性语义）。
+        return create(args, handle, providers, toolContext, settings, startInfo,
+            ExtensionUI.noop(), "print", null, true);
     }
 
     /** 批 20（B257）：带 {@code parentSessionId} 的形态（RPC new_session）。 */
@@ -393,8 +395,9 @@ public final class AgentSession implements AutoCloseable {
                                        SettingsManager settings,
                                        SessionStartInfo startInfo,
                                        String parentSessionId) {
+        // 评审回补（I-2）：createReplacing 专属链——替换会话不重放 --name。
         return create(args, handle, providers, toolContext, settings, startInfo,
-            ExtensionUI.noop(), "print", parentSessionId);
+            ExtensionUI.noop(), "print", parentSessionId, false);
     }
 
     /** 批 17（T7）：带扩展 UI/mode 的持久仓装配（TUI 构造期注入路径）。 */
@@ -405,10 +408,15 @@ public final class AgentSession implements AutoCloseable {
                                        SettingsManager settings,
                                        SessionStartInfo startInfo,
                                        ExtensionUI ui, String mode) {
-        return create(args, handle, providers, toolContext, settings, startInfo, ui, mode, null);
+        return create(args, handle, providers, toolContext, settings, startInfo, ui, mode,
+            null, true);
     }
 
-    /** 批 17（T7）＋批 20（B257 parentSessionId 末端）：全参装配。 */
+    /**
+     * 批 20 评审回补（I-2）：全参＋{@code applyInitialName} 末端——createReplacing
+     * 链（/new、RPC new_session）传 {@code false}：pi 的 {@code --name} 只在启动
+     * 会话解析后应用一次（main.ts:709-715），替换会话不重放。
+     */
     private static AgentSession create(Args args,
                                        PersistentSessionRepositories.RepositoryHandle handle,
                                        ProviderRegistry providers,
@@ -416,11 +424,11 @@ public final class AgentSession implements AutoCloseable {
                                        SettingsManager settings,
                                        SessionStartInfo startInfo,
                                        ExtensionUI ui, String mode,
-                                       String parentSessionId) {
+                                       String parentSessionId, boolean applyInitialName) {
         var session = assemble(args, settings, providers, toolContext,
             handle, handle.repository(), resumeLike(args), startInfo, ui, mode);
         session.persistentRepository = handle;
-        return SessionSetup.resolveSession(session, args, parentSessionId);
+        return SessionSetup.resolveSession(session, args, parentSessionId, applyInitialName);
     }
 
     /**
@@ -1403,8 +1411,10 @@ public final class AgentSession implements AutoCloseable {
             var command = services.slashCommands() == null ? null
                 : services.slashCommands().extensionCommand(prompt);
             if (command != null) {
-                executeExtensionCommand(command, prompt);
-                return SessionResult.handled();
+                // 批 20 评审回补（I-1）：命令体独立虚拟线程执行（pi 的 void 异步
+                // 语义）——同步 join 会死锁 RPC 读线程（ctx.ui 对话的应答线由同一
+                // 线程读）并冻结 TUI 渲染线程。
+                return SessionResult.handledBy(() -> executeExtensionCommand(command, prompt));
             }
         }
         // docs/15：pi :1991-2003 —— input 事件在 skill/模板展开**之前**
@@ -1414,8 +1424,12 @@ public final class AgentSession implements AutoCloseable {
         if (extensionFirer != null) {
             var outcome = extensionFirer.input(prompt,
                 config.source() == null ? "interactive" : config.source(),
-                config.streamingBehavior() == null ? null
-                    : config.streamingBehavior().wireName());
+                // 批 20 评审回补（I-3，pi agent-session.ts:1996 逐字）：
+                // streamingBehavior 仅流式中传（this.isStreaming ? … : undefined）——
+                // 与 queueUserInput 同一门；空闲时带 behavior 的 prompt（RPC 常见）
+                // 不再把 "steer" 泄给 input 处理器。
+                config.streamingBehavior() == null || !harness.isRunning(laneName())
+                    ? null : config.streamingBehavior().wireName());
             if (outcome.handled()) {
                 return SessionResult.handled();
             }

@@ -63,11 +63,24 @@ public final class InteractiveMode {
 
             @Override
             public void steer(String text) {
+                // 批 20 评审回补（I-5，pi flushCompactionQueue :4805-4818）：
+                // 重放时扩展命令即执行（缓冲后注册的边/input 钩改写出的斜杠文本）——
+                // 直送 queueUserInput 会吃 throwIfExtensionCommand。
+                if (isExtensionCommand(text)) {
+                    session.processPrompt(
+                        text, PromptConfig.defaults(), streamObserver, entryObserver);
+                    return;
+                }
                 session.steer(text);
             }
 
             @Override
             public void followUp(String text) {
+                if (isExtensionCommand(text)) {
+                    session.processPrompt(
+                        text, PromptConfig.defaults(), streamObserver, entryObserver);
+                    return;
+                }
                 session.followUp(text);
             }
 

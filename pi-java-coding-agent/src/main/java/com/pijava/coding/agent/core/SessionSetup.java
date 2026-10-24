@@ -129,6 +129,18 @@ final class SessionSetup {
     /** 批 20（B257）：带 {@code parentSessionId} 的形态（RPC {@code new_session}）。 */
     static AgentSession resolveSession(AgentSession session, Args args,
                                        String parentSessionId) {
+        return resolveSession(session, args, parentSessionId, true);
+    }
+
+    /**
+     * 批 20 评审回补（I-2）：{@code applyInitialName=false} 的形态——pi 的
+     * {@code --name} 只在<b>启动会话解析后</b>应用一次（main.ts:709-715），
+     * {@code runtime.newSession} 不重放：createReplacing 链（/new、RPC
+     * new_session）传 {@code false}，否则每个替换会话都被冠上启动名并多写一行
+     * session_info。
+     */
+    static AgentSession resolveSession(AgentSession session, Args args,
+                                       String parentSessionId, boolean applyInitialName) {
         AgentSession resolved;
         if (args.noSession()) {
             resolved = session;
@@ -138,7 +150,9 @@ final class SessionSetup {
             resolved = SessionPersistence.resolveInMemory(session, args);
         }
         // 批 20（B32，pi main.ts:709-715）：--name 写 session_info（解析后无条件臂）。
-        SessionPersistence.applyInitialName(resolved, args);
+        if (applyInitialName) {
+            SessionPersistence.applyInitialName(resolved, args);
+        }
         return resolved;
     }
 

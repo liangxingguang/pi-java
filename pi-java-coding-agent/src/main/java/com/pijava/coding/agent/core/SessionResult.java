@@ -24,16 +24,27 @@ public final class SessionResult {
     private final CompletableFuture<List<Entry>> entries;
     private final CompletableFuture<RunStatus> status;
     private final String disposition;
+    private final CompletableFuture<Void> commandCompletion;
 
     SessionResult(
             Stream<StreamEvent> stream,
             CompletableFuture<List<Entry>> entries,
             CompletableFuture<RunStatus> status,
             String disposition) {
+        this(stream, entries, status, disposition, null);
+    }
+
+    SessionResult(
+            Stream<StreamEvent> stream,
+            CompletableFuture<List<Entry>> entries,
+            CompletableFuture<RunStatus> status,
+            String disposition,
+            CompletableFuture<Void> commandCompletion) {
         this.stream = stream;
         this.entries = entries;
         this.status = status;
         this.disposition = disposition;
+        this.commandCompletion = commandCompletion;
     }
 
     /** Incremental events (single consumption, like any Java Stream). */
@@ -84,5 +95,39 @@ public final class SessionResult {
             CompletableFuture.completedFuture(List.of()),
             CompletableFuture.completedFuture(new RunStatus(0, "handled")),
             "handled");
+    }
+
+    /**
+     * 批 20 评审回补（I-1）：扩展命令臂的 handled——pi {@code prompt()} 是
+     * {@code void} 异步语义（rpc-mode.ts:398 不 await 读线程），命令体在<b>独立
+     * 虚拟线程</b>执行：同步 join 会让 RPC 读线程死等「只有自己能读」的
+     * {@code extension_ui_response}（ctx.ui 对话 5 分钟超时），TUI 渲染线程亦被
+     * 慢命令冻住。{@link #commandCompletion()} 在命令体结束时正常完成
+     * （错误已路由 extension_error，不向外抛）——RPC 层借此把响应推迟到
+     * 命令完成之后（pi preflightResult 时序对位）。
+     */
+    public static SessionResult handledBy(Runnable commandBody) {
+        var completion = new CompletableFuture<Void>();
+        Thread.startVirtualThread(() -> {
+            try {
+                commandBody.run();
+                completion.complete(null);
+            } catch (Throwable t) {
+                completion.completeExceptionally(t);
+            }
+        });
+        return new SessionResult(
+            Stream.empty(),
+            CompletableFuture.completedFuture(List.of()),
+            CompletableFuture.completedFuture(new RunStatus(0, "handled")),
+            "handled", completion);
+    }
+
+    /**
+     * 扩展命令执行体的完成信号（仅 {@link #handledBy} 产物非 null）——
+     * pi {@code preflightResult} 在命令完成后才发射的时序对位。
+     */
+    public CompletableFuture<Void> commandCompletion() {
+        return commandCompletion;
     }
 }

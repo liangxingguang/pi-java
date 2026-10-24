@@ -147,6 +147,7 @@ class InteractiveExtensionCommandRoutingTest {
             var second = mode.submit("/hello world");
 
             assertThat(second.disposition()).isEqualTo("handled");
+            second.commandCompletion().join();
             assertThat(calls).containsExactly("world");
             assertThat(s.clearQueue().steering())
                 .as("扩展命令不入 steer 队列").isEmpty();
@@ -205,9 +206,50 @@ class InteractiveExtensionCommandRoutingTest {
             var result = mode.submit("/hello world");
 
             assertThat(result.disposition()).isEqualTo("handled");
+            result.commandCompletion().join();
             assertThat(calls).containsExactly("world");
             compactThread.join(Duration.ofSeconds(10).toMillis());
             assertThat(compactThread.isAlive()).isFalse();
+        }
+    }
+
+    @Test
+    void compactionReplayExecutesLateRegisteredExtensionCommand() throws Exception {
+        // 批 20 评审回补（I-5，pi flushCompactionQueue :4805-4818）：缓冲时未注册
+        // 的斜杠文本，重放时已注册 ⇒ 即执行（不吃 throwIfExtensionCommand）。
+        try (var s = session("faux-ier",
+                List.of(textTurn("summary"), textTurn("prefix"),
+                    textTurn("after"), textTurn("late-cmd-reply")), 200)) {
+            s.harness().seedTranscript(AgentHarness.DEFAULT_LANE, List.of(
+                messageEntry("e1", null, true, "first"),
+                messageEntry("e2", "e1", false, "second"),
+                messageEntry("e3", "e2", true, "third"),
+                messageEntry("e4", "e3", false, "fourth")));
+            var calls = new CopyOnWriteArrayList<String>();
+            var mode = new InteractiveMode(s);
+            mode.setObservers(e -> { }, e -> { });
+
+            var compactThread = Thread.ofPlatform()
+                .unstarted(() -> s.compact(new CompactionSettings(true, 10, 1)));
+            compactThread.start();
+            var deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+            while (System.nanoTime() < deadline && !s.isCompacting()) {
+                Thread.sleep(2);
+            }
+            assertThat(s.isCompacting()).isTrue();
+
+            mode.submit("/late arg");   // 未注册 ⇒ 缓冲为普通文本（steer 臂）
+            // 压缩收尾前注册：重放时应即执行。
+            s.services().slashCommands().extensionView().register(probe("late", calls));
+
+            compactThread.join(Duration.ofSeconds(10).toMillis());
+            assertThat(compactThread.isAlive()).isFalse();
+            var waitDeadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+            while (System.nanoTime() < waitDeadline && calls.isEmpty()) {
+                Thread.sleep(10);
+            }
+            assertThat(calls).as("pi :4805-4818——重放时扩展命令即执行")
+                .containsExactly("arg");
         }
     }
 

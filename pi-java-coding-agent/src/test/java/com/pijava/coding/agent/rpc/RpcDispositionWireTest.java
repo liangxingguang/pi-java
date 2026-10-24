@@ -87,7 +87,7 @@ class RpcDispositionWireTest {
     }
 
     @Test
-    void promptWithExtensionCommandRespondsHandled() {
+    void promptWithExtensionCommandRespondsHandled() throws Exception {
         try (var s = session("faux-disp", List.of(textTurn("r")), 0)) {
             var calls = new CopyOnWriteArrayList<String>();
             s.services().slashCommands().extensionView().register(probe("hello", calls));
@@ -97,6 +97,12 @@ class RpcDispositionWireTest {
 
             dispatcher.handleLine("{\"id\":\"1\",\"type\":\"prompt\",\"message\":\"/hello world\"}");
 
+            // 批 20 评审回补（I-1）：响应在命令完成后异步写——轮询到线。
+            var deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+            while (System.nanoTime() < deadline
+                    && !out.toString().contains("\"command\":\"prompt\"")) {
+                Thread.sleep(10);
+            }
             assertThat(readLine(out, "prompt")).contains("\"disposition\":\"handled\"");
             assertThat(calls).containsExactly("world");
         }
@@ -182,6 +188,50 @@ class RpcDispositionWireTest {
                 .contains("\"success\":false")
                 .contains("Extension command \\\"/hello\\\" cannot be queued."
                     + " Use prompt() or execute the command when not streaming.");
+        }
+    }
+
+    @Test
+    void extensionCommandExecutionDoesNotBlockTheReaderThread() throws Exception {
+        // 批 20 评审回补（I-1，pi rpc-mode.ts:398 的 void prompt 对位）：
+        // 命令体在独立虚拟线程执行——读线程继续照护后续命令；prompt 响应
+        // 在命令完成后才写（preflightResult 时序）。
+        try (var s = session("faux-disp", List.of(textTurn("r")), 0)) {
+            var gate = new java.util.concurrent.CountDownLatch(1);
+            s.services().slashCommands().extensionView().register(new SlashCommand() {
+                @Override public String name() { return "gate"; }
+                @Override public String description() { return "gate probe"; }
+                @Override public String argumentHint() { return ""; }
+                @Override public CompletionStage<String> execute(String args, SlashContext context) {
+                    return CompletableFuture.supplyAsync(() -> {
+                        try {
+                            gate.await(5, java.util.concurrent.TimeUnit.SECONDS);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                        return "ok";
+                    });
+                }
+            });
+            var out = new ByteArrayOutputStream();
+            var dispatcher = new RpcDispatcher(s, new JsonlWriter(out),
+                ArgsParser.parse(new String[] {"--session-dir", tmp.toString()}));
+
+            dispatcher.handleLine("{\"id\":\"1\",\"type\":\"prompt\",\"message\":\"/gate\"}");
+            // 命令还卡在 gate 上：后续命令照常照护（同步 join 会死在这里）。
+            dispatcher.handleLine("{\"id\":\"2\",\"type\":\"get_commands\"}");
+            var before = out.toString();
+            assertThat(before).contains("\"command\":\"get_commands\",\"success\":true");
+            assertThat(before).doesNotContain("\"command\":\"prompt\"")
+                .as("prompt 响应须等命令完成（pi preflightResult 时序）");
+
+            gate.countDown();
+            var deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+            while (System.nanoTime() < deadline
+                    && !out.toString().contains("\"command\":\"prompt\"")) {
+                Thread.sleep(10);
+            }
+            assertThat(readLine(out, "prompt")).contains("\"disposition\":\"handled\"");
         }
     }
 

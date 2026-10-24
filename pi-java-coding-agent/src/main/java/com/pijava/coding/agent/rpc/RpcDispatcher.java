@@ -404,8 +404,17 @@ public final class RpcDispatcher {
                 // 异步 run：事件经订阅推送；AgentSettled 复位。
                 streaming = true;
             }
-            out.write(RpcResponse.ok(prompt.id(), "prompt",
-                new RpcPayloads.DispositionData(result.disposition())));
+            if (result.commandCompletion() != null) {
+                // 批 20 评审回补（I-1，pi rpc-mode.ts:398-412 时序对位）：void
+                // prompt——响应在命令执行完成后才写（preflightResult 时序），
+                // 读线程不阻塞（后续命令照读照护）。
+                result.commandCompletion().thenRun(() -> writeQuietly(
+                    RpcResponse.ok(prompt.id(), "prompt",
+                        new RpcPayloads.DispositionData("handled"))));
+            } else {
+                out.write(RpcResponse.ok(prompt.id(), "prompt",
+                    new RpcPayloads.DispositionData(result.disposition())));
+            }
         } catch (IllegalStateException e) {
             // 压缩中 / 运行中未指定 streamingBehavior（pi 在调用线程同步抛）。
             out.write(RpcResponse.fail(prompt.id(), "prompt", e.getMessage()));
@@ -424,6 +433,15 @@ public final class RpcDispatcher {
         return images.stream()
             .map(i -> new com.pijava.agent.harness.PromptImage(i.mediaType(), i.data()))
             .toList();
+    }
+
+    /** 批 20 评审回补（I-1）：后台线程写出（与 emitEvent 同一容错形状）。 */
+    private void writeQuietly(RpcResponse response) {
+        try {
+            out.write(response);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     /** 批 17（T3）：fire-and-forget 写出（pi notify/setStatus/setTitle/set_editor_text/setWidget 臂——不等应答）。 */
@@ -509,7 +527,11 @@ public final class RpcDispatcher {
         //（pi undefined 同形；旧 "" 修真）。
         RpcModel wireModel = null;
         if (model != null) {
-            var info = com.pijava.ai.provider.ModelsJsonConfig.allModels().find(model)
+            // 批 20 评审回补（I-4）：读会话**装配期**目录快照（pi 内存注册表对位）
+            // ——ModelsJsonConfig.allModels() 逐调用重读重解析 models.json：每次
+            // get_state 一份盘读＋全目录解析，且文件损坏会让 get_state 整个失败
+            // （pi 读内存运行时模型，无此失败面；真 home 继承亦随快照收敛到装配点）。
+            var info = session.modelCatalog().find(model)
                 .orElseGet(() -> com.pijava.ai.catalog.ModelInfo.minimal(model));
             wireModel = RpcModel.of(info, providerConfigOf(model.provider()), JSON);
         }

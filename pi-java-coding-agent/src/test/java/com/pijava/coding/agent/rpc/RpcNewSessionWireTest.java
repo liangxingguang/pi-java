@@ -143,6 +143,26 @@ class RpcNewSessionWireTest {
     }
 
     @Test
+    void replacementSessionDoesNotInheritStartupName() throws Exception {
+        // 批 20 评审回补（I-2，pi main.ts:709-715 对位）：--name 只在启动会话
+        // 解析后应用一次——new_session 的替换会话不冠名、不多写 session_info。
+        var args = ArgsParser.parse(new String[] {
+            "--session-dir", tmp.toString(), "--name", "startup-name"});
+        // createWeb＝公共持久仓入口（jsonl 自 args.sessionDir；stored 名需持久存储，
+        // in-memory 无 storage 是 D122 边）。
+        try (var s = AgentSession.createWeb(args)) {
+            assertThat(s.storedSessionName()).isEqualTo("startup-name");
+            var out = new ByteArrayOutputStream();
+            var d = dispatcher(s, out);
+            d.handleLine("{\"id\":\"1\",\"type\":\"new_session\"}");
+
+            assertThat(responseLine(out)).contains("\"cancelled\":false");
+            assertThat(d.currentSession().storedSessionName())
+                .as("替换会话不重放 --name（pi runtime.newSession 同形）").isNull();
+        }
+    }
+
+    @Test
     void parentSessionLandsInNewSessionHeader() throws Exception {
         try (var s = session()) {
             var out = new ByteArrayOutputStream();

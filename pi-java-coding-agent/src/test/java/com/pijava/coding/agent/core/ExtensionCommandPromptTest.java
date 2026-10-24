@@ -158,6 +158,8 @@ class ExtensionCommandPromptTest {
             var result = s.processPrompt("/hello world", PromptConfig.defaults());
 
             assertThat(result.disposition()).isEqualTo("handled");
+            // 批 20 评审回补（I-1）：命令体独立虚拟线程——断言前等完成信号。
+            result.commandCompletion().join();
             assertThat(probe.calls).containsExactly("world");
             assertThat(s.harness().isRunning(s.laneName()))
                 .as("handled ⇒ 不起 run").isFalse();
@@ -171,7 +173,8 @@ class ExtensionCommandPromptTest {
             s.services().slashCommands().extensionView().register(probe);
 
             // pi :2118-2120 逐字：spaceIndex + 1 起切——前导空格保留。
-            s.processPrompt("/hello  world", PromptConfig.defaults());
+            s.processPrompt("/hello  world", PromptConfig.defaults())
+                .commandCompletion().join();
 
             assertThat(probe.calls).containsExactly(" world");
         }
@@ -209,6 +212,7 @@ class ExtensionCommandPromptTest {
 
                 // pi :2131-2139 逐字：出错也是 handled。
                 assertThat(result.disposition()).isEqualTo("handled");
+                result.commandCompletion().join();
                 assertThat(events).anySatisfy(e -> {
                     assertThat(e).isInstanceOf(AgentSessionEvent.ExtensionError.class);
                     var err = ((AgentSessionEvent.ExtensionError) e).error();
@@ -268,6 +272,19 @@ class ExtensionCommandPromptTest {
         try (var s = session("--session-id", "ec10")) {
             s.steer("via rpc", null, "rpc");
             assertThat(EVENTS).contains("input:via rpc:rpc:null");
+        }
+    }
+
+    @Test
+    void idlePromptWithStreamingBehaviorDoesNotLeakItToInputEvent() {
+        // 批 20 评审回补（I-3，pi agent-session.ts:1996 逐字）：streamingBehavior
+        // 仅流式中传——空闲 prompt 带 behavior（RPC 常见形）不给 input 处理器。
+        try (var s = session("--session-id", "ec12")) {
+            var result = s.processPrompt("idle prompt",
+                PromptConfig.rpc(StreamingBehavior.STEER));
+            assertThat(result.disposition()).isEqualTo("started");
+            assertThat(EVENTS).contains("input:idle prompt:rpc:null");
+            result.status();
         }
     }
 
