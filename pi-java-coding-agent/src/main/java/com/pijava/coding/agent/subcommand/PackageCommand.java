@@ -373,7 +373,8 @@ public final class PackageCommand {
                     continue;
                 }
                 var value = index + 1 < rest.length ? rest[index + 1] : null;
-                if (value == null || value.startsWith("-")) {
+                // pi `!value ||` 含空串（:505——评审 M-2：shell 空展开不得当源）。
+                if (value == null || value.isEmpty() || value.startsWith("-")) {
                     missingOptionValue = missingOptionValue != null ? missingOptionValue : arg;
                 } else if (extensionFlagSource != null) {
                     conflictingOptions = conflictingOptions != null ? conflictingOptions

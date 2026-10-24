@@ -310,4 +310,22 @@ class ConfigSelectorScreenTest {
         assertThat(settings.global().extensions)
             .containsExactly("+" + Path.of("extensions", "my-ext.jar").toString());
     }
+
+    @Test
+    void toggleKeepsCursorOnToggledRow() {
+        // 评审 I-2：pi updateItem 原地变异不动 selectedIndex——toggle 后光标
+        // 留在被拨行（不得吸附回首项）。
+        var c = component(WriteScope.GLOBAL, true);
+        while (c.model().selectedItem() == null
+            || !c.model().selectedItem().displayName().equals("my-ext.jar")) {
+            c.onKeyEvent(KeyEvent.ofKey(KeyCode.DOWN));
+        }
+        var indexBefore = c.model().selectedIndex();
+
+        c.onKeyEvent(KeyEvent.ofChar(' '));
+
+        assertThat(c.model().selectedIndex()).isEqualTo(indexBefore);
+        assertThat(c.model().selectedItem().displayName()).isEqualTo("my-ext.jar");
+        assertThat(c.model().selectedItem().enabled()).isTrue();
+    }
 }

@@ -46,17 +46,24 @@ class ConfigCommandTuiTest {
     private PrintStream originalOut;
     private PrintStream originalErr;
 
-    /** 捕获形 TUI provider。 */
+    /** 捕获形 TUI provider（{@code exitCode} 透传测评审 I-1）。 */
     private record CapturingTui(AtomicReference<ScopedResolvedPaths> paths,
             AtomicReference<Boolean> projectModeAvailable,
-            AtomicReference<ConfigSelectorProvider.WriteScope> writeScope)
+            AtomicReference<ConfigSelectorProvider.WriteScope> writeScope, int exitCode)
         implements ConfigSelectorProvider {
         @Override
-        public void selectConfig(ScopedResolvedPaths resolvedPaths, SettingsManager settings,
+        public int selectConfig(ScopedResolvedPaths resolvedPaths, SettingsManager settings,
                 Path cwd, Path agentDir, WriteScope scope, boolean projectMode) {
             paths.set(resolvedPaths);
             projectModeAvailable.set(projectMode);
             writeScope.set(scope);
+            return exitCode;
+        }
+
+        static CapturingTui ok(AtomicReference<ScopedResolvedPaths> paths,
+                AtomicReference<Boolean> available,
+                AtomicReference<ConfigSelectorProvider.WriteScope> scope) {
+            return new CapturingTui(paths, available, scope, 0);
         }
     }
 
@@ -100,7 +107,7 @@ class ConfigCommandTuiTest {
         var scope = new AtomicReference<ConfigSelectorProvider.WriteScope>();
 
         var code = ConfigCommand.run(new String[0],
-            env(new CapturingTui(paths, available, scope)));
+            env(CapturingTui.ok(paths, available, scope)));
 
         assertThat(code).isZero();
         assertThat(available.get()).isTrue();
@@ -121,7 +128,7 @@ class ConfigCommandTuiTest {
         var scope = new AtomicReference<ConfigSelectorProvider.WriteScope>();
 
         var code = ConfigCommand.run(new String[0],
-            env(new CapturingTui(paths, available, scope)));
+            env(CapturingTui.ok(paths, available, scope)));
 
         assertThat(code).isZero();
         assertThat(available.get()).isFalse();
@@ -131,7 +138,7 @@ class ConfigCommandTuiTest {
     @Test
     void localFlagUntrustedErrorsVerbatim() {
         var paths = new AtomicReference<ScopedResolvedPaths>();
-        var tui = new CapturingTui(paths, new AtomicReference<>(), new AtomicReference<>());
+        var tui = new CapturingTui(paths, new AtomicReference<>(), new AtomicReference<>(), 0);
 
         var code = ConfigCommand.run(new String[] {"-l"}, env(tui));
 
@@ -147,7 +154,7 @@ class ConfigCommandTuiTest {
         var scope = new AtomicReference<ConfigSelectorProvider.WriteScope>();
 
         var code = ConfigCommand.run(new String[] {"-l", "-a"},
-            env(new CapturingTui(new AtomicReference<>(), available, scope)));
+            env(CapturingTui.ok(new AtomicReference<>(), available, scope)));
 
         assertThat(code).isZero();
         assertThat(scope.get()).isEqualTo(ConfigSelectorProvider.WriteScope.PROJECT);
@@ -161,6 +168,16 @@ class ConfigCommandTuiTest {
         assertThat(code).isEqualTo(1);
         assertThat(err.toString(StandardCharsets.UTF_8))
             .contains("error: config requires pi-java-tui on the classpath");
+    }
+
+    @Test
+    void tuiFailureExitCodePropagates() {
+        // 评审 I-1：无终端等 TUI 失败不得落 0（runner 返 1 ⇒ 命令返 1）。
+        var code = ConfigCommand.run(new String[0],
+            env(new CapturingTui(new AtomicReference<>(), new AtomicReference<>(),
+                new AtomicReference<>(), 1)));
+
+        assertThat(code).isEqualTo(1);
     }
 
     @Test

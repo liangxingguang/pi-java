@@ -289,13 +289,16 @@ public final class ConfigSelectorModel {
             selectFirstItem();
             return;
         }
-        var lowerQuery = query.toLowerCase();
+        // 评审 M-3：Locale.ROOT——tr-TR 等默认 locale 的 I/ı 折叠会偏 pi 的
+        // JS toLowerCase（locale-insensitive）。
+        var lowerQuery = query.toLowerCase(java.util.Locale.ROOT);
         Set<ResourceItem> matchingItems = new HashSet<>();
         for (var entry : flatItems) {
             if (entry instanceof FlatEntry.ItemRow row
-                && (row.item().displayName().toLowerCase().contains(lowerQuery)
-                    || row.item().resourceType().id().toLowerCase().contains(lowerQuery)
-                    || row.item().path().toLowerCase().contains(lowerQuery))) {
+                && (row.item().displayName().toLowerCase(java.util.Locale.ROOT).contains(lowerQuery)
+                    || row.item().resourceType().id().toLowerCase(java.util.Locale.ROOT)
+                        .contains(lowerQuery)
+                    || row.item().path().toLowerCase(java.util.Locale.ROOT).contains(lowerQuery))) {
                 matchingItems.add(row.item());
             }
         }
@@ -352,11 +355,16 @@ public final class ConfigSelectorModel {
         }
     }
 
-    /** 就地更新后重建 flat/filtered（保查询）。 */
+    /** 就地更新后重建 flat/filtered（保查询）——评审 I-2：pi 的 updateItem
+     *  原地变异且不动 selectedIndex（config-selector.ts:382-394）；java record
+     *  不可变 ⇒ 重建后恢复原选中位（越界夹紧），光标不吸附回首项。 */
     private void rebuildFlat() {
-        var query = lastQuery;
+        var selection = selectedIndex;
         buildFlatList();
-        filterItems(query);
+        filterItems(lastQuery);
+        if (selection >= 0 && selection < filteredItems.size()) {
+            selectedIndex = selection;
+        }
     }
 
     private String lastQuery = "";

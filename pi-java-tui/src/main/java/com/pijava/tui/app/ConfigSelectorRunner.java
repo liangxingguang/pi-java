@@ -27,14 +27,15 @@ public final class ConfigSelectorRunner {
 
     private ConfigSelectorRunner() {}
 
-    /** 全屏跑资源配置选择器直到关闭。 */
-    public static void select(ScopedResolvedPaths resolvedPaths, SettingsManager settings,
+    /** 全屏跑资源配置选择器直到关闭；返回进程退出码（评审 I-1：无终端 ⇒ 1，
+     *  与 PiTuiLauncher:31-35/SessionSelectorRunner 先例同向）。 */
+    public static int select(ScopedResolvedPaths resolvedPaths, SettingsManager settings,
             Path cwd, Path agentDir, WriteScope writeScope, boolean projectModeAvailable) {
         if (System.console() == null && !Boolean.getBoolean("pi-java.dev.forceTui")) {
             // 窄差 D70 同族（会话选择器先例）。
             System.err.println("error: config requires a real terminal "
                 + "(run from Windows Terminal / cmd / PowerShell)");
-            return;
+            return 1;
         }
         dev.tamboui.toolkit.app.ToolkitRunner runner;
         try {
@@ -74,5 +75,6 @@ public final class ConfigSelectorRunner {
         } catch (Exception e) {
             throw new IllegalStateException("Config selector failed: " + e.getMessage(), e);
         }
+        return 0;
     }
 }

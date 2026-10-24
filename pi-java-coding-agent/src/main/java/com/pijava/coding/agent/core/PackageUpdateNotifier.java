@@ -30,16 +30,17 @@ public final class PackageUpdateNotifier {
             return;
         }
         Thread.startVirtualThread(() -> {
-            final List<PackageUpdate> updates;
+            // 评审 I-3：onUpdates（UI 编排回调）也在吞错臂内——会话已关时
+            // dispatcher 抛错不能裸奔到虚拟线程（alt 屏 TUI 在飞会污屏）。
             try {
-                updates = check.get();
+                var updates = check.get();
+                if (updates == null || updates.isEmpty()) {
+                    return;
+                }
+                onUpdates.accept(updates);
             } catch (RuntimeException e) {
-                return;   // pi :1273-1278 catch ⇒ []
+                // pi :1273-1278 catch ⇒ []（异常全静默）
             }
-            if (updates == null || updates.isEmpty()) {
-                return;
-            }
-            onUpdates.accept(updates);
         });
     }
 

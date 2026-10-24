@@ -59,6 +59,22 @@ class PackageUpdateNoticeTest {
     }
 
     @Test
+    void callbackExceptionsAreSwallowedToo() throws InterruptedException {
+        // 评审 I-3：UI 编排回调抛错（会话已关等）同样静默——不裸奔到虚拟线程。
+        var updates = List.of(
+            new PackageUpdate("npm:foo", "foo", PackageUpdate.Type.NPM, SourceScope.USER));
+        var ran = new CountDownLatch(1);
+
+        PackageUpdateNotifier.checkAsync(() -> updates, list -> {
+            ran.countDown();
+            throw new IllegalStateException("dispatcher closed");
+        });
+
+        // 回调确实跑过；虚拟线程无未捕获异常（不崩测试 JVM 的 uncaught 面）。
+        assertThat(ran.await(10, TimeUnit.SECONDS)).isTrue();
+    }
+
+    @Test
     void exceptionsAreSwallowed() throws InterruptedException {
         // pi :1273-1278 吞错对位。
         var latch = new CountDownLatch(1);

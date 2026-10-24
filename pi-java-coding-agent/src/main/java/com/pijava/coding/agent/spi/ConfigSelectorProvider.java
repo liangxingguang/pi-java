@@ -32,8 +32,9 @@ public interface ConfigSelectorProvider {
      * @param agentDir             全局 agent 目录
      * @param writeScope           初始写作用域（{@code config -l} ⇒ PROJECT）
      * @param projectModeAvailable 未信任 ⇒ false（tab 切换门关闭）
+     * @return 进程退出码（无终端等失败 ⇒ 非 0——评审 I-1：错误路径不得落 0）
      */
-    void selectConfig(ScopedResolvedPaths resolvedPaths, SettingsManager settings,
-                      Path cwd, Path agentDir, WriteScope writeScope,
-                      boolean projectModeAvailable);
+    int selectConfig(ScopedResolvedPaths resolvedPaths, SettingsManager settings,
+                     Path cwd, Path agentDir, WriteScope writeScope,
+                     boolean projectModeAvailable);
 }

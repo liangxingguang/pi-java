@@ -140,12 +140,13 @@ public final class ConfigCommand {
             ? PackageManagers.create(env.cwd(), env.agentDir(), manager, env.homeDir())
                 .resolve(null)
             : globalResolved;
-        env.tui().selectConfig(new ScopedResolvedPaths(globalResolved, projectResolved),
+        // pi :887 process.exit(0) 对位（Main 统一 System.exit）；评审 I-1：
+        // TUI 失败（无终端等）的退出码由 provider 上报，不恒 0。
+        return env.tui().selectConfig(new ScopedResolvedPaths(globalResolved, projectResolved),
             manager, env.cwd(), env.agentDir(),
             local ? ConfigSelectorProvider.WriteScope.PROJECT
                 : ConfigSelectorProvider.WriteScope.GLOBAL,
             manager.isProjectTrusted());
-        return 0;   // pi :887 process.exit(0) 对位（Main 统一 System.exit）
     }
 
     // ── enable/disable 便利臂（java 独有；pi pattern 代数写回）────

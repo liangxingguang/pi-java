@@ -63,6 +63,9 @@ class PackageCommandParseTest {
         assertThat(missing.missingOptionValue()).isEqualTo("--extension");
         var dashValue = parse("update", "--extension", "--self");
         assertThat(dashValue.missingOptionValue()).isEqualTo("--extension");
+        // 评审 M-2：空串也是 missing（pi `!value` 对位）
+        var emptyValue = parse("update", "--extension", "");
+        assertThat(emptyValue.missingOptionValue()).isEqualTo("--extension");
     }
 
     @Test

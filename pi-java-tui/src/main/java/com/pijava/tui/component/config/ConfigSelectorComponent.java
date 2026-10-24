@@ -41,9 +41,6 @@ public final class ConfigSelectorComponent {
     private final boolean projectModeAvailable;
     private int maxVisible;
 
-    private Runnable onClose = () -> {};
-    private Runnable onExit = () -> {};
-    private Runnable onToggle = () -> {};
     private boolean done;
 
     public ConfigSelectorComponent(ConfigSelectorModel model,
@@ -60,13 +57,9 @@ public final class ConfigSelectorComponent {
         this.maxVisible = Math.max(5, terminalHeight - CHROME_LINES);
     }
 
-    /** pi 构造注入回调（:889-900）。 */
-    public void setCallbacks(Runnable close, Runnable exit, Runnable toggle) {
-        this.onClose = close;
-        this.onExit = exit;
-        this.onToggle = toggle;
-    }
-
+    /** pi 的 onClose/onExit/onToggle 回调（:889-900 构造注入）不移植——评审
+     *  M-1：runner 连续渲染（每 tick render）使 requestRender 无谓，esc/ctrl+c
+     *  结局由 {@link #isDone()} 承载（批 14 选择器同构）。 */
     public boolean isDone() {
         return done;
     }
@@ -100,13 +93,11 @@ public final class ConfigSelectorComponent {
             return true;
         }
         if (event.isCancel()) {
-            onClose.run();
-            done = true;
+            done = true;   // esc 关闭（pi onCancel ⇒ ui.stop()）
             return true;
         }
         if (event.isCtrlC()) {
-            onExit.run();
-            done = true;
+            done = true;   // ctrl+c 退出（pi onExit ⇒ process.exit(0)，同结局）
             return true;
         }
         if (event.isKey(KeyCode.TAB) && !event.hasShift()) {
@@ -149,7 +140,7 @@ public final class ConfigSelectorComponent {
         }
         if (newEnabled != null) {
             model.updateItem(item, newEnabled);
-            onToggle.run();
+            // pi onToggle ⇒ requestRender——runner 每 tick 渲染，无谓（M-1）。
         }
     }
 

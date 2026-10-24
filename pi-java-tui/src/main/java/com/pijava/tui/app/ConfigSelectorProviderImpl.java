@@ -13,9 +13,9 @@ import com.pijava.coding.agent.spi.ScopedResolvedPaths;
 public final class ConfigSelectorProviderImpl implements ConfigSelectorProvider {
 
     @Override
-    public void selectConfig(ScopedResolvedPaths resolvedPaths, SettingsManager settings,
+    public int selectConfig(ScopedResolvedPaths resolvedPaths, SettingsManager settings,
             Path cwd, Path agentDir, WriteScope writeScope, boolean projectModeAvailable) {
-        ConfigSelectorRunner.select(resolvedPaths, settings, cwd, agentDir, writeScope,
+        return ConfigSelectorRunner.select(resolvedPaths, settings, cwd, agentDir, writeScope,
             projectModeAvailable);
     }
 }
