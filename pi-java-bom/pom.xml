@@ -26,6 +26,9 @@
         <version.snakeyaml>2.4</version.snakeyaml>
         <version.jgit>7.6.0.202603022253-r</version.jgit>
         <version.java-websocket>1.5.7</version.java-websocket>
+        <!-- 批 18 裁决⑥⑦：npm range 语义（^/~/x-range/||/hyphen）＋ .tgz 解包。 -->
+        <version.semver4j>3.1.0</version.semver4j>
+        <version.commons-compress>1.27.1</version.commons-compress>
 
         <version.anthropic-java>2.66.0</version.anthropic-java>
         <version.openai-java>4.42.0</version.openai-java>
@@ -196,6 +199,18 @@
                 <version>${version.java-websocket}</version>
             </dependency>
 
+            <!-- semver4j（批 18 裁决⑥：npm range 语义，零传递依赖） -->
+            <dependency>
+                <groupId>com.vdurmont</groupId>
+                <artifactId>semver4j</artifactId>
+                <version>${version.semver4j}</version>
+            </dependency>
+            <!-- commons-compress（批 18 裁决⑦：npm tarball 解包） -->
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-compress</artifactId>
+                <version>${version.commons-compress}</version>
+            </dependency>
             <!-- JGit（P6-6 技能目录 .gitignore 语义；排除对象库/传输层依赖） -->
             <dependency>
                 <groupId>org.eclipse.jgit</groupId>
