@@ -81,22 +81,24 @@ public final class ConfigResourceWriteBack {
 
     /**
      * pi {@code toggleResource} 的 project 臂（:523-526）：三态循环 → 覆写写回；
-     * 返回新 effective enabled（inherit ⇒ 继承值），未写 ⇒ {@code null}（pi undefined）。
+     * 返回新 effective enabled（inherit ⇒ 继承值），未写 ⇒ {@code empty}
+     * （pi undefined；{@code Optional} 而非 {@code Boolean} null——spotbugs
+     * NP_BOOLEAN_RETURN_NULL 坑，批 agent-core-4 教训）。
      */
-    public Boolean toggleProject(ConfigItem item, boolean inheritedEnabled,
+    public java.util.Optional<Boolean> toggleProject(ConfigItem item, boolean inheritedEnabled,
             boolean inheritedGlobal) {
         var state = getNextOverrideState(item, inheritedEnabled);
         var ok = item.metadata().origin() == Origin.TOP_LEVEL
             ? setProjectTopLevelOverride(item, state, inheritedGlobal)
             : setProjectPackageOverride(item, state);
         if (!ok) {
-            return null;
+            return java.util.Optional.empty();
         }
-        return switch (state) {
+        return java.util.Optional.of(switch (state) {
             case INHERIT -> inheritedEnabled;
             case LOAD -> true;
             case UNLOAD -> false;
-        };
+        });
     }
 
     /** pi {@code toggleTopLevelResource}（:538-584）：剥前缀去重 → 推 {@code +/-pattern}。 */

@@ -143,7 +143,7 @@ public final class ConfigSelectorComponent {
         final Boolean newEnabled;
         if (projectMode) {
             newEnabled = writeBack.toggleProject(toConfigItem(item),
-                getInheritedEnabled(item), isInheritedGlobalItem(item));
+                getInheritedEnabled(item), isInheritedGlobalItem(item)).orElse(null);
         } else {
             newEnabled = writeBack.toggleGlobal(toConfigItem(item));
         }
