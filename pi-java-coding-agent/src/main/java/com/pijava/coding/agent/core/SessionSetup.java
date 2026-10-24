@@ -13,15 +13,10 @@ import com.pijava.agent.tool.AgentTool;
 import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.coding.agent.cli.Args;
 import com.pijava.coding.agent.cli.ThinkingLevels;
-import com.pijava.coding.agent.pkg.GitPackageStore;
-import com.pijava.coding.agent.pkg.GitRunner;
-import com.pijava.coding.agent.pkg.HttpNpmResolver;
-import com.pijava.coding.agent.pkg.InstallLayout;
 import com.pijava.coding.agent.pkg.PackageAutoDiscovery;
 import com.pijava.coding.agent.pkg.PackageManager;
 import com.pijava.coding.agent.pkg.ResolvedPaths;
 import com.pijava.coding.agent.pkg.ResolvedResource;
-import com.pijava.coding.agent.pkg.SourceResolver;
 import com.pijava.coding.agent.skill.SkillDiscovery;
 
 /**
