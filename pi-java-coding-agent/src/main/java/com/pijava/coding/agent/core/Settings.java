@@ -46,6 +46,13 @@ public final class Settings {
     public String shellCommandPrefix;
     public Boolean quietStartup;
     public String defaultProjectTrust;
+    /** pi {@code packages}（settings-schema.ts:295-299，元素形 {@code PackageSourceSchema}
+     *  :170-190）：npm/git/本地包源表，string（全量装载）或 object（资源过滤）。 */
+    public List<PackageSource> packages;
+    /** pi {@code npmCommand}（settings-schema.ts:268-273）：npm 查找/安装命令的
+     *  argv 形（如 {@code ["mise","exec","node@20","--","npm"]}）。HTTP 实现下不消费
+     *  命令本体（窄差 D104）。 */
+    public List<String> npmCommand;
     public List<String> extensions;
     public List<String> skills;
     public List<String> prompts;

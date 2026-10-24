@@ -114,6 +114,20 @@ public final class SettingsAccessors {
         manager.markModified("followUpMode");
     }
 
+    /** pi {@code getPackages}（settings-manager.ts:1076-1078）：合并视图防御性
+     *  拷贝，缺席 ⇒ 空表（pi {@code ?? []} 对位）。 */
+    public List<PackageSource> getPackages() {
+        var packages = manager.effective().packages;
+        return packages == null ? List.of() : List.copyOf(packages);
+    }
+
+    /** pi {@code getNpmCommand}（settings-manager.ts:1013-1015）：防御性拷贝；
+     *  缺席 ⇒ {@code null}（≙ pi undefined）。 */
+    public List<String> getNpmCommand() {
+        var command = manager.effective().npmCommand;
+        return command == null ? null : List.copyOf(command);
+    }
+
     public Boolean getQuietStartup() {
         return manager.effective().quietStartup;
     }
