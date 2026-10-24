@@ -109,6 +109,16 @@ public final class AgentSession implements AutoCloseable {
     private volatile ExtensionUI extensionUI = ExtensionUI.noop();
     /** 批 17（T1）：pi {@code ExtensionMode}（"tui"|"rpc"|"json"|"print"）——随 UI 注入。 */
     private volatile String extensionMode = "print";
+    /**
+     * 批 20（B237，裁决②）：扩展命令执行件的 {@link SlashContext} 供应器——
+     * pi {@code createCommandContext}（runner.ts:990-1024）的 java 最低可行为形：
+     * TUI 装配期注入真回调（quit/switchSession），RPC/print 维持默认
+     * （{@link SlashContext#of}，no-op 回调——窄差 D119）。volatile：写侧是
+     * 模式层装配线程，读侧是命令执行线程（批 17 extensionUI 同手法）。
+     */
+    private volatile Supplier<com.pijava.coding.agent.core.slash.SlashContext>
+        slashContextSupplier =
+            () -> com.pijava.coding.agent.core.slash.SlashContext.of(this);
     // resources_discover：扩展贡献的主题候选（启动时选第一个可用）。
     private List<Path> themePaths = List.of();
     /** 批 18（评审 M4）：本会话装配期的 resolve 结果（wireSession 现算一份，
@@ -285,10 +295,25 @@ public final class AgentSession implements AutoCloseable {
      * 内含 shutdown{new}＋真正关闭）。
      */
     public static AgentSession createReplacing(Args args, String previousSessionId) {
-        return create(args, new SessionStartInfo("new", previousSessionId));
+        return createReplacing(args, previousSessionId, null);
+    }
+
+    /**
+     * 批 20（B257，pi rpc-mode.ts:433-435＋agent-session-runtime.ts:241-243）：
+     * {@code parentSession} 落新会话 header（{@code null} ⇒ 不写）——与
+     * {@code previousSessionId}（session_start 事件载荷）是<b>两个</b>字段。
+     */
+    public static AgentSession createReplacing(Args args, String previousSessionId,
+                                               String parentSession) {
+        return create(args, new SessionStartInfo("new", previousSessionId), parentSession);
     }
 
     private static AgentSession create(Args args, SessionStartInfo startInfo) {
+        return create(args, startInfo, null);
+    }
+
+    private static AgentSession create(Args args, SessionStartInfo startInfo,
+                                       String parentSessionId) {
         var settings = SettingsManager.load(args.projectTrustOverride());
         var effective = settings.effective();
         var backend = effective.sessionBackend == null ? "jsonl" : effective.sessionBackend;
@@ -304,7 +329,7 @@ public final class AgentSession implements AutoCloseable {
                 Map.of(),
                 new DefaultShellExecutor(effective.shellPath),
                 new DefaultFileSystem()),
-            settings, startInfo);
+            settings, startInfo, parentSessionId);
     }
 
     /** Assemble a session against a specific in-memory repository (tests). */
@@ -357,8 +382,19 @@ public final class AgentSession implements AutoCloseable {
                                        ToolContext toolContext,
                                        SettingsManager settings,
                                        SessionStartInfo startInfo) {
+        return create(args, handle, providers, toolContext, settings, startInfo, null);
+    }
+
+    /** 批 20（B257）：带 {@code parentSessionId} 的形态（RPC new_session）。 */
+    private static AgentSession create(Args args,
+                                       PersistentSessionRepositories.RepositoryHandle handle,
+                                       ProviderRegistry providers,
+                                       ToolContext toolContext,
+                                       SettingsManager settings,
+                                       SessionStartInfo startInfo,
+                                       String parentSessionId) {
         return create(args, handle, providers, toolContext, settings, startInfo,
-            ExtensionUI.noop(), "print");
+            ExtensionUI.noop(), "print", parentSessionId);
     }
 
     /** 批 17（T7）：带扩展 UI/mode 的持久仓装配（TUI 构造期注入路径）。 */
@@ -369,10 +405,22 @@ public final class AgentSession implements AutoCloseable {
                                        SettingsManager settings,
                                        SessionStartInfo startInfo,
                                        ExtensionUI ui, String mode) {
+        return create(args, handle, providers, toolContext, settings, startInfo, ui, mode, null);
+    }
+
+    /** 批 17（T7）＋批 20（B257 parentSessionId 末端）：全参装配。 */
+    private static AgentSession create(Args args,
+                                       PersistentSessionRepositories.RepositoryHandle handle,
+                                       ProviderRegistry providers,
+                                       ToolContext toolContext,
+                                       SettingsManager settings,
+                                       SessionStartInfo startInfo,
+                                       ExtensionUI ui, String mode,
+                                       String parentSessionId) {
         var session = assemble(args, settings, providers, toolContext,
             handle, handle.repository(), resumeLike(args), startInfo, ui, mode);
         session.persistentRepository = handle;
-        return SessionSetup.resolveSession(session, args);
+        return SessionSetup.resolveSession(session, args, parentSessionId);
     }
 
     /**
@@ -1149,6 +1197,17 @@ public final class AgentSession implements AutoCloseable {
     }
 
     /**
+     * 批 20（B32）：pi {@code sessionManager.getSessionName()}
+     * （session-manager.ts:1318-1327）对位——<b>stored</b> 名（最新 session_info
+     * 的值），无 ⇒ {@code null}（RPC get_state 键省略；三存储的
+     * {@code SessionStorage.getName()} 已 null-when-absent）。与显示名
+     * {@link #sessionName()}（{@code "session"} 回落）是两件事：显示层继续读后者。
+     */
+    public String storedSessionName() {
+        return session == null ? null : session.getName();
+    }
+
+    /**
      * Rename the session ({@code /name})。
      *
      * <p>pi {@code agent-session.ts:3942-3947}：落盘 → 读回规范化名 → 发事件。
@@ -1335,6 +1394,19 @@ public final class AgentSession implements AutoCloseable {
             PromptConfig config,
             StreamObserver streamObserver,
             EntryObserver entryObserver) {
+        // 批 20（B237，pi agent-session.ts:1978-1984 逐字序）：扩展命令臂在
+        // input 事件与压缩门**之前**——"Handle extension commands first (execute
+        // immediately, even during streaming)"（pi 注释逐字）；handled ⇒ 不展开、
+        // 不排队、不驱动。pi 的 expandPromptTemplates 门 java 无 SDK 开关面、
+        // 恒真（窄差 D117）。
+        if (prompt.startsWith("/")) {
+            var command = services.slashCommands() == null ? null
+                : services.slashCommands().extensionCommand(prompt);
+            if (command != null) {
+                executeExtensionCommand(command, prompt);
+                return SessionResult.handled();
+            }
+        }
         // docs/15：pi :1991-2003 —— input 事件在 skill/模板展开**之前**
         // （pi 注释逐字："Emit input event for extension interception (before
         // skill/template expansion)"）；handled ⇒ 不展开、不排队、不驱动。
@@ -1361,13 +1433,15 @@ public final class AgentSession implements AutoCloseable {
             harness.isRunning(laneName()),
             config.streamingBehavior());
         if (verdict == PromptRouter.Verdict.QUEUE_STEER) {
-            harness.steer(laneName(), expandedPrompt);
+            // 批 20（B237）：images 随排队走（pi prompt 流式臂 :2016-2023
+            // _queueSteer(expandedText, currentImages) 对位）。
+            harness.steer(laneName(), expandedPrompt, config.images());
             // B34（原 docs/26）：pi _queueSteer 排队后发 queue_update（:2193）。
             emitQueueUpdate();
             return SessionResult.queued();
         }
         if (verdict == PromptRouter.Verdict.QUEUE_FOLLOW_UP) {
-            harness.followUp(laneName(), expandedPrompt);
+            harness.followUp(laneName(), expandedPrompt, config.images());
             emitQueueUpdate();
             return SessionResult.queued();
         }
@@ -1400,7 +1474,7 @@ public final class AgentSession implements AutoCloseable {
         var statusFuture = new CompletableFuture<RunStatus>();
 
         Thread.startVirtualThread(() -> SessionRunner.drive(
-            this, expandedPrompt, queue, entriesFuture, statusFuture,
+            this, expandedPrompt, config.images(), queue, entriesFuture, statusFuture,
             streamObserver, entryObserver));
 
         Stream<StreamEvent> stream = Stream.generate(() -> {
@@ -1441,13 +1515,101 @@ public final class AgentSession implements AutoCloseable {
         harness.abort(laneName());
     }
 
-    /** Queue a follow-up message (processed when the current run finishes). */
+    /**
+     * Queue a follow-up message (processed when the current run finishes).
+     *
+     * <p>批 20（B237）：返回 pi {@code QueuedInputDisposition}
+     * （{@code "handled"|"queued"}，agent-session.ts:310），不再是排队 id——
+     * 全仓无调用方消费旧 id（InteractiveMode/RpcDispatcher/CompactionInputBuffer
+     * 均语句位）。</p>
+     */
     public String followUp(String prompt) {
-        // pi :2191-2192（_queueUserInput 队列路径）：先 /skill: 后模板。
-        var id = harness.followUp(laneName(), expandUserPrompt(prompt));
-        // B34（原 docs/26）：pi followUp 入队后发 queue_update（agent-session.ts:2210）。
+        return queueUserInput(prompt, null, StreamingBehavior.FOLLOW_UP, "interactive");
+    }
+
+    /** pi {@code followUp(text, images, {source})}（agent-session.ts:2227-2234）全参形。 */
+    public String followUp(String prompt,
+                           List<com.pijava.agent.harness.PromptImage> images, String source) {
+        return queueUserInput(prompt, images, StreamingBehavior.FOLLOW_UP, source);
+    }
+
+    /**
+     * pi {@code _queueUserInput}（agent-session.ts:2173-2200 逐字序）：扩展命令抛 →
+     * input 事件（handled 短路／transform 换文）→ 先 /skill: 后模板展开 → 排队 →
+     * queue_update。
+     */
+    private String queueUserInput(String text,
+                                  List<com.pijava.agent.harness.PromptImage> images,
+                                  StreamingBehavior behavior, String source) {
+        if (text.startsWith("/")) {
+            throwIfExtensionCommand(text);
+        }
+        String current = text;
+        if (extensionFirer != null) {
+            // pi :2183-2188：streamingBehavior 仅流式中传入（this.isStreaming ?
+            // behavior : undefined 逐字）。
+            var outcome = extensionFirer.input(text, source,
+                harness.isRunning(laneName()) ? behavior.wireName() : null);
+            if (outcome.handled()) {
+                return "handled";   // pi :2189
+            }
+            current = outcome.text();   // images 不换（D12 延伸，窄差 D120）
+        }
+        // pi :2191-2192：先 /skill: 后模板。
+        var expanded = expandUserPrompt(current);
+        if (behavior == StreamingBehavior.STEER) {
+            harness.steer(laneName(), expanded, images);
+        } else {
+            harness.followUp(laneName(), expanded, images);
+        }
+        // B34（原 docs/26）：pi _queueSteer/_queueFollowUp 入队后发 queue_update
+        //（agent-session.ts:2243/:2259）。
         emitQueueUpdate();
-        return id;
+        return "queued";
+    }
+
+    /**
+     * pi {@code _throwIfExtensionCommand}（agent-session.ts:2268-2279 逐字，
+     * 错文逐字）：扩展命令不可入队——名字从原文空格两刀切出（非注册件回读）。
+     */
+    private void throwIfExtensionCommand(String text) {
+        var command = services.slashCommands() == null ? null
+            : services.slashCommands().extensionCommand(text);
+        if (command != null) {
+            int spaceIndex = text.indexOf(" ");
+            String commandName = spaceIndex == -1 ? text.substring(1)
+                : text.substring(1, spaceIndex);
+            throw new IllegalStateException(
+                "Extension command \"/" + commandName + "\" cannot be queued."
+                    + " Use prompt() or execute the command when not streaming.");
+        }
+    }
+
+    /**
+     * pi {@code _tryExecuteExtensionCommand}（agent-session.ts:2116-2141 逐字序）：
+     * 名字/参数空格两刀（args 不 trim）；执行异常 ⇒ extension_error
+     * （extensionPath 逐字 {@code "command:<name>"}、event {@code "command"}），
+     * <b>出错也是 handled</b>。返回值（java {@link SlashCommand} 契约的结果文本）
+     * 随 pi 的 void 丢弃——扩展命令经 {@code ctx.ui} 管理自己的输出（批 17 全面化
+     * 已就位）。
+     */
+    private void executeExtensionCommand(
+            com.pijava.coding.agent.core.slash.SlashCommand command, String text) {
+        int spaceIndex = text.indexOf(" ");
+        String commandArgs = spaceIndex == -1 ? "" : text.substring(spaceIndex + 1);
+        try {
+            command.execute(commandArgs, slashContextSupplier.get())
+                .toCompletableFuture().join();
+        } catch (Throwable e) {
+            // join 的包装层（CompletionException）取因——pi err.message 口径。
+            var cause = e instanceof java.util.concurrent.CompletionException
+                    && e.getCause() != null ? e.getCause() : e;
+            if (extensionFirer != null) {
+                extensionFirer.bus().emitError(
+                    com.pijava.coding.agent.extension.ExtensionError.of(
+                        "command:" + command.name(), "command", cause));
+            }
+        }
     }
 
     /**
@@ -1730,12 +1892,20 @@ public final class AgentSession implements AutoCloseable {
         harness.waitForIdle(laneName());
     }
 
-    /** Queue a steering message (injected into the current run's next round). */
+    /**
+     * Queue a steering message (injected into the current run's next round).
+     *
+     * <p>批 20（B237）：返回 pi {@code QueuedInputDisposition}（同
+     * {@link #followUp(String)} 注记）。</p>
+     */
     public String steer(String prompt) {
-        // pi :2191-2192（_queueUserInput 队列路径）：先 /skill: 后模板。
-        var id = harness.steer(laneName(), expandUserPrompt(prompt));
-        emitQueueUpdate();
-        return id;
+        return queueUserInput(prompt, null, StreamingBehavior.STEER, "interactive");
+    }
+
+    /** pi {@code steer(text, images, {source})}（agent-session.ts:2211-2217）全参形。 */
+    public String steer(String prompt,
+                        List<com.pijava.agent.harness.PromptImage> images, String source) {
+        return queueUserInput(prompt, images, StreamingBehavior.STEER, source);
     }
 
     /**
@@ -1876,6 +2046,18 @@ public final class AgentSession implements AutoCloseable {
         return extensionMode;
     }
 
+    /**
+     * 批 20（B237，裁决②）：注入扩展命令的 {@link SlashContext} 供应器
+     * （TUI 装配期调用；{@code null} 忽略）。会话替换后须对新会话重注
+     * （批 17 extensionUI 重绑同缝）。
+     */
+    public void slashContextSupplier(
+            Supplier<com.pijava.coding.agent.core.slash.SlashContext> supplier) {
+        if (supplier != null) {
+            this.slashContextSupplier = supplier;
+        }
+    }
+
     /** List sessions for {@code /session} and the resume picker. */
     public List<SessionInfo> listSessions() {
         if (persistentRepository != null) {
@@ -1991,6 +2173,20 @@ public final class AgentSession implements AutoCloseable {
         return repository.find(idOrPrefix);
     }
 
+    /**
+     * 批 20（B257）：pi {@code emitBeforeSwitch}（agent-session-runtime.ts:230-234）
+     * 的公开发射口——{@code session_before_switch} 可取消事件；返回 {@code true}
+     * 即<b>已被扩展取消</b>（调用方不得替换会话）。{@code switchTo} 与 RPC
+     * new_session 共用（后者 pi 序：取消 ⇒ {@code {cancelled:true}} 不替换）。
+     *
+     * @param reason           pi 线值（{@code "new"|"resume"|"fork"|"import"}…）
+     * @param targetSessionFile 目标会话（{@code "new"} 无目标 ⇒ {@code null}，pi 同形）
+     */
+    public boolean fireBeforeSwitch(String reason, String targetSessionFile) {
+        return extensionFirer != null
+            && extensionFirer.sessionBeforeSwitch(reason, targetSessionFile);
+    }
+
     /** docs/15：{@link #switchTo} 的结局（pi 的 {@code {cancelled}} 对位）。 */
     public enum SwitchOutcome { SWITCHED, CANCELLED, NOT_FOUND }
 
@@ -2006,8 +2202,8 @@ public final class AgentSession implements AutoCloseable {
      * shutdown/start 在同一条 bus 上发射（pi 是旧/新两条 runner，窄差 D23）。
      */
     public SwitchResult switchTo(String idOrPrefix) {
-        if (extensionFirer != null
-                && extensionFirer.sessionBeforeSwitch("resume", idOrPrefix)) {
+        // 批 20：上提共用 fireBeforeSwitch（同码）。
+        if (fireBeforeSwitch("resume", idOrPrefix)) {
             return new SwitchResult(SwitchOutcome.CANCELLED, this);
         }
         boolean exists = persistentRepository != null

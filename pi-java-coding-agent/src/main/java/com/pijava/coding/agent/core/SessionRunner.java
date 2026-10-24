@@ -46,6 +46,7 @@ final class SessionRunner {
     static void drive(
             AgentSession owner,
             String prompt,
+            java.util.List<com.pijava.agent.harness.PromptImage> images,
             LinkedBlockingQueue<Optional<StreamEvent>> queue,
             CompletableFuture<List<Entry>> entriesFuture,
             CompletableFuture<RunStatus> statusFuture,
@@ -104,7 +105,8 @@ final class SessionRunner {
             List<Entry> transcript = List.of();
             try {
                 var outcome = owner.harness()
-                    .prompt(laneName, prompt, List.of(), passEvents(owner, laneName));
+                    .prompt(laneName, prompt,
+                        images == null ? List.of() : images, passEvents(owner, laneName));
                 // 用户 prompt 的 entry 由引擎起手写入，此处补一次落盘
                 // （原 docs/27 §2.1：pi 的 `_appendEntry` → `_persist` 逐条写）。
                 flush(owner, laneName);

@@ -113,7 +113,9 @@ public final class DefaultExtensionContext implements ExtensionContext {
 
     @Override
     public CommandRegistry slashCommands() {
-        return services.slashCommands();
+        // 批 20（B237）：扩展注册走打标视图（register 即 EXTENSION）——
+        // pi 的扩展命令表与内置件是两个注册面，java 同池 ⇒ 标签区分执行面。
+        return services.slashCommands().extensionView();
     }
 
     @Override

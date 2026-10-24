@@ -130,6 +130,8 @@ public final class PiTuiApp {
         this.dispatcher = dispatcher;
         this.normalizer = new ScrollInputNormalizer(scrollConfig);
         this.session = mode.session();
+        // 批 20（B237，裁决②）：扩展命令执行件的 SlashContext 供应器（真回调）。
+        injectSlashContext(session);
         // 批 16（T4d）：工具渲染器责任链随会话注入（MessageBubble 查表消费）。
         com.pijava.tui.component.ToolRenderers.install(session.toolRenderers());
         this.sessionEvents = new SessionEventChannel(dispatcher, chatScreen::onSessionEvent);
@@ -941,12 +943,23 @@ public final class PiTuiApp {
         return overlay;
     }
 
+    /**
+     * 批 20（B237，裁决②）：扩展命令执行件的 {@link SlashContext} 供应器注入
+     * （真 quit/switch 回调；供应器捕获目标会话自身——替换后旧供应器随旧会话弃）。
+     */
+    private void injectSlashContext(AgentSession target) {
+        target.slashContextSupplier(
+            () -> new SlashContext(target, keys, this::exit, this::switchSession));
+    }
+
     /** Visible for testing (docs/16 ExitPathCloseTest 的替换臂驱动口)。 */
     void switchSession(AgentSession newSession) {
         // 批 17 评审回补（Important #2）：模式层扩展 UI/mode 随切换携带——pi
         // finishSessionReplacement→rebindSession（agent-session-runtime.ts:187-191）
         // 对位；/new（createReplacing 烘 noop）、/fork、/resume 全会话换都过此缝。
         newSession.extensionUI(session.extensionUI(), session.extensionMode());
+        // 批 20（B237）：SlashContext 供应器同缝重注（批 17 评审 #2 同族）。
+        injectSlashContext(newSession);
         this.session = newSession;
         // 批 16（T4d）：渲染器注册表随会话切换重装。
         com.pijava.tui.component.ToolRenderers.install(newSession.toolRenderers());

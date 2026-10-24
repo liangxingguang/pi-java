@@ -93,17 +93,33 @@ public final class InteractiveMode {
      */
     public SessionResult submit(String prompt) {
         if (session.isCompacting()) {
+            // 批 20（B237，pi interactive-mode.ts:3362-3370）：压缩中扩展命令
+            // 即执行（pi 注释 "extension commands execute immediately"），其余缓冲。
+            if (isExtensionCommand(prompt)) {
+                return session.processPrompt(
+                    prompt, PromptConfig.defaults(), streamObserver, entryObserver);
+            }
             buffer.add(prompt, StreamingBehavior.STEER);
             session.emitQueueUpdate(buffer.steeringTexts(), buffer.followUpTexts());
             session.flashStatus("Queued message for after compaction");
             return SessionResult.queued();
         }
         if (session.isRunning()) {
-            session.steer(prompt);
-            return SessionResult.queued();
+            // 批 20（B237，pi :3373-3381）：流式中一律 prompt{steer}——扩展命令在
+            // prompt 内即执行，普通文本经 input 事件后排队（TUI steer 自此触发
+            // 扩展 input 钩，pi 同形——行为变化登记）。
+            return session.processPrompt(prompt,
+                PromptConfig.withStreamingBehavior(StreamingBehavior.STEER),
+                streamObserver, entryObserver);
         }
         return session.processPrompt(
             prompt, PromptConfig.defaults(), streamObserver, entryObserver);
+    }
+
+    /** pi {@code isExtensionCommand}（interactive-mode.ts:4771-4779）——只做名字查找。 */
+    private boolean isExtensionCommand(String text) {
+        var registry = session.services().slashCommands();
+        return registry != null && registry.extensionCommand(text) != null;
     }
 
     /** Abort the current run (cross-thread safe). */
@@ -151,13 +167,23 @@ public final class InteractiveMode {
      */
     public void followUp(String prompt) {
         if (session.isCompacting()) {
+            // 批 20（B237，pi :4479-4488）：压缩中扩展命令即执行，其余缓冲。
+            if (isExtensionCommand(prompt)) {
+                session.processPrompt(
+                    prompt, PromptConfig.defaults(), streamObserver, entryObserver);
+                return;
+            }
             buffer.add(prompt, StreamingBehavior.FOLLOW_UP);
             session.emitQueueUpdate(buffer.steeringTexts(), buffer.followUpTexts());
             session.flashStatus("Queued message for after compaction");
             return;
         }
         if (session.isRunning()) {
-            session.followUp(prompt);
+            // 批 20（B237，pi :4490-4496）：流式中 prompt{followUp}（扩展命令
+            // prompt 内即执行，普通文本经 input 事件后排队）。
+            session.processPrompt(prompt,
+                PromptConfig.withStreamingBehavior(StreamingBehavior.FOLLOW_UP),
+                streamObserver, entryObserver);
             return;
         }
         submit(prompt);
