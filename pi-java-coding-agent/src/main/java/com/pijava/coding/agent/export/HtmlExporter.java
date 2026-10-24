@@ -23,13 +23,13 @@ public final class HtmlExporter {
     private static final DateTimeFormatter DATE = DateTimeFormatter
         .ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneOffset.UTC);
 
-    private static final String CSS = """
-        :root {
-          --page: #18181e; --card: #1e1e24; --user: #343541;
-          --accent: #8abeb7; --text: #d4d4d4; --muted: #808080;
-          --error: #cc6666; --success: #b5bd68; --border: #505050;
-          --code: #b5bd68; --heading: #f0c674;
-        }
+    /**
+     * 批 21（T12，B163）：{@code :root} 变量不再硬编码——由活跃/具名主题解析
+     * 注入（pi export-html {@code generateThemeVars} 对位）。本常量是不含
+     * {@code :root} 的模板；{@code {{ROOT_VARS}}} 占位在渲染期替换。
+     */
+    private static final String CSS_TEMPLATE = """
+        {{ROOT_VARS}}
         * { box-sizing: border-box; }
         body { margin: 0; background: var(--page); color: var(--text);
                font: 15px/1.6 -apple-system, "Segoe UI", Roboto, sans-serif; }
@@ -80,10 +80,18 @@ public final class HtmlExporter {
         return export(sessionJsonl, Path.of("pi-java-session-" + base + ".html"));
     }
 
-    /** 导出到指定输出路径。 */
+    /** 导出到指定输出路径（主题变量取活跃主题）。 */
     public Path export(Path sessionJsonl, Path outputHtml) {
+        return export(sessionJsonl, outputHtml, null);
+    }
+
+    /**
+     * 批 21（T12）：具名主题臂（pi {@code themeName?} 参数对位）——
+     * {@code null} ⇒ 当前活跃主题。
+     */
+    public Path export(Path sessionJsonl, Path outputHtml, String themeName) {
         try {
-            var html = render(readLines(sessionJsonl));
+            var html = render(readLines(sessionJsonl), themeName);
             Files.writeString(outputHtml, html);
             return outputHtml;
         } catch (IOException e) {
@@ -114,13 +122,15 @@ public final class HtmlExporter {
 
     // ── 渲染 ──────────────────────────────────────────────────────
 
-    private String render(JsonNode session) {
+    private String render(JsonNode session, String themeName) {
         var out = new StringBuilder();
         out.append("<!DOCTYPE html>\n<html lang=\"zh-CN\">\n<head>\n")
             .append("  <meta charset=\"UTF-8\">\n")
             .append("  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n")
             .append("  <title>pi-java session export</title>\n")
-            .append("  <style>\n").append(CSS).append("\n  </style>\n")
+            .append("  <style>\n")
+            .append(CSS_TEMPLATE.replace("{{ROOT_VARS}}", ExportThemeVars.rootVars(themeName)))
+            .append("\n  </style>\n")
             .append("</head>\n<body>\n  <div class=\"page\">\n");
         renderHeader(out, session.get("header"));
         var entries = session.get("entries");

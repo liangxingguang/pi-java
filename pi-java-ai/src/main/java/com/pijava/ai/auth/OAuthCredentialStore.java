@@ -47,23 +47,35 @@ public final class OAuthCredentialStore {
         this.path = path;
     }
 
-    /** 读取 provider 的 OAuth 凭证；无则返回 empty。 */
+    /** 读取 provider 的 OAuth 凭证；无则返回 empty（批 21 T2：读也过锁，杜绝撕裂读）。 */
     public Optional<OAuthCredential> resolve(String provider) {
-        return Optional.ofNullable(readAll().get(provider));
+        try {
+            return Optional.ofNullable(
+                withLockedFile(channel -> readFrom(channel).get(provider)));
+        } catch (UnsupportedOperationException e) {
+            // 旧 readAll 语义：IO 失败 ⇒ 空（pi parseStorageData 容忍同）。
+            return Optional.empty();
+        }
     }
 
-    /** 保存 provider 的 OAuth 凭证。 */
+    /** 保存 provider 的 OAuth 凭证（批 21 T2：RMW 收进同一把锁——pi withLock 对位）。 */
     public void store(String provider, OAuthCredential credential) {
-        var all = readAll();
-        all.put(provider, credential);
-        writeAll(all);
+        withLockedFile(channel -> {
+            var all = readFrom(channel);
+            all.put(provider, credential);
+            writeTo(channel, all);
+            return null;
+        });
     }
 
-    /** 删除 provider 的 OAuth 凭证。 */
+    /** 删除 provider 的 OAuth 凭证（批 21 T2：同锁 RMW）。 */
     public void delete(String provider) {
-        var all = readAll();
-        all.remove(provider);
-        writeAll(all);
+        withLockedFile(channel -> {
+            var all = readFrom(channel);
+            all.remove(provider);
+            writeTo(channel, all);
+            return null;
+        });
     }
 
     /**
@@ -99,21 +111,6 @@ public final class OAuthCredentialStore {
     }
 
     // ── File I/O ──────────────────────────────────────────────
-
-    private Map<String, OAuthCredential> readAll() {
-        try {
-            var parent = path.getParent();
-            if (parent != null) {
-                Files.createDirectories(parent);
-            }
-            if (!Files.exists(path)) {
-                return new HashMap<>();
-            }
-            return MAPPER.readValue(path.toFile(), MAP_TYPE);
-        } catch (IOException e) {
-            return new HashMap<>();
-        }
-    }
 
     /** 允许 IOException 的通道 I/O body。 */
     @FunctionalInterface
@@ -167,7 +164,12 @@ public final class OAuthCredentialStore {
                 break;
             }
         }
-        return MAPPER.readValue(bytes, MAP_TYPE);
+        try {
+            return MAPPER.readValue(bytes, MAP_TYPE);
+        } catch (IOException | RuntimeException e) {
+            // 旧 readAll 语义：坏 JSON ⇒ 空表（pi parseStorageData 容忍同）。
+            return new HashMap<>();
+        }
     }
 
     /** 在已加锁的通道上截断并全量覆写。 */
@@ -179,22 +181,4 @@ public final class OAuthCredentialStore {
         channel.force(true);
     }
 
-    private void writeAll(Map<String, OAuthCredential> data) {
-        try {
-            var parent = path.getParent();
-            if (parent != null) {
-                Files.createDirectories(parent);
-            }
-            try (var channel = FileChannel.open(path,
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.WRITE,
-                    StandardOpenOption.TRUNCATE_EXISTING);
-                 FileLock ignored = channel.lock()) {
-                channel.write(ByteBuffer.wrap(MAPPER.writeValueAsBytes(data)));
-            }
-        } catch (IOException e) {
-            throw new UnsupportedOperationException(
-                    "Failed to write OAuth auth file: " + path, e);
-        }
-    }
 }
