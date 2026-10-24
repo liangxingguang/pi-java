@@ -63,7 +63,8 @@ class ConfigCommandPatternTest {
     }
 
     private int run(String... args) {
-        return ConfigCommand.run(args, manager, trustRoot, cwd);
+        return ConfigCommand.run(args,
+            new ConfigCommand.ConfigEnv(manager, trustRoot, cwd, agentDir, homeDir, null));
     }
 
     private String globalJson() throws IOException {

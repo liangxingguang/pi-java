@@ -22,6 +22,23 @@ final class PackageCommandHelp {
         };
     }
 
+    /** pi {@code printConfigCommandHelp}（:302-315）逐字（色裁、名翻译）。 */
+    static void printConfig() {
+        System.out.println("""
+            Usage:
+              pi-java config [-l] [--approve|--no-approve]
+
+            Open the resource configuration TUI to enable or disable package resources.
+            Without -l, starts in global settings (~/.pi-java/agent/settings.json).
+            Press Tab in the TUI to switch between global and project-local modes.
+
+            Options:
+              -l, --local       Edit project overrides (.pi-java/settings.json)
+              -a, --approve     Trust project-local files for this command with -l
+              -na, --no-approve Ignore project-local files for this command with -l
+            """);
+    }
+
     /** pi {@code printPackageCommandHelp}（:317-395）逐字（色裁、名翻译）。 */
     static void print(String command) {
         switch (command) {

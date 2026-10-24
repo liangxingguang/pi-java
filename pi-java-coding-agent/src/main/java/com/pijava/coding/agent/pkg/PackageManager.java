@@ -438,8 +438,10 @@ public final class PackageManager {
     }
 
     /** pi {@code canonicalizePath}（utils/paths.ts:27-33）：realpath 失败回原串。
-     *  java 对位 {@code toRealPath(NOFOLLOW_LINKS)}（docs/29 §3 T5 裁决文）。 */
-    private static String canonicalizePath(String path) {
+     *  java 对位 {@code toRealPath(NOFOLLOW_LINKS)}（docs/29 §3 T5 裁决文）。
+     *  批 19 转 public：config TUI 的继承态键（{@code type:canonicalizePath}，
+     *  config-selector.ts:850-852）共用。 */
+    public static String canonicalizePath(String path) {
         try {
             return Path.of(path).toRealPath(LinkOption.NOFOLLOW_LINKS).toString();
         } catch (IOException | java.nio.file.InvalidPathException | SecurityException e) {
