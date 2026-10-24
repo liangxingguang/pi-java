@@ -342,13 +342,13 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 | E2-17 | `quietStartup` | `:253` | `:42` | 1 | 对齐 | `SettingsAccessors.java:80` |
 | E2-18 | `defaultProjectTrust` | `:259` | `:43` | 2 | 对齐 | `SettingsAccessors.java:90` |
 | E2-19 | `shellCommandPrefix` | `:265` | `:41` | 2 | 对齐 | 4 处消费 |
-| E2-20 | `npmCommand` | `:268` | — | 2 | **缺失** | 无字段 |
+| E2-20 | `npmCommand` | `:268` | `Settings.java` 字段＋`SettingsAccessors.getNpmCommand`（防御性拷贝，settings-manager.ts:1013 对位）＋`pkg/NpmCommand` 校验（文案逐字） | 2 | **对齐** | **批 18（2026-10-24，docs/29 T1）**；HTTP 实现不消费命令本体＝窄差 D104 |
 | E2-21 | `collapseChangelog` | `:274` | `:99` | 1 | **对齐** | **批 12（2026-10-22，docs/23 T7）**：折叠门两臂（pi :843-872）——折叠 ⇒ 一行文案逐字（"Updated to vX.Y.Z. Use /changelog to view full changelog."）、非折叠 ⇒ "What's New"＋全文；设置页行 `SettingsScreen` "Collapse changelog"（install 域）；窄差 D63 |
 | E2-22 | `enableInstallTelemetry` | `:280` | `:101` | 1 | **存疑** | 批 11（docs/22 T7）：字段＋Install 访问器（`?? true`）；**批 12（docs/23 §4/裁决⑤）**：pi 两消费——changelog 版本推进后 ping `pi.dev/api/report-install`（**不移植**：pi.dev 是 pi 自有端点，复刻发送会污染其遥测，窄差 D55）＋provider 归因头（随 B253 批 19） |
 | E2-23 | `enableAnalytics` | `:286` | `:103` | 1 | **对齐** | **批 12（2026-10-22，docs/23 T8）核销**（裁决③口径先例）：pi 运行时**零消费者**（全锚点 grep：除 UUID 生成/首次设置向导/bug-report 脱敏剔除外无 analytics 客户端、无上报端点；docs/settings.md:168 自述 "Currently used only by the experimental first-run setup."）⇒ pi 侧零消费＝声明面即全量（批 11 已落字段＋访问器＋UUID 生成） |
 | E2-24 | `trackingId` | `:292` | `:105` | 1 | **对齐** | 同 E2-23（批 12 核销，裁决③）；bug-report 的 trackingId/deviceId 脱敏（pi bug-report.ts:62）随批 14（/bug＋crash-log）带上 |
 | E2-25 | `deviceId` | `:303` | `:80` | 1 | **对齐** | **批 11（2026-10-22，docs/22 T5）**：字段＋`SettingsInstallAccessors.getOrCreateDeviceId`（只读写全局域／生成即 flush／幂等，settings-manager.ts:1066-1074 对位）＋消费点 `AuthCommand` ChatGPT 臂（持久安装 ID，pi interactive-mode.ts:6331 对位） |
-| E2-26 | `packages` | `:295` | — | 2 | **缺失** | 无字段 |
+| E2-26 | `packages` | `:295` | `Settings.java` 字段（`PackageSource` union 两形）＋accessor＋`PackageManager.resolve()` 消费 | 2 | **对齐** | **批 18（2026-10-24，docs/29 T1/T5/T6）**；写回链（installAndPersist 族）随批 19（E6-14） |
 | E2-27 | `extensions` | `:300` | `:44` | 2 | 对齐 | 2 处消费 |
 | E2-28 | `skills` | `:308` | `:45` | 2 | 对齐 | 13 处消费 |
 | E2-29 | `prompts` | `:309` | `:46` | 2 | 对齐 | 5 处消费 |
@@ -379,7 +379,7 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 | E2-54 | `fullscreenCopyOnSelect` | `:424` | `:117` | 1 | **存疑** | 批 11（docs/22 T7）：字段＋UiPrefs 访问器（`?? true`）；**批 12（docs/23 §4）**：消费依赖 alt-screen 选区/复制子系统（map/05 S2a-d 未排期）⇒ **窄差 D59** |
 | E2-55 | `fullscreenWheelScrollLines` | `:430` | `:119` | 1 | **对齐** | **批 12（2026-10-22，docs/23 T12，裁决⑥）**：数字臂接 `ScrollConfig.from` 第三参（固定行数 `withWheelLines`，accessor 已 clamp 1–100）；auto 臂维持既有 Codex 有界加速模型（窄差 D60＝K38：pi auto 是 mac/SSH 判定＋速率加速 ≤6＋Alt×5 的速度模型，不新造） |
 
-**E2 汇总：对齐 46 / 缺失 2 / 存疑 6 / 出分母 1 / 合计 54**；**Σ权重 84 / Σ(w×c) 76.5 / 加权 91.1%**
+**E2 汇总（批 18 后）：对齐 48 / 缺失 0 / 存疑 6 / 出分母 1 / 合计 54**；**Σ权重 84 / Σ(w×c) 80.5 / 加权 95.8%**
 > `queueMode`（`:436`）/`websockets`（`:442`）只存在于 `SettingsSchema` 输入侧，`interface Settings`（`:471`）显式 Omit，非 settings.json 键，不列单元。
 > 本锚点改判：`compaction`（E2-10）存疑 → **对齐**（modelOverrides 字段＋per-model resolver 接线，A9 闭环）。
 > 批 1（2026-10-18，B236/docs/11）：`defaultTools`（E2-35）缺失 → **对齐**（键＋分层 merge＋解析＋消费点全落，窄差 D3 登记）。
@@ -487,22 +487,22 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 |---|---|---|---|---|---|---|
 | E6-1 | `install` 本地源 | `package-manager.ts:112` | `PackageCommand.java:54-65` | 2 | **存疑** | — |
 | E6-2 | `install` http(s) URL | `package-manager.ts` | `ExtensionPackageManager.java:93` | 2 | **存疑** | — |
-| E6-3 | npm 源（版本/range/pinning） | `package-manager.ts:139-147` | ❌ | **3** | **缺失** | — |
-| E6-4 | git 源 | `package-manager.ts` | ❌ | 2 | **缺失** | — |
-| E6-5 | 作用域 user/project/temporary | `package-manager.ts:135` | ⚠️ 只有 global/project | 2 | **存疑** | — |
-| E6-6 | 资源过滤 | `package-manager.ts:187-194` | ❌ | 2 | **缺失** | — |
-| E6-7 | 资源优先级（5 档） | `package-manager.ts:171-184` | ❌ | 2 | **缺失** | — |
-| E6-8 | 忽略文件 | `package-manager.ts:206` | ❌ | 1 | **缺失** | — |
-| E6-9 | 进度回调 `onProgress` | `package-manager.ts:96` | ❌ | 1 | **缺失** | — |
+| E6-3 | npm 源（版本/range/pinning） | `package-manager.ts:139-147` | `pkg/HttpNpmResolver.java`＋`pkg/Semvers.java`（semver4j 适配）＋`NpmResolver` seam | **3** | **对齐** | **批 18（2026-10-24，docs/29 T3，裁决①③）**：HTTP registry 直拉（pinned 直拉约定 URL／range maxSatisfying／SRI 校验）；npm CLI 臂留 seam；窄差 D102/D104 |
+| E6-4 | git 源 | `package-manager.ts` | `pkg/GitPackageStore.java`＋`pkg/GitRunner.java` | 2 | **对齐** | **批 18（docs/29 T4，裁决②）**：spawn 系统 git 命令表逐字（clone／checkout ref／ensureGitRef marker 恢复／update 双臂／remote HEAD／removeGit 修剪／temporary 刷新静默保留缓存）；窄差 D103 |
+| E6-5 | 作用域 user/project/temporary | `package-manager.ts:135` | `pkg/SourceScope.java`＋`SourceResolver`（信任门逐字）＋`InstallLayout`（temporary sha256-8 检出） | 2 | **对齐** | **批 18（docs/29 T2/T5）**；窄差 D109 |
+| E6-6 | 资源过滤 | `package-manager.ts:187-194` | `pkg/ResourcePatterns.java`（四符代数逐字）＋`MinimatchLite`＋`PackageFilter` 三支 | 2 | **对齐** | **批 18（docs/29 T5）**；窄差 D110 |
+| E6-7 | 资源优先级（5 档） | `package-manager.ts:171-184` | `PathMetadata.resourcePrecedenceRank` 逐字＋`PackageManager.toResolvedPaths`＋T6 会话装配消费 | 2 | **对齐** | **批 18（docs/29 T5/T6，裁决⑨：旧 USER→PROJECT 直扫退役，project 压 user 行为变化钉死）** |
+| E6-8 | 忽略文件 | `package-manager.ts:206` | `pkg/PackageIgnore.java`（三文件名＋拍平加前缀，JGit IgnoreNode 承载） | 1 | **对齐** | **批 18（docs/29 T5）**；窄差 D107 |
+| E6-9 | 进度回调 `onProgress` | `package-manager.ts:96` | `pkg/ProgressEvent.java`＋`ProgressCallback`＋`withProgress`（start/complete/error 三型发射） | 1 | **对齐** | **批 18（docs/29 T4/T5，裁决⑪口径：发射面齐即翻）**；消费面（CLI/TUI 进度显示）随批 19 |
 | E6-10 | `update self` / `update pi` | `package-manager-cli.ts:449`（self-update 执行段 `:218`）+ `utils/windows-self-update.ts`；本锚点新增旧版本清理 `pruneManagedReleases:137` | ❌ 只打印说明（`PackageCommand.java:20-22`） | 2 | **缺失** | — |
 | E6-11 | `update --extensions` | `package-manager-cli.ts:449` | ❌ | 2 | **缺失** | — |
 | E6-12 | `update --models`（模型目录刷新） | `package-manager-cli.ts:458` + `core/remote-catalog-provider.ts` | ❌ 子命令无；⚠️ **机制已在核心自动跑**（`ModelCatalogRefresh.java` + `RemoteCatalogProvider.java`，RPC 启动后台刷新） | 1 | **缺失** | — |
 | E6-13 | `config` TUI（Tab 切作用域、逐资源开关） | `package-manager-cli.ts:813` + `config-selector.ts` | ⚠️ 非交互 `enable/disable`（`ConfigCommand.java:15`） | 2 | **存疑** | — |
 | E6-14 | 持久化到 `settings.packages` | `package-manager.ts:112` | ❌ 无 `packages` 键 | **3** | **缺失** | — |
-| E6-15 | pi manifest 读取 | `core/pi-manifest.ts` | ❌ | 2 | **缺失** | — |
-| E6-16 | `remove` / `uninstall` | `package-manager.ts:118` | ⚠️ `PackageCommand.java:74-85` | 2 | **存疑** | — |
+| E6-15 | pi manifest 读取 | `core/pi-manifest.ts` | `pkg/PiManifest.java`（pi-manifest.ts 35 行逐字）＋`PackageResourceCollector` manifest 臂消费 | 2 | **存疑** | **批 18（docs/29 T5）**：机制落地改注；CLI/展示消费面（config TUI／list 标记）随批 19 终判 |
+| E6-16 | `remove` / `uninstall` | `package-manager.ts:118` | ⚠️ `PackageCommand.java:74-85`（旧 `ExtensionPackageManager` 目录面——批 18 T6 后会话装配不再读该目录，CLI 与装配脱钩） | 2 | **缺失** | **批 18 降级注记**（docs/29 §8：CLI 子命令面批 19 收编重裁，接新 PackageManager） |
 
-**E6 汇总：对齐 0 / 缺失 11 / 存疑 5 / 合计 16 = 0%**；**Σ权重 31 / Σ(w×c) 5.0 / 加权 16.1%**
+**E6 汇总（批 18 后）：对齐 7 / 存疑 4 / 缺失 5 / 合计 16 = 43.8%**；**Σ权重 31 / Σ(w×c) 17.0 / 加权 54.8%**
 
 ### E7 RPC 面（6）
 
@@ -608,27 +608,27 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | C. Slash 命令 | 12 | 2 | 11 | 25 | 48.0% |
 | D. 扩展系统 41 事件 | 18 | 16 | 7 | 41 | 43.9% |
 | D′. 扩展 UI 注入面 | 0 | 8 | 1 | 9 | 0% |
-| E. 其余能力单元 | 51 | 65 | 32 | 148 | 34.5% |
+| E. 其余能力单元 | 60 | 56 | 32 | 148 | 40.5% |
 | ├ E1 配置文件 | 2 | 1 | 2 | 5 | 40.0% |
-| ├ E2 settings 键 | 46 | 1 | 6 | 53 | 86.8% |
+| ├ E2 settings 键 | 48 | 0 | 6 | 53 | 90.6% |
 | ├ E3 会话管理 | 22 | 2 | 0 | 24 | 91.7% |
 | ├ E4 资源发现 | 5 | 2 | 0 | 7 | 71.4% |
 | ├ E5 扩展 API | 10 | 22 | 3 | 35 | 28.6% |
-| ├ E6 包管理器 | 0 | 11 | 5 | 16 | 0% |
+| ├ E6 包管理器 | 7 | 5 | 4 | 16 | 43.8% |
 | └ E7 RPC 面 | 2 | 0 | 4 | 6 | 33.3% |
 | G. 主流新增子系统（MCP/codemode/…） | 3 | 5 | 2 | 10 | 30.0% |
 | F. 整块缺失（子系统） | 0 | 6 | 0 | 6 | 0% |
-| **合计（模块，不含 E8）** | **172** | **75** | **41** | **288** | **59.7%** |
+| **合计（模块，不含 E8）** | **181** | **66** | **41** | **288** | **62.8%** |
 | E8. 边缘/面外子系统（**与 E3/C/G 重叠，不计入**） | 4 | 2 | 0 | 6 | 66.7% |
 
-**严格口径**（把「引擎钩子存在但未桥接」的 5 条——#7/#12/#17/#18/#19——也算缺失）：对齐 **160** / 缺失 **82** / 存疑 **46** / 合计 **288** = **55.6%**。
+**严格口径**（把「引擎钩子存在但未桥接」的 5 条——#7/#12/#17/#18/#19——也算缺失）：对齐 **169** / 缺失 **73** / 存疑 **46** / 合计 **288** = **58.7%**。
 > 批 14（2026-10-23，docs/25）：本表逐行实算收平——A 域 11 行＋E3 域 7 行翻动；E2 行同步批 13 台账文本（对齐 44→46、E2-45 出分母 54→53）；分母 290→288 为逐行实算值（含往批汇总滞后吸收）。
 
 **扩展系统单独口径**（D + D′ + E5）：41 事件 = 18 对齐；UI 注入 9 面 = 0 对齐；扩展 API 35 项 = 10 对齐 ⇒ **85 个单元中 28 个对齐 = 32.9%**。
 
 **java 独有（不计入分母）**：`--base-url`、`--port`、`--debug`、`--trace-payloads`（CLI）；`/help`、`/create-skill`（slash）；`auth oauth-login`、`auth profile…`（子命令）。
 
-**最大三处差距**（批 4 后）：① **E6 包管理器**且**零对齐单元**；② **扩展系统长尾**——MCP 面主体已落（明细见 map/07），但 **codemode（3,957 行）＋ tool-search/virtual-models/nested（766 行）共 4,723 行仍为 0**，且 MCP 的 builtin 工厂接线卡在 D/E5 扩展面（B221）；③ **D 域剩余 24 个未对齐事件**（provider 请求面 B248、结果臂族 B249、生命周期 B250、tree 两事件 B245、D′ UI 注入面）。
+**最大三处差距**（批 18 后）：① ~~E6 包管理器~~（批 18 后 resolve 内核已对齐 54.8%，余 CLI/持久化面随批 19）；② **扩展系统长尾**——MCP 面主体已落（明细见 map/07），但 **codemode（3,957 行）＋ tool-search/virtual-models/nested（766 行）共 4,723 行仍为 0**，且 MCP 的 builtin 工厂接线卡在 D/E5 扩展面（B221）；③ **D 域剩余 24 个未对齐事件**（provider 请求面 B248、结果臂族 B249、生命周期 B250、tree 两事件 B245、D′ UI 注入面）。
 **其余长期缺口**：④ `cache_warming` 设置＋`/bug`＋RPC `"handled"` disposition（已分别计入 E2/C/E7；`defaultTools` 与 `--tools` pattern/modifier 批 1 已对齐）。
 
 ---
@@ -643,26 +643,28 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | A. CLI 参数 | 62 | 61.5 | 99.2% | 97.7% |
 | B. 子命令 | 15 | 9.0 | 60.0% | 37.5% |
 | C. Slash 命令 | 38 | 34.5 | 90.7% | 80.0% |
-| D. 扩展系统 41 事件 | 83 | 77.0 | 92.8% | 90.2% |
+| D. 扩展系统 41 事件 | 83 | 79.0 | 95.2% | 95.1% |
 | D′. 扩展 UI 注入面 | 16 | 1.0 | 6.3% | 0% |
 | E1. 配置文件 / 清单 | 10 | 6.0 | 60.0% | 40.0% |
-| E2. settings.json 键 | 84 | 76.5 | 91.1% | 85.2% |
+| E2. settings.json 键 | 84 | 80.5 | 95.8% | 90.6% |
 | E3. 会话管理行为 | 40 | 37.0 | 92.5% | 91.7% |
 | E4. 资源发现 | 14 | 10.0 | 71.4% | 71.4% |
-| E5. 扩展 API 面 | 58 | 22.0 | 37.9% | 28.6% |
-| E6. 包管理器 | 31 | 5.0 | 16.1% | 0% |
+| E5. 扩展 API 面 | 58 | 23.5 | 40.5% | 31.4% |
+| E6. 包管理器 | 31 | 17.0 | 54.8% | 43.8% |
 | E7. RPC 面 | 12 | 8.0 | 66.7% | 33.3% |
 | G. 主流新增子系统 | 18 | 7.0 | 38.9% | 30.0% |
 | F. 整块缺失（子系统） | 13 | 0.0 | 0% | 0% |
-| **模块合计（不含 E8）** | **494** | **355.0** | **71.9%** | **64.7%** |
+| **模块合计（不含 E8）** | **494** | **374.5** | **75.8%** | **68.9%** |
 | E8. 边缘/面外子系统（与 E3/C/G 重叠，不计入） | 7 | 5.0 | 71.4% | 66.7% |
 
-**模块合计**：Σ权重 494 ／ Σ(w×c) 355.0 ／ **加权完成度 = 355.0/494 ≈ 71.9%**（未加权 187.0/289 ≈ 64.7%；批 16 后值——按 Δ 续列：批 15 的 345.5＋本批 9.5）。
+**模块合计**：Σ权重 494 ／ Σ(w×c) 374.5 ／ **加权完成度 = 374.5/494 ≈ 75.8%**（未加权 199.0/289 ≈ 68.9%；批 18 后值——按 Δ 续列：批 17 的 358.5＋本批 16.0）。
 
-**去重口径**（F 域有 2 行与 E4/E6 重叠＋G-1..G-5 归 map/07）：Σ权重 **485** ／ Σ(w×c) **350.5** ／ **加权完成度 = 350.5/485 ≈ 72.3%**（未加权 187.0/289 ≈ 64.7%）。
+**去重口径**（F 域有 2 行与 E4/E6 重叠＋G-1..G-5 归 map/07）：Σ权重 **485** ／ Σ(w×c) **370.0** ／ **加权完成度 = 370.0/485 ≈ 76.3%**（未加权 199.0/289 ≈ 68.9%）。
 > 口径注记（批 14）：A/E3 域行与未加权汇总表已逐行实算（含往批滞后收平：E2 对齐 44→46、E3 段汇总 27.5→28.5 的批 10 滞后）；模块加权合计按 Δ 续列，与逐行域和的 ±1.5 存量口径差随下次全量重测一并收平（批 4 同例）。
 > 批 15（2026-10-23，docs/26）：C 域 7 行翻动（+7.0：#2/#4/#6/#9/#12/#13/#21——T8–T12＋B79 销号）；E8-2/E8-3 注记行随翻（不计入分母）；E8-1 旧汇总漏算一并更正。
 > 批 16（2026-10-23，docs/27）：**9.5 点翻动**——E5-7/E5-30（+1.0×2）＋E5-11（+1.0）＋E5-18（+2.0）＋E5-29（存疑→对齐 +1.0）＋A-43（+1.0）＋C-23（存疑→对齐 +0.5）＋D#36（+2.0）；D#11 不动（裁决⑤随 E5-23 批）；E8-7 注记行随翻（不计入分母）。B204/B246 销号；B221 收编 ②④⑤。
+> 批 17（2026-10-24，docs/28）：**3.5 点翻动**——E5-31（缺失→存疑 +1.0）＋E5-32（存疑→对齐 +0.5）＋D#26/#27（+2.0）。B221 收编 ③；B214 改注不销号。（本表 D/E5 两行滞后于批 17，批 18 回填时一并收平。）
+> 批 18（2026-10-24，docs/29）：**16.0 点翻动**——E6-3（+3.0）＋E6-4/E6-6/E6-7（+2.0×3）＋E6-5（存疑→对齐 +1.0）＋E6-8/E6-9（+1.0×2）＋E2-20/E2-26（+2.0×2）＋E6-15（缺失→存疑 +1.0）＋E6-16（存疑→缺失 −1.0，T6 后旧 CLI 目录面与装配脱钩、批 19 重裁）；E6 域不再是零对齐域（5.0→17.0/31 ≈ 54.8%）。
 
 **扩展系统单独口径**（D + D′ + E5）：Σ权重 157 ／ Σ(w×c) 71.0 ／ **加权 45.2%**（未加权 28/85 ≈ 32.9%）。
 

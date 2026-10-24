@@ -77,7 +77,7 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 
 ---
 
-## 1 总表（coding-agent 批 17 后值，2026-10-24；agent-core 批 5 后值，2026-10-18；telemetry 批 1 后值，2026-10-17；ai 批 10 后 2026-10-16；批 3b/4/6/8 为台账行为项、加权不变；其余模块为 2026-10-12 重测值）
+## 1 总表（coding-agent 批 18 后值，2026-10-24；agent-core 批 5 后值，2026-10-18；telemetry 批 1 后值，2026-10-17；ai 批 10 后 2026-10-16；批 3b/4/6/8 为台账行为项、加权不变；其余模块为 2026-10-12 重测值）
 
 | 模块（地图） | Σ权重 | Σ(w×c) | **加权完成度** | 未加权 | 权重 3 层 |
 |---|---:|---:|---:|---:|---:|
@@ -87,10 +87,10 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 | session-sqlite ＋ evals（map/06） | 87 | 44.5 | **51.1%** | 50.0%（20/40） | — |
 | pi-java-telemetry（map/01，**批1后**） | 34 | 34.0 | **100%** | 100%（16/16） | 100%（21/21） |
 | pi-java-tui/web（map/05） | 245 | 120.5 | **49.2%** | 29.7%（44/148） | 67.3% |
-| pi-java-coding-agent（map/04，剔 MCP 粗单元） | 485 | 354.0 | **73.0%** | 65.7%（190.0/289） | 73.9%（17/23） |
-| **合计（去重后，coding-agent 批17后）** | **1,379** | **1,035.5** | **75.1%** | — | — |
+| pi-java-coding-agent（map/04，剔 MCP 粗单元） | 485 | 370.0 | **76.3%** | 68.9%（199.0/289） | 73.9%（17/23） |
+| **合计（去重后，coding-agent 批18后）** | **1,379** | **1,051.5** | **76.3%** | — | — |
 
-> map/04 原始口径（含 G-1..G-5）：Σw 494 ／ Σwc 338.5 ／ **68.5%**；两处账都在，总表用去重值。
+> map/04 原始口径（含 G-1..G-5）：Σw 494 ／ Σwc 374.5 ／ **75.8%**；两处账都在，总表用去重值。
 > ⚠️ 批 4 复核修正：D 域基线逐行实算 11.5（旧汇总行 10.5，存疑漏计 1.0）＋设计稿 §8 正文 Δ 加总错误（30.5→32.5）⇒ 账面较批 4 设计稿预期（258.5/52.1%）高 3.0。
 > protocol/client/server（R1 排除）未加权：map/01 全层 10 对齐 / 40 缺失 / 35 存疑（85 单元）。
 
@@ -98,7 +98,7 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 
 - **ai 层权重 3 全齐**：每轮都走的请求/响应/计量主路无缺口。批 10 后计分母缺失仅 1 条（#8 namespace），无半成品——#90 图片缩放消费链已落 agent-core/coding-agent，#98 federation 批 10 闭环。分类器面已裁 R5。
 - **mcp 模块本体完成度高（76%）**，但会话内接线面是缺口（B221：六个 on() 事件 0/6、激活门、ui.custom、工具渲染器、提示分节、registerMcpServer 挂载点）。这批缺口对应 map/07 G 组 17 单元里的 15 个缺失——**进程外 `pi mcp` CLI 可用、会话内 MCP 不激活**。
-- **coding-agent 最低**：批 17 后欠账集中在扩展系统剩余面（D 域加权 95.2%——存疑清零，缺失 2 行＝#1 project_trust／#11 随 E5-23 批；E5 40.5%〔UI 注入层主体已落，余 15 成员挂账〕、包管理器 16.1%）；A 域 99.2%（余 A-29 随批 20）、E3 域 92.5%（余 E3-15/E3-23 各挂 B1/B30）。
+- **coding-agent 最低**：批 18 后欠账集中在扩展系统剩余面与包管理器 CLI 面（D 域加权 95.2%——存疑清零，缺失 2 行＝#1 project_trust／#11 随 E5-23 批；E5 40.5%〔UI 注入层主体已落，余 15 成员挂账〕、E6 54.8%〔resolve 内核已对齐，余 CLI/持久化面随批 19〕）；A 域 99.2%（余 A-29 随批 20）、E3 域 92.5%（余 E3-15/E3-23 各挂 B1/B30）、E2 域 95.8%（缺失清零）。
 - **agent-core 批 5 后 180/180 = 100%**（第二个满分模块）：权重 3 层 27/27、工具表 21/21、确认缺失与存疑**双清零**（批 5 收编 22 条存疑：13 做、8 裁决、#60 R1 出分母），未得分池 = 0。
 
 ---
@@ -141,9 +141,9 @@ codemode-only 的 4 个单元（exposure/deferred/discovery）权重 0，B161/B1
 
 现状：**模块 100%**——加权 180/180、未加权 90/90、权重 3 层含工具 27/27、工具表 21/21、确认缺失与存疑**双清零**、未得分池 = 0。（批 4 登记的 B244/B245 已分别随 coding-agent 批 2/批 8 销号。）
 
-### 2.4 coding-agent — 73.0%（去重）｜ map/04
+### 2.4 coding-agent — 76.3%（去重）｜ map/04
 
-A CLI 参数 99.2%（批 16 后）、C slash 90.7%（批 16 后）、E3 会话管理 92.5%；**D 扩展事件 95.2%（批 17 后，余缺失 2 行＝#1/#11）、E6 包管理器 16.1%、E5 扩展 API 40.5%（批 17 后）** 拉低整体。
+A CLI 参数 99.2%（批 16 后）、C slash 90.7%（批 16 后）、E3 会话管理 92.5%、E2 settings 95.8%（批 18 后，缺失清零）；**D 扩展事件 95.2%（批 17 后，余缺失 2 行＝#1/#11）、E6 包管理器 54.8%（批 18 后——resolve 内核已对齐，余 CLI/持久化面随批 19）、E5 扩展 API 40.5%（批 17 后）** 拉低整体。
 G 域新子系统：MCP 明细在 map/07；codemode 3,957 行＋tool-search/virtual-models/nested 766 行仍为 0（B161/B162）。
 新缺口：B237（RPC `handled` disposition）。
 - 批 1（2026-10-18 闭环，B236/docs/11）：`--tools` 三层语义（`*` 通配/`+name`/`-name` 修饰符/`mcp__` 保留）＋`--exclude-tools` 通配 denylist＋settings `defaultTools`（merge/resolve）＋注册面门接线（`createAllTools` 八件经 `_isAllowedTool` 过滤）＋默认激活集 **7→4**（裁决①）；map/04 A-20/A-21/E2-35 翻对齐（+3.5）；**B236 销号**、B246 新登记（reload 臂＋SDK 抛错面）；43.2% → **43.9%**（未加权 31.7% → 32.8%）。合计 63.9% → 64.2%（882.5 → 886.0/1381）。
@@ -165,6 +165,8 @@ G 域新子系统：MCP 明细在 map/07；codemode 3,957 行＋tool-search/virt
 - 批 15（2026-10-23 闭环，docs/26，slash 尾 C 域）：**`/bug` 故障上报全链＋crash-log 子系统＋C 域存疑修**——T1 `CrashLog`/`CrashRecord`（末 5 条/7 天窗/全量 notified 回写逐字）→ T2 集成（启动提示/未捕获钩〔裁决③死终端面不做〕/**`/import` 修真 fatal**〔裁决⑤，**B256 即登即销**〕/`/bug` 建议门序逐字＋`CrashIntegration` 文案件）→ T3 `BugReport` 核心（SENSITIVE_KEY 逐字/redactUrl 裁决⑨手写解析/收集裁决⑧子集/尾选）＋T3b 摘要缝（`LlmSummaryGenerator` systemPrompt 参化＋`BugReportSummarizer` 四守卫逐字）→ T4 `SessionBranchSerializer`（pi.share trailing）→ T5 `ZipArchives`（裁决① JDK 形）→ T6 `BugReportUpload`（multipart/网关/裁决⑩恒匿名）→ T7 `/bug` TUI 流（三屏＋`BugReportFlow`，裁决⑦ hint 从输入行切）→ T8 `/thinking`（空参选择器裁决⑥简版/有参直设，可用集过滤逐字）→ T9 `/model` 直设臂（`ModelExactMatch`＋scoped 收口＋15s 刷新回落）→ T10 `/export` 默认臂＋引号解析 → T11 `/session` 全段（`SessionStats`/`UsageCostBreakdown`，**D68 销号**）→ T12 `/changelog` `/compact` 核销核验（`SlashChangelogCompactTest` 双钉）。map/04 **C 域 7 行翻动**（+7.0 ⇒ 34.0/38 ≈ **89.5%**，余 6：设置/scoped-models 选择器、Radius 分享/登录、reload〔批 16〕）＋E8-2/E8-3 注记行随翻；map/05 **S29/S30 缺失→对齐**（+2.0；**R29 挂起注记**〔裁决④〕）；**B79 销号**；窄差 D79–D88（ZIP 字节/JAR 名针/死终端/schema 子集/dim 文本/简版选择器/恒匿名/裸选择器/无子进程清理/无外部编辑器）；68.9% → **70.3%**（未加权 60.7% → 62.3%；w3 73.9%/D 域 90.4%/E2 91.1% 不动）；tui/web 47.6% → **48.4%**（116.5 → 118.5/245）。合计 73.3% → **74.0%**（1,011.5 → 1,020.5/1379）。行为变化注记：**`/import` 失败 ⇒ 记 crash＋exit 1**（pi 语义，file-not-found 除外）、**`/export` 无参 ⇒ `session-<ts>.html` 落 cwd**、`/model <ref>` 直设生效、**崩溃后下次启动提示「Run /bug」**、非重试错误后 `/bug` 建议行（每进程一次）、`/session` 全段。**回归回补三钉**（命令数 24⇒26／/export Usage 钉废／Re-billed 位置钉）＋**前存红修真**（`TreeNavigationFlowTest.queuedMessagesRestore…`——根因＝steer 提交早于 run 首个 provider 调用的测试时序缺陷，callCount 门修）。排障注记：真 home `compaction.enabled=false` 被不设 compaction 的测试继承（套件性环境影响——本批 T12 排障所得）。新文件 15＋测试 14；E1 涨到 2,392、E6 912、E7 734。
 - 批 16（2026-10-23 闭环，docs/27，E5 扩展 API 面第一批）：**激活门＋提示分节＋registerToolRenderer＋扩展 CLI flag＋`/reload`＋model_select**——T1 flag 面（`ExtensionFlag`/`ExtensionFlagBinder` 三态配对与绑定逐字＋`startupDiagnostics` 落点〔裁决⑧〕＋`--help` 轻量装载 Extension CLI Flags 段〔裁决⑩〕）→ T2 激活门三件套（裁决① `setActiveTools` 删 clear/registerAll＋装配后注册即激活臂〔isAllowed 门〕＋窄化投影 D91）→ T3 提示分节接线（`BeforeAgentStartEvent` 可变 sections〔裁决⑪〕写回 harness→装配→diff 补丁全链）→ T4 `registerToolRenderer`（文本级责任链〔裁决⑦〕＋内置 MCP resolver＋TUI `ToolRenderers`/MessageBubble 消费缝，**B204 销号**）→ T5 `/reload`（`SessionReload` 七步序＋provider 重置烘焙臂〔裁决④〕＋skills/prompts 替换重扫新原语＋defaultTools diff 三分支，**B246 销号**；窄差 D90/D93）→ T6 `model_select`（两发射点＋equals 门）。map/04 **E5 域 5 行翻动**（16.0→22.0/58 ≈ **37.9%**）＋A 域 A-43 翻（**99.2%**）＋C 域 C-23 翻（**90.7%**）＋D 域 #36 翻（**92.8%**；#11 裁决⑤随 E5-23 批）；E8-7 注记行随翻。B221 收编 ②④⑤（余 ①③⑥）；窄差 D89–D94。**评审回补（修真）**：裁决① 连带——工具执行查找面接活跃集活视图（`PiToolRunner`＋`PiLaneEngine`，pi agent-loop.ts:716 对位，失活即 not found）＋四处旧夹具修形（PromptLoadoutTest 注册面补齐/AgentLoopL1/CrossLayerLengthGate/HarnessToolExecutionSpans 激活面=注册面/SessionFailurePathTest 注册+激活分离）；**责任链语义自纠**——pi resolver 返回值直返，「不管」须显式 `next()`（首版测试误写成自动落空，取证 runner.ts:789-795 后改钉 pi 逐字）。70.3% → **72.3%**（未加权 62.3% → 64.7%；w3 73.9% 不动）。合计 74.0% → **74.7%**（1,020.5 → 1,030.0/1379）。行为变化注记：**`/reload` 全量七步序**（settings/extensions 事件/skills/prompts/providers/defaultTools diff）、**扩展工具装配后即激活**（B221② 现状修复）、**失活工具执行即 not found**（pi 语义）、未识别 `--flag` 产启动诊断、`--help` 尾部可出现扩展 flag 段。新文件 11＋测试 7（47 用例＋agent-core 3）；E1 涨到 2,532、E6 924、E7 734 不动。
 - 批 17（2026-10-24 闭环，docs/28，E5 扩展 API 面第二批·扩展 UI 注入层）：**`ExtensionUI` 28 成员全面化＋晚绑定修真＋`ui_prompt` 事件对＋RPC 九方法通道＋TUI 对话四件套/custom 挂载面＋widget/footer/header/状态段注入层**——T1 接口面（default 逐字对位 pi `noOpUIContext`＋`NOOP` 单例恒等＋14 件新类型〔裁决③ 文本级 SPI〕＋`DefaultExtensionContext` 持 Supplier 现读〔裁决②——E5-32 存疑实质修复〕＋`mode()/hasUi()`）→ T2 `ui_prompt_start/end`（`UiPromptEventExtensionUI` 装饰器：只包五件阻塞方法、深度计数嵌套只发最外层、同步抛先 finish、`queueMicrotask`⇒FIFO 单虚拟线程执行器）→ T3 `RpcExtensionUI`（九方法 typed＋参数键平铺顶层〔pi spread 逐字〕＋signal/timeout 本地解除〔裁决⑦〕＋setWidget 工厂臂静默忽略〔pi 同缺〕）→ T4 四件套 overlay（selector/input/editor 逐字行形＋阻塞面护栏〔裁决⑤/D98〕＋confirm＝selector 特化）→ T5 `custom` 挂载面（done 幂等闸＋dispose 吞异常＋handle 窄化三件〔D99〕）→ T6 注入层（widget 两区/截断 10 行/footer/header 换槽/状态段 sanitize 逐字）→ T7 装配（`create(args,ui,mode)` 重载＋launcher 重排＋`onSessionInvalidated` 三路径＋reload 首步前＋**修真** `--no-extensions` 早退臂跳过 UI 烘值）。map/04 **E5 域 2 行翻动**（22.0→23.5/58 ≈ **40.5%**）＋**D 域 #26/#27 翻**（**95.2%**，余缺失 2 行＝#1/#11）；map/05 **S22/S23 缺失→对齐**（tui/web 118.5→**120.5/245 ≈ 49.2%**）。**B221 收编 ③**（余 ①⑥）；**B214 改注不销号**（挂载面落、载荷随 MCP 工厂批）；窄差 D95–D101。**评审回补**：**I-1** RPC 应答按 id 路由（`pendingUiRequests`＝pi `pendingExtensionRequests` 对位——孤儿通道线程偷应答修真）＋**I-2** 会话替换重绑扩展 UI（pi rebindSession 对位：RpcDispatcher new_session＋switchTo 注入＋PiTuiApp.switchSession 携带缝）＋Minor×2 随修（custom 清账/装饰器透传）＋spotbugs 回补（verify 阶段 4 钉）。72.3% → **73.0%**（未加权 64.7% → 65.7%；w3 73.9% 不动）。合计 74.7% → **75.1%**（1,030.0 → 1,035.5/1379）。行为变化注记：**TUI 下扩展可弹对话/挂 widget/换 footer/header**（此前静默 noop）、**RPC 九方法通道接通**、/reload·/new·/fork·/resume 前复位扩展 UI 态。新文件 22＋测试 12（69 用例）；E1 涨到 2,630、E2 679、E6 涨到 1,016、E7 涨到 1,031。
+
+- 批 18（2026-10-24 闭环，docs/29，E6 包管理器第一批·resolve 内核）：**settings 两键＋源解析三型＋npm HTTP registry＋git spawn＋resolve() 五档优先级/过滤/忽略＋会话装配接线（裁决⑨）**——T1 `packages`/`npmCommand`（`PackageSource` union 写回不胀形＋校验文案逐字）→ T2 `ParsedSource`/`GitUrlParser`/`SourceResolver`（分派逐字＋hosted-git-info 裁通用臂 D105＋dedupe project 赢/delta 双留）＋`Semvers`（裁决⑥ semver4j 引库——hyphen 实测覆盖，**D106 改注销号**）→ T3 `NpmResolver` seam＋`HttpNpmResolver`（裁决③④：精简 packument/SRI sha512/tar.gz 剥层/pinned 直拉/registry 四级来源）＋`InstallLayout`（temporary sha256-8 逐字/越根防护）→ T4 `GitRunner`＋`GitPackageStore`（裁决② spawn 系统 git 命令表逐字；npm 依赖臂裁 D103）→ T5 `PackageManager.resolve()`（五档 rank 逐字/first-wins/canonicalize 去重/四符代数/`MinimatchLite` D110/`PackageIgnore` D107/`PiManifest`/扫描族 .jar 翻译 D111/自动发现双信任门/onMissing 三臂/`withProgress` 发射面裁决⑪）→ T6 会话四类装配接 resolve（旧直扫臂退役；`-e` 走 temporary resolve；`--no-*` 只裁 resolve 臂；/reload 同入口重放）。map/04 **E6 域 9 行翻动**（5.0→**17.0/31 ≈ 54.8%**——零对齐域消除；E6-15 改注存疑、E6-16 降级缺失）＋**E2-20/E2-26 翻**（E2 域 **95.8%**，缺失清零）。**评审回补**：**I-1** prompts 同名 first-wins 修真（注册表后注册胜出曾把 resolve 序反转）＋**I-2** Windows 冒号条目启动崩修真（纯串化＋parsePathOrNull）＋M-1（`**` 两语义差实测对拍修）/M-2（校验接线）/M-3（host 小写）/M-4（装配单遍 resolve）/M-7（测试 homeDir 缝）随修；M-5 登 D112；窄差 D102–D105/D107–D112；spotbugs 12 钉回补。73.0% → **76.3%**（未加权 65.7% → 68.9%；w3 73.9% 不动）。合计 75.1% → **76.3%**（1,035.5 → 1,051.5/1379）。行为变化注记：**settings 四数组＋packages 键生效**（project 压 user）、**npm:/git: 包真实安装**、**-e 收 npm:/git:**、-ne 下 project 资源过信任门。新文件 21＋测试 16 件（146 用例）；E1 涨到 2,681、E2 706（批 17 滞后更正值）。
 
 ### 2.5 tui/web — 49.2%（总表行；map/05 域表 49.2%）｜ map/05
 
