@@ -179,6 +179,15 @@ public final class HttpNpmResolver implements NpmResolver {
         return target;
     }
 
+    /** pi {@code uninstallNpm}（:1874-1890）的 HTTP 臂对位＝目录删除（窄差 D113）。 */
+    @Override
+    public void uninstall(String name, Path installRoot) throws IOException {
+        if (!Files.exists(installRoot)) {
+            return;
+        }
+        deleteRecursively(installRoot.resolve("node_modules").resolve(name));
+    }
+
     // ── 内部 ─────────────────────────────────────────────────────
 
     private static List<String> versionsOf(JsonNode packument) {

@@ -26,9 +26,10 @@ import com.pijava.coding.agent.pkg.SourceResolver.ScopedPackage;
  * :1296-1340 等）——包源（project 先入＋身份去重）→ settings 四类数组 →
  * 自动发现 → 内置扩展，输出五档优先级排序＋canonicalize 去重的路径表。
  *
- * <p>CLI 子命令面（install/remove/update/list/config）与 settings 写回链归
- * 批 19（docs/29 §4）；本类含 resolve 缺包臂 {@code installParsedSource} 与
- * {@code withProgress}（E6-9 发射面，裁决⑪）。</p>
+ * <p>批 19（docs/30）并入公开安装面：{@code install/remove}（:1036-1079）＋
+ * settings 写回链（委托 {@link PackageConfigWriter}）＋{@code update}/
+ * {@code checkForAvailableUpdates}（委托 {@code PackageUpdater}，T3）；CLI
+ * 子命令面在 {@code subcommand/PackageCommand}。</p>
  */
 public final class PackageManager {
 
@@ -42,6 +43,7 @@ public final class PackageManager {
     private final InstallLayout layout;
     private final GitPackageStore gitStore;
     private final PackageResourceCollector collector;
+    private final PackageConfigWriter configWriter;
     private final Path homeDir;
     private volatile ProgressCallback progressCallback;
 
@@ -68,6 +70,7 @@ public final class PackageManager {
         this.layout = layout;
         this.gitStore = gitStore;
         this.collector = new PackageResourceCollector(resolver);
+        this.configWriter = new PackageConfigWriter(resolver, settings, this::getInstalledPath);
         this.homeDir = homeDir;
     }
 
@@ -164,6 +167,94 @@ public final class PackageManager {
             .toList();
         resolvePackageSources(packageSources, accumulator, null);
         return toResolvedPaths(accumulator);
+    }
+
+    // ── 批 19 T1：install/remove 公开面＋settings 写回链（:1036-1079/
+    //    :832-879/:1008-1034）─────────────────────────────────────
+
+    /**
+     * pi {@code install}（:1036-1058）：npm→装／git→clone／local→仅校验路径存在
+     * （{@code Path does not exist: <resolved>} 逐字，模型可见）；project 域前过
+     * 信任门。https URL 由 {@link SourceParser} 归 git 源（pi 同，无 JAR 下载臂——
+     * 裁决④）。
+     */
+    public void install(String source, boolean local) {
+        var parsed = SourceParser.parseSource(source);
+        var scope = local ? SourceScope.PROJECT : SourceScope.USER;
+        resolver.assertProjectTrustedForScope(scope);
+        try {
+            withProgress(Action.INSTALL, source, "Installing " + source + "...", () -> {
+                if (parsed instanceof NpmSource npm) {
+                    var installRoot = layout.npmInstallRoot(scope, false);
+                    layout.ensureNpmProject(installRoot);
+                    npmResolver.install(npm, installRoot);
+                    return;
+                }
+                if (parsed instanceof GitSource git) {
+                    gitStore.installGit(git, scope);
+                    return;
+                }
+                var resolved = resolver.resolvePath(((LocalSource) parsed).path());
+                var path = PackageResourceScanner.parsePathOrNull(resolved);
+                if (path == null || !Files.exists(path)) {
+                    throw new IllegalStateException("Path does not exist: " + resolved);
+                }
+            });
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /** pi {@code installAndPersist}（:1060-1062）：先文件系统后 settings。 */
+    public void installAndPersist(String source, boolean local) {
+        install(source, local);
+        addSourceToSettings(source, local);
+    }
+
+    /**
+     * pi {@code remove}（:1064-1079）：npm→卸载（D113 目录删除）／git→删 clone／
+     * local→无文件系统动作（只写 settings）。
+     */
+    public void remove(String source, boolean local) {
+        var parsed = SourceParser.parseSource(source);
+        var scope = local ? SourceScope.PROJECT : SourceScope.USER;
+        resolver.assertProjectTrustedForScope(scope);
+        try {
+            withProgress(Action.REMOVE, source, "Removing " + source + "...", () -> {
+                if (parsed instanceof NpmSource npm) {
+                    npmResolver.uninstall(npm.name(), layout.npmInstallRoot(scope, false));
+                    return;
+                }
+                if (parsed instanceof GitSource git) {
+                    gitStore.removeGit(git, scope);
+                }
+                // local 臂：无文件系统动作（pi :1075-1077）。
+            });
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /** pi {@code removeAndPersist}（:1081-1084）：remove 后写 settings，返回
+     *  settings 是否有匹配条目被移除。 */
+    public boolean removeAndPersist(String source, boolean local) {
+        remove(source, local);
+        return removeSourceFromSettings(source, local);
+    }
+
+    /** pi {@code addSourceToSettings}（:832-861）——委托 {@link PackageConfigWriter}。 */
+    public boolean addSourceToSettings(String source, boolean local) {
+        return configWriter.addSourceToSettings(source, local);
+    }
+
+    /** pi {@code removeSourceFromSettings}（:863-879）。 */
+    public boolean removeSourceFromSettings(String source, boolean local) {
+        return configWriter.removeSourceFromSettings(source, local);
+    }
+
+    /** pi {@code listConfiguredPackages}（:1008-1034）。 */
+    public List<ConfiguredPackage> listConfiguredPackages() {
+        return configWriter.listConfiguredPackages();
     }
 
     /** pi {@code getInstalledPath}（:883-897）：已装路径查询（不存在 ⇒ null）。 */
@@ -364,8 +455,9 @@ public final class PackageManager {
     }
 
     /** pi {@code withProgress}（:903-918）：操作前 start，成 complete，转发
-     *  error（message＝异常 message）并把异常继续抛。 */
-    void withProgress(Action action, String source, String message, IoRunnable operation)
+     *  error（message＝异常 message）并把异常继续抛。批 19 转 public：install/
+     *  remove/update 的 CLI 消费面（E6-9）经此发射。 */
+    public void withProgress(Action action, String source, String message, IoRunnable operation)
             throws IOException {
         emitProgress(ProgressEvent.start(action, source, message));
         try {
@@ -385,7 +477,7 @@ public final class PackageManager {
     }
 
     @FunctionalInterface
-    interface IoRunnable {
+    public interface IoRunnable {
         void run() throws IOException;
     }
 }

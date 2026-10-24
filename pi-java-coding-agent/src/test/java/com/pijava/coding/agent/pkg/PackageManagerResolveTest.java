@@ -63,6 +63,11 @@ class PackageManagerResolveTest {
                 "{\"name\":\"" + source.name() + "\",\"version\":\"1.0.0\"}");
             return target;
         }
+
+        @Override
+        public void uninstall(String name, Path installRoot) {
+            // resolve 测试不消费卸载臂。
+        }
     }
 
     @BeforeEach

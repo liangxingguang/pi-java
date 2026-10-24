@@ -57,6 +57,15 @@ public record PackageSource(
     }
 
     /**
+     * pi 写回链原位替换对位（package-manager.ts:850 {@code { ...existing, source:
+     * normalized }}）：保留过滤字段只换 {@code source}（批 19 T1）。
+     */
+    public PackageSource withSource(String newSource) {
+        return new PackageSource(newSource, autoload, extensions, skills, prompts, themes,
+            stringForm);
+    }
+
+    /**
      * 写回不胀形：裸串来的写回裸串；对象形只写非 null 键（pi 对象臂全字段
      * optional，缺席键不应出现在写回 JSON 里）。
      */

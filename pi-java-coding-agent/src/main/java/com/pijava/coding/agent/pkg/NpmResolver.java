@@ -27,4 +27,12 @@ public interface NpmResolver {
      * pinned（精确版本）源不查元数据直接下载（docs/29 §3 T3）。
      */
     Path install(NpmSource source, Path installRoot) throws IOException;
+
+    /**
+     * 卸载（批 19 T1，pi {@code uninstallNpm} :1874-1890 对位）。pi 走 npm CLI
+     * {@code uninstall <name> --prefix <root>}；HTTP 臂对位＝删
+     * {@code <installRoot>/node_modules/<name>}（窄差 D113）。{@code installRoot}
+     * 不存在 ⇒ no-op（pi {@code existsSync} 门）。
+     */
+    void uninstall(String name, Path installRoot) throws IOException;
 }
