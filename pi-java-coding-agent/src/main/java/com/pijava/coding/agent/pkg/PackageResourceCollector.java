@@ -199,8 +199,9 @@ public final class PackageResourceCollector {
      *  包资源收集，四类皆空回 false ⇒ 目录本身当扩展路径收。 */
     public void resolveLocalExtensionSource(LocalSource source, ResourceAccumulator accumulator,
             PackageFilter filter, PathMetadata metadata, Path baseDir) {
-        var resolved = Path.of(resolver.resolvePathFromBase(source.path(), baseDir));
-        if (!Files.exists(resolved)) {
+        var resolved = PackageResourceScanner.parsePathOrNull(
+            resolver.resolvePathFromBase(source.path(), baseDir));
+        if (resolved == null || !Files.exists(resolved)) {
             return;
         }
         try {

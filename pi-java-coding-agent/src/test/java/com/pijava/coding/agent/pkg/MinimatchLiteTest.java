@@ -44,6 +44,25 @@ class MinimatchLiteTest {
     }
 
     @Test
+    void globstarAtEndRequiresAtLeastOneSegment() {
+        // pi minimatch 10.2.6 实测对拍（评审 M1）：「a/**」不中「a」自身。
+        assertThat(MinimatchLite.match("a/**", "a")).isFalse();
+        assertThat(MinimatchLite.match("a/**", "a/b")).isTrue();
+        assertThat(MinimatchLite.match("a/**", "a/b/c")).isTrue();
+    }
+
+    @Test
+    void globstarDoesNotCrossDotSegments() {
+        // dot:false：通配（含 **）不匹配 . 开头段（pi minimatch 实测对拍）。
+        assertThat(MinimatchLite.match("a/**", "a/.b/c")).isFalse();
+        assertThat(MinimatchLite.match("**/*.md", ".h/x.md")).isFalse();
+        assertThat(MinimatchLite.match("**/*.md", "a/.h/x.md")).isFalse();
+        assertThat(MinimatchLite.match("**/*.md", "a/x.md")).isTrue();
+        assertThat(MinimatchLite.match("**", "plain")).isTrue();
+        assertThat(MinimatchLite.match("**", ".dot")).isFalse();
+    }
+
+    @Test
     void dotSegmentsNotMatchedByLeadingWildcard() {
         // minimatch dot:false 默认。
         assertThat(MinimatchLite.match("*.md", ".hidden.md")).isFalse();

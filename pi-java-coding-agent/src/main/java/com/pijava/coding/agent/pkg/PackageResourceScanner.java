@@ -320,8 +320,8 @@ public final class PackageResourceScanner {
     public static List<String> collectFilesFromPaths(List<String> paths, ResourceType type) {
         var files = new ArrayList<String>();
         for (var p : paths) {
-            var path = Path.of(p);
-            if (!Files.exists(path)) {
+            var path = parsePathOrNull(p);
+            if (path == null || !Files.exists(path)) {
                 continue;
             }
             if (Files.isRegularFile(path)) {
@@ -331,6 +331,16 @@ public final class PackageResourceScanner {
             }
         }
         return files;
+    }
+
+    /** Windows 非法字符（如 {@code builtin:x} 的冒号）⇒ null（≙ pi
+     *  existsSync=false 静默跳过；评审 I2 回补）。 */
+    public static Path parsePathOrNull(String path) {
+        try {
+            return Path.of(path);
+        } catch (java.nio.file.InvalidPathException e) {
+            return null;
+        }
     }
 
     /** pi {@code expandPackageGlob}（:296-300）：glob 展开可见路径（dot 段不收），

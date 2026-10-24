@@ -62,6 +62,8 @@ public final class GitUrlParser {
                 if (host == null) {
                     return null;
                 }
+                // JS URL.hostname 小写 host（评审 M3 回补；简写臂 pi 不保小写，同形保留）。
+                host = host.toLowerCase(Locale.ROOT);
                 path = stripLeadingSlashes(uri.getRawPath() == null ? "" : uri.getRawPath());
             } catch (URISyntaxException e) {
                 return null;

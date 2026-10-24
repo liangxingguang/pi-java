@@ -201,6 +201,31 @@ class PackageManagerResolveTest {
     }
 
     @Test
+    void invalidNpmCommandThrowsAtConstruction() {
+        // 评审 M2 回补：T1 校验面接进 PackageManager 构造（设计 T1.4）。
+        var global = new Settings();
+        global.npmCommand = List.of("", "install");
+        writeGlobal(global);
+
+        assertThatThrownBy(() -> newManager(List.of()))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Invalid npmCommand: first array entry must be a non-empty command");
+    }
+
+    @Test
+    void builtinSettingsEntryDoesNotCrashResolve() {
+        // 评审 I2 回补：settings 四类数组里裸 builtin: 条目（Windows 上
+        // Path.of 抛 InvalidPathException 的形态）⇒ pi 结局＝静默跳过。
+        var global = new Settings();
+        global.extensions = List.of("builtin:mcp");
+        writeGlobal(global);
+
+        var resolved = manager.resolve(null);
+
+        assertThat(resolved.extensions()).isEmpty();
+    }
+
+    @Test
     void onMissingNullInstallsDirectly() {
         var global = new Settings();
         global.packages = List.of(PackageSource.of("npm:ghostpkg"));

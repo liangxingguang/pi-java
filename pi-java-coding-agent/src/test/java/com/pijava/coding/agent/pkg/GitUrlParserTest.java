@@ -135,6 +135,14 @@ class GitUrlParserTest {
     }
 
     @Test
+    void protocolHostLowercasedLikeJsUrl() {
+        // JS URL.hostname 小写归一（评审 M3）；身份键与安装路径随之稳定。
+        var git = GitUrlParser.parseGitUrl("https://GitHub.COM/u/r");
+
+        assertThat(git.host()).isEqualTo("github.com");
+    }
+
+    @Test
     void deepPathsAccepted() {
         var git = GitUrlParser.parseGitUrl("https://gitlab.com/group/sub/repo");
 

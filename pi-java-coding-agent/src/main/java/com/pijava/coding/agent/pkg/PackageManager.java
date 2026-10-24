@@ -57,6 +57,10 @@ public final class PackageManager {
     public PackageManager(SourceResolver resolver, SettingsManager settings,
             List<String> builtinExtensions, NpmResolver npmResolver,
             InstallLayout layout, GitPackageStore gitStore, Path homeDir) {
+        // pi getNpmCommand 校验面（package-manager.ts:1787-1789，docs/29 T1.4
+        // 「构造/解析处」）：首项空 ⇒ 抛（文案逐字）。HTTP 臂不消费命令本体
+        //（D104），但配置非法时与 pi 同文案报错。
+        NpmCommand.resolve(settings.accessors().getNpmCommand());
         this.resolver = resolver;
         this.settings = settings;
         this.builtinExtensions = List.copyOf(builtinExtensions);
@@ -175,8 +179,9 @@ public final class PackageManager {
         }
         if (parsed instanceof LocalSource local) {
             var baseDir = resolver.getBaseDirForScope(scope);
-            var path = Path.of(resolver.resolvePathFromBase(local.path(), baseDir));
-            return Files.exists(path) ? path : null;
+            var path = PackageResourceScanner.parsePathOrNull(
+                resolver.resolvePathFromBase(local.path(), baseDir));
+            return path != null && Files.exists(path) ? path : null;
         }
         return null;
     }

@@ -195,7 +195,16 @@ public final class SourceResolver {
                 // pi fileURLToPath 同样拒绝非法 file URL；这里按字面路径继续。
             }
         }
-        var path = Path.of(normalized);
+        // pi resolvePath 是纯串拼接（node path.resolve 不校验字符）——Windows 上
+        // 含 ':' 的条目（如 settings 里裸写 builtin:mcp）在 java 抛
+        // InvalidPathException ⇒ 回落原串，下游 existsSync=false 静默跳过
+        //（pi 同结局）。评审 I2 回补。
+        final Path path;
+        try {
+            path = Path.of(normalized);
+        } catch (java.nio.file.InvalidPathException e) {
+            return normalized;
+        }
         var resolved = path.isAbsolute() ? path.normalize() : baseDir.resolve(path).normalize();
         return resolved.toString();
     }

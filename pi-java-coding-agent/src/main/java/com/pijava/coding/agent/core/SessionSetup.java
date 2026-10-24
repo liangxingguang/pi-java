@@ -153,6 +153,11 @@ final class SessionSetup {
      * {@code /reload} 经同一入口自然重放（pi resource-loader.reload 对位）。
      */
     static PackageManager packageManagerFor(SettingsManager settings) {
+        return packageManagerFor(settings, Path.of(PackageAutoDiscovery.getHomeDir()));
+    }
+
+    /** 可测形（homeDir 注入——真 home 的 {@code ~/.agents} 不泄进夹具，评审 M7）。 */
+    static PackageManager packageManagerFor(SettingsManager settings, Path homeDir) {
         var cwd = Path.of(System.getProperty("user.dir"));
         var agentDir = FileSettingsStorage.defaultAgentDir();
         var resolver = new SourceResolver(cwd, agentDir, settings::isProjectTrusted);
@@ -160,8 +165,23 @@ final class SessionSetup {
         return new PackageManager(resolver, settings,
             com.pijava.coding.agent.extension.ExtensionManager.builtinExtensionNames(),
             new HttpNpmResolver(cwd, layout), layout,
-            new GitPackageStore(new GitRunner(), layout, null),
-            Path.of(PackageAutoDiscovery.getHomeDir()));
+            new GitPackageStore(new GitRunner(), layout, null), homeDir);
+    }
+
+    /**
+     * 一次装配的 resolve 结果三元组（评审 M4：pi resource-loader 每次 reload 只
+     * 跑<b>一遍</b> resolve＋一遍 resolveExtensionSources——temporary 未 pin git
+     * 源每遍都真 {@code git pull}，重复跑既有副作用也有会话内不一致窗口）。
+     * 初装（wireSession）与 {@code /reload} 各自现算一份，三消费面共享。
+     */
+    record ResolvedAssembly(PackageManager pm, ResolvedPaths resolved, ResolvedPaths cli) {}
+
+    static ResolvedAssembly resolveAll(Args args, SettingsManager settings) {
+        return resolveAll(args, packageManagerFor(settings));
+    }
+
+    static ResolvedAssembly resolveAll(Args args, PackageManager pm) {
+        return new ResolvedAssembly(pm, pm.resolve(null), resolveCliSources(args, pm));
     }
 
     /** pi {@code mergePaths}：保序去重（先到者胜）。 */
@@ -192,19 +212,23 @@ final class SessionSetup {
      */
     static List<com.pijava.coding.agent.prompt.PromptTemplates.PromptTemplate>
             loadPromptTemplates(Args args, SettingsManager settings) {
-        var pm = packageManagerFor(settings);
+        return loadPromptTemplates(args, resolveAll(args, settings));
+    }
+
+    static List<com.pijava.coding.agent.prompt.PromptTemplates.PromptTemplate>
+            loadPromptTemplates(Args args, ResolvedAssembly assembly) {
         var fs = new com.pijava.agent.tool.DefaultFileSystem();
         // scope 随 resolve 元数据走（CLI 车道＝temporary，B247 打标惯例）。
         var scoped = new java.util.ArrayList<
             com.pijava.coding.agent.prompt.PromptTemplates.ScopedTemplatePath>();
-        for (var r : resolveCliSources(args, pm).prompts()) {
+        for (var r : assembly.cli().prompts()) {
             if (r.enabled()) {
                 scoped.add(new com.pijava.coding.agent.prompt.PromptTemplates
                     .ScopedTemplatePath(r.path(), scopeOf(r)));
             }
         }
         if (!args.noPromptTemplates()) {
-            for (var r : pm.resolve(null).prompts()) {
+            for (var r : assembly.resolved().prompts()) {
                 if (r.enabled()) {
                     scoped.add(new com.pijava.coding.agent.prompt.PromptTemplates
                         .ScopedTemplatePath(r.path(), scopeOf(r)));
@@ -224,7 +248,17 @@ final class SessionSetup {
         // 同路径先到者胜（mergePaths 语义在 scoped 列表上的对位）。
         var seen = new java.util.LinkedHashSet<String>();
         scoped.removeIf(s -> !seen.add(s.path()));
-        return com.pijava.coding.agent.prompt.PromptTemplates.loadScoped(fs, scoped).templates();
+        var loaded = com.pijava.coding.agent.prompt.PromptTemplates
+            .loadScoped(fs, scoped).templates();
+        // pi dedupePrompts（resource-loader.ts:1160-1184）：同名<b>先到先得</b>——
+        // 注册表（PromptTemplateRegistry.put）是后注册胜出，不先去重会把 resolve
+        // 序整体反转（评审 I1 回补：project 必须压 user、显式 CLI 撞名必输）。
+        var byName = new java.util.LinkedHashMap<String,
+            com.pijava.coding.agent.prompt.PromptTemplates.PromptTemplate>();
+        for (var template : loaded) {
+            byName.putIfAbsent(template.name(), template);
+        }
+        return List.copyOf(byName.values());
     }
 
     /** PathMetadata.scope → SourceInfo.Scope。 */
@@ -244,12 +278,15 @@ final class SessionSetup {
      * 退役）；{@code --no-skills} 只裁 resolve 臂（pi :594 对位），CLI 臂仍收。
      */
     static Map<String, Skill> discoverSkills(Args args, SettingsManager settings) {
-        var pm = packageManagerFor(settings);
-        var cliSkills = enabledPaths(resolveCliSources(args, pm).skills());
+        return discoverSkills(args, resolveAll(args, settings));
+    }
+
+    static Map<String, Skill> discoverSkills(Args args, ResolvedAssembly assembly) {
+        var cliSkills = enabledPaths(assembly.cli().skills());
         var explicit = args.skills() == null ? List.<String>of() : args.skills();
         var ordered = args.noSkills()
             ? mergePaths(cliSkills, explicit)
-            : mergePaths(mergePaths(cliSkills, enabledPaths(pm.resolve(null).skills())),
+            : mergePaths(mergePaths(cliSkills, enabledPaths(assembly.resolved().skills())),
                 explicit);
         if (ordered.isEmpty()) {
             return Map.of();

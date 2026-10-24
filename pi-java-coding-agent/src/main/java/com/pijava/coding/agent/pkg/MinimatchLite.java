@@ -30,16 +30,18 @@ public final class MinimatchLite {
             var isFirst = i == 0;
             var isLast = i == segments.length - 1;
             if (segment.equals("**")) {
+                // dot:false：** 不跨 . 开头段（逐段 (?!\.) 负先行，评审 M1 回补）；
+                // 尾位 ** 至少一段（pi minimatch：「a/**」不中「a」自身）。
                 if (isFirst && isLast) {
-                    out.append(".*");
+                    out.append("(?![.])[^/]+(?:/(?![.])[^/]+)*");
                 } else if (isFirst) {
                     // "**/b"：零段也能接 b（尾部斜杠由本段自带）。
-                    out.append("(?:[^/]+/)*");
+                    out.append("(?:(?![.])[^/]+/)*");
                 } else if (isLast) {
-                    out.append("(?:/[^/]+)*");
+                    out.append("(?:/(?![.])[^/]+)+");
                 } else {
                     // "a/**/b"：零段时 "a/b" 也中（斜杠本段自带）。
-                    out.append("(?:/[^/]+)*/");
+                    out.append("(?:/(?![.])[^/]+)*/");
                 }
                 continue;
             }

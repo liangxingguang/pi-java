@@ -81,13 +81,31 @@ class ResolveWiringTest {
         settings.reload();
     }
 
+    /** 评审 M7：装配走 homeDir 注入缝——真 {@code HOME} 环境变量的
+     *  {@code ~/.agents/skills} 不泄进夹具（pi getHomeDir 是 HOME-first）。 */
+    private SessionSetup.ResolvedAssembly assembly(com.pijava.coding.agent.cli.Args args) {
+        return SessionSetup.resolveAll(args,
+            SessionSetup.packageManagerFor(settings, home));
+    }
+
+    private java.util.Map<String, com.pijava.agent.skill.Skill> discover(String... argv) {
+        var args = ArgsParser.parse(argv);
+        return SessionSetup.discoverSkills(args, assembly(args));
+    }
+
+    private java.util.List<com.pijava.coding.agent.prompt.PromptTemplates.PromptTemplate>
+            prompts(String... argv) {
+        var args = ArgsParser.parse(argv);
+        return SessionSetup.loadPromptTemplates(args, assembly(args));
+    }
+
     @Test
     void packageSkillEntersSessionViaResolve() throws Exception {
         var pkgDir = Files.createDirectories(cwd.resolve("pkg"));
         writeSkill(pkgDir.resolve("skills"), "pkg-skill", "from package");
         writeGlobalPackages(PackageSource.of(pkgDir.toString()));
 
-        var skills = SessionSetup.discoverSkills(ArgsParser.parse(new String[0]), settings);
+        var skills = discover();
 
         assertThat(skills).containsKey("pkg-skill");
         assertThat(skills.get("pkg-skill").description()).isEqualTo("from package");
@@ -100,7 +118,7 @@ class ResolveWiringTest {
         writeSkill(agentDir().resolve("skills"), "dup", "user variant");
         writeSkill(cwd.resolve(".pi-java").resolve("skills"), "dup", "project variant");
 
-        var skills = SessionSetup.discoverSkills(ArgsParser.parse(new String[0]), settings);
+        var skills = discover();
 
         assertThat(skills.get("dup").description()).isEqualTo("project variant");
     }
@@ -113,7 +131,7 @@ class ResolveWiringTest {
         writeGlobalPackages(PackageSource.object(
             pkgDir.toString(), null, null, List.of("!drop"), null, null));
 
-        var skills = SessionSetup.discoverSkills(ArgsParser.parse(new String[0]), settings);
+        var skills = discover();
 
         assertThat(skills).containsKey("keep");
         assertThat(skills).doesNotContainKey("drop");
@@ -128,8 +146,7 @@ class ResolveWiringTest {
         var explicitDir = Files.createDirectories(cwd.resolve("explicit"));
         writeSkill(explicitDir, "cli-skill", "explicit");
 
-        var skills = SessionSetup.discoverSkills(ArgsParser.parse(
-            new String[] {"--no-skills", "--skill", explicitDir.toString()}), settings);
+        var skills = discover("--no-skills", "--skill", explicitDir.toString());
 
         assertThat(skills).doesNotContainKey("pkg-only");
         assertThat(skills).containsKey("cli-skill");
@@ -143,13 +160,44 @@ class ResolveWiringTest {
             "---\ndescription: from package\n---\nPackage prompt body");
         writeGlobalPackages(PackageSource.of(pkgDir.toString()));
 
-        var templates = SessionSetup.loadPromptTemplates(
-            ArgsParser.parse(new String[0]), settings);
+        var templates = prompts();
 
         assertThat(templates).anySatisfy(t -> {
             assertThat(t.name()).isEqualTo("p");
             assertThat(t.description()).isEqualTo("from package");
         });
+    }
+
+    @Test
+    void promptNameCollisionFirstWinsInResolveOrder() throws Exception {
+        // pi dedupePrompts（resource-loader.ts:1160-1184）先到先得：resolve 序
+        // project(1) 先于 user(3) ⇒ project 胜（评审 I1 钉——注册表后注册胜出，
+        // 不先去重会整体反转）。
+        var projectPrompts = Files.createDirectories(cwd.resolve(".pi-java").resolve("prompts"));
+        Files.writeString(projectPrompts.resolve("dup.md"), "project body");
+        var userPrompts = Files.createDirectories(agentDir().resolve("prompts"));
+        Files.writeString(userPrompts.resolve("dup.md"), "user body");
+
+        var templates = prompts();
+
+        assertThat(templates.stream().filter(t -> t.name().equals("dup")).toList())
+            .singleElement().extracting(t -> t.content()).isEqualTo("project body");
+    }
+
+    @Test
+    void explicitPromptTemplateLosesToResolvedOnCollision() throws Exception {
+        // pi mergePaths 末位＋first-wins：--prompt-template 撞名必输（评审 I1 ③）。
+        var pkgDir = Files.createDirectories(cwd.resolve("pkgDup"));
+        var pkgPrompts = Files.createDirectories(pkgDir.resolve("prompts"));
+        Files.writeString(pkgPrompts.resolve("dup.md"), "package body");
+        writeGlobalPackages(PackageSource.of(pkgDir.toString()));
+        var explicitDir = Files.createDirectories(cwd.resolve("explicitDup"));
+        Files.writeString(explicitDir.resolve("dup.md"), "explicit body");
+
+        var templates = prompts("--prompt-template", explicitDir.toString());
+
+        assertThat(templates.stream().filter(t -> t.name().equals("dup")).toList())
+            .singleElement().extracting(t -> t.content()).isEqualTo("package body");
     }
 
     @Test
@@ -162,9 +210,7 @@ class ResolveWiringTest {
         var explicitDir = Files.createDirectories(cwd.resolve("explicitP"));
         Files.writeString(explicitDir.resolve("cli.md"), "cli body");
 
-        var templates = SessionSetup.loadPromptTemplates(ArgsParser.parse(
-            new String[] {"--no-prompt-templates", "--prompt-template",
-                explicitDir.toString()}), settings);
+        var templates = prompts("--no-prompt-templates", "--prompt-template", explicitDir.toString());
 
         assertThat(templates).noneMatch(t -> t.name().equals("pkg-only"));
         assertThat(templates).anyMatch(t -> t.name().equals("cli"));

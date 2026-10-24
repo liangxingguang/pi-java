@@ -112,6 +112,9 @@ public final class AgentSession implements AutoCloseable {
     private volatile String extensionMode = "print";
     // resources_discover：扩展贡献的主题候选（启动时选第一个可用）。
     private List<Path> themePaths = List.of();
+    /** 批 18（评审 M4）：本会话装配期的 resolve 结果（wireSession 现算一份，
+     *  技能/模板/主题/扩展四消费面共享；/reload 重算）。 */
+    private SessionSetup.ResolvedAssembly resolveAssembly;
     // 3d（原 docs/31 §8.22）：pi 的重试中止是「仅退避睡眠存活」的
     // _retryAbortController（agent-session.ts:2948 建、:2963 finally 弃）——
     // 会话侧等价的窗口模拟：onAutoRetryStart 开窗（先清残留计数，≙ 新 controller）、
@@ -463,10 +466,13 @@ public final class AgentSession implements AutoCloseable {
             .toList();
         tools.registerAll(toolList);
 
+        // 批 18（评审 M4）：一次装配一次 resolve——temporary git 源每遍真 pull，
+        // 重复 resolve 有副作用与会话内不一致窗口；pi resource-loader 单遍对位。
+        var resolveAssembly = SessionSetup.resolveAll(args, settings);
         var promptTemplates = new PromptTemplateRegistry();
         // 批 18（T6 裁决⑨）：模板由 PackageManager.resolve() 统辖（settings 数组/
         // 包/自动发现五档优先级＋CLI 显式），批 16 前的默认两目录直扫退役。
-        promptTemplates.registerAll(SessionSetup.loadPromptTemplates(args, settings));
+        promptTemplates.registerAll(SessionSetup.loadPromptTemplates(args, resolveAssembly));
         var services = new SessionServices(
             settings,
             new TrustManager(effective.defaultProjectTrust),
@@ -705,7 +711,7 @@ public final class AgentSession implements AutoCloseable {
             .steeringMode(SessionSetup.queueMode(effective.steeringMode))
             .followUpMode(SessionSetup.queueMode(effective.followUpMode))
             .toolExecution(ToolExecution.defaultMode())
-            .skills(SessionSetup.discoverSkills(args, settings))
+            .skills(SessionSetup.discoverSkills(args, resolveAssembly))
             .telemetry(telemetry)
             .compactionObserver(compactionObserver)
             // 3d 环 A/B 三件套（原 docs/31 §8.22.3）：settings 晚读口（每次 run 现取，
@@ -766,6 +772,7 @@ public final class AgentSession implements AutoCloseable {
                 () -> agentSession.harness.getThinkingLevel(),
                 models::supportsThinking));
         agentSession.baseToolContext = toolContext;
+        agentSession.resolveAssembly = resolveAssembly;
         return agentSession;
     }
 
@@ -2507,16 +2514,17 @@ public final class AgentSession implements AutoCloseable {
         // 是模式层装配而非扩展加载（runner.ts:580；早退臂曾把它跳过 ⇒
         // --no-extensions 下 TUI/RPC 注入落空）。
         owner.extensionUI = ui == null ? ExtensionUI.noop() : ui;
-        // 批 18（T6）：包管理器装配＋CLI 显式源 temporary resolve＋主题候选基线
-        //（pi resource-loader.ts:530-585 合并臂：themes 独立于 noExtensions，
+        // 批 18（T6）：CLI 显式源 temporary resolve＋主题候选基线（pi
+        // resource-loader.ts:530-585 合并臂：themes 独立于 noExtensions，
         // noThemes 只裁 resolve 臂）。在 -ne 早退臂之前，主题不被扩展开关误裁。
-        var packageManager = SessionSetup.packageManagerFor(services.settings());
-        var cliResolved = SessionSetup.resolveCliSources(args, packageManager);
+        // 评审 M4：resolve 结果复用 wireSession 的装配期单遍（owner.resolveAssembly）。
+        var assembly = owner.resolveAssembly;
+        var cliResolved = assembly.cli();
         var cliThemePaths = SessionSetup.enabledPaths(cliResolved.themes());
         var themeStrings = args.noThemes()
             ? cliThemePaths
             : SessionSetup.mergePaths(cliThemePaths,
-                SessionSetup.enabledPaths(packageManager.resolve(null).themes()));
+                SessionSetup.enabledPaths(assembly.resolved().themes()));
         owner.themePaths = themeStrings.stream().map(java.nio.file.Path::of).toList();
         // 批 14（docs/25 T15，A-25）：早退臂收紧为「-ne 且无显式路径」——
         // pi resource-loader.ts:578/690 的 noExtensions ? cliEnabledExtensions : merge(...)
@@ -2571,10 +2579,9 @@ public final class AgentSession implements AutoCloseable {
             // 批 18（T6）：resolve() 输出取代「扫全局/项目扩展目录」两臂（pi
             // mergePaths(cliEnabledExtensions, enabledExtensions) :577-578 对位；
             // 自动发现臂覆盖原两目录扫描，settings 数组/包自此生效——裁决⑨）。
-            var resolved = packageManager.resolve(null);
             for (var path : SessionSetup.mergePaths(
                     SessionSetup.enabledPaths(cliResolved.extensions()),
-                    SessionSetup.enabledPaths(resolved.extensions()))) {
+                    SessionSetup.enabledPaths(assembly.resolved().extensions()))) {
                 loadResolvedExtension(manager, path);
             }
         } else {
