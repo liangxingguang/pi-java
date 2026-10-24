@@ -614,6 +614,8 @@ B 域后态：对齐 7／存疑 1（#4）／缺失 0＝**14.0/15 ≈ 93.3%**。
 7. `2e824f50` T7 启动包更新通知
 8. `aef75931` 扫尾（SessionSetup 残留 import 清理）
 9. `15889c5e` spotbugs 回补（toggleProject Optional）
+10. `fdf79ecd` docs 闭环回填（四处）
+11. `493f5880` 评审回补（I-1/I-2/I-3＋M-1/2/3）
 
 **实际翻动（与 §0 预期一致，+18.0）**：E6-1/E6-2/E6-13/E6-15 存疑→对齐、
 E6-11/E6-12/E6-14/E6-16 缺失→对齐、E6-10 缺失→存疑、B-1/B-2/B-5/B-6 存疑→对齐、
@@ -622,7 +624,20 @@ B-4 缺失→存疑。E6 域 17.0→**30.0/31 ≈ 96.8%**（缺失清零）、B 
 **w3 账面滞后修正**：批 18 的 w3 #18/#23（npm 源、包源复合）翻对齐当时漏入 w3 表，
 连同本批 #19 ⇒ w3 73.9%（17/23）→ **87.0%（20/23）**。
 
-**过程修真/回补**（无独立评审环节，verify 驱动）：
+**评审回补（6 条全实，`493f5880`）**：
+
+- **I-1**（exit 码承重）：config TUI 无终端臂打印错误后 void 返回 ⇒ 命令落 0——
+  SPI `selectConfig` 改返退出码（runner 无终端 ⇒ 1，PiTuiLauncher/
+  SessionSelectorRunner 先例同向）。
+- **I-2**（光标吸附）：pi `updateItem` 原地变异不动 selectedIndex；java record
+  不可变 ⇒ 重建 flat 后恢复原选中位（toggle 不再跳回首项）。
+- **I-3**（污屏窗）：`PackageUpdateNotifier` 的 UI 编排回调纳入吞错臂——会话
+  已关时 dispatcher 抛错不裸奔虚拟线程（alt 屏在飞）。
+- **M-1** 删 `setCallbacks` 死 API（runner 每 tick 渲染，pi requestRender 无谓）。
+- **M-2** `--extension ""` 空串门（pi `!value` 对位）。
+- **M-3** 搜索 `toLowerCase(Locale.ROOT)`（tr-TR 的 I/ı 折叠偏 pi JS 语义）。
+
+**过程修真/回补（verify 驱动）**：
 
 - **修真（设计外新发现）**：`SettingsManager.setProjectTrusted(false)` 旧实现
   `storage.writeProject(new Settings())` 整本抹项目 settings 文件——pi 对位
@@ -637,6 +652,12 @@ B-4 缺失→存疑。E6 域 17.0→**30.0/31 ≈ 96.8%**（缺失清零）、B 
   仅在 `autoload !== false` 时（初版测试期望错，取证改钉）。
 - **环境坑复现**：`mvn test -pl <下游>` 不带 `-am` 拾 .m2 旧构件假红
   （ChatScreen NCDFE）；`-Dtest` 跨模块要配 `-Dsurefire.failIfNoSpecifiedTests=false`。
+- **verify 史**：#1 红（spotbugs NP_BOOLEAN_RETURN_NULL——15889c5e 回补）、#2 绿、
+  评审回补后 #3 红在 `PiTuiAppDequeueTest.escWhileStreamingRestoresQueuedThenAborts`
+  （全套件时序敏感——隔离 3/3 绿、#2 同码绿，批 15 同族 steer/abort 时序窗，
+  作前存红登记）、#4 绿收口（exit 0，BUILD SUCCESS，0 失败）。
+- **本机事故**：`perl -i` 跨盘（D:→C: temp）rename 失败吃掉 MEMORY.md——按会话
+  开场快照完整重建（教训入记忆：批量改写用 Edit 工具，不用 perl -i）。
 
 **行为变化注记**（changelog 级）：见 docs/04 批 19 项【风险/代价】段
 （install https URL 不下载 JAR／config 无参开 TUI／update 裸跑恒不可用臂／
