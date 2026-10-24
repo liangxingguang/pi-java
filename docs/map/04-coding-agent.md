@@ -274,7 +274,7 @@ pi-java 的**引擎钩子** = `pi-java-agent-core/.../agent/hook/HookSystem.java
 |---|---|---|
 | D31 | 替换 payload 类型不符 ⇒ 车道抛 `IllegalStateException`（请求失败）；pi 会把垃圾形状发给 provider 收 400——同属「扩展弄坏请求 ⇒ 请求失败」，失败点提前（裁决⑤） | [内部，边缘] |
 | D32 | google 车道 payload 载体是 `GooglePayload(model, contents, config)` record（pi 是单一 `GenerateContentParameters` 对象；java SDK 三分参调用所致） | [内部] |
-| D33 | `before_provider_headers` 事件头集＝models.json 三层（provider⨁model⨁override）合并值；pi 另有 `auth.headers` 与调用方显式 `options.headers` 两层（java 无生产者）及 attribution 层（**B253** 新登记） | [内部] |
+| D33 | `before_provider_headers` 事件头集＝models.json 三层（provider⨁model⨁override）合并值；pi 另有 `auth.headers` 与调用方显式 `options.headers` 两层（java 无生产者）。~~及 attribution 层~~——**批 20 B253 销号**（attribution 并入钩前头集，pi transformHeaders 闭包对位）；余两层不改 | [内部] |
 | D34 | null 抑制 **SDK 默认头**不可达（通道只作用于 extra["headers"] 合并集；pi 的 null 还能压 provider 默认头如 User-Agent）；合并集内 null＝删除全落 | [内部，边缘] |
 | D35 | 响应头摊平口径：名按 SDK/JDK 原样大小写（pi fetch `Headers.entries()` 小写化），同名多值逗号连接（≈fetch 行为） | [内部] |
 
@@ -509,13 +509,13 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | # | 能力单元 | pi 侧证据 | pi-java 侧证据 | 权重 | 判定 | 台账 |
 |---|---|---|---|---|---|---|
 | E7-1 | RPC 命令集（pi 33 / java 33） | `rpc-types.ts:22-74` 33 个 `type` | `RpcCommand.java:23-55` 33 个 `@JsonSubTypes`（含 `ClearQueue:236`，`:298` 分发） | **3** | 对齐 | B34 闭环，两边集合逐一对上；**批 3（2026-10-19，B247/docs/13）**：`get_commands` 线格式对齐——`data` 包 `{commands}` 键（rpc-types.ts:241）、条目 `(name, description?, source, sourceInfo)`、去内置（pi 语义＝可经 prompt 调用）；扩展臂随 B221（窄差 D5） |
-| E7-2 | `extension_ui_request/response` 双向通道 | `rpc-types.ts:253-297`（9 method） | `RpcDispatcher.java:337-348` + `:57` `uiQueue` | 2 | **存疑** | 形有；`ui()` 无生产者 |
-| E7-3 | `get_state` 状态字段 | `rpc-types.ts:96-109`（`model?: Model` 对象） | `RpcDispatcher.java:390` `buildState` / `RpcSessionState.java:20-32` | 2 | **存疑** | java 已补 `isCompacting`/`sessionFile`/`sessionId`/`pendingMessageCount`；**B31**（model 是字符串非对象，`RpcSessionState:21`）/ **B32**（sessionName 恒有默认值，`SessionPersistence:249-255`）/ **B33**（messageCount 取 entryCount） |
-| E7-4 | RPC 事件线格式 | `modes/json-event.ts` | `mode/JsonEventMapper.java` | **3** | **存疑** | **B27/B28/B29**（另 `queue_update:98-99`、压缩/重试事件已上线） |
+| E7-2 | `extension_ui_request/response` 双向通道 | `rpc-types.ts:253-297`（9 method） | `RpcExtensionUI.java`（九方法 typed，参数平铺＝pi spread）＋`RpcDispatcher` `pendingUiRequests` 按 id 路由＋new_session 重绑 | 2 | **对齐** | **批 20（docs/31 T3 核销）**：生产者＝批 17 `RpcExtensionUI`（行注「无生产者」已过时）；`ExtensionUiWireParityTest` 钉九 method 键名/三 response 形 |
+| E7-3 | `get_state` 状态字段 | `rpc-types.ts:96-109`（`model?: Model` 对象） | `RpcDispatcher.buildState`＋`RpcModel.java`（全对象）＋`AgentSession.storedSessionName`＋`harness.getMessages()` | 2 | **对齐** | **批 20（docs/31 T2）**：**B31/B32/B33 全销**——model 全对象（cost −1⇒0/compat NONE⇒省略/无模型⇒键省略）、sessionName stored 缺席化＋--name 写 session_info、messageCount 工作副本口径；窄差 D118/D121/D122 |
+| E7-4 | RPC 事件线格式 | `modes/json-event.ts` | `mode/JsonEventMapper.java` | **3** | **对齐** | **批 20（docs/31 T4 核销）**：行注的 **B27/B28/B29 早在包④（RPC 重试面，2026-09-19）闭环**、台账重建（258b29b5）时已清出——行注滞后修正；`JsonEventParityTest` 钉 message_update 拍平/toolcall_start 补 id+toolName＋错位错文逐字/透传 |
 | E7-5 | RPC 命令线的 `Instant` 序列化 | pi 无此问题 | `rpc/JsonlWriter.java` | 1 | 对齐 | **B52 已修** |
-| E7-6 | RPC `prompt` 回执 `disposition` | `rpc-types.ts:118` `PromptDisposition`（＝`"handled"\|"queued"\|"started"`，agent-session `:310-311`） | ✅ `RpcDispatcher.java:117-130`（steer/follow_up 恒 `"queued"`，prompt 透传 `SessionResult.disposition`，`SessionResult.java:59-61`） | 1 | **存疑** | 形状已落；java 只产 `"started"/"queued"`，**不产 `"handled"`**（命令在 prompt 内被处理的回执） |
+| E7-6 | RPC `prompt` 回执 `disposition` | `rpc-types.ts:118` `PromptDisposition`（＝`"handled"\|"queued"\|"started"`，agent-session `:310-311`） | `RpcDispatcher`（prompt/steer/follow_up 全透传 `QueuedInputDisposition`）＋`AgentSession` 扩展命令臂＋queueUserInput 全序 | 1 | **对齐** | **批 20（docs/31 T1，B237 销号）**：`handled` 两臂落地——扩展命令即执行（CommandRegistry EXTENSION 标签）＋input 事件吞没（steer/followUp 同过）；扩展命令入队错文逐字 fail |
 
-**E7 汇总：对齐 2 / 缺失 0 / 存疑 4 / 合计 6 = 33.3%**；**Σ权重 12 / Σ(w×c) 8.0 / 加权 66.7%**
+**E7 汇总（批 20 后）：对齐 6 / 缺失 0 / 存疑 0 / 合计 6 = 100%**；**Σ权重 12 / Σ(w×c) 12.0 / 加权 100%（第六个满分域）**
 
 ---
 
@@ -615,10 +615,10 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | ├ E4 资源发现 | 5 | 2 | 0 | 7 | 71.4% |
 | ├ E5 扩展 API | 10 | 22 | 3 | 35 | 28.6% |
 | ├ E6 包管理器 | 15 | 0 | 1 | 16 | 93.8% |
-| └ E7 RPC 面 | 2 | 0 | 4 | 6 | 33.3% |
+| └ E7 RPC 面 | 6 | 0 | 0 | 6 | **100%**（批 20） |
 | G. 主流新增子系统（MCP/codemode/…） | 3 | 5 | 2 | 10 | 30.0% |
 | F. 整块缺失（子系统） | 0 | 6 | 0 | 6 | 0% |
-| **合计（模块，不含 E8）** | **181** | **66** | **41** | **288** | **62.8%** |
+| **合计（模块，不含 E8）** | **185** | **66** | **37** | **288** | **64.2%**（批 20：E7 域 4 行翻对齐） |
 | E8. 边缘/面外子系统（**与 E3/C/G 重叠，不计入**） | 4 | 2 | 0 | 6 | 66.7% |
 
 **严格口径**（把「引擎钩子存在但未桥接」的 5 条——#7/#12/#17/#18/#19——也算缺失）：对齐 **169** / 缺失 **73** / 存疑 **46** / 合计 **288** = **58.7%**。
