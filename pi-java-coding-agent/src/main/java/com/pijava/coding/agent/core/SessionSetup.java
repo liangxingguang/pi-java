@@ -158,14 +158,9 @@ final class SessionSetup {
 
     /** 可测形（homeDir 注入——真 home 的 {@code ~/.agents} 不泄进夹具，评审 M7）。 */
     static PackageManager packageManagerFor(SettingsManager settings, Path homeDir) {
-        var cwd = Path.of(System.getProperty("user.dir"));
-        var agentDir = FileSettingsStorage.defaultAgentDir();
-        var resolver = new SourceResolver(cwd, agentDir, settings::isProjectTrusted);
-        var layout = new InstallLayout(resolver);
-        return new PackageManager(resolver, settings,
-            com.pijava.coding.agent.extension.ExtensionManager.builtinExtensionNames(),
-            new HttpNpmResolver(cwd, layout), layout,
-            new GitPackageStore(new GitRunner(), layout, null), homeDir);
+        // 批 19（T4）：装配体收敛到公共缝 PackageManagers（CLI 面共用）。
+        return PackageManagers.create(Path.of(System.getProperty("user.dir")),
+            FileSettingsStorage.defaultAgentDir(), settings, homeDir);
     }
 
     /**

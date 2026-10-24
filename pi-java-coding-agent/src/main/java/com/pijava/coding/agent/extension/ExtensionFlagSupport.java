@@ -18,9 +18,9 @@ import com.pijava.coding.agent.prompt.PromptTemplateRegistry;
  *
  * <p>java 侧不建会话、不碰 session 文件、不设 user.home 重定向：裸 registries 的
  * {@link DefaultExtensionContext}（settings/models/repository 槽为 null——扩展
- * 读到即 NPE，由逐扩展隔离吞掉）。装载面＝SPI（TCCL）＋global/project JAR＋
- * 显式 {@code -e}（-ne 旁路 SPI/JAR 但不旁路显式，与
- * {@code AgentSession.loadExtensions} 同口径）。</p>
+ * 读到即 NPE，由逐扩展隔离吞掉）。装载面＝SPI（TCCL）＋resolve() 装配枚举
+ * （批 19 裁决④善后：旧 JAR 拷贝目录扫描退役）＋显式 {@code -e}（-ne 旁路
+ * SPI/resolve 但不旁路显式，与 {@code AgentSession.loadExtensions} 同口径）。</p>
  */
 public final class ExtensionFlagSupport {
 
@@ -39,12 +39,7 @@ public final class ExtensionFlagSupport {
             var manager = new ExtensionManager(context);
             if (!args.noExtensions()) {
                 manager.loadAllIsolated();
-                for (var jar : ExtensionPackageManager.global().installedJars()) {
-                    manager.loadJarIsolated(jar);
-                }
-                for (var jar : ExtensionPackageManager.project().installedJars()) {
-                    manager.loadJarIsolated(jar);
-                }
+                loadResolvedIsolated(manager);
             }
             for (var explicit : args.extensions()) {
                 manager.loadJarIsolated(Path.of(explicit).toAbsolutePath().normalize());
@@ -52,6 +47,24 @@ public final class ExtensionFlagSupport {
             return context.allFlags();
         } catch (RuntimeException e) {
             return List.of();
+        }
+    }
+
+    /** 批 19：resolve() 装配枚举（pi --help 全运行时对位——含缺包直装语义）。
+     *  失败（网络/信任门）只丢 resolve 臂，SPI 臂 flags 保留。 */
+    private static void loadResolvedIsolated(ExtensionManager manager) {
+        try {
+            var cwd = Path.of(System.getProperty("user.dir"));
+            var settings = com.pijava.coding.agent.core.SettingsManager.load(null);
+            var pm = com.pijava.coding.agent.core.PackageManagers.create(cwd,
+                com.pijava.coding.agent.core.FileSettingsStorage.defaultAgentDir(), settings);
+            for (var resource : pm.resolve(null).extensions()) {
+                if (resource.enabled()) {
+                    manager.loadResolvedIsolated(resource.path());
+                }
+            }
+        } catch (RuntimeException e) {
+            // --help 绝不崩；resolve 臂故障静默（pi loader 同旨隔离）。
         }
     }
 }

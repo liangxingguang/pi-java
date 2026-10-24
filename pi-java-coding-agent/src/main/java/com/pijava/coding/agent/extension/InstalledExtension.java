@@ -23,6 +23,38 @@ public record InstalledExtension(
     List<String> skills
 ) {
 
+    /**
+     * 批 19（裁决④善后）：从 resolve 装配的扩展资源路径枚举展示记录——
+     * {@code builtin:} 前缀跳过；目录经 {@code resolveExtensionEntries} 取入口
+     * JAR；其余按 JAR 处理。非法路径跳过（诊断面不崩）。
+     */
+    public static List<InstalledExtension> fromResolvedPaths(List<String> paths) {
+        var out = new java.util.ArrayList<InstalledExtension>();
+        for (var path : paths) {
+            if (path.startsWith(com.pijava.coding.agent.pkg.PackageManager.BUILTIN_PATH_PREFIX)) {
+                continue;
+            }
+            final Path p;
+            try {
+                p = Path.of(path);
+            } catch (java.nio.file.InvalidPathException e) {
+                continue;
+            }
+            if (java.nio.file.Files.isDirectory(p)) {
+                var entries = com.pijava.coding.agent.pkg.PackageResourceScanner
+                    .resolveExtensionEntries(p);
+                if (entries != null) {
+                    for (var entry : entries) {
+                        out.add(of(Path.of(entry)));
+                    }
+                }
+                continue;
+            }
+            out.add(of(p));
+        }
+        return out;
+    }
+
     /** 从扩展目录中的 JAR 构建展示记录。 */
     public static InstalledExtension of(Path jar) {
         Path fileNamePath = jar.getFileName();

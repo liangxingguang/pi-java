@@ -348,16 +348,14 @@ public final class BugReportFlow {
     }
 
     private List<com.pijava.coding.agent.extension.InstalledExtension> installedExtensions() {
-        var all = new java.util.ArrayList<com.pijava.coding.agent.extension.InstalledExtension>();
         try {
-            all.addAll(com.pijava.coding.agent.extension.ExtensionPackageManager
-                .global().list());
-            all.addAll(com.pijava.coding.agent.extension.ExtensionPackageManager
-                .project().list());
+            // 批 19（裁决④善后）：枚举源改 resolve 装配的扩展资源路径。
+            return com.pijava.coding.agent.extension.InstalledExtension
+                .fromResolvedPaths(session.extensionResourcePaths());
         } catch (Exception ignored) {
             // best-effort（上报自身不能再崩）。
+            return List.of();
         }
-        return all;
     }
 
     // ── 文案件 ──────────────────────────────────────────────

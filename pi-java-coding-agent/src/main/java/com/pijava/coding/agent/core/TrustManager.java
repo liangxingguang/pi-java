@@ -80,7 +80,8 @@ public final class TrustManager {
         return "--" + normalized.replaceAll("[/\\\\:]", "-") + "--";
     }
 
-    private static Path defaultRoot() {
+    /** 默认信任根 {@code ~/.pi-java/trust/}（批 19 转 public：CLI 环境记录注入）。 */
+    public static Path defaultRoot() {
         String home = System.getProperty("user.home");
         return Path.of(home, ".pi-java", "trust");
     }

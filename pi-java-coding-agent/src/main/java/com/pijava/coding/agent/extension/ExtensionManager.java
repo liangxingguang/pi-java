@@ -87,6 +87,31 @@ public final class ExtensionManager {
         return Set.copyOf(loaded.keySet());
     }
 
+    /**
+     * 批 19（T4 善后）：resolve 输出的隔离加载入口（{@code --help} 轻量道）——
+     * {@code builtin:} 前缀跳过；目录经 {@code resolveExtensionEntries} 取入口
+     * JAR 逐个隔离加载；其余按 JAR 隔离加载。
+     */
+    public Set<String> loadResolvedIsolated(String path) {
+        if (path.startsWith(com.pijava.coding.agent.pkg.PackageManager.BUILTIN_PATH_PREFIX)) {
+            return Set.of();
+        }
+        var p = Path.of(path);
+        if (java.nio.file.Files.isDirectory(p)) {
+            var entries = com.pijava.coding.agent.pkg.PackageResourceScanner
+                .resolveExtensionEntries(p);
+            if (entries == null) {
+                return Set.of();
+            }
+            var loaded = new LinkedHashSet<String>();
+            for (var entry : entries) {
+                loaded.addAll(loadJarIsolated(Path.of(entry)));
+            }
+            return Set.copyOf(loaded);
+        }
+        return loadJarIsolated(p);
+    }
+
     /** {@link #loadJar(Path)} 的逐扩展隔离变体（{@code --help} 轻量装载用）。 */
     public Set<String> loadJarIsolated(Path jar) {
         var names = new LinkedHashSet<String>();

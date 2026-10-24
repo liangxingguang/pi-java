@@ -66,7 +66,6 @@ import com.pijava.coding.agent.core.session.InMemorySessionRepository;
 import com.pijava.coding.agent.core.session.SessionInfo;
 import com.pijava.coding.agent.extension.DefaultExtensionContext;
 import com.pijava.coding.agent.extension.ExtensionManager;
-import com.pijava.coding.agent.extension.ExtensionPackageManager;
 import com.pijava.coding.agent.extension.ExtensionUI;
 import com.pijava.coding.agent.extension.ResourcePaths;
 import com.pijava.coding.agent.prompt.PromptTemplateRegistry;
@@ -929,6 +928,20 @@ public final class AgentSession implements AutoCloseable {
             }
         }
         manager.loadJar(p);
+    }
+
+    /**
+     * 批 19（裁决④善后）：装配期 resolve 的启用扩展资源路径（pi resource-loader
+     * 合并臂 :577-578 同序：CLI 先行）——crash-log/bug 上报的扩展枚举源，取代旧
+     * {@code ExtensionPackageManager} 目录扫描。装配未完成 ⇒ 空表。
+     */
+    public List<String> extensionResourcePaths() {
+        if (resolveAssembly == null) {
+            return List.of();
+        }
+        return SessionSetup.mergePaths(
+            SessionSetup.enabledPaths(resolveAssembly.cli().extensions()),
+            SessionSetup.enabledPaths(resolveAssembly.resolved().extensions()));
     }
 
     /** The underlying harness (used by the session repository and TUI). */

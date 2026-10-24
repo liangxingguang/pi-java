@@ -159,14 +159,13 @@ public final class PiTuiLauncher {
         return writer.toString();
     }
 
-    /** 批 15（T2b/裁决②）：已安装扩展表（best-effort，崩了不能再崩）。 */
+    /** 批 15（T2b/裁决②）：已安装扩展表（best-effort，崩了不能再崩）。
+     *  批 19（裁决④善后）：枚举源改 resolve 装配的扩展资源路径。 */
     private static java.util.List<com.pijava.coding.agent.extension.InstalledExtension>
             loadedExtensions(AgentSession session) {
         try {
-            var all = new java.util.ArrayList<com.pijava.coding.agent.extension.InstalledExtension>();
-            all.addAll(com.pijava.coding.agent.extension.ExtensionPackageManager.global().list());
-            all.addAll(com.pijava.coding.agent.extension.ExtensionPackageManager.project().list());
-            return all;
+            return com.pijava.coding.agent.extension.InstalledExtension
+                .fromResolvedPaths(session.extensionResourcePaths());
         } catch (Exception e) {
             return java.util.List.of();
         }
