@@ -202,8 +202,18 @@ public final class DefaultProviders {
             });
             return streamBlocking(provider, model, context, options,
                 apiOptions(args, model.provider(), settings, Credentials::resolveCredential,
-                    requestExtra(options, sessionId)), bridge);
+                    requestExtra(options, sessionId)), bridge, settings);
         };
+    }
+
+    /**
+     * 批 20（B253，裁决⑥）：provider 静态默认 baseUrl——pi {@code model.baseUrl}
+     * 的目录值语义（attribution host 判定的操作数，<b>不取</b> CLI/settings
+     * 覆盖）。非 {@link ConfigurableProvider}（测试 FauxProvider 等）⇒ null。
+     */
+    private static String providerDefaultBaseUrl(Provider provider) {
+        return provider instanceof com.pijava.ai.provider.ConfigurableProvider cp
+            ? cp.providerConfig().defaultBaseUrl() : null;
     }
 
     /**
@@ -310,7 +320,8 @@ public final class DefaultProviders {
             // ①：六参重建，maxRetries 钉 0（authKind 保真，B138 同族教训）。
             resolved = new ApiOptions(resolved.baseUrl(), resolved.apiKey(),
                 resolved.timeout(), 0, resolved.extra(), resolved.authKind());
-            return streamBlocking(provider, model, context, options, resolved, bridge, true);
+            return streamBlocking(provider, model, context, options, resolved, bridge,
+                settings, true);
         };
     }
 
@@ -320,8 +331,10 @@ public final class DefaultProviders {
             com.pijava.agent.harness.Context context,
             com.pijava.agent.harness.StreamOptions options,
             ApiOptions apiOptions,
-            com.pijava.coding.agent.extension.bridge.ProviderEventBridge bridge) {
-        return streamBlocking(provider, model, context, options, apiOptions, bridge, false);
+            com.pijava.coding.agent.extension.bridge.ProviderEventBridge bridge,
+            Settings settings) {
+        return streamBlocking(provider, model, context, options, apiOptions, bridge,
+            settings, false);
     }
 
     private static StreamIterator streamBlocking(
@@ -331,6 +344,7 @@ public final class DefaultProviders {
             com.pijava.agent.harness.StreamOptions options,
             ApiOptions apiOptions,
             com.pijava.coding.agent.extension.bridge.ProviderEventBridge bridge,
+            Settings settings,
             boolean warm) {
         // 系统提示与工具定义都来自 Context（pi 的 Context）；它们不再走消息列表或 options。
         //
@@ -352,6 +366,13 @@ public final class DefaultProviders {
                 .orElseGet(() -> ModelInfo.minimal(model));
         // D-P1（原 docs/65）：per-model baseUrl/headers（三源合并的产物）在请求面生效。
         var effectiveOptions = withPerModelOverrides(apiOptions, modelInfo);
+        // 批 20（B253，pi sdk.ts:355-361 对位）：attribution 头层并入
+        // extra["headers"]——恒执行（遥测门内建），**不挂** before_provider_headers
+        // 订阅门（pi 的 merge 在 transformHeaders 闭包里、钩判定之前）；扩展钩自此
+        // 看到合并全集。暖路径同过（pi 暖请求保留 transformHeaders 闭包）。
+        effectiveOptions = ProviderAttribution.apply(effectiveOptions, modelInfo,
+            providerDefaultBaseUrl(provider),
+            InstallTelemetry.isEnabled(settings.enableInstallTelemetry));
         if (bridge != null) {
             // docs/17（B248，pi models.ts:866-871 对位）：合并头集过 transformHeaders
             // 写回 extra["headers"]（钩本体不入 extra——pi :870 剥离键对位）；
