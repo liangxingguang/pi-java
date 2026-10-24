@@ -26,12 +26,17 @@ public final class GitPackageStore {
 
     private final GitRunner git;
     private final InstallLayout layout;
-    private final ProgressCallback progressCallback;
+    private volatile ProgressCallback progressCallback;
 
     public GitPackageStore(GitRunner git, InstallLayout layout, ProgressCallback progressCallback) {
         this.git = git;
         this.layout = layout;
         this.progressCallback = progressCallback;
+    }
+
+    /** pi {@code setProgressCallback} 对位（晚绑定，resolve 前随时可换）。 */
+    public void setProgressCallback(ProgressCallback callback) {
+        this.progressCallback = callback;
     }
 
     /** pi {@code getGitUpdateMarkerPath}（:1971-1973）：
