@@ -1,6 +1,7 @@
 package com.pijava.coding.agent.core;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -130,15 +131,26 @@ public final class SettingsManager {
     }
 
     /**
-     * Change project trust. When untrusted, the project scope is cleared so
-     * only global settings apply (Phase 3 design §12.4).
+     * Change project trust. When untrusted, the project scope is cleared
+     * <b>in memory only</b> so only global settings apply (pi
+     * {@code setProjectTrusted}，settings-manager.ts:473-496——
+     * {@code projectSettings = {}} 不落盘；信任恢复时从存储重读 project 域）。
+     *
+     * <p>批 19 修真：旧实现 {@code storage.writeProject(new Settings())} 会把
+     * 项目 settings 文件整本覆写为空——pi 无此行为（纯内存清空），未信任项目里
+     * 跑 {@code list}/{@code update} 会数据丢失。</p>
      */
     public void setProjectTrusted(boolean trusted) {
+        if (this.projectTrusted == trusted) {
+            return;
+        }
         this.projectTrusted = trusted;
         if (!trusted) {
-            storage.writeProject(new Settings());
+            project = new Settings();
+        } else {
+            project = storage.readProject();
+            migrate(project);
         }
-        reload();
     }
 
     /** Persist modified global fields. */
@@ -147,6 +159,128 @@ public final class SettingsManager {
             storage.writeGlobal(global);
             modifiedFields.clear();
         }
+    }
+
+    // ── 批 19（docs/30 T2）写回面：字段级 merge 落盘 ─────────────
+    //
+    // pi 的 set* 写回是「改内存 → markModified → save() 立即落盘」，落盘经
+    // persistScopedSettings（settings-manager.ts:596-625）做字段级 merge——
+    // 文件锁内读当前文件、只覆盖 modified 字段、保留未知键与其余字段（含
+    // 并发进程写进来的新键）。下列 setter 对位此语义：改内存＋经
+    // {@link SettingsStorage#withLock} 立即写回单字段，<b>不</b>经
+    // {@link #flush()} 的整本写路径。
+
+    /** pi {@code setPackages}（:1080-1085）：写全局 {@code packages} 并立即落盘。 */
+    public void setPackages(List<PackageSource> packages) {
+        global.packages = packages == null ? null : List.copyOf(packages);
+        persistField(SettingsScope.GLOBAL, "packages", global.packages);
+    }
+
+    /** pi {@code setProjectPackages}（:1086-1090，经 {@code updateProjectSettings}
+     *  的信任门 :553-556）。 */
+    public void setProjectPackages(List<PackageSource> packages) {
+        assertProjectTrustedForWrite();
+        project.packages = packages == null ? null : List.copyOf(packages);
+        persistField(SettingsScope.PROJECT, "packages", project.packages);
+    }
+
+    /** pi {@code setExtensionPaths}（:1096-1100）。 */
+    public void setExtensions(List<String> extensions) {
+        global.extensions = copyOrNull(extensions);
+        persistField(SettingsScope.GLOBAL, "extensions", global.extensions);
+    }
+
+    /** pi {@code setProjectExtensionPaths}（:1102-1106）。 */
+    public void setProjectExtensions(List<String> extensions) {
+        assertProjectTrustedForWrite();
+        project.extensions = copyOrNull(extensions);
+        persistField(SettingsScope.PROJECT, "extensions", project.extensions);
+    }
+
+    /** pi {@code setSkillPaths}（:1112-1116）。 */
+    public void setSkills(List<String> skills) {
+        global.skills = copyOrNull(skills);
+        persistField(SettingsScope.GLOBAL, "skills", global.skills);
+    }
+
+    /** pi {@code setProjectSkillPaths}（:1118-1122）。 */
+    public void setProjectSkills(List<String> skills) {
+        assertProjectTrustedForWrite();
+        project.skills = copyOrNull(skills);
+        persistField(SettingsScope.PROJECT, "skills", project.skills);
+    }
+
+    /** pi {@code setPromptTemplatePaths}（:1128-1132）。 */
+    public void setPrompts(List<String> prompts) {
+        global.prompts = copyOrNull(prompts);
+        persistField(SettingsScope.GLOBAL, "prompts", global.prompts);
+    }
+
+    /** pi {@code setProjectPromptTemplatePaths}（:1134-1138）。 */
+    public void setProjectPrompts(List<String> prompts) {
+        assertProjectTrustedForWrite();
+        project.prompts = copyOrNull(prompts);
+        persistField(SettingsScope.PROJECT, "prompts", project.prompts);
+    }
+
+    /** pi {@code setThemePaths}（:1144-1148）。 */
+    public void setThemes(List<String> themes) {
+        global.themes = copyOrNull(themes);
+        persistField(SettingsScope.GLOBAL, "themes", global.themes);
+    }
+
+    /** pi {@code setProjectThemePaths}（:1150-1154）。 */
+    public void setProjectThemes(List<String> themes) {
+        assertProjectTrustedForWrite();
+        project.themes = copyOrNull(themes);
+        persistField(SettingsScope.PROJECT, "themes", project.themes);
+    }
+
+    /** pi {@code assertProjectTrustedForWrite}（:553-556）——模型可见文案逐字。 */
+    private void assertProjectTrustedForWrite() {
+        if (!projectTrusted) {
+            throw new IllegalStateException(
+                "Project is not trusted; refusing to write project settings");
+        }
+    }
+
+    private static List<String> copyOrNull(List<String> values) {
+        return values == null ? null : List.copyOf(values);
+    }
+
+    /**
+     * pi {@code persistScopedSettings}（:596-625）对位：锁内读当前文件 → 只替换
+     * 目标键 → 写回（2 空格缩进 ≙ {@code JSON.stringify(merged, null, 2)}）。
+     * {@code value == null} ⇒ 删键（pi 写 {@code undefined} 被 stringify 丢弃同结局）。
+     */
+    private void persistField(SettingsScope scope, String field, Object value) {
+        storage.withLock(scope, current -> mergeFieldJson(current, field, value));
+    }
+
+    /** 字段级 merge 的纯函数核（测试直调）。 */
+    static String mergeFieldJson(String current, String field, Object value) {
+        try {
+            var tree = current != null && !current.isBlank()
+                ? Json.mapper().readTree(stripBom(current)) : null;
+            var object = tree instanceof ObjectNode node
+                ? node : Json.mapper().createObjectNode();
+            if (value == null) {
+                object.remove(field);
+            } else {
+                object.set(field, Json.mapper().valueToTree(value));
+            }
+            return Json.mapper().writerWithDefaultPrettyPrinter().writeValueAsString(object);
+        } catch (java.io.IOException e) {
+            throw new SettingsStorageException("Cannot merge settings field: " + field, e);
+        }
+    }
+
+    /** U+FEFF（写成常量避免源码内嵌不可见 BOM 字面量）。 */
+    private static final String BOM = "﻿";
+
+    private static String stripBom(String content) {
+        // pi stripBom（utils/text.ts）对位。
+        return content.startsWith(BOM) ? content.substring(1) : content;
     }
 
     /** The merged view used by {@link #load} for trust resolution. */

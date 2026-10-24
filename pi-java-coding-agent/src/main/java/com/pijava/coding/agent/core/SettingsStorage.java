@@ -24,15 +24,30 @@ public interface SettingsStorage {
     void writeProject(Settings settings);
 
     /**
-     * Run a read-modify-write function under a scope lock.
+     * Run a read-modify-write function under a scope lock. {@code fn} receives
+     * the current content <b>as JSON text</b> and returns the new content
+     * (or {@code null} to skip the write).
      *
-     * @param scope which file to lock
-     * @param fn    receives the current content and returns the new content
+     * <p>批 19 修默认实现：旧默认把 {@code Settings.toString()}（非 JSON）喂给
+     * 回调且丢弃返回值——现在做完整 JSON 往返（序列化 → fn → 反序列化写回），
+     * 内存存储也能行使批 19 的字段级 merge 写回链。</p>
      */
     default void withLock(SettingsScope scope, Function<String, String> fn) {
-        // Phase 3 default: no cross-process lock (in-memory and simple file
-        // storages are single-process). Cross-process FileLock → Phase 4.
-        fn.apply(scope instanceof SettingsScope.Global
-            ? readGlobal().toString() : readProject().toString());
+        var global = scope instanceof SettingsScope.Global;
+        try {
+            var current = Json.mapper().writeValueAsString(
+                global ? readGlobal() : readProject());
+            var updated = fn.apply(current);
+            if (updated != null) {
+                var parsed = Json.mapper().readValue(updated, Settings.class);
+                if (global) {
+                    writeGlobal(parsed);
+                } else {
+                    writeProject(parsed);
+                }
+            }
+        } catch (java.io.IOException e) {
+            throw new SettingsStorageException("Cannot read-modify-write settings", e);
+        }
     }
 }

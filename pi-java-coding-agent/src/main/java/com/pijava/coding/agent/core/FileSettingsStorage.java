@@ -91,8 +91,9 @@ public final class FileSettingsStorage implements SettingsStorage {
                 String current = Files.exists(path) ? Files.readString(path) : "{}";
                 var updated = fn.apply(current);
                 if (updated != null) {
+                    // pi writeFileSync 对位：文件不存在时创建（批 19 写回链首写场景）。
                     Files.writeString(path, updated,
-                        StandardOpenOption.TRUNCATE_EXISTING);
+                        StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
                 }
             } catch (IOException e) {
                 throw new SettingsStorageException(
