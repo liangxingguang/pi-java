@@ -168,33 +168,33 @@ public final class ExtensionEditorOverlay implements ScreenOverlay, ExtensionDia
         var rows = new ArrayList<List<Span>>();
         rows.add(borderRow(width));
         rows.add(List.of());
-        rows.add(List.of(new Span(" " + title, SemanticColors.ACCENT)));
+        rows.add(List.of(new Span(" " + title, SemanticColors.accent())));
         rows.add(List.of());
         return rows;
     }
 
     /** pi DynamicBorder：{@code "─".repeat(max(1, width))}，border 色（≈ DIM）。 */
     private static List<Span> borderRow(int width) {
-        return List.of(new Span("─".repeat(Math.max(1, width)), SemanticColors.DIM));
+        return List.of(new Span("─".repeat(Math.max(1, width)), SemanticColors.dim()));
     }
 
     /** pi hint 四段逐字（:100-106）。 */
     private List<Span> hintRow() {
         return List.of(
             new Span(" " + KeybindingHints.keyText(
-                keys.strokeFor(KeybindingsManager.SELECT_CONFIRM)), SemanticColors.DIM),
-            new Span(" submit", SemanticColors.MUTED),
-            new Span("  ", SemanticColors.PLAIN),
+                keys.strokeFor(KeybindingsManager.SELECT_CONFIRM)), SemanticColors.dim()),
+            new Span(" submit", SemanticColors.muted()),
+            new Span("  ", SemanticColors.plain()),
             new Span(KeybindingHints.keyText(
-                keys.strokeFor(KeybindingsManager.INPUT_NEW_LINE)), SemanticColors.DIM),
-            new Span(" newline", SemanticColors.MUTED),
-            new Span("  ", SemanticColors.PLAIN),
+                keys.strokeFor(KeybindingsManager.INPUT_NEW_LINE)), SemanticColors.dim()),
+            new Span(" newline", SemanticColors.muted()),
+            new Span("  ", SemanticColors.plain()),
             new Span(KeybindingHints.keyText(
-                keys.strokeFor(KeybindingsManager.SELECT_CANCEL)), SemanticColors.DIM),
-            new Span(" cancel", SemanticColors.MUTED),
-            new Span("  ", SemanticColors.PLAIN),
+                keys.strokeFor(KeybindingsManager.SELECT_CANCEL)), SemanticColors.dim()),
+            new Span(" cancel", SemanticColors.muted()),
+            new Span("  ", SemanticColors.plain()),
             new Span(KeybindingHints.keyText(
-                keys.strokeFor(KeybindingsManager.EXTERNAL_EDITOR)), SemanticColors.DIM),
-            new Span(" external editor", SemanticColors.MUTED));
+                keys.strokeFor(KeybindingsManager.EXTERNAL_EDITOR)), SemanticColors.dim()),
+            new Span(" external editor", SemanticColors.muted()));
     }
 }

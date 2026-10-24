@@ -82,6 +82,7 @@ public final class Main {
             return ListModelsCommand.run(parsed.listModels());
         }
         if (parsed.mode() != null && "rpc".equals(parsed.mode())) {
+            initThemeForHeadless(parsed);
             return RpcMode.run(System.in, System.out, parsed);
         }
         if (parsed.mode() != null && "web".equals(parsed.mode())) {
@@ -94,6 +95,7 @@ public final class Main {
             return web.get().runWeb(parsed);
         }
         if (parsed.mode() != null && "json".equals(parsed.mode())) {
+            initThemeForHeadless(parsed);
             return PrintMode.runJson(parsed.messages(), parsed);
         }
         if (parsed.mode() != null && !"text".equals(parsed.mode())) {
@@ -102,6 +104,9 @@ public final class Main {
             return 2;
         }
         if (parsed.export() != null) {
+            // 批 21（T9/T12）：导出前初始化主题（pi main.ts:905 对位）——
+            // HTML 导出的 CSS 变量由活跃主题解析（T12）。
+            initThemeForHeadless(parsed);
             // pi main.ts:639-651（T13）：第二位置参数是输出路径；文案逐字。
             try {
                 var input = java.nio.file.Path.of(parsed.export());
@@ -118,6 +123,7 @@ public final class Main {
             }
         }
         if (parsed.print()) {
+            initThemeForHeadless(parsed);
             return PrintMode.run(parsed.messages(), parsed);
         }
 
@@ -129,6 +135,28 @@ public final class Main {
             return 1;
         }
         return entry.get().runInteractive(parsed);
+    }
+
+    /**
+     * 批 21（T9，docs/32）：非交互模式的主题初始化（pi main.ts:905
+     * {@code initTheme(settingsManager.getTheme(), false)} 逐字对位——无 watcher；
+     * {@code getTheme()} 对对形返回 null ⇒ initTheme 内落 system，pi 同）。
+     * 用途：HTML 导出主题变量（T12）与扩展 {@code getThemeByName}。
+     * {@code --use-theme} 在非交互臂作本次覆盖（pi main.ts:681-683 的
+     * applyOverrides 在非交互模式下同样生效——经此直接进 initTheme）。
+     */
+    private static void initThemeForHeadless(Args parsed) {
+        try {
+            var settings = com.pijava.coding.agent.core.SettingsManager.load(null, null, null);
+            var name = parsed.useTheme() != null
+                ? com.pijava.coding.agent.theme.ThemeSettings.resolveThemeSetting(
+                    parsed.useTheme(), com.pijava.coding.agent.theme.Themes.terminalTheme())
+                : settings.accessors().getTheme();
+            com.pijava.coding.agent.theme.Themes.initTheme(name, false);
+        } catch (RuntimeException e) {
+            // 主题初始化失败不阻断 headless 主流程（pi initTheme 内部已静默回落，
+            // 此 catch 防 settings 读取等外围失败）。
+        }
     }
 
     private static boolean hasErrors(Args args) {

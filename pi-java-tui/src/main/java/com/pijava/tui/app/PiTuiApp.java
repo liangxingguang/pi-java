@@ -20,6 +20,7 @@ import com.pijava.tui.component.SlashCompleter;
 import com.pijava.tui.screen.ChatScreen;
 import com.pijava.tui.screen.ModelSelectorScreen;
 import com.pijava.tui.screen.ModelThinkingLevelScreen;
+import com.pijava.tui.screen.ThemeSubmenuScreen;
 import com.pijava.tui.screen.ScreenOverlay;
 import com.pijava.tui.screen.SessionListScreen;
 import com.pijava.tui.screen.SettingsScreen;
@@ -601,7 +602,8 @@ public final class PiTuiApp {
             case CommandRegistry.UI_TREE_SELECTOR -> openTreeSelector();
             case CommandRegistry.UI_FORK_SELECTOR -> openForkSelector();
             case CommandRegistry.UI_SETTINGS ->
-                openOverlay(new SettingsScreen(session));
+                // 批 21（T11）：设置屏带主题控制器（Theme 子菜单预览/应用）。
+                openOverlay(new SettingsScreen(session, themeController));
             case CommandRegistry.UI_SCOPED_MODELS ->
                 chatScreen.appendSystemText(
                     "Use /scoped-models +<model> or /scoped-models -<model>");
@@ -804,6 +806,13 @@ public final class PiTuiApp {
             openOverlay(new ModelThinkingLevelScreen(session));
             return;
         }
+        // 批 21（T11，map/05 S9；pi settings-selector.ts:749-756 对位）：
+        // Theme 子菜单请求 ⇒ 不关屏改开 ThemeSubmenuScreen。
+        if (done instanceof SettingsScreen settings
+                && settings.pollThemeRequest()) {
+            openOverlay(new ThemeSubmenuScreen(session, themeController));
+            return;
+        }
         // 批 13 T9（pi :5045-5048 的 rebuildChatFromMessages 对位）：
         // "Cache miss notices" 改动 ⇒ 整表重建（重推导 miss 通知/暖行）。
         if (done instanceof SettingsScreen settings
@@ -842,6 +851,20 @@ public final class PiTuiApp {
 
     /** 扩展 UI 宿主（bindExtensionUi 回填；null ⇒ 无扩展 UI 装配）。 */
     private TuiExtensionUiHost extensionUiHost;
+
+    /** 批 21（T9/T11）：主题控制器（设置页 Theme 子菜单＋/reload 主题臂消费）。 */
+    private com.pijava.coding.agent.theme.ThemeController themeController;
+
+    /** 批 21（T9）：回填主题控制器（launcher 在会话装配后注入）。 */
+    public void setThemeController(
+            com.pijava.coding.agent.theme.ThemeController controller) {
+        this.themeController = controller;
+    }
+
+    /** 批 21（T11）：主题控制器读面（设置页 Theme 子菜单用；可空＝未装配）。 */
+    public com.pijava.coding.agent.theme.ThemeController themeController() {
+        return themeController;
+    }
 
     /**
      * 批 17（T7，docs/28 §3-T7.1）：回填扩展 UI 宿主——overlay 开合回调、

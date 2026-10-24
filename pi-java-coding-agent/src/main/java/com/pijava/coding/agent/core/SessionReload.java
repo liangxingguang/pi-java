@@ -98,6 +98,9 @@ final class SessionReload {
         // 批 21（T8）：resources_discover 重放可能追加扩展 themePaths ⇒ 重装载
         //（pi setExtensionPaths → updateThemesFromPaths 重跑对位）。
         session.reloadThemes();
+        // 批 21（T8，裁决⑩）：模式层收尾口（pi interactive-mode.ts:6490-6492
+        // 的 setRegisteredThemes＋applyFromSettings 由监听者完成）。
+        session.fireReloaded();
     }
 
     /**

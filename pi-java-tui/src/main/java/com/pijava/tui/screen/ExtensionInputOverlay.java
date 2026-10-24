@@ -174,25 +174,25 @@ public final class ExtensionInputOverlay implements ScreenOverlay, ExtensionDial
         rows.add(List.of());
         var title = countdownSeconds >= 0
             ? baseTitle + " (" + countdownSeconds + "s)" : baseTitle;
-        rows.add(List.of(new Span(" " + title, SemanticColors.ACCENT)));
+        rows.add(List.of(new Span(" " + title, SemanticColors.accent())));
         rows.add(List.of());
         return rows;
     }
 
     /** pi DynamicBorder：{@code "─".repeat(max(1, width))}，border 色（≈ DIM）。 */
     private static List<Span> borderRow(int width) {
-        return List.of(new Span("─".repeat(Math.max(1, width)), SemanticColors.DIM));
+        return List.of(new Span("─".repeat(Math.max(1, width)), SemanticColors.dim()));
     }
 
     /** pi hint 行逐字：{@code keyHint(confirm,"submit") + "  " + keyHint(cancel,"cancel")}。 */
     private List<Span> hintRow() {
         return List.of(
             new Span(" " + KeybindingHints.keyText(
-                keys.strokeFor(KeybindingsManager.SELECT_CONFIRM)), SemanticColors.DIM),
-            new Span(" submit", SemanticColors.MUTED),
-            new Span("  ", SemanticColors.PLAIN),
+                keys.strokeFor(KeybindingsManager.SELECT_CONFIRM)), SemanticColors.dim()),
+            new Span(" submit", SemanticColors.muted()),
+            new Span("  ", SemanticColors.plain()),
             new Span(KeybindingHints.keyText(
-                keys.strokeFor(KeybindingsManager.SELECT_CANCEL)), SemanticColors.DIM),
-            new Span(" cancel", SemanticColors.MUTED));
+                keys.strokeFor(KeybindingsManager.SELECT_CANCEL)), SemanticColors.dim()),
+            new Span(" cancel", SemanticColors.muted()));
     }
 }

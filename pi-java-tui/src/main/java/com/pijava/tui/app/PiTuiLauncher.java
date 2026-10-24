@@ -5,7 +5,6 @@ import com.pijava.coding.agent.core.AgentSession;
 import com.pijava.coding.agent.core.KeybindingsManager;
 import com.pijava.coding.agent.modes.InteractiveMode;
 import com.pijava.tui.screen.ChatScreen;
-import com.pijava.tui.theme.PiTheme;
 import com.pijava.tui.util.InlineTuiShell;
 import com.pijava.tui.util.ScrollConfig;
 import com.pijava.tui.util.TamboUIAdapter;
@@ -64,6 +63,37 @@ public final class PiTuiLauncher {
         // 批 17（T7）：overlay 开合/外部编辑器往返/终端几何回填（晚绑定 holder）。
         app.bindExtensionUi(extensionUiHost);
 
+        // 批 21（T9/T10，docs/32）：主题初始化全链——① 装配发现的主题注册进
+        // Themes（pi interactive-mode.ts:667 setRegisteredThemes 对位）；②
+        // settings terminal.trueColor 覆盖重探测色彩档（裁决④）；③ 控制器
+        //（ctor 内 initTheme〔watcher 开〕＋--use-theme 作 initialThemeSetting，
+        // pi :668-673 对位）。onChanged ⇒ 样式表重生成＋重渲染（pi ui.invalidate
+        // ＋requestRender 对位——SemanticColors 访问器现读活跃主题，无须清缓存）。
+        com.pijava.coding.agent.theme.Themes.setRegisteredThemes(session.themes());
+        com.pijava.coding.agent.theme.Themes.redetectColorMode(terminalTrueColor(session));
+        var themeEngineRef = new java.util.concurrent.atomic.AtomicReference<
+            dev.tamboui.css.engine.StyleEngine>();
+        var themeController = new com.pijava.coding.agent.theme.ThemeController(
+            session.services()::settings,
+            message -> dispatcher.dispatch(() -> chatScreen.showError(message)),
+            () -> {
+                var engine = themeEngineRef.get();
+                if (engine != null) {
+                    com.pijava.tui.theme.ThemeApplicator.reapply(engine);
+                }
+            },
+            args.useTheme());
+        app.setThemeController(themeController);
+        // 批 21（T9）：扩展 UI 主题面（getAllThemes/getTheme/setTheme）的晚绑定回填。
+        extensionUiHost.setThemeController(themeController);
+        extensionUiHost.setSessionSource(sessionRef::get);
+        // 批 21（T8，裁决⑩）：/reload 主题臂——pi interactive-mode.ts:6490-6492
+        //（setRegisteredThemes＋applyFromSettings）的模式层收尾。
+        session.addReloadListener(() -> dispatcher.dispatch(() -> {
+            com.pijava.coding.agent.theme.Themes.setRegisteredThemes(session.themes());
+            themeController.applyFromSettings();
+        }));
+
         // 批 12 T7（docs/23 §3；pi :948-949 init 调用点对位）：启动 changelog
         // 比较＋回写（runner 启动前装配，welcome 后展示）。
         app.setStartupChangelog(
@@ -116,16 +146,23 @@ public final class PiTuiLauncher {
             entry -> dispatcher.dispatch(() -> chatScreen.onEntry(entry)),
             event -> dispatcher.dispatch(() -> chatScreen.onStreamEvent(event)));
 
-        var theme = themeFrom(args, session);
         try {
             if ("fullscreen".equalsIgnoreCase(tuiModeFrom(args, session))) {
-                return runFullscreen(app, args, theme, session);
+                return runFullscreen(app, args, session, themeEngineRef);
             }
-            return runRegular(app, args, theme, session);
+            return runRegular(app, args, session, themeEngineRef);
         } finally {
+            // 批 21（T7，pi main.ts:428/971/992 对位）：退出停主题监视器。
+            com.pijava.coding.agent.theme.Themes.stopThemeWatcher();
             // 交互模式退出 ⇒ 恢复旧 handler（钩的独占装配只活在本模式内）。
             Thread.setDefaultUncaughtExceptionHandler(previousHandler);
         }
+    }
+
+    /** 批 21（T9，裁决④）：settings {@code terminal.trueColor}（boolean|"auto"）⇒ 覆盖值。 */
+    private static Boolean terminalTrueColor(AgentSession session) {
+        var terminal = session.services().settings().effective().terminal;
+        return terminal != null && terminal.trueColor() instanceof Boolean value ? value : null;
     }
 
     /** 批 15（T2a）：pi {@code new Date(crash.timestamp).toLocaleString()} 对位。 */
@@ -180,13 +217,17 @@ public final class PiTuiLauncher {
     }
 
     /** Fullscreen mode: alternate-screen ToolkitRunner (internal viewport + scrollbar). */
-    private static int runFullscreen(PiTuiApp app, Args args, String theme,
-                                     AgentSession session) {
+    private static int runFullscreen(PiTuiApp app, Args args, AgentSession session,
+                                     java.util.concurrent.atomic.AtomicReference<
+                                         dev.tamboui.css.engine.StyleEngine> themeEngineRef) {
         try {
             // 批 12 T9（pi tui.ts:1477-1484 对位）：硬件光标开关注入。
             var runner = TamboUIAdapter.createRunner(
                 session.services().settings().uiPrefs().getShowHardwareCursor());
-            runner.styleEngine(PiTheme.engineFor(theme));
+            // 批 21（T10）：样式表由活跃主题生成（原 PiTheme .tcss 已删，裁决⑦）。
+            var engine = com.pijava.tui.theme.ThemeApplicator.engineForCurrentTheme();
+            themeEngineRef.set(engine);
+            runner.styleEngine(engine);
             app.start(runner);
             app.submitInitial(args);
             runner.run(app::root);
@@ -220,10 +261,13 @@ public final class PiTuiLauncher {
      * transcript; only the input box and status line stay pinned at the
      * bottom. Fullscreen (alternate screen) is the default, matching Codex.
      */
-    private static int runRegular(PiTuiApp app, Args args, String theme,
-                                  AgentSession session) {
+    private static int runRegular(PiTuiApp app, Args args, AgentSession session,
+                                  java.util.concurrent.atomic.AtomicReference<
+                                      dev.tamboui.css.engine.StyleEngine> themeEngineRef) {
         try (var shell = InlineTuiShell.create()) {
-            app.applyTheme(PiTheme.engineFor(theme));
+            var engine = com.pijava.tui.theme.ThemeApplicator.engineForCurrentTheme();
+            themeEngineRef.set(engine);
+            app.applyTheme(engine);
             app.startInline(shell);
             app.submitInitial(args);
             shell.run(app::onInlineEvent, app::renderInline);
@@ -279,12 +323,4 @@ public final class PiTuiLauncher {
         return mode == null ? "fullscreen" : mode;
     }
 
-    private static String themeFrom(Args args, AgentSession session) {
-        // 批 14（docs/25 T16；pi main.ts:681-683）：--use-theme 优先于 --theme
-        //（--theme 的「选择」语义属 A-29 重排批 20，现维持文件加载现状）。
-        var cli = args.useTheme() != null ? args.useTheme()
-            : (args.themes() != null && !args.themes().isEmpty() ? args.themes().get(0) : null);
-        var settingsTheme = session.services().settings().effective().theme;
-        return PiTheme.resolveTheme(cli, settingsTheme, session.themePaths());
-    }
 }

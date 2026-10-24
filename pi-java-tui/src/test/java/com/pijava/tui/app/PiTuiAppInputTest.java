@@ -13,7 +13,7 @@ import com.pijava.tui.component.EditorComponent;
 import com.pijava.tui.component.ChatMessage;
 import com.pijava.tui.screen.ChatScreen;
 import com.pijava.tui.screen.SettingsScreen;
-import com.pijava.tui.theme.PiTheme;
+import com.pijava.tui.theme.ThemeApplicator;
 import com.pijava.tui.util.TuiEventDispatcher;
 
 import dev.tamboui.toolkit.app.ToolkitRunner;
@@ -111,7 +111,7 @@ class PiTuiAppInputTest {
             var dispatcher = new TuiEventDispatcher();
             var app = new PiTuiApp(mode, chatScreen,
                 new KeybindingsManager(), dispatcher);
-            runner.styleEngine(PiTheme.engineFor("dark"));
+            runner.styleEngine(ThemeApplicator.engineForCurrentTheme());
             mode.setObservers(
                 entry -> dispatcher.dispatch(() -> chatScreen.onEntry(entry)),
                 event -> dispatcher.dispatch(() -> chatScreen.onStreamEvent(event)));

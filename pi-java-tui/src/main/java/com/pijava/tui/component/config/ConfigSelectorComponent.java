@@ -181,8 +181,8 @@ public final class ConfigSelectorComponent {
         rows.add(List.of());
         // 搜索行＋其下空行（pi :402-403；"> " 提示符约定同批 14）
         rows.add(List.of(
-            new RowSpan("> ", SemanticColors.ACCENT),
-            new RowSpan(searchEditor.getText(), SemanticColors.PLAIN)));
+            new RowSpan("> ", SemanticColors.accent()),
+            new RowSpan(searchEditor.getText(), SemanticColors.plain())));
         rows.add(List.of());
         rows.addAll(listRows(width));
         rows.add(List.of());
@@ -205,7 +205,7 @@ public final class ConfigSelectorComponent {
             : "~/.pi-java/agent/settings.json";
         return List.of(
             twoPartRow(title, hints.toString(), width),
-            List.of(new RowSpan(scopeHint, SemanticColors.MUTED)));
+            List.of(new RowSpan(scopeHint, SemanticColors.muted())));
     }
 
     /** pi :215-222：标题左齐＋提示右齐（spacing 夹紧），超宽截断（色裁 D116 同族）。 */
@@ -215,7 +215,7 @@ public final class ConfigSelectorComponent {
         if (line.length() > width) {
             line = line.substring(0, width);
         }
-        return List.of(new RowSpan(line, SemanticColors.PLAIN));
+        return List.of(new RowSpan(line, SemanticColors.plain()));
     }
 
     /** pi ResourceList.render（:398-458）。 */
@@ -223,7 +223,7 @@ public final class ConfigSelectorComponent {
         var rows = new ArrayList<List<RowSpan>>();
         var entries = model.filteredItems();
         if (entries.isEmpty()) {
-            rows.add(List.of(new RowSpan("  No resources found", SemanticColors.MUTED)));
+            rows.add(List.of(new RowSpan("  No resources found", SemanticColors.muted())));
             return rows;
         }
         var selectedIndex = model.selectedIndex();
@@ -241,12 +241,12 @@ public final class ConfigSelectorComponent {
                     var inherited = projectMode && row.group().scope() == SourceScope.USER;
                     var label = row.group().label() + (inherited ? " · inherited global" : "");
                     rows.add(List.of(new RowSpan("  " + label,
-                        inherited ? SemanticColors.DIM : SemanticColors.ACCENT)));
+                        inherited ? SemanticColors.dim() : SemanticColors.accent())));
                 }
                 case FlatEntry.SubgroupRow row -> {
                     var dim = projectMode && row.group().scope() == SourceScope.USER;
                     rows.add(List.of(new RowSpan("    " + row.subgroup().label(),
-                        dim ? SemanticColors.DIM : SemanticColors.MUTED)));
+                        dim ? SemanticColors.dim() : SemanticColors.muted())));
                 }
                 case FlatEntry.ItemRow row -> rows.add(itemRow(row.item(), isSelected,
                     projectMode, width));
@@ -258,7 +258,7 @@ public final class ConfigSelectorComponent {
             var currentItem = entries.subList(0, selectedIndex).stream()
                 .filter(e -> e instanceof FlatEntry.ItemRow).count() + 1;
             rows.add(List.of(new RowSpan("  (" + currentItem + "/" + itemCount + ")",
-                SemanticColors.DIM)));
+                SemanticColors.dim())));
         }
         return rows;
     }
@@ -274,8 +274,8 @@ public final class ConfigSelectorComponent {
         if (line.length() > width) {
             line = line.substring(0, Math.max(0, width - 3)) + "...";
         }
-        var style = dimmed ? SemanticColors.DIM
-            : isSelected ? SemanticColors.PLAIN.bold() : SemanticColors.PLAIN;
+        var style = dimmed ? SemanticColors.dim()
+            : isSelected ? SemanticColors.plain().bold() : SemanticColors.plain();
         return List.of(new RowSpan(line, style));
     }
 
@@ -305,7 +305,7 @@ public final class ConfigSelectorComponent {
 
     /** pi DynamicBorder 对位（批 10/14 同形）：accent 色全宽横线。 */
     private static List<RowSpan> borderRow(int width) {
-        return List.of(new RowSpan("─".repeat(Math.max(1, width)), SemanticColors.ACCENT));
+        return List.of(new RowSpan("─".repeat(Math.max(1, width)), SemanticColors.accent()));
     }
 
     /** span 模型 → TamboUI Element（render 只翻译，不另建行形——批 14 同手法）。 */

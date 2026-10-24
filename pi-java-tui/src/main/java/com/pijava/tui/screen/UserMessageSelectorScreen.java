@@ -154,16 +154,16 @@ public final class UserMessageSelectorScreen implements ScreenOverlay {
         int width = Math.max(1, terminalCols.getAsInt());
         var rows = new ArrayList<List<Span>>();
         rows.add(List.of());
-        rows.add(List.of(new Span(" Fork from Message", SemanticColors.PLAIN.bold())));
+        rows.add(List.of(new Span(" Fork from Message", SemanticColors.plain().bold())));
         for (var line : wrapWords(SUBTITLE, Math.max(1, width - 2))) {
-            rows.add(List.of(new Span(" " + line, SemanticColors.MUTED)));
+            rows.add(List.of(new Span(" " + line, SemanticColors.muted())));
         }
         rows.add(List.of());
         rows.add(borderRow(width));
         rows.add(List.of());
         if (messages.isEmpty()) {
             // pi :39-42（防御臂，宿主预检 "No messages to fork from" 后不可达）。
-            rows.add(List.of(new Span("  No user messages found", SemanticColors.MUTED)));
+            rows.add(List.of(new Span("  No user messages found", SemanticColors.muted())));
         } else {
             // 可视窗以选中项为中心滑动（pi :44-48 公式逐字）。
             int startIndex = Math.max(0, Math.min(
@@ -176,21 +176,21 @@ public final class UserMessageSelectorScreen implements ScreenOverlay {
                 // 光标占 2 列（pi :55-57）；选中加粗。
                 var truncated = truncateToWidth(normalized, width - 2);
                 if (isSelected) {
-                    rows.add(List.of(new Span("› ", SemanticColors.ACCENT),
-                        new Span(truncated, SemanticColors.PLAIN.bold())));
+                    rows.add(List.of(new Span("› ", SemanticColors.accent()),
+                        new Span(truncated, SemanticColors.plain().bold())));
                 } else {
-                    rows.add(List.of(new Span("  " + truncated, SemanticColors.PLAIN)));
+                    rows.add(List.of(new Span("  " + truncated, SemanticColors.plain())));
                 }
                 // 序位行（pi :61-64）。
                 rows.add(List.of(new Span(
-                    "  Message " + (i + 1) + " of " + messages.size(), SemanticColors.MUTED)));
+                    "  Message " + (i + 1) + " of " + messages.size(), SemanticColors.muted())));
                 rows.add(List.of());   // 条间空行（pi :65）
             }
             // 滚动指示（pi :68-71 出现条件逐字）。
             if (startIndex > 0 || endIndex < messages.size()) {
                 rows.add(List.of(new Span(
                     "  (" + (selectedIndex + 1) + "/" + messages.size() + ")",
-                    SemanticColors.MUTED)));
+                    SemanticColors.muted())));
             }
         }
         rows.add(List.of());
@@ -200,7 +200,7 @@ public final class UserMessageSelectorScreen implements ScreenOverlay {
 
     /** pi DynamicBorder（dynamic-border.ts:16-18，裁决⑤）：{@code "─" × max(1, width)}，MUTED 近似。 */
     private static List<Span> borderRow(int width) {
-        return List.of(new Span("─".repeat(Math.max(1, width)), SemanticColors.MUTED));
+        return List.of(new Span("─".repeat(Math.max(1, width)), SemanticColors.muted()));
     }
 
     /**

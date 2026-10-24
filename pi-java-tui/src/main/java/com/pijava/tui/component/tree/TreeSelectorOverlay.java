@@ -229,37 +229,37 @@ public final class TreeSelectorOverlay implements ScreenOverlay {
         int width = Math.max(20, terminalCols.getAsInt());
         var children = new ArrayList<Element>();
         children.add(richLine(List.of(
-            new TreeListRenderer.Span("  Session Tree", SemanticColors.PLAIN.bold()))));
+            new TreeListRenderer.Span("  Session Tree", SemanticColors.plain().bold()))));
         for (var helpLine : TreeHelpLine.render(width)) {
-            children.add(richLine(List.of(new TreeListRenderer.Span(helpLine, SemanticColors.MUTED))));
+            children.add(richLine(List.of(new TreeListRenderer.Span(helpLine, SemanticColors.muted()))));
         }
         // pi SearchLine（:1174-1180）：查询串 accent。
         var searchSpans = new ArrayList<TreeListRenderer.Span>();
-        searchSpans.add(new TreeListRenderer.Span("  Type to search:", SemanticColors.MUTED));
+        searchSpans.add(new TreeListRenderer.Span("  Type to search:", SemanticColors.muted()));
         if (!model.searchQuery().isEmpty()) {
-            searchSpans.add(new TreeListRenderer.Span(" " + model.searchQuery(), SemanticColors.ACCENT));
+            searchSpans.add(new TreeListRenderer.Span(" " + model.searchQuery(), SemanticColors.accent()));
         }
         children.add(richLine(searchSpans));
 
         if (isEditingLabel()) {
             // pi LabelInput.render（:1305-1317）逐字。
             children.add(richLine(List.of(
-                new TreeListRenderer.Span("  Label (empty to remove):", SemanticColors.MUTED))));
+                new TreeListRenderer.Span("  Label (empty to remove):", SemanticColors.muted()))));
             children.add(labelEditor.render());
             children.add(richLine(List.of(
-                new TreeListRenderer.Span("  enter save  esc cancel", SemanticColors.MUTED))));
+                new TreeListRenderer.Span("  enter save  esc cancel", SemanticColors.muted()))));
         } else {
             var rows = renderer.buildRows(model);
             if (rows.isEmpty()) {
                 children.add(richLine(List.of(
-                    new TreeListRenderer.Span(TreeListRenderer.emptyLine(), SemanticColors.MUTED))));
+                    new TreeListRenderer.Span(TreeListRenderer.emptyLine(), SemanticColors.muted()))));
             } else {
                 for (var lineSpans : renderer.viewport(rows, width)) {
                     children.add(richLine(lineSpans));
                 }
             }
             children.add(richLine(List.of(
-                new TreeListRenderer.Span(renderer.statusLine(model), SemanticColors.MUTED))));
+                new TreeListRenderer.Span(renderer.statusLine(model), SemanticColors.muted()))));
         }
         return TamboUIAdapter.column(children);
     }

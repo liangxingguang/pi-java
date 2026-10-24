@@ -113,12 +113,12 @@ public final class SessionSelectorHeader {
         // 右段（pi :134-148）：{scopeText}  {nameText}  {sortText}（两个空格分隔）。
         var right = new ArrayList<Span>();
         right.addAll(scopeSpans());
-        right.add(new Span("  ", SemanticColors.PLAIN));
-        right.add(new Span("Name: ", SemanticColors.MUTED));
-        right.add(new Span(nameFilter == NameFilter.ALL ? "All" : "Named", SemanticColors.ACCENT));
-        right.add(new Span("  ", SemanticColors.PLAIN));
-        right.add(new Span("Sort: ", SemanticColors.MUTED));
-        right.add(new Span(sortLabel(), SemanticColors.ACCENT));
+        right.add(new Span("  ", SemanticColors.plain()));
+        right.add(new Span("Name: ", SemanticColors.muted()));
+        right.add(new Span(nameFilter == NameFilter.ALL ? "All" : "Named", SemanticColors.accent()));
+        right.add(new Span("  ", SemanticColors.plain()));
+        right.add(new Span("Sort: ", SemanticColors.muted()));
+        right.add(new Span(sortLabel(), SemanticColors.accent()));
         right = new ArrayList<>(SessionText.truncateSpans(right, width));
 
         int rightWidth = SessionText.widthOf(right);
@@ -127,8 +127,8 @@ public final class SessionSelectorHeader {
         int spacing = Math.max(0, width - TextLayout.displayWidth(left) - rightWidth);
 
         var row1 = new ArrayList<Span>();
-        row1.add(new Span(left, SemanticColors.PLAIN.bold()));
-        row1.add(new Span(" ".repeat(spacing), SemanticColors.PLAIN));
+        row1.add(new Span(left, SemanticColors.plain().bold()));
+        row1.add(new Span(" ".repeat(spacing), SemanticColors.plain()));
         row1.addAll(right);
 
         var hintRows = hintRows(width);
@@ -141,17 +141,17 @@ public final class SessionSelectorHeader {
             var progressText = loadProgress != null
                 ? loadProgress.loaded + "/" + loadProgress.total : "...";
             return List.of(
-                new Span("○ Current Folder | ", SemanticColors.MUTED),
-                new Span("Loading " + progressText, SemanticColors.ACCENT));
+                new Span("○ Current Folder | ", SemanticColors.muted()),
+                new Span("Loading " + progressText, SemanticColors.accent()));
         }
         if (scope == Scope.CURRENT) {
             return List.of(
-                new Span("◉ Current Folder", SemanticColors.ACCENT),
-                new Span(" | ○ All", SemanticColors.MUTED));
+                new Span("◉ Current Folder", SemanticColors.accent()),
+                new Span(" | ○ All", SemanticColors.muted()));
         }
         return List.of(
-            new Span("○ Current Folder | ", SemanticColors.MUTED),
-            new Span("◉ All", SemanticColors.ACCENT));
+            new Span("○ Current Folder | ", SemanticColors.muted()),
+            new Span("◉ All", SemanticColors.accent()));
     }
 
     /** pi :134：relevance 显示为 Fuzzy。 */
@@ -168,17 +168,17 @@ public final class SessionSelectorHeader {
         if (confirmingDeletePath != null) {
             // pi :159-161：删除确认单行（error 色为底、键名 dim/描述 muted）。
             var row = new ArrayList<Span>();
-            row.add(new Span("Delete session? ", SemanticColors.ERROR));
-            row.add(new Span("enter", SemanticColors.DIM));
-            row.add(new Span(" confirm", SemanticColors.MUTED));
-            row.add(new Span(" · ", SemanticColors.ERROR));
-            row.add(new Span("esc", SemanticColors.DIM));
-            row.add(new Span(" cancel", SemanticColors.MUTED));
+            row.add(new Span("Delete session? ", SemanticColors.error()));
+            row.add(new Span("enter", SemanticColors.dim()));
+            row.add(new Span(" confirm", SemanticColors.muted()));
+            row.add(new Span(" · ", SemanticColors.error()));
+            row.add(new Span("esc", SemanticColors.dim()));
+            row.add(new Span(" cancel", SemanticColors.muted()));
             return List.of(SessionText.truncateSpans(row, width), List.of());
         }
         if (statusMessage != null) {
             // pi :162-165：状态消息单行（error/accent 色）。
-            var style = statusMessage.error() ? SemanticColors.ERROR : SemanticColors.ACCENT;
+            var style = statusMessage.error() ? SemanticColors.error() : SemanticColors.accent();
             return List.of(List.of(new Span(
                 SessionText.truncateToWidth(statusMessage.message(), width, "…"), style)),
                 List.of());
@@ -186,20 +186,20 @@ public final class SessionSelectorHeader {
         // pi :167-182 常态两行。
         var row1 = new ArrayList<Span>();
         row1.addAll(keyHintSpans("tab", "scope"));   // tui.input.tab 不入键位表（裁决⑥）
-        row1.add(new Span(" · ", SemanticColors.MUTED));
-        row1.add(new Span("re:<pattern> regex · \"phrase\" exact", SemanticColors.MUTED));
+        row1.add(new Span(" · ", SemanticColors.muted()));
+        row1.add(new Span("re:<pattern> regex · \"phrase\" exact", SemanticColors.muted()));
 
         var row2 = new ArrayList<Span>();
         row2.addAll(keyHint(KeybindingsManager.SESSION_TOGGLE_SORT, "sort"));
-        row2.add(new Span(" · ", SemanticColors.MUTED));
+        row2.add(new Span(" · ", SemanticColors.muted()));
         row2.addAll(keyHint(KeybindingsManager.SESSION_TOGGLE_NAMED_FILTER, "named"));
-        row2.add(new Span(" · ", SemanticColors.MUTED));
+        row2.add(new Span(" · ", SemanticColors.muted()));
         row2.addAll(keyHint(KeybindingsManager.SESSION_DELETE, "delete"));
-        row2.add(new Span(" · ", SemanticColors.MUTED));
+        row2.add(new Span(" · ", SemanticColors.muted()));
         row2.addAll(keyHint(KeybindingsManager.SESSION_TOGGLE_PATH,
             "path " + (showPath ? "(on)" : "(off)")));
         if (showRenameHint) {
-            row2.add(new Span(" · ", SemanticColors.MUTED));
+            row2.add(new Span(" · ", SemanticColors.muted()));
             row2.addAll(keyHint(KeybindingsManager.SESSION_RENAME, "rename"));
         }
         return List.of(SessionText.truncateSpans(row1, width),
@@ -213,7 +213,7 @@ public final class SessionSelectorHeader {
 
     private List<Span> keyHintSpans(String keyText, String description) {
         return List.of(
-            new Span(keyText, SemanticColors.DIM),
-            new Span(" " + description, SemanticColors.MUTED));
+            new Span(keyText, SemanticColors.dim()),
+            new Span(" " + description, SemanticColors.muted()));
     }
 }

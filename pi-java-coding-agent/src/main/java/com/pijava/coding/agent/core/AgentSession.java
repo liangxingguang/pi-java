@@ -123,6 +123,9 @@ public final class AgentSession implements AutoCloseable {
     private List<Path> themePaths = List.of();
     /** 批 21（T8）：themePaths 的装载结果（pi resourceLoader.getThemes() 对位）。 */
     private List<com.pijava.coding.agent.theme.Theme> themes = List.of();
+    /** 批 21（T8）：reload 完成监听者（模式层主题收尾口）。 */
+    private final java.util.concurrent.CopyOnWriteArrayList<Runnable> reloadListeners =
+        new java.util.concurrent.CopyOnWriteArrayList<>();
     /** 批 18（评审 M4）：本会话装配期的 resolve 结果（wireSession 现算一份，
      *  技能/模板/主题/扩展四消费面共享；/reload 重算）。 */
     private SessionSetup.ResolvedAssembly resolveAssembly;
@@ -1337,6 +1340,24 @@ public final class AgentSession implements AutoCloseable {
     void setThemePathsForReload(List<String> paths) {
         themePaths = paths.stream().map(Path::of).toList();
         reloadThemes();
+    }
+
+    /**
+     * 批 21（T8，裁决⑩）：reload 完成监听——pi 的 setRegisteredThemes＋
+     * {@code themeController.applyFromSettings()} 在 InteractiveMode 收尾
+     * （interactive-mode.ts:6490-6492）；java 的 /reload 封在 slash 命令里，
+     * 模式层经此口接收尾（注册表写入/控制器应用都在监听者侧，会话层保持
+     * toolkit 中立）。
+     */
+    public void addReloadListener(Runnable listener) {
+        reloadListeners.addIfAbsent(listener);
+    }
+
+    /** {@link SessionReload} 收尾回调。 */
+    void fireReloaded() {
+        for (var listener : reloadListeners) {
+            listener.run();
+        }
     }
 
     /**

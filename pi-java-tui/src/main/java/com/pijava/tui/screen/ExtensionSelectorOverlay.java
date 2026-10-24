@@ -157,16 +157,16 @@ public final class ExtensionSelectorOverlay implements ScreenOverlay, ExtensionD
             titleLines[titleLines.length - 1] += " (" + countdownSeconds + "s)";
         }
         for (var line : titleLines) {
-            rows.add(List.of(new Span(" " + line, SemanticColors.ACCENT.bold())));
+            rows.add(List.of(new Span(" " + line, SemanticColors.accent().bold())));
         }
         rows.add(List.of());
         // pi updateList：选中项 "→ " 前缀＋accent；未选 "  " 前缀＋正文色。
         int selected = selectedIndex.get();
         for (int i = 0; i < options.size(); i++) {
             if (i == selected) {
-                rows.add(List.of(new Span(" → " + options.get(i), SemanticColors.ACCENT)));
+                rows.add(List.of(new Span(" → " + options.get(i), SemanticColors.accent())));
             } else {
-                rows.add(List.of(new Span("   " + options.get(i), SemanticColors.PLAIN)));
+                rows.add(List.of(new Span("   " + options.get(i), SemanticColors.plain())));
             }
         }
         rows.add(List.of());
@@ -179,14 +179,14 @@ public final class ExtensionSelectorOverlay implements ScreenOverlay, ExtensionD
     /** pi hint 行逐字：{@code rawKeyHint("↑↓","navigate") + keyHint(confirm,"select") + keyHint(cancel,"cancel")}。 */
     private List<Span> hintRow() {
         return List.of(
-            new Span(" ↑↓", SemanticColors.DIM),
-            new Span(" navigate", SemanticColors.MUTED),
-            new Span("  ", SemanticColors.PLAIN),
-            new Span(hintKey(KeybindingsManager.SELECT_CONFIRM), SemanticColors.DIM),
-            new Span(" select", SemanticColors.MUTED),
-            new Span("  ", SemanticColors.PLAIN),
-            new Span(hintKey(KeybindingsManager.SELECT_CANCEL), SemanticColors.DIM),
-            new Span(" cancel", SemanticColors.MUTED));
+            new Span(" ↑↓", SemanticColors.dim()),
+            new Span(" navigate", SemanticColors.muted()),
+            new Span("  ", SemanticColors.plain()),
+            new Span(hintKey(KeybindingsManager.SELECT_CONFIRM), SemanticColors.dim()),
+            new Span(" select", SemanticColors.muted()),
+            new Span("  ", SemanticColors.plain()),
+            new Span(hintKey(KeybindingsManager.SELECT_CANCEL), SemanticColors.dim()),
+            new Span(" cancel", SemanticColors.muted()));
     }
 
     private String hintKey(String actionId) {
@@ -195,6 +195,6 @@ public final class ExtensionSelectorOverlay implements ScreenOverlay, ExtensionD
 
     /** pi DynamicBorder：{@code "─".repeat(max(1, width))}，border 色（≈ DIM）。 */
     static List<Span> borderRow(int width) {
-        return List.of(new Span("─".repeat(Math.max(1, width)), SemanticColors.DIM));
+        return List.of(new Span("─".repeat(Math.max(1, width)), SemanticColors.dim()));
     }
 }

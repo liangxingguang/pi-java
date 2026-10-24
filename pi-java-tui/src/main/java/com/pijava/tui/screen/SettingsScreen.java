@@ -33,6 +33,10 @@ public final class SettingsScreen implements ScreenOverlay {
     private boolean modelThinkingRequested;
     /** 批 13 T9："Cache miss notices" 改动置位；PiTuiApp 检出后重建聊天区（pi :5045-5048）。 */
     private boolean cacheMissNoticesToggled;
+    /** 批 21（T11，map/05 S9）：Enter 命中 Theme 行置位；PiTuiApp 检出后开 ThemeSubmenuScreen。 */
+    private boolean themeRequested;
+    /** 批 21（T11）：主题控制器（Theme 行摘要与子菜单预览/应用；null ⇒ 测试形）。 */
+    private final com.pijava.coding.agent.theme.ThemeController themeController;
 
     /**
      * Creates the settings page bound to the session's settings service.
@@ -40,7 +44,19 @@ public final class SettingsScreen implements ScreenOverlay {
      * @param session the session whose settings are edited
      */
     public SettingsScreen(AgentSession session) {
+        this(session, null);
+    }
+
+    /**
+     * 批 21（T11）：带主题控制器的构造（生产路径——PiTuiApp 注入）。
+     *
+     * @param session the session whose settings are edited
+     * @param themeController 主题控制器（可空）
+     */
+    public SettingsScreen(AgentSession session,
+                          com.pijava.coding.agent.theme.ThemeController themeController) {
         this.session = session;
+        this.themeController = themeController;
         this.fields = buildFields(session);
     }
 
@@ -53,8 +69,13 @@ public final class SettingsScreen implements ScreenOverlay {
         var install = session.services().settings().install();
         var network = session.services().settings().network();
         var fields = new ArrayList<SettingField>();
-        fields.add(new SettingField("Theme", List.of("dark", "light"),
-            accessors::getTheme, accessors::setTheme));
+        // 批 21（T11，pi settings-selector.ts:749-756 对位）：Theme 行从
+        // dark/light 循环改子菜单入口（S9——single/automatic 两模式＋预览）；
+        // 摘要＝当前选择（controller.getThemeSelection ?? 设置原值）。
+        fields.add(SettingField.submenu("Theme", THEME_SUBMENU_ID,
+            () -> themeController != null
+                ? java.util.Objects.requireNonNullElse(themeController.getThemeSelection(), "system")
+                : java.util.Objects.requireNonNullElse(accessors.getThemeSetting(), "system")));
         fields.add(new SettingField("Steering mode", List.of("one-at-a-time", "all"),
             accessors::getSteeringMode, accessors::setSteeringMode));
         fields.add(new SettingField("Follow-up mode", List.of("one-at-a-time", "all"),
@@ -119,6 +140,7 @@ public final class SettingsScreen implements ScreenOverlay {
         // T14（pi settings-selector.ts:607-610 菜单项对位）：子菜单行——Enter
         // 不循环取值，置 modelThinkingRequested 由 PiTuiApp 改开两级选择器。
         fields.add(SettingField.submenu("Default thinking level per model",
+            MODEL_THINKING_SUBMENU_ID,
             () -> modelThinkingSummary(accessors)));
         return List.copyOf(fields);
     }
@@ -147,7 +169,12 @@ public final class SettingsScreen implements ScreenOverlay {
         if (event.isConfirm()) {
             var field = fields.get(selected);
             if (field.submenu()) {
-                modelThinkingRequested = true;
+                // 批 21（T11）：子菜单分行置位（Theme / thinking-level 两族）。
+                if (THEME_SUBMENU_ID.equals(field.submenuId())) {
+                    themeRequested = true;
+                } else {
+                    modelThinkingRequested = true;
+                }
             } else {
                 cycle(selected);
             }
@@ -222,21 +249,32 @@ public final class SettingsScreen implements ScreenOverlay {
         return value == null ? null : String.valueOf(value);
     }
 
+    /** 批 21（T11）：Theme 子菜单请求的一次性检出（PiTuiApp 关屏处理点调用）。 */
+    public boolean pollThemeRequest() {
+        var requested = themeRequested;
+        themeRequested = false;
+        return requested;
+    }
+
+    private static final String MODEL_THINKING_SUBMENU_ID = "modelThinking";
+    private static final String THEME_SUBMENU_ID = "theme";
+
     /** 一行设置：循环取值字段，或 {@code submenu} 入口（values 空、Enter 置请求位）。 */
     private record SettingField(
         String label,
         List<String> values,
         Supplier<String> getter,
         Consumer<String> setter,
-        boolean submenu
+        boolean submenu,
+        String submenuId
     ) {
         SettingField(String label, List<String> values,
                      Supplier<String> getter, Consumer<String> setter) {
-            this(label, values, getter, setter, false);
+            this(label, values, getter, setter, false, null);
         }
 
-        static SettingField submenu(String label, Supplier<String> summary) {
-            return new SettingField(label, List.of(), summary, v -> { }, true);
+        static SettingField submenu(String label, String submenuId, Supplier<String> summary) {
+            return new SettingField(label, List.of(), summary, v -> { }, true, submenuId);
         }
     }
 }

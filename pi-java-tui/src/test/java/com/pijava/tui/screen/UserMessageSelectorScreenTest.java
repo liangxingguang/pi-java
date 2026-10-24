@@ -126,14 +126,14 @@ class UserMessageSelectorScreenTest {
             .filter(r -> r.stream().anyMatch(s -> s.text().startsWith("›")))
             .findFirst().orElseThrow();
         assertThat(cursorRow.get(0).text()).isEqualTo("› ");
-        assertThat(cursorRow.get(0).style()).isSameAs(SemanticColors.ACCENT);
+        assertThat(cursorRow.get(0).style()).isSameAs(SemanticColors.accent());
         assertThat(cursorRow.get(1).text()).isEqualTo("plain");
         // 未选中行：两空格前缀、无加粗（样式即 PLAIN 本体）。
         var plainRow = rows.stream()
             .filter(r -> r.size() == 1 && r.get(0).text().startsWith("  first"))
             .findFirst().orElseThrow();
         assertThat(plainRow.get(0).text()).isEqualTo("  first second");
-        assertThat(plainRow.get(0).style()).isSameAs(SemanticColors.PLAIN);
+        assertThat(plainRow.get(0).style()).isSameAs(SemanticColors.plain());
         // 序位行＋条间空行＋无滚动指示（n=2 全可见）。
         var texts = lineTexts(rig.screen());
         assertThat(texts).containsSubsequence("  first second", "  Message 1 of 2", "");
@@ -196,7 +196,7 @@ class UserMessageSelectorScreenTest {
         assertThat(texts.get(2))
             .isEqualTo(" Select a user message to copy the active path up to that point into a new");
         assertThat(texts.get(3)).isEqualTo(" session");
-        assertThat(rows.get(2).get(0).style()).isSameAs(SemanticColors.MUTED);
+        assertThat(rows.get(2).get(0).style()).isSameAs(SemanticColors.muted());
         assertThat(texts.get(4)).isEmpty();
         assertThat(texts.get(5)).isEqualTo("─".repeat(80));
         // 尾：空行 ⇒ border（末两行）。

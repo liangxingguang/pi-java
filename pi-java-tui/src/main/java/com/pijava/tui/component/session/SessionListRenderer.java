@@ -49,7 +49,7 @@ public final class SessionListRenderer {
         if (filtered.isEmpty()) {
             // pi :429-447：named×showCwd 两维四分文案。
             rows.add(List.of(new Span(
-                SessionText.truncateToWidth(emptyMessage(), width, "…"), SemanticColors.MUTED)));
+                SessionText.truncateToWidth(emptyMessage(), width, "…"), SemanticColors.muted())));
             return rows;
         }
 
@@ -68,7 +68,7 @@ public final class SessionListRenderer {
             rows.add(List.of(new Span(
                 SessionText.truncateToWidth(
                     "  (" + (model.selectedIndex() + 1) + "/" + filtered.size() + ")", width, ""),
-                SemanticColors.MUTED)));
+                SemanticColors.muted())));
         }
         return rows;
     }
@@ -110,13 +110,13 @@ public final class SessionListRenderer {
         // 颜色优先级（pi :494-501）：确认删除 error > 当前会话 accent > 有名 warning > 默认。
         Style messageStyle;
         if (isConfirmingDelete) {
-            messageStyle = SemanticColors.ERROR;
+            messageStyle = SemanticColors.error();
         } else if (isCurrent) {
-            messageStyle = SemanticColors.ACCENT;
+            messageStyle = SemanticColors.accent();
         } else if (hasName) {
-            messageStyle = SemanticColors.WARNING;
+            messageStyle = SemanticColors.warning();
         } else {
-            messageStyle = SemanticColors.PLAIN;
+            messageStyle = SemanticColors.plain();
         }
         if (isSelected) {
             // pi :503-505 选中加粗（整行 selectedBg 底色不移植——批 10 同例）。
@@ -124,17 +124,17 @@ public final class SessionListRenderer {
         }
 
         var spans = new ArrayList<Span>();
-        spans.add(new Span(cursor, isSelected ? SemanticColors.ACCENT : SemanticColors.PLAIN));
+        spans.add(new Span(cursor, isSelected ? SemanticColors.accent() : SemanticColors.plain()));
         if (!prefix.isEmpty()) {
-            spans.add(new Span(prefix, SemanticColors.DIM));
+            spans.add(new Span(prefix, SemanticColors.dim()));
         }
         spans.add(new Span(truncatedMsg, messageStyle));
         // pi :509-511：间距 ≥1。
         int leftWidth = 2 + prefixWidth + TextLayout.displayWidth(truncatedMsg);
         int spacing = Math.max(1, width - leftWidth - TextLayout.displayWidth(rightPart));
-        spans.add(new Span(" ".repeat(spacing), SemanticColors.PLAIN));
+        spans.add(new Span(" ".repeat(spacing), SemanticColors.plain()));
         spans.add(new Span(rightPart,
-            isConfirmingDelete ? SemanticColors.ERROR : SemanticColors.DIM));
+            isConfirmingDelete ? SemanticColors.error() : SemanticColors.dim()));
         // pi :517 行级截断安全网。
         return SessionText.truncateSpans(spans, width);
     }

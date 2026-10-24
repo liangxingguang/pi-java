@@ -43,13 +43,13 @@ class SessionListRendererTest {
 
         assertThat(rows).hasSize(2);
         assertThat(rows.get(0).get(0).text()).isEqualTo("› ");
-        assertThat(rows.get(0).get(0).style()).isEqualTo(SemanticColors.ACCENT);
+        assertThat(rows.get(0).get(0).style()).isEqualTo(SemanticColors.accent());
         assertThat(rows.get(1).get(0).text()).isEqualTo("  ");
         // RECENT 保入序 ⇒ 行 0 是 a（选中，消息加粗）、行 1 是 b（不加粗）
         assertThat(rows.get(0).stream().filter(s -> s.text().contains("first-a"))
-            .findFirst().orElseThrow().style()).isEqualTo(SemanticColors.PLAIN.bold());
+            .findFirst().orElseThrow().style()).isEqualTo(SemanticColors.plain().bold());
         assertThat(rows.get(1).stream().filter(s -> s.text().contains("first-b"))
-            .findFirst().orElseThrow().style()).isEqualTo(SemanticColors.PLAIN);
+            .findFirst().orElseThrow().style()).isEqualTo(SemanticColors.plain());
     }
 
     @Test
@@ -65,17 +65,17 @@ class SessionListRendererTest {
         var rows = renderer.layout(80);
         // 有名 ⇒ warning（行 0 选中加粗）；无名 ⇒ 默认
         assertThat(rows.get(0).stream().filter(s -> s.text().contains("My Session"))
-            .findFirst().orElseThrow().style()).isEqualTo(SemanticColors.WARNING.bold());
+            .findFirst().orElseThrow().style()).isEqualTo(SemanticColors.warning().bold());
         assertThat(rows.get(1).stream().filter(s -> s.text().contains("first-plain"))
-            .findFirst().orElseThrow().style()).isEqualTo(SemanticColors.PLAIN);
+            .findFirst().orElseThrow().style()).isEqualTo(SemanticColors.plain());
 
         // 确认删除中 ⇒ error（message 与右侧两段同色；选中行叠加加粗）
         model.touchSelection();
         model.startDeleteConfirmationForSelectedSession();
         rows = renderer.layout(80);
         assertThat(rows.get(0).stream().filter(s -> s.text().contains("My Session"))
-            .findFirst().orElseThrow().style()).isEqualTo(SemanticColors.ERROR.bold());
-        assertThat(rows.get(0).get(rows.get(0).size() - 1).style()).isEqualTo(SemanticColors.ERROR);
+            .findFirst().orElseThrow().style()).isEqualTo(SemanticColors.error().bold());
+        assertThat(rows.get(0).get(rows.get(0).size() - 1).style()).isEqualTo(SemanticColors.error());
     }
 
     @Test
@@ -147,6 +147,6 @@ class SessionListRendererTest {
         assertThat(rows).hasSize(2);
         assertThat(rowText(rows.get(1))).contains("└─ ");
         assertThat(rows.get(1).stream().filter(s -> s.text().contains("└─ "))
-            .findFirst().orElseThrow().style()).isEqualTo(SemanticColors.DIM);
+            .findFirst().orElseThrow().style()).isEqualTo(SemanticColors.dim());
     }
 }

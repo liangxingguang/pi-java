@@ -10,7 +10,6 @@ import com.pijava.coding.agent.spi.ConfigSelectorProvider.WriteScope;
 import com.pijava.coding.agent.spi.ScopedResolvedPaths;
 import com.pijava.tui.component.config.ConfigSelectorComponent;
 import com.pijava.tui.component.config.ConfigSelectorModel;
-import com.pijava.tui.theme.PiTheme;
 import com.pijava.tui.util.TamboUIAdapter;
 
 import dev.tamboui.toolkit.event.EventResult;
@@ -43,8 +42,14 @@ public final class ConfigSelectorRunner {
         } catch (Exception e) {
             throw new IllegalStateException("Failed to start the config selector TUI", e);
         }
-        runner.styleEngine(PiTheme.engineFor(
-            PiTheme.resolveTheme(null, settings.effective().theme, java.util.List.of())));
+        // 批 21（T9）：主题初始化＝pi 序（settings 名〔对形经 resolveThemeSetting〕
+        // ?? null ⇒ initTheme 内落 system）；选择器路径无注册主题表（pi 同——
+        // 启动选择器只认内建＋<agentDir>/themes 目录扫描）。
+        com.pijava.coding.agent.theme.Themes.initTheme(
+            com.pijava.coding.agent.theme.ThemeSettings.resolveThemeSetting(
+                settings.effective().theme,
+                com.pijava.coding.agent.theme.Themes.terminalTheme()), false);
+        runner.styleEngine(com.pijava.tui.theme.ThemeApplicator.engineForCurrentTheme());
 
         var model = new ConfigSelectorModel(
             ConfigSelectorModel.buildGroups(resolvedPaths.global(), agentDir),

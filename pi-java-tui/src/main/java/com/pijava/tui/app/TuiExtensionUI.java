@@ -225,6 +225,52 @@ public final class TuiExtensionUI implements ExtensionUI {
             host.chatScreen().setExtensionWidget(key, content, options, hostEnv));
     }
 
+    // ── 主题面（批 21 T9：pi interactive-mode.ts:2665-2680 对位）──
+
+    /** pi {@code theme}（:2665-2667）的窄化投影：当前主题名。 */
+    @Override
+    public String theme() {
+        return com.pijava.coding.agent.theme.Themes.currentThemeName();
+    }
+
+    /** pi {@code getAllThemes}（:2678）。 */
+    @Override
+    public List<ThemeEntry> getAllThemes() {
+        return com.pijava.coding.agent.theme.Themes.getAvailableThemesWithPaths().stream()
+            .map(info -> new ThemeEntry(info.name(),
+                info.path() != null ? info.path().toString() : null))
+            .toList();
+    }
+
+    /** pi {@code getTheme}（:2679）：按名加载（不切换）；未找到 ⇒ null。 */
+    @Override
+    public @Nullable ThemeEntry getTheme(String name) {
+        var theme = com.pijava.coding.agent.theme.Themes.getThemeByName(name);
+        return theme == null ? null : new ThemeEntry(theme.name(), theme.sourcePath());
+    }
+
+    /**
+     * pi {@code setTheme}（:2670-2680 逐字序）：控制器按名切换；成功且与持久值
+     * 不同 ⇒ 写 settings 全局域＋flush。
+     */
+    @Override
+    public SetThemeResult setTheme(String name) {
+        var controller = host.themeController();
+        if (controller == null) {
+            return new SetThemeResult(false, "UI not available");
+        }
+        var result = controller.setThemeName(name, false);
+        var session = host.sessionOrNull();
+        if (result.success() && session != null) {
+            var settings = session.services().settings();
+            if (!name.equals(settings.accessors().getTheme())) {
+                settings.accessors().setTheme(name);
+                settings.flush();
+            }
+        }
+        return new SetThemeResult(result.success(), result.error());
+    }
+
     @Override
     public void setFooter(@Nullable ExtensionFooterFactory factory) {
         host.dispatcher().dispatch(() -> host.chatScreen().setExtensionFooter(factory, hostEnv));

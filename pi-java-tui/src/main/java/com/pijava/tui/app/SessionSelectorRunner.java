@@ -10,7 +10,6 @@ import com.pijava.coding.agent.core.SessionResolutionExit;
 import com.pijava.coding.agent.core.SettingsManager;
 import com.pijava.coding.agent.spi.SessionListLoader;
 import com.pijava.tui.component.session.SessionSelectorComponent;
-import com.pijava.tui.theme.PiTheme;
 import com.pijava.tui.util.TamboUIAdapter;
 import com.pijava.tui.util.TuiEventDispatcher;
 
@@ -52,9 +51,14 @@ public final class SessionSelectorRunner {
         } catch (Exception e) {
             throw new IllegalStateException("Failed to start the session selector TUI", e);
         }
-        // pi :681-683：--use-theme 先覆盖再进选择器；picker 无扩展 themePaths（List.of()）。
-        runner.styleEngine(PiTheme.engineFor(
-            PiTheme.resolveTheme(useThemeOverride, settings.effective().theme, List.of())));
+        // 批 21（T9）：--use-theme 覆盖优先（pi main.ts:681-683 applyOverrides
+        // 对位——选择器场景＝本次调用的初始设置）；其后 settings；对形经
+        // resolveThemeSetting 解析。picker 无注册主题表（pi 启动选择器同）。
+        com.pijava.coding.agent.theme.Themes.initTheme(
+            com.pijava.coding.agent.theme.ThemeSettings.resolveThemeSetting(
+                useThemeOverride != null ? useThemeOverride : settings.effective().theme,
+                com.pijava.coding.agent.theme.Themes.terminalTheme()), false);
+        runner.styleEngine(com.pijava.tui.theme.ThemeApplicator.engineForCurrentTheme());
 
         var dispatcher = new TuiEventDispatcher();
         var executor = Executors.newVirtualThreadPerTaskExecutor();

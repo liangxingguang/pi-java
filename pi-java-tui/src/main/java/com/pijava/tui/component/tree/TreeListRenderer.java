@@ -113,12 +113,12 @@ public final class TreeListRenderer {
 
         // pi :737-743：无 connector 的根行折叠标记独立（accent）；活动路径 •。
         var prefixPart = new ArrayList<Span>();
-        prefixPart.add(new Span(prefix.toString(), SemanticColors.DIM));
+        prefixPart.add(new Span(prefix.toString(), SemanticColors.dim()));
         if (isFolded && !showsConnector) {
-            prefixPart.add(new Span("⊞ ", SemanticColors.ACCENT));
+            prefixPart.add(new Span("⊞ ", SemanticColors.accent()));
         }
         if (m.isOnActivePath(entry.id())) {
-            prefixPart.add(new Span("• ", SemanticColors.ACCENT));
+            prefixPart.add(new Span("• ", SemanticColors.accent()));
         }
         int anchorCol = prefixPart.stream()
             .mapToInt(s -> TextLayout.displayWidth(s.text())).sum();
@@ -126,10 +126,10 @@ public final class TreeListRenderer {
         // pi :745-749：label＋时间戳。
         var labelSpans = new ArrayList<Span>();
         if (node.label() != null) {
-            labelSpans.add(new Span("[" + node.label() + "] ", SemanticColors.WARNING));
+            labelSpans.add(new Span("[" + node.label() + "] ", SemanticColors.warning()));
             if (m.showLabelTimestamps() && node.labelTimestamp() != null) {
                 labelSpans.add(new Span(
-                    formatLabelTimestamp(node.labelTimestamp()) + " ", SemanticColors.MUTED));
+                    formatLabelTimestamp(node.labelTimestamp()) + " ", SemanticColors.muted()));
             }
         }
 
@@ -137,7 +137,7 @@ public final class TreeListRenderer {
 
         var gutter = new ArrayList<Span>();
         gutter.add(new Span(isSelected ? "› " : "  ",
-            isSelected ? SemanticColors.ACCENT : SemanticColors.PLAIN));
+            isSelected ? SemanticColors.accent() : SemanticColors.plain()));
         var body = new ArrayList<Span>();
         body.addAll(prefixPart);
         body.addAll(labelSpans);
@@ -229,70 +229,70 @@ public final class TreeListRenderer {
             case Entry.Message m -> {
                 switch (m.message()) {
                     case Message.UserMessage u -> {
-                        spans.add(new Span("user: ", SemanticColors.ACCENT));
+                        spans.add(new Span("user: ", SemanticColors.accent()));
                         spans.add(new Span(TreeTextSupport.normalize(
-                            TreeTextSupport.extractContent(u.content())), SemanticColors.PLAIN));
+                            TreeTextSupport.extractContent(u.content())), SemanticColors.plain()));
                     }
                     case Message.AssistantMessage am -> {
-                        spans.add(new Span("assistant: ", SemanticColors.SUCCESS));
+                        spans.add(new Span("assistant: ", SemanticColors.success()));
                         String text = TreeTextSupport.normalize(
                             TreeTextSupport.extractContent(am.content()));
                         if (!text.isEmpty()) {
-                            spans.add(new Span(text, SemanticColors.PLAIN));
+                            spans.add(new Span(text, SemanticColors.plain()));
                         } else if (am.stopReason() == StopReason.ABORTED) {
-                            spans.add(new Span("(aborted)", SemanticColors.MUTED));
+                            spans.add(new Span("(aborted)", SemanticColors.muted()));
                         } else if (am.errorMessage() != null) {
                             spans.add(new Span(TreeTextSupport.truncate(
                                 TreeTextSupport.normalize(am.errorMessage()), 80),
-                                SemanticColors.ERROR));
+                                SemanticColors.error()));
                         } else {
-                            spans.add(new Span("(no content)", SemanticColors.MUTED));
+                            spans.add(new Span("(no content)", SemanticColors.muted()));
                         }
                     }
                     case Message.ToolResultMessage tr -> {
                         var toolCall = tr.toolUseId() == null ? null : toolCallMap.get(tr.toolUseId());
                         if (toolCall != null) {
                             spans.add(new Span(formatToolCall(toolCall.name(),
-                                toolCall.arguments()), SemanticColors.MUTED));
+                                toolCall.arguments()), SemanticColors.muted()));
                         } else {
                             spans.add(new Span("[" + (tr.toolName() != null
-                                ? tr.toolName() : "tool") + "]", SemanticColors.MUTED));
+                                ? tr.toolName() : "tool") + "]", SemanticColors.muted()));
                         }
                     }
                     case Message.SystemMessage sys -> {
                         // pi :811-812：其他 role ⇒ [role]（dim）
                         spans.add(new Span("[" + TreeTextSupport.piRole(sys) + "]",
-                            SemanticColors.DIM));
+                            SemanticColors.dim()));
                     }
                 }
             }
             case Entry.BashExecution b ->
                 spans.add(new Span("[bash]: " + TreeTextSupport.normalize(
-                    b.command() == null ? "" : b.command()), SemanticColors.DIM));
+                    b.command() == null ? "" : b.command()), SemanticColors.dim()));
             case Entry.CustomMessage cm -> {
                 spans.add(new Span("[" + cm.customType() + "]: ",
-                    SemanticColors.CUSTOM_MESSAGE_LABEL));
+                    SemanticColors.customMessageLabel()));
                 spans.add(new Span(TreeTextSupport.normalize(
-                    TreeTextSupport.extractCustomContent(cm.content())), SemanticColors.PLAIN));
+                    TreeTextSupport.extractCustomContent(cm.content())), SemanticColors.plain()));
             }
             case Entry.Compaction c ->
                 spans.add(new Span("[compaction: " + Math.round(c.tokensBefore() / 1000.0)
-                    + "k tokens]", SemanticColors.BORDER_ACCENT));
+                    + "k tokens]", SemanticColors.borderAccent()));
             case Entry.BranchSummary bs -> {
-                spans.add(new Span("[branch summary]: ", SemanticColors.WARNING));
+                spans.add(new Span("[branch summary]: ", SemanticColors.warning()));
                 spans.add(new Span(TreeTextSupport.normalize(bs.summary()),
-                    SemanticColors.PLAIN));
+                    SemanticColors.plain()));
             }
             case Entry.ModelChange mc ->
-                spans.add(new Span("[model: " + mc.modelId() + "]", SemanticColors.DIM));
+                spans.add(new Span("[model: " + mc.modelId() + "]", SemanticColors.dim()));
             case Entry.ThinkingLevelChange tc ->
                 spans.add(new Span("[thinking: " + tc.thinkingLevel() + "]",
-                    SemanticColors.DIM));
+                    SemanticColors.dim()));
             case Entry.Custom c ->
-                spans.add(new Span("[custom: " + c.customType() + "]", SemanticColors.DIM));
+                spans.add(new Span("[custom: " + c.customType() + "]", SemanticColors.dim()));
             case Entry.ContextEdit ce ->
                 spans.add(new Span("[context " + (ce.replacement() == null ? "omit" : "replace")
-                    + ": " + ce.targetId() + "]", SemanticColors.DIM));
+                    + ": " + ce.targetId() + "]", SemanticColors.dim()));
             case Entry.Usage u -> {
                 // 恒隐（过滤层），无文案
             }

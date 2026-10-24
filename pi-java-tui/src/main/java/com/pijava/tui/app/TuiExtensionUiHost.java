@@ -47,6 +47,9 @@ public final class TuiExtensionUiHost {
     private volatile Thread renderThread;
     private volatile boolean renderLoopActive;
 
+    /** 批 21（T9）：主题控制器（PiTuiLauncher 在控制器建成后回填；null ⇒ 未装配）。 */
+    private volatile com.pijava.coding.agent.theme.ThemeController themeController;
+
     public TuiExtensionUiHost(TuiEventDispatcher dispatcher, ChatScreen chatScreen,
                               KeybindingsManager keybindings,
                               Supplier<String> externalEditorCommand) {
@@ -129,5 +132,28 @@ public final class TuiExtensionUiHost {
     /** 外部编辑器往返（命令, 内容) ⇒ 读回内容；空 ⇒ 不动（pi 非 complete 臂）。 */
     public BiFunction<String, String, Optional<String>> externalEditorRoundtrip() {
         return externalEditorRoundtrip;
+    }
+
+    /** 批 21（T9）：主题控制器回填（晚绑定 holder，bindApp 同族）。 */
+    public void setThemeController(com.pijava.coding.agent.theme.ThemeController controller) {
+        this.themeController = controller;
+    }
+
+    /** 批 21（T9）：主题控制器读面（null ⇒ 未装配——setTheme 走失败臂）。 */
+    public com.pijava.coding.agent.theme.ThemeController themeController() {
+        return themeController;
+    }
+
+    /** 会话现读源（externalEditorCommand 的 Supplier 先例；null ⇒ 未装配）。 */
+    private volatile Supplier<com.pijava.coding.agent.core.AgentSession> sessionSource;
+
+    /** 批 21（T9）：会话源回填（扩展 setTheme 的持久化臂用）。 */
+    public void setSessionSource(Supplier<com.pijava.coding.agent.core.AgentSession> source) {
+        this.sessionSource = source;
+    }
+
+    /** 批 21（T9）：当前会话（null ⇒ 会话未建/已拆）。 */
+    public com.pijava.coding.agent.core.AgentSession sessionOrNull() {
+        return sessionSource != null ? sessionSource.get() : null;
     }
 }

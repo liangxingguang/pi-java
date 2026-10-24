@@ -452,8 +452,8 @@ public final class SessionSelectorComponent {
         // pi :426-427：搜索输入行＋其下空行。输入行沿 EditorComponent 的 "> "
         // 提示符约定（批 9 label 同手法；pi 的裸 Input 无提示符——视觉窄差）。
         rows.add(List.of(
-            new Span("> ", SemanticColors.ACCENT),
-            new Span(searchEditor.getText(), SemanticColors.PLAIN)));
+            new Span("> ", SemanticColors.accent()),
+            new Span(searchEditor.getText(), SemanticColors.plain())));
         rows.add(List.of());
         rows.addAll(renderer.layout(width));
         rows.add(List.of());
@@ -478,6 +478,6 @@ public final class SessionSelectorComponent {
 
     /** pi DynamicBorder 对位（批 10 裁决⑤同形）：{@code "─" × max(1, width)}，accent。 */
     private static List<Span> borderRow(int width) {
-        return List.of(new Span("─".repeat(Math.max(1, width)), SemanticColors.ACCENT));
+        return List.of(new Span("─".repeat(Math.max(1, width)), SemanticColors.accent()));
     }
 }
