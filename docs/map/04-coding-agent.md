@@ -104,16 +104,16 @@ pi `main.ts:617`（`mcp`）＋ `handlePackageCommand`/`handleConfigCommand`/`run
 
 | # | 子命令 | pi 有 | java 有 | 权重 | 判定 | 证据 |
 |---|---|---|---|---|---|---|
-| 1 | `install <source> [-l]` | ✅ | ⚠️ `PackageCommand.java:54` | 2 | **存疑** | java 只支持**本地 JAR 路径或 http(s) URL**（`ExtensionPackageManager.java:76/93`）；pi 支持 npm / git / local 三源 |
-| 2 | `remove <source> [-l]` | ✅ | ⚠️ `PackageCommand.java:74` | 2 | **存疑** | 同上 |
+| 1 | `install <source> [-l]` | ✅ | ✅ `PackageCommand.java`（pkg 面） | 2 | **对齐** | **批 19（2026-10-24，docs/30 T4）**：npm/git/local 三源分派逐字＋写回链；http(s) URL 按 git 源解析（旧 JAR 下载臂删，裁决④） |
+| 2 | `remove <source> [-l]` | ✅ | ✅ `PackageCommand.java` | 2 | **对齐** | **批 19**：npm 目录删除（D113）／git removeGit／local 无 fs 动作；`No matching package found for` 逐字 |
 | 3 | `uninstall <source>`（别名） | ✅ | ✅ `SubcommandHandler.java:41` | 1 | 对齐 | |
-| 4 | `update [source\|self\|pi]` | ✅ `package-manager-cli.ts:449/458` | ❌ `PackageCommand.java:20` | 2 | **缺失** | java 只打印 `SELF_UPDATE_NOTE`，**无 self-update、无扩展更新、无模型目录刷新子命令**（⚠️ 目录刷新机制本身已在核心自动跑，见 E6-12） |
-| 5 | `list` | ✅ `package-manager-cli.ts:996` | ⚠️ `PackageCommand.java:109` | 2 | **存疑** | pi 按 user/project 分组 + `installedPath`（`:1009-1010`）；java 平铺 |
-| 6 | `config [-l]` | ✅ `package-manager-cli.ts:813`（**TUI**） | ⚠️ `ConfigCommand.java:15` | 2 | **存疑** | java 是**非交互** `config enable\|disable` |
+| 4 | `update [source\|self\|pi]` | ✅ `package-manager-cli.ts:449/458` | ⚠️ `PackageCommand.java` | 2 | **存疑** | **批 19**：`--extensions`（update 机制）＋`--models`（15s 短路臂）落地；**self 恒走不可用说明臂＋exit 1**（裁决②/D115，java 无安装形态，真实通道挂 R29/序 21）——三面缺其一 |
+| 5 | `list` | ✅ `package-manager-cli.ts:996` | ✅ `PackageCommand.java` | 2 | **对齐** | **批 19**：user/project 分组＋`(filtered)` 对象形标记＋installedPath 两行式逐字 |
+| 6 | `config [-l]` | ✅ `package-manager-cli.ts:813`（**TUI**） | ✅ `ConfigCommand.java`＋tui `ConfigSelectorComponent` | 2 | **对齐** | **批 19（T5+T6，裁决①全做）**：TUI 本体（双份 resolve／Tab 切域／三态覆写／搜索）＋`enable\|disable` 便利臂改 pi pattern 代数 |
 | 7 | `auth <cmd>` | ✅ check / print-api-key / print-bearer-token（`auth-command.ts:52-60`） | ✅ `AuthCommand.java:42-47` | 2 | 对齐 | java 是**超集**：多 `oauth-login`、`profile set/unset/list/set-key` |
 | 8 | `mcp` | ✅ `main.ts:617`（`extensions/mcp/cli.ts` 599 行） | ✅ `SubcommandHandler.java:44-47` | 2 | 对齐 | java 有 `pi mcp`（`subcommand/Mcp*`，1,193 行）；**子命令逐项判定与明细整体见 `map/07-mcp.md`，本图不展开** |
 
-**汇总：对齐 3 / 缺失 1 / 存疑 4 / 合计 8 = 37.5%**；**Σ权重 15 / Σ(w×c) 9.0 / 加权 60.0%**
+**汇总（批 19 后）：对齐 7 / 缺失 0 / 存疑 1 / 合计 8 = 87.5%**；**Σ权重 15 / Σ(w×c) 14.0 / 加权 93.3%**
 
 ---
 
@@ -485,24 +485,24 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 
 | # | 能力单元 | pi 侧证据 | pi-java 侧证据 | 权重 | 判定 | 台账 |
 |---|---|---|---|---|---|---|
-| E6-1 | `install` 本地源 | `package-manager.ts:112` | `PackageCommand.java:54-65` | 2 | **存疑** | — |
-| E6-2 | `install` http(s) URL | `package-manager.ts` | `ExtensionPackageManager.java:93` | 2 | **存疑** | — |
+| E6-1 | `install` 本地源 | `package-manager.ts:112` | `pkg/PackageManager.install`（local 臂校验存在，文案逐字）＋CLI 面 | 2 | **对齐** | **批 19（2026-10-24，docs/30 T1/T4）** |
+| E6-2 | `install` http(s) URL | `package-manager.ts` | `SourceParser`（https ⇒ git 源，pi parseSource 对位） | 2 | **对齐** | **批 19（T4，裁决④）**：旧 JAR 下载臂随 `ExtensionPackageManager` 删除退役 |
 | E6-3 | npm 源（版本/range/pinning） | `package-manager.ts:139-147` | `pkg/HttpNpmResolver.java`＋`pkg/Semvers.java`（semver4j 适配）＋`NpmResolver` seam | **3** | **对齐** | **批 18（2026-10-24，docs/29 T3，裁决①③）**：HTTP registry 直拉（pinned 直拉约定 URL／range maxSatisfying／SRI 校验）；npm CLI 臂留 seam；窄差 D102/D104 |
 | E6-4 | git 源 | `package-manager.ts` | `pkg/GitPackageStore.java`＋`pkg/GitRunner.java` | 2 | **对齐** | **批 18（docs/29 T4，裁决②）**：spawn 系统 git 命令表逐字（clone／checkout ref／ensureGitRef marker 恢复／update 双臂／remote HEAD／removeGit 修剪／temporary 刷新静默保留缓存）；窄差 D103 |
 | E6-5 | 作用域 user/project/temporary | `package-manager.ts:135` | `pkg/SourceScope.java`＋`SourceResolver`（信任门逐字）＋`InstallLayout`（temporary sha256-8 检出） | 2 | **对齐** | **批 18（docs/29 T2/T5）**；窄差 D109 |
 | E6-6 | 资源过滤 | `package-manager.ts:187-194` | `pkg/ResourcePatterns.java`（四符代数逐字）＋`MinimatchLite`＋`PackageFilter` 三支 | 2 | **对齐** | **批 18（docs/29 T5）**；窄差 D110 |
 | E6-7 | 资源优先级（5 档） | `package-manager.ts:171-184` | `PathMetadata.resourcePrecedenceRank` 逐字＋`PackageManager.toResolvedPaths`＋T6 会话装配消费 | 2 | **对齐** | **批 18（docs/29 T5/T6，裁决⑨：旧 USER→PROJECT 直扫退役，project 压 user 行为变化钉死）** |
 | E6-8 | 忽略文件 | `package-manager.ts:206` | `pkg/PackageIgnore.java`（三文件名＋拍平加前缀，JGit IgnoreNode 承载） | 1 | **对齐** | **批 18（docs/29 T5）**；窄差 D107 |
-| E6-9 | 进度回调 `onProgress` | `package-manager.ts:96` | `pkg/ProgressEvent.java`＋`ProgressCallback`＋`withProgress`（start/complete/error 三型发射） | 1 | **对齐** | **批 18（docs/29 T4/T5，裁决⑪口径：发射面齐即翻）**；消费面（CLI/TUI 进度显示）随批 19 |
-| E6-10 | `update self` / `update pi` | `package-manager-cli.ts:449`（self-update 执行段 `:218`）+ `utils/windows-self-update.ts`；本锚点新增旧版本清理 `pruneManagedReleases:137` | ❌ 只打印说明（`PackageCommand.java:20-22`） | 2 | **缺失** | — |
-| E6-11 | `update --extensions` | `package-manager-cli.ts:449` | ❌ | 2 | **缺失** | — |
-| E6-12 | `update --models`（模型目录刷新） | `package-manager-cli.ts:458` + `core/remote-catalog-provider.ts` | ❌ 子命令无；⚠️ **机制已在核心自动跑**（`ModelCatalogRefresh.java` + `RemoteCatalogProvider.java`，RPC 启动后台刷新） | 1 | **缺失** | — |
-| E6-13 | `config` TUI（Tab 切作用域、逐资源开关） | `package-manager-cli.ts:813` + `config-selector.ts` | ⚠️ 非交互 `enable/disable`（`ConfigCommand.java:15`） | 2 | **存疑** | — |
-| E6-14 | 持久化到 `settings.packages` | `package-manager.ts:112` | ❌ 无 `packages` 键 | **3** | **缺失** | — |
-| E6-15 | pi manifest 读取 | `core/pi-manifest.ts` | `pkg/PiManifest.java`（pi-manifest.ts 35 行逐字）＋`PackageResourceCollector` manifest 臂消费 | 2 | **存疑** | **批 18（docs/29 T5）**：机制落地改注；CLI/展示消费面（config TUI／list 标记）随批 19 终判 |
-| E6-16 | `remove` / `uninstall` | `package-manager.ts:118` | ⚠️ `PackageCommand.java:74-85`（旧 `ExtensionPackageManager` 目录面——批 18 T6 后会话装配不再读该目录，CLI 与装配脱钩） | 2 | **缺失** | **批 18 降级注记**（docs/29 §8：CLI 子命令面批 19 收编重裁，接新 PackageManager） |
+| E6-9 | 进度回调 `onProgress` | `package-manager.ts:96` | `pkg/ProgressEvent.java`＋`ProgressCallback`＋`withProgress`（start/complete/error 三型发射） | 1 | **对齐** | **批 18（docs/29 T4/T5，裁决⑪口径：发射面齐即翻）**；**批 19**：CLI 消费面落（START 行 plain，D116）＋T7 启动更新通知第二消费者 |
+| E6-10 | `update self` / `update pi` | `package-manager-cli.ts:449`（self-update 执行段 `:218`）+ `utils/windows-self-update.ts`；本锚点新增旧版本清理 `pruneManagedReleases:137` | ⚠️ `PackageCommand` self 臂＝恒不可用说明＋exit 1（pi unknown 安装形态臂对位） | 2 | **存疑** | **批 19（docs/30 T4，裁决②/D115）**：java 无 npm/managed 安装形态 ⇒ 恒不可用臂；真实自更新通道挂 R29/序 21 终裁 |
+| E6-11 | `update --extensions` | `package-manager-cli.ts:449` | `pkg/PackageUpdater.java`（并发 4 闸/首错 detached/npm 分批/git pinned 参与）＋CLI 面 | 2 | **对齐** | **批 19（docs/30 T3/T4，裁决⑥）**；窄差 D113（npm 逐包顺装） |
+| E6-12 | `update --models`（模型目录刷新） | `package-manager-cli.ts:458` + `core/remote-catalog-provider.ts` | `PackageCommand` --models 短路臂（settings/trust 之前，15s 超时＋错误聚合逐字） | 1 | **对齐** | **批 19（docs/30 T4）**：`ModelCatalogRefresh` 缝复用（批 15 先例） |
+| E6-13 | `config` TUI（Tab 切作用域、逐资源开关） | `package-manager-cli.ts:813` + `config-selector.ts` | `core/ConfigResourceWriteBack.java`＋tui `ConfigSelectorComponent`/`ConfigSelectorModel`＋SPI 壳 | 2 | **对齐** | **批 19（docs/30 T5+T6，裁决①全做）**：双份 resolve／Tab 切域门／三态覆写真值表／搜索保头；java 独有 `enable\|disable` 便利臂保留（不计分母） |
+| E6-14 | 持久化到 `settings.packages` | `package-manager.ts:112` | `SettingsManager.setPackages/setProjectPackages`（字段级 merge 落盘，未知键保留）＋`pkg/PackageConfigWriter`（身份去重/原位替换/追加） | **3** | **对齐** | **批 19（docs/30 T1+T2，裁决③）** |
+| E6-15 | pi manifest 读取 | `core/pi-manifest.ts` | `pkg/PiManifest.java`（pi-manifest.ts 35 行逐字）＋`PackageResourceCollector` manifest 臂消费 | 2 | **对齐** | **批 19 终判（docs/30 §1.5）**：机制＋收集消费批 18 已落；pi `list` 无独立 manifest 标记（唯一标记＝`(filtered)` 对象形判定）⇒ 展示面无残件 |
+| E6-16 | `remove` / `uninstall` | `package-manager.ts:118` | `pkg/PackageManager.remove` 三臂＋`HttpNpmResolver.uninstall`（目录删除，D113）＋CLI 面 | 2 | **对齐** | **批 19（docs/30 T1/T4）** |
 
-**E6 汇总（批 18 后）：对齐 7 / 存疑 4 / 缺失 5 / 合计 16 = 43.8%**；**Σ权重 31 / Σ(w×c) 17.0 / 加权 54.8%**
+**E6 汇总（批 19 后）：对齐 15 / 存疑 1 / 缺失 0 / 合计 16 = 93.8%**；**Σ权重 31 / Σ(w×c) 30.0 / 加权 96.8%**
 
 ### E7 RPC 面（6）
 
@@ -604,7 +604,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | 分区 | 对齐 | 缺失 | 存疑 | 合计 | 完成度 |
 |---|---:|---:|---:|---:|---:|
 | A. CLI 参数 | 42 | 0 | 1 | 43 | 97.7% |
-| B. 子命令 | 3 | 1 | 4 | 8 | 37.5% |
+| B. 子命令 | 7 | 0 | 1 | 8 | 87.5% |
 | C. Slash 命令 | 12 | 2 | 11 | 25 | 48.0% |
 | D. 扩展系统 41 事件 | 18 | 16 | 7 | 41 | 43.9% |
 | D′. 扩展 UI 注入面 | 0 | 8 | 1 | 9 | 0% |
@@ -614,7 +614,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | ├ E3 会话管理 | 22 | 2 | 0 | 24 | 91.7% |
 | ├ E4 资源发现 | 5 | 2 | 0 | 7 | 71.4% |
 | ├ E5 扩展 API | 10 | 22 | 3 | 35 | 28.6% |
-| ├ E6 包管理器 | 7 | 5 | 4 | 16 | 43.8% |
+| ├ E6 包管理器 | 15 | 0 | 1 | 16 | 93.8% |
 | └ E7 RPC 面 | 2 | 0 | 4 | 6 | 33.3% |
 | G. 主流新增子系统（MCP/codemode/…） | 3 | 5 | 2 | 10 | 30.0% |
 | F. 整块缺失（子系统） | 0 | 6 | 0 | 6 | 0% |
@@ -641,7 +641,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|
 | A. CLI 参数 | 62 | 61.5 | 99.2% | 97.7% |
-| B. 子命令 | 15 | 9.0 | 60.0% | 37.5% |
+| B. 子命令 | 15 | 14.0 | 93.3% | 87.5% |
 | C. Slash 命令 | 38 | 34.5 | 90.7% | 80.0% |
 | D. 扩展系统 41 事件 | 83 | 79.0 | 95.2% | 95.1% |
 | D′. 扩展 UI 注入面 | 16 | 1.0 | 6.3% | 0% |
@@ -650,21 +650,22 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | E3. 会话管理行为 | 40 | 37.0 | 92.5% | 91.7% |
 | E4. 资源发现 | 14 | 10.0 | 71.4% | 71.4% |
 | E5. 扩展 API 面 | 58 | 23.5 | 40.5% | 31.4% |
-| E6. 包管理器 | 31 | 17.0 | 54.8% | 43.8% |
+| E6. 包管理器 | 31 | 30.0 | 96.8% | 93.8% |
 | E7. RPC 面 | 12 | 8.0 | 66.7% | 33.3% |
 | G. 主流新增子系统 | 18 | 7.0 | 38.9% | 30.0% |
 | F. 整块缺失（子系统） | 13 | 0.0 | 0% | 0% |
-| **模块合计（不含 E8）** | **494** | **374.5** | **75.8%** | **68.9%** |
+| **模块合计（不含 E8）** | **494** | **392.5** | **79.5%** | **72.0%** |
 | E8. 边缘/面外子系统（与 E3/C/G 重叠，不计入） | 7 | 5.0 | 71.4% | 66.7% |
 
-**模块合计**：Σ权重 494 ／ Σ(w×c) 374.5 ／ **加权完成度 = 374.5/494 ≈ 75.8%**（未加权 199.0/289 ≈ 68.9%；批 18 后值——按 Δ 续列：批 17 的 358.5＋本批 16.0）。
+**模块合计**：Σ权重 494 ／ Σ(w×c) 392.5 ／ **加权完成度 = 392.5/494 ≈ 79.5%**（未加权 208.0/289 ≈ 72.0%；批 19 后值——按 Δ 续列：批 18 的 374.5＋本批 18.0）。
 
-**去重口径**（F 域有 2 行与 E4/E6 重叠＋G-1..G-5 归 map/07）：Σ权重 **485** ／ Σ(w×c) **370.0** ／ **加权完成度 = 370.0/485 ≈ 76.3%**（未加权 199.0/289 ≈ 68.9%）。
+**去重口径**（F 域有 2 行与 E4/E6 重叠＋G-1..G-5 归 map/07）：Σ权重 **485** ／ Σ(w×c) **388.0** ／ **加权完成度 = 388.0/485 ≈ 80.0%**（未加权 208.0/289 ≈ 72.0%）。
 > 口径注记（批 14）：A/E3 域行与未加权汇总表已逐行实算（含往批滞后收平：E2 对齐 44→46、E3 段汇总 27.5→28.5 的批 10 滞后）；模块加权合计按 Δ 续列，与逐行域和的 ±1.5 存量口径差随下次全量重测一并收平（批 4 同例）。
 > 批 15（2026-10-23，docs/26）：C 域 7 行翻动（+7.0：#2/#4/#6/#9/#12/#13/#21——T8–T12＋B79 销号）；E8-2/E8-3 注记行随翻（不计入分母）；E8-1 旧汇总漏算一并更正。
 > 批 16（2026-10-23，docs/27）：**9.5 点翻动**——E5-7/E5-30（+1.0×2）＋E5-11（+1.0）＋E5-18（+2.0）＋E5-29（存疑→对齐 +1.0）＋A-43（+1.0）＋C-23（存疑→对齐 +0.5）＋D#36（+2.0）；D#11 不动（裁决⑤随 E5-23 批）；E8-7 注记行随翻（不计入分母）。B204/B246 销号；B221 收编 ②④⑤。
 > 批 17（2026-10-24，docs/28）：**3.5 点翻动**——E5-31（缺失→存疑 +1.0）＋E5-32（存疑→对齐 +0.5）＋D#26/#27（+2.0）。B221 收编 ③；B214 改注不销号。（本表 D/E5 两行滞后于批 17，批 18 回填时一并收平。）
 > 批 18（2026-10-24，docs/29）：**16.0 点翻动**——E6-3（+3.0）＋E6-4/E6-6/E6-7（+2.0×3）＋E6-5（存疑→对齐 +1.0）＋E6-8/E6-9（+1.0×2）＋E2-20/E2-26（+2.0×2）＋E6-15（缺失→存疑 +1.0）＋E6-16（存疑→缺失 −1.0，T6 后旧 CLI 目录面与装配脱钩、批 19 重裁）；E6 域不再是零对齐域（5.0→17.0/31 ≈ 54.8%）。
+> 批 19（2026-10-24，docs/30）：**18.0 点翻动**——E6-11/E6-16（缺失→对齐 +2.0×2）＋E6-14（缺失→对齐 +3.0）＋E6-12（+1.0）＋E6-1/E6-2/E6-13/E6-15（存疑→对齐 +1.0×4）＋E6-10（缺失→存疑 +1.0，self 恒不可用臂裁决②）＋B-1/B-2/B-5/B-6（存疑→对齐 +1.0×4）＋B-4（缺失→存疑 +1.0）；**E6 域缺失清零**（17.0→30.0/31 ≈ 96.8%）、B 域 9.0→14.0/15 ≈ 93.3%（余 B-4 存疑挂 R29）。修真随批：`setProjectTrusted(false)` 旧实现整本抹项目 settings 文件 ⇒ pi 对位纯内存清空（docs/30 §9）。w3 账面滞后修正：批 18 的 #18/#23（npm 源、包源复合）翻对齐未入 w3 表，连同本批 #19 ⇒ w3 对齐 17→20/23。
 
 **扩展系统单独口径**（D + D′ + E5）：Σ权重 157 ／ Σ(w×c) 71.0 ／ **加权 45.2%**（未加权 28/85 ≈ 32.9%）。
 
@@ -680,7 +681,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 > ⚠️ 分层合计（261.0）与模块逐行实算（261.5）差 0.5，为存量基线口径差（旧账分层 226.5 vs 域汇总 226.0 同源），随下次全量重测一并收平。
 
 > 读数：**权重 3 层（65.2%）继续领跑**。批 coding-agent-4（docs/14）五条 w3 翻对齐（`context`/`context_with_system`/`message_update`/`tool_call`/`tool_result`，+10.5），w3 对齐数 9 → 14。
-> ⚠️ w3 层剩余欠账（批 7 后）：扩展系统 1 个（#17 扩展示例库）＋包管理器 3 个（#18/#19/#23＝E6 域）＋RPC #21 存疑＋整块 #22。~~#5~~（批 7）、~~#6/#8~~（批 5）。
+> ⚠️ w3 层剩余欠账（批 19 后）：扩展系统 1 个（#17 扩展示例库）＋RPC #21 存疑＋整块 #22。~~#5~~（批 7）、~~#6/#8~~（批 5）、~~#18/#19/#23~~（包管理器，批 18/19 清零）。
 
 ### 权重 3 单元（23 个 —— 最该先修）
 
@@ -703,15 +704,15 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | 15 | E4 | 上下文文件发现（AGENTS.md/CLAUDE.md） | 3 | 对齐 |
 | 16 | E5 | `registerTool` | 3 | 对齐 |
 | 17 | E5 | 扩展示例库 | 3 | **缺失** |
-| 18 | E6 | npm 源 | 3 | **缺失** |
-| 19 | E6 | 持久化到 `settings.packages` | 3 | **缺失** |
+| 18 | E6 | npm 源 | 3 | 对齐（批 18） |
+| 19 | E6 | 持久化到 `settings.packages` | 3 | 对齐（批 19） |
 | 20 | E7 | RPC 命令集（33/33） | 3 | 对齐 |
 | 21 | E7 | RPC 事件线格式 | 3 | **存疑** |
 | 22 | F | `examples/` 可执行验收规格 | 3 | **缺失** |
-| 23 | F | npm/git 包源 + 优先级 + 忽略文件 | 3 | **缺失** |
+| 23 | F | npm/git 包源 + 优先级 + 忽略文件 | 3 | 对齐（批 18） |
 
-> 权重 3 层 23 个单元中（批 7 后实算）：**对齐 17 / 存疑 1 / 缺失 5**（Σ(w×c) 52.5 / 69 = 76.1%）。
-> 归属：扩展系统仅剩 **1 个**（#17 扩展示例库——#5 批 7 翻、#6/#8 批 5 翻〔本表批 5 滞后，批 7 一并修正〕）；包管理器 **3 个**（#18/#19/#23）；其余散在 RPC（#21 存疑）与整块缺失（#22）。
+> 权重 3 层 23 个单元中（批 19 后实算）：**对齐 20 / 存疑 1 / 缺失 2**（Σ(w×c) 61.5 / 69 = 89.1%）。
+> 归属：扩展系统仅剩 **1 个**（#17 扩展示例库——#5 批 7 翻、#6/#8 批 5 翻〔本表批 5 滞后，批 7 一并修正〕）；~~包管理器 3 个（#18/#19/#23）~~（批 18 翻 #18/#23〔当时漏入本表〕＋批 19 翻 #19——包管理器 w3 清零）；其余散在 RPC（#21 存疑）与整块缺失（#22）。
 
 ### 未加权 vs 加权的差
 

@@ -20,18 +20,19 @@
 
 ---
 
-## §1 进度总览（2026-10-24 实算，批 18 闭环后）
+## §1 进度总览（2026-10-24 实算，批 19 闭环后）
 
 | 指标 | 读数 |
 |---|---|
-| 已闭环批次 | **18**（批 1–18，docs/11–29） |
-| 设计待审批次 | **0**（下一包号 docs/30） |
-| 计划批次（批 19 起） | **约 3–7**（§3；含 3 个未拍板变量，见 §3.3） |
+| 已闭环批次 | **19**（批 1–19，docs/11–30） |
+| 设计待审批次 | **0**（下一包号 docs/31） |
+| 计划批次（批 20 起） | **约 3–7**（§3；含 3 个未拍板变量，见 §3.3） |
 | **总批次估计** | **约 17–21**（不变） |
-| 模块账面（Σ 485，去重） | 370.0 ≈ **76.3%** |
+| 模块账面（Σ 485，去重） | 388.0 ≈ **80.0%** |
 | D 域（扩展事件，Σ 83） | 79.0 ≈ **95.2%**（存疑已清零，余 2 缺失随子系统：#1 project_trust／#11 随 E5-23 批） |
-| E6 域（包管理器，Σ 31） | 17.0 ≈ **54.8%**（批 18：resolve 内核对齐；余 CLI/持久化面随批 19） |
-| 全仓账面（Σ 1379） | 1,051.5 ≈ **76.3%** |
+| E6 域（包管理器，Σ 31） | 30.0 ≈ **96.8%**（批 19：缺失清零；余 E6-10 存疑挂 R29/序 21） |
+| B 域（子命令，Σ 15） | 14.0 ≈ **93.3%**（批 19：余 B-4 存疑挂 R29/序 21） |
+| 全仓账面（Σ 1379） | 1,069.5 ≈ **77.6%** |
 
 > ⚠️ 总批次是**估计值**，不是承诺。三个拍板变量（§3.3）每个能摆动 1–3 批。
 > 每批闭环时按当时真实欠账重排 §3，允许增删批次。
@@ -60,6 +61,7 @@
 | 16 | docs/27 | 2026-10-23 | E5 扩展 API 面第一批：激活门三件套＋装配后注册即激活（B221②）＋提示分节接线（B221⑤）＋registerToolRenderer 责任链＋内置 MCP resolver＋TUI 消费缝（**B204 销号**）＋扩展 CLI flag 面（registerFlag/getFlag＋绑定＋--help 段；A-43/E5-7/E5-30）＋`/reload` 七步序＋defaultTools diff 三分支（**B246 销号**）＋`model_select` 两发射点（D#36）；评审回补修真（工具执行查找面接活跃集＋四夹具修形；责任链 null 直返语义自纠）；B221 收编 ②④⑤（余 ①③⑥）；窄差 D89–D94；D#11 不动（裁决⑤随 E5-23 批） | 350.5/485 ≈ **72.3%**（+9.5：E5 域 16.0→22.0/58 ≈ **37.9%**、A 域 61.5/62 ≈ **99.2%**、C 域 34.5/38 ≈ **90.7%**、D 域 77.0/83 ≈ **92.8%**）；全仓 1,030.0/1379 ≈ **74.7%** |
 | 17 | docs/28 | 2026-10-24 | E5 扩展 API 面第二批（扩展 UI 注入层）：`ExtensionUI` 28 成员全面化＋晚绑定修真（裁决②）＋`ui_prompt_start/end` 事件对（D#26/#27）＋`RpcExtensionUI` 九方法通道（E5-32，参数平铺＝pi spread）＋TUI 对话四件套/custom 挂载面（S22，B221③ 收编）＋widget/footer/header/状态段注入层（S23）＋装配与生命周期（create(ui,mode) 重载＋onSessionInvalidated 三路径＋reload 首步前）；**评审回补**：RPC 应答按 id 路由（I-1）＋会话替换重绑扩展 UI（I-2）＋Minor×2 随修；窄差 D95–D101；B214 改注不销号（载荷随 MCP 扩展工厂批） | 354.0/485 ≈ **73.0%**（+3.5：E5 域 22.0→23.5/58 ≈ **40.5%**、D 域 77.0→79.0/83 ≈ **95.2%**）；map/05 S22/S23（tui/web 118.5→120.5/245 ≈ **49.2%**）；全仓 1,035.5/1379 ≈ **75.1%** |
 | 18 | docs/29 | 2026-10-24 | E6 包管理器第一批（resolve 内核，裁决①②③＝方案 D）：T1 settings `packages`/`npmCommand` 两键（E2-20/E2-26）＋T2 源解析三型＋GitUrlParser/identity/dedupe＋Semvers（semver4j 引库，D106 改注销号）＋T3 npm HTTP registry（NpmResolver seam/SRI/tar 解包/InstallLayout）＋T4 git spawn 命令表（marker 恢复/update 双臂/刷新静默）＋T5 resolve()（五档优先级/四符过滤/忽略拍平/PiManifest/扫描族/自动发现信任门/onMissing 三臂/withProgress）＋T6 会话装配四类接 resolve（裁决⑨：project 压 user 行为变化＋settings 四数组生效＋-e 收 npm:/git:）；**评审回补**：I-1 prompts 同名 first-wins 修真＋I-2 Windows 冒号条目启动崩修真＋M-1/2/3/4/7 随修；窄差 D102–D105/D107–D112；E6-16 降级缺失（CLI 批 19 重裁） | 370.0/485 ≈ **76.3%**（+16.0：**E6 域 5.0→17.0/31 ≈ 54.8%**〔零对齐域消除〕＋E2 域 76.5→80.5/84 ≈ **95.8%**〔缺失清零〕）；全仓 1,051.5/1379 ≈ **76.3%** |
+| 19 | docs/30 | 2026-10-24 | E6 包管理器第二批（CLI 面＋写回链＋update 机制＋config TUI，裁决①②④用户拍板）：T2 `SettingsManager` 写回面（字段级 merge 落盘〔裁决③〕＋**`setProjectTrusted(false)` 抹盘修真**）→ T1 写回链＋公开安装面（`PackageConfigWriter` 身份去重/原位替换）→ T3 update 机制（`PackageUpdater` 并发 4 闸〔裁决⑥ detached 首错抛〕＋Did-you-mean 逐字）→ T4 CLI 面重裁（pi parsePackageCommand 逐字＋--models 短路臂＋self 恒不可用臂〔裁决②〕；**裁决④删 `ExtensionPackageManager`**，诊断/--help 枚举源迁 resolve）→ T5 config enable/disable 改 pi pattern 代数 → T6 config TUI 本体（`ConfigResourceWriteBack` 四函数＋三态循环＋tui `ConfigSelectorModel/Component`＋SPI 壳）→ T7 启动包更新通知；**onMissing 三选取证否定**（pi 无此 UI）；E6-15 终判对齐；窄差 D113–D116；spotbugs 回补 1 钉 | 388.0/485 ≈ **80.0%**（+18.0：**E6 域 17.0→30.0/31 ≈ 96.8%**〔缺失清零，余 E6-10 存疑挂 R29〕＋**B 域 9.0→14.0/15 ≈ 93.3%**〔余 B-4 存疑〕）；w3 73.9%→**87.0%**（批 18 漏入 w3 表两翻收平）；全仓 1,069.5/1379 ≈ **77.6%** |
 
 > 口径注记：批 8 起模块分母按**去重** 487（原 496），读数以最新一批闭环回填为准。
 
@@ -74,7 +76,7 @@
 | ~~15~~ | ~~扩展 API 面第一批~~ | — | **批 16 已闭环**（docs/27）：三项＋并入项全落；D#36 随收翻行，**D#11 经裁决⑤改挂 E5-23 批**（发射链唯一生产者＝`registerMcpServer`，map/07 域） |
 | ~~16~~ | ~~扩展 API 面第二批（E5：ctx.ui.custom/B214＋D′ 注入层 widget/footer/header）~~ | — | **批 17 已闭环**（docs/28）：序 16 全落＋D 域 #26/#27 随收；E5-31 余 15 成员 TUI 臂挂账（docs/28 §4）；B214 改注（挂载面落、载荷随 MCP 工厂批） |
 | ~~17~~ | ~~包管理器第一批（E6：npm/git 源、资源优先级、忽略文件）~~ | — | **批 18 已闭环**（docs/29）：resolve 内核全落＋两 settings 键；窄差 D102–D111（D106 改注＝semver4j 覆盖 hyphen）；E6-16 降级注记（旧 CLI 目录面脱钩） |
-| 18 | 包管理器第二批（E6：settings.packages 持久化、CLI 面） | ~11 | 拍板变量②已随批 18 拍板（裁决①②③）；收编旧 `PackageCommand`/`ExtensionPackageManager` CLI 面＋onMissing TUI 三选＋onProgress 消费面＋E6-15 终判 |
+| ~~18~~ | ~~包管理器第二批（E6：settings.packages 持久化、CLI 面）~~ | — | **批 19 已闭环**（docs/30）：写回链＋字段级 merge 落盘＋update 机制＋CLI 面重裁＋config TUI 全做（裁决①）；**onMissing TUI 三选取证否定**（pi 锚点不存在该 UI——唯一非空回调 startup-ui.ts:81 恒 `"skip"`，`"error"` 臂无调用方 ⇒ 不做不重排，本条修正序 18 原注记）；窄差 D113–D116；self 真实通道挂序 21（R29 联动） |
 | 19 | RPC/协议尾：B237（handled 三态）＋B253（attribution 头层）＋E7 存疑 | ~6 | 小项合包 |
 | 20 | E1/E3/E4 尾＋JSON 主题系统（2,417 行） | ~10 | 主题与 map/05 主题选择器（S9）联动；`theme` 键随此（批 11 留白）。**批 14 重排并入**：A-29 `--theme`（pi 语义依赖 JSON 主题系统 E4-4/B163） |
 | 21 | 会话管理尾（E3：listSessions onProgress、~~B54~~）＋自更新 | ~6 | 收尾批。批 14 核销：B54 已随批 14 销号（裁决⑤）；E3-9 repo 层已暴露（T4），onProgress 的 web 协议面暴露（W15）仍留此。**批 15 挂起注记**：map/05 R29 安装变更警告（pi `detectInstallChange`＋`maybeShowInstallChangeWarning` 三件套）随本批评估——java 无 package.json 安装形态，自更新通道落地时一并裁决（裁决④） |
