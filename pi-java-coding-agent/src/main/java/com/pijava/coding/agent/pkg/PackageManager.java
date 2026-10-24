@@ -44,6 +44,7 @@ public final class PackageManager {
     private final GitPackageStore gitStore;
     private final PackageResourceCollector collector;
     private final PackageConfigWriter configWriter;
+    private final PackageUpdater updater;
     private final Path homeDir;
     private volatile ProgressCallback progressCallback;
 
@@ -71,6 +72,8 @@ public final class PackageManager {
         this.gitStore = gitStore;
         this.collector = new PackageResourceCollector(resolver);
         this.configWriter = new PackageConfigWriter(resolver, settings, this::getInstalledPath);
+        this.updater = new PackageUpdater(resolver, settings, layout, npmResolver, gitStore,
+            this::withProgress);
         this.homeDir = homeDir;
     }
 
@@ -255,6 +258,16 @@ public final class PackageManager {
     /** pi {@code listConfiguredPackages}（:1008-1034）。 */
     public List<ConfiguredPackage> listConfiguredPackages() {
         return configWriter.listConfiguredPackages();
+    }
+
+    /** pi {@code update(source?)}（:1090-1120）——委托 {@link PackageUpdater}（T3）。 */
+    public void update(String source) {
+        updater.update(source);
+    }
+
+    /** pi {@code checkForAvailableUpdates}（:1217-1280）——启动更新通知操作数（T7）。 */
+    public List<PackageUpdate> checkForAvailableUpdates() {
+        return updater.checkForAvailableUpdates();
     }
 
     /** pi {@code getInstalledPath}（:883-897）：已装路径查询（不存在 ⇒ null）。 */

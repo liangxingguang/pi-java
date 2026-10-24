@@ -217,6 +217,21 @@ public final class GitPackageStore {
         return match.group(1);
     }
 
+    /** pi {@code gitHasAvailableUpdate}（:1566-1581）：本地 HEAD vs 远程 HEAD
+     *  不等即有更新；离线/任何异常 ⇒ false（批 19 T3）。 */
+    public boolean gitHasAvailableUpdate(Path installedPath) {
+        if (PackageEnvironment.isOfflineModeEnabled()) {
+            return false;
+        }
+        try {
+            var localHead = git.capture(List.of("git", "rev-parse", "HEAD"), installedPath,
+                GitRunner.NETWORK_TIMEOUT_MS).trim();
+            return !localHead.equals(getRemoteGitHead(installedPath).trim());
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
     /** pi {@code removeGit}（:2033-2038）。 */
     public void removeGit(GitSource source, SourceScope scope) throws IOException {
         var targetDir = layout.gitInstallPath(source, scope);
