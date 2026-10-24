@@ -256,6 +256,22 @@ public final class PiTuiApp {
         showStartupChangelog();
         showStartupCrashNotice();
         showStartupDiagnostics();
+        schedulePackageUpdateCheck();
+    }
+
+    /**
+     * 批 19（T7，pi :1166-1178 启动 fire-and-forget 对位）：后台查包更新，非空 ⇒
+     * 聊天区插通知块（文案 pi :4667-4684 逐字；dim 系统文本，窄差 D83 同族）。
+     */
+    private void schedulePackageUpdateCheck() {
+        var settings = session.services().settings();
+        var cwd = java.nio.file.Path.of(System.getProperty("user.dir"));
+        var agentDir = com.pijava.coding.agent.core.FileSettingsStorage.defaultAgentDir();
+        com.pijava.coding.agent.core.PackageUpdateNotifier.checkAsync(
+            () -> com.pijava.coding.agent.core.PackageManagers.create(cwd, agentDir, settings)
+                .checkForAvailableUpdates(),
+            updates -> dispatcher.dispatch(() -> chatScreen.appendSystemText(
+                com.pijava.coding.agent.core.PackageUpdateNotifier.notificationText(updates))));
     }
 
     /** 批 16（T1d 裁决⑧）：扩展 flag 绑定诊断随启动提示展示（dim 系统文本）。 */
