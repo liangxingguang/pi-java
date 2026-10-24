@@ -65,27 +65,40 @@ public final class PromptTemplates {
      * {@code prompt-templates.ts:271-273}），非 markdown 跳过，读/解析失败返回告警。
      */
     public static LoadResult load(FileSystem fs, List<String> paths) {
+        return loadScoped(fs, paths.stream()
+            .map(p -> new ScopedTemplatePath(p, SourceInfo.Scope.TEMPORARY)).toList());
+    }
+
+    /**
+     * 批 18（T6）：带 scope 的加载车道——resolve 输出携 {@code PathMetadata.scope}
+     * 进来，打标不再一刀切 TEMPORARY（pi resource-loader 的 metadataByPath 映射
+     * 对位的最小面；source 恒 {@code "local"} 沿用 B247 打标惯例，
+     * {@code resourceMetadataByPath} 全表随批 19）。
+     */
+    public static LoadResult loadScoped(FileSystem fs, List<ScopedTemplatePath> paths) {
         var templates = new ArrayList<PromptTemplate>();
         var diagnostics = new ArrayList<Diagnostic>();
-        for (var path : paths) {
+        for (var scoped : paths) {
             FileInfo info;
             try {
-                info = fs.fileInfo(path);
+                info = fs.fileInfo(scoped.path());
             } catch (IOException e) {
                 continue; // pi :271-273：显式路径不存在 ⇒ 静默跳过（无诊断）
             }
-            // B247（pi :257-261）：显式路径 scope 缺省落 temporary；baseDir
-            // 目录入参⇒自身、文件入参⇒父目录（pi :259 statSync 分支）。
+            // B247（pi :257-261）：baseDir 目录入参⇒自身、文件入参⇒父目录
+            //（pi :259 statSync 分支）；scope 由调用方按来源定。
             if ("dir".equals(info.kind())) {
-                loadFromDir(fs, info.path(), templates, diagnostics,
-                    SourceInfo.Scope.TEMPORARY, info.path());
+                loadFromDir(fs, info.path(), templates, diagnostics, scoped.scope(), info.path());
             } else if ("file".equals(info.kind()) && info.path().endsWith(".md")) {
                 loadFromFile(fs, info.path(), templates, diagnostics,
-                    SourceInfo.Scope.TEMPORARY, parentDir(info.path()));
+                    scoped.scope(), parentDir(info.path()));
             }
         }
         return new LoadResult(templates, diagnostics);
     }
+
+    /** {@link #loadScoped} 入参形：路径＋来源 scope 打标。 */
+    public record ScopedTemplatePath(String path, SourceInfo.Scope scope) {}
 
     /**
      * pi {@code includeDefaults} 分支（:262-265）＋ {@code getSourceInfo} 打标

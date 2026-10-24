@@ -59,9 +59,9 @@ final class SessionReload {
         // ⑤ 资源重扫：skills/prompts 整表替换（pi resourceLoader.reload() :3677 对位；
         //    扩展臂在 ⑦ 随 resources_discover 重放叠加回来）。
         session.harness().skillManager().replaceAll(
-            SessionSetup.discoverSkills(session.sessionArgs()).values());
+            SessionSetup.discoverSkills(session.sessionArgs(), settings).values());
         session.services().promptTemplates().replaceAll(
-            SessionSetup.loadPromptTemplates(session.sessionArgs()));
+            SessionSetup.loadPromptTemplates(session.sessionArgs(), settings));
         // ⑥ defaultTools diff（B246；pi :3678-3685）：新增 ⇒ 经注册表过滤并入
         //    activeTools；移除的保持激活（不动）；usesDefaultTools=false ⇒ 跳过。
         if (selection != null && selection.usesDefaultTools()) {

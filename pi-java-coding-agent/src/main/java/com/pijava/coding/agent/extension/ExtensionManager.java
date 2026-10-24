@@ -39,6 +39,21 @@ public final class ExtensionManager {
     }
 
     /**
+     * 批 18（T6）：内置扩展名表（ServiceLoader 发现名，不注册）——pi main 层
+     * {@code builtinExtensions}（createExtensions 中 isBuiltinExtension 的名表，
+     * resource-loader.ts:382-387）对位，供包管理器 resolve 的内置臂使用。
+     */
+    public static List<String> builtinExtensionNames() {
+        var tccl = Thread.currentThread().getContextClassLoader();
+        var loader = tccl != null ? tccl : ExtensionManager.class.getClassLoader();
+        var names = new ArrayList<String>();
+        for (var ext : ServiceLoader.load(PiExtension.class, loader)) {
+            names.add(ext.name());
+        }
+        return names;
+    }
+
+    /**
      * 加载所有已发现扩展，返回已加载扩展名。
      *
      * <p>用线程上下文 classloader（ServiceLoader 标准惯例；CLI 主线程的 TCCL 即应用

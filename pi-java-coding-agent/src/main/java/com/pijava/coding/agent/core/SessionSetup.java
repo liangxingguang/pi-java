@@ -13,6 +13,15 @@ import com.pijava.agent.tool.AgentTool;
 import com.pijava.ai.thinking.ModelThinkingLevel;
 import com.pijava.coding.agent.cli.Args;
 import com.pijava.coding.agent.cli.ThinkingLevels;
+import com.pijava.coding.agent.pkg.GitPackageStore;
+import com.pijava.coding.agent.pkg.GitRunner;
+import com.pijava.coding.agent.pkg.HttpNpmResolver;
+import com.pijava.coding.agent.pkg.InstallLayout;
+import com.pijava.coding.agent.pkg.PackageAutoDiscovery;
+import com.pijava.coding.agent.pkg.PackageManager;
+import com.pijava.coding.agent.pkg.ResolvedPaths;
+import com.pijava.coding.agent.pkg.ResolvedResource;
+import com.pijava.coding.agent.pkg.SourceResolver;
 import com.pijava.coding.agent.skill.SkillDiscovery;
 
 /**
@@ -136,38 +145,119 @@ final class SessionSetup {
         return new QueueMode.OneAtATime();
     }
 
+    // ── 批 18（T6）：resolve() 统辖的资源装配（裁决⑨）──────────────────
+
     /**
-     * 批 16（T5b）：提示模板载入的抽取（默认两目录＋CLI 显式路径，同名后注册胜出），
-     * {@code wireSession} 初装与 {@code /reload} 重扫共用（pi loadPromptTemplates
-     * includeDefaults，prompt-templates.ts:262-265）。
+     * 包管理器装配（pi {@code DefaultPackageManager} 构造对位，resource-loader.ts:
+     * 382-390）。{@code resolve()} 相对管理器实例无状态 ⇒ 各消费点现建现用；
+     * {@code /reload} 经同一入口自然重放（pi resource-loader.reload 对位）。
      */
-    static List<com.pijava.coding.agent.prompt.PromptTemplates.PromptTemplate>
-            loadPromptTemplates(Args args) {
-        if (args.noPromptTemplates()) {
-            return List.of();
-        }
-        var fs = new com.pijava.agent.tool.DefaultFileSystem();
-        var defaults = com.pijava.coding.agent.prompt.PromptTemplates.loadDefaults(fs,
-            com.pijava.coding.agent.core.FileSettingsStorage.defaultAgentDir().toString(),
-            System.getProperty("user.dir"));
-        var all = new java.util.ArrayList<>(defaults.templates());
-        if (args.promptTemplates() != null && !args.promptTemplates().isEmpty()) {
-            all.addAll(com.pijava.coding.agent.prompt.PromptTemplates.load(fs,
-                args.promptTemplates()).templates());
-        }
-        return all;
+    static PackageManager packageManagerFor(SettingsManager settings) {
+        var cwd = Path.of(System.getProperty("user.dir"));
+        var agentDir = FileSettingsStorage.defaultAgentDir();
+        var resolver = new SourceResolver(cwd, agentDir, settings::isProjectTrusted);
+        var layout = new InstallLayout(resolver);
+        return new PackageManager(resolver, settings,
+            com.pijava.coding.agent.extension.ExtensionManager.builtinExtensionNames(),
+            new HttpNpmResolver(cwd, layout), layout,
+            new GitPackageStore(new GitRunner(), layout, null),
+            Path.of(PackageAutoDiscovery.getHomeDir()));
     }
 
-    /** 发现技能（USER + PROJECT + 显式路径），--no-skills 时为空。 */
-    static Map<String, Skill> discoverSkills(Args args) {
-        if (args.noSkills()) {
+    /** pi {@code mergePaths}：保序去重（先到者胜）。 */
+    static List<String> mergePaths(List<String> first, List<String> second) {
+        var merged = new java.util.LinkedHashSet<String>(first);
+        merged.addAll(second);
+        return List.copyOf(merged);
+    }
+
+    /** pi resource-loader 的 enabled 过滤＋路径提取（:545-553）。 */
+    static List<String> enabledPaths(List<ResolvedResource> resources) {
+        return resources.stream().filter(ResolvedResource::enabled)
+            .map(ResolvedResource::path).toList();
+    }
+
+    /** {@code -e} 显式源（含 npm:/git:）经 temporary resolve（pi
+     *  {@code resolveExtensionSources(additionalExtensionPaths, {temporary:true})}
+     *  对位，resource-loader.ts:532-534）。 */
+    static ResolvedPaths resolveCliSources(Args args, PackageManager pm) {
+        return pm.resolveExtensionSources(args.extensions(), false, true);
+    }
+
+    /**
+     * 批 16（T5b）＋批 18（T6）：提示模板载入——resolve 输出（enabled 臂）并入
+     * 显式车道（pi resource-loader :594-600 合并臂：CLI 先行、settings/包/自动
+     * 发现随后、{@code --no-prompt-templates} 只裁 resolve 臂不裁 CLI）。
+     * {@code wireSession} 初装与 {@code /reload} 重扫共用。
+     */
+    static List<com.pijava.coding.agent.prompt.PromptTemplates.PromptTemplate>
+            loadPromptTemplates(Args args, SettingsManager settings) {
+        var pm = packageManagerFor(settings);
+        var fs = new com.pijava.agent.tool.DefaultFileSystem();
+        // scope 随 resolve 元数据走（CLI 车道＝temporary，B247 打标惯例）。
+        var scoped = new java.util.ArrayList<
+            com.pijava.coding.agent.prompt.PromptTemplates.ScopedTemplatePath>();
+        for (var r : resolveCliSources(args, pm).prompts()) {
+            if (r.enabled()) {
+                scoped.add(new com.pijava.coding.agent.prompt.PromptTemplates
+                    .ScopedTemplatePath(r.path(), scopeOf(r)));
+            }
+        }
+        if (!args.noPromptTemplates()) {
+            for (var r : pm.resolve(null).prompts()) {
+                if (r.enabled()) {
+                    scoped.add(new com.pijava.coding.agent.prompt.PromptTemplates
+                        .ScopedTemplatePath(r.path(), scopeOf(r)));
+                }
+            }
+        }
+        if (args.promptTemplates() != null) {
+            for (var p : args.promptTemplates()) {
+                scoped.add(new com.pijava.coding.agent.prompt.PromptTemplates
+                    .ScopedTemplatePath(p,
+                        com.pijava.coding.agent.core.source.SourceInfo.Scope.TEMPORARY));
+            }
+        }
+        if (scoped.isEmpty()) {
+            return List.of();
+        }
+        // 同路径先到者胜（mergePaths 语义在 scoped 列表上的对位）。
+        var seen = new java.util.LinkedHashSet<String>();
+        scoped.removeIf(s -> !seen.add(s.path()));
+        return com.pijava.coding.agent.prompt.PromptTemplates.loadScoped(fs, scoped).templates();
+    }
+
+    /** PathMetadata.scope → SourceInfo.Scope。 */
+    private static com.pijava.coding.agent.core.source.SourceInfo.Scope scopeOf(
+            ResolvedResource resource) {
+        return switch (resource.metadata().scope()) {
+            case USER -> com.pijava.coding.agent.core.source.SourceInfo.Scope.USER;
+            case PROJECT -> com.pijava.coding.agent.core.source.SourceInfo.Scope.PROJECT;
+            case TEMPORARY -> com.pijava.coding.agent.core.source.SourceInfo.Scope.TEMPORARY;
+        };
+    }
+
+    /**
+     * 发现技能——批 18（T6 裁决⑨）改由 {@code resolve()} 统辖：CLI（-e 包技能
+     * ＋ --skill 显式）先行，settings 条目/包/自动发现按 pi 五档优先级随后
+     * （<b>行为变化</b>：同名技能 project 从此压过 user，旧臂 USER→PROJECT 直扫
+     * 退役）；{@code --no-skills} 只裁 resolve 臂（pi :594 对位），CLI 臂仍收。
+     */
+    static Map<String, Skill> discoverSkills(Args args, SettingsManager settings) {
+        var pm = packageManagerFor(settings);
+        var cliSkills = enabledPaths(resolveCliSources(args, pm).skills());
+        var explicit = args.skills() == null ? List.<String>of() : args.skills();
+        var ordered = args.noSkills()
+            ? mergePaths(cliSkills, explicit)
+            : mergePaths(mergePaths(cliSkills, enabledPaths(pm.resolve(null).skills())),
+                explicit);
+        if (ordered.isEmpty()) {
             return Map.of();
         }
         var cwd = Path.of(System.getProperty("user.dir"));
         var discovery = new SkillDiscovery(cwd, FileSettingsStorage.defaultAgentDir());
-        var explicit = args.skills() == null ? List.<Path>of()
-            : args.skills().stream().map(Path::of).toList();
-        var result = discovery.discoverAll(true, explicit);
+        var result = discovery.discoverAll(false,
+            ordered.stream().map(Path::of).toList());
         var map = new LinkedHashMap<String, Skill>();
         for (var skill : result.skills()) {
             map.put(skill.name(), skill);

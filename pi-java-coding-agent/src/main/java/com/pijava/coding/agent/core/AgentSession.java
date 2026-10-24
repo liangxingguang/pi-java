@@ -464,9 +464,9 @@ public final class AgentSession implements AutoCloseable {
         tools.registerAll(toolList);
 
         var promptTemplates = new PromptTemplateRegistry();
-        // pi loadPromptTemplates includeDefaults（prompt-templates.ts:262-265）：
-        // 默认两目录＋CLI 显式路径（批 16 抽取进 SessionSetup，/reload 重扫复用）。
-        promptTemplates.registerAll(SessionSetup.loadPromptTemplates(args));
+        // 批 18（T6 裁决⑨）：模板由 PackageManager.resolve() 统辖（settings 数组/
+        // 包/自动发现五档优先级＋CLI 显式），批 16 前的默认两目录直扫退役。
+        promptTemplates.registerAll(SessionSetup.loadPromptTemplates(args, settings));
         var services = new SessionServices(
             settings,
             new TrustManager(effective.defaultProjectTrust),
@@ -705,7 +705,7 @@ public final class AgentSession implements AutoCloseable {
             .steeringMode(SessionSetup.queueMode(effective.steeringMode))
             .followUpMode(SessionSetup.queueMode(effective.followUpMode))
             .toolExecution(ToolExecution.defaultMode())
-            .skills(SessionSetup.discoverSkills(args))
+            .skills(SessionSetup.discoverSkills(args, settings))
             .telemetry(telemetry)
             .compactionObserver(compactionObserver)
             // 3d 环 A/B 三件套（原 docs/31 §8.22.3）：settings 晚读口（每次 run 现取，
@@ -886,10 +886,42 @@ public final class AgentSession implements AutoCloseable {
                 paths.promptPaths().stream().map(Path::toString).toList());
             services.promptTemplates().registerAll(load.templates());
         }
-        // themes: 扩展贡献的候选列表（TUI 启动时选第一个可用）。
+        // themes: 扩展贡献追加到 resolve 基线之后（批 18 T6：pi 合并序——
+        // CLI/resolve 先行，resources_discover 的扩展贡献随后），候选去重。
         if (!paths.themePaths().isEmpty() && !args.noThemes()) {
-            owner.themePaths = List.copyOf(paths.themePaths());
+            var merged = new java.util.ArrayList<>(owner.themePaths);
+            for (var p : paths.themePaths()) {
+                if (!merged.contains(p)) {
+                    merged.add(p);
+                }
+            }
+            owner.themePaths = List.copyOf(merged);
         }
+    }
+
+    /**
+     * 批 18（T6）：resolve 输出的扩展路径消费——{@code builtin:} 前缀在消费点
+     * 过滤（java 内置扩展走既有 ServiceLoader 装配）；目录源先解析显式入口
+     * （{@code package.json} pi 清单/extensions 条目或 {@code index.jar} 回落，
+     * 裁决⑤），无入口则按 classpath 根加载目录。
+     */
+    private static void loadResolvedExtension(
+            com.pijava.coding.agent.extension.ExtensionManager manager, String path) {
+        if (path.startsWith(com.pijava.coding.agent.pkg.PackageManager.BUILTIN_PATH_PREFIX)) {
+            return;
+        }
+        var p = java.nio.file.Path.of(path);
+        if (java.nio.file.Files.isDirectory(p)) {
+            var entries = com.pijava.coding.agent.pkg.PackageResourceScanner
+                .resolveExtensionEntries(p);
+            if (entries != null) {
+                for (var entry : entries) {
+                    manager.loadJar(java.nio.file.Path.of(entry));
+                }
+                return;
+            }
+        }
+        manager.loadJar(p);
     }
 
     /** The underlying harness (used by the session repository and TUI). */
@@ -2475,6 +2507,17 @@ public final class AgentSession implements AutoCloseable {
         // 是模式层装配而非扩展加载（runner.ts:580；早退臂曾把它跳过 ⇒
         // --no-extensions 下 TUI/RPC 注入落空）。
         owner.extensionUI = ui == null ? ExtensionUI.noop() : ui;
+        // 批 18（T6）：包管理器装配＋CLI 显式源 temporary resolve＋主题候选基线
+        //（pi resource-loader.ts:530-585 合并臂：themes 独立于 noExtensions，
+        // noThemes 只裁 resolve 臂）。在 -ne 早退臂之前，主题不被扩展开关误裁。
+        var packageManager = SessionSetup.packageManagerFor(services.settings());
+        var cliResolved = SessionSetup.resolveCliSources(args, packageManager);
+        var cliThemePaths = SessionSetup.enabledPaths(cliResolved.themes());
+        var themeStrings = args.noThemes()
+            ? cliThemePaths
+            : SessionSetup.mergePaths(cliThemePaths,
+                SessionSetup.enabledPaths(packageManager.resolve(null).themes()));
+        owner.themePaths = themeStrings.stream().map(java.nio.file.Path::of).toList();
         // 批 14（docs/25 T15，A-25）：早退臂收紧为「-ne 且无显式路径」——
         // pi resource-loader.ts:578/690 的 noExtensions ? cliEnabledExtensions : merge(...)
         // 对位：显式 -e 路径恒加载（-ne 旁路），且扩展事件面随加载活着。
@@ -2525,17 +2568,21 @@ public final class AgentSession implements AutoCloseable {
             .collect(java.util.stream.Collectors.toSet());
         if (!args.noExtensions()) {
             manager.loadAll();
-            for (var jar : ExtensionPackageManager.global().installedJars()) {
-                manager.loadJar(jar);
+            // 批 18（T6）：resolve() 输出取代「扫全局/项目扩展目录」两臂（pi
+            // mergePaths(cliEnabledExtensions, enabledExtensions) :577-578 对位；
+            // 自动发现臂覆盖原两目录扫描，settings 数组/包自此生效——裁决⑨）。
+            var resolved = packageManager.resolve(null);
+            for (var path : SessionSetup.mergePaths(
+                    SessionSetup.enabledPaths(cliResolved.extensions()),
+                    SessionSetup.enabledPaths(resolved.extensions()))) {
+                loadResolvedExtension(manager, path);
             }
-            for (var jar : ExtensionPackageManager.project().installedJars()) {
-                manager.loadJar(jar);
+        } else {
+            // 批 18（T6）：pi noExtensions ⇒ cliEnabledExtensions（:577）——
+            // -ne 下 CLI 显式源仍加载；-e 本地目录/npm:/git: 经 temporary resolve。
+            for (var path : SessionSetup.enabledPaths(cliResolved.extensions())) {
+                loadResolvedExtension(manager, path);
             }
-        }
-        // 批 14（docs/25 T15）：pi additionalExtensionPaths（main.ts:728
-        // resolveCliPaths 对位＝cwd 相对 ⇒ 绝对规范化）——显式 -e 恒加载（-ne 旁路）。
-        for (var explicit : args.extensions()) {
-            manager.loadJar(java.nio.file.Path.of(explicit).toAbsolutePath().normalize());
         }
         owner.extensionManager = manager;
         // 批 16（T1d）：CLI 未知 --flag 绑定进共享值表（pi applyExtensionFlagValues，
