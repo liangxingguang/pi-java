@@ -121,6 +121,8 @@ public final class AgentSession implements AutoCloseable {
             () -> com.pijava.coding.agent.core.slash.SlashContext.of(this);
     // resources_discover：扩展贡献的主题候选（启动时选第一个可用）。
     private List<Path> themePaths = List.of();
+    /** 批 21（T8）：themePaths 的装载结果（pi resourceLoader.getThemes() 对位）。 */
+    private List<com.pijava.coding.agent.theme.Theme> themes = List.of();
     /** 批 18（评审 M4）：本会话装配期的 resolve 结果（wireSession 现算一份，
      *  技能/模板/主题/扩展四消费面共享；/reload 重算）。 */
     private SessionSetup.ResolvedAssembly resolveAssembly;
@@ -757,9 +759,11 @@ public final class AgentSession implements AutoCloseable {
                     // 批 11 T2（pi sdk.ts:262-270）：初始模型命中 per-model 表 ⇒ 应用。
                     model == null ? null : settings.accessors()
                         .getModelThinkingLevel(model.provider(), model.modelName())))
-            .systemPrompt(SessionSetup.customPromptFor(args))
+            .systemPrompt(SessionSetup.customPromptFor(args, settings,
+                java.nio.file.Path.of(System.getProperty("user.dir"))))
             .promptGuidelines(SessionSetup.DEFAULT_PROMPT_GUIDELINES)
-            .appendSystemPrompt(SessionSetup.appendSystemPromptFor(args))
+            .appendSystemPrompt(SessionSetup.appendSystemPromptFor(args, settings,
+                java.nio.file.Path.of(System.getProperty("user.dir"))))
             .activeTools(SessionSetup.activeTools(selection, toolList))
             .toolRegistry(tools)
             .toolContext(policyToolContext)
@@ -1319,6 +1323,41 @@ public final class AgentSession implements AutoCloseable {
     /** 扩展贡献的主题候选（resources_discover themePaths）；无则空列表。 */
     public List<Path> themePaths() {
         return themePaths;
+    }
+
+    /**
+     * 批 21（T8）：已装载的主题表（pi {@code resourceLoader.getThemes().themes}
+     * 对位——装配期与 /reload 经 {@link #reloadThemes()} 重算）。
+     */
+    public List<com.pijava.coding.agent.theme.Theme> themes() {
+        return themes;
+    }
+
+    /** 批 21（T8）：{@link SessionReload} ⑤ 的写面——重设 themePaths 并重装载。 */
+    void setThemePathsForReload(List<String> paths) {
+        themePaths = paths.stream().map(Path::of).toList();
+        reloadThemes();
+    }
+
+    /**
+     * 批 21（T8）：装载 themePaths 指向的主题文件（pi
+     * {@code updateThemesFromPaths} 对位——resolve 的自动发现条目已含
+     * {@code <agentDir>/themes} 与项目 {@code .pi-java/themes}）。装载/碰撞诊断
+     * 进 {@code startupDiagnostics}（pi 的 themeDiagnostics 对位；模式层随
+     * startupDiagnostics 既有通道上报）。
+     */
+    void reloadThemes() {
+        var result = com.pijava.coding.agent.theme.ThemeLoader.loadThemes(
+            themePaths.stream().map(Path::toString).toList(),
+            com.pijava.coding.agent.theme.Themes.colorMode());
+        themes = List.copyOf(result.themes());
+        for (var diagnostic : result.diagnostics()) {
+            startupDiagnostics.add(new Args.ArgDiagnostic(
+                "collision".equals(diagnostic.level()) ? "collision" : diagnostic.level(),
+                diagnostic.filePath() != null
+                    ? diagnostic.filePath() + ": " + diagnostic.message()
+                    : diagnostic.message()));
+        }
     }
 
     /**
@@ -2749,6 +2788,9 @@ public final class AgentSession implements AutoCloseable {
             : SessionSetup.mergePaths(cliThemePaths,
                 SessionSetup.enabledPaths(assembly.resolved().themes()));
         owner.themePaths = themeStrings.stream().map(java.nio.file.Path::of).toList();
+        // 批 21（T8）：基线路径即装（pi resourceLoader 初始 reload 对位）——
+        // 在 -ne 早退臂之前，主题不被扩展开关误裁（noThemes 只裁 resolve 臂）。
+        owner.reloadThemes();
         // 批 14（docs/25 T15，A-25）：早退臂收紧为「-ne 且无显式路径」——
         // pi resource-loader.ts:578/690 的 noExtensions ? cliEnabledExtensions : merge(...)
         // 对位：显式 -e 路径恒加载（-ne 旁路），且扩展事件面随加载活着。
@@ -2865,6 +2907,10 @@ public final class AgentSession implements AutoCloseable {
             startInfo == null ? null : startInfo.previousSessionFile());
         applySessionStartResources(harness, services,
             manager.sessionStartResources(), args, owner);
+        // 批 21（T8）：themePaths 定稿（resolve 基线＋resources_discover 扩展贡献）
+        // 后统一装载主题；诊断进 startupDiagnostics（pi resourceLoader 的
+        // themeDiagnostics 对位）。
+        owner.reloadThemes();
     }
 
     // ── Package-private accessors ───────────────────────────

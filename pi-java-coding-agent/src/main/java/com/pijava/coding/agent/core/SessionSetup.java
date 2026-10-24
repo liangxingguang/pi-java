@@ -112,13 +112,102 @@ final class SessionSetup {
      * 现在按 pi 的语义：给了自定义提示就没有那三段。</p>
      */
     static String customPromptFor(Args args) {
-        return args.systemPrompt() == null ? "" : args.systemPrompt();
+        return customPromptFor(args, null, null);
+    }
+
+    /**
+     * 批 21（T3，E4-6）：pi {@code resource-loader.ts:656-658} 对位——
+     * {@code systemPromptSource = CLI ?? discoverSystemPromptFile()}，再过
+     * {@link #resolvePromptInput}（file-or-literal）。发现的 SYSTEM.md 进的是
+     * <b>替换型</b> customPrompt（抑制 tools/rules/docs 三段，与 {@code --system-prompt}
+     * 同语义）。
+     *
+     * @param settings 信任门读取口（null ⇒ 不信任 ⇒ 项目臂不读）
+     * @param cwd 项目目录（null ⇒ 无项目臂）
+     */
+    static String customPromptFor(Args args, SettingsManager settings, Path cwd) {
+        var source = args.systemPrompt() != null ? args.systemPrompt()
+            : discoverSystemPromptFile(settings, cwd);
+        var resolved = resolvePromptInput(source, "system prompt");
+        return resolved == null ? "" : resolved;
     }
 
     /** {@code --append-system-prompt}（pi 的 {@code appendSystemPrompt} → {@code addendum} 段）。 */
     static String appendSystemPromptFor(Args args) {
-        return args.appendSystemPrompt().isEmpty()
-            ? "" : String.join("\n\n", args.appendSystemPrompt());
+        return appendSystemPromptFor(args, null, null);
+    }
+
+    /**
+     * 批 21（T3，E4-6）：pi {@code resource-loader.ts:662-671} 对位——CLI
+     * {@code --append-system-prompt} 全缺席才走 {@code APPEND_SYSTEM.md} 发现；
+     * 多源各过 {@link #resolvePromptInput} 后 {@code join("\n\n")}。
+     */
+    static String appendSystemPromptFor(Args args, SettingsManager settings, Path cwd) {
+        List<String> sources = args.appendSystemPrompt().isEmpty()
+            ? java.util.Optional.ofNullable(discoverAppendSystemPromptFile(settings, cwd))
+                .map(List::of).orElse(List.of())
+            : args.appendSystemPrompt();
+        var resolved = sources.stream()
+            .map(source -> resolvePromptInput(source, "append system prompt"))
+            .filter(java.util.Objects::nonNull)
+            .toList();
+        return resolved.isEmpty() ? "" : String.join("\n\n", resolved);
+    }
+
+    /**
+     * pi {@code resolvePromptInput}（resource-loader.ts:167-182 逐字）：源是现存
+     路径 ⇒ 读文件内容（BOM 剥离；读失败告警后按字面量用）；否则按字面量。
+     */
+    static String resolvePromptInput(String input, String description) {
+        if (input == null || input.isEmpty()) {
+            return null;
+        }
+        if (java.nio.file.Files.exists(Path.of(input))) {
+            try {
+                return com.pijava.coding.agent.theme.Themes.stripBom(
+                    java.nio.file.Files.readString(Path.of(input)));
+            } catch (java.io.IOException | RuntimeException e) {
+                // pi console.error(chalk.yellow(...)) 对位（DefaultProviders 先例）。
+                System.err.println("Warning: Could not read " + description + " file "
+                    + input + ": " + e);
+                return input;
+            }
+        }
+        return input;
+    }
+
+    /**
+     * pi {@code discoverSystemPromptFile}（resource-loader.ts:1213-1225 逐字）：
+     * 项目 {@code .pi-java/SYSTEM.md}（<b>项目信任门</b>）→ 全局
+     * {@code <agentDir>/SYSTEM.md}；都没有 ⇒ null。
+     */
+    static String discoverSystemPromptFile(SettingsManager settings, Path cwd) {
+        if (cwd != null && settings != null && settings.isProjectTrusted()) {
+            var projectPath = cwd.resolve(".pi-java").resolve("SYSTEM.md");
+            if (java.nio.file.Files.exists(projectPath)) {
+                return projectPath.toString();
+            }
+        }
+        var globalPath = FileSettingsStorage.defaultAgentDir().resolve("SYSTEM.md");
+        if (java.nio.file.Files.exists(globalPath)) {
+            return globalPath.toString();
+        }
+        return null;
+    }
+
+    /** pi {@code discoverAppendSystemPromptFile}（:1227-1240 逐字同形）。 */
+    static String discoverAppendSystemPromptFile(SettingsManager settings, Path cwd) {
+        if (cwd != null && settings != null && settings.isProjectTrusted()) {
+            var projectPath = cwd.resolve(".pi-java").resolve("APPEND_SYSTEM.md");
+            if (java.nio.file.Files.exists(projectPath)) {
+                return projectPath.toString();
+            }
+        }
+        var globalPath = FileSettingsStorage.defaultAgentDir().resolve("APPEND_SYSTEM.md");
+        if (java.nio.file.Files.exists(globalPath)) {
+            return globalPath.toString();
+        }
+        return null;
     }
 
     /** 会话解析：--no-session 直接返回，否则按持久后端 resolve。 */

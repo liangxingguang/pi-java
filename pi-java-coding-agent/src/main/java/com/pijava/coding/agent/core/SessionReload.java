@@ -17,7 +17,8 @@ import java.util.LinkedHashSet;
  *   <li>provider 重置（裁决④：车道构造期烘焙 settings ⇒ 清内置重注册、快照保留
  *       扩展项；pi {@code resetApiProviders} ai/compat.ts:209-213 对位）；</li>
  *   <li>资源重扫：skills/prompts 整表替换重扫（pi {@code resourceLoader.reload()}
- *       对位）；themes 随批 20（裁决⑨）；context files 是晚读口恒新（无须动作）；</li>
+ *       对位）；themes 批 21 落地（重算 themePaths＋重装载，注册表/控制器在
+ *       模式层收尾——裁决⑩）；context files 是晚读口恒新（无须动作）；</li>
  *   <li>defaultTools diff（B246 三分支）：新增进 defaultTools 的 ⇒ 激活；从中移除的
  *       ⇒ 保持激活（不动）；会话中 {@code -name} 移除的 ⇒ 修饰符照旧 apply 到新
  *       设置上，保持移除。{@code usesDefaultTools=false} ⇒ 整臂跳过；</li>
@@ -64,6 +65,16 @@ final class SessionReload {
             SessionSetup.discoverSkills(session.sessionArgs(), assembly).values());
         session.services().promptTemplates().replaceAll(
             SessionSetup.loadPromptTemplates(session.sessionArgs(), assembly));
+        // 批 21（T8，原批 16 裁决⑨挂账）：themes 臂——重算 themePaths（resolve
+        // 重扫的 themes 条目）并重装载（pi interactive-mode.ts:6490 的
+        // setRegisteredThemes 由模式层在 reload 收尾经 Themes 写入——裁决⑩：
+        // 会话层只重算 owner.themes，不碰全局注册表）。
+        var reloadCli = SessionSetup.enabledPaths(assembly.cli().themes());
+        var reloadThemesPaths = session.sessionArgs().noThemes()
+            ? reloadCli
+            : SessionSetup.mergePaths(reloadCli,
+                SessionSetup.enabledPaths(assembly.resolved().themes()));
+        session.setThemePathsForReload(reloadThemesPaths);
         // ⑥ defaultTools diff（B246；pi :3678-3685）：新增 ⇒ 经注册表过滤并入
         //    activeTools；移除的保持激活（不动）；usesDefaultTools=false ⇒ 跳过。
         if (selection != null && selection.usesDefaultTools()) {
@@ -84,6 +95,9 @@ final class SessionReload {
             AgentSession.applySessionStartResources(session.harness(), session.services(),
                 manager.sessionStartResources(), session.sessionArgs(), session);
         }
+        // 批 21（T8）：resources_discover 重放可能追加扩展 themePaths ⇒ 重装载
+        //（pi setExtensionPaths → updateThemesFromPaths 重跑对位）。
+        session.reloadThemes();
     }
 
     /**

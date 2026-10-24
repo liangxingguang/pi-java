@@ -84,8 +84,21 @@ public final class SettingsAccessors {
         manager.markModified("modelThinkingLevels");
     }
 
-    public String getTheme() {
+    /**
+     * pi {@code getThemeSetting}（settings-manager.ts:741-745）：原样返回
+     * {@code theme} 设置串（可为 {@code "light/dark"} 自动模式对）。
+     */
+    public String getThemeSetting() {
         return manager.effective().theme;
+    }
+
+    /**
+     * pi {@code getTheme}（settings-manager.ts:747-750）：含 {@code /} 的对形
+     * ⇒ {@code null}（对形不经此口直读，走 ThemeSettings.resolveThemeSetting）。
+     */
+    public String getTheme() {
+        var theme = getThemeSetting();
+        return theme != null && theme.contains("/") ? null : theme;
     }
 
     /** Set the theme in the global scope. */
