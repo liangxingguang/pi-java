@@ -52,6 +52,9 @@ public final class PackageAutoDiscovery {
         // Project skills from .agents/ (each with its own baseDir)
         for (var agentsSkillsDir : projectAgentsSkillDirs) {
             var agentsBaseDir = agentsSkillsDir.getParent(); // the .agents directory
+            if (agentsBaseDir == null) {
+                continue;
+            }
             var agentsMetadata = new PathMetadata("auto", SourceScope.PROJECT,
                 PathMetadata.Origin.TOP_LEVEL, agentsBaseDir.toString(), null);
             addResources(accumulator, ResourceType.SKILLS,
@@ -82,12 +85,14 @@ public final class PackageAutoDiscovery {
 
         // User skills from ~/.agents/ (with its own baseDir)
         var userAgentsBaseDir = userAgentsSkillsDir.getParent();
+        if (userAgentsBaseDir != null) {
         var userAgentsMetadata = new PathMetadata("auto", SourceScope.USER,
             PathMetadata.Origin.TOP_LEVEL, userAgentsBaseDir.toString(), null);
         addResources(accumulator, ResourceType.SKILLS,
             PackageResourceScanner.collectSkillEntries(
                 userAgentsSkillsDir, PackageResourceScanner.SkillMode.AGENTS),
             userAgentsMetadata, orEmpty(globalSettings.skills), userAgentsBaseDir);
+        }
 
         addResources(accumulator, ResourceType.PROMPTS,
             PackageResourceScanner.collectAutoPromptEntries(globalBaseDir.resolve("prompts")),

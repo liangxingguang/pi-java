@@ -43,7 +43,10 @@ public final class GitPackageStore {
      *  {@code <parent>/.<basename>.pi-update-incomplete}。 */
     public static Path updateMarkerPath(Path targetDir) {
         var parent = targetDir.getParent();
-        var name = targetDir.getFileName().toString();
+        var name = targetDir.getFileName();
+        if (parent == null || name == null) {
+            throw new IllegalArgumentException("targetDir 无父目录/文件名: " + targetDir);
+        }
         return parent.resolve("." + name + ".pi-update-incomplete");
     }
 
@@ -63,7 +66,10 @@ public final class GitPackageStore {
         if (gitRoot != null) {
             layout.ensureGitIgnore(gitRoot);
         }
-        Files.createDirectories(targetDir.getParent());
+        var targetParent = targetDir.getParent();
+        if (targetParent != null) {
+            Files.createDirectories(targetParent);
+        }
         Files.deleteIfExists(updateMarkerPath(targetDir));
 
         try {

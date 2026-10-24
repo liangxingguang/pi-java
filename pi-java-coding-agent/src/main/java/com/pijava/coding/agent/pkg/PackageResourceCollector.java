@@ -205,8 +205,10 @@ public final class PackageResourceCollector {
         }
         try {
             if (Files.isRegularFile(resolved)) {
+                var parent = resolved.getParent();
                 accumulator.addResource(ResourceType.EXTENSIONS, resolved.toString(),
-                    metadata.withBaseDir(resolved.getParent().toString()), true);
+                    metadata.withBaseDir(parent != null ? parent.toString()
+                        : resolved.toString()), true);
                 return;
             }
             if (Files.isDirectory(resolved)) {

@@ -128,13 +128,7 @@ public final class HttpNpmResolver implements NpmResolver {
 
     @Override
     public List<String> versions(String name) throws IOException {
-        var packument = fetchPackument(name);
-        var versionsNode = packument.get("versions");
-        var versions = new ArrayList<String>();
-        if (versionsNode != null && versionsNode.isObject()) {
-            versionsNode.fieldNames().forEachRemaining(versions::add);
-        }
-        return versions;
+        return versionsOf(fetchPackument(name));
     }
 
     @Override
@@ -161,7 +155,7 @@ public final class HttpNpmResolver implements NpmResolver {
             version = source.version();
         } else {
             var packument = fetchPackument(source.name());
-            version = latestSatisfying(source.name(), source.range());
+            version = pickVersion(versionsOf(packument), source);
             var distNode = packument.path("versions").path(version).path("dist");
             dist = distNode.isMissingNode() ? null : distNode;
         }
@@ -186,6 +180,32 @@ public final class HttpNpmResolver implements NpmResolver {
     }
 
     // ── 内部 ─────────────────────────────────────────────────────
+
+    private static List<String> versionsOf(JsonNode packument) {
+        var versionsNode = packument.get("versions");
+        var versions = new ArrayList<String>();
+        if (versionsNode != null && versionsNode.isObject()) {
+            versionsNode.fieldNames().forEachRemaining(versions::add);
+        }
+        return versions;
+    }
+
+    /** pi :1560-1562 对位：range ⇒ maxSatisfying；无 ⇒ rcompare 取首；
+     *  无满足 ⇒ 抛。 */
+    private static String pickVersion(List<String> versions, NpmSource source)
+            throws IOException {
+        var valid = versions.stream()
+            .filter(v -> v != null && !v.isEmpty() && Semvers.valid(v) != null)
+            .toList();
+        var latest = source.range() != null
+            ? Semvers.maxSatisfying(valid, source.range())
+            : valid.stream().max(versionOrder()).orElse(null);
+        if (latest == null) {
+            throw new IOException("Unexpected response from npm registry for " + source.name());
+        }
+        return latest;
+    }
+
 
     /** {@code GET <registry>/<name>}（scoped 名 {@code @} 后斜杠转 {@code %2f}）。 */
     private JsonNode fetchPackument(String name) throws IOException {
@@ -292,8 +312,9 @@ public final class HttpNpmResolver implements NpmResolver {
                     Files.createDirectories(destination);
                     continue;
                 }
-                if (destination.getParent() != null) {
-                    Files.createDirectories(destination.getParent());
+                var destinationParent = destination.getParent();
+                if (destinationParent != null) {
+                    Files.createDirectories(destinationParent);
                 }
                 // tar 流跨 entry 推进，Files.copy 不许关它 ⇒ 不关包装。
                 Files.copy(NonClosingInputStream.of(tar), destination,

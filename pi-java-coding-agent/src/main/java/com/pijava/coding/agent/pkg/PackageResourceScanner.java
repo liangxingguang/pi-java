@@ -28,6 +28,12 @@ public final class PackageResourceScanner {
 
     private PackageResourceScanner() {}
 
+    /** {@code Path.getFileName()} 空安全（根路径无文件名；spotbugs NP 闸）。 */
+    private static String entryName(Path entry) {
+        var name = entry.getFileName();
+        return name == null ? "" : name.toString();
+    }
+
     /** pi {@code FILE_PATTERNS}（:220-226；extensions 翻译为 .jar，裁决⑤）。 */
     public static Predicate<String> fileNamePattern(ResourceType type) {
         return switch (type) {
@@ -54,7 +60,7 @@ public final class PackageResourceScanner {
         ignore.addRules(dir, root);
         try (var stream = Files.list(dir)) {
             for (var entry : (Iterable<Path>) stream::iterator) {
-                var name = entry.getFileName().toString();
+                var name = entryName(entry);
                 if (name.startsWith(".")) {
                     continue;
                 }
@@ -105,7 +111,7 @@ public final class PackageResourceScanner {
         }
 
         for (var entry : dirEntries) {
-            if (!entry.getFileName().toString().equals("SKILL.md")) {
+            if (!entryName(entry).equals("SKILL.md")) {
                 continue;
             }
             if (!Files.isRegularFile(entry)) {
@@ -119,7 +125,7 @@ public final class PackageResourceScanner {
         }
 
         for (var entry : dirEntries) {
-            var name = entry.getFileName().toString();
+            var name = entryName(entry);
             if (name.startsWith(".") || name.equals("node_modules")) {
                 continue;
             }
@@ -204,7 +210,7 @@ public final class PackageResourceScanner {
         ignore.addRules(dir, dir);
         try (var stream = Files.list(dir)) {
             for (var entry : (Iterable<Path>) stream::iterator) {
-                var name = entry.getFileName().toString();
+                var name = entryName(entry);
                 if (name.startsWith(".") || name.equals("node_modules")) {
                     continue;
                 }
@@ -269,7 +275,7 @@ public final class PackageResourceScanner {
         ignore.addRules(dir, dir);
         try (var stream = Files.list(dir)) {
             for (var entry : (Iterable<Path>) stream::iterator) {
-                var name = entry.getFileName().toString();
+                var name = entryName(entry);
                 if (name.startsWith(".") || name.equals("node_modules")) {
                     continue;
                 }
