@@ -174,6 +174,8 @@ final class SessionPersistence {
         //（SessionSetup.resolveSession:122-124）同语义；ephemeral 是更安全一侧
         //（不落盘的一方可逆，反之不可）。
         if (args.noSession()) {
+            // 批 20（B32）：noSession 臂同走 --name 写回（仅显示名——无存储）。
+            applyInitialName(session, args);
             return session;
         }
         var handle = session.persistentRepository();
@@ -181,7 +183,7 @@ final class SessionPersistence {
         // Scoped to this project's directory (原 docs/39 §6.1) —— 全项目扫描是 A12
         // 的根因：`ready` 压在它后面，成本随全部会话文件数线性增长。
         var latest = handle.latest(cwd);
-        return latest.map(meta -> {
+        var resolved = latest.map(meta -> {
             attach(session, handle, meta);
             return session;
         }).orElseGet(() -> {
@@ -190,6 +192,9 @@ final class SessionPersistence {
             attach(session, handle, created.getMetadata());
             return session;
         });
+        // 批 20（B32，pi main.ts:709-715）：--name 写 session_info（web 臂同）。
+        applyInitialName(resolved, args);
+        return resolved;
     }
 
     /**
@@ -199,6 +204,16 @@ final class SessionPersistence {
      * （pi 的干净 {@code Error: <msg>} exit 1，裁决②），不再是栈 trace。
      */
     static AgentSession resolvePersistent(AgentSession session, Args args) {
+        return resolvePersistent(session, args, null);
+    }
+
+    /**
+     * 批 20（B257）：带 {@code parentSessionId} 的形态——仅<b>新建臂</b>消费
+     * （RPC {@code new_session.parentSession}；resume/fork 等臂不携带，pi
+     * {@code newSession} 恒新建 SessionManager 的语义下 RPC args 无那些旗标）。
+     */
+    static AgentSession resolvePersistent(AgentSession session, Args args,
+                                          String parentSessionId) {
         var handle = session.persistentRepository();
         var cwd = System.getProperty("user.dir");
         if (args.fork() != null) {
@@ -218,13 +233,13 @@ final class SessionPersistence {
             return handle.latest(cwd).map(meta -> {
                 attach(session, handle, meta);
                 return session;
-            }).orElseGet(() -> createAttached(session, handle, cwd));
+            }).orElseGet(() -> createAttached(session, handle, cwd, parentSessionId));
         }
         if (args.sessionId() != null) {
             resolveSessionId(session, args, handle, cwd);
             return session;
         }
-        return createAttached(session, handle, cwd);
+        return createAttached(session, handle, cwd, parentSessionId);
     }
 
     /** pi :368-390（--fork 臂）：session-id 目标查重（T9）→ 源解析 → forkFrom {id}。 */
@@ -334,7 +349,19 @@ final class SessionPersistence {
     private static AgentSession createAttached(AgentSession session,
                                                PersistentSessionRepositories.RepositoryHandle handle,
                                                String cwd) {
-        var created = handle.create(cwd, null);
+        return createAttached(session, handle, cwd, null);
+    }
+
+    /**
+     * 批 20（B257）：{@code parentSessionId} 落新会话 header（pi
+     * {@code sessionManager.newSession({parentSession})}，session-manager.ts:1069
+     * 对位；{@code null} ⇒ 不写，pi {@code options?.parentSession} 缺席同形）。
+     * 与 session_start 事件载荷的 previousSessionFile 是<b>两个</b>字段，不可串。
+     */
+    private static AgentSession createAttached(AgentSession session,
+                                               PersistentSessionRepositories.RepositoryHandle handle,
+                                               String cwd, String parentSessionId) {
+        var created = handle.create(cwd, parentSessionId);
         session.session(created);
         attach(session, handle, created.getMetadata());
         return session;
@@ -416,5 +443,32 @@ final class SessionPersistence {
             return stored;
         }
         return "session";
+    }
+
+    /**
+     * 批 20（B32，裁决⑧）：pi {@code --name} 写回（main.ts:709-715，初始/resume
+     * 同臂——在会话解析<b>之后</b>无条件跑）＋{@code normalizeSessionName}
+     * （cli/args.ts:66-69，<b>仅 trim</b>——与 {@code /name} 的换行消毒+trim 是
+     * 两个规范化器，勿混）。空名 ⇒ 干净 {@code Error: --name requires a
+     * non-empty value} exit 1（pi :711-714 逐字，复用批 14 的退出面）。
+     *
+     * <p>写 {@code FactName}（session_info 线格对位）＋显示名同源；装配早期不发
+     * SessionInfoChanged（pi 此点无监听者——appendSessionInfo 直写）。
+     * {@code --no-session} 无存储 ⇒ 仅显示名（java 边：pi 的 inMemory
+     * SessionManager 仍能记名）。</p>
+     */
+    static void applyInitialName(AgentSession session, Args args) {
+        if (args.name() == null) {
+            return;
+        }
+        var name = args.name().trim();
+        if (name.isEmpty()) {
+            throw SessionResolutionExit.error("--name requires a non-empty value");
+        }
+        var storage = session.session();
+        if (storage != null) {
+            storage.setName(name);
+        }
+        session.name(name);
     }
 }

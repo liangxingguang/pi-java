@@ -128,16 +128,19 @@ public final class RpcDispatcher {
             switch (command) {
                 case RpcCommand.Prompt p -> handlePrompt(p);
                 case RpcCommand.Steer s -> {
-                    // A5：pi rpc-mode.ts:416-419，data.disposition（无扩展 input
-                    // 事件 ⇒ 恒 "queued"）。
-                    session.steer(s.message());
+                    // 批 20（B237，pi rpc-mode.ts:416-419）：disposition 透传
+                    //（input 事件 handled / 正常 queued）＋images 透传；
+                    // 扩展命令入队 ⇒ IllegalStateException → 通用 fail 响应。
+                    var steerDisposition =
+                        session.steer(s.message(), toPromptImages(s.images()), "rpc");
                     out.write(RpcResponse.ok(s.id(), "steer",
-                        new RpcPayloads.DispositionData("queued")));
+                        new RpcPayloads.DispositionData(steerDisposition)));
                 }
                 case RpcCommand.FollowUp f -> {
-                    session.followUp(f.message());
+                    var followUpDisposition =
+                        session.followUp(f.message(), toPromptImages(f.images()), "rpc");
                     out.write(RpcResponse.ok(f.id(), "follow_up",
-                        new RpcPayloads.DispositionData("queued")));
+                        new RpcPayloads.DispositionData(followUpDisposition)));
                 }
                 case RpcCommand.Abort a -> {
                     out.write(RpcResponse.ok(a.id(), "abort"));
@@ -146,20 +149,29 @@ public final class RpcDispatcher {
                 case RpcCommand.GetState g ->
                     out.write(RpcResponse.ok(g.id(), "get_state", buildState()));
                 case RpcCommand.NewSession n -> {
-                    // docs/15（B250）＋docs/16（B252）：替换式新建 —— start{new,
-                    // previous}＋旧会话真正关闭（closeForReplacement 内含
-                    // shutdown{new, 新 id}；pi newSession 序列，序差在册 D20）。
-                    var old = session;
-                    var previousId = old.sessionId();
-                    unsubscribe();
-                    session = AgentSession.createReplacing(args, previousId);
-                    // 批 17 评审回补（Important #2）：新会话重绑 RPC 扩展 UI 通道
-                    //（pi finishSessionReplacement→rebindSession 对位，
-                    // agent-session-runtime.ts:187-191／rpc-mode.ts:313-321）。
-                    session.extensionUI(extensionUI, "rpc");
-                    old.closeForReplacement("new", session.sessionId());
-                    eventSubscription = session.subscribe(this::emitEvent);
-                    out.write(RpcResponse.ok(n.id(), "new_session", buildState()));
+                    // 批 20（B257，pi rpc-mode.ts:432-441＋agent-session-runtime.ts:226-258
+                    // 逐字序）：before_switch("new") 取消 ⇒ {cancelled:true} **不替换**；
+                    // 响应形 {cancelled}（旧实现发全量 state——形状差修真）。
+                    if (session.fireBeforeSwitch("new", null)) {
+                        out.write(RpcResponse.ok(n.id(), "new_session",
+                            new RpcPayloads.CancelledData(true)));
+                    } else {
+                        // docs/15（B250）＋docs/16（B252）：替换式新建 —— start{new,
+                        // previous}＋旧会话真正关闭（closeForReplacement 内含
+                        // shutdown{new, 新 id}；pi newSession 序列，序差在册 D20）。
+                        var old = session;
+                        var previousId = old.sessionId();
+                        unsubscribe();
+                        session = AgentSession.createReplacing(args, previousId, n.parentSession());
+                        // 批 17 评审回补（Important #2）：新会话重绑 RPC 扩展 UI 通道
+                        //（pi finishSessionReplacement→rebindSession 对位，
+                        // agent-session-runtime.ts:187-191／rpc-mode.ts:313-321）。
+                        session.extensionUI(extensionUI, "rpc");
+                        old.closeForReplacement("new", session.sessionId());
+                        eventSubscription = session.subscribe(this::emitEvent);
+                        out.write(RpcResponse.ok(n.id(), "new_session",
+                            new RpcPayloads.CancelledData(false)));
+                    }
                 }
                 case RpcCommand.GetMessages m ->
                     out.write(RpcResponse.ok(m.id(), "get_messages", buildMessages()));
@@ -382,10 +394,12 @@ public final class RpcDispatcher {
     private void handlePrompt(RpcCommand.Prompt prompt) throws IOException {
         String text = prompt.message() == null ? "" : prompt.message();
         // A5（原 docs/25）：pi rpc-mode.ts:398-412 —— 响应在预检之后写，
-        // data.disposition = started | queued；路由门拒绝 ⇒ 恰一条失败响应。
+        // data.disposition = started | queued | handled（批 20 B237 三态齐）；
+        // 路由门拒绝 ⇒ 恰一条失败响应。
         try {
             var result = session.processPrompt(text,
-                PromptConfig.rpc(prompt.streamingBehavior())); // docs/15：input source="rpc"
+                // docs/15：input source="rpc"；批 20：images 透传（pi :399 对位）
+                PromptConfig.rpc(prompt.streamingBehavior(), toPromptImages(prompt.images())));
             if ("started".equals(result.disposition())) {
                 // 异步 run：事件经订阅推送；AgentSettled 复位。
                 streaming = true;
@@ -396,6 +410,20 @@ public final class RpcDispatcher {
             // 压缩中 / 运行中未指定 streamingBehavior（pi 在调用线程同步抛）。
             out.write(RpcResponse.fail(prompt.id(), "prompt", e.getMessage()));
         }
+    }
+
+    /**
+     * 批 20（B237）：线格式图片 → {@link com.pijava.agent.harness.PromptImage}
+     * （null/空 ⇒ {@code null} ≙ pi {@code images?: ImageContent[]} 缺席）。
+     */
+    private static java.util.List<com.pijava.agent.harness.PromptImage> toPromptImages(
+            java.util.List<com.pijava.ai.message.ContentBlock.ImageContent> images) {
+        if (images == null || images.isEmpty()) {
+            return null;
+        }
+        return images.stream()
+            .map(i -> new com.pijava.agent.harness.PromptImage(i.mediaType(), i.data()))
+            .toList();
     }
 
     /** 批 17（T3）：fire-and-forget 写出（pi notify/setStatus/setTitle/set_editor_text/setWidget 臂——不等应答）。 */
@@ -476,12 +504,23 @@ public final class RpcDispatcher {
         // 不再读引擎内存态（旧实现全新会话恒报 false）。
         boolean autoCompactionEnabled =
             session.services().settings().accessors().getCompactionEnabled();
-        String modelId = model == null ? "" : model.provider() + "/" + model.modelName();
+        // 批 20（B31，pi rpc-mode.ts:450）：model 发整个 Model 对象（目录解析；
+        // 未命中 ⇒ ModelInfo.minimal 容忍形状，窄差 D121），无模型 ⇒ 键省略
+        //（pi undefined 同形；旧 "" 修真）。
+        RpcModel wireModel = null;
+        if (model != null) {
+            var info = com.pijava.ai.provider.ModelsJsonConfig.allModels().find(model)
+                .orElseGet(() -> com.pijava.ai.catalog.ModelInfo.minimal(model));
+            wireModel = RpcModel.of(info, providerConfigOf(model.provider()), JSON);
+        }
         // 逐字段取自会话，与 pi rpc-mode.ts:450-465 的取值表一一对应（包④，原 docs/31 §8.37）。
         // 此前 isCompacting / sessionFile / sessionId / pendingMessageCount 是写死的
         // false / null / null / 0。
+        // 批 20：sessionName 读 stored（B32——无 session_info ⇒ 键省略，pi
+        // getSessionName 同形）；messageCount 改工作副本口径（B33——pi
+        // agent.state.messages.length，压缩后与转录分叉正是要义）。
         return new RpcSessionState(
-            modelId,
+            wireModel,
             thinkingWire(harness.getThinkingLevel()),
             streaming,
             session.isCompacting(),
@@ -489,10 +528,23 @@ public final class RpcDispatcher {
             queueWire(harness.followUpMode()),
             session.sessionFile(),
             session.sessionId(),
-            session.sessionName(),
+            session.storedSessionName(),
             autoCompactionEnabled,
-            (int) session.entryCount(),
+            harness.getMessages().size(),
             session.pendingMessageCount());
+    }
+
+    /**
+     * 批 20（B31/T6 共用）：provider 的静态配置（api/baseUrl 缺省源＝pi
+     * {@code model.baseUrl} 的目录值语义——<b>不取</b> CLI/settings 覆盖，裁决⑥）。
+     * 非 {@link com.pijava.ai.provider.ConfigurableProvider}（测试 FauxProvider 等）
+     * ⇒ {@code null}（两键省略）。
+     */
+    private com.pijava.ai.provider.ProviderConfig providerConfigOf(String providerName) {
+        return session.services().providers().get(providerName)
+            .filter(com.pijava.ai.provider.ConfigurableProvider.class::isInstance)
+            .map(p -> ((com.pijava.ai.provider.ConfigurableProvider) p).providerConfig())
+            .orElse(null);
     }
 
     private List<Message> buildMessages() {

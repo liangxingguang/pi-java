@@ -5,7 +5,9 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 /**
  * get_state 载荷（对齐 pi {@code RpcSessionState} 的线格式）。
  *
- * <p>wire 友好字段：model 为 {@code "provider/id"}，thinkingLevel 为 wire 值
+ * <p>wire 友好字段：model 为整个 {@link RpcModel} 对象（批 20，B31——pi
+ * {@code rpc-mode.ts:450} 发运行时 {@code Model} 整体；无模型 ⇒ 键省略，
+ * pi {@code undefined} 同形），thinkingLevel 为 wire 值
  * （{@code "off"}|minimal|low|medium|high|xhigh|max），队列模式为
  * {@code "all"|"one-at-a-time"}。</p>
  *
@@ -14,11 +16,12 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * （{@code rpc-types.ts:103/:105}）是可选的，{@code JSON.stringify} 对
  * {@code undefined} <b>省略键</b>。故 {@code sessionFile} 在非文件后端
  * （sqlite / in-memory / {@code --no-session}）必须**缺席**而不是 {@code null} ——
- * 这与 {@link RpcResponse} 的信封纪律同一条。</p>
+ * 这与 {@link RpcResponse} 的信封纪律同一条。批 20（B32）：{@code sessionName}
+ * 同纪律——未命名（无 session_info）⇒ 缺席，不再是显示名回落。</p>
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record RpcSessionState(
-    String model,
+    RpcModel model,
     String thinkingLevel,
     boolean isStreaming,
     boolean isCompacting,

@@ -212,7 +212,10 @@ class RpcDispatcherTest {
         assertThat(output).contains("\"id\":\"2\"")
             .contains("\"command\":\"get_state\"")
             .contains("\"success\":true")
-            .contains("\"model\":\"faux-state/hello\"");
+            // 批 20（B31）：model 改对象形（pi rpc-mode.ts:450 对位）。
+            .contains("\"model\":{")
+            .contains("\"provider\":\"faux-state\"")
+            .contains("\"id\":\"hello\"");
 
         // 包④（原 docs/31 §8.37）：state 载荷的四个字段此前写死 false/null/null/0，
         // 现在逐字段取自会话。这里钉住静态会话下的取值 —— 真值侧
@@ -223,7 +226,9 @@ class RpcDispatcherTest {
         assertThat(payload.get("messageCount").asInt()).isZero();
         assertThat(payload.get("isStreaming").asBoolean()).isFalse();
         assertThat(payload.get("sessionId").asText()).isEqualTo("session");
-        assertThat(payload.get("sessionName").asText()).isEqualTo("session");
+        // 批 20（B32）：未命名 ⇒ sessionName 键省略（pi undefined 同形）；
+        // in-memory 会话无存储（窄差 D122）。
+        assertThat(payload.has("sessionName")).isFalse();
         assertThat(payload.get("steeringMode").asText()).isEqualTo("one-at-a-time");
         assertThat(payload.get("followUpMode").asText()).isEqualTo("one-at-a-time");
         // --no-session ⇒ 无落盘路径。pi 的 `sessionFile?: string`（rpc-types.ts:103）
@@ -509,14 +514,17 @@ class RpcDispatcherTest {
         var dispatcher = new RpcDispatcher(scoped, new JsonlWriter(out), args);
 
         dispatcher.handleLine("{\"id\":\"1\",\"type\":\"get_state\"}");
-        var before = payloadOf(out.toString(StandardCharsets.UTF_8), "1").get("model").asText();
+        // 批 20（B31）：model 对象形——按 provider/id 两键取值。
+        var beforeModel = payloadOf(out.toString(StandardCharsets.UTF_8), "1").get("model");
+        var before = beforeModel.get("provider").asText() + "/" + beforeModel.get("id").asText();
         out.reset();
 
         dispatcher.handleLine("{\"id\":\"2\",\"type\":\"cycle_model\"}");
         dispatcher.handleLine("{\"id\":\"3\",\"type\":\"get_state\"}");
         var output = out.toString(StandardCharsets.UTF_8);
         assertThat(output).contains("\"command\":\"cycle_model\",\"success\":true");
-        var after = payloadOf(output, "3").get("model").asText();
+        var afterModel = payloadOf(output, "3").get("model");
+        var after = afterModel.get("provider").asText() + "/" + afterModel.get("id").asText();
 
         assertThat(before).startsWith("google/");
         assertThat(after).startsWith("google/");

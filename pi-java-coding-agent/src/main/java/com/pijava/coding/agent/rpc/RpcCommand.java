@@ -77,7 +77,8 @@ public sealed interface RpcCommand {
     }
 
     @JsonTypeName("follow_up")
-    record FollowUp(String id, String message) implements RpcCommand {
+    record FollowUp(String id, String message, List<ContentBlock.ImageContent> images)
+        implements RpcCommand {
         @Override public String type() { return "follow_up"; }
     }
 
@@ -92,7 +93,7 @@ public sealed interface RpcCommand {
     }
 
     @JsonTypeName("new_session")
-    record NewSession(String id) implements RpcCommand {
+    record NewSession(String id, String parentSession) implements RpcCommand {
         @Override public String type() { return "new_session"; }
     }
 

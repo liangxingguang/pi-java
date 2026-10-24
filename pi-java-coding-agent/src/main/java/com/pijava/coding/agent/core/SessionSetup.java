@@ -123,13 +123,23 @@ final class SessionSetup {
 
     /** 会话解析：--no-session 直接返回，否则按持久后端 resolve。 */
     static AgentSession resolveSession(AgentSession session, Args args) {
+        return resolveSession(session, args, null);
+    }
+
+    /** 批 20（B257）：带 {@code parentSessionId} 的形态（RPC {@code new_session}）。 */
+    static AgentSession resolveSession(AgentSession session, Args args,
+                                       String parentSessionId) {
+        AgentSession resolved;
         if (args.noSession()) {
-            return session;
+            resolved = session;
+        } else if (session.persistentRepository() != null) {
+            resolved = SessionPersistence.resolvePersistent(session, args, parentSessionId);
+        } else {
+            resolved = SessionPersistence.resolveInMemory(session, args);
         }
-        if (session.persistentRepository() != null) {
-            return SessionPersistence.resolvePersistent(session, args);
-        }
-        return SessionPersistence.resolveInMemory(session, args);
+        // 批 20（B32，pi main.ts:709-715）：--name 写 session_info（解析后无条件臂）。
+        SessionPersistence.applyInitialName(resolved, args);
+        return resolved;
     }
 
     /** 队列模式 wire 值 → QueueMode。 */

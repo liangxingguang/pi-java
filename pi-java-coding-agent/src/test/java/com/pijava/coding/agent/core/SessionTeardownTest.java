@@ -170,12 +170,21 @@ class SessionTeardownTest {
         var node = new ObjectMapper().readTree(out.toString(StandardCharsets.UTF_8)
             .lines().filter(l -> l.contains("\"new_session\"")).findFirst().orElseThrow());
         assertThat(node.path("success").asBoolean()).isTrue();
-        var newId = node.path("data").path("sessionId").asText();
+        // 批 20（B257）：响应形改 pi {cancelled:false}（旧 java 方言发全量 state，
+        // 已修真）——newId 从 shutdown 事件目标取，并核对新会话以该 id 落盘。
+        assertThat(node.path("data").path("cancelled").asBoolean()).isFalse();
         assertThatThrownBy(() -> old.harness().prompt("x"))
             .as("旧会话真正关闭（docs/16 §3.6）")
             .isInstanceOf(HarnessClosedException.class);
-        assertThat(EVENTS.stream().filter(e -> e.startsWith("shutdown:new:")).toList())
-            .as("shutdown{new, 新 id} 恰一次").containsExactly("shutdown:new:" + newId);
+        var shutdowns = EVENTS.stream().filter(e -> e.startsWith("shutdown:new:")).toList();
+        assertThat(shutdowns).as("shutdown{new, 新 id} 恰一次").hasSize(1);
+        var newId = shutdowns.get(0).substring("shutdown:new:".length());
+        assertThat(newId).as("shutdown 目标＝新会话 id（非空）").isNotEmpty();
+        try (var files = Files.walk(dir)) {
+            // jsonl 按 per-cwd 子目录落盘（JsonlSessionRepository.sessionDirectory）。
+            assertThat(files.anyMatch(p -> p.getFileName().toString().contains(newId)))
+                .as("新会话以 shutdown 目标 id 落盘").isTrue();
+        }
         assertThat(EVENTS).contains("start:new:" + old.sessionId());
         dispatcher.close();
     }

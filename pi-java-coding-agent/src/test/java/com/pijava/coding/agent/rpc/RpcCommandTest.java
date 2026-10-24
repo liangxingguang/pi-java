@@ -25,10 +25,15 @@ class RpcCommandTest {
                 List.of(new ContentBlock.ImageContent("image/png", "AA==")),
                 StreamingBehavior.STEER),
             new RpcCommand.Steer("2", "steer text", null),
-            new RpcCommand.FollowUp("3", "more"),
+            // 批 20（B237）：follow_up 补 images 线格（pi rpc-types.ts:24）。
+            new RpcCommand.FollowUp("3", "more", null),
+            new RpcCommand.FollowUp("3", "more",
+                List.of(new ContentBlock.ImageContent("image/png", "AA=="))),
             new RpcCommand.Abort("4"),
             new RpcCommand.GetState("5"),
-            new RpcCommand.NewSession("6"),
+            // 批 20（B257）：new_session 补 parentSession（pi rpc-types.ts:27）。
+            new RpcCommand.NewSession("6", null),
+            new RpcCommand.NewSession("6", "parent-file.jsonl"),
             new RpcCommand.GetMessages("7"),
             new RpcCommand.GetLastAssistantText("8"),
             new RpcCommand.SetModel("1", "openai/gpt-4o"),

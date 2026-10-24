@@ -18,6 +18,10 @@ final class RpcPayloads {
      */
     record DispositionData(String disposition) {}
 
+    /** 批 20（B257）：pi {@code new_session} 响应 data——{@code {cancelled: boolean}}
+     *  （rpc-types.ts:131 附近／agent-session-runtime.ts:258）。 */
+    record CancelledData(boolean cancelled) {}
+
     /** pi {@code BashResult}：stdout+stderr 合并输出与退出信息。 */
     record RpcBashResult(
         String output,
