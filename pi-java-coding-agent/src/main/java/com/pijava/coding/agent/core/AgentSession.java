@@ -2157,24 +2157,54 @@ public final class AgentSession implements AutoCloseable {
      * 其它后端留旧路（逐会话 open，失败降级元数据摘要）。</p>
      */
     public List<SessionSummary> listSessionsSummary(String cwd) {
+        return listSessionsSummary(cwd, null, null);
+    }
+
+    /**
+     * 批 22（T1，W15）：摘要级渐进发布回调（pi {@code SessionListProgress}
+     * 在 {@link AgentSession} 摘要面的投影——partial 仅周期发布点非 null）。
+     */
+    @FunctionalInterface
+    public interface SessionSummaryProgress {
+        /** @param partials 已加载会话的活动序快照；非发布点为 null（pi 同） */
+        void onProgress(int loaded, int total, List<SessionSummary> partials);
+    }
+
+    /**
+     * 批 22（T1，W15）：带进度回调与中止信号的会话摘要列表（pi
+     * {@code SessionManager.list(path, onProgress, signal)} 对位）——
+     * JSONL 臂透传 {@code listRich} 的渐进发布（partial 快照逐条映射为
+     * {@link SessionSummary}）；其它后端退化臂＝一次性全量＋无中间回调。
+     */
+    public List<SessionSummary> listSessionsSummary(
+            String cwd, SessionSummaryProgress progress,
+            com.pijava.ai.AbortSignal signal) {
         if (persistentRepository == null) {
             return List.of();
         }
         String dir = cwd == null || cwd.isBlank() ? System.getProperty("user.dir") : cwd;
         if (persistentRepository.repository()
                 instanceof com.pijava.agent.session.jsonl.JsonlSessionRepository repo) {
-            return repo.listRich(dir, null, null).stream()
-                .map(info -> new SessionSummary(info.id(), info.path(),
-                    info.name() == null ? "" : info.name(), info.cwd(),
-                    java.time.Instant.ofEpochMilli(info.createdMs()), info.modifiedMs(),
-                    info.messageCount(), info.firstMessage()))
-                .toList();
+            return repo.listRich(dir, progress == null ? null
+                : (loaded, total, partials) -> progress.onProgress(loaded, total,
+                    partials == null ? null
+                        : partials.stream().map(AgentSession::toSummary).toList()),
+                signal).stream().map(AgentSession::toSummary).toList();
         }
         var result = new java.util.ArrayList<SessionSummary>();
         for (var meta : persistentRepository.list(dir)) {
             result.add(summaryFor(meta));
         }
         return result;
+    }
+
+    /** 批 22（T1）：RichSessionInfo ⇒ SessionSummary 的共享映射。 */
+    private static SessionSummary toSummary(
+            com.pijava.agent.session.jsonl.RichSessionInfo info) {
+        return new SessionSummary(info.id(), info.path(),
+            info.name() == null ? "" : info.name(), info.cwd(),
+            java.time.Instant.ofEpochMilli(info.createdMs()), info.modifiedMs(),
+            info.messageCount(), info.firstMessage());
     }
 
     private SessionSummary summaryFor(SessionMetadata meta) {

@@ -11,6 +11,7 @@ export type ClientMessage =
   | { type: "getState" }
   | { type: "newSession" }
   | { type: "getSessions" }
+  | { type: "cancelSessions" }
   | { type: "loadSession"; sessionPath: string }
   // ── Stage B：文件浏览器 / git（代码调试）──
   | { type: "listDir"; path: string }
@@ -85,6 +86,8 @@ export type ServerMessage =
   | { type: "error"; message: string }
   | { type: "ready" }
   | { type: "sessions"; sessions: SessionListItem[]; currentSessionId: string }
+  // 批 22（W15）：渐进发布帧——周期发布点的部分表（pi partialSessions 对位）
+  | { type: "sessionsProgress"; loaded: number; total: number; sessions: SessionListItem[] }
   | { type: "sessionChanged"; sessionId: string }
   // ── Stage B ──
   | { type: "dirListing"; path: string; entries: DirEntry[] }

@@ -84,6 +84,7 @@ public final class WebProtocol {
         @JsonSubTypes.Type(value = WebClientMessage.GetState.class),
         @JsonSubTypes.Type(value = WebClientMessage.NewSession.class),
         @JsonSubTypes.Type(value = WebClientMessage.GetSessions.class),
+        @JsonSubTypes.Type(value = WebClientMessage.CancelSessions.class),
         @JsonSubTypes.Type(value = WebClientMessage.LoadSession.class),
         @JsonSubTypes.Type(value = WebClientMessage.ListDir.class),
         @JsonSubTypes.Type(value = WebClientMessage.ReadFile.class),
@@ -156,6 +157,12 @@ public final class WebProtocol {
         @JsonTypeName("getSessions")
         record GetSessions() implements WebClientMessage {
             @Override public String type() { return "getSessions"; }
+        }
+
+        /** 批 22（T1，W15）：中止进行中的渐进会话列表（pi AbortSignal 对位）。 */
+        @JsonTypeName("cancelSessions")
+        record CancelSessions() implements WebClientMessage {
+            @Override public String type() { return "cancelSessions"; }
         }
 
         @JsonTypeName("loadSession")
@@ -260,6 +267,7 @@ public final class WebProtocol {
         @JsonSubTypes.Type(value = WebServerMessage.ModelChanged.class),
         @JsonSubTypes.Type(value = WebServerMessage.Error.class),
         @JsonSubTypes.Type(value = WebServerMessage.Sessions.class),
+        @JsonSubTypes.Type(value = WebServerMessage.SessionsProgress.class),
         @JsonSubTypes.Type(value = WebServerMessage.SessionChanged.class),
         @JsonSubTypes.Type(value = WebServerMessage.DirListing.class),
         @JsonSubTypes.Type(value = WebServerMessage.FileContent.class),
@@ -319,11 +327,22 @@ public final class WebProtocol {
             @Override public String type() { return "error"; }
         }
 
-        /** 会话列表（{@code sessions}）。 */
+        /** 会话列表（{@code sessions}）——终态全量（渐进臂的收尾帧）。 */
         @JsonTypeName("sessions")
         record Sessions(List<SessionListItem> sessions, String currentSessionId)
                 implements WebServerMessage {
             @Override public String type() { return "sessions"; }
+        }
+
+        /**
+         * 批 22（T1，W15）：会话列表渐进发布帧（pi {@code SessionListProgress}
+         * 周期发布点的 partialSessions 快照对位）——loaded/total 进度＋已加载
+         会话的活动序部分表。
+         */
+        @JsonTypeName("sessionsProgress")
+        record SessionsProgress(int loaded, int total, List<SessionListItem> sessions)
+                implements WebServerMessage {
+            @Override public String type() { return "sessionsProgress"; }
         }
 
         /** 会话切换广播（{@code sessionChanged}）。 */

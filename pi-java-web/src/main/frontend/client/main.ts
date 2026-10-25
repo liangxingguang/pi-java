@@ -93,6 +93,8 @@ let currentSessionName: string | undefined;
 let sidebarOpen = false;
 let sessionList: SessionListItem[] = [];
 let sessionsLoading = false;
+// 批 22（W15）：渐进扫描进度（null ⇒ 非扫描中/无发布点帧）
+let sessionsProgress: { loaded: number; total: number } | null = null;
 let sessionFilter = "";
 let notice = "";
 let exportPath = "";
@@ -202,6 +204,14 @@ function handleServerMessage(msg: ServerMessage) {
       sessionList = msg.sessions;
       currentSessionId = msg.currentSessionId;
       sessionsLoading = false;
+      sessionsProgress = null;
+      renderApp();
+      break;
+
+    // 批 22（W15）：渐进发布帧——边扫边渲染（pi 选择器渐进填充对位）
+    case "sessionsProgress":
+      sessionList = msg.sessions;
+      sessionsProgress = { loaded: msg.loaded, total: msg.total };
       renderApp();
       break;
 
@@ -490,6 +500,12 @@ function toggleSidebar() {
 
 function closeSidebar() {
   sidebarOpen = false;
+  // 批 22（W15）：picker 关闭 ⇒ 中止进行中的渐进扫描（pi AbortSignal 对位）
+  if (sessionsLoading) {
+    sessionsLoading = false;
+    sessionsProgress = null;
+    send({ type: "cancelSessions" });
+  }
   renderApp();
 }
 
@@ -613,9 +629,9 @@ function renderSidebar() {
       </div>
 
       <div class="flex-1 overflow-y-auto">
-        ${sessionsLoading ? html`
+        ${sessionsLoading && sessionList.length === 0 ? html`
           <div style="display:flex;align-items:center;justify-content:center;padding:48px 0;color:var(--muted-foreground);font-size:13px">
-            Loading sessions...
+            Loading sessions${sessionsProgress ? ` ${sessionsProgress.loaded}/${sessionsProgress.total}` : ""}...
           </div>
         ` : sessionList.length === 0 ? html`
           <div style="display:flex;align-items:center;justify-content:center;padding:48px 0;color:var(--muted-foreground);font-size:13px">

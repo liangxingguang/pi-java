@@ -92,7 +92,8 @@ final class WebDispatcher {
                 }
                 case WebClientMessage.GetState ignored -> send.accept(stateSync());
                 case WebClientMessage.NewSession ignored -> newSession();
-                case WebClientMessage.GetSessions ignored -> send.accept(sessions());
+                case WebClientMessage.GetSessions ignored -> startSessionsListing();
+                case WebClientMessage.CancelSessions ignored -> cancelSessionsListing();
                 case WebClientMessage.LoadSession l -> loadSession(l.sessionPath());
                 case WebClientMessage.ListDir l -> send.accept(dirListing(l.path()));
                 case WebClientMessage.ReadFile f -> send.accept(fileContent(f.path()));
@@ -233,13 +234,72 @@ final class WebDispatcher {
 
     private WebServerMessage.Sessions sessions() {
         var items = session.listSessionsSummary(System.getProperty("user.dir")).stream()
-            .map(s -> new SessionListItem(
-                s.id(), s.path(), s.name(), s.cwd(),
-                s.created().toString(),
-                Instant.ofEpochMilli(s.modifiedMs()).toString(),
-                s.messageCount(), s.firstMessage()))
+            .map(WebDispatcher::toSessionListItem)
             .toList();
         return new WebServerMessage.Sessions(items, session.sessionId());
+    }
+
+    /** 批 22（T1）：SessionSummary ⇒ 线格的共享映射。 */
+    private static SessionListItem toSessionListItem(AgentSession.SessionSummary s) {
+        return new SessionListItem(s.id(), s.path(), s.name(), s.cwd(),
+            s.created().toString(), Instant.ofEpochMilli(s.modifiedMs()).toString(),
+            s.messageCount(), s.firstMessage());
+    }
+
+    // ── 批 22（T1，W15）：渐进会话列表（pi SessionListProgress/AbortSignal 对位）──
+
+    /** 进行中的列表任务（代次闸：新 GetSessions 作废旧轮）。 */
+    private final java.util.concurrent.atomic.AtomicLong sessionsGeneration =
+        new java.util.concurrent.atomic.AtomicLong();
+    private volatile com.pijava.ai.AbortSignal sessionsAbort;
+
+    /**
+     * pi 选择器重开即新扫的同族语义（裁决④）：每轮列表在虚拟线程上跑富列表；
+     * 周期发布点（partial 非空）发 {@code sessionsProgress}，完成发终态
+     * {@code sessions}；新一轮/取消作废旧轮（旧轮此后一帧都不发）。
+     */
+    private void startSessionsListing() {
+        cancelSessionsListing();
+        long generation = sessionsGeneration.incrementAndGet();
+        var signal = com.pijava.ai.AbortSignal.create();
+        sessionsAbort = signal;
+        Thread.startVirtualThread(() -> {
+            try {
+                var items = session.listSessionsSummary(System.getProperty("user.dir"),
+                    (loaded, total, partials) -> {
+                        if (partials == null || generation != sessionsGeneration.get()) {
+                            return;   // 非发布点不携快照（pi 同）；代次过期整帧弃
+                        }
+                        send.accept(new WebServerMessage.SessionsProgress(loaded, total,
+                            partials.stream().map(WebDispatcher::toSessionListItem).toList()));
+                    }, signal);
+                if (generation == sessionsGeneration.get()) {
+                    send.accept(new WebServerMessage.Sessions(
+                        items.stream().map(WebDispatcher::toSessionListItem).toList(),
+                        session.sessionId()));
+                }
+            } catch (RuntimeException e) {
+                if (generation == sessionsGeneration.get()) {
+                    send.accept(new WebServerMessage.Error(
+                        "Failed to list sessions: " + e.getMessage()));
+                }
+            }
+        });
+    }
+
+    /** 测试面：当前列表代次（代次闸断言用）。 */
+    long sessionsListingGeneration() {
+        return sessionsGeneration.get();
+    }
+
+    /** pi 选择器关闭 ⇒ AbortSignal 中止对位。 */
+    private void cancelSessionsListing() {
+        var signal = sessionsAbort;
+        sessionsAbort = null;
+        sessionsGeneration.incrementAndGet();   // 代次闸先翻，在飞回调自弃
+        if (signal != null) {
+            signal.abort();
+        }
     }
 
     /** 当前会话统计快照（{@code getSessionStats} 响应）。 */
