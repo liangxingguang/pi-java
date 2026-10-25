@@ -50,7 +50,7 @@ class PackageCommandRunTest {
         System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
         System.setErr(new PrintStream(err, true, StandardCharsets.UTF_8));
         modelsRefreshResult = null;
-        env = new PackageCommand.CliEnv(cwd, agentDir, trustRoot, dir -> {
+        env = new PackageCommand.CliEnv(cwd, agentDir, new com.pijava.coding.agent.core.ProjectTrustStore(trustRoot), dir -> {
             modelsRefreshCalls.incrementAndGet();
             return modelsRefreshResult;
         });
@@ -151,7 +151,7 @@ class PackageCommandRunTest {
         Files.writeString(cwd.resolve(".pi-java").resolve("settings.json"),
             "{\"packages\":[\"local-pkg\"]}");
         // untrusted 时 project 域内存清空（pi 同）⇒ 信任标记落 trustRoot。
-        new com.pijava.coding.agent.core.TrustManager(trustRoot, null).trust(cwd, true);
+        new com.pijava.coding.agent.core.ProjectTrustStore(trustRoot).set(cwd, true);
 
         var code = PackageCommand.run("list", new String[0], env);
 

@@ -342,4 +342,11 @@ public sealed interface ExtensionEvent {
     record McpServersChangeEvent(
             java.util.List<com.pijava.mcp.config.RegisteredMcpServer> servers)
             implements ExtensionEvent {}
+
+    /**
+     * 批 23（T3）：pi {@code project_trust}（types.ts:685-689）——启动信任解析
+     * 询问扩展（first-wins：首个返回非 undecided 的处理器胜出）。在会话装配前
+     * 的预信任装载期发射（pi resource-loader.ts:505-525）。
+     */
+    record ProjectTrustEvent(String cwd) implements ExtensionEvent {}
 }

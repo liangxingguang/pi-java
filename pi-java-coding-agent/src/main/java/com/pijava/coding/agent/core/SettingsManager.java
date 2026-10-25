@@ -60,9 +60,32 @@ public final class SettingsManager {
         // 批 11 T3（pi main.ts:596/874 启动期应用对位）：读全局域；测试道
         // withStorage 不应用（不改 JVM 全局态）。
         HttpProxySupport.apply(manager.global().httpProxy);
-        manager.setProjectTrusted(
-            resolveTrust(projectTrustOverride, manager.merged().defaultProjectTrust));
+        manager.setProjectTrusted(resolveTrust(projectTrustOverride, manager));
         return manager;
+    }
+
+    /**
+     * 批 23（docs/34 T3，裁决②③）：启动初步信任＝pi 的「已存决策」臂
+     * （package-manager-cli.ts:777-779 {@code override ?? saved} 对位）——
+     * 读 trust.json 最近祖先；无存储面（内存测试道）⇒ 不信任。
+     * 会话创建路径的完整七级链（含默认策略/扩展事件/弹窗）在
+     * {@link ProjectTrustSetup}（{@code AgentSession.create*} 随即调用）。
+     */
+    private static boolean resolveTrust(Boolean override, SettingsManager manager) {
+        if (override != null) {
+            return override;
+        }
+        if (manager.storage() instanceof FileSettingsStorage files) {
+            var globalPath = files.globalPath();
+            var projectPath = files.projectPath();
+            if (globalPath != null && projectPath != null
+                    && projectPath.getParent() != null) {
+                var saved = new ProjectTrustStore(globalPath.getParent())
+                    .get(projectPath.getParent().getParent());
+                return Boolean.TRUE.equals(saved);
+            }
+        }
+        return false;
     }
 
     /** Create a manager backed by the given storage (tests/in-memory). */
@@ -292,17 +315,6 @@ public final class SettingsManager {
         return content.startsWith(BOM) ? content.substring(1) : content;
     }
 
-    /** The merged view used by {@link #load} for trust resolution. */
-    private Settings merged() {
-        return merge(global, project);
-    }
-
-    private static boolean resolveTrust(Boolean override, String defaultTrust) {
-        if (override != null) {
-            return override;
-        }
-        return !"never".equals(defaultTrust);
-    }
 
     /**
      * Migrate legacy settings fields (Phase 3 design §12.3): {@code queueMode}

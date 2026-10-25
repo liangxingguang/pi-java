@@ -64,7 +64,7 @@ class ConfigCommandPatternTest {
 
     private int run(String... args) {
         return ConfigCommand.run(args,
-            new ConfigCommand.ConfigEnv(manager, trustRoot, cwd, agentDir, homeDir, null));
+            new ConfigCommand.ConfigEnv(manager, new com.pijava.coding.agent.core.ProjectTrustStore(trustRoot), cwd, agentDir, homeDir, null));
     }
 
     private String globalJson() throws IOException {
@@ -155,7 +155,7 @@ class ConfigCommandPatternTest {
 
     @Test
     void projectScopeWithSavedTrustMarkerWrites() throws IOException {
-        new com.pijava.coding.agent.core.TrustManager(trustRoot, null).trust(cwd, true);
+        new com.pijava.coding.agent.core.ProjectTrustStore(trustRoot).set(cwd, true);
 
         var code = run("disable", "themes", "t", "-l");
 

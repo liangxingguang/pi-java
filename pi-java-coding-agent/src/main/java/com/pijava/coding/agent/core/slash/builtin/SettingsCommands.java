@@ -38,15 +38,19 @@ public final class SettingsCommands {
                         "Usage: /trust always|never|ask");
                 }
                 var trust = ctx.session().services().trust();
-                trust.setDefaultTrust(value);
-                trust.trust(Path.of(System.getProperty("user.dir")),
-                    value.equals("always"));
+                // 批 23（T3，裁决②）：trust.json 语义——always⇒true 落盘、
+                // never⇒false 落盘、ask⇒删键（回到默认询问）。
+                trust.set(Path.of(System.getProperty("user.dir")),
+                    switch (value) {
+                        case "always" -> Boolean.TRUE;
+                        case "never" -> Boolean.FALSE;
+                        default -> null;
+                    });
                 var accessors = ctx.session().services().settings().accessors();
                 accessors.setDefaultProjectTrust(value);
                 ctx.session().services().settings().flush();
                 return CompletableFuture.completedFuture(
-                    "Project trust set to \"" + value
-                        + "\" (persistence in Phase 4)");
+                    "Project trust set to \"" + value + "\"");
             }
         });
         registry.register(new SlashCommand() {

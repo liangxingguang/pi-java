@@ -131,6 +131,9 @@ class McpListCommandTest {
         Files.writeString(cwd.resolve(".pi-java").resolve("mcp.json"),
                 "{ \"mcpServers\": { \"files\": { \"enabled\": false, \"exposure\": \"direct\" } } }",
                 StandardCharsets.UTF_8);
+        // 批 23（T3，裁决②③）：项目 mcp.json 走信任门——已存决策（trust.json）
+        // 才生效（pi useSavedProjectTrustOnly 臂；旧 ask⇒信任 已随换代移除）。
+        new com.pijava.coding.agent.core.ProjectTrustStore(agentDir).set(cwd, true);
 
         run("list");
         assertThat(out).anyMatch(line -> line.startsWith("  project override: "));

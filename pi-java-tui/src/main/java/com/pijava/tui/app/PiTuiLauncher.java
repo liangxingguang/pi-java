@@ -49,7 +49,10 @@ public final class PiTuiLauncher {
                     : s.services().settings().accessors().getExternalEditorCommand();
             });
         var extensionUI = new TuiExtensionUI(extensionUiHost);
-        var session = AgentSession.create(args, extensionUI, "tui");
+        // 批 23（docs/34 T3）：启动信任弹窗缝——pi 的 interactive 信任提示
+        //（project-trust.ts 弹窗臂）在会话装配期经启动壳弹出（先于聊天 UI）。
+        var session = AgentSession.create(args, extensionUI, "tui",
+            TrustPromptRunner::prompt);
         sessionRef.set(session);
         var mode = new InteractiveMode(session);
         // Windows Terminal/ConPTY send about one raw event per wheel notch

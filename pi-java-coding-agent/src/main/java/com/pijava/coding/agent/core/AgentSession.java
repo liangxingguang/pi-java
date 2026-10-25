@@ -193,6 +193,16 @@ public final class AgentSession implements AutoCloseable {
     /** T5b（裁决④）：扩展注册的 provider 名集（loadExtensions 按 diff 簿记，reload 快照保留）。 */
     private java.util.Set<String> extensionProviderNames = java.util.Set.of();
 
+    /**
+     * 批 23（T3）：信任解析告警并入启动诊断（pi {@code projectTrustDiagnostics}
+     * 对位——main.ts:773 的 warning 收集）。
+     */
+    private static void attachTrustWarnings(AgentSession session, java.util.List<String> warnings) {
+        for (var warning : warnings) {
+            session.startupDiagnostics.add(new Args.ArgDiagnostic("warning", warning));
+        }
+    }
+
     private AgentSession(AgentHarness harness, SessionServices services,
                          Args args, String name) {
         this.harness = harness;
@@ -205,6 +215,9 @@ public final class AgentSession implements AutoCloseable {
     /** Web 默认入口：恢复最近一个持久会话，仅当无会话时新建（刷新/重连不丢历史）。 */
     public static AgentSession createWeb(Args args) {
         var settings = SettingsManager.load(args.projectTrustOverride());
+        // 批 23（T3）：信任七级链先于 settings 消费（pi main.ts:740-777 序对位）；
+        // web 无弹窗（prompter null＝pi 无 UI 臂）。
+        var trustWarnings = ProjectTrustSetup.apply(args, settings, null);
         var effective = settings.effective();
         var backend = effective.sessionBackend == null ? "jsonl" : effective.sessionBackend;
         var sessionsRoot = Path.of(args.sessionDir() != null ? args.sessionDir()
@@ -225,7 +238,9 @@ public final class AgentSession implements AutoCloseable {
             // 前查 latest 等价（裁决⑥：resume 存量会话时不应用 scoped 初始模型）。
             handle.latest(System.getProperty("user.dir")).isPresent());
         session.persistentRepository = handle;
-        return SessionPersistence.resolvePersistentWeb(session, args);
+        var resolved = SessionPersistence.resolvePersistentWeb(session, args);
+        attachTrustWarnings(resolved, trustWarnings);
+        return resolved;
     }
 
     /**
@@ -241,6 +256,8 @@ public final class AgentSession implements AutoCloseable {
     static AgentSession createWeb(Args args, ProviderRegistry providers,
                                   ToolContext toolContext) {
         var settings = SettingsManager.load(args.projectTrustOverride());
+        // 批 23（T3）：信任七级链先于 settings 消费（cwd 取 settings 存储面项目目录）。
+        var trustWarnings = ProjectTrustSetup.apply(args, settings, null);
         var effective = settings.effective();
         var backend = effective.sessionBackend == null ? "jsonl" : effective.sessionBackend;
         var sessionsRoot = Path.of(args.sessionDir() != null ? args.sessionDir()
@@ -253,7 +270,9 @@ public final class AgentSession implements AutoCloseable {
             handle, handle.repository(),
             handle.latest(System.getProperty("user.dir")).isPresent());
         session.persistentRepository = handle;
-        return SessionPersistence.resolvePersistentWeb(session, args);
+        var resolvedWeb = SessionPersistence.resolvePersistentWeb(session, args);
+        attachTrustWarnings(resolvedWeb, trustWarnings);
+        return resolvedWeb;
     }
 
     public static AgentSession create(Args args) {
@@ -269,12 +288,25 @@ public final class AgentSession implements AutoCloseable {
      * @param mode pi {@code ExtensionMode}（{@code "tui"} 等；null ⇒ "print"）
      */
     public static AgentSession create(Args args, ExtensionUI ui, String mode) {
-        return create(args, null, ui, mode);
+        return create(args, null, ui, mode, null);
+    }
+
+    /**
+     * 批 23（docs/34 T3）：带信任弹窗缝的 TUI 入口——pi 的 interactive 启动
+     * 信任提示（project-trust.ts 弹窗臂）经 {@code prompter} 注入；其余模式
+     * 传 {@code null}（＝pi 无 UI 恒 false 臂）。
+     */
+    public static AgentSession create(Args args, ExtensionUI ui, String mode,
+                                      ProjectTrustPrompter prompter) {
+        return create(args, null, ui, mode, prompter);
     }
 
     private static AgentSession create(Args args, SessionStartInfo startInfo,
-                                       ExtensionUI ui, String mode) {
+                                       ExtensionUI ui, String mode,
+                                       ProjectTrustPrompter prompter) {
         var settings = SettingsManager.load(args.projectTrustOverride());
+        // 批 23（T3）：信任七级链先于 settings 消费（pi main.ts:740-777 序对位）。
+        var trustWarnings = ProjectTrustSetup.apply(args, settings, prompter);
         var effective = settings.effective();
         var backend = effective.sessionBackend == null ? "jsonl" : effective.sessionBackend;
         var sessionsRoot = Path.of(args.sessionDir() != null ? args.sessionDir()
@@ -283,13 +315,15 @@ public final class AgentSession implements AutoCloseable {
         var handle = "sqlite".equals(backend)
             ? PersistentSessionRepositories.sqlite(sessionsRoot)
             : PersistentSessionRepositories.jsonl(sessionsRoot);
-        return create(args, handle, DefaultProviders.defaultProviders(effective.catalogBaseUrl),
+        var session = create(args, handle, DefaultProviders.defaultProviders(effective.catalogBaseUrl),
             new ToolContext(
                 System.getProperty("user.dir"),
                 Map.of(),
                 new DefaultShellExecutor(effective.shellPath),
                 new DefaultFileSystem()),
             settings, startInfo, ui, mode);
+        attachTrustWarnings(session, trustWarnings);
+        return session;
     }
 
     /**
@@ -320,6 +354,9 @@ public final class AgentSession implements AutoCloseable {
     private static AgentSession create(Args args, SessionStartInfo startInfo,
                                        String parentSessionId) {
         var settings = SettingsManager.load(args.projectTrustOverride());
+        // 批 23（T3）：替换式新建经 cwd 缓存短路（pi projectTrustByCwd——
+        // /new 不重问）；缓存未中走完整七级链（无弹窗缝——初始装配已问过）。
+        var trustWarnings = ProjectTrustSetup.apply(args, settings, null);
         var effective = settings.effective();
         var backend = effective.sessionBackend == null ? "jsonl" : effective.sessionBackend;
         var sessionsRoot = Path.of(args.sessionDir() != null ? args.sessionDir()
@@ -328,26 +365,31 @@ public final class AgentSession implements AutoCloseable {
         var handle = "sqlite".equals(backend)
             ? PersistentSessionRepositories.sqlite(sessionsRoot)
             : PersistentSessionRepositories.jsonl(sessionsRoot);
-        return create(args, handle, DefaultProviders.defaultProviders(effective.catalogBaseUrl),
+        var session = create(args, handle, DefaultProviders.defaultProviders(effective.catalogBaseUrl),
             new ToolContext(
                 System.getProperty("user.dir"),
                 Map.of(),
                 new DefaultShellExecutor(effective.shellPath),
                 new DefaultFileSystem()),
             settings, startInfo, parentSessionId);
+        attachTrustWarnings(session, trustWarnings);
+        return session;
     }
 
     /** Assemble a session against a specific in-memory repository (tests). */
     static AgentSession create(Args args, InMemorySessionRepository repository) {
         var settings = SettingsManager.load(args.projectTrustOverride());
+        var trustWarnings = ProjectTrustSetup.apply(args, settings, null);
         var effective = settings.effective();
-        return create(args, repository, DefaultProviders.defaultProviders(effective.catalogBaseUrl),
+        var session = create(args, repository, DefaultProviders.defaultProviders(effective.catalogBaseUrl),
             new ToolContext(
                 System.getProperty("user.dir"),
                 Map.of(),
                 new DefaultShellExecutor(effective.shellPath),
                 new DefaultFileSystem()),
             settings);
+        attachTrustWarnings(session, trustWarnings);
+        return session;
     }
 
     /** Create with injected providers and tool context (RPC/testing). */
@@ -360,8 +402,12 @@ public final class AgentSession implements AutoCloseable {
     static AgentSession create(Args args, InMemorySessionRepository repository,
                                ProviderRegistry providers,
                                ToolContext toolContext) {
-        return create(args, repository, providers, toolContext,
-            SettingsManager.load(args.projectTrustOverride()));
+        var settings = SettingsManager.load(args.projectTrustOverride());
+        // 批 23（T3）：信任链用注入 ToolContext 的 cwd（夹具 temp 目录）。
+        var trustWarnings = ProjectTrustSetup.apply(args, settings, null);
+        var session = create(args, repository, providers, toolContext, settings);
+        attachTrustWarnings(session, trustWarnings);
+        return session;
     }
     /** 批 16（T5/T6 夹具缝）：注入 settings 的 in-memory 形态（防真 home 继承坑）。 */
     static AgentSession create(Args args, InMemorySessionRepository repository,
@@ -535,7 +581,12 @@ public final class AgentSession implements AutoCloseable {
         promptTemplates.registerAll(SessionSetup.loadPromptTemplates(args, resolveAssembly));
         var services = new SessionServices(
             settings,
-            new TrustManager(effective.defaultProjectTrust),
+            // 批 23（T3，裁决②）：pi ProjectTrustStore 对位——trust.json 落
+            // agentDir（存储面可取则随其根，否则默认 agentDir）。
+            new ProjectTrustStore(
+                settings.storage() instanceof FileSettingsStorage files
+                    ? files.globalPath().getParent()
+                    : FileSettingsStorage.defaultAgentDir()),
             providers,
             models,
             tools,

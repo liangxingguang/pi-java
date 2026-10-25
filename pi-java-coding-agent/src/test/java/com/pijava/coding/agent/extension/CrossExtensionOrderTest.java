@@ -15,7 +15,7 @@ import com.pijava.ai.provider.ProviderRegistry;
 import com.pijava.ai.provider.builtin.ProviderCatalog;
 import com.pijava.coding.agent.core.SessionServices;
 import com.pijava.coding.agent.core.SettingsManager;
-import com.pijava.coding.agent.core.TrustManager;
+import com.pijava.coding.agent.core.ProjectTrustStore;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.AgentStartEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEventSpec;
@@ -101,7 +101,7 @@ class CrossExtensionOrderTest {
         var providers = ProviderRegistry.create();
         var services = new SessionServices(
             SettingsManager.load(null),
-            new TrustManager("none"),
+            new ProjectTrustStore(java.nio.file.Path.of(System.getProperty("java.io.tmpdir"), "pi-java-test-trust")),
             providers,
             new DefaultModelResolver(ProviderCatalog.allModels()),
             new ToolRegistry(null), CommandRegistry.withBuiltins(),

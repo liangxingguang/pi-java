@@ -243,6 +243,15 @@ public final class ExtensionEventSpec<E extends ExtensionEvent, R> {
     public static final ExtensionEventSpec<ExtensionEvent.McpServersChangeEvent, Void>
         MCP_SERVERS_CHANGE = new ExtensionEventSpec<>("mcp_servers_change");
 
+    /**
+     * 批 23（T3）：pi {@code "project_trust"}（types.ts:1569 订阅口，结果型）——
+     * first-wins：首个返回非 {@code UNDECIDED} 的处理器胜出
+     * （runner.ts:292-320）；全部 undecided/出错 ⇒ 结果缺席。
+     */
+    public static final ExtensionEventSpec<ExtensionEvent.ProjectTrustEvent,
+        ExtensionResults.ProjectTrustEventResult>
+        PROJECT_TRUST = new ExtensionEventSpec<>("project_trust");
+
     private final String name;
 
     private ExtensionEventSpec(String name) {

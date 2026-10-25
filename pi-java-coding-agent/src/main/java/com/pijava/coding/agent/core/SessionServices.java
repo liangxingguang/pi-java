@@ -17,7 +17,9 @@ import com.pijava.coding.agent.prompt.PromptTemplateRegistry;
  * phases (InMemorySessionRepository and the harness internals cover Phase 3).</p>
  *
  * @param settings          global + project settings manager
- * @param trust             project trust decisions
+ * @param trust             批 23（docs/34 T3，裁决②）：项目信任存储
+ *                          （{@code <agentDir>/trust.json}，pi ProjectTrustStore 对位；
+ *                          旧 TrustManager 标记文件已随换代删除）
  * @param providers         registered LLM providers
  * @param models            model catalog resolver
  * @param tools             tool registry (active tools registered on the harness)
@@ -27,7 +29,7 @@ import com.pijava.coding.agent.prompt.PromptTemplateRegistry;
  */
 public record SessionServices(
     SettingsManager settings,
-    TrustManager trust,
+    ProjectTrustStore trust,
     ProviderRegistry providers,
     ModelResolver models,
     ToolRegistry tools,

@@ -115,6 +115,41 @@ public final class SessionEventFirer {
     }
 
     /**
+     * 批 23（docs/34 T3）：pi {@code emitProjectTrustEvent}（runner.ts:292-320
+     * 逐字）——first-wins：按注册序逐个问，首个返回非 {@code UNDECIDED} 的处理器
+     * 短路胜出；处理器抛错只进 errors 不中断（pi 同——含返回 null 触发的
+     * NPE，对位 pi 的 {@code undefined.trusted} TypeError）；全部 undecided ⇒
+     * 结果缺席。errors 由调用方格式化上报（pi project-trust.ts:60-63）。
+     */
+    public ProjectTrustOutcome projectTrust(String cwd) {
+        var errors = new ArrayList<ExtensionError>();
+        if (!bus.hasHandlers(ExtensionEventSpec.PROJECT_TRUST)) {
+            return new ProjectTrustOutcome(Optional.empty(), errors);
+        }
+        var event = new ExtensionEvent.ProjectTrustEvent(cwd);
+        for (var h : bus.snapshot(ExtensionEventSpec.PROJECT_TRUST)) {
+            try {
+                var r = h.handle(event, ctx);
+                if (r.trusted()
+                        == com.pijava.coding.agent.extension.event.ExtensionResults
+                            .TrustDecision.UNDECIDED) {
+                    continue;
+                }
+                return new ProjectTrustOutcome(Optional.of(r), errors);
+            } catch (Throwable e) {
+                errors.add(h.error(e));
+            }
+        }
+        return new ProjectTrustOutcome(Optional.empty(), errors);
+    }
+
+    /** pi {@code emitProjectTrustEvent} 的返回形（{@code {result?, errors}}）。 */
+    public record ProjectTrustOutcome(
+            Optional<com.pijava.coding.agent.extension.event.ExtensionResults
+                .ProjectTrustEventResult> result,
+            List<ExtensionError> errors) {}
+
+    /**
      * 批 23（docs/34 T2）：pi runner.ts:457-461 的 changeListener 发射——
      * 注册表变更后广播 {@code mcp_servers_change}，载荷为变更后<b>全量</b>列表。
      * 观察型：逐处理器 catch ⇒ emitError ⇒ 继续（生命周期族同纪律）。

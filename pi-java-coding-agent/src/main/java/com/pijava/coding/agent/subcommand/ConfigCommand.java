@@ -9,7 +9,7 @@ import com.pijava.coding.agent.core.FileSettingsStorage;
 import com.pijava.coding.agent.core.PackageManagers;
 import com.pijava.coding.agent.core.Settings;
 import com.pijava.coding.agent.core.SettingsManager;
-import com.pijava.coding.agent.core.TrustManager;
+import com.pijava.coding.agent.core.ProjectTrustStore;
 import com.pijava.coding.agent.spi.ConfigSelectorProvider;
 import com.pijava.coding.agent.spi.ScopedResolvedPaths;
 
@@ -35,13 +35,14 @@ public final class ConfigCommand {
 
     private ConfigCommand() {}
 
-    /** 环境注入缝（测试重定向 settings/信任根/cwd/agentDir/homeDir/TUI）。 */
-    record ConfigEnv(SettingsManager manager, Path trustRoot, Path cwd, Path agentDir,
-            Path homeDir, ConfigSelectorProvider tui) {
+    /** 环境注入缝（测试重定向 settings/信任存储/cwd/agentDir/homeDir/TUI）。 */
+    record ConfigEnv(SettingsManager manager, ProjectTrustStore trustStore, Path cwd,
+            Path agentDir, Path homeDir, ConfigSelectorProvider tui) {
         static ConfigEnv system() {
-            return new ConfigEnv(SettingsManager.load(null), TrustManager.defaultRoot(),
+            var agentDir = FileSettingsStorage.defaultAgentDir();
+            return new ConfigEnv(SettingsManager.load(null), new ProjectTrustStore(agentDir),
                 Path.of(System.getProperty("user.dir")),
-                FileSettingsStorage.defaultAgentDir(),
+                agentDir,
                 Path.of(com.pijava.coding.agent.pkg.PackageAutoDiscovery.getHomeDir()),
                 ServiceLoader.load(ConfigSelectorProvider.class).findFirst().orElse(null));
         }
@@ -117,10 +118,10 @@ public final class ConfigCommand {
 
     private static int openTui(ConfigEnv env, boolean local, Boolean trustOverride) {
         var manager = env.manager();
-        // D114：override 优先，否则按已存信任标记判定（无交互询问臂）。
+        // D114：override 优先，否则按已存信任判定（无交互询问臂）。批 23（T3，
+        // 裁决②）：trust.json 最近祖先读（pi useSavedProjectTrustOnly 臂对位）。
         manager.setProjectTrusted(trustOverride != null ? trustOverride
-            : new TrustManager(env.trustRoot(), manager.effective().defaultProjectTrust)
-                .isTrusted(env.cwd()));
+            : Boolean.TRUE.equals(env.trustStore().get(env.cwd())));
         if (local && !manager.isProjectTrusted()) {
             // pi :859 逐字（resource config 文案）。
             System.err.println(
@@ -164,8 +165,7 @@ public final class ConfigCommand {
         var manager = env.manager();
         if (local) {
             manager.setProjectTrusted(trustOverride != null ? trustOverride
-                : new TrustManager(env.trustRoot(), manager.effective().defaultProjectTrust)
-                    .isTrusted(env.cwd()));
+                : Boolean.TRUE.equals(env.trustStore().get(env.cwd())));
             if (!manager.isProjectTrusted()) {
                 System.err.println(
                     "Project is not trusted. Use --approve to modify local resource config.");

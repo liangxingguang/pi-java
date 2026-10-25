@@ -188,4 +188,20 @@ public final class ExtensionResults {
      */
     public record CacheWarmingDecisionEventResult(
             com.pijava.coding.agent.core.CacheWarming.Action action) {}
+
+    // ═══════════════════════════════════════════════════════════
+    // 批 23（docs/34 T3）：project_trust 族（pi types.ts:685-700）
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * pi {@code ProjectTrustEventDecision}（types.ts:691）——三态字面量闭集
+     * （{@code "yes"|"no"|"undecided"}；内部类型，不上线）。
+     */
+    public enum TrustDecision { YES, NO, UNDECIDED }
+
+    /**
+     * pi {@code ProjectTrustEventResult}（types.ts:693-696）——{@code remember=true}
+     * 时定夺落 trust.json（{@code remember} 缺席/false 仅本会话生效）。
+     */
+    public record ProjectTrustEventResult(TrustDecision trusted, Boolean remember) {}
 }

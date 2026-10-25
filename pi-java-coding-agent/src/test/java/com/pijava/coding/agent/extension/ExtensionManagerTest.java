@@ -16,7 +16,7 @@ import com.pijava.ai.provider.builtin.ProviderCatalog;
 import com.pijava.ai.provider.ProviderRegistry;
 import com.pijava.coding.agent.core.SessionServices;
 import com.pijava.coding.agent.core.SettingsManager;
-import com.pijava.coding.agent.core.TrustManager;
+import com.pijava.coding.agent.core.ProjectTrustStore;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
 import com.pijava.coding.agent.prompt.PromptTemplateRegistry;
 
@@ -87,7 +87,7 @@ class ExtensionManagerTest {
         var commands = CommandRegistry.withBuiltins();
         var services = new SessionServices(
             SettingsManager.load(null),
-            new TrustManager("none"),
+            new ProjectTrustStore(java.nio.file.Path.of(System.getProperty("java.io.tmpdir"), "pi-java-test-trust")),
             providers,
             new DefaultModelResolver(ProviderCatalog.allModels()),
             tools, commands, new MemorySessionRepository(),

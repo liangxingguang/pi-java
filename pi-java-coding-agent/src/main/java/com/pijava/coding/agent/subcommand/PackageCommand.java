@@ -14,7 +14,6 @@ import com.pijava.coding.agent.core.FileSettingsStorage;
 import com.pijava.coding.agent.core.ModelCatalogRefresh;
 import com.pijava.coding.agent.core.PackageManagers;
 import com.pijava.coding.agent.core.SettingsManager;
-import com.pijava.coding.agent.core.TrustManager;
 import com.pijava.coding.agent.pkg.ConfiguredPackage;
 import com.pijava.coding.agent.pkg.PackageManager;
 import com.pijava.coding.agent.pkg.ProgressEvent;
@@ -53,11 +52,14 @@ public final class PackageCommand {
             Boolean projectTrustOverride, boolean help, String invalidOption,
             String invalidArgument, String missingOptionValue, String conflictingOptions) {}
 
-    /** 环境注入缝（测试重定向 cwd/agentDir/信任根/模型刷新）。 */
-    record CliEnv(Path cwd, Path agentDir, Path trustRoot, ModelsRefresher modelsRefresher) {
+    /** 环境注入缝（测试重定向 cwd/agentDir/信任存储/模型刷新）。 */
+    record CliEnv(Path cwd, Path agentDir,
+            com.pijava.coding.agent.core.ProjectTrustStore trustStore,
+            ModelsRefresher modelsRefresher) {
         static CliEnv system() {
+            var agentDir = FileSettingsStorage.defaultAgentDir();
             return new CliEnv(Path.of(System.getProperty("user.dir")),
-                FileSettingsStorage.defaultAgentDir(), TrustManager.defaultRoot(),
+                agentDir, new com.pijava.coding.agent.core.ProjectTrustStore(agentDir),
                 PackageCommand::refreshModelCatalogs);
         }
     }
@@ -125,9 +127,11 @@ public final class PackageCommand {
         var settings = SettingsManager.load(env.agentDir(), env.cwd(),
             options.projectTrustOverride());
         if (options.projectTrustOverride() == null) {
-            // D114：非交互 CLI 无询问臂，直接按已存信任（TrustManager 标记）判定。
-            settings.setProjectTrusted(new TrustManager(env.trustRoot(),
-                settings.effective().defaultProjectTrust).isTrusted(env.cwd()));
+            // D114：非交互 CLI 无询问臂——按已存信任判定。批 23（T3，裁决②）：
+            // trust.json 存储（pi package-manager-cli 的 useSavedProjectTrustOnly
+            // 臂对位——只读已存决策，不看默认策略）。
+            settings.setProjectTrusted(
+                Boolean.TRUE.equals(env.trustStore().get(env.cwd())));
         }
         var writesProjectPackageConfig =
             ("install".equals(options.command()) || "remove".equals(options.command()))

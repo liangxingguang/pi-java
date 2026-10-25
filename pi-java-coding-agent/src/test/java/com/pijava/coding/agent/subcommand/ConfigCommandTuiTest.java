@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.pijava.coding.agent.core.FileSettingsStorage;
 import com.pijava.coding.agent.core.SettingsManager;
-import com.pijava.coding.agent.core.TrustManager;
+import com.pijava.coding.agent.core.ProjectTrustStore;
 import com.pijava.coding.agent.spi.ConfigSelectorProvider;
 import com.pijava.coding.agent.spi.ScopedResolvedPaths;
 
@@ -85,7 +85,7 @@ class ConfigCommandTuiTest {
 
     private ConfigCommand.ConfigEnv env(ConfigSelectorProvider tui) {
         var manager = SettingsManager.withStorage(new FileSettingsStorage(agentDir, cwd));
-        return new ConfigCommand.ConfigEnv(manager, trustRoot, cwd, agentDir, homeDir, tui);
+        return new ConfigCommand.ConfigEnv(manager, new ProjectTrustStore(trustRoot), cwd, agentDir, homeDir, tui);
     }
 
     private void seedResources() throws IOException {
@@ -101,7 +101,7 @@ class ConfigCommandTuiTest {
     @Test
     void doubleResolveTrustedProjectGetsOwnCopy() throws IOException {
         seedResources();
-        new TrustManager(trustRoot, null).trust(cwd, true);
+        new ProjectTrustStore(trustRoot).set(cwd, true);
         var paths = new AtomicReference<ScopedResolvedPaths>();
         var available = new AtomicReference<Boolean>();
         var scope = new AtomicReference<ConfigSelectorProvider.WriteScope>();
