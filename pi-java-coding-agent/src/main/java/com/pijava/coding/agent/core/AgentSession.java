@@ -51,6 +51,8 @@ import com.pijava.agent.tool.DefaultFileSystem;
 import com.pijava.agent.tool.DefaultShellExecutor;
 import com.pijava.agent.tool.ShellOptions;
 
+import com.pijava.coding.agent.core.slash.SlashCommand;
+import com.pijava.coding.agent.core.slash.SlashContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.pijava.agent.tool.ShellResult;
@@ -211,8 +213,7 @@ public final class AgentSession implements AutoCloseable {
         this.name = name;
     }
 
-    /** Assemble from CLI args with the configured persistent backend. */
-    /** Web 默认入口：恢复最近一个持久会话，仅当无会话时新建（刷新/重连不丢历史）。 */
+	/** Web 默认入口：恢复最近一个持久会话，仅当无会话时新建（刷新/重连不丢历史）。 */
     public static AgentSession createWeb(Args args) {
         var settings = SettingsManager.load(args.projectTrustOverride());
         // 批 23（T3）：信任七级链先于 settings 消费（pi main.ts:740-777 序对位）；
@@ -583,10 +584,7 @@ public final class AgentSession implements AutoCloseable {
             settings,
             // 批 23（T3，裁决②）：pi ProjectTrustStore 对位——trust.json 落
             // agentDir（存储面可取则随其根，否则默认 agentDir）。
-            new ProjectTrustStore(
-                settings.storage() instanceof FileSettingsStorage files
-                    ? files.globalPath().getParent()
-                    : FileSettingsStorage.defaultAgentDir()),
+            ProjectTrustStore.forSettings(settings),
             providers,
             models,
             tools,
@@ -869,20 +867,20 @@ public final class AgentSession implements AutoCloseable {
         agentSession.modelResolver = models;
         agentSession.branchSummarization = new BranchSummarization(
             new LlmSummaryGenerator(recordingStreamFn,
-                () -> agentSession.harness.getModel(),
+					agentSession.harness::getModel,
                 retrySettings, retryAborted, retryObserver,
                 () -> models.maxOutputTokens(agentSession.harness.getModel()),
-                () -> agentSession.harness.getThinkingLevel(),
+					agentSession.harness::getThinkingLevel,
                 models::supportsThinking));
         // 批 15（T3b）：bug 摘要生成器——与分支摘要同源的 StreamFn/retry 环
         //（pi agent-session.ts:4322 的 _getSummarizationRequestAuth 对位：
         // auth 参在 java 由 streamFn 车道自取）。
         agentSession.bugReportSummarizer = new com.pijava.coding.agent.core.bugreport
             .BugReportSummarizer(new LlmSummaryGenerator(recordingStreamFn,
-                () -> agentSession.harness.getModel(),
+				agentSession.harness::getModel,
                 retrySettings, retryAborted, retryObserver,
                 () -> models.maxOutputTokens(agentSession.harness.getModel()),
-                () -> agentSession.harness.getThinkingLevel(),
+				agentSession.harness::getThinkingLevel,
                 models::supportsThinking));
         agentSession.baseToolContext = toolContext;
         agentSession.resolveAssembly = resolveAssembly;
@@ -1455,8 +1453,7 @@ public final class AgentSession implements AutoCloseable {
             if (!entries.isEmpty()) {
                 return entries;
             }
-            LOG.debug("[session] accumulatedEntries: storage empty ({} entries), falling back to harness recent",
-                entries.size());
+            LOG.debug("[session] accumulatedEntries: storage empty ({} entries), falling back to harness recent", 0);
         } else {
             LOG.warn("[session] accumulatedEntries: persistent session is null, using harness recent");
         }
@@ -2277,7 +2274,7 @@ public final class AgentSession implements AutoCloseable {
             messageCount = (int) opened.getStats().messageCount();
             var first = opened.findEntries(
                 new EntryQuery("message", null, EntryOrder.OLDEST_FIRST, 1, null));
-            if (!first.isEmpty() && first.get(0) instanceof Entry.Message m
+            if (!first.isEmpty() && first.getFirst() instanceof Entry.Message m
                     && m.message() != null) {
                 firstMessage = firstMessageText(m.message());
             }
@@ -2604,7 +2601,7 @@ public final class AgentSession implements AutoCloseable {
      * {@link AgentSessionEvent.EntryAppended} 广播 ⇒ 落盘。收口样板照
      * {@link #appendUsage}。
      */
-    public Entry.Custom appendCustomEntry(String customType, java.util.Map<String, Object> data) {
+    public void appendCustomEntry(String customType, Map<String, Object> data) {
         var entry = harness.appendDeferredLaneEntry(laneName(),
             (seq, parentId) -> new Entry.Custom(
                 java.util.UUID.randomUUID().toString(), seq, parentId,
@@ -2613,8 +2610,7 @@ public final class AgentSession implements AutoCloseable {
         if (session != null) {
             SessionPersistence.persistPending(this, session, laneName());
         }
-        return entry;
-    }
+	}
 
     /** 批 13（T6）：当前叶 id——{@code CacheWarmer.SessionAccess.getBranch} 的操作数。 */
     String currentLeafId() {
@@ -2936,7 +2932,7 @@ public final class AgentSession implements AutoCloseable {
             owner.cacheWarmingBridge.install(bus, context);
         }
         // session 由 SessionPersistence 稍后赋值，惰性求值绑定供 sendMessage 落盘用。
-        context.bindSession(() -> owner.session());
+        context.bindSession(owner::session);
         var manager = new ExtensionManager(context);
         // 批 16（T2d/T5b）：加载前基线——diff 出扩展贡献的工具/provider 名。
         var baselineToolNames = new java.util.HashSet<>(services.tools().toolNames());

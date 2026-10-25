@@ -76,12 +76,11 @@ public final class SettingsManager {
             return override;
         }
         if (manager.storage() instanceof FileSettingsStorage files) {
-            var globalPath = files.globalPath();
             var projectPath = files.projectPath();
-            if (globalPath != null && projectPath != null
-                    && projectPath.getParent() != null) {
-                var saved = new ProjectTrustStore(globalPath.getParent())
-                    .get(projectPath.getParent().getParent());
+            var projectConfigDir = projectPath == null ? null : projectPath.getParent();
+            var projectDir = projectConfigDir == null ? null : projectConfigDir.getParent();
+            if (projectDir != null) {
+                var saved = ProjectTrustStore.forSettings(manager).get(projectDir);
                 return Boolean.TRUE.equals(saved);
             }
         }

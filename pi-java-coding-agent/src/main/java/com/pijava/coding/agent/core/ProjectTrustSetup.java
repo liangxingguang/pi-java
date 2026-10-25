@@ -61,14 +61,18 @@ public final class ProjectTrustSetup {
     public static List<String> apply(Args args, SettingsManager settings,
                                      ProjectTrustPrompter prompter) {
         var warnings = new ArrayList<String>();
-        Path cwd;
-        Path agentDir;
+        Path cwd = Path.of(System.getProperty("user.dir"));
+        Path agentDir = FileSettingsStorage.defaultAgentDir();
         if (settings.storage() instanceof FileSettingsStorage files) {
-            agentDir = files.globalPath().getParent();
-            cwd = files.projectPath().getParent().getParent();
-        } else {
-            agentDir = FileSettingsStorage.defaultAgentDir();
-            cwd = Path.of(System.getProperty("user.dir"));
+            var globalPath = files.globalPath();
+            var projectPath = files.projectPath();
+            var globalParent = globalPath == null ? null : globalPath.getParent();
+            var projectConfigDir = projectPath == null ? null : projectPath.getParent();
+            var projectDir = projectConfigDir == null ? null : projectConfigDir.getParent();
+            if (globalParent != null && projectDir != null) {
+                agentDir = globalParent;
+                cwd = projectDir;
+            }
         }
         var store = new ProjectTrustStore(agentDir);
         var cacheKey = ProjectTrustStore.normalizeCwd(cwd);

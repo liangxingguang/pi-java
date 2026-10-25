@@ -46,11 +46,25 @@ public final class ProjectTrustStore {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    private final Path trustDir;
     private final Path trustPath;
 
     /** @param agentDir 全局 agent 目录（{@code trust.json} 落其下，pi :214）。 */
     public ProjectTrustStore(Path agentDir) {
-        this.trustPath = agentDir.toAbsolutePath().normalize().resolve("trust.json");
+        this.trustDir = agentDir.toAbsolutePath().normalize();
+        this.trustPath = trustDir.resolve("trust.json");
+    }
+
+    /** 从 settings 存储面取 agentDir 建仓（仅 {@link FileSettingsStorage} 携带目录）。 */
+    public static ProjectTrustStore forSettings(SettingsManager settings) {
+        if (settings.storage() instanceof FileSettingsStorage files) {
+            var globalPath = files.globalPath();
+            var parent = globalPath == null ? null : globalPath.getParent();
+            if (parent != null) {
+                return new ProjectTrustStore(parent);
+            }
+        }
+        return new ProjectTrustStore(FileSettingsStorage.defaultAgentDir());
     }
 
     /** 测试/诊断用：存储文件路径。 */
@@ -168,7 +182,7 @@ public final class ProjectTrustStore {
                     .append(": ").append(entry.getValue());
             }
             json.append(sorted.isEmpty() ? "}" : "\n}").append("\n");
-            Files.createDirectories(trustPath.getParent());
+            Files.createDirectories(trustDir);
             Files.writeString(trustPath, json.toString(), StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         } catch (IOException e) {
@@ -179,7 +193,7 @@ public final class ProjectTrustStore {
     /** pi {@code withTrustFileLock}（:173-177）：整段读写跑在 trust.json.lock 文件锁内。 */
     private <T> T locked(java.util.function.Supplier<T> body) {
         try {
-            Files.createDirectories(trustPath.getParent());
+            Files.createDirectories(trustDir);
             try (var channel = FileChannel.open(lockPath(),
                     StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                     var lock = lock(channel)) {
