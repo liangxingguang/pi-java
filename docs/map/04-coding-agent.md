@@ -108,13 +108,14 @@ pi `main.ts:617`（`mcp`）＋ `handlePackageCommand`/`handleConfigCommand`/`run
 | 1 | `install <source> [-l]` | ✅ | ✅ `PackageCommand.java`（pkg 面） | 2 | **对齐** | **批 19（2026-10-24，docs/30 T4）**：npm/git/local 三源分派逐字＋写回链；http(s) URL 按 git 源解析（旧 JAR 下载臂删，裁决④） |
 | 2 | `remove <source> [-l]` | ✅ | ✅ `PackageCommand.java` | 2 | **对齐** | **批 19**：npm 目录删除（D113）／git removeGit／local 无 fs 动作；`No matching package found for` 逐字 |
 | 3 | `uninstall <source>`（别名） | ✅ | ✅ `SubcommandHandler.java:41` | 1 | 对齐 | |
-| 4 | `update [source\|self\|pi]` | ✅ `package-manager-cli.ts:449/458` | ⚠️ `PackageCommand.java` | 2 | **存疑** | **批 19**：`--extensions`（update 机制）＋`--models`（15s 短路臂）落地；**self 恒走不可用说明臂＋exit 1**（裁决②/D115，java 无安装形态，真实通道挂 R29/序 21）——三面缺其一 |
+| 4 | `update [source\|self\|pi]` | ✅ `package-manager-cli.ts:449/458` | ✅ `PackageCommand.java` | 2 | **对齐** | **批 19**：`--extensions`（update 机制）＋`--models`（15s 短路臂）落地；self 恒不可用臂＋exit 1。**批 22（docs/33 T2，裁决①）终裁**：java 无 npm/managed 分发形态 ⇒ 恒不可用臂＝pi 未知形态臂终局（D115 保留） |
 | 5 | `list` | ✅ `package-manager-cli.ts:996` | ✅ `PackageCommand.java` | 2 | **对齐** | **批 19**：user/project 分组＋`(filtered)` 对象形标记＋installedPath 两行式逐字 |
 | 6 | `config [-l]` | ✅ `package-manager-cli.ts:813`（**TUI**） | ✅ `ConfigCommand.java`＋tui `ConfigSelectorComponent` | 2 | **对齐** | **批 19（T5+T6，裁决①全做）**：TUI 本体（双份 resolve／Tab 切域／三态覆写／搜索）＋`enable\|disable` 便利臂改 pi pattern 代数 |
 | 7 | `auth <cmd>` | ✅ check / print-api-key / print-bearer-token（`auth-command.ts:52-60`） | ✅ `AuthCommand.java:42-47` | 2 | 对齐 | java 是**超集**：多 `oauth-login`、`profile set/unset/list/set-key` |
 | 8 | `mcp` | ✅ `main.ts:617`（`extensions/mcp/cli.ts` 599 行） | ✅ `SubcommandHandler.java:44-47` | 2 | 对齐 | java 有 `pi mcp`（`subcommand/Mcp*`，1,193 行）；**子命令逐项判定与明细整体见 `map/07-mcp.md`，本图不展开** |
 
-**汇总（批 19 后）：对齐 7 / 缺失 0 / 存疑 1 / 合计 8 = 87.5%**；**Σ权重 15 / Σ(w×c) 14.0 / 加权 93.3%**
+**汇总（批 22 后）：对齐 8 / 缺失 0 / 存疑 0 / 合计 8 = 100%**；**Σ权重 15 / Σ(w×c) 15.0 / 加权 100%（第十二个满分域）**
+> 批 22（2026-10-25，docs/33）：#4 `update` 存疑⇒对齐（+1.0，自更新终裁裁决①，同 E6-10 一件两表投射）。Σ 14.0→**15.0/15 = 100%**。
 
 ---
 
@@ -500,7 +501,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | E6-7 | 资源优先级（5 档） | `package-manager.ts:171-184` | `PathMetadata.resourcePrecedenceRank` 逐字＋`PackageManager.toResolvedPaths`＋T6 会话装配消费 | 2 | **对齐** | **批 18（docs/29 T5/T6，裁决⑨：旧 USER→PROJECT 直扫退役，project 压 user 行为变化钉死）** |
 | E6-8 | 忽略文件 | `package-manager.ts:206` | `pkg/PackageIgnore.java`（三文件名＋拍平加前缀，JGit IgnoreNode 承载） | 1 | **对齐** | **批 18（docs/29 T5）**；窄差 D107 |
 | E6-9 | 进度回调 `onProgress` | `package-manager.ts:96` | `pkg/ProgressEvent.java`＋`ProgressCallback`＋`withProgress`（start/complete/error 三型发射） | 1 | **对齐** | **批 18（docs/29 T4/T5，裁决⑪口径：发射面齐即翻）**；**批 19**：CLI 消费面落（START 行 plain，D116）＋T7 启动更新通知第二消费者 |
-| E6-10 | `update self` / `update pi` | `package-manager-cli.ts:449`（self-update 执行段 `:218`）+ `utils/windows-self-update.ts`；本锚点新增旧版本清理 `pruneManagedReleases:137` | ⚠️ `PackageCommand` self 臂＝恒不可用说明＋exit 1（pi unknown 安装形态臂对位） | 2 | **存疑** | **批 19（docs/30 T4，裁决②/D115）**：java 无 npm/managed 安装形态 ⇒ 恒不可用臂；真实自更新通道挂 R29/序 21 终裁 |
+| E6-10 | `update self` / `update pi` | `package-manager-cli.ts:449`（self-update 执行段 `:218`）+ `utils/windows-self-update.ts`；本锚点新增旧版本清理 `pruneManagedReleases:137` | ⚠️ `PackageCommand` self 臂＝恒不可用说明＋exit 1（pi unknown 安装形态臂对位） | 2 | **对齐** | **批 22（docs/33 T2，裁决①）终裁**：pi-java 无 npm/managed 分发形态（本地构建/Native Image，无远程制品仓）⇒ pi 的未知形态臂即终局行为；npm/managed/pruneManagedReleases 永远不适用；D115 保留 |
 | E6-11 | `update --extensions` | `package-manager-cli.ts:449` | `pkg/PackageUpdater.java`（并发 4 闸/首错 detached/npm 分批/git pinned 参与）＋CLI 面 | 2 | **对齐** | **批 19（docs/30 T3/T4，裁决⑥）**；窄差 D113（npm 逐包顺装） |
 | E6-12 | `update --models`（模型目录刷新） | `package-manager-cli.ts:458` + `core/remote-catalog-provider.ts` | `PackageCommand` --models 短路臂（settings/trust 之前，15s 超时＋错误聚合逐字） | 1 | **对齐** | **批 19（docs/30 T4）**：`ModelCatalogRefresh` 缝复用（批 15 先例） |
 | E6-13 | `config` TUI（Tab 切作用域、逐资源开关） | `package-manager-cli.ts:813` + `config-selector.ts` | `core/ConfigResourceWriteBack.java`＋tui `ConfigSelectorComponent`/`ConfigSelectorModel`＋SPI 壳 | 2 | **对齐** | **批 19（docs/30 T5+T6，裁决①全做）**：双份 resolve／Tab 切域门／三态覆写真值表／搜索保头；java 独有 `enable\|disable` 便利臂保留（不计分母） |
@@ -508,7 +509,8 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | E6-15 | pi manifest 读取 | `core/pi-manifest.ts` | `pkg/PiManifest.java`（pi-manifest.ts 35 行逐字）＋`PackageResourceCollector` manifest 臂消费 | 2 | **对齐** | **批 19 终判（docs/30 §1.5）**：机制＋收集消费批 18 已落；pi `list` 无独立 manifest 标记（唯一标记＝`(filtered)` 对象形判定）⇒ 展示面无残件 |
 | E6-16 | `remove` / `uninstall` | `package-manager.ts:118` | `pkg/PackageManager.remove` 三臂＋`HttpNpmResolver.uninstall`（目录删除，D113）＋CLI 面 | 2 | **对齐** | **批 19（docs/30 T1/T4）** |
 
-**E6 汇总（批 19 后）：对齐 15 / 存疑 1 / 缺失 0 / 合计 16 = 93.8%**；**Σ权重 31 / Σ(w×c) 30.0 / 加权 96.8%**
+**E6 汇总（批 22 后）：对齐 16 / 存疑 0 / 缺失 0 / 合计 16 = 100%**；**Σ权重 31 / Σ(w×c) 31.0 / 加权 100%（第十一个满分域）**
+> 批 22（2026-10-25，docs/33）：E6-10 存疑⇒对齐（+1.0，自更新终裁裁决①——恒不可用臂＝pi 未知形态臂终局）。Σ 30.0→**31.0/31 = 100%**。
 
 ### E7 RPC 面（6）
 
@@ -647,7 +649,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|
 | A. CLI 参数 | 62 | 62.0 | 100% | 100% |
-| B. 子命令 | 15 | 14.0 | 93.3% | 87.5% |
+| B. 子命令 | 15 | 15.0 | 100% | 100% |
 | C. Slash 命令 | 38 | 34.5 | 90.7% | 80.0% |
 | D. 扩展系统 41 事件 | 83 | 79.0 | 95.2% | 95.1% |
 | D′. 扩展 UI 注入面 | 16 | 1.0 | 6.3% | 0% |
@@ -656,16 +658,16 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | E3. 会话管理行为 | 40 | 40.0 | 100% | 100% |
 | E4. 资源发现 | 14 | 14.0 | 100% | 100% |
 | E5. 扩展 API 面 | 58 | 23.5 | 40.5% | 31.4% |
-| E6. 包管理器 | 31 | 30.0 | 96.8% | 93.8% |
+| E6. 包管理器 | 31 | 31.0 | 100% | 100% |
 | E7. RPC 面 | 12 | 12.0 | 100% | 100% |
 | G. 主流新增子系统 | 18 | 7.0 | 38.9% | 30.0% |
 | F. 整块缺失（子系统） | 13 | 0.0 | 0% | 0% |
-| **模块合计（不含 E8）** | **494** | **409.0** | **82.8%** | **75.1%** |
+| **模块合计（不含 E8）** | **494** | **411.0** | **83.2%** | **75.8%** |
 | E8. 边缘/面外子系统（与 E3/C/G 重叠，不计入） | 7 | 5.0 | 71.4% | 66.7% |
 
-**模块合计**：Σ权重 494 ／ Σ(w×c) 409.0 ／ **加权完成度 = 409.0/494 ≈ 82.8%**（未加权 217.0/289 ≈ 75.1%；批 21 后值——按 Δ 续列：批 19 的 392.5＋批 20 4.0＋本批 12.5）。
+**模块合计**：Σ权重 494 ／ Σ(w×c) 411.0 ／ **加权完成度 = 411.0/494 ≈ 83.2%**（未加权 219.0/289 ≈ 75.8%；批 22 后值——按 Δ 续列：批 21 的 409.0＋本批 2.0）。
 
-**去重口径**（F 域有 2 行与 E4/E6 重叠＋G-1..G-5 归 map/07）：Σ权重 **485** ／ Σ(w×c) **404.5** ／ **加权完成度 = 404.5/485 ≈ 83.4%**（未加权 217.0/289 ≈ 75.1%）。
+**去重口径**（F 域有 2 行与 E4/E6 重叠＋G-1..G-5 归 map/07）：Σ权重 **485** ／ Σ(w×c) **406.5** ／ **加权完成度 = 406.5/485 ≈ 83.8%**（未加权 219.0/289 ≈ 75.8%）。
 > 口径注记（批 14）：A/E3 域行与未加权汇总表已逐行实算（含往批滞后收平：E2 对齐 44→46、E3 段汇总 27.5→28.5 的批 10 滞后）；模块加权合计按 Δ 续列，与逐行域和的 ±1.5 存量口径差随下次全量重测一并收平（批 4 同例）。
 > 批 15（2026-10-23，docs/26）：C 域 7 行翻动（+7.0：#2/#4/#6/#9/#12/#13/#21——T8–T12＋B79 销号）；E8-2/E8-3 注记行随翻（不计入分母）；E8-1 旧汇总漏算一并更正。
 > 批 16（2026-10-23，docs/27）：**9.5 点翻动**——E5-7/E5-30（+1.0×2）＋E5-11（+1.0）＋E5-18（+2.0）＋E5-29（存疑→对齐 +1.0）＋A-43（+1.0）＋C-23（存疑→对齐 +0.5）＋D#36（+2.0）；D#11 不动（裁决⑤随 E5-23 批）；E8-7 注记行随翻（不计入分母）。B204/B246 销号；B221 收编 ②④⑤。
@@ -674,6 +676,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 > 批 19（2026-10-24，docs/30）：**18.0 点翻动**——E6-11/E6-16（缺失→对齐 +2.0×2）＋E6-14（缺失→对齐 +3.0）＋E6-12（+1.0）＋E6-1/E6-2/E6-13/E6-15（存疑→对齐 +1.0×4）＋E6-10（缺失→存疑 +1.0，self 恒不可用臂裁决②）＋B-1/B-2/B-5/B-6（存疑→对齐 +1.0×4）＋B-4（缺失→存疑 +1.0）；**E6 域缺失清零**（17.0→30.0/31 ≈ 96.8%）、B 域 9.0→14.0/15 ≈ 93.3%（余 B-4 存疑挂 R29）。修真随批：`setProjectTrusted(false)` 旧实现整本抹项目 settings 文件 ⇒ pi 对位纯内存清空（docs/30 §9）。w3 账面滞后修正：批 18 的 #18/#23（npm 源、包源复合）翻对齐未入 w3 表，连同本批 #19 ⇒ w3 对齐 17→20/23。
 > 批 20（2026-10-25，docs/31）：**4.0 点翻动**——E7-2/E7-4（存疑→对齐 +1.0×2，核销）＋E7-3（+1.0，B31/B32/B33 销号）＋E7-6（+0.5，B237 销号）；**E7 域存疑清零＝第六个满分域**；B253/B257 销号（后者即登即销）。域汇总表 E7 行滞后，批 21 一并收平。
 > 批 21（2026-10-25，docs/32）：**12.5 点翻动**——E1-3/E1-4（存疑→对齐 +1.0×2）＋E1-5（缺失→对齐 +2.0，核销）＋E2-9（存疑→对齐 +1.0）＋E3-15（+2.0）/E3-23（+0.5）（核销）＋E4-4/E4-6（缺失→对齐 +2.0×2）＋A-29（存疑→对齐 +0.5）；**E1/E3/E4/A 四域同批满分**（满分域第七至第十）；**B163 销号**（JSON 主题系统 2,417 行域整体移植）；F6 注记核销（症状过期）。窄差 D123–D133。map/05 S9 缺失→对齐（+1.0）。
+> 批 22（2026-10-25，docs/33）：**2 行翻动**——E6-10/B#4 存疑→对齐（+1.0×2，自更新终裁裁决①：恒不可用臂＝pi 未知形态臂终局）；**E6/B 两域同批满分**（满分域第十一、十二）。map/05 W15 缺失→对齐（+1.0，web 渐进会话列表）＋R29 出分母（终裁不做，分母 245→244）。
 
 **扩展系统单独口径**（D + D′ + E5）：Σ权重 157 ／ Σ(w×c) 71.0 ／ **加权 45.2%**（未加权 28/85 ≈ 32.9%）。
 

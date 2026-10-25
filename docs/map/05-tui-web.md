@@ -112,7 +112,7 @@
 | R26 | **工具调用参数渲染（MCP 与 fallback 渲染工具显式展示 args）** | ✓ `core/tools/render-utils.ts:78 formatToolCallWithArgs` + `tool-execution.ts:143` | ✗ | **缺失** | 1 | java `ToolCallCard.java:13-37` 对全部工具走同一「name+status+截断 args」，且无 MCP 渲染器 |
 | R27 | **3D 彩蛋（pi logo / Armin）+ header logo**（全屏 overlay，惰性加载） | ✓ `components/easter-egg-3d.ts`（**1292 行**）+ `easter-egg-3d.lazy.ts` + `pi-logo.ts:15 piLogoLines`（40 行） | ✗ | **缺失** | 1 | java 无任何彩蛋/logo 动画；取代旧的 daxnuts（R22） |
 | R28 | **排队消息区（streaming 时聊天区与编辑器之间的 dim `Steering:`/`Follow-up:` 行）** | ✓ `interactive-mode.ts:461 pendingMessagesContainer`、`:4724 updatePendingMessagesDisplay`（末尾另有 `↳ <dequeue 键> to edit all queued messages` 提示行）；流式期间 bash/工具组件也挂该区 | ✓ `PendingQueueView.java`（含 hint 行，批 10）+ `ChatScreen.java`（`QueueUpdate` 驱动） | **存疑** | 1 | 批 10（docs/21）证据更新：dequeue hint 行（键名随绑定表大写形）＋取回编辑整条流程已补齐（S20/K11 翻对齐）；**「流式 bash/工具组件挂该区」仍缺** ⇒ 判定维持存疑 |
-| R29 | **安装变更警告（会话运行中 pi 被升级/替换 → 错误时提示重启命令）** | ✓ `interactive-mode.ts:2193 maybeShowInstallChangeWarning`（调用点 `:2184`、`:3643`）+ `config.ts detectInstallChange`（#10439，每会话一次） | ✗ | **缺失（挂起）** | 1 | **批 15 裁决④挂起**（docs/26 §4/§6）：java 无 package.json 安装形态也无自更新通道（docs/20 §3 序 21），三件套不做；`maybeSuggestBugReport` 的 install-change 门恒 false（≡ pi `detectInstallChange()` 恒 undefined 臂）；随自更新批评估 |
+| ~~R29~~ | ~~安装变更警告（会话运行中 pi 被升级/替换 → 错误时提示重启命令）~~ | ✓ `interactive-mode.ts:2193 maybeShowInstallChangeWarning`＋`config.ts detectInstallChange` | ✗ | **出分母（不做）** | — | **批 22（docs/33 T3，裁决②）终裁**：java 无 package.json 安装形态且无自更新通道（E6-10 终裁联动）⇒ 检测前提不成立；`maybeSuggestBugReport` 的恒 false 门即终局；docs/04 §4 C 类登记，触发条件＝分发通道落地 |
 
 ---
 
@@ -223,7 +223,7 @@
 | W12 | `transcript()` 读取点清点（web 三处） | 架构 | —— | `WebDispatcher.java:235,349,380` | **存疑** | 1 | A2 |
 | W13 | web 会话范围（`--session-dir` / `latest(cwd)`） | 行为 | pi `findMostRecentSession(dir)` 只读一个项目目录 | `PersistentSessionRepositories.latest(cwd)`（包⑫ 已修） | **对齐** | 2 | A12（已结案） |
 | W14 | `--no-session` 在 web 路径生效 | 行为 | pi 语义「别落盘」 | ✗ `SessionPersistence.resolvePersistentWeb` 的 `args` 形参一句话都没用 | **缺失** | 1 | **B54** |
-| W15 | 会话列表 API 带 `onProgress`（异步进度 + 增量结果 + 可取消） | 行为 | pi `core/session-manager.ts:884-889 SessionListProgress`（带 **`partialSessions`** 第三参 + `AbortSignal`；`:943 onProgress`）；`session-selector.ts:76-116` 消费 | ✗ 同步全量 | **缺失** | 1 | **B55** |
+| W15 | 会话列表 API 带 `onProgress`（异步进度 + 增量结果 + 可取消） | 行为 | pi `core/session-manager.ts:884-889 SessionListProgress`（带 **`partialSessions`** 第三参 + `AbortSignal`；`:943 onProgress`）；`session-selector.ts:76-116` 消费 | ✓ repo 层批 14（listRich 进度＋取消）＋TUI 选择器批 14＋**web 面批 22** | **对齐** | 1 | **批 22（docs/33 T1）**：`sessionsProgress`/`cancelSessions` 协议帧＋代次闸＋虚拟线程富列表＋前端渐进渲染（picker 关闭发 cancelSessions）；B55 批 14 已销 |
 | W16 | `find()` 的范围（`--session <id>` 跨项目查找） | 行为 | pi `findLocalSessionByExactId(id, cwd, sessionDir)` 项目内 | `PersistentSessionRepositories.find():59` 走 `all()` ⇒ O(全部)、跨项目 | **缺失** | 1 | **B53** |
 
 ---
@@ -322,11 +322,11 @@
 | 面 | 对齐 | 缺失 | 存疑 | 判定单位 | 完成度 |
 |---|---:|---:|---:|---:|---:|
 | 屏幕/面板（S1–S30 + S2a–d + S32，35） | 12 | 20 | 3 | 35 | **34.3%** |
-| 渲染特性（R1–R29，29 单元，含 R21） | 2 | 21 | 5 | 28 | **7.1%** |
+| 渲染特性（R1–R29，28 单元〔R29 批 22 出分母〕，含 R21） | 2 | 20 | 5 | 27 | **7.4%** |
 | 键绑定/交互（K1–K39，39 单元，含 K36） | 10 | 22 | 6 | 38 | **26.3%** |
 | TUI 组件（C1–C20，20 单元） | 7 | 9 | 4 | 20 | **35.0%** |
 | 主题/样式（T1–T11，11 单元） | 3 | 6 | 2 | 11 | **27.3%** |
-| web 对齐面（W1–W16，16 单元） | 8 | 4 | 4 | 16 | **50.0%** |
+| web 对齐面（W1–W16，16 单元） | 9 | 3 | 4 | 16 | **56.3%** |
 | **合计** | **42** | **82** | **24** | **148** | **28.4%** |
 
 > 非对齐项 2 条（R21 回合分隔条、K36 模式 2027 规避）已从分母剔除。
@@ -494,13 +494,13 @@
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|
 | 屏幕/面板（35 单元） | 47 | 24.5 | **52.1%** | 40.0% |
-| 渲染特性（R1–R29，29 单元；R21 权重 0 已剔） | 40 | 7.5 | **18.8%** | 10.7% |
+| 渲染特性（R1–R29，28 单元；R21 权重 0 已剔；R29 批 22 出分母） | 39 | 7.5 | **19.2%** | 11.1% |
 | 键绑定/交互（K1–K39，39 单元；K36 权重 0 已剔） | 66 | 33.5 | **50.8%** | 28.9% |
 | TUI 组件（C1–C20，20 单元） | 41 | 22.5 | **54.9%** | 35.0% |
 | 主题/样式（T1–T11，11 单元） | 18 | 6.5 | **36.1%** | 27.3% |
-| web 对齐面（W1–W16，16 单元） | 33 | 26.0 | **78.8%** | 50.0% |
+| web 对齐面（W1–W16，16 单元） | 33 | 27.0 | **81.8%** | 56.3% |
 
-**模块合计**：Σ权重 **245** ／ Σ(w×c) **121.5** ／ **加权完成度 = 121.5/245 ≈ 49.6%**（未加权 **45/148 ≈ 30.4%**，**+19.2pp**）
+**模块合计**：Σ权重 **244**（R29 批 22 出分母） ／ Σ(w×c) **122.5** ／ **加权完成度 = 122.5/244 ≈ 50.2%**（未加权 **46/147 ≈ 31.3%**，**+18.9pp**）
 
 > 批 10（2026-10-22，docs/21）：S20 缺失→对齐（+1.0）、K11 缺失→对齐（+1.0）；R28 证据更新不翻（流式 bash/工具挂载仍缺）。
 > 批 13（2026-10-23，docs/24）：R24 存疑→对齐（+0.5，cache-warmer 子系统批随收——生产者/文案逐字/门//session 段/footer）。
@@ -508,6 +508,7 @@
 > 批 15（2026-10-23，docs/26）：**S29 `/bug` 流程 缺失→对齐（+1.0）＋S30 崩溃记录＋启动提示 缺失→对齐（+1.0）**；R29 安装变更警告挂起注记（裁决④，随自更新批）。Σ 116.5→**118.5/245 ≈ 48.4%**。
 > 批 17（2026-10-24，docs/28）：**S22 扩展对话框四件套 缺失→对齐（+1.0）＋S23 扩展 widget/footer/header/状态槽 缺失→对齐（+1.0）**。Σ 118.5→**120.5/245 ≈ 49.2%**。
 > 批 21（2026-10-25，docs/32）：**S9 theme 选择器 缺失→对齐（+1.0，ThemeSubmenuScreen＋设置页入口）**。Σ 120.5→**121.5/245 ≈ 49.6%**。
+> 批 22（2026-10-25，docs/33）：**W15 web 会话列表 onProgress 缺失→对齐（+1.0，sessionsProgress/cancelSessions＋代次闸＋前端渐进渲染）＋R29 终裁不做出分母（分母 245→244）**。Σ 121.5→**122.5/244 ≈ 50.2%**。
 
 > 较前锚点（144 单元：241 权 / 108.0 / **44.8%**）变化 **−0.5pp**，构成：① K20 对齐→存疑（w2）分子 −1.0；② R18/R24 缺失→存疑（w1×2）分子 +1.0；③ 新增 4 单元（R28 存疑 w1 +0.5；R29/K39/C20 缺失 w1×3）分母 +4、分子 +0.5。净效果：分子 +0.5、分母 +4。
 
